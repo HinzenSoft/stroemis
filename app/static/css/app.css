@@ -266,8 +266,14 @@ table.list td.small { white-space: nowrap; }
 #toast.show { opacity: 1; }
 #toast.err { background: var(--rot); }
 /* Als Popover bringt der Browser eigene Vorgaben mit (Rahmen, Mitte, Canvas-Farben) – die
-   müssen weichen, sonst sitzt der Toast als weißer Kasten in der Bildmitte. */
-#toast[popover] { inset: auto; margin: 0; border: 0; width: max-content; height: auto; overflow: visible; }
+   müssen weichen, sonst sitzt der Toast als weißer Kasten in der Bildmitte. "inset: auto"
+   räumt dabei aber auch die eigene Platzierung ab, und weil diese Regel die genauere ist,
+   gewinnt sie gegen "left/bottom" oben: Die Meldung klebte oben links in der Ecke und war
+   durch das translateX zur Hälfte aus dem Bild geschoben. Deshalb steht sie hier noch einmal. */
+#toast[popover] {
+  inset: auto; left: 50%; bottom: 24px;
+  margin: 0; border: 0; width: max-content; max-width: 90vw; height: auto; overflow: visible;
+}
 #toast:popover-open { display: block; }
 
 /* Dialog */

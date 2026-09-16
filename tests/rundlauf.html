@@ -116,6 +116,9 @@ const KORPUS = {
   bildUnterschrift: "![Alt](/media/wiki/x.jpg \"Eine Unterschrift\")",
   leerzeilen: "A\n\n\n\nB",
   gesetzteLeerzeile: "Absatz A.\n\n&nbsp;\n\nAbsatz B.",
+  leerzeileVorAbschnitt: ":::columns\n&nbsp;\n\n&nbsp;\n\n:::align center\n![B](/media/wiki/x.jpg)\n:::\n|||\nRechts.\n:::",
+  leerzeileVorTrenner: ":::columns\nLinks.\n\n&nbsp;\n\n|||\nRechts.\n:::",
+  leerzeileVorAbschluss: ":::info \U0001F4A1\nText.\n\n&nbsp;\n\n:::",
   zweiLeerzeilen: "Absatz A.\n\n&nbsp;\n\n&nbsp;\n\nAbsatz B.",
   boxMitDollar: ":::accordion Beispiel\n```\n$$latex\n```\n:::",
   unbekannterBlock: ":::etwasneues\nInhalt\n:::",
@@ -282,6 +285,27 @@ pruefe("eine gesetzte Leerzeile (&nbsp;) überlebt das Speichern wörtlich", () 
   const md = "Absatz A.\n\n&nbsp;\n\nAbsatz B.";
   const raus = rundlauf(md);
   return raus === md ? "" : "hinein:\n" + md + "\n\nheraus:\n" + raus;
+});
+
+pruefe("eine gesetzte Leerzeile neben einer Marke überlebt das Speichern", () => {
+  /* trim() zählt das geschützte Leerzeichen als Leerraum. Beim Aufräumen der Marken fiel eine
+     gesetzte Leerzeile deshalb weg, sobald unmittelbar daneben eine Marke stand – und genau
+     dort steht sie: In Spalten schiebt man mit Leerzeilen ein Bild neben den Text herunter.
+     Der Rundlauf allein fand das nicht, denn die Leerzeile verschwand in beiden Runden
+     gleichermaßen; gezählt werden muss, wie viele ankommen. */
+  const faelle = {
+    "vor einem Abschnitt": ":::columns\n&nbsp;\n\n&nbsp;\n\n:::align center\n![B](/media/wiki/x.jpg)\n:::\n|||\nRechts.\n:::",
+    "vor dem Trenner": ":::columns\nLinks.\n\n&nbsp;\n|||\nRechts.\n:::",
+    "vor dem Abschluss": ":::info 💡\nText.\n\n&nbsp;\n:::",
+    "vor einer Hinweiskiste": "Davor.\n\n&nbsp;\n\n:::info 💡\nText.\n:::",
+  };
+  const zaehl = (md) => (md.match(/&nbsp;/g) || []).length;
+  const fehlt = [];
+  for (const name in faelle) {
+    const soll = zaehl(faelle[name]), ist = zaehl(rundlauf(faelle[name]));
+    if (ist !== soll) fehlt.push(`${name}: ${ist} von ${soll} Leerzeilen übrig`);
+  }
+  return fehlt.join("\n");
 });
 
 pruefe("ein Abschnitt ohne Schlussmarke wird aufgelöst, nicht bis zum Ende verlängert", () => {

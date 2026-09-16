@@ -63,7 +63,7 @@ window.EDMD = (function () {
     // Eine Marke braucht Leerzeilen um sich herum, sonst zieht der Markdown-Parser sie in den
     // vorhergehenden Absatz. Auf dem Rueckweg fallen sie wieder weg.
     const marke = (...zeilen) => {
-      while (out.length && !out[out.length - 1].trim()) out.pop();
+      while (out.length && istLeer(out[out.length - 1])) out.pop();
       if (out.length) out.push("");
       out.push(...zeilen, "$$", "");
     };
@@ -192,13 +192,20 @@ window.EDMD = (function () {
     return wandleBloecke(absaetzeZusammenziehen(vorbereitet.split("\n"))).join("\n").replace(/\n+$/, "");
   }
 
+  /* „Leer“ heißt: nichts als Leerraum – das geschützte Leerzeichen zählt hier ausdrücklich
+     NICHT dazu, obwohl trim() es dazurechnet. Ein Absatz daraus ist eine vom Benutzer gesetzte
+     Leerzeile und damit Inhalt. Wo diese Unterscheidung fehlte, verschwand sie beim Speichern,
+     sobald unmittelbar danach eine Marke stand – in Spalten fiel es auf, denn dort schiebt man
+     mit Leerzeilen ein Bild neben den Text herunter. */
+  const istLeer = (z) => !String(z).replace(/\u00a0/g, "x").trim();
+
   /* Aufraeumen der Marken-Abschnitte: Leerzeilen, die nur die Marken im Editor umgeben haben,
      verschwinden wieder; eine Waise (|||, ::: ohne offenen Abschnitt) wird verworfen. Damit
      bleibt das gespeicherte Markdown auch dann gueltig, wenn jemand eine Marke geloescht hat. */
   function ordneMarken(lines) {
     const out = [];
     const letzte = () => (out.length ? out[out.length - 1] : null);
-    const leerWeg = () => { while (out.length && !out[out.length - 1].trim()) out.pop(); };
+    const leerWeg = () => { while (out.length && istLeer(out[out.length - 1])) out.pop(); };
     let zaun = null;                                   // offener Codeblock
     let tiefe = 0;                                     // offene :::-Abschnitte
     for (const l of lines) {
@@ -222,10 +229,8 @@ window.EDMD = (function () {
         leerWeg(); out.push(l); continue;
       }
       const vor = letzte();
-      // Ein Absatz aus einem geschützten Leerzeichen ist eine GESETZTE Leerzeile (siehe unten,
-      // LEERZEILE) – trim() hielte ihn für leer und würfe ihn als „doppelt“ weg: Die Leerzeile
-      // überlebte das Öffnen, aber nicht das erste Speichern danach.
-      if (!l.replace(/\u00a0/g, "x").trim()) {
+      // Ein Absatz aus einem geschützten Leerzeichen ist eine GESETZTE Leerzeile – siehe istLeer.
+      if (istLeer(l)) {
         // Keine Leerzeile unmittelbar nach einer öffnenden Marke und keine doppelten.
         if (vor === null || !vor.trim() || isFenceOpen(vor) || (tiefe && TRENNER.test(vor))) continue;
         out.push(l); continue;
