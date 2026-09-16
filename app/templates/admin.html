@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% set active = 'admin' %}
+{% block title %}Nutzer – strömis.de{% endblock %}
+{% block body %}
+<main class="page">
+  <div class="page-head"><h1>Nutzerverwaltung</h1><button class="btn" id="btn-new-user">+ Nutzer anlegen</button></div>
+  <section id="pending" class="section"></section>
+  <p class="help">Administratoren dürfen alle Alben, Bilder und Wiki-Seiten bearbeiten. Beim Löschen eines Nutzers gehen seine Inhalte auf dich über.</p>
+  <p class="help hidden" id="videopflege"></p>
+  <div style="overflow:auto"><table class="list" id="users"><thead><tr><th>Name</th><th>E-Mail</th><th>Gliederung</th><th>Rolle</th><th>Inhalte</th><th></th></tr></thead><tbody></tbody></table></div>
+</main>
+<dialog id="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/admin.js') }}"></script>{% endblock %}

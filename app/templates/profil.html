@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% set active = 'profile' %}
+{% block title %}Profil – strömis.de{% endblock %}
+{% block body %}
+<main class="page narrow">
+  <div class="page-head"><h1>Mein Profil</h1><span class="muted small">{{ user.email }}</span></div>
+  <form id="f-profile">
+    <label for="name">Name</label>
+    <input id="name" type="text" value="{{ user.name }}" autocomplete="name">
+    <label for="gliederung">Gliederung</label>
+    <input id="gliederung" type="text" value="{{ user.gliederung }}" placeholder="z. B. OG Musterstadt, LV Bayern">
+    <label for="phone">Telefon</label>
+    <input id="phone" type="tel" value="{{ user.phone }}" autocomplete="tel">
+    <div class="help">Name und Kontaktdaten sind für andere angemeldete Nutzer sichtbar, wenn du als Ansprechpartner eingetragen bist.</div>
+    <div class="btn-row" style="margin-top:14px"><button class="btn" type="submit">Speichern</button></div>
+  </form>
+  <section class="section">
+    <h2>Profilbild</h2>
+    <div class="profilbild">
+      <div class="pb-vorschau" id="pb-vorschau" aria-hidden="true">{% if avatar %}<img src="{{ avatar }}" alt="">{% endif %}<span class="pb-kuerzel{% if avatar %} hidden{% endif %}">{{ initialen }}</span></div>
+      <div class="pb-text">
+        <div class="help">Es steht neben dem Namen an jedem Artikel, den du erstellt oder an dem du mitgeschrieben hast. Ohne Bild werden die Initialen gezeigt.</div>
+        <div class="btn-row">
+          <button class="btn secondary" id="pb-waehlen" type="button">Bild wählen …</button>
+          <button class="btn secondary{% if not avatar %} hidden{% endif %}" id="pb-weg" type="button">Entfernen</button>
+        </div>
+        <input id="pb-datei" type="file" accept="image/*" class="hidden">
+      </div>
+    </div>
+  </section>
+  <section class="section">
+    <h2>Passwort ändern</h2>
+    <form id="f-password">
+      <label for="current">Aktuelles Passwort</label>
+      <input id="current" type="password" autocomplete="current-password" required>
+      <label for="password">Neues Passwort</label>
+      <input id="password" type="password" autocomplete="new-password" minlength="8" required>
+      <label for="password2">Neues Passwort wiederholen</label>
+      <input id="password2" type="password" autocomplete="new-password" minlength="8" required>
+      <div class="btn-row" style="margin-top:14px"><button class="btn secondary" type="submit">Passwort ändern</button></div>
+    </form>
+  </section>
+</main>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/profile.js') }}"></script>{% endblock %}

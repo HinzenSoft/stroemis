@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Rundlauf und Verlauf – strömis.de</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 16px 20px; max-width: 1000px; }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  p.hinweis { color: #555; margin: 0 0 16px; }
+  #editor, #editor2, #editor3 { position: absolute; left: -9999px; width: 800px; }
+  #ergebnis, #ergebnis2, #ergebnis3 { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+  .zeile { padding: 3px 6px; border-bottom: 1px solid #eee; display: flex; gap: 10px; }
+  .ok { color: #0a7a3d; } .fehler { background: #fdecec; color: #a30000; }
+  pre { background: #f5f5f5; padding: 8px; overflow: auto; margin: 4px 0 10px; white-space: pre-wrap; }
+  #kopf, #kopf2, #kopf3 { font-weight: 700; padding: 8px 0; }
+</style>
+</head>
+<body>
+<h1>Rundlauf: Markdown → Editor → Markdown</h1>
+<p class="hinweis">Prüft die zentrale Invariante des Editors: Öffnen und Speichern darf kein Byte
+ändern. Danach folgt der Rückgängig-Verlauf: Das Laden einer Seite darf sich nicht zurücknehmen
+lassen. Diese Datei direkt im Browser öffnen (Doppelklick) – sie lädt die Skripte des Projekts
+über relative Pfade und braucht keinen Server.</p>
+<div id="editor"></div>
+<div id="kopf">läuft …</div>
+<div id="ergebnis"></div>
+
+<h1>Verlauf: Strg+Z direkt nach dem Laden</h1>
+<p class="hinweis">Toast UI füllt den Editor über gewöhnliche ProseMirror-Transaktionen – ohne
+Gegenmaßnahme nimmt das erste Strg+Z das Laden zurück, der Artikel ist leer und die
+Autospeicherung schreibt ihn so zur Seite. Siehe <code>editor-verlauf.js</code>.</p>
+<div id="editor2"></div>
+<div id="kopf2">läuft …</div>
+<div id="ergebnis2"></div>
+
+<h1>Zellen verbinden und teilen</h1>
+<p class="hinweis">Die Erweiterung des Herstellers bringt die Befehle mit, die Auswahl über
+mehrere Zellen aber ist im Bündel 3.2.2 fehlerhaft übersetzt und muss geflickt werden (siehe
+<code>editor-layout.js</code>). Geprüft wird beides: dass eine Zellauswahl überhaupt entsteht und
+dass Verbinden und Teilen die erwartete Schreibweise ergeben.</p>
+<div id="editor3"></div>
+<div id="kopf3">läuft …</div>
+<div id="ergebnis3"></div>
+
+<script src="../app/static/vendor/marked/marked.min.js"></script>
+<script src="../app/static/vendor/dompurify/purify.min.js"></script>
+<script src="../app/static/js/markdown.js"></script>
+<script src="../app/static/js/editor-format.js"></script>
+<script src="../app/static/vendor/toastui/toastui-editor-all.min.js"></script>
+<script src="../app/static/vendor/toastui/toastui-editor-plugin-table-merged-cell.min.js"></script>
+<script src="../app/static/js/editor-layout.js"></script>
+<script src="../app/static/js/editor-verlauf.js"></script>
+<script>
+/* Der Prüfkorpus deckt jede Auszeichnung, jeden Blocktyp und die bekannten Randfälle ab.
+   Neue Fälle einfach hier eintragen. */
+const KORPUS = {
+  ueberschriften: "# Eins\n\n## Zwei\n\n### Drei\n\n#### Vier\n\nText.",
+  absatz: "Erster Absatz.\n\nZweiter Absatz.\n\nDritter mit harter\\\nZeile.",
+  listeEng: "* eins\n* zwei\n* drei",
+  listeGeschachtelt: "* eins\n  * tief a\n  * tief b\n* zwei",
+  listeNummer: "1. eins\n2. zwei\n3. drei",
+  aufgaben: "* [ ] offen\n* [x] erledigt",
+  zitat: "> Ein Zitat\n> über zwei Zeilen.",
+  linie: "Oben\n\n---\n\nUnten",
+  code: "```js\nconst a = 1;\nif (a) { foo(); }\n```",
+  codeMitBloecken: "```\n:::info\n$$hinweis\n|||\n:::\n```",
+  codeTilde: "~~~python\nprint(':::')\n~~~",
+  tabelle: "| A | B |\n| --- | --- |\n| 1 | 2 |",
+  tabelleAusrichtung: "| L | M | R |\n| :-- | :-: | --: |\n| a | b | c |",
+  tabellePipeCode: "| Code | Text |\n| --- | --- |\n| `a\\|b` | zwei |",
+  tabelleMarken: "| Zelle | Zwei |\n| --- | --- |\n| ++unterstrichen++ | ==markiert== |",
+  // Zusammengefasste Zellen in der Schreibweise der Toast-UI-Erweiterung. Die Geometrie muss
+  // stimmen: Was eine verbundene Zelle überdeckt, steht in den folgenden Zeilen nicht mehr.
+  tabelleColspan: "| A | B | C |\n| --- | --- | --- |\n| @cols=2:a1 | c1 |\n| a2 | b2 | c2 |",
+  tabelleRowspan: "| A | B |\n| --- | --- |\n| @rows=2:a1 | b1 |\n| b2 |",
+  tabelleBeides: "| A | B | C |\n| --- | --- | --- |\n| @cols=2:@rows=2:Eck | c1 |\n| c2 |\n| a3 | b3 | c3 |",
+  tabelleVerbundenUmbruch: "| A | B | C |\n| --- | --- | --- |\n| @cols=2:a1<br>b1 | c1 |\n| a2 | b2 | c2 |",
+  tabelleVerbundenKopf: "| @cols=2:Belastbarkeit | C |\n| --- | --- | --- |\n| a1 | b1 | c1 |",
+  auszeichnungen: "**fett** *kursiv* ~~weg~~ `code` ++unterstrichen++ ==markiert== ^hoch^ ~tief~",
+  farbenStatus: "{{rot:roter Text}} und {status:in Arbeit}",
+  links: "[intern](/wiki/ankertechnik) und [extern](https://example.org) und <https://example.org>",
+  bild: "![Alt-Text](/media/wiki/x.jpg)",
+  bildBreite: "![Alt](/media/wiki/x.jpg#w=50%)",
+  bildKlammer: "![Foto \\[1\\]](/media/wiki/x.jpg)",
+  medien: "![Film](/media/wiki/f.mp4)\n\n![Ton](/media/wiki/t.mp3)",
+  hinweisAlle: ":::info 💡\nInfo\n:::\n\n:::warning ⚠️\nAchtung\n:::\n\n:::success ✅\nGut\n:::\n\n:::danger ⛔\nSchlecht\n:::\n\n:::note 📝\nNotiz\n:::",
+  hinweisFarbe: ":::info 💡 farbe:mint\nMit eigener Farbe.\n:::",
+  hinweisInhalt: ":::note 📝\n### Überschrift\n\nAbsatz.\n\n* eins\n* zwei\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n:::",
+  // Eine Aufzählung mit Unterpunkt in einer Hinweiskiste: Der Einzug des Unterpunkts muss
+  // erhalten bleiben – gespeichert wie beim Öffnen.
+  hinweisListeTief: ":::note 📝\n* eins\n* zwei\n  * tiefer\n:::",
+  hinweisEingerueckt: "  :::info 💡\n  * eins\n    * tiefer\n  :::",
+  hinweisEinzeilig: "| Zelle |\n| --- |\n| :::warning **Kurz** ::: |",
+  box: ":::accordion Titel der Box\nInhalt.\n:::",
+  boxLeer: ":::accordion\n:::",
+  boxInBox: ":::accordion Aussen\n:::accordion Innen\ntief\n:::\n:::",
+  spalten2: ":::columns\nLinks\n|||\nRechts\n:::",
+  spalten3: ":::columns\nA\n|||\nB\n|||\nC\n:::",
+  spalten5: ":::columns\na\n|||\nb\n|||\nc\n|||\nd\n|||\ne\n:::",
+  spaltenTief: ":::columns\nAussen links\n\n:::columns\ntief a\n|||\ntief b\n:::\n\nnach innen\n|||\nAussen rechts\n:::",
+  spaltenMitKiste: ":::columns\n:::info 💡\nHinweis links\n:::\n|||\n:::align center\nMittig rechts\n:::\n:::",
+  spaltenMitBox: ":::columns\n:::accordion Box\nInhalt\n:::\n|||\nRechts\n:::",
+  spaltenCode: ":::columns\n```\na|||b\n```\n|||\nRechts\n:::",
+  ausrichtung: ":::align center\nMittig\n:::\n\n:::align right\nRechts\n:::\n\n:::align justify\nBlocksatz mit etwas mehr Text.\n:::",
+  marken: ":::toc\n:::\n\n:::unterseiten\n:::\n\n:::seitenumbruch\n:::",
+  baustein: ":::baustein sicherung\nInhalt des Bausteins.\n:::",
+  bausteinMitKiste: ":::baustein technik\n:::info \u{1F4A1}\nHinweis im Baustein\n:::\n\nDanach.\n:::",
+  einbau: ":::einbau ankertechnik#sicherung\n:::",
+  einbauImText: "Davor.\n\n:::einbau ankertechnik#sicherung\n:::\n\nDanach.",
+  einbauOhneZiel: ":::einbau\n:::",
+  bausteinInSpalten: ":::columns\n:::baustein links\nA\n:::\n|||\nRechts\n:::",
+  gemischt: "# Titel\n\n:::columns\n### Links\n\n* a\n* b\n|||\n:::accordion Rechts\n:::info 💡\ntief verschachtelt\n:::\n:::\n:::\n\nSchluss.",
+  ohneSchluss: ":::info 💡\nText ohne Abschluss",
+  waise: "Text\n\n|||\n\nMehr Text",
+  htmlMarken: "<u>unter</u> <mark>markiert</mark> <sub>tief</sub> <sup>hoch</sup>",
+  bildUnterschrift: "![Alt](/media/wiki/x.jpg \"Eine Unterschrift\")",
+  leerzeilen: "A\n\n\n\nB",
+  gesetzteLeerzeile: "Absatz A.\n\n&nbsp;\n\nAbsatz B.",
+  zweiLeerzeilen: "Absatz A.\n\n&nbsp;\n\n&nbsp;\n\nAbsatz B.",
+  boxMitDollar: ":::accordion Beispiel\n```\n$$latex\n```\n:::",
+  unbekannterBlock: ":::etwasneues\nInhalt\n:::",
+  umlaute: "Größe, Straße, Übung – „Anführung“ und Gedankenstrich —",
+  // Ein Absatz, dessen Quelle über mehrere Zeilen läuft, ist EIN Absatz – Markdown liest den
+  // einzelnen Umbruch als Leerzeichen. Ohne das Zusammenziehen beim Öffnen machte der Editor
+  // daraus drei Absätze und schrieb sie beim Speichern auch so zurück.
+  absatzUmbrochen: "Erste Zeile eines Absatzes,\nzweite Zeile desselben Absatzes,\ndritte Zeile.",
+  absatzUmbrochenMitMarken: "Ein Absatz mit **fett**\nund ++unterstrichen++ über zwei Zeilen.",
+  harterUmbruch: "Zeile mit hartem Umbruch  \nzweite Zeile.",
+  umbruchVorListe: "Ein Absatz\nüber zwei Zeilen.\n\n* Punkt eins\n* Punkt zwei",
+  zitatUmbrochen: "> Ein Zitat über zwei\n> Zeilen.",
+  zitatZweiAbsaetze: "> Erster Absatz.\n>\n> Zweiter Absatz.",
+};
+
+/* Zweite Runde: was einmal gespeichert wurde, muss beim nächsten Mal unverändert bleiben.
+   Die erste Runde darf normalisieren (etwa "-" zu "*" in Aufzählungen). */
+const editor = new toastui.Editor({
+  el: document.querySelector("#editor"), height: "200px",
+  initialEditType: "wysiwyg", previewStyle: "tab", usageStatistics: false, hideModeSwitch: true,
+  // Ohne die Erweiterung für zusammengefasste Zellen stünde "@cols=2:" als Text in der Zelle und
+  // liefe nicht mehr stabil durch – sie gehört zum Editor des Wikis und damit in den Rundlauf.
+  plugins: [EDLAYOUT.zellenAuswahl, toastui.Editor.plugin.tableMergedCell],
+});
+const rundlauf = (md) => {
+  editor.setMarkdown(EDMD.toEditorMd(md), false);
+  return EDMD.fromEditorMd(editor.getMarkdown());
+};
+
+const raus = document.getElementById("ergebnis");
+let fehler = 0, gesamt = 0;
+for (const name in KORPUS) {
+  gesamt++;
+  const md = KORPUS[name];
+  let eins, zwei, meldung = "";
+  try {
+    eins = rundlauf(md);
+    zwei = rundlauf(eins);
+  } catch (e) {
+    meldung = "Ausnahme: " + e.message;
+  }
+  const stabil = !meldung && eins === zwei;
+  if (!stabil) fehler++;
+  const el = document.createElement("div");
+  el.className = "zeile " + (stabil ? "ok" : "fehler");
+  el.innerHTML = "<span>" + (stabil ? "✓" : "✗") + "</span><span>" + name + "</span>";
+  if (!stabil) {
+    const p = document.createElement("pre");
+    p.textContent = meldung || ("erste Runde:\n" + eins + "\n\nzweite Runde:\n" + zwei);
+    el.appendChild(p);
+  }
+  raus.appendChild(el);
+}
+document.getElementById("kopf").textContent = fehler
+  ? fehler + " von " + gesamt + " Fällen sind nicht stabil"
+  : "alle " + gesamt + " Fälle laufen byteidentisch durch";
+document.getElementById("kopf").className = fehler ? "fehler" : "ok";
+
+/* --- Verlauf ------------------------------------------------------------------------
+   Ein zweiter Editor, so aufgesetzt wie der im Wiki (openEditor): leerer Anfangswert, Inhalt
+   erst danach, und beides innerhalb von EDVERLAUF.oeffnen – denn schon der Aufbau legt einen
+   Verlaufseintrag an. Geprüft wird, was der Benutzer auslöst – der Tastendruck geht durch
+   dieselbe Stelle wie im Browser (ProseMirrors handleKeyDown), der Knopf in der
+   Blasenleiste ruft ed.exec("undo"). */
+const ed2 = EDVERLAUF.oeffnen(() => new toastui.Editor({
+  el: document.querySelector("#editor2"), height: "200px",
+  initialEditType: "wysiwyg", hideModeSwitch: true, usageStatistics: false,
+  initialValue: "", widgetRules: MD.widgetRules(),
+  plugins: [EDLAYOUT.layoutPlugin, EDVERLAUF.plugin],
+}));
+const strgZ = () => {
+  const view = ed2.wwEditor.view;
+  const ev = new KeyboardEvent("keydown", { key: "z", code: "KeyZ", ctrlKey: true, bubbles: true });
+  view.someProp("handleKeyDown", (f) => f(view, ev));
+};
+const raus2 = document.getElementById("ergebnis2");
+let fehler2 = 0, gesamt2 = 0;
+const pruefe = (name, fn) => {
+  gesamt2++;
+  let meldung = "";
+  try { meldung = fn() || ""; } catch (e) { meldung = "Ausnahme: " + e.message; }
+  if (meldung) fehler2++;
+  const el = document.createElement("div");
+  el.className = "zeile " + (meldung ? "fehler" : "ok");
+  el.innerHTML = "<span>" + (meldung ? "✗" : "✓") + "</span><span>" + name + "</span>";
+  if (meldung) { const p = document.createElement("pre"); p.textContent = meldung; el.appendChild(p); }
+  raus2.appendChild(el);
+};
+
+const SEITE = "# Seite\n\nErster Absatz.\n\n* eins\n* zwei";
+
+// Muss vor allem anderen laufen: Hier ist noch nichts geladen, geprüft wird allein der Aufbau.
+pruefe("der Aufbau des Editors steht nicht im Verlauf", () => {
+  const t = EDVERLAUF.tiefe(ed2);
+  return t === 0 ? "" : "Verlauftiefe ist " + t + ", erwartet 0";
+});
+
+pruefe("Strg+Z direkt nach dem Laden ändert nichts", () => {
+  EDVERLAUF.laden(ed2, EDMD.toEditorMd(SEITE));
+  const vorher = ed2.getMarkdown();
+  strgZ(); strgZ(); strgZ();
+  const nachher = ed2.getMarkdown();
+  return vorher === nachher ? "" : "vorher:\n" + vorher + "\n\nnach Strg+Z:\n" + nachher;
+});
+
+pruefe("Rückgängig-Knopf der Blasenleiste ändert nichts", () => {
+  EDVERLAUF.laden(ed2, EDMD.toEditorMd(SEITE));
+  const vorher = ed2.getMarkdown();
+  ed2.exec("undo"); ed2.exec("undo");
+  const nachher = ed2.getMarkdown();
+  return vorher === nachher ? "" : "vorher:\n" + vorher + "\n\nnach undo:\n" + nachher;
+});
+
+pruefe("der Verlauf ist nach dem Laden leer", () => {
+  EDVERLAUF.laden(ed2, EDMD.toEditorMd(SEITE));
+  const t = EDVERLAUF.tiefe(ed2);
+  return t === 0 ? "" : "Verlauftiefe ist " + t + ", erwartet 0";
+});
+
+pruefe("eigene Änderungen bleiben rückgängig zu machen", () => {
+  EDVERLAUF.laden(ed2, EDMD.toEditorMd(SEITE));
+  const geladen = ed2.getMarkdown();
+  ed2.setSelection(3, 3);
+  ed2.insertText("XY");
+  const getippt = ed2.getMarkdown();
+  if (getippt === geladen) return "das Tippen hat nichts geändert – Prüfung greift nicht";
+  strgZ();
+  const zurueck = ed2.getMarkdown();
+  if (zurueck !== geladen) return "getippt:\n" + getippt + "\n\nnach Strg+Z:\n" + zurueck;
+  strgZ(); strgZ();
+  const nochmal = ed2.getMarkdown();
+  return nochmal === geladen ? "" : "weiteres Strg+Z ging über das Laden hinaus:\n" + nochmal;
+});
+
+pruefe("Aufgabenlisten behalten ihr Kästchen, Formulare kommen nicht durch", () => {
+  const auf = MD.render("* [ ] offen\n");
+  if (!/<input[^>]*type="checkbox"/.test(auf) || !/disabled/.test(auf)) return "Kästchen fehlt:\n" + auf;
+  const boese = MD.render('<form action="x"><input type="text" name="pw"><button>Senden</button></form>');
+  if (/<form|<input|<button/i.test(boese)) return "Formular kam durch:\n" + boese;
+  const stil = MD.render('<style>body{display:none}</style><p>Text</p>');
+  return /<style/i.test(stil) ? "Stilblock kam durch:\n" + stil : "";
+});
+
+pruefe("ein eingerückter Unterpunkt bleibt in der Hinweiskiste eingerückt", () => {
+  /* Der Rumpf eines :::-Blocks wird um seinen Einzug erleichtert – Docmost-Exporte rückten
+     ganze Blöcke ein. Abgezogen wurde früher je Zeile bis zu drei Zeichen; damit verlor der
+     Unterpunkt einer Aufzählung genau die zwei Leerzeichen, die ihn zum Unterpunkt machen,
+     und die Leseansicht zeigte ihn auf oberster Ebene, während der Editor ihn einrückte. */
+  const wurzel = document.createElement("div");
+  wurzel.innerHTML = MD.render(":::note 📝\n* eins\n* zwei\n  * tiefer\n:::");
+  const liste = wurzel.querySelector(".callout-body > ul");
+  if (!liste) return "keine Aufzählung in der Kiste:\n" + wurzel.innerHTML;
+  if (liste.children.length !== 2) return liste.children.length + " Punkte auf oberster Ebene, erwartet 2";
+  if (!liste.children[1].querySelector("ul")) return "der Unterpunkt hängt nicht unter „zwei“";
+  // Gegenprobe: ein gleichmäßig eingerückter Block wird weiterhin ausgerückt.
+  const eingerueckt = document.createElement("div");
+  eingerueckt.innerHTML = MD.render("  :::info 💡\n  * eins\n    * tiefer\n  :::");
+  const li = eingerueckt.querySelector(".callout-body > ul");
+  return li && li.children.length === 1 && li.querySelector("ul")
+    ? "" : "der eingerückte Block kam nicht sauber an:\n" + eingerueckt.innerHTML;
+});
+
+pruefe("eine gesetzte Leerzeile (&nbsp;) überlebt das Speichern wörtlich", () => {
+  const md = "Absatz A.\n\n&nbsp;\n\nAbsatz B.";
+  const raus = rundlauf(md);
+  return raus === md ? "" : "hinein:\n" + md + "\n\nheraus:\n" + raus;
+});
+
+pruefe("ein Abschnitt ohne Schlussmarke wird aufgelöst, nicht bis zum Ende verlängert", () => {
+  const raus = EDMD.fromEditorMd("# T\n\n$$hinweis\ninfo 💡\n$$\n\nIm Kasten\n\nDanach");
+  return raus === "# T\n\nIm Kasten\n\nDanach" ? "" : "heraus:\n" + raus;
+});
+
+/* --- Bündigkeit über mehrere Absätze ---------------------------------------------------
+   EDMD.ausrichten bekommt den Text und die beiden Stellen, die der Editor markiert hat (Anfang
+   und Ende der Auswahl). Geprüft wird, was daraus wird – ohne Editor, denn das ist reine
+   Textarbeit. „«“ steht in den Proben für die Marke am Auswahlanfang, „»“ für die am Ende;
+   „C»“ heißt also „die Auswahl endet in C“, „»C“ dagegen „sie endet unmittelbar davor“.
+   Absichtlich keine Zeichen, die in Markdown vorkommen: Ein „!“ steckt schon in jedem Bild.
+   Führende und abschließende Leerzeilen zählen nicht mit – die räumt der Editor selbst weg. */
+const ausricht = (probe, mode) => {
+  const zeilen = probe.split("\n");
+  const markeZeile = zeilen.findIndex((z) => z.includes("\u00ab"));
+  const endeZeile = zeilen.findIndex((z) => z.includes("\u00bb"));
+  const md = zeilen.map((z) => z.split("\u00ab").join("").split("\u00bb").join("")).join("\n");
+  const amBlockanfang = endeZeile > markeZeile && zeilen[endeZeile].trimStart().startsWith("\u00bb");
+  return EDMD.ausrichten(md, { markeZeile, endeZeile, amBlockanfang, mode });
+};
+const ohneRand = (t) => String(t === undefined ? t : t).replace(/^\n+|\n+$/g, "");
+const gleich = (erg, soll) => ohneRand(erg.md) === soll ? ""
+  : "heraus:\n" + (erg.md === undefined ? "Fehler: " + erg.fehler : erg.md) + "\n\nerwartet:\n" + soll;
+
+pruefe("eine Auswahl über drei Absätze richtet alle drei aus", () =>
+  gleich(ausricht("«A\n\nB\n\nC»\n\nD", "center"),
+         "$$ausrichtung\ncenter\n$$\n\nA\n\nB\n\nC\n\n$$ende\n$$\n\nD"));
+
+pruefe("ohne Endmarke bleibt es beim einen Absatz", () =>
+  gleich(ausricht("«A\n\nB", "right"),
+         "$$ausrichtung\nright\n$$\n\nA\n\n$$ende\n$$\n\nB"));
+
+pruefe("endet die Auswahl am Anfang des nächsten Absatzes, bleibt der draußen", () =>
+  gleich(ausricht("«A\n\nB\n\n»C", "center"),
+         "$$ausrichtung\ncenter\n$$\n\nA\n\nB\n\n$$ende\n$$\n\nC"));
+
+pruefe("dieselbe Richtung noch einmal nimmt die Marken zurück", () =>
+  gleich(ausricht("$$ausrichtung\ncenter\n$$\n\n«A\n\nB»\n\n$$ende\n$$", "center"), "A\n\nB"));
+
+pruefe("eine andere Richtung ändert den ganzen Abschnitt", () =>
+  gleich(ausricht("$$ausrichtung\ncenter\n$$\n\n«A\n\nB»\n\n$$ende\n$$", "right"),
+         "$$ausrichtung\nright\n$$\n\nA\n\nB\n\n$$ende\n$$"));
+
+pruefe("ein einzeln ausgerichteter Absatz im Bereich verliert seine Marken", () =>
+  gleich(ausricht("«A\n\n$$ausrichtung\ncenter\n$$\n\nB\n\n$$ende\n$$\n\nC»", "left"),
+         "$$ausrichtung\nleft\n$$\n\nA\n\nB\n\nC\n\n$$ende\n$$"));
+
+pruefe("ein vollständig umschlossener Hinweis geht mit", () =>
+  gleich(ausricht("«A\n\n$$hinweis\ninfo 💡\n$$\n\nText\n\n$$ende\n$$\n\nB»", "center"),
+         "$$ausrichtung\ncenter\n$$\n\nA\n\n$$hinweis\ninfo 💡\n$$\n\nText\n\n$$ende\n$$\n\nB\n\n$$ende\n$$"));
+
+pruefe("Bild und Bildunterschrift kommen gemeinsam in den Abschnitt", () =>
+  gleich(ausricht("«![B](/media/wiki/b.jpg)\n\n*Die Unterschrift*»", "center"),
+         "$$ausrichtung\ncenter\n$$\n\n![B](/media/wiki/b.jpg)\n\n*Die Unterschrift*\n\n$$ende\n$$"));
+
+pruefe("eine Auswahl über eine Abschnittsgrenze hinaus wird abgelehnt", () => {
+  const erg = ausricht("$$hinweis\ninfo 💡\n$$\n\n«Text\n\n$$ende\n$$\n\nB»", "right");
+  return erg.fehler ? "" : "durchgelassen:\n" + erg.md;
+});
+
+pruefe("eine Auswahl innerhalb eines Hinweises bleibt darin", () =>
+  gleich(ausricht("$$hinweis\ninfo 💡\n$$\n\n«A\n\nB»\n\n$$ende\n$$", "center"),
+         "$$hinweis\ninfo 💡\n$$\n\n$$ausrichtung\ncenter\n$$\n\nA\n\nB\n\n$$ende\n$$\n\n$$ende\n$$"));
+
+pruefe("das Profilbild der Autorenzeile zählt nicht als Artikelbild", () => {
+  // Im Editor steht über dem Text die Autorenzeile – seit es Profilbilder gibt, mit einem <img>
+  // darin. Zählte es als Artikelbild mit, fände jede Änderung an einem Bild (drehen, zuschneiden,
+  // Breite, Löschen) die falsche Stelle im Text und bräche ab.
+  const buehne = document.createElement("div");
+  buehne.innerHTML = '<div class="autorzeile ed-nichtinhalt"><span class="avatar">'
+    + '<img src="/media/avatar/abc.jpg" alt=""></span></div>'
+    + '<p><img src="/media/wiki/artikelbild.jpg" alt="eins"></p>'
+    + '<img class="ProseMirror-separator" alt="">';
+  const alle = Array.from(buehne.querySelectorAll("img"));
+  const inhalt = alle.filter(MD.istInhaltsbild);
+  if (alle.length !== 3) return "Aufbau der Probe stimmt nicht: " + alle.length + " Bilder";
+  if (inhalt.length !== 1) return inhalt.length + " Artikelbilder gezählt, erwartet 1";
+  return inhalt[0].getAttribute("src") === "/media/wiki/artikelbild.jpg"
+    ? "" : "gezählt wurde das falsche Bild: " + inhalt[0].getAttribute("src");
+});
+
+pruefe("ein über mehrere Zeilen umbrochener Absatz ist im Editor EIN Absatz", () => {
+  // Markdown liest den einzelnen Zeilenumbruch als Leerzeichen; die Leseansicht setzt ihn auch
+  // so. Toast UI machte daraus je Zeile einen Absatz – der Editor zeigte drei Absätze mit
+  // Abstand, und beim Speichern wurden echte Absätze daraus.
+  EDVERLAUF.laden(ed2, EDMD.toEditorMd("Erste Zeile,\nzweite Zeile,\ndritte Zeile."));
+  const absaetze = [...ed2.wwEditor.view.dom.children].filter((k) => k.tagName === "P" && k.textContent.trim());
+  if (absaetze.length !== 1) return absaetze.length + " Absätze statt einem: " + absaetze.map((x) => x.textContent).join(" | ");
+  const raus = EDMD.fromEditorMd(ed2.getMarkdown());
+  return raus === "Erste Zeile, zweite Zeile, dritte Zeile." ? "" : "gespeichert:\n" + raus;
+});
+
+pruefe("ein Zitat über zwei Zeilen ist im Editor EIN Absatz", () => {
+  EDVERLAUF.laden(ed2, EDMD.toEditorMd("> Ein Zitat über zwei\n> Zeilen."));
+  const zitat = ed2.wwEditor.view.dom.querySelector("blockquote");
+  if (!zitat) return "kein Zitat im Editor";
+  const n = zitat.querySelectorAll("p").length;
+  return n === 1 ? "" : n + " Absätze im Zitat statt einem";
+});
+
+pruefe("ein harter Umbruch (zwei Leerzeichen) bleibt ein Umbruch", () => {
+  const md = "Zeile mit hartem Umbruch  \nzweite Zeile.";
+  EDVERLAUF.laden(ed2, EDMD.toEditorMd(md));
+  const raus = EDMD.fromEditorMd(ed2.getMarkdown());
+  return /\n/.test(raus) ? "" : "der Umbruch ist verschwunden: " + JSON.stringify(raus);
+});
+
+pruefe("ein Bild mitten im Text bekommt im Editor eine eigene Zeile", () => {
+  // Die Leseansicht setzt jedes Bild auf display:block, der Editor lässt es sonst in der
+  // Textzeile mitlaufen: Der Absatz war dort rund fünfzig Pixel flacher als im Artikel und
+  // ein mittig ausgerichtetes Bild stand neben der Mitte.
+  EDVERLAUF.laden(ed2, EDMD.toEditorMd("Text davor ![x](/media/wiki/x.jpg) Text danach.\n\n![allein](/media/wiki/y.jpg)"));
+  const wurzel = ed2.wwEditor.view.dom;
+  const imText = wurzel.querySelector(".ed-bild-im-text");
+  const alleine = [...wurzel.children].find((k) => k.querySelector && k.querySelector('img[alt="allein"]'));
+  if (!imText) return "der Absatz mit Bild im Text trägt die Klasse nicht";
+  if (!imText.querySelector('img[alt="x"]')) return "die Klasse sitzt am falschen Absatz";
+  if (alleine && alleine.classList.contains("ed-bild-im-text")) return "ein Bild allein im Absatz bekam sie auch";
+  return "";
+});
+
+pruefe("Laden ändert kein Byte am Markdown", () => {
+  EDVERLAUF.laden(ed2, EDMD.toEditorMd(SEITE));
+  const raus = EDMD.fromEditorMd(ed2.getMarkdown());
+  return raus === SEITE ? "" : "hinein:\n" + SEITE + "\n\nheraus:\n" + raus;
+});
+
+document.getElementById("kopf2").textContent = fehler2
+  ? fehler2 + " von " + gesamt2 + " Prüfungen schlagen fehl"
+  : "alle " + gesamt2 + " Prüfungen des Verlaufs sind grün";
+document.getElementById("kopf2").className = fehler2 ? "fehler" : "ok";
+
+/* --- Zellen verbinden und teilen ----------------------------------------------------
+   Der dritte Editor ist bestückt wie der im Wiki: Erweiterung des Herstellers und die
+   Reparatur der Zellauswahl. Ausgelöst wird über denselben Weg wie der Zug mit der Maus –
+   Toast UI legt dafür eine Plugin-Sicht an, deren setCellSelection auch der eigene
+   Mausbeobachter ruft. */
+let pmStateDritt = null;
+const spion = (ctx) => { pmStateDritt = ctx.pmState; return {}; };
+const ed3 = new toastui.Editor({
+  el: document.querySelector("#editor3"), height: "200px",
+  initialEditType: "wysiwyg", hideModeSwitch: true, usageStatistics: false,
+  plugins: [spion, EDLAYOUT.zellenAuswahl, toastui.Editor.plugin.tableMergedCell],
+});
+const sicht3 = () => ed3.wwEditor.view;
+// Positionen vor jeder Zelle, zeilenweise – Kopfzeile ist Zeile 0.
+const zellRaster = (view) => {
+  const doc = view.state.doc;
+  let tab = null, tabPos = 0;
+  doc.descendants((n, p) => { if (!tab && n.type.name === "table") { tab = n; tabPos = p; } return !tab; });
+  if (!tab) throw new Error("keine Tabelle im Text");
+  const raster = [];
+  tab.forEach((rumpf, roff) => {
+    const rumpfPos = tabPos + 1 + roff;
+    rumpf.forEach((zeile, zoff) => {
+      const zeilePos = rumpfPos + 1 + zoff;
+      const zellen = [];
+      zeile.forEach((z, soff) => zellen.push(zeilePos + 1 + soff));
+      raster.push(zellen);
+    });
+  });
+  return raster;
+};
+const zellenZiehen = (vonZeile, vonSpalte, bisZeile, bisSpalte) => {
+  const view = sicht3();
+  const sicht = (view.pluginViews || []).find((v) => typeof v.setCellSelection === "function");
+  if (!sicht) throw new Error("Toast UI gibt die Zellauswahl nicht mehr über eine Plugin-Sicht heraus");
+  const r = zellRaster(view), d = view.state.doc;
+  sicht.setCellSelection(d.resolve(r[vonZeile][vonSpalte]), d.resolve(r[bisZeile][bisSpalte]));
+};
+const setzen3 = (md) => ed3.setMarkdown(EDMD.toEditorMd(md), false);
+const holen3 = () => EDMD.fromEditorMd(ed3.getMarkdown());
+
+const raus3 = document.getElementById("ergebnis3");
+let fehler3 = 0, gesamt3 = 0;
+const pruefe3 = (name, fn) => {
+  gesamt3++;
+  let meldung = "";
+  try { meldung = fn() || ""; } catch (e) { meldung = "Ausnahme: " + e.message; }
+  if (meldung) fehler3++;
+  const el = document.createElement("div");
+  el.className = "zeile " + (meldung ? "fehler" : "ok");
+  el.innerHTML = "<span>" + (meldung ? "✗" : "✓") + "</span><span>" + name + "</span>";
+  if (meldung) { const p = document.createElement("pre"); p.textContent = meldung; el.appendChild(p); }
+  raus3.appendChild(el);
+};
+
+const DREI = "| A | B | C |\n| --- | --- | --- |\n| a1 | b1 | c1 |\n| a2 | b2 | c2 |\n| a3 | b3 | c3 |";
+
+pruefe3("der Zug über mehrere Zellen ergibt eine Zellauswahl", () => {
+  setzen3(DREI);
+  zellenZiehen(1, 0, 1, 1);
+  const gewaehlt = sicht3().dom.querySelectorAll("td.toastui-editor-cell-selected, th.toastui-editor-cell-selected");
+  return gewaehlt.length === 2 ? "" : gewaehlt.length + " Zellen markiert, erwartet 2";
+});
+
+pruefe3("Verbinden über zwei Spalten schreibt @cols=2:", () => {
+  setzen3(DREI);
+  zellenZiehen(1, 0, 1, 1);
+  ed3.exec("mergeCells");
+  const md = holen3();
+  return /^\| @cols=2:a1<br>b1 \| c1 \|$/m.test(md) ? "" : md;
+});
+
+pruefe3("Verbinden über zwei Zeilen schreibt @rows=2:", () => {
+  setzen3(DREI);
+  zellenZiehen(1, 0, 2, 0);
+  ed3.exec("mergeCells");
+  const md = holen3();
+  return /^\| @rows=2:a1<br>a2 \| b1 \| c1 \|$/m.test(md) ? "" : md;
+});
+
+pruefe3("Verbinden über ein Viereck schreibt beides und bleibt stabil", () => {
+  setzen3(DREI);
+  zellenZiehen(1, 0, 2, 1);
+  ed3.exec("mergeCells");
+  const eins = holen3();
+  if (!/@cols=2:@rows=2:/.test(eins)) return "keine Verbindung über Zeilen und Spalten:\n" + eins;
+  setzen3(eins);
+  const zwei = holen3();
+  return eins === zwei ? "" : "erste Runde:\n" + eins + "\n\nzweite Runde:\n" + zwei;
+});
+
+pruefe3("ein sinnloses @rows=1: räumt der Editor weg", () => {
+  // Toast UI schreibt beim Verbinden über nur eine Zeile trotzdem "@rows=1:". Bliebe das stehen,
+  // wäre schon das nächste Öffnen und Speichern eine Änderung ohne Inhalt.
+  setzen3(DREI);
+  zellenZiehen(1, 0, 1, 1);
+  ed3.exec("mergeCells");
+  return /@rows=1:/.test(holen3()) ? "das @rows=1: steht noch im Markdown" : "";
+});
+
+pruefe3("Teilen macht das Verbinden rückgängig", () => {
+  setzen3(DREI);
+  zellenZiehen(1, 0, 1, 1);
+  ed3.exec("mergeCells");
+  const verbunden = holen3();
+  ed3.exec("splitCells");
+  const geteilt = holen3();
+  if (/@cols=|@rows=/.test(geteilt)) return "nach dem Teilen steht noch eine Verbindung darin:\n" + geteilt;
+  const zellen = geteilt.split("\n")[2];
+  return /^\| a1<br>b1 \| \| c1 \|$/.test(zellen) || /^\| a1<br>b1 \|\s*\| c1 \|$/.test(zellen)
+    ? "" : "verbunden:\n" + verbunden + "\n\ngeteilt:\n" + geteilt;
+});
+
+pruefe3("ein Textwechsel bei stehender Zellauswahl wirft den Editor nicht", () => {
+  // Toast UI rechnet die alte Auswahl auf den neuen Text um und findet die Zelle dort nicht
+  // mehr. Ohne die Absicherung in editor-layout.js bliebe der Editor mit einer Ausnahme stehen.
+  setzen3(DREI);
+  zellenZiehen(1, 0, 1, 1);
+  setzen3("Nur noch ein Absatz.");
+  return holen3().trim() === "Nur noch ein Absatz." ? "" : "heraus kam:\n" + holen3();
+});
+
+pruefe3("Gegenprobe: ohne die Reparatur entsteht gar keine Zellauswahl", () => {
+  const Auswahl = pmStateDritt && pmStateDritt.Selection;
+  if (!Auswahl) return "das Modul pmState war nicht zu bekommen";
+  const geflickt = Object.getOwnPropertyDescriptor(Auswahl, "call");
+  delete Auswahl.call;                                  // wieder Function.prototype.call
+  let geworfen = false;
+  try {
+    setzen3(DREI);
+    zellenZiehen(1, 0, 1, 1);
+  } catch (e) { geworfen = true; }
+  const markiert = sicht3().dom.querySelectorAll("td.toastui-editor-cell-selected").length;
+  if (geflickt) Object.defineProperty(Auswahl, "call", geflickt);
+  return geworfen || !markiert ? "" : "ohne Reparatur wurden trotzdem " + markiert + " Zellen markiert";
+});
+
+/* Und die Gegenseite: Was der Editor schreibt, muss die Leseansicht auch zeigen. marked kennt
+   nur GFM-Tabellen; "@cols=2:" stünde dort als Text in der Zelle. Die Nachbearbeitung in
+   markdown.js setzt daraus colspan und rowspan und räumt die Füllzellen weg. */
+const lesestueck = document.createElement("article");
+lesestueck.className = "wiki-content";
+lesestueck.style.cssText = "position:absolute;left:-9999px;width:800px";
+document.body.appendChild(lesestueck);
+const lesen3 = (md) => {
+  lesestueck.innerHTML = MD.render(md);
+  MD.enhance(lesestueck, {});
+  return lesestueck.querySelector("table");
+};
+const raster3 = (t) => [...t.rows].map((r) => [...r.cells].map((c) => c.textContent.trim() + "/" + c.colSpan + "/" + c.rowSpan));
+
+pruefe3("die Leseansicht macht aus @cols=2: ein colspan", () => {
+  const t = lesen3("| A | B | C |\n| --- | --- | --- |\n| @cols=2:a1 | c1 |\n| a2 | b2 | c2 |");
+  const soll = [["A/1/1", "B/1/1", "C/1/1"], ["a1/2/1", "c1/1/1"], ["a2/1/1", "b2/1/1", "c2/1/1"]];
+  return JSON.stringify(raster3(t)) === JSON.stringify(soll) ? "" : JSON.stringify(raster3(t));
+});
+
+pruefe3("die Leseansicht macht aus @rows=2: ein rowspan", () => {
+  const t = lesen3("| A | B |\n| --- | --- |\n| @rows=2:a1 | b1 |\n| b2 |");
+  const soll = [["A/1/1", "B/1/1"], ["a1/1/2", "b1/1/1"], ["b2/1/1"]];
+  return JSON.stringify(raster3(t)) === JSON.stringify(soll) ? "" : JSON.stringify(raster3(t));
+});
+
+pruefe3("die Leseansicht versteht @cols= und @rows= an derselben Zelle", () => {
+  const t = lesen3("| A | B | C |\n| --- | --- | --- |\n| @cols=2:@rows=2:Eck | c1 |\n| c2 |\n| a3 | b3 | c3 |");
+  const soll = [["A/1/1", "B/1/1", "C/1/1"], ["Eck/2/2", "c1/1/1"], ["c2/1/1"], ["a3/1/1", "b3/1/1", "c3/1/1"]];
+  return JSON.stringify(raster3(t)) === JSON.stringify(soll) ? "" : JSON.stringify(raster3(t));
+});
+
+pruefe3("eine Tabelle mit verbundenen Zellen bekommt keine Sortierpfeile", () => {
+  const mit = lesen3("| A | B | C |\n| --- | --- | --- |\n| @cols=2:a1 | c1 |\n| a2 | b2 | c2 |");
+  if (mit.querySelector(".th-sort")) return "die verbundene Tabelle hat Sortierpfeile";
+  // Die Gegenprobe braucht zwei Datenzeilen: unter einer einzigen gibt es nichts zu sortieren.
+  const ohne = lesen3("| A | B |\n| --- | --- |\n| a1 | b1 |\n| a2 | b2 |");
+  return ohne.querySelector(".th-sort") ? "" : "die gewöhnliche Tabelle hat keine mehr – die Gegenprobe greift nicht";
+});
+
+pruefe3("Gegenprobe: ohne die Nachbearbeitung bliebe @cols=2: Text", () => {
+  lesestueck.innerHTML = MD.render("| A | B | C |\n| --- | --- | --- |\n| @cols=2:a1 | c1 |\n| a2 | b2 | c2 |");
+  const zelle = lesestueck.querySelector("tbody td");
+  return zelle && /@cols=2:/.test(zelle.textContent) ? "" : "die Schreibweise verschwindet schon ohne enhance()";
+});
+
+document.getElementById("kopf3").textContent = fehler3
+  ? fehler3 + " von " + gesamt3 + " Prüfungen schlagen fehl"
+  : "alle " + gesamt3 + " Prüfungen zu verbundenen Zellen sind grün";
+document.getElementById("kopf3").className = fehler3 ? "fehler" : "ok";
+</script>
+</body>
+</html>

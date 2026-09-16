@@ -1,0 +1,17 @@
+services:
+  stroemis:
+    build: .
+    image: stroemis:latest
+    container_name: stroemis
+    restart: unless-stopped
+    env_file: .env
+    # Nur lokal veröffentlichen – TLS und die Domain übernimmt ein Reverse-Proxy (siehe README).
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # Datenbank, Originale, Thumbnails, Wiki-Bilder, Secret-Key.
+      # Alternativ ein Ordner: "./data:/data" – dann vorher  mkdir data && chown 1000:1000 data
+      - stroemis-data:/data
+
+volumes:
+  stroemis-data:

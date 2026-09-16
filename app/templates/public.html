@@ -1,0 +1,40 @@
+{% set user = none %}
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#e30613">
+  <title>Wiki – strömis.de</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body class="public">
+<header class="bauchbinde">
+  <a class="brand" href="/oeffentlich/">
+    {% if cfg.MASKOTTCHEN %}<span class="maskottchen"><img src="{{ url_for('static', filename=cfg.MASKOTTCHEN) }}" alt="strömis.de"></span>{% else %}<span class="wortmarke">{% if cfg.WORTMARKE %}<img src="{{ url_for('static', filename='img/dlrg-wortmarke.svg') }}" alt="DLRG">{% else %}DLRG{% endif %}</span>{% endif %}
+    <span class="trenner" aria-hidden="true"></span>
+    <span class="funktion">Strömungsrettung<small>strömis.de · öffentliches Wiki</small></span>
+  </a>
+  <nav class="nav"><a href="{{ cfg.BASE_URL }}/login">Anmelden</a></nav>
+</header>
+<div class="wiki-shell public" data-slug="{{ slug }}">
+  <aside class="wiki-side" id="wiki-side">
+    <input type="search" id="wiki-search" placeholder="Wiki durchsuchen …" aria-label="Wiki durchsuchen">
+    <ul class="search-results hidden" id="search-results"></ul>
+    <ul class="tree" id="tree"></ul>
+  </aside>
+  <main class="wiki-main" id="wiki-main">
+    <button class="btn secondary small wiki-menu-btn" id="wiki-menu">☰ Seiten</button>
+    <div id="wiki-content"></div>
+  </main>
+  <aside class="wiki-rail" id="wiki-rail"><nav class="toc" id="toc" aria-label="Inhalt"></nav></aside>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script nonce="{{ csp_nonce }}">window.STROEMIS = { baseUrl: {{ cfg.BASE_URL | tojson }}, publicUrl: {{ cfg.PUBLIC_URL | tojson }} };</script>
+<script src="{{ url_for('static', filename='vendor/marked/marked.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/dompurify/purify.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
+<script src="{{ url_for('static', filename='js/public.js') }}"></script>
+</body>
+</html>

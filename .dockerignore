@@ -1,0 +1,12 @@
+# Nur was wirklich ins Abbild gehört – der Rest bläht bloß den Build-Kontext auf.
+data/
+.env
+__pycache__/
+*.pyc
+tests/
+docs/
+.git/
+.claude/
+README.md
+# Die JavaScript-Bibliotheken lädt Stufe 1 des Dockerfiles selbst und prüft ihre Prüfsummen.
+app/static/vendor/

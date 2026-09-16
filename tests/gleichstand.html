@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Gleichstand: Lesen und Schreiben – strömis.de</title>
+<link rel="stylesheet" href="../app/static/vendor/toastui/toastui-editor.min.css">
+<link rel="stylesheet" href="../app/static/vendor/toastui/toastui-editor-plugin-table-merged-cell.min.css">
+<link rel="stylesheet" href="../app/static/css/app.css">
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 16px 20px; }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  p.hinweis { color: #555; margin: 0 0 16px; max-width: 70em; }
+  #bericht { height: 40vh; overflow: auto; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+  .zeile { padding: 3px 6px; border-bottom: 1px solid #eee; display: flex; gap: 10px; }
+  .ok { color: #0a7a3d; } .fehler { background: #fdecec; color: #a30000; }
+  #kopf { font-weight: 700; padding: 8px 0; }
+  pre { background: #f5f5f5; padding: 8px; margin: 4px 0 10px; white-space: pre-wrap; }
+  /* Beide Ansichten nebeneinander und gleich breit. Sie bleiben sichtbar: Gemessen wird
+     zwar mit dem Rechner, aber danebengehalten sieht man den Unterschied auch. */
+  /* Die Bühne bekommt Schrift und Zeilenmaß des Wikis: Sonst misst die Leseansicht in der
+     Systemschrift und der Editor in der Hausschrift, und schon die Spaltenbreiten einer Tabelle
+     mit automatischem Umbruch gingen auseinander. */
+  #buehne { display: flex; gap: 24px; width: 1360px; font-family: var(--font); font-size: 15px; line-height: 1.45; }
+  #buehne > div { width: 660px; flex: none; }
+  #buehne h2.ueber { font: 700 12px/1.4 system-ui; color: #555; margin: 0 0 6px; }
+</style>
+</head>
+<body>
+<h1>Gleichstand: derselbe Text in Leseansicht und Editor</h1>
+<p class="hinweis">Der Editor soll zeigen, was der Artikel später zeigt. Hier läuft derselbe
+Markdown-Text einmal durch die Leseansicht (markdown.js) und einmal durch den Editor, und für
+jede Textstelle werden Schriftgröße, Schnitt, Farbe, Auszeichnung, Ausrichtung und der linke
+Textanfang verglichen. Die Höhe bleibt außen vor: Der Editor braucht Platz für seine Marken.
+Diese Datei direkt im Browser öffnen (Doppelklick); sie braucht keinen Server.</p>
+<div id="kopf">läuft …</div>
+<div id="bericht"><div id="ergebnis"></div></div>
+
+<div id="buehne">
+  <div><h2 class="ueber">Leseansicht</h2><article id="lesen" class="wiki-content"></article></div>
+  <div class="wiki-editor"><h2 class="ueber">Editor</h2><div id="schreiben"></div></div>
+</div>
+
+<script src="../app/static/vendor/marked/marked.min.js"></script>
+<script src="../app/static/vendor/dompurify/purify.min.js"></script>
+<script src="../app/static/vendor/toastui/toastui-editor-all.min.js"></script>
+<script src="../app/static/vendor/toastui/toastui-editor-plugin-table-merged-cell.min.js"></script>
+<script src="../app/static/js/markdown.js"></script>
+<script src="../app/static/js/editor-format.js"></script>
+<script src="../app/static/js/editor-layout.js"></script>
+<script>
+/* Die Proben decken die Bausteine ab, die in beiden Ansichten vorkommen. Was es nur in einer
+   gibt (Sortierpfeil, Kopierknopf, Ankerlink, Vollbild, Marken des Editors), bleibt draußen. */
+const PROBEN = {
+  auszeichnungen: "Ein Satz mit **fett**, *kursiv*, ~~durchgestrichen~~, `Code`, ++unterstrichen++,\n"
+    + "==hervorgehoben==, m^2^, H~2~O, {{rot:rot}}, {{blau:blau}}, {{gruen:gruen}}, {{grau:grau}},\n"
+    + "{{gelb:gelb}}, {status:offen} und [ein Link](https://www.dlrg.de).",
+  ueberschriften: "## Zweite Ebene\n\n### Dritte Ebene\n\n#### Vierte Ebene\n\n##### Fünfte Ebene",
+  listen: "* Punkt eins\n* Punkt zwei\n  * tiefer gelegt\n    * noch tiefer\n\n1. erstens\n2. zweitens\n   1. tiefer gezählt",
+  aufgaben: "* [ ] offen\n* [x] erledigt",
+  zitat: "> Ein Zitat über zwei\n> Zeilen.",
+  code: "```\nVorformatierter Text\n  mit Einrückung\n```",
+  linie: "Davor.\n\n---\n\nDanach.",
+  tabelle: "| Verfahren | 20 kN | 30 kN |\n| :-- | :-: | --: |\n| Bandschlinge | ja | nein |\n| Ringanker | ja | ja |",
+  tabelleVerbunden: "| Verfahren | @cols=2:Belastbarkeit |\n| --- | --- | --- |\n| @rows=2:Bandschlinge | 20 kN | ja |\n| 30 kN | nein |",
+  hinweiskisten: ":::info 💡\n**Hinweis** mit Text.\n:::\n\n:::warning ⚠️\n**Achtung** mit Text.\n:::\n\n"
+    + ":::success ✅\n**Vorteil** mit Text.\n:::\n\n:::danger ⛔\n**Gefahr** mit Text.\n:::\n\n"
+    + ":::note 📝\n**Notiz** mit Text.\n:::",
+  kisteMitFarbe: ":::info 🚤 farbe:mint\nEigene Farbe und eigenes Emoji.\n:::",
+  kisteMitTieferListe: ":::note 📝\n### Hinweise\n\n* Erprobung steht aus.\n* Mit Roll-Up Trage.\n  * Vermutlich ungeeignet.\n:::",
+  spalten: ":::columns\n### Links\nInhalt links.\n|||\n### Rechts\nInhalt rechts.\n:::",
+  box: ":::accordion Materialliste anzeigen\n* Bandschlinge 120 cm\n* zwei HMS-Karabiner\n:::",
+  ausrichtung: ":::align center\nMittig gesetzter Absatz.\n:::\n\n:::align right\nRechtsbündiger Absatz.\n:::",
+  bildUndUnterschrift: "![Bild](/media/wiki/pruef.jpg)\n\n*Die Bildunterschrift*",
+  anhang: "[Handbuch als Anhang](/media/wiki/pruef.pdf)",
+  umbrueche: "Erster Teil eines Absatzes,\nzweiter Teil desselben Absatzes.\n\nHart getrennt  \nzweite Zeile.",
+};
+
+const lesen = document.getElementById("lesen");
+const editor = new toastui.Editor({
+  el: document.querySelector("#schreiben"), height: "900px",
+  initialEditType: "wysiwyg", previewStyle: "tab", usageStatistics: false, hideModeSwitch: true,
+  initialValue: "", widgetRules: MD.widgetRules(),
+  plugins: [EDLAYOUT.zellenAuswahl, EDLAYOUT.layoutPlugin, toastui.Editor.plugin.tableMergedCell],
+});
+
+const norm = (s) => (s || "").replace(/[#⇅]/g, "").replace(/Kopieren/g, "").replace(/\s+/g, " ").trim();
+
+/* Je Textstelle: wo sie anfängt und wie sie aussieht. Verglichen wird der innerste Träger
+   eines Textes – sonst misst man Hüllen gegen Hüllen, die es nur in einer Ansicht gibt. */
+function sammle(wurzel) {
+  const bez = wurzel.getBoundingClientRect();
+  const raus = new Map();
+  wurzel.querySelectorAll("*").forEach((k) => {
+    /* Was es nur in einer Ansicht als Element gibt: Sortierpfeil, Ankerlink und Kopierknopf
+       baut erst die Leseansicht ein; Symbol und Endung der Anhangsschaltfläche zeichnet der
+       Editor als Pseudoelement. Gemessen wird die Schaltfläche als Ganzes. */
+    if (k.closest(".ed-nichtinhalt") || k.classList.contains("th-sort")
+        || k.classList.contains("h-anchor") || k.classList.contains("code-copy")
+        || k.classList.contains("att-ext") || k.classList.contains("att-icon")) return;
+    const t = norm(k.textContent);
+    if (!t || t.length > 70) return;
+    if ([...k.children].some((c) => norm(c.textContent) === t)) return;
+    if (raus.has(t)) return;
+    const cs = getComputedStyle(k);
+    // Blatt = trägt den Text selbst. Hüllen (Liste, Zeile, Kiste, Schaltfläche) bauen beide
+    // Ansichten verschieden auf; sie werden nur verglichen, wenn es drüben etwas Gleiches gibt.
+    const blatt = ![...k.children].some((c) => norm(c.textContent));
+    const block = ["block", "list-item", "table-cell", "flex", "grid"].includes(cs.display);
+    const tw = document.createTreeWalker(k, NodeFilter.SHOW_TEXT);
+    const tn = tw.nextNode();
+    let tx = null;
+    if (tn) {
+      const rg = document.createRange();
+      rg.setStart(tn, 0); rg.setEnd(tn, Math.min(3, tn.length));
+      tx = Math.round(rg.getBoundingClientRect().left - bez.left);
+    }
+    raus.set(t, { tag: k.tagName, tx, blatt, block, fs: cs.fontSize, fw: cs.fontWeight, st: cs.fontStyle,
+                  fa: cs.color, hg: cs.backgroundColor, dek: cs.textDecorationLine, ta: cs.textAlign,
+                  // Vererbt sich: An einem Absatz steht überall dasselbe, an einer Liste zeigt es
+                  // das Aufzählungszeichen – und das lief in der zweiten Ebene auseinander.
+                  lz: cs.listStyleType });
+  });
+  return raus;
+}
+
+const raus = document.getElementById("ergebnis");
+let fehler = 0, gesamt = 0;
+const zeile = (name, meldung) => {
+  gesamt++;
+  if (meldung) fehler++;
+  const el = document.createElement("div");
+  el.className = "zeile " + (meldung ? "fehler" : "ok");
+  el.innerHTML = "<span>" + (meldung ? "✗" : "✓") + "</span><span>" + name + "</span>";
+  if (meldung) { const p = document.createElement("pre"); p.textContent = meldung; el.appendChild(p); }
+  raus.appendChild(el);
+};
+
+for (const name in PROBEN) {
+  const md = PROBEN[name];
+  lesen.innerHTML = MD.render(md);
+  MD.enhance(lesen, {});
+  editor.setMarkdown(EDMD.toEditorMd(md), false);
+  // Ausdrücklich die WYSIWYG-Fläche: "#schreiben .toastui-editor-contents" träfe zuerst die
+  // verborgene Vorschau, und die misst sich zu null.
+  const L = sammle(lesen),
+        E = sammle(document.querySelector("#schreiben .toastui-editor-ww-container .ProseMirror"));
+  const abw = [];
+  for (const [t, l] of L) {
+    // Reine Zeichenstellen (das Symbol einer Kiste, der Anhangshaken) zeichnet der Editor als
+    // Pseudoelement – dazu gibt es kein Gegenstück zum Messen.
+    if (!/[\p{L}\p{N}]/u.test(t)) continue;
+    const e = E.get(t);
+    if (!e) { if (l.blatt) abw.push("„" + t.slice(0, 40) + "“ fehlt im Editor"); continue; }
+    const d = [];
+    /* Der linke Textanfang ist die Probe auf Einzug, Polsterung und Ausrichtung – aber nur bei
+       Blöcken: Eine ausgezeichnete Stelle mitten im Satz sitzt dort, wo die Zeile sie hintreibt,
+       und schon ein Pixel Unterschied in der Breite eines Widgets verschiebt sie. */
+    /* Linksbündig muss es auf zwei Pixel stimmen. Mittig und rechtsbündig hängt der Zeilenfall
+       zusätzlich an der unsichtbaren Schlussmarke, die ProseMirror in jeden Absatz setzt – dort
+       sind acht Pixel erlaubt. Ebenso in Tabellenzellen: Schrift, Polsterung und Gesamtbreite
+       sind in beiden Ansichten gleich, die selbsttätige Spaltenaufteilung des Browsers verteilt
+       den Überschuss aber um wenige Pixel verschieden, sobald der Zelleninhalt einmal roher Text
+       (Leseansicht) und einmal ein Absatz (Editor) ist. */
+    const inTabelle = l.tag === "TD" || l.tag === "TH";
+    const grenze = inTabelle || !(l.ta === "left" || l.ta === "start") ? 8 : 2;
+    if (l.block && e.block && l.tx !== null && e.tx !== null && Math.abs(l.tx - e.tx) > grenze) {
+      d.push("Textanfang " + l.tx + "/" + e.tx);
+    }
+    if (l.fs !== e.fs) d.push("Schriftgröße " + l.fs + "/" + e.fs);
+    if (l.fw !== e.fw) d.push("Schnitt " + l.fw + "/" + e.fw);
+    if (l.st !== e.st) d.push("Kursiv " + l.st + "/" + e.st);
+    if (l.fa !== e.fa) d.push("Farbe " + l.fa + "/" + e.fa);
+    if (l.dek !== e.dek) d.push("Auszeichnung " + l.dek + "/" + e.dek);
+    if (l.ta !== e.ta) d.push("Ausrichtung " + l.ta + "/" + e.ta);
+    // Nur an Listenpunkten: Die Eigenschaft vererbt sich überallhin, sichtbar ist sie aber nur
+    // dort. (Der Titel einer einklappbaren Box ist in der Leseansicht ein <summary> ohne Marke,
+    // im Editor ein Absatz – beide zeigen nichts, die Eigenschaft steht trotzdem verschieden.)
+    if (l.tag === "LI" && e.tag === "LI" && l.lz !== e.lz) d.push("Aufzählungszeichen " + l.lz + "/" + e.lz);
+    if (d.length) abw.push("„" + t.slice(0, 34) + "“: " + d.join(", "));
+  }
+  zeile(name, abw.length ? abw.join("\n") : "");
+}
+
+document.getElementById("kopf").textContent = fehler
+  ? fehler + " von " + gesamt + " Bausteinen sehen in beiden Ansichten verschieden aus"
+  : "alle " + gesamt + " Bausteine sehen in beiden Ansichten gleich aus";
+document.getElementById("kopf").className = fehler ? "fehler" : "ok";
+</script>
+</body>
+</html>

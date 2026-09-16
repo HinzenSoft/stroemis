@@ -1,0 +1,14 @@
+# Laufzeitdaten und Geheimnisse – gehören nie ins Repository.
+.env
+data/
+*.db
+*.db-wal
+*.db-shm
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+# Werkzeugdateien der Entwicklungsumgebung
+.claude/

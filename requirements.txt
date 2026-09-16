@@ -1,0 +1,8 @@
+Flask==3.1.1
+# Werkzeug und itsdangerous kommen mit Flask, werden aber direkt benutzt
+# (Passwort-Hash, sicherer Dateiname, signierte Links) – deshalb hier festgeschrieben.
+Werkzeug==3.1.8
+itsdangerous==2.2.0
+gunicorn==23.0.0
+Pillow==11.2.1
+pillow-heif==0.22.0

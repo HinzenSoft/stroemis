@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% set active = 'map' %}
+{% block title %}Spots – strömis.de{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/markercluster/MarkerCluster.css') }}">
+{% endblock %}
+{% block body %}
+<main class="map-shell">
+  <div id="map"></div>
+  <div class="map-tools">
+    <button class="chip active" data-cat="">Alle</button>
+    <button class="chip seil" data-cat="seil">Seiltechnik</button>
+    <button class="chip wasser" data-cat="wasser">Gewässer</button>
+    <button class="btn secondary" id="btn-albums">Alben</button>
+    <button class="btn" id="btn-new-album">+ Neues Album</button>
+  </div>
+  <div class="locate-banner hidden" id="locate-banner"></div>
+  <aside class="panel" id="panel" aria-live="polite">
+    <div class="panel-head"><h2 id="panel-title"></h2><button class="close" id="panel-close" aria-label="Schließen">×</button></div>
+    <div class="panel-body" id="panel-body"></div>
+  </aside>
+</main>
+<dialog id="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
+<dialog id="lightbox" class="lightbox"><div class="lb" id="lb-body"></div></dialog>
+<input type="file" id="file-input" accept="image/*,video/*,.heic,.heif,.mp4,.mov,.m4v,.webm" multiple class="hidden">
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/markercluster/leaflet.markercluster.js') }}"></script>
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Anmelden – strömis.de{% endblock %}
+{% block body %}
+<main class="login-shell">
+  <section class="login-side">
+    <div class="slideshow" id="slideshow" aria-hidden="true"><div class="slide"></div><div class="slide"></div></div>
+    <div class="login-side-text">
+      <div class="login-marke">
+        {% if cfg.MASKOTTCHEN %}<span class="maskottchen"><img src="{{ url_for('static', filename=cfg.MASKOTTCHEN) }}" alt="strömis.de"></span>{% else %}<span class="wortmarke">{% if cfg.WORTMARKE %}<img src="{{ url_for('static', filename='img/dlrg-wortmarke.svg') }}" alt="DLRG">{% else %}DLRG{% endif %}</span>{% endif %}
+        <span class="trenner" aria-hidden="true"></span>
+        <span class="funktion">Strömungsrettung<small>strömis.de</small></span>
+      </div>
+      <p>Übungsobjekte für die seiltechnische Rettung, Übungsgewässer für die Strömungsrettung und ein gemeinsames Wiki – gesammelt und geteilt von Strömungsrettenden.</p>
+      <p class="small">Die Inhalte sind nur für angemeldete Nutzer sichtbar. Einen Teil des Wissens gibt es frei zugänglich im <a href="{{ cfg.PUBLIC_URL }}/">öffentlichen Wiki</a>.</p>
+    </div>
+  </section>
+  <section class="login-form" data-mode="{{ mode }}" data-next="{{ next }}">
+    {% if mode == 'login' %}
+      <h2>Anmelden</h2>
+      <form id="f-login">
+        <label for="email">E-Mail-Adresse</label>
+        <input id="email" name="email" type="email" autocomplete="username" required>
+        <label for="password">Passwort</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <div class="error hidden" id="err"></div>
+        <button class="btn" type="submit">Anmelden</button>
+      </form>
+      <div class="login-links">
+        <a href="/forgot">Passwort vergessen?</a>
+        {% if allow_registration %}<a href="/register">Konto anfragen</a>{% endif %}
+      </div>
+    {% elif mode == 'register' %}
+      <h2>Konto anfragen</h2>
+      {% if not allow_registration %}
+        <p class="notice">Kontoanfragen sind deaktiviert. Ein Administrator kann dein Konto anlegen.</p>
+      {% else %}
+      <p class="help">Ein Administrator prüft deine Anfrage und schaltet das Konto frei – du bekommst dann eine E-Mail.</p>
+      <form id="f-register">
+        <label for="name">Name</label>
+        <input id="name" name="name" type="text" autocomplete="name" required>
+        <label for="gliederung">Gliederung</label>
+        <input id="gliederung" name="gliederung" type="text" placeholder="z. B. OG Musterstadt, LV Bayern" required>
+        <label for="email">E-Mail-Adresse</label>
+        <input id="email" name="email" type="email" autocomplete="username" required>
+        <label for="password">Passwort</label>
+        <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+        <div class="help">Mindestens 8 Zeichen.</div>
+        <label for="reason">Begründung <span class="muted">(optional)</span></label>
+        <textarea id="reason" name="reason" placeholder="z. B. SR2 in der OG Musterstadt, Ausbildung Seiltechnik"></textarea>
+        <div class="error hidden" id="err"></div>
+        <button class="btn" type="submit">Konto anfragen</button>
+      </form>
+      {% endif %}
+      <div class="login-links"><a href="/login">Zurück zur Anmeldung</a></div>
+    {% elif mode == 'forgot' %}
+      <h2>Passwort zurücksetzen</h2>
+      <p>Wir schicken dir einen Link, mit dem du ein neues Passwort setzen kannst.</p>
+      <form id="f-forgot">
+        <label for="email">E-Mail-Adresse</label>
+        <input id="email" name="email" type="email" autocomplete="username" required>
+        <div class="error hidden" id="err"></div>
+        <button class="btn" type="submit">Link anfordern</button>
+      </form>
+      <div class="login-links"><a href="/login">Zurück zur Anmeldung</a></div>
+    {% else %}
+      {# Ob ein Token vorliegt, sieht erst das JavaScript: er steht im Fragment der Adresse. #}
+      <h2>Neues Passwort setzen</h2>
+      <p class="notice hidden" id="no-token">Dieser Seite fehlt der Link aus der E-Mail. Fordere einen neuen an oder melde dich mit deinem bisherigen Passwort an.</p>
+      <form id="f-reset" class="hidden">
+        <label for="password">Neues Passwort</label>
+        <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+        <label for="password2">Passwort wiederholen</label>
+        <input id="password2" name="password2" type="password" autocomplete="new-password" minlength="8" required>
+        <div class="error hidden" id="err"></div>
+        <button class="btn" type="submit">Passwort speichern</button>
+      </form>
+      <div class="login-links"><a href="/login">Zur Anmeldung</a><a href="/forgot">Neuen Link anfordern</a></div>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/auth.js') }}"></script>{% endblock %}

@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Live mitlesen – strömis.de</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 16px 20px; max-width: 1000px; }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  p.hinweis { color: #555; margin: 0 0 16px; }
+  #ergebnis { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+  .zeile { padding: 3px 6px; border-bottom: 1px solid #eee; display: flex; gap: 10px; }
+  .ok { color: #0a7a3d; } .fehler { background: #fdecec; color: #a30000; }
+  pre { background: #f5f5f5; padding: 8px; overflow: auto; margin: 4px 0 10px; white-space: pre-wrap; }
+  #kopf { font-weight: 700; padding: 8px 0; }
+  /* Die Anwendung läuft seitlich außerhalb des Fensters, aber in voller Höhe: Die Prüfung
+     scrollt das Fenster und misst, wo ein Absatz nach dem Nachzeichnen steht. Deshalb steht die
+     Bühne im Fluss (nur weit nach links gerückt) und nicht absolut: Eine absolut gesetzte Bühne
+     zählt nicht zur Seitenhöhe, das Fenster ließe sich kaum scrollen, und die Prüfung der
+     Lesestelle schlüge je nach Fenstergröße fehl, ohne dass an der Anwendung etwas fehlt. */
+  #buehne { margin-left: -100000px; width: 1000px; }
+  /* Der Bericht wächst mit jeder Prüfung. Stünde er ohne feste Höhe über der Bühne, schöbe
+     jede neue Zeile den Artikel um ihre Höhe nach unten – und die Prüfung der Lesestelle
+     bekäme genau diesen Versatz als vermeintlichen Sprung gemeldet. */
+  #bericht { height: 45vh; overflow: auto; }
+  #buehne p { margin: 0 0 14px; }
+</style>
+</head>
+<body>
+<h1>Live mitlesen: der Leser sieht, was der Schreiber speichert</h1>
+<p class="hinweis">Es schreibt immer nur eine Person; die anderen sollen trotzdem nicht warten.
+Geprüft wird: Sobald jemand anderes schreibt, meldet sich der Leser alle 4 statt alle 15 Sekunden,
+holt eine neue Fassung und zeichnet den Artikel nach – ohne dass die Lesestelle springt, und nicht,
+solange im Artikel etwas markiert ist. Diese Datei direkt im Browser öffnen (Doppelklick); der
+Server ist eine Attrappe. Der Lauf dauert rund eine halbe Minute, weil die echten Takte gelten.</p>
+<div id="bericht"><div id="kopf">läuft …</div>
+<div id="ergebnis"></div></div>
+
+<div id="buehne">
+  <div class="wiki-shell" data-slug="seite-l">
+    <aside class="wiki-side" id="wiki-side">
+      <input type="search" id="wiki-search">
+      <ul class="search-results hidden" id="search-results"></ul>
+      <div class="btn-row"><button id="btn-new-page">+ Neue Seite</button><button id="btn-trash">🗑</button></div>
+      <div id="favorites"></div>
+      <ul class="tree" id="tree"></ul>
+    </aside>
+    <main class="wiki-main" id="wiki-main">
+      <button id="wiki-menu">☰ Seiten</button>
+      <div id="wiki-content"></div>
+    </main>
+    <aside class="wiki-rail" id="wiki-rail">
+      <section class="seiten-info hidden" id="seiten-info"></section>
+      <nav class="toc" id="toc"></nav>
+      <section class="comments" id="comments"></section>
+    </aside>
+  </div>
+  <button class="comment-fab hidden" id="comment-fab" type="button">💬</button>
+  <dialog id="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
+  <div id="toast"></div>
+</div>
+
+<script src="../app/static/vendor/marked/marked.min.js"></script>
+<script src="../app/static/vendor/dompurify/purify.min.js"></script>
+<script src="../app/static/vendor/toastui/toastui-editor-all.min.js"></script>
+<script src="../app/static/vendor/toastui/de-de.js"></script>
+<script src="../app/static/js/markdown.js"></script>
+<script src="../app/static/js/editor-format.js"></script>
+<script src="../app/static/js/editor-layout.js"></script>
+<script src="../app/static/js/editor-verlauf.js"></script>
+<script src="../app/static/js/common.js"></script>
+
+<script>
+/* ======================================================================================
+   Attrappe: ein Server, an dem "Anna" schreibt. Der Test spielt Anna, indem er den
+   Seiteninhalt und die Fassungsnummer direkt ändert – genau das sieht der Herzschlag.
+   ====================================================================================== */
+const PROBE = { pulse: [], schreiber: { user_id: 2, name: "Anna", seit: "2026-01-01T10:00:00" } };
+const absaetze = (n) => Array.from({ length: n }, (_, i) => `Absatz ${i + 1}: Anker sind die Schnittstelle zwischen den vorgefundenen Objekten und den eigentlichen Rettungssystemen.`);
+const SEITEN = {
+  1: { id: 1, title: "Lange Seite", slug: "seite-l", parent_id: null, position: 0, version: 3,
+       format: "markdown", content: "# Lange Seite\n\n" + absaetze(40).join("\n\n") },
+};
+const RECHTE = { can_edit: true, can_delete: true, can_share: true, can_publish: false,
+                 is_public: false, public_children: false, effective_public: false,
+                 read_restricted: false, is_template: false, favorite: false, watch: false,
+                 icon: "", comment_count: 0, backlink_count: 0, editors: [], created_by: 1,
+                 created_by_name: "Wilko", created_at: "2026-01-01T10:00:00", updated_at: "2026-01-01T10:00:00" };
+const alsJson = (p) => Object.assign({}, RECHTE, p);
+
+S.api = function (pfad, opts) {
+  const methode = (opts && opts.method) || "GET";
+  const body = opts && opts.body;
+  if (pfad === "/api/wiki/praesenz") {
+    if (body && body.weg) return Promise.resolve({ ok: true });
+    PROBE.pulse.push(Date.now());
+    return Promise.resolve({ modus: "lesen", version: SEITEN[1].version, schreiber: PROBE.schreiber, andere: [] });
+  }
+  let d = {};
+  if (pfad === "/api/wiki/tree") d = { pages: Object.values(SEITEN).map(alsJson) };
+  else if (/^\/api\/wiki\/pages\/[^/]+$/.test(pfad) && methode === "GET") {
+    const key = decodeURIComponent(pfad.split("/").pop());
+    const s = Object.values(SEITEN).find((a) => a.slug === key || String(a.id) === key);
+    d = s ? { page: alsJson(s) } : null;
+  }
+  else if (/\/comments$/.test(pfad)) d = { comments: [] };
+  else if (/\/backlinks$/.test(pfad)) d = { pages: [] };
+  else if (/\/attachments$/.test(pfad)) d = { files: [] };
+  else if (/\/contributors$/.test(pfad)) d = { owner: null, contributors: [] };
+  else if (pfad === "/api/wiki/recent") d = { pages: [] };
+  if (d === null) return Promise.reject(new Error("Seite nicht gefunden"));
+  return Promise.resolve(d);
+};
+window.STROEMIS = window.STROEMIS || { user: { id: 1, name: "Wilko", role: "user" }, publicUrl: "" };
+history.pushState = () => {};
+history.replaceState = () => {};
+</script>
+
+<script src="../app/static/js/wiki.js"></script>
+
+<script>
+const raus = document.getElementById("ergebnis");
+let fehler = 0, gesamt = 0;
+const pruefe = (name, bedingung, hinweis) => {
+  gesamt++;
+  if (!bedingung) fehler++;
+  const el = document.createElement("div");
+  el.className = "zeile " + (bedingung ? "ok" : "fehler");
+  el.innerHTML = "<span>" + (bedingung ? "✓" : "✗") + "</span><span>" + name + "</span>";
+  if (!bedingung && hinweis) { const pre = document.createElement("pre"); pre.textContent = hinweis; el.appendChild(pre); }
+  raus.appendChild(el);
+};
+const warte = (ms) => new Promise((f) => setTimeout(f, ms));
+async function warteAuf(was, bedingung, maxMs = 6000) {
+  const ende = Date.now() + maxMs;
+  while (Date.now() < ende) { if (bedingung()) return true; await warte(50); }
+  return false;
+}
+const artikel = () => document.querySelector("#article");
+const absatz = (n) => Array.from(artikel().querySelectorAll("p")).find((p) => p.textContent.startsWith(`Absatz ${n}:`));
+// Der Test spielt Anna: Inhalt ändern, Fassung hochzählen – so sieht es der Herzschlag.
+const annaSpeichert = (content) => { SEITEN[1].content = content; SEITEN[1].version += 1; };
+
+async function ablauf() {
+  // --- Leser kommt an, Anna schreibt bereits ---------------------------------------------
+  pruefe("Seite wird angezeigt", await warteAuf("Artikel", () => artikel() && absatz(40)));
+  pruefe("erster Herzschlag ist raus", PROBE.pulse.length >= 1);
+  pruefe("„Anna bearbeitet“ steht in der Kopfzeile", /Anna bearbeitet/.test((document.querySelector("#pg-praesenz") || {}).textContent || ""));
+  pruefe("Bearbeiten ist ausgegraut", document.querySelector("#pg-edit").disabled === true);
+
+  // --- Anna hängt einen Absatz an: er muss im kurzen Takt ankommen ------------------------
+  const vorher = PROBE.pulse.length;
+  annaSpeichert(SEITEN[1].content + "\n\nNachtrag von Anna.");
+  const kam = await warteAuf("Nachtrag erscheint", () => /Nachtrag von Anna\./.test(artikel().textContent), 6000);
+  pruefe("der Nachtrag erscheint ohne Neuladen innerhalb von 6 s", kam);
+  const abstand = PROBE.pulse.length > vorher ? PROBE.pulse[vorher] - PROBE.pulse[vorher - 1] : null;
+  pruefe("der Herzschlag läuft im kurzen Takt (unter 6 s statt 15 s)", abstand !== null && abstand < 6000, "Abstand: " + abstand + " ms");
+
+  // --- Lesestelle: Anna fügt OBEN einen Absatz ein, der Leser steht bei Absatz 25 ---------
+  absatz(25).scrollIntoView();
+  window.scrollBy(0, -37);
+  await warte(100);
+  const obenVorher = absatz(25).getBoundingClientRect().top;
+  const scrollVorher = window.scrollY;
+  annaSpeichert(SEITEN[1].content.replace("# Lange Seite\n\n", "# Lange Seite\n\nNeuer erster Absatz von Anna, der oben alles nach unten schiebt.\n\n"));
+  const oben = await warteAuf("neuer Absatz oben", () => /Neuer erster Absatz/.test(artikel().textContent), 6000);
+  pruefe("ein oben eingefügter Absatz kommt an", oben);
+  await warte(100);
+  const obenNachher = absatz(25).getBoundingClientRect().top;
+  pruefe("Absatz 25 steht nach dem Nachzeichnen an derselben Stelle (±2 px)",
+         Math.abs(obenNachher - obenVorher) <= 2, `vorher ${obenVorher}, nachher ${obenNachher}`);
+  pruefe("die Bildlaufhöhe ist dafür gewachsen – die Stelle wurde gehalten, nicht die Zahl",
+         window.scrollY > scrollVorher, `scrollY ${scrollVorher} → ${window.scrollY}`);
+
+  // --- Auswahl im Artikel: solange sie steht, wird nicht gezeichnet -----------------------
+  window.getSelection().selectAllChildren(absatz(30));
+  annaSpeichert(SEITEN[1].content + "\n\nWährend der Auswahl geschrieben.");
+  const trotzdem = await warteAuf("unter der Auswahl", () => /Während der Auswahl/.test(artikel().textContent), 5500);
+  pruefe("unter einer Textauswahl wird nicht nachgezeichnet", !trotzdem);
+  pruefe("die Auswahl steht noch", !window.getSelection().isCollapsed);
+  window.getSelection().removeAllRanges();
+  const danach = await warteAuf("nach der Auswahl", () => /Während der Auswahl/.test(artikel().textContent), 6000);
+  pruefe("nach dem Aufheben der Auswahl kommt der Stand nach", danach);
+
+  // --- Anna geht: letzter Stand kommt noch, dann wieder langer Takt -------------------------
+  PROBE.schreiber = null;
+  annaSpeichert(SEITEN[1].content + "\n\nSchluss von Anna.");
+  const schluss = await warteAuf("Schluss", () => /Schluss von Anna\./.test(artikel().textContent), 6000);
+  pruefe("der letzte Stand nach Annas Weggang kommt noch an", schluss);
+  pruefe("die Marke „bearbeitet“ ist weg", !document.querySelector("#pg-praesenz"));
+  pruefe("Bearbeiten ist wieder frei", document.querySelector("#pg-edit").disabled === false);
+  const n = PROBE.pulse.length;
+  await warte(6000);
+  pruefe("ohne Schreiber kein kurzer Takt mehr (kein Herzschlag in 6 s)", PROBE.pulse.length === n, `Herzschläge: ${n} → ${PROBE.pulse.length}`);
+  window.scrollTo(0, 0);
+}
+
+window.addEventListener("error", (e) => { pruefe("keine Ausnahme", false, String(e.message)); });
+ablauf().catch((e) => { pruefe("Ablauf läuft durch", false, e && e.stack ? e.stack : String(e)); }).then(() => {
+  const kopf = document.getElementById("kopf");
+  kopf.textContent = fehler ? fehler + " von " + gesamt + " Prüfungen schlagen fehl" : "alle " + gesamt + " Prüfungen bestanden";
+  kopf.className = fehler ? "fehler" : "ok";
+  window.ERGEBNIS = { gesamt, fehler };
+});
+</script>
+</body>
+</html>

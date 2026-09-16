@@ -1,0 +1,1883 @@
+/* Die Hausschrift der DLRG (Univers 55 Roman) liegt als WOFF2 im Projekt. Sie wird für die
+   Bauchbinde, die Wortmarke auf der Anmeldeseite und für alle Überschriften benutzt – in der
+   Leseansicht und im Editor gleichermaßen, sonst verschöbe sich der Text beim Umschalten. */
+@font-face {
+  font-family: "DLRG Univers";
+  src: url("/static/fonts/dlrg-univers-regular.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "DLRG Univers";
+  src: url("/static/fonts/dlrg-univers-italic.woff2") format("woff2");
+  font-weight: 400; font-style: italic; font-display: swap;
+}
+@font-face {
+  font-family: "DLRG Univers";
+  src: url("/static/fonts/dlrg-univers-bold.woff2") format("woff2");
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+
+/* strömis.de – Gestaltung nach dem DLRG-Handbuch Corporate Design (Stand 09/2024):
+   Hausfarben Rot #e30613 und Gelb #ffed00 (Gelb nur für die Wortmarke in der roten Bauchbinde),
+   Text in 80 % Schwarz #575756, Blau #0069b4 nur als Kennfarbe für Gewässer, Hausschrift Univers – Arial als Alternative. */
+:root {
+  --rot: #e30613;
+  --rot-dunkel: #b3000e;
+  --rot-hell: #fdeaec;
+  --gelb: #ffed00;
+  --gelb-dunkel: #e0cf00;
+  --anthrazit: #575756;   /* 80 % Schwarz */
+  --schwarz: #3c3c3b;
+  --grau: #6d6d6c;
+  --grau-hell: #f3f3f3;
+  --linie: #dadada;
+  --weiss: #ffffff;
+  --wasser: #0069b4;      /* DLRG-Blau */
+  --ok: #2b7a3d;
+  --font: Univers, "Univers Next", "Univers LT Std", Arial, Helvetica, sans-serif;
+  --font-marke: "DLRG Univers", Univers, "Univers Next", Arial, Helvetica, sans-serif;
+  --topbar: 52px;
+  /* Eine Textspalte für Lesen und Schreiben – feste Zahl statt ch, weil ch von der
+     geladenen Schrift abhängt und Editor und Ansicht dann auseinanderlaufen. */
+  --lesebreite: 690px;
+  --lesetext: 1.02rem;
+  --lesezeile: 1.45;
+  --lesepad: 36px;
+  --panel-w: 400px;
+  --radius: 2px;          /* Kanten der Bedienelemente – kantig wie das Handbuch CD */
+  --radius-gross: 6px;    /* schwebende Flächen: Menüs, Popover, Seitenleiste */
+  --radius-pille: 999px;  /* Marken und Plaketten */
+  /* Vier Rollen statt fünfundzwanzig Einzelwerte: was schwebt, was aufliegt, was am Rand
+     klebt und was die Karte überlagert. */
+  --schatten-menue: 0 6px 20px rgba(0, 0, 0, .2);
+  --schatten-dialog: 0 10px 40px rgba(0, 0, 0, .3);
+  --schatten-karte: 0 1px 4px rgba(0, 0, 0, .35);
+  --schatten-leiste: 0 8px 24px rgba(0, 0, 0, .22);
+  /* Drei Stufen für Hilfstexte und Beschriftungen – vorher lagen zwischen .72 und .95 rem
+     sechzehn verschiedene Werte, die nebeneinander unruhig wirkten. */
+  --fs-marke: .74rem;     /* Marken, Abschnittsbeschriftungen in Versalien */
+  --fs-klein: .82rem;     /* Hilfstexte, Nebenangaben */
+  --fs-mittel: .9rem;     /* Listen, Formularbeschriftungen, Tabellen */
+  /* Hinweiskisten: Fläche und Kante einmal gepflegt. Leseansicht und Editor greifen beide
+     hierauf zu – vorher standen die Werte doppelt im Blatt, und die Warnkiste hatte in den
+     beiden Ansichten schon zwei verschiedene Kantenfarben. */
+  --co-info-fl: #eaf2f9;      --co-info-ka: var(--wasser);
+  --co-warning-fl: #fffbd6;   --co-warning-ka: var(--gelb-dunkel);
+  --co-danger-fl: var(--rot-hell); --co-danger-ka: var(--rot);
+  --co-success-fl: #e9f5ec;   --co-success-ka: var(--ok);
+  --co-note-fl: var(--grau-hell);  --co-note-ka: var(--grau);
+  --co-rosa-fl: #fde8ee;      --co-rosa-ka: #e08fa8;
+  --co-pfirsich-fl: #fdeee0;  --co-pfirsich-ka: #e2a066;
+  --co-sonne-fl: #fdf6d8;     --co-sonne-ka: #d8c400;
+  --co-mint-fl: #e4f5ea;      --co-mint-ka: #5fb27a;
+  --co-himmel-fl: #e4f0fa;    --co-himmel-ka: #5f9ccd;
+  --co-flieder-fl: #efe6f7;   --co-flieder-ka: #9a76bd;
+  --co-sand-fl: #f3ede3;      --co-sand-ka: #bfa780;
+  --co-stein-fl: #f0f0f0;     --co-stein-ka: #a0a0a0;
+}
+
+* { box-sizing: border-box; }
+/* Der Platz des Scrollbalkens wird immer freigehalten: sonst rückt der ganze Text um
+   die halbe Balkenbreite, sobald eine Seite länger oder kürzer als das Fenster wird –
+   etwa beim Wechsel zwischen Lesen und Bearbeiten. */
+html { height: 100%; scrollbar-gutter: stable; }
+body {
+  /* min-height statt height: sonst endet die klebende Kopfzeile nach einer Bildschirmhöhe. */
+  min-height: 100%;
+  margin: 0;
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--anthrazit);
+  background: var(--weiss);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--rot); }
+a:hover { color: var(--rot-dunkel); }
+/* Überschriften in der Hausschrift – überall, nicht nur in der Bauchbinde. */
+h1, h2, h3, h4 { font-family: var(--font-marke); line-height: 1.2; margin: 0 0 .5em; letter-spacing: -.01em; }
+h1 { font-size: 1.7rem; font-weight: 700; color: var(--rot); }
+h2 { font-size: 1.3rem; font-weight: 700; }
+h3 { font-size: 1.05rem; font-weight: 700; }
+p { margin: 0 0 .9em; }
+img { max-width: 100%; }
+/* Tastaturfokus: Gelb allein war auf Weiß unsichtbar (1,2:1). Ein anthrazitfarbener Ring
+   mit gelbem Hof ist auf Weiß, Rot und Gelb zu sehen. */
+:focus-visible { outline: 2px solid var(--anthrazit); outline-offset: 2px; box-shadow: 0 0 0 5px rgba(255, 237, 0, .6); }
+.bauchbinde :focus-visible { outline-color: var(--weiss); box-shadow: none; }
+.hidden { display: none !important; }
+.muted { color: var(--grau); }
+.small { font-size: var(--fs-klein); }
+
+/* --- Kopfzeile: die rote Bauchbinde ---------------------------------- */
+.bauchbinde {
+  position: sticky; top: 0; z-index: 1200;
+  height: var(--topbar);
+  background: var(--rot);
+  color: var(--weiss);
+  display: flex; align-items: stretch; gap: 8px;
+  padding: 0 12px 0 0;
+}
+.bauchbinde, .bauchbinde a, .login-marke { font-family: var(--font-marke); }
+.brand {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 18px;
+  color: var(--weiss); text-decoration: none;
+}
+.brand:hover { color: var(--weiss); }
+.wortmarke { color: var(--gelb); font-weight: 700; font-size: 1.45rem; letter-spacing: .02em; line-height: 1; display: flex; align-items: center; }
+.wortmarke img { height: 24px; width: auto; display: block; }
+/* Eigenes Zeichen statt Schriftzug. Es ist hochformatig bis quadratisch, deshalb richtet es
+   sich an der Höhe der Leiste aus und ragt nicht darüber hinaus: 52 px Leiste, 40 px Bild. */
+.maskottchen { display: flex; align-items: center; flex: none; }
+/* Die Leiste ist 52 px hoch; 44 lassen dem Zeichen Luft, ohne dass es anstößt. */
+.maskottchen img { height: 44px; width: auto; display: block; }
+.trenner { width: 2px; height: 30px; background: var(--gelb); opacity: .9; flex: none; }
+.funktion { display: flex; flex-direction: column; line-height: 1.15; font-weight: 600; font-size: 1.02rem; }
+.funktion small { font-weight: 400; font-size: var(--fs-marke); opacity: .9; }
+/* min-width: 0 und Rollen statt Drücken: Sonst schiebt die Navigation die ganze Bauchbinde
+   über den Fensterrand hinaus, und beim Herauszoomen endet der rote Balken mitten im Bild. */
+.nav { display: flex; align-items: stretch; margin-left: auto; min-width: 0; overflow-x: auto;
+  scrollbar-width: none; -ms-overflow-style: none; }
+.nav::-webkit-scrollbar { display: none; }
+.nav a, .nav button { white-space: nowrap; flex: none; }
+.nav a {
+  display: flex; align-items: center; padding: 0 12px;
+  color: var(--weiss); text-decoration: none; font-weight: 600;
+  border-bottom: 4px solid transparent;
+}
+.nav a:hover { background: rgba(255,255,255,.12); color: var(--weiss); }
+.nav a.active { border-bottom-color: var(--gelb); }
+/* 85 % Weiß auf Rot ergab nur 3,8:1 – der eigene Name stand blasser da als jede Schaltfläche. */
+.nav .user { color: var(--weiss); font-weight: 400; opacity: .95; }
+.nav button {
+  background: none; border: 0; color: var(--weiss); font: inherit; font-weight: 600;
+  padding: 0 12px; cursor: pointer;
+}
+.nav button:hover { background: rgba(255,255,255,.12); }
+/* Ganz schmale Geräte: Der Zusatz neben der Wortmarke weicht, damit Nutzer, Profil und
+   Abmelden in die Zeile passen, statt in der rollenden Navigation zu verschwinden. */
+@media (max-width: 640px) {
+  .funktion small { display: none; }
+  .brand { padding: 0 12px; gap: 9px; }
+  .wortmarke { font-size: 1.25rem; }
+  .maskottchen img { height: 34px; }
+  .nav a, .nav button { padding: 0 9px; font-size: var(--fs-mittel); }
+  .nav .user { display: none; }
+}
+/* Ganz schmale Geräte: Der Zusatz neben der Wortmarke weicht, damit Nutzer, Profil und
+   Abmelden in die Zeile passen. Steht hinter der 640-px-Regel, damit der engere Abstand gilt. */
+@media (max-width: 560px) {
+  .brand .trenner, .brand .funktion { display: none; }
+  .nav a, .nav button { padding: 0 7px; }
+}
+/* Auf dem Telefon bleibt von 36 px Seitenpolster nichts für den Text – Lesen und Schreiben
+   teilen sich die Variable, das Raster bleibt deckungsgleich. */
+/* Tablet (bis 1024 px): Der Seitenbaum darf höchstens 260 px breit sein – auch wenn jemand ihn
+   am Rechner breiter gezogen hat (min() gegen die gespeicherte Breite) –, das Seitenpolster
+   schrumpft, die Albumleiste der Karte wird schmaler. */
+@media (max-width: 1024px) {
+  :root { --lesepad: 24px; --panel-w: 340px; }
+  .lb { grid-template-columns: 1fr 300px; }
+  /* Die drei Knöpfe über dem Seitenbaum passen in 260 px nur mit etwas weniger Polster. */
+  .wiki-side .btn-row .btn.small { padding: 5px 8px; }
+}
+@media (max-width: 480px) { :root { --lesepad: 16px; } }
+
+/* --- Bausteine --------------------------------------------------------- */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--rot); color: var(--weiss);
+  border: 1px solid var(--rot); border-radius: var(--radius);
+  padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer;
+  text-decoration: none; line-height: 1.2; white-space: nowrap;   /* ein Knopf bricht nie in sich um */
+}
+.btn:hover { background: var(--rot-dunkel); border-color: var(--rot-dunkel); color: var(--weiss); }
+.btn:disabled, .btn:disabled:hover { opacity: .55; cursor: default; background: var(--rot); border-color: var(--rot); color: var(--weiss); }
+.btn.secondary { background: var(--weiss); color: var(--anthrazit); border-color: var(--anthrazit); }
+.btn.secondary:hover { background: var(--grau-hell); }
+.btn.secondary:disabled, .btn.secondary:disabled:hover { background: var(--weiss); color: var(--anthrazit); border-color: var(--anthrazit); }
+.btn.ghost { background: transparent; color: var(--rot); border-color: transparent; padding: 8px 10px; }
+.btn.ghost:hover { background: var(--rot-hell); }
+.btn.danger { background: var(--weiss); color: var(--rot); border-color: var(--rot); }
+.btn.danger:hover { background: var(--rot-hell); }
+.btn.small { padding: 5px 10px; font-size: var(--fs-klein); }
+.btn.yellow { background: var(--gelb); color: var(--anthrazit); border-color: var(--gelb); }
+.btn.yellow:hover { background: var(--gelb-dunkel); border-color: var(--gelb-dunkel); color: var(--anthrazit); }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+label { display: block; font-weight: 600; font-size: .9rem; margin: 12px 0 4px; }
+label.inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 6px 0; }
+input[type=text], input[type=email], input[type=password], input[type=number], input[type=search],
+input[type=tel], input[type=datetime-local], select, textarea {
+  width: 100%; font: inherit; line-height: 1.2; color: var(--anthrazit);
+  border: 1px solid var(--grau); border-radius: var(--radius);
+  padding: 8px 10px; background: var(--weiss);
+}
+textarea { min-height: 90px; resize: vertical; }
+input:focus, select:focus, textarea:focus { border-color: var(--anthrazit); outline: 2px solid var(--anthrazit); outline-offset: 0; box-shadow: 0 0 0 4px rgba(255, 237, 0, .5); }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+@media (max-width: 480px) { .field-row { grid-template-columns: 1fr; } }
+.help { color: var(--grau); font-size: var(--fs-klein); margin-top: 3px; }
+.error { color: var(--rot); font-weight: 600; margin: 10px 0; }
+.notice { background: var(--grau-hell); border-left: 4px solid var(--gelb); padding: 10px 12px; margin: 12px 0; }
+
+/* Marken (Plaketten) tragen alle dieselbe Form – nur die Farbe unterscheidet sie: gelb für
+   Hinweise, grau für Ruhendes, kräftig für die Kategorie eines Albums, Statusfarben im Text.
+   Vorher hatte jede Sorte eigene Maße, Rundungen und Schriftgrößen. */
+.badge, .cat, .status-badge, .seitentitel .pubbadge {
+  display: inline-block; font-size: var(--fs-marke); font-weight: 700;
+  padding: 1px 8px; border-radius: var(--radius-pille); vertical-align: middle;
+  white-space: nowrap; text-transform: none; letter-spacing: 0;   /* nicht von einem Zwischentitel erben */
+}
+.badge { background: var(--gelb); color: var(--anthrazit); }
+.badge.grey { background: var(--grau-hell); color: var(--grau); }
+.cat { color: var(--weiss); background: var(--grau); }
+.cat.seil { background: var(--rot); }
+.cat.wasser { background: var(--wasser); }
+
+table.list { width: 100%; border-collapse: collapse; font-size: var(--fs-mittel); }
+table.list th, table.list td { text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--linie); vertical-align: top; }
+table.list th { font-weight: 700; color: var(--grau); font-size: var(--fs-klein); border-bottom: 2px solid var(--anthrazit); }
+table.list tr:hover td { background: var(--grau-hell); }
+table.list .btn-row { flex-wrap: nowrap; }
+table.list td.small { white-space: nowrap; }
+/* Auf dem Telefon wird aus der Tabelle eine Liste: je Nutzer eine Karte, die Spaltennamen
+   stehen als Beschriftung davor, die Knöpfe darunter – statt sechs Spalten, die seitwärts
+   aus dem Bild laufen und die Knöpfe außer Sicht schieben. */
+@media (max-width: 640px) {
+  table.list, table.list tbody, table.list tr, table.list td { display: block; }
+  table.list thead { display: none; }
+  table.list tr { padding: 10px 0 12px; border-bottom: 1px solid var(--linie); }
+  table.list td { border: 0; padding: 2px 0; white-space: normal; }
+  table.list td.small { white-space: normal; }
+  table.list td[data-l]::before { content: attr(data-l) ": "; color: var(--grau); font-size: var(--fs-klein); }
+  table.list td.btn-row { display: flex; flex-wrap: wrap; padding-top: 8px; }
+  table.list tr:hover td { background: none; }
+}
+
+/* Toast */
+#toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  background: var(--anthrazit); color: var(--weiss); padding: 10px 16px; border-radius: var(--radius);
+  font-weight: 600; z-index: 3000; opacity: 0; pointer-events: none; transition: opacity .2s;
+  max-width: 90vw;
+}
+#toast.show { opacity: 1; }
+#toast.err { background: var(--rot); }
+/* Als Popover bringt der Browser eigene Vorgaben mit (Rahmen, Mitte, Canvas-Farben) – die
+   müssen weichen, sonst sitzt der Toast als weißer Kasten in der Bildmitte. */
+#toast[popover] { inset: auto; margin: 0; border: 0; width: max-content; height: auto; overflow: visible; }
+#toast:popover-open { display: block; }
+
+/* Dialog */
+dialog {
+  border: 0; border-top: 6px solid var(--rot); border-radius: var(--radius); padding: 0;
+  width: min(560px, 94vw); color: var(--anthrazit);
+  box-shadow: var(--schatten-dialog);
+}
+dialog::backdrop { background: rgba(60,60,59,.55); }
+dialog .dlg-body { padding: 18px 20px 20px; max-height: 80vh; max-height: 80dvh; overflow: auto; }
+dialog h2 { margin-bottom: 4px; }
+dialog .dlg-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+dialog.wide { width: min(1100px, 96vw); }
+
+/* Seiten mit normalem Inhalt */
+.page { max-width: 860px; margin: 0 auto; padding: 28px 20px 60px; }
+.page.narrow { max-width: 520px; }
+.page-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 2px solid var(--anthrazit); padding-bottom: 8px; margin-bottom: 20px; }
+.section { margin: 26px 0; }
+.section h2 { border-bottom: 1px solid var(--linie); padding-bottom: 4px; }
+
+/* --- Anmeldung --------------------------------------------------------- */
+.login-shell { min-height: calc(100vh - var(--topbar)); display: grid; grid-template-columns: 1fr minmax(340px, 33%); }
+.login-side {
+  background: var(--rot); color: var(--weiss); padding: 48px 40px;
+  display: flex; flex-direction: column; justify-content: flex-end;
+}
+.login-marke { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
+.login-marke .wortmarke { font-size: 2.4rem; }
+.login-marke .wortmarke img { height: 40px; }
+.login-marke .maskottchen img { height: 96px; }
+.login-marke .trenner { height: 46px; }
+.login-marke .funktion { font-size: 1.3rem; }
+.login-side h1 { color: var(--weiss); font-weight: 700; font-size: 2.2rem; }
+.login-side p { max-width: 38ch; font-size: 1.05rem; }
+.login-form {
+  padding: 48px 40px; max-width: 420px; width: 100%; margin: 0 auto;
+  display: flex; flex-direction: column; justify-content: center;
+}
+.login-form h2 { margin-bottom: 14px; }
+.login-form .btn { width: 100%; justify-content: center; margin-top: 16px; }
+.login-links { margin-top: 18px; font-size: var(--fs-mittel); display: flex; flex-wrap: wrap; gap: 6px 16px; }
+@media (max-width: 760px) {
+  .login-shell { grid-template-columns: 1fr; }
+  .login-side { padding: 28px 22px; }
+  .login-side h1 { font-size: 2rem; }
+  .login-form { padding: 24px 22px 40px; }
+}
+
+/* --- Karte ------------------------------------------------------------- */
+.map-shell { position: relative; height: calc(100vh - var(--topbar)); height: calc(100dvh - var(--topbar)); overflow: hidden; }
+#map { position: absolute; inset: 0; background: #e6e2d8; }
+.map-tools {
+  position: absolute; top: 12px; left: 12px; z-index: 900;
+  display: flex; gap: 6px; flex-wrap: wrap; max-width: calc(100% - 24px);
+}
+.map-tools .btn, .chip {
+  box-shadow: var(--schatten-karte);
+}
+.chip {
+  background: var(--weiss); color: var(--anthrazit); border: 1px solid var(--weiss);
+  border-radius: var(--radius); padding: 7px 11px; font: inherit; font-weight: 600; cursor: pointer; font-size: var(--fs-mittel);
+}
+.chip:hover { background: var(--grau-hell); }
+.chip.active { background: var(--anthrazit); color: var(--weiss); border-color: var(--anthrazit); }
+.chip.active.seil { background: var(--rot); border-color: var(--rot); }
+.chip.active.wasser { background: var(--wasser); border-color: var(--wasser); }
+
+.locate-banner {
+  /* Unten in der Karte: Oben brach die Werkzeugleiste auf schmalen Fenstern in zwei Zeilen
+     um und lag dann unter dem Banner. */
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 28px; z-index: 950;
+  background: var(--gelb); color: var(--anthrazit); border-radius: var(--radius);
+  padding: 10px 14px; box-shadow: var(--schatten-karte);
+  /* Umbrechen erlaubt: Auf schmalen Fenstern liefen Suchfeld und Knöpfe sonst aus dem Bild.
+     Der Text darf schrumpfen, die Bedienelemente nicht. */
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; max-width: calc(100% - 24px);
+}
+.locate-banner img { width: 44px; height: 44px; object-fit: cover; border: 2px solid var(--weiss); flex: none; }
+.locate-banner strong { display: block; }
+.locate-banner > div:not(.btn-row) { flex: 1 1 160px; min-width: 0; }
+.locate-banner .btn-row { margin-left: auto; flex-wrap: wrap; }
+#map.locating { cursor: crosshair; }
+/* Dateien über der Karte: Die Fläche sagt, was beim Loslassen geschieht (Text aus data-drop).
+   Sie liegt über der Karte, aber unter der Seitenleiste – die zeigt mit ihrem eigenen Rahmen,
+   wenn sie das Ziel ist. Ohne pointer-events:none fielen die Ereignisse auf die Fläche selbst
+   und der Browser könnte nicht mehr sagen, worüber die Dateien gerade schweben. */
+.map-shell.drop-aktiv::after {
+  content: attr(data-drop); position: absolute; inset: 12px; z-index: 990; pointer-events: none;
+  display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px;
+  border: 3px dashed var(--weiss); border-radius: var(--radius); background: rgba(0, 105, 180, .38);
+  color: var(--weiss); font-weight: 700; font-size: 1.25rem; text-shadow: 0 1px 3px rgba(0, 0, 0, .5);
+}
+.panel.drop-ziel { outline: 3px dashed var(--wasser); outline-offset: -8px; }
+.nahe-liste { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.nahe-liste li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* Adresssuche im Positionierungsmodus: eine Zeile in der Bauchbinde, die Treffer darunter. */
+.locate-banner .loc-suche { display: flex; gap: 6px; align-items: center; }
+.locate-banner .loc-suche input { width: min(38vw, 220px); padding: 5px 8px; font: inherit; font-size: var(--fs-mittel);
+  border: 1px solid var(--linie); border-radius: var(--radius); background: var(--weiss); color: var(--anthrazit); }
+.locate-banner .loc-treffer {
+  position: absolute; left: 12px; right: 12px; bottom: calc(100% + 6px); z-index: 960;
+  list-style: none; margin: 0; padding: 4px; max-height: 40vh; overflow: auto; overscroll-behavior: contain;
+  background: var(--weiss); color: var(--anthrazit); border: 1px solid var(--linie);
+  border-radius: var(--radius); box-shadow: var(--schatten-leiste);
+}
+.locate-banner .loc-treffer li { margin: 0; }
+.locate-banner .loc-treffer .muted { padding: 6px 8px; color: var(--grau); font-size: var(--fs-mittel); }
+.locate-banner .loc-treffer button {
+  display: block; width: 100%; text-align: left; padding: 7px 8px; border: 0; background: none;
+  font: inherit; font-size: var(--fs-mittel); color: inherit; cursor: pointer; border-radius: var(--radius);
+}
+.locate-banner .loc-treffer button:hover { background: var(--grau-hell); }
+
+/* Thumbnail-Marker */
+.thumb-marker { background: none !important; border: 0 !important; }
+.thumb-marker .tm {
+  width: 64px; height: 64px; border: 3px solid var(--weiss); border-radius: 3px;
+  background-size: cover; background-position: center; background-color: var(--grau-hell);
+  box-shadow: 0 0 0 1px var(--anthrazit), 0 2px 6px rgba(0,0,0,.4);
+  transition: transform .12s;
+}
+.thumb-marker:hover .tm, .thumb-marker.hi .tm { transform: scale(1.12); z-index: 5; }
+.thumb-marker .tm.seil { border-color: var(--weiss); box-shadow: 0 0 0 2px var(--rot), 0 2px 6px rgba(0,0,0,.4); }
+.thumb-marker .tm.wasser { box-shadow: 0 0 0 2px var(--wasser), 0 2px 6px rgba(0,0,0,.4); }
+.thumb-marker .tm.temp { box-shadow: 0 0 0 3px var(--gelb), 0 2px 6px rgba(0,0,0,.4); }
+/* Cluster: gestapelte Bilder + gelbe Anzahl als Hinweis, dass zusammengefasst wurde */
+.cluster-marker { background: none !important; border: 0 !important; }
+.cluster-marker .cm { position: relative; width: 71px; height: 71px; }
+.cluster-marker .cm .stack {
+  position: absolute; left: 0; top: 0; width: 64px; height: 64px;
+  border: 3px solid var(--weiss); border-radius: 3px; background: var(--grau-hell);
+  box-shadow: 0 0 0 1px var(--anthrazit), 0 2px 6px rgba(0,0,0,.4);
+  background-size: cover; background-position: center;
+}
+.cluster-marker .cm .stack.s2 { transform: translate(5px, -5px) rotate(4deg); z-index: 0; }
+.cluster-marker .cm .stack.s3 { transform: translate(10px, -10px) rotate(8deg); z-index: -1; }
+.cluster-marker .cm .stack.s1 { z-index: 1; }
+.cluster-marker .cm .count {
+  position: absolute; right: -6px; bottom: -6px; z-index: 2;
+  min-width: 26px; height: 26px; padding: 0 7px; border-radius: var(--radius-pille);
+  background: var(--gelb); color: var(--anthrazit); font-weight: 800; font-size: .85rem;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 2px var(--weiss), 0 1px 4px rgba(0,0,0,.4);
+}
+.cluster-marker:hover .cm { transform: scale(1.06); }
+.leaflet-container { font-family: var(--font); }
+.leaflet-control-layers, .leaflet-bar { border: 1px solid var(--linie) !important; border-radius: var(--radius) !important; box-shadow: 0 1px 4px rgba(0,0,0,.2) !important; }
+.leaflet-bar a { color: var(--anthrazit); }
+.locate-me { font-weight: 700; font-size: 15px; }
+.leaflet-control-attribution { font-size: 10px; }
+
+/* Seitenleiste */
+.panel {
+  position: absolute; top: 0; right: 0; bottom: 0; width: var(--panel-w); max-width: 100%;
+  background: rgba(255,255,255,.96); z-index: 1000; box-shadow: -2px 0 12px rgba(0,0,0,.25);
+  border-radius: 6px 0 0 6px;
+  transform: translateX(105%); transition: transform .2s ease-out;
+  display: flex; flex-direction: column;
+}
+.panel.open { transform: translateX(0); }
+/* Die Kartenknöpfe (Zoom, Ebenen, Standort) und die Rechtehinweise stehen rechts unten – also
+   dort, wo die Seitenleiste aufgeht. Ist sie offen, rücken sie neben sie statt darunter zu
+   verschwinden. Auf schmalen Fenstern nimmt die Leiste die ganze Breite ein; dort bleibt es
+   beim alten Platz, sonst schöbe es die Knöpfe aus dem Bild. */
+.map-shell:has(.panel.open) .leaflet-right { right: var(--panel-w); transition: right .2s ease-out; }
+@media (max-width: 560px) {
+  .map-shell:has(.panel.open) .leaflet-right { right: 0; }
+}
+.panel-head {
+  display: flex; align-items: flex-start; gap: 8px; padding: 14px 16px 10px;
+  border-bottom: 2px solid var(--anthrazit);
+}
+.panel-head h2 { margin: 0; flex: 1; font-size: 1.2rem; }
+.panel-head .close { background: none; border: 0; font-size: 1.5rem; line-height: 1; cursor: pointer; color: var(--anthrazit); padding: 0 4px; }
+.panel-body { flex: 1; overflow: auto; padding: 14px 16px 30px; }
+.panel-body h3 + * { margin-top: 0; }
+.contact { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: var(--fs-mittel); }
+.contact dt { color: var(--grau); }
+.contact dd { margin: 0; }
+.meta { font-size: var(--fs-klein); color: var(--grau); }
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; margin-top: 8px; }
+.photo-grid button {
+  position: relative; border: 0; padding: 0; background: var(--grau-hell); aspect-ratio: 1; cursor: pointer;
+  overflow: hidden; border-radius: var(--radius);
+}
+.photo-grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-grid button.hi { outline: 4px solid var(--gelb); }
+.photo-grid .nogeo { position: absolute; left: 4px; top: 4px; }
+.photo-grid .cap { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(60,60,59,.75); color: var(--weiss); font-size: var(--fs-marke); padding: 2px 5px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.album-list { list-style: none; margin: 0; padding: 0; }
+.album-list li { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--linie); cursor: pointer; }
+.album-list li:hover { background: var(--grau-hell); }
+.album-list img, .album-list .noimg { width: 56px; height: 56px; object-fit: cover; flex: none; background: var(--grau-hell); border-radius: var(--radius); }
+.album-list .t { font-weight: 600; }
+.empty { color: var(--grau); padding: 20px 0; text-align: center; }
+.empty strong { display: block; color: var(--anthrazit); margin-bottom: 4px; }
+@media (max-width: 640px) {
+  .panel {
+    top: auto; left: 0; width: 100%; height: 70%;
+    transform: translateY(105%); box-shadow: 0 -2px 12px rgba(0,0,0,.25);
+    border-top: 4px solid var(--rot);
+  }
+  .panel.open { transform: translateY(0); }
+}
+
+/* Bild-Detail (Lightbox) */
+dialog.lightbox { width: min(1200px, 97vw); border-top: 0; background: var(--anthrazit); color: var(--weiss); }
+.lb { display: grid; grid-template-columns: 1fr 340px; max-height: 92vh; }
+.lb-img { background: #222; display: flex; align-items: center; justify-content: center; min-height: 240px; position: relative; }
+.lb-img img { max-width: 100%; max-height: 92vh; object-fit: contain; }
+.lb-nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,.5); color: var(--weiss); border: 0; font-size: 2rem; padding: 8px 12px; cursor: pointer; }
+.lb-nav.prev { left: 0; } .lb-nav.next { right: 0; }
+.lb-side { background: var(--weiss); color: var(--anthrazit); padding: 16px 18px; overflow: auto; }
+.lb-side h2 { font-size: 1.1rem; }
+.lb-side .close { float: right; background: none; border: 0; font-size: 1.5rem; cursor: pointer; color: var(--anthrazit); }
+.lb-side .close:hover, .panel-head .close:hover { color: var(--rot); }
+.lb-nav:hover { background: rgba(0,0,0,.75); }
+/* Die Knöpfe unter den Bildangaben: alles, was man mit dem Bild tut, in einer Reihe – und
+   das Löschen abgesetzt darunter. Früher trugen einige davon die randlose Form und lasen sich
+   wie Beschriftungen; man sah ihnen nicht an, dass man sie drücken kann. */
+.lb-side .lb-aktionen { margin-top: 16px; display: grid; gap: 10px; }
+/* Gleich breite Felder statt freiem Umbruch: Bei schmaler Spalte stehen zwei nebeneinander,
+   bei breiter drei – die Kanten fluchten in jedem Fall. Sonst franst die Reihe aus, weil die
+   Beschriftungen verschieden lang sind. */
+.lb-side .lb-aktionen > .btn-row:first-child {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px;
+}
+.lb-side .lb-aktionen > .btn-row:first-child .btn { width: 100%; justify-content: center; }
+.lb-side .lb-aktionen-weg { padding-top: 10px; border-top: 1px solid var(--linie); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: .9rem; margin: 10px 0; }
+.kv dt { color: var(--grau); } .kv dd { margin: 0; white-space: pre-wrap; }
+.note-box { background: var(--grau-hell); border-left: 4px solid var(--gelb); padding: 8px 10px; white-space: pre-wrap; margin: 8px 0; }
+@media (max-width: 760px) {
+  .lb { grid-template-columns: 1fr; max-height: none; }
+  .lb-img img, .lb-img video { max-height: 55vh; }
+}
+
+/* Upload-Liste */
+.upload-list { margin: 10px 0; font-size: var(--fs-mittel); }
+.upload-list li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--linie); }
+progress { width: 100%; height: 10px; accent-color: var(--rot); }
+
+/* --- Wiki -------------------------------------------------------------- */
+.wiki-shell { --side-w: 340px; display: grid; grid-template-columns: var(--side-w) minmax(0, 1fr) 260px; min-height: calc(100vh - var(--topbar)); }
+.wiki-side { border-right: 1px solid var(--linie); background: var(--grau-hell); padding: 14px 12px 40px; position: sticky; top: var(--topbar); height: calc(100vh - var(--topbar)); overflow: auto; }
+.wiki-side input[type=search] { margin-bottom: 10px; }
+.tree, .tree ul { list-style: none; margin: 0; padding: 0; }
+.tree ul { padding-left: 14px; border-left: 1px solid var(--linie); margin-left: 6px; }
+.tree li { margin: 1px 0; }
+.tree .row { display: flex; align-items: center; gap: 2px; min-width: 0; }
+/* Lange Seitentitel brechen nicht um, sondern enden mit … – sonst wird der Baum unruhig
+   und die Zeilen springen beim Auf- und Zuklappen. Der volle Titel steht im Tooltip. */
+.tree a {
+  flex: 1 1 auto; min-width: 0; display: block; padding: 4px 6px; color: var(--anthrazit);
+  text-decoration: none; border-radius: var(--radius); font-size: var(--fs-mittel);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border-left: 3px solid transparent;    /* Platz für die rote Kante des aktiven Eintrags */
+}
+.tree a:hover { background: var(--weiss); }
+.tree a.active { background: var(--weiss); border-left: 3px solid var(--rot); font-weight: 600; }
+.tree .tg { background: none; border: 0; width: 20px; height: 22px; cursor: pointer; color: var(--grau); font-size: var(--fs-marke); padding: 0; flex: none; }
+.tree li.collapsed > ul { display: none; }
+.tree li.collapsed > .row .tg::before { content: "▸"; }
+.tree li:not(.collapsed) > .row .tg::before { content: "▾"; }
+.tree li.leaf > .row .tg { visibility: hidden; }
+.search-results { list-style: none; margin: 0 0 12px; padding: 0; }
+.search-results li { padding: 6px 6px; border-bottom: 1px solid var(--linie); font-size: var(--fs-mittel); }
+/* Lange Titel enden mit … statt umzubrechen – wie im Seitenbaum darunter. */
+.search-results a { font-weight: 600; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-results .snip { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.search-results .snip { color: var(--grau); font-size: var(--fs-klein); }
+.wiki-meta { font-size: .82rem; color: var(--grau); border-bottom: 2px solid var(--anthrazit); padding-bottom: 8px; margin-bottom: 20px; }
+.wiki-content h1 { font-size: 1.7rem; margin-top: 1.2em; }
+.wiki-content h2 { font-size: 1.35rem; margin-top: 1.4em; border-bottom: 1px solid var(--linie); padding-bottom: 3px; }
+.wiki-content h3 { font-size: 1.1rem; margin-top: 1.2em; }
+.wiki-content h4 { font-size: 1rem; margin-top: 1em; }
+.wiki-content hr { border: 0; border-top: 2px solid var(--linie); margin: 1.6em 0; }
+.wiki-content table { border-collapse: collapse; margin: 1em 0; font-size: .93rem; }
+/* text-align nur, wo die Tabelle keine eigene Spaltenausrichtung vorgibt:
+   ein pauschales text-align:left hat das align-Attribut aus "| :---: |" überschrieben. */
+.wiki-content th, .wiki-content td { border: 1px solid var(--linie); padding: 6px 9px; vertical-align: top; }
+/* Bündigkeit in Tabellen – in beiden Ansichten gleich. Der Editor bekam sonst die Vorgabe des
+   Browsers (Kopfzellen mittig), während die Leseansicht links ausrichtete: Wer eine Tabelle
+   schrieb, sah etwas anderes, als hinterher im Artikel stand. Die Ausrichtung steht als
+   align-Attribut an der Zelle; :not([align]) trifft nur die Spalten ohne eigene Angabe. */
+.wiki-content th:not([align]), .wiki-content td:not([align]),
+.wiki-editor .toastui-editor-contents th:not([align]),
+.wiki-editor .toastui-editor-contents td:not([align]) { text-align: left; }
+.wiki-content th[align=center], .wiki-content td[align=center],
+.wiki-editor .toastui-editor-contents th[align=center],
+.wiki-editor .toastui-editor-contents td[align=center] { text-align: center; }
+.wiki-content th[align=right], .wiki-content td[align=right],
+.wiki-editor .toastui-editor-contents th[align=right],
+.wiki-editor .toastui-editor-contents td[align=right] { text-align: right; }
+.wiki-content th[align=left], .wiki-content td[align=left],
+.wiki-editor .toastui-editor-contents th[align=left],
+.wiki-editor .toastui-editor-contents td[align=left] { text-align: left; }
+.wiki-content th { background: var(--grau-hell); }
+.wiki-content blockquote { margin: 1em 0; padding: 6px 14px; border-left: 4px solid var(--grau); background: var(--grau-hell); }
+.wiki-content code { background: var(--grau-hell); padding: 1px 4px; border-radius: var(--radius); font-size: .9em; }
+.wiki-content pre { background: var(--grau-hell); padding: 10px 12px; overflow: auto; }
+.wiki-content pre code { background: none; padding: 0; }
+/* Breite Tabellen scrollen in ihrem eigenen Bereich, statt die Textspalte aufzuschieben. */
+.table-scroll { overflow-x: auto; margin: 1em 0; }
+.table-scroll table { margin: 0; }
+/* Codeblock mit Kopierknopf – der Knopf sitzt am Rahmen, nicht im scrollenden Text. */
+.code-block { position: relative; margin: 1em 0; }
+.code-block pre { margin: 0; }
+.code-copy {
+  position: absolute; top: 6px; right: 6px; padding: 2px 8px;
+  font: inherit; font-size: .78rem; line-height: 1.6;
+  background: var(--weiss); color: var(--grau); border: 1px solid var(--linie);
+  border-radius: var(--radius); cursor: pointer; opacity: 0; transition: opacity .15s;
+}
+.code-block:hover .code-copy, .code-copy:focus-visible { opacity: 1; }
+/* Anker an Überschriften – nur beim Überfahren sichtbar, im Druck nie. */
+.h-anchor { margin-left: .35em; color: var(--grau); text-decoration: none; opacity: 0; font-weight: 400; }
+h1:hover > .h-anchor, h2:hover > .h-anchor, h3:hover > .h-anchor, h4:hover > .h-anchor,
+h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
+.h-anchor:hover { color: var(--rot); }
+/* Ohne Maus gibt es kein Darüberfahren – auf dem Telefon stünde das Zeichen sonst nie da
+   und niemand fände den Link zum Abschnitt. Dort bleibt es blass sichtbar. */
+@media (hover: none) {
+  /* Ohne Maus gibt es kein Darüberfahren – sichtbar ja, aber leise: Das Zeichen gehört nicht
+     zur Überschrift. */
+  .h-anchor { opacity: .5; }
+}
+/* Seitenauswahl im Link-Dialog */
+.link-pages { list-style: none; padding: 0; margin: 6px 0 0; max-height: 168px; overflow: auto; border: 1px solid var(--linie); }
+.link-pages:empty { display: none; }
+.link-pages li { border-bottom: 1px solid var(--linie); }
+.link-pages li:last-child { border-bottom: 0; }
+/* Adresse im Link-Kontextmenü */
+.ed-link-url { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--grau); font-size: var(--fs-klein); }
+/* Anhänge im Artikel */
+.wiki-content a.attachment {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
+  margin: .3em 0; padding: 7px 12px 7px 10px;
+  border: 1px solid var(--linie); border-radius: var(--radius);
+  background: var(--grau-hell); color: var(--anthrazit); text-decoration: none; vertical-align: middle;
+}
+.wiki-content a.attachment:hover { border-color: var(--rot); color: var(--rot); }
+.wiki-content .att-icon { font-size: 1.15em; line-height: 1; }
+.wiki-content .att-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wiki-content .att-ext { color: var(--grau); font-size: .74rem; letter-spacing: .04em; flex: none; }
+.wiki-content img { display: block; margin: .6em 0; max-height: 70vh; }
+.wiki-content img + em, .wiki-content p > em:only-child { color: var(--grau); font-size: .9em; }
+.wiki-content input[type=checkbox] { margin-right: 6px; }
+/* Aufgabenlisten: der Haken ersetzt den Aufzählungspunkt, sonst steht beides nebeneinander. */
+.wiki-content li:has(> input[type=checkbox]) { list-style: none; margin-left: -1.35em; }
+/* Auszeichnungen ohne Markdown-Entsprechung: ++unterstrichen++ ==hervorgehoben== 10^3^ H~2~O.
+   Im Editor stehen sie als Widget (contenteditable=false) und sehen dort genauso aus. */
+.wiki-content mark, .toastui-editor-contents mark {
+  background: #fff3a8; color: inherit; padding: 0 2px; border-radius: var(--radius);
+}
+.wiki-content u, .toastui-editor-contents u { text-underline-offset: 2px; }
+.wiki-content sub, .wiki-content sup, .toastui-editor-contents sub, .toastui-editor-contents sup { font-size: .75em; line-height: 0; }
+.toastui-editor-contents .tui-widget { white-space: pre-wrap; }
+/* Synchronisierte Abschnitte. Der Baustein sieht in seiner Heimatseite aus wie gewöhnlicher
+   Text – er IST dort der Inhalt. Der Einbau zeigt fremden Text und sagt das auch: abgesetzt,
+   mit Herkunft darunter. */
+.baustein { display: block; }
+.einbau { margin: 1.1em 0; padding: 10px 14px; border-left: 3px dashed var(--wasser); background: #f7fafd; }
+.einbau > .einbau-inhalt > :first-child { margin-top: 0; }
+.einbau > .einbau-inhalt > :last-child { margin-bottom: 0; }
+.einbau-fuss { margin-top: 8px; color: var(--grau); font-size: .82rem; }
+.einbau-fehlt { color: var(--grau); font-size: .9rem; }
+/* Im Editor ist der Einbau kein Inhalt, sondern ein Schild: Geändert wird er anderswo. */
+.ed-einbau { margin: 1.1em 0; padding: 8px 12px; border-left: 3px dashed var(--wasser); background: #f7fafd; }
+.callout { margin: 1.1em 0; padding: 10px 14px; border-left: 5px solid var(--grau); background: var(--grau-hell); }
+.callout > :first-child { margin-top: 0; } .callout > :last-child { margin-bottom: 0; }
+.callout h3, .callout h4 { margin-top: 0; }
+.callout-info, .callout-tip { border-color: var(--co-info-ka); background: var(--co-info-fl); }
+.callout-warning { border-color: var(--co-warning-ka); background: var(--co-warning-fl); }
+.callout-danger { border-color: var(--co-danger-ka); background: var(--co-danger-fl); }
+.callout-success { border-color: var(--co-success-ka); background: var(--co-success-fl); }
+.callout-note { border-color: var(--co-note-ka); background: var(--co-note-fl); }
+.children-list { margin-top: 30px; border-top: 1px solid var(--linie); padding-top: 12px; }
+.children-list ul { columns: 2; list-style: none; padding: 0; margin: 6px 0; }
+.children-list li { padding: 2px 0; break-inside: avoid; }
+.wiki-editor textarea.plain { min-height: 480px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9rem; }
+.rev-list li { padding: 6px 0; border-bottom: 1px solid var(--linie); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.wiki-menu-btn { display: none; }
+@media (max-width: 1180px) {
+  .wiki-shell, body.public .wiki-shell.public { grid-template-columns: var(--side-w) minmax(0, 1fr); }
+  /* Bleibt die Spur im Raster (öffentliche Seite ohne Kommentare), verschwindet sie wie bisher. */
+  .wiki-shell > .wiki-rail { display: none; }
+  /* Die Spur steht hier unter dem Artikel (wiki.js versetzt sie in die Textspalte): Kommentare
+     und Angaben zur Seite bleiben erreichbar. Das Inhaltsverzeichnis entfällt – am Fuß der
+     Seite nützt es nichts, und sein Knopf in der Kopfzeile geht mit. */
+  .wiki-main > .wiki-rail { position: static; height: auto; overflow: visible; padding: 28px 0 0; font-size: .9rem; }
+  .wiki-main > .wiki-rail #toc { display: none; }
+  #pg-toc { display: none; }
+}
+/* Der Baum-Knopf in der Kopfzeile gehört dem Telefon (siehe unten). Steht vor dem Media-Block,
+   weil die spätere .kopfknopf-Regel sonst auch am Rechner display:inline-flex durchsetzte. */
+.wiki-head .kopfknopf.baum-knopf { display: none; }
+@media (max-width: 800px) {
+  /* minmax(0, 1fr) statt 1fr: Ein "1fr" wächst mit dem breitesten Kind mit. Die Kopfzeile mit
+     Pfad und Knöpfen zwang die Spalte so auf 458 px, das Dokument wurde breiter als das Fenster,
+     und beim Herauszoomen hörte die Bauchbinde am alten Fensterrand auf. */
+  .wiki-shell, body.public .wiki-shell.public, body.editing .wiki-shell { grid-template-columns: minmax(0, 1fr); }
+  .wiki-side { position: fixed; left: 0; top: var(--topbar); bottom: 0; width: min(320px, 90vw); transform: translateX(-105%); transition: transform .2s; z-index: 1100; box-shadow: 2px 0 10px rgba(0,0,0,.25); height: auto; }
+  .wiki-side.open { transform: translateX(0); }
+  .wiki-menu-btn { display: inline-flex; }
+  /* Sobald eine Seite offen ist, sitzt der Baum-Knopf in der Kopfzeile – die eigene Zeile
+     „☰ Seiten“ darüber entfällt und gibt dem Text 40 px zurück. */
+  .wiki-main:has(.wiki-head .baum-knopf) > .wiki-menu-btn { display: none; }
+  .wiki-head .kopfknopf.baum-knopf { display: inline-flex; }
+  /* Hinter der offenen Schublade dunkelt die Seite ab – man sieht, dass sie darüber liegt, und
+     ein Tippen daneben schließt sie (der Klick-Handler in wiki.js sieht „außerhalb“). */
+  body:has(.wiki-side.open)::after {
+    content: ""; position: fixed; inset: var(--topbar) 0 0 0; background: rgba(60, 60, 59, .35); z-index: 1090;
+  }
+}
+@media (max-width: 640px) {
+  /* Der Pfad schrumpfte auf dem Telefon auf „Lang…“ – der Titel steht ohnehin direkt darunter. */
+  .wiki-head:has(.btn-row) .krumen { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+
+
+/* --- Wiki: Artikel mittig, rechte Leiste mit Inhalt und Kommentaren ------------ */
+/* Beim Bearbeiten bleibt die rechte Leiste stehen: dort stehen die Kommentare, die man beim
+   Überarbeiten lesen will, und die Angaben zur Seite. Das Inhaltsverzeichnis ist dort leer. */
+.wiki-rail { padding: 32px 18px 40px 6px; position: sticky; top: var(--topbar); height: calc(100vh - var(--topbar)); overflow: auto; font-size: .86rem; }
+/* Zwischentitel in Leisten und Tafeln: „Inhalt“, „Kommentare“, „Beschreibung“, „Mitwirkende“,
+   „Merkliste“. Vorher fünf Stile mit vier Schriftgrößen – jetzt einer. */
+.rail-title, .panel-body h3, .side-title, .autor-tafel .autor-titel, .lb-side h3 {
+  font-weight: 700; color: var(--grau); font-size: var(--fs-marke); letter-spacing: .06em;
+  text-transform: uppercase; margin: 18px 0 6px; border-bottom: 1px solid var(--linie); padding-bottom: 3px;
+}
+.rail-title, .panel-body h3:first-child, .side-title:first-child,
+.autor-tafel .autor-titel, .lb-side h3 { margin-top: 0; }
+.toc { margin-bottom: 26px; }
+.toc-list { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--linie); }
+.toc-list li { margin: 0; }
+.toc-list a { display: block; padding: 3px 8px; color: var(--anthrazit); text-decoration: none; border-left: 2px solid transparent; margin-left: -2px; line-height: 1.3; }
+.toc-list a:hover { border-left-color: var(--rot); color: var(--rot); }
+.toc-list .l1 a { padding-left: 18px; } .toc-list .l2 a { padding-left: 28px; font-size: var(--fs-klein); } .toc-list .l3 a { padding-left: 38px; font-size: var(--fs-klein); }
+/* Fünfte Ebene: noch eine Stufe tiefer, sonst stünde sie bündig mit der vierten. */
+.toc-list .l4 a { padding-left: 48px; font-size: var(--fs-marke); }
+.seitentitel .pubbadge { background: var(--grau-hell); color: var(--anthrazit); }
+.tree .pub { font-size: .75em; }
+
+/* Kommentare */
+.comment { border-left: 3px solid var(--linie); padding: 6px 10px; margin: 8px 0; background: var(--weiss); overflow-wrap: break-word; }
+.comment.reply { margin-left: 14px; border-left-color: var(--grau-hell); }
+.comment.resolved { color: var(--grau); border-left-color: var(--linie); }
+.comment.resolved .c-head strong { color: var(--grau); }
+.comment.flash, mark.cq.flash, .cbadge.flash { outline: 3px solid var(--gelb); }
+.c-head { margin-bottom: 2px; }
+.c-quote { margin: 4px 0; padding: 4px 8px; font-size: var(--fs-klein); color: var(--grau); border-left: 3px solid var(--gelb); background: #fffbd6; cursor: pointer; white-space: pre-wrap; max-height: 5.4em; overflow: hidden; }
+.c-body { white-space: pre-wrap; }
+.c-actions { display: flex; gap: 10px; margin-top: 4px; }
+.lnk { background: none; border: 0; color: var(--rot); font: inherit; font-size: .8rem; padding: 0; cursor: pointer; }
+.lnk:hover { text-decoration: underline; }
+mark.cq { background: #fff3a8; padding: 0 1px; cursor: pointer; border-bottom: 2px solid var(--gelb); }
+.cbadge { cursor: pointer; font-size: .8em; margin-right: 2px; }
+.comment-fab { position: absolute; z-index: 1150; background: var(--anthrazit); color: var(--weiss); border: 0; border-radius: var(--radius); padding: 6px 12px; font: inherit; font-weight: 600; font-size: var(--fs-klein); cursor: pointer; box-shadow: var(--schatten-menue); }
+.comment-fab:hover { background: var(--rot); }
+
+/* Callouts mit Emoji oben links (wie Docmost), mehrspaltige Abschnitte */
+.callout { display: flex; gap: 10px; align-items: flex-start; }
+/* Das Zeichen ist so hoch wie eine fette Textzeile: die Emoji-Schrift zeichnet 1.29 em hoch,
+   eine fette Zeile misst 0.92 em von der Versalhöhe bis zur Unterlänge – daraus 0.72 em.
+   Die Zeilenhöhe ist die der Textzeile: dann liegt das Zeichen auf deren Mitte.
+   Die Spalte behält die Breite des früheren, größeren Zeichens (1.56 × Lesegröße), damit der
+   Text an derselben Stelle beginnt; das kleinere Zeichen steht darin mittig. */
+.callout-emoji {
+  font-size: .72em; line-height: calc(var(--lesetext) * var(--lesezeile)); flex: none;
+  width: calc(var(--lesetext) * 1.56); text-align: center;
+}
+.callout-body { flex: 1; min-width: 0; }
+.callout-body > :first-child { margin-top: 0; } .callout-body > :last-child { margin-bottom: 0; }
+/* Oben knapper als unten: der Absatz darüber bringt seinen eigenen Abstand schon mit. */
+.columns { display: grid; gap: 22px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: .35em 0 1em; }
+.columns.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.columns.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* Auch die Spalte ist ein Raster – dann fallen ihre Ränder so wenig zusammen wie im
+   Editor, und beide Ansichten zeigen dieselben Abstände. */
+.columns .col { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 0; align-content: start; }
+.columns .col > :first-child { margin-top: 0; }
+@media (max-width: 640px) { .columns, .columns.cols-3 { grid-template-columns: 1fr; } }
+.wiki-content video { display: block; max-width: 100%; max-height: 70vh; margin: .6em 0; background: #000; }
+.wiki-content.boxed { border: 1px solid var(--linie); padding: 12px; max-height: 50vh; overflow: auto; }
+
+/* Editor (Toast UI) im Look der Seite */
+.wiki-editor .toastui-editor-defaultUI { border-radius: var(--radius); font-family: var(--font); }
+.wiki-editor .toastui-editor-contents { font-family: var(--font); font-size: 1rem; color: var(--anthrazit); }
+.callout-pick { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+
+/* Teilen */
+.user-pick { max-height: 240px; overflow: auto; border: 1px solid var(--linie); padding: 4px 10px; margin-top: 6px; }
+.user-pick label { display: flex; }
+.share-link { display: flex; gap: 8px; margin-top: 8px; }
+.share-link input { flex: 1; }
+
+/* Kontoanfragen im Adminbereich */
+.request { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--linie); border-left: 4px solid var(--gelb); margin: 8px 0; }
+
+/* Öffentliches Wiki */
+body.public .wiki-shell { grid-template-columns: 250px minmax(0, 1fr) 240px; }
+
+/* Anmeldeseite: Slideshow aus den Spots */
+.login-side { position: relative; overflow: hidden; }
+.login-side-text { position: relative; z-index: 2; }
+.login-side .login-marke .funktion small { font-weight: 400; font-size: var(--fs-klein); opacity: .9; }
+.slideshow { position: absolute; inset: 0; z-index: 0; opacity: 0; transition: opacity 1.2s; }
+.slideshow.on { opacity: 1; }
+.slideshow .slide { position: absolute; inset: -6%; background-size: cover; background-position: center; opacity: 0; transition: opacity 2.5s ease-in-out; }
+.slideshow .slide.show { opacity: 1; }
+.slideshow .slide.pan-a { animation: pan-a 20s linear forwards; }
+.slideshow .slide.pan-b { animation: pan-b 20s linear forwards; }
+@keyframes pan-a { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.12) translate(-2%, 1.5%); } }
+@keyframes pan-b { from { transform: scale(1.12) translate(2%, -1.5%); } to { transform: scale(1) translate(0, 0); } }
+.slideshow::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(227,6,19,.25) 0%, rgba(227,6,19,.55) 55%, rgba(120,0,10,.85) 100%); }
+.login-side-text a { color: var(--weiss); text-decoration: underline; }
+
+/* Karte: Video-Kennzeichnung */
+.thumb-marker .tm { position: relative; }
+.thumb-marker .play, .photo-grid .play { position: absolute; right: 3px; bottom: 3px; background: rgba(0,0,0,.6); color: var(--weiss); font-size: var(--fs-marke); line-height: 1; padding: 3px 4px; border-radius: 3px; }
+.lb-img video { max-width: 100%; max-height: 92vh; }
+
+/* Einklappbare Boxen, Emoji-Auswahl */
+details.accordion { border: 1px solid var(--linie); border-left: 4px solid var(--grau); margin: 1em 0; background: var(--weiss); }
+details.accordion > summary {
+  cursor: pointer; padding: 8px 12px 8px 32px; font-weight: 600; background: var(--grau-hell);
+  position: relative; list-style: none;
+}
+details.accordion > summary::-webkit-details-marker { display: none; }
+/* Der Pfeil wird selbst gezeichnet – der Editor zeigt denselben, dort aufgeklappt. */
+details.accordion > summary::before {
+  content: ""; position: absolute; left: 14px; top: 50%; width: 6px; height: 6px;
+  border-right: 2px solid var(--grau); border-bottom: 2px solid var(--grau);
+  transform: translateY(-70%) rotate(-45deg); transition: transform .15s;
+}
+details.accordion[open] > summary::before { transform: translateY(-70%) rotate(45deg); }
+details.accordion > summary:hover { color: var(--rot); }
+details.accordion .accordion-body { padding: 10px 12px; }
+details.accordion .accordion-body > :first-child { margin-top: 0; } details.accordion .accordion-body > :last-child { margin-bottom: 0; }
+.em-row { display: flex; align-items: center; gap: 10px; }
+.em-row input { width: 5em; font-size: 1.6rem; text-align: center; padding: 4px; }
+.em-grid { display: flex; flex-wrap: wrap; gap: 2px; max-height: 40vh; overflow: auto; border: 1px solid var(--linie); padding: 6px; margin-top: 8px; }
+.em-grid .em { width: 34px; height: 34px; font-size: 1.35rem; line-height: 1; background: none; border: 1px solid transparent; border-radius: var(--radius); cursor: pointer; padding: 0; }
+.em-grid .em:hover, .em-grid .em.sel { border-color: var(--rot); background: var(--rot-hell); }
+
+/* Editor: nur WYSIWYG – die eingebaute Werkzeugleiste ist abgeschaltet. */
+.wiki-editor .toastui-editor-defaultUI { display: flex; flex-direction: column; overflow: visible; }
+.wiki-editor .toastui-editor-main { order: 1; }
+.align-left { text-align: left; } .align-center { text-align: center; } .align-right { text-align: right; } .align-justify { text-align: justify; }
+.align-center img, .align-center video { margin-left: auto; margin-right: auto; }
+.align-right img, .align-right video { margin-left: auto; }
+/* Ein Bild mit Unterschrift steht in einem <figure>, und dessen eigene Regel (figure img:
+   margin 0) ist genauer als die beiden darüber. Ohne diese Zeilen blieb das Bild am linken
+   Rand stehen, während die Unterschrift darunter schon mittig stand. */
+.wiki-content .align-center figure img { margin-left: auto; margin-right: auto; }
+.wiki-content .align-right figure img { margin-left: auto; margin-right: 0; }
+
+/* Schwebende Formatleiste bei Textauswahl */
+.ed-bubble { position: absolute; z-index: 1300; display: flex; align-items: center; gap: 2px; padding: 4px; background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius-gross); box-shadow: var(--schatten-menue); }
+/* Knöpfe, Symbole und Trenner sind für Text-, Kontext- und Blockmenü dieselben – siehe den
+   gemeinsamen Block weiter unten. Hier steht nur, was die Textleiste allein betrifft. */
+
+/* "/"-Einfügemenü */
+.ed-slash { position: absolute; z-index: 1300; width: 300px; max-height: 60vh; overflow: auto; background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius-gross); box-shadow: var(--schatten-leiste); padding: 6px; }
+.ed-slash-title { font-size: var(--fs-marke); color: var(--grau); padding: 4px 8px 6px; }
+.ed-slash button { display: flex; flex-direction: column; align-items: flex-start; }
+.ed-slash button span { font-size: var(--fs-klein); color: var(--grau); }
+.ed-slash button.sel strong { color: var(--rot); }
+
+/* Editor ohne obere Toolbar; Tabellen volle Breite; Kontextmenüs für Tabellen, Blöcke und Bilder */
+/* Es gibt keine feste Werkzeugleiste mehr – der leere Balken darf auch keinen Platz
+   beanspruchen, sonst beginnt der Text im Editor 46 px tiefer als in der Ansicht. */
+.wiki-editor .toastui-editor-defaultUI-toolbar,
+.wiki-editor .toastui-editor-toolbar { display: none !important; }
+.wiki-editor .toastui-editor-defaultUI .toastui-editor-main { border-top: 0; }
+.wiki-content table, .toastui-editor-contents table { width: 100% !important; table-layout: auto; }
+.wiki-content th, .wiki-content td, .toastui-editor-contents th, .toastui-editor-contents td { width: auto !important; }
+.ed-bubble { max-width: min(96vw, 560px); flex-wrap: wrap; }
+.ed-ctx { position: absolute; z-index: 1300; display: flex; align-items: center; gap: 2px; flex-wrap: wrap; max-width: min(96vw, 480px); padding: 4px; background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius-gross); box-shadow: var(--schatten-menue); font-size: .85rem; }
+
+/* --- Eine Formensprache für alle schwebenden Leisten --------------------------------
+   Die Symbole sind Inline-SVG in currentColor: die Hausschrift (Univers, ersatzweise
+   Arial) enthält für Ausrichtung, Tabellenbefehle und die meisten Verben keine Zeichen,
+   jedes Unicode-Symbol käme aus einer zufälligen Ersatzschrift und brächte eine fremde
+   Strichstärke mit. Ein Raster, eine Strichstärke, eine Grundlinie. */
+.ed-bubble, .ed-ctx { --ed-knopf: 30px; --ed-hoehe: 28px; }
+.ed-bubble button, .ed-ctx button {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: var(--ed-knopf); height: var(--ed-hoehe); padding: 0;
+  border: 0; border-radius: var(--radius); background: none; cursor: pointer;
+  font: inherit; color: var(--anthrazit); white-space: nowrap;
+}
+.ed-bubble button:hover, .ed-ctx button:hover { background: var(--grau-hell); color: var(--rot); }
+.ed-bubble button.on, .ed-ctx button.on { background: var(--rot-hell); color: var(--rot); }
+.ed-ctx button.danger { color: var(--rot); }
+.ed-bubble svg, .ed-ctx svg, .ed-grip svg {
+  width: 16px; height: 16px; display: block; flex: none; pointer-events: none;
+  fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+}
+/* Wo eine Fläche gemeint ist – Farbbalken, Griffpunkte – gilt das Gegenteil. */
+.ed-bubble svg .voll, .ed-ctx svg .voll, .ed-grip svg .voll { fill: currentColor; stroke: none; }
+/* Die wenigen Knöpfe, die eine Zahl oder ein Kürzel tragen müssen. */
+.ed-ctx button.num { padding: 0 6px; font-size: .82rem; font-variant-numeric: tabular-nums; }
+.ed-ctx button.abbr { padding: 0 6px; font-size: .72rem; letter-spacing: .07em; }
+/* Gruppenkopf: kein Wort, sondern ein blasses Symbol vor der Gruppe. */
+.ed-ctx .lbl { display: inline-flex; align-items: center; height: var(--ed-hoehe); padding: 0 4px; color: var(--grau); }
+.ed-ctx .lbl svg { width: 16px; height: 16px; opacity: .7; }
+.ed-bubble .sep, .ed-ctx .sep { flex: none; width: 1px; height: 18px; background: var(--linie); margin: 0 4px; }
+.ed-bubble button:focus-visible, .ed-ctx button:focus-visible { outline-offset: -2px; }
+/* Fingerbedienung: ohne Hover gibt es kein title, der Knopf muss groß genug sein. */
+@media (pointer: coarse) {
+  .ed-bubble, .ed-ctx { --ed-knopf: 36px; --ed-hoehe: 36px; }
+  .ed-bubble svg, .ed-ctx svg { width: 18px; height: 18px; }
+  /* Fingerziele: Mit der Maus reichen 28 px, mit dem Daumen nicht. Gilt nur, wo der
+     Hauptzeiger grob ist – ein Laptop mit Touchscreen bleibt wie er ist. */
+  .btn.small { padding: 9px 12px; }
+  .wiki-head .kopfknopf { width: 38px; height: 38px; }
+  .mode-toggle button { padding: 9px 12px; }
+  .tree a { padding: 8px 6px; }
+  .tree .tg { width: 28px; height: 32px; }
+  .chip { padding: 10px 12px; }
+  .lb-nav { padding: 16px 14px; }
+  .lb-side .close, .panel-head .close { padding: 6px 10px; }
+  .toc-list a { padding: 7px 8px; }
+  .lnk { padding: 5px 0; }
+  .album-list li { padding: 10px 0; }
+  .search-results li { padding: 9px 6px; }
+  .fav-list a { padding: 7px 6px; }
+  .rundknopf { width: 30px; height: 30px; }
+}
+@media (max-width: 640px) {
+  /* iOS zoomt in jedes Feld unter 16 px hinein – und danach nicht mehr heraus. */
+  input[type=text], input[type=email], input[type=password], input[type=number], input[type=search],
+  input[type=tel], input[type=datetime-local], select, textarea { font-size: 16px; }
+  .panel { padding-bottom: env(safe-area-inset-bottom); }
+}
+/* Hoher Kontrast: Flächenfarben fallen weg, der aktive Zustand braucht eine Kante. */
+@media (forced-colors: active) {
+  .ed-bubble button.on, .ed-ctx button.on { border: 1px solid currentColor; }
+}
+
+/* Emoji-Auswahl direkt am Knopf, ohne Dialog. */
+.ed-emoji { position: absolute; z-index: 1310; width: min(92vw, 360px); padding: 6px; background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius-gross); box-shadow: var(--schatten-menue); }
+.ed-emoji .em-row { gap: 8px; margin-bottom: 6px; }
+.ed-emoji .em-inp { width: 5em; }
+.ed-emoji .em-grid { max-height: min(46vh, 300px); }
+/* Die Ziehgriffe stehen neben dem roten Auswahlrahmen – deshalb Gelb, die zweite Kennfarbe
+   der Anwendung, mit dunklem Rand, damit sie auch auf hellen Bildern stehen. */
+.ed-resize { position: absolute; z-index: 1299; width: 14px; height: 44px; border-radius: var(--radius-pille); background: var(--gelb); border: 2px solid var(--anthrazit); box-shadow: 0 1px 4px rgba(0,0,0,.4); cursor: ew-resize; }
+/* Ein angeklicktes Bild soll man auf einen Blick erkennen – deshalb der Ring in der
+   Kennfarbe der Anwendung, mit hellem Hof darum, damit er auch auf dunklen Bildern steht. */
+.ed-resize-frame {
+  position: absolute; z-index: 1298; pointer-events: none; border-radius: var(--radius);
+  outline: 2px solid var(--rot); outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--weiss), 0 0 0 6px rgba(227, 6, 19, .18);
+}
+
+/* Zuschneiden: Die Hülle liegt deckungsgleich über dem Bild, der Rahmen darin markiert den
+   Ausschnitt. Abgedunkelt wird nicht mit vier Flächen, sondern mit einem sehr weiten Schatten
+   um den Rahmen herum – der endet an der Hülle, weil die ihn abschneidet. */
+.ed-crop { position: absolute; z-index: 1300; overflow: hidden; }
+.ed-crop-rahmen {
+  position: absolute; cursor: move; touch-action: none;
+  outline: 1px solid var(--weiss); box-shadow: 0 0 0 9999px rgba(0, 0, 0, .5);
+}
+.ed-crop-ecke {
+  position: absolute; width: 16px; height: 16px; background: var(--weiss);
+  border: 2px solid var(--rot); border-radius: 3px; touch-action: none;
+}
+/* Die Griffe sitzen innen: Steht der Rahmen am Bildrand – und das ist er zu Beginn –,
+   schnitte die Hülle sie außen zur Hälfte ab und man bekäme sie kaum zu fassen. */
+.ed-crop-ecke.ecke-lo { left: -1px; top: -1px; cursor: nwse-resize; }
+.ed-crop-ecke.ecke-ro { right: -1px; top: -1px; cursor: nesw-resize; }
+.ed-crop-ecke.ecke-lu { left: -1px; bottom: -1px; cursor: nesw-resize; }
+.ed-crop-ecke.ecke-ru { right: -1px; bottom: -1px; cursor: nwse-resize; }
+.ed-crop-leiste {
+  position: absolute; z-index: 1301; display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; background: var(--weiss); border: 1px solid var(--linie);
+  border-radius: var(--radius-gross); box-shadow: var(--schatten-menue);
+}
+.ed-crop-leiste .hinweis { color: var(--grau); font-size: .85rem; }
+.toastui-editor-contents img.ed-selected,
+.toastui-editor-contents video.ed-selected {
+  outline: 2px solid var(--rot); outline-offset: 2px; border-radius: var(--radius);
+  box-shadow: 0 0 0 2px var(--weiss), 0 0 0 6px rgba(227, 6, 19, .18);
+}
+/* Ein angeklickter Link bleibt dezent – dort geht es nicht um eine Fläche. */
+.toastui-editor-contents a.ed-selected { outline: 2px solid var(--gelb); outline-offset: 1px; border-radius: var(--radius); }
+/* Toast UI zeichnet einen ausgewählten Knoten hellblau. Neben dem roten Auswahlrahmen der
+   Anwendung liest sich das wie ein Fremdkörper – auch hier Gelb. */
+.wiki-editor .ProseMirror-selectednode { outline-color: var(--gelb); }
+.wiki-editor .ProseMirror-selectednode::after { border-color: var(--gelb); }
+.block-edit textarea { min-height: 120px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9rem; }
+.block-edit .cols { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+
+/* --- Seitenbaum: Symbole, Merkliste, Zeilenaktionen, Ziehen ------------------------ */
+.tree-icon { margin-right: 5px; }
+.tree .fav { color: var(--gelb-dunkel); }
+.tree .row { position: relative; }
+.tree .row-add, .tree .row-menu {
+  opacity: 0; flex: none; width: 20px; height: 20px; padding: 0; margin-left: 2px;
+  background: none; border: 0; border-radius: var(--radius);
+  color: var(--grau); font: inherit; font-size: .95rem; line-height: 1; cursor: pointer;
+}
+.tree .row:hover .row-add, .tree .row:hover .row-menu,
+.tree .row-add:focus-visible, .tree .row-menu:focus-visible { opacity: 1; }
+.tree .row-add:hover, .tree .row-menu:hover { background: var(--linie); color: var(--anthrazit); }
+.tree .row.dragging { opacity: .45; }
+.tree .row.drop-into { outline: 2px solid var(--rot); outline-offset: -2px; border-radius: var(--radius); }
+.tree .row.drop-before { box-shadow: inset 0 2px 0 var(--rot); }
+.tree .row.drop-after { box-shadow: inset 0 -2px 0 var(--rot); }
+.tree-menu {
+  position: absolute; z-index: 1400; min-width: 210px; padding: 4px;
+  background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius-gross);
+  box-shadow: var(--schatten-leiste);
+}
+/* Ein Eintrag in einem aufklappenden Menü – Seitenbaum, Einfügemenü, Seitenwahl im
+   Link-Dialog. Vorher drei Varianten mit verschiedener Polsterung und Hover-Farbe. */
+.tree-menu button, .link-pages button, .ed-slash button {
+  display: block; width: 100%; text-align: left; padding: 6px 10px;
+  background: none; border: 0; font: inherit; color: inherit; cursor: pointer; border-radius: var(--radius);
+}
+.tree-menu button:hover, .link-pages button:hover, .link-pages button.sel,
+.ed-slash button:hover, .ed-slash button.sel { background: var(--grau-hell); }
+.tree-menu button.danger { color: var(--rot); }
+.fav-list { list-style: none; padding: 0; margin: 0 0 12px; }
+.fav-list a { display: block; padding: 3px 6px; color: inherit; text-decoration: none; border-radius: var(--radius); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fav-list a:hover { background: var(--grau-hell); }
+
+/* --- Startseite: zuletzt besucht / geändert ---------------------------------------- */
+/* Übersicht des Wikis: Abschnitt, darunter seine Seiten und deren Unterseiten. Enger gesetzt
+   als ein Artikel – es ist ein Verzeichnis, kein Fließtext. */
+.home-baum ul { list-style: none; margin: .2em 0 1.4em; padding-left: 14px; border-left: 1px solid var(--linie); }
+.home-baum ul ul { margin: .15em 0 .3em; }
+.home-baum li { padding: 2px 0; }
+.home-baum li a { text-decoration: none; }
+.home-baum li a:hover { text-decoration: underline; }
+.home-baum .home-tiefer li { font-size: var(--fs-klein); }
+
+.home-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 18px; }
+@media (max-width: 700px) { .home-cols { grid-template-columns: 1fr; } }
+.home-cols ul { list-style: none; padding: 0; margin: 0; }
+.home-cols li { padding: 4px 0; border-bottom: 1px solid var(--linie); }
+.home-cols li:last-child { border-bottom: 0; }
+/* Seitensymbol im Kopf und Papierkorb-Liste */
+.page-icon {
+  background: none; border: 0; padding: 0 6px 0 0; font: inherit; font-size: 1em;
+  line-height: 1; cursor: pointer; color: var(--grau); opacity: .5;
+}
+.page-icon:hover, .page-icon:focus-visible { color: var(--rot); opacity: 1; }
+.trash-list { list-style: none; padding: 0; margin: 12px 0 0; }
+.trash-list li { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--linie); }
+.trash-list li:last-child { border-bottom: 0; }
+
+/* --- Statusmarken, Bildunterschriften, Inhaltsblock, Vollbild --------------------- */
+.status-warn { background: var(--gelb); color: var(--anthrazit); }
+.status-ok { background: #dff0e2; color: var(--ok); }
+.status-danger { background: var(--rot-hell); color: var(--rot); }
+.status-grau { background: var(--grau-hell); color: var(--grau); }
+
+.wiki-content figure { margin: 1em 0; }
+.wiki-content figure img { margin: 0; }
+.wiki-content figcaption { color: var(--grau); font-size: .88rem; margin-top: 4px; }
+
+.inline-toc { border: 1px solid var(--linie); border-left: 4px solid var(--rot); padding: 10px 14px; margin: 1.2em 0; background: var(--grau-hell); }
+.inline-toc .toc-list { margin: 6px 0 0; }
+.page-break { border-top: 1px dashed var(--linie); margin: 1.6em 0; }
+
+.wiki-content img.zoomable { cursor: zoom-in; }
+.md-lightbox {
+  position: fixed; inset: 0; z-index: 4000; display: flex; align-items: center; justify-content: center;
+  background: rgba(60,60,59,.9); padding: 24px; cursor: zoom-out;
+}
+.md-lightbox img { max-width: 96vw; max-height: 92vh; object-fit: contain; cursor: default; }
+.md-lightbox-close {
+  position: absolute; top: 12px; right: 16px; width: 36px; height: 36px;
+  background: none; border: 0; color: var(--weiss); font-size: 2rem; line-height: 1; cursor: pointer;
+}
+.toc-list a.active { color: var(--rot); font-weight: 700; }
+
+/* --- Druckansicht ----------------------------------------------------------------- */
+@media print {
+  .bauchbinde, .wiki-side, .wiki-rail, .comment-fab, .wiki-menu-btn, .btn-row,
+  .ed-bubble, .ed-slash, .ed-ctx, #toast, .code-copy, .h-anchor, .page-icon,
+  .th-sort, .praesenz, .rundknopf, .cbadge, .mode-toggle, .kopfknopf { display: none !important; }
+  mark.cq { background: none; color: inherit; }
+  .wiki-main { padding: 0; max-width: none; }
+  .wiki-shell { display: block; }
+  .wiki-content a { color: inherit; text-decoration: underline; }
+  .wiki-content a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .85em; color: #555; }
+  .page-break { break-after: page; border: 0; margin: 0; }
+  .callout, .accordion, table, figure, .columns { break-inside: avoid; }
+  details.accordion > .accordion-body { display: block !important; }
+  .table-scroll { overflow: visible; }
+}
+/* Kommentar-Reiter */
+.c-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+.c-tabs button {
+  flex: 1; padding: 4px 6px; background: none; border: 1px solid var(--linie);
+  border-radius: var(--radius); font: inherit; font-size: var(--fs-klein); color: var(--grau); cursor: pointer;
+}
+.c-tabs button.sel { background: var(--rot-hell); border-color: var(--rot); color: var(--rot); font-weight: 700; }
+.ed-stats { margin-top: 8px; text-align: right; }
+/* Textfarben – nur die Hausfarben aus dem Handbuch CD */
+.tc-rot { color: var(--rot); }
+.tc-blau { color: var(--wasser); }
+.tc-gruen { color: var(--ok); }
+.tc-grau { color: var(--grau); }
+/* Gelb ist Hinweisfarbe: die Schrift darauf wird rot, sonst trägt die Marke keine Aussage. */
+.tc-gelb { background: var(--gelb); color: var(--rot); font-weight: 600; padding: 0 3px; }
+.wiki-content audio { display: block; width: 100%; margin: .8em 0; }
+/* Der Sortierpfeil steht im rechten Innenabstand der Kopfzelle, nicht im Textfluss: Als
+   Inhalt machte er die Spalte um gut zwanzig Pixel breiter als dieselbe Tabelle im Editor,
+   wo es ihn nicht gibt – die Spaltengrenzen sprangen beim Umschalten. */
+.wiki-content th { position: relative; }
+.th-sort { position: absolute; right: 1px; top: 50%; transform: translateY(-50%);
+  padding: 0 2px; background: none; border: 0; color: var(--grau); font: inherit; font-size: .8em; cursor: pointer; opacity: .5; }
+.wiki-content th:hover .th-sort, .th-sort:focus-visible { opacity: 1; }
+.th-sort:hover { color: var(--rot); }
+.columns.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 900px) { .columns.cols-5, .columns.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Auf dem Telefon steht alles untereinander – auch vier und fünf Spalten. Zwei Spalten auf
+   375 px sind je rund 150 px breit: Bilder werden briefmarkengroß und Wörter brechen mitten
+   entzwei. Diese Regel steht nach der 900er, damit sie bei gleicher Kraft gewinnt. */
+@media (max-width: 640px) {
+  .columns, .columns.cols-3, .columns.cols-4, .columns.cols-5 { grid-template-columns: minmax(0, 1fr); }
+}
+/* Versionsvergleich */
+.diff { white-space: pre-wrap; font-size: .93rem; line-height: 1.5; }
+.diff ins { background: #dff0e2; color: var(--ok); text-decoration: none; }
+.diff del { background: var(--rot-hell); color: var(--rot); }
+
+
+/* --- Sidebar in der Breite verstellbar ---------------------------------------------- */
+.side-grip {
+  /* Ganz innerhalb der Spalte: die 3 px, die früher herausragten, zwangen der Seitenleiste
+     einen waagerechten Rollbalken auf. */
+  position: absolute; top: 0; right: 0; width: 6px; height: 100%;
+  cursor: col-resize; z-index: 5;
+}
+.side-grip:hover, .side-grip.dragging { background: var(--rot); opacity: .4; }
+/* Automatische Textrichtung: importierte Inhalte können auch rechtsläufig sein. */
+.wiki-content { unicode-bidi: plaintext; }
+.wiki-content p, .wiki-content li, .wiki-content td, .wiki-content th, .wiki-content blockquote { unicode-bidi: plaintext; }
+/* Ziehgriff für Blöcke im Editor */
+.ed-grip {
+  position: absolute; z-index: 1250; width: 18px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--grau); cursor: grab; user-select: none; border-radius: var(--radius);
+  font-size: .95rem; line-height: 1;
+}
+.ed-grip:hover { background: var(--grau-hell); color: var(--anthrazit); }
+.ed-grip:active { cursor: grabbing; }
+.toastui-editor-contents .blk-before { box-shadow: 0 -2px 0 var(--rot); }
+.toastui-editor-contents .blk-after { box-shadow: 0 2px 0 var(--rot); }
+/* Import: Dateiliste und Fortschritt */
+
+/* --- Editor auf schmalen Bildschirmen ---------------------------------------------- */
+@media (max-width: 760px) {
+  .ed-bubble { max-width: 96vw; flex-wrap: wrap; justify-content: center; left: 2vw !important; }
+  .ed-slash { width: min(94vw, 320px); left: 3vw !important; }
+  .ed-ctx { max-width: 94vw; left: 3vw !important; flex-wrap: wrap; }
+  .ed-grip { display: none; }                 /* Ziehen per Finger kollidiert mit dem Scrollen */
+  .tree-menu { width: min(94vw, 260px); }
+}
+/* Markenblöcke im Editor: nur ein Hinweis, gefüllt wird erst in der Ansicht */
+.toastui-editor-contents .ed-marker { border: 1px dashed var(--linie); padding: 8px 12px; margin: 1em 0; }
+.toastui-editor-contents .page-break.ed-marker { border-top: 1px dashed var(--linie); text-align: center; }
+/* Marken der Spalten- und Ausrichtungsabschnitte: nur eine schmale Linie mit Beschriftung,
+   damit der Inhalt dazwischen der Blickfang bleibt – bearbeitet wird er ganz normal. */
+/* Die Marke eines Abschnitts ist im Editor nur noch ein schmaler, unsichtbarer Anfasser:
+   sichtbar wird der Abschnitt durch seine Wirkung, nicht durch eine Linie. Beim Überfahren
+   blitzt eine feine Linie auf, damit man ihn findet und ziehen kann. */
+.toastui-editor-contents .sek-marke {
+  display: flex; align-items: center; height: 6px;
+  border: 0; padding: 0; margin: .35em 0; line-height: 1; color: var(--rot);
+}
+.toastui-editor-contents .sek-marke::after {
+  content: ""; flex: 1; border-top: 1px solid currentColor; opacity: 0; transition: opacity .12s;
+}
+.toastui-editor-custom-block:hover .sek-marke::after { opacity: .35; }
+.toastui-editor-custom-block:has(.sek-marke) { margin: 0; }
+/* Toast UI polstert jede Custom-Block-Hülle. In unseren Marken steckt darin nichts als der
+   schmale Anfasser – die Polsterung blieb als leerer Streifen von gut dreißig Pixeln stehen,
+   mit einer Linie darin, sobald die Maus darüberfuhr. Abgestellt war das bisher einzeln je
+   Markenart, und Ausrichtung und Baustein fehlten in der Aufzählung. Jetzt entscheidet die
+   Marke selbst: Wo eine steckt, wird weder gepolstert noch gerahmt. Der Rahmen ist der Grund
+   für die Linien, die an Ausrichtung und Spalten noch zu sehen waren: Toast UI zeichnet um
+   jede Hülle ein hellviolettes Rechteck, und mit weggenommener Polsterung blieb davon ein
+   Strich quer über die Seite. */
+.wiki-editor .toastui-editor-custom-block:has(.sek-marke) > .toastui-editor-custom-block-view {
+  padding: 0; border: 0; border-radius: 0; background: none;
+}
+/* Beim Anklicken einer Marke klappt Toast UI sein eigenes Feld für den Blocktext auf – ein
+   hellvioletter Kasten mitten im Artikel. Zu bearbeiten gibt es dort nichts: Art, Ausrichtung
+   und Spaltenzahl stellt das Menü des Abschnitts, und der Inhalt steht ohnehin im Text. */
+.wiki-editor .toastui-editor-custom-block:has(.sek-marke) > .toastui-editor-custom-block-editor {
+  display: none !important;
+}
+/* An einer Marke gibt es nichts zu bearbeiten, und auch der Hinweis wird direkt im Text
+   bearbeitet: die Leiste mit Blockname und Stift entfällt im Editor durchgehend. */
+.wiki-editor .toastui-editor-custom-block .tool { display: none !important; }
+/* Auswahlfelder in der Auswahlleiste */
+.ed-bubble select.ed-style, .ed-bubble select.ed-align {
+  width: auto; padding: 3px 4px; font-size: .85rem; border-color: var(--linie);
+}
+.ed-bubble select.ed-align { width: 3.2em; text-align: center; }
+/* Ein einzelner Spaltenblock (fehlender ||| -Trenner) darf nicht in die halbe Breite gequetscht werden. */
+.columns.cols-1 { grid-template-columns: minmax(0, 1fr); }
+
+/* ============================================================================
+   Eine Textspalte für Lesen und Schreiben. Beide Ansichten teilen sich Raster,
+   Breite, linke Kante, Schriftgröße und Zeilenhöhe – beim Umschalten darf sich
+   kein Wort bewegen. Deshalb steht hier alles beieinander statt verstreut.
+   ============================================================================ */
+/* Die rechte Spur behält ihre 260 px, auch wenn das Inhaltsverzeichnis darin
+   ausgeblendet ist – nur so bleibt das Raster in beiden Ansichten dasselbe. */
+.wiki-main {
+  padding: 28px var(--lesepad) 80px;
+  max-width: calc(var(--lesebreite) + 2 * var(--lesepad));
+  width: 100%; margin: 0 auto; justify-self: center;
+}
+/* Der Editor legt seine Blöcke in ein Raster (für die Spalten). Dort fallen Ränder nicht
+   zusammen. Damit die Ansicht dieselben Abstände zeigt, ist auch sie ein Raster – sonst
+   verschöbe sich der Text ab der ersten Überschrift beim Umschalten. */
+.wiki-content {
+  overflow-wrap: break-word;
+  max-width: none; font-size: var(--lesetext); line-height: var(--lesezeile);
+  display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 0; align-content: start;
+}
+
+/* Kopfzeile: eine Zeile – links der Pfad, rechts die Knöpfe. Sie bleibt beim Blättern
+   unter der Bauchbinde stehen, damit Umschalter und Aktionen immer erreichbar sind.
+   Beide Ansichten bauen dieselbe eine Zeile; nur so beginnt der Titel beim Umschalten
+   an derselben Stelle. Deshalb auch kein Umbruch: der Pfad weicht mit … zurück. */
+.wiki-head, .wiki-head.editing-head {
+  display: flex; flex-direction: row; align-items: center; gap: 10px; flex-wrap: nowrap;
+  margin: 0 0 20px; padding: 6px 0 8px; border-bottom: 2px solid var(--anthrazit);
+  /* Über allem, was im Text liegt, aber unter der Bauchbinde (z-index 1200). */
+  position: sticky; top: var(--topbar); z-index: 40; background: var(--weiss);
+}
+.wiki-head .wiki-meta {
+  margin: 0; padding: 0; border: 0; min-width: 0; flex: 1 1 auto;
+  font-size: .82rem; color: var(--grau);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Der Pfad steht links, alles andere rechtsbündig am Rand der Textspalte – wie in Docmost.
+   Der Innenabstand nach links schiebt die Knöpfe ans Ende, egal wie lang der Pfad ist; ist er
+   zu lang für die Zeile, wird er gekürzt statt umzubrechen. */
+.wiki-head .krumen { flex: 0 1 auto; min-width: 0; flex-wrap: nowrap; overflow: hidden; }
+/* Wird es eng, schrumpfen die Ebenen darüber – der Titel der Seite selbst zuletzt. */
+.wiki-head .krumen .krume { flex: 0 8 auto; }
+.wiki-head .krumen .krume[aria-current] { flex: 0 1 auto; }
+.wiki-head .krumen .krume-sep { flex: none; }
+.wiki-head .btn-row { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; margin: 0 0 0 auto; flex: none; }
+/* Die Symbolknöpfe der Kopfzeile sind quadratisch – wie die Symbole in Docmost. */
+/* Sprungziele (Inhaltsverzeichnis, Kommentaranker) dürfen nicht unter der klebenden
+   Bauchbinde und Kopfzeile landen. */
+.wiki-content h1, .wiki-content h2, .wiki-content h3, .wiki-content h4,
+.wiki-content h5, .wiki-content h6, .wiki-content [id] { scroll-margin-top: calc(var(--topbar) + 60px); }
+/* Der Knopf in der Kopfzeile blendet die Gliederung aus; die rechte Spur behält ihre
+   Breite, damit sich der Text dabei nicht verschiebt. */
+body.toc-aus .wiki-rail .toc { display: none; }
+/* Der Speicherstand steht links neben den Knöpfen – ruhig, außer es klemmt. */
+.wiki-head #ed-status { flex: none; white-space: nowrap; }
+.wiki-head #ed-status.warn { color: var(--rot); font-weight: 600; }
+/* „Anna bearbeitet“ – steht links in der Knopfreihe, damit es beim Lesen auffällt, bevor
+   jemand auf Bearbeiten drückt. */
+.praesenz {
+  display: inline-flex; align-items: center; gap: 4px; margin-right: 4px;
+  padding: 3px 8px; border-radius: var(--radius-pille); white-space: nowrap;
+  background: var(--gelb); color: var(--anthrazit); font-size: var(--fs-marke); font-weight: 600;
+}
+.wiki-head .kopfknopf {
+  width: 30px; height: 30px; padding: 0; font-size: 15px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+/* Knöpfe mit gezeichnetem Symbol statt Schriftzeichen – dieselben Regeln wie in den
+   schwebenden Leisten: 16er-Raster, currentColor, damit das Symbol die Farbe des Knopfes
+   annimmt (auch beim Überfahren). */
+.wiki-head .kopfknopf svg {
+  width: 16px; height: 16px; display: block; flex: none; pointer-events: none;
+  fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* Der Seitentitel ist die erste Überschrift der Textspalte – in beiden Ansichten. */
+.wiki-content h1, .wiki-content h2, .wiki-content h3, .wiki-content h4,
+.wiki-content h5, .wiki-content h6, h1.seitentitel,
+.wiki-editor .toastui-editor-contents h1, .wiki-editor .toastui-editor-contents h2,
+.wiki-editor .toastui-editor-contents h3, .wiki-editor .toastui-editor-contents h4,
+.wiki-editor .toastui-editor-contents h5, .wiki-editor .toastui-editor-contents h6 {
+  font-family: var(--font-marke);
+}
+h1.seitentitel,
+.wiki-editor .toastui-editor-contents h1:first-child {
+  font-size: 1.7rem; line-height: 1.2; font-weight: 700; color: var(--rot);
+  letter-spacing: -.01em; margin: 0 0 .5em; padding: 0; border: 0;
+}
+h1.seitentitel .page-icon { margin-right: 6px; }
+
+/* Brotkrumen oben links – Symbol und Titel je Ebene, getrennt durch einen Schrägstrich. */
+.krumen { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: .84rem; min-width: 0; }
+.krumen .krume { display: inline-flex; align-items: center; gap: 5px; color: var(--grau); text-decoration: none; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.krumen a.krume:hover { color: var(--rot); text-decoration: underline; }
+.krumen .krume[aria-current] { color: var(--schwarz); font-weight: 700; }
+.krumen .krume-icon { font-size: 1em; line-height: 1; }
+.krumen .krume-sep { color: var(--linie); }
+
+/* Autorzeile unter der Überschrift – in der Ansicht und im Editor dieselbe. */
+.autorzeile { display: flex; align-items: center; gap: 8px; height: 24px; line-height: 1; margin: 0 0 1.2em; font-size: .86rem; color: var(--grau); }
+.autorzeile .avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 50%; flex: none;
+  background: var(--rot-hell); color: var(--rot); font-size: .68rem; font-weight: 700; letter-spacing: .02em;
+}
+.autorzeile .autorname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Liegt ein Profilbild vor, füllt es den Kreis vollständig aus – zugeschnitten wurde beim
+   Hochladen, object-fit fängt nur ab, dass ein Bestandsbild einmal nicht quadratisch ist. */
+.autorzeile .avatar img, .autor-tafel .avatar img {
+  width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block;
+}
+/* Name und Zeichen sind zusammen ein Knopf: ein Klick zeigt, wer an der Seite geschrieben hat. */
+.autorzeile .autor-knopf {
+  display: inline-flex; align-items: center; gap: 8px; min-width: 0;
+  border: 0; background: none; padding: 0; margin: 0; font: inherit; color: inherit;
+  cursor: pointer; border-radius: var(--radius);
+}
+.autorzeile .autor-knopf:hover .autorname { color: var(--anthrazit); text-decoration: underline; }
+
+/* Profilseite: Bild links, Erklärung und Knöpfe rechts. */
+.profilbild { display: flex; align-items: center; gap: 16px; margin: 12px 0 0; }
+.profilbild .pb-vorschau {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 76px; height: 76px; border-radius: 50%; overflow: hidden;
+  background: var(--rot-hell); color: var(--rot); font-size: 1.7rem; font-weight: 700;
+}
+.profilbild .pb-vorschau img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.profilbild .pb-text { min-width: 0; }
+.profilbild .pb-text .help { margin: 0 0 10px; }
+
+/* Die Tafel darunter: oben der Ersteller, darunter die Mitwirkenden. Sie hängt an der
+   Autorenzeile und blättert mit ihr mit; deshalb liegt sie – wie der Text selbst – unter
+   der Kopfzeile (z-index 40) und der Bauchbinde (1200) und verschwindet beim Blättern
+   dahinter, statt darüber hinwegzuwandern. */
+.autor-tafel {
+  position: absolute; z-index: 30; min-width: 230px; max-width: 320px;
+  padding: 10px 12px; background: var(--weiss); border: 1px solid var(--linie);
+  border-radius: var(--radius); box-shadow: var(--schatten-leiste);
+}
+.autor-tafel .autor-person { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.autor-tafel .avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 50%; flex: none;
+  background: var(--rot-hell); color: var(--rot); font-size: var(--fs-marke); font-weight: 700;
+}
+.autor-tafel .avatar.mit { background: var(--grau-hell); color: var(--grau); }
+.autor-tafel .autor-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.autor-tafel .autor-nam { font-weight: 600; color: var(--anthrazit); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.autor-tafel .autor-rolle { font-size: var(--fs-klein); color: var(--grau); }
+/* Steht unter dem Ersteller und ist um die Breite des Avatars eingerückt, damit es als
+   Nachsatz zu ihm liest und nicht als weitere Person. */
+.autor-tafel .autor-wechsel { margin: 2px 0 2px 40px; }
+.autor-tafel .autor-trenner { border-top: 1px solid var(--linie); margin: 8px 0; }
+.rundknopf {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; flex: none; padding: 0;
+  border: 1px solid var(--linie); border-radius: 50%; background: none;
+  font: inherit; font-size: .74rem; font-style: italic; font-weight: 700;
+  color: var(--grau); cursor: pointer; line-height: 1;
+}
+.rundknopf:hover { border-color: var(--rot); color: var(--rot); }
+.rundknopf.on { border-color: var(--rot); background: var(--rot-hell); color: var(--rot); }
+.rundknopf.still { cursor: default; font-style: normal; }
+
+/* Angaben zur Seite in der rechten Leiste. */
+.seiten-info { margin-bottom: 22px; }
+.info-liste { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0 0 14px; font-size: .82rem; }
+.info-liste dt { color: var(--grau); }
+.info-liste dd { margin: 0; color: var(--schwarz); text-align: right; }
+.info-links { margin: 0 0 12px; padding-left: 16px; font-size: .82rem; }
+.info-links a { color: var(--anthrazit); }
+.info-links a:hover { color: var(--rot); }
+
+/* Im Editor ist die Autorzeile ein eingehängtes Stück DOM, kein Dokumentinhalt. */
+.toastui-editor-contents .autorzeile { user-select: none; }
+
+/* Der Editor IST die Textspalte. Vier Klassen tief, weil das Vendor-CSS nach app.css
+   geladen wird: bei gleicher Spezifität gewänne sonst dessen padding von 16px 25px. */
+.wiki-editor .toastui-editor-ww-container .ProseMirror.toastui-editor-contents {
+  max-width: none; margin: 0; padding: 0;
+  font-size: var(--lesetext); line-height: var(--lesezeile);
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents :not(table) {
+  line-height: var(--lesezeile); box-sizing: border-box;
+}
+/* Überschriften und die Autorzeile behalten ihre eigene Zeilenhöhe – die Regel darüber ist
+   spezifischer als die Überschriftenregeln weiter unten und würde sie sonst überschreiben. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents h1,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents h2,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents h3,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents h4 { line-height: 1.2; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents .autorzeile { line-height: 1; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents p { margin: 0 0 .9em; color: inherit; }
+.wiki-editor .toastui-editor-contents h1, .wiki-editor .toastui-editor-contents h2,
+.wiki-editor .toastui-editor-contents h3, .wiki-editor .toastui-editor-contents h4 {
+  color: var(--anthrazit); font-weight: 700; line-height: 1.2;
+  letter-spacing: -.01em; border: 0; padding: 0; margin: 0 0 .5em;
+}
+.wiki-editor .toastui-editor-contents h1 { font-size: 1.7rem; color: var(--rot); margin-top: 1.2em; }
+.wiki-editor .toastui-editor-contents h2 { font-size: 1.35rem; margin-top: 1.4em; border-bottom: 1px solid var(--linie); padding-bottom: 3px; }
+.wiki-editor .toastui-editor-contents h3 { font-size: 1.1rem; margin-top: 1.2em; }
+.wiki-editor .toastui-editor-contents h4 { font-size: 1rem; margin-top: 1em; }
+.wiki-editor .toastui-editor-contents h1:first-child { margin-top: 0; }
+.wiki-editor .toastui-editor-contents ul, .wiki-editor .toastui-editor-contents ol {
+  margin: 1em 0; padding-left: 40px; color: inherit;
+}
+.wiki-editor .toastui-editor-contents ul { list-style: disc outside; }
+.wiki-editor .toastui-editor-contents ol { list-style: decimal outside; }
+.wiki-editor .toastui-editor-contents ul > li::before,
+.wiki-editor .toastui-editor-contents ol > li::before { content: none; }
+.wiki-editor .toastui-editor-contents li { min-height: 0; }
+/* Eine Liste in einer Liste hat im Artikel keinen eigenen Rand (so macht es der Browser);
+   der Editor gab ihr denselben wie einer Liste im Fließtext – der Punkt darüber war dadurch
+   fünfzehn Pixel höher als im Artikel. */
+.wiki-editor .toastui-editor-contents li > ul, .wiki-editor .toastui-editor-contents li > ol { margin: 0; }
+/* Im Editor steckt jeder Listenpunkt in einem Absatz, in der Leseansicht nicht. Dessen
+   unterer Rand zöge die Punkte um eine knappe Zeile auseinander. Mehrere Absätze in einem
+   Punkt behalten ihren Abstand – nur der letzte gibt ihn ab. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents li > p:last-child { margin-bottom: 0; }
+/* Folgt dem Text eines Listenpunktes eine Unterliste, steht in der Leseansicht nichts
+   dazwischen – im Editor trennte sie der Rand des Absatzes um eine halbe Zeile. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents li > p:has(+ ul),
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents li > p:has(+ ol) { margin-bottom: 0; }
+.wiki-editor .toastui-editor-contents .task-list-item { margin-left: -24px; padding-left: 24px; }
+.wiki-editor .toastui-editor-contents .task-list-item::before { content: ""; }
+@media print { .wiki-main { max-width: none; } }
+
+/* --- Der Editor zeigt, was dasteht --------------------------------------------------
+   Ausrichtung, Hinweiskisten und Spalten werden im Editor wirklich dargestellt, nicht
+   beschriftet. Die Klassen kommen aus Node-Dekorationen (siehe layoutPlugin in wiki.js);
+   das Dokument selbst weiß davon nichts. */
+.wiki-editor .toastui-editor-ww-container .ProseMirror {
+  display: grid; grid-template-columns: minmax(0, 1fr);
+  column-gap: 0; row-gap: 0; align-content: start; align-items: start;
+  /* Bezugsrahmen für die absolut liegenden Spaltenblöcke (siehe layoutPlugin). */
+  position: relative;
+  /* Toast UI setzt auf .toastui-editor-contents z-index: 20. Ohne Positionierung blieb das
+     wirkungslos; mit dem Bezugsrahmen oben griffe es plötzlich – und der Text stünde auf
+     gleicher Stufe wie die klebende Kopfzeile, also (später im Text) über ihr. */
+  z-index: auto;
+}
+.wiki-editor .toastui-editor-ww-container .ProseMirror > * { grid-column: 1 / -1; min-width: 0; }
+/* Die Autorzeile ist ein Widget ohne Dekoration – ihre Zeile hält das Plugin frei. */
+.wiki-editor .toastui-editor-ww-container .ProseMirror > .autorzeile { grid-column: 1 / -1; grid-row: 2; }
+
+/* Hinweiskiste: die Fläche liegt auf jedem Block, die beiden Marken bilden ihren oberen und
+   unteren Rand. Das Symbol steht groß am ersten Absatz – wie in der Leseansicht, wo es links
+   neben dem Text sitzt. Beschriftungen wie "HINWEIS" gibt es nicht: der Editor soll zeigen,
+   was dasteht, nicht was es heißt. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-marke {
+  --co-flaeche: var(--co-info-fl); --co-kante: var(--co-info-ka);
+  background: var(--co-flaeche); border-left: 5px solid var(--co-kante);
+  margin: 0; padding: 0 14px 0 calc(14px + var(--lesetext) * 1.56 + 10px); align-self: stretch;
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-warning { --co-flaeche: var(--co-warning-fl); --co-kante: var(--co-warning-ka); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-danger { --co-flaeche: var(--co-danger-fl); --co-kante: var(--co-danger-ka); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-success { --co-flaeche: var(--co-success-fl); --co-kante: var(--co-success-ka); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-note { --co-flaeche: var(--co-note-fl); --co-kante: var(--co-note-ka); }
+/* Selbst gewählte Pastellfarbe schlägt die Farbe der Hinweisart. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .cofarbe-rosa { --co-flaeche: var(--co-rosa-fl); --co-kante: var(--co-rosa-ka); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .cofarbe-pfirsich { --co-flaeche: var(--co-pfirsich-fl); --co-kante: var(--co-pfirsich-ka); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .cofarbe-sonne { --co-flaeche: var(--co-sonne-fl); --co-kante: var(--co-sonne-ka); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .cofarbe-mint { --co-flaeche: var(--co-mint-fl); --co-kante: var(--co-mint-ka); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .cofarbe-himmel { --co-flaeche: var(--co-himmel-fl); --co-kante: var(--co-himmel-ka); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .cofarbe-flieder { --co-flaeche: var(--co-flieder-fl); --co-kante: var(--co-flieder-ka); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .cofarbe-sand { --co-flaeche: var(--co-sand-fl); --co-kante: var(--co-sand-ka); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .cofarbe-stein { --co-flaeche: var(--co-stein-fl); --co-kante: var(--co-stein-ka); }
+
+/* Dieselben Farben in der Leseansicht. Die Klassen heißen dort „co-farbe-…“ statt
+   „cofarbe-…“: Der Editor erbt Klassen an geschachtelte Blöcke weiter und siebt dabei alles
+   mit „co-“ am Anfang aus – ein Bindestrich mehr, und die Pastellfarbe fiele mit weg. */
+.callout.co-farbe-rosa { background: var(--co-rosa-fl); border-color: var(--co-rosa-ka); }
+.callout.co-farbe-pfirsich { background: var(--co-pfirsich-fl); border-color: var(--co-pfirsich-ka); }
+.callout.co-farbe-sonne { background: var(--co-sonne-fl); border-color: var(--co-sonne-ka); }
+.callout.co-farbe-mint { background: var(--co-mint-fl); border-color: var(--co-mint-ka); }
+.callout.co-farbe-himmel { background: var(--co-himmel-fl); border-color: var(--co-himmel-ka); }
+.callout.co-farbe-flieder { background: var(--co-flieder-fl); border-color: var(--co-flieder-ka); }
+.callout.co-farbe-sand { background: var(--co-sand-fl); border-color: var(--co-sand-ka); }
+.callout.co-farbe-stein { background: var(--co-stein-fl); border-color: var(--co-stein-ka); }
+
+/* Auswahlfeld für die Pastellfarben. */
+.ed-farben { position: absolute; z-index: 1310; display: grid; grid-template-columns: repeat(3, 30px); gap: 6px;
+  padding: 8px; background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius-gross); box-shadow: var(--schatten-menue); }
+.ed-farben .farbe { width: 30px; height: 30px; border: 1px solid var(--linie); border-radius: var(--radius); cursor: pointer; padding: 0;
+  font: inherit; font-size: .8rem; color: var(--grau); }
+.ed-farben .farbe:hover { border-color: var(--rot); }
+.ed-farben .farbe.on { border: 2px solid var(--rot); }
+.ed-farben .farbe.leer { background: var(--weiss); }
+/* Einzeilige Hinweiskiste in einer Tabellenzelle: In der Leseansicht steht dort ein Kästchen,
+   im Editor bliebe sonst der rohe Text ":::warning … :::" stehen. Die Marken werden
+   ausgeblendet, der Absatz bekommt die Fläche – dieselben Farben und Maße wie .callout.
+   Nur Ansicht: im Dokument steht der Text unverändert (siehe editor-layout.js). */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents .co-zeichen { display: none; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.co-zelle {
+  position: relative; margin: 1.1em 0; padding: 10px 14px 10px calc(14px + var(--lesetext) * 1.56 + 10px);
+  border-left: 5px solid var(--co-kante, var(--grau)); background: var(--co-flaeche, var(--grau-hell));
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.co-zelle::before {
+  content: attr(data-emoji); position: absolute; left: 14px; top: 10px;
+  font-size: .72em; line-height: calc(var(--lesetext) * var(--lesezeile));
+  width: calc(var(--lesetext) * 1.56); text-align: center;
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.coz-info,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.coz-tip { --co-flaeche: #eaf2f9; --co-kante: var(--wasser); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.coz-warning { --co-flaeche: #fffbd6; --co-kante: var(--gelb); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.coz-danger { --co-flaeche: var(--rot-hell); --co-kante: var(--rot); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.coz-success { --co-flaeche: #e9f5ec; --co-kante: var(--ok); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents p.coz-note { --co-flaeche: var(--grau-hell); --co-kante: var(--grau); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-marke:not(.co-schluss) { padding-top: 6px; margin-top: 1.1em; border-top-right-radius: 4px; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-schluss { padding-bottom: 6px; margin-bottom: 1.1em; border-bottom-right-radius: 4px; }
+/* Die Marke ist nur noch ein schmaler Anfasser am oberen und unteren Rand der Kiste.
+   Toast UI polstert die Hülle jedes Custom-Blocks; hier wäre das sichtbarer Leerraum und
+   die Kiste stünde höher als in der Leseansicht. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-marke .sek-marke { margin: 0; height: 4px; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-marke .sek-marke::after { display: none; }
+/* Das Symbol steht im linken Einzug der Kiste, auf Höhe der ersten Zeile – wie in der
+   Leseansicht, wo es neben dem Text sitzt. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-erst { position: relative; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .co-erst::before {
+  content: attr(data-emoji); position: absolute; left: 14px; top: 0;
+  /* Größe und Zeilenhöhe wie in der Leseansicht; die Spalte ist so breit wie das frühere
+     Zeichen, damit das kleinere an genau derselben Stelle steht. */
+  font-size: .72em; line-height: calc(var(--lesetext) * var(--lesezeile));
+  width: calc(var(--lesetext) * 1.56); text-align: center;
+}
+
+/* In Kiste und Box tragen die Blöcke die Fläche selbst; ihre Ränder sind deshalb auf null
+   gesetzt, sonst risse die Fläche zwischen zwei Absätzen auf. Den Abstand übernimmt ein
+   Innenabstand – mit denselben Werten, die der Block in der Leseansicht als oberen Rand hätte.
+   Ohne ihn klebte eine Liste unmittelbar am Absatz darüber. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .kasten:not(.kasten-erst) { padding-top: .9em; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > ul.kasten:not(.kasten-erst),
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > ol.kasten:not(.kasten-erst),
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > h4.kasten:not(.kasten-erst) { padding-top: 1em; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > h1.kasten:not(.kasten-erst),
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > h3.kasten:not(.kasten-erst) { padding-top: 1.2em; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > h2.kasten:not(.kasten-erst) { padding-top: 1.4em; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .kasten.ed-leerzeile { padding-top: 0; }
+/* Die Leerzeile, die im Markdown zwei Absätze trennt, ist im Editor ein leerer Absatz –
+   nötig fürs Speichern, aber in der Leseansicht steht dort nichts. Zugeklappt stimmt der
+   Zeilenfall beider Ansichten überein; wer den Schreibstrich hineinsetzt, sieht die Zeile
+   wieder (die Klasse fällt dann weg, siehe editor-layout.js). */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > p.ed-fuge {
+  height: 0; min-height: 0; margin: 0; padding: 0; overflow: hidden;
+}
+
+/* Aufzählungen in der Kiste brauchen ihren gewohnten Einzug – ohne ihn klebten die Punkte
+   am linken Rand der Kiste. Gerechnet, nicht geschätzt: dieselbe Polsterung wie jeder andere
+   Block der Kiste, dazu der Einzug, den die Leseansicht ihren Aufzählungen gibt (32px unten).
+   Eine feste Zahl liefe davon weg, sobald sich die Lesegröße ändert. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > ul.co,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > ol.co {
+  padding-left: calc(14px + var(--lesetext) * 1.56 + 10px + 32px);
+}
+/* Auch in der Leseansicht stehen Aufzählungen der Kiste eingerückt zum Fließtext daneben. */
+.wiki-content .callout-body > ul, .wiki-content .callout-body > ol { padding-left: 32px; }
+
+/* Aufzählungen tiefer als eine Ebene: Der Artikel nimmt die Zeichen des Browsers – Punkt,
+   Kreis, Quadrat. Toast UI setzt in jeder Ebene denselben Punkt; im Editor sah eine
+   zweite Ebene deshalb aus wie die erste. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents ul ul { list-style-type: circle; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents ul ul ul { list-style-type: square; }
+
+/* Einklappbare Box: im Editor immer aufgeklappt – nur so laesst sich ihr Inhalt bearbeiten.
+   Titel und Inhalt sind gewoehnliche Bloecke; Rahmen, Flaeche und Pfeil kommen aus diesen
+   Klassen und zeigen dasselbe Bild wie die aufgeklappte Box in der Leseansicht. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-titel,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-marke {
+  background: var(--weiss); border-left: 4px solid var(--grau); border-right: 1px solid var(--linie);
+  margin: 0; padding: 0 12px; align-self: stretch;
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-titel,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-auf { background: var(--grau-hell); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-titel {
+  font-weight: 600; padding: 8px 12px 8px 32px; position: relative;
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-erst::before {
+  content: ""; position: absolute; left: 14px; top: .45em; width: 6px; height: 6px;
+  border-right: 2px solid var(--grau); border-bottom: 2px solid var(--grau); transform: rotate(45deg);
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-auf {
+  border-top: 1px solid var(--linie); border-top-right-radius: 4px; padding-top: 4px; margin-top: 1em;
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-mitte { padding-bottom: 6px; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-schluss {
+  border-bottom: 1px solid var(--linie); border-bottom-right-radius: 4px; padding-bottom: 6px; margin-bottom: 1em;
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-marke .sek-marke { margin: 0; height: 4px; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-marke .sek-marke::after { display: none; }
+/* Toast UI polstert die Huelle jedes Custom-Blocks; an der Marke waere das sichtbarer Leerraum. */
+/* Aufzaehlungen in der Box eingerueckt wie im Fliesstext daneben. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > ul.ak,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > ol.ak { padding-left: 52px; }
+
+/* Ausrichtung */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .al-left { text-align: left; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .al-center { text-align: center; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .al-right { text-align: right; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .al-justify { text-align: justify; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .al-center img { margin-left: auto; margin-right: auto; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .al-right img { margin-left: auto; }
+
+/* Die Beschriftungen der Marken ("SPALTE 1", "ENDE", "MITTIG") gehören nicht in den Text –
+   der Editor zeigt ja bereits, was sie bewirken. Für Vorlesehilfen bleiben sie erhalten. */
+.toastui-editor-contents .sek-marke > span {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+/* Die stillen Marken (Ausrichtung, Spaltenkopf, Spaltenfuß) dürfen im Fluss keinen Platz
+   kosten: In der Leseansicht gibt es sie nicht, und jede Zeile Höhe hier verschiebt alles
+   Folgende gegenüber dem Artikel. Über ein ganzes Dokument summiert sich das und der Sprung
+   beim Umschalten wird sichtbar. Sie sind deshalb null hoch; der Strich liegt auf der Kante.
+   Den Zwischenraum, den die Leseansicht dem Abschnitt gibt (.columns: .35em oben, 1em unten),
+   tragen Kopf und Fuß als Rand – so steht der Inhalt in beiden Ansichten auf demselben Pixel. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sek-still .sek-marke,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sp-fuss .sek-marke,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sp-kopf .sek-marke { margin: 0; height: 0; opacity: .35; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sek-still { margin: 0; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sp-kopf { margin: .35em 0 0; }
+/* Nur der untere Abstand: Den oberen schreibt die Messung des Plugins – er ist die Höhe
+   der längsten Spalte und hält die Rasterzeile auf. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sp-fuss { margin-bottom: 1em; }
+/* Der Baustein ist die eine Marke, deren Beschriftung dastehen soll: Sie sagt, dass dieser
+   Teil der Seite anderswo eingebunden ist – wer ihn ändert, ändert ihn dort mit. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sek-teil .sek-marke {
+  height: auto; margin: .6em 0 .2em; color: var(--wasser);
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sek-teil .sek-marke::after {
+  opacity: .4; margin-left: 8px;
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sek-teil-auf .sek-marke > span {
+  position: static; width: auto; height: auto; overflow: visible; clip-path: none;
+  font-size: .76rem; letter-spacing: .02em; text-transform: uppercase;
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sek-still:hover .sek-marke,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sp-kopf:hover .sek-marke,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sp-fuss:hover .sek-marke { opacity: .9; }
+
+/* Spalten: der ganze Abschnitt bekommt EINE Rasterzeile, seine Blöcke liegen darin absolut.
+   Die Waagerechte rechnet CSS (--sp-l/--sp-b, aus dem Verschachtelungspfad), die Senkrechte
+   misst das Plugin und schreibt sie in ein eigenes Stilblatt. Nur so fließt jede Spalte für
+   sich: eine Rasterzeile wäre über alle Spalten hinweg gleich hoch. */
+/* Toast UI polstert die Hülle jedes Custom-Blocks. An den Spaltenmarken sind das oben und
+   unten je 17 px sichtbarer Leerraum – der Abschnitt rückte damit weit vom Absatz davor ab. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sp-abs {
+  position: absolute; top: 0; left: var(--sp-l, 0px); width: var(--sp-b, 100%);
+}
+/* Wie in der Leseansicht (.columns .col > :first-child) beginnt jede Spalte ohne oberen Rand.
+   Das gilt auch, wenn dort eine Hinweiskiste oder eine Box anfängt – deren eigene Regel ist
+   spezifischer, deshalb hier ausnahmsweise !important. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .sp-erst { margin-top: 0 !important; }
+
+/* Der Editor erbt das Aussehen der Leseansicht, wo es geht: Anhänge, Bildunterschriften,
+   Tabellenköpfe, Zitate und Codeblöcke sahen sonst anders aus als im fertigen Artikel. */
+/* Bild und Bildunterschrift stehen im Artikel als eine Abbildung zusammen; im Editor sind es
+   zwei Absätze. Damit die Stelle gleich hoch ist, erben sie deren Maße (figure/figcaption). */
+.wiki-editor .toastui-editor-contents > .ed-bild { margin-bottom: 0; }
+/* Ein Bild mitten im Text steht im Artikel auf einer eigenen Zeile (die Leseansicht setzt
+   jedes Bild auf display:block). Ohne diese Zeile lief es im Editor in der Textzeile mit. */
+.wiki-editor .toastui-editor-contents > .ed-bild-im-text img { display: block; margin: .6em 0; }
+.wiki-editor .toastui-editor-contents > .ed-unterschrift {
+  color: var(--grau); font-size: .88rem; margin-top: 4px;
+}
+/* Der Artikel übernimmt nur den Text der kursiven Zeile in die Bildunterschrift – dort steht
+   sie also aufrecht und in .88rem. Im Editor blieb das Kursiv stehen und die Regel für einen
+   rein kursiven Absatz verkleinerte sie ein zweites Mal. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ed-unterschrift em:only-child {
+  font-style: normal; font-size: 1em; color: var(--grau);
+}
+/* Tabellen: Toast UI setzt eigene Schriftgröße und Ränder. Im Artikel sind sie kleiner –
+   eine Tabelle war im Editor gut dreißig Pixel höher, und das verschob alles Folgende. */
+.wiki-editor .toastui-editor-contents table { font-size: .93rem; margin: 1em 0; }
+/* In der Zelle steht der Text im Editor in einem Absatz. Dessen unterer Rand – aus der Regel
+   für gewöhnliche Absätze – machte jede Zeile dreizehn Pixel höher als im Artikel. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents th > p,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents td > p { margin: 0; }
+/* Toast UI färbt die Tabelle dunkler als den übrigen Fließtext; die Zellen erben das. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents table,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents td { color: inherit; }
+/* Anhänge sehen im Artikel wie eine beschriftete Schaltfläche aus (markdown.js baut sie beim
+   Anzeigen). Im Editor gibt es diesen Umbau nicht – dort bliebe ein blauer Link stehen. Die
+   Adresse verrät die Art, also macht die Schaltfläche hier das Stilblatt. Werte wie oben bei
+   .wiki-content a.attachment, damit die Stelle in beiden Ansichten gleich hoch und breit ist. */
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".pdf"], .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".doc"], .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".docx"], .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".odt"], .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".rtf"], .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".xls"], .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".xlsx"], .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".ods"], .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".csv"], .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".ppt"], .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".pptx"], .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".odp"], .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".txt"], .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".zip"], .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".gpx"], .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".kml"], .wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".kmz"] {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
+  margin: .3em 0; padding: 7px 12px 7px 10px;
+  border: 1px solid var(--linie); border-radius: var(--radius);
+  background: var(--grau-hell); color: var(--anthrazit); text-decoration: none; vertical-align: middle;
+}
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".pdf"]::before { content: "📕"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".doc"]::before { content: "📘"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".docx"]::before { content: "📘"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".odt"]::before { content: "📘"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".rtf"]::before { content: "📘"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".xls"]::before { content: "📗"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".xlsx"]::before { content: "📗"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".ods"]::before { content: "📗"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".csv"]::before { content: "📗"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".ppt"]::before { content: "📙"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".pptx"]::before { content: "📙"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".odp"]::before { content: "📙"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".txt"]::before { content: "📄"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".zip"]::before { content: "🗜️"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".gpx"]::before { content: "🗺️"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".kml"]::before { content: "🗺️"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".kmz"]::before { content: "🗺️"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"]::before { font-size: 1.15em; line-height: 1; }
+/* Die Endung steht im Artikel als kleine Marke rechts daneben – ohne sie wäre die
+   Schaltfläche im Editor gut dreißig Pixel schmaler. */
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".pdf"]::after { content: "PDF"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".doc"]::after { content: "DOC"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".docx"]::after { content: "DOCX"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".odt"]::after { content: "ODT"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".rtf"]::after { content: "RTF"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".xls"]::after { content: "XLS"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".xlsx"]::after { content: "XLSX"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".ods"]::after { content: "ODS"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".csv"]::after { content: "CSV"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".ppt"]::after { content: "PPT"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".pptx"]::after { content: "PPTX"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".odp"]::after { content: "ODP"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".txt"]::after { content: "TXT"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".zip"]::after { content: "ZIP"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".gpx"]::after { content: "GPX"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".kml"]::after { content: "KML"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"][href$=".kmz"]::after { content: "KMZ"; }
+.wiki-editor .toastui-editor-contents a[href*="/media/wiki/"]::after {
+  color: var(--grau); font-size: .74rem; letter-spacing: .04em; flex: none;
+}
+
+.wiki-editor .toastui-editor-contents .att-icon { font-size: 1.15em; line-height: 1; }
+.wiki-editor .toastui-editor-contents .att-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wiki-editor .toastui-editor-contents .att-ext { color: var(--grau); font-size: .74rem; letter-spacing: .04em; flex: none; }
+.wiki-editor .toastui-editor-contents img { max-height: 70vh; }
+/* Farben, die Toast UI selbst setzt und die im Artikel anders aussehen: Durchgestrichenes
+   war grau statt schwarz, ein Link blau statt rot, die fünfte Überschrift so groß wie
+   Fließtext statt kleiner und grau. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents del,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents s { color: inherit; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents a:not([href*="/media/wiki/"]) { color: var(--rot); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents h5,
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents h6 {
+  font-size: .83em; font-weight: 700; color: inherit;
+}
+/* Trennlinie, Tonaufnahme und Film standen im Editor nach Toast-UI-Vorgabe: die Linie enger,
+   der Ton als schmales Feld mitten in der Zeile. Im Artikel sind es Blöcke über die volle
+   Breite – hier dieselben Werte wie dort (app.css oben bei .wiki-content). */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents hr {
+  border: 0; border-top: 2px solid var(--linie); margin: 1.6em 0; background: none; height: 0;
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents audio {
+  display: block; width: 100%; margin: .8em 0;
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents video {
+  display: block; max-width: 100%; max-height: 70vh; margin: .6em 0; background: #000;
+}
+.wiki-editor .toastui-editor-contents video, .wiki-editor .toastui-editor-contents audio { max-width: 100%; }
+.wiki-editor .toastui-editor-contents p > em:only-child { color: var(--grau); font-size: .9em; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents th {
+  background: var(--grau-hell); color: var(--anthrazit); font-weight: 700; padding: 6px 9px; border: 1px solid var(--linie);
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents td { padding: 6px 9px; border: 1px solid var(--linie); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents blockquote {
+  margin: 1em 0; padding: 6px 14px; border-left: 4px solid var(--grau); background: var(--grau-hell); color: inherit;
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents blockquote p { color: inherit; }
+/* Der Codeblock steht im Artikel in einem Rahmen mit 1em Rand ringsum (.code-block), das
+   <pre> darin hat keinen. Toast UI gibt seiner Hülle eigene Ränder – die Stelle war dadurch
+   zehn Pixel höher als im Artikel. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents .toastui-editor-ww-code-block {
+  margin: 1em 0;
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents .toastui-editor-ww-code-block pre { margin: 0; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents pre {
+  background: var(--grau-hell); padding: 10px 12px;
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents code {
+  background: var(--grau-hell); padding: 1px 4px; border-radius: var(--radius); font-size: .9em; color: inherit;
+}
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents pre code { background: none; padding: 0; }
+
+/* --- Editor im Docmost-Zuschnitt --------------------------------------------------- */
+/* Umschalter Lesen/Bearbeiten oben rechts – wie in Docmost der kurze Weg zwischen beidem. */
+.mode-toggle { display: inline-flex; border: 1px solid var(--linie); border-radius: var(--radius); overflow: hidden; margin-left: 6px; }
+.mode-toggle button {
+  border: 0; background: var(--weiss); color: var(--grau); cursor: pointer;
+  font: inherit; font-size: .82rem; padding: 5px 12px; line-height: 1.2;
+}
+.mode-toggle button + button { border-left: 1px solid var(--linie); }
+.mode-toggle button:hover { background: var(--grau-hell); color: var(--schwarz); }
+.mode-toggle button.on { background: var(--rot); color: var(--weiss); cursor: default; }
+.mode-toggle button.on:hover { background: var(--rot); color: var(--weiss); }
+/* Bearbeiten ist gesperrt, solange jemand anderes die Seite offen hat. Der Knopf bleibt stehen
+   und wird blass – verschwände er, sähe die Seite aus, als dürfte man sie überhaupt nicht
+   bearbeiten. Warum, sagt der gelbe Hinweis „… bearbeitet“ links daneben. */
+.mode-toggle button:disabled { opacity: .45; cursor: not-allowed; }
+.mode-toggle button:focus-visible { outline-offset: -3px; box-shadow: none; }
+.mode-toggle button:disabled:hover { background: var(--weiss); color: var(--grau); }
+.wiki-editor .toastui-editor-defaultUI { border: 0; }
+.wiki-editor .toastui-editor-ww-container { background: transparent; }
+
+/* ============================================================================
+   Telefon und Touch – alles hier greift nur bei schmalem Fenster, grobem Zeiger oder ohne
+   Maus. Der Desktop bleibt davon unberührt.
+   ============================================================================ */
+/* Bedienelemente, die am Rechner erst beim Überfahren erscheinen, stehen ohne Maus immer da. */
+@media (hover: none) {
+  .tree .row-add, .tree .row-menu, .code-copy { opacity: 1; }
+}
+@media (pointer: coarse) {
+  .rundknopf { width: 32px; height: 32px; }
+  .lnk { padding: 8px 4px; }
+  .c-tabs button { padding: 9px 6px; }
+  .em-grid .em { width: 42px; height: 42px; }
+  .ed-farben { grid-template-columns: repeat(3, 40px); }
+  .ed-farben .farbe { width: 40px; height: 40px; }
+  .page-icon { padding: 6px 8px 6px 0; }
+  .th-sort { padding: 6px; opacity: 1; }
+  .code-copy { padding: 6px 10px; }
+  .locate-banner .loc-treffer button { min-height: 44px; }
+  .leaflet-touch .leaflet-bar a { width: 40px; height: 40px; line-height: 40px; font-size: 20px; }
+  .leaflet-touch .leaflet-control-layers-toggle { width: 40px; height: 40px; }
+  .comment-fab { padding: 11px 16px; font-size: 1rem; }
+  .panel-body, .lb-side, .wiki-side { overscroll-behavior: contain; }
+  /* Der Toast lag unten – auf dem Telefon hinter der Tastatur. Oben, unter der Bauchbinde. */
+  #toast { bottom: auto; top: calc(var(--topbar) + 12px + env(safe-area-inset-top, 0px)); max-width: calc(100vw - 24px); }
+}
+/* Dialoge füllen das Telefon fast ganz; die Höhe folgt dem sichtbaren Bereich (Tastatur!). */
+@media (max-width: 640px) {
+  dialog, dialog.wide { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+  dialog .dlg-body { max-height: calc(100dvh - 22px); overflow-wrap: anywhere; overscroll-behavior: contain; }
+  .share-link { flex-wrap: wrap; }
+  .share-link input { flex: 1 1 100%; }
+  .wiki-head #ed-status { flex: 0 1 auto; min-width: 0; max-width: 38vw; overflow: hidden; text-overflow: ellipsis; }
+  /* Kartenwerkzeuge in einer Zeile, seitlich rollbar, statt in zwei Zeilen über den Markern. */
+  .map-tools { flex-wrap: nowrap; overflow-x: auto; max-width: none; right: 12px; padding: 2px 2px 6px; scrollbar-width: none; }
+  .map-tools::-webkit-scrollbar { display: none; }
+  .map-tools .btn, .map-tools .chip { flex: none; }
+  /* Positionieren: Banner über die volle Breite; die Zoomknöpfe weichen ihm. */
+  .locate-banner { left: 8px; right: 8px; transform: none; bottom: 8px; max-width: none; }
+  .locate-banner .loc-suche { flex: 1 1 100%; }
+  .locate-banner .loc-suche input { font-size: 16px; width: 100%; }
+  .map-shell:has(.locate-banner:not(.hidden)) .leaflet-bottom.leaflet-right { display: none; }
+  /* Offene Albumleiste (unteres Drittel frei): Kartenknöpfe rücken darüber. */
+  .map-shell:has(.panel.open) .leaflet-bottom.leaflet-right { bottom: 70%; }
+}
+/* Leuchtkasten auf dem Telefon: bildschirmfüllend, Bild oben, Angaben scrollen darunter;
+   das Schließen-Kreuz liegt auf dem Bild, wo man es sucht. Beim Bearbeiten weicht das Bild
+   dem Formular – mit Tastatur bliebe sonst nur ein Feld sichtbar. */
+@media (max-width: 760px) {
+  dialog.lightbox { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
+  .lb { height: 100dvh; max-height: 100dvh; grid-template-rows: auto minmax(0, 1fr); position: relative; }
+  .lb .lb-img img, .lb .lb-img video { max-height: 55vh; }
+  .lb-side { overflow: auto; }
+  .lb.editing .lb-img { display: none; }
+  .lb-side .close { position: absolute; top: 8px; right: 8px; float: none; z-index: 2; width: 44px; height: 44px;
+                    background: rgba(0, 0, 0, .55); color: var(--weiss); border-radius: 50%; }
+  .lb.editing .lb-side .close { background: var(--grau-hell); color: var(--anthrazit); }
+  .ed-slash { max-height: 40dvh; }
+}
+/* Ganz schmale Telefone: die Navigation der Bauchbinde rückt zusammen, der Rand deutet an,
+   dass sie weiterrollt. */
+@media (max-width: 480px) {
+  .nav a, .nav button { padding: 0 6px; font-size: var(--fs-klein); }
+}
+/* Geräte mit Kerbe und Wischleiste: Ränder freihalten. env() ist am Rechner null. */
+@supports (padding: env(safe-area-inset-left)) {
+  .bauchbinde { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+  @media (max-width: 800px) {
+    .wiki-side { padding-left: calc(12px + env(safe-area-inset-left)); padding-bottom: calc(40px + env(safe-area-inset-bottom)); }
+  }
+}
+
+/* ============================================================================
+   Faltgeräte (Galaxy Fold, Pixel Fold …) aufgeklappt: Der Browser meldet zwei Bildschirm-
+   hälften (Viewport Segments). Dann liegt die Falz genau auf der Trennlinie – links der
+   Seitenbaum, rechts der Text; auf der Karte rechts die Albumleiste. Browser ohne diese
+   Abfrage (Safari, Desktop) überspringen den Block.
+   ============================================================================ */
+@media (horizontal-viewport-segments: 2) and (min-width: 801px) {
+  body .wiki-shell, body.public .wiki-shell.public { grid-template-columns: env(viewport-segment-right 0 0) minmax(0, 1fr); }
+  .wiki-side { width: auto; }
+  .map-shell { --panel-w: env(viewport-segment-width 1 0); }
+}
+@media (horizontal-viewport-segments: 2) and (max-width: 800px) {
+  /* Zusammengeklappt schmal, aber mit zwei Hälften: die Schublade füllt genau die linke. */
+  .wiki-side { width: env(viewport-segment-right 0 0); }
+  .panel { width: env(viewport-segment-width 1 0); }
+}
+
+/* Tablet (801–1024 px): Der Seitenbaum ist höchstens 260 px breit – min() gegen die am
+   Rechner gespeicherte Breite. Steht hinter der 1180-px-Regel, damit es sie überstimmt;
+   unter 801 px gilt weiter die Schublade. */
+@media (min-width: 801px) and (max-width: 1024px) {
+  body .wiki-shell, body.editing .wiki-shell, body.public .wiki-shell.public { grid-template-columns: min(var(--side-w), 260px) minmax(0, 1fr); }
+}

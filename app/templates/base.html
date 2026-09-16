@@ -1,0 +1,37 @@
+{% set user = user if user is defined else none %}
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#e30613">
+  <title>{% block title %}strömis.de{% endblock %}</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+<header class="bauchbinde">
+  <a class="brand" href="/">
+    {% if cfg.MASKOTTCHEN %}<span class="maskottchen"><img src="{{ url_for('static', filename=cfg.MASKOTTCHEN) }}" alt="strömis.de"></span>{% else %}<span class="wortmarke">{% if cfg.WORTMARKE %}<img src="{{ url_for('static', filename='img/dlrg-wortmarke.svg') }}" alt="DLRG">{% else %}DLRG{% endif %}</span>{% endif %}
+    <span class="trenner" aria-hidden="true"></span>
+    <span class="funktion">Strömungsrettung<small>strömis.de</small></span>
+  </a>
+  {% if user %}
+  <nav class="nav" aria-label="Hauptnavigation">
+    <a href="/" class="{% if active == 'wiki' %}active{% endif %}">Wiki</a>
+    <a href="/karte" class="{% if active == 'map' %}active{% endif %}">Spots</a>
+    {% if is_admin %}<a href="/admin" class="{% if active == 'admin' %}active{% endif %}">Nutzer</a>{% endif %}
+    <a href="/profil" class="{% if active == 'profile' %}active{% endif %}"><span class="user">{{ user.name or user.email }}</span>&nbsp;Profil</a>
+    <button type="button" id="logout">Abmelden</button>
+  </nav>
+  {% endif %}
+</header>
+{% block body %}{% endblock %}
+<div id="toast" role="status" aria-live="polite"></div>
+<script nonce="{{ csp_nonce }}">window.STROEMIS = { user: {{ (user and {'id': user.id, 'name': user.name, 'email': user.email, 'role': user.role}) | tojson }}, mapCenter: {{ cfg.MAP_CENTER | tojson }}, mapZoom: {{ cfg.MAP_ZOOM }}, tileUrl: {{ cfg.TILE_URL | tojson }}, tileAttribution: {{ cfg.TILE_ATTRIBUTION | tojson }}, topoUrl: {{ cfg.TOPO_URL | tojson }}, topoAttribution: {{ cfg.TOPO_ATTRIBUTION | tojson }}, satUrl: {{ cfg.SAT_URL | tojson }}, satAttribution: {{ cfg.SAT_ATTRIBUTION | tojson }}, satLabelsUrl: {{ cfg.SAT_LABELS_URL | tojson }}, publicUrl: {{ cfg.PUBLIC_URL | tojson }}, maxUploadMb: {{ cfg.MAX_CONTENT_LENGTH // 1048576 }} };</script>
+<script src="{{ url_for('static', filename='js/common.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

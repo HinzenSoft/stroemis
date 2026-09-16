@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Nachgeholtes Speichern – strömis.de</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 16px 20px; max-width: 1000px; }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  p.hinweis { color: #555; margin: 0 0 16px; }
+  #ergebnis { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+  .zeile { padding: 3px 6px; border-bottom: 1px solid #eee; display: flex; gap: 10px; }
+  .ok { color: #0a7a3d; } .fehler { background: #fdecec; color: #a30000; }
+  pre { background: #f5f5f5; padding: 8px; overflow: auto; margin: 4px 0 10px; white-space: pre-wrap; }
+  #kopf { font-weight: 700; padding: 8px 0; }
+  /* Die Anwendung selbst läuft unsichtbar: geprüft wird, was sie an den Server schickt. */
+  #buehne { position: absolute; left: -9999px; top: 0; width: 1000px; height: 700px; }
+</style>
+</head>
+<body>
+<h1>Nachgeholtes Speichern schreibt nie die fremde Seite</h1>
+<p class="hinweis">Stellt das Zeitfenster nach, in dem ein Speichervorgang seinen eigenen Editor
+überlebt: Seite R wird bearbeitet, die Anfrage bleibt hängen, währenddessen wechselt man zu Seite Q
+und tippt dort. Der nachgeholte Lauf darf danach nicht den Text von Q unter der Kennung von R
+ablegen. Diese Datei direkt im Browser öffnen (Doppelklick) – sie lädt die Skripte des Projekts
+über relative Pfade und braucht keinen Server; der Server ist hier durch eine Attrappe ersetzt,
+die jeden PUT so lange festhält, bis der Test ihn freigibt. Damit hängt nichts an Laufzeiten.</p>
+<div id="kopf">läuft …</div>
+<div id="ergebnis"></div>
+
+<!-- Der Aufbau aus app/templates/wiki.html – wiki.js sucht diese Knoten beim Start. -->
+<div id="buehne">
+  <div class="wiki-shell" data-slug="seite-r">
+    <aside class="wiki-side" id="wiki-side">
+      <input type="search" id="wiki-search">
+      <ul class="search-results hidden" id="search-results"></ul>
+      <div class="btn-row"><button id="btn-new-page">+ Neue Seite</button><button id="btn-trash">🗑</button></div>
+      <div id="favorites"></div>
+      <ul class="tree" id="tree"></ul>
+    </aside>
+    <main class="wiki-main" id="wiki-main">
+      <button id="wiki-menu">☰ Seiten</button>
+      <div id="wiki-content"></div>
+    </main>
+    <aside class="wiki-rail" id="wiki-rail">
+      <section class="seiten-info hidden" id="seiten-info"></section>
+      <nav class="toc" id="toc"></nav>
+      <section class="comments" id="comments"></section>
+    </aside>
+  </div>
+  <button class="comment-fab hidden" id="comment-fab" type="button">💬</button>
+  <dialog id="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
+  <div id="toast"></div>
+</div>
+
+<script src="../app/static/vendor/marked/marked.min.js"></script>
+<script src="../app/static/vendor/dompurify/purify.min.js"></script>
+<script src="../app/static/vendor/toastui/toastui-editor-all.min.js"></script>
+<script src="../app/static/vendor/toastui/de-de.js"></script>
+<script src="../app/static/js/markdown.js"></script>
+<script src="../app/static/js/editor-format.js"></script>
+<script src="../app/static/js/editor-layout.js"></script>
+<script src="../app/static/js/editor-verlauf.js"></script>
+<script src="../app/static/js/common.js"></script>
+
+<script>
+/* ======================================================================================
+   Attrappe: Server, Editorregister, Adresszeile
+   Muss vor wiki.js laufen – wiki.js holt sich S.api beim Laden aus dem Objekt heraus.
+   ====================================================================================== */
+const PROBE = {
+  puts: [],          // jeder PUT, den wiki.js abgeschickt hat
+  offen: [],         // PUTs, die noch auf ihre Antwort warten
+  adressen: [],      // was push-/replaceState an die Adresszeile geschrieben hätte
+  editoren: [],      // jede angelegte Toast-UI-Instanz, in der Reihenfolge des Anlegens
+};
+
+const SEITEN = {
+  1: { id: 1, title: "Seite R", slug: "seite-r", parent_id: null, position: 0, version: 3,
+       format: "markdown", content: "# Seite R\n\nInhalt von R." },
+  2: { id: 2, title: "Seite Q", slug: "seite-q", parent_id: null, position: 1, version: 5,
+       format: "markdown", content: "# Seite Q\n\nInhalt von Q." },
+};
+const RECHTE = { can_edit: true, can_delete: true, can_share: true, can_publish: false,
+                 is_public: false, public_children: false, effective_public: false,
+                 read_restricted: false, is_template: false, favorite: false, watch: false,
+                 icon: "", comment_count: 0, backlink_count: 0, editors: [],
+                 created_at: "2026-01-01T10:00:00", updated_at: "2026-01-01T10:00:00" };
+const alsJson = (p) => Object.assign({}, RECHTE, p);
+
+S.api = function (pfad, opts) {
+  const methode = (opts && opts.method) || "GET";
+  const body = opts && opts.body;
+
+  if (methode === "PUT") {
+    const m = /^\/api\/wiki\/pages\/(\d+)$/.exec(pfad);
+    if (m) {
+      const id = +m[1];
+      // Festhalten statt beantworten: der Test gibt jeden PUT einzeln frei und bestimmt so
+      // selbst, wann der Aufrufer aus seinem await zurückkehrt.
+      const eintrag = { id, body, erledigt: false };
+      PROBE.puts.push(eintrag);
+      return new Promise((fertig) => {
+        PROBE.offen.push(() => {
+          const s = SEITEN[id];
+          if (body.title !== undefined) s.title = body.title;
+          if (body.content !== undefined) s.content = body.content;
+          // Der Server vergibt die Adresse aus dem Titel; ein schon vergebener bekommt eine
+          // Nummer angehängt – genau so ist aus der Seite R seinerzeit "seite-q-2" geworden.
+          if (body.title !== undefined) {
+            const roh = body.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+            const belegt = Object.values(SEITEN).some((a) => a.id !== id && a.slug === roh);
+            s.slug = belegt ? roh + "-2" : roh;
+          }
+          s.version += 1;
+          eintrag.erledigt = true;
+          fertig({ page: alsJson(s) });
+        });
+      });
+    }
+  }
+
+  // Der Weg in den Editor führt über das Schreibrecht (siehe bearbeitenStarten in wiki.js).
+  // Hier sitzt nie ein Zweiter an der Seite: Die Attrappe gibt das Recht immer heraus.
+  if (pfad === "/api/wiki/praesenz") {
+    const s = body && body.page_id ? SEITEN[body.page_id] : null;
+    return Promise.resolve({ modus: (body && body.modus) || "lesen",
+                             version: s ? s.version : 0, schreiber: null, andere: [] });
+  }
+
+  let d = {};
+  if (pfad === "/api/wiki/tree") d = { pages: Object.values(SEITEN).map(alsJson) };
+  else if (/^\/api\/wiki\/pages\/[^/]+$/.test(pfad) && methode === "GET") {
+    const key = decodeURIComponent(pfad.split("/").pop());
+    const s = Object.values(SEITEN).find((a) => a.slug === key || String(a.id) === key);
+    d = s ? { page: alsJson(s) } : null;
+  }
+  else if (/\/comments$/.test(pfad)) d = { comments: [] };
+  else if (/\/backlinks$/.test(pfad)) d = { pages: [] };
+  else if (/\/attachments$/.test(pfad)) d = { files: [] };
+  else if (/\/contributors$/.test(pfad)) d = { users: [] };
+  else if (pfad === "/api/wiki/recent") d = { pages: [] };
+  if (d === null) return Promise.reject(new Error("Seite nicht gefunden"));
+  return Promise.resolve(d);
+};
+
+/* Die Adresszeile lässt sich aus einer file://-Seite nicht setzen – pushState wirft dort.
+   Mitschreiben genügt: geprüft wird ohnehin nur, auf welche Seite sie zuletzt zeigen wollte. */
+history.pushState = (zustand, titel, url) => { PROBE.adressen.push(String(url)); };
+history.replaceState = (zustand, titel, url) => { PROBE.adressen.push(String(url)); };
+
+/* Jede Editorinstanz mitschreiben: anders kommt der Test von außen nicht an den Editor,
+   den wiki.js in seiner Kapsel hält. */
+const EchterEditor = toastui.Editor;
+function EditorMitRegister(optionen) {
+  const inst = new EchterEditor(optionen);
+  PROBE.editoren.push(inst);
+  return inst;
+}
+EditorMitRegister.prototype = EchterEditor.prototype;
+Object.setPrototypeOf(EditorMitRegister, EchterEditor);
+toastui.Editor = EditorMitRegister;
+</script>
+
+<script src="../app/static/js/wiki.js"></script>
+
+<script>
+/* ======================================================================================
+   Der Ablauf
+   ====================================================================================== */
+const raus = document.getElementById("ergebnis");
+let fehler = 0, gesamt = 0;
+const pruefe = (name, bedingung, hinweis) => {
+  gesamt++;
+  if (!bedingung) fehler++;
+  const el = document.createElement("div");
+  el.className = "zeile " + (bedingung ? "ok" : "fehler");
+  el.innerHTML = "<span>" + (bedingung ? "✓" : "✗") + "</span><span>" + name + "</span>";
+  if (!bedingung && hinweis) {
+    const pre = document.createElement("pre");
+    pre.textContent = hinweis;
+    el.appendChild(pre);
+  }
+  raus.appendChild(el);
+};
+
+const warte = (ms) => new Promise((f) => setTimeout(f, ms));
+async function warteAuf(was, bedingung, maxMs = 5000) {
+  const ende = Date.now() + maxMs;
+  while (Date.now() < ende) {
+    if (bedingung()) return;
+    await warte(25);
+  }
+  throw new Error("Zeitüberschreitung: " + was);
+}
+const klick = (sel) => document.querySelector(sel).click();
+
+async function ablauf() {
+  // Ein Entwurf aus einem früheren Lauf brächte beim Öffnen den Übernehmen-Balken mit.
+  try { Object.keys(localStorage).filter((k) => /^stroemis-entwurf-/.test(k)).forEach((k) => localStorage.removeItem(k)); }
+  catch (e) { /* egal */ }
+
+  // --- Seite R öffnen und bearbeiten ---------------------------------------------------
+  await warteAuf("Seite R wird angezeigt", () => document.querySelector("#pg-edit"));
+  klick("#pg-edit");
+  await warteAuf("Editor für R steht", () => PROBE.editoren.length === 1);
+  const edR = PROBE.editoren[0];
+
+  // Tippen: das stößt den ersten Speicherlauf an (spaeterSichern, 1200 ms).
+  edR.insertText(" Nachtrag R.");
+  await warteAuf("erster PUT ist unterwegs", () => PROBE.puts.length === 1, 6000);
+  pruefe("erster PUT geht an Seite R", PROBE.puts[0].id === 1, JSON.stringify(PROBE.puts[0]));
+
+  // Noch einmal tippen, während die Anfrage hängt: das setzt "wiederholen".
+  edR.insertText(" Und noch was.");
+  await warte(1600);                       // der Nachschlag-Zeitgeber muss abgelaufen sein
+  pruefe("der zweite Tastendruck wartet auf die hängende Anfrage", PROBE.puts.length === 1,
+         "PUTs: " + PROBE.puts.length);
+
+  // --- Mitten in der hängenden Anfrage zu Seite Q wechseln ------------------------------
+  const zeileQ = Array.from(document.querySelectorAll("#tree li")).find((li) => li.dataset.id === "2");
+  zeileQ.querySelector("a").click();
+  await warteAuf("Seite Q wird angezeigt", () => {
+    const b = document.querySelector("#pg-edit");
+    return b && /Seite Q/.test(document.querySelector("#wiki-content").textContent);
+  });
+  klick("#pg-edit");
+  await warteAuf("Editor für Q steht", () => PROBE.editoren.length === 2);
+  const edQ = PROBE.editoren[1];
+  edQ.insertText(" Nachtrag Q.");
+
+  // --- Jetzt erst antwortet der Server auf den alten PUT --------------------------------
+  const adressenVorher = PROBE.adressen.length;
+  PROBE.offen.shift()();
+  await warte(1200);                       // 300 ms Nachschlag plus reichlich Luft
+  // Und nun alles beantworten, was sonst noch offen steht – ein echter Server tut nichts
+  // anderes. Erst danach ist am Datenbestand zu sehen, was ein später Lauf angerichtet hat;
+  // eine noch hängende Anfrage sähe harmlos aus.
+  for (let i = 0; i < 6 && PROBE.offen.length; i++) {
+    while (PROBE.offen.length) PROBE.offen.shift()();
+    await warte(400);
+  }
+
+  // --- Was darf jetzt passiert sein? ----------------------------------------------------
+  const anR = PROBE.puts.filter((p) => p.id === 1);
+  const fremd = anR.filter((p) => /Nachtrag Q|Inhalt von Q/.test(p.body.content || "")
+                                  || /Seite Q/.test(p.body.title || ""));
+  pruefe("kein Schreibvorgang legt den Text von Q unter der Kennung von R ab",
+         fremd.length === 0, JSON.stringify(fremd, null, 2));
+  pruefe("Seite R behält Titel und Adresse",
+         SEITEN[1].title === "Seite R" && SEITEN[1].slug === "seite-r",
+         JSON.stringify(SEITEN[1]));
+  pruefe("der in R getippte Text steht in R",
+         /Nachtrag R\./.test(SEITEN[1].content), SEITEN[1].content);
+  pruefe("Seite Q bleibt unberührt",
+         SEITEN[2].title === "Seite Q" && SEITEN[2].slug === "seite-q",
+         JSON.stringify(SEITEN[2]));
+  const zurueck = PROBE.adressen.slice(adressenVorher).filter((u) => /seite-r/.test(u));
+  pruefe("der späte Lauf holt die Adresszeile nicht zu R zurück",
+         zurueck.length === 0, zurueck.join("\n"));
+}
+
+window.addEventListener("error", (e) => { pruefe("keine Ausnahme", false, String(e.message)); });
+
+ablauf().catch((e) => {
+  pruefe("Ablauf läuft durch", false, e && e.stack ? e.stack : String(e));
+}).then(() => {
+  const kopf = document.getElementById("kopf");
+  kopf.textContent = fehler ? fehler + " von " + gesamt + " Prüfungen schlagen fehl"
+                            : "alle " + gesamt + " Prüfungen bestanden";
+  kopf.className = fehler ? "fehler" : "ok";
+  window.ERGEBNIS = { gesamt, fehler };
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% set active = 'wiki' %}
+{% block title %}Wiki – strömis.de{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/toastui/toastui-editor.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/toastui/toastui-editor-plugin-table-merged-cell.min.css') }}">
+{% endblock %}
+{% block body %}
+<div class="wiki-shell" data-slug="{{ slug }}">
+  <aside class="wiki-side" id="wiki-side">
+    <input type="search" id="wiki-search" placeholder="Wiki durchsuchen …" aria-label="Wiki durchsuchen">
+    <ul class="search-results hidden" id="search-results"></ul>
+    <div class="btn-row" style="margin-bottom:10px"><button class="btn small" id="btn-new-page">+ Neue Seite</button><button class="btn ghost small" id="btn-trash" title="Papierkorb">🗑</button></div>
+    <div id="favorites"></div>
+    <ul class="tree" id="tree"></ul>
+  </aside>
+  <main class="wiki-main" id="wiki-main">
+    <button class="btn secondary small wiki-menu-btn" id="wiki-menu">☰ Seiten</button>
+    <div id="wiki-content"></div>
+  </main>
+  <aside class="wiki-rail" id="wiki-rail">
+    <section class="seiten-info hidden" id="seiten-info" aria-label="Angaben zur Seite"></section>
+    <nav class="toc" id="toc" aria-label="Inhalt"></nav>
+    <section class="comments" id="comments"></section>
+  </aside>
+</div>
+<button class="comment-fab hidden" id="comment-fab" type="button">💬 Kommentieren</button>
+<dialog id="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/marked/marked.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/dompurify/purify.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/toastui/toastui-editor-all.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/toastui/toastui-editor-plugin-table-merged-cell.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/toastui/de-de.js') }}"></script>
+<script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
+<script src="{{ url_for('static', filename='js/editor-format.js') }}"></script>
+<script src="{{ url_for('static', filename='js/editor-layout.js') }}"></script>
+<script src="{{ url_for('static', filename='js/editor-verlauf.js') }}"></script>
+<script src="{{ url_for('static', filename='js/wiki.js') }}"></script>
+{% endblock %}
