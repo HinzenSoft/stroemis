@@ -652,5 +652,62 @@ window.EDLAYOUT = (function () {
   // Toast UI dort "pmState" herausgibt – dieselbe Modulinstanz, die der Editor selbst benutzt.
   const zellenAuswahl = ({ pmState }) => { zellenAuswahlReparieren(pmState); return {}; };
 
-  return { layoutPlugin, zellenAuswahl };
+  /* --- Die Schilder der Abschnittsmarken sind kein Schreibgrund ------------------------
+     Ein Schild ist ein Custom-Block, und sein Text ist das Argument der Marke: bei
+     "$$baustein / sicherung" die Kennung. Gerät der Schreibstrich hinein – über die
+     Pfeiltasten ist das ein Tastendruck –, schreibt jede Eingabe dort hinein. Aus der Kennung
+     wurde dann "Erster Absatz.\n\nZweiter Absatz.sicherung", und beim Speichern zerfiel der
+     ganze Abschnitt: Die Marke war nicht mehr als solche zu erkennen, der Rumpf stand als
+     roher "$$baustein"-Text im Artikel und das Gegenstück fehlte.
+     Statt die Eingabe wortlos zu schlucken, wandert sie dorthin, wo sie hingehört: unmittelbar
+     hinter das Schild – bei einer öffnenden Marke ist das der Anfang des Abschnitts. */
+  const MARKE_INFO = new Set(["spalten", "spalte", "ausrichtung", "hinweis", "akkordeon",
+                              "koerper", "baustein", "einbau", "ende"]);
+  const markeUm = ($pos) => {
+    for (let d = $pos.depth; d > 0; d--) {
+      const knoten = $pos.node(d);
+      if (knoten.type.name !== "customBlock") continue;
+      return MARKE_INFO.has(String(knoten.attrs.info || "").trim())
+        ? { knoten, pos: $pos.before(d) } : null;
+    }
+    return null;
+  };
+  /* "scheibe" ist eine ProseMirror-Slice (aus der Zwischenablage), "knoten" ein einzelner
+     Knoten (ein getippter Absatz). Die Slice wird über replaceRange eingesetzt: insert() legte
+     sie roh an die Stelle, und eine Aufzählung kam dabei als zwei Textzeilen an. */
+  const hinterDieMarke = (view, marke, { scheibe, knoten }) => {
+    const pos = marke.pos + marke.knoten.nodeSize;
+    try {
+      const tr = scheibe ? view.state.tr.replaceRange(pos, pos, scheibe)
+                         : view.state.tr.insert(pos, knoten);
+      const Auswahl = Object.getPrototypeOf(view.state.selection.constructor);
+      const ende = Math.min(pos + (scheibe ? scheibe.content.size : knoten.nodeSize), tr.doc.content.size);
+      tr.setSelection(Auswahl.near(tr.doc.resolve(ende)));
+      view.dispatch(tr.scrollIntoView());
+    } catch (e) {
+      // Passt der Inhalt dort nicht hinein, bleibt es beim Nichtstun – lieber nichts einfügen
+      // als die Marke zerschreiben.
+    }
+    return true;
+  };
+  const markenSchuetzen = ({ pmState }) => ({
+    wysiwygPlugins: [() => new pmState.Plugin({
+      props: {
+        handleTextInput(view, von, bis, text) {
+          const marke = markeUm(view.state.doc.resolve(von));
+          if (!marke) return false;
+          const absatz = view.state.schema.nodes.paragraph;
+          if (!absatz || !text) return true;
+          return hinterDieMarke(view, marke, { knoten: absatz.create(null, view.state.schema.text(text)) });
+        },
+        handlePaste(view, ereignis, scheibe) {
+          const marke = markeUm(view.state.selection.$from);
+          if (!marke) return false;
+          return hinterDieMarke(view, marke, { scheibe });
+        },
+      },
+    })],
+  });
+
+  return { layoutPlugin, zellenAuswahl, markenSchuetzen };
 })();

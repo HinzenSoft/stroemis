@@ -187,7 +187,7 @@ const ed2 = EDVERLAUF.oeffnen(() => new toastui.Editor({
   el: document.querySelector("#editor2"), height: "200px",
   initialEditType: "wysiwyg", hideModeSwitch: true, usageStatistics: false,
   initialValue: "", widgetRules: MD.widgetRules(),
-  plugins: [EDLAYOUT.layoutPlugin, EDVERLAUF.plugin],
+  plugins: [EDLAYOUT.layoutPlugin, EDLAYOUT.markenSchuetzen, EDVERLAUF.plugin],
 }));
 const strgZ = () => {
   const view = ed2.wwEditor.view;
@@ -308,6 +308,30 @@ pruefe("eine gesetzte Leerzeile neben einer Marke überlebt das Speichern", () =
   return fehlt.join("\n");
 });
 
+/* --- Synchronisierte Abschnitte ------------------------------------------------------- */
+
+pruefe("in die Marke eines Abschnitts lässt sich nicht hineinschreiben", () => {
+  /* Das Schild einer Marke ist ein Custom-Block, und sein Text ist das Argument der Marke –
+     bei „$$baustein / sicherung“ die Kennung. Geriet der Schreibstrich hinein, schrieb jede
+     Eingabe dort hinein; bei mehr als einer Zeile zerfiel der ganze Abschnitt beim Speichern.
+     Das Getippte gehört hinter das Schild, also an den Anfang des Abschnitts. */
+  EDVERLAUF.laden(ed2, EDMD.toEditorMd(":::baustein sicherung\nDer Text.\n:::"));
+  const view = ed2.wwEditor.view;
+  let pos = -1;
+  view.state.doc.descendants((n, p) => {
+    if (pos < 0 && n.type.name === "customBlock" && String(n.attrs.info).trim() === "baustein") pos = p + 1;
+    return pos < 0;
+  });
+  if (pos < 0) return "die Marke steckt nicht als Custom-Block im Dokument";
+  const Auswahl = Object.getPrototypeOf(view.state.selection.constructor);
+  view.dispatch(view.state.tr.setSelection(Auswahl.near(view.state.doc.resolve(pos))));
+  const drin = view.someProp("handleTextInput", (f) => f(view, pos, pos, "x"));
+  const md = EDMD.fromEditorMd(ed2.getMarkdown());
+  if (!drin) return "die Eingabe lief ungebremst in die Marke";
+  if (!/^:::baustein sicherung$/m.test(md)) return "die Kennung hat gelitten:\n" + md;
+  return /(^|\n)x(\n|$)/.test(md) ? "" : "das Getippte ist nicht im Abschnitt gelandet:\n" + md;
+});
+
 pruefe("ein Abschnitt ohne Schlussmarke wird aufgelöst, nicht bis zum Ende verlängert", () => {
   const raus = EDMD.fromEditorMd("# T\n\n$$hinweis\ninfo 💡\n$$\n\nIm Kasten\n\nDanach");
   return raus === "# T\n\nIm Kasten\n\nDanach" ? "" : "heraus:\n" + raus;
@@ -371,6 +395,35 @@ pruefe("eine Auswahl über eine Abschnittsgrenze hinaus wird abgelehnt", () => {
 pruefe("eine Auswahl innerhalb eines Hinweises bleibt darin", () =>
   gleich(ausricht("$$hinweis\ninfo 💡\n$$\n\n«A\n\nB»\n\n$$ende\n$$", "center"),
          "$$hinweis\ninfo 💡\n$$\n\n$$ausrichtung\ncenter\n$$\n\nA\n\nB\n\n$$ende\n$$\n\n$$ende\n$$"));
+
+/* Auswahl in einen synchronisierten Abschnitt fassen – dieselben Stellen wie bei der
+   Ausrichtung (siehe ausricht), nur fasst EDMD.einfassen ein, statt umzuschalten. */
+const einfass = (probe) => {
+  const zeilen = probe.split("\n");
+  const markeZeile = zeilen.findIndex((z) => z.includes("\u00ab"));
+  const endeZeile = zeilen.findIndex((z) => z.includes("\u00bb"));
+  const md = zeilen.map((z) => z.split("\u00ab").join("").split("\u00bb").join("")).join("\n");
+  const amBlockanfang = endeZeile > markeZeile && zeilen[endeZeile].trimStart().startsWith("\u00bb");
+  return EDMD.einfassen(md, { markeZeile, endeZeile, amBlockanfang, kopf: ["$$baustein", "kennung", "$$"] });
+};
+
+pruefe("das Ausgewählte wird eingefasst, ohne sich zu ändern", () =>
+  gleich(einfass("A\n\n«B\n\nC»\n\nD"),
+         "A\n\n$$baustein\nkennung\n$$\n\nB\n\nC\n\n$$ende\n$$\n\nD"));
+
+pruefe("Tabelle und Bild überstehen das Einfassen Zeile für Zeile", () =>
+  gleich(einfass("«| A | B |\n| --- | --- |\n| 1 | 2 |\n\n![B](/media/wiki/x.jpg)»"),
+         "$$baustein\nkennung\n$$\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n![B](/media/wiki/x.jpg)\n\n$$ende\n$$"));
+
+pruefe("ein vorhandener Abschnitt wandert vollständig mit hinein", () =>
+  gleich(einfass("«$$hinweis\ninfo 💡\n$$\n\nIn der Kiste\n\n$$ende\n$$»"),
+         "$$baustein\nkennung\n$$\n\n$$hinweis\ninfo 💡\n$$\n\nIn der Kiste\n\n$$ende\n$$\n\n$$ende\n$$"));
+
+pruefe("eine Auswahl über eine Abschnittsgrenze hinaus wird abgelehnt", () => {
+  const erg = einfass("$$hinweis\ninfo 💡\n$$\n\n«In der Kiste\n\n$$ende\n$$\n\nDanach»");
+  return erg.md === undefined && /über einen Abschnitt hinaus/.test(erg.fehler || "")
+    ? "" : "heraus:\n" + JSON.stringify(erg);
+});
 
 pruefe("das Profilbild der Autorenzeile zählt nicht als Artikelbild", () => {
   // Im Editor steht über dem Text die Autorenzeile – seit es Profilbilder gibt, mit einem <img>

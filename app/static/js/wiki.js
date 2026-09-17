@@ -1394,6 +1394,7 @@
           bausteinMd, einbauMd, HINWEIS_NAME, ABSCHNITT_AUF } = window.EDMD;
   const layoutPlugin = window.EDLAYOUT.layoutPlugin;
   const zellenAuswahl = window.EDLAYOUT.zellenAuswahl;
+  const markenSchuetzen = window.EDLAYOUT.markenSchuetzen;
 
   /* Toast UI 3.2.2 hat einen Fehler im Konverter für Tabellenzellen: er entscheidet über
      "steckt in der Zelle Fließtext, der in einen Absatz gehört?" mit node.literal.match(...).
@@ -1755,6 +1756,7 @@
           <option value="quote">Zitat</option>
           <option value="codeblock">Code-Block</option>
           <option value="callout">Callout</option>
+          <option value="baustein">Synchronisierter Abschnitt</option>
         </optgroup>
         <optgroup label="Auszeichnung">
           <option value="code">Code</option>
@@ -1804,6 +1806,7 @@
       else if (v === "codeblock") ed.exec("codeBlock");
       else if (v === "code") ed.exec("code");
       else if (v === "callout") return calloutMenu();
+      else if (v === "baustein") return zuBaustein();
       else if (["mark", "sup", "sub"].includes(v)) return applyMark(v);
       state.dirty = true;
     };
@@ -1856,23 +1859,21 @@
       e.target.value = "";
       if (mode) applyAlign(mode);
     };
-    const applyAlign = (mode) => {
-      // Markdown kennt keine Ausrichtung. Der Bereich wird deshalb in zwei Marken eingefasst –
-      // steht er schon zwischen solchen, ändert sich nur die Richtung, und dieselbe Richtung
-      // noch einmal hebt sie wieder auf. Der Inhalt selbst bleibt unangetastet und damit
-      // auch der Cursor darin.
-      hideBubble();
-      /* Welcher Block gemeint ist, entscheidet eine Marke an der Cursorstelle – nicht das
-         Abzählen der Blöcke. Das Zählen ging schief, sobald Editor und Text einen Block
-         unterschiedlich schneiden (ein Bild mit Unterschrift, ein weicher Umbruch), und dann
-         verweigerte die Ausrichtung den Dienst. Die Marke trifft die Stelle immer.
-         Bei einer Auswahl über mehrere Absätze wird auch das Ende markiert: Sonst richtete
-         sich nur der oberste Absatz aus, und der Rest blieb stehen, wie er war. Zuerst das
-         Ende einsetzen – eine Einfügung am Anfang verschöbe die Stelle dahinter. */
+    /* --- Eine Umformung an der Stelle anwenden, die der Benutzer gewählt hat --------------
+       Welcher Block gemeint ist, entscheidet eine Marke an der Cursorstelle – nicht das
+       Abzählen der Blöcke. Das Zählen ging schief, sobald Editor und Text einen Block
+       unterschiedlich schneiden (ein Bild mit Unterschrift, ein weicher Umbruch), und dann
+       verweigerte die Umformung den Dienst. Die Marke trifft die Stelle immer.
+       Bei einer Auswahl über mehrere Absätze wird auch das Ende markiert: Sonst würde nur der
+       oberste Absatz umgeformt, und der Rest bliebe stehen, wie er war. Zuerst das Ende
+       einsetzen – eine Einfügung am Anfang verschöbe die Stelle dahinter.
+       "fn" bekommt (md, stellen) und liefert { md } oder { fehler }. "wahl" ist eine vorher
+       gemerkte Auswahl; ohne sie gilt die aktuelle. */
+    const anDerAuswahl = (fn, hinweis, wahl) => {
       let md, marken = false;
       try {
-        const wahl = ed.getSelection();
-        const von = Math.min(wahl[0], wahl[1]), bis = Math.max(wahl[0], wahl[1]);
+        const w = wahl || ed.getSelection();
+        const von = Math.min(w[0], w[1]), bis = Math.max(w[0], w[1]);
         if (bis > von) { ed.setSelection(bis, bis); ed.replaceSelection(AUSRICHT_ENDE); }
         ed.setSelection(von, von);                 // Auswahl nicht überschreiben
         ed.replaceSelection(AUSRICHT_MARKE);
@@ -1893,14 +1894,37 @@
       md = zeilen.join("\n");
       const nicht = (text) => {
         if (marken) setMd(md);                     // aufgeräumter Stand zurück in den Editor
-        toast(text || "Der Abschnitt lässt sich hier nicht zuordnen – bitte in den Absatz "
-                    + "klicken, der ausgerichtet werden soll.", true);
+        toast(text || hinweis, true);
       };
       if (markeZeile < 0) return nicht();
-      const erg = EDMD.ausrichten(md, { markeZeile, endeZeile, amBlockanfang, mode });
+      const erg = fn(md, { markeZeile, endeZeile, amBlockanfang });
       if (erg.fehler !== undefined) return nicht(erg.fehler || undefined);
       setMd(erg.md);
       state.dirty = true;
+    };
+
+    const applyAlign = (mode) => {
+      // Markdown kennt keine Ausrichtung. Der Bereich wird deshalb in zwei Marken eingefasst –
+      // steht er schon zwischen solchen, ändert sich nur die Richtung, und dieselbe Richtung
+      // noch einmal hebt sie wieder auf. Der Inhalt selbst bleibt unangetastet und damit
+      // auch der Cursor darin.
+      hideBubble();
+      anDerAuswahl((md, stellen) => EDMD.ausrichten(md, Object.assign({ mode }, stellen)),
+                   "Der Abschnitt lässt sich hier nicht zuordnen – bitte in den Absatz "
+                   + "klicken, der ausgerichtet werden soll.");
+    };
+
+    /* Das Ausgewählte zu einem synchronisierten Abschnitt machen: ein Markenpaar darum, sonst
+       nichts. Die Auswahl wird VOR dem Dialog gemerkt – ein modaler Dialog nimmt dem Editor den
+       Fokus, und danach wäre nicht mehr zu erfahren, was markiert war. */
+    const zuBaustein = () => {
+      let wahl = null;
+      try { wahl = ed.getSelection(); } catch (e) { /* dann gilt die aktuelle Stelle */ }
+      hideBubble();
+      bausteinDialog((kennung) => anDerAuswahl(
+        (md, stellen) => EDMD.einfassen(md, Object.assign({ kopf: ["$$baustein", kennung, "$$"] }, stellen)),
+        "Die Stelle lässt sich nicht zuordnen – bitte den Text auswählen, der zum Abschnitt "
+        + "werden soll.", wahl));
     };
 
     /* Der Zug über mehrere Zellen ist flüchtig. ProseMirror liest seine Auswahl neu aus dem
@@ -2076,10 +2100,13 @@
       return raus;
     };
 
-    function bausteinDialog() {
+    /* Ohne Rückruf wird ein leerer Abschnitt eingefügt; mit Rückruf bekommt dieser die Kennung
+       und fasst damit ein, was gerade ausgewählt ist. */
+    function bausteinDialog(aufKennung) {
       dialog(`<h2>Synchronisierter Abschnitt</h2>
-        <p class="help">Dieser Teil der Seite lässt sich auf anderen Seiten einbinden. Geändert
-          wird er immer hier – überall sonst erscheint der geänderte Text mit.</p>
+        <p class="help">${aufKennung
+          ? "Das Ausgewählte wird zu einem synchronisierten Abschnitt – am Text selbst ändert sich dabei nichts."
+          : "Dieser Teil der Seite lässt sich auf anderen Seiten einbinden. Geändert wird er immer hier – überall sonst erscheint der geänderte Text mit."}</p>
         <label for="bs-name">Kennung</label>
         <input type="text" id="bs-name" placeholder="z. B. sicherung-am-ufer" autocomplete="off">
         <p class="help" id="bs-vorschau"></p>
@@ -2097,7 +2124,8 @@
             const k = alsKennung(feld.value);
             if (!k) return toast("Bitte eine Kennung angeben.", true);
             dlg.close();
-            insert(bausteinMd(k));
+            if (aufKennung) aufKennung(k);
+            else insert(bausteinMd(k));
           };
         });
     }
@@ -2128,11 +2156,19 @@
               teile.querySelectorAll("button").forEach((x) => x.classList.toggle("sel", x === b));
             });
           };
+          /* Die Liste scrollt und zeigt deshalb alle Seiten – vorher standen nur die ersten
+             acht darin, und wer den Titel nicht auswendig wusste, fand seine Seite nicht.
+             Alphabetisch, damit sie auch ohne Suche aufzufinden ist. */
+          const EB_MAX = 200;
           const zeigeSeiten = () => {
             const q = suche.value.trim().toLowerCase();
-            const treffer = state.pages.filter((p) => !q || p.title.toLowerCase().includes(q)).slice(0, 8);
+            const alle = state.pages.filter((p) => !q || p.title.toLowerCase().includes(q))
+              .sort((a, b) => a.title.localeCompare(b.title, "de"));
+            const treffer = alle.slice(0, EB_MAX);
             seiten.innerHTML = treffer.length
               ? treffer.map((p) => `<li><button type="button" data-slug="${esc(p.slug)}">${esc(p.title)}</button></li>`).join("")
+                + (alle.length > treffer.length
+                   ? `<li class="muted small">… und ${alle.length - treffer.length} weitere – bitte suchen.</li>` : "")
               : '<li class="muted small">Keine passende Seite.</li>';
             seiten.querySelectorAll("button[data-slug]").forEach((b) => b.onclick = async () => {
               gewaehlt = b.dataset.slug;
@@ -4010,7 +4046,7 @@
            Schreibweise "@cols=2:"/"@rows=2:" im Markdown. Fehlt sie – etwa weil die Datei
            nicht geladen wurde –, läuft der Editor ohne sie weiter; verbundene Zellen wären
            dann nur nicht mehr verbindbar. */
-        plugins: [autorWidget, layoutPlugin, medienNodeView, EDVERLAUF.plugin, zellenAuswahl,
+        plugins: [autorWidget, layoutPlugin, medienNodeView, EDVERLAUF.plugin, zellenAuswahl, markenSchuetzen,
                   ...(toastui.Editor.plugin && toastui.Editor.plugin.tableMergedCell
                       ? [toastui.Editor.plugin.tableMergedCell] : [])],
         initialEditType: "wysiwyg",

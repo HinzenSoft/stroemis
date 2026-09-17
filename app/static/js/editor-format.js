@@ -578,8 +578,41 @@ window.EDMD = (function () {
     return { md: entleere(out).join("\n") };
   }
 
+  /* --- Einen Bereich in ein Markenpaar fassen -------------------------------------------
+     Für den synchronisierten Abschnitt: Die ausgewählten Blöcke bekommen ein Markenpaar um
+     sich, am Inhalt ändert sich dabei nichts – keine Zeile wird umgeschrieben, keine vorhandene
+     Marke entfernt. Das unterscheidet es von der Ausrichtung, die umschaltet und aufräumt.
+     "kopf" sind die Zeilen der öffnenden Marke, etwa ["$$baustein", "sicherung", "$$"].
+     Liefert { md } oder { fehler }. */
+  function einfassen(md, { markeZeile, endeZeile, amBlockanfang, kopf }) {
+    const { lines, blocks } = topLevelBlocks(md);
+    const blockZu = (z) => blocks.findIndex((b) => z >= b.start && z < b.end);
+    const idxVon = blockZu(markeZeile);
+    let idxBis = endeZeile >= 0 ? blockZu(endeZeile) : idxVon;
+    if (idxBis < 0) idxBis = idxVon;
+    // Endet die Auswahl genau am Anfang des nächsten Absatzes, gehört der nicht mehr dazu.
+    if (amBlockanfang && idxBis > idxVon) idxBis--;
+    if (idxVon < 0 || idxBis < idxVon) return { fehler: "" };
+    /* Die Auswahl muss für sich stehen: Wer mitten in einem Abschnitt anfängt und außerhalb
+       aufhört, ließe sich nur einfassen, indem der vorhandene Abschnitt zerschnitten wird. */
+    let tiefe = 0;
+    for (let j = idxVon; j <= idxBis; j++) {
+      const a = (lines[blocks[j].start] || "").trim();
+      if (ABSCHNITT_AUF.has(a)) tiefe++;
+      else if (a === "$$ende") { tiefe--; if (tiefe < 0) break; }
+    }
+    if (tiefe !== 0) {
+      return { fehler: "Die Auswahl reicht über einen Abschnitt hinaus. Bitte innerhalb eines "
+                     + "Abschnitts auswählen." };
+    }
+    const out = [...lines.slice(0, blocks[idxVon].start), ...kopf, "",
+                 ...lines.slice(blocks[idxVon].start, blocks[idxBis].end), "",
+                 "$$ende", "$$", ...lines.slice(blocks[idxBis].end)];
+    return { md: entleere(out).join("\n") };
+  }
+
   return { toEditorMd, fromEditorMd, repariert: () => markenRepariert, topLevelBlocks, entleere,
-           MARKEN_RE, ausrichten,
+           MARKEN_RE, ausrichten, einfassen,
            SNIPPETS, hinweisMd, akkordeonMd, bausteinMd, einbauMd, hinweisKopf, hinweisZeile,
            HINWEIS_NAME, ABSCHNITT_AUF };
 })();

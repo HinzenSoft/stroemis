@@ -282,6 +282,13 @@ Auf der Seite, die den Text hält, fügt *Synchronisierter Abschnitt* aus dem Ei
 Bereich mit einer **Kennung** ein. Über sie sprechen andere Seiten ihn an; eine blaue Zeile im
 Editor zeigt, wo er anfängt.
 
+Was schon dasteht, lässt sich nachträglich dazu machen: die Absätze markieren und in der
+Auswahlleiste unter *Umwandeln in …* den Eintrag *Synchronisierter Abschnitt* wählen. Abgefragt
+wird nur die Kennung; am Text selbst ändert sich nichts – Tabellen, Bilder und Hinweiskisten
+wandern Zeile für Zeile mit hinein. Die Auswahl muss dabei ganz innerhalb eines Abschnitts
+liegen: Was in einer Hinweiskiste beginnt und daneben endet, ließe sich nur einfassen, indem die
+Kiste zerschnitten wird – das lehnt der Editor ab.
+
 ```
 :::baustein sicherung-am-ufer
 ### Sicherung am Ufer
@@ -291,7 +298,7 @@ Immer zwei Personen, immer mit Sicht zum Wasser.
 ```
 
 Auf jeder anderen Seite holt *Abschnitt einbinden* ihn herein – Seite wählen, Abschnitt wählen,
-fertig:
+fertig. Die Liste führt alle Seiten des Wikis; das Suchfeld darüber engt sie ein:
 
 ```
 :::einbau ankertechnik#sicherung-am-ufer
@@ -439,6 +446,9 @@ erneut gewählt hebt sie wieder auf.
   Titel und Inhalt: Ohne sie wird beim Speichern der ganze Abschnitt zum Titel und die Box steht
   leer da. Innerhalb der Kästen ändert sich nichts: Dort wird getippt und gelöscht wie überall.
   Der Baustein ist noch nicht geschützt.
+- **In die Schilder der Marken lässt sich nicht schreiben.** Sie tragen das, was die Marke
+  ausmacht – beim synchronisierten Abschnitt die Kennung. Gerät der Schreibstrich hinein, landet
+  Getipptes und Eingefügtes unmittelbar dahinter, also am Anfang des Abschnitts.
 - **Seitenumbruch**: `:::seitenumbruch` bricht beim Drucken um.
 
 ## Typische Fehler
