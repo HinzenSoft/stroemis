@@ -3,6 +3,8 @@ import io
 import logging
 import multiprocessing
 import os
+import re
+import socket
 import sqlite3
 import sys
 import tempfile
@@ -40,6 +42,88 @@ def jpeg(with_gps):
     img.save(buf, "JPEG", exif=exif.tobytes())
     buf.seek(0)
     return buf
+
+
+class PruefstandSMTP(threading.Thread):
+    """Ein winziger SMTP-Server für die Prüfung. Er nimmt Mails an und legt sie ab; Empfänger,
+    die „abweisen“ im Namen tragen, lehnt er mit 550 ab – damit lässt sich prüfen, ob die
+    Anwendung die Antwort des Mailservers auch wirklich auswertet."""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.sock = socket.socket()
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.listen(5)
+        self.port = self.sock.getsockname()[1]
+        self.post = []                      # [(Umschlagabsender, [Empfänger], Rohtext)]
+        self._laeuft = True
+
+    def run(self):
+        # Mit Zeitschranke statt blockierendem accept: Ein close() aus einem anderen Faden weckt
+        # ein wartendes accept() nicht zuverlässig, und der Faden liefe weiter.
+        self.sock.settimeout(0.2)
+        self.faeden = []
+        while self._laeuft:
+            try:
+                verbindung, _ = self.sock.accept()
+            except TimeoutError:
+                continue
+            except OSError:
+                return
+            f = threading.Thread(target=self._sitzung, args=(verbindung,), daemon=True)
+            self.faeden.append(f)
+            f.start()
+
+    def _sitzung(self, c):
+        f = c.makefile("rb")
+        sag = lambda t: c.sendall((t + "\r\n").encode())
+        sag("220 pruefstand ESMTP")
+        umschlag, empfaenger, daten = None, [], []
+        while True:
+            zeile = f.readline()
+            if not zeile:
+                break
+            b = zeile.decode("utf-8", "replace").strip()
+            o = b.upper()
+            if o.startswith(("EHLO", "HELO")):
+                sag("250-pruefstand")
+                sag("250 SIZE 10240000")
+            elif o.startswith("MAIL FROM:"):
+                umschlag = b[10:].split()[0].strip().strip("<>")
+                sag("250 OK")
+            elif o.startswith("RCPT TO:"):
+                adr = b[8:].split()[0].strip().strip("<>")
+                if "abweisen" in adr:
+                    sag("550 5.1.1 Unbekannter Empfaenger")
+                else:
+                    empfaenger.append(adr)
+                    sag("250 OK")
+            elif o == "DATA":
+                sag("354 los")
+                while True:
+                    z = f.readline()
+                    if not z or z.strip() == b".":
+                        break
+                    daten.append(z.decode("utf-8", "replace"))
+                self.post.append((umschlag, empfaenger, "".join(daten)))
+                umschlag, empfaenger, daten = None, [], []
+                sag("250 2.0.0 Angenommen")
+            elif o == "QUIT":
+                sag("221 tschuess")
+                break
+            else:
+                sag("250 OK")
+        c.close()
+
+    def stop(self):
+        self._laeuft = False
+        for f in getattr(self, "faeden", []):
+            f.join(timeout=2)
+        try:
+            self.sock.close()
+        except OSError:
+            pass
 
 
 def test_everything():
@@ -1245,6 +1329,66 @@ def test_haertung():
         assert _os2.path.exists(pfad2)
         assert adm.delete(f"/api/admin/users/{uid2}", headers=H).status_code == 200
         assert not _os2.path.exists(pfad2)
+
+        # --- Mailversand: Kopfzeilen, Umschlag und die Antwort des Servers -------------------
+        # Warum das hier steht: Mails der Plattform wurden von Empfängern abgewiesen. Was die
+        # Anwendung dazu beitragen kann, sind saubere Kopfzeilen und eine Auskunft darüber, was
+        # der Mailserver geantwortet hat – eine abgewiesene Adresse kommt nicht als Ausnahme,
+        # sondern als Rückgabewert, und der wurde früher weggeworfen.
+        post = PruefstandSMTP()
+        post.start()
+        try:
+            app.config.update(SMTP_HOST="127.0.0.1", SMTP_PORT=post.port, SMTP_STARTTLS=False,
+                              SMTP_SSL=False, SMTP_USER="", SMTP_ENVELOPE_FROM="",
+                              MAIL_FROM="strömis.de <post@hinzen.tech>")
+            r = adm.post("/api/admin/testmail", json={"to": "wer@example.org"})
+            assert r.status_code == 200 and r.json["ok"] is True, r.json
+            assert "angenommen" in r.json["meldung"], r.json
+            umschlag, empfaenger, roh = post.post[-1]
+            # SMTP trennt Zeilen mit CRLF; für die Prüfungen reicht \n.
+            kopf = roh.replace("\r\n", "\n").split("\n\n", 1)[0]
+            # Der Umschlagabsender entscheidet über die SPF-Prüfung und muss ohne eigene Angabe
+            # auf derselben Domain liegen wie das From – sonst scheitert DMARC.
+            assert umschlag == "post@hinzen.tech" and empfaenger == ["wer@example.org"], (umschlag, empfaenger)
+            # Ohne Message-ID gilt eine Mail vielen Filtern als verdächtig, und ihre Domain soll
+            # die des Absenders sein.
+            m = re.search(r"^Message-ID: <(\S+)>$", kopf, re.M)
+            assert m and m.group(1).endswith("@hinzen.tech"), kopf
+            assert re.search(r"^Auto-Submitted: auto-generated$", kopf, re.M), kopf
+            # Der Anzeigename muss als EIN kodiertes Wort dastehen. Python kodierte sonst nur
+            # „strömis“ und hängte „.de“ roh daran – ein abgeschnittenes kodiertes Wort, das
+            # ein Teil der Empfänger wörtlich anzeigt.
+            von = re.search(r"^From: (.+)$", kopf, re.M).group(1)
+            assert von.endswith("<post@hinzen.tech>") and "?=.de" not in von, von
+
+            # Ein eigener Umschlagabsender geht vor – für Rückläufer in ein anderes Postfach.
+            app.config["SMTP_ENVELOPE_FROM"] = "bounce@hinzen.tech"
+            assert adm.post("/api/admin/testmail", json={"to": "wer@example.org"}).json["ok"] is True
+            assert post.post[-1][0] == "bounce@hinzen.tech", post.post[-1][0]
+            app.config["SMTP_ENVELOPE_FROM"] = ""
+
+            # Weist der Mailserver den Empfänger ab, steht sein Wortlaut im Bericht.
+            r = adm.post("/api/admin/testmail", json={"to": "abweisen@example.org"})
+            assert r.json["ok"] is False and "550" in r.json["meldung"], r.json
+            assert "Unbekannter Empfaenger" in r.json["meldung"], r.json
+            assert adm.post("/api/admin/testmail", json={"to": "keine-adresse"}).status_code == 400
+
+            # Ist der Mailserver nicht erreichbar, wirft der Versand nicht, sondern berichtet.
+            app.config["SMTP_PORT"] = 1        # dort horcht niemand
+            r = adm.post("/api/admin/testmail", json={"to": "wer@example.org"})
+            assert r.json["ok"] is False and "Keine Verbindung" in r.json["meldung"], r.json
+            with app.app_context():
+                from app.mailer import send_mail as _send
+                assert _send("wer@example.org", "Betreff", "Text") is False
+        finally:
+            post.stop()
+            # Abwarten, bis der Faden wirklich zu ist: Weiter unten gabelt sich der Prozess
+            # (mehrere Arbeitsprozesse), und fork() aus einem Prozess mit laufenden Fäden ist
+            # eine bekannte Quelle für Hänger.
+            post.join(timeout=5)
+            app.config.update(SMTP_HOST="", SMTP_PORT=587, SMTP_STARTTLS=True)
+        # Nur Administratoren dürfen die Probemail auslösen.
+        assert c1.post("/api/admin/testmail", json={}).status_code == 403
 
         # --- /healthz antwortet ohne Anmeldung ----------------------------------------------
         assert anon_get(app, "/healthz").status_code == 200

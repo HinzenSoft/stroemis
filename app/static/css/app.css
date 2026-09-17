@@ -1020,6 +1020,14 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .ed-slash button strong { font-weight: 600; }
 .ed-slash button span { font-size: var(--fs-klein); color: var(--grau); max-width: 100%; }
 .tree-menu button.danger { color: var(--rot); }
+/* Antwort des Mailservers nach einer Probemail – zum Lesen und Weitergeben, deshalb als
+   Kasten mit ganzem Text statt als Kurzhinweis, der nach drei Sekunden weg ist. */
+.mail-bericht { margin-top: 12px; padding: 10px 12px; border-radius: var(--radius); border-left: 5px solid var(--grau); background: var(--grau-hell); }
+.mail-bericht.ok { border-left-color: var(--ok); }
+.mail-bericht.fehler { border-left-color: var(--rot); }
+.mail-bericht p { margin: 4px 0 0; overflow-wrap: anywhere; }
+.mail-bericht .kv { margin: 8px 0 0; font-size: var(--fs-klein); }
+
 .fav-list { list-style: none; padding: 0; margin: 0 0 12px; }
 .fav-list a { display: block; padding: 3px 6px; color: inherit; text-decoration: none; border-radius: var(--radius); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fav-list a:hover { background: var(--grau-hell); }

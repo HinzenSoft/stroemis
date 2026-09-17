@@ -263,6 +263,9 @@ def create_app():
         MAX_REQUEST_LENGTH=int(os.environ.get("MAX_REQUEST_MB", "1")) * 1024 * 1024,
         MAX_REVISIONS=int(os.environ.get("WIKI_MAX_REVISIONS", "100")),
         SITE_NAME=os.environ.get("SITE_NAME", "strömis.de"),
+        # Absender des Umschlags (Return-Path). Leer = die Adresse aus MAIL_FROM; dann liegen
+        # Umschlag und From auf derselben Domain, wie DMARC es verlangt.
+        SMTP_ENVELOPE_FROM=os.environ.get("SMTP_ENVELOPE_FROM", ""),
         ADMIN_NOTIFY_EMAIL=os.environ.get("ADMIN_NOTIFY_EMAIL", ""),
         LOGIN_SLIDESHOW=_env_bool("LOGIN_SLIDESHOW", True),
         PUBLIC_HOST=_idna(os.environ.get("PUBLIC_HOST", "wiki.strömis.de")),

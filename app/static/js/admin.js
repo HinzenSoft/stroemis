@@ -29,6 +29,42 @@
       </tr>`).join("");
   }
 
+  /* Probemail: Kommt bei jemandem nichts an, sagt der Mailserver hier wörtlich, woran es liegt –
+     keine Verbindung, Anmeldung abgelehnt, Empfänger abgewiesen. Die Antwort steht im Dialog
+     und nicht in einem Kurzhinweis: Sie ist zum Lesen und Weitergeben da. */
+  document.getElementById("btn-testmail").addEventListener("click", () => {
+    S.dialog(`<h2>Testmail senden</h2>
+      <p class="help">Verschickt eine Probemail über den eingerichteten Mailserver und zeigt, was er
+        dazu sagt. Kommt sie an, funktioniert der Weg bis zu diesem Postfach; landet sie im Spam oder
+        gar nicht, liegt es meist an SPF, DKIM oder DMARC der Absenderdomain.</p>
+      <label for="tm-to">Empfänger</label>
+      <input type="email" id="tm-to" value="${S.esc(STROEMIS.user.email || "")}" autocomplete="off">
+      <div id="tm-out"></div>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button>
+      <button class="btn" id="tm-go" type="button">Senden</button></div>`,
+      (dlg, body) => {
+        const raus = body.querySelector("#tm-out");
+        body.querySelector("#tm-go").onclick = async (ev) => {
+          const knopf = ev.currentTarget;
+          if (knopf.disabled) return;
+          knopf.disabled = true;
+          raus.innerHTML = '<p class="help">wird verschickt …</p>';
+          try {
+            const d = await S.api("/api/admin/testmail", { method: "POST", body: { to: body.querySelector("#tm-to").value } });
+            raus.innerHTML = `<div class="mail-bericht ${d.ok ? "ok" : "fehler"}">
+              <strong>${d.ok ? "Angenommen" : "Nicht hinausgegangen"}</strong>
+              <p>${S.esc(d.meldung)}</p>
+              <dl class="kv"><dt>An</dt><dd>${S.esc(d.an)}</dd>
+                <dt>Absender</dt><dd>${S.esc(d.absender)}</dd>
+                ${d.umschlag ? `<dt>Umschlag</dt><dd>${S.esc(d.umschlag)}</dd>` : ""}</dl></div>`;
+          } catch (e) {
+            raus.innerHTML = `<div class="mail-bericht fehler"><strong>Fehlgeschlagen</strong><p>${S.esc(e.message)}</p></div>`;
+          }
+          knopf.disabled = false;
+        };
+      });
+  });
+
   /* Videopflege: Bestandsvideos werden nach dem Start im Hintergrund gewandelt. Die Zeile
      erscheint nur, solange etwas läuft oder etwas zu berichten ist – sonst bleibt die Seite
      ruhig. Solange es läuft, wird nachgesehen. */

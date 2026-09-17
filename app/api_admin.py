@@ -7,7 +7,7 @@ from . import db, medienpflege
 from .auth import (EMAIL_RE, MIN_PW, ROLLEN, admin_required, can_reset, clear_attempts, current_user,
                    eingabefehler_abfangen, json_body, public_user, send_reset_mail)
 from .images import delete_avatar
-from .mailer import send_mail
+from .mailer import send_mail, versand
 from werkzeug.security import generate_password_hash
 
 bp = Blueprint("admin", __name__, url_prefix="/api/admin")
@@ -17,6 +17,36 @@ eingabefehler_abfangen(bp)
 def _rolle(wert):
     """Unbekanntes wird zur einfachen Rolle – so kann kein Tippfehler Rechte verteilen."""
     return wert if wert in ROLLEN else "user"
+
+
+@bp.post("/testmail")
+@admin_required
+def testmail():
+    """Eine Probemail verschicken und wörtlich berichten, was der Mailserver dazu sagt.
+
+    Gedacht zum Nachsehen, wenn Mails nicht ankommen: Ob es an der Verbindung liegt, an der
+    Anmeldung oder daran, dass die Gegenseite den Empfänger abweist, steht in der Antwort.
+    Inhalt und Betreff sind fest – der Knopf verschickt nichts, was jemand hineinschreiben
+    könnte. Ohne Angabe geht die Mail an die eigene Adresse."""
+    cfg = current_app.config
+    ich = current_user()
+    ziel = (json_body().get("to") or "").strip() or ich["email"]
+    if not EMAIL_RE.match(ziel):
+        return jsonify(error="Bitte eine gültige E-Mail-Adresse angeben."), 400
+    if not cfg.get("SMTP_HOST"):
+        return jsonify(ok=False, meldung="SMTP ist nicht eingerichtet (SMTP_HOST fehlt). "
+                                         "Ohne Mailserver schreibt die Anwendung Mails nur ins Log.",
+                       an=ziel, absender=cfg.get("MAIL_FROM", ""))
+    ok, meldung = versand(
+        ziel, f"{cfg['SITE_NAME']} – Probemail",
+        f"Diese Mail hat {ich['name'] or ich['email']} in der Nutzerverwaltung von {cfg['SITE_NAME']} "
+        "ausgelöst, um den Versand zu prüfen.\n\n"
+        "Kommt sie an, funktioniert der Weg vom Server bis zu diesem Postfach. Landet sie im "
+        "Spam oder gar nicht, liegt es meist an SPF, DKIM oder DMARC der Absenderdomain – die "
+        "Unzustellbarkeitsmeldung nennt den Grund.\n")
+    current_app.logger.info("Probemail an %s von %s: %s", ziel, ich["email"], meldung)
+    return jsonify(ok=ok, meldung=meldung, an=ziel, absender=cfg.get("MAIL_FROM", ""),
+                   umschlag=(cfg.get("SMTP_ENVELOPE_FROM") or "").strip() or None)
 
 
 @bp.get("/videos")

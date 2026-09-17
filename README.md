@@ -102,6 +102,7 @@ Alle Einstellungen stehen in `.env` (Vorlage: `.env.example`):
 | `ADMIN_NOTIFY_EMAIL` | Empfänger für Kontoanfragen (leer = der dienstälteste Administrator; es geht bewusst genau eine Mail hinaus, damit die Antwortzeit nicht verrät, ob eine Adresse schon ein Konto hat – die übrigen Admins sehen die Anfrage unter „Nutzer“) |
 | `LOGIN_SLIDESHOW` | Slideshow auf der Anmeldeseite (`true`/`false`) |
 | `SMTP_*`, `MAIL_FROM` | Mailversand für Passwort-Reset; ohne `SMTP_HOST` steht der Link im Container-Log (`docker compose logs`) |
+| `SMTP_ENVELOPE_FROM` | Absender des Umschlags (Return-Path). Leer = die Adresse aus `MAIL_FROM`; gegen sie prüft der Empfänger SPF (siehe „Damit Mails ankommen“) |
 | `WIKI_MAX_REVISIONS` | Fassungen je Wiki-Seite im Verlauf (Standard 100, `0` = alle behalten) |
 | `MAP_CENTER`, `MAP_ZOOM`, `TILE_URL`, `TOPO_URL`, `SAT_URL` | Kartenstart und Kachelquellen; `SAT_URL` ist das Luftbild und die Startansicht (leer = nur Straßenkarte) |
 | `SAT_LABELS_URL` | Beschriftungsebenen über dem Luftbild (Straßen, Orts- und Gewässernamen), mehrere durch Komma; leer = keine |
@@ -120,6 +121,25 @@ Ohne `ADMIN_EMAIL`/`ADMIN_PASSWORD` wird der erste Nutzer, der ein Konto anfragt
 - **Sitzungsschlüssel:** wird beim ersten Start exklusiv angelegt, damit nicht zwei Gunicorn-Worker mit verschiedenen Schlüsseln starten (das äußerte sich sonst in sporadischen Abmeldungen).
 - **JavaScript-Bibliotheken** werden beim Bauen gegen `vendor.sha256` geprüft. Nach einem Versionswechsel im Dockerfile die Prüfsummen neu erzeugen (Anleitung steht in der Datei).
 - **Wiki-Inhalte** werden im Browser gerendert und mit DOMPurify bereinigt; Seiten liefern eine CSP mit Nonce, kein `unsafe-inline` für Skripte.
+
+## Damit Mails ankommen
+
+Die Anwendung verschickt nur wenige, dafür wichtige Mails: Passwort-Reset, Kontofreigabe,
+Benachrichtigung an Beobachter. Ob sie ankommen, entscheidet nicht die Anwendung, sondern das
+DNS der Absenderdomain. Empfänger prüfen drei Dinge:
+
+- **SPF** – ein TXT-Eintrag auf der Domain, der sagt, welche Server für sie versenden dürfen.
+  Fehlt er, gilt jede Mail als ungedeckt.
+- **DKIM** – eine Signatur, die der versendende Mailserver anbringt. Sie entsteht nur, wenn die
+  Mail über genau diesen Server hinausgeht.
+- **DMARC** – die Ansage, was bei Misserfolg geschehen soll. `p=reject` heißt: wegwerfen. Es
+  genügt, wenn SPF **oder** DKIM passt, aber die geprüfte Domain muss zu der in `MAIL_FROM`
+  gehören – dafür sorgt der Umschlagabsender (`SMTP_ENVELOPE_FROM`, leer = wie `MAIL_FROM`).
+
+Die Anwendung tut, was von ihrer Seite möglich ist: `Message-ID` und `Auto-Submitted` in jeder
+Mail, der Anzeigename als ein sauber kodiertes Wort, und die Antwort des Mailservers landet im
+Log statt im Nichts. **Testmail senden** in der Nutzerverwaltung verschickt eine Probemail und
+zeigt wörtlich, was der Mailserver dazu sagt – Verbindung, Anmeldung, abgewiesener Empfänger.
 
 ## Daten und Sicherung
 
