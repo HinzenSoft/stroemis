@@ -845,8 +845,6 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 /* "/"-Einfügemenü */
 .ed-slash { position: absolute; z-index: 1300; width: 300px; max-height: 60vh; overflow: auto; background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius-gross); box-shadow: var(--schatten-leiste); padding: 6px; }
 .ed-slash-title { font-size: var(--fs-marke); color: var(--grau); padding: 4px 8px 6px; }
-.ed-slash button { display: flex; flex-direction: column; align-items: flex-start; }
-.ed-slash button span { font-size: var(--fs-klein); color: var(--grau); }
 .ed-slash button.sel strong { color: var(--rot); }
 
 /* Editor ohne obere Toolbar; Tabellen volle Breite; Kontextmenüs für Tabellen, Blöcke und Bilder */
@@ -1004,6 +1002,15 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 }
 .tree-menu button:hover, .link-pages button:hover, .link-pages button.sel,
 .ed-slash button:hover, .ed-slash button.sel { background: var(--grau-hell); }
+/* Der Eintrag im Einfügemenü steht zweizeilig: der Name, darunter wozu er gut ist. Diese Regel
+   muss NACH der gemeinsamen Menüregel stehen – die setzt display:block, und damit liefen Name
+   und Erklärung ineinander („Überschrift 1Große Abschnittsüberschrift“), die Erklärung brach
+   mitten im Wort um und lief in den nächsten Eintrag. Beide bekommen ihre eigene Zeile, die
+   Erklärung darf umbrechen – gekürzt wird sie nicht: Bei „Synchronisierten Abschnitt einer
+   anderen Seite anzeigen“ stünde sonst genau das Ende nicht mehr da, auf das es ankommt. */
+.ed-slash button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; line-height: 1.35; }
+.ed-slash button strong { font-weight: 600; }
+.ed-slash button span { font-size: var(--fs-klein); color: var(--grau); max-width: 100%; }
 .tree-menu button.danger { color: var(--rot); }
 .fav-list { list-style: none; padding: 0; margin: 0 0 12px; }
 .fav-list a { display: block; padding: 3px 6px; color: inherit; text-decoration: none; border-radius: var(--radius); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
