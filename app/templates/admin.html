@@ -7,7 +7,12 @@
   <section id="pending" class="section"></section>
   <p class="help">Administratoren dürfen alle Alben, Bilder und Wiki-Seiten bearbeiten. Beim Löschen eines Nutzers gehen seine Inhalte auf dich über.</p>
   <p class="help hidden" id="videopflege"></p>
-  <div style="overflow:auto"><table class="list" id="users"><thead><tr><th>Name</th><th>E-Mail</th><th>Gliederung</th><th>Rolle</th><th>Inhalte</th><th></th></tr></thead><tbody></tbody></table></div>
+  <table class="list" id="users">
+    <!-- Feste Spaltenbreiten (table-layout: fixed in app.css): So passt die Tabelle in jeder
+         Fensterbreite in die Seite, statt sie über den Rand zu schieben. -->
+    <colgroup><col style="width:13%"><col style="width:24%"><col style="width:15%"><col style="width:8%"><col style="width:14%"><col style="width:26%"></colgroup>
+    <thead><tr><th>Name</th><th>E-Mail</th><th>Gliederung</th><th>Rolle</th><th>Inhalte</th><th></th></tr></thead><tbody></tbody>
+  </table>
 </main>
 <dialog id="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
 {% endblock %}

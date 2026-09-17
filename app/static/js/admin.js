@@ -16,7 +16,7 @@
     tbody.innerHTML = users.filter((u) => u.status !== "pending").map((u) => `
       <tr data-id="${u.id}" ${u.active ? "" : 'class="muted"'}>
         <td data-l="Name">${S.esc(u.name) || "<span class='muted'>–</span>"}${u.active ? "" : ' <span class="badge grey">deaktiviert</span>'}</td>
-        <td data-l="E-Mail">${S.esc(u.email)}</td>
+        <td class="mail" data-l="E-Mail">${S.esc(u.email)}</td>
         <td data-l="Gliederung">${S.esc(u.gliederung)}</td>
         <td data-l="Rolle">${u.role === "admin" ? '<span class="badge">Admin</span>'
           : u.role === "editor" ? '<span class="badge">Redakteur</span>' : "Nutzer"}</td>

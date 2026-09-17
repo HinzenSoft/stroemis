@@ -236,12 +236,20 @@ input:focus, select:focus, textarea:focus { border-color: var(--anthrazit); outl
 .cat.seil { background: var(--rot); }
 .cat.wasser { background: var(--wasser); }
 
-table.list { width: 100%; border-collapse: collapse; font-size: var(--fs-mittel); }
+/* Feste Aufteilung: Die Spalten bekommen ihre Breite aus dem colgroup der Seite, nicht aus dem
+   längsten Wort darin. Damit passt die Tabelle immer in die Seite – vorher schob die letzte
+   Spalte (alle Knöpfe nebeneinander) sie über den Rand, und die Nutzerverwaltung bekam einen
+   waagerechten Rollbalken, hinter dem „Löschen“ verschwand. */
+table.list { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--fs-mittel); }
 table.list th, table.list td { text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--linie); vertical-align: top; }
 table.list th { font-weight: 700; color: var(--grau); font-size: var(--fs-klein); border-bottom: 2px solid var(--anthrazit); }
 table.list tr:hover td { background: var(--grau-hell); }
-table.list .btn-row { flex-wrap: nowrap; }
-table.list td.small { white-space: nowrap; }
+/* Die Knopfreihe bricht um, statt die Spalte aufzuspannen. */
+table.list .btn-row { gap: 6px 8px; }
+/* Eine E-Mail hat außer dem Bindestrich keine Trennstelle. Passt sie nicht in ihre Spalte,
+   bricht sie notfalls im Wort – sonst stünde sie über den Zellenrand hinaus. Name und
+   Gliederung haben Leerzeichen und brechen von selbst an der richtigen Stelle. */
+table.list td.mail { overflow-wrap: anywhere; }
 /* Auf dem Telefon wird aus der Tabelle eine Liste: je Nutzer eine Karte, die Spaltennamen
    stehen als Beschriftung davor, die Knöpfe darunter – statt sechs Spalten, die seitwärts
    aus dem Bild laufen und die Knöpfe außer Sicht schieben. */
