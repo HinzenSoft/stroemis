@@ -7,9 +7,13 @@
   let stopSpy = null;
 
   async function get(path) {
-    const r = await fetch(path, { credentials: "same-origin" });
+    let r;
+    // Der Status gehört an den Fehler – sonst ist "gibt es nicht" von "gerade nicht
+    // erreichbar" nicht zu unterscheiden (siehe einbauFuellen in markdown.js).
+    try { r = await fetch(path, { credentials: "same-origin" }); }
+    catch (e) { const netz = new Error("Keine Verbindung zum Server."); netz.status = 0; throw netz; }
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.error || "Fehler " + r.status);
+    if (!r.ok) { const err = new Error(d.error || "Fehler " + r.status); err.status = r.status; throw err; }
     return d;
   }
 
@@ -67,11 +71,23 @@
     const items = MD.buildToc(art);
     // Eingebundene Abschnitte nur aus dem öffentlichen Bestand: Ist die Quellseite nicht
     // freigegeben, antwortet die Schnittstelle gar nicht erst mit ihr.
+    const verzeichnisZeichnen = (liste) => {
+      tocEl.innerHTML = liste.length ? `<div class="rail-title">Inhalt</div>${MD.tocHtml(liste)}` : "";
+      if (stopSpy) stopSpy();
+      stopSpy = MD.tocScrollspy(art, tocEl);
+    };
     MD.enhance(art, { children: (d.tree || []).filter((t) => t.parent_id === p.id), prefix,
-                      holeSeite: (slug) => get(`/api/public/pages/${encodeURIComponent(slug)}`).then((r) => r.page) });
-    tocEl.innerHTML = items.length ? `<div class="rail-title">Inhalt</div>${MD.tocHtml(items)}` : "";
-    if (stopSpy) stopSpy();
-    stopSpy = MD.tocScrollspy(art, tocEl);
+                      holeSeite: (slug) => get(`/api/public/pages/${encodeURIComponent(slug)}`).then((r) => r.page),
+                      /* Eingebundener Text trifft erst nach dem Zeichnen ein. Ohne dieselbe
+                         Behandlung führten seine internen Links auf /wiki/… und damit zur
+                         Anmeldung, und seine Überschriften fehlten im Verzeichnis. */
+                      nachInhalt: (el) => {
+                        el.querySelectorAll('a[href^="/wiki/"]').forEach((a) =>
+                          a.setAttribute("href", prefix + a.getAttribute("href").slice(6)));
+                        wire(el);
+                        verzeichnisZeichnen(MD.buildToc(art));
+                      } });
+    verzeichnisZeichnen(items);
     if (!MD.scrollToHash(content)) window.scrollTo(0, 0);
   }
 

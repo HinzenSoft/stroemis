@@ -1,19 +1,36 @@
 {% extends "base.html" %}
 {% set active = 'admin' %}
-{% block title %}Nutzer – strömis.de{% endblock %}
+{% block title %}Verwaltung – strömis.de{% endblock %}
 {% block body %}
 <main class="page">
-  <div class="page-head"><h1>Nutzerverwaltung</h1>
-    <div class="btn-row"><button class="btn secondary" id="btn-testmail">Testmail senden</button><button class="btn" id="btn-new-user">+ Nutzer anlegen</button></div></div>
+  <div class="page-head"><h1 id="seitentitel">Nutzerverwaltung</h1>
+    <div class="btn-row" id="kopf-knoepfe"><button class="btn secondary" id="btn-testmail">Testmail senden</button><button class="btn" id="btn-new-user">+ Nutzer anlegen</button></div></div>
+  <div class="c-tabs" role="tablist">
+    <button type="button" data-reiter="nutzer" class="sel" role="tab">Nutzer</button>
+    <button type="button" data-reiter="einstellungen" role="tab">Einstellungen</button>
+  </div>
+  <section id="bereich-nutzer">
   <section id="pending" class="section"></section>
   <p class="help">Administratoren dürfen alle Alben, Bilder und Wiki-Seiten bearbeiten. Beim Löschen eines Nutzers gehen seine Inhalte auf dich über.</p>
   <p class="help hidden" id="videopflege"></p>
   <table class="list" id="users">
     <!-- Feste Spaltenbreiten (table-layout: fixed in app.css): So passt die Tabelle in jeder
          Fensterbreite in die Seite, statt sie über den Rand zu schieben. -->
-    <colgroup><col style="width:13%"><col style="width:24%"><col style="width:15%"><col style="width:8%"><col style="width:14%"><col style="width:26%"></colgroup>
-    <thead><tr><th>Name</th><th>E-Mail</th><th>Gliederung</th><th>Rolle</th><th>Inhalte</th><th></th></tr></thead><tbody></tbody>
+    <colgroup><col style="width:13%"><col style="width:20%"><col style="width:12%"><col style="width:14%"><col style="width:11%"><col style="width:11%"><col style="width:19%"></colgroup>
+    <thead><tr><th>Name</th><th>E-Mail</th><th>Gliederung</th><th>Rolle</th><th>Zuletzt da</th><th>Inhalte</th><th></th></tr></thead><tbody></tbody>
   </table>
+  </section>
+
+  <section id="bereich-einstellungen" class="hidden">
+    <p class="help">Diese Werte standen bisher nur in der Datei <code>.env</code> auf dem Server.
+      Was hier gesetzt wird, gilt <strong>vorrangig</strong> und wirkt sofort – in allen
+      Arbeitsprozessen. „Zurücksetzen“ nimmt den Wert wieder aus der <code>.env</code>
+      beziehungsweise der eingebauten Vorgabe.</p>
+    <div id="einst-aus" class="notice hidden">Die Einstellungen sind über
+      <code>EINSTELLUNGEN_AUS=1</code> abgeschaltet – es gilt allein die <code>.env</code>.
+      Gespeicherte Werte bleiben erhalten und greifen wieder, sobald die Variable entfällt.</div>
+    <form id="einst-form"></form>
+  </section>
 </main>
 <dialog id="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
 {% endblock %}

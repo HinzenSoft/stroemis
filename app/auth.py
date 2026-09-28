@@ -19,7 +19,9 @@ MIN_PW = 8
 
 # Antwort auf eine Kontoanfrage – wortgleich, egal ob es die Adresse schon gibt (keine Nutzer-Enumeration).
 PENDING_MSG = ("Danke! Deine Anfrage wurde an die Administratoren geschickt. "
-               "Du bekommst eine E-Mail, sobald dein Konto freigegeben ist.")
+               "Du bekommst eine E-Mail, sobald dein Konto freigegeben ist. "
+               "Sieh dann bitte auch im Spam-Ordner nach – automatisch verschickte Mails landen "
+               "dort häufiger.")
 
 # Bremse gegen Passwort-Raten: mehr Fehlversuche je Adresse oder je IP sperren für ATTEMPT_WINDOW.
 ATTEMPT_WINDOW = timedelta(minutes=15)
@@ -69,6 +71,15 @@ def darf_inhalte(user=None):
     return bool(user and user["role"] in ("admin", "editor"))
 
 
+def is_pruefer(user=None):
+    """Darf Prüfungen abnehmen. Ein Zusatzrecht, keine Rolle: Es wird neben „user“, „editor“ oder
+    „admin“ vergeben und ersetzt keins davon. Bewusst kein Freibrief für Administratoren – der
+    Bereich enthält personenbezogene Daten von Teilnehmenden und soll nur sehen, wer ihn braucht;
+    ein Administrator kann sich das Recht in der Nutzerverwaltung selbst geben."""
+    user = user or current_user()
+    return bool(user and user.get("is_pruefer"))
+
+
 def initialen(name):
     """Die Buchstaben im Kreis, wenn kein Profilbild vorliegt – gleiche Regel wie im Wiki:
     die Anfangsbuchstaben der ersten beiden Wörter."""
@@ -86,6 +97,7 @@ def public_user(u):
     out["status"] = u.get("status", "active")
     out["reason"] = u.get("reason", "")
     out["avatar"] = avatar_url(u.get("avatar") or "")
+    out["is_pruefer"] = bool(u.get("is_pruefer"))
     return out
 
 
@@ -105,6 +117,19 @@ def admin_required(f):
             return jsonify(error="Nicht angemeldet"), 401
         if not is_admin():
             return jsonify(error="Nur für Administratoren"), 403
+        return f(*a, **kw)
+    return wrapper
+
+
+def pruefer_required(f):
+    """Für die Schnittstellen des Prüfungsbereichs: angemeldet UND Prüfer. Der Reiter wird nicht nur
+    ausgeblendet – jede Route prüft selbst, sonst genügte eine getippte Adresse."""
+    @wraps(f)
+    def wrapper(*a, **kw):
+        if not current_user():
+            return jsonify(error="Nicht angemeldet"), 401
+        if not is_pruefer():
+            return jsonify(error="Nur für Prüfer"), 403
         return f(*a, **kw)
     return wrapper
 
@@ -354,6 +379,10 @@ def login():
     # gültigen Konto die IP-Bremse beliebig oft lösen und weiter Passwörter durchprobieren.
     clear_attempts([f"mail:{email}"])
     warne_wenn_cookie_verworfen()
+    # Wann zuletzt angemeldet – in der Nutzerverwaltung die Antwort auf „wer arbeitet hier
+    # eigentlich noch mit?“. Nur bei der erfolgreichen Anmeldung, nicht bei jedem Aufruf: Der
+    # Zeitpunkt soll das Anmelden bezeichnen, nicht das letzte Lebenszeichen des Browsers.
+    db.execute("UPDATE users SET last_login = ? WHERE id = ?", (db.now(), u["id"]))
     session.clear()
     session["uid"] = u["id"]
     session.permanent = True
@@ -379,7 +408,9 @@ def forgot():
             send_reset_mail(u)
         except Exception as exc:  # Versand darf die Antwort nicht verändern (kein Nutzer-Enumeration)
             current_app.logger.error("Reset-Mail an %s fehlgeschlagen: %s", email, exc)
-    return jsonify(ok=True, message="Falls ein Konto existiert, wurde eine E-Mail mit einem Link verschickt.")
+    return jsonify(ok=True, message="Falls ein Konto existiert, wurde eine E-Mail mit einem Link "
+                                    "verschickt. Sieh bitte auch im Spam-Ordner nach – automatisch "
+                                    "verschickte Mails landen dort häufiger.")
 
 
 @bp.post("/auth/reset")

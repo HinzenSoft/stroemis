@@ -14,7 +14,12 @@ window.S = (function () {
     try {
       res = await fetch(path, init);
     } catch (e) {
-      throw new Error("Keine Verbindung zum Server.");
+      // Kein Serverstatus: Das Netz war weg, der Server nicht erreichbar oder die Anfrage
+      // abgebrochen. Das ist etwas anderes als "gibt es nicht" – wer beides gleich behandelt,
+      // behauptet bei jedem Wacklen, der Inhalt existiere nicht.
+      const netz = new Error("Keine Verbindung zum Server.");
+      netz.status = 0;
+      throw netz;
     }
     if (res.status === 401 && !path.startsWith("/api/auth/")) {
       location.href = "/login?next=" + encodeURIComponent(location.pathname);
@@ -22,7 +27,13 @@ window.S = (function () {
     }
     let data = {};
     try { data = await res.json(); } catch (e) { /* leer */ }
-    if (!res.ok) throw new Error(data.error || ("Fehler " + res.status));
+    if (!res.ok) {
+      // Der Status gehört an den Fehler: Nur damit lässt sich später "gibt es nicht" (404/403)
+      // von "gerade nicht erreichbar" (0, 5xx) unterscheiden.
+      const err = new Error(data.error || ("Fehler " + res.status));
+      err.status = res.status;
+      throw err;
+    }
     return data;
   }
 

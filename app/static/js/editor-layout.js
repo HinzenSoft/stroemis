@@ -59,7 +59,8 @@ window.EDLAYOUT = (function () {
     const stil = Array.from({ length: anz }, () => []);
     const emojiFuer = {};
     const abschnitte = [];             // oberste Spaltenabschnitte, für die gemessen wird
-    const wert = { kinder, anz, kl, stil, emojiFuer, abschnitte };
+    const akkordeons = [];             // einklappbare Boxen: Blockindizes und Dokumentstellen
+    const wert = { kinder, anz, kl, stil, emojiFuer, abschnitte, akkordeons };
     planFassung = doc; planWert = wert; planSchmal = schmal;
     if (!anz) return wert;
 
@@ -190,6 +191,11 @@ window.EDLAYOUT = (function () {
           // geben ihnen das Aussehen der aufgeklappten Box aus der Leseansicht.
           const mitte = trenner.find((j) => kinder[j].art === "koerper");
           const trennung = mitte === undefined ? zu : mitte;
+          // Für das Zuklappen: Titel sind die Blöcke zwischen Öffner und Trennmarke, der Körper
+          // alles von der Trennmarke bis vor die Schlussmarke. Die Dokumentstelle des Öffners
+          // ist der Schlüssel, unter dem sich der Editor „aufgeklappt“ merkt.
+          akkordeons.push({ auf: i, trennung, zu, vonPos: kinder[i].von,
+                            koerperPos: kinder[trennung].von, endePos: kinder[zu].bis });
           const ohne = erbe.filter((c) => !/^ak(-|$)/.test(c));
           stelle(i, [...erbe, "ak-marke", "ak-auf"]);
           for (let x = i + 1; x < trennung; x++) { if (!kinder[x].art) { kl[x].push("ak-erst"); break; } }
@@ -324,8 +330,10 @@ window.EDLAYOUT = (function () {
      Marken, löst sich beim Speichern der ganze Abschnitt auf – der Inhalt bleibt, der Kasten
      ist fort. Entfernen und Rücktaste lassen diese Blöcke deshalb stehen. Weg kommen sie über
      ihr eigenes Menü ("Tabelle löschen", "Block löschen", "Abschnitt löschen").
-     Der Baustein bleibt vorerst außen vor – danach war nicht gefragt. */
-  const GESCHUETZT_AUF = ["spalten", "ausrichtung", "hinweis", "akkordeon"];
+     Auch der synchronisierte Abschnitt und der Einbau: Verschwindet eine ihrer Marken, zerfällt
+     beim Speichern der Abschnitt – und mit ihm die Kennung, über die andere Seiten ihn
+     einbinden. Vorher waren beide ausgenommen und ließen sich mit der Rücktaste wegräumen. */
+  const GESCHUETZT_AUF = ["spalten", "ausrichtung", "hinweis", "akkordeon", "baustein", "einbau"];
 
   function geschuetzteKnoten(doc) {
     const raus = [];
@@ -339,6 +347,12 @@ window.EDLAYOUT = (function () {
       } else if (art === "ende") {
         const auf = stapel.pop();
         if (GESCHUETZT_AUF.includes(auf)) eintrag(auf);
+      } else if (art === "einbau") {
+        /* Der Einbau ist eine einzelne Marke ohne Schlussmarke und steht deshalb in keinem
+           der anderen Zweige. Ihn bloß in GESCHUETZT_AUF zu führen half nichts: Die Liste
+           wird nur in den Zweigen darüber abgefragt, und keiner traf zu – die Rücktaste
+           räumte den Einbau weiter kommentarlos weg. */
+        eintrag("einbau");
       } else if (art === "spalte") {
         if (stapel[stapel.length - 1] === "spalten") eintrag("spalten");
       } else if (art === "koerper") {
@@ -396,11 +410,41 @@ window.EDLAYOUT = (function () {
     return treffer ? treffer.art : null;
   }
 
+  /* --- Einklappbare Boxen im Editor -------------------------------------------------------
+     Im Artikel ist eine Box zu, bis man sie aufklappt. Im Editor war sie immer offen – alles
+     darunter stand deshalb um den ganzen Inhalt der Box tiefer als im Artikel, und beim Wechsel
+     zwischen Lesen und Schreiben sprang der Text. Jetzt beginnt auch der Editor zugeklappt:
+     Körper und Trennmarke werden nur ausgeblendet (Ansicht, nicht Dokument), ein Klick auf den
+     Pfeil vor dem Titel klappt auf und zu. Gemerkt wird die Dokumentstelle des Öffners; sie
+     wandert mit jeder Änderung mit (Mapping). Landet der Schreibstrich in einer zugeklappten
+     Box – Pfeiltasten, Suche, Rückgängig –, klappt sie von selbst auf: Was man tippt, soll man
+     sehen. Beim Zuklappen rückt ein Schreibstrich aus dem Körper ans Ende des Titels. */
+  const AK_META = "ak-klappen";
+
   function layoutPlugin(ctx) {
-    const { Plugin } = ctx.pmState;
+    const { Plugin, Selection } = ctx.pmState;
     const { Decoration, DecorationSet } = ctx.pmView;
     return {
       wysiwygPlugins: [() => new Plugin({
+        state: {
+          init: () => ({ offen: [] }),
+          apply(tr, alt) {
+            let offen = alt.offen.map((p) => tr.mapping.map(p));
+            const meta = tr.getMeta(AK_META);
+            if (meta && meta.toggle != null) {
+              offen = offen.includes(meta.toggle) ? offen.filter((p) => p !== meta.toggle) : [...offen, meta.toggle];
+            }
+            let plan;
+            try { plan = spaltenPlan(tr.doc); } catch (e) { return { offen }; }
+            const gueltig = new Set(plan.akkordeons.map((a) => a.vonPos));
+            offen = offen.filter((p, i) => gueltig.has(p) && offen.indexOf(p) === i);
+            const { from, to } = tr.selection;
+            plan.akkordeons.forEach((a) => {
+              if (!offen.includes(a.vonPos) && from >= a.koerperPos && to <= a.endePos) offen.push(a.vonPos);
+            });
+            return { offen };
+          },
+        },
         /* Zwei Absätze trennt im Markdown eine Leerzeile, und der Editor bildet sie als leeren
            Absatz ab. Beim Teilen mit der Eingabetaste entsteht dieser Absatz aber NICHT: Aus
            einem Absatz werden zwei unmittelbar aufeinanderfolgende, und Toast UI schreibt sie
@@ -439,10 +483,21 @@ window.EDLAYOUT = (function () {
               const stelle = $v.depth >= 1 ? $v.before(1) : $v.pos;
               offen = plan.kinder.findIndex((k) => k.von === stelle);
             } catch (e) { /* keine brauchbare Auswahl – dann bleibt alles zu */ }
+            // Zugeklappte Boxen: Titel bekommen „ak-zu“ (Pfeil nach rechts), Trennmarke und Körper
+            // „ak-versteckt“. Der Bauplan bleibt unberührt – er gilt je Fassung, das Klappen nicht.
+            const aufgeklappt = new Set(((this && this.getState && this.getState(zustand)) || { offen: [] }).offen);
+            const zusatz = {};
+            plan.akkordeons.forEach((a) => {
+              if (aufgeklappt.has(a.vonPos)) return;
+              for (let x = a.auf; x < a.trennung; x++) (zusatz[x] = zusatz[x] || []).push("ak-zu");
+              for (let x = a.trennung; x < a.zu; x++) (zusatz[x] = zusatz[x] || []).push("ak-versteckt");
+              (zusatz[a.zu] = zusatz[a.zu] || []).push("ak-zu");     // die Schlussmarke schrumpft mit
+            });
             const decos = [];
             for (let i = 0; i < plan.anz; i++) {
               const attrs = {};
-              const klassen = i === offen ? plan.kl[i].filter((c) => c !== "ed-fuge") : plan.kl[i];
+              const basis = i === offen ? plan.kl[i].filter((c) => c !== "ed-fuge") : plan.kl[i];
+              const klassen = zusatz[i] ? basis.concat(zusatz[i]) : basis;
               if (klassen.length) attrs.class = Array.from(new Set(klassen)).join(" ");
               if (plan.stil[i].length) attrs.style = plan.stil[i].join(";");
               if (plan.emojiFuer[i]) attrs["data-emoji"] = plan.emojiFuer[i];
@@ -455,6 +510,27 @@ window.EDLAYOUT = (function () {
             }
             zellenKaesten(zustand.doc, decos, Decoration);
             return DecorationSet.create(zustand.doc, decos);
+          },
+          /* Klick auf den Pfeil vor dem Titel einer Box: auf- oder zuklappen. Nur der Pfeil –
+             der Titel selbst bleibt gewöhnlicher Text, den man anklickt, um ihn zu bearbeiten. */
+          handleClick(sicht, pos, ereignis) {
+            const titel = ereignis.target && ereignis.target.closest ? ereignis.target.closest(".ak-titel") : null;
+            if (!titel || titel.parentElement !== sicht.dom) return false;
+            if (ereignis.clientX - titel.getBoundingClientRect().left > 30) return false;
+            let plan;
+            try { plan = spaltenPlan(sicht.state.doc); } catch (e) { return false; }
+            const idx = plan.kinder.findIndex((k) => k.von <= pos && pos < k.bis);
+            const a = plan.akkordeons.find((x) => idx > x.auf && idx < x.trennung);
+            if (!a) return false;
+            const istOffen = this.getState(sicht.state).offen.includes(a.vonPos);
+            let tr = sicht.state.tr.setMeta(AK_META, { toggle: a.vonPos }).setMeta("addToHistory", false);
+            if (istOffen) {
+              const { from, to } = sicht.state.selection;
+              if (from >= a.koerperPos && to <= a.endePos) tr = tr.setSelection(Selection.near(tr.doc.resolve(a.koerperPos), -1));
+            }
+            sicht.dispatch(tr);
+            ereignis.preventDefault();
+            return true;
           },
           handleKeyDown(sicht, ereignis) {
             if (ereignis.key !== "Backspace" && ereignis.key !== "Delete") return false;
@@ -709,5 +785,38 @@ window.EDLAYOUT = (function () {
     })],
   });
 
-  return { layoutPlugin, zellenAuswahl, markenSchuetzen };
+  /* --- Aus mehreren Absätzen eine Liste machen ------------------------------------------
+     Eine gesetzte Leerzeile ist im Editor ein eigener, leerer Absatz – anders lässt sie sich in
+     Markdown nicht festhalten. Toast UI macht beim Umwandeln aus JEDEM Absatz der Auswahl einen
+     Listenpunkt, also auch aus diesen: Zwischen den eigentlichen Punkten standen leere.
+
+     Aufgeräumt wird NACH der Umwandlung, nicht davor. Vorher brächte es nichts: appendTransaction
+     weiter oben setzt zwischen zwei unmittelbar aufeinanderfolgende Absätze sofort wieder einen
+     leeren – genau das, was die Schreibweise zwischen Absätzen verlangt. Innerhalb einer Liste
+     gilt diese Regel nicht, dort trennt die Liste ihre Punkte selbst. */
+  function leereListenpunkteWeg(sicht) {
+    if (!sicht || !sicht.state) return 0;
+    const { from, to } = sicht.state.selection;
+    if (to <= from) return 0;
+    const weg = [];
+    let mitInhalt = 0;
+    sicht.state.doc.descendants((n, pos) => {
+      if (n.type.name !== "listItem") return true;
+      const ende = pos + n.nodeSize;
+      if (ende <= from || pos >= to) return false;
+      // Das geschützte Leerzeichen zählt hier als Leerraum – es IST die gesetzte Leerzeile.
+      if (String(n.textContent || "").replace(/\u00a0/g, "").trim()) mitInhalt++;
+      else weg.push({ von: pos, bis: ende });
+      return false;                        // in den Punkt selbst braucht es keinen Blick
+    });
+    // Bliebe nichts übrig, war die leere Liste gewollt – dann nichts anfassen.
+    if (!weg.length || !mitInhalt) return 0;
+    const tr = sicht.state.tr;
+    // Von hinten nach vorn, damit die vorderen Stellen gültig bleiben.
+    weg.reverse().forEach(({ von, bis }) => tr.delete(von, bis));
+    sicht.dispatch(tr);
+    return weg.length;
+  }
+
+  return { layoutPlugin, zellenAuswahl, markenSchuetzen, leereListenpunkteWeg };
 })();

@@ -346,6 +346,10 @@ def test_everything():
         assert [q["title"] for q in rueck["pages"]] == ["Neu"], rueck
         tree = c2.get("/api/wiki/tree").json["pages"]
         assert {p["title"] for p in tree} == {"Seiltechnik", "Neu", "Anker", "Ringankern", "Bandschlingenanker"}
+        # Die Nutzerverwaltung zählt die angelegten Artikel mit – Sabine hat die fünf Seiten angelegt.
+        zaehler = {u["email"]: u for u in c.get("/api/admin/users").json["users"]}
+        assert zaehler["sr@example.org"]["page_count"] == 5 and zaehler["x@example.org"]["page_count"] == 0, zaehler
+        assert all("page_count" in u and "album_count" in u for u in zaehler.values())
         # Keine Hintertür: Im öffentlichen Abschnitt „Anker“ darf ein Nicht-Administrator keine
         # Unterseite anlegen – sonst käme Veröffentlichen durch die Hintertür.
         r = c2.post("/api/wiki/pages", json={"title": "Hintertür", "parent_id": root["id"], "content": "Geheim"})
@@ -569,6 +573,12 @@ def test_everything():
         assert c3.get(f"/api/wiki/pages/{privsub['slug']}").status_code == 403
         assert not any(p["slug"] == "nur-intern" for p in c3.get("/api/wiki/tree").json["pages"])
         assert c3.get("/api/wiki/search?q=geheimwort").json["results"] == []
+        # Auch nicht über den Katalog der synchronisierten Abschnitte: Die Liste kommt aus dem
+        # Seiteninhalt, also muss sie durch dieselbe Rechteprüfung wie die Suche.
+        c2.put(f"/api/wiki/pages/{priv['id']}",
+               json={"content": "# Nur intern\ngeheimwort\n\n:::baustein geheimteil\nText\n:::"})
+        assert not any(b["kennung"] == "geheimteil" for b in c3.get("/api/wiki/bausteine").json["bausteine"])
+        assert any(b["kennung"] == "geheimteil" for b in c2.get("/api/wiki/bausteine").json["bausteine"])
         assert c3.get(f"/api/wiki/pages/{priv['id']}/revisions").status_code == 403
         assert c3.get(f"/api/wiki/pages/{priv['id']}/comments").status_code == 403
         assert c3.get(f"/api/wiki/pages/{priv['id']}/export").status_code == 403
@@ -693,6 +703,37 @@ def test_haertung():
                                          "content": ":::einbau bausteinquelle#sicherung\n:::"})
         rueck = c1.get(f"/api/wiki/pages/{q['id']}/backlinks").json["pages"]
         assert [x["title"] for x in rueck] == ["Bausteinnutzer"], rueck
+        # Und zwar als EINBAU, nicht als gewöhnlicher Verweis: Die andere Seite zeigt den Text
+        # dieser hier, sie erwähnt sie nicht bloß. Vorher lag beides in einem Topf.
+        assert rueck[0]["einbau"] is True, rueck
+
+        # --- Der Katalog der synchronisierten Abschnitte -------------------------------------
+        # Ohne ihn behalf sich der Einbau-Dialog mit zwei Listen: erst eine Seite wählen, dann
+        # sehen, ob darauf überhaupt ein Abschnitt liegt. Wer die Kennung kannte, aber nicht die
+        # Seite, kam nie ans Ziel – und jeder Probeklick lud eine ganze Seite und trug einen
+        # Besuch ein, der „Zuletzt besucht“ verwässerte.
+        kat = c1.get("/api/wiki/bausteine").json["bausteine"]
+        treffer = [b for b in kat if b["slug"] == "bausteinquelle"]
+        assert len(treffer) == 1, kat
+        assert treffer[0]["kennung"] == "sicherung"
+        assert treffer[0]["auszug"] == "Text"
+        assert treffer[0]["verwendungen"] == 1
+        assert treffer[0]["seiten"] == ["Bausteinnutzer"]
+
+        # Ein ":::baustein" in einem Codebeispiel ist Text, kein Abschnitt – der Renderer löst
+        # ihn zu Recht nie auf. Böte der Katalog ihn an, bliebe der Einbau für immer leer.
+        c1.post("/api/wiki/pages", json={"title": "Bausteinbeispiel", "format": "markdown",
+                                         "content": "```\n:::baustein nurbeispiel\nText\n:::\n```"})
+        kat = c1.get("/api/wiki/bausteine").json["bausteine"]
+        assert not [b for b in kat if b["kennung"] == "nurbeispiel"], kat
+
+        # Ein eingerückter Einbau wird angezeigt (der Renderer erlaubt bis zu drei Leerzeichen) –
+        # also muss er auch als Rückverweis zählen. Sonst übersieht ihn jede Warnung.
+        c1.post("/api/wiki/pages", json={"title": "Bausteinnutzer eingerueckt", "format": "markdown",
+                                         "content": "Davor.\n\n  :::einbau bausteinquelle#sicherung\n  :::"})
+        kat = c1.get("/api/wiki/bausteine").json["bausteine"]
+        treffer = [b for b in kat if b["slug"] == "bausteinquelle"][0]
+        assert treffer["verwendungen"] == 2, treffer
 
         # --- Seiten sind immer Markdown ------------------------------------------------------
         # Früher gab es daneben das Format "html" (aus Docmost übernommene Seiten), und wer nur
@@ -1208,6 +1249,81 @@ def test_haertung():
         assert c1.get("/api/admin/videos").status_code == 403
         st = adm.get("/api/admin/videos")
         assert st.status_code == 200 and {"laeuft", "geprueft", "gewandelt", "fehler", "fertig"} <= set(st.json)
+
+        # --- Letzte Anmeldung ---------------------------------------------------------------
+        # Die Nutzerliste beantwortet damit „wer arbeitet hier eigentlich noch mit?“. Vermerkt
+        # wird nur die erfolgreiche Anmeldung, nicht jeder Aufruf – der Zeitpunkt soll das
+        # Anmelden bezeichnen, nicht das letzte Lebenszeichen eines offenen Browsers.
+        liste = {u["email"]: u for u in adm.get("/api/admin/users").json["users"]}
+        assert "last_login" in liste["a@example.org"], liste["a@example.org"]
+        assert liste["a@example.org"]["last_login"], "die Anmeldung wurde nicht vermerkt"
+        # Ein Konto, das noch nie benutzt wurde, hat keinen Zeitpunkt – und darf keinen erfinden.
+        frisch = adm.post("/api/admin/users", json={"email": "nie@example.org", "password": "geheim12345",
+                                                     "name": "Nie Da", "role": "user"}).json["user"]
+        liste = {u["id"]: u for u in adm.get("/api/admin/users").json["users"]}
+        assert liste[frisch["id"]]["last_login"] is None, liste[frisch["id"]]
+        # Eine gescheiterte Anmeldung ändert nichts daran. (429 statt 401, wenn die Anmeldebremse
+        # von den Prüfungen davor noch greift – abgewiesen ist sie so oder so.)
+        assert app.test_client().post("/api/auth/login",
+                                      json={"email": "nie@example.org", "password": "falsch"}
+                                      ).status_code in (401, 429)
+        liste = {u["id"]: u for u in adm.get("/api/admin/users").json["users"]}
+        assert liste[frisch["id"]]["last_login"] is None
+        adm.delete(f"/api/admin/users/{frisch['id']}", headers=H)
+
+        # --- Einstellungen im Browser -------------------------------------------------------
+        # Bisher standen diese Werte nur in der .env auf dem Server. Was hier gespeichert wird,
+        # liegt DARÜBER – sonst ließe sich etwas einstellen, ohne dass es wirkt.
+        assert c1.get("/api/admin/einstellungen").status_code == 403       # nur für Administratoren
+        e = adm.get("/api/admin/einstellungen")
+        assert e.status_code == 200
+        felder = {f["schluessel"]: f for f in e.json["felder"]}
+        assert "SMTP_HOST" in felder and "MAX_UPLOAD_MB" in felder
+        # Was nie einstellbar sein darf, taucht auch nicht auf: Mit dem Sitzungsschlüssel ließen
+        # sich fremde Anmeldungen fälschen, mit dem Datenverzeichnis das Dateisystem ablaufen.
+        assert not ({"SECRET_KEY", "ADMIN_PASSWORD", "DATA_DIR", "DB_PATH"} & set(felder))
+        # Der geltende Wert kommt mit, und dazu, woher er stammt.
+        assert felder["SITE_NAME"]["quelle"] in ("gespeichert", "umgebung", "vorgabe")
+
+        # Speichern wirkt sofort – ohne Neustart, auch in der Konfiguration dieses Prozesses.
+        assert adm.put("/api/admin/einstellungen",
+                       json={"werte": {"SITE_NAME": "Prüfseite", "MAX_UPLOAD_MB": "7"}}).status_code == 200
+        with app.app_context():
+            from app import einstellungen as _e
+            _e.anwenden()
+            assert app.config["SITE_NAME"] == "Prüfseite"
+            # MAX_UPLOAD_MB steht als MAX_CONTENT_LENGTH in Bytes in der Konfiguration.
+            assert app.config["MAX_CONTENT_LENGTH"] == 7 * 1024 * 1024
+
+        # Das Mailkennwort geht nie an den Browser zurück – auch nicht als Teil der Antwort.
+        adm.put("/api/admin/einstellungen", json={"werte": {"SMTP_PASSWORD": "streng-geheim"}})
+        roh = adm.get("/api/admin/einstellungen").get_data(as_text=True)
+        assert "streng-geheim" not in roh, roh[:400]
+        felder = {f["schluessel"]: f for f in adm.get("/api/admin/einstellungen").json["felder"]}
+        assert felder["SMTP_PASSWORD"]["wert"] == "" and felder["SMTP_PASSWORD"]["gesetzt"] is True
+        # Ein leeres Kennwortfeld heißt „unverändert“, nicht „löschen“ – sonst räumte jedes
+        # Speichern des Formulars das Kennwort weg, weil es ja nie zurückgegeben wird.
+        adm.put("/api/admin/einstellungen", json={"werte": {"SMTP_PASSWORD": ""}})
+        with app.app_context():
+            from app import einstellungen as _e
+            assert _e.gespeichert()["SMTP_PASSWORD"] == "streng-geheim"
+
+        # Unbekannte Schlüssel werden übergangen: Sonst schriebe ein Aufruf von außen beliebige
+        # Werte in die Konfiguration.
+        adm.put("/api/admin/einstellungen", json={"werte": {"SECRET_KEY": "x", "DB_PATH": "/tmp/x"}})
+        with app.app_context():
+            from app import einstellungen as _e
+            assert "SECRET_KEY" not in _e.gespeichert() and "DB_PATH" not in _e.gespeichert()
+
+        # Zurücksetzen holt den Wert wieder aus .env und Vorgabe.
+        assert adm.delete("/api/admin/einstellungen/SITE_NAME", headers=H).status_code == 200
+        assert adm.delete("/api/admin/einstellungen/GIBTSNICHT", headers=H).status_code == 404
+        with app.app_context():
+            from app import einstellungen as _e
+            assert "SITE_NAME" not in _e.gespeichert()
+            assert app.config["SITE_NAME"] != "Prüfseite"
+        for k in ("MAX_UPLOAD_MB", "SMTP_PASSWORD"):
+            adm.delete(f"/api/admin/einstellungen/{k}", headers=H)
 
         # --- Pegel: die Funktion ist ausgebaut, nichts davon darf mehr nach außen dringen -----
         with app.app_context():

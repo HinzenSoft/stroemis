@@ -17,7 +17,7 @@
 **Wiki (Startseite, Docmost-Nachfolger)**
 - WYSIWYG-Editor (Toast UI) mit Markdown-Kürzeln direkt im Text (`# `, `- `, `> `, ` ``` `). Eine Quelltextansicht gibt es nicht – gespeichert wird trotzdem Markdown.
 - Keine feste Toolbar: `/` öffnet ein Einfügemenü (Überschriften, Listen, Tabelle, Bild, Video, Datei, Audio, Callout, Spalten, Box, Inhaltsverzeichnis, Emoji, Datum …); markierter Text bekommt eine schwebende Leiste mit „Umwandeln in …“ (Überschriften, Listen, Zitat, Code-Block, Callout, Code, Hervorheben, Hoch-/Tiefstellen), Fett/Kursiv/Durchgestrichen/Unterstrichen, Textfarbe, Link, Ausrichtung und Rückgängig/Wiederholen. Klick in Tabellen, auf Bilder, Links oder in einen Abschnitt öffnet ein Kontextmenü wie in Docmost: Zeilen/Spalten, Spaltenausrichtung, Zellen verbinden und wieder teilen (ein Zug über mehrere Zellen, dann *Zellen verbinden*; gespeichert als `@cols=`/`@rows=` vor dem Zelleninhalt, sortiert wird eine solche Tabelle nicht mehr), Bildbreite (Presets, Zahlenwert oder Ziehgriff), Ausrichtung, Alt-Text, Zuschneiden (Rahmen über dem Bild; das Ergebnis ist eine neue Datei, das Original bleibt liegen), Spaltenanzahl, Callout-Art und Emoji, Duplizieren, Löschen. Die Menüs tragen nur Symbole (eigene SVG, keine Icon-Bibliothek); markierter Text blendet das Blockmenü aus und die Formatleiste ein, und umgekehrt. Der Editor zeigt Spalten nebeneinander, Callouts als farbige Kisten – auch die einzeilige Form in einer Tabellenzelle, deren Marken dort ausgeblendet sind –, einklappbare Boxen aufgeklappt und Ausrichtung wirklich ausgerichtet – der Inhalt ist dabei gewöhnlicher Editorinhalt und wird direkt bearbeitet, ohne Dialog. Jede Spalte fließt für sich (gemessenes Layout statt geteilter Rasterzeilen), in Breite und Rinne deckungsgleich mit der Leseansicht. Auch der Zeilenfall stimmt überein: Die Leerzeile, mit der Markdown zwei Absätze trennt, ist im Editor technisch ein leerer Absatz – sie bleibt im Dokument stehen, wird aber zugeklappt. Jede darüber hinaus gesetzte Leerzeile bleibt dagegen sichtbar und wird als `&nbsp;`-Absatz gespeichert; früher schrieb der Editor dafür eine `<br>`-Zeile, und die verschluckte in der Leseansicht den folgenden Absatz. Auf schmalen Bildschirmen stehen Spalten in beiden Ansichten untereinander (ab 640 px). Blöcke lassen sich am Griff links verschieben; an einer Marke wandert der ganze Abschnitt mit. Tabellen, Spalten- und Ausrichtungsabschnitte lassen sich nicht mit Entfernen oder Rücktaste löschen – nur über ihr eigenes Menü; eine halb gelöschte Abschnittsmarke nähme beim Speichern den ganzen Abschnitt mit. Oben rechts schaltet ein Umschalter zwischen Lesen und Bearbeiten, beide in derselben Breite. Bilder per Drag & Drop, Einfügen aus der Zwischenablage sowie Kopieren und Ausschneiden.
-- Callouts (`info`, `tip`, `warning`, `success`, `danger`, `note`) mit frei wählbarem Emoji und wahlweise einer eigenen Pastellfarbe (`farbe:mint` in der Kopfzeile; acht Töne zur Auswahl) (Auswahl aller darstellbaren Unicode-Emojis oder Eingabe über den System-Emoji-Picker). Abschnitte mit 2 bis 5 Spalten, einklappbare Boxen (Accordions; Titel und Inhalt direkt im Text bearbeitbar) – beide ineinander verschachtelbar. Ausrichtungsblöcke (`:::align center`). Synchronisierte Abschnitte: `:::baustein <kennung>` hält einen Text an einer Stelle, `:::einbau <seite>#<kennung>` zeigt ihn auf beliebig vielen anderen Seiten – geändert wird nur in der Quelle. Vorhandene Absätze lassen sich nachträglich dazu machen (markieren → „Umwandeln in …“ → „Synchronisierter Abschnitt“), ohne dass sich am Text etwas ändert. Aufgelöst wird beim Anzeigen über die gewöhnliche Schnittstelle, damit die Leserechte der Quellseite von allein gelten; im öffentlichen Bereich erscheint nur, was dort freigegeben ist. Rückverweise zeigen der Quellseite, wer sie einbindet. Gespeichert wird Markdown mit `:::`-Blöcken; bestehende Seiten funktionieren unverändert. Tabellen, Callouts, einklappbare Boxen, Spalten und Ausrichtungsblöcke lassen sich im Editor nicht mit Entfernen oder Rücktaste löschen – nur über ihr Inline-Menü; ein versehentlicher Tastendruck würde sonst eine Marke entfernen und beim Speichern den ganzen Abschnitt auflösen.
+- Callouts (`info`, `tip`, `warning`, `success`, `danger`, `note`) mit frei wählbarem Emoji und wahlweise einer eigenen Pastellfarbe (`farbe:mint` in der Kopfzeile; acht Töne zur Auswahl) (Auswahl aller darstellbaren Unicode-Emojis oder Eingabe über den System-Emoji-Picker). Abschnitte mit 2 bis 5 Spalten, einklappbare Boxen (Accordions; Titel und Inhalt direkt im Text bearbeitbar – im Editor zugeklappt wie im Artikel, der Pfeil vor dem Titel klappt auf) – beide ineinander verschachtelbar. Ausrichtungsblöcke (`:::align center`). Synchronisierte Abschnitte: `:::baustein <kennung>` hält einen Text an einer Stelle, `:::einbau <seite>#<kennung>` zeigt ihn auf beliebig vielen anderen Seiten – geändert wird nur in der Quelle. Vorhandene Absätze lassen sich nachträglich dazu machen (markieren → „Umwandeln in …“ → „Synchronisierter Abschnitt“), ohne dass sich am Text etwas ändert. Aufgelöst wird beim Anzeigen über die gewöhnliche Schnittstelle, damit die Leserechte der Quellseite von allein gelten; im öffentlichen Bereich erscheint nur, was dort freigegeben ist. Rückverweise zeigen der Quellseite, wer sie einbindet. Gespeichert wird Markdown mit `:::`-Blöcken; bestehende Seiten funktionieren unverändert. Tabellen, Callouts, einklappbare Boxen, Spalten und Ausrichtungsblöcke lassen sich im Editor nicht mit Entfernen oder Rücktaste löschen – nur über ihr Inline-Menü; ein versehentlicher Tastendruck würde sonst eine Marke entfernen und beim Speichern den ganzen Abschnitt auflösen.
 - Die Übersicht (`/wiki`) listet jeden Abschnitt mit allem, was darunter liegt – verschachtelt bis zur dritten Ebene; tiefer steht, wie viele Seiten noch folgen. Darunter „zuletzt besucht“ und „zuletzt geändert“.
 - Die erste Überschrift im Text ist zugleich der Seitentitel – wie in Docmost. Wer sie ändert, benennt die Seite um; ein eigenes Titelfeld gibt es nicht mehr. Einsortiert wird eine Seite durch Ziehen im Seitenbaum links (auf eine Seite ziehen macht sie zur Unterseite).
 - Die Kopfzeile bleibt beim Scrollen stehen und ist wie in Docmost aufgeteilt: links der Pfad zur Seite mit den Symbolen der Ebenen, rechts der Umschalter Lesen/Bearbeiten, Kommentare, Teilen, ein Knopf für das Inhaltsverzeichnis und „⋯“ für alles Weitere (Verlauf, Merkliste, Beobachten, Export, Drucken, Vorlage, Duplizieren, Papierkorb). Unter der Überschrift steht, wer die Seite angelegt hat – ein Klick darauf zeigt Ersteller und Mitwirkende –, daneben ein Knopf, der rechts die Angaben zur Seite aufklappt: Herkunft, Zeitpunkte, Wörter, Zeichen, Lesezeit und die Verweise in beide Richtungen.
@@ -42,6 +42,19 @@
 
 **Anmeldeseite**
 - Slideshow mit zufälligen Bildern aus den Spots (langsam wandernd, überblendet; abschaltbar mit `LOGIN_SLIDESHOW=false`, respektiert „Bewegung reduzieren“). Die Bilder werden über signierte, 24 h gültige Links ausgeliefert. Link zum öffentlichen Wiki.
+
+**Prüfungen** (nur für Nutzer mit dem Zusatzrecht „Prüfer“)
+- Lehrgänge mit Titel, Nummer, Zeitraum, Ort, Status, Lehrgangsleitung und Referierenden (aus den Nutzern gewählt oder als Freitext für Externe). Liste mit Suche, Jahresfilter, Teilnehmerzahl, Fortschritt („18/24 Leistungen abgenommen“) und offenen Mängeln.
+- Zwei Stufen innerhalb des Bereichs: **Lehrgangsleitung** (wer im Lehrgang mit Leitungsfunktion eingetragen ist) und Administration legen Lehrgänge, Teilnehmende, Voraussetzungen und Leistungen an, ändern und löschen sie; alle anderen Prüfenden – etwa Referierende – nehmen Prüfungen ab und haken Voraussetzungen ab. Wer einen Lehrgang anlegt, wird automatisch seine Leitung.
+- Je Teilnehmendem ein Profilbild, ein freier Kommentar der Prüfenden und das **Lehrgangsergebnis** der Leitung (bestanden / nicht bestanden). Mit dem Ergebnis sind die Prüfungsdaten der Person eingefroren – keine neuen Versuche, Medien oder Haken, bis die Leitung das Ergebnis aufhebt.
+- Beispieldaten (ein SR1- und ein SR2-Lehrgang nach der Checkliste „Beurteilung Strömungsretter 2“) legt die Administration per Knopf in der Lehrgangsliste oder mit `python -m app.beispieldaten` an.
+- **Import** der Teilnehmerliste (.xlsx, etwa die ISC-Checkliste „Voraussetzungen“ mit allgemeinen Lehrgangsinformationen): Die Datei wird vorab gelesen und in einer Vorschau gezeigt – erkannte Spalten, Zuordnung (Stammdaten, Voraussetzung, weitere Angabe, ignorieren) per Auswahl korrigierbar, Warnungen zu Leerzeilen und Duplikaten. Kopfzeilen der Datei (Nummer, Titel, Zeitraum, Ort) füllen leere Lehrgangsfelder; Spalten mit ja/nein werden zu **Voraussetzungen** des Lehrgangs, bereits erfüllte Häkchen werden übernommen und als „importiert“ protokolliert. Ein zweiter Import derselben Liste aktualisiert statt zu verdoppeln.
+- **Voraussetzungen** je Teilnehmendem abhaken – unter jedem Haken steht klein, wer ihn wann gesetzt hat; jede Änderung bleibt im Verlauf. Teilnehmende mit offenen Voraussetzungen sind markiert.
+- **Prüfungsleistungen** mit Beschreibung (Editor wie im Wiki) und optionalem Zeitansatz; sortierbar. Ein Lehrgang lässt sich samt Leistungen und Voraussetzungs-Definitionen **kopieren** – ohne Teilnehmende und Ergebnisse.
+- **Prüfungen abnehmen** in einer Matrix Teilnehmende × Leistungen, auf dem Telefon als Liste je Leistung oder je Teilnehmendem. Der Bewertungsdialog hat eine **Stoppuhr** (nur bei Zeitansatz; überlebt Neuladen und Bildschirmsperre, weil der Startzeitpunkt im Browser liegt), ein immer manuell befüllbares Zeitfeld, große Knöpfe 👍 bestanden / 👎 mangelhaft, einen Kommentar (Pflicht bei mangelhaft) und Bilder/Videos direkt von der Kamera. Jede Bewertung trägt Prüfer und Zeitpunkt; Änderungen werden als „bearbeitet von … am …“ gekennzeichnet, der alte Stand bleibt im Verlauf.
+- **Nachprüfung** als zusätzlicher Versuch; die Erstprüfung bleibt sichtbar, für die Matrix zählt der letzte Versuch.
+- **Mängel / Feedback**: alle mangelhaften Leistungen je Teilnehmendem mit Kommentar, Medien, Zeit, Prüfer und Stand der Nachprüfung – filterbar und als Druckansicht für das Feedbackgespräch.
+- Die Medien liegen in einem eigenen Ordner und werden nur an Prüfer ausgeliefert.
 
 ## Schnellstart
 
@@ -86,7 +99,24 @@ Nach einem Update gilt: Wer die Anwendung im Browser offen hat, lädt die Seite 
 
 ## Konfiguration
 
-Alle Einstellungen stehen in `.env` (Vorlage: `.env.example`):
+Beim ersten Start richtet `.env` die Anlage ein (Vorlage: `.env.example`). Danach lässt sich
+fast alles davon **im Browser** ändern: **Verwaltung → Einstellungen**. Jedes Feld zeigt dort,
+woher sein geltender Wert kommt – hier gesetzt, aus der `.env` oder eingebaute Vorgabe – und
+lässt sich einzeln zurücksetzen.
+
+Ein im Browser gesetzter Wert hat **Vorrang** vor der `.env`. Andernfalls ließe sich etwas
+einstellen, ohne dass es wirkt, und der Grund stünde in einer Datei auf dem Server. Die Werte
+liegen in der Datenbank und gelten sofort in allen Arbeitsprozessen; ein Neustart ist für keine
+Einstellung nötig.
+
+Nur in der `.env` einstellbar bleiben `SECRET_KEY`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `DATA_DIR`
+und `VIDEOPFLEGE`. Das Mailkennwort wird gespeichert, aber nie wieder ausgeliefert – auch nicht
+an Administratoren.
+
+> **Notausgang:** Hat eine Einstellung die Anwendung unbedienbar gemacht – der klassische Fall
+> ist `COOKIE_SECURE` an, während der Zugriff über einfaches HTTP läuft –, käme niemand mehr an
+> die Oberfläche, um sie zurückzunehmen. Dafür gibt es `EINSTELLUNGEN_AUS=1`: Damit gilt wieder
+> allein die `.env`, die gespeicherten Werte bleiben erhalten.
 
 | Variable | Bedeutung |
 | --- | --- |
@@ -108,6 +138,7 @@ Alle Einstellungen stehen in `.env` (Vorlage: `.env.example`):
 | `SAT_LABELS_URL` | Beschriftungsebenen über dem Luftbild (Straßen, Orts- und Gewässernamen), mehrere durch Komma; leer = keine |
 | `TILE_ATTRIBUTION`, `TOPO_ATTRIBUTION`, `SAT_ATTRIBUTION` | Rechtehinweise unter der Karte (leer = Vorgaben von OSM, OpenTopoMap und Esri) |
 | `VIDEOPFLEGE` | `0` schaltet den Hintergrundlauf ab, der nach dem Start Bestandsvideos nach H.264 wandelt (Standard: an) |
+| `EINSTELLUNGEN_AUS` | `1` setzt alle im Browser gespeicherten Werte außer Kraft – dann gilt allein diese Datei |
 | `GEOCODE_URL` | Adresssuche beim Platzieren von Bildern (leer = abgeschaltet). Die öffentliche Nominatim-Adresse erlaubt eine Anfrage je Sekunde; wer viel sucht, betreibt eine eigene. |
 
 Ohne `ADMIN_EMAIL`/`ADMIN_PASSWORD` wird der erste Nutzer, der ein Konto anfragt, sofort Administrator. Ohne SMTP werden Kontoanfragen nicht per Mail gemeldet – offene Anfragen stehen aber immer oben unter „Nutzer“.
@@ -138,8 +169,35 @@ DNS der Absenderdomain. Empfänger prüfen drei Dinge:
 
 Die Anwendung tut, was von ihrer Seite möglich ist: `Message-ID` und `Auto-Submitted` in jeder
 Mail, der Anzeigename als ein sauber kodiertes Wort, und die Antwort des Mailservers landet im
-Log statt im Nichts. **Testmail senden** in der Nutzerverwaltung verschickt eine Probemail und
+Log statt im Nichts. **Testmail senden** in der Verwaltung verschickt eine Probemail und
 zeigt wörtlich, was der Mailserver dazu sagt – Verbindung, Anmeldung, abgewiesener Empfänger.
+
+### Wenn Mails trotzdem im Spam landen
+
+In der Reihenfolge, in der es sich lohnt:
+
+1. **Die Absenderdomain.** Sie wiegt schwerer als alles andere. Exotische Endungen (`.tech`,
+   `.xyz`, `.top`) werden von manchen Empfängern pauschal abgewiesen – die DLRG-Server tun
+   genau das (`550 5.7.1 Absender-TLD nicht erlaubt`). Eine `.de`-Domain, die zur Seite gehört,
+   löst dieses Problem vollständig und ist durch nichts zu ersetzen.
+2. **SPF, DKIM und DMARC vollständig** auf ebendieser Domain. Alle drei, nicht zwei davon.
+   Bei DMARC mit `p=none` anfangen und die Berichte lesen, bevor auf `quarantine` oder
+   `reject` gestellt wird.
+3. **Ausrichtung.** Die Domain im Umschlagabsender muss zu der in `MAIL_FROM` passen, sonst
+   scheitert DMARC trotz gültigem SPF. Beides steht unter Verwaltung → Einstellungen → E-Mail.
+4. **Rückwärtsauflösung (PTR)** der versendenden IP auf einen Namen der Domain, und dieser
+   Name wieder auf die IP. Fehlt sie, stuft fast jeder Empfänger herab.
+5. **Ein bedienter Posteingang** hinter der Absenderadresse. `noreply@` ist verbreitet und
+   wird trotzdem schlechter bewertet als eine Adresse, an die man antworten kann.
+6. **Über einen Versanddienst schicken** (Postmark, Brevo, Mailjet, der Mailserver des
+   Hosters), statt selbst zuzustellen. Deren Adressbereiche haben einen Ruf, ein einzelner
+   Server hat keinen. Bei den meisten heißt das: `SMTP_ENVELOPE_FROM` auf eine Adresse ihrer
+   Domain setzen, `MAIL_FROM` bleibt die eigene.
+7. **Aufwärmen.** Eine Domain, die jahrelang nichts verschickt hat und plötzlich Mails an
+   dieselbe Empfängerdomain schickt, fällt auf. Erst wenige, dann mehr.
+
+Nicht zielführend: den Text umschreiben, Bilder weglassen oder auf Wörter wie „Passwort“
+verzichten. Bei transaktionalen Mails entscheidet fast ausschließlich die Absenderdomain.
 
 ## Daten und Sicherung
 
@@ -197,6 +255,8 @@ pip install -r requirements.txt
 python run.py                 # http://127.0.0.1:8080, Daten in ./data
 python tests/test_smoke.py    # Rauchtest über die API (Login, Upload, EXIF, Rechte, Wiki, Reset)
                               # und Härtungstest (Freigaben, alte Adressen, Anmeldebremse, Grenzen)
+python tests/test_pruefungen.py         # Prüfungsbereich (Rechte, Excel-Import, Kopieren, Nachprüfung, Medien)
+python tests/test_pruefungen_import.py  # Excel-Erkennung
 ```
 
 Die JavaScript-Bibliotheken liegen im Arbeitsbaum unter `app/static/vendor/` und werden im Docker-Build noch einmal frisch geladen und gegen `vendor.sha256` geprüft.
@@ -218,12 +278,15 @@ app/
   api_albums.py    Alben, Bilder, Kartendaten
   api_wiki.py      Seiten, Versionen, Suche, Freigaben, Kommentare, öffentliche API, Datei-Upload, Export
   api_admin.py     Nutzerverwaltung
+  api_pruefungen.py  Prüfungen: Lehrgänge, Teilnehmende, Voraussetzungen, Leistungen, Versuche, Medien, Mängel, Import, Rechte
+  beispieldaten.py   Beispiel-Lehrgänge SR1/SR2 (Knopf für die Administration oder python -m app.beispieldaten)
+  pruefungen_import.py  Excel-Teilnehmerlisten lesen (Kopfzeile finden, Spalten zuordnen, ja/nein deuten) – ohne Flask
   images.py        EXIF (GPS, Höhe, Zeit), Ausrichtung, Thumbnails, HEIC, Videos nach H.264
   medienpflege.py  Bestandsvideos nach dem Start im Hintergrund wandeln (eine Sperre, ein Arbeiter)
   db.py            SQLite-Schema, Migrationen, Transaktionsklammer
   mailer.py        SMTP-Versand (ohne SMTP_HOST landet die Mail im Log)
   templates/       Jinja-Seiten
-  static/css/      app.css – ein Blatt für alle Ansichten
+  static/css/      app.css – ein Blatt für alle Ansichten; pruefungen.css nur für den Prüfungsbereich
   static/fonts/    DLRG Univers als WOFF2 (Regular, Kursiv, Fett)
   static/img/      Favicon, optional die DLRG-Wortmarke
   static/vendor/   Leaflet, markercluster, marked, DOMPurify, Toast UI (im Docker-Build geladen)
@@ -235,9 +298,12 @@ app/
                    wiki.js         Editor, Seitenbaum, Kommentare, Teilen, Verlauf
                    public.js       öffentliches Wiki
                    map.js          Karte, Alben, Upload, Lokalisieren, Bild-Detail
+                   pruefungen.js   Lehrgänge, Voraussetzungen, Bewertungsmatrix, Stoppuhr, Mängel, Excel-Import
                    admin.js, auth.js, profile.js
 tests/
   test_smoke.py    Rauch- und Härtungstest über die API
+  test_pruefungen.py  Prüfungsbereich: Rechte, Import, Kopieren, Pflichtkommentar, Nachprüfung, Medien, Mängel
+  test_pruefungen_import.py  Excel-Erkennung mit synthetischen Dateien
   rundlauf.html    Rundlauf, Rückgängig-Verlauf und verbundene Zellen im Browser prüfen (Datei einfach öffnen)
   gleichstand.html Leseansicht und Editor nebeneinander messen (Datei einfach öffnen)
   nachgeholtes_speichern.html

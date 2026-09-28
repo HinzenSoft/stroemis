@@ -175,6 +175,158 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   created_at    TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_login_attempts ON login_attempts(scope, created_at);
+
+-- Einstellungen, die im Browser geändert werden. Sie liegen ÜBER der .env: Ein Wert, der sich
+-- hier ändern lässt, ohne zu wirken, wäre schlimmer als gar keine Einstellung. Gespeichert wird
+-- immer Text; wie er zu lesen ist, steht in app/einstellungen.py.
+-- In der Datenbank statt im Speicher, weil Gunicorn die Anwendung in jedem Arbeitsprozess
+-- getrennt startet – sonst verhielte sich die Seite bei jedem zweiten Aufruf anders.
+CREATE TABLE IF NOT EXISTS einstellungen (
+  schluessel    TEXT PRIMARY KEY,
+  wert          TEXT NOT NULL DEFAULT '',
+  geaendert_am  TEXT NOT NULL,
+  geaendert_von INTEGER
+);
+
+-- --- Prüfungen: Lehrgänge, Teilnehmende, Voraussetzungen, Prüfungsleistungen, Versuche, Medien ----------
+-- Wer etwas gesetzt, geprüft oder hochgeladen hat, steht als Kennung UND als Name in der Zeile: Die
+-- Nachvollziehbarkeit einer Prüfung darf nicht daran hängen, dass das Konto des Prüfers noch besteht.
+CREATE TABLE IF NOT EXISTS pruef_lehrgaenge (
+  id              INTEGER PRIMARY KEY,
+  titel           TEXT NOT NULL,
+  nummer          TEXT NOT NULL DEFAULT '',
+  datum_von       TEXT,                           -- 'YYYY-MM-DD'
+  datum_bis       TEXT,
+  ort             TEXT NOT NULL DEFAULT '',
+  beschreibung    TEXT NOT NULL DEFAULT '',
+  status          TEXT NOT NULL DEFAULT 'geplant', -- geplant | laufend | abgeschlossen
+  created_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_by_name TEXT NOT NULL DEFAULT '',
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pruef_ausbilder (
+  id            INTEGER PRIMARY KEY,
+  lehrgang_id   INTEGER NOT NULL REFERENCES pruef_lehrgaenge(id) ON DELETE CASCADE,
+  user_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,   -- NULL = externer Ausbilder (Freitext)
+  name          TEXT NOT NULL DEFAULT '',
+  funktion      TEXT NOT NULL DEFAULT '',        -- Lehrgangsleitung | Ausbilder | frei
+  sortierung    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_pruef_ausbilder_lehrgang ON pruef_ausbilder(lehrgang_id);
+
+CREATE TABLE IF NOT EXISTS pruef_teilnehmer (
+  id            INTEGER PRIMARY KEY,
+  lehrgang_id   INTEGER NOT NULL REFERENCES pruef_lehrgaenge(id) ON DELETE CASCADE,
+  name          TEXT NOT NULL,                    -- Nachname
+  vorname       TEXT NOT NULL DEFAULT '',
+  geburtsdatum  TEXT,                             -- 'YYYY-MM-DD'
+  gliederung    TEXT NOT NULL DEFAULT '',
+  email         TEXT NOT NULL DEFAULT '',
+  bemerkung     TEXT NOT NULL DEFAULT '',
+  extra         TEXT NOT NULL DEFAULT '{}',       -- weitere Spalten aus dem Excel-Import als JSON
+  sortierung    INTEGER NOT NULL DEFAULT 0,
+  created_at    TEXT NOT NULL,
+  bild          TEXT NOT NULL DEFAULT '',         -- Profilbild unter media/pruefungen/avatar
+  kommentar     TEXT NOT NULL DEFAULT '',         -- freier Kommentar der Prüfenden zur Person
+  -- Lehrgangsergebnis der Leitung. Ist es gesetzt, sind die Prüfungsdaten der Person eingefroren.
+  ergebnis          TEXT,                         -- 'bestanden' | 'nicht_bestanden' | NULL
+  ergebnis_von      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  ergebnis_von_name TEXT NOT NULL DEFAULT '',
+  ergebnis_am       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_pruef_tn_lehrgang ON pruef_teilnehmer(lehrgang_id);
+
+CREATE TABLE IF NOT EXISTS pruef_voraussetzungen (
+  id            INTEGER PRIMARY KEY,
+  lehrgang_id   INTEGER NOT NULL REFERENCES pruef_lehrgaenge(id) ON DELETE CASCADE,
+  bezeichnung   TEXT NOT NULL,
+  sortierung    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_pruef_vor_lehrgang ON pruef_voraussetzungen(lehrgang_id);
+
+-- Der aktuelle Haken je Teilnehmer und Voraussetzung …
+CREATE TABLE IF NOT EXISTS pruef_voraussetzung_status (
+  teilnehmer_id     INTEGER NOT NULL REFERENCES pruef_teilnehmer(id) ON DELETE CASCADE,
+  voraussetzung_id  INTEGER NOT NULL REFERENCES pruef_voraussetzungen(id) ON DELETE CASCADE,
+  erfuellt          INTEGER NOT NULL DEFAULT 0,
+  gesetzt_von       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  gesetzt_von_name  TEXT NOT NULL DEFAULT '',
+  gesetzt_am        TEXT NOT NULL,
+  quelle            TEXT NOT NULL DEFAULT 'manuell',   -- manuell | import
+  PRIMARY KEY (teilnehmer_id, voraussetzung_id)
+);
+-- … und jeder Vorgang daran: Auch das Entfernen eines Hakens bleibt nachlesbar.
+CREATE TABLE IF NOT EXISTS pruef_voraussetzung_verlauf (
+  id                INTEGER PRIMARY KEY,
+  teilnehmer_id     INTEGER NOT NULL REFERENCES pruef_teilnehmer(id) ON DELETE CASCADE,
+  voraussetzung_id  INTEGER NOT NULL REFERENCES pruef_voraussetzungen(id) ON DELETE CASCADE,
+  erfuellt          INTEGER NOT NULL,
+  user_id           INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  user_name         TEXT NOT NULL DEFAULT '',
+  zeit              TEXT NOT NULL,
+  quelle            TEXT NOT NULL DEFAULT 'manuell'
+);
+CREATE INDEX IF NOT EXISTS idx_pruef_vverlauf ON pruef_voraussetzung_verlauf(teilnehmer_id, voraussetzung_id);
+
+CREATE TABLE IF NOT EXISTS pruef_leistungen (
+  id                   INTEGER PRIMARY KEY,
+  lehrgang_id          INTEGER NOT NULL REFERENCES pruef_lehrgaenge(id) ON DELETE CASCADE,
+  bezeichnung          TEXT NOT NULL,
+  beschreibung_md      TEXT NOT NULL DEFAULT '',
+  zeitansatz_sekunden  INTEGER,                   -- NULL = kein Zeitansatz, keine Stoppuhr
+  sortierung           INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_pruef_leist_lehrgang ON pruef_leistungen(lehrgang_id);
+
+-- Ein Prüfungsversuch. Die Nachprüfung ist ein weiterer Versuch derselben Zelle; der erste bleibt stehen.
+CREATE TABLE IF NOT EXISTS pruef_versuche (
+  id                  INTEGER PRIMARY KEY,
+  teilnehmer_id       INTEGER NOT NULL REFERENCES pruef_teilnehmer(id) ON DELETE CASCADE,
+  leistung_id         INTEGER NOT NULL REFERENCES pruef_leistungen(id) ON DELETE CASCADE,
+  versuch_nr          INTEGER NOT NULL,
+  ist_nachpruefung    INTEGER NOT NULL DEFAULT 0,
+  ergebnis            TEXT NOT NULL,              -- bestanden | mangelhaft
+  zeit_sekunden       INTEGER,
+  kommentar           TEXT NOT NULL DEFAULT '',
+  geprueft_von        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  geprueft_von_name   TEXT NOT NULL DEFAULT '',
+  geprueft_am         TEXT NOT NULL,
+  bearbeitet_von      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  bearbeitet_von_name TEXT NOT NULL DEFAULT '',
+  bearbeitet_am       TEXT,
+  UNIQUE (teilnehmer_id, leistung_id, versuch_nr)
+);
+CREATE INDEX IF NOT EXISTS idx_pruef_versuche_leistung ON pruef_versuche(leistung_id);
+
+-- Der überschriebene Stand einer Bewertung: Was galt von wann bis wann, und wer hatte es geschrieben.
+CREATE TABLE IF NOT EXISTS pruef_versuch_verlauf (
+  id             INTEGER PRIMARY KEY,
+  versuch_id     INTEGER NOT NULL REFERENCES pruef_versuche(id) ON DELETE CASCADE,
+  ergebnis       TEXT NOT NULL,
+  zeit_sekunden  INTEGER,
+  kommentar      TEXT NOT NULL DEFAULT '',
+  von_user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  von_name       TEXT NOT NULL DEFAULT '',
+  stand_ab       TEXT NOT NULL,
+  ersetzt_am     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pruef_vsverlauf ON pruef_versuch_verlauf(versuch_id);
+
+CREATE TABLE IF NOT EXISTS pruef_medien (
+  id                    INTEGER PRIMARY KEY,
+  versuch_id            INTEGER NOT NULL REFERENCES pruef_versuche(id) ON DELETE CASCADE,
+  file                  TEXT NOT NULL,            -- Dateiname unter media/pruefungen/orig
+  kind                  TEXT NOT NULL DEFAULT 'image',   -- image | video
+  original_name         TEXT NOT NULL DEFAULT '',
+  width                 INTEGER,
+  height                INTEGER,
+  hochgeladen_von       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  hochgeladen_von_name  TEXT NOT NULL DEFAULT '',
+  hochgeladen_am        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pruef_medien_versuch ON pruef_medien(versuch_id);
 """
 
 
@@ -223,6 +375,20 @@ MIGRATIONS = [
     ("wiki_pages", "deleted_batch", "TEXT"),
     # Profilbild: der Dateiname unter media/avatar. Leer heißt: es werden die Initialen gezeigt.
     ("users", "avatar", "TEXT NOT NULL DEFAULT ''"),
+    # Wann sich der Nutzer zuletzt angemeldet hat. Leer heißt: seit Einführung dieser Spalte
+    # nicht mehr – ein Konto, das nie benutzt wird, sieht man der Liste sonst nicht an.
+    ("users", "last_login", "TEXT"),
+    # Zusatzrecht „Prüfer“: kommt zur Rolle hinzu, ersetzt sie nicht. Ein Redakteur kann also
+    # zugleich Prüfungen abnehmen. Nur wer das Flag trägt, sieht den Bereich – auch ein Administrator
+    # muss es sich geben (lassen).
+    ("users", "is_pruefer", "INTEGER NOT NULL DEFAULT 0"),
+    # Prüfungen, zweite Runde: Profilbild, freier Kommentar und Lehrgangsergebnis je Teilnehmenden.
+    ("pruef_teilnehmer", "bild", "TEXT NOT NULL DEFAULT ''"),
+    ("pruef_teilnehmer", "kommentar", "TEXT NOT NULL DEFAULT ''"),
+    ("pruef_teilnehmer", "ergebnis", "TEXT"),
+    ("pruef_teilnehmer", "ergebnis_von", "INTEGER"),
+    ("pruef_teilnehmer", "ergebnis_von_name", "TEXT NOT NULL DEFAULT ''"),
+    ("pruef_teilnehmer", "ergebnis_am", "TEXT"),
 ]
 
 
