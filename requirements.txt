@@ -6,3 +6,5 @@ itsdangerous==2.2.0
 gunicorn==23.0.0
 Pillow==11.2.1
 pillow-heif==0.22.0
+# Excel-Import der Teilnehmerlisten im Prüfungsbereich (.xlsx lesen)
+openpyxl==3.1.5

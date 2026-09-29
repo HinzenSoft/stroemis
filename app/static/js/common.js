@@ -14,7 +14,12 @@ window.S = (function () {
     try {
       res = await fetch(path, init);
     } catch (e) {
-      throw new Error("Keine Verbindung zum Server.");
+      // Kein Serverstatus: Das Netz war weg, der Server nicht erreichbar oder die Anfrage
+      // abgebrochen. Das ist etwas anderes als "gibt es nicht" – wer beides gleich behandelt,
+      // behauptet bei jedem Wacklen, der Inhalt existiere nicht.
+      const netz = new Error("Keine Verbindung zum Server.");
+      netz.status = 0;
+      throw netz;
     }
     if (res.status === 401 && !path.startsWith("/api/auth/")) {
       location.href = "/login?next=" + encodeURIComponent(location.pathname);
@@ -22,11 +27,40 @@ window.S = (function () {
     }
     let data = {};
     try { data = await res.json(); } catch (e) { /* leer */ }
-    if (!res.ok) throw new Error(data.error || ("Fehler " + res.status));
+    if (!res.ok) {
+      // Der Status gehört an den Fehler: Nur damit lässt sich später "gibt es nicht" (404/403)
+      // von "gerade nicht erreichbar" (0, 5xx) unterscheiden.
+      const err = new Error(data.error || ("Fehler " + res.status));
+      err.status = res.status;
+      throw err;
+    }
     return data;
   }
 
   let toastTimer;
+  /* Ist ein Dialog offen, erscheint die Meldung bei IHM statt am unteren Fensterrand: Auf einem
+     großen, hohen Bildschirm sitzt ein mittig geöffneter Dialog oft weit über dem unteren Rand –
+     eine Fehlermeldung dort ("Bitte einen Titel angeben") blieb unbemerkt, während der Blick noch
+     auf dem Formular lag. Ist über dem Dialog Platz, schwebt die Meldung wie eine Fahne darüber;
+     füllt der Dialog fast den Bildschirm (Telefon), rutscht sie stattdessen in seinen oberen Rand.
+     Berechnet wird das bei jedem Aufruf neu – der Dialog bewegt sich während der kurzen Anzeigezeit
+     ohnehin nicht. */
+  function toastPositionieren(el) {
+    const offene = document.querySelectorAll("dialog[open]");
+    const dlg = offene[offene.length - 1];   // zuletzt geöffnet liegt oben (z. B. eine Rückfrage)
+    if (!dlg) { el.classList.remove("bei-dialog", "bei-dialog-innen"); return; }
+    const r = dlg.getBoundingClientRect();
+    el.style.setProperty("--toast-x", Math.round(r.left + r.width / 2) + "px");
+    el.classList.add("bei-dialog");
+    if (r.top > 64) {
+      el.style.setProperty("--toast-y", Math.round(r.top - 10) + "px");
+      el.classList.remove("bei-dialog-innen");
+    } else {
+      el.style.setProperty("--toast-y", Math.round(r.top + 10) + "px");
+      el.classList.add("bei-dialog-innen");
+    }
+  }
+
   /* Der Toast liegt als Popover in der obersten Ebene des Browsers – über dem Backdrop eines
      modalen Dialogs. Sonst stand „Bitte einen Nutzer wählen“ gedimmt HINTER dem Dialog, aus
      dem die Meldung kam. Ältere Browser ohne Popover zeigen ihn wie bisher. */
@@ -35,6 +69,10 @@ window.S = (function () {
     if (!el) return;
     el.textContent = msg;
     el.className = "show" + (isError ? " err" : "");
+    // Ein Fehler unterbricht sofort (assertive), eine Bestätigung wartet, bis eine Sprechpause ist.
+    el.setAttribute("role", isError ? "alert" : "status");
+    el.setAttribute("aria-live", isError ? "assertive" : "polite");
+    toastPositionieren(el);
     try { if (!el.hasAttribute("popover")) el.setAttribute("popover", "manual"); el.showPopover(); } catch (e) { /* kein Popover */ }
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {
@@ -49,8 +87,10 @@ window.S = (function () {
     const body = document.getElementById("dlg-body");
     body.innerHTML = html;
     body.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => dlg.close()));
-    if (onOpen) onOpen(dlg, body);
+    // Erst öffnen, dann onOpen: Ein geschlossener Dialog ist display:none – focus() und
+    // scrollIntoView() darin liefen ins Leere, und der Fokus landete auf dem ersten Element.
     if (!dlg.open) dlg.showModal();
+    if (onOpen) onOpen(dlg, body);
     return dlg;
   }
 
@@ -94,6 +134,41 @@ window.S = (function () {
       location.href = "/login";
     }
   });
+
+  /* Sichtbarer Ausschnitt: Auf dem iPhone nimmt die Tastatur die halbe Höhe, aber 100dvh weiß davon
+     nichts. Ein Dialog blieb deshalb bildschirmhoch, sein Inhalt hatte nichts zu rollen, und iOS
+     schob stattdessen den ganzen Ausschnitt hin und her – „Scrollen geht nicht mehr“. Die beiden
+     Variablen tragen Höhe und Versatz des tatsächlich sichtbaren Bereichs, die Klasse „tastatur“
+     sagt, dass er deutlich kleiner ist als das Fenster; app.css begrenzt offene Dialoge damit.
+     Android (interactive-widget=resizes-content) verkleinert das Fenster selbst – dort greift nichts. */
+  (function sichtbarerAusschnitt() {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const root = document.documentElement;
+    let tick = null, warTastatur = false;
+    const setzen = () => {
+      tick = null;
+      root.style.setProperty("--vv-h", Math.round(vv.height) + "px");
+      root.style.setProperty("--vv-top", Math.round(vv.offsetTop) + "px");
+      // Beim Hineinzoomen schrumpft der Ausschnitt ebenfalls – das ist keine Tastatur.
+      const tastatur = vv.scale <= 1.01 && vv.height < window.innerHeight - 100;
+      root.classList.toggle("tastatur", tastatur);
+      // Gerade aufgegangen: Das Feld mit dem Fokus in den nun kleineren Dialog holen – iOS hat es
+      // vorher nur im großen Ausschnitt sichtbar gemacht.
+      if (tastatur && !warTastatur) {
+        const ae = document.activeElement;
+        if (ae && ae.closest && ae.closest("dialog[open]") && (ae.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))) {
+          try { ae.scrollIntoView({ block: "center", inline: "nearest" }); } catch (e) { /* egal */ }
+        }
+      }
+      warTastatur = tastatur;
+    };
+    const planen = () => { if (tick == null) tick = requestAnimationFrame(setzen); };
+    vv.addEventListener("resize", planen);
+    vv.addEventListener("scroll", planen);
+    window.addEventListener("resize", planen);
+    setzen();
+  })();
 
   return { esc, api, toast, dialog, confirm, fmtDate, fmtCoord, CAT };
 })();

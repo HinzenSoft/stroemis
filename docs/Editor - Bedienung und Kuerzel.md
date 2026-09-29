@@ -284,10 +284,18 @@ Editor zeigt, wo er anfängt.
 
 Was schon dasteht, lässt sich nachträglich dazu machen: die Absätze markieren und in der
 Auswahlleiste unter *Umwandeln in …* den Eintrag *Synchronisierter Abschnitt* wählen. Abgefragt
-wird nur die Kennung; am Text selbst ändert sich nichts – Tabellen, Bilder und Hinweiskisten
-wandern Zeile für Zeile mit hinein. Die Auswahl muss dabei ganz innerhalb eines Abschnitts
-liegen: Was in einer Hinweiskiste beginnt und daneben endet, ließe sich nur einfassen, indem die
-Kiste zerschnitten wird – das lehnt der Editor ab.
+wird nur die Kennung – vorgeschlagen aus dem markierten Text; am Text selbst ändert sich nichts,
+Tabellen, Bilder und Hinweiskisten wandern Zeile für Zeile mit hinein.
+
+Reicht die Auswahl nur halb in eine Hinweiskiste oder eine einklappbare Box hinein, wird sie bis
+zu deren Grenzen **erweitert** und das angesagt. Ein Kasten lässt sich nicht teilen, und die
+Schlussmarke ist im Editor kaum zu treffen: Sie ist null Pixel hoch, eine gezogene Auswahl endet
+deshalb immer davor. Wer den ganzen Kasten meint, braucht gar nicht zu ziehen – ein Klick hinein,
+dann im Blockmenü *Zum synchronisierten Abschnitt machen*.
+
+Nur über eine **Spaltengrenze** hinweg geht es nicht: Da liegt der Trenner zwischen zwei Spalten,
+und ein Markenpaar darüber ließe ihn beim Speichern verschwinden. Dann entweder innerhalb einer
+Spalte auswählen oder den ganzen Spaltenabschnitt über sein Blockmenü nehmen.
 
 ```
 :::baustein sicherung-am-ufer
@@ -297,8 +305,12 @@ Immer zwei Personen, immer mit Sicht zum Wasser.
 :::
 ```
 
-Auf jeder anderen Seite holt *Abschnitt einbinden* ihn herein – Seite wählen, Abschnitt wählen,
-fertig. Die Liste führt alle Seiten des Wikis; das Suchfeld darüber engt sie ein:
+Auf jeder anderen Seite holt *Abschnitt einbinden* ihn herein. Die Liste führt **alle**
+synchronisierten Abschnitte des Wikis, die man lesen darf – mit Kennung, Herkunftsseite, den
+ersten Zeilen ihres Inhalts und der Zahl der Seiten, die sie schon zeigen. Gesucht wird über
+alles drei, man muss also weder die Seite noch die Kennung auswendig wissen. Aufgeführt ist, was
+gespeichert ist: Ein eben erst angelegter Abschnitt erscheint erst, wenn seine Seite gespeichert
+wurde.
 
 ```
 :::einbau ankertechnik#sicherung-am-ufer
@@ -312,12 +324,24 @@ Dabei gilt:
 - **Leserechte gelten weiter.** Der Abschnitt wird beim Anzeigen geholt, nicht beim Speichern
   eingesetzt. Wer die Quellseite nicht lesen darf, sieht einen Hinweis statt des Textes – im
   öffentlichen Bereich ebenso, solange die Quellseite nicht freigegeben ist.
+- **Der eingebundene Text sieht aus wie daheim.** Verbundene Tabellenzellen, Scrollbereich für
+  breite Tabellen, Kopierknopf am Code, Bildunterschrift und Vollbild, Anker an den Überschriften
+  – und die Überschriften stehen im Inhaltsverzeichnis der einbindenden Seite.
 - **Umbenennen trägt.** Bekommt die Quellseite einen neuen Namen, findet der Einbau sie weiter.
+  Die **Kennung** dagegen ist der Anker: Wer sie ändert, muss die einbindenden Seiten nachziehen.
+  Der Editor fragt vorher und nennt die betroffenen Seiten – ebenso vor *Abschnitt auflösen*,
+  *Abschnitt samt Inhalt löschen* und bevor die ganze Quellseite in den Papierkorb geht.
 - **Fehlt der Abschnitt**, steht an seiner Stelle, welcher auf welcher Seite fehlt – keine Lücke.
+  Ist der Server gerade nicht erreichbar, steht genau das da und nicht „gibt es nicht“.
 - **Rückverweise zeigen die Nutzer.** Unter dem Artikel der Quellseite steht unter *Was hierher
   verweist*, welche Seiten den Abschnitt einbinden (dieselbe Zahl auch in den Angaben zur Seite
-  unter *Verweise hierher*). Ein Blick dorthin, bevor man ihn ändert.
-- Ein Baustein darf selbst Einbauten enthalten, drei Ebenen tief.
+  unter *Verweise hierher*). Ein ⇄ davor trennt den Einbau vom gewöhnlichen Link.
+- **Am Einbau selbst** führt das Blockmenü *Anderen Abschnitt einbinden*, *Quellseite in neuem
+  Tab öffnen* und *Einbau entfernen*.
+- **Die Kennung** besteht aus Kleinbuchstaben, Ziffern und Strichen und darf kein `#` enthalten.
+  Zweimal dieselbe auf einer Seite geht nicht – eingebunden würde immer die obere.
+- Ein Baustein darf selbst Einbauten enthalten, drei Ebenen tief. Bindet er sich selbst ein,
+  sagt das Wiki es, statt den Text geschachtelt zu wiederholen.
 
 ## Tabellen
 
@@ -445,7 +469,8 @@ erneut gewählt hebt sie wieder auf.
   und der Kasten ist fort. Bei der einklappbaren Box gilt das auch für die Trennmarke zwischen
   Titel und Inhalt: Ohne sie wird beim Speichern der ganze Abschnitt zum Titel und die Box steht
   leer da. Innerhalb der Kästen ändert sich nichts: Dort wird getippt und gelöscht wie überall.
-  Der Baustein ist noch nicht geschützt.
+  Das gilt auch für den synchronisierten Abschnitt und den Einbau: Verschwindet eine ihrer
+  Marken, zerfällt der Abschnitt, und mit ihm die Kennung, über die andere Seiten ihn zeigen.
 - **In die Schilder der Marken lässt sich nicht schreiben.** Sie tragen das, was die Marke
   ausmacht – beim synchronisierten Abschnitt die Kennung. Gerät der Schreibstrich hinein, landet
   Getipptes und Eingefügtes unmittelbar dahinter, also am Anfang des Abschnitts.

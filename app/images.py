@@ -254,7 +254,10 @@ def store_upload(file_storage, media_dir, poster=None):
         file_storage.save(orig_path)
     except Exception as exc:
         _cleanup()
-        raise ValueError(f"Die Datei „{name}“ konnte nicht gespeichert werden ({exc}).")
+        # Der Grund (volle Platte, fehlende Rechte) nennt den Pfad auf dem Server – der gehört
+        # ins Protokoll, nicht in die Antwort.
+        logging.getLogger(__name__).warning("Upload „%s“ konnte nicht abgelegt werden: %s", name, exc)
+        raise ValueError(f"Die Datei „{name}“ konnte nicht gespeichert werden. Bitte später erneut versuchen.")
 
     if ext in VIDEO_EXT:
         meta = {"lat": None, "lon": None, "altitude": None, "taken_at": None}
@@ -287,6 +290,9 @@ def store_upload(file_storage, media_dir, poster=None):
         try:
             if poster is not None:
                 with Image.open(poster.stream) as img:
+                    # Dieselbe Pixelgrenze wie für Bilder: Ein riesiges Standbild bindet beim
+                    # Drehen und Kopieren sonst hunderte Megabyte je Anfrage.
+                    _pixel_pruefen(img, name)
                     img = ImageOps.exif_transpose(img)
                     if img.mode not in ("RGB", "L"):
                         img = img.convert("RGB")
@@ -303,7 +309,8 @@ def store_upload(file_storage, media_dir, poster=None):
                 _placeholder_poster(web_path, thumb_path)
             except Exception as exc:
                 _cleanup()
-                raise ValueError(f"Für „{name}“ ließ sich keine Vorschau anlegen ({exc}).")
+                logging.getLogger(__name__).warning("Vorschau für „%s“ konnte nicht angelegt werden: %s", name, exc)
+                raise ValueError(f"Für „{name}“ ließ sich keine Vorschau anlegen.")
         meta.update({"file": orig_name, "width": width, "height": height, "original_name": name,
                      "kind": "video"})
         return meta

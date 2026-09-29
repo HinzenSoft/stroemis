@@ -118,12 +118,19 @@ def can_read(page, user=None):
 
 def readable(rows):
     """Filtert eine Trefferliste auf das, was der angemeldete Nutzer lesen darf.
-    Ohne beschränkte Seiten in der Datenbank ist das ein No-Op."""
+    Ohne beschränkte Seiten in der Datenbank ist das ein No-Op.
+
+    Bringt eine Zeile schon "parent_id" und "created_by" mit, entfällt die Einzelabfrage je
+    Treffer. Das wurde bisher mit "in r" geprüft – und das ging bei jeder Datenbankzeile
+    daneben: sqlite3.Row durchsucht damit die WERTE, nicht die Spaltennamen. Der schnelle Weg
+    wurde deshalb nie genommen, und jede Trefferliste lief Zeile für Zeile durch _get_page
+    samt Ahnenlauf."""
     if not db.query("SELECT 1 FROM wiki_pages WHERE read_restricted = 1 LIMIT 1", one=True):
         return rows
     out = []
     for r in rows:
-        page = r if "created_by" in r and "parent_id" in r else _get_page(int(r["id"]))
+        spalten = set(r.keys()) if hasattr(r, "keys") else set()
+        page = r if {"created_by", "parent_id"} <= spalten else _get_page(int(r["id"]))
         if page and can_read(page):
             out.append(r)
     return out
@@ -218,7 +225,34 @@ _LINK_REF_RE = re.compile(r"\]\(\s*/wiki/([A-Za-z0-9][A-Za-z0-9\-_]*)")
 # Ein eingebundener Abschnitt (":::einbau seite#abschnitt") ist ein Verweis wie jeder andere –
 # er zählt sogar schwerer: Wer den Abschnitt auf der Quellseite ändert, ändert ihn hier mit.
 # Über die Rückverweise sieht man dort, wen das betrifft, bevor man ihn anfasst.
-_EINBAU_REF_RE = re.compile(r"^:::[ \t]*einbau[ \t]+([A-Za-z0-9][A-Za-z0-9\-_]*)\s*#", re.MULTILINE)
+# Bis zu drei Leerzeichen Einzug – genau so weit, wie der Renderer den Block noch erkennt.
+# Ohne diese Nachsicht wurde ein eingerückter Einbau zwar angezeigt, aber nie als Rückverweis
+# erfasst: Jede Warnung vor dem Löschen der Quelle hätte ihn übersehen.
+_EINBAU_REF_RE = re.compile(r"^[ \t]{0,3}:::[ \t]*einbau[ \t]+([A-Za-z0-9][A-Za-z0-9\-_]*)[ \t]*#",
+                            re.MULTILINE)
+# Dieselbe Zeile, aber vollständig: Seite und Kennung. Grundlage für die Verwendungszahl.
+_EINBAU_ZIEL_RE = re.compile(r"^[ \t]{0,3}:::[ \t]*einbau[ \t]+([A-Za-z0-9][A-Za-z0-9\-_]*)"
+                             r"[ \t]*#[ \t]*(\S[^\n]*?)[ \t]*$", re.MULTILINE)
+# Die Kopfzeile eines synchronisierten Abschnitts.
+_BAUSTEIN_RE = re.compile(r"^[ \t]{0,3}:::[ \t]*baustein[ \t]+(\S[^\n]*?)[ \t]*$", re.MULTILINE)
+_ZAUN_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
+
+
+def _ohne_code(content):
+    """Der Seiteninhalt ohne die Zeilen in Codeblöcken.
+
+    Ein ":::baustein beispiel" in einem Codebeispiel ist Text, kein Abschnitt – der Renderer
+    löst ihn zu Recht nie auf. Ohne diese Maske bot der Einbau-Dialog genau solche Zeilen als
+    wählbaren Abschnitt an, und der Einbau blieb danach für immer leer."""
+    raus, zaun = [], None
+    for zeile in (content or "").split("\n"):
+        m = _ZAUN_RE.match(zeile)
+        if m:
+            zaun = None if zaun and zeile.strip().startswith(zaun) else (zaun or m.group(1))
+            raus.append("")
+            continue
+        raus.append("" if zaun else zeile)
+    return "\n".join(raus)
 
 
 def link_refs(content):
@@ -438,6 +472,89 @@ def search():
         results.append({"id": r["id"], "title": r["title"], "slug": r["slug"],
                         "snippet": snippet, "terms": terms})
     return jsonify(results=readable(results), terms=terms)
+
+
+_TRENNZEILE_RE = re.compile(r"^[ \t]*\|[ \t:\-|]+\|[ \t]*$")
+
+
+def _auszug(zeilen):
+    """Ein lesbarer Anriss aus Markdown-Zeilen – für die Auswahlliste im Einbau-Dialog.
+
+    Die Rohschreibweise taugt dort nicht: Tabellenstriche, Rautenzeichen und Linkklammern
+    füllen den Platz, ohne etwas zu sagen. Gekürzt wird auf das, woran man den Abschnitt
+    wiedererkennt."""
+    text = []
+    for z in zeilen:
+        if _TRENNZEILE_RE.match(z) or z.strip().startswith(":::") or z.strip().startswith("```"):
+            continue
+        z = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", z)          # Bilder ganz weg
+        z = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", z)       # Links: nur der Text
+        z = re.sub(r"^[ \t]*[#>*+\-]+[ \t]*", "", z)          # Überschrift, Zitat, Aufzählung
+        # Der Vorsatz verbundener Zellen ("@cols=2:") ist Steuerzeichen, kein Text.
+        z = re.sub(r"@(?:cols|rows)=\d{1,3}:", "", z)
+        z = z.replace("|", " ").replace("*", "").replace("`", "")
+        text.append(z)
+    roh = plain_text(" ".join(text))
+    return roh[:160] + ("…" if len(roh) > 160 else "")
+
+
+def _bausteine_von(content):
+    """Alle synchronisierten Abschnitte eines Seiteninhalts – als (kennung, auszug).
+
+    Gelesen wird der gespeicherte Text, nicht die Anzeige. Der Auszug ist der Rumpf des
+    Abschnitts, damit im Einbau-Dialog zu erkennen ist, was man einbindet; ohne ihn stand dort
+    nur eine Kennung, und wer sie nicht selbst vergeben hat, musste raten."""
+    zeilen = _ohne_code(content).split("\n")
+    raus = []
+    for i, zeile in enumerate(zeilen):
+        m = _BAUSTEIN_RE.match(zeile)
+        if not m:
+            continue
+        tiefe, ende = 1, len(zeilen)
+        for j in range(i + 1, len(zeilen)):
+            z = zeilen[j].strip()
+            if z == ":::":
+                tiefe -= 1
+                if not tiefe:
+                    ende = j
+                    break
+            elif z.startswith(":::") and len(z) > 3:
+                tiefe += 1
+        auszug = _auszug(zeilen[i + 1:ende])
+        raus.append((m.group(1), auszug))
+    return raus
+
+
+@bp.get("/bausteine")
+@login_required
+def bausteine():
+    """Alle synchronisierten Abschnitte, die der Nutzer lesen darf – mit Auszug und der Zahl
+    der Seiten, die sie einbinden.
+
+    Vorher gab es das nicht, und der Einbau-Dialog behalf sich mit zwei Listen: erst eine Seite
+    wählen, dann sehen, ob darauf überhaupt ein Abschnitt liegt. Wer die Kennung kannte, aber
+    nicht die Seite, kam nie ans Ziel – und jeder Probeklick lud eine ganze Seite und trug einen
+    Besuch ein, der „Zuletzt besucht“ verwässerte.
+
+    Gezählt wird nur über Seiten, die der Nutzer lesen darf. Eine höhere Zahl auszuweisen als
+    Seiten zu nennen sind, verriete die Existenz beschränkter Seiten."""
+    rows = readable(db.query(
+        "SELECT id, title, slug, content, parent_id, created_by FROM wiki_pages "
+        "WHERE deleted_at IS NULL AND content LIKE '%:::%'"))
+    # Erst alle Einbauten sammeln: Sie stehen auf ANDEREN Seiten als der Abschnitt selbst.
+    verwendung = {}
+    for r in rows:
+        for m in _EINBAU_ZIEL_RE.finditer(_ohne_code(r["content"])):
+            verwendung.setdefault((m.group(1).lower(), m.group(2).lower()), []).append(r["title"])
+    katalog = []
+    for r in rows:
+        for kennung, auszug in _bausteine_von(r["content"]):
+            seiten = verwendung.get((r["slug"].lower(), kennung.lower()), [])
+            katalog.append({"slug": r["slug"], "title": r["title"], "kennung": kennung,
+                            "auszug": auszug, "verwendungen": len(seiten),
+                            "seiten": sorted(set(seiten))})
+    katalog.sort(key=lambda b: (b["title"].lower(), b["kennung"].lower()))
+    return jsonify(bausteine=katalog)
 
 
 @bp.get("/pages/<slug>")
@@ -952,9 +1069,20 @@ def backlinks(pid):
     if not can_read(p):
         return jsonify(error="Diese Seite ist nur für freigegebene Nutzer sichtbar."), 403
     rows = db.query(
-        "SELECT DISTINCT q.id, q.title, q.slug, q.icon FROM wiki_page_links l JOIN wiki_pages q ON q.id = l.page_id "
+        "SELECT DISTINCT q.id, q.title, q.slug, q.icon, q.content, q.parent_id, q.created_by "
+        "FROM wiki_page_links l JOIN wiki_pages q ON q.id = l.page_id "
         f"WHERE l.target_slug IN ({_ALLE_NAMEN}) AND q.id != ? AND q.deleted_at IS NULL "
         "ORDER BY q.title COLLATE NOCASE", (pid, pid, pid))
+    # Ein Einbau ist mehr als ein Verweis: Die andere Seite ZEIGT den Text dieser hier. Wer
+    # ihn ändert, ändert ihn dort mit; wer ihn löscht, reißt dort ein Loch. In der Tabelle
+    # stehen beide Arten nebeneinander, die Oberfläche warf sie in einen Topf.
+    namen = {p["slug"].lower()} | {r["slug"].lower() for r in db.query(
+        "SELECT slug FROM wiki_slugs WHERE page_id = ?", (pid,))}
+    herein = []
+    for r in readable(rows):
+        zeigt = {m.group(1).lower() for m in _EINBAU_REF_RE.finditer(_ohne_code(r["content"]))} & namen
+        herein.append({"id": r["id"], "title": r["title"], "slug": r["slug"],
+                       "icon": r["icon"], "einbau": bool(zeigt)})
     # Ausgehende Verweise stehen in derselben Tabelle, nur andersherum gelesen – die Angaben
     # zur Seite zeigen beide Richtungen. Ziel ist die Seite, die den Namen heute trägt oder
     # früher trug (siehe _ALLE_NAMEN).
@@ -963,7 +1091,7 @@ def backlinks(pid):
         "LEFT JOIN wiki_slugs s ON s.slug = l.target_slug "
         "JOIN wiki_pages q ON q.slug = l.target_slug OR q.id = s.page_id "
         "WHERE l.page_id = ? AND q.id != ? AND q.deleted_at IS NULL ORDER BY q.title COLLATE NOCASE", (pid, pid))
-    return jsonify(pages=readable(rows), outgoing=readable(out))
+    return jsonify(pages=herein, outgoing=readable(out))
 
 
 @bp.get("/pages/<int:pid>/contributors")

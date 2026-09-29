@@ -35,6 +35,9 @@
         <p class="notice">Kontoanfragen sind deaktiviert. Ein Administrator kann dein Konto anlegen.</p>
       {% else %}
       <p class="help">Ein Administrator prüft deine Anfrage und schaltet das Konto frei – du bekommst dann eine E-Mail.</p>
+      <p class="help">Sieh bitte auch im <strong>Spam-Ordner</strong> nach: Automatisch verschickte
+        Mails landen dort häufiger. Findest du sie, hilft es allen, sie als „kein Spam“ zu
+        markieren und den Absender in die Kontakte aufzunehmen.</p>
       <form id="f-register">
         <label for="name">Name</label>
         <input id="name" name="name" type="text" autocomplete="name" required>
@@ -55,6 +58,8 @@
     {% elif mode == 'forgot' %}
       <h2>Passwort zurücksetzen</h2>
       <p>Wir schicken dir einen Link, mit dem du ein neues Passwort setzen kannst.</p>
+      <p class="help">Der Link ist eine Stunde gültig. Sieh bitte auch im <strong>Spam-Ordner</strong>
+        nach – automatisch verschickte Mails landen dort häufiger.</p>
       <form id="f-forgot">
         <label for="email">E-Mail-Adresse</label>
         <input id="email" name="email" type="email" autocomplete="username" required>

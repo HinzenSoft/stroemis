@@ -155,6 +155,19 @@ img { max-width: 100%; }
   padding: 0 12px; cursor: pointer;
 }
 .nav button:hover { background: rgba(255,255,255,.12); }
+/* Tablet hochkant, Faltgeräte und Telefone quer (641–900 px): Der Zusatz neben der Wortmarke
+   und der eigene Name weichen – sonst schob die Navigation die Wortmarke an und „Abmelden“ lag
+   hinter dem rechten Rand. „Profil“ bleibt als Weg zum eigenen Konto stehen. */
+@media (max-width: 900px) {
+  .funktion small { display: none; }
+  .nav .user { display: none; }
+  .nav a, .nav button { padding: 0 10px; }
+}
+/* Bis 720 px reicht das nicht: Auch der Schriftzug weicht, das Zeichen bleibt – so passen alle
+   sechs Punkte der Navigation ohne Rollen nebeneinander. */
+@media (max-width: 720px) {
+  .brand .trenner, .brand .funktion { display: none; }
+}
 /* Ganz schmale Geräte: Der Zusatz neben der Wortmarke weicht, damit Nutzer, Profil und
    Abmelden in die Zeile passen, statt in der rollenden Navigation zu verschwinden. */
 @media (max-width: 640px) {
@@ -209,12 +222,14 @@ img { max-width: 100%; }
 label { display: block; font-weight: 600; font-size: .9rem; margin: 12px 0 4px; }
 label.inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 6px 0; }
 input[type=text], input[type=email], input[type=password], input[type=number], input[type=search],
-input[type=tel], input[type=datetime-local], select, textarea {
+input[type=tel], input[type=datetime-local], input[type=date], select, textarea {
   width: 100%; font: inherit; line-height: 1.2; color: var(--anthrazit);
   border: 1px solid var(--grau); border-radius: var(--radius);
   padding: 8px 10px; background: var(--weiss);
 }
 textarea { min-height: 90px; resize: vertical; }
+/* Datumsfelder sahen auf iOS wie kleine graue Pillen ohne Rahmen aus – gleiche Höhe wie Textfelder. */
+input[type=date] { -webkit-appearance: none; appearance: none; min-height: 40px; }
 input:focus, select:focus, textarea:focus { border-color: var(--anthrazit); outline: 2px solid var(--anthrazit); outline-offset: 0; box-shadow: 0 0 0 4px rgba(255, 237, 0, .5); }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 @media (max-width: 480px) { .field-row { grid-template-columns: 1fr; } }
@@ -250,10 +265,17 @@ table.list .btn-row { gap: 6px 8px; }
    bricht sie notfalls im Wort – sonst stünde sie über den Zellenrand hinaus. Name und
    Gliederung haben Leerzeichen und brechen von selbst an der richtigen Stelle. */
 table.list td.mail { overflow-wrap: anywhere; }
-/* Auf dem Telefon wird aus der Tabelle eine Liste: je Nutzer eine Karte, die Spaltennamen
-   stehen als Beschriftung davor, die Knöpfe darunter – statt sechs Spalten, die seitwärts
-   aus dem Bild laufen und die Knöpfe außer Sicht schieben. */
-@media (max-width: 640px) {
+/* Eine Marke darf ihre Spalte nicht verlassen. „table-layout: fixed“ schneidet nichts ab, und
+   die Marke selbst bricht nie um – „Redakteur“ lief deshalb quer über die Spalte „Inhalte“.
+   Jetzt bleibt sie in ihrer Zelle und bricht im Notfall lieber im Wort. */
+table.list .badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; padding: 1px 6px; }
+/* Auf schmalen Geräten wird aus der Tabelle eine Liste: je Nutzer eine Karte, die Spaltennamen
+   stehen als Beschriftung davor, die Knöpfe darunter – statt sieben Spalten, die seitwärts
+   aus dem Bild laufen und die Knöpfe außer Sicht schieben.
+   Der Umschaltpunkt liegt höher als sonst im Projekt (640px): Sieben Spalten brauchen mehr
+   Platz als sechs, und ab hier wird die Rollenspalte zu schmal für das Wort „Redakteur“.
+   Die Regel gilt nur dieser einen Tabelle – "table.list" steht nur in der Nutzerverwaltung. */
+@media (max-width: 860px) {
   table.list, table.list tbody, table.list tr, table.list td { display: block; }
   table.list thead { display: none; }
   table.list tr { padding: 10px 0 12px; border-bottom: 1px solid var(--linie); }
@@ -283,6 +305,21 @@ table.list td.mail { overflow-wrap: anywhere; }
   margin: 0; border: 0; width: max-content; max-width: 90vw; height: auto; overflow: visible;
 }
 #toast:popover-open { display: block; }
+/* Ein Fehler darf nicht im Vorbeigehen übersehen werden: dunklerer Schatten und ein Warnzeichen
+   davor, statt nur der roten Fläche. */
+#toast.err { box-shadow: 0 6px 20px rgba(0, 0, 0, .35); }
+#toast.err::before { content: "⚠ "; }
+/* Ist ein Dialog offen, sitzt die Meldung bei ihm (Positionswerte kommen von toastPositionieren
+   in common.js) statt am unteren Fensterrand – auf einem hohen Bildschirm liegt sonst viel Platz
+   dazwischen, und wer auf den Dialog schaut, sieht sie nicht. ".bei-dialog" schwebt als Fahne
+   über dem Dialog; füllt der Dialog fast den Bildschirm (Telefon), setzt ".bei-dialog-innen"
+   sie stattdessen in seinen oberen Rand. Id+Klasse (bzw. Id+Attribut+Klasse für die Popover-
+   Fassung) schlägt dabei zuverlässig die Regeln oben UND die mobile Ecke weiter unten – ganz
+   gleich, in welcher Reihenfolge die Regeln im Blatt stehen. */
+#toast.bei-dialog { left: var(--toast-x, 50%); bottom: auto; top: var(--toast-y, 24px); transform: translate(-50%, -100%); }
+#toast.bei-dialog.bei-dialog-innen { transform: translate(-50%, 0); }
+#toast[popover].bei-dialog { left: var(--toast-x, 50%); bottom: auto; top: var(--toast-y, 24px); }
+
 
 /* Dialog */
 dialog {
@@ -291,13 +328,29 @@ dialog {
   box-shadow: var(--schatten-dialog);
 }
 dialog::backdrop { background: rgba(60,60,59,.55); }
-dialog .dlg-body { padding: 18px 20px 20px; max-height: 80vh; max-height: 80dvh; overflow: auto; }
+dialog .dlg-body { padding: 18px 20px 20px; max-height: 80vh; max-height: 80dvh; overflow: auto; overscroll-behavior: contain; }
+/* Solange ein Dialog offen ist, wandert keine Wischgeste an die Seite dahinter: Auf Android
+   löste das Weiterziehen am Dialogrand „zum Neuladen ziehen“ aus – Kommentar und Dateien weg. */
+html:has(dialog[open]) { overscroll-behavior: none; }
 dialog h2 { margin-bottom: 4px; }
 dialog .dlg-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 dialog.wide { width: min(1100px, 96vw); }
+/* Tastatur offen (iOS: der sichtbare Ausschnitt schrumpft, 100dvh nicht): Der Dialog wird so hoch wie
+   der sichtbare Bereich und hängt an dessen Oberkante – sein Inhalt rollt dann innen, statt dass iOS
+   den ganzen Ausschnitt verschiebt. Die Werte setzt common.js aus visualViewport; gilt für Telefon
+   und Tablet gleichermaßen. */
+html.tastatur dialog[open] { position: fixed; top: var(--vv-top, 0px); bottom: auto; margin: 8px auto 0;
+  max-height: calc(var(--vv-h, 100dvh) - 16px); }
+html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22px); }
+/* Telefon quer (Höhe ≤ 500 px): Der Dialog nimmt fast die ganze Höhe, weniger Polster. */
+@media (max-height: 500px) {
+  dialog, dialog.wide { max-height: calc(100dvh - 8px); }
+  dialog .dlg-body { max-height: calc(100dvh - 14px); padding: 12px 16px 14px; }
+}
 
 /* Seiten mit normalem Inhalt */
-.page { max-width: 860px; margin: 0 auto; padding: 28px 20px 60px; }
+.page { max-width: 860px; margin: 0 auto; padding: 28px 20px 60px;
+  padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
 .page.narrow { max-width: 520px; }
 .page-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 2px solid var(--anthrazit); padding-bottom: 8px; margin-bottom: 20px; }
 .section { margin: 26px 0; }
@@ -615,6 +668,10 @@ h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
 .link-pages:empty { display: none; }
 .link-pages li { border-bottom: 1px solid var(--linie); }
 .link-pages li:last-child { border-bottom: 0; }
+/* Die Auswahlliste der synchronisierten Abschnitte ist höher als die gewöhnliche Seitenliste:
+   Hier ist zu entscheiden, WAS man einbindet, nicht nur wo es herkommt. Die Regeln für ihre
+   Einträge stehen weiter unten – sie müssen NACH der gemeinsamen Menüregel kommen. */
+.bausteinliste { max-height: 320px; }
 /* Adresse im Link-Kontextmenü */
 .ed-link-url { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--grau); font-size: var(--fs-klein); }
 /* Anhänge im Artikel */
@@ -649,7 +706,12 @@ h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
 .einbau > .einbau-inhalt > :first-child { margin-top: 0; }
 .einbau > .einbau-inhalt > :last-child { margin-bottom: 0; }
 .einbau-fuss { margin-top: 8px; color: var(--grau); font-size: .82rem; }
-.einbau-fehlt { color: var(--grau); font-size: .9rem; }
+/* Ein Einbau, der nicht aufgeht, ist ein Befund und kein Kleingedrucktes: Vorher stand dort
+   grauer Kleintext, den man beim Lesen überflog – und die Seite wirkte bloß lückenhaft. */
+.einbau-fehlt { color: var(--co-warning-ka); font-size: .92rem; font-weight: 500; }
+/* In der Verlaufsansicht läuft keine Nachbearbeitung; der Einbau bliebe ein leerer
+   gestrichelter Streifen. Der Text kommt aus dem Ziel selbst, ganz ohne Skript. */
+.einbau:empty::after { content: "Eingebundener Abschnitt: " attr(data-ziel); color: var(--grau); font-size: .9rem; }
 /* Im Editor ist der Einbau kein Inhalt, sondern ein Schild: Geändert wird er anderswo. */
 .ed-einbau { margin: 1.1em 0; padding: 8px 12px; border-left: 3px dashed var(--wasser); background: #f7fafd; }
 .callout { margin: 1.1em 0; padding: 10px 14px; border-left: 5px solid var(--grau); background: var(--grau-hell); }
@@ -908,7 +970,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   .tree .tg { width: 28px; height: 32px; }
   .chip { padding: 10px 12px; }
   .lb-nav { padding: 16px 14px; }
-  .lb-side .close, .panel-head .close { padding: 6px 10px; }
+  .lb-side .close, .panel-head .close { padding: 6px 10px; min-width: 44px; min-height: 44px; }
   .toc-list a { padding: 7px 8px; }
   .lnk { padding: 5px 0; }
   .album-list li { padding: 10px 0; }
@@ -919,8 +981,13 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 @media (max-width: 640px) {
   /* iOS zoomt in jedes Feld unter 16 px hinein – und danach nicht mehr heraus. */
   input[type=text], input[type=email], input[type=password], input[type=number], input[type=search],
-  input[type=tel], input[type=datetime-local], select, textarea { font-size: 16px; }
+  input[type=tel], input[type=datetime-local], input[type=date], select, textarea { font-size: 16px; }
   .panel { padding-bottom: env(safe-area-inset-bottom); }
+}
+/* Telefon quer ist breiter als 640 px, zoomt aber genauso hinein. */
+@media (max-height: 500px) {
+  input[type=text], input[type=email], input[type=password], input[type=number], input[type=search],
+  input[type=tel], input[type=datetime-local], input[type=date], select, textarea { font-size: 16px; }
 }
 /* Hoher Kontrast: Flächenfarben fallen weg, der aktive Zustand braucht eine Kante. */
 @media (forced-colors: active) {
@@ -1018,6 +1085,16 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
    anderen Seite anzeigen“ stünde sonst genau das Ende nicht mehr da, auf das es ankommt. */
 .ed-slash button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; line-height: 1.35; }
 .ed-slash button strong { font-weight: 600; }
+/* Dasselbe für die Auswahlliste der synchronisierten Abschnitte: Kennung, darunter Herkunft und
+   Verwendungszahl, darunter ein Auszug. Auch diese Regel muss NACH der gemeinsamen Menüregel
+   stehen – die setzt display:block, und dann stand „regelblockaus Pruefquelle“ in einer Zeile. */
+.bausteinliste button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; line-height: 1.35; padding: 8px 10px; }
+.bausteinliste button strong { font-weight: 600; }
+.bausteinliste .bl-quelle { color: var(--grau); font-size: .82rem; }
+.bausteinliste .bl-auszug {
+  color: var(--grau); font-size: .85rem;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 .ed-slash button span { font-size: var(--fs-klein); color: var(--grau); max-width: 100%; }
 .tree-menu button.danger { color: var(--rot); }
 /* Antwort des Mailservers nach einer Probemail – zum Lesen und Weitergeben, deshalb als
@@ -1105,6 +1182,27 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   border-radius: var(--radius); font: inherit; font-size: var(--fs-klein); color: var(--grau); cursor: pointer;
 }
 .c-tabs button.sel { background: var(--rot-hell); border-color: var(--rot); color: var(--rot); font-weight: 700; }
+
+/* --- Einstellungen in der Verwaltung ---------------------------------------------------
+   Ein Feld trägt drei Angaben: wofür es gut ist, woher der geltende Wert kommt und wie die
+   Variable in der .env heißt. Die Herkunft ist das Entscheidende – ohne sie sieht man einem
+   Feld nicht an, ob der Wert hier gesetzt wurde oder aus der Datei stammt, und wer dann etwas
+   ändert und nichts geschieht, sucht an der falschen Stelle. */
+.einst-gruppe { border: 1px solid var(--linie); border-radius: var(--radius); padding: 4px 14px 14px; margin: 0 0 16px; }
+.einst-gruppe legend { font-weight: 700; padding: 0 6px; }
+.einst-feld { margin: 12px 0; }
+.einst-feld input[type=text], .einst-feld input[type=password], .einst-feld input[type=number], .einst-feld textarea { width: 100%; }
+.einst-feld textarea { resize: vertical; }
+.einst-feld .help { margin-top: 2px; }
+.einst-kopf { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 2px; }
+.einst-kopf label { font-weight: 600; margin: 0; }
+.einst-name { color: var(--grau); font-size: .78rem; }
+.einst-quelle { font-size: .72rem; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--linie); color: var(--grau); }
+.einst-quelle.q-gespeichert { border-color: var(--rot); color: var(--rot); background: var(--rot-hell); }
+.einst-schalter { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.einst-schalter input { width: auto; }
+/* Der Speichern-Knopf bleibt beim Rollen sichtbar – die Liste ist länger als ein Bildschirm. */
+.einst-aktionen { position: sticky; bottom: 0; background: var(--weiss); padding: 10px 0; border-top: 1px solid var(--linie); align-items: center; }
 .ed-stats { margin-top: 8px; text-align: right; }
 /* Textfarben – nur die Hausfarben aus dem Handbuch CD */
 .tc-rot { color: var(--rot); }
@@ -1311,12 +1409,13 @@ h1.seitentitel .page-icon { margin-right: 6px; }
 .krumen .krume-icon { font-size: 1em; line-height: 1; }
 .krumen .krume-sep { color: var(--linie); }
 
-/* Autorzeile unter der Überschrift – in der Ansicht und im Editor dieselbe. */
-.autorzeile { display: flex; align-items: center; gap: 8px; height: 24px; line-height: 1; margin: 0 0 1.2em; font-size: .86rem; color: var(--grau); }
+/* Autorzeile unter der Überschrift – in der Ansicht und im Editor dieselbe. Das Bild ist mit
+   32 px groß genug, um ein Gesicht zu erkennen; die Zeile wächst mit, in beiden Ansichten gleich. */
+.autorzeile { display: flex; align-items: center; gap: 8px; height: 32px; line-height: 1; margin: 0 0 1.2em; font-size: .86rem; color: var(--grau); }
 .autorzeile .avatar {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px; border-radius: 50%; flex: none;
-  background: var(--rot-hell); color: var(--rot); font-size: .68rem; font-weight: 700; letter-spacing: .02em;
+  width: 32px; height: 32px; border-radius: 50%; flex: none;
+  background: var(--rot-hell); color: var(--rot); font-size: .8rem; font-weight: 700; letter-spacing: .02em;
 }
 .autorzeile .autorname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Liegt ein Profilbild vor, füllt es den Kreis vollständig aus – zugeschnitten wurde beim
@@ -1355,8 +1454,8 @@ h1.seitentitel .page-icon { margin-right: 6px; }
 .autor-tafel .autor-person { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
 .autor-tafel .avatar {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; border-radius: 50%; flex: none;
-  background: var(--rot-hell); color: var(--rot); font-size: var(--fs-marke); font-weight: 700;
+  width: 40px; height: 40px; border-radius: 50%; flex: none;
+  background: var(--rot-hell); color: var(--rot); font-size: .85rem; font-weight: 700;
 }
 .autor-tafel .avatar.mit { background: var(--grau-hell); color: var(--grau); }
 .autor-tafel .autor-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
@@ -1364,7 +1463,7 @@ h1.seitentitel .page-icon { margin-right: 6px; }
 .autor-tafel .autor-rolle { font-size: var(--fs-klein); color: var(--grau); }
 /* Steht unter dem Ersteller und ist um die Breite des Avatars eingerückt, damit es als
    Nachsatz zu ihm liest und nicht als weitere Person. */
-.autor-tafel .autor-wechsel { margin: 2px 0 2px 40px; }
+.autor-tafel .autor-wechsel { margin: 2px 0 2px 50px; }
 .autor-tafel .autor-trenner { border-top: 1px solid var(--linie); margin: 8px 0; }
 .rundknopf {
   display: inline-flex; align-items: center; justify-content: center;
@@ -1577,9 +1676,10 @@ h1.seitentitel .page-icon { margin-right: 6px; }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents ul ul { list-style-type: circle; }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents ul ul ul { list-style-type: square; }
 
-/* Einklappbare Box: im Editor immer aufgeklappt – nur so laesst sich ihr Inhalt bearbeiten.
-   Titel und Inhalt sind gewoehnliche Bloecke; Rahmen, Flaeche und Pfeil kommen aus diesen
-   Klassen und zeigen dasselbe Bild wie die aufgeklappte Box in der Leseansicht. */
+/* Einklappbare Box: Titel und Inhalt sind gewoehnliche Bloecke; Rahmen, Flaeche und Pfeil
+   kommen aus diesen Klassen und zeigen dasselbe Bild wie die Box in der Leseansicht. Wie dort
+   beginnt sie zugeklappt (editor-layout.js): Koerper und Trennmarke sind dann ausgeblendet,
+   der Pfeil vor dem Titel zeigt nach rechts und klappt auf Klick auf. */
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak,
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-titel,
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-marke {
@@ -1602,6 +1702,16 @@ h1.seitentitel .page-icon { margin-right: 6px; }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-schluss {
   border-bottom: 1px solid var(--linie); border-bottom-right-radius: 4px; padding-bottom: 6px; margin-bottom: 1em;
 }
+/* Zugeklappt: Pfeil nach rechts wie die geschlossene Box im Artikel, Koerper unsichtbar. Der
+   Pfeil ist die Klickflaeche (die linken 30 px des Titels) – der Titeltext bleibt bearbeitbar. */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-zu.ak-erst::before { transform: rotate(-45deg); top: .5em; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-erst:hover::before { border-color: var(--rot); }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-versteckt { display: none !important; }
+/* Zugeklappt bleiben nur Titel und die beiden Randmarken: Die Marken schrumpfen auf Strichstaerke,
+   damit die Box so hoch ist wie die geschlossene Box im Artikel (dort nur Titel und Rahmen). */
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-auf.ak-zu { padding-top: 0; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-schluss.ak-zu { padding-bottom: 0; }
+.wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-marke.ak-zu .sek-marke { height: 1px; }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-marke .sek-marke { margin: 0; height: 4px; }
 .wiki-editor .toastui-editor-ww-container .toastui-editor-contents > .ak-marke .sek-marke::after { display: none; }
 /* Toast UI polstert die Huelle jedes Custom-Blocks; an der Marke waere das sichtbarer Leerraum. */

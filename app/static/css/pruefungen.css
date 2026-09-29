@@ -1,0 +1,581 @@
+/* Prüfungen – Lehrgänge, Teilnehmende (mit Profilbild), Bewertungsmatrix samt Kommentar- und
+   Ergebnisspalte, eingefrorene Personen, Mängelübersicht.
+   Eigenes Blatt, das die Variablen und Bausteine aus app.css weiterbenutzt (Farben, .btn, .badge,
+   table.list, dialog, .c-tabs). Gedacht für draußen am Gewässer, auf dem Telefon, mit einer Hand:
+   große Ziele, wenig Text, Farben, die man auch bei Sonne unterscheidet. */
+
+/* Die Prüfungsseite darf den ganzen Bildschirm nutzen – die Matrix und die Teilnehmertabelle
+   zeigen am Abend am Rechner umso mehr Spalten ohne Rollen. Das Wiki bleibt bei seiner Lesebreite. */
+.pruef { max-width: none; }
+.pruef .page-head h1 { margin: 0; overflow-wrap: anywhere; }
+.pruef .page-head .btn-row { margin-left: auto; }
+.pruef .zurueck { display: inline-block; margin-bottom: 8px; font-size: var(--fs-mittel); text-decoration: none; }
+.pruef .zurueck:hover { text-decoration: underline; }
+.pruef .kopf-meta { color: var(--grau); font-size: var(--fs-mittel); display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; margin: 6px 0 4px; }
+.pruef .kopf-meta .badge { vertical-align: baseline; }
+.pruef .ausbilder-zeile { font-size: var(--fs-mittel); margin: 0 0 6px; }
+.pruef .beschreibung-kopf { font-size: var(--fs-mittel); margin: 0 0 10px; }
+.pruef .beschreibung-kopf summary { cursor: pointer; color: var(--grau); }
+.pruef .beschreibung-kopf .md { margin-top: 6px; }
+
+/* Marken in den drei Prüfungsfarben – neben gelb (Hinweis) und grau (ruhend) aus app.css. */
+.badge.rot { background: var(--rot); color: var(--weiss); }
+.badge.gruen { background: var(--ok); color: var(--weiss); }
+.badge.blau { background: var(--wasser); color: var(--weiss); }
+.badge.np { background: var(--anthrazit); color: var(--weiss); font-size: .7rem; padding: 0 5px; margin-left: 4px; }
+/* Büroklammer in der Zelle: Anhänge vorhanden (Bilder/Videos) – mit Zähler ab zwei. */
+.zelle .anhang { font-size: .8rem; font-weight: 600; margin-left: 5px; color: var(--anthrazit); white-space: nowrap; }
+/* X/Y erfüllte Kriterien der Leistung, an dieser Zelle – schneller Indikator vor dem Öffnen. */
+.zelle .krit-stand { font-size: .8rem; font-weight: 600; margin-left: 5px; color: var(--anthrazit); white-space: nowrap; }
+
+/* Ein Knopf, der wie ein Verweis aussieht – für Namen, die eine Bearbeitung öffnen. */
+.linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--anthrazit); font-weight: 600; cursor: pointer; text-align: left; }
+.linkbtn:hover { color: var(--rot); text-decoration: underline; }
+
+/* --- Teilnehmende: Profilbild, Schloss, Lehrgangsergebnis ---------------------------------
+   Der Kreis vor dem Namen: Profilbild oder Initialen, 28 px, rund – dieselbe Form wie die
+   Autorenkreise im Wiki, damit man Personen überall auf einen Blick wiedererkennt. */
+.tn-kopfzeile { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; vertical-align: middle; }
+.tn-kopfzeile .tn-name, .tn-kopfzeile .linkbtn { min-width: 0; overflow-wrap: anywhere; }
+.tn-bild {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 28px; height: 28px; border-radius: 50%; overflow: hidden;
+  background: var(--rot-hell); color: var(--rot); font-size: .7rem; font-weight: 700; letter-spacing: .02em; line-height: 1;
+}
+.tn-bild img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tn-bild.mit { background: var(--grau-hell); }
+/* Groß im Dialog der Person – wie .pb-vorschau auf der Profilseite. */
+.tn-bild.gross { width: 76px; height: 76px; font-size: 1.7rem; }
+/* Ein echtes Bild ist antippbar (Leuchtkasten); der Rahmen zeigt es beim Überfahren und im Fokus. */
+.tn-bild.klick { cursor: zoom-in; }
+.tn-bild.klick:hover, .tn-bild.klick:focus-visible { outline: 2px solid var(--rot); outline-offset: 1px; }
+.lb-profil img { width: min(90vw, 420px); height: auto; border-radius: var(--radius-gross); }
+.tn-block-kopf .tn-bild.gross { margin-right: 4px; }
+.zelle-zeile .name .zeile-zeit { color: var(--anthrazit); }
+.zelle-zeile .name .zeile-komm { color: var(--anthrazit); font-style: italic; white-space: normal; margin-top: 2px; }
+.tn-bild-zeile { display: flex; align-items: center; gap: 16px; margin: 4px 0 12px; }
+.tn-bild-zeile .pb-text { min-width: 0; flex: 1 1 auto; }
+.tn-bild-zeile .pb-text .help { margin: 0 0 8px; }
+.schloss { flex: none; font-size: .95rem; line-height: 1; cursor: help; }
+h2.dlg-tn .tn-kopfzeile { gap: 8px; }
+h2.dlg-tn .tn-bild { width: 32px; height: 32px; font-size: .8rem; }
+p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* Zähler im Kopf: „3 bestanden · 1 nicht bestanden“ */
+.erg-zaehler .ja { color: var(--ok); }
+.erg-zaehler .nein { color: var(--rot); }
+.erg-marke { margin-left: 6px; vertical-align: middle; }
+/* Spalte „Lehrgang“: zwei runde Knöpfe (Leitung) oder die Marke; darunter wer und wann. */
+.erg-block { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 104px; }
+.erg-knoepfe { display: inline-flex; gap: 6px; }
+.erg-knopf {
+  width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--linie); background: var(--weiss);
+  font-size: 1.25rem; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  filter: grayscale(1); opacity: .65; transition: transform .1s ease;
+}
+.erg-knopf:hover { filter: none; opacity: 1; transform: scale(1.06); }
+.erg-knopf.ja:hover { border-color: var(--ok); }
+.erg-knopf.nein:hover { border-color: var(--rot); }
+.erg-knopf.sel { filter: none; opacity: 1; color: var(--weiss); }
+.erg-knopf.ja.sel { background: var(--ok); border-color: var(--ok); }
+.erg-knopf.nein.sel { background: var(--rot); border-color: var(--rot); }
+.erg-knopf:disabled { cursor: progress; }
+.erg-von, .erg-leer { font-size: .75rem; color: var(--grau); }
+.erg-block .erg-marke { margin-left: 0; }
+/* Spalte „Kommentar“: die Zelle ist der Knopf zum Dialog; leer steht „+ Kommentar“. */
+.komm-zelle {
+  display: block; width: 100%; min-width: 160px; max-width: 260px; min-height: 52px; padding: 6px 8px;
+  border: 1px dashed var(--linie); border-radius: var(--radius); background: var(--weiss);
+  font: inherit; font-size: var(--fs-klein); color: var(--anthrazit); text-align: left; cursor: pointer; line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.komm-zelle:hover { border-color: var(--anthrazit); }
+.komm-zelle:not(.leer) { border-style: solid; }
+.komm-zelle.leer { color: var(--grau); }
+.bew-matrix th.komm-kopf, .bew-matrix th.erg-kopf { text-align: left; }
+/* Eingefroren: Zellen, Kästen und Kommentar gedämpft – ansehen ja, ändern nein. */
+.zelle.gesperrt, .komm-zelle.gesperrt { opacity: .7; cursor: default; }
+.zelle.gesperrt:hover, .komm-zelle.gesperrt:hover { border-color: var(--linie); }
+.komm-zelle.gesperrt { border-style: solid; }
+.zelle-zeile.gesperrt .zelle { opacity: .55; }
+.pruef .table-scroll tr.gesperrt td { background: var(--grau-hell); }
+.pruef .table-scroll tr.gesperrt.offen td { background: var(--rot-hell); }
+.tn-karte.gesperrt { background: var(--grau-hell); }
+.tn-karte.gesperrt .vk-zeile { opacity: .7; }
+.vk input[type=checkbox]:disabled, .vk-zeile input[type=checkbox]:disabled { cursor: not-allowed; opacity: .6; }
+/* „je TN“: Block über der Liste mit Bild, Name, Kommentar und Ergebnis. */
+.tn-block { border: 1px solid var(--linie); border-left: 4px solid var(--anthrazit); border-radius: var(--radius); padding: 10px 12px; margin: 0 0 12px; }
+.tn-block.gesperrt { border-left-color: var(--grau); background: var(--grau-hell); }
+.tn-block-kopf { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 1.05rem; font-weight: 600; margin-bottom: 8px; }
+/* Die Gliederung hinter dem Namen; der Trennpunkt kommt aus dem Blatt, damit er beim Umbruch
+   auf dem Telefon nicht allein am Zeilenanfang steht. */
+.tn-block-kopf .tn-gliederung::before { content: "· "; }
+.tn-block .notice.small { margin: 0 0 8px; font-size: var(--fs-klein); }
+.tn-block-felder { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; align-items: start; }
+.tn-block-felder .feldname { display: block; font-size: var(--fs-klein); color: var(--grau); font-weight: 700; margin-bottom: 4px; }
+.tn-block-felder .komm-zelle { max-width: none; }
+
+/* --- Fortschritt: „18/24 Leistungen abgenommen“ mit Balken ------------------------------ */
+.fortschritt { font-size: var(--fs-klein); color: var(--grau); min-width: 140px; }
+.fortschritt .balken { height: 8px; background: var(--grau-hell); border-radius: var(--radius-pille); overflow: hidden; margin: 3px 0; }
+.fortschritt .balken > span { display: block; height: 100%; background: var(--anthrazit); border-radius: var(--radius-pille); }
+.fortschritt .balken > span.voll { background: var(--ok); }
+.fortschritt .maengel { color: var(--rot); font-weight: 700; }
+
+/* --- Lehrgangsliste -------------------------------------------------------------------- */
+.pruef .filter { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 14px; }
+.pruef .filter input[type=search] { flex: 1 1 220px; width: auto; }
+.pruef .filter select { width: auto; flex: 0 0 auto; }
+.pruef table.list td .titel { font-weight: 700; font-size: 1rem; text-decoration: none; color: var(--anthrazit); overflow-wrap: anywhere; }
+.pruef table.list td .titel:hover { color: var(--rot); }
+.pruef table.list td .nummer { color: var(--grau); font-size: var(--fs-klein); }
+.pruef .leer { color: var(--grau); padding: 26px 0; text-align: center; }
+.pruef .leer strong { display: block; color: var(--anthrazit); margin-bottom: 4px; }
+
+/* --- Reiter des Lehrgangs --------------------------------------------------------------- */
+.pruef .c-tabs.reiter { margin: 14px 0 16px; }
+.pruef .c-tabs.reiter button { padding: 9px 6px; font-size: var(--fs-mittel); }
+.pruef .c-tabs.reiter button .z { font-weight: 400; opacity: .8; }
+.pruef .reiter-kopf { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 0 0 12px; }
+.pruef .reiter-kopf h2 { margin: 0; }
+.pruef .reiter-kopf .btn-row { margin-left: auto; }
+
+/* Rollbereich für Matrizen: Die Seite selbst rollt nie seitwärts, nur diese Kiste. */
+.pruef .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0; border: 1px solid var(--linie); border-radius: var(--radius); max-width: 100%; }
+.pruef .table-scroll table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: var(--fs-mittel); }
+.pruef .table-scroll th, .pruef .table-scroll td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--linie); background: var(--weiss); }
+.pruef .table-scroll th { font-size: var(--fs-klein); color: var(--grau); font-weight: 700; border-bottom: 2px solid var(--anthrazit); white-space: normal; min-width: 120px; max-width: 200px; }
+/* Erste Spalte klebt: Beim Rollen nach rechts bleibt der Name stehen, sonst weiß man bei der
+   zehnten Spalte nicht mehr, wessen Zeile man gerade abhakt. */
+.pruef .table-scroll th:first-child, .pruef .table-scroll td:first-child {
+  position: sticky; left: 0; z-index: 2; min-width: 160px; max-width: 220px;
+  box-shadow: 2px 0 0 var(--linie);
+}
+.pruef .table-scroll tr.offen td { background: var(--rot-hell); }
+.pruef .table-scroll .tn-name { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.pruef .table-scroll .tn-sub { display: block; color: var(--grau); font-size: var(--fs-klein); }
+
+/* --- Voraussetzungs-Häkchen: Kasten, darunter klein wer und wann -------------------------- */
+.vk { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 110px; }
+.vk input[type=checkbox] { width: 28px; height: 28px; margin: 0; accent-color: var(--ok); cursor: pointer; flex: none; }
+.vk-stempel { background: none; border: 0; padding: 0; font: inherit; font-size: .72rem; line-height: 1.25; color: var(--grau); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.vk-stempel:hover { color: var(--rot); text-decoration: underline; }
+.vk-stempel.ja { color: var(--ok); }
+.vk-stempel.nein { color: var(--rot); }
+.vk-stempel:disabled { cursor: default; text-decoration: none; }
+
+/* Telefon: eine Karte je Teilnehmer:in, die Voraussetzungen als Zeilen mit großem Kasten. */
+.tn-mobil { display: none; }
+.tn-karte { border: 1px solid var(--linie); border-radius: var(--radius); margin: 0 0 10px; padding: 10px 12px; }
+.tn-karte.offen { border-left: 4px solid var(--rot); background: var(--rot-hell); }
+.tn-karte .tn-kopf { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.tn-karte .tn-kopf .linkbtn { font-size: 1rem; flex: 1 1 auto; min-height: 44px; }
+/* Zugeklappt, damit die Liste nicht für jede Person voll ausgerollt scrollt – wer offen hat,
+   steht schon in der Marke oben im Kartenkopf. Der Zustand übersteht ein Häkchen: renderLehrgangSeite
+   merkt sich beim Neuzeichnen, welche <details> offen waren, und klappt sie wieder auf. */
+.tn-karte details.vor-klapp { margin-top: 4px; }
+.tn-karte details.vor-klapp summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+.tn-karte details.vor-klapp[open] summary { margin-bottom: 2px; }
+.vk-zeile { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 0 8px; padding: 4px 0; border-top: 1px solid var(--linie); min-height: 48px; }
+.vk-zeile input[type=checkbox] { width: 30px; height: 30px; margin: 0 auto; accent-color: var(--ok); }
+.vk-zeile .vk-text { font-size: var(--fs-mittel); cursor: pointer; padding: 8px 0; }
+.vk-zeile .vk-text small { display: block; font-size: .72rem; color: var(--grau); }
+.vk-zeile .vk-text small.ja { color: var(--ok); }
+.vk-zeile .vk-text small.nein { color: var(--rot); }
+.vk-zeile .vk-verlauf { width: 44px; height: 44px; background: none; border: 0; font-size: 1.1rem; color: var(--grau); cursor: pointer; }
+
+/* Verwalten-Dialog der Voraussetzungen: eine Zeile je Eintrag, Pfeile rechts. */
+.vor-liste { margin: 8px 0; padding: 0; list-style: none; }
+.vor-liste li { display: flex; gap: 6px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--linie); }
+.vor-liste li input[type=text] { flex: 1 1 auto; min-width: 0; }
+.vor-liste .btn.ghost { padding: 6px 8px; }
+.vor-neu { display: flex; gap: 6px; margin-top: 10px; }
+.vor-neu input[type=text] { flex: 1 1 auto; min-width: 0; }
+
+/* --- Prüfungsleistungen ------------------------------------------------------------------ */
+.leistung-karte { border: 1px solid var(--linie); border-left: 4px solid var(--anthrazit); border-radius: var(--radius); padding: 10px 12px; margin: 0 0 10px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
+.leistung-karte .titel { font-weight: 700; font-size: 1.02rem; overflow-wrap: anywhere; }
+.leistung-karte .titel .badge { margin-left: 6px; }
+.leistung-karte .md-vorschau { grid-column: 1 / -1; font-size: var(--fs-mittel); color: var(--grau); max-height: 4.6em; overflow: hidden; position: relative; }
+.leistung-karte .md-vorschau::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1.6em; background: linear-gradient(rgba(255,255,255,0), var(--weiss)); }
+.leistung-karte .md-vorschau p, .leistung-karte .md-vorschau ul, .leistung-karte .md-vorschau ol { margin: 0 0 .3em; }
+.leistung-karte .md-vorschau h1, .leistung-karte .md-vorschau h2, .leistung-karte .md-vorschau h3 { font-size: 1em; margin: 0 0 .2em; color: var(--grau); }
+.leistung-karte .btn-row { justify-content: flex-end; align-self: start; }
+.leistung-karte .pfeile { display: inline-flex; gap: 2px; }
+.leistung-karte .pfeile .btn { padding: 6px 9px; }
+#pl-editor { margin-top: 4px; }
+.pl-fallback { min-height: 220px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9rem; }
+/* Keine feste Toolbar mehr (toolbarItems: []) – die schwebende Formatleiste (.ed-bubble, siehe
+   app.css) übernimmt, wie im Wiki. Der jetzt leere Balken darf keinen Platz mehr beanspruchen,
+   sonst bliebe eine leere Zeile über dem Text stehen (dieselbe Regel wie .wiki-editor). */
+.md-editor .toastui-editor-defaultUI-toolbar,
+.md-editor .toastui-editor-toolbar { display: none !important; }
+.md-editor .toastui-editor-defaultUI .toastui-editor-main { border-top: 0; }
+
+/* --- Bewertungsmatrix ------------------------------------------------------------------- */
+.bew-umschalter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
+.bew-umschalter .c-tabs { margin: 0; flex: 1 1 260px; max-width: 420px; }
+.bew-umschalter .c-tabs button { padding: 9px 6px; font-size: var(--fs-mittel); }
+.bew-umschalter select { width: auto; flex: 1 1 200px; max-width: 100%; }
+.pruef .bew-matrix td { padding: 3px; }
+.pruef .bew-matrix th { text-align: center; }
+.pruef .bew-matrix th.tn-kopf { text-align: left; }
+/* Eine Zelle ist ein Knopf: Statusfarbe als Fläche, Symbol groß, darunter wer und wann. Gilt
+   für Matrix und Listen gleich, damit dieselbe Bewertung überall gleich aussieht. */
+.zelle {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  width: 100%; min-width: 112px; min-height: 52px; padding: 4px 6px;
+  border: 1px solid var(--linie); border-radius: var(--radius); background: var(--weiss);
+  font: inherit; color: var(--anthrazit); cursor: pointer; text-align: center; line-height: 1.2;
+}
+.zelle:hover { border-color: var(--anthrazit); }
+.zelle .sym { font-size: 1.35rem; line-height: 1; }
+.zelle .txt { font-size: var(--fs-klein); font-weight: 700; }
+.zelle .sub { font-size: .75rem; color: var(--grau); overflow-wrap: anywhere; }
+.zelle.st-offen { background: var(--grau-hell); color: var(--grau); }
+.zelle.st-offen .sym { color: var(--grau); font-weight: 700; }
+.zelle.st-bestanden, .zelle.st-nachpruefung_bestanden { background: var(--co-success-fl); border-color: var(--ok); }
+.zelle.st-bestanden .txt, .zelle.st-nachpruefung_bestanden .txt { color: var(--ok); }
+.zelle.st-mangelhaft, .zelle.st-nachpruefung_mangelhaft { background: var(--rot-hell); border-color: var(--rot); }
+.zelle.st-mangelhaft .txt, .zelle.st-nachpruefung_mangelhaft .txt { color: var(--rot); }
+/* Listenform („je Leistung“ / „je TN“): Name links, Status rechts – eine Zeile je Eintrag. */
+.zellen-liste { list-style: none; margin: 0; padding: 0; }
+.zellen-liste li { border-bottom: 1px solid var(--linie); }
+.zelle-zeile {
+  display: grid; grid-template-columns: minmax(0, 1fr) 128px; align-items: center; gap: 10px;
+  width: 100%; min-height: 60px; padding: 6px 4px; background: none; border: 0; font: inherit; color: var(--anthrazit);
+  cursor: pointer; text-align: left;
+}
+.zelle-zeile:hover { background: var(--grau-hell); }
+.zelle-zeile .name { font-weight: 600; font-size: 1rem; overflow-wrap: anywhere; }
+.zelle-zeile .name small { display: block; font-weight: 400; color: var(--grau); font-size: var(--fs-klein); }
+.zelle-zeile .zelle { min-height: 48px; }
+.zelle-zeile.offen-vor .name::after { content: " ⚠"; color: var(--rot); }
+/* "je TN": der Leistungstitel selbst färbt sich mit dem Ergebnis – "offen" bleibt ohne Regel neutral. */
+.leist-titel.st-bestanden, .leist-titel.st-nachpruefung_bestanden { color: var(--ok); }
+.leist-titel.st-mangelhaft, .leist-titel.st-nachpruefung_mangelhaft { color: var(--rot); }
+
+/* Banner: irgendwo läuft eine Stoppuhr. Sticky unter der Bauchbinde, damit man sie findet. */
+.su-banner {
+  position: sticky; top: calc(var(--topbar) + 6px); z-index: 900;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--gelb); color: var(--anthrazit); border-left: 5px solid var(--rot);
+  padding: 8px 12px; margin: 0 0 12px; border-radius: var(--radius); box-shadow: var(--schatten-karte);
+  font-weight: 600;
+}
+.su-banner .zeit { font-variant-numeric: tabular-nums; font-size: 1.1rem; }
+.su-banner .btn { margin-left: auto; }
+
+/* --- Bewertungsdialog -------------------------------------------------------------------- */
+dialog.pruef-dlg { width: min(720px, 96vw); }
+.pruef-dlg .dlg-kopf h2 { margin-bottom: 0; }
+.pruef-dlg .dlg-kopf .leistung { color: var(--grau); font-size: var(--fs-mittel); margin: 0 0 8px; }
+.pruef-dlg details.beschreibung { margin: 0 0 12px; border: 1px solid var(--linie); border-radius: var(--radius); padding: 6px 10px; font-size: var(--fs-mittel); }
+.pruef-dlg details.beschreibung summary { cursor: pointer; font-weight: 600; }
+.pruef-dlg details.beschreibung .md { margin-top: 6px; }
+.pruef-dlg details.beschreibung .md > :first-child { margin-top: 0; }
+.pruef-dlg h3 { margin: 16px 0 6px; font-size: .95rem; text-transform: uppercase; letter-spacing: .04em; color: var(--grau); }
+.pruef-dlg .abschluss { margin-top: 10px; border-top: 1px solid var(--linie); padding-top: 12px; }
+
+/* Ein bisheriger Versuch: Ergebnis groß, Kommentar, Medien, dann die Abnahmezeile. */
+.versuch-karte { border: 1px solid var(--linie); border-left: 5px solid var(--grau); border-radius: var(--radius); padding: 8px 12px; margin: 0 0 8px; }
+.versuch-karte.bestanden { border-left-color: var(--ok); }
+.versuch-karte.mangelhaft { border-left-color: var(--rot); }
+.versuch-karte .vk-kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-weight: 700; }
+.versuch-karte .vk-kopf .erg.bestanden { color: var(--ok); }
+.versuch-karte .vk-kopf .erg.mangelhaft { color: var(--rot); }
+.versuch-karte .vk-kopf .zeit { font-variant-numeric: tabular-nums; font-weight: 400; color: var(--grau); }
+.versuch-karte .kommentar { white-space: pre-wrap; margin: 4px 0; font-size: var(--fs-mittel); }
+.versuch-karte .abnahme { font-size: var(--fs-klein); color: var(--grau); margin-top: 4px; }
+.versuch-karte details.staende { font-size: var(--fs-klein); margin-top: 4px; }
+.versuch-karte details.staende summary { cursor: pointer; color: var(--grau); }
+.versuch-karte details.staende li { margin: 3px 0; }
+.versuch-karte .btn-row { margin-top: 8px; }
+.versuch-karte progress { margin-top: 6px; }
+
+/* Medien: Kacheln mit Wiedergabezeichen für Videos, ✕ zum Löschen in der Ecke. */
+.medien-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; margin: 6px 0; }
+.medien-grid .medium { position: relative; aspect-ratio: 1; border: 0; padding: 0; background: var(--grau-hell); border-radius: var(--radius); overflow: hidden; cursor: pointer; }
+.medien-grid .medium img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.medien-grid .medium .play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--weiss); font-size: 1.6rem; text-shadow: 0 0 6px rgba(0,0,0,.7); pointer-events: none; }
+.medien-grid .medium-weg { position: absolute; top: 2px; right: 2px; width: 28px; height: 28px; border: 0; border-radius: 50%; background: rgba(60,60,59,.8); color: var(--weiss); font-size: 1rem; line-height: 1; cursor: pointer; }
+.medien-grid .medium-weg:hover { background: var(--rot); }
+.medien-grid .medium-huelle { position: relative; }
+.medien-grid.klein { grid-template-columns: repeat(auto-fill, 64px); }
+
+/* Stoppuhr: Anzeige groß, Sollzeit daneben, drei Knöpfe mit mindestens 48 px. */
+.stoppuhr { border: 1px solid var(--linie); border-radius: var(--radius); padding: 10px 12px; margin: 6px 0 4px; background: var(--grau-hell); }
+.stoppuhr .su-zeile { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.stoppuhr .su-anzeige { font-size: 2.6rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: .02em; color: var(--anthrazit); }
+.stoppuhr .su-soll { color: var(--grau); font-weight: 600; }
+.stoppuhr.ueber .su-anzeige { color: var(--rot); }
+.stoppuhr.ueber .su-soll::after { content: " – überschritten"; color: var(--rot); }
+/* minmax(0, 1fr) und Umbruch erlaubt: Mit „1fr“ und nowrap waren die drei Knöpfe bei 360–390 px
+   breiter als der Dialog, und der Dialog rollte seitwärts. */
+.stoppuhr .su-knoepfe { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.stoppuhr .su-knoepfe .btn { min-height: 48px; justify-content: center; white-space: normal; min-width: 0; padding-left: 6px; padding-right: 6px; }
+@media (max-width: 400px) {
+  .stoppuhr .su-knoepfe { grid-template-columns: 1fr 1fr; }
+  .stoppuhr .su-knoepfe [data-su=reset] { grid-column: 1 / -1; min-height: 40px; }
+}
+.stoppuhr .su-hinweis { font-size: var(--fs-klein); color: var(--grau); margin-top: 6px; }
+.stoppuhr.laeuft .su-anzeige { color: var(--wasser); }
+.stoppuhr.laeuft.ueber .su-anzeige { color: var(--rot); }
+
+/* Bewertung: zwei große Knöpfe, halbe Breite, grün und rot – das Wichtigste am Dialog. */
+.bew-wahl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 6px; }
+.bew-wahl button {
+  min-height: 60px; border: 2px solid var(--linie); border-radius: var(--radius); background: var(--weiss);
+  font: inherit; font-size: 1.05rem; font-weight: 700; color: var(--anthrazit); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px; padding: 6px 4px;
+  /* Der Dialog erlaubt auf dem Telefon Umbrüche im Wort (overflow-wrap: anywhere in app.css) –
+     „mangelhaft“ darf aber nicht als „mangelhaf-t“ auf zwei Zeilen landen. */
+  overflow-wrap: normal; word-break: keep-all; white-space: nowrap;
+}
+.bew-wahl button .sym { font-size: 1.6rem; }
+.bew-wahl button[data-erg=bestanden]:hover { border-color: var(--ok); }
+.bew-wahl button[data-erg=mangelhaft]:hover { border-color: var(--rot); }
+.bew-wahl button[data-erg=bestanden].sel { background: var(--ok); border-color: var(--ok); color: var(--weiss); }
+.bew-wahl button[data-erg=mangelhaft].sel { background: var(--rot); border-color: var(--rot); color: var(--weiss); }
+
+/* Kriterienliste im Bewertungsdialog: eine Zeile je Punkt, durch Antippen zyklisch nicht bewertet
+   → erfüllt → nicht erfüllt. Dieselben Flächen/Kanten wie die Hinweiskisten in app.css. */
+.kriterien-liste { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.krit-zeile {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 8px 12px;
+  border: 1px solid var(--linie); border-radius: var(--radius); background: var(--weiss);
+  font: inherit; font-size: var(--fs-mittel); text-align: left; color: var(--anthrazit); cursor: pointer;
+}
+.krit-zeile .krit-sym { font-size: 1.15rem; line-height: 1; flex: none; }
+.krit-zeile .krit-text { flex: 1 1 auto; overflow-wrap: anywhere; }
+.krit-zeile.ja { border-color: var(--co-success-ka); background: var(--co-success-fl); }
+.krit-zeile.nein { border-color: var(--co-danger-ka); background: var(--co-danger-fl); }
+/* Lese-Ansicht (Bisherige Versuche, Alle Bewertungen, Mängel, Druck „je TN“): kompakte Marken
+   statt der großen Knöpfe – hier wird nichts mehr angetippt. */
+.kriterien-ergebnis { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: var(--fs-klein); }
+.kriterien-ergebnis li.ja { color: var(--ok); }
+.kriterien-ergebnis li.nein { color: var(--rot); }
+/* In "je TN" folgt die Liste direkt auf die Knopfzeile, außerhalb des Knopfs – mit deren Innenabstand. */
+.zellen-liste .kriterien-ergebnis { padding: 0 4px 8px; }
+.pruef-dlg textarea.fehler, .pruef-dlg input.fehler { border-color: var(--rot); outline: 2px solid var(--rot); }
+.pruef-dlg .zeitfeld { max-width: 160px; font-variant-numeric: tabular-nums; font-size: 1.1rem; }
+.pruef-dlg .zeit-zeile { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pruef-dlg .zeit-zeile .help { margin: 0; }
+
+/* Medienauswahl vor dem Hochladen: Vorschau, Name, Größe, ✕. */
+.medien-wahl { list-style: none; margin: 8px 0 0; padding: 0; }
+.medien-wahl li { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--linie); font-size: var(--fs-mittel); }
+.medien-wahl li img, .medien-wahl li .video-icon { width: 56px; height: 56px; object-fit: cover; border-radius: var(--radius); background: var(--grau-hell); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+.medien-wahl li .name { overflow-wrap: anywhere; }
+.medien-wahl li .name small { display: block; color: var(--grau); }
+.medien-wahl li .btn { min-width: 44px; min-height: 44px; justify-content: center; }
+.medien-knopf { width: 100%; justify-content: center; min-height: 48px; white-space: normal; }
+.pruef-dlg .up-stand { margin-top: 8px; }
+.pruef-dlg .up-stand progress { margin-top: 4px; }
+
+/* --- Mängel / Feedback -------------------------------------------------------------------- */
+.maengel-filter { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px 10px; align-items: end; margin: 0 0 14px; }
+.maengel-filter label { margin: 0 0 4px; }
+.maengel-filter label.inline { margin: 0; min-height: 40px; }
+.maengel-filter select { width: 100%; }
+.maengel-filter .knoepfe { grid-column: 1 / -1; }
+.tn-gruppe { margin: 0 0 18px; }
+.tn-gruppe h3 { border-bottom: 1px solid var(--linie); padding-bottom: 4px; margin: 0 0 8px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.tn-gruppe h3 .badge { vertical-align: baseline; }
+.mangel-karte { border: 1px solid var(--linie); border-left: 5px solid var(--rot); border-radius: var(--radius); padding: 8px 12px; margin: 0 0 8px; }
+.mangel-karte.gut { border-left-color: var(--ok); }
+.mangel-karte .mk-kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.mangel-karte .mk-kopf .leistung { font-weight: 700; font-size: 1rem; }
+.mangel-karte .mk-kopf .badge { margin-left: auto; }
+.mangel-karte .zeit { font-variant-numeric: tabular-nums; color: var(--grau); font-size: var(--fs-mittel); }
+.mangel-karte .kommentar { white-space: pre-wrap; margin: 4px 0; }
+.mangel-karte .abnahme { font-size: var(--fs-klein); color: var(--grau); }
+.mangel-karte .btn-row { margin-top: 8px; }
+
+/* --- Import-Dialog ------------------------------------------------------------------------- */
+.import-schritt { margin: 8px 0; }
+.import-datei { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.import-datei input[type=file] { max-width: 100%; }
+.import-zahlen { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0; font-size: var(--fs-mittel); }
+.import-zahlen b { font-size: 1.1rem; }
+.import-spalten { width: 100%; border-collapse: collapse; font-size: var(--fs-mittel); margin: 6px 0 12px; }
+.import-spalten th, .import-spalten td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--linie); vertical-align: top; }
+.import-spalten th { font-size: var(--fs-klein); color: var(--grau); }
+.import-spalten td.beispiele { color: var(--grau); font-size: var(--fs-klein); overflow-wrap: anywhere; }
+.import-spalten select { width: 100%; min-width: 150px; padding: 6px 8px; }
+.import-vorschau { width: 100%; border-collapse: collapse; font-size: var(--fs-klein); }
+.import-vorschau th, .import-vorschau td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--linie); }
+.import-vorschau th { color: var(--grau); }
+.import-vorschau tr.vorhanden td { color: var(--grau); }
+.import-warnungen { margin: 10px 0; }
+.import-warnungen ul { margin: 4px 0 0; padding-left: 18px; }
+.import-lehrgang .field-row { grid-template-columns: 1fr 1fr; }
+.import-fuellen { margin: 8px 0; }
+.import-arbeit { padding: 20px 0; text-align: center; color: var(--grau); }
+.import-arbeit progress { margin-top: 10px; }
+
+/* --- Zeilen der Referierenden im Lehrgang-Dialog (Klassen ausb-* bleiben) -------------------- */
+.ausb-liste { margin: 4px 0 8px; }
+.ausb-zeile { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) auto auto; gap: 6px; align-items: center; margin: 0 0 6px; }
+.ausb-zeile select, .ausb-zeile input { min-width: 0; }
+.ausb-zeile .ausb-wer { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ausb-zeile label.inline { margin: 0; font-size: var(--fs-klein); }
+.ausb-zeile .ausb-leit { white-space: nowrap; font-size: var(--fs-mittel); font-weight: 600; }
+.ausb-zeile .btn.ghost { padding: 6px 9px; }
+
+/* Verlauf-Dialog: Liste der Zustände, neueste oben. */
+.verlauf-liste { list-style: none; margin: 8px 0; padding: 0; }
+.verlauf-liste li { padding: 6px 0; border-bottom: 1px solid var(--linie); font-size: var(--fs-mittel); }
+.verlauf-liste li .ja { color: var(--ok); font-weight: 700; }
+.verlauf-liste li .nein { color: var(--rot); font-weight: 700; }
+.verlauf-liste li .quelle { color: var(--grau); font-size: var(--fs-klein); }
+
+/* Lightbox-Bildunterschrift – die Seitenleiste des Leuchtkastens aus app.css wird nur knapp gefüllt. */
+.lb-side .lb-meta { font-size: var(--fs-mittel); color: var(--grau); margin: 8px 0; }
+.lb-side .lb-meta strong { color: var(--anthrazit); display: block; overflow-wrap: anywhere; }
+.lb-img video { max-width: 100%; max-height: 92vh; }
+
+/* --- Druckansicht ----------------------------------------------------------------------------- */
+.pruef.druck { max-width: 900px; }
+.pruef.druck .druck-kopf { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; border-bottom: 2px solid var(--anthrazit); padding-bottom: 6px; margin-bottom: 14px; }
+.pruef.druck .druck-kopf h1 { margin: 0; flex: 1 1 auto; }
+.pruef.druck .druck-kopf .btn { margin-left: auto; }
+.pruef.druck .druck-filter { width: 100%; color: var(--grau); font-size: var(--fs-mittel); }
+.pruef.druck .mangel-karte { break-inside: avoid; }
+.pruef.druck .medien-grid { grid-template-columns: repeat(auto-fill, 72px); }
+/* In der Druckansicht gibt es nur die Übersicht – alles, was Bedienung ist, bleibt draußen,
+   auch die Bauchbinde (sie liegt außerhalb von <main>, daher über :has am body). */
+.pruef.druck .c-tabs, .pruef.druck .maengel-filter, .pruef.druck .su-banner, .pruef.druck .reiter-kopf .btn-row { display: none !important; }
+body:has(.pruef.druck) .bauchbinde { display: none; }
+body:has(.pruef.druck) #toast { top: 12px; }
+@media print {
+  .bauchbinde, #toast, .no-print, .pruef .btn, .pruef .btn-row, .pruef .c-tabs, .pruef .filter, .maengel-filter, .su-banner { display: none !important; }
+  .pruef { padding: 0; max-width: none; }
+  .mangel-karte, .tn-gruppe, .versuch-karte { break-inside: avoid; }
+  .medien-grid .medium .play { display: none; }
+  a { color: inherit; text-decoration: none; }
+  /* Profilbilder bleiben im Druck – sie helfen beim Zuordnen; Knöpfe fürs Ergebnis nicht. */
+  .erg-knoepfe, .komm-zelle.leer { display: none !important; }
+  .tn-bild { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+
+/* --- Telefon (≤ 760 px): Listen statt Tabellen, große Ziele ----------------------------------- */
+@media (max-width: 760px) {
+  .pruef { padding: 14px 12px 60px; }
+  .pruef .page-head { gap: 8px; }
+  .pruef .page-head .btn-row { margin-left: 0; width: 100%; }
+  .pruef .page-head .btn-row .btn { flex: 1 1 auto; justify-content: center; }
+  .pruef .reiter-kopf .btn-row { margin-left: 0; width: 100%; }
+  .pruef .reiter-kopf .btn-row .btn { flex: 1 1 auto; justify-content: center; }
+  .tn-desktop { display: none; }
+  .tn-mobil { display: block; }
+  .leistung-karte { grid-template-columns: 1fr; }
+  .leistung-karte .btn-row { justify-content: flex-start; }
+  .maengel-filter { grid-template-columns: 1fr; }
+  .maengel-filter .knoepfe .btn { flex: 1 1 auto; justify-content: center; }
+  /* Schmal: oben Person und ✕, darunter Funktion und der Haken „Leitung“. */
+  .ausb-zeile { grid-template-columns: 1fr auto; }
+  .ausb-zeile .ausb-wer { grid-column: 1; grid-row: 1; }
+  .ausb-zeile .btn.ghost { grid-column: 2; grid-row: 1; }
+  .ausb-zeile .ausb-funktion { grid-column: 1; grid-row: 2; }
+  .ausb-zeile .ausb-leit { grid-column: 2; grid-row: 2; }
+  .import-spalten thead { display: none; }
+  .import-spalten tr, .import-spalten td { display: block; }
+  .import-spalten tr { padding: 6px 0; border-bottom: 1px solid var(--linie); }
+  .import-spalten td { border: 0; padding: 2px 0; }
+  .import-spalten td.titel { font-weight: 600; }
+  .import-lehrgang .field-row { grid-template-columns: 1fr; }
+  .zelle-zeile { grid-template-columns: minmax(0, 1fr) 112px; }
+  .stoppuhr .su-anzeige { font-size: 2.2rem; }
+  .pruef-dlg .zeitfeld { max-width: 140px; }
+  .bew-wahl { gap: 8px; }
+  .bew-wahl button { font-size: .95rem; gap: 6px; }
+  .bew-wahl button .sym { font-size: 1.4rem; }
+  .su-banner { top: calc(var(--topbar) + 4px); }
+  .pruef .c-tabs.reiter button { font-size: var(--fs-klein); padding: 10px 2px; }
+  /* Matrix: Die klebende Namensspalte ließ neben sich keine ganze Zelle mehr frei (160 + 128 px
+     bei 336 px). Schmaler, Zellen ohne die Nebenzeile – die steht in „je Leistung“ und „je TN“. */
+  .pruef .bew-matrix th:first-child, .pruef .bew-matrix td:first-child { min-width: 108px; max-width: 132px; }
+  .bew-matrix .zelle { min-width: 92px; }
+  .bew-matrix .zelle .sub { display: none; }
+  .tn-block-felder { grid-template-columns: 1fr; }
+  /* „je TN“: die Gliederung in eigener Zeile unter dem Namen, bündig mit ihm (76 px Bild + 8 px Abstand + 4 px Rand). */
+  .tn-block-kopf .tn-gliederung { flex: 1 1 100%; padding-left: 88px; margin-top: -4px; font-weight: 400; font-size: var(--fs-mittel); }
+  .tn-block-kopf .tn-gliederung::before { content: none; }
+  /* Voraussetzungen verwalten: das Textfeld über die ganze Breite, die drei Knöpfe darunter –
+     nebeneinander blieben dem Text nur 160 px, und „Mindestalter 16 Jahre“ war abgeschnitten. */
+  .vor-liste li { flex-wrap: wrap; padding: 8px 0; }
+  .vor-liste li input[type=text] { flex: 1 1 100%; }
+  .tn-bild-zeile { align-items: flex-start; }
+  .tn-bild-zeile .btn-row .btn { flex: 1 1 auto; justify-content: center; }
+}
+/* Fingerbedienung: mindestens 44 px Höhe für alles, was man drückt – Knöpfe, Kästen, Reiter. */
+@media (pointer: coarse) {
+  /* Jeder Dialog dieser Seite (#dlg liegt außerhalb von <main>) – nicht nur die mit Zusatzklasse. */
+  .pruef .btn, #dlg .btn, .pruef-dlg .btn, .import-dlg .btn { min-height: 44px; }
+  .pruef .btn.small, #dlg .btn.small { min-height: 44px; padding: 9px 12px; }
+  .pruef .c-tabs button, .bew-umschalter .c-tabs button { min-height: 44px; }
+  .pruef .filter select, .pruef .filter input, .bew-umschalter select, .maengel-filter select,
+  .import-dlg select, .import-spalten select { min-height: 44px; }
+  .vk input[type=checkbox] { width: 40px; height: 40px; }
+  .vk-stempel { min-height: 24px; }
+  .zelle { min-height: 56px; }
+  .linkbtn { min-height: 44px; display: inline-flex; align-items: center; }
+  .vor-liste .btn.ghost, .leistung-karte .pfeile .btn, .ausb-zeile .btn.ghost { min-width: 44px; min-height: 44px; justify-content: center; }
+  .ausb-zeile .ausb-leit { min-height: 44px; }
+  .ausb-zeile .ausb-leit input[type=checkbox] { width: 24px; height: 24px; }
+  .medien-grid .medium-weg { width: 44px; height: 44px; }
+  .medien-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+  /* Der Schalter „nur offene Mängel“: das Kästchen selbst wird größer, die ganze Beschriftung ist Ziel. */
+  .maengel-filter label.inline { min-height: 44px; }
+  .maengel-filter input[type=checkbox] { width: 26px; height: 26px; }
+  /* Kommentarzelle und Ergebnisknöpfe sind Ziele wie die Bewertungszellen. */
+  .komm-zelle { min-height: 56px; }
+  .erg-knopf { width: 48px; height: 48px; }
+}
+
+/* --- Diktat: Mikrofon-Knopf neben Textfeldern (diktat.js) ------------------------------------
+   Der Kopf über dem Feld trägt links die Beschriftung, rechts den Knopf; läuft die Erkennung,
+   wird der Knopf rot und der Punkt pulst. Die Vorschauzeile zeigt, was der Browser gerade versteht. */
+.feld-kopf { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 12px 0 4px; }
+.feld-kopf label { margin: 0; }
+.btn.diktat { gap: 8px; }
+.btn.diktat .diktat-punkt { width: 10px; height: 10px; border-radius: 50%; background: var(--grau); flex: none; }
+.btn.diktat.an { background: var(--rot); color: var(--weiss); border-color: var(--rot); }
+.btn.diktat.an .diktat-punkt { background: var(--weiss); animation: diktat-puls 1s ease-in-out infinite; }
+@keyframes diktat-puls { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+@media (prefers-reduced-motion: reduce) { .btn.diktat.an .diktat-punkt { animation: none; } }
+.diktat-vorschau { font-size: var(--fs-klein); color: var(--grau); font-style: italic; margin: 4px 0 0; min-height: 1.2em; }
+.diktat-hinweis { margin-top: 4px; }
+
+/* --- Telefon im Querformat (Höhe ≤ 500 px): Alles flacher, damit Zeit, Wahl und Speichern
+   ohne langes Rollen erreichbar sind. --------------------------------------------------- */
+@media (max-height: 500px) {
+  .stoppuhr .su-anzeige { font-size: 1.8rem; }
+  .stoppuhr .su-knoepfe .btn { min-height: 40px; }
+  .pruef-dlg textarea, #dlg textarea { min-height: 56px; }
+  .bew-wahl button { min-height: 48px; }
+}
+
+/* --- Fingerbedienung, zweiter Teil --------------------------------------------------------- */
+@media (pointer: coarse) {
+  /* Abbrechen/Speichern kleben am unteren Rand des rollenden Dialogs – nach drei Versuchen mit
+     Medien musste man sonst bis ganz nach unten, um überhaupt abzubrechen. */
+  .pruef-dlg .abschluss .dlg-actions { position: sticky; bottom: -20px; background: var(--weiss); padding: 10px 0 20px; margin-top: 10px; border-top: 1px solid var(--linie); z-index: 1; }
+  /* Kleine Ziele, die bisher fehlten: Zurück-Verweis, aufklappbare Beschreibungen, Ankreuzfelder. */
+  .pruef .zurueck, .pruef summary, #dlg summary { min-height: 44px; display: inline-flex; align-items: center; }
+  #dlg label.inline { min-height: 44px; }
+  #dlg label.inline input[type=checkbox] { width: 24px; height: 24px; }
+  /* Kein Doppeltipp-Zoom: Zwei schnelle Tipps (Start → Stopp, zwei Haken) zoomten sonst hinein. */
+  .pruef button, .pruef .btn, .pruef input[type=checkbox], #dlg button, #dlg .btn, .zelle, .zelle-zeile, .vk-zeile, .c-tabs button { touch-action: manipulation; }
+}
+/* Ohne Maus gibt es kein Überfahren: Die Ergebnisknöpfe sahen dauerhaft ausgegraut aus, und
+   Namen, die eine Bearbeitung öffnen, wirkten wie Text. */
+@media (hover: none) {
+  .erg-knopf { filter: none; opacity: .9; }
+  .linkbtn, .vk-stempel { text-decoration: underline dotted; text-underline-offset: 3px; }
+}
+.tn-bild.klick { cursor: pointer; }
+/* Querformat mit Kerbe: Inhalt nicht unter Notch oder Dynamic Island. */
+@media (max-width: 760px) {
+  .pruef { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+}

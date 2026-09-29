@@ -13,7 +13,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
 
-from . import api_admin, api_albums, api_wiki, auth, db, medienpflege
+from . import api_admin, api_albums, api_pruefungen, api_wiki, auth, db, einstellungen, medienpflege
 from .images import AVATAR_MAX_BYTES, VIDEO_EXT
 
 
@@ -37,13 +37,17 @@ class PublicHostMiddleware:
     """Anfragen an die Wiki-Subdomain landen im öffentlichen Bereich (/oeffentlich/…).
     API, Medien und statische Dateien bleiben unverändert erreichbar."""
 
-    def __init__(self, wsgi, host):
-        self.wsgi, self.host = wsgi, host
+    def __init__(self, wsgi, app):
+        self.wsgi, self.app = wsgi, app
 
     def __call__(self, environ, start_response):
+        # Den Namen bei jeder Anfrage frisch aus der Konfiguration lesen, nicht beim Bauen
+        # einmal festhalten: Sonst ließe sich der öffentliche Hostname zwar in den Einstellungen
+        # ändern, bliebe aber bis zum nächsten Neustart wirkungslos.
+        host = self.app.config.get("PUBLIC_HOST") or ""
         req_host = _idna(environ.get("HTTP_X_FORWARDED_HOST") or environ.get("HTTP_HOST", ""))
         path = environ.get("PATH_INFO", "/")
-        if self.host and req_host == self.host and not path.startswith(("/static/", "/media/", "/api/", "/oeffentlich")):
+        if host and req_host == host and not path.startswith(("/static/", "/media/", "/api/", "/oeffentlich")):
             environ["PATH_INFO"] = "/oeffentlich" + (path if path != "/" else "/")
         return self.wsgi(environ, start_response)
 
@@ -176,6 +180,66 @@ def admin():
     return render_template("admin.html", user=auth.current_user())
 
 
+# --- Prüfungen: nur für Nutzer mit dem Zusatzrecht „Prüfer“ -------------------------------------
+# Der Bereich hat drei Ansichten unter einer Seite: die Lehrgangsliste, ein Lehrgang mit seinen
+# Reitern und eine druckfreundliche Mängelübersicht. Was zu zeigen ist, liest das JavaScript aus
+# den Datenattributen; das Recht prüft jede Route selbst – ein ausgeblendeter Reiter ist kein Schutz.
+
+def _pruefungen_seite(ansicht, lehrgang_id=None, katalog_id=None):
+    if not auth.is_pruefer():
+        abort(403)
+    return render_template("pruefungen.html", user=auth.current_user(), ansicht=ansicht,
+                           lehrgang_id=lehrgang_id, katalog_id=katalog_id)
+
+
+@pages.get("/pruefungen")
+@auth.page_login_required
+def pruefungen():
+    return _pruefungen_seite("liste")
+
+
+# Kataloge sind kein Lehrgang – eigene, wortgleiche Routen (nicht unter <int:lid>, sonst gäbe es
+# einen Lehrgang mit der Nummer „kataloge“ nie zu sehen). Vor der <int:lid>-Route eingetragen ist
+# das nicht nötig: Flasks Konverter lässt „kataloge“ dort ohnehin nie durch.
+@pages.get("/pruefungen/kataloge")
+@auth.page_login_required
+def pruefungen_kataloge():
+    return _pruefungen_seite("kataloge")
+
+
+@pages.get("/pruefungen/kataloge/<int:kid>")
+@auth.page_login_required
+def pruefungen_katalog(kid):
+    return _pruefungen_seite("katalog", katalog_id=kid)
+
+
+@pages.get("/pruefungen/<int:lid>")
+@auth.page_login_required
+def pruefungen_lehrgang(lid):
+    return _pruefungen_seite("lehrgang", lid)
+
+
+@pages.get("/pruefungen/<int:lid>/druck")
+@auth.page_login_required
+def pruefungen_druck(lid):
+    return _pruefungen_seite("druck", lid)
+
+
+@pages.get("/media/pruefung/<kind>/<path:filename>")
+def pruefung_media(kind, filename):
+    """Bilder und Videos zu Prüfungen. Sie zeigen Teilnehmende – also nur an Prüfer, und nie in
+    einen gemeinsamen Zwischenspeicher. Der Weg liegt außerhalb von /media/<kind>/, damit die
+    allgemeine Medienroute (jeder Angemeldete) hier nicht greift."""
+    if kind not in ("orig", "web", "thumb", "avatar"):
+        abort(404)
+    if not auth.current_user():
+        abort(401)
+    if not auth.is_pruefer():
+        abort(403)
+    wurzel = os.path.join(current_app.config["MEDIA_DIR"], "pruefungen", kind)
+    return _media_response(wurzel, filename, 60 * 60, private=True)
+
+
 def _safe_next(value):
     """Nur seiteneigene Ziele zulassen – „//fremde.seite“ wäre eine offene Weiterleitung.
     Browser lesen den Rückstrich wie einen Schrägstrich („/\\fremde.seite“) und werfen führende
@@ -268,6 +332,7 @@ def create_app():
         SMTP_ENVELOPE_FROM=os.environ.get("SMTP_ENVELOPE_FROM", ""),
         ADMIN_NOTIFY_EMAIL=os.environ.get("ADMIN_NOTIFY_EMAIL", ""),
         LOGIN_SLIDESHOW=_env_bool("LOGIN_SLIDESHOW", True),
+        SPRACHEINGABE=_env_bool("SPRACHEINGABE", True),     # Diktat an den Kommentarfeldern der Prüfungen
         PUBLIC_HOST=_idna(os.environ.get("PUBLIC_HOST", "wiki.strömis.de")),
         PUBLIC_URL=os.environ.get("PUBLIC_URL", "https://wiki.strömis.de").rstrip("/"),
         SESSION_COOKIE_HTTPONLY=True,
@@ -318,7 +383,7 @@ def create_app():
             'Kartendarstellung: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)'),
     )
     app.json.ensure_ascii = False
-    app.wsgi_app = PublicHostMiddleware(ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1), app.config["PUBLIC_HOST"])
+    app.wsgi_app = PublicHostMiddleware(ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1), app)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -329,12 +394,17 @@ def create_app():
             # einmalig: Anhänge und Seitenverweise vorhandener Seiten zuordnen
             api_wiki.backfill_page_files()
         auth.ensure_admin()
+    # Was jetzt in der Konfiguration steht, kommt aus Umgebung und Vorgaben. Diese Kopie ist die
+    # Grundlage für "zurück auf die Vorgabe" – danach liegen die gespeicherten Werte darüber.
+    einstellungen.grundstand_merken(app)
+    einstellungen.beim_start_anwenden(app)
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(api_albums.bp)
     app.register_blueprint(api_wiki.bp)
     app.register_blueprint(api_wiki.public_bp)
     app.register_blueprint(api_admin.bp)
+    app.register_blueprint(api_pruefungen.bp)
     app.register_blueprint(pages)
 
     # Bestandsvideos, die noch nicht jeder Browser abspielt, werden im Hintergrund gewandelt.
@@ -353,19 +423,37 @@ def create_app():
     # gewöhnliche Aufrufe. Das Profilbild braucht mehr als die – eine Aufnahme vom Telefon hat
     # mehrere Megabyte –, aber längst nicht so viel wie ein Film, und die Grenze muss greifen,
     # bevor irgendetwas gepuffert wird.
-    upload_limits = {
-        "albums.upload_photos": app.config["MAX_CONTENT_LENGTH"],
-        "albums.einwurf": app.config["MAX_CONTENT_LENGTH"],
-        "wiki.upload_file": app.config["MAX_CONTENT_LENGTH"],
-        "auth.set_avatar": AVATAR_MAX_BYTES,
-    }
+    # Welche Route die große Grenze bekommt – die Zahl selbst wird bei jeder Anfrage frisch
+    # gelesen, sonst bliebe eine in den Einstellungen geänderte Grenze bis zum Neustart wirkungslos.
+    GROSSE_UPLOADS = ("albums.upload_photos", "albums.einwurf", "wiki.upload_file", "pruefungen.upload_medien")
+    # Eine Excel-Teilnehmerliste hat einige hundert Kilobyte; sie wird vollständig in den Speicher
+    # gelesen. Die Filmgrenze wäre hier eine Einladung, den Arbeitsprozess mit Gigabytes zu füllen.
+    IMPORT_MAX_BYTES = 25 * 1024 * 1024
+    IMPORT_ROUTEN = ("pruefungen.import_vorschau", "pruefungen.import_uebernehmen")
+
+    @app.before_request
+    def einstellungen_anwenden():
+        """Die im Browser gesetzten Werte über die Konfiguration legen.
+
+        Muss vor allem anderen laufen: size_guard liest MAX_REQUEST_LENGTH, die Seiten lesen
+        SITE_NAME, der Mailversand die SMTP-Angaben. Statische Dateien und Medien bleiben außen
+        vor – eine Bilddatei soll keine Datenbankabfrage kosten."""
+        if not einstellungen.ist_statisch():
+            einstellungen.anwenden()
 
     @app.before_request
     def size_guard():
         """MAX_CONTENT_LENGTH gilt prozessweit und muss wegen der Uploads riesig sein. Überall
         sonst genügt ein enges Limit, sonst puffert der Server auch für einen anonymen Aufruf
         gigabyteweise Daten, bevor überhaupt eine Prüfung greift."""
-        limit = upload_limits.get(request.endpoint, app.config["MAX_REQUEST_LENGTH"])
+        if request.endpoint in ("auth.set_avatar", "pruefungen.upload_tn_bild"):
+            limit = AVATAR_MAX_BYTES
+        elif request.endpoint in IMPORT_ROUTEN:
+            limit = IMPORT_MAX_BYTES
+        elif request.endpoint in GROSSE_UPLOADS:
+            limit = app.config["MAX_CONTENT_LENGTH"]
+        else:
+            limit = app.config["MAX_REQUEST_LENGTH"]
         if (request.content_length or 0) > limit:
             return jsonify(error="Die gesendeten Daten sind zu groß (Grenze: "
                                  f"{limit // (1024 * 1024)} MB)."), 413
@@ -389,7 +477,8 @@ def create_app():
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        resp.headers.setdefault("Permissions-Policy", "geolocation=(self), camera=()")
+        # Mikrofon nur für die eigene Seite: das Diktat der Prüfungen (Web Speech API) braucht es.
+        resp.headers.setdefault("Permissions-Policy", "geolocation=(self), camera=(), microphone=(self)")
         resp.headers.setdefault(
             "Content-Security-Policy",
             f"default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; "
@@ -399,7 +488,8 @@ def create_app():
 
     @app.context_processor
     def inject():
-        return {"cfg": app.config, "is_admin": auth.is_admin(), "csp_nonce": getattr(g, "csp_nonce", "")}
+        return {"cfg": app.config, "is_admin": auth.is_admin(), "is_pruefer": auth.is_pruefer(),
+                "csp_nonce": getattr(g, "csp_nonce", "")}
 
     @app.errorhandler(413)
     def too_large(_e):

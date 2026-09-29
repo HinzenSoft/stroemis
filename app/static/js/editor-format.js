@@ -96,13 +96,24 @@ window.EDMD = (function () {
          andere Abschnitt; der Einbau hat keinen eigenen Inhalt, nur ein Ziel – er wird deshalb
          zu einer einzelnen Marke ohne "$$ende". Steht im Rumpf doch etwas, bleibt die Zeile
          :::-Text, sonst ginge dieser Inhalt beim Speichern verloren. */
-      if (name === "baustein") {
-        marke("$$baustein", args.trim() || "abschnitt");
+      /* Ohne Kennung oder mit "#" darin ist der Abschnitt nicht ansprechbar: Das Ziel eines
+         Einbaus wird an "#" zerlegt, und was dahinter steht, ist dann nicht die Kennung.
+         Solche Zeilen bleiben :::-Text, statt dass der Editor eine Kennung erfindet – vorher
+         schrieb er stillschweigend "abschnitt" hinein, und schon bloßes Öffnen und Speichern
+         änderte den Artikel und gab ihm eine Adresse, die niemand vergeben hat.
+         Dieselbe "$$"-Vorsicht wie bei Hinweis und Box: Ein "$$ende" im Rumpf schlösse den
+         Abschnitt beim Zurückwandeln an der falschen Stelle. */
+      if (name === "baustein" && args.trim() && args.indexOf("#") < 0
+          && !body.some((l) => l.trim().startsWith("$$"))) {
+        marke("$$baustein", args.trim());
         out.push(...wandleBloecke(body));
         marke("$$ende");
         i = end; continue;
       }
-      if (name === "einbau" && !body.some((l) => l.trim())) {
+      /* Ohne Ziel keine Marke: Toast UI lässt die leere Rumpfzeile fallen, die Marke hat dann
+         nur noch zwei Zeilen – und beim Speichern erkennt sie sich selbst nicht mehr. Aus
+         ":::einbau" wurde so "$$einbau", also Markensyntax mitten im gespeicherten Artikel. */
+      if (name === "einbau" && args.trim() && !body.some((l) => l.trim())) {
         marke("$$einbau", args.trim());
         i = end; continue;
       }
@@ -241,9 +252,14 @@ window.EDMD = (function () {
     return out;
   }
 
-  // Meldet, ob beim letzten Rückwandeln unvollständige Abschnitte begradigt wurden – dann
-  // hat jemand eine Marke gelöscht, und der Abschnitt verschwindet beim Speichern.
-  let markenRepariert = false;
+  /* Meldet, ob beim letzten Rückwandeln unvollständige Abschnitte begradigt wurden – dann
+     hat jemand eine Marke gelöscht, und der Abschnitt verschwindet beim Speichern.
+     Gemerkt wird auch, WELCHE Art betroffen war: Ein zerfallener Baustein wiegt schwerer als
+     ein zerfallener Spaltenabschnitt, denn mit ihm verschwindet die Kennung, über die andere
+     Seiten ihn einbinden. Vorher war das ein bloßer Schalter, und die Meldung sprach in jedem
+     Fall von „Spalten- oder Ausrichtungsabschnitt“. */
+  const reparaturArten = new Set();
+  const reparatur = (art) => reparaturArten.add(art || "abschnitt");
   /* Der Titel einer einklappbaren Box steht im Editor als gewöhnlicher Absatz zwischen
      "$$akkordeon" und "$$koerper". Gespeichert gehört er in die Kopfzeile ":::accordion …",
      denn nur dort liest ihn die Leseansicht. Mehrere Zeilen werden zu einer zusammengezogen;
@@ -252,7 +268,7 @@ window.EDMD = (function () {
     if (!eintrag || eintrag.pos == null) return;
     const roh = out.splice(eintrag.pos + 1).map((z) => z.trim()).filter(Boolean);
     const titel = roh.filter((z) => !/^(:::|\|\|\|)/.test(z));
-    if (titel.length !== 1 || titel.length !== roh.length) markenRepariert = true;
+    if (titel.length !== 1 || titel.length !== roh.length) reparatur("akkordeon");
     // Ohne Titel bleibt die Kopfzeile leer: „:::accordion“ und „:::accordion Details“ sind zwei
     // verschiedene Texte, und das Speichern soll keinen Titel erfinden, den niemand geschrieben hat.
     out[eintrag.pos] = `:::accordion ${titel.join(" ")}`.trimEnd();
@@ -282,7 +298,7 @@ window.EDMD = (function () {
   }
 
   function fromEditorMd(md) {
-    markenRepariert = false;
+    reparaturArten.clear();
     // Ausgezeichnete Stellen gibt der Editor als "$$widgetN ++text++$$" zurück – Klammer weg.
     let src = String(md || "").replace(/\$\$widget\d+ ([\s\S]*?)\$\$/g, "$1");
     // Der harte Umbruch kommt als Zeichen zurück und wird wieder zu zwei Leerzeichen und
@@ -331,17 +347,23 @@ window.EDMD = (function () {
           const emoji = kopf.slice(1).join(" ");
           out.push(`:::${ck in MD.CALLOUTS ? ck : "info"}${emoji ? " " + emoji : ""}`);
           stapel.push({ art: "callout", start: out.length - 1 });
-        } else if (art === "baustein") { out.push(`:::baustein ${arg || "abschnitt"}`); stapel.push({ art: "baustein", start: out.length - 1 }); }
+        } else if (art === "baustein") {
+          // Leere Kennung: Der Nutzer hat sie im Editor entfernt. "abschnitt" ist dann ein
+          // Notbehelf, damit der Abschnitt nicht zerfällt – erfunden wird sie nur noch hier,
+          // nie beim bloßen Öffnen eines vorhandenen Artikels.
+          out.push(`:::baustein ${arg || "abschnitt"}`);
+          stapel.push({ art: "baustein", start: out.length - 1 });
+        }
         else if (art === "einbau") { out.push(`:::einbau ${arg}`.trimEnd(), ":::"); }
-        else if (art === "spalte") { if (oben && oben.art === "columns") { out.push("|||"); oben.trenner.push(out.length - 1); } else markenRepariert = true; }
-        else if (art === "koerper") { if (oben && oben.art === "accordion") titelUebernehmen(out, oben); else markenRepariert = true; }
+        else if (art === "spalte") { if (oben && oben.art === "columns") { out.push("|||"); oben.trenner.push(out.length - 1); } else reparatur("spalten"); }
+        else if (art === "koerper") { if (oben && oben.art === "accordion") titelUebernehmen(out, oben); else reparatur("akkordeon"); }
         else if (stapel.length) {
           const zu = stapel.pop();
           // Fehlt die Trennmarke, ist der ganze Abschnitt Titel – dann bleibt die Box leer.
-          if (zu.pos != null) { titelUebernehmen(out, zu); markenRepariert = true; }
+          if (zu.pos != null) { titelUebernehmen(out, zu); reparatur("akkordeon"); }
           out.push(":::");
         }
-        else markenRepariert = true;                 // Abschluss ohne Anfang
+        else reparatur();                            // Abschluss ohne Anfang
         continue;
       }
       // Ältere Entwürfe aus dem Browserspeicher können noch die geschlossene Form enthalten.
@@ -376,7 +398,7 @@ window.EDMD = (function () {
       // bei fehlender Trennmarke) – beides zu vermischen ließ jede Schlussmarke ein Akkordeon sehen.
       for (const t of (zu.trenner || []).slice().reverse()) out.splice(t, 1);
       if (zu.start != null) out.splice(zu.start, 1);
-      markenRepariert = true;
+      reparatur(zu.art);
     }
     if (open) out.push(":::");
     // Steht am Textende ein $$-Block, hängt Toast UI einen leeren Absatz an; der käme als
@@ -584,35 +606,109 @@ window.EDMD = (function () {
      Marke entfernt. Das unterscheidet es von der Ausrichtung, die umschaltet und aufräumt.
      "kopf" sind die Zeilen der öffnenden Marke, etwa ["$$baustein", "sicherung", "$$"].
      Liefert { md } oder { fehler }. */
+  /* Eine Auswahl, die einen Abschnitt nur halb erwischt, auf ganze Abschnitte aufrunden.
+     Der Normalfall „ein Absatz und die Hinweiskiste darunter“ scheiterte früher an einer
+     Fehlermeldung, und zwar aus einem Grund, den niemand sehen konnte: Die Schlussmarke
+     ist im Editor null Pixel hoch, eine mit der Maus gezogene Auswahl endet deshalb immer
+     VOR ihr. Die Tiefe war eins, also Absage – und der Rat („innerhalb eines Abschnitts
+     auswählen“) zeigte in die falsche Richtung, nötig gewesen wäre MEHR Auswahl.
+     Statt abzulehnen wandern die Grenzen jetzt bis zur fehlenden Marke. Sie wandern dabei
+     nur nach außen, also endet die Schleife; fehlt der Partner ganz, wird abgebrochen.
+     Liefert { von, bis } oder null. */
+  function ausgleichen(lines, blocks, von, bis) {
+    const art = (j) => (lines[blocks[j].start] || "").trim();
+    for (let runde = 0; runde <= blocks.length; runde++) {
+      let tiefe = 0, fehltDavor = false;
+      for (let j = von; j <= bis; j++) {
+        const a = art(j);
+        if (ABSCHNITT_AUF.has(a)) tiefe++;
+        else if (a === "$$ende") { if (tiefe) tiefe--; else { fehltDavor = true; break; } }
+      }
+      if (fehltDavor) {
+        // Zum ersten unbeantworteten "$$ende" die Öffnungsmarke davor suchen.
+        let t = 0, neu = -1;
+        for (let j = von - 1; j >= 0; j--) {
+          const a = art(j);
+          if (a === "$$ende") t++;
+          else if (ABSCHNITT_AUF.has(a)) { if (!t) { neu = j; break; } t--; }
+        }
+        if (neu < 0) return null;
+        von = neu; continue;
+      }
+      if (!tiefe) return { von, bis };
+      // Zur innersten noch offenen Marke die Schlussmarke dahinter suchen.
+      let t = 0, neu = -1;
+      for (let j = bis + 1; j < blocks.length; j++) {
+        const a = art(j);
+        if (ABSCHNITT_AUF.has(a)) t++;
+        else if (a === "$$ende") { if (!t) { neu = j; break; } t--; }
+      }
+      if (neu < 0) return null;
+      bis = neu;
+    }
+    return null;
+  }
+
   function einfassen(md, { markeZeile, endeZeile, amBlockanfang, kopf }) {
     const { lines, blocks } = topLevelBlocks(md);
     const blockZu = (z) => blocks.findIndex((b) => z >= b.start && z < b.end);
-    const idxVon = blockZu(markeZeile);
+    let idxVon = blockZu(markeZeile);
     let idxBis = endeZeile >= 0 ? blockZu(endeZeile) : idxVon;
     if (idxBis < 0) idxBis = idxVon;
     // Endet die Auswahl genau am Anfang des nächsten Absatzes, gehört der nicht mehr dazu.
     if (amBlockanfang && idxBis > idxVon) idxBis--;
     if (idxVon < 0 || idxBis < idxVon) return { fehler: "" };
-    /* Die Auswahl muss für sich stehen: Wer mitten in einem Abschnitt anfängt und außerhalb
-       aufhört, ließe sich nur einfassen, indem der vorhandene Abschnitt zerschnitten wird. */
-    let tiefe = 0;
+    const vorher = { von: idxVon, bis: idxBis };
+    const rund = ausgleichen(lines, blocks, idxVon, idxBis);
+    if (!rund) {
+      return { fehler: "Hier fehlt einem Abschnitt die Schlussmarke. Bitte erst den Abschnitt "
+                     + "in Ordnung bringen." };
+    }
+    idxVon = rund.von; idxBis = rund.bis;
+    /* Der Spaltentrenner lässt sich nicht aufrunden: Er steht INNERHALB eines Abschnitts,
+       die Tiefe ist dabei null, es gibt also nichts zu erweitern. Angenommen wurde eine solche
+       Auswahl früher trotzdem – das Markenpaar legte sich um den Trenner, und beim Speichern
+       verschwand er: Aus zwei Spalten wurde stillschweigend eine, der Text lief untereinander. */
+    let tiefe = 0, trenner = false;
     for (let j = idxVon; j <= idxBis; j++) {
       const a = (lines[blocks[j].start] || "").trim();
       if (ABSCHNITT_AUF.has(a)) tiefe++;
-      else if (a === "$$ende") { tiefe--; if (tiefe < 0) break; }
+      else if (a === "$$ende") tiefe--;
+      else if (a === "$$spalte" && tiefe === 0) trenner = true;
     }
-    if (tiefe !== 0) {
-      return { fehler: "Die Auswahl reicht über einen Abschnitt hinaus. Bitte innerhalb eines "
-                     + "Abschnitts auswählen." };
+    if (trenner) {
+      return { fehler: "Die Auswahl reicht über eine Spaltengrenze. Bitte innerhalb einer "
+                     + "Spalte auswählen – oder den ganzen Spaltenabschnitt über sein "
+                     + "Blockmenü nehmen." };
     }
     const out = [...lines.slice(0, blocks[idxVon].start), ...kopf, "",
                  ...lines.slice(blocks[idxVon].start, blocks[idxBis].end), "",
                  "$$ende", "$$", ...lines.slice(blocks[idxBis].end)];
-    return { md: entleere(out).join("\n") };
+    // "erweitert" sagt dem Aufrufer, dass mehr im Abschnitt steht als markiert war – das darf
+    // nicht stillschweigend geschehen.
+    return { md: entleere(out).join("\n"),
+             erweitert: idxVon !== vorher.von || idxBis !== vorher.bis };
   }
 
-  return { toEditorMd, fromEditorMd, repariert: () => markenRepariert, topLevelBlocks, entleere,
-           MARKEN_RE, ausrichten, einfassen,
+  /* Was beim Speichern begradigt wurde – als Satz, den die Oberfläche anzeigen kann.
+     Leer heißt: nichts war kaputt. */
+  const reparaturText = () => {
+    if (!reparaturArten.size) return "";
+    if (reparaturArten.has("baustein")) {
+      return "Einem synchronisierten Abschnitt fehlte eine Marke – sie wurden entfernt, der "
+           + "Inhalt bleibt. Seiten, die ihn einbinden, finden ihn jetzt nicht mehr.";
+    }
+    if (reparaturArten.has("columns")) {
+      return "Einem Spaltenabschnitt fehlte eine Marke – die Marken wurden entfernt, der Inhalt "
+           + "bleibt erhalten und steht jetzt untereinander.";
+    }
+    return "Einem Abschnitt fehlte eine Marke – die Marken wurden entfernt, der Inhalt bleibt "
+         + "erhalten.";
+  };
+
+  return { toEditorMd, fromEditorMd, repariert: () => reparaturArten.size > 0, reparaturText,
+           topLevelBlocks, entleere,
+           MARKEN_RE, ausrichten, einfassen, ausgleichen,
            SNIPPETS, hinweisMd, akkordeonMd, bausteinMd, einbauMd, hinweisKopf, hinweisZeile,
            HINWEIS_NAME, ABSCHNITT_AUF };
 })();

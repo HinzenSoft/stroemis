@@ -3,7 +3,7 @@ import secrets
 
 from flask import Blueprint, current_app, jsonify
 
-from . import db, medienpflege
+from . import db, einstellungen, medienpflege
 from .auth import (EMAIL_RE, MIN_PW, ROLLEN, admin_required, can_reset, clear_attempts, current_user,
                    eingabefehler_abfangen, json_body, public_user, send_reset_mail)
 from .images import delete_avatar
@@ -49,6 +49,40 @@ def testmail():
                    umschlag=(cfg.get("SMTP_ENVELOPE_FROM") or "").strip() or None)
 
 
+@bp.get("/einstellungen")
+@admin_required
+def einstellungen_lesen():
+    """Alle einstellbaren Werte samt Herkunft. Das Mailkennwort ist nie dabei."""
+    return jsonify(**einstellungen.als_json(), aus=einstellungen.abgeschaltet())
+
+
+@bp.put("/einstellungen")
+@admin_required
+def einstellungen_schreiben():
+    """Werte speichern. Sie gelten ab der nächsten Anfrage, auch in den anderen Arbeitsprozessen.
+
+    Unbekannte Schlüssel werden übergangen – so kann kein Aufruf von außen beliebige Werte in
+    die Konfiguration schreiben."""
+    d = json_body()
+    try:
+        anzahl = einstellungen.speichern(d.get("werte") or {}, current_user()["id"])
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 400
+    einstellungen.anwenden()
+    current_app.logger.info("Einstellungen geändert von %s: %s Felder", current_user()["email"], anzahl)
+    return jsonify(**einstellungen.als_json(), gespeichert=anzahl)
+
+
+@bp.delete("/einstellungen/<schluessel>")
+@admin_required
+def einstellungen_zuruecksetzen(schluessel):
+    """Einen Wert wieder aus .env und Vorgabe holen."""
+    if not einstellungen.zuruecksetzen(schluessel):
+        return jsonify(error="Diese Einstellung gibt es nicht."), 404
+    current_app.logger.info("Einstellung %s von %s zurückgesetzt", schluessel, current_user()["email"])
+    return jsonify(**einstellungen.als_json())
+
+
 @bp.get("/videos")
 @admin_required
 def videos():
@@ -61,12 +95,15 @@ def videos():
 def list_users():
     rows = db.query(
         "SELECT u.*, (SELECT COUNT(*) FROM albums a WHERE a.owner_id = u.id) AS album_count, "
-        "(SELECT COUNT(*) FROM photos p WHERE p.owner_id = u.id) AS photo_count "
+        "(SELECT COUNT(*) FROM photos p WHERE p.owner_id = u.id) AS photo_count, "
+        # Artikel, die der Nutzer angelegt hat – ohne den Papierkorb, der zählt nicht als Inhalt.
+        "(SELECT COUNT(*) FROM wiki_pages w WHERE w.created_by = u.id AND w.deleted_at IS NULL) AS page_count "
         "FROM users u ORDER BY (u.status = 'pending') DESC, u.created_at")
     out = []
     for r in rows:
         u = public_user(r)
-        u["album_count"], u["photo_count"] = r["album_count"], r["photo_count"]
+        u["album_count"], u["photo_count"], u["page_count"] = r["album_count"], r["photo_count"], r["page_count"]
+        u["last_login"] = r["last_login"]
         out.append(u)
     return jsonify(users=out)
 
@@ -84,9 +121,10 @@ def create_user():
     if len(pw) < MIN_PW:
         return jsonify(error=f"Das Passwort muss mindestens {MIN_PW} Zeichen lang sein."), 400
     uid = db.execute(
-        "INSERT INTO users (email, password_hash, name, gliederung, phone, role, created_at) VALUES (?,?,?,?,?,?,?)",
+        "INSERT INTO users (email, password_hash, name, gliederung, phone, role, is_pruefer, created_at) "
+        "VALUES (?,?,?,?,?,?,?,?)",
         (email, generate_password_hash(pw), (d.get("name") or "").strip(), (d.get("gliederung") or "").strip(),
-         (d.get("phone") or "").strip(), _rolle(d.get("role")), db.now()))
+         (d.get("phone") or "").strip(), _rolle(d.get("role")), 1 if d.get("is_pruefer") else 0, db.now()))
     u = db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True)
     mailed = False
     if d.get("send_invite"):
@@ -122,6 +160,9 @@ def update_user(uid):
         if uid == current_user()["id"] and role != "admin":
             return jsonify(error="Du kannst dir nicht selbst die Administratorrechte entziehen."), 400
         vals["role"] = role
+    if "is_pruefer" in d:
+        # Zusatzrecht neben der Rolle – darf auch beim eigenen Konto gesetzt und entzogen werden.
+        vals["is_pruefer"] = 1 if d.get("is_pruefer") else 0
     if "active" in d:
         active = 1 if d.get("active") else 0
         if uid == current_user()["id"] and not active:

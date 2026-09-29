@@ -22,7 +22,8 @@
   <nav class="nav" aria-label="Hauptnavigation">
     <a href="/" class="{% if active == 'wiki' %}active{% endif %}">Wiki</a>
     <a href="/karte" class="{% if active == 'map' %}active{% endif %}">Spots</a>
-    {% if is_admin %}<a href="/admin" class="{% if active == 'admin' %}active{% endif %}">Nutzer</a>{% endif %}
+    {% if is_pruefer %}<a href="/pruefungen" class="{% if active == 'pruefungen' %}active{% endif %}">Prüfungen</a>{% endif %}
+    {% if is_admin %}<a href="/admin" class="{% if active == 'admin' %}active{% endif %}">Verwaltung</a>{% endif %}
     <a href="/profil" class="{% if active == 'profile' %}active{% endif %}"><span class="user">{{ user.name or user.email }}</span>&nbsp;Profil</a>
     <button type="button" id="logout">Abmelden</button>
   </nav>
@@ -30,7 +31,7 @@
 </header>
 {% block body %}{% endblock %}
 <div id="toast" role="status" aria-live="polite"></div>
-<script nonce="{{ csp_nonce }}">window.STROEMIS = { user: {{ (user and {'id': user.id, 'name': user.name, 'email': user.email, 'role': user.role}) | tojson }}, mapCenter: {{ cfg.MAP_CENTER | tojson }}, mapZoom: {{ cfg.MAP_ZOOM }}, tileUrl: {{ cfg.TILE_URL | tojson }}, tileAttribution: {{ cfg.TILE_ATTRIBUTION | tojson }}, topoUrl: {{ cfg.TOPO_URL | tojson }}, topoAttribution: {{ cfg.TOPO_ATTRIBUTION | tojson }}, satUrl: {{ cfg.SAT_URL | tojson }}, satAttribution: {{ cfg.SAT_ATTRIBUTION | tojson }}, satLabelsUrl: {{ cfg.SAT_LABELS_URL | tojson }}, publicUrl: {{ cfg.PUBLIC_URL | tojson }}, maxUploadMb: {{ cfg.MAX_CONTENT_LENGTH // 1048576 }} };</script>
+<script nonce="{{ csp_nonce }}">window.STROEMIS = { user: {{ (user and {'id': user.id, 'name': user.name, 'email': user.email, 'role': user.role, 'is_pruefer': (user.is_pruefer or 0) | int > 0}) | tojson }}, mapCenter: {{ cfg.MAP_CENTER | tojson }}, mapZoom: {{ cfg.MAP_ZOOM }}, tileUrl: {{ cfg.TILE_URL | tojson }}, tileAttribution: {{ cfg.TILE_ATTRIBUTION | tojson }}, topoUrl: {{ cfg.TOPO_URL | tojson }}, topoAttribution: {{ cfg.TOPO_ATTRIBUTION | tojson }}, satUrl: {{ cfg.SAT_URL | tojson }}, satAttribution: {{ cfg.SAT_ATTRIBUTION | tojson }}, satLabelsUrl: {{ cfg.SAT_LABELS_URL | tojson }}, publicUrl: {{ cfg.PUBLIC_URL | tojson }}, maxUploadMb: {{ cfg.MAX_CONTENT_LENGTH // 1048576 }}, spracheingabe: {{ cfg.SPRACHEINGABE | tojson }} };</script>
 <script src="{{ url_for('static', filename='js/common.js') }}"></script>
 {% block scripts %}{% endblock %}
 </body>

@@ -109,6 +109,20 @@ const KORPUS = {
   einbauImText: "Davor.\n\n:::einbau ankertechnik#sicherung\n:::\n\nDanach.",
   einbauOhneZiel: ":::einbau\n:::",
   bausteinInSpalten: ":::columns\n:::baustein links\nA\n:::\n|||\nRechts\n:::",
+  /* Eine Kennung ist Pflicht und darf kein "#" enthalten – sonst ist der Abschnitt nicht
+     ansprechbar, denn das Ziel eines Einbaus wird an "#" zerlegt. Solche Zeilen bleiben
+     :::-Text; vorher schrieb der Editor stillschweigend "abschnitt" hinein und gab dem
+     Abschnitt damit eine Adresse, die niemand vergeben hat. */
+  bausteinOhneKennung: ":::baustein\nInhalt\n:::",
+  bausteinKennungMitRaute: ":::baustein a#b\nInhalt\n:::",
+  // Dieselbe "$$"-Vorsicht wie bei Hinweis und Box (siehe boxMitDollar).
+  bausteinMitDollar: ":::baustein formel\n```\n$$latex\n```\n:::",
+  bausteinInKiste: ":::info \u{1F4A1}\n:::baustein drin\nText in Kiste und Baustein\n:::\n:::",
+  bausteinInBox: ":::accordion Titel\n:::baustein drin\nText in Box und Baustein\n:::\n:::",
+  bausteinZweimalGleich: ":::baustein doppelt\nErster\n:::\n\n:::baustein doppelt\nZweiter\n:::",
+  bausteinUmSpalten: ":::baustein quer\n:::columns\nLinks\n|||\nRechts\n:::\n:::",
+  einbauInSpalten: ":::columns\n:::einbau seite#teil\n:::\n|||\nRechts\n:::",
+  einbauEingerueckt: "Davor.\n\n  :::einbau seite#teil\n  :::\n\nDanach.",
   gemischt: "# Titel\n\n:::columns\n### Links\n\n* a\n* b\n|||\n:::accordion Rechts\n:::info 💡\ntief verschachtelt\n:::\n:::\n:::\n\nSchluss.",
   ohneSchluss: ":::info 💡\nText ohne Abschluss",
   waise: "Text\n\n|||\n\nMehr Text",
@@ -148,6 +162,21 @@ const rundlauf = (md) => {
   return EDMD.fromEditorMd(editor.getMarkdown());
 };
 
+/* Fälle, in denen die ERSTE Runde den Text bewusst begradigt: Toast UI schreibt Tabellen,
+   Umbrüche, Linien und Auszeichnungen in seiner eigenen Schreibweise. Für alle anderen gilt die
+   Invariante strenger, als sie bisher geprüft wurde: Nicht nur Runde 1 und 2 müssen gleich sein,
+   schon Runde 1 darf am Ausgangstext kein Byte ändern. Vorher verglich der Prüfstand nur eins
+   gegen zwei – deshalb fiel nie auf, dass aus ":::baustein" ein ":::baustein abschnitt" wurde
+   und aus ":::einbau" ein "$$einbau". */
+const BEGRADIGT = new Set([
+  "absatz", "listeGeschachtelt", "zitat", "linie", "codeTilde", "tabelleAusrichtung",
+  "tabellePipeCode", "tabelleMarken", "tabelleVerbundenKopf", "auszeichnungen", "links",
+  "hinweisListeTief", "hinweisEingerueckt", "hinweisEinzeilig", "boxLeer", "waise",
+  "htmlMarken", "bildUnterschrift", "leerzeilen", "leerzeileVorAbschnitt", "absatzUmbrochen",
+  "absatzUmbrochenMitMarken", "umbruchVorListe", "zitatUmbrochen", "zitatZweiAbsaetze",
+  "einbauEingerueckt",
+]);
+
 const raus = document.getElementById("ergebnis");
 let fehler = 0, gesamt = 0;
 for (const name in KORPUS) {
@@ -159,6 +188,9 @@ for (const name in KORPUS) {
     zwei = rundlauf(eins);
   } catch (e) {
     meldung = "Ausnahme: " + e.message;
+  }
+  if (!meldung && eins !== md && !BEGRADIGT.has(name)) {
+    meldung = "Runde 1 ändert den Ausgangstext:\nvorher:\n" + md + "\n\nnachher:\n" + eins;
   }
   const stabil = !meldung && eins === zwei;
   if (!stabil) fehler++;
@@ -396,6 +428,95 @@ pruefe("eine Auswahl innerhalb eines Hinweises bleibt darin", () =>
   gleich(ausricht("$$hinweis\ninfo 💡\n$$\n\n«A\n\nB»\n\n$$ende\n$$", "center"),
          "$$hinweis\ninfo 💡\n$$\n\n$$ausrichtung\ncenter\n$$\n\nA\n\nB\n\n$$ende\n$$\n\n$$ende\n$$"));
 
+/* --- Aus Absätzen eine Liste --------------------------------------------------------
+   Eine gesetzte Leerzeile ist im Editor ein eigener, leerer Absatz. Toast UI machte beim
+   Umwandeln aus jedem Absatz der Auswahl einen Listenpunkt – zwischen den eigentlichen
+   Punkten standen deshalb leere. Aufgeräumt wird nach der Umwandlung: Davor setzte das
+   Layout-Plugin die Leerzeilen sofort wieder ein, weil zwei Absätze sie brauchen. */
+const listenProbe = (md, befehl) => {
+  ed2.setMarkdown(EDMD.toEditorMd(md), false);
+  const view = ed2.wwEditor.view;
+  const Auswahl = view.state.selection.constructor;
+  // Alles auswählen – so, wie es jemand mit der Maus täte.
+  view.dispatch(view.state.tr.setSelection(Auswahl.create(view.state.doc, 1, view.state.doc.content.size - 1)));
+  ed2.exec(befehl || "bulletList");
+  EDLAYOUT.leereListenpunkteWeg(ed2.wwEditor.view);
+  return [...ed2.wwEditor.view.dom.querySelectorAll("li")].map((li) => li.textContent.replace(/\u00a0/g, "").trim());
+};
+
+pruefe("aus Absätzen mit Leerzeilen wird eine Liste ohne leere Punkte", () => {
+  const raus = listenProbe("Eins\n\n&nbsp;\n\nZwei\n\n&nbsp;\n\nDrei");
+  return raus.join("|") === "Eins|Zwei|Drei" ? "" : "heraus: " + JSON.stringify(raus);
+});
+
+pruefe("dasselbe für die nummerierte Liste", () => {
+  const raus = listenProbe("Eins\n\n&nbsp;\n\nZwei", "orderedList");
+  return raus.join("|") === "Eins|Zwei" ? "" : "heraus: " + JSON.stringify(raus);
+});
+
+/* Gegenprobe: Ein einzelner leerer Absatz soll einen leeren Punkt ergeben – wer eine leere
+   Liste anlegt, will genau das. Sonst käme gar nichts heraus. */
+pruefe("eine leere Auswahl ergibt weiter einen leeren Punkt", () => {
+  const raus = listenProbe("&nbsp;");
+  return raus.length === 1 && raus[0] === "" ? "" : "heraus: " + JSON.stringify(raus);
+});
+
+/* --- Löschschutz --------------------------------------------------------------------
+   Steht der Schreibstrich unmittelbar neben einem Abschnitt, ist er mit einem Tastendruck
+   weg – und mit ihm beim Speichern der ganze Abschnitt. Geprüft wird über denselben Weg,
+   den auch der Browser nimmt: handleKeyDown des Layout-Plugins. Liefert es true, ist die
+   Taste abgewehrt.
+   Der Einbau kam hier lange nicht vor: Er stand zwar in der Liste der geschützten Arten,
+   aber geschuetzteKnoten hatte für ihn keinen Zweig – er ist eine einzelne Marke ohne
+   Schlussmarke und fiel deshalb durch alle. Die Rücktaste räumte ihn kommentarlos weg. */
+const schutzProbe = (md, wohin) => {
+  ed2.setMarkdown(EDMD.toEditorMd(md), false);
+  const view = ed2.wwEditor.view;
+  const doc = view.state.doc;
+  let ziel = -1;
+  doc.forEach((n, off) => {
+    if (ziel < 0 && n.isTextblock && n.textContent.startsWith(wohin)) ziel = off + 1;
+  });
+  if (ziel < 0) return { fehler: `Absatz „${wohin}“ nicht gefunden` };
+  const Auswahl = view.state.selection.constructor;
+  view.dispatch(view.state.tr.setSelection(Auswahl.create(doc, ziel)));
+  /* Gemessen wird am Ergebnis, nicht am Rückgabewert: someProp fragt ALLE Plugins, und die
+     Grundbelegung von ProseMirror beantwortet die Rücktaste ohnehin mit true. Nur der
+     Blockzähler sagt, ob der Nachbar überlebt hat. Dazu die Meldung, die der Schutz nach
+     außen gibt – ohne sie bliebe die Taste wirkungslos, und das liest sich wie ein Fehler. */
+  let gemeldet = null;
+  const horch = (e) => { gemeldet = e.detail && e.detail.art; };
+  document.addEventListener("edlayout:geschuetzt", horch);
+  const vorher = view.state.doc.childCount;
+  const ev = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true });
+  view.someProp("handleKeyDown", (f) => f(view, ev));
+  document.removeEventListener("edlayout:geschuetzt", horch);
+  return { unveraendert: view.state.doc.childCount === vorher, gemeldet };
+};
+
+pruefe("die Rücktaste löscht einen eingebundenen Abschnitt nicht", () => {
+  const e = schutzProbe(":::einbau seite#teil\n:::\n\nDanach.", "Danach.");
+  if (e.fehler) return e.fehler;
+  if (!e.unveraendert) return "der Einbau wurde gelöscht";
+  return e.gemeldet === "einbau" ? "" : "gemeldet wurde: " + e.gemeldet;
+});
+
+pruefe("die Rücktaste löscht die Schlussmarke eines Bausteins nicht", () => {
+  const e = schutzProbe(":::baustein teil\nInhalt\n:::\n\nDanach.", "Danach.");
+  if (e.fehler) return e.fehler;
+  if (!e.unveraendert) return "die Schlussmarke wurde gelöscht";
+  return e.gemeldet === "baustein" ? "" : "gemeldet wurde: " + e.gemeldet;
+});
+
+/* Gegenprobe: Zwischen zwei gewöhnlichen Absätzen darf der Schutz schweigen – sonst wäre er
+   kein Schutz, sondern eine kaputte Taste. Ob ProseMirror die beiden Absätze dann wirklich
+   zusammenzieht, prüft dieser Aufbau nicht: Die nachgebaute Taste erreicht die Grundbelegung
+   des Editors nicht. Geprüft wird das Unsere – dass hier nichts abgewehrt wird. */
+pruefe("zwischen zwei Absätzen wehrt nichts ab", () => {
+  const e = schutzProbe("Davor.\n\nDanach.", "Danach.");
+  return e.fehler || (e.gemeldet ? "ohne Grund abgewehrt: " + e.gemeldet : "");
+});
+
 /* Auswahl in einen synchronisierten Abschnitt fassen – dieselben Stellen wie bei der
    Ausrichtung (siehe ausricht), nur fasst EDMD.einfassen ein, statt umzuschalten. */
 const einfass = (probe) => {
@@ -419,9 +540,41 @@ pruefe("ein vorhandener Abschnitt wandert vollständig mit hinein", () =>
   gleich(einfass("«$$hinweis\ninfo 💡\n$$\n\nIn der Kiste\n\n$$ende\n$$»"),
          "$$baustein\nkennung\n$$\n\n$$hinweis\ninfo 💡\n$$\n\nIn der Kiste\n\n$$ende\n$$\n\n$$ende\n$$"));
 
-pruefe("eine Auswahl über eine Abschnittsgrenze hinaus wird abgelehnt", () => {
-  const erg = einfass("$$hinweis\ninfo 💡\n$$\n\n«In der Kiste\n\n$$ende\n$$\n\nDanach»");
-  return erg.md === undefined && /über einen Abschnitt hinaus/.test(erg.fehler || "")
+/* Aufrunden statt Ablehnen. Die Schlussmarke ist im Editor null Pixel hoch, eine gezogene
+   Auswahl endet deshalb immer vor ihr – der Normalfall "Absatz plus Hinweiskiste" scheiterte
+   an einer Fehlermeldung, deren Rat obendrein in die falsche Richtung zeigte. Jetzt wandern
+   die Grenzen bis zur fehlenden Marke, und "erweitert" sagt es an. */
+pruefe("eine Auswahl, die in einem Abschnitt beginnt, wird nach vorn erweitert", () =>
+  gleich(einfass("$$hinweis\ninfo 💡\n$$\n\n«In der Kiste\n\n$$ende\n$$\n\nDanach»"),
+         "$$baustein\nkennung\n$$\n\n$$hinweis\ninfo 💡\n$$\n\nIn der Kiste\n\n$$ende\n$$\n\nDanach\n\n$$ende\n$$"));
+
+pruefe("Absatz plus Hinweiskiste – der häufigste Fall überhaupt", () =>
+  gleich(einfass("«Davor\n\n$$hinweis\ninfo 💡\n$$\n\nIn der Kiste»\n\n$$ende\n$$"),
+         "$$baustein\nkennung\n$$\n\nDavor\n\n$$hinweis\ninfo 💡\n$$\n\nIn der Kiste\n\n$$ende\n$$\n\n$$ende\n$$"));
+
+pruefe("die Erweiterung wird gemeldet, die passgenaue Auswahl nicht", () => {
+  const eng = einfass("A\n\n«B\n\nC»\n\nD");
+  const weit = einfass("«Davor\n\n$$hinweis\ninfo 💡\n$$\n\nIn der Kiste»\n\n$$ende\n$$");
+  return eng.erweitert === false && weit.erweitert === true
+    ? "" : "heraus: eng=" + eng.erweitert + " weit=" + weit.erweitert;
+});
+
+pruefe("eine Auswahl über eine Spaltengrenze wird abgelehnt", () => {
+  const erg = einfass("$$spalten\n$$\n\n«Links\n\n$$spalte\n$$\n\nRechts»\n\n$$ende\n$$");
+  return erg.md === undefined && /Spaltengrenze/.test(erg.fehler || "")
+    ? "" : "heraus:\n" + JSON.stringify(erg);
+});
+
+/* Beginnt die Auswahl in Spalte 1 und endet hinter dem Spaltenabschnitt, wird nach vorn bis
+   zur Öffnungsmarke erweitert – der ganze Abschnitt kommt mit, und der Trenner liegt dann
+   nicht mehr auf Tiefe null. Deshalb ist die Ansage an den Nutzer Pflicht. */
+pruefe("von Spalte 1 bis hinter den Abschnitt erweitert auf den ganzen Abschnitt", () =>
+  gleich(einfass("$$spalten\n$$\n\n«Links\n\n$$spalte\n$$\n\nRechts\n\n$$ende\n$$\n\nDanach»"),
+         "$$baustein\nkennung\n$$\n\n$$spalten\n$$\n\nLinks\n\n$$spalte\n$$\n\nRechts\n\n$$ende\n$$\n\nDanach\n\n$$ende\n$$"));
+
+pruefe("fehlt dem Abschnitt die Schlussmarke, wird nicht geraten", () => {
+  const erg = einfass("«$$hinweis\ninfo 💡\n$$\n\nIn der Kiste»\n\nDanach");
+  return erg.md === undefined && /Schlussmarke/.test(erg.fehler || "")
     ? "" : "heraus:\n" + JSON.stringify(erg);
 });
 

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% set active = 'pruefungen' %}
+{% block title %}Prüfungen – strömis.de{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/toastui/toastui-editor.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pruefungen.css') }}">
+{% endblock %}
+{% block body %}
+{# Eine Seite, drei Ansichten: Lehrgangsliste, ein Lehrgang mit seinen Reitern, die druckfreundliche
+   Mängelübersicht. Welche gemeint ist, sagt die Route über data-ansicht; das JavaScript baut den
+   Inhalt daraus. Für den Druck gibt es keine eigene body-Klasse (base.html), deshalb trägt das
+   <main> die Klasse „druck“ – pruefungen.css blendet damit alles außer der Übersicht aus. #}
+<main class="page pruef{% if ansicht == 'druck' %} druck{% endif %}" id="pruef"
+      data-ansicht="{{ ansicht }}" data-lehrgang="{{ lehrgang_id if lehrgang_id is not none else '' }}"
+      data-katalog="{{ katalog_id if katalog_id is not none else '' }}">
+  <p class="help" id="pruef-laden">Wird geladen …</p>
+</main>
+<dialog id="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
+<dialog id="lightbox" class="lightbox"><div class="lb" id="lb-body"></div></dialog>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/marked/marked.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/dompurify/purify.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/toastui/toastui-editor-all.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/toastui/de-de.js') }}"></script>
+<script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
+<script src="{{ url_for('static', filename='js/diktat.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pruefungen.js') }}"></script>
+{% endblock %}

@@ -484,7 +484,12 @@ window.MD = (function () {
     root.querySelectorAll("h1, h2, h3, h4, h5").forEach((h) => {
       // Die id wird immer aus dem Text gebildet – eine mitgebrachte (rohes HTML, Import) käme
       // ungeprüft in ein href und war so ein Weg am Sanitizer vorbei in die Leiste.
-      let id = h.textContent.trim().toLowerCase().replace(/[äöüß]/g, (c) => ({ ä: "ae", ö: "oe", ü: "ue", ß: "ss" }[c]))
+      /* Ohne den Anker rechnen: Sein "#" steht im textContent und flösse in die Kennung ein.
+         Heute fällt es am Ende weg, sobald es aber einmal nicht am Rand steht, verschöbe sich
+         die Kennung bei jedem weiteren Lauf. */
+      const roh = [...h.childNodes].filter((n) => !(n.nodeType === 1 && n.classList.contains("h-anchor")))
+        .map((n) => n.textContent).join("");
+      let id = roh.trim().toLowerCase().replace(/[äöüß]/g, (c) => ({ ä: "ae", ö: "oe", ü: "ue", ß: "ss" }[c]))
         .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "abschnitt";
       let n = 2, base = id;
       // Zweimal derselbe Abschnittsname – und: Eine Überschrift „Toc“ oder „Tree“ ergäbe eine
@@ -494,7 +499,8 @@ window.MD = (function () {
       while (used.has(id) || fremd(id)) id = `${base}-${n++}`;
       used.add(id);
       h.id = id;
-      items.push({ id, level: +h.tagName[1], text: h.textContent.trim() });
+      // Ohne den Anker: Sonst stünde in der Leiste „Ankertechnik#“.
+      items.push({ id, level: +h.tagName[1], text: roh.trim() });
     });
     return items;
   }
@@ -509,24 +515,50 @@ window.MD = (function () {
      ließe sich über einen Einbau abfragen, welche Seiten es gibt. */
   const EINBAU_TIEFE = 3;                 // Baustein im Baustein – irgendwo ist Schluss
 
-  function einbauFuellen(wurzel, o, tiefe, speicher) {
+  function einbauFuellen(wurzel, o, tiefe, speicher, kette) {
+    const bisher = kette || [];
     wurzel.querySelectorAll(".einbau[data-ziel]").forEach((el) => {
       if (el.dataset.gefuellt) return;
       el.dataset.gefuellt = "1";
       const teil = String(el.getAttribute("data-ziel") || "").split("#");
       const slug = (teil[0] || "").trim();
-      const kennung = (teil[1] || "").trim();
+      const kennung = teil.slice(1).join("#").trim();
       const sage = (text) => { el.innerHTML = `<div class="einbau-fehlt">${esc(text)}</div>`; };
       if (!slug || !kennung) return sage("Eingebundener Abschnitt ohne Ziel – erwartet wird „seite#abschnitt“.");
+      /* Bindet ein Abschnitt sich selbst ein – unmittelbar oder über Umwege –, wuchs der Text
+         bis zur Tiefengrenze immer weiter, und derselbe Absatz stand dreifach ineinander da.
+         Die Kette sagt, was auf dem Weg hierher schon eingesetzt wurde. */
+      const ich = `${slug.toLowerCase()}#${kennung.toLowerCase()}`;
+      if (bisher.includes(ich)) {
+        return sage(`„${kennung}“ bindet sich selbst ein – das lässt sich nicht auflösen.`);
+      }
       if (tiefe >= EINBAU_TIEFE) return sage("Zu viele ineinander eingebundene Abschnitte.");
       if (typeof o.holeSeite !== "function") return sage(`Eingebundener Abschnitt „${kennung}“ aus „${slug}“.`);
-      if (!speicher.has(slug)) speicher.set(slug, Promise.resolve(o.holeSeite(slug)).catch(() => null));
-      speicher.get(slug).then((seite) => {
+      /* Fehlschläge NICHT im Zwischenspeicher behalten: Vorher fiel jeder Fehler – Abbruch,
+         Zeitüberschreitung, Serverfehler – auf dieselbe Aussage „gibt es nicht“ zusammen, und
+         weil das Ergebnis liegen blieb, wurde es nicht einmal erneut versucht. */
+      if (!speicher.has(slug)) {
+        speicher.set(slug, Promise.resolve(o.holeSeite(slug))
+          .then((seite) => ({ seite }), (fehler) => { speicher.delete(slug); return { fehler }; }));
+      }
+      speicher.get(slug).then(({ seite, fehler }) => {
+        if (fehler) {
+          const st = fehler && fehler.status;
+          // 404 und 403 bleiben ununterscheidbar: Sonst ließe sich über einen Einbau abfragen,
+          // welche Seiten es gibt. Alles andere ist kein Befund über die Seite, sondern über
+          // die Verbindung – und das gehört auch so gesagt.
+          return sage(st === 404 || st === 403
+            ? `Der eingebundene Abschnitt ist nicht verfügbar: „${slug}“ gibt es nicht oder du darfst die Seite nicht lesen.`
+            : `Der eingebundene Abschnitt aus „${slug}“ ließ sich gerade nicht laden (${(fehler && fehler.message) || "unbekannter Fehler"}). Beim nächsten Aufruf wird es erneut versucht.`);
+        }
         if (!seite) return sage(`Der eingebundene Abschnitt ist nicht verfügbar: „${slug}“ gibt es nicht oder du darfst die Seite nicht lesen.`);
         const huelle = document.createElement("div");
         huelle.innerHTML = render(seite.content);
+        // Groß- und Kleinschreibung darf die Kennung nicht trennen: Wer "Sicherung" einbindet
+        // und "sicherung" geschrieben hat, sah nur "gibt es nicht (mehr)".
+        const kl = kennung.toLowerCase();
         const quelle = [...huelle.querySelectorAll(".baustein")]
-          .find((b) => b.getAttribute("data-baustein") === kennung);
+          .find((b) => String(b.getAttribute("data-baustein") || "").toLowerCase() === kl);
         if (!quelle) return sage(`Den Abschnitt „${kennung}“ gibt es auf „${seite.title}“ nicht (mehr).`);
         el.innerHTML = "";
         const inhalt = document.createElement("div");
@@ -540,33 +572,35 @@ window.MD = (function () {
         a.textContent = seite.title;
         fuss.append(document.createTextNode("Aus "), a);
         el.appendChild(fuss);
-        einbauFuellen(inhalt, o, tiefe + 1, speicher);   // Baustein im Baustein
+        einbauFuellen(inhalt, o, tiefe + 1, speicher, bisher.concat(ich));   // Baustein im Baustein
+        /* Links, Inhaltsverzeichnis und Scrollspy entstehen VOR enhance und kennen den
+           eingebundenen Text deshalb nicht: Seine Überschriften fehlten im Verzeichnis, seine
+           internen Links luden im Wiki die ganze Anwendung neu und führten im öffentlichen
+           Bereich auf /wiki/… und damit zur Anmeldung.
+           Das kommt VOR der Nachbearbeitung: buildToc vergibt die Kennungen der Überschriften,
+           und ohne Kennung bekommt eine Überschrift keinen Anker. */
+        if (typeof o.nachInhalt === "function") { try { o.nachInhalt(inhalt); } catch (e) { /* egal */ } }
+        /* Und jetzt dasselbe wie für den eigenen Text der Seite. Ohne das stand im Einbau der
+           rohe Vorsatz "@cols=2:" als Zellentext, breite Tabellen sprengten die Spalte, Code
+           hatte keinen Kopierknopf und Bilder kein Vollbild. */
+        nachbearbeiten(inhalt);
       });
     });
   }
 
-  function enhance(root, opts) {
-    const o = opts || {};
-    einbauFuellen(root, o, 0, new Map());
+  /* Alles, was aus dem gerenderten HTML erst den fertigen Artikel macht: Bildunterschrift und
+     Vollbild, verbundene Tabellenzellen, Scrollbereich, Kopierknopf am Code, Sortierknöpfe und
+     die Anker an den Überschriften.
 
-    // Platzhalter aus :::toc und :::unterseiten füllen
-    root.querySelectorAll(".md-marker[data-marker=toc]").forEach((el) => {
-      const items = buildToc(root);
-      el.innerHTML = items.length
-        ? `<div class="inline-toc"><strong>Inhalt</strong>${tocHtml(items)}</div>`
-        : '<div class="inline-toc muted small">Noch keine Überschriften.</div>';
-    });
-    root.querySelectorAll(".md-marker[data-marker=unterseiten]").forEach((el) => {
-      const kids = o.children || [];
-      el.innerHTML = kids.length
-        ? `<div class="children-list"><strong>Unterseiten</strong><ul>${kids.map((k) =>
-            `<li><a href="${esc(o.prefix || "/wiki/")}${esc(k.slug)}">${k.icon ? esc(k.icon) + " " : ""}${esc(k.title)}</a></li>`).join("")}</ul></div>`
-        : '<div class="muted small">Diese Seite hat keine Unterseiten.</div>';
-    });
-
+     Eigene Funktion, weil das auch für EINGEBUNDENEN Text gilt. Der trifft erst später ein –
+     einbauFuellen läuft asynchron und wurde als erste Zeile von enhance angestoßen, alles
+     Weitere lief synchron darüber hinweg. Im Einbau stand deshalb der rohe Vorsatz "@cols=2:"
+     als Zellentext, Codeblöcke hatten keinen Kopierknopf, Bilder kein Vollbild und
+     Überschriften keinen Anker. */
+  function nachbearbeiten(wurzel) {
     // Bildunterschrift: ein kursiver Absatz direkt unter dem Bild wird zur Beschriftung.
     // Diese Schreibweise überlebt den WYSIWYG-Editor, ein Bildtitel ("…") dagegen nicht.
-    root.querySelectorAll("p > img:only-child").forEach((img) => {
+    wurzel.querySelectorAll("p > img:only-child").forEach((img) => {
       const para = img.parentElement;
       const next = para.nextElementSibling;
       if (!next || next.tagName !== "P") return;
@@ -582,8 +616,11 @@ window.MD = (function () {
     });
 
     // Bilder und Videos im Vollbild ansehen
-    root.querySelectorAll("img").forEach((img) => {
+    wurzel.querySelectorAll("img").forEach((img) => {
       if (img.closest("a")) return;                     // verlinkte Bilder behalten ihren Link
+      // Ein zweiter Lauf über denselben Baum hinge einen zweiten Rückruf an – und ein Klick
+      // öffnete das Vollbild doppelt.
+      if (img.classList.contains("zoomable")) return;
       img.classList.add("zoomable");
       img.addEventListener("click", () => openLightbox(img.getAttribute("src"), img.getAttribute("alt")));
     });
@@ -591,7 +628,7 @@ window.MD = (function () {
     /* Zusammengefasste Zellen: Der Editor schreibt sie als Vorsatz in die Zelle
        ("@cols=2:Text", "@rows=2:Text"). marked kennt nur gewöhnliche Tabellen und lässt den
        Vorsatz als Text stehen – hier wird daraus das, was er meint. */
-    root.querySelectorAll("td, th").forEach((zelle) => {
+    wurzel.querySelectorAll("td, th").forEach((zelle) => {
       let vorsatz = zelle.textContent;
       if (vorsatz.indexOf("@cols=") !== 0 && vorsatz.indexOf("@rows=") !== 0) return;
       let spalten = 1, zeilen = 1, m;
@@ -611,8 +648,12 @@ window.MD = (function () {
     /* Und die Zellen wieder weg, die nur dastehen, weil GFM jede Zeile gleich lang haben will:
        Was eine verbundene Zelle überdeckt, steht im Markdown gar nicht – marked füllt es auf.
        Gezählt wird wie im Browser: Jede Zelle rückt auf die nächste freie Spalte. */
-    root.querySelectorAll("table").forEach((t) => {
+    wurzel.querySelectorAll("table").forEach((t) => {
       if (!t.querySelector("[colspan], [rowspan]")) return;
+      // Nur einmal je Tabelle: Beim zweiten Lauf stünden die Füllzellen nicht mehr da, und
+      // die Rechnung träfe echte Zellen.
+      if (t.dataset.zellenGezaehlt) return;
+      t.dataset.zellenGezaehlt = "1";
       // Spaltenzahl aus der längsten Zeile: Die Kopfzeile trägt die aufgefüllten Zellen
       // (siehe tabellenkoepfeFuellen) und wäre mit ihren Spannen zu breit gerechnet.
       const breite = [...t.rows].reduce((n, r) => Math.max(n, r.cells.length), 0);
@@ -636,7 +677,7 @@ window.MD = (function () {
       });
     });
 
-    root.querySelectorAll("table").forEach((t) => {
+    wurzel.querySelectorAll("table").forEach((t) => {
       if (t.parentElement && t.parentElement.classList.contains("table-scroll")) return;
       const box = document.createElement("div");
       box.className = "table-scroll";
@@ -644,7 +685,7 @@ window.MD = (function () {
       box.appendChild(t);
     });
 
-    root.querySelectorAll("pre").forEach((pre) => {
+    wurzel.querySelectorAll("pre").forEach((pre) => {
       if (pre.parentElement && pre.parentElement.classList.contains("code-block")) return;
       const box = document.createElement("div");
       box.className = "code-block";
@@ -669,7 +710,7 @@ window.MD = (function () {
     });
 
     // Tabellen nach Spalte sortieren – rein in der Ansicht, der Inhalt bleibt unverändert.
-    root.querySelectorAll("table").forEach((t) => {
+    wurzel.querySelectorAll("table").forEach((t) => {
       const head = t.tHead && t.tHead.rows[0];
       const body = t.tBodies[0];
       if (!head || !body || body.rows.length < 2) return;
@@ -703,8 +744,12 @@ window.MD = (function () {
       });
     });
 
-    root.querySelectorAll("h1[id], h2[id], h3[id], h4[id], h5[id]").forEach((h) => {
-      if (h.querySelector(".h-anchor")) return;
+    wurzel.querySelectorAll("h1[id], h2[id], h3[id], h4[id], h5[id]").forEach((h) => {
+      /* Einen vorhandenen Anker auffrischen statt ihn stehen zu lassen: buildToc vergibt die
+         Kennungen bei jedem Lauf neu, und sobald eingebundener Text dazukommt, können sie sich
+         verschieben. Ein Anker mit alter Kennung spränge dann auf die falsche Stelle. */
+      const da = h.querySelector(".h-anchor");
+      if (da) { da.href = "#" + h.id; return; }
       const a = document.createElement("a");
       a.className = "h-anchor";
       a.href = "#" + h.id;
@@ -715,6 +760,30 @@ window.MD = (function () {
       a.title = "Link zu diesem Abschnitt";
       h.appendChild(a);
     });
+  }
+
+  function enhance(root, opts) {
+    const o = opts || {};
+    einbauFuellen(root, o, 0, new Map());
+
+    // Platzhalter aus :::toc und :::unterseiten füllen
+    root.querySelectorAll(".md-marker[data-marker=toc]").forEach((el) => {
+      const items = buildToc(root);
+      el.innerHTML = items.length
+        ? `<div class="inline-toc"><strong>Inhalt</strong>${tocHtml(items)}</div>`
+        : '<div class="inline-toc muted small">Noch keine Überschriften.</div>';
+    });
+    root.querySelectorAll(".md-marker[data-marker=unterseiten]").forEach((el) => {
+      const kids = o.children || [];
+      el.innerHTML = kids.length
+        ? `<div class="children-list"><strong>Unterseiten</strong><ul>${kids.map((k) =>
+            `<li><a href="${esc(o.prefix || "/wiki/")}${esc(k.slug)}">${k.icon ? esc(k.icon) + " " : ""}${esc(k.title)}</a></li>`).join("")}</ul></div>`
+        : '<div class="muted small">Diese Seite hat keine Unterseiten.</div>';
+    });
+
+    // Zuletzt der Rest: Was hier steht, ist schon da. Der eingebundene Text bekommt
+    // dieselbe Behandlung, sobald er eintrifft (siehe einbauFuellen).
+    nachbearbeiten(root);
   }
 
   /* Bild im Vollbild – ein einziges Overlay für alle Seiten. */
