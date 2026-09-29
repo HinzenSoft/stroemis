@@ -86,14 +86,14 @@ def _ist_leitungsfunktion(funktion):
 
 
 def _darf_leiten(lid):
-    """Lehrgangsleitung ist, wer im Lehrgang als Referierende:r mit Leitungsfunktion eingetragen ist
-    (über sein Nutzerkonto) – und die Administration. Ein Freitext-Eintrag ohne Konto zählt nicht:
-    Er ließe sich von jedem hineinschreiben."""
+    """Lehrgangsleitung ist, wer im Lehrgang mit dem Kennzeichen „Leitung“ eingetragen ist (über sein
+    Nutzerkonto) – und die Administration. Mehrere Personen je Lehrgang sind möglich. Ein Freitext-
+    Eintrag ohne Konto zählt nicht: Er ließe sich von jedem hineinschreiben."""
     if is_admin():
         return True
     uid = current_user()["id"]
-    return any(_ist_leitungsfunktion(a["funktion"]) for a in db.query(
-        "SELECT funktion FROM pruef_ausbilder WHERE lehrgang_id = ? AND user_id = ?", (lid, uid)))
+    return bool(db.query("SELECT 1 FROM pruef_ausbilder WHERE lehrgang_id = ? AND user_id = ? AND ist_leitung = 1",
+                         (lid, uid)))
 
 
 def _leitung(lid):
@@ -106,9 +106,9 @@ def _leitung_ergaenzen(ausbilder):
     bearbeiten. Administratoren brauchen den Eintrag nicht; wer sich selbst schon als Leitung
     eingetragen hat, bekommt keinen zweiten."""
     uid, name = _ich()
-    if is_admin() or any(a_uid == uid and _ist_leitungsfunktion(f) for a_uid, _, f in ausbilder):
+    if is_admin() or any(a_uid == uid and leit for a_uid, _, _, leit in ausbilder):
         return ausbilder
-    return [(uid, name, "Lehrgangsleitung")] + list(ausbilder)
+    return [(uid, name, "", 1)] + list(ausbilder)
 
 
 def _eingefroren_pruefen(tn):
@@ -250,6 +250,28 @@ def _leistung(lid):
     return row
 
 
+def _katalog(kid):
+    row = db.query("SELECT * FROM pruef_kataloge WHERE id = ?", (kid,), one=True)
+    if not row:
+        raise Abgelehnt("Katalog nicht gefunden", 404)
+    return row
+
+
+def _katalog_leistung(lid):
+    row = db.query("SELECT * FROM pruef_katalog_leistungen WHERE id = ?", (lid,), one=True)
+    if not row:
+        raise Abgelehnt("Katalogeintrag nicht gefunden", 404)
+    return row
+
+
+def _katalog_admin():
+    """Kataloge sind lehrgangsübergreifend – es gibt keine Leitung, die sie verwalten könnte.
+    Deshalb bleibt das Anlegen, Ändern und Löschen der Administration vorbehalten; jede:r Prüfer:in
+    darf sie lesen und beim Anlegen eines Lehrgangs als Vorlage wählen."""
+    if not is_admin():
+        raise Abgelehnt("Kataloge verwaltet nur die Administration.", 403)
+
+
 # Ein Versuch samt dem, was zur Anzeige immer dazugehört: Leistung und Teilnehmende:r.
 _VERSUCH_SQL = (
     "SELECT v.*, p.bezeichnung AS leistung_bezeichnung, p.sortierung AS leistung_sortierung, "
@@ -325,6 +347,27 @@ def _leistung_json(p):
 
 def _voraussetzung_json(v):
     return {k: v[k] for k in ("id", "bezeichnung", "sortierung")}
+
+
+# Kataloge tragen dieselben Spalten wie eine Prüfungsleistung (bezeichnung, beschreibung_md,
+# zeitansatz_sekunden, sortierung) – _leistung_json passt deshalb unverändert auf beide Tabellen.
+_KATALOG_SQL = ("SELECT k.*, (SELECT COUNT(*) FROM pruef_katalog_leistungen kl WHERE kl.katalog_id = k.id) "
+               "AS leistungen_anzahl FROM pruef_kataloge k ")
+
+
+def _katalog_kurz(r):
+    return {k: r[k] for k in ("id", "titel", "beschreibung", "created_by_name", "created_at",
+                              "updated_at", "leistungen_anzahl")}
+
+
+def _katalog_detail(kid):
+    r = db.query(_KATALOG_SQL + "WHERE k.id = ?", (kid,), one=True)
+    if not r:
+        raise Abgelehnt("Katalog nicht gefunden", 404)
+    out = _katalog_kurz(r)
+    out["leistungen"] = [_leistung_json(p) for p in db.query(
+        "SELECT * FROM pruef_katalog_leistungen WHERE katalog_id = ? ORDER BY sortierung, id", (kid,))]
+    return out
 
 
 def _teilnehmer_liste(lid, nur_tid=None):
@@ -420,8 +463,9 @@ def _lehrgang_detail(lid):
         raise Abgelehnt("Lehrgang nicht gefunden", 404)
     out = _lehrgang_kurz(r)
     out["beschreibung"] = r["beschreibung"]
-    out["ausbilder"] = db.query("SELECT id, user_id, name, funktion FROM pruef_ausbilder WHERE lehrgang_id = ? "
-                                "ORDER BY sortierung, id", (lid,))
+    out["ausbilder"] = [dict(a, ist_leitung=bool(a["ist_leitung"])) for a in db.query(
+        "SELECT id, user_id, name, funktion, ist_leitung FROM pruef_ausbilder WHERE lehrgang_id = ? "
+        "ORDER BY sortierung, id", (lid,))]
     out["voraussetzungen"] = [_voraussetzung_json(v) for v in db.query(
         "SELECT * FROM pruef_voraussetzungen WHERE lehrgang_id = ? ORDER BY sortierung, id", (lid,))]
     out["leistungen"] = [_leistung_json(p) for p in db.query(
@@ -494,7 +538,7 @@ def _zeitraum_pruefen(von, bis):
 
 
 def _ausbilder_liste(roh):
-    """Ausbilder aus dem Body: (user_id|None, name, funktion). Ein Verweis auf ein Nutzerkonto
+    """Ausbilder aus dem Body: (user_id|None, name, funktion, ist_leitung). Ein Verweis auf ein Nutzerkonto
     zieht dessen Namen, wenn keiner mitkommt; ein unbekanntes Konto wird zum Freitext –
     so bleibt der Eintrag erhalten, auch wenn die Kennung nicht (mehr) stimmt."""
     if roh is None:
@@ -507,6 +551,9 @@ def _ausbilder_liste(roh):
             continue
         name = sfield(e, "name").strip()[:120]
         funktion = sfield(e, "funktion").strip()[:80]
+        # Das Kennzeichen kommt aus dem Dialog. Fehlt es (ältere Aufrufe), zählt wie bisher ein „leit“
+        # in der Funktion – so bleibt ein Aufruf mit funktion="Lehrgangsleitung" weiter gültig.
+        leit = _bool(e, "ist_leitung") if "ist_leitung" in e else _ist_leitungsfunktion(funktion)
         uid, user = e.get("user_id"), None
         if uid not in (None, "") and not isinstance(uid, bool):
             try:
@@ -520,15 +567,15 @@ def _ausbilder_liste(roh):
         else:
             uid = None
         if name:
-            out.append((uid, name, funktion))
+            out.append((uid, name, funktion, int(leit)))
     return out
 
 
 def _ausbilder_schreiben(lid, ausbilder):
     db.execute("DELETE FROM pruef_ausbilder WHERE lehrgang_id = ?", (lid,))
-    for i, (uid, name, funktion) in enumerate(ausbilder):
-        db.execute("INSERT INTO pruef_ausbilder (lehrgang_id, user_id, name, funktion, sortierung) VALUES (?,?,?,?,?)",
-                   (lid, uid, name, funktion, i))
+    for i, (uid, name, funktion, leit) in enumerate(ausbilder):
+        db.execute("INSERT INTO pruef_ausbilder (lehrgang_id, user_id, name, funktion, ist_leitung, sortierung) "
+                   "VALUES (?,?,?,?,?,?)", (lid, uid, name, funktion, leit, i))
 
 
 @bp.get("/lehrgaenge")
@@ -556,6 +603,10 @@ def create_lehrgang():
     vals = _lehrgang_felder(d, neu=True)
     _zeitraum_pruefen(vals["datum_von"], vals["datum_bis"])
     ausbilder = _leitung_ergaenzen(_ausbilder_liste(d.get("ausbilder")))
+    # Katalog als Vorlage (optional): seine Leistungen werden gleich unten hineinkopiert, nicht
+    # verlinkt – wie bei kopieren(). Erst hier nachschlagen, damit ein unbekannter Katalog den
+    # Lehrgang gar nicht erst halb anlegt.
+    katalog = _katalog(_ganzzahl(d["katalog_id"], "Katalog")) if d.get("katalog_id") not in (None, "") else None
     uid, name = _ich()
     ts = db.now()
     with db.transaction():
@@ -565,6 +616,12 @@ def create_lehrgang():
             (vals["titel"], vals["nummer"], vals["datum_von"], vals["datum_bis"], vals["ort"],
              vals["beschreibung"], vals["status"], uid, name, ts, ts))
         _ausbilder_schreiben(lid, ausbilder)
+        if katalog:
+            for i, p in enumerate(db.query("SELECT * FROM pruef_katalog_leistungen WHERE katalog_id = ? "
+                                           "ORDER BY sortierung, id", (katalog["id"],))):
+                db.execute("INSERT INTO pruef_leistungen (lehrgang_id, bezeichnung, beschreibung_md, "
+                          "zeitansatz_sekunden, sortierung) VALUES (?,?,?,?,?)",
+                          (lid, p["bezeichnung"], p["beschreibung_md"], p["zeitansatz_sekunden"], i))
     return jsonify(lehrgang=_lehrgang_detail(lid)), 201
 
 
@@ -630,8 +687,8 @@ def kopieren(lid):
             "created_by, created_by_name, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (titel, "", von, bis, alt["ort"], alt["beschreibung"], "geplant", uid, name, ts, ts))
         for a in db.query("SELECT * FROM pruef_ausbilder WHERE lehrgang_id = ? ORDER BY sortierung, id", (lid,)):
-            db.execute("INSERT INTO pruef_ausbilder (lehrgang_id, user_id, name, funktion, sortierung) VALUES (?,?,?,?,?)",
-                       (neu, a["user_id"], a["name"], a["funktion"], a["sortierung"]))
+            db.execute("INSERT INTO pruef_ausbilder (lehrgang_id, user_id, name, funktion, ist_leitung, sortierung) "
+                       "VALUES (?,?,?,?,?,?)", (neu, a["user_id"], a["name"], a["funktion"], a["ist_leitung"], a["sortierung"]))
         for v in db.query("SELECT * FROM pruef_voraussetzungen WHERE lehrgang_id = ? ORDER BY sortierung, id", (lid,)):
             db.execute("INSERT INTO pruef_voraussetzungen (lehrgang_id, bezeichnung, sortierung) VALUES (?,?,?)",
                        (neu, v["bezeichnung"], v["sortierung"]))
@@ -1125,23 +1182,6 @@ def delete_medium(mid):
     return jsonify(ok=True)
 
 
-# --- Beispieldaten -------------------------------------------------------------------------
-
-@bp.post("/beispieldaten")
-@pruefer_required
-def beispieldaten():
-    """Zwei erfundene Lehrgänge (SR1, SR2) zum Ausprobieren – nur für die Administration, damit
-    kein Prüfer versehentlich Fantasiedaten in den Bestand mischt."""
-    if not is_admin():
-        raise Abgelehnt("Beispieldaten legt nur die Administration an.", 403)
-    from . import beispieldaten as bd
-    uid, name = _ich()
-    with db.transaction():
-        ids = bd.anlegen(uid, name)
-    rows = [db.query(_LEHRGANG_SQL + "WHERE l.id = ?", (lid,), one=True) for lid in ids]
-    return jsonify(lehrgaenge=[_lehrgang_kurz(r) for r in rows]), 201
-
-
 # --- 4.7 Mängel / Feedback ---------------------------------------------------
 
 @bp.get("/lehrgaenge/<int:lid>/maengel")
@@ -1371,9 +1411,11 @@ def import_uebernehmen():
             a_name = (a.get("name") or "").strip()[:120]
             if not a_name or imp.normalisiert(a_name) in vorhandene_ausbilder:
                 continue
-            db.execute("INSERT INTO pruef_ausbilder (lehrgang_id, user_id, name, funktion, sortierung) VALUES (?,?,?,?,?)",
-                       (lid, None, a_name, (a.get("funktion") or "").strip()[:80],
-                        _naechste_sortierung("pruef_ausbilder", lid)))
+            funktion = (a.get("funktion") or "").strip()[:80]
+            # Aus der ISC-Liste kommt die Leitung als Freitext ohne Konto – sichtbar, aber ohne Rechte.
+            db.execute("INSERT INTO pruef_ausbilder (lehrgang_id, user_id, name, funktion, ist_leitung, sortierung) "
+                       "VALUES (?,?,?,?,?,?)", (lid, None, a_name, funktion, int(_ist_leitungsfunktion(funktion)),
+                                               _naechste_sortierung("pruef_ausbilder", lid)))
             vorhandene_ausbilder.add(imp.normalisiert(a_name))
             ausbilder_neu += 1
 
@@ -1436,3 +1478,122 @@ def import_uebernehmen():
     return jsonify(lehrgang=_lehrgang_detail(lid), angelegt=angelegt, aktualisiert=aktualisiert,
                    voraussetzungen_neu=voraussetzungen_neu, ausbilder_neu=ausbilder_neu,
                    warnungen=warnungen), 201
+
+
+# --- 4.9 Prüfungsleistungskataloge --------------------------------------------
+# Vorlagen für die Prüfungsleistungen eines Lehrgangs, unabhängig von einer einzelnen
+# Durchführung. Jede:r Prüfer:in darf sie lesen und beim Anlegen eines Lehrgangs wählen; ändern
+# und löschen darf sie nur die Administration (_katalog_admin) – es gibt anders als beim Lehrgang
+# keine Leitung, die dafür geradestünde. Eine Änderung am Katalog wirkt sich nie auf einen schon
+# angelegten Lehrgang aus: create_lehrgang() kopiert die Zeilen nur einmal hinein (wie kopieren()).
+
+@bp.get("/kataloge")
+@pruefer_required
+def list_kataloge():
+    rows = db.query(_KATALOG_SQL + "ORDER BY titel COLLATE NOCASE")
+    return jsonify(kataloge=[_katalog_kurz(r) for r in rows])
+
+
+def _katalog_felder(d, neu):
+    vals = {}
+    if neu or "titel" in d:
+        vals["titel"] = sfield(d, "titel").strip()[:200]
+        if not vals["titel"]:
+            raise Abgelehnt("Bitte einen Titel angeben.")
+    if neu or "beschreibung" in d:
+        vals["beschreibung"] = sfield(d, "beschreibung").strip()[:20000]
+    return vals
+
+
+@bp.post("/kataloge")
+@pruefer_required
+def create_katalog():
+    _katalog_admin()
+    vals = _katalog_felder(json_body(), neu=True)
+    uid, name = _ich()
+    ts = db.now()
+    kid = db.execute(
+        "INSERT INTO pruef_kataloge (titel, beschreibung, created_by, created_by_name, created_at, updated_at) "
+        "VALUES (?,?,?,?,?,?)", (vals["titel"], vals["beschreibung"], uid, name, ts, ts))
+    return jsonify(katalog=_katalog_detail(kid)), 201
+
+
+@bp.get("/kataloge/<int:kid>")
+@pruefer_required
+def get_katalog(kid):
+    return jsonify(katalog=_katalog_detail(kid))
+
+
+@bp.put("/kataloge/<int:kid>")
+@pruefer_required
+def update_katalog(kid):
+    _katalog(kid)
+    _katalog_admin()
+    vals = _katalog_felder(json_body(), neu=False)
+    if vals:
+        sets = ", ".join(f"{k} = ?" for k in vals) + ", updated_at = ?"
+        db.execute(f"UPDATE pruef_kataloge SET {sets} WHERE id = ?", (*vals.values(), db.now(), kid))
+    return jsonify(katalog=_katalog_detail(kid))
+
+
+@bp.delete("/kataloge/<int:kid>")
+@pruefer_required
+def delete_katalog(kid):
+    _katalog(kid)
+    _katalog_admin()
+    db.execute("DELETE FROM pruef_kataloge WHERE id = ?", (kid,))
+    return jsonify(ok=True)
+
+
+def _katalog_naechste_sortierung(kid):
+    return db.query("SELECT COALESCE(MAX(sortierung), -1) + 1 AS n FROM pruef_katalog_leistungen "
+                    "WHERE katalog_id = ?", (kid,), one=True)["n"]
+
+
+@bp.post("/kataloge/<int:kid>/leistungen")
+@pruefer_required
+def create_katalog_leistung(kid):
+    _katalog(kid)
+    _katalog_admin()
+    # Dieselben Felder und Grenzen wie bei einer Prüfungsleistung im Lehrgang – _leistung_felder
+    # kennt nur den Body, keine Tabelle.
+    vals = _leistung_felder(json_body(), neu=True)
+    lid = db.execute(
+        "INSERT INTO pruef_katalog_leistungen (katalog_id, bezeichnung, beschreibung_md, zeitansatz_sekunden, "
+        "sortierung) VALUES (?,?,?,?,?)", (kid, vals["bezeichnung"], vals["beschreibung_md"],
+                                          vals["zeitansatz_sekunden"], _katalog_naechste_sortierung(kid)))
+    return jsonify(leistung=_leistung_json(_katalog_leistung(lid))), 201
+
+
+@bp.put("/katalog-leistungen/<int:lid>")
+@pruefer_required
+def update_katalog_leistung(lid):
+    _katalog_leistung(lid)
+    _katalog_admin()
+    vals = _leistung_felder(json_body(), neu=False)
+    if vals:
+        sets = ", ".join(f"{k} = ?" for k in vals)
+        db.execute(f"UPDATE pruef_katalog_leistungen SET {sets} WHERE id = ?", (*vals.values(), lid))
+    return jsonify(leistung=_leistung_json(_katalog_leistung(lid)))
+
+
+@bp.delete("/katalog-leistungen/<int:lid>")
+@pruefer_required
+def delete_katalog_leistung(lid):
+    _katalog_leistung(lid)
+    _katalog_admin()
+    db.execute("DELETE FROM pruef_katalog_leistungen WHERE id = ?", (lid,))
+    return jsonify(ok=True)
+
+
+@bp.put("/kataloge/<int:kid>/leistungen/reihenfolge")
+@pruefer_required
+def reihenfolge_katalog_leistungen(kid):
+    _katalog(kid)
+    _katalog_admin()
+    ids = _id_liste(json_body().get("ids"))
+    with db.transaction():
+        for i, lid in enumerate(ids):
+            db.execute("UPDATE pruef_katalog_leistungen SET sortierung = ? WHERE id = ? AND katalog_id = ?",
+                      (i, lid, kid))
+    return jsonify(ok=True)

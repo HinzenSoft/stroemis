@@ -10,15 +10,21 @@
   if (!root) return;
   const ANSICHT = root.dataset.ansicht || "liste";
   const LEHRGANG_ID = root.dataset.lehrgang ? +root.dataset.lehrgang : null;
+  const KATALOG_ID = root.dataset.katalog ? +root.dataset.katalog : null;
   const API = "/api/pruefungen";
   const SU_KEY = "pruef:stoppuhr";
   const $ = (sel, el) => (el || document).querySelector(sel);
   const $$ = (sel, el) => Array.from((el || document).querySelectorAll(sel));
   const schmal = () => window.matchMedia("(max-width: 760px)").matches;
+  // Fokus beim Öffnen nur mit Maus/Tastatur: Auf dem Telefon ginge sofort die Tastatur auf und
+  // verdeckte die untere Hälfte des Dialogs, bevor man ihn gelesen hat.
+  const fokus = (el) => { if (el && !window.matchMedia("(pointer: coarse)").matches) el.focus(); };
 
   const state = {
     lehrgang: null,          // LehrgangDetail der geöffneten Seite
     nutzer: null,            // Nutzerliste für die Auswahl der Referierenden, einmal geladen
+    kataloge: null,          // Kataloge (Kurzform mit Anzahl), einmal geladen – Auswahl beim Anlegen
+    katalog: null,           // Katalogdetail der geöffneten Katalogseite
     liste: [], jahre: [],    // Lehrgangsliste und die darin vorkommenden Jahre
     reiter: "teilnehmer",
     bewAnsicht: null, bewLeistung: null, bewTn: null,
@@ -49,7 +55,15 @@
     if (!t) return { ok: true, wert: null };
     const m = t.match(/^(\d{1,3}):([0-5]?\d)(?:[.,]\d+)?$/);
     if (m) return { ok: true, wert: (+m[1]) * 60 + (+m[2]) };
-    if (/^\d+$/.test(t)) return { ok: true, wert: +t };
+    if (/^\d+$/.test(t)) {
+      // Die Zifferntastatur des Telefons (inputmode=numeric) hat keinen Doppelpunkt: „230“ und
+      // „0230“ heißen 2:30, ein- und zweistellig sind Sekunden („45“).
+      if (t.length >= 3) {
+        const sek = +t.slice(-2), min = +t.slice(0, -2);
+        return sek > 59 ? { ok: false } : { ok: true, wert: min * 60 + sek };
+      }
+      return { ok: true, wert: +t };
+    }
     return { ok: false };
   }
   // „2026-12-04“ → „04.12.2026“ – ohne Date-Objekt, damit keine Zeitzone den Tag verschiebt.
@@ -322,12 +336,20 @@
      „wide“ oder „pruef-dlg“), dann kommt der neue Inhalt. Das hängt bewusst nicht allein am
      close-Ereignis des Dialogs: In einem verborgenen Reiter liefert der Browser es verspätet
      oder gar nicht, und der nächste Dialog trüge dann Breite und Timer des vorigen. */
+  // Diktat (Spracheingabe, diktat.js): Knopf neben einem Textfeld und der Hinweis dazu – leer, wenn
+  // der Browser keine Spracherkennung hat oder die Einstellung sie abschaltet.
+  const diktatKnopf = (id) => (window.Diktat ? Diktat.knopf(id) : "");
+  const diktatHinweis = () => (window.Diktat ? Diktat.hinweis() : "");
+
   function dialogOeffnen(html, onOpen, klassen) {
     if (state.dlgAufraeumen) { const f = state.dlgAufraeumen; state.dlgAufraeumen = null; try { f(); } catch (e) { /* schon weg */ } }
+    if (window.Diktat) Diktat.stopp();
     const el = $("#dlg");
     el.className = "";
     if (klassen) el.classList.add(...klassen);
-    return dialog(html, onOpen);
+    const dlg = dialog(html, onOpen);
+    if (window.Diktat) Diktat.anbinden($("#dlg-body"));
+    return dlg;
   }
 
   /* --- Nutzerliste für die Auswahl der Referierenden ----------------------------------------- */
@@ -354,7 +376,8 @@
         <input type="text" class="ausb-name${extern ? "" : " hidden"}" placeholder="Name (extern)" value="${extern ? esc(a.name) : ""}" aria-label="Name der externen Person">
         <label class="inline"><input type="checkbox" class="ausb-extern" ${extern ? "checked" : ""}> extern (Freitext)</label>
       </div>
-      <input type="text" class="ausb-funktion" list="ausb-funktionen" placeholder="Funktion" value="${esc(a.funktion || "")}" aria-label="Funktion">
+      <input type="text" class="ausb-funktion" list="ausb-funktionen" placeholder="Funktion (optional)" value="${esc(a.funktion || "")}" aria-label="Funktion">
+      <label class="inline ausb-leit" title="Lehrgangsleitung: darf den Lehrgang bearbeiten, Prüfungen löschen und das Lehrgangsergebnis vermerken"><input type="checkbox" class="ausb-leitung" ${a.ist_leitung ? "checked" : ""}> Leitung</label>
       <button type="button" class="btn ghost" data-weg aria-label="Zeile entfernen" title="Zeile entfernen">✕</button>
     </div>`;
   }
@@ -364,14 +387,15 @@
     $$(".ausb-zeile", body).forEach((z) => {
       const extern = $(".ausb-extern", z).checked;
       const funktion = $(".ausb-funktion", z).value.trim();
+      const ist_leitung = $(".ausb-leitung", z).checked;
       if (extern) {
         const name = $(".ausb-name", z).value.trim();
-        if (name) liste.push({ user_id: null, name, funktion });
+        if (name) liste.push({ user_id: null, name, funktion, ist_leitung });
       } else {
         const sel = $(".ausb-user", z);
         // Der Name kommt aus der Nutzerliste, nicht aus dem Optionstext – dort hängt die Gliederung dran.
         const n = sel.value ? (state.nutzer || []).find((x) => x.id === +sel.value) : null;
-        if (n) liste.push({ user_id: n.id, name: n.name, funktion });
+        if (n) liste.push({ user_id: n.id, name: n.name, funktion, ist_leitung });
       }
     });
     return liste;
@@ -381,6 +405,9 @@
     const nutzer = await nutzerLaden();
     lg = lg || {};
     const neu = !lg.id;
+    // Die Katalogauswahl gibt es nur beim Anlegen: Sie kopiert einmalig Leistungen hinein, ein
+    // schon laufender Lehrgang hat längst eigene (siehe kataloge-Abschnitt weiter unten).
+    const kataloge = neu ? await katalogeLaden() : [];
     dialogOeffnen(`<h2>${neu ? "Lehrgang anlegen" : "Lehrgang bearbeiten"}</h2>
       <label for="lg-titel">Titel / Lehrgangsbezeichnung</label>
       <input type="text" id="lg-titel" value="${esc(lg.titel)}" placeholder="z. B. Strömungsretter 1 (SR1)" required>
@@ -395,17 +422,28 @@
         ${Object.keys(STATUS).map((s) => `<option value="${s}" ${(lg.status || "geplant") === s ? "selected" : ""}>${STATUS[s][0]}</option>`).join("")}
       </select>
       <label>Lehrgangsleitung und Referierende</label>
-      <div class="help">Wer hier als Nutzer mit der Funktion „Lehrgangsleitung“ steht, darf den Lehrgang bearbeiten, Stammdaten pflegen, Prüfungen löschen und das Lehrgangsergebnis vermerken.</div>
+      <div class="help">Mehrere Personen können Lehrgangsleitung sein – dafür den Haken „Leitung“ setzen. Die Leitung darf den Lehrgang
+        bearbeiten, Stammdaten pflegen, Prüfungen löschen und das Lehrgangsergebnis vermerken; alle anderen prüfen und haken ab.
+        Rechte bekommt nur, wer über sein Nutzerkonto gewählt ist – ein externer Freitext-Eintrag erscheint nur in der Anzeige.</div>
       <div class="ausb-liste" id="ausb-liste">${(lg.ausbilder || []).map((a) => ausbilderZeileHtml(a, nutzer)).join("")}</div>
-      <datalist id="ausb-funktionen"><option value="Lehrgangsleitung"><option value="Referierende:r"></datalist>
-      <button type="button" class="btn secondary small" id="ausb-plus">+ Referierende:r</button>
-      <label for="lg-besch">Beschreibung / Bemerkungen</label>
+      <datalist id="ausb-funktionen"><option value="Referierende:r"><option value="Seiltechnik"><option value="Wasser"><option value="Helfer:in"></datalist>
+      <div class="btn-row"><button type="button" class="btn secondary small" id="ausb-plus-leitung">+ Lehrgangsleitung</button>
+        <button type="button" class="btn secondary small" id="ausb-plus">+ Referierende:r</button></div>
+      <div class="feld-kopf"><label for="lg-besch">Beschreibung / Bemerkungen</label>${diktatKnopf("lg-besch")}</div>
       <textarea id="lg-besch" placeholder="Ablauf, Treffpunkt, Besonderheiten …">${esc(lg.beschreibung)}</textarea>
+      ${neu && kataloge.length ? `<label for="lg-katalog">Prüfungsleistungen aus Katalog übernehmen (optional)</label>
+      <select id="lg-katalog"><option value="">– Keine Vorlage, leer beginnen –</option>
+        ${kataloge.map((k) => `<option value="${k.id}">${esc(k.titel)} (${plural(k.leistungen_anzahl, "Leistung", "Leistungen")})</option>`).join("")}</select>
+      <div class="help">Die Leistungen werden einmalig in diesen Lehrgang kopiert – eine spätere Änderung am Katalog wirkt sich nicht mehr
+        aus. Weitere Leistungen lassen sich jederzeit einzeln ergänzen, auch während der Lehrgang schon läuft.</div>` : ""}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn" id="lg-save" type="button">${neu ? "Lehrgang anlegen" : "Speichern"}</button></div>`,
       (dlg, body) => {
         const liste = $("#ausb-liste", body);
-        if (!liste.children.length) liste.insertAdjacentHTML("beforeend", ausbilderZeileHtml({ funktion: "Lehrgangsleitung" }, nutzer));
+        // Ein neuer Lehrgang beginnt mit der anlegenden Person als Leitung – der Server trüge sie ohnehin
+        // ein; so sieht man es gleich und kann weitere Leitungen daneben setzen.
+        if (!liste.children.length) liste.insertAdjacentHTML("beforeend", ausbilderZeileHtml({ user_id: (STROEMIS.user || {}).id, ist_leitung: true }, nutzer));
+        $("#ausb-plus-leitung", body).onclick = () => liste.insertAdjacentHTML("beforeend", ausbilderZeileHtml({ ist_leitung: true }, nutzer));
         $("#ausb-plus", body).onclick = () => liste.insertAdjacentHTML("beforeend", ausbilderZeileHtml({ funktion: "Referierende:r" }, nutzer));
         liste.addEventListener("click", (e) => { const b = e.target.closest("[data-weg]"); if (b) b.closest(".ausb-zeile").remove(); });
         liste.addEventListener("change", (e) => {
@@ -415,7 +453,7 @@
           $(".ausb-name", z).classList.toggle("hidden", !e.target.checked);
           if (e.target.checked) $(".ausb-name", z).focus();
         });
-        if (neu) $("#lg-titel", body).focus();
+        if (neu) fokus($("#lg-titel", body));
         $("#lg-save", body).onclick = async (ev) => {
           const knopf = ev.currentTarget;
           if (knopf.disabled) return;
@@ -424,6 +462,7 @@
             datum_von: $("#lg-von", body).value || null, datum_bis: $("#lg-bis", body).value || null,
             status: $("#lg-status", body).value, beschreibung: $("#lg-besch", body).value, ausbilder: ausbilderLesen(body),
           };
+          if (neu && $("#lg-katalog", body)) d.katalog_id = $("#lg-katalog", body).value ? +$("#lg-katalog", body).value : null;
           if (!d.titel) { $("#lg-titel", body).focus(); return toast("Bitte einen Titel angeben.", true); }
           if (d.datum_von && d.datum_bis && d.datum_bis < d.datum_von) { $("#lg-bis", body).focus(); return toast("Das Enddatum liegt vor dem Anfang.", true); }
           knopf.disabled = true;
@@ -484,11 +523,10 @@
      Lehrgangsliste
      ========================================================================================== */
   function renderListe() {
-    // „Beispieldaten anlegen“ nur für Administratoren: zwei erfundene Lehrgänge zum Ausprobieren.
     root.innerHTML = `
       <div class="page-head"><h1>Prüfungen</h1>
-        <div class="btn-row">${istAdmin() ? '<button class="btn ghost" data-act="beispieldaten" title="Zwei Lehrgänge (SR1, SR2) mit erfundenen Personen anlegen">Beispieldaten anlegen</button>' : ""}
-          <button class="btn secondary" data-act="lg-import">Import</button>
+        <div class="btn-row"><button class="btn secondary" data-act="lg-import">Import</button>
+          <a class="btn secondary" href="/pruefungen/kataloge">Kataloge</a>
           <button class="btn" data-act="lg-neu">+ Lehrgang anlegen</button></div></div>
       <div class="su-banner hidden" id="su-banner"></div>
       <div class="filter">
@@ -543,6 +581,171 @@
   }
 
   /* ==========================================================================================
+     Kataloge: Vorlagen für Prüfungsleistungen, unabhängig von einem Lehrgang. Lesen darf jede:r
+     Prüfer:in (Auswahl beim Anlegen eines Lehrgangs); anlegen, ändern und löschen nur die
+     Administration – anders als beim Lehrgang gibt es keine Leitung, die dafür geradestünde.
+     ========================================================================================== */
+  async function katalogeLaden(neu) {
+    if (state.kataloge && !neu) return state.kataloge;
+    try { state.kataloge = (await api(`${API}/kataloge`)).kataloge || []; }
+    catch (e) { toast("Die Kataloge ließen sich nicht laden: " + e.message, true); state.kataloge = []; }
+    return state.kataloge;
+  }
+
+  async function renderKataloge() {
+    root.innerHTML = `<a class="zurueck" href="/pruefungen">← Alle Lehrgänge</a>
+      <div class="page-head"><h1>Prüfungsleistungskataloge</h1>
+        ${istAdmin() ? '<div class="btn-row"><button class="btn" data-act="kat-neu">+ Katalog anlegen</button></div>' : ""}</div>
+      <p class="help">Ein Katalog ist eine Vorlage: Seine Prüfungsleistungen lassen sich beim Anlegen eines Lehrgangs
+        einmalig übernehmen. Spätere Änderungen am Katalog wirken sich nicht mehr auf schon angelegte Lehrgänge aus.</p>
+      <div id="kat-liste"><p class="help">Wird geladen …</p></div>`;
+    const ziel = $("#kat-liste");
+    const kataloge = await katalogeLaden(true);
+    if (!ziel) return;
+    if (!kataloge.length) {
+      ziel.innerHTML = `<div class="leer"><strong>Noch keine Kataloge</strong>${istAdmin()
+        ? "Lege einen an, um Prüfungsleistungen als Vorlage bereitzustellen." : "Die Administration legt sie an."}</div>`;
+      return;
+    }
+    ziel.innerHTML = `<table class="list">
+      <colgroup><col style="width:32%"><col style="width:38%"><col style="width:10%"><col style="width:20%"></colgroup>
+      <thead><tr><th>Katalog</th><th>Beschreibung</th><th>Leistungen</th><th></th></tr></thead>
+      <tbody>${kataloge.map((k) => `<tr data-id="${k.id}">
+        <td data-l="Katalog"><a class="titel" href="/pruefungen/kataloge/${k.id}">${esc(k.titel)}</a></td>
+        <td data-l="Beschreibung">${k.beschreibung ? esc(kuerzen(k.beschreibung, 140)) : '<span class="muted">–</span>'}</td>
+        <td data-l="Leistungen">${k.leistungen_anzahl}</td>
+        <td class="btn-row">
+          <a class="btn small" href="/pruefungen/kataloge/${k.id}">Öffnen</a>
+          ${istAdmin() ? `<button class="btn ghost small" data-act="kat-edit" data-id="${k.id}">Bearbeiten</button>
+          <button class="btn ghost small" data-act="kat-del" data-id="${k.id}">Löschen</button>` : ""}
+        </td></tr>`).join("")}</tbody></table>`;
+  }
+
+  function katalogDialog(k) {
+    k = k || {};
+    const neu = !k.id;
+    dialogOeffnen(`<h2>${neu ? "Katalog anlegen" : "Katalog bearbeiten"}</h2>
+      <label for="kat-titel">Titel</label>
+      <input type="text" id="kat-titel" value="${esc(k.titel)}" placeholder="z. B. Strömungsretter 1 (SR1)" required>
+      <label for="kat-besch">Beschreibung (optional)</label>
+      <textarea id="kat-besch" placeholder="Wofür ist dieser Katalog gedacht, welcher Lehrgangstyp?">${esc(k.beschreibung)}</textarea>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
+        <button class="btn" id="kat-save" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
+      (dlg, body) => {
+        if (neu) fokus($("#kat-titel", body));
+        $("#kat-save", body).onclick = async (ev) => {
+          const knopf = ev.currentTarget;
+          if (knopf.disabled) return;
+          const titel = $("#kat-titel", body).value.trim();
+          if (!titel) { $("#kat-titel", body).focus(); return toast("Bitte einen Titel angeben.", true); }
+          const d = { titel, beschreibung: $("#kat-besch", body).value };
+          knopf.disabled = true;
+          try {
+            const r = neu ? await api(`${API}/kataloge`, { method: "POST", body: d })
+                          : await api(`${API}/kataloge/${k.id}`, { method: "PUT", body: d });
+            dlg.close();
+            state.kataloge = null;   // Titel/Beschreibung geändert – Auswahlliste neu laden.
+            if (neu) { toast("Katalog angelegt"); location.href = `/pruefungen/kataloge/${r.katalog.id}`; return; }
+            toast("Gespeichert");
+            if (ANSICHT === "kataloge") await renderKataloge();
+            else { state.katalog = r.katalog; renderKatalogSeite(); }
+          } catch (e) { toast(e.message, true); }
+          finally { knopf.disabled = false; }
+        };
+      });
+  }
+
+  async function katalogLoeschen(k) {
+    const text = `Katalog „${k.titel}“ löschen? Schon angelegte Lehrgänge behalten ihre Prüfungsleistungen – nur die Vorlage verschwindet.`;
+    if (!(await S.confirm(text, "Endgültig löschen"))) return;
+    try {
+      await api(`${API}/kataloge/${k.id}`, { method: "DELETE" });
+      state.kataloge = null;
+      toast("Katalog gelöscht");
+      if (ANSICHT === "katalog") location.href = "/pruefungen/kataloge"; else await renderKataloge();
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function loadKatalogDetail() {
+    const d = await api(`${API}/kataloge/${KATALOG_ID}`);
+    state.katalog = d.katalog;
+  }
+
+  function renderKatalogSeite() {
+    const k = state.katalog;
+    if (!k) return;
+    const admin = istAdmin();
+    const ls = k.leistungen || [];
+    root.innerHTML = `<a class="zurueck" href="/pruefungen/kataloge">← Alle Kataloge</a>
+      <div class="page-head"><h1>${esc(k.titel)}</h1>
+        ${admin ? `<div class="btn-row"><button class="btn secondary small" data-act="kat-edit" data-id="${k.id}">Bearbeiten</button>
+        <button class="btn ghost small" data-act="kat-del" data-id="${k.id}">Löschen</button></div>` : ""}</div>
+      ${k.beschreibung ? `<details class="beschreibung-kopf"><summary>Beschreibung</summary><div class="md">${esc(k.beschreibung).replace(/\n/g, "<br>")}</div></details>` : ""}
+      <div class="reiter-kopf"><h2>Prüfungsleistungen</h2>
+        ${admin ? '<div class="btn-row"><button class="btn small" data-act="kl-neu">+ Prüfungsleistung</button></div>' : ""}</div>
+      ${!ls.length ? '<div class="leer"><strong>Noch keine Prüfungsleistungen</strong>Sie werden beim Anlegen eines Lehrgangs mit diesem Katalog als Vorlage in den Lehrgang kopiert.</div>'
+        : ls.map((l, i) => leistungKarteHtml(l, i, ls.length, admin, "kl")).join("")}`;
+  }
+
+  function katalogLeistungDialog(kid, l) {
+    l = l || {};
+    const neu = !l.id;
+    dialogOeffnen(`<h2>${neu ? "Prüfungsleistung anlegen" : "Prüfungsleistung bearbeiten"}</h2>
+      <label for="kl-bez">Bezeichnung</label>
+      <input type="text" id="kl-bez" value="${esc(l.bezeichnung)}" placeholder="z. B. Wurfsackwurf auf Ziel, Aufbau Flaschenzug 3:1" required>
+      <label for="kl-zeit">Zeitansatz (mm:ss oder 300 für 3:00) – leer lassen, wenn es keine Sollzeit gibt</label>
+      <input type="text" id="kl-zeit" class="zeitfeld" inputmode="numeric" placeholder="mm:ss" autocomplete="off"
+             value="${l.zeitansatz_sekunden != null ? fmtZeit(l.zeitansatz_sekunden) : ""}">
+      <div class="help">Mit Zeitansatz zeigt der Bewertungsdialog später eine Stoppuhr mit Sollzeit. Über das Bestehen entscheidet sie nicht.</div>
+      <label>Beschreibung – Ablauf und Kriterien</label>
+      <div id="kl-editor"></div>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
+        <button class="btn" id="kl-save" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
+      (dlg, body) => {
+        const holen = mdEditorEinrichten(dlg, body, "#kl-editor", l.beschreibung_md, "kl-md");
+        if (neu) fokus($("#kl-bez", body));
+        $("#kl-save", body).onclick = async (ev) => {
+          const knopf = ev.currentTarget;
+          if (knopf.disabled) return;
+          const bez = $("#kl-bez", body).value.trim();
+          if (!bez) { $("#kl-bez", body).focus(); return toast("Bitte eine Bezeichnung angeben.", true); }
+          const z = zeitLesen($("#kl-zeit", body).value);
+          if (!z.ok) { $("#kl-zeit", body).focus(); return toast("Zeitansatz bitte als mm:ss angeben, z. B. 03:00 – oder nur Ziffern: 300.", true); }
+          const d = { bezeichnung: bez, beschreibung_md: holen(), zeitansatz_sekunden: z.wert };
+          knopf.disabled = true;
+          try {
+            if (neu) await api(`${API}/kataloge/${kid}/leistungen`, { method: "POST", body: d });
+            else await api(`${API}/katalog-leistungen/${l.id}`, { method: "PUT", body: d });
+            dlg.close();
+            toast(neu ? "Prüfungsleistung angelegt" : "Gespeichert");
+            await loadKatalogDetail(); renderKatalogSeite();
+          } catch (e) { toast(e.message, true); }
+          finally { knopf.disabled = false; }
+        };
+      }, ["wide"]);
+  }
+
+  async function katalogLeistungLoeschen(kid, l) {
+    if (!(await S.confirm(`Prüfungsleistung „${l.bezeichnung}“ aus dem Katalog löschen?`))) return;
+    try {
+      await api(`${API}/katalog-leistungen/${l.id}`, { method: "DELETE" });
+      toast("Prüfungsleistung gelöscht");
+      await loadKatalogDetail(); renderKatalogSeite();
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function katalogLeistungVerschieben(kid, lid, richtung) {
+    const ls = state.katalog.leistungen;
+    const i = ls.findIndex((x) => x.id === lid), j = i + richtung;
+    if (i < 0 || j < 0 || j >= ls.length) return;
+    [ls[i], ls[j]] = [ls[j], ls[i]];
+    try {
+      await api(`${API}/kataloge/${kid}/leistungen/reihenfolge`, { method: "PUT", body: { ids: ls.map((x) => x.id) } });
+      renderKatalogSeite();
+    } catch (e) { [ls[i], ls[j]] = [ls[j], ls[i]]; toast(e.message, true); }
+  }
+
+  /* ==========================================================================================
      Lehrgangsseite mit Reitern
      ========================================================================================== */
   const REITER = ["teilnehmer", "leistungen", "bewertung", "maengel"];
@@ -561,9 +764,22 @@
   function renderLehrgangSeite() {
     const lg = state.lehrgang;
     if (!lg) return;
-    const ausb = (lg.ausbilder || []).map((a) => `${esc(a.name)}${a.funktion ? ` <span class="muted">(${esc(a.funktion)})</span>` : ""}`).join(", ");
+    // Kopf: erst die Leitung(en), dann die übrigen Referierenden – jeweils mit Funktion in Klammern.
+    // Bei einer Leitung ist die Funktion „Lehrgangsleitung“ (etwa aus der ISC-Liste) nur eine Wiederholung – weg damit.
+    const person = (a) => {
+      const f = a.ist_leitung && /^(lehrgangs)?leitung$/i.test((a.funktion || "").trim()) ? "" : a.funktion;
+      return `${esc(a.name)}${f ? ` <span class="muted">(${esc(f)})</span>` : ""}`;
+    };
+    const leitungen = (lg.ausbilder || []).filter((a) => a.ist_leitung).map(person).join(", ");
+    const referierende = (lg.ausbilder || []).filter((a) => !a.ist_leitung).map(person).join(", ");
+    const ausb = [leitungen ? `<span class="muted">Leitung:</span> ${leitungen}` : "",
+                  referierende ? `<span class="muted">Referierende:</span> ${referierende}` : ""].filter(Boolean).join(" · ");
     // Kopfknöpfe nur für die Leitung; „Bearbeiten“ steht ganz rechts. Kopieren geht über die Liste.
     const best = lg.ergebnis_bestanden || 0, nicht = lg.ergebnis_nicht_bestanden || 0;
+    // Rollstand der Matrizen und offene Beschreibungen überleben das Neuzeichnen – sonst sprang die
+    // Matrix nach jedem Speichern auf dem Tablet zurück in die erste Spalte.
+    const rollstaende = $$(".table-scroll", root).map((el) => el.scrollLeft);
+    const aufgeklappt = $$("details", root).map((d) => d.open);
     root.innerHTML = `
       <a class="zurueck" href="/pruefungen">← Alle Lehrgänge</a>
       <div class="page-head"><h1>${esc(lg.titel)}</h1>
@@ -575,7 +791,7 @@
         ${lg.datum_von || lg.datum_bis ? `<span>${esc(spanne(lg.datum_von, lg.datum_bis))}</span>` : ""}${lg.ort ? `<span>${esc(lg.ort)}</span>` : ""}
         <span>${plural(lg.tn_anzahl, "Teilnehmende:r", "Teilnehmende")}</span>
         ${best || nicht ? `<span class="erg-zaehler" title="Vermerkte Lehrgangsergebnisse"><b class="ja">${best} bestanden</b> · <b class="nein">${nicht} nicht bestanden</b></span>` : ""}</div>
-      ${ausb ? `<p class="ausbilder-zeile"><span class="muted">Referierende:</span> ${ausb}</p>` : ""}
+      ${ausb ? `<p class="ausbilder-zeile">${ausb}</p>` : ""}
       ${lg.beschreibung ? `<details class="beschreibung-kopf"><summary>Beschreibung</summary><div class="md">${esc(lg.beschreibung).replace(/\n/g, "<br>")}</div></details>` : ""}
       ${fortschrittHtml(lg)}
       <div class="c-tabs reiter" role="tablist">
@@ -588,6 +804,8 @@
       <div id="reiter-inhalt"></div>`;
     renderReiter();
     bannerZeichnen();
+    $$(".table-scroll", root).forEach((el, i) => { if (rollstaende[i]) el.scrollLeft = rollstaende[i]; });
+    $$("details", root).forEach((d, i) => { if (aufgeklappt[i]) d.open = true; });
   }
 
   function renderReiter() {
@@ -743,13 +961,13 @@
         <div><label for="tn-gl">Gliederung</label><input type="text" id="tn-gl" value="${esc(tn.gliederung)}"></div>
       </div>
       <label for="tn-email">E-Mail</label><input type="email" id="tn-email" value="${esc(tn.email)}" autocomplete="off">
-      <label for="tn-bem">Bemerkung</label><textarea id="tn-bem" style="min-height:60px">${esc(tn.bemerkung)}</textarea>
+      <div class="feld-kopf"><label for="tn-bem">Bemerkung</label>${diktatKnopf("tn-bem")}</div><textarea id="tn-bem" style="min-height:60px">${esc(tn.bemerkung)}</textarea>
       ${extra.length ? `<label>Weitere Angaben aus dem Import</label><dl class="kv">${extra.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}
       <div class="dlg-actions">${neu ? "" : '<button class="btn danger" id="tn-del" type="button" style="margin-right:auto">Löschen</button>'}
         <button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn" id="tn-save" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
       (dlg, body) => {
-        if (neu) $("#tn-vorname", body).focus();
+        if (neu) fokus($("#tn-vorname", body));
         // Profilbild: sofort hochladen bzw. entfernen – unabhängig vom „Speichern“ der Felder.
         const pbWaehlen = $("#tn-pb-waehlen", body), pbWeg = $("#tn-pb-weg", body), pbDatei = $("#tn-pb-datei", body);
         let pbLaeuft = false;
@@ -905,21 +1123,28 @@
   }
 
   /* --- Reiter Leistungen ----------------------------------------------------------------- */
+  /* Eine Prüfungsleistung als Karte – dieselbe Darstellung für die Leistungen eines Lehrgangs
+     und die eines Katalogs (Vorlage). Nur die data-act-Namen unterscheiden sich (praefix "pl"
+     bzw. "kl"), damit ein Klick nie im falschen Bereich landet. */
+  function leistungKarteHtml(l, i, gesamt, editierbar, praefix) {
+    return `<div class="leistung-karte" data-lid="${l.id}">
+      <div class="titel">${esc(l.bezeichnung)} ${l.zeitansatz_sekunden != null ? `<span class="badge grey" title="Zeitansatz (Sollzeit)">⏱ ${fmtZeit(l.zeitansatz_sekunden)}</span>` : ""}</div>
+      ${editierbar ? `<div class="btn-row">
+        <span class="pfeile"><button class="btn ghost small" data-act="${praefix}-hoch" data-lid="${l.id}" ${i === 0 ? "disabled" : ""} aria-label="nach oben" title="nach oben">↑</button>
+          <button class="btn ghost small" data-act="${praefix}-runter" data-lid="${l.id}" ${i === gesamt - 1 ? "disabled" : ""} aria-label="nach unten" title="nach unten">↓</button></span>
+        <button class="btn ghost small" data-act="${praefix}-edit" data-lid="${l.id}">Bearbeiten</button>
+        <button class="btn ghost small" data-act="${praefix}-del" data-lid="${l.id}">Löschen</button></div>` : '<div class="btn-row"></div>'}
+      ${l.beschreibung_md ? `<div class="md-vorschau">${md(l.beschreibung_md)}</div>` : '<div class="md-vorschau muted">Keine Beschreibung.</div>'}
+    </div>`;
+  }
+
   function leistungenHtml(lg) {
     const ls = lg.leistungen || [];
     const leitung = darfLeiten();
     const kopf = `<div class="reiter-kopf"><h2>Prüfungsleistungen</h2>
       ${leitung ? '<div class="btn-row"><button class="btn small" data-act="pl-neu">+ Prüfungsleistung</button></div>' : ""}</div>`;
     if (!ls.length) return kopf + '<div class="leer"><strong>Noch keine Prüfungsleistungen</strong>Jede:r Teilnehmende bekommt für jede Leistung ein Bewertungsfeld in der Matrix.</div>';
-    return kopf + ls.map((l, i) => `<div class="leistung-karte" data-lid="${l.id}">
-      <div class="titel">${esc(l.bezeichnung)} ${l.zeitansatz_sekunden != null ? `<span class="badge grey" title="Zeitansatz (Sollzeit)">⏱ ${fmtZeit(l.zeitansatz_sekunden)}</span>` : ""}</div>
-      ${leitung ? `<div class="btn-row">
-        <span class="pfeile"><button class="btn ghost small" data-act="pl-hoch" data-lid="${l.id}" ${i === 0 ? "disabled" : ""} aria-label="nach oben" title="nach oben">↑</button>
-          <button class="btn ghost small" data-act="pl-runter" data-lid="${l.id}" ${i === ls.length - 1 ? "disabled" : ""} aria-label="nach unten" title="nach unten">↓</button></span>
-        <button class="btn ghost small" data-act="pl-edit" data-lid="${l.id}">Bearbeiten</button>
-        <button class="btn ghost small" data-act="pl-del" data-lid="${l.id}">Löschen</button></div>` : '<div class="btn-row"></div>'}
-      ${l.beschreibung_md ? `<div class="md-vorschau">${md(l.beschreibung_md)}</div>` : '<div class="md-vorschau muted">Keine Beschreibung.</div>'}
-    </div>`).join("");
+    return kopf + ls.map((l, i) => leistungKarteHtml(l, i, ls.length, leitung, "pl")).join("");
   }
 
   async function leistungVerschieben(lid, richtung) {
@@ -935,13 +1160,40 @@
 
   /* Dialog mit Toast UI für die Beschreibung. Bleibt der Editor aus (Datei nicht geladen),
      gibt es ein einfaches Markdown-Feld – die Leistung lässt sich trotzdem anlegen. */
+  /* Toast-UI-Editor in ein Element einhängen (Markdown-Textarea als Rückfall, falls die
+     Bibliothek fehlt) und beim Schließen des Dialogs wieder abbauen. Gemeinsam für Leistungen im
+     Lehrgang und im Katalog – dieselbe Beschreibung, derselbe Editor. Liefert eine Funktion, die
+     den aktuellen Markdown-Text ausliest. */
+  function mdEditorEinrichten(dlg, body, elSelektor, wert, fallbackId) {
+    const el = $(elSelektor, body);
+    let ed = null, fallback = null;
+    if (window.toastui && toastui.Editor) {
+      const opts = {
+        el, initialEditType: "wysiwyg", hideModeSwitch: true, height: "260px",
+        initialValue: wert || "", language: "de-DE", usageStatistics: false,
+        placeholder: "Wie läuft die Prüfung ab, was wird bewertet?",
+        toolbarItems: [["heading", "bold", "italic"], ["ul", "ol", "link"]],
+      };
+      try { ed = new toastui.Editor(opts); }
+      catch (e) { delete opts.language; try { ed = new toastui.Editor(opts); } catch (e2) { ed = null; } }
+    }
+    if (!ed) {
+      el.innerHTML = `<textarea class="pl-fallback" id="${fallbackId}" placeholder="Beschreibung (Markdown)">${esc(wert)}</textarea>`;
+      fallback = $("#" + fallbackId, el);
+    }
+    const aufraeumen = () => { try { if (ed) ed.destroy(); } catch (e) { /* schon weg */ } ed = null; };
+    state.dlgAufraeumen = aufraeumen;
+    dlg.addEventListener("close", () => { if (state.dlgAufraeumen === aufraeumen) { aufraeumen(); state.dlgAufraeumen = null; } }, { once: true });
+    return () => { try { return ed ? ed.getMarkdown() : fallback.value; } catch (e) { return fallback ? fallback.value : ""; } };
+  }
+
   function leistungDialog(l) {
     l = l || {};
     const neu = !l.id;
     dialogOeffnen(`<h2>${neu ? "Prüfungsleistung anlegen" : "Prüfungsleistung bearbeiten"}</h2>
       <label for="pl-bez">Bezeichnung</label>
       <input type="text" id="pl-bez" value="${esc(l.bezeichnung)}" placeholder="z. B. Wurfsackwurf auf Ziel, Aufbau Flaschenzug 3:1" required>
-      <label for="pl-zeit">Zeitansatz (mm:ss) – leer lassen, wenn es keine Sollzeit gibt</label>
+      <label for="pl-zeit">Zeitansatz (mm:ss oder 300 für 3:00) – leer lassen, wenn es keine Sollzeit gibt</label>
       <input type="text" id="pl-zeit" class="zeitfeld" inputmode="numeric" placeholder="mm:ss" autocomplete="off"
              value="${l.zeitansatz_sekunden != null ? fmtZeit(l.zeitansatz_sekunden) : ""}">
       <div class="help">Mit Zeitansatz zeigt der Bewertungsdialog eine Stoppuhr mit Sollzeit. Über das Bestehen entscheidet sie nicht.</div>
@@ -950,37 +1202,16 @@
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn" id="pl-save" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
       (dlg, body) => {
-        const el = $("#pl-editor", body);
-        let ed = null, fallback = null;
-        if (window.toastui && toastui.Editor) {
-          const opts = {
-            el, initialEditType: "wysiwyg", hideModeSwitch: true, height: "260px",
-            initialValue: l.beschreibung_md || "", language: "de-DE", usageStatistics: false,
-            placeholder: "Wie läuft die Prüfung ab, was wird bewertet?",
-            toolbarItems: [["heading", "bold", "italic"], ["ul", "ol", "link"]],
-          };
-          try { ed = new toastui.Editor(opts); }
-          catch (e) { delete opts.language; try { ed = new toastui.Editor(opts); } catch (e2) { ed = null; } }
-        }
-        if (!ed) {
-          el.innerHTML = `<textarea class="pl-fallback" id="pl-md" placeholder="Beschreibung (Markdown)">${esc(l.beschreibung_md)}</textarea>`;
-          fallback = $("#pl-md", el);
-        }
-        // Der Editor wird beim nächsten Dialog (oder beim Schließen) abgebaut – siehe dialogOeffnen.
-        const aufraeumen = () => { try { if (ed) ed.destroy(); } catch (e) { /* schon weg */ } ed = null; };
-        state.dlgAufraeumen = aufraeumen;
-        dlg.addEventListener("close", () => { if (state.dlgAufraeumen === aufraeumen) { aufraeumen(); state.dlgAufraeumen = null; } }, { once: true });
-        if (neu) $("#pl-bez", body).focus();
+        const holen = mdEditorEinrichten(dlg, body, "#pl-editor", l.beschreibung_md, "pl-md");
+        if (neu) fokus($("#pl-bez", body));
         $("#pl-save", body).onclick = async (ev) => {
           const knopf = ev.currentTarget;
           if (knopf.disabled) return;
           const bez = $("#pl-bez", body).value.trim();
           if (!bez) { $("#pl-bez", body).focus(); return toast("Bitte eine Bezeichnung angeben.", true); }
           const z = zeitLesen($("#pl-zeit", body).value);
-          if (!z.ok) { $("#pl-zeit", body).focus(); return toast("Zeitansatz bitte als mm:ss angeben, z. B. 03:00.", true); }
-          let text = "";
-          try { text = ed ? ed.getMarkdown() : fallback.value; } catch (e) { text = fallback ? fallback.value : ""; }
-          const d = { bezeichnung: bez, beschreibung_md: text, zeitansatz_sekunden: z.wert };
+          if (!z.ok) { $("#pl-zeit", body).focus(); return toast("Zeitansatz bitte als mm:ss angeben, z. B. 03:00 – oder nur Ziffern: 300.", true); }
+          const d = { bezeichnung: bez, beschreibung_md: holen(), zeitansatz_sekunden: z.wert };
           knopf.disabled = true;
           try {
             if (neu) await api(`${API}/lehrgaenge/${LEHRGANG_ID}/leistungen`, { method: "POST", body: d });
@@ -1013,6 +1244,9 @@
     let a = null;
     try { a = localStorage.getItem(ANSICHT_KEY()); } catch (e) { /* egal */ }
     // Am Gewässer ist „alle TN für Leistung X“ der häufigste Ablauf – auf dem Telefon die Vorgabe.
+    // Eine am Tablet gewählte Matrix passt auf das Telefon nicht (klebende Namensspalte plus eine
+    // Zelle sind schon breiter als der Bildschirm) – dort beginnt es wieder mit „je Leistung“.
+    if (a === "matrix" && schmal()) a = "leistung";
     state.bewAnsicht = ["matrix", "leistung", "tn"].includes(a) ? a : (schmal() ? "leistung" : "matrix");
     return state.bewAnsicht;
   }
@@ -1064,7 +1298,8 @@
         <button type="button" role="tab" data-act="bew-ansicht" data-a="tn" class="${a === "tn" ? "sel" : ""}">je TN</button>
       </div>
       ${a === "leistung" ? `<select id="bew-sel-leistung" aria-label="Prüfungsleistung">${ls.map((l) => `<option value="${l.id}" ${l.id === state.bewLeistung ? "selected" : ""}>${esc(l.bezeichnung)}${l.zeitansatz_sekunden != null ? ` (⏱ ${fmtZeit(l.zeitansatz_sekunden)})` : ""}</option>`).join("")}</select>` : ""}
-      ${a === "tn" ? `<select id="bew-sel-tn" aria-label="Teilnehmende:r">${tns.map((t) => `<option value="${t.id}" ${t.id === state.bewTn ? "selected" : ""}>${esc(tnName(t))}${t.gliederung ? ` (${esc(t.gliederung)})` : ""}</option>`).join("")}</select>` : ""}
+      ${a === "tn" ? `<select id="bew-sel-tn" aria-label="Teilnehmende:r">${tns.map((t) => `<option value="${t.id}" ${t.id === state.bewTn ? "selected" : ""}>${esc(tnName(t))}${t.gliederung ? ` (${esc(t.gliederung)})` : ""}</option>`).join("")}</select>
+        <button type="button" class="btn secondary small" data-act="bew-tn-druck" title="Alle Leistungen dieser Person mit Kommentaren und Bildern drucken oder als PDF speichern">🖨 Druckansicht</button>` : ""}
     </div>`;
     let inhalt = "";
     if (a === "matrix") {
@@ -1088,7 +1323,7 @@
       const tn = tns.find((x) => x.id === state.bewTn);
       // Kopf über der Liste: Bild und Name, der freie Kommentar und (für die Leitung) das Ergebnis.
       const block = `<div class="tn-block${tn.eingefroren ? " gesperrt" : ""}">
-        <div class="tn-block-kopf"><span class="tn-kopfzeile">${tnBildHtml(tn, "gross")}${schlossHtml(tn)}<span class="tn-name">${esc(tnName(tn))}</span></span>${tn.gliederung ? `<span class="muted">· ${esc(tn.gliederung)}</span>` : ""}</div>
+        <div class="tn-block-kopf"><span class="tn-kopfzeile">${tnBildHtml(tn, "gross")}${schlossHtml(tn)}<span class="tn-name">${esc(tnName(tn))}</span></span>${tn.gliederung ? `<span class="muted tn-gliederung">${esc(tn.gliederung)}</span>` : ""}</div>
         ${tn.eingefroren ? `<p class="notice small">${esc(EINGEFROREN)}</p>` : ""}
         <div class="tn-block-felder">
           <div><span class="feldname">Kommentar</span>${kommentarZelleHtml(tn, { laenge: 200 })}</div>
@@ -1119,7 +1354,7 @@
     dialogOeffnen(`<h2>Kommentar</h2>
       <p class="help dlg-tn">${tnKopfHtml(tn)}${tn.gliederung ? `<span class="muted">· ${esc(tn.gliederung)}</span>` : ""}</p>
       ${nurLesen ? `<p class="notice">${esc(EINGEFROREN)}</p>` : ""}
-      <label for="tn-komm">Freier Kommentar${nurLesen ? "" : " – Eindruck, Stärken, Hinweise für das Abschlussgespräch"}</label>
+      <div class="feld-kopf"><label for="tn-komm">Freier Kommentar${nurLesen ? "" : " – Eindruck, Stärken, Hinweise für das Abschlussgespräch"}</label>${nurLesen ? "" : diktatKnopf("tn-komm")}</div>
       <textarea id="tn-komm" maxlength="5000" ${nurLesen ? "readonly" : ""} placeholder="${nurLesen ? "Kein Kommentar." : "Zum Beispiel: sehr sicher im Wasser, braucht bei der Seiltechnik noch Routine."}">${esc(tn.kommentar)}</textarea>
       ${nurLesen ? "" : '<div class="help">Sichtbar für alle Prüfenden dieses Lehrgangs. Höchstens 5000 Zeichen.</div>'}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">${nurLesen ? "Schließen" : "Abbrechen"}</button>
@@ -1127,7 +1362,7 @@
       (dlg, body) => {
         const feld = $("#tn-komm", body);
         if (nurLesen) return;
-        feld.focus();
+        fokus(feld);
         $("#tn-komm-save", body).onclick = async (ev) => {
           const knopf = ev.currentTarget;
           if (knopf.disabled) return;
@@ -1203,8 +1438,8 @@
           <button type="button" class="btn secondary" data-su="stopp" disabled>■ Stopp</button>
           <button type="button" class="btn ghost" data-su="reset">Zurücksetzen</button></div>
         <div class="su-hinweis"></div></div>` : ""}
-      <label for="bw-zeit">Zeit (mm:ss)</label>
-      <div class="zeit-zeile"><input type="text" id="bw-zeit" class="zeitfeld" inputmode="numeric" pattern="[0-9]{1,3}:[0-5]?[0-9]" placeholder="mm:ss" autocomplete="off"
+      <label for="bw-zeit">Zeit (mm:ss oder 230 für 2:30)</label>
+      <div class="zeit-zeile"><input type="text" id="bw-zeit" class="zeitfeld" inputmode="numeric" placeholder="mm:ss" autocomplete="off"
              value="${v.zeit_sekunden != null ? fmtZeit(v.zeit_sekunden) : ""}">
         <span class="help">${l.zeitansatz_sekunden != null ? "„Stopp“ trägt die gemessene Zeit ein – sie lässt sich hier korrigieren." : "Ohne Zeitansatz, aber die Zeit darf trotzdem notiert werden."}</span></div>
       <label>Bewertung</label>
@@ -1212,8 +1447,9 @@
         <button type="button" data-erg="bestanden" class="${v.ergebnis === "bestanden" ? "sel" : ""}" aria-pressed="${v.ergebnis === "bestanden"}"><span class="sym" aria-hidden="true">👍</span> bestanden</button>
         <button type="button" data-erg="mangelhaft" class="${v.ergebnis === "mangelhaft" ? "sel" : ""}" aria-pressed="${v.ergebnis === "mangelhaft"}"><span class="sym" aria-hidden="true">👎</span> mangelhaft</button>
       </div>
-      <label for="bw-komm" id="bw-komm-label">${v.ergebnis === "mangelhaft" ? "Kommentar (Pflicht bei mangelhaft)" : "Kommentar"}</label>
+      <div class="feld-kopf"><label for="bw-komm" id="bw-komm-label">${v.ergebnis === "mangelhaft" ? "Kommentar (Pflicht bei mangelhaft)" : "Kommentar"}</label>${diktatKnopf("bw-komm")}</div>
       <textarea id="bw-komm" placeholder="Was war gut, was hat gefehlt? Bei mangelhaft: die Fehler für das Feedbackgespräch.">${esc(v.kommentar)}</textarea>
+      ${diktatHinweis()}
       <label>Medien</label>
       <button type="button" class="btn secondary medien-knopf" id="bw-medien-knopf">📷 Foto/Video aufnehmen oder wählen</button>
       <input type="file" id="bw-dateien" class="hidden" accept="image/*,video/*,.heic,.heif,.mp4,.mov,.m4v,.webm" multiple>
@@ -1468,7 +1704,7 @@
           zeitfeld.value = fmtZeit(Math.round((Date.now() - laufend.start) / 1000));
         }
         const z = zeitLesen(zeitfeld.value);
-        if (!z.ok) { zeitfeld.classList.add("fehler"); zeitfeld.focus(); return toast("Zeit bitte als mm:ss angeben, z. B. 02:30.", true); }
+        if (!z.ok) { zeitfeld.classList.add("fehler"); zeitfeld.focus(); return toast("Zeit bitte als mm:ss angeben, z. B. 02:30 – oder nur Ziffern: 230.", true); }
         const kommentar = komm.value.trim();
         // Pflichtkommentar schon hier – der Server prüft es ebenfalls (siehe catch unten).
         if (erg === "mangelhaft" && !kommentar) { komm.classList.add("fehler"); komm.focus(); return toast("Bei „mangelhaft“ ist ein Kommentar Pflicht.", true); }
@@ -1580,6 +1816,21 @@
     } catch (e) { ziel.innerHTML = `<p class="notice">Die Mängel ließen sich nicht laden: ${esc(e.message)}</p>`; }
   }
 
+  /* Freier Kommentar und je Versuch eine Karte mit Zeit, Kommentar und Medien – der gemeinsame
+     Rumpf von „Alle Bewertungen“ (Dialog) und der Druckansicht „je TN“, damit beide bei jeder
+     Änderung gleich bleiben. soll(lid) liefert den Zeitansatz der Leistung oder null. */
+  function bewertungenListeHtml(tn, versuche, soll) {
+    return `${tn.kommentar ? `<div class="versuch-karte"><div class="vk-kopf">Kommentar</div><div class="kommentar">${esc(tn.kommentar)}</div></div>` : ""}
+      ${versuche.length ? versuche.map((v) => `<div class="versuch-karte ${v.ergebnis}">
+        <div class="vk-kopf"><span>${esc(v.leistung_bezeichnung)}</span><span class="muted">${versuchTitel(v)}</span>
+          <span class="erg ${v.ergebnis}">${v.ergebnis === "bestanden" ? "👍 bestanden" : "👎 mangelhaft"}</span>
+          ${v.zeit_sekunden != null ? `<span class="zeit">⏱ ${fmtZeit(v.zeit_sekunden)}${soll(v.leistung_id) != null ? ` <span class="muted">(Soll ${fmtZeit(soll(v.leistung_id))})</span>` : ""}</span>` : ""}</div>
+        ${v.kommentar ? `<div class="kommentar">${esc(v.kommentar)}</div>` : ""}
+        ${medienGridHtml(v.medien)}
+        <div class="abnahme">abgenommen von ${esc(v.geprueft_von_name)} am ${esc(fmtDate(v.geprueft_am, true))}${v.bearbeitet_am ? ` · bearbeitet von ${esc(v.bearbeitet_von_name)} am ${esc(fmtDate(v.bearbeitet_am, true))}` : ""}</div>
+      </div>`).join("") : '<p class="muted">Noch keine Bewertungen.</p>'}`;
+  }
+
   /* Alle Bewertungen einer Person – auch die bestandenen mit ihren Kommentaren, für das Gespräch. */
   async function alleBewertungenDialog(tid) {
     let d;
@@ -1588,22 +1839,17 @@
     const soll = (lid) => { const l = (state.lehrgang.leistungen || []).find((x) => x.id === lid); return l ? l.zeitansatz_sekunden : null; };
     dialogOeffnen(`<h2 class="dlg-tn">${tnKopfHtml(tn)}</h2>
       <p class="help">${esc(tn.gliederung || "")}${tn.gliederung ? " · " : ""}${plural(versuche.length, "Bewertung", "Bewertungen")}${tn.ergebnis ? ` · Lehrgang ${ERGEBNIS[tn.ergebnis][0]}` : ""}</p>
-      ${tn.kommentar ? `<div class="versuch-karte"><div class="vk-kopf">Kommentar</div><div class="kommentar">${esc(tn.kommentar)}</div></div>` : ""}
-      ${versuche.length ? versuche.map((v) => `<div class="versuch-karte ${v.ergebnis}">
-        <div class="vk-kopf"><span>${esc(v.leistung_bezeichnung)}</span><span class="muted">${versuchTitel(v)}</span>
-          <span class="erg ${v.ergebnis}">${v.ergebnis === "bestanden" ? "👍 bestanden" : "👎 mangelhaft"}</span>
-          ${v.zeit_sekunden != null ? `<span class="zeit">⏱ ${fmtZeit(v.zeit_sekunden)}${soll(v.leistung_id) != null ? ` <span class="muted">(Soll ${fmtZeit(soll(v.leistung_id))})</span>` : ""}</span>` : ""}</div>
-        ${v.kommentar ? `<div class="kommentar">${esc(v.kommentar)}</div>` : ""}
-        ${medienGridHtml(v.medien)}
-        <div class="abnahme">abgenommen von ${esc(v.geprueft_von_name)} am ${esc(fmtDate(v.geprueft_am, true))}${v.bearbeitet_am ? ` · bearbeitet von ${esc(v.bearbeitet_von_name)} am ${esc(fmtDate(v.bearbeitet_am, true))}` : ""}</div>
-      </div>`).join("") : '<p class="muted">Noch keine Bewertungen.</p>'}
+      ${bewertungenListeHtml(tn, versuche, soll)}
       <div class="dlg-actions"><button class="btn" data-close type="button">Schließen</button></div>`,
       undefined, ["pruef-dlg"]);
   }
 
   /* --- Druckansicht --------------------------------------------------------------------------- */
+  // Welche Druckansicht gemeint ist, sagt ?ansicht= in der Adresse – „tn“ für eine Person mit
+  // allen ihren Leistungen, sonst (auch ohne den Parameter, für alte Verweise) die Mängelübersicht.
   async function renderDruck() {
     const p = new URLSearchParams(location.search);
+    if (p.get("ansicht") === "tn") return renderDruckTn(+p.get("teilnehmer"));
     const mf = { teilnehmer: p.get("teilnehmer") || "", leistung: p.get("leistung") || "", nur_offen: p.get("nur_offen") === "1" };
     let lg, d;
     try {
@@ -1617,6 +1863,31 @@
         <button class="btn no-print" id="druck-los" type="button">🖨 Drucken</button>
         <div class="druck-filter">${esc([spanne(lg.datum_von, lg.datum_bis), lg.ort, lg.nummer ? `Nr. ${lg.nummer}` : ""].filter(Boolean).join(" · "))}<br>${esc(filter.join(" · "))} · Stand ${esc(fmtDate(new Date().toISOString(), true))}</div></div>
       ${maengelGruppenHtml(d.maengel || [], { druck: true, nurOffen: mf.nur_offen })}`;
+    $("#druck-los").onclick = () => window.print();
+  }
+
+  /* Druckansicht „je TN“: Profilbild, Kommentar und jede Leistung mit Zeit, Kommentar und Bildern –
+     alles, was auf dem Bildschirm unter „je TN“ und im Dialog „Alle Bewertungen“ steht, hier als
+     eigene, druckbare Seite (auch als PDF speicherbar). tid kommt aus der Adresse; ist sie leer
+     oder ungültig, bricht es mit einer Meldung statt mit einer falschen Person ab. */
+  async function renderDruckTn(tid) {
+    if (!tid) { root.innerHTML = '<p class="notice">Keine Person angegeben.</p>'; return; }
+    let lg, d;
+    try {
+      lg = await loadDetail();
+      d = await api(`${API}/teilnehmer/${tid}/versuche`);
+    } catch (e) {
+      root.innerHTML = `<p class="notice">${esc(e.status === 404 ? "Diese Person gibt es in diesem Lehrgang nicht (mehr)." : "Die Bewertungen ließen sich nicht laden: " + e.message)}</p>`;
+      return;
+    }
+    const tn = tnVoll(d.teilnehmer), versuche = d.versuche || [];
+    const soll = (lid) => { const l = (lg.leistungen || []).find((x) => x.id === lid); return l ? l.zeitansatz_sekunden : null; };
+    root.innerHTML = `<div class="druck-kopf"><h1>Prüfungsleistungen – ${esc(tnName(tn))}</h1>
+        <button class="btn no-print" id="druck-los" type="button">🖨 Drucken</button>
+        <div class="druck-filter">${esc([lg.titel, spanne(lg.datum_von, lg.datum_bis), lg.ort].filter(Boolean).join(" · "))}<br>
+          ${esc(tn.gliederung || "")}${tn.gliederung ? " · " : ""}${plural(versuche.length, "Bewertung", "Bewertungen")}${tn.ergebnis ? ` · Lehrgang ${ERGEBNIS[tn.ergebnis][0]}` : ""} · Stand ${esc(fmtDate(new Date().toISOString(), true))}</div></div>
+      <div class="tn-block-kopf">${tnBildHtml(tn, "gross")}${schlossHtml(tn)}<span class="tn-name">${esc(tnName(tn))}</span>${tn.gliederung ? `<span class="muted tn-gliederung">${esc(tn.gliederung)}</span>` : ""}</div>
+      ${bewertungenListeHtml(tn, versuche, soll)}`;
     $("#druck-los").onclick = () => window.print();
   }
 
@@ -1791,16 +2062,14 @@
           return importDialog(lg);
         }
         case "lg-del": return lehrgangLoeschen(lgAus(id));
-        case "beispieldaten": {
-          if (!(await S.confirm("Zwei Beispiel-Lehrgänge (SR1 und SR2) mit erfundenen Personen, Bewertungen und Kommentaren anlegen? Du wirst als Lehrgangsleitung eingetragen.", "Anlegen"))) return;
-          b.disabled = true;
-          try {
-            const r = await api(`${API}/beispieldaten`, { method: "POST", body: {} });
-            toast(`${plural((r.lehrgaenge || []).length, "Beispiel-Lehrgang", "Beispiel-Lehrgänge")} angelegt`);
-            await listeLaden(true);
-          } finally { b.disabled = false; }
-          return;
-        }
+        case "kat-neu": return katalogDialog(null);
+        case "kat-edit": return katalogDialog(ANSICHT === "kataloge" ? state.kataloge.find((k) => k.id === id) : state.katalog);
+        case "kat-del": return katalogLoeschen(ANSICHT === "kataloge" ? state.kataloge.find((k) => k.id === id) : state.katalog);
+        case "kl-neu": return katalogLeistungDialog(KATALOG_ID, null);
+        case "kl-edit": return katalogLeistungDialog(KATALOG_ID, (state.katalog.leistungen || []).find((l) => l.id === lid));
+        case "kl-del": return katalogLeistungLoeschen(KATALOG_ID, (state.katalog.leistungen || []).find((l) => l.id === lid));
+        case "kl-hoch": return katalogLeistungVerschieben(KATALOG_ID, lid, -1);
+        case "kl-runter": return katalogLeistungVerschieben(KATALOG_ID, lid, 1);
         case "tn-kommentar": return kommentarDialog(tid);
         case "tn-bild": return bildDialog(tid);
         case "tn-ergebnis": return ergebnisSetzen(tid, b.dataset.erg, b);
@@ -1821,6 +2090,7 @@
         case "pl-hoch": return leistungVerschieben(lid, -1);
         case "pl-runter": return leistungVerschieben(lid, 1);
         case "bew-ansicht": bewAnsichtSetzen(b.dataset.a); return renderReiter();
+        case "bew-tn-druck": window.open(`/pruefungen/${LEHRGANG_ID}/druck?ansicht=tn&teilnehmer=${state.bewTn}`, "_blank", "noopener"); return;
         case "zelle": return bewertungsDialog(tid, lid);
         case "m-np": return bewertungsDialog(tid, lid, { nachpruefung: true });
         case "m-alle": return state.mf.teilnehmer ? alleBewertungenDialog(+state.mf.teilnehmer) : toast("Bitte zuerst eine Person wählen.", true);
@@ -1846,6 +2116,16 @@
   async function start() {
     meldungZeigen();
     if (ANSICHT === "liste") return renderListe();
+    if (ANSICHT === "kataloge") return renderKataloge();
+    if (ANSICHT === "katalog") {
+      if (!KATALOG_ID) { root.innerHTML = '<p class="notice">Kein Katalog angegeben.</p>'; return; }
+      try { await loadKatalogDetail(); }
+      catch (e) {
+        root.innerHTML = `<a class="zurueck" href="/pruefungen/kataloge">← Alle Kataloge</a><p class="notice">${esc(e.status === 404 ? "Diesen Katalog gibt es nicht (mehr)." : "Der Katalog ließ sich nicht laden: " + e.message)}</p>`;
+        return;
+      }
+      return renderKatalogSeite();
+    }
     if (!LEHRGANG_ID) { root.innerHTML = '<p class="notice">Kein Lehrgang angegeben.</p>'; return; }
     if (ANSICHT === "druck") return renderDruck();
     state.reiter = reiterAusHash();

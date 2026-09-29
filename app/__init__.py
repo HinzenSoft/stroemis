@@ -185,16 +185,32 @@ def admin():
 # Reitern und eine druckfreundliche Mängelübersicht. Was zu zeigen ist, liest das JavaScript aus
 # den Datenattributen; das Recht prüft jede Route selbst – ein ausgeblendeter Reiter ist kein Schutz.
 
-def _pruefungen_seite(ansicht, lehrgang_id=None):
+def _pruefungen_seite(ansicht, lehrgang_id=None, katalog_id=None):
     if not auth.is_pruefer():
         abort(403)
-    return render_template("pruefungen.html", user=auth.current_user(), ansicht=ansicht, lehrgang_id=lehrgang_id)
+    return render_template("pruefungen.html", user=auth.current_user(), ansicht=ansicht,
+                           lehrgang_id=lehrgang_id, katalog_id=katalog_id)
 
 
 @pages.get("/pruefungen")
 @auth.page_login_required
 def pruefungen():
     return _pruefungen_seite("liste")
+
+
+# Kataloge sind kein Lehrgang – eigene, wortgleiche Routen (nicht unter <int:lid>, sonst gäbe es
+# einen Lehrgang mit der Nummer „kataloge“ nie zu sehen). Vor der <int:lid>-Route eingetragen ist
+# das nicht nötig: Flasks Konverter lässt „kataloge“ dort ohnehin nie durch.
+@pages.get("/pruefungen/kataloge")
+@auth.page_login_required
+def pruefungen_kataloge():
+    return _pruefungen_seite("kataloge")
+
+
+@pages.get("/pruefungen/kataloge/<int:kid>")
+@auth.page_login_required
+def pruefungen_katalog(kid):
+    return _pruefungen_seite("katalog", katalog_id=kid)
 
 
 @pages.get("/pruefungen/<int:lid>")
@@ -316,6 +332,7 @@ def create_app():
         SMTP_ENVELOPE_FROM=os.environ.get("SMTP_ENVELOPE_FROM", ""),
         ADMIN_NOTIFY_EMAIL=os.environ.get("ADMIN_NOTIFY_EMAIL", ""),
         LOGIN_SLIDESHOW=_env_bool("LOGIN_SLIDESHOW", True),
+        SPRACHEINGABE=_env_bool("SPRACHEINGABE", True),     # Diktat an den Kommentarfeldern der Prüfungen
         PUBLIC_HOST=_idna(os.environ.get("PUBLIC_HOST", "wiki.strömis.de")),
         PUBLIC_URL=os.environ.get("PUBLIC_URL", "https://wiki.strömis.de").rstrip("/"),
         SESSION_COOKIE_HTTPONLY=True,
@@ -460,7 +477,8 @@ def create_app():
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        resp.headers.setdefault("Permissions-Policy", "geolocation=(self), camera=()")
+        # Mikrofon nur für die eigene Seite: das Diktat der Prüfungen (Web Speech API) braucht es.
+        resp.headers.setdefault("Permissions-Policy", "geolocation=(self), camera=(), microphone=(self)")
         resp.headers.setdefault(
             "Content-Security-Policy",
             f"default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; "

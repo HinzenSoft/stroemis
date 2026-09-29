@@ -88,6 +88,12 @@ FELDER = [
     Feld("LOGIN_SLIDESHOW", "Seite", "Bilder auf der Anmeldeseite", art="schalter",
          hilfe="Zeigt zufällige Bilder aus den Spots hinter dem Anmeldeformular."),
 
+    # --- Prüfungen --------------------------------------------------------------------------
+    Feld("SPRACHEINGABE", "Prüfungen", "Diktieren per Mikrofon", art="schalter",
+         hilfe="Mikrofon-Knopf an den Kommentarfeldern der Prüfungen – für draußen, mit Handschuhen. "
+               "Die Erkennung übernimmt der Browser; Chrome und Safari können das Audio dafür an "
+               "Google bzw. Apple senden. Aus, wenn der Datenschutz das nicht zulässt."),
+
     # --- E-Mail -----------------------------------------------------------------------------
     Feld("MAIL_FROM", "E-Mail", "Absender",
          hilfe="Name und Adresse, wie sie beim Empfänger stehen. Die Domain dahinter entscheidet "

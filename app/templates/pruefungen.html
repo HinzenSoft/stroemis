@@ -11,7 +11,8 @@
    Inhalt daraus. Für den Druck gibt es keine eigene body-Klasse (base.html), deshalb trägt das
    <main> die Klasse „druck“ – pruefungen.css blendet damit alles außer der Übersicht aus. #}
 <main class="page pruef{% if ansicht == 'druck' %} druck{% endif %}" id="pruef"
-      data-ansicht="{{ ansicht }}" data-lehrgang="{{ lehrgang_id if lehrgang_id is not none else '' }}">
+      data-ansicht="{{ ansicht }}" data-lehrgang="{{ lehrgang_id if lehrgang_id is not none else '' }}"
+      data-katalog="{{ katalog_id if katalog_id is not none else '' }}">
   <p class="help" id="pruef-laden">Wird geladen …</p>
 </main>
 <dialog id="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
@@ -23,5 +24,6 @@
 <script src="{{ url_for('static', filename='vendor/toastui/toastui-editor-all.min.js') }}"></script>
 <script src="{{ url_for('static', filename='vendor/toastui/de-de.js') }}"></script>
 <script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
+<script src="{{ url_for('static', filename='js/diktat.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pruefungen.js') }}"></script>
 {% endblock %}

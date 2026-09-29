@@ -155,6 +155,19 @@ img { max-width: 100%; }
   padding: 0 12px; cursor: pointer;
 }
 .nav button:hover { background: rgba(255,255,255,.12); }
+/* Tablet hochkant, Faltgeräte und Telefone quer (641–900 px): Der Zusatz neben der Wortmarke
+   und der eigene Name weichen – sonst schob die Navigation die Wortmarke an und „Abmelden“ lag
+   hinter dem rechten Rand. „Profil“ bleibt als Weg zum eigenen Konto stehen. */
+@media (max-width: 900px) {
+  .funktion small { display: none; }
+  .nav .user { display: none; }
+  .nav a, .nav button { padding: 0 10px; }
+}
+/* Bis 720 px reicht das nicht: Auch der Schriftzug weicht, das Zeichen bleibt – so passen alle
+   sechs Punkte der Navigation ohne Rollen nebeneinander. */
+@media (max-width: 720px) {
+  .brand .trenner, .brand .funktion { display: none; }
+}
 /* Ganz schmale Geräte: Der Zusatz neben der Wortmarke weicht, damit Nutzer, Profil und
    Abmelden in die Zeile passen, statt in der rollenden Navigation zu verschwinden. */
 @media (max-width: 640px) {
@@ -209,12 +222,14 @@ img { max-width: 100%; }
 label { display: block; font-weight: 600; font-size: .9rem; margin: 12px 0 4px; }
 label.inline { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 6px 0; }
 input[type=text], input[type=email], input[type=password], input[type=number], input[type=search],
-input[type=tel], input[type=datetime-local], select, textarea {
+input[type=tel], input[type=datetime-local], input[type=date], select, textarea {
   width: 100%; font: inherit; line-height: 1.2; color: var(--anthrazit);
   border: 1px solid var(--grau); border-radius: var(--radius);
   padding: 8px 10px; background: var(--weiss);
 }
 textarea { min-height: 90px; resize: vertical; }
+/* Datumsfelder sahen auf iOS wie kleine graue Pillen ohne Rahmen aus – gleiche Höhe wie Textfelder. */
+input[type=date] { -webkit-appearance: none; appearance: none; min-height: 40px; }
 input:focus, select:focus, textarea:focus { border-color: var(--anthrazit); outline: 2px solid var(--anthrazit); outline-offset: 0; box-shadow: 0 0 0 4px rgba(255, 237, 0, .5); }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 @media (max-width: 480px) { .field-row { grid-template-columns: 1fr; } }
@@ -290,6 +305,21 @@ table.list .badge { max-width: 100%; white-space: normal; overflow-wrap: anywher
   margin: 0; border: 0; width: max-content; max-width: 90vw; height: auto; overflow: visible;
 }
 #toast:popover-open { display: block; }
+/* Ein Fehler darf nicht im Vorbeigehen übersehen werden: dunklerer Schatten und ein Warnzeichen
+   davor, statt nur der roten Fläche. */
+#toast.err { box-shadow: 0 6px 20px rgba(0, 0, 0, .35); }
+#toast.err::before { content: "⚠ "; }
+/* Ist ein Dialog offen, sitzt die Meldung bei ihm (Positionswerte kommen von toastPositionieren
+   in common.js) statt am unteren Fensterrand – auf einem hohen Bildschirm liegt sonst viel Platz
+   dazwischen, und wer auf den Dialog schaut, sieht sie nicht. ".bei-dialog" schwebt als Fahne
+   über dem Dialog; füllt der Dialog fast den Bildschirm (Telefon), setzt ".bei-dialog-innen"
+   sie stattdessen in seinen oberen Rand. Id+Klasse (bzw. Id+Attribut+Klasse für die Popover-
+   Fassung) schlägt dabei zuverlässig die Regeln oben UND die mobile Ecke weiter unten – ganz
+   gleich, in welcher Reihenfolge die Regeln im Blatt stehen. */
+#toast.bei-dialog { left: var(--toast-x, 50%); bottom: auto; top: var(--toast-y, 24px); transform: translate(-50%, -100%); }
+#toast.bei-dialog.bei-dialog-innen { transform: translate(-50%, 0); }
+#toast[popover].bei-dialog { left: var(--toast-x, 50%); bottom: auto; top: var(--toast-y, 24px); }
+
 
 /* Dialog */
 dialog {
@@ -298,13 +328,29 @@ dialog {
   box-shadow: var(--schatten-dialog);
 }
 dialog::backdrop { background: rgba(60,60,59,.55); }
-dialog .dlg-body { padding: 18px 20px 20px; max-height: 80vh; max-height: 80dvh; overflow: auto; }
+dialog .dlg-body { padding: 18px 20px 20px; max-height: 80vh; max-height: 80dvh; overflow: auto; overscroll-behavior: contain; }
+/* Solange ein Dialog offen ist, wandert keine Wischgeste an die Seite dahinter: Auf Android
+   löste das Weiterziehen am Dialogrand „zum Neuladen ziehen“ aus – Kommentar und Dateien weg. */
+html:has(dialog[open]) { overscroll-behavior: none; }
 dialog h2 { margin-bottom: 4px; }
 dialog .dlg-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 dialog.wide { width: min(1100px, 96vw); }
+/* Tastatur offen (iOS: der sichtbare Ausschnitt schrumpft, 100dvh nicht): Der Dialog wird so hoch wie
+   der sichtbare Bereich und hängt an dessen Oberkante – sein Inhalt rollt dann innen, statt dass iOS
+   den ganzen Ausschnitt verschiebt. Die Werte setzt common.js aus visualViewport; gilt für Telefon
+   und Tablet gleichermaßen. */
+html.tastatur dialog[open] { position: fixed; top: var(--vv-top, 0px); bottom: auto; margin: 8px auto 0;
+  max-height: calc(var(--vv-h, 100dvh) - 16px); }
+html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22px); }
+/* Telefon quer (Höhe ≤ 500 px): Der Dialog nimmt fast die ganze Höhe, weniger Polster. */
+@media (max-height: 500px) {
+  dialog, dialog.wide { max-height: calc(100dvh - 8px); }
+  dialog .dlg-body { max-height: calc(100dvh - 14px); padding: 12px 16px 14px; }
+}
 
 /* Seiten mit normalem Inhalt */
-.page { max-width: 860px; margin: 0 auto; padding: 28px 20px 60px; }
+.page { max-width: 860px; margin: 0 auto; padding: 28px 20px 60px;
+  padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
 .page.narrow { max-width: 520px; }
 .page-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 2px solid var(--anthrazit); padding-bottom: 8px; margin-bottom: 20px; }
 .section { margin: 26px 0; }
@@ -924,7 +970,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   .tree .tg { width: 28px; height: 32px; }
   .chip { padding: 10px 12px; }
   .lb-nav { padding: 16px 14px; }
-  .lb-side .close, .panel-head .close { padding: 6px 10px; }
+  .lb-side .close, .panel-head .close { padding: 6px 10px; min-width: 44px; min-height: 44px; }
   .toc-list a { padding: 7px 8px; }
   .lnk { padding: 5px 0; }
   .album-list li { padding: 10px 0; }
@@ -935,8 +981,13 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 @media (max-width: 640px) {
   /* iOS zoomt in jedes Feld unter 16 px hinein – und danach nicht mehr heraus. */
   input[type=text], input[type=email], input[type=password], input[type=number], input[type=search],
-  input[type=tel], input[type=datetime-local], select, textarea { font-size: 16px; }
+  input[type=tel], input[type=datetime-local], input[type=date], select, textarea { font-size: 16px; }
   .panel { padding-bottom: env(safe-area-inset-bottom); }
+}
+/* Telefon quer ist breiter als 640 px, zoomt aber genauso hinein. */
+@media (max-height: 500px) {
+  input[type=text], input[type=email], input[type=password], input[type=number], input[type=search],
+  input[type=tel], input[type=datetime-local], input[type=date], select, textarea { font-size: 16px; }
 }
 /* Hoher Kontrast: Flächenfarben fallen weg, der aktive Zustand braucht eine Kante. */
 @media (forced-colors: active) {

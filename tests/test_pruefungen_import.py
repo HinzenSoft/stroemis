@@ -186,7 +186,7 @@ def test_analysieren_beispieldatei():
     assert tn[1]["voraussetzungen"]["7"] is True
 
     # Rolle ≠ Teilnehmer → Ausbilder
-    assert e["ausbilder"] == [{"name": "Dirk Muster", "funktion": "Lehrgangsleitung", "zeile": 11}]
+    assert e["ausbilder"] == [{"name": "Dirk Muster", "funktion": "Lehrgangsleitung", "ist_leitung": True, "zeile": 11}]
 
     # Warnungen: Duplikat und Leerzeilen, als deutsche Sätze
     w = e["warnungen"]
@@ -258,7 +258,7 @@ def test_freie_liste_und_sonderfaelle():
     assert tn[1]["vorname"] == "Erika" and tn[1]["geburtsdatum"] == "1999-01-15"
     assert tn[1]["voraussetzungen"] == {"7": False}
     assert tn[1]["extra"]["Funktion"] == "Teilnehmerin"        # Rollentext bleibt als Zusatzangabe
-    assert e["ausbilder"] == [{"name": "Referentin Extern", "funktion": "Referent", "zeile": 5}]
+    assert e["ausbilder"] == [{"name": "Referentin Extern", "funktion": "Referent", "ist_leitung": False, "zeile": 5}]
     w = e["warnungen"]
     assert any("Zeile 4" in s and "Nachnamen" in s and "übersprungen" in s for s in w), w
     assert any("Eine leere Zeile" in s for s in w), w

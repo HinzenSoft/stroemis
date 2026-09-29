@@ -222,3 +222,133 @@ Prüfungen werden bereits beim Hochladen gewandelt).
 - **Anhänge sichtbar:** Sind zu einer Prüfung Bilder oder Videos hinterlegt, zeigen die Bewertungsübersichten (Matrix,
   „je Leistung“, „je TN“) in der Zelle eine Büroklammer, ab zwei Anhängen mit Zähler. Schnittstelle: `medien_anzahl`
   je Zelle im Lehrgangsdetail.
+
+## Nachtrag (28.09.2026): Mehrere Lehrgangsleitungen
+
+- Die Leitung ist jetzt ein eigenes Kennzeichen je Person (`pruef_ausbilder.ist_leitung`) statt eines Wortes in der
+  Funktion. Im Lehrgangsdialog hat jede Zeile den Haken „Leitung“; beliebig viele Personen können ihn tragen, und
+  „+ Lehrgangsleitung“ legt direkt eine weitere Leitungszeile an. Die Funktion bleibt freier Text (z. B. „Seiltechnik“).
+- Ein neuer Lehrgang beginnt mit der anlegenden Person als vorgewählter Leitung; der Server ergänzt sie weiterhin, falls
+  sie fehlt (Eintrag mit leerer Funktion und Kennzeichen).
+- Rechte hat nur, wer über sein Nutzerkonto gewählt ist. Externe Freitext-Einträge dürfen das Kennzeichen tragen (etwa
+  die Leitung aus der ISC-Liste), erscheinen damit aber nur in der Anzeige.
+- Lehrgangskopf: „Leitung: A, B · Referierende: C (Seiltechnik)“. Bei Leitungen wird eine Funktion, die nur
+  „Lehrgangsleitung“ oder „Leitung“ lautet, nicht noch einmal in Klammern wiederholt.
+- Migration: Die Spalte kommt additiv dazu; vorhandene Einträge, deren Funktion „leit“ enthält („Lehrgangsleitung“,
+  „Leiter:in“), erhalten das Kennzeichen einmalig beim ersten Start (`NACHARBEITEN` in `app/db.py`).
+- Schnittstelle: `ausbilder[].ist_leitung` (bool) in Lehrgangsdetail, Import-Vorschau und beim Anlegen/Bearbeiten. Fehlt
+  das Feld im Aufruf, zählt wie bisher ein „leit“ in der Funktion – ältere Aufrufe bleiben gültig.
+- Beispieldaten: SR1 hat eine zweite, externe Leitung.
+
+## Nachtrag (28.09.2026): Diktat, Scrollen unter der iOS-Tastatur, volle Breite
+
+- **Diktieren per Mikrofon** (`app/static/js/diktat.js`): Neben den Kommentarfeldern der Prüfungen – Bewertung,
+  Kommentar je Person, Bemerkung im Teilnehmerdialog, Beschreibung des Lehrgangs – steht ein Knopf „Diktieren“.
+  Er nutzt die Web Speech API des Browsers (Deutsch, fortlaufend, mit Vorschau des gerade Verstandenen); der
+  erkannte Text landet hinter dem vorhandenen und bleibt wie getippt änderbar. Ein zweiter Tipp stoppt, ebenso das
+  Schließen des Dialogs oder das Verlassen der Seite. Kann der Browser auf dem Gerät erkennen (Chrome ab 139 mit
+  Sprachpaket), wird das bevorzugt. Ohne Unterstützung (Firefox) gibt es keinen Knopf.
+  Datenschutz: Die Erkennung übernimmt der Browser – Chrome und Safari können das Audio dafür an Google bzw. Apple
+  senden; der Hinweis steht am Feld. Die Einstellung **SPRACHEINGABE** (Verwaltung → Einstellungen → Prüfungen,
+  Vorgabe an) schaltet alles ab. Der Header `Permissions-Policy` erlaubt das Mikrofon für die eigene Seite.
+- **Scrollen mit offener Tastatur (iOS):** Dialoge waren unter der Tastatur so hoch wie der ganze Bildschirm – ihr
+  Inhalt hatte nichts zu rollen, und Safari verschob stattdessen den sichtbaren Ausschnitt hin und her. Jetzt misst
+  `common.js` den sichtbaren Bereich (`visualViewport`) und legt ihn als `--vv-h`/`--vv-top` samt Klasse `tastatur`
+  an das `<html>`; `app.css` begrenzt offene Dialoge damit auf den sichtbaren Bereich und hängt sie an dessen
+  Oberkante. Der Inhalt rollt dann innen, das Feld mit dem Fokus wird hineingeholt. Gilt für alle Dialoge der
+  Anwendung auf Telefon und Tablet; Android verkleinert das Fenster selbst (`interactive-widget=resizes-content`).
+- **Volle Breite am Rechner:** Die Prüfungsseite nutzt die ganze Bildschirmbreite (vorher 1200 px), damit Matrix und
+  Teilnehmertabelle mehr Spalten ohne Rollen zeigen. Das Wiki behält seine Lesebreite.
+- **Mobile Durchsicht (Telefon, Querformat, Foldables 540/653 px, Tablets 768/1024 px):**
+  - Kopfzeile: Zwischen 641 und 900 px schoben sich Schriftzug und Navigation ineinander, „Abmelden“ lag hinter dem
+    rechten Rand (Tablet hochkant, Faltgeräte, Telefon quer). Jetzt weichen dort der Zusatz „strömis.de“ und der eigene
+    Name (bis 720 px auch der Schriftzug, das Zeichen bleibt); „Profil“ bleibt der Weg zum Konto. Betrifft alle Seiten,
+    ist aber reine Platzkorrektur – Aufbau und Breite des Wikis bleiben.
+  - „Voraussetzungen verwalten“ auf dem Telefon: Das Textfeld hatte neben den drei Knöpfen nur 150 px und schnitt
+    „Mindestalter 16 Jahre“ ab – jetzt volle Breite, die Knöpfe darunter.
+  - „je TN“ auf dem Telefon: Die Gliederung steht in eigener Zeile unter dem Namen statt mit einem verwaisten „·“ am
+    Zeilenanfang.
+  - Geprüft und in Ordnung: Lehrgangsliste als Karten bis 760 px, Teilnehmerkarten, Matrix mit seitlichem Rollen der
+    Leistungsspalten, Bewertungsdialog im Querformat (306 px hoch, innen rollbar), Import-, Mängel- und
+    Prüfungsleistungsdialog, keine waagerechten Überläufe des Dokuments bei 375/540/653/768 px.
+- **Aus der Code-Durchsicht der mobilen Ansichten** (umgesetzt):
+  - Stoppuhr-Knöpfe: Bei 360–390 px waren „▶ Start / ■ Stopp / Zurücksetzen“ breiter als der Dialog, der dann seitwärts
+    rollte. Sie dürfen jetzt umbrechen; unter 400 px stehen Start und Stopp nebeneinander, Zurücksetzen darunter.
+  - Zeitfeld: Die Zifferntastatur des Telefons hat keinen Doppelpunkt. „230“ oder „0230“ gilt jetzt als 2:30, ein- und
+    zweistellige Eingaben bleiben Sekunden; Beschriftung und Fehlertext sagen das.
+  - Wischgesten aus Dialogen wandern nicht mehr an die Seite dahinter (kein „zum Neuladen ziehen“ auf Android, kein
+    Mitrollen der Seite auf iOS) – auf allen Breiten, nicht nur unter 640 px.
+  - Matrix auf dem Telefon: klebende Namensspalte schmaler, Zellen ohne Nebenzeile; eine am Tablet gespeicherte
+    Matrix-Ansicht fällt auf dem Telefon auf „je Leistung“ zurück. Zwei Matrixregeln (Zellpolster, zentrierte Köpfe)
+    griffen wegen der Spezifität nie – behoben.
+  - Neuzeichnen nach dem Speichern behält den seitlichen Rollstand der Matrizen und offene Beschreibungen bei.
+  - Dialoge öffnen jetzt vor `onOpen` (common.js): Fokus und „zum Formular rollen“ wirken auch beim ersten Öffnen.
+    Auf Touch-Geräten wird beim Öffnen kein Feld mehr automatisch fokussiert – die Tastatur verdeckte sonst sofort den
+    halben Dialog.
+  - Telefon quer (Höhe ≤ 500 px): flachere Dialoge, kleinere Stoppuhr, kürzere Textfelder; Eingabefelder auch dort
+    16 px (kein iOS-Zoom). Datumsfelder sehen jetzt wie die übrigen Felder aus.
+  - Abbrechen/Speichern kleben im Bewertungsdialog am unteren Rand; Zurück-Verweis, aufklappbare Beschreibungen und
+    Ankreuzfelder in Dialogen sind 44 px hoch; kein Doppeltipp-Zoom auf Knöpfen und Zellen; Ergebnisknöpfe und
+    Namen-Verweise ohne Hover-Zustand erkennbar; Seitenpolster respektieren die Kerbe im Querformat.
+  - Kleinere Schrift der Nebenangaben auf mindestens 12 px, gesperrte Zellen weniger stark gedämpft; Pinch-Zoom gilt
+    nicht mehr als „Tastatur offen“; Schließkreuz des Leuchtkastens auch auf Tablets 44 px.
+  - Nicht umgesetzt: klebende Kopfzeile der Matrix auf Tablets (bräuchte einen eigenen Rollbereich mit fester Höhe),
+    Zweiteilung für aufgespannte Faltgeräte, Stoppuhr ohne localStorage, Lösch-Kreuz der Medienkacheln.
+
+## Nachtrag (28.09.2026): Prüfungsleistungskataloge, besser sichtbare Fehlermeldungen, Beispieldaten entfernt
+
+- **Prüfungsleistungskataloge** (`pruef_kataloge`, `pruef_katalog_leistungen`): Vorlagen für die Prüfungsleistungen
+  eines Lehrgangs, unabhängig von einer einzelnen Durchführung. Neue Seite `/pruefungen/kataloge` (Liste) und
+  `/pruefungen/kataloge/<id>` (ein Katalog mit seinen Leistungen), Knopf „Kataloge“ in der Lehrgangsliste links
+  neben „+ Lehrgang anlegen“.
+  - Lesen darf jede:r Prüfer:in – auch, um beim Anlegen eines Lehrgangs einen Katalog als Vorlage zu wählen
+    (`POST /api/pruefungen/lehrgaenge` nimmt dafür `katalog_id` entgegen). Anlegen, Ändern, Löschen eines Katalogs
+    und Pflege seiner Leistungen (`POST/PUT/DELETE .../kataloge`, `.../kataloge/<id>/leistungen`,
+    `.../katalog-leistungen/<id>`, `.../kataloge/<id>/leistungen/reihenfolge`) ist der Administration vorbehalten –
+    anders als beim Lehrgang gibt es keine Leitung, die dafür geradestünde.
+  - **Kopiert, nicht verknüpft:** Die Leistungen eines gewählten Katalogs werden beim Anlegen des Lehrgangs einmalig
+    in dessen eigene `pruef_leistungen` geschrieben (derselbe Weg wie beim „Lehrgang kopieren“). Eine spätere
+    Änderung am Katalog – Umbenennen, neue oder gelöschte Leistungen, sogar das Löschen des ganzen Katalogs – wirkt
+    sich nie auf einen schon angelegten Lehrgang aus. Individuelle Leistungen lassen sich unabhängig davon wie
+    bisher jederzeit ergänzen, auch während der Lehrgang läuft.
+  - Oberfläche: Katalog-Leistungen nutzen dieselbe Karte und denselben Toast-UI-Editor wie die Leistungen eines
+    Lehrgangs (`leistungKarteHtml`, `mdEditorEinrichten` – aus der bisherigen Leistungen-Oberfläche herausgezogen).
+- **Fehlermeldungen bei Dialogen besser zu finden:** Bislang erschien jede Meldung (`S.toast`) fest am unteren
+  Fensterrand. Bei einem mittig geöffneten, nicht bildschirmfüllenden Dialog auf einem großen oder hohen Bildschirm
+  lag da leicht ein großer, leerer Abstand dazwischen – wer auf den Dialog sah, bekam „Bitte einen Titel angeben“
+  leicht nicht mit. `common.js` positioniert die Meldung jetzt bei jedem Aufruf neu: Ist ein Dialog offen, schwebt
+  sie wie eine Fahne über seinem oberen Rand; füllt der Dialog fast den Bildschirm (Telefon), rutscht sie
+  stattdessen in seinen oberen Rand hinein. Ohne offenen Dialog bleibt es beim unteren Fensterrand bzw. der
+  bestehenden mobilen Ecke unter der Kopfzeile. Zusätzlich: ein Warnzeichen (⚠) vor Fehlermeldungen, ein deutlicherer
+  Schatten, und `role`/`aria-live` wechseln zwischen `alert`/`assertive` (Fehler, unterbricht sofort) und
+  `status`/`polite` (Bestätigung). Diese Änderung liegt in `common.js`/`app.css` und wirkt deshalb auf jeden Dialog
+  der Anwendung, nicht nur auf die Prüfungen – dort war die Meldung aber der gemeldete Auslöser.
+- **Beispieldaten entfernt:** Der Knopf „Beispieldaten anlegen“, `POST /api/pruefungen/beispieldaten` und
+  `app/beispieldaten.py` (SR1/SR2 mit erfundenen Personen) sind ersatzlos entfernt. Betroffene Tests wurden auf
+  direkte API-Aufrufe umgestellt, ohne an Aussagekraft zu verlieren.
+
+**Getroffene Annahmen:**
+- Kataloge sind ein Rechtsbereich für sich: Anlegen/Ändern/Löschen ist Adminsache, nicht Sache einer wählbaren
+  „Katalogleitung“ – es gab dafür keine Vorgabe, und ein eigenes Leitungskonzept nur für Kataloge hätte die
+  Rechtematrix ohne erkennbaren Nutzen verkompliziert.
+- Die Katalogauswahl gilt nur für das *Anlegen* eines Lehrgangs, nicht für den Excel-Import (der einen Lehrgang
+  ohne Zielangabe ebenfalls neu anlegen kann) – der Import hat einen eigenen Ablauf ohne diese Auswahl, und danach
+  lassen sich Leistungen ohnehin einzeln ergänzen.
+- Ein Katalog trägt nur Prüfungsleistungen als Vorlage, keine Voraussetzungen – so war es angefragt
+  („Vorlage der Prüfungsleistungen“).
+
+## Nachtrag (29.09.2026): Druckansicht „je TN“
+
+- In der Bewertungsansicht „je TN“ steht jetzt neben der Personenauswahl ein Knopf „🖨 Druckansicht“. Er öffnet
+  `/pruefungen/<id>/druck?ansicht=tn&teilnehmer=<tid>` in einem neuen Tab – eine eigene, druckbare Seite mit
+  Profilbild, dem freien Kommentar und jeder Prüfungsleistung als Karte (Versuchsnummer, Ergebnis, Zeit neben
+  Sollzeit, Kommentar, **Bilder und Videos des Versuchs**, wer wann abgenommen hat). Lässt sich drucken oder über
+  den Browser als PDF speichern, genau wie die bestehende Mängelübersicht.
+  - Kein neuer Endpunkt nötig: Die Seite nutzt `GET /api/pruefungen/teilnehmer/<tid>/versuche`, denselben Aufruf
+    wie der Dialog „Alle Bewertungen“ aus der Mängelübersicht.
+  - Der gemeinsame Rumpf (Kommentar + Versuchskarten mit Medien) ist aus dem bisherigen Dialog in eine eigene
+    Funktion (`bewertungenListeHtml`) gezogen, damit Dialog und Druckansicht nie auseinanderlaufen.
+  - Die bestehende Route `/pruefungen/<id>/druck` bekommt dafür den Parameter `ansicht=tn`; ohne ihn (auch bei
+    alten, gespeicherten Verweisen) zeigt sie wie bisher die Mängelübersicht.
+  - Nutzt vollständig die schon vorhandene Druck-Gestaltung (`.versuch-karte`, `.medien-grid`, `@media print`) –
+    keine neue CSS nötig.

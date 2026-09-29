@@ -200,8 +200,10 @@ def test_pruefungen():
         ausb = lg["ausbilder"]
         assert len(ausb) == 3, ausb
         for a in ausb:
-            hat_felder(a, "id", "user_id", "name", "funktion")
+            hat_felder(a, "id", "user_id", "name", "funktion", "ist_leitung")
         assert ausb[0]["user_id"] == pr_id and ausb[0]["name"] == "Petra Prüferin" and ausb[0]["funktion"] == "Lehrgangsleitung", ausb
+        # Ohne Kennzeichen im Aufruf zählt wie früher das Wort in der Funktion.
+        assert ausb[0]["ist_leitung"] is True and ausb[1]["ist_leitung"] is False and ausb[2]["ist_leitung"] is False, ausb
         assert ausb[1]["user_id"] is None and ausb[1]["name"] == "Erwin Extern", ausb
         assert ausb[2]["user_id"] is None and ausb[2]["name"] == "Frieda Fremd", ausb
         # Ein unbekannter Status wird zu „geplant“.
@@ -218,7 +220,8 @@ def test_pruefungen():
         assert lg["status"] == "geplant" and lg["ort"] == "Neustadt" and lg["titel"] == "Strömungsretter 2"
         # Die bearbeitende Leitung bleibt eingetragen (sonst sperrte sie sich mit dieser Liste selbst aus).
         assert [a["name"] for a in lg["ausbilder"]] == ["Petra Prüferin", "Nur Einer"], lg["ausbilder"]
-        assert lg["ausbilder"][0]["user_id"] == pr_id and lg["ausbilder"][0]["funktion"] == "Lehrgangsleitung"
+        assert lg["ausbilder"][0]["user_id"] == pr_id and lg["ausbilder"][0]["ist_leitung"] is True
+        assert lg["ausbilder"][1]["ist_leitung"] is False
         assert lg["beschreibung"] == "Aufbaulehrgang"
         assert pr.put(f"/api/pruefungen/lehrgaenge/{lid}", json={"datum_bis": "2026-04-01"}).status_code == 400  # vor datum_von
         assert pr.put(f"/api/pruefungen/lehrgaenge/{lid}", json={"titel": ""}).status_code == 400
@@ -865,7 +868,8 @@ def test_import():
         assert lg["created_by_name"] == "Petra Prüferin"
         # Wer importiert, wird Lehrgangsleitung; die Leitung aus der Datei steht als Freitext dahinter.
         assert [a["name"] for a in lg["ausbilder"]] == ["Petra Prüferin", "Lena Leitung"], lg["ausbilder"]
-        assert lg["ausbilder"][0]["funktion"] == "Lehrgangsleitung" and lg["ausbilder"][1]["funktion"] == "Lehrgangsleitung"
+        assert lg["ausbilder"][0]["ist_leitung"] is True and lg["ausbilder"][1]["ist_leitung"] is True
+        assert lg["ausbilder"][1]["funktion"] == "Lehrgangsleitung"
         assert lg["ausbilder"][1]["user_id"] is None
         assert lg["ausbilder"][0]["user_id"] == pr_id
         assert [v["bezeichnung"] for v in lg["voraussetzungen"]] == [t.replace("\n", " ") for t in VORAUSSETZUNGEN]
@@ -1222,18 +1226,9 @@ def test_nachtraege():
 
 
 # ----------------------------------------------------------------------------------------------------
-# Runde 2: Leitungsrechte, Profilbild, Kommentar, Lehrgangsergebnis, Einfrieren, Beispieldaten
+# Runde 2: Leitungsrechte, Profilbild, Kommentar, Lehrgangsergebnis, Einfrieren
 # ----------------------------------------------------------------------------------------------------
 
-# Die 17 Prüfungsleistungen der Checkliste „Beurteilung Strömungsretter 2“ – Reihenfolge ist Teil der Vorgabe.
-SR2_LEISTUNGEN = (
-    "Beherrschen der Standardknoten für SR", "Beherrschen der Anker", "Standardverfahren Flachseilbrücke",
-    "Standardverfahren Schräghangrettung", "Standardverfahren Abseilen", "Notverfahren",
-    "Führungsverhalten (Fachtechnisch)",
-    "Sicherheitsbewusstsein (Gefährdungsbeurteilung, Schaffen von Sicherheit, Eigensicherung)",
-    "Teamfähigkeit (Seiltechnik)", "Wurfsack", "Springersperre", "Grundlagen Raft", "Raftfähre", "Einsätze bei Nacht",
-    "Rettungstechniken im/am strömenden Gewässer", "Führungsverhalten (Wasser)", "Teamfähigkeit (Wasser)",
-)
 TN_FELDER2 = TN_FELDER + ("bild", "kommentar", "ergebnis", "ergebnis_von_name", "ergebnis_am", "eingefroren")
 LEHRGANG_KURZ2 = LEHRGANG_KURZ + ("darf_leiten", "ergebnis_bestanden", "ergebnis_nicht_bestanden")
 
@@ -1260,14 +1255,14 @@ def bild_pfad(tmp, tn):
 
 
 def leitung_von(lg, user_id):
-    """Einträge der Ausbilderliste, die diesen Nutzer als Leitung führen (Funktion enthält „leit“)."""
-    return [a for a in lg["ausbilder"] if a["user_id"] == user_id and "leit" in (a["funktion"] or "").lower()]
+    """Einträge der Ausbilderliste, die diesen Nutzer als Leitung führen (Kennzeichen ist_leitung)."""
+    return [a for a in lg["ausbilder"] if a["user_id"] == user_id and a["ist_leitung"] is True]
 
 
 def test_rechte_und_ergebnis():
     """Runde 2: Nur Leitung (Ausbilderliste mit eigener user_id und Leitungsfunktion) oder Administration
     darf Stammdaten, Definitionen und Versuche löschen bzw. bearbeiten; alle Prüfenden bewerten, haken ab
-    und kommentieren. Dazu Profilbilder, das Lehrgangsergebnis mit Einfrieren und die Beispieldaten."""
+    und kommentieren. Dazu Profilbilder und das Lehrgangsergebnis mit Einfrieren."""
     with tempfile.TemporaryDirectory() as tmp:
         app, adm, pr, pr_id, nix, nix_id = umgebung(tmp)
         anon = app.test_client()
@@ -1292,7 +1287,7 @@ def test_rechte_und_ergebnis():
         lid = lg["id"]
         assert lg["darf_leiten"] is True and lg["ergebnis_bestanden"] == 0 and lg["ergebnis_nicht_bestanden"] == 0, lg
         eintrag = leitung_von(lg, pr_id)
-        assert len(eintrag) == 1 and eintrag[0]["funktion"] == "Lehrgangsleitung" and eintrag[0]["name"] == "Petra Prüferin", lg["ausbilder"]
+        assert len(eintrag) == 1 and eintrag[0]["ist_leitung"] is True and eintrag[0]["name"] == "Petra Prüferin", lg["ausbilder"]
         # Steht der Anleger schon als Leitung in der Liste, wird er nicht verdoppelt; Externe bleiben erhalten.
         r = pr.post("/api/pruefungen/lehrgaenge", json={
             "titel": "Schon Leitung",
@@ -1373,7 +1368,6 @@ def test_rechte_und_ergebnis():
         leitung_noetig(zweit.delete(f"/api/pruefungen/leistungen/{lei[0]['id']}", headers=H))
         leitung_noetig(zweit.put(f"/api/pruefungen/lehrgaenge/{lid}/leistungen/reihenfolge", json={"ids": [lei[1]["id"], lei[0]["id"]]}))
         leitung_noetig(zweit.put(f"/api/pruefungen/teilnehmer/{anna['id']}/ergebnis", json={"ergebnis": "bestanden"}))
-        assert zweit.post("/api/pruefungen/beispieldaten", json={}).status_code == 403
         # Nichts davon hat Spuren hinterlassen.
         det = pr.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]
         assert det["ort"] == "" and [t["vorname"] for t in det["teilnehmer"]] == ["Anna", "Bert", "Clara"], det
@@ -1420,7 +1414,6 @@ def test_rechte_und_ergebnis():
         assert nix.put(f"/api/pruefungen/teilnehmer/{anna['id']}/kommentar", json={"kommentar": "x"}).status_code == 403
         assert nix.put(f"/api/pruefungen/teilnehmer/{anna['id']}/ergebnis", json={"ergebnis": "bestanden"}).status_code == 403
         assert bild_hochladen(nix, anna["id"]).status_code == 403
-        assert nix.post("/api/pruefungen/beispieldaten", json={}).status_code == 403
 
         # --- A. Leitung und Administration: dieselben Routen mit 200/201 ---------------------------------------
         r = pr.put(f"/api/pruefungen/lehrgaenge/{lid}", json={"ort": "Musterstadt"})
@@ -1632,56 +1625,6 @@ def test_rechte_und_ergebnis():
         kurz = next(e for e in pr.get("/api/pruefungen/lehrgaenge").json["lehrgaenge"] if e["id"] == lid)
         assert kurz["ergebnis_bestanden"] == 0 and kurz["ergebnis_nicht_bestanden"] == 0, kurz
 
-        # --- D. Beispieldaten: nur die Administration ----------------------------------------------------------
-        assert pr.post("/api/pruefungen/beispieldaten", json={}).status_code == 403
-        assert adm.post("/api/pruefungen/beispieldaten").status_code == 403                  # CSRF ohne JSON/Header
-        vorher = {e["id"] for e in adm.get("/api/pruefungen/lehrgaenge").json["lehrgaenge"]}
-        r = adm.post("/api/pruefungen/beispieldaten", json={})
-        assert r.status_code == 201, (r.status_code, r.get_json())
-        beispiele = r.json["lehrgaenge"]
-        assert len(beispiele) == 2, beispiele
-        for e in beispiele:
-            hat_felder(e, *LEHRGANG_KURZ2)
-            assert e["id"] not in vorher and e["darf_leiten"] is True and e["tn_anzahl"] > 0 and e["leistungen_anzahl"] > 0, e
-        sr1 = next(e for e in beispiele if "SR1" in e["titel"])
-        sr2 = next(e for e in beispiele if "SR2" in e["titel"])
-        # SR2: Leistungen exakt nach der Checkliste, fünf Voraussetzungen, sechs Teilnehmende mit Bewertungen.
-        det2 = adm.get(f"/api/pruefungen/lehrgaenge/{sr2['id']}").json["lehrgang"]
-        assert tuple(l["bezeichnung"] for l in det2["leistungen"]) == SR2_LEISTUNGEN, [l["bezeichnung"] for l in det2["leistungen"]]
-        assert len(det2["voraussetzungen"]) == 5, [v["bezeichnung"] for v in det2["voraussetzungen"]]
-        assert any("Fitness" in v["bezeichnung"] for v in det2["voraussetzungen"]), det2["voraussetzungen"]
-        assert det2["tn_anzahl"] == 6 and det2["zellen_abgenommen"] > 0, (det2["tn_anzahl"], det2["zellen_abgenommen"])
-        assert len(leitung_von(det2, adm_id)) == 1, det2["ausbilder"]                      # der Aufrufer leitet
-        assert any(a["user_id"] is None for a in det2["ausbilder"]), det2["ausbilder"]     # plus externe Referierende
-        # SR1: mindestens 8 Teilnehmende, eine Nachprüfung, ein vermerktes Ergebnis, Haken und Kommentare.
-        det1 = adm.get(f"/api/pruefungen/lehrgaenge/{sr1['id']}").json["lehrgang"]
-        assert det1["tn_anzahl"] >= 8 and len(det1["teilnehmer"]) >= 8, det1["tn_anzahl"]
-        assert len(det1["voraussetzungen"]) == 14 and len(det1["leistungen"]) == 9, (len(det1["voraussetzungen"]), len(det1["leistungen"]))
-        assert any(l["zeitansatz_sekunden"] for l in det1["leistungen"]) and any(l["beschreibung_md"] for l in det1["leistungen"])
-        versuche1 = [v for t in det1["teilnehmer"]
-                     for v in adm.get(f"/api/pruefungen/teilnehmer/{t['id']}/versuche").json["versuche"]]
-        assert any(v["ist_nachpruefung"] for v in versuche1), "Beispieldaten brauchen eine Nachprüfung"
-        assert any(v["kommentar"] for v in versuche1) and all(v["geprueft_von_name"] for v in versuche1)
-        mit_ergebnis = [t for t in det1["teilnehmer"] if t["ergebnis"]]
-        assert mit_ergebnis and all(t["eingefroren"] and t["ergebnis_von_name"] and t["ergebnis_am"] for t in mit_ergebnis), det1["teilnehmer"]
-        assert det1["ergebnis_bestanden"] + det1["ergebnis_nicht_bestanden"] == len(mit_ergebnis)
-        assert any(t["voraussetzungen"] for t in det1["teilnehmer"]), "teils abgehakte Voraussetzungen"
-        for t in det1["teilnehmer"] + det2["teilnehmer"]:
-            hat_felder(t, *TN_FELDER2)
-        assert all(a["name"] for a in det1["ausbilder"] + det2["ausbilder"])
-        # Für Prüfende ohne Leitung sind die Beispiele sichtbar, aber nicht leitbar.
-        assert pr.get(f"/api/pruefungen/lehrgaenge/{sr1['id']}").json["lehrgang"]["darf_leiten"] is False
-        liste_pr = {e["id"]: e["darf_leiten"] for e in pr.get("/api/pruefungen/lehrgaenge").json["lehrgaenge"]}
-        assert liste_pr[sr1["id"]] is False and liste_pr[sr2["id"]] is False
-        leitung_noetig(pr.put(f"/api/pruefungen/lehrgaenge/{sr2['id']}", json={"ort": "Fremd"}))
-        # Ein zweiter Aufruf legt weitere Kopien an, ohne die ersten zu berühren.
-        r = adm.post("/api/pruefungen/beispieldaten", json={})
-        assert r.status_code == 201 and len(r.json["lehrgaenge"]) == 2, r.get_json()
-        neue = {e["id"] for e in r.json["lehrgaenge"]}
-        assert not neue & {sr1["id"], sr2["id"]}
-        assert {e["titel"] for e in r.json["lehrgaenge"]} != {sr1["titel"], sr2["titel"]}, "Kopien tragen einen Zusatz im Titel"
-        assert adm.get(f"/api/pruefungen/lehrgaenge/{sr2['id']}").json["lehrgang"]["tn_anzahl"] == 6
-
         # --- Lehrgang löschen räumt auch die Profilbilder weg ------------------------------------------------------
         r = bild_hochladen(pr, bert["id"], "bert.jpg")
         assert r.status_code == 200, r.get_json()
@@ -1693,7 +1636,7 @@ def test_rechte_und_ergebnis():
         assert pr.get(r.json["teilnehmer"]["bild"]).status_code == 404
         avatar_dir = os.path.join(tmp, "media", "pruefungen", "avatar")
         uebrig = os.listdir(avatar_dir) if os.path.isdir(avatar_dir) else []
-        # Nur die Bilder der Beispieldaten (falls welche angelegt werden) dürfen noch liegen – jedes mit Datenbankzeile.
+        # Nur Bilder anderer, noch bestehender Lehrgänge dürfen noch liegen – jedes mit Datenbankzeile.
         bilder_db = {t["bild"].rsplit("/", 1)[1] for lgk in adm.get("/api/pruefungen/lehrgaenge").json["lehrgaenge"]
                      for t in adm.get(f"/api/pruefungen/lehrgaenge/{lgk['id']}").json["lehrgang"]["teilnehmer"] if t["bild"]}
         assert set(uebrig) == bilder_db, (uebrig, bilder_db)
@@ -1706,3 +1649,256 @@ if __name__ == "__main__":
     test_import_modul()
     test_nachtraege()
     test_rechte_und_ergebnis()
+
+
+def test_mehrere_leitungen():
+    """Nachtrag: Beliebig viele Personen können Lehrgangsleitung sein – das Kennzeichen ist_leitung zählt,
+    nicht der Wortlaut der Funktion. Externe Einträge tragen es nur für die Anzeige."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, adm, pr, pr_id, nix, nix_id = umgebung(tmp)
+        assert adm.put(f"/api/admin/users/{pr_id}", json={"is_pruefer": True}).status_code == 200
+        r = adm.post("/api/admin/users", json={"email": "zweit@example.org", "password": "passwort1",
+                                               "name": "Zacharias Zweitleitung", "gliederung": "OG Musterstadt",
+                                               "role": "editor", "is_pruefer": True})
+        assert r.status_code == 201, r.json
+        zweit_id = r.json["user"]["id"]
+        zweit = app.test_client()
+        assert zweit.post("/api/auth/login", json={"email": "zweit@example.org", "password": "passwort1"}).status_code == 200
+
+        # Zwei Leitungen mit Konto, eine externe Leitung, eine Referentin – die Funktion ist freier Text.
+        r = pr.post("/api/pruefungen/lehrgaenge", json={
+            "titel": "Doppelt geleitet", "datum_von": "2026-07-01",
+            "ausbilder": [{"user_id": pr_id, "ist_leitung": True},
+                          {"user_id": zweit_id, "funktion": "Seiltechnik", "ist_leitung": True},
+                          {"user_id": None, "name": "Ilse ISC-Leitung", "funktion": "Lehrgangsleitung", "ist_leitung": True},
+                          {"user_id": None, "name": "Renate Referierend", "funktion": "Wasser", "ist_leitung": False}]})
+        assert r.status_code == 201, (r.status_code, r.get_json())
+        lg = r.json["lehrgang"]
+        lid = lg["id"]
+        assert [(a["name"], a["funktion"], a["ist_leitung"]) for a in lg["ausbilder"]] == [
+            ("Petra Prüferin", "", True), ("Zacharias Zweitleitung", "Seiltechnik", True),
+            ("Ilse ISC-Leitung", "Lehrgangsleitung", True), ("Renate Referierend", "Wasser", False)], lg["ausbilder"]
+        assert len(leitung_von(lg, pr_id)) == 1 and len(leitung_von(lg, zweit_id)) == 1, "nicht verdoppelt"
+        # Beide leiten: sehen darf_leiten und dürfen Stammdaten ändern.
+        assert zweit.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]["darf_leiten"] is True
+        r = zweit.put(f"/api/pruefungen/lehrgaenge/{lid}", json={"ort": "Von der Zweitleitung"})
+        assert r.status_code == 200 and r.json["lehrgang"]["ort"] == "Von der Zweitleitung", r.get_json()
+        # Die Zweitleitung bleibt auch nach ihrer eigenen Änderung der Liste eingetragen (keine Selbstaussperrung),
+        # die Erstleitung ebenfalls – sie steht in der mitgeschickten Liste.
+        assert [a["user_id"] for a in r.json["lehrgang"]["ausbilder"] if a["ist_leitung"]][:2] == [pr_id, zweit_id]
+
+        # Das Kennzeichen zählt, nicht das Wort: ohne Haken ist „Lehrgangsleitung“ nur eine Beschriftung.
+        r = pr.put(f"/api/pruefungen/lehrgaenge/{lid}", json={
+            "ausbilder": [{"user_id": pr_id, "ist_leitung": True},
+                          {"user_id": zweit_id, "funktion": "Lehrgangsleitung", "ist_leitung": False}]})
+        assert r.status_code == 200, r.get_json()
+        assert [a["ist_leitung"] for a in r.json["lehrgang"]["ausbilder"]] == [True, False], r.json["lehrgang"]["ausbilder"]
+        assert zweit.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]["darf_leiten"] is False
+        assert zweit.put(f"/api/pruefungen/lehrgaenge/{lid}", json={"ort": "verboten"}).status_code == 403
+        # Ein Freitext-Eintrag mit Kennzeichen verleiht keine Rechte – Zacharias steht nur als Text drin.
+        r = pr.put(f"/api/pruefungen/lehrgaenge/{lid}", json={
+            "ausbilder": [{"user_id": None, "name": "Zacharias Zweitleitung", "ist_leitung": True}]})
+        assert r.status_code == 200 and r.json["lehrgang"]["ausbilder"][1]["user_id"] is None, r.get_json()
+        assert zweit.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]["darf_leiten"] is False
+        # Der Wert muss ein Ja/Nein sein.
+        assert pr.put(f"/api/pruefungen/lehrgaenge/{lid}",
+                      json={"ausbilder": [{"user_id": pr_id, "ist_leitung": "vielleicht"}]}).status_code == 400
+
+        # Kopieren nimmt die Kennzeichen mit.
+        r = pr.put(f"/api/pruefungen/lehrgaenge/{lid}", json={
+            "ausbilder": [{"user_id": pr_id, "ist_leitung": True}, {"user_id": zweit_id, "ist_leitung": True},
+                          {"user_id": None, "name": "Renate Referierend", "funktion": "Wasser"}]})
+        assert r.status_code == 200, r.get_json()
+        r = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/kopieren", json={"titel": "Kopie", "datum_von": "2027-01-01"})
+        assert r.status_code == 201, (r.status_code, r.get_json())
+        assert [(a["name"], a["ist_leitung"]) for a in r.json["lehrgang"]["ausbilder"]] == [
+            ("Petra Prüferin", True), ("Zacharias Zweitleitung", True), ("Renate Referierend", False)]
+        assert zweit.get(f"/api/pruefungen/lehrgaenge/{r.json['lehrgang']['id']}").json["lehrgang"]["darf_leiten"] is True
+
+        # Auch über den gewöhnlichen Weg lassen sich mehr als zwei Leitungen mit Referierenden ohne
+        # Kennzeichen mischen – nicht nur beim Kopieren (oben).
+        adm_id = adm.get("/api/me").json["user"]["id"]
+        assert adm.put(f"/api/admin/users/{adm_id}", json={"is_pruefer": True}).status_code == 200
+        r = adm.post("/api/pruefungen/lehrgaenge", json={
+            "titel": "Dreifach besetzt",
+            "ausbilder": [{"user_id": adm_id, "ist_leitung": True},
+                          {"user_id": None, "name": "Renate Referierend", "funktion": "Wasser"},
+                          {"user_id": None, "name": "Konstantin Ko-Leitung", "ist_leitung": True}]})
+        assert r.status_code == 201, (r.status_code, r.get_json())
+        assert [a["ist_leitung"] for a in r.json["lehrgang"]["ausbilder"]] == [True, False, True], r.json["lehrgang"]["ausbilder"]
+
+
+def test_migration_leitung():
+    """Bestandsdaten von vor dem Kennzeichen: Wer „leit“ in der Funktion trug, bekommt beim ersten Start mit
+    der neuen Spalte das Kennzeichen – genau einmal, ein zweiter Start ändert nichts mehr."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, adm, pr, pr_id, nix, nix_id = umgebung(tmp)
+        assert adm.put(f"/api/admin/users/{pr_id}", json={"is_pruefer": True}).status_code == 200
+        r = pr.post("/api/pruefungen/lehrgaenge", json={"titel": "Alt", "ausbilder": [
+            {"user_id": pr_id, "funktion": "Lehrgangsleitung"}, {"user_id": nix_id, "funktion": "Leiter"},
+            {"user_id": None, "name": "Erwin Extern", "funktion": "Referierende:r"}]})
+        assert r.status_code == 201, r.get_json()
+        lid = r.json["lehrgang"]["id"]
+        # Alten Stand nachstellen: Spalte weg, damit init_db sie neu anlegt und die Nacharbeit läuft.
+        import sqlite3
+        from app import db
+        conn = sqlite3.connect(app.config["DB_PATH"])
+        conn.execute("ALTER TABLE pruef_ausbilder DROP COLUMN ist_leitung")
+        conn.commit()
+        assert "ist_leitung" not in [r[1] for r in conn.execute("PRAGMA table_info(pruef_ausbilder)")]
+        conn.close()
+        with app.app_context():
+            db.init_db()
+            zeilen = db.query("SELECT name, funktion, ist_leitung FROM pruef_ausbilder WHERE lehrgang_id = ? "
+                              "ORDER BY sortierung", (lid,))
+        assert [(z["funktion"], z["ist_leitung"]) for z in zeilen] == [("Lehrgangsleitung", 1), ("Leiter", 1), ("Referierende:r", 0)], zeilen
+        # Danach zählt nur noch das Kennzeichen: Wer es verliert, ist trotz Wort keine Leitung mehr.
+        with app.app_context():
+            db.execute("UPDATE pruef_ausbilder SET ist_leitung = 0 WHERE lehrgang_id = ? AND user_id = ?", (lid, pr_id))
+            db.init_db()
+            zeilen = db.query("SELECT ist_leitung FROM pruef_ausbilder WHERE lehrgang_id = ? ORDER BY sortierung", (lid,))
+        assert [z["ist_leitung"] for z in zeilen] == [0, 1, 0], zeilen
+        assert pr.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]["darf_leiten"] is False
+
+
+def test_diktat_einstellung():
+    """Diktat (Spracheingabe): Die Seite gibt den Schalter an den Browser und lädt diktat.js; das
+    Mikrofon ist per Permissions-Policy für die eigene Seite erlaubt; die Einstellung SPRACHEINGABE
+    steht in der Verwaltung und schaltet den Knopf ab."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, adm, pr, pr_id, nix, nix_id = umgebung(tmp)
+        assert adm.put(f"/api/admin/users/{pr_id}", json={"is_pruefer": True}).status_code == 200
+        r = pr.get("/pruefungen")
+        assert r.status_code == 200
+        html = r.get_data(as_text=True)
+        assert "spracheingabe: true" in html and "js/diktat.js" in html, html[:2000]
+        assert "microphone=(self)" in r.headers.get("Permissions-Policy", ""), r.headers.get("Permissions-Policy")
+        assert pr.get("/static/js/diktat.js").status_code == 200
+        felder = {f["schluessel"]: f for f in adm.get("/api/admin/einstellungen").json["felder"]}
+        assert felder["SPRACHEINGABE"]["gruppe"] == "Prüfungen" and felder["SPRACHEINGABE"]["art"] == "schalter", felder["SPRACHEINGABE"]
+        assert adm.put("/api/admin/einstellungen", json={"werte": {"SPRACHEINGABE": "false"}}).status_code == 200
+        assert "spracheingabe: false" in pr.get("/pruefungen").get_data(as_text=True)
+        # Ohne Anmeldung gibt es die Seite nicht – und damit auch keinen Hinweis auf den Schalter.
+        assert app.test_client().get("/pruefungen").status_code in (302, 401, 403)
+
+
+KATALOG_KURZ = ("id", "titel", "beschreibung", "created_by_name", "created_at", "updated_at", "leistungen_anzahl")
+KATALOG_DETAIL = KATALOG_KURZ + ("leistungen",)
+
+
+def test_kataloge():
+    """Prüfungsleistungskataloge: Vorlagen für die Prüfungsleistungen eines Lehrgangs. Jede:r
+    Prüfer:in darf sie lesen und beim Anlegen eines Lehrgangs wählen; verwalten (anlegen, ändern,
+    löschen, Leistungen pflegen) darf nur die Administration. Eine Änderung am Katalog – auch das
+    Löschen – wirkt sich nie auf einen schon angelegten Lehrgang aus: Seine Leistungen sind eine
+    Kopie, keine Verknüpfung."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, adm, pr, pr_id, nix, nix_id = umgebung(tmp)
+        assert adm.put(f"/api/admin/users/{pr_id}", json={"is_pruefer": True}).status_code == 200
+        # Kataloge verwalten ist Adminsache – aber auch die Administration braucht das Prüferrecht,
+        # um den Bereich überhaupt zu betreten (is_pruefer zählt für sich, nicht die Rolle).
+        adm_id = adm.get("/api/me").json["user"]["id"]
+        assert adm.put(f"/api/admin/users/{adm_id}", json={"is_pruefer": True}).status_code == 200
+
+        # --- Rechte: lesen darf jede:r Prüfer:in, verwalten nur die Administration ------------------
+        assert pr.get("/api/pruefungen/kataloge").status_code == 200
+        assert nix.get("/api/pruefungen/kataloge").status_code == 403          # kein Prüferrecht
+        r = pr.post("/api/pruefungen/kataloge", json={"titel": "Versuch"})
+        assert r.status_code == 403 and "Administration" in r.json["error"], r.get_json()
+        assert nix.post("/api/pruefungen/kataloge", json={"titel": "Versuch"}).status_code == 403
+
+        # --- Anlegen, lesen, ändern, Feldgrenzen ------------------------------------------------------
+        assert adm.post("/api/pruefungen/kataloge", json={"titel": ""}).status_code == 400
+        r = adm.post("/api/pruefungen/kataloge", json={"titel": "Strömungsretter 1", "beschreibung": "Standardkatalog SR1"})
+        assert r.status_code == 201, (r.status_code, r.get_json())
+        kat = r.json["katalog"]
+        hat_felder(kat, *KATALOG_DETAIL)
+        assert kat["titel"] == "Strömungsretter 1" and kat["beschreibung"] == "Standardkatalog SR1"
+        assert kat["leistungen_anzahl"] == 0 and kat["leistungen"] == [] and kat["created_by_name"] == "Administrator"
+        kid = kat["id"]
+        r = pr.get(f"/api/pruefungen/kataloge/{kid}")
+        assert r.status_code == 200 and r.json["katalog"]["titel"] == "Strömungsretter 1"
+        assert pr.put(f"/api/pruefungen/kataloge/{kid}", json={"titel": "Fremd"}).status_code == 403
+        r = adm.put(f"/api/pruefungen/kataloge/{kid}", json={"titel": "SR1 (Standard)"})
+        assert r.status_code == 200 and r.json["katalog"]["titel"] == "SR1 (Standard)" and r.json["katalog"]["beschreibung"] == "Standardkatalog SR1"
+        assert adm.get("/api/pruefungen/kataloge/999999").status_code == 404
+        assert adm.put("/api/pruefungen/kataloge/999999", json={"titel": "x"}).status_code == 404
+
+        # --- Leistungen im Katalog: anlegen, bearbeiten, Reihenfolge, löschen --------------------------
+        assert pr.post(f"/api/pruefungen/kataloge/{kid}/leistungen", json={"bezeichnung": "Fremd"}).status_code == 403
+        r = adm.post(f"/api/pruefungen/kataloge/{kid}/leistungen", json={"bezeichnung": "Wurfsackwurf auf Ziel", "zeitansatz_sekunden": 90})
+        assert r.status_code == 201, (r.status_code, r.get_json())
+        l1 = r.json["leistung"]
+        hat_felder(l1, "id", "bezeichnung", "beschreibung_md", "zeitansatz_sekunden", "sortierung")
+        assert l1["bezeichnung"] == "Wurfsackwurf auf Ziel" and l1["zeitansatz_sekunden"] == 90
+        r = adm.post(f"/api/pruefungen/kataloge/{kid}/leistungen",
+                     json={"bezeichnung": "Standardknoten", "beschreibung_md": "Achter, Palstek, Prusik"})
+        assert r.status_code == 201, r.get_json()
+        l2 = r.json["leistung"]
+        assert adm.post(f"/api/pruefungen/kataloge/{kid}/leistungen", json={"bezeichnung": ""}).status_code == 400
+        assert adm.post(f"/api/pruefungen/kataloge/{kid}/leistungen",
+                        json={"bezeichnung": "Kaputt", "zeitansatz_sekunden": "nicht mm:ss"}).status_code == 400
+        det = adm.get(f"/api/pruefungen/kataloge/{kid}").json["katalog"]
+        assert [l["bezeichnung"] for l in det["leistungen"]] == ["Wurfsackwurf auf Ziel", "Standardknoten"]
+        assert det["leistungen_anzahl"] == 2
+        # Umbenennen, Reihenfolge tauschen, löschen.
+        assert pr.put(f"/api/pruefungen/katalog-leistungen/{l1['id']}", json={"bezeichnung": "x"}).status_code == 403
+        r = adm.put(f"/api/pruefungen/katalog-leistungen/{l1['id']}", json={"bezeichnung": "Wurfsackwurf"})
+        assert r.status_code == 200 and r.json["leistung"]["bezeichnung"] == "Wurfsackwurf"
+        assert adm.put(f"/api/pruefungen/kataloge/{kid}/leistungen/reihenfolge",
+                       json={"ids": [l2["id"], l1["id"]]}).status_code == 200
+        det = adm.get(f"/api/pruefungen/kataloge/{kid}").json["katalog"]
+        assert [l["bezeichnung"] for l in det["leistungen"]] == ["Standardknoten", "Wurfsackwurf"]
+        assert pr.delete(f"/api/pruefungen/katalog-leistungen/{l1['id']}", headers=H).status_code == 403
+        assert adm.delete(f"/api/pruefungen/katalog-leistungen/{l1['id']}", headers=H).status_code == 200
+        assert adm.get(f"/api/pruefungen/kataloge/{kid}").json["katalog"]["leistungen_anzahl"] == 1
+        assert adm.put("/api/pruefungen/katalog-leistungen/999999", json={"bezeichnung": "x"}).status_code == 404
+        assert adm.delete("/api/pruefungen/katalog-leistungen/999999", headers=H).status_code == 404
+
+        # Zweite Leistung wieder anlegen, damit der Katalog für die Vorlagen-Tests zwei Einträge hat.
+        r = adm.post(f"/api/pruefungen/kataloge/{kid}/leistungen", json={"bezeichnung": "Wurfsackwurf", "zeitansatz_sekunden": 90})
+        assert r.status_code == 201, r.get_json()
+        l1 = r.json["leistung"]
+        det = adm.get(f"/api/pruefungen/kataloge/{kid}").json["katalog"]
+        assert [l["bezeichnung"] for l in det["leistungen"]] == ["Standardknoten", "Wurfsackwurf"]
+
+        # --- Als Vorlage beim Anlegen eines Lehrgangs: jede:r Prüfer:in darf einen Katalog wählen -----
+        r = pr.post("/api/pruefungen/lehrgaenge", json={"titel": "Mit Vorlage", "katalog_id": kid})
+        assert r.status_code == 201, (r.status_code, r.get_json())
+        lg = r.json["lehrgang"]
+        lid = lg["id"]
+        assert lg["leistungen_anzahl"] == 2
+        assert [(l["bezeichnung"], l["beschreibung_md"], l["zeitansatz_sekunden"]) for l in lg["leistungen"]] == [
+            ("Standardknoten", "Achter, Palstek, Prusik", None), ("Wurfsackwurf", "", 90)]
+        # Ein unbekannter Katalog lässt gar nichts erst halb entstehen.
+        vorher = {e["id"] for e in adm.get("/api/pruefungen/lehrgaenge").json["lehrgaenge"]}
+        assert pr.post("/api/pruefungen/lehrgaenge", json={"titel": "Kaputt", "katalog_id": 999999}).status_code == 404
+        assert {e["id"] for e in adm.get("/api/pruefungen/lehrgaenge").json["lehrgaenge"]} == vorher
+        # Ohne Angabe (oder leer) bleibt es wie bisher: ein leerer Lehrgang.
+        r = pr.post("/api/pruefungen/lehrgaenge", json={"titel": "Ohne Vorlage", "katalog_id": ""})
+        assert r.status_code == 201 and r.json["lehrgang"]["leistungen_anzahl"] == 0, r.get_json()
+        r = pr.post("/api/pruefungen/lehrgaenge", json={"titel": "Auch ohne Vorlage"})
+        assert r.status_code == 201 and r.json["lehrgang"]["leistungen_anzahl"] == 0, r.get_json()
+
+        # --- Kernanforderung: Änderungen am Katalog wirken sich nie auf lid aus ------------------------
+        assert adm.put(f"/api/pruefungen/katalog-leistungen/{l2['id']}", json={"bezeichnung": "Umbenannt im Katalog"}).status_code == 200
+        assert adm.post(f"/api/pruefungen/kataloge/{kid}/leistungen", json={"bezeichnung": "Neu im Katalog"}).status_code == 201
+        assert adm.delete(f"/api/pruefungen/katalog-leistungen/{l1['id']}", headers=H).status_code == 200
+        unveraendert = pr.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]
+        assert [(l["bezeichnung"], l["beschreibung_md"], l["zeitansatz_sekunden"]) for l in unveraendert["leistungen"]] == [
+            ("Standardknoten", "Achter, Palstek, Prusik", None), ("Wurfsackwurf", "", 90)], unveraendert["leistungen"]
+        # Während der Lehrgang läuft, lassen sich weiterhin eigene, unabhängige Leistungen ergänzen.
+        r = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/leistungen", json={"bezeichnung": "Zusätzlich, nur hier"})
+        assert r.status_code == 201, r.get_json()
+        assert pr.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]["leistungen_anzahl"] == 3
+        # Auch das Löschen des ganzen Katalogs ändert am Lehrgang nichts – seine Leistungen sind Kopien.
+        assert adm.delete(f"/api/pruefungen/kataloge/{kid}", headers=H).status_code == 200
+        assert adm.get(f"/api/pruefungen/kataloge/{kid}").status_code == 404
+        weiterhin = pr.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]
+        assert weiterhin["leistungen_anzahl"] == 3
+        assert [l["bezeichnung"] for l in weiterhin["leistungen"]] == ["Standardknoten", "Wurfsackwurf", "Zusätzlich, nur hier"]
+
+        # --- Ohne Prüferrecht bleibt auch das zu ---------------------------------------------------
+        assert nix.get(f"/api/pruefungen/kataloge").status_code == 403
+        assert nix.get(f"/api/pruefungen/kataloge/{kid}").status_code == 403
+        print("Kataloge-Test bestanden.")

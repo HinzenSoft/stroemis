@@ -211,7 +211,8 @@ CREATE TABLE IF NOT EXISTS pruef_ausbilder (
   lehrgang_id   INTEGER NOT NULL REFERENCES pruef_lehrgaenge(id) ON DELETE CASCADE,
   user_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,   -- NULL = externer Ausbilder (Freitext)
   name          TEXT NOT NULL DEFAULT '',
-  funktion      TEXT NOT NULL DEFAULT '',        -- Lehrgangsleitung | Ausbilder | frei
+  funktion      TEXT NOT NULL DEFAULT '',        -- frei, z. B. „Seiltechnik“ oder „Referierende:r“
+  ist_leitung   INTEGER NOT NULL DEFAULT 0,      -- 1 = Lehrgangsleitung (mehrere je Lehrgang möglich)
   sortierung    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_pruef_ausbilder_lehrgang ON pruef_ausbilder(lehrgang_id);
@@ -279,6 +280,30 @@ CREATE TABLE IF NOT EXISTS pruef_leistungen (
   sortierung           INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_pruef_leist_lehrgang ON pruef_leistungen(lehrgang_id);
+
+-- Prüfungsleistungskataloge: Vorlagen für pruef_leistungen, unabhängig von einem Lehrgang. Beim
+-- Anlegen eines Lehrgangs werden die Zeilen eines gewählten Katalogs nach pruef_leistungen KOPIERT
+-- (siehe kopieren() in api_pruefungen.py) – nie verlinkt. Eine spätere Änderung am Katalog wirkt
+-- sich damit nie auf einen schon angelegten Lehrgang aus; er bleibt beim damaligen Stand.
+CREATE TABLE IF NOT EXISTS pruef_kataloge (
+  id                INTEGER PRIMARY KEY,
+  titel             TEXT NOT NULL,
+  beschreibung      TEXT NOT NULL DEFAULT '',
+  created_by        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_by_name   TEXT NOT NULL DEFAULT '',
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pruef_katalog_leistungen (
+  id                   INTEGER PRIMARY KEY,
+  katalog_id           INTEGER NOT NULL REFERENCES pruef_kataloge(id) ON DELETE CASCADE,
+  bezeichnung          TEXT NOT NULL,
+  beschreibung_md      TEXT NOT NULL DEFAULT '',
+  zeitansatz_sekunden  INTEGER,
+  sortierung           INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_pruef_katalog_leist ON pruef_katalog_leistungen(katalog_id);
 
 -- Ein Prüfungsversuch. Die Nachprüfung ist ein weiterer Versuch derselben Zelle; der erste bleibt stehen.
 CREATE TABLE IF NOT EXISTS pruef_versuche (
@@ -389,7 +414,17 @@ MIGRATIONS = [
     ("pruef_teilnehmer", "ergebnis_von", "INTEGER"),
     ("pruef_teilnehmer", "ergebnis_von_name", "TEXT NOT NULL DEFAULT ''"),
     ("pruef_teilnehmer", "ergebnis_am", "TEXT"),
+    # Prüfungen: die Leitung ist ein eigenes Kennzeichen, nicht mehr nur ein Wort in der Funktion.
+    ("pruef_ausbilder", "ist_leitung", "INTEGER NOT NULL DEFAULT 0"),
 ]
+
+# Was nach dem Anlegen einer Spalte einmalig mit den vorhandenen Zeilen geschieht. Nur der Prozess,
+# der die Spalte wirklich angelegt hat, führt es aus – so läuft es genau einmal.
+NACHARBEITEN = {
+    # Bisher galt als Leitung, wessen Funktion „leit“ enthielt („Lehrgangsleitung“, „Leiter:in“).
+    ("pruef_ausbilder", "ist_leitung"):
+        "UPDATE pruef_ausbilder SET ist_leitung = 1 WHERE lower(funktion) LIKE '%leit%'",
+}
 
 
 # Tabellen, deren Inhalt vollständig aus den Seiten abgeleitet ist. Ändert sich die Art, wie sie
@@ -450,6 +485,9 @@ def _init_db_einmal():
         if column not in cols:
             try:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+                nacharbeit = NACHARBEITEN.get((table, column))
+                if nacharbeit:
+                    conn.execute(nacharbeit)
             except sqlite3.OperationalError as e:
                 # Gunicorn startet die App in jedem Arbeitsprozess getrennt und damit gleichzeitig:
                 # zwischen Abfrage und ALTER kann ein anderer Prozess die Spalte schon angelegt

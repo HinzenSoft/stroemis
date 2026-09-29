@@ -45,15 +45,17 @@
 
 **Prüfungen** (nur für Nutzer mit dem Zusatzrecht „Prüfer“)
 - Lehrgänge mit Titel, Nummer, Zeitraum, Ort, Status, Lehrgangsleitung und Referierenden (aus den Nutzern gewählt oder als Freitext für Externe). Liste mit Suche, Jahresfilter, Teilnehmerzahl, Fortschritt („18/24 Leistungen abgenommen“) und offenen Mängeln.
-- Zwei Stufen innerhalb des Bereichs: **Lehrgangsleitung** (wer im Lehrgang mit Leitungsfunktion eingetragen ist) und Administration legen Lehrgänge, Teilnehmende, Voraussetzungen und Leistungen an, ändern und löschen sie; alle anderen Prüfenden – etwa Referierende – nehmen Prüfungen ab und haken Voraussetzungen ab. Wer einen Lehrgang anlegt, wird automatisch seine Leitung.
+- Zwei Stufen innerhalb des Bereichs: **Lehrgangsleitung** (wer im Lehrgang mit dem Kennzeichen „Leitung“ eingetragen ist – mehrere Personen je Lehrgang sind möglich) und Administration legen Lehrgänge, Teilnehmende, Voraussetzungen und Leistungen an, ändern und löschen sie; alle anderen Prüfenden – etwa Referierende – nehmen Prüfungen ab und haken Voraussetzungen ab. Wer einen Lehrgang anlegt, wird automatisch seine Leitung.
 - Je Teilnehmendem ein Profilbild, ein freier Kommentar der Prüfenden und das **Lehrgangsergebnis** der Leitung (bestanden / nicht bestanden). Mit dem Ergebnis sind die Prüfungsdaten der Person eingefroren – keine neuen Versuche, Medien oder Haken, bis die Leitung das Ergebnis aufhebt.
-- Beispieldaten (ein SR1- und ein SR2-Lehrgang nach der Checkliste „Beurteilung Strömungsretter 2“) legt die Administration per Knopf in der Lehrgangsliste oder mit `python -m app.beispieldaten` an.
+- **Diktieren per Mikrofon** an den Kommentarfeldern (Web Speech API des Browsers, Deutsch). Die Erkennung läuft im Browser – Chrome und Safari können das Audio an Google bzw. Apple senden; die Einstellung `SPRACHEINGABE` schaltet den Knopf ab.
+- **Prüfungsleistungskataloge**: Vorlagen für die Prüfungsleistungen eines Lehrgangs, unabhängig von einer einzelnen Durchführung. Lesen darf jede:r Prüfer:in (Auswahl beim Anlegen eines Lehrgangs, Knopf „Kataloge“ neben „+ Lehrgang anlegen“); anlegen, ändern, löschen und die Leistungen darin pflegen darf nur die Administration. Die Leistungen eines gewählten Katalogs werden beim Anlegen einmalig in den Lehrgang **kopiert** – eine spätere Änderung am Katalog (auch sein Löschen) wirkt sich nie auf einen schon angelegten Lehrgang aus. Individuelle Leistungen lassen sich unabhängig davon jederzeit ergänzen, auch während der Lehrgang läuft.
 - **Import** der Teilnehmerliste (.xlsx, etwa die ISC-Checkliste „Voraussetzungen“ mit allgemeinen Lehrgangsinformationen): Die Datei wird vorab gelesen und in einer Vorschau gezeigt – erkannte Spalten, Zuordnung (Stammdaten, Voraussetzung, weitere Angabe, ignorieren) per Auswahl korrigierbar, Warnungen zu Leerzeilen und Duplikaten. Kopfzeilen der Datei (Nummer, Titel, Zeitraum, Ort) füllen leere Lehrgangsfelder; Spalten mit ja/nein werden zu **Voraussetzungen** des Lehrgangs, bereits erfüllte Häkchen werden übernommen und als „importiert“ protokolliert. Ein zweiter Import derselben Liste aktualisiert statt zu verdoppeln.
 - **Voraussetzungen** je Teilnehmendem abhaken – unter jedem Haken steht klein, wer ihn wann gesetzt hat; jede Änderung bleibt im Verlauf. Teilnehmende mit offenen Voraussetzungen sind markiert.
 - **Prüfungsleistungen** mit Beschreibung (Editor wie im Wiki) und optionalem Zeitansatz; sortierbar. Ein Lehrgang lässt sich samt Leistungen und Voraussetzungs-Definitionen **kopieren** – ohne Teilnehmende und Ergebnisse.
 - **Prüfungen abnehmen** in einer Matrix Teilnehmende × Leistungen, auf dem Telefon als Liste je Leistung oder je Teilnehmendem. Der Bewertungsdialog hat eine **Stoppuhr** (nur bei Zeitansatz; überlebt Neuladen und Bildschirmsperre, weil der Startzeitpunkt im Browser liegt), ein immer manuell befüllbares Zeitfeld, große Knöpfe 👍 bestanden / 👎 mangelhaft, einen Kommentar (Pflicht bei mangelhaft) und Bilder/Videos direkt von der Kamera. Jede Bewertung trägt Prüfer und Zeitpunkt; Änderungen werden als „bearbeitet von … am …“ gekennzeichnet, der alte Stand bleibt im Verlauf.
 - **Nachprüfung** als zusätzlicher Versuch; die Erstprüfung bleibt sichtbar, für die Matrix zählt der letzte Versuch.
 - **Mängel / Feedback**: alle mangelhaften Leistungen je Teilnehmendem mit Kommentar, Medien, Zeit, Prüfer und Stand der Nachprüfung – filterbar und als Druckansicht für das Feedbackgespräch.
+- **Druckansicht „je TN“**: In der Bewertungsansicht „je Teilnehmendem“ zeigt „🖨 Druckansicht“ alle Prüfungsleistungen der gewählten Person auf einer eigenen Seite – mit Profilbild, freiem Kommentar sowie je Leistung Ergebnis, Zeit, Kommentar und den hochgeladenen Bildern/Videos. Drucken oder als PDF speichern.
 - Die Medien liegen in einem eigenen Ordner und werden nur an Prüfer ausgeliefert.
 
 ## Schnellstart
@@ -255,7 +257,7 @@ pip install -r requirements.txt
 python run.py                 # http://127.0.0.1:8080, Daten in ./data
 python tests/test_smoke.py    # Rauchtest über die API (Login, Upload, EXIF, Rechte, Wiki, Reset)
                               # und Härtungstest (Freigaben, alte Adressen, Anmeldebremse, Grenzen)
-python tests/test_pruefungen.py         # Prüfungsbereich (Rechte, Excel-Import, Kopieren, Nachprüfung, Medien)
+python tests/test_pruefungen.py         # Prüfungsbereich (Rechte, Kataloge, Excel-Import, Kopieren, Nachprüfung, Medien)
 python tests/test_pruefungen_import.py  # Excel-Erkennung
 ```
 
@@ -278,8 +280,7 @@ app/
   api_albums.py    Alben, Bilder, Kartendaten
   api_wiki.py      Seiten, Versionen, Suche, Freigaben, Kommentare, öffentliche API, Datei-Upload, Export
   api_admin.py     Nutzerverwaltung
-  api_pruefungen.py  Prüfungen: Lehrgänge, Teilnehmende, Voraussetzungen, Leistungen, Versuche, Medien, Mängel, Import, Rechte
-  beispieldaten.py   Beispiel-Lehrgänge SR1/SR2 (Knopf für die Administration oder python -m app.beispieldaten)
+  api_pruefungen.py  Prüfungen: Lehrgänge, Teilnehmende, Voraussetzungen, Leistungen, Kataloge, Versuche, Medien, Mängel, Import, Rechte
   pruefungen_import.py  Excel-Teilnehmerlisten lesen (Kopfzeile finden, Spalten zuordnen, ja/nein deuten) – ohne Flask
   images.py        EXIF (GPS, Höhe, Zeit), Ausrichtung, Thumbnails, HEIC, Videos nach H.264
   medienpflege.py  Bestandsvideos nach dem Start im Hintergrund wandeln (eine Sperre, ein Arbeiter)
@@ -302,7 +303,7 @@ app/
                    admin.js, auth.js, profile.js
 tests/
   test_smoke.py    Rauch- und Härtungstest über die API
-  test_pruefungen.py  Prüfungsbereich: Rechte, Import, Kopieren, Pflichtkommentar, Nachprüfung, Medien, Mängel
+  test_pruefungen.py  Prüfungsbereich: Rechte, Kataloge, Import, Kopieren, Pflichtkommentar, Nachprüfung, Medien, Mängel
   test_pruefungen_import.py  Excel-Erkennung mit synthetischen Dateien
   rundlauf.html    Rundlauf, Rückgängig-Verlauf und verbundene Zellen im Browser prüfen (Datei einfach öffnen)
   gleichstand.html Leseansicht und Editor nebeneinander messen (Datei einfach öffnen)
