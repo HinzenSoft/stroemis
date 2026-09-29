@@ -352,3 +352,180 @@ Prüfungen werden bereits beim Hochladen gewandelt).
     alten, gespeicherten Verweisen) zeigt sie wie bisher die Mängelübersicht.
   - Nutzt vollständig die schon vorhandene Druck-Gestaltung (`.versuch-karte`, `.medien-grid`, `@media print`) –
     keine neue CSS nötig.
+
+## Nachtrag (29.09.2026): Ein Knopf statt zwei bei Leitung/Referierende
+
+- Im Lehrgang-Dialog gab es zwei Knöpfe, um eine Zeile bei „Lehrgangsleitung und Referierende“ anzulegen
+  („+ Lehrgangsleitung“ mit vorgesetztem Haken, „+ Referierende:r“ mit vorgesetzter Funktion) – nebeneinander
+  wirkte das redundant, zumal jede Zeile ohnehin einen eigenen Leitung-Haken und ein freies Funktionsfeld hat.
+  Jetzt gibt es nur noch „+ Person“: eine leere Zeile, Haken und Funktion werden direkt darin gesetzt.
+
+## Nachtrag (29.09.2026): Voraussetzungen je Person auf dem Telefon zugeklappt
+
+- In der schmalen Kartenansicht der Teilnehmenden (≤ 760 px, senkrechtes Telefon) ist die Liste der
+  Voraussetzungen je Person jetzt zugeklappt – ein Antippen von „Voraussetzungen“ öffnet sie. Wer noch offene
+  Punkte hat, steht weiterhin sofort sichtbar in der Marke im Kartenkopf; zum Abhaken selbst muss man die
+  passende Karte antippen, statt sich durch alle acht oder mehr Personen zu scrollen.
+- Der Zustand übersteht das Setzen eines Hakens: Die Seite zeichnet sich danach komplett neu (Fortschritt und
+  Zähler ändern sich mit), und die schon vorhandene Merklogik für offene `<details>` (aus der Druckvorschau-
+  Beschreibung) hält die gerade geöffnete Karte offen – kein erneutes Aufklappen nach jedem Tipp nötig.
+- Die breite Tabellenansicht (Desktop und Querformat-Telefon/Tablet ab 761 px) bleibt unverändert eine Matrix
+  Teilnehmende × Voraussetzungen, wie bisher.
+
+## Nachtrag (29.09.2026): Kriterienliste je Prüfungsleistung
+
+- **Zusätzlich zur freien Beschreibung** lässt sich an jeder Prüfungsleistung optional eine **Kriterienliste** anlegen –
+  einzelne, einzeln abhakbare Punkte (z. B. „Mindestens zwei Treffer“, „Sicherer Stand, Seil nicht um die Hand
+  gewickelt“). Verwaltet wird sie im Bearbeiten-Dialog der Leistung, direkt unter der Beschreibung; verfügbar ist sie
+  erst, sobald die Leistung angelegt ist (wie das Profilbild bei einer Person). Anlegen, Umbenennen, Umsortieren und
+  Löschen ist wie bei den Leistungen selbst Sache der Lehrgangsleitung; ein Antippen/Verlassen des Felds speichert
+  sofort, ohne den restlichen, noch unfertig ausgefüllten Dialog anzutasten.
+- **Der Haken im Bewertungsdialog:** Ist eine Kriterienliste vorhanden, zeigt der Bewertungsdialog sie zwischen Zeit
+  und Ergebnis. Jeder Punkt ist ein Knopf mit drei Zuständen – **nicht bewertet** (⬜), **erfüllt** (✅, grün) und
+  **nicht erfüllt** (❌, rot) –, ein Antippen schaltet zyklisch weiter. Der Stand wird zusammen mit Ergebnis, Zeit,
+  Kommentar und Medien gespeichert und lässt sich beim Bearbeiten eines Versuchs erneut ändern, auch unabhängig davon,
+  ob sich sonst etwas an der Bewertung ändert.
+- **Sichtbar überall, wo ein Versuch im Detail steht:** „Bisherige Versuche“ im Bewertungsdialog, der Dialog „Alle
+  Bewertungen“, die Mängelübersicht und die Druckansicht „je TN“ zeigen unter Kommentar und Zeit kompakt, welche
+  Kriterien mit ✅ oder ❌ bewertet wurden – nicht bewertete Punkte bleiben dort unerwähnt, um die Ansicht nicht mit
+  „offenem“ vollzustellen. Die Leistungskarte zeigt zusätzlich ein Zählmarke („📋 2“), wenn eine Kriterienliste
+  hinterlegt ist.
+- **Kopiert, nicht verknüpft:** „Lehrgang kopieren“ nimmt die Kriterienliste jeder Leistung als Vorlage mit (wie die
+  Beschreibung), mit neuen, eigenen Kennungen im neuen Lehrgang – ein Bearbeiten der Kopie wirkt sich nie auf das
+  Original aus. Löschen eines Kriteriums oder der ganzen Leistung entfernt zugehörige Haken an Versuchen automatisch
+  (Fremdschlüssel-Kaskade), wie es beim Löschen einer Voraussetzung schon der Fall war.
+- Neue Tabellen `pruef_kriterien` (Definition je Leistung) und `pruef_versuch_kriterien` (Haken je Versuch), acht neue
+  Endpunkte unter `/api/pruefungen` (`kriterien`, `katalog-`… bewusst nicht betroffen, siehe unten), `kriterien` als
+  neues Feld an jeder Leistung im Lehrgang und an jedem Versuch.
+
+**Getroffene Annahmen:**
+- Die Kriterienliste gibt es nur für Leistungen **im Lehrgang**, nicht für Kataloge (Prüfungsleistungskataloge). Ein
+  Katalog hat keine Teilnehmenden und keine Versuche, an denen sich ein Haken setzen ließe – die namensgebende
+  Interaktion („mehrmals antippen, um durch die Zustände zu gehen“) ergibt dort keinen Sinn. Wer eine Kriterienliste
+  auch als Katalog-Vorlage mitführen möchte, kann das als eigenen Auftrag nachreichen.
+  **↳ Überholt, siehe Nachtrag „Kriterienlisten auch für Kataloge und beim Anlegen“ vom selben Tag.**
+- Beim Bearbeiten eines Versuchs zählt ein reines Ändern der Kriterien-Haken nicht als „bearbeitet“ im Sinne der
+  Verlaufsanzeige (kein neuer Verlaufseintrag, kein neues „bearbeitet von … am …“) – dafür gibt es keine eigene
+  Versionsgeschichte je Kriterium, anders als bei Ergebnis/Zeit/Kommentar.
+
+## Nachtrag (29.09.2026): Kriterienlisten auch für Kataloge und beim Anlegen
+
+Erweitert die Kriterienliste des vorigen Nachtrags um die beiden dort bewusst ausgesparten Fälle:
+
+- **Auch Katalog-Leistungen können eine Kriterienliste tragen.** Dieselbe Oberfläche (Dreizustands-Knöpfe ⬜/✅/❌ im
+  Bewertungsdialog, Umsortieren/Umbenennen/Löschen im Bearbeiten-Dialog) wie bei einer Lehrgangs-Leistung – ein
+  Katalog hat weiterhin keine Versuche, daher dient die Liste dort als reine Vorlage ohne Bewertungsteil. Verwaltet
+  wird sie wie bisher über eigene Endpunkte (`/api/pruefungen/katalog-leistungen/<id>/kriterien`,
+  `/api/pruefungen/katalog-kriterien/<id>`, `.../reihenfolge`), Rechte wie beim übrigen Katalog: nur Administration.
+- **Beim erstmaligen Anlegen einer Leistung** – Lehrgang wie Katalog – lässt sich die Kriterienliste jetzt direkt im
+  selben Dialog mit aufbauen, statt erst nach dem Speichern warten zu müssen: Ein rein lokaler Entwurf (Hinzufügen,
+  Entfernen, Umsortieren im Speicher des Browsers, ohne eigene Endpunkte, solange die Leistung noch keine Kennung
+  hat) wird beim Anlegen als Liste von Bezeichnungen mitgeschickt und in derselben Datenbank-Transaktion wie die
+  Leistung selbst gespeichert.
+- **Katalog → Lehrgang kopiert jetzt auch die Kriterien mit.** Wird beim Anlegen eines Lehrgangs ein Katalog als
+  Vorlage gewählt, entstehen zu jeder übernommenen Leistung auch ihre Kriterien neu (eigene Kennungen, wie die
+  Leistungen selbst) – eine spätere Änderung am Katalog wirkt sich weiterhin nie auf einen schon angelegten Lehrgang
+  aus (geprüft: Umbenennen eines Katalog-Kriteriums nach dem Kopieren ändert die Kopie im Lehrgang nicht).
+- Neue Tabelle `pruef_katalog_kriterien` (Definition je Katalog-Leistung, gleicher Aufbau wie `pruef_kriterien`);
+  jede Katalog-Leistung liefert jetzt ebenfalls ein `kriterien`-Feld.
+
+**Hebt eine Annahme des vorigen Nachtrags auf:** Kataloge kennen jetzt doch Kriterien (siehe oben). Die zweite
+Annahme jenes Nachtrags (Kriterien-Haken zählen nicht als „bearbeitet“) gilt unverändert weiter.
+
+## Nachtrag (29.09.2026): Beispieldaten als eigenständiges Entwicklungswerkzeug
+
+- **`scripts/beispieldaten.py`** (neu, außerhalb von `app/`): legt von der Kommandozeile aus (`python
+  scripts/beispieldaten.py`) unter dem ersten Administrator-Konto denselben SR1-/SR2-Beispieldatensatz an wie das
+  frühere `app/beispieldaten.py` – laufender SR1- und abgeschlossener SR2-Lehrgang, erfundene Personen,
+  Voraussetzungen, Bewertungen, eine Nachprüfung, Lehrgangsergebnisse – jetzt zusätzlich mit **Kriterienlisten** an
+  zwei Leistungen (Wurfsackwurf: drei Kriterien mit gemischten ✅/❌/nicht-bewertet-Haken an mehreren Versuchen;
+  Eigensicherung: vier Kriterien ohne Versuche, zeigt den frisch angelegten Zustand) und korrekt gesetztem
+  `ist_leitung` (die Spalte kam erst nach dem alten Skript dazu).
+  - **Kein Ersatz für den entfernten Weg in der Anwendung.** Kein Knopf, keine Route, kein Import in `app/`; das
+    `Dockerfile` kopiert nur `app/` ins Abbild, das Skript kommt dort nie mit. Gedacht ist es ausschließlich dazu,
+    eine lokale Entwicklungsdatenbank (`DATA_DIR`, wie bei `run.py` standardmäßig `./data`) von Hand mit Testdaten
+    zu füllen – etwa nach einem frischen Klon oder einem geleerten `DATA_DIR`.
+  - Geprüft: Lauf gegen eine frische Testdatenbank, Kriterien und Haken stichprobenartig über die Datenbank
+    nachgezählt (7 Kriterien, 18 Haken in der erwarteten Verteilung), die bestehenden 17 Tests bleiben unberührt,
+    da das Skript von keinem App- oder Testcode importiert wird.
+
+## Nachtrag (29.09.2026): X/Y erfüllte Kriterien als Indikator in Matrix, „je Leistung“ und „je TN“
+
+- Hat eine Prüfungsleistung eine Kriterienliste, zeigt jede Zelle mit einem Versuch jetzt zusätzlich „📋 X/Y“
+  (erfüllte von insgesamt definierten Kriterien) – in der Matrix, in „je Leistung“ und in „je TN“ gleichermaßen,
+  da alle drei Ansichten dieselbe Zellen-Funktion (`zelleHtml`) teilen. Gezählt wird nur der letzte Versuch der
+  Zelle und nur „erfüllt“ (✅); „nicht erfüllt“ (❌) und noch nicht bewertete Kriterien zählen nicht zu X, senken Y
+  aber auch nicht – Y ist immer die volle Länge der Kriterienliste. Ohne Versuch (Status „offen“) erscheint kein
+  Indikator, auch wenn die Leistung Kriterien hat – vor dem ersten Versuch gibt es nichts zu berichten. Leistungen
+  ohne Kriterienliste bleiben unverändert ohne das Symbol.
+  - Das Badge sitzt wie die vorhandene Anhang-Büroklammer im Textblock der Zelle (`.txt`), nicht in der Zeile mit
+    Prüfer und Uhrzeit (`.sub`) – letztere blendet die schmale Matrix auf dem Telefon aus, das Badge bleibt dort
+    bewusst sichtbar, weil genau dort der schnelle Überblick ohne Aufklappen am meisten zählt.
+  - Neues Feld `kriterien_erfuellt` an jeder Zelle in der Teilnehmerliste des Lehrgangs (`GET
+    /api/pruefungen/lehrgaenge/<id>`, `teilnehmer[].leistungen[<leistung_id>].kriterien_erfuellt`) – die Gesamtzahl
+    Y kommt weiterhin aus der schon vorhandenen Kriterienliste der Leistung selbst, dafür war kein neues Feld nötig.
+  - Im Bewertungsdialog selbst (die eigentliche Detailansicht) ändert sich nichts – dort steht die Kriterienliste
+    bereits vollständig mit jedem einzelnen Haken; der neue Indikator ist gezielt für die Ansichten davor gedacht.
+
+## Nachtrag (29.09.2026): „je TN“ zeigt die Kriterienliste im Detail statt nur des X/Y-Kürzels
+
+- **Verfeinert den vorigen Nachtrag für die Ansicht „je TN“:** Statt des kompakten „📋 X/Y“ steht dort jetzt direkt
+  unter Zeit und Kommentar des letzten Versuchs die vollständige Kriterienliste als Zeilen mit ✅/❌ und Bezeichnung
+  – wie es Mängelübersicht, Druckansicht „je TN“ und der Dialog „Alle Bewertungen“ für einen Versuch schon zeigen
+  (`kriterienErgebnisHtml`, jetzt auch hier wiederverwendet statt neu gebaut). Nicht bewertete Kriterien bleiben
+  unerwähnt. Matrix und „je Leistung“ bleiben beim kompakten Kürzel – dort stehen viele Zellen nebeneinander, wo
+  eine volle Liste je Zelle die Übersicht sprengen würde; „je TN“ zeigt ohnehin nur eine Person mit reichlich Platz
+  je Zeile, dort ist die Detailliste die bessere Wahl.
+  - Neues Feld `kriterien_stand` an jeder Zelle der Teilnehmerliste (`teilnehmer[].leistungen[<id>].kriterien_stand`)
+    – derselbe `{kriterium_id: erfüllt}`-Stand wie an `versuch["kriterien"]`, nur schon in der Lehrgangs-Detailantwort
+    enthalten statt über einen eigenen Aufruf je Zelle nachgeladen werden zu müssen. `kriterien_erfuellt` bleibt für
+    Matrix/„je Leistung“ bestehen und wird jetzt aus demselben Stand abgeleitet statt separat gezählt.
+  - Die Liste liegt als eigenes `<li>` nach dem Knopf der Zeile, nicht darin: ein `<ul>` ist kein gültiger Inhalt
+    eines `<button>`, das hätte der Browser sonst durch Verschieben „repariert“ und die Klickfläche verändert.
+
+## Nachtrag (29.09.2026): Leistungstitel in „je TN“ nach Ergebnis eingefärbt
+
+- Der Titel jeder Prüfungsleistung in der Ansicht „je TN“ ist jetzt grün, wenn der letzte Versuch bestanden ist,
+  rot bei mangelhaft, und unverändert (Standardfarbe) ohne Versuch – dieselben Farben, die Symbol und Text der
+  Zelle selbst schon tragen (`var(--ok)`/`var(--rot)`), nur zusätzlich am Titel. Zeit- und Kommentarzeile darunter
+  behalten ihre eigene, unveränderte Farbe. Reines CSS/Markup, kein neues Feld – der Status steht an der Zelle
+  bereits als `status` zur Verfügung. Matrix und „je Leistung“ bleiben unverändert: Dort trägt schon die ganze
+  Zelle (Hintergrund, Rahmen, Symbol) die Ergebnisfarbe, ein zusätzlich eingefärbter Titel wäre dort doppelt.
+
+## Nachtrag (29.09.2026): Kriterienliste (Ergebnis) untereinander statt nebeneinander
+
+- Die kompakte ✅/❌-Kriterienliste eines Versuchs (`.kriterien-ergebnis`) stand bisher als Fließtext nebeneinander
+  und brach nur am Zeilenende um – bei mehr als zwei, drei Kriterien oder längeren Bezeichnungen unübersichtlich.
+  Sie steht jetzt als echte Liste untereinander. Eine reine CSS-Änderung (`flex-direction: column` statt `flex-wrap:
+  wrap`), wirkt deshalb überall, wo diese Liste erscheint: „je TN“, „Bisherige Versuche“ im Bewertungsdialog, der
+  Dialog „Alle Bewertungen“, die Mängelübersicht und die Druckansicht „je TN“.
+
+## Nachtrag (29.09.2026): Schwebende Formatleiste statt fester Toolbar bei der Beschreibung
+
+- Die Beschreibung einer Prüfungsleistung (Lehrgang wie Katalog) hatte bisher eine feste Werkzeugleiste über dem
+  Textfeld (Toast UI in Standardeinstellung: Überschrift, Fett, Kursiv, Aufzählung, Nummerierte Liste, Link als
+  sechs feste Symbole). Jetzt gibt es dort keine feste Leiste mehr – wie im Wiki-Editor erscheint bei markiertem
+  Text eine schwebende Formatleiste mit genau diesen sechs Werkzeugen (Überschrift/Text und Listen in einem
+  „Umwandeln in …“-Auswahlfeld, dazu Fett, Kursiv, Link), direkt über der Auswahl.
+  - **Kein neuer Editor, keine neue Bibliothek.** Beide Editoren – Wiki wie Prüfungen – laufen auf demselben
+    Toast-UI-Editor; das Wiki blendet seine eigene feste Toolbar schon länger aus (`toolbarItems: []`) und ersetzt
+    sie durch eine solche Leiste. Für die Beschreibung reicht ein schlankes Gegenstück, gebaut auf denselben
+    öffentlichen Editor-Befehlen (`exec`, `getSelection`, `setSelection`, `replaceSelection`) wie das große Vorbild
+    – ohne dessen Wiki-eigene Bausteine (Spalten, Callouts, synchronisierte Abschnitte, Tabellen), die in einer
+    einzelnen Beschreibung keinen Sinn ergäben. Neue Funktionen `mdBubbleEinrichten` und `linkEinfuegenDialog` in
+    `pruefungen.js`; die vorhandene CSS für schwebende Leisten (`.ed-bubble` in `app.css`) wird unverändert
+    mitbenutzt, keine neuen Symbole nötig außer dem einen Ketten-Symbol für „Link“.
+  - Link einfügen öffnet einen eigenen kleinen, gestapelten Dialog (Text, Adresse) statt des großen Link-Dialogs
+    des Wikis mit Ziel/Attributen – dafür braucht es in einer kurzen Ablaufbeschreibung keine weiteren Optionen.
+    Der Dialog liegt als eigenes `<dialog>`-Element neben dem Leistungsdialog (wie `S.confirm`), nicht über
+    `dialogOeffnen`: Letzteres würde den offen stehenden Leistungsdialog überschreiben und dessen noch unfertig
+    ausgefüllte Felder leeren.
+  - Die Formatleiste hängt am `<dialog>` der Leistung selbst, nicht an `document.body` wie beim Wiki: Ein modal
+    geöffneter `<dialog>` (`showModal()`) liegt im eigenen Top-Layer des Browsers, ein an `document.body`
+    gehängtes Element bliebe trotz hohem `z-index` dahinter verdeckt. `position: fixed` statt `absolute` macht
+    ihre Position dabei unabhängig vom Bildlauf.
+  - Geprüft: Formatleiste erscheint bei Textauswahl in beiden Dialogen (Lehrgangs- wie Katalog-Leistung) an der
+    richtigen Stelle; Fett/Kursiv togglen korrekt inklusive aktivem Zustand an der Leiste; Aufzählung ↔
+    Nummerierte Liste wandelt um; Link fügt mit vorausgefülltem markiertem Text einen echten Link ein und stellt
+    die Auswahl nach dem Dialog wieder her. Die bestehenden 17 Tests bleiben unberührt (reine Oberflächenänderung,
+    keine Schnittstelle betroffen).

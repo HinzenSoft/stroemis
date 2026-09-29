@@ -1902,3 +1902,176 @@ def test_kataloge():
         assert nix.get(f"/api/pruefungen/kataloge").status_code == 403
         assert nix.get(f"/api/pruefungen/kataloge/{kid}").status_code == 403
         print("Kataloge-Test bestanden.")
+
+
+def test_kriterien():
+    """Kriterienliste einer Prüfungsleistung: eine optionale Checkliste zusätzlich zur freien
+    Beschreibung, mit einem dreistufigen Haken (nicht bewertet/erfüllt/nicht erfüllt) je Versuch.
+    Verwalten (anlegen/umbenennen/umsortieren/löschen) ist Leitungssache wie bei den Leistungen
+    selbst; den Haken setzen darf jede:r Prüfer:in beim Bewerten. Kriterien lassen sich auch schon
+    beim Erstanlegen einer Leistung mitgeben (Lehrgang wie Katalog) – dort gibt es noch keine
+    leistung_id für die einzelnen Kriterien-Endpunkte. Katalog-Kriterien sind eine reine Vorlage
+    (kein Haken-Zustand, keine Versuche) und werden beim Anlegen eines Lehrgangs aus dem Katalog
+    als Kopie in die neuen Leistungen übernommen, wie Beschreibung und Zeitansatz. Jede Zelle in
+    der Teilnehmerliste (Matrix, je Leistung, je TN) trägt zusätzlich "kriterien_erfuellt" (Anzahl
+    erfüllter Kriterien des letzten Versuchs, als schneller X/Y-Indikator vor dem Öffnen) und
+    "kriterien_stand" (derselbe {kriterium_id: erfüllt}-Stand wie an versuch["kriterien"] – "je TN"
+    zeigt damit die volle Liste statt nur der Zahl)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, adm, pr, pr_id, nix, nix_id = umgebung(tmp)
+        assert adm.put(f"/api/admin/users/{pr_id}", json={"is_pruefer": True}).status_code == 200
+        r = adm.post("/api/admin/users", json={"email": "zweit@example.org", "password": "passwort1",
+                                               "name": "Zacharias Zweitprüfer", "gliederung": "OG Musterstadt",
+                                               "role": "editor", "is_pruefer": True})
+        assert r.status_code == 201, r.json
+        zweit_id = r.json["user"]["id"]
+        zweit = app.test_client()
+        assert zweit.post("/api/auth/login", json={"email": "zweit@example.org", "password": "passwort1"}).status_code == 200
+
+        lg = pr.post("/api/pruefungen/lehrgaenge", json={"titel": "Kriterien-Lehrgang"}).json["lehrgang"]
+        lid = lg["id"]
+        tn = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/teilnehmer", json={"name": "Muster", "vorname": "Max"}).json["teilnehmer"]
+        pl = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/leistungen", json={"bezeichnung": "Wurfsackwurf"}).json["leistung"]
+        pl_id = pl["id"]
+        assert pl["kriterien"] == []                       # frisch angelegt: leer, aber vorhanden
+
+        # --- Verwalten: nur die Leitung -----------------------------------------------------------
+        assert zweit.post(f"/api/pruefungen/leistungen/{pl_id}/kriterien", json={"bezeichnung": "x"}).status_code == 403
+        assert pr.post(f"/api/pruefungen/leistungen/{pl_id}/kriterien", json={"bezeichnung": ""}).status_code == 400
+        r = pr.post(f"/api/pruefungen/leistungen/{pl_id}/kriterien", json={"bezeichnung": "Wurfsack sicher gegriffen"})
+        assert r.status_code == 201, r.get_json()
+        k1 = r.json["kriterium"]
+        hat_felder(k1, "id", "bezeichnung", "sortierung")
+        r = pr.post(f"/api/pruefungen/leistungen/{pl_id}/kriterien", json={"bezeichnung": "Zielperson getroffen"})
+        assert r.status_code == 201, r.get_json()
+        k2 = r.json["kriterium"]
+        det = pr.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]
+        pl2 = next(p for p in det["leistungen"] if p["id"] == pl_id)
+        assert [k["bezeichnung"] for k in pl2["kriterien"]] == ["Wurfsack sicher gegriffen", "Zielperson getroffen"]
+
+        # Umbenennen, Reihenfolge tauschen, löschen – jeweils nur Leitung.
+        assert zweit.put(f"/api/pruefungen/kriterien/{k1['id']}", json={"bezeichnung": "x"}).status_code == 403
+        r = pr.put(f"/api/pruefungen/kriterien/{k1['id']}", json={"bezeichnung": "Wurfsack sauber gegriffen"})
+        assert r.status_code == 200 and r.json["kriterium"]["bezeichnung"] == "Wurfsack sauber gegriffen"
+        assert zweit.put(f"/api/pruefungen/leistungen/{pl_id}/kriterien/reihenfolge",
+                         json={"ids": [k2["id"], k1["id"]]}).status_code == 403
+        assert pr.put(f"/api/pruefungen/leistungen/{pl_id}/kriterien/reihenfolge",
+                      json={"ids": [k2["id"], k1["id"]]}).status_code == 200
+        pl2 = pr.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]["leistungen"][0]
+        assert [k["id"] for k in pl2["kriterien"]] == [k2["id"], k1["id"]]
+        assert pr.put("/api/pruefungen/kriterien/999999", json={"bezeichnung": "x"}).status_code == 404
+        assert pr.delete("/api/pruefungen/kriterien/999999", headers=H).status_code == 404
+
+        # --- Kriterien-Haken an einem Versuch: jede:r Prüfer:in darf das ---------------------------
+        zelle = f"/api/pruefungen/teilnehmer/{tn['id']}/leistungen/{pl_id}/versuche"
+        r = zweit.post(zelle, json={"ergebnis": "bestanden", "zeit_sekunden": 60,
+                                    "kriterien": {str(k1["id"]): True, str(k2["id"]): False}})
+        assert r.status_code == 201, (r.status_code, r.get_json())
+        versuch = r.json["versuch"]
+        hat_felder(versuch, "kriterien")
+        assert versuch["kriterien"] == {str(k1["id"]): True, str(k2["id"]): False}, versuch["kriterien"]
+        vid = versuch["id"]
+        # Eine fremde/unbekannte Kennung und ein Nicht-Ja/Nein-Wert werden stillschweigend übergangen.
+        r = pr.get(f"{zelle}")
+        assert r.status_code == 200 and r.json["versuche"][0]["kriterien"] == {str(k1["id"]): True, str(k2["id"]): False}
+        # Matrix/Listen bekommen dazu einen X/Y-Zähler je Zelle – nur "erfüllt" zählt, "nicht
+        # erfüllt" und unbewertete Kriterien nicht (hier: k1 erfüllt, k2 nicht -> 1, bei 2 Kriterien).
+        # "je TN" zeigt zusätzlich den vollen Stand als Liste (kriterien_stand), gleiche Form wie
+        # versuch["kriterien"] – so lässt sich dort dieselbe Kriterienliste-Funktion wiederverwenden.
+        det = pr.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]
+        zelle_tn = next(t for t in det["teilnehmer"] if t["id"] == tn["id"])
+        zellstand = zelle_tn["leistungen"][str(pl_id)]
+        assert zellstand["kriterien_erfuellt"] == 1
+        assert zellstand["kriterien_stand"] == {str(k1["id"]): True, str(k2["id"]): False}
+        assert pr.post(f"/api/pruefungen/lehrgaenge/{lid}/leistungen", json={"bezeichnung": "Andere"}).status_code == 201
+        r2 = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/teilnehmer", json={"name": "Zweit", "vorname": "Tim"})
+        assert r2.status_code == 201, r2.get_json()
+        tn2 = r2.json["teilnehmer"]
+        r = pr.post(f"/api/pruefungen/teilnehmer/{tn2['id']}/leistungen/{pl_id}/versuche",
+                    json={"ergebnis": "bestanden", "kriterien": {"999999": True, str(k1["id"]): "ja"}})
+        assert r.status_code == 201 and r.json["versuch"]["kriterien"] == {}, r.get_json()
+        assert pr.post(f"/api/pruefungen/teilnehmer/{tn2['id']}/leistungen/{pl_id}/versuche",
+                       json={"ergebnis": "bestanden", "nachpruefung": True, "kriterien": "nicht-objekt"}).status_code == 400
+
+        # --- Ändern: Haken lassen sich unabhängig von Ergebnis/Kommentar/Zeit setzen ---------------
+        r = pr.put(f"/api/pruefungen/versuche/{vid}", json={"kriterien": {str(k1["id"]): False}})
+        assert r.status_code == 200, r.get_json()
+        assert r.json["versuch"]["kriterien"] == {str(k1["id"]): False}, r.json["versuch"]["kriterien"]
+        assert r.json["versuch"]["ergebnis"] == "bestanden" and r.json["versuch"]["zeit_sekunden"] == 60
+        # Ohne "kriterien" im Body bleibt der Stand unangetastet – auch wenn sich sonst etwas ändert.
+        r = pr.put(f"/api/pruefungen/versuche/{vid}", json={"kommentar": "Nachtrag"})
+        assert r.status_code == 200 and r.json["versuch"]["kriterien"] == {str(k1["id"]): False}, r.json["versuch"]["kriterien"]
+
+        # --- Löschen eines Kriteriums nimmt seinen Haken an bestehenden Versuchen mit --------------
+        assert pr.delete(f"/api/pruefungen/kriterien/{k1['id']}", headers=H).status_code == 200
+        r = pr.get(zelle)
+        assert r.json["versuche"][0]["kriterien"] == {}, r.json["versuche"][0]["kriterien"]
+        pl2 = pr.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]["leistungen"][0]
+        assert [k["id"] for k in pl2["kriterien"]] == [k2["id"]]
+
+        # --- Kopieren nimmt die (verbliebene) Kriterienliste als Vorlage mit -----------------------
+        r = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/kopieren", json={"titel": "Kopie"})
+        assert r.status_code == 201, r.get_json()
+        kopie = r.json["lehrgang"]
+        pl_kopie = next(p for p in kopie["leistungen"] if p["bezeichnung"] == "Wurfsackwurf")
+        assert [k["bezeichnung"] for k in pl_kopie["kriterien"]] == ["Zielperson getroffen"]
+        assert pl_kopie["kriterien"][0]["id"] != k2["id"]   # eigene, neue Kennung – keine Verknüpfung
+
+        # --- Löschen der Leistung räumt ihre Kriterien mit auf --------------------------------------
+        assert pr.delete(f"/api/pruefungen/leistungen/{pl_id}", headers=H).status_code == 200
+        assert pr.get(f"/api/pruefungen/lehrgaenge/{lid}").status_code == 200
+        assert pr.put(f"/api/pruefungen/kriterien/{k2['id']}", json={"bezeichnung": "x"}).status_code == 404  # kaskadiert mit der Leistung weg
+
+        # --- Kriterien schon beim Erstanlegen einer Leistung im Lehrgang -----------------------------
+        r = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/leistungen",
+                    json={"bezeichnung": "Neue Leistung", "kriterien": ["Erstes Kriterium", "  ", "", "Zweites Kriterium"]})
+        assert r.status_code == 201, r.get_json()
+        neue = r.json["leistung"]
+        assert [k["bezeichnung"] for k in neue["kriterien"]] == ["Erstes Kriterium", "Zweites Kriterium"], neue["kriterien"]
+        assert pr.post(f"/api/pruefungen/lehrgaenge/{lid}/leistungen",
+                       json={"bezeichnung": "Kaputt", "kriterien": "nicht-liste"}).status_code == 400
+        assert pr.post(f"/api/pruefungen/lehrgaenge/{lid}/leistungen",
+                       json={"bezeichnung": "Ohne Kriterien"}).json["leistung"]["kriterien"] == []
+
+        # --- Katalog-Kriterien: eine reine Vorlage, verwalten nur die Administration -----------------
+        adm_id = adm.get("/api/me").json["user"]["id"]
+        assert adm.put(f"/api/admin/users/{adm_id}", json={"is_pruefer": True}).status_code == 200
+        kat = adm.post("/api/pruefungen/kataloge", json={"titel": "Katalog"}).json["katalog"]
+        r = adm.post(f"/api/pruefungen/kataloge/{kat['id']}/leistungen",
+                     json={"bezeichnung": "Standardknoten", "kriterien": ["Achterknoten sauber", "Palstek sauber"]})
+        assert r.status_code == 201, r.get_json()
+        kl = r.json["leistung"]
+        assert [k["bezeichnung"] for k in kl["kriterien"]] == ["Achterknoten sauber", "Palstek sauber"], kl["kriterien"]
+        kl_id = kl["id"]
+        assert zweit.post(f"/api/pruefungen/katalog-leistungen/{kl_id}/kriterien", json={"bezeichnung": "x"}).status_code == 403
+        r = adm.post(f"/api/pruefungen/katalog-leistungen/{kl_id}/kriterien", json={"bezeichnung": "Prusik sauber"})
+        assert r.status_code == 201, r.get_json()
+        kk3 = r.json["kriterium"]
+        assert zweit.put(f"/api/pruefungen/katalog-kriterien/{kk3['id']}", json={"bezeichnung": "x"}).status_code == 403
+        r = adm.put(f"/api/pruefungen/katalog-kriterien/{kk3['id']}", json={"bezeichnung": "Prusikknoten sauber"})
+        assert r.status_code == 200 and r.json["kriterium"]["bezeichnung"] == "Prusikknoten sauber"
+        assert zweit.put(f"/api/pruefungen/katalog-leistungen/{kl_id}/kriterien/reihenfolge",
+                         json={"ids": [kk3["id"]]}).status_code == 403
+        katdet = adm.get(f"/api/pruefungen/kataloge/{kat['id']}").json["katalog"]
+        kl2 = katdet["leistungen"][0]
+        assert [k["bezeichnung"] for k in kl2["kriterien"]] == ["Achterknoten sauber", "Palstek sauber", "Prusikknoten sauber"]
+        assert adm.put(f"/api/pruefungen/katalog-leistungen/{kl_id}/kriterien/reihenfolge",
+                       json={"ids": [kk3["id"], kl2["kriterien"][0]["id"], kl2["kriterien"][1]["id"]]}).status_code == 200
+        kl3 = adm.get(f"/api/pruefungen/kataloge/{kat['id']}").json["katalog"]["leistungen"][0]
+        assert kl3["kriterien"][0]["id"] == kk3["id"]
+        assert zweit.delete(f"/api/pruefungen/katalog-kriterien/{kk3['id']}", headers=H).status_code == 403
+        assert adm.delete(f"/api/pruefungen/katalog-kriterien/{kk3['id']}", headers=H).status_code == 200
+        assert adm.put(f"/api/pruefungen/katalog-kriterien/{kk3['id']}", json={"bezeichnung": "x"}).status_code == 404
+
+        # --- Ein Lehrgang aus diesem Katalog übernimmt die Kriterien als Kopie ------------------------
+        r = pr.post("/api/pruefungen/lehrgaenge", json={"titel": "Mit Katalog-Kriterien", "katalog_id": kat["id"]})
+        assert r.status_code == 201, r.get_json()
+        pl_neu = r.json["lehrgang"]["leistungen"][0]
+        assert [k["bezeichnung"] for k in pl_neu["kriterien"]] == ["Achterknoten sauber", "Palstek sauber"], pl_neu["kriterien"]
+        # Kopiert, nicht verknüpft: Eine spätere Änderung am Katalog wirkt sich nicht auf den schon
+        # angelegten Lehrgang aus (der eigentliche Beweis – unterschiedliche Tabellen-IDs allein
+        # sagen nichts, siehe die Notiz beim Kataloge-Test).
+        assert adm.post(f"/api/pruefungen/katalog-leistungen/{kl_id}/kriterien", json={"bezeichnung": "Nachträglich"}).status_code == 201
+        unveraendert = pr.get(f"/api/pruefungen/lehrgaenge/{r.json['lehrgang']['id']}").json["lehrgang"]["leistungen"][0]
+        assert [k["bezeichnung"] for k in unveraendert["kriterien"]] == ["Achterknoten sauber", "Palstek sauber"]
+        print("Kriterien-Test bestanden.")

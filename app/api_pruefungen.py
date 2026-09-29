@@ -315,7 +315,7 @@ def _versuche_json(rows):
         return []
     ids = [r["id"] for r in rows]
     marks = ",".join("?" * len(ids))
-    medien, verlauf = {}, {}
+    medien, verlauf, kriterien = {}, {}, {}
     for m in db.query(f"SELECT * FROM pruef_medien WHERE versuch_id IN ({marks}) ORDER BY id", ids):
         medien.setdefault(m["versuch_id"], []).append(_medium_json(m))
     for h in db.query(f"SELECT * FROM pruef_versuch_verlauf WHERE versuch_id IN ({marks}) "
@@ -323,6 +323,8 @@ def _versuche_json(rows):
         verlauf.setdefault(h["versuch_id"], []).append(
             {"ergebnis": h["ergebnis"], "zeit_sekunden": h["zeit_sekunden"], "kommentar": h["kommentar"],
              "von_name": h["von_name"], "stand_ab": h["stand_ab"], "ersetzt_am": h["ersetzt_am"]})
+    for k in db.query(f"SELECT * FROM pruef_versuch_kriterien WHERE versuch_id IN ({marks})", ids):
+        kriterien.setdefault(k["versuch_id"], {})[k["kriterium_id"]] = bool(k["erfuellt"])
     out = []
     for v in rows:
         out.append({
@@ -332,6 +334,7 @@ def _versuche_json(rows):
             "geprueft_von_name": v["geprueft_von_name"], "geprueft_am": v["geprueft_am"],
             "bearbeitet_von_name": v["bearbeitet_von_name"], "bearbeitet_am": v["bearbeitet_am"],
             "medien": medien.get(v["id"], []), "verlauf": verlauf.get(v["id"], []),
+            "kriterien": kriterien.get(v["id"], {}),
             "leistung_bezeichnung": v["leistung_bezeichnung"],
             "teilnehmer_name": f"{v['tn_vorname']} {v['tn_name']}".strip()})
     return out
@@ -343,6 +346,45 @@ def _versuch_json(row):
 
 def _leistung_json(p):
     return {k: p[k] for k in ("id", "bezeichnung", "beschreibung_md", "zeitansatz_sekunden", "sortierung")}
+
+
+def _kriterium_json(k):
+    return {kk: k[kk] for kk in ("id", "bezeichnung", "sortierung")}
+
+
+def _kriterien_liste(roh):
+    """Kriterien-Bezeichnungen beim Anlegen EINER Leistung (Lehrgang oder Katalog) – vor dem
+    ersten Speichern gibt es noch keine leistung_id für die einzelnen Kriterien-Endpunkte, deshalb
+    kommt hier gleich die ganze Liste mit. Leere Zeilen werden übergangen statt abgewiesen: Wer aus
+    einer Vorlage einfügt und eine Zeile leer bleibt, soll die Leistung trotzdem anlegen können."""
+    if roh is None:
+        return []
+    if not isinstance(roh, list) or len(roh) > 100:
+        raise Abgelehnt("„kriterien“ muss eine Liste von Bezeichnungen sein.")
+    out = []
+    for x in roh:
+        bez = x.strip()[:300] if isinstance(x, str) else ""
+        if bez:
+            out.append(bez)
+    return out
+
+
+def _leistung_json_voll(p):
+    """_leistung_json plus die Kriterienliste – nur für Leistungen IM Lehrgang. Ein Katalog hat
+    keine Versuche, an denen sich ein Kriterium abhaken ließe, und bleibt bei _leistung_json."""
+    out = _leistung_json(p)
+    out["kriterien"] = [_kriterium_json(k) for k in db.query(
+        "SELECT * FROM pruef_kriterien WHERE leistung_id = ? ORDER BY sortierung, id", (p["id"],))]
+    return out
+
+
+def _katalog_leistung_json_voll(p):
+    """Dasselbe für eine Katalog-Leistung: eine reine Vorlagen-Kriterienliste ohne Haken-Zustand –
+    pruef_katalog_kriterien kennt kein "erfüllt", das gibt es erst am Versuch im Lehrgang."""
+    out = _leistung_json(p)
+    out["kriterien"] = [_kriterium_json(k) for k in db.query(
+        "SELECT * FROM pruef_katalog_kriterien WHERE katalog_leistung_id = ? ORDER BY sortierung, id", (p["id"],))]
+    return out
 
 
 def _voraussetzung_json(v):
@@ -365,7 +407,7 @@ def _katalog_detail(kid):
     if not r:
         raise Abgelehnt("Katalog nicht gefunden", 404)
     out = _katalog_kurz(r)
-    out["leistungen"] = [_leistung_json(p) for p in db.query(
+    out["leistungen"] = [_katalog_leistung_json_voll(p) for p in db.query(
         "SELECT * FROM pruef_katalog_leistungen WHERE katalog_id = ? ORDER BY sortierung, id", (kid,))]
     return out
 
@@ -387,15 +429,26 @@ def _teilnehmer_liste(lid, nur_tid=None):
         status.setdefault(s["teilnehmer_id"], {})[str(s["voraussetzung_id"])] = {
             "erfuellt": bool(s["erfuellt"]), "gesetzt_von_name": s["gesetzt_von_name"],
             "gesetzt_am": s["gesetzt_am"], "quelle": s["quelle"]}
+    # Kriterien-Stand je Versuch: für die Matrix und "je Leistung" nur die Zahl erfüllter als
+    # schneller X/Y-Indikator, für "je TN" die volle Liste wie im Bewertungsdialog. Eine fehlende
+    # Kennung heißt "nicht bewertet" (dritter Zustand) und bleibt in der Liste unerwähnt.
+    krit_stand = {}
+    for k in db.query(
+        "SELECT vk.versuch_id, vk.kriterium_id, vk.erfuellt FROM pruef_versuch_kriterien vk "
+        "JOIN pruef_versuche v ON v.id = vk.versuch_id JOIN pruef_teilnehmer t ON t.id = v.teilnehmer_id "
+        "WHERE " + where, args):
+        krit_stand.setdefault(k["versuch_id"], {})[str(k["kriterium_id"])] = bool(k["erfuellt"])
     # Zellen: aufsteigend nach versuch_nr, damit der letzte Versuch am Ende gewinnt.
     zellen = {}
     for v in db.query("SELECT v.* FROM pruef_versuche v JOIN pruef_teilnehmer t ON t.id = v.teilnehmer_id "
                       "WHERE " + where + " ORDER BY v.versuch_nr", args):
         z = zellen.setdefault(v["teilnehmer_id"], {}).setdefault(str(v["leistung_id"]), {"versuche": 0, "medien_anzahl": 0})
         z["versuche"] += 1
+        stand = krit_stand.get(v["id"], {})
         z.update({"status": _zellstatus(v), "letzter_versuch_id": v["id"], "letztes_ergebnis": v["ergebnis"],
                   "letzte_zeit_sekunden": v["zeit_sekunden"], "letzter_kommentar": v["kommentar"],
-                  "geprueft_von_name": v["geprueft_von_name"], "geprueft_am": v["geprueft_am"]})
+                  "geprueft_von_name": v["geprueft_von_name"], "geprueft_am": v["geprueft_am"],
+                  "kriterien_erfuellt": sum(1 for x in stand.values() if x), "kriterien_stand": stand})
     # Anhänge je Zelle über alle Versuche – die Übersichten zeigen dafür eine Büroklammer.
     for m in db.query("SELECT v.teilnehmer_id, v.leistung_id, COUNT(*) AS n FROM pruef_medien m "
                       "JOIN pruef_versuche v ON v.id = m.versuch_id JOIN pruef_teilnehmer t ON t.id = v.teilnehmer_id "
@@ -468,7 +521,7 @@ def _lehrgang_detail(lid):
         "ORDER BY sortierung, id", (lid,))]
     out["voraussetzungen"] = [_voraussetzung_json(v) for v in db.query(
         "SELECT * FROM pruef_voraussetzungen WHERE lehrgang_id = ? ORDER BY sortierung, id", (lid,))]
-    out["leistungen"] = [_leistung_json(p) for p in db.query(
+    out["leistungen"] = [_leistung_json_voll(p) for p in db.query(
         "SELECT * FROM pruef_leistungen WHERE lehrgang_id = ? ORDER BY sortierung, id", (lid,))]
     out["teilnehmer"] = _teilnehmer_liste(lid)
     return out
@@ -619,9 +672,15 @@ def create_lehrgang():
         if katalog:
             for i, p in enumerate(db.query("SELECT * FROM pruef_katalog_leistungen WHERE katalog_id = ? "
                                            "ORDER BY sortierung, id", (katalog["id"],))):
-                db.execute("INSERT INTO pruef_leistungen (lehrgang_id, bezeichnung, beschreibung_md, "
-                          "zeitansatz_sekunden, sortierung) VALUES (?,?,?,?,?)",
-                          (lid, p["bezeichnung"], p["beschreibung_md"], p["zeitansatz_sekunden"], i))
+                neue_leistung = db.execute(
+                    "INSERT INTO pruef_leistungen (lehrgang_id, bezeichnung, beschreibung_md, "
+                    "zeitansatz_sekunden, sortierung) VALUES (?,?,?,?,?)",
+                    (lid, p["bezeichnung"], p["beschreibung_md"], p["zeitansatz_sekunden"], i))
+                # Die Kriterienliste ist Teil der Leistungsvorlage, wie bei Beschreibung/Zeitansatz.
+                for j, k in enumerate(db.query("SELECT * FROM pruef_katalog_kriterien WHERE katalog_leistung_id = ? "
+                                               "ORDER BY sortierung, id", (p["id"],))):
+                    db.execute("INSERT INTO pruef_kriterien (leistung_id, bezeichnung, sortierung) VALUES (?,?,?)",
+                              (neue_leistung, k["bezeichnung"], j))
     return jsonify(lehrgang=_lehrgang_detail(lid)), 201
 
 
@@ -693,9 +752,14 @@ def kopieren(lid):
             db.execute("INSERT INTO pruef_voraussetzungen (lehrgang_id, bezeichnung, sortierung) VALUES (?,?,?)",
                        (neu, v["bezeichnung"], v["sortierung"]))
         for p in db.query("SELECT * FROM pruef_leistungen WHERE lehrgang_id = ? ORDER BY sortierung, id", (lid,)):
-            db.execute("INSERT INTO pruef_leistungen (lehrgang_id, bezeichnung, beschreibung_md, zeitansatz_sekunden, "
-                       "sortierung) VALUES (?,?,?,?,?)",
-                       (neu, p["bezeichnung"], p["beschreibung_md"], p["zeitansatz_sekunden"], p["sortierung"]))
+            neue_leistung = db.execute(
+                "INSERT INTO pruef_leistungen (lehrgang_id, bezeichnung, beschreibung_md, zeitansatz_sekunden, "
+                "sortierung) VALUES (?,?,?,?,?)",
+                (neu, p["bezeichnung"], p["beschreibung_md"], p["zeitansatz_sekunden"], p["sortierung"]))
+            # Die Kriterienliste ist Teil der Leistungsdefinition, wie die Beschreibung – sie zieht mit.
+            for k in db.query("SELECT * FROM pruef_kriterien WHERE leistung_id = ? ORDER BY sortierung, id", (p["id"],)):
+                db.execute("INSERT INTO pruef_kriterien (leistung_id, bezeichnung, sortierung) VALUES (?,?,?)",
+                          (neue_leistung, k["bezeichnung"], k["sortierung"]))
     return jsonify(lehrgang=_lehrgang_detail(neu)), 201
 
 
@@ -956,12 +1020,17 @@ def _leistung_felder(d, neu):
 def create_leistung(lid):
     _lehrgang(lid)
     _leitung(lid)
-    vals = _leistung_felder(json_body(), neu=True)
-    pid = db.execute(
-        "INSERT INTO pruef_leistungen (lehrgang_id, bezeichnung, beschreibung_md, zeitansatz_sekunden, sortierung) "
-        "VALUES (?,?,?,?,?)", (lid, vals["bezeichnung"], vals["beschreibung_md"], vals["zeitansatz_sekunden"],
-                               _naechste_sortierung("pruef_leistungen", lid)))
-    return jsonify(leistung=_leistung_json(_leistung(pid))), 201
+    d = json_body()
+    vals = _leistung_felder(d, neu=True)
+    kriterien = _kriterien_liste(d.get("kriterien"))
+    with db.transaction():
+        pid = db.execute(
+            "INSERT INTO pruef_leistungen (lehrgang_id, bezeichnung, beschreibung_md, zeitansatz_sekunden, sortierung) "
+            "VALUES (?,?,?,?,?)", (lid, vals["bezeichnung"], vals["beschreibung_md"], vals["zeitansatz_sekunden"],
+                                   _naechste_sortierung("pruef_leistungen", lid)))
+        for i, bez in enumerate(kriterien):
+            db.execute("INSERT INTO pruef_kriterien (leistung_id, bezeichnung, sortierung) VALUES (?,?,?)", (pid, bez, i))
+    return jsonify(leistung=_leistung_json_voll(_leistung(pid))), 201
 
 
 @bp.put("/leistungen/<int:lid>")
@@ -972,7 +1041,7 @@ def update_leistung(lid):
     if vals:
         sets = ", ".join(f"{k} = ?" for k in vals)
         db.execute(f"UPDATE pruef_leistungen SET {sets} WHERE id = ?", (*vals.values(), lid))
-    return jsonify(leistung=_leistung_json(_leistung(lid)))
+    return jsonify(leistung=_leistung_json_voll(_leistung(lid)))
 
 
 @bp.delete("/leistungen/<int:lid>")
@@ -993,6 +1062,98 @@ def reihenfolge_leistungen(lid):
     _leitung(lid)
     _reihenfolge("pruef_leistungen", lid, _id_liste(json_body().get("ids")))
     return jsonify(ok=True)
+
+
+# --- 4.5b Kriterien je Prüfungsleistung ---------------------------------------
+# Eine optionale Checkliste zusätzlich zur freien Beschreibung – jeder Punkt lässt sich bei einer
+# Bewertung einzeln erfüllt/nicht erfüllt setzen (siehe _kriterien_map/_kriterien_schreiben weiter
+# unten und pruef_versuch_kriterien im Schema). Rechte wie bei den Prüfungsleistungen selbst: lesen
+# über den Lehrgang, ändern nur die Leitung.
+
+def _kriterium(kid):
+    row = db.query("SELECT * FROM pruef_kriterien WHERE id = ?", (kid,), one=True)
+    if not row:
+        raise Abgelehnt("Kriterium nicht gefunden", 404)
+    return row
+
+
+def _naechste_sortierung_kriterien(lid):
+    return db.query("SELECT COALESCE(MAX(sortierung), -1) + 1 AS n FROM pruef_kriterien WHERE leistung_id = ?",
+                    (lid,), one=True)["n"]
+
+
+@bp.post("/leistungen/<int:lid>/kriterien")
+@pruefer_required
+def create_kriterium(lid):
+    l = _leistung(lid)
+    _leitung(l["lehrgang_id"])
+    bez = sfield(json_body(), "bezeichnung").strip()[:300]
+    if not bez:
+        raise Abgelehnt("Bitte eine Bezeichnung angeben.")
+    kid = db.execute("INSERT INTO pruef_kriterien (leistung_id, bezeichnung, sortierung) VALUES (?,?,?)",
+                     (lid, bez, _naechste_sortierung_kriterien(lid)))
+    return jsonify(kriterium=_kriterium_json(_kriterium(kid))), 201
+
+
+@bp.put("/kriterien/<int:kid>")
+@pruefer_required
+def update_kriterium(kid):
+    k = _kriterium(kid)
+    _leitung(_leistung(k["leistung_id"])["lehrgang_id"])
+    bez = sfield(json_body(), "bezeichnung").strip()[:300]
+    if not bez:
+        raise Abgelehnt("Bitte eine Bezeichnung angeben.")
+    db.execute("UPDATE pruef_kriterien SET bezeichnung = ? WHERE id = ?", (bez, kid))
+    return jsonify(kriterium=_kriterium_json(_kriterium(kid)))
+
+
+@bp.delete("/kriterien/<int:kid>")
+@pruefer_required
+def delete_kriterium(kid):
+    k = _kriterium(kid)
+    _leitung(_leistung(k["leistung_id"])["lehrgang_id"])
+    db.execute("DELETE FROM pruef_kriterien WHERE id = ?", (kid,))
+    return jsonify(ok=True)
+
+
+@bp.put("/leistungen/<int:lid>/kriterien/reihenfolge")
+@pruefer_required
+def reihenfolge_kriterien(lid):
+    l = _leistung(lid)
+    _leitung(l["lehrgang_id"])
+    ids = _id_liste(json_body().get("ids"))
+    with db.transaction():
+        for i, kid in enumerate(ids):
+            db.execute("UPDATE pruef_kriterien SET sortierung = ? WHERE id = ? AND leistung_id = ?", (i, kid, lid))
+    return jsonify(ok=True)
+
+
+def _kriterien_map(d, leistung_id):
+    """Kriterien-Haken aus dem Body eines Versuchs: {kriterium_id: True|False}. Unbekannte oder zu
+    einer anderen Leistung gehörende Kennungen werden stillschweigend übergangen – die Bewertung
+    selbst darf daran nicht scheitern, auch wenn sich die Kriterienliste inzwischen geändert hat."""
+    roh = d.get("kriterien")
+    if roh is None:
+        return {}
+    if not isinstance(roh, dict):
+        raise Abgelehnt("„kriterien“ muss ein Objekt aus Kennung und Haken sein.")
+    gueltige = {k["id"] for k in db.query("SELECT id FROM pruef_kriterien WHERE leistung_id = ?", (leistung_id,))}
+    out = {}
+    for kid_roh, wert in roh.items():
+        try:
+            kid = int(kid_roh)
+        except (TypeError, ValueError):
+            continue
+        if kid in gueltige and isinstance(wert, bool):
+            out[kid] = wert
+    return out
+
+
+def _kriterien_schreiben(versuch_id, kriterien):
+    db.execute("DELETE FROM pruef_versuch_kriterien WHERE versuch_id = ?", (versuch_id,))
+    for kid, wert in kriterien.items():
+        db.execute("INSERT INTO pruef_versuch_kriterien (versuch_id, kriterium_id, erfuellt) VALUES (?,?,?)",
+                   (versuch_id, kid, int(wert)))
 
 
 # --- 4.6 Versuche (Bewertungen) ----------------------------------------------
@@ -1022,7 +1183,7 @@ def zelle_versuche(tid, lid):
     _, p = _zelle(tid, lid)
     rows = _zellen_versuche(tid, lid)
     return jsonify(versuche=_versuche_json(rows), status=_zellstatus(rows[-1] if rows else None),
-                   teilnehmer=_tn_json(tid), leistung=_leistung_json(p))
+                   teilnehmer=_tn_json(tid), leistung=_leistung_json_voll(p))
 
 
 @bp.post("/teilnehmer/<int:tid>/leistungen/<int:lid>/versuche")
@@ -1037,6 +1198,7 @@ def create_versuch(tid, lid):
     kommentar = sfield(d, "kommentar").strip()[:5000]
     _bewertung_pruefen(ergebnis, kommentar)
     zeit = _sekunden(d.get("zeit_sekunden"))
+    kriterien = _kriterien_map(d, lid)
     bisher = _zellen_versuche(tid, lid)
     if bisher:
         if not _bool(d, "nachpruefung"):
@@ -1059,6 +1221,8 @@ def create_versuch(tid, lid):
         if "UNIQUE" in str(exc).upper():
             raise Abgelehnt(SCHON_BEWERTET, 409)
         raise Abgelehnt(GERADE_GELOESCHT, 409)
+    if kriterien:
+        _kriterien_schreiben(vid, kriterien)
     return jsonify(versuch=_versuch_json(_versuch(vid))), 201
 
 
@@ -1074,6 +1238,10 @@ def update_versuch(vid):
     kommentar = sfield(d, "kommentar").strip()[:5000] if "kommentar" in d else v["kommentar"]
     zeit = _sekunden(d.get("zeit_sekunden")) if "zeit_sekunden" in d else v["zeit_sekunden"]
     _bewertung_pruefen(ergebnis, kommentar)
+    # Die Kriterien-Haken hängen an keinem Verlauf und laufen unabhängig von den übrigen Feldern:
+    # Wer nur ankreuzt, ohne Ergebnis/Kommentar/Zeit zu ändern, soll das trotzdem speichern können.
+    if "kriterien" in d:
+        _kriterien_schreiben(vid, _kriterien_map(d, v["leistung_id"]))
     if (ergebnis, kommentar, zeit) == (v["ergebnis"], v["kommentar"], v["zeit_sekunden"]):
         return jsonify(versuch=_versuch_json(v))      # nichts geändert – kein Verlaufseintrag
     # Sonst stünde eine Nachprüfung hinter einer bestandenen Prüfung – ein Stand, den es beim
@@ -1557,12 +1725,18 @@ def create_katalog_leistung(kid):
     _katalog_admin()
     # Dieselben Felder und Grenzen wie bei einer Prüfungsleistung im Lehrgang – _leistung_felder
     # kennt nur den Body, keine Tabelle.
-    vals = _leistung_felder(json_body(), neu=True)
-    lid = db.execute(
-        "INSERT INTO pruef_katalog_leistungen (katalog_id, bezeichnung, beschreibung_md, zeitansatz_sekunden, "
-        "sortierung) VALUES (?,?,?,?,?)", (kid, vals["bezeichnung"], vals["beschreibung_md"],
-                                          vals["zeitansatz_sekunden"], _katalog_naechste_sortierung(kid)))
-    return jsonify(leistung=_leistung_json(_katalog_leistung(lid))), 201
+    d = json_body()
+    vals = _leistung_felder(d, neu=True)
+    kriterien = _kriterien_liste(d.get("kriterien"))
+    with db.transaction():
+        lid = db.execute(
+            "INSERT INTO pruef_katalog_leistungen (katalog_id, bezeichnung, beschreibung_md, zeitansatz_sekunden, "
+            "sortierung) VALUES (?,?,?,?,?)", (kid, vals["bezeichnung"], vals["beschreibung_md"],
+                                              vals["zeitansatz_sekunden"], _katalog_naechste_sortierung(kid)))
+        for i, bez in enumerate(kriterien):
+            db.execute("INSERT INTO pruef_katalog_kriterien (katalog_leistung_id, bezeichnung, sortierung) "
+                      "VALUES (?,?,?)", (lid, bez, i))
+    return jsonify(leistung=_katalog_leistung_json_voll(_katalog_leistung(lid))), 201
 
 
 @bp.put("/katalog-leistungen/<int:lid>")
@@ -1574,7 +1748,7 @@ def update_katalog_leistung(lid):
     if vals:
         sets = ", ".join(f"{k} = ?" for k in vals)
         db.execute(f"UPDATE pruef_katalog_leistungen SET {sets} WHERE id = ?", (*vals.values(), lid))
-    return jsonify(leistung=_leistung_json(_katalog_leistung(lid)))
+    return jsonify(leistung=_katalog_leistung_json_voll(_katalog_leistung(lid)))
 
 
 @bp.delete("/katalog-leistungen/<int:lid>")
@@ -1596,4 +1770,68 @@ def reihenfolge_katalog_leistungen(kid):
         for i, lid in enumerate(ids):
             db.execute("UPDATE pruef_katalog_leistungen SET sortierung = ? WHERE id = ? AND katalog_id = ?",
                       (i, lid, kid))
+    return jsonify(ok=True)
+
+
+# --- 4.9b Kriterien je Katalog-Leistung ----------------------------------------
+# Dieselbe Idee wie bei den Kriterien im Lehrgang (4.5b), aber als reine Vorlage: pruef_katalog_
+# kriterien kennt kein "erfüllt" – das gibt es erst am Versuch, und Kataloge haben keine Versuche.
+# Rechte wie bei den Katalog-Leistungen selbst: lesen jede:r Prüfer:in, ändern nur die Administration.
+
+def _katalog_kriterium(kid):
+    row = db.query("SELECT * FROM pruef_katalog_kriterien WHERE id = ?", (kid,), one=True)
+    if not row:
+        raise Abgelehnt("Kriterium nicht gefunden", 404)
+    return row
+
+
+def _katalog_kriterien_naechste_sortierung(lid):
+    return db.query("SELECT COALESCE(MAX(sortierung), -1) + 1 AS n FROM pruef_katalog_kriterien "
+                    "WHERE katalog_leistung_id = ?", (lid,), one=True)["n"]
+
+
+@bp.post("/katalog-leistungen/<int:lid>/kriterien")
+@pruefer_required
+def create_katalog_kriterium(lid):
+    _katalog_leistung(lid)
+    _katalog_admin()
+    bez = sfield(json_body(), "bezeichnung").strip()[:300]
+    if not bez:
+        raise Abgelehnt("Bitte eine Bezeichnung angeben.")
+    kid = db.execute("INSERT INTO pruef_katalog_kriterien (katalog_leistung_id, bezeichnung, sortierung) "
+                     "VALUES (?,?,?)", (lid, bez, _katalog_kriterien_naechste_sortierung(lid)))
+    return jsonify(kriterium=_kriterium_json(_katalog_kriterium(kid))), 201
+
+
+@bp.put("/katalog-kriterien/<int:kid>")
+@pruefer_required
+def update_katalog_kriterium(kid):
+    _katalog_kriterium(kid)
+    _katalog_admin()
+    bez = sfield(json_body(), "bezeichnung").strip()[:300]
+    if not bez:
+        raise Abgelehnt("Bitte eine Bezeichnung angeben.")
+    db.execute("UPDATE pruef_katalog_kriterien SET bezeichnung = ? WHERE id = ?", (bez, kid))
+    return jsonify(kriterium=_kriterium_json(_katalog_kriterium(kid)))
+
+
+@bp.delete("/katalog-kriterien/<int:kid>")
+@pruefer_required
+def delete_katalog_kriterium(kid):
+    _katalog_kriterium(kid)
+    _katalog_admin()
+    db.execute("DELETE FROM pruef_katalog_kriterien WHERE id = ?", (kid,))
+    return jsonify(ok=True)
+
+
+@bp.put("/katalog-leistungen/<int:lid>/kriterien/reihenfolge")
+@pruefer_required
+def reihenfolge_katalog_kriterien(lid):
+    _katalog_leistung(lid)
+    _katalog_admin()
+    ids = _id_liste(json_body().get("ids"))
+    with db.transaction():
+        for i, kid in enumerate(ids):
+            db.execute("UPDATE pruef_katalog_kriterien SET sortierung = ? WHERE id = ? AND katalog_leistung_id = ?",
+                      (i, kid, lid))
     return jsonify(ok=True)

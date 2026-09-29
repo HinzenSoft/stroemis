@@ -281,6 +281,16 @@ CREATE TABLE IF NOT EXISTS pruef_leistungen (
 );
 CREATE INDEX IF NOT EXISTS idx_pruef_leist_lehrgang ON pruef_leistungen(lehrgang_id);
 
+-- Kriterienliste einer Prüfungsleistung: zusätzlich zur freien Beschreibung eine optionale,
+-- einzeln abhakbare Checkliste (siehe pruef_versuch_kriterien für den Haken je Versuch).
+CREATE TABLE IF NOT EXISTS pruef_kriterien (
+  id            INTEGER PRIMARY KEY,
+  leistung_id   INTEGER NOT NULL REFERENCES pruef_leistungen(id) ON DELETE CASCADE,
+  bezeichnung   TEXT NOT NULL,
+  sortierung    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_pruef_kriterien_leistung ON pruef_kriterien(leistung_id);
+
 -- Prüfungsleistungskataloge: Vorlagen für pruef_leistungen, unabhängig von einem Lehrgang. Beim
 -- Anlegen eines Lehrgangs werden die Zeilen eines gewählten Katalogs nach pruef_leistungen KOPIERT
 -- (siehe kopieren() in api_pruefungen.py) – nie verlinkt. Eine spätere Änderung am Katalog wirkt
@@ -305,6 +315,18 @@ CREATE TABLE IF NOT EXISTS pruef_katalog_leistungen (
 );
 CREATE INDEX IF NOT EXISTS idx_pruef_katalog_leist ON pruef_katalog_leistungen(katalog_id);
 
+-- Kriterienliste einer Katalog-Leistung: dieselbe Idee wie pruef_kriterien, aber als reine
+-- Vorlage – ein Katalog hat keine Versuche, an denen sich ein Haken setzen ließe. Beim Anlegen
+-- eines Lehrgangs aus dem Katalog werden diese Zeilen nach pruef_kriterien kopiert (siehe
+-- create_lehrgang in api_pruefungen.py), wie die Leistungen selbst.
+CREATE TABLE IF NOT EXISTS pruef_katalog_kriterien (
+  id                   INTEGER PRIMARY KEY,
+  katalog_leistung_id  INTEGER NOT NULL REFERENCES pruef_katalog_leistungen(id) ON DELETE CASCADE,
+  bezeichnung          TEXT NOT NULL,
+  sortierung           INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_pruef_katalog_kriterien ON pruef_katalog_kriterien(katalog_leistung_id);
+
 -- Ein Prüfungsversuch. Die Nachprüfung ist ein weiterer Versuch derselben Zelle; der erste bleibt stehen.
 CREATE TABLE IF NOT EXISTS pruef_versuche (
   id                  INTEGER PRIMARY KEY,
@@ -323,6 +345,17 @@ CREATE TABLE IF NOT EXISTS pruef_versuche (
   bearbeitet_am       TEXT,
   UNIQUE (teilnehmer_id, leistung_id, versuch_nr)
 );
+
+-- Der Haken je Kriterium zu EINEM Versuch: erfüllt oder nicht. Fehlt die Zeile, ist das Kriterium
+-- bei diesem Versuch (noch) nicht bewertet – der dritte, neutrale Zustand beim Durchklicken.
+CREATE TABLE IF NOT EXISTS pruef_versuch_kriterien (
+  id            INTEGER PRIMARY KEY,
+  versuch_id    INTEGER NOT NULL REFERENCES pruef_versuche(id) ON DELETE CASCADE,
+  kriterium_id  INTEGER NOT NULL REFERENCES pruef_kriterien(id) ON DELETE CASCADE,
+  erfuellt      INTEGER NOT NULL,
+  UNIQUE (versuch_id, kriterium_id)
+);
+CREATE INDEX IF NOT EXISTS idx_pruef_versuch_kriterien ON pruef_versuch_kriterien(versuch_id);
 CREATE INDEX IF NOT EXISTS idx_pruef_versuche_leistung ON pruef_versuche(leistung_id);
 
 -- Der überschriebene Stand einer Bewertung: Was galt von wann bis wann, und wer hatte es geschrieben.

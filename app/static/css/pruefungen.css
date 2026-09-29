@@ -25,6 +25,8 @@
 .badge.np { background: var(--anthrazit); color: var(--weiss); font-size: .7rem; padding: 0 5px; margin-left: 4px; }
 /* Büroklammer in der Zelle: Anhänge vorhanden (Bilder/Videos) – mit Zähler ab zwei. */
 .zelle .anhang { font-size: .8rem; font-weight: 600; margin-left: 5px; color: var(--anthrazit); white-space: nowrap; }
+/* X/Y erfüllte Kriterien der Leistung, an dieser Zelle – schneller Indikator vor dem Öffnen. */
+.zelle .krit-stand { font-size: .8rem; font-weight: 600; margin-left: 5px; color: var(--anthrazit); white-space: nowrap; }
 
 /* Ein Knopf, der wie ein Verweis aussieht – für Namen, die eine Bearbeitung öffnen. */
 .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--anthrazit); font-weight: 600; cursor: pointer; text-align: left; }
@@ -167,6 +169,12 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .tn-karte.offen { border-left: 4px solid var(--rot); background: var(--rot-hell); }
 .tn-karte .tn-kopf { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
 .tn-karte .tn-kopf .linkbtn { font-size: 1rem; flex: 1 1 auto; min-height: 44px; }
+/* Zugeklappt, damit die Liste nicht für jede Person voll ausgerollt scrollt – wer offen hat,
+   steht schon in der Marke oben im Kartenkopf. Der Zustand übersteht ein Häkchen: renderLehrgangSeite
+   merkt sich beim Neuzeichnen, welche <details> offen waren, und klappt sie wieder auf. */
+.tn-karte details.vor-klapp { margin-top: 4px; }
+.tn-karte details.vor-klapp summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+.tn-karte details.vor-klapp[open] summary { margin-bottom: 2px; }
 .vk-zeile { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 0 8px; padding: 4px 0; border-top: 1px solid var(--linie); min-height: 48px; }
 .vk-zeile input[type=checkbox] { width: 30px; height: 30px; margin: 0 auto; accent-color: var(--ok); }
 .vk-zeile .vk-text { font-size: var(--fs-mittel); cursor: pointer; padding: 8px 0; }
@@ -196,6 +204,12 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .leistung-karte .pfeile .btn { padding: 6px 9px; }
 #pl-editor { margin-top: 4px; }
 .pl-fallback { min-height: 220px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9rem; }
+/* Keine feste Toolbar mehr (toolbarItems: []) – die schwebende Formatleiste (.ed-bubble, siehe
+   app.css) übernimmt, wie im Wiki. Der jetzt leere Balken darf keinen Platz mehr beanspruchen,
+   sonst bliebe eine leere Zeile über dem Text stehen (dieselbe Regel wie .wiki-editor). */
+.md-editor .toastui-editor-defaultUI-toolbar,
+.md-editor .toastui-editor-toolbar { display: none !important; }
+.md-editor .toastui-editor-defaultUI .toastui-editor-main { border-top: 0; }
 
 /* --- Bewertungsmatrix ------------------------------------------------------------------- */
 .bew-umschalter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
@@ -236,6 +250,9 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .zelle-zeile .name small { display: block; font-weight: 400; color: var(--grau); font-size: var(--fs-klein); }
 .zelle-zeile .zelle { min-height: 48px; }
 .zelle-zeile.offen-vor .name::after { content: " ⚠"; color: var(--rot); }
+/* "je TN": der Leistungstitel selbst färbt sich mit dem Ergebnis – "offen" bleibt ohne Regel neutral. */
+.leist-titel.st-bestanden, .leist-titel.st-nachpruefung_bestanden { color: var(--ok); }
+.leist-titel.st-mangelhaft, .leist-titel.st-nachpruefung_mangelhaft { color: var(--rot); }
 
 /* Banner: irgendwo läuft eine Stoppuhr. Sticky unter der Bauchbinde, damit man sie findet. */
 .su-banner {
@@ -319,6 +336,26 @@ dialog.pruef-dlg { width: min(720px, 96vw); }
 .bew-wahl button[data-erg=mangelhaft]:hover { border-color: var(--rot); }
 .bew-wahl button[data-erg=bestanden].sel { background: var(--ok); border-color: var(--ok); color: var(--weiss); }
 .bew-wahl button[data-erg=mangelhaft].sel { background: var(--rot); border-color: var(--rot); color: var(--weiss); }
+
+/* Kriterienliste im Bewertungsdialog: eine Zeile je Punkt, durch Antippen zyklisch nicht bewertet
+   → erfüllt → nicht erfüllt. Dieselben Flächen/Kanten wie die Hinweiskisten in app.css. */
+.kriterien-liste { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.krit-zeile {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 8px 12px;
+  border: 1px solid var(--linie); border-radius: var(--radius); background: var(--weiss);
+  font: inherit; font-size: var(--fs-mittel); text-align: left; color: var(--anthrazit); cursor: pointer;
+}
+.krit-zeile .krit-sym { font-size: 1.15rem; line-height: 1; flex: none; }
+.krit-zeile .krit-text { flex: 1 1 auto; overflow-wrap: anywhere; }
+.krit-zeile.ja { border-color: var(--co-success-ka); background: var(--co-success-fl); }
+.krit-zeile.nein { border-color: var(--co-danger-ka); background: var(--co-danger-fl); }
+/* Lese-Ansicht (Bisherige Versuche, Alle Bewertungen, Mängel, Druck „je TN“): kompakte Marken
+   statt der großen Knöpfe – hier wird nichts mehr angetippt. */
+.kriterien-ergebnis { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: var(--fs-klein); }
+.kriterien-ergebnis li.ja { color: var(--ok); }
+.kriterien-ergebnis li.nein { color: var(--rot); }
+/* In "je TN" folgt die Liste direkt auf die Knopfzeile, außerhalb des Knopfs – mit deren Innenabstand. */
+.zellen-liste .kriterien-ergebnis { padding: 0 4px 8px; }
 .pruef-dlg textarea.fehler, .pruef-dlg input.fehler { border-color: var(--rot); outline: 2px solid var(--rot); }
 .pruef-dlg .zeitfeld { max-width: 160px; font-variant-numeric: tabular-nums; font-size: 1.1rem; }
 .pruef-dlg .zeit-zeile { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

@@ -427,8 +427,7 @@
         Rechte bekommt nur, wer über sein Nutzerkonto gewählt ist – ein externer Freitext-Eintrag erscheint nur in der Anzeige.</div>
       <div class="ausb-liste" id="ausb-liste">${(lg.ausbilder || []).map((a) => ausbilderZeileHtml(a, nutzer)).join("")}</div>
       <datalist id="ausb-funktionen"><option value="Referierende:r"><option value="Seiltechnik"><option value="Wasser"><option value="Helfer:in"></datalist>
-      <div class="btn-row"><button type="button" class="btn secondary small" id="ausb-plus-leitung">+ Lehrgangsleitung</button>
-        <button type="button" class="btn secondary small" id="ausb-plus">+ Referierende:r</button></div>
+      <div class="btn-row"><button type="button" class="btn secondary small" id="ausb-plus">+ Person</button></div>
       <div class="feld-kopf"><label for="lg-besch">Beschreibung / Bemerkungen</label>${diktatKnopf("lg-besch")}</div>
       <textarea id="lg-besch" placeholder="Ablauf, Treffpunkt, Besonderheiten …">${esc(lg.beschreibung)}</textarea>
       ${neu && kataloge.length ? `<label for="lg-katalog">Prüfungsleistungen aus Katalog übernehmen (optional)</label>
@@ -443,8 +442,8 @@
         // Ein neuer Lehrgang beginnt mit der anlegenden Person als Leitung – der Server trüge sie ohnehin
         // ein; so sieht man es gleich und kann weitere Leitungen daneben setzen.
         if (!liste.children.length) liste.insertAdjacentHTML("beforeend", ausbilderZeileHtml({ user_id: (STROEMIS.user || {}).id, ist_leitung: true }, nutzer));
-        $("#ausb-plus-leitung", body).onclick = () => liste.insertAdjacentHTML("beforeend", ausbilderZeileHtml({ ist_leitung: true }, nutzer));
-        $("#ausb-plus", body).onclick = () => liste.insertAdjacentHTML("beforeend", ausbilderZeileHtml({ funktion: "Referierende:r" }, nutzer));
+        // Eine leere Zeile für beides: Die Funktion ist frei, der Haken „Leitung“ steht jeder Person offen.
+        $("#ausb-plus", body).onclick = () => liste.insertAdjacentHTML("beforeend", ausbilderZeileHtml({}, nutzer));
         liste.addEventListener("click", (e) => { const b = e.target.closest("[data-weg]"); if (b) b.closest(".ausb-zeile").remove(); });
         liste.addEventListener("change", (e) => {
           if (!e.target.classList.contains("ausb-extern")) return;
@@ -697,13 +696,82 @@
       <input type="text" id="kl-zeit" class="zeitfeld" inputmode="numeric" placeholder="mm:ss" autocomplete="off"
              value="${l.zeitansatz_sekunden != null ? fmtZeit(l.zeitansatz_sekunden) : ""}">
       <div class="help">Mit Zeitansatz zeigt der Bewertungsdialog später eine Stoppuhr mit Sollzeit. Über das Bestehen entscheidet sie nicht.</div>
-      <label>Beschreibung – Ablauf und Kriterien</label>
+      <label>Beschreibung – Ablauf</label>
       <div id="kl-editor"></div>
+      <label>Kriterienliste (optional)</label>
+      <div class="help">Zusätzlich zur Beschreibung: einzeln abhakbare Punkte. Wird beim Anlegen eines Lehrgangs aus diesem Katalog
+        als Vorlage in die neue Prüfungsleistung kopiert.</div>
+      ${neu ? '<div id="krit-wrap"></div>' : kriterienListeHtml(l)}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn" id="kl-save" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
       (dlg, body) => {
         const holen = mdEditorEinrichten(dlg, body, "#kl-editor", l.beschreibung_md, "kl-md");
         if (neu) fokus($("#kl-bez", body));
+        // Neu: die Kriterien sind nur ein lokaler Entwurf, bis die Leistung selbst existiert.
+        // Bestehend: jede Änderung persistiert sofort über die eigenen Kriterien-Endpunkte.
+        const kritEntwurf = neu ? kriterienEntwurfEinrichten(body) : null;
+        if (!neu) {
+          const kritBinden = () => {
+            const anlegen = async () => {
+              const feld = $("#krit-neu-text", body);
+              const bez = feld.value.trim();
+              if (!bez) return feld.focus();
+              try {
+                await api(`${API}/katalog-leistungen/${l.id}/kriterien`, { method: "POST", body: { bezeichnung: bez } });
+                await kritNachziehen();
+                $("#krit-neu-text", body).focus();
+              } catch (e) { toast(e.message, true); }
+            };
+            $("#krit-neu-go", body).onclick = anlegen;
+            $("#krit-neu-text", body).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); anlegen(); } });
+            $$("[data-krit-bez]", body).forEach((inp) => {
+              const li = inp.closest("li"), kritid = +li.dataset.kid;
+              const alt = inp.value;
+              inp.addEventListener("blur", async () => {
+                const bez = inp.value.trim();
+                if (!bez) { inp.value = alt; return; }
+                if (bez === alt) return;
+                try { await api(`${API}/katalog-kriterien/${kritid}`, { method: "PUT", body: { bezeichnung: bez } }); await kritNachziehen(); toast("Umbenannt"); }
+                catch (e) { inp.value = alt; toast(e.message, true); }
+              });
+              inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); inp.blur(); } });
+            });
+            // Am je Zeichnung neuen Rahmen gebunden, nicht am dauerhaften Dialogkörper – sonst
+            // häuften sich die Handler bei jedem Neuzeichnen (wie bei den Voraussetzungen).
+            $("#krit-wrap", body).addEventListener("click", async (e) => {
+              const b = e.target.closest("button[data-krit-hoch],button[data-krit-runter],button[data-krit-del]");
+              if (!b) return;
+              const li = b.closest("li"), kritid = +li.dataset.kid;
+              const ks = l.kriterien || [];
+              const i = ks.findIndex((x) => x.id === kritid);
+              try {
+                if (b.hasAttribute("data-krit-del")) {
+                  if (!(await S.confirm(`Kriterium „${ks[i].bezeichnung}“ löschen?`))) return;
+                  await api(`${API}/katalog-kriterien/${kritid}`, { method: "DELETE" });
+                } else {
+                  const j = b.hasAttribute("data-krit-hoch") ? i - 1 : i + 1;
+                  if (j < 0 || j >= ks.length) return;
+                  [ks[i], ks[j]] = [ks[j], ks[i]];
+                  await api(`${API}/katalog-leistungen/${l.id}/kriterien/reihenfolge`, { method: "PUT", body: { ids: ks.map((x) => x.id) } });
+                }
+                await kritNachziehen();
+              } catch (err) { toast(err.message, true); }
+            });
+          };
+          // Nach jeder Änderung: frischen Stand holen (auch für die Seite hinter dem Dialog – der
+          // Kriterien-Zähler auf der Karte soll stimmen), dann nur den Rahmen neu zeichnen.
+          const kritNachziehen = async () => {
+            try {
+              await loadKatalogDetail();
+              const frisch = (state.katalog.leistungen || []).find((x) => x.id === l.id);
+              if (frisch) l.kriterien = frisch.kriterien;
+            } catch (e) { /* lokaler Stand bleibt, falls das Nachladen scheitert */ }
+            $("#krit-wrap", body).outerHTML = kriterienListeHtml(l);
+            kritBinden();
+            renderKatalogSeite();
+          };
+          kritBinden();
+        }
         $("#kl-save", body).onclick = async (ev) => {
           const knopf = ev.currentTarget;
           if (knopf.disabled) return;
@@ -712,6 +780,7 @@
           const z = zeitLesen($("#kl-zeit", body).value);
           if (!z.ok) { $("#kl-zeit", body).focus(); return toast("Zeitansatz bitte als mm:ss angeben, z. B. 03:00 – oder nur Ziffern: 300.", true); }
           const d = { bezeichnung: bez, beschreibung_md: holen(), zeitansatz_sekunden: z.wert };
+          if (neu) d.kriterien = kritEntwurf.werte();
           knopf.disabled = true;
           try {
             if (neu) await api(`${API}/kataloge/${kid}/leistungen`, { method: "POST", body: d });
@@ -861,15 +930,18 @@
       <div class="tn-kopf">${tnKopfHtml(tn, leitung ? `<button type="button" class="linkbtn" data-act="tn-edit" data-tid="${tn.id}">${esc(tnName(tn))}</button>` : null)}
         ${tn.voraussetzungen_offen ? `<span class="badge rot">${tn.voraussetzungen_offen} offen</span>` : (vor.length ? '<span class="badge gruen">alle erfüllt</span>' : "")}${ergebnisMarkeHtml(tn)}</div>
       ${tn.gliederung || tn.geburtsdatum ? `<div class="small muted">${esc(tn.gliederung || "")}${tn.geburtsdatum ? `${tn.gliederung ? " · " : ""}geb. ${esc(fmtTag(tn.geburtsdatum))}` : ""}</div>` : ""}
-      ${vor.map((v) => {
-        const st = tn.voraussetzungen[String(v.id)];
-        const id = `vk-${tn.id}-${v.id}`;
-        return `<div class="vk-zeile">
-          <input type="checkbox" id="${id}" data-vk data-tid="${tn.id}" data-vid="${v.id}" ${st && st.erfuellt ? "checked" : ""} ${tn.eingefroren ? "disabled" : ""}>
-          <label class="vk-text" for="${id}">${esc(v.bezeichnung)}${st ? `<small class="${st.erfuellt ? "ja" : "nein"}">${stempelHtml(st)}</small>` : ""}</label>
-          <button type="button" class="vk-verlauf" data-act="vk-verlauf" data-tid="${tn.id}" data-vid="${v.id}" ${st ? "" : "disabled"} aria-label="Verlauf anzeigen" title="Verlauf">🕓</button>
-        </div>`;
-      }).join("")}
+      ${vor.length ? `<details class="vor-klapp">
+        <summary>Voraussetzungen</summary>
+        ${vor.map((v) => {
+          const st = tn.voraussetzungen[String(v.id)];
+          const id = `vk-${tn.id}-${v.id}`;
+          return `<div class="vk-zeile">
+            <input type="checkbox" id="${id}" data-vk data-tid="${tn.id}" data-vid="${v.id}" ${st && st.erfuellt ? "checked" : ""} ${tn.eingefroren ? "disabled" : ""}>
+            <label class="vk-text" for="${id}">${esc(v.bezeichnung)}${st ? `<small class="${st.erfuellt ? "ja" : "nein"}">${stempelHtml(st)}</small>` : ""}</label>
+            <button type="button" class="vk-verlauf" data-act="vk-verlauf" data-tid="${tn.id}" data-vid="${v.id}" ${st ? "" : "disabled"} aria-label="Verlauf anzeigen" title="Verlauf">🕓</button>
+          </div>`;
+        }).join("")}
+      </details>` : ""}
     </div>`).join("")}</div>`;
     return kopf + hinweis + tabelle + karten;
   }
@@ -1128,7 +1200,8 @@
      bzw. "kl"), damit ein Klick nie im falschen Bereich landet. */
   function leistungKarteHtml(l, i, gesamt, editierbar, praefix) {
     return `<div class="leistung-karte" data-lid="${l.id}">
-      <div class="titel">${esc(l.bezeichnung)} ${l.zeitansatz_sekunden != null ? `<span class="badge grey" title="Zeitansatz (Sollzeit)">⏱ ${fmtZeit(l.zeitansatz_sekunden)}</span>` : ""}</div>
+      <div class="titel">${esc(l.bezeichnung)} ${l.zeitansatz_sekunden != null ? `<span class="badge grey" title="Zeitansatz (Sollzeit)">⏱ ${fmtZeit(l.zeitansatz_sekunden)}</span>` : ""}
+        ${l.kriterien && l.kriterien.length ? `<span class="badge grey" title="Kriterienliste">📋 ${l.kriterien.length}</span>` : ""}</div>
       ${editierbar ? `<div class="btn-row">
         <span class="pfeile"><button class="btn ghost small" data-act="${praefix}-hoch" data-lid="${l.id}" ${i === 0 ? "disabled" : ""} aria-label="nach oben" title="nach oben">↑</button>
           <button class="btn ghost small" data-act="${praefix}-runter" data-lid="${l.id}" ${i === gesamt - 1 ? "disabled" : ""} aria-label="nach unten" title="nach unten">↓</button></span>
@@ -1158,33 +1231,228 @@
     } catch (e) { [ls[i], ls[j]] = [ls[j], ls[i]]; toast(e.message, true); }
   }
 
+  /* Adresse (und Text) für einen Link – als eigenes <dialog>-Element wie S.confirm, nicht über
+     dialogOeffnen: Das würde den #dlg-body überschreiben und den Leistungsdialog dahinter leeren,
+     der gerade noch offen steht. */
+  function linkEinfuegenDialog(vorschlagText, aufOk) {
+    const dlg = document.createElement("dialog");
+    dlg.innerHTML = `<div class="dlg-body"><h2>Link einfügen</h2>
+      <label for="lk-text">Text</label>
+      <input type="text" id="lk-text" value="${esc(vorschlagText || "")}">
+      <label for="lk-url">Adresse</label>
+      <input type="text" id="lk-url" placeholder="https://…" autocomplete="off">
+      <div class="dlg-actions"><button class="btn secondary" id="lk-abbr" type="button">Abbrechen</button>
+      <button class="btn" id="lk-ok" type="button">Einfügen</button></div></div>`;
+    document.body.appendChild(dlg);
+    dlg.querySelector("#lk-abbr").onclick = () => dlg.close();
+    dlg.querySelector("#lk-ok").onclick = () => {
+      const urlFeld = dlg.querySelector("#lk-url");
+      const url = urlFeld.value.trim();
+      if (!url) return urlFeld.focus();
+      const text = dlg.querySelector("#lk-text").value.trim() || url;
+      dlg.close();
+      aufOk({ url, text });
+    };
+    dlg.addEventListener("close", () => dlg.remove(), { once: true });
+    dlg.showModal();
+    fokus(dlg.querySelector(vorschlagText ? "#lk-url" : "#lk-text"));
+  }
+
+  /* Schwebende Formatleiste statt fester Toolbar – dieselbe Idee wie im Wiki-Editor (siehe
+     wiki.js, setupInlineTools/onSelection), hier auf die paar Werkzeuge zurechtgestutzt, die die
+     Beschreibung einer Prüfungsleistung braucht: Überschrift/Text, Liste, fett, kursiv, Link.
+     Beide teilen sich denselben Toast-UI-Editor und damit dessen öffentliche exec/Selection-API;
+     das Wiki-Menü selbst (Callouts, Spalten, Bausteine, Tabellen …) bleibt dort, wo es hingehört.
+     Liefert { bubble, onSelection } zum Abbauen beim Schließen des Dialogs. */
+  function mdBubbleEinrichten(ed, root, dlg) {
+    const bubble = document.createElement("div");
+    bubble.className = "ed-bubble hidden";
+    // <dialog> mit showModal() liegt im Top-Layer des Browsers – ein an document.body gehängtes
+    // Element bliebe trotz z-index dahinter unsichtbar. Als Kind des Dialogs selbst kommt die
+    // Leiste in dieselbe Ebene; "fixed" statt "absolute" macht ihre Position dabei unabhängig
+    // davon, wo im Baum sie hängt (das Original im Wiki hängt an document.body, dort passend
+    // mit "absolute" plus Bildlaufversatz – hier reicht die reine Fensterposition).
+    bubble.style.position = "fixed";
+    bubble.setAttribute("role", "toolbar");
+    bubble.setAttribute("aria-label", "Textformat");
+    bubble.innerHTML = `
+      <select class="ed-style" title="Absatz umwandeln" aria-label="Absatz umwandeln">
+        <option value="">Umwandeln in …</option>
+        <option value="p">Text</option>
+        <option value="h1">Überschrift 1</option>
+        <option value="h2">Überschrift 2</option>
+        <option value="h3">Überschrift 3</option>
+        <option value="ul">Aufzählung</option>
+        <option value="ol">Nummerierte Liste</option>
+      </select>
+      <span class="sep"></span>
+      <button type="button" data-cmd="bold" title="Fett" aria-label="Fett"><b>B</b></button>
+      <button type="button" data-cmd="italic" title="Kursiv" aria-label="Kursiv"><i>I</i></button>
+      <span class="sep"></span>
+      <button type="button" data-act="link" title="Link einfügen" aria-label="Link einfügen">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6.5 9.5l3-3M7.5 4.5l1-1a2.8 2.8 0 014 4l-1 1M8.5 11.5l-1 1a2.8 2.8 0 01-4-4l1-1"/></svg>
+      </button>`;
+    dlg.appendChild(bubble);
+    // Der eigentliche ProseMirror-Inhalt liegt tiefer im Toast-UI-Aufbau – nur Auswahlen darin
+    // (nicht irgendwo sonst auf der Seite) sollen die Leiste zeigen.
+    const pm = () => root.querySelector(".toastui-editor-ww-container .ProseMirror");
+    const hide = () => bubble.classList.add("hidden");
+    // Kein Fokuswechsel beim Klick auf die Leiste selbst – sonst bräche die Auswahl ab, bevor
+    // der Befehl sie liest. Nur das <select> braucht seinen eigenen Fokus, um sich zu öffnen.
+    bubble.addEventListener("mousedown", (e) => { if (e.target.tagName !== "SELECT") e.preventDefault(); });
+    bubble.querySelectorAll("[data-cmd]").forEach((b) => { b.onclick = () => ed.exec(b.dataset.cmd); });
+    bubble.querySelector(".ed-style").onchange = (e) => {
+      const v = e.target.value;
+      e.target.value = "";
+      if (!v) return;
+      hide();
+      if (/^h[1-3]$/.test(v)) ed.exec("heading", { level: +v[1] });
+      else if (v === "p") ed.exec("heading", { level: 0 });
+      else if (v === "ul") ed.exec("bulletList");
+      else if (v === "ol") ed.exec("orderedList");
+    };
+    bubble.querySelector("[data-act=link]").onclick = () => {
+      const text = ed.getSelectedText();
+      let bereich = null;
+      try { bereich = ed.getSelection(); } catch (e) { /* im Rückfall ohne Editor egal */ }
+      hide();
+      // Der Link-Dialog nimmt den Fokus – die Auswahl merken und vor dem Einfügen wiederherstellen.
+      linkEinfuegenDialog(text, ({ url, text: label }) => {
+        if (bereich) { try { ed.setSelection(bereich[0], bereich[1]); } catch (e) { /* egal */ } }
+        ed.exec("addLink", { linkUrl: url, linkText: label });
+      });
+    };
+    // Zeigt an, welche Auszeichnung an der Auswahl schon anliegt (wie im Wiki-Editor).
+    function markActive() {
+      const sel = document.getSelection();
+      const node = sel && sel.anchorNode;
+      const knoten = node && (node.nodeType === 1 ? node : node.parentElement);
+      const map = { bold: "strong, b", italic: "em, i" };
+      bubble.querySelectorAll("[data-cmd]").forEach((b) => {
+        b.classList.toggle("on", !!(knoten && knoten.closest(map[b.dataset.cmd])));
+      });
+      bubble.querySelector(".ed-style").value = "";
+    }
+    const onSelection = () => {
+      const el = pm();
+      const sel = document.getSelection();
+      if (!el || !sel || sel.isCollapsed || !sel.rangeCount || !el.contains(sel.anchorNode)) return hide();
+      const r = sel.getRangeAt(0).getBoundingClientRect();
+      if (!r.width && !r.height) return hide();
+      bubble.classList.remove("hidden");
+      markActive();
+      const w = bubble.offsetWidth;
+      bubble.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2))}px`;
+      bubble.style.top = `${Math.max(8, r.top - bubble.offsetHeight - 8)}px`;
+    };
+    document.addEventListener("selectionchange", onSelection);
+    return { bubble, onSelection };
+  }
+
   /* Dialog mit Toast UI für die Beschreibung. Bleibt der Editor aus (Datei nicht geladen),
      gibt es ein einfaches Markdown-Feld – die Leistung lässt sich trotzdem anlegen. */
   /* Toast-UI-Editor in ein Element einhängen (Markdown-Textarea als Rückfall, falls die
      Bibliothek fehlt) und beim Schließen des Dialogs wieder abbauen. Gemeinsam für Leistungen im
      Lehrgang und im Katalog – dieselbe Beschreibung, derselbe Editor. Liefert eine Funktion, die
-     den aktuellen Markdown-Text ausliest. */
+     den aktuellen Markdown-Text ausliest.
+     Keine feste Toolbar (toolbarItems: []) – stattdessen wie im Wiki eine schwebende Leiste bei
+     Textauswahl (mdBubbleEinrichten), damit die Beschreibung mehr Platz zum Schreiben behält und
+     sich einheitlich zum übrigen Editor der Anwendung verhält. */
   function mdEditorEinrichten(dlg, body, elSelektor, wert, fallbackId) {
     const el = $(elSelektor, body);
-    let ed = null, fallback = null;
+    let ed = null, fallback = null, bubble = null, onSelection = null;
     if (window.toastui && toastui.Editor) {
+      el.classList.add("md-editor");
       const opts = {
         el, initialEditType: "wysiwyg", hideModeSwitch: true, height: "260px",
         initialValue: wert || "", language: "de-DE", usageStatistics: false,
         placeholder: "Wie läuft die Prüfung ab, was wird bewertet?",
-        toolbarItems: [["heading", "bold", "italic"], ["ul", "ol", "link"]],
+        toolbarItems: [],
       };
       try { ed = new toastui.Editor(opts); }
       catch (e) { delete opts.language; try { ed = new toastui.Editor(opts); } catch (e2) { ed = null; } }
+      if (ed) { const b = mdBubbleEinrichten(ed, el, dlg); bubble = b.bubble; onSelection = b.onSelection; }
     }
     if (!ed) {
       el.innerHTML = `<textarea class="pl-fallback" id="${fallbackId}" placeholder="Beschreibung (Markdown)">${esc(wert)}</textarea>`;
       fallback = $("#" + fallbackId, el);
     }
-    const aufraeumen = () => { try { if (ed) ed.destroy(); } catch (e) { /* schon weg */ } ed = null; };
+    const aufraeumen = () => {
+      try { if (ed) ed.destroy(); } catch (e) { /* schon weg */ }
+      if (onSelection) document.removeEventListener("selectionchange", onSelection);
+      if (bubble) bubble.remove();
+      ed = null;
+    };
     state.dlgAufraeumen = aufraeumen;
     dlg.addEventListener("close", () => { if (state.dlgAufraeumen === aufraeumen) { aufraeumen(); state.dlgAufraeumen = null; } }, { once: true });
     return () => { try { return ed ? ed.getMarkdown() : fallback.value; } catch (e) { return fallback ? fallback.value : ""; } };
+  }
+
+  /* Ein rein lokaler Entwurf einer Kriterienliste, bevor die Leistung zum ersten Mal gespeichert
+     wird (Lehrgang wie Katalog) – ohne eigene Kennung gibt es dafür noch keine Kriterien-Endpunkte.
+     Dieselben Bausteine (#krit-wrap, .vor-liste) wie beim Bearbeiten einer bestehenden Leistung,
+     aber rein im Speicher: Hinzufügen/Entfernen/Umsortieren zeichnet nur diesen Ausschnitt neu und
+     schickt nichts zum Server. werte() liest zusätzlich die Feldinhalte, bevor neu gezeichnet oder
+     gespeichert wird – sonst ginge eine gerade getippte, noch nicht verlassene Zeile verloren.
+     Ruft am Ende einmal zeichnen() auf: Die Vorlage im Dialog-HTML enthält dafür nur ein leeres
+     <div id="krit-wrap"></div> als Platzhalter. */
+  function kriterienEntwurfEinrichten(body) {
+    let liste = [];
+    const lesen = () => { liste = $$("#krit-wrap [data-krit-entwurf]", body).map((i) => i.value); return liste; };
+    const html = () => `<div id="krit-wrap">
+      ${liste.length ? `<ul class="vor-liste">${liste.map((bez, i) => `<li>
+        <input type="text" value="${esc(bez)}" data-krit-entwurf aria-label="Kriterium">
+        <button type="button" class="btn ghost" data-krit-hoch ${i === 0 ? "disabled" : ""} aria-label="nach oben" title="nach oben">↑</button>
+        <button type="button" class="btn ghost" data-krit-runter ${i === liste.length - 1 ? "disabled" : ""} aria-label="nach unten" title="nach unten">↓</button>
+        <button type="button" class="btn ghost" data-krit-del aria-label="entfernen" title="entfernen">🗑</button></li>`).join("")}</ul>`
+        : '<p class="muted">Noch keine Kriterien.</p>'}
+      <div class="vor-neu"><input type="text" id="krit-neu-text" placeholder="Neues Kriterium, z. B. Wurfsack sicher gegriffen" aria-label="Neues Kriterium">
+        <button type="button" class="btn secondary small" id="krit-neu-go">+ Kriterium</button></div>
+    </div>`;
+    const zeichnen = () => { $("#krit-wrap", body).outerHTML = html(); binden(); };
+    function binden() {
+      const anlegen = () => {
+        const feld = $("#krit-neu-text", body);
+        const bez = feld.value.trim();
+        if (!bez) return feld.focus();
+        lesen(); liste.push(bez); zeichnen();
+        $("#krit-neu-text", body).focus();
+      };
+      $("#krit-neu-go", body).onclick = anlegen;
+      $("#krit-neu-text", body).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); anlegen(); } });
+      $("#krit-wrap", body).addEventListener("click", (e) => {
+        const b = e.target.closest("button[data-krit-hoch],button[data-krit-runter],button[data-krit-del]");
+        if (!b) return;
+        const li = b.closest("li"), i = [...li.parentElement.children].indexOf(li);
+        lesen();
+        if (b.hasAttribute("data-krit-del")) liste.splice(i, 1);
+        else {
+          const j = b.hasAttribute("data-krit-hoch") ? i - 1 : i + 1;
+          if (j < 0 || j >= liste.length) return;
+          [liste[i], liste[j]] = [liste[j], liste[i]];
+        }
+        zeichnen();
+      });
+    }
+    zeichnen();
+    return { werte: lesen };
+  }
+
+  /* Die Kriterienliste einer BESTEHENDEN Leistung – ein eigener, per outerHTML ersetzbarer Rahmen,
+     damit ein Antippen (anlegen/umbenennen/umsortieren/löschen) nur diesen Ausschnitt neu zeichnet
+     und nicht den ganzen Dialog: Sonst gingen unfertig getippte Bezeichnung/Beschreibung verloren. */
+  function kriterienListeHtml(l) {
+    const ks = l.kriterien || [];
+    return `<div id="krit-wrap">
+      ${ks.length ? `<ul class="vor-liste">${ks.map((k, i) => `<li data-kid="${k.id}">
+        <input type="text" value="${esc(k.bezeichnung)}" data-krit-bez aria-label="Kriterium">
+        <button type="button" class="btn ghost" data-krit-hoch ${i === 0 ? "disabled" : ""} aria-label="nach oben" title="nach oben">↑</button>
+        <button type="button" class="btn ghost" data-krit-runter ${i === ks.length - 1 ? "disabled" : ""} aria-label="nach unten" title="nach unten">↓</button>
+        <button type="button" class="btn ghost" data-krit-del aria-label="löschen" title="löschen">🗑</button></li>`).join("")}</ul>`
+        : '<p class="muted">Noch keine Kriterien.</p>'}
+      <div class="vor-neu"><input type="text" id="krit-neu-text" placeholder="Neues Kriterium, z. B. Wurfsack sicher gegriffen" aria-label="Neues Kriterium">
+        <button type="button" class="btn secondary small" id="krit-neu-go">+ Kriterium</button></div>
+    </div>`;
   }
 
   function leistungDialog(l) {
@@ -1197,13 +1465,82 @@
       <input type="text" id="pl-zeit" class="zeitfeld" inputmode="numeric" placeholder="mm:ss" autocomplete="off"
              value="${l.zeitansatz_sekunden != null ? fmtZeit(l.zeitansatz_sekunden) : ""}">
       <div class="help">Mit Zeitansatz zeigt der Bewertungsdialog eine Stoppuhr mit Sollzeit. Über das Bestehen entscheidet sie nicht.</div>
-      <label>Beschreibung – Ablauf und Kriterien</label>
+      <label>Beschreibung – Ablauf</label>
       <div id="pl-editor"></div>
+      <label>Kriterienliste (optional)</label>
+      <div class="help">Zusätzlich zur Beschreibung: einzeln abhakbare Punkte. Im Bewertungsdialog lässt sich jeder Punkt antippen –
+        nicht bewertet, ✅ erfüllt, ❌ nicht erfüllt.</div>
+      ${neu ? '<div id="krit-wrap"></div>' : kriterienListeHtml(l)}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn" id="pl-save" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
       (dlg, body) => {
         const holen = mdEditorEinrichten(dlg, body, "#pl-editor", l.beschreibung_md, "pl-md");
         if (neu) fokus($("#pl-bez", body));
+        // Neu: die Kriterien sind nur ein lokaler Entwurf, bis die Leistung selbst existiert.
+        // Bestehend: jede Änderung persistiert sofort über die eigenen Kriterien-Endpunkte.
+        const kritEntwurf = neu ? kriterienEntwurfEinrichten(body) : null;
+        if (!neu) {
+          const kritBinden = () => {
+            const anlegen = async () => {
+              const feld = $("#krit-neu-text", body);
+              const bez = feld.value.trim();
+              if (!bez) return feld.focus();
+              try {
+                await api(`${API}/leistungen/${l.id}/kriterien`, { method: "POST", body: { bezeichnung: bez } });
+                await kritNachziehen();
+                $("#krit-neu-text", body).focus();
+              } catch (e) { toast(e.message, true); }
+            };
+            $("#krit-neu-go", body).onclick = anlegen;
+            $("#krit-neu-text", body).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); anlegen(); } });
+            $$("[data-krit-bez]", body).forEach((inp) => {
+              const li = inp.closest("li"), kid = +li.dataset.kid;
+              const alt = inp.value;
+              inp.addEventListener("blur", async () => {
+                const bez = inp.value.trim();
+                if (!bez) { inp.value = alt; return; }
+                if (bez === alt) return;
+                try { await api(`${API}/kriterien/${kid}`, { method: "PUT", body: { bezeichnung: bez } }); await kritNachziehen(); toast("Umbenannt"); }
+                catch (e) { inp.value = alt; toast(e.message, true); }
+              });
+              inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); inp.blur(); } });
+            });
+            // Am je Zeichnung neuen Rahmen gebunden, nicht am dauerhaften Dialogkörper – sonst
+            // häuften sich die Handler bei jedem Neuzeichnen (wie bei den Voraussetzungen).
+            $("#krit-wrap", body).addEventListener("click", async (e) => {
+              const b = e.target.closest("button[data-krit-hoch],button[data-krit-runter],button[data-krit-del]");
+              if (!b) return;
+              const li = b.closest("li"), kid = +li.dataset.kid;
+              const ks = l.kriterien || [];
+              const i = ks.findIndex((x) => x.id === kid);
+              try {
+                if (b.hasAttribute("data-krit-del")) {
+                  if (!(await S.confirm(`Kriterium „${ks[i].bezeichnung}“ löschen? Schon erfasste Haken dazu gehen verloren.`))) return;
+                  await api(`${API}/kriterien/${kid}`, { method: "DELETE" });
+                } else {
+                  const j = b.hasAttribute("data-krit-hoch") ? i - 1 : i + 1;
+                  if (j < 0 || j >= ks.length) return;
+                  [ks[i], ks[j]] = [ks[j], ks[i]];
+                  await api(`${API}/leistungen/${l.id}/kriterien/reihenfolge`, { method: "PUT", body: { ids: ks.map((x) => x.id) } });
+                }
+                await kritNachziehen();
+              } catch (err) { toast(err.message, true); }
+            });
+          };
+          // Nach jeder Änderung: frischen Stand holen (auch für die Seite hinter dem Dialog – der
+          // Kriterien-Zähler auf der Karte soll stimmen), dann nur den Rahmen neu zeichnen.
+          const kritNachziehen = async () => {
+            try {
+              await loadDetail();
+              const frisch = (state.lehrgang.leistungen || []).find((x) => x.id === l.id);
+              if (frisch) l.kriterien = frisch.kriterien;
+            } catch (e) { /* lokaler Stand bleibt, falls das Nachladen scheitert */ }
+            $("#krit-wrap", body).outerHTML = kriterienListeHtml(l);
+            kritBinden();
+            renderLehrgangSeite();
+          };
+          kritBinden();
+        }
         $("#pl-save", body).onclick = async (ev) => {
           const knopf = ev.currentTarget;
           if (knopf.disabled) return;
@@ -1212,6 +1549,7 @@
           const z = zeitLesen($("#pl-zeit", body).value);
           if (!z.ok) { $("#pl-zeit", body).focus(); return toast("Zeitansatz bitte als mm:ss angeben, z. B. 03:00 – oder nur Ziffern: 300.", true); }
           const d = { bezeichnung: bez, beschreibung_md: holen(), zeitansatz_sekunden: z.wert };
+          if (neu) d.kriterien = kritEntwurf.werte();
           knopf.disabled = true;
           try {
             if (neu) await api(`${API}/lehrgaenge/${LEHRGANG_ID}/leistungen`, { method: "POST", body: d });
@@ -1275,9 +1613,15 @@
     const anhang = z && z.medien_anzahl
       ? `<span class="anhang" role="img" aria-label="${z.medien_anzahl} ${z.medien_anzahl === 1 ? "Anhang" : "Anhänge"}" title="${z.medien_anzahl} ${z.medien_anzahl === 1 ? "Anhang" : "Anhänge"}">📎${z.medien_anzahl > 1 ? z.medien_anzahl : ""}</span>`
       : "";
+    // Hat die Leistung eine Kriterienliste und gibt es schon einen Versuch: X/Y erfüllt als
+    // schneller Indikator, ohne dafür die Zelle öffnen zu müssen. In "je TN" steht stattdessen
+    // die volle Liste darunter (siehe bewertungHtml) – dort unterbleibt das Kürzel (opts.ohneKrit).
+    const krit = z && !opts.ohneKrit && l.kriterien && l.kriterien.length
+      ? `<span class="krit-stand" role="img" aria-label="${z.kriterien_erfuellt} von ${l.kriterien.length} Kriterien erfüllt" title="${z.kriterien_erfuellt} von ${l.kriterien.length} Kriterien erfüllt">📋 ${z.kriterien_erfuellt}/${l.kriterien.length}</span>`
+      : "";
     return `${auf}
       <span class="sym" aria-hidden="true">${def.sym}</span>
-      <span class="txt">${def.txt}${def.np ? '<span class="badge np">NP</span>' : ""}${anhang}</span>
+      <span class="txt">${def.txt}${def.np ? '<span class="badge np">NP</span>' : ""}${anhang}${krit}</span>
       ${opts.ohneSub ? "" : `<span class="sub">${sub}</span>`}${alsSpan ? "</span>" : "</button>"}`;
   }
 
@@ -1334,14 +1678,20 @@
           // Zu jeder Leistung: gebrauchte Zeit (neben der Sollzeit) und der Kommentar des letzten
           // Versuchs – das ist die Ansicht fürs Feedbackgespräch mit der Person.
           const z = tn.leistungen[String(l.id)];
+          const status = z ? z.status : "offen";
           const zeit = z && z.letzte_zeit_sekunden != null
             ? `<small class="zeile-zeit">⏱ ${fmtZeit(z.letzte_zeit_sekunden)}${l.zeitansatz_sekunden != null ? ` von ${fmtZeit(l.zeitansatz_sekunden)}${z.letzte_zeit_sekunden > l.zeitansatz_sekunden ? " – über Sollzeit" : ""}` : ""}</small>`
             : (l.zeitansatz_sekunden != null ? `<small>Sollzeit ${fmtZeit(l.zeitansatz_sekunden)}</small>` : "");
           const komm = z && z.letzter_kommentar ? `<small class="zeile-komm">${esc(kuerzen(z.letzter_kommentar, 220))}</small>` : "";
+          // Volle Kriterienliste statt nur des X/Y-Kürzels: In dieser Ansicht steht ohnehin nur
+          // eine Person mit reichlich Platz je Zeile – wie in der Druckansicht "je TN" schon.
+          // Als eigenes <li> nach dem Knopf, nicht darin: ein <ul> gehört nicht in ein <button>.
+          const krit = kriterienErgebnisHtml(l.id, z && z.kriterien_stand);
+          // Der Titel färbt sich mit dem Ergebnis – grün bestanden, rot mangelhaft, sonst unverändert.
           return `<li><button type="button" class="zelle-zeile${tn.eingefroren ? " gesperrt" : ""}" data-act="zelle" data-tid="${tn.id}" data-lid="${l.id}">
-          <span class="name">${esc(l.bezeichnung)}${zeit}${komm}</span>
-          ${zelleHtml(tn, l, { tag: "span" })}
-        </button></li>`; }).join("")}</ul>`;
+          <span class="name"><span class="leist-titel st-${status}">${esc(l.bezeichnung)}</span>${zeit}${komm}</span>
+          ${zelleHtml(tn, l, { tag: "span", ohneKrit: true })}
+        </button>${krit}</li>`; }).join("")}</ul>`;
     }
     return kopf + umschalter + inhalt;
   }
@@ -1407,6 +1757,27 @@
   /* ==========================================================================================
      Bewertungsdialog
      ========================================================================================== */
+  // Drei Zustände je Kriterium: nicht bewertet → erfüllt → nicht erfüllt → nicht bewertet.
+  const KRIT_SYM = { leer: "⬜", ja: "✅", nein: "❌" };
+  const KRIT_ZYKLUS = { leer: "ja", ja: "nein", nein: "leer" };
+  // Die Kriteriendefinitionen einer Leistung (Text, Reihenfolge) stehen an ihr selbst, nicht am
+  // Versuch – wie beim Zeitansatz (soll()) zeigt eine spätere Umbenennung sich rückwirkend überall.
+  const kriterienDefs = (lid) => {
+    const l = (state.lehrgang.leistungen || []).find((x) => x.id === lid);
+    return (l && l.kriterien) || [];
+  };
+  /* Nur die Kriterien, die bei DIESEM Versuch tatsächlich angekreuzt wurden – für Lese-Ansichten
+     (Bisherige Versuche, Alle Bewertungen, Mängel, Druck). Nicht bewertete bleiben unerwähnt. */
+  function kriterienErgebnisHtml(lid, stand) {
+    if (!stand) return "";
+    const eintraege = kriterienDefs(lid).filter((k) => stand[String(k.id)] !== undefined);
+    if (!eintraege.length) return "";
+    return `<ul class="kriterien-ergebnis">${eintraege.map((k) => {
+      const ok = stand[String(k.id)];
+      return `<li class="${ok ? "ja" : "nein"}">${ok ? "✅" : "❌"} ${esc(k.bezeichnung)}</li>`;
+    }).join("")}</ul>`;
+  }
+
   function versuchKarteHtml(v, istLetzter, opts = {}) {
     const bearbeitet = v.bearbeitet_am ? ` · <span title="Ursprünglicher Stand im Verlauf">bearbeitet von ${esc(v.bearbeitet_von_name)} am ${esc(fmtDate(v.bearbeitet_am, true))}</span>` : "";
     return `<div class="versuch-karte ${v.ergebnis}" data-vid="${v.id}">
@@ -1414,6 +1785,7 @@
         <span class="erg ${v.ergebnis}">${v.ergebnis === "bestanden" ? "👍 bestanden" : "👎 mangelhaft"}</span>
         ${v.zeit_sekunden != null ? `<span class="zeit">⏱ ${fmtZeit(v.zeit_sekunden)}${opts.soll != null ? ` <span class="muted">(Soll ${fmtZeit(opts.soll)})</span>` : ""}</span>` : ""}</div>
       ${v.kommentar ? `<div class="kommentar">${esc(v.kommentar)}</div>` : ""}
+      ${kriterienErgebnisHtml(v.leistung_id, v.kriterien)}
       ${medienGridHtml(v.medien, { loeschbar: !!opts.onMedienWeg, onDelete: opts.onMedienWeg })}
       <div class="abnahme">abgenommen von ${esc(v.geprueft_von_name)} am ${esc(fmtDate(v.geprueft_am, true))}${bearbeitet}</div>
       ${v.verlauf && v.verlauf.length ? `<details class="staende"><summary>Frühere Stände (${v.verlauf.length})</summary><ul>${v.verlauf.map((s) => `<li>
@@ -1442,6 +1814,14 @@
       <div class="zeit-zeile"><input type="text" id="bw-zeit" class="zeitfeld" inputmode="numeric" placeholder="mm:ss" autocomplete="off"
              value="${v.zeit_sekunden != null ? fmtZeit(v.zeit_sekunden) : ""}">
         <span class="help">${l.zeitansatz_sekunden != null ? "„Stopp“ trägt die gemessene Zeit ein – sie lässt sich hier korrigieren." : "Ohne Zeitansatz, aber die Zeit darf trotzdem notiert werden."}</span></div>
+      ${l.kriterien && l.kriterien.length ? `<label>Kriterien</label>
+      <div class="kriterien-liste" id="bw-kriterien">${l.kriterien.map((k) => {
+        const stand = v.kriterien || {};
+        const z = stand[String(k.id)] === true ? "ja" : stand[String(k.id)] === false ? "nein" : "leer";
+        return `<button type="button" class="krit-zeile ${z}" data-kid="${k.id}" data-stand="${z}" aria-pressed="${z === "ja"}">
+          <span class="krit-sym" aria-hidden="true">${KRIT_SYM[z]}</span><span class="krit-text">${esc(k.bezeichnung)}</span></button>`;
+      }).join("")}</div>
+      <div class="help">Antippen wechselt zwischen nicht bewertet, ✅ erfüllt und ❌ nicht erfüllt.</div>` : ""}
       <label>Bewertung</label>
       <div class="bew-wahl" id="bw-wahl">
         <button type="button" data-erg="bestanden" class="${v.ergebnis === "bestanden" ? "sel" : ""}" aria-pressed="${v.ergebnis === "bestanden"}"><span class="sym" aria-hidden="true">👍</span> bestanden</button>
@@ -1674,6 +2054,17 @@
       });
       komm.addEventListener("input", () => { if (komm.value.trim()) komm.classList.remove("fehler"); });
       zeitfeld.addEventListener("input", () => zeitfeld.classList.remove("fehler"));
+      // Kriterien: ein Tipp wechselt nicht bewertet → erfüllt → nicht erfüllt → nicht bewertet.
+      const kritListe = $("#bw-kriterien", form);
+      if (kritListe) kritListe.addEventListener("click", (e) => {
+        const btn = e.target.closest(".krit-zeile");
+        if (!btn) return;
+        const naechster = KRIT_ZYKLUS[btn.dataset.stand];
+        btn.dataset.stand = naechster;
+        btn.className = `krit-zeile ${naechster}`;
+        btn.querySelector(".krit-sym").textContent = KRIT_SYM[naechster];
+        btn.setAttribute("aria-pressed", String(naechster === "ja"));
+      });
 
       // Medien auswählen: Vorschau, Größe, einzeln entfernbar. Die Dateien liegen im Speicher,
       // bis die Bewertung gespeichert ist – erst dann gibt es einen Versuch, zu dem sie gehören.
@@ -1708,14 +2099,21 @@
         const kommentar = komm.value.trim();
         // Pflichtkommentar schon hier – der Server prüft es ebenfalls (siehe catch unten).
         if (erg === "mangelhaft" && !kommentar) { komm.classList.add("fehler"); komm.focus(); return toast("Bei „mangelhaft“ ist ein Kommentar Pflicht.", true); }
+        // Kriterien-Stand aus den Knöpfen lesen – ohne Kriterienliste liefert das ein leeres Objekt,
+        // was der Server als „nichts zu ändern“ versteht.
+        const kriterien = {};
+        $$(".krit-zeile", form).forEach((btn) => {
+          if (btn.dataset.stand === "ja") kriterien[btn.dataset.kid] = true;
+          else if (btn.dataset.stand === "nein") kriterien[btn.dataset.kid] = false;
+        });
         knopf.disabled = true;
         try {
           let versuch;
           if (modus.art === "edit") {
-            versuch = (await api(`${API}/versuche/${modus.versuch.id}`, { method: "PUT", body: { ergebnis: erg, zeit_sekunden: z.wert, kommentar } })).versuch;
+            versuch = (await api(`${API}/versuche/${modus.versuch.id}`, { method: "PUT", body: { ergebnis: erg, zeit_sekunden: z.wert, kommentar, kriterien } })).versuch;
           } else {
             versuch = (await api(`${API}/teilnehmer/${tid}/leistungen/${lid}/versuche`,
-              { method: "POST", body: { ergebnis: erg, zeit_sekunden: z.wert, kommentar, nachpruefung: modus.art === "np" } })).versuch;
+              { method: "POST", body: { ergebnis: erg, zeit_sekunden: z.wert, kommentar, nachpruefung: modus.art === "np", kriterien } })).versuch;
           }
           if (dateien.length) {
             try {
@@ -1777,6 +2175,7 @@
         ${v.zeit_sekunden != null || m.leistung.zeitansatz_sekunden != null ? `<span class="zeit">⏱ ${v.zeit_sekunden != null ? fmtZeit(v.zeit_sekunden) : "–"}${m.leistung.zeitansatz_sekunden != null ? ` (Soll ${fmtZeit(m.leistung.zeitansatz_sekunden)})` : ""}</span>` : ""}
         <span class="${npKlasse}">${npText}</span></div>
       ${v.kommentar ? `<div class="kommentar">${esc(v.kommentar)}</div>` : '<div class="kommentar muted">Kein Kommentar.</div>'}
+      ${kriterienErgebnisHtml(v.leistung_id, v.kriterien)}
       ${medienGridHtml(v.medien, { klein: !!opts.druck })}
       <div class="abnahme">abgenommen von ${esc(v.geprueft_von_name)} am ${esc(fmtDate(v.geprueft_am, true))}${bearbeitet}</div>
       ${opts.druck ? "" : `<div class="btn-row">
@@ -1826,6 +2225,7 @@
           <span class="erg ${v.ergebnis}">${v.ergebnis === "bestanden" ? "👍 bestanden" : "👎 mangelhaft"}</span>
           ${v.zeit_sekunden != null ? `<span class="zeit">⏱ ${fmtZeit(v.zeit_sekunden)}${soll(v.leistung_id) != null ? ` <span class="muted">(Soll ${fmtZeit(soll(v.leistung_id))})</span>` : ""}</span>` : ""}</div>
         ${v.kommentar ? `<div class="kommentar">${esc(v.kommentar)}</div>` : ""}
+        ${kriterienErgebnisHtml(v.leistung_id, v.kriterien)}
         ${medienGridHtml(v.medien)}
         <div class="abnahme">abgenommen von ${esc(v.geprueft_von_name)} am ${esc(fmtDate(v.geprueft_am, true))}${v.bearbeitet_am ? ` · bearbeitet von ${esc(v.bearbeitet_von_name)} am ${esc(fmtDate(v.bearbeitet_am, true))}` : ""}</div>
       </div>`).join("") : '<p class="muted">Noch keine Bewertungen.</p>'}`;
