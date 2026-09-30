@@ -571,12 +571,12 @@
         <td data-l="Status">${statusMarke(lg.status)}</td>
         <td data-l="TN">${lg.tn_anzahl}</td>
         <td data-l="Fortschritt">${fortschrittHtml(lg)}</td>
-        <td class="btn-row">
+        <td class="tabelle-aktionen"><div class="btn-row">
           <a class="btn small" href="/pruefungen/${lg.id}">Öffnen</a>
           ${lg.darf_leiten ? `<button class="btn ghost small" data-act="lg-edit" data-id="${lg.id}">Bearbeiten</button>
           <button class="btn ghost small" data-act="lg-kopie" data-id="${lg.id}">Kopieren</button>
           <button class="btn ghost small" data-act="lg-del" data-id="${lg.id}">Löschen</button>` : ""}
-        </td></tr>`).join("")}</tbody></table>`;
+        </div></td></tr>`).join("")}</tbody></table>`;
   }
 
   /* ==========================================================================================
@@ -613,11 +613,11 @@
         <td data-l="Katalog"><a class="titel" href="/pruefungen/kataloge/${k.id}">${esc(k.titel)}</a></td>
         <td data-l="Beschreibung">${k.beschreibung ? esc(kuerzen(k.beschreibung, 140)) : '<span class="muted">–</span>'}</td>
         <td data-l="Leistungen">${k.leistungen_anzahl}</td>
-        <td class="btn-row">
+        <td class="tabelle-aktionen"><div class="btn-row">
           <a class="btn small" href="/pruefungen/kataloge/${k.id}">Öffnen</a>
           ${istAdmin() ? `<button class="btn ghost small" data-act="kat-edit" data-id="${k.id}">Bearbeiten</button>
           <button class="btn ghost small" data-act="kat-del" data-id="${k.id}">Löschen</button>` : ""}
-        </td></tr>`).join("")}</tbody></table>`;
+        </div></td></tr>`).join("")}</tbody></table>`;
   }
 
   function katalogDialog(k) {
@@ -1667,7 +1667,7 @@
       const tn = tns.find((x) => x.id === state.bewTn);
       // Kopf über der Liste: Bild und Name, der freie Kommentar und (für die Leitung) das Ergebnis.
       const block = `<div class="tn-block${tn.eingefroren ? " gesperrt" : ""}">
-        <div class="tn-block-kopf"><span class="tn-kopfzeile">${tnBildHtml(tn, "gross")}${schlossHtml(tn)}<span class="tn-name">${esc(tnName(tn))}</span></span>${tn.gliederung ? `<span class="muted tn-gliederung">${esc(tn.gliederung)}</span>` : ""}</div>
+        <div class="tn-block-kopf">${tnBildHtml(tn, "gross")}<div class="tn-block-text"><span class="tn-name-zeile">${schlossHtml(tn)}<span class="tn-name">${esc(tnName(tn))}</span></span>${tn.gliederung ? `<span class="muted tn-gliederung">${esc(tn.gliederung)}</span>` : ""}</div></div>
         ${tn.eingefroren ? `<p class="notice small">${esc(EINGEFROREN)}</p>` : ""}
         <div class="tn-block-felder">
           <div><span class="feldname">Kommentar</span>${kommentarZelleHtml(tn, { laenge: 200 })}</div>
@@ -2286,7 +2286,7 @@
         <button class="btn no-print" id="druck-los" type="button">🖨 Drucken</button>
         <div class="druck-filter">${esc([lg.titel, spanne(lg.datum_von, lg.datum_bis), lg.ort].filter(Boolean).join(" · "))}<br>
           ${esc(tn.gliederung || "")}${tn.gliederung ? " · " : ""}${plural(versuche.length, "Bewertung", "Bewertungen")}${tn.ergebnis ? ` · Lehrgang ${ERGEBNIS[tn.ergebnis][0]}` : ""} · Stand ${esc(fmtDate(new Date().toISOString(), true))}</div></div>
-      <div class="tn-block-kopf">${tnBildHtml(tn, "gross")}${schlossHtml(tn)}<span class="tn-name">${esc(tnName(tn))}</span>${tn.gliederung ? `<span class="muted tn-gliederung">${esc(tn.gliederung)}</span>` : ""}</div>
+      <div class="tn-block-kopf">${tnBildHtml(tn, "gross")}<div class="tn-block-text"><span class="tn-name-zeile">${schlossHtml(tn)}<span class="tn-name">${esc(tnName(tn))}</span></span>${tn.gliederung ? `<span class="muted tn-gliederung">${esc(tn.gliederung)}</span>` : ""}</div></div>
       ${bewertungenListeHtml(tn, versuche, soll)}`;
     $("#druck-los").onclick = () => window.print();
   }

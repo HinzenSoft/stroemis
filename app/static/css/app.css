@@ -217,6 +217,9 @@ img { max-width: 100%; }
 .btn.small { padding: 5px 10px; font-size: var(--fs-klein); }
 .btn.yellow { background: var(--gelb); color: var(--anthrazit); border-color: var(--gelb); }
 .btn.yellow:hover { background: var(--gelb-dunkel); border-color: var(--gelb-dunkel); color: var(--anthrazit); }
+/* Immer als <div> in eine Zelle setzen, nie die Klasse direkt an ein <td>: display:flex auf dem
+   Zellen-Element selbst ließ die Zelle nur noch so hoch wie ihr Inhalt werden, nicht mehr so hoch
+   wie die Tabellenzeile – Klick- und Hover-Fläche endeten dann sichtbar vor dem Zeilenende. */
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
 label { display: block; font-weight: 600; font-size: .9rem; margin: 12px 0 4px; }
@@ -274,7 +277,7 @@ table.list .badge { max-width: 100%; white-space: normal; overflow-wrap: anywher
    aus dem Bild laufen und die Knöpfe außer Sicht schieben.
    Der Umschaltpunkt liegt höher als sonst im Projekt (640px): Sieben Spalten brauchen mehr
    Platz als sechs, und ab hier wird die Rollenspalte zu schmal für das Wort „Redakteur“.
-   Die Regel gilt nur dieser einen Tabelle – "table.list" steht nur in der Nutzerverwaltung. */
+   Die Regel gilt jeder "table.list" – Nutzerverwaltung, Lehrgangs- und Katalogliste der Prüfungen. */
 @media (max-width: 860px) {
   table.list, table.list tbody, table.list tr, table.list td { display: block; }
   table.list thead { display: none; }
@@ -282,7 +285,7 @@ table.list .badge { max-width: 100%; white-space: normal; overflow-wrap: anywher
   table.list td { border: 0; padding: 2px 0; white-space: normal; }
   table.list td.small { white-space: normal; }
   table.list td[data-l]::before { content: attr(data-l) ": "; color: var(--grau); font-size: var(--fs-klein); }
-  table.list td.btn-row { display: flex; flex-wrap: wrap; padding-top: 8px; }
+  table.list td.tabelle-aktionen { padding-top: 8px; }
   table.list tr:hover td { background: none; }
 }
 

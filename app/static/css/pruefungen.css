@@ -50,7 +50,6 @@
 .tn-bild.klick { cursor: zoom-in; }
 .tn-bild.klick:hover, .tn-bild.klick:focus-visible { outline: 2px solid var(--rot); outline-offset: 1px; }
 .lb-profil img { width: min(90vw, 420px); height: auto; border-radius: var(--radius-gross); }
-.tn-block-kopf .tn-bild.gross { margin-right: 4px; }
 .zelle-zeile .name .zeile-zeit { color: var(--anthrazit); }
 .zelle-zeile .name .zeile-komm { color: var(--anthrazit); font-style: italic; white-space: normal; margin-top: 2px; }
 .tn-bild-zeile { display: flex; align-items: center; gap: 16px; margin: 4px 0 12px; }
@@ -105,10 +104,14 @@ p.dlg-tn { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 /* „je TN“: Block über der Liste mit Bild, Name, Kommentar und Ergebnis. */
 .tn-block { border: 1px solid var(--linie); border-left: 4px solid var(--anthrazit); border-radius: var(--radius); padding: 10px 12px; margin: 0 0 12px; }
 .tn-block.gesperrt { border-left-color: var(--grau); background: var(--grau-hell); }
-.tn-block-kopf { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 1.05rem; font-weight: 600; margin-bottom: 8px; }
-/* Die Gliederung hinter dem Namen; der Trennpunkt kommt aus dem Blatt, damit er beim Umbruch
-   auf dem Telefon nicht allein am Zeilenanfang steht. */
-.tn-block-kopf .tn-gliederung::before { content: "· "; }
+/* Größeres Bild links, Name und Gliederung gestapelt rechts daneben – füllt die Höhe des
+   größeren Bildes sinnvoll, statt daneben Leerraum zu lassen. */
+.tn-block-kopf { display: flex; align-items: center; gap: 12px; font-size: 1.05rem; font-weight: 600; margin-bottom: 8px; }
+.tn-block-kopf .tn-bild.gross { width: 104px; height: 104px; font-size: 2.3rem; }
+.tn-block-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tn-name-zeile { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.tn-name-zeile .tn-name { overflow-wrap: anywhere; }
+.tn-block-kopf .tn-gliederung { font-weight: 400; font-size: var(--fs-mittel); color: var(--grau); }
 .tn-block .notice.small { margin: 0 0 8px; font-size: var(--fs-klein); }
 .tn-block-felder { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; align-items: start; }
 .tn-block-felder .feldname { display: block; font-size: var(--fs-klein); color: var(--grau); font-weight: 700; margin-bottom: 4px; }
@@ -498,9 +501,6 @@ body:has(.pruef.druck) #toast { top: 12px; }
   .bew-matrix .zelle { min-width: 92px; }
   .bew-matrix .zelle .sub { display: none; }
   .tn-block-felder { grid-template-columns: 1fr; }
-  /* „je TN“: die Gliederung in eigener Zeile unter dem Namen, bündig mit ihm (76 px Bild + 8 px Abstand + 4 px Rand). */
-  .tn-block-kopf .tn-gliederung { flex: 1 1 100%; padding-left: 88px; margin-top: -4px; font-weight: 400; font-size: var(--fs-mittel); }
-  .tn-block-kopf .tn-gliederung::before { content: none; }
   /* Voraussetzungen verwalten: das Textfeld über die ganze Breite, die drei Knöpfe darunter –
      nebeneinander blieben dem Text nur 160 px, und „Mindestalter 16 Jahre“ war abgeschnitten. */
   .vor-liste li { flex-wrap: wrap; padding: 8px 0; }

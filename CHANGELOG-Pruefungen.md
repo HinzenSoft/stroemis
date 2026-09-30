@@ -529,3 +529,55 @@ Annahme jenes Nachtrags (Kriterien-Haken zählen nicht als „bearbeitet“) gil
     Nummerierte Liste wandelt um; Link fügt mit vorausgefülltem markiertem Text einen echten Link ein und stellt
     die Auswahl nach dem Dialog wieder her. Die bestehenden 17 Tests bleiben unberührt (reine Oberflächenänderung,
     keine Schnittstelle betroffen).
+
+## Nachtrag (29.09.2026): Aktionsspalte der Listen füllte nicht die ganze Zeile
+
+- In der Lehrgangsliste (und ebenso in der Katalogliste sowie, unabhängig von den Prüfungen, in der
+  Nutzerverwaltung) war die letzte Spalte mit den Knöpfen „Öffnen/Bearbeiten/…“ sichtbar niedriger als die
+  übrige Zeile – der Hover-Hintergrund und die Zellenfläche endeten vor dem unteren Zeilenrand, sobald eine
+  andere Spalte durch mehrzeiligen Inhalt (Titel, Nummer, Ort) höher wurde.
+  - **Ursache:** Die Klasse `.btn-row` (`display: flex`) saß direkt auf dem `<td>`. Ein Tabellenzelle mit
+    eigenem `display:flex` wird beim Tabellenlayout nicht mehr wie die übrigen Zellen auf die Zeilenhöhe
+    gestreckt, sondern nur so hoch wie ihr Inhalt – hier die Knöpfe, meist niedriger als die Nachbarspalten.
+  - **Behoben** durch Umhängen: `<td>` bleibt eine gewöhnliche Zelle (neue Klasse `.tabelle-aktionen` nur für
+    einen kleinen mobilen Abstand), die Knöpfe stehen in einem `<div class="btn-row">` darin – wie überall sonst
+    im Programm schon üblich. Die mobile Sonderregel für diese eine Zelle entfällt damit ersatzlos.
+  - Geprüft: Zellenhöhe der Aktionsspalte stimmt jetzt exakt mit der Zeilenhöhe überein (per Messung), der
+    Hover-Hintergrund deckt die ganze Zeile ab. Ein Kommentar an der `.btn-row`-Basisregel warnt jetzt davor,
+    die Klasse künftig wieder direkt an ein `<td>` zu hängen.
+
+## Nachtrag (29.09.2026): Größeres Profilbild in „je TN“, Gliederung unter dem Namen
+
+- Das Profilbild im Kopf der Ansicht „je TN“ (interaktiv wie Druckansicht) ist von 76 auf 104 px gewachsen.
+  Damit daneben kein Leerraum bleibt, steht die Gliederung jetzt immer – nicht mehr nur auf dem Telefon – unter
+  statt neben dem Namen; beide teilen sich die neue Bildhöhe sinnvoll. Die bisherige, nur für schmale Bildschirme
+  gedachte Sonderregel (Einzug per `padding-left`, passend zur alten Bildbreite) ist damit hinfällig und entfernt
+  – das gestapelte Layout gilt jetzt einheitlich auf allen Breiten. Betrifft nur `.tn-block-kopf` (den Kopf dieser
+  einen Ansicht); das kleinere Profilbild im Teilnehmenden-Dialog („Bild wählen …“) bleibt bei 76 px.
+
+## Nachtrag (29.09.2026): Bugfix – Beschreibung wurde bei Überlänge stillschweigend gekappt
+
+- **Fehlerbild:** Ein in die Beschreibung einer Prüfungsleistung eingefügtes Bild (per Einfügen aus der
+  Zwischenablage oder Ziehen ins Textfeld – dafür gibt es keinen eigenen Hochladeweg, Toast UI bettet es
+  ersatzweise als Base64-Text direkt im Markdown ein) konnte nach dem Speichern kaputt oder gar nicht mehr
+  angezeigt werden.
+- **Ursache:** `_leistung_felder()` in `api_pruefungen.py` schnitt `beschreibung_md` serverseitig auf 50.000
+  Zeichen zu (`[:50000]`) – ohne Fehlermeldung, ohne Rückmeldung. Landete der Schnitt mitten im eingebetteten
+  Base64-Bild (bei einem echten Foto sehr wahrscheinlich, ein Bild allein sprengt die Grenze oft schon), war das
+  gespeicherte Markdown kaputt: `![…](data:image/png;base64,AAAA…` ohne schließende Klammer – kein gültiger
+  Bildverweis mehr, `marked` rendert den Rest stattdessen als sichtbaren Text-Wulst. Betraf gleichermaßen
+  Leistungen im Lehrgang und im Katalog (beide teilen sich `_leistung_felder`).
+- **Behoben:** Eine zu lange Beschreibung wird jetzt mit 400 und der Meldung „Die Beschreibung ist zu lang
+  (höchstens 50.000 Zeichen). Ein eingefügtes Bild wird als Text mitgezählt und ist dafür oft schon zu groß.“
+  abgelehnt, statt stillschweigend beschädigt gespeichert zu werden. Die Meldung erscheint im Leistungsdialog
+  wie jede andere Fehlermeldung als Toast; der zuvor gespeicherte Stand bleibt dabei unangetastet.
+- **Nicht behoben, bewusst offengelassen:** Die eigentliche Ursache – dass Bilder in dieser Beschreibung
+  überhaupt nur als roher Base64-Text landen, ohne echten Hochladeweg wie ihn Wiki-Artikel (`uploadFile()`,
+  `addImageBlobHook`) oder Medien an einem Versuch (`orig`/`web`/`thumb`, HEIC/Video-Wandlung) längst haben –
+  bleibt bestehen. Ein Bild, das unter der 50.000-Zeichen-Grenze bleibt, funktioniert weiterhin einwandfrei
+  (geprüft: Einfügen, Speichern, Kartenvorschau, erneutes Öffnen zeigen es alle korrekt an); ein größeres, echtes
+  Foto lässt sich damit aber weiterhin nicht sinnvoll einbetten – es scheitert jetzt nur ehrlich statt heimlich.
+  Ob dafür ein echter Hochladeweg für diese Beschreibung gebaut werden soll, ist eine eigene, größere
+  Entscheidung und war nicht Teil dieses Bugfixes.
+- Neue Testzusicherung in `tests/test_pruefungen.py`: Ablehnung über der Grenze, unveränderter Altbestand nach
+  der Ablehnung, Erfolg genau an der Grenze (50.000 Zeichen).
