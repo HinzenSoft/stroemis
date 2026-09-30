@@ -1009,7 +1009,14 @@ def _leistung_felder(d, neu):
         if not vals["bezeichnung"]:
             raise Abgelehnt("Bitte eine Bezeichnung angeben.")
     if neu or "beschreibung_md" in d:
-        vals["beschreibung_md"] = sfield(d, "beschreibung_md")[:50000]
+        vals["beschreibung_md"] = sfield(d, "beschreibung_md")
+        # Nicht stillschweigend abschneiden: Ein Bild, das über Einfügen/Ziehen ohne eigenen
+        # Hochladeweg als Base64-Text im Markdown landet, wurde hier bisher mitten im Text
+        # gekappt – das Ergebnis war ein kaputtes ![](data:...), weder Bild noch lesbarer Text.
+        # Eine klare Ablehnung sagt wenigstens, woran es liegt.
+        if len(vals["beschreibung_md"]) > 50000:
+            raise Abgelehnt("Die Beschreibung ist zu lang (höchstens 50.000 Zeichen). Ein eingefügtes Bild "
+                            "wird als Text mitgezählt und ist dafür oft schon zu groß.")
     if neu or "zeitansatz_sekunden" in d:
         vals["zeitansatz_sekunden"] = _sekunden(d.get("zeitansatz_sekunden"), "Zeitansatz")
     return vals

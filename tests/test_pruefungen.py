@@ -349,6 +349,18 @@ def test_pruefungen():
         wurf = r.json["leistung"]
         hat_felder(wurf, "id", "bezeichnung", "beschreibung_md", "zeitansatz_sekunden", "sortierung")
         assert wurf["zeitansatz_sekunden"] == 180 and wurf["beschreibung_md"] == "# Ablauf\n\n3 Würfe", wurf
+        # Eine zu lange Beschreibung (z. B. ein ohne eigenen Hochladeweg als Base64-Text eingefügtes
+        # Bild) wird abgelehnt, nicht mehr stillschweigend mitten im Text gekappt – das ergäbe sonst
+        # kaputtes Markdown, weder Bild noch lesbarer Text. Der bestehende Stand bleibt dabei unberührt.
+        r = pr.put(f"/api/pruefungen/leistungen/{wurf['id']}", json={"beschreibung_md": "x" * 50001})
+        assert r.status_code == 400 and "lang" in r.json["error"], r.get_json()
+        det = pr.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]
+        unveraendert = next(p for p in det["leistungen"] if p["id"] == wurf["id"])
+        assert unveraendert["beschreibung_md"] == "# Ablauf\n\n3 Würfe", unveraendert
+        # Genau an der Grenze geht es noch durch – danach der ursprüngliche Text wieder zurück,
+        # damit spätere Prüfungen in diesem Test (z. B. beim Kopieren) den bekannten Stand sehen.
+        assert pr.put(f"/api/pruefungen/leistungen/{wurf['id']}", json={"beschreibung_md": "x" * 50000}).status_code == 200
+        assert pr.put(f"/api/pruefungen/leistungen/{wurf['id']}", json={"beschreibung_md": "# Ablauf\n\n3 Würfe"}).status_code == 200
         r = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/leistungen", json={"bezeichnung": "Aufbau Flaschenzug 3:1", "zeitansatz_sekunden": None})
         assert r.status_code == 201 and r.json["leistung"]["zeitansatz_sekunden"] is None, r.get_json()
         flaschenzug = r.json["leistung"]

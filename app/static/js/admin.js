@@ -42,11 +42,11 @@
           : u.role === "editor" ? '<span class="badge">Redakteur</span>' : "Nutzer"}${u.is_pruefer ? ' <span class="badge grey" title="Zusatzrecht: darf Prüfungen abnehmen">Prüfer</span>' : ""}</td>
         <td class="small" data-l="Zuletzt da">${letzterLogin(u)}</td>
         <td class="small" data-l="Inhalte">${u.page_count} Artikel, ${u.album_count} Alben, ${u.photo_count} Bilder</td>
-        <td class="btn-row">
+        <td class="tabelle-aktionen"><div class="btn-row">
           <button class="btn ghost small" data-act="edit">Bearbeiten</button>
           <button class="btn ghost small" data-act="reset">Reset-Mail</button>
           ${u.id !== STROEMIS.user.id ? '<button class="btn ghost small" data-act="delete">Löschen</button>' : ""}
-        </td>
+        </div></td>
       </tr>`).join("");
   }
 

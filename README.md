@@ -97,6 +97,32 @@ Uploads bis 5 GB: bei nginx/Traefik `client_max_body_size`/`maxRequestBodyBytes`
 
 Nach einem Update gilt: Wer die Anwendung im Browser offen hat, lädt die Seite einmal neu. Ein Reiter, der noch die alten Skripte ausführt, spricht sonst weiter mit der alten Schnittstelle – im schlimmsten Fall legt jeder seiner Zwischenstände eine eigene Fassung im Verlauf an.
 
+### Automatisches Deployment
+
+`.github/workflows/deploy.yml` verbindet sich bei jedem Push nach `main` (oder von Hand über „Run workflow“ in
+GitHub) per SSH mit dem VPS und führt dort `git pull`, `docker compose up -d --build --remove-orphans` und
+`docker image prune -f` aus – der Build läuft also auf dem VPS selbst, ohne Umweg über eine Registry. Läuft
+gerade schon ein Deploy, wartet ein zweiter statt parallel zu starten.
+
+Einmalige Einrichtung:
+
+1. Auf dem eigenen Rechner ein eigenes Schlüsselpaar nur für dieses Deployment erzeugen (nicht den persönlichen
+   Schlüssel verwenden): `ssh-keygen -t ed25519 -C "github-actions-deploy" -f deploy_key -N ""`.
+2. Den öffentlichen Teil (`deploy_key.pub`) auf dem VPS in `~/.ssh/authorized_keys` des Deploy-Nutzers eintragen.
+3. Im GitHub-Repository unter **Settings → Secrets and variables → Actions** anlegen:
+   - `DEPLOY_HOST` – Adresse des VPS
+   - `DEPLOY_USER` – SSH-Nutzer auf dem VPS
+   - `DEPLOY_SSH_KEY` – Inhalt der privaten Schlüsseldatei (`deploy_key`)
+   - `DEPLOY_PATH` – absoluter Pfad zum Klon dieses Repositories auf dem VPS (dort liegt `docker-compose.yml`)
+   - `DEPLOY_PORT` – nur nötig, wenn SSH dort nicht auf Port 22 läuft
+4. Auf dem VPS sicherstellen, dass der Deploy-Nutzer `git pull` im Repository ohne Rückfrage ausführen kann (bei
+   einem privaten Repository braucht der VPS selbst einen eigenen, lesenden Zugang zu GitHub – z. B. ein weiteres
+   Deploy-Schlüsselpaar, auf GitHub unter **Settings → Deploy keys** des Repositories hinterlegt) und Mitglied
+   der Gruppe `docker` ist (`docker compose` ohne `sudo`).
+
+Bis diese Secrets gesetzt sind, schlägt der Workflow beim ersten Lauf fehl – manuelles Deployment per SSH
+funktioniert unverändert genauso wie bisher.
+
 `GET /healthz` antwortet ohne Anmeldung mit `{"ok": true}` – darauf setzt der `HEALTHCHECK` des Containers auf (alle 30 s, `docker ps` zeigt den Zustand). Die Daten liegen im Volume unter `/data`: `stroemis.db` (SQLite mit WAL), `media/` (Originale, Web-Größen, Thumbnails, Wiki-Anhänge, Profilbilder) und `secret_key`. Für eine Sicherung genügt es, dieses Volume zu kopieren – am besten bei gestopptem Container.
 
 ## Konfiguration

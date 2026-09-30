@@ -1,0 +1,35 @@
+name: Deploy
+
+# Baut und startet den Docker-Compose-Stack auf dem VPS neu – bei jedem Push nach main, oder von
+# Hand über "Run workflow". Der Build läuft dabei auf dem VPS selbst (kein Registry-Umweg nötig);
+# siehe README.md, Abschnitt "Betrieb hinter strömis.de" für die einmalige Einrichtung der Secrets.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Läuft ein Deploy noch, wartet der nächste statt parallel zu starten – zwei gleichzeitige
+# "docker compose up --build" auf demselben Host wären sonst ein Wettlauf um dieselben Ressourcen.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auf dem VPS git pull und docker compose up --build ausführen
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script_stop: true
+          script: |
+            cd "${{ secrets.DEPLOY_PATH }}"
+            git fetch origin main
+            git checkout main
+            git merge --ff-only origin/main
+            docker compose up -d --build --remove-orphans
+            docker image prune -f
