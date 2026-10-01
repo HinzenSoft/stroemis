@@ -1653,7 +1653,7 @@
       inhalt = `<div class="table-scroll"><table class="bew-matrix">
         <thead><tr><th class="tn-kopf">Teilnehmende:r</th>${ls.map((l) => `<th title="${esc(l.bezeichnung)}">${esc(l.bezeichnung)}${l.zeitansatz_sekunden != null ? `<br><span class="muted">⏱ ${fmtZeit(l.zeitansatz_sekunden)}</span>` : ""}</th>`).join("")}</tr></thead>
         <tbody>${tns.map((tn) => `<tr class="${tn.eingefroren ? "gesperrt" : ""}">
-          <td>${tnKopfHtml(tn)}<span class="tn-sub">${esc(tn.gliederung || "")}</span>
+          <td>${tnKopfHtml(tn, `<button type="button" class="linkbtn" data-act="bew-zu-tn" data-tid="${tn.id}" title="Ansicht „je TN“ für ${esc(tnName(tn))} öffnen">${esc(tnName(tn))}</button>`)}<span class="tn-sub">${esc(tn.gliederung || "")}</span>
             ${tn.voraussetzungen_offen ? `<span class="badge rot" title="Voraussetzungen nicht vollständig">${tn.voraussetzungen_offen} Vorauss. offen</span>` : ""}</td>
           ${ls.map((l) => `<td>${zelleHtml(tn, l)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
     } else if (a === "leistung") {
@@ -2490,6 +2490,9 @@
         case "pl-hoch": return leistungVerschieben(lid, -1);
         case "pl-runter": return leistungVerschieben(lid, 1);
         case "bew-ansicht": bewAnsichtSetzen(b.dataset.a); return renderReiter();
+        // Name in der Matrix: direkt zu „je TN“ für genau diese Person wechseln, statt erst über
+        // den Reiter und dann die Auswahl zu müssen.
+        case "bew-zu-tn": state.bewTn = tid; bewAnsichtSetzen("tn"); return renderReiter();
         case "bew-tn-druck": window.open(`/pruefungen/${LEHRGANG_ID}/druck?ansicht=tn&teilnehmer=${state.bewTn}`, "_blank", "noopener"); return;
         case "zelle": return bewertungsDialog(tid, lid);
         case "m-np": return bewertungsDialog(tid, lid, { nachpruefung: true });

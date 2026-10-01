@@ -581,3 +581,15 @@ Annahme jenes Nachtrags (Kriterien-Haken zählen nicht als „bearbeitet“) gil
   Entscheidung und war nicht Teil dieses Bugfixes.
 - Neue Testzusicherung in `tests/test_pruefungen.py`: Ablehnung über der Grenze, unveränderter Altbestand nach
   der Ablehnung, Erfolg genau an der Grenze (50.000 Zeichen).
+
+## Nachtrag (01.10.2026): Name in der Matrix öffnet direkt „je TN“
+
+- Der Name in der ersten Spalte der Matrix ist jetzt ein Knopf: ein Klick wechselt direkt in die Ansicht
+  „je TN“ für genau diese Person, statt erst über den Reiter zu wechseln und sie dort in der Auswahl zu
+  suchen. Nur die Matrix – „je Leistung“ zeigt die Namen unverändert als reinen Text, dort öffnet ein Klick
+  auf die Zeile bereits den Bewertungsdialog der gewählten Leistung.
+  - Neuer Fall `bew-zu-tn` im gemeinsamen Klick-Verteiler der Seite: setzt `state.bewTn` und wechselt die
+    Ansicht wie der Reiter „je TN“ selbst (`bewAnsichtSetzen`), dann wird neu gezeichnet.
+  - Wiederverwendet den vorhandenen `.linkbtn`-Baustein (wie der Name in der Teilnehmenden-Liste, der den
+    Bearbeiten-Dialog öffnet) – keine neue Gestaltung nötig. Funktioniert auch für eingefrorene Personen,
+    da nur das Ansehen betroffen ist.
