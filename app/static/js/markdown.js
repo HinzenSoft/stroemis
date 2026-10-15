@@ -4,6 +4,9 @@ window.MD = (function () {
   const CALLOUTS = { info: "💡", warning: "⚠️", success: "✅", danger: "⛔", note: "📝", tip: "💡" };
   const VIDEO_RE = /\.(mp4|m4v|mov|webm)(\?.*)?$/i;
   const AUDIO_RE = /\.(mp3|m4a|ogg|oga|wav)(\?.*)?$/i;
+  // Hochgeladener HTML-Baustein (nur Redakteur/Admin, siehe api_wiki.upload_file) – eingebettet
+  // als gesandboxte <iframe>, nie als Teil der Seite selbst. Siehe EMBED_CSP in app/__init__.py.
+  const EMBED_RE = /\.html(\?.*)?$/i;
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   /* Pastelltöne, aus denen die Hintergrundfarbe eines Callouts gewählt werden kann.
@@ -384,6 +387,15 @@ window.MD = (function () {
       }
       if (AUDIO_RE.test(href || "")) {
         return `<audio controls preload="metadata" src="${esc(href)}"${title ? ` title="${esc(title)}"` : ""}></audio>`;
+      }
+      if (EMBED_RE.test(href || "")) {
+        // "allow-scripts" ohne "allow-same-origin": der Baustein darf sein eigenes Skript
+        // ausführen, bekommt aber nie Cookies, Sitzung oder DOM dieser Seite zu sehen (siehe
+        // _EMBED_CSP in app/__init__.py, die serverseitig dasselbe zusätzlich erzwingt).
+        const w = imageWidth(href);
+        return `<iframe class="html-embed" src="${esc(href)}" sandbox="allow-scripts" loading="lazy" `
+          + `referrerpolicy="no-referrer" title="${esc(text || "Eingebettete Seite")}"`
+          + `${w ? ` style="width:${/%$/.test(w) ? w : w + "px"}"` : ""}></iframe>`;
       }
       const w = imageWidth(href);
       const img = `<img src="${esc(href)}" alt="${esc(text || "")}"${w ? ` width="${esc(w)}"` : ""} loading="lazy">`;
@@ -880,6 +892,6 @@ window.MD = (function () {
     && !(img.closest && img.closest(".ed-nichtinhalt"));
 
   return { render, buildToc, tocHtml, enhance, scrollToHash, tocScrollspy, istInhaltsbild,
-           CALLOUTS, CALLOUT_FARBEN, ALIGNS, MARKERS, COLOR_NAMES, VIDEO_RE, AUDIO_RE, esc, allEmojis,
+           CALLOUTS, CALLOUT_FARBEN, ALIGNS, MARKERS, COLOR_NAMES, VIDEO_RE, AUDIO_RE, EMBED_RE, esc, allEmojis,
            fenceMask, imageWidth, widgetRules, htmlMarksToSyntax, wrapMark, UMBRUCH };
 })();

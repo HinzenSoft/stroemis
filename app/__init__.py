@@ -14,7 +14,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
 
 from . import api_admin, api_albums, api_pruefungen, api_wiki, auth, db, einstellungen, medienpflege
-from .images import AVATAR_MAX_BYTES, VIDEO_EXT
+from .images import AVATAR_MAX_BYTES, EMBED_EXT, VIDEO_EXT
 
 
 def _env_bool(name, default=False):
@@ -143,15 +143,27 @@ def slideshow():
     return jsonify(images=[{"url": "/media/slide/" + ser.dumps(key(r["file"]))} for r in rows])
 
 
-def _media_response(directory, filename, max_age, private):
+_STRICT_MEDIA_CSP = "default-src 'none'; img-src 'self' data:; media-src 'self'; sandbox"
+# Gilt nur für hochgeladene HTML-Bausteine (EMBED_EXT in images.py; nur Redakteur/Admin dürfen sie
+# einstellen, siehe api_wiki.upload_file). "sandbox allow-scripts" ohne "allow-same-origin" heißt:
+# der Inhalt darf sein eigenes Skript ausführen (sonst bliebe vom Einbetten nichts übrig), läuft
+# dabei aber in einem eigenen, nicht wiederverwendbaren Ursprung – kein Zugriff auf Cookies,
+# Sitzung oder DOM dieser Seite, keine Top-Level-Navigation, keine Popups. Das gilt auch dann,
+# wenn die Adresse direkt aufgerufen wird, nicht nur innerhalb der <iframe sandbox="allow-scripts">,
+# mit der der Artikel sie einbettet (siehe markdown.js/wiki.js, EMBED_RE).
+_EMBED_CSP = "sandbox allow-scripts"
+
+
+def _media_response(directory, filename, max_age, private, csp=None):
     """Mediendatei ausliefern. Angemeldeten-Inhalte dürfen nur im Browser des Nutzers liegen,
-    nicht in einem gemeinsamen Zwischenspeicher. Skripte sind in Medien nie erwünscht –
-    die eigene CSP macht auch ein direkt aufgerufenes SVG harmlos."""
+    nicht in einem gemeinsamen Zwischenspeicher. Skripte sind in Medien grundsätzlich nicht
+    erwünscht – die eigene CSP macht auch ein direkt aufgerufenes SVG harmlos; die eine bewusste
+    Ausnahme ist der HTML-Baustein (csp=_EMBED_CSP, siehe media())."""
     resp = send_from_directory(directory, filename, max_age=max_age)
     if private:
         resp.cache_control.public = None
         resp.cache_control.private = True
-    resp.headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self' data:; media-src 'self'; sandbox"
+    resp.headers["Content-Security-Policy"] = csp or _STRICT_MEDIA_CSP
     return resp
 
 
@@ -304,7 +316,8 @@ def media(kind, filename):
     # dem eigenen Zwischenspeicher weiterbekommen. Eine Stunde genügt, um die Autorenzeilen
     # eines Rundgangs durchs Wiki abzudecken.
     dauer = 60 * 60 if kind == "avatar" else 60 * 60 * 24 * 30
-    return _media_response(wurzel, filename, dauer, private=not public)
+    csp = _EMBED_CSP if kind == "wiki" and os.path.splitext(filename)[1].lower() in EMBED_EXT else None
+    return _media_response(wurzel, filename, dauer, private=not public, csp=csp)
 
 
 @pages.get("/healthz")

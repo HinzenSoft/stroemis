@@ -13,7 +13,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from . import db
 from .auth import avatar_url, current_user, darf_inhalte, eingabefehler_abfangen, is_admin, json_body, login_required
-from .images import WIKI_EXT, crop_wiki_image, rotate_wiki_image, store_wiki_file
+from .images import EMBED_EXT, WIKI_EXT, crop_wiki_image, rotate_wiki_image, store_wiki_file
 from .mailer import send_mail
 
 bp = Blueprint("wiki", __name__, url_prefix="/api/wiki")
@@ -1602,6 +1602,13 @@ def upload_file():
     f = request.files.get("file") or request.files.get("image")
     if not f:
         return jsonify(error="Keine Datei empfangen."), 400
+    # Ein HTML-Baustein bettet sich mit eigenem Skript gesandboxt ein (siehe media() in
+    # __init__.py) – sicher für die Leser, aber wer ihn einstellen darf, bleibt trotzdem auf
+    # Redakteur/Admin beschränkt: automatisch für jeden Leser ausgeführter Inhalt ist etwas
+    # anderes als ein Download, den sich jemand erst selbst öffnen müsste.
+    ext = os.path.splitext(f.filename or "")[1].lower()
+    if ext in EMBED_EXT and not darf_inhalte():
+        return jsonify(error="HTML-Bausteine dürfen nur Redakteure und Administratoren einstellen."), 403
     try:
         name, kind = store_wiki_file(f, current_app.config["MEDIA_DIR"])
     except ValueError as exc:

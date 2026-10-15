@@ -794,6 +794,29 @@ def test_haertung():
         assert red.put(f"/api/admin/users/{red_id}", json={"role": "admin"}, headers=H).status_code == 403
         assert red.put(f"/api/wiki/pages/{rseite['id']}/share",
                        json={"is_public": True}, headers=H).status_code == 403       # kein Veröffentlichen
+
+        # --- HTML-Baustein: nur Redakteur/Admin darf einstellen, läuft gesandboxt ------------
+        html_bytes = lambda: io.BytesIO(b"<!doctype html><title>t</title><script>1</script>")
+        assert c1.post("/api/wiki/files", data={"file": (html_bytes(), "grafik.html")}, headers=H,
+                       content_type="multipart/form-data").status_code == 403
+        html_up = red.post("/api/wiki/files", data={"file": (html_bytes(), "grafik.html")}, headers=H,
+                           content_type="multipart/form-data")
+        assert html_up.status_code == 200 and html_up.json["kind"] == "embed", html_up.json
+        assert red.get(html_up.json["url"]).headers["Content-Security-Policy"] == "sandbox allow-scripts"
+        assert adm.post("/api/wiki/files", data={"file": (html_bytes(), "grafik.html")}, headers=H,
+                        content_type="multipart/form-data").status_code == 200
+        # Ein normales Bild bleibt weiterhin ohne jedes Skript ausgeliefert.
+        bild_up = red.post("/api/wiki/files", data={"file": (jpeg(False), "normal.jpg")}, headers=H,
+                           content_type="multipart/form-data")
+        assert "default-src 'none'" in red.get(bild_up.json["url"]).headers["Content-Security-Policy"]
+        # Auf einer freigegebenen Seite ist der Baustein auch ohne Anmeldung abrufbar – aber
+        # genau deshalb bleibt die Sandbox-Richtlinie auch für Unangemeldete bestehen.
+        embed_seite = adm.post("/api/wiki/pages", json={"title": "Grafikseite", "parent_id": pub["id"],
+                                                         "content": f"# Grafikseite\n\n![t]({html_up.json['url']})"})
+        assert embed_seite.status_code == 201
+        anon_embed = anon_get(app, html_up.json["url"])
+        assert anon_embed.status_code == 200 and anon_embed.headers["Content-Security-Policy"] == "sandbox allow-scripts"
+
         # Eine unbekannte Rollenbezeichnung darf keine Rechte verteilen.
         adm.put(f"/api/admin/users/{red_id}", json={"role": "superchef"})
         assert [u["role"] for u in adm.get("/api/admin/users").json["users"]

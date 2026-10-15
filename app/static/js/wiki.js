@@ -89,7 +89,11 @@
     } catch (e) { return bearbeitungsKennzeichen(); }
   })();
   // Welche Endungen als Film und Ton gelten, entscheidet der Renderer – hier dieselbe Liste.
-  const { VIDEO_RE, AUDIO_RE } = MD;
+  const { VIDEO_RE, AUDIO_RE, EMBED_RE } = MD;
+  // Wer HTML-Bausteine einstellen darf – dieselbe Grenze wie darf_inhalte() im Server
+  // (Redakteur/Admin): automatisch für jeden Leser ausgeführter Inhalt ist etwas anderes als
+  // ein Bild oder ein Download, den sich jemand erst selbst öffnen müsste.
+  const darfEinbetten = () => !!(STROEMIS.user && (STROEMIS.user.role === "admin" || STROEMIS.user.role === "editor"));
   // Jede Zeile, die im Editorformat einen Block eröffnet. Blockmenü und Ziehgriff bilden
   // damit Text und Editor aufeinander ab – beide müssen dieselbe Liste sehen.
   const MARKEN_RE = window.EDMD.MARKEN_RE;
@@ -1590,6 +1594,16 @@
           { type: "closeTag", tagName: "audio", outerNewLine: true },
         ];
       }
+      if (EMBED_RE.test(url)) {
+        const ew = MD.imageWidth(url);
+        const attrs = { src: url, class: "html-embed", sandbox: "allow-scripts", loading: "lazy",
+                        referrerpolicy: "no-referrer", title: node.firstChild ? node.firstChild.literal || "" : "" };
+        if (ew) attrs.style = `width:${/%$/.test(ew) ? ew : ew + "px"}`;
+        return [
+          { type: "openTag", tagName: "iframe", attributes: attrs, outerNewLine: true },
+          { type: "closeTag", tagName: "iframe", outerNewLine: true },
+        ];
+      }
       const w = MD.imageWidth(url);
       if (w) {
         return [{ type: "openTag", tagName: "img", selfClose: true, attributes: { src: url, alt: node.firstChild ? node.firstChild.literal || "" : "", width: w } }];
@@ -2130,6 +2144,11 @@
         if (kind !== "file") return toast("Das ist keine Audiodatei.", true);
         insert(`![${name || "Aufnahme"}](${url})\n`);
       }) },
+      // Nur für Redakteure/Admins – dieselbe Grenze wie darf_inhalte() im Server (siehe darfEinbetten()).
+      ...(darfEinbetten() ? [{ t: "HTML einbetten", d: "Eigenständige HTML-Seite einbetten (z. B. interaktive Grafik)", k: "iframe baustein", run: () => pickHtml((url, name, kind) => {
+        if (kind !== "embed") return toast("Das ist keine HTML-Datei.", true);
+        insert(`![${name || "Baustein"}](${url})\n`);
+      }) }] : []),
       { t: "Datei", d: "Anhang verlinken (PDF, Word, Excel, ZIP, GPX …)", run: () => pickFile(".pdf,.doc,.docx,.odt,.rtf,.xls,.xlsx,.ods,.csv,.ppt,.pptx,.odp,.txt,.zip,.gpx,.kml,.kmz", (url, name, kind, filename) => {
         if (kind !== "file") return toast("Für Bilder und Videos bitte „Bild“ oder „Video“ verwenden.", true);
         insert(`[${filename || name}](${url})\n`);
@@ -3972,6 +3991,10 @@
     pickFile("image/*,.heic,.heif", cb);
   }
 
+  function pickHtml(cb) {
+    pickFile(".html", cb);
+  }
+
   function leaveEditor() {
     /* Der Editor schreibt selbstständig. Wer ihn über einen anderen Weg verlässt (Seitenbaum,
        ein Link im Text), soll deshalb nicht gefragt werden – der letzte Stand geht noch los,
@@ -4263,19 +4286,31 @@
       /* Toast UI baut im WYSIWYG für jeden Bildknoten ein <img> – auch für ![](film.mp4).
          Das ergab ein kaputtes Bild statt eines Abspielers, und weil das <img> mitgezählt
          wurde, traf das Bildmenü nach einer Tonaufnahme die falsche Fundstelle. Eine eigene
-         NodeView macht daraus <video> bzw. <audio>; gewöhnliche Bilder bleiben <img>. */
+         NodeView macht daraus <video> bzw. <audio>; gewöhnliche Bilder bleiben <img>.
+         Ein HTML-Baustein (![…](…html), siehe EMBED_RE) wird ebenso zur <iframe> – live, mit
+         eigenem Skript, auch beim Bearbeiten direkt daneben. ignoreMutation lässt ProseMirror
+         in Ruhe, was innerhalb der iframe geschieht (eigener Ursprung, eigenes Dokument) – wie
+         bei <img>/<video> schon üblich, nur dass hier zusätzlich Skript darin laufen darf. */
       const medienNodeView = () => ({
         wysiwygNodeViews: {
           image: (node) => {
             const url = String(node.attrs.imageUrl || "");
-            const film = VIDEO_RE.test(url), ton = AUDIO_RE.test(url);
-            const el = document.createElement(film ? "video" : ton ? "audio" : "img");
+            const film = VIDEO_RE.test(url), ton = AUDIO_RE.test(url), bettet = EMBED_RE.test(url);
+            const el = document.createElement(film ? "video" : ton ? "audio" : bettet ? "iframe" : "img");
             el.setAttribute("src", url);
             if (film || ton) { el.setAttribute("controls", "true"); el.setAttribute("preload", "metadata"); }
-            else {
+            else if (bettet) {
+              el.className = "html-embed";
+              el.setAttribute("sandbox", "allow-scripts");
+              el.setAttribute("loading", "lazy");
+              el.setAttribute("referrerpolicy", "no-referrer");
+              el.setAttribute("title", node.attrs.altText || "Eingebettete Seite");
+            } else {
               el.setAttribute("alt", node.attrs.altText || "");
+            }
+            if (!film && !ton) {
               const w = MD.imageWidth(url);
-              if (w) { el.style.width = /%$/.test(w) ? w : `${w}px`; el.style.height = "auto"; }
+              if (w) { el.style.width = /%$/.test(w) ? w : `${w}px`; if (!bettet) el.style.height = "auto"; }
             }
             return { dom: el, ignoreMutation: () => true };
           },

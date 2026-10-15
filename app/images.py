@@ -28,7 +28,12 @@ VIDEO_EXT = {".mp4", ".m4v", ".mov", ".webm"}
 AUDIO_EXT = {".mp3", ".m4a", ".ogg", ".oga", ".wav"}
 DOC_EXT = {".pdf", ".doc", ".docx", ".odt", ".rtf", ".xls", ".xlsx", ".ods", ".csv",
            ".ppt", ".pptx", ".odp", ".txt", ".zip", ".gpx", ".kml", ".kmz"} | AUDIO_EXT
-WIKI_EXT = ALLOWED_EXT | VIDEO_EXT | DOC_EXT | {".gif", ".svg"}
+# Die eine bewusste Ausnahme von "ohne ausführbare Formate": ein eigenständiger HTML-Baustein
+# zum Einbetten (z. B. eine interaktive Erklärgrafik). Eigene Kategorie statt einfach bei DOC_EXT
+# mitzulaufen – wer das hochladen darf, entscheidet api_wiki.py (nur Redakteur/Admin), und
+# ausgeliefert wird er über eine eigene, gesandboxte Route (siehe app/__init__.py).
+EMBED_EXT = {".html"}
+WIKI_EXT = ALLOWED_EXT | VIDEO_EXT | DOC_EXT | EMBED_EXT | {".gif", ".svg"}
 THUMB_SIZE = 256      # quadratischer Ausschnitt für Karte und Raster
 AVATAR_SIZE = 256     # Profilbild: quadratisch, gezeigt wird es in 24 bis 30 px
 # Ein Profilbild kommt vom Telefon oder aus einer Kamera; mehr als 8 MB hat keins davon. Die
@@ -409,8 +414,8 @@ def delete_avatar(media_dir, datei):
 
 
 def store_wiki_file(file_storage, media_dir):
-    """Bild, Video oder Anhang für Artikel. Bilder werden als Web-Variante gespeichert,
-    alles andere unverändert. Liefert (Dateiname, 'image'|'video'|'file')."""
+    """Bild, Video, HTML-Baustein oder Anhang für Artikel. Bilder werden als Web-Variante
+    gespeichert, alles andere unverändert. Liefert (Dateiname, 'image'|'video'|'embed'|'file')."""
     name = file_storage.filename or "datei"
     ext = os.path.splitext(name)[1].lower()
     if not ext and (file_storage.mimetype or "").startswith("image/"):
@@ -420,7 +425,7 @@ def store_wiki_file(file_storage, media_dir):
     d = os.path.join(media_dir, "wiki")
     os.makedirs(d, exist_ok=True)
     key = secrets.token_hex(8)
-    if ext in VIDEO_EXT or ext in DOC_EXT or ext in (".gif", ".svg"):
+    if ext in VIDEO_EXT or ext in DOC_EXT or ext in EMBED_EXT or ext in (".gif", ".svg"):
         out = key + ext
         try:  # ein abgebrochener Schreibvorgang darf keine Waise in media/wiki hinterlassen
             file_storage.save(os.path.join(d, out))
@@ -431,7 +436,8 @@ def store_wiki_file(file_storage, media_dir):
             # Wie bei den Alben: Was nicht jeder Browser spielt, wird gewandelt. Der Artikel
             # bekommt gleich die Adresse der gewandelten Datei.
             _, out, _, _ = video_nachbereiten(os.path.join(d, out))
-        return out, ("video" if ext in VIDEO_EXT else "file" if ext in DOC_EXT else "image")
+        kind = "video" if ext in VIDEO_EXT else "embed" if ext in EMBED_EXT else "file" if ext in DOC_EXT else "image"
+        return out, kind
     with Image.open(file_storage.stream) as img:
         _pixel_pruefen(img, name)
         out = _bild_ablegen(ImageOps.exif_transpose(img), d, key)

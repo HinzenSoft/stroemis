@@ -1215,6 +1215,10 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 /* Gelb ist Hinweisfarbe: die Schrift darauf wird rot, sonst trägt die Marke keine Aussage. */
 .tc-gelb { background: var(--gelb); color: var(--rot); font-weight: 600; padding: 0 3px; }
 .wiki-content audio { display: block; width: 100%; margin: .8em 0; }
+/* HTML-Baustein: Vorgabegröße wie eine schmale Infokarte, nicht die volle Textbreite – die
+   meisten eingebetteten Seiten (Erklärgrafik, kleines Werkzeug) sind selbst schmal angelegt.
+   "![…](datei.html#w=800)" setzt eine andere Breite, wie bei Bildern schon üblich. */
+.html-embed { display: block; width: 100%; max-width: 560px; height: 600px; margin: .8em 0; border: 1px solid var(--linie); border-radius: var(--radius-gross); }
 /* Der Sortierpfeil steht im rechten Innenabstand der Kopfzelle, nicht im Textfluss: Als
    Inhalt machte er die Spalte um gut zwanzig Pixel breiter als dieselbe Tabelle im Editor,
    wo es ihn nicht gibt – die Spaltengrenzen sprangen beim Umschalten. */
