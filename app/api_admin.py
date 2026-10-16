@@ -8,6 +8,9 @@ from .auth import (EMAIL_RE, MIN_PW, MODULE, STUFEN, VERWALTUNG, admin_required,
                    current_user, eingabefehler_abfangen, json_body, public_user, send_reset_mail)
 from .images import delete_avatar
 from .mailer import send_mail, versand
+from .material.services import Abgelehnt
+from .material.services import journal as mat_journal
+from .material.services.rechte import rollen_lesen
 from werkzeug.security import generate_password_hash
 
 bp = Blueprint("admin", __name__, url_prefix="/api/admin")
@@ -15,7 +18,9 @@ eingabefehler_abfangen(bp)
 
 
 # Vorgabe für neue Konten: Mitglied in Spots und Wiki, sonst nichts.
-VORGABE = {"karte": 1, "wiki": 1, "pruefungen": 0, "verwaltung": 0}
+VORGABE = {"karte": 1, "wiki": 1, "pruefungen": 0, "material": 0, "verwaltung": 0}
+# Was am Konto zum Modul Material gehört – Änderungen daran stehen im Journal des Moduls.
+MATERIAL_SPALTEN = ("recht_material", "mat_pruefer", "mat_katalog", "urkundennummer")
 
 
 def _rechte_lesen(d, basis):
@@ -142,13 +147,21 @@ def create_user():
         return jsonify(error=f"Das Passwort muss mindestens {MIN_PW} Zeichen lang sein."), 400
     try:
         rechte = _rechte_lesen(d, VORGABE) if "rechte" in d else dict(VORGABE)
+        mat = rollen_lesen(d, {}, rechte)
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
-    uid = db.execute(
-        "INSERT INTO users (email, password_hash, name, gliederung, phone, recht_karte, recht_wiki, "
-        "recht_pruefungen, recht_verwaltung, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (email, generate_password_hash(pw), (d.get("name") or "").strip(), (d.get("gliederung") or "").strip(),
-         (d.get("phone") or "").strip(), *(rechte[m] for m in MODULE), db.now()))
+    except Abgelehnt as exc:
+        return jsonify(error=str(exc)), exc.code
+    spalten = [f"recht_{m}" for m in MODULE] + list(mat)
+    with db.transaction():
+        uid = db.execute(
+            f"INSERT INTO users (email, password_hash, name, gliederung, phone, {', '.join(spalten)}, created_at) "
+            f"VALUES ({','.join('?' * (6 + len(spalten)))})",
+            (email, generate_password_hash(pw), (d.get("name") or "").strip(), (d.get("gliederung") or "").strip(),
+             (d.get("phone") or "").strip(), *(rechte[m] for m in MODULE), *mat.values(), db.now()))
+        neu = dict(mat, recht_material=rechte["material"])
+        if neu["recht_material"] or neu["mat_pruefer"] or neu["mat_katalog"]:
+            mat_journal.eintragen("user", uid, "rollen", None, dict(neu, email=email))
     u = db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True)
     mailed = False
     if d.get("send_invite"):
@@ -179,17 +192,23 @@ def update_user(uid):
         if other and other["id"] != uid:
             return jsonify(error="Diese E-Mail-Adresse wird bereits verwendet."), 409
         vals["email"] = email
-    if "rechte" in d:
+    if "rechte" in d or any(k in d for k in ("mat_pruefer", "mat_katalog", "urkundennummer")):
+        rechte = {m: u[f"recht_{m}"] for m in MODULE}
         try:
-            rechte = _rechte_lesen(d, {m: u[f"recht_{m}"] for m in MODULE})
+            if "rechte" in d:
+                rechte = _rechte_lesen(d, rechte)
+            mat = rollen_lesen(d, u, rechte)
         except ValueError as exc:
             return jsonify(error=str(exc)), 400
+        except Abgelehnt as exc:
+            return jsonify(error=str(exc)), exc.code
         # Wer sich selbst die Verwaltung nähme, käme an diese Seite nicht mehr heran – und wäre das
         # letzte Verwaltungskonto, stünde die Anwendung ohne da.
         if uid == current_user()["id"] and rechte["verwaltung"] < VERWALTUNG:
             return jsonify(error="Du kannst dir nicht selbst die Verwaltungsrechte entziehen."), 400
         for m in MODULE:
             vals[f"recht_{m}"] = rechte[m]
+        vals.update(mat)
     if "active" in d:
         active = 1 if d.get("active") else 0
         if uid == current_user()["id"] and not active:
@@ -201,7 +220,11 @@ def update_user(uid):
         vals["password_hash"] = generate_password_hash(d["password"])
     if vals:
         sets = ", ".join(f"{k} = ?" for k in vals)
-        db.execute(f"UPDATE users SET {sets} WHERE id = ?", (*vals.values(), uid))
+        with db.transaction():
+            db.execute(f"UPDATE users SET {sets} WHERE id = ?", (*vals.values(), uid))
+            # Wer Prüfer ist und mit welcher Urkundennummer, gehört zur Nachvollziehbarkeit der Prüfungen.
+            mat_journal.aenderung("user", uid, {k: u[k] for k in MATERIAL_SPALTEN},
+                                  {k: vals.get(k, u[k]) for k in MATERIAL_SPALTEN}, action="rollen")
     if "password_hash" in vals:
         # Ein Admin setzt das Passwort meist genau dann neu, wenn sich jemand ausgesperrt hat –
         # ohne das Löschen der Fehlversuche bliebe die Anmeldung trotzdem gesperrt.

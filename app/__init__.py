@@ -15,7 +15,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import safe_join
 
-from . import api_admin, api_albums, api_pruefungen, api_wiki, auth, db, einstellungen, medienpflege
+from . import api_admin, api_albums, api_pruefungen, api_wiki, auth, db, einstellungen, material, medienpflege
 from .images import AVATAR_MAX_BYTES, EMBED_EXT, VIDEO_EXT
 
 
@@ -403,6 +403,8 @@ def create_app():
         ADMIN_NOTIFY_EMAIL=os.environ.get("ADMIN_NOTIFY_EMAIL", ""),
         LOGIN_SLIDESHOW=_env_bool("LOGIN_SLIDESHOW", True),
         SPRACHEINGABE=_env_bool("SPRACHEINGABE", True),     # Diktat an den Kommentarfeldern der Prüfungen
+        # Modul Material: Ab wie vielen Tagen vor der Fälligkeit ein Artikel „bald fällig“ heißt.
+        MATERIAL_BALD_FAELLIG_TAGE=int(os.environ.get("MATERIAL_BALD_FAELLIG_TAGE", "30")),
         PUBLIC_HOST=_idna(os.environ.get("PUBLIC_HOST", "wiki.strömis.de")),
         PUBLIC_URL=os.environ.get("PUBLIC_URL", "https://wiki.strömis.de").rstrip("/"),
         SESSION_COOKIE_HTTPONLY=True,
@@ -458,6 +460,9 @@ def create_app():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     db.init_app(app)
+    # Das Modul Material bringt Schema, Blueprints und Kommandozeile selbst mit; es meldet seine
+    # Migration an, bevor die Datenbank eingerichtet wird.
+    material.init_app(app)
     with app.app_context():
         new_tables = db.init_db()
         if new_tables & {"wiki_page_files", "wiki_page_links"}:
@@ -500,6 +505,8 @@ def create_app():
     # gelesen. Die Filmgrenze wäre hier eine Einladung, den Arbeitsprozess mit Gigabytes zu füllen.
     IMPORT_MAX_BYTES = 25 * 1024 * 1024
     IMPORT_ROUTEN = ("pruefungen.import_vorschau", "pruefungen.import_uebernehmen")
+    # Modul Material: Produkt- und Ordnerfotos, Herstellerdokumente – eigene, feste Grenzen.
+    MATERIAL_UPLOADS = material.upload_grenzen()
 
     @app.before_request
     def einstellungen_anwenden():
@@ -518,6 +525,8 @@ def create_app():
         gigabyteweise Daten, bevor überhaupt eine Prüfung greift."""
         if request.endpoint in ("auth.set_avatar", "pruefungen.upload_tn_bild"):
             limit = AVATAR_MAX_BYTES
+        elif request.endpoint in MATERIAL_UPLOADS:
+            limit = MATERIAL_UPLOADS[request.endpoint]
         elif request.endpoint in IMPORT_ROUTEN:
             limit = IMPORT_MAX_BYTES
         elif request.endpoint in GROSSE_UPLOADS:

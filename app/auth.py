@@ -98,10 +98,14 @@ def _im_hintergrund(funktion, *args):
 #   wiki        Mitglied: eigene und freigegebene Seiten; Verwaltung: alle Seiten, beschränkte lesen,
 #               veröffentlichen, HTML-Bausteine, Ersteller ändern, endgültig löschen.
 #   pruefungen  Mitglied: Prüfungen abnehmen; Verwaltung: Kataloge pflegen, jeden Lehrgang leiten.
+#   material    Mitglied: Bestand, Fälligkeiten, Lebensläufe und Protokolle ansehen (Führungskraft);
+#               Verwaltung: Materialwart – Ordner und Artikel pflegen, Prüfdurchgänge eröffnen.
+#               Quer dazu zwei Kennzeichen am Konto: Prüfer (Sachkundiger, nur mit Urkundennummer)
+#               und Produktkatalogpfleger – siehe app/material/services/rechte.py.
 #   verwaltung  Verwaltung: Nutzer, Rechte, Einstellungen – und damit alle Rechte überall; eine
 #               Mitglied-Stufe gibt es hier nicht.
 # Die Werte liegen als Spalten recht_<modul> am Nutzer (db.py); api_admin schreibt sie.
-MODULE = ("karte", "wiki", "pruefungen", "verwaltung")
+MODULE = ("karte", "wiki", "pruefungen", "material", "verwaltung")
 KEIN_ZUGRIFF, MITGLIED, VERWALTUNG = 0, 1, 2
 STUFEN = (KEIN_ZUGRIFF, MITGLIED, VERWALTUNG)
 
@@ -159,6 +163,13 @@ def public_user(u):
     out["reason"] = u.get("reason", "")
     out["avatar"] = avatar_url(u.get("avatar") or "")
     out["rechte"] = rechte_von(u)
+    # Modul Material: die beiden Kennzeichen, wie sie gespeichert sind, und die Urkundennummer.
+    # Was davon wirkt (Prüfer nur mit Urkundennummer, Katalog auch für die Verwaltung), entscheidet
+    # app/material/services/rechte.py.
+    out["mat_pruefer"] = bool(u.get("mat_pruefer"))
+    out["mat_katalog"] = bool(u.get("mat_katalog"))
+    out["urkundennummer"] = u.get("urkundennummer") or ""
+    out["unterschrift"] = bool(u.get("signature_png"))
     return out
 
 
@@ -174,6 +185,7 @@ def login_required(f):
 KEIN_ZUGANG = {"karte": "Für dein Konto sind die Spots nicht freigeschaltet.",
                "wiki": "Für dein Konto ist das Wiki nicht freigeschaltet.",
                "pruefungen": "Nur für Prüfer",
+               "material": "Für dein Konto ist das Modul Material nicht freigeschaltet.",
                "verwaltung": "Nur für die Verwaltung"}
 
 
@@ -323,7 +335,7 @@ def ensure_admin():
         try:
             db.execute(
                 "INSERT INTO users (email, password_hash, name, recht_karte, recht_wiki, recht_pruefungen, "
-                "recht_verwaltung, created_at) VALUES (?,?,?,2,2,2,2,?)",
+                "recht_material, recht_verwaltung, created_at) VALUES (?,?,?,2,2,2,2,2,?)",
                 (email, generate_password_hash(pw), "Administrator", db.now()))
             current_app.logger.info("Administrator %s angelegt.", email)
         except sqlite3.IntegrityError:
@@ -335,8 +347,8 @@ def ensure_admin():
     if u and u["recht_verwaltung"] != VERWALTUNG:
         # status mitziehen: ein noch wartendes Konto käme sonst trotz Verwaltungsrecht nicht an der
         # Anmeldung vorbei (login() weist 'pending' vor 'active' ab).
-        db.execute("UPDATE users SET recht_karte = 2, recht_wiki = 2, recht_pruefungen = 2, recht_verwaltung = 2, "
-                   "active = 1, status = 'active' WHERE id = ?", (u["id"],))
+        db.execute("UPDATE users SET recht_karte = 2, recht_wiki = 2, recht_pruefungen = 2, recht_material = 2, "
+                   "recht_verwaltung = 2, active = 1, status = 'active' WHERE id = ?", (u["id"],))
 
 
 # --- Endpunkte ---------------------------------------------------------------
@@ -412,12 +424,12 @@ def register():
             first = not db.query("SELECT 1 FROM users LIMIT 1", one=True)
             uid = db.execute(
                 "INSERT INTO users (email, password_hash, name, gliederung, phone, recht_karte, recht_wiki, "
-                "recht_pruefungen, recht_verwaltung, active, status, reason, created_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "recht_pruefungen, recht_material, recht_verwaltung, active, status, reason, created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 # Der allererste Nutzer bekommt überall Verwaltung; alle weiteren die Vorgabe
                 # (Mitglied in Spots und Wiki) und warten auf die Freigabe.
                 (email, pw_hash, name, gliederung, _einzeilig(sfield(d, "phone")),
-                 *((2, 2, 2, 2) if first else (1, 1, 0, 0)),
+                 *((2, 2, 2, 2, 2) if first else (1, 1, 0, 0, 0)),
                  1 if first else 0, "active" if first else "pending",
                  sfield(d, "reason").strip()[:2000], db.now()))
     except sqlite3.IntegrityError:

@@ -456,6 +456,15 @@ MIGRATIONS = [
     ("users", "recht_wiki", "INTEGER NOT NULL DEFAULT 1"),
     ("users", "recht_pruefungen", "INTEGER NOT NULL DEFAULT 0"),
     ("users", "recht_verwaltung", "INTEGER NOT NULL DEFAULT 0"),
+    # Modul Material: Stufe in der Matrix (1 = Führungskraft, lesend; 2 = Materialwart) und quer dazu
+    # zwei Kennzeichen – Prüfer (Sachkundiger, nur mit Urkundennummer) und Produktkatalogpfleger.
+    # Die Unterschrift legt der Prüfer einmal im Profil ab (PNG); beim Festschreiben einer Prüfung
+    # wird sie kopiert, damit eine spätere neue Unterschrift kein altes Protokoll verändert.
+    ("users", "recht_material", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "mat_pruefer", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "mat_katalog", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "urkundennummer", "TEXT NOT NULL DEFAULT ''"),
+    ("users", "signature_png", "BLOB"),
 ]
 
 # Was nach dem Anlegen einer Spalte einmalig mit den vorhandenen Zeilen geschieht. Nur der Prozess,
@@ -474,6 +483,9 @@ NACHARBEITEN = {
         "UPDATE users SET recht_pruefungen = CASE WHEN role = 'admin' THEN 2 WHEN is_pruefer = 1 THEN 1 ELSE 0 END",
     ("users", "recht_verwaltung"):
         "UPDATE users SET recht_verwaltung = CASE WHEN role = 'admin' THEN 2 ELSE 0 END",
+    # Wer schon alles verwaltet, verwaltet auch das neue Modul; alle anderen bekommen es erst von Hand.
+    ("users", "recht_material"):
+        "UPDATE users SET recht_material = CASE WHEN recht_verwaltung = 2 THEN 2 ELSE 0 END",
 }
 
 
@@ -493,6 +505,12 @@ OBSOLETE_COLUMNS = (("wiki_pages", "full_width"), ("users", "role"), ("users", "
                     ("photos", "pegel_url"), ("photos", "pegel_station"), ("photos", "pegel_gewaesser"),
                     ("photos", "pegel_entfernung_m"), ("photos", "pegel_quelle"), ("photos", "pegel_betreiber"),
                     ("photos", "pegel_wert"), ("photos", "pegel_einheit"), ("photos", "pegel_wert_zeit"))
+
+
+# Module mit eigenem Schema (app/material) melden hier eine Funktion an, die beim Start nach dem
+# Kernschema läuft – mit derselben Verbindung und unter derselben Wiederholung bei Sperren. So bleibt
+# db.py unabhängig von den Modulen, und ein Modul bringt seine Tabellen und deren Version selbst mit.
+SCHEMA_MODULE = []
 
 
 def init_db():
@@ -548,6 +566,8 @@ def _init_db_einmal():
         except sqlite3.Error:
             pass
     conn.commit()
+    for modul_migrieren in SCHEMA_MODULE:
+        modul_migrieren(conn)
     after = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     conn.close()
     return after - before

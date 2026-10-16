@@ -30,11 +30,12 @@
     { k: "karte", t: "Spots", hilfe: "Mitglied: eigene Alben anlegen und bearbeiten. Verwaltung: alle Alben." },
     { k: "wiki", t: "Wiki", hilfe: "Mitglied: eigene und freigegebene Seiten. Verwaltung: alle Seiten, beschränkte lesen, veröffentlichen, HTML-Bausteine, Ersteller ändern." },
     { k: "pruefungen", t: "Prüfungen", hilfe: "Mitglied: Prüfungen abnehmen (Prüfer). Verwaltung: zusätzlich Kataloge pflegen und jeden Lehrgang leiten." },
+    { k: "material", t: "Material", hilfe: "Mitglied: Bestand, Fälligkeiten, Lebensläufe und Protokolle ansehen (Führungskraft). Verwaltung: Materialwart – Ordner und Artikel pflegen. Prüfer und Katalogpflege sind eigene Häkchen im Dialog." },
     { k: "verwaltung", t: "Verwaltung", nurVoll: true,
       hilfe: "Verwaltung: Nutzer, Rechte und Einstellungen – schließt alle Rechte in allen Modulen ein." },
   ];
   const STUFEN = [[0, "–"], [1, "Mitglied"], [2, "Verwaltung"]];
-  const VORGABE = { karte: 1, wiki: 1, pruefungen: 0, verwaltung: 0 };   // neues Konto
+  const VORGABE = { karte: 1, wiki: 1, pruefungen: 0, material: 0, verwaltung: 0 };   // neues Konto
   const ERGIBT_SICH = "ergibt sich aus Verwaltung";
 
   /* Ein Auswahlfeld für die Stufe eines Moduls. Steht die Verwaltung auf „Verwaltung“, sind die
@@ -59,8 +60,19 @@
      die anderen drei Felder von selbst nach. */
   function zeichneRechte(tr, u) {
     MODULE.forEach((m) => {
-      tr.querySelector(`td.recht[data-modul="${m.k}"]`).innerHTML = rechtFeld(m, u.rechte, { eigenes: u.id === STROEMIS.user.id });
+      tr.querySelector(`td.recht[data-modul="${m.k}"]`).innerHTML = rechtZelle(m, u);
     });
+  }
+
+  /* Das Material-Feld trägt darunter die beiden Kennzeichen des Moduls. Gesetzt werden sie im
+     Dialog „Bearbeiten“ – der Prüfer braucht dort die Urkundennummer. */
+  function rechtZelle(m, u) {
+    const feld = rechtFeld(m, u.rechte, { eigenes: u.id === STROEMIS.user.id });
+    if (m.k !== "material") return feld;
+    const marken = [];
+    if (u.mat_pruefer) marken.push(`<span class="badge grey" title="Prüfer (Sachkundiger), Urkundennummer ${S.esc(u.urkundennummer)}">Prüfer</span>`);
+    if (u.mat_katalog) marken.push('<span class="badge grey" title="Produktkatalogpfleger">Katalog</span>');
+    return feld + (marken.length ? `<div class="recht-marken">${marken.join(" ")}</div>` : "");
   }
 
   async function load() {
@@ -79,7 +91,7 @@
         <td data-l="Name">${S.esc(u.name) || "<span class='muted'>–</span>"}${u.active ? "" : ' <span class="badge grey">deaktiviert</span>'}</td>
         <td class="mail" data-l="E-Mail">${S.esc(u.email)}</td>
         <td data-l="Gliederung">${S.esc(u.gliederung)}</td>
-        ${MODULE.map((m) => `<td class="recht" data-l="${m.t}" data-modul="${m.k}">${rechtFeld(m, u.rechte, { eigenes: u.id === STROEMIS.user.id })}</td>`).join("")}
+        ${MODULE.map((m) => `<td class="recht" data-l="${m.t}" data-modul="${m.k}">${rechtZelle(m, u)}</td>`).join("")}
         <td class="small" data-l="Zuletzt da">${letzterLogin(u)}</td>
         <td class="small" data-l="Inhalte">${u.page_count} Artikel, ${u.album_count} Alben, ${u.photo_count} Bilder</td>
         <td class="tabelle-aktionen"><div class="btn-row">
@@ -173,9 +185,17 @@
       <label>Telefon</label><input type="tel" id="u-phone" value="${S.esc(u.phone)}">
       <label>Rechte</label>
       <div class="rechte-reihe">${MODULE.map((m) => `<div><label for="u-r-${m.k}">${m.t}</label>${rechtFeld(m, rechte, { id: "u-r-" + m.k, eigenes })}</div>`).join("")}</div>
-      <div class="help">„–“ kein Zugriff · „Mitglied“ eigene Inhalte, bei Prüfungen: Prüfungen abnehmen ·
-        „Verwaltung“ alles im Modul. Verwaltung im Modul „Verwaltung“ schließt alle Rechte ein.
+      <div class="help">„–“ kein Zugriff · „Mitglied“ eigene Inhalte, bei Prüfungen: Prüfungen abnehmen, bei Material: lesen ·
+        „Verwaltung“ alles im Modul (bei Material: Materialwart). Verwaltung im Modul „Verwaltung“ schließt alle Rechte ein.
         Was eine Stufe genau umfasst, steht als Hinweis am Feld.</div>
+      <fieldset class="mat-rollen"><legend>Modul Material</legend>
+        <label class="inline"><input type="checkbox" id="u-mat-pruefer" ${u.mat_pruefer ? "checked" : ""}> Prüfer (Sachkundiger, Qualifikation 1012)</label>
+        <div class="field-row"><div><label for="u-urkunde">Urkundennummer</label><input type="text" id="u-urkunde" maxlength="40" value="${S.esc(u.urkundennummer || "")}"></div><div></div></div>
+        <div class="help">Ohne Urkundennummer keine Prüferrolle. Sie steht später auf jedem Prüfprotokoll; die Unterschrift legt der Prüfer selbst im Profil ab.
+          Auch die Verwaltung prüft nur mit eigenem Häkchen und eigener Urkundennummer.</div>
+        <label class="inline"><input type="checkbox" id="u-mat-katalog" ${u.mat_katalog ? "checked" : ""}> Produktkatalogpfleger – Kategorien, Produkte, Herstellerdokumente und Prüfformulare (plattformweit)</label>
+        <div class="help">Beides gibt mindestens Leserecht im Modul.</div>
+      </fieldset>
       <label>${u.id ? "Neues Passwort (leer lassen, um es zu behalten)" : "Passwort (leer lassen, um eines zu erzeugen)"}</label>
       <input type="text" id="u-pw" autocomplete="off">
       ${u.id ? `<label class="inline"><input type="checkbox" id="u-active" ${u.active ? "checked" : ""}> Konto aktiv</label>`
@@ -189,6 +209,8 @@
       name: body.querySelector("#u-name").value, gliederung: body.querySelector("#u-gl").value,
       email: body.querySelector("#u-email").value, phone: body.querySelector("#u-phone").value,
       password: body.querySelector("#u-pw").value || undefined, rechte,
+      mat_pruefer: body.querySelector("#u-mat-pruefer").checked, mat_katalog: body.querySelector("#u-mat-katalog").checked,
+      urkundennummer: body.querySelector("#u-urkunde").value,
     };
   }
 
@@ -196,6 +218,12 @@
      Verwaltung auf „Verwaltung“ stellt, sieht die drei anderen Felder sofort auf „Verwaltung“
      springen und erstarren – und bekommt beim Zurückstellen seine vorherigen Werte wieder. */
   function koppleRechte(body) {
+    // Prüfer und Katalogpfleger haben mindestens Leserecht im Modul Material – wer das Häkchen setzt,
+    // sieht das Feld gleich mitgehen, statt nach dem Speichern eine Meldung zu bekommen.
+    ["#u-mat-pruefer", "#u-mat-katalog"].forEach((sel) => body.querySelector(sel).addEventListener("change", (e) => {
+      const mat = body.querySelector("#u-r-material");
+      if (e.target.checked && mat.value === "0") mat.value = "1";
+    }));
     const chef = body.querySelector("#u-r-verwaltung");
     chef.addEventListener("change", () => {
       const voll = chef.value === "2";

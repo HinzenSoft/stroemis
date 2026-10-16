@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Material – strömis.de{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('material.static', filename='material.css') }}">
+{% endblock %}
+{% block body %}
+{# Eine Seite für alle Ansichten des Moduls (Dashboard, Prüfungen, Bestand, Katalog, Suche, Artikel …).
+   Welche gemeint ist, sagt data-ansicht; was das Konto darf, data-darf – die Oberfläche blendet danach
+   nur aus, der Server prüft jede Aktion selbst. Den Inhalt baut material.js aus /api/material. #}
+<main class="page breit mat" id="mat" data-ansicht="{{ ansicht }}" data-daten="{{ daten }}" data-darf="{{ darf }}">
+  <nav class="mat-nav" aria-label="Modul Material">
+    <a href="/material" data-nav="dashboard">Übersicht</a>
+    <a href="/material/pruefungen" data-nav="pruefungen">Prüfungen</a>
+    <a href="/material/bestand" data-nav="bestand">Bestand</a>
+    <a href="/material/katalog" data-nav="katalog">Katalog</a>
+    <form class="mat-suche" action="/material/suche" method="get" role="search">
+      <input type="search" name="q" placeholder="Serien-, Inventar-, Herstellernr." title="Serien-, Inventar- oder Herstellernummer – auch Teile davon" aria-label="Artikel suchen"
+             autocomplete="off" enterkeyhint="search">
+      <button class="btn small" type="submit">Suchen</button>
+    </form>
+  </nav>
+  <div id="mat-inhalt"><p class="help">Wird geladen …</p></div>
+</main>
+<dialog id="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('material.static', filename='material.js') }}"></script>{% endblock %}

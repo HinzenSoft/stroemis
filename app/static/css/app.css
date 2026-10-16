@@ -284,10 +284,15 @@ table.list .recht-wahl { font-size: .78rem; padding: 4px 2px 4px 4px; }
 #users td[data-l=Name], #users td[data-l=Gliederung] { overflow-wrap: anywhere; }
 /* Dieselben vier Felder im Dialog „Nutzer anlegen/bearbeiten“, in einer Reihe mit Überschrift
    je Modul – schmaler als die normale Beschriftung, weil vier davon nebeneinander stehen. */
-.rechte-reihe { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0 10px; }
+.rechte-reihe { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0 10px; }
 .rechte-reihe label { margin: 0 0 3px; font-size: var(--fs-klein); color: var(--grau); }
 .rechte-reihe select { padding-left: 6px; padding-right: 2px; }   /* vier „Verwaltung“ nebeneinander */
-@media (max-width: 480px) { .rechte-reihe { grid-template-columns: 1fr 1fr; row-gap: 8px; } }
+@media (max-width: 600px) { .rechte-reihe { grid-template-columns: 1fr 1fr; row-gap: 8px; } }
+/* Unter dem Material-Feld der Matrix: die beiden Kennzeichen des Moduls (Prüfer, Katalog). */
+.recht-marken { margin-top: 3px; display: flex; flex-wrap: wrap; gap: 3px; }
+/* Die Rollen des Moduls Material im Nutzerdialog – abgesetzt, weil sie quer zur Matrix stehen. */
+fieldset.mat-rollen { border: 1px solid var(--linie); padding: 4px 12px 10px; margin: 14px 0 4px; }
+fieldset.mat-rollen legend { font-weight: 700; font-size: .9rem; padding: 0 4px; }
 /* Auf schmalen Geräten wird aus der Tabelle eine Liste: je Nutzer eine Karte, die Spaltennamen
    stehen als Beschriftung davor, die Knöpfe darunter – statt sieben Spalten, die seitwärts
    aus dem Bild laufen und die Knöpfe außer Sicht schieben.

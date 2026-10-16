@@ -58,6 +58,17 @@
 - **Druckansicht „je TN“**: In der Bewertungsansicht „je Teilnehmendem“ zeigt „🖨 Druckansicht“ alle Prüfungsleistungen der gewählten Person auf einer eigenen Seite – mit Profilbild, freiem Kommentar sowie je Leistung Ergebnis, Zeit, Kommentar und den hochgeladenen Bildern/Videos. Drucken oder als PDF speichern.
 - Die Medien liegen in einem eigenen Ordner und werden nur an Prüfer ausgeliefert.
 
+**Material** (Ausrüstungsbestand und Prüfnachweise; nur mit Zugang zum Modul Material – Stand: Lieferung 1 von 4, siehe `CHANGELOG-Material.md`)
+- Verwaltet PSA gegen Absturz und Seiltechnik sowie Wasser-Material (Schwimmwesten, Wasserrettungshelme, Wurfsäcke, Neopren- und Trockenanzüge) aller Gliederungen in einer Instanz. Lampen, Pumpen, Funk, Verbrauchsmaterial, Ausleihe und Fahrzeuginventar gehören bewusst nie hinein – das Modul ersetzt Prüfkarte und Excel-Liste des Materialwarts, kein Lager.
+- **Rollen** (Nutzerverwaltung): Stufe im Modul Material – Mitglied = Führungskraft (lesend), Verwaltung = Materialwart. Dazu zwei Häkchen am Konto: **Prüfer** (Sachkundiger, nur mit Urkundennummer) und **Produktkatalogpfleger** (plattformweit). Die Verwaltung ist überall Materialwart und Katalogpfleger, Prüfer aber nur mit eigenem Häkchen und eigener Urkundennummer. Jede Rollenänderung steht im Journal des Moduls.
+- **Katalog**: Kategoriebaum mit Normen und Vorgaben, Produkte (Hersteller, Modell, Artikelnummer, Norm, Materialart, Prüfintervall, Lebensdauer) mit Dublettenprüfung auf Hersteller + Modell + Artikelnummer (Schreibweise egal, „-“ als Artikelnummer zählt als keine). Lebensdauer: Pflicht bei textil, verboten bei Metall/Hardware, bei „sonstiges“ nur mit Fundstelle der Herstellerangabe. Produktbild über die vorhandene Bildverarbeitung, Herstellerdokumente (PDF/Bild oder Link) mit Version, Gültigkeitsbeginn, neuer Version und Zurückziehen – ein Protokoll verweist später auf die am Prüftag gültige. Suche serverseitig mit Trigramm-Index und Seiten. Pflegen dürfen nur Verwaltung und Produktkatalogpfleger.
+- **Prüfformulare**: je Kategorie ein generisches, je Produkt optional ein spezifisches, das es ersetzt; versioniert, höchstens eine Version aktiv, eine benutzte Version wird nie mehr geändert. Prüfpunkte mit Gruppe, Art (Ja/Nein, Text, Datum, Zahl, Foto, Unterschrift), Pflicht, Sollwert und „kritisch“.
+- **Bestand**: Ordnerbaum, oben die Gliederungen, darunter frei verschachtelt Standorte, Fahrzeuge, Sets. Jede Gliederung bekommt die Systemordner „Gesperrt“ und „Ausgesondert“ (nicht umbenennbar, verschiebbar, löschbar; nichts kommt von Hand hinein). Artikel bekommen eine plattformweit eineindeutige Inventarnummer (`M-000001`) und – ohne Herstellernummer – eine eindeutige Seriennummer (`STR-000001`); beide werden nie wieder vergeben. Lebensende (nur textil) = Herstellung (Monat genügt) + Lebensdauer, nächste Prüfung als Vorschlag aus dem Intervall; beides lässt sich nur vorziehen. Mehrfachauswahl zum Verschieben, Journal mit Vorher/Nachher je Feld an Produkt, Artikel und Ordner.
+- **Prüfintervall**: Herstellerseite (Produkt, sonst Kategorie) und Organisation (Artikel, sonst nächster Ordner bis zur Gliederung) – es gilt das kürzere. Ein Ordner kann verschärfen, nicht verlängern. Wird das wirksame Intervall kürzer, ziehen Fälligkeiten hinter „heute + Intervall“ auf diese Grenze vor (mit Journaleintrag).
+- **Status** wird nie gespeichert, sondern abgeleitet: einsatzbereit, bald fällig (Einstellung `MATERIAL_BALD_FAELLIG_TAGE`, Vorgabe 30), überfällig, gesperrt, Lebensdauer erreicht, ausgesondert. Übersicht mit Zählung je Gliederung, Liste der fälligen Prüfungen.
+- **Suche** nach Serien-, Inventar- und Herstellernummer mit Teiltreffern; ein eindeutiger Treffer öffnet den Artikel direkt. Jeder Artikel hat eine Adresse `https://strömis.de/m/<token>` für QR-Code, NFC- oder RFID-Tag – sie führt über die Anmeldung zum Artikel.
+- Katalogimport für die Ergebnisse aus Phase 0: `flask --app "app:create_app()" material import-catalog datei.json` (Format in `CHANGELOG-Material.md`, Vorlage mit Kategorien und Normen in `docs/material-katalog-vorlage.json`).
+
 ## Schnellstart
 
 ```bash
@@ -217,6 +228,7 @@ an Administratoren.
 | `MAP_CENTER`, `MAP_ZOOM`, `TILE_URL`, `TOPO_URL`, `SAT_URL` | Kartenstart und Kachelquellen; `SAT_URL` ist das Luftbild und die Startansicht (leer = nur Straßenkarte) |
 | `SAT_LABELS_URL` | Beschriftungsebenen über dem Luftbild (Straßen, Orts- und Gewässernamen), mehrere durch Komma; leer = keine |
 | `TILE_ATTRIBUTION`, `TOPO_ATTRIBUTION`, `SAT_ATTRIBUTION` | Rechtehinweise unter der Karte (leer = Vorgaben von OSM, OpenTopoMap und Esri) |
+| `MATERIAL_BALD_FAELLIG_TAGE` | Modul Material: so viele Tage vor der nächsten Prüfung gilt ein Artikel als „bald fällig“ (Standard 30; auch unter „Verwaltung → Einstellungen“) |
 | `VIDEOPFLEGE` | `0` schaltet den Hintergrundlauf ab, der nach dem Start Bestandsvideos nach H.264 wandelt (Standard: an) |
 | `EINSTELLUNGEN_AUS` | `1` setzt alle im Browser gespeicherten Werte außer Kraft – dann gilt allein diese Datei |
 | `GEOCODE_URL` | Adresssuche beim Platzieren von Bildern (leer = abgeschaltet). Die öffentliche Nominatim-Adresse erlaubt eine Anfrage je Sekunde; wer viel sucht, betreibt eine eigene. |
@@ -368,7 +380,10 @@ python tests/test_smoke.py    # Rauchtest über die API (Login, Upload, EXIF, Re
                               # und Härtungstest (Freigaben, alte Adressen, Anmeldebremse, Grenzen)
 python tests/test_pruefungen.py         # Prüfungsbereich (Rechte, Kataloge, Excel-Import, Kopieren, Nachprüfung, Medien)
 python tests/test_pruefungen_import.py  # Excel-Erkennung
+python tests/test_material.py           # Modul Material (Migration, Rollen, Katalog, Ordner, Artikel, Suche, Journal, Import)
 python scripts/beispieldaten.py         # füllt ./data mit zwei erfundenen Prüfungs-Lehrgängen zum Ausprobieren
+python scripts/material_demo.py --demo  # füllt ./data mit DEMO-Katalog und DEMO-Bestand (nie für echte Prüfungen)
+flask --app "app:create_app()" material import-catalog katalog.json --trocken   # Katalogdatei prüfen
 scripts/sicherung.sh hand               # Datenordner aufs NAS sichern (siehe „Daten und Sicherung“)
 ```
 
@@ -400,6 +415,10 @@ app/
   images.py        EXIF (GPS, Höhe, Zeit), Ausrichtung, Thumbnails, HEIC, Videos nach H.264
   medienpflege.py  Nach dem Start im Hintergrund: Bestandsvideos wandeln, verwaiste Artikeldateien aufräumen (eine Sperre, ein Arbeiter)
   db.py            SQLite-Schema, Migrationen, Transaktionsklammer
+  material/        Modul Material, eigenständig: models.py (Tabellen mat_*, Schemaversion in mat_meta),
+                   routes.py (Seiten /material…, /m/<token>, Schnittstelle /api/material…, Medien),
+                   cli.py (flask material import-catalog), services/ (rechte, katalog, bestand, status,
+                   interval, search, nummern, qr, journal, importer), templates/, static/ (material.js, .css)
   mailer.py        SMTP-Versand (ohne SMTP_HOST landet die Mail im Log)
   templates/       Jinja-Seiten
   static/css/      app.css – ein Blatt für alle Ansichten; pruefungen.css nur für den Prüfungsbereich
@@ -420,6 +439,7 @@ tests/
   test_smoke.py    Rauch-, Härtungs- und Befundtest über die API (der Befundtest stellt die Fixes der Sicherheitsprüfung nach)
   test_pruefungen.py  Prüfungsbereich: Rechte, Kataloge, Import, Kopieren, Pflichtkommentar, Nachprüfung, Medien, Mängel
   test_pruefungen_import.py  Excel-Erkennung mit synthetischen Dateien
+  test_material.py Modul Material: Migration, Rollen, Katalog, Ordner, Artikel, Suche, Journal, Status, Import
   rundlauf.html    Rundlauf, Rückgängig-Verlauf und verbundene Zellen im Browser prüfen (Datei einfach öffnen)
   gleichstand.html Leseansicht und Editor nebeneinander messen (Datei einfach öffnen)
   nachgeholtes_speichern.html

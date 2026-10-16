@@ -1,0 +1,165 @@
+/* Modul Material – Gestaltung nach dem DLRG-Handbuch Corporate Design (Farben und Schrift aus app.css).
+   Statusfarben: grün einsatzbereit, gelb bald fällig, rot überfällig, dunkelrot Lebensdauer erreicht,
+   anthrazit gesperrt, grau ausgesondert – überall dieselben, in Marken, Kacheln und Zählern. */
+.mat { --mat-gesperrt: var(--schwarz); --mat-lebensdauer: var(--rot-dunkel); }
+
+/* Unternavigation des Moduls mit der Suchmaske für Nummern */
+.mat-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 4px; margin: -8px 0 18px;
+  border-bottom: 1px solid var(--linie); padding-bottom: 8px; }
+.mat-nav > a { padding: 6px 12px; color: var(--anthrazit); text-decoration: none; font-weight: 600;
+  border-bottom: 3px solid transparent; }
+.mat-nav > a:hover { color: var(--rot); }
+.mat-nav > a.aktiv { border-bottom-color: var(--rot); color: var(--rot); }
+.mat-suche { margin-left: auto; display: flex; gap: 6px; align-items: center; min-width: min(360px, 100%); }
+.mat-suche input { flex: 1; min-width: 0; }
+@media (max-width: 640px) { .mat-suche { margin-left: 0; width: 100%; } }
+
+.mat-leer { color: var(--grau); padding: 14px 0; }
+.mat-text { white-space: pre-wrap; }
+.mat-warn { color: var(--rot); font-weight: 600; }
+.mat-pfad { font-size: var(--fs-klein); color: var(--grau); margin-bottom: 6px; }
+.mat-pfad a { color: var(--grau); }
+.mat h1 .mat-status, .mat h1 .badge { vertical-align: middle; }
+
+/* Status als Marke – dieselbe Form wie .badge */
+.mat-status { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 8px;
+  border-radius: var(--radius-pille); white-space: nowrap; color: var(--weiss); background: var(--grau); }
+.mat-status.gross { font-size: .85rem; padding: 3px 12px; }
+.s-einsatzbereit.mat-status { background: var(--ok); }
+.s-bald_faellig.mat-status { background: var(--gelb); color: var(--anthrazit); }
+.s-ueberfaellig.mat-status { background: var(--rot); }
+.s-lebensdauer.mat-status { background: var(--mat-lebensdauer); }
+.s-gesperrt.mat-status { background: var(--mat-gesperrt); }
+.s-ausgesondert.mat-status { background: var(--grau-hell); color: var(--grau); border: 1px solid var(--linie); }
+
+/* Groß und unübersehbar: gesperrt, ausgesondert, Lebensdauer erreicht – auch nach einem QR-Scan */
+.mat-banner { padding: 12px 16px; font-weight: 700; margin: 0 0 14px; color: var(--weiss); letter-spacing: .01em; }
+.mat-banner.s-ausgesondert { background: var(--grau); }
+.mat-banner.s-gesperrt { background: var(--mat-gesperrt); }
+.mat-banner.s-lebensdauer { background: var(--mat-lebensdauer); }
+.mat-demo { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 6px; margin-left: 6px;
+  background: repeating-linear-gradient(45deg, var(--gelb), var(--gelb) 6px, #fff8a6 6px, #fff8a6 12px);
+  color: var(--anthrazit); border: 1px solid var(--gelb-dunkel); vertical-align: middle; }
+.mat-demo-banner { background: repeating-linear-gradient(45deg, var(--gelb), var(--gelb) 12px, #fff8a6 12px, #fff8a6 24px);
+  border: 2px solid var(--gelb-dunkel); padding: 10px 14px; font-weight: 700; margin: 0 0 14px; }
+
+/* Übersicht */
+.mat-kacheln { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 6px 0 10px; }
+.mat-kachel { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 1px solid var(--linie);
+  border-top: 4px solid var(--grau); text-decoration: none; color: var(--anthrazit); background: var(--weiss); }
+a.mat-kachel:hover { background: var(--grau-hell); }
+.mat-kachel strong { font-size: 1.7rem; line-height: 1.1; font-family: var(--font-marke); }
+.mat-kachel span { font-size: var(--fs-klein); color: var(--grau); }
+.mat-kachel.gesamt { border-top-color: var(--anthrazit); }
+.mat-kachel.s-einsatzbereit { border-top-color: var(--ok); }
+.mat-kachel.s-bald_faellig { border-top-color: var(--gelb-dunkel); }
+.mat-kachel.s-ueberfaellig { border-top-color: var(--rot); }
+.mat-kachel.s-lebensdauer { border-top-color: var(--mat-lebensdauer); }
+.mat-kachel.s-gesperrt { border-top-color: var(--mat-gesperrt); }
+
+/* Ordnerbaum */
+.mat-baum, .mat-baum ul, .mat-unterordner { list-style: none; margin: 0; padding: 0; }
+.mat-baum ul { margin-left: 14px; padding-left: 12px; border-left: 1px solid var(--linie); }
+.mat-baum li, .mat-unterordner li { padding: 4px 0; }
+.mat-baum li > a, .mat-unterordner li > a { font-weight: 600; }
+.mat-baum li.system > a, .mat-unterordner li.system > a { font-weight: 400; color: var(--grau); }
+.mat-unterordner li { border-bottom: 1px solid var(--linie); padding: 8px 0; }
+.mat-art { display: inline-block; font-size: var(--fs-marke); color: var(--grau); border: 1px solid var(--linie);
+  border-radius: var(--radius-pille); padding: 0 7px; margin-left: 6px; vertical-align: middle; font-weight: 400; }
+.mat-baum-zahl { display: inline-block; min-width: 1.6em; text-align: center; margin-left: 8px; font-size: var(--fs-klein);
+  color: var(--anthrazit); background: var(--grau-hell); border-radius: var(--radius-pille); padding: 0 6px; }
+.mat-zahl { display: inline-block; min-width: 1.5em; text-align: center; margin-left: 4px; font-size: var(--fs-marke);
+  font-weight: 700; color: var(--weiss); border-radius: var(--radius-pille); padding: 0 5px; }
+.mat-zahl.s-ueberfaellig { background: var(--rot); }
+.mat-zahl.s-lebensdauer { background: var(--mat-lebensdauer); }
+.mat-zahl.s-gesperrt { background: var(--mat-gesperrt); }
+.mat-zahl.s-bald_faellig { background: var(--gelb); color: var(--anthrazit); }
+.mat-wahl { max-height: 55vh; overflow: auto; border: 1px solid var(--linie); padding: 6px 10px; margin-top: 8px; }
+.mat-wahl .mat-baum li { padding: 0; }
+
+.mat-ordnerkopf { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 8px; }
+.mat-ordnerfoto { width: 120px; height: 120px; object-fit: cover; border: 1px solid var(--linie); }
+.mat-filter { flex-wrap: wrap; }
+
+/* Tabellen: Die Listen des Moduls teilen ihre Spalten nach dem Inhalt auf (Produktnamen sind lang,
+   Nummern kurz) – unter 860 px werden sie ohnehin zu Karten. Nur der Formular-Editor hat feste Spalten. */
+table.list.mat-tabelle { table-layout: auto; }
+table.list.mat-formtabelle { table-layout: fixed; }
+.mat-tabelle td { vertical-align: middle; }
+.mat-mini { width: 32px; height: 32px; object-fit: cover; vertical-align: middle; margin-right: 8px; border: 1px solid var(--linie); }
+.mat-wahlspalte { width: 34px; }
+table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspalte { padding-left: 4px; padding-right: 4px; }
+.mat-alt td { color: var(--grau); }
+.mat-hash { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.mat-seiten { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 12px 0; font-size: var(--fs-klein); }
+@media (max-width: 860px) { table.list td.mat-wahlspalte, table.list th.mat-wahlspalte { width: auto; } }
+
+/* Mehrfachauswahl: Die Leiste bleibt am unteren Rand stehen, solange etwas angehakt ist. */
+.mat-sammel { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--anthrazit); color: var(--weiss); padding: 10px 14px; margin-top: 10px; box-shadow: var(--schatten-leiste); z-index: 5; }
+.mat-sammel[hidden] { display: none; }
+
+/* Artikel und Produkt */
+.mat-artikelkopf { display: flex; gap: 18px; align-items: flex-start; margin: 4px 0 8px; }
+.mat-produktbild { width: 180px; height: 180px; object-fit: contain; border: 1px solid var(--linie); background: var(--weiss); }
+.mat-produktbild.leer { display: flex; align-items: center; justify-content: center; color: var(--grau);
+  font-size: var(--fs-klein); background: var(--grau-hell); }
+.mat-artikeltitel h1 { margin-bottom: 4px; }
+.mat-produktzeile { margin: 0 0 6px; font-size: 1.05rem; }
+.mat-spalten { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 0 28px; }
+.mat-daten { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 6px 14px; margin: 0; }
+.mat-daten dt { color: var(--grau); font-size: var(--fs-mittel); }
+.mat-daten dd { margin: 0; }
+.mat-qr { display: flex; gap: 6px; margin-bottom: 22px; }
+.mat-qr input { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; }
+.mat-doks { padding-left: 18px; }
+@media (max-width: 900px) { .mat-spalten { grid-template-columns: 1fr; } }
+@media (max-width: 560px) {
+  .mat-artikelkopf { flex-direction: column; }
+  .mat-produktbild { width: 100%; height: 200px; }
+  .mat-produktbild.leer { display: none; }        /* ohne Bild kein bildschirmhoher Platzhalter */
+  .mat-daten { grid-template-columns: 1fr; gap: 0 0; }
+  .mat-daten dd { margin-bottom: 8px; }
+}
+
+/* Journal mit Vorher/Nachher je Feld */
+.mat-journal { list-style: none; padding: 0; margin: 0; }
+.mat-journal > li { border-left: 3px solid var(--linie); padding: 6px 0 8px 12px; margin-bottom: 4px; }
+.mat-j-kopf { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: var(--fs-mittel); }
+.mat-j-zeit { color: var(--grau); font-size: var(--fs-klein); }
+.mat-diff { border-collapse: collapse; margin-top: 4px; font-size: var(--fs-klein); max-width: 100%; }
+.mat-diff th, .mat-diff td { border: 1px solid var(--linie); padding: 3px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.mat-diff thead th { background: var(--grau-hell); color: var(--grau); }
+.mat-diff tbody th { color: var(--grau); font-weight: 600; }
+.mat-wertliste { margin: 0; padding-left: 16px; }
+.mat-auf > summary { cursor: pointer; font-weight: 700; padding: 6px 0; }
+
+/* Artikel anlegen */
+.mat-formular { max-width: 720px; }
+.mat-produktwahl { position: relative; }
+.mat-treffer { display: flex; flex-direction: column; border: 1px solid var(--linie); border-top: 0; }
+.mat-treffer:empty { display: none; }
+.mat-treffer-zeile { display: flex; align-items: center; gap: 6px; text-align: left; background: var(--weiss); border: 0;
+  border-bottom: 1px solid var(--linie); padding: 8px 10px; font: inherit; cursor: pointer; }
+.mat-treffer-zeile:hover, .mat-treffer-zeile:focus { background: var(--grau-hell); }
+.mat-treffer .help { padding: 6px 10px; margin: 0; }
+.mat-gewaehlt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px; margin-top: 6px;
+  border: 1px solid var(--linie); border-left: 4px solid var(--ok); }
+.mat-knoepfe { margin-top: 18px; }
+
+/* Katalog */
+.mat-katalog { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); gap: 24px; align-items: start; }
+.mat-katalog aside h2 { margin-top: 0; }
+.mat-katbaum a.aktiv { color: var(--rot); text-decoration: underline; }
+.mat-katbaum li > a { font-weight: 600; }
+.mat-formmarke { font-size: var(--fs-marke); margin-left: 6px; }
+.mat-katknoepfe { margin-top: 10px; }
+#kat-q { margin-bottom: 10px; }
+@media (max-width: 860px) { .mat-katalog { grid-template-columns: 1fr; } }
+
+/* Prüfformular */
+.mat-formtabelle input[type=text], .mat-formtabelle select { width: 100%; }
+.mat-formtabelle td { vertical-align: top; }
+.mat-formtabelle .btn-row { margin-top: 4px; gap: 2px; }
+.mat-formtabelle .btn.ghost.small { padding: 2px 8px; }
+.mat-versionen { padding-left: 18px; }

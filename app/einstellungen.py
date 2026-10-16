@@ -94,6 +94,12 @@ FELDER = [
                "Die Erkennung übernimmt der Browser; Chrome und Safari können das Audio dafür an "
                "Google bzw. Apple senden. Aus, wenn der Datenschutz das nicht zulässt."),
 
+    # --- Material ---------------------------------------------------------------------------
+    Feld("MATERIAL_BALD_FAELLIG_TAGE", "Material", "„Bald fällig“ ab … Tagen vor der Prüfung", art="zahl",
+         wandeln=lambda roh: max(0, min(365, int(str(roh).strip()))) if str(roh).strip().isdigit() else None,
+         hilfe="So viele Tage vor der nächsten Prüfung steht ein Artikel im Dashboard und in den Listen als "
+               "„bald fällig“. Vorgabe 30.", platzhalter="30"),
+
     # --- E-Mail -----------------------------------------------------------------------------
     Feld("MAIL_FROM", "E-Mail", "Absender",
          hilfe="Name und Adresse, wie sie beim Empfänger stehen. Die Domain dahinter entscheidet "

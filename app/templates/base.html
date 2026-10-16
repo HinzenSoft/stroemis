@@ -24,6 +24,7 @@
     {% if rechte.wiki %}<a href="/" class="{% if active == 'wiki' %}active{% endif %}">Wiki</a>{% endif %}
     {% if rechte.karte %}<a href="/karte" class="{% if active == 'map' %}active{% endif %}">Spots</a>{% endif %}
     {% if rechte.pruefungen %}<a href="/pruefungen" class="{% if active == 'pruefungen' %}active{% endif %}">Prüfungen</a>{% endif %}
+    {% if rechte.material %}<a href="/material" class="{% if active == 'material' %}active{% endif %}">Material</a>{% endif %}
     {% if rechte.verwaltung %}<a href="/admin" class="{% if active == 'admin' %}active{% endif %}">Verwaltung</a>{% endif %}
     <a href="/profil" class="{% if active == 'profile' %}active{% endif %}"><span class="user">{{ user.name or user.email }}</span>&nbsp;Profil</a>
     <button type="button" id="logout">Abmelden</button>

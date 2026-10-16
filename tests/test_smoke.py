@@ -786,7 +786,7 @@ def test_haertung():
         red, red_id = member("redakteur@example.org")
         assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"karte": 2, "wiki": 2}}).status_code == 200
         assert [u["rechte"] for u in adm.get("/api/admin/users").json["users"]
-                if u["email"] == "redakteur@example.org"] == [{"karte": 2, "wiki": 2, "pruefungen": 0, "verwaltung": 0}]
+                if u["email"] == "redakteur@example.org"] == [{"karte": 2, "wiki": 2, "pruefungen": 0, "material": 0, "verwaltung": 0}]
         rseite = c1.post("/api/wiki/pages", json={"title": "Fremde Seite", "format": "markdown",
                                                   "content": "# Fremde Seite\n\nText"}).json["page"]
         c1.put(f"/api/wiki/pages/{rseite['id']}/restrict", json={"read_restricted": True})
@@ -1791,9 +1791,9 @@ def test_rechte():
             return c, uid
 
         # Der Administrator aus der .env hat überall Verwaltung; ein neues Konto die Vorgabe.
-        assert adm.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "verwaltung": 2}
+        assert adm.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "material": 2, "verwaltung": 2}
         c1, uid1 = member("a@example.org")
-        assert c1.get("/api/me").json["user"]["rechte"] == {"karte": 1, "wiki": 1, "pruefungen": 0, "verwaltung": 0}
+        assert c1.get("/api/me").json["user"]["rechte"] == {"karte": 1, "wiki": 1, "pruefungen": 0, "material": 0, "verwaltung": 0}
         assert c1.get("/").status_code == 200 and c1.get("/karte").status_code == 200
         assert c1.get("/pruefungen").status_code == 403 and c1.get("/admin").status_code == 403
         assert c1.get("/api/pruefungen/lehrgaenge").status_code == 403
@@ -1828,7 +1828,7 @@ def test_rechte():
 
         # Verwaltung im Modul Verwaltung zieht alle Module nach – auch gespeichert, nicht nur wirksam.
         assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"verwaltung": 2}}).status_code == 200
-        assert c2.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "verwaltung": 2}
+        assert c2.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "material": 2, "verwaltung": 2}
         assert c2.get("/api/admin/users").status_code == 200 and c2.get("/api/pruefungen/lehrgaenge").status_code == 200
         # Niemand nimmt sich selbst die Verwaltung; andere Module am eigenen Konto gehen.
         assert c2.put(f"/api/admin/users/{uid2}", json={"rechte": {"verwaltung": 0}}).status_code == 400
@@ -1839,13 +1839,13 @@ def test_rechte():
         assert c2.put(f"/api/admin/users/{uid2}", json={"rechte": {"pruefungen": 0}}).status_code == 200
         assert c2.get("/api/me").json["user"]["rechte"]["pruefungen"] == 2
         assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"verwaltung": 0}}).status_code == 200
-        assert c2.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "verwaltung": 0}
+        assert c2.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "material": 2, "verwaltung": 0}
         assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"pruefungen": 0}}).status_code == 200
         assert c2.get("/api/me").json["user"]["rechte"]["pruefungen"] == 0
         # Anlegen mit Matrix, ohne Angabe die Vorgabe.
         r = adm.post("/api/admin/users", json={"email": "p@example.org", "password": "geheim12345",
                                                 "rechte": {"pruefungen": 1}})
-        assert r.status_code == 201 and r.json["user"]["rechte"] == {"karte": 1, "wiki": 1, "pruefungen": 1, "verwaltung": 0}
+        assert r.status_code == 201 and r.json["user"]["rechte"] == {"karte": 1, "wiki": 1, "pruefungen": 1, "material": 0, "verwaltung": 0}
         assert adm.post("/api/admin/users", json={"email": "q@example.org", "password": "geheim12345",
                                                    "rechte": {"verwaltung": 1}}).status_code == 400
 
@@ -1868,10 +1868,11 @@ def test_rechte():
         with app.app_context():
             spalten = [r["name"] for r in db_mod.query("PRAGMA table_info(users)")]
             assert "role" not in spalten and "is_pruefer" not in spalten and "recht_wiki" in spalten, spalten
-            stand = {u["email"]: (u["recht_karte"], u["recht_wiki"], u["recht_pruefungen"], u["recht_verwaltung"])
+            stand = {u["email"]: (u["recht_karte"], u["recht_wiki"], u["recht_pruefungen"], u["recht_verwaltung"],
+                                   u["recht_material"])
                      for u in db_mod.query("SELECT * FROM users")}
-        assert stand == {"admin@example.org": (2, 2, 2, 2), "red@example.org": (2, 2, 1, 0),
-                         "nu@example.org": (1, 1, 1, 0), "gast@example.org": (1, 1, 0, 0)}, stand
+        assert stand == {"admin@example.org": (2, 2, 2, 2, 2), "red@example.org": (2, 2, 1, 0, 0),
+                         "nu@example.org": (1, 1, 1, 0, 0), "gast@example.org": (1, 1, 0, 0, 0)}, stand
     print("Rechte-Test bestanden.")
 
 

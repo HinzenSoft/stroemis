@@ -12,9 +12,10 @@
   <section id="bereich-nutzer">
   <section id="pending" class="section"></section>
   <p class="help">Rechte gelten je Modul: „–“ heißt kein Zugriff, „Mitglied“ bearbeitet eigene Inhalte
-    (bei Prüfungen: nimmt Prüfungen ab), „Verwaltung“ darf im Modul alles. Wer die Verwaltung im Modul
-    „Verwaltung“ hat, hat sie überall. Änderungen in der Tabelle greifen sofort. Beim Löschen eines
-    Nutzers gehen seine Inhalte auf dich über.</p>
+    (bei Prüfungen: nimmt Prüfungen ab; bei Material: liest als Führungskraft), „Verwaltung“ darf im Modul
+    alles (bei Material: Materialwart). Prüfer und Produktkatalogpfleger des Moduls Material setzt „Bearbeiten“.
+    Wer die Verwaltung im Modul „Verwaltung“ hat, hat sie überall – nur Prüfer ist niemand von selbst.
+    Änderungen in der Tabelle greifen sofort. Beim Löschen eines Nutzers gehen seine Inhalte auf dich über.</p>
   <p class="help hidden" id="videopflege"></p>
   <table class="list" id="users">
     <!-- Feste Spaltenbreiten (table-layout: fixed in app.css): So passt die Tabelle in jeder
@@ -22,8 +23,8 @@
          brauchen je so viel Platz, dass „Verwaltung“ im Auswahlfeld ausgeschrieben steht (rund
          90 px); dafür ist die Seite breiter als sonst (.page.breit), und „Zuletzt da“ wie Inhalte
          sind schmaler und brechen in mehrere Zeilen um. -->
-    <colgroup><col style="width:10%"><col style="width:11%"><col style="width:9%"><col style="width:11.5%"><col style="width:11.5%"><col style="width:11.5%"><col style="width:11.5%"><col style="width:7%"><col style="width:6.5%"><col style="width:10.5%"></colgroup>
-    <thead><tr><th>Name</th><th>E-Mail</th><th>Gliederung</th><th>Spots</th><th>Wiki</th><th>Prüfungen</th><th>Verwaltung</th><th>Zuletzt da</th><th>Inhalte</th><th></th></tr></thead><tbody></tbody>
+    <colgroup><col style="width:9%"><col style="width:11%"><col style="width:8%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:6.5%"><col style="width:6%"><col style="width:9.5%"></colgroup>
+    <thead><tr><th>Name</th><th>E-Mail</th><th>Gliederung</th><th>Spots</th><th>Wiki</th><th>Prüfungen</th><th>Material</th><th>Verwaltung</th><th>Zuletzt da</th><th>Inhalte</th><th></th></tr></thead><tbody></tbody>
   </table>
   </section>
 
