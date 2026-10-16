@@ -33,5 +33,9 @@ jobs:
             git fetch origin main
             git checkout main
             git merge --ff-only origin/main
+            # Vor dem Neustart ein Schnappschuss des Datenordners auf das NAS (BACKUP_ZIEL in der
+            # .env des Servers). Schlägt die Sicherung fehl, bleibt der alte Stand laufen.
+            scripts/sicherung.sh deploy
+            scripts/sicherung-einrichten.sh
             docker compose up -d --build --remove-orphans
             docker image prune -f

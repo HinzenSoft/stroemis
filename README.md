@@ -101,7 +101,7 @@ Nach einem Update gilt: Wer die Anwendung im Browser offen hat, lädt die Seite 
 ### Automatisches Deployment
 
 `.github/workflows/deploy.yml` verbindet sich bei jedem Push nach `main` (oder von Hand über „Run workflow“ in
-GitHub) per SSH mit dem VPS und führt dort `git pull`, `docker compose up -d --build --remove-orphans` und
+GitHub) per SSH mit dem VPS und führt dort `git pull`, die Sicherung `scripts/sicherung.sh deploy` (siehe „Daten und Sicherung“), `docker compose up -d --build --remove-orphans` und
 `docker image prune -f` aus – der Build läuft also auf dem VPS selbst, ohne Umweg über eine Registry. Läuft
 gerade schon ein Deploy, wartet ein zweiter statt parallel zu starten. Die SSH-Action ist auf einen festen
 Commit gepinnt (Kommentar `# v1` daneben): Ein wanderndes Tag könnte sonst anderen Code mit dem Deploy-Schlüssel
@@ -157,6 +157,7 @@ an Administratoren.
 | `ALLOW_REGISTRATION` | Selbstregistrierung erlauben (`true`/`false`) |
 | `COOKIE_SECURE` | Cookies nur über HTTPS (`true` im Produktivbetrieb) |
 | `MAX_UPLOAD_MB` | Obergrenze je Hochladevorgang (Standard 5120 = 5 GB) |
+| `BACKUP_ZIEL`, `BACKUP_SSH_KEY`, `BACKUP_SSH_PORT`, `BACKUP_BEHALTEN_*` | Ziel und Aufbewahrung der stündlichen Sicherung (siehe „Daten und Sicherung“); nur `scripts/sicherung.sh` liest sie, nicht die Anwendung |
 | `MAX_REQUEST_MB` | Obergrenze einer gewöhnlichen Anfrage ohne Upload (Standard 1) – begrenzt auch die Länge einer Wiki-Seite. Gilt auch am Datenstrom; Anfragen ohne `Content-Length` (chunked) werden mit 411 abgewiesen |
 | `SITE_NAME` | Name der Anwendung in Betreffzeilen und Absendern |
 | `PUBLIC_HOST`, `PUBLIC_URL` | Subdomain und Adresse des öffentlichen Wikis |
@@ -240,11 +241,33 @@ verzichten. Bei transaktionalen Mails entscheidet fast ausschließlich die Absen
 
 ## Daten und Sicherung
 
-Alles liegt im Volume `/data`: `stroemis.db` (SQLite), `media/orig` (Originale), `media/web` und `media/thumb` (erzeugte Varianten), `media/wiki` (Wiki-Bilder), `media/avatar` (Profilbilder), `secret_key` und `tmp/` (Zwischendateien laufender Uploads und Exporte – muss nicht gesichert werden). Verwaiste Dateien unter `media/wiki` räumt der Hintergrundlauf nach einer Woche weg (siehe „Wie die Anwendung abgesichert ist“). Für ein Backup reicht es, das Volume zu kopieren, z. B.
+Alles liegt im Volume `/data`: `stroemis.db` (SQLite), `media/orig` (Originale), `media/web` und `media/thumb` (erzeugte Varianten), `media/wiki` (Wiki-Bilder), `media/avatar` (Profilbilder), `media/pruefungen` (Medien zu Prüfungen), `secret_key` und `tmp/` (Zwischendateien laufender Uploads und Exporte – muss nicht gesichert werden). Verwaiste Dateien unter `media/wiki` räumt der Hintergrundlauf nach einer Woche weg (siehe „Wie die Anwendung abgesichert ist“).
+
+**Sicherung auf ein NAS** übernimmt `scripts/sicherung.sh` – auf dem Host, nicht im Container (der ist schreibgeschützt und kennt kein NAS). Es läuft **stündlich** per Cron (Minute 7, eingetragen von `scripts/sicherung-einrichten.sh`, das der Deploy-Workflow mit aufruft) und **vor jedem Deploy** aus `.github/workflows/deploy.yml`; schlägt die Sicherung dort fehl, bricht das Deploy ab, und der alte Stand läuft weiter. Jeder Lauf legt auf dem Ziel einen Ordner `JJJJ-MM-TT_HHMM` an (Deploy- und Handläufe mit Zusatz `-deploy`/`-hand`), der den ganzen Datenordner enthält; unveränderte Dateien sind Hardlinks auf den vorigen Schnappschuss (`rsync --link-dest`). Ein Lauf überträgt also nur, was sich geändert hat – und trotzdem ist jeder Ordner für sich vollständig. `latest` zeigt auf den jüngsten. Die Datenbank wird nicht als Datei kopiert (sie läuft im WAL-Modus), sondern über SQLites Online-Backup in einen in sich stimmigen Stand gebracht und mit `quick_check` geprüft; `tmp/`, die WAL-Dateien und die Sperrdatei der Videopflege bleiben außen vor.
+
+Aufbewahrt werden alle Schnappschüsse der letzten `BACKUP_BEHALTEN_STUNDEN` (48), danach je Tag der erste für `BACKUP_BEHALTEN_TAGE` (30) und je Monat der erste für `BACKUP_BEHALTEN_MONATE` (12); der jüngste bleibt immer. Reste abgebrochener Läufe (`*.teil`) räumt der nächste Lauf nach einem Tag weg. Zwei Läufe zugleich gibt es nicht (Sperre unter `data/tmp/sicherung/`); der stündliche wartet, wenn gerade das Deploy sichert. Protokoll: `sicherung.log` neben `docker-compose.yml`.
+
+Einrichten:
 
 ```bash
-# docker-compose.yml bindet ./data ein – ein Archiv davon genügt (am besten bei gestopptem Container):
-sudo tar czf stroemis-$(date +%F).tgz --exclude=./tmp -C data .
+# Auf dem NAS: einen Nutzer mit SSH-Zugang und rsync, einen Zielordner, den öffentlichen Schlüssel des
+# Deploy-Nutzers vom VPS in dessen authorized_keys. Dann auf dem VPS in der .env:
+BACKUP_ZIEL=sicherung@nas.beispiel.de:/volume1/sicherung/stroemis
+BACKUP_SSH_KEY=~/.ssh/id_ed25519      # Schlüssel des Nutzers, unter dem Cron und Deploy laufen
+BACKUP_SSH_PORT=22
+# Einmal von Hand prüfen und den Cron eintragen:
+scripts/sicherung.sh hand && scripts/sicherung-einrichten.sh
+```
+
+Statt SSH geht auch ein lokaler Pfad (`BACKUP_ZIEL=/mnt/nas/stroemis`, etwa ein per NFS eingehängtes NAS); Hardlinks brauchen dort ein Dateisystem, das sie kann – auf SMB/CIFS wird jeder Schnappschuss eine volle Kopie. Ohne `BACKUP_ZIEL` tut das Skript nichts und meldet das nur; ein Deploy scheitert daran nicht. Auf dem Host braucht es `rsync`, `python3` und `flock`; kann der Deploy-Nutzer den Datenordner nicht lesen (er gehört uid 1000), zieht das Skript die Datenbank über `docker compose exec` aus dem laufenden Container.
+
+Zurückspielen:
+
+```bash
+docker compose down
+rsync -a --delete --exclude=/tmp/ sicherung@nas.beispiel.de:/volume1/sicherung/stroemis/2026-10-16_1207/ data/
+sudo chown -R 1000:1000 data
+docker compose up -d
 ```
 
 ## DLRG-Wortmarke einsetzen
@@ -298,6 +321,7 @@ python tests/test_smoke.py    # Rauchtest über die API (Login, Upload, EXIF, Re
 python tests/test_pruefungen.py         # Prüfungsbereich (Rechte, Kataloge, Excel-Import, Kopieren, Nachprüfung, Medien)
 python tests/test_pruefungen_import.py  # Excel-Erkennung
 python scripts/beispieldaten.py         # füllt ./data mit zwei erfundenen Prüfungs-Lehrgängen zum Ausprobieren
+scripts/sicherung.sh hand               # Datenordner aufs NAS sichern (siehe „Daten und Sicherung“)
 ```
 
 Die JavaScript-Bibliotheken liegen im Arbeitsbaum unter `app/static/vendor/` und werden im Docker-Build noch einmal frisch geladen und gegen `vendor.sha256` geprüft.
