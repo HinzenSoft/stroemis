@@ -14,7 +14,7 @@ from datetime import date
 from flask import Blueprint, current_app, jsonify, request
 
 from . import db
-from .auth import current_user, eingabefehler_abfangen, is_admin, json_body, pruefer_required, sfield
+from .auth import current_user, eingabefehler_abfangen, json_body, pruefer_required, sfield, verwaltet
 from .images import BildFehler, delete_avatar, delete_photo_files, store_avatar, store_upload
 
 bp = Blueprint("pruefungen", __name__, url_prefix="/api/pruefungen")
@@ -105,7 +105,7 @@ def _darf_leiten(lid):
     """Lehrgangsleitung ist, wer im Lehrgang mit dem Kennzeichen „Leitung“ eingetragen ist (über sein
     Nutzerkonto) – und die Administration. Mehrere Personen je Lehrgang sind möglich. Ein Freitext-
     Eintrag ohne Konto zählt nicht: Er ließe sich von jedem hineinschreiben."""
-    if is_admin():
+    if verwaltet("pruefungen"):
         return True
     uid = current_user()["id"]
     return bool(db.query("SELECT 1 FROM pruef_ausbilder WHERE lehrgang_id = ? AND user_id = ? AND ist_leitung = 1",
@@ -122,7 +122,7 @@ def _leitung_ergaenzen(ausbilder):
     bearbeiten. Administratoren brauchen den Eintrag nicht; wer sich selbst schon als Leitung
     eingetragen hat, bekommt keinen zweiten."""
     uid, name = _ich()
-    if is_admin() or any(a_uid == uid and leit for a_uid, _, _, leit in ausbilder):
+    if verwaltet("pruefungen") or any(a_uid == uid and leit for a_uid, _, _, leit in ausbilder):
         return ausbilder
     return [(uid, name, "", 1)] + list(ausbilder)
 
@@ -311,7 +311,7 @@ def _katalog_admin():
     """Kataloge sind lehrgangsübergreifend – es gibt keine Leitung, die sie verwalten könnte.
     Deshalb bleibt das Anlegen, Ändern und Löschen der Administration vorbehalten; jede:r Prüfer:in
     darf sie lesen und beim Anlegen eines Lehrgangs als Vorlage wählen."""
-    if not is_admin():
+    if not verwaltet("pruefungen"):
         raise Abgelehnt("Kataloge verwaltet nur die Administration.", 403)
 
 
@@ -691,7 +691,7 @@ def list_lehrgaenge():
     if q:
         rows = [r for r in rows if q in f"{r['titel']} {r['nummer']} {r['ort']}".casefold()]
     # Leitungsrecht für alle Zeilen in einer Abfrage – nicht eine je Lehrgang.
-    if is_admin():
+    if verwaltet("pruefungen"):
         leitung = {r["id"] for r in rows}
     else:
         leitung = {z["lehrgang_id"] for z in db.query(

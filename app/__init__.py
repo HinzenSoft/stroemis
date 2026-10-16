@@ -95,24 +95,30 @@ pages = Blueprint("pages", __name__)
 @pages.get("/")
 @auth.page_login_required
 def index():
-    """Startseite ist das Wiki."""
-    return render_template("wiki.html", user=auth.current_user(), slug="")
+    """Startseite ist das Wiki – oder das erste Modul, das die Rechte-Matrix dem Konto öffnet."""
+    if auth.nutzt("wiki"):
+        return render_template("wiki.html", user=auth.current_user(), slug="")
+    for modul, ziel in (("karte", "/karte"), ("pruefungen", "/pruefungen"), ("verwaltung", "/admin")):
+        if auth.nutzt(modul):
+            return redirect(ziel)
+    return render_template("error.html", code=403, message="Für dein Konto ist noch kein Bereich "
+                           "freigeschaltet. Bitte wende dich an die Verwaltung."), 403
 
 
 @pages.get("/karte")
-@auth.page_login_required
+@auth.page_modul_required("karte")
 def karte():
     return render_template("index.html", user=auth.current_user())
 
 
 @pages.get("/wiki")
-@auth.page_login_required
+@auth.page_modul_required("wiki")
 def wiki():
     return render_template("wiki.html", user=auth.current_user(), slug="")
 
 
 @pages.get("/wiki/<slug>")
-@auth.page_login_required
+@auth.page_modul_required("wiki")
 def wiki_page(slug):
     return render_template("wiki.html", user=auth.current_user(), slug=slug)
 
@@ -319,6 +325,12 @@ def media(kind, filename):
     if not public and not auth.current_user():
         # Anhänge öffentlicher Wiki-Seiten dürfen ohne Login geladen werden
         abort(401)
+    # Medien gehören zu ihrem Modul: Bilder der Spots nur mit Zugang zu den Spots, Artikeldateien
+    # nur mit Zugang zum Wiki (oder öffentlich). Profilbilder sieht jeder Angemeldete.
+    if kind in ("orig", "web", "thumb") and not auth.nutzt("karte"):
+        abort(403)
+    if kind == "wiki" and not public and not auth.nutzt("wiki"):
+        abort(403)
     # Ein Profilbild ist eine Angabe zur Person: Wer es entfernt, soll es nicht wochenlang aus
     # dem eigenen Zwischenspeicher weiterbekommen. Eine Stunde genügt, um die Autorenzeilen
     # eines Rundgangs durchs Wiki abzudecken. Öffentliche Anhänge einen Tag: Die dürfen in
@@ -555,6 +567,7 @@ def create_app():
     @app.context_processor
     def inject():
         return {"cfg": app.config, "is_admin": auth.is_admin(), "is_pruefer": auth.is_pruefer(),
+                "rechte": auth.rechte_von(auth.current_user()) if auth.current_user() else {},
                 "csp_nonce": getattr(g, "csp_nonce", "")}
 
     @app.errorhandler(413)

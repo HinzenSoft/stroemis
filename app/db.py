@@ -14,7 +14,12 @@ CREATE TABLE IF NOT EXISTS users (
   name          TEXT NOT NULL DEFAULT '',
   gliederung    TEXT NOT NULL DEFAULT '',
   phone         TEXT NOT NULL DEFAULT '',
-  role          TEXT NOT NULL DEFAULT 'user',      -- 'user' | 'editor' | 'admin'
+  -- Rechte je Modul: 0 = kein Zugriff, 1 = Mitglied, 2 = Verwaltung (siehe auth.MODULE).
+  -- Verwaltung im Modul „verwaltung“ schließt alle anderen Rechte ein.
+  recht_karte      INTEGER NOT NULL DEFAULT 1,
+  recht_wiki       INTEGER NOT NULL DEFAULT 1,
+  recht_pruefungen INTEGER NOT NULL DEFAULT 0,
+  recht_verwaltung INTEGER NOT NULL DEFAULT 0,
   active        INTEGER NOT NULL DEFAULT 1,
   created_at    TEXT NOT NULL
 );
@@ -436,10 +441,6 @@ MIGRATIONS = [
     # Wann sich der Nutzer zuletzt angemeldet hat. Leer heißt: seit Einführung dieser Spalte
     # nicht mehr – ein Konto, das nie benutzt wird, sieht man der Liste sonst nicht an.
     ("users", "last_login", "TEXT"),
-    # Zusatzrecht „Prüfer“: kommt zur Rolle hinzu, ersetzt sie nicht. Ein Redakteur kann also
-    # zugleich Prüfungen abnehmen. Nur wer das Flag trägt, sieht den Bereich – auch ein Administrator
-    # muss es sich geben (lassen).
-    ("users", "is_pruefer", "INTEGER NOT NULL DEFAULT 0"),
     # Prüfungen, zweite Runde: Profilbild, freier Kommentar und Lehrgangsergebnis je Teilnehmenden.
     ("pruef_teilnehmer", "bild", "TEXT NOT NULL DEFAULT ''"),
     ("pruef_teilnehmer", "kommentar", "TEXT NOT NULL DEFAULT ''"),
@@ -449,6 +450,12 @@ MIGRATIONS = [
     ("pruef_teilnehmer", "ergebnis_am", "TEXT"),
     # Prüfungen: die Leitung ist ein eigenes Kennzeichen, nicht mehr nur ein Wort in der Funktion.
     ("pruef_ausbilder", "ist_leitung", "INTEGER NOT NULL DEFAULT 0"),
+    # Rechte-Matrix statt Rollen: je Modul eine Stufe (0 kein Zugriff, 1 Mitglied, 2 Verwaltung).
+    # Die Nacharbeit überträgt role/is_pruefer, danach fallen beide Spalten (OBSOLETE_COLUMNS).
+    ("users", "recht_karte", "INTEGER NOT NULL DEFAULT 1"),
+    ("users", "recht_wiki", "INTEGER NOT NULL DEFAULT 1"),
+    ("users", "recht_pruefungen", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "recht_verwaltung", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 # Was nach dem Anlegen einer Spalte einmalig mit den vorhandenen Zeilen geschieht. Nur der Prozess,
@@ -457,6 +464,16 @@ NACHARBEITEN = {
     # Bisher galt als Leitung, wessen Funktion „leit“ enthielt („Lehrgangsleitung“, „Leiter:in“).
     ("pruef_ausbilder", "ist_leitung"):
         "UPDATE pruef_ausbilder SET ist_leitung = 1 WHERE lower(funktion) LIKE '%leit%'",
+    # Administrator → überall Verwaltung; Redakteur → Verwaltung in Spots und Wiki (er durfte dort
+    # schon alles bearbeiten); Nutzer → Mitglied; das Prüfer-Häkchen → Mitglied in Prüfungen.
+    ("users", "recht_karte"):
+        "UPDATE users SET recht_karte = CASE WHEN role IN ('admin', 'editor') THEN 2 ELSE 1 END",
+    ("users", "recht_wiki"):
+        "UPDATE users SET recht_wiki = CASE WHEN role IN ('admin', 'editor') THEN 2 ELSE 1 END",
+    ("users", "recht_pruefungen"):
+        "UPDATE users SET recht_pruefungen = CASE WHEN role = 'admin' THEN 2 WHEN is_pruefer = 1 THEN 1 ELSE 0 END",
+    ("users", "recht_verwaltung"):
+        "UPDATE users SET recht_verwaltung = CASE WHEN role = 'admin' THEN 2 ELSE 0 END",
 }
 
 
@@ -471,7 +488,8 @@ DERIVED_TABLES = ("wiki_page_files", "wiki_page_links")
 # pegel_stationen: Die automatische Pegelzuordnung (PegelAlarm) ist wieder ausgebaut –
 # der Zugang zur Schnittstelle wurde verwehrt. Mit ihr gehen die Pegelspalten der Bilder.
 OBSOLETE_TABLES = ("wiki_labels", "pegel_stationen")
-OBSOLETE_COLUMNS = (("wiki_pages", "full_width"),
+# users.role / users.is_pruefer: abgelöst durch die Rechte-Matrix (recht_*), siehe MIGRATIONS.
+OBSOLETE_COLUMNS = (("wiki_pages", "full_width"), ("users", "role"), ("users", "is_pruefer"),
                     ("photos", "pegel_url"), ("photos", "pegel_station"), ("photos", "pegel_gewaesser"),
                     ("photos", "pegel_entfernung_m"), ("photos", "pegel_quelle"), ("photos", "pegel_betreiber"),
                     ("photos", "pegel_wert"), ("photos", "pegel_einheit"), ("photos", "pegel_wert_zeit"))
@@ -503,14 +521,6 @@ def _init_db_einmal():
         conn.execute(f"PRAGMA user_version = {DERIVED_VERSION}")
     for table in OBSOLETE_TABLES:
         conn.execute(f"DROP TABLE IF EXISTS {table}")
-    for table, column in OBSOLETE_COLUMNS:
-        # DROP COLUMN kennt SQLite erst ab 3.35. Ist es älter, bleibt die Spalte stehen –
-        # sie stört nicht, weil sie nirgends mehr gelesen wird.
-        try:
-            if column in [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]:
-                conn.execute(f"ALTER TABLE {table} DROP COLUMN {column}")
-        except sqlite3.Error:
-            pass
     before = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     conn.executescript(SCHEMA)
     for table, column, decl in MIGRATIONS:
@@ -527,6 +537,16 @@ def _init_db_einmal():
                 # haben. Nur genau diesen Fall abfangen, alles andere gehört gemeldet.
                 if "duplicate column" not in str(e).lower():
                     raise
+    # Erst nach den Migrationen: Die Nacharbeit zu neuen Spalten liest womöglich noch aus den
+    # abgelösten (role → recht_*).
+    for table, column in OBSOLETE_COLUMNS:
+        # DROP COLUMN kennt SQLite erst ab 3.35. Ist es älter, bleibt die Spalte stehen –
+        # sie stört nicht, weil sie nirgends mehr gelesen wird.
+        try:
+            if column in [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]:
+                conn.execute(f"ALTER TABLE {table} DROP COLUMN {column}")
+        except sqlite3.Error:
+            pass
     conn.commit()
     after = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     conn.close()

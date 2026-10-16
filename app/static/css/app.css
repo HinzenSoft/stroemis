@@ -272,6 +272,22 @@ table.list td.mail { overflow-wrap: anywhere; }
    die Marke selbst bricht nie um – „Redakteur“ lief deshalb quer über die Spalte „Inhalte“.
    Jetzt bleibt sie in ihrer Zelle und bricht im Notfall lieber im Wort. */
 table.list .badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; padding: 1px 6px; }
+/* Rechte-Matrix der Nutzerverwaltung: In jeder Zeile stehen vier Auswahlfelder nebeneinander,
+   ihre Spalten sind gut elf Prozent breit. Das normale Feld (8/10 px Polster, Tabellenschrift)
+   wäre darin zu breit für das Wort „Verwaltung“ – deshalb kleiner und ohne Rand zur Zelle.
+   Abgeschaltet heißt hier nicht „kaputt“, sondern „ergibt sich aus Verwaltung“: grau, aber lesbar. */
+table.list td.recht, #users th { padding-left: 4px; padding-right: 4px; }
+table.list .recht-wahl { font-size: .78rem; padding: 4px 2px 4px 4px; }
+.recht-wahl:disabled { color: var(--grau); background: var(--grau-hell); cursor: default; }
+/* Name und Gliederung sind schmaler als zuvor: Ein langer Nachname oder „Ortsgruppe“ bricht
+   notfalls im Wort, wie die E-Mail – statt in die Nachbarzelle zu laufen. */
+#users td[data-l=Name], #users td[data-l=Gliederung] { overflow-wrap: anywhere; }
+/* Dieselben vier Felder im Dialog „Nutzer anlegen/bearbeiten“, in einer Reihe mit Überschrift
+   je Modul – schmaler als die normale Beschriftung, weil vier davon nebeneinander stehen. */
+.rechte-reihe { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0 10px; }
+.rechte-reihe label { margin: 0 0 3px; font-size: var(--fs-klein); color: var(--grau); }
+.rechte-reihe select { padding-left: 6px; padding-right: 2px; }   /* vier „Verwaltung“ nebeneinander */
+@media (max-width: 480px) { .rechte-reihe { grid-template-columns: 1fr 1fr; row-gap: 8px; } }
 /* Auf schmalen Geräten wird aus der Tabelle eine Liste: je Nutzer eine Karte, die Spaltennamen
    stehen als Beschriftung davor, die Knöpfe darunter – statt sieben Spalten, die seitwärts
    aus dem Bild laufen und die Knöpfe außer Sicht schieben.
@@ -287,6 +303,12 @@ table.list .badge { max-width: 100%; white-space: normal; overflow-wrap: anywher
   table.list td[data-l]::before { content: attr(data-l) ": "; color: var(--grau); font-size: var(--fs-klein); }
   table.list td.tabelle-aktionen { padding-top: 8px; }
   table.list tr:hover td { background: none; }
+  /* Die vier Rechte-Felder einer Karte stehen als 2×2-Raster: Modulname darüber, Feld darunter.
+     Untereinander wären es vier Zeilen, die mehr Platz nähmen als der ganze übrige Nutzer. */
+  table.list td.recht { display: inline-block; width: calc(50% - 6px); padding: 4px 0; vertical-align: top; }
+  table.list td.recht[data-modul=karte], table.list td.recht[data-modul=pruefungen] { margin-right: 8px; }
+  table.list td.recht::before { display: block; content: attr(data-l); margin-bottom: 2px; }
+  table.list td.recht .recht-wahl { font-size: 16px; padding: 6px 8px; }   /* kein iOS-Zoom, Fingergröße */
 }
 
 /* Toast */
@@ -355,6 +377,11 @@ html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22
 .page { max-width: 860px; margin: 0 auto; padding: 28px 20px 60px;
   padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
 .page.narrow { max-width: 520px; }
+/* Die Nutzerverwaltung hat zehn Spalten, vier davon mit Auswahlfeldern von je rund 90 px: In
+   860 px passen sie nicht nebeneinander. Die Einstellungen darunter bleiben bei der gewohnten
+   Lesebreite – sonst zögen sich ihre Eingabefelder über die ganze Seite. */
+.page.breit { max-width: 1180px; }
+.page.breit #bereich-einstellungen { max-width: 820px; }
 .page-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 2px solid var(--anthrazit); padding-bottom: 8px; margin-bottom: 20px; }
 .section { margin: 26px 0; }
 .section h2 { border-bottom: 1px solid var(--linie); padding-bottom: 4px; }

@@ -109,7 +109,7 @@
      Prüfende bewerten, haken ab und kommentieren; Stammdaten, Leistungen, Löschen und das
      Lehrgangsergebnis gehören der Lehrgangsleitung und der Administration (darf_leiten). */
   const darfLeiten = () => !!(state.lehrgang && state.lehrgang.darf_leiten);
-  const istAdmin = () => !!(window.STROEMIS && STROEMIS.user && STROEMIS.user.role === "admin");
+  const istAdmin = () => !!(window.STROEMIS && STROEMIS.user && STROEMIS.user.rechte && STROEMIS.user.rechte.pruefungen === 2);
   // Derselbe Text wie im Server (409) – damit die Oberfläche nicht anders erklärt als die Antwort.
   const EINGEFROREN = "Für diese Person ist das Lehrgangsergebnis vermerkt – die Prüfungsdaten sind eingefroren. Die Lehrgangsleitung kann das Ergebnis aufheben.";
 

@@ -4,8 +4,8 @@ import secrets
 from flask import Blueprint, current_app, jsonify
 
 from . import db, einstellungen, medienpflege
-from .auth import (EMAIL_RE, MIN_PW, ROLLEN, admin_required, can_reset, clear_attempts, current_user,
-                   eingabefehler_abfangen, json_body, public_user, send_reset_mail)
+from .auth import (EMAIL_RE, MIN_PW, MODULE, STUFEN, VERWALTUNG, admin_required, can_reset, clear_attempts,
+                   current_user, eingabefehler_abfangen, json_body, public_user, send_reset_mail)
 from .images import delete_avatar
 from .mailer import send_mail, versand
 from werkzeug.security import generate_password_hash
@@ -14,9 +14,29 @@ bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 eingabefehler_abfangen(bp)
 
 
-def _rolle(wert):
-    """Unbekanntes wird zur einfachen Rolle – so kann kein Tippfehler Rechte verteilen."""
-    return wert if wert in ROLLEN else "user"
+# Vorgabe für neue Konten: Mitglied in Spots und Wiki, sonst nichts.
+VORGABE = {"karte": 1, "wiki": 1, "pruefungen": 0, "verwaltung": 0}
+
+
+def _rechte_lesen(d, basis):
+    """Stufen aus der Anfrage über den Bestand legen. Nur bekannte Module, nur 0/1/2 – ein Tippfehler
+    verteilt keine Rechte. Verwaltung kennt kein Mitglied, und Verwaltung im Modul Verwaltung zieht
+    alle anderen Module auf Verwaltung: So steht in der Matrix, was gilt."""
+    neu = dict(basis)
+    angaben = d.get("rechte")
+    if not isinstance(angaben, dict):
+        raise ValueError("„rechte“ muss ein Objekt mit den Modulen sein.")
+    for modul, wert in angaben.items():
+        if modul not in MODULE:
+            raise ValueError(f"Unbekanntes Modul „{modul}“.")
+        if isinstance(wert, bool) or wert not in STUFEN:
+            raise ValueError("Eine Stufe ist 0 (kein Zugriff), 1 (Mitglied) oder 2 (Verwaltung).")
+        if modul == "verwaltung" and wert == 1:
+            raise ValueError("Im Modul Verwaltung gibt es nur „kein Zugriff“ oder „Verwaltung“.")
+        neu[modul] = wert
+    if neu["verwaltung"] == VERWALTUNG:
+        neu = {m: VERWALTUNG for m in MODULE}
+    return neu
 
 
 @bp.post("/testmail")
@@ -120,11 +140,15 @@ def create_user():
     pw = d.get("password") or secrets.token_urlsafe(12)
     if len(pw) < MIN_PW:
         return jsonify(error=f"Das Passwort muss mindestens {MIN_PW} Zeichen lang sein."), 400
+    try:
+        rechte = _rechte_lesen(d, VORGABE) if "rechte" in d else dict(VORGABE)
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 400
     uid = db.execute(
-        "INSERT INTO users (email, password_hash, name, gliederung, phone, role, is_pruefer, created_at) "
-        "VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO users (email, password_hash, name, gliederung, phone, recht_karte, recht_wiki, "
+        "recht_pruefungen, recht_verwaltung, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (email, generate_password_hash(pw), (d.get("name") or "").strip(), (d.get("gliederung") or "").strip(),
-         (d.get("phone") or "").strip(), _rolle(d.get("role")), 1 if d.get("is_pruefer") else 0, db.now()))
+         (d.get("phone") or "").strip(), *(rechte[m] for m in MODULE), db.now()))
     u = db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True)
     mailed = False
     if d.get("send_invite"):
@@ -155,14 +179,17 @@ def update_user(uid):
         if other and other["id"] != uid:
             return jsonify(error="Diese E-Mail-Adresse wird bereits verwendet."), 409
         vals["email"] = email
-    if "role" in d:
-        role = _rolle(d.get("role"))
-        if uid == current_user()["id"] and role != "admin":
-            return jsonify(error="Du kannst dir nicht selbst die Administratorrechte entziehen."), 400
-        vals["role"] = role
-    if "is_pruefer" in d:
-        # Zusatzrecht neben der Rolle – darf auch beim eigenen Konto gesetzt und entzogen werden.
-        vals["is_pruefer"] = 1 if d.get("is_pruefer") else 0
+    if "rechte" in d:
+        try:
+            rechte = _rechte_lesen(d, {m: u[f"recht_{m}"] for m in MODULE})
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        # Wer sich selbst die Verwaltung nähme, käme an diese Seite nicht mehr heran – und wäre das
+        # letzte Verwaltungskonto, stünde die Anwendung ohne da.
+        if uid == current_user()["id"] and rechte["verwaltung"] < VERWALTUNG:
+            return jsonify(error="Du kannst dir nicht selbst die Verwaltungsrechte entziehen."), 400
+        for m in MODULE:
+            vals[f"recht_{m}"] = rechte[m]
     if "active" in d:
         active = 1 if d.get("active") else 0
         if uid == current_user()["id"] and not active:

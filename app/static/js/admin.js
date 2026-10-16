@@ -22,6 +22,47 @@
     return `<span class="${alt.trim()}" title="${S.esc(S.fmtDate(u.last_login, true))}">${text}</span>`;
   }
 
+  /* Rechte je Modul: Jeder Nutzer hat in jedem der vier Module eine Stufe – kein Zugriff,
+     Mitglied oder Verwaltung. Was die Stufe im Modul bedeutet, steht hier an EINER Stelle und
+     erscheint als Titel am Auswahlfeld, in der Tabelle wie im Dialog. Im Modul Verwaltung gibt
+     es kein „Mitglied“: Nutzer, Rechte und Einstellungen pflegt man ganz oder gar nicht. */
+  const MODULE = [
+    { k: "karte", t: "Spots", hilfe: "Mitglied: eigene Alben anlegen und bearbeiten. Verwaltung: alle Alben." },
+    { k: "wiki", t: "Wiki", hilfe: "Mitglied: eigene und freigegebene Seiten. Verwaltung: alle Seiten, beschränkte lesen, veröffentlichen, HTML-Bausteine, Ersteller ändern." },
+    { k: "pruefungen", t: "Prüfungen", hilfe: "Mitglied: Prüfungen abnehmen (Prüfer). Verwaltung: zusätzlich Kataloge pflegen und jeden Lehrgang leiten." },
+    { k: "verwaltung", t: "Verwaltung", nurVoll: true,
+      hilfe: "Verwaltung: Nutzer, Rechte und Einstellungen – schließt alle Rechte in allen Modulen ein." },
+  ];
+  const STUFEN = [[0, "–"], [1, "Mitglied"], [2, "Verwaltung"]];
+  const VORGABE = { karte: 1, wiki: 1, pruefungen: 0, verwaltung: 0 };   // neues Konto
+  const ERGIBT_SICH = "ergibt sich aus Verwaltung";
+
+  /* Ein Auswahlfeld für die Stufe eines Moduls. Steht die Verwaltung auf „Verwaltung“, sind die
+     übrigen drei Felder nur noch Anzeige: Der Server speichert dort ohnehin 2, und ein Feld, das
+     man umstellt und das sofort zurückspringt, wäre verwirrender als ein abgeschaltetes. Das
+     eigene Konto kann sich die Verwaltung nicht entziehen – der Server lehnt es ab, also wird
+     es gar nicht erst angeboten. */
+  function rechtFeld(m, rechte, opts) {
+    opts = opts || {};
+    rechte = rechte || {};
+    const voll = (rechte.verwaltung | 0) === 2;
+    let wert = rechte[m.k] | 0, aus = false, titel = m.hilfe;
+    if (m.k !== "verwaltung" && voll) { wert = 2; aus = true; titel = ERGIBT_SICH; }
+    if (m.k === "verwaltung" && opts.eigenes) { aus = true; titel = "Dein eigenes Konto: Die Verwaltung kannst du dir nicht selbst entziehen."; }
+    const stufen = STUFEN.filter(([v]) => !(m.nurVoll && v === 1));
+    return `<select class="recht-wahl" data-modul="${m.k}"${opts.id ? ` id="${opts.id}"` : ""} aria-label="${S.esc(m.t)}"
+      title="${S.esc(titel)}"${aus ? " disabled" : ""}>${stufen.map(([v, l]) => `<option value="${v}"${v === wert ? " selected" : ""}>${l}</option>`).join("")}</select>`;
+  }
+
+  /* Die vier Zellen einer Zeile neu zeichnen – nach jeder Antwort des Servers, ob Erfolg oder
+     Fehler: So zeigt die Zeile immer das, was gespeichert ist, und bei verwaltung = 2 ziehen
+     die anderen drei Felder von selbst nach. */
+  function zeichneRechte(tr, u) {
+    MODULE.forEach((m) => {
+      tr.querySelector(`td.recht[data-modul="${m.k}"]`).innerHTML = rechtFeld(m, u.rechte, { eigenes: u.id === STROEMIS.user.id });
+    });
+  }
+
   async function load() {
     try { users = (await S.api("/api/admin/users")).users; }
     catch (e) { S.toast("Die Nutzerliste ließ sich nicht laden: " + e.message, true); return; }
@@ -38,8 +79,7 @@
         <td data-l="Name">${S.esc(u.name) || "<span class='muted'>–</span>"}${u.active ? "" : ' <span class="badge grey">deaktiviert</span>'}</td>
         <td class="mail" data-l="E-Mail">${S.esc(u.email)}</td>
         <td data-l="Gliederung">${S.esc(u.gliederung)}</td>
-        <td class="rolle" data-l="Rolle">${u.role === "admin" ? '<span class="badge">Admin</span>'
-          : u.role === "editor" ? '<span class="badge">Redakteur</span>' : "Nutzer"}${u.is_pruefer ? ' <span class="badge grey" title="Zusatzrecht: darf Prüfungen abnehmen">Prüfer</span>' : ""}</td>
+        ${MODULE.map((m) => `<td class="recht" data-l="${m.t}" data-modul="${m.k}">${rechtFeld(m, u.rechte, { eigenes: u.id === STROEMIS.user.id })}</td>`).join("")}
         <td class="small" data-l="Zuletzt da">${letzterLogin(u)}</td>
         <td class="small" data-l="Inhalte">${u.page_count} Artikel, ${u.album_count} Alben, ${u.photo_count} Bilder</td>
         <td class="tabelle-aktionen"><div class="btn-row">
@@ -122,24 +162,20 @@
 
   function userForm(u) {
     u = u || {};
+    const rechte = u.rechte || VORGABE;
+    const eigenes = !!u.id && u.id === STROEMIS.user.id;
     return `
       <div class="field-row">
         <div><label>Name</label><input type="text" id="u-name" value="${S.esc(u.name)}"></div>
         <div><label>Gliederung</label><input type="text" id="u-gl" value="${S.esc(u.gliederung)}"></div>
       </div>
       <label>E-Mail-Adresse</label><input type="email" id="u-email" value="${S.esc(u.email)}" required>
-      <div class="field-row">
-        <div><label>Telefon</label><input type="tel" id="u-phone" value="${S.esc(u.phone)}"></div>
-        <div><label>Rolle</label><select id="u-role">
-          <option value="user" ${u.role !== "admin" && u.role !== "editor" ? "selected" : ""}>Nutzer</option>
-          <option value="editor" ${u.role === "editor" ? "selected" : ""}>Redakteur</option>
-          <option value="admin" ${u.role === "admin" ? "selected" : ""}>Administrator</option>
-        </select>
-        <div class="help">Redakteur: darf alle Seiten und Alben bearbeiten, aber keine Nutzer verwalten
-          und nichts ohne Anmeldung veröffentlichen.</div></div>
-      </div>
-      <label class="inline"><input type="checkbox" id="u-pruefer" ${u.is_pruefer ? "checked" : ""}> Prüfer – darf Prüfungen abnehmen (zusätzlich zur Rolle)</label>
-      <div class="help">Schaltet den Reiter „Prüfungen“ frei: Lehrgänge, Teilnehmende, Bewertungen und Medien. Gilt unabhängig von der Rolle – auch ein Administrator braucht das Häkchen.</div>
+      <label>Telefon</label><input type="tel" id="u-phone" value="${S.esc(u.phone)}">
+      <label>Rechte</label>
+      <div class="rechte-reihe">${MODULE.map((m) => `<div><label for="u-r-${m.k}">${m.t}</label>${rechtFeld(m, rechte, { id: "u-r-" + m.k, eigenes })}</div>`).join("")}</div>
+      <div class="help">„–“ kein Zugriff · „Mitglied“ eigene Inhalte, bei Prüfungen: Prüfungen abnehmen ·
+        „Verwaltung“ alles im Modul. Verwaltung im Modul „Verwaltung“ schließt alle Rechte ein.
+        Was eine Stufe genau umfasst, steht als Hinweis am Feld.</div>
       <label>${u.id ? "Neues Passwort (leer lassen, um es zu behalten)" : "Passwort (leer lassen, um eines zu erzeugen)"}</label>
       <input type="text" id="u-pw" autocomplete="off">
       ${u.id ? `<label class="inline"><input type="checkbox" id="u-active" ${u.active ? "checked" : ""}> Konto aktiv</label>`
@@ -147,18 +183,35 @@
   }
 
   function read(body) {
+    const rechte = {};
+    MODULE.forEach((m) => { rechte[m.k] = +body.querySelector("#u-r-" + m.k).value; });
     return {
       name: body.querySelector("#u-name").value, gliederung: body.querySelector("#u-gl").value,
       email: body.querySelector("#u-email").value, phone: body.querySelector("#u-phone").value,
-      role: body.querySelector("#u-role").value, password: body.querySelector("#u-pw").value || undefined,
-      is_pruefer: body.querySelector("#u-pruefer").checked,
+      password: body.querySelector("#u-pw").value || undefined, rechte,
     };
+  }
+
+  /* Im Dialog gilt dieselbe Regel wie in der Tabelle, nur ohne Server dazwischen: Wer die
+     Verwaltung auf „Verwaltung“ stellt, sieht die drei anderen Felder sofort auf „Verwaltung“
+     springen und erstarren – und bekommt beim Zurückstellen seine vorherigen Werte wieder. */
+  function koppleRechte(body) {
+    const chef = body.querySelector("#u-r-verwaltung");
+    chef.addEventListener("change", () => {
+      const voll = chef.value === "2";
+      MODULE.filter((m) => m.k !== "verwaltung").forEach((m) => {
+        const f = body.querySelector("#u-r-" + m.k);
+        if (voll) { f.dataset.vorher = f.value; f.value = "2"; f.disabled = true; f.title = ERGIBT_SICH; }
+        else { f.disabled = false; f.title = m.hilfe; if (f.dataset.vorher !== undefined) f.value = f.dataset.vorher; }
+      });
+    });
   }
 
   document.getElementById("btn-new-user").addEventListener("click", () => {
     S.dialog(`<h2>Nutzer anlegen</h2>${userForm()}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="u-save" type="button">Anlegen</button></div>`,
       (dlg, body) => {
+        koppleRechte(body);
         body.querySelector("#u-save").onclick = async (ev) => {
           const knopf = ev.currentTarget;
           if (knopf.disabled) return;          // Doppelklick legte den Nutzer zweimal an
@@ -179,6 +232,25 @@
       });
   });
 
+  /* Rechte direkt in der Tabelle ändern: ein Wechsel, ein PUT mit nur diesem Modul. Die Antwort
+     trägt die vollständigen Rechte – bei verwaltung = 2 also auch die drei nachgezogenen –, und
+     daraus wird die Zeile gezeichnet. Schlägt es fehl (etwa weil man sich selbst die Verwaltung
+     entzieht), bleibt der alte Stand und das Feld springt zurück. */
+  tbody.addEventListener("change", async (e) => {
+    const sel = e.target.closest("select[data-modul]");
+    if (!sel) return;
+    const tr = sel.closest("tr");
+    const u = users.find((x) => x.id === +tr.dataset.id);
+    if (!u) return;
+    sel.disabled = true;      // kein zweiter Wechsel, solange der erste unterwegs ist
+    try {
+      const r = await S.api(`/api/admin/users/${u.id}`, { method: "PUT", body: { rechte: { [sel.dataset.modul]: +sel.value } } });
+      u.rechte = (r.user && r.user.rechte) || Object.assign({}, u.rechte, { [sel.dataset.modul]: +sel.value });
+      S.toast("Gespeichert");
+    } catch (err) { S.toast(err.message, true); }
+    zeichneRechte(tr, u);
+  });
+
   tbody.addEventListener("click", async (e) => {
     const btn = e.target.closest("button[data-act]");
     if (!btn) return;
@@ -188,6 +260,7 @@
       S.dialog(`<h2>${S.esc(u.name || u.email)}</h2>${userForm(u)}
         <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="u-save" type="button">Speichern</button></div>`,
         (dlg, body) => {
+          koppleRechte(body);
           body.querySelector("#u-save").onclick = async (ev) => {
             const knopf = ev.currentTarget;
             if (knopf.disabled) return;

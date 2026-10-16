@@ -145,7 +145,7 @@ S.api = function (pfad, opts) {
 };
 // Was base.html sonst in die Seite schreibt: wer angemeldet ist. Ohne das stolperte der
 // Editoraufbau still (darfEinbetten liest STROEMIS.user).
-window.STROEMIS = { user: { id: 7, name: "Prüferin", email: "p@example.org", role: "editor", is_pruefer: false },
+window.STROEMIS = { user: { id: 7, name: "Prüferin", email: "p@example.org", rechte: { karte: 2, wiki: 2, pruefungen: 0, verwaltung: 0 } },
                     publicUrl: "", maxUploadMb: 5120 };
 
 /* Die Adresszeile lässt sich aus einer file://-Seite nicht setzen – pushState wirft dort.

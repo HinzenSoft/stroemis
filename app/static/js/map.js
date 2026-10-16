@@ -2,7 +2,8 @@
 (function () {
   const { esc, api, toast, dialog, fmtDate, fmtCoord, CAT } = S;
   const me = STROEMIS.user;
-  const isAdmin = me.role === "admin";
+  // Verwaltung im Modul Spots (Rechte-Matrix): darf alle Alben bearbeiten.
+  const isAdmin = !!(me.rechte && me.rechte.karte === 2);
 
   const state = {
     map: null, cluster: null, photos: [], markers: new Map(), filter: "",

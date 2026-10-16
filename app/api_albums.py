@@ -15,7 +15,7 @@ from datetime import datetime
 from flask import Blueprint, current_app, jsonify, request
 
 from . import db
-from .auth import current_user, darf_inhalte, eingabefehler_abfangen, json_body, login_required
+from .auth import current_user, eingabefehler_abfangen, json_body, karte_required, verwaltet
 from .images import delete_photo_files, store_upload
 
 bp = Blueprint("albums", __name__, url_prefix="/api")
@@ -84,7 +84,7 @@ def album_json(a, photos):
 def can_edit(owner_id):
     """Ein Album führt, wer es angelegt hat – dazu Administratoren und Redakteure."""
     u = current_user()
-    return darf_inhalte(u) or u["id"] == owner_id
+    return verwaltet("karte", u) or u["id"] == owner_id
 
 
 def can_edit_photo(p):
@@ -124,7 +124,7 @@ def _clean_album(d, existing=None):
 # --- Karte -------------------------------------------------------------------
 
 @bp.get("/map")
-@login_required
+@karte_required
 def map_data():
     rows = db.query(
         "SELECT p.id, p.album_id, p.file, p.lat, p.lon, p.title, p.kind, a.title AS album_title, a.category, "
@@ -151,7 +151,7 @@ def _kennung():
         roh = roh.replace(zeichen, ersatz)
     return unicodedata.normalize("NFKD", roh).encode("ascii", "ignore").decode("ascii").strip() or "wiki"
 @bp.get("/geocode")
-@login_required
+@karte_required
 def geocode():
     """Adresse oder Ortsname zu Koordinaten – zum Anfahren der Stelle beim Platzieren von Bildern."""
     dienst = current_app.config.get("GEOCODE_URL")
@@ -209,7 +209,7 @@ def geocode():
 # --- Alben -------------------------------------------------------------------
 
 @bp.get("/albums")
-@login_required
+@karte_required
 def list_albums():
     rows = db.query(
         "SELECT a.*, u.name AS owner_name, "
@@ -230,7 +230,7 @@ def list_albums():
 
 
 @bp.post("/albums")
-@login_required
+@karte_required
 def create_album():
     try:
         vals = _clean_album(json_body())
@@ -246,7 +246,7 @@ def create_album():
 
 
 @bp.get("/albums/<int:aid>")
-@login_required
+@karte_required
 def get_album(aid):
     a = _get_album(aid)
     if not a:
@@ -257,7 +257,7 @@ def get_album(aid):
 
 
 @bp.put("/albums/<int:aid>/cover")
-@login_required
+@karte_required
 def set_album_cover(aid):
     """Deckblatt des Albums festlegen – oder mit photo_id null wieder dem ersten Bild überlassen."""
     a = _get_album(aid)
@@ -280,7 +280,7 @@ def set_album_cover(aid):
 
 
 @bp.put("/albums/<int:aid>")
-@login_required
+@karte_required
 def update_album(aid):
     a = _get_album(aid)
     if not a:
@@ -300,7 +300,7 @@ def update_album(aid):
 
 
 @bp.delete("/albums/<int:aid>")
-@login_required
+@karte_required
 def delete_album(aid):
     a = _get_album(aid)
     if not a:
@@ -358,7 +358,7 @@ def _bilder_ablegen(aid, files, posters):
 
 
 @bp.post("/albums/<int:aid>/photos")
-@login_required
+@karte_required
 def upload_photos(aid):
     a = _get_album(aid)
     if not a:
@@ -393,7 +393,7 @@ def _alben_in_der_naehe(lat, lon, ausser):
 
 
 @bp.post("/albums/einwurf")
-@login_required
+@karte_required
 def einwurf():
     """Dateien, die auf die Karte gezogen wurden: Sie werden zu einem neuen Album. Liegt der
     Mittelpunkt ihrer Geotags nahe an einem vorhandenen Album, sagt die Antwort das – und der
@@ -431,7 +431,7 @@ def einwurf():
 
 
 @bp.post("/albums/<int:aid>/zusammenlegen")
-@login_required
+@karte_required
 def zusammenlegen(aid):
     """Alle Bilder dieses Albums in ein anderes übernehmen; das dann leere Album verschwindet.
     Gedacht für den Einwurf, dessen Bilder doch zu einem vorhandenen Album gehören."""
@@ -468,7 +468,7 @@ def _get_photo(pid):
 
 
 @bp.get("/photos/<int:pid>")
-@login_required
+@karte_required
 def get_photo(pid):
     p = _get_photo(pid)
     if not p:
@@ -479,7 +479,7 @@ def get_photo(pid):
 
 
 @bp.put("/photos/<int:pid>")
-@login_required
+@karte_required
 def update_photo(pid):
     p = _get_photo(pid)
     if not p:
@@ -560,7 +560,7 @@ def update_photo(pid):
 
 
 @bp.delete("/photos/<int:pid>")
-@login_required
+@karte_required
 def delete_photo(pid):
     p = _get_photo(pid)
     if not p:

@@ -111,7 +111,7 @@ S.api = function (pfad, opts) {
   if (d === null) return Promise.reject(new Error("Seite nicht gefunden"));
   return Promise.resolve(d);
 };
-window.STROEMIS = window.STROEMIS || { user: { id: 1, name: "Wilko", role: "user" }, publicUrl: "" };
+window.STROEMIS = window.STROEMIS || { user: { id: 1, name: "Wilko", rechte: { karte: 1, wiki: 1, pruefungen: 0, verwaltung: 0 } }, publicUrl: "" };
 history.pushState = () => {};
 history.replaceState = () => {};
 </script>

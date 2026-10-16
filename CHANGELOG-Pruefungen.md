@@ -4,6 +4,16 @@ Erweiterung von strömis.de um Lehrgänge, Teilnehmende, Voraussetzungen, Prüfu
 Stoppuhr, Nachprüfungen, Medien und eine Mängelübersicht für Feedbackrunden – nur für Nutzer mit dem neuen
 Zusatzrecht „Prüfer“.
 
+## Nachtrag (16.10.2026): Rechte-Matrix statt Prüfer-Häkchen
+
+Das Zusatzrecht `is_pruefer` ist in der Rechte-Matrix aufgegangen (`users.recht_pruefungen`, siehe `auth.MODULE`):
+Stufe 1 „Mitglied“ ist der bisherige Prüfer, Stufe 2 „Verwaltung“ pflegt zusätzlich die Kataloge und leitet jeden
+Lehrgang – das war vorher an die Administratorrolle gebunden. Verwaltung im Modul Verwaltung schließt Prüfungen ein;
+ein Administrator braucht das Häkchen also nicht mehr. Die Umstellung überträgt das Häkchen einmalig (Nacharbeit in
+`db.MIGRATIONS`), die Spalten `role` und `is_pruefer` fallen danach. Schnittstelle: `public_user` liefert `rechte`
+statt `role`/`is_pruefer`; `PUT /api/admin/users/<id>` nimmt `{"rechte": {"pruefungen": 0|1|2}}`. Oberfläche:
+`istAdmin()` in pruefungen.js fragt `rechte.pruefungen === 2`.
+
 ## Nachtrag (15.10.2026): Sicherheits-Review – Importgrenzen, Namensvettern, Einfrieren, Wettläufe
 
 Befunde eines Sicherheits-Reviews des Prüfungsmoduls, behoben in `api_pruefungen.py` und `pruefungen_import.py` und

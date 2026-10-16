@@ -279,7 +279,7 @@ def main():
     """Von der Kommandozeile: unter dem ersten Administrator anlegen."""
     app = create_app()
     with app.app_context():
-        admin = db.query("SELECT id, name, email FROM users WHERE role = 'admin' ORDER BY id LIMIT 1", one=True)
+        admin = db.query("SELECT id, name, email FROM users WHERE recht_verwaltung = 2 ORDER BY id LIMIT 1", one=True)
         if not admin:
             raise SystemExit("Kein Administrator vorhanden – zuerst die Anwendung starten (ADMIN_EMAIL/ADMIN_PASSWORD).")
         with db.transaction():

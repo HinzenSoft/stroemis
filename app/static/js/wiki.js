@@ -98,7 +98,7 @@
   // (Redakteur/Admin): automatisch für jeden Leser ausgeführter Inhalt ist etwas anderes als
   // ein Bild oder ein Download, den sich jemand erst selbst öffnen müsste.
   // window.STROEMIS setzt base.html; die Prüfstände unter tests/ bauen die Seite ohne Vorlage auf.
-  const darfEinbetten = () => { const u = window.STROEMIS && STROEMIS.user; return !!(u && (u.role === "admin" || u.role === "editor")); };
+  const darfEinbetten = () => { const u = window.STROEMIS && STROEMIS.user; return !!(u && u.rechte && u.rechte.wiki === 2); };
   // Jede Zeile, die im Editorformat einen Block eröffnet. Blockmenü und Ziehgriff bilden
   // damit Text und Editor aufeinander ab – beide müssen dieselbe Liste sehen.
   const MARKEN_RE = window.EDMD.MARKEN_RE;
@@ -795,7 +795,7 @@
       const r = await api(`/api/wiki/pages/${p.id}/contributors`);
       const mit = r.contributors || [];
       // Umschreiben darf nur die Administration – am Ersteller hängen Rechte, nicht bloß ein Name.
-      const darfWechseln = !!(STROEMIS.user && STROEMIS.user.role === "admin");
+      const darfWechseln = !!(STROEMIS.user && STROEMIS.user.rechte && STROEMIS.user.rechte.wiki === 2);
       box.innerHTML = (r.owner ? person(r.owner, "Ersteller") : "")
         + (darfWechseln ? '<button class="lnk autor-wechsel" id="au-wechsel" type="button">Ersteller ändern …</button>' : "")
         + (mit.length ? `<div class="autor-trenner"></div><div class="autor-titel">Mitwirkende</div>`

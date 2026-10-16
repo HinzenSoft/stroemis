@@ -5,7 +5,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
-from flask import Blueprint, current_app, g, jsonify, redirect, request, session, url_for
+from flask import Blueprint, abort, current_app, g, jsonify, redirect, request, session, url_for
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -92,33 +92,53 @@ def _im_hintergrund(funktion, *args):
     threading.Thread(target=lauf, name="mail", daemon=True).start()
 
 
+# --- Rechte-Matrix ------------------------------------------------------------------------------
+# Statt Rollen trägt jedes Konto je Modul eine Stufe: 0 kein Zugriff, 1 Mitglied, 2 Verwaltung.
+#   karte       Mitglied: eigene Alben anlegen und bearbeiten; Verwaltung: alle Alben.
+#   wiki        Mitglied: eigene und freigegebene Seiten; Verwaltung: alle Seiten, beschränkte lesen,
+#               veröffentlichen, HTML-Bausteine, Ersteller ändern, endgültig löschen.
+#   pruefungen  Mitglied: Prüfungen abnehmen; Verwaltung: Kataloge pflegen, jeden Lehrgang leiten.
+#   verwaltung  Verwaltung: Nutzer, Rechte, Einstellungen – und damit alle Rechte überall; eine
+#               Mitglied-Stufe gibt es hier nicht.
+# Die Werte liegen als Spalten recht_<modul> am Nutzer (db.py); api_admin schreibt sie.
+MODULE = ("karte", "wiki", "pruefungen", "verwaltung")
+KEIN_ZUGRIFF, MITGLIED, VERWALTUNG = 0, 1, 2
+STUFEN = (KEIN_ZUGRIFF, MITGLIED, VERWALTUNG)
+
+
+def stufe(modul, user=None):
+    """Wirksame Stufe eines Nutzers im Modul – Verwaltung im Modul „verwaltung“ gilt überall."""
+    user = user or current_user()
+    if not user:
+        return KEIN_ZUGRIFF
+    if int(user["recht_verwaltung"] or 0) >= VERWALTUNG:
+        return VERWALTUNG
+    return int(user[f"recht_{modul}"] or 0)
+
+
+def nutzt(modul, user=None):
+    """Hat Zugang zum Modul (Mitglied oder Verwaltung)."""
+    return stufe(modul, user) >= MITGLIED
+
+
+def verwaltet(modul, user=None):
+    return stufe(modul, user) >= VERWALTUNG
+
+
+def rechte_von(user):
+    """Die wirksamen Stufen als Wörterbuch – so gehen sie an die Oberfläche."""
+    return {m: stufe(m, user) for m in MODULE}
+
+
 def is_admin(user=None):
-    user = user or current_user()
-    return bool(user and user["role"] == "admin")
-
-
-# Die Rollen: "user" schreibt an eigenen und freigegebenen Seiten, "editor" an allen Inhalten,
-# "admin" zusätzlich an Nutzern und Freigaben.
-ROLLEN = ("user", "editor", "admin")
-
-
-def darf_inhalte(user=None):
-    """Darf alle Inhalte bearbeiten – Administratoren und Redakteure.
-
-    Bewusst NICHT dasselbe wie is_admin: Nutzerverwaltung, das Veröffentlichen ohne Anmeldung
-    und das Verschieben in öffentliche Abschnitte bleiben beim Administrator. Ein Redakteur
-    pflegt das Wiki, verteilt aber keine Rechte und stellt nichts ins offene Netz."""
-    user = user or current_user()
-    return bool(user and user["role"] in ("admin", "editor"))
+    """Verwaltung im Modul Verwaltung: Nutzer und Einstellungen – und alle Rechte überall."""
+    return verwaltet("verwaltung", user)
 
 
 def is_pruefer(user=None):
-    """Darf Prüfungen abnehmen. Ein Zusatzrecht, keine Rolle: Es wird neben „user“, „editor“ oder
-    „admin“ vergeben und ersetzt keins davon. Bewusst kein Freibrief für Administratoren – der
-    Bereich enthält personenbezogene Daten von Teilnehmenden und soll nur sehen, wer ihn braucht;
-    ein Administrator kann sich das Recht in der Nutzerverwaltung selbst geben."""
-    user = user or current_user()
-    return bool(user and user.get("is_pruefer"))
+    """Darf Prüfungen abnehmen (Mitglied oder Verwaltung im Modul Prüfungen). Der Bereich enthält
+    personenbezogene Daten von Teilnehmenden – wer ihn nicht braucht, bekommt die Stufe nicht."""
+    return nutzt("pruefungen", user)
 
 
 def initialen(name):
@@ -134,11 +154,11 @@ def avatar_url(datei):
 
 
 def public_user(u):
-    out = {k: u[k] for k in ("id", "email", "name", "gliederung", "phone", "role", "active", "created_at")}
+    out = {k: u[k] for k in ("id", "email", "name", "gliederung", "phone", "active", "created_at")}
     out["status"] = u.get("status", "active")
     out["reason"] = u.get("reason", "")
     out["avatar"] = avatar_url(u.get("avatar") or "")
-    out["is_pruefer"] = bool(u.get("is_pruefer"))
+    out["rechte"] = rechte_von(u)
     return out
 
 
@@ -151,28 +171,31 @@ def login_required(f):
     return wrapper
 
 
-def admin_required(f):
-    @wraps(f)
-    def wrapper(*a, **kw):
-        if not current_user():
-            return jsonify(error="Nicht angemeldet"), 401
-        if not is_admin():
-            return jsonify(error="Nur für Administratoren"), 403
-        return f(*a, **kw)
-    return wrapper
+KEIN_ZUGANG = {"karte": "Für dein Konto sind die Spots nicht freigeschaltet.",
+               "wiki": "Für dein Konto ist das Wiki nicht freigeschaltet.",
+               "pruefungen": "Nur für Prüfer",
+               "verwaltung": "Nur für die Verwaltung"}
 
 
-def pruefer_required(f):
-    """Für die Schnittstellen des Prüfungsbereichs: angemeldet UND Prüfer. Der Reiter wird nicht nur
-    ausgeblendet – jede Route prüft selbst, sonst genügte eine getippte Adresse."""
-    @wraps(f)
-    def wrapper(*a, **kw):
-        if not current_user():
-            return jsonify(error="Nicht angemeldet"), 401
-        if not is_pruefer():
-            return jsonify(error="Nur für Prüfer"), 403
-        return f(*a, **kw)
-    return wrapper
+def modul_required(modul, mindestens=MITGLIED):
+    """Schnittstellen eines Moduls: angemeldet UND die Stufe im Modul. Ein ausgeblendeter Reiter
+    ist kein Schutz – jede Route prüft selbst, sonst genügte eine getippte Adresse."""
+    def deko(f):
+        @wraps(f)
+        def wrapper(*a, **kw):
+            if not current_user():
+                return jsonify(error="Nicht angemeldet"), 401
+            if stufe(modul) < mindestens:
+                return jsonify(error=KEIN_ZUGANG[modul] if mindestens == MITGLIED else "Nur für die Verwaltung"), 403
+            return f(*a, **kw)
+        return wrapper
+    return deko
+
+
+karte_required = modul_required("karte")
+wiki_required = modul_required("wiki")
+pruefer_required = modul_required("pruefungen")
+admin_required = modul_required("verwaltung", VERWALTUNG)
 
 
 def page_login_required(f):
@@ -182,6 +205,20 @@ def page_login_required(f):
             return redirect(url_for("pages.login", next=request.path))
         return f(*a, **kw)
     return wrapper
+
+
+def page_modul_required(modul):
+    """Seiten eines Moduls: ohne Anmeldung zum Login, ohne Stufe die Fehlerseite."""
+    def deko(f):
+        @wraps(f)
+        def wrapper(*a, **kw):
+            if not current_user():
+                return redirect(url_for("pages.login", next=request.path))
+            if not nutzt(modul):
+                abort(403)
+            return f(*a, **kw)
+        return wrapper
+    return deko
 
 
 def eingabefehler_abfangen(bp):
@@ -285,8 +322,9 @@ def ensure_admin():
     if not u:
         try:
             db.execute(
-                "INSERT INTO users (email, password_hash, name, role, created_at) VALUES (?,?,?,?,?)",
-                (email, generate_password_hash(pw), "Administrator", "admin", db.now()))
+                "INSERT INTO users (email, password_hash, name, recht_karte, recht_wiki, recht_pruefungen, "
+                "recht_verwaltung, created_at) VALUES (?,?,?,2,2,2,2,?)",
+                (email, generate_password_hash(pw), "Administrator", db.now()))
             current_app.logger.info("Administrator %s angelegt.", email)
         except sqlite3.IntegrityError:
             # Gunicorn startet die App in jedem Arbeitsprozess getrennt. Beim allerersten Start
@@ -294,10 +332,11 @@ def ensure_admin():
             # finden ihn zwischen Abfrage und Einfügen bereits vor. Ohne diesen Fang stürbe der
             # zweite Prozess beim Hochfahren – und gunicorn fährt daraufhin ganz herunter.
             u = db.query("SELECT * FROM users WHERE email = ?", (email,), one=True)
-    if u and u["role"] != "admin":
-        # status mitziehen: ein noch wartendes Konto käme sonst trotz Admin-Rolle nicht an der
+    if u and u["recht_verwaltung"] != VERWALTUNG:
+        # status mitziehen: ein noch wartendes Konto käme sonst trotz Verwaltungsrecht nicht an der
         # Anmeldung vorbei (login() weist 'pending' vor 'active' ab).
-        db.execute("UPDATE users SET role = 'admin', active = 1, status = 'active' WHERE id = ?", (u["id"],))
+        db.execute("UPDATE users SET recht_karte = 2, recht_wiki = 2, recht_pruefungen = 2, recht_verwaltung = 2, "
+                   "active = 1, status = 'active' WHERE id = ?", (u["id"],))
 
 
 # --- Endpunkte ---------------------------------------------------------------
@@ -307,7 +346,7 @@ def notify_admins_about_request(user):
     cfg = current_app.config
     to = ([cfg["ADMIN_NOTIFY_EMAIL"]] if cfg.get("ADMIN_NOTIFY_EMAIL") else
           [a["email"] for a in db.query(
-              "SELECT email FROM users WHERE role = 'admin' AND active = 1 ORDER BY id")])[:MAX_NOTIFY_MAILS]
+              "SELECT email FROM users WHERE recht_verwaltung = 2 AND active = 1 ORDER BY id")])[:MAX_NOTIFY_MAILS]
     body = (
         "Eine neue Kontoanfrage wartet auf Freigabe:\n\n"
         f"Name:        {user['name']}\n"
@@ -372,10 +411,14 @@ def register():
         with db.transaction(sofort=True):
             first = not db.query("SELECT 1 FROM users LIMIT 1", one=True)
             uid = db.execute(
-                "INSERT INTO users (email, password_hash, name, gliederung, phone, role, active, status, reason, "
-                "created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO users (email, password_hash, name, gliederung, phone, recht_karte, recht_wiki, "
+                "recht_pruefungen, recht_verwaltung, active, status, reason, created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                # Der allererste Nutzer bekommt überall Verwaltung; alle weiteren die Vorgabe
+                # (Mitglied in Spots und Wiki) und warten auf die Freigabe.
                 (email, pw_hash, name, gliederung, _einzeilig(sfield(d, "phone")),
-                 "admin" if first else "user", 1 if first else 0, "active" if first else "pending",
+                 *((2, 2, 2, 2) if first else (1, 1, 0, 0)),
+                 1 if first else 0, "active" if first else "pending",
                  sfield(d, "reason").strip()[:2000], db.now()))
     except sqlite3.IntegrityError:
         # Dieselbe Adresse im selben Augenblick zweimal angefragt: Die zweite Anfrage bekommt die

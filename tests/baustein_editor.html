@@ -73,7 +73,7 @@ die jeden PUT sofort beantwortet und mitschreibt.</p>
 const PROBE = { puts: [], adressen: [] };
 const BAUSTEIN = "/media/wiki/a1b2c3.html";
 // Was base.html sonst in die Seite schreibt: wer angemeldet ist (Redakteur – darf Bausteine einstellen).
-window.STROEMIS = { user: { id: 7, name: "Prüferin", email: "p@example.org", role: "editor", is_pruefer: false },
+window.STROEMIS = { user: { id: 7, name: "Prüferin", email: "p@example.org", rechte: { karte: 2, wiki: 2, pruefungen: 0, verwaltung: 0 } },
                     publicUrl: "https://wiki.example.org", maxUploadMb: 5120 };
 /* Zwischen den Absätzen steht ein rohes <iframe> im Text: Es darf weder im Artikel noch im Editor
    zum Rahmen werden – nur der hochgeladene Baustein wird einer. Nicht am Textende, denn ein

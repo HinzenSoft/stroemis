@@ -13,7 +13,7 @@ from urllib.parse import unquote
 from flask import Blueprint, current_app, jsonify, request
 
 from . import db
-from .auth import avatar_url, current_user, darf_inhalte, eingabefehler_abfangen, is_admin, json_body, login_required
+from .auth import avatar_url, current_user, eingabefehler_abfangen, json_body, verwaltet, wiki_required
 from .images import EMBED_EXT, crop_wiki_image, rotate_wiki_image, store_wiki_file, wiki_endung
 from .mailer import send_mail
 
@@ -77,7 +77,7 @@ def can_edit(page, user=None):
     user = user or current_user()
     if not user:
         return False
-    if darf_inhalte(user) or page["created_by"] == user["id"]:
+    if verwaltet("wiki", user) or page["created_by"] == user["id"]:
         return True
     ids = [page["id"], *_ancestor_ids(page)]
     marks = ",".join("?" * len(ids))
@@ -102,7 +102,7 @@ def can_read(page, user=None):
     user = user or current_user()
     if not user:
         return False
-    if darf_inhalte(user):
+    if verwaltet("wiki", user):
         return True
     ids, restricted = restricted_ids(page)
     if not restricted:
@@ -141,7 +141,7 @@ def readable(rows):
 
 def can_delete(page, user=None):
     user = user or current_user()
-    return bool(user and (darf_inhalte(user) or page["created_by"] == user["id"]))
+    return bool(user and (verwaltet("wiki", user) or page["created_by"] == user["id"]))
 
 
 def is_public(page):
@@ -236,7 +236,7 @@ def _fremde_seiten(ids, nur_lebende=False, user=None):
     nicht einmal lesen darf. Für den Papierkorb zählen nur Seiten, die noch nicht darin liegen
     (nur_lebende): Was andere selbst schon hineingelegt haben, bleibt vom Verschieben unberührt."""
     user = user or current_user()
-    if not user or darf_inhalte(user):
+    if not user or verwaltet("wiki", user):
         return 0
     marks = ",".join("?" * len(ids))
     lebend = " AND deleted_at IS NULL" if nur_lebende else ""
@@ -379,7 +379,7 @@ def page_json(p):
     out["can_edit"] = can_edit(p)
     out["can_delete"] = can_delete(p)
     out["can_share"] = can_delete(p)      # Freigabe zum Bearbeiten: Ersteller oder Admin
-    out["can_publish"] = is_admin()       # Veröffentlichen: nur Admin
+    out["can_publish"] = verwaltet("wiki")       # Veröffentlichen: nur Admin
     if out["can_share"]:
         out["editors"] = _editors(p["id"])
     out["comment_count"] = db.query("SELECT COUNT(*) AS n FROM wiki_comments WHERE page_id = ? AND resolved = 0",
@@ -487,7 +487,7 @@ def _revision(pid, title, content, fmt, uid, ts, sitzung=None, alt_zwischenstand
 # --- Baum, Suche, Seiten --------------------------------------------------------
 
 @bp.get("/tree")
-@login_required
+@wiki_required
 def tree():
     uid = current_user()["id"]
     rows = db.query(
@@ -506,7 +506,7 @@ def _like(term):
 
 
 @bp.get("/search")
-@login_required
+@wiki_required
 def search():
     """Mehrwortsuche: jedes Wort muss vorkommen (Titel oder Inhalt). Treffer im Titel zuerst,
     danach die mit den meisten Wörtern im Titel."""
@@ -596,7 +596,7 @@ def _bausteine_von(content):
 
 
 @bp.get("/bausteine")
-@login_required
+@wiki_required
 def bausteine():
     """Alle synchronisierten Abschnitte, die der Nutzer lesen darf – mit Auszug und der Zahl
     der Seiten, die sie einbinden.
@@ -628,7 +628,7 @@ def bausteine():
 
 
 @bp.get("/pages/<slug>")
-@login_required
+@wiki_required
 def get_page(slug):
     p = _get_page(slug)
     if not p:
@@ -646,7 +646,7 @@ def get_page(slug):
 
 
 @bp.post("/pages")
-@login_required
+@wiki_required
 def create_page():
     d = json_body()
     title = (d.get("title") or "").strip()
@@ -655,7 +655,7 @@ def create_page():
     parent_id = d.get("parent_id") or None
     if parent_id and not _elternseite(parent_id):
         return jsonify(error="Übergeordnete Seite nicht gefunden."), 400
-    if inherits_public(parent_id) and not is_admin():
+    if inherits_public(parent_id) and not verwaltet("wiki"):
         return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Seiten darin dürfen nur "
                              "Administratoren anlegen."), 403
     content = d.get("content") or ""
@@ -675,7 +675,7 @@ def create_page():
 
 
 @bp.put("/pages/<int:pid>")
-@login_required
+@wiki_required
 def update_page(pid):
     p = _get_page(pid)
     if not p:
@@ -723,7 +723,7 @@ def update_page(pid):
                 return jsonify(error="Eine Seite kann nicht unter sich selbst einsortiert werden."), 400
             if not _elternseite(parent_id):
                 return jsonify(error="Übergeordnete Seite nicht gefunden."), 400
-        if parent_id != p["parent_id"] and inherits_public(parent_id) and not is_admin():
+        if parent_id != p["parent_id"] and inherits_public(parent_id) and not verwaltet("wiki"):
             return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Seiten dorthin verschieben "
                                  "dürfen nur Administratoren."), 403
         if parent_id != p["parent_id"] and _beschraenkung_verlassen(p, parent_id):
@@ -810,7 +810,7 @@ def _subtree_ids(pid):
 
 
 @bp.delete("/pages/<int:pid>")
-@login_required
+@wiki_required
 def delete_page(pid):
     """In den Papierkorb legen – mitsamt Unterseiten, damit sich der Abschnitt geschlossen
     wiederherstellen lässt. Endgültig entfernt wird erst über den Papierkorb."""
@@ -835,7 +835,7 @@ def delete_page(pid):
 
 
 @bp.get("/trash")
-@login_required
+@wiki_required
 def trash():
     """Papierkorb: nur die obersten gelöschten Seiten – Unterseiten hängen daran."""
     rows = db.query(
@@ -849,7 +849,7 @@ def trash():
     # Titel beschränkter Seiten gehören nicht in jedermanns Papierkorb.
     rows = [r for r in rows if can_read(_trashed(r["id"]), me)]
     for r in rows:
-        r["can_restore"] = bool(darf_inhalte(me) or db.query(
+        r["can_restore"] = bool(verwaltet("wiki", me) or db.query(
             "SELECT 1 FROM wiki_pages WHERE id = ? AND created_by = ?", (r["id"], me["id"]), one=True))
     return jsonify(pages=rows)
 
@@ -859,7 +859,7 @@ def _trashed(pid):
 
 
 @bp.post("/pages/<int:pid>/restore")
-@login_required
+@wiki_required
 def restore_page(pid):
     p = _trashed(pid)
     if not p:
@@ -872,7 +872,7 @@ def restore_page(pid):
         parent = None
     # Ist der frühere Ort inzwischen öffentlich, wäre Wiederherstellen ein Veröffentlichen –
     # das dürfen nur Administratoren, genau wie Anlegen und Verschieben dorthin.
-    if parent and inherits_public(parent) and not is_admin():
+    if parent and inherits_public(parent) and not verwaltet("wiki"):
         return jsonify(error="Der frühere Ort dieser Seite ist inzwischen ohne Anmeldung sichtbar. "
                              "Dorthin wiederherstellen dürfen nur Administratoren."), 403
     ids = _subtree_ids(pid)
@@ -894,7 +894,7 @@ def restore_page(pid):
 
 
 @bp.delete("/trash/<int:pid>")
-@login_required
+@wiki_required
 def purge_page(pid):
     """Endgültig löschen – samt Unterseiten, Versionen, Kommentaren und Verknüpfungen."""
     p = _trashed(pid)
@@ -923,7 +923,7 @@ def _revision_page(r):
 
 
 @bp.get("/pages/<int:pid>/revisions")
-@login_required
+@wiki_required
 def revisions(pid):
     # Auch im Papierkorb nachschlagen: _get_page blendet gelöschte Seiten aus, und ohne Seite
     # fiele die Rechteprüfung sonst einfach weg.
@@ -939,7 +939,7 @@ def revisions(pid):
 
 
 @bp.get("/revisions/<int:rid>")
-@login_required
+@wiki_required
 def get_revision(rid):
     # Spalten einzeln: das Kennzeichen der Bearbeitung ist Innenleben des Verlaufs und hat
     # in der Antwort nichts verloren – wer es kennt, könnte damit eine fremde Fassung
@@ -955,7 +955,7 @@ def get_revision(rid):
 
 
 @bp.post("/revisions/<int:rid>/restore")
-@login_required
+@wiki_required
 def restore_revision(rid):
     r = db.query("SELECT * FROM wiki_revisions WHERE id = ?", (rid,), one=True)
     if not r:
@@ -985,7 +985,7 @@ def restore_revision(rid):
 # --- Seiteneigenschaften, Merkliste, Verlauf der Besuche ---------------------------------
 
 @bp.put("/pages/<int:pid>/icon")
-@login_required
+@wiki_required
 def set_icon(pid):
     """Emoji vor dem Seitentitel. Leerer Wert entfernt es wieder."""
     p = _get_page(pid)
@@ -1000,7 +1000,7 @@ def set_icon(pid):
 
 
 @bp.put("/pages/<int:pid>/options")
-@login_required
+@wiki_required
 def set_options(pid):
     """„Als Vorlage anbieten“."""
     p = _get_page(pid)
@@ -1019,7 +1019,7 @@ def set_options(pid):
 
 
 @bp.put("/pages/<int:pid>/favorite")
-@login_required
+@wiki_required
 def set_favorite(pid):
     p = _get_page(pid)
     if not p:
@@ -1036,7 +1036,7 @@ def set_favorite(pid):
 
 
 @bp.get("/favorites")
-@login_required
+@wiki_required
 def favorites():
     rows = db.query(
         "SELECT p.id, p.title, p.slug, p.icon FROM wiki_favorites f JOIN wiki_pages p ON p.id = f.page_id "
@@ -1045,7 +1045,7 @@ def favorites():
 
 
 @bp.get("/recent")
-@login_required
+@wiki_required
 def recent():
     """Startseite: zuletzt besuchte und zuletzt geänderte Seiten."""
     uid = current_user()["id"]
@@ -1059,7 +1059,7 @@ def recent():
 
 
 @bp.get("/templates")
-@login_required
+@wiki_required
 def templates():
     rows = db.query("SELECT id, title, slug, icon FROM wiki_pages WHERE is_template = 1 AND deleted_at IS NULL "
                     "ORDER BY title COLLATE NOCASE")
@@ -1096,7 +1096,7 @@ def _praesenz_liste(pid, ohne_reiter):
 
 
 @bp.post("/praesenz")
-@login_required
+@wiki_required
 def praesenz():
     """Herzschlag eines offenen Reiters. Liefert zurück, ob er schreiben darf und wer sonst da ist."""
     d = json_body()
@@ -1148,7 +1148,7 @@ def praesenz():
 
 
 @bp.get("/pages/<int:pid>/backlinks")
-@login_required
+@wiki_required
 def backlinks(pid):
     """Was verlinkt hierher – aus der beim Speichern gepflegten Verweistabelle."""
     p = _get_page(pid)
@@ -1183,7 +1183,7 @@ def backlinks(pid):
 
 
 @bp.get("/pages/<int:pid>/contributors")
-@login_required
+@wiki_required
 def contributors(pid):
     """Wer an der Seite geschrieben hat: der Ersteller und alle, von denen eine Fassung im
     Verlauf steht – zuletzt Beteiligte zuerst. Mehr weiß die Anwendung nicht: gelöschte
@@ -1216,7 +1216,7 @@ def contributors(pid):
 
 
 @bp.put("/pages/<int:pid>/creator")
-@login_required
+@wiki_required
 def set_creator(pid):
     """Den Ersteller einer Seite auf einen anderen Nutzer umschreiben – nur für Administratoren.
 
@@ -1228,7 +1228,7 @@ def set_creator(pid):
     p = _get_page(pid)
     if not p:
         return jsonify(error="Seite nicht gefunden"), 404
-    if not is_admin():
+    if not verwaltet("wiki"):
         return jsonify(error="Den Ersteller kann nur ein Administrator ändern."), 403
     d = json_body()
     uid = d.get("user_id")
@@ -1249,7 +1249,7 @@ def set_creator(pid):
 
 
 @bp.get("/pages/<int:pid>/attachments")
-@login_required
+@wiki_required
 def attachments(pid):
     """Alle Dateien, die diese Seite einbindet – mit Originalname und Größe, soweit bekannt."""
     p = _get_page(pid)
@@ -1266,7 +1266,7 @@ def attachments(pid):
 
 
 @bp.post("/pages/<int:pid>/duplicate")
-@login_required
+@wiki_required
 def duplicate_page(pid):
     """Seite kopieren (ohne Unterseiten, ohne Verlauf, ohne Freigaben)."""
     p = _get_page(pid)
@@ -1274,7 +1274,7 @@ def duplicate_page(pid):
         return jsonify(error="Seite nicht gefunden"), 404
     if not can_read(p):
         return jsonify(error="Diese Seite ist nur für freigegebene Nutzer sichtbar."), 403
-    if inherits_public(p["parent_id"]) and not is_admin():
+    if inherits_public(p["parent_id"]) and not verwaltet("wiki"):
         return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Seiten darin dürfen nur "
                              "Administratoren anlegen."), 403
     title = f"{p['title']} (Kopie)"
@@ -1293,7 +1293,7 @@ def duplicate_page(pid):
 
 
 @bp.put("/reorder")
-@login_required
+@wiki_required
 def reorder():
     """Seitenbaum umsortieren: Liste aus {id, parent_id, position}.
     Verschieben darf nur, wer die jeweilige Seite bearbeiten darf."""
@@ -1321,7 +1321,7 @@ def reorder():
             if not _elternseite(parent_id):
                 return jsonify(error="Übergeordnete Seite nicht gefunden."), 400
         # Verschieben in einen öffentlichen Abschnitt ist Veröffentlichen – nur für Administratoren.
-        if parent_id != page["parent_id"] and inherits_public(parent_id) and not is_admin():
+        if parent_id != page["parent_id"] and inherits_public(parent_id) and not verwaltet("wiki"):
             return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Dorthin dürfen nur "
                                  "Administratoren verschieben."), 403
         if parent_id != page["parent_id"] and _beschraenkung_verlassen(page, parent_id):
@@ -1352,7 +1352,7 @@ def reorder():
 
 
 @bp.put("/pages/<int:pid>/restrict")
-@login_required
+@wiki_required
 def set_restrict(pid):
     """Lesebeschränkung setzen. Wer darf lesen, steht dann in „Bearbeiten erlauben“ –
     plus Ersteller und Administratoren. Nur Ersteller oder Admin dürfen das umstellen."""
@@ -1384,7 +1384,7 @@ def set_restrict(pid):
 # --- Seite beobachten -------------------------------------------------------------------
 
 @bp.put("/pages/<int:pid>/watch")
-@login_required
+@wiki_required
 def set_watch(pid):
     p = _get_page(pid)
     if not p:
@@ -1401,7 +1401,7 @@ def set_watch(pid):
 
 
 @bp.get("/watches")
-@login_required
+@wiki_required
 def watches():
     rows = db.query(
         "SELECT p.id, p.title, p.slug, p.icon FROM wiki_watches w JOIN wiki_pages p ON p.id = w.page_id "
@@ -1415,7 +1415,7 @@ def notify_watchers(page, what):
     try:
         me = current_user()
         rows = db.query(
-            "SELECT u.id, u.email, u.name, u.role FROM wiki_watches w JOIN users u ON u.id = w.user_id "
+            "SELECT u.id, u.email, u.name, u.recht_wiki, u.recht_verwaltung FROM wiki_watches w JOIN users u ON u.id = w.user_id "
             "WHERE w.page_id = ? AND u.active = 1 AND u.id != ?", (page["id"], me["id"] if me else 0))
         if not rows:
             return
@@ -1424,7 +1424,7 @@ def notify_watchers(page, what):
         who = (me or {}).get("name") or (me or {}).get("email") or "jemand"
         for r in rows:
             # Wer die Seite inzwischen nicht mehr lesen darf, bekommt auch keine Nachricht.
-            if not can_read(page, {"id": r["id"], "role": r["role"]}):
+            if not can_read(page, {"id": r["id"], "recht_wiki": r["recht_wiki"], "recht_verwaltung": r["recht_verwaltung"]}):
                 continue
             try:
                 send_mail(r["email"], f"{cfg['SITE_NAME']} – „{page['title']}“ wurde geändert",
@@ -1462,7 +1462,7 @@ def _descendants(pid):
 
 
 @bp.get("/pages/<int:pid>/export")
-@login_required
+@wiki_required
 def export_page(pid):
     """Seite als Markdown-Datei oder – mit children=1 – als ZIP samt Unterseiten und Anhängen."""
     from flask import send_file
@@ -1530,7 +1530,7 @@ def export_page(pid):
 # --- Bearbeitungsfreigabe und Veröffentlichung -----------------------------------------
 
 @bp.get("/users")
-@login_required
+@wiki_required
 def users_for_sharing():
     rows = db.query("SELECT id, name, gliederung FROM users WHERE active = 1 AND status = 'active' "
                     "ORDER BY name COLLATE NOCASE")
@@ -1538,7 +1538,7 @@ def users_for_sharing():
 
 
 @bp.put("/pages/<int:pid>/editors")
-@login_required
+@wiki_required
 def set_editors(pid):
     p = _get_page(pid)
     if not p:
@@ -1560,12 +1560,12 @@ def set_editors(pid):
 
 
 @bp.put("/pages/<int:pid>/share")
-@login_required
+@wiki_required
 def set_share(pid):
     p = _get_page(pid)
     if not p:
         return jsonify(error="Seite nicht gefunden"), 404
-    if not is_admin():
+    if not verwaltet("wiki"):
         return jsonify(error="Veröffentlichen dürfen nur Administratoren."), 403
     d = json_body()
     if d.get("is_public") and restricted_ids(p)[1]:
@@ -1600,8 +1600,8 @@ def set_share(pid):
 def _comment_json(c, page):
     me = current_user()
     out = dict(c)
-    out["can_delete"] = bool(me and (darf_inhalte(me) or c["user_id"] == me["id"] or page["created_by"] == me["id"]))
-    out["can_edit"] = bool(me and (is_admin(me) or c["user_id"] == me["id"]))
+    out["can_delete"] = bool(me and (verwaltet("wiki", me) or c["user_id"] == me["id"] or page["created_by"] == me["id"]))
+    out["can_edit"] = bool(me and (verwaltet("wiki", me) or c["user_id"] == me["id"]))
     return out
 
 
@@ -1612,7 +1612,7 @@ def _comment_page(c):
 
 
 @bp.get("/pages/<int:pid>/comments")
-@login_required
+@wiki_required
 def list_comments(pid):
     p = _get_page(pid)
     if not p:
@@ -1625,7 +1625,7 @@ def list_comments(pid):
 
 
 @bp.post("/pages/<int:pid>/comments")
-@login_required
+@wiki_required
 def add_comment(pid):
     p = _get_page(pid)
     if not p:
@@ -1664,7 +1664,7 @@ def add_comment(pid):
 
 
 @bp.put("/comments/<int:cid>")
-@login_required
+@wiki_required
 def update_comment(cid):
     c = db.query("SELECT * FROM wiki_comments WHERE id = ?", (cid,), one=True)
     if not c:
@@ -1683,7 +1683,7 @@ def update_comment(cid):
     if "body" in d:
         # Den Text ändern darf nur, wer ihn geschrieben hat – „erledigt“ dagegen auch der Seitenersteller.
         me = current_user()
-        if c["user_id"] != me["id"] and not darf_inhalte(me):
+        if c["user_id"] != me["id"] and not verwaltet("wiki", me):
             return jsonify(error="Nur der Verfasser kann seinen Kommentar ändern."), 403
         body = (d.get("body") or "").strip()
         if not body:
@@ -1693,7 +1693,7 @@ def update_comment(cid):
 
 
 @bp.delete("/comments/<int:cid>")
-@login_required
+@wiki_required
 def delete_comment(cid):
     c = db.query("SELECT * FROM wiki_comments WHERE id = ?", (cid,), one=True)
     if not c:
@@ -1710,7 +1710,7 @@ def delete_comment(cid):
 # --- Dateien (Bilder, Videos) für Artikel -----------------------------------------------
 
 @bp.post("/files")
-@login_required
+@wiki_required
 def upload_file():
     f = request.files.get("file") or request.files.get("image")
     if not f:
@@ -1722,7 +1722,7 @@ def upload_file():
     # Dieselbe Endungsregel wie beim Ablegen (wiki_endung): Eine Datei ohne Endung mit erfundenem
     # Inhaltstyp lief sonst an dieser Prüfung vorbei und wurde erst in der Ablage zum .html.
     ext = wiki_endung(f)
-    if ext in EMBED_EXT and not darf_inhalte():
+    if ext in EMBED_EXT and not verwaltet("wiki"):
         return jsonify(error="HTML-Bausteine dürfen nur Redakteure und Administratoren einstellen."), 403
     try:
         name, kind = store_wiki_file(f, current_app.config["MEDIA_DIR"])
@@ -1739,7 +1739,7 @@ def upload_file():
 
 
 @bp.post("/files/drehung")
-@login_required
+@wiki_required
 def rotate_file():
     """Ein Artikelbild um eine Vierteldrehung kippen. Wie beim Zuschnitt entsteht eine neue
     Datei; das Ausgangsbild bleibt liegen."""
@@ -1759,7 +1759,7 @@ def rotate_file():
 
 
 @bp.post("/files/zuschnitt")
-@login_required
+@wiki_required
 def crop_file():
     """Ausschnitt eines Artikelbildes. Das Ergebnis ist eine neue Datei – das Ausgangsbild
     bleibt liegen, damit ein Zuschnitt sich rückgängig machen lässt und ein Bild, das an

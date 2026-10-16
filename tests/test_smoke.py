@@ -147,7 +147,7 @@ def test_everything():
 
         # Login als Admin
         r = c.post("/api/auth/login", json={"email": "admin@example.org", "password": "geheim123"})
-        assert r.status_code == 200 and r.json["user"]["role"] == "admin"
+        assert r.status_code == 200 and r.json["user"]["rechte"]["verwaltung"] == 2
         assert c.get("/").status_code == 200
         assert "Content-Security-Policy" in c.get("/").headers
 
@@ -781,12 +781,12 @@ def test_haertung():
             c1.put(f"/api/wiki/pages/{eigen['id']}", json={"content": f"Fassung {i}"})
         assert len(c1.get(f"/api/wiki/pages/{eigen['id']}/revisions").json["revisions"]) == 3
 
-        # --- Rolle „Redakteur" ---------------------------------------------------------------
-        # Darf alle Inhalte bearbeiten, aber keine Nutzer verwalten und nichts veröffentlichen.
+        # --- Verwaltung im Wiki (Rechte-Matrix, früher „Redakteur“) ---------------------------
+        # Darf alle Seiten bearbeiten und veröffentlichen, aber keine Nutzer verwalten.
         red, red_id = member("redakteur@example.org")
-        assert adm.put(f"/api/admin/users/{red_id}", json={"role": "editor"}).status_code == 200
-        assert [u["role"] for u in adm.get("/api/admin/users").json["users"]
-                if u["email"] == "redakteur@example.org"] == ["editor"]
+        assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"karte": 2, "wiki": 2}}).status_code == 200
+        assert [u["rechte"] for u in adm.get("/api/admin/users").json["users"]
+                if u["email"] == "redakteur@example.org"] == [{"karte": 2, "wiki": 2, "pruefungen": 0, "verwaltung": 0}]
         rseite = c1.post("/api/wiki/pages", json={"title": "Fremde Seite", "format": "markdown",
                                                   "content": "# Fremde Seite\n\nText"}).json["page"]
         c1.put(f"/api/wiki/pages/{rseite['id']}/restrict", json={"read_restricted": True})
@@ -796,9 +796,11 @@ def test_haertung():
         assert red.delete(f"/api/wiki/pages/{rseite['id']}", headers=H).status_code == 200
         red.post(f"/api/wiki/pages/{rseite['id']}/restore", json={}, headers=H)
         assert red.get("/api/admin/users").status_code == 403                        # keine Nutzer
-        assert red.put(f"/api/admin/users/{red_id}", json={"role": "admin"}, headers=H).status_code == 403
+        assert red.put(f"/api/admin/users/{red_id}", json={"rechte": {"verwaltung": 2}}, headers=H).status_code == 403
+        # Verwaltung im Wiki schließt das Veröffentlichen ein – nur an der Lesebeschränkung der
+        # Seite scheitert es hier, nicht am Recht.
         assert red.put(f"/api/wiki/pages/{rseite['id']}/share",
-                       json={"is_public": True}, headers=H).status_code == 403       # kein Veröffentlichen
+                       json={"is_public": True}, headers=H).status_code != 403
 
         # --- HTML-Baustein: nur Redakteur/Admin darf einstellen, läuft gesandboxt ------------
         html_bytes = lambda: io.BytesIO(b"<!doctype html><title>t</title><script>1</script>")
@@ -822,10 +824,15 @@ def test_haertung():
         anon_embed = anon_get(app, html_up.json["url"])
         assert anon_embed.status_code == 200 and anon_embed.headers["Content-Security-Policy"] == "sandbox allow-scripts"
 
-        # Eine unbekannte Rollenbezeichnung darf keine Rechte verteilen.
-        adm.put(f"/api/admin/users/{red_id}", json={"role": "superchef"})
-        assert [u["role"] for u in adm.get("/api/admin/users").json["users"]
-                if u["email"] == "redakteur@example.org"] == ["user"]
+        # Unbekannte Module und Stufen verteilen keine Rechte.
+        assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"wiki": 7}}).status_code == 400
+        assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"chef": 2}}).status_code == 400
+        assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"verwaltung": 1}}).status_code == 400
+        assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"wiki": True}}).status_code == 400
+        assert [u["rechte"]["wiki"] for u in adm.get("/api/admin/users").json["users"]
+                if u["email"] == "redakteur@example.org"] == [2]
+        # Zurück auf Mitglied: die beschränkte fremde Seite ist wieder zu.
+        assert adm.put(f"/api/admin/users/{red_id}", json={"rechte": {"karte": 1, "wiki": 1}}).status_code == 200
         assert red.get(f"/api/wiki/pages/{rseite['slug']}").status_code == 403
         c1.delete(f"/api/wiki/pages/{rseite['id']}", headers=H)
 
@@ -1287,7 +1294,7 @@ def test_haertung():
         assert liste["a@example.org"]["last_login"], "die Anmeldung wurde nicht vermerkt"
         # Ein Konto, das noch nie benutzt wurde, hat keinen Zeitpunkt – und darf keinen erfinden.
         frisch = adm.post("/api/admin/users", json={"email": "nie@example.org", "password": "geheim12345",
-                                                     "name": "Nie Da", "role": "user"}).json["user"]
+                                                     "name": "Nie Da"}).json["user"]
         liste = {u["id"]: u for u in adm.get("/api/admin/users").json["users"]}
         assert liste[frisch["id"]]["last_login"] is None, liste[frisch["id"]]
         # Eine gescheiterte Anmeldung ändert nichts daran. (429 statt 401, wenn die Anmeldebremse
@@ -1766,7 +1773,110 @@ def test_befunde():
     print("Befundtest bestanden.")
 
 
+def test_rechte():
+    """Rechte-Matrix: je Modul eine Stufe statt Rollen – Zugang, Verwaltung, Eigenschutz, Umstellung."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app = make_app(tmp)
+        adm = app.test_client()
+        adm.post("/api/auth/login", json={"email": "admin@example.org", "password": "geheim123"})
+        H = {"X-Requested-With": "XMLHttpRequest"}
+
+        def member(mail):
+            c = app.test_client()
+            c.post("/api/auth/register", json={"email": mail, "password": "passwort1", "name": mail[:3],
+                                               "gliederung": "OG Test"})
+            uid = [u for u in adm.get("/api/admin/users").json["users"] if u["email"] == mail][0]["id"]
+            adm.post(f"/api/admin/users/{uid}/approve", json={})
+            c.post("/api/auth/login", json={"email": mail, "password": "passwort1"})
+            return c, uid
+
+        # Der Administrator aus der .env hat überall Verwaltung; ein neues Konto die Vorgabe.
+        assert adm.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "verwaltung": 2}
+        c1, uid1 = member("a@example.org")
+        assert c1.get("/api/me").json["user"]["rechte"] == {"karte": 1, "wiki": 1, "pruefungen": 0, "verwaltung": 0}
+        assert c1.get("/").status_code == 200 and c1.get("/karte").status_code == 200
+        assert c1.get("/pruefungen").status_code == 403 and c1.get("/admin").status_code == 403
+        assert c1.get("/api/pruefungen/lehrgaenge").status_code == 403
+
+        # Kein Zugang zum Wiki: Seite, Schnittstelle und Artikeldateien sind zu – die Spots bleiben.
+        seite = c1.post("/api/wiki/pages", json={"title": "Meine", "content": "# Meine"}).json["page"]
+        bild = c1.post("/api/wiki/files", data={"file": (jpeg(False), "b.jpg")}, headers=H,
+                       content_type="multipart/form-data").json["url"]
+        assert c1.get(bild).status_code == 200
+        assert adm.put(f"/api/admin/users/{uid1}", json={"rechte": {"wiki": 0}}).status_code == 200
+        assert c1.get("/").status_code == 302 and c1.get("/").headers["Location"].endswith("/karte")
+        assert c1.get("/wiki").status_code == 403 and c1.get(f"/wiki/{seite['slug']}").status_code == 403
+        assert c1.get("/api/wiki/tree").status_code == 403
+        assert c1.get(f"/api/wiki/pages/{seite['slug']}").status_code == 403
+        assert c1.get(bild).status_code == 403
+        assert c1.get("/api/map").status_code == 200 and c1.get("/karte").status_code == 200
+        # Auch die Spots zu: kein Bereich mehr – die Startseite sagt es, statt ins Leere zu leiten.
+        assert adm.put(f"/api/admin/users/{uid1}", json={"rechte": {"karte": 0}}).status_code == 200
+        assert c1.get("/api/map").status_code == 403 and c1.get("/karte").status_code == 403
+        r = c1.get("/")
+        assert r.status_code == 403 and "kein Bereich" in r.get_data(as_text=True)
+        assert c1.get("/profil").status_code == 200                      # das Profil bleibt immer
+
+        # Verwaltung im Wiki: fremde Seiten bearbeiten und veröffentlichen, aber keine Nutzer.
+        c2, uid2 = member("b@example.org")
+        assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"wiki": 2}}).status_code == 200
+        fremd = adm.post("/api/wiki/pages", json={"title": "Fremd", "content": "# Fremd"}).json["page"]
+        assert c2.put(f"/api/wiki/pages/{fremd['id']}", json={"content": "# Fremd\n\nNeu"}).status_code == 200
+        assert c2.put(f"/api/wiki/pages/{fremd['id']}/share", json={"is_public": True}, headers=H).status_code == 200
+        assert c2.get("/api/admin/users").status_code == 403 and c2.get("/admin").status_code == 403
+        assert c2.get("/api/pruefungen/lehrgaenge").status_code == 403
+
+        # Verwaltung im Modul Verwaltung zieht alle Module nach – auch gespeichert, nicht nur wirksam.
+        assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"verwaltung": 2}}).status_code == 200
+        assert c2.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "verwaltung": 2}
+        assert c2.get("/api/admin/users").status_code == 200 and c2.get("/api/pruefungen/lehrgaenge").status_code == 200
+        # Niemand nimmt sich selbst die Verwaltung; andere Module am eigenen Konto gehen.
+        assert c2.put(f"/api/admin/users/{uid2}", json={"rechte": {"verwaltung": 0}}).status_code == 400
+        # Solange Verwaltung gilt, steht überall Verwaltung – auch gespeichert: Ein anderes Modul lässt
+        # sich nicht darunter setzen. Nimmt der Administrator die Verwaltung zurück, bleiben die
+        # übrigen Module auf Verwaltung, bis jemand sie einzeln setzt – nichts wird stillschweigend
+        # auf einen früheren Stand zurückgedreht.
+        assert c2.put(f"/api/admin/users/{uid2}", json={"rechte": {"pruefungen": 0}}).status_code == 200
+        assert c2.get("/api/me").json["user"]["rechte"]["pruefungen"] == 2
+        assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"verwaltung": 0}}).status_code == 200
+        assert c2.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "verwaltung": 0}
+        assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"pruefungen": 0}}).status_code == 200
+        assert c2.get("/api/me").json["user"]["rechte"]["pruefungen"] == 0
+        # Anlegen mit Matrix, ohne Angabe die Vorgabe.
+        r = adm.post("/api/admin/users", json={"email": "p@example.org", "password": "geheim12345",
+                                                "rechte": {"pruefungen": 1}})
+        assert r.status_code == 201 and r.json["user"]["rechte"] == {"karte": 1, "wiki": 1, "pruefungen": 1, "verwaltung": 0}
+        assert adm.post("/api/admin/users", json={"email": "q@example.org", "password": "geheim12345",
+                                                   "rechte": {"verwaltung": 1}}).status_code == 400
+
+    # --- Umstellung: Eine Datenbank mit Rollen bekommt die Matrix – Rolle und Prüfer-Haken wandern.
+    with tempfile.TemporaryDirectory() as tmp:
+        from app import db as db_mod
+        alt = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+        schema_alt = db_mod.SCHEMA.replace(
+            "  recht_karte      INTEGER NOT NULL DEFAULT 1,\n  recht_wiki       INTEGER NOT NULL DEFAULT 1,\n"
+            "  recht_pruefungen INTEGER NOT NULL DEFAULT 0,\n  recht_verwaltung INTEGER NOT NULL DEFAULT 0,\n",
+            "  role TEXT NOT NULL DEFAULT 'user', is_pruefer INTEGER NOT NULL DEFAULT 0,\n")
+        assert "role TEXT" in schema_alt
+        alt.executescript(schema_alt)
+        for mail, rolle, pruefer in (("admin@example.org", "admin", 0), ("red@example.org", "editor", 1),
+                                     ("nu@example.org", "user", 1), ("gast@example.org", "user", 0)):
+            alt.execute("INSERT INTO users (email, password_hash, name, role, is_pruefer, created_at) VALUES (?,?,?,?,?,?)",
+                        (mail, "x", mail, rolle, pruefer, "2026-01-01T00:00:00"))
+        alt.commit(); alt.close()
+        app = make_app(tmp)
+        with app.app_context():
+            spalten = [r["name"] for r in db_mod.query("PRAGMA table_info(users)")]
+            assert "role" not in spalten and "is_pruefer" not in spalten and "recht_wiki" in spalten, spalten
+            stand = {u["email"]: (u["recht_karte"], u["recht_wiki"], u["recht_pruefungen"], u["recht_verwaltung"])
+                     for u in db_mod.query("SELECT * FROM users")}
+        assert stand == {"admin@example.org": (2, 2, 2, 2), "red@example.org": (2, 2, 1, 0),
+                         "nu@example.org": (1, 1, 1, 0), "gast@example.org": (1, 1, 0, 0)}, stand
+    print("Rechte-Test bestanden.")
+
+
 if __name__ == "__main__":
     test_everything()
     test_haertung()
     test_befunde()
+    test_rechte()
