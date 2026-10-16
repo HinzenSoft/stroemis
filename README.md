@@ -100,10 +100,14 @@ Nach einem Update gilt: Wer die Anwendung im Browser offen hat, lädt die Seite 
 
 ### Automatisches Deployment
 
-`.github/workflows/deploy.yml` verbindet sich bei jedem Push nach `main` (oder von Hand über „Run workflow“ in
-GitHub) per SSH mit dem VPS und führt dort `git pull`, die Sicherung `scripts/sicherung.sh deploy` (siehe „Daten und Sicherung“), `docker compose up -d --build --remove-orphans` und
-`docker image prune -f` aus – der Build läuft also auf dem VPS selbst, ohne Umweg über eine Registry. Läuft
-gerade schon ein Deploy, wartet ein zweiter statt parallel zu starten. Die SSH-Action ist auf einen festen
+`.github/workflows/deploy.yml` verbindet sich bei jedem Push nach `main` oder `dev` (oder von Hand über „Run
+workflow“ in GitHub) per SSH mit dem VPS. `main` geht in die Produktion (Klon unter `DEPLOY_PATH`), `dev` in die
+Entwicklungsumgebung (eigener Klon, siehe unten); andere Zweige werden nie ausgerollt. Im jeweiligen Klon führt
+er `git pull`, die Sicherung `scripts/sicherung.sh deploy` (siehe „Daten und Sicherung“), `docker compose up -d
+--build --remove-orphans` und `docker image prune -f` aus – der Build läuft also auf dem VPS selbst, ohne Umweg
+über eine Registry. Vorher prüft er, dass `data/` dem Nutzer 1000 gehört; sonst bricht er ab, und der laufende
+Container bleibt stehen, statt durch einen ersetzt zu werden, der beim Start an fehlenden Schreibrechten stirbt.
+Läuft gerade schon ein Deploy (auch der anderen Umgebung), wartet ein zweiter statt parallel zu starten. Die SSH-Action ist auf einen festen
 Commit gepinnt (Kommentar `# v1` daneben): Ein wanderndes Tag könnte sonst anderen Code mit dem Deploy-Schlüssel
 ausführen; zum Heben den neuen Commit eintragen.
 
@@ -117,6 +121,8 @@ Einmalige Einrichtung:
    - `DEPLOY_USER` – SSH-Nutzer auf dem VPS
    - `DEPLOY_SSH_KEY` – Inhalt der privaten Schlüsseldatei (`deploy_key`)
    - `DEPLOY_PATH` – absoluter Pfad zum Klon dieses Repositories auf dem VPS (dort liegt `docker-compose.yml`)
+   - `DEPLOY_PATH_DEV` – nur nötig, wenn der Klon der Entwicklungsumgebung nicht neben dem der Produktion
+     liegt (Vorgabe: `DEPLOY_PATH` mit `-dev` dahinter, siehe „Entwicklungsumgebung“)
    - `DEPLOY_PORT` – nur nötig, wenn SSH dort nicht auf Port 22 läuft
 4. Auf dem VPS sicherstellen, dass der Deploy-Nutzer `git pull` im Repository ohne Rückfrage ausführen kann (bei
    einem privaten Repository braucht der VPS selbst einen eigenen, lesenden Zugang zu GitHub – z. B. ein weiteres
@@ -125,6 +131,48 @@ Einmalige Einrichtung:
 
 Bis diese Secrets gesetzt sind, schlägt der Workflow beim ersten Lauf fehl – manuelles Deployment per SSH
 funktioniert unverändert genauso wie bisher.
+
+### Entwicklungsumgebung (dev.strömis.de)
+
+Der Zweig `dev` läuft genauso wie die Produktion, nur getrennt: eigener Klon auf demselben VPS, eigene `.env`,
+eigene Daten, eigener Container `stroemis-dev` auf Port 8008, erreichbar unter `https://dev.strömis.de`
+(`dev.xn--strmis-yxa.de`). Jeder Push auf `dev` rollt dort automatisch aus; was sich bewährt hat, kommt per Merge
+nach `main` und damit in die Produktion. Die Entwicklung beginnt mit leeren Daten, schickt Mails mit „(DEV)“ im
+Absendernamen und sichert nicht aufs NAS – ihre Schnappschüsse sollen sich nicht mit denen der Produktion mischen.
+
+Einmalige Einrichtung:
+
+1. DNS: `dev.xn--strmis-yxa.de` als A-Eintrag (und AAAA, falls vorhanden) auf den VPS.
+2. Auf dem VPS als Deploy-Nutzer das Einrichtungsskript aus dem Zweig `dev` holen und mit dem Ordner der
+   Produktion aufrufen (an der Produktion ändert das nichts):
+
+   ```bash
+   git -C /pfad/zur/produktion fetch origin dev
+   git -C /pfad/zur/produktion show origin/dev:scripts/dev-einrichten.sh > ~/dev-einrichten.sh
+   bash ~/dev-einrichten.sh /pfad/zur/produktion
+   ```
+
+   Es klont den Zweig `dev` neben die Produktion (Ordnername mit `-dev`), kopiert die `.env` der Produktion und
+   stellt sie um (Projekt-, Container- und Abbildname `stroemis-dev`, Port 8008, Adressen auf `dev.strömis.de`,
+   eigener Sitzungsschlüssel, keine NAS-Sicherung), legt `data/` für den Nutzer 1000 an (einmal `sudo`), baut
+   und startet. Ein anderer Zielordner: als zweites Argument angeben und in GitHub das Secret `DEPLOY_PATH_DEV`
+   setzen.
+3. Den Reverse-Proxy ergänzen und neu laden, z. B. Caddy:
+
+```
+dev.strömis.de, dev.xn--strmis-yxa.de {
+    reverse_proxy 127.0.0.1:8008
+    request_body {
+        max_size 5GB
+    }
+    header X-Robots-Tag "noindex, nofollow"
+}
+```
+
+Wie bei der Produktion veröffentlicht Docker den Port auf allen Schnittstellen und an `ufw` vorbei; 8008 also in
+der Firewall des Anbieters nur für den Proxy öffnen, oder – läuft der Proxy auf demselben Host – in der `.env`
+der Entwicklung `STROEMIS_PORT=127.0.0.1:8008` setzen. Unterscheiden sich Produktion und Entwicklung sonst
+noch, dann nur über ihre `.env`; `docker-compose.yml` und das Dockerfile sind für beide dieselben.
 
 `GET /healthz` antwortet ohne Anmeldung mit `{"ok": true}` – darauf setzt der `HEALTHCHECK` des Containers auf (alle 30 s, `docker ps` zeigt den Zustand). Die Daten liegen im Volume unter `/data`: `stroemis.db` (SQLite mit WAL), `media/` (Originale, Web-Größen, Thumbnails, Wiki-Anhänge, Profilbilder) und `secret_key`. Für eine Sicherung genügt es, dieses Volume zu kopieren – am besten bei gestopptem Container.
 

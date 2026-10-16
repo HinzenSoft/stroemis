@@ -1,18 +1,25 @@
+# Eine Datei für Produktion und Entwicklung. Was sich zwischen beiden unterscheidet, steht in der .env
+# des jeweiligen Klons (Compose liest sie auch für die Platzhalter in dieser Datei):
+#   COMPOSE_PROJECT_NAME  Projektname           Produktion: Ordnername (stroemis)   Entwicklung: stroemis-dev
+#   STROEMIS_NAME         Container und Abbild  Vorgabe stroemis                     Entwicklung: stroemis-dev
+#   STROEMIS_PORT         veröffentlichter Port Vorgabe 8080                         Entwicklung: 8008
+# Ohne diese Einträge verhält sich die Datei genau wie bisher.
 services:
   stroemis:
     build: .
-    image: stroemis:latest
-    container_name: stroemis
+    image: ${STROEMIS_NAME:-stroemis}:latest
+    container_name: ${STROEMIS_NAME:-stroemis}
     restart: unless-stopped
     env_file: .env
     # Auf allen Schnittstellen veröffentlicht, damit der Reverse-Proxy (TLS, Domain – siehe README)
     # auch von einem anderen Rechner aus erreicht. Achtung: Docker öffnet den Port an einer
     # ufw-Firewall vorbei, und wer den Container direkt erreicht, kann die Weiterleitungs-
     # kopfzeilen (X-Forwarded-For) selbst setzen und damit die Anmeldebremse je IP umgehen.
-    # Deshalb Port 8080 am Netz nur für den Proxy freigeben (Firewall des Anbieters oder
-    # Docker-eigene Regeln); läuft der Proxy auf demselben Host, genügt "127.0.0.1:8080:8080".
+    # Deshalb den Port am Netz nur für den Proxy freigeben (Firewall des Anbieters oder Docker-eigene
+    # Regeln); läuft der Proxy auf demselben Host, genügt STROEMIS_PORT=127.0.0.1:8080 in der .env.
+    # Im Container spricht Gunicorn immer auf 8080 – nur der Port auf dem Host wechselt.
     ports:
-      - "8080:8080"
+      - "${STROEMIS_PORT:-8080}:8080"
     volumes:
       # Datenbank, Originale, Thumbnails, Wiki-Bilder, Secret-Key, Zwischendateien.
       # Der Ordner muss dem Nutzer 1000 gehören:  mkdir -p data && sudo chown -R 1000:1000 data
