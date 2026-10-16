@@ -1,7 +1,6 @@
 # Laufzeitdaten und Geheimnisse – gehören nie ins Repository.
 .env
 data/
-sicherung.log
 *.db
 *.db-wal
 *.db-shm

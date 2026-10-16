@@ -59,9 +59,5 @@ jobs:
               echo "Einmalig:  mkdir -p '$ZIEL/data' && sudo chown -R 1000:1000 '$ZIEL/data'" >&2
               exit 1
             fi
-            # Vor dem Neustart ein Schnappschuss des Datenordners auf das NAS (BACKUP_ZIEL in der
-            # .env dieses Klons). Schlägt die Sicherung fehl, bleibt der alte Stand laufen.
-            scripts/sicherung.sh deploy
-            scripts/sicherung-einrichten.sh
             docker compose up -d --build --remove-orphans
             docker image prune -f

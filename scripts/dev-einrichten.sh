@@ -17,8 +17,7 @@
 # Was das Skript tut:
 #   1. den Zweig dev aus demselben GitHub-Repository klonen, aus dem auch die Produktion holt;
 #   2. die .env der Produktion kopieren und umstellen: eigener Projekt-, Container- und Abbildname,
-#      eigener Port, eigene Adressen, „(DEV)“ im Seitennamen, eigener Sitzungsschlüssel, KEINE Sicherung
-#      aufs NAS (sonst mischten sich die Schnappschüsse beider Umgebungen in einem Ordner);
+#      eigener Port, eigene Adressen, „(DEV)“ im Seitennamen, eigener Sitzungsschlüssel;
 #   3. den leeren Datenordner anlegen und dem Nutzer 1000 geben, unter dem der Container läuft;
 #   4. bauen und starten.
 # Die Produktion wird dabei nicht angefasst. Daten werden nicht kopiert – die Entwicklung beginnt leer,
@@ -69,7 +68,6 @@ setze PUBLIC_HOST "wiki.$DOMAIN"
 setze PUBLIC_URL "https://$DOMAIN/oeffentlich"
 setze SITE_NAME "strömis.de (DEV)"
 setze SECRET_KEY ""
-setze BACKUP_ZIEL ""
 
 # --- Datenordner für den Nutzer im Container ----------------------------------------------------------
 mkdir -p "$ZIEL/data"

@@ -114,9 +114,9 @@ Nach einem Update gilt: Wer die Anwendung im Browser offen hat, lädt die Seite 
 `.github/workflows/deploy.yml` verbindet sich bei jedem Push nach `main` oder `dev` (oder von Hand über „Run
 workflow“ in GitHub) per SSH mit dem VPS. `main` geht in die Produktion (Klon unter `DEPLOY_PATH`), `dev` in die
 Entwicklungsumgebung (eigener Klon, siehe unten); andere Zweige werden nie ausgerollt. Im jeweiligen Klon führt
-er `git pull`, die Sicherung `scripts/sicherung.sh deploy` (siehe „Daten und Sicherung“), `docker compose up -d
---build --remove-orphans` und `docker image prune -f` aus – der Build läuft also auf dem VPS selbst, ohne Umweg
-über eine Registry. Vorher prüft er, dass `data/` dem Nutzer 1000 gehört; sonst bricht er ab, und der laufende
+er `git pull`, `docker compose up -d --build --remove-orphans` und `docker image prune -f` aus – der Build
+läuft also auf dem VPS selbst, ohne Umweg über eine Registry.
+Vorher prüft er, dass `data/` dem Nutzer 1000 gehört; sonst bricht er ab, und der laufende
 Container bleibt stehen, statt durch einen ersetzt zu werden, der beim Start an fehlenden Schreibrechten stirbt.
 Läuft gerade schon ein Deploy (auch der anderen Umgebung), wartet ein zweiter statt parallel zu starten. Die SSH-Action ist auf einen festen
 Commit gepinnt (Kommentar `# v1` daneben): Ein wanderndes Tag könnte sonst anderen Code mit dem Deploy-Schlüssel
@@ -148,8 +148,8 @@ funktioniert unverändert genauso wie bisher.
 Der Zweig `dev` läuft genauso wie die Produktion, nur getrennt: eigener Klon auf demselben VPS, eigene `.env`,
 eigene Daten, eigener Container `stroemis-dev` auf Port 8008, erreichbar unter `https://dev.strömis.de`
 (`dev.xn--strmis-yxa.de`). Jeder Push auf `dev` rollt dort automatisch aus; was sich bewährt hat, kommt per Merge
-nach `main` und damit in die Produktion. Die Entwicklung beginnt mit leeren Daten, schickt Mails mit „(DEV)“ im
-Absendernamen und sichert nicht aufs NAS – ihre Schnappschüsse sollen sich nicht mit denen der Produktion mischen.
+nach `main` und damit in die Produktion. Die Entwicklung beginnt mit leeren Daten und schickt Mails mit „(DEV)“ im
+Absendernamen.
 
 Einmalige Einrichtung:
 
@@ -165,7 +165,7 @@ Einmalige Einrichtung:
 
    Es klont den Zweig `dev` neben die Produktion (Ordnername mit `-dev`), kopiert die `.env` der Produktion und
    stellt sie um (Projekt-, Container- und Abbildname `stroemis-dev`, Port 8008, Adressen auf `dev.strömis.de`,
-   eigener Sitzungsschlüssel, keine NAS-Sicherung), legt `data/` für den Nutzer 1000 an (einmal `sudo`), baut
+   eigener Sitzungsschlüssel), legt `data/` für den Nutzer 1000 an (einmal `sudo`), baut
    und startet. Ein anderer Zielordner: als zweites Argument angeben und in GitHub das Secret `DEPLOY_PATH_DEV`
    setzen.
 3. Den Reverse-Proxy ergänzen und neu laden, z. B. Caddy:
@@ -216,7 +216,6 @@ an Administratoren.
 | `ALLOW_REGISTRATION` | Selbstregistrierung erlauben (`true`/`false`) |
 | `COOKIE_SECURE` | Cookies nur über HTTPS (`true` im Produktivbetrieb) |
 | `MAX_UPLOAD_MB` | Obergrenze je Hochladevorgang (Standard 5120 = 5 GB) |
-| `BACKUP_ZIEL`, `BACKUP_SSH_KEY`, `BACKUP_SSH_PORT`, `BACKUP_BEHALTEN_*` | Ziel und Aufbewahrung der stündlichen Sicherung (siehe „Daten und Sicherung“); nur `scripts/sicherung.sh` liest sie, nicht die Anwendung |
 | `MAX_REQUEST_MB` | Obergrenze einer gewöhnlichen Anfrage ohne Upload (Standard 1) – begrenzt auch die Länge einer Wiki-Seite. Gilt auch am Datenstrom; Anfragen ohne `Content-Length` (chunked) werden mit 411 abgewiesen |
 | `SITE_NAME` | Name der Anwendung in Betreffzeilen und Absendern |
 | `PUBLIC_HOST`, `PUBLIC_URL` | Subdomain und Adresse des öffentlichen Wikis |
@@ -301,31 +300,28 @@ verzichten. Bei transaktionalen Mails entscheidet fast ausschließlich die Absen
 
 ## Daten und Sicherung
 
-Alles liegt im Volume `/data`: `stroemis.db` (SQLite), `media/orig` (Originale), `media/web` und `media/thumb` (erzeugte Varianten), `media/wiki` (Wiki-Bilder), `media/avatar` (Profilbilder), `media/pruefungen` (Medien zu Prüfungen), `secret_key` und `tmp/` (Zwischendateien laufender Uploads und Exporte – muss nicht gesichert werden). Verwaiste Dateien unter `media/wiki` räumt der Hintergrundlauf nach einer Woche weg (siehe „Wie die Anwendung abgesichert ist“).
+Alles liegt im Volume `/data`: `stroemis.db` (SQLite), `media/orig` (Originale), `media/web` und `media/thumb` (erzeugte Varianten), `media/wiki` (Wiki-Bilder), `media/avatar` (Profilbilder), `media/pruefungen` (Medien zu Prüfungen), `media/material` (Fotos und Herstellerdokumente des Moduls Material), `secret_key` und `tmp/` (Zwischendateien laufender Uploads und Exporte – muss nicht gesichert werden). Verwaiste Dateien unter `media/wiki` räumt der Hintergrundlauf nach einer Woche weg (siehe „Wie die Anwendung abgesichert ist“).
 
-**Sicherung auf ein NAS** übernimmt `scripts/sicherung.sh` – auf dem Host, nicht im Container (der ist schreibgeschützt und kennt kein NAS). Es läuft **stündlich** per Cron (Minute 7, eingetragen von `scripts/sicherung-einrichten.sh`, das der Deploy-Workflow mit aufruft) und **vor jedem Deploy** aus `.github/workflows/deploy.yml`; schlägt die Sicherung dort fehl, bricht das Deploy ab, und der alte Stand läuft weiter. Jeder Lauf legt auf dem Ziel einen Ordner `JJJJ-MM-TT_HHMM` an (Deploy- und Handläufe mit Zusatz `-deploy`/`-hand`), der den ganzen Datenordner enthält; unveränderte Dateien sind Hardlinks auf den vorigen Schnappschuss (`rsync --link-dest`). Ein Lauf überträgt also nur, was sich geändert hat – und trotzdem ist jeder Ordner für sich vollständig. `latest` zeigt auf den jüngsten. Die Datenbank wird nicht als Datei kopiert (sie läuft im WAL-Modus), sondern über SQLites Online-Backup in einen in sich stimmigen Stand gebracht und mit `quick_check` geprüft; `tmp/`, die WAL-Dateien und die Sperrdatei der Videopflege bleiben außen vor.
+**Stündliche Sicherung nach `~/data.bak`** – ein einzelner Cron-Eintrag auf dem VPS. Er gehört in den Cron des
+Nutzers, dem `data/` gehört (uid 1000), oder in den von root: Nur die dürfen `secret_key` lesen. Mit `crontab -e`
+eintragen und den Pfad anpassen:
 
-Aufbewahrt werden alle Schnappschüsse der letzten `BACKUP_BEHALTEN_STUNDEN` (48), danach je Tag der erste für `BACKUP_BEHALTEN_TAGE` (30) und je Monat der erste für `BACKUP_BEHALTEN_MONATE` (12); der jüngste bleibt immer. Reste abgebrochener Läufe (`*.teil`) räumt der nächste Lauf nach einem Tag weg. Zwei Läufe zugleich gibt es nicht (Sperre unter `data/tmp/sicherung/`); der stündliche wartet, wenn gerade das Deploy sichert. Protokoll: `sicherung.log` neben `docker-compose.yml`.
-
-Einrichten:
-
-```bash
-# Auf dem NAS: einen Nutzer mit SSH-Zugang und rsync, einen Zielordner, den öffentlichen Schlüssel des
-# Deploy-Nutzers vom VPS in dessen authorized_keys. Dann auf dem VPS in der .env:
-BACKUP_ZIEL=sicherung@nas.beispiel.de:/volume1/sicherung/stroemis
-BACKUP_SSH_KEY=~/.ssh/id_ed25519      # Schlüssel des Nutzers, unter dem Cron und Deploy laufen
-BACKUP_SSH_PORT=22
-# Einmal von Hand prüfen und den Cron eintragen:
-scripts/sicherung.sh hand && scripts/sicherung-einrichten.sh
+```
+0 * * * * cd /pfad/zur/produktion && mkdir -p ~/data.bak && docker exec stroemis python -c "import sqlite3; d = sqlite3.connect('/data/tmp/abzug.db'); sqlite3.connect('/data/stroemis.db').backup(d); d.execute('PRAGMA journal_mode=DELETE')" && cp data/tmp/abzug.db ~/data.bak/stroemis.db && rsync -a --delete --exclude=/tmp/ --exclude='/stroemis.db*' data/ ~/data.bak/
 ```
 
-Statt SSH geht auch ein lokaler Pfad (`BACKUP_ZIEL=/mnt/nas/stroemis`, etwa ein per NFS eingehängtes NAS); Hardlinks brauchen dort ein Dateisystem, das sie kann – auf SMB/CIFS wird jeder Schnappschuss eine volle Kopie. Ohne `BACKUP_ZIEL` tut das Skript nichts und meldet das nur; ein Deploy scheitert daran nicht. Auf dem Host braucht es `rsync`, `python3` und `flock`; kann der Deploy-Nutzer den Datenordner nicht lesen (er gehört uid 1000), zieht das Skript die Datenbank über `docker compose exec` aus dem laufenden Container.
+Die Datenbank läuft im WAL-Modus; eine bloße Dateikopie kann mitten in einem Schreibvorgang einen unbrauchbaren
+Stand erwischen. Deshalb zieht der Eintrag sie zuerst über SQLites Online-Backup im laufenden Container ab und legt
+diesen Abzug als `stroemis.db` in die Sicherung, umgestellt auf das gewöhnliche Journal: So entstehen in
+`~/data.bak` auch beim Hineinschauen keine WAL-Dateien, die beim Zurückspielen mitkämen. Danach spiegelt `rsync`
+alle übrigen Dateien: Es überträgt nur Geändertes, und was in `data/` gelöscht wurde, verschwindet auch aus der
+Sicherung. `~/data.bak` hält also immer nur den Stand der letzten vollen Stunde. Auf dem Host braucht es `rsync`.
 
-Zurückspielen:
+Zurückspielen (im Ordner der Produktion):
 
 ```bash
 docker compose down
-rsync -a --delete --exclude=/tmp/ sicherung@nas.beispiel.de:/volume1/sicherung/stroemis/2026-10-16_1207/ data/
+rsync -a --delete ~/data.bak/ data/    # --delete räumt auch alte WAL-Dateien neben der Datenbank weg
 sudo chown -R 1000:1000 data
 docker compose up -d
 ```
@@ -384,7 +380,6 @@ python tests/test_material.py           # Modul Material (Migration, Rollen, Kat
 python scripts/beispieldaten.py         # füllt ./data mit zwei erfundenen Prüfungs-Lehrgängen zum Ausprobieren
 python scripts/material_demo.py --demo  # füllt ./data mit DEMO-Katalog und DEMO-Bestand (nie für echte Prüfungen)
 flask --app "app:create_app()" material import-catalog katalog.json --trocken   # Katalogdatei prüfen
-scripts/sicherung.sh hand               # Datenordner aufs NAS sichern (siehe „Daten und Sicherung“)
 ```
 
 Die JavaScript-Bibliotheken liegen im Arbeitsbaum unter `app/static/vendor/` und werden im Docker-Build noch einmal frisch geladen und gegen `vendor.sha256` geprüft.
