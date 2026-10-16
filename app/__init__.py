@@ -1,13 +1,15 @@
 """strömis.de – Übungsobjekte, Übungsgewässer und Wiki für die Strömungsrettung."""
 import logging
 import os
+import random
 import secrets
 import base64
 import tempfile
 import time
-from datetime import timedelta
+from datetime import date, timedelta
+from urllib.parse import urlsplit
 
-from flask import (Blueprint, Flask, abort, current_app, g, jsonify, redirect, render_template,
+from flask import (Blueprint, Flask, Request, abort, current_app, g, jsonify, redirect, render_template,
                    request, send_from_directory, url_for)
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -137,7 +139,12 @@ def slideshow():
     if not current_app.config["LOGIN_SLIDESHOW"]:
         return jsonify(images=[])
     # Ohne Anmeldung gibt es nur die Bilder selbst – Albumtitel wären sonst durch wiederholtes Abrufen auslesbar.
-    rows = db.query("SELECT file FROM photos WHERE kind = 'image' ORDER BY RANDOM() LIMIT 12")
+    # Und je Tag dieselbe Auswahl statt neuer Zufall je Aufruf: Wer die Adresse in Schleife abriefe,
+    # bekäme sonst nach und nach den ganzen Bestand ohne Anmeldung. Zwölf Bilder am Tag sind das
+    # Schaufenster, nicht die Sammlung.
+    rows = db.query("SELECT file FROM photos WHERE kind = 'image' ORDER BY id")
+    wahl = random.Random(f"{current_app.config['SECRET_KEY']}:{date.today().isoformat()}")
+    rows = wahl.sample(rows, min(12, len(rows)))
     ser = _slide_serializer()
     key = lambda f: os.path.splitext(f)[0] + ".jpg"  # noqa: E731
     return jsonify(images=[{"url": "/media/slide/" + ser.dumps(key(r["file"]))} for r in rows])
@@ -314,8 +321,10 @@ def media(kind, filename):
         abort(401)
     # Ein Profilbild ist eine Angabe zur Person: Wer es entfernt, soll es nicht wochenlang aus
     # dem eigenen Zwischenspeicher weiterbekommen. Eine Stunde genügt, um die Autorenzeilen
-    # eines Rundgangs durchs Wiki abzudecken.
-    dauer = 60 * 60 if kind == "avatar" else 60 * 60 * 24 * 30
+    # eines Rundgangs durchs Wiki abzudecken. Öffentliche Anhänge einen Tag: Die dürfen in
+    # gemeinsamen Zwischenspeichern liegen, und eine zurückgenommene Freigabe soll dort nicht
+    # wochenlang nachwirken.
+    dauer = 60 * 60 if kind == "avatar" else 60 * 60 * 24 if public else 60 * 60 * 24 * 30
     csp = _EMBED_CSP if kind == "wiki" and os.path.splitext(filename)[1].lower() in EMBED_EXT else None
     return _media_response(wurzel, filename, dauer, private=not public, csp=csp)
 
@@ -325,13 +334,49 @@ def healthz():
     return jsonify(ok=True)
 
 
+class _Anfrage(Request):
+    """Hochgeladene Dateien, die Werkzeug nicht mehr im Speicher hält, landen auf dem Datenvolumen
+    (TMP_DIR) statt im Wurzeldateisystem des Containers. Dort wäre ein 5-GB-Film zweimal unterwegs
+    – einmal als Zwischendatei, einmal am Ziel –, und der Platz ist dafür nicht bemessen."""
+
+    def _get_file_stream(self, total_content_length, content_type, filename=None, content_length=None):
+        return tempfile.SpooledTemporaryFile(max_size=500 * 1024, mode="rb+", dir=current_app.config["TMP_DIR"])
+
+
+def _kachel_quellen(cfg):
+    """Herkünfte der Kartenkacheln für die CSP – aus denselben Einstellungen, die die Karte benutzt.
+    Leaflets Platzhalter {s} (Subdomains) wird zum Jokerzeichen. Alles andere an fremden Bildern
+    bleibt draußen: Ein Bild von einer fremden Adresse meldete dieser bei jedem Aufruf, wer die
+    Seite liest – auch im öffentlichen Wiki."""
+    quellen = []
+    for schluessel in ("TILE_URL", "SAT_URL", "SAT_LABELS_URL", "TOPO_URL"):
+        for adresse in str(cfg.get(schluessel) or "").split(","):
+            adresse = adresse.strip().replace("{s}.", "*.")
+            if not adresse:
+                continue
+            try:
+                teile = urlsplit(adresse)
+            except ValueError:
+                continue
+            if teile.scheme in ("http", "https") and teile.netloc:
+                quelle = f"{teile.scheme}://{teile.netloc}"
+                if quelle not in quellen:
+                    quellen.append(quelle)
+    return " ".join(quellen)
+
+
 def create_app():
     data_dir = os.environ.get("DATA_DIR", "/data")
     media_dir = os.path.join(data_dir, "media")
     os.makedirs(media_dir, exist_ok=True)
+    # Zwischendateien auf dem Datenvolumen: große Upload-Teile (siehe _Anfrage) und der ZIP-Export.
+    tmp_dir = os.path.join(data_dir, "tmp")
+    os.makedirs(tmp_dir, exist_ok=True)
 
     app = Flask(__name__, static_folder="static", template_folder="templates")
+    app.request_class = _Anfrage
     app.config.update(
+        TMP_DIR=tmp_dir,
         SECRET_KEY=_load_secret(data_dir),
         DATA_DIR=data_dir,
         MEDIA_DIR=media_dir,
@@ -467,6 +512,13 @@ def create_app():
             limit = app.config["MAX_CONTENT_LENGTH"]
         else:
             limit = app.config["MAX_REQUEST_LENGTH"]
+        # Eine Anfrage ohne Content-Length (Transfer-Encoding: chunked) trägt keine Länge – und
+        # wurde sonst bis zur prozessweiten Filmgrenze in den Arbeitsspeicher gelesen, auch ohne
+        # Anmeldung. Browser schicken die Länge immer mit; wer sie weglässt, bekommt 411. Dazu die
+        # Grenze am Datenstrom selbst: Werkzeug liest dann in keinem Fall mehr als diese Zahl.
+        if request.content_length is None and request.headers.get("Transfer-Encoding"):
+            return jsonify(error="Diese Anfrage braucht eine Content-Length-Kopfzeile."), 411
+        request.max_content_length = limit
         if (request.content_length or 0) > limit:
             return jsonify(error="Die gesendeten Daten sind zu groß (Grenze: "
                                  f"{limit // (1024 * 1024)} MB)."), 413
@@ -495,7 +547,8 @@ def create_app():
         resp.headers.setdefault(
             "Content-Security-Policy",
             f"default-src 'self'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: blob: https:; media-src 'self' blob:; font-src 'self' data:; connect-src 'self'; "
+            f"img-src 'self' data: blob: {_kachel_quellen(app.config)}; media-src 'self' blob:; "
+            "font-src 'self' data:; connect-src 'self'; "
             "frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'")
         return resp
 
@@ -506,8 +559,10 @@ def create_app():
 
     @app.errorhandler(413)
     def too_large(_e):
-        return jsonify(error="Die gesendeten Daten sind zu groß (Grenze: "
-                             f"{app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)} MB)."), 413
+        # Die Grenze der Route (size_guard), nicht die prozessweite: Sonst stünde bei einem zu großen
+        # JSON-Aufruf „5120 MB“ in der Meldung.
+        grenze = request.max_content_length or app.config["MAX_CONTENT_LENGTH"]
+        return jsonify(error=f"Die gesendeten Daten sind zu groß (Grenze: {grenze // (1024 * 1024)} MB)."), 413
 
     @app.errorhandler(404)
     def not_found(_e):

@@ -3,6 +3,7 @@ import http.client
 import json
 import math
 import os
+import sqlite3
 import threading
 import time
 import unicodedata
@@ -14,7 +15,7 @@ from datetime import datetime
 from flask import Blueprint, current_app, jsonify, request
 
 from . import db
-from .auth import current_user, darf_inhalte, eingabefehler_abfangen, is_admin, json_body, login_required
+from .auth import current_user, darf_inhalte, eingabefehler_abfangen, json_body, login_required
 from .images import delete_photo_files, store_upload
 
 bp = Blueprint("albums", __name__, url_prefix="/api")
@@ -48,6 +49,7 @@ _geo_merker = {}                          # Suchwort -> (Zeitpunkt, Treffer)
 GEO_ABSTAND_SEK = 1.1                     # Nominatim erlaubt höchstens eine Anfrage je Sekunde
 GEO_MERKER_SEK = 60 * 60
 GEO_MERKER_MAX = 200
+GEO_WARTEN_MAX_SEK = 3.0                  # länger wartet keine Anfrage auf ihren Platz in der Reihe
 
 
 def _key(file):
@@ -165,12 +167,16 @@ def geocode():
         merk = _geo_merker.get(frage.lower())
         if merk and jetzt - merk[0] < GEO_MERKER_SEK:
             return jsonify(results=merk[1])
-        # Der Dienst verträgt eine Anfrage je Sekunde. Wer schneller tippt, wartet kurz –
-        # das ist immer noch freundlicher, als abgewiesen zu werden.
-        warten = GEO_ABSTAND_SEK - (jetzt - _geo_zuletzt[0])
-        if warten > 0:
-            time.sleep(min(warten, GEO_ABSTAND_SEK))
-        _geo_zuletzt[0] = time.time()
+        # Der Dienst verträgt eine Anfrage je Sekunde. Jede Anfrage reserviert sich den nächsten
+        # freien Zeitpunkt und wartet darauf – außerhalb der Sperre, sonst stünden alle anderen
+        # Threads des Arbeiters hinter ihr an. Wer mehrere Sekunden warten müsste, bekommt gleich
+        # eine Absage statt eines hängenden Aufrufs.
+        start = max(jetzt, _geo_zuletzt[0] + GEO_ABSTAND_SEK)
+        if start - jetzt > GEO_WARTEN_MAX_SEK:
+            return jsonify(error="Die Adresssuche ist gerade ausgelastet. Bitte gleich noch einmal."), 429
+        _geo_zuletzt[0] = start
+    if start > jetzt:
+        time.sleep(start - jetzt)
 
     ziel = dienst + "?" + urllib.parse.urlencode({
         "q": frage, "format": "jsonv2", "limit": "5", "accept-language": "de"})
@@ -326,17 +332,25 @@ def _bilder_ablegen(aid, files, posters):
         except ValueError as exc:
             errors.append(str(exc))
             continue
-        except Exception as exc:
-            # Eine kaputte Datei darf den ganzen Hochladevorgang nicht abbrechen.
+        except Exception:
+            # Eine kaputte Datei darf den ganzen Hochladevorgang nicht abbrechen. Der Grund steht
+            # im Protokoll, nicht in der Antwort: Pillow und das Dateisystem nennen darin Serverpfade.
             current_app.logger.exception("Upload von %s fehlgeschlagen", f.filename)
-            errors.append(f"Die Datei „{f.filename or '?'}“ konnte nicht verarbeitet werden ({exc}).")
+            errors.append(f"Die Datei „{f.filename or '?'}“ konnte nicht verarbeitet werden.")
             continue
-        pid = db.execute(
-            "INSERT INTO photos (album_id, owner_id, file, original_name, width, height, lat, lon, altitude, "
-            "geo_source, taken_at, sort, created_at, kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (aid, current_user()["id"], meta["file"], meta["original_name"], meta["width"], meta["height"],
-             meta["lat"], meta["lon"], meta["altitude"], "exif" if meta["lat"] is not None else None,
-             meta["taken_at"], sort_base + i, ts, meta["kind"]))
+        try:
+            pid = db.execute(
+                "INSERT INTO photos (album_id, owner_id, file, original_name, width, height, lat, lon, altitude, "
+                "geo_source, taken_at, sort, created_at, kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (aid, current_user()["id"], meta["file"], meta["original_name"], meta["width"], meta["height"],
+                 meta["lat"], meta["lon"], meta["altitude"], "exif" if meta["lat"] is not None else None,
+                 meta["taken_at"], sort_base + i, ts, meta["kind"]))
+        except sqlite3.IntegrityError:
+            # Das Album ist inzwischen gelöscht: Die eben abgelegten Dateien dürfen nicht als
+            # Waisen liegen bleiben.
+            delete_photo_files(current_app.config["MEDIA_DIR"], meta["file"])
+            errors.append("Das Album wurde zwischenzeitlich gelöscht.")
+            break
         neu = db.query("SELECT * FROM photos WHERE id = ?", (pid,), one=True)
         created.append(photo_json(neu))
     db.execute("UPDATE albums SET updated_at = ? WHERE id = ?", (ts, aid))

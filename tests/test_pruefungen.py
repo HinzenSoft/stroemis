@@ -1329,6 +1329,9 @@ def test_rechte_und_ergebnis():
         assert r.status_code == 201 and r.json["lehrgang"]["darf_leiten"] is True and len(leitung_von(r.json["lehrgang"], zweit_id)) == 1, r.get_json()
         zweits = r.json["lehrgang"]["id"]
         liste = {e["id"]: e for e in zweit.get("/api/pruefungen/lehrgaenge").json["lehrgaenge"]}
+        # Die Liste bestimmt das Leitungsrecht mit einer Abfrage für alle Zeilen – sie muss dasselbe
+        # sagen wie die Einzelansicht.
+        assert liste[admin_lg["id"]]["darf_leiten"] is False and liste[zweits]["darf_leiten"] is True, liste
         for e in liste.values():
             hat_felder(e, *LEHRGANG_KURZ2)
         assert liste[lid]["darf_leiten"] is False and liste[zweits]["darf_leiten"] is True and liste[admin_lg["id"]]["darf_leiten"] is False
@@ -1655,12 +1658,206 @@ def test_rechte_und_ergebnis():
         print("Rechte-/Ergebnis-Test bestanden.")
 
 
+def test_sicherheit():
+    """Nachträge aus dem Sicherheits-Review: Leitung nur als ganzes Wort, Namensvettern beim Import
+    werden nicht verschmolzen, Einfrieren deckt Löschen und Definitionen ab, Bewertung und Haken werden
+    in einem Zug geschrieben, Dateien verwaisen nicht, Importgrenzen und eine kaputte Zuordnung ergeben
+    400 statt 500."""
+    from app.api_pruefungen import _ist_leitungsfunktion
+    for funktion, erwartet in (("Lehrgangsleitung", True), ("Leitung", True), ("Leiter:in", True), ("Leiter/in", True),
+                               ("Leiterin", True), ("Leitung und Prüfer", True), ("Ltg.", True), ("LGL", True),
+                               ("Begleitung", False), ("Anleitung Knoten", False), ("Ausbildungsleiter", False),
+                               ("Referierende:r", False), ("", False), (None, False)):
+        assert _ist_leitungsfunktion(funktion) is erwartet, funktion
+    with tempfile.TemporaryDirectory() as tmp:
+        app, adm, pr, pr_id, nix, nix_id = umgebung(tmp)
+        assert adm.put(f"/api/admin/users/{pr_id}", json={"is_pruefer": True}).status_code == 200
+        adm_id = adm.get("/api/me").json["user"]["id"]
+        assert adm.put(f"/api/admin/users/{adm_id}", json={"is_pruefer": True}).status_code == 200
+        r = adm.post("/api/admin/users", json={"email": "zweit@example.org", "password": "passwort1",
+                                               "name": "Zacharias Zweitprüfer", "gliederung": "OG Musterstadt",
+                                               "role": "editor", "is_pruefer": True})
+        assert r.status_code == 201, r.json
+        zweit_id = r.json["user"]["id"]
+        zweit = app.test_client()
+        assert zweit.post("/api/auth/login", json={"email": "zweit@example.org", "password": "passwort1"}).status_code == 200
+
+        # --- M3: Ohne Kennzeichen entscheidet das ganze Wort, nicht der Teilstring „leit“ --------------------
+        r = pr.post("/api/pruefungen/lehrgaenge", json={"titel": "Wortliste", "ausbilder": [
+            {"user_id": None, "name": "Berta Begleitung", "funktion": "Begleitung"},
+            {"user_id": None, "name": "Anton Anleitung", "funktion": "Anleitung Knoten"},
+            {"user_id": None, "name": "Lena Leitung", "funktion": "Leitung und Prüferin"},
+            {"user_id": zweit_id, "funktion": "Begleitung", "ist_leitung": True}]})      # das Kennzeichen schlägt das Wort
+        assert r.status_code == 201, r.get_json()
+        assert [(a["name"], a["ist_leitung"]) for a in r.json["lehrgang"]["ausbilder"]] == [
+            ("Petra Prüferin", True), ("Berta Begleitung", False), ("Anton Anleitung", False),
+            ("Lena Leitung", True), ("Zacharias Zweitprüfer", True)], r.json["lehrgang"]["ausbilder"]
+        assert zweit.get(f"/api/pruefungen/lehrgaenge/{r.json['lehrgang']['id']}").json["lehrgang"]["darf_leiten"] is True
+        # Aus der Importdatei: „Begleitung“ wird Ausbilderin, aber nicht Leitung.
+        r = _import(pr, _xlsx([["Vorname", "Nachname", "Rolle"], ["Ida", "Import", "TN"],
+                               ["Berta", "Begleit", "Begleitung"], ["Lena", "Leit", "Lehrgangsleitung"]]), name="Wort.xlsx")
+        assert r.status_code == 201, r.get_json()
+        ausb = {a["name"]: a["ist_leitung"] for a in r.json["lehrgang"]["ausbilder"]}
+        assert ausb["Berta Begleit"] is False and ausb["Lena Leit"] is True, ausb
+
+        # --- M2: Zwei Namensvettern in der Datei, eine Person ohne Geburtsdatum im Lehrgang -----------------
+        zw = pr.post("/api/pruefungen/lehrgaenge", json={"titel": "Namensvettern"}).json["lehrgang"]
+        dana = pr.post(f"/api/pruefungen/lehrgaenge/{zw['id']}/teilnehmer", json={"name": "Doppel", "vorname": "Dana"}).json["teilnehmer"]
+        assert pr.post(f"/api/pruefungen/lehrgaenge/{zw['id']}/voraussetzungen", json={"bezeichnung": "EH"}).status_code == 201
+
+        def zwei_danas():
+            return _xlsx([["Vorname", "Nachname", "Geburtsdatum", "EH"],
+                          ["Dana", "Doppel", "01.01.2005", "ja"], ["Dana", "Doppel", "02.02.2006", "ja"]])
+        r = _vorschau(pr, zwei_danas(), lehrgang_id=zw["id"])
+        assert r.status_code == 200, r.get_json()
+        assert [(t["vorhanden"], t["mehrdeutig"]) for t in r.json["teilnehmer"]] == [(True, True), (True, True)], r.json["teilnehmer"]
+        assert sum("dieselbe Person" in w for w in r.json["warnungen"]) == 2, r.json["warnungen"]
+        r = _import(pr, zwei_danas(), lehrgang_id=zw["id"])
+        assert r.status_code == 201 and (r.json["angelegt"], r.json["aktualisiert"]) == (0, 0), r.get_json()
+        tn = r.json["lehrgang"]["teilnehmer"]
+        assert len(tn) == 1 and tn[0]["id"] == dana["id"] and tn[0]["geburtsdatum"] is None and tn[0]["voraussetzungen"] == {}, tn
+        # Eine Zeile allein passt und füllt das Geburtsdatum – danach ist die zweite Dana eine andere Person.
+        r = _import(pr, _xlsx([["Vorname", "Nachname", "Geburtsdatum", "EH"], ["Dana", "Doppel", "01.01.2005", "ja"]]), lehrgang_id=zw["id"])
+        assert r.status_code == 201 and r.json["aktualisiert"] == 1, r.get_json()
+        assert r.json["lehrgang"]["teilnehmer"][0]["geburtsdatum"] == "2005-01-01"
+        r = _import(pr, zwei_danas(), lehrgang_id=zw["id"])
+        assert r.status_code == 201 and (r.json["angelegt"], r.json["aktualisiert"]) == (1, 1), r.get_json()
+        assert sorted(t["geburtsdatum"] for t in r.json["lehrgang"]["teilnehmer"]) == ["2005-01-01", "2006-02-02"]
+
+        # --- L1: Eingefrorene Person nicht löschbar; ihre Leistungen, Kriterien, Voraussetzungen gesperrt ---
+        lg = pr.post("/api/pruefungen/lehrgaenge", json={"titel": "Einfrieren"}).json["lehrgang"]
+        lid = lg["id"]
+        anna = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/teilnehmer", json={"name": "Beispiel", "vorname": "Anna"}).json["teilnehmer"]
+        bert = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/teilnehmer", json={"name": "Muster", "vorname": "Bert"}).json["teilnehmer"]
+        drsa = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/voraussetzungen", json={"bezeichnung": "DRSA"}).json["voraussetzung"]
+        eh = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/voraussetzungen", json={"bezeichnung": "EH"}).json["voraussetzung"]
+        wurf = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/leistungen", json={"bezeichnung": "Wurf", "kriterien": ["Griff"]}).json["leistung"]
+        knoten = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/leistungen", json={"bezeichnung": "Knoten"}).json["leistung"]
+        griff = wurf["kriterien"][0]
+        assert pr.put(f"/api/pruefungen/teilnehmer/{anna['id']}/voraussetzungen/{drsa['id']}", json={"erfuellt": True}).status_code == 200
+        r = pr.post(f"/api/pruefungen/teilnehmer/{anna['id']}/leistungen/{wurf['id']}/versuche",
+                    json={"ergebnis": "bestanden", "kriterien": {str(griff["id"]): True}})
+        assert r.status_code == 201 and r.json["versuch"]["kriterien"] == {str(griff["id"]): True}, r.get_json()
+        assert pr.post(f"/api/pruefungen/teilnehmer/{bert['id']}/leistungen/{wurf['id']}/versuche", json={"ergebnis": "bestanden"}).status_code == 201
+        assert pr.put(f"/api/pruefungen/teilnehmer/{anna['id']}/ergebnis", json={"ergebnis": "bestanden"}).status_code == 200
+
+        def gesperrt(r):
+            assert r.status_code == 409, (r.status_code, r.get_json())
+            assert "eingefroren" in r.json["error"], r.json
+        for client in (pr, adm):
+            gesperrt(client.delete(f"/api/pruefungen/teilnehmer/{anna['id']}", headers=H))
+        gesperrt(pr.put(f"/api/pruefungen/leistungen/{wurf['id']}", json={"bezeichnung": "Wurf (neu)"}))
+        gesperrt(pr.put(f"/api/pruefungen/leistungen/{wurf['id']}", json={"zeitansatz_sekunden": 30}))
+        gesperrt(pr.delete(f"/api/pruefungen/leistungen/{wurf['id']}", headers=H))
+        gesperrt(pr.put(f"/api/pruefungen/kriterien/{griff['id']}", json={"bezeichnung": "Griff (neu)"}))
+        gesperrt(pr.delete(f"/api/pruefungen/kriterien/{griff['id']}", headers=H))
+        gesperrt(pr.put(f"/api/pruefungen/voraussetzungen/{drsa['id']}", json={"bezeichnung": "DRSA Silber"}))
+        gesperrt(pr.delete(f"/api/pruefungen/voraussetzungen/{drsa['id']}", headers=H))
+        # Nicht betroffen: Definitionen ohne Daten eingefrorener Personen, andere Personen, Umsortieren.
+        assert pr.put(f"/api/pruefungen/leistungen/{knoten['id']}", json={"bezeichnung": "Knoten (neu)"}).status_code == 200
+        assert pr.post(f"/api/pruefungen/leistungen/{wurf['id']}/kriterien", json={"bezeichnung": "Ziel"}).status_code == 201
+        assert pr.put(f"/api/pruefungen/voraussetzungen/{eh['id']}", json={"bezeichnung": "EH-Kurs"}).status_code == 200
+        assert pr.delete(f"/api/pruefungen/voraussetzungen/{eh['id']}", headers=H).status_code == 200
+        assert pr.put(f"/api/pruefungen/lehrgaenge/{lid}/leistungen/reihenfolge", json={"ids": [knoten["id"], wurf["id"]]}).status_code == 200
+        assert pr.delete(f"/api/pruefungen/teilnehmer/{bert['id']}", headers=H).status_code == 200
+        # Nichts davon hat Spuren hinterlassen.
+        det = pr.get(f"/api/pruefungen/lehrgaenge/{lid}").json["lehrgang"]
+        assert [t["id"] for t in det["teilnehmer"]] == [anna["id"]]
+        w = next(l for l in det["leistungen"] if l["id"] == wurf["id"])
+        assert w["bezeichnung"] == "Wurf" and w["zeitansatz_sekunden"] is None, w
+        assert [k["bezeichnung"] for k in w["kriterien"]] == ["Griff", "Ziel"], w["kriterien"]
+        assert [v["bezeichnung"] for v in det["voraussetzungen"]] == ["DRSA"]
+        # Ergebnis aufgehoben: alles wieder erlaubt.
+        assert pr.put(f"/api/pruefungen/teilnehmer/{anna['id']}/ergebnis", json={"ergebnis": None}).status_code == 200
+        assert pr.put(f"/api/pruefungen/leistungen/{wurf['id']}", json={"bezeichnung": "Wurf (neu)"}).status_code == 200
+        assert pr.delete(f"/api/pruefungen/kriterien/{griff['id']}", headers=H).status_code == 200
+        assert pr.delete(f"/api/pruefungen/voraussetzungen/{drsa['id']}", headers=H).status_code == 200
+        assert pr.delete(f"/api/pruefungen/teilnehmer/{anna['id']}", headers=H).status_code == 200
+        # Der Lehrgang als Ganzes bleibt löschbar, auch mit eingefrorener Person darin.
+        clara = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/teilnehmer", json={"name": "Probe", "vorname": "Clara"}).json["teilnehmer"]
+        assert pr.put(f"/api/pruefungen/teilnehmer/{clara['id']}/ergebnis", json={"ergebnis": "nicht_bestanden"}).status_code == 200
+        assert pr.delete(f"/api/pruefungen/lehrgaenge/{lid}", headers=H).status_code == 200
+        assert pr.get(f"/api/pruefungen/lehrgaenge/{lid}").status_code == 404
+
+        # --- L2/L3: Nachprüfung nur nach Mangel (im INSERT geprüft); Haken erst nach gelungenem UPDATE -----
+        lg = pr.post("/api/pruefungen/lehrgaenge", json={"titel": "Versuche"}).json["lehrgang"]
+        lid = lg["id"]
+        tn = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/teilnehmer", json={"name": "Muster", "vorname": "Max"}).json["teilnehmer"]
+        lei = pr.post(f"/api/pruefungen/lehrgaenge/{lid}/leistungen", json={"bezeichnung": "Wurf", "kriterien": ["Griff", "Ziel"]}).json["leistung"]
+        k1, k2 = (str(k["id"]) for k in lei["kriterien"])
+        zelle = f"/api/pruefungen/teilnehmer/{tn['id']}/leistungen/{lei['id']}/versuche"
+        v1 = pr.post(zelle, json={"ergebnis": "bestanden", "kriterien": {k1: True}}).json["versuch"]
+        assert v1["kriterien"] == {k1: True}
+        r = pr.post(zelle, json={"ergebnis": "mangelhaft", "kommentar": "doch nicht", "nachpruefung": True})
+        assert r.status_code == 409 and "mangelhaften" in r.json["error"], r.get_json()
+        assert [v["id"] for v in pr.get(zelle).json["versuche"]] == [v1["id"]]
+        r = pr.put(f"/api/pruefungen/versuche/{v1['id']}", json={"ergebnis": "mangelhaft", "kommentar": "Seil verdreht",
+                                                                "kriterien": {k1: False, k2: False}})
+        assert r.status_code == 200 and r.json["versuch"]["kriterien"] == {k1: False, k2: False}, r.get_json()
+        r = pr.post(zelle, json={"ergebnis": "bestanden", "nachpruefung": True, "kriterien": {k1: True, k2: True}})
+        assert r.status_code == 201 and r.json["versuch"]["versuch_nr"] == 2 and r.json["versuch"]["kriterien"] == {k1: True, k2: True}, r.get_json()
+        # Versuch 1 lässt sich wegen der Nachprüfung nicht mehr auf „bestanden“ setzen – und die mitgeschickten
+        # Haken bleiben dann ebenfalls, wie sie waren (vorher wurden sie trotz 409 überschrieben).
+        r = pr.put(f"/api/pruefungen/versuche/{v1['id']}", json={"ergebnis": "bestanden", "kriterien": {k1: True, k2: True}})
+        assert r.status_code == 409, r.get_json()
+        v1_jetzt = pr.get(zelle).json["versuche"][0]
+        assert v1_jetzt["kriterien"] == {k1: False, k2: False} and v1_jetzt["ergebnis"] == "mangelhaft", v1_jetzt
+        # Nur die Haken ändern geht weiter – ohne neuen Verlaufseintrag.
+        r = pr.put(f"/api/pruefungen/versuche/{v1['id']}", json={"kriterien": {k1: True}})
+        assert r.status_code == 200 and r.json["versuch"]["kriterien"] == {k1: True}, r.get_json()
+        assert len(r.json["versuch"]["verlauf"]) == len(v1_jetzt["verlauf"]) == 1
+
+        # --- L5: Medium zweimal löschen → 404, Datei nur einmal weg; Profilbild-Wechsel räumt auf ---------
+        medien = lade_medien(pr, v1["id"])
+        pfade = medien_dateien(tmp, medien[0])
+        assert all(os.path.exists(p) for p in pfade)
+        assert pr.delete(f"/api/pruefungen/medien/{medien[0]['id']}", headers=H).status_code == 200
+        assert not any(os.path.exists(p) for p in pfade), pfade
+        assert pr.delete(f"/api/pruefungen/medien/{medien[0]['id']}", headers=H).status_code == 404
+        assert pr.delete(f"/api/pruefungen/medien/{medien[1]['id']}", headers=H).status_code == 200
+        assert pr.delete(f"/api/pruefungen/medien/{medien[1]['id']}", headers=H).status_code == 404
+        r = bild_hochladen(pr, tn["id"], "a.jpg")
+        assert r.status_code == 200, r.get_json()
+        pfad_a = bild_pfad(tmp, r.json["teilnehmer"])
+        r = bild_hochladen(pr, tn["id"], "b.png", inhalt=png())
+        assert r.status_code == 200, r.get_json()
+        pfad_b = bild_pfad(tmp, r.json["teilnehmer"])
+        assert not os.path.exists(pfad_a) and os.path.isfile(pfad_b)
+        assert pr.delete(f"/api/pruefungen/teilnehmer/{tn['id']}/bild", headers=H).status_code == 200
+        assert os.listdir(os.path.join(tmp, "media", "pruefungen", "avatar")) == []
+
+        # --- L9/H1/L6 über die Schnittstelle: kaputte Zuordnung und dünn besetzte Datei → 400, nichts angelegt
+        anzahl = len(pr.get("/api/pruefungen/lehrgaenge").json["lehrgaenge"])
+        tief = "[" * 100_000 + "]" * 100_000
+        r = _vorschau(pr, _xlsx([["Vorname", "Nachname"], ["Ida", "Zwei"]]), zuordnung=tief)
+        assert r.status_code == 400, (r.status_code, r.get_json())
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["Vorname", "Nachname"])
+        ws.append(["Max", "Muster"])
+        ws.cell(30_000, 1, "x")
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        r = _import(pr, buf, name="duenn.xlsx")
+        assert r.status_code == 400 and "Zeile 30000" in r.json["error"], (r.status_code, r.get_json())
+        assert len(pr.get("/api/pruefungen/lehrgaenge").json["lehrgaenge"]) == anzahl
+        # Zusatzspalten begrenzt: 55 in der Datei, 50 am Datensatz, Titel und Wert gekürzt.
+        kopf = ["Vorname", "Nachname", "T" * 150] + [f"Z{i}" for i in range(54)]
+        r = _import(pr, _xlsx([kopf, ["Max", "Muster", "w" * 600] + [f"wert{i}" for i in range(54)]]), name="breit.xlsx")
+        assert r.status_code == 201, r.get_json()
+        extra = r.json["lehrgang"]["teilnehmer"][0]["extra"]
+        assert len(extra) == 50 and extra["T" * 100] == "w" * 500, (len(extra), sorted(extra)[:3])
+        print("Sicherheits-Test bestanden.")
+
+
 if __name__ == "__main__":
     test_pruefungen()
     test_import()
     test_import_modul()
     test_nachtraege()
     test_rechte_und_ergebnis()
+    test_sicherheit()
 
 
 def test_mehrere_leitungen():

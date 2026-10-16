@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
 ARG LEAFLET=1.9.4
 ARG MARKERCLUSTER=1.5.3
 ARG MARKED=12.0.2
-ARG DOMPURIFY=3.1.6
+ARG DOMPURIFY=3.4.17
 ARG TOASTUI=3.2.2
 # Prüfsumme der optionalen deutschen Sprachdatei (siehe unten – sie darf fehlen, der Rest nicht).
 ARG DE_DE_SHA=a904840fa6f6e0983570e0aa258f7b0bddcc83133969a3e69df526c7cb905a8e
@@ -84,7 +84,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY --from=vendor /vendor ./app/static/vendor
-RUN useradd --system --uid 1000 --create-home stroemis && mkdir -p /data && chown -R stroemis:stroemis /data /srv
+# Nur /data gehört dem Laufzeitnutzer. Der Programmcode unter /srv bleibt root und damit für den
+# laufenden Dienst unveränderlich – ein Fehler in der Anwendung kann so nicht ihren eigenen Code
+# umschreiben. Bytecode wird ohnehin nicht geschrieben (PYTHONDONTWRITEBYTECODE).
+RUN useradd --system --uid 1000 --create-home stroemis && mkdir -p /data && chown -R stroemis:stroemis /data
 USER stroemis
 VOLUME ["/data"]
 EXPOSE 8080
@@ -93,7 +96,10 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
 # Das Zugriffsprotokoll führt nur den Pfad, nicht die Abfrage: sonst stünden dort Einmal-Links
 # (etwa aus älteren Passwort-E-Mails) im Klartext. Aus demselben Grund fehlt der Referer –
 # er trägt Pfad und Abfrage der verweisenden Seite vollständig mit.
+# Gunicorn ab 25 öffnet von sich aus einen Steuer-Socket (gunicornc) unter $HOME/.gunicorn; das
+# Wurzeldateisystem ist schreibgeschützt (docker-compose.yml, read_only), und gebraucht wird die
+# Schnittstelle nicht – also aus.
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "4", "--timeout", "3600", \
-     "--forwarded-allow-ips", "*", "--access-logfile", "-", \
+     "--forwarded-allow-ips", "*", "--no-control-socket", "--access-logfile", "-", \
      "--access-logformat", "%(h)s %(l)s %(u)s %(t)s \"%(m)s %(U)s %(H)s\" %(s)s %(b)s \"%(a)s\"", \
      "app:create_app()"]

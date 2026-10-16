@@ -127,12 +127,37 @@ window.S = (function () {
 
   const CAT = { seil: "Seiltechnik", wasser: "Übungsgewässer", sonstiges: "Sonstiges" };
 
-  document.addEventListener("click", async (e) => {
-    if (e.target.id === "logout") {
-      try { await api("/api/auth/logout", { method: "POST", body: {} }); }
-      catch (err) { toast("Abmelden hat nicht geklappt: " + err.message, true); return; }
-      location.href = "/login";
+  /* Was beim Abmelden aus dem Browser verschwindet: Entwürfe, die Stoppuhr einer Prüfung –
+     alles, was Inhalt trägt. Am gemeinsamen Rechner fände sonst die nächste Person den
+     ungespeicherten Text ihres Vorgängers im Entwurfsbalken. Einstellungen ohne Inhalt
+     (Breite der Seitenleiste, zugeklapptes Verzeichnis) bleiben; sie verraten nichts. Die
+     Ansichtswahl der Prüfungsseite teilt den Vorsatz „pruef:“ und geht mit – ein Klick stellt
+     sie wieder her. */
+  const BLEIBT = new Set(["stroemis-sidebar", "stroemis-toc-aus"]);
+  function ablageLeeren() {
+    for (const speicher of [window.localStorage, window.sessionStorage]) {
+      try {
+        const weg = [];
+        for (let i = 0; i < speicher.length; i++) {
+          const k = speicher.key(i);
+          if (k && /^(stroemis-|pruef:)/.test(k) && !BLEIBT.has(k)) weg.push(k);
+        }
+        weg.forEach((k) => speicher.removeItem(k));
+      } catch (e) { /* kein Speicher (privater Modus, abgeschaltet) – dann gibt es auch nichts zu löschen */ }
     }
+  }
+
+  document.addEventListener("click", async (e) => {
+    /* Nur der Knopf in der Hauptnavigation (base.html) meldet ab. Geprüft wurde vorher allein
+       die id – und ein <span id="logout"> im Artikel warf damit jeden hinaus, der es anklickte.
+       Die Reinigung (markdown.js, RAHMEN_ID) lässt die id im Inhalt inzwischen nicht mehr zu;
+       das hier ist der zweite Riegel. */
+    const knopf = e.target.closest && e.target.closest("button#logout, a#logout");
+    if (!knopf || !knopf.closest("header nav")) return;
+    try { await api("/api/auth/logout", { method: "POST", body: {} }); }
+    catch (err) { toast("Abmelden hat nicht geklappt: " + err.message, true); return; }
+    ablageLeeren();
+    location.href = "/login";
   });
 
   /* Sichtbarer Ausschnitt: Auf dem iPhone nimmt die Tastatur die halbe Höhe, aber 100dvh weiß davon

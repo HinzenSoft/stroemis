@@ -565,11 +565,19 @@ def execute_zeilen(sql, args=()):
 
 
 @contextmanager
-def transaction():
+def transaction(sofort=False):
     """Mehrere Schreibzugriffe als eine Einheit – bricht einer ab, bleibt nichts halb erledigt.
-    execute() innerhalb des Blocks schreibt mit, committet aber erst am Ende."""
+    execute() innerhalb des Blocks schreibt mit, committet aber erst am Ende.
+
+    sofort=True holt die Schreibsperre schon beim Betreten (BEGIN IMMEDIATE), nicht erst beim
+    ersten Schreibbefehl. Gebraucht, wo eine Prüfung und das Schreiben zusammengehören („gibt es
+    schon einen Nutzer?“ → „dann ist dieser der erste“): Zwei Arbeiter, die gleichzeitig lesen,
+    kämen sonst beide zu demselben Schluss und schrieben beide."""
     conn = get_db()
-    g.tx_depth = getattr(g, "tx_depth", 0) + 1
+    tiefe = getattr(g, "tx_depth", 0)
+    if sofort and not tiefe and not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    g.tx_depth = tiefe + 1
     try:
         yield conn
     except BaseException:

@@ -1,6 +1,7 @@
 """Anmeldung, Registrierung, Passwort-Reset und Profil."""
 import re
 import sqlite3
+import threading
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
@@ -47,8 +48,48 @@ def current_user():
         g.user = None
         if uid:
             u = db.query("SELECT * FROM users WHERE id = ? AND active = 1", (uid,), one=True)
+            # Die Sitzung trägt den Passwortstand mit (sitzung_beginnen): Nach einer Änderung des
+            # Passworts – auch per Reset-Link – gilt sie in jedem anderen Browser nicht mehr.
+            if u and session.get("pw") != sitzungsmarke(u):
+                u = None
             g.user = u
     return g.user
+
+
+def sitzungsmarke(u):
+    return (u.get("password_hash") or "")[-12:]
+
+
+def sitzung_beginnen(u):
+    """Anmelden: die Sitzung an Konto UND Passwortstand binden. Ändert sich das Passwort,
+    verfallen alle anderen Sitzungen dieser Person – ein entwendetes Cookie hilft danach nicht
+    mehr, und wer sein Passwort zurücksetzt, wirft damit auch fremde Anmeldungen hinaus."""
+    session.clear()
+    session["uid"] = u["id"]
+    session["pw"] = sitzungsmarke(u)
+    session.permanent = True
+
+
+def _einzeilig(text, n=120):
+    """Ein Feld für eine Zeile: Steuerzeichen und Zeilenumbrüche raus, Länge gedeckelt. Ein
+    Zeilenumbruch im Namen landete sonst im Betreff der Admin-Mail – die der Mailer zu Recht
+    verwirft, womit die Anfrage unbemerkt nur unter /admin läge."""
+    text = "".join(c for c in (text or "") if c >= " " and c != "\x7f")
+    return text.strip()[:n]
+
+
+def _im_hintergrund(funktion, *args):
+    """Mailversand neben der Anfrage statt in ihr: Die Antwortzeit soll nicht verraten, ob eine
+    Mail hinausging – sonst ließe sich an der Dauer ablesen, welche Adressen ein Konto haben."""
+    app = current_app._get_current_object()
+
+    def lauf():
+        with app.app_context():
+            try:
+                funktion(*args)
+            except Exception as exc:
+                app.logger.error("Mailversand im Hintergrund fehlgeschlagen: %s", exc)
+    threading.Thread(target=lauf, name="mail", daemon=True).start()
 
 
 def is_admin(user=None):
@@ -300,8 +341,8 @@ def register():
         for scope in scopes:
             note_attempt(scope)
     pw = sfield(d, "password")
-    name = sfield(d, "name").strip()
-    gliederung = sfield(d, "gliederung").strip()
+    name = _einzeilig(sfield(d, "name"))
+    gliederung = _einzeilig(sfield(d, "gliederung"))
     if not EMAIL_RE.match(email):
         return jsonify(error="Bitte eine gültige E-Mail-Adresse angeben."), 400
     if not name or not gliederung:
@@ -325,18 +366,24 @@ def register():
             current_app.logger.error("Hinweismail an %s fehlgeschlagen: %s", email, exc)
         current_app.logger.info("Kontoanfrage für bereits vorhandene Adresse %s abgewiesen.", email)
         return jsonify(pending=True, message=PENDING_MSG), 201
-    first = not db.query("SELECT 1 FROM users LIMIT 1", one=True)
-    uid = db.execute(
-        "INSERT INTO users (email, password_hash, name, gliederung, phone, role, active, status, reason, created_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (email, pw_hash, name, gliederung, sfield(d, "phone").strip(),
-         "admin" if first else "user", 1 if first else 0, "active" if first else "pending",
-         sfield(d, "reason").strip()[:2000], db.now()))
+    try:
+        # Prüfung und Eintrag unter einer Schreibsperre: Zwei gleichzeitige Erstanfragen sähen
+        # sonst beide „noch kein Nutzer“ – und beide würden Administrator.
+        with db.transaction(sofort=True):
+            first = not db.query("SELECT 1 FROM users LIMIT 1", one=True)
+            uid = db.execute(
+                "INSERT INTO users (email, password_hash, name, gliederung, phone, role, active, status, reason, "
+                "created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (email, pw_hash, name, gliederung, _einzeilig(sfield(d, "phone")),
+                 "admin" if first else "user", 1 if first else 0, "active" if first else "pending",
+                 sfield(d, "reason").strip()[:2000], db.now()))
+    except sqlite3.IntegrityError:
+        # Dieselbe Adresse im selben Augenblick zweimal angefragt: Die zweite Anfrage bekommt die
+        # Antwort von oben – als gäbe es das Konto schon. Gibt es jetzt ja auch.
+        return jsonify(pending=True, message=PENDING_MSG), 201
     u = db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True)
     if first:
-        session.clear()
-        session["uid"] = uid
-        session.permanent = True
+        sitzung_beginnen(u)
         return jsonify(user=public_user(u), pending=False), 201
     notify_admins_about_request(u)
     return jsonify(pending=True, message=PENDING_MSG), 201
@@ -383,9 +430,7 @@ def login():
     # eigentlich noch mit?“. Nur bei der erfolgreichen Anmeldung, nicht bei jedem Aufruf: Der
     # Zeitpunkt soll das Anmelden bezeichnen, nicht das letzte Lebenszeichen des Browsers.
     db.execute("UPDATE users SET last_login = ? WHERE id = ?", (db.now(), u["id"]))
-    session.clear()
-    session["uid"] = u["id"]
-    session.permanent = True
+    sitzung_beginnen(u)
     return jsonify(user=public_user(u))
 
 
@@ -398,16 +443,19 @@ def logout():
 @bp.post("/auth/forgot")
 def forgot():
     email = sfield(json_body(), "email").strip().lower()
-    scope = f"forgot:{request.remote_addr or '?'}"
-    if attempts_exceeded([scope], MAX_FORGOT_TRIES):
+    # Je Absender UND je Adresse: Sonst ließe sich ein Postfach mit Reset-Mails fluten, sobald die
+    # Absenderadresse nicht festliegt (mehrere Rechner, gefälschte Weiterleitungskopfzeile).
+    scopes = [f"forgot:{request.remote_addr or '?'}", f"forgot-mail:{email}"]
+    if attempts_exceeded(scopes, MAX_FORGOT_TRIES):
         return jsonify(error="Zu viele Anfragen. Bitte in einer Viertelstunde noch einmal probieren."), 429
-    note_attempt(scope)
+    with db.transaction():
+        for scope in scopes:
+            note_attempt(scope)
     u = db.query("SELECT * FROM users WHERE email = ?", (email,), one=True)
     if can_reset(u):
-        try:
-            send_reset_mail(u)
-        except Exception as exc:  # Versand darf die Antwort nicht verändern (kein Nutzer-Enumeration)
-            current_app.logger.error("Reset-Mail an %s fehlgeschlagen: %s", email, exc)
+        # Im Hintergrund: Der Versand (Verbindung, STARTTLS, Anmeldung) dauert spürbar – und nur
+        # bei vorhandenem Konto. An der Antwortzeit wäre sonst abzulesen, welche Adressen eins haben.
+        _im_hintergrund(send_reset_mail, u)
     return jsonify(ok=True, message="Falls ein Konto existiert, wurde eine E-Mail mit einem Link "
                                     "verschickt. Sieh bitte auch im Spam-Ordner nach – automatisch "
                                     "verschickte Mails landen dort häufiger.")
@@ -432,12 +480,11 @@ def reset():
         if (u.get("status") or "active") == "pending":
             return jsonify(error="Deine Kontoanfrage wartet noch auf die Freigabe durch einen Administrator."), 403
         return jsonify(error="Dieses Konto ist deaktiviert."), 403
+    neu = generate_password_hash(pw)
     with db.transaction():
-        db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(pw), u["id"]))
+        db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (neu, u["id"]))
         clear_attempts([f"ip:{request.remote_addr or '?'}", f"mail:{u['email']}"])
-    session.clear()
-    session["uid"] = u["id"]
-    session.permanent = True
+    sitzung_beginnen({**u, "password_hash": neu})
     return jsonify(ok=True)
 
 
@@ -494,8 +541,11 @@ def set_avatar():
 @login_required
 def remove_avatar():
     u = current_user()
-    db.execute("UPDATE users SET avatar = '' WHERE id = ?", (u["id"],))
-    delete_avatar(current_app.config["MEDIA_DIR"], u.get("avatar") or "")
+    alt = u.get("avatar") or ""
+    # Bedingt wie beim Hochladen: Hat ein anderer Reiter inzwischen ein neues Bild gesetzt, bleibt
+    # das stehen – sonst löschte dieser Aufruf dessen Datei und ließe die Zeile ins Leere zeigen.
+    if alt and db.execute_zeilen("UPDATE users SET avatar = '' WHERE id = ? AND avatar = ?", (u["id"], alt)):
+        delete_avatar(current_app.config["MEDIA_DIR"], alt)
     return jsonify(user=public_user(db.query("SELECT * FROM users WHERE id = ?", (u["id"],), one=True)))
 
 
@@ -509,5 +559,8 @@ def change_password():
     new = sfield(d, "password")
     if len(new) < MIN_PW:
         return jsonify(error=f"Das neue Passwort muss mindestens {MIN_PW} Zeichen lang sein."), 400
-    db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(new), u["id"]))
+    neu = generate_password_hash(new)
+    db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (neu, u["id"]))
+    # Diese Sitzung bleibt, alle anderen verfallen (siehe sitzung_beginnen).
+    session["pw"] = neu[-12:]
     return jsonify(ok=True)

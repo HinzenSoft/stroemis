@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>HTML-Baustein im Editor – strömis.de</title>
+<link rel="stylesheet" href="../app/static/vendor/toastui/toastui-editor.min.css">
+<link rel="stylesheet" href="../app/static/css/app.css">
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 16px 20px; max-width: 1000px; }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  p.hinweis { color: #555; margin: 0 0 16px; }
+  #ergebnis { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+  .zeile { padding: 3px 6px; border-bottom: 1px solid #eee; display: flex; gap: 10px; }
+  .ok { color: #0a7a3d; } .fehler { background: #fdecec; color: #a30000; }
+  pre { background: #f5f5f5; padding: 8px; overflow: auto; margin: 4px 0 10px; white-space: pre-wrap; }
+  #kopf { font-weight: 700; padding: 8px 0; }
+  /* Die Anwendung läuft mit dem echten Stylesheet, aber außerhalb des Bildes: Für Griffe und
+     Maße zählt die Geometrie, nicht die Sichtbarkeit. */
+  #buehne { position: absolute; left: -9999px; top: 0; width: 1000px; height: 900px; }
+</style>
+</head>
+<body>
+<h1>HTML-Baustein: Rahmen im Artikel, Menü und Griffe im Editor</h1>
+<p class="hinweis">Prüft den HTML-Baustein in beiden Ansichten: Im Artikel entsteht aus der Bild-Schreibweise
+ein gesandboxter Rahmen mit den Maßen aus der Adresse; im Editor steckt er in einer Hülle mit Griff, bekommt
+dasselbe Menü wie ein Bild (Breite, Höhe, Ausrichtung, Titel …) und lässt sich an drei Griffen ziehen – rechts
+die Breite, unten die Höhe. Gespeichert wird in der Adresse (<code>#w=…&amp;h=…</code>); geprüft wird, was der
+Editor an den Server schickt. Diese Datei direkt im Browser öffnen (Doppelklick) – der Server ist eine Attrappe,
+die jeden PUT sofort beantwortet und mitschreibt.</p>
+<div id="kopf">läuft …</div>
+<div id="ergebnis"></div>
+
+<!-- Der Aufbau aus app/templates/wiki.html – wiki.js sucht diese Knoten beim Start. -->
+<div id="buehne">
+  <div class="wiki-shell" data-slug="seite-b">
+    <aside class="wiki-side" id="wiki-side">
+      <input type="search" id="wiki-search">
+      <ul class="search-results hidden" id="search-results"></ul>
+      <div class="btn-row"><button id="btn-new-page">+ Neue Seite</button><button id="btn-trash">🗑</button></div>
+      <div id="favorites"></div>
+      <ul class="tree" id="tree"></ul>
+    </aside>
+    <main class="wiki-main" id="wiki-main">
+      <button id="wiki-menu">☰ Seiten</button>
+      <div id="wiki-content"></div>
+    </main>
+    <aside class="wiki-rail" id="wiki-rail">
+      <section class="seiten-info hidden" id="seiten-info"></section>
+      <nav class="toc" id="toc"></nav>
+      <section class="comments" id="comments"></section>
+    </aside>
+  </div>
+  <button class="comment-fab hidden" id="comment-fab" type="button">💬</button>
+  <dialog id="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
+  <div id="toast"></div>
+</div>
+
+<script src="../app/static/vendor/marked/marked.min.js"></script>
+<script src="../app/static/vendor/dompurify/purify.min.js"></script>
+<script src="../app/static/vendor/toastui/toastui-editor-all.min.js"></script>
+<script src="../app/static/vendor/toastui/de-de.js"></script>
+<script src="../app/static/js/markdown.js"></script>
+<script src="../app/static/js/editor-format.js"></script>
+<script src="../app/static/js/editor-layout.js"></script>
+<script src="../app/static/js/editor-verlauf.js"></script>
+<script src="../app/static/js/common.js"></script>
+
+<script>
+/* ======================================================================================
+   Attrappe: Server und Adresszeile (wie in nachgeholtes_speichern.html, nur antwortet
+   der Server hier sofort). Muss vor wiki.js laufen – wiki.js holt sich S.api beim Laden.
+   ====================================================================================== */
+const PROBE = { puts: [], adressen: [] };
+const BAUSTEIN = "/media/wiki/a1b2c3.html";
+// Was base.html sonst in die Seite schreibt: wer angemeldet ist (Redakteur – darf Bausteine einstellen).
+window.STROEMIS = { user: { id: 7, name: "Prüferin", email: "p@example.org", role: "editor", is_pruefer: false },
+                    publicUrl: "https://wiki.example.org", maxUploadMb: 5120 };
+/* Zwischen den Absätzen steht ein rohes <iframe> im Text: Es darf weder im Artikel noch im Editor
+   zum Rahmen werden – nur der hochgeladene Baustein wird einer. Nicht am Textende, denn ein
+   leergereinigter HTML-Block als letzter Block lässt Toast UI beim Setzen der Schreibmarke eine
+   Warnung in die Konsole schreiben (mit jedem Sanitizer, auch dem eigenen) – das verrauschte
+   den Lauf, ohne etwas zu prüfen. */
+const SEITE = { id: 1, title: "Seite B", slug: "seite-b", parent_id: null, position: 0, version: 3,
+                format: "markdown",
+                content: "# Seite B\n\nEin Absatz davor.\n\n![Erklärgrafik](" + BAUSTEIN + "#w=60%&h=420)\n\n"
+                       + "<iframe src=\"https://fremde.seite/\"></iframe>\n\n"
+                       + "![Alt](/media/wiki/x.jpg#w=50%)\n\nEin Absatz danach." };
+const RECHTE = { can_edit: true, can_delete: true, can_share: true, can_publish: false,
+                 is_public: false, public_children: false, effective_public: false,
+                 read_restricted: false, is_template: false, favorite: false, watch: false,
+                 icon: "", comment_count: 0, backlink_count: 0, editors: [],
+                 created_at: "2026-01-01T10:00:00", updated_at: "2026-01-01T10:00:00" };
+const alsJson = (p) => Object.assign({}, RECHTE, p);
+
+S.api = function (pfad, opts) {
+  const methode = (opts && opts.method) || "GET";
+  const body = opts && opts.body;
+  if (methode === "PUT" && /^\/api\/wiki\/pages\/1$/.test(pfad)) {
+    PROBE.puts.push({ body });
+    if (body.title !== undefined) SEITE.title = body.title;
+    if (body.content !== undefined) SEITE.content = body.content;
+    SEITE.version += 1;
+    return Promise.resolve({ page: alsJson(SEITE) });
+  }
+  if (pfad === "/api/wiki/praesenz") {
+    return Promise.resolve({ modus: (body && body.modus) || "lesen", version: SEITE.version, schreiber: null, andere: [] });
+  }
+  let d = {};
+  if (pfad === "/api/wiki/tree") d = { pages: [alsJson(SEITE)] };
+  else if (/^\/api\/wiki\/pages\/[^/]+$/.test(pfad) && methode === "GET") d = { page: alsJson(SEITE) };
+  else if (/\/comments$/.test(pfad)) d = { comments: [] };
+  else if (/\/backlinks$/.test(pfad)) d = { pages: [], outgoing: [] };
+  else if (/\/attachments$/.test(pfad)) d = { files: [] };
+  else if (/\/contributors$/.test(pfad)) d = { owner: null, contributors: [] };
+  else if (pfad === "/api/wiki/bausteine") d = { bausteine: [] };
+  else if (pfad === "/api/wiki/recent") d = { seen: [], changed: [] };
+  return Promise.resolve(d);
+};
+history.pushState = (zustand, titel, url) => { PROBE.adressen.push(String(url)); };
+history.replaceState = (zustand, titel, url) => { PROBE.adressen.push(String(url)); };
+
+/* Die Optionen jeder Editorinstanz mitschreiben: Nur so lässt sich von außen prüfen, womit
+   wiki.js den Editor aufsetzt – etwa mit welcher Reinigung (sanitizer). */
+const EchterEditor = toastui.Editor;
+function EditorMitRegister(optionen) {
+  PROBE.optionen = optionen;
+  return new EchterEditor(optionen);
+}
+EditorMitRegister.prototype = EchterEditor.prototype;
+Object.setPrototypeOf(EditorMitRegister, EchterEditor);
+toastui.Editor = EditorMitRegister;
+</script>
+
+<script src="../app/static/js/wiki.js"></script>
+
+<script>
+/* ======================================================================================
+   Der Ablauf
+   ====================================================================================== */
+const raus = document.getElementById("ergebnis");
+let fehler = 0, gesamt = 0;
+const pruefe = (name, bedingung, hinweis) => {
+  gesamt++;
+  if (!bedingung) fehler++;
+  const el = document.createElement("div");
+  el.className = "zeile " + (bedingung ? "ok" : "fehler");
+  el.innerHTML = "<span>" + (bedingung ? "✓" : "✗") + "</span><span>" + name + "</span>";
+  if (!bedingung && hinweis) {
+    const pre = document.createElement("pre");
+    pre.textContent = hinweis;
+    el.appendChild(pre);
+  }
+  raus.appendChild(el);
+};
+const warte = (ms) => new Promise((f) => setTimeout(f, ms));
+async function warteAuf(was, bedingung, maxMs = 5000) {
+  const ende = Date.now() + maxMs;
+  while (Date.now() < ende) {
+    if (bedingung()) return;
+    await warte(25);
+  }
+  throw new Error("Zeitüberschreitung: " + was);
+}
+const $ = (s) => document.querySelector(s);
+const sichtbar = (el) => !!el && !el.classList.contains("hidden");
+const pm = () => $(".toastui-editor-ww-container .ProseMirror");
+const rahmenImEditor = () => { const el = pm(); return el ? el.querySelector(".ed-embed iframe.html-embed") : null; };
+const letzterInhalt = () => (PROBE.puts.length ? PROBE.puts[PROBE.puts.length - 1].body.content : "");
+/* Auf den nächsten Speicherlauf warten: Der Editor schreibt 1,2 s nach jeder Änderung. */
+async function naechsterPut() {
+  const n = PROBE.puts.length;
+  await warteAuf("Speichervorgang nach der Änderung", () => PROBE.puts.length > n, 6000);
+  return letzterInhalt();
+}
+const zeiger = (el, typ, x, y) => el.dispatchEvent(new PointerEvent(typ, { bubbles: true, cancelable: true,
+  clientX: x, clientY: y, button: 0, pointerId: 1, pointerType: "mouse", isPrimary: true }));
+
+async function ablauf() {
+  try { Object.keys(localStorage).filter((k) => /^stroemis-/.test(k)).forEach((k) => localStorage.removeItem(k)); }
+  catch (e) { /* egal */ }
+
+  // --- Leseansicht: aus der Bild-Schreibweise wird ein gesandboxter Rahmen ----------------
+  await warteAuf("Seite wird angezeigt", () => $("#pg-edit"));
+  const art = $("#article");
+  const fr = art && art.querySelector("iframe.html-embed");
+  pruefe("der Artikel zeigt den Baustein als Rahmen", !!fr, art ? art.innerHTML : "kein Artikel");
+  if (fr) {
+    pruefe("der Rahmen ist gesandboxt, ohne allow-same-origin", fr.getAttribute("sandbox") === "allow-scripts", fr.outerHTML);
+    pruefe("Breite 60 % und Höhe 420 px kommen aus der Adresse",
+           fr.style.width === "60%" && fr.style.height === "420px", fr.getAttribute("style") || "");
+    pruefe("kein Platzhalter bleibt stehen", !art.querySelector(".html-embed-platz"), art.innerHTML);
+    pruefe("der Titel steht am Rahmen", fr.getAttribute("title") === "Erklärgrafik", fr.outerHTML);
+    pruefe("ein rohes <iframe> im Text wird im Artikel zu keinem Rahmen",
+           art.querySelectorAll("iframe").length === 1, art.innerHTML);
+  }
+
+  // --- Editor: Hülle, Griff, Menü -----------------------------------------------------------
+  $("#pg-edit").click();
+  await warteAuf("Editor steht", () => rahmenImEditor(), 8000);
+  let huelle = pm().querySelector(".ed-embed");
+  pruefe("im Editor steckt der Rahmen in einer Hülle mit Griff",
+         !!huelle && !!huelle.querySelector(".ed-embed-griff") && huelle.querySelector("iframe").getAttribute("sandbox") === "allow-scripts",
+         huelle ? huelle.outerHTML.slice(0, 300) : "keine Hülle");
+  pruefe("die Hülle trägt die Breite, der Rahmen die Höhe",
+         !!huelle && huelle.style.width === "60%" && rahmenImEditor().style.height === "420px" && !rahmenImEditor().style.width,
+         huelle ? huelle.getAttribute("style") + " | " + rahmenImEditor().getAttribute("style") : "");
+
+  // --- Reinigung: der Editor bekommt dieselbe wie die Leseansicht als Option mit (Toast UI ruft
+  //     sie nur für Vorschau und eigene HTML-Renderer; die Leseansicht reinigt ohnehin erneut) ---
+  const reinigung = PROBE.optionen && PROBE.optionen.sanitizer;
+  pruefe("der Editor bekommt die Reinigung aus markdown.js mit", typeof reinigung === "function",
+         PROBE.optionen ? Object.keys(PROBE.optionen).join(", ") : "keine Optionen mitgeschrieben");
+  if (reinigung) {
+    const geputzt = reinigung('<p style="color:red">Rot</p><iframe src="https://fremde.seite/"></iframe><span id="logout">x</span>');
+    pruefe("die Reinigung lässt weder <iframe> noch style noch Rahmen-Kennungen durch, den Absatz aber schon",
+           !/<iframe|style=|id="logout"/.test(geputzt) && /<p>Rot<\/p>/.test(geputzt), geputzt);
+  }
+  pruefe("im Editor ist der einzige Rahmen der hochgeladene Baustein",
+         Array.from(pm().querySelectorAll("iframe")).every((f) => f.classList.contains("html-embed"))
+         && pm().querySelectorAll("iframe").length === 1,
+         Array.from(pm().querySelectorAll("iframe")).map((f) => f.outerHTML.slice(0, 120)).join("\n"));
+
+  huelle.querySelector(".ed-embed-griff").click();
+  await warte(50);
+  const ctx = $(".ed-ctx");
+  pruefe("ein Klick auf den Griff öffnet das Menü des Bausteins",
+         sichtbar(ctx) && ctx.getAttribute("aria-label") === "HTML-Baustein",
+         ctx ? ctx.outerHTML.slice(0, 300) : "kein .ed-ctx – vorhanden: " + ["ed-bubble", "ed-slash", "ed-ctx", "ed-grip", "ed-resize"]
+           .map((k) => k + "=" + document.querySelectorAll("." + k).length).join(" "));
+  if (!ctx) throw new Error("Menü nicht vorhanden");
+  pruefe("das Menü hat Breite, Größe, Ausrichtung, Titel, Ersetzen, Öffnen, Duplizieren und Löschen",
+         ["[data-w='100%']", "[data-act=exact]", "[data-al=center]", "[data-act=alt]", "[data-act=replace]",
+          "[data-act=open]", "[data-act=dup]", "[data-act=del]"].every((s) => ctx.querySelector(s)),
+         ctx ? ctx.innerHTML : "");
+  pruefe("Rahmen und drei Griffe sind sichtbar",
+         sichtbar($(".ed-resize-frame")) && sichtbar($(".ed-resize:not(.unten):not(.ecke)"))
+         && sichtbar($(".ed-resize.unten")) && sichtbar($(".ed-resize.ecke")),
+         Array.from(document.querySelectorAll(".ed-resize, .ed-resize-frame")).map((e) => e.className).join(", "));
+  pruefe("die Hülle trägt den Auswahlring", huelle.classList.contains("ed-selected"), huelle.className);
+
+  // --- Breite über das Menü -----------------------------------------------------------------
+  ctx.querySelector("[data-w='100%']").click();
+  let md = await naechsterPut();
+  pruefe("„100 %“ schreibt w=100% in die Adresse und lässt die Höhe stehen",
+         md.includes("![Erklärgrafik](" + BAUSTEIN + "#w=100%&h=420)"), md);
+  pruefe("das Bild dahinter bleibt unberührt", md.includes("![Alt](/media/wiki/x.jpg#w=50%)"), md);
+  await warteAuf("Hülle neu gezeichnet", () => rahmenImEditor() && pm().querySelector(".ed-embed").style.width === "100%");
+
+  // --- Höhe über den unteren Griff ----------------------------------------------------------
+  huelle = pm().querySelector(".ed-embed");
+  huelle.querySelector(".ed-embed-griff").click();
+  await warte(50);
+  let fr2 = rahmenImEditor();
+  const hoeheVorher = parseFloat(getComputedStyle(fr2).height);
+  const unten = $(".ed-resize.unten");
+  let r = unten.getBoundingClientRect();
+  zeiger(unten, "pointerdown", r.left + 5, r.top + 5);
+  zeiger(unten, "pointermove", r.left + 5, r.top + 105);
+  pruefe("beim Ziehen wächst der Rahmen live mit",
+         Math.round(parseFloat(fr2.style.height)) === Math.round(hoeheVorher + 100), fr2.style.height);
+  zeiger(unten, "pointerup", r.left + 5, r.top + 105);
+  md = await naechsterPut();
+  const erwartetH = Math.round(hoeheVorher + 100);
+  pruefe("der untere Griff schreibt die neue Höhe (" + erwartetH + " px) in die Adresse",
+         md.includes("![Erklärgrafik](" + BAUSTEIN + "#w=100%&h=" + erwartetH + ")"), md);
+  await warteAuf("Rahmen mit neuer Höhe", () => rahmenImEditor() && rahmenImEditor().style.height === erwartetH + "px");
+
+  // --- Breite über den rechten Griff --------------------------------------------------------
+  huelle = pm().querySelector(".ed-embed");
+  huelle.querySelector(".ed-embed-griff").click();
+  await warte(50);
+  const rechts = $(".ed-resize:not(.unten):not(.ecke)");
+  r = rechts.getBoundingClientRect();
+  zeiger(rechts, "pointerdown", r.left + 5, r.top + 5);
+  zeiger(rechts, "pointermove", r.left - 195, r.top + 5);
+  zeiger(rechts, "pointerup", r.left - 195, r.top + 5);
+  md = await naechsterPut();
+  const mW = /!\[Erklärgrafik\]\([^)]*#w=(\d+)%&h=(\d+)\)/.exec(md);
+  pruefe("der rechte Griff schreibt eine kleinere Breite in Prozent und lässt die Höhe stehen",
+         !!mW && +mW[1] < 100 && +mW[1] >= 5 && +mW[2] === erwartetH, md);
+
+  // --- Titel über das Menü ------------------------------------------------------------------
+  await warteAuf("Hülle steht wieder", () => rahmenImEditor());
+  huelle = pm().querySelector(".ed-embed");
+  huelle.querySelector(".ed-embed-griff").click();
+  await warte(50);
+  $(".ed-ctx [data-act=alt]").click();
+  await warteAuf("Titeldialog offen", () => $("#dlg").open && $("#alt-text"));
+  pruefe("der Titeldialog zeigt den Titel aus dem Text, nicht die Vorgabe des Rahmens",
+         $("#alt-text").value === "Erklärgrafik", $("#alt-text").value);
+  $("#alt-text").value = "Neuer Titel";
+  $("#alt-ok").click();
+  md = await naechsterPut();
+  pruefe("der neue Titel steht in der Adresse, die Maße bleiben",
+         new RegExp("!\\[Neuer Titel\\]\\(" + BAUSTEIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "#w=\\d+%&h=" + erwartetH + "\\)").test(md), md);
+
+  // --- Klick IN den Rahmen: das Fenster verliert den Fokus an den Rahmen -------------------
+  await warteAuf("Hülle steht wieder", () => rahmenImEditor());
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await warte(20);
+  pruefe("Escape schließt das Menü", !sichtbar($(".ed-ctx")), $(".ed-ctx").className);
+  fr2 = rahmenImEditor();
+  fr2.focus();
+  window.dispatchEvent(new Event("blur"));
+  await warte(60);
+  pruefe("ein Klick in den Rahmen (Fokus wandert hinein) öffnet das Menü ebenfalls",
+         document.activeElement === fr2 ? sichtbar($(".ed-ctx")) && $(".ed-ctx").getAttribute("aria-label") === "HTML-Baustein" : true,
+         "aktiv: " + (document.activeElement && document.activeElement.tagName) + ", Menü: " + $(".ed-ctx").className);
+
+  // --- Das Bildmenü arbeitet daneben weiter, die Zuordnung stimmt ---------------------------
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  const img = pm().querySelector("img[src*='x.jpg']");
+  img.click();
+  await warte(50);
+  pruefe("das Bild dahinter bekommt sein eigenes Menü", sichtbar($(".ed-ctx")) && $(".ed-ctx").getAttribute("aria-label") === "Bild", $(".ed-ctx").className);
+  $(".ed-ctx [data-w='25%']").click();
+  md = await naechsterPut();
+  pruefe("die Breite trifft das Bild und nicht den Baustein davor",
+         md.includes("![Alt](/media/wiki/x.jpg#w=25%)") && /!\[Neuer Titel\]\([^)]*#w=\d+%&h=\d+\)/.test(md), md);
+
+  // --- Löschen über das Menü ----------------------------------------------------------------
+  await warteAuf("Hülle steht wieder", () => rahmenImEditor());
+  pm().querySelector(".ed-embed .ed-embed-griff").click();
+  await warte(50);
+  $(".ed-ctx [data-act=del]").click();
+  md = await naechsterPut();
+  pruefe("Löschen entfernt den Baustein, das Bild bleibt",
+         !md.includes(BAUSTEIN) && md.includes("x.jpg#w=25%"), md);
+}
+
+window.addEventListener("error", (e) => { pruefe("keine Ausnahme", false, String(e.message)); });
+// wiki.js öffnet den Editor aus einer async-Funktion heraus: Eine Ausnahme dort wäre sonst stumm.
+window.addEventListener("unhandledrejection", (e) => {
+  const g = e.reason;
+  pruefe("keine abgewiesene Zusage", false, (g && g.stack) || String(g));
+});
+
+ablauf().catch((e) => {
+  pruefe("Ablauf läuft durch", false, e && e.stack ? e.stack : String(e));
+}).then(() => {
+  const kopf = document.getElementById("kopf");
+  kopf.textContent = fehler ? fehler + " von " + gesamt + " Prüfungen schlagen fehl"
+                            : "alle " + gesamt + " Prüfungen bestanden";
+  kopf.className = fehler ? "fehler" : "ok";
+  window.ERGEBNIS = { gesamt, fehler };
+});
+</script>
+</body>
+</html>

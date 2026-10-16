@@ -15,6 +15,7 @@ Das Modul liefert bewusst nur Rohdaten (Dicts und Listen). Der Abgleich mit der 
 import io
 import re
 import warnings
+import zipfile
 from datetime import date, datetime, timedelta
 
 import openpyxl
@@ -42,6 +43,26 @@ NEIN_WOERTER = frozenset(["nein", "n", "-", "–", "—", "falsch", "false", "no
 
 MAX_KOPF_SUCHE = 40          # so weit unten wird die Kopfzeile höchstens gesucht
 MIN_TEXTZELLEN_KOPF = 3      # weniger Titel ist keine Tabelle
+
+# Grenzen gegen Dateien, die klein aussehen und beim Lesen explodieren. Eine .xlsx ist ein ZIP:
+# 25 KB komprimiert können 250 MB XML sein – die Upload-Grenze zählt nur das Archiv. Und openpyxl
+# legt beim Durchlaufen eines Blatts für JEDES Feld im Rechteck „höchste Zeile × höchste Spalte“
+# ein Zellobjekt an, auch für die leeren dazwischen: eine einzige Zelle in XFD1048576 wären 17
+# Milliarden, eine in (3000, 300) schon 900.000 (gut 230 MB). Eine Teilnehmerliste hat ein paar
+# hundert Zeilen und ein paar Dutzend Spalten; alles hier liegt weit darüber.
+MAX_ZIP_EINTRAEGE = 500               # Dateien im Archiv (eine normale Arbeitsmappe hat 10–20)
+MAX_ENTPACKT = 200 * 1024 * 1024      # Summe der entpackten Größen laut Inhaltsverzeichnis
+MAX_ARBEITSBLAETTER = 20
+MAX_ZEILEN = 20_000                   # höchste belegte Zeile eines Blatts
+MAX_SPALTEN = 300                     # höchste belegte Spalte eines Blatts
+# Zeilen × Spalten über alle gelesenen Blätter. Gemessen: 500.000 Felder ≈ 125 MB und 1 s,
+# 2 Millionen ≈ 490 MB und 4 s – das Dreifache der größten zulässigen Liste (2.000 Zeilen × 80
+# Spalten) reicht, mehr frisst einen Gunicorn-Arbeiter.
+MAX_ZELLEN = 500_000
+MAX_DATENZEILEN = 2_000               # Zeilen mit Inhalt unter der Kopfzeile je Import
+MAX_EXTRA_SPALTEN = 50                # Spalten mit „weiteren Angaben“ je Datei …
+MAX_EXTRA_TITEL = 100                 # … Länge ihres Titels (Schlüssel im JSON) …
+MAX_EXTRA_WERT = 500                  # … und Länge eines Werts
 
 _RE_ISO = re.compile(r"^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?\s*(?:uhr)?$", re.I)
 _RE_DE = re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*(?:uhr)?$", re.I)
@@ -198,6 +219,24 @@ def _ist_textzelle(wert):
 
 # --- Datei öffnen -------------------------------------------------------------------------
 
+def _archiv_pruefen(roh):
+    """Grenzen des ZIP-Archivs, BEVOR openpyxl es entpackt. zipfile hält sich beim Entpacken an die
+    im Inhaltsverzeichnis eingetragenen Größen (mehr Daten werden abgeschnitten), deshalb taugt die
+    Summe dort als Obergrenze für das, was gleich im Speicher landet."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(roh)) as zf:
+            eintraege = zf.infolist()
+    except Exception as e:                                   # noqa: BLE001 – jede Leseausnahme ist ein Dateiproblem
+        raise ImportFehler("Die Excel-Datei konnte nicht gelesen werden (beschädigt oder kein .xlsx).") from e
+    if len(eintraege) > MAX_ZIP_EINTRAEGE:
+        raise ImportFehler(f"Die Datei besteht aus {len(eintraege)} Einträgen – eine Excel-Arbeitsmappe hat "
+                           f"höchstens {MAX_ZIP_EINTRAEGE}. Bitte nur die Teilnehmerliste hochladen.")
+    entpackt = sum(e.file_size for e in eintraege)
+    if entpackt > MAX_ENTPACKT:
+        raise ImportFehler(f"Die Datei ist entpackt {entpackt // (1024 * 1024)} MB groß – höchstens "
+                           f"{MAX_ENTPACKT // (1024 * 1024)} MB lassen sich einlesen. Bitte nur die Teilnehmerliste hochladen.")
+
+
 def _arbeitsblatt(datei, dateiname):
     """Liest die Datei und liefert das erste Arbeitsblatt mit Inhalt als Liste von Zeilen
     (jede Zeile eine Liste der Zellwerte). Alles, was hier schiefgeht, ist ein Fehler der Datei,
@@ -219,6 +258,7 @@ def _arbeitsblatt(datei, dateiname):
     # mit einer verständlichen Meldung statt mit einer openpyxl-Ausnahme.
     if not roh.startswith(b"PK"):
         raise ImportFehler("Das ist keine .xlsx-Datei. Bitte die Liste in Excel als „Excel-Arbeitsmappe (.xlsx)“ speichern.")
+    _archiv_pruefen(roh)
     try:
         # openpyxl warnt bei Kopf-/Fußzeilen, die es nicht versteht (Seminarsystem-Exporte) –
         # für den Import ohne Belang, soll aber nicht das Protokoll füllen.
@@ -229,8 +269,27 @@ def _arbeitsblatt(datei, dateiname):
             wb = openpyxl.load_workbook(io.BytesIO(roh), data_only=True)
     except Exception as e:                                   # noqa: BLE001 – jede Leseausnahme ist ein Dateiproblem
         raise ImportFehler("Die Excel-Datei konnte nicht gelesen werden (beschädigt oder kein .xlsx).") from e
+    if len(wb.worksheets) > MAX_ARBEITSBLAETTER:
+        raise ImportFehler(f"Die Arbeitsmappe hat {len(wb.worksheets)} Arbeitsblätter – höchstens "
+                           f"{MAX_ARBEITSBLAETTER} lassen sich einlesen. Bitte nur die Teilnehmerliste hochladen.")
+    zellen = 0
     for ws in wb.worksheets:
-        zeilen = [list(z) for z in ws.iter_rows(values_only=True)]
+        # max_row/max_column zählen hier nur Zellen, die wirklich in der Datei stehen – nicht den
+        # (fälschbaren) Dimension-Eintrag. Erst iter_rows() füllt das Rechteck dazwischen mit
+        # Zellobjekten auf; deshalb wird das Rechteck VOR dem Durchlaufen gemessen und mit festen
+        # Grenzen übergeben. Über alle Blätter summiert, weil die Zellen der schon durchlaufenen
+        # Blätter in der Arbeitsmappe liegen bleiben.
+        zeilen_n, spalten_n = ws.max_row, ws.max_column
+        if zeilen_n > MAX_ZEILEN or spalten_n > MAX_SPALTEN:
+            raise ImportFehler(f"Das Blatt „{ws.title}“ reicht bis Zeile {zeilen_n} und Spalte {spalten_n} – höchstens "
+                               f"{MAX_ZEILEN} Zeilen und {MAX_SPALTEN} Spalten lassen sich einlesen. Bitte Inhalte "
+                               "weit außerhalb der Liste entfernen (auch vermeintlich leere Zellen).")
+        zellen += zeilen_n * spalten_n
+        if zellen > MAX_ZELLEN:
+            raise ImportFehler(f"Das Blatt „{ws.title}“ ist mit {zeilen_n} Zeilen × {spalten_n} Spalten zu groß – "
+                               f"höchstens {MAX_ZELLEN:,} Felder lassen sich einlesen. Bitte Inhalte weit außerhalb "
+                               "der Liste entfernen (auch vermeintlich leere Zellen).".replace(",", "."))
+        zeilen = [list(z) for z in ws.iter_rows(max_row=zeilen_n, max_col=spalten_n, values_only=True)]
         if any(not _leer(w) for z in zeilen for w in z):
             return zeilen
     raise ImportFehler("Die Excel-Datei enthält keine Daten.")
@@ -381,6 +440,7 @@ def _spalten_bestimmen(kopf, daten, zuordnung, warnungen):
     breite = max([len(kopf)] + [len(z) for z in daten])
     spalten = []
     vergeben = set()
+    extras = 0
     for idx in range(breite):
         titel_roh = kopf[idx] if idx < len(kopf) else None
         titel = als_text(titel_roh) if not _leer(titel_roh) else ""
@@ -400,6 +460,17 @@ def _spalten_bestimmen(kopf, daten, zuordnung, warnungen):
                 zu = "extra"
             else:
                 vergeben.add(zu)
+        if zu == "extra":
+            # Die weiteren Angaben landen als JSON an jedem Teilnehmenden – eine Datei mit hunderten
+            # Spalten würde jede Zeile aufblähen. Was über die Grenze geht, wird übergangen und
+            # gemeldet; in der Vorschau lässt sich die Zuordnung umstellen.
+            extras += 1
+            if extras > MAX_EXTRA_SPALTEN:
+                if extras == MAX_EXTRA_SPALTEN + 1:
+                    warnungen.append(f"Mehr als {MAX_EXTRA_SPALTEN} Spalten mit weiteren Angaben – ab Spalte "
+                                     f"„{titel or get_column_letter(idx + 1)}“ werden sie nicht übernommen. Bitte "
+                                     "nicht benötigte Spalten auf „ignorieren“ setzen.")
+                zu = "ignorieren"
         beispiele = []
         for w in werte:
             text = als_text(w)
@@ -424,6 +495,18 @@ def _text(zeile, idx):
 AUSBILDER_WOERTER = ("lehrgangsleit", "leitung", "leiter", "ausbild", "referent", "prüfer", "pruefer", "dozent",
                      "trainer", "helfer", "lehrkraft", "instruktor", "multiplikator")
 TEILNEHMER_WOERTER = ("teilnehm", "tn", "teiln", "teiln.", "gast", "kandidat", "prüfling", "pruefling", "schüler", "schueler")
+
+# Leitung ist ein eigenes Wort in der Rolle („Lehrgangsleitung“, „Leiter:in“, „Leitung und Prüfer“,
+# „Ltg.“), kein Wortteil: „Begleitung“ oder „Anleitung Knoten“ leiten nichts. Die Rolle wird in
+# Wörter zerlegt – eine Genderform („Leiter:in“, „Leiter/innen“) bleibt dabei ein Wort – und jedes
+# Wort muss ganz auf die Liste passen. Dieselbe Regel steht in api_pruefungen._ist_leitungsfunktion
+# (für die Ausbilderliste ohne Datei – dieses Modul soll wegen openpyxl nicht beim Start geladen werden).
+_RE_LEITUNG_WORT = re.compile(r"(?:lehrgangs)?(?:leitung|leiter(?:[:/*_·]?in(?:nen)?)?)|ltg|lgl", re.I)
+_RE_WORT = re.compile(r"[^\W\d_]+(?:[:/*_·](?:innen|in)(?![^\W\d_]))?", re.I)
+
+
+def ist_leitungsrolle(rolle):
+    return any(_RE_LEITUNG_WORT.fullmatch(w) for w in _RE_WORT.findall(rolle or ""))
 
 
 def _ist_ausbilder_rolle(rolle, nr, warnungen):
@@ -489,8 +572,16 @@ def analysieren(datei, zuordnung=None, dateiname=""):
                        for s in vor_spalten]
     rolle_titel = next((s["titel"] for s in spalten if s["zuordnung"] == "rolle"), "Rolle")
 
+    # Die Übernahme schreibt je Zeile mehrere Datensätze in einer Transaktion – tausende Zeilen
+    # auf einmal hielten die Datenbank minutenlang gesperrt. Leerzeilen zählen nicht: Excel-Exporte
+    # hängen gern welche an.
+    belegt = sum(1 for z in daten if not all(_leer(w) for w in z))
+    if belegt > MAX_DATENZEILEN:
+        raise ImportFehler(f"Die Datei hat {belegt} Datenzeilen – höchstens {MAX_DATENZEILEN} lassen sich auf einmal "
+                           "übernehmen. Bitte die Liste aufteilen.")
+
     teilnehmer, ausbilder = [], []
-    schluessel_gesehen = []          # (schluessel, Excel-Zeile) – für die Duplikatwarnung
+    schluessel_gesehen = {}          # (vorname, name) → [(geburtsdatum, Excel-Zeile)] – für die Duplikatwarnung
     ausbilder_gesehen = {}
     leerzeilen = 0
     ohne_namen = []
@@ -519,17 +610,19 @@ def analysieren(datei, zuordnung=None, dateiname=""):
             if geburtsdatum is None:
                 warnungen.append(f"Zeile {nr}: Geburtsdatum „{als_text(geb_roh)}“ nicht lesbar – bleibt leer.")
 
+        # Titel und Wert begrenzt: Beides landet als JSON an jedem Teilnehmenden, und eine Zelle
+        # kann in Excel 32.000 Zeichen fassen.
         extra = {}
         for s in extra_spalten:
             text = _text(zeile, s["index"])
             if text:
-                extra[s["titel"] or f"Spalte {get_column_letter(s['index'] + 1)}"] = text
+                extra[(s["titel"] or f"Spalte {get_column_letter(s['index'] + 1)}")[:MAX_EXTRA_TITEL]] = text[:MAX_EXTRA_WERT]
 
         rolle = _text(zeile, feld_idx.get("rolle"))
         if rolle:
             # Der Rollentext bleibt als Zusatzangabe sichtbar – auch bei Teilnehmenden, damit
             # „Teilnehmender“ vs. „Gast“ o. Ä. später noch nachlesbar ist.
-            extra[rolle_titel] = rolle
+            extra[rolle_titel[:MAX_EXTRA_TITEL]] = rolle[:MAX_EXTRA_WERT]
         voller_name = " ".join(t for t in (vorname, name) if t)
         if rolle and _ist_ausbilder_rolle(rolle, nr, warnungen):
             k = normalisiert(voller_name)
@@ -537,15 +630,18 @@ def analysieren(datei, zuordnung=None, dateiname=""):
                 warnungen.append(f"Zeile {nr}: „{voller_name}“ ({rolle}) steht schon in Zeile {ausbilder_gesehen[k]} – übersprungen.")
             else:
                 ausbilder_gesehen[k] = nr
-                ausbilder.append({"name": voller_name, "funktion": rolle, "ist_leitung": "leit" in normalisiert(rolle), "zeile": nr})
+                ausbilder.append({"name": voller_name, "funktion": rolle, "ist_leitung": ist_leitungsrolle(rolle), "zeile": nr})
             continue
 
         k = schluessel(vorname, name, geburtsdatum)
-        doppelt = next((z for ks, z in schluessel_gesehen if passt(ks, k)), None)
+        # Dieselbe Regel wie passt(): gleiche Namen und gleiches Geburtsdatum – oder eines fehlt.
+        # Nach Namen gebündelt, damit der Vergleich auch bei tausend Zeilen nicht quadratisch wird.
+        namensvettern = schluessel_gesehen.setdefault(k[:2], [])
+        doppelt = next((z for geb, z in namensvettern if geb is None or k[2] is None or geb == k[2]), None)
         if doppelt is not None:
             warnungen.append(f"Zeile {nr}: „{voller_name}“ kommt schon in Zeile {doppelt} vor – die zweite Zeile wird übersprungen.")
             continue
-        schluessel_gesehen.append((k, nr))
+        namensvettern.append((k[2], nr))
 
         teilnehmer.append({
             "vorname": vorname,

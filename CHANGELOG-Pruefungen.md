@@ -4,6 +4,55 @@ Erweiterung von strömis.de um Lehrgänge, Teilnehmende, Voraussetzungen, Prüfu
 Stoppuhr, Nachprüfungen, Medien und eine Mängelübersicht für Feedbackrunden – nur für Nutzer mit dem neuen
 Zusatzrecht „Prüfer“.
 
+## Nachtrag (15.10.2026): Sicherheits-Review – Importgrenzen, Namensvettern, Einfrieren, Wettläufe
+
+Befunde eines Sicherheits-Reviews des Prüfungsmoduls, behoben in `api_pruefungen.py` und `pruefungen_import.py` und
+abgesichert durch `test_sicherheit` (`tests/test_pruefungen.py`) sowie `test_grenzen` und `test_leitungsrolle`
+(`tests/test_pruefungen_import.py`). Oberfläche und Schema unverändert.
+
+- **Import-Grenzen gegen dünn besetzte und aufgeblasene Dateien.** openpyxl legt beim Durchlaufen eines Blatts für
+  jedes Feld im Rechteck „höchste Zeile × höchste Spalte“ ein Zellobjekt an – eine 5-KB-Datei mit einer einzigen Zelle
+  in Zeile 3000/Spalte 300 kostete 900.000 Zellen und 230 MB, eine Zelle in XFD1048576 den ganzen Arbeitsprozess.
+  Jetzt wird das Rechteck vor dem Durchlaufen gemessen: höchstens 20.000 Zeilen, 300 Spalten und 500.000 Felder je
+  Arbeitsmappe (gemessen ≈ 125 MB und 1 s; 2 Millionen wären 490 MB), höchstens 20 Arbeitsblätter. Davor prüft der
+  Import das ZIP-Archiv selbst: höchstens 500 Einträge und 200 MB entpackt – die 25-MB-Uploadgrenze galt nur für das
+  komprimierte Archiv, XML lässt sich hundertfach verdichten. Außerdem höchstens 2.000 Datenzeilen je Import und 50
+  Spalten mit weiteren Angaben (der Rest wird „ignorieren“ und gemeldet); Spaltentitel werden auf 100, Werte auf 500
+  Zeichen gekürzt – auch beim Zusammenführen mit älteren Zusatzangaben am Datensatz. Alle Grenzen sind benannte
+  Konstanten (`MAX_*`) in `pruefungen_import.py`; Überschreitungen ergeben 400 mit Klartext, der sagt, was zu tun ist.
+- **Namensvettern beim Import.** Stand eine Person ohne Geburtsdatum im Lehrgang und brachte die Datei zwei
+  gleichnamige Zeilen mit verschiedenen Geburtsdaten, hat die erste Zeile die Person samt Geburtsdatum übernommen und
+  die zweite ihre Haken dazugeschrieben. Der Abgleich läuft jetzt vor dem Schreiben über alle Zeilen
+  (`_treffer_im_bestand`): Mehrere Dateizeilen auf dieselbe Person gelten wie bisher „eine Zeile auf mehrere
+  Personen“ als mehrdeutig – Warnung in Vorschau und Übernahme, keine der Zeilen wird übernommen, bis das
+  Geburtsdatum im Lehrgang ergänzt ist.
+- **Leitung nur als ganzes Wort.** Fehlt in einem Aufruf das Kennzeichen `ist_leitung` (und bei der Leitung aus der
+  Importdatei), entschied der Teilstring „leit“ – „Begleitung“ oder „Anleitung Knoten“ wurden Leitung. Jetzt zählt eine
+  Wortliste (Lehrgangsleitung, Leitung, Leiter/Leiterin samt Genderformen, Ltg, LGL), und jedes Wort der Funktion
+  muss ganz passen: „Leitung und Prüfer“ zählt, „Begleitung“ nicht (`_ist_leitungsfunktion`, gleiche Regel in
+  `pruefungen_import.ist_leitungsrolle`). Das Kennzeichen aus dem Dialog hat weiter Vorrang.
+- **Einfrieren deckt Löschen und Definitionen ab.** Eine Person mit vermerktem Lehrgangsergebnis lässt sich nicht mehr
+  löschen (409), bis die Leitung das Ergebnis aufhebt. Leistungen, Kriterien und Voraussetzungen, an denen eine
+  eingefrorene Person Bewertungen bzw. Haken hat, lassen sich weder ändern (Bezeichnung, Beschreibung, Zeitansatz)
+  noch löschen (409, `_eingefroren_betroffen_pruefen`); Definitionen ohne solche Daten und das Umsortieren bleiben
+  frei. Den Lehrgang als Ganzes darf die Leitung weiterhin löschen – das tut sie bewusst und vollständig.
+- **Wettläufe zwischen Lesen und Schreiben.** `create_versuch` schreibt „letzter Versuch ist mangelhaft“ und „Person
+  nicht eingefroren“ als Bedingung in den INSERT selbst (`INSERT … SELECT … WHERE`), Versuch und Kriterien-Haken in
+  einer Transaktion; wurde der letzte Versuch zwischen Lesen und Schreiben auf „bestanden“ gesetzt, gibt es 409 statt
+  einer Nachprüfung hinter einer bestandenen Prüfung. `update_versuch` schreibt die Haken erst NACH dem gelungenen
+  bedingten UPDATE in derselben Transaktion – bei 409 bleiben sie, wie sie waren. Kommentar, Voraussetzungshaken,
+  Medien-Upload, Medium- und Personen-Löschen tragen „… AND ergebnis IS NULL“ im Schreibzugriff und melden 409, wenn
+  das Ergebnis genau dazwischen vermerkt wurde (`_eingefroren_nachpruefen`).
+- **Keine verwaisten Dateien.** Ein Medium, dessen Zeile nicht geschrieben werden konnte (Person inzwischen
+  eingefroren, Versuch gelöscht), wird sofort wieder von der Platte genommen. Der Profilbild-Upload schreibt bedingt
+  wie `auth.set_avatar` (`WHERE bild = <alter Stand>`): Laden zwei Reiter gleichzeitig hoch, gewinnt einer, der
+  andere räumt seine Datei weg und bekommt 409; Entfernen löscht nur die Datei, die wirklich aus der Zeile genommen
+  wurde. Ein zweites Löschen desselben Mediums ergibt 404 statt eines stummen Erfolgs.
+- **Kleinigkeiten.** Die Dublettenprüfung innerhalb der Datei ist nach Namen gebündelt (dict statt linear
+  durchsuchter Liste, gleiches Verhalten, nicht mehr quadratisch); eine absurd tief verschachtelte Spaltenzuordnung
+  ergibt 400 statt 500 (`RecursionError` abgefangen). `list_lehrgaenge` bestimmt `darf_leiten` mit einer Abfrage
+  für alle Zeilen (die Lehrgänge, in denen der Aufrufer Leitung ist) statt einer je Lehrgang.
+
 ## Neue Dateien
 
 | Datei | Inhalt |

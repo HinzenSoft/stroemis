@@ -5,6 +5,7 @@ import os
 import secrets
 import shutil
 import subprocess
+import threading
 from datetime import datetime
 
 from PIL import Image, ImageOps
@@ -145,6 +146,14 @@ WEB_VIDEO = {"h264", "vp8", "vp9", "av1"}
 WEB_AUDIO = {"aac", "mp3", "opus", "vorbis", None}
 VIDEO_MAX_KANTE = 1920                 # größere Aufnahmen werden verkleinert
 VIDEO_FRIST_SEK = 30 * 60              # eine hängende Umwandlung darf keinen Arbeiter festhalten
+# Höchstens eine Umwandlung je Arbeitsprozess zugleich: libx264 nimmt sich alle Kerne, und ein
+# paar gleichzeitige Uploads hielten sonst alle Threads und den ganzen Rechner eine halbe Stunde
+# fest. Wer zu zweit hochlädt, wartet kurz – die Datei liegt schon, nur das Wandeln steht an.
+_UMWANDLUNG = threading.Semaphore(1)
+# ffmpeg erkennt das Format am Inhalt, nicht an der Endung. Eine als .mov getarnte Abspielliste
+# (m3u8, ffconcat) dürfte sonst beliebige Adressen nachladen; mit dieser Liste bleiben nur
+# lokale Dateien, Daten-URLs und die Entschlüsselung übrig.
+_PROTOKOLLE = ["-protocol_whitelist", "file,crypto,data"]
 
 
 def _ffprobe(pfad):
@@ -153,7 +162,7 @@ def _ffprobe(pfad):
         return None, None, None, None
     try:
         roh = subprocess.run(
-            [FFPROBE, "-v", "error", "-print_format", "json", "-show_streams", pfad],
+            [FFPROBE, "-v", "error", *_PROTOKOLLE, "-print_format", "json", "-show_streams", pfad],
             capture_output=True, timeout=60, check=True).stdout
         spuren = json.loads(roh).get("streams", [])
     except (subprocess.SubprocessError, ValueError, OSError):
@@ -166,20 +175,61 @@ def _ffprobe(pfad):
 
 def _video_umwandeln(quelle, ziel):
     """Nach H.264/AAC wandeln. "faststart" schiebt die Sprungtabelle nach vorn, sonst lädt der
-    Browser erst die ganze Datei, bevor er das erste Bild zeigt."""
+    Browser erst die ganze Datei, bevor er das erste Bild zeigt. Begleitangaben kommen nicht mit
+    (-map_metadata -1): Ein Telefon schreibt den Aufnahmeort in den Film, und der gehört so wenig
+    ins Netz wie das EXIF eines Bildes."""
     if not FFMPEG:
         return False
-    befehl = [FFMPEG, "-y", "-i", quelle,
-              "-map", "0:v:0", "-map", "0:a:0?",
+    befehl = [FFMPEG, "-y", *_PROTOKOLLE, "-i", quelle,
+              "-map", "0:v:0", "-map", "0:a:0?", "-map_metadata", "-1",
               "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
               "-vf", f"scale='min({VIDEO_MAX_KANTE},iw)':-2",
               "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", ziel]
     try:
-        subprocess.run(befehl, capture_output=True, timeout=VIDEO_FRIST_SEK, check=True)
+        with _UMWANDLUNG:
+            subprocess.run(befehl, capture_output=True, timeout=VIDEO_FRIST_SEK, check=True)
     except (subprocess.SubprocessError, OSError):
         _rm(ziel)
         return False
     return os.path.exists(ziel) and os.path.getsize(ziel) > 0
+
+
+def _hat_ortsangabe(pfad):
+    """Steht ein Aufnahmeort in den Begleitangaben? (iPhone: com.apple.quicktime.location.ISO6709,
+    andere: "location".) Nur dann lohnt das Umpacken – sonst würde die Medienpflege bei jedem
+    Start jeden Film neu schreiben."""
+    if not FFPROBE:
+        return False
+    try:
+        roh = subprocess.run(
+            [FFPROBE, "-v", "error", *_PROTOKOLLE, "-print_format", "json", "-show_format", "-show_streams", pfad],
+            capture_output=True, timeout=60, check=True).stdout
+        angaben = json.loads(roh)
+    except (subprocess.SubprocessError, ValueError, OSError):
+        return False
+    stellen = [angaben.get("format") or {}, *(angaben.get("streams") or [])]
+    return any("location" in k.lower() for s in stellen for k in (s.get("tags") or {}))
+
+
+def _metadaten_entfernen(pfad):
+    """Begleitangaben aus einem Video streichen, das sonst unverändert bleibt. Nur Umpacken
+    (-c copy), kein Neukodieren – das dauert Sekunden, nicht Minuten. Schlägt es fehl, bleibt die
+    Datei, wie sie war; das ist kein Grund, den Upload abzuweisen."""
+    if not FFMPEG or not _hat_ortsangabe(pfad):
+        return False
+    basis, ext = os.path.splitext(pfad)
+    ziel = basis + ".umwandlung" + ext
+    befehl = [FFMPEG, "-y", *_PROTOKOLLE, "-i", pfad, "-map", "0:v", "-map", "0:a?", "-map_metadata", "-1",
+              "-c", "copy", *(["-movflags", "+faststart"] if ext.lower() in (".mp4", ".m4v", ".mov") else []), ziel]
+    try:
+        subprocess.run(befehl, capture_output=True, timeout=VIDEO_FRIST_SEK, check=True)
+        if os.path.getsize(ziel) > 0:
+            os.replace(ziel, pfad)
+            return True
+    except (subprocess.SubprocessError, OSError):
+        pass
+    _rm(ziel)
+    return False
 
 
 def _video_pruefen(pfad):
@@ -202,30 +252,40 @@ def video_nachbereiten(pfad):
     wandeln, breite, hoehe = _video_pruefen(pfad)
     name = os.path.basename(pfad)
     if not wandeln:
+        _metadaten_entfernen(pfad)
         return "bleibt", name, breite, hoehe
     basis = os.path.splitext(pfad)[0]
     ziel = basis + ".umwandlung.mp4"
     if not _video_umwandeln(pfad, ziel):
         return "fehler", name, breite, hoehe
     neu = basis + ".mp4"
-    if os.path.abspath(neu) != os.path.abspath(pfad):
-        _rm(pfad)
+    # Erst die gewandelte Datei an ihren Platz, dann das Original weg. Andersherum fehlte nach
+    # einem Abbruch dazwischen beides, worauf die Seite zeigt.
+    gleich = os.path.abspath(neu) == os.path.abspath(pfad)
     os.replace(ziel, neu)
+    if not gleich:
+        _rm(pfad)
     _, breite, hoehe = _video_pruefen(neu)
     return "gewandelt", os.path.basename(neu), breite, hoehe
 
 
 def _video_standbild(quelle, ziel):
-    """Ein Bild aus der Mitte der ersten Sekunden als Vorschau ziehen."""
+    """Ein Bild nach der ersten Sekunde als Vorschau ziehen – das erste Bild ist oft noch schwarz
+    oder verwackelt. Ist der Film kürzer als eine Sekunde, gibt es dort nichts; dann eben das
+    erste Bild statt des grauen Platzhalters."""
     if not FFMPEG:
         return False
-    try:
-        subprocess.run([FFMPEG, "-y", "-ss", "1", "-i", quelle, "-frames:v", "1", "-q:v", "3", ziel],
-                       capture_output=True, timeout=120, check=True)
-    except (subprocess.SubprocessError, OSError):
+    for ab in ("1", "0"):
+        try:
+            subprocess.run([FFMPEG, "-y", *_PROTOKOLLE, "-ss", ab, "-i", quelle, "-frames:v", "1", "-q:v", "3", ziel],
+                           capture_output=True, timeout=120, check=True)
+        except (subprocess.SubprocessError, OSError):
+            _rm(ziel)
+            continue
+        if os.path.exists(ziel) and os.path.getsize(ziel) > 0:
+            return True
         _rm(ziel)
-        return False
-    return os.path.exists(ziel) and os.path.getsize(ziel) > 0
+    return False
 
 
 def _placeholder_poster(path_web, path_thumb):
@@ -413,13 +473,26 @@ def delete_avatar(media_dir, datei):
     _rm(os.path.join(media_dir, "avatar", datei))
 
 
-def store_wiki_file(file_storage, media_dir):
-    """Bild, Video, HTML-Baustein oder Anhang für Artikel. Bilder werden als Web-Variante
-    gespeichert, alles andere unverändert. Liefert (Dateiname, 'image'|'video'|'embed'|'file')."""
+def wiki_endung(file_storage):
+    """Die Endung, unter der eine Artikeldatei abgelegt würde – an EINER Stelle bestimmt, damit die
+    Rechteprüfung beim Hochladen (api_wiki.upload_file) und die Ablage dieselbe Antwort geben.
+    Fehlt die Endung, hilft der Inhaltstyp des Browsers aus, aber nur zu einer Bildendung: Aus
+    einem erfundenen "image/html" wurde sonst ein .html – und damit ein HTML-Baustein, den auch
+    ein Nutzer ohne Redakteursrecht einstellen konnte."""
     name = file_storage.filename or "datei"
     ext = os.path.splitext(name)[1].lower()
     if not ext and (file_storage.mimetype or "").startswith("image/"):
         ext = "." + file_storage.mimetype.split("/")[1].replace("jpeg", "jpg")
+        if ext not in ALLOWED_EXT | {".gif"}:
+            ext = ""
+    return ext
+
+
+def store_wiki_file(file_storage, media_dir):
+    """Bild, Video, HTML-Baustein oder Anhang für Artikel. Bilder werden als Web-Variante
+    gespeichert, alles andere unverändert. Liefert (Dateiname, 'image'|'video'|'embed'|'file')."""
+    name = file_storage.filename or "datei"
+    ext = wiki_endung(file_storage)
     if ext not in WIKI_EXT:
         raise ValueError(f"Dateityp {ext or '(ohne Endung)'} wird nicht unterstützt.")
     d = os.path.join(media_dir, "wiki")
@@ -508,6 +581,7 @@ def crop_wiki_image(media_dir, name, kasten):
     d = os.path.join(media_dir, "wiki")
     os.makedirs(d, exist_ok=True)
     with Image.open(quelle) as img:
+        _pixel_pruefen(img, name)
         img = ImageOps.exif_transpose(img)
         b, h = img.size
         rand = (round(links * b), round(oben * h),

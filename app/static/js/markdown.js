@@ -4,10 +4,21 @@ window.MD = (function () {
   const CALLOUTS = { info: "💡", warning: "⚠️", success: "✅", danger: "⛔", note: "📝", tip: "💡" };
   const VIDEO_RE = /\.(mp4|m4v|mov|webm)(\?.*)?$/i;
   const AUDIO_RE = /\.(mp3|m4a|ogg|oga|wav)(\?.*)?$/i;
-  // Hochgeladener HTML-Baustein (nur Redakteur/Admin, siehe api_wiki.upload_file) – eingebettet
-  // als gesandboxte <iframe>, nie als Teil der Seite selbst. Siehe EMBED_CSP in app/__init__.py.
-  const EMBED_RE = /\.html(\?.*)?$/i;
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  /* Hochgeladener HTML-Baustein (nur Redakteur/Admin, siehe api_wiki.upload_file) – eingebettet
+     als gesandboxte <iframe>, nie als Teil der Seite selbst. Siehe EMBED_CSP in app/__init__.py.
+     Zum Rahmen wird NUR eine eigene Datei: Pfad unter /media/wiki/, Endung .html, dahinter
+     höchstens die Maße (#w=60%&h=420). Vorher genügte die Endung – eine fremde Adresse mit
+     „.html“ wurde damit ebenfalls zum Rahmen, und der holte jede beliebige Seite in den Artikel,
+     zwar gesandboxt, aber ohne dass jemand sie hochgeladen und damit verantwortet hätte. */
+  const BAUSTEIN_RE = /^\/media\/wiki\/([^\s?#]+\.html)(?:#([^\s#]*))?$/i;
+  const MASSE_RE = /^(?:w=\d{1,4}(?:px|%25|%)?(?:&h=\d{1,4})?|h=\d{1,4})?$/;
+  function istBaustein(href) {
+    const m = BAUSTEIN_RE.exec(String(href || ""));
+    if (!m || m[1].split("/").includes("..")) return false;
+    return MASSE_RE.test(m[2] || "");
+  }
 
   /* Pastelltöne, aus denen die Hintergrundfarbe eines Callouts gewählt werden kann.
      Gespeichert wird der Name, nicht der Farbwert – so bleibt das Markdown lesbar und es
@@ -211,10 +222,20 @@ window.MD = (function () {
   /* Bildbreite steckt als Fragment in der Adresse: ![Alt](bild.jpg#w=60%)
      Der WYSIWYG-Editor schreibt Adressen beim Speichern prozentkodiert zurück ("%" wird "%25").
      Beide Schreibweisen werden gelesen, sonst ginge die Breite beim ersten Speichern verloren. */
+  /* Breite und Höhe aus dem Fragment: "#w=60%", "#w=60%&h=420" oder nur "#h=420". Die Breite
+     wie bei Bildern in Prozent oder Pixeln, die Höhe immer in Pixeln – ein Rahmen hat anders
+     als ein Bild keine Höhe, die sich aus seinem Inhalt ergäbe. Liefert { w: "60%"|"420"|"",
+     h: 420|null }. Bilder kennen nur die Breite; die Höhe steht nur an HTML-Bausteinen. */
+  function embedMasse(href) {
+    const s = String(href || "");
+    const frag = s.indexOf("#") >= 0 ? s.slice(s.indexOf("#") + 1) : "";
+    const w = /(?:^|&)w=(\d{1,4})(px|%25|%)?(?:&|$)/.exec(frag);
+    const h = /(?:^|&)h=(\d{1,4})(?:&|$)/.exec(frag);
+    return { w: w ? (w[2] === "%" || w[2] === "%25" ? w[1] + "%" : w[1]) : "", h: h ? +h[1] : null };
+  }
+
   function imageWidth(href) {
-    const m = /#w=(\d{1,4})(px|%25|%)?$/.exec(href || "");
-    if (!m) return "";
-    return m[2] === "%" || m[2] === "%25" ? m[1] + "%" : m[1];
+    return embedMasse(href).w;
   }
 
   /* --- Auszeichnungen, die Markdown selbst nicht kennt -----------------------------------
@@ -388,14 +409,16 @@ window.MD = (function () {
       if (AUDIO_RE.test(href || "")) {
         return `<audio controls preload="metadata" src="${esc(href)}"${title ? ` title="${esc(title)}"` : ""}></audio>`;
       }
-      if (EMBED_RE.test(href || "")) {
-        // "allow-scripts" ohne "allow-same-origin": der Baustein darf sein eigenes Skript
-        // ausführen, bekommt aber nie Cookies, Sitzung oder DOM dieser Seite zu sehen (siehe
-        // _EMBED_CSP in app/__init__.py, die serverseitig dasselbe zusätzlich erzwingt).
-        const w = imageWidth(href);
-        return `<iframe class="html-embed" src="${esc(href)}" sandbox="allow-scripts" loading="lazy" `
-          + `referrerpolicy="no-referrer" title="${esc(text || "Eingebettete Seite")}"`
-          + `${w ? ` style="width:${/%$/.test(w) ? w : w + "px"}"` : ""}></iframe>`;
+      if (istBaustein(href)) {
+        /* Hier entsteht noch kein Rahmen. DOMPurify verbietet <iframe> grundsätzlich (siehe
+           REINIGUNG), und das soll so bleiben – ein rohes <iframe> im Seitentext kommt damit
+           nie durch. Genau daran scheiterte aber auch der eigene Rahmen: Er wurde mit
+           herausgefiltert, und der Baustein stand nur im Editor, nie im Artikel. Der Renderer
+           setzt deshalb einen Platzhalter; nachbearbeiten() macht daraus den Rahmen – aus der
+           geprüften Adresse, nicht aus dem HTML. Wo keine Nachbearbeitung läuft (Verlauf),
+           steht wenigstens der Dateiname da. */
+        const name = href.replace(/^\/media\/wiki\//, "").replace(/#.*$/, "");
+        return `<span class="html-embed-platz" data-src="${esc(href)}" data-titel="${esc(text || "")}">HTML-Baustein: ${esc(name)}</span>`;
       }
       const w = imageWidth(href);
       const img = `<img src="${esc(href)}" alt="${esc(text || "")}"${w ? ` width="${esc(w)}"` : ""} loading="lazy">`;
@@ -459,13 +482,29 @@ window.MD = (function () {
 
   /* Was DOMPurify zusätzlich durchlässt und was ausdrücklich nicht. Ein Artikel darf Filme
      zeigen, aber weder Formulare noch Stilblöcke mitbringen: Ein <style> im Text stellte die
-     Oberfläche aller Leser um, ein <form> täuschte Eingaben vor. Und ids, die der Rahmen
-     selbst benutzt (dlg, toast, article …), dürfen im Inhalt nicht vorkommen – sonst fände
-     getElementById das Element im Artikel statt das des Rahmens (DOM-Clobbering). */
+     Oberfläche aller Leser um, ein <form> täuschte Eingaben vor. Dasselbe gilt für das
+     style-Attribut: Die CSP erlaubt Inline-Stile, und ein <div style="position:fixed;inset:0">
+     legte sich über die ganze Oberfläche jedes Lesers. Was ein Artikel an Gestalt braucht,
+     läuft über Klassen (Callout-Farben, Ausrichtung) und Attribute (Bildbreite über width).
+     Und ids, die der Rahmen selbst benutzt (dlg, toast, article …), dürfen im Inhalt nicht
+     vorkommen – sonst fände getElementById das Element im Artikel statt das des Rahmens
+     (DOM-Clobbering). */
   const REINIGUNG = { ADD_TAGS: ["video", "audio", "source"],
                       ADD_ATTR: ["target", "controls", "preload", "playsinline"],
-                      FORBID_TAGS: ["style", "form", "textarea", "select", "button", "dialog", "iframe"] };
-  const RAHMEN_ID = /^(dlg|toast|toc|comments|article|tree|map|banner|favorites|editor|side|fab|wiki-|pg-|ed-|lb-|al-|up-|au-|sh-|ic-|lk-|be-|ce-|dr-|loc-|imp-|p-|h-|btn-|comment-|search-|seiten-)/;
+                      FORBID_TAGS: ["style", "form", "textarea", "select", "button", "dialog", "iframe"],
+                      FORBID_ATTR: ["style"] };
+  /* Jede Kennung und jeder Kennungsvorsatz, den Wiki, öffentlicher Bereich und Rahmen (base.html,
+     common.js) selbst vergeben – ohne Abschluss, also als Vorsatz: "dlg" deckt auch "dlg-body".
+     Verifiziert war: Ein <span id="logout"> im Artikel meldete beim Anklicken ab, ein
+     <div id="info-verweise"> fing die Verweisliste der Seitenangaben ab. Die Prüfungsseite räumt
+     die ids gerenderter Beschreibungen selbst weg (pruefungen.js, md()). */
+  const RAHMEN_ID = /^(dlg|toast|toc|comments|article|tree|map|banner|favorites|editor|side|fab|logout|ck|wiki-|pg-|ed-|lb-|al-|up-|au-|sh-|ic-|lk-|be-|ce-|dr-|loc-|imp-|p-|h-|btn-|comment-|search-|seiten-|info-|c-|em-|fr-|tb-|eb-|bs-|alt-|iw-|ih-|rev-|home-)/;
+  const KENNUNG_RE = /^[A-Za-z][\w-]*$/;
+  /* Für Überschriften gilt die Regel enger als für ids im Inhalt: nur die ganzen Wörter des Rahmens
+     („toc“, „toc-2“ – nicht „toastbrot“, nicht „mappe“) und seine Vorsätze aus mindestens zwei
+     Buchstaben. Ein Anker wie „#p-seil“, „#banner“ oder „#2024“ bleibt, was er immer war: Links
+     darauf stehen in anderen Seiten, in Lesezeichen und in verschickten Adressen. */
+  const RAHMEN_H = /^(?:(?:dlg|toast|toc|comments|article|tree|map|favorites|editor|logout|ck)(?:-|$)|(?:wiki|pg|ed|lb|al|up|au|sh|ic|lk|be|ce|dr|loc|imp|btn|comment|search|seiten|info|em|fr|tb|eb|bs|alt|iw|ih|rev|home)-)/;
   /* Aufgabenlisten („* [ ] offen“) brauchen ein <input type=checkbox> – das ist der einzige
      Grund, aus dem hier überhaupt ein Eingabefeld stehen darf. Alles andere fliegt raus, und
      auch die Kästchen bleiben abgeschaltet: Ein Artikel soll nichts entgegennehmen. */
@@ -478,16 +517,29 @@ window.MD = (function () {
     node.setAttribute("disabled", "");
   });
   DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
-    if (data.attrName === "id" && (!/^[A-Za-z][\w-]*$/.test(data.attrValue) || RAHMEN_ID.test(data.attrValue))) {
+    if (data.attrName === "id" && (!KENNUNG_RE.test(data.attrValue) || RAHMEN_ID.test(data.attrValue))) {
       data.keepAttr = false;
     }
   });
 
+  /* Dieselbe Reinigung für alles, was von außen in die Seite will. Die Editoren (wiki.js,
+     pruefungen.js) bekommen sie als Option "sanitizer" mit – Toast UI 3.2.2 ruft sie aber nur in
+     der Markdown-Vorschau und in eigenen HTML-Renderern auf; eingefügtes HTML im WYSIWYG-Pfad
+     reinigt weiter seine mitgebrachte alte DOMPurify-Kopie (2.3.3), danach schneidet ProseMirror
+     alles ab, was sein Schema nicht kennt. Der Schutz der Leser liegt in der Leseansicht: Was der
+     Editor speichert, läuft beim Anzeigen immer noch einmal durch render() und damit hier durch. */
+  const reinigen = (html) => DOMPurify.sanitize(html, REINIGUNG);
+
   function render(md) {
     let html;
     try { html = marked.parse(tabellenkoepfeFuellen(leerzeilenBegradigen(md || ""))); } catch (e) { html = `<p class="error">Markdown konnte nicht gerendert werden: ${esc(e.message)}</p>`; }
-    return DOMPurify.sanitize(html, REINIGUNG);
+    return reinigen(html);
   }
+
+  /* decodeURIComponent wirft bei einer kaputten Prozentfolge ("%E0%A4%A") – und so eine steht
+     schnell in einer Adresse oder einem Anker, den jemand von Hand getippt hat. Dann lieber der
+     Rohwert als ein Fehler, der den ganzen Seitenaufbau abbricht. */
+  const entziffern = (t) => { try { return decodeURIComponent(t); } catch (e) { return t; } };
 
   /* Überschriften mit IDs versehen und Gliederung liefern */
   function buildToc(root) {
@@ -503,6 +555,12 @@ window.MD = (function () {
         .map((n) => n.textContent).join("");
       let id = roh.trim().toLowerCase().replace(/[äöüß]/g, (c) => ({ ä: "ae", ö: "oe", ü: "ue", ß: "ss" }[c]))
         .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "abschnitt";
+      /* Eine Überschrift „PG Präsenz“ ergäbe "pg-praesenz" – und die Marke mit dieser Kennung
+         entsteht erst beim Herzschlag, die Prüfung gegen vorhandene Elemente unten sieht sie also
+         nicht. praesenzAnzeigen (wiki.js) löschte dann die Überschrift statt der Marke. Deshalb
+         ein Zusatz, sobald die Kennung ein Wort oder einen Vorsatz des Rahmens trifft (RAHMEN_H).
+         Alle anderen Anker („#einleitung“, „#2024“) bleiben, wie sie sind. */
+      if (RAHMEN_H.test(id)) id += "-abschnitt";
       let n = 2, base = id;
       // Zweimal derselbe Abschnittsname – und: Eine Überschrift „Toc“ oder „Tree“ ergäbe eine
       // Kennung, die es im Rahmen schon gibt (die Leiste, der Seitenbaum). getElementById
@@ -609,7 +667,44 @@ window.MD = (function () {
      Weitere lief synchron darüber hinweg. Im Einbau stand deshalb der rohe Vorsatz "@cols=2:"
      als Zellentext, Codeblöcke hatten keinen Kopierknopf, Bilder kein Vollbild und
      Überschriften keinen Anker. */
+  /* Der Rahmen eines HTML-Bausteins – in Leseansicht und Editor derselbe. "allow-scripts" ohne
+     "allow-same-origin": der Baustein darf sein eigenes Skript ausführen, bekommt aber nie
+     Cookies, Sitzung oder DOM dieser Seite zu sehen (siehe _EMBED_CSP in app/__init__.py, die
+     serverseitig dasselbe zusätzlich erzwingt). Gebaut wird er aus Attributen, nie aus HTML –
+     und nur für eine Adresse, die istBaustein() für gut befunden hat. */
+  function bausteinElement(src, titel) {
+    const el = document.createElement("iframe");
+    el.className = "html-embed";
+    el.setAttribute("sandbox", "allow-scripts");
+    el.setAttribute("loading", "lazy");
+    el.setAttribute("referrerpolicy", "no-referrer");
+    el.setAttribute("title", titel || "Eingebettete Seite");
+    el.setAttribute("src", src);
+    bausteinMasse(el, src);
+    return el;
+  }
+
+  /* Die Maße aus dem Fragment anlegen: die Breite an "el", die Höhe an "hoehenEl" (ohne Angabe
+     ebenfalls an "el"). Im Editor trägt eine Hülle die Breite und der Rahmen die Höhe – ein
+     Prozentwert am Rahmen selbst bezöge sich sonst auf die Hülle, die sich nach ihm richtet.
+     Ohne Angabe gilt die Vorgabe aus dem Stylesheet; eine gesetzte Breite darf die Textspalte
+     ausfüllen, deshalb fällt die enge Vorgabe (max-width) dann weg. */
+  function bausteinMasse(el, src, hoehenEl) {
+    const { w, h } = embedMasse(src);
+    el.style.width = w ? (/%$/.test(w) ? w : `${w}px`) : "";
+    el.style.maxWidth = w ? "100%" : "";
+    (hoehenEl || el).style.height = h ? `${h}px` : "";
+  }
+
   function nachbearbeiten(wurzel) {
+    // HTML-Bausteine: der Platzhalter des Renderers wird zum gesandboxten Rahmen – nur für eine
+    // Adresse, die istBaustein() noch einmal prüft. Alles andere bleibt der Hinweis mit Namen.
+    wurzel.querySelectorAll(".html-embed-platz[data-src]").forEach((platz) => {
+      const src = platz.getAttribute("data-src") || "";
+      if (!istBaustein(src)) return;
+      platz.replaceWith(bausteinElement(src, platz.getAttribute("data-titel") || ""));
+    });
+
     // Bildunterschrift: ein kursiver Absatz direkt unter dem Bild wird zur Beschriftung.
     // Diese Schreibweise überlebt den WYSIWYG-Editor, ein Bildtitel ("…") dagegen nicht.
     wurzel.querySelectorAll("p > img:only-child").forEach((img) => {
@@ -820,7 +915,6 @@ window.MD = (function () {
     if (!root || !tocEl) return () => {};
     const heads = Array.from(root.querySelectorAll("h1[id], h2[id], h3[id], h4[id], h5[id]"));
     if (!heads.length) return () => {};
-    const entziffern = (t) => { try { return decodeURIComponent(t); } catch (e) { return t; } };
     const links = new Map(Array.from(tocEl.querySelectorAll("a[href^='#']"))
       .map((a) => [entziffern(a.getAttribute("href").slice(1)), a]));
     const onScroll = () => {
@@ -843,7 +937,7 @@ window.MD = (function () {
 
   /* Beim Laden mit #anker: der Artikel steht erst nach dem Rendern, darum hier nachziehen. */
   function scrollToHash(root) {
-    const id = decodeURIComponent((location.hash || "").slice(1));
+    const id = entziffern((location.hash || "").slice(1));
     if (!id) return false;
     const t = root.querySelector(`[id="${CSS.escape(id)}"]`) || document.getElementById(id);
     if (!t) return false;
@@ -890,8 +984,16 @@ window.MD = (function () {
   const istInhaltsbild = (img) => !!img && img.tagName === "IMG"
     && !img.classList.contains("ProseMirror-separator")
     && !(img.closest && img.closest(".ed-nichtinhalt"));
+  /* Dasselbe für alles, was im Text als Bild-Schreibweise steht und ein Menü bekommt: Bilder
+     und HTML-Bausteine. Die Reihenfolge dieser Elemente im Editor entspricht der Reihenfolge
+     der ![…](…)-Fundstellen im Markdown – darauf beruht die Zuordnung im Bild- und
+     Bausteinmenü (wiki.js, rewriteImage). */
+  const istInhaltsmedium = (el) => istInhaltsbild(el)
+    || !!(el && el.tagName === "IFRAME" && el.classList.contains("html-embed")
+          && !(el.closest && el.closest(".ed-nichtinhalt")));
 
-  return { render, buildToc, tocHtml, enhance, scrollToHash, tocScrollspy, istInhaltsbild,
-           CALLOUTS, CALLOUT_FARBEN, ALIGNS, MARKERS, COLOR_NAMES, VIDEO_RE, AUDIO_RE, EMBED_RE, esc, allEmojis,
-           fenceMask, imageWidth, widgetRules, htmlMarksToSyntax, wrapMark, UMBRUCH };
+  return { render, reinigen, entziffern, buildToc, tocHtml, enhance, scrollToHash, tocScrollspy, istInhaltsbild, istInhaltsmedium,
+           CALLOUTS, CALLOUT_FARBEN, ALIGNS, MARKERS, COLOR_NAMES, VIDEO_RE, AUDIO_RE, esc, allEmojis,
+           fenceMask, imageWidth, embedMasse, istBaustein, bausteinElement, bausteinMasse,
+           widgetRules, htmlMarksToSyntax, wrapMark, UMBRUCH };
 })();

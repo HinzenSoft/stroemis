@@ -87,7 +87,9 @@
     // Ein festgelegtes Albumdeckblatt liegt obenauf – sonst zeigt der Stapel das, was der Zufall
     // der Reihenfolge gerade nach vorn spült. sort() ist stabil, die übrige Folge bleibt also.
     const geordnet = kids.slice().sort((x, y) => (y.options.photo.cover ? 1 : 0) - (x.options.photo.cover ? 1 : 0));
-    const thumbs = geordnet.slice(0, 3).map((m) => m.options.photo.thumb);
+    // Adressen vom Server kommen escaped in die Attribute – nicht weil sie heute Böses
+    // enthielten, sondern damit das nicht davon abhängt, wie der Server sie morgen baut.
+    const thumbs = geordnet.slice(0, 3).map((m) => esc(m.options.photo.thumb));
     let html = '<div class="cm">';
     if (thumbs[2]) html += `<div class="stack s3" style="background-image:url('${thumbs[2]}')"></div>`;
     if (thumbs[1]) html += `<div class="stack s2" style="background-image:url('${thumbs[1]}')"></div>`;
@@ -99,7 +101,7 @@
   function photoMarker(p) {
     const icon = L.divIcon({
       className: "thumb-marker",
-      html: `<div class="tm ${esc(p.category)}" style="background-image:url('${p.thumb}')" title="${esc(p.album_title)}">${p.kind === "video" ? '<span class="play" aria-hidden="true">▶</span>' : ""}</div>`,
+      html: `<div class="tm ${esc(p.category)}" style="background-image:url('${esc(p.thumb)}')" title="${esc(p.album_title)}">${p.kind === "video" ? '<span class="play" aria-hidden="true">▶</span>' : ""}</div>`,
       iconSize: [64, 64], iconAnchor: [32, 32],
     });
     const m = L.marker([p.lat, p.lon], { icon, photo: p, title: p.album_title });
@@ -168,10 +170,10 @@
     }
     openPanel("Alben", `<ul class="album-list">${d.albums.map((a) => `
       <li data-id="${a.id}">
-        ${a.cover ? `<img src="${a.cover}" alt="">` : '<div class="noimg"></div>'}
+        ${a.cover ? `<img src="${esc(a.cover)}" alt="">` : '<div class="noimg"></div>'}
         <div>
           <div class="t">${esc(a.title)}</div>
-          <div class="small"><span class="cat ${esc(a.category)}">${CAT[a.category] || a.category}</span>
+          <div class="small"><span class="cat ${esc(a.category)}">${CAT[a.category] || esc(a.category)}</span>
             ${a.photo_count} Bilder${a.unlocated_count ? ` <span class="badge" title="Bilder ohne Position">${a.unlocated_count} ohne Position</span>` : ""}</div>
           <div class="meta">${esc(a.owner_name || "")}${a.contact_name ? " · Ansprechpartner: " + esc(a.contact_name) : ""}</div>
         </div>
@@ -194,7 +196,7 @@
 
     openPanel(a.title, `
       <div class="btn-row">
-        <span class="cat ${esc(a.category)}">${CAT[a.category] || a.category}</span>
+        <span class="cat ${esc(a.category)}">${CAT[a.category] || esc(a.category)}</span>
         ${a.photos.some((p) => p.lat != null) ? '<button class="btn ghost small" id="a-fit">Auf Karte zeigen</button>' : ""}
         ${a.can_edit ? '<button class="btn ghost small" id="a-edit">Bearbeiten</button>' : ""}
       </div>
@@ -207,7 +209,7 @@
         ${a.unlocated_count ? '<button class="btn yellow small" id="a-locate">Bilder ohne Position lokalisieren</button>' : ""}</div>` : ""}
       ${a.photos.length ? `<div class="photo-grid">${a.photos.map((p, i) => `
         <button data-i="${i}" ${p.id === highlightId ? 'class="hi"' : ""} title="${esc(p.title || p.original_name)}">
-          <img src="${p.thumb}" alt="${esc(p.title || p.original_name)}" loading="lazy">
+          <img src="${esc(p.thumb)}" alt="${esc(p.title || p.original_name)}" loading="lazy">
           ${p.kind === "video" ? '<span class="play" aria-hidden="true">▶</span>' : ""}
           ${p.lat == null ? '<span class="badge nogeo" title="Keine Position">ohne Ort</span>' : ""}
           ${p.title ? `<span class="cap">${esc(p.title)}</span>` : ""}
@@ -387,7 +389,7 @@
         const unl = d.photos.filter((p) => d.unlocated.includes(p.id));
         dialog(`<h2>${unl.length === 1 ? "Ein Bild ohne Geotag" : unl.length + " Bilder ohne Geotag"}</h2>
           <p>${unl.length === 1 ? "Dieses Bild enthält" : "Diese Bilder enthalten"} keine Positionsdaten. Möchtest du ${unl.length === 1 ? "es" : "sie"} jetzt auf der Karte platzieren?</p>
-          <div class="photo-grid">${unl.map((p) => `<button type="button" disabled><img src="${p.thumb}" alt=""></button>`).join("")}</div>
+          <div class="photo-grid">${unl.map((p) => `<button type="button" disabled><img src="${esc(p.thumb)}" alt=""></button>`).join("")}</div>
           <div class="dlg-actions"><button class="btn secondary" data-close type="button">Später</button><button class="btn yellow" id="loc-start" type="button">Jetzt auf der Karte platzieren</button></div>`,
           (dl2, body) => { body.querySelector("#loc-start").onclick = () => { dl2.close(); startLocate(unl); }; });
       }
@@ -521,7 +523,7 @@
     const albumPos = !!state.letztePos || (state.album && state.album.lat != null);
     const rest = state.locateQueue.length;
     banner.classList.remove("hidden");
-    banner.innerHTML = `<img src="${p.thumb}" alt="">
+    banner.innerHTML = `<img src="${esc(p.thumb)}" alt="">
       <div><strong>Auf die Karte tippen, um die Position zu setzen</strong>
         <span class="small">${esc(p.title || p.original_name)}${rest ? ` · danach noch ${rest}` : ""}</span></div>
       <form class="loc-suche" id="loc-form">
@@ -586,7 +588,7 @@
     const p = state.locating;
     clearTemp();
     state.tempMarker = L.marker(e.latlng, {
-      icon: L.divIcon({ className: "thumb-marker", html: `<div class="tm temp" style="background-image:url('${p.thumb}')"></div>`, iconSize: [64, 64], iconAnchor: [32, 32] }),
+      icon: L.divIcon({ className: "thumb-marker", html: `<div class="tm temp" style="background-image:url('${esc(p.thumb)}')"></div>`, iconSize: [64, 64], iconAnchor: [32, 32] }),
     }).addTo(state.map);
     banner.querySelector("strong").textContent = `Position: ${fmtCoord(e.latlng.lat, e.latlng.lng)}`;
     let ok = banner.querySelector("#loc-ok");
@@ -627,8 +629,8 @@
     kv.push(["Position", p.lat != null ? `<a href="https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lon}#map=18/${p.lat}/${p.lon}" target="_blank" rel="noopener">${fmtCoord(p.lat, p.lon)}</a> <span class="muted">(${p.geo_source === "exif" ? "aus Bild" : "manuell"})</span>` : '<span class="badge">keine Position</span>']);
     if (p.altitude != null) kv.push(["Höhe ü. NN", `${Math.round(p.altitude)} m`]);
     if (p.height_m != null) kv.push(["Objekthöhe", `${String(p.height_m).replace(".", ",")} m`]);
-    if (p.kind === "video") kv.push(["Video", `${esc(p.original_name)} – <a href="${p.orig}" target="_blank" rel="noopener">herunterladen</a>`]);
-    else if (p.width) kv.push(["Original", `${p.width} × ${p.height} px – <a href="${p.orig}" target="_blank" rel="noopener">herunterladen</a>`]);
+    if (p.kind === "video") kv.push(["Video", `${esc(p.original_name)} – <a href="${esc(p.orig)}" target="_blank" rel="noopener">herunterladen</a>`]);
+    else if (p.width) kv.push(["Original", `${p.width} × ${p.height} px – <a href="${esc(p.orig)}" target="_blank" rel="noopener">herunterladen</a>`]);
 
     const view = `
       <h2>${esc(p.title || p.original_name)}</h2>
@@ -663,7 +665,7 @@
 
     lbBody.innerHTML = `
       <div class="lb-img">
-        ${p.kind === "video" ? `<video controls playsinline preload="metadata" poster="${p.web}" src="${p.orig}"></video>` : `<img src="${p.web}" alt="${esc(p.title || p.original_name)}">`}
+        ${p.kind === "video" ? `<video controls playsinline preload="metadata" poster="${esc(p.web)}" src="${esc(p.orig)}"></video>` : `<img src="${esc(p.web)}" alt="${esc(p.title || p.original_name)}">`}
         ${a.photos.length > 1 ? '<button class="lb-nav prev" id="lb-prev" aria-label="Vorheriges">‹</button><button class="lb-nav next" id="lb-next" aria-label="Nächstes">›</button>' : ""}
       </div>
       <div class="lb-side"><button class="close" id="lb-close" aria-label="Schließen">×</button>${editing ? form : view}</div>`;

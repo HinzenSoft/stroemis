@@ -152,6 +152,7 @@ FELDER = [
 ]
 
 NACH_SCHLUESSEL = {f.schluessel: f for f in FELDER}
+_angewendet = set()      # Schlüssel, deren gespeicherten Wert dieser Prozess übernommen hat (siehe anwenden)
 GRUPPEN = []
 for _f in FELDER:
     if _f.gruppe not in GRUPPEN:
@@ -199,6 +200,18 @@ def anwenden():
         wert = f.wert(roh)
         if wert is not None:
             current_app.config[f.config] = wert
+        _angewendet.add(schluessel)
+    # Was dieser Prozess einmal aus der Datenbank übernommen hat und was dort nicht mehr steht,
+    # geht zurück auf den Grundstand. Ohne das erführe der andere Arbeitsprozess vom Zurücksetzen
+    # nichts: Die Zeile ist weg, also setzt die Schleife oben nichts mehr – und der zuletzt
+    # übernommene Wert bliebe dort bis zum Neustart stehen. Nur die übernommenen Schlüssel, nicht
+    # alle: Was nie aus der Datenbank kam, hat vielleicht jemand bewusst direkt in der Konfiguration
+    # gesetzt (Tests tun das), und das soll die nächste Anfrage nicht stillschweigend zurückdrehen.
+    for schluessel in list(_angewendet - werte.keys()):
+        f = NACH_SCHLUESSEL.get(schluessel)
+        if f and schluessel in _grundstand:
+            current_app.config[f.config] = _grundstand[schluessel]
+        _angewendet.discard(schluessel)
 
 
 def beim_start_anwenden(app):

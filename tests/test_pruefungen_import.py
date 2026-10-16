@@ -7,6 +7,7 @@ aber ausschließlich mit erfundenen Namen."""
 import io
 import os
 import sys
+import zipfile
 from datetime import date, datetime
 
 import openpyxl
@@ -14,8 +15,9 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app import pruefungen_import as pi  # noqa: E402
 from app.pruefungen_import import (  # noqa: E402
-    ImportFehler, ZUORDNUNGEN, analysieren, datum_lesen, ist_erfuellt, normalisiert, passt,
+    ImportFehler, ZUORDNUNGEN, analysieren, datum_lesen, ist_erfuellt, ist_leitungsrolle, normalisiert, passt,
     schluessel, zeitraum_lesen,
 )
 
@@ -344,10 +346,125 @@ def test_importfehler():
         assert ".xlsx" in str(e)
 
 
+def test_leitungsrolle():
+    """Leitung ist ein eigenes Wort in der Rolle, kein Teilstring: „Begleitung“ leitet nicht."""
+    for rolle, erwartet in (("Lehrgangsleitung", True), ("Leitung", True), ("Leiter:in", True), ("Leiterin", True),
+                            ("Leiter/innen", True), ("Leiter*in", True), ("Lehrgangsleiter", True),
+                            ("Leitung und Prüfer", True), ("Leitung/Prüfer", True), ("Ltg.", True), ("LGL", True),
+                            ("Co-Leitung", True), ("stellv. Leitung", True),
+                            ("Begleitung", False), ("Anleitung Knoten", False), ("Ausbildungsleiter", False),
+                            ("Schwimmleiter", False), ("Referent", False), ("Teilnehmender", False), ("", False),
+                            (None, False)):
+        assert ist_leitungsrolle(rolle) is erwartet, rolle
+    # In der Datei: „Begleitung“ wird über das Ausbilderwort „leitung“ zwar Ausbilderin, aber keine Leitung.
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["Vorname", "Nachname", "Rolle"])
+    ws.append(["Ida", "Import", "TN"])
+    ws.append(["Berta", "Begleit", "Begleitung"])
+    ws.append(["Lena", "Leit", "Leitung und Prüferin"])
+    b = io.BytesIO()
+    wb.save(b)
+    e = analysieren(b)
+    assert [(a["name"], a["ist_leitung"]) for a in e["ausbilder"]] == [("Berta Begleit", False), ("Lena Leit", True)]
+    assert [t["name"] for t in e["teilnehmer"]] == ["Import"]
+
+
+def test_grenzen():
+    """Dateien, die klein aussehen und beim Lesen explodieren, werden mit Klartext abgewiesen – geprüft
+    mit kleinen Dateien, die eine Grenze reißen, ohne den Test zu bremsen."""
+    def mit_zelle(zeile, spalte):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["Vorname", "Nachname"])
+        ws.append(["Max", "Muster"])
+        ws.cell(zeile, spalte, "x")
+        b = io.BytesIO()
+        wb.save(b)
+        return b.getvalue()
+
+    # Eine einzige Zelle weit außerhalb: höchste Zeile, höchste Spalte, Rechteck. openpyxl legte für
+    # jedes Feld des Rechtecks ein Zellobjekt an; die Grenzen gelten der Form, nicht der Dateigröße –
+    # jede dieser Dateien ist unter 10 KB.
+    for zeile, spalte, hinweis in ((30_000, 1, "Zeile 30000"), (3, 400, "Spalte 400"), (5_000, 200, "Felder")):
+        roh = mit_zelle(zeile, spalte)
+        assert len(roh) < 10_000
+        with pytest.raises(ImportFehler) as e:
+            analysieren(roh)
+        assert hinweis in str(e.value), (zeile, spalte, str(e.value))
+    assert analysieren(mit_zelle(1_000, 50))["teilnehmer"][0]["name"] == "Muster"       # eine normale Liste
+
+    # Zu viele Arbeitsblätter – alle würden beim Öffnen geladen.
+    wb = openpyxl.Workbook()
+    for i in range(pi.MAX_ARBEITSBLAETTER):                 # plus das vorhandene: eins zu viel
+        wb.create_sheet(f"Blatt {i}")
+    wb.worksheets[-1].append(["Vorname", "Nachname"])
+    wb.worksheets[-1].append(["Max", "Muster"])
+    b = io.BytesIO()
+    wb.save(b)
+    with pytest.raises(ImportFehler) as e:
+        analysieren(b)
+    assert "Arbeitsblätter" in str(e.value)
+
+    # Das Archiv selbst: zu viele Einträge; zu groß entpackt (die Grenze dafür künstlich klein, damit
+    # der Test keine 200 MB schreibt – geprüft wird der Weg, nicht die Zahl).
+    b = io.BytesIO()
+    with zipfile.ZipFile(b, "w") as zf:
+        for i in range(pi.MAX_ZIP_EINTRAEGE + 1):
+            zf.writestr(f"e{i}", b"x")
+    with pytest.raises(ImportFehler) as e:
+        analysieren(b.getvalue())
+    assert "Einträgen" in str(e.value)
+    alt = pi.MAX_ENTPACKT
+    pi.MAX_ENTPACKT = 1024
+    try:
+        with pytest.raises(ImportFehler) as e:
+            analysieren(beispiel_xlsx())
+        assert "entpackt" in str(e.value)
+    finally:
+        pi.MAX_ENTPACKT = alt
+    assert analysieren(beispiel_xlsx())["kopfzeile"] == 7                              # danach wieder lesbar
+
+    # Mehr Datenzeilen als auf einmal übernommen werden: Fehler mit Zahl; Leerzeilen zählen nicht.
+    def liste(n, leerzeilen=0):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["Vorname", "Nachname"])
+        for i in range(n):
+            ws.append([f"V{i}", f"N{i}"])
+        for _ in range(leerzeilen):
+            ws.append(["", "  "])
+        b = io.BytesIO()
+        wb.save(b)
+        return b
+    with pytest.raises(ImportFehler) as e:
+        analysieren(liste(pi.MAX_DATENZEILEN + 1))
+    assert f"{pi.MAX_DATENZEILEN + 1} Datenzeilen" in str(e.value)
+    assert len(analysieren(liste(pi.MAX_DATENZEILEN, leerzeilen=5))["teilnehmer"]) == pi.MAX_DATENZEILEN
+
+    # Weitere Angaben: höchstens 50 Spalten (der Rest wird „ignorieren“ und einmal gemeldet), Titel auf
+    # 100 und Werte auf 500 Zeichen gekürzt.
+    kopf = ["Vorname", "Nachname", "T" * 150] + [f"Z{i}" for i in range(pi.MAX_EXTRA_SPALTEN + 4)]
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(kopf)
+    ws.append(["Max", "Muster", "w" * 600] + [f"wert{i}" for i in range(pi.MAX_EXTRA_SPALTEN + 4)])
+    b = io.BytesIO()
+    wb.save(b)
+    e = analysieren(b)
+    zu = [s["zuordnung"] for s in e["spalten"]]
+    assert zu.count("extra") == pi.MAX_EXTRA_SPALTEN and zu[-5:] == ["ignorieren"] * 5, zu
+    assert sum("weiteren Angaben" in w for w in e["warnungen"]) == 1, e["warnungen"]
+    extra = e["teilnehmer"][0]["extra"]
+    assert len(extra) == pi.MAX_EXTRA_SPALTEN and extra["T" * pi.MAX_EXTRA_TITEL] == "w" * pi.MAX_EXTRA_WERT
+
+
 if __name__ == "__main__":
     test_helfer()
     test_analysieren_beispieldatei()
     test_zuordnung_ueberschreiben()
     test_freie_liste_und_sonderfaelle()
     test_importfehler()
+    test_leitungsrolle()
+    test_grenzen()
     print("Import-Test bestanden.")

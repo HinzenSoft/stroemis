@@ -19,11 +19,15 @@
 
   /* Eigene Adressen, die keine Wiki-Seite sind: Anhänge, statische Dateien, API. */
   const isFile = (href) => /^\/(api|media|static)\//.test(href);
+  /* Fremd ist, was einen anderen Ursprung hat – ganz, nicht als Vorsatz: Mit startsWith galt
+     "https://stroemis.de.evil.example/" als eigene Adresse. Lässt sich die Adresse nicht
+     deuten, zählt sie als fremd. */
+  const istFremd = (href) => { try { return new URL(href, location.href).origin !== location.origin; } catch (e) { return true; } };
 
   function wire(root) {
     root.querySelectorAll("a[href]").forEach((a) => {
       const href = a.getAttribute("href") || "";
-      if (/^https?:\/\//i.test(href) && !href.startsWith(location.origin)) { a.target = "_blank"; a.rel = "noopener"; }
+      if (/^https?:\/\//i.test(href) && istFremd(href)) { a.target = "_blank"; a.rel = "noopener"; }
       else if (href.startsWith(prefix) && !isFile(href)) a.addEventListener("click", (e) => { e.preventDefault(); navigate(href.slice(prefix.length)); });
     });
   }

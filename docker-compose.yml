@@ -5,13 +5,24 @@ services:
     container_name: stroemis
     restart: unless-stopped
     env_file: .env
-    # Nur lokal veröffentlichen – TLS und die Domain übernimmt ein Reverse-Proxy (siehe README).
+    # Nur auf der Schleife des Hosts veröffentlichen – TLS und die Domain übernimmt der
+    # Reverse-Proxy (siehe README). Ohne das "127.0.0.1:" hängt der Container am Netz: Docker
+    # öffnet den Port an der Firewall (ufw) vorbei, und wer direkt anklopft, kann die
+    # Weiterleitungskopfzeilen (X-Forwarded-For) selbst setzen und damit die Anmeldebremse umgehen.
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
-      # Datenbank, Originale, Thumbnails, Wiki-Bilder, Secret-Key.
-      # Alternativ ein Ordner: "./data:/data" – dann vorher  mkdir data && chown 1000:1000 data
+      # Datenbank, Originale, Thumbnails, Wiki-Bilder, Secret-Key, Zwischendateien.
+      # Der Ordner muss dem Nutzer 1000 gehören:  mkdir -p data && sudo chown -R 1000:1000 data
       - ./data:/data
-
-volumes:
-  stroemis-data:
+    # Der Dienst braucht keine Sonderrechte: keine Capabilities, kein Rechtegewinn durch setuid.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # Das Wurzeldateisystem bleibt unveränderlich: Geschrieben wird nur nach /data (Datenbank,
+    # Medien, Zwischendateien unter /data/tmp) und nach /tmp, wo Gunicorn die Lebenszeichen seiner
+    # Arbeitsprozesse ablegt – dafür ein flüchtiger Speicherbereich, der mit dem Container vergeht.
+    read_only: true
+    tmpfs:
+      - /tmp

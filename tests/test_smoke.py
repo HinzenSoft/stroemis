@@ -1,5 +1,6 @@
 """Rauchtest gegen die Flask-App (ohne Browser): python tests/test_smoke.py  oder  pytest tests/"""
 import io
+import json
 import logging
 import multiprocessing
 import os
@@ -484,6 +485,10 @@ def test_everything():
         assert c4.post("/api/auth/reset", json={"token": token, "password": "neuespw12"}).status_code == 200
         assert c4.post("/api/auth/reset", json={"token": token, "password": "neuespw12"}).status_code == 400
         assert c4.post("/api/auth/login", json={"email": "sr@example.org", "password": "neuespw12"}).status_code == 200
+        # Der Reset wirft alle anderen Anmeldungen dieser Person hinaus – die Sitzung trägt den
+        # Passwortstand mit. c2 ist Sabine: alte Sitzung weg, neu anmelden.
+        assert c2.get("/api/me").status_code == 401
+        assert c2.post("/api/auth/login", json={"email": "sr@example.org", "password": "neuespw12"}).status_code == 200
 
         # Löschen räumt Dateien weg
         r = c2.delete(f"/api/albums/{aid}", headers=H); assert r.status_code == 200, (r.status_code, r.get_json())
@@ -1570,6 +1575,198 @@ def anon_get(app, path):
     return app.test_client().get(path)
 
 
+def test_befunde():
+    """Die Fixes aus der Sicherheitsprüfung vom 15.10.2026 – jeder Punkt einmal nachgestellt."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app = make_app(tmp)
+        adm = app.test_client()
+        adm.post("/api/auth/login", json={"email": "admin@example.org", "password": "geheim123"})
+        H = {"X-Requested-With": "XMLHttpRequest"}
+
+        def member(mail):
+            c = app.test_client()
+            c.post("/api/auth/register", json={"email": mail, "password": "passwort1", "name": mail[:3],
+                                               "gliederung": "OG Test"})
+            uid = [u for u in adm.get("/api/admin/users").json["users"] if u["email"] == mail][0]["id"]
+            adm.post(f"/api/admin/users/{uid}/approve", json={})
+            c.post("/api/auth/login", json={"email": mail, "password": "passwort1"})
+            return c, uid
+        c1, uid1 = member("a@example.org")
+        c2, uid2 = member("b@example.org")
+
+        # --- Größenbremse greift am Datenstrom, auch ohne Content-Length (chunked) ----------
+        gross = json.dumps({"email": "admin@example.org", "password": "A" * (2 * 1024 * 1024)}).encode()
+        r = app.test_client().post("/api/auth/login", input_stream=io.BytesIO(gross), content_type="application/json",
+                                   headers={"Transfer-Encoding": "chunked"},
+                                   environ_overrides={"wsgi.input_terminated": True})
+        assert r.status_code == 411, (r.status_code, r.get_json())
+        r = app.test_client().post("/api/auth/login", data=gross, content_type="application/json")
+        assert r.status_code == 413 and "1 MB" in r.json["error"]
+
+        # --- HTML-Baustein: die Endung aus dem Inhaltstyp zählt wie der Dateiname ------------
+        r = c1.post("/api/wiki/files", data={"file": (io.BytesIO(b"<script>1</script>"), "x", "image/html")},
+                    headers=H, content_type="multipart/form-data")
+        assert r.status_code == 400, (r.status_code, r.get_json())       # ohne Endung, kein Bildtyp
+        r = c1.post("/api/wiki/files", data={"file": (io.BytesIO(b"<b>x</b>"), "x.html", "text/html")},
+                    headers=H, content_type="multipart/form-data")
+        assert r.status_code == 403
+        r = c1.post("/api/wiki/files", data={"file": (jpeg(False), "x", "image/jpeg")},
+                    headers=H, content_type="multipart/form-data")
+        assert r.status_code == 200 and r.json["kind"] == "image", r.get_json()   # Bild ohne Endung weiter ok
+        bild_url = r.json["url"]
+        bild_ref = bild_url.split("/media/wiki/")[1]
+
+        # --- Anhangsliste kennt Art und Größe -----------------------------------------------
+        anhang = c1.post("/api/wiki/pages", json={"title": "Anhang", "content": f"# Anhang\n\n![x]({bild_url})"}).json["page"]
+        dateien = c1.get(f"/api/wiki/pages/{anhang['id']}/attachments").json["files"]
+        assert dateien and dateien[0]["kind"] == "image" and dateien[0]["size"] > 0, dateien
+
+        # --- reorder verrät keinen Titel ----------------------------------------------------
+        geheim = adm.post("/api/wiki/pages", json={"title": "Geheimer Plan", "content": "# Geheimer Plan"}).json["page"]
+        assert adm.put(f"/api/wiki/pages/{geheim['id']}/restrict", json={"read_restricted": True}).status_code == 200
+        assert c1.get("/api/wiki/pages/geheimer-plan").status_code == 403
+        r = c1.put("/api/wiki/reorder", json={"items": [{"id": geheim["id"], "parent_id": None, "position": 0}]})
+        assert r.status_code == 404 and "Geheimer" not in r.json["error"], r.get_json()
+        offen = adm.post("/api/wiki/pages", json={"title": "Offener Plan", "content": "# Offener Plan"}).json["page"]
+        r = c1.put("/api/wiki/reorder", json={"items": [{"id": offen["id"], "parent_id": None, "position": 0}]})
+        assert r.status_code == 403 and "Offener" not in r.json["error"], r.get_json()
+
+        # --- Elternseite ohne Leserecht: kein Orakel, kein Einhängen -------------------------
+        assert c1.post("/api/wiki/pages", json={"title": "Eindringling", "parent_id": geheim["id"],
+                                                 "content": "x"}).status_code == 400
+        assert c1.put(f"/api/wiki/pages/{anhang['id']}", json={"parent_id": geheim["id"]}).status_code == 400
+        assert c1.put(f"/api/wiki/pages/{anhang['id']}", json={"parent_id": 999999}).status_code == 400
+
+        # --- Aus einem beschränkten Abschnitt heraus nur, wer die Sperre lösen dürfte ---------
+        assert adm.put(f"/api/wiki/pages/{geheim['id']}/editors", json={"user_ids": [uid1]}).status_code == 200
+        unter = c1.post("/api/wiki/pages", json={"title": "Unterlage", "parent_id": geheim["id"],
+                                                  "content": "# Unterlage"}).json["page"]
+        assert c2.get("/api/wiki/pages/unterlage").status_code == 403
+        r = c1.put(f"/api/wiki/pages/{unter['id']}", json={"parent_id": None})
+        assert r.status_code == 403 and "beschränkten Abschnitt" in r.json["error"], (r.status_code, r.get_json())
+        r = c1.put("/api/wiki/reorder", json={"items": [{"id": unter["id"], "parent_id": None, "position": 0}]})
+        assert r.status_code == 403
+        assert c2.get("/api/wiki/pages/unterlage").status_code == 403                 # weiter geschützt
+        unter2 = c1.post("/api/wiki/pages", json={"title": "Unterlage 2", "parent_id": geheim["id"],
+                                                   "content": "# U2"}).json["page"]
+        assert c1.put(f"/api/wiki/pages/{unter2['id']}", json={"parent_id": unter["id"]}).status_code == 200  # innerhalb
+        assert adm.put(f"/api/wiki/pages/{unter['id']}", json={"parent_id": None}).status_code == 200    # Admin darf
+        assert c2.get("/api/wiki/pages/unterlage").status_code == 200
+
+        # --- Export: jede Datei einmal, mit Obergrenze ----------------------------------------
+        wurzel = c1.post("/api/wiki/pages", json={"title": "Exportwurzel",
+                                                   "content": f"# Exportwurzel\n\n![a]({bild_url})"}).json["page"]
+        c1.post("/api/wiki/pages", json={"title": "Exportkind", "parent_id": wurzel["id"],
+                                          "content": f"# Exportkind\n\n![b]({bild_url})"})
+        r = c1.get(f"/api/wiki/pages/{wurzel['id']}/export?children=1")
+        assert r.status_code == 200, r.status_code
+        namen = zipfile.ZipFile(io.BytesIO(r.data)).namelist()
+        assert namen.count("media/" + bild_ref) == 1, namen
+        from app import api_wiki
+        grenze = api_wiki.EXPORT_MAX_BYTES
+        api_wiki.EXPORT_MAX_BYTES = 10
+        try:
+            assert c1.get(f"/api/wiki/pages/{wurzel['id']}/export?children=1").status_code == 413
+        finally:
+            api_wiki.EXPORT_MAX_BYTES = grenze
+
+        # --- Mitwirkende ohne E-Mail-Adressen -----------------------------------------------
+        assert adm.put(f"/api/wiki/pages/{wurzel['id']}", json={"content": "# Exportwurzel\n\nneu"}).status_code == 200
+        r = c1.get(f"/api/wiki/pages/{wurzel['id']}/contributors").json
+        assert r["contributors"] and "email" not in r["owner"] and all("email" not in u for u in r["contributors"]), r
+
+        # --- Löschen nimmt keine fremden Unterseiten mit ------------------------------------
+        gemeinsam = c1.post("/api/wiki/pages", json={"title": "Gemeinsam", "content": "# Gemeinsam"}).json["page"]
+        assert c1.put(f"/api/wiki/pages/{gemeinsam['id']}/editors", json={"user_ids": [uid2]}).status_code == 200
+        vonb = c2.post("/api/wiki/pages", json={"title": "Von b", "parent_id": gemeinsam["id"],
+                                                 "content": "# Von b"}).json["page"]
+        r = c1.delete(f"/api/wiki/pages/{gemeinsam['id']}", headers=H)
+        assert r.status_code == 403 and "1 Seiten" in r.json["error"], r.get_json()
+        assert c2.delete(f"/api/wiki/pages/{vonb['id']}", headers=H).status_code == 200
+        assert c1.delete(f"/api/wiki/pages/{gemeinsam['id']}", headers=H).status_code == 200   # ohne fremde lebende Seite
+        assert c1.delete(f"/api/wiki/trash/{gemeinsam['id']}", headers=H).status_code == 403   # „Von b“ hängt noch dran
+        assert adm.delete(f"/api/wiki/trash/{gemeinsam['id']}", headers=H).status_code == 200
+
+        # --- Passwort vergessen: auch je Adresse gebremst -----------------------------------
+        for i in range(10):
+            r = app.test_client().post("/api/auth/forgot", json={"email": "a@example.org"},
+                                       environ_base={"REMOTE_ADDR": f"10.0.0.{i + 1}"})
+            assert r.status_code == 200, (i, r.status_code)
+        r = app.test_client().post("/api/auth/forgot", json={"email": "a@example.org"},
+                                   environ_base={"REMOTE_ADDR": "10.0.0.99"})
+        assert r.status_code == 429
+
+        # --- Passwortwechsel: diese Sitzung bleibt, alle anderen verfallen --------------------
+        c1b = app.test_client()
+        assert c1b.post("/api/auth/login", json={"email": "a@example.org", "password": "passwort1"}).status_code == 200
+        assert c1.put("/api/me/password", json={"current": "passwort1", "password": "passwort2"}).status_code == 200
+        assert c1.get("/api/me").status_code == 200
+        assert c1b.get("/api/me").status_code == 401
+
+        # --- Kontoanfrage: einzeilige Felder ohne Steuerzeichen -------------------------------
+        r = app.test_client().post("/api/auth/register", json={"email": "z@example.org", "password": "passwort1",
+                                                                 "name": "Zeilen\r\nBruch", "gliederung": "OG\tX"})
+        assert r.status_code == 201, r.get_json()
+        z = [u for u in adm.get("/api/admin/users").json["users"] if u["email"] == "z@example.org"][0]
+        assert z["name"] == "ZeilenBruch" and z["gliederung"] == "OGX", z
+
+        # --- Öffentlich: ein beschränkter Vorfahr schlägt die Freigabe – auch in Index und Suche
+        schau = adm.post("/api/wiki/pages", json={"title": "Schaufenster", "content": "# Schaufenster\n\nsichtbar"}).json["page"]
+        assert adm.put(f"/api/wiki/pages/{schau['id']}/share", json={"is_public": True, "public_children": False}).status_code == 200
+        assert any(p["slug"] == "schaufenster" for p in anon_get(app, "/api/public/index").json["pages"])
+        assert anon_get(app, "/api/public/search?q=sichtbar").json["results"]
+        assert adm.put(f"/api/wiki/pages/{schau['id']}", json={"parent_id": geheim["id"]}).status_code == 200
+        assert not any(p["slug"] == "schaufenster" for p in anon_get(app, "/api/public/index").json["pages"])
+        assert not anon_get(app, "/api/public/search?q=sichtbar").json["results"]
+        assert anon_get(app, "/api/public/pages/schaufenster").status_code == 404
+
+        # --- Einstellungen: Zurücksetzen wirkt auch im anderen Arbeitsprozess -----------------
+        from app import db as db_mod, einstellungen
+        with app.app_context():
+            einstellungen.speichern({"ALLOW_REGISTRATION": "false"}, 1)
+        anon_get(app, "/api/public/index")                       # eine Anfrage: Werte werden übernommen
+        assert app.config["ALLOW_REGISTRATION"] is False
+        with app.app_context():                                   # „der andere Arbeiter“ setzt zurück
+            db_mod.execute("DELETE FROM einstellungen WHERE schluessel = 'ALLOW_REGISTRATION'")
+        anon_get(app, "/api/public/index")
+        assert app.config["ALLOW_REGISTRATION"] is True
+
+        # --- Aufräumlauf: verwaiste Artikeldateien nach einer Woche, genutzte und frische bleiben
+        from app import medienpflege
+        wiki_dir = os.path.join(app.config["MEDIA_DIR"], "wiki")
+        alt = os.path.join(wiki_dir, "uralt.png")
+        with open(alt, "wb") as fh:
+            fh.write(b"x")
+        os.utime(alt, (1, 1))
+        rest = os.path.join(wiki_dir, "abgebrochen.umwandlung.mp4")
+        with open(rest, "wb") as fh:
+            fh.write(b"x")
+        os.utime(rest, (1, 1))
+        genutzt = os.path.join(wiki_dir, bild_ref)
+        os.utime(genutzt, (1, 1))                                  # alt, aber auf der Seite „Anhang“ eingebunden
+        frisch = os.path.join(wiki_dir, "frisch.png")
+        with open(frisch, "wb") as fh:
+            fh.write(b"x")
+        # Ein gewandeltes Video, das eine Seite noch unter der alten Adresse nennt (media() liefert
+        # .mov weiter als .mp4 aus), ist keine Waise – eine nirgends genannte alte .mov schon.
+        film = os.path.join(wiki_dir, "film.mp4")
+        with open(film, "wb") as fh:
+            fh.write(b"x")
+        os.utime(film, (1, 1))
+        assert c1.post("/api/wiki/pages", json={"title": "Filmseite", "content": "# Film\n\n[Film](/media/wiki/film.mov)"}).status_code == 201
+        fremd_mov = os.path.join(wiki_dir, "fremd.mov")
+        with open(fremd_mov, "wb") as fh:
+            fh.write(b"x")
+        os.utime(fremd_mov, (1, 1))
+        with app.app_context():
+            assert medienpflege._wiki_waisen(app.config["MEDIA_DIR"]) == 3
+        assert not os.path.exists(alt) and not os.path.exists(rest) and not os.path.exists(fremd_mov)
+        assert os.path.exists(genutzt) and os.path.exists(frisch) and os.path.exists(film)
+
+    print("Befundtest bestanden.")
+
+
 if __name__ == "__main__":
     test_everything()
     test_haertung()
+    test_befunde()

@@ -130,7 +130,8 @@ S.api = function (pfad, opts) {
   let d = {};
   if (pfad === "/api/wiki/tree") d = { pages: Object.values(SEITEN).map(alsJson) };
   else if (/^\/api\/wiki\/pages\/[^/]+$/.test(pfad) && methode === "GET") {
-    const key = decodeURIComponent(pfad.split("/").pop());
+    // Das Nachziehen und der Einbau hängen "?leise=1" an (kein Eintrag in „Zuletzt besucht“).
+    const key = decodeURIComponent(pfad.split("/").pop().split("?")[0]);
     const s = Object.values(SEITEN).find((a) => a.slug === key || String(a.id) === key);
     d = s ? { page: alsJson(s) } : null;
   }
@@ -142,6 +143,10 @@ S.api = function (pfad, opts) {
   if (d === null) return Promise.reject(new Error("Seite nicht gefunden"));
   return Promise.resolve(d);
 };
+// Was base.html sonst in die Seite schreibt: wer angemeldet ist. Ohne das stolperte der
+// Editoraufbau still (darfEinbetten liest STROEMIS.user).
+window.STROEMIS = { user: { id: 7, name: "Prüferin", email: "p@example.org", role: "editor", is_pruefer: false },
+                    publicUrl: "", maxUploadMb: 5120 };
 
 /* Die Adresszeile lässt sich aus einer file://-Seite nicht setzen – pushState wirft dort.
    Mitschreiben genügt: geprüft wird ohnehin nur, auf welche Seite sie zuletzt zeigen wollte. */
@@ -232,6 +237,13 @@ async function ablauf() {
   const adressenVorher = PROBE.adressen.length;
   PROBE.offen.shift()();
   await warte(1200);                       // 300 ms Nachschlag plus reichlich Luft
+  /* Die Antwort auf die erste Anfrage räumte früher bedingungslos den Entwurf von R weg – mit
+     genau den Tastendrücken („Und noch was.“), die diese Anfrage nicht mehr mitgenommen hatte
+     und die nach dem Abräumen des Editors nirgends sonst mehr standen. */
+  let entwurfR = null;
+  try { entwurfR = JSON.parse(localStorage.getItem("stroemis-entwurf-1") || "null"); } catch (e) { /* egal */ }
+  pruefe("der Entwurf von R überlebt die Antwort auf die erste Anfrage",
+         !!entwurfR && /Und noch was\./.test(entwurfR.md || ""), JSON.stringify(entwurfR));
   // Und nun alles beantworten, was sonst noch offen steht – ein echter Server tut nichts
   // anderes. Erst danach ist am Datenbestand zu sehen, was ein später Lauf angerichtet hat;
   // eine noch hängende Anfrage sähe harmlos aus.
@@ -257,6 +269,47 @@ async function ablauf() {
   const zurueck = PROBE.adressen.slice(adressenVorher).filter((u) => /seite-r/.test(u));
   pruefe("der späte Lauf holt die Adresszeile nicht zu R zurück",
          zurueck.length === 0, zurueck.join("\n"));
+  // Der Abschluss hat den Stand beim Verlassen festgehalten und hinter der hängenden Anfrage
+  // hergeschickt – der Entwurf ist damit erledigt und darf weg.
+  pruefe("der beim Verlassen noch ungesicherte Text wird nachgesendet",
+         /Und noch was\./.test(SEITEN[1].content), SEITEN[1].content);
+  let entwurfDanach = null;
+  try { entwurfDanach = localStorage.getItem("stroemis-entwurf-1"); } catch (e) { /* egal */ }
+  pruefe("danach ist der Entwurf von R weggeräumt", entwurfDanach === null, String(entwurfDanach));
+
+  // --- Zweiter Akt: Verlassen mitten in der Anfrage, ohne weiter zu tippen ------------------
+  /* Hier trägt der Entwurf nichts, was die hängende Anfrage nicht auch hat. Nach ihrer Antwort
+     muss er weg – sonst böte das nächste Öffnen einen „Entwurf“ an, der längst gespeichert
+     ist – und es darf keine zweite Anfrage für denselben Stand geben. */
+  const putsR = PROBE.puts.filter((p) => p.id === 1).length;
+  const zeileR = Array.from(document.querySelectorAll("#tree li")).find((li) => li.dataset.id === "1");
+  zeileR.querySelector("a").click();
+  await warteAuf("Seite R wird wieder angezeigt", () => {
+    const b = document.querySelector("#pg-edit");
+    return b && /Seite R/.test(document.querySelector("#wiki-content").textContent);
+  });
+  klick("#pg-edit");
+  await warteAuf("Editor für R steht erneut", () => PROBE.editoren.length === 3);
+  PROBE.editoren[2].insertText(" Dritter Satz.");
+  await warteAuf("die Anfrage ist unterwegs", () => PROBE.puts.filter((p) => p.id === 1).length === putsR + 1, 6000);
+  zeileQ.querySelector("a").click();
+  await warteAuf("Seite Q wird wieder angezeigt", () => {
+    const b = document.querySelector("#pg-edit");
+    return b && /Seite Q/.test(document.querySelector("#wiki-content").textContent);
+  });
+  let entwurfR3 = null;
+  try { entwurfR3 = localStorage.getItem("stroemis-entwurf-1"); } catch (e) { /* egal */ }
+  pruefe("beim Verlassen liegt der Stand als Entwurf im Browser", !!entwurfR3 && /Dritter Satz\./.test(entwurfR3), String(entwurfR3));
+  for (let i = 0; i < 6 && PROBE.offen.length; i++) {
+    while (PROBE.offen.length) PROBE.offen.shift()();
+    await warte(400);
+  }
+  let entwurfR4 = null;
+  try { entwurfR4 = localStorage.getItem("stroemis-entwurf-1"); } catch (e) { /* egal */ }
+  pruefe("nach der Antwort ist der Entwurf weg – es gab nichts nachzusenden", entwurfR4 === null, String(entwurfR4));
+  pruefe("der dritte Satz steht in R", /Dritter Satz\./.test(SEITEN[1].content), SEITEN[1].content);
+  pruefe("für denselben Stand geht keine zweite Anfrage los",
+         PROBE.puts.filter((p) => p.id === 1).length === putsR + 1, JSON.stringify(PROBE.puts.filter((p) => p.id === 1).slice(putsR), null, 2));
 }
 
 window.addEventListener("error", (e) => { pruefe("keine Ausnahme", false, String(e.message)); });

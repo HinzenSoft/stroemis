@@ -3,7 +3,7 @@
 # Quelle ziehen und hier eintragen, zum Beispiel
 #   curl -fsSL https://unpkg.com/leaflet@1.9.4/dist/leaflet.js | sha256sum
 # (der Build prüft die Liste, deshalb lässt sie sich nicht aus ihm selbst erzeugen).
-c0845096a7c4a6741f362ac506c94c1c7d27dc603bcc1bf64a587f76f2dbe3a1  dompurify/purify.min.js
+cd37898f9782adf54820c413191b5691803f0f137c799d6edcfd38523b4c2c31  dompurify/purify.min.js
 066daca850d8ffbef007af00b06eac0015728dee279c51f3cb6c716df7c42edf  leaflet/images/layers-2x.png
 1dbbe9d028e292f36fcba8f8b3a28d5e8932754fc2215b9ac69e4cdecf5107c6  leaflet/images/layers.png
 00179c4c1ee830d3a108412ae0d294f55776cfeb085c60129a39aa6fc4ae2528  leaflet/images/marker-icon-2x.png

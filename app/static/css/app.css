@@ -1004,7 +1004,11 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .ed-emoji .em-grid { max-height: min(46vh, 300px); }
 /* Die Ziehgriffe stehen neben dem roten Auswahlrahmen – deshalb Gelb, die zweite Kennfarbe
    der Anwendung, mit dunklem Rand, damit sie auch auf hellen Bildern stehen. */
-.ed-resize { position: absolute; z-index: 1299; width: 14px; height: 44px; border-radius: var(--radius-pille); background: var(--gelb); border: 2px solid var(--anthrazit); box-shadow: 0 1px 4px rgba(0,0,0,.4); cursor: ew-resize; }
+.ed-resize { position: absolute; z-index: 1299; width: 14px; height: 44px; border-radius: var(--radius-pille); background: var(--gelb); border: 2px solid var(--anthrazit); box-shadow: 0 1px 4px rgba(0,0,0,.4); cursor: ew-resize; touch-action: none; }
+/* Die beiden zusätzlichen Griffe des HTML-Bausteins: unten liegend für die Höhe, in der Ecke
+   rund für beides. touch-action: none, damit der Finger beim Ziehen nicht die Seite rollt. */
+.ed-resize.unten { width: 44px; height: 14px; cursor: ns-resize; }
+.ed-resize.ecke { width: 22px; height: 22px; cursor: nwse-resize; }
 /* Ein angeklicktes Bild soll man auf einen Blick erkennen – deshalb der Ring in der
    Kennfarbe der Anwendung, mit hellem Hof darum, damit er auch auf dunklen Bildern steht. */
 .ed-resize-frame {
@@ -1219,6 +1223,28 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
    meisten eingebetteten Seiten (Erklärgrafik, kleines Werkzeug) sind selbst schmal angelegt.
    "![…](datei.html#w=800)" setzt eine andere Breite, wie bei Bildern schon üblich. */
 .html-embed { display: block; width: 100%; max-width: 560px; height: 600px; margin: .8em 0; border: 1px solid var(--linie); border-radius: var(--radius-gross); }
+/* Der Platzhalter des Renderers – zu sehen nur dort, wo keine Nachbearbeitung läuft (etwa in
+   der Verlaufsansicht): dann steht wenigstens der Name der Datei da, kein leerer Fleck. */
+.html-embed-platz { display: inline-block; font-size: var(--fs-klein); color: var(--grau); border: 1px dashed var(--linie); border-radius: var(--radius); padding: 2px 8px; }
+/* Im Editor steckt der Rahmen in einer Hülle (wiki.js, bausteinHuelle): Sie trägt die Breite,
+   der Griff liegt in der Ecke ÜBER dem Rahmen und kostet keine Höhe – Editor und Leseansicht
+   bleiben auf gleicher Höhe. Die Vorgabemaße sind dieselben wie an .html-embed. */
+.ed-embed { display: block; position: relative; width: 100%; max-width: 560px; margin: .8em 0; }
+.ed-embed > .html-embed { width: 100%; max-width: none; margin: 0; }
+.ed-embed-griff {
+  position: absolute; top: 6px; left: 6px; z-index: 1; display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; font-size: var(--fs-marke); color: var(--anthrazit); background: rgba(255, 255, 255, .92);
+  border: 1px solid var(--linie); border-radius: var(--radius-pille); box-shadow: var(--schatten-karte);
+  cursor: pointer; user-select: none; white-space: nowrap; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis;
+}
+.ed-embed-griff:hover { color: var(--rot); }
+.ed-embed-griff svg { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.ed-embed-griff svg .voll { fill: currentColor; stroke: none; }
+/* Angeklickt: derselbe Ring wie an einem gewählten Bild. */
+.ed-embed.ed-selected {
+  outline: 2px solid var(--rot); outline-offset: 2px; border-radius: var(--radius-gross);
+  box-shadow: 0 0 0 2px var(--weiss), 0 0 0 6px rgba(227, 6, 19, .18);
+}
 /* Der Sortierpfeil steht im rechten Innenabstand der Kopfzelle, nicht im Textfluss: Als
    Inhalt machte er die Spalte um gut zwanzig Pixel breiter als dieselbe Tabelle im Editor,
    wo es ihn nicht gibt – die Spaltengrenzen sprangen beim Umschalten. */

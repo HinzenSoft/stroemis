@@ -98,7 +98,8 @@ S.api = function (pfad, opts) {
   let d = {};
   if (pfad === "/api/wiki/tree") d = { pages: Object.values(SEITEN).map(alsJson) };
   else if (/^\/api\/wiki\/pages\/[^/]+$/.test(pfad) && methode === "GET") {
-    const key = decodeURIComponent(pfad.split("/").pop());
+    // Das Nachziehen hängt "?leise=1" an (kein Eintrag in „Zuletzt besucht“).
+    const key = decodeURIComponent(pfad.split("/").pop().split("?")[0]);
     const s = Object.values(SEITEN).find((a) => a.slug === key || String(a.id) === key);
     d = s ? { page: alsJson(s) } : null;
   }

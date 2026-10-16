@@ -112,7 +112,11 @@ function sammle(wurzel) {
     if (tn) {
       const rg = document.createRange();
       rg.setStart(tn, 0); rg.setEnd(tn, Math.min(3, tn.length));
-      tx = Math.round(rg.getBoundingClientRect().left - bez.left);
+      const kasten = rg.getBoundingClientRect();
+      // Ohne Ausdehnung ist die Stelle gerade nicht zu sehen – etwa der Körper einer zugeklappten
+      // Box, den der Editor erst öffnet, wenn der Schreibstrich hineinkommt. Dann gibt es keinen
+      // Textanfang zu vergleichen; der Rest (Schrift, Farbe, Ausrichtung) wird weiter geprüft.
+      tx = kasten.width || kasten.height ? Math.round(kasten.left - bez.left) : null;
     }
     raus.set(t, { tag: k.tagName, tx, blatt, block, fs: cs.fontSize, fw: cs.fontWeight, st: cs.fontStyle,
                   fa: cs.color, hg: cs.backgroundColor, dek: cs.textDecorationLine, ta: cs.textAlign,

@@ -3,6 +3,9 @@
 (function () {
   const { esc, api, toast, dialog, fmtDate } = S;
   const $ = (sel, root) => (root || document).querySelector(sel);
+  /* Beschriftung für [Text](url) und ![Text](url): Ein Dateiname wie "Plan [v2].pdf" beendete
+     mit seiner eckigen Klammer die Beschriftung, und aus dem Link wurde Fließtext. */
+  const mdBeschriftung = (s) => String(s || "").replace(/([\[\]])/g, "\\$1");
   /* Beim Wechsel zwischen Lesen und Bearbeiten gemerkte Bildlaufhöhe: beide Ansichten setzen
      jeden Block auf dieselbe Höhe, die Stelle im Text bleibt damit unter dem Zeiger stehen.
      Ohne das Merken sprang der Editor ans Dokumentende, sobald er den Fokus bekam. */
@@ -89,11 +92,13 @@
     } catch (e) { return bearbeitungsKennzeichen(); }
   })();
   // Welche Endungen als Film und Ton gelten, entscheidet der Renderer – hier dieselbe Liste.
-  const { VIDEO_RE, AUDIO_RE, EMBED_RE } = MD;
+  // Was ein HTML-Baustein ist, ebenfalls (MD.istBaustein): nur eigene Dateien unter /media/wiki/.
+  const { VIDEO_RE, AUDIO_RE } = MD;
   // Wer HTML-Bausteine einstellen darf – dieselbe Grenze wie darf_inhalte() im Server
   // (Redakteur/Admin): automatisch für jeden Leser ausgeführter Inhalt ist etwas anderes als
   // ein Bild oder ein Download, den sich jemand erst selbst öffnen müsste.
-  const darfEinbetten = () => !!(STROEMIS.user && (STROEMIS.user.role === "admin" || STROEMIS.user.role === "editor"));
+  // window.STROEMIS setzt base.html; die Prüfstände unter tests/ bauen die Seite ohne Vorlage auf.
+  const darfEinbetten = () => { const u = window.STROEMIS && STROEMIS.user; return !!(u && (u.role === "admin" || u.role === "editor")); };
   // Jede Zeile, die im Editorformat einen Block eröffnet. Blockmenü und Ziehgriff bilden
   // damit Text und Editor aufeinander ab – beide müssen dieselbe Liste sehen.
   const MARKEN_RE = window.EDMD.MARKEN_RE;
@@ -357,7 +362,7 @@
   /* ======================================================================
      Navigation
      ====================================================================== */
-  function slugFromPath() { return decodeURIComponent(location.pathname.replace(/^\/(wiki\/?)?/, "")); }
+  function slugFromPath() { return MD.entziffern(location.pathname.replace(/^\/(wiki\/?)?/, "")); }
 
   function navigate(ziel, push = true) {
     // "seite#abschnitt" oder "seite?x": Nur der Slug sucht die Seite, der Anker springt danach.
@@ -428,7 +433,9 @@
     if ((dlg && dlg.open) || (sel && !sel.isCollapsed && art && art.contains(sel.anchorNode))) return;
     state.zieht = true;
     try {
-      const d = await api(`/api/wiki/pages/${encodeURIComponent(p.slug)}`);
+      // leise=1: Das Nachziehen ist kein Besuch – sonst stünde die Seite bei „Zuletzt besucht“
+      // immer wieder oben, nur weil jemand anders daran schreibt.
+      const d = await api(`/api/wiki/pages/${encodeURIComponent(p.slug)}?leise=1`);
       if (state.current !== p || state.editor || !d.page || d.page.version === p.version) return;
       const neu = d.page;
       const kopfNeu = neu.title !== p.title || neu.icon !== p.icon || neu.slug !== p.slug;
@@ -703,13 +710,18 @@
       });
   }
 
+  /* Fremd ist, was einen anderen Ursprung hat – ganz, nicht als Vorsatz: Mit startsWith galt
+     "https://stroemis.de.evil.example/" als eigene Adresse. Lässt sich die Adresse nicht
+     deuten, zählt sie als fremd. */
+  const istFremd = (href) => { try { return new URL(href, location.href).origin !== location.origin; } catch (e) { return true; } };
+
   function wireLinks(root) {
     root.querySelectorAll("a[href]").forEach((a) => {
       const href = a.getAttribute("href") || "";
-      if (/^https?:\/\//i.test(href) && !href.startsWith(location.origin)) { a.target = "_blank"; a.rel = "noopener"; }
+      if (/^https?:\/\//i.test(href) && istFremd(href)) { a.target = "_blank"; a.rel = "noopener"; }
       else if (href.startsWith("/wiki/")) a.addEventListener("click", (e) => { e.preventDefault(); navigate(href.slice(6)); });
       else if (href.startsWith("#") && href.length > 1) a.addEventListener("click", (e) => {
-        const ziel = document.getElementById(decodeURIComponent(href.slice(1)));
+        const ziel = document.getElementById(MD.entziffern(href.slice(1)));
         if (!ziel) return;
         e.preventDefault();
         ziel.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -907,7 +919,9 @@
     // Eingebundene Abschnitte holen sich ihre Quellseite über die gewöhnliche Schnittstelle –
     // damit gelten deren Leserechte, ohne dass sie hier ein zweites Mal geprüft werden müssten.
     MD.enhance(art, { children: children(p.id),
-                      holeSeite: (slug) => api(`/api/wiki/pages/${encodeURIComponent(slug)}`).then((d) => d.page),
+                      // leise=1: Die Quellseite eines Einbaus wird gelesen, nicht besucht – sie
+                      // gehört nicht in „Zuletzt besucht“.
+                      holeSeite: (slug) => api(`/api/wiki/pages/${encodeURIComponent(slug)}?leise=1`).then((d) => d.page),
                       /* Eingebundener Text trifft erst nach dem Zeichnen ein. Seine Links
                          müssen dieselbe Behandlung bekommen wie die eigenen – sonst lädt ein
                          Klick darin die ganze Anwendung neu –, und seine Überschriften gehören
@@ -1594,11 +1608,13 @@
           { type: "closeTag", tagName: "audio", outerNewLine: true },
         ];
       }
-      if (EMBED_RE.test(url)) {
-        const ew = MD.imageWidth(url);
+      if (MD.istBaustein(url)) {
+        const { w: ew, h: eh } = MD.embedMasse(url);
         const attrs = { src: url, class: "html-embed", sandbox: "allow-scripts", loading: "lazy",
                         referrerpolicy: "no-referrer", title: node.firstChild ? node.firstChild.literal || "" : "" };
-        if (ew) attrs.style = `width:${/%$/.test(ew) ? ew : ew + "px"}`;
+        const stil = [ew ? `width:${/%$/.test(ew) ? ew : ew + "px"};max-width:100%` : "", eh ? `height:${eh}px` : ""]
+          .filter(Boolean).join(";");
+        if (stil) attrs.style = stil;
         return [
           { type: "openTag", tagName: "iframe", attributes: attrs, outerNewLine: true },
           { type: "closeTag", tagName: "iframe", outerNewLine: true },
@@ -1702,6 +1718,8 @@
     /* Der synchronisierte Abschnitt: ein Kasten mit zwei entgegengesetzten Pfeilen – der
        Inhalt liegt hier und erscheint anderswo mit. */
     synchron:  ico('<rect x="2.5" y="2.5" width="11" height="11" rx="1"/><path d="M5 6.3h6M9.6 4.8l1.4 1.5-1.4 1.5M11 9.7H5M6.4 8.2L5 9.7l1.4 1.5"/>'),
+    /* Der HTML-Baustein: ein Fenster mit Titelleiste – eine eigene Seite im Artikel. */
+    baustein:  ico('<rect x="2.5" y="3" width="11" height="10" rx="1"/><path d="M2.5 6h11"/><circle class="voll" cx="4.6" cy="4.5" r=".7"/><circle class="voll" cx="6.6" cy="4.5" r=".7"/>'),
     griff:     ico('<circle class="voll" cx="6" cy="4" r="1.1"/><circle class="voll" cx="10" cy="4" r="1.1"/><circle class="voll" cx="6" cy="8" r="1.1"/><circle class="voll" cx="10" cy="8" r="1.1"/><circle class="voll" cx="6" cy="12" r="1.1"/><circle class="voll" cx="10" cy="12" r="1.1"/>'),
   };
   const AUSRICHTUNGEN = [["left", I.linksb, "Links"], ["center", I.mittig, "Mittig"],
@@ -2138,20 +2156,20 @@
       { t: "Bild", d: "Bild hochladen", run: () => pickImage((url, alt) => { ed.exec("addImage", { imageUrl: url, altText: alt }); state.dirty = true; }) },
       { t: "Video", d: "Video hochladen (MP4, MOV, WebM)", run: () => pickFile("video/*,.mp4,.m4v,.mov,.webm", (url, name, kind) => {
         if (kind !== "video") return toast("Das ist kein Video – für Bilder bitte „Bild“ verwenden.", true);
-        insert(`![${name || "Video"}](${url})\n`);
+        insert(`![${mdBeschriftung(name || "Video")}](${url})\n`);
       }) },
       { t: "Audio", d: "Tonaufnahme einbetten (MP3, M4A, OGG, WAV)", k: "ton sprache", run: () => pickFile(".mp3,.m4a,.ogg,.oga,.wav,audio/*", (url, name, kind) => {
         if (kind !== "file") return toast("Das ist keine Audiodatei.", true);
-        insert(`![${name || "Aufnahme"}](${url})\n`);
+        insert(`![${mdBeschriftung(name || "Aufnahme")}](${url})\n`);
       }) },
       // Nur für Redakteure/Admins – dieselbe Grenze wie darf_inhalte() im Server (siehe darfEinbetten()).
       ...(darfEinbetten() ? [{ t: "HTML einbetten", d: "Eigenständige HTML-Seite einbetten (z. B. interaktive Grafik)", k: "iframe baustein", run: () => pickHtml((url, name, kind) => {
         if (kind !== "embed") return toast("Das ist keine HTML-Datei.", true);
-        insert(`![${name || "Baustein"}](${url})\n`);
+        insert(`![${mdBeschriftung(name || "Baustein")}](${url})\n`);
       }) }] : []),
       { t: "Datei", d: "Anhang verlinken (PDF, Word, Excel, ZIP, GPX …)", run: () => pickFile(".pdf,.doc,.docx,.odt,.rtf,.xls,.xlsx,.ods,.csv,.ppt,.pptx,.odp,.txt,.zip,.gpx,.kml,.kmz", (url, name, kind, filename) => {
         if (kind !== "file") return toast("Für Bilder und Videos bitte „Bild“ oder „Video“ verwenden.", true);
-        insert(`[${filename || name}](${url})\n`);
+        insert(`[${mdBeschriftung(filename || name)}](${url})\n`);
       }) },
       { t: "Code-Block", d: "Vorformatierter Text", run: () => ed.exec("codeBlock") },
       { t: "Trennlinie", d: "Waagerechte Linie", run: () => ed.exec("hr") },
@@ -2620,7 +2638,7 @@
       e.stopPropagation();
       if (e.clipboardData) {
         e.clipboardData.setData("text/plain", info.md);
-        e.clipboardData.setData("text/html", `<img src="${lastImage.getAttribute("src")}" alt="${lastImage.getAttribute("alt") || ""}">`);
+        e.clipboardData.setData("text/html", `<img src="${esc(lastImage.getAttribute("src"))}" alt="${esc(lastImage.getAttribute("alt") || "")}">`);
       }
       if (e.type === "cut") {
         const img = lastImage;
@@ -2665,9 +2683,10 @@
         if (status) status.textContent = `Lade ${f.name} hoch (${done + 1}/${list.length}) …`;
         try {
           const r = await uploadFile(f);
-          if (r.kind === "image") insert(`![${f.name.replace(/\.[^.]+$/, "")}](${r.url})\n`);
-          else if (r.kind === "video") insert(`![${f.name.replace(/\.[^.]+$/, "")}](${r.url})\n`);
-          else insert(`[${f.name}](${r.url})\n`);
+          const ohneEndung = mdBeschriftung(f.name.replace(/\.[^.]+$/, ""));
+          if (r.kind === "image") insert(`![${ohneEndung}](${r.url})\n`);
+          else if (r.kind === "video") insert(`![${ohneEndung}](${r.url})\n`);
+          else insert(`[${mdBeschriftung(f.name)}](${r.url})\n`);
           done++;
         } catch (err) { toast(`${f.name}: ${err.message}`, true); }
       }
@@ -2705,8 +2724,11 @@
     ctx.addEventListener("mousedown", (e) => e.preventDefault());
     const frame = document.createElement("div"); frame.className = "ed-resize-frame hidden"; document.body.appendChild(frame);
     const handle = document.createElement("div"); handle.className = "ed-resize hidden"; handle.title = "Ziehen zum Skalieren"; handle.setAttribute("role", "button"); handle.setAttribute("aria-label", "Bildbreite ändern"); document.body.appendChild(handle);
+    // Zwei weitere Griffe nur für HTML-Bausteine: unten die Höhe, in der Ecke beides.
+    const handleUnten = document.createElement("div"); handleUnten.className = "ed-resize unten hidden"; handleUnten.title = "Ziehen für die Höhe"; handleUnten.setAttribute("role", "button"); handleUnten.setAttribute("aria-label", "Höhe des Bausteins ändern"); document.body.appendChild(handleUnten);
+    const handleEcke = document.createElement("div"); handleEcke.className = "ed-resize ecke hidden"; handleEcke.title = "Ziehen für Breite und Höhe"; handleEcke.setAttribute("role", "button"); handleEcke.setAttribute("aria-label", "Breite und Höhe des Bausteins ändern"); document.body.appendChild(handleEcke);
     let ctxTarget = null;
-    const hideCtx = () => { if (emojiZu) emojiZu(); if (farbZu) farbZu(); ctx.classList.add("hidden"); frame.classList.add("hidden"); handle.classList.add("hidden"); if (ctxTarget && ctxTarget.classList) ctxTarget.classList.remove("ed-selected"); ctxTarget = null; };
+    const hideCtx = () => { if (emojiZu) emojiZu(); if (farbZu) farbZu(); ctx.classList.add("hidden"); [frame, handle, handleUnten, handleEcke].forEach((g) => g.classList.add("hidden")); if (ctxTarget && ctxTarget.classList) ctxTarget.classList.remove("ed-selected"); ctxTarget = null; };
     const placeCtx = (el, html, wire, name) => {
       hideBubble();                                  // Block- und Textleiste schließen sich aus
       ctx.innerHTML = html;
@@ -2739,7 +2761,7 @@
 
     /* Die obersten Elemente, die im Markdown auch wirklich einen Block ergeben.
        Ein leerer Absatz steht im Editor für eine Leerzeile und zählt deshalb nicht mit. */
-    const hasMedia = (el) => !!el.querySelector("img, video, audio, table, hr") || el.tagName === "HR";
+    const hasMedia = (el) => !!el.querySelector("img, video, audio, iframe, table, hr") || el.tagName === "HR";
     const blockEls = () => {
       const el = pm();
       if (!el) return [];
@@ -2779,7 +2801,7 @@
         const sel = document.getSelection();
         if (!sel || !sel.anchorNode) return false;
         const top = topElFor(sel.anchorNode);
-        return !!(top && (top.classList.contains("toastui-editor-custom-block") || top.querySelector("img, video, audio")));
+        return !!(top && (top.classList.contains("toastui-editor-custom-block") || top.querySelector("img, video, audio, iframe")));
       })();
       // Auf welchem Block steht der Cursor? Gebraucht, wenn die Marke nicht in den Text kommt:
       // Auf einem Schild (Einbau, Abschnittsmarke, Bild) gibt es keine Textstelle, in die sich
@@ -3491,9 +3513,14 @@
     };
     /* ProseMirror setzt eigene <img class="ProseMirror-separator"> in den Baum. Zählte man sie
        mit, zeigte das Bildmenü ab dem zweiten Bild auf die falsche Fundstelle im Markdown. */
-    // Nur die Bilder des Artikels – die Regel dafür steht in MD.istInhaltsbild.
-    const contentImages = () => Array.from(pm().querySelectorAll("img")).filter(MD.istInhaltsbild);
+    /* Nur die Bilder und HTML-Bausteine des Artikels – die Regel dafür steht in
+       MD.istInhaltsmedium. Beide stehen im Markdown als ![…](…) und zählen in derselben Liste;
+       ließe man die Bausteine weg, verschöbe jeder von ihnen die Zuordnung aller Bilder dahinter. */
+    const contentImages = () => Array.from(pm().querySelectorAll("img, iframe.html-embed")).filter(MD.istInhaltsmedium);
 
+    /* Die Fundstelle eines Bildes oder Bausteins im Markdown umschreiben. fn bekommt
+       { alt, url (ohne Maße), width, hoehe } und liefert die neue Schreibweise – oder null
+       zum Entfernen. */
     const rewriteImage = (img, fn) => {
       const bilder = contentImages();
       const index = bilder.indexOf(img);
@@ -3507,14 +3534,22 @@
       }
       const occ = stellen[index];
       if (!occ) return toast("Bild im Text nicht gefunden.", true);
-      const base = occ.url.replace(/#w=[^#]*$/, "");
-      const replacement = fn({ alt: occ.alt, url: base, width: MD.imageWidth(occ.url) });
+      const base = occ.url.replace(/#(?:w|h)=[^#]*$/, "");
+      const masse = MD.embedMasse(occ.url);
+      const replacement = fn({ alt: occ.alt, url: base, width: masse.w, hoehe: masse.h });
       setMd(md.slice(0, occ.start) + (replacement == null ? "" : replacement) + md.slice(occ.end));
       state.dirty = true;
       hideCtx();
     };
     const imgMd = (alt, url, width) =>
-      `![${String(alt || "").replace(/([\[\]])/g, "\\$1")}](${url}${width ? "#w=" + width : ""})`;
+      `![${mdBeschriftung(alt)}](${url}${width ? "#w=" + width : ""})`;
+    /* Dasselbe für einen HTML-Baustein, mit Höhe: ![Titel](datei.html#w=60%&h=420). */
+    const embedMd = (alt, url, width, hoehe) => {
+      const masse = [width ? `w=${width}` : "", hoehe ? `h=${hoehe}` : ""].filter(Boolean).join("&");
+      return `![${mdBeschriftung(alt)}](${url}${masse ? "#" + masse : ""})`;
+    };
+    /* Die Fundstelle eines Elements – für Dialoge, die den heutigen Stand zeigen wollen. */
+    const fundstelleVon = (el) => imageOccurrences(ed.getMarkdown())[contentImages().indexOf(el)] || null;
 
     /* Links: n-ter Link im Markdown = n-ter <a> im Editor. Bilder (![…]) sind ausgenommen. */
     const linkOccurrences = (md) => {
@@ -3739,6 +3774,62 @@
       }
     };
 
+    /* Ein Bild oder einen Baustein ausrichten – gemeinsam für beide Menüs. "bau(o)" liefert
+       die Schreibweise des Elements aus seiner Fundstelle; die kennt nur der Aufrufer.
+       Steht das Element schon in einem Ausrichtungsabschnitt, wird dessen Richtung geändert –
+       sonst schachtelte jeder Klick einen weiteren Abschnitt darum. */
+    const medienAusrichten = (el, mode, bau) => {
+      const top = topElFor(el);
+      const auf = umgebenderAbschnitt(top);
+      if (auf && auf.querySelector(".sek-ausrichtung")) {
+        const index = blockRoots().indexOf(auf);
+        if (index >= 0) return rewriteBloecke([{ index, text: `$$ausrichtung\n${mode}\n$$` }]);
+      }
+      /* Eine Bildunterschrift gehört zum Bild: Im Artikel werden Bild und kursiver Absatz
+         darunter zu einer Abbildung zusammengefasst. Bliebe die Unterschrift außerhalb des
+         Ausrichtungsabschnitts, stünde sie im Artikel als gewöhnlicher Absatz da – die
+         Abbildung wäre auseinandergerissen. Deshalb wandert sie mit. */
+      // Nachbarschaft über blockEls, nicht über nextElementSibling: Zwischen zwei Blöcken
+      // steht im Editor eine Fuge (ein leerer Absatz zum Anklicken), die kein Block ist.
+      const els = blockEls();
+      const i = top ? els.indexOf(top) : -1;
+      const unten = i >= 0 ? els[i + 1] : null;
+      if (unten && unten.classList.contains("ed-unterschrift")) {
+        const md = ed.getMarkdown();
+        const { lines, blocks } = topLevelBlocks(md);
+        if (blocks.length === els.length && blocks[i] && blocks[i + 1]) {
+          const erg = EDMD.ausrichten(md, { markeZeile: blocks[i].start, endeZeile: blocks[i + 1].start,
+                                            amBlockanfang: false, mode });
+          if (erg.md !== undefined) {
+            setMd(erg.md);
+            state.dirty = true;
+            hideCtx();
+            return;
+          }
+        }
+      }
+      rewriteImage(el, (o) => `\n$$ausrichtung\n${mode}\n$$\n\n${bau(o)}\n\n$$ende\n$$\n`);
+    };
+
+    /* Alternativtext (Bild) bzw. Titel (Baustein) – derselbe Dialog. Der heutige Wert kommt aus
+       dem Markdown, nicht aus dem Element: Der Rahmen trägt sonst die Vorgabe „Eingebettete
+       Seite“, und die stünde dann als Vorschlag im Feld. */
+    const altDialog = (el, titel, hilfe, bau) => {
+      const occ = fundstelleVon(el);
+      const cur = occ ? occ.alt.replace(/\\([\[\]])/g, "$1") : (el.getAttribute("alt") || "");
+      hideCtx();
+      dialog(`<h2>${esc(titel)}</h2>
+        <p class="help">${esc(hilfe)}</p>
+        <label for="alt-text">${esc(titel)}</label><input type="text" id="alt-text" value="${esc(cur)}">
+        <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
+        <button class="btn" id="alt-ok" type="button">Übernehmen</button></div>`,
+        (dlg, body) => { body.querySelector("#alt-ok").onclick = () => {
+          const a = body.querySelector("#alt-text").value;
+          dlg.close();
+          rewriteImage(el, (o) => bau(o, a));
+        }; });
+    };
+
     const imageMenu = (img) => {
       img.classList.add("ed-selected");
       strichHinterBild(img);
@@ -3752,54 +3843,11 @@
         ${btn("data-act", "del", "Bild löschen", I.papierkorb, "danger")}`;
       placeCtx(img, html, (box) => {
         box.querySelectorAll("[data-w]").forEach((x) => x.onclick = () => rewriteImage(img, (o) => imgMd(o.alt, o.url, x.dataset.w)));
-        box.querySelectorAll("[data-al]").forEach((x) => x.onclick = () => {
-          // Steht das Bild schon in einem Ausrichtungsabschnitt, wird dessen Richtung geändert –
-          // sonst schachtelte jeder Klick einen weiteren Abschnitt darum.
-          const top = topElFor(img);
-          const auf = umgebenderAbschnitt(top);
-          if (auf && auf.querySelector(".sek-ausrichtung")) {
-            const index = blockRoots().indexOf(auf);
-            if (index >= 0) return rewriteBloecke([{ index, text: `$$ausrichtung\n${x.dataset.al}\n$$` }]);
-          }
-          /* Eine Bildunterschrift gehört zum Bild: Im Artikel werden Bild und kursiver Absatz
-             darunter zu einer Abbildung zusammengefasst. Bliebe die Unterschrift außerhalb des
-             Ausrichtungsabschnitts, stünde sie im Artikel als gewöhnlicher Absatz da – die
-             Abbildung wäre auseinandergerissen. Deshalb wandert sie mit. */
-          // Nachbarschaft über blockEls, nicht über nextElementSibling: Zwischen zwei Blöcken
-          // steht im Editor eine Fuge (ein leerer Absatz zum Anklicken), die kein Block ist.
-          const els = blockEls();
-          const i = top ? els.indexOf(top) : -1;
-          const unten = i >= 0 ? els[i + 1] : null;
-          if (unten && unten.classList.contains("ed-unterschrift")) {
-            const md = ed.getMarkdown();
-            const { lines, blocks } = topLevelBlocks(md);
-            if (blocks.length === els.length && blocks[i] && blocks[i + 1]) {
-              const erg = EDMD.ausrichten(md, { markeZeile: blocks[i].start, endeZeile: blocks[i + 1].start,
-                                                amBlockanfang: false, mode: x.dataset.al });
-              if (erg.md !== undefined) {
-                setMd(erg.md);
-                state.dirty = true;
-                hideCtx();
-                return;
-              }
-            }
-          }
-          rewriteImage(img, (o) => `\n$$ausrichtung\n${x.dataset.al}\n$$\n\n${imgMd(o.alt, o.url, o.width)}\n\n$$ende\n$$\n`);
-        });
-        box.querySelector("[data-act=alt]").onclick = () => {
-          const cur = img.getAttribute("alt") || "";
-          hideCtx();
-          dialog(`<h2>Bildbeschreibung</h2>
-            <p class="help">Der Alternativtext wird vorgelesen, wenn das Bild nicht angezeigt werden kann.</p>
-            <label for="alt-text">Alternativtext</label><input type="text" id="alt-text" value="${esc(cur)}">
-            <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
-            <button class="btn" id="alt-ok" type="button">Übernehmen</button></div>`,
-            (dlg, body) => { body.querySelector("#alt-ok").onclick = () => {
-              const a = body.querySelector("#alt-text").value;
-              dlg.close();
-              rewriteImage(img, (o) => imgMd(a, o.url, o.width));
-            }; });
-        };
+        box.querySelectorAll("[data-al]").forEach((x) => x.onclick = () =>
+          medienAusrichten(img, x.dataset.al, (o) => imgMd(o.alt, o.url, o.width)));
+        box.querySelector("[data-act=alt]").onclick = () => altDialog(img, "Alternativtext",
+          "Der Alternativtext wird vorgelesen, wenn das Bild nicht angezeigt werden kann.",
+          (o, a) => imgMd(a, o.url, o.width));
         box.querySelector("[data-act=exact]").onclick = () => {
           const cur = MD.imageWidth(img.getAttribute("src")) || "";
           hideCtx();
@@ -3829,6 +3877,7 @@
       frame.classList.remove("hidden"); handle.classList.remove("hidden");
       frame.style.left = `${window.scrollX + r.left}px`; frame.style.top = `${window.scrollY + r.top}px`; frame.style.width = `${r.width}px`; frame.style.height = `${r.height}px`;
       handle.style.left = `${window.scrollX + r.right - 7}px`; handle.style.top = `${window.scrollY + r.top + r.height / 2 - 22}px`;
+      handle.onpointerdown = null;                     // der Zeigergriff des Bausteinmenüs
       handle.onmousedown = handle.ontouchstart = (e) => {
         e.preventDefault();
         // Bezugsgröße ist der Textbereich, in dem das Bild steht – genau darauf bezieht der
@@ -3869,6 +3918,124 @@
       };
     };
 
+    /* --- Menü des HTML-Bausteins ---------------------------------------------------------
+       Dasselbe Muster wie beim Bild: Breite, Ausrichtung, Titel, Ersetzen, Duplizieren,
+       Löschen. Dazu die Höhe, die ein Rahmen anders als ein Bild nicht aus seinem Inhalt
+       kennt – und drei Griffe statt einem: rechts die Breite, unten die Höhe, in der Ecke
+       beides. Bisher hatte der Baustein gar kein Menü: Ein Klick in den Rahmen erreicht die
+       Seite nicht, und ohne Klick gab es nichts, woran ein Menü hätte hängen können. */
+    const embedMenu = (fr) => {
+      const huelle = fr.closest(".ed-embed") || fr;
+      huelle.classList.add("ed-selected");
+      const src = fr.getAttribute("src") || "";
+      const cur = MD.embedMasse(src).w;
+      const bau = (o, w, h, alt) => embedMd(alt === undefined ? o.alt : alt, o.url,
+                                            w === undefined ? o.width : w, h === undefined ? o.hoehe : h);
+      const html = `<span class="lbl" title="HTML-Baustein">${I.baustein}</span>${["25%", "50%", "75%", "100%"].map((w) =>
+          btn("data-w", w, `Breite ${parseInt(w, 10)} % der Textbreite`, parseInt(w, 10), "num" + (cur === w ? " on" : ""))).join("")}${
+          btn("data-w", "", "Vorgabebreite", I.original, cur ? "" : "on")}${btn("data-act", "exact", "Breite und Höhe genau angeben", "…", "num")}<span class="sep"></span>
+        ${btn("data-al", "left", "Baustein links", I.linksb)}${btn("data-al", "center", "Baustein mittig", I.mittig)}${btn("data-al", "right", "Baustein rechts", I.rechtsb)}<span class="sep"></span>
+        ${btn("data-act", "alt", "Titel des Bausteins", "ALT", "abbr")}<span class="sep"></span>
+        ${btn("data-act", "replace", "Baustein durch eine andere HTML-Datei ersetzen", I.ersetzen)}${btn("data-act", "open", "Baustein in neuem Tab öffnen", I.extern)}${btn("data-act", "dup", "Baustein duplizieren", I.duplizieren)}<span class="sep"></span>
+        ${btn("data-act", "del", "Baustein löschen", I.papierkorb, "danger")}`;
+      placeCtx(huelle, html, (box) => {
+        box.querySelectorAll("[data-w]").forEach((x) => x.onclick = () => rewriteImage(fr, (o) => bau(o, x.dataset.w)));
+        box.querySelectorAll("[data-al]").forEach((x) => x.onclick = () => medienAusrichten(fr, x.dataset.al, (o) => bau(o)));
+        box.querySelector("[data-act=alt]").onclick = () => altDialog(fr, "Titel des Bausteins",
+          "Der Titel wird vorgelesen und beschreibt, was der Baustein zeigt.", (o, a) => bau(o, undefined, undefined, a));
+        box.querySelector("[data-act=exact]").onclick = () => {
+          const { w, h } = MD.embedMasse(src);
+          hideCtx();
+          dialog(`<h2>Größe des Bausteins</h2>
+            <p class="help">Breite in Prozent der Textbreite (z. B. <code>60%</code>) oder in Bildpunkten (z. B. <code>420</code>),
+              Höhe in Bildpunkten. Leer heißt: die Vorgabe.</p>
+            <div class="field-row">
+              <div><label for="iw-val">Breite</label><input type="text" id="iw-val" value="${esc(w)}" placeholder="60% oder 420"></div>
+              <div><label for="ih-val">Höhe</label><input type="text" id="ih-val" inputmode="numeric" value="${h ? esc(String(h)) : ""}" placeholder="600"></div>
+            </div>
+            <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
+            <button class="btn" id="iw-ok" type="button">Übernehmen</button></div>`,
+            (dlg, body) => { body.querySelector("#iw-ok").onclick = () => {
+              const rawW = body.querySelector("#iw-val").value.trim().replace(",", ".");
+              const rawH = body.querySelector("#ih-val").value.trim();
+              const mw = /^(\d{1,4})\s*(%|px)?$/.exec(rawW);
+              const mh = /^(\d{1,4})\s*(px)?$/.exec(rawH);
+              if (rawW && !mw) return toast("Breite bitte als Zahl angeben, wahlweise mit % dahinter.", true);
+              if (rawH && !mh) return toast("Höhe bitte als Zahl in Bildpunkten angeben.", true);
+              dlg.close();
+              const neuW = !rawW ? "" : (mw[2] === "%" ? mw[1] + "%" : mw[1]);
+              const neuH = !rawH ? null : +mh[1];
+              rewriteImage(fr, (o) => bau(o, neuW, neuH));
+            }; });
+        };
+        box.querySelector("[data-act=replace]").onclick = () => pickHtml((url, name, kind) => {
+          if (kind !== "embed") return toast("Das ist keine HTML-Datei.", true);
+          rewriteImage(fr, (o) => bau(Object.assign({}, o, { url })));
+        });
+        box.querySelector("[data-act=open]").onclick = () => { window.open(src.replace(/#.*$/, ""), "_blank", "noopener"); hideCtx(); };
+        box.querySelector("[data-act=dup]").onclick = () => rewriteImage(fr, (o) => bau(o) + "\n\n" + bau(o));
+        box.querySelector("[data-act=del]").onclick = () => rewriteImage(fr, () => null);
+      }, "HTML-Baustein");
+      griffeZeigen(huelle, fr);
+    };
+
+    /* Griffe am Baustein: rechts die Breite, unten die Höhe, in der Ecke beides. Mit
+       Zeigerereignissen und Zeigerfang am Griff statt mit Mausereignissen am Dokument wie beim
+       Bild: Über dem Rahmen gehört jede Bewegung dem fremden Dokument darin, und das Ziehen
+       bräche ab, sobald der Zeiger ihn erreicht. Der Fang lenkt alles auf den Griff, bis
+       losgelassen wird. Gespeichert wird die Breite in Prozent der Textspalte (wie beim Bild),
+       die Höhe in Bildpunkten. */
+    const griffeZeigen = (huelle, fr) => {
+      const stelle = () => {
+        const r = huelle.getBoundingClientRect();
+        frame.style.left = `${window.scrollX + r.left}px`; frame.style.top = `${window.scrollY + r.top}px`;
+        frame.style.width = `${r.width}px`; frame.style.height = `${r.height}px`;
+        handle.style.left = `${window.scrollX + r.right - 7}px`; handle.style.top = `${window.scrollY + r.top + r.height / 2 - 22}px`;
+        handleUnten.style.left = `${window.scrollX + r.left + r.width / 2 - 22}px`; handleUnten.style.top = `${window.scrollY + r.bottom - 7}px`;
+        handleEcke.style.left = `${window.scrollX + r.right - 11}px`; handleEcke.style.top = `${window.scrollY + r.bottom - 11}px`;
+      };
+      stelle();
+      [frame, handle, handleUnten, handleEcke].forEach((g) => g.classList.remove("hidden"));
+      handle.onmousedown = handle.ontouchstart = null;    // die Mausgriffe des Bildmenüs
+      const ziehen = (griff, breite, hoehe) => (e) => {
+        if (e.button != null && e.button !== 0) return;
+        e.preventDefault();
+        try { griff.setPointerCapture(e.pointerId); } catch (x) { /* dann ohne Fang */ }
+        // Bezugsgröße wie beim Bild: der Block, in dem der Baustein steht – darauf bezieht der
+        // Browser später width="…%".
+        let host = huelle.parentElement;
+        while (host && host !== pm() && /^inline/.test(getComputedStyle(host).display)) host = host.parentElement;
+        host = host || pm();
+        const cs = getComputedStyle(host);
+        const bezug = Math.max(1, host.clientWidth - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0));
+        const start = huelle.getBoundingClientRect();
+        const x0 = e.clientX, y0 = e.clientY;
+        let w = start.width, h = start.height, bewegt = false;
+        const move = (ev) => {
+          if (Math.abs(ev.clientX - x0) > 2 || Math.abs(ev.clientY - y0) > 2) bewegt = true;
+          if (breite) { w = Math.max(120, Math.min(bezug, start.width + (ev.clientX - x0))); huelle.style.width = `${w}px`; huelle.style.maxWidth = "100%"; }
+          if (hoehe) { h = Math.max(120, Math.min(4000, start.height + (ev.clientY - y0))); fr.style.height = `${h}px`; }
+          stelle();
+        };
+        const up = () => {
+          griff.removeEventListener("pointermove", move);
+          griff.removeEventListener("pointerup", up);
+          griff.removeEventListener("pointercancel", up);
+          if (!bewegt) return;                        // bloßes Anfassen ändert nichts
+          const pct = Math.max(5, Math.min(100, Math.round((w / bezug) * 100)));
+          rewriteImage(fr, (o) => embedMd(o.alt, o.url,
+            breite ? (pct >= 98 ? "100%" : `${pct}%`) : o.width,
+            hoehe ? Math.round(h) : o.hoehe));
+        };
+        griff.addEventListener("pointermove", move);
+        griff.addEventListener("pointerup", up);
+        griff.addEventListener("pointercancel", up);
+      };
+      handle.onpointerdown = ziehen(handle, true, false);
+      handleUnten.onpointerdown = ziehen(handleUnten, false, true);
+      handleEcke.onpointerdown = ziehen(handleEcke, true, true);
+    };
+
     root.addEventListener("click", (e) => {
       if (!ed.isWysiwygMode()) return hideCtx();
       const el = pm(); if (!el || !el.contains(e.target)) return hideCtx();
@@ -3888,6 +4055,13 @@
       const sel = document.getSelection();
       if (sel && !sel.isCollapsed && sel.rangeCount && el.contains(sel.anchorNode) && String(sel).trim()) return hideCtx();
       hideCtx();
+      // Griff oder Hülle eines HTML-Bausteins: das Menü des Bausteins. Ein Klick IN den Rahmen
+      // kommt hier nie an – den erkennt onFensterBlur weiter unten.
+      const huelle = e.target.closest(".ed-embed");
+      if (huelle) {
+        const fr = huelle.querySelector("iframe.html-embed");
+        if (fr) { ctxTarget = huelle; return embedMenu(fr); }
+      }
       const img = e.target.closest("img");
       // Nur Artikelbilder bekommen ein Menü: Ein Klick auf das Profilbild in der Autorenzeile
       // soll keine Bildleiste aufziehen, deren Knöpfe auf nichts im Text zeigen.
@@ -3925,6 +4099,22 @@
     };
     document.addEventListener("edlayout:geschuetzt", onSchutz);
 
+    /* Ein Klick IN den Rahmen eines Bausteins erreicht diese Seite nicht – er gehört dem
+       Dokument darin. Was die Seite davon mitbekommt: Das Fenster verliert den Fokus, und das
+       aktive Element ist der Rahmen. Daran erkennt sich der Klick, und das Menü öffnet sich wie
+       beim Bild – der Baustein selbst bleibt dabei bedienbar. */
+    const onFensterBlur = () => setTimeout(() => {
+      const a = document.activeElement;
+      if (!a || a.tagName !== "IFRAME" || !a.classList.contains("html-embed")) return;
+      const el = pm();
+      if (!el || !el.contains(a) || !ed.isWysiwygMode()) return;
+      if (ctxTarget && ctxTarget.contains && ctxTarget.contains(a)) return;     // Menü steht schon
+      hideCtx();
+      ctxTarget = a.closest(".ed-embed") || a;
+      embedMenu(a);
+    }, 0);
+    window.addEventListener("blur", onFensterBlur);
+
     /* ProseMirror baut Bildknoten bei jeder Änderung neu auf und verliert dabei die Breite,
        die nur in der Adresse steht. Deshalb nach jeder Änderung einmal nachziehen –
        gebündelt im nächsten Bildaufbau, damit schnelles Tippen nichts kostet. */
@@ -3941,11 +4131,12 @@
       document.removeEventListener("selectionchange", onSelection);
       document.removeEventListener("keydown", onEscape);
       document.removeEventListener("edlayout:geschuetzt", onSchutz);
+      window.removeEventListener("blur", onFensterBlur);
       if (breitenLauf) cancelAnimationFrame(breitenLauf);
       if (emojiZu) emojiZu();
       if (farbZu) farbZu();
       cropSchliessen();                              // sonst bliebe der Rahmen über der Seite liegen
-      bubble.remove(); menu.remove(); ctx.remove(); frame.remove(); handle.remove();
+      bubble.remove(); menu.remove(); ctx.remove(); frame.remove(); handle.remove(); handleUnten.remove(); handleEcke.remove();
       origDestroy();
     };
   }
@@ -4287,30 +4478,45 @@
          Das ergab ein kaputtes Bild statt eines Abspielers, und weil das <img> mitgezählt
          wurde, traf das Bildmenü nach einer Tonaufnahme die falsche Fundstelle. Eine eigene
          NodeView macht daraus <video> bzw. <audio>; gewöhnliche Bilder bleiben <img>.
-         Ein HTML-Baustein (![…](…html), siehe EMBED_RE) wird ebenso zur <iframe> – live, mit
-         eigenem Skript, auch beim Bearbeiten direkt daneben. ignoreMutation lässt ProseMirror
-         in Ruhe, was innerhalb der iframe geschieht (eigener Ursprung, eigenes Dokument) – wie
-         bei <img>/<video> schon üblich, nur dass hier zusätzlich Skript darin laufen darf. */
+         Ein HTML-Baustein (![…](/media/wiki/…html), siehe MD.istBaustein) wird ebenso zur
+         <iframe> – live, mit eigenem Skript, auch beim Bearbeiten direkt daneben. ignoreMutation
+         lässt ProseMirror in Ruhe, was innerhalb der iframe geschieht (eigener Ursprung, eigenes
+         Dokument) – wie bei <img>/<video> schon üblich, nur dass hier zusätzlich Skript darin
+         laufen darf. */
+      /* Der Baustein steckt im Editor in einer Hülle, die ihm gibt, was ein <img> von allein
+         hat: etwas, das man anklicken kann. Klicks IM Rahmen erreichen die Seite nie – sie
+         gehören dem Dokument des Bausteins –, ein Menü wie beim Bild ließe sich sonst nicht
+         öffnen. Der Griff liegt in der Ecke ÜBER dem Rahmen und kostet keine Höhe: Editor und
+         Leseansicht bleiben auf gleicher Höhe. Die Hülle trägt die Breite, der Rahmen die Höhe
+         (siehe MD.bausteinMasse). */
+      const bausteinHuelle = (url, titel) => {
+        const huelle = document.createElement("span");
+        huelle.className = "ed-embed";
+        huelle.contentEditable = "false";
+        const griff = document.createElement("span");
+        griff.className = "ed-embed-griff";
+        griff.innerHTML = `${I.baustein}<span>${esc(url.replace(/^\/media\/wiki\//, "").replace(/#.*$/, ""))}</span>`;
+        griff.title = "HTML-Baustein – antippen für Größe, Ausrichtung und mehr";
+        griff.addEventListener("mousedown", (e) => e.preventDefault());
+        const rahmen = MD.bausteinElement(url, titel);
+        rahmen.style.width = ""; rahmen.style.maxWidth = "";   // die Breite trägt hier die Hülle
+        huelle.append(griff, rahmen);
+        MD.bausteinMasse(huelle, url, rahmen);
+        return huelle;
+      };
       const medienNodeView = () => ({
         wysiwygNodeViews: {
           image: (node) => {
             const url = String(node.attrs.imageUrl || "");
-            const film = VIDEO_RE.test(url), ton = AUDIO_RE.test(url), bettet = EMBED_RE.test(url);
-            const el = document.createElement(film ? "video" : ton ? "audio" : bettet ? "iframe" : "img");
+            if (MD.istBaustein(url)) return { dom: bausteinHuelle(url, node.attrs.altText || ""), ignoreMutation: () => true };
+            const film = VIDEO_RE.test(url), ton = AUDIO_RE.test(url);
+            const el = document.createElement(film ? "video" : ton ? "audio" : "img");
             el.setAttribute("src", url);
             if (film || ton) { el.setAttribute("controls", "true"); el.setAttribute("preload", "metadata"); }
-            else if (bettet) {
-              el.className = "html-embed";
-              el.setAttribute("sandbox", "allow-scripts");
-              el.setAttribute("loading", "lazy");
-              el.setAttribute("referrerpolicy", "no-referrer");
-              el.setAttribute("title", node.attrs.altText || "Eingebettete Seite");
-            } else {
+            else {
               el.setAttribute("alt", node.attrs.altText || "");
-            }
-            if (!film && !ton) {
               const w = MD.imageWidth(url);
-              if (w) { el.style.width = /%$/.test(w) ? w : `${w}px`; if (!bettet) el.style.height = "auto"; }
+              if (w) { el.style.width = /%$/.test(w) ? w : `${w}px`; el.style.height = "auto"; }
             }
             return { dom: el, ignoreMutation: () => true };
           },
@@ -4348,6 +4554,11 @@
         // ++unterstrichen++, ==hervorgehoben==, ^hoch^ und ~tief~ als Widgets: der Editor zeigt sie
         // ausgezeichnet an und gibt den Quelltext unverändert zurück (siehe markdown.js).
         widgetRules: MD.widgetRules(),
+        /* Dieselbe Reinigung wie in der Leseansicht. Toast UI nutzt die Option nur für die
+           Markdown-Vorschau und eigene HTML-Renderer, nicht beim Einfügen in den WYSIWYG-Pfad –
+           dort gilt sein eigenes DOMPurify samt ProseMirror-Schema. Was gespeichert wird, reinigt
+           die Leseansicht beim Anzeigen ohnehin erneut (siehe MD.reinigen). */
+        sanitizer: MD.reinigen,
         hooks: {
           addImageBlobHook: async (blob, callback) => {
             try {
@@ -4509,11 +4720,30 @@
     // Der Stand, wie er in der Datenbank steht – nicht die Editorfassung mit den $$-Marken.
     const urText = String(p.content || "");
     let gesichert = urText;
+    /* Die Zusage des laufenden Speicherlaufs – samt seinem finally. Der Abschluss wartet darauf,
+       wenn er mitten in eine Anfrage fällt (siehe abschliessen). */
+    let laufendeSicherung = null, laufFertig = null;
     const stand = (text, warnung) => {
       const st = $("#ed-status");
       if (!st) return;
       st.textContent = text;
       st.classList.toggle("warn", !!warnung);
+    };
+    // Der Stand des eigenen Editors – oder null, wenn er schon abgeräumt ist.
+    const editorStand = () => { try { return fromEditorMd(meinEditor.getMarkdown()); } catch (e) { return null; } };
+    /* Den eigenen Entwurf (nicht state.dropDraft – das zeigt nach einem Seitenwechsel schon auf
+       den der nächsten Seite) wegräumen, sobald er nichts mehr enthält, was nicht gespeichert
+       ist. Steht der Editor noch, zählt sein Stand: Ist darin schon mehr als hier gesichert
+       wurde, bleibt der Entwurf bis zum nächsten Lauf liegen. Ist der Editor abgeräumt, zählt
+       der Entwurf selbst – er trägt dann die Tastendrücke, die die laufende Anfrage nicht mehr
+       mitgenommen hat, und ist das Einzige, was davon übrig ist, bis der Abschluss sie
+       nachsendet (vorher flog er hier bedingungslos heraus, und genau diese Tastendrücke waren
+       weg). Hat inzwischen ein neuer Editor derselben Seite geöffnet, gehört der Entwurf ihm. */
+    const entwurfAbgleichen = (md) => {
+      if (lebt && state.editor === meinEditor) { if (editorStand() === md) dropDraft(); return; }
+      if (state.editorSeite === p.id) return;
+      const d = readDraft();
+      if (d && fromEditorMd(String(d.md || "")) === md) dropDraft();
     };
     const jetztSichern = async () => {
       /* Der Text kommt aus dem EIGENEN Editor und geht an die EIGENE Seite p – beides muss
@@ -4552,6 +4782,7 @@
       if (letzterSchreib && jetzt - letzterSchreib > SITZUNG_PAUSE_MS) sitzung = bearbeitungsKennzeichen();
       letzterSchreib = jetzt;
       sichertGerade = true;
+      laufendeSicherung = new Promise((f) => { laufFertig = f; });
       state.speichert = true;
       stand("Speichert …");
       try {
@@ -4561,9 +4792,7 @@
         p.title = r.page.title;
         p.slug = r.page.slug;
         gesichert = md;
-        // Der eigene Entwurf, nicht state.dropDraft: das zeigt nach einem Seitenwechsel schon
-        // auf den Entwurf der nächsten Seite.
-        dropDraft();
+        entwurfAbgleichen(md);
         await loadTree();
         // Während der Anfrage kann der Editor geschlossen worden sein. Geschrieben ist dann
         // zwar richtig, aber Statuszeile und Adresszeile gehören jetzt einer anderen Seite.
@@ -4598,6 +4827,9 @@
           state.speichert = false;
           if (nachschlag) spaeterSichern(300);
         }
+        const fertig = laufFertig;
+        laufendeSicherung = null; laufFertig = null;
+        if (fertig) fertig();
       }
     };
     const spaeterSichern = (verzoegerung = 1200) => {
@@ -4607,6 +4839,26 @@
     };
     meinEditor.on("change", () => spaeterSichern());
     editorCleanup.push(() => clearTimeout(sicherLauf));
+    /* Den beim Verlassen festgehaltenen Stand hinter der laufenden Anfrage herschicken. Läuft
+       ohne Editor und ohne Oberfläche: kein Status, keine Adresszeile – das gehört inzwischen
+       der nächsten Seite. Der Text ist der eigene, zur eigenen Seite p, mit derselben Sitzung;
+       vom nachgeholten Speichern (siehe jetztSichern) unterscheidet ihn, dass er VOR dem
+       Abräumen aus dem Editor gelesen wurde. Scheitert es (Konflikt, Netz), bleibt der
+       Entwurf im Browser stehen und wird beim nächsten Öffnen angeboten. */
+    const nachsenden = async (md) => {
+      if (konflikt || state.editorGesperrt || md === gesichert) return md === gesichert;
+      const titel = titelZeile(md) || (p.title || "").trim();
+      if (!titel || (!md.trim() && gesichert.trim())) return false;
+      try {
+        const r = await api(`/api/wiki/pages/${p.id}`, { method: "PUT", body: {
+          title: titel, content: md, format: "markdown", base_version: p.version, sitzung } });
+        p.version = r.page.version; p.title = r.page.title; p.slug = r.page.slug;
+        gesichert = md;
+        entwurfAbgleichen(md);
+        katalogVergessen();
+        return true;
+      } catch (e) { return false; }
+    };
     // Beim Verlassen geht der letzte Stand noch los; er landet in derselben Fassung wie die
     // Zwischenstände, weil er dasselbe Kennzeichen trägt.
     const abschliessen = async () => {
@@ -4614,7 +4866,18 @@
       if (!lebt || isNew || konflikt) return true;
       // Wer nur hineingesehen hat, ändert nichts – auch nicht die Schreibweise des Markdowns.
       if (!state.dirty) return true;
-      return jetztSichern();
+      if (!sichertGerade) return jetztSichern();
+      /* Mitten in einer Anfrage: jetztSichern merkte sich bisher nur „noch einmal“ – und wenn
+         der Editor danach abgeräumt wurde, lief der Nachschlag ins Leere. Die Tastendrücke
+         seit dem Start der Anfrage waren weg. Deshalb JETZT den Stand lesen, solange der
+         Editor steht, die Anfrage abwarten und dann entscheiden: Steht der Editor noch
+         (Umschalter „Lesen“ wartet hier), reicht der gewöhnliche Weg; sonst wird der
+         festgehaltene Stand nachgesendet. */
+      const md = editorStand();
+      if (md == null) return false;
+      await laufendeSicherung;
+      if (lebt && state.editor === meinEditor) { clearTimeout(sicherLauf); return jetztSichern(); }
+      return nachsenden(md);
     };
     state.editorAbschluss = abschliessen;
     if (!isNew) praesenzPuls();          // sofort als Schreiber melden, nicht erst beim nächsten Takt

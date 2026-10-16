@@ -1,10 +1,10 @@
-Flask==3.1.1
+Flask==3.1.3
 # Werkzeug und itsdangerous kommen mit Flask, werden aber direkt benutzt
 # (Passwort-Hash, sicherer Dateiname, signierte Links) – deshalb hier festgeschrieben.
-Werkzeug==3.1.8
+Werkzeug==3.1.9
 itsdangerous==2.2.0
-gunicorn==23.0.0
-Pillow==11.2.1
-pillow-heif==0.22.0
+gunicorn==26.2.0
+Pillow==12.3.0
+pillow-heif==1.8.1
 # Excel-Import der Teilnehmerlisten im Prüfungsbereich (.xlsx lesen)
 openpyxl==3.1.5

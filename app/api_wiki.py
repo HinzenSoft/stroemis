@@ -4,6 +4,7 @@ import io
 import os
 import re
 import secrets
+import tempfile
 import unicodedata
 import zipfile
 from datetime import datetime, timedelta
@@ -13,7 +14,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from . import db
 from .auth import avatar_url, current_user, darf_inhalte, eingabefehler_abfangen, is_admin, json_body, login_required
-from .images import EMBED_EXT, WIKI_EXT, crop_wiki_image, rotate_wiki_image, store_wiki_file
+from .images import EMBED_EXT, crop_wiki_image, rotate_wiki_image, store_wiki_file, wiki_endung
 from .mailer import send_mail
 
 bp = Blueprint("wiki", __name__, url_prefix="/api/wiki")
@@ -23,6 +24,8 @@ public_bp = Blueprint("wiki_public", __name__, url_prefix="/api/public")
 # Seiten sind Markdown. Das Feld "format" steht noch in der Datenbank (auch an jeder Fassung),
 # damit alte Zeilen lesbar bleiben – geschrieben wird nur noch "markdown".
 FORMAT = "markdown"
+# Mehr packt der ZIP-Export nicht ein (die Anhänge eines Abschnitts können Filme sein).
+EXPORT_MAX_BYTES = 2 * 1024 ** 3
 # Anhänge, die eine Seite einbindet: /media/wiki/<pfad>. Der Pfad endet erst am Trennzeichen –
 # Dateinamen mit Umlaut dürfen nicht abgeschnitten werden. Fragment (#w=…) und Abfrage gehören nicht dazu.
 _FILE_REF_RE = re.compile(r"/media/wiki/([^\s\"'<>)\]?#]+)")
@@ -183,6 +186,72 @@ def inherits_public(parent_id):
     marks = ",".join("?" * len(ids))
     return bool(db.query(f"SELECT 1 FROM wiki_pages WHERE id IN ({marks}) AND is_public = 1 AND public_children = 1 "
                          "AND deleted_at IS NULL", ids, one=True))
+
+
+BESCHRAENKUNG_VERLASSEN = ("Diese Seite liegt in einem lesebeschränkten Abschnitt. Dort herausverschieben darf "
+                           "nur, wer die Beschränkung aufheben dürfte – der Ersteller des Abschnitts oder "
+                           "ein Administrator.")
+FREMDE_UNTERSEITEN = ("Darunter liegen %d Seiten, die andere angelegt haben. Die kann nur ihr Ersteller oder "
+                      "ein Administrator löschen – bitte zuerst verschieben lassen.")
+
+
+def _elternseite(parent_id):
+    """Die Seite, unter die etwas gehängt werden soll – nur, wenn es sie gibt und der Aufrufer sie
+    lesen darf. Die bloße Existenzprüfung von früher war ein Orakel („gibt es die Kennung 17?“),
+    und sie erlaubte, fremde Seiten in beschränkte Abschnitte anderer zu hängen."""
+    try:
+        parent = _get_page(int(parent_id))
+    except (TypeError, ValueError):
+        return None
+    return parent if parent and can_read(parent) else None
+
+
+def _beschraenkung_verlassen(page, neuer_parent_id):
+    """Verlässt die Seite mit diesem Elternwechsel den lesebeschränkten Abschnitt, in dem sie liegt?
+    Danach wäre sie für alle Angemeldeten lesbar. Das darf nur, wer die Beschränkung selbst
+    aufheben dürfte (set_restrict: Ersteller der beschränkten Seite oder Admin) – nicht jeder,
+    der im Abschnitt zum Bearbeiten freigegeben ist. Die eigene Beschränkung der Seite zieht mit um."""
+    _, beschraenkt = restricted_ids(page)
+    sperren = [i for i in beschraenkt if i != page["id"]]
+    if not sperren:
+        return False
+    oben_neu = set()
+    if neuer_parent_id is not None:
+        parent = _get_page(int(neuer_parent_id))
+        if parent:
+            oben_neu = {parent["id"], *_ancestor_ids(parent)}
+    if any(i in oben_neu for i in sperren):
+        return False                     # bleibt unter (mindestens) einer der bisherigen Sperren
+    for rid in sperren:
+        sperre = db.query("SELECT * FROM wiki_pages WHERE id = ?", (rid,), one=True)
+        if sperre and not can_delete(sperre):
+            return True
+    return False
+
+
+def _fremde_seiten(ids, nur_lebende=False, user=None):
+    """Wie viele Seiten dieses Teilbaums der Nutzer nicht löschen dürfte. Redakteure und Admins:
+    keine. Für alle anderen zählt je Seite die Erstellerregel – Papierkorb und endgültiges
+    Löschen nähmen sonst mit, was andere geschrieben haben, auch Seiten, die der Löschende
+    nicht einmal lesen darf. Für den Papierkorb zählen nur Seiten, die noch nicht darin liegen
+    (nur_lebende): Was andere selbst schon hineingelegt haben, bleibt vom Verschieben unberührt."""
+    user = user or current_user()
+    if not user or darf_inhalte(user):
+        return 0
+    marks = ",".join("?" * len(ids))
+    lebend = " AND deleted_at IS NULL" if nur_lebende else ""
+    return db.query(f"SELECT COUNT(*) AS n FROM wiki_pages WHERE id IN ({marks}) AND created_by != ?{lebend}",
+                    (*ids, user["id"]), one=True)["n"]
+
+
+def _datei_vermerken(name, original, kind):
+    """Eine abgelegte Artikeldatei eintragen – mit Art und Größe, wie die Anhangsliste sie zeigt."""
+    try:
+        groesse = os.path.getsize(os.path.join(current_app.config["MEDIA_DIR"], "wiki", name))
+    except OSError:
+        groesse = 0
+    db.execute("INSERT INTO wiki_files (file, original_name, user_id, created_at, kind, size) VALUES (?,?,?,?,?,?)",
+               (name, original, current_user()["id"], db.now(), kind, groesse))
 
 
 # --- Hilfen --------------------------------------------------------------------
@@ -455,7 +524,7 @@ def search():
     rows = db.query(
         f"SELECT id, title, slug, content, format, updated_at FROM wiki_pages "
         f"WHERE deleted_at IS NULL AND {where} "
-        f"ORDER BY ({order}) DESC, updated_at DESC, title COLLATE NOCASE LIMIT 30", args)
+        f"ORDER BY ({order}) DESC, updated_at DESC, title COLLATE NOCASE LIMIT 200", args)
 
     results = []
     for r in rows:
@@ -471,7 +540,8 @@ def search():
             snippet = text[:160] + ("…" if len(text) > 160 else "")
         results.append({"id": r["id"], "title": r["title"], "slug": r["slug"],
                         "snippet": snippet, "terms": terms})
-    return jsonify(results=readable(results), terms=terms)
+    # Erst die Rechte, dann die Grenze: Sonst verdrängten beschränkte Treffer die sichtbaren.
+    return jsonify(results=readable(results)[:30], terms=terms)
 
 
 _TRENNZEILE_RE = re.compile(r"^[ \t]*\|[ \t:\-|]+\|[ \t]*$")
@@ -565,10 +635,13 @@ def get_page(slug):
         return jsonify(error="Seite nicht gefunden"), 404
     if not can_read(p):
         return jsonify(error="Diese Seite ist nur für freigegebene Nutzer sichtbar."), 403
-    # Besuch vermerken – Grundlage für „Zuletzt besucht“ auf der Startseite.
-    db.execute("INSERT INTO wiki_views (user_id, page_id, seen_at) VALUES (?,?,?) "
-               "ON CONFLICT(user_id, page_id) DO UPDATE SET seen_at = excluded.seen_at",
-               (current_user()["id"], p["id"], db.now()))
+    # Besuch vermerken – Grundlage für „Zuletzt besucht“ auf der Startseite. Nicht bei leise=1:
+    # So holen das Live-Nachziehen und der Einbau fremder Abschnitte ihre Quellseiten, und ein
+    # eingebauter Baustein ist kein Besuch der Seite, aus der er stammt.
+    if not request.args.get("leise"):
+        db.execute("INSERT INTO wiki_views (user_id, page_id, seen_at) VALUES (?,?,?) "
+                   "ON CONFLICT(user_id, page_id) DO UPDATE SET seen_at = excluded.seen_at",
+                   (current_user()["id"], p["id"], db.now()))
     return jsonify(page=page_json(p))
 
 
@@ -580,7 +653,7 @@ def create_page():
     if not title:
         return jsonify(error="Bitte einen Titel angeben."), 400
     parent_id = d.get("parent_id") or None
-    if parent_id and not db.query("SELECT 1 FROM wiki_pages WHERE id = ? AND deleted_at IS NULL", (parent_id,), one=True):
+    if parent_id and not _elternseite(parent_id):
         return jsonify(error="Übergeordnete Seite nicht gefunden."), 400
     if inherits_public(parent_id) and not is_admin():
         return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Seiten darin dürfen nur "
@@ -588,7 +661,9 @@ def create_page():
     content = d.get("content") or ""
     ts = db.now()
     uid = current_user()["id"]
-    with db.transaction():
+    # sofort: Die freie Adresse (unique_slug) wird unter der Schreibsperre bestimmt – zwei
+    # gleichzeitig angelegte Seiten gleichen Titels liefen sonst in den UNIQUE-Fehler.
+    with db.transaction(sofort=True):
         pid = db.execute(
             "INSERT INTO wiki_pages (title, slug, parent_id, content, format, position, created_by, updated_by, "
             "created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
@@ -646,11 +721,13 @@ def update_page(pid):
             parent_id = int(parent_id)
             if parent_id == pid or _is_descendant(pid, parent_id):
                 return jsonify(error="Eine Seite kann nicht unter sich selbst einsortiert werden."), 400
-            if not db.query("SELECT 1 FROM wiki_pages WHERE id = ? AND deleted_at IS NULL", (parent_id,), one=True):
+            if not _elternseite(parent_id):
                 return jsonify(error="Übergeordnete Seite nicht gefunden."), 400
         if parent_id != p["parent_id"] and inherits_public(parent_id) and not is_admin():
             return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Seiten dorthin verschieben "
                                  "dürfen nur Administratoren."), 403
+        if parent_id != p["parent_id"] and _beschraenkung_verlassen(p, parent_id):
+            return jsonify(error=BESCHRAENKUNG_VERLASSEN), 403
         vals["parent_id"] = parent_id
     if "position" in d:
         vals["position"] = int(d.get("position") or 0)
@@ -679,7 +756,12 @@ def update_page(pid):
         vals["version"] = (p["version"] or 0) + 1
     sets = ", ".join(f"{k} = ?" for k in vals)
     try:
-        with db.transaction():
+        with db.transaction(sofort=True):
+            # Noch einmal unter der Schreibsperre: Ein gleichzeitiges Umsortieren kann den Baum seit
+            # der Prüfung oben verändert haben – „A unter B“ und „B unter A“ ergäben sonst zwei
+            # Seiten, die nirgends mehr auftauchen.
+            if vals.get("parent_id") is not None and _is_descendant(pid, vals["parent_id"]):
+                return jsonify(error="Eine Seite kann nicht unter sich selbst einsortiert werden."), 400
             # Bedingt schreiben: Zwischen dem Lesen der Fassung weiter oben und diesem Schreibzugriff
             # liegen einige Millisekunden. Trafen zwei Speichervorgänge mit derselben base_version
             # darin zusammen, wurden beide angenommen und der erste still überschrieben – beide
@@ -738,6 +820,9 @@ def delete_page(pid):
     if not can_delete(p):
         return jsonify(error="Nur der Ersteller oder ein Administrator kann diese Seite löschen."), 403
     ids = _subtree_ids(pid)
+    fremd = _fremde_seiten(ids, nur_lebende=True)
+    if fremd:
+        return jsonify(error=FREMDE_UNTERSEITEN % fremd), 403
     marks = ",".join("?" * len(ids))
     ts = db.now()
     # Eine Kennung für diesen Löschvorgang: Sie hält zusammen, was gemeinsam in den Papierkorb
@@ -818,6 +903,9 @@ def purge_page(pid):
     if not can_delete(p):
         return jsonify(error="Nur der Ersteller oder ein Administrator kann endgültig löschen."), 403
     ids = _subtree_ids(pid)
+    fremd = _fremde_seiten(ids)
+    if fremd:
+        return jsonify(error=FREMDE_UNTERSEITEN % fremd), 403
     marks = ",".join("?" * len(ids))
     with db.transaction():
         # Unterseiten zuerst, damit kein Fremdschlüssel bricht; der Rest hängt an ON DELETE CASCADE.
@@ -1099,23 +1187,24 @@ def backlinks(pid):
 def contributors(pid):
     """Wer an der Seite geschrieben hat: der Ersteller und alle, von denen eine Fassung im
     Verlauf steht – zuletzt Beteiligte zuerst. Mehr weiß die Anwendung nicht: gelöschte
-    Fassungen (siehe MAX_REVISIONS) nehmen ihren Namen mit."""
+    Fassungen (siehe MAX_REVISIONS) nehmen ihren Namen mit. Ohne E-Mail-Adressen: Die Liste
+    sieht jeder, der die Seite lesen darf, und sie braucht nur Name und Bild."""
     p = _get_page(pid)
     if not p:
         return jsonify(error="Seite nicht gefunden"), 404
     if not can_read(p):
         return jsonify(error="Diese Seite ist nur für freigegebene Nutzer sichtbar."), 403
     rows = db.query(
-        "SELECT u.id, u.name, u.email, u.avatar, MAX(r.created_at) AS zuletzt FROM wiki_revisions r "
+        "SELECT u.id, u.name, u.avatar, MAX(r.created_at) AS zuletzt FROM wiki_revisions r "
         "JOIN users u ON u.id = r.user_id WHERE r.page_id = ? AND r.user_id != ? "
         "GROUP BY u.id ORDER BY zuletzt DESC", (pid, p["created_by"]))
     # Wer zuletzt gespeichert hat, gehört dazu, auch wenn seine Fassung inzwischen weggeräumt ist.
     kennt = {r["id"] for r in rows}
     if p["updated_by"] and p["updated_by"] != p["created_by"] and p["updated_by"] not in kennt:
-        u = db.query("SELECT id, name, email, avatar FROM users WHERE id = ?", (p["updated_by"],), one=True)
+        u = db.query("SELECT id, name, avatar FROM users WHERE id = ?", (p["updated_by"],), one=True)
         if u:
             rows = [{**dict(u), "zuletzt": p["updated_at"]}, *rows]
-    ersteller = db.query("SELECT id, name, email, avatar FROM users WHERE id = ?", (p["created_by"],), one=True)
+    ersteller = db.query("SELECT id, name, avatar FROM users WHERE id = ?", (p["created_by"],), one=True)
 
     def mit_bild(r):
         d = dict(r)
@@ -1191,7 +1280,7 @@ def duplicate_page(pid):
     title = f"{p['title']} (Kopie)"
     ts = db.now()
     uid = current_user()["id"]
-    with db.transaction():
+    with db.transaction(sofort=True):             # freie Adresse unter der Schreibsperre, wie beim Anlegen
         new_id = db.execute(
             "INSERT INTO wiki_pages (title, slug, parent_id, content, format, position, icon, created_by, "
             "updated_by, created_at, updated_at, read_restricted) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -1220,37 +1309,43 @@ def reorder():
         except (TypeError, ValueError, KeyError):
             return jsonify(error="Ungültige Angaben."), 400
         page = _get_page(cid)
-        if not page:
+        # Erst Lesen, dann Bearbeiten prüfen – und der Fehlertext nennt keinen Titel: Sonst ließe
+        # sich über durchprobierte Kennungen auslesen, wie die beschränkten Seiten heißen.
+        if not page or not can_read(page):
             return jsonify(error="Seite nicht gefunden."), 404
         if not can_edit(page):
-            return jsonify(error=f"„{page['title']}“ darfst du nicht verschieben."), 403
+            return jsonify(error="Diese Seite darfst du nicht verschieben."), 403
         if parent_id is not None:
             if parent_id == cid or _is_descendant(cid, parent_id):
                 return jsonify(error="Eine Seite kann nicht unter sich selbst einsortiert werden."), 400
-            if not db.query("SELECT 1 FROM wiki_pages WHERE id = ? AND deleted_at IS NULL", (parent_id,), one=True):
+            if not _elternseite(parent_id):
                 return jsonify(error="Übergeordnete Seite nicht gefunden."), 400
         # Verschieben in einen öffentlichen Abschnitt ist Veröffentlichen – nur für Administratoren.
         if parent_id != page["parent_id"] and inherits_public(parent_id) and not is_admin():
             return jsonify(error="Dieser Abschnitt ist ohne Anmeldung sichtbar. Dorthin dürfen nur "
                                  "Administratoren verschieben."), 403
+        if parent_id != page["parent_id"] and _beschraenkung_verlassen(page, parent_id):
+            return jsonify(error=BESCHRAENKUNG_VERLASSEN), 403
         prepared.append((parent_id, position, cid))
     # Zyklen gegen den GEPLANTEN Stand prüfen: „A unter B“ und „B unter A“ bestehen einzeln
     # jede Prüfung und ergeben zusammen zwei Seiten, die im Baum nirgends mehr auftauchen.
+    # Die Prüfung läuft unter der Schreibsperre (sofort): Zwei gleichzeitige Aufrufe aus zwei
+    # Arbeitsprozessen sähen sonst beide den alten Baum und schrieben beide.
     plan = {cid: parent_id for parent_id, _, cid in prepared}
-    for cid in plan:
-        cur, gesehen = plan[cid], set()
-        while cur is not None:
-            if cur == cid:
-                return jsonify(error="Eine Seite kann nicht unter sich selbst einsortiert werden."), 400
-            if cur in gesehen:
-                break
-            gesehen.add(cur)
-            if cur in plan:
-                cur = plan[cur]
-            else:
-                row = db.query("SELECT parent_id FROM wiki_pages WHERE id = ?", (cur,), one=True)
-                cur = row["parent_id"] if row else None
-    with db.transaction():
+    with db.transaction(sofort=True):
+        for cid in plan:
+            cur, gesehen = plan[cid], set()
+            while cur is not None:
+                if cur == cid:
+                    return jsonify(error="Eine Seite kann nicht unter sich selbst einsortiert werden."), 400
+                if cur in gesehen:
+                    break
+                gesehen.add(cur)
+                if cur in plan:
+                    cur = plan[cur]
+                else:
+                    row = db.query("SELECT parent_id FROM wiki_pages WHERE id = ?", (cur,), one=True)
+                    cur = row["parent_id"] if row else None
         for parent_id, position, cid in prepared:
             db.execute("UPDATE wiki_pages SET parent_id = ?, position = ? WHERE id = ?", (parent_id, position, cid))
     return jsonify(ok=True, moved=len(prepared))
@@ -1370,7 +1465,7 @@ def _descendants(pid):
 @login_required
 def export_page(pid):
     """Seite als Markdown-Datei oder – mit children=1 – als ZIP samt Unterseiten und Anhängen."""
-    from flask import Response, send_file
+    from flask import send_file
 
     p = _get_page(pid)
     if not p:
@@ -1388,8 +1483,13 @@ def export_page(pid):
 
     # Beschränkte Unterseiten gehören nicht in den Export.
     pages = [p, *[k for k in _descendants(pid) if can_read(_get_page(int(k["id"])) or k)]]
-    media = os.path.join(current_app.config["MEDIA_DIR"], "wiki")
-    buf = io.BytesIO()
+    # realpath auch für die Wurzel: Liegt DATA_DIR hinter einem symbolischen Verweis, fiele sonst
+    # jeder Anhang still aus dem Export (commonpath verglich den Verweis mit seinem Ziel).
+    media = os.path.realpath(os.path.join(current_app.config["MEDIA_DIR"], "wiki"))
+    # Auf Platte statt im Arbeitsspeicher: Ein Abschnitt mit Filmen ist schnell einige Gigabyte,
+    # und die lägen sonst je Export vollständig im Arbeitsprozess.
+    buf = tempfile.TemporaryFile(dir=current_app.config["TMP_DIR"])
+    gepackt, gesamt, zu_gross = set(), 0, False
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         by_id = {q["id"]: q for q in pages}
         vergeben = set()          # zwei Geschwister „Foo“ und „Foo.“ ergäben denselben Pfad
@@ -1406,9 +1506,22 @@ def export_page(pid):
             vergeben.add(rel.lower())
             z.writestr(rel + ".md", q["content"] or "")
             for ref in file_refs(q["content"]):
+                if ref in gepackt:
+                    continue                 # dieselbe Datei auf mehreren Seiten: einmal genügt
                 src = os.path.join(media, ref)
                 if os.path.isfile(src) and os.path.commonpath([media, os.path.realpath(src)]) == media:
+                    gesamt += os.path.getsize(src)
+                    if gesamt > EXPORT_MAX_BYTES:
+                        zu_gross = True
+                        break
                     z.write(src, "media/" + ref)
+                    gepackt.add(ref)
+            if zu_gross:
+                break
+    if zu_gross:
+        buf.close()
+        return jsonify(error=f"Der Export wäre größer als {EXPORT_MAX_BYTES // 1024 ** 3} GB. Bitte "
+                             "Unterseiten einzeln exportieren."), 413
     buf.seek(0)
     return send_file(buf, mimetype="application/zip", as_attachment=True,
                      download_name=f"{_export_name(p['title'])}.zip")
@@ -1606,17 +1719,21 @@ def upload_file():
     # __init__.py) – sicher für die Leser, aber wer ihn einstellen darf, bleibt trotzdem auf
     # Redakteur/Admin beschränkt: automatisch für jeden Leser ausgeführter Inhalt ist etwas
     # anderes als ein Download, den sich jemand erst selbst öffnen müsste.
-    ext = os.path.splitext(f.filename or "")[1].lower()
+    # Dieselbe Endungsregel wie beim Ablegen (wiki_endung): Eine Datei ohne Endung mit erfundenem
+    # Inhaltstyp lief sonst an dieser Prüfung vorbei und wurde erst in der Ablage zum .html.
+    ext = wiki_endung(f)
     if ext in EMBED_EXT and not darf_inhalte():
         return jsonify(error="HTML-Bausteine dürfen nur Redakteure und Administratoren einstellen."), 403
     try:
         name, kind = store_wiki_file(f, current_app.config["MEDIA_DIR"])
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
-    except Exception as exc:
-        return jsonify(error=f"Datei konnte nicht verarbeitet werden ({exc})."), 400
-    db.execute("INSERT INTO wiki_files (file, original_name, user_id, created_at) VALUES (?,?,?,?)",
-               (name, f.filename or "", current_user()["id"], db.now()))
+    except Exception:
+        # Der Grund ins Protokoll, nicht in die Antwort: Pillow und das Dateisystem nennen darin
+        # Serverpfade.
+        current_app.logger.exception("Wiki-Upload von %s fehlgeschlagen", f.filename)
+        return jsonify(error="Die Datei konnte nicht verarbeitet werden."), 400
+    _datei_vermerken(name, f.filename or "", kind)
     url = f"/media/wiki/{name}"
     return jsonify(url=url, kind=kind, data={"filePath": url})
 
@@ -1634,10 +1751,10 @@ def rotate_file():
         neu = rotate_wiki_image(current_app.config["MEDIA_DIR"], name, d.get("grad"))
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
-    except Exception as exc:
-        return jsonify(error=f"Das Bild ließ sich nicht drehen ({exc})."), 400
-    db.execute("INSERT INTO wiki_files (file, original_name, user_id, created_at) VALUES (?,?,?,?)",
-               (neu, name, current_user()["id"], db.now()))
+    except Exception:
+        current_app.logger.exception("Drehen von %s fehlgeschlagen", name)
+        return jsonify(error="Das Bild ließ sich nicht drehen."), 400
+    _datei_vermerken(neu, name, "image")
     return jsonify(url=f"/media/wiki/{neu}")
 
 
@@ -1656,10 +1773,10 @@ def crop_file():
                               (d.get("x"), d.get("y"), d.get("w"), d.get("h")))
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
-    except Exception as exc:
-        return jsonify(error=f"Das Bild ließ sich nicht zuschneiden ({exc})."), 400
-    db.execute("INSERT INTO wiki_files (file, original_name, user_id, created_at) VALUES (?,?,?,?)",
-               (neu, name, current_user()["id"], db.now()))
+    except Exception:
+        current_app.logger.exception("Zuschneiden von %s fehlgeschlagen", name)
+        return jsonify(error="Das Bild ließ sich nicht zuschneiden."), 400
+    _datei_vermerken(neu, name, "image")
     return jsonify(url=f"/media/wiki/{neu}")
 
 
@@ -1672,9 +1789,42 @@ def _public_page_json(p):
 @public_bp.get("/index")
 def public_index():
     """Alle freigegebenen Einstiegsseiten (Seiten, die selbst freigegeben sind)."""
-    rows = db.query("SELECT id, title, slug, public_children, updated_at FROM wiki_pages WHERE is_public = 1 AND deleted_at IS NULL "
-                    "ORDER BY position, title COLLATE NOCASE")
-    return jsonify(pages=rows)
+    rows = db.query("SELECT id, title, slug, public_children, updated_at, parent_id, is_public, read_restricted "
+                    "FROM wiki_pages WHERE is_public = 1 AND deleted_at IS NULL ORDER BY position, title COLLATE NOCASE")
+    # Eine freigegebene Seite, die inzwischen unter einem beschränkten Abschnitt liegt, ist nicht
+    # mehr erreichbar (is_public) – dann gehört auch ihr Titel nicht in die Liste.
+    karte = _seitenkarte() if rows else {}
+    return jsonify(pages=[{k: r[k] for k in ("id", "title", "slug", "public_children", "updated_at")}
+                          for r in rows if _oeffentlich_laut_karte(r, karte)])
+
+
+def _seitenkarte():
+    """Alle Seiten auf einen Griff (auch die im Papierkorb – eine Beschränkung dort zählt weiter):
+    Grundlage, um die Freigabe vieler Treffer ohne eine Abfrage je Treffer und Ahnen zu klären.
+    Die öffentliche Suche läuft ohne Anmeldung; je Treffer mehrere Abfragen wären dort eine
+    Einladung, den Server zu beschäftigen."""
+    return {r["id"]: r for r in db.query(
+        "SELECT id, parent_id, is_public, public_children, read_restricted, deleted_at FROM wiki_pages")}
+
+
+def _oeffentlich_laut_karte(page, karte):
+    """is_public(), nur mit der Karte statt mit Datenbankabfragen – dieselben Regeln: Eine
+    Beschränkung irgendwo in der Ahnenreihe schlägt jede Freigabe; sonst zählt die eigene Freigabe
+    oder die eines Vorfahren samt Unterseiten (der nicht im Papierkorb liegt)."""
+    if page["read_restricted"]:
+        return False
+    erbt, pid, gesehen = False, page["parent_id"], set()
+    while pid is not None and pid not in gesehen:
+        gesehen.add(pid)
+        a = karte.get(pid)
+        if not a:
+            break
+        if a["read_restricted"]:
+            return False
+        if a["is_public"] and a["public_children"] and not a["deleted_at"]:
+            erbt = True
+        pid = a["parent_id"]
+    return bool(page["is_public"]) or erbt
 
 
 @public_bp.get("/search")
@@ -1689,11 +1839,12 @@ def public_search():
     for t in terms:
         args += [_like(t), _like(t)]
     rows = db.query(
-        f"SELECT id, title, slug, content, format, parent_id, is_public, public_children FROM wiki_pages "
-        f"WHERE deleted_at IS NULL AND {where} ORDER BY title COLLATE NOCASE LIMIT 500", args)
+        f"SELECT id, title, slug, content, format, parent_id, is_public, public_children, read_restricted "
+        f"FROM wiki_pages WHERE deleted_at IS NULL AND {where} ORDER BY title COLLATE NOCASE LIMIT 500", args)
     results = []
+    karte = _seitenkarte() if rows else {}
     for r in rows:
-        if not is_public(r):
+        if not _oeffentlich_laut_karte(r, karte):
             continue
         text = plain_text(r["content"])
         low = text.lower()

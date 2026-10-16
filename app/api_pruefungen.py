@@ -35,6 +35,12 @@ EINGEFROREN = ("Für diese Person ist das Lehrgangsergebnis vermerkt – die Pr�
 NUR_LEITUNG = "Nur die Lehrgangsleitung oder die Administration darf das."
 GERADE_GELOESCHT = ("Die Person, die Leistung oder der Lehrgang wurde inzwischen von jemand anderem gelöscht – "
                     "bitte die Seite neu laden.")
+EINGEFROREN_LOESCHEN = ("Für diese Person ist das Lehrgangsergebnis vermerkt – die Prüfungsdaten sind eingefroren. "
+                        "Sie kann erst gelöscht werden, wenn die Lehrgangsleitung das Ergebnis aufgehoben hat.")
+EINGEFROREN_DEFINITION = ("Dazu gibt es Bewertungen oder Haken von Personen mit vermerktem Lehrgangsergebnis – deren "
+                          "Prüfungsdaten sind eingefroren, deshalb lässt sich das weder ändern noch löschen. Die "
+                          "Lehrgangsleitung kann das Ergebnis aufheben.")
+BILD_GEAENDERT = "Das Profilbild wurde zwischenzeitlich anderswo geändert. Bitte die Seite neu laden."
 
 
 class Abgelehnt(Exception):
@@ -79,10 +85,20 @@ def _ich():
     return u["id"], (u["name"] or u["email"])
 
 
+# Leitung ist ein eigenes Wort in der Funktion („Lehrgangsleitung“, „Leiter:in“, „Leitung und Prüfer“,
+# „Ltg.“), kein Wortteil: „Begleitung“ oder „Anleitung Knoten“ leiten nichts. Die Funktion wird in
+# Wörter zerlegt – eine Genderform („Leiter:in“, „Leiter/innen“) bleibt dabei ein Wort – und jedes
+# Wort muss ganz auf die Liste passen. Dieselbe Regel steht in pruefungen_import.ist_leitungsrolle;
+# das Modul lässt sich hier nicht einbinden, ohne openpyxl beim Start zu laden.
+_RE_LEITUNG_WORT = re.compile(r"(?:lehrgangs)?(?:leitung|leiter(?:[:/*_·]?in(?:nen)?)?)|ltg|lgl", re.I)
+_RE_WORT = re.compile(r"[^\W\d_]+(?:[:/*_·](?:innen|in)(?![^\W\d_]))?", re.I)
+
+
 def _ist_leitungsfunktion(funktion):
-    """„Lehrgangsleitung“, „Leitung“, „Leiter:in“ – alles, was „leit“ enthält. Referierende ohne
-    Leitungsfunktion prüfen und haken ab, verändern aber keine Stammdaten."""
-    return "leit" in (funktion or "").lower()
+    """Zählt nur, wenn ein Aufruf das Kennzeichen ist_leitung nicht mitschickt, und für die Leitung
+    aus einer Importdatei. Referierende ohne Leitungsfunktion prüfen und haken ab, verändern aber
+    keine Stammdaten."""
+    return any(_RE_LEITUNG_WORT.fullmatch(w) for w in _RE_WORT.findall(funktion or ""))
 
 
 def _darf_leiten(lid):
@@ -115,6 +131,33 @@ def _eingefroren_pruefen(tn):
     """Prüfungsdaten einer Person mit vermerktem Lehrgangsergebnis sind eingefroren."""
     if tn.get("ergebnis"):
         raise Abgelehnt(EINGEFROREN, 409)
+
+
+def _eingefroren_nachpruefen(tid, meldung=EINGEFROREN):
+    """Für bedingte Schreibzugriffe („… AND ergebnis IS NULL“), die keine Zeile getroffen haben:
+    Zwischen _eingefroren_pruefen() oben in der Route und dem Schreiben hat jemand das Ergebnis
+    vermerkt – oder die Person gelöscht. Beides bekommt seine Antwort statt eines stummen Erfolgs."""
+    if not db.query("SELECT 1 FROM pruef_teilnehmer WHERE id = ?", (tid,), one=True):
+        raise Abgelehnt(GERADE_GELOESCHT, 409)
+    raise Abgelehnt(meldung, 409)
+
+
+# Womit eine Definition an den Prüfungsdaten einer Person hängt (korreliert über t = pruef_teilnehmer):
+# eine Leistung über ihre Versuche, ein Kriterium über die Versuche seiner Leistung, eine
+# Voraussetzung über den gesetzten Haken.
+_LEISTUNG_BETROFFEN = "SELECT 1 FROM pruef_versuche v WHERE v.teilnehmer_id = t.id AND v.leistung_id = ?"
+_VORAUSSETZUNG_BETROFFEN = ("SELECT 1 FROM pruef_voraussetzung_status s WHERE s.teilnehmer_id = t.id "
+                            "AND s.voraussetzung_id = ?")
+
+
+def _eingefroren_betroffen_pruefen(bedingung, args):
+    """Leistungen, Kriterien und Voraussetzungen gehören zu den eingefrorenen Prüfungsdaten: Was eine
+    Person mit vermerktem Ergebnis abgelegt oder nachgewiesen hat, darf hinterher weder anders heißen
+    noch verschwinden. Verweigert, sobald eine eingefrorene Person Bewertungen oder Haken daran hat.
+    Der Lehrgang als Ganzes bleibt löschbar – das tut die Leitung bewusst und vollständig."""
+    if db.query(f"SELECT 1 FROM pruef_teilnehmer t WHERE t.ergebnis IS NOT NULL AND EXISTS ({bedingung}) LIMIT 1",
+                args, one=True):
+        raise Abgelehnt(EINGEFROREN_DEFINITION, 409)
 
 
 def _bild_url(datei):
@@ -501,12 +544,13 @@ _LEHRGANG_SQL = (
     "FROM pruef_lehrgaenge l ")
 
 
-def _lehrgang_kurz(r):
+def _lehrgang_kurz(r, darf_leiten=None):
+    """darf_leiten: in der Liste schon bekannt (eine Abfrage für alle Lehrgänge statt eine je Zeile)."""
     out = {k: r[k] for k in ("id", "titel", "nummer", "datum_von", "datum_bis", "ort", "status", "created_by_name",
                              "created_at", "updated_at", "tn_anzahl", "leistungen_anzahl", "zellen_abgenommen",
                              "offene_maengel", "voraussetzungen_offen", "ergebnis_bestanden", "ergebnis_nicht_bestanden")}
     out["zellen_gesamt"] = r["tn_anzahl"] * r["leistungen_anzahl"]
-    out["darf_leiten"] = _darf_leiten(r["id"])
+    out["darf_leiten"] = _darf_leiten(r["id"]) if darf_leiten is None else darf_leiten
     return out
 
 
@@ -646,7 +690,13 @@ def list_lehrgaenge():
     rows = db.query(_LEHRGANG_SQL + where + "ORDER BY (l.datum_von IS NULL), l.datum_von DESC, l.id DESC", args)
     if q:
         rows = [r for r in rows if q in f"{r['titel']} {r['nummer']} {r['ort']}".casefold()]
-    return jsonify(lehrgaenge=[_lehrgang_kurz(r) for r in rows])
+    # Leitungsrecht für alle Zeilen in einer Abfrage – nicht eine je Lehrgang.
+    if is_admin():
+        leitung = {r["id"] for r in rows}
+    else:
+        leitung = {z["lehrgang_id"] for z in db.query(
+            "SELECT lehrgang_id FROM pruef_ausbilder WHERE user_id = ? AND ist_leitung = 1", (current_user()["id"],))}
+    return jsonify(lehrgaenge=[_lehrgang_kurz(r, r["id"] in leitung) for r in rows])
 
 
 @bp.post("/lehrgaenge")
@@ -821,11 +871,18 @@ def update_teilnehmer(tid):
 @bp.delete("/teilnehmer/<int:tid>")
 @pruefer_required
 def delete_teilnehmer(tid):
+    """Eine Person mit vermerktem Lehrgangsergebnis bleibt stehen, solange es steht: Löschen wäre die
+    gründlichste Art, eingefrorene Prüfungsdaten zu ändern. Die Leitung hebt das Ergebnis erst auf."""
     t = _tn(tid)
     _leitung(t["lehrgang_id"])
+    if t["ergebnis"]:
+        raise Abgelehnt(EINGEFROREN_LOESCHEN, 409)
     dateien = _medien_dateien("v.teilnehmer_id = ?", (tid,))
     with db.transaction():
-        db.execute("DELETE FROM pruef_teilnehmer WHERE id = ?", (tid,))
+        # Die Bedingung steckt im DELETE: Zwischen der Prüfung oben und dem Löschen könnte die
+        # Leitung gerade das Ergebnis vermerken.
+        if not db.execute_zeilen("DELETE FROM pruef_teilnehmer WHERE id = ? AND ergebnis IS NULL", (tid,)):
+            _eingefroren_nachpruefen(tid, EINGEFROREN_LOESCHEN)
         db.execute("UPDATE pruef_lehrgaenge SET updated_at = ? WHERE id = ?", (db.now(), t["lehrgang_id"]))
     _dateien_loeschen(dateien)
     _bilder_loeschen([t["bild"]] if t["bild"] else [])
@@ -846,9 +903,15 @@ def upload_tn_bild(tid):
         name = store_avatar(f, _medien_dir())
     except BildFehler as exc:
         raise Abgelehnt(str(exc))
-    with db.transaction():
-        db.execute("UPDATE pruef_teilnehmer SET bild = ? WHERE id = ?", (name, tid))
-    _bilder_loeschen([t["bild"]] if t["bild"] else [])
+    # Bedingt schreiben, wie bei auth.set_avatar: Laden zwei Reiter gleichzeitig hoch, gewinnt einer –
+    # der andere räumt seine Datei wieder weg, statt sie verwaist liegen zu lassen. Und erst wenn der
+    # neue Name in der Zeile steht, fällt der alte weg.
+    alt = t["bild"] or ""
+    if not db.execute_zeilen("UPDATE pruef_teilnehmer SET bild = ? WHERE id = ? AND bild = ?", (name, tid, alt)):
+        _bilder_loeschen([name])
+        raise Abgelehnt(BILD_GEAENDERT if db.query("SELECT 1 FROM pruef_teilnehmer WHERE id = ?", (tid,), one=True)
+                        else GERADE_GELOESCHT, 409)
+    _bilder_loeschen([alt] if alt else [])
     return jsonify(teilnehmer=_tn_json(tid))
 
 
@@ -857,9 +920,11 @@ def upload_tn_bild(tid):
 def delete_tn_bild(tid):
     t = _tn(tid)
     _leitung(t["lehrgang_id"])
-    with db.transaction():
-        db.execute("UPDATE pruef_teilnehmer SET bild = '' WHERE id = ?", (tid,))
-    _bilder_loeschen([t["bild"]] if t["bild"] else [])
+    alt = t["bild"] or ""
+    # Nur die Datei löschen, die wirklich aus der Zeile genommen wurde: Hat inzwischen jemand ein
+    # neues Bild hochgeladen, bleibt das stehen – samt Datei.
+    if db.execute_zeilen("UPDATE pruef_teilnehmer SET bild = '' WHERE id = ? AND bild = ?", (tid, alt)) and alt:
+        _bilder_loeschen([alt])
     return jsonify(teilnehmer=_tn_json(tid))
 
 
@@ -872,7 +937,11 @@ def set_tn_kommentar(tid):
     _eingefroren_pruefen(t)
     kommentar = sfield(json_body(), "kommentar").strip()[:5000]
     with db.transaction():
-        db.execute("UPDATE pruef_teilnehmer SET kommentar = ? WHERE id = ?", (kommentar, tid))
+        # „… AND ergebnis IS NULL“: Die Prüfung oben ist ein getrennter Lesezugriff – wird das Ergebnis
+        # genau dazwischen vermerkt, darf der Kommentar nicht mehr durchrutschen.
+        if not db.execute_zeilen("UPDATE pruef_teilnehmer SET kommentar = ? WHERE id = ? AND ergebnis IS NULL",
+                                 (kommentar, tid)):
+            _eingefroren_nachpruefen(tid)
         db.execute("UPDATE pruef_lehrgaenge SET updated_at = ? WHERE id = ?", (db.now(), t["lehrgang_id"]))
     return jsonify(teilnehmer=_tn_json(tid))
 
@@ -932,6 +1001,7 @@ def update_voraussetzung(vid):
     bez = sfield(json_body(), "bezeichnung").strip()[:300]
     if not bez:
         raise Abgelehnt("Die Bezeichnung darf nicht leer sein.")
+    _eingefroren_betroffen_pruefen(_VORAUSSETZUNG_BETROFFEN, (vid,))
     db.execute("UPDATE pruef_voraussetzungen SET bezeichnung = ? WHERE id = ?", (bez, vid))
     return jsonify(voraussetzung=_voraussetzung_json(_voraussetzung(vid)))
 
@@ -940,6 +1010,7 @@ def update_voraussetzung(vid):
 @pruefer_required
 def delete_voraussetzung(vid):
     _leitung(_voraussetzung(vid)["lehrgang_id"])
+    _eingefroren_betroffen_pruefen(_VORAUSSETZUNG_BETROFFEN, (vid,))
     with db.transaction():
         db.execute("DELETE FROM pruef_voraussetzungen WHERE id = ?", (vid,))
     return jsonify(ok=True)
@@ -975,13 +1046,19 @@ def set_voraussetzung_status(tid, vid):
     uid, name = _ich()
     ts = db.now()
     with db.transaction():
-        db.execute(
+        # Geschrieben wird nur, solange die Person nicht eingefroren ist – die Bedingung steckt im
+        # INSERT selbst, weil zwischen _eingefroren_pruefen() und hier das Ergebnis vermerkt werden
+        # kann. (Die WHERE-Klausel braucht SQLite außerdem, um SELECT und ON CONFLICT auseinanderzuhalten.)
+        n = db.execute_zeilen(
             "INSERT INTO pruef_voraussetzung_status (teilnehmer_id, voraussetzung_id, erfuellt, gesetzt_von, "
-            "gesetzt_von_name, gesetzt_am, quelle) VALUES (?,?,?,?,?,?,'manuell') "
+            "gesetzt_von_name, gesetzt_am, quelle) SELECT ?,?,?,?,?,?,'manuell' "
+            "WHERE EXISTS (SELECT 1 FROM pruef_teilnehmer WHERE id = ? AND ergebnis IS NULL) "
             "ON CONFLICT(teilnehmer_id, voraussetzung_id) DO UPDATE SET erfuellt = excluded.erfuellt, "
             "gesetzt_von = excluded.gesetzt_von, gesetzt_von_name = excluded.gesetzt_von_name, "
             "gesetzt_am = excluded.gesetzt_am, quelle = excluded.quelle",
-            (tid, vid, erfuellt, uid, name, ts))
+            (tid, vid, erfuellt, uid, name, ts, tid))
+        if not n:
+            _eingefroren_nachpruefen(tid)
         db.execute("INSERT INTO pruef_voraussetzung_verlauf (teilnehmer_id, voraussetzung_id, erfuellt, user_id, "
                    "user_name, zeit, quelle) VALUES (?,?,?,?,?,?,'manuell')", (tid, vid, erfuellt, uid, name, ts))
     return jsonify(status={"erfuellt": bool(erfuellt), "gesetzt_von_name": name, "gesetzt_am": ts,
@@ -1046,6 +1123,8 @@ def update_leistung(lid):
     _leitung(_leistung(lid)["lehrgang_id"])
     vals = _leistung_felder(json_body(), neu=False)
     if vals:
+        # Bezeichnung, Beschreibung und Zeitansatz sind das, woran eine Bewertung gemessen wurde.
+        _eingefroren_betroffen_pruefen(_LEISTUNG_BETROFFEN, (lid,))
         sets = ", ".join(f"{k} = ?" for k in vals)
         db.execute(f"UPDATE pruef_leistungen SET {sets} WHERE id = ?", (*vals.values(), lid))
     return jsonify(leistung=_leistung_json_voll(_leistung(lid)))
@@ -1055,6 +1134,7 @@ def update_leistung(lid):
 @pruefer_required
 def delete_leistung(lid):
     _leitung(_leistung(lid)["lehrgang_id"])
+    _eingefroren_betroffen_pruefen(_LEISTUNG_BETROFFEN, (lid,))
     dateien = _medien_dateien("v.leistung_id = ?", (lid,))
     with db.transaction():
         db.execute("DELETE FROM pruef_leistungen WHERE id = ?", (lid,))
@@ -1110,6 +1190,8 @@ def update_kriterium(kid):
     bez = sfield(json_body(), "bezeichnung").strip()[:300]
     if not bez:
         raise Abgelehnt("Bitte eine Bezeichnung angeben.")
+    # Die Kriterienliste gehört zur Bewertung jeder Person, die die Leistung abgelegt hat.
+    _eingefroren_betroffen_pruefen(_LEISTUNG_BETROFFEN, (k["leistung_id"],))
     db.execute("UPDATE pruef_kriterien SET bezeichnung = ? WHERE id = ?", (bez, kid))
     return jsonify(kriterium=_kriterium_json(_kriterium(kid)))
 
@@ -1119,6 +1201,7 @@ def update_kriterium(kid):
 def delete_kriterium(kid):
     k = _kriterium(kid)
     _leitung(_leistung(k["leistung_id"])["lehrgang_id"])
+    _eingefroren_betroffen_pruefen(_LEISTUNG_BETROFFEN, (k["leistung_id"],))
     db.execute("DELETE FROM pruef_kriterien WHERE id = ?", (kid,))
     return jsonify(ok=True)
 
@@ -1216,20 +1299,41 @@ def create_versuch(tid, lid):
     else:
         nr, nachpruefung = 1, 0
     uid, name = _ich()
-    try:
-        vid = db.execute(
-            "INSERT INTO pruef_versuche (teilnehmer_id, leistung_id, versuch_nr, ist_nachpruefung, ergebnis, "
-            "zeit_sekunden, kommentar, geprueft_von, geprueft_von_name, geprueft_am) VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (tid, lid, nr, nachpruefung, ergebnis, zeit, kommentar, uid, name, db.now()))
-    except sqlite3.IntegrityError as exc:
-        # Zwei Prüfer speichern dieselbe Zelle im selben Augenblick: UNIQUE(teilnehmer, leistung, nr)
-        # fängt den zweiten ab – er bekommt dieselbe Auskunft wie beim nachträglichen Versuch.
-        # Ein Fremdschlüsselfehler heißt dagegen: Person oder Leistung ist gerade gelöscht worden.
-        if "UNIQUE" in str(exc).upper():
-            raise Abgelehnt(SCHON_BEWERTET, 409)
-        raise Abgelehnt(GERADE_GELOESCHT, 409)
-    if kriterien:
-        _kriterien_schreiben(vid, kriterien)
+    # Die Bedingungen stecken im INSERT selbst: Das Lesen oben und das Schreiben hier sind getrennte
+    # Schritte – dazwischen kann ein zweiter Prüfer den letzten Versuch auf „bestanden“ setzen (dann
+    # darf keine Nachprüfung mehr entstehen) oder die Leitung das Ergebnis vermerken. Ein INSERT, der
+    # keine Zeile schreibt, nennt den Grund. UNIQUE(teilnehmer, leistung, nr) fängt daneben zwei
+    # gleichzeitige Bewertungen derselben Zelle.
+    bedingung = "NOT EXISTS (SELECT 1 FROM pruef_teilnehmer t WHERE t.id = ? AND t.ergebnis IS NOT NULL)"
+    args = [tid]
+    if bisher:
+        bedingung += (" AND EXISTS (SELECT 1 FROM pruef_versuche s WHERE s.teilnehmer_id = ? AND s.leistung_id = ? "
+                      "AND s.versuch_nr = ? AND s.ergebnis = 'mangelhaft')")
+        args += [tid, lid, bisher[-1]["versuch_nr"]]
+    with db.transaction():
+        try:
+            n = db.execute_zeilen(
+                "INSERT INTO pruef_versuche (teilnehmer_id, leistung_id, versuch_nr, ist_nachpruefung, ergebnis, "
+                "zeit_sekunden, kommentar, geprueft_von, geprueft_von_name, geprueft_am) "
+                "SELECT ?,?,?,?,?,?,?,?,?,? WHERE " + bedingung,
+                (tid, lid, nr, nachpruefung, ergebnis, zeit, kommentar, uid, name, db.now(), *args))
+        except sqlite3.IntegrityError as exc:
+            # Zwei Prüfer speichern dieselbe Zelle im selben Augenblick: UNIQUE(teilnehmer, leistung, nr)
+            # fängt den zweiten ab – er bekommt dieselbe Auskunft wie beim nachträglichen Versuch.
+            # Ein Fremdschlüsselfehler heißt dagegen: Person oder Leistung ist gerade gelöscht worden.
+            if "UNIQUE" in str(exc).upper():
+                raise Abgelehnt(SCHON_BEWERTET, 409)
+            raise Abgelehnt(GERADE_GELOESCHT, 409)
+        if not n:
+            _eingefroren_pruefen(_tn(tid))
+            raise Abgelehnt(NUR_NACH_MANGEL, 409)
+        # Die Kennung über den eindeutigen Schlüssel statt über lastrowid – das wäre nach einem INSERT
+        # ohne Zeile der Wert des vorigen Schreibzugriffs. Die Kriterien-Haken gehören in dieselbe
+        # Transaktion: eine Bewertung ohne ihre Haken soll es auch bei einem Abbruch nicht geben.
+        vid = db.query("SELECT id FROM pruef_versuche WHERE teilnehmer_id = ? AND leistung_id = ? AND versuch_nr = ?",
+                       (tid, lid, nr), one=True)["id"]
+        if kriterien:
+            _kriterien_schreiben(vid, kriterien)
     return jsonify(versuch=_versuch_json(_versuch(vid))), 201
 
 
@@ -1247,9 +1351,13 @@ def update_versuch(vid):
     _bewertung_pruefen(ergebnis, kommentar)
     # Die Kriterien-Haken hängen an keinem Verlauf und laufen unabhängig von den übrigen Feldern:
     # Wer nur ankreuzt, ohne Ergebnis/Kommentar/Zeit zu ändern, soll das trotzdem speichern können.
-    if "kriterien" in d:
-        _kriterien_schreiben(vid, _kriterien_map(d, v["leistung_id"]))
+    # Geschrieben werden sie aber erst NACH dem bedingten UPDATE unten, in derselben Transaktion –
+    # sonst wären sie bei einem 409 schon überschrieben, obwohl die Antwort „nichts geändert“ sagt.
+    kriterien = _kriterien_map(d, v["leistung_id"]) if "kriterien" in d else None
     if (ergebnis, kommentar, zeit) == (v["ergebnis"], v["kommentar"], v["zeit_sekunden"]):
+        if kriterien is not None:
+            with db.transaction():
+                _kriterien_schreiben(vid, kriterien)
         return jsonify(versuch=_versuch_json(v))      # nichts geändert – kein Verlaufseintrag
     # Sonst stünde eine Nachprüfung hinter einer bestandenen Prüfung – ein Stand, den es beim
     # Anlegen nie geben kann und den die Mängelübersicht nicht deuten könnte. Die Bedingung
@@ -1281,6 +1389,8 @@ def update_versuch(vid):
                 raise Abgelehnt(KEIN_SPAETERER, 409)
             raise Abgelehnt("Diese Bewertung wurde inzwischen von jemand anderem geändert – bitte die Seite neu "
                             "laden und die Änderung noch einmal eintragen.", 409)
+        if kriterien is not None:
+            _kriterien_schreiben(vid, kriterien)
         db.execute("INSERT INTO pruef_versuch_verlauf (versuch_id, ergebnis, zeit_sekunden, kommentar, von_user_id, "
                    "von_name, stand_ab, ersetzt_am) VALUES (?,?,?,?,?,?,?,?)",
                    (vid, v["ergebnis"], v["zeit_sekunden"], v["kommentar"], alt_von, alt_name,
@@ -1338,11 +1448,28 @@ def upload_medien(vid):
             current_app.logger.exception("Upload von %s fehlgeschlagen", f.filename)
             errors.append(f"Die Datei „{f.filename or '?'}“ konnte nicht verarbeitet werden.")
             continue
-        mid = db.execute(
-            "INSERT INTO pruef_medien (versuch_id, file, kind, original_name, width, height, hochgeladen_von, "
-            "hochgeladen_von_name, hochgeladen_am) VALUES (?,?,?,?,?,?,?,?,?)",
-            (vid, meta["file"], meta["kind"], meta["original_name"], meta["width"], meta["height"], uid, name, db.now()))
-        medien.append(_medium_json(_medium(mid)))
+        # Die Zeile nur schreiben, solange die Person nicht eingefroren ist – zwischen der Prüfung
+        # oben und hier kann das Ergebnis vermerkt worden sein. Trifft das INSERT nichts oder scheitert
+        # es am Fremdschlüssel, liegt die Datei schon auf der Platte und muss wieder weg – sonst
+        # bliebe sie verwaist, ohne Zeile, die je auf sie zeigt.
+        try:
+            n = db.execute_zeilen(
+                "INSERT INTO pruef_medien (versuch_id, file, kind, original_name, width, height, hochgeladen_von, "
+                "hochgeladen_von_name, hochgeladen_am) SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS ("
+                "SELECT 1 FROM pruef_versuche v JOIN pruef_teilnehmer t ON t.id = v.teilnehmer_id "
+                "WHERE v.id = ? AND t.ergebnis IS NULL)",
+                (vid, meta["file"], meta["kind"], meta["original_name"], meta["width"], meta["height"], uid, name,
+                 db.now(), vid))
+        except sqlite3.IntegrityError:
+            _dateien_loeschen([meta["file"]])
+            raise
+        if not n:
+            _dateien_loeschen([meta["file"]])
+            if not db.query("SELECT 1 FROM pruef_versuche WHERE id = ?", (vid,), one=True):
+                raise Abgelehnt(GERADE_GELOESCHT, 409)
+            raise Abgelehnt(EINGEFROREN, 409)
+        medien.append(_medium_json(db.query("SELECT * FROM pruef_medien WHERE versuch_id = ? AND file = ?",
+                                            (vid, meta["file"]), one=True)))
     return jsonify(medien=medien, errors=errors), 201
 
 
@@ -1351,8 +1478,16 @@ def upload_medien(vid):
 def delete_medium(mid):
     m = _medium(mid)
     _eingefroren_pruefen(_tn(_versuch(m["versuch_id"])["teilnehmer_id"]))
-    with db.transaction():
-        db.execute("DELETE FROM pruef_medien WHERE id = ?", (mid,))
+    # Zeile noch da und Person nicht eingefroren – beides im DELETE selbst. Trifft es nichts, war
+    # jemand schneller: Dann die Datei nicht anfassen, sondern sagen, was los ist.
+    n = db.execute_zeilen(
+        "DELETE FROM pruef_medien WHERE id = ? AND EXISTS (SELECT 1 FROM pruef_versuche v "
+        "JOIN pruef_teilnehmer t ON t.id = v.teilnehmer_id WHERE v.id = pruef_medien.versuch_id AND t.ergebnis IS NULL)",
+        (mid,))
+    if not n:
+        if db.query("SELECT 1 FROM pruef_medien WHERE id = ?", (mid,), one=True):
+            raise Abgelehnt(EINGEFROREN, 409)
+        raise Abgelehnt("Medium nicht gefunden", 404)
     _dateien_loeschen([m["file"]])
     return jsonify(ok=True)
 
@@ -1439,7 +1574,9 @@ def _import_eingaben():
     if roh:
         try:
             zuordnung = json.loads(roh)
-        except ValueError:
+        except (ValueError, RecursionError):
+            # RecursionError: absurd tief verschachteltes JSON – eine Zuordnung ist ein flaches Objekt,
+            # und ein 500 wäre die falsche Antwort auf eine kaputte Eingabe.
             raise Abgelehnt("Die Spaltenzuordnung ist kein gültiges JSON.")
         if not isinstance(zuordnung, dict) or not all(isinstance(v, str) for v in zuordnung.values()):
             raise Abgelehnt("Die Spaltenzuordnung muss ein Objekt {Spaltenindex: Zuordnung} sein.")
@@ -1460,28 +1597,60 @@ def _analysieren(f, zuordnung):
 
 
 def _tn_schluessel(lid):
-    """(Schlüssel, Zeile) für alle Teilnehmenden eines Lehrgangs – der Abgleich beim Import."""
+    """{id: (Schlüssel, Zeile)} für alle Teilnehmenden eines Lehrgangs – der Abgleich beim Import."""
     imp = _import_modul()
-    return [(imp.schluessel(t["vorname"], t["name"], t["geburtsdatum"]), t)
-            for t in db.query("SELECT * FROM pruef_teilnehmer WHERE lehrgang_id = ?", (lid,))]
+    return {t["id"]: (imp.schluessel(t["vorname"], t["name"], t["geburtsdatum"]), t)
+            for t in db.query("SELECT * FROM pruef_teilnehmer WHERE lehrgang_id = ?", (lid,))}
 
 
 def _passende_tns(imp, bestand, tn):
     """Alle Teilnehmenden des Lehrgangs, auf die eine Dateizeile passt. Meist genau einer; ohne
     Geburtsdatum in der Datei können es bei Namensgleichheit zwei sein – dann wird nicht geraten."""
     key = imp.schluessel(tn.get("vorname") or "", tn.get("name") or "", tn.get("geburtsdatum"))
-    return [zeile for alt_key, zeile in bestand if imp.passt(key, alt_key)]
+    return [zeile for alt_key, zeile in bestand.values() if imp.passt(key, alt_key)]
 
 
-def _passender_tn(imp, bestand, tn, warnungen=None):
-    treffer = _passende_tns(imp, bestand, tn)
-    if len(treffer) > 1:
-        if warnungen is not None:
-            warnungen.append(f"Zeile {tn.get('zeile')}: „{tn.get('vorname', '')} {tn.get('name', '')}“ passt auf "
-                             f"{len(treffer)} Teilnehmende des Lehrgangs (Geburtsdatum fehlt in der Datei) – "
-                             "die Zeile wird nicht übernommen. Bitte das Geburtsdatum ergänzen.")
-        return "mehrdeutig"
-    return treffer[0] if treffer else None
+def _treffer_im_bestand(imp, bestand, teilnehmer, warnungen):
+    """Je Dateizeile der passende Teilnehmende des Lehrgangs, None oder "mehrdeutig" – in der
+    Reihenfolge von `teilnehmer`. Mehrdeutig ist eine Zeile in zwei Fällen: Sie passt auf mehrere
+    Personen des Lehrgangs (Geburtsdatum fehlt in der Datei) – oder mehrere Zeilen der Datei passen
+    auf dieselbe Person (sie steht ohne Geburtsdatum im Lehrgang, die Datei bringt zwei Namensvettern
+    mit verschiedenen Geburtsdaten). Welche von beiden sie ist, lässt sich nicht erraten; früher hat
+    die erste Zeile die Person samt Geburtsdatum übernommen und die zweite ihre Haken dazugeschrieben.
+    Deshalb läuft der Abgleich VOR dem Schreiben über alle Zeilen, nicht Zeile für Zeile."""
+    passende = [_passende_tns(imp, bestand, tn) for tn in teilnehmer]
+    zeilen_je_person = {}
+    for tn, treffer in zip(teilnehmer, passende):
+        if len(treffer) == 1:
+            zeilen_je_person.setdefault(treffer[0]["id"], []).append(tn.get("zeile"))
+    out = []
+    for tn, treffer in zip(teilnehmer, passende):
+        wer = f"Zeile {tn.get('zeile')}: „{tn.get('vorname', '')} {tn.get('name', '')}“"
+        if len(treffer) > 1:
+            warnungen.append(f"{wer} passt auf {len(treffer)} Teilnehmende des Lehrgangs (Geburtsdatum fehlt in der "
+                             "Datei) – die Zeile wird nicht übernommen. Bitte das Geburtsdatum ergänzen.")
+            out.append("mehrdeutig")
+        elif treffer and len(zeilen_je_person[treffer[0]["id"]]) > 1:
+            andere = ", ".join(str(z) for z in zeilen_je_person[treffer[0]["id"]] if z != tn.get("zeile"))
+            warnungen.append(f"{wer} passt wie Zeile {andere} auf dieselbe Person des Lehrgangs (dort ohne "
+                             "Geburtsdatum) – keine der Zeilen wird übernommen. Bitte das Geburtsdatum im Lehrgang "
+                             "ergänzen.")
+            out.append("mehrdeutig")
+        else:
+            out.append(treffer[0] if treffer else None)
+    return out
+
+
+def _extra_begrenzen(imp, extra):
+    """Dieselben Grenzen wie beim Lesen der Datei (MAX_EXTRA_* in pruefungen_import) noch einmal am
+    Datensatz: Hier werden die Zusatzspalten alter und neuer Importe zusammengeführt, und was in
+    pruef_teilnehmer.extra steht, lädt jede Lehrgangsansicht mit."""
+    out = {}
+    for k, v in extra.items():
+        if len(out) >= imp.MAX_EXTRA_SPALTEN:
+            break
+        out[str(k)[:imp.MAX_EXTRA_TITEL]] = str(v)[:imp.MAX_EXTRA_WERT]
+    return out
 
 
 def _zeitraum_aus_datei(kopf, warnungen, alt_von=None, alt_bis=None):
@@ -1508,11 +1677,11 @@ def import_vorschau():
     f, lehrgang, zuordnung = _import_eingaben()
     imp = _import_modul()
     ergebnis = _analysieren(f, zuordnung)
-    bestand = _tn_schluessel(lehrgang["id"]) if lehrgang else []
+    bestand = _tn_schluessel(lehrgang["id"]) if lehrgang else {}
     vorhandene = {imp.normalisiert(v["bezeichnung"]) for v in db.query(
         "SELECT bezeichnung FROM pruef_voraussetzungen WHERE lehrgang_id = ?", (lehrgang["id"],))} if lehrgang else set()
-    for tn in ergebnis["teilnehmer"]:
-        treffer = _passender_tn(imp, bestand, tn, ergebnis["warnungen"])
+    for tn, treffer in zip(ergebnis["teilnehmer"],
+                           _treffer_im_bestand(imp, bestand, ergebnis["teilnehmer"], ergebnis["warnungen"])):
         tn["vorhanden"] = treffer is not None
         tn["mehrdeutig"] = treffer == "mehrdeutig"
     for v in ergebnis["voraussetzungen"]:
@@ -1594,14 +1763,16 @@ def import_uebernehmen():
             vorhandene_ausbilder.add(imp.normalisiert(a_name))
             ausbilder_neu += 1
 
-        # Teilnehmende
-        bestand = _tn_schluessel(lid)
+        # Teilnehmende. Der Abgleich mit dem Bestand läuft vorab über alle Zeilen (_treffer_im_bestand);
+        # Dubletten innerhalb der Datei hat analysieren() schon aussortiert, deshalb kann keine spätere
+        # Zeile auf eine hier erst angelegte Person passen.
+        teilnehmer = ergebnis.get("teilnehmer") or []
+        treffer = _treffer_im_bestand(imp, _tn_schluessel(lid), teilnehmer, warnungen)
         sortierung = _naechste_sortierung("pruef_teilnehmer", lid)
-        for tn in ergebnis.get("teilnehmer") or []:
+        for tn, alt in zip(teilnehmer, treffer):
             felder = {feld: (tn.get(feld) or "").strip()[:TN_GRENZEN[feld]] for feld in TN_GRENZEN}
             felder["geburtsdatum"] = tn.get("geburtsdatum") or None
             extra_neu = tn.get("extra") if isinstance(tn.get("extra"), dict) else {}
-            alt = _passender_tn(imp, bestand, tn, warnungen)
             if alt == "mehrdeutig":
                 continue
             if alt and alt.get("ergebnis"):
@@ -1615,7 +1786,7 @@ def import_uebernehmen():
                 # ein leerer lässt ihn stehen.
                 extra = _extra(alt["extra"])
                 extra.update({k: v for k, v in extra_neu.items() if v not in (None, "")})
-                vals["extra"] = json.dumps(extra, ensure_ascii=False)
+                vals["extra"] = json.dumps(_extra_begrenzen(imp, extra), ensure_ascii=False)
                 sets = ", ".join(f"{k} = ?" for k in vals)
                 db.execute(f"UPDATE pruef_teilnehmer SET {sets} WHERE id = ?", (*vals.values(), tid))
                 aktualisiert += 1
@@ -1627,11 +1798,10 @@ def import_uebernehmen():
                     "INSERT INTO pruef_teilnehmer (lehrgang_id, name, vorname, geburtsdatum, gliederung, email, "
                     "bemerkung, extra, sortierung, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
                     (lid, felder["name"], felder["vorname"], felder["geburtsdatum"], felder["gliederung"],
-                     felder["email"], felder["bemerkung"], json.dumps(extra_neu, ensure_ascii=False), sortierung, ts))
+                     felder["email"], felder["bemerkung"], json.dumps(_extra_begrenzen(imp, extra_neu), ensure_ascii=False),
+                     sortierung, ts))
                 sortierung += 1
                 angelegt += 1
-                neu = db.query("SELECT * FROM pruef_teilnehmer WHERE id = ?", (tid,), one=True)
-                bestand.append((imp.schluessel(neu["vorname"], neu["name"], neu["geburtsdatum"]), neu))
             # Häkchen aus der Datei: nur setzen, nie zurücknehmen – und nur, wenn er noch nicht steht.
             for spalte, erfuellt in (tn.get("voraussetzungen") or {}).items():
                 vid = spalte_zu_vid.get(str(spalte))

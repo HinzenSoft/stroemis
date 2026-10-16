@@ -1368,6 +1368,9 @@
         initialValue: wert || "", language: "de-DE", usageStatistics: false,
         placeholder: "Wie läuft die Prüfung ab, was wird bewertet?",
         toolbarItems: [],
+        // Dieselbe Reinigung wie in der Leseansicht und im Wiki-Editor; Toast UI nutzt sie nur für
+        // Vorschau und eigene HTML-Renderer, die Anzeige reinigt gespeicherten Text ohnehin erneut.
+        sanitizer: MD.reinigen,
       };
       try { ed = new toastui.Editor(opts); }
       catch (e) { delete opts.language; try { ed = new toastui.Editor(opts); } catch (e2) { ed = null; } }

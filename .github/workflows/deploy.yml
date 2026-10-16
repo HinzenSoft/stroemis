@@ -19,7 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Auf dem VPS git pull und docker compose up --build ausführen
-        uses: appleboy/ssh-action@v1
+        # Auf einen festen Stand gepinnt (Tag v1 vom 2026-10-15): Ein wanderndes Tag könnte sonst
+        # morgen anderen Code mit dem Deploy-Schlüssel ausführen. Zum Heben: neue Prüfsumme eintragen.
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}

@@ -81,6 +81,9 @@ const KORPUS = {
   links: "[intern](/wiki/ankertechnik) und [extern](https://example.org) und <https://example.org>",
   bild: "![Alt-Text](/media/wiki/x.jpg)",
   bildBreite: "![Alt](/media/wiki/x.jpg#w=50%)",
+  // HTML-Baustein mit Breite und Höhe – "&" und "%" im Fragment müssen den Editor überleben.
+  baustein: "![Erklärgrafik](/media/wiki/a1b2c3.html#w=60%&h=420)",
+  bausteinHoehe: "![Werkzeug](/media/wiki/a1b2c3.html#h=300)",
   bildKlammer: "![Foto \\[1\\]](/media/wiki/x.jpg)",
   medien: "![Film](/media/wiki/f.mp4)\n\n![Ton](/media/wiki/t.mp3)",
   hinweisAlle: ":::info 💡\nInfo\n:::\n\n:::warning ⚠️\nAchtung\n:::\n\n:::success ✅\nGut\n:::\n\n:::danger ⛔\nSchlecht\n:::\n\n:::note 📝\nNotiz\n:::",
@@ -292,6 +295,71 @@ pruefe("Aufgabenlisten behalten ihr Kästchen, Formulare kommen nicht durch", ()
   if (/<form|<input|<button/i.test(boese)) return "Formular kam durch:\n" + boese;
   const stil = MD.render('<style>body{display:none}</style><p>Text</p>');
   return /<style/i.test(stil) ? "Stilblock kam durch:\n" + stil : "";
+});
+
+pruefe("das style-Attribut fliegt aus dem Inhalt, Bildbreite und Callout-Farbe bleiben", () => {
+  /* Die CSP erlaubt Inline-Stile; ein <div style="position:fixed;inset:0"> im Text legte sich
+     über die Oberfläche aller Leser. Was ein Artikel an Gestalt braucht, läuft über Klassen
+     und Attribute – die müssen den Filter überleben. */
+  const boese = MD.render('<div style="position:fixed;inset:0;z-index:99999;background:#fff">Über allem</div>\n\n'
+    + '![Alt](/media/wiki/x.jpg#w=50%)\n\n:::info 💡 farbe:mint\nText\n:::');
+  if (/style=/i.test(boese)) return "style kam durch:\n" + boese;
+  if (!/<img[^>]*width="50%"/.test(boese)) return "die Bildbreite fehlt:\n" + boese;
+  if (!/co-farbe-mint/.test(boese)) return "die Callout-Farbe fehlt:\n" + boese;
+  // Tabellenspalten richten sich über das align-Attribut aus, nicht über style.
+  const tab = MD.render("| L | R |\n| :-- | --: |\n| a | b |");
+  return /align="right"/.test(tab) ? "" : "die Spaltenausrichtung fehlt:\n" + tab;
+});
+
+pruefe("Kennungen des Rahmens kommen nicht aus dem Inhalt, gewöhnliche bleiben", () => {
+  /* Ein <span id="logout"> im Artikel meldete beim Anklicken ab (common.js prüfte die id
+     dokumentweit), ein <div id="info-…"> fing die Verweisliste der Seitenangaben ab. */
+  const raus = MD.render('<span id="logout">x</span><div id="info-x">y</div><p id="einleitung">z</p><i id="c-ok">w</i>');
+  if (/id="(logout|info-x|c-ok)"/.test(raus)) return "eine Rahmen-Kennung kam durch:\n" + raus;
+  return /id="einleitung"/.test(raus) ? "" : "eine harmlose Kennung ging verloren:\n" + raus;
+});
+
+pruefe("Überschriften weichen den Kennungen des Rahmens aus, gewöhnliche Anker bleiben", () => {
+  /* „PG Präsenz“ ergab "pg-praesenz" – die Marke mit dieser Kennung entsteht erst beim
+     Herzschlag, und praesenzAnzeigen löschte dann die Überschrift. Ausweichen muss aber nur,
+     was ein Wort oder einen Vorsatz des Rahmens wirklich trifft: „Toastbrot“ beginnt zwar wie
+     die Meldungsleiste, „P-Seil“ wie die Felder des Fotodialogs, „Mappe“ wie die Karte – doch
+     Anker wie „#toastbrot“ oder „#2024“ stehen in Links anderer Seiten und müssen bleiben. */
+  const wurzel = document.createElement("div");
+  wurzel.innerHTML = MD.render("## Einleitung\n\n## PG Präsenz\n\n## Toc\n\n## 2024\n\n## Einleitung\n\n## Toastbrot\n\n## P-Seil\n\n## Mappe\n\n## Dlg Body");
+  const ids = MD.buildToc(wurzel).map((i) => i.id);
+  const soll = ["einleitung", "pg-praesenz-abschnitt", "toc-abschnitt", "2024", "einleitung-2", "toastbrot", "p-seil", "mappe", "dlg-body-abschnitt"];
+  return JSON.stringify(ids) === JSON.stringify(soll) ? "" : "Kennungen: " + JSON.stringify(ids);
+});
+
+pruefe("ein kaputter Anker in der Adresse wirft nicht", () => {
+  // decodeURIComponent("%E0%A4%A") wirft – und riss damit den Seitenaufbau mit.
+  if (MD.entziffern("%E0%A4%A") !== "%E0%A4%A") return "der Rohwert kommt nicht zurück";
+  return MD.entziffern("ank%C3%BCndigung") === "ankündigung" ? "" : "gültige Folgen werden nicht mehr entziffert";
+});
+
+pruefe("HTML-Baustein: nur die eigene Datei wird zum Rahmen, und erst in der Nachbearbeitung", () => {
+  /* Der Renderer darf keinen Rahmen schreiben – DOMPurify verbietet <iframe>, und das soll so
+     bleiben. Der Baustein entsteht in enhance() aus einer geprüften Adresse; alles, was nicht
+     unter /media/wiki/ liegt, bleibt draußen, auch ein rohes <iframe> im Text. */
+  const roh = MD.render("![Erklärgrafik](/media/wiki/abc123.html#w=60%25&h=420)");
+  if (/<iframe/i.test(roh)) return "Rahmen schon vor der Nachbearbeitung:\n" + roh;
+  if (!/html-embed-platz/.test(roh)) return "Platzhalter fehlt:\n" + roh;
+  const wurzel = document.createElement("div");
+  wurzel.innerHTML = roh;
+  MD.enhance(wurzel, {});
+  const fr = wurzel.querySelector("iframe.html-embed");
+  if (!fr) return "Rahmen fehlt nach der Nachbearbeitung:\n" + wurzel.innerHTML;
+  if (fr.getAttribute("sandbox") !== "allow-scripts") return "sandbox ist „" + fr.getAttribute("sandbox") + "“, erwartet allow-scripts";
+  if (fr.getAttribute("title") !== "Erklärgrafik") return "Titel ist „" + fr.getAttribute("title") + "“";
+  if (fr.style.width !== "60%" || fr.style.height !== "420px") return `Maße ${fr.style.width} × ${fr.style.height}, erwartet 60% × 420px`;
+  const fremd = document.createElement("div");
+  fremd.innerHTML = MD.render("![x](https://fremde.seite/x.html)\n\n<iframe src=\"https://fremde.seite/\"></iframe>\n\n"
+    + "![y](/media/wiki/../../etc/x.html)\n\n![z](/media/wiki/a.html#w=60%&foo=bar)");
+  MD.enhance(fremd, {});
+  if (fremd.querySelector("iframe")) return "fremder Rahmen kam durch:\n" + fremd.innerHTML;
+  const masse = MD.embedMasse("/media/wiki/a.html#h=300");
+  return masse.w === "" && masse.h === 300 ? "" : "Maße aus #h=300: " + JSON.stringify(masse);
 });
 
 pruefe("ein eingerückter Unterpunkt bleibt in der Hinweiskiste eingerückt", () => {
