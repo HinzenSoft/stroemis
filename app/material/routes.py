@@ -30,6 +30,7 @@ UPLOAD_GRENZEN = {
     "material_api.ordner_foto": katalog.BILD_MAX_BYTES + 1024 * 1024,
     "material_api.dokument_neu": katalog.DOK_MAX_BYTES + 1024 * 1024,
     "material_api.dokument_version": katalog.DOK_MAX_BYTES + 1024 * 1024,
+    "material_api.kategorie_dokument_neu": katalog.DOK_MAX_BYTES + 1024 * 1024,
     "material_api.punkt_foto": katalog.BILD_MAX_BYTES + 1024 * 1024,
     "material_api.anhang_neu": anhang.MAX_BYTES + 1024 * 1024,
 }
@@ -59,6 +60,11 @@ def _seite_args(maxi=search.PRO_SEITE_MAX):
     sonst „alles auf einmal“."""
     seite, pro_seite = search.seiten(request.args.get("seite", 1), request.args.get("pro_seite", 50))
     return seite, min(pro_seite, maxi)
+
+
+def _sortier_args():
+    """(Spalte, Richtung) aus der Anfrage – geprüft wird in search.sortierung gegen die Liste der Spalten."""
+    return (request.args.get("sort") or None), (request.args.get("richtung") or "auf")
 
 
 # --- Seiten ------------------------------------------------------------------------------------------
@@ -197,7 +203,7 @@ def start():
 @requires_folder("lesen")
 def suche():
     seite, pro_seite = _seite_args()
-    rows, gesamt = search.artikel(request.args.get("q", ""), seite, pro_seite)
+    rows, gesamt = search.artikel(request.args.get("q", ""), seite, pro_seite, *_sortier_args())
     treffer = []
     for r in rows:
         k = bestand.artikel_kurz(r)
@@ -215,7 +221,7 @@ def faellig():
     ordner_id = request.args.get("ordner", type=int)
     if ordner_id:
         bestand.ordner(ordner_id)
-    liste, gesamt = bestand.faellige(ordner_id, stati, seite, pro_seite)
+    liste, gesamt = bestand.faellige(ordner_id, stati, seite, pro_seite, *_sortier_args())
     return jsonify(artikel=liste, gesamt=gesamt, schwelle_tage=st.schwelle_tage())
 
 
@@ -262,7 +268,7 @@ def produkte():
     _katalog_lesen()
     seite, pro_seite = _seite_args()
     kid = request.args.get("kategorie", type=int)
-    rows, gesamt = search.produkte(request.args.get("q", ""), kid, seite, pro_seite)
+    rows, gesamt = search.produkte(request.args.get("q", ""), kid, seite, pro_seite, *_sortier_args())
     seite, pro_seite = search.seiten(seite, pro_seite)
     return jsonify(produkte=[katalog.produkt_json(r) for r in rows], gesamt=gesamt, seite=seite, pro_seite=pro_seite)
 
@@ -320,18 +326,42 @@ def dokument_neu(pid):
     return jsonify(dokument_id=did, dokumente=katalog.dokumente(pid)), 201
 
 
+@api.get("/kategorien/<int:kid>/dokumente")
+def kategorie_dokumente(kid):
+    if not current_user():
+        return jsonify(error="Nicht angemeldet"), 401
+    _katalog_lesen()
+    katalog.kategorie(kid)
+    return jsonify(dokumente=katalog.dokumente(kid=kid))
+
+
+@api.post("/kategorien/<int:kid>/dokumente")
+@katalog_required
+def kategorie_dokument_neu(kid):
+    """Ein Dokument für alle Produkte der Kategorie und ihrer Unterkategorien (Pflegehinweis, Anleitung)."""
+    did = katalog.dokument_anlegen(None, _eingabe(), request.files.get("file"), kid=kid)
+    return jsonify(dokument_id=did, dokumente=katalog.dokumente(kid=kid)), 201
+
+
 @api.post("/dokumente/<int:did>/version")
 @katalog_required
 def dokument_version(did):
     neu = katalog.dokument_neue_version(did, _eingabe(), request.files.get("file"))
-    return jsonify(dokument_id=neu, dokumente=katalog.dokumente(katalog.dokument(neu)["product_id"])), 201
+    return jsonify(dokument_id=neu, dokumente=katalog.dokumente_des(katalog.dokument(neu))), 201
+
+
+@api.put("/dokumente/<int:did>")
+@katalog_required
+def dokument_umbenennen(did):
+    katalog.dokument_umbenennen(did, json_body())
+    return jsonify(dokumente=katalog.dokumente_des(katalog.dokument(did)))
 
 
 @api.post("/dokumente/<int:did>/zurueckziehen")
 @katalog_required
 def dokument_zurueckziehen(did):
     katalog.dokument_zurueckziehen(did, json_body())
-    return jsonify(dokumente=katalog.dokumente(katalog.dokument(did)["product_id"]))
+    return jsonify(dokumente=katalog.dokumente_des(katalog.dokument(did)))
 
 
 @api.get("/formulare")
@@ -418,7 +448,8 @@ def ordner_lesen(fid):
     # Lager durchgesehen werden.
     seite = search.seiten(request.args.get("seite", 1), 1)[0]
     pro_seite = max(1, min(500, request.args.get("pro_seite", 200, type=int) or 200))
-    return jsonify(ordner=bestand.ordner_inhalt(fid, request.args.get("status") or None, seite, pro_seite))
+    return jsonify(ordner=bestand.ordner_inhalt(fid, request.args.get("status") or None, seite, pro_seite,
+                                                *_sortier_args()))
 
 
 @api.put("/ordner/<int:fid>")

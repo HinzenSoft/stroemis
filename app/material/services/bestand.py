@@ -555,7 +555,7 @@ def artikel_json(i, voll=False):
         out["lebensdauer"] = None
     if voll:
         out["journal"] = journal.fuer_artikel(i)
-        out["dokumente"] = [dd for dd in katalog.dokumente(p["id"]) if dd["gilt"]]
+        out["dokumente"] = katalog.gueltige_dokumente(p["id"], heute().isoformat())   # samt denen der Kategorien
         f = katalog.formular_fuer_produkt(p["id"])
         out["formular"] = ({"id": f["id"], "version": f["version"], "title": f["title"], "quelle": f["quelle"],
                             "punkte": f["punkte_anzahl"]} if f else None)
@@ -573,8 +573,29 @@ def artikel_json(i, voll=False):
     return out
 
 
-def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100):
+def artikel_sortierung():
+    """Sortierbare Spalten der Artikellisten: Name in der Anfrage → SQL über i = mat_item, p = mat_product.
+    „faellig“ stellt neue Artikel (Eingangsprüfung) nach vorn und gesperrte und ausgesonderte nach hinten,
+    „status“ sortiert nach Dringlichkeit. Die Stichtage stehen als Literale im Ausdruck (vom Server
+    berechnete ISO-Daten), damit er auch in Abfragen mit ?-Parametern taugt (Suche)."""
+    par = st.parameter()
+    status = st.status_sql("i").replace(":st_heute", f"'{par['st_heute']}'").replace(":st_bald", f"'{par['st_bald']}'")
+    return {
+        "inventar": "i.inventory_no",
+        "hersteller": "p.manufacturer COLLATE NOCASE",
+        "produkt": "p.model COLLATE NOCASE",
+        "serie": "i.serial_no COLLATE NOCASE",
+        "faellig": ("CASE WHEN i.lock_state <> 'frei' THEN NULL WHEN i.last_inspected_on IS NULL THEN '' "
+                    "ELSE i.next_due_on END"),
+        "status": (f"CASE {status} WHEN 'ueberfaellig' THEN 0 WHEN 'lebensdauer' THEN 1 WHEN 'neu' THEN 2 "
+                   f"WHEN 'gesperrt' THEN 3 WHEN 'bald_faellig' THEN 4 WHEN 'einsatzbereit' THEN 5 ELSE 6 END"),
+    }
+
+
+def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, richtung="auf"):
     """Ein Ordner mit Pfad, Unterordnern (mit Zählung) und den Artikeln direkt darin."""
+    from .search import sortierung
+    ordnung = sortierung(artikel_sortierung(), sort, richtung, "i.inventory_no")
     o = ordner(fid)
     alle = {x["id"]: x for x in baum()}
     kinder = [x for x in alle.values() if x["parent_id"] == fid]
@@ -588,7 +609,7 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100):
         params["sf"] = status_filter
     gesamt = db.query(f"SELECT COUNT(*) AS n FROM mat_item i {bedingung}", params, one=True)["n"]
     seite = max(1, int(seite or 1))
-    rows = db.query(ARTIKEL_LISTE_SQL + bedingung + " ORDER BY i.inventory_no LIMIT :lim OFFSET :off",
+    rows = db.query(ARTIKEL_LISTE_SQL + bedingung + f" ORDER BY {ordnung} LIMIT :lim OFFSET :off",
                     dict(params, lim=pro_seite, off=(seite - 1) * pro_seite))
     out = alle[fid]
     out["pfad"] = pfad(fid)
@@ -606,9 +627,10 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100):
 FAELLIG = ("ueberfaellig", "neu", "bald_faellig")
 
 
-def faellige(ordner_id=None, nur=FAELLIG, seite=1, pro_seite=100):
+def faellige(ordner_id=None, nur=FAELLIG, seite=1, pro_seite=100, sort=None, richtung="auf"):
     """Artikel, die geprüft werden müssen – überfällige zuerst, dann neue (Eingangsprüfung), dann nach
-    Datum."""
+    Datum; oder nach einer gewählten Spalte."""
+    from .search import sortierung
     params = st.parameter()
     bedingungen = [f"{st.status_sql('i')} IN ({','.join(':n' + str(k) for k in range(len(nur)))})"]
     params.update({f"n{k}": s for k, s in enumerate(nur)})
@@ -620,8 +642,9 @@ def faellige(ordner_id=None, nur=FAELLIG, seite=1, pro_seite=100):
     gesamt = db.query(f"SELECT COUNT(*) AS n FROM mat_item i {where}", params, one=True)["n"]
     reihe = (f"CASE {st.status_sql('i')} WHEN 'ueberfaellig' THEN 0 WHEN 'lebensdauer' THEN 1 WHEN 'neu' THEN 2 "
              f"WHEN 'bald_faellig' THEN 3 ELSE 4 END")
-    rows = db.query(ARTIKEL_LISTE_SQL + where + f" ORDER BY {reihe}, i.next_due_on IS NOT NULL, i.next_due_on, "
-                    "i.inventory_no LIMIT :lim OFFSET :off",
+    ordnung = sortierung(artikel_sortierung(), sort, richtung,
+                         f"{reihe}, i.next_due_on IS NOT NULL, i.next_due_on, i.inventory_no")
+    rows = db.query(ARTIKEL_LISTE_SQL + where + f" ORDER BY {ordnung} LIMIT :lim OFFSET :off",
                     dict(params, lim=pro_seite, off=(max(1, seite) - 1) * pro_seite))
     liste = []
     for r in rows:

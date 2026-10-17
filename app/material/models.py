@@ -24,10 +24,12 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     der Artikel noch keine Eingangsprüfung – sein Status ist „neu“.
   - mat_inspection.basis_inspection_id (Lieferung 2): Eine Aussonderung, die aus einer Prüfung folgt,
     verweist auf diese; die Prüfart „eingang“ (Eingangsprüfung) kam dazu.
+  - mat_product_document.category_id (Schritt 3): Ein Dokument hängt an einem Produkt oder an einer
+    Kategorie und gilt dann für alle Produkte darin; Art „Pflegehinweis“.
 """
 import sqlite3
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -38,7 +40,10 @@ ORDNERARTEN = {"gliederung": "Gliederung", "standort": "Standort", "fahrzeug": "
 SYSTEMORDNER = {"gesperrt": "Gesperrt", "ausgesondert": "Ausgesondert"}
 DOKUMENTARTEN = {"produktbild": "Produktbild", "konformitaetserklaerung": "Konformitätserklärung",
                  "gebrauchsanleitung": "Gebrauchsanleitung", "pruefanweisung": "Prüfanweisung",
-                 "datenblatt": "Datenblatt", "sonstiges": "Sonstiges"}
+                 "pflegehinweis": "Pflegehinweis", "datenblatt": "Datenblatt", "sonstiges": "Sonstiges"}
+# Die Dokumentarten, mit denen Schritt 1 die Tabelle angelegt hat (Schritt 3 nahm „Pflegehinweis“ dazu).
+DOKUMENTARTEN_1 = ("produktbild", "konformitaetserklaerung", "gebrauchsanleitung", "pruefanweisung", "datenblatt",
+                   "sonstiges")
 EDITOREN = {"yesno": "Ja/Nein", "text": "Text", "date": "Datum", "number": "Zahl", "photo": "Foto",
             "signature": "Unterschrift"}
 SPERRZUSTAENDE = ("frei", "gesperrt", "ausgesondert", "verloren")
@@ -111,7 +116,7 @@ SCHRITT_1 = [
     """CREATE TABLE IF NOT EXISTS mat_product_document (
       id               INTEGER PRIMARY KEY,
       product_id       INTEGER NOT NULL REFERENCES mat_product(id) ON DELETE CASCADE,
-      kind             TEXT NOT NULL CHECK (kind IN """ + _in(DOKUMENTARTEN) + """),
+      kind             TEXT NOT NULL CHECK (kind IN """ + _in(DOKUMENTARTEN_1) + """),
       title            TEXT NOT NULL,
       file_path        TEXT,                        -- Datei unter media/material/dok
       url              TEXT,
@@ -493,20 +498,65 @@ def _schritt_2(conn):
         raise sqlite3.IntegrityError(f"Fremdschlüssel nach dem Umbau verletzt: {sorted(neu_verletzt)[:5]}")
 
 
-def _fk_verletzungen(conn):
-    """Verletzte Fremdschlüssel in den Tabellen, die der Umbau berührt: (Tabelle, Zeile, Ziel)."""
+def _fk_verletzungen(conn, tabellen=("mat_round", "mat_round_item", "mat_inspection", "mat_inspection_result",
+                                     "mat_inspection_attachment")):
+    """Verletzte Fremdschlüssel in den Tabellen, die ein Umbau berührt: (Tabelle, Zeile, Ziel)."""
     out = set()
-    for tabelle in ("mat_round", "mat_round_item", "mat_inspection", "mat_inspection_result",
-                    "mat_inspection_attachment"):
+    for tabelle in tabellen:
         for r in conn.execute(f"PRAGMA foreign_key_check({tabelle})"):
             out.add((r[0], r[1], r[2]))
     return out
 
 
+# --- Schritt 3: Dokumente an Kategorien ----------------------------------------------------------------
+# Ein Dokument hängt an einem Produkt ODER an einer Kategorie; dann gilt es für alle Produkte darin und in
+# ihren Unterkategorien (Pflegehinweise, allgemeine Anleitungen). product_id wird dafür nullbar – auch das
+# geht in SQLite nur mit einer neuen Tabelle. Kennungen kommen wie bei Prüfungen nie wieder.
+DOCUMENT_3 = """CREATE TABLE {name} (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id       INTEGER REFERENCES mat_product(id) ON DELETE CASCADE,
+      category_id      INTEGER REFERENCES mat_category(id) ON DELETE CASCADE,
+      kind             TEXT NOT NULL CHECK (kind IN """ + _in(DOKUMENTARTEN) + """),
+      title            TEXT NOT NULL,
+      file_path        TEXT,                        -- Datei unter media/material/dok
+      url              TEXT,
+      mime             TEXT NOT NULL DEFAULT '',
+      size             INTEGER NOT NULL DEFAULT 0,
+      sha256           TEXT NOT NULL DEFAULT '',
+      version          TEXT NOT NULL DEFAULT '',
+      valid_from       TEXT NOT NULL,               -- 'YYYY-MM-DD'
+      replaces_id      INTEGER REFERENCES mat_product_document(id),   -- Vorgängerversion
+      withdrawn_on     TEXT,                        -- zurückgezogen ab diesem Tag
+      uploaded_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      uploaded_by_name TEXT NOT NULL DEFAULT '',
+      uploaded_at      TEXT NOT NULL,
+      CHECK ((file_path IS NULL) <> (url IS NULL)),
+      CHECK ((product_id IS NULL) <> (category_id IS NULL))
+    )"""
+DOCUMENT_INDIZES = [
+    "CREATE INDEX IF NOT EXISTS idx_mat_document_product ON mat_product_document(product_id)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_document_category ON mat_product_document(category_id)",
+    # Jede Version hat höchstens einen Nachfolger – auch wenn zwei gleichzeitig „Neue Version“ drücken.
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_mat_document_nachfolger ON mat_product_document(replaces_id) "
+    "WHERE replaces_id IS NOT NULL",
+]
+
+
+def _schritt_3(conn):
+    """Dokumente auch an Kategorien (Umbau von mat_product_document, alle Zeilen bleiben) und die Art
+    „Pflegehinweis“."""
+    tabellen = ("mat_product_document",)
+    vorher = _fk_verletzungen(conn, tabellen)
+    _umbauen(conn, "mat_product_document", DOCUMENT_3, DOCUMENT_INDIZES, "document")
+    neu_verletzt = _fk_verletzungen(conn, tabellen) - vorher
+    if neu_verletzt:
+        raise sqlite3.IntegrityError(f"Fremdschlüssel nach dem Umbau verletzt: {sorted(neu_verletzt)[:5]}")
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
-SCHRITTE = {1: SCHRITT_1, 2: _schritt_2}
+SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3}
 
 
 def _meta(conn, schluessel, vorgabe=None):

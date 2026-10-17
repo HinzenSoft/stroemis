@@ -1,4 +1,5 @@
-"""Katalog: Kategorien, Produkte, Produktdokumente und Prüfformulare.
+"""Katalog: Kategorien, Produkte, Dokumente (am Produkt oder für alle Produkte einer Kategorie) und
+Prüfformulare.
 
 Pflegen dürfen ihn nur Admins und Produktkatalogpfleger (routes.py prüft das an jeder Route). Die
 Regeln stehen hier, weil der Katalogimport (importer.py) dieselben braucht wie die Oberfläche.
@@ -9,7 +10,9 @@ Fachliche Grenzen aus dem Konzept:
     Herstellerangabe (Fundstelle).
   - Formulare: je Kategorie ein generisches, je Produkt optional ein spezifisches, das das generische
     ersetzt. Versioniert; eine benutzte Version wird nie mehr geändert, sondern durch eine neue ersetzt.
-  - Fotos und Herstellerdokumente hängen am Produkt, nie am einzelnen Artikel.
+  - Fotos und Herstellerdokumente hängen am Produkt, nie am einzelnen Artikel. Allgemeine Dokumente
+    (Pflegehinweise, Anleitungen) können an einer Kategorie hängen und gelten dann für alle Produkte
+    darin und in ihren Unterkategorien.
 """
 import hashlib
 import os
@@ -32,6 +35,8 @@ LEBENSDAUER_TEXTIL = "Bei textilem Material ist die Lebensdauer Pflicht (Herstel
 LEBENSDAUER_METALL = "Metall und Hardware haben keine festgeschriebene Lebensdauer – das Feld bleibt leer."
 LEBENSDAUER_SONSTIGES = "Bei „sonstiges“ gibt es eine Lebensdauer nur mit Herstellerangabe (Fundstelle angeben)."
 KEIN_INTERVALL = "Kein Prüfintervall: am Produkt angeben oder in der Kategorie als Vorgabe hinterlegen."
+# Ein Prüfpunkt ist oft eine ganze Prüfanweisung („Kontrolle des Zustands der Verriegelungshülse (z. B. …)“).
+PUNKT_TEXT_MAX = 1000
 
 # Herstellerdokumente: PDF und Bilder, unverändert abgelegt. Der Inhalt muss zur Endung passen – eine
 # HTML-Datei mit .pdf-Endung wird nicht angenommen, auch wenn die Medienroute sie ohnehin nur mit
@@ -145,20 +150,30 @@ def kategorie_aendern(kid, d):
 
 
 def kategorie_loeschen(kid):
-    alt = kategorie(kid)
-    if db.query("SELECT 1 FROM mat_category WHERE parent_id = ? LIMIT 1", (kid,), one=True):
-        raise Abgelehnt("Die Kategorie hat Unterkategorien – erst diese verschieben oder löschen.", 409)
-    if db.query("SELECT 1 FROM mat_product WHERE category_id = ? LIMIT 1", (kid,), one=True):
-        raise Abgelehnt("In der Kategorie stehen noch Produkte.", 409)
-    if db.query("SELECT 1 FROM mat_inspection i JOIN mat_form f ON f.id = i.form_id WHERE f.category_id = ? LIMIT 1",
-                (kid,), one=True):
-        raise Abgelehnt("Ein Formular dieser Kategorie wurde schon für Prüfungen benutzt.", 409)
-    with db.transaction():
+    dateien = []
+    with db.transaction(sofort=True):              # prüfen und löschen unter einer Sperre
+        alt = kategorie(kid)
+        if db.query("SELECT 1 FROM mat_category WHERE parent_id = ? LIMIT 1", (kid,), one=True):
+            raise Abgelehnt("Die Kategorie hat Unterkategorien – erst diese verschieben oder löschen.", 409)
+        if db.query("SELECT 1 FROM mat_product WHERE category_id = ? LIMIT 1", (kid,), one=True):
+            raise Abgelehnt("In der Kategorie stehen noch Produkte.", 409)
+        if db.query("SELECT 1 FROM mat_inspection i JOIN mat_form f ON f.id = i.form_id WHERE f.category_id = ? LIMIT 1",
+                    (kid,), one=True):
+            raise Abgelehnt("Ein Formular dieser Kategorie wurde schon für Prüfungen benutzt.", 409)
         for f in db.query("SELECT id FROM mat_form WHERE category_id = ?", (kid,)):
             db.execute("DELETE FROM mat_form WHERE id = ?", (f["id"],))
             journal.eintragen("form", f["id"], "geloescht", {"kategorie": alt["name"]}, None)
+        # Dokumente der Kategorie gehen mit (eine leere Kategorie hat keine Produkte, die sie bräuchten);
+        # ihr Journal bekommt das Ende vermerkt.
+        for dok in db.query("SELECT id, title, file_path FROM mat_product_document WHERE category_id = ?", (kid,)):
+            journal.eintragen("document", dok["id"], "geloescht", {"kategorie": alt["name"], "title": dok["title"]}, None)
+            if dok["file_path"]:
+                dateien.append(dok["file_path"])
+        db.execute("DELETE FROM mat_product_document WHERE category_id = ?", (kid,))
         db.execute("DELETE FROM mat_category WHERE id = ?", (kid,))
         journal.eintragen("category", kid, "geloescht", alt, None)
+    for name in dateien:
+        _entfernen(os.path.join(dok_dir(), name))
 
 
 def kategorien():
@@ -413,6 +428,7 @@ def produkt_json(p, voll=False):
         out["artikel_gesamt"] = db.query("SELECT COUNT(*) AS n FROM mat_item WHERE product_id = ?", (p["id"],),
                                          one=True)["n"]
         out["dokumente"] = dokumente(p["id"])
+        out["kategorie_dokumente"] = geerbte_dokumente(p["id"])
         f = formular_fuer_produkt(p["id"])
         out["formular"] = ({"id": f["id"], "version": f["version"], "title": f["title"], "quelle": f["quelle"],
                             "punkte": f["punkte_anzahl"]} if f else None)
@@ -483,9 +499,16 @@ def _dokument_werte(d, alt=None, datei=None):
     return w
 
 
-def dokument_anlegen(pid, d, datei=None, ersetzt=None):
-    """Ein Dokument am Produkt – oder, mit ersetzt, die neue Version eines vorhandenen."""
-    produkt(pid)
+def dokument_anlegen(pid, d, datei=None, ersetzt=None, kid=None):
+    """Ein Dokument am Produkt pid – oder an der Kategorie kid, dann gilt es für alle Produkte darin und in
+    ihren Unterkategorien. Mit ersetzt: die neue Version eines vorhandenen (am selben Ziel)."""
+    if ersetzt:
+        pid, kid = ersetzt["product_id"], ersetzt["category_id"]
+    if kid:
+        kategorie(kid)
+        pid = None
+    else:
+        produkt(pid)
     w = _dokument_werte(d, ersetzt, datei)
     name = mime = sha = None
     groesse = 0
@@ -498,11 +521,13 @@ def dokument_anlegen(pid, d, datei=None, ersetzt=None):
                                     (ersetzt["id"],), one=True):
                 raise Abgelehnt("Zu diesem Dokument gibt es schon eine neuere Version – bitte diese ersetzen.", 409)
             did = db.execute(
-                "INSERT INTO mat_product_document (product_id, kind, title, file_path, url, mime, size, sha256, version, "
-                "valid_from, replaces_id, uploaded_by, uploaded_by_name, uploaded_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (pid, w["kind"], w["title"], name, w["url"], mime or "", groesse, sha or "", w["version"],
+                "INSERT INTO mat_product_document (product_id, category_id, kind, title, file_path, url, mime, size, sha256, "
+                "version, valid_from, replaces_id, uploaded_by, uploaded_by_name, uploaded_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (pid, kid, w["kind"], w["title"], name, w["url"], mime or "", groesse, sha or "", w["version"],
                  w["valid_from"], ersetzt["id"] if ersetzt else None, uid, uname, db.now()))
-            nachher = dict(w, file_path=name, sha256=sha, size=groesse, product_id=pid)
+            nachher = dict(w, file_path=name, sha256=sha, size=groesse)
+            nachher.update({"category_id": kid} if kid else {"product_id": pid})
             journal.eintragen("document", did, "neue_version" if ersetzt else "angelegt",
                               {"ersetzt": ersetzt["id"]} if ersetzt else None, nachher)
     except BaseException:
@@ -516,7 +541,19 @@ def dokument_neue_version(did, d, datei=None):
     alt = dokument(did)
     if db.query("SELECT 1 FROM mat_product_document WHERE replaces_id = ? LIMIT 1", (did,), one=True):
         raise Abgelehnt("Zu diesem Dokument gibt es schon eine neuere Version – bitte diese ersetzen.", 409)
-    return dokument_anlegen(alt["product_id"], d, datei, ersetzt=alt)
+    return dokument_anlegen(None, d, datei, ersetzt=alt)
+
+
+def dokument_umbenennen(did, d):
+    """Den Namen eines Dokuments ändern – jeder Version, auch einer alten. Datei und Prüfsumme bleiben; ein
+    Protokoll trägt ohnehin den Namen, den das Dokument am Prüftag hatte (documents_json)."""
+    titel = text(d, "title", "Titel", 200, pflicht=True)
+    with db.transaction(sofort=True):
+        alt = dokument(did)
+        if titel == alt["title"]:
+            return
+        db.execute("UPDATE mat_product_document SET title = ? WHERE id = ?", (titel, did))
+        journal.eintragen("document", did, "umbenannt", {"title": alt["title"]}, {"title": titel})
 
 
 def dokument_zurueckziehen(did, d):
@@ -539,12 +576,15 @@ def _gilt(doc, docs, stichtag):
     return not any(n["replaces_id"] == doc["id"] and n["valid_from"] <= stichtag for n in docs)
 
 
-def dokumente(pid, stichtag=None):
+def dokumente(pid=None, stichtag=None, kid=None):
+    """Alle Dokumente (alle Versionen) eines Produkts – oder, mit kid, einer Kategorie."""
     stichtag = stichtag or heute().isoformat()
-    docs = db.query("SELECT * FROM mat_product_document WHERE product_id = ? ORDER BY valid_from DESC, id DESC", (pid,))
+    spalte, ziel = ("category_id", kid) if kid else ("product_id", pid)
+    docs = db.query(f"SELECT * FROM mat_product_document WHERE {spalte} = ? ORDER BY valid_from DESC, id DESC", (ziel,))
     out = []
     for doc in docs:
-        out.append({"id": doc["id"], "kind": doc["kind"], "title": doc["title"], "version": doc["version"],
+        out.append({"id": doc["id"], "product_id": doc["product_id"], "category_id": doc["category_id"],
+                    "kind": doc["kind"], "title": doc["title"], "version": doc["version"],
                     "valid_from": doc["valid_from"], "withdrawn_on": doc["withdrawn_on"], "url": doc["url"],
                     "datei": f"/media/material/dok/{doc['file_path']}" if doc["file_path"] else None,
                     "mime": doc["mime"], "size": doc["size"], "sha256": doc["sha256"],
@@ -555,9 +595,27 @@ def dokumente(pid, stichtag=None):
     return out
 
 
+def dokumente_des(doc):
+    """Die Dokumentliste des Ziels, an dem doc hängt (Produkt oder Kategorie)."""
+    return dokumente(doc["product_id"], kid=doc["category_id"]) if doc["category_id"] else dokumente(doc["product_id"])
+
+
+def geerbte_dokumente(pid, stichtag=None):
+    """Die am Stichtag gültigen Dokumente der Kategorie eines Produkts und ihrer Oberkategorien – sie gelten
+    für das Produkt mit (Pflegehinweise, allgemeine Anleitungen). Jedes trägt seine Herkunft."""
+    p = produkt(pid)
+    out = []
+    for k in kategorie_pfad(p["category_id"]):
+        for d in dokumente(kid=k["id"], stichtag=stichtag):
+            if d["gilt"]:
+                out.append(dict(d, herkunft={"id": k["id"], "name": k["name"]}))
+    return out
+
+
 def gueltige_dokumente(pid, stichtag):
-    """Die am Stichtag gültigen Dokumente – so verweist ein Protokoll auf den damaligen Stand."""
-    return [d for d in dokumente(pid, stichtag) if d["gilt"]]
+    """Die am Stichtag gültigen Dokumente des Produkts samt denen seiner Kategorien – so verweist ein
+    Protokoll auf den damaligen Stand."""
+    return [d for d in dokumente(pid, stichtag) if d["gilt"]] + geerbte_dokumente(pid, stichtag)
 
 
 # --- Prüfformulare ------------------------------------------------------------------------------------
@@ -608,7 +666,7 @@ def punkte_pruefen(roh):
             raise Abgelehnt(f"Prüfpunkt {n}: Kritisch kann nur ein Ja/Nein-Punkt sein – er hat einen Sollwert, "
                             "an dem sich ein Mangel festmachen lässt.")
         out.append({"group_name": text(p, "gruppe", f"Gruppe von Prüfpunkt {n}", 80),
-                    "label": text(p, "text", f"Text von Prüfpunkt {n}", 300, pflicht=True),
+                    "label": text(p, "text", f"Text von Prüfpunkt {n}", PUNKT_TEXT_MAX, pflicht=True),
                     "editor": art, "mandatory": int(wahr(p, "pflicht", f"Pflicht (Prüfpunkt {n})") if "pflicht" in p else 1),
                     "expected_value": soll, "is_critical": int(kritisch), "position": n})
     return out
@@ -749,8 +807,9 @@ def formular_json(f, mit_punkten=True):
     if f["category_id"]:
         out["ziel"] = {"art": "kategorie", "id": f["category_id"], "pfad": kategorie_pfad(f["category_id"])}
     else:
-        p = db.query("SELECT id, manufacturer, model, article_no FROM mat_product WHERE id = ?", (f["product_id"],), one=True)
-        out["ziel"] = {"art": "produkt", "id": f["product_id"],
+        p = db.query("SELECT id, manufacturer, model, article_no, category_id FROM mat_product WHERE id = ?",
+                     (f["product_id"],), one=True)
+        out["ziel"] = {"art": "produkt", "id": f["product_id"], "kategorie_id": p["category_id"] if p else None,
                        "name": f"{p['manufacturer']} {p['model']}" if p else "?"}
     if mit_punkten:
         out["punkte"] = [punkt_json(p) for p in punkte(f["id"])]

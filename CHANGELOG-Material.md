@@ -376,6 +376,27 @@ alle neuen Routen und 33 absichtlich kaputte PDFs – kein 500), Oberfläche (im
 - **Nach dem Deploy auf dev** stehen alle vorhandenen Artikel auf „neu“. Wer die Demo-Zustände sehen will, lässt
   den Demolauf noch einmal laufen (Befehl wie bisher) – er legt die DEMO-Prüfungen einmal an.
 
+### Nachbesserungen nach der Auslieferung (Durchsicht vom 17.10.2026)
+
+- **Prüfpunkte im Formular-Editor** brechen um und wachsen mit dem Text; die Spalte ist breiter, ein Prüfpunkt darf
+  bis 1000 Zeichen lang sein (vorher 300) – auch im Katalogimport (`punkte[].text`).
+- **Katalog mit der Leiste links**: Der Kategorienbaum steht wie der Ordnerbaum in der Leiste (Katalog, Produkt,
+  Formular; markiert, aufklappbar, Produktzahl samt Unterkategorien, am Telefon „☰ Kategorien“). Die gewählte
+  Kategorie steht über der Produktliste mit ihren Angaben und Knöpfen.
+- **Listen**: Produktbilder 25 % größer (40 px), der Hersteller in eigener Spalte, Spalten sortierbar (Klick auf
+  den Kopf, noch einmal: absteigend). Katalog, Ordner, „Prüfungen“ und Suche sortieren auf dem Server – sie kommen
+  seitenweise, eine Sortierung im Browser stimmte nur auf der einen Seite; der Prüfdurchgang sortiert im Browser.
+  „Nächste Prüfung“ stellt neue Artikel (Eingangsprüfung) nach vorn, „Status“ sortiert nach Dringlichkeit, das
+  Intervall im Katalog auch geerbt von der Oberkategorie.
+- **Dokumente umbenennen**: Den Namen eines hochgeladenen Dokuments ändert der Katalogpfleger nachträglich – jeder
+  Version, mit Journaleintrag. Datei, Version und Prüfsumme bleiben; alte Prüfungen zeigen den Namen vom Prüftag.
+- **Dokumente an Kategorien** (Schemaversion 3): Pflegehinweise, allgemeine Anleitungen oder Links lassen sich an
+  eine Kategorie hängen und gelten dann für alle Produkte darin und in den Unterkategorien – am Produkt unter „Aus
+  der Kategorie“, am Artikel bei den Herstellerdokumenten, in einer Prüfung unter den am Prüftag gültigen
+  Dokumenten. Versionen, Zurückziehen und Umbenennen wie am Produkt; neue Art „Pflegehinweis“. Dafür baut der
+  Start `mat_product_document` einmal neu auf (ein Dokument hängt jetzt an einem Produkt ODER an einer Kategorie;
+  alle Zeilen bleiben, Kennungen kommen nie wieder). Eine leere Kategorie lässt sich samt ihren Dokumenten löschen.
+
 ## Katalogdatei (Format 1)
 
 Eine JSON-Datei, UTF-8. Kategorien werden über Namen an ihrer Stelle im Baum gefunden, Produkte über die
@@ -419,6 +440,7 @@ mit seiner Stelle (`produkte[3] (…): …`). `--trocken` prüft nur.
 | `kategorie` | Pfad als Liste von Namen oder als Text „Ober / Unter“ |
 | `formulare[].kategorie` / `.produkt` | generisch je Kategorie oder spezifisch je Produkt (Hersteller, Modell, Artikelnummer) |
 | `aktivieren` | Standard `true`: die Version wird aktiv, eine ältere aktive des Ziels inaktiv |
+| `punkte[].text` | der Prüfpunkt bzw. die Prüfanweisung, höchstens 1000 Zeichen |
 | `punkte[].art` | `yesno`, `text`, `date`, `number`, `photo`, `signature` |
 | `punkte[].soll` | bei `yesno` Pflicht: `ja` oder `nein` (bei Schadensfragen `nein`); bei `text`/`number` optionaler Hinweis |
 | `punkte[].kritisch` | nur bei `yesno`: ein Mangel daran schließt „einsatzbereit“ aus |
@@ -443,6 +465,9 @@ Im Container liegt die Datei im Datenordner:
 | `GET /api/material/artikel/vorschlag` | lesen | Vorschläge (Intervall, nächste Prüfung, Lebensende) vor dem Anlegen |
 | `POST /api/material/artikel`, `GET/PUT/DELETE …/<id>`, `POST /api/material/artikel/verschieben` | lesen / Materialwart | Artikel, auch mehrere auf einmal verschieben |
 | `GET /media/material/<orig|web|thumb|dok|anhang>/<datei>` | lesen | Fotos, Dokumente, Prüfanhänge; privat, strenge CSP |
+| `GET/POST /api/material/kategorien/<id>/dokumente` | lesen / Katalog | Dokumente für alle Produkte einer Kategorie |
+| `PUT /api/material/dokumente/<id>` (`title`) | Katalog | Dokument umbenennen (Produkt- oder Kategoriedokument) |
+| `?sort=<spalte>&richtung=auf|ab` an `produkte`, `ordner/<id>`, `faellig`, `suche` | – | Sortierung: Katalog `hersteller`, `produkt`, `kategorie`, `materialart`, `intervall`, `lebensdauer`, `bestand`; Artikel `inventar`, `hersteller`, `produkt`, `serie`, `faellig`, `status` |
 | `GET/POST /api/material/artikel/<id>/pruefungen` | lesen / Prüfer | Prüfungen eines Artikels; Prüfung beginnen (`art`, `durchgang_id`) – oder den eigenen Entwurf fortsetzen |
 | `GET/PUT/DELETE /api/material/pruefungen/<id>` | lesen / Prüfer / Prüfer oder Materialwart | Prüfung lesen; Art und Bemerkung am Entwurf; Entwurf verwerfen bzw. Reservierung freigeben |
 | `PUT /api/material/pruefungen/<id>/punkte/<pid>`, `POST/DELETE …/foto` | Prüfer (eigener Entwurf) | Befund, Wert, Bemerkung, Foto je Prüfpunkt |

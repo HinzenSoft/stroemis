@@ -32,8 +32,8 @@
   const ORDNERART = { gliederung: "Gliederung", standort: "Standort", fahrzeug: "Fahrzeug", set: "Set",
                       persoenlich: "persönlich", sonstiges: "sonstiges" };
   const DOKART = { produktbild: "Produktbild", konformitaetserklaerung: "Konformitätserklärung",
-                   gebrauchsanleitung: "Gebrauchsanleitung", pruefanweisung: "Prüfanweisung", datenblatt: "Datenblatt",
-                   sonstiges: "Sonstiges" };
+                   gebrauchsanleitung: "Gebrauchsanleitung", pruefanweisung: "Prüfanweisung", pflegehinweis: "Pflegehinweis",
+                   datenblatt: "Datenblatt", sonstiges: "Sonstiges" };
   const EDITOR = { yesno: "Ja/Nein", text: "Text", date: "Datum", number: "Zahl", photo: "Foto", signature: "Unterschrift" };
   // Feldnamen für das Journal – was nicht hier steht, erscheint mit seinem technischen Namen.
   const FELD = {
@@ -62,7 +62,7 @@
                    reservierung_freigegeben: "Reservierung freigegeben", geprueft: "geprüft", freigeprueft: "freigeprüft",
                    gesperrt: "gesperrt", ausgesondert: "ausgesondert", anhang: "Anhang", anhang_entfernt: "Anhang entfernt",
                    eroeffnet: "Durchgang eröffnet", ausgenommen: "ausgenommen", einbezogen: "wieder einbezogen",
-                   geschlossen: "Durchgang abgeschlossen", faelligkeit: "Fälligkeit vorgezogen" };
+                   geschlossen: "Durchgang abgeschlossen", faelligkeit: "Fälligkeit vorgezogen", umbenannt: "umbenannt" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang" };
 
@@ -101,56 +101,89 @@
     aktionen[b.dataset.act](b, e);
   });
 
-  /* --- Ordnerleiste links ---------------------------------------------------------------------
-     Wo Ansicht und Bildschirm Platz haben, steht der Ordnerbaum links: die eigene Ebene markiert, der Weg
-     dorthin aufgeklappt, jeder Ordner einen Klick entfernt. Unter 1200 px ist er eine Schublade hinter
-     „☰ Ordner“ (wie im Wiki). Nicht im Bestand (dort ist der Baum der Inhalt) und nicht im Katalog (der hat
-     seinen Kategorienbaum). Auf- und Zuklappen merkt sich der Browser. */
+  // Ein Textfeld so hoch wie sein Inhalt – lange Prüfanweisungen bleiben ganz lesbar. Ändert sich die Breite
+  // (Fenster, Telefon gedreht), rechnen alle sichtbaren neu.
+  function textHoehe(ta) {
+    ta.style.height = "auto";
+    ta.style.height = `${ta.scrollHeight + ta.offsetHeight - ta.clientHeight}px`;
+  }
+  let hoeheLos = null;
+  window.addEventListener("resize", () => { clearTimeout(hoeheLos); hoeheLos = setTimeout(() => $$("textarea.fp-text").forEach(textHoehe), 150); });
+
+  /* --- Leiste links --------------------------------------------------------------------------------
+     Wo Ansicht und Bildschirm Platz haben, steht links ein Baum: im Bestand der Ordnerbaum, im Katalog
+     (Katalog, Produkt, Formular) der Kategorienbaum. Die eigene Ebene ist markiert, der Weg dorthin
+     aufgeklappt, alles einen Klick entfernt. Unter 1200 px ist die Leiste eine Schublade hinter
+     „☰ Ordner“ bzw. „☰ Kategorien“ (wie im Wiki). Nicht auf der Seite „Bestand“: dort ist der Ordnerbaum
+     selbst der Inhalt. Auf- und Zuklappen merkt sich der Browser, je Baum getrennt. */
+  const KATALOG_ANSICHTEN = new Set(["katalog", "produkt", "formular"]);
   const MIT_LEISTE = new Set(["dashboard", "pruefungen", "ordner", "artikel", "artikel_neu", "suche", "pruefung",
-                              "pruefung_neu", "durchgang"]);
+                              "pruefung_neu", "durchgang", "katalog", "produkt", "formular"]);
+  const LEISTE_KATALOG = KATALOG_ANSICHTEN.has(ANSICHT);
   const leiste = document.getElementById("mat-side");
   const leisteAuf = document.getElementById("mat-side-auf");
-  const KLAPP = "mat-ordner-klapp";
-  let leisteOrdner = null;
-  let leisteAktiv = null;
+  const KLAPP = LEISTE_KATALOG ? "mat-kategorie-klapp" : "mat-ordner-klapp";
+  let leisteDaten = null;              // Ordner oder Kategorien
+  let leisteAktiv = null;              // markierter Ordner bzw. markierte Kategorie
+  let katalogWahl = null;              // setzt der Katalog: Kategorie wählen, ohne die Seite neu zu laden
   const klappLesen = () => { try { return JSON.parse(localStorage.getItem(KLAPP) || "{}") || {}; } catch (e) { return {}; } };
   const klappMerken = (z) => { try { localStorage.setItem(KLAPP, JSON.stringify(z)); } catch (e) { /* privat: dann eben nicht */ } };
 
   function leisteZeichnen() {
-    if (!leisteOrdner) return;
+    if (!leisteDaten) return;
     const ziel = $("#mat-baumnav");
-    if (!leisteOrdner.length) { ziel.innerHTML = leer("Noch keine Ordner."); return; }
-    const kinder = baumKinder(leisteOrdner);
+    if (!leisteDaten.length) { ziel.innerHTML = leer(LEISTE_KATALOG ? "Noch keine Kategorien." : "Noch keine Ordner."); return; }
+    const kinder = baumKinder(leisteDaten);
     const nachId = {};
-    leisteOrdner.forEach((o) => { nachId[o.id] = o; });
+    leisteDaten.forEach((o) => { nachId[o.id] = o; });
     const weg = new Set();
     for (let x = leisteAktiv; x && nachId[x] && !weg.has(x); x = nachId[x].parent_id) weg.add(x);
     const klapp = klappLesen();
-    const zweig = (pid, tiefe) => (kinder[pid] || []).map((o) => {
-      const hat = !!kinder[o.id];
-      const auf = hat && (weg.has(o.id) || (o.id in klapp ? klapp[o.id] : tiefe === 0));
+    // Kategorien zählen die Produkte ihrer Unterkategorien mit – wie die Liste, die ein Klick öffnet.
+    const summe = (id) => (nachId[id].produkte || 0) + (kinder[id] || []).reduce((n, c) => n + summe(c.id), 0);
+    const zeile = (o, hat, auf) => {
+      const aktiv = o.id === leisteAktiv;
+      const knopf = `<button class="tg" type="button" data-klapp="${o.id}" aria-label="${auf ? "zuklappen" : "aufklappen"}" ${hat ? "" : 'tabindex="-1"'}></button>`;
+      const markiert = `class="${aktiv ? "active" : ""}" ${aktiv ? 'aria-current="page"' : ""}`;
+      if (LEISTE_KATALOG) {
+        return `${knopf}<a href="/material/katalog?kategorie=${o.id}" data-kat="${o.id}" ${markiert} title="${esc(o.name)}${o.norm ? ` · ${esc(o.norm)}` : ""}">${esc(o.name)}</a>
+          <span class="mat-side-anzahl" title="Produkte (mit Unterkategorien)">${summe(o.id)}</span>`;
+      }
       const z = o.zaehlung || {};
       const rot = (z.ueberfaellig || 0) + (z.lebensdauer || 0);
       const zahl = o.system_kind ? `<span class="mat-side-anzahl">${Object.values(z).reduce((a, b) => a + b, 0)}</span>`
         : `${rot ? `<span class="mat-zahl s-ueberfaellig" title="überfällig oder Lebensdauer erreicht">${rot}</span>` : ""}${z.neu ? `<span class="mat-zahl s-neu" title="neu – Eingangsprüfung offen">${z.neu}</span>` : ""}`;
+      return `${knopf}<a href="/material/ordner/${o.id}" ${markiert} title="${esc(o.name)}">${o.system_kind ? "🔒 " : ""}${esc(o.name)}</a>${zahl}`;
+    };
+    const zweig = (pid, tiefe) => (kinder[pid] || []).map((o) => {
+      const hat = !!kinder[o.id];
+      const auf = hat && (weg.has(o.id) || (o.id in klapp ? klapp[o.id] : tiefe === 0));
       return `<li class="${hat ? (auf ? "" : "collapsed") : "leaf"}${o.system_kind ? " system" : ""}">
-        <div class="row"><button class="tg" type="button" data-klapp="${o.id}" aria-label="${auf ? "zuklappen" : "aufklappen"}" ${hat ? "" : 'tabindex="-1"'}></button>
-          <a href="/material/ordner/${o.id}" class="${o.id === leisteAktiv ? "active" : ""}" title="${esc(o.name)}" ${o.id === leisteAktiv ? 'aria-current="page"' : ""}>${o.system_kind ? "🔒 " : ""}${esc(o.name)}</a>${zahl}</div>
-        ${hat ? `<ul>${zweig(o.id, tiefe + 1)}</ul>` : ""}</li>`;
+        <div class="row">${zeile(o, hat, auf)}</div>${hat ? `<ul>${zweig(o.id, tiefe + 1)}</ul>` : ""}</li>`;
     }).join("");
-    ziel.innerHTML = `<ul class="tree mat-tree">${zweig(0, 0)}</ul>`;
+    const alle = LEISTE_KATALOG ? `<li class="leaf"><div class="row"><button class="tg" type="button" tabindex="-1" aria-hidden="true"></button>
+      <a href="/material/katalog" data-kat="" class="${ANSICHT === "katalog" && !leisteAktiv ? "active" : ""}">alle Kategorien</a></div></li>` : "";
+    ziel.innerHTML = `<ul class="tree mat-tree">${alle}${zweig(0, 0)}</ul>`;
   }
 
   async function leisteLaden() {
-    if (!leiste || !MIT_LEISTE.has(ANSICHT) || !DARF.lesen) return;
+    if (!leiste || !MIT_LEISTE.has(ANSICHT) || !(DARF.lesen || (LEISTE_KATALOG && DARF.katalog))) return;
     document.getElementById("mat-shell").classList.add("mit-leiste");
     leiste.hidden = false;
-    try { leisteOrdner = (await api(`${API}/ordner`)).ordner; }
+    if (LEISTE_KATALOG) {
+      const kopf = $(".mat-side-kopf a", leiste);
+      kopf.textContent = "Kategorien";
+      kopf.href = "/material/katalog";
+      leiste.setAttribute("aria-label", "Kategorien");
+      if (leisteAuf) leisteAuf.textContent = "☰ Kategorien";
+    }
+    try { leisteDaten = LEISTE_KATALOG ? await kategorienLaden() : (await api(`${API}/ordner`)).ordner; }
     catch (e) { $("#mat-baumnav").innerHTML = `<p class="error">${esc(e.message)}</p>`; return; }
     leisteZeichnen();
   }
-  // Jede Ansicht meldet hier ihren Ordner (Ordner, Artikel, Prüfung, Durchgang) – die Leiste markiert ihn.
-  function leisteMarkieren(fid) { leisteAktiv = fid || null; leisteZeichnen(); }
+  // Jede Ansicht meldet hier ihren Ordner (Ordner, Artikel, Prüfung, Durchgang) bzw. ihre Kategorie (Katalog,
+  // Produkt, Formular) – die Leiste markiert ihn.
+  function leisteMarkieren(id) { leisteAktiv = id || null; leisteZeichnen(); }
   const schublade = window.matchMedia("(max-width: 1199px)");
   // Als Schublade ist die geschlossene Leiste nur aus dem Bild geschoben – „inert“ nimmt sie auch aus der
   // Tab-Reihenfolge und dem Vorlesen. Neben dem Inhalt (breiter Bildschirm) ist sie immer bedienbar.
@@ -165,6 +198,14 @@
   }
   if (leiste) {
     leiste.addEventListener("click", (e) => {
+      // Im Katalog wechselt eine Kategorie ohne Neuladen – Suche und Sortierung bleiben stehen.
+      const kat = e.target.closest("a[data-kat]");
+      if (kat && katalogWahl && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
+        e.preventDefault();
+        katalogWahl(kat.dataset.kat ? +kat.dataset.kat : null);
+        leisteZu();
+        return;
+      }
       const b = e.target.closest("[data-klapp]");
       if (!b) return;
       const li = b.closest("li");
@@ -353,18 +394,35 @@
   }
 
   /* Artikelliste als Tabelle; mit auswahl:true bekommt jede Zeile ein Häkchen (Mehrfachauswahl). */
+  /* Sortierbare Spaltenköpfe. Sortiert wird auf dem Server (die Listen kommen seitenweise); ein Klick sortiert
+     aufsteigend, der nächste auf dieselbe Spalte absteigend. sort = { feld, richtung } oder null. */
+  function sortKopf(titel, feld, sort) {
+    if (!sort) return `<th>${esc(titel)}</th>`;
+    const an = sort.feld === feld;
+    const zustand = an ? (sort.richtung === "ab" ? "descending" : "ascending") : "none";
+    return `<th aria-sort="${zustand}"><button type="button" class="mat-sort${an ? " an" : ""}" data-act="sortieren" data-feld="${feld}"
+      title="nach ${esc(titel)} sortieren">${esc(titel)}<span class="mat-sort-pfeil" aria-hidden="true">${an ? (sort.richtung === "ab" ? "▼" : "▲") : "↕"}</span></button></th>`;
+  }
+  const sortWeiter = (sort, feld) => (sort.feld === feld ? { feld, richtung: sort.richtung === "auf" ? "ab" : "auf" } : { feld, richtung: "auf" });
+  const sortParameter = (q, sort) => { if (sort && sort.feld) { q.set("sort", sort.feld); q.set("richtung", sort.richtung); } return q; };
+  // Ein Produkt in Listen: Hersteller in eigener Spalte, hier Bild, Modell und Artikelnummer.
+  const produktZelle = (a) => `${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${esc(a.model || "")}${a.article_no ? ` <span class="muted">${esc(a.article_no)}</span>` : ""}${demoMarke(a.demo)}`;
+
   function artikelTabelle(liste, opts) {
     opts = opts || {};
+    const s = opts.sort || null;
     return `<table class="list mat-tabelle mat-artikel">
       <thead><tr>${opts.auswahl ? '<th class="mat-wahlspalte"><input type="checkbox" id="mat-alle" aria-label="alle auswählen"></th>' : ""}
-        <th>Inventar-Nr.</th><th>Produkt</th><th>Seriennummer</th>${opts.pfad ? "<th>Ablage</th>" : ""}<th>Nächste Prüfung</th><th>Status</th>${opts.pruefen ? "<th></th>" : ""}</tr></thead>
+        ${sortKopf("Inventar-Nr.", "inventar", s)}${sortKopf("Hersteller", "hersteller", s)}${sortKopf("Produkt", "produkt", s)}${sortKopf("Seriennummer", "serie", s)}
+        ${opts.pfad ? "<th>Ablage</th>" : ""}${sortKopf("Nächste Prüfung", "faellig", s)}${sortKopf("Status", "status", s)}${opts.pruefen ? "<th></th>" : ""}</tr></thead>
       <tbody>${liste.map((a) => `<tr data-id="${a.id}">
         ${opts.auswahl ? `<td class="mat-wahlspalte"><input type="checkbox" class="mat-wahl-art" value="${a.id}" ${a.lock_state !== "frei" ? 'disabled title="Gesperrte und ausgesonderte Artikel bleiben in ihrem Systemordner."' : ""} aria-label="${esc(a.inventory_no)} auswählen"></td>` : ""}
         <td data-l="Inventar-Nr."><a class="mat-inv" href="/material/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a></td>
-        <td data-l="Produkt">${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${esc(produktName(a))}${a.article_no ? ` <span class="muted">${esc(a.article_no)}</span>` : ""}${demoMarke(a.demo)}</td>
+        <td data-l="Hersteller">${esc(a.manufacturer || "")}</td>
+        <td data-l="Produkt">${produktZelle(a)}</td>
         <td data-l="Seriennummer">${esc(a.serial_no)}${a.serial_generated ? ' <span class="muted" title="vom System vergeben">(System)</span>' : ""}</td>
         ${opts.pfad ? `<td data-l="Ablage">${esc(a.pfad || "")}</td>` : ""}
-        <td data-l="Nächste Prüfung">${a.status === "neu" ? '<span class="muted">Eingangsprüfung</span>' : a.status === "ausgesondert" ? '<span class="muted">–</span>' : a.next_due_on ? esc(fmtTag(a.next_due_on)) : '<span class="muted">–</span>'}</td>
+        <td data-l="Nächste Prüfung">${a.status === "neu" ? '<span class="muted">Eingangsprüfung</span>' : a.lock_state !== "frei" ? '<span class="muted">–</span>' : a.next_due_on ? esc(fmtTag(a.next_due_on)) : '<span class="muted">–</span>'}</td>
         <td data-l="Status">${statusMarke(a.status)}${a.entwurf ? `<div class="small muted">in Prüfung bei ${esc(a.entwurf.pruefer || "?")}</div>` : ""}</td>
         ${opts.pruefen ? `<td class="tabelle-aktionen">${pruefKnopf(a)}</td>` : ""}</tr>`).join("")}</tbody></table>`;
   }
@@ -382,16 +440,17 @@
     const params = new URLSearchParams(location.search);
     let filter = params.get("status") || "ueberfaellig,neu,bald_faellig";
     let seite = 1;
+    let sort = { feld: null, richtung: "auf" };
     const FILTER = [["ueberfaellig,neu,bald_faellig", "fällig, überfällig und neu"], ["ueberfaellig", "überfällig"],
                     ["neu", "neu (Eingangsprüfung)"], ["bald_faellig", "bald fällig"], ["lebensdauer", "Lebensdauer erreicht"],
                     ["gesperrt", "gesperrt"]];
     async function liste() {
-      const q = new URLSearchParams({ status: filter, seite, pro_seite: 50 });
+      const q = sortParameter(new URLSearchParams({ status: filter, seite, pro_seite: 50 }), sort);
       if (DATEN.ordner) q.set("ordner", DATEN.ordner);
       const d = await api(`${API}/faellig?${q}`);
       $("#pr-liste").innerHTML = `<p class="help">Überfällig, neu (die Eingangsprüfung steht aus) oder in den nächsten ${d.schwelle_tage} Tagen fällig. Prüfen lässt sich jeder Artikel aber jederzeit – auch aus seiner Ansicht.</p>
         <div class="c-tabs mat-filter">${FILTER.map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}</button>`).join("")}</div>
-        ${d.artikel.length ? artikelTabelle(d.artikel, { pfad: true, pruefen: DARF.pruefen }) : leer("Keine Artikel in dieser Auswahl.")}
+        ${d.artikel.length ? artikelTabelle(d.artikel, { pfad: true, pruefen: DARF.pruefen, sort }) : leer("Keine Artikel in dieser Auswahl.")}
         ${seitenleiste(d.gesamt, seite, 50)}`;
     }
     async function offene() {
@@ -417,6 +476,7 @@
     aktionen = {
       filter: (b) => { filter = b.dataset.f; seite = 1; history.replaceState(null, "", `?status=${filter}`); zeigenIn(liste, "#pr-liste"); },
       seite: (b) => { seite = +b.dataset.seite; zeigenIn(liste, "#pr-liste"); },
+      sortieren: (b) => { sort = sortWeiter(sort, b.dataset.feld); seite = 1; zeigenIn(liste, "#pr-liste"); },
       freigeben: (b) => reservierungFreigeben(+b.dataset.id, b.dataset.wer, () => Promise.all([zeigenIn(offene, "#pr-offen"), zeigenIn(liste, "#pr-liste")])),
       runde: () => rundeDialog(DATEN.ordner || null),
     };
@@ -506,8 +566,9 @@
     const id = DATEN.id;
     let filter = "";
     let seite = 1;
+    let sort = { feld: null, richtung: "auf" };
     async function zeichnen() {
-      const q = new URLSearchParams({ seite, pro_seite: 200 });
+      const q = sortParameter(new URLSearchParams({ seite, pro_seite: 200 }), sort);
       if (filter) q.set("status", filter);
       const d = (await api(`${API}/ordner/${id}?${q}`)).ordner;
       leisteMarkieren(d.id);
@@ -530,7 +591,7 @@
         ${d.unterordner.length ? `<section class="section"><h2>Unterordner</h2>${unterordnerHtml(d.unterordner)}</section>` : ""}
         <section class="section"><h2>Artikel in diesem Ordner</h2>
           <div class="c-tabs mat-filter">${["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"].map((s) => `<button type="button" data-act="filter" data-f="${s}" class="${s === filter ? "sel" : ""}">${s ? esc(STATUS[s]) : "alle"}${s && d.direkt && d.direkt[s] ? ` (${d.direkt[s]})` : ""}</button>`).join("")}</div>
-          ${d.artikel.length ? artikelTabelle(d.artikel, { auswahl: darfPflegen, pruefen: DARF.pruefen && d.system_kind !== "ausgesondert" }) : leer(filter ? "Keine Artikel mit diesem Status." : "Hier liegen keine Artikel.")}
+          ${d.artikel.length ? artikelTabelle(d.artikel, { auswahl: darfPflegen, pruefen: DARF.pruefen && d.system_kind !== "ausgesondert", sort }) : leer(filter ? "Keine Artikel mit diesem Status." : "Hier liegen keine Artikel.")}
           ${seitenleiste(d.artikel_gesamt, seite, d.pro_seite)}
           ${darfPflegen ? '<div class="mat-sammel" id="mat-sammel" hidden><span id="mat-sammel-n"></span><button class="btn small" data-act="sammel-verschieben">Verschieben nach …</button></div>' : ""}
         </section>
@@ -548,6 +609,7 @@
       aktionen = {
         filter: (b) => { filter = b.dataset.f; seite = 1; zeigen(zeichnen); },
         seite: (b) => { seite = +b.dataset.seite; zeigen(zeichnen); },
+        sortieren: (b) => { sort = sortWeiter(sort, b.dataset.feld); seite = 1; zeigen(zeichnen); },
         unterordner: () => ordnerDialog({ kind: "standort" }, d.id),
         runde: () => rundeDialog(d.id),
         bearbeiten: () => ordnerDialog(d, d.parent_id),
@@ -664,7 +726,7 @@
           <div class="mat-qr"><input type="text" readonly value="${esc(a.qr_adresse)}" id="mat-qr" aria-label="Adresse für QR, NFC und RFID">
           <button class="btn secondary small" data-act="qr-kopieren">Kopieren</button></div>
           <h2>Herstellerdokumente</h2>
-          ${a.dokumente.length ? `<ul class="mat-doks">${a.dokumente.map((d) => `<li><a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a> <span class="muted">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}</span></li>`).join("")}</ul>` : leer("Am Produkt sind keine Dokumente hinterlegt.")}
+          ${a.dokumente.length ? `<ul class="mat-doks">${a.dokumente.map((d) => `<li><a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a> <span class="muted">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}${d.herkunft ? ` · für die Kategorie ${esc(d.herkunft.name)}` : ""}</span></li>`).join("")}</ul>` : leer("Am Produkt und seiner Kategorie sind keine Dokumente hinterlegt.")}
         </section>
       </div>
       <section class="section"><h2>Prüfungen</h2>${pruefListe(a.pruefungen)}</section>
@@ -892,22 +954,16 @@
     let kategorie = DATEN.kategorie || null;
     let q = "";
     let seite = 1;
+    let sort = { feld: null, richtung: "auf" };
     const kats = await kategorienLaden();
-    function katBaum() {
-      const kinder = {};
-      kats.forEach((k) => { (kinder[k.parent_id || 0] = kinder[k.parent_id || 0] || []).push(k); });
-      const zweig = (pid) => (kinder[pid] || []).map((k) => `<li><a href="#" data-act="kategorie" data-id="${k.id}" class="${k.id === kategorie ? "aktiv" : ""}">${esc(k.name)}</a>
-          ${k.norm ? `<span class="muted small">${esc(k.norm)}</span>` : ""}${demoMarke(k.demo)}
-          ${k.aktives_formular ? `<a class="mat-formmarke" href="/material/katalog/formular/${k.aktives_formular}" title="aktives generisches Prüfformular">Formular</a>` : ""}
-          ${kinder[k.id] ? `<ul>${zweig(k.id)}</ul>` : ""}</li>`).join("");
-      return `<ul class="mat-baum mat-katbaum"><li><a href="#" data-act="kategorie" data-id="" class="${kategorie ? "" : "aktiv"}">alle Kategorien</a></li>${zweig(0)}</ul>`;
-    }
     async function liste() {
-      const p = new URLSearchParams({ q, seite, pro_seite: 25 });
+      const p = sortParameter(new URLSearchParams({ q, seite, pro_seite: 25 }), sort);
       if (kategorie) p.set("kategorie", kategorie);
       const d = await api(`${API}/produkte?${p}`);
-      $("#kat-liste").innerHTML = d.produkte.length ? `<table class="list mat-tabelle"><thead><tr><th>Produkt</th><th>Kategorie</th><th>Materialart</th><th>Intervall</th><th>Lebensdauer</th><th>Bestand</th></tr></thead><tbody>
-        ${d.produkte.map((x) => `<tr><td data-l="Produkt">${x.vorschau ? `<img class="mat-mini" src="${esc(x.vorschau)}" alt="" loading="lazy">` : ""}<a href="/material/katalog/produkt/${x.id}"><strong>${esc(produktName(x))}</strong></a>${x.article_no ? ` <span class="muted">${esc(x.article_no)}</span>` : ""}${demoMarke(x.demo)}</td>
+      const s = sort;
+      $("#kat-liste").innerHTML = d.produkte.length ? `<table class="list mat-tabelle"><thead><tr>${sortKopf("Hersteller", "hersteller", s)}${sortKopf("Produkt", "produkt", s)}${sortKopf("Kategorie", "kategorie", s)}${sortKopf("Materialart", "materialart", s)}${sortKopf("Intervall", "intervall", s)}${sortKopf("Lebensdauer", "lebensdauer", s)}${sortKopf("Bestand", "bestand", s)}</tr></thead><tbody>
+        ${d.produkte.map((x) => `<tr><td data-l="Hersteller">${esc(x.manufacturer || "")}</td>
+          <td data-l="Produkt">${x.vorschau ? `<img class="mat-mini" src="${esc(x.vorschau)}" alt="" loading="lazy">` : ""}<a href="/material/katalog/produkt/${x.id}"><strong>${esc(x.model || "")}</strong></a>${x.article_no ? ` <span class="muted">${esc(x.article_no)}</span>` : ""}${demoMarke(x.demo)}</td>
           <td data-l="Kategorie">${esc(x.category_name || "")}</td><td data-l="Materialart">${esc(MATERIALART[x.material_kind])}</td>
           <td data-l="Intervall">${x.intervall.monate ? `${x.intervall.monate} Mon.` : "–"}</td>
           <td data-l="Lebensdauer">${x.lifetime_years ? `${x.lifetime_years} J.` : "–"}</td><td data-l="Bestand">${x.bestand}</td></tr>`).join("")}</tbody></table>${seitenleiste(d.gesamt, seite, 25)}`
@@ -915,23 +971,43 @@
     }
     function zeichnen() {
       const k = kats.find((x) => x.id === kategorie);
+      const pfad = [];
+      for (let x = k; x; x = kats.find((y) => y.id === x.parent_id)) pfad.unshift(x);
+      leisteMarkieren(kategorie);
+      // Produkte samt Unterkategorien – dieselbe Zahl wie in der Leiste und wie die Liste darunter.
+      const summe = (id) => (kats.find((x) => x.id === id).produkte || 0) + kats.filter((x) => x.parent_id === id).reduce((n, c) => n + summe(c.id), 0);
+      const angaben = k ? [k.norm ? esc(k.norm) : "", k.default_material_kind ? `Materialart ${esc(MATERIALART[k.default_material_kind])}` : "",
+        k.default_interval_months ? `Prüfintervall ${k.default_interval_months} Monate` : "", plural(summe(k.id), "Produkt", "Produkte")].filter(Boolean).join(" · ") : "";
       inhalt.innerHTML = `<div class="page-head"><h1>Katalog</h1>
           <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu">+ Kategorie</button><button class="btn" data-act="produkt-neu">+ Produkt</button>' : ""}</div></div>
-        <div class="mat-katalog">
-          <aside><h2>Kategorien</h2>${kats.length ? katBaum() : leer("Noch keine Kategorien.")}
-            ${k && DARF.katalog ? `<div class="btn-row mat-katknoepfe"><button class="btn ghost small" data-act="kat-bearbeiten">Kategorie bearbeiten</button>
+        ${k ? `<div class="mat-katkopf">
+            <div class="mat-pfad"><a href="/material/katalog" data-act="kategorie" data-id="">alle Kategorien</a>${pfad.slice(0, -1).map((x) => ` / <a href="/material/katalog?kategorie=${x.id}" data-act="kategorie" data-id="${x.id}">${esc(x.name)}</a>`).join("")}</div>
+            <h2>${esc(k.name)} ${demoMarke(k.demo)}</h2>
+            <p class="small">${angaben}${k.aktives_formular ? ` · <a href="/material/katalog/formular/${k.aktives_formular}">generisches Prüfformular</a>` : ' · <span class="muted">kein aktives generisches Prüfformular</span>'}</p>
+            ${DARF.katalog ? `<div class="btn-row"><button class="btn ghost small" data-act="kat-bearbeiten">Kategorie bearbeiten</button>
               <button class="btn ghost small" data-act="kat-formular">Generisches Formular</button><button class="btn ghost small" data-act="kat-loeschen">Löschen</button></div>` : ""}
-            ${k && !DARF.katalog && k.aktives_formular ? `<p><a href="/material/katalog/formular/${k.aktives_formular}">Generisches Formular ansehen</a></p>` : ""}</aside>
-          <div><input type="search" id="kat-q" placeholder="Produkte suchen: Hersteller, Modell, Artikelnummer, Norm" value="${esc(q)}" autocomplete="off">
-            <div id="kat-liste"></div></div>
-        </div>`;
+            <div class="mat-katdoks"><h3 class="mat-unter">Dokumente für alle Produkte dieser Kategorie</h3>
+              <p class="help">Pflegehinweise, allgemeine Anleitungen … – sie gelten für jedes Produkt hier und in den Unterkategorien und stehen dort bei den Herstellerdokumenten.</p>
+              <div id="kat-doks"><p class="help">Wird geladen …</p></div>
+              ${DARF.katalog ? '<button class="btn secondary small" data-act="dok-neu">+ Dokument</button>' : ""}</div></div>`
+          : (kats.length ? "" : leer(DARF.katalog ? "Noch keine Kategorien – mit „+ Kategorie“ anlegen." : "Noch keine Kategorien."))}
+        <input type="search" id="kat-q" placeholder="Produkte suchen: Hersteller, Modell, Artikelnummer, Norm" value="${esc(q)}" autocomplete="off">
+        <div id="kat-liste"></div>`;
       let los = null;
       $("#kat-q").addEventListener("input", (e) => { clearTimeout(los); los = setTimeout(() => { q = e.target.value.trim(); seite = 1; zeigen(liste); }, 250); });
       zeigen(liste);
+      if (k) zeigenIn(katDoks, "#kat-doks");
+    }
+    let katDocs = [];
+    async function katDoks() {
+      katDocs = (await api(`${API}/kategorien/${kategorie}/dokumente`)).dokumente;
+      const ziel = $("#kat-doks");
+      if (ziel) ziel.innerHTML = katDocs.length ? dokTabelle(katDocs, DARF.katalog) : leer("Noch keine Dokumente an dieser Kategorie.");
     }
     aktionen = {
-      kategorie: (b) => { kategorie = b.dataset.id ? +b.dataset.id : null; seite = 1; history.replaceState(null, "", kategorie ? `?kategorie=${kategorie}` : location.pathname); zeichnen(); },
+      kategorie: (b) => katalogWahl(b.dataset.id ? +b.dataset.id : null),
       seite: (b) => { seite = +b.dataset.seite; zeigen(liste); },
+      sortieren: (b) => { sort = sortWeiter(sort, b.dataset.feld); seite = 1; zeigen(liste); },
       "kat-neu": () => kategorieDialog({ parent_id: kategorie }),
       "kat-bearbeiten": () => kategorieDialog(kats.find((x) => x.id === kategorie)),
       "kat-loeschen": async () => {
@@ -941,6 +1017,13 @@
       },
       "kat-formular": () => formularFuer({ kategorie_id: kategorie }),
       "produkt-neu": () => produktDialog({ category_id: kategorie }),
+      ...dokAktionen(() => katDocs, () => `${API}/kategorien/${kategorie}/dokumente`, () => zeigenIn(katDoks, "#kat-doks")),
+    };
+    katalogWahl = (id) => {
+      kategorie = id;
+      seite = 1;
+      history.replaceState(null, "", kategorie ? `?kategorie=${kategorie}` : location.pathname);
+      zeichnen();
     };
     zeichnen();
   }
@@ -1036,17 +1119,57 @@
     });
   }
 
-  /* --- Produkt ------------------------------------------------------------------------------------- */
-  async function produkt() {
-    const p = (await api(`${API}/produkte/${DATEN.id}`)).produkt;
-    const k = DARF.katalog;
-    const zeile = (t, w) => `<dt>${esc(t)}</dt><dd>${w}</dd>`;
-    const dokZeile = (d) => `<tr class="${d.gilt ? "" : "mat-alt"}"><td data-l="Dokument"><a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>
+  /* --- Dokumente: am Produkt oder an einer Kategorie (gelten dann für alle Produkte darin) ------------ */
+  function dokZeile(d, k) {
+    return `<tr class="${d.gilt ? "" : "mat-alt"}"><td data-l="Dokument"><a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>
         <div class="small muted">${esc(DOKART[d.kind] || d.kind)}${d.datei ? ` · ${esc(groesse(d.size))}` : " · Link"}</div></td>
       <td data-l="Version">${esc(d.version || "–")}</td><td data-l="Gültig ab">${esc(fmtTag(d.valid_from))}</td>
       <td data-l="Stand">${d.gilt ? '<span class="mat-status s-einsatzbereit">gilt</span>' : d.withdrawn_on ? `zurückgezogen ${esc(fmtTag(d.withdrawn_on))}` : d.abgeloest_durch ? "abgelöst" : "noch nicht gültig"}
         ${d.sha256 ? `<div class="small muted mat-hash" title="SHA-256 ${esc(d.sha256)}">${esc(d.sha256.slice(0, 12))}…</div>` : ""}</td>
-      <td>${k && !d.abgeloest_durch && !d.withdrawn_on ? `<div class="btn-row"><button class="btn ghost small" data-act="dok-version" data-id="${d.id}">Neue Version</button><button class="btn ghost small" data-act="dok-zurueck" data-id="${d.id}">Zurückziehen</button></div>` : ""}</td></tr>`;
+      <td>${k ? `<div class="btn-row"><button class="btn ghost small" data-act="dok-name" data-id="${d.id}">Umbenennen</button>${!d.abgeloest_durch && !d.withdrawn_on ? `<button class="btn ghost small" data-act="dok-version" data-id="${d.id}">Neue Version</button><button class="btn ghost small" data-act="dok-zurueck" data-id="${d.id}">Zurückziehen</button>` : ""}</div>` : ""}</td></tr>`;
+  }
+  const dokTabelle = (docs, k) => `<table class="list mat-tabelle"><thead><tr><th>Dokument</th><th>Version</th><th>Gültig ab</th><th>Stand</th><th></th></tr></thead><tbody>${docs.map((d) => dokZeile(d, k)).join("")}</tbody></table>`;
+
+  // Umbenennen, neue Version, zurückziehen – für Produkt- und Kategoriedokumente gleich; danach neu zeichnen.
+  function dokAktionen(docs, neuUrl, danach) {
+    return {
+      "dok-neu": () => dokumentDialog(typeof neuUrl === "function" ? neuUrl() : neuUrl, null, danach),
+      "dok-version": (b) => dokumentDialog(`${API}/dokumente/${b.dataset.id}/version`, docs().find((d) => d.id === +b.dataset.id), danach),
+      "dok-zurueck": async (b) => {
+        const d = docs().find((x) => x.id === +b.dataset.id);
+        if (!(await confirm(`„${d.title}“ ab heute zurückziehen? Es bleibt in der Liste und in alten Protokollen sichtbar.`, "Zurückziehen"))) return;
+        try { await api(`${API}/dokumente/${d.id}/zurueckziehen`, { method: "POST", body: {} }); toast("Zurückgezogen"); await danach(); } catch (e) { toast(e.message, true); }
+      },
+      "dok-name": (b) => {
+        const d = docs().find((x) => x.id === +b.dataset.id);
+        dialog(`<h2>Dokument umbenennen</h2>
+          <p class="help">Nur der Name ändert sich – Datei, Version und Prüfsumme bleiben. Alte Protokolle zeigen den Namen vom Prüftag.</p>
+          <label for="dn-titel">Name</label><input type="text" id="dn-titel" maxlength="200" value="${esc(d.title)}">
+          <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="dn-ok" type="button">Speichern</button></div>`,
+        (dlg, body) => {
+          const feld = $("#dn-titel", body);
+          fokus(feld);
+          if (feld.select && !window.matchMedia("(pointer: coarse)").matches) feld.select();
+          const speichern = async (ev) => {
+            if (ev) ev.preventDefault();
+            const knopf = $("#dn-ok", body);
+            knopf.disabled = true;
+            try { await api(`${API}/dokumente/${d.id}`, { method: "PUT", body: { title: feld.value } }); dlg.close(); toast("Umbenannt"); await danach(); }
+            catch (e) { toast(e.message, true); knopf.disabled = false; }
+          };
+          $("#dn-ok", body).onclick = () => speichern();
+          feld.addEventListener("keydown", (e) => { if (e.key === "Enter") speichern(e); });
+        });
+      },
+    };
+  }
+
+  /* --- Produkt ------------------------------------------------------------------------------------- */
+  async function produkt() {
+    const p = (await api(`${API}/produkte/${DATEN.id}`)).produkt;
+    leisteMarkieren(p.category_id);
+    const k = DARF.katalog;
+    const zeile = (t, w) => `<dt>${esc(t)}</dt><dd>${w}</dd>`;
     const formulare = p.formulare || [];
     inhalt.innerHTML = `${p.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen.</p>' : ""}
       <div class="mat-pfad"><a href="/material/katalog">Katalog</a> / ${p.kategorie_pfad.map((x) => `<a href="/material/katalog?kategorie=${x.id}">${esc(x.name)}</a>`).join(" / ")}</div>
@@ -1073,8 +1196,11 @@
       </div>
       <section class="section"><h2>Herstellerdokumente</h2>
         <p class="help">Gelten für alle Artikel dieses Produkts. Ein Protokoll verweist auf die Version, die am Prüftag galt.</p>
-        ${p.dokumente.length ? `<table class="list mat-tabelle"><thead><tr><th>Dokument</th><th>Version</th><th>Gültig ab</th><th>Stand</th><th></th></tr></thead><tbody>${p.dokumente.map(dokZeile).join("")}</tbody></table>` : leer("Noch keine Dokumente.")}
+        ${p.dokumente.length ? dokTabelle(p.dokumente, k) : leer("Noch keine Dokumente am Produkt.")}
         ${k ? '<button class="btn secondary small" data-act="dok-neu">+ Dokument</button>' : ""}
+        ${p.kategorie_dokumente.length ? `<h3 class="mat-unter">Aus der Kategorie – gelten für alle Produkte darin</h3>
+          <ul class="mat-doks">${p.kategorie_dokumente.map((d) => `<li><a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>
+            <span class="muted small">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""} · <a href="/material/katalog?kategorie=${d.herkunft.id}">${esc(d.herkunft.name)}</a></span></li>`).join("")}</ul>` : ""}
       </section>
       <section class="section"><h2>Journal</h2>${journalHtml(p.journal, true)}</section>`;
     aktionen = {
@@ -1085,18 +1211,12 @@
         try { await api(`${API}/produkte/${p.id}`, { method: "DELETE" }); location.href = "/material/katalog"; } catch (e) { toast(e.message, true); }
       },
       formular: () => formularFuer({ produkt_id: p.id }),
-      "dok-neu": () => dokumentDialog(`${API}/produkte/${p.id}/dokumente`, null),
-      "dok-version": (b) => dokumentDialog(`${API}/dokumente/${b.dataset.id}/version`, p.dokumente.find((d) => d.id === +b.dataset.id)),
-      "dok-zurueck": async (b) => {
-        const d = p.dokumente.find((x) => x.id === +b.dataset.id);
-        if (!(await confirm(`„${d.title}“ ab heute zurückziehen? Es bleibt in der Liste und in alten Protokollen sichtbar.`, "Zurückziehen"))) return;
-        try { await api(`${API}/dokumente/${d.id}/zurueckziehen`, { method: "POST", body: {} }); toast("Zurückgezogen"); zeigen(produkt); } catch (e) { toast(e.message, true); }
-      },
+      ...dokAktionen(() => p.dokumente, `${API}/produkte/${p.id}/dokumente`, () => zeigen(produkt)),
     };
   }
 
-  function dokumentDialog(url, alt) {
-    dialog(`<h2>${alt ? `Neue Version von „${esc(alt.title)}“` : "Herstellerdokument hinzufügen"}</h2>
+  function dokumentDialog(url, alt, danach) {
+    dialog(`<h2>${alt ? `Neue Version von „${esc(alt.title)}“` : "Dokument hinzufügen"}</h2>
       ${alt ? "" : `<label for="dd-kind">Art</label><select id="dd-kind">${Object.entries(DOKART).map(([w, t]) => `<option value="${w}">${esc(t)}</option>`).join("")}</select>`}
       <label for="dd-title">Titel</label><input type="text" id="dd-title" value="${esc(alt ? alt.title : "")}" maxlength="200" placeholder="leer = Dateiname">
       <div class="field-row"><div><label for="dd-ver">Versionsstand</label><input type="text" id="dd-ver" maxlength="40" placeholder="z. B. 03/2024"></div>
@@ -1120,7 +1240,7 @@
           } else {
             await api(url, { method: "POST", body: Object.assign(felder, { url: $("#dd-url", body).value, valid_from: felder.valid_from || null }) });
           }
-          dlg.close(); toast("Dokument gespeichert"); zeigen(produkt);
+          dlg.close(); toast("Dokument gespeichert"); await (danach ? danach() : zeigen(produkt));
         } catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
     });
@@ -1130,6 +1250,7 @@
   async function formular() {
     const d = await api(`${API}/formulare/${DATEN.id}`);
     const f = d.formular;
+    leisteMarkieren(f.ziel.art === "kategorie" ? f.ziel.id : f.ziel.kategorie_id);
     const bearbeitbar = DARF.katalog && f.aenderbar;
     let punkte = f.punkte.map((p) => Object.assign({}, p));
     const zielText = f.ziel.art === "kategorie" ? `Kategorie ${f.ziel.pfad.map((x) => x.name).join(" / ")} (generisch)` : `Produkt ${f.ziel.name} (spezifisch)`;
@@ -1140,7 +1261,7 @@
           <td data-l="Soll">${esc(p.soll || "–")}</td><td>${p.pflicht ? "Pflicht" : "optional"}${p.kritisch ? ' · <strong class="mat-warn">kritisch</strong>' : ""}</td></tr>`;
       }
       return `<tr data-i="${i}"><td data-l="Gruppe"><input type="text" class="fp-gruppe" value="${esc(p.gruppe || "")}" maxlength="80"></td>
-        <td data-l="Prüfpunkt"><input type="text" class="fp-text" value="${esc(p.text || "")}" maxlength="300"></td>
+        <td data-l="Prüfpunkt"><textarea class="fp-text" rows="1" maxlength="1000" aria-label="Prüfpunkt">${esc(p.text || "")}</textarea></td>
         <td data-l="Art"><select class="fp-art">${Object.entries(EDITOR).map(([w, t]) => `<option value="${w}" ${p.art === w ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></td>
         <td data-l="Soll">${p.art === "yesno" ? `<select class="fp-soll"><option value="">–</option><option value="ja" ${p.soll === "ja" ? "selected" : ""}>ja</option><option value="nein" ${p.soll === "nein" ? "selected" : ""}>nein</option></select>`
           : p.art === "text" || p.art === "number" ? `<input type="text" class="fp-soll" value="${esc(p.soll || "")}" maxlength="60" placeholder="optional">` : '<span class="muted">–</span>'}</td>
@@ -1165,10 +1286,10 @@
             <button class="btn secondary small" data-act="neue-version">Neue Version</button>${!f.aktiv && !f.benutzt ? '<button class="btn ghost small" data-act="loeschen">Löschen</button>' : ""}` : ""}</div></div>
         <p class="help">${esc(zielText)}. ${f.gueltig_ab ? `Gültig ab ${esc(fmtTag(f.gueltig_ab))}.` : "Noch nie aktiviert."}
           ${f.benutzt ? " Diese Version wurde schon für Prüfungen benutzt und bleibt unverändert – Änderungen gehen über eine neue Version." : ""}
-          Alle Prüfpunkte werden bei der Prüfung mit ihrem Sollwert vorbelegt; ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus.</p>
+          Bei der Prüfung ist jeder Befund mit „in Ordnung“ vorbelegt, Ja/Nein-Punkte mit ihrem Sollwert; bei Text und Zahl ist das Soll ein Hinweis für den Prüfer. Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus.</p>
         ${bearbeitbar ? `<label for="fp-titel">Titel</label><input type="text" id="fp-titel" value="${esc(f.titel || "")}" maxlength="160">` : ""}
         <table class="list mat-tabelle mat-formtabelle" id="fp-tabelle">
-          <colgroup><col style="width:16%"><col style="width:38%"><col style="width:13%"><col style="width:12%"><col style="width:21%"></colgroup><thead><tr><th>Gruppe</th><th>Prüfpunkt</th><th>Art</th><th>Soll</th><th></th></tr></thead>
+          <colgroup><col style="width:13%"><col style="width:48%"><col style="width:12%"><col style="width:11%"><col style="width:16%"></colgroup><thead><tr><th>Gruppe</th><th>Prüfpunkt</th><th>Art</th><th>Soll</th><th></th></tr></thead>
           <tbody>${punkte.map(punktZeile).join("")}</tbody></table>
         ${!punkte.length ? leer("Noch keine Prüfpunkte.") : ""}
         ${bearbeitbar ? '<div class="btn-row mat-knoepfe"><button class="btn secondary" data-act="punkt-neu">+ Prüfpunkt</button><button class="btn" data-act="speichern">Speichern</button></div>' : ""}
@@ -1176,6 +1297,12 @@
           ${v.aktiv ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : ""}${v.benutzt ? ' <span class="badge grey">benutzt</span>' : ""} <span class="muted">${esc(v.titel || "")} · ${plural(v.punkte_anzahl, "Prüfpunkt", "Prüfpunkte")}</span></li>`).join("")}</ul></section>
         <details class="section mat-auf"><summary>Journal</summary>${journalHtml(f.journal)}</details>`;
       $$(".fp-art", inhalt).forEach((s) => s.addEventListener("change", () => { einsammeln(); zeichnen(); }));
+      $$(".fp-text", inhalt).forEach((ta) => {
+        textHoehe(ta);
+        ta.addEventListener("input", () => textHoehe(ta));
+        // Ein Prüfpunkt ist eine Zeile Text, die nur umbricht – Enter fügt keinen Absatz ein.
+        ta.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
+      });
     }
     async function speichern() {
       einsammeln();
@@ -1208,14 +1335,19 @@
   /* --- Suche -------------------------------------------------------------------------------------------- */
   async function suche() {
     let seite = 1;
+    let sort = { feld: null, richtung: "auf" };
     async function zeichnen() {
       const q = DATEN.q || "";
       if (!q) { inhalt.innerHTML = `<h1>Suche</h1>${leer("Serien-, Inventar- oder Herstellernummer oben eingeben – auch Teile davon.")}`; return; }
-      const d = await api(`${API}/suche?q=${encodeURIComponent(q)}&seite=${seite}&pro_seite=50`);
+      const p = sortParameter(new URLSearchParams({ q, seite, pro_seite: 50 }), sort);
+      const d = await api(`${API}/suche?${p}`);
       inhalt.innerHTML = `<div class="page-head"><h1>Suche „${esc(q)}“</h1></div>
-        ${d.treffer.length ? artikelTabelle(d.treffer, { pfad: true }) : leer("Kein Artikel gefunden.")}${seitenleiste(d.gesamt, seite, 50)}`;
+        ${d.treffer.length ? artikelTabelle(d.treffer, { pfad: true, sort }) : leer("Kein Artikel gefunden.")}${seitenleiste(d.gesamt, seite, 50)}`;
     }
-    aktionen = { seite: (b) => { seite = +b.dataset.seite; zeigen(zeichnen); } };
+    aktionen = {
+      seite: (b) => { seite = +b.dataset.seite; zeigen(zeichnen); },
+      sortieren: (b) => { sort = sortWeiter(sort, b.dataset.feld); seite = 1; zeigen(zeichnen); },
+    };
     await zeichnen();
   }
 
@@ -1449,7 +1581,7 @@
       return `${ergebnisBox}
         ${pr.punkte.length ? `<section class="section"><h2>Befunde</h2><table class="list mat-tabelle mat-befunde"><thead><tr><th>Prüfpunkt</th><th>Befund</th><th>Wert</th><th>Bemerkung</th><th>Foto</th></tr></thead><tbody>${zeilen}</tbody></table></section>` : ""}
         ${pr.art !== "aussonderung" ? anhaengeHtml() : ""}
-        ${pr.dokumente.length ? `<section class="section"><h2>Herstellerdokumente am Prüftag</h2><ul class="mat-doks">${pr.dokumente.map((d) => `<li>${esc(d.title)} <span class="muted small">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}</span></li>`).join("")}</ul></section>` : ""}`;
+        ${pr.dokumente.length ? `<section class="section"><h2>Herstellerdokumente am Prüftag</h2><ul class="mat-doks">${pr.dokumente.map((d) => `<li>${esc(d.title)} <span class="muted small">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}${d.kategorie ? ` · für die Kategorie ${esc(d.kategorie)}` : ""}</span></li>`).join("")}</ul></section>` : ""}`;
     }
 
     function bearbeitenHtml() {
@@ -1621,6 +1753,23 @@
   async function durchgangAnsicht() {
     let filter = "";
     let d = null;
+    let sort = { feld: null, richtung: "auf" };
+    // Der Durchgang kommt als Ganzes – hier sortiert der Browser selbst.
+    const ZUSTAND_REIHE = { in_pruefung: 0, offen: 1, ausgenommen: 2, erledigt: 3 };
+    const STATUS_RANG = { ueberfaellig: 0, lebensdauer: 1, neu: 2, gesperrt: 3, bald_faellig: 4, einsatzbereit: 5, ausgesondert: 6 };
+    const SORTWERT = {
+      inventar: (a) => a.inventory_no, hersteller: (a) => (a.manufacturer || "").toLowerCase(), produkt: (a) => (a.model || "").toLowerCase(),
+      ablage: (a) => (a.pfad || "").toLowerCase(), stand: (a) => ZUSTAND_REIHE[a.zustand], status: (a) => STATUS_RANG[a.status],
+    };
+    function sortiert(liste) {
+      if (!sort.feld) return liste;
+      const wert = SORTWERT[sort.feld];
+      const r = sort.richtung === "ab" ? -1 : 1;
+      return liste.slice().sort((x, y) => {
+        const a = wert(x), b = wert(y);
+        return (a < b ? -1 : a > b ? 1 : 0) * r || x.inventory_no.localeCompare(y.inventory_no);
+      });
+    }
     async function laden() { d = (await api(`${API}/durchgaenge/${DATEN.id}`)).durchgang; }
     function zeile(a) {
       const darf = d.offen && (DARF.verwalten || DARF.pruefen);
@@ -1641,7 +1790,8 @@
         if (darf) knopf += `<button type="button" class="btn ghost small" data-act="ausnehmen" data-id="${a.id}" data-nr="${esc(a.inventory_no)}">Ausnehmen</button>`;
       }
       return `<tr class="z-${a.zustand}"><td data-l="Inventar-Nr."><a class="mat-inv" href="/material/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a></td>
-        <td data-l="Produkt">${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${esc(produktName(a))}${demoMarke(a.demo)}<div class="small muted">SN ${esc(a.serial_no)}</div></td>
+        <td data-l="Hersteller">${esc(a.manufacturer || "")}</td>
+        <td data-l="Produkt">${produktZelle(a)}<div class="small muted">SN ${esc(a.serial_no)}</div></td>
         <td data-l="Ablage">${esc(a.pfad)}</td><td data-l="Stand">${zustand}</td><td data-l="Status">${statusMarke(a.status)}</td>
         <td class="tabelle-aktionen">${knopf}</td></tr>`;
     }
@@ -1649,7 +1799,8 @@
       leisteMarkieren(d.folder_id);
       const z = d.zaehlung;
       const darf = DARF.verwalten || DARF.pruefen;
-      const liste = d.artikel.filter((a) => !filter || a.zustand === filter);
+      const liste = sortiert(d.artikel.filter((a) => !filter || a.zustand === filter));
+      const s = sort;
       inhalt.innerHTML = `<div class="mat-pfad"><a href="/material/pruefungen">Prüfungen</a> / Prüfdurchgang</div>
         <div class="page-head"><h1>${esc(d.titel)} ${d.offen ? '<span class="badge">offen</span>' : '<span class="badge grey">abgeschlossen</span>'}</h1>
           <div class="btn-row">${d.offen && darf ? `<button class="btn" data-act="schliessen" ${d.abschliessbar ? "" : "disabled"}>Durchgang abschließen</button>` : ""}
@@ -1660,12 +1811,13 @@
         <p>${fortschritt(z)}</p>
         ${d.offen ? `<p class="help">Jeder öffnet seinen Artikel mit „Prüfen“ und reserviert ihn damit – die anderen sehen „in Prüfung bei …“. Abschließen geht, sobald jeder Artikel geprüft oder mit Grund ausgenommen ist. Das Sammelprotokoll mit allen Prüfern folgt mit Lieferung 3.</p>` : ""}
         <div class="c-tabs mat-filter">${[["", "alle"], ["offen", "offen"], ["in_pruefung", "in Prüfung"], ["erledigt", "erledigt"], ["ausgenommen", "ausgenommen"]].map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}${f ? ` (${z[f]})` : ""}</button>`).join("")}</div>
-        ${liste.length ? `<table class="list mat-tabelle mat-runde"><thead><tr><th>Inventar-Nr.</th><th>Produkt</th><th>Ablage</th><th>Stand</th><th>Status</th><th></th></tr></thead><tbody>${liste.map(zeile).join("")}</tbody></table>` : leer("Keine Artikel in dieser Auswahl.")}
+        ${liste.length ? `<table class="list mat-tabelle mat-runde"><thead><tr>${sortKopf("Inventar-Nr.", "inventar", s)}${sortKopf("Hersteller", "hersteller", s)}${sortKopf("Produkt", "produkt", s)}${sortKopf("Ablage", "ablage", s)}${sortKopf("Stand", "stand", s)}${sortKopf("Status", "status", s)}<th></th></tr></thead><tbody>${liste.map(zeile).join("")}</tbody></table>` : leer("Keine Artikel in dieser Auswahl.")}
         ${d.pruefer.length ? `<section class="section"><h2>Prüfer in diesem Durchgang</h2><ul>${d.pruefer.map((x) => `<li>${esc(x.name)}${x.urkunde ? ` · Urkundennummer ${esc(x.urkunde)}` : ""} – ${plural(x.anzahl, "Prüfung", "Prüfungen")}</li>`).join("")}</ul></section>` : ""}`;
     }
     async function neu() { await laden(); zeichnen(); }
     aktionen = {
       filter: (b) => { filter = b.dataset.f; zeichnen(); },
+      sortieren: (b) => { sort = sortWeiter(sort, b.dataset.feld); zeichnen(); },
       freigeben: (b) => reservierungFreigeben(+b.dataset.id, b.dataset.wer, neu),
       einbeziehen: async (b) => {
         try { await api(`${API}/durchgaenge/${d.id}/einbeziehen`, { method: "POST", body: { item_id: +b.dataset.id } }); await neu(); }

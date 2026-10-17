@@ -543,7 +543,8 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
         elif not maengel and not grund:
             raise Abgelehnt(f"Ohne Mangel braucht „{ERGEBNISSE[ergebnis]}“ einen Grund.")
         dokumente = [{"id": x["id"], "title": x["title"], "kind": x["kind"], "version": x["version"],
-                      "valid_from": x["valid_from"], "sha256": x["sha256"]}
+                      "valid_from": x["valid_from"], "sha256": x["sha256"],
+                      "kategorie": x["herkunft"]["name"] if x.get("herkunft") else None}
                      for x in katalog.gueltige_dokumente(produkt["id"], tag)]
         ts = db.now()
         db.execute("UPDATE mat_inspection SET result = ?, inspected_on = ?, next_due_on = ?, reason = ?, remarks = ?, "

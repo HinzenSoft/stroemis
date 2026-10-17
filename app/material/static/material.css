@@ -91,8 +91,15 @@ a.mat-kachel:hover { background: var(--grau-hell); }
 table.list.mat-tabelle { table-layout: auto; }
 table.list.mat-formtabelle { table-layout: fixed; }
 .mat-tabelle td { vertical-align: middle; }
-.mat-mini { width: 32px; height: 32px; object-fit: contain; vertical-align: middle; margin-right: 8px; border: 1px solid var(--linie);
+.mat-mini { width: 40px; height: 40px; object-fit: contain; vertical-align: middle; margin-right: 8px; border: 1px solid var(--linie);
   background: var(--weiss); }
+/* Sortierbare Spaltenköpfe: der ganze Kopf ist der Knopf. */
+.mat-sort { background: none; border: 0; padding: 0; font: inherit; font-weight: inherit; color: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px; text-align: left; }
+.mat-sort:hover, .mat-sort.an { color: var(--rot); }
+.mat-sort:focus-visible { outline: 3px solid var(--gelb); outline-offset: 2px; }
+.mat-sort-pfeil { font-size: .7em; color: var(--grau); }
+.mat-sort.an .mat-sort-pfeil { color: var(--rot); }
 .mat-wahlspalte { width: 34px; }
 table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspalte { padding-left: 4px; padding-right: 4px; }
 .mat-alt td { color: var(--grau); }
@@ -155,17 +162,19 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-knoepfe { margin-top: 18px; }
 
 /* Katalog */
-.mat-katalog { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); gap: 24px; align-items: start; }
-.mat-katalog aside h2 { margin-top: 0; }
-.mat-katbaum a.aktiv { color: var(--rot); text-decoration: underline; }
-.mat-katbaum li > a { font-weight: 600; }
-.mat-formmarke { font-size: var(--fs-marke); margin-left: 6px; }
-.mat-katknoepfe { margin-top: 10px; }
+/* Den Kategorienbaum zeigt die Leiste links (wie den Ordnerbaum); hier steht die gewählte Kategorie. */
+.mat-katkopf { border-left: 4px solid var(--rot); background: var(--grau-hell); padding: 10px 14px; margin: 0 0 14px; }
+.mat-katkopf h2 { margin: 2px 0 4px; }
+.mat-katkopf .mat-pfad { margin-bottom: 0; }
+.mat-katdoks { margin-top: 12px; border-top: 1px solid var(--linie); padding-top: 8px; }
+.mat-unter { font-size: var(--fs-mittel); text-transform: uppercase; letter-spacing: .04em; color: var(--grau); margin: 14px 0 6px; }
+
 #kat-q { margin-bottom: 10px; }
-@media (max-width: 860px) { .mat-katalog { grid-template-columns: 1fr; } }
 
 /* Prüfformular */
 .mat-formtabelle input[type=text], .mat-formtabelle select { width: 100%; }
+/* Der Prüfpunkt bricht um und wächst mit (material.js, textHoehe) – Prüfanweisungen sind oft länger. */
+.mat-formtabelle textarea.fp-text { width: 100%; min-height: 0; resize: none; overflow: hidden; line-height: 1.35; display: block; }
 .mat-formtabelle td { vertical-align: top; }
 .mat-formtabelle .btn-row { margin-top: 4px; gap: 2px; }
 .mat-formtabelle .btn.ghost.small { padding: 2px 8px; }

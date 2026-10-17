@@ -14,6 +14,32 @@ from .nummern import inventar_ziffern
 
 PRO_SEITE_MAX = 100
 
+# Sortierbare Spalten der Listen: Name in der Anfrage → SQL-Ausdruck. Leere Werte stehen immer hinten; bei
+# Gleichstand gilt die übliche Reihenfolge der Liste. „intervall“ im Katalog sortiert produkte() selbst, weil
+# das wirksame Intervall von einer Oberkategorie geerbt sein kann.
+PRODUKT_SORTIERUNG = {
+    "hersteller": "p.manufacturer COLLATE NOCASE",
+    "produkt": "p.model COLLATE NOCASE",
+    "kategorie": "c.name COLLATE NOCASE",
+    "materialart": "p.material_kind",
+    "lebensdauer": "p.lifetime_years",
+    "bestand": "bestand",
+}
+PRODUKT_STANDARD = "p.manufacturer COLLATE NOCASE, p.model COLLATE NOCASE, p.article_no COLLATE NOCASE"
+RICHTUNGEN = ("auf", "ab")
+
+
+def sortierung(sortierbar, feld, richtung, standard):
+    """ORDER BY für eine sortierbare Spalte – oder die übliche Reihenfolge, wenn keine gewählt ist."""
+    if not feld:
+        return standard
+    if feld not in sortierbar:
+        raise Abgelehnt("Nach dieser Spalte lässt sich nicht sortieren.")
+    if richtung not in RICHTUNGEN:
+        raise Abgelehnt("Sortierrichtung ist „auf“ oder „ab“.")
+    ausdruck = sortierbar[feld]
+    return f"({ausdruck}) IS NULL, {ausdruck} {'DESC' if richtung == 'ab' else 'ASC'}, {standard}"
+
 
 def volltext_an():
     row = db.query("SELECT wert FROM mat_meta WHERE schluessel = 'volltext'", one=True)
@@ -61,9 +87,15 @@ def kategorie_und_unterkategorien(kid):
         "SELECT id FROM baum", (kid,))]
 
 
-def produkte(q="", kategorie_id=None, seite=1, pro_seite=25):
+def produkte(q="", kategorie_id=None, seite=1, pro_seite=25, sort=None, richtung="auf"):
     """Katalogsuche über Hersteller, Modell, Artikelnummer und Norm. Liefert (Zeilen, Gesamtzahl)."""
     seite, pro_seite = seiten(seite, pro_seite)
+    if sort == "intervall":
+        if richtung not in RICHTUNGEN:
+            raise Abgelehnt("Sortierrichtung ist „auf“ oder „ab“.")
+        ordnung = PRODUKT_STANDARD
+    else:
+        ordnung = sortierung(PRODUKT_SORTIERUNG, sort, richtung, PRODUKT_STANDARD)
     bedingungen, args = [], []
     fts = volltext_an()
     lang = [w for w in woerter(q) if len(w) >= 3] if fts else []
@@ -81,19 +113,28 @@ def produkte(q="", kategorie_id=None, seite=1, pro_seite=25):
         args += ids
     where = ("WHERE " + " AND ".join(bedingungen)) if bedingungen else ""
     gesamt = _abfragen(f"SELECT COUNT(*) AS n FROM mat_product p {where}", tuple(args), one=True)["n"]
-    rows = _abfragen(
-        f"SELECT p.*, c.name AS category_name, "
-        f"(SELECT COUNT(*) FROM mat_item i WHERE i.product_id = p.id AND i.lock_state <> 'ausgesondert') AS bestand "
-        f"FROM mat_product p JOIN mat_category c ON c.id = p.category_id {where} "
-        f"ORDER BY p.manufacturer COLLATE NOCASE, p.model COLLATE NOCASE, p.article_no COLLATE NOCASE "
-        f"LIMIT ? OFFSET ?", (*args, pro_seite, (seite - 1) * pro_seite))
+    auswahl = (f"SELECT p.*, c.name AS category_name, "
+               f"(SELECT COUNT(*) FROM mat_item i WHERE i.product_id = p.id AND i.lock_state <> 'ausgesondert') AS bestand "
+               f"FROM mat_product p JOIN mat_category c ON c.id = p.category_id {where} ORDER BY {ordnung}")
+    if sort == "intervall":
+        # Das wirksame Intervall (Produkt, sonst Kategorie oder Oberkategorie) – in Python, dann die Seite.
+        from .interval import herstellerseite
+        alle = _abfragen(auswahl, tuple(args))
+        mit = [(herstellerseite(r)[0], i, r) for i, r in enumerate(alle)]
+        mit.sort(key=lambda x: (x[0] is None, -(x[0] or 0) if richtung == "ab" else (x[0] or 0), x[1]))
+        start = (seite - 1) * pro_seite
+        return [r for _, _, r in mit[start:start + pro_seite]], gesamt
+    rows = _abfragen(f"{auswahl} LIMIT ? OFFSET ?", (*args, pro_seite, (seite - 1) * pro_seite))
     return rows, gesamt
 
 
-def artikel(q, seite=1, pro_seite=25):
+def artikel(q, seite=1, pro_seite=25, sort=None, richtung="auf"):
     """Suche nach Serien-, Inventar- und Herstellernummer (Artikelnummer des Produkts), mit
-    Teiltreffern. Liefert (Zeilen, Gesamtzahl); Zeilen tragen Produkt- und Ordnerangaben."""
+    Teiltreffern. Liefert (Zeilen, Gesamtzahl); Zeilen tragen Produkt- und Ordnerangaben. Ohne gewählte
+    Sortierung steht ein genauer Treffer oben."""
+    from .bestand import artikel_sortierung
     seite, pro_seite = seiten(seite, pro_seite)
+    eigene = sortierung(artikel_sortierung(), sort, richtung, "i.inventory_no") if sort else None
     ws = woerter(q)
     if not ws:
         return [], 0
@@ -123,6 +164,6 @@ def artikel(q, seite=1, pro_seite=25):
         f"p.demo AS product_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "
         f"e.inspector_user_id AS entwurf_pruefer_id "
         f"{basis.replace(' WHERE ', ' LEFT JOIN mat_inspection e ON e.item_id = i.id AND e.completed_at IS NULL WHERE ', 1)} "
-        f"ORDER BY (i.inventory_no = ?) DESC, (lower(i.serial_no) = lower(?)) DESC, i.inventory_no "
-        f"LIMIT ? OFFSET ?", (*args, genau, " ".join(ws), pro_seite, (seite - 1) * pro_seite))
+        f"ORDER BY {eigene + ', ' if eigene else ''}(i.inventory_no = ?) DESC, (lower(i.serial_no) = lower(?)) DESC, "
+        f"i.inventory_no LIMIT ? OFFSET ?", (*args, genau, " ".join(ws), pro_seite, (seite - 1) * pro_seite))
     return rows, gesamt

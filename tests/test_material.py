@@ -1425,6 +1425,112 @@ def test_review_lieferung2_robust():
     print("Review-Befunde Lieferung 2 (Kennungen, Dialoge, Anhänge) nachgestellt und behoben.")
 
 
+def test_listen_und_formular():
+    """Wünsche aus der Durchsicht von Lieferung 2: lange Prüfanweisungen, sortierbare Listen."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        adm, kp, w, p1 = k["adm"], k["katalog"], k["wart"], k["pruefer"]
+        ids = katalog_grund(adm)
+        pruef_formulare(kp, ids)
+        # Ein Prüfpunkt darf eine ganze Prüfanweisung sein (bis 1000 Zeichen) – im Editor wie im Import.
+        anweisung = "Kontrolle des Zustands der Verriegelungshülse (z. B. Deformierungen, Risse, Korrosion). " * 10
+        assert 800 < len(anweisung.strip()) <= 1000
+        r = kp.post("/api/material/formulare", json={"kategorie_id": ids["gurte"], "punkte": [
+            {"text": anweisung, "art": "yesno", "soll": "nein"}]})
+        assert r.status_code == 201 and r.json["formular"]["punkte"][0]["text"] == anweisung.strip(), r.get_json()
+        r = kp.post("/api/material/formulare", json={"kategorie_id": ids["gurte"], "punkte": [
+            {"text": "x" * 1001, "art": "yesno", "soll": "nein"}]})
+        assert r.status_code == 400 and "1000" in r.json["error"], r.get_json()
+        # Das Formular eines Produkts nennt dessen Kategorie (die Leiste links markiert sie).
+        spez = kp.get(f"/api/material/formulare?produkt={ids['gurt']}").json["formulare"][0]["id"]
+        assert kp.get(f"/api/material/formulare/{spez}").json["formular"]["ziel"]["kategorie_id"] == ids["gurte"]
+
+        # Katalog: sortierbar nach Hersteller, Intervall (auch geerbt), Bestand – auf dem Server, über alle Seiten.
+        r = adm.post("/api/material/produkte", json={"category_id": ids["karabiner"], "manufacturer": "Alpenwerk",
+                                                     "model": "HMS Zeta", "material_kind": "metall_hardware", "interval_months": 6})
+        assert r.status_code == 201, r.get_json()
+        zeta = r.json["produkt"]["id"]
+        def produkte(**a):
+            r = kp.get("/api/material/produkte", query_string=dict(a, pro_seite=2))
+            assert r.status_code == 200, r.get_json()
+            return [x["id"] for x in r.json["produkte"]], r.json["gesamt"]
+        assert produkte(sort="hersteller") == ([zeta, ids["gurt"]], 3)
+        assert produkte(sort="hersteller", richtung="ab")[0][0] in (ids["gurt"], ids["hms"])
+        assert produkte(sort="intervall", seite=1)[0][0] == zeta                   # 6 Monate vor 12
+        assert produkte(sort="intervall", richtung="ab", seite=2)[0] == [zeta]      # absteigend: zuletzt
+        gid, _ = gliederung(w)
+        neuer_artikel(w, ids["hms"], gid, serial_no="H1")
+        neuer_artikel(w, ids["hms"], gid, serial_no="H2")
+        assert produkte(sort="bestand", richtung="ab")[0][0] == ids["hms"]
+        for falsch in ({"sort": "passwort"}, {"sort": "hersteller", "richtung": "quer"}):
+            assert kp.get("/api/material/produkte", query_string=falsch).status_code == 400
+
+        # Artikellisten: Ordner, Fälligkeiten und Suche sortieren nach Spalte, Status nach Dringlichkeit.
+        z = neuer_artikel(w, zeta, gid, serial_no="Z1")
+        assert abschluss(p1, starten(p1, z["id"]).json["pruefung"]["id"], ergebnis="einsatzbereit").status_code == 200
+        def ordner(**a):
+            r = w.get(f"/api/material/ordner/{gid}", query_string=a)
+            assert r.status_code == 200, r.get_json()
+            return [x["serial_no"] for x in r.json["ordner"]["artikel"]]
+        assert ordner(sort="hersteller") == ["Z1", "H1", "H2"]
+        assert ordner(sort="serie", richtung="ab") == ["Z1", "H2", "H1"]
+        assert ordner(sort="status")[-1] == "Z1"                                    # neu vor einsatzbereit
+        assert ordner(sort="faellig")[:2] == ["H1", "H2"]                           # Eingangsprüfung zuerst
+        r = w.get("/api/material/faellig", query_string={"status": "neu,einsatzbereit", "sort": "hersteller"})
+        assert [x["serial_no"] for x in r.json["artikel"]] == ["Z1", "H1", "H2"], r.get_json()
+        r = w.get("/api/material/suche", query_string={"q": "M-0", "sort": "serie", "richtung": "ab"})
+        assert [x["serial_no"] for x in r.json["treffer"]] == ["Z1", "H2", "H1"], r.get_json()
+        assert w.get(f"/api/material/ordner/{gid}", query_string={"sort": "ablage; DROP TABLE mat_item"}).status_code == 400
+
+        # Den Namen eines Herstellerdokuments ändert der Katalogpfleger nachträglich – nur den Namen.
+        r = kp.post(f"/api/material/produkte/{ids['hms']}/dokumente", data={"kind": "gebrauchsanleitung", "title": "scan_0815",
+                    "url": "https://example.org/anleitung.pdf"}, headers=H, content_type="multipart/form-data")
+        assert r.status_code == 201, r.get_json()
+        did = r.json["dokument_id"]
+        assert w.put(f"/api/material/dokumente/{did}", json={"title": "x"}).status_code == 403
+        assert kp.put(f"/api/material/dokumente/{did}", json={"title": "  "}).status_code == 400
+        r = kp.put(f"/api/material/dokumente/{did}", json={"title": "Gebrauchsanleitung HMS Beta"})
+        assert r.status_code == 200, r.get_json()
+        dok = next(x for x in r.json["dokumente"] if x["id"] == did)
+        assert dok["title"] == "Gebrauchsanleitung HMS Beta" and dok["url"] == "https://example.org/anleitung.pdf"
+        eintrag = next(e for e in kp.get(f"/api/material/produkte/{ids['hms']}").json["produkt"]["journal"] if e["action"] == "umbenannt")
+        assert eintrag["vorher"] == {"title": "scan_0815"} and eintrag["nachher"] == {"title": "Gebrauchsanleitung HMS Beta"}
+
+        # Dokumente an einer Kategorie gelten für alle Produkte darin und in den Unterkategorien.
+        kat_url = f"/api/material/kategorien/{ids['psa']}/dokumente"
+        assert w.post(kat_url, json={"kind": "pflegehinweis", "url": "https://example.org/pflege.pdf"}).status_code == 403
+        r = kp.post(kat_url, data={"kind": "pflegehinweis", "title": "Pflegehinweise PSA", "url": "https://example.org/pflege.pdf"},
+                    headers=H, content_type="multipart/form-data")
+        assert r.status_code == 201, r.get_json()
+        kdid = r.json["dokument_id"]
+        assert [d["title"] for d in kp.get(kat_url).json["dokumente"]] == ["Pflegehinweise PSA"]
+        geerbt = kp.get(f"/api/material/produkte/{ids['hms']}").json["produkt"]["kategorie_dokumente"]   # HMS: Unterkategorie
+        assert [(d["title"], d["herkunft"]["id"]) for d in geerbt] == [("Pflegehinweise PSA", ids["psa"])], geerbt
+        h1 = next(x for x in w.get(f"/api/material/ordner/{gid}").json["ordner"]["artikel"] if x["serial_no"] == "H1")
+        assert "Pflegehinweise PSA" in [d["title"] for d in w.get(f"/api/material/artikel/{h1['id']}").json["artikel"]["dokumente"]]
+        # Umbenennen, neue Version, zurückziehen wie am Produkt; die Prüfung merkt sich, was am Prüftag galt.
+        assert kp.put(f"/api/material/dokumente/{kdid}", json={"title": "Pflegehinweise PSA (Hersteller)"}).status_code == 200
+        r = kp.post(f"/api/material/dokumente/{kdid}/version", data={"title": "Pflegehinweise PSA 2026", "url": "https://example.org/pflege2.pdf"},
+                    headers=H, content_type="multipart/form-data")
+        assert r.status_code == 201 and [d["title"] for d in r.json["dokumente"] if d["gilt"]] == ["Pflegehinweise PSA 2026"], r.get_json()
+        pr = starten(p1, h1["id"]).json["pruefung"]
+        assert abschluss(p1, pr["id"], ergebnis="einsatzbereit").status_code == 200
+        doks = p1.get(f"/api/material/pruefungen/{pr['id']}").json["pruefung"]["dokumente"]
+        assert any(d["title"] == "Pflegehinweise PSA 2026" and d["kategorie"] == "PSA gegen Absturz" for d in doks), doks
+        # Eine leere Kategorie lässt sich samt ihren Dokumenten löschen; das Journal vermerkt es.
+        leer_id = adm.post("/api/material/kategorien", json={"name": "Leer"}).json["kategorie"]["id"]
+        r = kp.post(f"/api/material/kategorien/{leer_id}/dokumente", data={"kind": "sonstiges", "url": "https://example.org/x.pdf"},
+                    headers=H, content_type="multipart/form-data")
+        leer_dok = r.json["dokument_id"]
+        assert kp.delete(f"/api/material/kategorien/{leer_id}", headers=H).status_code == 200
+        with app.app_context():
+            from app import db
+            assert db.query("SELECT 1 FROM mat_product_document WHERE id = ?", (leer_dok,), one=True) is None
+            assert db.query("SELECT 1 FROM mat_audit WHERE entity = 'document' AND entity_id = ? AND action = 'geloescht'",
+                            (leer_dok,), one=True)
+    print("Listen- und Formulartest bestanden.")
+
+
 def test_migration_lieferung2():
     """Eine Datenbank aus Lieferung 1 (Schemaversion 1) kommt mit allen Zeilen auf Version 2."""
     from app.material import models
@@ -1457,11 +1563,26 @@ def test_migration_lieferung2():
                      "(2, 'b', 'yesno')")
         conn.execute("INSERT INTO mat_inspection_attachment (inspection_id, kind, file_path, sha256, uploaded_at) "
                      "VALUES (1, 'sonstiges', 'x.pdf', '00', ?)", (ts,))
+        conn.execute("INSERT INTO mat_product_document (id, product_id, kind, title, url, valid_from, uploaded_at) "
+                     "VALUES (7, 1, 'gebrauchsanleitung', 'Anleitung', 'https://example.org/a.pdf', '2026-01-01', ?)", (ts,))
         conn.commit()
         conn.close()
         app = make_app(tmp)
         conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
-        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "2"
+        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == str(models.SCHEMA_VERSION)
+        # Schritt 3: Dokumente bleiben; eins hängt jetzt an Produkt oder Kategorie, nie an beidem oder keinem.
+        assert conn.execute("SELECT id, product_id, category_id, title FROM mat_product_document").fetchall() == \
+            [(7, 1, None, "Anleitung")]
+        conn.execute("INSERT INTO mat_product_document (category_id, kind, title, url, valid_from, uploaded_at) "
+                     "VALUES (1, 'pflegehinweis', 'Pflege', 'https://example.org/p.pdf', '2026-01-01', ?)", (ts,))
+        for falsch in ("NULL, NULL", "1, 1"):
+            try:
+                conn.execute(f"INSERT INTO mat_product_document (product_id, category_id, kind, title, url, valid_from, "
+                             f"uploaded_at) VALUES ({falsch}, 'sonstiges', 'x', 'https://example.org/x', '2026-01-01', ?)", (ts,))
+                raise AssertionError("Dokument ohne bzw. mit zwei Zielen angenommen: " + falsch)
+            except sqlite3.IntegrityError:
+                pass
+        conn.rollback()
         assert conn.execute("SELECT id, item_id, kind, result FROM mat_inspection ORDER BY id").fetchall() == \
             [(1, 1, "periodisch", "einsatzbereit"), (2, 2, "periodisch", None)]
         assert conn.execute("SELECT COUNT(*) FROM mat_inspection_result").fetchone()[0] == 2
@@ -1511,4 +1632,5 @@ if __name__ == "__main__":
     test_durchgang()
     test_review_lieferung2()
     test_review_lieferung2_robust()
+    test_listen_und_formular()
     test_migration_lieferung2()
