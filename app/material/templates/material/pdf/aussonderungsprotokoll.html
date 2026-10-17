@@ -1,0 +1,60 @@
+{% extends "material/pdf/basis.html" %}
+{# Aussonderungsprotokoll: Der Artikel verlässt den Bestand endgültig. Daten laut services/pdf.py (dokument,
+   artikel – „ordner“ ist hier der Ordner vor der Aussonderung –, aussonderung, unterschrift). #}
+{% block stil %}
+.aussonderung-kasten { border: .5pt solid var(--linie); border-left: 2.5mm solid var(--rot); padding: 3mm 4mm; margin: 2mm 0 1mm;
+  break-inside: avoid; overflow-wrap: anywhere; }
+.aussonderung-kasten .gross { font-size: 15pt; font-weight: 700; color: var(--rot-dunkel); line-height: 1.15; }
+.aussonderung-kasten .grund { font-size: 11pt; color: var(--schwarz); margin-top: 1mm; }
+.aussonderung-kasten .endgueltig { margin-top: 2mm; color: var(--schwarz); }
+.bemerkung { margin-top: 1mm; }
+{% endblock %}
+
+{% block unterzeile %}Aussonderung am {{ aussonderung.datum }}{% endblock %}
+
+{% block kopfzeile %}
+<div class="aussonderung-kasten">
+  <div class="lbl">Grund der Aussonderung</div>
+  <div class="gross">{{ aussonderung.grund }}</div>
+  <div class="endgueltig">Der Artikel zählt nicht mehr zum Bestand und kann nicht zurückgeholt werden.</div>
+</div>
+{% endblock %}
+
+{% block inhalt %}
+{{ artikel_block(artikel, mit_ordner=False) }}
+
+<section>
+  <h2>Aussonderung</h2>
+  {{ felder([
+      ("Tag der Aussonderung", aussonderung.datum), ("Grund", aussonderung.grund),
+      ("Ausgesondert durch", (aussonderung.person or "") ~ (" (" ~ aussonderung.rolle ~ ")" if aussonderung.rolle else "")),
+      ("Urkundennummer", aussonderung.urkunde), ("Anmeldung", aussonderung.login), ("Sperre", aussonderung.sperre),
+    ]) }}
+  {{ felder([("Ordner vor der Aussonderung", artikel.ordner), ("Ordner jetzt", aussonderung.ordner_jetzt)], spalten=1) }}
+  {%- if aussonderung.basis %}
+  {%- set b = aussonderung.basis %}
+  <div class="kasten">
+    <div class="lbl">Grundlage</div>
+    <div class="wert">Prüfprotokoll <span class="mono">{{ b.protokoll_id }}</span> vom {{ b.datum }} – {{ b.art }}, Prüfer {{ b.pruefer }}</div>
+  </div>
+  {%- endif %}
+  {%- if aussonderung.bemerkung %}
+  <div class="bemerkung"><div class="lbl">Bemerkung</div><div class="wert text">{{ aussonderung.bemerkung }}</div></div>
+  {%- endif %}
+</section>
+
+<section>
+  <h2>Letzte Prüfung</h2>
+  {%- set lp = aussonderung.letzte_pruefung %}
+  {%- if lp %}
+  {{ felder([
+      ("Prüftag", lp.datum), ("Art der Prüfung", lp.art), ("Ergebnis", lp.ergebnis_text),
+      ("Prüfer", lp.pruefer), ("Prüfprotokoll", lp.protokoll_id),
+    ]) }}
+  {%- else %}
+  <p class="hinweis">Für diesen Artikel ist keine abgeschlossene Prüfung verzeichnet.</p>
+  {%- endif %}
+</section>
+
+{{ unterschrift_block(unterschrift, dokument) }}
+{% endblock %}

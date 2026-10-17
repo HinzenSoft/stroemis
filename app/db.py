@@ -402,6 +402,9 @@ def get_db():
         conn = sqlite3.connect(current_app.config["DB_PATH"], timeout=15)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
+        # Löscht ein REPLACE eine Zeile, um eine Eindeutigkeit zu erfüllen, laufen ihre Lösch-Trigger nur mit diesem
+        # Schalter – sonst ginge etwa eine festgeschriebene Prüfung des Moduls Material an ihrem Schutz vorbei.
+        conn.execute("PRAGMA recursive_triggers = ON")
         g.db = conn
     return g.db
 

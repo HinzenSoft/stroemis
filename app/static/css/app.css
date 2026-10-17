@@ -1507,6 +1507,48 @@ h1.seitentitel .page-icon { margin-right: 6px; }
 .profilbild .pb-text { min-width: 0; }
 .profilbild .pb-text .help { margin: 0 0 10px; }
 
+/* Unterschrift (Modul Material, unterschrift.js): der Dialog mit dem Signatur-Pad – auf Weiß über einer Linie
+   wie auf Papier; Linie und Platzhalter liegen über der Zeichenfläche und kommen nicht ins Bild – und die
+   hinterlegte Unterschrift im Profil. Hier statt in material.css, weil das Profil sie auch braucht. */
+dialog.us-dlg { width: min(640px, 96vw); }
+.us-flaeche { position: relative; margin: 12px 0 0; border: 1px solid var(--grau); border-radius: var(--radius); background: var(--weiss); }
+.us-canvas { display: block; width: 100%; height: 210px; touch-action: none; cursor: crosshair;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.us-linie { position: absolute; left: 22px; right: 22px; bottom: 46px; border-bottom: 1px solid var(--grau); pointer-events: none; }
+.us-linie::before { content: "×"; position: absolute; left: 0; bottom: 3px; color: var(--grau); font-size: 1.15rem; line-height: 1; }
+.us-platzhalter { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-80%); text-align: center;
+  color: var(--grau); pointer-events: none; font-size: var(--fs-mittel); }
+.us-platzhalter[hidden] { display: none; }
+.us-bisher { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; }
+.us-bisher img { height: 34px; width: auto; max-width: 160px; }
+.us-aktionen [data-us="leeren"] { margin-right: auto; }
+@media (max-width: 480px) {
+  .us-canvas { height: 180px; }
+  dialog.us-dlg .dlg-body { padding: 14px 14px 16px; }
+  .us-aktionen .btn { padding-left: 12px; padding-right: 12px; }
+}
+/* Telefon quer (Höhe ≤ 500 px): Die Zeichenfläche bekommt, was neben Titel, Hinweis und Knöpfen bleibt – so
+   stehen „Abbrechen“ und „Übernehmen“ immer im Bild. Vorher lagen sie unter dem Rand, und rollen ging nur
+   neben der Fläche, weil die Fläche das Wischen zum Zeichnen braucht. */
+@media (max-height: 500px) {
+  dialog.us-dlg { width: min(820px, calc(100vw - 16px)); }
+  dialog.us-dlg .dlg-body { display: flex; flex-direction: column; height: calc(100vh - 24px); height: calc(100dvh - 24px);
+    padding: 10px 14px 12px; }
+  dialog.us-dlg h2 { flex: none; font-size: 1.1rem; margin: 0 0 2px; }
+  .us-hinweis { flex: none; margin: 0; font-size: var(--fs-klein); line-height: 1.35; }
+  .us-flaeche { flex: 1 1 0; min-height: 110px; margin-top: 8px; }
+  .us-canvas { position: absolute; inset: 0; height: 100%; }
+  .us-bisher { display: none; }
+  dialog.us-dlg .us-aktionen { flex: none; margin-top: 8px; }
+}
+.us-profil { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin: 10px 0 0; }
+.us-knoepfe { flex-direction: column; align-items: stretch; }
+.us-vorschau { flex: none; display: flex; align-items: center; justify-content: center; width: min(260px, 100%); height: 96px;
+  padding: 6px 10px; border: 1px solid var(--linie); border-bottom: 2px solid var(--anthrazit); background: var(--weiss); }
+.us-vorschau.leer { background: var(--grau-hell); border-bottom-style: dashed; }
+.us-vorschau img { max-width: 100%; max-height: 100%; display: block; }
+.us-vorschau .muted { font-size: var(--fs-klein); text-align: center; }
+
 /* Die Tafel darunter: oben der Ersteller, darunter die Mitwirkenden. Sie hängt an der
    Autorenzeile und blättert mit ihr mit; deshalb liegt sie – wie der Text selbst – unter
    der Kopfzeile (z-index 40) und der Bauchbinde (1200) und verschwindet beim Blättern

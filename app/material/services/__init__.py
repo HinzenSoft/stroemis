@@ -4,7 +4,10 @@ Die Regeln stehen hier, nicht in den Routen: Schnittstelle, Katalogimport und Te
 Prüfungen durchlaufen. Eine verletzte Regel wird als Abgelehnt geworfen – mit Klartext und Statuscode;
 routes.py macht daraus die übliche JSON-Antwort, der Import eine Fehlerzeile."""
 import re
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
+ZONE = ZoneInfo("Europe/Berlin")
 
 
 class Abgelehnt(Exception):
@@ -17,9 +20,10 @@ class Abgelehnt(Exception):
 
 
 def heute():
-    """Der Kalendertag, gegen den Fälligkeiten und Lebensdauer gemessen werden. Eine eigene Funktion,
-    damit Tests einen Stichtag setzen können, ohne die Uhr zu verstellen."""
-    return date.today()
+    """Der Kalendertag in Deutschland, gegen den Fälligkeiten und Lebensdauer gemessen werden und der als Prüftag
+    ins Protokoll kommt. Der Container läuft in UTC – zwischen Mitternacht und 1 bzw. 2 Uhr wäre sonst noch
+    gestern. Eine eigene Funktion, damit Tests einen Stichtag setzen können, ohne die Uhr zu verstellen."""
+    return datetime.now(ZONE).date()
 
 
 # --- Eingaben lesen ------------------------------------------------------------------------------

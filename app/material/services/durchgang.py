@@ -13,18 +13,25 @@ vor der Eröffnung begonnen wurde, zählt mit. Je Artikel gilt:
   offen          sonst
 
 Abschließen lässt sich der Durchgang erst, wenn jeder Artikel erledigt oder ausgenommen ist und kein
-Entwurf des Durchgangs mehr offen ist. Das Sammelprotokoll mit allen Prüfern folgt mit Lieferung 3.
-Ein Artikel steht höchstens in einem offenen Durchgang.
+Entwurf des Durchgangs mehr offen ist. Dann entsteht in derselben Transaktion das Sammelprotokoll
+(protokoll.py): alle Artikel mit Ergebnis, Ausnahmen mit Grund, alle beteiligten Prüfer mit Urkundennummer
+und Unterschrift, die Einzelprotokolle mit ihrer Prüfsumme – festgeschrieben wie jedes Protokoll; danach
+ist der Durchgang unveränderlich. Ein Artikel steht höchstens in einem offenen Durchgang.
 
 Abbrechen beendet ihn vorzeitig: Offene Prüfungen darin laufen als einzelne Prüfungen weiter. Wurde noch
 nichts abgeschlossen, verschwindet er ganz; sonst endet er als „abgebrochen“ – Geprüftes und
-Ausgenommenes bleibt ihm zugeordnet, jeder andere Artikel steht darin als „nicht geprüft“."""
+Ausgenommenes bleibt ihm zugeordnet, jeder andere Artikel steht darin als „nicht geprüft“ – auch im
+Sammelprotokoll, das ein abgebrochener Durchgang ebenso bekommt."""
 from datetime import date
 
 from ... import db
 from . import Abgelehnt, heute, text
-from . import bestand, journal
+from . import bestand, journal, protokoll
 from .faelligkeit import im_unterbaum
+
+# Bedingung für Abfragen über mat_inspection: ohne Prüfungen, deren Berichtigung im selben Durchgang abgeschlossen ist.
+OHNE_BERICHTIGTE = ("AND NOT EXISTS (SELECT 1 FROM mat_inspection b WHERE b.corrects_inspection_id = mat_inspection.id "
+                    "AND b.round_id = mat_inspection.round_id AND b.completed_at IS NOT NULL) ")
 
 ZUSTAND_TEXT = {"offen": "offen", "in_pruefung": "in Prüfung", "erledigt": "erledigt", "ausgenommen": "ausgenommen",
                 "nicht_geprueft": "nicht geprüft"}
@@ -99,10 +106,12 @@ def eroeffnen(fid, d, akteur):
                          "VALUES (?,?,?,?,?)", (fid, titel, akteur.get("id"), akteur["name"], heute().isoformat()))
         for iid in artikel:
             db.execute("INSERT INTO mat_round_item (round_id, item_id) VALUES (?, ?)", (rid, iid))
-        # Wer schon prüft, prüft jetzt im Durchgang: Sein Entwurf ist die Reservierung und zählt hier.
+        # Wer schon prüft, prüft jetzt im Durchgang: Sein Entwurf ist die Reservierung und zählt hier. Eine
+        # Berichtigung nicht – sie trägt den Prüftag ihres Originals und gehört nur zu dessen Durchgang.
         uebernommen = db.execute_zeilen(
             "UPDATE mat_inspection SET round_id = ? WHERE completed_at IS NULL AND round_id IS NULL "
-            "AND item_id IN (SELECT item_id FROM mat_round_item WHERE round_id = ?)", (rid, rid))
+            "AND corrects_inspection_id IS NULL AND item_id IN (SELECT item_id FROM mat_round_item WHERE round_id = ?)",
+            (rid, rid))
         journal.eintragen("round", rid, "eroeffnet", None,
                           {"title": titel, "folder_id": fid, "ordner": bestand._pfad_text(fid), "artikel": len(artikel),
                            "entwuerfe": uebernommen})
@@ -155,7 +164,8 @@ def durchgang_json(r, voll=False, pruefer_id=None):
     z = _zaehlung(zeilen, geschlossen)
     out = {"id": r["id"], "titel": r["title"], "folder_id": r["folder_id"], "ordner": bestand._pfad_text(r["folder_id"]),
            "eroeffnet_von": r["opened_by_name"], "eroeffnet_am": r["opened_on"], "geschlossen_am": r["closed_on"],
-           "geschlossen_von": r["closed_by_name"], "offen": not geschlossen, "abgebrochen": bool(r["aborted"]), "zaehlung": z}
+           "geschlossen_von": r["closed_by_name"], "offen": not geschlossen, "abgebrochen": bool(r["aborted"]), "zaehlung": z,
+           "protokoll": protokoll.protokoll_json(r, f"/material/durchgang/{r['id']}/sammelprotokoll")}
     entwuerfe = _offene_entwuerfe(r["id"])
     out["abschliessbar"] = out["offen"] and z["offen"] == 0 and z["in_pruefung"] == 0 and not entwuerfe
     if not voll:
@@ -184,10 +194,12 @@ def durchgang_json(r, voll=False, pruefer_id=None):
     reihe = {"in_pruefung": 0, "offen": 1, "nicht_geprueft": 1, "ausgenommen": 2, "erledigt": 3}
     liste.sort(key=lambda a: (reihe[a["zustand"]], a["pfad"], a["inventory_no"]))
     out["artikel"] = liste
+    # Ein berichtigtes Original zählt nicht mit, wenn seine Berichtigung im selben Durchgang abgeschlossen ist –
+    # sonst wären es mehr Prüfungen als geprüfte Artikel.
     out["pruefer"] = db.query(
         "SELECT inspector_name AS name, inspector_certificate AS urkunde, COUNT(*) AS anzahl FROM mat_inspection "
-        "WHERE round_id = ? AND completed_at IS NOT NULL GROUP BY inspector_user_id, inspector_name, "
-        "inspector_certificate ORDER BY inspector_name", (r["id"],))
+        "WHERE round_id = ? AND completed_at IS NOT NULL " + OHNE_BERICHTIGTE +
+        "GROUP BY inspector_user_id, inspector_name, inspector_certificate ORDER BY inspector_name", (r["id"],))
     out["loeschbar"] = out["offen"] and not db.query(
         "SELECT 1 FROM mat_inspection WHERE round_id = ? LIMIT 1", (r["id"],), one=True)
     return out
@@ -242,14 +254,15 @@ def einbeziehen(rid, iid):
             raise Abgelehnt("Der Artikel ist ausgesondert und wird nicht mehr geprüft – er bleibt ausgenommen.", 409)
         db.execute("UPDATE mat_round_item SET excluded_reason = NULL, excluded_by = NULL, excluded_by_name = '', "
                    "excluded_at = NULL WHERE round_id = ? AND item_id = ?", (rid, iid))
-        # Prüft schon jemand (begonnen, als der Artikel ausgenommen war), zählt diese Prüfung jetzt hier.
-        db.execute("UPDATE mat_inspection SET round_id = ? WHERE item_id = ? AND completed_at IS NULL AND round_id IS NULL",
-                   (rid, iid))
+        # Prüft schon jemand (begonnen, als der Artikel ausgenommen war), zählt diese Prüfung jetzt hier – eine
+        # Berichtigung nicht (siehe eroeffnen).
+        db.execute("UPDATE mat_inspection SET round_id = ? WHERE item_id = ? AND completed_at IS NULL AND round_id IS NULL "
+                   "AND corrects_inspection_id IS NULL", (rid, iid))
         journal.eintragen("round", rid, "einbezogen", {"item_id": iid, "grund": ri["excluded_reason"]}, None)
 
 
 def abschliessen(rid, akteur):
-    with db.transaction(sofort=True):
+    with protokoll.dateien_sichern(), db.transaction(sofort=True):
         r = _runde_offen(rid)
         zeilen = _zeilen(rid)
         z = _zaehlung(zeilen)
@@ -264,12 +277,13 @@ def abschliessen(rid, akteur):
                    (heute().isoformat(), akteur.get("id"), akteur["name"], rid))
         journal.eintragen("round", rid, "geschlossen", None, {"title": r["title"], "erledigt": z["erledigt"],
                                                               "ausgenommen": z["ausgenommen"]})
+        protokoll.durchgang_festschreiben(rid, db.now())
 
 
 def abbrechen(rid, akteur):
     """Den Durchgang vorzeitig beenden (siehe oben). Liefert, ob er bleibt – False: Er wurde entfernt, weil
     darin noch nichts abgeschlossen war."""
-    with db.transaction(sofort=True):
+    with protokoll.dateien_sichern(), db.transaction(sofort=True):
         r = _runde_offen(rid)
         for e in _offene_entwuerfe(rid):
             db.execute("UPDATE mat_inspection SET round_id = NULL WHERE id = ?", (e["id"],))
@@ -285,6 +299,7 @@ def abbrechen(rid, akteur):
         journal.eintragen("round", rid, "abgebrochen", None, {"title": r["title"], "erledigt": z["erledigt"],
                                                               "ausgenommen": z["ausgenommen"],
                                                               "nicht_geprueft": z["nicht_geprueft"]})
+        protokoll.durchgang_festschreiben(rid, db.now())
         return True
 
 

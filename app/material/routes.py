@@ -8,15 +8,16 @@ import json
 import os
 import sqlite3
 
-from flask import (Blueprint, abort, current_app, g, jsonify, redirect, render_template, request,
+from flask import (Blueprint, abort, current_app, g, jsonify, redirect, render_template, request, send_file,
                    send_from_directory, url_for)
 
 from .. import db
-from ..auth import current_user, eingabefehler_abfangen, json_body
+from ..auth import attempts_exceeded, current_user, eingabefehler_abfangen, json_body, note_attempt
 from . import models
-from .services import Abgelehnt, anhang, bestand, durchgang, journal, katalog, kennung, meldung, pruefung, search
+from .services import (Abgelehnt, anhang, bestand, durchgang, journal, katalog, kennung, meldung, protokoll, pruefung,
+                       search, unterschrift)
 from .services import status as st
-from .services.rechte import darf, darf_alles, ist_katalogpfleger, katalog_required, requires_folder
+from .services.rechte import _ordner_aus_anfrage, darf, darf_alles, ist_katalogpfleger, katalog_required, requires_folder
 
 seiten = Blueprint("material", __name__, template_folder="templates", static_folder="static",
                    static_url_path="/static/material", cli_group="material")
@@ -34,7 +35,14 @@ UPLOAD_GRENZEN = {
     "material_api.punkt_foto": katalog.BILD_MAX_BYTES + 1024 * 1024,
     "material_api.anhang_neu": anhang.MAX_BYTES + 1024 * 1024,
     "material_api.meldung_anlegen": meldung.MAX_FOTOS * katalog.BILD_MAX_BYTES + 1024 * 1024,
+    # Unterschriften kommen als data:-URL im JSON (Signatur-Pad) – mehr als die übliche Grenze von 1 MB.
+    "material_api.unterschrift_setzen": unterschrift.MAX_ZEICHEN + 64 * 1024,
+    "material_api.punkt_setzen": unterschrift.MAX_ZEICHEN + 64 * 1024,
+    # Die Prüfseite nimmt ein ganzes Protokoll samt angefügter Anhänge an – ohne Anmeldung, daher gebremst
+    # (PRUEFEN_JE_VIERTELSTUNDE) und nicht unbegrenzt.
+    "material_api.pruefen": 200 * 1024 * 1024,
 }
+PRUEFEN_JE_VIERTELSTUNDE = 20
 
 
 @api.errorhandler(Abgelehnt)
@@ -124,6 +132,54 @@ def pruefung_seite(pid):
 @seiten.get("/material/durchgang/<int:rid>")
 def durchgang_seite(rid):
     return _seite("durchgang", id=rid)
+
+
+def _protokoll_senden(row, quelle, kennung_wert, inventarnummer=None):
+    """Ein festgeschriebenes Protokoll ausliefern – nur an Angemeldete mit Leserecht im Ordner und nur, wenn die
+    Datei noch genau die festgeschriebene ist (Prüfsumme). Im Browser geöffnet, nicht heruntergeladen."""
+    u = current_user()
+    if not u:
+        return redirect(url_for("pages.login", next=request.path))
+    if not darf("lesen"):
+        abort(403)
+    try:
+        if not darf("lesen", _ordner_aus_anfrage(quelle, {quelle: kennung_wert})):
+            abort(403)
+        if not row:
+            abort(404)
+        pfad = protokoll.datei(row)
+    except Abgelehnt as exc:
+        return render_template("error.html", user=u, code=exc.code, message=str(exc)), exc.code
+    resp = send_file(pfad, mimetype="application/pdf", download_name=protokoll.dateiname(row, inventarnummer),
+                     max_age=60 * 60 * 24, conditional=True)
+    resp.cache_control.public = None
+    resp.cache_control.private = True
+    # Kein „sandbox“ wie bei Anhängen: Damit zeigt der PDF-Betrachter von Chrome die Datei nicht an. Ein Protokoll
+    # enthält weder Skripte noch Formulare – auch angefügte Anhänge kommen entschärft hinein (stempel.anhaengen).
+    resp.headers["Content-Security-Policy"] = "default-src 'none'; object-src 'self'; img-src 'self' data:"
+    return resp
+
+
+@seiten.get("/material/pruefung/<int:pid>/pdf")
+def pruefung_pdf(pid):
+    row = db.query("SELECT x.*, i.inventory_no FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id "
+                   "WHERE x.id = ? AND x.locked_at IS NOT NULL", (pid,), one=True)
+    return _protokoll_senden(row, "pid", pid, row["inventory_no"] if row else None)
+
+
+@seiten.get("/material/durchgang/<int:rid>/sammelprotokoll")
+def sammelprotokoll(rid):
+    row = db.query("SELECT * FROM mat_round WHERE id = ? AND locked_at IS NOT NULL", (rid,), one=True)
+    return _protokoll_senden(row, "rid", rid)
+
+
+@seiten.get("/material/pruefen")
+def pruefseite():
+    """Prüfseite: Jeder – auch ohne Anmeldung – lädt ein Protokoll hoch und erfährt, ob es unverändert ist.
+    Sie zeigt nur das Ergebnis und die Protokoll-ID, keine Personendaten."""
+    u = current_user()
+    return render_template("material/pruefen.html", user=u, active="material" if u else None,
+                           angemeldet=bool(u and darf("lesen")))
 
 
 @seiten.get("/material/katalog")
@@ -708,11 +764,21 @@ def anhang_entfernen(pid, aid):
     return jsonify(ok=True)
 
 
+@api.post("/pruefungen/<int:pid>/festschreiben")
 @api.post("/pruefungen/<int:pid>/abschliessen")
 @requires_folder("pruefen", quelle="pid")
 def pruefung_abschliessen(pid):
+    """Abschließen heißt seit Lieferung 3 Festschreiben (der alte Pfad bleibt für offene Seiten gültig)."""
     pruefung.abschliessen(pid, json_body(), _pruefer())
     return _pruefung_antwort(pid)
+
+
+@api.post("/pruefungen/<int:pid>/berichtigen")
+@requires_folder("pruefen", quelle="pid")
+def pruefung_berichtigen(pid):
+    """Berichtigung einer abgeschlossenen Prüfung beginnen – liefert den neuen Entwurf."""
+    neu = pruefung.berichtigen(pid, json_body(), _pruefer())
+    return _pruefung_antwort(neu, 201)
 
 
 @api.delete("/pruefungen/<int:pid>")
@@ -739,8 +805,57 @@ def artikel_sperren(iid):
 @api.post("/artikel/<int:iid>/aussondern")
 @requires_folder("verwalten", quelle="iid")
 def artikel_aussondern(iid):
-    pruefung.aussondern(iid, json_body(), _pruefer())
-    return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True))
+    aid = pruefung.aussondern(iid, json_body(), _pruefer())
+    return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True), aussonderung=aid)
+
+
+# --- Schnittstelle: eigene Unterschrift und Prüfseite --------------------------------------------------------
+
+@api.get("/unterschrift")
+@requires_folder("lesen")
+def unterschrift_lesen():
+    return jsonify(unterschrift=unterschrift.daten_uri(unterschrift.von(current_user()["id"])))
+
+
+@api.put("/unterschrift")
+@requires_folder("lesen")
+def unterschrift_setzen():
+    """Die eigene Unterschrift hinterlegen (data:-URL vom Signatur-Pad) – Grundlage jedes Festschreibens."""
+    return jsonify(unterschrift=unterschrift.setzen(current_user(), json_body().get("bild")))
+
+
+@api.delete("/unterschrift")
+@requires_folder("lesen")
+def unterschrift_entfernen():
+    unterschrift.entfernen(current_user())
+    return jsonify(unterschrift=None)
+
+
+@api.post("/pruefen")
+def pruefen():
+    """Prüfseite ohne Anmeldung: ein hochgeladenes PDF gegen die gespeicherten Prüfsummen. Gespeichert wird nichts."""
+    bereich = [f"pruefen-ip:{request.remote_addr or '?'}"]
+    if attempts_exceeded(bereich, PRUEFEN_JE_VIERTELSTUNDE):
+        return jsonify(error="Zu viele Prüfungen in kurzer Zeit. Bitte in einer Viertelstunde noch einmal."), 429
+    with db.transaction():
+        note_attempt(bereich[0])
+    datei = request.files.get("datei")
+    if not datei or not datei.filename:
+        return jsonify(error="Bitte eine PDF-Datei wählen."), 400
+    ergebnis = protokoll.pruefen(datei.stream)
+    u = current_user()
+    if u and darf("lesen") and ergebnis.get("protokoll_id"):
+        ergebnis["link"] = _protokoll_link(ergebnis["protokoll_id"])
+    return jsonify(ergebnis)
+
+
+def _protokoll_link(pid):
+    """Für Angemeldete mit Zugang: wohin das Protokoll in der Oberfläche gehört."""
+    if pid.startswith("S-"):
+        r = db.query("SELECT id FROM mat_round WHERE protocol_id = ?", (pid,), one=True)
+        return f"/material/durchgang/{r['id']}" if r else None
+    r = db.query("SELECT id FROM mat_inspection WHERE protocol_id = ?", (pid,), one=True)
+    return f"/material/pruefung/{r['id']}" if r else None
 
 
 # --- Schnittstelle: Prüfdurchgänge ---------------------------------------------------------------------------

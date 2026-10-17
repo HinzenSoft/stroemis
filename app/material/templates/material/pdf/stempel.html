@@ -1,0 +1,29 @@
+<!doctype html>
+{# Vorlage des Prüfsummen-Stempels (services/pdf.py: stempelvorlage). Eine Seite DIN A4 hochkant ohne
+   Hintergrund, nur unten links ein weißer Kasten mit den Zeilen. services/stempel.py legt diese Seite als
+   Form-XObject auf jede Protokollseite; der Kasten muss deshalb in den unteren 14 mm bleiben, die jede
+   Protokollseite freihält (zwei Zeilen passen). #}
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Prüfsummen-Stempel</title>
+<meta name="author" content="strömis.de">
+<style>
+@page { size: A4; margin: 0; }
+html, body { margin: 0; padding: 0; background: none; }
+.stempel {
+  position: absolute; left: 15mm; bottom: 5mm; max-width: 180mm; box-sizing: border-box;
+  padding: 1mm; background: #ffffff; color: #3c3c3b;
+  font-family: "DejaVu Sans Mono", monospace; font-size: 6.5pt; line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+</style>
+</head>
+<body>
+<div class="stempel">
+{%- for z in zeilen %}
+  <div>{{ z }}</div>
+{%- endfor %}
+</div>
+</body>
+</html>

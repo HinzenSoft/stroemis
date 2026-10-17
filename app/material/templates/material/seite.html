@@ -35,4 +35,6 @@
 </div>
 <dialog id="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('material.static', filename='material.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='vendor/signature_pad/signature_pad.umd.min.js') }}"></script>
+<script src="{{ url_for('material.static', filename='unterschrift.js') }}"></script>
+<script src="{{ url_for('material.static', filename='material.js') }}"></script>{% endblock %}

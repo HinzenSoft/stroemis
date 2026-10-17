@@ -298,6 +298,64 @@ def _placeholder_poster(path_web, path_thumb):
     ImageOps.fit(img, (THUMB_SIZE, THUMB_SIZE)).save(path_thumb, "JPEG", quality=80)
 
 
+def _ohne_alpha(img):
+    """Für JPEG: Durchsichtige Flächen (freigestellte PNGs, WebP mit Alphakanal) auf Weiß legen. JPEG kennt keine
+    Durchsichtigkeit – ein bloßes convert("RGB") ließe sie schwarz werden, ein Produktfoto stünde dann im
+    schwarzen Kasten. Andere Farbräume (CMYK, Palette) werden RGB, Graustufen bleiben."""
+    if img.mode in ("RGBA", "LA", "PA") or (img.mode == "P" and "transparency" in img.info):
+        img = img.convert("RGBA")
+        grund = Image.new("RGB", img.size, (255, 255, 255))
+        grund.paste(img, mask=img.split()[-1])
+        return grund
+    if img.mode not in ("RGB", "L"):
+        return img.convert("RGB")
+    return img
+
+
+def _varianten_schreiben(img, web_path, thumb_path, vorschau_ganz):
+    """Web- und Vorschaufassung (JPEG) aus einem schon gedrehten Bild."""
+    img = _ohne_alpha(img)
+    web = img.copy()
+    web.thumbnail((WEB_MAX, WEB_MAX))
+    web.save(web_path, "JPEG", quality=85, optimize=True)
+    if vorschau_ganz:
+        thumb = img.copy()
+        thumb.thumbnail((THUMB_SIZE, THUMB_SIZE), Image.Resampling.LANCZOS)
+    else:
+        thumb = ImageOps.fit(img, (THUMB_SIZE, THUMB_SIZE), Image.Resampling.LANCZOS)
+    thumb.save(thumb_path, "JPEG", quality=82, optimize=True)
+
+
+def varianten_erneuern(media_dir, orig_name, vorschau_ganz=False):
+    """Web- und Vorschaufassung eines abgelegten Bildes aus dem Original neu schreiben, wenn das Original
+    durchsichtige Flächen hat (Reparatur: vor dem 17.10.2026 wurden sie schwarz). Die neuen Dateien entstehen
+    neben den alten und ersetzen sie in einem Zug. Liefert, ob etwas erneuert wurde."""
+    if not orig_name or "/" in orig_name or "\\" in orig_name or orig_name.startswith("."):
+        return False
+    paths = media_paths(media_dir)
+    orig_path = os.path.join(paths["orig"], orig_name)
+    key = os.path.splitext(orig_name)[0]
+    try:
+        with Image.open(orig_path) as img:
+            if not (img.mode in ("RGBA", "LA", "PA") or (img.mode == "P" and "transparency" in img.info)):
+                return False
+            _pixel_pruefen(img, orig_name)
+            bild = ImageOps.exif_transpose(img)
+            web_neu = os.path.join(paths["web"], key + ".neu.jpg")
+            thumb_neu = os.path.join(paths["thumb"], key + ".neu.jpg")
+            try:
+                _varianten_schreiben(bild, web_neu, thumb_neu, vorschau_ganz)
+                os.replace(web_neu, os.path.join(paths["web"], key + ".jpg"))
+                os.replace(thumb_neu, os.path.join(paths["thumb"], key + ".jpg"))
+            finally:
+                for rest in (web_neu, thumb_neu):
+                    if os.path.exists(rest):
+                        os.remove(rest)
+    except (OSError, ValueError):
+        return False
+    return True
+
+
 def store_upload(file_storage, media_dir, poster=None, vorschau_ganz=False):
     """Speichert Original, erzeugt Web- und Thumb-Variante. Liefert Metadaten oder wirft ValueError.
     Videos werden unverändert abgelegt; als Vorschau dient das vom Browser mitgeschickte Standbild (poster).
@@ -360,9 +418,7 @@ def store_upload(file_storage, media_dir, poster=None, vorschau_ganz=False):
                     # Dieselbe Pixelgrenze wie für Bilder: Ein riesiges Standbild bindet beim
                     # Drehen und Kopieren sonst hunderte Megabyte je Anfrage.
                     _pixel_pruefen(img, name)
-                    img = ImageOps.exif_transpose(img)
-                    if img.mode not in ("RGB", "L"):
-                        img = img.convert("RGB")
+                    img = _ohne_alpha(ImageOps.exif_transpose(img))
                     width, height = width or img.size[0], height or img.size[1]
                     web = img.copy()
                     web.thumbnail((WEB_MAX, WEB_MAX))
@@ -388,17 +444,7 @@ def store_upload(file_storage, media_dir, poster=None, vorschau_ganz=False):
             meta = read_exif(img)
             img = ImageOps.exif_transpose(img)
             width, height = img.size
-            if img.mode not in ("RGB", "L"):
-                img = img.convert("RGB")
-            web = img.copy()
-            web.thumbnail((WEB_MAX, WEB_MAX))
-            web.save(web_path, "JPEG", quality=85, optimize=True)
-            if vorschau_ganz:
-                thumb = img.copy()
-                thumb.thumbnail((THUMB_SIZE, THUMB_SIZE), Image.Resampling.LANCZOS)
-            else:
-                thumb = ImageOps.fit(img, (THUMB_SIZE, THUMB_SIZE), Image.Resampling.LANCZOS)
-            thumb.save(thumb_path, "JPEG", quality=82, optimize=True)
+            _varianten_schreiben(img, web_path, thumb_path, vorschau_ganz)
     except ValueError:
         _cleanup()
         raise

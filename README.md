@@ -58,7 +58,7 @@
 - **Druckansicht „je TN“**: In der Bewertungsansicht „je Teilnehmendem“ zeigt „🖨 Druckansicht“ alle Prüfungsleistungen der gewählten Person auf einer eigenen Seite – mit Profilbild, freiem Kommentar sowie je Leistung Ergebnis, Zeit, Kommentar und den hochgeladenen Bildern/Videos. Drucken oder als PDF speichern.
 - Die Medien liegen in einem eigenen Ordner und werden nur an Prüfer ausgeliefert.
 
-**Material** (Ausrüstungsbestand und Prüfnachweise; nur mit Zugang zum Modul Material – Stand: Lieferung 2 von 4, siehe `CHANGELOG-Material.md`)
+**Material** (Ausrüstungsbestand und Prüfnachweise; nur mit Zugang zum Modul Material – Stand: Lieferung 3 von 4, siehe `CHANGELOG-Material.md`)
 - Verwaltet PSA gegen Absturz und Seiltechnik sowie Wasser-Material (Schwimmwesten, Wasserrettungshelme, Wurfsäcke, Neopren- und Trockenanzüge) aller Gliederungen in einer Instanz. Lampen, Pumpen, Funk, Verbrauchsmaterial, Ausleihe und Fahrzeuginventar gehören bewusst nie hinein – das Modul ersetzt Prüfkarte und Excel-Liste des Materialwarts, kein Lager.
 - **Rollen** (Nutzerverwaltung): Stufe im Modul Material – Mitglied = Führungskraft (lesend), Verwaltung = Materialwart. Dazu zwei Häkchen am Konto: **Prüfer** (Sachkundiger, nur mit Urkundennummer) und **Produktkatalogpfleger** (plattformweit). Die Verwaltung ist überall Materialwart und Katalogpfleger, Prüfer aber nur mit eigenem Häkchen und eigener Urkundennummer. Jede Rollenänderung steht im Journal des Moduls.
 - **Katalog**: Kategoriebaum mit Normen und Vorgaben, Produkte (Hersteller, Modell, Artikelnummer, Norm, Materialart, Prüfintervall, Lebensdauer) mit Dublettenprüfung auf Hersteller + Modell + Artikelnummer (Schreibweise egal, „-“ als Artikelnummer zählt als keine); jede Artikelnummer gibt es zudem nur einmal im Katalog. Lebensdauer: Pflicht bei textil, verboten bei Metall, bei „sonstiges“ nur mit Fundstelle der Herstellerangabe. Produktbild über die vorhandene Bildverarbeitung, Herstellerdokumente (PDF/Bild oder Link) mit Version, Gültigkeitsbeginn, neuer Version, Zurückziehen und Umbenennen – ein Protokoll verweist später auf die am Prüftag gültige. Allgemeine Dokumente (Pflegehinweise, Anleitungen) hängen an einer Kategorie und gelten für alle Produkte darin und darunter. Listen mit eigener Herstellerspalte, sortierbar per Klick auf den Spaltenkopf; links der Kategorienbaum als Navigation. Suche serverseitig mit Trigramm-Index und Seiten. Pflegen dürfen nur Verwaltung und Produktkatalogpfleger. Fehlt beim Anlegen eines Artikels ein Produkt, meldet der Materialwart es mit Links, Fotos und Bemerkung; die Katalogpfleger bekommen eine Mail, legen es an (oder ordnen ein vorhandenes zu) oder lehnen mit Begründung ab, und der Melder bekommt Bescheid.
@@ -66,9 +66,10 @@
 - **Bestand**: Ordnerbaum, oben die Gliederungen, darunter frei verschachtelt Standorte, Fahrzeuge, Sets. Jede Gliederung bekommt die Systemordner „Gesperrt“ und „Ausgesondert“ (nicht umbenennbar, verschiebbar, löschbar; nichts kommt von Hand hinein). Artikel bekommen eine plattformweit eineindeutige Inventarnummer (`M-000001`) und – ohne Herstellernummer – eine eindeutige Seriennummer (`STR-000001`); beide werden nie wieder vergeben. Lebensende (nur textil) = Herstellung (Monat genügt) + Lebensdauer; es lässt sich nur vorziehen. Mehrfachauswahl zum Verschieben, Journal mit Vorher/Nachher je Feld an Produkt, Artikel und Ordner. Links steht der Ordnerbaum als Navigation (eigene Ebene markiert); unter 1200 px Breite klappt er als Schublade hinter „☰ Ordner“ auf.
 - **Prüfintervall**: Herstellerseite (Produkt, sonst Kategorie) und Organisation (Artikel, sonst nächster Ordner bis zur Gliederung) – es gilt das kürzere. Ein Ordner kann verschärfen, nicht verlängern. Wird das wirksame Intervall kürzer, ziehen Fälligkeiten hinter „heute + Intervall“ auf diese Grenze vor (mit Journaleintrag).
 - **Status** wird nie gespeichert, sondern abgeleitet: neu (noch keine Prüfung – die Eingangsprüfung steht aus), einsatzbereit, bald fällig (Einstellung `MATERIAL_BALD_FAELLIG_TAGE`, Vorgabe 30), überfällig, gesperrt, Lebensdauer erreicht, ausgesondert. Übersicht mit Zählung je Gliederung, Liste der fälligen Prüfungen.
-- **Prüfung** (nur Prüfer mit Urkundennummer): jederzeit aus der Artikelansicht startbar, die erste ist immer die Eingangsprüfung. Formular = aktives spezifisches des Produkts, sonst aktives generisches der Kategorie; jeder Befund ist mit „in Ordnung“ vorbelegt, Ja/Nein-Punkte mit ihrem Sollwert. Fürs Telefon gebaut: große Umschalter je Prüfpunkt, Kamera-Knopf, feste Leiste unten mit Ergebnis und Abschluss; jede Eingabe wird sofort gespeichert. Jeder Mangel braucht ein Foto, ein kritischer Mangel oder ein erreichtes Lebensende schließt „einsatzbereit“ aus, die nächste Fälligkeit (Prüftag + Intervall) lässt sich nur vorziehen. Anhänge (Prüfkarte, Bericht) als PDF oder Foto; mehrere Fotos eines Scans werden ein PDF. Der offene Entwurf reserviert den Artikel: andere sehen „in Prüfung bei …“, eine liegen gebliebene Reservierung gibt der Materialwart frei. Unterschrift, PDF-Protokoll und Festschreiben folgen mit Lieferung 3.
-- **Sperren und Aussondern**: „instandsetzen“ sperrt und verschiebt nach „Gesperrt“ der Gliederung (Herkunft gemerkt); zurück bringt nur eine Freiprüfung mit „einsatzbereit“. Ein Prüfer kann auch ohne Prüfung sperren (Sturzbelastung, Beschädigung, Verlust). Ausgesondert wird aus der Prüfung („aussondern“) oder vom Materialwart – nur gesperrte Artikel, mit Grund und Datum; jede Aussonderung ist ein eigener Vorgang, der Artikel wandert nach „Ausgesondert“ und zählt nirgends mehr als Bestand.
-- **Prüfdurchgang** (Materialwart oder Prüfer eröffnet ihn für einen Ordner): alle Artikel darin und darunter auf einer gemeinsamen Liste (offen, in Prüfung bei …, erledigt, mit Grund ausgenommen); mehrere Prüfer zugleich, jeder mit eigener Urkundennummer. Abschließen erst, wenn alles geprüft oder ausgenommen ist; „Abbrechen“ beendet ihn vorzeitig (offene Prüfungen laufen einzeln weiter, Ungeprüftes steht darin als „nicht geprüft“).
+- **Prüfung** (nur Prüfer mit Urkundennummer): jederzeit aus der Artikelansicht startbar, die erste ist immer die Eingangsprüfung. Formular = aktives spezifisches des Produkts, sonst aktives generisches der Kategorie; jeder Befund ist mit „in Ordnung“ vorbelegt, Ja/Nein-Punkte mit ihrem Sollwert. Fürs Telefon gebaut: große Umschalter je Prüfpunkt, Kamera-Knopf, feste Leiste unten mit Ergebnis und Abschluss; jede Eingabe wird sofort gespeichert. Jeder Mangel braucht ein Foto, ein kritischer Mangel oder ein erreichtes Lebensende schließt „einsatzbereit“ aus, die nächste Fälligkeit (Prüftag + Intervall) lässt sich nur vorziehen. Anhänge (Prüfkarte, Bericht) als PDF oder Foto; mehrere Fotos eines Scans werden ein PDF. Der offene Entwurf reserviert den Artikel: andere sehen „in Prüfung bei …“, eine liegen gebliebene Reservierung gibt der Materialwart frei. Abschließen heißt **Festschreiben**: Es braucht die im Profil hinterlegte Unterschrift und erzeugt das Prüfprotokoll als PDF (siehe „Nachweis“); danach ist die Prüfung unveränderlich. Unterschriftsfelder eines Formulars füllt man auf dem Signatur-Pad.
+- **Sperren und Aussondern**: „instandsetzen“ sperrt und verschiebt nach „Gesperrt“ der Gliederung (Herkunft gemerkt); zurück bringt nur eine Freiprüfung mit „einsatzbereit“. Ein Prüfer kann auch ohne Prüfung sperren (Sturzbelastung, Beschädigung, Verlust). Ausgesondert wird aus der Prüfung („aussondern“) oder vom Materialwart – nur gesperrte Artikel, mit Grund und Datum; jede Aussonderung ist ein eigener Vorgang mit eigenem, festgeschriebenem Aussonderungsprotokoll (auch der Materialwart braucht dafür seine Unterschrift), der Artikel wandert nach „Ausgesondert“ und zählt nirgends mehr als Bestand.
+- **Prüfdurchgang** (Materialwart oder Prüfer eröffnet ihn für einen Ordner): alle Artikel darin und darunter auf einer gemeinsamen Liste (offen, in Prüfung bei …, erledigt, mit Grund ausgenommen); mehrere Prüfer zugleich, jeder mit eigener Urkundennummer. Abschließen erst, wenn alles geprüft oder ausgenommen ist – dann entsteht das Sammelprotokoll mit allen Artikeln, Ausnahmen, Prüfern samt Urkundennummer und Unterschrift und den Prüfsummen der Einzelprotokolle; „Abbrechen“ beendet ihn vorzeitig (offene Prüfungen laufen einzeln weiter, Ungeprüftes steht darin als „nicht geprüft“, auch im Sammelprotokoll).
+- **Nachweis**: Prüfer (und wer aussondert) hinterlegen ihre Unterschrift einmal im Profil (Signatur-Pad). Beim Festschreiben entsteht ein PDF/A-Protokoll (WeasyPrint) – Prüf-, Aussonderungs- oder Sammelprotokoll mit Protokoll-ID (`P-`, `A-`, `S-2026-000123`), Unterschrift, Anmeldung und Zeitpunkt, beim Prüfprotokoll nach dem Muster der EN-365-Karte mit Befunden, Mangelfotos, Herstellerdokumenten, Anhängen samt Prüfsumme (auf Wunsch hinten angefügt) und QR-Code zum Lebenslauf. Im Fuß jeder Seite steht „SHA-256 (erste N Bytes): …“: nachrechenbar mit `head -c N datei.pdf | sha256sum` oder auf der öffentlichen Prüfseite `/material/pruefen` (ohne Anmeldung; zeigt nur „unverändert“ oder „verändert“ und die Protokoll-ID). Die Dateien liegen schreibgeschützt unter `/data/pdf/<jahr>/`; Datenbank-Trigger weisen jede Änderung an festgeschriebenen Prüfungen und abgeschlossenen Durchgängen ab. Eine Korrektur ist eine **Berichtigung**: ein neuer Entwurf mit allen Befunden, Fotos und Anhängen, demselben Prüftag und Verweis – das Original bleibt mit seinem Protokoll erhalten.
 - **Suche** nach Serien-, Inventar- und Herstellernummer mit Teiltreffern; ein eindeutiger Treffer öffnet den Artikel direkt. Jeder Artikel hat eine Adresse `https://strömis.de/m/<token>` für QR-Code, NFC- oder RFID-Tag – sie führt über die Anmeldung zum Artikel.
 - Katalogimport für die Ergebnisse aus Phase 0: `flask --app "app:create_app()" material import-catalog datei.json` (Format in `CHANGELOG-Material.md`, Vorlage mit Kategorien und Normen in `docs/material-katalog-vorlage.json`).
 
@@ -108,7 +109,7 @@ strömis.de, xn--strmis-yxa.de, wiki.strömis.de, wiki.xn--strmis-yxa.de {
 
 Beide Hostnamen zeigen auf denselben Container: Anfragen mit dem Host `wiki.strömis.de` (`PUBLIC_HOST`) landen automatisch im öffentlichen Bereich (intern `/oeffentlich/…`), alles andere bleibt die interne Plattform. Dafür braucht die Subdomain einen DNS-Eintrag und ein Zertifikat (Caddy holt es automatisch).
 
-Uploads bis 5 GB: bei nginx/Traefik `client_max_body_size`/`maxRequestBodyBytes` und die Timeouts entsprechend erhöhen (Gunicorn im Container wartet bis zu 60 Minuten). Der Container wertet `X-Forwarded-Proto/For/Host` aus (ProxyFix), damit Links und sichere Cookies stimmen. `docker-compose.yml` veröffentlicht Port 8080 auf allen Schnittstellen, damit auch ein Proxy auf einem anderen Rechner ihn erreicht. Wer den Container direkt erreicht, könnte diese Kopfzeilen selbst setzen und damit die Anmeldebremse je IP umgehen – und Docker öffnet Ports an einer `ufw`-Firewall vorbei. Den Port deshalb in der Firewall des Anbieters nur für den Proxy freigeben; läuft der Proxy auf demselben Host, genügt `"127.0.0.1:8080:8080"` in der Compose-Datei. Der Container läuft ohne Capabilities und ohne Rechtegewinn (`cap_drop`, `no-new-privileges`), und sein Wurzeldateisystem ist schreibgeschützt (`read_only`): Beschreibbar bleiben nur das Datenvolumen `/data` und ein flüchtiges `/tmp` für Gunicorns Prozess-Lebenszeichen.
+Uploads bis 5 GB: bei nginx/Traefik `client_max_body_size`/`maxRequestBodyBytes` und die Timeouts entsprechend erhöhen (Gunicorn im Container wartet bis zu 60 Minuten). Der Container wertet `X-Forwarded-Proto/For/Host` aus (ProxyFix), damit Links und sichere Cookies stimmen. `docker-compose.yml` veröffentlicht Port 8080 auf allen Schnittstellen, damit auch ein Proxy auf einem anderen Rechner ihn erreicht. Wer den Container direkt erreicht, könnte diese Kopfzeilen selbst setzen und damit die Anmeldebremse je IP umgehen – und Docker öffnet Ports an einer `ufw`-Firewall vorbei. Den Port deshalb in der Firewall des Anbieters nur für den Proxy freigeben; läuft der Proxy auf demselben Host, genügt `"127.0.0.1:8080:8080"` in der Compose-Datei. Der Container läuft ohne Capabilities und ohne Rechtegewinn (`cap_drop`, `no-new-privileges`), und sein Wurzeldateisystem ist schreibgeschützt (`read_only`): Beschreibbar bleiben nur das Datenvolumen `/data` und ein flüchtiges `/tmp` für Gunicorns Prozess-Lebenszeichen, den Schriften-Zwischenspeicher von Fontconfig und die Zwischendateien von WeasyPrint beim Erzeugen eines Protokolls (je Protokoll einige 100 kB, danach gelöscht).
 
 Nach einem Update gilt: Wer die Anwendung im Browser offen hat, lädt die Seite einmal neu. Ein Reiter, der noch die alten Skripte ausführt, spricht sonst weiter mit der alten Schnittstelle – im schlimmsten Fall legt jeder seiner Zwischenstände eine eigene Fassung im Verlauf an.
 
@@ -188,7 +189,7 @@ der Firewall des Anbieters nur für den Proxy öffnen, oder – läuft der Proxy
 der Entwicklung `STROEMIS_PORT=127.0.0.1:8008` setzen. Unterscheiden sich Produktion und Entwicklung sonst
 noch, dann nur über ihre `.env`; `docker-compose.yml` und das Dockerfile sind für beide dieselben.
 
-`GET /healthz` antwortet ohne Anmeldung mit `{"ok": true}` – darauf setzt der `HEALTHCHECK` des Containers auf (alle 30 s, `docker ps` zeigt den Zustand). Die Daten liegen im Volume unter `/data`: `stroemis.db` (SQLite mit WAL), `media/` (Originale, Web-Größen, Thumbnails, Wiki-Anhänge, Profilbilder) und `secret_key`. Für eine Sicherung genügt es, dieses Volume zu kopieren – am besten bei gestopptem Container.
+`GET /healthz` antwortet ohne Anmeldung mit `{"ok": true}` – darauf setzt der `HEALTHCHECK` des Containers auf (alle 30 s, `docker ps` zeigt den Zustand). Die Daten liegen im Volume unter `/data`: `stroemis.db` (SQLite mit WAL), `media/` (Originale, Web-Größen, Thumbnails, Wiki-Anhänge, Profilbilder), `pdf/` (festgeschriebene Protokolle des Moduls Material) und `secret_key`. Für eine Sicherung genügt es, dieses Volume zu kopieren – am besten bei gestopptem Container.
 
 ## Konfiguration
 
@@ -254,6 +255,7 @@ Ohne `ADMIN_EMAIL`/`ADMIN_PASSWORD` bekommt der erste Nutzer, der ein Konto anfr
 - **Videos:** ffmpeg arbeitet nur mit lokalen Dateien (`-protocol_whitelist`), entfernt beim Wandeln und beim Umpacken die Begleitangaben (Aufnahmeort vom Telefon) und läuft je Arbeitsprozess nur einmal zugleich. Der ZIP-Export packt jede Datei einmal, auf Platte, bis 2 GB.
 - **Aufräumen:** Nach dem Start entfernt der Hintergrundlauf Artikeldateien unter `media/wiki`, die seit einer Woche weder eine Seite noch eine Fassung im Verlauf nennt (Uploads ohne Speichern, alte Zuschnitte, Anhänge endgültig gelöschter Seiten, abgebrochene Umwandlungen).
 - **Anmeldeseite:** Die Slideshow zeigt je Tag dieselbe Auswahl, nicht bei jedem Aufruf andere Bilder – sonst ließe sich der Bestand ohne Anmeldung einsammeln.
+- **Protokolle (Modul Material):** Festgeschriebene Prüfungen, Aussonderungen und Durchgänge ändert auch die Datenbank nicht mehr (Trigger); die PDF-Dateien liegen schreibgeschützt unter `/data/pdf` und werden nur ausgeliefert, wenn ihre Prüfsumme noch stimmt. WeasyPrint lädt beim Rendern nichts aus dem Netz und keine fremden Dateien – nur die eigenen Schriften; Bilder kommen eingebettet. Die öffentliche Prüfseite `/material/pruefen` speichert nichts, nennt keine Personendaten und ist je Adresse auf 20 Prüfungen in 15 Minuten und 200 MB je Datei gebremst.
 
 ## Damit Mails ankommen
 
@@ -303,7 +305,7 @@ verzichten. Bei transaktionalen Mails entscheidet fast ausschließlich die Absen
 
 ## Daten und Sicherung
 
-Alles liegt im Volume `/data`: `stroemis.db` (SQLite), `media/orig` (Originale), `media/web` und `media/thumb` (erzeugte Varianten), `media/wiki` (Wiki-Bilder), `media/avatar` (Profilbilder), `media/pruefungen` (Medien zu Prüfungen), `media/material` (Fotos, Herstellerdokumente und Prüfanhänge des Moduls Material), `secret_key` und `tmp/` (Zwischendateien laufender Uploads und Exporte – muss nicht gesichert werden). Verwaiste Dateien unter `media/wiki` räumt der Hintergrundlauf nach einer Woche weg (siehe „Wie die Anwendung abgesichert ist“).
+Alles liegt im Volume `/data`: `stroemis.db` (SQLite), `media/orig` (Originale), `media/web` und `media/thumb` (erzeugte Varianten), `media/wiki` (Wiki-Bilder), `media/avatar` (Profilbilder), `media/pruefungen` (Medien zu Prüfungen), `media/material` (Fotos, Herstellerdokumente und Prüfanhänge des Moduls Material), `pdf/` (festgeschriebene Protokolle des Moduls Material, schreibgeschützt – unbedingt mitsichern: die Datenbank verweist auf sie, und ihre Prüfsummen lassen sich nicht neu erzeugen), `secret_key` und `tmp/` (Zwischendateien laufender Uploads und Exporte – muss nicht gesichert werden). Verwaiste Dateien unter `media/wiki` räumt der Hintergrundlauf nach einer Woche weg (siehe „Wie die Anwendung abgesichert ist“).
 
 **Stündliche Sicherung nach `~/data.bak`** – ein einzelner Cron-Eintrag auf dem VPS. Er gehört in den Cron des
 Nutzers, dem `data/` gehört (uid 1000), oder in den von root: Nur die dürfen `secret_key` lesen. Mit `crontab -e`
@@ -324,10 +326,17 @@ Zurückspielen (im Ordner der Produktion):
 
 ```bash
 docker compose down
-rsync -a --delete ~/data.bak/ data/    # --delete räumt auch alte WAL-Dateien neben der Datenbank weg
+rsync -a --delete --exclude=/pdf/ ~/data.bak/ data/    # --delete räumt auch alte WAL-Dateien neben der Datenbank weg
+rsync -a ~/data.bak/pdf/ data/pdf/                     # Protokolle nur ergänzen, nie löschen (siehe unten)
 sudo chown -R 1000:1000 data
 docker compose up -d
 ```
+
+Festgeschriebene Protokolle des Moduls Material (`data/pdf/`) werden beim Zurückspielen nicht gelöscht: Ein
+Protokoll, das nach der letzten Sicherung entstand, ist vielleicht schon ausgehändigt. Die Datenbank kennt es nach
+dem Zurückspielen nicht mehr; der Start legt es deshalb nach `data/pdf/verwaist/`, und seine Protokoll-ID wird nicht
+noch einmal vergeben (ist der zugehörige Entwurf wieder offen, bekommt sein neues Protokoll eine Folgenummer wie
+`P-2026-000007-2`). Die Prüfung ist im System neu festzuschreiben.
 
 ## DLRG-Wortmarke einsetzen
 
@@ -379,13 +388,17 @@ python tests/test_smoke.py    # Rauchtest über die API (Login, Upload, EXIF, Re
                               # und Härtungstest (Freigaben, alte Adressen, Anmeldebremse, Grenzen)
 python tests/test_pruefungen.py         # Prüfungsbereich (Rechte, Kataloge, Excel-Import, Kopieren, Nachprüfung, Medien)
 python tests/test_pruefungen_import.py  # Excel-Erkennung
-python tests/test_material.py           # Modul Material (Migration, Rollen, Katalog, Ordner, Artikel, Suche, Journal, Import, Prüfung, Durchgang, Produktmeldungen)
+python tests/test_material.py           # Modul Material (Migration, Rollen, Katalog, Ordner, Artikel, Suche, Journal, Import, Prüfung, Durchgang, Produktmeldungen,
+                                        # Festschreiben, Protokolle, Prüfsumme, Prüfseite, Berichtigung) – braucht WeasyPrint samt Pango;
+                                        # den Stempel liest pdftotext (poppler-utils), ohne es pypdf
 python scripts/beispieldaten.py         # füllt ./data mit zwei erfundenen Prüfungs-Lehrgängen zum Ausprobieren
 python scripts/material_demo.py --demo  # füllt ./data mit DEMO-Katalog, DEMO-Bestand und DEMO-Prüfungen (nie für echte Prüfungen)
 flask --app "app:create_app()" material import-catalog katalog.json --trocken   # Katalogdatei prüfen
 ```
 
 Die JavaScript-Bibliotheken liegen im Arbeitsbaum unter `app/static/vendor/` und werden im Docker-Build noch einmal frisch geladen und gegen `vendor.sha256` geprüft.
+
+WeasyPrint (Protokolle des Moduls Material) braucht außerhalb von Docker die Systembibliotheken Pango und HarfBuzz – unter Debian/Ubuntu `sudo apt install libpango-1.0-0 libpangoft2-1.0-0 fonts-dejavu-core` (dazu `libharfbuzz-subset0` ab Debian 12 bzw. Ubuntu 24.04 – älteren Systemen fehlt das Paket, WeasyPrint läuft dann ohne), unter macOS `brew install pango`.
 
 `scripts/beispieldaten.py` ist ein eigenständiges Entwicklungswerkzeug außerhalb von `app/` – ohne Route, ohne Knopf in der Oberfläche, nur von der Kommandozeile aufrufbar. Es legt unter dem ersten Administrator-Konto einen laufenden SR1- und einen abgeschlossenen SR2-Lehrgang mit erfundenen Personen, Voraussetzungen, Prüfungsleistungen (zwei davon mit Kriterienliste), Bewertungen und einer Nachprüfung an. Ein früherer, gleichnamiger Weg direkt in der Anwendung (Knopf, API-Route) wurde bewusst entfernt (siehe `CHANGELOG-Pruefungen.md`); dieses Skript berührt weder Route noch Oberfläche und läuft nie im Docker-Image mit (`Dockerfile` kopiert nur `app/`).
 
@@ -416,14 +429,16 @@ app/
   material/        Modul Material, eigenständig: models.py (Tabellen mat_*, Schemaversion in mat_meta),
                    routes.py (Seiten /material…, /m/<token>, Schnittstelle /api/material…, Medien),
                    cli.py (flask material import-catalog), services/ (rechte, katalog, bestand, status,
-                   interval, search, nummern, qr, journal, importer, pruefung, durchgang, anhang),
-                   templates/, static/ (material.js, .css)
+                   interval, search, nummern, qr, journal, importer, pruefung, durchgang, anhang,
+                   protokoll (Festschreiben, Ablage, Prüfseite), pdf (WeasyPrint), stempel (Prüfsumme),
+                   unterschrift), templates/ (pdf/: Vorlagen der Protokolle), static/ (material.js, .css,
+                   unterschrift.js für das Signatur-Pad, pruefen.js für die Prüfseite)
   mailer.py        SMTP-Versand (ohne SMTP_HOST landet die Mail im Log)
   templates/       Jinja-Seiten
   static/css/      app.css – ein Blatt für alle Ansichten; pruefungen.css nur für den Prüfungsbereich
   static/fonts/    DLRG Univers als WOFF2 (Regular, Kursiv, Fett)
   static/img/      Favicon, optional die DLRG-Wortmarke
-  static/vendor/   Leaflet, markercluster, marked, DOMPurify, Toast UI (im Docker-Build geladen)
+  static/vendor/   Leaflet, markercluster, marked, DOMPurify, Toast UI, signature_pad (im Docker-Build geladen)
   static/js/       common.js       gemeinsame Helfer (api, esc, dialog, toast, Datum)
                    markdown.js     Renderer: Callouts, Spalten, Boxen, Videos, TOC, Auszeichnungen
                    editor-format.js  Markdown <-> Editorformat (reine Funktionen, trägt den Rundlauf)
@@ -439,7 +454,8 @@ tests/
   test_pruefungen.py  Prüfungsbereich: Rechte, Kataloge, Import, Kopieren, Pflichtkommentar, Nachprüfung, Medien, Mängel
   test_pruefungen_import.py  Excel-Erkennung mit synthetischen Dateien
   test_material.py Modul Material: Migration, Rollen, Katalog, Ordner, Artikel, Suche, Journal, Status, Import,
-                   Prüfung, Sperre und Aussonderung, Anhänge, Prüfdurchgang, Produktmeldungen
+                   Prüfung, Sperre und Aussonderung, Anhänge, Prüfdurchgang, Produktmeldungen, Festschreiben,
+                   Protokolle mit Prüfsumme, Prüfseite, Berichtigung, Unterschrift
   rundlauf.html    Rundlauf, Rückgängig-Verlauf und verbundene Zellen im Browser prüfen (Datei einfach öffnen)
   gleichstand.html Leseansicht und Editor nebeneinander messen (Datei einfach öffnen)
   nachgeholtes_speichern.html

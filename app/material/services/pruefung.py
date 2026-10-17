@@ -9,8 +9,11 @@ Index), die anderen sehen „in Prüfung bei …“. Eine liegen gebliebene Rese
 Materialwart frei. Die erste Prüfung eines Artikels ist immer die Eingangsprüfung; bis sie
 abgeschlossen ist, steht er auf „neu“.
 
-Abschließen setzt Ergebnis, Sperrzustand und Fälligkeit (Unterschrift, PDF und Festschreiben folgen mit
-Lieferung 3). Regeln dabei:
+Abschließen heißt Festschreiben (Lieferung 3): Es setzt Ergebnis, Sperrzustand und Fälligkeit und erzeugt in
+derselben Transaktion das Prüfprotokoll als PDF mit Unterschrift, Anmeldung, Zeitpunkt und Prüfsumme
+(protokoll.py). Danach ist die Prüfung unveränderlich – auch die Datenbank weist jede Änderung ab
+(Trigger, models.py). Eine Korrektur ist eine Berichtigung: ein neuer Entwurf mit allen Befunden, Fotos und
+Anhängen, demselben Prüftag und Verweis auf das Original, das unverändert bleibt. Regeln beim Abschluss:
   - Jeder Pflichtpunkt hat einen Wert oder ist „nicht zutreffend“; jeder Mangel hat ein Foto.
   - Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus, ebenso ein erreichtes Lebensende
     (nur textil – bei Metall entscheidet allein der Befund).
@@ -19,10 +22,13 @@ Lieferung 3). Regeln dabei:
     nur vorziehen.
   - „instandsetzen“ sperrt: Der Artikel wandert in „Gesperrt“ seiner Gliederung, der Herkunftsordner
     bleibt gemerkt. „einsatzbereit“ an einem gesperrten Artikel ist die Freiprüfung – sie bringt ihn
-    zurück in den Herkunftsordner. „aussondern“ ist zugleich die Aussonderung (eigener Vorgang).
+    zurück in den Herkunftsordner. „aussondern“ ist zugleich die Aussonderung (eigener Vorgang mit
+    eigenem Aussonderungsprotokoll).
+  - Festschreiben verlangt eine Urkundennummer und eine im Profil hinterlegte Unterschrift; Unterschrifts-
+    felder des Formulars sind wie andere Pflichtpunkte zu füllen.
 
-Wer handelt, kommt als „pruefer“-dict herein ({id, name, urkunde}) – aus dem angemeldeten Konto
-(pruefer_aus) oder, für die Demodaten auf der Kommandozeile, von Hand."""
+Wer handelt, kommt als „pruefer“-dict herein ({id, name, urkunde, unterschrift, login}) – aus dem
+angemeldeten Konto (pruefer_aus) oder, für die Demodaten auf der Kommandozeile, von Hand."""
 import json
 from datetime import date
 
@@ -33,20 +39,25 @@ from ...images import delete_photo_files
 from ..models import ANHANGARTEN, AUSSONDERUNGSGRUENDE, BEFUNDE, ERGEBNISSE, PRUEFARTEN, SPERRGRUENDE
 from . import Abgelehnt, auswahl, datum, heute, text, wahr
 from . import anhang as anh
-from . import bestand, journal, katalog
+from . import bestand, journal, katalog, protokoll
 from . import status as st
+from . import unterschrift as us
 from .interval import plus_monate, wirksam
 
 BEFUND_TEXT = {"ok": "in Ordnung", "mangel": "Mangel", "nicht_zutreffend": "nicht zutreffend"}
-ABGESCHLOSSEN = "Die Prüfung ist abgeschlossen und lässt sich nicht mehr ändern."
+ABGESCHLOSSEN = ("Die Prüfung ist festgeschrieben und lässt sich nicht mehr ändern – eine Korrektur geht nur als "
+                 "Berichtigung.")
 URKUNDE_FEHLT = "Prüfen dürfen nur Prüfer mit hinterlegter Urkundennummer."
+UNTERSCHRIFT_FEHLT = ("Zum Festschreiben fehlt deine Unterschrift – bitte im Profil hinterlegen (Profil → Unterschrift) "
+                      "oder direkt hier unterschreiben.")
 
 
 def pruefer_aus(user):
-    """Der Prüfer aus dem angemeldeten Konto."""
+    """Der Prüfer aus dem angemeldeten Konto – mit Unterschrift und Anmeldung fürs Festschreiben."""
     from .rechte import urkunde_saeubern
     return {"id": user["id"], "name": user["name"] or user["email"],
-            "urkunde": urkunde_saeubern(user["urkundennummer"] or "")}
+            "urkunde": urkunde_saeubern(user["urkundennummer"] or ""),
+            "unterschrift": user.get("signature_png") or None, "login": user["email"]}
 
 
 def _tag(d):
@@ -122,7 +133,7 @@ def befund_json(r):
     return {"id": r["id"], "position": r["position"], "gruppe": r["group_name"], "text": r["checklist_text"],
             "art": r["editor"], "pflicht": bool(r["mandatory"]), "soll": r["expected_value"],
             "kritisch": bool(r["is_critical"]), "befund": r["finding"], "wert": r["value"], "notiz": r["note"],
-            "foto": foto}
+            "foto": foto, "unterschrift": us.daten_uri(r.get("signature_png"))}
 
 
 def anhang_json(a):
@@ -139,7 +150,27 @@ def kurz_json(p):
             "ergebnis": p["result"], "ergebnis_text": ERGEBNISSE.get(p["result"], "") if p["result"] else "",
             "grund": p["reason"], "bemerkung": p["remarks"], "naechste": p["next_due_on"],
             "entwurf": p["completed_at"] is None, "abgeschlossen_am": p["completed_at"], "begonnen_am": p["created_at"],
-            "basis_id": p["basis_inspection_id"]}
+            "basis_id": p["basis_inspection_id"],
+            "protokoll": protokoll.protokoll_json(p, f"/material/pruefung/{p['id']}/pdf"),
+            "berichtigt": _verweis(p["corrects_inspection_id"]),
+            "berichtigt_durch": _berichtigung_von(p["id"]) if p["completed_at"] else None}
+
+
+def _verweis(pid):
+    """Kurzangaben zu einer anderen Prüfung (Original einer Berichtigung)."""
+    if not pid:
+        return None
+    r = db.query("SELECT id, protocol_id, inspected_on FROM mat_inspection WHERE id = ?", (pid,), one=True)
+    return {"id": r["id"], "protokoll_id": r["protocol_id"], "datum": r["inspected_on"]} if r else None
+
+
+def _berichtigung_von(pid):
+    r = db.query("SELECT id, protocol_id, completed_at, inspector_name FROM mat_inspection WHERE corrects_inspection_id = ?",
+                 (pid,), one=True)
+    if not r:
+        return None
+    return {"id": r["id"], "protokoll_id": r["protocol_id"], "entwurf": r["completed_at"] is None,
+            "pruefer": r["inspector_name"]}
 
 
 def pruefung_json(p, pruefer_id=None):
@@ -166,7 +197,14 @@ def pruefung_json(p, pruefer_id=None):
         if r:
             out["durchgang"] = {"id": r["id"], "titel": r["title"], "offen": r["closed_on"] is None}
     out["dokumente"] = json.loads(p["documents_json"] or "[]")
-    tag = heute().isoformat() if out["entwurf"] else p["inspected_on"]
+    out["unterschrift"] = us.daten_uri(p["signature_png"])
+    out["grund_berichtigung"] = p["correction_reason"]
+    if not out["entwurf"]:
+        out["berichtigbar"] = berichtigbar(p, item)
+    tag = p["inspected_on"] if out["entwurf"] and p["corrects_inspection_id"] else (
+        heute().isoformat() if out["entwurf"] else p["inspected_on"])
+    if out["entwurf"]:
+        out["prueftag"] = tag            # der Tag, den Festschreiben jetzt setzen würde (deutsche Zeit)
     out["lebensdauer"] = _lebensdauer(item, produkt, tag)
     if out["entwurf"]:
         iv = wirksam(produkt, _intervall_ordner(item), item["interval_months"])
@@ -333,11 +371,25 @@ def punkt_setzen(pid, rid, d, pruefer):
         _entwurf_des(pid, pruefer)
         r = _befund(pid, rid)
         art = r["editor"]
-        if art == "signature":
-            raise Abgelehnt("Unterschriftsfelder kommen mit Lieferung 3.", 409)
         befund, wert, notiz = r["finding"], r["value"], r["note"]
         if "notiz" in d:
             notiz = text(d, "notiz", "Bemerkung zum Prüfpunkt", 1000, einzeilig=False)
+        if art == "signature":
+            # Unterschriftsfeld des Formulars: gezeichnet auf dem Signatur-Pad; leer = noch nicht unterschrieben.
+            bild = r["signature_png"]
+            if d.get("befund") == "nicht_zutreffend":
+                befund, bild = "nicht_zutreffend", None
+            elif "unterschrift" in d:
+                bild = us.lesen(d["unterschrift"], r["checklist_text"]) if d["unterschrift"] else None
+                befund = "ok"
+            elif d.get("befund") == "ok":
+                befund = "ok"
+            elif "befund" in d or "wert" in d:
+                raise Abgelehnt("Ein Unterschriftsfeld nimmt eine Unterschrift auf (oder „nicht zutreffend“).")
+            db.execute("UPDATE mat_inspection_result SET finding = ?, value = '', note = ?, signature_png = ? WHERE id = ?",
+                       (befund, notiz, bild, rid))
+            _beruehrt(pid)
+            return befund_json(_befund(pid, rid))
         if art == "yesno":
             # Der Befund folgt aus dem Wert: Weicht er vom Soll ab, ist das ein Mangel.
             if d.get("befund") == "nicht_zutreffend":
@@ -371,7 +423,7 @@ def punkt_foto_setzen(pid, rid, file_storage, pruefer):
     _entwurf_des(pid, pruefer)
     alt = _befund(pid, rid)
     if alt["editor"] == "signature":
-        raise Abgelehnt("Unterschriftsfelder kommen mit Lieferung 3.", 409)
+        raise Abgelehnt("Ein Unterschriftsfeld nimmt eine Unterschrift auf, kein Foto.")
     neu = katalog.foto_ablegen(file_storage, vorschau_ganz=True)
     try:
         with db.transaction(sofort=True):
@@ -405,7 +457,10 @@ def kopf_setzen(pid, d, pruefer):
     with db.transaction(sofort=True):
         p = _entwurf_des(pid, pruefer)
         art = p["kind"]
-        if "art" in d:
+        if "art" in d and p["corrects_inspection_id"]:
+            if d.get("art") != art:
+                raise Abgelehnt("Die Prüfart einer Berichtigung ist die des Originals.", 409)
+        elif "art" in d:
             arten = arten_fuer(bestand.artikel(p["item_id"]))[0]
             art = auswahl(d.get("art"), arten, "Prüfart")
         bemerkung = text(d, "bemerkung", "Bemerkung", 4000, einzeilig=False) if "bemerkung" in d else p["remarks"]
@@ -493,22 +548,26 @@ def _beantwortet(r):
     if r["editor"] == "photo":
         return bool(r["photo"])
     if r["editor"] == "signature":
-        return True                      # Unterschriftsfelder: Lieferung 3
+        return bool(r["signature_png"])
     return bool((r["value"] or "").strip())
 
 
 def abschliessen(pid, d, pruefer, pruefdatum=None):
-    """Ergebnis festlegen. pruefdatum nur für Demodaten und Tests – über die Schnittstelle gilt heute."""
+    """Ergebnis festlegen und festschreiben (Protokoll mit Unterschrift und Prüfsumme). pruefdatum nur für
+    Demodaten und Tests – über die Schnittstelle gilt heute, bei einer Berichtigung der Prüftag des Originals."""
     if not pruefer.get("urkunde"):
         raise Abgelehnt(URKUNDE_FEHLT, 403)
+    if not pruefer.get("unterschrift"):
+        raise Abgelehnt(UNTERSCHRIFT_FEHLT, 403)
     ergebnis = auswahl(d.get("ergebnis"), ERGEBNISSE, "Ergebnis")
-    with db.transaction(sofort=True):
+    with protokoll.dateien_sichern(), db.transaction(sofort=True):
         p = _entwurf_des(pid, pruefer)
         item = bestand.artikel(p["item_id"])
         if item["lock_state"] == "ausgesondert":
             raise Abgelehnt("Der Artikel wurde inzwischen ausgesondert.", 409)
         produkt = katalog.produkt(item["product_id"])
-        tag = _tag(pruefdatum or heute())
+        tag = _tag(pruefdatum or (p["inspected_on"] if p["corrects_inspection_id"] else heute()))
+        heimat = _heimat(item)
         punkte = befunde(pid)
         offen = [r["checklist_text"] for r in punkte if r["mandatory"] and not _beantwortet(r)]
         if offen:
@@ -555,11 +614,23 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
         journal.eintragen("inspection", pid, "abgeschlossen", None,
                           {"result": ergebnis, "inspected_on": tag, "next_due_on": naechste, "kind": p["kind"],
                            "maengel": len(maengel), "reason": grund})
-        _wirkung(item, p, ergebnis, tag, naechste, grund, pruefer)
+        _wirkung(item, p, ergebnis, tag, naechste, grund, pruefer, ts)
+        nr = protokoll.pruefung_festschreiben(pid, ts, pruefer["unterschrift"], pruefer.get("login"), heimat)
+        if p["corrects_inspection_id"]:
+            journal.eintragen("inspection", p["corrects_inspection_id"], "berichtigt", None,
+                              {"berichtigung": pid, "protocol_id": nr, "grund": p["correction_reason"]})
     return pid
 
 
-def _wirkung(item, p, ergebnis, tag, naechste, grund, pruefer):
+def _heimat(item):
+    """Der Ordner, in den der Artikel gehört: bei gesperrten der Herkunftsordner (er liegt nur vorübergehend in
+    „Gesperrt“). So steht er im Protokoll – Sperre und Aussonderung verschieben ihn erst danach."""
+    if item["lock_state"] in ("gesperrt", "verloren") and item["origin_folder_id"]:
+        return item["origin_folder_id"]
+    return item["folder_id"]
+
+
+def _wirkung(item, p, ergebnis, tag, naechste, grund, pruefer, ts=None):
     """Was das Ergebnis am Artikel bewirkt – in der Transaktion des Abschlusses."""
     iid = item["id"]
     gesperrt = item["lock_state"] in ("gesperrt", "verloren")
@@ -589,7 +660,7 @@ def _wirkung(item, p, ergebnis, tag, naechste, grund, pruefer):
     else:                                                  # aussondern
         db.execute("UPDATE mat_item SET last_inspected_on = ?, updated_at = ? WHERE id = ?", (tag, db.now(), iid))
         _aussondern(bestand.artikel(iid), "Prüfergebnis „aussondern“" + (f": {grund}" if grund else ""), "",
-                    tag, pruefer, basis_id=p["id"])
+                    tag, pruefer, basis_id=p["id"], ts=ts)
 
 
 def _rueckweg(item):
@@ -649,12 +720,18 @@ def sperren(iid, d, pruefer):
         _sperren(item, "verloren" if art == "verlust" else "gesperrt", grund)
 
 
-def _aussondern(item, grund, bemerkung, tag, akteur, basis_id=None):
-    """Aussonderung als eigener Vorgang (mat_inspection, Art „aussonderung“, ohne Formular); der Artikel
-    wandert in „Ausgesondert“ und zählt nirgends mehr als Bestand."""
+def _aussondern(item, grund, bemerkung, tag, akteur, basis_id=None, ts=None):
+    """Aussonderung als eigener Vorgang (mat_inspection, Art „aussonderung“, ohne Formular) mit eigenem,
+    festgeschriebenem Aussonderungsprotokoll; der Artikel wandert in „Ausgesondert“ und zählt nirgends mehr
+    als Bestand. Läuft in der Transaktion des Aufrufers, innerhalb von protokoll.dateien_sichern()."""
     from . import durchgang
     ziel = _systemziel(item, "ausgesondert")
-    ts = db.now()
+    ts = ts or db.now()
+    heimat = _heimat(item)
+    sperre = ""
+    if item["lock_state"] in ("gesperrt", "verloren"):
+        sperre = ("verloren gemeldet" if item["lock_state"] == "verloren" else "gesperrt") + (
+            f" – {item['lock_reason']}" if item["lock_reason"] else "")
     aid = db.execute(
         "INSERT INTO mat_inspection (item_id, inspector_user_id, inspector_name, inspector_certificate, inspected_on, "
         "kind, result, reason, remarks, basis_inspection_id, completed_at, created_at, updated_at) "
@@ -671,17 +748,22 @@ def _aussondern(item, grund, bemerkung, tag, akteur, basis_id=None):
                       {"lock_state": "ausgesondert", "folder_id": ziel, "ordner": bestand._pfad_text(ziel),
                        "grund": grund, "datum": tag, "aussonderung": aid})
     durchgang.nach_aussonderung(item["id"], tag, basis_id)
+    protokoll.pruefung_festschreiben(aid, ts, akteur.get("unterschrift"), akteur.get("login"), heimat, sperre)
     return aid
 
 
 def aussondern(iid, d, akteur):
-    """Aussonderung durch den Materialwart – nur für Artikel, die ein Prüfer vorher gesperrt hat."""
+    """Aussonderung durch den Materialwart – nur für Artikel, die ein Prüfer vorher gesperrt hat. Auch sie
+    wird festgeschrieben und braucht daher die Unterschrift dessen, der aussondert."""
+    if not akteur.get("unterschrift"):
+        raise Abgelehnt("Zum Aussondern fehlt deine Unterschrift – das Aussonderungsprotokoll wird damit "
+                        "festgeschrieben. Bitte im Profil hinterlegen (Profil → Unterschrift).", 403)
     art = auswahl(d.get("grund"), AUSSONDERUNGSGRUENDE, "Grund der Aussonderung")
     bemerkung = text(d, "bemerkung", "Bemerkung", 2000, einzeilig=False)
     tag = datum(d.get("datum"), "Datum") or heute().isoformat()
     if tag > heute().isoformat():
         raise Abgelehnt("Das Datum der Aussonderung liegt in der Zukunft.")
-    with db.transaction(sofort=True):
+    with protokoll.dateien_sichern(), db.transaction(sofort=True):
         item = bestand.artikel(iid)
         if item["lock_state"] == "ausgesondert":
             raise Abgelehnt("Der Artikel ist schon ausgesondert.", 409)
@@ -694,3 +776,126 @@ def aussondern(iid, d, akteur):
         if offen:
             raise Abgelehnt(reserviert_text(offen) + " Erst die Reservierung freigeben.", 409)
         return _aussondern(item, AUSSONDERUNGSGRUENDE[art], bemerkung, tag, akteur)
+
+
+# --- Berichtigung ---------------------------------------------------------------------------------------
+
+def berichtigbar(p, item=None):
+    """Lässt sich diese abgeschlossene Prüfung berichtigen? {ok, grund} – grund erklärt ein Nein."""
+    def nein(grund):
+        return {"ok": False, "grund": grund}
+    if not p["completed_at"]:
+        return nein("Ein Entwurf wird weiter bearbeitet, nicht berichtigt.")
+    if p["kind"] == "aussonderung" or p["result"] == "aussondern":
+        return nein("Eine Aussonderung lässt sich nicht berichtigen – der Artikel bleibt ausgesondert.")
+    item = item or bestand.artikel(p["item_id"])
+    if item["lock_state"] == "ausgesondert":
+        return nein("Der Artikel ist ausgesondert.")
+    # Gesperrt, ohne dass diese Prüfung gesperrt hat („instandsetzen“): Dann kam die Sperre danach (Sturz,
+    # Beschädigung, Verlust). Eine Berichtigung mit dem alten Prüftag gäbe den Artikel sonst als Freiprüfung frei.
+    if item["lock_state"] in ("gesperrt", "verloren") and p["result"] != "instandsetzen":
+        return nein("Nach dieser Prüfung wurde der Artikel gesperrt – freigeben kann ihn nur eine neue Prüfung.")
+    schon = _berichtigung_von(p["id"])
+    if schon:
+        return nein(f"Die Berichtigung ist schon in Arbeit ({schon['pruefer']})." if schon["entwurf"] else
+                    f"Schon berichtigt durch {schon['protokoll_id'] or 'eine spätere Prüfung'} – berichtigt wird "
+                    "dann diese.")
+    # Zeitstempel haben ganze Sekunden: Bei Gleichstand entscheidet die Kennung (AUTOINCREMENT, wächst nur).
+    spaeter = db.query("SELECT 1 FROM mat_inspection WHERE item_id = ? AND id <> ? AND completed_at IS NOT NULL "
+                       "AND kind <> 'aussonderung' AND (completed_at > ? OR (completed_at = ? AND id > ?)) LIMIT 1",
+                       (p["item_id"], p["id"], p["completed_at"], p["completed_at"], p["id"]), one=True)
+    if spaeter:
+        return nein("Berichtigen lässt sich nur die letzte Prüfung des Artikels – danach wurde er erneut geprüft.")
+    offen = offener_entwurf(p["item_id"])
+    if offen:
+        return nein(reserviert_text(offen))
+    return {"ok": True, "grund": ""}
+
+
+def _foto_kopieren(name):
+    """Mangelfoto für die Berichtigung kopieren (Original-, Web- und Vorschaufassung) – die Berichtigung hat
+    eigene Dateien, damit ihr Verwerfen die des Originals nicht mitnimmt. Liefert den neuen Namen oder ''."""
+    import os
+    import secrets
+    import shutil
+    if not name:
+        return ""
+    d = katalog.medien_dir()
+    alt_key, ext = os.path.splitext(name)
+    neu_key = secrets.token_hex(8)
+    paare = [(os.path.join(d, "orig", name), os.path.join(d, "orig", neu_key + ext)),
+             (os.path.join(d, "web", alt_key + ".jpg"), os.path.join(d, "web", neu_key + ".jpg")),
+             (os.path.join(d, "thumb", alt_key + ".jpg"), os.path.join(d, "thumb", neu_key + ".jpg"))]
+    if not os.path.isfile(paare[1][0]):
+        return ""
+    try:
+        for quelle, ziel in paare:
+            if os.path.isfile(quelle):
+                shutil.copyfile(quelle, ziel)
+    except OSError:
+        delete_photo_files(d, neu_key + ext)
+        raise Abgelehnt("Ein Foto des Originals ließ sich nicht kopieren.", 500)
+    return neu_key + ext
+
+
+def berichtigen(pid, d, pruefer):
+    """Berichtigung einer abgeschlossenen Prüfung beginnen: ein neuer Entwurf mit allen Befunden, Fotos und
+    Anhängen des Originals, demselben Prüftag und derselben Prüfart, Verweis und Grund. Das Original bleibt
+    unverändert (mit seinem Protokoll) und zeigt künftig „berichtigt durch …“; die Berichtigung wird wie jede
+    Prüfung festgeschrieben und wirkt dann am Artikel. Berichtigen darf nur, wer die Prüfung gemacht hat, und
+    nur die letzte Prüfung eines Artikels. Liefert die Kennung des neuen Entwurfs."""
+    from . import durchgang
+    if not pruefer.get("urkunde"):
+        raise Abgelehnt(URKUNDE_FEHLT, 403)
+    grund = text(d, "grund", "Grund der Berichtigung", 300, pflicht=True)
+    fotos, dateien = [], []
+    try:
+        with db.transaction(sofort=True):
+            p = pruefung(pid)
+            if p["completed_at"] and not _eigen(p, pruefer):
+                raise Abgelehnt(f"Berichtigen darf nur, wer die Prüfung gemacht hat ({p['inspector_name']}). Wer "
+                                "selbst prüft, macht eine neue Prüfung.", 403)
+            ok = berichtigbar(p)
+            if not ok["ok"]:
+                raise Abgelehnt(ok["grund"], 409)
+            runde = None
+            if p["round_id"] and durchgang.runde(p["round_id"])["closed_on"] is None:
+                runde = p["round_id"]
+            ts = db.now()
+            neu = db.execute(
+                "INSERT INTO mat_inspection (item_id, round_id, inspector_user_id, inspector_name, inspector_certificate, "
+                "form_id, form_version, inspected_on, kind, reason, remarks, corrects_inspection_id, correction_reason, "
+                "created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (p["item_id"], runde, pruefer.get("id"), pruefer["name"], pruefer["urkunde"], p["form_id"],
+                 p["form_version"], p["inspected_on"], p["kind"], p["reason"], p["remarks"], pid, grund, ts, ts))
+            for r in befunde(pid):
+                foto = _foto_kopieren(r["photo"])
+                if foto:
+                    fotos.append(foto)
+                db.execute("INSERT INTO mat_inspection_result (inspection_id, checklist_item_id, position, group_name, "
+                           "checklist_text, editor, mandatory, expected_value, is_critical, finding, value, note, photo, "
+                           "signature_png) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                           (neu, r["checklist_item_id"], r["position"], r["group_name"], r["checklist_text"], r["editor"],
+                            r["mandatory"], r["expected_value"], r["is_critical"], r["finding"], r["value"], r["note"],
+                            foto, r["signature_png"]))
+            for a in anhaenge(pid):
+                try:
+                    with open(f"{anh.anhang_dir(katalog.medien_dir())}/{a['file_path']}", "rb") as fh:
+                        name, summe = anh.ablegen(katalog.medien_dir(), fh.read())
+                except OSError:
+                    raise Abgelehnt(f"Der Anhang „{a['title']}“ des Originals fehlt im Datenverzeichnis.", 409)
+                dateien.append(name)
+                db.execute("INSERT INTO mat_inspection_attachment (inspection_id, kind, title, file_path, mime, pages, "
+                           "sha256, uploaded_by, uploaded_by_name, uploaded_at, in_pdf) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                           (neu, a["kind"], a["title"], name, a["mime"], a["pages"], summe, a["uploaded_by"],
+                            a["uploaded_by_name"], a["uploaded_at"], a["in_pdf"]))
+            journal.eintragen("inspection", neu, "berichtigung_begonnen", None,
+                              {"item_id": p["item_id"], "kind": p["kind"], "berichtigt": pid,
+                               "protocol_id": p["protocol_id"], "grund": grund, "round_id": runde})
+    except BaseException:
+        for f in fotos:
+            delete_photo_files(katalog.medien_dir(), f)
+        for f in dateien:
+            anh.entfernen(katalog.medien_dir(), f)
+        raise
+    return neu

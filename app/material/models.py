@@ -31,10 +31,19 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     Produkt) oder lehnt mit Begründung ab; der Melder bekommt Bescheid.
   - mat_round.aborted (Schritt 5): 1 = der Durchgang wurde vorzeitig beendet („abgebrochen“), nicht
     abgeschlossen; closed_on ist dann der Tag des Abbruchs.
+  - Schritt 6 (Lieferung 3, Nachweis): mat_inspection.locked_login (Anmeldung beim Festschreiben) und
+    correction_reason (Grund einer Berichtigung), mat_inspection_result.signature_png (Unterschriftsfeld
+    eines Formulars), mat_round.locked_at (Sammelprotokoll festgeschrieben); höchstens eine Berichtigung
+    je Prüfung; Indizes für die Prüfseite. Dazu Trigger, die festgeschriebene und abgeschlossene Prüfungen,
+    ihre Befunde und Anhänge sowie abgeschlossene Durchgänge unveränderlich machen (auch gegen INSERT OR REPLACE
+    und gegen Nachschieben in einen geschlossenen Durchgang) – die Service-Schicht
+    weist Änderungen vorher mit Klartext ab, die Trigger fangen, was an ihr vorbeiginge. Ausgenommen sind
+    nur die Nutzerkennungen, die die Datenbank beim Löschen eines Kontos selbst auf NULL setzt.
+    Wer eine dieser Tabellen später neu aufbaut (wie Schritt 2), muss die Trigger danach neu anlegen.
 """
 import sqlite3
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -599,10 +608,129 @@ def _schritt_5(conn):
         conn.execute("ALTER TABLE mat_round ADD COLUMN aborted INTEGER NOT NULL DEFAULT 0")
 
 
+# Schritt 6 (Lieferung 3): Festschreiben, Berichtigung, Unterschriftsfelder, Sammelprotokoll.
+# Spalten, die eine festgeschriebene Prüfung festhalten – alles außer inspector_user_id, die beim Löschen
+# des Kontos auf NULL geht (Name, Urkundennummer und Unterschrift stehen ohnehin als Kopie in der Zeile).
+_PRUEFUNG_FEST = ("item_id, round_id, protocol_id, inspector_name, inspector_certificate, form_id, form_version, "
+                  "inspected_on, kind, result, reason, remarks, next_due_on, signature_png, corrects_inspection_id, "
+                  "basis_inspection_id, documents_json, completed_at, locked_at, locked_login, correction_reason, "
+                  "pdf_path, pdf_sha256, pdf_hashed_bytes, file_sha256, created_at, updated_at")
+# Der Inhalt einer abgeschlossenen Prüfung – auch einer aus Lieferung 2, die noch kein Protokoll hat.
+_PRUEFUNG_INHALT = ("item_id, round_id, inspector_name, inspector_certificate, form_id, form_version, inspected_on, kind, "
+                    "result, reason, remarks, next_due_on, corrects_inspection_id, basis_inspection_id, documents_json, "
+                    "completed_at, correction_reason, created_at")
+_BEFUND_SPALTEN = ("inspection_id, position, group_name, checklist_text, editor, mandatory, expected_value, is_critical, "
+                   "finding, value, note, photo, signature_png")
+_ANHANG_SPALTEN = "inspection_id, kind, title, file_path, mime, pages, sha256, uploaded_by_name, uploaded_at, in_pdf"
+_DURCHGANG_FEST = ("folder_id, title, opened_by_name, opened_on, closed_on, closed_by_name, protocol_id, pdf_path, "
+                   "pdf_sha256, pdf_hashed_bytes, file_sha256, aborted, locked_at")
+# Der Inhalt eines abgeschlossenen Durchgangs – auch eines aus Lieferung 2 ohne Sammelprotokoll.
+_DURCHGANG_INHALT = "folder_id, title, opened_by_name, opened_on, closed_on, closed_by_name, aborted"
+_FEST = "'Eine festgeschriebene Prüfung ist unveränderlich.'"
+_ABGESCHLOSSEN = "'Eine abgeschlossene Prüfung ist unveränderlich.'"
+_DURCHGANG_ZU = "'Ein abgeschlossener Prüfdurchgang ist unveränderlich.'"
+_ELTERN_ZU = "EXISTS (SELECT 1 FROM mat_inspection x WHERE x.id = {}.inspection_id AND x.completed_at IS NOT NULL)"
+_RUNDE_ZU = "EXISTS (SELECT 1 FROM mat_round r WHERE r.id = {}.round_id AND r.closed_on IS NOT NULL)"
+# Eine andere, abgeschlossene Prüfung trägt schon diese Protokoll-ID oder berichtigt schon dasselbe Original.
+_GLEICHE_EINDEUTIGE = (
+    "((NEW.protocol_id IS NOT NULL AND EXISTS (SELECT 1 FROM mat_inspection x WHERE x.protocol_id = NEW.protocol_id "
+    "AND x.id IS NOT NEW.id AND x.completed_at IS NOT NULL)) OR (NEW.corrects_inspection_id IS NOT NULL AND EXISTS "
+    "(SELECT 1 FROM mat_inspection x WHERE x.corrects_inspection_id = NEW.corrects_inspection_id AND x.id IS NOT NEW.id "
+    "AND x.completed_at IS NOT NULL)))")
+_GLEICHE_RUNDEN_ID = ("(NEW.protocol_id IS NOT NULL AND EXISTS (SELECT 1 FROM mat_round r WHERE r.protocol_id = NEW.protocol_id "
+                      "AND r.id IS NOT NEW.id AND r.closed_on IS NOT NULL))")
+# INSERT OR REPLACE über die Kennung einer Zeile, die zu einer abgeschlossenen Prüfung gehört.
+_ERSETZT_ZU = ("EXISTS (SELECT 1 FROM {} k JOIN mat_inspection x ON x.id = k.inspection_id "
+               "WHERE k.id = NEW.id AND x.completed_at IS NOT NULL)")
+
+
+def _trigger(name, wann, bedingung, meldung):
+    return (f"CREATE TRIGGER IF NOT EXISTS {name} {wann} WHEN {bedingung} "
+            f"BEGIN SELECT RAISE(ABORT, {meldung}); END")
+
+
+TRIGGER_6 = [
+    _trigger("mat_inspection_festgeschrieben", f"BEFORE UPDATE OF {_PRUEFUNG_FEST} ON mat_inspection",
+             "OLD.locked_at IS NOT NULL", _FEST),
+    _trigger("mat_inspection_abgeschlossen", f"BEFORE UPDATE OF {_PRUEFUNG_INHALT} ON mat_inspection",
+             "OLD.completed_at IS NOT NULL", _ABGESCHLOSSEN),
+    _trigger("mat_inspection_unloeschbar", "BEFORE DELETE ON mat_inspection", "OLD.completed_at IS NOT NULL",
+             _ABGESCHLOSSEN),
+    # Die Kontokennung des Prüfers darf nur auf NULL gehen (Konto gelöscht) – sonst dürfte ein anderes Konto die
+    # Prüfung berichtigen, als hätte es sie gemacht.
+    _trigger("mat_inspection_pruefer", "BEFORE UPDATE OF inspector_user_id ON mat_inspection",
+             "OLD.completed_at IS NOT NULL AND NEW.inspector_user_id IS NOT NULL "
+             "AND NEW.inspector_user_id IS NOT OLD.inspector_user_id", _ABGESCHLOSSEN),
+    # INSERT OR REPLACE löscht ohne Lösch-Trigger (recursive_triggers ist aus) – deshalb auch beim Einfügen prüfen.
+    _trigger("mat_inspection_ersetzen", "BEFORE INSERT ON mat_inspection",
+             "EXISTS (SELECT 1 FROM mat_inspection x WHERE x.id = NEW.id AND x.completed_at IS NOT NULL) OR "
+             + _GLEICHE_EINDEUTIGE, _ABGESCHLOSSEN),
+    # Ebenso über die eindeutigen Spalten: Eine Protokoll-ID oder ein Berichtigungsverweis, den schon eine
+    # abgeschlossene Prüfung trägt, ließe die andere per OR REPLACE verschwinden.
+    _trigger("mat_inspection_eindeutig", "BEFORE UPDATE OF protocol_id, corrects_inspection_id ON mat_inspection",
+             _GLEICHE_EINDEUTIGE, _ABGESCHLOSSEN),
+    # Nichts kommt nachträglich in einen abgeschlossenen Durchgang.
+    _trigger("mat_inspection_in_runde", "BEFORE INSERT ON mat_inspection",
+             "NEW.round_id IS NOT NULL AND " + _RUNDE_ZU.format("NEW"), _DURCHGANG_ZU),
+    _trigger("mat_inspection_runde_wechsel", "BEFORE UPDATE OF round_id ON mat_inspection",
+             "NEW.round_id IS NOT NULL AND " + _RUNDE_ZU.format("NEW"), _DURCHGANG_ZU),
+    _trigger("mat_result_aendern", f"BEFORE UPDATE OF {_BEFUND_SPALTEN} ON mat_inspection_result",
+             _ELTERN_ZU.format("OLD") + " OR " + _ELTERN_ZU.format("NEW"), _ABGESCHLOSSEN),
+    _trigger("mat_result_neu", "BEFORE INSERT ON mat_inspection_result",
+             _ELTERN_ZU.format("NEW") + " OR " + _ERSETZT_ZU.format("mat_inspection_result"), _ABGESCHLOSSEN),
+    _trigger("mat_result_loeschen", "BEFORE DELETE ON mat_inspection_result", _ELTERN_ZU.format("OLD"), _ABGESCHLOSSEN),
+    _trigger("mat_attachment_aendern", f"BEFORE UPDATE OF {_ANHANG_SPALTEN} ON mat_inspection_attachment",
+             _ELTERN_ZU.format("OLD") + " OR " + _ELTERN_ZU.format("NEW"), _ABGESCHLOSSEN),
+    _trigger("mat_attachment_neu", "BEFORE INSERT ON mat_inspection_attachment",
+             _ELTERN_ZU.format("NEW") + " OR " + _ERSETZT_ZU.format("mat_inspection_attachment"), _ABGESCHLOSSEN),
+    _trigger("mat_attachment_loeschen", "BEFORE DELETE ON mat_inspection_attachment", _ELTERN_ZU.format("OLD"),
+             _ABGESCHLOSSEN),
+    _trigger("mat_round_festgeschrieben", f"BEFORE UPDATE OF {_DURCHGANG_FEST} ON mat_round",
+             "OLD.locked_at IS NOT NULL", _DURCHGANG_ZU),
+    _trigger("mat_round_abgeschlossen", f"BEFORE UPDATE OF {_DURCHGANG_INHALT} ON mat_round",
+             "OLD.closed_on IS NOT NULL", _DURCHGANG_ZU),
+    _trigger("mat_round_unloeschbar", "BEFORE DELETE ON mat_round", "OLD.closed_on IS NOT NULL", _DURCHGANG_ZU),
+    _trigger("mat_round_ersetzen", "BEFORE INSERT ON mat_round",
+             "EXISTS (SELECT 1 FROM mat_round r WHERE r.id = NEW.id AND r.closed_on IS NOT NULL) OR "
+             + _GLEICHE_RUNDEN_ID, _DURCHGANG_ZU),
+    _trigger("mat_round_eindeutig", "BEFORE UPDATE OF protocol_id ON mat_round", _GLEICHE_RUNDEN_ID, _DURCHGANG_ZU),
+    _trigger("mat_round_item_aendern",
+             "BEFORE UPDATE OF round_id, item_id, excluded_reason, excluded_by_name, excluded_at ON mat_round_item",
+             _RUNDE_ZU.format("OLD") + " OR " + _RUNDE_ZU.format("NEW"), _DURCHGANG_ZU),
+    _trigger("mat_round_item_neu", "BEFORE INSERT ON mat_round_item", _RUNDE_ZU.format("NEW"), _DURCHGANG_ZU),
+    _trigger("mat_round_item_loeschen", "BEFORE DELETE ON mat_round_item", _RUNDE_ZU.format("OLD"), _DURCHGANG_ZU),
+]
+
+
+def _schritt_6(conn):
+    """Lieferung 3: Spalten fürs Festschreiben und Berichtigen, Indizes für die Prüfseite, Trigger."""
+    neu = [("mat_inspection", "locked_login", "TEXT NOT NULL DEFAULT ''"),
+           ("mat_inspection", "correction_reason", "TEXT NOT NULL DEFAULT ''"),
+           ("mat_inspection_result", "signature_png", "BLOB"),
+           ("mat_round", "locked_at", "TEXT")]
+    for tabelle, spalte, art in neu:
+        if spalte not in _spalten(conn, tabelle):
+            conn.execute(f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {art}")
+    for sql in [
+        # Eine Prüfung wird höchstens einmal berichtigt (auch der Entwurf der Berichtigung zählt);
+        # wer weiter korrigieren will, berichtigt die Berichtigung.
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_mat_inspection_berichtigt ON mat_inspection(corrects_inspection_id) "
+        "WHERE corrects_inspection_id IS NOT NULL",
+        "CREATE INDEX IF NOT EXISTS idx_mat_inspection_basis ON mat_inspection(basis_inspection_id) "
+        "WHERE basis_inspection_id IS NOT NULL",
+        # Die Prüfseite sucht ein hochgeladenes PDF über seine Prüfsummen.
+        "CREATE INDEX IF NOT EXISTS idx_mat_inspection_datei ON mat_inspection(file_sha256) WHERE file_sha256 IS NOT NULL",
+        "CREATE INDEX IF NOT EXISTS idx_mat_inspection_inhalt ON mat_inspection(pdf_sha256) WHERE pdf_sha256 IS NOT NULL",
+        "CREATE INDEX IF NOT EXISTS idx_mat_round_datei ON mat_round(file_sha256) WHERE file_sha256 IS NOT NULL",
+        "CREATE INDEX IF NOT EXISTS idx_mat_round_inhalt ON mat_round(pdf_sha256) WHERE pdf_sha256 IS NOT NULL",
+    ] + TRIGGER_6:
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
-SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5}
+SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6}
 
 
 def _meta(conn, schluessel, vorgabe=None):

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Protokoll prüfen – strömis.de{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('material.static', filename='material.css') }}">
+{% endblock %}
+{% block body %}
+{# Prüfseite (Lieferung 3): öffentlich, ohne Anmeldung. Sie vergleicht ein hochgeladenes PDF mit den gespeicherten
+   Prüfsummen und zeigt nur „unverändert“ oder „verändert“ samt Protokoll-ID – keine Personendaten. Die Datei wird
+   nicht gespeichert. #}
+<main class="page narrow mat-pruefen" id="pruefen" data-angemeldet="{{ 'ja' if angemeldet else 'nein' }}">
+  {% if angemeldet %}<div class="mat-pfad"><a href="/material">Material</a> / <a href="/material/pruefungen">Prüfungen</a></div>{% endif %}
+  <h1>Protokoll prüfen</h1>
+  <p>Jedes festgeschriebene Protokoll von strömis.de – Prüf-, Aussonderungs- und Sammelprotokoll – trägt im Fuß
+    jeder Seite eine Prüfsumme: „SHA-256 (erste N Bytes): …“. Lade die PDF-Datei hier hoch; die Seite vergleicht sie
+    mit dem Wert, der beim Festschreiben gespeichert wurde. Die Datei wird dabei nicht gespeichert.</p>
+  <form id="pr-form" class="mat-pruefen-form">
+    <label class="mat-ablage" id="pr-ablage" for="pr-datei">
+      <span id="pr-name">PDF-Datei hierher ziehen oder <u>auswählen</u></span>
+      <input type="file" id="pr-datei" name="datei" accept="application/pdf,.pdf" class="mat-datei">
+    </label>
+    <div class="btn-row"><button class="btn" type="submit" id="pr-los" disabled>Prüfen</button></div>
+  </form>
+  <div id="pr-ergebnis" class="mat-pruefergebnis" role="status" aria-live="polite" hidden></div>
+  <section class="section">
+    <h2>Selbst nachrechnen</h2>
+    <p>Die Prüfsumme deckt die ersten N Bytes der Datei ab – das ist das Protokoll samt angefügter Anhänge, ohne den
+      Stempel selbst. Mit Linux oder macOS:</p>
+    <pre class="mat-befehl">head -c N protokoll.pdf | sha256sum</pre>
+    <p class="help">Für N die Zahl aus dem Stempel einsetzen. Stimmt das Ergebnis mit der aufgedruckten Summe überein, ist
+      der Inhalt unverändert. Ob die Datei wirklich von strömis.de stammt, zeigt erst der Abgleich hier.</p>
+  </section>
+</main>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('material.static', filename='pruefen.js') }}"></script>{% endblock %}

@@ -100,6 +100,7 @@ def main():
         if db.query("SELECT 1 FROM mat_folder WHERE demo = 1 LIMIT 1", one=True):
             print("Demo-Bestand ist schon da – nichts weiter angelegt.")
             demo_pruefungen()
+            demo_protokolle_nachreichen()
             return
         produkt = {p["model"]: p["id"] for p in db.query("SELECT id, model FROM mat_product WHERE demo = 1")}
         gl = bestand.ordner_anlegen({"name": "DEMO-Gliederung", "kind": "gliederung",
@@ -150,7 +151,7 @@ def demo_pruefungen():
                 "p.id = i.product_id WHERE p.demo = 1 LIMIT 1", one=True):
         print("DEMO-Prüfungen sind schon da – nichts weiter angelegt.")
         return
-    pruefer = {"id": None, "name": "DEMO-Prüfer", "urkunde": "DEMO"}
+    pruefer = demo_pruefer()
     offen = db.query("SELECT i.id, i.serial_no, i.retire_by, p.model FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
                      "WHERE p.demo = 1 AND i.lock_state = 'frei' AND NOT EXISTS (SELECT 1 FROM mat_inspection x WHERE "
                      "x.item_id = i.id) ORDER BY i.id")
@@ -169,7 +170,73 @@ def demo_pruefungen():
             d["grund"] = "DEMO: Verschluss schließt schwer (Platzhalter)"
         pruefung.abschliessen(pid, d, pruefer, pruefdatum=h - timedelta(days=tage))
         angelegt += 1
-    print(f"Prüfungen: {angelegt} DEMO-Eingangsprüfungen angelegt.")
+    print(f"Prüfungen: {angelegt} DEMO-Eingangsprüfungen angelegt und festgeschrieben.")
+
+
+def demo_unterschrift():
+    """Eine gezeichnete Platzhalter-Unterschrift mit „DEMO“ – als PNG, wie es das Signatur-Pad liefert, und durch
+    dieselbe Prüfung wie jede echte Unterschrift (unterschrift.lesen)."""
+    import base64
+    import io
+    import math
+
+    from PIL import Image, ImageDraw
+
+    from app.material.services import unterschrift
+    bild = Image.new("RGBA", (600, 200), (0, 0, 0, 0))
+    zeichnen = ImageDraw.Draw(bild)
+    punkte = [(30 + x, 110 + 35 * math.sin(x / 22.0) * math.exp(-x / 500.0)) for x in range(0, 540, 4)]
+    zeichnen.line(punkte, fill=(20, 40, 110, 255), width=5, joint="curve")
+    zeichnen.text((40, 150), "DEMO – keine echte Unterschrift", fill=(20, 40, 110, 255))
+    puffer = io.BytesIO()
+    bild.save(puffer, "PNG")
+    return unterschrift.lesen(unterschrift.VORSATZ + base64.b64encode(puffer.getvalue()).decode())
+
+
+def demo_pruefer():
+    """Der Prüfer der Demodaten – ohne Konto, mit DEMO-Urkundennummer und DEMO-Unterschrift."""
+    return {"id": None, "name": "DEMO-Prüfer", "urkunde": "DEMO", "unterschrift": demo_unterschrift(),
+            "login": "Demodaten"}
+
+
+def demo_protokolle_nachreichen():
+    """Ein DEMO-Bestand aus Lieferung 2 hat abgeschlossene, aber nicht festgeschriebene Prüfungen. Die des
+    DEMO-Prüfers bekommen hier ihr Protokoll (mit DEMO-Unterschrift); Prüfungen, die jemand auf dev selbst gemacht
+    hat – auch an DEMO-Artikeln –, und echte Prüfungen bleiben, wie sie sind."""
+    from app import db
+    from app.material.services import protokoll
+    offen = db.query("SELECT x.id, x.item_id, i.lock_state, i.folder_id, i.origin_folder_id FROM mat_inspection x "
+                     "JOIN mat_item i ON i.id = x.item_id JOIN mat_product p ON p.id = i.product_id "
+                     "WHERE p.demo = 1 AND x.inspector_user_id IS NULL AND x.inspector_name = 'DEMO-Prüfer' "
+                     "AND x.completed_at IS NOT NULL AND x.locked_at IS NULL ORDER BY x.id")
+    if not offen:
+        return
+    pruefer = demo_pruefer()
+    for x in offen:
+        with protokoll.dateien_sichern(), db.transaction(sofort=True):
+            protokoll.pruefung_festschreiben(x["id"], db.now(), pruefer["unterschrift"], pruefer["login"],
+                                             _ordner_damals(x))
+    print(f"Protokolle: {len(offen)} DEMO-Prüfungen nachträglich festgeschrieben.")
+
+
+def _ordner_damals(x):
+    """Der Ordner des Artikels zur Zeit der Prüfung – aus dem Journal des Artikels: der zuletzt eingetragene Ordner
+    vor (bzw. mit) dem Eintrag zu dieser Prüfung; vor einer Sperre aus der Prüfung der Ordner davor. Unbekannt:
+    None (dann bleibt die Zeile im Protokoll leer, statt einen späteren Ordner zu nennen)."""
+    import json
+
+    from app import db
+    ordner = None
+    for e in db.query("SELECT action, before_json, after_json FROM mat_audit WHERE entity = 'item' AND entity_id = ? "
+                      "ORDER BY id", (x["item_id"],)):
+        nachher = json.loads(e["after_json"] or "{}")
+        if nachher.get("pruefung") == x["id"]:
+            if e["action"] == "gesperrt":
+                return json.loads(e["before_json"] or "{}").get("folder_id") or ordner
+            return nachher.get("folder_id") or ordner
+        if nachher.get("folder_id"):
+            ordner = nachher["folder_id"]
+    return None
 
 
 if __name__ == "__main__":

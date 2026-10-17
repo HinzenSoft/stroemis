@@ -905,3 +905,36 @@ def formulare_fuer(kategorie_id=None, produkt_id=None):
                                       (f["id"],), one=True)["n"]
         out.append(j)
     return out
+
+
+def durchsichtige_bilder_reparieren(conn):
+    """Einmalige Reparatur beim Start (Kennzeichen in mat_meta): Bis zum 17.10.2026 wurden durchsichtige Flächen
+    in Produkt-, Ordner-, Mangel- und Meldungsfotos beim Umwandeln nach JPEG schwarz. Die Originale sind erhalten –
+    aus ihnen entstehen Web- und Vorschaufassung neu, mit weißem Grund. Unter der Schreibsperre, damit es nur ein
+    Arbeitsprozess tut."""
+    import json
+    import logging
+
+    from ...images import varianten_erneuern
+    pfad = conn.execute("PRAGMA database_list").fetchone()[2]
+    if not pfad:
+        return
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if conn.execute("SELECT 1 FROM mat_meta WHERE schluessel = 'bilder_weiss'").fetchone():
+            return
+        dateien = [(r[0], True) for r in conn.execute("SELECT image FROM mat_product WHERE image <> ''")]
+        dateien += [(r[0], True) for r in conn.execute("SELECT photo FROM mat_inspection_result WHERE photo <> ''")]
+        dateien += [(r[0], False) for r in conn.execute("SELECT photo FROM mat_folder WHERE photo <> ''")]
+        for (fotos,) in conn.execute("SELECT photos_json FROM mat_product_request"):
+            dateien += [(f, False) for f in json.loads(fotos or "[]") if isinstance(f, str)]
+        medien = os.path.join(os.path.dirname(pfad), "media", "material")
+        neu = sum(varianten_erneuern(medien, name, ganz) for name, ganz in dateien
+                  if os.path.splitext(name)[1].lower() in (".png", ".webp", ".tif", ".tiff", ".gif"))
+        conn.execute("INSERT INTO mat_meta (schluessel, wert) VALUES ('bilder_weiss', '1')")
+        conn.commit()
+        if neu:
+            logging.getLogger(__name__).info("%d Bilder mit durchsichtigem Hintergrund neu auf Weiß erzeugt.", neu)
+    finally:
+        if conn.in_transaction:
+            conn.rollback()

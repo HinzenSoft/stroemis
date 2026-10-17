@@ -8,6 +8,7 @@ ARG MARKERCLUSTER=1.5.3
 ARG MARKED=12.0.2
 ARG DOMPURIFY=3.4.17
 ARG TOASTUI=3.2.2
+ARG SIGNATURE_PAD=5.1.4
 # Prüfsumme der optionalen deutschen Sprachdatei (siehe unten – sie darf fehlen, der Rest nicht).
 ARG DE_DE_SHA=a904840fa6f6e0983570e0aa258f7b0bddcc83133969a3e69df526c7cb905a8e
 WORKDIR /vendor
@@ -16,7 +17,7 @@ COPY vendor.sha256 .
 # Jede Datei wird gegen vendor.sha256 geprüft: feste Versionsnummern allein bewahren nicht davor,
 # dass ein Paketspiegel andere Inhalte ausliefert als erwartet.
 RUN set -eux; \
-    mkdir -p leaflet/images markercluster marked dompurify toastui; \
+    mkdir -p leaflet/images markercluster marked dompurify toastui signature_pad; \
     for f in leaflet.js leaflet.css; do curl -fsSL -o leaflet/$f "https://unpkg.com/leaflet@${LEAFLET}/dist/$f"; done; \
     for f in layers.png layers-2x.png marker-icon.png marker-icon-2x.png marker-shadow.png; do \
         curl -fsSL -o leaflet/images/$f "https://unpkg.com/leaflet@${LEAFLET}/dist/images/$f"; done; \
@@ -24,6 +25,9 @@ RUN set -eux; \
         curl -fsSL -o markercluster/$f "https://unpkg.com/leaflet.markercluster@${MARKERCLUSTER}/dist/$f"; done; \
     curl -fsSL -o marked/marked.min.js "https://unpkg.com/marked@${MARKED}/marked.min.js"; \
     curl -fsSL -o dompurify/purify.min.js "https://unpkg.com/dompurify@${DOMPURIFY}/dist/purify.min.js"; \
+    # Signatur-Pad für die Unterschrift im Profil und die Unterschriftsfelder der Prüfformulare (Modul Material).
+    curl -fsSL -o signature_pad/signature_pad.umd.min.js \
+        "https://unpkg.com/signature_pad@${SIGNATURE_PAD}/dist/signature_pad.umd.min.js"; \
     curl -fsSL -o toastui/toastui-editor-all.min.js "https://uicdn.toast.com/editor/${TOASTUI}/toastui-editor-all.min.js"; \
     curl -fsSL -o toastui/toastui-editor.min.css "https://uicdn.toast.com/editor/${TOASTUI}/toastui-editor.min.css"; \
     # Zusammengefasste Tabellenzellen: Die Erweiterung liegt nur unter "latest"; festgehalten
@@ -74,7 +78,15 @@ RUN set -eux; \
     /ffmpeg/ffprobe -version | head -1
 
 FROM python:3.12-slim
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 DATA_DIR=/data PIP_NO_CACHE_DIR=1
+# XDG_CACHE_HOME: Fontconfig (für WeasyPrint) legt seinen Zwischenspeicher dort ab – das Wurzeldateisystem ist
+# zur Laufzeit schreibgeschützt (docker-compose.yml), /tmp ein flüchtiger Speicherbereich.
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 DATA_DIR=/data PIP_NO_CACHE_DIR=1 XDG_CACHE_HOME=/tmp/cache
+# WeasyPrint (Protokolle des Moduls Material als PDF/A) braucht Pango und HarfBuzz. Die Protokolle setzen die
+# eigene Schrift „DLRG Univers“ (app/static/fonts); DejaVu springt für Zeichen ein, die sie nicht hat, und setzt
+# Prüfsummen in Festbreite.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
 # ffmpeg und ffprobe sind eigenständige Programme; sie werden aufgerufen, nicht eingebunden.
 # Ihre Lizenz (GPLv3) liegt daneben.
 COPY --from=ffmpeg /ffmpeg/ffmpeg /ffmpeg/ffprobe /usr/local/bin/

@@ -16,6 +16,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from PIL import Image  # noqa: E402
 
 H = {"X-Requested-With": "XMLHttpRequest"}
+
+
+def _heute():
+    """Der Kalendertag, mit dem der Server rechnet (deutsche Zeit) – nicht der des Testrechners."""
+    from app.material.services import heute
+    return heute()
+
+
 PDF = b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"
 
 
@@ -35,6 +43,25 @@ def jpeg(breite=320, hoehe=240):
     Image.new("RGB", (breite, hoehe), (200, 30, 30)).save(buf, "JPEG")
     buf.seek(0)
     return buf
+
+
+def unterschrift_daten(text="T", breite=420, hoehe=160):
+    """Eine gezeichnete Unterschrift als data:-URL, wie sie das Signatur-Pad liefert (PNG mit Alpha)."""
+    import base64
+    from PIL import ImageDraw
+    bild = Image.new("RGBA", (breite, hoehe), (0, 0, 0, 0))
+    zeichnen = ImageDraw.Draw(bild)
+    zeichnen.line([(20, 120), (80, 40), (140, 110), (200, 50), (260, 115), (330, 60)], fill=(10, 20, 90, 255), width=6)
+    zeichnen.text((30, 130), text, fill=(10, 20, 90, 255))
+    buf = io.BytesIO()
+    bild.save(buf, "PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def unterschreiben(c):
+    """Eigene Unterschrift im Profil hinterlegen – ohne sie lässt sich nichts festschreiben (Lieferung 3)."""
+    r = c.put("/api/material/unterschrift", json={"bild": unterschrift_daten()})
+    assert r.status_code == 200 and r.json["unterschrift"].startswith("data:image/png;base64,"), r.get_json()
 
 
 def anmelden(app, mail, pw):
@@ -62,6 +89,9 @@ def umgebung(tmp):
     k["fuehrung"], _ = konto("fuehrung@example.org", rechte={"material": 1})
     k["pruefer"], k["pruefer_id"] = konto("pruefer@example.org", mat_pruefer=True, urkundennummer="1012-4711")
     k["nutzer"], _ = konto("nutzer@example.org")
+    # Prüfer und Materialwart hinterlegen ihre Unterschrift: Festschreiben und Aussondern brauchen sie.
+    unterschreiben(k["pruefer"])
+    unterschreiben(k["wart"])
     return app, k
 
 
@@ -317,7 +347,7 @@ def test_artikel():
         ids = katalog_grund(k["adm"])
         w = k["wart"]
         gid, system = gliederung(w)
-        heute = date.today()
+        heute = _heute()
         # Ohne Herstellernummer: eindeutige Inventar- und Seriennummer vom System.
         nummern = []
         for _ in range(3):
@@ -723,7 +753,7 @@ def test_review_befunde():
         ids = katalog_grund(k["adm"])
         w, adm = k["wart"], k["adm"]
         gid, system = gliederung(w)
-        heute = date.today()
+        heute = _heute()
         morgen = (heute + timedelta(days=1)).isoformat()
         grenze12 = None
 
@@ -905,7 +935,9 @@ def zweiter_pruefer(app, adm):
     r = adm.post("/api/admin/users", json={"email": "pruefer2@example.org", "password": "passwort1", "name": "Prüferin Zwei",
                                            "mat_pruefer": True, "urkundennummer": "1012-4712"})
     assert r.status_code == 201, r.get_json()
-    return anmelden(app, "pruefer2@example.org", "passwort1")
+    c = anmelden(app, "pruefer2@example.org", "passwort1")
+    unterschreiben(c)
+    return c
 
 
 def starten(c, iid, **d):
@@ -929,7 +961,7 @@ def test_pruefung():
         p2 = zweiter_pruefer(app, k["adm"])
         gid, system = gliederung(w)
         fahrzeug = w.post("/api/material/ordner", json={"name": "Fahrzeug 1", "kind": "fahrzeug", "parent_id": gid}).json["ordner"]["id"]
-        h = date.today()
+        h = _heute()
         a = neuer_artikel(w, ids["gurt"], fahrzeug, manufactured_on=f"{h.year - 2}-01")
         iid = a["id"]
         # Neu angelegt heißt „neu“, nicht einsatzbereit: Die Eingangsprüfung steht aus.
@@ -1055,7 +1087,7 @@ def test_sperre_und_aussonderung():
         w, p1 = k["wart"], k["pruefer"]
         gid, system = gliederung(w)
         lager = w.post("/api/material/ordner", json={"name": "Lager", "kind": "standort", "parent_id": gid}).json["ordner"]["id"]
-        h = date.today()
+        h = _heute()
         bestand_vorher = w.get("/api/material/start").json["bestand"]
         # Textil nach Ablauf der Lebensdauer: „einsatzbereit“ ist nicht mehr wählbar.
         alt = neuer_artikel(w, ids["gurt"], lager, manufactured_on=f"{h.year - 11}-01")
@@ -1324,7 +1356,7 @@ def test_review_lieferung2():
 
         # 5. Wird das Intervall kürzer, gilt „letzte Prüfung + neues Intervall“ (ohne Prüfung: heute + Intervall).
         from app.material.services.interval import plus_monate
-        h = date.today()
+        h = _heute()
         vor = (h - timedelta(days=200)).isoformat()
         with app.app_context():
             from app import db
@@ -1612,10 +1644,19 @@ def test_migration_lieferung2():
             raise AssertionError("zweiter offener Entwurf angenommen")
         except sqlite3.IntegrityError:
             pass
-        # Befunde und Anhänge hängen weiter an ihrer Prüfung (Löschen nimmt sie mit).
-        conn.execute("DELETE FROM mat_inspection WHERE id = 1")
-        assert conn.execute("SELECT COUNT(*) FROM mat_inspection_result WHERE inspection_id = 1").fetchone()[0] == 0
-        assert conn.execute("SELECT COUNT(*) FROM mat_inspection_attachment").fetchone()[0] == 0
+        # Seit Schritt 6 (Lieferung 3) ist eine abgeschlossene Prüfung unlöschbar – auch per SQL; ihre Befunde und
+        # Anhänge ebenso. Ein Entwurf nimmt beim Löschen seine Befunde mit.
+        for sql in ("DELETE FROM mat_inspection WHERE id = 1", "DELETE FROM mat_inspection_result WHERE inspection_id = 1",
+                    "DELETE FROM mat_inspection_attachment WHERE inspection_id = 1",
+                    "UPDATE mat_inspection SET remarks = 'nachträglich' WHERE id = 1"):
+            try:
+                conn.execute(sql)
+                raise AssertionError("abgeschlossene Prüfung geändert: " + sql)
+            except sqlite3.IntegrityError as exc:
+                assert "unveränderlich" in str(exc), exc
+        conn.execute("DELETE FROM mat_inspection WHERE id = 2")
+        assert conn.execute("SELECT COUNT(*) FROM mat_inspection_result WHERE inspection_id = 2").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM mat_inspection_attachment").fetchone()[0] == 1
         conn.rollback()
         conn.close()
         # Ein zweiter Start ändert nichts mehr.
@@ -1864,7 +1905,8 @@ def test_durchgang_abbrechen():
                                                       "ORDER BY id", (rid,))]
             entwurf = [x["action"] for x in db.query("SELECT action FROM mat_audit WHERE entity = 'inspection' AND entity_id = ? "
                                                      "ORDER BY id", (pid_a,))]
-        assert aktionen[0] == "eroeffnet" and aktionen[-1] == "abgebrochen", aktionen
+        # Seit Lieferung 3 bekommt auch ein abgebrochener Durchgang sein Sammelprotokoll („festgeschrieben“).
+        assert aktionen[0] == "eroeffnet" and aktionen[-2:] == ["abgebrochen", "festgeschrieben"], aktionen
         assert entwurf.count("geaendert") == 2, entwurf
         rid2 = w.post("/api/material/durchgaenge", json={"folder_id": gid, "titel": "Neu"}).json["durchgang"]["id"]
         for x in (a, b, c):
@@ -2009,8 +2051,8 @@ def test_monatsangaben():
         ids = katalog_grund(k["adm"])
         w = k["wart"]
         gid, _ = gliederung(w)
-        dieser = date.today().strftime("%Y-%m")
-        naechster = (date.today().replace(day=28) + timedelta(days=5)).strftime("%Y-%m")
+        dieser = _heute().strftime("%Y-%m")
+        naechster = (_heute().replace(day=28) + timedelta(days=5)).strftime("%Y-%m")
 
         def anlegen(**f):
             return w.post("/api/material/artikel", json=dict({"product_id": ids["hms"], "folder_id": gid}, **f))
@@ -2041,6 +2083,810 @@ def test_monatsangaben():
     print("Monatstest bestanden.")
 
 
+# --- Lieferung 3: Nachweis ----------------------------------------------------------------------------------
+
+def pdf_seiten(pfad):
+    """Text je Seite – mit pdftotext (poppler-utils), wie im Auftrag; fehlt es, mit pypdf."""
+    import shutil
+    import subprocess
+    if shutil.which("pdftotext"):
+        return [subprocess.run(["pdftotext", "-q", "-f", str(i), "-l", str(i), pfad, "-"], capture_output=True,
+                               check=True).stdout.decode("utf-8", "replace") for i in range(1, _seitenzahl(pfad) + 1)]
+    from pypdf import PdfReader
+    return [s.extract_text() or "" for s in PdfReader(pfad).pages]
+
+
+def _seitenzahl(pfad):
+    from pypdf import PdfReader
+    return len(PdfReader(pfad).pages)
+
+
+def _flach(text):
+    return " ".join(text.split())
+
+
+def protokoll_zeile(app, pid=None, rid=None):
+    with app.app_context():
+        from app import db
+        if rid:
+            return db.query("SELECT * FROM mat_round WHERE id = ?", (rid,), one=True)
+        return db.query("SELECT * FROM mat_inspection WHERE id = ?", (pid,), one=True)
+
+
+def festschreiben(c, pid, **d):
+    return c.post(f"/api/material/pruefungen/{pid}/festschreiben", json=d)
+
+
+def test_festschreiben():
+    """Die Smoke-Tests aus dem Auftrag zu Lieferung 3: Unterschrift und Urkundennummer, Unveränderlichkeit,
+    aufgedruckte Prüfsumme gegen head -c N und Datenbank, file_sha256, Stempel auf jeder Seite, Anhänge mit
+    Prüfsumme im Protokoll."""
+    import hashlib
+    import subprocess
+    from pypdf import PdfWriter
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w, p1 = k["wart"], k["pruefer"]
+        gid, _ = gliederung(w)
+        a = neuer_artikel(w, ids["hms"], gid)
+        pid = starten(p1, a["id"]).json["pruefung"]["id"]
+        # Ohne Unterschrift im Profil scheitert das Festschreiben – mit Hinweis, wo sie hingehört.
+        assert p1.delete("/api/material/unterschrift", headers=H).status_code == 200
+        r = festschreiben(p1, pid, ergebnis="einsatzbereit")
+        assert r.status_code == 403 and "Unterschrift" in r.json["error"], r.get_json()
+        # Ohne Urkundennummer ebenso (die Prüferrolle hängt daran; der Dienst prüft es selbst noch einmal).
+        with app.test_request_context():
+            from app.material.services import Abgelehnt, pruefung
+            try:
+                pruefung.abschliessen(pid, {"ergebnis": "einsatzbereit"},
+                                      {"id": k["pruefer_id"], "name": "pruefer", "urkunde": "", "unterschrift": b"x"})
+                raise AssertionError("ohne Urkundennummer festgeschrieben")
+            except Abgelehnt as exc:
+                assert exc.code == 403 and "Urkundennummer" in str(exc)
+        assert festschreiben(w, pid, ergebnis="einsatzbereit").status_code == 403        # Materialwart ist kein Prüfer
+        unterschreiben(p1)
+        # Zwei Anhänge: einer kommt hinten ans Protokoll, der andere steht nur im Verzeichnis.
+        url = f"/api/material/pruefungen/{pid}/anhaenge"
+        ah1 = p1.post(url, data={"file": [(jpeg(800, 1100), "karte.jpg")], "art": "externes_pruefformular",
+                                 "titel": "Prüfkarte des Herstellers", "im_protokoll": "ja"},
+                      headers=H, content_type="multipart/form-data").json["anhang"]
+        schreiber = PdfWriter()
+        schreiber.add_blank_page(595, 842)
+        schreiber.add_blank_page(842, 595)
+        buf = io.BytesIO()
+        schreiber.write(buf)
+        buf.seek(0)
+        ah2 = p1.post(url, data={"file": [(buf, "bericht.pdf")], "art": "pruefbericht", "titel": "Bericht Dienstleister",
+                                 "im_protokoll": "nein"}, headers=H, content_type="multipart/form-data").json["anhang"]
+        r = festschreiben(p1, pid, ergebnis="einsatzbereit", bemerkung="Alles in Ordnung – äöü ß")
+        assert r.status_code == 200, r.get_json()
+        pr = r.json["pruefung"]
+        jahr = _heute().year
+        assert pr["protokoll"]["id"] == f"P-{jahr}-{pid:06d}", pr["protokoll"]
+        assert pr["protokoll"]["url"] == f"/material/pruefung/{pid}/pdf" and pr["unterschrift"].startswith("data:image/png")
+        zeile = protokoll_zeile(app, pid)
+        assert zeile["locked_at"] and zeile["signature_png"] and zeile["locked_login"] == "pruefer@example.org"
+        assert zeile["pdf_path"] == f"pdf/{jahr}/P-{jahr}-{pid:06d}.pdf"
+
+        # Nach dem Festschreiben ist jede Änderung abgewiesen.
+        rid = pr["punkte"][0]["id"]
+        assert p1.put(f"/api/material/pruefungen/{pid}/punkte/{rid}", json={"wert": "nein"}).status_code == 409
+        assert p1.put(f"/api/material/pruefungen/{pid}", json={"bemerkung": "später"}).status_code == 409
+        assert p1.post(url, data={"file": [(jpeg(), "x.jpg")]}, headers=H,
+                       content_type="multipart/form-data").status_code == 409
+        assert p1.delete(f"{url}/{ah1['id']}", headers=H).status_code == 409
+        assert p1.delete(f"/api/material/pruefungen/{pid}", headers=H).status_code == 409
+        assert w.delete(f"/api/material/pruefungen/{pid}", headers=H).status_code == 409
+        assert festschreiben(p1, pid, ergebnis="einsatzbereit").status_code == 409
+        # … auch an der Schnittstelle vorbei, direkt in der Datenbank (Trigger).
+        conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+        for sql in (f"UPDATE mat_inspection SET result = 'instandsetzen' WHERE id = {pid}",
+                    f"UPDATE mat_inspection SET pdf_sha256 = 'x' WHERE id = {pid}",
+                    f"DELETE FROM mat_inspection WHERE id = {pid}",
+                    f"UPDATE mat_inspection_result SET finding = 'mangel' WHERE inspection_id = {pid}",
+                    f"DELETE FROM mat_inspection_attachment WHERE inspection_id = {pid}"):
+            try:
+                conn.execute(sql)
+                raise AssertionError("festgeschriebene Prüfung geändert: " + sql)
+            except sqlite3.IntegrityError as exc:
+                assert "unveränderlich" in str(exc), exc
+        conn.close()
+
+        # head -c N über die Datei ergibt den aufgedruckten Wert und den in der Datenbank.
+        pfad = os.path.join(tmp, zeile["pdf_path"])
+        with open(pfad, "rb") as fh:
+            daten = fh.read()
+        n = zeile["pdf_hashed_bytes"]
+        kopf = subprocess.run(f"head -c {n} '{pfad}' | sha256sum", shell=True, capture_output=True,
+                              text=True).stdout.split()[0]
+        assert kopf == zeile["pdf_sha256"] == hashlib.sha256(daten[:n]).hexdigest() == pr["protokoll"]["sha256"]
+        # file_sha256 passt zur abgelegten Datei; sie ist schreibgeschützt.
+        assert hashlib.sha256(daten).hexdigest() == zeile["file_sha256"]
+        assert not os.access(pfad, os.W_OK) or os.geteuid() == 0
+        # Der Stempeltext steht auf jeder Seite – auch auf der hinten angefügten Anhangseite.
+        seiten = pdf_seiten(pfad)
+        stempel = f"SHA-256 (erste {n} Bytes): {zeile['pdf_sha256']}"
+        assert len(seiten) >= 2 and all(stempel in _flach(s) for s in seiten), [s[-300:] for s in seiten]
+        # Anhänge stehen mit Prüfsumme im Protokoll; nur der angefügte kommt als Seite dazu.
+        text = _flach(" ".join(seiten))
+        for ah in (ah1, ah2):
+            assert ah["titel"] in text and ah["sha256"] in text.replace(" ", ""), ah
+        assert "pruefer" in text and "1012-4711" in text and f"P-{jahr}-{pid:06d}" in text and a["inventory_no"] in text
+        # Ausliefern: nur mit Leserecht, nur unverändert.
+        r = k["fuehrung"].get(f"/material/pruefung/{pid}/pdf")
+        assert r.status_code == 200 and r.mimetype == "application/pdf" and r.data == daten
+        assert f"P-{jahr}-{pid:06d}_{a['inventory_no']}.pdf" in r.headers["Content-Disposition"]
+        assert "sandbox" not in r.headers["Content-Security-Policy"]
+        assert k["nutzer"].get(f"/material/pruefung/{pid}/pdf").status_code == 403
+        r = app.test_client().get(f"/material/pruefung/{pid}/pdf")
+        assert r.status_code == 302 and "/login" in r.headers["Location"]
+        assert k["fuehrung"].get(f"/material/pruefung/{pid + 99}/pdf").status_code == 404
+        # Im Lebenslauf: Protokoll-ID und Link.
+        lauf = w.get(f"/api/material/artikel/{a['id']}").json["artikel"]["pruefungen"]
+        assert lauf[0]["protokoll"]["id"] == f"P-{jahr}-{pid:06d}", lauf
+        # Eine nachträglich veränderte Datei liefert der Server nicht mehr aus.
+        os.chmod(pfad, 0o644)
+        with open(pfad, "r+b") as fh:
+            fh.seek(n // 2)
+            b = fh.read(1)
+            fh.seek(n // 2)
+            fh.write(bytes([b[0] ^ 1]))
+        r = k["fuehrung"].get(f"/material/pruefung/{pid}/pdf")
+        assert r.status_code == 409 and b"Pr\xc3\xbcfsumme" in r.data, r.status_code
+    print("Festschreibtest bestanden.")
+
+
+def test_berichtigung():
+    """Eine Korrektur entsteht als neue Prüfung mit Verweis; das Original bleibt Byte für Byte, wie es war."""
+    import hashlib
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w, p1 = k["wart"], k["pruefer"]
+        p2 = zweiter_pruefer(app, k["adm"])
+        gid, system = gliederung(w)
+        a = neuer_artikel(w, ids["hms"], gid)
+        pr = starten(p1, a["id"]).json["pruefung"]
+        pk = punkte_von(pr)
+        p1.put(f"/api/material/pruefungen/{pr['id']}/punkte/{pk['Testpunkt Verschleiß']}", json={"wert": "ja",
+                                                                                           "notiz": "Kerbe"})
+        p1.post(f"/api/material/pruefungen/{pr['id']}/punkte/{pk['Testpunkt Verschleiß']}/foto",
+                data={"file": (jpeg(), "kerbe.jpg")}, headers=H, content_type="multipart/form-data")
+        assert festschreiben(p1, pr["id"], ergebnis="instandsetzen").status_code == 200
+        alt = protokoll_zeile(app, pr["id"])
+        with open(os.path.join(tmp, alt["pdf_path"]), "rb") as fh:
+            alt_summe = hashlib.sha256(fh.read()).hexdigest()
+        url = f"/api/material/pruefungen/{pr['id']}/berichtigen"
+        # Nur wer geprüft hat, berichtigt – und nur mit Grund.
+        assert p2.post(url, json={"grund": "x"}).status_code == 403
+        assert w.post(url, json={"grund": "x"}).status_code == 403
+        r = p1.post(url, json={})
+        assert r.status_code == 400 and "Grund" in r.json["error"]
+        r = p1.post(url, json={"grund": "Kerbe war Schmutz – Befund falsch"})
+        assert r.status_code == 201, r.get_json()
+        b = r.json["pruefung"]
+        assert b["entwurf"] and b["berichtigt"]["id"] == pr["id"] and b["art"] == pr["art"], b
+        assert b["datum"] == alt["inspected_on"] and b["grund_berichtigung"].startswith("Kerbe war")
+        kopie = {x["text"]: x for x in b["punkte"]}
+        assert kopie["Testpunkt Verschleiß"]["befund"] == "mangel" and kopie["Testpunkt Verschleiß"]["foto"]
+        assert kopie["Testpunkt Verschleiß"]["foto"]["web"] != [x for x in pr["punkte"]][0].get("foto")
+        # Das Original zeigt die laufende Berichtigung; ein zweiter Versuch scheitert.
+        o = p1.get(f"/api/material/pruefungen/{pr['id']}").json["pruefung"]
+        assert o["berichtigt_durch"]["entwurf"] and not o["berichtigbar"]["ok"], o["berichtigbar"]
+        assert p1.post(url, json={"grund": "nochmal"}).status_code == 409
+        # Die Prüfart einer Berichtigung steht fest.
+        assert p1.put(f"/api/material/pruefungen/{b['id']}", json={"art": "periodisch"}).status_code == 409
+        # Verwerfen gibt das Original wieder frei – seine Fotos bleiben.
+        assert p1.delete(f"/api/material/pruefungen/{b['id']}", headers=H).status_code == 200
+        foto_alt = [x for x in p1.get(f"/api/material/pruefungen/{pr['id']}").json["pruefung"]["punkte"] if x["foto"]][0]
+        assert p1.get(foto_alt["foto"]["web"]).status_code == 200
+        b = p1.post(url, json={"grund": "Kerbe war Schmutz – Befund falsch"}).json["pruefung"]
+        kb = punkte_von(b)
+        assert p1.put(f"/api/material/pruefungen/{b['id']}/punkte/{kb['Testpunkt Verschleiß']}",
+                      json={"wert": "nein"}).status_code == 200
+        r = festschreiben(p1, b["id"], ergebnis="einsatzbereit")
+        assert r.status_code == 200, r.get_json()
+        b = r.json["pruefung"]
+        jahr = _heute().year
+        assert b["protokoll"]["id"] == f"P-{jahr}-{b['id']:06d}" and b["datum"] == alt["inspected_on"]
+        # Die Berichtigung wirkt am Artikel: Freiprüfung aus „Gesperrt“ zurück.
+        art = w.get(f"/api/material/artikel/{a['id']}").json["artikel"]
+        assert art["status"] != "gesperrt" and art["folder_id"] == gid, art
+        # Das Original: unverändert, mit Verweis auf die Berichtigung.
+        neu = protokoll_zeile(app, pr["id"])
+        assert {kk: neu[kk] for kk in ("result", "pdf_sha256", "file_sha256", "locked_at")} == \
+            {kk: alt[kk] for kk in ("result", "pdf_sha256", "file_sha256", "locked_at")}
+        with open(os.path.join(tmp, neu["pdf_path"]), "rb") as fh:
+            assert hashlib.sha256(fh.read()).hexdigest() == alt_summe
+        o = p1.get(f"/api/material/pruefungen/{pr['id']}").json["pruefung"]
+        assert o["berichtigt_durch"]["protokoll_id"] == b["protokoll"]["id"] and not o["berichtigt_durch"]["entwurf"]
+        text = _flach(" ".join(pdf_seiten(os.path.join(tmp, protokoll_zeile(app, b["id"])["pdf_path"]))))
+        assert "Berichtigung" in text and alt["protocol_id"] in text and "Kerbe war Schmutz" in text, text[:600]
+        # Berichtigen lässt sich nur die letzte Prüfung des Artikels.
+        assert p1.post(f"/api/material/pruefungen/{b['id']}/berichtigen", json={"grund": "x"}).status_code == 201
+        assert p1.delete(f"/api/material/pruefungen/{b['id'] + 1}", headers=H).status_code == 200
+        p3 = starten(p1, a["id"]).json["pruefung"]["id"]
+        assert festschreiben(p1, p3, ergebnis="einsatzbereit").status_code == 200
+        r = p1.post(f"/api/material/pruefungen/{b['id']}/berichtigen", json={"grund": "x"})
+        assert r.status_code == 409 and "letzte Prüfung" in r.json["error"], r.get_json()
+        with app.app_context():
+            from app import db
+            aktionen = [x["action"] for x in db.query("SELECT action FROM mat_audit WHERE entity = 'inspection' "
+                                                      "AND entity_id = ? ORDER BY id", (pr["id"],))]
+        assert aktionen[-1] == "berichtigt" and "festgeschrieben" in aktionen, aktionen
+    print("Berichtigungstest bestanden.")
+
+
+def test_pruefseite():
+    """/material/pruefen meldet das Original als unverändert und eine um ein Byte geänderte Kopie als verändert –
+    ohne Anmeldung und ohne Personendaten."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w, p1 = k["wart"], k["pruefer"]
+        gid, _ = gliederung(w)
+        a = neuer_artikel(w, ids["hms"], gid)
+        pid = starten(p1, a["id"]).json["pruefung"]["id"]
+        assert festschreiben(p1, pid, ergebnis="einsatzbereit").status_code == 200
+        zeile = protokoll_zeile(app, pid)
+        with open(os.path.join(tmp, zeile["pdf_path"]), "rb") as fh:
+            original = fh.read()
+        n = zeile["pdf_hashed_bytes"]
+        anon = app.test_client()
+        assert anon.get("/material/pruefen").status_code == 200
+
+        def pruefen(daten, c=anon):
+            r = c.post("/api/material/pruefen", data={"datei": (io.BytesIO(daten), "protokoll.pdf")}, headers=H,
+                       content_type="multipart/form-data")
+            assert r.status_code == 200, r.get_json()
+            return r.json
+
+        e = pruefen(original)
+        assert e["ergebnis"] == "unveraendert" and e["protokoll_id"] == zeile["protocol_id"], e
+        # Keine Personendaten: nur Ergebnis, Protokoll-ID, Art und ein Hinweis.
+        assert set(e) <= {"ergebnis", "protokoll_id", "art", "hinweis"}, e
+        assert "pruefer" not in json.dumps(e) and "1012" not in json.dumps(e)
+        # Ein Byte im Protokoll geändert → verändert.
+        kopie = bytearray(original)
+        kopie[n // 2] ^= 1
+        e = pruefen(bytes(kopie))
+        assert e["ergebnis"] == "veraendert" and e["protokoll_id"] == zeile["protocol_id"], e
+        # Ein Byte hinter den ersten N geändert: Inhalt intakt, Datei trotzdem nicht die ausgegebene.
+        kopie = bytearray(original)
+        kopie[-5] ^= 1
+        e = pruefen(bytes(kopie))
+        assert e["ergebnis"] == "veraendert" and f"ersten {n} Bytes" in e["hinweis"], e
+        # Ohne Stempel (nur die ersten N Bytes) ebenso.
+        e = pruefen(original[:n])
+        assert e["ergebnis"] == "veraendert" and "Stempel" in e["hinweis"], e
+        # Ein fremdes PDF ist kein Protokoll von strömis.de.
+        assert pruefen(PDF)["ergebnis"] == "unbekannt"
+        # Angemeldet mit Zugang zum Modul: dazu der Weg zum Vorgang.
+        assert pruefen(original, k["fuehrung"])["link"] == f"/material/pruefung/{pid}"
+        assert "link" not in pruefen(original, k["nutzer"])
+        r = anon.post("/api/material/pruefen", data={}, headers=H, content_type="multipart/form-data")
+        assert r.status_code == 400
+        # Gebremst: zu viele Prüfungen in einer Viertelstunde von einer Adresse.
+        codes = [anon.post("/api/material/pruefen", data={"datei": (io.BytesIO(PDF), "x.pdf")}, headers=H,
+                           content_type="multipart/form-data").status_code for _ in range(25)]
+        assert 429 in codes, codes
+    print("Prüfseitentest bestanden.")
+
+
+def test_aussonderungsprotokoll():
+    """Jede Aussonderung hat ihr eigenes festgeschriebenes Protokoll – aus der Prüfung und durch den Materialwart."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w, p1 = k["wart"], k["pruefer"]
+        gid, system = gliederung(w)
+        h = _heute()
+        alt = neuer_artikel(w, ids["gurt"], gid, manufactured_on=f"{h.year - 11}-01")
+        pr = starten(p1, alt["id"]).json["pruefung"]
+        p1.put(f"/api/material/pruefungen/{pr['id']}/punkte/{punkte_von(pr)['Testpunkt Messwert']}", json={"wert": "1"})
+        r = festschreiben(p1, pr["id"], ergebnis="aussondern", grund="Lebensdauer überschritten")
+        assert r.status_code == 200, r.get_json()
+        lauf = w.get(f"/api/material/artikel/{alt['id']}").json["artikel"]["pruefungen"]
+        aus, pruef = lauf[0], lauf[1]
+        jahr = h.year
+        assert aus["art"] == "aussonderung" and aus["protokoll"]["id"] == f"A-{jahr}-{aus['id']:06d}", aus
+        assert pruef["protokoll"]["id"] == f"P-{jahr}-{pr['id']:06d}"
+        text = _flach(" ".join(pdf_seiten(os.path.join(tmp, protokoll_zeile(app, aus["id"])["pdf_path"]))))
+        assert "Aussonderungsprotokoll" in text and pruef["protokoll"]["id"] in text and "Lebensdauer überschritten" in text
+        text = _flach(" ".join(pdf_seiten(os.path.join(tmp, protokoll_zeile(app, pr["id"])["pdf_path"]))))
+        assert aus["protokoll"]["id"] in text, text[:800]
+        # Eine Aussonderung lässt sich nicht berichtigen.
+        assert p1.post(f"/api/material/pruefungen/{pr['id']}/berichtigen", json={"grund": "x"}).status_code == 409
+        # Durch den Materialwart: nur mit hinterlegter Unterschrift.
+        b = neuer_artikel(w, ids["hms"], gid)
+        assert p1.post(f"/api/material/artikel/{b['id']}/sperren", json={"grund": "verlust"}).status_code == 200
+        assert w.delete("/api/material/unterschrift", headers=H).status_code == 200
+        r = w.post(f"/api/material/artikel/{b['id']}/aussondern", json={"grund": "verlust", "bemerkung": "Seit Übung weg"})
+        assert r.status_code == 403 and "Unterschrift" in r.json["error"], r.get_json()
+        unterschreiben(w)
+        r = w.post(f"/api/material/artikel/{b['id']}/aussondern", json={"grund": "verlust", "bemerkung": "Seit Übung weg"})
+        assert r.status_code == 200, r.get_json()
+        aid = r.json["aussonderung"]
+        zeile = protokoll_zeile(app, aid)
+        assert zeile["protocol_id"] == f"A-{jahr}-{aid:06d}" and zeile["locked_login"] == "wart@example.org"
+        text = _flach(" ".join(pdf_seiten(os.path.join(tmp, zeile["pdf_path"]))))
+        assert "Verlust" in text and "Seit Übung weg" in text and "Materialwart" in text and b["inventory_no"] in text
+        assert "verloren" in text, text[:900]
+        r = k["fuehrung"].get(f"/material/pruefung/{aid}/pdf")
+        assert r.status_code == 200 and r.mimetype == "application/pdf"
+    print("Aussonderungsprotokolltest bestanden.")
+
+
+def test_sammelprotokoll():
+    """Abschluss eines Durchgangs: Sammelprotokoll mit allen Artikeln, Ausnahmen, Prüfern samt Urkundennummer
+    und den Einzelprotokollen; danach ist der Durchgang unveränderlich. Auch ein Abbruch bekommt eins."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w, p1 = k["wart"], k["pruefer"]
+        p2 = zweiter_pruefer(app, k["adm"])
+        gid, _ = gliederung(w)
+        artikel = [neuer_artikel(w, ids["hms"], gid) for _ in range(3)]
+        rid = w.post("/api/material/durchgaenge", json={"folder_id": gid, "titel": "Jahresprüfung Test"}).json["durchgang"]["id"]
+        einzel = []
+        for c, x in ((p1, artikel[0]), (p2, artikel[1])):
+            pid = starten(c, x["id"], durchgang_id=rid).json["pruefung"]["id"]
+            assert festschreiben(c, pid, ergebnis="einsatzbereit").status_code == 200
+            einzel.append(protokoll_zeile(app, pid))
+        assert w.post(f"/api/material/durchgaenge/{rid}/ausnehmen",
+                      json={"item_id": artikel[2]["id"], "grund": "nicht auffindbar"}).status_code == 200
+        r = w.post(f"/api/material/durchgaenge/{rid}/abschliessen", json={})
+        assert r.status_code == 200, r.get_json()
+        d = r.json["durchgang"]
+        jahr = _heute().year
+        assert d["protokoll"]["id"] == f"S-{jahr}-{rid:06d}" and d["protokoll"]["url"] == f"/material/durchgang/{rid}/sammelprotokoll"
+        zeile = protokoll_zeile(app, rid=rid)
+        pfad = os.path.join(tmp, zeile["pdf_path"])
+        seiten = pdf_seiten(pfad)
+        stempel = f"SHA-256 (erste {zeile['pdf_hashed_bytes']} Bytes): {zeile['pdf_sha256']}"
+        assert all(stempel in _flach(s) for s in seiten)
+        text = _flach(" ".join(seiten))
+        for x in artikel:
+            assert x["inventory_no"] in text, x["inventory_no"]
+        for e in einzel:
+            assert e["protocol_id"] in text and e["file_sha256"] in text.replace(" ", ""), e["protocol_id"]
+        assert "pruefer" in text and "1012-4711" in text and "Prüferin Zwei" in text and "1012-4712" in text
+        assert "nicht auffindbar" in text and "Jahresprüfung Test" in text
+        r = k["fuehrung"].get(f"/material/durchgang/{rid}/sammelprotokoll")
+        assert r.status_code == 200 and r.mimetype == "application/pdf"
+        # Abgeschlossen heißt unveränderlich – auch in der Datenbank.
+        conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+        for sql in (f"UPDATE mat_round SET title = 'x' WHERE id = {rid}", f"DELETE FROM mat_round WHERE id = {rid}",
+                    f"DELETE FROM mat_round_item WHERE round_id = {rid}",
+                    f"UPDATE mat_round_item SET excluded_reason = 'y' WHERE round_id = {rid}"):
+            try:
+                conn.execute(sql)
+                raise AssertionError("abgeschlossenen Durchgang geändert: " + sql)
+            except sqlite3.IntegrityError as exc:
+                assert "unveränderlich" in str(exc), exc
+        conn.close()
+        # Ein abgebrochener Durchgang: Sammelprotokoll mit „nicht geprüft“.
+        rid2 = w.post("/api/material/durchgaenge", json={"folder_id": gid, "titel": "Abbruch Test"}).json["durchgang"]["id"]
+        pid = starten(p1, artikel[0]["id"], durchgang_id=rid2).json["pruefung"]["id"]
+        assert festschreiben(p1, pid, ergebnis="einsatzbereit").status_code == 200
+        r = w.post(f"/api/material/durchgaenge/{rid2}/abbrechen", json={})
+        assert r.status_code == 200 and r.json["durchgang"]["protokoll"]["id"] == f"S-{jahr}-{rid2:06d}", r.get_json()
+        text = _flach(" ".join(pdf_seiten(os.path.join(tmp, protokoll_zeile(app, rid=rid2)["pdf_path"]))))
+        assert "abgebrochen" in text and "nicht geprüft" in text, text[:800]
+    print("Sammelprotokolltest bestanden.")
+
+
+def test_unterschrift():
+    """Unterschrift im Profil: nur PNG vom Signatur-Pad, nicht leer; normalisiert gespeichert; im Journal."""
+    import base64
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        p1 = k["pruefer"]
+        r = p1.get("/api/material/unterschrift")
+        assert r.status_code == 200 and r.json["unterschrift"].startswith("data:image/png;base64,")
+        gespeichert = Image.open(io.BytesIO(base64.b64decode(r.json["unterschrift"].split(",", 1)[1])))
+        assert gespeichert.mode == "RGBA" and gespeichert.width < 420           # leerer Rand abgeschnitten
+
+        def setzen(bild):
+            return p1.put("/api/material/unterschrift", json={"bild": bild})
+        assert setzen("kein Bild").status_code == 400
+        buf = io.BytesIO()
+        Image.new("RGB", (50, 50), (0, 0, 0)).save(buf, "JPEG")
+        assert setzen("data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()).status_code == 400
+        assert setzen("data:image/png;base64,@@@").status_code == 400
+        buf = io.BytesIO()
+        Image.new("RGBA", (400, 150), (0, 0, 0, 0)).save(buf, "PNG")
+        r = setzen("data:image/png;base64," + base64.b64encode(buf.getvalue()).decode())
+        assert r.status_code == 400 and "leer" in r.json["error"], r.get_json()
+        # Auch ein Bild mit weißem Hintergrund (ohne Alpha) taugt: Tinte ist, was dunkel ist.
+        buf = io.BytesIO()
+        weiss = Image.new("RGB", (400, 150), (255, 255, 255))
+        from PIL import ImageDraw
+        ImageDraw.Draw(weiss).line([(20, 100), (200, 30), (380, 110)], fill=(0, 0, 0), width=5)
+        weiss.save(buf, "PNG")
+        r = setzen("data:image/png;base64," + base64.b64encode(buf.getvalue()).decode())
+        assert r.status_code == 200, r.get_json()
+        assert k["nutzer"].put("/api/material/unterschrift", json={"bild": unterschrift_daten()}).status_code == 403
+        assert app.test_client().get("/api/material/unterschrift").status_code == 401
+        with app.app_context():
+            from app import db
+            eintraege = db.query("SELECT * FROM mat_audit WHERE entity = 'user' AND action = 'unterschrift'")
+        assert len(eintraege) >= 3 and all("signature" not in (e["after_json"] or "") for e in eintraege)
+        assert p1.delete("/api/material/unterschrift", headers=H).json["unterschrift"] is None
+        assert p1.get("/api/material/start").json["darf"]["unterschrift"] is False
+    print("Unterschrifttest bestanden.")
+
+
+def test_unterschriftsfeld():
+    """Unterschriftsfelder eines Formulars: auf dem Signatur-Pad zu füllen, Pflicht wie andere Punkte."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        kp, w, p1 = k["katalog"], k["wart"], k["pruefer"]
+        r = kp.post("/api/material/formulare", json={"produkt_id": ids["hms"], "titel": "HMS mit Unterschrift", "punkte": [
+            {"text": "Testpunkt Sicht", "art": "yesno", "soll": "ja"},
+            {"text": "Unterschrift Gerätewart", "art": "signature"}]})
+        assert r.status_code == 201, r.get_json()
+        assert kp.post(f"/api/material/formulare/{r.json['formular']['id']}/aktivieren", json={}).status_code == 200
+        gid, _ = gliederung(w)
+        a = neuer_artikel(w, ids["hms"], gid)
+        pr = starten(p1, a["id"]).json["pruefung"]
+        sig = punkte_von(pr)["Unterschrift Gerätewart"]
+        r = festschreiben(p1, pr["id"], ergebnis="einsatzbereit")
+        assert r.status_code == 400 and "Unterschrift Gerätewart" in r.json["error"], r.get_json()
+        url = f"/api/material/pruefungen/{pr['id']}/punkte/{sig}"
+        assert p1.put(url, json={"wert": "x"}).status_code == 400
+        assert p1.post(url + "/foto", data={"file": (jpeg(), "x.jpg")}, headers=H,
+                       content_type="multipart/form-data").status_code == 400
+        assert p1.put(url, json={"unterschrift": "data:image/png;base64,AAAA"}).status_code == 400
+        r = p1.put(url, json={"unterschrift": unterschrift_daten("G")})
+        assert r.status_code == 200 and r.json["punkt"]["unterschrift"].startswith("data:image/png"), r.get_json()
+        r = p1.put(url, json={"befund": "nicht_zutreffend"})
+        assert r.json["punkt"]["befund"] == "nicht_zutreffend" and r.json["punkt"]["unterschrift"] is None
+        assert p1.put(url, json={"unterschrift": unterschrift_daten("G")}).json["punkt"]["befund"] == "ok"
+        r = festschreiben(p1, pr["id"], ergebnis="einsatzbereit")
+        assert r.status_code == 200, r.get_json()
+        with app.app_context():
+            from app import db
+            zeile = db.query("SELECT signature_png FROM mat_inspection_result WHERE id = ?", (sig,), one=True)
+        assert zeile["signature_png"].startswith(b"\x89PNG")
+        assert p1.put(url, json={"unterschrift": None}).status_code == 409
+    print("Unterschriftsfeldtest bestanden.")
+
+
+def test_lieferung2_bestand():
+    """Prüfungen, die vor Lieferung 3 abgeschlossen wurden, haben kein Protokoll und bleiben trotzdem
+    unveränderlich; berichtigen lassen sie sich wie jede abgeschlossene Prüfung."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w, p1 = k["wart"], k["pruefer"]
+        gid, _ = gliederung(w)
+        a = neuer_artikel(w, ids["hms"], gid)
+        with app.app_context():
+            from app import db
+            ts = db.now()
+            pid = db.execute("INSERT INTO mat_inspection (item_id, inspector_user_id, inspector_name, inspector_certificate, "
+                             "inspected_on, kind, result, next_due_on, completed_at, created_at, updated_at) "
+                             "VALUES (?, ?, 'pruefer', '1012-4711', ?, 'eingang', 'einsatzbereit', ?, ?, ?, ?)",
+                             (a["id"], k["pruefer_id"], _heute().isoformat(),
+                              (_heute() + timedelta(days=300)).isoformat(), ts, ts, ts))
+        pr = p1.get(f"/api/material/pruefungen/{pid}").json["pruefung"]
+        assert pr["protokoll"] is None and pr["berichtigbar"]["ok"], pr
+        assert k["fuehrung"].get(f"/material/pruefung/{pid}/pdf").status_code == 404
+        conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+        try:
+            conn.execute(f"UPDATE mat_inspection SET result = 'instandsetzen' WHERE id = {pid}")
+            raise AssertionError("abgeschlossene Prüfung geändert")
+        except sqlite3.IntegrityError:
+            pass
+        conn.close()
+        r = p1.post(f"/api/material/pruefungen/{pid}/berichtigen", json={"grund": "Protokoll fehlte"})
+        assert r.status_code == 201, r.get_json()
+        b = r.json["pruefung"]
+        r = festschreiben(p1, b["id"], ergebnis="einsatzbereit")
+        assert r.status_code == 200 and r.json["pruefung"]["protokoll"], r.get_json()
+        text = _flach(" ".join(pdf_seiten(os.path.join(tmp, protokoll_zeile(app, b["id"])["pdf_path"]))))
+        assert "ohne Protokoll" in text, text[:600]
+    print("Bestandstest Lieferung 2 bestanden.")
+
+
+def pdf_mit_skript():
+    """Ein PDF mit Seitenaktion (JavaScript), einem Launch-Verweis, einem JavaScript-Verweis, einem normalen Verweis
+    und einem ausgefüllten Formularfeld mit Tastenaktion – so etwas soll nie ins Protokoll gelangen."""
+    from pypdf import PdfWriter
+    from pypdf.generic import (ArrayObject, DecodedStreamObject, DictionaryObject, FloatObject, NameObject, NumberObject,
+                               TextStringObject)
+    w = PdfWriter()
+    seite = w.add_blank_page(595, 842)
+
+    def objekt(d):
+        return w._add_object(DictionaryObject(d))
+
+    def js():
+        return objekt({NameObject("/S"): NameObject("/JavaScript"), NameObject("/JS"): TextStringObject("app.alert(1)")})
+
+    def verweis(aktion, x):
+        return objekt({NameObject("/Type"): NameObject("/Annot"), NameObject("/Subtype"): NameObject("/Link"),
+                       NameObject("/Rect"): ArrayObject([FloatObject(v) for v in (x, 10, x + 30, 30)]),
+                       NameObject("/A"): aktion, NameObject("/F"): NumberObject(4)})
+    seite[NameObject("/AA")] = DictionaryObject({NameObject("/O"): js()})
+    uri = objekt({NameObject("/S"): NameObject("/URI"), NameObject("/URI"): TextStringObject("https://example.org/")})
+    launch = objekt({NameObject("/S"): NameObject("/Launch"), NameObject("/F"): TextStringObject("calc.exe")})
+    bild = DecodedStreamObject()
+    bild.set_data(b"0 0 1 rg 0 0 50 20 re f")
+    bild.update({NameObject("/Type"): NameObject("/XObject"), NameObject("/Subtype"): NameObject("/Form"),
+                 NameObject("/BBox"): ArrayObject([FloatObject(v) for v in (0, 0, 50, 20)])})
+    feld = objekt({NameObject("/Type"): NameObject("/Annot"), NameObject("/Subtype"): NameObject("/Widget"),
+                   NameObject("/FT"): NameObject("/Tx"), NameObject("/T"): TextStringObject("feld"),
+                   NameObject("/V"): TextStringObject("ausgefuellt"), NameObject("/F"): NumberObject(4),
+                   NameObject("/Rect"): ArrayObject([FloatObject(v) for v in (100, 100, 150, 120)]),
+                   NameObject("/AP"): DictionaryObject({NameObject("/N"): w._add_object(bild)}),
+                   NameObject("/AA"): DictionaryObject({NameObject("/K"): js()})})
+    seite[NameObject("/Annots")] = ArrayObject([verweis(uri, 10), verweis(launch, 60), verweis(js(), 110), feld])
+    w._root_object[NameObject("/AcroForm")] = DictionaryObject({NameObject("/Fields"): ArrayObject([feld])})
+    w._root_object[NameObject("/OpenAction")] = js()
+    puffer = io.BytesIO()
+    w.write(puffer)
+    puffer.seek(0)
+    return puffer
+
+
+def test_review_lieferung3():
+    """Befunde aus der Durchsicht von Lieferung 3, je als Regressionstest."""
+    import base64
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w, p1 = k["wart"], k["pruefer"]
+        gid, _ = gliederung(w)
+        db_pfad = os.path.join(tmp, "stroemis.db")
+
+        # 1. Eine Berichtigung hebt keine spätere Sperre auf (sonst gäbe ein Protokoll mit dem alten Prüftag den
+        #    Artikel nach einem Sturz wieder frei).
+        a = neuer_artikel(w, ids["hms"], gid)
+        pid = starten(p1, a["id"]).json["pruefung"]["id"]
+        assert festschreiben(p1, pid, ergebnis="einsatzbereit").status_code == 200
+        assert p1.post(f"/api/material/artikel/{a['id']}/sperren", json={"grund": "sturz"}).status_code == 200
+        r = p1.post(f"/api/material/pruefungen/{pid}/berichtigen", json={"grund": "x"})
+        assert r.status_code == 409 and "gesperrt" in r.json["error"], r.get_json()
+
+        # 2. Ein neuer Durchgang übernimmt keinen offenen Berichtigungsentwurf.
+        b = neuer_artikel(w, ids["hms"], gid)
+        pid = starten(p1, b["id"]).json["pruefung"]["id"]
+        assert festschreiben(p1, pid, ergebnis="einsatzbereit").status_code == 200
+        ber = p1.post(f"/api/material/pruefungen/{pid}/berichtigen", json={"grund": "Tippfehler"}).json["pruefung"]
+        rid = w.post("/api/material/durchgaenge", json={"folder_id": gid, "titel": "Jahresprüfung"}).json["durchgang"]["id"]
+        assert p1.get(f"/api/material/pruefungen/{ber['id']}").json["pruefung"]["round_id"] is None
+        assert festschreiben(p1, ber["id"], ergebnis="einsatzbereit").status_code == 200
+        zeile = [x for x in w.get(f"/api/material/durchgaenge/{rid}").json["durchgang"]["artikel"] if x["id"] == b["id"]][0]
+        assert zeile["zustand"] == "offen", zeile
+        assert w.post(f"/api/material/durchgaenge/{rid}/abbrechen", json={}).json["durchgang"] is None
+
+        # 3. Eine im Durchgang berichtigte Prüfung zählt bei den Prüfern nur einmal.
+        c = neuer_artikel(w, ids["hms"], gid)
+        rid = w.post("/api/material/durchgaenge", json={"folder_id": gid, "titel": "Zählung"}).json["durchgang"]["id"]
+        pid = starten(p1, c["id"], durchgang_id=rid).json["pruefung"]["id"]
+        assert festschreiben(p1, pid, ergebnis="einsatzbereit").status_code == 200
+        ber = p1.post(f"/api/material/pruefungen/{pid}/berichtigen", json={"grund": "Tippfehler"}).json["pruefung"]
+        assert ber["round_id"] == rid
+        assert festschreiben(p1, ber["id"], ergebnis="einsatzbereit").status_code == 200
+        d = w.get(f"/api/material/durchgaenge/{rid}").json["durchgang"]
+        assert [x["anzahl"] for x in d["pruefer"]] == [1], d["pruefer"]
+
+        # 4. Die Trigger halten auch INSERT OR REPLACE, Umhängen und Nachschieben stand.
+        fest = protokoll_zeile(app, pid)
+        conn = sqlite3.connect(db_pfad)
+        conn.execute("PRAGMA foreign_keys = ON")
+        entwurf = starten(p1, c["id"]).json["pruefung"]["id"]
+        befund_entwurf = conn.execute("SELECT id FROM mat_inspection_result WHERE inspection_id = ?", (entwurf,)).fetchone()[0]
+        befund_fest = conn.execute("SELECT id FROM mat_inspection_result WHERE inspection_id = ?", (pid,)).fetchone()[0]
+        for sql, args in [
+            ("INSERT OR REPLACE INTO mat_inspection (id, item_id, inspected_on, kind, result, created_at, updated_at) "
+             "VALUES (?, ?, '2026-01-01', 'periodisch', 'instandsetzen', 'x', 'x')", (pid, c["id"])),
+            ("UPDATE mat_inspection_result SET inspection_id = ? WHERE id = ?", (pid, befund_entwurf)),
+            ("INSERT OR REPLACE INTO mat_inspection_result (id, inspection_id, checklist_text, editor) VALUES (?, ?, 'x', 'yesno')",
+             (befund_fest, entwurf)),
+            ("UPDATE mat_inspection SET round_id = ? WHERE id = ?", (rid, entwurf)),
+            # REPLACE über eine eindeutige Spalte löschte sonst die andere Prüfung ohne Lösch-Trigger.
+            ("UPDATE OR REPLACE mat_inspection SET protocol_id = ? WHERE id = ?", (fest["protocol_id"], entwurf)),
+            ("INSERT OR REPLACE INTO mat_inspection (item_id, protocol_id, inspected_on, kind, created_at, updated_at) "
+             "VALUES (?, ?, '2026-01-01', 'periodisch', 'x', 'x')", (a["id"], fest["protocol_id"])),
+            ("INSERT INTO mat_inspection (item_id, round_id, inspected_on, kind, created_at, updated_at) "
+             "VALUES (?, ?, '2026-01-01', 'periodisch', 'x', 'x')", (a["id"], rid)),
+        ]:
+            if "round_id = ?" in sql or "round_id, inspected_on" in sql:
+                conn.execute("UPDATE mat_round SET closed_on = '2026-10-17' WHERE id = ? AND closed_on IS NULL", (rid,))
+            try:
+                conn.execute(sql, args)
+                raise AssertionError("an den Triggern vorbei: " + sql)
+            except sqlite3.IntegrityError as exc:
+                assert "unveränderlich" in str(exc), exc
+        # Die Kontokennung des Prüfers geht beim Löschen eines Kontos auf NULL – auf ein anderes Konto nie.
+        anderer = conn.execute("SELECT id FROM users WHERE email = 'wart@example.org'").fetchone()[0]
+        try:
+            conn.execute("UPDATE mat_inspection SET inspector_user_id = ? WHERE id = ?", (anderer, pid))
+            raise AssertionError("Prüfer einer festgeschriebenen Prüfung umgeschrieben")
+        except sqlite3.IntegrityError:
+            pass
+        conn.execute("UPDATE mat_inspection SET inspector_user_id = NULL WHERE id = ?", (pid,))
+        # Ein abgeschlossener Durchgang (hier ohne Sammelprotokoll, wie aus Lieferung 2) lässt sich nicht wieder öffnen.
+        try:
+            conn.execute("UPDATE mat_round SET closed_on = NULL WHERE id = ?", (rid,))
+            raise AssertionError("abgeschlossenen Durchgang wieder geöffnet")
+        except sqlite3.IntegrityError:
+            pass
+        conn.rollback()
+        conn.close()
+        assert protokoll_zeile(app, pid)["result"] == fest["result"]
+
+        # 5. Die Prüfseite nennt keine Protokoll-ID zu einer erfundenen Kennung.
+        falsch = (b"%PDF-1.4\n%Stroemis-Protokoll " + fest["protocol_id"].encode() + b" N=1 SHA-256=" + b"0" * 64 + b"\n")
+        r = app.test_client().post("/api/material/pruefen", data={"datei": (io.BytesIO(falsch), "x.pdf")}, headers=H,
+                                   content_type="multipart/form-data")
+        assert r.json["ergebnis"] == "unbekannt" and r.json["protokoll_id"] is None, r.get_json()
+
+        # 6. Skripte und ausführende Aktionen eines Anhangs kommen nicht ins Protokoll; Verweise und Felder bleiben.
+        assert p1.delete(f"/api/material/pruefungen/{entwurf}", headers=H).status_code == 200
+        e = neuer_artikel(w, ids["hms"], gid)
+        pid = starten(p1, e["id"]).json["pruefung"]["id"]
+        r = p1.post(f"/api/material/pruefungen/{pid}/anhaenge", data={"file": [(pdf_mit_skript(), "karte.pdf")],
+                                                                       "im_protokoll": "ja"},
+                    headers=H, content_type="multipart/form-data")
+        assert r.status_code == 201, r.get_json()
+        assert festschreiben(p1, pid, ergebnis="einsatzbereit").status_code == 200
+        with open(os.path.join(tmp, protokoll_zeile(app, pid)["pdf_path"]), "rb") as fh:
+            daten = fh.read()
+        assert b"/JavaScript" not in daten and b"/Launch" not in daten and b"/OpenAction" not in daten
+        assert b"/URI" in daten and b"/AP" in daten
+
+        # 7. Riesige Unterschriften werden abgewiesen (Speicher), bevor sie dekodiert werden.
+        buf = io.BytesIO()
+        Image.new("RGBA", (2500, 2000), (0, 0, 0, 0)).save(buf, "PNG")
+        r = p1.put("/api/material/unterschrift", json={"bild": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()})
+        assert r.status_code == 400, r.get_json()
+
+        # 8. Zeichen, die der fette Schnitt von DLRG Univers nicht hat, kommen richtig ins Protokoll (und als PDF/A).
+        r = k["katalog"].post("/api/material/produkte", json={"category_id": ids["karabiner"], "manufacturer": "Łukasz",
+                                                               "model": "Ŝpezial −5 μm", "material_kind": "metall_hardware",
+                                                               "interval_months": 12})
+        assert r.status_code == 201, r.get_json()
+        f = neuer_artikel(w, r.json["produkt"]["id"], gid)
+        pid = starten(p1, f["id"]).json["pruefung"]["id"]
+        assert festschreiben(p1, pid, ergebnis="einsatzbereit").status_code == 200
+        text = _flach(" ".join(pdf_seiten(os.path.join(tmp, protokoll_zeile(app, pid)["pdf_path"]))))
+        assert "Łukasz" in text and "−5 μm" in text, text[:400]
+
+        # 10. Ein geändertes Byte in der Kennung des Stempels: weiter „verändert“ mit Protokoll-ID (über die %%EOF-Grenzen).
+        zeile = protokoll_zeile(app, pid)
+        with open(os.path.join(tmp, zeile["pdf_path"]), "rb") as fh:
+            kopie = bytearray(fh.read())
+        stelle = kopie.index(b"%Stroemis-Protokoll") + 25
+        kopie[stelle] ^= 1
+        r = app.test_client().post("/api/material/pruefen", data={"datei": (io.BytesIO(bytes(kopie)), "x.pdf")}, headers=H,
+                                   content_type="multipart/form-data")
+        assert r.json["ergebnis"] == "veraendert" and r.json["protokoll_id"] == zeile["protocol_id"], r.get_json()
+
+        # 11. Angefügte Seiten bekommen unten einen eigenen Streifen für den Stempel – er verdeckt nichts vom Anhang.
+        from pypdf import PdfReader
+        zeile = protokoll_zeile(app, protokoll_zeile(app, pid)["id"] - 1)      # die Prüfung mit dem Skript-Anhang (6.)
+        angefuegt = PdfReader(os.path.join(tmp, zeile["pdf_path"])).pages[-1]
+        assert float(angefuegt.mediabox.bottom) < -39 and float(angefuegt.mediabox.top) == 842, angefuegt.mediabox
+
+        # 12. Ohne Fälligkeit (instandsetzen) sagt das Protokoll, warum – die EN-365-Karte nennt sie immer.
+        g2 = neuer_artikel(w, ids["hms"], gid)
+        pid = starten(p1, g2["id"]).json["pruefung"]["id"]
+        assert festschreiben(p1, pid, ergebnis="instandsetzen", grund="Feder lahm").status_code == 200
+        text = _flach(" ".join(pdf_seiten(os.path.join(tmp, protokoll_zeile(app, pid)["pdf_path"]))))
+        assert "Nächste Prüfung" in text and "Freiprüfung nötig" in text, text[:900]
+
+        # 13. Ein schon gestempeltes Protokoll als Anhang behält auf seinen Seiten den eigenen Stempel.
+        alt = protokoll_zeile(app, pid)
+        with open(os.path.join(tmp, alt["pdf_path"]), "rb") as fh:
+            alt_daten = fh.read()
+        h2 = neuer_artikel(w, ids["hms"], gid)
+        pid = starten(p1, h2["id"]).json["pruefung"]["id"]
+        r = p1.post(f"/api/material/pruefungen/{pid}/anhaenge", data={"file": [(io.BytesIO(alt_daten), "alt.pdf")],
+                                                                       "im_protokoll": "ja"},
+                    headers=H, content_type="multipart/form-data")
+        assert r.status_code == 201, r.get_json()
+        assert festschreiben(p1, pid, ergebnis="einsatzbereit").status_code == 200
+        neu = protokoll_zeile(app, pid)
+        seiten = pdf_seiten(os.path.join(tmp, neu["pdf_path"]))
+        alter_stempel = f"SHA-256 (erste {alt['pdf_hashed_bytes']} Bytes): {alt['pdf_sha256']}"
+        neuer_stempel = f"SHA-256 (erste {neu['pdf_hashed_bytes']} Bytes): {neu['pdf_sha256']}"
+        assert alter_stempel in _flach(seiten[-1]) and neuer_stempel in _flach(seiten[-1]), seiten[-1][-500:]
+
+        # 14. Mit AES verschlüsselte Anhänge (leeres Benutzerkennwort, wie bei Herstellern üblich) lassen sich anhängen.
+        from pypdf import PdfWriter
+        geschuetzt = PdfWriter()
+        geschuetzt.add_blank_page(595, 842)
+        geschuetzt.encrypt(user_password="", owner_password="hersteller", algorithm="AES-128")
+        buf = io.BytesIO()
+        geschuetzt.write(buf)
+        buf.seek(0)
+        i2 = neuer_artikel(w, ids["hms"], gid)
+        pid = starten(p1, i2["id"]).json["pruefung"]["id"]
+        r = p1.post(f"/api/material/pruefungen/{pid}/anhaenge", data={"file": [(buf, "geschuetzt.pdf")], "im_protokoll": "ja"},
+                    headers=H, content_type="multipart/form-data")
+        assert r.status_code == 201, r.get_json()
+        assert festschreiben(p1, pid, ergebnis="einsatzbereit").status_code == 200
+        seiten = pdf_seiten(os.path.join(tmp, protokoll_zeile(app, pid)["pdf_path"]))
+        assert "SHA-256 (erste" in _flach(seiten[-1]) and len(seiten) >= 2
+
+        # 15. Liegt unter einer ID schon ein Protokoll (nach dem Zurückspielen einer Sicherung wieder offener Entwurf,
+        #     sein ausgehändigtes Protokoll in pdf/verwaist/), bekommt das neue eine Folgenummer – nie dieselbe ID.
+        j2 = neuer_artikel(w, ids["hms"], gid)
+        pid = starten(p1, j2["id"]).json["pruefung"]["id"]
+        jahr = _heute().year
+        os.makedirs(os.path.join(tmp, "pdf", "verwaist"), exist_ok=True)
+        with open(os.path.join(tmp, "pdf", "verwaist", f"P-{jahr}-{pid:06d}-20260101000000.pdf"), "wb") as fh:
+            fh.write(b"%PDF-1.7\n")
+        r = festschreiben(p1, pid, ergebnis="einsatzbereit")
+        assert r.status_code == 200 and r.json["pruefung"]["protokoll"]["id"] == f"P-{jahr}-{pid:06d}-2", r.get_json()
+        with open(os.path.join(tmp, protokoll_zeile(app, pid)["pdf_path"]), "rb") as fh:
+            e = app.test_client().post("/api/material/pruefen", data={"datei": (io.BytesIO(fh.read()), "x.pdf")}, headers=H,
+                                       content_type="multipart/form-data").json
+        assert e["ergebnis"] == "unveraendert" and e["protokoll_id"] == f"P-{jahr}-{pid:06d}-2", e
+
+        # 9. Eine Protokolldatei ohne Datenbankzeile (Absturz vor dem Commit) wird beim Start beiseitegelegt.
+        waise = os.path.join(tmp, "pdf", str(_heute().year), f"A-{_heute().year}-999999.pdf")
+        with open(waise, "wb") as fh:
+            fh.write(b"%PDF-1.7\n")
+        make_app(tmp)
+        assert not os.path.exists(waise) and os.listdir(os.path.join(tmp, "pdf", "verwaist")), os.listdir(os.path.join(tmp, "pdf"))
+        # … und ihre Nummer wird nicht noch einmal vergeben (etwa nach dem Zurückspielen einer älteren Sicherung).
+        conn = sqlite3.connect(db_pfad)
+        assert conn.execute("SELECT seq FROM sqlite_sequence WHERE name = 'mat_inspection'").fetchone()[0] >= 999999
+        conn.close()
+        assert os.path.exists(os.path.join(tmp, protokoll_zeile(app, pid)["pdf_path"]))
+    print("Review-Befunde Lieferung 3 nachgestellt und behoben.")
+
+
+def test_durchsichtige_bilder():
+    """Produktbilder mit durchsichtigem Hintergrund (freigestellte PNGs) stehen auf Weiß, nicht auf Schwarz – neu
+    hochgeladene sofort, schon vorhandene nach der einmaligen Reparatur beim Start."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        frei = Image.new("RGBA", (600, 400), (0, 0, 0, 0))
+        from PIL import ImageDraw
+        ImageDraw.Draw(frei).ellipse([150, 80, 450, 320], fill=(220, 120, 20, 255))
+        for modus in ("RGBA", "P", "LA"):
+            buf = io.BytesIO()
+            (frei if modus == "RGBA" else frei.convert(modus)).save(buf, "PNG", **({"transparency": 0} if modus == "P" else {}))
+            buf.seek(0)
+            r = k["katalog"].post(f"/api/material/produkte/{ids['gurt']}/bild", data={"file": (buf, "frei.png")}, headers=H,
+                                  content_type="multipart/form-data")
+            assert r.status_code == 200, r.get_json()
+            p = r.json["produkt"]
+            for url in (p["bild"], p["vorschau"]):
+                bild = Image.open(io.BytesIO(k["katalog"].get(url).data)).convert("RGB")
+                assert min(bild.getpixel((1, 1))) > 240, (modus, url, bild.getpixel((1, 1)))
+        # Ein Bild aus der Zeit davor (Vorschau schwarz) wird beim nächsten Start aus dem Original neu erzeugt.
+        medien = os.path.join(tmp, "media", "material")
+        key = os.path.splitext(p["original"].rsplit("/", 1)[1])[0]
+        for art in ("web", "thumb"):
+            Image.new("RGB", (60, 40), (0, 0, 0)).save(os.path.join(medien, art, key + ".jpg"), "JPEG")
+        conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+        conn.execute("DELETE FROM mat_meta WHERE schluessel = 'bilder_weiss'")
+        conn.commit()
+        conn.close()
+        make_app(tmp)
+        for art in ("web", "thumb"):
+            bild = Image.open(os.path.join(medien, art, key + ".jpg")).convert("RGB")
+            assert bild.size != (60, 40) and min(bild.getpixel((1, 1))) > 240, (art, bild.size, bild.getpixel((1, 1)))
+    print("Bildtest (durchsichtiger Hintergrund) bestanden.")
+
+
 if __name__ == "__main__":
     test_migration()
     test_rollen()
@@ -2067,3 +2913,13 @@ if __name__ == "__main__":
     test_artikelnummer_eindeutig()
     test_produkt_variante()
     test_monatsangaben()
+    test_festschreiben()
+    test_berichtigung()
+    test_pruefseite()
+    test_aussonderungsprotokoll()
+    test_sammelprotokoll()
+    test_unterschrift()
+    test_unterschriftsfeld()
+    test_lieferung2_bestand()
+    test_review_lieferung3()
+    test_durchsichtige_bilder()

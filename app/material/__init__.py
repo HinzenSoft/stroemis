@@ -9,7 +9,8 @@ Aufbau:
   routes.py      Seiten (/material/…, /m/<token>), Schnittstelle (/api/material/…), Medien
   cli.py         flask material import-catalog
   services/      Fachregeln: rechte, katalog, bestand, status, interval, search, nummern, qr, journal,
-                 importer
+                 importer, pruefung, durchgang, anhang, meldung, protokoll (Festschreiben, Prüfseite),
+                 pdf (WeasyPrint), stempel (Prüfsumme), unterschrift
   templates/, static/   Seite und Oberfläche (material.js, material.css)
 """
 from .. import db
@@ -18,10 +19,22 @@ from . import models
 MATERIAL_BALD_FAELLIG_TAGE = 30
 
 
+def _verwaiste_protokolle(conn):
+    from .services.protokoll import verwaiste_beiseite
+    verwaiste_beiseite(conn)
+
+
+def _bilder_reparieren(conn):
+    from .services.katalog import durchsichtige_bilder_reparieren
+    durchsichtige_bilder_reparieren(conn)
+
+
 def schema_anmelden():
-    """Die Migration dieses Moduls beim Start mitlaufen lassen (db.init_db ruft sie auf)."""
-    if models.migrieren not in db.SCHEMA_MODULE:
-        db.SCHEMA_MODULE.append(models.migrieren)
+    """Die Migration dieses Moduls beim Start mitlaufen lassen (db.init_db ruft sie auf) – danach den Abgleich der
+    Protokolldateien mit der Datenbank und die einmalige Reparatur durchsichtiger Bilder."""
+    for schritt in (models.migrieren, _verwaiste_protokolle, _bilder_reparieren):
+        if schritt not in db.SCHEMA_MODULE:
+            db.SCHEMA_MODULE.append(schritt)
 
 
 def init_app(app):

@@ -1,0 +1,134 @@
+{% extends "material/pdf/basis.html" %}
+{# Sammelprotokoll eines Prüfdurchgangs: Ergebnisübersicht, Prüfer, alle Artikel des Durchgangs und das
+   Verzeichnis der Einzelprotokolle mit der Prüfsumme jeder Datei. Daten laut services/pdf.py (dokument,
+   durchgang, zaehlung, pruefer, artikel, ohne_protokoll). Bis zu etwa 500 Artikelzeilen. #}
+{% block stil %}
+.uebersicht-tab { width: 100%; border-collapse: collapse; }
+.uebersicht-tab > tbody > tr > td { vertical-align: top; padding: 0; }
+.uebersicht-tab td.zaehlung-spalte { width: 72mm; padding-right: 8mm !important; }
+table.zaehlung { width: 100%; border-collapse: collapse; }
+table.zaehlung td { padding: 1mm 0; border-bottom: .5pt solid var(--linie); color: var(--schwarz); }
+table.zaehlung td.anzahl { text-align: right; font-weight: 700; width: 14mm; }
+table.zaehlung tr.einzug td { color: var(--anthrazit); }
+table.zaehlung tr.einzug td.text { padding-left: 5mm; }
+table.zaehlung tr.einzug td.anzahl { font-weight: 400; }
+table.pruefer-liste .u img { max-width: 32mm; max-height: 10mm; }
+table.pruefer-liste td { vertical-align: middle; }
+
+table.artikel-liste, table.verzeichnis { font-size: 8pt; }
+table.artikel-liste td { padding: 1mm 1.3mm; }
+table.artikel-liste .klein { font-size: 7pt; color: var(--grau); }
+.erg-instandsetzen { font-weight: 700; color: var(--schwarz); }
+.erg-aussondern { font-weight: 700; color: var(--rot-dunkel); }
+.zustand-nicht_geprueft { font-weight: 700; color: var(--rot-dunkel); }
+.zustand-ausgenommen { color: var(--schwarz); }
+tr.offen .nr-marke { background: var(--rot); color: #ffffff; font-weight: 700; }
+.berichtigung { font-size: 6.5pt; color: var(--grau); }
+table.verzeichnis td { padding: .9mm 1.3mm; }
+table.verzeichnis .hash { font-size: 7pt; }
+.abbruch { border: .5pt solid var(--linie); border-left: 2.5mm solid var(--rot); padding: 2.5mm 4mm; margin: 2mm 0 1mm;
+  color: var(--schwarz); break-inside: avoid; }
+.abbruch strong { color: var(--rot-dunkel); font-size: 11pt; }
+{% endblock %}
+
+{% block unterzeile %}{{ durchgang.titel }}{% if durchgang.abgebrochen %}<span class="marke">ABGEBROCHEN</span>{% endif %}{% endblock %}
+
+{% block kopfzeile %}
+{%- if durchgang.abgebrochen %}
+<div class="abbruch"><strong>Durchgang abgebrochen</strong><br>
+  Der Prüfdurchgang wurde vor dem Ende abgebrochen. Artikel, die nicht geprüft wurden, sind in der Liste als
+  „nicht geprüft“ gekennzeichnet, ihre Nummer ist rot markiert.</div>
+{%- endif %}
+{% endblock %}
+
+{% block inhalt %}
+<section>
+  <h2>Prüfdurchgang</h2>
+  {{ felder([
+      ("Durchgang", durchgang.titel), ("Gliederung", durchgang.gliederung), ("eröffnet", durchgang.eroeffnet),
+      ("abgebrochen" if durchgang.abgebrochen else "abgeschlossen", durchgang.abgeschlossen),
+    ], spalten=2) }}
+  {{ felder([("Ordner", durchgang.ordner)], spalten=1) }}
+</section>
+
+<section>
+  <table class="uebersicht-tab"><tr>
+    <td class="zaehlung-spalte">
+      <h2>Ergebnisübersicht</h2>
+      <table class="zaehlung">
+        {%- for z in zaehlung %}
+        <tr class="{{ 'einzug' if z.einzug }}"><td class="text">{{ z.text }}</td><td class="anzahl">{{ z.anzahl }}</td></tr>
+        {%- endfor %}
+      </table>
+    </td>
+    <td>
+      <h2>Prüfer in diesem Durchgang</h2>
+      {%- if pruefer %}
+      <table class="liste pruefer-liste">
+        <colgroup><col><col style="width: 22mm"><col style="width: 16mm"><col style="width: 35mm"></colgroup>
+        <thead><tr><th>Name</th><th>Urkunde</th><th class="zahl">Prüfungen</th><th>Unterschrift</th></tr></thead>
+        <tbody>
+        {%- for p in pruefer %}
+          <tr><td class="wert">{{ p.name }}</td><td class="mono">{{ p.urkunde }}</td><td class="zahl">{{ p.anzahl }}</td>
+            <td class="u">{% if p.unterschrift %}<img src="{{ p.unterschrift }}" alt="Unterschrift">{% else %}<span class="hinweis">keine hinterlegt</span>{% endif %}</td></tr>
+        {%- endfor %}
+        </tbody>
+      </table>
+      {%- else %}
+      <p class="hinweis">In diesem Durchgang wurde nicht geprüft.</p>
+      {%- endif %}
+    </td>
+  </tr></table>
+  {%- if ohne_protokoll %}
+  <p class="legende">{% if ohne_protokoll == 1 %}Eine erledigte Prüfung wurde{% else %}{{ ohne_protokoll }} erledigte Prüfungen wurden{% endif %}
+    abgeschlossen, bevor es Einzelprotokolle als PDF gab; dazu steht im Verzeichnis keine Prüfsumme.</p>
+  {%- endif %}
+  {{ festschreibung(dokument) }}
+</section>
+
+<section>
+  <h2>Artikel im Durchgang</h2>
+  <table class="liste artikel-liste">
+    <colgroup><col style="width: 10mm"><col style="width: 27mm"><col><col style="width: 23mm"><col style="width: 31mm"><col style="width: 25mm"></colgroup>
+    <thead><tr><th class="zahl">Nr.</th><th>Inventar- / Seriennummer</th><th>Produkt und Ordner</th><th>Ergebnis</th><th>geprüft</th><th>Protokoll</th></tr></thead>
+    <tbody>
+    {%- for a in artikel %}
+      <tr class="{{ 'offen' if a.zustand == 'nicht_geprueft' }}">
+        <td class="nr zahl"><span class="nr-marke">{{ a.nr }}</span></td>
+        <td><div class="mono">{{ a.inventarnummer }}</div><div class="klein mono">{{ a.seriennummer }}</div></td>
+        <td><div class="wert">{{ a.produkt }}</div><div class="klein">{{ a.ordner }}</div></td>
+        <td>
+          {%- if a.zustand == "erledigt" %}<span class="erg-{{ a.ergebnis }}">{{ a.ergebnis_text }}</span>
+          {%- elif a.zustand == "ausgenommen" %}<span class="zustand-ausgenommen">ausgenommen</span>
+            {%- if a.ausnahme %}<div class="klein">{{ a.ausnahme }}</div>{% endif %}
+          {%- else %}<span class="zustand-nicht_geprueft">nicht geprüft</span>{% endif -%}
+        </td>
+        <td>{% if a.datum %}{{ a.datum }}{% endif %}{% if a.pruefer %}<div class="klein">{{ a.pruefer }}{% if a.urkunde %}, {{ a.urkunde }}{% endif %}</div>{% endif %}</td>
+        <td>{% if a.protokoll_id %}<span class="mono">{{ a.protokoll_id }}</span>{% if a.berichtigung %}<div class="berichtigung">Berichtigung</div>{% endif %}{% endif %}</td>
+      </tr>
+    {%- endfor %}
+    </tbody>
+  </table>
+</section>
+
+{%- set mit_protokoll = artikel | selectattr("protokoll_id") | list %}
+<section>
+  <h2>Verzeichnis der Einzelprotokolle</h2>
+  {%- if mit_protokoll %}
+  <p class="hinweis">SHA-256 jeder Protokolldatei, wie sie abgelegt ist – zum Abgleich mit den einzelnen PDFs.</p>
+  <table class="liste verzeichnis">
+    <colgroup><col style="width: 30mm"><col style="width: 24mm"><col style="width: 18mm"><col></colgroup>
+    <thead><tr><th>Protokoll-ID</th><th>Inventarnummer</th><th>Prüftag</th><th>SHA-256 der Datei</th></tr></thead>
+    <tbody>
+    {%- for a in mit_protokoll %}
+      <tr><td class="mono">{{ a.protokoll_id }}{% if a.berichtigung %}<div class="berichtigung">Berichtigung</div>{% endif %}</td>
+        <td class="mono">{{ a.inventarnummer }}</td><td>{{ a.datum }}</td>
+        <td>{% if a.datei_sha256 %}<span class="hash">{{ a.datei_sha256 }}</span>{% else %}<span class="hinweis">nicht verfügbar</span>{% endif %}</td></tr>
+    {%- endfor %}
+    </tbody>
+  </table>
+  {%- else %}
+  <p class="hinweis">Zu diesem Durchgang gibt es keine Einzelprotokolle.</p>
+  {%- endif %}
+</section>
+{% endblock %}

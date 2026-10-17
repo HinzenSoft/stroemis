@@ -31,7 +31,8 @@ services:
       - no-new-privileges:true
     # Das Wurzeldateisystem bleibt unveränderlich: Geschrieben wird nur nach /data (Datenbank,
     # Medien, Zwischendateien unter /data/tmp) und nach /tmp, wo Gunicorn die Lebenszeichen seiner
-    # Arbeitsprozesse ablegt – dafür ein flüchtiger Speicherbereich, der mit dem Container vergeht.
+    # Arbeitsprozesse ablegt, Fontconfig seinen Schriften-Zwischenspeicher (XDG_CACHE_HOME) und WeasyPrint seine
+    # Zwischendateien beim Erzeugen eines Protokolls – ein flüchtiger Speicherbereich, der mit dem Container vergeht.
     read_only: true
     tmpfs:
       - /tmp

@@ -388,3 +388,62 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
   .mat-abschluss-zeile .mat-due { flex: 1 1 100%; justify-content: space-between; }
   .mat-abschluss { margin-left: -12px; margin-right: -12px; }
 }
+
+/* Festschreiben, Protokoll, Berichtigung. Der Knopf „Festschreiben“ im Dialog ist dunkel statt rot: Er
+   bestätigt etwas, statt etwas zu zerstören. */
+.btn.mat-fest { background: var(--anthrazit); border-color: var(--anthrazit); color: var(--weiss); }
+.btn.mat-fest:hover { background: var(--schwarz); border-color: var(--schwarz); }
+.btn.mat-fest:disabled, .btn.mat-fest:disabled:hover { background: var(--anthrazit); border-color: var(--anthrazit); }
+.mat-fs-daten { margin: 12px 0; }
+.mat-fs-daten dd { overflow-wrap: anywhere; }
+.mat-fs-warnung { border-left: 4px solid var(--rot-dunkel); background: var(--rot-hell); padding: 8px 12px; margin: 10px 0; }
+.mat-fs-unterschrift { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 10px 0 4px; }
+/* Unterschrift als Bild: auf Weiß über einer Linie, wie auf dem Papier. */
+.mat-us-bild, .mat-fs-unterschrift img { display: block; height: 64px; width: auto; max-width: min(280px, 100%); object-fit: contain;
+  object-position: left bottom; background: var(--weiss); border-bottom: 1px solid var(--anthrazit); padding: 2px 6px 4px; }
+.mat-us-mini { display: block; height: 34px; width: auto; max-width: 140px; }
+.mat-us-fehlt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
+  background: var(--grau-hell); border-left: 4px solid var(--gelb); padding: 10px 12px; margin: 10px 0 0; }
+.mat-protokoll-kopf { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin: 0 0 12px; }
+.mat-protokoll-id { font-size: 1.15rem; font-weight: 700; }
+.mat-protokoll .mat-daten { grid-template-columns: 120px minmax(0, 1fr); }
+.mat-protokoll-zeile { font-size: var(--fs-mittel); }
+.mat-summe { background: none; border: 0; padding: 0; font-size: inherit; color: inherit; cursor: copy; text-align: left;
+  border-bottom: 1px dashed var(--grau); overflow-wrap: anywhere; }
+.mat-summe:hover { color: var(--rot); border-bottom-color: var(--rot); }
+.mat-summe:focus-visible { outline: 3px solid var(--gelb); outline-offset: 2px; }
+.mat-ber { border-left: 4px solid var(--wasser); background: var(--co-info-fl); padding: 10px 14px; margin: 0 0 12px; }
+.mat-ber.ersetzt { border-left-color: var(--anthrazit); background: var(--grau-hell); }
+/* „PDF“ in Listen (Lebenslauf, Durchgänge): eine kleine umrandete Fläche statt drei Buchstaben Text – am Telefon
+   sonst kaum zu treffen. */
+.mat-pdf { display: inline-block; padding: 1px 8px; border: 1px solid currentColor; border-radius: var(--radius);
+  font-size: var(--fs-klein); font-weight: 700; line-height: 1.5; text-decoration: none; white-space: nowrap; }
+.mat-pdf:hover { background: var(--rot-hell); }
+@media (pointer: coarse) { .mat-pdf { display: inline-flex; align-items: center; justify-content: center; min-width: 48px; min-height: 40px; padding: 0 12px; } }
+.mat-marke-ber { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 8px; border-radius: var(--radius-pille);
+  white-space: nowrap; background: var(--co-info-fl); color: var(--wasser); box-shadow: inset 0 0 0 1px var(--wasser); }
+/* Unterschriftsfeld im Prüfformular: Bild, „Unterschreiben“ und „n. z.“ – am Telefon so groß wie die Umschalter. */
+.mat-us-feld { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 4px 0; }
+.mat-us-feld .btn-row { gap: 6px; }
+.mat-us-feld .btn { min-height: 44px; }
+.mat-nz-knopf[aria-pressed="true"], .mat-nz-knopf[aria-pressed="true"]:hover { background: var(--anthrazit); border-color: var(--anthrazit); color: var(--weiss); }
+@media (hover: hover) and (pointer: fine) and (min-width: 700px) {
+  .mat-us-feld { margin: 0; }
+  .mat-us-feld .btn { min-height: 32px; }
+  .mat-us-feld .mat-us-bild { height: 52px; }
+}
+
+/* Prüfseite (Lieferung 3) */
+.mat-pruefen .mat-ablage { display: block; margin: 16px 0 8px; cursor: pointer; }
+.mat-pruefen .mat-ablage .small { font-weight: 400; }
+.mat-pruefergebnis { margin: 16px 0; padding: 12px 14px; border-radius: var(--radius-gross); border: 1px solid var(--linie); }
+.mat-pruefergebnis strong { font-size: 1.15rem; display: block; margin-bottom: 4px; }
+.mat-pruefergebnis p { margin: 4px 0; }
+.mat-pruefergebnis.ok { background: var(--co-success-fl, #e9f5ec); border-color: var(--ok); }
+.mat-pruefergebnis.ok strong { color: var(--ok); }
+.mat-pruefergebnis.bad { background: var(--rot-hell); border-color: var(--rot); }
+.mat-pruefergebnis.bad strong { color: var(--rot-dunkel); }
+.mat-pruefergebnis.neutral { background: var(--grau-hell); }
+.mat-pruefergebnis.fehler { background: var(--grau-hell); border-left: 4px solid var(--gelb); }
+.mat-befehl { background: var(--grau-hell); padding: 8px 10px; border-radius: var(--radius); overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9rem; }

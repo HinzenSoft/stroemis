@@ -28,6 +28,21 @@
       </div>
     </div>
   </section>
+  {# Unterschrift nur für wen, der sie braucht: Prüfer (Festschreiben) und Materialwarte (Aussondern) – mit Zugang
+     zum Modul. Ist schon eine hinterlegt, bleibt der Abschnitt, damit sie sich nach einem Rollenwechsel entfernen lässt. #}
+  {% if (rechte.material or user.mat_pruefer or user.mat_katalog) and (user.mat_pruefer or (rechte.material or 0) >= 2 or user.signature_png) %}
+  <section class="section" id="unterschrift">
+    <h2>Unterschrift</h2>
+    <div class="help">Für das Modul Material: Sie wird beim Festschreiben einer Prüfung oder Aussonderung als Kopie ins Protokoll übernommen – zusammen mit deiner Anmeldung, dem Zeitpunkt und der Prüfsumme. Änderst oder entfernst du sie, wirkt das nur auf künftige Protokolle.</div>
+    <div class="us-profil">
+      <div class="us-vorschau leer" id="us-vorschau"><span class="muted">Wird geladen …</span></div>
+      <div class="btn-row us-knoepfe">
+        <button class="btn secondary" id="us-zeichnen" type="button" disabled>Unterschreiben</button>
+        <button class="btn secondary hidden" id="us-weg" type="button">Entfernen</button>
+      </div>
+    </div>
+  </section>
+  {% endif %}
   <section class="section">
     <h2>Passwort ändern</h2>
     <form id="f-password">
@@ -42,4 +57,7 @@
   </section>
 </main>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/profile.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/profile.js') }}"></script>
+{% if (rechte.material or user.mat_pruefer or user.mat_katalog) and (user.mat_pruefer or (rechte.material or 0) >= 2 or user.signature_png) %}<script src="{{ url_for('static', filename='vendor/signature_pad/signature_pad.umd.min.js') }}"></script>
+<script src="{{ url_for('material.static', filename='unterschrift.js') }}"></script>
+<script src="{{ url_for('material.static', filename='profil_unterschrift.js') }}"></script>{% endif %}{% endblock %}

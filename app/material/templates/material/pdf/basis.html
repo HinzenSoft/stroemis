@@ -1,0 +1,262 @@
+<!doctype html>
+{# Gemeinsames Layout der PDF-Protokolle (services/pdf.py setzt sie mit WeasyPrint als PDF/A-3b).
+   Seite DIN A4 hochkant: oben der schmale rote Kopfbalken, unten der Fuß mit Titel, Protokoll-ID und
+   Seitenzahl. Die unteren 14 mm jeder Seite bleiben leer – dort liegt nach dem Festschreiben der
+   Prüfsummen-Stempel (services/stempel.py).
+   Alle Werte kommen fertig formatiert an; die Vorlagen formatieren nichts um. Mehrzeilige Eingaben
+   (Bemerkung, Notiz, Wert) stehen in .text mit white-space: pre-wrap, nie mit |safe.
+   Schriften: DLRG Univers aus static/fonts (Basisadresse ist dieses Verzeichnis); Zeichen, die ihr fehlen,
+   setzt DejaVu Sans. Prüfsummen und Kennungen in DejaVu Sans Mono.
+   Die Makros unten (felder, artikel_block, unterschrift_block, festschreibung) benutzen die abgeleiteten
+   Vorlagen; sie stehen vor dem Block „inhalt“ und sind deshalb dort sichtbar. #}
+{%- macro felder(paare, spalten=3) -%}
+  {# paare: Liste von (Beschriftung, Wert); leere Werte fallen weg, der Rest füllt Zeilen zu je „spalten“ Feldern. #}
+  {%- set voll = paare | selectattr(1) | list -%}
+  {%- if voll -%}
+  <table class="felder spalten-{{ spalten }}">
+    {%- for zeile in voll | batch(spalten) %}
+    <tr>{% for b, w in zeile %}<td><div class="lbl">{{ b }}</div><div class="wert">{{ w }}</div></td>{% endfor -%}
+      {%- for _ in range(spalten - zeile | length) %}<td></td>{% endfor %}</tr>
+    {%- endfor %}
+  </table>
+  {%- endif -%}
+{%- endmacro -%}
+
+{%- macro artikel_block(artikel, mit_ordner=True) -%}
+  <section class="artikel">
+    <h2>Artikel</h2>
+    <table class="artikel-tab"><tr>
+      <td class="artikel-daten">
+        <div class="produkt">{{ artikel.produkt }}</div>
+        <div class="kategorie">{{ artikel.kategorie }}</div>
+        {%- set sn -%}
+          <span class="mono">{{ artikel.seriennummer }}</span>{% if artikel.seriennummer_vergeben %} <span class="hinweis">vom System vergeben</span>{% endif %}
+        {%- endset %}
+        <table class="felder spalten-3">
+          <tr>
+            <td><div class="lbl">Inventarnummer</div><div class="wert mono">{{ artikel.inventarnummer }}</div></td>
+            <td colspan="2"><div class="lbl">Seriennummer</div><div class="wert">{{ sn }}</div></td>
+          </tr>
+        </table>
+        {{ felder([
+            ("Hersteller", artikel.hersteller), ("Modell", artikel.modell), ("Artikelnummer", artikel.artikelnummer),
+            ("Norm", artikel.norm), ("Materialart", artikel.materialart), ("hergestellt", artikel.hergestellt),
+            ("gekauft", artikel.gekauft), ("Erstgebrauch", artikel.erstgebrauch), ("Lebensende", artikel.lebensende),
+          ]) }}
+        {{ felder([("Gliederung", artikel.gliederung), ("Ordner", artikel.ordner if mit_ordner else "")], spalten=1) }}
+      </td>
+      <td class="artikel-bild">
+        {%- if artikel.bild %}<img src="{{ artikel.bild }}" alt="Produktbild">{% else %}<div class="ohne-bild">kein Produktbild</div>{% endif -%}
+      </td>
+      <td class="artikel-qr">
+        {%- if artikel.qr_svg %}
+        <div class="qr-bild">{{ artikel.qr_svg | safe }}</div>
+        <div class="qr-titel">Lebenslauf online</div>
+        <div class="qr-url">{{ artikel.qr_url }}</div>
+        {%- endif %}
+      </td>
+    </tr></table>
+  </section>
+{%- endmacro -%}
+
+{%- macro unterschrift_block(u, dokument) -%}
+  <section class="unterschrift-teil">
+    <h2>Unterschrift</h2>
+    <table class="unterschrift"><tr>
+      <td class="u-feld">
+        <div class="u-bild">{% if u.bild %}<img src="{{ u.bild }}" alt="Unterschrift">{% else %}<span class="hinweis">keine Unterschrift hinterlegt</span>{% endif %}</div>
+        <div class="u-name">{{ u.name }}{% if u.urkunde %}, Urkunde {{ u.urkunde }}{% endif %}</div>
+      </td>
+      <td class="u-daten">
+        {{ felder([("Anmeldung", u.login), ("Zeitpunkt der Unterschrift", u.zeit)], spalten=1) }}
+      </td>
+    </tr></table>
+    {{ festschreibung(dokument) }}
+  </section>
+{%- endmacro -%}
+
+{%- macro festschreibung(dokument) -%}
+  <p class="festschreibung">Elektronisch festgeschrieben; die Prüfsumme im Fuß jeder Seite macht jede Änderung
+    erkennbar. Prüfen: <span class="nowrap">{{ dokument.pruefseite }}</span></p>
+{%- endmacro -%}
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>{{ dokument.titel }} {{ dokument.protokoll_id }}</title>
+<meta name="author" content="strömis.de">
+<meta name="keywords" content="strömis-protokoll {{ dokument.protokoll_id }}">
+<style>
+@font-face { font-family: "DLRG Univers"; src: url("dlrg-univers-regular.woff2") format("woff2"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "DLRG Univers"; src: url("dlrg-univers-italic.woff2") format("woff2"); font-weight: 400; font-style: italic; }
+@font-face { font-family: "DLRG Univers"; src: url("dlrg-univers-bold.woff2") format("woff2"); font-weight: 700; font-style: normal; }
+
+/* Farben nach DLRG-CD 2024 wie static/css/app.css. Gelb nur als schmale Kennlinie, nie als Textfarbe. */
+:root {
+  --rot: #e30613; --rot-dunkel: #b3000e; --gelb-dunkel: #e0cf00;
+  --anthrazit: #575756; --schwarz: #3c3c3b; --grau: #6d6d6c; --linie: #dadada; --grau-hell: #f3f3f3;
+  --ok: #2b7a3d;
+}
+
+/* Seite: 15 mm seitlich und oben. Unten 24 mm: 0–14 mm für den Stempel, darüber der Fuß (ab etwa 20 mm). */
+@page {
+  size: A4;
+  margin: 15mm 15mm 24mm 15mm;
+  font-family: "DLRG Univers", "DejaVu Sans", sans-serif;
+  font-size: 7.5pt;
+  color: #6d6d6c;
+  @top-left {
+    content: "strömis.de";
+    width: 90mm; height: 5.5mm; margin-top: 5mm; margin-bottom: auto; padding: 0 3mm;
+    background: #e30613; color: #ffffff; font-size: 9pt; font-weight: 700; vertical-align: middle;
+  }
+  @top-right {
+    content: "{% if dokument.demo %}DEMO – nicht für echte Prüfungen{% else %}Material · Prüfnachweis{% endif %}";
+    width: 90mm; height: 5.5mm; margin-top: 5mm; margin-bottom: auto; padding: 0 3mm;
+    background: #e30613; color: #ffffff; font-size: 7.5pt; font-weight: 700; vertical-align: middle; text-align: right;
+  }
+  @bottom-left {
+    content: string(titel) " " string(protokoll);
+    width: 120mm; vertical-align: top; padding-top: 3.5mm; border-top: .5pt solid #dadada;
+  }
+  @bottom-right {
+    content: "Seite " counter(page) " von " counter(pages);
+    width: 60mm; vertical-align: top; padding-top: 3.5mm; border-top: .5pt solid #dadada; text-align: right;
+  }
+}
+
+html {
+  font-family: "DLRG Univers", "DejaVu Sans", sans-serif;
+  font-size: 9pt; line-height: 1.35; color: var(--anthrazit);
+}
+body { margin: 0; }
+h1, h2, h3 { color: var(--schwarz); font-weight: 700; line-height: 1.15; break-after: avoid; }
+h1 { font-size: 21pt; margin: 0; letter-spacing: -.01em; string-set: titel content(); }
+h2 { font-size: 10.5pt; margin: 6mm 0 2.2mm; padding-bottom: 1.2mm; border-bottom: .8pt solid var(--rot); }
+h3 { font-size: 9pt; margin: 3.5mm 0 1.2mm; }
+p { margin: 0 0 2mm; }
+/* PDF/A verbietet /Interpolate true (ISO 19005 6.2.8); WeasyPrint setzt es bei image-rendering: auto. Die Fotos
+   liegen ohnehin in höherer Auflösung vor, als sie gedruckt werden. */
+img { image-rendering: crisp-edges; }
+.mono, .pid, .hash { font-family: "DejaVu Sans Mono", monospace; }
+/* Kennungen und Prüfsummen nie mit Silbentrennung: Ein Trennstrich darin wäre ein falsches Zeichen – gedruckt
+   wie beim Kopieren. Umbrechen dürfen sie (overflow-wrap), nur ohne Strich. */
+.mono, .pid, .hash, .qr-url, table.liste td.mono { hyphens: manual; }
+.mono { font-size: .9em; }
+.hash { font-size: 6.6pt; line-height: 1.3; overflow-wrap: anywhere; color: var(--anthrazit); }
+.text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.hinweis { color: var(--grau); font-size: 7.5pt; }
+.nowrap { white-space: nowrap; }
+.lbl { font-size: 7pt; color: var(--grau); line-height: 1.25; }
+.wert { color: var(--schwarz); overflow-wrap: anywhere; }
+
+/* Wasserzeichen der Demo-Umgebung: auf jeder Seite (position: fixed), blass hinter dem Text. */
+.wasserzeichen {
+  position: fixed; top: 92mm; left: -15mm; width: 210mm; z-index: -1;
+  text-align: center; font-size: 150pt; font-weight: 700; line-height: 1; color: #ededed;
+  transform: rotate(-38deg);
+}
+.demo-hinweis {
+  border: 1pt solid var(--rot-dunkel); padding: 2mm 3mm; margin: 0 0 4mm;
+  color: var(--rot-dunkel); break-inside: avoid;
+}
+.demo-hinweis strong { font-size: 11pt; display: block; }
+
+/* Kopf der ersten Seite */
+.kopf { border-bottom: .8pt solid var(--rot); padding-bottom: 3mm; margin-bottom: 1mm; }
+/* Feste Spaltenbreiten auch hier und beim Artikel: Ein langes Wort ohne Leerzeichen (Produkt, Seriennummer,
+   Ordner) bricht dann um, statt Bild und QR-Code über den rechten Rand zu schieben. */
+.kopf-tab { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.kopf-tab td { vertical-align: bottom; padding: 0; }
+.kopf-titel { overflow-wrap: anywhere; }
+.kopf-titel .unterzeile { margin-top: 1.5mm; font-size: 9.5pt; color: var(--schwarz); }
+.kopf-titel .marke { display: inline-block; margin-left: 3mm; padding: .4mm 2mm; border: 1.2pt solid var(--rot-dunkel);
+  color: var(--rot-dunkel); font-size: 10pt; font-weight: 700; vertical-align: 3pt; letter-spacing: .04em; }
+.kopf-id { width: 62mm; text-align: right; }
+.kopf-id .pid { font-size: 13pt; font-weight: 700; color: var(--schwarz); string-set: protokoll content(); }
+.kopf-id .zeit { font-size: 8pt; color: var(--anthrazit); margin-top: .5mm; }
+.kopfzeile { margin: 0 0 2mm; }
+
+/* Felder: Beschriftung klein über dem Wert, in Spalten */
+table.felder { width: 100%; border-collapse: collapse; table-layout: fixed; }
+table.felder td { vertical-align: top; padding: 1.2mm 3mm 1.2mm 0; }
+
+/* Artikel */
+.artikel-tab { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.artikel-tab > tbody > tr > td { vertical-align: top; padding: 0; }
+.artikel .produkt { font-size: 12pt; font-weight: 700; color: var(--schwarz); line-height: 1.2; overflow-wrap: anywhere; }
+.artikel .kategorie { color: var(--grau); margin: .5mm 0 1.5mm; overflow-wrap: anywhere; }
+.artikel-bild { width: 40mm; padding-left: 4mm !important; text-align: center; }
+.artikel-bild img { max-width: 38mm; max-height: 38mm; border: .5pt solid var(--linie); }
+.ohne-bild { width: 38mm; height: 26mm; border: .5pt dashed var(--linie); color: var(--grau); font-size: 7pt;
+  padding-top: 11mm; text-align: center; }
+.artikel-qr { width: 30mm; padding-left: 4mm !important; text-align: center; }
+.qr-bild svg { width: 25mm; height: 25mm; display: block; margin: 0 auto; }
+.qr-titel { font-size: 7.5pt; font-weight: 700; color: var(--schwarz); margin-top: .8mm; }
+.qr-url { font-family: "DejaVu Sans Mono", monospace; font-size: 5.8pt; line-height: 1.25; overflow-wrap: anywhere; color: var(--anthrazit); }
+
+/* Tabellen: Kopfzeile wiederholt sich auf jeder Seite, Zeilen brechen nicht mitten durch. */
+/* Feste Spaltenbreiten (colgroup): Lange Bemerkungen dürfen den Prüfpunkt nicht zusammendrücken, und WeasyPrint
+   setzt feste Tabellen deutlich schneller. */
+table.liste { width: 100%; border-collapse: collapse; table-layout: fixed; }
+table.liste thead { display: table-header-group; }
+table.liste th {
+  text-align: left; vertical-align: bottom; font-size: 7pt; font-weight: 700; color: var(--grau);
+  padding: 1mm 1.5mm; border-bottom: .8pt solid var(--schwarz);
+}
+table.liste td {
+  vertical-align: top; padding: 1.3mm 1.5mm; border-bottom: .5pt solid var(--linie);
+  overflow-wrap: anywhere; hyphens: auto;
+}
+table.liste tr { break-inside: avoid; }
+table.liste .zahl { text-align: right; }
+/* Laufende Nummern nie zwischen den Ziffern trennen – auch dreistellige (Sammelprotokoll ab Nr. 100). */
+table.liste td.nr { color: var(--grau); overflow-wrap: normal; white-space: nowrap; }
+/* Laufende Nummer; hervorgehobene Zeilen (Mangel, nicht geprüft) setzen sie als kleine rote Marke */
+.nr-marke { display: inline-block; min-width: 4.2mm; padding: 0 .7mm; text-align: center; }
+
+/* Hinweiskästen (Berichtigung, Folge, Aussonderung) – Kante statt Fläche, druckt auch schwarz-weiß */
+.kasten { border: .5pt solid var(--linie); border-left: 1.5mm solid var(--grau); padding: 2mm 3mm; margin: 3mm 0;
+  break-inside: avoid; color: var(--schwarz); overflow-wrap: anywhere; }
+.kasten.rot { border-left-color: var(--rot); }
+.kasten .titel { font-weight: 700; }
+
+.festschreibung { margin-top: 3mm; font-size: 8pt; color: var(--anthrazit); }
+.legende { margin-top: 1.5mm; font-size: 7pt; color: var(--grau); }
+
+/* Unterschrift */
+.unterschrift-teil { break-inside: avoid; }
+table.unterschrift { width: 100%; border-collapse: collapse; }
+table.unterschrift > tbody > tr > td { vertical-align: bottom; padding: 0; }
+.u-feld { width: 80mm; padding-right: 8mm !important; }
+.u-bild { height: 24mm; border-bottom: .8pt solid var(--schwarz); text-align: left; }
+.u-bild img { max-width: 72mm; max-height: 23mm; }
+.u-bild .hinweis { display: block; padding-top: 16mm; }
+.u-name { font-size: 7.5pt; color: var(--grau); margin-top: 1mm; overflow-wrap: anywhere; }
+{% block stil %}{% endblock %}
+</style>
+</head>
+<body>
+{%- if dokument.demo %}
+<div class="wasserzeichen">DEMO</div>
+{%- endif %}
+<header class="kopf">
+  <table class="kopf-tab"><tr>
+    <td class="kopf-titel">
+      <h1>{{ dokument.titel }}</h1>
+      <div class="unterzeile">{% block unterzeile %}{% endblock %}</div>
+    </td>
+    <td class="kopf-id">
+      <div class="lbl">Protokoll-ID</div>
+      <div class="pid">{{ dokument.protokoll_id }}</div>
+      <div class="zeit">festgeschrieben {{ dokument.festgeschrieben }}</div>
+    </td>
+  </tr></table>
+</header>
+<div class="kopfzeile">{% block kopfzeile %}{% endblock %}</div>
+{%- if dokument.demo %}
+<div class="demo-hinweis"><strong>DEMO – nicht für echte Prüfungen</strong>
+  Dieses Protokoll stammt aus der Demo-Umgebung von {{ dokument.plattform }} und belegt keine Prüfung.</div>
+{%- endif %}
+{% block inhalt %}{% endblock %}
+</body>
+</html>

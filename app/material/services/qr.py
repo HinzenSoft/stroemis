@@ -14,14 +14,29 @@ def neues_token():
     return secrets.token_urlsafe(12)          # 16 Zeichen, 96 Bit Zufall
 
 
-def adresse(token):
-    """Vollständige Adresse für das Etikett. Der Hostname geht in Punycode hinaus (xn--…): Nicht
-    jede Kamera-App öffnet einen Link mit Umlaut, jede aber die Punycode-Form."""
-    basis = (current_app.config.get("BASE_URL") or "").rstrip("/")
+def basis():
+    """BASE_URL mit dem Hostnamen in Punycode (xn--…): Nicht jede Kamera-App öffnet einen Link mit Umlaut,
+    jede aber die Punycode-Form."""
+    url = (current_app.config.get("BASE_URL") or "").rstrip("/")
     try:
-        schema, rest = basis.split("://", 1)
+        schema, rest = url.split("://", 1)
         host, _, pfad = rest.partition("/")
-        basis = f"{schema}://{host.encode('idna').decode()}" + (f"/{pfad}" if pfad else "")
+        url = f"{schema}://{host.encode('idna').decode()}" + (f"/{pfad}" if pfad else "")
     except (ValueError, UnicodeError):
         pass
-    return f"{basis}{PFAD}{token}"
+    return url
+
+
+def anzeige(url):
+    """Dieselbe Adresse mit lesbarem Hostnamen (strömis.de statt xn--strmis-yxa.de) – zum Abdrucken."""
+    try:
+        schema, rest = url.split("://", 1)
+        host, _, pfad = rest.partition("/")
+        return f"{schema}://{host.encode().decode('idna')}" + (f"/{pfad}" if pfad else "")
+    except (ValueError, UnicodeError):
+        return url
+
+
+def adresse(token):
+    """Vollständige Adresse für das Etikett."""
+    return f"{basis()}{PFAD}{token}"

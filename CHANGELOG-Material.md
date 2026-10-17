@@ -7,9 +7,9 @@ Lieferungen; jede ist für sich deploybar.
 | Lieferung | Inhalt | Stand |
 | --- | --- | --- |
 | 1 – Fundament | Schema, Migration, Rollen, Katalog mit Dokumenten und Formularen, Ordnerbaum, Artikel, Suche, Journal | geliefert 16.10.2026, freigegeben 17.10.2026 |
-| 2 – Prüfung | Prüfformular, Mangelfoto, Anhänge, Ergebnis, Sperre, Aussonderung, Lebenslauf, Prüfdurchgang; dazu Status „neu“ mit Eingangsprüfung, Prüfen jederzeit, Ordnernavigation | geliefert 17.10.2026 |
-| 3 – Nachweis | Unterschrift, Festschreiben, PDF mit Prüfsumme, Prüfseite | offen |
-| 4 – Überblick | Dashboard, QR-Etiketten, Export | offen |
+| 2 – Prüfung | Prüfformular, Mangelfoto, Anhänge, Ergebnis, Sperre, Aussonderung, Lebenslauf, Prüfdurchgang; dazu Status „neu“ mit Eingangsprüfung, Prüfen jederzeit, Ordnernavigation | geliefert 17.10.2026, freigegeben 17.10.2026 |
+| 3 – Nachweis | Unterschrift, Festschreiben, PDF mit Prüfsumme, Prüfseite; dazu Berichtigung und Unterschriftsfelder | geliefert 17.10.2026 |
+| 4 – Überblick | Dashboard, QR-Etiketten, Export; dazu Katalog-Export (Katalog und Formulare von dev in die Produktion, ohne Bestand und Prüfungen) und Rückrufe zu Produkten (Hinweis in der Anwendung und per Mail) | offen |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -454,6 +454,243 @@ alle neuen Routen und 33 absichtlich kaputte PDFs – kein 500), Oberfläche (im
   Kategorieansicht: Wer den Katalog pflegt, erreicht das generische Formular über den Knopf; den Verweis in der
   Angabenzeile sehen nur noch Lesende, die keinen Knopf haben.
 
+## Lieferung 3 – Nachweis (17.10.2026)
+
+Unterschrift im Profil, Festschreiben, PDF-Einzel-, Sammel- und Aussonderungsprotokoll, aufgedruckte Prüfsumme und
+Prüfseite. Lieferung 2 wurde am 17.10.2026 mit „Erstelle Lieferung 3“ freigegeben.
+
+### Neu
+
+- **Unterschrift im Profil** (`services/unterschrift.py`, Signatur-Pad `signature_pad.js`): Wer im Modul Material
+  arbeitet, zeichnet seine Unterschrift einmal unter „Profil → Unterschrift“ (Finger, Stift oder Maus) und kann sie
+  ändern oder entfernen. Der Server nimmt nur ein PNG vom Pad an, verlangt sichtbare Striche, schneidet den leeren
+  Rand ab, verkleinert bei Bedarf und speichert ein frisch geschriebenes Bild – nie die Bytes des Browsers. Jede
+  Änderung steht im Journal (Konto, ohne das Bild). Fehlt sie beim Festschreiben, öffnet das Prüfformular das Pad
+  direkt im Ablauf.
+- **Festschreiben** (`services/pruefung.py`, `services/protokoll.py`): „Abschließen“ heißt jetzt „Festschreiben“
+  und braucht Urkundennummer und Unterschrift. In derselben Schreibtransaktion setzt es Ergebnis, Sperrzustand und
+  Fälligkeit wie bisher, übernimmt eine Kopie der Unterschrift, die Anmeldung (E-Mail des Kontos) und den Zeitpunkt
+  und erzeugt das Prüfprotokoll. Danach ist die Prüfung unveränderlich – die Oberfläche bietet nichts mehr an, die
+  Schnittstelle antwortet mit 409, und Datenbank-Trigger weisen jede Änderung an Prüfung, Befunden und Anhängen ab,
+  auch an der Anwendung vorbei.
+- **Prüfprotokoll** nach dem Muster der EN-365-Karte (`templates/material/pdf/`): Gliederung und Ordner,
+  Artikel-Stammdaten mit Serien- und Inventarnummer, Herstell-, Kauf- und Erstgebrauchsdatum, Lebensende (textil),
+  Produktbild, QR-Code zum Online-Lebenslauf; Prüfart, Prüftag, Prüfer mit Urkundennummer und Anmeldung, Formular
+  mit Version, Durchgang; alle Prüfpunkte mit Soll, Befund, Wert und Bemerkung (Mängel und kritische Punkte
+  markiert), Fotos der Mängel, Ergebnis mit nächster Fälligkeit und Folge (gesperrt, ausgesondert), Bemerkung, die am
+  Prüftag gültigen Herstellerdokumente, das Verzeichnis der Anhänge mit SHA-256 und Seitenzahl, die Unterschrift
+  mit Name, Urkundennummer, Anmeldung und Zeitpunkt, Protokoll-ID. Anhänge mit „hinten ans Protokoll hängen“ folgen
+  als Seiten im selben PDF – entschärft: Skripte, ausführende Aktionen und Formular-Wörterbücher eines Anhangs
+  kommen nicht mit, Verweise und ausgefüllte Felder (ihr Erscheinungsbild) bleiben sichtbar.
+- **Aussonderungsprotokoll**: Jede Aussonderung – aus der Prüfung („aussondern“) oder durch den Materialwart – wird
+  mit eigenem Protokoll festgeschrieben: Artikel, Grund, Datum, Bemerkung, Sperrvermerk, ausführende Person mit
+  Rolle, Urkundennummer (falls Prüfer), Anmeldung und Unterschrift, Verweis auf die auslösende Prüfung und die letzte
+  Prüfung davor. Auch der Materialwart braucht dafür seine Unterschrift.
+- **Sammelprotokoll** je Prüfdurchgang: entsteht beim Abschließen – und beim Abbrechen, wenn darin schon geprüft
+  wurde – in derselben Transaktion: Durchgang, Ordner, eröffnet und abgeschlossen (von, wann), Ergebnisübersicht,
+  alle beteiligten Prüfer mit Urkundennummer, Zahl der Prüfungen und Unterschrift, alle Artikel mit Ergebnis,
+  Prüftag, Prüfer und Protokoll-ID, ausgenommene mit Grund, nicht geprüfte (Abbruch) als solche, dazu das
+  Verzeichnis der Einzelprotokolle mit der SHA-256 ihrer Datei – so belegt es auch, welche Einzelprotokolle zur
+  Jahresprüfung gehören. Danach ist der Durchgang unveränderlich (auch per Trigger).
+- **Prüfsumme** (`services/stempel.py`): WeasyPrint erzeugt das Protokoll vollständig, angefügte Anhänge kommen
+  per inkrementellem Update dazu; über diese N Bytes geht SHA-256. Ein zweites inkrementelles Update legt den Stempel
+  „SHA-256 (erste N Bytes): <hex>“ samt Protokoll-ID, Befehl zum Nachrechnen und Adresse der Prüfseite in den Fuß
+  jeder Seite – auch auf angefügte Seiten (gedrehte und andere Formate eingeschlossen): Die bekommen dafür unten einen
+  eigenen Streifen von 14 mm (und mindestens die Breite von DIN A4), damit der Stempel nichts vom Anhang verdeckt und
+  auf kleinen Fotoseiten lesbar bleibt; nur die Seitengrenzen ändern sich, im Nachtrag. Die ersten N Bytes bleiben
+  Byte für Byte: `head -c N datei.pdf | sha256sum` ergibt die aufgedruckte Summe. In der Datenbank stehen
+  `pdf_sha256`, `pdf_hashed_bytes` und `file_sha256` (ganze Datei mit Stempel).
+- **Ablage**: `DATA_DIR/pdf/<jahr>/<protokoll-id>.pdf`, exklusiv angelegt, auf Platte geschrieben (fsync),
+  schreibgeschützt. Ausgeliefert wird nur an Angemeldete mit Leserecht und nur, solange die Datei ihre Prüfsumme
+  hat (`/material/pruefung/<id>/pdf`, `/material/durchgang/<id>/sammelprotokoll`, Dateiname
+  `<Protokoll-ID>_<Inventarnummer>.pdf`). Scheitert der Vorgang nach dem Schreiben, wird die Datei wieder gelöscht.
+- **Prüfseite** `/material/pruefen` (ohne Anmeldung): PDF hochladen, die Antwort ist „unverändert“, „verändert“ oder
+  „kein Protokoll erkannt“ samt Protokoll-ID – keine Personendaten, nichts wird gespeichert. Eine veränderte Datei
+  erkennt sie an einer Kennung im Stempel-Nachtrag wieder (nur wenn N und Prüfsumme darin zum Protokoll passen) und
+  sagt, ob der Protokollinhalt (die ersten N Bytes) noch stimmt. Den Inhalt einer hochgeladenen Datei zerlegt sie
+  nicht. Angemeldete mit Zugang bekommen zusätzlich den Weg zum Vorgang. Gebremst auf 20 Prüfungen je
+  Adresse in 15 Minuten, höchstens 200 MB je Datei.
+- **Berichtigung**: Eine festgeschriebene Prüfung korrigiert nur, wer sie gemacht hat – „Berichtigen“ mit Grund legt
+  einen neuen Entwurf an: alle Befunde, Fotos (kopiert) und Anhänge (kopiert) des Originals, derselbe Prüftag,
+  dieselbe Prüfart, Verweis auf das Original. Festgeschrieben wird sie wie jede Prüfung (ihr Protokoll nennt das
+  Original und den Grund) und wirkt dann am Artikel; das Original bleibt Byte für Byte erhalten und zeigt
+  „berichtigt durch …“. Berichtigen lässt sich nur die letzte Prüfung eines Artikels, keine Aussonderung und jede
+  Prüfung höchstens einmal (wer danach weiter korrigiert, berichtigt die Berichtigung).
+- **Unterschriftsfelder** in Prüfformularen: auf dem Signatur-Pad zu füllen (Name des Feldes als Titel), Pflicht wie
+  andere Prüfpunkte, „nicht zutreffend“ möglich; das Bild steht im Protokoll beim Prüfpunkt.
+- **Oberfläche**: Protokollabschnitt in jeder abgeschlossenen Prüfung (Protokoll-ID, PDF, festgeschrieben von/am,
+  Prüfsumme, Unterschrift), „PDF“ im Lebenslauf, Knopf „Sammelprotokoll“ im Durchgang, Berichtigen mit Hinweisen am
+  Original und an der Berichtigung, Unterschrift im Aussonderungsdialog, Verweis auf die Prüfseite.
+- **Demodaten**: Die DEMO-Prüfungen werden mit einer DEMO-Unterschrift festgeschrieben; ein DEMO-Bestand aus
+  Lieferung 2 bekommt seine Protokolle beim nächsten Lauf nachgereicht (nur DEMO-Prüfungen, mit DEMO-Hinweis).
+
+### Behoben (gemeldet während Lieferung 3)
+
+- **Produktbilder mit durchsichtigem Hintergrund** (freigestellte PNGs, auch WebP mit Alphakanal) standen in Listen,
+  Produktansicht und Protokoll auf Schwarz: Beim Umwandeln nach JPEG ging der Alphakanal verloren. Durchsichtige
+  Flächen werden jetzt weiß – für alle Bilder, die durch die gemeinsame Bildverarbeitung gehen (Produkt-, Ordner-,
+  Mangel- und Meldungsfotos, Alben, Prüfungsbereich). Schon hochgeladene Bilder des Moduls Material repariert der
+  Start einmal: Web- und Vorschaufassung entstehen aus dem erhaltenen Original neu. Alben und Prüfungsbereich werden
+  nicht nachträglich repariert (dort sind freigestellte Bilder unüblich) – ein betroffenes Bild dort einfach neu
+  hochladen.
+
+### Migration
+
+- Schemaversion 6, läuft beim Start von selbst: neue Spalten `mat_inspection.locked_login`,
+  `mat_inspection.correction_reason`, `mat_inspection_result.signature_png`, `mat_round.locked_at`; ein eindeutiger
+  Index (höchstens eine Berichtigung je Prüfung), Indizes für die Prüfseite und 22 Trigger für die
+  Unveränderlichkeit (auch gegen `INSERT OR REPLACE` über Kennung, Protokoll-ID oder Berichtigungsverweis, gegen
+  Nachschieben in einen abgeschlossenen Durchgang und gegen das Umschreiben der Prüferkennung – nur das Leeren beim
+  Löschen eines Kontos bleibt erlaubt). Die Verbindungen der App schalten dazu `recursive_triggers` ein, damit
+  Lösch-Trigger auch bei einem `REPLACE` greifen. Keine Tabelle wird umgebaut; alle Zeilen bleiben.
+- Prüfungen, die vor Lieferung 3 abgeschlossen wurden, behalten ihren Inhalt, bekommen aber kein Protokoll (ohne
+  Unterschrift ließe sich keins festschreiben); sie sind ab jetzt auch in der Datenbank unveränderlich und lassen
+  sich wie jede abgeschlossene Prüfung berichtigen. Die Produktion hat noch keine Daten des Moduls.
+- Neues Verzeichnis `/data/pdf` – es gehört in die Sicherung (der Cron-Eintrag aus der README kopiert `data/` ohnehin
+  ganz). Beim Zurückspielen werden Protokolle nur ergänzt, nie gelöscht (Befehl in der README geändert): Was nach der
+  Sicherung festgeschrieben wurde, legt der Start nach `pdf/verwaist/`, und seine Protokoll-ID wird nicht noch
+  einmal vergeben (Zähler gehoben bzw. Folgenummer).
+- `docker compose up -d --build` installiert Pango, HarfBuzz und DejaVu im Image und die neuen Python-Pakete; keine
+  Handarbeit.
+
+### Neue Abhängigkeiten
+
+| Paket | Version | Lizenz | Wofür |
+| --- | --- | --- | --- |
+| WeasyPrint | 70.0 (08.09.2026) | BSD-3-Clause | Protokolle als PDF/A-3b aus Jinja-Vorlagen |
+| pydyf | 0.12.1 | BSD-3-Clause | schreibt das PDF für WeasyPrint – festgehalten |
+| segno | 1.6.6 | BSD-3-Clause | QR-Code zum Lebenslauf im Protokoll |
+| tzdata | 2026.4 | Apache-2.0 | deutsche Ortszeit im Protokoll (das schlanke Image hat keine Zeitzonen) |
+| cryptography | 50.0.2 (30.09.2026) | Apache-2.0 oder BSD-3-Clause | pypdf liest damit mit AES verschlüsselte Anhänge (leeres Benutzerkennwort, bei Herstellern üblich) – ohne nur RC4; das betraf schon den Upload aus Lieferung 2 |
+| signature_pad | 5.1.4 (JavaScript) | MIT | Unterschrift zeichnen; wie die übrigen Bibliotheken geladen und gegen `vendor.sha256` geprüft |
+| Debian: libpango-1.0-0, libpangoft2-1.0-0, libharfbuzz-subset0, fonts-dejavu-core | aus dem Basis-Image | LGPL / MIT / Bitstream Vera | für WeasyPrint; DejaVu setzt Prüfsummen und Zeichen, die DLRG Univers nicht hat |
+
+WeasyPrint zieht außerdem tinycss2, cssselect2, tinyhtml5, Pyphen, fontTools (mit brotli/zopfli für WOFF2) und
+cffi nach (alle BSD/MIT). Das Image wird dadurch größer (geschätzt 60–80 MB); im Speicher kostet WeasyPrint je
+Arbeitsprozess beim ersten Protokoll etwa 50–100 MB.
+
+### Entscheidungen
+
+- **Protokoll-ID** `P-<jahr>-<nr>` (Prüfung), `A-…` (Aussonderung), `S-…` (Sammelprotokoll): Die Nummer ist die
+  Kennung des Vorgangs (nie zweimal vergeben), das Jahr das des Festschreibens. Lücken sind verworfene Entwürfe.
+  Kein eigener Zähler – so hängt die ID nicht an einer zweiten Transaktion. Liegt unter einer ID schon eine Datei
+  (nach dem Zurückspielen einer Sicherung kann ein Entwurf wieder offen sein, dessen Protokoll schon ausgehändigt
+  wurde), bekommt das neue Protokoll eine Folgenummer (`P-2026-000007-2`); eine ID bezeichnet nie zwei Dateien.
+- **Festschreiben in einem Schritt mit dem Abschluss** und in derselben Schreibtransaktion wie das Rendern: Was im
+  PDF steht, ist genau das, was die Datenbank festhält. Das hält die Schreibsperre für die Dauer des Renderns
+  (gemessen siehe unten); andere Prüfer warten so lange mit dem Speichern, der Lesebetrieb nicht.
+- **Stempel als ein gemeinsames Form-XObject**, auf das jede Seite verweist; die Seiteninhalte bleiben unangetastet
+  (in `q … Q` gerahmt). Zusammenführen mit `merge_page` hätte die von WeasyPrint geteilte Farbraumtabelle bei jeder
+  Seite um eine Kopie erweitert (5 KB je Seite, quadratisch wachsend). Jetzt: rund 450 Byte je Seite.
+- **Die Warnung von qpdf** aus dem Prototyp kam von pypdf: Sein inkrementelles Update führt den Querverweis-Strom
+  nicht in dessen eigenem Index (und schreibt nach „obj“ keinen Zeilenumbruch, was PDF/A verletzt). `stempel.py`
+  schreibt den Querverweis-Strom deshalb selbst (Unterklasse von `PdfWriter`, pypdf ist festgehalten); qpdf meldet
+  danach nichts mehr, veraPDF bestätigt PDF/A-3b auch nach dem Stempel.
+- **PDF/A-3b** (WeasyPrint `pdf_variant`): erlaubt Transparenz (Unterschrift mit Alphakanal) und ist für die
+  Archivierung gängig. Schrift im Protokoll ist DLRG Univers (eingebettet; die Schrift erlaubt Einbettung für Ansicht
+  und Druck), Prüfsummen in DejaVu Sans Mono.
+- **Kennung im Stempel-Nachtrag**: ein PDF-Kommentar `%Stroemis-Protokoll <ID> N=… SHA-256=…` – unkomprimiert lesbar,
+  auch wenn eine veränderte Datei sich nicht mehr öffnen lässt. Daran ordnet die Prüfseite eine veränderte Kopie
+  ihrem Protokoll zu.
+- **Berichtigung** (offener Punkt aus Lieferung 2): nur der Prüfer selbst (wer anders prüft, macht eine neue
+  Prüfung), nur die letzte Prüfung eines Artikels (sonst wirkte die Korrektur einer alten Prüfung am heutigen Stand
+  vorbei), nie eine Aussonderung (unumkehrbar). Prüftag und Prüfart bleiben die des Originals, die Fälligkeit
+  rechnet ab diesem Prüftag. Liegt das Original in einem noch offenen Durchgang, zählt die Berichtigung dort.
+- **Aussonderung durch den Materialwart** braucht seine Unterschrift – jedes festgeschriebene Protokoll trägt eine.
+- **Sammelprotokoll ohne eigene Unterschrift dessen, der abschließt**: Es fasst unterschriebene Einzelprotokolle
+  zusammen; die Unterschriften der Prüfer stehen darin, der Abschließende mit Name und Zeitpunkt.
+- **E-Mail-Versand von Protokollen** gibt es nicht – laut Auftrag höchstens eine Option; das PDF lädt jeder mit
+  Leserecht.
+- **Lebenslauf als PDF** kommt mit Lieferung 4 (Export), wie im Auftrag unter den Smoke-Tests dort genannt.
+- **Zeitstempel** stehen in deutscher Ortszeit (Europe/Berlin) im Protokoll, in der Datenbank weiter in UTC.
+
+### Abweichungen vom Konzept, mit Begründung
+
+- `mat_inspection.locked_login`: Die „Login-Identität“ aus dem Auftrag ist die E-Mail-Adresse des Kontos zum
+  Zeitpunkt des Festschreibens – als Kopie, wie Name und Urkundennummer.
+- `mat_inspection.correction_reason`: Grund der Berichtigung (der Verweis selbst steht seit Lieferung 1 in
+  `corrects_inspection_id`).
+- `mat_inspection_result.signature_png`: das gezeichnete Unterschriftsfeld eines Formulars – kein Foto, keine Datei.
+- `mat_round.locked_at`: Zeitpunkt des Sammelprotokolls (`closed_on` ist nur ein Tag).
+- Die Unveränderlichkeit sichern zusätzlich Datenbank-Trigger (verlangt war „Schreibschutz in der
+  Service-Schicht“) – sie fangen ab, was an der Service-Schicht vorbeiginge. Ausgenommen sind die Nutzerkennungen,
+  die SQLite beim Löschen eines Kontos selbst auf NULL setzt.
+
+### Messwerte
+
+Gemessen in der Entwicklungsumgebung (Intel i5-6500T): Prüfprotokoll mit drei Fotos 0,7 s (erstes Protokoll eines
+Arbeitsprozesses 1,9 s – Import von WeasyPrint, Silbentrennung, Schriften), Aussonderungsprotokoll 0,3 s, Stempel
+0,13 s, Sammelprotokoll mit 300 Artikeln 4,7 s, mit 500 Artikeln 8 s. So lange hält der Vorgang die Schreibsperre der
+Datenbank; andere schreiben in dieser Zeit nicht, lesen aber weiter. Der Stempel macht eine Datei um rund 450 Byte
+je Seite größer.
+
+### Review vor der Auslieferung
+
+Zuerst haben unabhängige Agenten die PDF-Vorlagen (Prüfen und Nachbessern, u. a. veraPDF mit Grenzfällen) und die
+Oberfläche (im Browser bei 1280 und 390 px, Maus und Touch) geprüft. Danach eine Durchsicht in sechs Blickwinkeln –
+Sicherheit, Datenintegrität, Abgleich mit dem Auftrag, PDF-Technik, Oberfläche, Betrieb – mit Gegenprüfung jedes
+Befunds durch einen zweiten Agenten. Alle bestätigten Befunde sind behoben; die Gegenprüfung hat die Korrekturen
+nachgestellt. Abgesichert in `test_review_lieferung3` (und `test_durchsichtige_bilder`):
+
+| # | Befund | Schwere | Behebung |
+| --- | --- | --- | --- |
+| 1 | Prüfseite zerlegte jede hochgeladene Datei mit pypdf – eine präparierte 50-KB-Datei band ohne Anmeldung 40 s und 770 MB | hoch | Die Prüfseite liest nur die Kennung am Dateiende und rechnet Prüfsummen; Rückgriff über höchstens zwölf %%EOF-Grenzen in einem Durchgang |
+| 2 | Eine Berichtigung mit altem Prüftag konnte eine spätere Sperre (Sturz, Verlust) als Freiprüfung aufheben | hoch | Berichtigen abgelehnt, wenn der Artikel nach der Prüfung gesperrt wurde |
+| 3 | JavaScript und ausführende Aktionen angehängter PDFs kamen ins Protokoll | mittel | Anhänge werden vor dem Anfügen entschärft; Verweise und ausgefüllte Felder bleiben |
+| 4 | Der Stempel verdeckte den unteren Rand angefügter Scan-Seiten und wurde auf kleinen Seiten unlesbar | mittel | eigener 14-mm-Streifen unter angefügten Seiten, mindestens A4-Breite |
+| 5 | Ein angehängtes, schon gestempeltes Protokoll verlor seinen eigenen Stempel | mittel | Stempel-XObject mit eigenem Namen je Protokoll |
+| 6 | AES-verschlüsselte Anhänge scheiterten im Image (`cryptography` fehlte; in der Testumgebung kam es aus dem System) | mittel | `cryptography==50.0.2`; Tests laufen isoliert (`python -S`) |
+| 7 | Laufende Nummern ab 100 brachen im PDF zwischen den Ziffern um | mittel | Spalte 10 mm, kein Umbruch |
+| 8 | Ein neuer Durchgang übernahm offene Berichtigungen und zählte alte Prüfungen als „erledigt“ | mittel | Berichtigungen bleiben beim Durchgang ihres Originals |
+| 9 | Zurückspielen laut README löschte neuere Protokolle und vergab ihre IDs noch einmal | mittel | Zurückspielen ergänzt Protokolle nur; Zähler gehoben, sonst Folgenummer |
+| 10 | Trigger umgehbar (INSERT/UPDATE OR REPLACE, Nachschieben in geschlossene Durchgänge, Wieder-Öffnen, Prüferkennung umschreiben) | niedrig | 22 Trigger, `recursive_triggers` an |
+| 11 | Prüfseite nannte zu erfundenen Kennungen vorhandene Protokoll-IDs; ein Byte in der Kennung ergab „unbekannt“ | niedrig | Kennung gilt nur mit passendem N und SHA-256; Zuordnung über den Inhalt |
+| 12 | Bei „instandsetzen“ fehlte im Protokoll die Angabe zur nächsten Prüfung | niedrig | „entfällt – … Freiprüfung nötig“ |
+| 13 | Prüftag nach UTC (Container), Dialog nach Browserdatum – zwischen 0 und 2 Uhr verschieden | niedrig | `heute()` in deutscher Zeit; Dialog zeigt den Tag des Servers |
+| 14 | Prüferzählung im Sammelprotokoll zählte berichtigte Originale mit | niedrig | ohne Originale, deren Berichtigung im Durchgang steht |
+| 15 | Absturz zwischen Datei und Commit ließ ein unterschriebenes Protokoll ohne Vorgang liegen | niedrig | Start legt solche Dateien nach `pdf/verwaist/` |
+| 16 | Riesige Unterschriftsbilder (16 MP) banden 220 MB je Anfrage | niedrig | höchstens 4 MP |
+| 17 | Kleinere Mängel: veraltete Unterschrift im Dialog, Umbruch „nicht unterschrieben“, Fokus im Profil, Überschrift allein am Seitenende, Doku zu `/tmp` und Ubuntu 22.04, Demo-Nachreichen mit falschen Ordnern bzw. fremden Prüfungen | niedrig | behoben |
+
+Ohne Befund geprüft: Rechte aller neuen Routen (auch kein Existenz-Leck über 403/404), CSRF auf der öffentlichen
+Prüfseite, Pfade, WeasyPrint lädt nichts aus dem Netz und keine fremden Dateien, Escaping aller Texte, parallele
+Festschreib-Anfragen (eine gewinnt, die anderen 409, eine Datei), Commitfehler (Datei wieder weg), Kontolöschung nach
+Festschreiben, Migration mit vier gleichzeitig startenden Prozessen, PDF/A-3b und qpdf für alle Protokollarten samt
+Grenzfällen, Stempel auf jeder Seite (auch 210 Seiten), Docker-Pakete und Auflösung der Abhängigkeiten für Python 3.12
+(x86_64 und aarch64), Testlauf unter CPython 3.12.
+
+### Zu prüfen
+
+- **Docker-Build**: hier ohne Docker nicht gebaut. Die Debian-Pakete gibt es unter diesen Namen in bookworm und
+  trixie (`python:3.12-slim` ist derzeit trixie); WeasyPrint 70 und seine Abhängigkeiten sind reine Python-Räder
+  bzw. haben Räder für Python 3.12 (cffi). Nach dem Deploy auf dev einmal ein Protokoll erzeugen.
+- **PDF/A**: veraPDF 1.30.3 bestätigt PDF/A-3b für alle Protokolle – mit Fotos, Unterschriften, Scans aus der App,
+  gedrehten und quer liegenden Seiten, vor und nach dem Stempel. **Hinten angefügte fremde PDFs** können die
+  Konformität brechen (etwa nicht eingebettete Schriften); umgewandelt werden sie nicht – sie bleiben, wie sie
+  hochgeladen wurden, und stehen mit Prüfsumme im Verzeichnis.
+- **PDF-Betrachter**: geprüft mit pdftotext, Ghostscript, pypdf, qpdf und veraPDF – nicht mit Adobe Acrobat, macOS
+  Vorschau und den Betrachtern von iOS und Android. Dort bitte ansehen, ob Stempel, Unterschrift und QR-Code sauber
+  erscheinen. Den eingebauten Betrachter von Chrome zeigt das kopflose Chromium hier nicht; die Antwort der Route ist
+  `200 application/pdf` mit einer CSP ohne `sandbox`.
+- **Schrift**: DLRG Univers wird als Teilmenge eingebettet; die Schrift erlaubt laut ihren Angaben die Einbettung
+  für Ansicht und Druck. Bitte bestätigen, dass die Lizenz der DLRG das für PDF-Protokolle abdeckt.
+- **Rechtliche Einordnung**: Die Unterschrift im Protokoll ist eine einfache elektronische Unterschrift (Bild plus
+  Anmeldung, Zeitpunkt und Prüfsumme), keine qualifizierte. Eine PDF-Signatur (PAdES), die Acrobat selbst prüft,
+  wäre ein späterer Schritt.
+- **Protokollinhalt** nach EN 365 bitte mit den Sachkundigen gegen die Papierkarte abgleichen – insbesondere, ob
+  etwas fehlt (etwa Nutzer der PSA, das kommt mit der Personenzuordnung in Phase 2).
+- **Regeln der Berichtigung** (nur der eigene Prüfer, nur die letzte Prüfung, keine Aussonderung, Prüftag bleibt)
+  fachlich bestätigen.
+- **Große Prüfdurchgänge**: Ab etwa 1 000 Artikeln dauerte das Sammelprotokoll länger als die 15 s, die andere
+  Schreibvorgänge auf die Sperre warten; solche Durchgänge besser teilen.
+- **Speicher**: WeasyPrint belegt je Arbeitsprozess nach dem ersten Protokoll grob 50–100 MB mehr.
+- **Prüfseite**: Grenze 20 Prüfungen je Adresse in 15 Minuten, 200 MB je Datei – bei Bedarf anpassen.
+- **Oberfläche** in Chromium geprüft (1280 px und 390 px, Maus und Touch, Drehen des Telefons, Pixeldichte 2 und
+  3); nicht in Safari/iOS – dort besonders das Zeichnen auf dem Signatur-Pad ansehen.
+- **dev nach dem Deploy**: Prüfungen, die dort in Lieferung 2 abgeschlossen wurden, stehen „ohne Protokoll“. Ein
+  erneuter Demolauf (Befehl wie bisher) schreibt die DEMO-Prüfungen nachträglich fest; eigene Testprüfungen
+  bleiben ohne Protokoll (oder lassen sich berichtigen).
+
 ## Katalogdatei (Format 1)
 
 Eine JSON-Datei, UTF-8. Kategorien werden über Namen an ihrer Stelle im Baum gefunden, Produkte über die
@@ -507,7 +744,7 @@ mit seiner Stelle (`produkte[3] (…): …`). `--trocken` prüft nur.
 Im Container liegt die Datei im Datenordner:
 `docker compose exec -e VIDEOPFLEGE=0 stroemis flask --app "app:create_app()" material import-catalog /data/import/katalog.json --trocken`
 
-## Schnittstelle (Lieferungen 1 und 2, mit den Nachbesserungen)
+## Schnittstelle (Lieferungen 1 bis 3, mit den Nachbesserungen)
 
 | Methode und Pfad | Recht | Zweck |
 | --- | --- | --- |
@@ -537,10 +774,15 @@ Im Container liegt die Datei im Datenordner:
 | `GET/PUT/DELETE /api/material/pruefungen/<id>` | lesen / Prüfer / Prüfer oder Materialwart | Prüfung lesen; Art und Bemerkung am Entwurf; Entwurf verwerfen bzw. Reservierung freigeben |
 | `PUT /api/material/pruefungen/<id>/punkte/<pid>`, `POST/DELETE …/foto` | Prüfer (eigener Entwurf) | Befund, Wert, Bemerkung, Foto je Prüfpunkt |
 | `POST /api/material/pruefungen/<id>/anhaenge` (`file` mehrfach, `art`, `titel`, `im_protokoll`), `DELETE …/<aid>` | Prüfer (eigener Entwurf) | Anhänge |
-| `POST /api/material/pruefungen/<id>/abschliessen` (`ergebnis`, `next_due_on`, `grund`, `bemerkung`) | Prüfer (eigener Entwurf) | Abschluss |
+| `POST /api/material/pruefungen/<id>/festschreiben` (`ergebnis`, `next_due_on`, `grund`, `bemerkung`; alter Pfad `…/abschliessen` gilt weiter) | Prüfer (eigener Entwurf, mit Unterschrift) | Abschluss und Festschreiben mit Protokoll |
+| `POST /api/material/pruefungen/<id>/berichtigen` (`grund`) | Prüfer (der die Prüfung gemacht hat) | Berichtigung beginnen; liefert den neuen Entwurf |
+| `PUT /api/material/pruefungen/<id>/punkte/<pid>` mit `unterschrift` (data:-URL oder `null`) | Prüfer (eigener Entwurf) | Unterschriftsfeld eines Formulars |
+| `GET/PUT/DELETE /api/material/unterschrift` (`bild`: data:-URL vom Signatur-Pad) | lesen (eigenes Konto) | eigene Unterschrift im Profil |
+| `GET /material/pruefung/<id>/pdf`, `GET /material/durchgang/<id>/sammelprotokoll` | lesen | Protokoll als PDF (nur, solange die Datei ihre Prüfsumme hat) |
+| `GET /material/pruefen`, `POST /api/material/pruefen` (`datei`) | ohne Anmeldung | Prüfseite: `ergebnis` (unveraendert, veraendert, unbekannt), `protokoll_id`, `art`, `hinweis` – angemeldet mit Zugang dazu `link` |
 | `GET /api/material/entwuerfe` | lesen | offene Prüfungen aller Prüfer |
 | `POST /api/material/artikel/<id>/sperren` (`grund`: sturz, beschaedigung, verlust; `text`) | Prüfer | Sperre ohne Prüfung |
-| `POST /api/material/artikel/<id>/aussondern` (`grund`: lebensdauer, verlust, irreparabel; `datum`, `bemerkung`) | Materialwart | Aussonderung gesperrter Artikel |
+| `POST /api/material/artikel/<id>/aussondern` (`grund`: lebensdauer, verlust, irreparabel; `datum`, `bemerkung`) | Materialwart (mit Unterschrift) | Aussonderung gesperrter Artikel mit Aussonderungsprotokoll; liefert `aussonderung` (Kennung) |
 | `GET/POST /api/material/durchgaenge`, `GET/DELETE …/<id>` | lesen / Materialwart oder Prüfer | Prüfdurchgänge (`?offen=1`); eröffnen (`folder_id`, `titel`); löschen, solange nichts geprüft ist |
-| `POST /api/material/durchgaenge/<id>/ausnehmen`, `…/einbeziehen` (`item_id`, `grund`), `…/abschliessen` | Materialwart oder Prüfer | Artikel ausnehmen, wieder einbeziehen, Durchgang abschließen |
+| `POST /api/material/durchgaenge/<id>/ausnehmen`, `…/einbeziehen` (`item_id`, `grund`), `…/abschliessen` | Materialwart oder Prüfer | Artikel ausnehmen, wieder einbeziehen, Durchgang abschließen (mit Sammelprotokoll) |
 | `POST /api/material/durchgaenge/<id>/abbrechen` | Materialwart oder Prüfer | vorzeitig beenden; `durchgang` ist `null`, wenn er mangels Geprüftem entfernt wurde |

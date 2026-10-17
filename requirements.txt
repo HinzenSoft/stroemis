@@ -10,3 +10,14 @@ pillow-heif==1.8.1
 openpyxl==3.1.5
 # Modul Material: Anhänge einer Prüfung (Scans und PDFs zu einem PDF), ab Lieferung 3 auch der Prüfsummen-Stempel
 pypdf==6.19.0
+# Damit pypdf mit AES verschlüsselte PDFs (leeres Benutzerkennwort, Rechte-Kennwort – bei Herstellern üblich) als
+# Anhang lesen und ans Protokoll hängen kann; ohne das Paket kann es nur RC4.
+cryptography==50.0.2
+# Modul Material, Lieferung 3: Protokolle als PDF/A (WeasyPrint braucht Pango und HarfBuzz aus dem Image, siehe
+# Dockerfile). pydyf schreibt das PDF – festgehalten, damit ein neues Release die Protokolldateien nicht unbemerkt
+# anders aufbaut. segno zeichnet den QR-Code zum Lebenslauf; tzdata liefert die deutsche Zeitzone für
+# Zeitstempel im Protokoll (das schlanke Image hat keine Zeitzonendaten).
+weasyprint==70.0
+pydyf==0.12.1
+segno==1.6.6
+tzdata==2026.4

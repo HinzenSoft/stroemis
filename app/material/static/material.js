@@ -56,6 +56,9 @@
     begonnen: "begonnen", seiten: "Seiten", dateien: "Dateien", basis: "aus Prüfung", erledigt: "erledigt", ausgenommen: "ausgenommen",
     links: "Links", fotos: "Fotos", note: "Bemerkung", answer: "Antwort", status: "Status",
     von: "Kopie von Produkt Nr.", kopie_von: "Kopie von Dokument Nr.", dokumente: "Dokumente übernommen",
+    protocol_id: "Protokoll-ID", pdf_sha256: "Prüfsumme", pdf_hashed_bytes: "Bytes", file_sha256: "Prüfsumme der Datei",
+    anhaenge_angefuegt: "Anhänge angefügt", login: "Anmeldung", berichtigung: "Berichtigung", berichtigt: "berichtigt",
+    unterschrift: "Unterschrift", nicht_geprueft: "nicht geprüft",
   };
   const AKTION = { angelegt: "angelegt", geaendert: "geändert", geloescht: "gelöscht", verschoben: "verschoben",
                    bild: "Bild geändert", foto: "Foto geändert", neue_version: "neue Version", zurueckgezogen: "zurückgezogen",
@@ -65,7 +68,9 @@
                    gesperrt: "gesperrt", ausgesondert: "ausgesondert", anhang: "Anhang", anhang_entfernt: "Anhang entfernt",
                    eroeffnet: "Durchgang eröffnet", ausgenommen: "ausgenommen", einbezogen: "wieder einbezogen",
                    geschlossen: "Durchgang abgeschlossen", faelligkeit: "Fälligkeit vorgezogen", umbenannt: "umbenannt",
-                   eingepflegt: "eingepflegt", abgelehnt: "abgelehnt", variante: "als Variante angelegt" };
+                   eingepflegt: "eingepflegt", abgelehnt: "abgelehnt", variante: "als Variante angelegt",
+                   festgeschrieben: "festgeschrieben", berichtigt: "berichtigt", berichtigung_begonnen: "Berichtigung begonnen",
+                   unterschrift: "Unterschrift geändert", abgebrochen: "Durchgang abgebrochen" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };
 
@@ -303,7 +308,8 @@
     if (feld === "material_kind" || feld === "default_material_kind") return esc(MATERIALART[v] || v);
     if (feld === "kind" || feld === "art") return esc(PRUEFART_KURZ[v] || ORDNERART[v] || ANHANGART[v] || v);
     if (feld === "result" || feld === "ergebnis") return esc(ERGEBNIS[v] || v);
-    if ((feld === "pruefung" || feld === "aussonderung" || feld === "basis") && Number.isInteger(v)) return `<a href="/material/pruefung/${v}">Nr. ${v}</a>`;
+    if (["pruefung", "aussonderung", "basis", "berichtigung", "berichtigt"].includes(feld) && Number.isInteger(v)) return `<a href="/material/pruefung/${v}">Nr. ${v}</a>`;
+    if (/sha256$/.test(feld)) return `<span class="mat-hash">${esc(v)}</span>`;
     if (feld === "lock_state") return esc({ frei: "frei", gesperrt: "gesperrt", verloren: "verloren (gesperrt)", ausgesondert: "ausgesondert" }[v] || v);
     if (/_on$|^valid_from$|^retire_by$|^datum$|^begonnen$/.test(feld)) return esc(fmtTag(v));
     if (typeof v === "object") return esc(JSON.stringify(v));
@@ -322,6 +328,46 @@
         <span class="muted">von ${esc(j.user_name || "–")}</span></div>
         ${zeilen ? `<table class="mat-diff"><thead><tr><th>Feld</th><th>vorher</th><th>nachher</th></tr></thead><tbody>${zeilen}</tbody></table>` : ""}</li>`;
     }).join("")}</ol>`;
+  }
+
+  /* --- Unterschrift und Protokoll ------------------------------------------------------------------
+     Festschreiben (Prüfung) und Aussondern brauchen die eigene Unterschrift aus dem Profil. Fehlt sie, öffnet
+     sich zuerst das Signatur-Pad (unterschrift.js); gespeichert wird sie im Profil und gilt sofort. */
+  let eigenesBildMerk = null;
+  // Jedes Mal frisch vom Server: Der Dialog soll genau die Unterschrift zeigen, die ins Protokoll kommt – auch wenn
+  // sie inzwischen in einem anderen Fenster ersetzt wurde.
+  async function eigenesBild() {
+    if (DARF.unterschrift) {
+      eigenesBildMerk = (await api(`${API}/unterschrift`)).unterschrift;
+      // Inzwischen im Profil entfernt (anderes Fenster)? Dann gilt sie als fehlend – Festschreiben fragt neu.
+      if (!eigenesBildMerk) DARF.unterschrift = false;
+    }
+    return eigenesBildMerk;
+  }
+  async function eigeneUnterschrift(hinweis) {
+    if (DARF.unterschrift) return true;
+    const bild = await MatUnterschrift.zeichnen({ titel: "Deine Unterschrift", hinweis,
+      speichern: async (b) => { eigenesBildMerk = (await api(`${API}/unterschrift`, { method: "PUT", body: { bild: b } })).unterschrift; } });
+    if (!bild) return false;
+    DARF.unterschrift = true;
+    toast("Unterschrift in deinem Profil gespeichert");
+    return true;
+  }
+  // Der Server lehnt ab, weil die Unterschrift inzwischen fehlt (in einem anderen Fenster entfernt)?
+  const unterschriftWeg = (e) => { if (e.status === 403 && /Unterschrift/.test(e.message)) { DARF.unterschrift = false; eigenesBildMerk = null; } };
+  // Ohne Zwischenablage ist der Text markiert; am Telefon gibt es kein Strg+C, dort kopiert das Menü der Markierung.
+  const kopierText = () => (window.matchMedia("(pointer: coarse)").matches ? "jetzt kopieren" : "mit Strg+C kopieren");
+  // Prüfsumme gekürzt; der volle Wert steht im title, ein Klick kopiert ihn (Aktion „summe“).
+  const summeKnopf = (h) => `<button type="button" class="mat-summe mat-hash" data-act="summe" data-wert="${esc(h)}" title="${esc(h)} – Klick kopiert">${esc(h.slice(0, 16))}…</button>`;
+  async function summeKopieren(b) {
+    try { await navigator.clipboard.writeText(b.dataset.wert); toast("Prüfsumme kopiert"); }
+    catch (e) {
+      // Ohne Zwischenablage: die ganze Summe zeigen und markieren.
+      b.textContent = b.dataset.wert;
+      const r = document.createRange(); r.selectNodeContents(b);
+      const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      toast(`Prüfsumme markiert – ${kopierText()}`);
+    }
   }
 
   /* --- Ordnerbaum ----------------------------------------------------------------------------- */
@@ -431,7 +477,7 @@
       ziel.innerHTML = `<section class="section"><h2>${nurOffen ? "Laufende Prüfdurchgänge" : "Prüfdurchgänge"}</h2>
         ${liste.length ? `<ul class="mat-runden">${liste.map((r) => `<li><a href="/material/durchgang/${r.id}"><strong>${esc(r.titel)}</strong></a>
           <span class="muted">${esc(r.ordner)} · eröffnet ${esc(fmtTag(r.eroeffnet_am))}${r.offen ? "" : ` · ${r.abgebrochen ? "abgebrochen" : "abgeschlossen"} ${esc(fmtTag(r.geschlossen_am))}`}</span>
-          ${fortschritt(r.zaehlung)}</li>`).join("")}</ul>` : leer("Noch kein Prüfdurchgang.")}</section>`;
+          ${fortschritt(r.zaehlung)}${r.protokoll ? ` <a class="mat-pdf" href="${esc(r.protokoll.url)}" target="_blank" rel="noopener" title="Sammelprotokoll ${esc(r.protokoll.id)} öffnen">PDF</a>` : ""}</li>`).join("")}</ul>` : leer("Noch kein Prüfdurchgang.")}</section>`;
     } catch (e) { ziel.innerHTML = ""; }
   }
   function fortschritt(z) {
@@ -515,7 +561,8 @@
     }
     async function zeichnen() {
       inhalt.innerHTML = `<div class="page-head"><h1>Prüfungen</h1>
-          <div class="btn-row">${DARF.verwalten || DARF.pruefen ? '<button class="btn secondary" data-act="runde">+ Prüfdurchgang</button>' : ""}</div></div>
+          <div class="btn-row"><a class="btn ghost" href="/material/pruefen" title="Ist ein PDF-Protokoll unverändert?">Protokoll prüfen</a>
+            ${DARF.verwalten || DARF.pruefen ? '<button class="btn secondary" data-act="runde">+ Prüfdurchgang</button>' : ""}</div></div>
         ${!DARF.pruefen ? '<p class="notice">Prüfen dürfen nur Prüfer mit hinterlegter Urkundennummer (Nutzerverwaltung → Häkchen „Prüfer“).</p>' : ""}
         <div id="pr-runden"></div><div id="pr-offen"></div>
         <section class="section"><h2>Zu prüfen</h2><div id="pr-liste"><p class="help">Wird geladen …</p></div></section>`;
@@ -783,7 +830,7 @@
       "qr-kopieren": async () => {
         const feld = $("#mat-qr");
         try { await navigator.clipboard.writeText(feld.value); toast("Adresse kopiert"); }
-        catch (e) { feld.select(); document.execCommand && document.execCommand("copy"); toast("Adresse markiert – mit Strg+C kopieren"); }
+        catch (e) { feld.select(); document.execCommand && document.execCommand("copy"); toast(`Adresse markiert – ${kopierText()}`); }
       },
       bearbeiten: () => artikelDialog(a),
       pruefen: () => { location.href = eigenerEntwurf ? `/material/pruefung/${a.entwurf.id}` : `/material/artikel/${a.id}/pruefung/neu`; },
@@ -804,15 +851,20 @@
     };
   }
 
-  /* Prüfungen eines Artikels, neueste zuerst – der Prüfteil des Lebenslaufs. */
+  /* Prüfungen eines Artikels, neueste zuerst – der Prüfteil des Lebenslaufs. Je festgeschriebenem Eintrag das
+     Protokoll (PDF im neuen Tab); ein durch eine Berichtigung ersetztes Original steht grau mit „berichtigt“. */
   function pruefListe(liste) {
     if (!liste || !liste.length) return leer("Noch keine Prüfung.");
-    return `<table class="list mat-tabelle mat-pruefliste"><thead><tr><th>Datum</th><th>Art</th><th>Ergebnis</th><th>Prüfer</th><th>Nächste Prüfung</th></tr></thead><tbody>
-      ${liste.map((x) => `<tr class="${x.entwurf ? "mat-entwurf" : ""}"><td data-l="Datum"><a href="/material/pruefung/${x.id}">${x.entwurf ? "Entwurf" : esc(fmtTag(x.datum))}</a></td>
-        <td data-l="Art">${esc(PRUEFART_KURZ[x.art] || x.art)}</td>
+    return `<table class="list mat-tabelle mat-pruefliste"><thead><tr><th>Datum</th><th>Art</th><th>Ergebnis</th><th>Prüfer</th><th>Nächste Prüfung</th><th>Protokoll</th></tr></thead><tbody>
+      ${liste.map((x) => {
+        const ersetzt = x.berichtigt_durch && !x.berichtigt_durch.entwurf;
+        return `<tr class="${x.entwurf ? "mat-entwurf" : ersetzt ? "mat-alt" : ""}"><td data-l="Datum"><a href="/material/pruefung/${x.id}">${x.entwurf ? "Entwurf" : esc(fmtTag(x.datum))}</a></td>
+        <td data-l="Art">${esc(PRUEFART_KURZ[x.art] || x.art)}${x.berichtigt ? ' <span class="mat-marke-ber">Berichtigung</span>' : ""}${ersetzt ? ` <span class="badge grey" title="berichtigt durch ${esc(x.berichtigt_durch.protokoll_id || "eine spätere Prüfung")}">berichtigt</span>` : ""}</td>
         <td data-l="Ergebnis">${x.entwurf ? '<span class="muted">in Prüfung</span>' : ergebnisMarke(x.ergebnis)}${x.grund ? `<div class="small muted">${esc(x.grund)}</div>` : ""}</td>
         <td data-l="Prüfer">${esc(x.pruefer || "")}${x.urkunde ? ` <span class="muted small">(${esc(x.urkunde)})</span>` : ""}</td>
-        <td data-l="Nächste Prüfung">${x.naechste ? esc(fmtTag(x.naechste)) : '<span class="muted">–</span>'}</td></tr>`).join("")}</tbody></table>`;
+        <td data-l="Nächste Prüfung">${x.naechste ? esc(fmtTag(x.naechste)) : '<span class="muted">–</span>'}</td>
+        <td data-l="Protokoll">${x.protokoll ? `<a class="mat-pdf" href="${esc(x.protokoll.url)}" target="_blank" rel="noopener" title="Protokoll ${esc(x.protokoll.id)} öffnen (PDF)">PDF</a> <span class="muted small mat-hash">${esc(x.protokoll.id)}</span>` : '<span class="muted">–</span>'}</td></tr>`;
+      }).join("")}</tbody></table>`;
   }
   const ergebnisMarke = (e) => (e ? `<span class="mat-ergebnis-marke e-${esc(e)}">${esc(ERGEBNIS[e] || e)}</span>` : "");
 
@@ -832,23 +884,57 @@
     });
   }
 
+  /* Aussonderung durch den Materialwart: wird mit seiner Unterschrift festgeschrieben (Aussonderungsprotokoll).
+     Fehlt sie, unterschreibt er im Dialog – vorab mit „Unterschreiben“ oder spätestens beim Aussondern. */
   function aussonderDialog(a) {
     const heute = new Date();
     const tag = `${heute.getFullYear()}-${String(heute.getMonth() + 1).padStart(2, "0")}-${String(heute.getDate()).padStart(2, "0")}`;
+    const HINWEIS = "Die Aussonderung wird mit deiner Unterschrift festgeschrieben. Sie wird in deinem Profil gespeichert und als Kopie ins Aussonderungsprotokoll übernommen.";
     dialog(`<h2>${esc(a.inventory_no)} aussondern</h2>
       <p class="help">Die Aussonderung ist endgültig: Der Artikel wandert nach „Ausgesondert“, bleibt dort mit seinem Lebenslauf sichtbar und zählt nirgends mehr als Bestand.</p>
       <div class="field-row"><div><label for="au-grund">Grund</label><select id="au-grund">${Object.entries(AUSSONDERUNGSGRUND).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
         <div><label for="au-datum">Datum</label><input type="date" id="au-datum" value="${tag}" max="${tag}"></div></div>
       <label for="au-bem">Bemerkung</label><textarea id="au-bem" rows="3" maxlength="2000"></textarea>
+      <p class="help">Die Aussonderung wird mit deiner Unterschrift festgeschrieben (Aussonderungsprotokoll).</p>
+      <div id="au-us"></div>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn danger" id="au-ok" type="button">Aussondern</button></div>`,
     (dlg, body) => {
+      async function usZeigen() {
+        const ziel = $("#au-us", body);
+        if (!DARF.unterschrift) {
+          ziel.innerHTML = `<div class="mat-us-fehlt"><span>Dir fehlt noch eine Unterschrift. Ohne sie lässt sich nicht aussondern.</span>
+            <button type="button" class="btn small" id="au-us-knopf">Unterschreiben</button></div>`;
+          $("#au-us-knopf", body).onclick = async () => { if (await eigeneUnterschrift(HINWEIS)) usZeigen(); };
+          return;
+        }
+        let bild = null;
+        try { bild = await eigenesBild(); } catch (e) { /* dann ohne Bild */ }
+        if (!DARF.unterschrift) { usZeigen(); return; }      // im Profil inzwischen entfernt
+        ziel.innerHTML = bild ? `<div class="mat-fs-unterschrift"><img src="${esc(bild)}" alt="Deine Unterschrift"><span class="small muted">Deine Unterschrift aus dem Profil</span></div>` : "";
+      }
+      usZeigen();
       $("#au-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
+        const hatte = DARF.unterschrift;
+        if (!(await eigeneUnterschrift(HINWEIS))) return;
+        if (!hatte) usZeigen();
         knopf.disabled = true;
+        knopf.textContent = "Wird festgeschrieben …";
         try {
-          await api(`${API}/artikel/${a.id}/aussondern`, { method: "POST", body: { grund: $("#au-grund", body).value, datum: $("#au-datum", body).value, bemerkung: $("#au-bem", body).value } });
-          dlg.close(); toast("Ausgesondert"); zeigen(artikel);
-        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+          const r = await api(`${API}/artikel/${a.id}/aussondern`, { method: "POST", body: { grund: $("#au-grund", body).value, datum: $("#au-datum", body).value, bemerkung: $("#au-bem", body).value } });
+          let prot = null;
+          try { prot = (await api(`${API}/pruefungen/${r.aussonderung}`)).pruefung.protokoll; } catch (e) { /* Link genügt */ }
+          toast(prot ? `Ausgesondert – Protokoll ${prot.id}` : "Ausgesondert");
+          // Im selben Dialog weiter: zur Aussonderung mit ihrem Protokoll; darunter steht der Artikel schon neu.
+          dialog(`<h2>${esc(a.inventory_no)} ausgesondert</h2>
+            <p>Das Aussonderungsprotokoll ${prot ? `<strong class="mat-hash">${esc(prot.id)}</strong> ` : ""}ist mit deiner Unterschrift festgeschrieben.</p>
+            <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button>
+              ${prot ? `<a class="btn secondary" href="${esc(prot.url)}" target="_blank" rel="noopener">Protokoll (PDF)</a>` : ""}
+              <a class="btn" href="/material/pruefung/${r.aussonderung}" id="au-weiter">Zur Aussonderung</a></div>`,
+          // Der Knopf, auf dem der Fokus lag, ist mit dem alten Inhalt weg – sonst fiele er an den Seitenanfang.
+          (d2, b2) => $("#au-weiter", b2).focus());
+          zeigen(artikel);
+        } catch (e) { unterschriftWeg(e); toast(e.message, true); knopf.disabled = false; knopf.textContent = "Aussondern"; if (!DARF.unterschrift) usZeigen(); }
       };
     });
   }
@@ -1752,20 +1838,56 @@
     // Was gerade gespeichert wird. Ein Wert wird beim Verlassen des Feldes gespeichert – tippt jemand danach
     // sofort auf „Abschließen“, wartet der Abschluss, bis der Wert angekommen ist.
     let laufend = Promise.resolve();
-    const merken = (p) => { laufend = laufend.then(() => p, () => p); return p; };
+    // Die Kette selbst schluckt Fehler (gemeldet hat sie der Aufrufer schon) – sonst stünde jeder abgelehnte Wert
+    // zusätzlich als „Uncaught (in promise)“ in der Konsole.
+    const merken = (p) => { laufend = laufend.then(() => p, () => p).catch(() => {}); return p; };
     const bearbeitbar = () => pr.entwurf && pr.eigen && DARF.pruefen;
     const punkt = (rid) => pr.punkte.find((x) => x.id === rid);
 
+    // Berichtigen darf nur, wer die Prüfung gemacht hat; ob es gerade geht, sagt der Server (berichtigbar). Eine
+    // Aussonderung (auch „aussondern“ als Ergebnis) ist nie berichtigbar – dort gibt es den Knopf gar nicht.
+    const darfBerichtigen = () => !pr.entwurf && pr.eigen && DARF.pruefen && pr.berichtigbar && pr.art !== "aussonderung"
+      && pr.ergebnis !== "aussondern";
+
     function kopf() {
       const a = pr.artikel;
+      const knoepfe = [];
+      if (pr.entwurf && !pr.eigen && DARF.verwalten) knoepfe.push('<button class="btn ghost small" data-act="freigeben">Reservierung freigeben</button>');
+      if (darfBerichtigen()) {
+        knoepfe.push(pr.berichtigbar.ok ? '<button class="btn secondary small" data-act="berichtigen">Berichtigen</button>'
+          : `<button class="btn secondary small" type="button" disabled title="${esc(pr.berichtigbar.grund)}">Berichtigen</button>`);
+      }
       return `${pr.produkt.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen. Dieses Produkt stammt aus den Demodaten.</p>' : ""}
         <div class="mat-pfad">${a.pfad.map((o) => `<a href="/material/ordner/${o.id}">${esc(o.name)}</a>`).join(" / ")} / <a href="/material/artikel/${a.id}">${esc(a.inventory_no)}</a></div>
         <div class="page-head"><h1>${esc(PRUEFART[pr.art] || pr.art)} <span class="mat-h1-zusatz">${esc(a.inventory_no)}</span> ${pr.entwurf ? '<span class="badge">Entwurf</span>' : ergebnisMarke(pr.ergebnis)}</h1>
-          ${pr.entwurf && !pr.eigen && DARF.verwalten ? '<div class="btn-row"><button class="btn ghost small" data-act="freigeben">Reservierung freigeben</button></div>' : ""}</div>
+          ${knoepfe.length ? `<div class="btn-row">${knoepfe.join("")}</div>` : ""}</div>
+        ${berichtigungHinweis()}
         <p class="mat-produktzeile"><strong>${esc(pr.produkt.name)}</strong>${pr.produkt.article_no ? ` · Art.-Nr. ${esc(pr.produkt.article_no)}` : ""} · Seriennummer ${esc(a.serial_no)} ${statusMarke(a.status)}</p>
-        <p class="small muted">${pr.formular ? `Formular ${esc(pr.formular.titel || "ohne Titel")}, Version ${pr.formular.version} · ` : ""}Prüfer ${esc(pr.pruefer || "–")}${pr.urkunde ? ` (Urkundennummer ${esc(pr.urkunde)})` : ""}
-          · ${pr.entwurf ? `begonnen ${esc(fmtZeit(pr.begonnen_am))}` : `Prüftag ${esc(fmtTag(pr.datum))}`}
+        <p class="small muted">${pr.formular ? `Formular ${esc(pr.formular.titel || "ohne Titel")}, Version ${pr.formular.version} · ` : ""}${pr.art === "aussonderung" ? "Ausgeführt von" : "Prüfer"} ${esc(pr.pruefer || "–")}${pr.urkunde ? ` (Urkundennummer ${esc(pr.urkunde)})` : ""}
+          · ${pr.entwurf && !pr.berichtigt ? `begonnen ${esc(fmtZeit(pr.begonnen_am))}` : `Prüftag ${esc(fmtTag(pr.datum))}`}
           ${pr.durchgang ? ` · Durchgang <a href="/material/durchgang/${pr.durchgang.id}">${esc(pr.durchgang.titel)}</a>` : ""}</p>`;
+    }
+
+    /* Berichtigung: Die Berichtigung verweist auf ihr Original, das Original auf seine Berichtigung. */
+    function berichtigungHinweis() {
+      const b = pr.berichtigt;
+      const original = (x) => (x.protokoll_id
+        ? `von <a href="/material/pruefung/${x.id}">Protokoll ${esc(x.protokoll_id)}</a> vom ${esc(fmtTag(x.datum))}`
+        : `<a href="/material/pruefung/${x.id}">der Prüfung vom ${esc(fmtTag(x.datum))}</a> (ohne Protokoll)`);
+      let html = "";
+      if (b && pr.entwurf) {
+        html += `<div class="mat-ber"><strong>Berichtigung</strong> ${original(b)} – Grund: ${esc(pr.grund_berichtigung || "–")}.
+          Der Prüftag bleibt der ${esc(fmtTag(pr.datum))}, die Art der Prüfung steht fest. Erst mit dem Festschreiben ersetzt die Berichtigung das Original.</div>`;
+      } else if (b) {
+        html += `<div class="mat-ber"><strong>Berichtigung</strong> ${original(b)}. Grund: ${esc(pr.grund_berichtigung || "–")}</div>`;
+      }
+      const d = pr.berichtigt_durch;
+      if (d && d.entwurf) {
+        html += `<div class="mat-ber"><strong>Berichtigung in Arbeit</strong> bei ${esc(d.pruefer || "–")} – <a href="/material/pruefung/${d.id}">Entwurf ansehen</a>. Bis sie festgeschrieben ist, gilt diese Prüfung.</div>`;
+      } else if (d) {
+        html += `<div class="mat-ber ersetzt"><strong>Berichtigt</strong> durch <a href="/material/pruefung/${d.id}">${d.protokoll_id ? `Protokoll ${esc(d.protokoll_id)}` : "eine spätere Prüfung"}</a> – maßgeblich ist die Berichtigung. Diese Prüfung bleibt${pr.protokoll ? " mit ihrem Protokoll" : ""} unverändert erhalten.</div>`;
+      }
+      return html;
     }
 
     function punktHtml(x) {
@@ -1777,7 +1899,12 @@
           ${["ja", "nein"].map((w) => `<button type="button" data-act="pwert" data-rid="${x.id}" data-wert="${w}" class="${w === x.soll ? "soll" : "abw"}" aria-pressed="${!nz && x.wert === w}">${w === "ja" ? "Ja" : "Nein"}</button>`).join("")}
           <button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="nicht_zutreffend" aria-pressed="${nz}">n. z.</button></div>`;
       } else if (x.art === "signature") {
-        steuer = '<p class="help">Unterschriftsfelder folgen mit Lieferung 3.</p>';
+        // Unterschriftsfeld: gezeichnet im Pad (unterschrift.js); „n. z.“ nimmt es heraus. Kein Foto.
+        steuer = `<div class="mat-us-feld">
+          ${x.unterschrift ? `<img class="mat-us-bild" src="${esc(x.unterschrift)}" alt="Unterschrift: ${esc(x.text)}">` : ""}
+          <div class="btn-row">${nz ? "" : `<button type="button" class="btn ${x.unterschrift || !x.pflicht ? "secondary " : ""}small" data-act="punterschrift" data-rid="${x.id}">${x.unterschrift ? "Neu unterschreiben" : "Unterschreiben"}</button>`}
+            ${x.unterschrift ? `<button type="button" class="btn ghost small" data-act="punterschrift-weg" data-rid="${x.id}">Entfernen</button>` : ""}
+            <button type="button" class="btn secondary small mat-nz-knopf" data-act="pbefund" data-rid="${x.id}" data-befund="nicht_zutreffend" aria-pressed="${nz}" title="nicht zutreffend">n. z.</button></div></div>`;
       } else {
         const feld = x.art === "photo" ? ""
           : x.art === "date" ? `<input type="date" class="mat-pwert" data-rid="${x.id}" value="${esc(x.wert || "")}" aria-label="${esc(x.text)}">`
@@ -1828,7 +1955,7 @@
           <div class="btn-row"><label class="btn secondary small">📷 Seite fotografieren<input type="file" accept="image/*" capture="environment" id="ah-kamera" class="mat-datei"></label>
             <label class="btn secondary small">Dateien wählen<input type="file" accept="application/pdf,image/*" multiple id="ah-dateien" class="mat-datei"></label></div>
           <ol class="mat-scan" id="ah-seiten"></ol>
-          <label class="inline"><input type="checkbox" id="ah-protokoll" checked> hinten ans Protokoll hängen (PDF ab Lieferung 3)</label>
+          <label class="inline"><input type="checkbox" id="ah-protokoll" checked> hinten ans Protokoll hängen</label>
           <div class="btn-row"><button type="button" class="btn small" data-act="anhang-hoch" id="ah-hoch" disabled>Als ein PDF anhängen</button></div></div>` : "";
       return `<section class="section"><h2>Anhänge</h2>
         ${bearbeitbar() ? '<p class="help">Externe Prüfkarte, Bericht eines Prüfdienstes … als PDF oder Foto. Mehrere Fotos (eine je Seite) und PDFs werden in der Reihenfolge der Liste ein PDF.</p>' : ""}
@@ -1845,8 +1972,8 @@
     }
 
     function offeneHinweise() {
-      const offen = pr.punkte.filter((x) => x.pflicht && x.art !== "signature" && x.befund !== "nicht_zutreffend"
-        && (x.art === "photo" ? !x.foto : x.art === "yesno" ? !x.wert : !(x.wert || "").trim()));
+      const offen = pr.punkte.filter((x) => x.pflicht && x.befund !== "nicht_zutreffend"
+        && (x.art === "photo" ? !x.foto : x.art === "signature" ? !x.unterschrift : x.art === "yesno" ? !x.wert : !(x.wert || "").trim()));
       const ohneFoto = pr.punkte.filter((x) => x.befund === "mangel" && !x.foto);
       const kritisch = pr.punkte.filter((x) => x.befund === "mangel" && x.kritisch);
       const ldErreicht = pr.lebensdauer && pr.lebensdauer.erreicht;
@@ -1860,7 +1987,7 @@
         <div class="mat-abschluss-zeile">
           <label class="mat-due" id="pr-due-feld" hidden>Nächste Prüfung <input type="date" id="pr-due" value="${esc(pr.vorschlag_naechste || "")}" max="${esc(pr.vorschlag_naechste || "")}" min="${isoHeute(1)}"></label>
           <input type="text" id="pr-grund" maxlength="300" placeholder="Grund" aria-label="Grund" value="${esc(pr.grund || "")}" hidden>
-          <button type="button" class="btn" data-act="abschliessen" id="pr-ok" disabled>Abschließen</button></div>
+          <button type="button" class="btn" data-act="festschreiben" id="pr-ok" disabled>Festschreiben</button></div>
         <div class="mat-abschluss-hinweis" id="pr-hinweis" aria-live="polite"></div></div>`;
     }
 
@@ -1886,6 +2013,7 @@
       if (pr.freipruefung && ergebnis === "einsatzbereit") teile.push("Freiprüfung: Der Artikel kehrt in seinen Herkunftsordner zurück");
       if (ergebnis === "instandsetzen" && !pr.freipruefung) teile.push("„instandsetzen“ sperrt den Artikel");
       if (ergebnis === "aussondern") teile.push("„aussondern“ ist endgültig");
+      if (!DARF.unterschrift) teile.push("Deine Unterschrift fehlt noch – „Festschreiben“ fragt danach");
       $("#pr-hinweis").textContent = teile.join(" · ");
       $("#pr-hinweis").classList.toggle("warn", !!(h.offen.length || h.ohneFoto.length || h.kritisch.length));
     }
@@ -1893,11 +2021,12 @@
     function leseHtml() {
       const zeilen = pr.punkte.map((x) => `<tr class="${x.befund === "mangel" ? "mat-mangelzeile" : ""}">
           <td data-l="Prüfpunkt">${x.gruppe ? `<span class="muted small">${esc(x.gruppe)}</span><br>` : ""}${esc(x.text)}${x.kritisch ? ' <span class="mat-kritisch">kritisch</span>' : ""}</td>
-          <td data-l="Befund">${befundMarke(x.befund)}</td><td data-l="Wert">${x.wert ? esc(x.wert) : '<span class="muted">–</span>'}${x.art === "yesno" && x.soll ? ` <span class="muted small">(Soll ${esc(x.soll)})</span>` : ""}</td>
+          <td data-l="Befund">${x.art === "signature" && !x.unterschrift && x.befund !== "nicht_zutreffend" ? '<span class="muted">nicht unterschrieben</span>' : befundMarke(x.befund)}</td><td data-l="Wert">${x.art === "signature" && x.unterschrift ? `<img class="mat-us-mini" src="${esc(x.unterschrift)}" alt="Unterschrift">`
+            : x.wert ? esc(x.wert) : '<span class="muted">–</span>'}${x.art === "yesno" && x.soll ? ` <span class="muted small">(Soll ${esc(x.soll)})</span>` : ""}</td>
           <td data-l="Bemerkung">${x.notiz ? `<span class="mat-text">${esc(x.notiz)}</span>` : ""}</td>
           <td data-l="Foto">${x.foto ? `<a href="${esc(x.foto.web)}" target="_blank" rel="noopener"><img class="mat-mini" src="${esc(x.foto.vorschau)}" alt="Foto"></a>` : ""}</td></tr>`).join("");
       const ergebnisBox = pr.entwurf ? `<p class="notice">Diese Prüfung ist noch offen – in Prüfung bei ${esc(pr.pruefer)} seit ${esc(fmtZeit(pr.begonnen_am))}. Was hier steht, ist der aktuelle Stand des Entwurfs.</p>`
-        : `<section class="section"><h2>Ergebnis</h2><dl class="mat-daten">
+        : `<div class="mat-spalten"><section class="section"><h2>Ergebnis</h2><dl class="mat-daten">
           <dt>Ergebnis</dt><dd>${ergebnisMarke(pr.ergebnis)}</dd>
           <dt>Prüftag</dt><dd>${esc(fmtTag(pr.datum))}</dd>
           ${pr.naechste ? `<dt>Nächste Prüfung</dt><dd><strong>${esc(fmtTag(pr.naechste))}</strong></dd>` : ""}
@@ -1905,12 +2034,47 @@
           ${pr.bemerkung ? `<dt>Bemerkung</dt><dd class="mat-text">${esc(pr.bemerkung)}</dd>` : ""}
           <dt>${pr.art === "aussonderung" ? "Ausgeführt von" : "Prüfer"}</dt><dd>${esc(pr.pruefer || "–")}${pr.urkunde ? ` · Urkundennummer ${esc(pr.urkunde)}` : ""}</dd>
           ${pr.basis_id ? `<dt>Grundlage</dt><dd><a href="/material/pruefung/${pr.basis_id}">Prüfung vom Tag der Aussonderung</a></dd>` : ""}
-          <dt>Abgeschlossen</dt><dd>${esc(fmtZeit(pr.abgeschlossen_am))}</dd></dl>
-          <p class="help">Unterschrift, PDF-Protokoll mit Prüfsumme und Festschreiben folgen mit Lieferung 3.</p></section>`;
+          <dt>Abgeschlossen</dt><dd>${esc(fmtZeit(pr.abgeschlossen_am))}</dd></dl></section>${protokollHtml()}</div>`;
       return `${ergebnisBox}
         ${pr.punkte.length ? `<section class="section"><h2>Befunde</h2><table class="list mat-tabelle mat-befunde"><thead><tr><th>Prüfpunkt</th><th>Befund</th><th>Wert</th><th>Bemerkung</th><th>Foto</th></tr></thead><tbody>${zeilen}</tbody></table></section>` : ""}
         ${pr.art !== "aussonderung" ? anhaengeHtml() : ""}
         ${pr.dokumente.length ? `<section class="section"><h2>Herstellerdokumente am Prüftag</h2>${dokListe(pr.dokumente, false)}</section>` : ""}`;
+    }
+
+    /* Mit dem Ergebnis „aussondern“ entsteht zusätzlich eine Aussonderung mit eigenem Protokoll (A-…). Die
+       Prüfung kennt sie nicht – der Lebenslauf schon: Dort verweist sie mit basis_id auf diese Prüfung. */
+    let aussonderung = null;
+    async function aussonderungLaden() {
+      aussonderung = null;
+      if (pr.entwurf || pr.ergebnis !== "aussondern" || pr.art === "aussonderung") return;
+      try {
+        const liste = (await api(`${API}/artikel/${pr.item_id}`)).artikel.pruefungen || [];
+        aussonderung = liste.find((x) => x.art === "aussonderung" && x.basis_id === pr.id) || null;
+      } catch (e) { /* dann ohne Verweis */ }
+    }
+    function aussonderungHtml() {
+      const a = aussonderung;
+      if (!a) return "";
+      return `<dt>Aussonderung</dt><dd><a href="/material/pruefung/${a.id}">${a.protokoll ? `Protokoll ${esc(a.protokoll.id)}` : "Aussonderung ansehen"}</a>
+        ${a.protokoll ? ` · <a class="mat-pdf" href="${esc(a.protokoll.url)}" target="_blank" rel="noopener" title="Aussonderungsprotokoll ${esc(a.protokoll.id)} öffnen">PDF</a>` : ""}</dd>`;
+    }
+
+    /* Das festgeschriebene Protokoll: ID, PDF, wann und mit welcher Anmeldung, Prüfsumme, Unterschrift. */
+    function protokollHtml() {
+      const p = pr.protokoll;
+      const nein = darfBerichtigen() && !pr.berichtigbar.ok && !pr.berichtigt_durch
+        ? `<p class="small muted">Berichtigen geht nicht: ${esc(pr.berichtigbar.grund)}</p>` : "";
+      if (!p) return `<section class="section mat-protokoll"><h2>Protokoll</h2><p class="muted">Vor Einführung des Festschreibens abgeschlossen – ohne Protokoll.</p>${nein}</section>`;
+      return `<section class="section mat-protokoll"><h2>Protokoll</h2>
+        <div class="mat-protokoll-kopf"><span class="mat-protokoll-id mat-hash">${esc(p.id)}</span>
+          <a class="btn secondary small" href="${esc(p.url)}" target="_blank" rel="noopener">Protokoll (PDF)</a></div>
+        <dl class="mat-daten">
+          <dt>Festgeschrieben</dt><dd>${esc(fmtZeit(p.festgeschrieben))}${p.anmeldung ? ` von ${esc(p.anmeldung)}` : ""}</dd>
+          <dt>Prüfsumme</dt><dd><span class="small muted">SHA-256 (erste ${esc(p.bytes)} Bytes)</span><br>${summeKnopf(p.sha256)}</dd>
+          ${pr.unterschrift ? `<dt>Unterschrift</dt><dd><img class="mat-us-bild" src="${esc(pr.unterschrift)}" alt="Unterschrift von ${esc(pr.pruefer || "")}"></dd>` : ""}
+          ${aussonderungHtml()}
+        </dl>
+        <p class="help">Die Prüfsumme steht im Fuß jeder Seite des PDFs. Ob eine Datei unverändert ist, zeigt <a href="/material/pruefen">Protokoll prüfen</a>.</p>${nein}</section>`;
     }
 
     function bearbeitenHtml() {
@@ -1918,13 +2082,15 @@
         ${lebensdauerHinweis(pr.lebensdauer)}
         ${punkteHtml()}
         <section class="section"><h2>Zur Prüfung</h2>
-          ${pr.arten && pr.arten.length > 1 ? `<label for="pr-art">Art der Prüfung</label><select id="pr-art">${pr.arten.map((x) => `<option value="${x}" ${x === pr.art ? "selected" : ""}>${esc(PRUEFART[x] || x)}</option>`).join("")}</select>` : ""}
+          ${pr.berichtigt ? `<label for="pr-art">Art der Prüfung</label><select id="pr-art" disabled><option>${esc(PRUEFART[pr.art] || pr.art)}</option></select>
+            <p class="help">Bei einer Berichtigung steht die Art fest – wie im Original.</p>`
+            : pr.arten && pr.arten.length > 1 ? `<label for="pr-art">Art der Prüfung</label><select id="pr-art">${pr.arten.map((x) => `<option value="${x}" ${x === pr.art ? "selected" : ""}>${esc(PRUEFART[x] || x)}</option>`).join("")}</select>` : ""}
           <label for="pr-bem">Bemerkung</label>
           <p class="help" id="pr-bem-hilfe">Mängel, die du während der Prüfung festgestellt und durch eine eigene Maßnahme gleich behoben hast, sind hier zu dokumentieren – jeweils mit der Maßnahme. Was sich nicht während der Prüfung beheben ließ, gehört als Mangel an den Prüfpunkt.</p>
           <textarea id="pr-bem" rows="3" maxlength="4000" aria-describedby="pr-bem-hilfe" placeholder="z. B. Schnapper schwergängig – gereinigt und geschmiert">${esc(pr.bemerkung || "")}</textarea></section>
         ${anhaengeHtml()}
         <p class="help">Alles ist gespeichert – du kannst die Prüfung jederzeit unterbrechen und später fortsetzen.
-          <button type="button" class="lnk" data-act="verwerfen">Entwurf verwerfen</button></p>
+          <button type="button" class="lnk" data-act="verwerfen">${pr.berichtigt ? "Berichtigung verwerfen" : "Entwurf verwerfen"}</button></p>
         ${abschlussHtml()}`;
     }
 
@@ -1957,7 +2123,11 @@
       const karte = $(`#pp-${neu.id}`);
       const notiz = $(".mat-pnotiz", karte);
       if (notiz && notizOffen && notiz.hidden) { notiz.hidden = false; const plus = $('[data-act="pnotiz-auf"]', karte); if (plus) plus.remove(); }
-      if (fokusSel) {
+      if (fokusSel && !$(fokusSel, karte)) {
+        // Den Knopf gibt es nicht mehr (z. B. „Entfernen“ nach dem Entfernen): Fokus auf den ersten der Karte.
+        const ersatz = $("button[data-act]", karte);
+        if (ersatz) ersatz.focus({ preventScroll: true });
+      } else if (fokusSel) {
         const ziel = $(fokusSel, karte);
         if (ziel) {
           if (tippen) { ziel.value = tippen.wert; }
@@ -2011,12 +2181,96 @@
       });
     }
 
+    const HINWEIS_FEST = "Zum Festschreiben brauchst du deine Unterschrift. Sie wird in deinem Profil gespeichert und als Kopie in jedes Protokoll übernommen, das du festschreibst – ändern kannst du sie dort jederzeit.";
+    const HINWEIS_WEG = "Deine Unterschrift ist nicht mehr in deinem Profil hinterlegt – vielleicht in einem anderen Fenster entfernt. Zum Festschreiben unterschreibe bitte neu; sie wird wieder im Profil gespeichert und als Kopie ins Protokoll übernommen.";
+    const usZeile = (bild) => (!DARF.unterschrift ? '<span class="small muted">fehlt – „Festschreiben“ fragt danach</span>'
+      : `${bild ? `<img class="mat-us-bild" src="${esc(bild)}" alt="Deine Unterschrift">` : ""}<span class="small muted">aus deinem Profil – sie kommt als Kopie ins Protokoll</span>`);
+
+    /* Vor dem Festschreiben: alles auf einen Blick, mit der Unterschrift, die ins Protokoll kommt. Der Knopf im
+       Dialog schreibt fest; scheitert es, bleibt der Dialog offen und der Toast sagt warum. Fehlt die Unterschrift
+       inzwischen (im Profil entfernt), fragt der Pad gleich danach – vor dem Dialog oder nach dem 403. */
+    async function festschreibDialog(daten) {
+      let bild = null;
+      try { bild = await eigenesBild(); } catch (e) { /* dann ohne Bild */ }
+      if (!DARF.unterschrift) {
+        if (!(await eigeneUnterschrift(HINWEIS_WEG))) { abschlussAktualisieren(); return; }
+        bild = eigenesBildMerk;
+        abschlussAktualisieren();
+      }
+      const a = pr.artikel;
+      const maengel = offeneHinweise().maengel.length;
+      dialog(`<h2>Prüfung festschreiben</h2>
+        <dl class="mat-daten mat-fs-daten">
+          <dt>Artikel</dt><dd><strong>${esc(a.inventory_no)}</strong> · ${esc(pr.produkt.name)}</dd>
+          <dt>Prüfung</dt><dd>${esc(PRUEFART[pr.art] || pr.art)} am ${esc(fmtTag(pr.prueftag || isoHeute()))}</dd>
+          <dt>Ergebnis</dt><dd>${ergebnisMarke(daten.ergebnis)}${maengel ? ` <span class="small">mit ${plural(maengel, "Mangel", "Mängeln")}</span>` : ""}</dd>
+          ${daten.ergebnis === "einsatzbereit" ? `<dt>Nächste Prüfung</dt><dd><strong>${esc(fmtTag(daten.next_due_on || pr.vorschlag_naechste))}</strong></dd>` : ""}
+          ${daten.grund ? `<dt>Grund</dt><dd>${esc(daten.grund)}</dd>` : ""}
+          <dt>Prüfer</dt><dd>${esc(pr.pruefer || "–")}${pr.urkunde ? ` · Urkundennummer ${esc(pr.urkunde)}` : ""}</dd>
+          <dt>Unterschrift</dt><dd id="fs-us">${usZeile(bild)}</dd>
+        </dl>
+        ${daten.ergebnis === "aussondern" ? `<p class="mat-fs-warnung"><strong>„aussondern“ ist endgültig.</strong> Der Artikel wandert nach „Ausgesondert“ und zählt nicht mehr als Bestand; dazu entsteht ein Aussonderungsprotokoll.</p>` : ""}
+        ${pr.berichtigt ? `<p>Diese Berichtigung ersetzt ${pr.berichtigt.protokoll_id ? `Protokoll ${esc(pr.berichtigt.protokoll_id)}` : "die ursprüngliche Prüfung"}; das Original bleibt unverändert erhalten.</p>` : ""}
+        <p class="help">Danach ist die Prüfung unveränderlich; eine Korrektur geht nur als Berichtigung. Das Protokoll entsteht mit Prüfsumme.</p>
+        <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn mat-fest" id="fs-ok" type="button">Festschreiben</button></div>`,
+      (dlg, body) => {
+        const knopf = $("#fs-ok", body);
+        fokus(knopf);
+        let erneut = false;          // nach einem 403 wegen fehlender Unterschrift genau einmal von selbst weiter
+        async function festschreiben() {
+          if (!DARF.unterschrift) {
+            if (!(await eigeneUnterschrift(HINWEIS_WEG))) return;          // abgebrochen: der Dialog bleibt offen
+            $("#fs-us", body).innerHTML = usZeile(eigenesBildMerk);
+            abschlussAktualisieren();
+          }
+          knopf.disabled = true;
+          knopf.textContent = "Wird festgeschrieben …";
+          try {
+            pr = (await api(`${API}/pruefungen/${pr.id}/festschreiben`, { method: "POST", body: daten })).pruefung;
+            await aussonderungLaden();
+            dlg.close();
+            toast((pr.protokoll ? `Festgeschrieben – Protokoll ${pr.protokoll.id}` : "Festgeschrieben")
+              + (aussonderung && aussonderung.protokoll ? `, Aussonderungsprotokoll ${aussonderung.protokoll.id}` : ""));
+            window.scrollTo(0, 0);
+            zeichnen();
+          } catch (e) {
+            unterschriftWeg(e);
+            knopf.disabled = false;
+            knopf.textContent = "Festschreiben";
+            if (!DARF.unterschrift) {
+              $("#fs-us", body).innerHTML = usZeile(null);
+              abschlussAktualisieren();
+              if (!erneut) { erneut = true; await festschreiben(); return; }
+            }
+            toast(e.message, true);
+          }
+        }
+        knopf.onclick = festschreiben;
+      });
+    }
+
     aktionen = {
       pwert: (b) => punktSetzen(+b.dataset.rid, { wert: b.dataset.wert }),
-      pbefund: (b) => {
+      punterschrift: async (b) => {
+        const x = punkt(+b.dataset.rid);
+        const bild = await MatUnterschrift.zeichnen({ titel: x.text, bestehend: x.unterschrift,
+          hinweis: "Hier unterschreibt, wen der Prüfpunkt nennt – mit Finger, Stift oder Maus. Die Unterschrift kommt mit der Prüfung ins Protokoll.",
+          speichern: async (bild) => { punktErsetzen((await merken(api(`${API}/pruefungen/${pr.id}/punkte/${x.id}`, { method: "PUT", body: { unterschrift: bild } }))).punkt); } });
+        // Die Karte ist neu gezeichnet, der Knopf von vorher weg: der Fokus geht auf „Neu unterschreiben“.
+        const neu = bild && $(`#pp-${x.id} [data-act="punterschrift"]`);
+        if (neu) neu.focus({ preventScroll: true });
+      },
+      "punterschrift-weg": async (b) => {
+        if (!(await confirm("Diese Unterschrift entfernen?", "Entfernen"))) return;
+        punktSetzen(+b.dataset.rid, { unterschrift: null });
+      },
+      pbefund: async (b) => {
         const x = punkt(+b.dataset.rid);
         // Noch einmal auf „n. z.“ tippen nimmt es zurück: wieder der Sollwert.
         const befund = b.dataset.befund === "nicht_zutreffend" && x.befund === "nicht_zutreffend" ? "ok" : b.dataset.befund;
+        // „n. z.“ nimmt einem Unterschriftsfeld die Unterschrift – wie „Entfernen“ erst nachfragen.
+        if (befund === "nicht_zutreffend" && x.art === "signature" && x.unterschrift
+          && !(await confirm(`„${x.text}“ als nicht zutreffend markieren? Die Unterschrift darin wird dabei entfernt.`, "Unterschrift entfernen"))) return;
         punktSetzen(x.id, { befund });
       },
       "pnotiz-auf": (b) => { const k = $(`#pp-${b.dataset.rid}`); const ta = $(".mat-pnotiz", k); ta.hidden = false; b.remove(); ta.focus(); },
@@ -2056,27 +2310,68 @@
         } catch (e) { toast(e.message, true); }
       },
       ergebnis: (b) => { if (b.disabled) return; ergebnis = ergebnis === b.dataset.e ? null : b.dataset.e; abschlussAktualisieren(); if (ergebnis && ergebnis !== "einsatzbereit") fokus($("#pr-grund")); },
-      abschliessen: async (b) => {
+      festschreiben: async (b) => {
         if (!ergebnis) return;
-        if (ergebnis === "aussondern" && !(await confirm("Den Artikel endgültig aussondern? Er wandert nach „Ausgesondert“ und zählt nicht mehr als Bestand.", "Aussondern"))) return;
+        // Was der Server sicher ablehnt, gleich hier sagen – bevor nach der Unterschrift gefragt wird.
+        const h = offeneHinweise();
+        const grund = ergebnis === "einsatzbereit" ? "" : $("#pr-grund").value.trim();
+        if (h.offen.length) { toast("Noch ohne Befund: " + h.offen.slice(0, 5).map((x) => x.text).join("; "), true); return; }
+        if (h.ohneFoto.length) { toast("Jeder Mangel braucht ein Foto – es fehlt bei: " + h.ohneFoto.slice(0, 5).map((x) => x.text).join("; "), true); return; }
+        if (ergebnis !== "einsatzbereit" && !h.maengel.length && !grund) { toast(`Ohne Mangel braucht „${ERGEBNIS[ergebnis]}“ einen Grund.`, true); fokus($("#pr-grund")); return; }
         b.disabled = true;
-        await laufend.catch(() => {});
-        const body = { ergebnis, grund: ergebnis === "einsatzbereit" ? "" : $("#pr-grund").value, bemerkung: $("#pr-bem").value };
-        if (ergebnis === "einsatzbereit") body.next_due_on = $("#pr-due").value || null;
         try {
-          pr = (await api(`${API}/pruefungen/${pr.id}/abschliessen`, { method: "POST", body })).pruefung;
-          toast("Prüfung abgeschlossen");
-          window.scrollTo(0, 0);
-          zeichnen();
-        } catch (e) { toast(e.message, true); b.disabled = false; }
+          if (!(await eigeneUnterschrift(HINWEIS_FEST))) return;
+          abschlussAktualisieren();
+          await laufend.catch(() => {});
+          const daten = { ergebnis, grund, bemerkung: $("#pr-bem").value };
+          if (ergebnis === "einsatzbereit") daten.next_due_on = $("#pr-due").value || null;
+          await festschreibDialog(daten);
+        } finally { if (b.isConnected) b.disabled = !ergebnis; }
       },
+      berichtigen: () => {
+        dialog(`<h2>Prüfung berichtigen</h2>
+          <p>Die Berichtigung ist ein neuer Entwurf mit allen Befunden, Fotos und Anhängen dieser Prüfung und demselben Prüftag (${esc(fmtTag(pr.datum))}).
+            Darin änderst du, was falsch war, und schreibst ihn wie jede Prüfung fest – erst dann gilt er am Artikel.</p>
+          <p class="help">Das Original bleibt unverändert${pr.protokoll ? ` mit Protokoll ${esc(pr.protokoll.id)}` : ""} erhalten und zeigt danach „berichtigt durch …“.</p>
+          <label for="bg-grund">Grund der Berichtigung</label><input type="text" id="bg-grund" maxlength="300" placeholder="z. B. Messwert falsch übertragen">
+          <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="bg-ok" type="button">Berichtigung beginnen</button></div>`,
+        (dlg, body) => {
+          const feld = $("#bg-grund", body);
+          fokus(feld);
+          feld.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("#bg-ok", body).click(); } });
+          $("#bg-ok", body).onclick = async (ev) => {
+            const grund = feld.value.trim();
+            if (!grund) { toast("Bitte den Grund der Berichtigung angeben.", true); feld.focus(); return; }
+            const knopf = ev.currentTarget;
+            knopf.disabled = true;
+            try { const r = await api(`${API}/pruefungen/${pr.id}/berichtigen`, { method: "POST", body: { grund } }); location.href = `/material/pruefung/${r.pruefung.id}`; }
+            catch (e) {
+              if (e.status === 409) {
+                // Inzwischen nicht mehr berichtigbar (etwa anderswo schon begonnen): neu laden – dann steht oben,
+                // was los ist, mit dem Weg zum Entwurf, und der Knopf sagt, warum er gesperrt ist.
+                dlg.close();
+                try { pr = (await api(`${API}/pruefungen/${pr.id}`)).pruefung; zeichnen(); } catch (err) { /* bleibt so */ }
+                toast(e.message, true);
+                return;
+              }
+              toast(e.message, true); knopf.disabled = false;
+            }
+          };
+        });
+      },
+      summe: summeKopieren,
       verwerfen: async () => {
-        if (!(await confirm("Den Entwurf verwerfen? Befunde, Fotos und Anhänge dieser Prüfung gehen verloren, der Artikel ist wieder frei.", "Verwerfen"))) return;
-        try { await api(`${API}/pruefungen/${pr.id}`, { method: "DELETE" }); location.href = `/material/artikel/${pr.item_id}`; }
+        const b = pr.berichtigt;
+        const frage = b ? `Die Berichtigung verwerfen? Was du darin geändert hast, geht verloren. Das Original${b.protokoll_id ? ` (Protokoll ${b.protokoll_id})` : ""} bleibt unverändert gültig.`
+          : "Den Entwurf verwerfen? Befunde, Fotos und Anhänge dieser Prüfung gehen verloren, der Artikel ist wieder frei.";
+        if (!(await confirm(frage, "Verwerfen"))) return;
+        // Eine verworfene Berichtigung führt zurück zum Original, das weiter gilt.
+        try { await api(`${API}/pruefungen/${pr.id}`, { method: "DELETE" }); location.href = b ? `/material/pruefung/${b.id}` : `/material/artikel/${pr.item_id}`; }
         catch (e) { toast(e.message, true); }
       },
       freigeben: () => reservierungFreigeben(pr.id, pr.pruefer, async () => { location.href = `/material/artikel/${pr.item_id}`; }),
     };
+    await aussonderungLaden();
     zeichnen();
   }
 
@@ -2141,12 +2436,16 @@
       inhalt.innerHTML = `<div class="mat-pfad"><a href="/material/pruefungen">Prüfungen</a> / Prüfdurchgang</div>
         <div class="page-head"><h1>${esc(d.titel)} ${d.offen ? '<span class="badge">offen</span>' : `<span class="badge grey">${d.abgebrochen ? "abgebrochen" : "abgeschlossen"}</span>`}</h1>
           <div class="btn-row">${d.offen && darf ? `<button class="btn secondary" data-act="abbrechen">Durchgang abbrechen</button>
-            <button class="btn" data-act="schliessen" ${d.abschliessbar ? "" : "disabled"}>Durchgang abschließen</button>` : ""}</div></div>
+            <button class="btn" data-act="schliessen" ${d.abschliessbar ? "" : "disabled"}>Durchgang abschließen</button>` : ""}
+            ${!d.offen && d.protokoll ? `<a class="btn secondary" href="${esc(d.protokoll.url)}" target="_blank" rel="noopener">Sammelprotokoll (PDF)</a>` : ""}</div></div>
         <p>Ordner <a href="/material/ordner/${d.folder_id}">${esc(d.ordner)}</a> · eröffnet ${esc(fmtTag(d.eroeffnet_am))} von ${esc(d.eroeffnet_von || "–")}
           ${d.offen ? "" : ` · ${d.abgebrochen ? "abgebrochen" : "abgeschlossen"} ${esc(fmtTag(d.geschlossen_am))} von ${esc(d.geschlossen_von || "–")}`}</p>
+        ${d.protokoll ? `<p class="mat-protokoll-zeile">Sammelprotokoll <strong class="mat-hash">${esc(d.protokoll.id)}</strong> · festgeschrieben ${esc(fmtZeit(d.protokoll.festgeschrieben))}
+          · SHA-256 (erste ${esc(d.protokoll.bytes)} Bytes) ${summeKnopf(d.protokoll.sha256)} · <a href="/material/pruefen">Protokoll prüfen</a></p>`
+          : d.offen ? "" : '<p class="small muted">Vor Einführung des Festschreibens geschlossen – ohne Sammelprotokoll.</p>'}
         <div class="mat-kacheln mat-rundenzahlen">${zustaende.map(([k, t]) => `<div class="mat-kachel z-${k || "gesamt"}"><strong>${z[k || "gesamt"]}</strong><span>${k ? t : "Artikel"}</span></div>`).join("")}</div>
         <p>${fortschritt(z)}</p>
-        ${d.offen ? `<p class="help">Jeder öffnet seinen Artikel mit „Prüfen“ und reserviert ihn damit – die anderen sehen „in Prüfung bei …“. Abschließen geht, sobald jeder Artikel geprüft oder mit Grund ausgenommen ist. Das Sammelprotokoll mit allen Prüfern folgt mit Lieferung 3.</p>` : ""}
+        ${d.offen ? `<p class="help">Jeder öffnet seinen Artikel mit „Prüfen“ und reserviert ihn damit – die anderen sehen „in Prüfung bei …“. Abschließen geht, sobald jeder Artikel geprüft oder mit Grund ausgenommen ist. Beim Abschließen entsteht das Sammelprotokoll mit allen Prüfern.</p>` : ""}
         <div class="c-tabs mat-filter">${zustaende.map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}${f ? ` (${z[f]})` : ""}</button>`).join("")}</div>
         ${liste.length ? `<table class="list mat-tabelle mat-runde"><thead><tr>${sortKopf("Inventar-Nr.", "inventar", s)}${sortKopf("Hersteller", "hersteller", s)}${sortKopf("Produkt", "produkt", s)}${sortKopf("Ablage", "ablage", s)}${sortKopf("Stand", "stand", s)}${sortKopf("Status", "status", s)}<th></th></tr></thead><tbody>${liste.map(zeile).join("")}</tbody></table>` : leer("Keine Artikel in dieser Auswahl.")}
         ${d.pruefer.length ? `<section class="section"><h2>Prüfer in diesem Durchgang</h2><ul>${d.pruefer.map((x) => `<li>${esc(x.name)}${x.urkunde ? ` · Urkundennummer ${esc(x.urkunde)}` : ""} – ${plural(x.anzahl, "Prüfung", "Prüfungen")}</li>`).join("")}</ul></section>` : ""}`;
@@ -2155,6 +2454,7 @@
     aktionen = {
       filter: (b) => { filter = b.dataset.f; zeichnen(); },
       sortieren: (b) => { sort = sortWeiter(sort, b.dataset.feld); zeichnen(); },
+      summe: summeKopieren,
       freigeben: (b) => reservierungFreigeben(+b.dataset.id, b.dataset.wer, neu),
       einbeziehen: async (b) => {
         try { await api(`${API}/durchgaenge/${d.id}/einbeziehen`, { method: "POST", body: { item_id: +b.dataset.id } }); await neu(); }
@@ -2177,16 +2477,19 @@
         });
       },
       schliessen: async (b) => {
-        if (!(await confirm(`Den Durchgang „${d.titel}“ abschließen? Danach lässt sich darin nichts mehr prüfen oder ausnehmen.`, "Abschließen"))) return;
+        if (!(await confirm(`Den Durchgang „${d.titel}“ abschließen? Danach lässt sich darin nichts mehr prüfen oder ausnehmen. Das Sammelprotokoll mit allen Prüfern wird festgeschrieben.`, "Abschließen"))) return;
         b.disabled = true;
-        try { await api(`${API}/durchgaenge/${d.id}/abschliessen`, { method: "POST", body: {} }); toast("Durchgang abgeschlossen"); await neu(); }
-        catch (e) { toast(e.message, true); b.disabled = false; }
+        try {
+          const r = await api(`${API}/durchgaenge/${d.id}/abschliessen`, { method: "POST", body: {} });
+          toast(r.durchgang && r.durchgang.protokoll ? `Durchgang abgeschlossen – Sammelprotokoll ${r.durchgang.protokoll.id}` : "Durchgang abgeschlossen");
+          await neu();
+        } catch (e) { toast(e.message, true); b.disabled = false; }
       },
       abbrechen: async (b) => {
         const z = d.zaehlung;
         const weiter = z.in_pruefung ? " Offene Prüfungen darin laufen als einzelne Prüfungen weiter." : "";
         const text = z.erledigt
-          ? `Den Durchgang „${d.titel}“ abbrechen? Er endet ohne Abschluss: ${z.erledigt} geprüft, ${z.ausgenommen} ausgenommen, ${z.offen + z.in_pruefung} nicht geprüft. Was geprüft ist, bleibt dokumentiert.`
+          ? `Den Durchgang „${d.titel}“ abbrechen? Er endet ohne Abschluss: ${z.erledigt} geprüft, ${z.ausgenommen} ausgenommen, ${z.offen + z.in_pruefung} nicht geprüft. Was geprüft ist, bleibt dokumentiert – das Sammelprotokoll wird mit diesem Stand festgeschrieben.`
           : `Den Durchgang „${d.titel}“ abbrechen? Darin ist noch nichts geprüft – er wird ganz entfernt.`;
         if (!(await confirm(text + weiter, "Durchgang abbrechen"))) return;
         b.disabled = true;
@@ -2194,7 +2497,7 @@
           const r = await api(`${API}/durchgaenge/${d.id}/abbrechen`, { method: "POST", body: {} });
           if (!r.durchgang) { location.href = "/material/pruefungen"; return; }
           filter = "";
-          toast("Durchgang abgebrochen"); await neu();
+          toast(r.durchgang.protokoll ? `Durchgang abgebrochen – Sammelprotokoll ${r.durchgang.protokoll.id}` : "Durchgang abgebrochen"); await neu();
         } catch (e) { toast(e.message, true); b.disabled = false; }
       },
     };
