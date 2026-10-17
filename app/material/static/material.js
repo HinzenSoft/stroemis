@@ -120,7 +120,7 @@
     von: "Kopie von Produkt Nr.", kopie_von: "Kopie von Dokument Nr.", dokumente: "Dokumente übernommen",
     protocol_id: "Protokoll-ID", pdf_sha256: "Prüfsumme", pdf_hashed_bytes: "Bytes", file_sha256: "Prüfsumme der Datei",
     anhaenge_angefuegt: "Anhänge angefügt", login: "Anmeldung", berichtigung: "Berichtigung", berichtigt: "berichtigt",
-    unterschrift: "Unterschrift", nicht_geprueft: "nicht geprüft",
+    unterschrift: "Unterschrift", nicht_geprueft: "nicht geprüft", uid: "Katalogkennung",
     rueckruf: "Rückruf Nr.", serials: "Seriennummern", mail: "Mail an Materialwarte und Prüfer", close_note: "Vermerk",
   };
   const AKTION = { angelegt: "angelegt", geaendert: "geändert", geloescht: "gelöscht", verschoben: "verschoben",
@@ -1340,7 +1340,8 @@
         k.default_interval_months ? `Prüfintervall ${k.default_interval_months} Monate` : "", plural(summe(k.id), "Produkt", "Produkte")].filter(Boolean).join(" · ") : "";
       // Zum aktiven generischen Formular führt bei Katalogpflegern der Knopf „Generisches Formular“, sonst der Verweis in der Angabenzeile.
       inhalt.innerHTML = `<div class="page-head"><h1>Katalog</h1>
-          <div class="btn-row">${DARF.lesen || DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/material/katalog/meldungen">Meldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>` : ""}
+          <div class="btn-row">${DARF.katalog ? '<button class="btn ghost" data-act="kat-export">Katalog exportieren</button><button class="btn ghost" data-act="kat-import">Katalog importieren</button>' : ""}
+            ${DARF.lesen || DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/material/katalog/meldungen">Meldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>` : ""}
             ${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu">+ Kategorie</button><button class="btn" data-act="produkt-neu">+ Produkt</button>' : ""}</div></div>
         ${k ? `<div class="mat-katkopf">
             <div class="mat-pfad"><a href="/material/katalog" data-act="kategorie" data-id="">alle Kategorien</a>${pfad.slice(0, -1).map((x) => ` / <a href="/material/katalog?kategorie=${x.id}" data-act="kategorie" data-id="${x.id}">${esc(x.name)}</a>`).join("")}</div>
@@ -1381,6 +1382,8 @@
       },
       "kat-formular": () => formularFuer({ kategorie_id: kategorie }),
       "produkt-neu": () => produktDialog({ category_id: kategorie }),
+      "kat-export": () => katalogExportDialog(),
+      "kat-import": () => katalogImportDialog(),
       ...dokAktionen(() => katDocs, () => `${API}/kategorien/${kategorie}/dokumente`, () => zeigenIn(katDoks, "#kat-doks")),
     };
     katalogWahl = (id) => {
@@ -1389,6 +1392,137 @@
       zeichnen();
     };
     zeichnen();
+  }
+
+  /* --- Katalogaustausch (Lieferung 4): Export als ZIP, Import mit Probelauf ----------------------------------
+     Export: Der Dialog zeigt erst, was mitkommt und was nicht (DEMO, fehlende Dateien), dann lädt der Knopf das ZIP.
+     Import: Datei wählen → Probelauf (der Server schreibt nichts, auch keine Datei) → Bericht → „Übernehmen“ führt
+     denselben Import echt aus und zeigt dessen Bericht. Gelöscht wird beim Import nie etwas. */
+  const AUSTAUSCH_ARTEN = [["kategorien", "Kategorien"], ["produkte", "Produkte"], ["formulare", "Formulare"],
+                           ["bilder", "Bilder"], ["dokumente", "Dokumente"]];
+  const austauschListe = (titel, zeilen, art) => (zeilen && zeilen.length ? `<div class="mat-austausch-liste ${art || ""}">
+    <strong>${esc(titel)}</strong><ul>${zeilen.map((z) => `<li>${esc(z)}</li>`).join("")}</ul></div>` : "");
+
+  async function katalogExportDialog() {
+    let v;
+    try { v = (await api(`${API}/katalog/export/vorschau`)).export; } catch (e) { toast(e.message, true); return; }
+    const e = v.enthalten, a = v.ausgelassen;
+    const zeile = (t, n, raus) => `<tr><th scope="row">${t}</th><td>${n}</td><td>${raus === null ? "–" : raus}</td></tr>`;
+    dialog(`<h2>Katalog exportieren</h2>
+      <p>Kategorien, Produkte mit Bild und Dokumenten und die Prüfformulare als ZIP – zum Import in einer anderen Instanz,
+        etwa von dev in die Produktion. Bestand, Artikel und Prüfungen kommen nie mit, DEMO-Einträge auch nicht.</p>
+      <table class="mat-austausch"><thead><tr><th></th><th>im Export</th><th>ausgelassen (DEMO)</th></tr></thead><tbody>
+        ${zeile("Kategorien", e.kategorien, a.kategorien)}${zeile("Produkte", e.produkte, a.produkte)}
+        ${zeile("davon mit Bild", e.bilder, null)}${zeile("Formulare", e.formulare, a.formulare)}${zeile("Dokumente", e.dokumente, a.dokumente)}
+      </tbody></table>
+      ${a.ohne_kennzeichen ? `<p class="help">${plural(a.ohne_kennzeichen, "Eintrag", "Einträge")} ohne eigenes DEMO-Kennzeichen fallen mit heraus: Sie stehen in einer DEMO-Kategorie bzw. gehören zu einem DEMO-Ziel.</p>` : ""}
+      ${a.namen.length ? `<details class="mat-auf"><summary>DEMO-Einträge (oberste Ebene)</summary><ul class="mat-austausch-aenderungen">${a.namen.map((n) => `<li>${esc(n)}</li>`).join("")}</ul></details>` : ""}
+      ${austauschListe("Nicht im Export, weil die Datei hier fehlt", v.fehlende_dateien, "warnung")}
+      ${v.ohne_punkte ? `<p class="help">${plural(v.ohne_punkte, "Formularentwurf", "Formularentwürfe")} ohne Prüfpunkte (und ohne aktives Formular) bleibt draußen.</p>` : ""}
+      ${v.groesse ? `<p class="help">Dateien zusammen etwa ${esc(groesse(v.groesse))}.${e.bilder ? " Die Produktbilder gehen als Original mit – samt ihren Metadaten." : ""}</p>` : ""}
+      ${v.groesse > v.grenze ? `<p class="error">Der Export wäre größer als ${esc(groesse(v.grenze))} – so groß wird er nicht gebaut.</p>` : ""}
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
+        ${v.groesse > v.grenze ? "" : `<a class="btn" id="ke-los" href="${API}/katalog/export" download>Herunterladen</a>`}</div>`,
+    (dlg, body) => {
+      // Der Download läuft am Dialog vorbei; geschlossen wird, sobald der Browser die Anfrage abgeschickt hat.
+      const los = $("#ke-los", body);
+      if (los) los.addEventListener("click", () => setTimeout(() => { if (dlg.open) dlg.close(); }, 400));
+    });
+  }
+
+  function importBerichtHtml(b) {
+    const arten = b.version === 2 ? AUSTAUSCH_ARTEN : AUSTAUSCH_ARTEN.slice(0, 3);
+    const zeile = ([k, t]) => {
+      const z = b[k] || {};
+      const geaendert = k === "formulare" ? "–" : (z.geaendert || 0) + (z.neue_version || 0);
+      return `<tr><th scope="row">${t}</th><td>${z.neu || 0}</td><td>${geaendert}</td><td>${z.unveraendert || 0}</td></tr>`;
+    };
+    const stand = b.gespeichert ? '<p class="mat-austausch-stand ok">Übernommen.</p>'
+      : b.fehler.length ? '<p class="mat-austausch-stand bad">Nicht übernommen – erst die Fehler beheben.</p>'
+        : b.trocken ? '<p class="mat-austausch-stand">Probelauf – noch nichts gespeichert.</p>'
+          : '<p class="mat-austausch-stand bad">Nicht gespeichert.</p>';
+    const h = b.herkunft || {};
+    const nichts = !b.fehler.length && !b.aenderungen.length && !b.hinweise.length;
+    return `${stand}
+      ${h.quelle || h.erstellt ? `<p class="help">Export von ${esc(h.quelle || "?")}${h.erstellt ? `, erstellt ${esc(fmtZeit(h.erstellt))}` : ""}.</p>` : ""}
+      <table class="mat-austausch"><thead><tr><th></th><th>neu</th><th>geändert</th><th>unverändert</th></tr></thead>
+        <tbody>${arten.map(zeile).join("")}</tbody></table>
+      ${b.version === 2 ? '<p class="help">Eine geänderte Prüfliste wird eine neue Formularversion (zählt als neu); eine neue Dokumentversion zählt als geändert.</p>' : ""}
+      ${austauschListe("Fehler", b.fehler, "fehler")}
+      ${austauschListe("Achtung – betrifft vorhandene Artikel", b.warnungen, "warnung")}
+      ${austauschListe("Hinweis", b.hinweise, "")}
+      ${b.aenderungen.length ? `<details class="mat-auf"${b.aenderungen.length <= 12 ? " open" : ""}><summary>Im Einzelnen (${b.aenderungen.length})</summary>
+        <ul class="mat-austausch-aenderungen">${b.aenderungen.map((z) => `<li>${esc(z)}</li>`).join("")}</ul></details>` : ""}
+      ${nichts && !b.gespeichert ? '<p class="mat-leer">Nichts zu übernehmen – der Katalog hier entspricht schon der Datei.</p>' : ""}`;
+  }
+
+  function katalogImportDialog() {
+    let datei = null;
+    dialog(`<h2>Katalog importieren</h2>
+      <p>Ein Katalog-Export (ZIP) oder eine Katalogdatei (JSON). Zuerst läuft ein Probelauf: Er zeigt, was neu ist und was
+        sich ändert, und speichert nichts. Übernommen wird erst mit „Übernehmen“. Gelöscht wird beim Import nie etwas.</p>
+      <div class="mat-ablage" id="ki-ablage">
+        <p><strong>Datei hierher ziehen</strong> oder <label class="btn secondary small">Datei wählen<input type="file" id="ki-datei" class="mat-datei" accept=".zip,.json,application/zip,application/json"></label></p>
+        <p class="help" id="ki-name">ZIP oder JSON, bis 2 GB.</p>
+      </div>
+      <div id="ki-bericht" class="mat-austausch-bericht" aria-live="polite"></div>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button>
+        <button class="btn" id="ki-ok" type="button" hidden>Übernehmen</button></div>`,
+    (dlg, body) => {
+      const bericht = $("#ki-bericht", body);
+      const ok = $("#ki-ok", body);
+      let laeuft = false;
+      async function senden(trocken) {
+        const fd = new FormData();
+        fd.append("file", datei);
+        fd.append("trocken", trocken ? "1" : "0");
+        return (await api(`${API}/katalog/import`, { method: "POST", body: fd })).bericht;
+      }
+      async function probelauf(f) {
+        if (!f || laeuft) return;
+        if (!/\.(zip|json)$/i.test(f.name)) { toast(`„${f.name}“: bitte ein Katalog-Export (ZIP) oder eine JSON-Datei.`, true); return; }
+        datei = f;
+        laeuft = true;
+        ok.hidden = true;
+        $("#ki-name", body).textContent = `${f.name} · ${groesse(f.size)}`;
+        bericht.innerHTML = '<p class="help">Probelauf läuft …</p>';
+        try {
+          const b = await senden(true);
+          bericht.innerHTML = importBerichtHtml(b);
+          ok.hidden = Boolean(b.fehler.length) || !(b.aenderungen.length || b.hinweise.length);
+        } catch (e) { bericht.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
+        laeuft = false;
+      }
+      $("#ki-datei", body).addEventListener("change", (ev) => { probelauf(ev.target.files[0]); ev.target.value = ""; });
+      const ablage = $("#ki-ablage", body);
+      // Abgelegt wird überall im Dialog – nie soll der Browser die Datei stattdessen selbst öffnen.
+      body.addEventListener("dragover", (ev) => { ev.preventDefault(); ablage.classList.add("ueber"); });
+      body.addEventListener("dragleave", (ev) => { if (!body.contains(ev.relatedTarget)) ablage.classList.remove("ueber"); });
+      body.addEventListener("drop", (ev) => {
+        ev.preventDefault();
+        ablage.classList.remove("ueber");
+        if (ev.dataTransfer && ev.dataTransfer.files.length) probelauf(ev.dataTransfer.files[0]);
+      });
+      ok.onclick = async () => {
+        if (!datei || laeuft) return;
+        laeuft = true;
+        ok.disabled = true;
+        ok.textContent = "Wird übernommen …";
+        try {
+          const b = await senden(false);
+          bericht.innerHTML = importBerichtHtml(b);
+          ok.hidden = true;
+          if (b.gespeichert) {
+            toast("Katalog übernommen");
+            // Leiste und Liste zeigen den neuen Stand, sobald der Bericht gelesen und der Dialog zu ist.
+            dlg.addEventListener("close", () => location.reload(), { once: true });
+          }
+        } catch (e) { toast(e.message, true); }
+        ok.disabled = false;
+        ok.textContent = "Übernehmen";
+        laeuft = false;
+      };
+    });
   }
 
   async function formularFuer(ziel) {
