@@ -30,9 +30,9 @@ def make_app(tmp):
     return app
 
 
-def jpeg():
+def jpeg(breite=320, hoehe=240):
     buf = io.BytesIO()
-    Image.new("RGB", (320, 240), (200, 30, 30)).save(buf, "JPEG")
+    Image.new("RGB", (breite, hoehe), (200, 30, 30)).save(buf, "JPEG")
     buf.seek(0)
     return buf
 
@@ -594,6 +594,17 @@ def test_formulare_und_dokumente():
         assert k["fuehrung"].get(r.json["produkt"]["vorschau"]).status_code == 200
         assert kp.post(f"/api/material/produkte/{ids['gurt']}/bild", data={"file": (io.BytesIO(PDF), "x.pdf")}, headers=H,
                        content_type="multipart/form-data").status_code == 400
+        # Die Vorschau eines Produktbilds zeigt das ganze Produkt, auch hochkant – kein Ausschnitt aus der
+        # Mitte. Ordnerfotos bleiben beim quadratischen Ausschnitt (wie Karte und Alben).
+        r = kp.post(f"/api/material/produkte/{ids['hms']}/bild", data={"file": (jpeg(200, 400), "hoch.jpg")}, headers=H,
+                    content_type="multipart/form-data")
+        assert r.status_code == 200, r.get_json()
+        assert Image.open(io.BytesIO(k["fuehrung"].get(r.json["produkt"]["vorschau"]).data)).size == (128, 256)
+        gid, _ = gliederung(k["wart"])
+        r = k["wart"].post(f"/api/material/ordner/{gid}/foto", data={"file": (jpeg(200, 400), "ordner.jpg")}, headers=H,
+                           content_type="multipart/form-data")
+        assert r.status_code == 200, r.get_json()
+        assert Image.open(io.BytesIO(k["wart"].get(r.json["ordner"]["vorschau"]).data)).size == (256, 256)
     print("Formular- und Dokumenttest bestanden.")
 
 

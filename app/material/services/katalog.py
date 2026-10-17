@@ -347,22 +347,24 @@ def bild_url(datei, art="web"):
     return f"/media/material/{art}/{key + '.jpg' if art != 'orig' else datei}"
 
 
-def foto_ablegen(file_storage):
-    """Ein Foto durch die vorhandene Pipeline (EXIF-Drehung, HEIC, Web- und Vorschaufassung)."""
+def foto_ablegen(file_storage, vorschau_ganz=False):
+    """Ein Foto durch die vorhandene Pipeline (EXIF-Drehung, HEIC, Web- und Vorschaufassung).
+    vorschau_ganz für Produktbilder: Der quadratische Ausschnitt aus der Mitte schnitte einem
+    hochkant fotografierten Produkt oben und unten ein Stück ab."""
     if not file_storage or not file_storage.filename:
         raise Abgelehnt("Es wurde keine Datei mitgeschickt.")
     ext = os.path.splitext(file_storage.filename)[1].lower()
     if ext not in ALLOWED_EXT:
         raise Abgelehnt(f"Dateityp {ext or '(ohne Endung)'} ist kein Foto (JPEG, PNG, WebP, HEIC, TIFF).")
     try:
-        return store_upload(file_storage, medien_dir())["file"]
+        return store_upload(file_storage, medien_dir(), vorschau_ganz=vorschau_ganz)["file"]
     except ValueError as exc:                # BildFehler und die Meldungen von store_upload sind für Nutzer
         raise Abgelehnt(str(exc))
 
 
 def produkt_bild_setzen(pid, file_storage):
     alt = produkt(pid)
-    neu = foto_ablegen(file_storage)
+    neu = foto_ablegen(file_storage, vorschau_ganz=True)
     with db.transaction():
         if not db.execute_zeilen("UPDATE mat_product SET image = ?, updated_at = ? WHERE id = ? AND image = ?",
                                  (neu, db.now(), pid, alt["image"])):

@@ -86,7 +86,8 @@ a.mat-kachel:hover { background: var(--grau-hell); }
 table.list.mat-tabelle { table-layout: auto; }
 table.list.mat-formtabelle { table-layout: fixed; }
 .mat-tabelle td { vertical-align: middle; }
-.mat-mini { width: 32px; height: 32px; object-fit: cover; vertical-align: middle; margin-right: 8px; border: 1px solid var(--linie); }
+.mat-mini { width: 32px; height: 32px; object-fit: contain; vertical-align: middle; margin-right: 8px; border: 1px solid var(--linie);
+  background: var(--weiss); }
 .mat-wahlspalte { width: 34px; }
 table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspalte { padding-left: 4px; padding-right: 4px; }
 .mat-alt td { color: var(--grau); }

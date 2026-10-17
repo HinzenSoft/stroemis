@@ -298,9 +298,11 @@ def _placeholder_poster(path_web, path_thumb):
     ImageOps.fit(img, (THUMB_SIZE, THUMB_SIZE)).save(path_thumb, "JPEG", quality=80)
 
 
-def store_upload(file_storage, media_dir, poster=None):
+def store_upload(file_storage, media_dir, poster=None, vorschau_ganz=False):
     """Speichert Original, erzeugt Web- und Thumb-Variante. Liefert Metadaten oder wirft ValueError.
-    Videos werden unverändert abgelegt; als Vorschau dient das vom Browser mitgeschickte Standbild (poster)."""
+    Videos werden unverändert abgelegt; als Vorschau dient das vom Browser mitgeschickte Standbild (poster).
+    vorschau_ganz: Die Vorschau eines Bildes zeigt alles, auf THUMB_SIZE verkleinert, statt des
+    quadratischen Ausschnitts aus der Mitte – für Produktbilder, bei denen nichts fehlen darf."""
     name = file_storage.filename or "bild"
     ext = os.path.splitext(name)[1].lower()
     if ext not in ALLOWED_EXT and ext not in VIDEO_EXT:
@@ -391,7 +393,11 @@ def store_upload(file_storage, media_dir, poster=None):
             web = img.copy()
             web.thumbnail((WEB_MAX, WEB_MAX))
             web.save(web_path, "JPEG", quality=85, optimize=True)
-            thumb = ImageOps.fit(img, (THUMB_SIZE, THUMB_SIZE), Image.Resampling.LANCZOS)
+            if vorschau_ganz:
+                thumb = img.copy()
+                thumb.thumbnail((THUMB_SIZE, THUMB_SIZE), Image.Resampling.LANCZOS)
+            else:
+                thumb = ImageOps.fit(img, (THUMB_SIZE, THUMB_SIZE), Image.Resampling.LANCZOS)
             thumb.save(thumb_path, "JPEG", quality=82, optimize=True)
     except ValueError:
         _cleanup()
