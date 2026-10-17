@@ -1,9 +1,34 @@
-/* Profil, Abschnitt „Unterschrift“: die eigene Unterschrift für das Modul Material zeichnen, ersetzen oder
-   entfernen. Beim Festschreiben einer Prüfung oder Aussonderung wird eine Kopie ins Protokoll übernommen;
-   eine spätere Änderung wirkt nur auf künftige Protokolle. Wer weder Prüfer noch Materialwart ist (data-setzen="0"),
-   sieht nur eine alte Unterschrift und kann sie entfernen. */
+/* Profil, Abschnitt „Urkundennummer und Unterschrift“ (Modul Material).
+   Urkundennummer: nur mit dem Häkchen „Prüfer“, das die Verwaltung setzt – eintragen, ändern oder leer entfernen; erst
+   mit ihr darf der Prüfer prüfen, ohne sie steht ein Hinweis darüber.
+   Unterschrift: zeichnen, ersetzen oder entfernen. Beim Festschreiben einer Prüfung oder Aussonderung wird eine Kopie
+   ins Protokoll übernommen; eine spätere Änderung wirkt nur auf künftige Protokolle. Wer weder Prüfer noch Materialwart
+   ist (data-setzen="0"), sieht nur eine alte Unterschrift und kann sie entfernen. */
 (function () {
   "use strict";
+  const urkundeForm = document.getElementById("f-urkunde");
+  if (urkundeForm) {
+    const feld = document.getElementById("urkundennummer");
+    const hinweis = document.getElementById("ur-hinweis");
+    const knopf = urkundeForm.querySelector("button[type=submit]");
+    let gespeichert = feld.value.trim();
+    urkundeForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (knopf.disabled) return;
+      const neu = feld.value.trim();
+      if (!neu && gespeichert && !(await S.confirm("Deine Urkundennummer entfernen? Danach kannst du nicht mehr prüfen, bis du wieder eine einträgst. Festgeschriebene Protokolle behalten ihre Nummer.", "Entfernen"))) return;
+      knopf.disabled = true;
+      try {
+        const r = await S.api("/api/material/urkundennummer", { method: "PUT", body: { urkundennummer: feld.value } });
+        feld.value = gespeichert = r.urkundennummer;
+        hinweis.classList.toggle("hidden", r.pruefen);
+        S.toast(r.urkundennummer ? (r.pruefen ? "Urkundennummer gespeichert – du kannst prüfen" : "Urkundennummer gespeichert")
+          : "Urkundennummer entfernt");
+      } catch (err) { S.toast(err.message, true); feld.focus(); }
+      finally { knopf.disabled = false; }
+    });
+  }
+
   const vorschau = document.getElementById("us-vorschau");
   if (!vorschau) return;
   const zeichnenKnopf = document.getElementById("us-zeichnen");

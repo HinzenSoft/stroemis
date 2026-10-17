@@ -4,7 +4,8 @@ Abbildung der Rollen aus dem Konzept auf das Rechtemodell der Plattform (Rechte-
 
   Führungskraft (lesend)    Stufe „Mitglied“ im Modul Material
   Materialwart              Stufe „Verwaltung“ im Modul Material
-  Prüfer (Sachkundiger)     Kennzeichen mat_pruefer – wirkt nur mit hinterlegter Urkundennummer
+  Prüfer (Sachkundiger)     Kennzeichen mat_pruefer (Häkchen „Prüfer“, setzt die Verwaltung) – wirkt erst mit
+                            gültiger Urkundennummer, die der Prüfer selbst im Profil einträgt (urkunde_setzen)
   Produktkatalogpfleger     Kennzeichen mat_katalog (plattformweit)
   Admin                     Verwaltung im Modul Verwaltung: Materialwart und Katalog überall –
                             Prüfer aber nur mit eigenem Kennzeichen und eigener Urkundennummer,
@@ -24,10 +25,15 @@ from flask import g, jsonify, request
 
 from ... import db
 from ...auth import MITGLIED, current_user, is_admin, nutzt, stufe, verwaltet
-from . import Abgelehnt, text, wahr
+from . import Abgelehnt, journal, text, wahr
 
 BERECHTIGUNGEN = ("lesen", "pruefen", "verwalten")
-URKUNDE_FEHLT = "Ohne Urkundennummer keine Prüferrolle."
+URKUNDE_UNGUELTIG = "Eine Urkundennummer braucht Buchstaben oder Ziffern."
+URKUNDE_NUR_PRUEFER = ("Die Urkundennummer trägt nur ein, wer das Häkchen „Prüfer“ hat – das setzt die Verwaltung in der "
+                       "Nutzerverwaltung.")
+# Für ein Konto mit Häkchen, aber ohne Urkundennummer: wo es weitergeht.
+URKUNDE_IM_PROFIL = ("Deine Urkundennummer fehlt noch – trage sie im Profil ein (Profil → Urkundennummer und "
+                     "Unterschrift), dann kannst du prüfen.")
 
 
 def urkunde_gueltig(nummer):
@@ -41,10 +47,34 @@ def urkunde_saeubern(nummer):
     return "".join(c for c in (nummer or "") if unicodedata.category(c) not in ("Cf", "Cc")).strip()
 
 
+def urkunde_lesen(d, feld="urkundennummer"):
+    """Urkundennummer aus einer Anfrage – gesäubert. Leer heißt „keine“; wer etwas eingibt, das ohne unsichtbare
+    Zeichen weder Buchstaben noch Ziffern hat, bekommt eine Meldung statt einer stillschweigend leeren Nummer."""
+    roh = text(d, feld, "Urkundennummer", n=40)
+    nummer = urkunde_saeubern(roh)
+    if roh and not urkunde_gueltig(nummer):
+        raise Abgelehnt(URKUNDE_UNGUELTIG)
+    return nummer
+
+
 def ist_pruefer(user=None):
-    """Sachkundiger mit Urkundennummer – nur das zählt, kein Schulungskatalog, kein Ablaufdatum."""
+    """Sachkundiger mit Urkundennummer – nur das zählt, kein Schulungskatalog, kein Ablaufdatum. Das Häkchen allein
+    (gesetzt von der Verwaltung) genügt nicht: Die Urkundennummer trägt der Prüfer selbst im Profil ein."""
     user = user or current_user()
     return bool(user and user["mat_pruefer"] and urkunde_gueltig(urkunde_saeubern(user["urkundennummer"])))
+
+
+def urkunde_fehlt(user=None):
+    """Häkchen „Prüfer“ gesetzt, aber (noch) keine gültige Urkundennummer – die Oberfläche zeigt dann den Weg ins Profil."""
+    user = user or current_user()
+    return bool(user and user["mat_pruefer"] and not ist_pruefer(user))
+
+
+def darf_unterschreiben(user=None):
+    """Die eigene Unterschrift hinterlegen: wer festschreibt (Prüfer – schon mit dem Häkchen, damit er Urkundennummer
+    und Unterschrift in beliebiger Reihenfolge im Profil eintragen kann) oder aussondert (Materialwart)."""
+    user = user or current_user()
+    return bool(user and darf("lesen", user=user) and (user["mat_pruefer"] or darf("verwalten", user=user)))
 
 
 def ist_katalogpfleger(user=None):
@@ -74,6 +104,8 @@ def darf_alles(user=None):
             "pruefen": darf("pruefen", user=user), "katalog": ist_katalogpfleger(user),
             "uid": user["id"] if user else None,
             "urkundennummer": (user["urkundennummer"] or "") if user else "",
+            # Häkchen „Prüfer“ gesetzt – mit pruefen = False heißt das: Urkundennummer fehlt (Hinweis mit Link ins Profil).
+            "pruefer_haekchen": bool(user and user["mat_pruefer"]),
             "unterschrift": bool(user and user["signature_png"])}
 
 
@@ -137,10 +169,14 @@ def requires_folder(berechtigung, quelle=None):
 
 
 def _meldung(berechtigung):
+    # Wer das Häkchen „Prüfer“ schon hat, erfährt, was ihm fehlt und wo er es nachträgt.
+    um_pruefen = berechtigung == "pruefen" or (isinstance(berechtigung, tuple) and "pruefen" in berechtigung)
+    zusatz = f" {URKUNDE_IM_PROFIL}" if um_pruefen and urkunde_fehlt() else ""
     if berechtigung == ("verwalten", "pruefen") or berechtigung == ("pruefen", "verwalten"):
-        return "Nur für Materialwarte und Prüfer mit Urkundennummer."
+        return "Nur für Materialwarte und Prüfer mit Urkundennummer." + zusatz
     if berechtigung == "pruefen":
-        return "Nur für Prüfer mit hinterlegter Urkundennummer."
+        return ("Nur für Prüfer mit Urkundennummer (Häkchen „Prüfer“ in der Nutzerverwaltung, Urkundennummer im eigenen "
+                "Profil)." + zusatz)
     if berechtigung == "verwalten":
         return "Nur für Materialwarte."
     return "Für dein Konto ist das Modul Material nicht freigeschaltet."
@@ -165,27 +201,61 @@ def rollen_lesen(d, user_row, rechte):
 
     d: JSON der Anfrage; user_row: bisheriger Datensatz (oder {} beim Anlegen); rechte: die schon
     gelesenen Stufen der Matrix (werden hier angepasst). Liefert die zu schreibenden Spalten.
-    Regeln: Prüfer nur mit Urkundennummer; Prüfer und Katalogpfleger haben mindestens Leserecht."""
+    Regeln: Das Häkchen „Prüfer“ geht auch ohne Urkundennummer – die trägt der Prüfer selbst im Profil ein, bis
+    dahin darf er nicht prüfen (ist_pruefer). Prüfer und Katalogpfleger haben mindestens Leserecht.
+
+    „urkundennummer“ nimmt die Schnittstelle weiter an (Skripte, Tests, eine Berichtigung durch die Verwaltung); die
+    Oberfläche der Nutzerverwaltung schickt es nicht mehr. Geprüft wird wie im Profil (urkunde_lesen). Geliefert wird
+    die Nummer nur, wenn sie sich ändert: ausdrücklich angegeben – oder geleert, weil die Verwaltung das Häkchen
+    wegnimmt (eine alte Nummer gälte sonst beim nächsten Häkchen ungefragt wieder, und das Konto könnte sie nirgends
+    mehr entfernen). Sonst bleibt, was der Prüfer im Profil eingetragen hat."""
     basis = user_row or {}
     pruefer = bool(basis.get("mat_pruefer"))
     katalog = bool(basis.get("mat_katalog"))
-    urkunde = basis.get("urkundennummer") or ""
+    urkunde = None
     if "mat_pruefer" in d:
         pruefer = wahr(d, "mat_pruefer", "Prüfer")
     if "mat_katalog" in d:
         katalog = wahr(d, "mat_katalog", "Produktkatalogpfleger")
     if "urkundennummer" in d:
-        urkunde = urkunde_saeubern(text(d, "urkundennummer", "Urkundennummer", n=40))
-    if pruefer and not urkunde_gueltig(urkunde):
-        raise Abgelehnt(URKUNDE_FEHLT)
+        urkunde = urkunde_lesen(d)
+    elif basis.get("mat_pruefer") and not pruefer and (basis.get("urkundennummer") or ""):
+        urkunde = ""
     if (pruefer or katalog) and rechte.get("material", 0) < MITGLIED:
         # Wer das Modul ausdrücklich auf „kein Zugriff“ stellt, soll nicht stillschweigend etwas anderes
         # gespeichert sehen; wer nur das Kennzeichen vergibt, bekommt das Leserecht dazu.
         if isinstance(d.get("rechte"), dict) and "material" in d["rechte"]:
             raise Abgelehnt("Prüfer und Produktkatalogpfleger brauchen im Modul Material mindestens „Mitglied“.")
         rechte["material"] = MITGLIED
-    return {"mat_pruefer": int(pruefer), "mat_katalog": int(katalog), "urkundennummer": urkunde}
+    out = {"mat_pruefer": int(pruefer), "mat_katalog": int(katalog)}
+    if urkunde is not None:
+        out["urkundennummer"] = urkunde
+    return out
 
 
 def material_stufe(user=None):
     return stufe("material", user)
+
+
+# --- Urkundennummer (aus dem eigenen Profil) ---------------------------------------------------------------
+
+def urkunde_setzen(user, d):
+    """Die eigene Urkundennummer im Profil eintragen, ändern oder – leer – entfernen (dann darf er nicht mehr prüfen).
+    Nur mit dem Häkchen „Prüfer“, das die Verwaltung setzt. Jede Änderung steht im Journal am Konto, wie eine
+    Rollenänderung aus der Nutzerverwaltung. Liefert die gespeicherte Nummer."""
+    if not user["mat_pruefer"]:
+        raise Abgelehnt(URKUNDE_NUR_PRUEFER, 403)
+    if not isinstance(d, dict) or "urkundennummer" not in d:
+        raise Abgelehnt("Bitte die Urkundennummer angeben – leer entfernt sie.")
+    nummer = urkunde_lesen(d)
+    with db.transaction(sofort=True):
+        # Frisch gelesen: Nimmt die Verwaltung das Häkchen gerade weg, trägt hier niemand mehr eine Nummer ein.
+        alt = db.query("SELECT mat_pruefer, urkundennummer FROM users WHERE id = ?", (user["id"],), one=True)
+        if not alt or not alt["mat_pruefer"]:
+            raise Abgelehnt(URKUNDE_NUR_PRUEFER, 403)
+        vorher = alt["urkundennummer"] or ""
+        if vorher != nummer:
+            db.execute("UPDATE users SET urkundennummer = ? WHERE id = ?", (nummer, user["id"]))
+            journal.eintragen("user", user["id"], "urkundennummer", {"urkundennummer": vorher},
+                              {"urkundennummer": nummer})
+    return nummer

@@ -153,7 +153,10 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 /* Artikel anlegen */
 .mat-formular { max-width: 720px; }
 .mat-produktwahl { position: relative; }
-.mat-treffer { display: flex; flex-direction: column; border: 1px solid var(--linie); border-top: 0; }
+/* Alle Treffer der Produktsuche (Artikel anlegen, Meldung zuordnen): scrollbar, je 50 nachgeladen (produktTreffer). */
+.mat-treffer { display: flex; flex-direction: column; border: 1px solid var(--linie); border-top: 0;
+  max-height: min(60vh, 480px); overflow-y: auto; overscroll-behavior: contain; }
+.mat-treffer-zeile { flex: 0 0 auto; }
 .mat-treffer:empty { display: none; }
 .mat-treffer-zeile { display: flex; align-items: center; gap: 6px; text-align: left; background: var(--weiss); border: 0;
   border-bottom: 1px solid var(--linie); padding: 8px 10px; font: inherit; cursor: pointer; }

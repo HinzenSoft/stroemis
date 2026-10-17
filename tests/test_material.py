@@ -173,29 +173,33 @@ def test_rollen():
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
         adm = k["adm"]
-        # Ohne Urkundennummer keine Prüferrolle – weder beim Anlegen noch beim Ändern.
+        # Das Häkchen „Prüfer“ geht auch ohne Urkundennummer (die trägt der Prüfer selbst im Profil ein, Lieferung 5) –
+        # beim Anlegen wie beim Ändern; prüfen darf das Konto aber erst mit Nummer.
         r = adm.post("/api/admin/users", json={"email": "ohne@example.org", "password": "passwort1", "mat_pruefer": True})
-        assert r.status_code == 400 and "Urkundennummer" in r.json["error"], r.get_json()
+        assert r.status_code == 201 and r.json["user"]["mat_pruefer"] and not r.json["user"]["urkunde_gueltig"], r.get_json()
+        assert r.json["user"]["rechte"]["material"] == 1
+        assert anmelden(app, "ohne@example.org", "passwort1").get("/api/material/start").json["darf"]["pruefen"] is False
         nutzer_id = [u for u in adm.get("/api/admin/users").json["users"] if u["email"] == "nutzer@example.org"][0]["id"]
-        r = adm.put(f"/api/admin/users/{nutzer_id}", json={"mat_pruefer": True})
-        assert r.status_code == 400 and "Urkundennummer" in r.json["error"]
         r = adm.put(f"/api/admin/users/{nutzer_id}", json={"mat_pruefer": True, "urkundennummer": "   "})
-        assert r.status_code == 400
-        r = adm.put(f"/api/admin/users/{k['pruefer_id']}", json={"urkundennummer": ""})        # Prüfer bleibt → 400
-        assert r.status_code == 400 and "Urkundennummer" in r.json["error"]
+        assert r.status_code == 200 and r.json["user"]["urkundennummer"] == "", r.get_json()
+        # Die Schnittstelle nimmt „urkundennummer“ weiter an (Skripte, Tests) – geprüft wie im Profil.
+        r = adm.put(f"/api/admin/users/{nutzer_id}", json={"urkundennummer": " - "})
+        assert r.status_code == 400 and "Urkundennummer" in r.json["error"], r.get_json()
         # Mit Urkundennummer: Prüfer – und damit mindestens Leserecht im Modul.
         r = adm.put(f"/api/admin/users/{nutzer_id}", json={"mat_pruefer": True, "urkundennummer": "1012-0815"})
         assert r.status_code == 200 and r.json["user"]["rechte"]["material"] == 1 and r.json["user"]["mat_pruefer"], r.get_json()
+        assert r.json["user"]["urkunde_gueltig"]
         # Wer das Modul ausdrücklich abschaltet, während das Kennzeichen bleibt, bekommt eine Meldung.
         r = adm.put(f"/api/admin/users/{nutzer_id}", json={"rechte": {"material": 0}})
         assert r.status_code == 400
         assert adm.put(f"/api/admin/users/{nutzer_id}", json={"mat_pruefer": False, "rechte": {"material": 0}}).status_code == 200
-        # Die Rollenänderungen stehen im Journal des Moduls.
+        # Die Rollenänderungen stehen im Journal des Moduls – mit dem Häkchen geht auch die Urkundennummer (Lieferung 5).
         with app.app_context():
             from app import db
             eintraege = db.query("SELECT * FROM mat_audit WHERE entity = 'user' AND entity_id = ? ORDER BY id", (nutzer_id,))
-        assert [json.loads(e["after_json"]).get("mat_pruefer") for e in eintraege] == [1, 0], eintraege
-        assert json.loads(eintraege[0]["after_json"])["urkundennummer"] == "1012-0815"
+        assert [json.loads(e["after_json"]) for e in eintraege] == [{"mat_pruefer": 1, "recht_material": 1},
+                                                                    {"urkundennummer": "1012-0815"},
+                                                                    {"mat_pruefer": 0, "recht_material": 0, "urkundennummer": ""}], eintraege
 
         # Was jede Rolle in der Oberfläche angeboten bekommt (der Server prüft trotzdem jede Aktion).
         def darf(c):
@@ -206,13 +210,13 @@ def test_rollen():
             assert isinstance(d.pop("uid"), int)          # eigene Kennung: „meine Prüfung“, „in Prüfung bei mir“
             return d
         assert darf(k["fuehrung"]) == {"lesen": True, "verwalten": False, "pruefen": False, "katalog": False,
-                                       "urkundennummer": "", "unterschrift": False}
+                                       "urkundennummer": "", "pruefer_haekchen": False, "unterschrift": False}
         assert darf(k["wart"])["verwalten"] and not darf(k["wart"])["pruefen"]
         assert darf(k["pruefer"])["pruefen"] and not darf(k["pruefer"])["verwalten"]
         assert darf(k["katalog"])["katalog"] and darf(k["katalog"])["lesen"] and not darf(k["katalog"])["verwalten"]
         # Admin: überall Materialwart und Katalogpfleger – Prüfer aber nie von selbst.
         assert darf(adm) == {"lesen": True, "verwalten": True, "pruefen": False, "katalog": True,
-                             "urkundennummer": "", "unterschrift": False}
+                             "urkundennummer": "", "pruefer_haekchen": False, "unterschrift": False}
         assert darf(k["nutzer"]) == 403
         # Seiten: Modul nur mit Recht; der Reiter erscheint nur dann.
         assert k["fuehrung"].get("/material").status_code == 200

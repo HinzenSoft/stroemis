@@ -14,7 +14,7 @@ derselben Transaktion das Prüfprotokoll als PDF mit Unterschrift, Anmeldung, Ze
 (protokoll.py). Danach ist die Prüfung unveränderlich – auch die Datenbank weist jede Änderung ab
 (Trigger, models.py). Eine Korrektur ist eine Berichtigung: ein neuer Entwurf mit allen Befunden, Fotos und
 Anhängen, demselben Prüftag und Verweis auf das Original, das unverändert bleibt. Regeln beim Abschluss:
-  - Jeder Pflichtpunkt hat einen Wert oder ist „nicht zutreffend“; jeder Mangel hat ein Foto.
+  - Jeder Pflichtpunkt hat einen Wert oder ist „nicht zutreffend“; jeder Mangel hat ein Foto und eine Bemerkung.
   - Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus, ebenso ein erreichtes Lebensende
     (nur textil – bei Metall entscheidet allein der Befund).
   - „instandsetzen“ und „aussondern“ ohne Mangel brauchen einen Grund.
@@ -47,16 +47,17 @@ from .interval import plus_monate, wirksam
 BEFUND_TEXT = {"ok": "in Ordnung", "mangel": "Mangel", "nicht_zutreffend": "nicht zutreffend"}
 ABGESCHLOSSEN = ("Die Prüfung ist festgeschrieben und lässt sich nicht mehr ändern – eine Korrektur geht nur als "
                  "Berichtigung.")
-URKUNDE_FEHLT = "Prüfen dürfen nur Prüfer mit hinterlegter Urkundennummer."
-UNTERSCHRIFT_FEHLT = ("Zum Festschreiben fehlt deine Unterschrift – bitte im Profil hinterlegen (Profil → Unterschrift) "
+URKUNDE_FEHLT = ("Prüfen dürfen nur Prüfer mit Urkundennummer – das Häkchen „Prüfer“ setzt die Verwaltung in der "
+                 "Nutzerverwaltung, die Urkundennummer trägt der Prüfer selbst im Profil ein.")
+UNTERSCHRIFT_FEHLT = ("Zum Festschreiben fehlt deine Unterschrift – bitte im Profil hinterlegen "
                       "oder direkt hier unterschreiben.")
 
 
 def pruefer_aus(user):
     """Der Prüfer aus dem angemeldeten Konto – mit Unterschrift und Anmeldung fürs Festschreiben."""
-    from .rechte import urkunde_saeubern
+    from .rechte import ist_pruefer, urkunde_saeubern
     return {"id": user["id"], "name": user["name"] or user["email"],
-            "urkunde": urkunde_saeubern(user["urkundennummer"] or ""),
+            "urkunde": urkunde_saeubern(user["urkundennummer"] or "") if ist_pruefer(user) else "",
             "unterschrift": user.get("signature_png") or None, "login": user["email"]}
 
 
@@ -575,6 +576,10 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
         ohne_foto = [r["checklist_text"] for r in punkte if r["finding"] == "mangel" and not r["photo"]]
         if ohne_foto:
             raise Abgelehnt("Jeder Mangel braucht ein Foto – es fehlt bei: " + "; ".join(ohne_foto[:5]))
+        # Was wo zu sehen ist, sagt das Foto allein nicht – jeder Mangel braucht dazu eine Bemerkung (Wunsch aus dem Pilot).
+        ohne_notiz = [r["checklist_text"] for r in punkte if r["finding"] == "mangel" and not (r["note"] or "").strip()]
+        if ohne_notiz:
+            raise Abgelehnt("Jeder Mangel braucht eine Bemerkung – sie fehlt bei: " + "; ".join(ohne_notiz[:5]))
         maengel = [r for r in punkte if r["finding"] == "mangel"]
         kritisch = [r["checklist_text"] for r in maengel if r["is_critical"]]
         lebensdauer = _lebensdauer(item, produkt, tag)
@@ -757,7 +762,7 @@ def aussondern(iid, d, akteur):
     wird festgeschrieben und braucht daher die Unterschrift dessen, der aussondert."""
     if not akteur.get("unterschrift"):
         raise Abgelehnt("Zum Aussondern fehlt deine Unterschrift – das Aussonderungsprotokoll wird damit "
-                        "festgeschrieben. Bitte im Profil hinterlegen (Profil → Unterschrift).", 403)
+                        "festgeschrieben. Bitte im Profil hinterlegen.", 403)
     art = auswahl(d.get("grund"), AUSSONDERUNGSGRUENDE, "Grund der Aussonderung")
     bemerkung = text(d, "bemerkung", "Bemerkung", 2000, einzeilig=False)
     tag = datum(d.get("datum"), "Datum") or heute().isoformat()

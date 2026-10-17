@@ -22,7 +22,8 @@ from .services import (Abgelehnt, anhang, bestand, durchgang, journal, katalog, 
 from .services import rueckruf
 from .services import status as st
 from .services import ueberblick
-from .services.rechte import _ordner_aus_anfrage, darf, darf_alles, ist_katalogpfleger, katalog_required, requires_folder
+from .services.rechte import (_ordner_aus_anfrage, darf, darf_alles, darf_unterschreiben, ist_katalogpfleger, ist_pruefer,
+                              katalog_required, requires_folder, urkunde_setzen)
 from .services.importer import ZIP_MAX_BYTES as KATALOG_ZIP_MAX_BYTES
 
 seiten = Blueprint("material", __name__, template_folder="templates", static_folder="static",
@@ -833,7 +834,17 @@ def artikel_aussondern(iid):
     return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True), aussonderung=aid)
 
 
-# --- Schnittstelle: eigene Unterschrift und Prüfseite --------------------------------------------------------
+# --- Schnittstelle: eigene Urkundennummer und Unterschrift, Prüfseite --------------------------------------------
+
+@api.put("/urkundennummer")
+@requires_folder("lesen")
+def urkundennummer_setzen():
+    """Die eigene Urkundennummer im Profil eintragen, ändern oder leer entfernen – nur mit dem Häkchen „Prüfer“ aus der
+    Nutzerverwaltung, nur fürs eigene Konto (eine Kennung in der Anfrage gibt es nicht). Erst mit ihr darf er prüfen."""
+    nummer = urkunde_setzen(current_user(), json_body())
+    u = db.query("SELECT * FROM users WHERE id = ?", (current_user()["id"],), one=True)
+    return jsonify(urkundennummer=nummer, pruefen=ist_pruefer(u))
+
 
 @api.get("/unterschrift")
 @requires_folder("lesen")
@@ -842,10 +853,13 @@ def unterschrift_lesen():
 
 
 @api.put("/unterschrift")
-@requires_folder(("pruefen", "verwalten"))
+@requires_folder("lesen")
 def unterschrift_setzen():
     """Die eigene Unterschrift hinterlegen (data:-URL vom Signatur-Pad) – Grundlage jedes Festschreibens. Nur wer
-    festschreibt (Prüfer) oder aussondert (Materialwart), braucht eine; entfernen darf jeder seine eigene."""
+    festschreibt (Prüfer, schon mit dem Häkchen – die Urkundennummer darf noch fehlen) oder aussondert (Materialwart),
+    braucht eine; entfernen darf jeder seine eigene."""
+    if not darf_unterschreiben():
+        return jsonify(error="Nur für Materialwarte und Prüfer."), 403
     return jsonify(unterschrift=unterschrift.setzen(current_user(), json_body().get("bild")))
 
 

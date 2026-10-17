@@ -913,6 +913,32 @@ Rückmeldungen aus dem Pilotbetrieb. Lieferung 4 wurde am 17.10.2026 mit „Lief
   sind grau, die Filter der Produktmeldungen sehen aus wie die übrigen Filterleisten.
 - **Ordnerseite**: „Bestand im ganzen Zweig“ steht unten über dem Journal statt als Erstes unter dem Kopf; Foto,
   Beschreibung und Prüfintervall des Ordners bleiben oben.
+- **Urkundennummer im eigenen Profil**: Die Verwaltung setzt in der Nutzerverwaltung nur noch das Häkchen „Prüfer“ –
+  jetzt auch ohne Nummer; das Eingabefeld im Dialog entfällt, dort steht die Nummer nur noch lesend („noch keine –
+  solange darf er nicht prüfen“). Der Prüfer trägt sie selbst im Profil ein, im Abschnitt „Urkundennummer und
+  Unterschrift“ (`PUT /api/material/urkundennummer`, nur eigenes Konto, nur mit Häkchen; leer entfernt sie). Prüfen
+  darf er weiterhin erst mit gültiger Nummer; bis dahin zeigt das Profil einen Hinweis, Artikel- und Prüfungsseite
+  einen Link dorthin (`/profil#unterschrift`), die Nutzerliste die gelbe Marke „Prüfer – Urkundennummer fehlt“. Jede
+  Änderung steht im Journal am Konto („Urkundennummer geändert“, vorher/nachher). Die Unterschrift kann er schon mit
+  dem Häkchen hinterlegen. Die Schnittstelle der Verwaltung nimmt `urkundennummer` weiter an (Skripte, Tests), geprüft
+  wie im Profil – nur leer statt „ohne Nummer abgewiesen“.
+- **Profilseite neu geordnet**: Profilbild oben, darunter „Stammdaten“ (jetzt mit Überschrift), dann „Urkundennummer
+  und Unterschrift“ (bzw. „Unterschrift“ für Materialwarte), zuletzt „Passwort ändern“ – an der Funktion ändert sich
+  nichts.
+  Nimmt die Verwaltung einem Konto das Häkchen „Prüfer“, verschwindet auch seine Urkundennummer (sie gälte sonst beim
+  nächsten Häkchen ungefragt wieder); aufs Protokoll – etwa einer Aussonderung durch den Materialwart – kommt eine
+  Nummer nur, solange das Konto wirksam Prüfer ist.
+- **Vorschläge im Suchfeld** (Kopfzeile jeder Modulseite, `suche.js`): schon ab zwei Zeichen – auch Teile einer
+  Nummer – bis zu acht Artikel als Steckbrief unter dem Feld: Produktfoto, Inventarnummer mit Status (Rückruf, DEMO
+  markiert), Produkt, Seriennummer und Ablage, der getippte Teil gelb hervorgehoben. Tipp oder Klick öffnet den
+  Artikel; Pfeiltasten wählen, Enter öffnet, Escape schließt; ohne Wahl führt Enter wie bisher zur Trefferliste,
+  „Alle N Treffer anzeigen“ ebenso. Ohne JavaScript bleibt es ein gewöhnliches Suchformular.
+- **Jeder Mangel braucht eine Bemerkung** – nicht mehr nur ein Foto. Festschreiben (auch einer Berichtigung oder mit
+  „aussondern“) lehnt sonst ab („Jeder Mangel braucht eine Bemerkung – sie fehlt bei: …“); im Formular steht am
+  Mangel „Bemerkung ist Pflicht“, das Feld ist bei einem Mangel immer offen, die Abschlussleiste zählt „Mängel ohne
+  Bemerkung“ mit. Eine eben getippte Bemerkung wird vor der Prüfung gespeichert – kein falscher Alarm.
+- **Produktsuche zeigt alle Treffer** (Artikel anlegen, Meldung zuordnen): statt acht Treffern und „genauer suchen“
+  eine scrollbare Liste aller Treffer; je 50 kommen vom Server, die nächsten, sobald das Ende der Liste ins Bild rückt.
 
 ## Katalogdatei (Format 1)
 
@@ -1091,7 +1117,8 @@ benannte Einträge werden abgewiesen. Hochladen und Export: bis 2 GB. Eine Datei
 | `POST /api/material/pruefungen/<id>/festschreiben` (`ergebnis`, `next_due_on`, `grund`, `bemerkung`; alter Pfad `…/abschliessen` gilt weiter) | Prüfer (eigener Entwurf, mit Unterschrift) | Abschluss und Festschreiben mit Protokoll |
 | `POST /api/material/pruefungen/<id>/berichtigen` (`grund`) | Prüfer (der die Prüfung gemacht hat) | Berichtigung beginnen; liefert den neuen Entwurf |
 | `PUT /api/material/pruefungen/<id>/punkte/<pid>` mit `unterschrift` (data:-URL oder `null`) | Prüfer (eigener Entwurf) | Unterschriftsfeld eines Formulars |
-| `GET/PUT/DELETE /api/material/unterschrift` (`bild`: data:-URL vom Signatur-Pad) | lesen; PUT nur Prüfer und Materialwart (eigenes Konto) | eigene Unterschrift im Profil |
+| `GET/PUT/DELETE /api/material/unterschrift` (`bild`: data:-URL vom Signatur-Pad) | lesen; PUT nur Prüfer (seit Lieferung 5 schon mit dem Häkchen, ohne Urkundennummer) und Materialwart (eigenes Konto) | eigene Unterschrift im Profil |
+| `PUT /api/material/urkundennummer` (`urkundennummer`; leer entfernt sie) | Häkchen „Prüfer“ (eigenes Konto), sonst 403 | eigene Urkundennummer im Profil; Antwort `urkundennummer`, `pruefen` (darf jetzt prüfen); ungültig 400 (Lieferung 5) |
 | `GET /material/pruefung/<id>/pdf`, `GET /material/durchgang/<id>/sammelprotokoll` | lesen | Protokoll als PDF (nur, solange die Datei ihre Prüfsumme hat) |
 | `GET /material/pruefen`, `POST /api/material/pruefen` (`datei`) | ohne Anmeldung | Prüfseite: `ergebnis` (unveraendert, veraendert, unbekannt), `protokoll_id`, `art`, `hinweis` – angemeldet mit Zugang dazu `link` |
 | `GET /api/material/entwuerfe` | lesen | offene Prüfungen aller Prüfer |

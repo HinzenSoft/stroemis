@@ -336,6 +336,10 @@ def test_fuehrungskraft_nur_lesen():
         # Auch die eigene Unterschrift hinterlegen darf sie nicht – sie schreibt nichts fest und sondert nichts aus.
         r = f.put("/api/material/unterschrift", json={"bild": "data:image/png;base64,AAAA"})
         assert r.status_code == 403 and "Materialwarte und Prüfer" in r.json["error"], r.get_json()
+        # Eine Urkundennummer eintragen auch nicht – das geht nur mit dem Häkchen „Prüfer“ (Lieferung 5).
+        assert any(x.rule == "/api/material/urkundennummer" and "PUT" in x.methods for x in regeln)
+        r = f.put("/api/material/urkundennummer", json={"urkundennummer": "1012-0001"})
+        assert r.status_code == 403 and "Häkchen" in r.json["error"], r.get_json()
         assert _stand(app) == vorher, "Die Führungskraft hat etwas verändert."
 
         # b) Lesen: jede Seite und jede Schnittstelle des Moduls.

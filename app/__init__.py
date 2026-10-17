@@ -193,8 +193,11 @@ def slide(token):
 @auth.page_login_required
 def profile():
     u = auth.current_user()
+    # Modul Material: Ob die Urkundennummer gilt, entscheidet rechte.py – das Profil zeigt einem Prüfer ohne gültige
+    # Nummer den Hinweis, dass er erst danach prüfen kann.
+    from .material.services.rechte import ist_pruefer
     return render_template("profil.html", user=u, avatar=auth.avatar_url(u.get("avatar") or ""),
-                           initialen=auth.initialen(u.get("name") or u["email"]))
+                           initialen=auth.initialen(u.get("name") or u["email"]), darf_pruefen=ist_pruefer(u))
 
 
 @pages.get("/admin")

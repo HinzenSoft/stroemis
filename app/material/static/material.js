@@ -89,7 +89,6 @@
   const ANHANGART = { externes_pruefformular: "externes Prüfformular", pruefbericht: "Prüfbericht", foto: "Foto", sonstiges: "Sonstiges" };
   const SPERRGRUND = { sturz: "Sturzbelastung", beschaedigung: "Beschädigung", verlust: "Verlust", rueckruf: "Rückruf" };
   const AUSSONDERUNGSGRUND = { lebensdauer: "Lebensdauer erreicht", verlust: "Verlust", irreparabel: "irreparabel" };
-  const ZUSTAND = { offen: "offen", in_pruefung: "in Prüfung", erledigt: "erledigt", ausgenommen: "ausgenommen" };
   const MATERIALART = { textil: "textil", metall_hardware: "Metall", sonstiges: "sonstiges" };
   const ORDNERART = { gliederung: "Gliederung", standort: "Standort", fahrzeug: "Fahrzeug", set: "Set",
                       persoenlich: "persönlich", sonstiges: "sonstiges" };
@@ -133,10 +132,19 @@
                    geschlossen: "Durchgang abgeschlossen", faelligkeit: "Fälligkeit vorgezogen", umbenannt: "umbenannt",
                    eingepflegt: "eingepflegt", abgelehnt: "abgelehnt", variante: "als Variante angelegt",
                    festgeschrieben: "festgeschrieben", berichtigt: "berichtigt", berichtigung_begonnen: "Berichtigung begonnen",
-                   unterschrift: "Unterschrift geändert", abgebrochen: "Durchgang abgebrochen",
-                   rueckruf: "Rückruf angelegt", rueckruf_beendet: "Rückruf beendet" };
+                   unterschrift: "Unterschrift geändert", urkundennummer: "Urkundennummer geändert",
+                   abgebrochen: "Durchgang abgebrochen", rueckruf: "Rückruf angelegt", rueckruf_beendet: "Rückruf beendet" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };
+
+  /* Warum hier nicht geprüft werden kann (DARF.pruefen ist false) – als HTML. Das Häkchen „Prüfer“ setzt die
+     Verwaltung in der Nutzerverwaltung, die Urkundennummer trägt der Prüfer selbst im Profil ein. Wer das Häkchen
+     schon hat, dem fehlt nur die Nummer: Er bekommt den Weg dorthin als Link. */
+  const URKUNDE_IM_PROFIL = 'Du bist als Prüfer eingetragen, aber deine Urkundennummer fehlt noch – trage sie im '
+    + '<a href="/profil#unterschrift">Profil unter „Urkundennummer und Unterschrift“</a> ein, dann kannst du prüfen.';
+  const pruefHinweis = () => DARF.pruefer_haekchen ? URKUNDE_IM_PROFIL
+    : "Prüfen dürfen nur Prüfer mit Urkundennummer: Das Häkchen „Prüfer“ setzt die Verwaltung in der Nutzerverwaltung, "
+      + "die Urkundennummer trägt der Prüfer selbst in seinem Profil ein.";
 
   // „2026-12-04“ → „04.12.2026“, „2026-12“ → „12/2026“ – ohne Date-Objekt, damit keine Zeitzone den Tag verschiebt.
   const fmtTag = (d) => {
@@ -677,7 +685,7 @@
       inhalt.innerHTML = `<div class="page-head"><h1>Prüfungen</h1>
           <div class="btn-row"><a class="btn secondary" href="/material/pruefen" title="Ist ein PDF-Protokoll unverändert?">Protokoll prüfen</a>
             ${DARF.verwalten || DARF.pruefen ? '<button class="btn secondary" data-act="runde">+ Prüfdurchgang</button>' : ""}</div></div>
-        ${!DARF.pruefen ? '<p class="notice">Prüfen dürfen nur Prüfer mit hinterlegter Urkundennummer (Nutzerverwaltung → Häkchen „Prüfer“).</p>' : ""}
+        ${!DARF.pruefen ? `<p class="notice">${pruefHinweis()}</p>` : ""}
         <div id="pr-runden"></div><div id="pr-offen"></div>
         <section class="section"><h2>Zu prüfen</h2><div id="pr-liste"><p class="help">Wird geladen …</p></div></section>`;
       await Promise.all([zeigenIn(liste, "#pr-liste"), zeigenIn(offene, "#pr-offen"), rundenKasten($("#pr-runden"), false)]);
@@ -864,6 +872,51 @@
     await zeichnen();
   }
 
+  /* --- Produktsuche mit allen Treffern (Artikel anlegen, Meldung zuordnen) ------------------------------
+     Alle Treffer in einer scrollbaren Liste unter dem Suchfeld, je 50 vom Server; rückt das Ende der Liste ins Bild,
+     kommen die nächsten. Eine Antwort zu einer älteren Eingabe zählt nicht mehr (Zähler je Liste). */
+  function trefferLeeren(ziel) {
+    ziel._lauf = (ziel._lauf || 0) + 1;
+    ziel.innerHTML = "";
+    ziel.onscroll = null;
+  }
+  function produktTreffer(ziel, q, waehlen, leerHtml) {
+    trefferLeeren(ziel);
+    const lauf = ziel._lauf;
+    const liste = [];
+    let gesamt = 0;
+    let seite = 0;
+    let laedt = false;
+    ziel.scrollTop = 0;
+    const zeile = (p, i) => `<button type="button" class="mat-treffer-zeile" data-i="${i}">
+      ${p.vorschau ? `<img class="mat-mini" src="${esc(p.vorschau)}" alt="">` : ""}<strong>${esc(produktName(p))}</strong> <span class="muted">${esc(p.article_no || "")} · ${esc(p.category_name || "")}</span>${demoMarke(p.demo)}</button>`;
+    async function mehr() {
+      if (laedt || (seite && liste.length >= gesamt)) return;
+      laedt = true;
+      try {
+        const d = await api(`${API}/produkte?q=${encodeURIComponent(q)}&pro_seite=50&seite=${seite + 1}`);
+        if (lauf !== ziel._lauf) return;
+        seite += 1;
+        gesamt = d.gesamt;
+        const start = liste.length;
+        liste.push(...d.produkte);
+        if (!liste.length) { ziel.innerHTML = leerHtml; return; }
+        const fuss = $(".mat-treffer-fuss", ziel);
+        if (fuss) fuss.remove();
+        ziel.insertAdjacentHTML("beforeend", d.produkte.map((p, i) => zeile(p, start + i)).join("")
+          + `<p class="help mat-treffer-fuss">${liste.length < gesamt ? `${liste.length} von ${gesamt} Treffern – weiter scrollen …` : plural(gesamt, "Treffer", "Treffer")}</p>`);
+      } catch (e) {
+        if (lauf === ziel._lauf) ziel.innerHTML = `<p class="error">${esc(e.message)}</p>`;
+        return;
+      } finally { laedt = false; }
+      // Füllt eine Seite den Kasten nicht (große Bildschirme), gleich die nächste holen.
+      if (lauf === ziel._lauf && liste.length < gesamt && ziel.scrollHeight <= ziel.clientHeight + 60) mehr();
+    }
+    ziel.onscroll = () => { if (ziel.scrollTop + ziel.clientHeight >= ziel.scrollHeight - 160) mehr(); };
+    ziel.onclick = (e) => { const b = e.target.closest(".mat-treffer-zeile"); if (b && liste[+b.dataset.i]) waehlen(liste[+b.dataset.i]); };
+    mehr();
+  }
+
   /* --- Export (Lieferung 4) ----------------------------------------------------------------------------
      Ordner: Artikelliste als CSV und alle Protokolle als ZIP; Artikel: Lebenslauf als PDF. Gewöhnliche Links,
      kein fetch – der Server prüft das Leserecht selbst und zeigt einen Fehler als Seite. Ein Download lässt die
@@ -951,7 +1004,8 @@
           ${a.entwurf ? `<p class="small">In Prüfung bei <strong>${esc(a.entwurf.pruefer)}</strong> seit ${esc(fmtZeit(a.entwurf.seit))}
             ${fremderEntwurf ? ` · <a href="/material/pruefung/${a.entwurf.id}">ansehen</a>` : ""}
             ${fremderEntwurf && DARF.verwalten ? ' · <button class="lnk" type="button" data-act="freigeben">Reservierung freigeben</button>' : ""}</p>` : ""}
-          ${!aus && !DARF.pruefen && (DARF.verwalten || DARF.lesen) ? '<p class="small muted">Prüfen dürfen Prüfer mit hinterlegter Urkundennummer.</p>' : ""}
+          ${aus || DARF.pruefen ? "" : DARF.pruefer_haekchen ? `<p class="notice small">${URKUNDE_IM_PROFIL}</p>`
+            : '<p class="small muted">Prüfen dürfen Prüfer mit Urkundennummer (Häkchen „Prüfer“ in der Nutzerverwaltung, Urkundennummer im eigenen Profil).</p>'}
           ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang <a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>.</p>` : ""}
           <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${frei ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}${DARF.lesen ? lebenslaufKnopf(a) : ""}</div>
         </div>
@@ -1194,7 +1248,7 @@
       $("#an-produkt").hidden = false;
       $("#an-produkt").innerHTML = `${p.vorschau ? `<img class="mat-mini" src="${esc(p.vorschau)}" alt="">` : ""}<strong>${esc(produktName(p))}</strong> ${p.article_no ? `<span class="muted">${esc(p.article_no)}</span>` : ""} ${demoMarke(p.demo)}
         <span class="mat-art">${esc(MATERIALART[p.material_kind])}</span> <button class="lnk" type="button" id="an-anders">anderes Produkt</button>`;
-      $("#an-treffer").innerHTML = "";
+      trefferLeeren($("#an-treffer"));
       $("#an-q").value = "";
       $("#an-anders").onclick = () => { produkt = null; $("#an-produkt").hidden = true; fokus($("#an-q")); };
       $("#an-ende").dataset.selbst = "";
@@ -1205,13 +1259,9 @@
       clearTimeout(suchLos);
       suchLos = setTimeout(async () => {
         const q = $("#an-q").value.trim();
-        if (!q) { $("#an-treffer").innerHTML = ""; return; }
-        const d = await api(`${API}/produkte?q=${encodeURIComponent(q)}&pro_seite=8`);
-        $("#an-treffer").innerHTML = d.produkte.length ? d.produkte.map((p, i) => `<button type="button" class="mat-treffer-zeile" data-i="${i}">
-            ${p.vorschau ? `<img class="mat-mini" src="${esc(p.vorschau)}" alt="">` : ""}<strong>${esc(produktName(p))}</strong> <span class="muted">${esc(p.article_no || "")} · ${esc(p.category_name || "")}</span>${demoMarke(p.demo)}</button>`).join("")
-          + (d.gesamt > d.produkte.length ? `<p class="help">${d.gesamt} Treffer – genauer suchen.</p>` : "")
-          : '<p class="help">Kein Produkt gefunden. <button type="button" class="lnk" data-act="melden">Als fehlendes Produkt melden</button></p>';
-        $$(".mat-treffer-zeile", $("#an-treffer")).forEach((b) => { b.onclick = () => waehlen(d.produkte[+b.dataset.i]); });
+        if (!q) { trefferLeeren($("#an-treffer")); return; }
+        produktTreffer($("#an-treffer"), q, waehlen,
+          '<p class="help">Kein Produkt gefunden. <button type="button" class="lnk" data-act="melden">Als fehlendes Produkt melden</button></p>');
       }, 200);
     });
     if (DATEN.produkt) {
@@ -2085,10 +2135,10 @@
     if (a.entwurf && a.entwurf.pruefer_id === DARF.uid && DARF.pruefen) { location.replace(`/material/pruefung/${a.entwurf.id}`); return; }
     const p = a.produkt;
     const pa = a.pruefarten || { arten: [], vorschlag: null };
-    let hinweis = "";
+    let hinweis = "";                     // HTML – nur der Hinweis zum Prüferwerden enthält einen Link
     if (a.lock_state === "ausgesondert") hinweis = "Ein ausgesonderter Artikel wird nicht mehr geprüft.";
-    else if (!DARF.pruefen) hinweis = "Prüfen dürfen nur Prüfer mit hinterlegter Urkundennummer (Nutzerverwaltung → Häkchen „Prüfer“).";
-    else if (a.entwurf) hinweis = `In Prüfung bei ${a.entwurf.pruefer} seit ${fmtZeit(a.entwurf.seit)}.${DARF.verwalten ? " Eine liegen gebliebene Reservierung gibst du in der Artikelansicht frei." : " Eine liegen gebliebene Reservierung gibt der Materialwart frei."}`;
+    else if (!DARF.pruefen) hinweis = pruefHinweis();
+    else if (a.entwurf) hinweis = esc(`In Prüfung bei ${a.entwurf.pruefer} seit ${fmtZeit(a.entwurf.seit)}.${DARF.verwalten ? " Eine liegen gebliebene Reservierung gibst du in der Artikelansicht frei." : " Eine liegen gebliebene Reservierung gibt der Materialwart frei."}`);
     else if (!a.formular) hinweis = "Für dieses Produkt gibt es kein aktives Prüfformular – weder am Produkt noch in seiner Kategorie. Der Produktkatalogpfleger legt es im Katalog an.";
     const ld = a.lebensdauer && a.lebensdauer.festgeschrieben ? { ende: a.lebensdauer.ende, rest_tage: a.lebensdauer.rest_tage, erreicht: a.lebensdauer.rest_tage <= 0 } : null;
     inhalt.innerHTML = `${p.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen. Dieses Produkt stammt aus den Demodaten.</p>' : ""}
@@ -2101,7 +2151,7 @@
         ${lebensdauerHinweis(ld)}
         ${a.formular ? `<p>Formular: ${esc(a.formular.title || "ohne Titel")} · Version ${a.formular.version} <span class="muted">(${esc(a.formular.quelle)}, ${plural(a.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span></p>` : ""}
         ${a.durchgang ? `<p>Im Prüfdurchgang <a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a> – die Prüfung zählt dort.</p>` : ""}
-        ${hinweis ? `<p class="notice">${esc(hinweis)}</p><p><a class="btn secondary" href="/material/artikel/${a.id}">Zum Artikel</a></p>` : `
+        ${hinweis ? `<p class="notice">${hinweis}</p><p><a class="btn secondary" href="/material/artikel/${a.id}">Zum Artikel</a></p>` : `
           <fieldset class="mat-arten"><legend>Art der Prüfung</legend>
             ${pa.arten.map((x) => `<label class="mat-art-wahl"><input type="radio" name="art" value="${x}" ${x === pa.vorschlag ? "checked" : ""}> ${esc(PRUEFART[x] || x)}</label>`).join("")}
             ${pa.arten.length === 1 && pa.arten[0] === "eingang" ? '<p class="help">Die erste Prüfung eines Artikels ist die Eingangsprüfung. Erst sie gibt ihn frei; bis dahin steht er auf „neu“.</p>' : ""}
@@ -2229,7 +2279,8 @@
           ${x.art === "yesno" && x.soll ? `<span class="muted small">Soll ${esc(x.soll)}</span>` : ""}${x.pflicht ? "" : '<span class="muted small">optional</span>'}</div>
         <div class="mat-punkt-zeile">${steuer}${foto}
           ${notiz ? "" : `<button type="button" class="lnk small" data-act="pnotiz-auf" data-rid="${x.id}">+ Bemerkung</button>`}</div>
-        <textarea class="mat-pnotiz" data-rid="${x.id}" rows="2" maxlength="1000" placeholder="${mangel ? "Was ist wo zu sehen? (Mangel)" : "Bemerkung"}" ${notiz ? "" : "hidden"}>${esc(x.notiz || "")}</textarea></div>`;
+        <textarea class="mat-pnotiz" data-rid="${x.id}" rows="2" maxlength="1000" placeholder="${mangel ? "Pflicht bei Mangel: Was ist wo zu sehen?" : "Bemerkung"}" ${notiz ? "" : "hidden"}${mangel ? ' aria-required="true"' : ""}>${esc(x.notiz || "")}</textarea>
+        ${mangel && !(x.notiz || "").trim() ? '<span class="mat-pflicht mat-pflicht-notiz">Bemerkung ist Pflicht</span>' : ""}</div>`;
     }
 
     function punkteHtml() {
@@ -2278,9 +2329,10 @@
       const offen = pr.punkte.filter((x) => x.pflicht && x.befund !== "nicht_zutreffend"
         && (x.art === "photo" ? !x.foto : x.art === "signature" ? !x.unterschrift : x.art === "yesno" ? !x.wert : !(x.wert || "").trim()));
       const ohneFoto = pr.punkte.filter((x) => x.befund === "mangel" && !x.foto);
+      const ohneNotiz = pr.punkte.filter((x) => x.befund === "mangel" && !(x.notiz || "").trim());
       const kritisch = pr.punkte.filter((x) => x.befund === "mangel" && x.kritisch);
       const ldErreicht = pr.lebensdauer && pr.lebensdauer.erreicht;
-      return { offen, ohneFoto, kritisch, einsatzSperre: kritisch.length || ldErreicht, maengel: pr.punkte.filter((x) => x.befund === "mangel") };
+      return { offen, ohneFoto, ohneNotiz, kritisch, einsatzSperre: kritisch.length || ldErreicht, maengel: pr.punkte.filter((x) => x.befund === "mangel") };
     }
 
     function abschlussHtml() {
@@ -2311,6 +2363,7 @@
       const teile = [];
       if (h.offen.length) teile.push(`${plural(h.offen.length, "Pflichtpunkt", "Pflichtpunkte")} ohne Befund`);
       if (h.ohneFoto.length) teile.push(`${plural(h.ohneFoto.length, "Mangel", "Mängel")} ohne Foto`);
+      if (h.ohneNotiz.length) teile.push(`${plural(h.ohneNotiz.length, "Mangel", "Mängel")} ohne Bemerkung`);
       if (h.kritisch.length) teile.push("kritischer Mangel – nicht einsatzbereit");
       else if (pr.lebensdauer && pr.lebensdauer.erreicht) teile.push("Lebensende erreicht – nicht einsatzbereit");
       if (pr.freipruefung && ergebnis === "einsatzbereit") teile.push("Freiprüfung: Der Artikel kehrt in seinen Herkunftsordner zurück");
@@ -2318,7 +2371,7 @@
       if (ergebnis === "aussondern") teile.push("„aussondern“ ist endgültig");
       if (!DARF.unterschrift) teile.push("Deine Unterschrift fehlt noch – „Festschreiben“ fragt danach");
       $("#pr-hinweis").textContent = teile.join(" · ");
-      $("#pr-hinweis").classList.toggle("warn", !!(h.offen.length || h.ohneFoto.length || h.kritisch.length));
+      $("#pr-hinweis").classList.toggle("warn", !!(h.offen.length || h.ohneFoto.length || h.ohneNotiz.length || h.kritisch.length));
     }
 
     function leseHtml() {
@@ -2401,7 +2454,8 @@
 
     function zeichnen() {
       leisteMarkieren(pr.artikel.folder_id);
-      inhalt.innerHTML = `<div class="mat-pruefung${bearbeitbar() ? " mat-mit-leiste" : ""}">${kopf()}${bearbeitbar() ? bearbeitenHtml() : leseHtml()}</div>`;
+      const ohneNummer = pr.entwurf && pr.eigen && !DARF.pruefen && DARF.pruefer_haekchen ? `<p class="notice">${URKUNDE_IM_PROFIL}</p>` : "";
+      inhalt.innerHTML = `<div class="mat-pruefung${bearbeitbar() ? " mat-mit-leiste" : ""}">${kopf()}${ohneNummer}${bearbeitbar() ? bearbeitenHtml() : leseHtml()}</div>`;
       if (bearbeitbar()) { binden(); abschlussAktualisieren(); seitenZeichnen(); }
     }
 
@@ -2617,11 +2671,17 @@
       ergebnis: (b) => { if (b.disabled) return; ergebnis = ergebnis === b.dataset.e ? null : b.dataset.e; abschlussAktualisieren(); if (ergebnis && ergebnis !== "einsatzbereit") fokus($("#pr-grund")); },
       festschreiben: async (b) => {
         if (!ergebnis) return;
-        // Was der Server sicher ablehnt, gleich hier sagen – bevor nach der Unterschrift gefragt wird.
+        // Was der Server sicher ablehnt, gleich hier sagen – bevor nach der Unterschrift gefragt wird. Vorher abwarten,
+        // was gerade gespeichert wird: Eine eben getippte Bemerkung kommt beim Verlassen des Feldes an.
+        await laufend.catch(() => {});
         const h = offeneHinweise();
         const grund = ergebnis === "einsatzbereit" ? "" : $("#pr-grund").value.trim();
         if (h.offen.length) { toast("Noch ohne Befund: " + h.offen.slice(0, 5).map((x) => x.text).join("; "), true); return; }
         if (h.ohneFoto.length) { toast("Jeder Mangel braucht ein Foto – es fehlt bei: " + h.ohneFoto.slice(0, 5).map((x) => x.text).join("; "), true); return; }
+        if (h.ohneNotiz.length) {
+          toast("Jeder Mangel braucht eine Bemerkung – sie fehlt bei: " + h.ohneNotiz.slice(0, 5).map((x) => x.text).join("; "), true);
+          fokus($(`#pp-${h.ohneNotiz[0].id} .mat-pnotiz`)); return;
+        }
         if (ergebnis !== "einsatzbereit" && !h.maengel.length && !grund) { toast(`Ohne Mangel braucht „${ERGEBNIS[ergebnis]}“ einen Grund.`, true); fokus($("#pr-grund")); return; }
         b.disabled = true;
         try {
@@ -2704,7 +2764,7 @@
     async function laden() { d = (await api(`${API}/durchgaenge/${DATEN.id}`)).durchgang; }
     function zeile(a) {
       const darf = d.offen && (DARF.verwalten || DARF.pruefen);
-      let zustand = "";
+      let zustand;
       let knopf = "";
       if (a.zustand === "erledigt") {
         zustand = `${ergebnisMarke(a.pruefung.ergebnis)} <a class="small" href="/material/pruefung/${a.pruefung.id}">${esc(fmtTag(a.pruefung.datum))}, ${esc(a.pruefung.pruefer)}</a>`;
@@ -2927,22 +2987,14 @@
       let los = null;
       async function suchen() {
         const q = $("#zu-q", body).value.trim();
-        if (!q) { $("#zu-treffer", body).innerHTML = ""; return; }
-        try {
-          const d = await api(`${API}/produkte?q=${encodeURIComponent(q)}&pro_seite=8`);
-          $("#zu-treffer", body).innerHTML = d.produkte.length ? d.produkte.map((p, i) => `<button type="button" class="mat-treffer-zeile" data-i="${i}">
-              ${p.vorschau ? `<img class="mat-mini" src="${esc(p.vorschau)}" alt="">` : ""}<strong>${esc(produktName(p))}</strong> <span class="muted">${esc(p.article_no || "")} · ${esc(p.category_name || "")}</span></button>`).join("")
-            : '<p class="help">Kein Produkt gefunden.</p>';
-          $$(".mat-treffer-zeile", body).forEach((b) => {
-            b.onclick = () => {
-              gewaehlt = d.produkte[+b.dataset.i];
-              $("#zu-gewaehlt", body).hidden = false;
-              $("#zu-gewaehlt", body).innerHTML = `<strong>${esc(produktName(gewaehlt))}</strong> <span class="muted">${esc(gewaehlt.article_no || "")}</span>`;
-              $("#zu-treffer", body).innerHTML = "";
-              $("#zu-ok", body).disabled = false;
-            };
-          });
-        } catch (e) { toast(e.message, true); }
+        if (!q) { trefferLeeren($("#zu-treffer", body)); return; }
+        produktTreffer($("#zu-treffer", body), q, (p) => {
+          gewaehlt = p;
+          $("#zu-gewaehlt", body).hidden = false;
+          $("#zu-gewaehlt", body).innerHTML = `<strong>${esc(produktName(gewaehlt))}</strong> <span class="muted">${esc(gewaehlt.article_no || "")}</span>`;
+          trefferLeeren($("#zu-treffer", body));
+          $("#zu-ok", body).disabled = false;
+        }, '<p class="help">Kein Produkt gefunden.</p>');
       }
       $("#zu-q", body).addEventListener("input", () => { clearTimeout(los); los = setTimeout(suchen, 200); });
       suchen();

@@ -65,12 +65,14 @@
   }
 
   /* Das Material-Feld trägt darunter die beiden Kennzeichen des Moduls. Gesetzt werden sie im
-     Dialog „Bearbeiten“ – der Prüfer braucht dort die Urkundennummer. */
+     Dialog „Bearbeiten“. Die Urkundennummer trägt der Prüfer selbst im Profil ein – bis dahin darf
+     er nicht prüfen, und seine Marke sagt das (gelb statt grau). */
   function rechtZelle(m, u) {
     const feld = rechtFeld(m, u.rechte, { eigenes: u.id === STROEMIS.user.id });
     if (m.k !== "material") return feld;
     const marken = [];
-    if (u.mat_pruefer) marken.push(`<span class="badge grey" title="Prüfer (Sachkundiger), Urkundennummer ${S.esc(u.urkundennummer)}">Prüfer</span>`);
+    if (u.mat_pruefer && u.urkunde_gueltig) marken.push(`<span class="badge grey" title="Prüfer (Sachkundiger), Urkundennummer ${S.esc(u.urkundennummer)}">Prüfer</span>`);
+    else if (u.mat_pruefer) marken.push('<span class="badge urkunde-fehlt" title="Häkchen „Prüfer“ gesetzt, aber noch keine Urkundennummer – die trägt der Prüfer selbst im Profil ein. Bis dahin darf er nicht prüfen.">Prüfer – Urkunden&shy;nummer fehlt</span>');
     if (u.mat_katalog) marken.push('<span class="badge grey" title="Produktkatalogpfleger">Katalog</span>');
     return feld + (marken.length ? `<div class="recht-marken">${marken.join(" ")}</div>` : "");
   }
@@ -172,6 +174,14 @@
     } catch (err) { S.toast(err.message, true); }
   });
 
+  /* Die Urkundennummer zeigt der Dialog nur – eintragen und ändern kann sie allein der Prüfer im
+     eigenen Profil (PUT /api/material/urkundennummer). */
+  function urkundeLesend(u) {
+    if (!u.id) return "Urkundennummer: trägt der Prüfer nach der ersten Anmeldung selbst im Profil ein – solange darf er nicht prüfen.";
+    if (u.urkunde_gueltig) return `Urkundennummer: <strong>${S.esc(u.urkundennummer)}</strong> – trägt der Prüfer selbst im Profil ein.`;
+    return "Urkundennummer: noch keine – solange darf er nicht prüfen. Er trägt sie selbst im Profil ein.";
+  }
+
   function userForm(u) {
     u = u || {};
     const rechte = u.rechte || VORGABE;
@@ -190,9 +200,10 @@
         Was eine Stufe genau umfasst, steht als Hinweis am Feld.</div>
       <fieldset class="mat-rollen"><legend>Modul Material</legend>
         <label class="inline"><input type="checkbox" id="u-mat-pruefer" ${u.mat_pruefer ? "checked" : ""}> Prüfer (Sachkundiger, Qualifikation 1012)</label>
-        <div class="field-row"><div><label for="u-urkunde">Urkundennummer</label><input type="text" id="u-urkunde" maxlength="40" value="${S.esc(u.urkundennummer || "")}"></div><div></div></div>
-        <div class="help">Ohne Urkundennummer keine Prüferrolle. Sie steht später auf jedem Prüfprotokoll; die Unterschrift legt der Prüfer selbst im Profil ab.
-          Auch die Verwaltung prüft nur mit eigenem Häkchen und eigener Urkundennummer.</div>
+        <p class="mat-urkunde" ${u.mat_pruefer ? "" : "hidden"}>${urkundeLesend(u)}</p>
+        <div class="help">Das Häkchen macht das Konto zum Prüfer. Urkundennummer und Unterschrift trägt der Prüfer selbst in seinem Profil ein
+          („Urkundennummer und Unterschrift“); beides steht später auf jedem Prüfprotokoll. Prüfen kann er erst mit Urkundennummer –
+          auch die Verwaltung prüft nur mit eigenem Häkchen und eigener Urkundennummer.</div>
         <label class="inline"><input type="checkbox" id="u-mat-katalog" ${u.mat_katalog ? "checked" : ""}> Produktkatalogpfleger – Kategorien, Produkte, Herstellerdokumente und Prüfformulare (plattformweit)</label>
         <div class="help">Beides gibt mindestens Leserecht im Modul.</div>
       </fieldset>
@@ -209,8 +220,8 @@
       name: body.querySelector("#u-name").value, gliederung: body.querySelector("#u-gl").value,
       email: body.querySelector("#u-email").value, phone: body.querySelector("#u-phone").value,
       password: body.querySelector("#u-pw").value || undefined, rechte,
+      // Die Urkundennummer schickt der Dialog nicht mit: Sie gehört dem Prüfer (Profil).
       mat_pruefer: body.querySelector("#u-mat-pruefer").checked, mat_katalog: body.querySelector("#u-mat-katalog").checked,
-      urkundennummer: body.querySelector("#u-urkunde").value,
     };
   }
 
@@ -218,6 +229,8 @@
      Verwaltung auf „Verwaltung“ stellt, sieht die drei anderen Felder sofort auf „Verwaltung“
      springen und erstarren – und bekommt beim Zurückstellen seine vorherigen Werte wieder. */
   function koppleRechte(body) {
+    // Der Hinweis zur Urkundennummer gehört nur zu einem Prüfer – er erscheint mit dem Häkchen.
+    body.querySelector("#u-mat-pruefer").addEventListener("change", (e) => { body.querySelector(".mat-urkunde").hidden = !e.target.checked; });
     // Prüfer und Katalogpfleger haben mindestens Leserecht im Modul Material – wer das Häkchen setzt,
     // sieht das Feld gleich mitgehen, statt nach dem Speichern eine Meldung zu bekommen.
     ["#u-mat-pruefer", "#u-mat-katalog"].forEach((sel) => body.querySelector(sel).addEventListener("change", (e) => {

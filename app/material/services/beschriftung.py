@@ -47,7 +47,8 @@ AKTION = {
     "geschlossen": "Durchgang abgeschlossen", "faelligkeit": "Fälligkeit vorgezogen", "umbenannt": "umbenannt",
     "eingepflegt": "eingepflegt", "abgelehnt": "abgelehnt", "variante": "als Variante angelegt",
     "festgeschrieben": "festgeschrieben", "berichtigt": "berichtigt", "berichtigung_begonnen": "Berichtigung begonnen",
-    "unterschrift": "Unterschrift geändert", "abgebrochen": "Durchgang abgebrochen",
+    "unterschrift": "Unterschrift geändert", "urkundennummer": "Urkundennummer geändert",
+    "abgebrochen": "Durchgang abgebrochen",
     "rueckruf": "Rückruf angelegt", "rueckruf_beendet": "Rückruf beendet",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",

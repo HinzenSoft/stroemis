@@ -100,8 +100,8 @@ def _im_hintergrund(funktion, *args):
 #   pruefungen  Mitglied: Prüfungen abnehmen; Verwaltung: Kataloge pflegen, jeden Lehrgang leiten.
 #   material    Mitglied: Bestand, Fälligkeiten, Lebensläufe und Protokolle ansehen (Führungskraft);
 #               Verwaltung: Materialwart – Ordner und Artikel pflegen, Prüfdurchgänge eröffnen.
-#               Quer dazu zwei Kennzeichen am Konto: Prüfer (Sachkundiger, nur mit Urkundennummer)
-#               und Produktkatalogpfleger – siehe app/material/services/rechte.py.
+#               Quer dazu zwei Kennzeichen am Konto: Prüfer (Sachkundiger; wirkt erst mit der Urkundennummer,
+#               die er selbst im Profil einträgt) und Produktkatalogpfleger – siehe app/material/services/rechte.py.
 #   verwaltung  Verwaltung: Nutzer, Rechte, Einstellungen – und damit alle Rechte überall; eine
 #               Mitglied-Stufe gibt es hier nicht.
 # Die Werte liegen als Spalten recht_<modul> am Nutzer (db.py); api_admin schreibt sie.
@@ -169,6 +169,9 @@ def public_user(u):
     out["mat_pruefer"] = bool(u.get("mat_pruefer"))
     out["mat_katalog"] = bool(u.get("mat_katalog"))
     out["urkundennummer"] = u.get("urkundennummer") or ""
+    # Taugt die Nummer (Buchstaben oder Ziffern)? Die Nutzerverwaltung zeigt sonst „Prüfer – Urkundennummer fehlt“.
+    from .material.services.rechte import urkunde_gueltig, urkunde_saeubern
+    out["urkunde_gueltig"] = urkunde_gueltig(urkunde_saeubern(out["urkundennummer"]))
     out["unterschrift"] = bool(u.get("signature_png"))
     return out
 
