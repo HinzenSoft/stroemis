@@ -701,7 +701,7 @@ def _sperren(item, zustand, grund, pruefung_id=None):
 
 
 def sperren(iid, d, pruefer):
-    """Sperre ohne Prüfung – nur Prüfer, nach Sturzbelastung, Beschädigung oder bei Verlust."""
+    """Sperre ohne Prüfung – nur Prüfer, nach Sturzbelastung, Beschädigung, bei Verlust oder Rückruf."""
     if not pruefer.get("urkunde"):
         raise Abgelehnt(URKUNDE_FEHLT, 403)
     art = auswahl(d.get("grund"), SPERRGRUENDE, "Grund der Sperre")

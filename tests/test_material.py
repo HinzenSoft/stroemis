@@ -144,8 +144,11 @@ def test_migration():
         erwartet = {"mat_meta", "mat_category", "mat_product", "mat_product_document", "mat_form", "mat_checklist_item",
                     "mat_folder", "mat_item", "mat_inspection", "mat_inspection_result", "mat_inspection_attachment",
                     "mat_round", "mat_round_item", "mat_folder_grant", "mat_reminder_log", "mat_audit",
-                    "mat_product_request"}
+                    "mat_product_request", "mat_recall"}
         assert erwartet <= tabellen, erwartet - tabellen
+        # Schritt 7: Kategorien und Produkte tragen eine dauerhafte Kennung für den Katalogaustausch.
+        for tabelle in ("mat_category", "mat_product"):
+            assert "uid" in {r[1] for r in conn.execute(f"PRAGMA table_info({tabelle})")}, tabelle
         spalten = {r[1] for r in conn.execute("PRAGMA table_info(users)")}
         assert {"recht_material", "mat_pruefer", "mat_katalog", "urkundennummer", "signature_png"} <= spalten
         # Eine Datenbank aus der Zeit vor dem Modul (ohne mat_*-Tabellen) wird beim Start ergänzt.

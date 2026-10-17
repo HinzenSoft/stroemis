@@ -40,10 +40,16 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     weist Änderungen vorher mit Klartext ab, die Trigger fangen, was an ihr vorbeiginge. Ausgenommen sind
     nur die Nutzerkennungen, die die Datenbank beim Löschen eines Kontos selbst auf NULL setzt.
     Wer eine dieser Tabellen später neu aufbaut (wie Schritt 2), muss die Trigger danach neu anlegen.
+  - Schritt 7 (Lieferung 4, Überblick): mat_recall – Rückruf eines Produkts durch den Hersteller, angelegt von
+    einem Katalogpfleger (Titel, Beschreibung mit Empfehlung, Link, optional die betroffenen Seriennummern;
+    beendet mit Vermerk); dazu mat_category.uid und mat_product.uid – eine zufällige, dauerhafte Kennung, über
+    die der Katalog-Export einer Instanz (dev) Kategorien und Produkte in einer anderen (Produktion) auch nach
+    Umbenennen oder Verschieben wiederfindet. Vorhandene Zeilen bekommen sie bei der Migration, neue per
+    Trigger, wenn der einfügende Code keine mitgibt.
 """
 import sqlite3
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -67,7 +73,7 @@ PRUEFARTEN = {"eingang": "Eingangsprüfung", "periodisch": "periodisch", "ausser
 # Die Prüfarten, mit denen Schritt 1 die Tabelle angelegt hat – Schritt 1 bleibt, wie er ausgeliefert wurde.
 PRUEFARTEN_1 = ("periodisch", "ausserplanmaessig", "reparatur", "aussonderung")
 # Sperre ohne Prüfung (nur Prüfer) und Aussonderung durch den Materialwart: die Gründe zur Auswahl.
-SPERRGRUENDE = {"sturz": "Sturzbelastung", "beschaedigung": "Beschädigung", "verlust": "Verlust"}
+SPERRGRUENDE = {"sturz": "Sturzbelastung", "beschaedigung": "Beschädigung", "verlust": "Verlust", "rueckruf": "Rückruf"}
 AUSSONDERUNGSGRUENDE = {"lebensdauer": "Lebensdauer erreicht", "verlust": "Verlust", "irreparabel": "irreparabel"}
 ERGEBNISSE = {"einsatzbereit": "einsatzbereit", "instandsetzen": "instandsetzen", "aussondern": "aussondern"}
 BEFUNDE = ("ok", "mangel", "nicht_zutreffend")
@@ -727,10 +733,49 @@ def _schritt_6(conn):
         conn.execute(sql)
 
 
+RECALL_7 = """CREATE TABLE IF NOT EXISTS mat_recall (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  -- Ein Rückruf gehört zu genau einem Produkt; ohne Produkt (gelöscht, also ohne Artikel) hat er keinen Sinn mehr.
+  product_id      INTEGER NOT NULL REFERENCES mat_product(id) ON DELETE CASCADE,
+  title           TEXT NOT NULL CHECK (title <> ''),
+  description     TEXT NOT NULL DEFAULT '',    -- was betroffen ist und was zu tun ist (Empfehlung des Herstellers)
+  url             TEXT NOT NULL DEFAULT '',    -- Meldung des Herstellers
+  serials         TEXT NOT NULL DEFAULT '',    -- betroffene Seriennummern, eine je Zeile; leer = alle Artikel
+  created_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_by_name TEXT NOT NULL DEFAULT '',
+  created_at      TEXT NOT NULL,
+  closed_at       TEXT,                        -- beendet: kein Hinweis mehr an den Artikeln, bleibt am Produkt sichtbar
+  closed_by       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  closed_by_name  TEXT NOT NULL DEFAULT '',
+  close_note      TEXT NOT NULL DEFAULT '',
+  mailed_at       TEXT,                        -- Benachrichtigung verschickt (Zeitpunkt, Zahl, Fehlschläge)
+  mail_count      INTEGER NOT NULL DEFAULT 0,
+  mail_failed     INTEGER NOT NULL DEFAULT 0
+)"""
+
+
+def _uid_trigger(tabelle):
+    return (f"CREATE TRIGGER IF NOT EXISTS trg_{tabelle}_uid AFTER INSERT ON {tabelle} WHEN NEW.uid IS NULL "
+            f"BEGIN UPDATE {tabelle} SET uid = lower(hex(randomblob(16))) WHERE id = NEW.id; END")
+
+
+def _schritt_7(conn):
+    """Lieferung 4: Rückrufe (mat_recall) und dauerhafte Kennungen für den Katalogaustausch (uid)."""
+    conn.execute(RECALL_7)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_mat_recall_product ON mat_recall(product_id, closed_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_mat_recall_offen ON mat_recall(closed_at, created_at)")
+    for tabelle in ("mat_category", "mat_product"):
+        if "uid" not in _spalten(conn, tabelle):
+            conn.execute(f"ALTER TABLE {tabelle} ADD COLUMN uid TEXT")
+        conn.execute(f"UPDATE {tabelle} SET uid = lower(hex(randomblob(16))) WHERE uid IS NULL")
+        conn.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS ux_{tabelle}_uid ON {tabelle}(uid)")
+        conn.execute(_uid_trigger(tabelle))
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
-SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6}
+SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7}
 
 
 def _meta(conn, schluessel, vorgabe=None):
