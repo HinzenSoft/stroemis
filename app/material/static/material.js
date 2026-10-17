@@ -986,21 +986,74 @@
   async function katalog() {
     let kategorie = DATEN.kategorie || null;
     let q = "";
-    let seite = 1;
     let sort = { feld: null, richtung: "auf" };
     const kats = await kategorienLaden();
-    async function liste() {
-      const p = sortParameter(new URLSearchParams({ q, seite, pro_seite: 25 }), sort);
-      if (kategorie) p.set("kategorie", kategorie);
-      const d = await api(`${API}/produkte?${p}`);
-      const s = sort;
-      $("#kat-liste").innerHTML = d.produkte.length ? `<table class="list mat-tabelle"><thead><tr>${sortKopf("Hersteller", "hersteller", s)}${sortKopf("Produkt", "produkt", s)}${sortKopf("Kategorie", "kategorie", s)}${sortKopf("Materialart", "materialart", s)}${sortKopf("Intervall", "intervall", s)}${sortKopf("Lebensdauer", "lebensdauer", s)}${sortKopf("Bestand", "bestand", s)}</tr></thead><tbody>
-        ${d.produkte.map((x) => `<tr><td data-l="Hersteller">${esc(x.manufacturer || "")}</td>
+    // Endlos: Die erste Seite kommt sofort, jede weitere, sobald das Ende der Liste ins Bild rückt. Jede neue
+    // Suche, Sortierung oder Kategorie beginnt einen neuen Lauf; was vom alten noch unterwegs ist, fällt weg.
+    const PRO_SEITE = 50;
+    let lauf = 0;
+    let beobachter = null;
+    let nachladen = null;
+    const produktZeile = (x) => `<tr><td data-l="Hersteller">${esc(x.manufacturer || "")}</td>
           <td data-l="Produkt">${x.vorschau ? `<img class="mat-mini" src="${esc(x.vorschau)}" alt="" loading="lazy">` : ""}<a href="/material/katalog/produkt/${x.id}"><strong>${esc(x.model || "")}</strong></a>${x.article_no ? ` <span class="muted">${esc(x.article_no)}</span>` : ""}${demoMarke(x.demo)}</td>
           <td data-l="Kategorie">${esc(x.category_name || "")}</td><td data-l="Materialart">${esc(MATERIALART[x.material_kind])}</td>
           <td data-l="Intervall">${x.intervall.monate ? `${x.intervall.monate} Mon.` : "–"}</td>
-          <td data-l="Lebensdauer">${x.lifetime_years ? `${x.lifetime_years} J.` : "–"}</td><td data-l="Bestand">${x.bestand}</td></tr>`).join("")}</tbody></table>${seitenleiste(d.gesamt, seite, 25)}`
+          <td data-l="Lebensdauer">${x.lifetime_years ? `${x.lifetime_years} J.` : "–"}</td><td data-l="Bestand">${x.bestand}</td></tr>`;
+    async function liste() {
+      const meinLauf = ++lauf;
+      if (beobachter) { beobachter.disconnect(); beobachter = null; }
+      const holen = (seite) => {
+        const p = sortParameter(new URLSearchParams({ q, seite, pro_seite: PRO_SEITE }), sort);
+        if (kategorie) p.set("kategorie", kategorie);
+        return api(`${API}/produkte?${p}`);
+      };
+      const d = await holen(1);
+      if (meinLauf !== lauf) return;
+      const s = sort;
+      const ziel = $("#kat-liste");
+      ziel.innerHTML = d.produkte.length ? `<table class="list mat-tabelle"><thead><tr>${sortKopf("Hersteller", "hersteller", s)}${sortKopf("Produkt", "produkt", s)}${sortKopf("Kategorie", "kategorie", s)}${sortKopf("Materialart", "materialart", s)}${sortKopf("Intervall", "intervall", s)}${sortKopf("Lebensdauer", "lebensdauer", s)}${sortKopf("Bestand", "bestand", s)}</tr></thead>
+        <tbody>${d.produkte.map(produktZeile).join("")}</tbody></table><p class="help mat-endlos" id="kat-mehr"></p>`
         : leer(q || kategorie ? "Kein Produkt in dieser Auswahl." : "Der Katalog ist noch leer.");
+      // War die Liste schon unter der Suchzeile weggescrollt, beginnt die neue Auswahl direkt unter ihr.
+      const such = $(".mat-suchzeile");
+      if (such && ziel.getBoundingClientRect().top < such.getBoundingClientRect().bottom) {
+        window.scrollBy(0, ziel.getBoundingClientRect().top - such.getBoundingClientRect().bottom);
+      }
+      if (!d.produkte.length) return;
+      const mehr = $("#kat-mehr");
+      let seite = 1;
+      let geladen = d.produkte.length;
+      let gesamt = d.gesamt;
+      let laedt = false;
+      const stand = () => { mehr.textContent = geladen < gesamt ? `${geladen} von ${gesamt} – weitere kommen beim Scrollen` : plural(gesamt, "Produkt", "Produkte"); };
+      stand();
+      if (geladen >= gesamt) return;
+      beobachter = new IntersectionObserver(async (eintraege) => {
+        if (laedt || !eintraege.some((e) => e.isIntersecting)) return;
+        laedt = true;
+        let n;
+        try { n = await holen(seite + 1); }
+        catch (e) {
+          laedt = false;
+          if (meinLauf !== lauf || !beobachter) return;
+          beobachter.unobserve(mehr);
+          mehr.innerHTML = `${esc(e.message)} <button type="button" class="lnk" data-act="kat-mehr">Noch einmal versuchen</button>`;
+          return;
+        }
+        laedt = false;
+        if (meinLauf !== lauf || !beobachter) return;
+        seite += 1;
+        $("tbody", ziel).insertAdjacentHTML("beforeend", n.produkte.map(produktZeile).join(""));
+        geladen += n.produkte.length;
+        gesamt = n.produkte.length ? n.gesamt : geladen;       // leer: inzwischen sind es weniger geworden
+        stand();
+        if (geladen >= gesamt) { beobachter.disconnect(); beobachter = null; return; }
+        // Steht das Ende nach dem Anhängen noch im Bild (großer Bildschirm), gleich die nächste Seite.
+        beobachter.unobserve(mehr);
+        beobachter.observe(mehr);
+      }, { rootMargin: "0px 0px 600px 0px" });
+      beobachter.observe(mehr);
+      nachladen = () => { if (beobachter) { stand(); beobachter.observe(mehr); } };
     }
     function zeichnen() {
       const k = kats.find((x) => x.id === kategorie);
@@ -1027,10 +1080,10 @@
               <div id="kat-doks"><p class="help">Wird geladen …</p></div>
               ${DARF.katalog ? '<button class="btn secondary small" data-act="dok-neu">+ Dokument</button>' : ""}</div></div>`
           : (kats.length ? "" : leer(DARF.katalog ? "Noch keine Kategorien – mit „+ Kategorie“ anlegen." : "Noch keine Kategorien."))}
-        <input type="search" id="kat-q" placeholder="Produkte suchen: Hersteller, Modell, Artikelnummer, Norm" value="${esc(q)}" autocomplete="off">
+        <div class="mat-suchzeile"><input type="search" id="kat-q" placeholder="Produkte suchen: Hersteller, Modell, Artikelnummer, Norm" value="${esc(q)}" autocomplete="off"></div>
         <div id="kat-liste"></div>`;
       let los = null;
-      $("#kat-q").addEventListener("input", (e) => { clearTimeout(los); los = setTimeout(() => { q = e.target.value.trim(); seite = 1; zeigen(liste); }, 250); });
+      $("#kat-q").addEventListener("input", (e) => { clearTimeout(los); los = setTimeout(() => { q = e.target.value.trim(); zeigen(liste); }, 250); });
       zeigen(liste);
       if (k) zeigenIn(katDoks, "#kat-doks");
       if (DARF.katalog) meldungenZaehlen($("#kat-meldungen"));
@@ -1043,8 +1096,8 @@
     }
     aktionen = {
       kategorie: (b) => katalogWahl(b.dataset.id ? +b.dataset.id : null),
-      seite: (b) => { seite = +b.dataset.seite; zeigen(liste); },
-      sortieren: (b) => { sort = sortWeiter(sort, b.dataset.feld); seite = 1; zeigen(liste); },
+      "kat-mehr": () => { if (nachladen) nachladen(); },
+      sortieren: (b) => { sort = sortWeiter(sort, b.dataset.feld); zeigen(liste); },
       "kat-neu": () => kategorieDialog({ parent_id: kategorie }),
       "kat-bearbeiten": () => kategorieDialog(kats.find((x) => x.id === kategorie)),
       "kat-loeschen": async () => {
@@ -1058,7 +1111,6 @@
     };
     katalogWahl = (id) => {
       kategorie = id;
-      seite = 1;
       history.replaceState(null, "", kategorie ? `?kategorie=${kategorie}` : location.pathname);
       zeichnen();
     };

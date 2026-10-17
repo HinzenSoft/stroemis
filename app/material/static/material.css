@@ -168,6 +168,10 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-katkopf { border-left: 4px solid var(--rot); background: var(--grau-hell); padding: 10px 14px; margin: 0 0 14px; }
 .mat-katkopf h2 { margin: 2px 0 4px; }
 .mat-katkopf .mat-pfad { margin-bottom: 0; }
+/* Die Produktliste lädt endlos nach; die Suchzeile bleibt dabei unter der Kopfleiste stehen. */
+.mat-suchzeile { position: sticky; top: var(--topbar); z-index: 30; background: var(--weiss); padding: 8px 0; }
+.mat-suchzeile input { margin: 0; }
+.mat-endlos { text-align: center; padding: 10px 0 4px; }
 .mat-katdoks { margin-top: 12px; border-top: 1px solid var(--linie); padding-top: 8px; }
 .mat-unter { font-size: var(--fs-mittel); text-transform: uppercase; letter-spacing: .04em; color: var(--grau); margin: 14px 0 6px; }
 .mat-unter-zusatz { text-transform: none; letter-spacing: 0; font-weight: 400; }
