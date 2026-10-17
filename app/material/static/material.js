@@ -1013,7 +1013,7 @@
         k.default_interval_months ? `Prüfintervall ${k.default_interval_months} Monate` : "", plural(summe(k.id), "Produkt", "Produkte")].filter(Boolean).join(" · ") : "";
       // Zum aktiven generischen Formular führt bei Katalogpflegern der Knopf „Generisches Formular“, sonst der Verweis in der Angabenzeile.
       inhalt.innerHTML = `<div class="page-head"><h1>Katalog</h1>
-          <div class="btn-row">${DARF.katalog ? `<a class="btn secondary" href="/material/katalog/meldungen">Meldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>
+          <div class="btn-row">${DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/material/katalog/meldungen">Meldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>
             <button class="btn secondary" data-act="kat-neu">+ Kategorie</button><button class="btn" data-act="produkt-neu">+ Produkt</button>` : ""}</div></div>
         ${k ? `<div class="mat-katkopf">
             <div class="mat-pfad"><a href="/material/katalog" data-act="kategorie" data-id="">alle Kategorien</a>${pfad.slice(0, -1).map((x) => ` / <a href="/material/katalog?kategorie=${x.id}" data-act="kategorie" data-id="${x.id}">${esc(x.name)}</a>`).join("")}</div>
@@ -1123,6 +1123,11 @@
       <div class="field-row"><div><label for="pd-ld">Lebensdauer (Jahre)</label><input type="number" id="pd-ld" min="1" max="50" value="${p.lifetime_years || ""}"><div class="help" id="pd-ld-hilfe"></div></div>
         <div><label for="pd-lq">Fundstelle der Lebensdauer</label><input type="text" id="pd-lq" value="${esc(p.lifetime_source || "")}" maxlength="300" placeholder="z. B. Gebrauchsanleitung, Kap. 9"></div></div>
       <label for="pd-desc">Beschreibung</label><textarea id="pd-desc" rows="3" maxlength="4000">${esc(p.description || "")}</textarea>
+      <label for="pd-bild">Produktbild</label>
+      <div class="mat-bildfeld">${p.vorschau ? `<img src="${esc(p.vorschau)}" alt="Bisheriges Produktbild">` : ""}
+        <div><input type="file" id="pd-bild" accept="image/*">
+          ${p.bild ? '<label class="inline"><input type="checkbox" id="pd-bild-weg"> Bild entfernen</label>' : ""}
+          <div class="help">${p.bild ? "Ein neues Bild ersetzt das bisherige. " : ""}JPEG, PNG, WebP oder HEIC vom Telefon.</div></div></div>
       ${p.meldung ? '<label for="pd-antwort">Anmerkung für den Melder (optional, steht in seiner Mail)</label><textarea id="pd-antwort" rows="2" maxlength="1000"></textarea>' : ""}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="pd-ok" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
     (dlg, body) => {
@@ -1145,17 +1150,33 @@
       mk.addEventListener("change", hilfen);
       if (neu && p.category_id) katSel.dispatchEvent(new Event("change"));
       hilfen();
-      $("#pd-ok", body).onclick = async () => {
+      // Erst die Angaben, dann das Bild. Scheitert nur das Bild, kennt der Dialog das Produkt schon: Ein zweiter
+      // Klick speichert die Angaben erneut und lädt das Bild nach, statt das Produkt doppelt anzulegen.
+      let pid = p.id || null;
+      $("#pd-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
         const daten = { category_id: katSel.value ? +katSel.value : null, manufacturer: $("#pd-her", body).value, model: $("#pd-mod", body).value,
                         article_no: $("#pd-art", body).value, norm: $("#pd-norm", body).value, material_kind: mk.value,
                         interval_months: $("#pd-int", body).value || null, lifetime_years: ld.value || null,
                         lifetime_source: $("#pd-lq", body).value, description: $("#pd-desc", body).value };
+        const bild = $("#pd-bild", body).files[0];
+        const weg = $("#pd-bild-weg", body);
+        knopf.disabled = true;
         try {
           // Aus einer Meldung: Produkt anlegen und Meldung erledigen in einem Zug (der Melder bekommt Bescheid).
-          const r = p.meldung ? await api(`${API}/meldungen/${p.meldung.id}/produkt`, { method: "POST", body: Object.assign(daten, { antwort: $("#pd-antwort", body).value }) })
-            : neu ? await api(`${API}/produkte`, { method: "POST", body: daten }) : await api(`${API}/produkte/${p.id}`, { method: "PUT", body: daten });
-          dlg.close(); location.href = `/material/katalog/produkt/${r.produkt.id}`;
-        } catch (e) { toast(e.message, true); }
+          const r = pid ? await api(`${API}/produkte/${pid}`, { method: "PUT", body: daten })
+            : p.meldung ? await api(`${API}/meldungen/${p.meldung.id}/produkt`, { method: "POST", body: Object.assign(daten, { antwort: $("#pd-antwort", body).value }) })
+            : await api(`${API}/produkte`, { method: "POST", body: daten });
+          pid = r.produkt.id;
+          if (bild) {
+            const fd = new FormData();
+            fd.append("file", bild);
+            await api(`${API}/produkte/${pid}/bild`, { method: "POST", body: fd });
+          } else if (weg && weg.checked) {
+            await api(`${API}/produkte/${pid}/bild`, { method: "DELETE" });
+          }
+          dlg.close(); location.href = `/material/katalog/produkt/${pid}`;
+        } catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
     });
   }
@@ -1242,7 +1263,7 @@
         ${p.bild ? `<a href="${esc(p.original || p.bild)}" target="_blank" rel="noopener"><img class="mat-produktbild" src="${esc(p.bild)}" alt=""></a>` : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel"><h1>${esc(produktName(p))} ${demoMarke(p.demo)}</h1>
           ${DARF.verwalten ? `<div class="btn-row"><a class="btn small" href="/material/artikel/neu?produkt=${p.id}">+ Artikel dieses Produkts</a></div>` : ""}
-          ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button><button class="btn secondary small" data-act="bild">Produktbild</button>${p.artikel_gesamt ? "" : '<button class="btn secondary small" data-act="loeschen">Löschen</button>'}</div>` : ""}</div>
+          ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${p.artikel_gesamt ? "" : '<button class="btn secondary small" data-act="loeschen">Löschen</button>'}</div>` : ""}</div>
       </div>
       <div class="mat-spalten">
         <section class="section"><h2>Stammdaten</h2><dl class="mat-daten">
@@ -1273,7 +1294,6 @@
       <section class="section"><h2>Journal</h2>${journalHtml(p.journal, true)}</section>`;
     aktionen = {
       bearbeiten: () => produktDialog(p),
-      bild: () => fotoDialog(`${API}/produkte/${p.id}/bild`, !!p.bild, produkt),
       loeschen: async () => {
         if (!(await confirm(`Produkt „${produktName(p)}“ aus dem Katalog löschen?`, "Löschen"))) return;
         try { await api(`${API}/produkte/${p.id}`, { method: "DELETE" }); location.href = "/material/katalog"; } catch (e) { toast(e.message, true); }
@@ -2070,7 +2090,8 @@
     if (!el) return;
     try {
       const n = (await api(`${API}/meldungen?status=offen`)).offen || 0;
-      el.textContent = n;
+      el.textContent = n > 99 ? "99+" : n;
+      el.title = plural(n, "offene Meldung", "offene Meldungen");
       el.hidden = !n;
     } catch (e) { /* der Zähler ist Beiwerk */ }
   }
