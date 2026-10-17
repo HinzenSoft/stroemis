@@ -1203,7 +1203,7 @@
         ${p.bild ? `<a href="${esc(p.original || p.bild)}" target="_blank" rel="noopener"><img class="mat-produktbild" src="${esc(p.bild)}" alt=""></a>` : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel"><h1>${esc(produktName(p))} ${demoMarke(p.demo)}</h1>
           ${DARF.verwalten ? `<div class="btn-row"><a class="btn small" href="/material/artikel/neu?produkt=${p.id}">+ Artikel dieses Produkts</a></div>` : ""}
-          ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button><button class="btn ghost small" data-act="bild">Produktbild</button>${p.artikel_gesamt ? "" : '<button class="btn ghost small" data-act="loeschen">Löschen</button>'}</div>` : ""}</div>
+          ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button><button class="btn secondary small" data-act="bild">Produktbild</button>${p.artikel_gesamt ? "" : '<button class="btn secondary small" data-act="loeschen">Löschen</button>'}</div>` : ""}</div>
       </div>
       <div class="mat-spalten">
         <section class="section"><h2>Stammdaten</h2><dl class="mat-daten">
