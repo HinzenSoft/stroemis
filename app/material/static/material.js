@@ -1899,8 +1899,8 @@
         : [["", "alle"], ["erledigt", "erledigt"], ["ausgenommen", "ausgenommen"]].concat(z.nicht_geprueft ? [["nicht_geprueft", "nicht geprüft"]] : []);
       inhalt.innerHTML = `<div class="mat-pfad"><a href="/material/pruefungen">Prüfungen</a> / Prüfdurchgang</div>
         <div class="page-head"><h1>${esc(d.titel)} ${d.offen ? '<span class="badge">offen</span>' : `<span class="badge grey">${d.abgebrochen ? "abgebrochen" : "abgeschlossen"}</span>`}</h1>
-          <div class="btn-row">${d.offen && darf ? `<button class="btn" data-act="schliessen" ${d.abschliessbar ? "" : "disabled"}>Durchgang abschließen</button>
-            <button class="btn secondary" data-act="abbrechen">Durchgang abbrechen</button>` : ""}</div></div>
+          <div class="btn-row">${d.offen && darf ? `<button class="btn secondary" data-act="abbrechen">Durchgang abbrechen</button>
+            <button class="btn" data-act="schliessen" ${d.abschliessbar ? "" : "disabled"}>Durchgang abschließen</button>` : ""}</div></div>
         <p>Ordner <a href="/material/ordner/${d.folder_id}">${esc(d.ordner)}</a> · eröffnet ${esc(fmtTag(d.eroeffnet_am))} von ${esc(d.eroeffnet_von || "–")}
           ${d.offen ? "" : ` · ${d.abgebrochen ? "abgebrochen" : "abgeschlossen"} ${esc(fmtTag(d.geschlossen_am))} von ${esc(d.geschlossen_von || "–")}`}</p>
         <div class="mat-kacheln mat-rundenzahlen">${zustaende.map(([k, t]) => `<div class="mat-kachel z-${k || "gesamt"}"><strong>${z[k || "gesamt"]}</strong><span>${k ? t : "Artikel"}</span></div>`).join("")}</div>
