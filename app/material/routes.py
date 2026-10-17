@@ -18,6 +18,7 @@ from .services import (Abgelehnt, anhang, bestand, durchgang, journal, katalog, 
                        search, unterschrift)
 from .services import status as st
 from .services.rechte import _ordner_aus_anfrage, darf, darf_alles, ist_katalogpfleger, katalog_required, requires_folder
+from .services.importer import ZIP_MAX_BYTES as KATALOG_ZIP_MAX_BYTES
 
 seiten = Blueprint("material", __name__, template_folder="templates", static_folder="static",
                    static_url_path="/static/material", cli_group="material")
@@ -41,6 +42,8 @@ UPLOAD_GRENZEN = {
     # Die Prüfseite nimmt ein ganzes Protokoll samt angefügter Anhänge an – ohne Anmeldung, daher gebremst
     # (PRUEFEN_JE_VIERTELSTUNDE) und nicht unbegrenzt.
     "material_api.pruefen": 200 * 1024 * 1024,
+    # Katalogimport (routes_katalog.py): ZIP mit Bildern und Dokumenten – so groß, wie der Export werden darf.
+    "material_api.katalog_importieren": KATALOG_ZIP_MAX_BYTES + 1024 * 1024,
 }
 PRUEFEN_JE_VIERTELSTUNDE = 20
 
@@ -915,3 +918,6 @@ def durchgang_abbrechen(rid):
 def durchgang_loeschen(rid):
     durchgang.loeschen(rid)
     return jsonify(ok=True)
+
+
+from . import routes_katalog  # noqa: E402,F401

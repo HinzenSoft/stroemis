@@ -482,3 +482,22 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
   .mat-lb-pfeil { top: auto; bottom: 14px; transform: none; width: 56px; height: 48px; font-size: 2rem; }
   .mat-lightbox figcaption { max-width: calc(100vw - 150px); }
 }
+
+/* Lieferung 4 – katalog */
+/* Katalogaustausch: Zahlen von Export und Import als kleine Tabelle (bleibt auch am Telefon eine Tabelle), darunter
+   Fehler, Warnungen zu vorhandenen Artikeln und Hinweise; die Änderungen im Einzelnen zum Aufklappen. */
+.mat-austausch { border-collapse: collapse; margin: 10px 0 6px; font-size: var(--fs-mittel); width: 100%; max-width: 480px; }
+.mat-austausch th, .mat-austausch td { border-bottom: 1px solid var(--linie); padding: 5px 8px; text-align: right; }
+.mat-austausch thead th { color: var(--grau); font-size: var(--fs-klein); font-weight: 700; border-bottom: 2px solid var(--anthrazit); }
+.mat-austausch th[scope="row"], .mat-austausch thead th:first-child { text-align: left; font-weight: 600; }
+.mat-austausch td { font-variant-numeric: tabular-nums; }
+.mat-austausch-stand { font-weight: 700; margin: 12px 0 4px; }
+.mat-austausch-stand.ok { color: var(--ok); }
+.mat-austausch-stand.bad { color: var(--rot-dunkel); }
+.mat-austausch-liste { margin: 10px 0; padding: 8px 12px; border-left: 4px solid var(--linie); background: var(--grau-hell); }
+.mat-austausch-liste.warnung { border-left-color: var(--co-warning-ka); background: var(--co-warning-fl); }
+.mat-austausch-liste.fehler { border-left-color: var(--rot); background: var(--rot-hell); }
+.mat-austausch-liste ul, .mat-austausch-aenderungen { margin: 4px 0 0; padding-left: 18px; }
+.mat-austausch-liste li, .mat-austausch-aenderungen li { overflow-wrap: anywhere; margin: 2px 0; }
+.mat-austausch-aenderungen { max-height: 280px; overflow-y: auto; font-size: var(--fs-klein); }
+.mat-austausch-bericht:empty { display: none; }
