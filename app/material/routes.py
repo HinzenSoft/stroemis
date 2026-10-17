@@ -767,6 +767,14 @@ def durchgang_abschliessen(rid):
     return jsonify(durchgang=durchgang.durchgang_json(durchgang.runde(rid)))
 
 
+@api.post("/durchgaenge/<int:rid>/abbrechen")
+@requires_folder(("verwalten", "pruefen"), quelle="rid")
+def durchgang_abbrechen(rid):
+    """Vorzeitig beenden; „durchgang“ ist null, wenn er mangels Geprüftem ganz entfernt wurde."""
+    bleibt = durchgang.abbrechen(rid, _pruefer())
+    return jsonify(durchgang=durchgang.durchgang_json(durchgang.runde(rid)) if bleibt else None)
+
+
 @api.delete("/durchgaenge/<int:rid>")
 @requires_folder(("verwalten", "pruefen"), quelle="rid")
 def durchgang_loeschen(rid):

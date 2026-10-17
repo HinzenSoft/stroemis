@@ -386,7 +386,7 @@
       if (nurOffen && !liste.length) { ziel.innerHTML = ""; return; }
       ziel.innerHTML = `<section class="section"><h2>${nurOffen ? "Laufende Prüfdurchgänge" : "Prüfdurchgänge"}</h2>
         ${liste.length ? `<ul class="mat-runden">${liste.map((r) => `<li><a href="/material/durchgang/${r.id}"><strong>${esc(r.titel)}</strong></a>
-          <span class="muted">${esc(r.ordner)} · eröffnet ${esc(fmtTag(r.eroeffnet_am))}${r.offen ? "" : ` · abgeschlossen ${esc(fmtTag(r.geschlossen_am))}`}</span>
+          <span class="muted">${esc(r.ordner)} · eröffnet ${esc(fmtTag(r.eroeffnet_am))}${r.offen ? "" : ` · ${r.abgebrochen ? "abgebrochen" : "abgeschlossen"} ${esc(fmtTag(r.geschlossen_am))}`}</span>
           ${fortschritt(r.zaehlung)}</li>`).join("")}</ul>` : leer("Noch kein Prüfdurchgang.")}</section>`;
     } catch (e) { ziel.innerHTML = ""; }
   }
@@ -1845,7 +1845,7 @@
     let d = null;
     let sort = { feld: null, richtung: "auf" };
     // Der Durchgang kommt als Ganzes – hier sortiert der Browser selbst.
-    const ZUSTAND_REIHE = { in_pruefung: 0, offen: 1, ausgenommen: 2, erledigt: 3 };
+    const ZUSTAND_REIHE = { in_pruefung: 0, offen: 1, nicht_geprueft: 1, ausgenommen: 2, erledigt: 3 };
     const STATUS_RANG = { ueberfaellig: 0, lebensdauer: 1, neu: 2, gesperrt: 3, bald_faellig: 4, einsatzbereit: 5, ausgesondert: 6 };
     const SORTWERT = {
       inventar: (a) => a.inventory_no, hersteller: (a) => (a.manufacturer || "").toLowerCase(), produkt: (a) => (a.model || "").toLowerCase(),
@@ -1870,6 +1870,8 @@
       } else if (a.zustand === "ausgenommen") {
         zustand = `<span class="badge grey">ausgenommen</span> <span class="small">${esc(a.ausnahme.grund)}</span> <span class="muted small">(${esc(a.ausnahme.von || "")})</span>`;
         if (darf && a.lock_state !== "ausgesondert") knopf = `<button type="button" class="btn ghost small" data-act="einbeziehen" data-id="${a.id}">Einbeziehen</button>`;
+      } else if (a.zustand === "nicht_geprueft") {
+        zustand = '<span class="badge grey">nicht geprüft</span>';
       } else if (a.zustand === "in_pruefung") {
         zustand = `<span class="badge">in Prüfung</span> <span class="small">bei ${esc(a.entwurf.pruefer)} seit ${esc(fmtZeit(a.entwurf.seit))}</span>`;
         if (a.entwurf.eigen && DARF.pruefen) knopf = `<a class="btn small" href="/material/pruefung/${a.entwurf.id}">Weiter prüfen</a>`;
@@ -1891,16 +1893,20 @@
       const darf = DARF.verwalten || DARF.pruefen;
       const liste = sortiert(d.artikel.filter((a) => !filter || a.zustand === filter));
       const s = sort;
+      // Laufend: offen, in Prüfung, erledigt, ausgenommen. Vorbei: erledigt, ausgenommen – nach einem Abbruch
+      // dazu „nicht geprüft“.
+      const zustaende = d.offen ? [["", "alle"], ["offen", "offen"], ["in_pruefung", "in Prüfung"], ["erledigt", "erledigt"], ["ausgenommen", "ausgenommen"]]
+        : [["", "alle"], ["erledigt", "erledigt"], ["ausgenommen", "ausgenommen"]].concat(z.nicht_geprueft ? [["nicht_geprueft", "nicht geprüft"]] : []);
       inhalt.innerHTML = `<div class="mat-pfad"><a href="/material/pruefungen">Prüfungen</a> / Prüfdurchgang</div>
-        <div class="page-head"><h1>${esc(d.titel)} ${d.offen ? '<span class="badge">offen</span>' : '<span class="badge grey">abgeschlossen</span>'}</h1>
-          <div class="btn-row">${d.offen && darf ? `<button class="btn" data-act="schliessen" ${d.abschliessbar ? "" : "disabled"}>Durchgang abschließen</button>` : ""}
-            ${d.loeschbar && darf ? '<button class="btn ghost small" data-act="loeschen">Löschen</button>' : ""}</div></div>
+        <div class="page-head"><h1>${esc(d.titel)} ${d.offen ? '<span class="badge">offen</span>' : `<span class="badge grey">${d.abgebrochen ? "abgebrochen" : "abgeschlossen"}</span>`}</h1>
+          <div class="btn-row">${d.offen && darf ? `<button class="btn" data-act="schliessen" ${d.abschliessbar ? "" : "disabled"}>Durchgang abschließen</button>
+            <button class="btn secondary" data-act="abbrechen">Durchgang abbrechen</button>` : ""}</div></div>
         <p>Ordner <a href="/material/ordner/${d.folder_id}">${esc(d.ordner)}</a> · eröffnet ${esc(fmtTag(d.eroeffnet_am))} von ${esc(d.eroeffnet_von || "–")}
-          ${d.offen ? "" : ` · abgeschlossen ${esc(fmtTag(d.geschlossen_am))} von ${esc(d.geschlossen_von || "–")}`}</p>
-        <div class="mat-kacheln mat-rundenzahlen">${[["gesamt", "Artikel"], ["offen", "offen"], ["in_pruefung", "in Prüfung"], ["erledigt", "erledigt"], ["ausgenommen", "ausgenommen"]].map(([k, t]) => `<div class="mat-kachel z-${k}"><strong>${z[k]}</strong><span>${t}</span></div>`).join("")}</div>
+          ${d.offen ? "" : ` · ${d.abgebrochen ? "abgebrochen" : "abgeschlossen"} ${esc(fmtTag(d.geschlossen_am))} von ${esc(d.geschlossen_von || "–")}`}</p>
+        <div class="mat-kacheln mat-rundenzahlen">${zustaende.map(([k, t]) => `<div class="mat-kachel z-${k || "gesamt"}"><strong>${z[k || "gesamt"]}</strong><span>${k ? t : "Artikel"}</span></div>`).join("")}</div>
         <p>${fortschritt(z)}</p>
         ${d.offen ? `<p class="help">Jeder öffnet seinen Artikel mit „Prüfen“ und reserviert ihn damit – die anderen sehen „in Prüfung bei …“. Abschließen geht, sobald jeder Artikel geprüft oder mit Grund ausgenommen ist. Das Sammelprotokoll mit allen Prüfern folgt mit Lieferung 3.</p>` : ""}
-        <div class="c-tabs mat-filter">${[["", "alle"], ["offen", "offen"], ["in_pruefung", "in Prüfung"], ["erledigt", "erledigt"], ["ausgenommen", "ausgenommen"]].map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}${f ? ` (${z[f]})` : ""}</button>`).join("")}</div>
+        <div class="c-tabs mat-filter">${zustaende.map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}${f ? ` (${z[f]})` : ""}</button>`).join("")}</div>
         ${liste.length ? `<table class="list mat-tabelle mat-runde"><thead><tr>${sortKopf("Inventar-Nr.", "inventar", s)}${sortKopf("Hersteller", "hersteller", s)}${sortKopf("Produkt", "produkt", s)}${sortKopf("Ablage", "ablage", s)}${sortKopf("Stand", "stand", s)}${sortKopf("Status", "status", s)}<th></th></tr></thead><tbody>${liste.map(zeile).join("")}</tbody></table>` : leer("Keine Artikel in dieser Auswahl.")}
         ${d.pruefer.length ? `<section class="section"><h2>Prüfer in diesem Durchgang</h2><ul>${d.pruefer.map((x) => `<li>${esc(x.name)}${x.urkunde ? ` · Urkundennummer ${esc(x.urkunde)}` : ""} – ${plural(x.anzahl, "Prüfung", "Prüfungen")}</li>`).join("")}</ul></section>` : ""}`;
     }
@@ -1935,10 +1941,20 @@
         try { await api(`${API}/durchgaenge/${d.id}/abschliessen`, { method: "POST", body: {} }); toast("Durchgang abgeschlossen"); await neu(); }
         catch (e) { toast(e.message, true); b.disabled = false; }
       },
-      loeschen: async () => {
-        if (!(await confirm(`Den Durchgang „${d.titel}“ löschen? Das geht nur, solange darin nichts geprüft wurde.`, "Löschen"))) return;
-        try { await api(`${API}/durchgaenge/${d.id}`, { method: "DELETE" }); location.href = "/material/pruefungen"; }
-        catch (e) { toast(e.message, true); }
+      abbrechen: async (b) => {
+        const z = d.zaehlung;
+        const weiter = z.in_pruefung ? " Offene Prüfungen darin laufen als einzelne Prüfungen weiter." : "";
+        const text = z.erledigt
+          ? `Den Durchgang „${d.titel}“ abbrechen? Er endet ohne Abschluss: ${z.erledigt} geprüft, ${z.ausgenommen} ausgenommen, ${z.offen + z.in_pruefung} nicht geprüft. Was geprüft ist, bleibt dokumentiert.`
+          : `Den Durchgang „${d.titel}“ abbrechen? Darin ist noch nichts geprüft – er wird ganz entfernt.`;
+        if (!(await confirm(text + weiter, "Durchgang abbrechen"))) return;
+        b.disabled = true;
+        try {
+          const r = await api(`${API}/durchgaenge/${d.id}/abbrechen`, { method: "POST", body: {} });
+          if (!r.durchgang) { location.href = "/material/pruefungen"; return; }
+          filter = "";
+          toast("Durchgang abgebrochen"); await neu();
+        } catch (e) { toast(e.message, true); b.disabled = false; }
       },
     };
     await neu();

@@ -264,6 +264,7 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-rundenzahlen .mat-kachel.z-in_pruefung { border-top-color: var(--wasser); }
 .mat-rundenzahlen .mat-kachel.z-erledigt { border-top-color: var(--ok); }
 .mat-rundenzahlen .mat-kachel.z-ausgenommen { border-top-color: var(--gelb-dunkel); }
+.mat-rundenzahlen .mat-kachel.z-nicht_geprueft { border-top-color: var(--rot); }
 .mat-runde .tabelle-aktionen .btn + .btn { margin-left: 4px; }
 .mat-arten { border: 1px solid var(--linie); padding: 10px 14px; margin: 14px 0; }
 .mat-arten legend { font-weight: 700; padding: 0 4px; }

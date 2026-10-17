@@ -1593,6 +1593,8 @@ def test_migration_lieferung2():
         assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
         # Schritt 4: die Tabelle für Produktmeldungen; eine Ablehnung braucht eine Begründung.
         assert conn.execute("SELECT COUNT(*) FROM mat_product_request").fetchone()[0] == 0
+        # Schritt 5: Durchgänge lassen sich abbrechen.
+        assert "aborted" in {r[1] for r in conn.execute("PRAGMA table_info(mat_round)")}
         try:
             conn.execute("INSERT INTO mat_product_request (manufacturer, model, dedupe_key, status, created_at, resolved_at) "
                          "VALUES ('H', 'M', 'h|m|', 'abgelehnt', ?, ?)", (ts, ts))
@@ -1814,6 +1816,65 @@ def test_produktmeldung_loeschen():
     print("Meldungs-Löschtest bestanden.")
 
 
+def test_durchgang_abbrechen():
+    """Ein Durchgang lässt sich vorzeitig beenden: Ohne Abgeschlossenes verschwindet er, sonst endet er als
+    „abgebrochen“. Offene Prüfungen darin laufen als einzelne Prüfungen weiter."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w, p1 = k["wart"], k["pruefer"]
+        gid, _ = gliederung(w)
+        a = neuer_artikel(w, ids["hms"], gid, serial_no="A")
+        b = neuer_artikel(w, ids["hms"], gid, serial_no="B")
+        c = neuer_artikel(w, ids["hms"], gid, serial_no="C")
+        # Nur ein Entwurf darin: Abbrechen entfernt den Durchgang, der Entwurf läuft einzeln weiter.
+        rid = w.post("/api/material/durchgaenge", json={"folder_id": gid, "titel": "Versehen"}).json["durchgang"]["id"]
+        pid_a = starten(p1, a["id"], durchgang_id=rid).json["pruefung"]["id"]
+        for x in (k["fuehrung"], k["nutzer"], k["katalog"]):
+            assert x.post(f"/api/material/durchgaenge/{rid}/abbrechen", json={}).status_code == 403
+        r = w.post(f"/api/material/durchgaenge/{rid}/abbrechen", json={})
+        assert r.status_code == 200 and r.json["durchgang"] is None, r.get_json()
+        assert w.get(f"/api/material/durchgaenge/{rid}").status_code == 404
+        assert p1.get(f"/api/material/pruefungen/{pid_a}").json["pruefung"]["round_id"] is None
+        # Mit Geprüftem endet er als abgebrochen: Geprüftes bleibt, der Rest steht darin als nicht geprüft.
+        rid = w.post("/api/material/durchgaenge", json={"folder_id": gid, "titel": "Jahresprüfung"}).json["durchgang"]["id"]
+        assert p1.get(f"/api/material/pruefungen/{pid_a}").json["pruefung"]["round_id"] == rid   # übernommen
+        r = starten(p1, b["id"], durchgang_id=rid)
+        assert abschluss(p1, r.json["pruefung"]["id"], ergebnis="einsatzbereit").status_code == 200
+        r = p1.post(f"/api/material/durchgaenge/{rid}/abbrechen", json={})
+        assert r.status_code == 200, r.get_json()
+        d = r.json["durchgang"]
+        assert not d["offen"] and d["abgebrochen"] and d["zaehlung"] == {
+            "gesamt": 3, "offen": 0, "in_pruefung": 0, "erledigt": 1, "ausgenommen": 0, "nicht_geprueft": 2}, d
+        zustand = {x["id"]: x["zustand"] for x in w.get(f"/api/material/durchgaenge/{rid}").json["durchgang"]["artikel"]}
+        assert zustand == {a["id"]: "nicht_geprueft", b["id"]: "erledigt", c["id"]: "nicht_geprueft"}, zustand
+        # Der Entwurf ist wieder eine einzelne Prüfung: abschließbar, zählt aber nicht mehr zum Durchgang.
+        assert p1.get(f"/api/material/pruefungen/{pid_a}").json["pruefung"]["round_id"] is None
+        assert abschluss(p1, pid_a, ergebnis="einsatzbereit").status_code == 200
+        d = w.get(f"/api/material/durchgaenge/{rid}").json["durchgang"]
+        assert d["zaehlung"]["erledigt"] == 1 and d["zaehlung"]["nicht_geprueft"] == 2, d["zaehlung"]
+        # Vorbei ist vorbei; ein normal abgeschlossener Durchgang heißt weiter nicht „abgebrochen“.
+        assert w.post(f"/api/material/durchgaenge/{rid}/abbrechen", json={}).status_code == 409
+        assert w.post(f"/api/material/durchgaenge/{rid}/abschliessen", json={}).status_code == 409
+        assert w.post(f"/api/material/durchgaenge/{rid}/ausnehmen", json={"item_id": c["id"], "grund": "x"}).status_code == 409
+        with app.app_context():
+            from app import db
+            aktionen = [x["action"] for x in db.query("SELECT action FROM mat_audit WHERE entity = 'round' AND entity_id = ? "
+                                                      "ORDER BY id", (rid,))]
+            entwurf = [x["action"] for x in db.query("SELECT action FROM mat_audit WHERE entity = 'inspection' AND entity_id = ? "
+                                                     "ORDER BY id", (pid_a,))]
+        assert aktionen[0] == "eroeffnet" and aktionen[-1] == "abgebrochen", aktionen
+        assert entwurf.count("geaendert") == 2, entwurf
+        rid2 = w.post("/api/material/durchgaenge", json={"folder_id": gid, "titel": "Neu"}).json["durchgang"]["id"]
+        for x in (a, b, c):
+            pid = starten(p1, x["id"], durchgang_id=rid2).json["pruefung"]["id"]
+            assert abschluss(p1, pid, ergebnis="einsatzbereit").status_code == 200
+        d = w.post(f"/api/material/durchgaenge/{rid2}/abschliessen", json={}).json["durchgang"]
+        assert not d["offen"] and not d["abgebrochen"] and d["zaehlung"]["nicht_geprueft"] == 0, d
+    print("Abbruchtest bestanden.")
+
+
 if __name__ == "__main__":
     test_migration()
     test_rollen()
@@ -1836,3 +1897,4 @@ if __name__ == "__main__":
     test_migration_lieferung2()
     test_produktmeldung()
     test_produktmeldung_loeschen()
+    test_durchgang_abbrechen()

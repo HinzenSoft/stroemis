@@ -29,10 +29,12 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
   - mat_product_request (Schritt 4): Meldung eines Produkts, das beim Anlegen eines Artikels im Katalog
     fehlt – mit Links, Fotos und Bemerkung. Ein Katalogpfleger pflegt es ein (neues oder vorhandenes
     Produkt) oder lehnt mit Begründung ab; der Melder bekommt Bescheid.
+  - mat_round.aborted (Schritt 5): 1 = der Durchgang wurde vorzeitig beendet („abgebrochen“), nicht
+    abgeschlossen; closed_on ist dann der Tag des Abbruchs.
 """
 import sqlite3
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -591,10 +593,16 @@ SCHRITT_4 = [
 ]
 
 
+def _schritt_5(conn):
+    """Prüfdurchgänge lassen sich abbrechen: mat_round.aborted."""
+    if "aborted" not in _spalten(conn, "mat_round"):
+        conn.execute("ALTER TABLE mat_round ADD COLUMN aborted INTEGER NOT NULL DEFAULT 0")
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
-SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4}
+SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5}
 
 
 def _meta(conn, schluessel, vorgabe=None):

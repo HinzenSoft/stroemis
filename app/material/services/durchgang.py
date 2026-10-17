@@ -14,7 +14,11 @@ vor der Eröffnung begonnen wurde, zählt mit. Je Artikel gilt:
 
 Abschließen lässt sich der Durchgang erst, wenn jeder Artikel erledigt oder ausgenommen ist und kein
 Entwurf des Durchgangs mehr offen ist. Das Sammelprotokoll mit allen Prüfern folgt mit Lieferung 3.
-Ein Artikel steht höchstens in einem offenen Durchgang."""
+Ein Artikel steht höchstens in einem offenen Durchgang.
+
+Abbrechen beendet ihn vorzeitig: Offene Prüfungen darin laufen als einzelne Prüfungen weiter. Wurde noch
+nichts abgeschlossen, verschwindet er ganz; sonst endet er als „abgebrochen“ – Geprüftes und
+Ausgenommenes bleibt ihm zugeordnet, jeder andere Artikel steht darin als „nicht geprüft“."""
 from datetime import date
 
 from ... import db
@@ -22,7 +26,8 @@ from . import Abgelehnt, heute, text
 from . import bestand, journal
 from .faelligkeit import im_unterbaum
 
-ZUSTAND_TEXT = {"offen": "offen", "in_pruefung": "in Prüfung", "erledigt": "erledigt", "ausgenommen": "ausgenommen"}
+ZUSTAND_TEXT = {"offen": "offen", "in_pruefung": "in Prüfung", "erledigt": "erledigt", "ausgenommen": "ausgenommen",
+                "nicht_geprueft": "nicht geprüft"}
 
 
 def _fmt(iso):
@@ -119,20 +124,24 @@ def _zeilen(rid):
         "WHERE ri.round_id = ?", (rid,))
 
 
-def _zustand(z):
+def _zustand(z, geschlossen=False):
     if z["pruefung_id"]:
         return "erledigt"
     if z["excluded_reason"]:
         return "ausgenommen"
+    if geschlossen:                  # nur nach einem Abbruch: Was bis dahin nicht geprüft war, bleibt es
+        return "nicht_geprueft"
     if z["entwurf_id"]:
         return "in_pruefung"
     return "offen"
 
 
-def _zaehlung(zeilen):
+def _zaehlung(zeilen, geschlossen=False):
     out = {"gesamt": len(zeilen), "offen": 0, "in_pruefung": 0, "erledigt": 0, "ausgenommen": 0}
+    if geschlossen:
+        out["nicht_geprueft"] = 0
     for z in zeilen:
-        out[_zustand(z)] += 1
+        out[_zustand(z, geschlossen)] += 1
     return out
 
 
@@ -142,10 +151,11 @@ def _offene_entwuerfe(rid):
 
 def durchgang_json(r, voll=False, pruefer_id=None):
     zeilen = _zeilen(r["id"])
-    z = _zaehlung(zeilen)
+    geschlossen = r["closed_on"] is not None
+    z = _zaehlung(zeilen, geschlossen)
     out = {"id": r["id"], "titel": r["title"], "folder_id": r["folder_id"], "ordner": bestand._pfad_text(r["folder_id"]),
            "eroeffnet_von": r["opened_by_name"], "eroeffnet_am": r["opened_on"], "geschlossen_am": r["closed_on"],
-           "geschlossen_von": r["closed_by_name"], "offen": r["closed_on"] is None, "zaehlung": z}
+           "geschlossen_von": r["closed_by_name"], "offen": not geschlossen, "abgebrochen": bool(r["aborted"]), "zaehlung": z}
     entwuerfe = _offene_entwuerfe(r["id"])
     out["abschliessbar"] = out["offen"] and z["offen"] == 0 and z["in_pruefung"] == 0 and not entwuerfe
     if not voll:
@@ -161,7 +171,7 @@ def durchgang_json(r, voll=False, pruefer_id=None):
     for x in zeilen:
         a = bestand.artikel_kurz(artikel[x["item_id"]])
         a["pfad"] = bestand._pfad_text(artikel[x["item_id"]]["folder_id"])
-        a["zustand"] = _zustand(x)
+        a["zustand"] = _zustand(x, geschlossen)
         a["zustand_text"] = ZUSTAND_TEXT[a["zustand"]]
         a["pruefung"] = ({"id": x["pruefung_id"], "ergebnis": x["ergebnis"], "pruefer": x["pruefer"],
                           "datum": x["geprueft_am"]} if x["pruefung_id"] else None)
@@ -171,7 +181,7 @@ def durchgang_json(r, voll=False, pruefer_id=None):
         a["ausnahme"] = ({"grund": x["excluded_reason"], "von": x["excluded_by_name"], "am": x["excluded_at"]}
                          if x["excluded_reason"] else None)
         liste.append(a)
-    reihe = {"in_pruefung": 0, "offen": 1, "ausgenommen": 2, "erledigt": 3}
+    reihe = {"in_pruefung": 0, "offen": 1, "nicht_geprueft": 1, "ausgenommen": 2, "erledigt": 3}
     liste.sort(key=lambda a: (reihe[a["zustand"]], a["pfad"], a["inventory_no"]))
     out["artikel"] = liste
     out["pruefer"] = db.query(
@@ -254,6 +264,28 @@ def abschliessen(rid, akteur):
                    (heute().isoformat(), akteur.get("id"), akteur["name"], rid))
         journal.eintragen("round", rid, "geschlossen", None, {"title": r["title"], "erledigt": z["erledigt"],
                                                               "ausgenommen": z["ausgenommen"]})
+
+
+def abbrechen(rid, akteur):
+    """Den Durchgang vorzeitig beenden (siehe oben). Liefert, ob er bleibt – False: Er wurde entfernt, weil
+    darin noch nichts abgeschlossen war."""
+    with db.transaction(sofort=True):
+        r = _runde_offen(rid)
+        for e in _offene_entwuerfe(rid):
+            db.execute("UPDATE mat_inspection SET round_id = NULL WHERE id = ?", (e["id"],))
+            journal.eintragen("inspection", e["id"], "geaendert", {"round_id": rid}, {"round_id": None})
+        if not db.query("SELECT 1 FROM mat_inspection WHERE round_id = ? LIMIT 1", (rid,), one=True):
+            db.execute("DELETE FROM mat_round_item WHERE round_id = ?", (rid,))
+            db.execute("DELETE FROM mat_round WHERE id = ?", (rid,))
+            journal.eintragen("round", rid, "geloescht", {"title": r["title"], "folder_id": r["folder_id"]}, None)
+            return False
+        z = _zaehlung(_zeilen(rid), geschlossen=True)
+        db.execute("UPDATE mat_round SET closed_on = ?, closed_by = ?, closed_by_name = ?, aborted = 1 WHERE id = ?",
+                   (heute().isoformat(), akteur.get("id"), akteur["name"], rid))
+        journal.eintragen("round", rid, "abgebrochen", None, {"title": r["title"], "erledigt": z["erledigt"],
+                                                              "ausgenommen": z["ausgenommen"],
+                                                              "nicht_geprueft": z["nicht_geprueft"]})
+        return True
 
 
 def loeschen(rid):
