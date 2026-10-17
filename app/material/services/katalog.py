@@ -19,6 +19,7 @@ import hashlib
 import os
 import re
 import secrets
+import shutil
 import sqlite3
 
 from flask import current_app
@@ -310,6 +311,60 @@ def produkt_anlegen(d, demo=False):
             raise Abgelehnt("Dieses Produkt steht schon im Katalog.", 409)
         journal.eintragen("product", pid, "angelegt", None, w)
     return pid
+
+
+def produkt_variante(pid, d):
+    """Kopie eines Produkts als neue Variante. Die Stammdaten kommen aus d (der Dialog schickt sie vorbelegt mit),
+    eine eigene Artikelnummer ist Pflicht. Auf Wunsch die aktuellen Dokumente des Produkts dazu – je Dokument die
+    neueste, nicht zurückgezogene Version; die Dateien werden kopiert, damit das Löschen des einen Produkts die
+    Dokumente des anderen nicht mitnimmt. Das Produktbild nie, spezifische Formulare auch nicht."""
+    quelle = produkt(pid)
+    if not artikelnummer(text(d, "article_no", "Artikelnummer", 80)):
+        raise Abgelehnt("Eine Variante braucht eine eigene Artikelnummer.")
+    wahl = d.get("dokumente") or []
+    if not isinstance(wahl, list) or any(isinstance(x, bool) or not isinstance(x, int) for x in wahl):
+        raise Abgelehnt("„dokumente“ muss eine Liste von Dokumentkennungen sein.")
+    aktuelle = {r["id"]: r for r in db.query(
+        "SELECT * FROM mat_product_document d WHERE product_id = ? AND (withdrawn_on IS NULL OR withdrawn_on > ?) "
+        "AND NOT EXISTS (SELECT 1 FROM mat_product_document n WHERE n.replaces_id = d.id)", (pid, heute().isoformat()))}
+    if any(x not in aktuelle for x in wahl):
+        raise Abgelehnt("Übernehmen lassen sich nur die aktuellen Dokumente dieses Produkts.")
+    kopien = []
+    try:
+        for doc in (aktuelle[x] for x in dict.fromkeys(wahl)):
+            kopien.append((doc, _datei_kopieren(doc["file_path"]) if doc["file_path"] else None))
+        uid, uname = akteur()
+        with db.transaction(sofort=True):
+            neu = produkt_anlegen(d, demo=bool(quelle["demo"]))
+            for doc, name in kopien:
+                did = db.execute(
+                    "INSERT INTO mat_product_document (product_id, kind, title, file_path, url, mime, size, sha256, version, "
+                    "valid_from, uploaded_by, uploaded_by_name, uploaded_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (neu, doc["kind"], doc["title"], name, doc["url"], doc["mime"], doc["size"], doc["sha256"],
+                     doc["version"], doc["valid_from"], uid, uname, db.now()))
+                journal.eintragen("document", did, "angelegt", None,
+                                  {"product_id": neu, "kind": doc["kind"], "title": doc["title"], "version": doc["version"],
+                                   "valid_from": doc["valid_from"], "kopie_von": doc["id"]})
+            journal.eintragen("product", neu, "variante", None, {"von": pid, "name": f"{quelle['manufacturer']} {quelle['model']}",
+                                                                 "dokumente": len(kopien)})
+    except BaseException:
+        for _, name in kopien:
+            if name:
+                _entfernen(os.path.join(dok_dir(), name))
+        raise
+    return neu
+
+
+def _datei_kopieren(name):
+    """Eine Dokumentdatei unter neuem Namen ablegen – gleicher Inhalt, gleiche Endung."""
+    neu = secrets.token_hex(10) + os.path.splitext(name)[1]
+    try:
+        shutil.copyfile(os.path.join(dok_dir(), name), os.path.join(dok_dir(), neu))
+    except OSError as exc:
+        _entfernen(os.path.join(dok_dir(), neu))
+        current_app.logger.warning("Dokumentdatei „%s“ ließ sich nicht kopieren: %s", name, exc)
+        raise Abgelehnt("Ein Dokument ließ sich nicht kopieren. Bitte später erneut versuchen – oder ohne Dokumente anlegen.")
+    return neu
 
 
 def produkt_aendern(pid, d):

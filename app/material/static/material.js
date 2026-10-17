@@ -55,6 +55,7 @@
     round_id: "Durchgang Nr.", form_id: "Formular Nr.", form_version: "Formularversion", inspector_name: "Prüfer",
     begonnen: "begonnen", seiten: "Seiten", dateien: "Dateien", basis: "aus Prüfung", erledigt: "erledigt", ausgenommen: "ausgenommen",
     links: "Links", fotos: "Fotos", note: "Bemerkung", answer: "Antwort", status: "Status",
+    von: "Kopie von Produkt Nr.", kopie_von: "Kopie von Dokument Nr.", dokumente: "Dokumente übernommen",
   };
   const AKTION = { angelegt: "angelegt", geaendert: "geändert", geloescht: "gelöscht", verschoben: "verschoben",
                    bild: "Bild geändert", foto: "Foto geändert", neue_version: "neue Version", zurueckgezogen: "zurückgezogen",
@@ -64,7 +65,7 @@
                    gesperrt: "gesperrt", ausgesondert: "ausgesondert", anhang: "Anhang", anhang_entfernt: "Anhang entfernt",
                    eroeffnet: "Durchgang eröffnet", ausgenommen: "ausgenommen", einbezogen: "wieder einbezogen",
                    geschlossen: "Durchgang abgeschlossen", faelligkeit: "Fälligkeit vorgezogen", umbenannt: "umbenannt",
-                   eingepflegt: "eingepflegt", abgelehnt: "abgelehnt" };
+                   eingepflegt: "eingepflegt", abgelehnt: "abgelehnt", variante: "als Variante angelegt" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };
 
@@ -1180,7 +1181,10 @@
     const kats = await kategorienLaden();
     const neu = !p.id;
     const kat = (id) => kats.find((k) => k.id === +id) || {};
-    dialog(`<h2>${p.meldung ? "Produkt aus Meldung anlegen" : neu ? "Produkt anlegen" : "Produkt bearbeiten"}</h2>
+    // Als Variante: die aktuellen Dokumente des Vorbilds (neueste Version, nicht zurückgezogen) zur Auswahl.
+    const vorbildDoks = p.variante_von ? p.variante_von.dokumente.filter((d) => !d.abgeloest_durch && (!d.withdrawn_on || d.withdrawn_on > isoHeute(0))) : [];
+    dialog(`<h2>${p.variante_von ? `Variante von „${esc(produktName(p.variante_von))}“` : p.meldung ? "Produkt aus Meldung anlegen" : neu ? "Produkt anlegen" : "Produkt bearbeiten"}</h2>
+      ${p.variante_von ? '<p class="help">Die Stammdaten sind übernommen – bitte die neue Artikelnummer eintragen und anpassen, was sich unterscheidet.</p>' : ""}
       ${p.meldung ? meldeKasten(p.meldung) : ""}
       <label for="pd-kat">Kategorie</label><select id="pd-kat"><option value="">– bitte wählen –</option>${kategorieOptionen(kats, p.category_id)}</select>
       <div class="field-row"><div><label for="pd-her">Hersteller</label><input type="text" id="pd-her" value="${esc(p.manufacturer || "")}" maxlength="120"></div>
@@ -1197,6 +1201,10 @@
         <div><input type="file" id="pd-bild" accept="image/*">
           ${p.bild ? '<label class="inline"><input type="checkbox" id="pd-bild-weg"> Bild entfernen</label>' : ""}
           <div class="help">${p.bild ? "Ein neues Bild ersetzt das bisherige. " : ""}JPEG, PNG, WebP oder HEIC vom Telefon.</div></div></div>
+      ${p.variante_von ? `<fieldset class="mat-variante-doks"><legend>Dokumente übernehmen</legend>
+        ${vorbildDoks.length ? vorbildDoks.map((d) => `<label class="inline"><input type="checkbox" class="pd-dok" value="${d.id}" checked> ${esc(d.title)}
+          <span class="muted small">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}${d.datei ? "" : " · Link"}</span></label>`).join("") : '<p class="help">Das Produkt hat keine aktuellen Dokumente.</p>'}
+        <p class="help">Das Produktbild wird nie übernommen. Dokumente der Kategorie gelten ohnehin für alle Produkte darin.</p></fieldset>` : ""}
       ${p.meldung ? '<label for="pd-antwort">Anmerkung für den Melder (optional, steht in seiner Mail)</label><textarea id="pd-antwort" rows="2" maxlength="1000"></textarea>' : ""}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="pd-ok" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
     (dlg, body) => {
@@ -1217,7 +1225,8 @@
         hilfen();
       });
       mk.addEventListener("change", hilfen);
-      if (neu && p.category_id) katSel.dispatchEvent(new Event("change"));
+      // Neu in einer Kategorie: deren Vorgaben übernehmen – nicht bei einer Variante, die hat ihre eigenen.
+      if (neu && p.category_id && !p.variante_von) katSel.dispatchEvent(new Event("change"));
       hilfen();
       artikelnummerPruefen($("#pd-art", body), $("#pd-art-hilfe", body), p.id);
       // Erst die Angaben, dann das Bild. Scheitert nur das Bild, kennt der Dialog das Produkt schon: Ein zweiter
@@ -1231,11 +1240,13 @@
                         lifetime_source: $("#pd-lq", body).value, description: $("#pd-desc", body).value };
         const bild = $("#pd-bild", body).files[0];
         const weg = $("#pd-bild-weg", body);
+        if (p.variante_von && !pid && !daten.article_no.trim()) { toast("Eine Variante braucht eine eigene Artikelnummer.", true); fokus($("#pd-art", body)); return; }
         knopf.disabled = true;
         try {
           // Aus einer Meldung: Produkt anlegen und Meldung erledigen in einem Zug (der Melder bekommt Bescheid).
           const r = pid ? await api(`${API}/produkte/${pid}`, { method: "PUT", body: daten })
             : p.meldung ? await api(`${API}/meldungen/${p.meldung.id}/produkt`, { method: "POST", body: Object.assign(daten, { antwort: $("#pd-antwort", body).value }) })
+            : p.variante_von ? await api(`${API}/produkte/${p.variante_von.id}/variante`, { method: "POST", body: Object.assign(daten, { dokumente: $$(".pd-dok:checked", body).map((c) => +c.value) }) })
             : await api(`${API}/produkte`, { method: "POST", body: daten });
           pid = r.produkt.id;
           if (bild) {
@@ -1333,7 +1344,7 @@
         ${p.bild ? `<a href="${esc(p.original || p.bild)}" target="_blank" rel="noopener"><img class="mat-produktbild" src="${esc(p.bild)}" alt=""></a>` : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel"><h1>${esc(produktName(p))} ${demoMarke(p.demo)}</h1>
           ${DARF.verwalten ? `<div class="btn-row"><a class="btn small" href="/material/artikel/neu?produkt=${p.id}">+ Artikel dieses Produkts</a></div>` : ""}
-          ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${p.artikel_gesamt ? "" : '<button class="btn secondary small" data-act="loeschen">Löschen</button>'}</div>` : ""}</div>
+          ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button><button class="btn secondary small" data-act="variante">Als Variante kopieren</button>${p.artikel_gesamt ? "" : '<button class="btn secondary small" data-act="loeschen">Löschen</button>'}</div>` : ""}</div>
       </div>
       <div class="mat-spalten">
         <section class="section"><h2>Stammdaten</h2><dl class="mat-daten">
@@ -1364,6 +1375,8 @@
       <section class="section"><h2>Journal</h2>${journalHtml(p.journal, true)}</section>`;
     aktionen = {
       bearbeiten: () => produktDialog(p),
+      // Stammdaten vorbelegt, Artikelnummer leer (eine neue ist Pflicht), kein Bild.
+      variante: () => produktDialog(Object.assign({}, p, { id: null, article_no: "", bild: null, vorschau: null, original: null, variante_von: p })),
       loeschen: async () => {
         if (!(await confirm(`Produkt „${produktName(p)}“ aus dem Katalog löschen?`, "Löschen"))) return;
         try { await api(`${API}/produkte/${p.id}`, { method: "DELETE" }); location.href = "/material/katalog"; } catch (e) { toast(e.message, true); }

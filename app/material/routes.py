@@ -299,6 +299,15 @@ def produkt_anlegen():
     return jsonify(produkt=katalog.produkt_json(katalog.produkt(pid), voll=True)), 201
 
 
+@api.post("/produkte/<int:pid>/variante")
+@katalog_required
+def produkt_variante(pid):
+    """Kopie als neue Variante: Felder wie POST /produkte (eigene Artikelnummer Pflicht), dazu „dokumente“ –
+    die Kennungen der aktuellen Dokumente, die mitkommen sollen. Das Produktbild kommt nie mit."""
+    neu = katalog.produkt_variante(pid, json_body())
+    return jsonify(produkt=katalog.produkt_json(katalog.produkt(neu), voll=True)), 201
+
+
 @api.get("/produkte/<int:pid>")
 def produkt_lesen(pid):
     if not current_user():

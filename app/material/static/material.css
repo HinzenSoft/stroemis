@@ -209,6 +209,10 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-bildfeld { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .mat-bildfeld img { width: 72px; height: 72px; object-fit: contain; background: var(--weiss); border: 1px solid var(--linie); }
 .mat-bildfeld .help { margin: 4px 0 0; }
+/* Variante: Auswahl der Dokumente, die mitkommen. */
+.mat-variante-doks { border: 1px solid var(--linie); padding: 6px 12px 8px; margin: 14px 0 0; }
+.mat-variante-doks legend { font-weight: 600; padding: 0 4px; }
+.mat-variante-doks label.inline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .mat-meldekasten p.small { margin: 0 0 6px; }
 
 #kat-q { margin-bottom: 10px; }

@@ -1941,6 +1941,66 @@ def test_artikelnummer_eindeutig():
     print("Artikelnummerntest bestanden.")
 
 
+def test_produkt_variante():
+    """Ein Produkt als neue Variante kopieren: Stammdaten ja, eine eigene Artikelnummer Pflicht, Dokumente nach
+    Wahl (nur aktuelle, Dateien kopiert), Produktbild und spezifische Formulare nie."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)                 # u. a. ein spezifisches Formular für den Gurt Alpha
+        kp, gurt = k["katalog"], ids["gurt"]
+        assert kp.post(f"/api/material/produkte/{gurt}/bild", data={"file": (jpeg(), "gurt.jpg")}, headers=H).status_code == 200
+        dok = f"/api/material/produkte/{gurt}/dokumente"
+        r = kp.post(dok, headers=H, data={"kind": "gebrauchsanleitung", "title": "Anleitung", "valid_from": "2026-01-01",
+                                          "file": (io.BytesIO(PDF), "anleitung.pdf")})
+        alt_v1 = r.json["dokument_id"]
+        r = kp.post(f"/api/material/dokumente/{alt_v1}/version", headers=H, data={"title": "Anleitung", "version": "2026",
+                                                                                 "valid_from": "2026-02-01",
+                                                                                 "file": (io.BytesIO(PDF + b"%v2"), "anleitung2.pdf")})
+        assert r.status_code == 201, r.get_json()
+        v2 = r.json["dokument_id"]
+        link = kp.post(dok, headers=H, json={"kind": "datenblatt", "title": "Datenblatt", "url": "https://example.org/gurt"}).json["dokument_id"]
+        weg = kp.post(dok, headers=H, json={"kind": "sonstiges", "title": "Alt", "url": "https://example.org/alt"}).json["dokument_id"]
+        assert kp.post(f"/api/material/dokumente/{weg}/zurueckziehen", headers=H, json={}).status_code == 200
+        quelle = kp.get(f"/api/material/produkte/{gurt}").json["produkt"]
+        stamm = {f: quelle[f] for f in ("category_id", "manufacturer", "model", "norm", "material_kind", "interval_months",
+                                        "lifetime_years", "lifetime_source", "description")}
+        url = f"/api/material/produkte/{gurt}/variante"
+        assert k["wart"].post(url, json=dict(stamm, article_no="GA-200"), headers=H).status_code == 403
+        r = kp.post(url, json=dict(stamm, article_no=" - "), headers=H)
+        assert r.status_code == 400 and "eigene Artikelnummer" in r.json["error"], r.get_json()
+        r = kp.post(url, json=dict(stamm, article_no="ga 100"), headers=H)            # die alte Nummer: dasselbe Produkt
+        assert r.status_code == 409 and "Gurt Alpha" in r.json["error"], r.get_json()
+        r = kp.post(url, json=dict(stamm, model="Gurt Alpha L", article_no="HB-7"), headers=H)   # vergeben an HMS Beta
+        assert r.status_code == 409 and "schon vergeben" in r.json["error"], r.get_json()
+        for falsch in ([alt_v1], [weg], [999999], ["x"]):
+            r = kp.post(url, json=dict(stamm, article_no="GA-200", dokumente=falsch), headers=H)
+            assert r.status_code == 400, (falsch, r.get_json())
+        orig = os.path.join(app.config["MEDIA_DIR"], "material", "dok")
+        vorher = set(os.listdir(orig))
+        r = kp.post(url, json=dict(stamm, article_no="GA-200", model="Gurt Alpha L", dokumente=[v2, link]), headers=H)
+        assert r.status_code == 201, r.get_json()
+        neu = r.json["produkt"]
+        assert neu["article_no"] == "GA-200" and neu["model"] == "Gurt Alpha L" and neu["lifetime_years"] == quelle["lifetime_years"]
+        assert neu["bild"] is None, neu["bild"]
+        docs = {d["title"]: d for d in neu["dokumente"]}
+        assert set(docs) == {"Anleitung", "Datenblatt"} and docs["Anleitung"]["version"] == "2026", docs
+        alt_v2 = next(d for d in quelle["dokumente"] if d["id"] == v2)
+        assert docs["Anleitung"]["sha256"] == alt_v2["sha256"] and docs["Anleitung"]["datei"] != alt_v2["datei"]
+        assert docs["Datenblatt"]["url"] == "https://example.org/gurt" and not docs["Datenblatt"]["datei"]
+        assert len(set(os.listdir(orig)) - vorher) == 1                        # eine Datei kopiert, der Link nicht
+        assert kp.get(f"/api/material/formulare?produkt={neu['id']}").json["formulare"] == []
+        journal = kp.get(f"/api/material/produkte/{neu['id']}").json["produkt"]["journal"]
+        assert any(e["action"] == "variante" and e["nachher"]["von"] == gurt for e in journal), journal
+        # Ohne Dokumente geht es auch; und das Löschen der Variante nimmt nur ihre eigenen Dateien mit.
+        r = kp.post(url, json=dict(stamm, article_no="GA-300", model="Gurt Alpha XL"), headers=H)
+        assert r.status_code == 201 and r.json["produkt"]["dokumente"] == [], r.get_json()
+        assert kp.delete(f"/api/material/produkte/{neu['id']}", headers=H).status_code == 200
+        assert set(os.listdir(orig)) == vorher
+        assert kp.get(f"/api/material/produkte/{gurt}").json["produkt"]["bild"]
+    print("Variantentest bestanden.")
+
+
 if __name__ == "__main__":
     test_migration()
     test_rollen()
@@ -1965,3 +2025,4 @@ if __name__ == "__main__":
     test_produktmeldung_loeschen()
     test_durchgang_abbrechen()
     test_artikelnummer_eindeutig()
+    test_produkt_variante()
