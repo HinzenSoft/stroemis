@@ -85,10 +85,12 @@ def lesen(paare, grenze=500):
 
 
 def fuer_produkt(pid):
-    """Journal eines Produkts: seine Stammdaten, seine Dokumente und seine spezifischen Formulare."""
+    """Journal eines Produkts: seine Stammdaten, seine Dokumente, seine spezifischen Formulare und die
+    Meldungen, über die es in den Katalog kam."""
     paare = [("product", pid)]
     paare += [("document", r["id"]) for r in db.query("SELECT id FROM mat_product_document WHERE product_id = ?", (pid,))]
     paare += [("form", r["id"]) for r in db.query("SELECT id FROM mat_form WHERE product_id = ?", (pid,))]
+    paare += [("request", r["id"]) for r in db.query("SELECT id FROM mat_product_request WHERE product_id = ?", (pid,))]
     return lesen(paare)
 
 

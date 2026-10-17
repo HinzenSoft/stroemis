@@ -173,6 +173,32 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-unter-zusatz { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .mat-unter-zusatz a { color: inherit; text-decoration: none; }        /* neutral wie die Zeile; Link erst beim Zeigen */
 .mat-unter-zusatz a:hover, .mat-unter-zusatz a:focus-visible { text-decoration: underline; }
+/* Produktmeldungen: je Meldung eine Karte, links farbig nach Status (offen blau, eingepflegt grün, abgelehnt rot). */
+.mat-meldezahl { display: inline-block; min-width: 1.5em; margin-left: 6px; padding: 0 5px; border-radius: var(--radius-pille);
+  background: var(--rot); color: var(--weiss); font-size: .8rem; line-height: 1.5; text-align: center; }
+.mat-meldezahl[hidden] { display: none; }
+.mat-filter { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
+.mat-meldung { border: 1px solid var(--linie); border-left: 4px solid var(--wasser); padding: 10px 14px; margin: 0 0 12px; }
+.mat-meldung.m-eingepflegt { border-left-color: var(--ok); }
+.mat-meldung.m-abgelehnt { border-left-color: var(--rot); }
+.mat-meldung-kopf { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.mat-meldung-kopf h2 { margin: 0; font-size: 1.15rem; }
+.mat-meldung > p.small { margin: 2px 0 8px; }
+.mat-meldung-daten { margin-bottom: 8px; }
+.mat-meldung-daten a { overflow-wrap: anywhere; }
+.mat-meldung-fotos { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 8px; }
+.mat-meldung-fotos img { width: 72px; height: 72px; object-fit: contain; background: var(--weiss); border: 1px solid var(--linie); }
+.mat-meldung-ergebnis { margin: 6px 0; }
+.mat-meldung .btn-row { margin-top: 8px; }
+.mat-mstatus { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 8px; border-radius: var(--radius-pille); }
+.mat-mstatus.m-offen { background: var(--co-info-fl); color: var(--wasser); box-shadow: inset 0 0 0 1px var(--wasser); }
+.mat-mstatus.m-eingepflegt { background: var(--co-success-fl); color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+.mat-mstatus.m-abgelehnt { background: var(--rot); color: var(--weiss); }
+.mat-meldeliste { list-style: none; padding: 0; margin: 0; }
+.mat-meldeliste li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 0; border-bottom: 1px solid var(--linie); }
+.mat-meldeliste li > div { flex: 1 1 100%; }
+.mat-meldekasten { border: 1px dashed var(--linie); background: var(--grau-hell); padding: 8px 12px; margin: 0 0 6px; }
+.mat-meldekasten p.small { margin: 0 0 6px; }
 
 #kat-q { margin-bottom: 10px; }
 

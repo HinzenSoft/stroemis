@@ -14,7 +14,7 @@ from flask import (Blueprint, abort, current_app, g, jsonify, redirect, render_t
 from .. import db
 from ..auth import current_user, eingabefehler_abfangen, json_body
 from . import models
-from .services import Abgelehnt, anhang, bestand, durchgang, journal, katalog, kennung, pruefung, search
+from .services import Abgelehnt, anhang, bestand, durchgang, journal, katalog, kennung, meldung, pruefung, search
 from .services import status as st
 from .services.rechte import darf, darf_alles, ist_katalogpfleger, katalog_required, requires_folder
 
@@ -33,6 +33,7 @@ UPLOAD_GRENZEN = {
     "material_api.kategorie_dokument_neu": katalog.DOK_MAX_BYTES + 1024 * 1024,
     "material_api.punkt_foto": katalog.BILD_MAX_BYTES + 1024 * 1024,
     "material_api.anhang_neu": anhang.MAX_BYTES + 1024 * 1024,
+    "material_api.meldung_anlegen": meldung.MAX_FOTOS * katalog.BILD_MAX_BYTES + 1024 * 1024,
 }
 
 
@@ -140,6 +141,12 @@ def formular_seite(fid):
     return _seite("formular", katalog_seite=True, id=fid)
 
 
+@seiten.get("/material/katalog/meldungen")
+def meldungen_seite():
+    """Katalogpfleger arbeiten hier die Meldungen fehlender Produkte ab; Materialwarte sehen ihre eigenen."""
+    return _seite("meldungen", katalog_seite=True, status=request.args.get("status"))
+
+
 @seiten.get("/material/suche")
 def suche_seite():
     """Ein eindeutiger Treffer öffnet den Artikel direkt; sonst zeigt die Seite die Trefferliste."""
@@ -196,7 +203,8 @@ def start():
     z = bestand.zaehlung()
     return jsonify(darf=darf_alles(), zaehlung=z, bestand=sum(z[s] for s in st.BESTAND),
                    gliederungen=gliederungen, naechste=naechste, faellig_gesamt=faellig,
-                   schwelle_tage=st.schwelle_tage(), status_text=st.LABEL)
+                   schwelle_tage=st.schwelle_tage(), status_text=st.LABEL,
+                   meldungen_offen=meldung.anzahl_offen() if ist_katalogpfleger() else None)
 
 
 @api.get("/suche")
@@ -362,6 +370,65 @@ def dokument_umbenennen(did):
 def dokument_zurueckziehen(did):
     katalog.dokument_zurueckziehen(did, json_body())
     return jsonify(dokumente=katalog.dokumente_des(katalog.dokument(did)))
+
+
+# --- Schnittstelle: Meldungen fehlender Produkte -------------------------------------------------------
+
+@api.get("/meldungen")
+def meldungen():
+    """Katalogpfleger sehen alle Meldungen (Standard: offene), Materialwarte ihre eigenen (Standard: alle)."""
+    u = current_user()
+    if not u:
+        return jsonify(error="Nicht angemeldet"), 401
+    alle = ist_katalogpfleger() and request.args.get("eigene") != "1"
+    if not alle and not darf("verwalten"):
+        raise Abgelehnt("Produktmeldungen sehen Katalogpfleger und Materialwarte (ihre eigenen).", 403)
+    filter_ = request.args.get("status") if request.args.get("status") in meldung.FILTER else ("offen" if alle else "alle")
+    rows = meldung.liste(filter_, None if alle else u["id"])
+    return jsonify(meldungen=[meldung.meldung_json(r) for r in rows], alle=alle, filter=filter_,
+                   offen=meldung.anzahl_offen() if alle else None)
+
+
+@api.post("/meldungen")
+@requires_folder("verwalten")
+def meldung_anlegen():
+    """Ein fehlendes Produkt melden – Felder als JSON oder, mit Fotos, als Formular (Feld „fotos“, mehrfach)."""
+    mid = meldung.anlegen(_eingabe(), request.files.getlist("fotos"))
+    return jsonify(meldung=meldung.meldung_json(meldung.meldung(mid))), 201
+
+
+@api.get("/meldungen/<int:mid>")
+def meldung_lesen(mid):
+    u = current_user()
+    if not u:
+        return jsonify(error="Nicht angemeldet"), 401
+    r = meldung.meldung(mid)
+    if not (ist_katalogpfleger() or r["created_by"] == u["id"]):
+        raise Abgelehnt("Diese Meldung sehen nur ihr Melder und die Katalogpfleger.", 403)
+    return jsonify(meldung=meldung.meldung_json(r))
+
+
+@api.post("/meldungen/<int:mid>/produkt")
+@katalog_required
+def meldung_produkt(mid):
+    """Produkt aus der Meldung anlegen (Felder wie POST /produkte, dazu „antwort“) – erledigt sie zugleich."""
+    pid = meldung.produkt_anlegen(mid, json_body())
+    return jsonify(produkt=katalog.produkt_json(katalog.produkt(pid), voll=True),
+                   meldung=meldung.meldung_json(meldung.meldung(mid))), 201
+
+
+@api.post("/meldungen/<int:mid>/zuordnen")
+@katalog_required
+def meldung_zuordnen(mid):
+    meldung.zuordnen(mid, json_body())
+    return jsonify(meldung=meldung.meldung_json(meldung.meldung(mid)))
+
+
+@api.post("/meldungen/<int:mid>/ablehnen")
+@katalog_required
+def meldung_ablehnen(mid):
+    meldung.ablehnen(mid, json_body())
+    return jsonify(meldung=meldung.meldung_json(meldung.meldung(mid)))
 
 
 @api.get("/formulare")

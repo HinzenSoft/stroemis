@@ -113,7 +113,8 @@ def test_migration():
         tabellen = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         erwartet = {"mat_meta", "mat_category", "mat_product", "mat_product_document", "mat_form", "mat_checklist_item",
                     "mat_folder", "mat_item", "mat_inspection", "mat_inspection_result", "mat_inspection_attachment",
-                    "mat_round", "mat_round_item", "mat_folder_grant", "mat_reminder_log", "mat_audit"}
+                    "mat_round", "mat_round_item", "mat_folder_grant", "mat_reminder_log", "mat_audit",
+                    "mat_product_request"}
         assert erwartet <= tabellen, erwartet - tabellen
         spalten = {r[1] for r in conn.execute("PRAGMA table_info(users)")}
         assert {"recht_material", "mat_pruefer", "mat_katalog", "urkundennummer", "signature_png"} <= spalten
@@ -1590,6 +1591,15 @@ def test_migration_lieferung2():
         # Wer schon geprüft wurde, ist nicht „neu“; wer nur einen Entwurf hat, schon.
         assert conn.execute("SELECT id, last_inspected_on FROM mat_item ORDER BY id").fetchall() == [(1, "2026-05-01"), (2, None)]
         assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+        # Schritt 4: die Tabelle für Produktmeldungen; eine Ablehnung braucht eine Begründung.
+        assert conn.execute("SELECT COUNT(*) FROM mat_product_request").fetchone()[0] == 0
+        try:
+            conn.execute("INSERT INTO mat_product_request (manufacturer, model, dedupe_key, status, created_at, resolved_at) "
+                         "VALUES ('H', 'M', 'h|m|', 'abgelehnt', ?, ?)", (ts, ts))
+            raise AssertionError("Ablehnung ohne Begründung angenommen")
+        except sqlite3.IntegrityError:
+            pass
+        conn.rollback()              # sonst bliebe die Transaktion offen, und das Pragma unten wirkte nicht
         # Die Eingangsprüfung ist jetzt eine erlaubte Art; der Entwurf je Artikel bleibt einzig.
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("INSERT INTO mat_inspection (item_id, inspected_on, kind, created_at, updated_at) "
@@ -1614,6 +1624,149 @@ def test_migration_lieferung2():
     print("Migrationstest Lieferung 2 bestanden.")
 
 
+# --- Meldungen fehlender Produkte ----------------------------------------------------------------------
+
+def test_produktmeldung():
+    """Ein Materialwart meldet ein Produkt, das im Katalog fehlt; ein Katalogpfleger pflegt es ein (neu oder
+    vorhanden) oder lehnt ab. Die Katalogpfleger bekommen die Meldung, der Melder den Bescheid per Mail."""
+    from app.material.services import meldung
+    alt = (meldung.HINTERGRUND, meldung.send_mail)
+    post = []
+    meldung.HINTERGRUND = lambda f, *a: f(*a)
+    meldung.send_mail = lambda an, betreff, inhalt: post.append((an, betreff, inhalt)) or True
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            app, k = umgebung(tmp)
+            ids = katalog_grund(k["adm"])
+            gid, _ = gliederung(k["wart"])
+
+            def melden(c, **f):
+                return c.post("/api/material/meldungen", json=dict({"manufacturer": "Irgendwer", "model": "Ding"}, **f), headers=H)
+
+            # Melden mit Foto, Links (doppelt, ohne Schema, Leerzeile), Kategorie und Ordner – als Formular.
+            r = k["wart"].post("/api/material/meldungen", headers=H, data={
+                "manufacturer": "Bergwerk", "model": "Rettungsgurt Gamma", "article_no": "RG-3", "norm": "EN 813",
+                "category_id": str(ids["gurte"]), "folder_id": str(gid),
+                "links": "https://example.org/gamma\nwww.example.org/gamma.pdf\n\nhttps://example.org/gamma",
+                "note": "Größe M/L\nfür die Strömungsretter", "fotos": (jpeg(), "etikett.jpg")})
+            assert r.status_code == 201, r.get_json()
+            m = r.json["meldung"]
+            assert m["status"] == "offen" and m["eigen"] and m["note"] == "Größe M/L\nfür die Strömungsretter", m
+            assert m["links"] == ["https://example.org/gamma", "https://www.example.org/gamma.pdf"], m["links"]
+            assert len(m["fotos"]) == 1 and m["fotos"][0]["vorschau"].startswith("/media/material/thumb/"), m["fotos"]
+            assert m["kategorie"]["pfad"] == "PSA gegen Absturz / Gurte" and m["ordner"]["pfad"] == "OG Musterstadt", m
+            assert k["wart"].get(m["fotos"][0]["vorschau"]).status_code == 200
+            assert [p[0] for p in post] == ["katalog@example.org"], post
+            assert "Rettungsgurt Gamma" in post[0][1] and "https://www.example.org/gamma.pdf" in post[0][2] \
+                and "https://strömis.de/material/katalog/meldungen" in post[0][2] and "OG Musterstadt" in post[0][2], post[0]
+
+            # Eingaben: Pflichtfelder, nur http(s)-Links, höchstens fünf, Kategorie muss es geben.
+            for falsch, teil in (({"manufacturer": " "}, "Hersteller"), ({"links": "javascript:alert(1)"}, "http"),
+                                 ({"links": "ftp://example.org/x"}, "http"), ({"links": ["https://example.org/a", 3]}, "Text"),
+                                 ({"links": "\n".join(f"https://example.org/{i}" for i in range(6))}, "Höchstens"),
+                                 ({"links": "https://example.org/" + "x" * 500}, "zu lang"), ({"category_id": 99999}, "Kategorie"),
+                                 ({"folder_id": 99999}, "Ordner"), ({"note": "x" * 2001}, "Bemerkung")):
+                r = melden(k["wart"], **falsch)
+                assert r.status_code in (400, 404) and teil in r.json["error"], (falsch, r.get_json())
+            # Fotos: höchstens drei, nur Bilder – und ein abgewiesenes lässt keine Datei zurück.
+            orig = os.path.join(app.config["MEDIA_DIR"], "material", "orig")
+            vorher = sorted(os.listdir(orig))
+            r = k["wart"].post("/api/material/meldungen", headers=H, data={
+                "manufacturer": "X", "model": "Y", "fotos": [(jpeg(), "a.jpg"), (io.BytesIO(PDF), "b.pdf")]})
+            assert r.status_code == 400 and "kein Foto" in r.json["error"] and sorted(os.listdir(orig)) == vorher, r.get_json()
+            r = k["wart"].post("/api/material/meldungen", headers=H, data={
+                "manufacturer": "X", "model": "Y", "fotos": [(jpeg(), f"{i}.jpg") for i in range(4)]})
+            assert r.status_code == 400 and "Höchstens 3 Fotos" in r.json["error"] and sorted(os.listdir(orig)) == vorher
+            # Was schon im Katalog steht (gleiche Dublette, andere Schreibweise), wird nicht gemeldet.
+            r = melden(k["wart"], manufacturer="testwerk", model="Gurt-Alpha", article_no="GA 100")
+            assert r.status_code == 409 and "steht schon im Katalog" in r.json["error"], r.get_json()
+            # Melden dürfen Materialwarte (die Verwaltung ist überall Materialwart), sonst niemand.
+            for wer in ("fuehrung", "pruefer", "nutzer", "katalog"):
+                assert melden(k[wer]).status_code == 403, wer
+            r = melden(k["adm"], manufacturer="Adminwerk", model="Seil Delta")
+            assert r.status_code == 201
+            m2 = r.json["meldung"]["id"]
+            assert post[-1][0] == "katalog@example.org"
+
+            # Sehen: der Materialwart nur seine, der Katalogpfleger alle offenen (älteste zuerst).
+            r = k["wart"].get("/api/material/meldungen")
+            assert r.status_code == 200 and not r.json["alle"] and [x["id"] for x in r.json["meldungen"]] == [m["id"]]
+            assert k["wart"].get(f"/api/material/meldungen/{m2}").status_code == 403
+            r = k["katalog"].get("/api/material/meldungen")
+            assert r.json["alle"] and [x["id"] for x in r.json["meldungen"]] == [m["id"], m2] and r.json["offen"] == 2
+            for wer in ("fuehrung", "nutzer"):
+                assert k[wer].get("/api/material/meldungen").status_code == 403, wer
+            assert k["katalog"].get("/api/material/start").json["meldungen_offen"] == 2
+            assert k["wart"].get("/api/material/start").json["meldungen_offen"] is None
+            assert k["katalog"].get("/material/katalog/meldungen").status_code == 200
+            assert k["wart"].get("/material/katalog/meldungen").status_code == 200
+            assert k["nutzer"].get("/material/katalog/meldungen").status_code == 403
+
+            # Einpflegen als neues Produkt: Produkt und erledigte Meldung in einem Zug, Bescheid an den Melder.
+            post.clear()
+            daten = {"category_id": ids["gurte"], "manufacturer": "Bergwerk", "model": "Rettungsgurt Gamma", "article_no": "RG-3",
+                     "material_kind": "textil", "lifetime_years": 10, "antwort": "Mit Gebrauchsanleitung angelegt."}
+            assert k["wart"].post(f"/api/material/meldungen/{m['id']}/produkt", json=daten, headers=H).status_code == 403
+            r = k["katalog"].post(f"/api/material/meldungen/{m['id']}/produkt", json=daten, headers=H)
+            assert r.status_code == 201, r.get_json()
+            pid = r.json["produkt"]["id"]
+            assert r.json["meldung"]["status"] == "eingepflegt" and r.json["meldung"]["produkt"]["id"] == pid
+            assert [p[0] for p in post] == ["wart@example.org"], post
+            assert f"https://strömis.de/material/artikel/neu?produkt={pid}&ordner={gid}" in post[0][2] \
+                and "Mit Gebrauchsanleitung angelegt." in post[0][2] and "ist im Katalog" in post[0][1], post[0]
+            with app.app_context():
+                from app import db
+                anzahl = db.query("SELECT COUNT(*) AS n FROM mat_product", one=True)["n"]
+            r = k["katalog"].post(f"/api/material/meldungen/{m['id']}/produkt", json=dict(daten, model="Gurt Gamma 2"), headers=H)
+            assert r.status_code == 409 and "schon erledigt" in r.json["error"], r.get_json()
+            with app.app_context():
+                assert db.query("SELECT COUNT(*) AS n FROM mat_product", one=True)["n"] == anzahl
+            journal = k["katalog"].get(f"/api/material/produkte/{pid}").json["produkt"]["journal"]
+            assert {("request", "angelegt"), ("request", "eingepflegt"), ("product", "angelegt")} <= \
+                {(e["entity"], e["action"]) for e in journal}, journal
+            # Eine Meldung, deren Produkt inzwischen anders in den Katalog kam, zeigt es als Treffer – ein Klick ordnet zu.
+            r = k["katalog"].post("/api/material/produkte", headers=H, json={
+                "category_id": ids["karabiner"], "manufacturer": "Adminwerk", "model": "Seil-Delta", "material_kind": "metall_hardware",
+                "interval_months": 12})
+            p2 = r.json["produkt"]["id"]
+            treffer = {x["id"]: x["treffer"] for x in k["katalog"].get("/api/material/meldungen").json["meldungen"]}
+            assert treffer == {m2: treffer[m2]} and treffer[m2]["id"] == p2, treffer
+            post.clear()
+            r = k["katalog"].post(f"/api/material/meldungen/{m2}/zuordnen", json={"product_id": p2}, headers=H)
+            assert r.status_code == 200 and r.json["meldung"]["status"] == "eingepflegt" and r.json["meldung"]["treffer"] is None
+            assert [p[0] for p in post] == ["admin@example.org"], post
+
+            # Ablehnen nur mit Begründung; danach ist die Meldung zu.
+            m3 = melden(k["wart"], manufacturer="Leuchtwerk", model="Stirnlampe").json["meldung"]["id"]
+            assert k["katalog"].post(f"/api/material/meldungen/{m3}/ablehnen", json={"antwort": "  "}, headers=H).status_code == 400
+            post.clear()
+            r = k["katalog"].post(f"/api/material/meldungen/{m3}/ablehnen", json={"antwort": "Lampen gehören nicht ins Modul."},
+                                  headers=H)
+            assert r.status_code == 200 and r.json["meldung"]["status"] == "abgelehnt", r.get_json()
+            assert [p[0] for p in post] == ["wart@example.org"] and "nicht aufgenommen" in post[0][1] \
+                and "Lampen gehören nicht ins Modul." in post[0][2], post
+            assert k["katalog"].post(f"/api/material/meldungen/{m3}/zuordnen", json={"product_id": p2}, headers=H).status_code == 409
+            eigene = k["wart"].get("/api/material/meldungen").json
+            assert eigene["filter"] == "alle" and [(x["id"], x["status"]) for x in eigene["meldungen"]] == \
+                [(m3, "abgelehnt"), (m["id"], "eingepflegt")], eigene
+            assert {x["id"] for x in k["katalog"].get("/api/material/meldungen?status=erledigt").json["meldungen"]} == {m["id"], m2, m3}
+            assert k["katalog"].get("/api/material/meldungen").json["meldungen"] == []
+
+            # Wird das Produkt gelöscht, bleibt die Meldung eingepflegt – ohne Produkt.
+            assert k["katalog"].delete(f"/api/material/produkte/{pid}", headers=H).status_code == 200
+            x = k["wart"].get(f"/api/material/meldungen/{m['id']}").json["meldung"]
+            assert x["status"] == "eingepflegt" and x["produkt"] is None and x["produkt_geloescht"], x
+            # Ohne Katalogpfleger geht die Meldung an die Verwaltung.
+            with app.app_context():
+                db.execute("UPDATE users SET mat_katalog = 0")
+            post.clear()
+            assert melden(k["wart"], manufacturer="Helmwerk", model="Helm Epsilon").status_code == 201
+            assert [p[0] for p in post] == ["admin@example.org"], post
+    finally:
+        meldung.HINTERGRUND, meldung.send_mail = alt
+    print("Meldungstest bestanden.")
+
+
 if __name__ == "__main__":
     test_migration()
     test_rollen()
@@ -1634,3 +1787,4 @@ if __name__ == "__main__":
     test_review_lieferung2_robust()
     test_listen_und_formular()
     test_migration_lieferung2()
+    test_produktmeldung()

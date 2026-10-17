@@ -54,6 +54,7 @@
     pruefer: "Prüfer", result: "Ergebnis", inspected_on: "Prüftag", reason: "Grund", maengel: "Mängel", item_id: "Artikel Nr.",
     round_id: "Durchgang Nr.", form_id: "Formular Nr.", form_version: "Formularversion", inspector_name: "Prüfer",
     begonnen: "begonnen", seiten: "Seiten", dateien: "Dateien", basis: "aus Prüfung", erledigt: "erledigt", ausgenommen: "ausgenommen",
+    links: "Links", fotos: "Fotos", note: "Bemerkung", answer: "Antwort", status: "Status",
   };
   const AKTION = { angelegt: "angelegt", geaendert: "geändert", geloescht: "gelöscht", verschoben: "verschoben",
                    bild: "Bild geändert", foto: "Foto geändert", neue_version: "neue Version", zurueckgezogen: "zurückgezogen",
@@ -62,9 +63,10 @@
                    reservierung_freigegeben: "Reservierung freigegeben", geprueft: "geprüft", freigeprueft: "freigeprüft",
                    gesperrt: "gesperrt", ausgesondert: "ausgesondert", anhang: "Anhang", anhang_entfernt: "Anhang entfernt",
                    eroeffnet: "Durchgang eröffnet", ausgenommen: "ausgenommen", einbezogen: "wieder einbezogen",
-                   geschlossen: "Durchgang abgeschlossen", faelligkeit: "Fälligkeit vorgezogen", umbenannt: "umbenannt" };
+                   geschlossen: "Durchgang abgeschlossen", faelligkeit: "Fälligkeit vorgezogen", umbenannt: "umbenannt",
+                   eingepflegt: "eingepflegt", abgelehnt: "abgelehnt" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
-                     category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang" };
+                     category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };
 
   // „2026-12-04“ → „04.12.2026“, „2026-12“ → „12/2026“ – ohne Date-Objekt, damit keine Zeitzone den Tag verschiebt.
   const fmtTag = (d) => {
@@ -86,7 +88,7 @@
 
   /* --- Gerüst -------------------------------------------------------------------------------- */
   const NAV = { dashboard: "dashboard", pruefungen: "pruefungen", bestand: "bestand", ordner: "bestand", artikel: "bestand",
-                artikel_neu: "bestand", katalog: "katalog", produkt: "katalog", formular: "katalog", suche: "",
+                artikel_neu: "bestand", katalog: "katalog", produkt: "katalog", formular: "katalog", meldungen: "katalog", suche: "",
                 pruefung: "pruefungen", pruefung_neu: "pruefungen", durchgang: "pruefungen" };
   $$(".mat-nav a").forEach((a) => a.classList.toggle("aktiv", a.dataset.nav === NAV[ANSICHT]));
   if (ANSICHT === "suche" && DATEN.q) $(".mat-suche input").value = DATEN.q;
@@ -112,13 +114,13 @@
 
   /* --- Leiste links --------------------------------------------------------------------------------
      Wo Ansicht und Bildschirm Platz haben, steht links ein Baum: im Bestand der Ordnerbaum, im Katalog
-     (Katalog, Produkt, Formular) der Kategorienbaum. Die eigene Ebene ist markiert, der Weg dorthin
+     (Katalog, Produkt, Formular, Meldungen) der Kategorienbaum. Die eigene Ebene ist markiert, der Weg dorthin
      aufgeklappt, alles einen Klick entfernt. Unter 1200 px ist die Leiste eine Schublade hinter
      „☰ Ordner“ bzw. „☰ Kategorien“ (wie im Wiki). Nicht auf der Seite „Bestand“: dort ist der Ordnerbaum
      selbst der Inhalt. Auf- und Zuklappen merkt sich der Browser, je Baum getrennt. */
-  const KATALOG_ANSICHTEN = new Set(["katalog", "produkt", "formular"]);
+  const KATALOG_ANSICHTEN = new Set(["katalog", "produkt", "formular", "meldungen"]);
   const MIT_LEISTE = new Set(["dashboard", "pruefungen", "ordner", "artikel", "artikel_neu", "suche", "pruefung",
-                              "pruefung_neu", "durchgang", "katalog", "produkt", "formular"]);
+                              "pruefung_neu", "durchgang", "katalog", "produkt", "formular", "meldungen"]);
   const LEISTE_KATALOG = KATALOG_ANSICHTEN.has(ANSICHT);
   const leiste = document.getElementById("mat-side");
   const leisteAuf = document.getElementById("mat-side-auf");
@@ -353,6 +355,8 @@
     const gl = d.gliederungen;
     inhalt.innerHTML = `<div class="page-head"><h1>Material</h1>
         <div class="btn-row">${DARF.verwalten ? '<a class="btn secondary" href="/material/bestand">Bestand pflegen</a><a class="btn" href="/material/artikel/neu">+ Artikel</a>' : ""}</div></div>
+      ${d.meldungen_offen ? `<p class="notice"><a href="/material/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produktmeldung", "offene Produktmeldungen")}</strong></a>
+        – Materialwarte warten darauf, Artikel davon anzulegen.</p>` : ""}
       <div class="mat-kacheln">
         <div class="mat-kachel gesamt"><strong>${d.bestand}</strong><span>Artikel im Bestand</span></div>
         ${kachel("ueberfaellig", "überfällig")}${kachel("neu", "neu (Eingangsprüfung)")}${kachel("bald_faellig", `bald fällig (${d.schwelle_tage} Tage)`)}
@@ -852,7 +856,8 @@
         <div class="mat-produktwahl"><input type="search" id="an-q" placeholder="Hersteller, Modell, Artikelnummer …" autocomplete="off">
           <div id="an-treffer" class="mat-treffer"></div></div>
         <div id="an-produkt" class="mat-gewaehlt" hidden></div>
-        <p class="help">Fehlt das Produkt, legt es ein Produktkatalogpfleger im Katalog an.</p>
+        <p class="help">Fehlt das Produkt im Katalog? <button type="button" class="lnk" data-act="melden">Fehlendes Produkt melden</button>
+          – ein Produktkatalogpfleger nimmt es auf, du bekommst Bescheid.</p>
         <label for="an-ordner">Ordner</label><select id="an-ordner">${optionen(0, 0)}</select>
         <label for="an-sn">Seriennummer des Herstellers</label><input type="text" id="an-sn" maxlength="80" placeholder="leer lassen, wenn der Hersteller keine vergibt">
         <div class="help">Ohne Herstellernummer vergibt das System eine eindeutige (STR-…), die dann am Artikel angebracht wird. Die Inventarnummer vergibt immer das System.</div>
@@ -866,7 +871,8 @@
         <label for="an-notes">Bemerkung</label><textarea id="an-notes" rows="2" maxlength="4000"></textarea>
         <div class="btn-row mat-knoepfe"><button class="btn" data-act="anlegen">Anlegen</button>
           <button class="btn secondary" data-act="anlegen-weiter" title="Produkt und Ordner bleiben für den nächsten Artikel stehen">Anlegen und nächsten</button></div>
-      </div>`;
+      </div>
+      <div id="an-meldungen"></div>`;
     let vorschlagLos = null;
     async function vorschlag() {
       if (!produkt) return;
@@ -911,7 +917,7 @@
         $("#an-treffer").innerHTML = d.produkte.length ? d.produkte.map((p, i) => `<button type="button" class="mat-treffer-zeile" data-i="${i}">
             ${p.vorschau ? `<img class="mat-mini" src="${esc(p.vorschau)}" alt="">` : ""}<strong>${esc(produktName(p))}</strong> <span class="muted">${esc(p.article_no || "")} · ${esc(p.category_name || "")}</span>${demoMarke(p.demo)}</button>`).join("")
           + (d.gesamt > d.produkte.length ? `<p class="help">${d.gesamt} Treffer – genauer suchen.</p>` : "")
-          : '<p class="help">Kein Produkt gefunden.</p>';
+          : '<p class="help">Kein Produkt gefunden. <button type="button" class="lnk" data-act="melden">Als fehlendes Produkt melden</button></p>';
         $$(".mat-treffer-zeile", $("#an-treffer")).forEach((b) => { b.onclick = () => waehlen(d.produkte[+b.dataset.i]); });
       }, 200);
     });
@@ -933,8 +939,35 @@
         fokus($("#an-sn"));
       } catch (e) { toast(e.message, true); }
     }
-    aktionen = { anlegen: () => anlegen(false), "anlegen-weiter": () => anlegen(true) };
+    // Die eigenen Meldungen unter dem Formular: Ist eine eingepflegt, wählt ein Klick ihr Produkt.
+    async function meldungenZeigen() {
+      const ziel = $("#an-meldungen");
+      try {
+        const liste = (await api(`${API}/meldungen?eigene=1&status=alle`)).meldungen.slice(0, 10);
+        ziel.innerHTML = liste.length ? `<section class="section"><h2>Deine Produktmeldungen</h2><ul class="mat-meldeliste">
+          ${liste.map((m) => `<li>${meldestatusMarke(m.status)} <strong>${esc(meldungName(m))}</strong>${m.article_no ? ` <span class="muted">${esc(m.article_no)}</span>` : ""}
+            <span class="muted small">gemeldet am ${esc(fmtTag(m.created_at))}</span>
+            ${m.status === "eingepflegt" && m.produkt ? `<button type="button" class="btn secondary small" data-act="meldung-waehlen" data-pid="${m.produkt.id}">Artikel davon anlegen</button>` : ""}
+            ${m.status === "abgelehnt" ? `<div class="small">Abgelehnt: <span class="mat-text">${esc(m.answer)}</span></div>` : ""}</li>`).join("")}</ul>
+          <p class="small"><a href="/material/katalog/meldungen">Alle deine Meldungen →</a></p></section>` : "";
+      } catch (e) { ziel.innerHTML = ""; }
+    }
+    aktionen = {
+      anlegen: () => anlegen(false), "anlegen-weiter": () => anlegen(true),
+      // Vorbelegt aus der Suche: „Hersteller Modell …“ – die meisten tippen den Hersteller zuerst.
+      melden: () => {
+        const q = $("#an-q").value.trim();
+        const teile = q.split(/\s+/).filter(Boolean);
+        meldungDialog({ manufacturer: teile.length > 1 ? teile[0] : "", model: teile.length > 1 ? teile.slice(1).join(" ") : q,
+                        folder_id: +$("#an-ordner").value || null }, meldungenZeigen);
+      },
+      "meldung-waehlen": async (b) => {
+        try { waehlen((await api(`${API}/produkte/${b.dataset.pid}`)).produkt); window.scrollTo({ top: 0, behavior: "smooth" }); }
+        catch (e) { toast(e.message, true); }
+      },
+    };
     fokus($("#an-q"));
+    meldungenZeigen();
   }
 
   /* --- Katalog ------------------------------------------------------------------------------------- */
@@ -980,7 +1013,8 @@
         k.default_interval_months ? `Prüfintervall ${k.default_interval_months} Monate` : "", plural(summe(k.id), "Produkt", "Produkte")].filter(Boolean).join(" · ") : "";
       // Zum aktiven generischen Formular führt bei Katalogpflegern der Knopf „Generisches Formular“, sonst der Verweis in der Angabenzeile.
       inhalt.innerHTML = `<div class="page-head"><h1>Katalog</h1>
-          <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu">+ Kategorie</button><button class="btn" data-act="produkt-neu">+ Produkt</button>' : ""}</div></div>
+          <div class="btn-row">${DARF.katalog ? `<a class="btn secondary" href="/material/katalog/meldungen">Meldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>
+            <button class="btn secondary" data-act="kat-neu">+ Kategorie</button><button class="btn" data-act="produkt-neu">+ Produkt</button>` : ""}</div></div>
         ${k ? `<div class="mat-katkopf">
             <div class="mat-pfad"><a href="/material/katalog" data-act="kategorie" data-id="">alle Kategorien</a>${pfad.slice(0, -1).map((x) => ` / <a href="/material/katalog?kategorie=${x.id}" data-act="kategorie" data-id="${x.id}">${esc(x.name)}</a>`).join("")}</div>
             <h2>${esc(k.name)} ${demoMarke(k.demo)}</h2>
@@ -999,6 +1033,7 @@
       $("#kat-q").addEventListener("input", (e) => { clearTimeout(los); los = setTimeout(() => { q = e.target.value.trim(); seite = 1; zeigen(liste); }, 250); });
       zeigen(liste);
       if (k) zeigenIn(katDoks, "#kat-doks");
+      if (DARF.katalog) meldungenZaehlen($("#kat-meldungen"));
     }
     let katDocs = [];
     async function katDoks() {
@@ -1076,7 +1111,8 @@
     const kats = await kategorienLaden();
     const neu = !p.id;
     const kat = (id) => kats.find((k) => k.id === +id) || {};
-    dialog(`<h2>${neu ? "Produkt anlegen" : "Produkt bearbeiten"}</h2>
+    dialog(`<h2>${p.meldung ? "Produkt aus Meldung anlegen" : neu ? "Produkt anlegen" : "Produkt bearbeiten"}</h2>
+      ${p.meldung ? meldeKasten(p.meldung) : ""}
       <label for="pd-kat">Kategorie</label><select id="pd-kat"><option value="">– bitte wählen –</option>${kategorieOptionen(kats, p.category_id)}</select>
       <div class="field-row"><div><label for="pd-her">Hersteller</label><input type="text" id="pd-her" value="${esc(p.manufacturer || "")}" maxlength="120"></div>
         <div><label for="pd-mod">Modell</label><input type="text" id="pd-mod" value="${esc(p.model || "")}" maxlength="160"></div></div>
@@ -1087,6 +1123,7 @@
       <div class="field-row"><div><label for="pd-ld">Lebensdauer (Jahre)</label><input type="number" id="pd-ld" min="1" max="50" value="${p.lifetime_years || ""}"><div class="help" id="pd-ld-hilfe"></div></div>
         <div><label for="pd-lq">Fundstelle der Lebensdauer</label><input type="text" id="pd-lq" value="${esc(p.lifetime_source || "")}" maxlength="300" placeholder="z. B. Gebrauchsanleitung, Kap. 9"></div></div>
       <label for="pd-desc">Beschreibung</label><textarea id="pd-desc" rows="3" maxlength="4000">${esc(p.description || "")}</textarea>
+      ${p.meldung ? '<label for="pd-antwort">Anmerkung für den Melder (optional, steht in seiner Mail)</label><textarea id="pd-antwort" rows="2" maxlength="1000"></textarea>' : ""}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="pd-ok" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
     (dlg, body) => {
       const katSel = $("#pd-kat", body), mk = $("#pd-mk", body), ld = $("#pd-ld", body);
@@ -1114,7 +1151,9 @@
                         interval_months: $("#pd-int", body).value || null, lifetime_years: ld.value || null,
                         lifetime_source: $("#pd-lq", body).value, description: $("#pd-desc", body).value };
         try {
-          const r = neu ? await api(`${API}/produkte`, { method: "POST", body: daten }) : await api(`${API}/produkte/${p.id}`, { method: "PUT", body: daten });
+          // Aus einer Meldung: Produkt anlegen und Meldung erledigen in einem Zug (der Melder bekommt Bescheid).
+          const r = p.meldung ? await api(`${API}/meldungen/${p.meldung.id}/produkt`, { method: "POST", body: Object.assign(daten, { antwort: $("#pd-antwort", body).value }) })
+            : neu ? await api(`${API}/produkte`, { method: "POST", body: daten }) : await api(`${API}/produkte/${p.id}`, { method: "PUT", body: daten });
           dlg.close(); location.href = `/material/katalog/produkt/${r.produkt.id}`;
         } catch (e) { toast(e.message, true); }
       };
@@ -1885,8 +1924,197 @@
     await neu();
   }
 
+  /* --- Produktmeldungen ------------------------------------------------------------------------------
+     Wer Artikel anlegt, meldet Produkte, die im Katalog fehlen (Links, Fotos, Bemerkung). Katalogpfleger
+     legen sie an (Produktdialog mit den Angaben der Meldung), ordnen ein vorhandenes zu oder lehnen mit
+     Begründung ab; der Melder bekommt jeweils eine Mail. */
+  const MELDESTATUS = { offen: "offen", eingepflegt: "eingepflegt", abgelehnt: "abgelehnt" };
+  const meldestatusMarke = (s) => `<span class="mat-mstatus m-${esc(s)}">${esc(MELDESTATUS[s] || s)}</span>`;
+  const meldungName = (m) => `${m.manufacturer} ${m.model}`;
+  const kurzLink = (u) => u.replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, "");
+
+  function meldeDetails(m) {
+    const zeile = (t, w) => `<dt>${esc(t)}</dt><dd>${w}</dd>`;
+    const daten = [m.article_no ? zeile("Artikelnummer", esc(m.article_no)) : "", m.norm ? zeile("Norm", esc(m.norm)) : "",
+      m.kategorie ? zeile("Kategorie (Vorschlag)", esc(m.kategorie.pfad)) : "",
+      m.links.length ? zeile("Links", m.links.map((l) => `<a href="${esc(l)}" target="_blank" rel="noopener noreferrer">${esc(kurzLink(l))}</a>`).join("<br>")) : "",
+      m.note ? zeile("Bemerkung", `<span class="mat-text">${esc(m.note)}</span>`) : ""].join("");
+    return `${daten ? `<dl class="mat-daten mat-meldung-daten">${daten}</dl>` : ""}
+      ${m.fotos.length ? `<div class="mat-meldung-fotos">${m.fotos.map((f) => `<a href="${esc(f.original)}" target="_blank" rel="noopener"><img src="${esc(f.vorschau)}" alt="Foto zur Meldung" loading="lazy"></a>`).join("")}</div>` : ""}`;
+  }
+  // Im Produktdialog: was der Melder wusste – zum Nachschlagen, während die Felder schon vorbelegt sind.
+  const meldeKasten = (m) => `<div class="mat-meldekasten"><p class="small">Gemeldet von ${esc(m.created_by_name || "–")} am ${esc(fmtTag(m.created_at))}${m.ordner ? ` für ${esc(m.ordner.pfad)}` : ""}</p>${meldeDetails(m)}</div>`;
+
+  function meldeKarte(m, alle) {
+    const wer = (name) => (name ? ` von ${esc(name)}` : "");
+    return `<article class="mat-meldung m-${esc(m.status)}">
+      <div class="mat-meldung-kopf"><h2>${esc(meldungName(m))}</h2>${meldestatusMarke(m.status)}</div>
+      <p class="muted small">gemeldet${wer(m.created_by_name)} am ${esc(fmtTag(m.created_at))}${m.ordner ? ` · für ${esc(m.ordner.pfad)}` : ""}</p>
+      ${meldeDetails(m)}
+      ${m.treffer ? `<p class="notice">Steht inzwischen im Katalog: <a href="/material/katalog/produkt/${m.treffer.id}">${esc(produktName(m.treffer))}</a>${m.treffer.article_no ? ` <span class="muted">${esc(m.treffer.article_no)}</span>` : ""}
+        ${alle ? `<button type="button" class="btn small" data-act="treffer" data-id="${m.id}">Zuordnen</button>` : ""}</p>` : ""}
+      ${m.status === "eingepflegt" ? `<p class="mat-meldung-ergebnis">Eingepflegt${wer(m.resolved_by_name)} am ${esc(fmtTag(m.resolved_at))}:
+        ${m.produkt ? `<a href="/material/katalog/produkt/${m.produkt.id}">${esc(produktName(m.produkt))}</a>` : '<span class="muted">Produkt inzwischen gelöscht</span>'}
+        ${m.answer ? `<br><span class="mat-text">${esc(m.answer)}</span>` : ""}</p>` : ""}
+      ${m.status === "abgelehnt" ? `<p class="mat-meldung-ergebnis">Abgelehnt${wer(m.resolved_by_name)} am ${esc(fmtTag(m.resolved_at))}: <span class="mat-text">${esc(m.answer)}</span></p>` : ""}
+      ${alle && m.status === "offen" ? `<div class="btn-row"><button type="button" class="btn small" data-act="anlegen" data-id="${m.id}">Produkt anlegen</button>
+        <button type="button" class="btn secondary small" data-act="zuordnen" data-id="${m.id}">Vorhandenes zuordnen</button>
+        <button type="button" class="btn secondary small" data-act="ablehnen" data-id="${m.id}">Ablehnen</button></div>` : ""}
+      ${m.eigen && DARF.verwalten && m.status === "eingepflegt" && m.produkt ? `<div class="btn-row"><a class="btn small" href="/material/artikel/neu?produkt=${m.produkt.id}${m.ordner ? `&ordner=${m.ordner.id}` : ""}">Artikel davon anlegen</a></div>` : ""}
+    </article>`;
+  }
+
+  async function meldungen() {
+    let filter = DATEN.status || null;
+    leisteMarkieren(null);
+    async function zeichnen() {
+      const d = await api(`${API}/meldungen${filter ? `?status=${encodeURIComponent(filter)}` : ""}`);
+      filter = d.filter;
+      const liste = d.meldungen;
+      const meldung = (b) => liste.find((m) => m.id === +b.dataset.id);
+      inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Produktmeldungen" : "Deine Produktmeldungen"}</h1>
+          <div class="btn-row"><a class="btn secondary" href="/material/katalog">Katalog</a>${DARF.verwalten ? '<a class="btn" href="/material/artikel/neu">+ Artikel</a>' : ""}</div></div>
+        <p class="help">${d.alle ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen. „Produkt anlegen“ übernimmt ihre Angaben in den Produktdialog. Der Melder bekommt eine Mail, sobald das Produkt im Katalog ist – oder deine Begründung, wenn du ablehnst."
+          : "Produkte, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald ein Katalogpfleger sie bearbeitet hat."}</p>
+        <div class="mat-filter" role="group" aria-label="Status">${[["offen", "offen"], ["erledigt", "erledigt"], ["alle", "alle"]].map(([w, t]) => `<button type="button" class="btn small${w === filter ? "" : " secondary"}" data-act="filter" data-f="${w}" aria-pressed="${w === filter}">${t}${w === "offen" && d.offen ? ` (${d.offen})` : ""}</button>`).join("")}</div>
+        ${liste.length ? liste.map((m) => meldeKarte(m, d.alle)).join("") : leer(filter === "offen" ? "Keine offenen Meldungen." : "Keine Meldungen.")}`;
+      aktionen = {
+        filter: (b) => {
+          filter = b.dataset.f;
+          try { history.replaceState(null, "", `/material/katalog/meldungen?status=${filter}`); } catch (e) { /* nur die Adresszeile */ }
+          zeigen(zeichnen);
+        },
+        anlegen: (b) => {
+          const m = meldung(b);
+          produktDialog({ meldung: m, manufacturer: m.manufacturer, model: m.model, article_no: m.article_no, norm: m.norm,
+                          category_id: m.kategorie ? m.kategorie.id : null });
+        },
+        zuordnen: (b) => zuordnenDialog(meldung(b), zeichnen),
+        ablehnen: (b) => ablehnenDialog(meldung(b), zeichnen),
+        treffer: async (b) => {
+          const m = meldung(b);
+          if (!(await confirm(`„${meldungName(m)}“ dem Produkt „${produktName(m.treffer)}“ zuordnen? Der Melder bekommt Bescheid.`, "Zuordnen"))) return;
+          try {
+            await api(`${API}/meldungen/${m.id}/zuordnen`, { method: "POST", body: { product_id: m.treffer.id } });
+            toast("Zugeordnet – der Melder bekommt Bescheid."); await zeichnen();
+          } catch (e) { toast(e.message, true); }
+        },
+      };
+    }
+    await zeichnen();
+  }
+
+  function zuordnenDialog(m, danach) {
+    dialog(`<h2>Vorhandenem Produkt zuordnen</h2>
+      <p class="help">Für „${esc(meldungName(m))}“ – wenn das Produkt schon im Katalog steht, etwa anders geschrieben oder mit anderer Artikelnummer.</p>
+      <label for="zu-q">Produkt suchen</label>
+      <div class="mat-produktwahl"><input type="search" id="zu-q" autocomplete="off" value="${esc(m.manufacturer)}"><div id="zu-treffer" class="mat-treffer"></div></div>
+      <div id="zu-gewaehlt" class="mat-gewaehlt" hidden></div>
+      <label for="zu-antwort">Anmerkung für den Melder (optional, steht in seiner Mail)</label><textarea id="zu-antwort" rows="2" maxlength="1000"></textarea>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="zu-ok" type="button" disabled>Zuordnen</button></div>`,
+    (dlg, body) => {
+      let gewaehlt = null;
+      let los = null;
+      async function suchen() {
+        const q = $("#zu-q", body).value.trim();
+        if (!q) { $("#zu-treffer", body).innerHTML = ""; return; }
+        try {
+          const d = await api(`${API}/produkte?q=${encodeURIComponent(q)}&pro_seite=8`);
+          $("#zu-treffer", body).innerHTML = d.produkte.length ? d.produkte.map((p, i) => `<button type="button" class="mat-treffer-zeile" data-i="${i}">
+              ${p.vorschau ? `<img class="mat-mini" src="${esc(p.vorschau)}" alt="">` : ""}<strong>${esc(produktName(p))}</strong> <span class="muted">${esc(p.article_no || "")} · ${esc(p.category_name || "")}</span></button>`).join("")
+            : '<p class="help">Kein Produkt gefunden.</p>';
+          $$(".mat-treffer-zeile", body).forEach((b) => {
+            b.onclick = () => {
+              gewaehlt = d.produkte[+b.dataset.i];
+              $("#zu-gewaehlt", body).hidden = false;
+              $("#zu-gewaehlt", body).innerHTML = `<strong>${esc(produktName(gewaehlt))}</strong> <span class="muted">${esc(gewaehlt.article_no || "")}</span>`;
+              $("#zu-treffer", body).innerHTML = "";
+              $("#zu-ok", body).disabled = false;
+            };
+          });
+        } catch (e) { toast(e.message, true); }
+      }
+      $("#zu-q", body).addEventListener("input", () => { clearTimeout(los); los = setTimeout(suchen, 200); });
+      suchen();
+      $("#zu-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        knopf.disabled = true;
+        try {
+          await api(`${API}/meldungen/${m.id}/zuordnen`, { method: "POST", body: { product_id: gewaehlt.id, antwort: $("#zu-antwort", body).value } });
+          dlg.close(); toast("Zugeordnet – der Melder bekommt Bescheid."); await danach();
+        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+      };
+    });
+  }
+
+  function ablehnenDialog(m, danach) {
+    dialog(`<h2>Meldung ablehnen</h2>
+      <p>„${esc(meldungName(m))}“, gemeldet von ${esc(m.created_by_name || "–")}</p>
+      <label for="ab-antwort">Begründung (bekommt der Melder per Mail)</label>
+      <textarea id="ab-antwort" rows="3" maxlength="1000" placeholder="z. B. gehört nicht ins Modul, steht unter anderem Namen im Katalog"></textarea>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="ab-ok" type="button">Ablehnen</button></div>`,
+    (dlg, body) => {
+      fokus($("#ab-antwort", body));
+      $("#ab-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        knopf.disabled = true;
+        try {
+          await api(`${API}/meldungen/${m.id}/ablehnen`, { method: "POST", body: { antwort: $("#ab-antwort", body).value } });
+          dlg.close(); toast("Abgelehnt – der Melder bekommt die Begründung."); await danach();
+        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+      };
+    });
+  }
+
+  async function meldungenZaehlen(el) {
+    if (!el) return;
+    try {
+      const n = (await api(`${API}/meldungen?status=offen`)).offen || 0;
+      el.textContent = n;
+      el.hidden = !n;
+    } catch (e) { /* der Zähler ist Beiwerk */ }
+  }
+
+  // Ein Produkt melden, das beim Anlegen eines Artikels im Katalog fehlt. v: Vorbelegung (aus der Suche) und Ordner.
+  async function meldungDialog(v, danach) {
+    const kats = await kategorienLaden();
+    dialog(`<h2>Fehlendes Produkt melden</h2>
+      <p class="help">Ein Produktkatalogpfleger nimmt es in den Katalog auf. Du bekommst eine Mail, sobald du Artikel davon anlegen kannst.</p>
+      <div class="field-row"><div><label for="me-her">Hersteller</label><input type="text" id="me-her" maxlength="120" value="${esc(v.manufacturer || "")}"></div>
+        <div><label for="me-mod">Modell</label><input type="text" id="me-mod" maxlength="160" value="${esc(v.model || "")}"></div></div>
+      <div class="field-row"><div><label for="me-art">Artikelnummer des Herstellers</label><input type="text" id="me-art" maxlength="80"></div>
+        <div><label for="me-norm">Norm</label><input type="text" id="me-norm" maxlength="200" placeholder="z. B. EN 362"></div></div>
+      <label for="me-kat">Kategorie</label><select id="me-kat"><option value="">– weiß ich nicht –</option>${kategorieOptionen(kats, null)}</select>
+      <label for="me-links">Links</label><textarea id="me-links" rows="3" placeholder="https://… – je Zeile eine Adresse: Herstellerseite, Gebrauchsanleitung, Händler"></textarea>
+      <label for="me-fotos">Fotos (bis zu 3)</label><input type="file" id="me-fotos" accept="image/*" multiple>
+      <div class="help">Etikett oder Typenschild – darauf stehen meist Hersteller, Modell, Norm und Herstelldatum.</div>
+      <label for="me-note">Bemerkung</label><textarea id="me-note" rows="3" maxlength="2000" placeholder="Was hilft beim Einpflegen? z. B. Größe, Farbe, wo gekauft"></textarea>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="me-ok" type="button">Melden</button></div>`,
+    (dlg, body) => {
+      fokus($("#me-her", body));
+      $("#me-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        const fotos = Array.from($("#me-fotos", body).files);
+        if (fotos.length > 3) { toast("Höchstens 3 Fotos.", true); return; }
+        const fd = new FormData();
+        const felder = { manufacturer: $("#me-her", body).value, model: $("#me-mod", body).value, article_no: $("#me-art", body).value,
+                         norm: $("#me-norm", body).value, category_id: $("#me-kat", body).value, folder_id: v.folder_id || "",
+                         links: $("#me-links", body).value, note: $("#me-note", body).value };
+        Object.entries(felder).forEach(([k, w]) => fd.append(k, w));
+        fotos.forEach((f) => fd.append("fotos", f));
+        knopf.disabled = true;
+        try {
+          await api(`${API}/meldungen`, { method: "POST", body: fd });
+          dlg.close();
+          toast("Gemeldet – du bekommst eine Mail, sobald das Produkt im Katalog ist.");
+          if (danach) await danach();
+        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+      };
+    });
+  }
+
   const ANSICHTEN = { dashboard, pruefungen, bestand, ordner, artikel, artikel_neu: artikelNeu, katalog, produkt, formular, suche,
-                      pruefung_neu: pruefungNeu, pruefung: pruefungAnsicht, durchgang: durchgangAnsicht };
+                      meldungen, pruefung_neu: pruefungNeu, pruefung: pruefungAnsicht, durchgang: durchgangAnsicht };
   leisteLaden();
   zeigen(ANSICHTEN[ANSICHT] || dashboard);
 })();

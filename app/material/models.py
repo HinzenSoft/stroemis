@@ -26,10 +26,13 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     verweist auf diese; die Prüfart „eingang“ (Eingangsprüfung) kam dazu.
   - mat_product_document.category_id (Schritt 3): Ein Dokument hängt an einem Produkt oder an einer
     Kategorie und gilt dann für alle Produkte darin; Art „Pflegehinweis“.
+  - mat_product_request (Schritt 4): Meldung eines Produkts, das beim Anlegen eines Artikels im Katalog
+    fehlt – mit Links, Fotos und Bemerkung. Ein Katalogpfleger pflegt es ein (neues oder vorhandenes
+    Produkt) oder lehnt mit Begründung ab; der Melder bekommt Bescheid.
 """
 import sqlite3
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -59,6 +62,7 @@ ERGEBNISSE = {"einsatzbereit": "einsatzbereit", "instandsetzen": "instandsetzen"
 BEFUNDE = ("ok", "mangel", "nicht_zutreffend")
 ANHANGARTEN = {"externes_pruefformular": "externes Prüfformular", "pruefbericht": "Prüfbericht", "foto": "Foto",
                "sonstiges": "Sonstiges"}
+MELDUNGSSTATUS = {"offen": "offen", "eingepflegt": "eingepflegt", "abgelehnt": "abgelehnt"}
 FREIGABEN = ("lesen", "pruefen", "verwalten")
 ERINNERUNGEN = ("30_tage", "7_tage", "faellig", "lebensdauer")
 
@@ -554,10 +558,43 @@ def _schritt_3(conn):
         raise sqlite3.IntegrityError(f"Fremdschlüssel nach dem Umbau verletzt: {sorted(neu_verletzt)[:5]}")
 
 
+# Schritt 4: Meldungen fehlender Produkte – eine neue Tabelle, am Bestehenden ändert sich nichts.
+SCHRITT_4 = [
+    """CREATE TABLE IF NOT EXISTS mat_product_request (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      manufacturer     TEXT NOT NULL,
+      model            TEXT NOT NULL,
+      article_no       TEXT NOT NULL DEFAULT '',
+      -- wie mat_product.dedupe_key: So findet die Liste das Produkt, sobald es im Katalog steht.
+      dedupe_key       TEXT NOT NULL,
+      norm             TEXT NOT NULL DEFAULT '',
+      category_id      INTEGER REFERENCES mat_category(id) ON DELETE SET NULL,   -- Vorschlag des Melders
+      folder_id        INTEGER REFERENCES mat_folder(id) ON DELETE SET NULL,     -- wohin die Artikel sollen
+      links_json       TEXT NOT NULL DEFAULT '[]',  -- Adressen: Hersteller, Gebrauchsanleitung, Händler
+      photos_json      TEXT NOT NULL DEFAULT '[]',  -- Dateien unter media/material/{orig,web,thumb}
+      note             TEXT NOT NULL DEFAULT '',
+      status           TEXT NOT NULL DEFAULT 'offen' CHECK (status IN """ + _in(MELDUNGSSTATUS) + """),
+      product_id       INTEGER REFERENCES mat_product(id) ON DELETE SET NULL,    -- das eingepflegte Produkt
+      answer           TEXT NOT NULL DEFAULT '',    -- Antwort des Katalogpflegers; bei Ablehnung Pflicht
+      created_by       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_by_name  TEXT NOT NULL DEFAULT '',
+      created_at       TEXT NOT NULL,
+      resolved_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      resolved_by_name TEXT NOT NULL DEFAULT '',
+      resolved_at      TEXT,
+      CHECK ((status = 'offen') = (resolved_at IS NULL)),
+      CHECK (status <> 'abgelehnt' OR answer <> '')
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_mat_request_status ON mat_product_request(status, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_request_creator ON mat_product_request(created_by)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_request_product ON mat_product_request(product_id)",
+]
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
-SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3}
+SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4}
 
 
 def _meta(conn, schluessel, vorgabe=None):
