@@ -2001,6 +2001,46 @@ def test_produkt_variante():
     print("Variantentest bestanden.")
 
 
+def test_monatsangaben():
+    """Kauf und Erstgebrauch wie die Herstellung auch als Monat: gespeichert wie eingegeben, gerechnet ab dem
+    Monatsersten; der laufende Monat liegt nicht in der Zukunft, der Monat der Herstellung nicht davor."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        w = k["wart"]
+        gid, _ = gliederung(w)
+        dieser = date.today().strftime("%Y-%m")
+        naechster = (date.today().replace(day=28) + timedelta(days=5)).strftime("%Y-%m")
+
+        def anlegen(**f):
+            return w.post("/api/material/artikel", json=dict({"product_id": ids["hms"], "folder_id": gid}, **f))
+        r = w.get(f"/api/material/artikel/vorschlag?product_id={ids['hms']}&folder_id={gid}&first_use_on=2025-04")
+        assert r.status_code == 200 and r.json["vorschlag"]["next_due_on"] == "2026-04-01", r.get_json()
+        r = anlegen(manufactured_on="2025-01", purchased_on="2025-03", first_use_on="2025-04")
+        assert r.status_code == 201, r.get_json()
+        a = r.json["artikel"]
+        assert (a["purchased_on"], a["first_use_on"], a["next_due_on"]) == ("2025-03", "2025-04", "2026-04-01"), a
+        # Der laufende Monat ist erlaubt, der nächste liegt in der Zukunft.
+        assert anlegen(purchased_on=dieser).status_code == 201
+        r = anlegen(first_use_on=naechster)
+        assert r.status_code == 400 and "Zukunft" in r.json["error"], r.get_json()
+        r = w.get(f"/api/material/artikel/vorschlag?product_id={ids['hms']}&folder_id={gid}&purchased_on={naechster}")
+        assert r.status_code == 400 and "Zukunft" in r.json["error"], r.get_json()
+        # Vor der Herstellung nicht – im selben Monat schon, auch neben einem Tagesdatum der Herstellung.
+        r = anlegen(manufactured_on="2025-05", first_use_on="2025-04")
+        assert r.status_code == 400 and "vor dem Herstelldatum" in r.json["error"], r.get_json()
+        assert anlegen(manufactured_on="2025-05-20", first_use_on="2025-05").status_code == 201
+        for falsch in ("2025-13", "05/2025", "2025-5"):
+            assert anlegen(purchased_on=falsch).status_code == 400, falsch
+        # Ändern: ein Monat statt eines Tagesdatums und zurück.
+        stand = w.get(f"/api/material/artikel/{a['id']}").json["artikel"]["stand"]
+        r = w.put(f"/api/material/artikel/{a['id']}", json={"stand": stand, "purchased_on": "2025-02-14"})
+        assert r.status_code == 200 and r.json["artikel"]["purchased_on"] == "2025-02-14", r.get_json()
+        r = w.put(f"/api/material/artikel/{a['id']}", json={"stand": r.json["artikel"]["stand"], "purchased_on": "2025-02"})
+        assert r.status_code == 200 and r.json["artikel"]["purchased_on"] == "2025-02", r.get_json()
+    print("Monatstest bestanden.")
+
+
 if __name__ == "__main__":
     test_migration()
     test_rollen()
@@ -2026,3 +2066,4 @@ if __name__ == "__main__":
     test_durchgang_abbrechen()
     test_artikelnummer_eindeutig()
     test_produkt_variante()
+    test_monatsangaben()

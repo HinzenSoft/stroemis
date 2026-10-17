@@ -78,6 +78,49 @@
     return m ? `${m[2]}/${m[1]}` : s;
   };
   const fmtZeit = (iso) => S.fmtDate(iso, true);
+
+  /* Datumsfelder auf Deutsch: Textfelder statt der Datumsfelder des Browsers – die zeigen das Format seiner
+     Sprache (in einem englischen Browser mm/dd/yyyy). Monat: MM/JJJJ, Tag: TT.MM.JJJJ; gespeichert wird ISO. */
+  const datumAnzeige = (iso, art) => {
+    const m = String(iso || "").match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/);
+    if (!m) return "";
+    return art === "monat" || !m[3] ? `${m[2]}/${m[1]}` : `${m[3]}.${m[2]}.${m[1]}`;
+  };
+  const datumFeld = (id, iso, art) => `<input type="text" id="${id}" class="mat-datum" data-art="${art}" inputmode="numeric" autocomplete="off"
+    maxlength="${art === "monat" ? 7 : 10}" placeholder="${art === "monat" ? "MM/JJJJ" : "TT.MM.JJJJ"}" value="${esc(datumAnzeige(iso, art))}">`;
+  // ISO ('YYYY-MM' bzw. 'YYYY-MM-DD'), "" für leer – oder ein Fehler mit Hinweis aufs Format.
+  function datumWert(feld, name) {
+    const s = feld.value.trim();
+    if (!s) return "";
+    if (feld.dataset.art === "monat") {
+      const m = s.match(/^(\d{1,2})[/.](\d{4})$/);
+      if (m && +m[1] >= 1 && +m[1] <= 12) return `${m[2]}-${m[1].padStart(2, "0")}`;
+      throw new Error(`„${name}“: bitte als MM/JJJJ angeben, z. B. 03/2024.`);
+    }
+    const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (m) {
+      const d = new Date(Date.UTC(+m[3], +m[2] - 1, +m[1]));
+      if (d.getUTCFullYear() === +m[3] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[1]) {
+        return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+      }
+    }
+    throw new Error(`„${name}“: bitte als TT.MM.JJJJ angeben, z. B. 17.03.2024.`);
+  }
+  // Beim Tippen die Trenner setzen („032024“ → „03/2024“, „17032024“ → „17.03.2024“), beim Verlassen vereinheitlichen.
+  document.addEventListener("input", (e) => {
+    const f = e.target;
+    if (!f.classList || !f.classList.contains("mat-datum") || e.inputType !== "insertText") return;
+    if (/[/.][/.]$/.test(f.value)) { f.value = f.value.slice(0, -1); return; }    // Trenner selbst getippt – steht schon da
+    if (f.dataset.art === "monat" ? /^\d{2}$/.test(f.value) : /^\d{2}$|^\d{1,2}\.\d{2}$/.test(f.value)) {
+      f.value += f.dataset.art === "monat" ? "/" : ".";
+    }
+  });
+  document.addEventListener("change", (e) => {
+    const f = e.target;
+    if (!f.classList || !f.classList.contains("mat-datum")) return;
+    try { f.value = datumAnzeige(datumWert(f, ""), f.dataset.art); f.classList.remove("ungueltig"); }
+    catch (err) { f.classList.add("ungueltig"); }
+  }, true);
   const plural = (n, eins, viele) => `${n} ${n === 1 ? eins : viele}`;
   const statusMarke = (s, gross) => `<span class="mat-status s-${esc(s)}${gross ? " gross" : ""}">${esc(STATUS[s] || s)}</span>`;
   const demoMarke = (x) => (x ? '<span class="mat-demo" title="DEMO – nicht für echte Prüfungen">DEMO</span>' : "");
@@ -815,26 +858,31 @@
     dialog(`<h2>Artikel ${esc(a.inventory_no)} bearbeiten</h2>
       <label for="ad-sn">Seriennummer des Herstellers</label><input type="text" id="ad-sn" value="${a.serial_generated ? "" : esc(a.serial_no)}" placeholder="${a.serial_generated ? esc(a.serial_no) + " (vom System)" : ""}" maxlength="80">
       <div class="help">Leer lassen behält die Nummer. Eine echte Herstellernummer ersetzt die vom System vergebene.</div>
-      <div class="field-row"><div><label for="ad-herst">Herstellung (Monat${textil ? ", Pflicht" : ""})</label><input type="month" id="ad-herst" value="${esc((a.manufactured_on || "").slice(0, 7))}"></div>
-        <div><label for="ad-kauf">Kauf</label><input type="date" id="ad-kauf" value="${esc(a.purchased_on || "")}"></div></div>
-      <div class="field-row"><div><label for="ad-erst">Erstgebrauch</label><input type="date" id="ad-erst" value="${esc(a.first_use_on || "")}"></div>
+      <div class="field-row"><div><label for="ad-herst">Herstellung (Monat${textil ? ", Pflicht" : ""})</label>${datumFeld("ad-herst", a.manufactured_on, "monat")}</div>
+        <div><label for="ad-kauf">Kauf (Monat)</label>${datumFeld("ad-kauf", a.purchased_on, "monat")}</div></div>
+      <div class="field-row"><div><label for="ad-erst">Erstgebrauch (Monat)</label>${datumFeld("ad-erst", a.first_use_on, "monat")}</div>
         <div><label for="ad-int">Prüfintervall am Artikel (Monate)</label><input type="number" id="ad-int" min="1" max="120" value="${a.interval_months || ""}" placeholder="vom Produkt/Ordner"></div></div>
-      <div class="field-row"><div ${a.status === "neu" ? "hidden" : ""}><label for="ad-due">Nächste Prüfung</label><input type="date" id="ad-due" value="${esc(a.next_due_on || "")}" max="${esc(a.next_due_on || "")}">
+      <div class="field-row"><div ${a.status === "neu" ? "hidden" : ""}><label for="ad-due">Nächste Prüfung</label>${datumFeld("ad-due", a.next_due_on, "tag")}
           <div class="help">Nur vorziehen – später setzt sie eine Prüfung.</div></div>
-        ${textil ? `<div><label for="ad-ende">Lebensende</label><input type="date" id="ad-ende" value="${esc(a.retire_by || "")}"><div class="help">Nur vorziehen. Leer lassen behält das Lebensende.</div></div>` : "<div></div>"}</div>
+        ${textil ? `<div><label for="ad-ende">Lebensende</label>${datumFeld("ad-ende", a.retire_by, "tag")}<div class="help">Nur vorziehen. Leer lassen behält das Lebensende.</div></div>` : "<div></div>"}</div>
       <label for="ad-notes">Bemerkung</label><textarea id="ad-notes" rows="3" maxlength="4000">${esc(a.notes || "")}</textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="ad-ok" type="button">Speichern</button></div>`,
     (dlg, body) => {
       $("#ad-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
+        // Ein Tagesdatum (aus der Zeit vor den Monatsfeldern) bleibt erhalten, wenn der Monat derselbe ist.
+        const behalten = (neu, alt) => (neu && alt && alt.slice(0, 7) === neu ? alt : neu || null);
+        let daten;
+        try {
+          daten = { stand: a.stand, serial_no: $("#ad-sn", body).value,
+                    manufactured_on: behalten(datumWert($("#ad-herst", body), "Herstellung"), a.manufactured_on),
+                    purchased_on: behalten(datumWert($("#ad-kauf", body), "Kauf"), a.purchased_on),
+                    first_use_on: behalten(datumWert($("#ad-erst", body), "Erstgebrauch"), a.first_use_on),
+                    interval_months: $("#ad-int", body).value || null,
+                    next_due_on: datumWert($("#ad-due", body), "Nächste Prüfung") || null, notes: $("#ad-notes", body).value };
+          if (textil) daten.retire_by = datumWert($("#ad-ende", body), "Lebensende") || null;
+        } catch (e) { toast(e.message, true); return; }
         knopf.disabled = true;
-        const herst = $("#ad-herst", body).value;
-        // Ein Tagesdatum bleibt erhalten, wenn der Monat derselbe ist – der Monatswähler kennt keinen Tag.
-        const daten = { stand: a.stand, serial_no: $("#ad-sn", body).value, purchased_on: $("#ad-kauf", body).value || null,
-                        manufactured_on: herst && a.manufactured_on && a.manufactured_on.slice(0, 7) === herst ? a.manufactured_on : (herst || null),
-                        first_use_on: $("#ad-erst", body).value || null, interval_months: $("#ad-int", body).value || null,
-                        next_due_on: $("#ad-due", body).value || null, notes: $("#ad-notes", body).value };
-        if (textil) daten.retire_by = $("#ad-ende", body).value || null;
         try { await api(`${API}/artikel/${a.id}`, { method: "PUT", body: daten }); dlg.close(); toast("Gespeichert"); zeigen(artikel); }
         catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
@@ -862,11 +910,11 @@
         <label for="an-ordner">Ordner</label><select id="an-ordner">${optionen(0, 0)}</select>
         <label for="an-sn">Seriennummer des Herstellers</label><input type="text" id="an-sn" maxlength="80" placeholder="leer lassen, wenn der Hersteller keine vergibt">
         <div class="help">Ohne Herstellernummer vergibt das System eine eindeutige (STR-…), die dann am Artikel angebracht wird. Die Inventarnummer vergibt immer das System.</div>
-        <div class="field-row"><div><label for="an-herst">Herstellung (Monat)</label><input type="month" id="an-herst"></div>
-          <div><label for="an-kauf">Kauf</label><input type="date" id="an-kauf"></div></div>
-        <div class="field-row"><div><label for="an-erst">Erstgebrauch</label><input type="date" id="an-erst"></div>
+        <div class="field-row"><div><label for="an-herst">Herstellung (Monat)</label>${datumFeld("an-herst", "", "monat")}</div>
+          <div><label for="an-kauf">Kauf (Monat)</label>${datumFeld("an-kauf", "", "monat")}</div></div>
+        <div class="field-row"><div><label for="an-erst">Erstgebrauch (Monat)</label>${datumFeld("an-erst", "", "monat")}</div>
           <div><label for="an-int">Prüfintervall am Artikel (Monate)</label><input type="number" id="an-int" min="1" max="120" placeholder="vom Produkt/Ordner"></div></div>
-        <div class="field-row"><div id="an-ende-feld" hidden><label for="an-ende">Lebensende</label><input type="date" id="an-ende"><div class="help" id="an-ende-hilfe"></div></div>
+        <div class="field-row"><div id="an-ende-feld" hidden><label for="an-ende">Lebensende</label>${datumFeld("an-ende", "", "tag")}<div class="help" id="an-ende-hilfe"></div></div>
           <div><p class="help" id="an-due-hilfe"></p></div></div>
         <p class="notice">Neu angelegte Artikel stehen auf <strong>neu</strong>, bis ein Prüfer die Eingangsprüfung gemacht hat – erst sie gibt sie frei und setzt die erste Fälligkeit.</p>
         <label for="an-notes">Bemerkung</label><textarea id="an-notes" rows="2" maxlength="4000"></textarea>
@@ -878,9 +926,10 @@
     async function vorschlag() {
       if (!produkt) return;
       const q = new URLSearchParams({ product_id: produkt.id, folder_id: $("#an-ordner").value });
-      for (const [k, sel] of [["manufactured_on", "#an-herst"], ["purchased_on", "#an-kauf"], ["first_use_on", "#an-erst"], ["interval_months", "#an-int"]]) {
-        if ($(sel).value) q.set(k, $(sel).value);
+      for (const [k, sel] of [["manufactured_on", "#an-herst"], ["purchased_on", "#an-kauf"], ["first_use_on", "#an-erst"]]) {
+        try { const w = datumWert($(sel), ""); if (w) q.set(k, w); } catch (e) { /* noch unvollständig getippt */ }
       }
+      if ($("#an-int").value) q.set("interval_months", $("#an-int").value);
       try {
         const v = (await api(`${API}/artikel/vorschlag?${q}`)).vorschlag;
         $("#an-due-hilfe").textContent = v.intervall.monate ? `Prüfintervall ${v.intervall.monate} Monate (${v.intervall.quelle}).` : "Kein Prüfintervall – am Produkt oder in der Kategorie eintragen.";
@@ -888,8 +937,7 @@
         $("#an-ende-feld").hidden = !textil;
         if (textil) {
           const ende = $("#an-ende");
-          if (!ende.dataset.selbst) ende.value = v.retire_by || "";
-          ende.max = v.retire_by || "";
+          if (!ende.dataset.selbst) ende.value = datumAnzeige(v.retire_by, "tag");
           $("#an-ende-hilfe").textContent = v.retire_by ? `${v.lifetime_years} Jahre ab Herstellung; nur vorziehen.` : "Herstellung angeben – bei textilem Material Pflicht.";
         }
       } catch (e) { /* Eingaben unvollständig – der Vorschlag kommt, sobald sie es nicht mehr sind */ }
@@ -927,11 +975,14 @@
     }
     async function anlegen(weiter) {
       if (!produkt) { toast("Bitte zuerst ein Produkt wählen.", true); return; }
-      const daten = { product_id: produkt.id, folder_id: +$("#an-ordner").value, serial_no: $("#an-sn").value,
-                      manufactured_on: $("#an-herst").value || null, purchased_on: $("#an-kauf").value || null,
-                      first_use_on: $("#an-erst").value || null, interval_months: $("#an-int").value || null,
-                      notes: $("#an-notes").value };
-      if (!$("#an-ende-feld").hidden) daten.retire_by = $("#an-ende").value || null;
+      let daten;
+      try {
+        daten = { product_id: produkt.id, folder_id: +$("#an-ordner").value, serial_no: $("#an-sn").value,
+                  manufactured_on: datumWert($("#an-herst"), "Herstellung") || null, purchased_on: datumWert($("#an-kauf"), "Kauf") || null,
+                  first_use_on: datumWert($("#an-erst"), "Erstgebrauch") || null, interval_months: $("#an-int").value || null,
+                  notes: $("#an-notes").value };
+        if (!$("#an-ende-feld").hidden) daten.retire_by = datumWert($("#an-ende"), "Lebensende") || null;
+      } catch (e) { toast(e.message, true); return; }
       try {
         const r = await api(`${API}/artikel`, { method: "POST", body: daten });
         if (!weiter) { location.href = `/material/artikel/${r.artikel.id}`; return; }

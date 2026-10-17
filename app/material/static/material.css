@@ -307,6 +307,7 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-kamera { cursor: pointer; }
 /* Dateiauswahl hinter einem Knopf: nur optisch versteckt, damit sie per Tastatur erreichbar bleibt. */
 .mat-datei { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
+.mat-datum.ungueltig { border-color: var(--rot); box-shadow: inset 0 0 0 1px var(--rot); }
 /* Mehrere Dokumente auf einmal: Ablagefläche, darunter je Datei eine Zeile mit Titel, Art und Versionsstand. */
 .mat-ablage { border: 2px dashed var(--linie); background: var(--grau-hell); padding: 12px 14px; text-align: center; }
 .mat-ablage.ueber { border-color: var(--wasser); background: var(--co-info-fl); }

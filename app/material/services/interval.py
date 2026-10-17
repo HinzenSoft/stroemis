@@ -105,7 +105,8 @@ def faelligkeit_vorschlag(monate, erstgebrauch=None, kauf=None, stichtag=None):
     if not monate:
         return None
     beginn = erstgebrauch or kauf
-    basis = date.fromisoformat(beginn) if beginn else (stichtag or heute())
+    # Ein Monat zählt ab seinem Ersten – die Fälligkeit kommt eher zu früh als zu spät.
+    basis = erster_tag(beginn) if beginn else (stichtag or heute())
     return plus_monate(basis, monate).isoformat()
 
 

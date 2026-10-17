@@ -276,14 +276,23 @@ def ablageordner_pruefen(fid):
     return o
 
 
+def _vor(a, b):
+    """Liegt a vor b? Beide 'YYYY-MM' oder 'YYYY-MM-DD'; ist eins nur ein Monat, zählt der Monat – ein Erstgebrauch
+    „05/2025“ liegt nicht vor einer Herstellung am 20.05.2025, und der laufende Monat liegt nicht in der Zukunft."""
+    if len(a) == 7 or len(b) == 7:
+        return a[:7] < b[:7]
+    return a < b
+
+
 def artikel_werte(d, alt=None):
     e = {f: alt.get(f) for f in ARTIKEL_FELDER} if alt else {}
     e.update({f: d[f] for f in ARTIKEL_FELDER if f in d})
     w = {"product_id": kennung(e.get("product_id"), "Produkt"),
          "serial_no": text(e, "serial_no", "Seriennummer", 80),
          "manufactured_on": monat_oder_datum(e.get("manufactured_on"), "Herstelldatum"),
-         "purchased_on": datum(e.get("purchased_on"), "Kaufdatum"),
-         "first_use_on": datum(e.get("first_use_on"), "Erstgebrauch"),
+         # Kauf und Erstgebrauch wie die Herstellung: Monat genügt (so steht es auf Rechnung und Prüfkarte).
+         "purchased_on": monat_oder_datum(e.get("purchased_on"), "Kaufdatum"),
+         "first_use_on": monat_oder_datum(e.get("first_use_on"), "Erstgebrauch"),
          "next_due_on": datum(e.get("next_due_on"), "Nächste Prüfung"),
          "retire_by": datum(e.get("retire_by"), "Lebensende"),
          "interval_months": ganzzahl(e.get("interval_months"), "Prüfintervall (Monate)", 1, 120),
@@ -294,11 +303,11 @@ def artikel_werte(d, alt=None):
     if hergestellt and hergestellt > h:
         raise Abgelehnt("Das Herstelldatum liegt in der Zukunft.")
     for feld, name in (("purchased_on", "Kaufdatum"), ("first_use_on", "Erstgebrauch")):
-        if w[feld] and hergestellt and date.fromisoformat(w[feld]) < hergestellt:
+        if w[feld] and w["manufactured_on"] and _vor(w[feld], w["manufactured_on"]):
             raise Abgelehnt(f"{name} liegt vor dem Herstelldatum.")
         # Ein Datum in der Zukunft verschöbe die errechnete erste Fälligkeit über „heute + Intervall“
         # hinaus – ein Artikel stünde ohne Prüfung jahrelang als einsatzbereit da.
-        if w[feld] and date.fromisoformat(w[feld]) > h:
+        if w[feld] and _vor(h.isoformat(), w[feld]):
             raise Abgelehnt(f"{name} liegt in der Zukunft.")
     if p["material_kind"] == "textil" and not w["manufactured_on"]:
         raise Abgelehnt("Bei textilem Material ist das Herstelldatum Pflicht – an ihm hängt die Lebensdauer.")
@@ -333,12 +342,12 @@ def vorschlag(d):
     fid = kennung(d.get("folder_id"), "Ordner", leer_erlaubt=True)
     monate = ganzzahl(d.get("interval_months"), "Prüfintervall (Monate)", 1, 120)
     iv = wirksam(p, fid, monate)
-    erst = datum(d.get("first_use_on"), "Erstgebrauch")
-    kauf = datum(d.get("purchased_on"), "Kaufdatum")
+    erst = monat_oder_datum(d.get("first_use_on"), "Erstgebrauch")
+    kauf = monat_oder_datum(d.get("purchased_on"), "Kaufdatum")
     herst = monat_oder_datum(d.get("manufactured_on"), "Herstelldatum")
     h = heute().isoformat()
     for wert, name in ((erst, "Erstgebrauch"), (kauf, "Kaufdatum")):
-        if wert and wert > h:
+        if wert and _vor(h, wert):
             raise Abgelehnt(f"{name} liegt in der Zukunft.")
     grenze = spaetestens(iv["monate"])
     vorschlag_due = faelligkeit_vorschlag(iv["monate"], erst, kauf)
