@@ -52,6 +52,7 @@ table.runden tr.detail .lbl { display: inline; margin-right: 1mm; }
 /* Ereignisse aus dem Journal */
 table.ereignisse { font-size: 8pt; }
 table.rueckrufe { font-size: 8.5pt; }
+p.vor-tabelle { break-after: avoid; }        /* Überschrift und Satz nicht allein am Seitenende stehen lassen */
 table.rueckrufe col.c-zeit { width: 33mm; }
 table.rueckrufe .text { white-space: pre-line; overflow-wrap: anywhere; margin: .5mm 0; }
 table.ereignisse col.c-zeit { width: 33mm; }
@@ -167,7 +168,7 @@ table.ereignisse .aenderung .feld { color: var(--grau); }
 {%- if rueckrufe %}
 <section>
   <h2>Rückrufe</h2>
-  <p class="hinweis">Rückrufe des Herstellers zu diesem Produkt, die den Artikel betreffen – angelegt im Katalog.</p>
+  <p class="hinweis vor-tabelle">Rückrufe des Herstellers zu diesem Produkt, die den Artikel betreffen – angelegt im Katalog.</p>
   <table class="liste rueckrufe">
     <colgroup><col class="c-zeit"><col></colgroup>
     <thead><tr><th>Angelegt</th><th>Rückruf</th></tr></thead>
