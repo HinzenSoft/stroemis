@@ -87,6 +87,15 @@ window.S = (function () {
     const body = document.getElementById("dlg-body");
     body.innerHTML = html;
     body.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => dlg.close()));
+    // Der Titel benennt den Dialog – so sagt die Vorlesehilfe beim Öffnen, worum es geht.
+    const titel = body.querySelector("h2");
+    if (titel) { titel.id = titel.id || "dlg-titel"; dlg.setAttribute("aria-labelledby", titel.id); }
+    else dlg.removeAttribute("aria-labelledby");
+    // showModal() setzt den Fokus selbst aufs erste Bedienelement – auf dem Telefon meist ein Textfeld, und dann ging
+    // sofort die Bildschirmtastatur auf und verdeckte den halben Dialog. Am Touchgerät bekommt deshalb der Titel den
+    // Fokus (autofocus; ein autofocus am <dialog> selbst übergeht Chromium); die Tastatur kommt erst, wenn man ins
+    // Feld tippt. Mit Maus und Tastatur bleibt es beim ersten Feld.
+    if (titel && window.matchMedia("(pointer: coarse)").matches) { titel.tabIndex = -1; titel.autofocus = true; }
     // Erst öffnen, dann onOpen: Ein geschlossener Dialog ist display:none – focus() und
     // scrollIntoView() darin liefen ins Leere, und der Fokus landete auf dem ersten Element.
     if (!dlg.open) dlg.showModal();
@@ -159,6 +168,60 @@ window.S = (function () {
     ablageLeeren();
     location.href = "/login";
   });
+
+  /* Hauptnavigation, die nicht in die Bauchbinde passt (Telefon, Tablet hochkant, Konten mit allen Modulen): Vorher
+     rollte die Leiste unsichtbar seitlich, und „Profil“ und „Abmelden“ lagen ohne jeden Hinweis hinter dem Rand.
+     Jetzt weicht Schritt für Schritt, was entbehrlich ist – erst der eigene Name, dann der Schriftzug neben dem
+     Zeichen. Reicht das nicht, wandern die hinteren Punkte (zuerst Abmelden, dann Profil, dann die Module von rechts)
+     in das Menü „Mehr“ am rechten Rand („Priority+“); der gerade aktive Punkt bleibt immer stehen. Neu geordnet
+     wird bei jeder Breitenänderung und wenn die Hausschrift nachgeladen ist. Ohne Skript rollt die Leiste wie bisher. */
+  (function kopfleiste() {
+    const kopf = document.querySelector("header.bauchbinde");
+    const nav = kopf && kopf.querySelector("nav.nav");
+    const mehr = nav && nav.querySelector(".nav-mehr");
+    if (!mehr) return;
+    const knopf = mehr.querySelector(".nav-mehr-knopf");
+    const liste = mehr.querySelector(".nav-mehr-liste");
+    const punkte = Array.from(nav.children).filter((el) => el !== mehr);
+    const zuBreit = () => nav.scrollWidth > nav.clientWidth + 1;
+    const zu = () => { liste.hidden = true; knopf.setAttribute("aria-expanded", "false"); };
+    let breite = -1;
+    function anordnen() {
+      zu();
+      punkte.forEach((p) => nav.insertBefore(p, mehr));
+      kopf.classList.remove("nav-eng", "nav-enger");
+      mehr.hidden = true;
+      nav.scrollLeft = 0;
+      if (!zuBreit()) return;
+      kopf.classList.add("nav-eng");                 // ohne den eigenen Namen
+      if (!zuBreit()) return;
+      kopf.classList.add("nav-enger");               // ohne den Schriftzug neben dem Zeichen
+      if (!zuBreit()) return;
+      mehr.hidden = false;
+      for (let i = punkte.length - 1; i >= 0 && zuBreit(); i--) {
+        if (!punkte[i].classList.contains("active")) liste.prepend(punkte[i]);
+      }
+    }
+    knopf.addEventListener("click", () => {
+      const auf = liste.hidden;
+      liste.hidden = !auf;
+      knopf.setAttribute("aria-expanded", String(auf));
+    });
+    document.addEventListener("click", (e) => { if (!liste.hidden && !mehr.contains(e.target)) zu(); });
+    // Wer mit der Tastatur aus dem Menü herausgeht, lässt es nicht offen stehen.
+    mehr.addEventListener("focusout", (e) => { if (e.relatedTarget && !mehr.contains(e.relatedTarget)) zu(); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || liste.hidden) return;
+      zu();
+      if (mehr.contains(document.activeElement)) knopf.focus();
+    });
+    // Nur die Breite zählt: Die Höhe ändert sich am Telefon schon beim Rollen (Adressleiste) und mit der Tastatur.
+    const pruefen = () => { const b = kopf.clientWidth; if (b !== breite) { breite = b; anordnen(); } };
+    if (window.ResizeObserver) new ResizeObserver(pruefen).observe(kopf);
+    else window.addEventListener("resize", pruefen);
+    pruefen();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(anordnen);
+  })();
 
   /* Sichtbarer Ausschnitt: Auf dem iPhone nimmt die Tastatur die halbe Höhe, aber 100dvh weiß davon
      nichts. Ein Dialog blieb deshalb bildschirmhoch, sein Inhalt hatte nichts zu rollen, und iOS

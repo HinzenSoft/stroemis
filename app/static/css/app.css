@@ -37,6 +37,12 @@
   --font: Univers, "Univers Next", "Univers LT Std", Arial, Helvetica, sans-serif;
   --font-marke: "DLRG Univers", Univers, "Univers Next", Arial, Helvetica, sans-serif;
   --topbar: 52px;
+  /* Ränder, die Kerbe, Kamera und Wischleiste freihalten (viewport-fit=cover); am Rechner null. Feste und klebende
+     Leisten (Schublade, Sammel- und Abschlussleiste, Lightbox) rechnen sie zu ihrem Innenabstand. */
+  --sicher-oben: env(safe-area-inset-top, 0px);
+  --sicher-unten: env(safe-area-inset-bottom, 0px);
+  --sicher-links: env(safe-area-inset-left, 0px);
+  --sicher-rechts: env(safe-area-inset-right, 0px);
   /* Eine Textspalte für Lesen und Schreiben – feste Zahl statt ch, weil ch von der
      geladenen Schrift abhängt und Editor und Ansicht dann auseinanderlaufen. */
   --lesebreite: 690px;
@@ -149,7 +155,9 @@ img { max-width: 100%; }
 .nav a:hover { background: rgba(255,255,255,.12); color: var(--weiss); }
 .nav a.active { border-bottom-color: var(--gelb); }
 /* 85 % Weiß auf Rot ergab nur 3,8:1 – der eigene Name stand blasser da als jede Schaltfläche. */
-.nav .user { color: var(--weiss); font-weight: 400; opacity: .95; }
+/* Abstand zu „Profil“ als Rand (das Leerzeichen am Ende des Namens fällt im Flex-Element weg, trennt aber beim
+   Vorlesen): Steht „Profil“ ohne Namen im Menü „Mehr“, rückte ein festes Leerzeichen davor es sonst ein. */
+.nav .user { color: var(--weiss); font-weight: 400; opacity: .95; margin-right: .278em; }
 .nav button {
   background: none; border: 0; color: var(--weiss); font: inherit; font-weight: 600;
   padding: 0 12px; cursor: pointer;
@@ -184,6 +192,32 @@ img { max-width: 100%; }
   .brand .trenner, .brand .funktion { display: none; }
   .nav a, .nav button { padding: 0 7px; }
 }
+/* Passt die Navigation trotzdem nicht (sieben Punkte für Konten mit allen Modulen), ordnet common.js sie neu
+   (kopfleiste): erst weicht der eigene Name (.nav-eng), dann der Schriftzug neben dem Zeichen (.nav-enger), und was
+   dann noch übersteht, wandert in das Menü „Mehr“ am rechten Rand. Die Liste hängt an der Bauchbinde (position:
+   sticky), nicht an der rollenden Navigation – so schneidet deren overflow sie nicht ab. */
+.bauchbinde.nav-eng .nav .user, .bauchbinde.nav-eng .funktion small,
+.bauchbinde.nav-enger .brand .trenner, .bauchbinde.nav-enger .brand .funktion { display: none; }
+.nav-mehr { display: flex; flex: none; }
+.nav-mehr[hidden] { display: none; }
+.nav .nav-mehr-knopf { display: flex; align-items: center; }
+.nav-mehr-knopf::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 7px;
+  border: solid currentColor; border-width: 0 2px 2px 0; transform: translateY(-2px) rotate(45deg); }
+.nav-mehr-knopf[aria-expanded="true"] { background: rgba(255,255,255,.16); }
+.nav-mehr-knopf[aria-expanded="true"]::after { transform: translateY(1px) rotate(-135deg); }
+.nav-mehr-liste { position: absolute; top: 100%; right: max(6px, var(--sicher-rechts)); z-index: 2;
+  min-width: 200px; max-width: calc(100vw - 12px); max-height: calc(100dvh - var(--topbar) - 12px); overflow-y: auto;
+  padding: 6px 0; background: var(--weiss); border: 1px solid var(--linie); border-radius: 0 0 var(--radius-gross) var(--radius-gross);
+  box-shadow: var(--schatten-menue); }
+.nav-mehr-liste[hidden] { display: none; }
+.nav .nav-mehr-liste a, .nav .nav-mehr-liste button {
+  display: flex; align-items: center; width: 100%; min-height: 44px; padding: 10px 18px; margin: 0;
+  background: none; border: 0; border-left: 4px solid transparent; color: var(--anthrazit); text-align: left;
+  font: inherit; font-size: var(--fs-mittel); font-weight: 600; text-decoration: none; cursor: pointer; }
+.nav .nav-mehr-liste a:hover, .nav .nav-mehr-liste button:hover { background: var(--grau-hell); color: var(--rot); }
+.nav .nav-mehr-liste a.active { border-left-color: var(--rot); color: var(--rot); }
+.nav .nav-mehr-liste .user { display: none; }
+.bauchbinde .nav-mehr-liste :focus-visible { outline-color: var(--anthrazit); outline-offset: -3px; }
 /* Auf dem Telefon bleibt von 36 px Seitenpolster nichts für den Text – Lesen und Schreiben
    teilen sich die Variable, das Raster bleibt deckungsgleich. */
 /* Tablet (bis 1024 px): Der Seitenbaum darf höchstens 260 px breit sein – auch wenn jemand ihn
@@ -367,7 +401,13 @@ dialog .dlg-body { padding: 18px 20px 20px; max-height: 80vh; max-height: 80dvh;
 /* Solange ein Dialog offen ist, wandert keine Wischgeste an die Seite dahinter: Auf Android
    löste das Weiterziehen am Dialogrand „zum Neuladen ziehen“ aus – Kommentar und Dateien weg. */
 html:has(dialog[open]) { overscroll-behavior: none; }
+/* … und am Touchgerät rollt auch die Seite dahinter nicht mit: Wer auf der Abdunklung zog, stand nach dem Schließen
+   an einer anderen Stelle (im Prüfformular war der bearbeitete Prüfpunkt dann aus dem Bild). Dasselbe für die
+   Großansicht der Fotos. Nicht mit der Maus: Dort ließe die Sperre statt des Rollbalkens einen leeren Streifen stehen. */
+@media (pointer: coarse) { html:has(dialog[open]:modal), html:has(.md-lightbox) { overflow: hidden; } }
 dialog h2 { margin-bottom: 4px; }
+/* Am Touchgerät trägt der Titel beim Öffnen den Fokus (common.js) – er ist kein Bedienelement, also ohne Ring. */
+dialog h2[autofocus]:focus { outline: none; box-shadow: none; }
 dialog .dlg-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 dialog.wide { width: min(1100px, 96vw); }
 /* Tastatur offen (iOS: der sichtbare Ausschnitt schrumpft, 100dvh nicht): Der Dialog wird so hoch wie
@@ -382,6 +422,20 @@ html.tastatur dialog[open] .dlg-body { max-height: calc(var(--vv-h, 100dvh) - 22
   dialog, dialog.wide { max-height: calc(100dvh - 8px); }
   dialog .dlg-body { max-height: calc(100dvh - 14px); padding: 12px 16px 14px; }
 }
+/* Rollt der Inhalt eines Dialogs (Telefon quer, lange Formulare am Telefon), standen Speichern und Abbrechen am Ende
+   und waren beim Öffnen nicht zu sehen. Jetzt kleben die Knöpfe am unteren Rand des Dialogs; ihr weißer Grund
+   deckt den Inhalt ab, der darunter weiterrollt. Den unteren Innenabstand trägt dafür die Knopfzeile statt des
+   rollenden Bereichs – Chromium hält klebende Elemente sonst um diesen Abstand vom Rand fern, und darunter schien
+   der Inhalt durch. Nur ohne Maus bzw. bei wenig Höhe – am Rechner bleibt es, wie es war. */
+@media (pointer: coarse), (max-height: 500px) {
+  dialog .dlg-body:has(> .dlg-actions:last-child) { padding-bottom: 0; container-type: scroll-state; }
+  dialog .dlg-body > .dlg-actions:last-child { position: sticky; bottom: 0; z-index: 2; background: var(--weiss); padding: 10px 0 20px; }
+  /* Der Schatten nur, solange darunter noch Inhalt wartet (Browser ohne diese Abfrage: ohne Schatten). */
+  @container scroll-state(scrollable: bottom) {
+    dialog .dlg-body > .dlg-actions:last-child { box-shadow: 0 -10px 10px -10px rgba(0, 0, 0, .25); }
+  }
+}
+@media (max-height: 500px) { dialog .dlg-body > .dlg-actions:last-child { padding-bottom: 14px; } }
 
 /* Seiten mit normalem Inhalt */
 .page { max-width: 860px; margin: 0 auto; padding: 28px 20px 60px;
@@ -1199,7 +1253,8 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 }
 .md-lightbox img { max-width: 96vw; max-height: 92vh; object-fit: contain; cursor: default; }
 .md-lightbox-close {
-  position: absolute; top: 12px; right: 16px; width: 36px; height: 36px;
+  /* Kerbe und Kamera (Telefon quer) bleiben frei; 44 px für den Finger. */
+  position: absolute; top: calc(12px + var(--sicher-oben)); right: calc(16px + var(--sicher-rechts)); width: 44px; height: 44px;
   background: none; border: 0; color: var(--weiss); font-size: 2rem; line-height: 1; cursor: pointer;
 }
 .toc-list a.active { color: var(--rot); font-weight: 700; }
@@ -2072,7 +2127,9 @@ dialog.us-dlg { width: min(640px, 96vw); }
 }
 /* Dialoge füllen das Telefon fast ganz; die Höhe folgt dem sichtbaren Bereich (Tastatur!). */
 @media (max-width: 640px) {
-  dialog, dialog.wide { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+  /* max-width auch: Sonst begrenzte die Vorgabe des Browsers (100 % − 2em − 6px) den Dialog am Außendisplay eines
+     Fold auf 308 statt 328 px. */
+  dialog, dialog.wide { width: calc(100vw - 16px); max-width: calc(100% - 16px); max-height: calc(100dvh - 16px); }
   dialog .dlg-body { max-height: calc(100dvh - 22px); overflow-wrap: anywhere; overscroll-behavior: contain; }
   .share-link { flex-wrap: wrap; }
   .share-link input { flex: 1 1 100%; }
@@ -2131,6 +2188,27 @@ dialog.us-dlg { width: min(640px, 96vw); }
   /* Zusammengeklappt schmal, aber mit zwei Hälften: die Schublade füllt genau die linke. */
   .wiki-side { width: env(viewport-segment-right 0 0); }
   .panel { width: env(viewport-segment-width 1 0); }
+}
+/* Dialoge, Großansicht und Meldungen stehen sonst mittig im ganzen Fenster – also genau auf der Falz: Beschriftungen,
+   Felder und die Zeichenfläche der Unterschrift lagen zum Teil darunter. Mit zwei Hälften nebeneinander gehören sie
+   in die rechte (dort steht auch der Inhalt), mit zwei Hälften übereinander in die untere. */
+@media (horizontal-viewport-segments: 2) {
+  /* Die Bauchbinde: das Zeichen samt Schriftzug in der linken Hälfte, die Navigation in der rechten (zu eng wird es
+     dort für Konten mit allen Modulen – dann ordnet common.js sie wie am Telefon). */
+  .bauchbinde .brand { flex: none; min-width: calc(env(viewport-segment-left 1 0) - 8px - var(--sicher-links)); }
+  .nav a, .nav button { padding: 0 9px; }
+  dialog[open], html.tastatur dialog[open] { max-width: none; width: calc(env(viewport-segment-width 1 0) - 24px);
+    margin-left: calc(env(viewport-segment-left 1 0) + 12px); margin-right: 12px; }
+  .md-lightbox { padding-left: calc(env(viewport-segment-left 1 0) + 24px); }
+  .md-lightbox img { max-width: calc(env(viewport-segment-width 1 0) - 48px); }
+  #toast, #toast[popover] { left: calc(env(viewport-segment-left 1 0) + env(viewport-segment-width 1 0) / 2); }
+}
+@media (vertical-viewport-segments: 2) {
+  dialog[open], html.tastatur dialog[open] { top: 0; bottom: auto; margin-top: calc(env(viewport-segment-top 0 1) + 8px); margin-bottom: 8px;
+    max-height: calc(env(viewport-segment-height 0 1) - 16px); }
+  dialog[open] .dlg-body, html.tastatur dialog[open] .dlg-body { max-height: calc(env(viewport-segment-height 0 1) - 22px); }
+  .md-lightbox { padding-top: calc(env(viewport-segment-top 0 1) + 24px); }
+  .md-lightbox img { max-height: calc(env(viewport-segment-height 0 1) - 48px); }
 }
 
 /* Tablet (801–1024 px): Der Seitenbaum ist höchstens 260 px breit – min() gegen die am

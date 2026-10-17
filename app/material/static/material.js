@@ -213,7 +213,75 @@
                 pruefung: "pruefungen", pruefung_neu: "pruefungen", durchgang: "pruefungen" };
   $$(".mat-nav a").forEach((a) => a.classList.toggle("aktiv", a.dataset.nav === NAV[ANSICHT]));
   if (ANSICHT === "suche" && DATEN.q) $(".mat-suche input").value = DATEN.q;
-  if (!DARF.lesen) $$('.mat-nav a:not([data-nav="katalog"]), .mat-suche').forEach((el) => el.remove());
+  if (!DARF.lesen) $$('.mat-nav a:not([data-nav="katalog"]), .mat-suche, #mat-lupe').forEach((el) => el.remove());
+
+  /* Modulnavigation (Lieferung 5): Passen „☰ Ordner“, die Reiter und das Suchfeld nicht in eine Zeile, stand die
+     Navigation am Telefon in drei Zeilen – über 200 px, bevor nach einem QR-Scan die Inventarnummer kam. Dann wird sie
+     einzeilig (.eng): Die Reiter rollen seitlich (der Rand blendet aus, solange dort noch einer steht, der aktive
+     wird ins Bild gerollt), die Nummernsuche wartet hinter der Lupe und öffnet als eigene Zeile darunter. Auf der
+     Übersicht, im Bestand und auf der Trefferseite steht sie gleich offen – dort ist sie der Einstieg. Reicht der
+     Platz auch so nicht, zeigt „☰“ nur noch das Zeichen, und die Reiter rücken zusammen (.enger). */
+  const matNav = $(".mat-nav");
+  const reiter = $(".mat-reiter");
+  const lupe = $("#mat-lupe");
+  const sucheForm = $(".mat-nav .mat-suche");
+  if (matNav && sucheForm && (["dashboard", "bestand", "suche"].includes(ANSICHT) || $("input", sucheForm).value)) {
+    matNav.classList.add("suche-offen");
+  }
+  function rollHinweis() {
+    if (!reiter) return;
+    const rest = reiter.scrollWidth - reiter.clientWidth - reiter.scrollLeft;
+    reiter.classList.toggle("rollt-links", reiter.scrollLeft > 2);
+    reiter.classList.toggle("rollt-rechts", rest > 2);
+  }
+  // Eine Zeile, wenn kein sichtbares Element unterhalb des ersten beginnt.
+  function einzeilig() {
+    const kinder = Array.from(matNav.children).filter((el) => el.offsetParent);
+    if (kinder.length < 2) return true;
+    const erstes = kinder[0].getBoundingClientRect();
+    return kinder.every((el) => el.getBoundingClientRect().top < erstes.bottom - 4);
+  }
+  let navBreite = -1;
+  function navAnordnen() {
+    if (!matNav || !reiter) return;
+    navBreite = matNav.clientWidth;
+    matNav.classList.remove("eng", "enger");
+    if (lupe) lupe.hidden = true;
+    if (!einzeilig()) {
+      matNav.classList.add("eng");
+      if (lupe) lupe.hidden = false;
+      if (reiter.scrollWidth > reiter.clientWidth + 1) matNav.classList.add("enger");
+    }
+    if (lupe) lupe.setAttribute("aria-expanded", String(matNav.classList.contains("suche-offen")));
+    const aktiv = $("a.aktiv", reiter);
+    if (aktiv && reiter.scrollWidth > reiter.clientWidth) {
+      const r = reiter.getBoundingClientRect();
+      const a = aktiv.getBoundingClientRect();
+      if (a.right > r.right - 24) reiter.scrollLeft += a.right - r.right + 32;
+      else if (a.left < r.left + 24) reiter.scrollLeft -= r.left - a.left + 32;
+    }
+    rollHinweis();
+  }
+  if (matNav && reiter) {
+    reiter.addEventListener("scroll", rollHinweis, { passive: true });
+    if (lupe) lupe.addEventListener("click", () => {
+      const auf = !matNav.classList.contains("suche-offen");
+      matNav.classList.toggle("suche-offen", auf);
+      lupe.setAttribute("aria-expanded", String(auf));
+      if (auf) $("input", sucheForm).focus();          // getippt, um zu suchen: hier darf die Tastatur kommen
+    });
+    // Escape im Feld (ohne offene Vorschläge – die schließt suche.js zuerst) klappt die Suche wieder ein.
+    if (sucheForm) sucheForm.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented || !matNav.classList.contains("eng") || !lupe) return;
+      matNav.classList.remove("suche-offen");
+      lupe.setAttribute("aria-expanded", "false");
+      lupe.focus();
+    });
+    const breiteGeaendert = () => { if (matNav.clientWidth !== navBreite) navAnordnen(); };
+    if (window.ResizeObserver) new ResizeObserver(breiteGeaendert).observe(matNav);
+    else window.addEventListener("resize", breiteGeaendert);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(navAnordnen);
+  }
 
   // Klicks auf [data-act] gehen an die Aktionen der gerade gezeichneten Ansicht.
   let aktionen = {};
@@ -236,9 +304,9 @@
   /* --- Leiste links --------------------------------------------------------------------------------
      Wo Ansicht und Bildschirm Platz haben, steht links ein Baum: im Bestand der Ordnerbaum, im Katalog
      (Katalog, Produkt, Formular, Meldungen) der Kategorienbaum. Die eigene Ebene ist markiert, der Weg dorthin
-     aufgeklappt, alles einen Klick entfernt. Unter 1200 px ist die Leiste eine Schublade hinter
-     „☰ Ordner“ bzw. „☰ Kategorien“ (wie im Wiki). Nicht auf der Seite „Bestand“: dort ist der Ordnerbaum
-     selbst der Inhalt. Auf- und Zuklappen merkt sich der Browser, je Baum getrennt. */
+     aufgeklappt, alles einen Klick entfernt. Unter 1024 px ist die Leiste eine Schublade hinter
+     „☰ Ordner“ bzw. „☰ Kategorien“ (wie im Wiki), auf einem Doppelbildschirm füllt sie die linke Hälfte. Nicht auf
+     der Seite „Bestand“: dort ist der Ordnerbaum selbst der Inhalt. Auf- und Zuklappen merkt sich der Browser, je Baum getrennt. */
   const KATALOG_ANSICHTEN = new Set(["katalog", "produkt", "formular", "meldungen"]);
   const MIT_LEISTE = new Set(["dashboard", "pruefungen", "ordner", "artikel", "artikel_neu", "suche", "pruefung",
                               "pruefung_neu", "durchgang", "katalog", "produkt", "formular", "meldungen"]);
@@ -292,13 +360,14 @@
   async function leisteLaden() {
     if (!leiste || !MIT_LEISTE.has(ANSICHT) || !(DARF.lesen || (LEISTE_KATALOG && DARF.katalog))) return;
     document.getElementById("mat-shell").classList.add("mit-leiste");
+    navAnordnen();                     // „☰ Ordner“ steht jetzt in der Zeile
     leiste.hidden = false;
     if (LEISTE_KATALOG) {
       const kopf = $(".mat-side-kopf a", leiste);
       kopf.textContent = "Kategorien";
       kopf.href = "/material/katalog";
       leiste.setAttribute("aria-label", "Kategorien");
-      if (leisteAuf) leisteAuf.textContent = "☰ Kategorien";
+      if (leisteAuf) $(".mat-side-auf-text", leisteAuf).textContent = " Kategorien";
     }
     try { leisteDaten = LEISTE_KATALOG ? await kategorienLaden() : (await api(`${API}/ordner`)).ordner; }
     catch (e) { $("#mat-baumnav").innerHTML = `<p class="error">${esc(e.message)}</p>`; return; }
@@ -307,10 +376,14 @@
   // Jede Ansicht meldet hier ihren Ordner (Ordner, Artikel, Prüfung, Durchgang) bzw. ihre Kategorie (Katalog,
   // Produkt, Formular) – die Leiste markiert ihn.
   function leisteMarkieren(id) { leisteAktiv = id || null; leisteZeichnen(); }
-  const schublade = window.matchMedia("(max-width: 1199px)");
+  // Schublade unter 1024 px (Tablet quer hat die Leiste daneben, Lieferung 5) – außer auf einem Doppelbildschirm mit
+  // zwei Hälften nebeneinander: Dort steht sie fest in der linken (material.css, Abschnitt Geräte: shell).
+  const schublade = window.matchMedia("(max-width: 1023px)");
+  const zweiHaelften = window.matchMedia("(horizontal-viewport-segments: 2)");
+  const alsSchublade = () => schublade.matches && !zweiHaelften.matches;
   // Als Schublade ist die geschlossene Leiste nur aus dem Bild geschoben – „inert“ nimmt sie auch aus der
   // Tab-Reihenfolge und dem Vorlesen. Neben dem Inhalt (breiter Bildschirm) ist sie immer bedienbar.
-  function leisteInert() { if (leiste) leiste.inert = schublade.matches && !leiste.classList.contains("open"); }
+  function leisteInert() { if (leiste) leiste.inert = alsSchublade() && !leiste.classList.contains("open"); }
   function leisteZu(fokusZurueck) {
     if (!leiste) return;
     const war = leiste.classList.contains("open");
@@ -318,6 +391,36 @@
     if (leisteAuf) leisteAuf.setAttribute("aria-expanded", "false");
     leisteInert();
     if (war && fokusZurueck && leisteAuf) leisteAuf.focus();
+  }
+  /* Wischen nach links schließt die Schublade – auf der Leiste wie auf der Abdunklung daneben. Die Leiste folgt dabei
+     dem Finger; reicht der Weg nicht (ein Viertel ihrer Breite, höchstens 80 px), springt sie zurück. Wer senkrecht
+     wischt, rollt wie bisher den Baum. */
+  function leisteWischen() {
+    let zug = null;
+    document.addEventListener("touchstart", (e) => {
+      zug = leiste.classList.contains("open") && e.touches.length === 1
+        ? { x: e.touches[0].clientX, y: e.touches[0].clientY, richtung: null, dx: 0 } : null;
+    }, { passive: true });
+    document.addEventListener("touchmove", (e) => {
+      if (!zug) return;
+      const dx = e.touches[0].clientX - zug.x;
+      const dy = e.touches[0].clientY - zug.y;
+      if (!zug.richtung && Math.abs(dx) + Math.abs(dy) > 10) zug.richtung = Math.abs(dx) > Math.abs(dy) ? "quer" : "hoch";
+      if (zug.richtung !== "quer") return;
+      zug.dx = Math.min(0, dx);
+      leiste.style.transition = "none";
+      leiste.style.transform = `translateX(${zug.dx}px)`;
+    }, { passive: true });
+    const ende = () => {
+      if (!zug) return;
+      const weit = zug.richtung === "quer" && zug.dx < -Math.min(80, leiste.offsetWidth / 4);
+      zug = null;
+      leiste.style.transition = "";
+      leiste.style.transform = "";
+      if (weit) leisteZu();
+    };
+    document.addEventListener("touchend", ende);
+    document.addEventListener("touchcancel", ende);
   }
   if (leiste) {
     leiste.addEventListener("click", (e) => {
@@ -353,7 +456,12 @@
       if (leiste.classList.contains("open") && !leiste.contains(e.target) && !(leisteAuf && leisteAuf.contains(e.target))) leisteZu();
     });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") leisteZu(true); });
-    schublade.addEventListener("change", leisteInert);
+    // Wechselt die Darstellung (Tablet gedreht, Fold auf- oder zugeklappt), schließt eine offene Schublade – sonst
+    // stand sie beim Zurückwechseln samt Abdunklung wieder offen da.
+    const umschalten = () => { leisteZu(); leisteInert(); navAnordnen(); };
+    schublade.addEventListener("change", umschalten);
+    zweiHaelften.addEventListener("change", umschalten);
+    leisteWischen();
     leisteInert();
   }
 
@@ -950,17 +1058,31 @@
     if (e.key !== "Escape") return;
     $$("details.mat-menue[open]").forEach((m) => { m.open = false; $("summary", m).focus(); });
   });
-  document.addEventListener("toggle", (e) => {
-    const m = e.target;
-    if (!(m instanceof HTMLDetailsElement) || !m.classList.contains("mat-menue") || !m.open) return;
+  function menueAusrichten(m) {
     const liste = $(".mat-menue-liste", m);
     const knopf = m.getBoundingClientRect();
     const breite = liste.offsetWidth;
-    const rand = document.documentElement.clientWidth;
-    const links = Math.max(8, Math.min(knopf.right - breite, rand - 8 - breite));
+    // Grenzen: das Fenster – auf einem Doppelbildschirm die Hälfte, in der der Knopf steht (sonst lag die Liste
+    // halb unter dem Scharnier).
+    let anfang = 0;
+    let ende = document.documentElement.clientWidth;
+    const haelften = window.viewport && window.viewport.segments;
+    if (haelften && haelften.length > 1) {
+      const h = Array.from(haelften).find((s) => knopf.left >= s.x - 1 && knopf.left < s.x + s.width);
+      if (h) { anfang = h.x; ende = Math.min(ende, h.x + h.width); }
+    }
+    const links = Math.max(anfang + 8, Math.min(knopf.right - breite, ende - 8 - breite));
     liste.style.right = "auto";
     liste.style.left = `${Math.round(links - knopf.left)}px`;
+  }
+  document.addEventListener("toggle", (e) => {
+    const m = e.target;
+    if (!(m instanceof HTMLDetailsElement) || !m.classList.contains("mat-menue") || !m.open) return;
+    menueAusrichten(m);
   }, true);
+  // Ändert sich die Fensterbreite, während ein Menü offen ist (Fold auf- oder zugeklappt, Tablet gedreht), rückt es mit –
+  // vorher behielt es die Lage vom Öffnen und ragte nach dem Zuklappen 31 px links aus dem Bild.
+  window.addEventListener("resize", () => $$("details.mat-menue[open]").forEach(menueAusrichten));
 
   /* --- Artikel --------------------------------------------------------------------------------------- */
   async function artikel() {

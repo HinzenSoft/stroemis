@@ -72,7 +72,25 @@
     feld.removeAttribute("aria-activedescendant");
     liste.hidden = false;
     feld.setAttribute("aria-expanded", "true");
+    hoeheBegrenzen();
   }
+
+  /* Die Liste endet über der Tastatur: höchstens bis zum unteren Rand des sichtbaren Ausschnitts (visualViewport – auf
+     dem iPhone schrumpft nur er, nicht das Fenster), mindestens aber so hoch wie zwei Steckbriefe. Vorher galten 70 %
+     der Fensterhöhe, und „Alle Treffer“ lag am Telefon hinter der Tastatur. */
+  function hoeheBegrenzen() {
+    if (liste.hidden) return;
+    const vv = window.visualViewport;
+    const unten = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    const frei = unten - liste.getBoundingClientRect().top - 8;
+    liste.style.maxHeight = `${Math.round(Math.max(130, Math.min(540, frei)))}px`;
+  }
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", hoeheBegrenzen);
+    window.visualViewport.addEventListener("scroll", hoeheBegrenzen);
+  }
+  window.addEventListener("resize", hoeheBegrenzen);
+  window.addEventListener("scroll", hoeheBegrenzen, { passive: true });   // Android rollt das Feld nach dem Öffnen der Tastatur ins Bild
 
   function schliessen() {
     if (laufend) laufend.abort();

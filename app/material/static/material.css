@@ -7,13 +7,17 @@
 /* Unternavigation des Moduls mit der Suchmaske für Nummern */
 .mat-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 4px; margin: -8px 0 18px;
   border-bottom: 1px solid var(--linie); padding-bottom: 8px; }
-.mat-nav > a { padding: 6px 12px; color: var(--anthrazit); text-decoration: none; font-weight: 600;
+.mat-reiter { display: flex; flex-wrap: wrap; gap: 4px; }
+.mat-reiter > a { padding: 6px 12px; color: var(--anthrazit); text-decoration: none; font-weight: 600;
   border-bottom: 3px solid transparent; }
-.mat-nav > a:hover { color: var(--rot); }
-.mat-nav > a.aktiv { border-bottom-color: var(--rot); color: var(--rot); }
-.mat-suche { margin-left: auto; display: flex; gap: 6px; align-items: center; min-width: min(360px, 100%); }
+.mat-reiter > a:hover { color: var(--rot); }
+.mat-reiter > a.aktiv { border-bottom-color: var(--rot); color: var(--rot); }
+/* Das Suchfeld wächst bis 360 px und gibt bis 260 px nach, bevor es umbricht – so passt es bei Telefon quer und
+   Tablet hochkant noch neben die Reiter (Lieferung 5); am Rechner bleibt es 360 px breit. */
+.mat-suche { margin-left: auto; display: flex; gap: 6px; align-items: center; flex: 1 1 260px; max-width: 360px;
+  min-width: min(260px, 100%); }
 .mat-suche input { flex: 1; min-width: 0; }
-@media (max-width: 640px) { .mat-suche { margin-left: 0; width: 100%; } }
+@media (max-width: 640px) { .mat-suche { margin-left: 0; flex-basis: 100%; max-width: none; } }
 
 .mat-leer { color: var(--grau); padding: 14px 0; }
 .mat-text { white-space: pre-wrap; }
@@ -229,8 +233,9 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-formtabelle .btn.small { padding: 2px 8px; }
 .mat-versionen { padding-left: 18px; }
 
-/* Ordnerleiste links. Ab 1200 px steht sie fest neben dem Inhalt; darunter ist sie eine Schublade hinter
-   „☰ Ordner“ wie die Seitenleiste im Wiki. Der Baum nutzt dessen Zeilen (.tree aus app.css). */
+/* Ordnerleiste links. Ab 1024 px steht sie fest neben dem Inhalt (bis 1199 px 240 px schmal, Abschnitt Geräte: shell);
+   darunter ist sie eine Schublade hinter „☰ Ordner“ wie die Seitenleiste im Wiki. Der Baum nutzt dessen Zeilen
+   (.tree aus app.css). */
 .mat-side-auf { display: none; }
 .mat-shell.mit-leiste { display: grid; grid-template-columns: 280px minmax(0, 1fr); align-items: start; }
 /* Mit „margin: auto“ wäre der Inhalt so schmal wie das, was gerade darin steht – je Seite anders breit. */
@@ -246,7 +251,7 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-tree .mat-zahl { margin-left: 0; flex: none; }
 .mat-tree li.system > .row a { color: var(--grau); }
 .mat-side-anzahl { flex: none; font-size: var(--fs-marke); color: var(--grau); padding: 0 4px; }
-@media (max-width: 1199px) {
+@media (max-width: 1023px) {
   .mat-shell.mit-leiste { display: block; }
   .mat-shell.mit-leiste .mat-side-auf { display: inline-flex; margin-right: 4px; }
   .mat-side { position: fixed; left: 0; top: var(--topbar); bottom: 0; height: auto; width: min(320px, 88vw);
@@ -623,3 +628,133 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mv-leer { padding: 12px; color: var(--grau); font-size: var(--fs-klein); }
 @media (max-width: 640px) { .mat-vorschlaege { left: 0; right: 0; width: auto; } }
 
+/* Lieferung 5 – Geräte: shell */
+/* Seitengerüst, Modulnavigation, Ordnerleiste, Dialoge und Doppelbildschirme auf Telefon, Foldable und Tablet. Am
+   Rechner (Maus, ab 1200 px) ändert sich hier nichts: Die Regeln greifen nur, wenn die Zeile nicht passt (Klassen aus
+   material.js), ohne Maus, bei wenig Höhe oder mit zwei Bildschirmhälften. */
+
+/* Modulnavigation in einer Zeile (material.js, navAnordnen): Die Reiter rollen seitlich, ein ausgeblendeter Rand zeigt,
+   dass dort noch einer steht; die Nummernsuche liegt hinter der Lupe und öffnet als eigene Zeile darunter. Das Polster
+   der Reiterleiste hält Platz für den Fokusring, den das Rollen sonst abschnitte. */
+.mat-reiter { min-width: 0; }
+.mat-lupe { justify-content: center; min-width: 40px; }
+.mat-lupe svg { display: block; }
+.mat-nav.eng { flex-wrap: wrap; gap: 4px 6px; }
+.mat-nav.eng .mat-side-auf, .mat-nav.eng .mat-lupe { min-height: 40px; min-width: 44px; justify-content: center; }
+.mat-nav.eng .mat-reiter { flex: 1 1 0; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  overscroll-behavior-x: contain; padding: 4px; margin: -4px; }
+.mat-nav.eng .mat-reiter::-webkit-scrollbar { display: none; }
+.mat-nav.eng .mat-reiter > a { flex: none; white-space: nowrap; }
+.mat-nav.eng .mat-suche { display: none; }
+.mat-nav.eng.suche-offen .mat-suche { display: flex; flex: 1 1 100%; max-width: none; margin: 4px 0 0; }
+.mat-nav.eng.suche-offen .mat-lupe { background: var(--anthrazit); border-color: var(--anthrazit); color: var(--weiss); }
+.mat-nav.enger .mat-side-auf-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.mat-nav.enger .mat-reiter > a { padding: 9px 8px 8px; font-size: var(--fs-mittel); }
+.mat-reiter.rollt-rechts { -webkit-mask-image: linear-gradient(to left, transparent, #000 28px); mask-image: linear-gradient(to left, transparent, #000 28px); }
+.mat-reiter.rollt-links { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
+.mat-reiter.rollt-links.rollt-rechts {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+/* Am Telefon steht im Prüfformular keine Suche (siehe oben) – dann auch keine Lupe. */
+@media (max-width: 640px) { #mat[data-ansicht="pruefung"] .mat-lupe { display: none; } }
+/* Weniger Luft über der Navigation, wo die Höhe knapp ist. */
+@media (max-width: 640px), (max-height: 500px) { .page.mat { padding-top: 18px; } }
+
+/* Ordnerleiste: ab 1024 px fest neben dem Inhalt, bis 1199 px schmaler (Tablet quer – der Inhalt behält gut 740 px,
+   so passen die Tabellen der Prüfungen). Kerbe und Wischleiste bleiben frei. */
+@media (min-width: 1024px) and (max-width: 1199px) {
+  .mat-shell.mit-leiste { grid-template-columns: 240px minmax(0, 1fr); }
+  .mat-shell.mit-leiste > .page { padding-left: 16px; padding-right: max(16px, var(--sicher-rechts)); }
+}
+.mat-side { padding-left: calc(10px + var(--sicher-links)); padding-bottom: calc(40px + var(--sicher-unten)); }
+/* Als Schublade: ein Schließen-Knopf für den Finger (44 × 44), auf Tablet und Fold aufgeklappt etwas breiter, und am
+   Touchgerät rollt die Seite dahinter nicht mit, solange sie offen ist (vorher rollte das Ziehen auf der Abdunklung
+   die Seite). Wischen nach links schließt (material.js, leisteWischen). */
+@media (max-width: 1023px) {
+  .mat-side-zu { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px;
+    margin: -10px -8px -10px 0; padding: 0; font-size: 1.25rem; }
+}
+@media (max-width: 1023px) and (pointer: coarse) { html:has(.mat-side.open) { overflow: hidden; } }
+@media (min-width: 600px) and (max-width: 1023px) { .mat-side { width: min(400px, 60vw); } }
+/* Lange Ordner- und Kategorienamen brechen um, statt mit „…“ zu enden – den vollen Namen im title sieht man ohne Maus
+   nie, und „DEMO-Gerätewagen Wasserret…“ war von seinem Nachbarn nicht zu unterscheiden. Mit der Maus am breiten
+   Bildschirm bleibt der Baum ruhig wie im Wiki. */
+@media (pointer: coarse), (max-width: 1023px) {
+  .mat-tree a { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; }
+}
+@media (pointer: coarse) {
+  .mat-tree a { padding-top: 11px; padding-bottom: 11px; }
+  .mat-tree .tg { width: 34px; height: auto; min-height: 44px; align-self: stretch; }
+}
+
+/* Telefon quer und offene Tastatur (wenig Höhe, ohne Maus): Die Bauchbinde rollt im Modul mit weg, statt zusammen mit
+   der Suchzeile des Katalogs 115 von 360 px zu belegen; die Suchzeile klebt dann allein am oberen Rand, die Schublade
+   reicht bis oben. */
+@media (max-height: 500px) and (pointer: coarse) {
+  body:has(#mat-shell) .bauchbinde { position: relative; }
+  .mat-suchzeile { top: 0; padding: 4px 0; }
+  .mat-side { top: 0; }
+}
+@media (max-height: 500px) and (pointer: coarse) and (max-width: 1023px) {
+  .mat-side { z-index: 1250; }
+  body:has(.mat-side.open)::after { inset: 0; z-index: 1240; }
+}
+/* Wer mit der Tastatur rückwärts geht, landete hinter der klebenden Kopfleiste (im Katalog hinter Kopfleiste und
+   Suchzeile) – der Fokus war nicht zu sehen. Gerollt wird jetzt so, dass das Ziel darunter steht. */
+html:has(.mat-shell) { scroll-padding-top: calc(var(--topbar) + 12px); }
+html:has(.mat-suchzeile) { scroll-padding-top: calc(var(--topbar) + 74px); }
+@media (max-height: 500px) and (pointer: coarse) {
+  html:has(.mat-shell) { scroll-padding-top: 12px; }
+  html:has(.mat-suchzeile) { scroll-padding-top: 68px; }
+}
+
+/* Feste und klebende Leisten halten Kerbe und Wischleiste frei (Variablen aus app.css :root). */
+.mat-sammel { padding-bottom: calc(10px + var(--sicher-unten)); }
+.mat-lb-pfeil.zurueck { left: calc(10px + var(--sicher-links)); }
+.mat-lb-pfeil.weiter { right: calc(10px + var(--sicher-rechts)); }
+@media (max-width: 640px) { .mat-lb-pfeil { bottom: calc(14px + var(--sicher-unten)); } }
+
+/* Doppelbildschirm mit Scharnier (Surface Duo, zwei Hälften nebeneinander): links in der einen Hälfte die Ordner- bzw.
+   Kategorienleiste, rechts in der anderen der Inhalt samt Abschlussleiste – nichts liegt mehr unter der Falz. Die
+   Lücke zwischen beiden ist so breit wie das Scharnier. Ansichten ohne Leiste (Bestand, Protokoll prüfen) stehen in
+   der rechten Hälfte; Dialoge und Großansicht legt app.css ebenfalls dorthin. Vorbild: Wiki und Karte (app.css). */
+@media (horizontal-viewport-segments: 2) {
+  .mat-shell.mit-leiste { display: grid; grid-template-columns: env(viewport-segment-width 0 0) minmax(0, 1fr);
+    column-gap: calc(env(viewport-segment-left 1 0) - env(viewport-segment-right 0 0)); }
+  .mat-shell.mit-leiste .mat-side-auf, .mat-side-zu { display: none; }
+  .mat-side { position: sticky; top: var(--topbar); bottom: auto; left: auto; height: calc(100vh - var(--topbar)); width: auto;
+    transform: none; transition: none; box-shadow: none; z-index: auto; }
+  body:has(.mat-side.open)::after { content: none; }
+  .mat-shell:not(.mit-leiste) > .page, .page.mat-pruefen { max-width: env(viewport-segment-width 1 0);
+    margin-left: env(viewport-segment-left 1 0); margin-right: 0; }
+  .mat-lightbox img { max-width: calc(env(viewport-segment-width 1 0) - 120px); }
+  .mat-lightbox figcaption { max-width: calc(env(viewport-segment-width 1 0) - 40px); }
+  .mat-lb-pfeil.zurueck { left: calc(env(viewport-segment-left 1 0) + 10px); }
+  /* In einer Hälfte ist der Inhalt so schmal wie am Telefon, das Fenster aber über 860 px breit: Die Listen werden
+     hier deshalb selbst zu Karten – dieselben Regeln wie unter 860 px (app.css table.list, oben .mat-wahlspalte,
+     .mat-befunde, .mat-ue). Sonst liefen die Tabellen über den rechten Rand. */
+  .mat-shell table.list, .mat-shell table.list tbody, .mat-shell table.list tr, .mat-shell table.list td { display: block; }
+  .mat-shell table.list thead { display: none; }
+  .mat-shell table.list tr { padding: 10px 0 12px; border-bottom: 1px solid var(--linie); }
+  .mat-shell table.list td { border: 0; padding: 2px 0; white-space: normal; }
+  .mat-shell table.list td[data-l]::before { content: attr(data-l) ": "; color: var(--grau); font-size: var(--fs-klein); }
+  .mat-shell table.list td.tabelle-aktionen { padding-top: 8px; }
+  .mat-shell table.list tr:hover td { background: none; }
+  .mat-shell table.list td.mat-wahlspalte { width: auto; }
+  .mat-shell table.list.mat-befunde td.mat-krit-spalte:empty { display: none; }
+  .mat-shell table.list.mat-befunde td.mat-krit-spalte { width: auto; padding: 2px 0; }
+  .mat-shell table.list.mat-ue tr { padding-left: calc(var(--tiefe, 0) * 14px); }
+  .mat-shell table.list.mat-ue tr.mat-ue-oben { border-top: 2px solid var(--linie); }
+  .mat-shell table.list.mat-ue tr.mat-ue-oben td { border-top: 0; }
+  .mat-shell table.list.mat-ue td.mat-ue-name { padding-left: 0; padding-bottom: 4px; }
+  .mat-shell table.list.mat-ue td.mat-ue-name::before { content: none; }
+  .mat-shell table.list.mat-ue td.mat-ue-zahl { display: inline-block; width: auto; margin-right: 14px; text-align: left; }
+  .mat-shell table.list.mat-ue td.mat-ue-null { display: none; }
+  .mat-shell table.list.mat-ue tr[hidden] { display: none; }
+  .mat-shell .mat-spalten { grid-template-columns: 1fr; }          /* wie unter 900 px */
+}
+/* Zwei Hälften übereinander: Die Großansicht zeigt das Foto in der unteren. */
+@media (vertical-viewport-segments: 2) {
+  .mat-lightbox img { max-height: calc(env(viewport-segment-height 0 1) - 110px); }
+  .mat-lb-pfeil { top: calc(env(viewport-segment-top 0 1) + env(viewport-segment-height 0 1) / 2); }
+}

@@ -17,14 +17,22 @@
   <div id="mat-baumnav"><p class="help">Wird geladen …</p></div>
 </aside>
 <main class="page breit mat" id="mat" data-ansicht="{{ ansicht }}" data-daten="{{ daten }}" data-darf="{{ darf }}">
+  {# Passt die Zeile nicht (Telefon, Fold, Tablet hochkant), ordnet material.js sie um (navAnordnen): Die Reiter rollen
+     seitlich in einer Zeile, die Nummernsuche wartet hinter der Lupe und öffnet als eigene Zeile darunter. #}
   <nav class="mat-nav" aria-label="Modul Material">
     <button class="btn secondary small mat-side-auf" type="button" id="mat-side-auf" aria-controls="mat-side"
-            aria-expanded="false">☰ Ordner</button>
-    <a href="/material" data-nav="dashboard">Übersicht</a>
-    <a href="/material/pruefungen" data-nav="pruefungen">Prüfungen</a>
-    <a href="/material/bestand" data-nav="bestand">Bestand</a>
-    <a href="/material/katalog" data-nav="katalog">Katalog</a>
-    <form class="mat-suche" action="/material/suche" method="get" role="search">
+            aria-expanded="false">☰<span class="mat-side-auf-text"> Ordner</span></button>
+    <div class="mat-reiter">
+      <a href="/material" data-nav="dashboard">Übersicht</a>
+      <a href="/material/pruefungen" data-nav="pruefungen">Prüfungen</a>
+      <a href="/material/bestand" data-nav="bestand">Bestand</a>
+      <a href="/material/katalog" data-nav="katalog">Katalog</a>
+    </div>
+    <button class="btn secondary small mat-lupe" type="button" id="mat-lupe" aria-controls="mat-suche" aria-expanded="false"
+            aria-label="Nummernsuche" title="Nummernsuche" hidden><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"
+            focusable="false"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path
+            d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
+    <form class="mat-suche" id="mat-suche" action="/material/suche" method="get" role="search">
       <input type="search" name="q" placeholder="Serien-, Inventar-, Herstellernr." title="Serien-, Inventar- oder Herstellernummer – auch Teile davon" aria-label="Artikel suchen"
              autocomplete="off" enterkeyhint="search">
       <button class="btn secondary small" type="submit">Suchen</button>

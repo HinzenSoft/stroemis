@@ -8,7 +8,8 @@
         phone: fp.querySelector("#phone").value } });
       S.toast("Profil gespeichert");
       const u = document.querySelector(".nav .user");
-      if (u) u.textContent = fp.querySelector("#name").value || STROEMIS.user.email;
+      // Das Leerzeichen am Ende trennt Name und „Profil“ beim Vorlesen; zu sehen ist der Rand aus app.css.
+      if (u) u.textContent = (fp.querySelector("#name").value || STROEMIS.user.email) + " ";
     } catch (err) { S.toast(err.message, true); }
   });
 

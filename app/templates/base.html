@@ -26,8 +26,14 @@
     {% if rechte.pruefungen %}<a href="/pruefungen" class="{% if active == 'pruefungen' %}active{% endif %}">Prüfungen</a>{% endif %}
     {% if rechte.material %}<a href="/material" class="{% if active == 'material' %}active{% endif %}">Material</a>{% endif %}
     {% if rechte.verwaltung %}<a href="/admin" class="{% if active == 'admin' %}active{% endif %}">Verwaltung</a>{% endif %}
-    <a href="/profil" class="{% if active == 'profile' %}active{% endif %}"><span class="user">{{ user.name or user.email }}</span>&nbsp;Profil</a>
+    <a href="/profil" class="{% if active == 'profile' %}active{% endif %}"><span class="user">{{ user.name or user.email }} </span>Profil</a>
     <button type="button" id="logout">Abmelden</button>
+    {# „Mehr“: Was nicht in die Leiste passt, legt common.js hierher (Priority+) – zuerst Abmelden und Profil, der
+       aktive Punkt bleibt immer stehen. Ohne Skript bleibt es verborgen, und die Leiste rollt seitlich wie bisher. #}
+    <div class="nav-mehr" hidden>
+      <button type="button" class="nav-mehr-knopf" id="nav-mehr-knopf" aria-expanded="false" aria-controls="nav-mehr-liste">Mehr</button>
+      <div class="nav-mehr-liste" id="nav-mehr-liste" hidden></div>
+    </div>
   </nav>
   {% endif %}
 </header>

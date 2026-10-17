@@ -81,6 +81,45 @@ def test_urkunde_korrekturen():
     print("Urkunde-Korrekturen bestanden.")
 
 
+def test_shell_geruest():
+    """Seitengerüst (Lieferung 5, Geräte): Die Hauptnavigation trägt das Menü „Mehr“ (verborgen, bis common.js Punkte
+    hineinlegt) – innerhalb von <nav>, sonst griffe „Abmelden“ daraus nicht mehr. Der Name vor „Profil“ endet mit einem
+    Leerzeichen (Vorlesen), ohne festes Leerzeichen davor. Die Modulnavigation hat Reiterleiste, Lupe und Suchformular
+    mit den Kennungen, die material.js und suche.js erwarten."""
+    import re
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        for konto in ("adm", "pruefer", "nutzer"):
+            html = k[konto].get("/profil").get_data(as_text=True)
+            nav = re.search(r'<nav class="nav" aria-label="Hauptnavigation">(.*?)</nav>', html, re.S)
+            assert nav, konto
+            nav = nav.group(1)
+            assert 'id="logout"' in nav and '<div class="nav-mehr" hidden>' in nav, konto
+            assert 'id="nav-mehr-knopf" aria-expanded="false" aria-controls="nav-mehr-liste"' in nav, konto
+            assert '<div class="nav-mehr-liste" id="nav-mehr-liste" hidden></div>' in nav, konto
+            assert nav.index('id="logout"') < nav.index("nav-mehr"), konto
+            name = re.search(r'<span class="user">([^<]*)</span>Profil</a>', nav)
+            assert name and name.group(1).endswith(" ") and name.group(1).strip(), (konto, name)
+            assert "&nbsp;Profil" not in nav, konto
+        for konto in ("wart", "pruefer"):
+            html = k[konto].get("/material/artikel/neu").get_data(as_text=True)
+            mnav = re.search(r'<nav class="mat-nav" aria-label="Modul Material">(.*?)</nav>', html, re.S)
+            assert mnav, konto
+            mnav = mnav.group(1)
+            assert '<div class="mat-reiter">' in mnav and mnav.count('data-nav="') == 4, konto
+            assert 'id="mat-lupe" aria-controls="mat-suche" aria-expanded="false"' in mnav and " hidden>" in mnav, konto
+            assert '<form class="mat-suche" id="mat-suche" action="/material/suche"' in mnav, konto
+            assert '<span class="mat-side-auf-text"> Ordner</span>' in mnav, konto
+            # Reihenfolge: Ordner-Knopf, Reiter, Lupe, Suche – material.js prüft die Zeile in dieser Folge.
+            assert mnav.index("mat-side-auf") < mnav.index("mat-reiter") < mnav.index("mat-lupe") < mnav.index("mat-suche"), konto
+        # Die öffentliche Prüfseite (ohne Anmeldung) hat keine Hauptnavigation – also auch kein „Mehr“.
+        with app.test_client() as gast:
+            html = gast.get("/material/pruefen").get_data(as_text=True)
+            assert "nav-mehr" not in html
+    print("Seitengerüst (shell) bestanden.")
+
+
 if __name__ == "__main__":
     test_mangel_braucht_bemerkung()
     test_urkunde_korrekturen()
+    test_shell_geruest()
