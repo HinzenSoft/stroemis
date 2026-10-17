@@ -5,7 +5,8 @@ Pflegen dürfen ihn nur Admins und Produktkatalogpfleger (routes.py prüft das a
 Regeln stehen hier, weil der Katalogimport (importer.py) dieselben braucht wie die Oberfläche.
 
 Fachliche Grenzen aus dem Konzept:
-  - Dublette = Hersteller + Modell + Artikelnummer (vereinheitlicht, siehe dedupe_key).
+  - Dublette = Hersteller + Modell + Artikelnummer (vereinheitlicht, siehe dedupe_key). Dazu gibt es jede
+    Artikelnummer im Katalog nur einmal (gleich vereinheitlicht; leer zählt nicht), siehe artikelnummer_vergeben.
   - Lebensdauer: Pflicht bei textilem Material, verboten bei Metall, bei „sonstiges“ nur mit
     Herstellerangabe (Fundstelle).
   - Formulare: je Kategorie ein generisches, je Produkt optional ein spezifisches, das das generische
@@ -271,6 +272,24 @@ def _dublette_pruefen(key, ausser=None):
         raise Abgelehnt(f"Dieses Produkt steht schon im Katalog: {andere['manufacturer']} {andere['model']}{nr}.", 409)
 
 
+def artikelnummer_vergeben(article_no, ausser=None):
+    """Das Produkt, das diese Artikelnummer schon trägt – Schreibweise egal (wie in der Dublette), leer zählt
+    nicht. Hinter dem letzten „|“ des dedupe_key steht genau die vereinheitlichte Artikelnummer; Hersteller und
+    Modell enthalten vereinheitlicht weder „|“ noch die Platzhalter von LIKE („%“, „_“)."""
+    nr = _einheitlich(artikelnummer(article_no))
+    if not nr:
+        return None
+    return db.query("SELECT id, manufacturer, model, article_no FROM mat_product WHERE dedupe_key LIKE ? AND id <> ? "
+                    "ORDER BY id LIMIT 1", ("%|" + nr, ausser or 0), one=True)
+
+
+def _artikelnummer_pruefen(article_no, ausser=None):
+    da = artikelnummer_vergeben(article_no, ausser)
+    if da:
+        raise Abgelehnt(f"Die Artikelnummer „{article_no}“ ist im Katalog schon vergeben: {da['manufacturer']} {da['model']} "
+                        f"({da['article_no']}).", 409)
+
+
 def produkt_anlegen(d, demo=False):
     w = produkt_werte(d)
     key = dedupe_key(w["manufacturer"], w["model"], w["article_no"])
@@ -278,6 +297,7 @@ def produkt_anlegen(d, demo=False):
     ts = db.now()
     with db.transaction(sofort=True):
         _dublette_pruefen(key)
+        _artikelnummer_pruefen(w["article_no"])
         try:
             pid = db.execute(
                 "INSERT INTO mat_product (category_id, manufacturer, model, article_no, dedupe_key, norm, material_kind, "
@@ -302,6 +322,10 @@ def produkt_aendern(pid, d):
                         "an ihr hängen Lebensdauer und Aussonderung.", 409)
     with db.transaction(sofort=True):
         _dublette_pruefen(key, ausser=pid)
+        # Geprüft, wenn sich die Nummer ändert: Eine Dopplung aus der Zeit vor dieser Regel soll nicht jede
+        # andere Änderung am Produkt blockieren.
+        if _einheitlich(w["article_no"]) != _einheitlich(artikelnummer(alt["article_no"])):
+            _artikelnummer_pruefen(w["article_no"], ausser=pid)
         db.execute("UPDATE mat_product SET category_id = ?, manufacturer = ?, model = ?, article_no = ?, dedupe_key = ?, "
                    "norm = ?, material_kind = ?, interval_months = ?, lifetime_years = ?, lifetime_source = ?, "
                    "description = ?, updated_at = ? WHERE id = ?",

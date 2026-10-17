@@ -281,6 +281,17 @@ def produkte():
     return jsonify(produkte=[katalog.produkt_json(r) for r in rows], gesamt=gesamt, seite=seite, pro_seite=pro_seite)
 
 
+@api.get("/produkte/artikelnummer")
+def artikelnummer_pruefen():
+    """Für den Hinweis beim Tippen: Wem gehört diese Artikelnummer schon? („ausser“: das Produkt, das man bearbeitet)"""
+    if not current_user():
+        return jsonify(error="Nicht angemeldet"), 401
+    _katalog_lesen()
+    da = katalog.artikelnummer_vergeben(request.args.get("nr", ""), request.args.get("ausser", type=int))
+    return jsonify(produkt={"id": da["id"], "name": f"{da['manufacturer']} {da['model']}", "article_no": da["article_no"]}
+                   if da else None)
+
+
 @api.post("/produkte")
 @katalog_required
 def produkt_anlegen():

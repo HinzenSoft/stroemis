@@ -391,6 +391,11 @@ alle neuen Routen und 33 absichtlich kaputte PDFs – kein 500), Oberfläche (im
   Ende der Liste ins Bild rückt) statt in Seiten; seine Suchzeile bleibt dabei unter der Kopfleiste stehen.
 - **Dokumente umbenennen**: Den Namen eines hochgeladenen Dokuments ändert der Katalogpfleger nachträglich – jeder
   Version, mit Journaleintrag. Datei, Version und Prüfsumme bleiben; alte Prüfungen zeigen den Namen vom Prüftag.
+- **Artikelnummern eindeutig**: Jede Artikelnummer gibt es im Katalog nur einmal – Schreibweise egal wie bei der
+  Dublette („KR13B-R-GI“ = „kr13b r gi“), leer oder „-“ zählt nicht. Geprüft beim Anlegen, beim Ändern der Nummer,
+  im Katalogimport (Fehlerzeile, nichts gespeichert) und bei Meldungen; Produkt- und Meldedialog sagen schon beim
+  Tippen, welchem Produkt die Nummer gehört. Eine Dopplung aus der Zeit davor bleibt, bis jemand eine der Nummern
+  ändert – andere Änderungen am Produkt blockiert sie nicht.
 - **Mehrere Dokumente auf einmal**: „+ Dokument“ (am Produkt und an der Kategorie) nimmt mehrere Dateien – per
   Mehrfachauswahl oder hineingezogen – und Links. Je Eintrag Titel (aus dem Dateinamen vorbelegt), Art als
   Auswahlliste (aus dem Dateinamen vorgeschlagen, wo es eindeutig ist, sonst Pflicht) und Versionsstand; „Gültig ab“
@@ -438,7 +443,8 @@ alle neuen Routen und 33 absichtlich kaputte PDFs – kein 500), Oberfläche (im
 ## Katalogdatei (Format 1)
 
 Eine JSON-Datei, UTF-8. Kategorien werden über Namen an ihrer Stelle im Baum gefunden, Produkte über die
-Dublette Hersteller + Modell + Artikelnummer. Was vorhanden ist, wird abgeglichen; ein Formular, dessen
+Dublette Hersteller + Modell + Artikelnummer; eine Artikelnummer, die schon ein anderes Produkt trägt, ist ein
+Fehler. Was vorhanden ist, wird abgeglichen; ein Formular, dessen
 Prüfpunkte sich geändert haben, wird eine neue Version. Ein Fehler irgendwo: nichts gespeichert, jeder Fehler
 mit seiner Stelle (`produkte[3] (…): …`). `--trocken` prüft nur.
 
@@ -496,6 +502,7 @@ Im Container liegt die Datei im Datenordner:
 | `GET /api/material/faellig?status=&ordner=` | lesen | fällige Artikel, Standard überfällig + neu + bald fällig |
 | `GET/POST /api/material/kategorien`, `PUT/DELETE …/<id>` | lesen / Katalog | Kategoriebaum |
 | `GET/POST /api/material/produkte`, `GET/PUT/DELETE …/<id>` | lesen / Katalog | Produkte mit Suche und Seiten (`q`, `kategorie`, `seite`, `pro_seite`) |
+| `GET /api/material/produkte/artikelnummer?nr=&ausser=` | lesen | Wem gehört diese Artikelnummer schon? (`produkt` oder `null`) |
 | `POST/DELETE /api/material/produkte/<id>/bild` | Katalog | Produktbild |
 | `POST /api/material/produkte/<id>/dokumente`, `POST /api/material/dokumente/<id>/version`, `…/zurueckziehen` | Katalog | Herstellerdokumente |
 | `GET/POST /api/material/formulare`, `GET/PUT/DELETE …/<id>`, `POST …/<id>/aktivieren`, `…/deaktivieren` | lesen / Katalog | Prüfformulare |

@@ -1159,6 +1159,23 @@
     });
   }
 
+  // Eine Artikelnummer gibt es im Katalog nur einmal. Schon beim Tippen sagen, wem sie gehört – der Server
+  // prüft beim Speichern ohnehin. ausser: das Produkt, das gerade bearbeitet wird.
+  function artikelnummerPruefen(feld, hilfe, ausser) {
+    let los = null;
+    const pruefen = async () => {
+      const nr = feld.value.trim();
+      if (!nr) { hilfe.innerHTML = ""; return; }
+      try {
+        const p = (await api(`${API}/produkte/artikelnummer?${new URLSearchParams({ nr, ausser: ausser || "" })}`)).produkt;
+        if (feld.value.trim() !== nr) return;          // inzwischen weitergetippt
+        hilfe.innerHTML = p ? `<span class="mat-warn">Schon vergeben: <a href="/material/katalog/produkt/${p.id}" target="_blank" rel="noopener">${esc(p.name)}</a>${p.article_no ? ` (${esc(p.article_no)})` : ""}</span>` : "";
+      } catch (e) { hilfe.innerHTML = ""; }
+    };
+    feld.addEventListener("input", () => { clearTimeout(los); los = setTimeout(pruefen, 300); });
+    if (feld.value.trim()) pruefen();
+  }
+
   async function produktDialog(p) {
     const kats = await kategorienLaden();
     const neu = !p.id;
@@ -1168,7 +1185,7 @@
       <label for="pd-kat">Kategorie</label><select id="pd-kat"><option value="">– bitte wählen –</option>${kategorieOptionen(kats, p.category_id)}</select>
       <div class="field-row"><div><label for="pd-her">Hersteller</label><input type="text" id="pd-her" value="${esc(p.manufacturer || "")}" maxlength="120"></div>
         <div><label for="pd-mod">Modell</label><input type="text" id="pd-mod" value="${esc(p.model || "")}" maxlength="160"></div></div>
-      <div class="field-row"><div><label for="pd-art">Artikelnummer des Herstellers</label><input type="text" id="pd-art" value="${esc(p.article_no || "")}" maxlength="80"></div>
+      <div class="field-row"><div><label for="pd-art">Artikelnummer des Herstellers</label><input type="text" id="pd-art" value="${esc(p.article_no || "")}" maxlength="80"><div class="help" id="pd-art-hilfe"></div></div>
         <div><label for="pd-norm">Norm</label><input type="text" id="pd-norm" value="${esc(p.norm || "")}" maxlength="200"></div></div>
       <div class="field-row"><div><label for="pd-mk">Materialart</label><select id="pd-mk">${Object.entries(MATERIALART).map(([w, t]) => `<option value="${w}" ${p.material_kind === w ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
         <div><label for="pd-int">Prüfintervall (Monate)</label><input type="number" id="pd-int" min="1" max="120" value="${p.interval_months || ""}"><div class="help" id="pd-int-hilfe"></div></div></div>
@@ -1202,6 +1219,7 @@
       mk.addEventListener("change", hilfen);
       if (neu && p.category_id) katSel.dispatchEvent(new Event("change"));
       hilfen();
+      artikelnummerPruefen($("#pd-art", body), $("#pd-art-hilfe", body), p.id);
       // Erst die Angaben, dann das Bild. Scheitert nur das Bild, kennt der Dialog das Produkt schon: Ein zweiter
       // Klick speichert die Angaben erneut und lädt das Bild nach, statt das Produkt doppelt anzulegen.
       let pid = p.id || null;
@@ -2293,7 +2311,7 @@
       <p class="help">Ein Produktkatalogpfleger nimmt es in den Katalog auf. Du bekommst eine Mail, sobald du Artikel davon anlegen kannst.</p>
       <div class="field-row"><div><label for="me-her">Hersteller</label><input type="text" id="me-her" maxlength="120" value="${esc(v.manufacturer || "")}"></div>
         <div><label for="me-mod">Modell</label><input type="text" id="me-mod" maxlength="160" value="${esc(v.model || "")}"></div></div>
-      <div class="field-row"><div><label for="me-art">Artikelnummer des Herstellers</label><input type="text" id="me-art" maxlength="80"></div>
+      <div class="field-row"><div><label for="me-art">Artikelnummer des Herstellers</label><input type="text" id="me-art" maxlength="80"><div class="help" id="me-art-hilfe"></div></div>
         <div><label for="me-norm">Norm</label><input type="text" id="me-norm" maxlength="200" placeholder="z. B. EN 362"></div></div>
       <label for="me-kat">Kategorie</label><select id="me-kat"><option value="">– weiß ich nicht –</option>${kategorieOptionen(kats, null)}</select>
       <label for="me-links">Links</label><textarea id="me-links" rows="3" placeholder="https://… – je Zeile eine Adresse: Herstellerseite, Gebrauchsanleitung, Händler"></textarea>
@@ -2303,6 +2321,7 @@
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="me-ok" type="button">Melden</button></div>`,
     (dlg, body) => {
       fokus($("#me-her", body));
+      artikelnummerPruefen($("#me-art", body), $("#me-art-hilfe", body), null);
       $("#me-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
         const fotos = Array.from($("#me-fotos", body).files);

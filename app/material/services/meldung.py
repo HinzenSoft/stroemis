@@ -125,6 +125,10 @@ def anlegen(d, dateien=()):
     if da:
         raise Abgelehnt(f"„{da['manufacturer']} {da['model']}“ steht schon im Katalog – bitte in der Produktsuche "
                         "danach suchen.", 409)
+    da = katalog.artikelnummer_vergeben(w["article_no"])
+    if da:
+        raise Abgelehnt(f"Die Artikelnummer „{w['article_no']}“ gehört im Katalog zu „{da['manufacturer']} {da['model']}“ – "
+                        "bitte in der Produktsuche danach suchen.", 409)
     fotos = fotos_ablegen(dateien)
     uid, name = akteur()
     try:
@@ -176,9 +180,13 @@ def meldung_json(r):
     p = db.query("SELECT * FROM mat_product WHERE id = ?", (r["product_id"],), one=True) if r["product_id"] else None
     out["produkt"] = katalog.produkt_json(p) if p else None
     out["produkt_geloescht"] = r["status"] == "eingepflegt" and not p
-    # Steht das Produkt inzwischen im Katalog (angelegt aus einer anderen Meldung oder direkt), genügt ein Klick.
-    t = (db.query("SELECT * FROM mat_product WHERE dedupe_key = ?", (r["dedupe_key"],), one=True)
-         if r["status"] == "offen" else None)
+    # Steht das Produkt inzwischen im Katalog (angelegt aus einer anderen Meldung oder direkt; gleiche Dublette
+    # oder gleiche Artikelnummer), genügt ein Klick.
+    t = None
+    if r["status"] == "offen":
+        t = db.query("SELECT * FROM mat_product WHERE dedupe_key = ?", (r["dedupe_key"],), one=True)
+        v = None if t else katalog.artikelnummer_vergeben(r["article_no"])
+        t = t or (katalog.produkt(v["id"]) if v else None)
     out["treffer"] = katalog.produkt_json(t) if t else None
     return out
 
@@ -208,6 +216,10 @@ def produkt_anlegen(mid, d):
     meldung(mid)
     antwort = _antwort(d)
     with db.transaction(sofort=True):
+        # Erst die Meldung, dann das Produkt: Wer eine erledigte nachbearbeitet, soll das erfahren – nicht, dass
+        # die Artikelnummer inzwischen vergeben ist.
+        if meldung(mid)["status"] != "offen":
+            raise Abgelehnt("Diese Meldung ist schon erledigt. Bitte neu laden.", 409)
         pid = katalog.produkt_anlegen(d)
         _abschliessen(mid, "eingepflegt", pid, antwort)
     _melder_benachrichtigen(meldung(mid))

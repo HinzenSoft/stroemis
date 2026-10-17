@@ -1875,6 +1875,72 @@ def test_durchgang_abbrechen():
     print("Abbruchtest bestanden.")
 
 
+def test_artikelnummer_eindeutig():
+    """Eine Artikelnummer gibt es im Katalog nur einmal – Schreibweise egal, leer zählt nicht. Geprüft beim Anlegen,
+    beim Ändern der Nummer, im Katalogimport und bei Meldungen; die Oberfläche fragt schon beim Tippen nach."""
+    from app.material.services import meldung
+    alt = (meldung.HINTERGRUND, meldung.send_mail)
+    meldung.HINTERGRUND = lambda f, *a: f(*a)
+    meldung.send_mail = lambda an, betreff, inhalt: True
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            app, k = umgebung(tmp)
+            ids = katalog_grund(k["adm"])
+            kp = k["katalog"]
+
+            def neu(**f):
+                return kp.post("/api/material/produkte", json=dict({"category_id": ids["karabiner"], "manufacturer": "Anderwerk",
+                                                                   "model": "Karabiner X", "material_kind": "metall_hardware",
+                                                                   "interval_months": 12}, **f))
+            # Anlegen: dieselbe Nummer bei anderem Hersteller und Modell – auch anders geschrieben – wird abgewiesen.
+            for nr in ("GA-100", "ga 100", "GA100"):
+                r = neu(article_no=nr)
+                assert r.status_code == 409 and "schon vergeben" in r.json["error"] and "Gurt Alpha" in r.json["error"], r.get_json()
+            # Ohne Artikelnummer (auch „-“ oder „/“) beliebig oft.
+            for i, nr in enumerate(("", "-", "", "/")):
+                assert neu(model=f"Ohne Nummer {i}", article_no=nr).status_code == 201, nr
+            r = neu(article_no="AX-1")
+            assert r.status_code == 201
+            ax = r.json["produkt"]["id"]
+            # Ändern: auf eine vergebene Nummer nicht; die eigene (anders geschrieben) behalten schon.
+            r = kp.put(f"/api/material/produkte/{ax}", json={"article_no": "HB 7"})
+            assert r.status_code == 409 and "HMS Beta" in r.json["error"], r.get_json()
+            assert kp.put(f"/api/material/produkte/{ax}", json={"article_no": "ax1", "description": "neu"}).status_code == 200
+            # Eine Dopplung aus der Zeit vor der Regel blockiert andere Änderungen nicht – nur eine neue vergebene Nummer.
+            with app.app_context():
+                from app import db
+                from app.material.services import katalog as kat
+                ts = "2026-01-01T00:00:00+00:00"
+                db.execute("INSERT INTO mat_product (category_id, manufacturer, model, article_no, dedupe_key, material_kind, "
+                           "interval_months, created_at, updated_at) VALUES (?, 'Altwerk', 'Altmodell', 'GA-100', ?, "
+                           "'metall_hardware', 12, ?, ?)", (ids["karabiner"], kat.dedupe_key("Altwerk", "Altmodell", "GA-100"), ts, ts))
+                altid = db.query("SELECT id FROM mat_product WHERE manufacturer = 'Altwerk'", one=True)["id"]
+            assert kp.put(f"/api/material/produkte/{altid}", json={"description": "geändert"}).status_code == 200
+            assert kp.put(f"/api/material/produkte/{altid}", json={"article_no": "HB-7"}).status_code == 409
+            # Hinweis beim Tippen: wem die Nummer gehört (ohne das gerade bearbeitete Produkt).
+            r = kp.get("/api/material/produkte/artikelnummer?nr=ga%20100")
+            assert r.status_code == 200 and r.json["produkt"]["name"] == "Testwerk Gurt Alpha", r.get_json()
+            assert kp.get(f"/api/material/produkte/artikelnummer?nr=GA-100&ausser={ids['gurt']}").json["produkt"]["name"] == "Altwerk Altmodell"
+            for nr in ("-", "ZZ-9", ""):
+                assert kp.get(f"/api/material/produkte/artikelnummer?nr={nr}").json["produkt"] is None, nr
+            assert k["wart"].get("/api/material/produkte/artikelnummer?nr=GA-100").status_code == 200
+            assert k["nutzer"].get("/api/material/produkte/artikelnummer?nr=GA-100").status_code == 403
+            # Meldungen: Gehört die Nummer schon einem Produkt, gibt es nichts zu melden.
+            r = k["wart"].post("/api/material/meldungen", headers=H, json={"manufacturer": "Fremdwerk", "model": "Irgendwas",
+                                                                          "article_no": "hb-7"})
+            assert r.status_code == 409 and "HMS Beta" in r.json["error"], r.get_json()
+            # Katalogimport: dieselbe Regel, mit Fehlerzeile – und nichts gespeichert.
+            with app.app_context():
+                from app.material.services import importer
+                bericht = importer.importieren({"format": "stroemis-material-katalog", "version": 1, "produkte": [
+                    {"kategorie": ["PSA gegen Absturz", "Karabiner"], "hersteller": "Importwerk", "modell": "Kopie",
+                     "artikelnummer": "GA 100", "materialart": "metall_hardware", "intervall_monate": 12}]})
+            assert not bericht["gespeichert"] and any("schon vergeben" in f for f in bericht["fehler"]), bericht
+    finally:
+        meldung.HINTERGRUND, meldung.send_mail = alt
+    print("Artikelnummerntest bestanden.")
+
+
 if __name__ == "__main__":
     test_migration()
     test_rollen()
@@ -1898,3 +1964,4 @@ if __name__ == "__main__":
     test_produktmeldung()
     test_produktmeldung_loeschen()
     test_durchgang_abbrechen()
+    test_artikelnummer_eindeutig()
