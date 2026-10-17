@@ -514,3 +514,45 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
   table.list.mat-ue td.mat-ue-null { display: none; }
   .mat-ue-klapp { width: 32px; height: 32px; }
 }
+
+/* Lieferung 4 – rueckruf */
+/* Rückrufe: Banner am Artikel (rot, solange er für den Artikel offen ist; hell mit rotem Rand, wenn erledigt), Karten
+   am Produkt, Kasten auf der Übersicht und eine kleine Marke in Artikellisten. */
+.mat-rr-banner { background: var(--rot); }
+.mat-rr-banner p { margin: 0 0 6px; overflow-wrap: anywhere; }
+.mat-rr-banner p:last-child { margin-bottom: 0; }
+.mat-rr-banner .mat-rr-titel { font-size: 1.05rem; letter-spacing: .02em; }
+.mat-rr-banner .mat-rr-text, .mat-rr-banner .mat-rr-zeile { font-weight: 400; }
+.mat-rr-banner .mat-rr-zeile { font-size: var(--fs-klein); }
+.mat-rr-banner a { color: var(--weiss); text-decoration: underline; }
+.mat-rr-banner .btn-row { margin: 8px 0 0; }
+.mat-rr-banner .btn, .mat-rr-banner .btn:hover { background: var(--weiss); color: var(--rot-dunkel); border-color: var(--weiss); }
+.mat-rr-banner .btn:hover { background: var(--rot-hell); }
+.mat-rr-banner.erledigt { background: var(--co-danger-fl); color: var(--anthrazit); border-left: 6px solid var(--rot); }
+.mat-rr-banner.erledigt a { color: var(--rot-dunkel); }
+.mat-rr-zustand { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 8px;
+  border-radius: var(--radius-pille); white-space: nowrap; vertical-align: middle; }
+.mat-rr-zustand.offen { background: var(--gelb); color: var(--anthrazit); }
+.mat-rr-zustand.erledigt { background: var(--ok); color: var(--weiss); }
+.mat-rr-marke { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 7px; border-radius: var(--radius-pille);
+  background: var(--rot); color: var(--weiss); text-transform: uppercase; letter-spacing: .03em; vertical-align: middle;
+  white-space: nowrap; }
+.mat-rr-karte { border: 1px solid var(--linie); border-left: 6px solid var(--rot); padding: 12px 14px; margin: 0 0 12px;
+  background: var(--weiss); }
+.mat-rr-karte.beendet { border-left-color: var(--grau); }
+.mat-rr-karte.beendet .mat-rr-marke { background: var(--grau); }
+.mat-rr-karte p { margin: 6px 0; overflow-wrap: anywhere; }
+.mat-rr-kopf { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; }
+.mat-rr-kopf h3 { margin: 0; font-size: 1.1rem; overflow-wrap: anywhere; }
+.mat-rr-karte .mat-rr-artikel { margin: 6px 0 10px; }
+.mat-rr-serien { display: inline; }
+.mat-rr-serien > summary { display: inline; cursor: pointer; color: var(--rot); }
+.mat-rr-beendet > summary { cursor: pointer; color: var(--grau); margin: 4px 0 10px; }
+.mat-rr-kasten { border: 1px solid var(--linie); border-left: 6px solid var(--rot); padding: 10px 14px;
+  background: var(--co-danger-fl); }
+.mat-rr-kasten h2 { margin-top: 0; }
+.mat-rr-liste { list-style: none; margin: 0; padding: 0; }
+.mat-rr-liste li { padding: 6px 0; border-bottom: 1px solid var(--linie); display: flex; flex-wrap: wrap; align-items: baseline;
+  gap: 4px 10px; }
+.mat-rr-liste li:last-child { border-bottom: 0; }
+.mat-rr-was { overflow-wrap: anywhere; }

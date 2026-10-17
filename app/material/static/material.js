@@ -121,6 +121,7 @@
     protocol_id: "Protokoll-ID", pdf_sha256: "Prüfsumme", pdf_hashed_bytes: "Bytes", file_sha256: "Prüfsumme der Datei",
     anhaenge_angefuegt: "Anhänge angefügt", login: "Anmeldung", berichtigung: "Berichtigung", berichtigt: "berichtigt",
     unterschrift: "Unterschrift", nicht_geprueft: "nicht geprüft",
+    rueckruf: "Rückruf Nr.", serials: "Seriennummern", mail: "Mail an Materialwarte und Prüfer", close_note: "Vermerk",
   };
   const AKTION = { angelegt: "angelegt", geaendert: "geändert", geloescht: "gelöscht", verschoben: "verschoben",
                    bild: "Bild geändert", foto: "Foto geändert", neue_version: "neue Version", zurueckgezogen: "zurückgezogen",
@@ -132,7 +133,8 @@
                    geschlossen: "Durchgang abgeschlossen", faelligkeit: "Fälligkeit vorgezogen", umbenannt: "umbenannt",
                    eingepflegt: "eingepflegt", abgelehnt: "abgelehnt", variante: "als Variante angelegt",
                    festgeschrieben: "festgeschrieben", berichtigt: "berichtigt", berichtigung_begonnen: "Berichtigung begonnen",
-                   unterschrift: "Unterschrift geändert", abgebrochen: "Durchgang abgebrochen" };
+                   unterschrift: "Unterschrift geändert", abgebrochen: "Durchgang abgebrochen",
+                   rueckruf: "Rückruf angelegt", rueckruf_beendet: "Rückruf beendet" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };
 
@@ -506,6 +508,7 @@
     const kachel = (s, titel) => `<a class="mat-kachel s-${s}" href="/material/pruefungen?status=${s}"><strong>${z[s] || 0}</strong><span>${esc(titel)}</span></a>`;
     inhalt.innerHTML = `<div class="page-head"><h1>Material</h1>
         <div class="btn-row">${DARF.verwalten ? '<a class="btn secondary" href="/material/bestand">Bestand pflegen</a><a class="btn" href="/material/artikel/neu">+ Artikel</a>' : ""}</div></div>
+      ${rueckrufKasten(d.rueckrufe)}
       ${d.meldungen_offen ? `<p class="notice"><a href="/material/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produktmeldung", "offene Produktmeldungen")}</strong></a>
         – Materialwarte warten darauf, Artikel davon anzulegen.</p>` : ""}
       <div class="mat-kacheln">
@@ -622,7 +625,7 @@
         <td data-l="Seriennummer">${esc(a.serial_no)}${a.serial_generated ? ' <span class="muted" title="vom System vergeben">(System)</span>' : ""}</td>
         ${opts.pfad ? `<td data-l="Ablage">${esc(a.pfad || "")}</td>` : ""}
         <td data-l="Nächste Prüfung">${a.status === "neu" ? '<span class="muted">Eingangsprüfung</span>' : a.lock_state !== "frei" ? '<span class="muted">–</span>' : a.next_due_on ? esc(fmtTag(a.next_due_on)) : '<span class="muted">–</span>'}</td>
-        <td data-l="Status">${statusMarke(a.status)}${a.entwurf ? `<div class="small muted">in Prüfung bei ${esc(a.entwurf.pruefer || "?")}</div>` : ""}</td>
+        <td data-l="Status">${statusMarke(a.status)}${a.rueckruf ? ` <span class="mat-rr-marke" title="Rückruf: ${esc(a.rueckruf)}">Rückruf</span>` : ""}${a.entwurf ? `<div class="small muted">in Prüfung bei ${esc(a.entwurf.pruefer || "?")}</div>` : ""}</td>
         ${opts.pruefen ? `<td class="tabelle-aktionen">${pruefKnopf(a)}</td>` : ""}</tr>`).join("")}</tbody></table>`;
   }
   // „Prüfen“ in Listen: für Prüfer, solange niemand anderes den Artikel reserviert hat.
@@ -894,6 +897,7 @@
       ${a.status === "gesperrt" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
       ${a.status === "lebensdauer" ? `<p class="mat-banner s-lebensdauer">LEBENSDAUER ERREICHT – aussondern.</p>` : ""}
       ${a.status === "neu" ? '<p class="mat-banner s-neu">NEU – die Eingangsprüfung steht aus. Bis dahin nicht einsetzen.</p>' : ""}
+      ${rueckrufBanner(a)}
       <div class="mat-pfad">${bc}</div>
       <div class="mat-artikelkopf">
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="Produktbild ${esc(produktName(p))}">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
@@ -946,6 +950,7 @@
       bearbeiten: () => artikelDialog(a),
       pruefen: () => { location.href = eigenerEntwurf ? `/material/pruefung/${a.entwurf.id}` : `/material/artikel/${a.id}/pruefung/neu`; },
       sperren: () => sperrDialog(a),
+      "rr-sperren": (b) => sperrDialog(a, { grund: "rueckruf", text: ((a.rueckrufe || []).find((r) => r.id === +b.dataset.id) || {}).title }),
       aussondern: () => aussonderDialog(a),
       freigeben: () => reservierungFreigeben(a.entwurf.id, a.entwurf.pruefer, () => zeigen(artikel)),
       verschieben: async () => {
@@ -979,11 +984,13 @@
   }
   const ergebnisMarke = (e) => (e ? `<span class="mat-ergebnis-marke e-${esc(e)}">${esc(ERGEBNIS[e] || e)}</span>` : "");
 
-  function sperrDialog(a) {
+  // vorgabe: { grund, text } – etwa aus dem Rückruf-Banner (Grund „Rückruf“, Titel des Rückrufs).
+  function sperrDialog(a, vorgabe) {
+    vorgabe = vorgabe || {};
     dialog(`<h2>${esc(a.inventory_no)} sperren</h2>
-      <p class="help">Sperren ohne Prüfung – nach Sturzbelastung, Beschädigung oder bei Verlust. Der Artikel wandert nach „Gesperrt“ seiner Gliederung; zurück bringt ihn nur eine Freiprüfung mit „einsatzbereit“.</p>
-      <label for="sd-grund">Grund</label><select id="sd-grund">${Object.entries(SPERRGRUND).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select>
-      <label for="sd-text">Was ist passiert?</label><input type="text" id="sd-text" maxlength="300" placeholder="z. B. Sturz in die Rettungskette, Schnitt am Band">
+      <p class="help">Sperren ohne Prüfung – nach Sturzbelastung, Beschädigung, bei Verlust oder bei einem Rückruf des Herstellers. Der Artikel wandert nach „Gesperrt“ seiner Gliederung; zurück bringt ihn nur eine Freiprüfung mit „einsatzbereit“.</p>
+      <label for="sd-grund">Grund</label><select id="sd-grund">${Object.entries(SPERRGRUND).map(([k, v]) => `<option value="${k}"${k === vorgabe.grund ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>
+      <label for="sd-text">Was ist passiert?</label><input type="text" id="sd-text" maxlength="300" placeholder="z. B. Sturz in die Rettungskette, Schnitt am Band" value="${esc(vorgabe.text || "")}">
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn danger" id="sd-ok" type="button">Sperren</button></div>`,
     (dlg, body) => {
       $("#sd-ok", body).onclick = async (ev) => {
@@ -1593,8 +1600,9 @@
         <div class="mat-artikeltitel"><h1>${esc(produktName(p))} ${demoMarke(p.demo)}</h1>
           ${DARF.verwalten ? `<div class="btn-row"><a class="btn small" href="/material/artikel/neu?produkt=${p.id}">+ Artikel dieses Produkts</a></div>` : ""}
           ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${p.artikel_gesamt ? "" : '<button class="btn secondary small" data-act="loeschen">Löschen</button>'}</div>
-          <div class="btn-row"><button class="btn secondary small" data-act="variante">Als Variante kopieren</button></div>` : ""}</div>
+          <div class="btn-row"><button class="btn secondary small" data-act="variante">Als Variante kopieren</button><button class="btn secondary small" data-act="rr-neu">Rückruf anlegen</button></div>` : ""}</div>
       </div>
+      ${rueckrufAbschnitt(p)}
       <div class="mat-spalten">
         <section class="section"><h2>Stammdaten</h2><dl class="mat-daten">
           ${zeile("Artikelnummer", p.article_no ? esc(p.article_no) : '<span class="muted">–</span>')}
@@ -1631,6 +1639,8 @@
         try { await api(`${API}/produkte/${p.id}`, { method: "DELETE" }); location.href = "/material/katalog"; } catch (e) { toast(e.message, true); }
       },
       formular: () => formularFuer({ produkt_id: p.id }),
+      "rr-neu": () => rueckrufDialog(p),
+      "rr-beenden": (b) => rueckrufBeenden(p.rueckrufe.find((r) => r.id === +b.dataset.id)),
       ...dokAktionen(() => p.dokumente, `${API}/produkte/${p.id}/dokumente`, () => zeigen(produkt)),
     };
   }
@@ -2827,6 +2837,147 @@
           dlg.close();
           toast("Gemeldet – du bekommst eine Mail, sobald das Produkt im Katalog ist.");
           if (danach) await danach();
+        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+      };
+    });
+  }
+
+  /* --- Rückrufe (Lieferung 4) ---------------------------------------------------------------------------
+     Ein Katalogpfleger legt am Produkt einen Rückruf an; er steht am Produkt (laufende oben, beendete eingeklappt),
+     als Banner an jedem betroffenen Artikel und als Kasten auf der Übersicht. Gesperrt wird nichts automatisch:
+     Prüfer sperren mit dem Grund „Rückruf“ (Knopf im Banner). Je Artikel ist ein Rückruf „offen“ oder „erledigt“
+     (gesperrt oder nach dem Rückruf geprüft) – das rechnet der Server, nie die Oberfläche. */
+  const RR_GRUND = { gesperrt: "gesperrt", geprueft: "nach dem Rückruf geprüft", ausgesondert: "ausgesondert" };
+  const rrZustand = (z, grund) => `<span class="mat-rr-zustand ${z === "erledigt" ? "erledigt" : "offen"}">${z === "erledigt" ? `erledigt${RR_GRUND[grund] ? ` – ${esc(RR_GRUND[grund])}` : ""}` : "offen"}</span>`;
+  const rrLink = (url, text) => (url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(text || kurzLink(url))}</a>` : "");
+
+  // Kasten auf der Übersicht: laufende Rückrufe, die Artikel im Bestand betreffen – wo noch etwas offen ist, zuerst.
+  function rueckrufKasten(liste) {
+    if (!liste || !liste.length) return "";
+    return `<section class="section mat-rr-kasten" aria-label="Rückrufe"><h2>Rückrufe</h2><ul class="mat-rr-liste">${liste.map((r) => `<li>
+        <span class="mat-rr-marke">Rückruf</span>
+        <span class="mat-rr-was"><a href="/material/katalog/produkt/${r.produkt.id}"><strong>${esc(produktName(r.produkt))}</strong></a> – ${esc(r.title)}</span>
+        <span class="small">${plural(r.betroffen, "Artikel", "Artikel")} betroffen · ${r.offen ? `<strong class="mat-warn">${r.offen} offen</strong>` : "alle erledigt"}</span></li>`).join("")}</ul></section>`;
+  }
+
+  // Banner am Artikel – je laufendem Rückruf, der ihn betrifft. Prüfer sperren von hier mit dem Grund „Rückruf“.
+  function rueckrufBanner(a) {
+    return (a.rueckrufe || []).map((r) => {
+      const offen = r.zustand !== "erledigt";
+      const sperren = offen && DARF.pruefen && a.lock_state === "frei" && !a.entwurf;
+      return `<div class="mat-banner mat-rr-banner${offen ? "" : " erledigt"}" role="note">
+        <p class="mat-rr-titel">RÜCKRUF: ${esc(r.title)}</p>
+        ${r.description ? `<p class="mat-text mat-rr-text">${esc(r.description)}</p>` : ""}
+        <p class="mat-rr-zeile">${r.url ? `${rrLink(r.url, "Meldung des Herstellers")} · ` : ""}seit ${esc(fmtTag(r.created_at))} · ${r.alle ? "alle Artikel des Produkts" : "betrifft diese Seriennummer"}
+          · für diesen Artikel ${rrZustand(r.zustand, r.grund)}${offen ? " – noch nicht gesperrt und seit dem Rückruf nicht geprüft" : ""}</p>
+        ${sperren ? `<div class="btn-row"><button class="btn small" type="button" data-act="rr-sperren" data-id="${r.id}">Sperren (Rückruf)</button></div>` : ""}
+        ${offen && !DARF.pruefen ? '<p class="mat-rr-zeile">Sperren dürfen Prüfer (Grund „Rückruf“); eine Prüfung nach dem Rückruf erledigt ihn ebenso.</p>' : ""}
+      </div>`;
+    }).join("");
+  }
+
+  // Wie es um die Mail steht: verschickt (mit Fehlschlägen), läuft noch, nicht bestätigt oder keine.
+  function rrMailText(r) {
+    if (r.mailed_at) {
+      const n = r.mail_count + r.mail_failed;
+      if (!n) return "Mail: keine Empfänger gefunden.";
+      return `Mail an ${plural(n, "Empfänger", "Empfänger")} verschickt am ${esc(fmtZeit(r.mailed_at))}${r.mail_failed ? ` – ${r.mail_failed} davon ${r.mail_failed === 1 ? "ging" : "gingen"} nicht hinaus` : ""}.`;
+    }
+    if (!r.mail_count) return "Keine Mail verschickt.";
+    const alt = Date.now() - Date.parse(r.created_at) > (r.unbestaetigt_minuten || 10) * 60000;
+    return alt ? `Mail an ${plural(r.mail_count, "Empfänger", "Empfänger")}: Versand nicht bestätigt.`
+      : `Mail an ${plural(r.mail_count, "Empfänger", "Empfänger")} wird verschickt …`;
+  }
+
+  function rueckrufKarte(r) {
+    const serien = r.serien || [];
+    const serienText = serien.length > 20
+      ? `${serien.slice(0, 20).map(esc).join(", ")} <details class="mat-rr-serien"><summary>alle ${serien.length} zeigen</summary><p class="mat-text">${esc(serien.join("\n"))}</p></details>`
+      : serien.map(esc).join(", ");
+    const artikel = r.artikel || [];
+    return `<article class="mat-rr-karte${r.aktiv ? "" : " beendet"}">
+      <div class="mat-rr-kopf"><span class="mat-rr-marke">${r.aktiv ? "Rückruf" : "beendet"}</span><h3>${esc(r.title)}</h3></div>
+      <p class="small muted">angelegt von ${esc(r.created_by_name || "–")} am ${esc(fmtTag(r.created_at))}${r.aktiv ? "" : ` · beendet von ${esc(r.closed_by_name || "–")} am ${esc(fmtTag(r.closed_at))}`}</p>
+      ${r.description ? `<p class="mat-text">${esc(r.description)}</p>` : ""}
+      ${r.url ? `<p>${rrLink(r.url, `Meldung des Herstellers: ${kurzLink(r.url)}`)}</p>` : ""}
+      <p><strong>Betroffen:</strong> ${r.alle ? "alle Artikel dieses Produkts" : `${serien.length === 1 ? "Seriennummer" : "Seriennummern"} ${serienText}`}</p>
+      ${r.aktiv ? `<p>${plural(r.betroffen, "Artikel", "Artikel")} im Bestand betroffen${r.betroffen ? ` · ${r.offen ? `<strong class="mat-warn">${r.offen} offen</strong>` : "alle erledigt"}` : ""}</p>
+        ${artikel.length ? `<table class="list mat-tabelle mat-rr-artikel"><thead><tr><th>Inventar-Nr.</th><th>Seriennummer</th><th>Ablage</th><th>Zustand</th></tr></thead><tbody>
+          ${artikel.map((x) => `<tr><td data-l="Inventar-Nr."><a class="mat-inv" href="/material/artikel/${x.id}"><strong>${esc(x.inventory_no)}</strong></a></td>
+            <td data-l="Seriennummer">${esc(x.serial_no)}${x.serial_generated ? ' <span class="muted">(System)</span>' : ""}</td>
+            <td data-l="Ablage">${esc(x.pfad || "")}</td><td data-l="Zustand">${rrZustand(x.zustand, x.grund)}</td></tr>`).join("")}</tbody></table>` : ""}
+        ${(r.nicht_gefunden || []).length ? `<p class="small">Ohne Artikel im Bestand: ${r.nicht_gefunden.map(esc).join(", ")}</p>` : ""}` : ""}
+      ${!r.aktiv && r.close_note ? `<p><strong>Vermerk:</strong> <span class="mat-text">${esc(r.close_note)}</span></p>` : ""}
+      <p class="small muted">${rrMailText(r)}</p>
+      ${r.aktiv && DARF.katalog ? `<div class="btn-row"><button class="btn secondary small" type="button" data-act="rr-beenden" data-id="${r.id}">Rückruf beenden</button></div>` : ""}
+    </article>`;
+  }
+
+  // Abschnitt am Produkt: laufende Rückrufe offen, beendete eingeklappt darunter.
+  function rueckrufAbschnitt(p) {
+    const liste = p.rueckrufe || [];
+    if (!liste.length) return "";
+    const aktiv = liste.filter((r) => r.aktiv);
+    const beendet = liste.filter((r) => !r.aktiv);
+    return `<section class="section mat-rr-abschnitt"><h2>Rückrufe</h2>
+      ${aktiv.map(rueckrufKarte).join("")}
+      ${beendet.length ? `<details class="mat-rr-beendet"><summary>${plural(beendet.length, "beendeter Rückruf", "beendete Rückrufe")}</summary>${beendet.map(rueckrufKarte).join("")}</details>` : ""}
+    </section>`;
+  }
+
+  function rueckrufDialog(p) {
+    dialog(`<h2>Rückruf anlegen</h2>
+      <p class="help">Für „${esc(produktName(p))}“. Der Hinweis steht danach am Produkt, an jedem betroffenen Artikel und auf der Übersicht. Gesperrt wird nichts automatisch – das tun Prüfer mit dem Grund „Rückruf“.</p>
+      <label for="rr-titel">Titel</label><input type="text" id="rr-titel" maxlength="200" placeholder="kurz, wie in der Meldung des Herstellers">
+      <label for="rr-text">Was ist betroffen, was ist zu tun?</label><textarea id="rr-text" rows="5" maxlength="4000" placeholder="Beschreibung und Empfehlung des Herstellers"></textarea>
+      <label for="rr-url">Link zur Meldung des Herstellers</label><input type="text" id="rr-url" inputmode="url" maxlength="500" placeholder="https://…" autocomplete="off">
+      <label for="rr-serien">Betroffene Seriennummern</label><textarea id="rr-serien" rows="4" placeholder="eine je Zeile – leer lassen, wenn alle Artikel des Produkts betroffen sind"></textarea>
+      <div class="help">Groß/klein und Leerzeichen am Rand spielen keine Rolle.</div>
+      <label class="inline"><input type="checkbox" id="rr-mail" checked> Mail an Materialwarte und Prüfer</label>
+      <div class="help">An alle Materialwarte und an die Prüfer, die einen betroffenen Artikel schon geprüft haben.</div>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="rr-ok" type="button">Rückruf anlegen</button></div>`,
+    (dlg, body) => {
+      fokus($("#rr-titel", body));
+      $("#rr-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        knopf.disabled = true;
+        try {
+          const r = await api(`${API}/produkte/${p.id}/rueckrufe`, { method: "POST", body: {
+            title: $("#rr-titel", body).value, description: $("#rr-text", body).value, url: $("#rr-url", body).value,
+            serials: $("#rr-serien", body).value, mail: $("#rr-mail", body).checked } });
+          rueckrufErgebnis(r);
+          zeigen(produkt);
+        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+      };
+    });
+  }
+
+  // Rückmeldung nach dem Anlegen: betroffene Artikel, Mail, Seriennummern ohne Artikel im Bestand.
+  function rueckrufErgebnis(r) {
+    const nf = r.nicht_gefunden || [];
+    dialog(`<h2>Rückruf angelegt</h2>
+      <p><strong>${plural(r.betroffen, "Artikel", "Artikel")}</strong> im Bestand betroffen${r.betroffen && r.offen < r.betroffen ? `, davon ${r.offen} offen` : ""}.</p>
+      <p>${!r.mail ? "Keine Mail verschickt." : r.empfaenger ? `Mail an ${plural(r.empfaenger, "Empfänger", "Empfänger")} wird verschickt.` : "Für die Mail gab es keine Empfänger."}</p>
+      ${nf.length ? `<p class="notice">Zu ${nf.length === 1 ? "dieser Seriennummer" : "diesen Seriennummern"} gibt es keinen Artikel im Bestand: ${nf.map(esc).join(", ")}</p>` : ""}
+      <div class="dlg-actions"><button class="btn" data-close type="button" id="rr-fertig">OK</button></div>`,
+    (d2, b2) => $("#rr-fertig", b2).focus());
+  }
+
+  function rueckrufBeenden(r) {
+    if (!r) return;
+    dialog(`<h2>Rückruf beenden</h2>
+      <p>„${esc(r.title)}“</p>
+      <p class="help">Danach steht kein Hinweis mehr an den Artikeln und auf der Übersicht; am Produkt bleibt der Rückruf mit deinem Vermerk sichtbar.${r.offen ? ` <strong>${plural(r.offen, "Artikel ist", "Artikel sind")} noch offen.</strong>` : ""}</p>
+      <label for="rr-vermerk">Vermerk</label><textarea id="rr-vermerk" rows="3" maxlength="1000" placeholder="z. B. alle betroffenen Artikel geprüft"></textarea>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="rr-beenden-ok" type="button">Beenden</button></div>`,
+    (dlg, body) => {
+      fokus($("#rr-vermerk", body));
+      $("#rr-beenden-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        knopf.disabled = true;
+        try {
+          await api(`${API}/rueckrufe/${r.id}/beenden`, { method: "POST", body: { vermerk: $("#rr-vermerk", body).value } });
+          dlg.close(); toast("Rückruf beendet"); zeigen(produkt);
         } catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
     });

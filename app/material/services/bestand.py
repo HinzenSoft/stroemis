@@ -523,7 +523,8 @@ ARTIKEL_LISTE_SQL = ("SELECT i.*, p.manufacturer, p.model, p.article_no, p.mater
 
 
 def artikel_kurz(i, stichtag=None):
-    """Eine Zeile für Listen: Nummern, Produkt, Ordner, Fälligkeiten, Status."""
+    """Eine Zeile für Listen: Nummern, Produkt, Ordner, Fälligkeiten, Status – und ein offener Rückruf (Titel)."""
+    from . import rueckruf
     s = st.status(i, stichtag)
     return {"id": i["id"], "inventory_no": i["inventory_no"], "serial_no": i["serial_no"],
             "serial_generated": bool(i["serial_generated"]), "folder_id": i["folder_id"],
@@ -533,7 +534,8 @@ def artikel_kurz(i, stichtag=None):
             "next_due_on": i["next_due_on"], "retire_by": i["retire_by"], "lock_state": i["lock_state"],
             "last_inspected_on": i.get("last_inspected_on"), "status": s, "status_text": st.LABEL[s],
             "entwurf": ({"id": i["entwurf_id"], "pruefer": i.get("entwurf_pruefer"),
-                         "pruefer_id": i.get("entwurf_pruefer_id")} if i.get("entwurf_id") else None)}
+                         "pruefer_id": i.get("entwurf_pruefer_id")} if i.get("entwurf_id") else None),
+            "rueckruf": rueckruf.offene_artikel().get(i["id"])}
 
 
 def artikel_json(i, voll=False):
@@ -579,6 +581,8 @@ def artikel_json(i, voll=False):
         rid = durchgang.offene_runde_fuer(i["id"])
         out["durchgang"] = ({"id": rid, "titel": durchgang.runde(rid)["title"]} if rid else None)
         out["darf_loeschen"] = not out["pruefungen"]
+        from . import rueckruf
+        out["rueckrufe"] = rueckruf.aktive_fuer_artikel(i)          # laufende, die ihn betreffen – fürs Banner
     return out
 
 
