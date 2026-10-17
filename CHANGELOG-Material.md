@@ -904,6 +904,15 @@ Rückmeldungen aus dem Pilotbetrieb. Lieferung 4 wurde am 17.10.2026 mit „Lief
   am Telefon ganz im Bild.
 - **Ordnerfoto im Dialog „Bearbeiten“** (wie das Produktbild): Foto wählen, ersetzen oder entfernen beim Bearbeiten –
   und schon beim Anlegen; der eigene Knopf „Foto“ entfällt.
+- **Einheitliche Knöpfe**: Grau umrandet ist der Standard für jede Aktion – in Kopfzeilen (auch „+ Artikel“,
+  „Bearbeiten“, „Verschieben“, „Löschen“, „Export“), in Listen und in Formularen; die roten Textknöpfe gibt es im Modul
+  nicht mehr, auch „Suchen“ ist grau. Rot gefüllt bleibt nur die eine Hauptaktion eines Schritts (bestätigender
+  Dialogknopf, „Prüfung starten“, „Prüfung beginnen“, „Festschreiben“, „Durchgang abschließen“, „Speichern“ im
+  Formular-Editor, „Prüfen“ auf der Prüfseite), rot umrandet nur das Bestätigen von Endgültigem (Sperren, Aussondern,
+  Meldung ablehnen, Rückruf beenden, „Festschreiben“ mit Ergebnis „aussondern“). Die kleinen „PDF“-Felder in Listen
+  sind grau, die Filter der Produktmeldungen sehen aus wie die übrigen Filterleisten.
+- **Ordnerseite**: „Bestand im ganzen Zweig“ steht unten über dem Journal statt als Erstes unter dem Kopf; Foto,
+  Beschreibung und Prüfintervall des Ordners bleiben oben.
 
 ## Katalogdatei (Format 1)
 

@@ -36,7 +36,7 @@ window.MatUnterschrift = (function () {
           <span class="us-linie" aria-hidden="true"></span>
           <span class="us-platzhalter" aria-hidden="true">Hier unterschreiben</span></div>
         ${opts.bestehend ? `<p class="us-bisher small muted">Bisher: <img src="${esc(opts.bestehend)}" alt="bisherige Unterschrift"></p>` : ""}
-        <div class="dlg-actions us-aktionen"><button type="button" class="btn ghost" data-us="leeren" disabled>Leeren</button>
+        <div class="dlg-actions us-aktionen"><button type="button" class="btn secondary" data-us="leeren" disabled>Leeren</button>
           <button type="button" class="btn secondary" data-us="ab">Abbrechen</button>
           <button type="button" class="btn" data-us="ok" disabled>Übernehmen</button></div></div>`;
       document.body.appendChild(dlg);

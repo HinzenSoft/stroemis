@@ -507,7 +507,7 @@
     const z = d.zaehlung;
     const kachel = (s, titel) => `<a class="mat-kachel s-${s}" href="/material/pruefungen?status=${s}"><strong>${z[s] || 0}</strong><span>${esc(titel)}</span></a>`;
     inhalt.innerHTML = `<div class="page-head"><h1>Material</h1>
-        <div class="btn-row">${DARF.verwalten ? '<a class="btn secondary" href="/material/bestand">Bestand pflegen</a><a class="btn" href="/material/artikel/neu">+ Artikel</a>' : ""}</div></div>
+        <div class="btn-row">${DARF.verwalten ? '<a class="btn secondary" href="/material/bestand">Bestand pflegen</a><a class="btn secondary" href="/material/artikel/neu">+ Artikel</a>' : ""}</div></div>
       ${rueckrufKasten(d.rueckrufe)}
       ${d.meldungen_offen ? `<p class="notice"><a href="/material/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produktmeldung", "offene Produktmeldungen")}</strong></a>
         – Materialwarte warten darauf, Artikel davon anzulegen.</p>` : ""}
@@ -633,7 +633,7 @@
     if (!DARF.pruefen || a.lock_state === "ausgesondert") return "";
     if (a.entwurf && a.entwurf.pruefer_id !== DARF.uid) return "";
     const q = durchgangId ? `?durchgang=${durchgangId}` : "";
-    return a.entwurf ? `<a class="btn small" href="/material/pruefung/${a.entwurf.id}">Weiter prüfen</a>`
+    return a.entwurf ? `<a class="btn secondary small" href="/material/pruefung/${a.entwurf.id}">Weiter prüfen</a>`
       : `<a class="btn secondary small" href="/material/artikel/${a.id}/pruefung/neu${q}">Prüfen</a>`;
   }
 
@@ -669,13 +669,13 @@
         ${liste.map((x) => `<tr><td data-l="Artikel"><a href="/material/artikel/${x.item_id}"><strong>${esc(x.artikel.inventory_no)}</strong></a> ${esc(produktName(x.artikel))} <div class="small muted">${esc(x.artikel.pfad)}</div></td>
           <td data-l="Prüfung">${esc(PRUEFART_KURZ[x.art] || x.art)}</td><td data-l="Prüfer">${esc(x.pruefer)}${x.eigen ? ' <span class="badge">du</span>' : ""}</td>
           <td data-l="begonnen">${esc(fmtZeit(x.begonnen_am))}</td>
-          <td class="tabelle-aktionen">${x.eigen && DARF.pruefen ? `<a class="btn small" href="/material/pruefung/${x.id}">Weiter prüfen</a>` : `<a class="btn ghost small" href="/material/pruefung/${x.id}">Ansehen</a>`}
-            ${!x.eigen && DARF.verwalten ? `<button class="btn ghost small" data-act="freigeben" data-id="${x.id}" data-wer="${esc(x.pruefer)}">Freigeben</button>` : ""}</td></tr>`).join("")}
+          <td class="tabelle-aktionen">${x.eigen && DARF.pruefen ? `<a class="btn secondary small" href="/material/pruefung/${x.id}">Weiter prüfen</a>` : `<a class="btn secondary small" href="/material/pruefung/${x.id}">Ansehen</a>`}
+            ${!x.eigen && DARF.verwalten ? `<button class="btn secondary small" data-act="freigeben" data-id="${x.id}" data-wer="${esc(x.pruefer)}">Freigeben</button>` : ""}</td></tr>`).join("")}
         </tbody></table></section>` : "";
     }
     async function zeichnen() {
       inhalt.innerHTML = `<div class="page-head"><h1>Prüfungen</h1>
-          <div class="btn-row"><a class="btn ghost" href="/material/pruefen" title="Ist ein PDF-Protokoll unverändert?">Protokoll prüfen</a>
+          <div class="btn-row"><a class="btn secondary" href="/material/pruefen" title="Ist ein PDF-Protokoll unverändert?">Protokoll prüfen</a>
             ${DARF.verwalten || DARF.pruefen ? '<button class="btn secondary" data-act="runde">+ Prüfdurchgang</button>' : ""}</div></div>
         ${!DARF.pruefen ? '<p class="notice">Prüfen dürfen nur Prüfer mit hinterlegter Urkundennummer (Nutzerverwaltung → Häkchen „Prüfer“).</p>' : ""}
         <div id="pr-runden"></div><div id="pr-offen"></div>
@@ -730,7 +730,7 @@
   async function bestand() {
     const d = await api(`${API}/ordner`);
     inhalt.innerHTML = `<div class="page-head"><h1>Bestand</h1>
-        <div class="btn-row">${DARF.verwalten ? '<button class="btn" data-act="gliederung">+ Gliederung</button>' : ""}</div></div>
+        <div class="btn-row">${DARF.verwalten ? '<button class="btn secondary" data-act="gliederung">+ Gliederung</button>' : ""}</div></div>
       <p class="help">Oben stehen die Gliederungen, darunter frei verschachtelt Standorte, Fahrzeuge, Sets. Jede Gliederung hat die
         Systemordner „Gesperrt“ und „Ausgesondert“ – dorthin kommen Artikel nur durch eine Sperre oder Aussonderung.
         Die Zahl hinter einem Ordner ist sein Bestand; farbig: überfällig, Lebensdauer erreicht, gesperrt, bald fällig.</p>
@@ -806,22 +806,22 @@
       inhalt.innerHTML = `<div class="mat-pfad"><a href="/material/bestand">Bestand</a> / ${bc}</div>
         <div class="page-head"><h1>${system ? "🔒 " : ""}${esc(d.name)} ${system ? "" : `<span class="mat-art">${esc(ORDNERART[d.kind])}</span>`}${demoMarke(d.demo)}</h1>
           <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="unterordner">+ Unterordner</button>
-            <a class="btn small" href="/material/artikel/neu?ordner=${d.id}">+ Artikel</a>
-            <button class="btn ghost small" data-act="bearbeiten">Bearbeiten</button>
-            <button class="btn ghost small" data-act="verschieben">Verschieben</button><button class="btn ghost small" data-act="loeschen">Löschen</button>` : ""}
+            <a class="btn secondary small" href="/material/artikel/neu?ordner=${d.id}">+ Artikel</a>
+            <button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>
+            <button class="btn secondary small" data-act="verschieben">Verschieben</button><button class="btn secondary small" data-act="loeschen">Löschen</button>` : ""}
             ${DARF.lesen ? exportMenue(d) : ""}</div></div>
         ${system ? `<p class="notice">${d.system_kind === "gesperrt" ? "Hierher verschiebt eine Sperre die Artikel der Gliederung. Zurück in ihren Herkunftsordner bringt sie nur eine Freiprüfung." : "Ausgesonderte Artikel bleiben hier mit ihrem vollen Lebenslauf sichtbar, zählen aber nirgends mehr als Bestand und lassen sich nicht zurückholen."}</p>` : ""}
-        <div class="mat-ordnerkopf">${d.foto ? `<img class="mat-ordnerfoto" src="${esc(d.vorschau)}" alt="">` : ""}
+        ${d.foto || d.description || d.interval_months ? `<div class="mat-ordnerkopf">${d.foto ? `<img class="mat-ordnerfoto" src="${esc(d.vorschau)}" alt="">` : ""}
           <div>${d.description ? `<p class="mat-text">${esc(d.description)}</p>` : ""}
-          ${d.interval_months ? `<p class="small">Prüfintervall hier: höchstens ${d.interval_months} Monate.</p>` : ""}
-          <p class="small">${system ? plural(Object.values(z).reduce((a, b) => a + b, 0), "Artikel", "Artikel") : `Bestand im ganzen Zweig: <strong>${d.bestand}</strong> ${zahlen(z)}`}</p></div></div>
+          ${d.interval_months ? `<p class="small">Prüfintervall hier: höchstens ${d.interval_months} Monate.</p>` : ""}</div></div>` : ""}
         ${d.unterordner.length ? `<section class="section"><h2>Unterordner</h2>${unterordnerHtml(d.unterordner)}</section>` : ""}
         <section class="section"><h2>Artikel in diesem Ordner</h2>
           <div class="c-tabs mat-filter">${["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"].map((s) => `<button type="button" data-act="filter" data-f="${s}" class="${s === filter ? "sel" : ""}">${s ? esc(STATUS[s]) : "alle"}${s && d.direkt && d.direkt[s] ? ` (${d.direkt[s]})` : ""}</button>`).join("")}</div>
           ${d.artikel.length ? artikelTabelle(d.artikel, { auswahl: darfPflegen, pruefen: DARF.pruefen && d.system_kind !== "ausgesondert", sort }) : leer(filter ? "Keine Artikel mit diesem Status." : "Hier liegen keine Artikel.")}
           ${seitenleiste(d.artikel_gesamt, seite, d.pro_seite)}
-          ${darfPflegen ? '<div class="mat-sammel" id="mat-sammel" hidden><span id="mat-sammel-n"></span><button class="btn small" data-act="sammel-verschieben">Verschieben nach …</button></div>' : ""}
+          ${darfPflegen ? '<div class="mat-sammel" id="mat-sammel" hidden><span id="mat-sammel-n"></span><button class="btn secondary small" data-act="sammel-verschieben">Verschieben nach …</button></div>' : ""}
         </section>
+        <p class="small mat-zweigbestand">${system ? plural(Object.values(z).reduce((a, b) => a + b, 0), "Artikel", "Artikel") : `Bestand im ganzen Zweig: <strong>${d.bestand}</strong> ${zahlen(z)}`}</p>
         <details class="section mat-auf"><summary>Journal des Ordners</summary>${journalHtml(d.journal)}</details>`;
       const sammel = () => {
         const n = $$(".mat-wahl-art:checked", inhalt).length;
@@ -871,7 +871,7 @@
   // Export eines Ordners als Untermenü im Ordnerkopf: Knopf „Export“, darunter die beiden Downloads mit einem Satz,
   // was drinsteckt. <details> öffnet und schließt ohne eigenes Skript (auch per Tastatur und Touch).
   const exportMenue = (d) => `<details class="mat-menue">
-      <summary class="btn ghost small" aria-haspopup="true">Export</summary>
+      <summary class="btn secondary small" aria-haspopup="true">Export</summary>
       <div class="mat-menue-liste">
         <a href="/material/export/${d.id}.csv" data-export="Die Artikelliste wird heruntergeladen …"><strong>Artikelliste (CSV)</strong>
           <span>Alle Artikel hier und darunter, auch die von hier gesperrten (ausgesonderte bei ihrer Gliederung), mit Status, Fälligkeiten und Stammdaten – für Excel.</span></a>
@@ -953,7 +953,7 @@
             ${fremderEntwurf && DARF.verwalten ? ' · <button class="lnk" type="button" data-act="freigeben">Reservierung freigeben</button>' : ""}</p>` : ""}
           ${!aus && !DARF.pruefen && (DARF.verwalten || DARF.lesen) ? '<p class="small muted">Prüfen dürfen Prüfer mit hinterlegter Urkundennummer.</p>' : ""}
           ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang <a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>.</p>` : ""}
-          <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${frei ? '<button class="btn ghost small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen ? '<button class="btn ghost small" data-act="loeschen">Löschen</button>' : ""}` : ""}${DARF.lesen ? lebenslaufKnopf(a) : ""}</div>
+          <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${frei ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}${DARF.lesen ? lebenslaufKnopf(a) : ""}</div>
         </div>
       </div>
       <div class="mat-spalten">
@@ -1061,7 +1061,7 @@
         const ziel = $("#au-us", body);
         if (!DARF.unterschrift) {
           ziel.innerHTML = `<div class="mat-us-fehlt"><span>Dir fehlt noch eine Unterschrift. Ohne sie lässt sich nicht aussondern.</span>
-            <button type="button" class="btn small" id="au-us-knopf">Unterschreiben</button></div>`;
+            <button type="button" class="btn secondary small" id="au-us-knopf">Unterschreiben</button></div>`;
           $("#au-us-knopf", body).onclick = async () => { if (await eigeneUnterschrift(HINWEIS)) usZeigen(); };
           return;
         }
@@ -1362,16 +1362,16 @@
         k.default_interval_months ? `Prüfintervall ${k.default_interval_months} Monate` : "", plural(summe(k.id), "Produkt", "Produkte")].filter(Boolean).join(" · ") : "";
       // Zum aktiven generischen Formular führt bei Katalogpflegern der Knopf „Generisches Formular“, sonst der Verweis in der Angabenzeile.
       inhalt.innerHTML = `<div class="page-head"><h1>Katalog</h1>
-          <div class="btn-row">${DARF.katalog ? '<button class="btn ghost" data-act="kat-export">Katalog exportieren</button><button class="btn ghost" data-act="kat-import">Katalog importieren</button>' : ""}
+          <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-export">Katalog exportieren</button><button class="btn secondary" data-act="kat-import">Katalog importieren</button>' : ""}
             ${DARF.lesen || DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/material/katalog/meldungen">Meldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>` : ""}
-            ${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu">+ Kategorie</button><button class="btn" data-act="produkt-neu">+ Produkt</button>' : ""}</div></div>
+            ${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu">+ Kategorie</button><button class="btn secondary" data-act="produkt-neu">+ Produkt</button>' : ""}</div></div>
         ${k ? `<div class="mat-katkopf">
             <div class="mat-pfad"><a href="/material/katalog" data-act="kategorie" data-id="">alle Kategorien</a>${pfad.slice(0, -1).map((x) => ` / <a href="/material/katalog?kategorie=${x.id}" data-act="kategorie" data-id="${x.id}">${esc(x.name)}</a>`).join("")}</div>
             <h2>${esc(k.name)} ${demoMarke(k.demo)}</h2>
             <p class="small">${angaben}${!k.aktives_formular ? ' · <span class="muted">kein aktives generisches Prüfformular</span>'
               : DARF.katalog ? "" : ` · <a href="/material/katalog/formular/${k.aktives_formular}">generisches Prüfformular</a>`}</p>
-            ${DARF.katalog ? `<div class="btn-row"><button class="btn ghost small" data-act="kat-bearbeiten">Kategorie bearbeiten</button>
-              <button class="btn ghost small" data-act="kat-formular">Generisches Formular</button><button class="btn ghost small" data-act="kat-loeschen">Löschen</button></div>` : ""}
+            ${DARF.katalog ? `<div class="btn-row"><button class="btn secondary small" data-act="kat-bearbeiten">Kategorie bearbeiten</button>
+              <button class="btn secondary small" data-act="kat-formular">Generisches Formular</button><button class="btn secondary small" data-act="kat-loeschen">Löschen</button></div>` : ""}
             <div class="mat-katdoks"><h3 class="mat-unter">Dokumente für alle Produkte dieser Kategorie</h3>
               <p class="help">Pflegehinweise, allgemeine Anleitungen … – sie gelten für jedes Produkt hier und in den Unterkategorien und stehen dort bei den Herstellerdokumenten.</p>
               <div id="kat-doks"><p class="help">Wird geladen …</p></div>
@@ -1702,7 +1702,7 @@
       <td data-l="Version">${esc(d.version || "–")}</td><td data-l="Gültig ab">${esc(fmtTag(d.valid_from))}</td>
       <td data-l="Stand">${d.gilt ? '<span class="mat-status s-einsatzbereit">gilt</span>' : d.withdrawn_on ? `zurückgezogen ${esc(fmtTag(d.withdrawn_on))}` : d.abgeloest_durch ? "abgelöst" : "noch nicht gültig"}
         ${d.sha256 ? `<div class="small muted mat-hash" title="SHA-256 ${esc(d.sha256)}">${esc(d.sha256.slice(0, 12))}…</div>` : ""}</td>
-      <td>${k ? `<div class="btn-row"><button class="btn ghost small" data-act="dok-name" data-id="${d.id}">Umbenennen</button>${!d.abgeloest_durch && !d.withdrawn_on ? `<button class="btn ghost small" data-act="dok-version" data-id="${d.id}">Neue Version</button><button class="btn ghost small" data-act="dok-zurueck" data-id="${d.id}">Zurückziehen</button>` : ""}</div>` : ""}</td></tr>`;
+      <td>${k ? `<div class="btn-row"><button class="btn secondary small" data-act="dok-name" data-id="${d.id}">Umbenennen</button>${!d.abgeloest_durch && !d.withdrawn_on ? `<button class="btn secondary small" data-act="dok-version" data-id="${d.id}">Neue Version</button><button class="btn secondary small" data-act="dok-zurueck" data-id="${d.id}">Zurückziehen</button>` : ""}</div>` : ""}</td></tr>`;
   }
   // Herstellerdokumente als Liste: erst die des Produkts, dann unter einer kleinen Zwischenzeile die seiner
   // Kategorien (Artikel: herkunft; Prüfung: kategorie, der Name vom Prüftag). verlinkt: Titel als Link.
@@ -1776,7 +1776,7 @@
       <div class="mat-artikelkopf">
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel"><h1>${esc(produktName(p))} ${demoMarke(p.demo)}</h1>
-          ${DARF.verwalten ? `<div class="btn-row"><a class="btn small" href="/material/artikel/neu?produkt=${p.id}">+ Artikel dieses Produkts</a></div>` : ""}
+          ${DARF.verwalten ? `<div class="btn-row"><a class="btn secondary small" href="/material/artikel/neu?produkt=${p.id}">+ Artikel dieses Produkts</a></div>` : ""}
           ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${p.artikel_gesamt ? "" : '<button class="btn secondary small" data-act="loeschen">Löschen</button>'}</div>
           <div class="btn-row"><button class="btn secondary small" data-act="variante">Als Variante kopieren</button><button class="btn secondary small" data-act="rr-neu">Rückruf anlegen</button></div>` : ""}</div>
       </div>
@@ -1984,7 +1984,7 @@
           : p.art === "text" || p.art === "number" ? `<input type="text" class="fp-soll" value="${esc(p.soll || "")}" maxlength="60" placeholder="optional">` : '<span class="muted">–</span>'}</td>
         <td><label class="inline"><input type="checkbox" class="fp-pflicht" ${p.pflicht ? "checked" : ""}> Pflicht</label>
           <label class="inline"><input type="checkbox" class="fp-kritisch" ${p.kritisch ? "checked" : ""} ${p.art === "yesno" ? "" : "disabled"}> kritisch</label>
-          <div class="btn-row"><button class="btn ghost small" data-act="hoch" data-i="${i}" aria-label="nach oben">↑</button><button class="btn ghost small" data-act="runter" data-i="${i}" aria-label="nach unten">↓</button><button class="btn ghost small" data-act="weg" data-i="${i}" aria-label="entfernen">✕</button></div></td></tr>`;
+          <div class="btn-row"><button class="btn secondary small" data-act="hoch" data-i="${i}" aria-label="nach oben">↑</button><button class="btn secondary small" data-act="runter" data-i="${i}" aria-label="nach unten">↓</button><button class="btn secondary small" data-act="weg" data-i="${i}" aria-label="entfernen">✕</button></div></td></tr>`;
     }
     function einsammeln() {
       if (!bearbeitbar) return;
@@ -1999,8 +1999,8 @@
       inhalt.innerHTML = `${f.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen.</p>' : ""}
         <div class="mat-pfad"><a href="/material/katalog">Katalog</a> / <a href="${zielLink}">${esc(zielText)}</a></div>
         <div class="page-head"><h1>${esc(f.titel || "Prüfformular")} <span class="badge grey">Version ${f.version}</span> ${f.aktiv ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : '<span class="badge grey">inaktiv</span>'} ${demoMarke(f.demo)}</h1>
-          <div class="btn-row">${DARF.katalog ? `${f.aktiv ? '<button class="btn ghost small" data-act="deaktivieren">Deaktivieren</button>' : '<button class="btn small" data-act="aktivieren">Aktivieren</button>'}
-            <button class="btn secondary small" data-act="neue-version">Neue Version</button>${!f.aktiv && !f.benutzt ? '<button class="btn ghost small" data-act="loeschen">Löschen</button>' : ""}` : ""}</div></div>
+          <div class="btn-row">${DARF.katalog ? `${f.aktiv ? '<button class="btn secondary small" data-act="deaktivieren">Deaktivieren</button>' : '<button class="btn secondary small" data-act="aktivieren">Aktivieren</button>'}
+            <button class="btn secondary small" data-act="neue-version">Neue Version</button>${!f.aktiv && !f.benutzt ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}</div></div>
         <p class="help">${esc(zielText)}. ${f.gueltig_ab ? `Gültig ab ${esc(fmtTag(f.gueltig_ab))}.` : "Noch nie aktiviert."}
           ${f.benutzt ? " Diese Version wurde schon für Prüfungen benutzt und bleibt unverändert – Änderungen gehen über eine neue Version." : ""}
           Bei der Prüfung ist jeder Befund mit „in Ordnung“ vorbelegt, Ja/Nein-Punkte mit ihrem Sollwert; bei Text und Zahl ist das Soll ein Hinweis für den Prüfer. Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus.</p>
@@ -2155,7 +2155,7 @@
     function kopf() {
       const a = pr.artikel;
       const knoepfe = [];
-      if (pr.entwurf && !pr.eigen && DARF.verwalten) knoepfe.push('<button class="btn ghost small" data-act="freigeben">Reservierung freigeben</button>');
+      if (pr.entwurf && !pr.eigen && DARF.verwalten) knoepfe.push('<button class="btn secondary small" data-act="freigeben">Reservierung freigeben</button>');
       if (darfBerichtigen()) {
         knoepfe.push(pr.berichtigbar.ok ? '<button class="btn secondary small" data-act="berichtigen">Berichtigen</button>'
           : `<button class="btn secondary small" type="button" disabled title="${esc(pr.berichtigbar.grund)}">Berichtigen</button>`);
@@ -2205,8 +2205,8 @@
         // Unterschriftsfeld: gezeichnet im Pad (unterschrift.js); „n. z.“ nimmt es heraus. Kein Foto.
         steuer = `<div class="mat-us-feld">
           ${x.unterschrift ? `<img class="mat-us-bild" src="${esc(x.unterschrift)}" alt="Unterschrift: ${esc(x.text)}">` : ""}
-          <div class="btn-row">${nz ? "" : `<button type="button" class="btn ${x.unterschrift || !x.pflicht ? "secondary " : ""}small" data-act="punterschrift" data-rid="${x.id}">${x.unterschrift ? "Neu unterschreiben" : "Unterschreiben"}</button>`}
-            ${x.unterschrift ? `<button type="button" class="btn ghost small" data-act="punterschrift-weg" data-rid="${x.id}">Entfernen</button>` : ""}
+          <div class="btn-row">${nz ? "" : `<button type="button" class="btn secondary small" data-act="punterschrift" data-rid="${x.id}">${x.unterschrift ? "Neu unterschreiben" : "Unterschreiben"}</button>`}
+            ${x.unterschrift ? `<button type="button" class="btn secondary small" data-act="punterschrift-weg" data-rid="${x.id}">Entfernen</button>` : ""}
             <button type="button" class="btn secondary small mat-nz-knopf" data-act="pbefund" data-rid="${x.id}" data-befund="nicht_zutreffend" aria-pressed="${nz}" title="nicht zutreffend">n. z.</button></div></div>`;
       } else {
         const feld = x.art === "photo" ? ""
@@ -2219,7 +2219,7 @@
       const fotoPflicht = mangel || (x.art === "photo" && x.pflicht && !nz);
       const foto = x.art === "signature" ? "" : `<div class="mat-punkt-foto">
           ${x.foto ? bildLink(x.foto.web, x.foto.original, x.text, "punkte", `<img src="${esc(x.foto.vorschau)}" alt="Foto zu ${esc(x.text)}">`) : ""}
-          <label class="btn ${fotoPflicht && !x.foto ? "" : "secondary"} small mat-kamera">📷 ${x.foto ? "neues Foto" : "Foto"}<input type="file" accept="image/*" capture="environment" data-foto="${x.id}" class="mat-datei" aria-label="Foto zu ${esc(x.text)}"></label>
+          <label class="btn secondary small mat-kamera">📷 ${x.foto ? "neues Foto" : "Foto"}<input type="file" accept="image/*" capture="environment" data-foto="${x.id}" class="mat-datei" aria-label="Foto zu ${esc(x.text)}"></label>
           ${x.foto ? `<button type="button" class="lnk small" data-act="pfoto-weg" data-rid="${x.id}">Foto entfernen</button>` : ""}
           ${fotoPflicht && !x.foto ? '<span class="mat-pflicht">Foto ist Pflicht</span>' : ""}</div>`;
       const notiz = mangel || x.notiz;
@@ -2259,7 +2259,7 @@
             <label class="btn secondary small">Dateien wählen<input type="file" accept="application/pdf,image/*" multiple id="ah-dateien" class="mat-datei"></label></div>
           <ol class="mat-scan" id="ah-seiten"></ol>
           <label class="inline"><input type="checkbox" id="ah-protokoll" checked> hinten ans Protokoll hängen</label>
-          <div class="btn-row"><button type="button" class="btn small" data-act="anhang-hoch" id="ah-hoch" disabled>Als ein PDF anhängen</button></div></div>` : "";
+          <div class="btn-row"><button type="button" class="btn secondary small" data-act="anhang-hoch" id="ah-hoch" disabled>Als ein PDF anhängen</button></div></div>` : "";
       return `<section class="section"><h2>Anhänge</h2>
         ${bearbeitbar() ? '<p class="help">Externe Prüfkarte, Bericht eines Prüfdienstes … als PDF oder Foto. Mehrere Fotos (eine je Seite) und PDFs werden in der Reihenfolge der Liste ein PDF.</p>' : ""}
         <div id="ah-liste">${anhaengeListe()}</div>${neu}</section>`;
@@ -2517,7 +2517,7 @@
         ${daten.ergebnis === "aussondern" ? `<p class="mat-fs-warnung"><strong>„aussondern“ ist endgültig.</strong> Der Artikel wandert nach „Ausgesondert“ und zählt nicht mehr als Bestand; dazu entsteht ein Aussonderungsprotokoll.</p>` : ""}
         ${pr.berichtigt ? `<p>Diese Berichtigung ersetzt ${pr.berichtigt.protokoll_id ? `Protokoll ${esc(pr.berichtigt.protokoll_id)}` : "die ursprüngliche Prüfung"}; das Original bleibt unverändert erhalten.</p>` : ""}
         <p class="help">Danach ist die Prüfung unveränderlich; eine Korrektur geht nur als Berichtigung. Das Protokoll entsteht mit Prüfsumme.</p>
-        <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn mat-fest" id="fs-ok" type="button">Festschreiben</button></div>`,
+        <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn${daten.ergebnis === "aussondern" ? " danger" : ""}" id="fs-ok" type="button">Festschreiben</button></div>`,
       (dlg, body) => {
         const knopf = $("#fs-ok", body);
         fokus(knopf);
@@ -2710,17 +2710,17 @@
         zustand = `${ergebnisMarke(a.pruefung.ergebnis)} <a class="small" href="/material/pruefung/${a.pruefung.id}">${esc(fmtTag(a.pruefung.datum))}, ${esc(a.pruefung.pruefer)}</a>`;
       } else if (a.zustand === "ausgenommen") {
         zustand = `<span class="badge grey">ausgenommen</span> <span class="small">${esc(a.ausnahme.grund)}</span> <span class="muted small">(${esc(a.ausnahme.von || "")})</span>`;
-        if (darf && a.lock_state !== "ausgesondert") knopf = `<button type="button" class="btn ghost small" data-act="einbeziehen" data-id="${a.id}">Einbeziehen</button>`;
+        if (darf && a.lock_state !== "ausgesondert") knopf = `<button type="button" class="btn secondary small" data-act="einbeziehen" data-id="${a.id}">Einbeziehen</button>`;
       } else if (a.zustand === "nicht_geprueft") {
         zustand = '<span class="badge grey">nicht geprüft</span>';
       } else if (a.zustand === "in_pruefung") {
         zustand = `<span class="badge">in Prüfung</span> <span class="small">bei ${esc(a.entwurf.pruefer)} seit ${esc(fmtZeit(a.entwurf.seit))}</span>`;
-        if (a.entwurf.eigen && DARF.pruefen) knopf = `<a class="btn small" href="/material/pruefung/${a.entwurf.id}">Weiter prüfen</a>`;
-        else if (DARF.verwalten && d.offen) knopf = `<button type="button" class="btn ghost small" data-act="freigeben" data-id="${a.entwurf.id}" data-wer="${esc(a.entwurf.pruefer)}">Freigeben</button>`;
+        if (a.entwurf.eigen && DARF.pruefen) knopf = `<a class="btn secondary small" href="/material/pruefung/${a.entwurf.id}">Weiter prüfen</a>`;
+        else if (DARF.verwalten && d.offen) knopf = `<button type="button" class="btn secondary small" data-act="freigeben" data-id="${a.entwurf.id}" data-wer="${esc(a.entwurf.pruefer)}">Freigeben</button>`;
       } else {
         zustand = '<span class="muted">offen</span>';
         if (d.offen && DARF.pruefen && a.lock_state !== "ausgesondert") knopf = `<a class="btn secondary small" href="/material/artikel/${a.id}/pruefung/neu?durchgang=${d.id}">Prüfen</a>`;
-        if (darf) knopf += `<button type="button" class="btn ghost small" data-act="ausnehmen" data-id="${a.id}" data-nr="${esc(a.inventory_no)}">Ausnehmen</button>`;
+        if (darf) knopf += `<button type="button" class="btn secondary small" data-act="ausnehmen" data-id="${a.id}" data-nr="${esc(a.inventory_no)}">Ausnehmen</button>`;
       }
       return `<tr class="z-${a.zustand}"><td data-l="Inventar-Nr."><a class="mat-inv" href="/material/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a></td>
         <td data-l="Hersteller">${esc(a.manufacturer || "")}</td>
@@ -2835,12 +2835,12 @@
     const wer = (name) => (name ? ` von ${esc(name)}` : "");
     const knoepfe = [];
     if (bearbeiten && m.status === "offen") {
-      knoepfe.push(`<button type="button" class="btn small" data-act="anlegen" data-id="${m.id}">Produkt anlegen</button>`,
+      knoepfe.push(`<button type="button" class="btn secondary small" data-act="anlegen" data-id="${m.id}">Produkt anlegen</button>`,
                    `<button type="button" class="btn secondary small" data-act="zuordnen" data-id="${m.id}">Vorhandenes zuordnen</button>`,
                    `<button type="button" class="btn secondary small" data-act="ablehnen" data-id="${m.id}">Ablehnen</button>`);
     }
     if (m.eigen && DARF.verwalten && m.status === "eingepflegt" && m.produkt) {
-      knoepfe.push(`<a class="btn small" href="/material/artikel/neu?produkt=${m.produkt.id}${m.ordner ? `&ordner=${m.ordner.id}` : ""}">Artikel davon anlegen</a>`);
+      knoepfe.push(`<a class="btn secondary small" href="/material/artikel/neu?produkt=${m.produkt.id}${m.ordner ? `&ordner=${m.ordner.id}` : ""}">Artikel davon anlegen</a>`);
     }
     // Eigene Meldungen löscht der Melder selbst – offen oder erledigt.
     if (m.eigen) knoepfe.push(`<button type="button" class="btn secondary small" data-act="loeschen" data-id="${m.id}">Löschen</button>`);
@@ -2849,7 +2849,7 @@
       <p class="muted small">gemeldet${wer(m.created_by_name)} am ${esc(fmtTag(m.created_at))}${m.ordner ? ` · für ${esc(m.ordner.pfad)}` : ""}</p>
       ${meldeDetails(m)}
       ${m.treffer ? `<p class="notice">Steht inzwischen im Katalog: <a href="/material/katalog/produkt/${m.treffer.id}">${esc(produktName(m.treffer))}</a>${m.treffer.article_no ? ` <span class="muted">${esc(m.treffer.article_no)}</span>` : ""}
-        ${bearbeiten ? `<button type="button" class="btn small" data-act="treffer" data-id="${m.id}">Zuordnen</button>` : ""}</p>` : ""}
+        ${bearbeiten ? `<button type="button" class="btn secondary small" data-act="treffer" data-id="${m.id}">Zuordnen</button>` : ""}</p>` : ""}
       ${m.status === "eingepflegt" ? `<p class="mat-meldung-ergebnis">Eingepflegt${wer(m.resolved_by_name)} am ${esc(fmtTag(m.resolved_at))}:
         ${m.produkt ? `<a href="/material/katalog/produkt/${m.produkt.id}">${esc(produktName(m.produkt))}</a>` : '<span class="muted">Produkt inzwischen gelöscht</span>'}
         ${m.answer ? `<br><span class="mat-text">${esc(m.answer)}</span>` : ""}</p>` : ""}
@@ -2875,9 +2875,9 @@
         : d.alle ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen; die Katalogpfleger nehmen sie auf oder lehnen sie mit Begründung ab."
           : "Produkte, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald ein Katalogpfleger sie bearbeitet hat.";
       inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Produktmeldungen" : "Deine Produktmeldungen"}</h1>
-          <div class="btn-row"><a class="btn secondary" href="/material/katalog">Katalog</a>${DARF.verwalten ? '<a class="btn" href="/material/artikel/neu">+ Artikel</a>' : ""}</div></div>
+          <div class="btn-row"><a class="btn secondary" href="/material/katalog">Katalog</a>${DARF.verwalten ? '<a class="btn secondary" href="/material/artikel/neu">+ Artikel</a>' : ""}</div></div>
         <p class="help">${hilfe}${DARF.verwalten && !DARF.katalog ? ` <button type="button" class="lnk" data-act="eigene">${d.alle ? "Nur deine zeigen" : "Alle Meldungen zeigen"}</button>` : ""}</p>
-        <div class="mat-filter" role="group" aria-label="Status">${[["offen", "offen"], ["erledigt", "erledigt"], ["alle", "alle"]].map(([w, t]) => `<button type="button" class="btn small${w === filter ? "" : " secondary"}" data-act="filter" data-f="${w}" aria-pressed="${w === filter}">${t}${w === "offen" && d.offen ? ` (${d.offen})` : ""}</button>`).join("")}</div>
+        <div class="c-tabs mat-filter" role="group" aria-label="Status">${[["offen", "offen"], ["erledigt", "erledigt"], ["alle", "alle"]].map(([w, t]) => `<button type="button" class="${w === filter ? "sel" : ""}" data-act="filter" data-f="${w}" aria-pressed="${w === filter}">${t}${w === "offen" && d.offen ? ` (${d.offen})` : ""}</button>`).join("")}</div>
         ${liste.length ? liste.map((m) => meldeKarte(m, d.bearbeiten)).join("") : leer(filter === "offen" ? "Keine offenen Meldungen." : "Keine Meldungen.")}`;
       aktionen = {
         filter: (b) => {
@@ -2962,7 +2962,7 @@
       <p>„${esc(meldungName(m))}“, gemeldet von ${esc(m.created_by_name || "–")}</p>
       <label for="ab-antwort">Begründung (bekommt der Melder per Mail)</label>
       <textarea id="ab-antwort" rows="3" maxlength="1000" placeholder="z. B. gehört nicht ins Modul, steht unter anderem Namen im Katalog"></textarea>
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="ab-ok" type="button">Ablehnen</button></div>`,
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn danger" id="ab-ok" type="button">Ablehnen</button></div>`,
     (dlg, body) => {
       fokus($("#ab-antwort", body));
       $("#ab-ok", body).onclick = async (ev) => {
@@ -3161,7 +3161,7 @@
       <p>„${esc(r.title)}“</p>
       <p class="help">Danach steht kein Hinweis mehr an den Artikeln und auf der Übersicht; am Produkt bleibt der Rückruf mit deinem Vermerk sichtbar.${r.offen ? ` <strong>${plural(r.offen, "Artikel ist", "Artikel sind")} noch offen.</strong>` : ""}</p>
       <label for="rr-vermerk">Vermerk</label><textarea id="rr-vermerk" rows="3" maxlength="1000" placeholder="z. B. alle betroffenen Artikel geprüft"></textarea>
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="rr-beenden-ok" type="button">Beenden</button></div>`,
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn danger" id="rr-beenden-ok" type="button">Beenden</button></div>`,
     (dlg, body) => {
       fokus($("#rr-vermerk", body));
       $("#rr-beenden-ok", body).onclick = async (ev) => {
