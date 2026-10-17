@@ -1602,7 +1602,9 @@
         ${punkteHtml()}
         <section class="section"><h2>Zur Prüfung</h2>
           ${pr.arten && pr.arten.length > 1 ? `<label for="pr-art">Art der Prüfung</label><select id="pr-art">${pr.arten.map((x) => `<option value="${x}" ${x === pr.art ? "selected" : ""}>${esc(PRUEFART[x] || x)}</option>`).join("")}</select>` : ""}
-          <label for="pr-bem">Bemerkung</label><textarea id="pr-bem" rows="3" maxlength="4000" placeholder="Was sonst zur Prüfung gehört">${esc(pr.bemerkung || "")}</textarea></section>
+          <label for="pr-bem">Bemerkung</label>
+          <p class="help" id="pr-bem-hilfe">Mängel, die du während der Prüfung festgestellt und durch eine eigene Maßnahme gleich behoben hast, sind hier zu dokumentieren – jeweils mit der Maßnahme. Was sich nicht vor Ort beheben ließ, gehört als Mangel an den Prüfpunkt.</p>
+          <textarea id="pr-bem" rows="3" maxlength="4000" aria-describedby="pr-bem-hilfe" placeholder="z. B. Schnapper schwergängig – gereinigt und geschmiert">${esc(pr.bemerkung || "")}</textarea></section>
         ${anhaengeHtml()}
         <p class="help">Alles ist gespeichert – du kannst die Prüfung jederzeit unterbrechen und später fortsetzen.
           <button type="button" class="lnk" data-act="verwerfen">Entwurf verwerfen</button></p>
