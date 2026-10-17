@@ -308,6 +308,7 @@ def test_fuehrungskraft_nur_lesen():
             ("pruefungen", "pid"): entwurf, ("pruefung", "pid"): fest, ("punkte", "rid"): punkt,
             ("ordner", "fid"): gid, ("formulare", "fid"): formulare["spezifisch"], ("formular", "fid"): formulare["spezifisch"],
             ("durchgaenge", "rid"): rid, ("durchgang", "rid"): rid,
+            ("export", "fid"): gid,                         # CSV und Protokoll-ZIP je Ordner
         }
 
         darf = f.get("/api/material/start").json["darf"]
