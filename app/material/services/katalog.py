@@ -316,14 +316,18 @@ def lebensende_nachziehen(pid, alt_jahre, neu_jahre):
 
 
 def produkt_loeschen(pid):
-    alt = produkt(pid)
-    if db.query("SELECT 1 FROM mat_item WHERE product_id = ? LIMIT 1", (pid,), one=True):
-        raise Abgelehnt("Von diesem Produkt gibt es Artikel – es bleibt im Katalog.", 409)
-    dateien = [r["file_path"] for r in db.query(
-        "SELECT file_path FROM mat_product_document WHERE product_id = ? AND file_path IS NOT NULL", (pid,))]
-    with db.transaction():
+    with db.transaction(sofort=True):
+        alt = produkt(pid)
+        if db.query("SELECT 1 FROM mat_item WHERE product_id = ? LIMIT 1", (pid,), one=True):
+            raise Abgelehnt("Von diesem Produkt gibt es Artikel – es bleibt im Katalog.", 409)
+        dateien = [r["file_path"] for r in db.query(
+            "SELECT file_path FROM mat_product_document WHERE product_id = ? AND file_path IS NOT NULL", (pid,))]
         for f in db.query("SELECT id FROM mat_form WHERE product_id = ?", (pid,)):
             journal.eintragen("form", f["id"], "geloescht", {"produkt": pid}, None)
+        # Die Dokumente gehen mit dem Produkt (ON DELETE CASCADE) – ihr Journal bekommt das Ende vermerkt,
+        # damit eine später wieder vergebene Kennung nicht ihre Geschichte erbt (journal.LOESCHUNG).
+        for dok in db.query("SELECT id, title FROM mat_product_document WHERE product_id = ?", (pid,)):
+            journal.eintragen("document", dok["id"], "geloescht", {"produkt": pid, "title": dok["title"]}, None)
         db.execute("DELETE FROM mat_form WHERE product_id = ?", (pid,))
         db.execute("DELETE FROM mat_product WHERE id = ?", (pid,))
         journal.eintragen("product", pid, "geloescht", alt, None)
@@ -665,14 +669,18 @@ def formular_anlegen(d, demo=False):
 
 def formular_speichern(fid, d):
     alt = formular(fid)
-    if ist_benutzt(fid):
-        raise Abgelehnt(FORMULAR_BENUTZT, 409)
     titel = text(d, "titel", "Titel", 160) if "titel" in d else alt["title"]
-    alte_punkte = [dict(p) for p in punkte(fid)]
-    liste = punkte_pruefen(d.get("punkte")) if "punkte" in d else alte_punkte
-    if alt["active"] and not liste:
-        raise Abgelehnt("Ein aktives Formular braucht mindestens einen Prüfpunkt.")
-    with db.transaction():
+    liste_neu = punkte_pruefen(d.get("punkte")) if "punkte" in d else None
+    # „Benutzt?“ und Schreiben unter einer Sperre: Eine Prüfung, die gleichzeitig beginnt, kopierte sonst
+    # Punkte, die gleich darauf unter derselben Versionsnummer andere werden.
+    with db.transaction(sofort=True):
+        alt = formular(fid)
+        if ist_benutzt(fid):
+            raise Abgelehnt(FORMULAR_BENUTZT, 409)
+        alte_punkte = [dict(p) for p in punkte(fid)]
+        liste = liste_neu if liste_neu is not None else alte_punkte
+        if alt["active"] and not liste:
+            raise Abgelehnt("Ein aktives Formular braucht mindestens einen Prüfpunkt.")
         db.execute("UPDATE mat_form SET title = ?, updated_at = ? WHERE id = ?", (titel, db.now(), fid))
         _punkte_schreiben(fid, liste)
         journal.aenderung("form", fid, {"title": alt["title"], "punkte": _punkte_kurz(alte_punkte)},
@@ -703,13 +711,13 @@ def formular_deaktivieren(fid):
 
 
 def formular_loeschen(fid):
-    f = formular(fid)
-    if ist_benutzt(fid):
-        raise Abgelehnt(FORMULAR_BENUTZT, 409)
-    if f["active"]:
-        raise Abgelehnt("Das aktive Formular lässt sich nicht löschen – erst eine andere Version aktivieren "
-                        "oder dieses deaktivieren.", 409)
-    with db.transaction():
+    with db.transaction(sofort=True):
+        f = formular(fid)
+        if ist_benutzt(fid):
+            raise Abgelehnt(FORMULAR_BENUTZT, 409)
+        if f["active"]:
+            raise Abgelehnt("Das aktive Formular lässt sich nicht löschen – erst eine andere Version aktivieren "
+                            "oder dieses deaktivieren.", 409)
         db.execute("DELETE FROM mat_form WHERE id = ?", (fid,))
         journal.eintragen("form", fid, "geloescht", {"title": f["title"], "version": f["version"]}, None)
 

@@ -8,13 +8,13 @@ import json
 import os
 import sqlite3
 
-from flask import (Blueprint, abort, current_app, jsonify, redirect, render_template, request,
+from flask import (Blueprint, abort, current_app, g, jsonify, redirect, render_template, request,
                    send_from_directory, url_for)
 
 from .. import db
 from ..auth import current_user, eingabefehler_abfangen, json_body
 from . import models
-from .services import Abgelehnt, bestand, journal, katalog, kennung, search
+from .services import Abgelehnt, anhang, bestand, durchgang, journal, katalog, kennung, pruefung, search
 from .services import status as st
 from .services.rechte import darf, darf_alles, ist_katalogpfleger, katalog_required, requires_folder
 
@@ -30,6 +30,8 @@ UPLOAD_GRENZEN = {
     "material_api.ordner_foto": katalog.BILD_MAX_BYTES + 1024 * 1024,
     "material_api.dokument_neu": katalog.DOK_MAX_BYTES + 1024 * 1024,
     "material_api.dokument_version": katalog.DOK_MAX_BYTES + 1024 * 1024,
+    "material_api.punkt_foto": katalog.BILD_MAX_BYTES + 1024 * 1024,
+    "material_api.anhang_neu": anhang.MAX_BYTES + 1024 * 1024,
 }
 
 
@@ -102,6 +104,21 @@ def artikel_seite(iid):
     return _seite("artikel", id=iid)
 
 
+@seiten.get("/material/artikel/<int:iid>/pruefung/neu")
+def pruefung_neu(iid):
+    return _seite("pruefung_neu", id=iid, durchgang=request.args.get("durchgang", type=int))
+
+
+@seiten.get("/material/pruefung/<int:pid>")
+def pruefung_seite(pid):
+    return _seite("pruefung", id=pid)
+
+
+@seiten.get("/material/durchgang/<int:rid>")
+def durchgang_seite(rid):
+    return _seite("durchgang", id=rid)
+
+
 @seiten.get("/material/katalog")
 def katalog_seite():
     return _seite("katalog", katalog_seite=True, kategorie=request.args.get("kategorie", type=int))
@@ -150,7 +167,7 @@ def qr_ziel(token):
 def medien(art, dateiname):
     """Produkt- und Ordnerfotos, Herstellerdokumente – nur für Angemeldete mit Zugang zum Modul, nie
     in einem gemeinsamen Zwischenspeicher. Skripte sind auch in einem PDF oder SVG wirkungslos."""
-    if art not in ("orig", "web", "thumb", "dok"):
+    if art not in ("orig", "web", "thumb", "dok", "anhang"):
         abort(404)
     if not current_user():
         abort(401)
@@ -193,7 +210,7 @@ def suche():
 @requires_folder("lesen")
 def faellig():
     nur = request.args.get("status") or ""
-    stati = tuple(s for s in nur.split(",") if s in st.STATUS) or ("ueberfaellig", "bald_faellig")
+    stati = tuple(s for s in nur.split(",") if s in st.STATUS) or bestand.FAELLIG
     seite, pro_seite = _seite_args()
     ordner_id = request.args.get("ordner", type=int)
     if ordner_id:
@@ -492,3 +509,159 @@ def artikel_verschieben():
                 raise Abgelehnt("Mindestens einen der Artikel darfst du nicht verschieben.", 403)
     n = bestand.artikel_verschieben(ids, ziel)
     return jsonify(ok=True, verschoben=n)
+
+
+# --- Schnittstelle: Prüfungen ------------------------------------------------------------------------------
+
+def _pruefer():
+    return pruefung.pruefer_aus(current_user())
+
+
+def _pruefung_antwort(pid, code=200):
+    return jsonify(pruefung=pruefung.pruefung_json(pruefung.pruefung(pid), current_user()["id"])), code
+
+
+@api.get("/artikel/<int:iid>/pruefungen")
+@requires_folder("lesen", quelle="iid")
+def artikel_pruefungen(iid):
+    return jsonify(pruefungen=pruefung.fuer_artikel(iid))
+
+
+@api.post("/artikel/<int:iid>/pruefungen")
+@requires_folder("pruefen", quelle="iid")
+def pruefung_starten(iid):
+    d = json_body()
+    rid = kennung(d.get("durchgang_id"), "Prüfdurchgang", leer_erlaubt=True)
+    pid, neu = pruefung.starten(iid, _pruefer(), d.get("art") or None, rid)
+    return _pruefung_antwort(pid, 201 if neu else 200)
+
+
+@api.get("/pruefungen/<int:pid>")
+@requires_folder("lesen", quelle="pid")
+def pruefung_lesen(pid):
+    return _pruefung_antwort(pid)
+
+
+@api.put("/pruefungen/<int:pid>")
+@requires_folder("pruefen", quelle="pid")
+def pruefung_kopf(pid):
+    pruefung.kopf_setzen(pid, json_body(), _pruefer())
+    return _pruefung_antwort(pid)
+
+
+@api.put("/pruefungen/<int:pid>/punkte/<int:rid>")
+@requires_folder("pruefen", quelle="pid")
+def punkt_setzen(pid, rid):
+    return jsonify(punkt=pruefung.punkt_setzen(pid, rid, json_body(), _pruefer()))
+
+
+@api.post("/pruefungen/<int:pid>/punkte/<int:rid>/foto")
+@requires_folder("pruefen", quelle="pid")
+def punkt_foto(pid, rid):
+    return jsonify(punkt=pruefung.punkt_foto_setzen(pid, rid, request.files.get("file"), _pruefer()))
+
+
+@api.delete("/pruefungen/<int:pid>/punkte/<int:rid>/foto")
+@requires_folder("pruefen", quelle="pid")
+def punkt_foto_entfernen(pid, rid):
+    return jsonify(punkt=pruefung.punkt_foto_entfernen(pid, rid, _pruefer()))
+
+
+@api.post("/pruefungen/<int:pid>/anhaenge")
+@requires_folder("pruefen", quelle="pid")
+def anhang_neu(pid):
+    a = pruefung.anhang_hinzufuegen(pid, request.form, request.files.getlist("file"), _pruefer())
+    return jsonify(anhang=a), 201
+
+
+@api.delete("/pruefungen/<int:pid>/anhaenge/<int:aid>")
+@requires_folder("pruefen", quelle="pid")
+def anhang_entfernen(pid, aid):
+    pruefung.anhang_entfernen(pid, aid, _pruefer())
+    return jsonify(ok=True)
+
+
+@api.post("/pruefungen/<int:pid>/abschliessen")
+@requires_folder("pruefen", quelle="pid")
+def pruefung_abschliessen(pid):
+    pruefung.abschliessen(pid, json_body(), _pruefer())
+    return _pruefung_antwort(pid)
+
+
+@api.delete("/pruefungen/<int:pid>")
+@requires_folder(("pruefen", "verwalten"), quelle="pid")
+def pruefung_verwerfen(pid):
+    """Den eigenen Entwurf verwerfen – oder als Materialwart eine liegen gebliebene Reservierung freigeben."""
+    pruefung.verwerfen(pid, _pruefer(), darf_freigeben=darf("verwalten", g.mat_ordner_id))
+    return jsonify(ok=True)
+
+
+@api.get("/entwuerfe")
+@requires_folder("lesen")
+def entwuerfe():
+    return jsonify(entwuerfe=pruefung.entwuerfe(current_user()["id"]))
+
+
+@api.post("/artikel/<int:iid>/sperren")
+@requires_folder("pruefen", quelle="iid")
+def artikel_sperren(iid):
+    pruefung.sperren(iid, json_body(), _pruefer())
+    return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True))
+
+
+@api.post("/artikel/<int:iid>/aussondern")
+@requires_folder("verwalten", quelle="iid")
+def artikel_aussondern(iid):
+    pruefung.aussondern(iid, json_body(), _pruefer())
+    return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True))
+
+
+# --- Schnittstelle: Prüfdurchgänge ---------------------------------------------------------------------------
+
+@api.get("/durchgaenge")
+@requires_folder("lesen")
+def durchgaenge():
+    return jsonify(durchgaenge=durchgang.liste(nur_offen=request.args.get("offen") == "1"))
+
+
+@api.post("/durchgaenge")
+@requires_folder(("verwalten", "pruefen"), quelle="json:folder_id")
+def durchgang_eroeffnen():
+    d = json_body()
+    rid = durchgang.eroeffnen(kennung(d.get("folder_id"), "Ordner"), d, _pruefer())
+    return jsonify(durchgang=durchgang.durchgang_json(durchgang.runde(rid))), 201
+
+
+@api.get("/durchgaenge/<int:rid>")
+@requires_folder("lesen", quelle="rid")
+def durchgang_lesen(rid):
+    return jsonify(durchgang=durchgang.durchgang_json(durchgang.runde(rid), voll=True, pruefer_id=current_user()["id"]))
+
+
+@api.post("/durchgaenge/<int:rid>/ausnehmen")
+@requires_folder(("verwalten", "pruefen"), quelle="rid")
+def durchgang_ausnehmen(rid):
+    d = json_body()
+    durchgang.ausnehmen(rid, kennung(d.get("item_id"), "Artikel"), d, _pruefer())
+    return jsonify(ok=True)
+
+
+@api.post("/durchgaenge/<int:rid>/einbeziehen")
+@requires_folder(("verwalten", "pruefen"), quelle="rid")
+def durchgang_einbeziehen(rid):
+    durchgang.einbeziehen(rid, kennung(json_body().get("item_id"), "Artikel"))
+    return jsonify(ok=True)
+
+
+@api.post("/durchgaenge/<int:rid>/abschliessen")
+@requires_folder(("verwalten", "pruefen"), quelle="rid")
+def durchgang_abschliessen(rid):
+    durchgang.abschliessen(rid, _pruefer())
+    return jsonify(durchgang=durchgang.durchgang_json(durchgang.runde(rid)))
+
+
+@api.delete("/durchgaenge/<int:rid>")
+@requires_folder(("verwalten", "pruefen"), quelle="rid")
+def durchgang_loeschen(rid):
+    durchgang.loeschen(rid)
+    return jsonify(ok=True)

@@ -1,35 +1,46 @@
 """Fälligkeiten nachziehen, wenn das wirksame Prüfintervall kürzer wird.
 
-Ohne Prüfung liegt eine Fälligkeit höchstens „heute + wirksames Intervall“ in der Zukunft – so beim
-Anlegen eines Artikels. Wird das Intervall danach kürzer (anderes Produkt, kürzere Vorgabe an Artikel,
-Ordner, Produkt oder Kategorie, Verschieben in einen strengeren Ordner), gilt dieselbe Grenze: Eine
-Fälligkeit dahinter wird auf die Grenze vorgezogen und im Journal des Artikels vermerkt. Nach hinten
-schiebt diese Regel nie etwas – später setzt eine Fälligkeit nur eine Prüfung.
+Wird das Intervall kürzer (anderes Produkt, kürzere Vorgabe an Artikel, Ordner, Produkt oder Kategorie,
+Verschieben in einen strengeren Ordner), gilt als Grenze „letzte Prüfung + neues Intervall“ – ohne Prüfung
+„heute + neues Intervall“ wie beim Anlegen. Eine Fälligkeit dahinter wird auf die Grenze vorgezogen und
+im Journal des Artikels vermerkt; liegt die Grenze schon zurück, ist der Artikel damit überfällig. Nach
+hinten schiebt diese Regel nie etwas – später setzt eine Fälligkeit nur eine Prüfung.
 
 Ausgesonderte Artikel bleiben, wie sie sind; eine fehlende Fälligkeit bleibt fehlend (der Artikel ist
 damit überfällig – ein Lückenfüller würde ihn ohne Prüfung einsatzbereit machen)."""
+from datetime import date
+
 from ... import db
 from . import journal
-from .interval import spaetestens, wirksam
+from .interval import plus_monate, spaetestens, wirksam
 
 
 def kappen(bedingung, args=()):
     """Fälligkeiten der Artikel, auf die die SQL-Bedingung (über i = mat_item, p = mat_product) passt,
-    auf heute + wirksames Intervall begrenzen. Liefert die Zahl der vorgezogenen Artikel. Läuft in der
-    Transaktion des Aufrufers mit."""
+    auf letzte Prüfung (ohne Prüfung: heute) + wirksames Intervall begrenzen. Liefert die Zahl der
+    vorgezogenen Artikel. Läuft in der Transaktion des Aufrufers mit."""
     zeilen = db.query(
-        "SELECT i.id, i.folder_id, i.next_due_on, i.interval_months AS i_int, p.interval_months AS p_int, "
+        "SELECT i.id, i.folder_id, i.origin_folder_id, i.lock_state, i.next_due_on, i.last_inspected_on, "
+        "i.interval_months AS i_int, p.interval_months AS p_int, "
         "p.category_id FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
         f"WHERE i.lock_state <> 'ausgesondert' AND i.next_due_on IS NOT NULL AND ({bedingung})", args)
     vorgezogen = 0
     for z in zeilen:
-        iv = wirksam({"interval_months": z["p_int"], "category_id": z["category_id"]}, z["folder_id"], z["i_int"])
-        grenze = spaetestens(iv["monate"])
+        # Gesperrte liegen in „Gesperrt“; ihr Intervall kommt aus dem Herkunftsordner (wie bei der Prüfung).
+        ordner = z["origin_folder_id"] if z["lock_state"] in ("gesperrt", "verloren") and z["origin_folder_id"] else z["folder_id"]
+        iv = wirksam({"interval_months": z["p_int"], "category_id": z["category_id"]}, ordner, z["i_int"])
+        if not iv["monate"]:
+            continue
+        if z["last_inspected_on"]:
+            grenze = plus_monate(date.fromisoformat(z["last_inspected_on"]), iv["monate"]).isoformat()
+            grund = f"kürzeres Prüfintervall ({iv['monate']} Monate, {iv['quelle']}) ab der letzten Prüfung"
+        else:
+            grenze = spaetestens(iv["monate"])
+            grund = f"kürzeres Prüfintervall ({iv['monate']} Monate, {iv['quelle']})"
         if grenze and z["next_due_on"] > grenze:
             db.execute("UPDATE mat_item SET next_due_on = ?, updated_at = ? WHERE id = ?", (grenze, db.now(), z["id"]))
             journal.eintragen("item", z["id"], "faelligkeit", {"next_due_on": z["next_due_on"]},
-                              {"next_due_on": grenze, "grund": f"kürzeres Prüfintervall ({iv['monate']} Monate, "
-                                                              f"{iv['quelle']})"})
+                              {"next_due_on": grenze, "grund": grund})
             vorgezogen += 1
     return vorgezogen
 

@@ -4,11 +4,22 @@
 <link rel="stylesheet" href="{{ url_for('material.static', filename='material.css') }}">
 {% endblock %}
 {% block body %}
-{# Eine Seite für alle Ansichten des Moduls (Dashboard, Prüfungen, Bestand, Katalog, Suche, Artikel …).
+{# Eine Seite für alle Ansichten des Moduls (Dashboard, Prüfungen, Bestand, Katalog, Suche, Artikel, Prüfung,
+   Prüfdurchgang …).
    Welche gemeint ist, sagt data-ansicht; was das Konto darf, data-darf – die Oberfläche blendet danach
    nur aus, der Server prüft jede Aktion selbst. Den Inhalt baut material.js aus /api/material. #}
+<div class="mat-shell" id="mat-shell">
+{# Ordnerleiste links (material.js füllt sie): in den Ansichten des Bestands neben dem Inhalt, auf schmalen
+   Bildschirmen als Schublade hinter „☰ Ordner“ – wie die Seitenleiste im Wiki. #}
+<aside class="mat-side" id="mat-side" aria-label="Ordner" hidden>
+  <div class="mat-side-kopf"><a href="/material/bestand">Ordner</a>
+    <button class="lnk mat-side-zu" type="button" id="mat-side-zu" aria-label="Ordnerleiste schließen">✕</button></div>
+  <div id="mat-baumnav"><p class="help">Wird geladen …</p></div>
+</aside>
 <main class="page breit mat" id="mat" data-ansicht="{{ ansicht }}" data-daten="{{ daten }}" data-darf="{{ darf }}">
   <nav class="mat-nav" aria-label="Modul Material">
+    <button class="btn secondary small mat-side-auf" type="button" id="mat-side-auf" aria-controls="mat-side"
+            aria-expanded="false">☰ Ordner</button>
     <a href="/material" data-nav="dashboard">Übersicht</a>
     <a href="/material/pruefungen" data-nav="pruefungen">Prüfungen</a>
     <a href="/material/bestand" data-nav="bestand">Bestand</a>
@@ -21,6 +32,7 @@
   </nav>
   <div id="mat-inhalt"><p class="help">Wird geladen …</p></div>
 </main>
+</div>
 <dialog id="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('material.static', filename='material.js') }}"></script>{% endblock %}

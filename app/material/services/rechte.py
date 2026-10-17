@@ -72,6 +72,7 @@ def darf_alles(user=None):
     user = user or current_user()
     return {"lesen": darf("lesen", user=user), "verwalten": darf("verwalten", user=user),
             "pruefen": darf("pruefen", user=user), "katalog": ist_katalogpfleger(user),
+            "uid": user["id"] if user else None,
             "urkundennummer": (user["urkundennummer"] or "") if user else "",
             "unterschrift": bool(user and user["signature_png"])}
 
@@ -85,6 +86,17 @@ def _ordner_aus_anfrage(quelle, kwargs):
         if not row:
             raise Abgelehnt("Artikel nicht gefunden.", 404)
         return row["folder_id"]
+    if quelle == "pid":
+        row = db.query("SELECT i.folder_id FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id WHERE x.id = ?",
+                       (kwargs.get("pid"),), one=True)
+        if not row:
+            raise Abgelehnt("Prüfung nicht gefunden.", 404)
+        return row["folder_id"]
+    if quelle == "rid":
+        row = db.query("SELECT folder_id FROM mat_round WHERE id = ?", (kwargs.get("rid"),), one=True)
+        if not row:
+            raise Abgelehnt("Prüfdurchgang nicht gefunden.", 404)
+        return row["folder_id"]
     if quelle and quelle.startswith("json:"):
         d = request.get_json(silent=True)
         wert = d.get(quelle[5:]) if isinstance(d, dict) else None
@@ -94,10 +106,13 @@ def _ordner_aus_anfrage(quelle, kwargs):
 
 def requires_folder(berechtigung, quelle=None):
     """Decorator für Routen, die einen Ordner betreffen: angemeldet, Berechtigung im Ordner (geerbt
-    von allen darüberliegenden), sonst 401/403. quelle sagt, woher der Ordner kommt: "fid" (Route),
-    "iid" (Artikel der Route), "json:<feld>" (Anfrage) oder None (ganzer Bestand). Der gefundene
-    Ordner steht danach in g.mat_ordner_id."""
-    if berechtigung not in BERECHTIGUNGEN:
+    von allen darüberliegenden), sonst 401/403. berechtigung ist eine aus BERECHTIGUNGEN oder ein Tupel
+    davon (eine genügt – „Materialwart oder Prüfer“). quelle sagt, woher der Ordner kommt: "fid"
+    (Route), "iid" (Artikel der Route), "pid" (Prüfung der Route), "rid" (Prüfdurchgang der Route),
+    "json:<feld>" (Anfrage) oder None (ganzer Bestand). Der gefundene Ordner steht danach in
+    g.mat_ordner_id."""
+    erlaubt = berechtigung if isinstance(berechtigung, tuple) else (berechtigung,)
+    if not erlaubt or any(b not in BERECHTIGUNGEN for b in erlaubt):
         raise ValueError(berechtigung)
 
     def deko(f):
@@ -113,7 +128,7 @@ def requires_folder(berechtigung, quelle=None):
                 ordner_id = _ordner_aus_anfrage(quelle, kw)
             except Abgelehnt as exc:
                 return jsonify(error=str(exc)), exc.code
-            if not darf(berechtigung, ordner_id):
+            if not any(darf(b, ordner_id) for b in erlaubt):
                 return jsonify(error=_meldung(berechtigung)), 403
             g.mat_ordner_id = ordner_id
             return f(*a, **kw)
@@ -122,6 +137,8 @@ def requires_folder(berechtigung, quelle=None):
 
 
 def _meldung(berechtigung):
+    if berechtigung == ("verwalten", "pruefen") or berechtigung == ("pruefen", "verwalten"):
+        return "Nur für Materialwarte und Prüfer mit Urkundennummer."
     if berechtigung == "pruefen":
         return "Nur für Prüfer mit hinterlegter Urkundennummer."
     if berechtigung == "verwalten":

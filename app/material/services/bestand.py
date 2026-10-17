@@ -13,6 +13,8 @@ Regeln aus dem Konzept, wie sie hier umgesetzt sind:
     Vorschlag aus dem Intervall (interval.py); höher als „heute + ein Intervall“ geht es ohne Prüfung
     nicht, und danach wird sie nur noch vorgezogen – später setzt sie allein eine Prüfung.
 """
+import hashlib
+import json
 from datetime import date
 
 from ... import db
@@ -388,8 +390,18 @@ def artikel_anlegen(d):
     return iid
 
 
+def stand_von(i):
+    """Fingerabdruck einer Artikelzeile: ändert sich mit jedem Feld – genauer als updated_at, das nur
+    sekundengenau ist."""
+    return hashlib.sha256(json.dumps(dict(i), sort_keys=True, default=str).encode()).hexdigest()[:20]
+
+
 def artikel_aendern(iid, d):
     alt = artikel(iid)
+    # Der Dialog schickt den Stand mit, den er geladen hat. Hat sich der Artikel seitdem geändert (eine
+    # Prüfung, eine Sperre), überschriebe er sonst still deren Ergebnis – etwa die neue Fälligkeit.
+    if d.get("stand") and d.get("stand") != stand_von(alt):
+        raise Abgelehnt("Der Artikel wurde inzwischen geändert (etwa durch eine Prüfung). Bitte neu laden.", 409)
     if alt["lock_state"] == "ausgesondert":
         raise Abgelehnt("Ein ausgesonderter Artikel bleibt, wie er ist.", 409)
     if "folder_id" in d and d.get("folder_id") != alt["folder_id"]:
@@ -434,6 +446,8 @@ def artikel_aendern(iid, d):
             raise Abgelehnt("Die nächste Prüfung lässt sich nicht löschen.")
         if alt["next_due_on"] and w["next_due_on"] > alt["next_due_on"]:
             raise Abgelehnt(VORZIEHEN)
+        if alt.get("last_inspected_on") and w["next_due_on"] <= alt["last_inspected_on"]:
+            raise Abgelehnt(f"Die nächste Prüfung muss nach der letzten Prüfung ({alt['last_inspected_on']}) liegen.")
         if w["next_due_on"] > grenze:
             raise Abgelehnt(f"Ohne Prüfung liegt die nächste Fälligkeit höchstens ein Intervall in der Zukunft "
                             f"(spätestens {grenze}).")
@@ -456,18 +470,22 @@ def artikel_verschieben(ids, ziel_id):
     if not isinstance(ids, list) or not ids or len(ids) > 500:
         raise Abgelehnt("Bitte 1 bis 500 Artikel auswählen.")
     ids = [kennung(x, "Artikel") for x in ids]
-    ablageordner_pruefen(ziel_id)
-    zeilen = db.query(f"SELECT * FROM mat_item WHERE id IN ({','.join('?' * len(ids))})", ids)
-    if len(zeilen) != len(set(ids)):
-        raise Abgelehnt("Mindestens ein Artikel wurde nicht gefunden.", 404)
-    if any(z["lock_state"] != "frei" for z in zeilen):
-        raise Abgelehnt(GESPERRT_BLEIBT, 409)
-    ziel_text = _pfad_text(ziel_id)
-    with db.transaction():
+    # Prüfen und Schreiben unter einer Sperre: Eine Sperre, die dazwischen fertig wird, holte den Artikel
+    # sonst wieder aus „Gesperrt“ heraus.
+    with db.transaction(sofort=True):
+        ablageordner_pruefen(ziel_id)
+        zeilen = db.query(f"SELECT * FROM mat_item WHERE id IN ({','.join('?' * len(ids))})", ids)
+        if len(zeilen) != len(set(ids)):
+            raise Abgelehnt("Mindestens ein Artikel wurde nicht gefunden.", 404)
+        if any(z["lock_state"] != "frei" for z in zeilen):
+            raise Abgelehnt(GESPERRT_BLEIBT, 409)
+        ziel_text = _pfad_text(ziel_id)
         for z in zeilen:
             if z["folder_id"] == ziel_id:
                 continue
-            db.execute("UPDATE mat_item SET folder_id = ?, updated_at = ? WHERE id = ?", (ziel_id, db.now(), z["id"]))
+            if not db.execute_zeilen("UPDATE mat_item SET folder_id = ?, updated_at = ? WHERE id = ? AND lock_state = 'frei'",
+                                     (ziel_id, db.now(), z["id"])):
+                raise Abgelehnt(GESPERRT_BLEIBT, 409)
             journal.eintragen("item", z["id"], "verschoben",
                               {"folder_id": z["folder_id"], "ordner": _pfad_text(z["folder_id"])},
                               {"folder_id": ziel_id, "ordner": ziel_text})
@@ -478,18 +496,21 @@ def artikel_verschieben(ids, ziel_id):
 def artikel_loeschen(iid):
     """Nur ein falsch angelegter Artikel ohne Prüfung lässt sich löschen; seine Inventarnummer wird nie
     wieder vergeben. Alles andere wird ausgesondert, nicht gelöscht."""
-    alt = artikel(iid)
-    if db.query("SELECT 1 FROM mat_inspection WHERE item_id = ? LIMIT 1", (iid,), one=True):
-        raise Abgelehnt("Der Artikel hat Prüfungen und bleibt mit seinem Lebenslauf – aussondern statt löschen.", 409)
-    if db.query("SELECT 1 FROM mat_round_item WHERE item_id = ? LIMIT 1", (iid,), one=True):
-        raise Abgelehnt("Der Artikel steht in einem Prüfdurchgang und bleibt.", 409)
-    with db.transaction():
+    with db.transaction(sofort=True):
+        alt = artikel(iid)
+        if db.query("SELECT 1 FROM mat_inspection WHERE item_id = ? LIMIT 1", (iid,), one=True):
+            raise Abgelehnt("Der Artikel hat Prüfungen und bleibt mit seinem Lebenslauf – aussondern statt löschen.", 409)
+        if db.query("SELECT 1 FROM mat_round_item WHERE item_id = ? LIMIT 1", (iid,), one=True):
+            raise Abgelehnt("Der Artikel steht in einem Prüfdurchgang und bleibt.", 409)
         db.execute("DELETE FROM mat_item WHERE id = ?", (iid,))
         journal.eintragen("item", iid, "geloescht", dict(alt, ordner=_pfad_text(alt["folder_id"])), None)
 
 
+# Mit dem offenen Entwurf (höchstens einer je Artikel): Listen zeigen „in Prüfung bei …“.
 ARTIKEL_LISTE_SQL = ("SELECT i.*, p.manufacturer, p.model, p.article_no, p.material_kind, p.image AS product_image, "
-                     "p.demo AS product_demo FROM mat_item i JOIN mat_product p ON p.id = i.product_id ")
+                     "p.demo AS product_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "
+                     "e.inspector_user_id AS entwurf_pruefer_id FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
+                     "LEFT JOIN mat_inspection e ON e.item_id = i.id AND e.completed_at IS NULL ")
 
 
 def artikel_kurz(i, stichtag=None):
@@ -501,7 +522,9 @@ def artikel_kurz(i, stichtag=None):
             "article_no": i.get("article_no"), "material_kind": i.get("material_kind"),
             "vorschau": katalog.bild_url(i.get("product_image"), "thumb"), "demo": bool(i.get("product_demo")),
             "next_due_on": i["next_due_on"], "retire_by": i["retire_by"], "lock_state": i["lock_state"],
-            "status": s, "status_text": st.LABEL[s]}
+            "last_inspected_on": i.get("last_inspected_on"), "status": s, "status_text": st.LABEL[s],
+            "entwurf": ({"id": i["entwurf_id"], "pruefer": i.get("entwurf_pruefer"),
+                         "pruefer_id": i.get("entwurf_pruefer_id")} if i.get("entwurf_id") else None)}
 
 
 def artikel_json(i, voll=False):
@@ -511,8 +534,10 @@ def artikel_json(i, voll=False):
     gl = gliederung_von(i["folder_id"])
     out = {f: i[f] for f in ("id", "product_id", "folder_id", "origin_folder_id", "serial_no", "inventory_no",
                              "manufactured_on", "purchased_on", "first_use_on", "retire_by", "lock_state",
-                             "lock_reason", "next_due_on", "interval_months", "notes", "created_at", "updated_at")}
+                             "lock_reason", "next_due_on", "interval_months", "notes", "created_at", "updated_at",
+                             "last_inspected_on")}
     out["serial_generated"] = bool(i["serial_generated"])
+    out["stand"] = stand_von(i)
     out["status"], out["status_text"] = s, st.LABEL[s]
     out["produkt"] = katalog.produkt_json(p)
     out["pfad"] = pfad(i["folder_id"])
@@ -534,9 +559,17 @@ def artikel_json(i, voll=False):
         f = katalog.formular_fuer_produkt(p["id"])
         out["formular"] = ({"id": f["id"], "version": f["version"], "title": f["title"], "quelle": f["quelle"],
                             "punkte": f["punkte_anzahl"]} if f else None)
-        out["pruefungen"] = []          # Lebenslauf der Prüfungen: Lieferung 2
-        out["darf_loeschen"] = not db.query("SELECT 1 FROM mat_inspection WHERE item_id = ? LIMIT 1", (i["id"],),
-                                            one=True)
+        from . import durchgang, pruefung
+        out["pruefungen"] = pruefung.fuer_artikel(i["id"])
+        e = pruefung.offener_entwurf(i["id"])
+        out["entwurf"] = ({"id": e["id"], "pruefer": e["inspector_name"], "pruefer_id": e["inspector_user_id"],
+                           "seit": e["created_at"], "art": e["kind"]} if e else None)
+        if i["lock_state"] != "ausgesondert":
+            arten, vorschlag = pruefung.arten_fuer(i)
+            out["pruefarten"] = {"arten": arten, "vorschlag": vorschlag}
+        rid = durchgang.offene_runde_fuer(i["id"])
+        out["durchgang"] = ({"id": rid, "titel": durchgang.runde(rid)["title"]} if rid else None)
+        out["darf_loeschen"] = not out["pruefungen"]
     return out
 
 
@@ -570,8 +603,12 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100):
     return out
 
 
-def faellige(ordner_id=None, nur=("ueberfaellig", "bald_faellig"), seite=1, pro_seite=100):
-    """Artikel, die geprüft werden müssen – überfällige zuerst, dann nach Datum."""
+FAELLIG = ("ueberfaellig", "neu", "bald_faellig")
+
+
+def faellige(ordner_id=None, nur=FAELLIG, seite=1, pro_seite=100):
+    """Artikel, die geprüft werden müssen – überfällige zuerst, dann neue (Eingangsprüfung), dann nach
+    Datum."""
     params = st.parameter()
     bedingungen = [f"{st.status_sql('i')} IN ({','.join(':n' + str(k) for k in range(len(nur)))})"]
     params.update({f"n{k}": s for k, s in enumerate(nur)})
@@ -581,8 +618,11 @@ def faellige(ordner_id=None, nur=("ueberfaellig", "bald_faellig"), seite=1, pro_
         params.update({f"f{k}": fid for k, fid in enumerate(ids)})
     where = "WHERE " + " AND ".join(bedingungen)
     gesamt = db.query(f"SELECT COUNT(*) AS n FROM mat_item i {where}", params, one=True)["n"]
-    rows = db.query(ARTIKEL_LISTE_SQL + where + " ORDER BY i.next_due_on IS NOT NULL, i.next_due_on, i.inventory_no "
-                    "LIMIT :lim OFFSET :off", dict(params, lim=pro_seite, off=(max(1, seite) - 1) * pro_seite))
+    reihe = (f"CASE {st.status_sql('i')} WHEN 'ueberfaellig' THEN 0 WHEN 'lebensdauer' THEN 1 WHEN 'neu' THEN 2 "
+             f"WHEN 'bald_faellig' THEN 3 ELSE 4 END")
+    rows = db.query(ARTIKEL_LISTE_SQL + where + f" ORDER BY {reihe}, i.next_due_on IS NOT NULL, i.next_due_on, "
+                    "i.inventory_no LIMIT :lim OFFSET :off",
+                    dict(params, lim=pro_seite, off=(max(1, seite) - 1) * pro_seite))
     liste = []
     for r in rows:
         k = artikel_kurz(r)

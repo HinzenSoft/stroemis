@@ -8,6 +8,8 @@ Rangfolge (das Schwerste gewinnt):
   ausgesondert        lock_state = ausgesondert
   gesperrt            lock_state = gesperrt oder verloren
   lebensdauer         retire_by liegt heute oder davor (nur textiles Material hat ein retire_by)
+  neu                 noch keine abgeschlossene Prüfung (last_inspected_on fehlt): Die Eingangsprüfung
+                      steht aus – vorher ist nichts einsatzbereit, auch nicht mit Fälligkeit in der Zukunft
   ueberfaellig        next_due_on liegt vor heute – oder fehlt
   bald_faellig        next_due_on liegt innerhalb der Schwelle (Einstellung, Vorgabe 30 Tage)
   einsatzbereit       sonst
@@ -18,9 +20,9 @@ from flask import current_app, has_app_context
 
 from . import heute as _heute
 
-STATUS = ("einsatzbereit", "bald_faellig", "ueberfaellig", "gesperrt", "lebensdauer", "ausgesondert")
+STATUS = ("einsatzbereit", "bald_faellig", "ueberfaellig", "neu", "gesperrt", "lebensdauer", "ausgesondert")
 LABEL = {"einsatzbereit": "einsatzbereit", "bald_faellig": "bald fällig", "ueberfaellig": "überfällig",
-         "gesperrt": "gesperrt", "lebensdauer": "Lebensdauer erreicht", "ausgesondert": "ausgesondert"}
+         "neu": "neu", "gesperrt": "gesperrt", "lebensdauer": "Lebensdauer erreicht", "ausgesondert": "ausgesondert"}
 # Was als Bestand zählt: alles, was nicht ausgesondert ist. Ein ausgesonderter Artikel bleibt mit
 # seinem Lebenslauf sichtbar, taucht aber in keiner Bestandszahl mehr auf.
 BESTAND = tuple(s for s in STATUS if s != "ausgesondert")
@@ -44,7 +46,7 @@ def _iso(d):
 
 
 def status(item, stichtag=None, schwelle=None):
-    """Status eines Artikels (dict oder Zeile mit lock_state, next_due_on, retire_by)."""
+    """Status eines Artikels (dict mit lock_state, last_inspected_on, next_due_on, retire_by)."""
     stichtag = stichtag or _heute()
     schwelle = schwelle_tage() if schwelle is None else schwelle
     h = _iso(stichtag)
@@ -56,6 +58,8 @@ def status(item, stichtag=None, schwelle=None):
         return "gesperrt"
     if item["retire_by"] and item["retire_by"] <= h:
         return "lebensdauer"
+    if not item.get("last_inspected_on"):
+        return "neu"
     if not item["next_due_on"] or item["next_due_on"] < h:
         return "ueberfaellig"
     if item["next_due_on"] <= bald:
@@ -69,6 +73,7 @@ def status_sql(alias="i"):
     return (f"(CASE WHEN {a}.lock_state = 'ausgesondert' THEN 'ausgesondert' "
             f"WHEN {a}.lock_state IN ('gesperrt', 'verloren') THEN 'gesperrt' "
             f"WHEN {a}.retire_by IS NOT NULL AND {a}.retire_by <= :st_heute THEN 'lebensdauer' "
+            f"WHEN {a}.last_inspected_on IS NULL THEN 'neu' "
             f"WHEN {a}.next_due_on IS NULL OR {a}.next_due_on < :st_heute THEN 'ueberfaellig' "
             f"WHEN {a}.next_due_on <= :st_bald THEN 'bald_faellig' "
             f"ELSE 'einsatzbereit' END)")

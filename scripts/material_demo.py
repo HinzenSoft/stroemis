@@ -96,10 +96,11 @@ def main():
                 print("FEHLER", f)
             sys.exit(1)
         print("Katalog:", {k: v for k, v in bericht.items() if k in ("kategorien", "produkte", "formulare")})
+        g.mat_akteur = "Demodaten"
         if db.query("SELECT 1 FROM mat_folder WHERE demo = 1 LIMIT 1", one=True):
             print("Demo-Bestand ist schon da – nichts weiter angelegt.")
+            demo_pruefungen()
             return
-        g.mat_akteur = "Demodaten"
         produkt = {p["model"]: p["id"] for p in db.query("SELECT id, model FROM mat_product WHERE demo = 1")}
         gl = bestand.ordner_anlegen({"name": "DEMO-Gliederung", "kind": "gliederung",
                                      "description": HINWEIS}, demo=True)
@@ -124,6 +125,51 @@ def main():
             bestand.artikel_anlegen(dict(felder, product_id=produkt[modell], folder_id=ordner_id,
                                          notes=HINWEIS))
         print(f"Bestand: {len(artikel)} Artikel in DEMO-Gliederung angelegt.")
+        demo_pruefungen()
+
+
+# Eingangsprüfungen für die Demo – zurückdatiert, damit jeder Status einmal vorkommt. Schlüssel: Modell und
+# Seriennummer (None = der erste Artikel des Modells ohne eigene Nummer), Wert: (vor wie vielen Tagen, Ergebnis).
+# Ein Artikel bleibt ohne Prüfung („neu“), der Helm ebenso – für ihn gibt es kein DEMO-Formular.
+DEMO_PRUEFUNGEN = [
+    ("DEMO Gurt A", 200, "einsatzbereit"),            # Lager: noch lange gültig
+    ("DEMO Gurt A", 170, "einsatzbereit"),            # Seilrucksack (Fahrzeug, 6 Monate): bald fällig
+    ("DEMO Statikseil 11 mm", 500, "einsatzbereit"),  # überfällig
+    ("DEMO HMS-Karabiner", 30, "instandsetzen"),      # gesperrt
+    ("DEMO HMS-Karabiner", 0, "einsatzbereit"),       # das Exemplar DEMO-K-0815
+    ("DEMO Rettungsweste", 20, "einsatzbereit"),
+]
+
+
+def demo_pruefungen():
+    """DEMO-Eingangsprüfungen – einmal: Gibt es schon eine Prüfung an einem DEMO-Artikel, bleibt alles, wie es
+    ist (ein Bestand aus Lieferung 1 bekommt sie beim nächsten Lauf nachgereicht)."""
+    from app import db
+    from app.material.services import pruefung
+    if db.query("SELECT 1 FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id JOIN mat_product p ON "
+                "p.id = i.product_id WHERE p.demo = 1 LIMIT 1", one=True):
+        print("DEMO-Prüfungen sind schon da – nichts weiter angelegt.")
+        return
+    pruefer = {"id": None, "name": "DEMO-Prüfer", "urkunde": "DEMO"}
+    offen = db.query("SELECT i.id, i.serial_no, i.retire_by, p.model FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
+                     "WHERE p.demo = 1 AND i.lock_state = 'frei' AND NOT EXISTS (SELECT 1 FROM mat_inspection x WHERE "
+                     "x.item_id = i.id) ORDER BY i.id")
+    h = date.today()
+    angelegt = 0
+    for modell, tage, ergebnis in DEMO_PRUEFUNGEN:
+        kandidaten = [i for i in offen if i["model"] == modell and not (i["retire_by"] and i["retire_by"] <= h.isoformat())]
+        if not kandidaten:
+            continue
+        i = next((x for x in kandidaten if x["serial_no"] == "DEMO-K-0815"), None) if tage == 0 else None
+        i = i or next(x for x in kandidaten if x["serial_no"] != "DEMO-K-0815")
+        offen.remove(i)
+        pid, _ = pruefung.starten(i["id"], pruefer)
+        d = {"ergebnis": ergebnis, "bemerkung": HINWEIS}
+        if ergebnis != "einsatzbereit":
+            d["grund"] = "DEMO: Verschluss schließt schwer (Platzhalter)"
+        pruefung.abschliessen(pid, d, pruefer, pruefdatum=h - timedelta(days=tage))
+        angelegt += 1
+    print(f"Prüfungen: {angelegt} DEMO-Eingangsprüfungen angelegt.")
 
 
 if __name__ == "__main__":

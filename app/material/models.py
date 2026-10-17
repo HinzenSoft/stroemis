@@ -2,8 +2,16 @@
 die Migrationsschritte, die beim Start laufen (siehe db.SCHEMA_MODULE).
 
 Alle Tabellen entstehen mit Lieferung 1 – auch die, deren Logik erst in Phase 2 kommt (Freigaben je
-Ordner, Erinnerungen). Spätere Lieferungen sollen ohne brechende Migration auskommen: Was dazukommt,
-ist ein weiterer Schritt in SCHRITTE und eine höhere SCHEMA_VERSION, nie ein Umbau einer Tabelle.
+Ordner, Erinnerungen). Was später dazukommt, ist ein weiterer Schritt in SCHRITTE und eine höhere
+SCHEMA_VERSION. Schritt 1 bleibt, wie er ausgeliefert wurde; jeder spätere Schritt baut darauf auf.
+
+Schritt 2 (Lieferung 2) baut mat_inspection und mat_round einmal neu auf: Die Prüfart
+„Eingangsprüfung“ muss in die CHECK-Regel (die ändert SQLite nur mit einer neuen Tabelle), und beide
+bekommen AUTOINCREMENT – ein verworfener Entwurf oder ein gelöschter leerer Durchgang gibt seine Kennung
+sonst an den nächsten weiter, und das unveränderliche Journal hinge am falschen Vorgang. Der Umbau
+übernimmt jede vorhandene Zeile (bis Lieferung 1 konnte ohnehin keine entstehen) und läuft nach dem
+Verfahren aus der SQLite-Dokumentation: Fremdschlüssel aus, neue Tabelle, kopieren, alte löschen,
+umbenennen, Indizes neu, foreign_key_check – alles in einer Transaktion.
 
 Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abweichungen:
   - mat_checklist_item.group_name statt group – „group“ ist ein SQL-Schlüsselwort.
@@ -12,10 +20,14 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
   - mat_category.default_material_kind – ohne sie ließe sich „Lebensdauer nur bei textilen
     Kategorien“ nicht prüfen; mat_product.lifetime_source – „sonstiges nur mit Herstellerangabe“.
   - Namensschnappschüsse (*_name) und demo-Kennzeichen wie im übrigen Bestand.
+  - mat_item.last_inspected_on (Lieferung 2): Tag der letzten abgeschlossenen Prüfung. Fehlt er, hat
+    der Artikel noch keine Eingangsprüfung – sein Status ist „neu“.
+  - mat_inspection.basis_inspection_id (Lieferung 2): Eine Aussonderung, die aus einer Prüfung folgt,
+    verweist auf diese; die Prüfart „eingang“ (Eingangsprüfung) kam dazu.
 """
 import sqlite3
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -30,8 +42,13 @@ DOKUMENTARTEN = {"produktbild": "Produktbild", "konformitaetserklaerung": "Konfo
 EDITOREN = {"yesno": "Ja/Nein", "text": "Text", "date": "Datum", "number": "Zahl", "photo": "Foto",
             "signature": "Unterschrift"}
 SPERRZUSTAENDE = ("frei", "gesperrt", "ausgesondert", "verloren")
-PRUEFARTEN = {"periodisch": "periodisch", "ausserplanmaessig": "außerplanmäßig", "reparatur": "Reparatur",
-              "aussonderung": "Aussonderung"}
+PRUEFARTEN = {"eingang": "Eingangsprüfung", "periodisch": "periodisch", "ausserplanmaessig": "außerplanmäßig",
+              "reparatur": "Reparatur", "aussonderung": "Aussonderung"}
+# Die Prüfarten, mit denen Schritt 1 die Tabelle angelegt hat – Schritt 1 bleibt, wie er ausgeliefert wurde.
+PRUEFARTEN_1 = ("periodisch", "ausserplanmaessig", "reparatur", "aussonderung")
+# Sperre ohne Prüfung (nur Prüfer) und Aussonderung durch den Materialwart: die Gründe zur Auswahl.
+SPERRGRUENDE = {"sturz": "Sturzbelastung", "beschaedigung": "Beschädigung", "verlust": "Verlust"}
+AUSSONDERUNGSGRUENDE = {"lebensdauer": "Lebensdauer erreicht", "verlust": "Verlust", "irreparabel": "irreparabel"}
 ERGEBNISSE = {"einsatzbereit": "einsatzbereit", "instandsetzen": "instandsetzen", "aussondern": "aussondern"}
 BEFUNDE = ("ok", "mangel", "nicht_zutreffend")
 ANHANGARTEN = {"externes_pruefformular": "externes Prüfformular", "pruefbericht": "Prüfbericht", "foto": "Foto",
@@ -236,7 +253,7 @@ SCHRITT_1 = [
       form_id                INTEGER REFERENCES mat_form(id),
       form_version           INTEGER,
       inspected_on           TEXT NOT NULL,
-      kind                   TEXT NOT NULL CHECK (kind IN """ + _in(PRUEFARTEN) + """),
+      kind                   TEXT NOT NULL CHECK (kind IN """ + _in(PRUEFARTEN_1) + """),
       result                 TEXT CHECK (result IN """ + _in(ERGEBNISSE) + """),
       reason                 TEXT NOT NULL DEFAULT '',   -- Grund einer Sperre oder Aussonderung
       remarks                TEXT NOT NULL DEFAULT '',
@@ -372,9 +389,124 @@ VOLLTEXT = [
     "INSERT INTO mat_item_fts(mat_item_fts) VALUES ('rebuild')",
 ]
 
-# Je Version die Schritte, die von der Vorversion dorthin führen. Jeder Schritt ist für sich
-# wiederholbar (IF NOT EXISTS), damit ein abgebrochener Start beim nächsten Mal einfach weiterläuft.
-SCHRITTE = {1: SCHRITT_1}
+# --- Schritt 2: Prüfungen (Lieferung 2) ----------------------------------------------------------------
+# mat_inspection in ihrer neuen Form: Prüfart „eingang“ und basis_inspection_id – eine Aussonderung, die
+# aus einer Prüfung folgt, verweist auf diese. {name} ist beim Umbau zuerst mat_inspection_neu.
+INSPECTION_2 = """CREATE TABLE {name} (
+      id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_id                INTEGER NOT NULL REFERENCES mat_item(id),
+      round_id               INTEGER REFERENCES mat_round(id),
+      protocol_id            TEXT UNIQUE,
+      inspector_user_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      inspector_name         TEXT NOT NULL DEFAULT '',
+      inspector_certificate  TEXT NOT NULL DEFAULT '',   -- Urkundennummer zum Prüfzeitpunkt
+      form_id                INTEGER REFERENCES mat_form(id),
+      form_version           INTEGER,
+      inspected_on           TEXT NOT NULL,
+      kind                   TEXT NOT NULL CHECK (kind IN """ + _in(PRUEFARTEN) + """),
+      result                 TEXT CHECK (result IN """ + _in(ERGEBNISSE) + """),
+      reason                 TEXT NOT NULL DEFAULT '',   -- Grund einer Sperre oder Aussonderung
+      remarks                TEXT NOT NULL DEFAULT '',
+      next_due_on            TEXT,
+      signature_png          BLOB,                       -- Kopie der Profil-Unterschrift
+      corrects_inspection_id INTEGER REFERENCES mat_inspection(id),
+      basis_inspection_id    INTEGER REFERENCES mat_inspection(id),   -- Aussonderung: aus dieser Prüfung
+      documents_json         TEXT NOT NULL DEFAULT '[]', -- zum Prüfzeitpunkt gültige Produktdokumente
+      completed_at           TEXT,                       -- abgeschlossen (Ergebnis wirkt)
+      locked_at              TEXT,                       -- festgeschrieben (unveränderlich)
+      pdf_path               TEXT,
+      pdf_sha256             TEXT,                       -- aufgedruckter Wert
+      pdf_hashed_bytes       INTEGER,                    -- N: so viele Bytes deckt der Wert ab
+      file_sha256            TEXT,                       -- ganze Datei mit Stempel
+      created_at             TEXT NOT NULL,
+      updated_at             TEXT NOT NULL
+    )"""
+ROUND_2 = """CREATE TABLE {name} (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      folder_id        INTEGER NOT NULL REFERENCES mat_folder(id),
+      title            TEXT NOT NULL,
+      opened_by        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      opened_by_name   TEXT NOT NULL DEFAULT '',
+      opened_on        TEXT NOT NULL,
+      closed_on        TEXT,
+      closed_by        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      closed_by_name   TEXT NOT NULL DEFAULT '',
+      protocol_id      TEXT UNIQUE,
+      pdf_path         TEXT,
+      pdf_sha256       TEXT,
+      pdf_hashed_bytes INTEGER,
+      file_sha256      TEXT
+    )"""
+ROUND_INDIZES = ["CREATE INDEX IF NOT EXISTS idx_mat_round_folder ON mat_round(folder_id)"]
+INSPECTION_INDIZES = [
+    "CREATE INDEX IF NOT EXISTS idx_mat_inspection_item ON mat_inspection(item_id, inspected_on)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_inspection_round ON mat_inspection(round_id)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_inspection_form ON mat_inspection(form_id)",
+    # Eine Reservierung ist der offene Entwurf eines Prüfers – höchstens einer je Artikel.
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_mat_inspection_offen ON mat_inspection(item_id) WHERE completed_at IS NULL",
+]
+
+
+def _spalten(conn, tabelle):
+    return [r[1] for r in conn.execute(f"PRAGMA table_info({tabelle})")]
+
+
+def _umbauen(conn, tabelle, sql, indizes, entitaet):
+    """Eine Tabelle in neuer Form aufbauen, alle Zeilen behalten (Fremdschlüssel sind aus, siehe
+    migrieren). Mit AUTOINCREMENT: Die nächste Kennung liegt über jeder je vergebenen – auch über
+    gelöschten, die das Journal unter entitaet noch kennt."""
+    alt = _spalten(conn, tabelle)
+    conn.execute(f"DROP TABLE IF EXISTS {tabelle}_neu")
+    conn.execute(sql.format(name=f"{tabelle}_neu"))
+    neu = _spalten(conn, f"{tabelle}_neu")
+    gemeinsam = ", ".join(s for s in alt if s in neu)
+    conn.execute(f"INSERT INTO {tabelle}_neu ({gemeinsam}) SELECT {gemeinsam} FROM {tabelle}")
+    conn.execute(f"DROP TABLE {tabelle}")
+    conn.execute(f"ALTER TABLE {tabelle}_neu RENAME TO {tabelle}")
+    for befehl in indizes:
+        conn.execute(befehl)
+    hoechste = max(conn.execute(f"SELECT COALESCE(MAX(id), 0) FROM {tabelle}").fetchone()[0],
+                   conn.execute("SELECT COALESCE(MAX(entity_id), 0) FROM mat_audit WHERE entity = ?",
+                                (entitaet,)).fetchone()[0])
+    conn.execute("DELETE FROM sqlite_sequence WHERE name IN (?, ?)", (tabelle, f"{tabelle}_neu"))
+    conn.execute("INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)", (tabelle, hoechste))
+
+
+def _schritt_2(conn):
+    """Prüfart „Eingangsprüfung“, Verweis auf die Prüfung hinter einer Aussonderung und Kennungen, die nie
+    wiederkommen (Umbau von mat_inspection und mat_round, alle Zeilen bleiben), sowie
+    mat_item.last_inspected_on: der Tag der letzten abgeschlossenen Prüfung. Fehlt er, hat der Artikel
+    noch keine – sein Status ist „neu“."""
+    vorher = _fk_verletzungen(conn)
+    _umbauen(conn, "mat_round", ROUND_2, ROUND_INDIZES, "round")
+    _umbauen(conn, "mat_inspection", INSPECTION_2, INSPECTION_INDIZES, "inspection")
+    if "last_inspected_on" not in _spalten(conn, "mat_item"):
+        conn.execute("ALTER TABLE mat_item ADD COLUMN last_inspected_on TEXT")
+    # Was schon abgeschlossen ist, zählt (bis Lieferung 1 gab es nichts – die Zeile schadet nicht).
+    conn.execute("UPDATE mat_item SET last_inspected_on = (SELECT MAX(x.inspected_on) FROM mat_inspection x "
+                 "WHERE x.item_id = mat_item.id AND x.completed_at IS NOT NULL AND x.kind <> 'aussonderung') "
+                 "WHERE last_inspected_on IS NULL")
+    # Der Umbau darf keinen Verweis brechen. Was schon vorher verletzt war, ist nicht seine Sache und soll
+    # den Start nicht für immer blockieren – gezählt wird nur, was neu dazukommt.
+    neu_verletzt = _fk_verletzungen(conn) - vorher
+    if neu_verletzt:
+        raise sqlite3.IntegrityError(f"Fremdschlüssel nach dem Umbau verletzt: {sorted(neu_verletzt)[:5]}")
+
+
+def _fk_verletzungen(conn):
+    """Verletzte Fremdschlüssel in den Tabellen, die der Umbau berührt: (Tabelle, Zeile, Ziel)."""
+    out = set()
+    for tabelle in ("mat_round", "mat_round_item", "mat_inspection", "mat_inspection_result",
+                    "mat_inspection_attachment"):
+        for r in conn.execute(f"PRAGMA foreign_key_check({tabelle})"):
+            out.add((r[0], r[1], r[2]))
+    return out
+
+
+# Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
+# wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
+# Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
+SCHRITTE = {1: SCHRITT_1, 2: _schritt_2}
 
 
 def _meta(conn, schluessel, vorgabe=None):
@@ -410,12 +542,21 @@ def migrieren(conn):
     conn.commit()
     if int(_meta(conn, "schema_version", 0)) >= SCHEMA_VERSION:
         return int(_meta(conn, "schema_version"))
+    # Ein Umbau löscht eine Tabelle, auf die andere verweisen. Mit eingeschalteten Fremdschlüsseln
+    # löschte DROP TABLE vorher jede abhängige Zeile (ON DELETE CASCADE) – deshalb aus, und zwar vor
+    # BEGIN: Innerhalb einer Transaktion wirkt das Pragma nicht.
+    fremdschluessel = conn.execute("PRAGMA foreign_keys").fetchone()[0]
+    conn.execute("PRAGMA foreign_keys = OFF")
     conn.execute("BEGIN IMMEDIATE")
     try:
         stand = int(_meta(conn, "schema_version", 0))      # unter der Sperre noch einmal lesen
         for version in range(stand + 1, SCHEMA_VERSION + 1):
-            for sql in SCHRITTE[version]:
-                conn.execute(sql)
+            schritt = SCHRITTE[version]
+            if callable(schritt):
+                schritt(conn)
+            else:
+                for sql in schritt:
+                    conn.execute(sql)
             if version == 1:
                 _meta_setzen(conn, "volltext", 1 if _volltext_anlegen(conn) else 0)
                 if _meta(conn, "inventar_zaehler") is None:
@@ -425,4 +566,6 @@ def migrieren(conn):
     except BaseException:
         conn.rollback()
         raise
+    finally:
+        conn.execute(f"PRAGMA foreign_keys = {1 if fremdschluessel else 0}")
     return int(_meta(conn, "schema_version"))

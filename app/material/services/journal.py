@@ -61,14 +61,27 @@ def _json(row):
             "nachher": json.loads(row["after_json"]) if row["after_json"] else None}
 
 
+# Womit ein Objekt endet. Prüfungen und Durchgänge vergeben ihre Kennung nie zweimal (AUTOINCREMENT,
+# models.py); Artikel, Ordner, Produkte, Kategorien, Formulare können nach dem Löschen eine Kennung
+# wiederbekommen. Was vor der letzten Löschung unter derselben Kennung steht, gehört einem Vorgänger.
+LOESCHUNG = {"inspection": ("geloescht", "verworfen", "reservierung_freigegeben")}
+
+
 def lesen(paare, grenze=500):
-    """Einträge zu mehreren (entity, id)-Paaren, neueste zuerst."""
+    """Einträge zu mehreren (entity, id)-Paaren, neueste zuerst – je Paar nur die seit seiner letzten
+    Löschung (siehe LOESCHUNG)."""
     if not paare:
         return []
     bedingung = " OR ".join("(entity = ? AND entity_id = ?)" for _ in paare)
     args = [x for p in paare for x in p]
+    ab = {}
+    for e, eid in paare:
+        aktionen = LOESCHUNG.get(e, ("geloescht",))
+        r = db.query(f"SELECT MAX(id) AS m FROM mat_audit WHERE entity = ? AND entity_id = ? AND action IN "
+                     f"({','.join('?' * len(aktionen))})", (e, eid, *aktionen), one=True)
+        ab[(e, eid)] = r["m"] or 0
     rows = db.query(f"SELECT * FROM mat_audit WHERE {bedingung} ORDER BY id DESC LIMIT ?", (*args, grenze))
-    return [_json(r) for r in rows]
+    return [_json(r) for r in rows if r["id"] > ab.get((r["entity"], r["entity_id"]), 0)]
 
 
 def fuer_produkt(pid):

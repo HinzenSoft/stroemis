@@ -8,3 +8,5 @@ Pillow==12.3.0
 pillow-heif==1.8.1
 # Excel-Import der Teilnehmerlisten im Prüfungsbereich (.xlsx lesen)
 openpyxl==3.1.5
+# Modul Material: Anhänge einer Prüfung (Scans und PDFs zu einem PDF), ab Lieferung 3 auch der Prüfsummen-Stempel
+pypdf==6.19.0

@@ -129,7 +129,7 @@ def test_migration():
         make_app(tmp)
         conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
         assert erwartet <= {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "1"
+        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == str(models.SCHEMA_VERSION)
     print("Migrationstest bestanden.")
 
 
@@ -166,7 +166,11 @@ def test_rollen():
         # Was jede Rolle in der Oberfläche angeboten bekommt (der Server prüft trotzdem jede Aktion).
         def darf(c):
             r = c.get("/api/material/start")
-            return r.json["darf"] if r.status_code == 200 else r.status_code
+            if r.status_code != 200:
+                return r.status_code
+            d = dict(r.json["darf"])
+            assert isinstance(d.pop("uid"), int)          # eigene Kennung: „meine Prüfung“, „in Prüfung bei mir“
+            return d
         assert darf(k["fuehrung"]) == {"lesen": True, "verwalten": False, "pruefen": False, "katalog": False,
                                        "urkundennummer": "", "unterschrift": False}
         assert darf(k["wart"])["verwalten"] and not darf(k["wart"])["pruefen"]
@@ -388,7 +392,7 @@ def test_artikel():
         r = w.post("/api/material/artikel/verschieben", json={"ids": alle, "folder_id": fz})
         assert r.status_code == 200 and r.json["verschoben"] == len(alle)
         assert w.get(f"/api/material/ordner/{gid}").json["ordner"]["artikel_gesamt"] == 0
-        # Ein gesperrter Artikel bleibt, wo er ist (die Sperre selbst kommt mit Lieferung 2).
+        # Ein gesperrter Artikel bleibt, wo er ist (hier von Hand gesetzt; die Sperre selbst prüft test_pruefung).
         with app.app_context():
             from app import db
             db.execute("UPDATE mat_item SET lock_state = 'gesperrt', folder_id = ?, origin_folder_id = ? WHERE id = ?",
@@ -617,18 +621,26 @@ def test_status_einheitlich():
             from app import db
             from app.material.services import status as st
             h = date(2026, 10, 16)
-            faelle = [("frei", "2026-10-15", None, "ueberfaellig"), ("frei", "2026-10-16", None, "bald_faellig"),
-                      ("frei", "2026-11-15", None, "bald_faellig"), ("frei", "2026-11-16", None, "einsatzbereit"),
-                      ("frei", None, None, "ueberfaellig"), ("frei", "2027-01-01", "2026-10-16", "lebensdauer"),
-                      ("frei", "2026-01-01", "2026-10-15", "lebensdauer"), ("frei", "2027-01-01", "2026-10-17", "einsatzbereit"),
-                      ("gesperrt", "2027-01-01", None, "gesperrt"), ("verloren", "2020-01-01", "2020-01-01", "gesperrt"),
-                      ("ausgesondert", "2020-01-01", "2020-01-01", "ausgesondert")]
+            g = "2026-01-01"          # zuletzt geprüft; None = noch nie (Eingangsprüfung offen)
+            faelle = [("frei", "2026-10-15", None, g, "ueberfaellig"), ("frei", "2026-10-16", None, g, "bald_faellig"),
+                      ("frei", "2026-11-15", None, g, "bald_faellig"), ("frei", "2026-11-16", None, g, "einsatzbereit"),
+                      ("frei", None, None, g, "ueberfaellig"), ("frei", "2027-01-01", "2026-10-16", g, "lebensdauer"),
+                      ("frei", "2026-01-01", "2026-10-15", g, "lebensdauer"), ("frei", "2027-01-01", "2026-10-17", g, "einsatzbereit"),
+                      ("gesperrt", "2027-01-01", None, g, "gesperrt"), ("verloren", "2020-01-01", "2020-01-01", g, "gesperrt"),
+                      ("ausgesondert", "2020-01-01", "2020-01-01", g, "ausgesondert"),
+                      # Ohne Prüfung ist ein Artikel „neu“ – auch mit Fälligkeit in der Zukunft oder schon überfällig.
+                      ("frei", "2027-01-01", None, None, "neu"), ("frei", "2026-10-15", None, None, "neu"),
+                      ("frei", None, None, None, "neu"), ("frei", "2027-01-01", "2026-10-17", None, "neu"),
+                      # Schwerer als „neu“: Lebensende, Sperre, Aussonderung.
+                      ("frei", "2027-01-01", "2026-10-16", None, "lebensdauer"), ("gesperrt", "2027-01-01", None, None, "gesperrt"),
+                      ("verloren", None, None, None, "gesperrt"), ("ausgesondert", None, None, None, "ausgesondert")]
             sql = st.status_sql("x")
-            for lock, due, retire, soll in faelle:
-                item = {"lock_state": lock, "next_due_on": due, "retire_by": retire}
+            for lock, due, retire, geprueft, soll in faelle:
+                item = {"lock_state": lock, "next_due_on": due, "retire_by": retire, "last_inspected_on": geprueft}
                 assert st.status(item, h, 30) == soll, (item, st.status(item, h, 30))
-                r = db.query(f"SELECT {sql} AS s FROM (SELECT :l AS lock_state, :d AS next_due_on, :r AS retire_by) x",
-                             dict(st.parameter(h, 30), l=lock, d=due, r=retire), one=True)
+                r = db.query(f"SELECT {sql} AS s FROM (SELECT :l AS lock_state, :d AS next_due_on, :r AS retire_by, "
+                             f":g AS last_inspected_on) x",
+                             dict(st.parameter(h, 30), l=lock, d=due, r=retire, g=geprueft), one=True)
                 assert r["s"] == soll, (item, r["s"])
     print("Statustest bestanden.")
 
@@ -857,6 +869,630 @@ def test_review_befunde():
     print("Review-Befunde nachgestellt und behoben.")
 
 
+# --- Lieferung 2: Prüfung ---------------------------------------------------------------------------------
+
+def pruef_formulare(kp, ids):
+    """Aktive Formulare: generisch für Gurte, spezifisch für den Gurt Alpha (ersetzt das generische),
+    generisch für Karabiner. Inhalte erfunden, nur für den Test."""
+    def form(ziel, titel, punkte):
+        r = kp.post("/api/material/formulare", json=dict(ziel, titel=titel, punkte=punkte))
+        assert r.status_code == 201, r.get_json()
+        fid = r.json["formular"]["id"]
+        assert kp.post(f"/api/material/formulare/{fid}/aktivieren", json={}).status_code == 200
+        return fid
+    return {
+        "generisch": form({"kategorie_id": ids["gurte"]}, "Gurt generisch", [
+            {"gruppe": "Band", "text": "Testpunkt generisch", "art": "yesno", "soll": "nein", "kritisch": True}]),
+        "spezifisch": form({"produkt_id": ids["gurt"]}, "Gurt spezifisch", [
+            {"gruppe": "Band", "text": "Testpunkt kritisch", "art": "yesno", "soll": "nein", "kritisch": True},
+            {"gruppe": "Band", "text": "Testpunkt Kennzeichnung", "art": "yesno", "soll": "ja"},
+            {"text": "Testpunkt Messwert", "art": "number"},
+            {"text": "Testpunkt Bemerkung", "art": "text", "pflicht": False}]),
+        "karabiner": form({"kategorie_id": ids["karabiner"]}, "Karabiner generisch", [
+            {"text": "Testpunkt Verschluss", "art": "yesno", "soll": "ja", "kritisch": True},
+            {"text": "Testpunkt Verschleiß", "art": "yesno", "soll": "nein"}]),
+    }
+
+
+def neuer_artikel(c, produkt_id, ordner_id, **felder):
+    r = c.post("/api/material/artikel", json=dict(felder, product_id=produkt_id, folder_id=ordner_id))
+    assert r.status_code == 201, r.get_json()
+    return r.json["artikel"]
+
+
+def zweiter_pruefer(app, adm):
+    r = adm.post("/api/admin/users", json={"email": "pruefer2@example.org", "password": "passwort1", "name": "Prüferin Zwei",
+                                           "mat_pruefer": True, "urkundennummer": "1012-4712"})
+    assert r.status_code == 201, r.get_json()
+    return anmelden(app, "pruefer2@example.org", "passwort1")
+
+
+def starten(c, iid, **d):
+    return c.post(f"/api/material/artikel/{iid}/pruefungen", json=d)
+
+
+def abschluss(c, pid, **d):
+    return c.post(f"/api/material/pruefungen/{pid}/abschliessen", json=d)
+
+
+def punkte_von(pr):
+    return {x["text"]: x["id"] for x in pr["punkte"]}
+
+
+def test_pruefung():
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        f = pruef_formulare(k["katalog"], ids)
+        w, p1 = k["wart"], k["pruefer"]
+        p2 = zweiter_pruefer(app, k["adm"])
+        gid, system = gliederung(w)
+        fahrzeug = w.post("/api/material/ordner", json={"name": "Fahrzeug 1", "kind": "fahrzeug", "parent_id": gid}).json["ordner"]["id"]
+        h = date.today()
+        a = neuer_artikel(w, ids["gurt"], fahrzeug, manufactured_on=f"{h.year - 2}-01")
+        iid = a["id"]
+        # Neu angelegt heißt „neu“, nicht einsatzbereit: Die Eingangsprüfung steht aus.
+        assert a["status"] == "neu" and a["last_inspected_on"] is None, a
+        assert a["pruefarten"] == {"arten": ["eingang"], "vorschlag": "eingang"}
+        z = w.get("/api/material/start").json["zaehlung"]
+        assert z["neu"] == 1 and z["einsatzbereit"] == 0, z
+        assert [x["id"] for x in w.get("/api/material/faellig").json["artikel"]] == [iid]
+        assert [x["id"] for x in w.get(f"/api/material/ordner/{fahrzeug}?status=neu").json["ordner"]["artikel"]] == [iid]
+        # Prüfen dürfen nur Prüfer mit Urkundennummer.
+        for c in (w, k["fuehrung"], k["katalog"], k["adm"]):
+            assert starten(c, iid).status_code == 403
+        assert starten(k["nutzer"], iid).status_code == 403
+        # Die erste Prüfung ist die Eingangsprüfung – eine andere Art wird abgewiesen.
+        r = starten(p1, iid, art="periodisch")
+        assert r.status_code == 400 and "Eingangsprüfung" in r.json["error"], r.get_json()
+        r = starten(p1, iid)
+        assert r.status_code == 201, r.get_json()
+        pr = r.json["pruefung"]
+        assert pr["art"] == "eingang" and pr["entwurf"] and pr["eigen"] and pr["pruefer"] == "pruefer"
+        # Das spezifische Formular des Produkts schlägt das generische der Kategorie.
+        assert pr["formular"]["id"] == f["spezifisch"], pr["formular"]
+        assert [x["text"] for x in pr["punkte"]] == ["Testpunkt kritisch", "Testpunkt Kennzeichnung", "Testpunkt Messwert",
+                                                     "Testpunkt Bemerkung"]
+        # Alle Punkte sind mit ihrem Sollwert vorbelegt – der Prüfer ändert nur Abweichungen.
+        assert all(x["befund"] == "ok" for x in pr["punkte"])
+        assert [x["wert"] for x in pr["punkte"] if x["art"] == "yesno"] == ["nein", "ja"]
+        # Eine benutzte Formularversion bleibt, wie sie ist.
+        assert k["katalog"].put(f"/api/material/formulare/{f['spezifisch']}", json={"titel": "x"}).status_code == 409
+        # Noch einmal starten: derselbe Entwurf. Eine zweite Prüferin bekommt „in Prüfung bei …“.
+        r = starten(p1, iid)
+        assert r.status_code == 200 and r.json["pruefung"]["id"] == pr["id"]
+        r = starten(p2, iid)
+        assert r.status_code == 409 and "In Prüfung bei pruefer" in r.json["error"], r.get_json()
+        assert w.get(f"/api/material/artikel/{iid}").json["artikel"]["entwurf"]["pruefer"] == "pruefer"
+        pid, pk = pr["id"], punkte_von(pr)
+        url = f"/api/material/pruefungen/{pid}/punkte"
+        # Fremde ändern am Entwurf nichts – auch keine andere Prüferin.
+        assert p2.put(f"{url}/{pk['Testpunkt Messwert']}", json={"wert": "1"}).status_code == 403
+        # Ein Pflichtpunkt ohne Wert blockiert den Abschluss.
+        r = abschluss(p1, pid, ergebnis="einsatzbereit")
+        assert r.status_code == 400 and "Testpunkt Messwert" in r.json["error"], r.get_json()
+        assert p1.put(f"{url}/{pk['Testpunkt Messwert']}", json={"wert": "abc"}).status_code == 400
+        assert p1.put(f"{url}/{pk['Testpunkt Messwert']}", json={"wert": "12,5"}).json["punkt"]["wert"] == "12,5"
+        # Der kritische Punkt weicht ab → Mangel. Ohne Foto lässt sich nicht abschließen.
+        r = p1.put(f"{url}/{pk['Testpunkt kritisch']}", json={"wert": "ja", "notiz": "Schnitt im Band"})
+        assert r.status_code == 200 and r.json["punkt"]["befund"] == "mangel", r.get_json()
+        r = abschluss(p1, pid, ergebnis="instandsetzen")
+        assert r.status_code == 400 and "Foto" in r.json["error"], r.get_json()
+        r = p1.post(f"{url}/{pk['Testpunkt kritisch']}/foto", data={"file": (jpeg(), "mangel.jpg")}, headers=H,
+                    content_type="multipart/form-data")
+        assert r.status_code == 200 and r.json["punkt"]["foto"]["vorschau"], r.get_json()
+        assert k["fuehrung"].get(r.json["punkt"]["foto"]["vorschau"]).status_code == 200
+        # Ein kritischer Mangel schließt „einsatzbereit“ aus.
+        r = abschluss(p1, pid, ergebnis="einsatzbereit")
+        assert r.status_code == 400 and "Kritischer Mangel" in r.json["error"], r.get_json()
+        assert p1.get(f"/api/material/pruefungen/{pid}").json["pruefung"]["einsatzbereit_gesperrt"]
+        # „instandsetzen“ sperrt und verschiebt nach „Gesperrt“; der Herkunftsordner bleibt gemerkt.
+        r = abschluss(p1, pid, ergebnis="instandsetzen", bemerkung="zum Hersteller")
+        assert r.status_code == 200 and r.json["pruefung"]["ergebnis"] == "instandsetzen", r.get_json()
+        assert not r.json["pruefung"]["entwurf"]
+        a = w.get(f"/api/material/artikel/{iid}").json["artikel"]
+        assert a["status"] == "gesperrt" and a["lock_state"] == "gesperrt", a
+        assert a["folder_id"] == system["gesperrt"] and a["origin_folder_id"] == fahrzeug, a
+        assert a["last_inspected_on"] == h.isoformat() and "instandsetzen" in a["lock_reason"]
+        # Abgeschlossen heißt: nichts mehr zu ändern, nichts mehr zu verwerfen.
+        assert p1.put(f"{url}/{pk['Testpunkt Messwert']}", json={"wert": "13"}).status_code == 409
+        assert p1.delete(f"/api/material/pruefungen/{pid}", headers=H).status_code == 409
+        # Von Hand zurückverschieben scheitert – auch für den Materialwart.
+        r = w.post("/api/material/artikel/verschieben", json={"ids": [iid], "folder_id": fahrzeug})
+        assert r.status_code == 409 and "Freiprüfung" in r.json["error"], r.get_json()
+        # Freiprüfung: Vorschlag „Reparatur“; „einsatzbereit“ bringt den Artikel zurück in den Herkunftsordner.
+        assert a["pruefarten"]["vorschlag"] == "reparatur" and "eingang" not in a["pruefarten"]["arten"]
+        r = starten(p2, iid)
+        assert r.status_code == 201 and r.json["pruefung"]["art"] == "reparatur" and r.json["pruefung"]["freipruefung"]
+        pr2 = r.json["pruefung"]
+        pid2 = pr2["id"]
+        p2.put(f"/api/material/pruefungen/{pid2}/punkte/{punkte_von(pr2)['Testpunkt Messwert']}", json={"wert": "12"})
+        # Die nächste Prüfung lässt sich vorziehen, nicht verschieben.
+        vorschlag = date.fromisoformat(pr2["vorschlag_naechste"])
+        from app.material.services.interval import plus_monate
+        assert pr2["vorschlag_naechste"] == plus_monate(h, 12).isoformat(), pr2["vorschlag_naechste"]   # Kategorie: 12 Monate
+        r = abschluss(p2, pid2, ergebnis="einsatzbereit", next_due_on=(vorschlag + timedelta(days=1)).isoformat())
+        assert r.status_code == 400 and "vorziehen" in r.json["error"], r.get_json()
+        r = abschluss(p2, pid2, ergebnis="einsatzbereit", next_due_on=h.isoformat())
+        assert r.status_code == 400
+        frueher = (h + timedelta(days=90)).isoformat()
+        r = abschluss(p2, pid2, ergebnis="einsatzbereit", next_due_on=frueher)
+        assert r.status_code == 200, r.get_json()
+        a = w.get(f"/api/material/artikel/{iid}").json["artikel"]
+        assert a["status"] == "einsatzbereit" and a["lock_state"] == "frei", a
+        assert a["folder_id"] == fahrzeug and a["origin_folder_id"] is None and a["next_due_on"] == frueher, a
+        assert [x["art"] for x in a["pruefungen"]] == ["reparatur", "eingang"], a["pruefungen"]
+        assert [x["ergebnis"] for x in a["pruefungen"]] == ["einsatzbereit", "instandsetzen"]
+        aktionen = [e["action"] for e in a["journal"] if e["entity"] == "item"]
+        assert "gesperrt" in aktionen and "freigeprueft" in aktionen, aktionen
+        # Prüfen geht jederzeit, auch wenn nichts fällig ist – Vorschlag „außerplanmäßig“.
+        assert a["pruefarten"]["vorschlag"] == "ausserplanmaessig", a["pruefarten"]
+        r = starten(p1, iid)
+        assert r.status_code == 201 and r.json["pruefung"]["art"] == "ausserplanmaessig"
+        pid3 = r.json["pruefung"]["id"]
+        # Die Prüfart lässt sich am Entwurf ändern – aber nicht in eine Eingangsprüfung.
+        assert p1.put(f"/api/material/pruefungen/{pid3}", json={"art": "eingang"}).status_code == 400
+        assert p1.put(f"/api/material/pruefungen/{pid3}", json={"art": "periodisch"}).json["pruefung"]["art"] == "periodisch"
+        # Den eigenen Entwurf verwirft der Prüfer selbst; dann ist der Artikel wieder frei.
+        assert p2.delete(f"/api/material/pruefungen/{pid3}", headers=H).status_code == 403
+        assert p1.delete(f"/api/material/pruefungen/{pid3}", headers=H).status_code == 200
+        assert w.get(f"/api/material/artikel/{iid}").json["artikel"]["entwurf"] is None
+        assert p1.get(f"/api/material/pruefungen/{pid3}").status_code == 404
+        # Lesen dürfen alle mit Zugang zum Modul, Nutzer ohne Recht nicht.
+        assert k["fuehrung"].get(f"/api/material/pruefungen/{pid}").status_code == 200
+        assert k["nutzer"].get(f"/api/material/pruefungen/{pid}").status_code == 403
+        assert k["fuehrung"].get(f"/material/pruefung/{pid}").status_code == 200
+        assert k["fuehrung"].get(f"/material/artikel/{iid}/pruefung/neu").status_code == 200
+    print("Prüfungstest bestanden.")
+
+
+def test_sperre_und_aussonderung():
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w, p1 = k["wart"], k["pruefer"]
+        gid, system = gliederung(w)
+        lager = w.post("/api/material/ordner", json={"name": "Lager", "kind": "standort", "parent_id": gid}).json["ordner"]["id"]
+        h = date.today()
+        bestand_vorher = w.get("/api/material/start").json["bestand"]
+        # Textil nach Ablauf der Lebensdauer: „einsatzbereit“ ist nicht mehr wählbar.
+        alt = neuer_artikel(w, ids["gurt"], lager, manufactured_on=f"{h.year - 11}-01")
+        assert alt["status"] == "lebensdauer"
+        # Der Materialwart sondert nur aus, was ein Prüfer vorher gesperrt hat.
+        r = w.post(f"/api/material/artikel/{alt['id']}/aussondern", json={"grund": "lebensdauer"})
+        assert r.status_code == 409 and "gesperrte" in r.json["error"], r.get_json()
+        pr = starten(p1, alt["id"]).json["pruefung"]
+        assert pr["lebensdauer"]["erreicht"] and pr["einsatzbereit_gesperrt"], pr
+        p1.put(f"/api/material/pruefungen/{pr['id']}/punkte/{punkte_von(pr)['Testpunkt Messwert']}", json={"wert": "1"})
+        r = abschluss(p1, pr["id"], ergebnis="einsatzbereit")
+        assert r.status_code == 400 and "Lebensende" in r.json["error"], r.get_json()
+        # Ohne Mangel braucht „aussondern“ einen Grund.
+        r = abschluss(p1, pr["id"], ergebnis="aussondern")
+        assert r.status_code == 400 and "Grund" in r.json["error"], r.get_json()
+        r = abschluss(p1, pr["id"], ergebnis="aussondern", grund="Lebensdauer überschritten")
+        assert r.status_code == 200, r.get_json()
+        a = w.get(f"/api/material/artikel/{alt['id']}").json["artikel"]
+        assert a["status"] == "ausgesondert" and a["folder_id"] == system["ausgesondert"], a
+        # Die Aussonderung ist ein eigener Vorgang mit Verweis auf die Prüfung.
+        assert [x["art"] for x in a["pruefungen"]] == ["aussonderung", "eingang"], a["pruefungen"]
+        assert a["pruefungen"][0]["basis_id"] == pr["id"] and a["pruefungen"][0]["ergebnis"] == "aussondern"
+        # Ausgesondert: zählt nicht mehr als Bestand, wird nicht mehr geprüft, gesperrt oder bearbeitet.
+        assert w.get("/api/material/start").json["bestand"] == bestand_vorher
+        assert starten(p1, alt["id"]).status_code == 409
+        assert p1.post(f"/api/material/artikel/{alt['id']}/sperren", json={"grund": "sturz"}).status_code == 409
+        assert w.put(f"/api/material/artikel/{alt['id']}", json={"notes": "x"}).status_code == 409
+
+        # Metall: Sperre ohne Prüfung nur durch Prüfer, Aussonderung danach durch den Materialwart.
+        b = neuer_artikel(w, ids["hms"], lager)
+        assert w.post(f"/api/material/artikel/{b['id']}/sperren", json={"grund": "beschaedigung"}).status_code == 403
+        assert p1.post(f"/api/material/artikel/{b['id']}/sperren", json={"grund": "unfug"}).status_code == 400
+        r = p1.post(f"/api/material/artikel/{b['id']}/sperren", json={"grund": "beschaedigung", "text": "Riss am Schnapper"})
+        assert r.status_code == 200, r.get_json()
+        a = r.json["artikel"]
+        assert a["status"] == "gesperrt" and a["folder_id"] == system["gesperrt"] and a["origin_folder_id"] == lager, a
+        assert a["lock_reason"] == "Beschädigung: Riss am Schnapper"
+        assert p1.post(f"/api/material/artikel/{b['id']}/sperren", json={"grund": "sturz"}).status_code == 409
+        # Aussondern darf der Prüfer ohne Prüfung nicht – das ist Sache des Materialwarts.
+        assert p1.post(f"/api/material/artikel/{b['id']}/aussondern", json={"grund": "irreparabel"}).status_code == 403
+        morgen = (h + timedelta(days=1)).isoformat()
+        assert w.post(f"/api/material/artikel/{b['id']}/aussondern", json={"grund": "irreparabel", "datum": morgen}).status_code == 400
+        r = w.post(f"/api/material/artikel/{b['id']}/aussondern", json={"grund": "irreparabel", "bemerkung": "Bruch"})
+        assert r.status_code == 200, r.get_json()
+        a = r.json["artikel"]
+        assert a["status"] == "ausgesondert" and a["folder_id"] == system["ausgesondert"] and a["origin_folder_id"] is None
+        assert a["pruefungen"][0]["art"] == "aussonderung" and a["pruefungen"][0]["grund"] == "irreparabel"
+        assert a["pruefungen"][0]["pruefer"] == "wart"
+        # Verlust: Der Prüfer sperrt ohne Prüfung mit Grund „Verlust“, der Materialwart sondert aus.
+        c = neuer_artikel(w, ids["hms"], lager, serial_no="V-1")
+        a = p1.post(f"/api/material/artikel/{c['id']}/sperren", json={"grund": "verlust"}).json["artikel"]
+        assert a["lock_state"] == "verloren" and a["status"] == "gesperrt", a
+        a = w.post(f"/api/material/artikel/{c['id']}/aussondern", json={"grund": "verlust"}).json["artikel"]
+        assert a["status"] == "ausgesondert"
+        # Im Ordner „Ausgesondert“ liegen beide samt Lebenslauf; im Bestand zählen sie nicht.
+        inhalt = w.get(f"/api/material/ordner/{system['ausgesondert']}").json["ordner"]
+        assert {x["id"] for x in inhalt["artikel"]} == {alt["id"], b["id"], c["id"]}
+        assert w.get("/api/material/start").json["bestand"] == bestand_vorher
+        # Ein Entwurf blockiert Sperre und Aussonderung: Darüber entscheidet die laufende Prüfung.
+        d = neuer_artikel(w, ids["hms"], lager, serial_no="E-1")
+        starten(p1, d["id"])
+        r = p1.post(f"/api/material/artikel/{d['id']}/sperren", json={"grund": "sturz"})
+        assert r.status_code == 409 and "In Prüfung bei" in r.json["error"], r.get_json()
+    print("Sperr- und Aussonderungstest bestanden.")
+
+
+def test_anhang_scan():
+    from pypdf import PdfReader, PdfWriter
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w, p1 = k["wart"], k["pruefer"]
+        gid, _ = gliederung(w)
+        a = neuer_artikel(w, ids["hms"], gid)
+        pid = starten(p1, a["id"]).json["pruefung"]["id"]
+        url = f"/api/material/pruefungen/{pid}/anhaenge"
+
+        def hochladen(c, dateien, **felder):
+            return c.post(url, data=dict(felder, file=dateien), headers=H, content_type="multipart/form-data")
+
+        # Ein mehrseitiger Scan (drei Fotos) wird ein PDF mit drei Seiten.
+        r = hochladen(p1, [(jpeg(), "seite1.jpg"), (jpeg(240, 320), "seite2.jpg"), (jpeg(), "seite3.jpg")],
+                      art="externes_pruefformular", titel="Prüfkarte des Herstellers", im_protokoll="ja")
+        assert r.status_code == 201, r.get_json()
+        scan = r.json["anhang"]
+        assert scan["seiten"] == 3 and scan["im_protokoll"] and scan["titel"] == "Prüfkarte des Herstellers"
+        datei = k["fuehrung"].get(scan["datei"])
+        assert datei.status_code == 200 and datei.data.startswith(b"%PDF-")
+        assert len(PdfReader(io.BytesIO(datei.data)).pages) == 3
+        import hashlib
+        assert hashlib.sha256(datei.data).hexdigest() == scan["sha256"]
+        assert k["nutzer"].get(scan["datei"]).status_code == 403
+        # Ein einzelnes PDF bleibt Byte für Byte, wie es ist; Fotos und PDFs zusammen werden ein PDF.
+        schreiber = PdfWriter()
+        schreiber.add_blank_page(595, 842)
+        schreiber.add_blank_page(595, 842)
+        puffer = io.BytesIO()
+        schreiber.write(puffer)
+        pdf = puffer.getvalue()
+        r = hochladen(p1, [(io.BytesIO(pdf), "bericht.pdf")], art="pruefbericht")
+        assert r.status_code == 201 and r.json["anhang"]["seiten"] == 2, r.get_json()
+        assert r.json["anhang"]["sha256"] == hashlib.sha256(pdf).hexdigest()
+        r = hochladen(p1, [(jpeg(), "foto.jpg"), (io.BytesIO(pdf), "bericht.pdf")], art="sonstiges")
+        assert r.status_code == 201 and r.json["anhang"]["seiten"] == 3, r.get_json()
+        # Was weder PDF noch Foto ist, wird abgewiesen; ebenso ein kaputtes PDF.
+        assert hochladen(p1, [(io.BytesIO(b"hallo"), "notiz.txt")]).status_code == 400
+        assert hochladen(p1, [(io.BytesIO(b"%PDF-1.4 kaputt"), "kaputt.pdf")]).status_code == 400
+        assert hochladen(p1, [], art="sonstiges").status_code == 400
+        # Anhängen und Entfernen darf nur der Prüfer des Entwurfs.
+        p2 = zweiter_pruefer(app, k["adm"])
+        assert hochladen(p2, [(jpeg(), "x.jpg")]).status_code == 403
+        pr = k["fuehrung"].get(f"/api/material/pruefungen/{pid}").json["pruefung"]
+        assert [x["seiten"] for x in pr["anhaenge"]] == [3, 2, 3]
+        assert p1.delete(f"{url}/{scan['id']}", headers=H).status_code == 200
+        assert k["fuehrung"].get(scan["datei"]).status_code == 404
+        assert len(k["fuehrung"].get(f"/api/material/pruefungen/{pid}").json["pruefung"]["anhaenge"]) == 2
+        # Wer den Entwurf verwirft, verwirft seine Anhänge mit.
+        rest = [x["datei"] for x in k["fuehrung"].get(f"/api/material/pruefungen/{pid}").json["pruefung"]["anhaenge"]]
+        assert p1.delete(f"/api/material/pruefungen/{pid}", headers=H).status_code == 200
+        assert all(k["fuehrung"].get(x).status_code == 404 for x in rest)
+    print("Anhangtest bestanden.")
+
+
+def test_durchgang():
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w, p1 = k["wart"], k["pruefer"]
+        p2 = zweiter_pruefer(app, k["adm"])
+        gid, system = gliederung(w)
+        fahrzeug = w.post("/api/material/ordner", json={"name": "Fahrzeug", "kind": "fahrzeug", "parent_id": gid}).json["ordner"]["id"]
+        a = neuer_artikel(w, ids["hms"], fahrzeug, serial_no="A")
+        b = neuer_artikel(w, ids["hms"], fahrzeug, serial_no="B")
+        c = neuer_artikel(w, ids["hms"], gid, serial_no="C")
+        # Eröffnen: Materialwart oder Prüfer – nicht Führungskraft oder Nutzer.
+        for x in (k["fuehrung"], k["nutzer"], k["katalog"]):
+            assert x.post("/api/material/durchgaenge", json={"folder_id": gid, "titel": "Jahresprüfung"}).status_code == 403
+        assert w.post("/api/material/durchgaenge", json={"folder_id": gid}).status_code == 400
+        assert w.post("/api/material/durchgaenge", json={"folder_id": system["gesperrt"], "titel": "x"}).status_code == 409
+        r = w.post("/api/material/durchgaenge", json={"folder_id": gid, "titel": "Jahresprüfung 2027"})
+        assert r.status_code == 201, r.get_json()
+        rid = r.json["durchgang"]["id"]
+        assert r.json["durchgang"]["zaehlung"] == {"gesamt": 3, "offen": 3, "in_pruefung": 0, "erledigt": 0, "ausgenommen": 0}
+        # Ein Artikel steht höchstens in einem offenen Durchgang.
+        r = p1.post("/api/material/durchgaenge", json={"folder_id": fahrzeug, "titel": "Fahrzeugcheck"})
+        assert r.status_code == 409 and "Jahresprüfung 2027" in r.json["error"], r.get_json()
+        # Wer einen Artikel öffnet, reserviert ihn; die anderen sehen „in Prüfung bei …“.
+        r = starten(p1, a["id"], durchgang_id=rid)
+        assert r.status_code == 201 and r.json["pruefung"]["round_id"] == rid
+        pid_a = r.json["pruefung"]["id"]
+        r = starten(p2, a["id"], durchgang_id=rid)
+        assert r.status_code == 409 and "In Prüfung bei pruefer" in r.json["error"], r.get_json()
+        d = k["fuehrung"].get(f"/api/material/durchgaenge/{rid}").json["durchgang"]
+        zeile = {x["id"]: x for x in d["artikel"]}
+        assert zeile[a["id"]]["zustand"] == "in_pruefung" and zeile[a["id"]]["entwurf"]["pruefer"] == "pruefer"
+        assert d["zaehlung"]["in_pruefung"] == 1 and not d["abschliessbar"]
+        # Abschließen geht erst, wenn alles geprüft oder ausgenommen ist.
+        r = w.post(f"/api/material/durchgaenge/{rid}/abschliessen", json={})
+        assert r.status_code == 409 and "offen" in r.json["error"], r.get_json()
+        # Eine liegen gebliebene Reservierung gibt der Materialwart frei – nicht die andere Prüferin,
+        # nicht die Führungskraft.
+        assert p2.delete(f"/api/material/pruefungen/{pid_a}", headers=H).status_code == 403
+        assert k["fuehrung"].delete(f"/api/material/pruefungen/{pid_a}", headers=H).status_code == 403
+        assert w.delete(f"/api/material/pruefungen/{pid_a}", headers=H).status_code == 200
+        journal_a = w.get(f"/api/material/artikel/{a['id']}").json["artikel"]["journal"]
+        assert any(e["action"] == "reservierung_freigegeben" for e in journal_a)
+        r = starten(p2, a["id"], durchgang_id=rid)
+        assert r.status_code == 201, r.get_json()
+        assert abschluss(p2, r.json["pruefung"]["id"], ergebnis="einsatzbereit").status_code == 200
+        # Ausnehmen braucht einen Grund; ein geprüfter Artikel lässt sich nicht mehr ausnehmen.
+        aus = f"/api/material/durchgaenge/{rid}/ausnehmen"
+        assert w.post(aus, json={"item_id": b["id"]}).status_code == 400
+        assert w.post(aus, json={"item_id": a["id"], "grund": "x"}).status_code == 409
+        assert k["fuehrung"].post(aus, json={"item_id": b["id"], "grund": "x"}).status_code == 403
+        assert w.post(aus, json={"item_id": b["id"], "grund": "nicht auffindbar"}).status_code == 200
+        # Ausgenommen heißt: nicht in diesem Durchgang prüfen – bis er wieder einbezogen ist.
+        assert starten(p1, b["id"], durchgang_id=rid).status_code == 409
+        assert w.post(f"/api/material/durchgaenge/{rid}/einbeziehen", json={"item_id": b["id"]}).status_code == 200
+        assert w.post(aus, json={"item_id": b["id"], "grund": "nicht auffindbar"}).status_code == 200
+        # Ohne Angabe des Durchgangs ordnet das System eine Prüfung dem offenen Durchgang des Artikels zu.
+        r = starten(p1, c["id"])
+        assert r.json["pruefung"]["round_id"] == rid, r.get_json()
+        pid_c = r.json["pruefung"]["id"]
+        d = w.get(f"/api/material/durchgaenge/{rid}").json["durchgang"]
+        assert d["zaehlung"] == {"gesamt": 3, "offen": 0, "in_pruefung": 1, "erledigt": 1, "ausgenommen": 1}
+        assert w.post(f"/api/material/durchgaenge/{rid}/abschliessen", json={}).status_code == 409
+        assert abschluss(p1, pid_c, ergebnis="einsatzbereit").status_code == 200
+        d = w.get(f"/api/material/durchgaenge/{rid}").json["durchgang"]
+        assert d["abschliessbar"] and {x["name"] for x in d["pruefer"]} == {"pruefer", "Prüferin Zwei"}
+        assert {x["urkunde"] for x in d["pruefer"]} == {"1012-4711", "1012-4712"}
+        assert not d["loeschbar"]
+        r = p1.post(f"/api/material/durchgaenge/{rid}/abschliessen", json={})
+        assert r.status_code == 200 and not r.json["durchgang"]["offen"], r.get_json()
+        assert w.post(aus, json={"item_id": a["id"], "grund": "x"}).status_code == 409
+        # Danach ist der Weg frei für den nächsten Durchgang; ein leerer lässt sich wieder löschen.
+        r = p1.post("/api/material/durchgaenge", json={"folder_id": fahrzeug, "titel": "Nachprüfung"})
+        assert r.status_code == 201, r.get_json()
+        rid2 = r.json["durchgang"]["id"]
+        assert r.json["durchgang"]["zaehlung"]["gesamt"] == 2
+        assert {x["id"] for x in w.get("/api/material/durchgaenge").json["durchgaenge"]} == {rid, rid2}
+        assert w.delete(f"/api/material/durchgaenge/{rid2}", headers=H).status_code == 200
+        assert w.get(f"/api/material/durchgaenge/{rid2}").status_code == 404
+        assert w.delete(f"/api/material/durchgaenge/{rid}", headers=H).status_code == 409
+        assert k["fuehrung"].get(f"/material/durchgang/{rid}").status_code == 200
+        # Wird ein Artikel eines offenen Durchgangs ausgesondert, nimmt das System ihn mit Grund heraus.
+        rid3 = w.post("/api/material/durchgaenge", json={"folder_id": fahrzeug, "titel": "Dritter"}).json["durchgang"]["id"]
+        assert p1.post(f"/api/material/artikel/{b['id']}/sperren", json={"grund": "verlust"}).status_code == 200
+        assert w.post(f"/api/material/artikel/{b['id']}/aussondern", json={"grund": "verlust"}).status_code == 200
+        d = w.get(f"/api/material/durchgaenge/{rid3}").json["durchgang"]
+        zeile = {x["id"]: x for x in d["artikel"]}
+        assert zeile[b["id"]]["zustand"] == "ausgenommen" and "ausgesondert" in zeile[b["id"]]["ausnahme"]["grund"]
+    print("Durchgangstest bestanden.")
+
+
+def test_review_lieferung2():
+    """Befunde aus dem Review vor der Auslieferung von Lieferung 2, nachgestellt."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        kp, w, p1 = k["katalog"], k["wart"], k["pruefer"]
+        gid, system = gliederung(w)
+        fahrzeug = w.post("/api/material/ordner", json={"name": "Fahrzeug", "kind": "fahrzeug", "parent_id": gid}).json["ordner"]["id"]
+        lager = w.post("/api/material/ordner", json={"name": "Lager", "kind": "standort", "parent_id": gid}).json["ordner"]["id"]
+        r = kp.post("/api/material/formulare", json={"kategorie_id": ids["karabiner"], "titel": "Zahlen", "punkte": [
+            {"text": "Öffnungsweite", "art": "number", "soll": "max. 22 mm"}, {"text": "Bandbreite", "art": "number", "soll": "45"},
+            {"text": "Zustand", "art": "text", "soll": "Hinweis für den Prüfer", "pflicht": False}]})
+        assert kp.post(f"/api/material/formulare/{r.json['formular']['id']}/aktivieren", json={}).status_code == 200
+
+        # 1. Bei Zahl und Text ist das Soll ein Hinweis, kein Messwert – nur eine reine Zahl wird vorbelegt.
+        a = neuer_artikel(w, ids["hms"], fahrzeug, serial_no="A")
+        pr = starten(p1, a["id"]).json["pruefung"]
+        assert {x["text"]: x["wert"] for x in pr["punkte"]} == {"Öffnungsweite": "", "Bandbreite": "45", "Zustand": ""}
+        r = abschluss(p1, pr["id"], ergebnis="einsatzbereit")
+        assert r.status_code == 400 and "Öffnungsweite" in r.json["error"], r.get_json()
+        p1.put(f"/api/material/pruefungen/{pr['id']}/punkte/{punkte_von(pr)['Öffnungsweite']}", json={"wert": "21"})
+        assert abschluss(p1, pr["id"], ergebnis="einsatzbereit").status_code == 200
+
+        # 2. Ein Entwurf, der vor der Eröffnung eines Durchgangs begann, zählt dort.
+        b = neuer_artikel(w, ids["hms"], fahrzeug, serial_no="B")
+        pb = starten(p1, b["id"]).json["pruefung"]
+        assert pb["round_id"] is None
+        rid = w.post("/api/material/durchgaenge", json={"folder_id": fahrzeug, "titel": "Fahrzeug"}).json["durchgang"]["id"]
+        assert p1.get(f"/api/material/pruefungen/{pb['id']}").json["pruefung"]["round_id"] == rid
+        p1.put(f"/api/material/pruefungen/{pb['id']}/punkte/{punkte_von(pb)['Öffnungsweite']}", json={"wert": "20"})
+        assert abschluss(p1, pb["id"], ergebnis="einsatzbereit").status_code == 200
+        zeilen = {x["id"]: x for x in w.get(f"/api/material/durchgaenge/{rid}").json["durchgang"]["artikel"]}
+        assert zeilen[b["id"]]["zustand"] == "erledigt", zeilen[b["id"]]
+
+        # 3. Ein Durchgang für einen Unterordner erfasst auch, was aus ihm nach „Gesperrt“ gewandert ist.
+        c = neuer_artikel(w, ids["hms"], lager, serial_no="C")
+        d = neuer_artikel(w, ids["hms"], lager, serial_no="D")
+        assert p1.post(f"/api/material/artikel/{c['id']}/sperren", json={"grund": "beschaedigung"}).status_code == 200
+        r = w.post("/api/material/durchgaenge", json={"folder_id": lager, "titel": "Lager"})
+        assert r.status_code == 201 and r.json["durchgang"]["zaehlung"]["gesamt"] == 2, r.get_json()
+        rid2 = r.json["durchgang"]["id"]
+
+        # 4. Ein ausgesonderter Artikel bleibt ausgenommen – „wieder einbeziehen“ geht nicht.
+        assert w.post(f"/api/material/artikel/{c['id']}/aussondern", json={"grund": "irreparabel"}).status_code == 200
+        zeilen = {x["id"]: x for x in w.get(f"/api/material/durchgaenge/{rid2}").json["durchgang"]["artikel"]}
+        assert zeilen[c["id"]]["zustand"] == "ausgenommen"
+        r = w.post(f"/api/material/durchgaenge/{rid2}/einbeziehen", json={"item_id": c["id"]})
+        assert r.status_code == 409 and "ausgesondert" in r.json["error"], r.get_json()
+        assert d["id"] in zeilen
+
+        # 5. Wird das Intervall kürzer, gilt „letzte Prüfung + neues Intervall“ (ohne Prüfung: heute + Intervall).
+        from app.material.services.interval import plus_monate
+        h = date.today()
+        vor = (h - timedelta(days=200)).isoformat()
+        with app.app_context():
+            from app import db
+            db.execute("UPDATE mat_item SET last_inspected_on = ?, next_due_on = ? WHERE id = ?",
+                       (vor, plus_monate(date.fromisoformat(vor), 12).isoformat(), a["id"]))
+        assert w.put(f"/api/material/ordner/{fahrzeug}", json={"interval_months": 6}).status_code == 200
+        a = w.get(f"/api/material/artikel/{a['id']}").json["artikel"]
+        assert a["next_due_on"] == plus_monate(date.fromisoformat(vor), 6).isoformat(), a["next_due_on"]
+        assert a["status"] == "ueberfaellig", a["status"]
+        assert any(e["action"] == "faelligkeit" and "letzten Prüfung" in (e["nachher"] or {}).get("grund", "")
+                   for e in a["journal"])
+    print("Review-Befunde Lieferung 2 nachgestellt und behoben.")
+
+
+def pdf_roh(objekte):
+    """Ein PDF aus {Nummer: Inhalt} mit gültiger Querverweistabelle – für absichtlich kaputte Anhänge."""
+    aus = bytearray(b"%PDF-1.7\n")
+    lage = {}
+    for n in sorted(objekte):
+        lage[n] = len(aus)
+        aus += f"{n} 0 obj\n{objekte[n]}\nendobj\n".encode("latin-1")
+    xref, groesse = len(aus), max(objekte) + 1
+    aus += f"xref\n0 {groesse}\n0000000000 65535 f \n".encode()
+    for n in range(1, groesse):
+        aus += (f"{lage[n]:010d} 00000 n \n" if n in lage else "0000000000 65535 f \n").encode()
+    aus += f"trailer\n<< /Size {groesse} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    return bytes(aus)
+
+
+def test_review_lieferung2_robust():
+    """Weitere Befunde aus dem Review von Lieferung 2: Kennungen, veraltete Dialoge, Durchgang, Anhänge."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w, p1 = k["wart"], k["pruefer"]
+        gid, _ = gliederung(w)
+        lager = w.post("/api/material/ordner", json={"name": "Lager", "kind": "standort", "parent_id": gid}).json["ordner"]["id"]
+        a = neuer_artikel(w, ids["hms"], lager, serial_no="A")
+        b = neuer_artikel(w, ids["hms"], lager, serial_no="B")
+
+        # Eine verworfene Prüfung gibt ihre Kennung nicht weiter – ihr Journal bliebe sonst am falschen Vorgang.
+        pa = starten(p1, a["id"]).json["pruefung"]["id"]
+        assert p1.delete(f"/api/material/pruefungen/{pa}", headers=H).status_code == 200
+        pb = starten(p1, b["id"]).json["pruefung"]["id"]
+        assert pb > pa, (pa, pb)
+        assert p1.delete(f"/api/material/pruefungen/{pb}", headers=H).status_code == 200
+        # Ebenso ein gelöschter (leerer) Prüfdurchgang.
+        r1 = w.post("/api/material/durchgaenge", json={"folder_id": lager, "titel": "eins"}).json["durchgang"]["id"]
+        assert w.delete(f"/api/material/durchgaenge/{r1}", headers=H).status_code == 200
+        r2 = w.post("/api/material/durchgaenge", json={"folder_id": lager, "titel": "zwei"}).json["durchgang"]["id"]
+        assert r2 > r1, (r1, r2)
+        assert w.delete(f"/api/material/durchgaenge/{r2}", headers=H).status_code == 200
+        # Ein gelöschter Artikel darf seine Kennung abgeben – seine Geschichte aber nicht.
+        c = neuer_artikel(w, ids["hms"], lager, serial_no="C")
+        assert w.delete(f"/api/material/artikel/{c['id']}", headers=H).status_code == 200
+        d = neuer_artikel(w, ids["hms"], lager, serial_no="D")
+        eigene = [e for e in d["journal"] if e["entity"] == "item"]
+        assert [e["action"] for e in eigene] == ["angelegt"] and eigene[0]["nachher"]["serial_no"] == "D", eigene
+
+        # Ein veralteter Bearbeiten-Dialog überschreibt keine Prüfung; eine Fälligkeit liegt nie vor der letzten Prüfung.
+        stand = d["stand"]
+        assert abschluss(p1, starten(p1, d["id"]).json["pruefung"]["id"], ergebnis="einsatzbereit").status_code == 200
+        r = w.put(f"/api/material/artikel/{d['id']}", json={"stand": stand, "notes": "aus altem Dialog", "next_due_on": "2020-01-01"})
+        assert r.status_code == 409 and "neu laden" in r.json["error"], r.get_json()
+        d = w.get(f"/api/material/artikel/{d['id']}").json["artikel"]
+        r = w.put(f"/api/material/artikel/{d['id']}", json={"stand": d["stand"], "next_due_on": d["last_inspected_on"]})
+        assert r.status_code == 400 and "nach der letzten Prüfung" in r.json["error"], r.get_json()
+        r = w.put(f"/api/material/artikel/{d['id']}", json={"stand": d["stand"], "notes": "neu geladen"})
+        assert r.status_code == 200, r.get_json()
+
+        # „Wieder einbeziehen“: Eine Prüfung, die begann, während der Artikel ausgenommen war, zählt danach hier.
+        rid = w.post("/api/material/durchgaenge", json={"folder_id": lager, "titel": "drei"}).json["durchgang"]["id"]
+        assert w.post(f"/api/material/durchgaenge/{rid}/ausnehmen", json={"item_id": b["id"], "grund": "verliehen"}).status_code == 200
+        pr = starten(p1, b["id"]).json["pruefung"]
+        assert pr["round_id"] is None
+        assert w.post(f"/api/material/durchgaenge/{rid}/einbeziehen", json={"item_id": b["id"]}).status_code == 200
+        assert abschluss(p1, pr["id"], ergebnis="einsatzbereit").status_code == 200
+        zeilen = {x["id"]: x for x in w.get(f"/api/material/durchgaenge/{rid}").json["durchgang"]["artikel"]}
+        assert zeilen[b["id"]]["zustand"] == "erledigt", zeilen[b["id"]]
+
+        # Anhänge: zu viele Seiten scheitern, bevor sie zusammengefügt werden; ein PDF, das sich nicht anfügen
+        # lässt (kaputte Anmerkung), wird auch allein abgewiesen – Lieferung 3 hängt es ans Protokoll.
+        pid = starten(p1, a["id"]).json["pruefung"]["id"]
+        url = f"/api/material/pruefungen/{pid}/anhaenge"
+        seiten = " ".join("3 0 R" for _ in range(300))
+        viele = pdf_roh({1: "<< /Type /Catalog /Pages 2 0 R >>", 2: f"<< /Type /Pages /Kids [{seiten}] /Count 300 >>",
+                         3: "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 9 9] >>"})
+        r = p1.post(url, data={"file": [(io.BytesIO(viele), "viele.pdf"), (jpeg(), "x.jpg")]}, headers=H,
+                    content_type="multipart/form-data")
+        assert r.status_code == 400 and "Seiten" in r.json["error"], r.get_json()
+        kaputt = pdf_roh({1: "<< /Type /Catalog /Pages 2 0 R >>", 2: "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+                          3: "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 9 9] /Annots [5 0 R] >>",
+                          5: "<< /Subtype /Link /Dest [99 0 R /XYZ] /A 77 0 R"})
+        r = p1.post(url, data={"file": [(io.BytesIO(kaputt), "kaputt.pdf")]}, headers=H, content_type="multipart/form-data")
+        assert r.status_code == 400, (r.status_code, r.get_json())
+        ablage = os.path.join(tmp, "media", "material", "anhang")
+        assert not os.path.isdir(ablage) or not os.listdir(ablage)        # nichts Halbes liegen geblieben
+    print("Review-Befunde Lieferung 2 (Kennungen, Dialoge, Anhänge) nachgestellt und behoben.")
+
+
+def test_migration_lieferung2():
+    """Eine Datenbank aus Lieferung 1 (Schemaversion 1) kommt mit allen Zeilen auf Version 2."""
+    from app.material import models
+    with tempfile.TemporaryDirectory() as tmp:
+        make_app(tmp)
+        conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+        for t in sorted(r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")):
+            if t.startswith("mat_") and not t.endswith(("_data", "_idx", "_config", "_docsize", "_content")):
+                conn.execute(f"DROP TABLE IF EXISTS {t}")
+        conn.execute("DROP TABLE IF EXISTS mat_meta")
+        conn.execute("CREATE TABLE mat_meta (schluessel TEXT PRIMARY KEY, wert TEXT NOT NULL)")
+        for sql in models.SCHRITT_1:
+            conn.execute(sql)
+        conn.executemany("INSERT INTO mat_meta VALUES (?, ?)", [("schema_version", "1"), ("inventar_zaehler", "2"),
+                                                               ("volltext", "0")])
+        ts = "2026-10-16T08:00:00+00:00"
+        conn.execute("INSERT INTO mat_category (id, name, created_at, updated_at) VALUES (1, 'K', ?, ?)", (ts, ts))
+        conn.execute("INSERT INTO mat_product (id, category_id, manufacturer, model, dedupe_key, material_kind, interval_months, "
+                     "created_at, updated_at) VALUES (1, 1, 'H', 'M', 'hm', 'metall_hardware', 12, ?, ?)", (ts, ts))
+        conn.execute("INSERT INTO mat_folder (id, name, kind, created_at, updated_at) VALUES (1, 'G', 'gliederung', ?, ?)", (ts, ts))
+        for iid in (1, 2):
+            conn.execute("INSERT INTO mat_item (id, product_id, folder_id, serial_no, inventory_no, next_due_on, qr_token, "
+                         "created_at, updated_at) VALUES (?, 1, 1, ?, ?, '2027-01-01', ?, ?, ?)",
+                         (iid, f"S{iid}", f"M-00000{iid}", f"tok{iid}", ts, ts))
+        conn.execute("INSERT INTO mat_inspection (id, item_id, inspected_on, kind, result, completed_at, created_at, updated_at) "
+                     "VALUES (1, 1, '2026-05-01', 'periodisch', 'einsatzbereit', ?, ?, ?)", (ts, ts, ts))
+        conn.execute("INSERT INTO mat_inspection (id, item_id, inspected_on, kind, created_at, updated_at) "
+                     "VALUES (2, 2, '2026-06-01', 'periodisch', ?, ?)", (ts, ts))
+        conn.execute("INSERT INTO mat_inspection_result (inspection_id, checklist_text, editor) VALUES (1, 'a', 'yesno'), "
+                     "(2, 'b', 'yesno')")
+        conn.execute("INSERT INTO mat_inspection_attachment (inspection_id, kind, file_path, sha256, uploaded_at) "
+                     "VALUES (1, 'sonstiges', 'x.pdf', '00', ?)", (ts,))
+        conn.commit()
+        conn.close()
+        app = make_app(tmp)
+        conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "2"
+        assert conn.execute("SELECT id, item_id, kind, result FROM mat_inspection ORDER BY id").fetchall() == \
+            [(1, 1, "periodisch", "einsatzbereit"), (2, 2, "periodisch", None)]
+        assert conn.execute("SELECT COUNT(*) FROM mat_inspection_result").fetchone()[0] == 2
+        assert conn.execute("SELECT COUNT(*) FROM mat_inspection_attachment").fetchone()[0] == 1
+        # Wer schon geprüft wurde, ist nicht „neu“; wer nur einen Entwurf hat, schon.
+        assert conn.execute("SELECT id, last_inspected_on FROM mat_item ORDER BY id").fetchall() == [(1, "2026-05-01"), (2, None)]
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+        # Die Eingangsprüfung ist jetzt eine erlaubte Art; der Entwurf je Artikel bleibt einzig.
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("INSERT INTO mat_inspection (item_id, inspected_on, kind, created_at, updated_at) "
+                     "VALUES (1, '2026-10-17', 'eingang', ?, ?)", (ts, ts))
+        try:
+            conn.execute("INSERT INTO mat_inspection (item_id, inspected_on, kind, created_at, updated_at) "
+                         "VALUES (1, '2026-10-17', 'periodisch', ?, ?)", (ts, ts))
+            raise AssertionError("zweiter offener Entwurf angenommen")
+        except sqlite3.IntegrityError:
+            pass
+        # Befunde und Anhänge hängen weiter an ihrer Prüfung (Löschen nimmt sie mit).
+        conn.execute("DELETE FROM mat_inspection WHERE id = 1")
+        assert conn.execute("SELECT COUNT(*) FROM mat_inspection_result WHERE inspection_id = 1").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM mat_inspection_attachment").fetchone()[0] == 0
+        conn.rollback()
+        conn.close()
+        # Ein zweiter Start ändert nichts mehr.
+        make_app(tmp)
+        with app.app_context():
+            from app import db
+            assert db.query("SELECT COUNT(*) AS n FROM mat_inspection", one=True)["n"] == 2
+    print("Migrationstest Lieferung 2 bestanden.")
+
+
 if __name__ == "__main__":
     test_migration()
     test_rollen()
@@ -869,3 +1505,10 @@ if __name__ == "__main__":
     test_status_einheitlich()
     test_import()
     test_review_befunde()
+    test_pruefung()
+    test_sperre_und_aussonderung()
+    test_anhang_scan()
+    test_durchgang()
+    test_review_lieferung2()
+    test_review_lieferung2_robust()
+    test_migration_lieferung2()

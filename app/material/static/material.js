@@ -1,6 +1,7 @@
 /* Modul Material – Oberfläche aller Ansichten: Übersicht, fällige Prüfungen, Bestand (Ordnerbaum mit
-   Systemordnern und Mehrfachauswahl), Artikel mit Lebenslauf-Journal, Artikel anlegen, Katalog mit
-   Produkten, Dokumenten und Prüfformularen, Suche nach Nummern.
+   Systemordnern und Mehrfachauswahl), Artikel mit Lebenslauf (Prüfungen und Journal), Artikel anlegen,
+   Prüfung (Formular fürs Telefon), Prüfdurchgang, Katalog mit Produkten, Dokumenten und Prüfformularen,
+   Suche nach Nummern; links die Ordnerleiste.
    Welche Ansicht gemeint ist, sagt data-ansicht am <main>; was das Konto darf, data-darf. Ausgeblendet
    wird nur, was ohnehin scheitern würde – der Server prüft jede Aktion selbst. */
 (function () {
@@ -15,9 +16,18 @@
   const $ = (sel, el) => (el || document).querySelector(sel);
   const $$ = (sel, el) => Array.from((el || document).querySelectorAll(sel));
 
-  const STATUS = { einsatzbereit: "einsatzbereit", bald_faellig: "bald fällig", ueberfaellig: "überfällig",
+  const STATUS = { einsatzbereit: "einsatzbereit", bald_faellig: "bald fällig", ueberfaellig: "überfällig", neu: "neu",
                    gesperrt: "gesperrt", lebensdauer: "Lebensdauer erreicht", ausgesondert: "ausgesondert" };
-  const STATUS_REIHE = ["ueberfaellig", "lebensdauer", "gesperrt", "bald_faellig", "einsatzbereit", "ausgesondert"];
+  const PRUEFART = { eingang: "Eingangsprüfung", periodisch: "periodische Prüfung", ausserplanmaessig: "außerplanmäßige Prüfung",
+                     reparatur: "Prüfung nach Reparatur", aussonderung: "Aussonderung" };
+  const PRUEFART_KURZ = { eingang: "Eingangsprüfung", periodisch: "periodisch", ausserplanmaessig: "außerplanmäßig",
+                          reparatur: "Reparatur", aussonderung: "Aussonderung" };
+  const ERGEBNIS = { einsatzbereit: "einsatzbereit", instandsetzen: "instandsetzen", aussondern: "aussondern" };
+  const BEFUND = { ok: "in Ordnung", mangel: "Mangel", nicht_zutreffend: "nicht zutreffend" };
+  const ANHANGART = { externes_pruefformular: "externes Prüfformular", pruefbericht: "Prüfbericht", foto: "Foto", sonstiges: "Sonstiges" };
+  const SPERRGRUND = { sturz: "Sturzbelastung", beschaedigung: "Beschädigung", verlust: "Verlust" };
+  const AUSSONDERUNGSGRUND = { lebensdauer: "Lebensdauer erreicht", verlust: "Verlust", irreparabel: "irreparabel" };
+  const ZUSTAND = { offen: "offen", in_pruefung: "in Prüfung", erledigt: "erledigt", ausgenommen: "ausgenommen" };
   const MATERIALART = { textil: "textil", metall_hardware: "Metall/Hardware", sonstiges: "sonstiges" };
   const ORDNERART = { gliederung: "Gliederung", standort: "Standort", fahrzeug: "Fahrzeug", set: "Set",
                       persoenlich: "persönlich", sonstiges: "sonstiges" };
@@ -38,10 +48,21 @@
     default_interval_months: "Prüfintervall (Vorgabe)", default_lifetime_years: "Lebensdauer (Vorgabe)",
     recht_material: "Stufe Material", mat_pruefer: "Prüfer", mat_katalog: "Katalogpfleger", urkundennummer: "Urkundennummer",
     system_kind: "Systemordner", url: "Adresse", file_path: "Datei", sha256: "SHA-256", size: "Größe",
+    lock_state: "Sperrzustand", lock_reason: "Grund der Sperre", origin_folder_id: "Herkunftsordner", herkunft: "Herkunftsordner",
+    last_inspected_on: "Zuletzt geprüft", pruefung: "Prüfung", ergebnis: "Ergebnis", art: "Art", grund: "Grund", datum: "Datum",
+    aussonderung: "Aussonderung",
+    pruefer: "Prüfer", result: "Ergebnis", inspected_on: "Prüftag", reason: "Grund", maengel: "Mängel", item_id: "Artikel Nr.",
+    round_id: "Durchgang Nr.", form_id: "Formular Nr.", form_version: "Formularversion", inspector_name: "Prüfer",
+    begonnen: "begonnen", seiten: "Seiten", dateien: "Dateien", basis: "aus Prüfung", erledigt: "erledigt", ausgenommen: "ausgenommen",
   };
   const AKTION = { angelegt: "angelegt", geaendert: "geändert", geloescht: "gelöscht", verschoben: "verschoben",
                    bild: "Bild geändert", foto: "Foto geändert", neue_version: "neue Version", zurueckgezogen: "zurückgezogen",
-                   aktiviert: "aktiviert", deaktiviert: "deaktiviert", lebensende: "Lebensende nachgezogen", rollen: "Rollen" };
+                   aktiviert: "aktiviert", deaktiviert: "deaktiviert", lebensende: "Lebensende nachgezogen", rollen: "Rollen",
+                   begonnen: "Prüfung begonnen", abgeschlossen: "Prüfung abgeschlossen", verworfen: "Prüfung verworfen",
+                   reservierung_freigegeben: "Reservierung freigegeben", geprueft: "geprüft", freigeprueft: "freigeprüft",
+                   gesperrt: "gesperrt", ausgesondert: "ausgesondert", anhang: "Anhang", anhang_entfernt: "Anhang entfernt",
+                   eroeffnet: "Durchgang eröffnet", ausgenommen: "ausgenommen", einbezogen: "wieder einbezogen",
+                   geschlossen: "Durchgang abgeschlossen", faelligkeit: "Fälligkeit vorgezogen" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang" };
 
@@ -65,7 +86,8 @@
 
   /* --- Gerüst -------------------------------------------------------------------------------- */
   const NAV = { dashboard: "dashboard", pruefungen: "pruefungen", bestand: "bestand", ordner: "bestand", artikel: "bestand",
-                artikel_neu: "bestand", katalog: "katalog", produkt: "katalog", formular: "katalog", suche: "" };
+                artikel_neu: "bestand", katalog: "katalog", produkt: "katalog", formular: "katalog", suche: "",
+                pruefung: "pruefungen", pruefung_neu: "pruefungen", durchgang: "pruefungen" };
   $$(".mat-nav a").forEach((a) => a.classList.toggle("aktiv", a.dataset.nav === NAV[ANSICHT]));
   if (ANSICHT === "suche" && DATEN.q) $(".mat-suche input").value = DATEN.q;
   if (!DARF.lesen) $$('.mat-nav a:not([data-nav="katalog"]), .mat-suche').forEach((el) => el.remove());
@@ -78,6 +100,98 @@
     if (b.tagName === "A" || b.tagName === "BUTTON") e.preventDefault();
     aktionen[b.dataset.act](b, e);
   });
+
+  /* --- Ordnerleiste links ---------------------------------------------------------------------
+     Wo Ansicht und Bildschirm Platz haben, steht der Ordnerbaum links: die eigene Ebene markiert, der Weg
+     dorthin aufgeklappt, jeder Ordner einen Klick entfernt. Unter 1200 px ist er eine Schublade hinter
+     „☰ Ordner“ (wie im Wiki). Nicht im Bestand (dort ist der Baum der Inhalt) und nicht im Katalog (der hat
+     seinen Kategorienbaum). Auf- und Zuklappen merkt sich der Browser. */
+  const MIT_LEISTE = new Set(["dashboard", "pruefungen", "ordner", "artikel", "artikel_neu", "suche", "pruefung",
+                              "pruefung_neu", "durchgang"]);
+  const leiste = document.getElementById("mat-side");
+  const leisteAuf = document.getElementById("mat-side-auf");
+  const KLAPP = "mat-ordner-klapp";
+  let leisteOrdner = null;
+  let leisteAktiv = null;
+  const klappLesen = () => { try { return JSON.parse(localStorage.getItem(KLAPP) || "{}") || {}; } catch (e) { return {}; } };
+  const klappMerken = (z) => { try { localStorage.setItem(KLAPP, JSON.stringify(z)); } catch (e) { /* privat: dann eben nicht */ } };
+
+  function leisteZeichnen() {
+    if (!leisteOrdner) return;
+    const ziel = $("#mat-baumnav");
+    if (!leisteOrdner.length) { ziel.innerHTML = leer("Noch keine Ordner."); return; }
+    const kinder = baumKinder(leisteOrdner);
+    const nachId = {};
+    leisteOrdner.forEach((o) => { nachId[o.id] = o; });
+    const weg = new Set();
+    for (let x = leisteAktiv; x && nachId[x] && !weg.has(x); x = nachId[x].parent_id) weg.add(x);
+    const klapp = klappLesen();
+    const zweig = (pid, tiefe) => (kinder[pid] || []).map((o) => {
+      const hat = !!kinder[o.id];
+      const auf = hat && (weg.has(o.id) || (o.id in klapp ? klapp[o.id] : tiefe === 0));
+      const z = o.zaehlung || {};
+      const rot = (z.ueberfaellig || 0) + (z.lebensdauer || 0);
+      const zahl = o.system_kind ? `<span class="mat-side-anzahl">${Object.values(z).reduce((a, b) => a + b, 0)}</span>`
+        : `${rot ? `<span class="mat-zahl s-ueberfaellig" title="überfällig oder Lebensdauer erreicht">${rot}</span>` : ""}${z.neu ? `<span class="mat-zahl s-neu" title="neu – Eingangsprüfung offen">${z.neu}</span>` : ""}`;
+      return `<li class="${hat ? (auf ? "" : "collapsed") : "leaf"}${o.system_kind ? " system" : ""}">
+        <div class="row"><button class="tg" type="button" data-klapp="${o.id}" aria-label="${auf ? "zuklappen" : "aufklappen"}" ${hat ? "" : 'tabindex="-1"'}></button>
+          <a href="/material/ordner/${o.id}" class="${o.id === leisteAktiv ? "active" : ""}" title="${esc(o.name)}" ${o.id === leisteAktiv ? 'aria-current="page"' : ""}>${o.system_kind ? "🔒 " : ""}${esc(o.name)}</a>${zahl}</div>
+        ${hat ? `<ul>${zweig(o.id, tiefe + 1)}</ul>` : ""}</li>`;
+    }).join("");
+    ziel.innerHTML = `<ul class="tree mat-tree">${zweig(0, 0)}</ul>`;
+  }
+
+  async function leisteLaden() {
+    if (!leiste || !MIT_LEISTE.has(ANSICHT) || !DARF.lesen) return;
+    document.getElementById("mat-shell").classList.add("mit-leiste");
+    leiste.hidden = false;
+    try { leisteOrdner = (await api(`${API}/ordner`)).ordner; }
+    catch (e) { $("#mat-baumnav").innerHTML = `<p class="error">${esc(e.message)}</p>`; return; }
+    leisteZeichnen();
+  }
+  // Jede Ansicht meldet hier ihren Ordner (Ordner, Artikel, Prüfung, Durchgang) – die Leiste markiert ihn.
+  function leisteMarkieren(fid) { leisteAktiv = fid || null; leisteZeichnen(); }
+  const schublade = window.matchMedia("(max-width: 1199px)");
+  // Als Schublade ist die geschlossene Leiste nur aus dem Bild geschoben – „inert“ nimmt sie auch aus der
+  // Tab-Reihenfolge und dem Vorlesen. Neben dem Inhalt (breiter Bildschirm) ist sie immer bedienbar.
+  function leisteInert() { if (leiste) leiste.inert = schublade.matches && !leiste.classList.contains("open"); }
+  function leisteZu(fokusZurueck) {
+    if (!leiste) return;
+    const war = leiste.classList.contains("open");
+    leiste.classList.remove("open");
+    if (leisteAuf) leisteAuf.setAttribute("aria-expanded", "false");
+    leisteInert();
+    if (war && fokusZurueck && leisteAuf) leisteAuf.focus();
+  }
+  if (leiste) {
+    leiste.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-klapp]");
+      if (!b) return;
+      const li = b.closest("li");
+      if (li.classList.contains("leaf")) return;
+      const auf = li.classList.contains("collapsed");
+      li.classList.toggle("collapsed", !auf);
+      b.setAttribute("aria-label", auf ? "zuklappen" : "aufklappen");
+      const klapp = klappLesen();
+      klapp[b.dataset.klapp] = auf;
+      klappMerken(klapp);
+    });
+    $("#mat-side-zu").addEventListener("click", () => leisteZu(true));
+    if (leisteAuf) leisteAuf.addEventListener("click", () => {
+      const auf = !leiste.classList.contains("open");
+      leiste.classList.toggle("open", auf);
+      leisteAuf.setAttribute("aria-expanded", String(auf));
+      leisteInert();
+      if (auf) { const a = $("a.active", leiste) || $("a", leiste); if (a) a.focus({ preventScroll: true }); }
+    });
+    // Tippen neben die offene Schublade oder Escape schließt sie.
+    document.addEventListener("click", (e) => {
+      if (leiste.classList.contains("open") && !leiste.contains(e.target) && !(leisteAuf && leisteAuf.contains(e.target))) leisteZu();
+    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") leisteZu(true); });
+    schublade.addEventListener("change", leisteInert);
+    leisteInert();
+  }
 
   async function zeigen(fn) {
     try { await fn(); }
@@ -100,15 +214,21 @@
     if (Array.isArray(v)) return v.length ? `<ul class="mat-wertliste">${v.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "–";
     if (typeof v === "boolean" || ((feld === "serial_generated" || feld === "active" || feld === "mat_pruefer" || feld === "mat_katalog") && (v === 0 || v === 1))) return v ? "ja" : "nein";
     if (feld === "material_kind" || feld === "default_material_kind") return esc(MATERIALART[v] || v);
-    if (/_on$|^valid_from$|^retire_by$/.test(feld)) return esc(fmtTag(v));
+    if (feld === "kind" || feld === "art") return esc(PRUEFART_KURZ[v] || ORDNERART[v] || ANHANGART[v] || v);
+    if (feld === "result" || feld === "ergebnis") return esc(ERGEBNIS[v] || v);
+    if ((feld === "pruefung" || feld === "aussonderung" || feld === "basis") && Number.isInteger(v)) return `<a href="/material/pruefung/${v}">Nr. ${v}</a>`;
+    if (feld === "lock_state") return esc({ frei: "frei", gesperrt: "gesperrt", verloren: "verloren (gesperrt)", ausgesondert: "ausgesondert" }[v] || v);
+    if (/_on$|^valid_from$|^retire_by$|^datum$|^begonnen$/.test(feld)) return esc(fmtTag(v));
     if (typeof v === "object") return esc(JSON.stringify(v));
     return esc(v);
   }
   function journalHtml(eintraege, mitEntitaet) {
     if (!eintraege || !eintraege.length) return leer("Noch keine Einträge.");
     return `<ol class="mat-journal">${eintraege.map((j) => {
+      const alle = Object.assign({}, j.vorher || {}, j.nachher || {});
       const felder = j.action === "angelegt" || j.action === "geloescht"
-        ? [] : Object.keys(Object.assign({}, j.vorher || {}, j.nachher || {}));
+        ? [] : Object.keys(alle).filter((f) => !(f === "folder_id" && "ordner" in alle) && !(f === "origin_folder_id" && "herkunft" in alle)
+                                       && !(f === "parent_id" && "pfad" in alle));
       const zeilen = felder.map((f) => `<tr><th>${esc(FELD[f] || f)}</th><td>${wert((j.vorher || {})[f], f)}</td><td>${wert((j.nachher || {})[f], f)}</td></tr>`).join("");
       return `<li><div class="mat-j-kopf"><span class="mat-j-zeit">${esc(fmtZeit(j.created_at))}</span>
         <strong>${mitEntitaet ? esc(ENTITAET[j.entity] || j.entity) + " " : ""}${esc(AKTION[j.action] || j.action)}</strong>
@@ -128,6 +248,7 @@
     if (!z) return "";
     const teile = [];
     if (z.ueberfaellig) teile.push(`<span class="mat-zahl s-ueberfaellig" title="überfällig">${z.ueberfaellig}</span>`);
+    if (z.neu) teile.push(`<span class="mat-zahl s-neu" title="neu – Eingangsprüfung offen">${z.neu}</span>`);
     if (z.lebensdauer) teile.push(`<span class="mat-zahl s-lebensdauer" title="Lebensdauer erreicht">${z.lebensdauer}</span>`);
     if (z.gesperrt) teile.push(`<span class="mat-zahl s-gesperrt" title="gesperrt">${z.gesperrt}</span>`);
     if (z.bald_faellig) teile.push(`<span class="mat-zahl s-bald_faellig" title="bald fällig">${z.bald_faellig}</span>`);
@@ -193,13 +314,14 @@
         <div class="btn-row">${DARF.verwalten ? '<a class="btn secondary" href="/material/bestand">Bestand pflegen</a><a class="btn" href="/material/artikel/neu">+ Artikel</a>' : ""}</div></div>
       <div class="mat-kacheln">
         <div class="mat-kachel gesamt"><strong>${d.bestand}</strong><span>Artikel im Bestand</span></div>
-        ${kachel("ueberfaellig", "überfällig")}${kachel("bald_faellig", `bald fällig (${d.schwelle_tage} Tage)`)}
+        ${kachel("ueberfaellig", "überfällig")}${kachel("neu", "neu (Eingangsprüfung)")}${kachel("bald_faellig", `bald fällig (${d.schwelle_tage} Tage)`)}
         ${kachel("gesperrt", "gesperrt")}${kachel("lebensdauer", "Lebensdauer erreicht")}${kachel("einsatzbereit", "einsatzbereit")}
       </div>
+      <div id="mat-runden"></div>
       <section class="section"><h2>Gliederungen</h2>
-        ${gl.length ? `<table class="list mat-tabelle"><thead><tr><th>Gliederung</th><th>Bestand</th><th>überfällig</th><th>bald fällig</th><th>gesperrt</th><th>Lebensdauer</th></tr></thead><tbody>
+        ${gl.length ? `<table class="list mat-tabelle"><thead><tr><th>Gliederung</th><th>Bestand</th><th>überfällig</th><th>neu</th><th>bald fällig</th><th>gesperrt</th><th>Lebensdauer</th></tr></thead><tbody>
           ${gl.map((o) => `<tr><td data-l="Gliederung"><a href="/material/ordner/${o.id}">${esc(o.name)}</a>${demoMarke(o.demo)}</td>
-            <td data-l="Bestand">${o.bestand}</td><td data-l="überfällig">${o.zaehlung.ueberfaellig || "–"}</td>
+            <td data-l="Bestand">${o.bestand}</td><td data-l="überfällig">${o.zaehlung.ueberfaellig || "–"}</td><td data-l="neu">${o.zaehlung.neu || "–"}</td>
             <td data-l="bald fällig">${o.zaehlung.bald_faellig || "–"}</td><td data-l="gesperrt">${o.zaehlung.gesperrt || "–"}</td>
             <td data-l="Lebensdauer">${o.zaehlung.lebensdauer || "–"}</td></tr>`).join("")}</tbody></table>`
           : leer(DARF.verwalten ? "Noch keine Gliederung – lege unter „Bestand“ die erste an." : "Noch keine Gliederung angelegt.")}
@@ -208,6 +330,26 @@
         ${d.naechste.length ? artikelTabelle(d.naechste, { pfad: true }) + (d.faellig_gesamt > d.naechste.length ? `<p><a href="/material/pruefungen">Alle ${d.faellig_gesamt} anzeigen →</a></p>` : "")
           : leer("Nichts fällig.")}
       </section>`;
+    rundenKasten($("#mat-runden"), true);
+  }
+
+  /* Laufende Prüfdurchgänge als Kasten (Übersicht) bzw. Liste mit abgeschlossenen (Prüfungen). */
+  async function rundenKasten(ziel, nurOffen) {
+    if (!ziel) return;
+    try {
+      const liste = (await api(`${API}/durchgaenge${nurOffen ? "?offen=1" : ""}`)).durchgaenge;
+      if (nurOffen && !liste.length) { ziel.innerHTML = ""; return; }
+      ziel.innerHTML = `<section class="section"><h2>${nurOffen ? "Laufende Prüfdurchgänge" : "Prüfdurchgänge"}</h2>
+        ${liste.length ? `<ul class="mat-runden">${liste.map((r) => `<li><a href="/material/durchgang/${r.id}"><strong>${esc(r.titel)}</strong></a>
+          <span class="muted">${esc(r.ordner)} · eröffnet ${esc(fmtTag(r.eroeffnet_am))}${r.offen ? "" : ` · abgeschlossen ${esc(fmtTag(r.geschlossen_am))}`}</span>
+          ${fortschritt(r.zaehlung)}</li>`).join("")}</ul>` : leer("Noch kein Prüfdurchgang.")}</section>`;
+    } catch (e) { ziel.innerHTML = ""; }
+  }
+  function fortschritt(z) {
+    const fertig = z.erledigt + z.ausgenommen;
+    const proz = z.gesamt ? Math.round((100 * fertig) / z.gesamt) : 0;
+    return `<span class="mat-fortschritt" title="${fertig} von ${z.gesamt} erledigt oder ausgenommen"><span style="width:${proz}%"></span></span>
+      <span class="small">${fertig}/${z.gesamt}${z.in_pruefung ? ` · ${z.in_pruefung} in Prüfung` : ""}</span>`;
   }
 
   /* Artikelliste als Tabelle; mit auswahl:true bekommt jede Zeile ein Häkchen (Mehrfachauswahl). */
@@ -215,39 +357,104 @@
     opts = opts || {};
     return `<table class="list mat-tabelle mat-artikel">
       <thead><tr>${opts.auswahl ? '<th class="mat-wahlspalte"><input type="checkbox" id="mat-alle" aria-label="alle auswählen"></th>' : ""}
-        <th>Inventar-Nr.</th><th>Produkt</th><th>Seriennummer</th>${opts.pfad ? "<th>Ablage</th>" : ""}<th>Nächste Prüfung</th><th>Status</th></tr></thead>
+        <th>Inventar-Nr.</th><th>Produkt</th><th>Seriennummer</th>${opts.pfad ? "<th>Ablage</th>" : ""}<th>Nächste Prüfung</th><th>Status</th>${opts.pruefen ? "<th></th>" : ""}</tr></thead>
       <tbody>${liste.map((a) => `<tr data-id="${a.id}">
         ${opts.auswahl ? `<td class="mat-wahlspalte"><input type="checkbox" class="mat-wahl-art" value="${a.id}" ${a.lock_state !== "frei" ? 'disabled title="Gesperrte und ausgesonderte Artikel bleiben in ihrem Systemordner."' : ""} aria-label="${esc(a.inventory_no)} auswählen"></td>` : ""}
-        <td data-l="Inventar-Nr."><a href="/material/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a></td>
+        <td data-l="Inventar-Nr."><a class="mat-inv" href="/material/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a></td>
         <td data-l="Produkt">${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${esc(produktName(a))}${a.article_no ? ` <span class="muted">${esc(a.article_no)}</span>` : ""}${demoMarke(a.demo)}</td>
         <td data-l="Seriennummer">${esc(a.serial_no)}${a.serial_generated ? ' <span class="muted" title="vom System vergeben">(System)</span>' : ""}</td>
         ${opts.pfad ? `<td data-l="Ablage">${esc(a.pfad || "")}</td>` : ""}
-        <td data-l="Nächste Prüfung">${a.next_due_on ? esc(fmtTag(a.next_due_on)) : '<span class="muted">–</span>'}</td>
-        <td data-l="Status">${statusMarke(a.status)}</td></tr>`).join("")}</tbody></table>`;
+        <td data-l="Nächste Prüfung">${a.status === "neu" ? '<span class="muted">Eingangsprüfung</span>' : a.status === "ausgesondert" ? '<span class="muted">–</span>' : a.next_due_on ? esc(fmtTag(a.next_due_on)) : '<span class="muted">–</span>'}</td>
+        <td data-l="Status">${statusMarke(a.status)}${a.entwurf ? `<div class="small muted">in Prüfung bei ${esc(a.entwurf.pruefer || "?")}</div>` : ""}</td>
+        ${opts.pruefen ? `<td class="tabelle-aktionen">${pruefKnopf(a)}</td>` : ""}</tr>`).join("")}</tbody></table>`;
+  }
+  // „Prüfen“ in Listen: für Prüfer, solange niemand anderes den Artikel reserviert hat.
+  function pruefKnopf(a, durchgangId) {
+    if (!DARF.pruefen || a.lock_state === "ausgesondert") return "";
+    if (a.entwurf && a.entwurf.pruefer_id !== DARF.uid) return "";
+    const q = durchgangId ? `?durchgang=${durchgangId}` : "";
+    return a.entwurf ? `<a class="btn small" href="/material/pruefung/${a.entwurf.id}">Weiter prüfen</a>`
+      : `<a class="btn secondary small" href="/material/artikel/${a.id}/pruefung/neu${q}">Prüfen</a>`;
   }
 
   /* --- Fällige Prüfungen ------------------------------------------------------------------------ */
   async function pruefungen() {
     const params = new URLSearchParams(location.search);
-    let filter = params.get("status") || "ueberfaellig,bald_faellig";
+    let filter = params.get("status") || "ueberfaellig,neu,bald_faellig";
     let seite = 1;
-    const FILTER = [["ueberfaellig,bald_faellig", "fällig und überfällig"], ["ueberfaellig", "überfällig"],
-                    ["bald_faellig", "bald fällig"], ["lebensdauer", "Lebensdauer erreicht"], ["gesperrt", "gesperrt"]];
-    async function zeichnen() {
+    const FILTER = [["ueberfaellig,neu,bald_faellig", "fällig, überfällig und neu"], ["ueberfaellig", "überfällig"],
+                    ["neu", "neu (Eingangsprüfung)"], ["bald_faellig", "bald fällig"], ["lebensdauer", "Lebensdauer erreicht"],
+                    ["gesperrt", "gesperrt"]];
+    async function liste() {
       const q = new URLSearchParams({ status: filter, seite, pro_seite: 50 });
       if (DATEN.ordner) q.set("ordner", DATEN.ordner);
       const d = await api(`${API}/faellig?${q}`);
-      inhalt.innerHTML = `<div class="page-head"><h1>Prüfungen</h1></div>
-        <p class="help">Was in den nächsten ${d.schwelle_tage} Tagen fällig wird oder schon überfällig ist. Prüfen lässt sich ab Lieferung 2 direkt aus dieser Liste.</p>
+      $("#pr-liste").innerHTML = `<p class="help">Überfällig, neu (die Eingangsprüfung steht aus) oder in den nächsten ${d.schwelle_tage} Tagen fällig. Prüfen lässt sich jeder Artikel aber jederzeit – auch aus seiner Ansicht.</p>
         <div class="c-tabs mat-filter">${FILTER.map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}</button>`).join("")}</div>
-        ${d.artikel.length ? artikelTabelle(d.artikel, { pfad: true }) : leer("Keine Artikel in dieser Auswahl.")}
+        ${d.artikel.length ? artikelTabelle(d.artikel, { pfad: true, pruefen: DARF.pruefen }) : leer("Keine Artikel in dieser Auswahl.")}
         ${seitenleiste(d.gesamt, seite, 50)}`;
     }
+    async function offene() {
+      const liste = (await api(`${API}/entwuerfe`)).entwuerfe;
+      $("#pr-offen").innerHTML = liste.length ? `<section class="section"><h2>Offene Prüfungen</h2>
+        <p class="help">Eine offene Prüfung reserviert ihren Artikel: Nur ihr Prüfer arbeitet daran weiter. Liegt eine liegen, gibt der Materialwart sie frei.</p>
+        <table class="list mat-tabelle"><thead><tr><th>Artikel</th><th>Prüfung</th><th>Prüfer</th><th>begonnen</th><th></th></tr></thead><tbody>
+        ${liste.map((x) => `<tr><td data-l="Artikel"><a href="/material/artikel/${x.item_id}"><strong>${esc(x.artikel.inventory_no)}</strong></a> ${esc(produktName(x.artikel))} <div class="small muted">${esc(x.artikel.pfad)}</div></td>
+          <td data-l="Prüfung">${esc(PRUEFART_KURZ[x.art] || x.art)}</td><td data-l="Prüfer">${esc(x.pruefer)}${x.eigen ? ' <span class="badge">du</span>' : ""}</td>
+          <td data-l="begonnen">${esc(fmtZeit(x.begonnen_am))}</td>
+          <td class="tabelle-aktionen">${x.eigen && DARF.pruefen ? `<a class="btn small" href="/material/pruefung/${x.id}">Weiter prüfen</a>` : `<a class="btn ghost small" href="/material/pruefung/${x.id}">Ansehen</a>`}
+            ${!x.eigen && DARF.verwalten ? `<button class="btn ghost small" data-act="freigeben" data-id="${x.id}" data-wer="${esc(x.pruefer)}">Freigeben</button>` : ""}</td></tr>`).join("")}
+        </tbody></table></section>` : "";
+    }
+    async function zeichnen() {
+      inhalt.innerHTML = `<div class="page-head"><h1>Prüfungen</h1>
+          <div class="btn-row">${DARF.verwalten || DARF.pruefen ? '<button class="btn secondary" data-act="runde">+ Prüfdurchgang</button>' : ""}</div></div>
+        ${!DARF.pruefen ? '<p class="notice">Prüfen dürfen nur Prüfer mit hinterlegter Urkundennummer (Nutzerverwaltung → Häkchen „Prüfer“).</p>' : ""}
+        <div id="pr-offen"></div><div id="pr-runden"></div>
+        <section class="section"><h2>Zu prüfen</h2><div id="pr-liste"><p class="help">Wird geladen …</p></div></section>`;
+      await Promise.all([zeigenIn(liste, "#pr-liste"), zeigenIn(offene, "#pr-offen"), rundenKasten($("#pr-runden"), false)]);
+    }
     aktionen = {
-      filter: (b) => { filter = b.dataset.f; seite = 1; history.replaceState(null, "", `?status=${filter}`); zeigen(zeichnen); },
-      seite: (b) => { seite = +b.dataset.seite; zeigen(zeichnen); },
+      filter: (b) => { filter = b.dataset.f; seite = 1; history.replaceState(null, "", `?status=${filter}`); zeigenIn(liste, "#pr-liste"); },
+      seite: (b) => { seite = +b.dataset.seite; zeigenIn(liste, "#pr-liste"); },
+      freigeben: (b) => reservierungFreigeben(+b.dataset.id, b.dataset.wer, () => Promise.all([zeigenIn(offene, "#pr-offen"), zeigenIn(liste, "#pr-liste")])),
+      runde: () => rundeDialog(DATEN.ordner || null),
     };
     await zeichnen();
+  }
+
+  // Wie zeigen(), aber nur für einen Teil der Seite.
+  async function zeigenIn(fn, sel) {
+    try { await fn(); } catch (e) { const el = $(sel); if (el) el.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
+  }
+
+  async function reservierungFreigeben(pid, wer, danach) {
+    if (!(await confirm(`Die offene Prüfung von ${wer} verwerfen und den Artikel freigeben? Ihre Befunde, Fotos und Anhänge gehen dabei verloren.`, "Freigeben"))) return;
+    try { await api(`${API}/pruefungen/${pid}`, { method: "DELETE" }); toast("Reservierung freigegeben"); await danach(); }
+    catch (e) { toast(e.message, true); }
+  }
+
+  async function rundeDialog(ordnerId) {
+    const liste = (await api(`${API}/ordner`)).ordner.filter((o) => !o.system_kind);
+    if (!liste.length) { toast("Zuerst unter „Bestand“ eine Gliederung anlegen.", true); return; }
+    const kinder = baumKinder(liste);
+    const optionen = (pid, tiefe) => (kinder[pid] || []).map((o) => `<option value="${o.id}" ${o.id === ordnerId ? "selected" : ""}>${EIN.repeat(tiefe)}${esc(o.name)} (${o.bestand})</option>${optionen(o.id, tiefe + 1)}`).join("");
+    dialog(`<h2>Prüfdurchgang eröffnen</h2>
+      <p class="help">Alle Artikel im gewählten Ordner und darunter (ohne ausgesonderte) kommen auf eine gemeinsame Liste. Mehrere Prüfer arbeiten sie gleichzeitig ab; wer einen Artikel öffnet, reserviert ihn.</p>
+      <label for="rd-titel">Titel</label><input type="text" id="rd-titel" maxlength="160" value="Jahresprüfung ${new Date().getFullYear()}">
+      <label for="rd-ordner">Ordner</label><select id="rd-ordner">${optionen(0, 0)}</select>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="rd-ok" type="button">Eröffnen</button></div>`,
+    (dlg, body) => {
+      fokus($("#rd-titel", body));
+      $("#rd-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        knopf.disabled = true;
+        try {
+          const r = await api(`${API}/durchgaenge`, { method: "POST", body: { titel: $("#rd-titel", body).value, folder_id: +$("#rd-ordner", body).value } });
+          location.href = `/material/durchgang/${r.durchgang.id}`;
+        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+      };
+    });
   }
 
   /* --- Bestand ------------------------------------------------------------------------------------ */
@@ -303,6 +510,7 @@
       const q = new URLSearchParams({ seite, pro_seite: 200 });
       if (filter) q.set("status", filter);
       const d = (await api(`${API}/ordner/${id}?${q}`)).ordner;
+      leisteMarkieren(d.id);
       const system = !!d.system_kind;
       const darfPflegen = DARF.verwalten && !system;
       const z = d.zaehlung || {};
@@ -312,7 +520,8 @@
           <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="unterordner">+ Unterordner</button>
             <a class="btn small" href="/material/artikel/neu?ordner=${d.id}">+ Artikel</a>
             <button class="btn ghost small" data-act="bearbeiten">Bearbeiten</button><button class="btn ghost small" data-act="foto">Foto</button>
-            <button class="btn ghost small" data-act="verschieben">Verschieben</button><button class="btn ghost small" data-act="loeschen">Löschen</button>` : ""}</div></div>
+            <button class="btn ghost small" data-act="verschieben">Verschieben</button><button class="btn ghost small" data-act="loeschen">Löschen</button>` : ""}
+            ${!system && (DARF.verwalten || DARF.pruefen) ? '<button class="btn ghost small" data-act="runde">+ Prüfdurchgang</button>' : ""}</div></div>
         ${system ? `<p class="notice">${d.system_kind === "gesperrt" ? "Hierher verschiebt eine Sperre die Artikel der Gliederung. Zurück in ihren Herkunftsordner bringt sie nur eine Freiprüfung." : "Ausgesonderte Artikel bleiben hier mit ihrem vollen Lebenslauf sichtbar, zählen aber nirgends mehr als Bestand und lassen sich nicht zurückholen."}</p>` : ""}
         <div class="mat-ordnerkopf">${d.foto ? `<img class="mat-ordnerfoto" src="${esc(d.vorschau)}" alt="">` : ""}
           <div>${d.description ? `<p class="mat-text">${esc(d.description)}</p>` : ""}
@@ -320,8 +529,8 @@
           <p class="small">${system ? plural(Object.values(z).reduce((a, b) => a + b, 0), "Artikel", "Artikel") : `Bestand im ganzen Zweig: <strong>${d.bestand}</strong> ${zahlen(z)}`}</p></div></div>
         ${d.unterordner.length ? `<section class="section"><h2>Unterordner</h2>${unterordnerHtml(d.unterordner)}</section>` : ""}
         <section class="section"><h2>Artikel in diesem Ordner</h2>
-          <div class="c-tabs mat-filter">${["", "ueberfaellig", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"].map((s) => `<button type="button" data-act="filter" data-f="${s}" class="${s === filter ? "sel" : ""}">${s ? esc(STATUS[s]) : "alle"}${s && d.direkt && d.direkt[s] ? ` (${d.direkt[s]})` : ""}</button>`).join("")}</div>
-          ${d.artikel.length ? artikelTabelle(d.artikel, { auswahl: darfPflegen }) : leer(filter ? "Keine Artikel mit diesem Status." : "Hier liegen keine Artikel.")}
+          <div class="c-tabs mat-filter">${["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"].map((s) => `<button type="button" data-act="filter" data-f="${s}" class="${s === filter ? "sel" : ""}">${s ? esc(STATUS[s]) : "alle"}${s && d.direkt && d.direkt[s] ? ` (${d.direkt[s]})` : ""}</button>`).join("")}</div>
+          ${d.artikel.length ? artikelTabelle(d.artikel, { auswahl: darfPflegen, pruefen: DARF.pruefen && d.system_kind !== "ausgesondert" }) : leer(filter ? "Keine Artikel mit diesem Status." : "Hier liegen keine Artikel.")}
           ${seitenleiste(d.artikel_gesamt, seite, d.pro_seite)}
           ${darfPflegen ? '<div class="mat-sammel" id="mat-sammel" hidden><span id="mat-sammel-n"></span><button class="btn small" data-act="sammel-verschieben">Verschieben nach …</button></div>' : ""}
         </section>
@@ -340,6 +549,7 @@
         filter: (b) => { filter = b.dataset.f; seite = 1; zeigen(zeichnen); },
         seite: (b) => { seite = +b.dataset.seite; zeigen(zeichnen); },
         unterordner: () => ordnerDialog({ kind: "standort" }, d.id),
+        runde: () => rundeDialog(d.id),
         bearbeiten: () => ordnerDialog(d, d.parent_id),
         foto: () => fotoDialog(`${API}/ordner/${d.id}/foto`, !!d.foto, zeichnen),
         verschieben: async () => {
@@ -376,9 +586,10 @@
         const f = $("#fd-datei", body).files[0];
         if (!f) { toast("Bitte ein Foto wählen.", true); return; }
         const fd = new FormData(); fd.append("file", f);
-        ev.currentTarget.disabled = true;
+        const knopf = ev.currentTarget;
+        knopf.disabled = true;
         try { await api(url, { method: "POST", body: fd }); dlg.close(); toast("Foto gespeichert"); await danach(); }
-        catch (e) { toast(e.message, true); ev.currentTarget.disabled = false; }
+        catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
       const weg = $("#fd-weg", body);
       if (weg) weg.onclick = async () => {
@@ -390,9 +601,14 @@
   /* --- Artikel --------------------------------------------------------------------------------------- */
   async function artikel() {
     const a = (await api(`${API}/artikel/${DATEN.id}`)).artikel;
+    leisteMarkieren(a.folder_id);
     const p = a.produkt;
     const frei = a.lock_state === "frei";
     const darfPflegen = DARF.verwalten && a.lock_state !== "ausgesondert";
+    const aus = a.lock_state === "ausgesondert";
+    const gesperrt = a.lock_state === "gesperrt" || a.lock_state === "verloren";
+    const eigenerEntwurf = a.entwurf && a.entwurf.pruefer_id === DARF.uid;
+    const fremderEntwurf = a.entwurf && !eigenerEntwurf;
     const iv = a.intervall || {};
     const ld = a.lebensdauer;
     let ldText = '<span class="muted">keine festgeschriebene Lebensdauer</span>';
@@ -409,6 +625,7 @@
       ${a.status === "ausgesondert" ? `<p class="mat-banner s-ausgesondert">AUSGESONDERT – dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden.</p>` : ""}
       ${a.status === "gesperrt" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
       ${a.status === "lebensdauer" ? `<p class="mat-banner s-lebensdauer">LEBENSDAUER ERREICHT – aussondern.</p>` : ""}
+      ${a.status === "neu" ? '<p class="mat-banner s-neu">NEU – die Eingangsprüfung steht aus. Bis dahin nicht einsetzen.</p>' : ""}
       <div class="mat-pfad">${bc}</div>
       <div class="mat-artikelkopf">
         ${p.bild ? `<a href="${esc(p.original || p.bild)}" target="_blank" rel="noopener"><img class="mat-produktbild" src="${esc(p.bild)}" alt="Produktbild ${esc(produktName(p))}"></a>` : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
@@ -416,6 +633,14 @@
           <h1>${esc(a.inventory_no)} ${statusMarke(a.status, true)}</h1>
           <p class="mat-produktzeile"><a href="/material/katalog/produkt/${p.id}">${esc(produktName(p))}</a>${p.article_no ? ` · Art.-Nr. ${esc(p.article_no)}` : ""}</p>
           <p>Seriennummer <strong>${esc(a.serial_no)}</strong>${a.serial_generated ? ' <span class="badge grey" title="Der Hersteller vergibt keine Seriennummer – diese Nummer bitte dauerhaft am Artikel anbringen.">vom System vergeben</span>' : ""}</p>
+          <div class="btn-row mat-pruefknoepfe">${!aus && DARF.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
+            ${frei && DARF.pruefen && !a.entwurf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
+            ${gesperrt && DARF.verwalten && !a.entwurf ? '<button class="btn secondary small" data-act="aussondern">Aussondern</button>' : ""}</div>
+          ${a.entwurf ? `<p class="small">In Prüfung bei <strong>${esc(a.entwurf.pruefer)}</strong> seit ${esc(fmtZeit(a.entwurf.seit))}
+            ${fremderEntwurf ? ` · <a href="/material/pruefung/${a.entwurf.id}">ansehen</a>` : ""}
+            ${fremderEntwurf && DARF.verwalten ? ' · <button class="lnk" type="button" data-act="freigeben">Reservierung freigeben</button>' : ""}</p>` : ""}
+          ${!aus && !DARF.pruefen && (DARF.verwalten || DARF.lesen) ? '<p class="small muted">Prüfen dürfen Prüfer mit hinterlegter Urkundennummer.</p>' : ""}
+          ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang <a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>.</p>` : ""}
           <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${frei ? '<button class="btn ghost small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen ? '<button class="btn ghost small" data-act="loeschen">Löschen</button>' : ""}` : ""}</div>
         </div>
       </div>
@@ -428,7 +653,8 @@
           ${zeile("Kauf", a.purchased_on ? esc(fmtTag(a.purchased_on)) : '<span class="muted">–</span>')}
           ${zeile("Erstgebrauch", a.first_use_on ? esc(fmtTag(a.first_use_on)) : '<span class="muted">–</span>')}
           ${zeile("Lebensende", ldText)}
-          ${zeile("Nächste Prüfung", a.next_due_on ? `<strong>${esc(fmtTag(a.next_due_on))}</strong>` : '<span class="mat-warn">keine</span>')}
+          ${zeile("Nächste Prüfung", aus ? '<span class="muted">–</span>' : gesperrt ? '<span class="muted">setzt die Freiprüfung</span>' : a.status === "neu" ? '<strong>Eingangsprüfung ausstehend</strong>' : a.next_due_on ? `<strong>${esc(fmtTag(a.next_due_on))}</strong>` : '<span class="mat-warn">keine</span>')}
+          ${zeile("Zuletzt geprüft", a.last_inspected_on ? esc(fmtTag(a.last_inspected_on)) : '<span class="muted">noch nie</span>')}
           ${zeile("Prüfintervall", ivText)}
           ${zeile("Prüfformular", a.formular ? `${esc(a.formular.title || "ohne Titel")} · Version ${a.formular.version} <span class="muted">(${esc(a.formular.quelle)}, ${plural(a.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span>` : '<span class="mat-warn">kein aktives Prüfformular – im Katalog anlegen</span>')}
           ${a.notes ? zeile("Bemerkung", `<span class="mat-text">${esc(a.notes)}</span>`) : ""}
@@ -441,7 +667,7 @@
           ${a.dokumente.length ? `<ul class="mat-doks">${a.dokumente.map((d) => `<li><a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a> <span class="muted">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}</span></li>`).join("")}</ul>` : leer("Am Produkt sind keine Dokumente hinterlegt.")}
         </section>
       </div>
-      <section class="section"><h2>Prüfungen</h2>${leer("Noch keine Prüfungen. Prüfen, Sperren und Aussondern kommen mit Lieferung 2.")}</section>
+      <section class="section"><h2>Prüfungen</h2>${pruefListe(a.pruefungen)}</section>
       <section class="section"><h2>Journal</h2><p class="help">Änderungen am Artikel und an seinem Produkt, neueste zuerst.</p>${journalHtml(a.journal, true)}</section>`;
     aktionen = {
       "qr-kopieren": async () => {
@@ -450,6 +676,10 @@
         catch (e) { feld.select(); document.execCommand && document.execCommand("copy"); toast("Adresse markiert – mit Strg+C kopieren"); }
       },
       bearbeiten: () => artikelDialog(a),
+      pruefen: () => { location.href = eigenerEntwurf ? `/material/pruefung/${a.entwurf.id}` : `/material/artikel/${a.id}/pruefung/neu`; },
+      sperren: () => sperrDialog(a),
+      aussondern: () => aussonderDialog(a),
+      freigeben: () => reservierungFreigeben(a.entwurf.id, a.entwurf.pruefer, () => zeigen(artikel)),
       verschieben: async () => {
         const ziel = await ordnerWaehlen("Artikel verschieben nach …");
         if (!ziel) return;
@@ -464,6 +694,55 @@
     };
   }
 
+  /* Prüfungen eines Artikels, neueste zuerst – der Prüfteil des Lebenslaufs. */
+  function pruefListe(liste) {
+    if (!liste || !liste.length) return leer("Noch keine Prüfung.");
+    return `<table class="list mat-tabelle mat-pruefliste"><thead><tr><th>Datum</th><th>Art</th><th>Ergebnis</th><th>Prüfer</th><th>Nächste Prüfung</th></tr></thead><tbody>
+      ${liste.map((x) => `<tr class="${x.entwurf ? "mat-entwurf" : ""}"><td data-l="Datum"><a href="/material/pruefung/${x.id}">${x.entwurf ? "Entwurf" : esc(fmtTag(x.datum))}</a></td>
+        <td data-l="Art">${esc(PRUEFART_KURZ[x.art] || x.art)}</td>
+        <td data-l="Ergebnis">${x.entwurf ? '<span class="muted">in Prüfung</span>' : ergebnisMarke(x.ergebnis)}${x.grund ? `<div class="small muted">${esc(x.grund)}</div>` : ""}</td>
+        <td data-l="Prüfer">${esc(x.pruefer || "")}${x.urkunde ? ` <span class="muted small">(${esc(x.urkunde)})</span>` : ""}</td>
+        <td data-l="Nächste Prüfung">${x.naechste ? esc(fmtTag(x.naechste)) : '<span class="muted">–</span>'}</td></tr>`).join("")}</tbody></table>`;
+  }
+  const ergebnisMarke = (e) => (e ? `<span class="mat-ergebnis-marke e-${esc(e)}">${esc(ERGEBNIS[e] || e)}</span>` : "");
+
+  function sperrDialog(a) {
+    dialog(`<h2>${esc(a.inventory_no)} sperren</h2>
+      <p class="help">Sperren ohne Prüfung – nach Sturzbelastung, Beschädigung oder bei Verlust. Der Artikel wandert nach „Gesperrt“ seiner Gliederung; zurück bringt ihn nur eine Freiprüfung mit „einsatzbereit“.</p>
+      <label for="sd-grund">Grund</label><select id="sd-grund">${Object.entries(SPERRGRUND).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select>
+      <label for="sd-text">Was ist passiert?</label><input type="text" id="sd-text" maxlength="300" placeholder="z. B. Sturz in die Rettungskette, Schnitt am Band">
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn danger" id="sd-ok" type="button">Sperren</button></div>`,
+    (dlg, body) => {
+      $("#sd-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        knopf.disabled = true;
+        try { await api(`${API}/artikel/${a.id}/sperren`, { method: "POST", body: { grund: $("#sd-grund", body).value, text: $("#sd-text", body).value } }); dlg.close(); toast("Gesperrt"); zeigen(artikel); }
+        catch (e) { toast(e.message, true); knopf.disabled = false; }
+      };
+    });
+  }
+
+  function aussonderDialog(a) {
+    const heute = new Date();
+    const tag = `${heute.getFullYear()}-${String(heute.getMonth() + 1).padStart(2, "0")}-${String(heute.getDate()).padStart(2, "0")}`;
+    dialog(`<h2>${esc(a.inventory_no)} aussondern</h2>
+      <p class="help">Die Aussonderung ist endgültig: Der Artikel wandert nach „Ausgesondert“, bleibt dort mit seinem Lebenslauf sichtbar und zählt nirgends mehr als Bestand.</p>
+      <div class="field-row"><div><label for="au-grund">Grund</label><select id="au-grund">${Object.entries(AUSSONDERUNGSGRUND).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
+        <div><label for="au-datum">Datum</label><input type="date" id="au-datum" value="${tag}" max="${tag}"></div></div>
+      <label for="au-bem">Bemerkung</label><textarea id="au-bem" rows="3" maxlength="2000"></textarea>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn danger" id="au-ok" type="button">Aussondern</button></div>`,
+    (dlg, body) => {
+      $("#au-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        knopf.disabled = true;
+        try {
+          await api(`${API}/artikel/${a.id}/aussondern`, { method: "POST", body: { grund: $("#au-grund", body).value, datum: $("#au-datum", body).value, bemerkung: $("#au-bem", body).value } });
+          dlg.close(); toast("Ausgesondert"); zeigen(artikel);
+        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+      };
+    });
+  }
+
   function artikelDialog(a) {
     const textil = a.produkt.material_kind === "textil";
     dialog(`<h2>Artikel ${esc(a.inventory_no)} bearbeiten</h2>
@@ -473,7 +752,7 @@
         <div><label for="ad-kauf">Kauf</label><input type="date" id="ad-kauf" value="${esc(a.purchased_on || "")}"></div></div>
       <div class="field-row"><div><label for="ad-erst">Erstgebrauch</label><input type="date" id="ad-erst" value="${esc(a.first_use_on || "")}"></div>
         <div><label for="ad-int">Prüfintervall am Artikel (Monate)</label><input type="number" id="ad-int" min="1" max="120" value="${a.interval_months || ""}" placeholder="vom Produkt/Ordner"></div></div>
-      <div class="field-row"><div><label for="ad-due">Nächste Prüfung</label><input type="date" id="ad-due" value="${esc(a.next_due_on || "")}" max="${esc(a.next_due_on || "")}">
+      <div class="field-row"><div ${a.status === "neu" ? "hidden" : ""}><label for="ad-due">Nächste Prüfung</label><input type="date" id="ad-due" value="${esc(a.next_due_on || "")}" max="${esc(a.next_due_on || "")}">
           <div class="help">Nur vorziehen – später setzt sie eine Prüfung.</div></div>
         ${textil ? `<div><label for="ad-ende">Lebensende</label><input type="date" id="ad-ende" value="${esc(a.retire_by || "")}"><div class="help">Nur vorziehen. Leer lassen behält das Lebensende.</div></div>` : "<div></div>"}</div>
       <label for="ad-notes">Bemerkung</label><textarea id="ad-notes" rows="3" maxlength="4000">${esc(a.notes || "")}</textarea>
@@ -484,7 +763,7 @@
         knopf.disabled = true;
         const herst = $("#ad-herst", body).value;
         // Ein Tagesdatum bleibt erhalten, wenn der Monat derselbe ist – der Monatswähler kennt keinen Tag.
-        const daten = { serial_no: $("#ad-sn", body).value, purchased_on: $("#ad-kauf", body).value || null,
+        const daten = { stand: a.stand, serial_no: $("#ad-sn", body).value, purchased_on: $("#ad-kauf", body).value || null,
                         manufactured_on: herst && a.manufactured_on && a.manufactured_on.slice(0, 7) === herst ? a.manufactured_on : (herst || null),
                         first_use_on: $("#ad-erst", body).value || null, interval_months: $("#ad-int", body).value || null,
                         next_due_on: $("#ad-due", body).value || null, notes: $("#ad-notes", body).value };
@@ -501,6 +780,7 @@
     const ordnerListe = (await api(`${API}/ordner`)).ordner;
     const wahl = ordnerListe.filter((o) => !o.system_kind);
     if (!wahl.length) { inhalt.innerHTML = `<h1>Artikel anlegen</h1>${leer("Zuerst unter „Bestand“ eine Gliederung anlegen.")}`; return; }
+    leisteMarkieren(DATEN.ordner);
     const kinder = baumKinder(wahl);
     const optionen = (pid, tiefe) => (kinder[pid] || []).map((o) => `<option value="${o.id}" ${o.id === DATEN.ordner ? "selected" : ""}>${EIN.repeat(tiefe)}${esc(o.name)}</option>${optionen(o.id, tiefe + 1)}`).join("");
     let produkt = null;
@@ -518,8 +798,9 @@
           <div><label for="an-kauf">Kauf</label><input type="date" id="an-kauf"></div></div>
         <div class="field-row"><div><label for="an-erst">Erstgebrauch</label><input type="date" id="an-erst"></div>
           <div><label for="an-int">Prüfintervall am Artikel (Monate)</label><input type="number" id="an-int" min="1" max="120" placeholder="vom Produkt/Ordner"></div></div>
-        <div class="field-row"><div><label for="an-due">Nächste Prüfung</label><input type="date" id="an-due"><div class="help" id="an-due-hilfe"></div></div>
-          <div id="an-ende-feld" hidden><label for="an-ende">Lebensende</label><input type="date" id="an-ende"><div class="help" id="an-ende-hilfe"></div></div></div>
+        <div class="field-row"><div id="an-ende-feld" hidden><label for="an-ende">Lebensende</label><input type="date" id="an-ende"><div class="help" id="an-ende-hilfe"></div></div>
+          <div><p class="help" id="an-due-hilfe"></p></div></div>
+        <p class="notice">Neu angelegte Artikel stehen auf <strong>neu</strong>, bis ein Prüfer die Eingangsprüfung gemacht hat – erst sie gibt sie frei und setzt die erste Fälligkeit.</p>
         <label for="an-notes">Bemerkung</label><textarea id="an-notes" rows="2" maxlength="4000"></textarea>
         <div class="btn-row mat-knoepfe"><button class="btn" data-act="anlegen">Anlegen</button>
           <button class="btn secondary" data-act="anlegen-weiter" title="Produkt und Ordner bleiben für den nächsten Artikel stehen">Anlegen und nächsten</button></div>
@@ -533,10 +814,7 @@
       }
       try {
         const v = (await api(`${API}/artikel/vorschlag?${q}`)).vorschlag;
-        const due = $("#an-due");
-        if (!due.dataset.selbst) due.value = v.next_due_on || "";
-        due.max = v.spaetestens || "";
-        $("#an-due-hilfe").textContent = v.intervall.monate ? `Intervall ${v.intervall.monate} Monate (${v.intervall.quelle}); ohne Prüfung spätestens ${fmtTag(v.spaetestens)}.` : "";
+        $("#an-due-hilfe").textContent = v.intervall.monate ? `Prüfintervall ${v.intervall.monate} Monate (${v.intervall.quelle}).` : "Kein Prüfintervall – am Produkt oder in der Kategorie eintragen.";
         const textil = v.material_kind === "textil";
         $("#an-ende-feld").hidden = !textil;
         if (textil) {
@@ -549,7 +827,6 @@
     }
     const spaeter = () => { clearTimeout(vorschlagLos); vorschlagLos = setTimeout(vorschlag, 250); };
     ["#an-ordner", "#an-herst", "#an-kauf", "#an-erst", "#an-int"].forEach((s) => $(s).addEventListener("change", spaeter));
-    $("#an-due").addEventListener("input", (e) => { e.target.dataset.selbst = "1"; });
     $("#an-ende").addEventListener("input", (e) => { e.target.dataset.selbst = "1"; });
     function waehlen(p) {
       produkt = p;
@@ -559,7 +836,7 @@
       $("#an-treffer").innerHTML = "";
       $("#an-q").value = "";
       $("#an-anders").onclick = () => { produkt = null; $("#an-produkt").hidden = true; fokus($("#an-q")); };
-      $("#an-due").dataset.selbst = ""; $("#an-ende").dataset.selbst = "";
+      $("#an-ende").dataset.selbst = "";
       vorschlag();
     }
     let suchLos = null;
@@ -584,7 +861,7 @@
       const daten = { product_id: produkt.id, folder_id: +$("#an-ordner").value, serial_no: $("#an-sn").value,
                       manufactured_on: $("#an-herst").value || null, purchased_on: $("#an-kauf").value || null,
                       first_use_on: $("#an-erst").value || null, interval_months: $("#an-int").value || null,
-                      next_due_on: $("#an-due").value || null, notes: $("#an-notes").value };
+                      notes: $("#an-notes").value };
       if (!$("#an-ende-feld").hidden) daten.retire_by = $("#an-ende").value || null;
       try {
         const r = await api(`${API}/artikel`, { method: "POST", body: daten });
@@ -942,6 +1219,491 @@
     await zeichnen();
   }
 
-  const ANSICHTEN = { dashboard, pruefungen, bestand, ordner, artikel, artikel_neu: artikelNeu, katalog, produkt, formular, suche };
+  /* --- Prüfung starten ---------------------------------------------------------------------------- */
+  function artikelPfad(a) {
+    return `<div class="mat-pfad">${(a.pfad || []).map((o) => `<a href="/material/ordner/${o.id}">${esc(o.name)}</a>`).join(" / ")}
+      / <a href="/material/artikel/${a.id}">${esc(a.inventory_no)}</a></div>`;
+  }
+  function lebensdauerHinweis(ld) {
+    if (!ld) return "";
+    return ld.erreicht ? `<p class="mat-banner s-lebensdauer">LEBENSENDE ERREICHT am ${esc(fmtTag(ld.ende))} – „einsatzbereit“ ist nicht mehr wählbar.</p>`
+      : `<p class="notice">Textil: Lebensende ${esc(fmtTag(ld.ende))} – noch ${plural(ld.rest_tage, "Tag", "Tage")}.</p>`;
+  }
+
+  async function pruefungNeu() {
+    const a = (await api(`${API}/artikel/${DATEN.id}`)).artikel;
+    leisteMarkieren(a.folder_id);
+    if (a.entwurf && a.entwurf.pruefer_id === DARF.uid && DARF.pruefen) { location.replace(`/material/pruefung/${a.entwurf.id}`); return; }
+    const p = a.produkt;
+    const pa = a.pruefarten || { arten: [], vorschlag: null };
+    let hinweis = "";
+    if (a.lock_state === "ausgesondert") hinweis = "Ein ausgesonderter Artikel wird nicht mehr geprüft.";
+    else if (!DARF.pruefen) hinweis = "Prüfen dürfen nur Prüfer mit hinterlegter Urkundennummer (Nutzerverwaltung → Häkchen „Prüfer“).";
+    else if (a.entwurf) hinweis = `In Prüfung bei ${a.entwurf.pruefer} seit ${fmtZeit(a.entwurf.seit)}.${DARF.verwalten ? " Eine liegen gebliebene Reservierung gibst du in der Artikelansicht frei." : " Eine liegen gebliebene Reservierung gibt der Materialwart frei."}`;
+    else if (!a.formular) hinweis = "Für dieses Produkt gibt es kein aktives Prüfformular – weder am Produkt noch in seiner Kategorie. Der Produktkatalogpfleger legt es im Katalog an.";
+    const ld = a.lebensdauer && a.lebensdauer.festgeschrieben ? { ende: a.lebensdauer.ende, rest_tage: a.lebensdauer.rest_tage, erreicht: a.lebensdauer.rest_tage <= 0 } : null;
+    inhalt.innerHTML = `${p.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen. Dieses Produkt stammt aus den Demodaten.</p>' : ""}
+      ${artikelPfad(a)}
+      <div class="page-head"><h1>Prüfung ${esc(a.inventory_no)} ${statusMarke(a.status, true)}</h1></div>
+      <div class="mat-formular">
+        <p class="mat-produktzeile"><strong>${esc(produktName(p))}</strong>${p.article_no ? ` · Art.-Nr. ${esc(p.article_no)}` : ""} · Seriennummer ${esc(a.serial_no)}</p>
+        ${a.lock_state !== "frei" && a.lock_state !== "ausgesondert" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.</p>` : ""}
+        ${lebensdauerHinweis(ld)}
+        ${a.formular ? `<p>Formular: ${esc(a.formular.title || "ohne Titel")} · Version ${a.formular.version} <span class="muted">(${esc(a.formular.quelle)}, ${plural(a.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span></p>` : ""}
+        ${a.durchgang ? `<p>Im Prüfdurchgang <a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a> – die Prüfung zählt dort.</p>` : ""}
+        ${hinweis ? `<p class="notice">${esc(hinweis)}</p><p><a class="btn secondary" href="/material/artikel/${a.id}">Zum Artikel</a></p>` : `
+          <fieldset class="mat-arten"><legend>Art der Prüfung</legend>
+            ${pa.arten.map((x) => `<label class="mat-art-wahl"><input type="radio" name="art" value="${x}" ${x === pa.vorschlag ? "checked" : ""}> ${esc(PRUEFART[x] || x)}</label>`).join("")}
+            ${pa.arten.length === 1 && pa.arten[0] === "eingang" ? '<p class="help">Die erste Prüfung eines Artikels ist die Eingangsprüfung. Erst sie gibt ihn frei; bis dahin steht er auf „neu“.</p>' : ""}
+          </fieldset>
+          <div class="btn-row mat-knoepfe"><button class="btn" data-act="beginnen">Prüfung beginnen</button><a class="btn secondary" href="/material/artikel/${a.id}">Abbrechen</a></div>
+          <p class="help">Mit dem Beginn reservierst du den Artikel: Andere sehen „in Prüfung bei dir“, bis du abschließt oder verwirfst. Jede Eingabe wird sofort gespeichert – du kannst jederzeit unterbrechen.</p>`}
+      </div>`;
+    aktionen = {
+      beginnen: async (b) => {
+        b.disabled = true;
+        const wahl = $('input[name="art"]:checked');
+        const body = { art: wahl ? wahl.value : null };
+        if (DATEN.durchgang) body.durchgang_id = DATEN.durchgang;
+        try { const r = await api(`${API}/artikel/${a.id}/pruefungen`, { method: "POST", body }); location.href = `/material/pruefung/${r.pruefung.id}`; }
+        catch (e) { toast(e.message, true); b.disabled = false; }
+      },
+    };
+  }
+
+  /* --- Prüfung (Entwurf und abgeschlossen) --------------------------------------------------------
+     Fürs Telefon am Material gebaut: je Prüfpunkt große Umschalter, ein Kamera-Knopf, die Bemerkung nur
+     bei Bedarf; unten eine feste Leiste mit Ergebnis und Abschluss. Jede Eingabe geht sofort an den
+     Server – der Entwurf ist immer gespeichert. Prüfen und Anzeigen übernimmt der Server; hier wird nur
+     vorab gezeigt, was er sagen würde (kritischer Mangel, fehlendes Foto). */
+  const befundMarke = (b) => (b ? `<span class="mat-befund b-${esc(b)}">${esc(BEFUND[b] || b)}</span>` : '<span class="muted">–</span>');
+  const isoHeute = (plusTage) => {
+    const d = new Date(); d.setDate(d.getDate() + (plusTage || 0));
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
+  async function pruefungAnsicht() {
+    let pr = (await api(`${API}/pruefungen/${DATEN.id}`)).pruefung;
+    let ergebnis = null;
+    let seiten = [];                 // Dateien für den nächsten Anhang (Scan: eine Seite je Foto)
+    let hochladen = false;           // ein Anhang ist unterwegs – der Knopf bleibt so lange gesperrt
+    let gebunden = false;
+    // Was gerade gespeichert wird. Ein Wert wird beim Verlassen des Feldes gespeichert – tippt jemand danach
+    // sofort auf „Abschließen“, wartet der Abschluss, bis der Wert angekommen ist.
+    let laufend = Promise.resolve();
+    const merken = (p) => { laufend = laufend.then(() => p, () => p); return p; };
+    const bearbeitbar = () => pr.entwurf && pr.eigen && DARF.pruefen;
+    const punkt = (rid) => pr.punkte.find((x) => x.id === rid);
+
+    function kopf() {
+      const a = pr.artikel;
+      return `${pr.produkt.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen. Dieses Produkt stammt aus den Demodaten.</p>' : ""}
+        <div class="mat-pfad">${a.pfad.map((o) => `<a href="/material/ordner/${o.id}">${esc(o.name)}</a>`).join(" / ")} / <a href="/material/artikel/${a.id}">${esc(a.inventory_no)}</a></div>
+        <div class="page-head"><h1>${esc(PRUEFART[pr.art] || pr.art)} <span class="mat-h1-zusatz">${esc(a.inventory_no)}</span> ${pr.entwurf ? '<span class="badge">Entwurf</span>' : ergebnisMarke(pr.ergebnis)}</h1>
+          ${pr.entwurf && !pr.eigen && DARF.verwalten ? '<div class="btn-row"><button class="btn ghost small" data-act="freigeben">Reservierung freigeben</button></div>' : ""}</div>
+        <p class="mat-produktzeile"><strong>${esc(pr.produkt.name)}</strong>${pr.produkt.article_no ? ` · Art.-Nr. ${esc(pr.produkt.article_no)}` : ""} · Seriennummer ${esc(a.serial_no)} ${statusMarke(a.status)}</p>
+        <p class="small muted">${pr.formular ? `Formular ${esc(pr.formular.titel || "ohne Titel")}, Version ${pr.formular.version} · ` : ""}Prüfer ${esc(pr.pruefer || "–")}${pr.urkunde ? ` (Urkundennummer ${esc(pr.urkunde)})` : ""}
+          · ${pr.entwurf ? `begonnen ${esc(fmtZeit(pr.begonnen_am))}` : `Prüftag ${esc(fmtTag(pr.datum))}`}
+          ${pr.durchgang ? ` · Durchgang <a href="/material/durchgang/${pr.durchgang.id}">${esc(pr.durchgang.titel)}</a>` : ""}</p>`;
+    }
+
+    function punktHtml(x) {
+      const mangel = x.befund === "mangel";
+      const nz = x.befund === "nicht_zutreffend";
+      let steuer;
+      if (x.art === "yesno") {
+        steuer = `<div class="mat-wahl3" role="group" aria-label="Befund zu ${esc(x.text)}">
+          ${["ja", "nein"].map((w) => `<button type="button" data-act="pwert" data-rid="${x.id}" data-wert="${w}" class="${w === x.soll ? "soll" : "abw"}" aria-pressed="${!nz && x.wert === w}">${w === "ja" ? "Ja" : "Nein"}</button>`).join("")}
+          <button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="nicht_zutreffend" aria-pressed="${nz}">n. z.</button></div>`;
+      } else if (x.art === "signature") {
+        steuer = '<p class="help">Unterschriftsfelder folgen mit Lieferung 3.</p>';
+      } else {
+        const feld = x.art === "photo" ? ""
+          : x.art === "date" ? `<input type="date" class="mat-pwert" data-rid="${x.id}" value="${esc(x.wert || "")}" aria-label="${esc(x.text)}">`
+          : x.art === "number" ? `<input type="text" inputmode="decimal" class="mat-pwert" data-rid="${x.id}" value="${esc(x.wert || "")}" placeholder="${x.soll ? `Soll ${esc(x.soll)}` : "Wert"}" aria-label="${esc(x.text)}">`
+          : `<textarea class="mat-pwert" data-rid="${x.id}" rows="2" maxlength="1000" aria-label="${esc(x.text)}" placeholder="${esc(x.soll || "")}">${esc(x.wert || "")}</textarea>`;
+        steuer = `${feld}<div class="mat-wahl3" role="group" aria-label="Befund zu ${esc(x.text)}">
+          ${[["ok", "in Ordnung", "soll"], ["mangel", "Mangel", "abw"], ["nicht_zutreffend", "n. z.", ""]].map(([b, t, k]) => `<button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="${b}" class="${k}" aria-pressed="${x.befund === b}">${t}</button>`).join("")}</div>`;
+      }
+      const fotoPflicht = mangel || (x.art === "photo" && x.pflicht && !nz);
+      const foto = x.art === "signature" ? "" : `<div class="mat-punkt-foto">
+          ${x.foto ? `<a href="${esc(x.foto.web)}" target="_blank" rel="noopener"><img src="${esc(x.foto.vorschau)}" alt="Foto zu ${esc(x.text)}"></a>` : ""}
+          <label class="btn ${fotoPflicht && !x.foto ? "" : "secondary"} small mat-kamera">📷 ${x.foto ? "neues Foto" : "Foto"}<input type="file" accept="image/*" capture="environment" data-foto="${x.id}" class="mat-datei" aria-label="Foto zu ${esc(x.text)}"></label>
+          ${x.foto ? `<button type="button" class="lnk small" data-act="pfoto-weg" data-rid="${x.id}">Foto entfernen</button>` : ""}
+          ${fotoPflicht && !x.foto ? '<span class="mat-pflicht">Foto ist Pflicht</span>' : ""}</div>`;
+      const notiz = mangel || x.notiz;
+      return `<div class="mat-punkt${mangel ? " mangel" : ""}${nz ? " nz" : ""}" id="pp-${x.id}">
+        <div class="mat-punkt-kopf"><span class="mat-punkt-text">${esc(x.text)}</span>
+          ${x.kritisch ? '<span class="mat-kritisch" title="Ein Mangel hier schließt „einsatzbereit“ aus">kritisch</span>' : ""}
+          ${x.art === "yesno" && x.soll ? `<span class="muted small">Soll ${esc(x.soll)}</span>` : ""}${x.pflicht ? "" : '<span class="muted small">optional</span>'}</div>
+        ${steuer}${foto}
+        <textarea class="mat-pnotiz" data-rid="${x.id}" rows="2" maxlength="1000" placeholder="${mangel ? "Was ist wo zu sehen? (Mangel)" : "Bemerkung"}" ${notiz ? "" : "hidden"}>${esc(x.notiz || "")}</textarea>
+        ${notiz ? "" : `<button type="button" class="lnk small" data-act="pnotiz-auf" data-rid="${x.id}">+ Bemerkung</button>`}</div>`;
+    }
+
+    function punkteHtml() {
+      if (!pr.punkte.length) return "";
+      let gruppe = null;
+      let html = "";
+      pr.punkte.forEach((x) => {
+        if (x.gruppe !== gruppe) { gruppe = x.gruppe; html += gruppe ? `<h3 class="mat-gruppe">${esc(gruppe)}</h3>` : ""; }
+        html += punktHtml(x);
+      });
+      return `<section class="section mat-punkte"><h2>Prüfpunkte</h2>
+        <p class="help">Vorbelegt mit dem Sollwert – ändere nur, was abweicht. Ein Mangel braucht ein Foto, ein kritischer schließt „einsatzbereit“ aus.</p>${html}</section>`;
+    }
+
+    function anhaengeListe() {
+      if (!pr.anhaenge.length) return leer("Keine Anhänge.");
+      return `<ul class="mat-anhaenge">${pr.anhaenge.map((x) => `<li><a href="${esc(x.datei)}" target="_blank" rel="noopener">${esc(x.titel)}</a>
+        <span class="muted small">${esc(x.art_text)} · ${plural(x.seiten || 0, "Seite", "Seiten")} · SHA-256 <span class="mat-hash" title="${esc(x.sha256)}">${esc(x.sha256.slice(0, 12))}…</span>${x.im_protokoll ? " · ans Protokoll" : ""}</span>
+        ${bearbeitbar() ? `<button type="button" class="lnk small" data-act="anhang-weg" data-id="${x.id}">entfernen</button>` : ""}</li>`).join("")}</ul>`;
+    }
+
+    function anhaengeHtml() {
+      const neu = bearbeitbar() ? `<div class="mat-anhang-neu">
+          <div class="field-row"><div><label for="ah-art">Art</label><select id="ah-art">${Object.entries(ANHANGART).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
+            <div><label for="ah-titel">Titel</label><input type="text" id="ah-titel" maxlength="160" placeholder="z. B. Prüfkarte des Herstellers"></div></div>
+          <div class="btn-row"><label class="btn secondary small">📷 Seite fotografieren<input type="file" accept="image/*" capture="environment" id="ah-kamera" class="mat-datei"></label>
+            <label class="btn secondary small">Dateien wählen<input type="file" accept="application/pdf,image/*" multiple id="ah-dateien" class="mat-datei"></label></div>
+          <ol class="mat-scan" id="ah-seiten"></ol>
+          <label class="inline"><input type="checkbox" id="ah-protokoll" checked> hinten ans Protokoll hängen (PDF ab Lieferung 3)</label>
+          <div class="btn-row"><button type="button" class="btn small" data-act="anhang-hoch" id="ah-hoch" disabled>Als ein PDF anhängen</button></div></div>` : "";
+      return `<section class="section"><h2>Anhänge</h2>
+        ${bearbeitbar() ? '<p class="help">Externe Prüfkarte, Bericht eines Prüfdienstes … als PDF oder Foto. Mehrere Fotos (eine je Seite) und PDFs werden in der Reihenfolge der Liste ein PDF.</p>' : ""}
+        <div id="ah-liste">${anhaengeListe()}</div>${neu}</section>`;
+    }
+
+    function seitenZeichnen() {
+      const ol = $("#ah-seiten");
+      if (!ol) return;
+      ol.innerHTML = seiten.map((f, i) => `<li>${esc(f.name)} <span class="muted small">${groesse(f.size)}</span>
+        <button type="button" class="lnk small" data-act="seite-weg" data-i="${i}">entfernen</button></li>`).join("");
+      $("#ah-hoch").disabled = !seiten.length || hochladen;
+      $("#ah-hoch").textContent = hochladen ? "Wird hochgeladen …" : seiten.length > 1 ? `${seiten.length} Dateien als ein PDF anhängen` : "Als PDF anhängen";
+    }
+
+    function offeneHinweise() {
+      const offen = pr.punkte.filter((x) => x.pflicht && x.art !== "signature" && x.befund !== "nicht_zutreffend"
+        && (x.art === "photo" ? !x.foto : x.art === "yesno" ? !x.wert : !(x.wert || "").trim()));
+      const ohneFoto = pr.punkte.filter((x) => x.befund === "mangel" && !x.foto);
+      const kritisch = pr.punkte.filter((x) => x.befund === "mangel" && x.kritisch);
+      const ldErreicht = pr.lebensdauer && pr.lebensdauer.erreicht;
+      return { offen, ohneFoto, kritisch, einsatzSperre: kritisch.length || ldErreicht, maengel: pr.punkte.filter((x) => x.befund === "mangel") };
+    }
+
+    function abschlussHtml() {
+      return `<div class="mat-abschluss" id="pr-abschluss" role="region" aria-label="Ergebnis und Abschluss">
+        <div class="mat-ergebnis" role="group" aria-label="Ergebnis">
+          ${Object.keys(ERGEBNIS).map((e) => `<button type="button" data-act="ergebnis" data-e="${e}" class="e-${e}" aria-pressed="false">${esc(ERGEBNIS[e])}</button>`).join("")}</div>
+        <div class="mat-abschluss-zeile">
+          <label class="mat-due" id="pr-due-feld" hidden>Nächste Prüfung <input type="date" id="pr-due" value="${esc(pr.vorschlag_naechste || "")}" max="${esc(pr.vorschlag_naechste || "")}" min="${isoHeute(1)}"></label>
+          <input type="text" id="pr-grund" maxlength="300" placeholder="Grund" aria-label="Grund" value="${esc(pr.grund || "")}" hidden>
+          <button type="button" class="btn" data-act="abschliessen" id="pr-ok" disabled>Abschließen</button></div>
+        <div class="mat-abschluss-hinweis" id="pr-hinweis" aria-live="polite"></div></div>`;
+    }
+
+    function abschlussAktualisieren() {
+      const h = offeneHinweise();
+      if (ergebnis === "einsatzbereit" && h.einsatzSperre) ergebnis = null;
+      $$("#pr-abschluss [data-act=ergebnis]").forEach((b) => {
+        b.setAttribute("aria-pressed", String(b.dataset.e === ergebnis));
+        if (b.dataset.e === "einsatzbereit") {
+          b.disabled = !!h.einsatzSperre;
+          b.title = h.einsatzSperre ? (pr.einsatzbereit_gesperrt.concat(h.kritisch.length ? ["kritischer Mangel"] : [])).join("; ") : "";
+        }
+      });
+      $("#pr-due-feld").hidden = ergebnis !== "einsatzbereit";
+      $("#pr-grund").hidden = !ergebnis || ergebnis === "einsatzbereit";
+      $("#pr-grund").placeholder = h.maengel.length ? "Grund (freiwillig – die Mängel stehen oben)" : "Grund (Pflicht ohne Mangel)";
+      $("#pr-ok").disabled = !ergebnis;
+      const teile = [];
+      if (h.offen.length) teile.push(`${plural(h.offen.length, "Pflichtpunkt", "Pflichtpunkte")} ohne Befund`);
+      if (h.ohneFoto.length) teile.push(`${plural(h.ohneFoto.length, "Mangel", "Mängel")} ohne Foto`);
+      if (h.kritisch.length) teile.push("kritischer Mangel – nicht einsatzbereit");
+      else if (pr.lebensdauer && pr.lebensdauer.erreicht) teile.push("Lebensende erreicht – nicht einsatzbereit");
+      if (pr.freipruefung && ergebnis === "einsatzbereit") teile.push("Freiprüfung: Der Artikel kehrt in seinen Herkunftsordner zurück");
+      if (ergebnis === "instandsetzen" && !pr.freipruefung) teile.push("„instandsetzen“ sperrt den Artikel");
+      if (ergebnis === "aussondern") teile.push("„aussondern“ ist endgültig");
+      $("#pr-hinweis").textContent = teile.join(" · ");
+      $("#pr-hinweis").classList.toggle("warn", !!(h.offen.length || h.ohneFoto.length || h.kritisch.length));
+    }
+
+    function leseHtml() {
+      const zeilen = pr.punkte.map((x) => `<tr class="${x.befund === "mangel" ? "mat-mangelzeile" : ""}">
+          <td data-l="Prüfpunkt">${x.gruppe ? `<span class="muted small">${esc(x.gruppe)}</span><br>` : ""}${esc(x.text)}${x.kritisch ? ' <span class="mat-kritisch">kritisch</span>' : ""}</td>
+          <td data-l="Befund">${befundMarke(x.befund)}</td><td data-l="Wert">${x.wert ? esc(x.wert) : '<span class="muted">–</span>'}${x.art === "yesno" && x.soll ? ` <span class="muted small">(Soll ${esc(x.soll)})</span>` : ""}</td>
+          <td data-l="Bemerkung">${x.notiz ? `<span class="mat-text">${esc(x.notiz)}</span>` : ""}</td>
+          <td data-l="Foto">${x.foto ? `<a href="${esc(x.foto.web)}" target="_blank" rel="noopener"><img class="mat-mini" src="${esc(x.foto.vorschau)}" alt="Foto"></a>` : ""}</td></tr>`).join("");
+      const ergebnisBox = pr.entwurf ? `<p class="notice">Diese Prüfung ist noch offen – in Prüfung bei ${esc(pr.pruefer)} seit ${esc(fmtZeit(pr.begonnen_am))}. Was hier steht, ist der aktuelle Stand des Entwurfs.</p>`
+        : `<section class="section"><h2>Ergebnis</h2><dl class="mat-daten">
+          <dt>Ergebnis</dt><dd>${ergebnisMarke(pr.ergebnis)}</dd>
+          <dt>Prüftag</dt><dd>${esc(fmtTag(pr.datum))}</dd>
+          ${pr.naechste ? `<dt>Nächste Prüfung</dt><dd><strong>${esc(fmtTag(pr.naechste))}</strong></dd>` : ""}
+          ${pr.grund ? `<dt>Grund</dt><dd>${esc(pr.grund)}</dd>` : ""}
+          ${pr.bemerkung ? `<dt>Bemerkung</dt><dd class="mat-text">${esc(pr.bemerkung)}</dd>` : ""}
+          <dt>${pr.art === "aussonderung" ? "Ausgeführt von" : "Prüfer"}</dt><dd>${esc(pr.pruefer || "–")}${pr.urkunde ? ` · Urkundennummer ${esc(pr.urkunde)}` : ""}</dd>
+          ${pr.basis_id ? `<dt>Grundlage</dt><dd><a href="/material/pruefung/${pr.basis_id}">Prüfung vom Tag der Aussonderung</a></dd>` : ""}
+          <dt>Abgeschlossen</dt><dd>${esc(fmtZeit(pr.abgeschlossen_am))}</dd></dl>
+          <p class="help">Unterschrift, PDF-Protokoll mit Prüfsumme und Festschreiben folgen mit Lieferung 3.</p></section>`;
+      return `${ergebnisBox}
+        ${pr.punkte.length ? `<section class="section"><h2>Befunde</h2><table class="list mat-tabelle mat-befunde"><thead><tr><th>Prüfpunkt</th><th>Befund</th><th>Wert</th><th>Bemerkung</th><th>Foto</th></tr></thead><tbody>${zeilen}</tbody></table></section>` : ""}
+        ${pr.art !== "aussonderung" ? anhaengeHtml() : ""}
+        ${pr.dokumente.length ? `<section class="section"><h2>Herstellerdokumente am Prüftag</h2><ul class="mat-doks">${pr.dokumente.map((d) => `<li>${esc(d.title)} <span class="muted small">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}</span></li>`).join("")}</ul></section>` : ""}`;
+    }
+
+    function bearbeitenHtml() {
+      return `${pr.freipruefung ? `<p class="mat-banner s-gesperrt">GESPERRT – mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.</p>` : ""}
+        ${lebensdauerHinweis(pr.lebensdauer)}
+        ${punkteHtml()}
+        ${anhaengeHtml()}
+        <section class="section"><h2>Zur Prüfung</h2>
+          ${pr.arten && pr.arten.length > 1 ? `<label for="pr-art">Art der Prüfung</label><select id="pr-art">${pr.arten.map((x) => `<option value="${x}" ${x === pr.art ? "selected" : ""}>${esc(PRUEFART[x] || x)}</option>`).join("")}</select>` : ""}
+          <label for="pr-bem">Bemerkung</label><textarea id="pr-bem" rows="3" maxlength="4000" placeholder="Was sonst zur Prüfung gehört">${esc(pr.bemerkung || "")}</textarea>
+          <p class="help">Alles ist gespeichert – du kannst die Prüfung jederzeit unterbrechen und später fortsetzen.
+            <button type="button" class="lnk" data-act="verwerfen">Entwurf verwerfen</button></p></section>
+        ${abschlussHtml()}`;
+    }
+
+    function zeichnen() {
+      leisteMarkieren(pr.artikel.folder_id);
+      inhalt.innerHTML = `<div class="mat-pruefung${bearbeitbar() ? " mat-mit-leiste" : ""}">${kopf()}${bearbeitbar() ? bearbeitenHtml() : leseHtml()}</div>`;
+      if (bearbeitbar()) { binden(); abschlussAktualisieren(); seitenZeichnen(); }
+    }
+
+    /* Die Karte neu zeichnen – ohne dem, der gerade darin tippt, etwas wegzunehmen: Was im fokussierten Feld
+       steht, aber noch nicht gespeichert ist, bleibt stehen (es wird beim Verlassen gespeichert), eine
+       geöffnete Bemerkung bleibt offen, und der Fokus kehrt auf dasselbe Element zurück – sonst schlösse
+       sich am Telefon die Tastatur mitten im Satz und die Tastaturbedienung fiele an den Seitenanfang. */
+    function punktErsetzen(neu) {
+      pr.punkte = pr.punkte.map((x) => (x.id === neu.id ? neu : x));
+      const el = $(`#pp-${neu.id}`);
+      if (!el) { abschlussAktualisieren(); return; }
+      const aktiv = el.contains(document.activeElement) ? document.activeElement : null;
+      let fokusSel = null;
+      if (aktiv) {
+        if (aktiv.classList.contains("mat-pnotiz")) fokusSel = ".mat-pnotiz";
+        else if (aktiv.classList.contains("mat-pwert")) fokusSel = ".mat-pwert";
+        else if (aktiv.matches("input[data-foto]")) fokusSel = "input[data-foto]";
+        else if (aktiv.dataset.act) fokusSel = `[data-act="${aktiv.dataset.act}"]${aktiv.dataset.wert ? `[data-wert="${aktiv.dataset.wert}"]` : ""}${aktiv.dataset.befund ? `[data-befund="${aktiv.dataset.befund}"]` : ""}`;
+      }
+      const tippen = aktiv && (fokusSel === ".mat-pnotiz" || fokusSel === ".mat-pwert") ? { wert: aktiv.value, von: aktiv.selectionStart, bis: aktiv.selectionEnd } : null;
+      const notizAlt = $(".mat-pnotiz", el);
+      const notizOffen = notizAlt && !notizAlt.hidden;
+      el.outerHTML = punktHtml(neu);
+      const karte = $(`#pp-${neu.id}`);
+      const notiz = $(".mat-pnotiz", karte);
+      if (notiz && notizOffen && notiz.hidden) { notiz.hidden = false; const plus = $('[data-act="pnotiz-auf"]', karte); if (plus) plus.remove(); }
+      if (fokusSel) {
+        const ziel = $(fokusSel, karte);
+        if (ziel) {
+          if (tippen) { ziel.value = tippen.wert; }
+          ziel.focus({ preventScroll: true });
+          if (tippen && ziel.setSelectionRange) { try { ziel.setSelectionRange(tippen.von, tippen.bis); } catch (e) { /* Datumsfeld */ } }
+          // Gesetzter Text löst beim Verlassen kein „change“ aus – ungespeichert Gerettetes speichert der Blur.
+          const feld = fokusSel === ".mat-pnotiz" ? "notiz" : "wert";
+          if (tippen && tippen.wert !== (neu[feld] || "")) {
+            ziel.addEventListener("blur", () => { if (ziel.isConnected && ziel.value !== (punkt(neu.id)[feld] || "")) punktSetzen(neu.id, { [feld]: ziel.value }); }, { once: true });
+          }
+        }
+      }
+      abschlussAktualisieren();
+    }
+
+    async function punktSetzen(rid, body) {
+      try { punktErsetzen((await merken(api(`${API}/pruefungen/${pr.id}/punkte/${rid}`, { method: "PUT", body }))).punkt); }
+      catch (e) { toast(e.message, true); }
+    }
+
+    function binden() {
+      if (gebunden) return;
+      gebunden = true;
+      inhalt.addEventListener("change", async (e) => {
+        if (!bearbeitbar()) return;
+        const el = e.target;
+        if (el.matches(".mat-pwert")) { await punktSetzen(+el.dataset.rid, { wert: el.value }); return; }
+        if (el.matches(".mat-pnotiz")) { await punktSetzen(+el.dataset.rid, { notiz: el.value }); return; }
+        if (el.matches("input[data-foto]")) {
+          const f = el.files[0];
+          if (!f) return;
+          const fd = new FormData(); fd.append("file", f);
+          const karte = el.closest(".mat-punkt");
+          if (karte) karte.classList.add("laedt");
+          try { punktErsetzen((await merken(api(`${API}/pruefungen/${pr.id}/punkte/${el.dataset.foto}/foto`, { method: "POST", body: fd }))).punkt); toast("Foto gespeichert"); }
+          catch (err) { toast(err.message, true); if (karte) karte.classList.remove("laedt"); }
+          return;
+        }
+        if (el.id === "pr-bem" || el.id === "pr-art") {
+          try {
+            pr = (await api(`${API}/pruefungen/${pr.id}`, { method: "PUT", body: el.id === "pr-bem" ? { bemerkung: el.value } : { art: el.value } })).pruefung;
+            if (el.id === "pr-art") { $("h1", inhalt).firstChild.textContent = `${PRUEFART[pr.art] || pr.art} `; toast("Prüfart geändert"); }
+          } catch (err) { toast(err.message, true); }
+          return;
+        }
+        if (el.id === "ah-kamera" || el.id === "ah-dateien") {
+          seiten = seiten.concat(Array.from(el.files));
+          el.value = "";
+          seitenZeichnen();
+        }
+      });
+    }
+
+    aktionen = {
+      pwert: (b) => punktSetzen(+b.dataset.rid, { wert: b.dataset.wert }),
+      pbefund: (b) => {
+        const x = punkt(+b.dataset.rid);
+        // Noch einmal auf „n. z.“ tippen nimmt es zurück: wieder der Sollwert.
+        const befund = b.dataset.befund === "nicht_zutreffend" && x.befund === "nicht_zutreffend" ? "ok" : b.dataset.befund;
+        punktSetzen(x.id, { befund });
+      },
+      "pnotiz-auf": (b) => { const k = $(`#pp-${b.dataset.rid}`); const ta = $(".mat-pnotiz", k); ta.hidden = false; b.remove(); ta.focus(); },
+      "pfoto-weg": async (b) => {
+        try { punktErsetzen((await api(`${API}/pruefungen/${pr.id}/punkte/${b.dataset.rid}/foto`, { method: "DELETE" })).punkt); }
+        catch (e) { toast(e.message, true); }
+      },
+      "seite-weg": (b) => { seiten.splice(+b.dataset.i, 1); seitenZeichnen(); },
+      "anhang-hoch": async () => {
+        if (!seiten.length || hochladen) return;
+        // Genau diese Dateien gehen hoch; was währenddessen dazukommt, bleibt für den nächsten Anhang stehen.
+        const teil = seiten.slice();
+        const fd = new FormData();
+        teil.forEach((f) => fd.append("file", f));
+        fd.append("art", $("#ah-art").value);
+        fd.append("titel", $("#ah-titel").value);
+        fd.append("im_protokoll", $("#ah-protokoll").checked ? "ja" : "nein");
+        hochladen = true;
+        seitenZeichnen();
+        try {
+          const r = await merken(api(`${API}/pruefungen/${pr.id}/anhaenge`, { method: "POST", body: fd }));
+          pr.anhaenge.push(r.anhang);
+          seiten = seiten.filter((f) => !teil.includes(f));
+          $("#ah-titel").value = "";
+          $("#ah-liste").innerHTML = anhaengeListe();
+          toast(`Angehängt (${plural(r.anhang.seiten, "Seite", "Seiten")})`);
+        } catch (e) { toast(e.message, true); }
+        hochladen = false;
+        seitenZeichnen();
+      },
+      "anhang-weg": async (b) => {
+        if (!(await confirm("Diesen Anhang entfernen?", "Entfernen"))) return;
+        try {
+          await api(`${API}/pruefungen/${pr.id}/anhaenge/${b.dataset.id}`, { method: "DELETE" });
+          pr.anhaenge = pr.anhaenge.filter((x) => x.id !== +b.dataset.id);
+          $("#ah-liste").innerHTML = anhaengeListe();
+        } catch (e) { toast(e.message, true); }
+      },
+      ergebnis: (b) => { if (b.disabled) return; ergebnis = ergebnis === b.dataset.e ? null : b.dataset.e; abschlussAktualisieren(); if (ergebnis && ergebnis !== "einsatzbereit") fokus($("#pr-grund")); },
+      abschliessen: async (b) => {
+        if (!ergebnis) return;
+        if (ergebnis === "aussondern" && !(await confirm("Den Artikel endgültig aussondern? Er wandert nach „Ausgesondert“ und zählt nicht mehr als Bestand.", "Aussondern"))) return;
+        b.disabled = true;
+        await laufend.catch(() => {});
+        const body = { ergebnis, grund: ergebnis === "einsatzbereit" ? "" : $("#pr-grund").value, bemerkung: $("#pr-bem").value };
+        if (ergebnis === "einsatzbereit") body.next_due_on = $("#pr-due").value || null;
+        try {
+          pr = (await api(`${API}/pruefungen/${pr.id}/abschliessen`, { method: "POST", body })).pruefung;
+          toast("Prüfung abgeschlossen");
+          window.scrollTo(0, 0);
+          zeichnen();
+        } catch (e) { toast(e.message, true); b.disabled = false; }
+      },
+      verwerfen: async () => {
+        if (!(await confirm("Den Entwurf verwerfen? Befunde, Fotos und Anhänge dieser Prüfung gehen verloren, der Artikel ist wieder frei.", "Verwerfen"))) return;
+        try { await api(`${API}/pruefungen/${pr.id}`, { method: "DELETE" }); location.href = `/material/artikel/${pr.item_id}`; }
+        catch (e) { toast(e.message, true); }
+      },
+      freigeben: () => reservierungFreigeben(pr.id, pr.pruefer, async () => { location.href = `/material/artikel/${pr.item_id}`; }),
+    };
+    zeichnen();
+  }
+
+  /* --- Prüfdurchgang ---------------------------------------------------------------------------------- */
+  async function durchgangAnsicht() {
+    let filter = "";
+    let d = null;
+    async function laden() { d = (await api(`${API}/durchgaenge/${DATEN.id}`)).durchgang; }
+    function zeile(a) {
+      const darf = d.offen && (DARF.verwalten || DARF.pruefen);
+      let zustand = "";
+      let knopf = "";
+      if (a.zustand === "erledigt") {
+        zustand = `${ergebnisMarke(a.pruefung.ergebnis)} <a class="small" href="/material/pruefung/${a.pruefung.id}">${esc(fmtTag(a.pruefung.datum))}, ${esc(a.pruefung.pruefer)}</a>`;
+      } else if (a.zustand === "ausgenommen") {
+        zustand = `<span class="badge grey">ausgenommen</span> <span class="small">${esc(a.ausnahme.grund)}</span> <span class="muted small">(${esc(a.ausnahme.von || "")})</span>`;
+        if (darf && a.lock_state !== "ausgesondert") knopf = `<button type="button" class="btn ghost small" data-act="einbeziehen" data-id="${a.id}">Einbeziehen</button>`;
+      } else if (a.zustand === "in_pruefung") {
+        zustand = `<span class="badge">in Prüfung</span> <span class="small">bei ${esc(a.entwurf.pruefer)} seit ${esc(fmtZeit(a.entwurf.seit))}</span>`;
+        if (a.entwurf.eigen && DARF.pruefen) knopf = `<a class="btn small" href="/material/pruefung/${a.entwurf.id}">Weiter prüfen</a>`;
+        else if (DARF.verwalten && d.offen) knopf = `<button type="button" class="btn ghost small" data-act="freigeben" data-id="${a.entwurf.id}" data-wer="${esc(a.entwurf.pruefer)}">Freigeben</button>`;
+      } else {
+        zustand = '<span class="muted">offen</span>';
+        if (d.offen && DARF.pruefen && a.lock_state !== "ausgesondert") knopf = `<a class="btn secondary small" href="/material/artikel/${a.id}/pruefung/neu?durchgang=${d.id}">Prüfen</a>`;
+        if (darf) knopf += `<button type="button" class="btn ghost small" data-act="ausnehmen" data-id="${a.id}" data-nr="${esc(a.inventory_no)}">Ausnehmen</button>`;
+      }
+      return `<tr class="z-${a.zustand}"><td data-l="Inventar-Nr."><a class="mat-inv" href="/material/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a></td>
+        <td data-l="Produkt">${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${esc(produktName(a))}${demoMarke(a.demo)}<div class="small muted">SN ${esc(a.serial_no)}</div></td>
+        <td data-l="Ablage">${esc(a.pfad)}</td><td data-l="Stand">${zustand}</td><td data-l="Status">${statusMarke(a.status)}</td>
+        <td class="tabelle-aktionen">${knopf}</td></tr>`;
+    }
+    function zeichnen() {
+      leisteMarkieren(d.folder_id);
+      const z = d.zaehlung;
+      const darf = DARF.verwalten || DARF.pruefen;
+      const liste = d.artikel.filter((a) => !filter || a.zustand === filter);
+      inhalt.innerHTML = `<div class="mat-pfad"><a href="/material/pruefungen">Prüfungen</a> / Prüfdurchgang</div>
+        <div class="page-head"><h1>${esc(d.titel)} ${d.offen ? '<span class="badge">offen</span>' : '<span class="badge grey">abgeschlossen</span>'}</h1>
+          <div class="btn-row">${d.offen && darf ? `<button class="btn" data-act="schliessen" ${d.abschliessbar ? "" : "disabled"}>Durchgang abschließen</button>` : ""}
+            ${d.loeschbar && darf ? '<button class="btn ghost small" data-act="loeschen">Löschen</button>' : ""}</div></div>
+        <p>Ordner <a href="/material/ordner/${d.folder_id}">${esc(d.ordner)}</a> · eröffnet ${esc(fmtTag(d.eroeffnet_am))} von ${esc(d.eroeffnet_von || "–")}
+          ${d.offen ? "" : ` · abgeschlossen ${esc(fmtTag(d.geschlossen_am))} von ${esc(d.geschlossen_von || "–")}`}</p>
+        <div class="mat-kacheln mat-rundenzahlen">${[["gesamt", "Artikel"], ["offen", "offen"], ["in_pruefung", "in Prüfung"], ["erledigt", "erledigt"], ["ausgenommen", "ausgenommen"]].map(([k, t]) => `<div class="mat-kachel z-${k}"><strong>${z[k]}</strong><span>${t}</span></div>`).join("")}</div>
+        <p>${fortschritt(z)}</p>
+        ${d.offen ? `<p class="help">Jeder öffnet seinen Artikel mit „Prüfen“ und reserviert ihn damit – die anderen sehen „in Prüfung bei …“. Abschließen geht, sobald jeder Artikel geprüft oder mit Grund ausgenommen ist. Das Sammelprotokoll mit allen Prüfern folgt mit Lieferung 3.</p>` : ""}
+        <div class="c-tabs mat-filter">${[["", "alle"], ["offen", "offen"], ["in_pruefung", "in Prüfung"], ["erledigt", "erledigt"], ["ausgenommen", "ausgenommen"]].map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}${f ? ` (${z[f]})` : ""}</button>`).join("")}</div>
+        ${liste.length ? `<table class="list mat-tabelle mat-runde"><thead><tr><th>Inventar-Nr.</th><th>Produkt</th><th>Ablage</th><th>Stand</th><th>Status</th><th></th></tr></thead><tbody>${liste.map(zeile).join("")}</tbody></table>` : leer("Keine Artikel in dieser Auswahl.")}
+        ${d.pruefer.length ? `<section class="section"><h2>Prüfer in diesem Durchgang</h2><ul>${d.pruefer.map((x) => `<li>${esc(x.name)}${x.urkunde ? ` · Urkundennummer ${esc(x.urkunde)}` : ""} – ${plural(x.anzahl, "Prüfung", "Prüfungen")}</li>`).join("")}</ul></section>` : ""}`;
+    }
+    async function neu() { await laden(); zeichnen(); }
+    aktionen = {
+      filter: (b) => { filter = b.dataset.f; zeichnen(); },
+      freigeben: (b) => reservierungFreigeben(+b.dataset.id, b.dataset.wer, neu),
+      einbeziehen: async (b) => {
+        try { await api(`${API}/durchgaenge/${d.id}/einbeziehen`, { method: "POST", body: { item_id: +b.dataset.id } }); await neu(); }
+        catch (e) { toast(e.message, true); }
+      },
+      ausnehmen: (b) => {
+        dialog(`<h2>${esc(b.dataset.nr)} ausnehmen</h2>
+          <p class="help">Ein ausgenommener Artikel wird in diesem Durchgang nicht geprüft. Der Grund steht später im Sammelprotokoll.</p>
+          <label for="dn-grund">Grund</label><input type="text" id="dn-grund" maxlength="200" list="dn-vorschlaege" placeholder="z. B. nicht auffindbar">
+          <datalist id="dn-vorschlaege"><option value="nicht auffindbar"><option value="beim Hersteller in Reparatur"><option value="kürzlich geprüft"></datalist>
+          <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="dn-ok" type="button">Ausnehmen</button></div>`,
+        (dlg, body) => {
+          fokus($("#dn-grund", body));
+          $("#dn-ok", body).onclick = async (ev) => {
+            const knopf = ev.currentTarget;
+            knopf.disabled = true;
+            try { await api(`${API}/durchgaenge/${d.id}/ausnehmen`, { method: "POST", body: { item_id: +b.dataset.id, grund: $("#dn-grund", body).value } }); dlg.close(); await neu(); }
+            catch (e) { toast(e.message, true); knopf.disabled = false; }
+          };
+        });
+      },
+      schliessen: async (b) => {
+        if (!(await confirm(`Den Durchgang „${d.titel}“ abschließen? Danach lässt sich darin nichts mehr prüfen oder ausnehmen.`, "Abschließen"))) return;
+        b.disabled = true;
+        try { await api(`${API}/durchgaenge/${d.id}/abschliessen`, { method: "POST", body: {} }); toast("Durchgang abgeschlossen"); await neu(); }
+        catch (e) { toast(e.message, true); b.disabled = false; }
+      },
+      loeschen: async () => {
+        if (!(await confirm(`Den Durchgang „${d.titel}“ löschen? Das geht nur, solange darin nichts geprüft wurde.`, "Löschen"))) return;
+        try { await api(`${API}/durchgaenge/${d.id}`, { method: "DELETE" }); location.href = "/material/pruefungen"; }
+        catch (e) { toast(e.message, true); }
+      },
+    };
+    await neu();
+  }
+
+  const ANSICHTEN = { dashboard, pruefungen, bestand, ordner, artikel, artikel_neu: artikelNeu, katalog, produkt, formular, suche,
+                      pruefung_neu: pruefungNeu, pruefung: pruefungAnsicht, durchgang: durchgangAnsicht };
+  leisteLaden();
   zeigen(ANSICHTEN[ANSICHT] || dashboard);
 })();

@@ -1,6 +1,7 @@
 /* Modul Material – Gestaltung nach dem DLRG-Handbuch Corporate Design (Farben und Schrift aus app.css).
-   Statusfarben: grün einsatzbereit, gelb bald fällig, rot überfällig, dunkelrot Lebensdauer erreicht,
-   anthrazit gesperrt, grau ausgesondert – überall dieselben, in Marken, Kacheln und Zählern. */
+   Statusfarben: grün einsatzbereit, gelb bald fällig, rot überfällig, blau neu (Eingangsprüfung offen –
+   das Blau der Hinweiskästen), dunkelrot Lebensdauer erreicht, anthrazit gesperrt, grau ausgesondert –
+   überall dieselben, in Marken, Kacheln und Zählern. */
 .mat { --mat-gesperrt: var(--schwarz); --mat-lebensdauer: var(--rot-dunkel); }
 
 /* Unternavigation des Moduls mit der Suchmaske für Nummern */
@@ -28,6 +29,7 @@
 .s-einsatzbereit.mat-status { background: var(--ok); }
 .s-bald_faellig.mat-status { background: var(--gelb); color: var(--anthrazit); }
 .s-ueberfaellig.mat-status { background: var(--rot); }
+.s-neu.mat-status { background: var(--co-info-fl); color: var(--wasser); box-shadow: inset 0 0 0 1px var(--wasser); }
 .s-lebensdauer.mat-status { background: var(--mat-lebensdauer); }
 .s-gesperrt.mat-status { background: var(--mat-gesperrt); }
 .s-ausgesondert.mat-status { background: var(--grau-hell); color: var(--grau); border: 1px solid var(--linie); }
@@ -37,6 +39,7 @@
 .mat-banner.s-ausgesondert { background: var(--grau); }
 .mat-banner.s-gesperrt { background: var(--mat-gesperrt); }
 .mat-banner.s-lebensdauer { background: var(--mat-lebensdauer); }
+.mat-banner.s-neu { background: var(--wasser); }
 .mat-demo { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 6px; margin-left: 6px;
   background: repeating-linear-gradient(45deg, var(--gelb), var(--gelb) 6px, #fff8a6 6px, #fff8a6 12px);
   color: var(--anthrazit); border: 1px solid var(--gelb-dunkel); vertical-align: middle; }
@@ -44,7 +47,7 @@
   border: 2px solid var(--gelb-dunkel); padding: 10px 14px; font-weight: 700; margin: 0 0 14px; }
 
 /* Übersicht */
-.mat-kacheln { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 6px 0 10px; }
+.mat-kacheln { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 6px 0 10px; }
 .mat-kachel { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 1px solid var(--linie);
   border-top: 4px solid var(--grau); text-decoration: none; color: var(--anthrazit); background: var(--weiss); }
 a.mat-kachel:hover { background: var(--grau-hell); }
@@ -54,6 +57,7 @@ a.mat-kachel:hover { background: var(--grau-hell); }
 .mat-kachel.s-einsatzbereit { border-top-color: var(--ok); }
 .mat-kachel.s-bald_faellig { border-top-color: var(--gelb-dunkel); }
 .mat-kachel.s-ueberfaellig { border-top-color: var(--rot); }
+.mat-kachel.s-neu { border-top-color: var(--wasser); }
 .mat-kachel.s-lebensdauer { border-top-color: var(--mat-lebensdauer); }
 .mat-kachel.s-gesperrt { border-top-color: var(--mat-gesperrt); }
 
@@ -71,6 +75,7 @@ a.mat-kachel:hover { background: var(--grau-hell); }
 .mat-zahl { display: inline-block; min-width: 1.5em; text-align: center; margin-left: 4px; font-size: var(--fs-marke);
   font-weight: 700; color: var(--weiss); border-radius: var(--radius-pille); padding: 0 5px; }
 .mat-zahl.s-ueberfaellig { background: var(--rot); }
+.mat-zahl.s-neu { background: var(--wasser); }
 .mat-zahl.s-lebensdauer { background: var(--mat-lebensdauer); }
 .mat-zahl.s-gesperrt { background: var(--mat-gesperrt); }
 .mat-zahl.s-bald_faellig { background: var(--gelb); color: var(--anthrazit); }
@@ -92,6 +97,7 @@ table.list.mat-formtabelle { table-layout: fixed; }
 table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspalte { padding-left: 4px; padding-right: 4px; }
 .mat-alt td { color: var(--grau); }
 .mat-hash { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.mat-inv { white-space: nowrap; }
 .mat-seiten { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 12px 0; font-size: var(--fs-klein); }
 @media (max-width: 860px) { table.list td.mat-wahlspalte, table.list th.mat-wahlspalte { width: auto; } }
 
@@ -164,3 +170,125 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-formtabelle .btn-row { margin-top: 4px; gap: 2px; }
 .mat-formtabelle .btn.ghost.small { padding: 2px 8px; }
 .mat-versionen { padding-left: 18px; }
+
+/* Ordnerleiste links. Ab 1200 px steht sie fest neben dem Inhalt; darunter ist sie eine Schublade hinter
+   „☰ Ordner“ wie die Seitenleiste im Wiki. Der Baum nutzt dessen Zeilen (.tree aus app.css). */
+.mat-side-auf { display: none; }
+.mat-shell.mit-leiste { display: grid; grid-template-columns: 280px minmax(0, 1fr); align-items: start; }
+/* Mit „margin: auto“ wäre der Inhalt so schmal wie das, was gerade darin steht – je Seite anders breit. */
+.mat-shell.mit-leiste > .page { width: 100%; min-width: 0; }
+.mat-side { background: var(--grau-hell); border-right: 1px solid var(--linie); padding: 14px 10px 40px;
+  position: sticky; top: var(--topbar); height: calc(100vh - var(--topbar)); overflow: auto; overscroll-behavior: contain; }
+.mat-side[hidden] { display: none; }
+.mat-side-kopf { display: flex; justify-content: space-between; align-items: center; margin: 0 6px 8px; }
+.mat-side-kopf a { font-weight: 700; color: var(--anthrazit); text-decoration: none; font-size: var(--fs-marke);
+  text-transform: uppercase; letter-spacing: .05em; }
+.mat-side-zu { display: none; font-size: 1.1rem; }
+.mat-tree .row { gap: 4px; }
+.mat-tree .mat-zahl { margin-left: 0; flex: none; }
+.mat-tree li.system > .row a { color: var(--grau); }
+.mat-side-anzahl { flex: none; font-size: var(--fs-marke); color: var(--grau); padding: 0 4px; }
+@media (max-width: 1199px) {
+  .mat-shell.mit-leiste { display: block; }
+  .mat-shell.mit-leiste .mat-side-auf { display: inline-flex; margin-right: 4px; }
+  .mat-side { position: fixed; left: 0; top: var(--topbar); bottom: 0; height: auto; width: min(320px, 88vw);
+    transform: translateX(-105%); transition: transform .2s; z-index: 1100; box-shadow: 2px 0 10px rgba(0, 0, 0, .25); }
+  .mat-side.open { transform: translateX(0); }
+  .mat-side-zu { display: inline-block; }
+  body:has(.mat-side.open)::after { content: ""; position: fixed; inset: var(--topbar) 0 0 0; background: rgba(60, 60, 59, .35); z-index: 1090; }
+}
+
+/* Prüfungen: Listen, Marken, Durchgänge */
+.mat-ergebnis-marke, .mat-befund { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 8px;
+  border-radius: var(--radius-pille); white-space: nowrap; }
+.mat-ergebnis-marke.e-einsatzbereit, .mat-befund.b-ok { background: var(--co-success-fl); color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+.mat-ergebnis-marke.e-instandsetzen { background: var(--gelb); color: var(--anthrazit); }
+.mat-ergebnis-marke.e-aussondern, .mat-befund.b-mangel { background: var(--rot); color: var(--weiss); }
+.mat-befund.b-nicht_zutreffend { background: var(--grau-hell); color: var(--grau); }
+.mat-pliste tr.mat-entwurf td, .mat-pruefliste tr.mat-entwurf td { background: var(--co-info-fl); }
+.mat-mangelzeile td { background: var(--rot-hell); }
+.mat-pruefknoepfe { margin: 10px 0 6px; }
+.mat-runden { list-style: none; padding: 0; margin: 0; }
+.mat-runden li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--linie); }
+.mat-fortschritt { display: inline-block; width: 120px; height: 8px; background: var(--grau-hell); border: 1px solid var(--linie);
+  vertical-align: middle; margin-right: 6px; }
+.mat-fortschritt > span { display: block; height: 100%; background: var(--ok); }
+.mat-rundenzahlen .mat-kachel.z-offen { border-top-color: var(--grau); }
+.mat-rundenzahlen .mat-kachel.z-in_pruefung { border-top-color: var(--wasser); }
+.mat-rundenzahlen .mat-kachel.z-erledigt { border-top-color: var(--ok); }
+.mat-rundenzahlen .mat-kachel.z-ausgenommen { border-top-color: var(--gelb-dunkel); }
+.mat-runde .tabelle-aktionen .btn + .btn { margin-left: 4px; }
+.mat-arten { border: 1px solid var(--linie); padding: 10px 14px; margin: 14px 0; }
+.mat-arten legend { font-weight: 700; padding: 0 4px; }
+.mat-art-wahl { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 1.02rem; }
+.mat-art-wahl input { width: 22px; height: 22px; }
+.mat-h1-zusatz { color: var(--grau); font-weight: 400; }
+
+/* Prüfung: je Prüfpunkt eine Karte mit großen Umschaltern – gebaut für eine Hand am Material. */
+.mat-gruppe { margin: 18px 0 6px; font-size: var(--fs-mittel); text-transform: uppercase; letter-spacing: .04em; color: var(--grau); }
+.mat-punkt { border: 1px solid var(--linie); border-left: 4px solid var(--linie); background: var(--weiss); padding: 10px 12px; margin: 0 0 10px; }
+.mat-punkt.mangel { border-left-color: var(--rot); background: var(--rot-hell); }
+.mat-punkt.nz { border-left-color: var(--grau-hell); }
+.mat-punkt.nz .mat-punkt-text { color: var(--grau); }
+.mat-punkt.laedt { opacity: .6; }
+.mat-punkt-kopf { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 8px; }
+.mat-punkt-text { font-weight: 700; flex: 1 1 260px; }
+.mat-kritisch { display: inline-block; font-size: var(--fs-marke); font-weight: 700; color: var(--rot); border: 1px solid var(--rot);
+  border-radius: var(--radius-pille); padding: 0 6px; }
+.mat-wahl3 { display: flex; gap: 0; margin: 6px 0; }
+.mat-wahl3 button { flex: 1 1 0; min-height: 46px; font: inherit; font-weight: 700; background: var(--weiss); color: var(--anthrazit);
+  border: 1px solid var(--linie); cursor: pointer; padding: 6px 8px; }
+.mat-wahl3 button + button { border-left: 0; }
+.mat-wahl3 button:hover { background: var(--grau-hell); }
+.mat-wahl3 button[aria-pressed="true"] { background: var(--anthrazit); border-color: var(--anthrazit); color: var(--weiss); }
+.mat-wahl3 button.soll[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); }
+.mat-wahl3 button.abw[aria-pressed="true"] { background: var(--rot); border-color: var(--rot); }
+.mat-wahl3 button:focus-visible { outline: 3px solid var(--gelb); outline-offset: -3px; position: relative; }
+.mat-punkt .mat-pwert { width: 100%; margin: 4px 0; font-size: 16px; }
+.mat-punkt .mat-pnotiz { width: 100%; margin-top: 8px; font-size: 16px; }
+.mat-punkt-foto { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+.mat-punkt-foto img { width: 64px; height: 64px; object-fit: contain; background: var(--weiss); border: 1px solid var(--linie); }
+.mat-kamera { cursor: pointer; }
+/* Dateiauswahl hinter einem Knopf: nur optisch versteckt, damit sie per Tastatur erreichbar bleibt. */
+.mat-datei { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
+label:has(> .mat-datei:focus-visible) { outline: 3px solid var(--gelb); outline-offset: 2px; }
+label:has(> .mat-datei) { position: relative; }
+.mat-pflicht { color: var(--rot); font-weight: 700; font-size: var(--fs-klein); }
+.mat-anhaenge { padding-left: 18px; }
+.mat-anhaenge li { margin: 4px 0; }
+.mat-anhang-neu { border: 1px dashed var(--linie); padding: 10px 12px; margin-top: 10px; }
+.mat-scan { padding-left: 22px; margin: 8px 0; }
+.mat-scan:empty { display: none; }
+
+/* Feste Abschlussleiste unten: Ergebnis, nächste Fälligkeit oder Grund, Abschließen. Was beim Tippen ins
+   Bild gerollt wird (offene Tastatur), soll nicht unter ihr landen. */
+html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
+.mat-abschluss { position: sticky; bottom: 0; z-index: 6; background: var(--weiss); border-top: 2px solid var(--anthrazit);
+  box-shadow: var(--schatten-leiste); padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); margin: 24px 0 0; }
+.mat-ergebnis { display: flex; gap: 6px; }
+.mat-ergebnis button { flex: 1 1 0; min-height: 46px; font: inherit; font-weight: 700; border: 2px solid var(--linie); background: var(--weiss);
+  color: var(--anthrazit); cursor: pointer; padding: 4px 6px; }
+.mat-ergebnis button:disabled { opacity: .4; cursor: not-allowed; text-decoration: line-through; }
+.mat-ergebnis button.e-einsatzbereit[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); color: var(--weiss); }
+.mat-ergebnis button.e-instandsetzen[aria-pressed="true"] { background: var(--gelb); border-color: var(--gelb-dunkel); color: var(--anthrazit); }
+.mat-ergebnis button.e-aussondern[aria-pressed="true"] { background: var(--mat-lebensdauer); border-color: var(--mat-lebensdauer); color: var(--weiss); }
+.mat-abschluss-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 8px; }
+.mat-abschluss-zeile input[type=text] { flex: 1 1 220px; min-width: 0; }
+.mat-abschluss-zeile .mat-due { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 600; }
+.mat-abschluss-zeile .mat-due[hidden], .mat-abschluss-zeile input[hidden] { display: none; }
+.mat-abschluss-zeile .btn { margin-left: auto; min-height: 44px; padding-left: 22px; padding-right: 22px; }
+.mat-abschluss-hinweis { font-size: var(--fs-klein); color: var(--grau); margin-top: 6px; }
+.mat-abschluss-hinweis:empty { display: none; }
+.mat-abschluss-hinweis.warn { color: var(--rot); font-weight: 600; }
+/* Am Telefon gehört der Platz der Prüfung: Die Nummernsuche steht auf jeder anderen Seite. */
+@media (max-width: 640px) {
+  #mat[data-ansicht="pruefung"] .mat-suche { display: none; }
+  .mat-pruefung h1 { font-size: 1.35rem; }
+  .mat-pruefung .page-head { margin-bottom: 12px; }
+}
+@media (max-width: 560px) {
+  .mat-ergebnis button { font-size: .86rem; }
+  .mat-abschluss-zeile .btn { flex: 1 1 100%; margin-left: 0; }
+  .mat-abschluss-zeile .mat-due { flex: 1 1 100%; justify-content: space-between; }
+  .mat-abschluss { margin-left: -12px; margin-right: -12px; }
+}

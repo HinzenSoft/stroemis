@@ -119,7 +119,10 @@ def artikel(q, seite=1, pro_seite=25):
     basis = f"FROM mat_item i JOIN mat_product p ON p.id = i.product_id WHERE {where}"
     gesamt = _abfragen(f"SELECT COUNT(*) AS n {basis}", tuple(args), one=True)["n"]
     rows = _abfragen(
-        f"SELECT i.*, p.manufacturer, p.model, p.article_no, p.material_kind, p.image AS product_image "
-        f"{basis} ORDER BY (i.inventory_no = ?) DESC, (lower(i.serial_no) = lower(?)) DESC, i.inventory_no "
+        f"SELECT i.*, p.manufacturer, p.model, p.article_no, p.material_kind, p.image AS product_image, "
+        f"p.demo AS product_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "
+        f"e.inspector_user_id AS entwurf_pruefer_id "
+        f"{basis.replace(' WHERE ', ' LEFT JOIN mat_inspection e ON e.item_id = i.id AND e.completed_at IS NULL WHERE ', 1)} "
+        f"ORDER BY (i.inventory_no = ?) DESC, (lower(i.serial_no) = lower(?)) DESC, i.inventory_no "
         f"LIMIT ? OFFSET ?", (*args, genau, " ".join(ws), pro_seite, (seite - 1) * pro_seite))
     return rows, gesamt
