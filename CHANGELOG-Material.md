@@ -436,7 +436,7 @@ mit seiner Stelle (`produkte[3] (…): …`). `--trocken` prüft nur.
 | `norm` | Freitext, z. B. „EN 362 oder EN 12275“ |
 | `materialart` | `textil`, `metall_hardware` oder `sonstiges` (an der Kategorie: Vorgabe für Produkte) |
 | `intervall_monate` | Prüfintervall 1–120; am Produkt optional, wenn die Kategorie eins vorgibt |
-| `lebensdauer_jahre` | 1–50; Produkt textil: Pflicht; Metall/Hardware: verboten; sonstiges: nur mit `lebensdauer_quelle`. An der Kategorie nur bei textil, nur als Vorschlag |
+| `lebensdauer_jahre` | 1–50; Produkt textil: Pflicht; Metall (`metall_hardware`): verboten; sonstiges: nur mit `lebensdauer_quelle`. An der Kategorie nur bei textil, nur als Vorschlag |
 | `kategorie` | Pfad als Liste von Namen oder als Text „Ober / Unter“ |
 | `formulare[].kategorie` / `.produkt` | generisch je Kategorie oder spezifisch je Produkt (Hersteller, Modell, Artikelnummer) |
 | `aktivieren` | Standard `true`: die Version wird aktiv, eine ältere aktive des Ziels inaktiv |

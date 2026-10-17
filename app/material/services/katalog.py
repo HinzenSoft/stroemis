@@ -6,7 +6,7 @@ Regeln stehen hier, weil der Katalogimport (importer.py) dieselben braucht wie d
 
 Fachliche Grenzen aus dem Konzept:
   - Dublette = Hersteller + Modell + Artikelnummer (vereinheitlicht, siehe dedupe_key).
-  - Lebensdauer: Pflicht bei textilem Material, verboten bei Metall/Hardware, bei „sonstiges“ nur mit
+  - Lebensdauer: Pflicht bei textilem Material, verboten bei Metall, bei „sonstiges“ nur mit
     Herstellerangabe (Fundstelle).
   - Formulare: je Kategorie ein generisches, je Produkt optional ein spezifisches, das das generische
     ersetzt. Versioniert; eine benutzte Version wird nie mehr geändert, sondern durch eine neue ersetzt.
@@ -32,7 +32,7 @@ from .interval import herstellerseite, lebensende
 FORMULAR_BENUTZT = ("Diese Formularversion wurde schon für Prüfungen benutzt und bleibt deshalb unverändert. "
                     "Lege eine neue Version an.")
 LEBENSDAUER_TEXTIL = "Bei textilem Material ist die Lebensdauer Pflicht (Herstellerangabe in Jahren)."
-LEBENSDAUER_METALL = "Metall und Hardware haben keine festgeschriebene Lebensdauer – das Feld bleibt leer."
+LEBENSDAUER_METALL = "Metall hat keine festgeschriebene Lebensdauer – das Feld bleibt leer."
 LEBENSDAUER_SONSTIGES = "Bei „sonstiges“ gibt es eine Lebensdauer nur mit Herstellerangabe (Fundstelle angeben)."
 KEIN_INTERVALL = "Kein Prüfintervall: am Produkt angeben oder in der Kategorie als Vorgabe hinterlegen."
 # Ein Prüfpunkt ist oft eine ganze Prüfanweisung („Kontrolle des Zustands der Verriegelungshülse (z. B. …)“).

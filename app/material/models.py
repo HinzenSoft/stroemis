@@ -34,7 +34,8 @@ SCHEMA_VERSION = 3
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
 # Oberfläche zeigt. Die Reihenfolge ist die der Auswahllisten.
-MATERIALARTEN = {"textil": "textil", "metall_hardware": "Metall/Hardware", "sonstiges": "sonstiges"}
+# Der Schlüssel „metall_hardware“ bleibt (Datenbank, Katalogimport); angezeigt wird kurz „Metall“.
+MATERIALARTEN = {"textil": "textil", "metall_hardware": "Metall", "sonstiges": "sonstiges"}
 ORDNERARTEN = {"gliederung": "Gliederung", "standort": "Standort", "fahrzeug": "Fahrzeug", "set": "Set",
                "persoenlich": "persönlich", "sonstiges": "sonstiges"}
 SYSTEMORDNER = {"gesperrt": "Gesperrt", "ausgesondert": "Ausgesondert"}

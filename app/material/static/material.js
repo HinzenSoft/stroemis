@@ -28,7 +28,7 @@
   const SPERRGRUND = { sturz: "Sturzbelastung", beschaedigung: "Beschädigung", verlust: "Verlust" };
   const AUSSONDERUNGSGRUND = { lebensdauer: "Lebensdauer erreicht", verlust: "Verlust", irreparabel: "irreparabel" };
   const ZUSTAND = { offen: "offen", in_pruefung: "in Prüfung", erledigt: "erledigt", ausgenommen: "ausgenommen" };
-  const MATERIALART = { textil: "textil", metall_hardware: "Metall/Hardware", sonstiges: "sonstiges" };
+  const MATERIALART = { textil: "textil", metall_hardware: "Metall", sonstiges: "sonstiges" };
   const ORDNERART = { gliederung: "Gliederung", standort: "Standort", fahrzeug: "Fahrzeug", set: "Set",
                       persoenlich: "persönlich", sonstiges: "sonstiges" };
   const DOKART = { produktbild: "Produktbild", konformitaetserklaerung: "Konformitätserklärung",
@@ -1095,7 +1095,7 @@
         ld.disabled = mk.value === "metall_hardware";
         if (ld.disabled) ld.value = "";
         $("#pd-ld-hilfe", body).textContent = textil ? "Pflicht bei textil – Herstellerangabe" + (k.default_lifetime_years ? ` (Vorschlag der Kategorie: ${k.default_lifetime_years})` : "")
-          : mk.value === "sonstiges" ? "nur mit Herstellerangabe (Fundstelle)" : "Metall/Hardware hat keine festgeschriebene Lebensdauer";
+          : mk.value === "sonstiges" ? "nur mit Herstellerangabe (Fundstelle)" : "Metall hat keine festgeschriebene Lebensdauer";
       };
       katSel.addEventListener("change", () => {
         const k = kat(katSel.value);

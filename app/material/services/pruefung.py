@@ -13,7 +13,7 @@ Abschließen setzt Ergebnis, Sperrzustand und Fälligkeit (Unterschrift, PDF und
 Lieferung 3). Regeln dabei:
   - Jeder Pflichtpunkt hat einen Wert oder ist „nicht zutreffend“; jeder Mangel hat ein Foto.
   - Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus, ebenso ein erreichtes Lebensende
-    (nur textil – bei Metall und Hardware entscheidet allein der Befund).
+    (nur textil – bei Metall entscheidet allein der Befund).
   - „instandsetzen“ und „aussondern“ ohne Mangel brauchen einen Grund.
   - Die nächste Fälligkeit (nur bei „einsatzbereit“) ist Prüftag + wirksames Intervall und lässt sich
     nur vorziehen.
