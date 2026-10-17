@@ -503,6 +503,34 @@ def test_lebenslauf_und_pruefung():
     print("Rückrufe: Lebenslauf und Prüfung bestanden.")
 
 
+def test_review_lieferung4():
+    """Befunde aus dem Review: Seriennummern mit innerem Leerraum (auch geschützten Leerzeichen) treffen den Artikel,
+    ein Zeilentrenner im Titel landet nicht im Betreff, mehrere offene Rückrufe stehen alle in der Prüfung."""
+    post, alt = post_abfangen()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            app, k, ids, _, lager, art = aufbau(tmp)
+            kp, w, p1 = k["katalog"], k["wart"], k["pruefer"]
+            # Am Artikel zieht die Speicherung Leerraum zusammen („AB  12“ → „AB 12“); der Rückruf vergleicht genauso.
+            ab = neuer_artikel(w, ids["hms"], lager, serial_no="AB  12")["id"]
+            r = anlegen(kp, ids["hms"], title="Leerraum", serials="ab  12\nRR\u00a01X", mail=False)
+            assert r.status_code == 201 and r.json["betroffen"] == 1 and r.json["nicht_gefunden"] == ["RR\u00a01X"], r.get_json()
+            assert [x["title"] for x in w.get(f"/api/material/artikel/{ab}").json["artikel"]["rueckrufe"]] == ["Leerraum"]
+            # Ein Zeilentrenner (U+2028) im Titel: Der Betreff bleibt eine Zeile, die Mail geht hinaus.
+            post.clear()
+            r = anlegen(kp, ids["hms"], title="Schnapper\u2028prüfen", serials="RR-3")
+            assert r.status_code == 201, r.get_json()
+            assert post and all(len(b.splitlines()) == 1 and "\u2028" not in b for _, b, _ in post), post
+            assert "Schnapper prüfen" in post[0][1], post[0][1]
+            # Zwei offene Rückrufe an RR-3 („alle“ gibt es noch nicht – „Leerraum“ betrifft nur AB 12): beide in der Prüfung.
+            assert anlegen(kp, ids["hms"], title="Für alle", mail=False).status_code == 201
+            pr = starten(p1, art["RR-3"]).json["pruefung"]
+            assert pr["artikel"]["rueckruf"] == "Schnapper\u2028prüfen · Für alle", pr["artikel"]
+    finally:
+        post_zurueck(alt)
+    print("Rückrufe: Review-Befunde Lieferung 4 bestanden.")
+
+
 if __name__ == "__main__":
     test_rechte_und_eingaben()
     test_betroffene_und_hinweise()
@@ -511,3 +539,4 @@ if __name__ == "__main__":
     test_sperre_und_zustand()
     test_beenden_und_loeschen()
     test_lebenslauf_und_pruefung()
+    test_review_lieferung4()

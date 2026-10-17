@@ -360,8 +360,55 @@ def test_rechte():
     print("Rechtetest (Export) bestanden.")
 
 
+def test_review_lieferung4():
+    """Befunde aus dem Review: Das Datum einer Ausnahme im Durchgang steht in deutscher Zeit (nicht als UTC-Datum),
+    und „die ältesten fehlen“ erscheint nur, wenn das Journal wirklich mehr Einträge hat, als der Lebenslauf aufnimmt."""
+    import sqlite3
+    from test_material import H, gliederung, katalog_grund, neuer_artikel, pdf_seiten, pruef_formulare, umgebung
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w = k["wart"]
+        gid, _ = gliederung(w)
+        a = neuer_artikel(w, ids["hms"], gid)
+        rid = w.post("/api/material/durchgaenge", json={"folder_id": gid, "titel": "Nachtschicht"}).json["durchgang"]["id"]
+        r = w.post(f"/api/material/durchgaenge/{rid}/ausnehmen", json={"item_id": a["id"], "grund": "nicht auffindbar"}, headers=H)
+        assert r.status_code == 200, r.get_json()
+        conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+        conn.execute("UPDATE mat_round_item SET excluded_at = '2026-01-15T23:30:00+00:00' WHERE round_id = ?", (rid,))
+        conn.commit()
+        conn.close()
+        r = w.get(f"/material/artikel/{a['id']}/lebenslauf.pdf")
+        pfad = os.path.join(tmp, "ll.pdf")
+        with open(pfad, "wb") as fh:
+            fh.write(r.data)
+        text = " ".join(" ".join(pdf_seiten(pfad)).split())
+        assert "16.01.2026" in text and "15.01.2026" not in text, text[:1500]
+        for bemerkung in ("erste", "zweite"):                     # Journal: angelegt plus zwei Änderungen
+            assert w.put(f"/api/material/artikel/{a['id']}", json={"notes": bemerkung}).status_code == 200
+        # Genau so viele Journaleinträge, wie der Lebenslauf aufnimmt: nichts fehlt.
+        from app.material.services import lebenslauf
+        with app.app_context():
+            from app import db
+            n = db.query("SELECT COUNT(*) AS n FROM mat_audit WHERE entity = 'item' AND entity_id = ?", (a["id"],), one=True)["n"]
+            alt = lebenslauf.JOURNAL_MAX
+            try:
+                lebenslauf.JOURNAL_MAX = n
+                d = lebenslauf.daten(a["id"])
+                assert not d["ereignisse_gekuerzt"] and len(d["ereignisse"]) == n, (n, d["ereignisse_gekuerzt"])
+                lebenslauf.JOURNAL_MAX = n - 1
+                d = lebenslauf.daten(a["id"])
+                assert d["ereignisse_gekuerzt"] and len(d["ereignisse"]) == n - 1, (n, d["ereignisse_gekuerzt"])
+                assert d["ereignisse"][0]["aktion"] != "angelegt"      # der älteste („angelegt“) fällt weg
+            finally:
+                lebenslauf.JOURNAL_MAX = alt
+    print("Review-Befunde Lieferung 4 (Export) bestanden.")
+
+
 if __name__ == "__main__":
     test_csv()
     test_zip()
     test_lebenslauf()
     test_rechte()
+    test_review_lieferung4()

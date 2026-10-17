@@ -581,3 +581,7 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mat-austausch-liste li, .mat-austausch-aenderungen li { overflow-wrap: anywhere; margin: 2px 0; }
 .mat-austausch-aenderungen { max-height: 280px; overflow-y: auto; font-size: var(--fs-klein); }
 .mat-austausch-bericht:empty { display: none; }
+
+/* Lieferung 4 – Review */
+/* .btn setzt display (app.css) und schlüge sonst das hidden-Attribut – etwa „Übernehmen“ im Katalogimport. */
+.btn[hidden] { display: none; }

@@ -18,7 +18,7 @@ from . import bestand, heute, journal, katalog, protokoll, qr
 from . import status as st
 from .beschriftung import SPERRZUSTAND, journal_zeilen
 from .interval import wirksam
-from .protokoll import PRUEFART_TEXT, datum_text, zeit_text
+from .protokoll import PRUEFART_TEXT, datum_text, ortszeit, zeit_text
 
 # So viele Journaleinträge nimmt der Lebenslauf höchstens auf (journal.lesen liest die neuesten zuerst).
 JOURNAL_MAX = 2000
@@ -155,7 +155,7 @@ def _durchgaenge(iid, baum_pfad):
             darin = f"geprüft am {datum_text(x['inspected_on'])} – {ERGEBNISSE.get(x['result'], x['result'])}"
         elif r["excluded_reason"]:
             darin = (f"ausgenommen: {r['excluded_reason']} ({r['excluded_by_name']}, "
-                     f"{datum_text((r['excluded_at'] or '')[:10])})")
+                     f"{ortszeit(r['excluded_at']).strftime('%d.%m.%Y') if r['excluded_at'] else ''})")
         elif r["closed_on"]:
             darin = "nicht geprüft"
         else:
@@ -209,7 +209,9 @@ def daten(iid):
     aussonderung = next((r for r in reversed(rows) if r["kind"] == "aussonderung"), None)
     verweise = {r["id"]: r["protocol_id"] for r in db.query(
         "SELECT id, protocol_id FROM mat_inspection WHERE item_id = ? AND protocol_id IS NOT NULL", (iid,))}
-    eintraege = journal.lesen([("item", iid)], grenze=JOURNAL_MAX)
+    eintraege = journal.lesen([("item", iid)], grenze=JOURNAL_MAX + 1)     # einer mehr: Wurde gekürzt?
+    gekuerzt = len(eintraege) > JOURNAL_MAX
+    eintraege = eintraege[:JOURNAL_MAX]                                      # die neuesten zuerst – der älteste fällt weg
     return {
         "dokument": {"art": "lebenslauf", "titel": "Lebenslauf", "stand": zeit_text(db.now()),
                      "plattform": qr.anzeige(qr.basis()).split("://", 1)[-1], "pruefseite": protokoll.pruefseite(),
@@ -221,7 +223,7 @@ def daten(iid):
         "durchgaenge": _durchgaenge(iid, baum_pfad),
         "rueckrufe": _rueckrufe(item),
         "ereignisse": journal_zeilen(list(reversed(eintraege)), verweise),
-        "ereignisse_gekuerzt": len(eintraege) >= JOURNAL_MAX,
+        "ereignisse_gekuerzt": gekuerzt,
     }
 
 

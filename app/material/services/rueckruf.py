@@ -45,8 +45,9 @@ _LINK = re.compile(r"https?://[^\s/?#]+\S*", re.IGNORECASE)
 # --- Eingaben -------------------------------------------------------------------------------------------
 
 def _norm(serie):
-    """Vergleichsform einer Seriennummer: ohne Leerraum außen, ohne Rücksicht auf Groß/klein."""
-    return (serie or "").strip().casefold()
+    """Vergleichsform einer Seriennummer: Leerraum wie am Artikel (außen weg, innen – auch geschützte Leerzeichen
+    aus kopierten Listen – ein Leerzeichen), ohne Rücksicht auf Groß/klein."""
+    return " ".join((serie or "").split()).casefold()
 
 
 def serien_lesen(wert):
@@ -232,14 +233,14 @@ def fuer_lebenslauf(item):
 
 
 def offene_artikel():
-    """Kennung → Titel des Rückrufs für jeden Artikel, an dem ein laufender Rückruf noch offen ist – für die Marke
+    """Kennung → Titel der Rückrufe (mit „ · “ verbunden) für jeden Artikel, an dem ein laufender Rückruf noch offen ist – für die Marke
     „Rückruf“ in Artikellisten. Einmal je Anfrage gerechnet (g): Eine Liste fragt sonst je Zeile."""
     if "mat_rueckruf_offen" not in g:
         offen = {}
         for r in db.query("SELECT * FROM mat_recall WHERE closed_at IS NULL ORDER BY id"):
             for a in betroffene(r):
                 if a["zustand"] == "offen":
-                    offen[a["id"]] = r["title"]
+                    offen[a["id"]] = f"{offen[a['id']]} · {r['title']}" if a["id"] in offen else r["title"]
         g.mat_rueckruf_offen = offen
     return g.mat_rueckruf_offen
 
@@ -369,7 +370,7 @@ def _mailtext(r, p, liste):
                "„Sperren (Rückruf)“). Eine Prüfung nach diesem Rückruf erledigt ihn für den Artikel ebenso.", "",
                f"Produkt und betroffene Artikel: {basis}/material/katalog/produkt/{p['id']}",
                f"Übersicht: {basis}/material"]
-    betreff = f"Rückruf: {name} – {r['title']}"
+    betreff = " ".join(f"Rückruf: {name} – {r['title']}".split())       # auch U+2028/U+0085: ein Betreff ist eine Zeile
     return betreff, "\n".join(zeilen) + "\n"
 
 

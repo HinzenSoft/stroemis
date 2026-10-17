@@ -487,7 +487,7 @@ def _sammelprotokoll(r, pid, ts):
             ohne += 1
         ausnahme = ""
         if z["excluded_reason"]:
-            ausnahme = f"{z['excluded_reason']} ({z['excluded_by_name']}, {datum_text((z['excluded_at'] or '')[:10])})"
+            ausnahme = f"{z['excluded_reason']} ({z['excluded_by_name']}, {ortszeit(z['excluded_at']).strftime('%d.%m.%Y') if z['excluded_at'] else ''})"
         liste.append({"inventarnummer": a["inventory_no"], "seriennummer": a["serial_no"],
                       "produkt": f"{a['manufacturer']} {a['model']}".strip(), "ordner": _pfad_text(a["folder_id"]),
                       "zustand": zustand, "ergebnis": (z["ergebnis"] or "") if x else "",

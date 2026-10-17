@@ -1495,14 +1495,17 @@
       }
       $("#ki-datei", body).addEventListener("change", (ev) => { probelauf(ev.target.files[0]); ev.target.value = ""; });
       const ablage = $("#ki-ablage", body);
-      // Abgelegt wird überall im Dialog – nie soll der Browser die Datei stattdessen selbst öffnen.
-      body.addEventListener("dragover", (ev) => { ev.preventDefault(); ablage.classList.add("ueber"); });
-      body.addEventListener("dragleave", (ev) => { if (!body.contains(ev.relatedTarget)) ablage.classList.remove("ueber"); });
+      // Abgelegt wird überall im Dialog – nie soll der Browser die Datei stattdessen selbst öffnen. #dlg-body bleibt
+      // über alle Dialoge bestehen: Die Handler gelten nur, solange dieser Dialog offen ist.
+      const weg = new AbortController();
+      dlg.addEventListener("close", () => weg.abort(), { once: true });
+      body.addEventListener("dragover", (ev) => { ev.preventDefault(); ablage.classList.add("ueber"); }, { signal: weg.signal });
+      body.addEventListener("dragleave", (ev) => { if (!body.contains(ev.relatedTarget)) ablage.classList.remove("ueber"); }, { signal: weg.signal });
       body.addEventListener("drop", (ev) => {
         ev.preventDefault();
         ablage.classList.remove("ueber");
         if (ev.dataTransfer && ev.dataTransfer.files.length) probelauf(ev.dataTransfer.files[0]);
-      });
+      }, { signal: weg.signal });
       ok.onclick = async () => {
         if (!datei || laeuft) return;
         laeuft = true;
@@ -1855,14 +1858,17 @@
       }
       $("#dm-dateien", body).addEventListener("change", (ev) => { hinzufuegen(Array.from(ev.target.files)); ev.target.value = ""; });
       const ablage = $("#dm-ablage", body);
-      // Abgelegt wird überall im Dialog – nie soll der Browser die Datei stattdessen selbst öffnen.
-      body.addEventListener("dragover", (ev) => { ev.preventDefault(); ablage.classList.add("ueber"); });
-      body.addEventListener("dragleave", (ev) => { if (!body.contains(ev.relatedTarget)) ablage.classList.remove("ueber"); });
+      // Abgelegt wird überall im Dialog – nie soll der Browser die Datei stattdessen selbst öffnen. #dlg-body bleibt
+      // über alle Dialoge bestehen: Die Handler gelten nur, solange dieser Dialog offen ist.
+      const weg = new AbortController();
+      dlg.addEventListener("close", () => weg.abort(), { once: true });
+      body.addEventListener("dragover", (ev) => { ev.preventDefault(); ablage.classList.add("ueber"); }, { signal: weg.signal });
+      body.addEventListener("dragleave", (ev) => { if (!body.contains(ev.relatedTarget)) ablage.classList.remove("ueber"); }, { signal: weg.signal });
       body.addEventListener("drop", (ev) => {
         ev.preventDefault();
         ablage.classList.remove("ueber");
         if (ev.dataTransfer && ev.dataTransfer.files.length) hinzufuegen(Array.from(ev.dataTransfer.files));
-      });
+      }, { signal: weg.signal });
       $("#dm-link", body).onclick = () => { merken(); eintraege.push({ datei: null, url: "", titel: "", art: "", version: "" }); zeichnen(); fokus($(".mat-dokzeile:last-child .dm-url", liste)); };
       $("#dm-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
@@ -2354,7 +2360,7 @@
 
     function bearbeitenHtml() {
       return `${pr.freipruefung ? `<p class="mat-banner s-gesperrt">GESPERRT – mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.</p>` : ""}
-        ${rueckrufHinweis(pr.artikel.rueckruf ? [pr.artikel.rueckruf] : [], pr.artikel.id)}
+        ${rueckrufHinweis(pr.artikel.rueckruf ? [pr.artikel.rueckruf] : [], pr.artikel.id, Boolean(pr.berichtigt))}
         ${lebensdauerHinweis(pr.lebensdauer)}
         ${punkteHtml()}
         <section class="section"><h2>Zur Prüfung</h2>
@@ -3016,10 +3022,11 @@
 
   // Hinweis in der Prüfung: Für den Artikel läuft ein Rückruf, der für ihn noch offen ist. Beschreibung und Empfehlung
   // stehen am Artikel; eine Prüfung nach dem Rückruf erledigt ihn für den Artikel.
-  function rueckrufHinweis(titel, artikelId) {
+  function rueckrufHinweis(titel, artikelId, berichtigung) {
     return titel.length ? `<div class="mat-banner mat-rr-banner" role="note"><p class="mat-rr-titel">RÜCKRUF: ${titel.map(esc).join(" · ")}</p>
-      <p class="mat-rr-zeile">Was der Hersteller empfiehlt, steht am <a href="/material/artikel/${artikelId}">Artikel</a>. Mit dem
-        Abschluss dieser Prüfung gilt der Rückruf für den Artikel als erledigt.</p></div>` : "";
+      <p class="mat-rr-zeile">Was der Hersteller empfiehlt, steht am <a href="/material/artikel/${artikelId}">Artikel</a>. ${berichtigung
+        ? "Eine Berichtigung erledigt den Rückruf nicht – dafür braucht es eine neue Prüfung oder eine Sperre."
+        : "Mit dem Abschluss dieser Prüfung gilt der Rückruf für den Artikel als erledigt."}</p></div>` : "";
   }
 
   // Banner am Artikel – je laufendem Rückruf, der ihn betrifft. Prüfer sperren von hier mit dem Grund „Rückruf“.
@@ -3030,7 +3037,7 @@
       return `<div class="mat-banner mat-rr-banner${offen ? "" : " erledigt"}" role="note">
         <p class="mat-rr-titel">RÜCKRUF: ${esc(r.title)}</p>
         ${r.description ? `<p class="mat-text mat-rr-text">${esc(r.description)}</p>` : ""}
-        <p class="mat-rr-zeile">${r.url ? `${rrLink(r.url, "Meldung des Herstellers")} · ` : ""}seit ${esc(fmtTag(r.created_at))} · ${r.alle ? "alle Artikel des Produkts" : "betrifft diese Seriennummer"}
+        <p class="mat-rr-zeile">${r.url ? `${rrLink(r.url, "Meldung des Herstellers")} · ` : ""}seit ${esc(S.fmtDate(r.created_at))} · ${r.alle ? "alle Artikel des Produkts" : "betrifft diese Seriennummer"}
           · für diesen Artikel ${rrZustand(r.zustand, r.grund)}${offen ? " – noch nicht gesperrt und seit dem Rückruf nicht geprüft" : ""}</p>
         ${sperren ? `<div class="btn-row"><button class="btn small" type="button" data-act="rr-sperren" data-id="${r.id}">Sperren (Rückruf)</button></div>` : ""}
         ${offen && !DARF.pruefen ? '<p class="mat-rr-zeile">Sperren dürfen Prüfer (Grund „Rückruf“); eine Prüfung nach dem Rückruf erledigt ihn ebenso.</p>' : ""}
@@ -3059,7 +3066,7 @@
     const artikel = r.artikel || [];
     return `<article class="mat-rr-karte${r.aktiv ? "" : " beendet"}">
       <div class="mat-rr-kopf"><span class="mat-rr-marke">${r.aktiv ? "Rückruf" : "beendet"}</span><h3>${esc(r.title)}</h3></div>
-      <p class="small muted">angelegt von ${esc(r.created_by_name || "–")} am ${esc(fmtTag(r.created_at))}${r.aktiv ? "" : ` · beendet von ${esc(r.closed_by_name || "–")} am ${esc(fmtTag(r.closed_at))}`}</p>
+      <p class="small muted">angelegt von ${esc(r.created_by_name || "–")} am ${esc(S.fmtDate(r.created_at))}${r.aktiv ? "" : ` · beendet von ${esc(r.closed_by_name || "–")} am ${esc(S.fmtDate(r.closed_at))}`}</p>
       ${r.description ? `<p class="mat-text">${esc(r.description)}</p>` : ""}
       ${r.url ? `<p>${rrLink(r.url, `Meldung des Herstellers: ${kurzLink(r.url)}`)}</p>` : ""}
       <p><strong>Betroffen:</strong> ${r.alle ? "alle Artikel dieses Produkts" : `${serien.length === 1 ? "Seriennummer" : "Seriennummern"} ${serienText}`}</p>
