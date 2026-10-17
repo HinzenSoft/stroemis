@@ -120,6 +120,8 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
   font-size: var(--fs-klein); background: var(--grau-hell); }
 .mat-artikeltitel h1 { margin-bottom: 4px; }
 .mat-produktzeile { margin: 0 0 6px; font-size: 1.05rem; }
+.mat-artikeltitel h1 + .btn-row { margin-top: 12px; }
+.mat-artikeltitel .btn-row + .btn-row { margin-top: 10px; }
 .mat-spalten { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 0 28px; }
 .mat-daten { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 6px 14px; margin: 0; }
 .mat-daten dt { color: var(--grau); font-size: var(--fs-mittel); }
@@ -266,6 +268,21 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 label:has(> .mat-datei:focus-visible) { outline: 3px solid var(--gelb); outline-offset: 2px; }
 label:has(> .mat-datei) { position: relative; }
 .mat-pflicht { color: var(--rot); font-weight: 700; font-size: var(--fs-klein); }
+/* Am Rechner (Maus, genug Breite) dürfen die Prüfpunkte dichter stehen: niedrigere, schmalere Umschalter,
+   Foto und „+ Bemerkung“ in derselben Zeile – so passen mehr Kriterien auf einen Bildschirm. Am Telefon bleiben
+   die großen Umschalter für die Bedienung mit einer Hand. */
+@media (hover: hover) and (pointer: fine) and (min-width: 700px) {
+  .mat-punkt { padding: 8px 12px; margin-bottom: 8px; }
+  .mat-punkt-kopf { margin-bottom: 6px; }
+  .mat-punkt-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+  .mat-punkt-zeile .mat-wahl3 { margin: 0; flex: 0 1 380px; }
+  .mat-punkt-zeile .mat-pwert { flex: 1 1 260px; width: auto; margin: 0; }
+  .mat-wahl3 button { min-height: 32px; padding: 3px 8px; }
+  .mat-punkt-foto { margin-top: 0; }
+  .mat-punkt-foto .mat-kamera { margin: 0; }
+  .mat-punkt-foto img { width: 40px; height: 40px; }
+  .mat-punkt .mat-pnotiz { margin-top: 6px; }
+}
 .mat-anhaenge { padding-left: 18px; }
 .mat-anhaenge li { margin: 4px 0; }
 .mat-anhang-neu { border: 1px dashed var(--linie); padding: 10px 12px; margin-top: 10px; }
@@ -292,6 +309,13 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
 .mat-abschluss-hinweis { font-size: var(--fs-klein); color: var(--grau); margin-top: 6px; }
 .mat-abschluss-hinweis:empty { display: none; }
 .mat-abschluss-hinweis.warn { color: var(--rot); font-weight: 600; }
+/* Am Rechner auch die Leiste niedriger – nach den Grundregeln, damit sie gilt (siehe Prüfpunkte oben). */
+@media (hover: hover) and (pointer: fine) and (min-width: 700px) {
+  .mat-abschluss { padding-top: 8px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+  .mat-ergebnis button { min-height: 34px; }
+  .mat-abschluss-zeile { margin-top: 6px; }
+  .mat-abschluss-zeile .btn { min-height: 34px; }
+}
 /* Am Telefon gehört der Platz der Prüfung: Die Nummernsuche steht auf jeder anderen Seite. */
 @media (max-width: 640px) {
   #mat[data-ansicht="pruefung"] .mat-suche { display: none; }

@@ -978,12 +978,14 @@
       const summe = (id) => (kats.find((x) => x.id === id).produkte || 0) + kats.filter((x) => x.parent_id === id).reduce((n, c) => n + summe(c.id), 0);
       const angaben = k ? [k.norm ? esc(k.norm) : "", k.default_material_kind ? `Materialart ${esc(MATERIALART[k.default_material_kind])}` : "",
         k.default_interval_months ? `Prüfintervall ${k.default_interval_months} Monate` : "", plural(summe(k.id), "Produkt", "Produkte")].filter(Boolean).join(" · ") : "";
+      // Zum aktiven generischen Formular führt bei Katalogpflegern der Knopf „Generisches Formular“, sonst der Verweis in der Angabenzeile.
       inhalt.innerHTML = `<div class="page-head"><h1>Katalog</h1>
           <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu">+ Kategorie</button><button class="btn" data-act="produkt-neu">+ Produkt</button>' : ""}</div></div>
         ${k ? `<div class="mat-katkopf">
             <div class="mat-pfad"><a href="/material/katalog" data-act="kategorie" data-id="">alle Kategorien</a>${pfad.slice(0, -1).map((x) => ` / <a href="/material/katalog?kategorie=${x.id}" data-act="kategorie" data-id="${x.id}">${esc(x.name)}</a>`).join("")}</div>
             <h2>${esc(k.name)} ${demoMarke(k.demo)}</h2>
-            <p class="small">${angaben}${k.aktives_formular ? ` · <a href="/material/katalog/formular/${k.aktives_formular}">generisches Prüfformular</a>` : ' · <span class="muted">kein aktives generisches Prüfformular</span>'}</p>
+            <p class="small">${angaben}${!k.aktives_formular ? ' · <span class="muted">kein aktives generisches Prüfformular</span>'
+              : DARF.katalog ? "" : ` · <a href="/material/katalog/formular/${k.aktives_formular}">generisches Prüfformular</a>`}</p>
             ${DARF.katalog ? `<div class="btn-row"><button class="btn ghost small" data-act="kat-bearbeiten">Kategorie bearbeiten</button>
               <button class="btn ghost small" data-act="kat-formular">Generisches Formular</button><button class="btn ghost small" data-act="kat-loeschen">Löschen</button></div>` : ""}
             <div class="mat-katdoks"><h3 class="mat-unter">Dokumente für alle Produkte dieser Kategorie</h3>
@@ -1150,7 +1152,7 @@
     });
     return gruppen;
   }
-  const katKopf = (name, id) => `<h3 class="mat-unter">Kategoriedokumente <span class="mat-unter-zusatz">für die Kategorie
+  const katKopf = (name, id) => `<h3 class="mat-unter">Dokumente <span class="mat-unter-zusatz">für die Kategorie
     ${id ? `<a href="/material/katalog?kategorie=${id}">${esc(name)}</a>` : esc(name)}</span></h3>`;
   const dokTabelle = (docs, k) => `<table class="list mat-tabelle"><thead><tr><th>Dokument</th><th>Version</th><th>Gültig ab</th><th>Stand</th><th></th></tr></thead><tbody>${docs.map((d) => dokZeile(d, k)).join("")}</tbody></table>`;
 
@@ -1200,12 +1202,14 @@
       <div class="mat-artikelkopf">
         ${p.bild ? `<a href="${esc(p.original || p.bild)}" target="_blank" rel="noopener"><img class="mat-produktbild" src="${esc(p.bild)}" alt=""></a>` : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel"><h1>${esc(produktName(p))} ${demoMarke(p.demo)}</h1>
-          <p class="mat-produktzeile">${p.article_no ? `Art.-Nr. ${esc(p.article_no)} · ` : ""}${esc(MATERIALART[p.material_kind])}${p.norm ? ` · ${esc(p.norm)}` : ""}</p>
-          <div class="btn-row">${k ? `<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button><button class="btn ghost small" data-act="bild">Produktbild</button>${p.artikel_gesamt ? "" : '<button class="btn ghost small" data-act="loeschen">Löschen</button>'}` : ""}
-            ${DARF.verwalten ? `<a class="btn small" href="/material/artikel/neu?produkt=${p.id}">+ Artikel dieses Produkts</a>` : ""}</div></div>
+          ${DARF.verwalten ? `<div class="btn-row"><a class="btn small" href="/material/artikel/neu?produkt=${p.id}">+ Artikel dieses Produkts</a></div>` : ""}
+          ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button><button class="btn ghost small" data-act="bild">Produktbild</button>${p.artikel_gesamt ? "" : '<button class="btn ghost small" data-act="loeschen">Löschen</button>'}</div>` : ""}</div>
       </div>
       <div class="mat-spalten">
         <section class="section"><h2>Stammdaten</h2><dl class="mat-daten">
+          ${zeile("Artikelnummer", p.article_no ? esc(p.article_no) : '<span class="muted">–</span>')}
+          ${zeile("Materialart", esc(MATERIALART[p.material_kind] || p.material_kind))}
+          ${zeile("Norm", p.norm ? esc(p.norm) : '<span class="muted">–</span>')}
           ${zeile("Prüfintervall", p.intervall.monate ? `${p.intervall.monate} Monate <span class="muted">(${esc(p.intervall.quelle)})</span>` : '<span class="mat-warn">keins</span>')}
           ${zeile("Lebensdauer", p.lifetime_years ? `${p.lifetime_years} Jahre${p.lifetime_source ? ` <span class="muted">(${esc(p.lifetime_source)})</span>` : ""}${p.material_kind === "textil" ? "" : ' <span class="muted">– nicht festgeschrieben</span>'}` : '<span class="muted">keine</span>')}
           ${zeile("Bestand", `${plural(p.bestand, "Artikel", "Artikel")}${p.artikel_gesamt > p.bestand ? ` <span class="muted">(+${p.artikel_gesamt - p.bestand} ausgesondert)</span>` : ""}`)}
@@ -1493,9 +1497,9 @@
         <div class="mat-punkt-kopf"><span class="mat-punkt-text">${esc(x.text)}</span>
           ${x.kritisch ? '<span class="mat-kritisch" title="Ein Mangel hier schließt „einsatzbereit“ aus">kritisch</span>' : ""}
           ${x.art === "yesno" && x.soll ? `<span class="muted small">Soll ${esc(x.soll)}</span>` : ""}${x.pflicht ? "" : '<span class="muted small">optional</span>'}</div>
-        ${steuer}${foto}
-        <textarea class="mat-pnotiz" data-rid="${x.id}" rows="2" maxlength="1000" placeholder="${mangel ? "Was ist wo zu sehen? (Mangel)" : "Bemerkung"}" ${notiz ? "" : "hidden"}>${esc(x.notiz || "")}</textarea>
-        ${notiz ? "" : `<button type="button" class="lnk small" data-act="pnotiz-auf" data-rid="${x.id}">+ Bemerkung</button>`}</div>`;
+        <div class="mat-punkt-zeile">${steuer}${foto}
+          ${notiz ? "" : `<button type="button" class="lnk small" data-act="pnotiz-auf" data-rid="${x.id}">+ Bemerkung</button>`}</div>
+        <textarea class="mat-pnotiz" data-rid="${x.id}" rows="2" maxlength="1000" placeholder="${mangel ? "Was ist wo zu sehen? (Mangel)" : "Bemerkung"}" ${notiz ? "" : "hidden"}>${esc(x.notiz || "")}</textarea></div>`;
     }
 
     function punkteHtml() {
