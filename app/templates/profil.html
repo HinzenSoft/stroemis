@@ -29,11 +29,13 @@
     </div>
   </section>
   {# Unterschrift nur für wen, der sie braucht: Prüfer (Festschreiben) und Materialwarte (Aussondern) – mit Zugang
-     zum Modul. Ist schon eine hinterlegt, bleibt der Abschnitt, damit sie sich nach einem Rollenwechsel entfernen lässt. #}
+     zum Modul. Ist schon eine hinterlegt, bleibt der Abschnitt, damit sie sich nach einem Rollenwechsel entfernen lässt;
+     neu unterschreiben (PUT /api/material/unterschrift) dürfen dann nur noch Prüfer und Materialwarte. #}
   {% if (rechte.material or user.mat_pruefer or user.mat_katalog) and (user.mat_pruefer or (rechte.material or 0) >= 2 or user.signature_png) %}
-  <section class="section" id="unterschrift">
+  {% set us_setzen = user.mat_pruefer or (rechte.material or 0) >= 2 %}
+  <section class="section" id="unterschrift" data-setzen="{{ 1 if us_setzen else 0 }}">
     <h2>Unterschrift</h2>
-    <div class="help">Für das Modul Material: Sie wird beim Festschreiben einer Prüfung oder Aussonderung als Kopie ins Protokoll übernommen – zusammen mit deiner Anmeldung, dem Zeitpunkt und der Prüfsumme. Änderst oder entfernst du sie, wirkt das nur auf künftige Protokolle.</div>
+    <div class="help">Für das Modul Material: Sie wird beim Festschreiben einer Prüfung oder Aussonderung als Kopie ins Protokoll übernommen – zusammen mit deiner Anmeldung, dem Zeitpunkt und der Prüfsumme. Änderst oder entfernst du sie, wirkt das nur auf künftige Protokolle.{% if not us_setzen %} Du bist weder Prüfer noch Materialwart und brauchst sie nicht mehr – entferne sie, wenn du magst.{% endif %}</div>
     <div class="us-profil">
       <div class="us-vorschau leer" id="us-vorschau"><span class="muted">Wird geladen …</span></div>
       <div class="btn-row us-knoepfe">

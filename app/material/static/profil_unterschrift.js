@@ -1,22 +1,26 @@
 /* Profil, Abschnitt „Unterschrift“: die eigene Unterschrift für das Modul Material zeichnen, ersetzen oder
    entfernen. Beim Festschreiben einer Prüfung oder Aussonderung wird eine Kopie ins Protokoll übernommen;
-   eine spätere Änderung wirkt nur auf künftige Protokolle. */
+   eine spätere Änderung wirkt nur auf künftige Protokolle. Wer weder Prüfer noch Materialwart ist (data-setzen="0"),
+   sieht nur eine alte Unterschrift und kann sie entfernen. */
 (function () {
   "use strict";
   const vorschau = document.getElementById("us-vorschau");
   if (!vorschau) return;
   const zeichnenKnopf = document.getElementById("us-zeichnen");
   const weg = document.getElementById("us-weg");
+  const abschnitt = document.getElementById("unterschrift");
+  const darfSetzen = !abschnitt || abschnitt.dataset.setzen !== "0";
   const API = "/api/material/unterschrift";
   let bild = null;
 
   function zeige(url) {
     bild = url || null;
     vorschau.innerHTML = bild ? `<img src="${S.esc(bild)}" alt="Deine hinterlegte Unterschrift">`
-      : '<span class="muted">Noch keine Unterschrift hinterlegt.</span>';
+      : `<span class="muted">${darfSetzen ? "Noch keine Unterschrift hinterlegt." : "Keine Unterschrift hinterlegt."}</span>`;
     vorschau.classList.toggle("leer", !bild);
     zeichnenKnopf.textContent = bild ? "Neu unterschreiben" : "Unterschreiben";
     zeichnenKnopf.disabled = false;
+    zeichnenKnopf.classList.toggle("hidden", !darfSetzen);
     weg.classList.toggle("hidden", !bild);
   }
 
@@ -35,7 +39,7 @@
     try {
       await S.api(API, { method: "DELETE" });
       zeige(null);
-      zeichnenKnopf.focus({ preventScroll: true });     // „Entfernen“ ist jetzt ausgeblendet
+      if (darfSetzen) zeichnenKnopf.focus({ preventScroll: true });     // „Entfernen“ ist jetzt ausgeblendet
       S.toast("Unterschrift entfernt");
     }
     catch (e) { S.toast(e.message, true); }

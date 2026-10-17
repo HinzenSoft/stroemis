@@ -1,8 +1,10 @@
 """QR-Kennung eines Artikels und die Adresse, die auf Etikett, NFC- oder RFID-Tag steht.
 
 Die Kennung ist zufällig und lang genug, dass sich keine fremden Artikel erraten lassen; sie verrät
-nichts über Gliederung oder Inventarnummer. Das Etikett selbst (segno, Bogen als PDF) kommt mit
-Lieferung 4 – die Adresse gilt schon jetzt und lässt sich am Artikel kopieren."""
+nichts über Gliederung oder Inventarnummer. Einen Etikettenbogen erzeugt das Modul nicht: Die Adresse
+lässt sich am Artikel kopieren und auf einen NFC- oder RFID-Tag schreiben oder als QR-Code mit einem
+beliebigen Etikettenprogramm drucken. Gedruckt oder geschrieben ist sie ein dauerhafter Vertrag – /m/<token>
+und die BASE_URL dürfen sich danach nicht mehr ändern."""
 import secrets
 
 from flask import current_app

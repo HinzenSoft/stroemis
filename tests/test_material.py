@@ -1734,14 +1734,19 @@ def test_produktmeldung():
             m2 = r.json["meldung"]["id"]
             assert post[-1][0] == "katalog@example.org"
 
-            # Sehen: der Materialwart nur seine, der Katalogpfleger alle offenen (älteste zuerst).
+            # Sehen: der Materialwart standardmäßig seine, der Katalogpfleger alle offenen (älteste zuerst). Lesen darf
+            # jeder mit Zugang zum Modul (Lieferung 4) – abarbeiten („bearbeiten“) nur der Katalogpfleger.
             r = k["wart"].get("/api/material/meldungen")
             assert r.status_code == 200 and not r.json["alle"] and [x["id"] for x in r.json["meldungen"]] == [m["id"]]
-            assert k["wart"].get(f"/api/material/meldungen/{m2}").status_code == 403
+            assert k["wart"].get(f"/api/material/meldungen/{m2}").status_code == 200
             r = k["katalog"].get("/api/material/meldungen")
-            assert r.json["alle"] and [x["id"] for x in r.json["meldungen"]] == [m["id"], m2] and r.json["offen"] == 2
-            for wer in ("fuehrung", "nutzer"):
-                assert k[wer].get("/api/material/meldungen").status_code == 403, wer
+            assert r.json["alle"] and r.json["bearbeiten"] and [x["id"] for x in r.json["meldungen"]] == [m["id"], m2] \
+                and r.json["offen"] == 2
+            for wer in ("fuehrung", "wart"):
+                r = k[wer].get("/api/material/meldungen", query_string={} if wer == "fuehrung" else {"eigene": "0"})
+                assert r.status_code == 200 and r.json["alle"] and not r.json["bearbeiten"], (wer, r.get_json())
+                assert [x["id"] for x in r.json["meldungen"]] == [m["id"], m2], wer
+            assert k["nutzer"].get("/api/material/meldungen").status_code == 403
             assert k["katalog"].get("/api/material/start").json["meldungen_offen"] == 2
             assert k["wart"].get("/api/material/start").json["meldungen_offen"] is None
             assert k["katalog"].get("/material/katalog/meldungen").status_code == 200

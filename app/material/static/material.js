@@ -504,7 +504,6 @@
     const d = await api(`${API}/start`);
     const z = d.zaehlung;
     const kachel = (s, titel) => `<a class="mat-kachel s-${s}" href="/material/pruefungen?status=${s}"><strong>${z[s] || 0}</strong><span>${esc(titel)}</span></a>`;
-    const gl = d.gliederungen;
     inhalt.innerHTML = `<div class="page-head"><h1>Material</h1>
         <div class="btn-row">${DARF.verwalten ? '<a class="btn secondary" href="/material/bestand">Bestand pflegen</a><a class="btn" href="/material/artikel/neu">+ Artikel</a>' : ""}</div></div>
       ${d.meldungen_offen ? `<p class="notice"><a href="/material/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produktmeldung", "offene Produktmeldungen")}</strong></a>
@@ -515,19 +514,63 @@
         ${kachel("gesperrt", "gesperrt")}${kachel("lebensdauer", "Lebensdauer erreicht")}${kachel("einsatzbereit", "einsatzbereit")}
       </div>
       <div id="mat-runden"></div>
-      <section class="section"><h2>Gliederungen</h2>
-        ${gl.length ? `<table class="list mat-tabelle"><thead><tr><th>Gliederung</th><th>Bestand</th><th>überfällig</th><th>neu</th><th>bald fällig</th><th>gesperrt</th><th>Lebensdauer</th></tr></thead><tbody>
-          ${gl.map((o) => `<tr><td data-l="Gliederung"><a href="/material/ordner/${o.id}">${esc(o.name)}</a>${demoMarke(o.demo)}</td>
-            <td data-l="Bestand">${o.bestand}</td><td data-l="überfällig">${o.zaehlung.ueberfaellig || "–"}</td><td data-l="neu">${o.zaehlung.neu || "–"}</td>
-            <td data-l="bald fällig">${o.zaehlung.bald_faellig || "–"}</td><td data-l="gesperrt">${o.zaehlung.gesperrt || "–"}</td>
-            <td data-l="Lebensdauer">${o.zaehlung.lebensdauer || "–"}</td></tr>`).join("")}</tbody></table>`
+      <section class="section"><h2>Fälligkeiten je Ordner</h2>
+        ${d.ordner_uebersicht.length ? ordnerUebersichtHtml(d.ordner_uebersicht)
           : leer(DARF.verwalten ? "Noch keine Gliederung – lege unter „Bestand“ die erste an." : "Noch keine Gliederung angelegt.")}
       </section>
       <section class="section"><h2>Als Nächstes zu prüfen</h2>
         ${d.naechste.length ? artikelTabelle(d.naechste, { pfad: true }) + (d.faellig_gesamt > d.naechste.length ? `<p><a href="/material/pruefungen">Alle ${d.faellig_gesamt} anzeigen →</a></p>` : "")
           : leer("Nichts fällig.")}
       </section>`;
+    ordnerUebersichtKlappen($("#mat-ue"));
     rundenKasten($("#mat-runden"), true);
+  }
+
+  /* Fälligkeiten je Ordner: Gliederungen mit ihren Ordnern eingerückt, die Zahlen für den ganzen Zweig – dieselben wie in
+     der Ordnerleiste (/start, ordner_uebersicht). Die Systemordner sind keine eigenen Zeilen: Gesperrte und ausgesonderte
+     Artikel liegen in ihrer Gliederung und zählen dort. Jede Zahl führt zur Liste genau dieser Artikel (Prüfungen, nach
+     Ordner und Status gefiltert), die nächste Fälligkeit zu allem Fälligen im Ordner, der Name zum Ordner. Ein großer Baum
+     (mehr als UE_GROSS Zeilen) beginnt mit zugeklappten Ordnern ab der zweiten Ebene unter der Gliederung. Unter 860 px
+     wird jede Zeile zur Karte; leere Zahlen entfallen dort. */
+  const UE_SPALTEN = [["ueberfaellig", "überfällig", "überfällig"], ["neu", "neu", "neu (Eingangsprüfung offen)"],
+                      ["bald_faellig", "bald fällig", "bald fällig"], ["gesperrt", "gesperrt", "gesperrt"],
+                      ["lebensdauer", "Lebensdauer erreicht", "Lebensdauer erreicht"]];
+  const UE_GROSS = 30;
+  function ordnerUebersichtHtml(zeilen) {
+    const nachId = {};
+    zeilen.forEach((o) => { nachId[o.id] = o; });
+    const zu = new Set(zeilen.length > UE_GROSS ? zeilen.filter((o) => o.tiefe >= 1 && o.unterordner).map((o) => o.id) : []);
+    const vorfahren = (o) => { const weg = []; for (let p = nachId[o.parent_id]; p; p = nachId[p.parent_id]) weg.push(p.id); return weg; };
+    const zeile = (o) => {
+      const weg = vorfahren(o);
+      const knopf = o.unterordner
+        ? `<button type="button" class="mat-ue-klapp" data-ue-klapp="${o.id}" aria-expanded="${!zu.has(o.id)}" aria-label="Unterordner von ${esc(o.name)}"></button>`
+        : '<span class="mat-ue-klapp" aria-hidden="true"></span>';
+      const zahlen = UE_SPALTEN.map(([s, kurz, lang]) => {
+        const n = o.zaehlung[s] || 0;
+        return `<td data-l="${esc(lang)}" class="mat-ue-zahl${n ? "" : " mat-ue-null"}">${n ? `<a class="mat-zahl s-${s}" href="/material/pruefungen?ordner=${o.id}&status=${s}" title="${esc(`${lang} – ${o.name}`)}">${n}</a>` : '<span class="muted">–</span>'}</td>`;
+      }).join("");
+      return `<tr data-weg="${weg.join(" ")}" class="${o.tiefe ? "" : "mat-ue-oben"}" style="--tiefe:${Math.min(o.tiefe, 8)}" ${weg.some((x) => zu.has(x)) ? "hidden" : ""}>
+        <td data-l="Ordner" class="mat-ue-name">${knopf}<a href="/material/ordner/${o.id}">${esc(o.name)}</a>${o.tiefe && o.kind !== "gliederung" ? "" : ` <span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}${demoMarke(o.demo)}</td>
+        <td data-l="Bestand" class="mat-ue-zahl">${o.bestand}</td>${zahlen}
+        <td data-l="nächste Fälligkeit" class="mat-ue-tag${o.naechste ? "" : " mat-ue-null"}">${o.naechste ? `<a class="t-${esc(o.naechste_status)}" href="/material/pruefungen?ordner=${o.id}" title="Alles Fällige in ${esc(o.name)}">${esc(fmtTag(o.naechste))}</a>` : '<span class="muted">–</span>'}</td></tr>`;
+    };
+    return `<p class="help">Die Zahlen gelten für den ganzen Zweig. Gesperrte und ausgesonderte Artikel liegen in ihrer Gliederung und zählen dort.
+        Nächste Fälligkeit: das früheste Prüfdatum im Zweig – ohne neue (Eingangsprüfung), gesperrte und Artikel am Lebensende, die ihre eigenen Spalten haben.</p>
+      <table class="list mat-tabelle mat-ue" id="mat-ue"><thead><tr><th>Ordner</th><th class="mat-ue-zahl">Bestand</th>
+        ${UE_SPALTEN.map(([s, kurz, lang]) => `<th class="mat-ue-zahl" title="${esc(lang)}">${esc(kurz)}</th>`).join("")}<th>nächste Fälligkeit</th></tr></thead>
+      <tbody>${zeilen.map(zeile).join("")}</tbody></table>`;
+  }
+  // Auf- und Zuklappen: Eine Zeile ist verborgen, solange einer ihrer Oberordner zugeklappt ist.
+  function ordnerUebersichtKlappen(tabelle) {
+    if (!tabelle) return;
+    tabelle.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-ue-klapp]");
+      if (!b) return;
+      b.setAttribute("aria-expanded", String(b.getAttribute("aria-expanded") !== "true"));
+      const zu = new Set($$('[data-ue-klapp][aria-expanded="false"]', tabelle).map((x) => x.dataset.ueKlapp));
+      $$("tbody tr", tabelle).forEach((tr) => { tr.hidden = tr.dataset.weg.split(" ").some((x) => x && zu.has(x)); });
+    });
   }
 
   /* Laufende Prüfdurchgänge als Kasten (Übersicht) bzw. Liste mit abgeschlossenen (Prüfungen). */
@@ -594,17 +637,23 @@
   /* --- Fällige Prüfungen ------------------------------------------------------------------------ */
   async function pruefungen() {
     const params = new URLSearchParams(location.search);
-    let filter = params.get("status") || "ueberfaellig,neu,bald_faellig";
+    // Alles Fällige – wie bestand.FAELLIG auf dem Server (überfällig, Lebensdauer erreicht, neu, bald fällig).
+    const FAELLIG = "ueberfaellig,lebensdauer,neu,bald_faellig";
+    let filter = params.get("status") || FAELLIG;
     let seite = 1;
     let sort = { feld: null, richtung: "auf" };
-    const FILTER = [["ueberfaellig,neu,bald_faellig", "fällig, überfällig und neu"], ["ueberfaellig", "überfällig"],
-                    ["neu", "neu (Eingangsprüfung)"], ["bald_faellig", "bald fällig"], ["lebensdauer", "Lebensdauer erreicht"],
-                    ["gesperrt", "gesperrt"]];
+    const FILTER = [[FAELLIG, "alles Fällige"], ["ueberfaellig", "überfällig"], ["lebensdauer", "Lebensdauer erreicht"],
+                    ["neu", "neu (Eingangsprüfung)"], ["bald_faellig", "bald fällig"], ["gesperrt", "gesperrt"],
+                    ["einsatzbereit", "einsatzbereit"]];
+    if (DATEN.ordner) leisteMarkieren(DATEN.ordner);
     async function liste() {
       const q = sortParameter(new URLSearchParams({ status: filter, seite, pro_seite: 50 }), sort);
       if (DATEN.ordner) q.set("ordner", DATEN.ordner);
       const d = await api(`${API}/faellig?${q}`);
-      $("#pr-liste").innerHTML = `<p class="help">Überfällig, neu (die Eingangsprüfung steht aus) oder in den nächsten ${d.schwelle_tage} Tagen fällig. Prüfen lässt sich jeder Artikel aber jederzeit – auch aus seiner Ansicht.</p>
+      // Aus der Übersicht kommt die Liste nach Ordner gefiltert – samt Unterordnern; „alle Ordner“ hebt das auf.
+      const ordnerZeile = d.ordner ? `<p class="mat-pr-ordner">Nur <a href="/material/ordner/${d.ordner.id}">${esc(d.ordner.pfad.map((o) => o.name).join(" / "))}</a> mit Unterordnern
+        · <a href="/material/pruefungen?status=${encodeURIComponent(filter)}">alle Ordner</a></p>` : "";
+      $("#pr-liste").innerHTML = `${ordnerZeile}<p class="help">Überfällig, Lebensdauer erreicht (die Prüfung endet mit „aussondern“), neu (die Eingangsprüfung steht aus) oder in den nächsten ${d.schwelle_tage} Tagen fällig. Prüfen lässt sich jeder Artikel aber jederzeit – auch aus seiner Ansicht.</p>
         <div class="c-tabs mat-filter">${FILTER.map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}</button>`).join("")}</div>
         ${d.artikel.length ? artikelTabelle(d.artikel, { pfad: true, pruefen: DARF.pruefen, sort }) : leer("Keine Artikel in dieser Auswahl.")}
         ${seitenleiste(d.gesamt, seite, 50)}`;
@@ -631,7 +680,7 @@
       await Promise.all([zeigenIn(liste, "#pr-liste"), zeigenIn(offene, "#pr-offen"), rundenKasten($("#pr-runden"), false)]);
     }
     aktionen = {
-      filter: (b) => { filter = b.dataset.f; seite = 1; history.replaceState(null, "", `?status=${filter}`); zeigenIn(liste, "#pr-liste"); },
+      filter: (b) => { filter = b.dataset.f; seite = 1; history.replaceState(null, "", `?${DATEN.ordner ? `ordner=${DATEN.ordner}&` : ""}status=${filter}`); zeigenIn(liste, "#pr-liste"); },
       seite: (b) => { seite = +b.dataset.seite; zeigenIn(liste, "#pr-liste"); },
       sortieren: (b) => { sort = sortWeiter(sort, b.dataset.feld); seite = 1; zeigenIn(liste, "#pr-liste"); },
       freigeben: (b) => reservierungFreigeben(+b.dataset.id, b.dataset.wer, () => Promise.all([zeigenIn(offene, "#pr-offen"), zeigenIn(liste, "#pr-liste")])),
@@ -878,8 +927,8 @@
           ${zeile("Prüfformular", a.formular ? `${esc(a.formular.title || "ohne Titel")} · Version ${a.formular.version} <span class="muted">(${esc(a.formular.quelle)}, ${plural(a.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span>` : '<span class="mat-warn">kein aktives Prüfformular – im Katalog anlegen</span>')}
           ${a.notes ? zeile("Bemerkung", `<span class="mat-text">${esc(a.notes)}</span>`) : ""}
         </dl></section>
-        <section class="section"><h2>QR-Etikett</h2>
-          <p class="help">Diese Adresse steht im QR-Code; derselbe Link lässt sich auf einen NFC- oder RFID-Tag schreiben. Die Kamera-App öffnet damit nach der Anmeldung diesen Artikel. Etikettenbögen kommen mit Lieferung 4.</p>
+        <section class="section"><h2>QR-Code und NFC</h2>
+          <p class="help">Diese Adresse öffnet nach der Anmeldung diesen Artikel. Kopiere sie und schreibe sie auf einen NFC- oder RFID-Tag oder drucke sie mit einem beliebigen Etikettenprogramm als QR-Code – die Kamera-App des Telefons öffnet sie.</p>
           <div class="mat-qr"><input type="text" readonly value="${esc(a.qr_adresse)}" id="mat-qr" aria-label="Adresse für QR, NFC und RFID">
           <button class="btn secondary small" data-act="qr-kopieren">Kopieren</button></div>
           <h2>Herstellerdokumente</h2>
@@ -1266,8 +1315,8 @@
         k.default_interval_months ? `Prüfintervall ${k.default_interval_months} Monate` : "", plural(summe(k.id), "Produkt", "Produkte")].filter(Boolean).join(" · ") : "";
       // Zum aktiven generischen Formular führt bei Katalogpflegern der Knopf „Generisches Formular“, sonst der Verweis in der Angabenzeile.
       inhalt.innerHTML = `<div class="page-head"><h1>Katalog</h1>
-          <div class="btn-row">${DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/material/katalog/meldungen">Meldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>
-            <button class="btn secondary" data-act="kat-neu">+ Kategorie</button><button class="btn" data-act="produkt-neu">+ Produkt</button>` : ""}</div></div>
+          <div class="btn-row">${DARF.lesen || DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/material/katalog/meldungen">Meldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>` : ""}
+            ${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu">+ Kategorie</button><button class="btn" data-act="produkt-neu">+ Produkt</button>' : ""}</div></div>
         ${k ? `<div class="mat-katkopf">
             <div class="mat-pfad"><a href="/material/katalog" data-act="kategorie" data-id="">alle Kategorien</a>${pfad.slice(0, -1).map((x) => ` / <a href="/material/katalog?kategorie=${x.id}" data-act="kategorie" data-id="${x.id}">${esc(x.name)}</a>`).join("")}</div>
             <h2>${esc(k.name)} ${demoMarke(k.demo)}</h2>
@@ -2588,10 +2637,11 @@
   // Im Produktdialog: was der Melder wusste – zum Nachschlagen, während die Felder schon vorbelegt sind.
   const meldeKasten = (m) => `<div class="mat-meldekasten"><p class="small">Gemeldet von ${esc(m.created_by_name || "–")} am ${esc(fmtTag(m.created_at))}${m.ordner ? ` für ${esc(m.ordner.pfad)}` : ""}</p>${meldeDetails(m)}</div>`;
 
-  function meldeKarte(m, alle) {
+  // bearbeiten: Katalogpfleger in der Liste aller Meldungen – nur sie bekommen die Knöpfe zum Abarbeiten.
+  function meldeKarte(m, bearbeiten) {
     const wer = (name) => (name ? ` von ${esc(name)}` : "");
     const knoepfe = [];
-    if (alle && m.status === "offen") {
+    if (bearbeiten && m.status === "offen") {
       knoepfe.push(`<button type="button" class="btn small" data-act="anlegen" data-id="${m.id}">Produkt anlegen</button>`,
                    `<button type="button" class="btn secondary small" data-act="zuordnen" data-id="${m.id}">Vorhandenes zuordnen</button>`,
                    `<button type="button" class="btn secondary small" data-act="ablehnen" data-id="${m.id}">Ablehnen</button>`);
@@ -2606,7 +2656,7 @@
       <p class="muted small">gemeldet${wer(m.created_by_name)} am ${esc(fmtTag(m.created_at))}${m.ordner ? ` · für ${esc(m.ordner.pfad)}` : ""}</p>
       ${meldeDetails(m)}
       ${m.treffer ? `<p class="notice">Steht inzwischen im Katalog: <a href="/material/katalog/produkt/${m.treffer.id}">${esc(produktName(m.treffer))}</a>${m.treffer.article_no ? ` <span class="muted">${esc(m.treffer.article_no)}</span>` : ""}
-        ${alle ? `<button type="button" class="btn small" data-act="treffer" data-id="${m.id}">Zuordnen</button>` : ""}</p>` : ""}
+        ${bearbeiten ? `<button type="button" class="btn small" data-act="treffer" data-id="${m.id}">Zuordnen</button>` : ""}</p>` : ""}
       ${m.status === "eingepflegt" ? `<p class="mat-meldung-ergebnis">Eingepflegt${wer(m.resolved_by_name)} am ${esc(fmtTag(m.resolved_at))}:
         ${m.produkt ? `<a href="/material/katalog/produkt/${m.produkt.id}">${esc(produktName(m.produkt))}</a>` : '<span class="muted">Produkt inzwischen gelöscht</span>'}
         ${m.answer ? `<br><span class="mat-text">${esc(m.answer)}</span>` : ""}</p>` : ""}
@@ -2617,24 +2667,32 @@
 
   async function meldungen() {
     let filter = DATEN.status || null;
+    let eigene = null;            // null: was der Server für die Rolle vorsieht; Materialwarte schalten zwischen „1“ und „0“
     leisteMarkieren(null);
     async function zeichnen() {
-      const d = await api(`${API}/meldungen${filter ? `?status=${encodeURIComponent(filter)}` : ""}`);
+      const q = new URLSearchParams();
+      if (filter) q.set("status", filter);
+      if (eigene) q.set("eigene", eigene);
+      const d = await api(`${API}/meldungen${String(q) ? `?${q}` : ""}`);
       filter = d.filter;
       const liste = d.meldungen;
       const meldung = (b) => liste.find((m) => m.id === +b.dataset.id);
+      // Lesende (Führungskraft, Materialwart in „alle“) sehen dieselben Karten ohne Knöpfe zum Abarbeiten.
+      const hilfe = d.bearbeiten ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen. „Produkt anlegen“ übernimmt ihre Angaben in den Produktdialog. Der Melder bekommt eine Mail, sobald das Produkt im Katalog ist – oder deine Begründung, wenn du ablehnst."
+        : d.alle ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen; die Katalogpfleger nehmen sie auf oder lehnen sie mit Begründung ab."
+          : "Produkte, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald ein Katalogpfleger sie bearbeitet hat.";
       inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Produktmeldungen" : "Deine Produktmeldungen"}</h1>
           <div class="btn-row"><a class="btn secondary" href="/material/katalog">Katalog</a>${DARF.verwalten ? '<a class="btn" href="/material/artikel/neu">+ Artikel</a>' : ""}</div></div>
-        <p class="help">${d.alle ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen. „Produkt anlegen“ übernimmt ihre Angaben in den Produktdialog. Der Melder bekommt eine Mail, sobald das Produkt im Katalog ist – oder deine Begründung, wenn du ablehnst."
-          : "Produkte, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald ein Katalogpfleger sie bearbeitet hat."}</p>
+        <p class="help">${hilfe}${DARF.verwalten && !DARF.katalog ? ` <button type="button" class="lnk" data-act="eigene">${d.alle ? "Nur deine zeigen" : "Alle Meldungen zeigen"}</button>` : ""}</p>
         <div class="mat-filter" role="group" aria-label="Status">${[["offen", "offen"], ["erledigt", "erledigt"], ["alle", "alle"]].map(([w, t]) => `<button type="button" class="btn small${w === filter ? "" : " secondary"}" data-act="filter" data-f="${w}" aria-pressed="${w === filter}">${t}${w === "offen" && d.offen ? ` (${d.offen})` : ""}</button>`).join("")}</div>
-        ${liste.length ? liste.map((m) => meldeKarte(m, d.alle)).join("") : leer(filter === "offen" ? "Keine offenen Meldungen." : "Keine Meldungen.")}`;
+        ${liste.length ? liste.map((m) => meldeKarte(m, d.bearbeiten)).join("") : leer(filter === "offen" ? "Keine offenen Meldungen." : "Keine Meldungen.")}`;
       aktionen = {
         filter: (b) => {
           filter = b.dataset.f;
           try { history.replaceState(null, "", `/material/katalog/meldungen?status=${filter}`); } catch (e) { /* nur die Adresszeile */ }
           zeigen(zeichnen);
         },
+        eigene: () => { eigene = d.alle ? "1" : "0"; filter = null; zeigen(zeichnen); },
         anlegen: (b) => {
           const m = meldung(b);
           produktDialog({ meldung: m, manufacturer: m.manufacturer, model: m.model, article_no: m.article_no, norm: m.norm,

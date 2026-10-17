@@ -17,6 +17,7 @@ from . import models
 from .services import (Abgelehnt, anhang, bestand, durchgang, journal, katalog, kennung, meldung, protokoll, pruefung,
                        search, unterschrift)
 from .services import status as st
+from .services import ueberblick
 from .services.rechte import _ordner_aus_anfrage, darf, darf_alles, ist_katalogpfleger, katalog_required, requires_folder
 
 seiten = Blueprint("material", __name__, template_folder="templates", static_folder="static",
@@ -78,14 +79,16 @@ def _sortier_args():
 
 # --- Seiten ------------------------------------------------------------------------------------------
 
-def _seite(ansicht, katalog_seite=False, **daten):
+def _seite(ansicht, katalog_seite=False, warnung=None, **daten):
+    """warnung: eine Funktion, die erst nach der Rechteprüfung gefragt wird – ihr Hinweis steht schon im HTML."""
     u = current_user()
     if not u:
         return redirect(url_for("pages.login", next=request.full_path.rstrip("?")))
     if not (darf("lesen") or (katalog_seite and ist_katalogpfleger())):
         abort(403)
     return render_template("material/seite.html", user=u, active="material", ansicht=ansicht,
-                           daten=json.dumps(daten, ensure_ascii=False), darf=json.dumps(darf_alles()))
+                           daten=json.dumps(daten, ensure_ascii=False), darf=json.dumps(darf_alles()),
+                           warnung=warnung() if warnung else None)
 
 
 @seiten.get("/material")
@@ -116,7 +119,9 @@ def artikel_neu():
 
 @seiten.get("/material/artikel/<int:iid>")
 def artikel_seite(iid):
-    return _seite("artikel", id=iid)
+    """Ziel jedes QR-Scans: Ist der Artikel ausgesondert, gesperrt oder am Lebensende, steht das schon im HTML –
+    sofort sichtbar, bevor material.js die Ansicht (mit eigenem Banner) zeichnet."""
+    return _seite("artikel", warnung=lambda: ueberblick.warnung(iid), id=iid)
 
 
 @seiten.get("/material/artikel/<int:iid>/pruefung/neu")
@@ -199,7 +204,8 @@ def formular_seite(fid):
 
 @seiten.get("/material/katalog/meldungen")
 def meldungen_seite():
-    """Katalogpfleger arbeiten hier die Meldungen fehlender Produkte ab; Materialwarte sehen ihre eigenen."""
+    """Katalogpfleger arbeiten hier die Meldungen fehlender Produkte ab; Materialwarte sehen ihre eigenen (oder alle),
+    wer sonst Zugang zum Modul hat, liest alle."""
     return _seite("meldungen", katalog_seite=True, status=request.args.get("status"))
 
 
@@ -254,10 +260,12 @@ def medien(art, dateiname):
 @api.get("/start")
 @requires_folder("lesen")
 def start():
-    gliederungen = [o for o in bestand.baum() if o["kind"] == "gliederung" and not o["system_kind"]]
+    alle = bestand.baum()
+    gliederungen = [o for o in alle if o["kind"] == "gliederung" and not o["system_kind"]]
     naechste, faellig = bestand.faellige(pro_seite=10)
     z = bestand.zaehlung()
     return jsonify(darf=darf_alles(), zaehlung=z, bestand=sum(z[s] for s in st.BESTAND),
+                   ordner_uebersicht=ueberblick.ordner_uebersicht(alle),
                    gliederungen=gliederungen, naechste=naechste, faellig_gesamt=faellig,
                    schwelle_tage=st.schwelle_tage(), status_text=st.LABEL,
                    meldungen_offen=meldung.anzahl_offen() if ist_katalogpfleger() else None)
@@ -286,7 +294,9 @@ def faellig():
     if ordner_id:
         bestand.ordner(ordner_id)
     liste, gesamt = bestand.faellige(ordner_id, stati, seite, pro_seite, *_sortier_args())
-    return jsonify(artikel=liste, gesamt=gesamt, schwelle_tage=st.schwelle_tage())
+    # Mit Ordner (aus der Übersicht): sein Pfad für die Überschrift der Liste.
+    return jsonify(artikel=liste, gesamt=gesamt, schwelle_tage=st.schwelle_tage(),
+                   ordner={"id": ordner_id, "pfad": bestand.pfad(ordner_id)} if ordner_id else None)
 
 
 # --- Schnittstelle: Katalog ----------------------------------------------------------------------------
@@ -452,17 +462,22 @@ def dokument_zurueckziehen(did):
 
 @api.get("/meldungen")
 def meldungen():
-    """Katalogpfleger sehen alle Meldungen (Standard: offene), Materialwarte ihre eigenen (Standard: alle)."""
+    """Lesen darf jeder mit Zugang zum Modul. Standard: Katalogpfleger und Lesende (Führungskraft) sehen alle
+    (offene zuerst), Materialwarte ihre eigenen (alle Stände); „eigene=1“ bzw. „eigene=0“ wählt ausdrücklich.
+    Abarbeiten („bearbeiten“) dürfen nur Katalogpfleger."""
     u = current_user()
     if not u:
         return jsonify(error="Nicht angemeldet"), 401
-    alle = ist_katalogpfleger() and request.args.get("eigene") != "1"
-    if not alle and not darf("verwalten"):
-        raise Abgelehnt("Produktmeldungen sehen Katalogpfleger und Materialwarte (ihre eigenen).", 403)
+    _katalog_lesen()
+    eigene = request.args.get("eigene")
+    if eigene in ("0", "1"):
+        alle = eigene == "0"
+    else:
+        alle = ist_katalogpfleger() or not darf("verwalten")
     filter_ = request.args.get("status") if request.args.get("status") in meldung.FILTER else ("offen" if alle else "alle")
     rows = meldung.liste(filter_, None if alle else u["id"])
     return jsonify(meldungen=[meldung.meldung_json(r) for r in rows], alle=alle, filter=filter_,
-                   offen=meldung.anzahl_offen() if alle else None)
+                   bearbeiten=alle and ist_katalogpfleger(), offen=meldung.anzahl_offen() if alle else None)
 
 
 @api.post("/meldungen")
@@ -479,8 +494,8 @@ def meldung_lesen(mid):
     if not u:
         return jsonify(error="Nicht angemeldet"), 401
     r = meldung.meldung(mid)
-    if not (ist_katalogpfleger() or r["created_by"] == u["id"]):
-        raise Abgelehnt("Diese Meldung sehen nur ihr Melder und die Katalogpfleger.", 403)
+    if not (darf("lesen") or ist_katalogpfleger() or r["created_by"] == u["id"]):
+        raise Abgelehnt("Diese Meldung sehen ihr Melder und alle mit Zugang zum Modul.", 403)
     return jsonify(meldung=meldung.meldung_json(r))
 
 
@@ -818,9 +833,10 @@ def unterschrift_lesen():
 
 
 @api.put("/unterschrift")
-@requires_folder("lesen")
+@requires_folder(("pruefen", "verwalten"))
 def unterschrift_setzen():
-    """Die eigene Unterschrift hinterlegen (data:-URL vom Signatur-Pad) – Grundlage jedes Festschreibens."""
+    """Die eigene Unterschrift hinterlegen (data:-URL vom Signatur-Pad) – Grundlage jedes Festschreibens. Nur wer
+    festschreibt (Prüfer) oder aussondert (Materialwart), braucht eine; entfernen darf jeder seine eigene."""
     return jsonify(unterschrift=unterschrift.setzen(current_user(), json_body().get("bild")))
 
 

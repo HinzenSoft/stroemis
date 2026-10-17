@@ -482,3 +482,35 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
   .mat-lb-pfeil { top: auto; bottom: 14px; transform: none; width: 56px; height: 48px; font-size: 2rem; }
   .mat-lightbox figcaption { max-width: calc(100vw - 150px); }
 }
+
+/* Lieferung 4 – ueberblick */
+/* Fälligkeiten je Ordner: Ordner eingerückt nach ihrer Tiefe (--tiefe am <tr>), Zahlen als Zähler in den Statusfarben,
+   jede ein Link zur gefilterten Liste. Zugeklappte Zweige sind verborgen – auch dort, wo die Karten-Ansicht (unter
+   860 px) jede Zeile zum Block macht; leere Zahlen entfallen in den Karten. */
+table.list.mat-ue tr[hidden] { display: none; }
+table.list.mat-ue td.mat-ue-name { padding-left: calc(6px + var(--tiefe, 0) * 22px); }
+.mat-ue tr.mat-ue-oben td { border-top: 2px solid var(--linie); }
+.mat-ue .mat-ue-name > a { font-weight: 600; }
+.mat-ue tr.mat-ue-oben .mat-ue-name > a { font-weight: 700; }
+.mat-ue th.mat-ue-zahl, .mat-ue td.mat-ue-zahl { text-align: center; white-space: nowrap; width: 1%; }
+.mat-ue td.mat-ue-zahl .mat-zahl { margin-left: 0; min-width: 2em; text-decoration: none; }
+.mat-ue .mat-ue-tag { white-space: nowrap; }
+.mat-ue .mat-ue-tag a { color: var(--anthrazit); }
+.mat-ue .mat-ue-tag a.t-ueberfaellig { color: var(--rot); font-weight: 700; }
+.mat-ue .mat-ue-tag a.t-bald_faellig { background: var(--gelb); color: var(--anthrazit); padding: 0 6px; border-radius: var(--radius-pille); }
+.mat-ue-klapp { display: inline-block; width: 22px; height: 22px; margin-right: 2px; padding: 0; border: 0; background: none;
+  color: var(--grau); cursor: pointer; vertical-align: middle; font-size: var(--fs-marke); }
+button.mat-ue-klapp[aria-expanded="true"]::before { content: "▾"; }
+button.mat-ue-klapp[aria-expanded="false"]::before { content: "▸"; }
+button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offset: 1px; }
+.mat-pr-ordner { margin: 0 0 6px; font-weight: 600; }
+@media (max-width: 860px) {
+  table.list.mat-ue tr { padding-left: calc(var(--tiefe, 0) * 14px); }
+  table.list.mat-ue tr.mat-ue-oben { border-top: 2px solid var(--linie); }
+  table.list.mat-ue tr.mat-ue-oben td { border-top: 0; }
+  table.list.mat-ue td.mat-ue-name { padding-left: 0; padding-bottom: 4px; }
+  table.list.mat-ue td.mat-ue-name::before { content: none; }
+  table.list.mat-ue td.mat-ue-zahl { display: inline-block; width: auto; margin-right: 14px; text-align: left; }
+  table.list.mat-ue td.mat-ue-null { display: none; }
+  .mat-ue-klapp { width: 32px; height: 32px; }
+}

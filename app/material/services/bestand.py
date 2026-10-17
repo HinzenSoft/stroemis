@@ -633,20 +633,24 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     return out
 
 
-FAELLIG = ("ueberfaellig", "neu", "bald_faellig")
+# Fällig ist, was vor dem nächsten Einsatz ein Prüfer in die Hand nehmen muss: überfällig, Lebensdauer erreicht
+# (die Prüfung endet mit „aussondern“), neu (Eingangsprüfung) und bald fällig. Dieselbe Regel wie das rote
+# Abzeichen der Ordnerleiste, das überfällig und Lebensdauer erreicht zusammen zählt.
+FAELLIG = ("ueberfaellig", "lebensdauer", "neu", "bald_faellig")
 
 
 def faellige(ordner_id=None, nur=FAELLIG, seite=1, pro_seite=100, sort=None, richtung="auf"):
-    """Artikel, die geprüft werden müssen – überfällige zuerst, dann neue (Eingangsprüfung), dann nach
-    Datum; oder nach einer gewählten Spalte."""
+    """Artikel, die geprüft werden müssen – überfällige zuerst, dann die am Lebensende, dann neue
+    (Eingangsprüfung), dann nach Datum; oder nach einer gewählten Spalte."""
     from .search import sortierung
     params = st.parameter()
     bedingungen = [f"{st.status_sql('i')} IN ({','.join(':n' + str(k) for k in range(len(nur)))})"]
     params.update({f"n{k}": s for k, s in enumerate(nur)})
     if ordner_id:
-        ids = unterbaum(ordner_id)
-        bedingungen.append(f"i.folder_id IN ({','.join(':f' + str(k) for k in range(len(ids)))})")
-        params.update({f"f{k}": fid for k, fid in enumerate(ids)})
+        # Der Unterbaum in der Abfrage selbst – nicht ein Parameter je Ordner.
+        bedingungen.append("i.folder_id IN (WITH RECURSIVE baum(id) AS (SELECT :ordner UNION SELECT f.id FROM mat_folder f "
+                           "JOIN baum b ON f.parent_id = b.id) SELECT id FROM baum)")
+        params["ordner"] = ordner_id
     where = "WHERE " + " AND ".join(bedingungen)
     gesamt = db.query(f"SELECT COUNT(*) AS n FROM mat_item i {where}", params, one=True)["n"]
     reihe = (f"CASE {st.status_sql('i')} WHEN 'ueberfaellig' THEN 0 WHEN 'lebensdauer' THEN 1 WHEN 'neu' THEN 2 "
