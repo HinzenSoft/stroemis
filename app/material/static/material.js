@@ -1133,12 +1133,25 @@
   function dokListe(docs, verlinkt) {
     const kat = (d) => (d.herkunft ? d.herkunft.name : d.kategorie);
     const eintrag = (d) => `<li>${verlinkt ? `<a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>` : esc(d.title)}
-      <span class="muted${verlinkt ? "" : " small"}">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}${kat(d) ? ` · für die Kategorie ${esc(kat(d))}` : ""}</span></li>`;
+      <span class="muted${verlinkt ? "" : " small"}">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}</span></li>`;
     const eigene = docs.filter((d) => !kat(d));
-    const geerbte = docs.filter((d) => kat(d));
     return `${eigene.length ? `<ul class="mat-doks">${eigene.map(eintrag).join("")}</ul>` : ""}
-      ${geerbte.length ? `<h3 class="mat-unter">Kategoriedokumente</h3><ul class="mat-doks">${geerbte.map(eintrag).join("")}</ul>` : ""}`;
+      ${katGruppen(docs.filter((d) => kat(d))).map((g) => `${katKopf(g.name, verlinkt ? g.id : null)}<ul class="mat-doks">${g.docs.map(eintrag).join("")}</ul>`).join("")}`;
   }
+  // Kategoriedokumente je Kategorie (ein Produkt erbt auch von Oberkategorien) – in der Reihenfolge des Pfads.
+  // Artikel und Produkt kennen die Kategorie (herkunft), eine Prüfung nur ihren Namen vom Prüftag (kategorie).
+  function katGruppen(docs) {
+    const gruppen = [];
+    docs.forEach((d) => {
+      const schluessel = d.herkunft ? `id${d.herkunft.id}` : `name${d.kategorie}`;
+      let g = gruppen.find((x) => x.schluessel === schluessel);
+      if (!g) gruppen.push((g = { schluessel, id: d.herkunft ? d.herkunft.id : null, name: d.herkunft ? d.herkunft.name : d.kategorie, docs: [] }));
+      g.docs.push(d);
+    });
+    return gruppen;
+  }
+  const katKopf = (name, id) => `<h3 class="mat-unter">Kategoriedokumente <span class="mat-unter-zusatz">für die Kategorie
+    ${id ? `<a href="/material/katalog?kategorie=${id}">${esc(name)}</a>` : esc(name)}</span></h3>`;
   const dokTabelle = (docs, k) => `<table class="list mat-tabelle"><thead><tr><th>Dokument</th><th>Version</th><th>Gültig ab</th><th>Stand</th><th></th></tr></thead><tbody>${docs.map((d) => dokZeile(d, k)).join("")}</tbody></table>`;
 
   // Umbenennen, neue Version, zurückziehen – für Produkt- und Kategoriedokumente gleich; danach neu zeichnen.
@@ -1209,10 +1222,10 @@
         <p class="help">Gelten für alle Artikel dieses Produkts. Ein Protokoll verweist auf die Version, die am Prüftag galt.</p>
         ${p.dokumente.length ? dokTabelle(p.dokumente, k) : leer("Noch keine Dokumente am Produkt.")}
         ${k ? '<button class="btn secondary small" data-act="dok-neu">+ Dokument</button>' : ""}
-        ${p.kategorie_dokumente.length ? `<h3 class="mat-unter">Kategoriedokumente</h3>
-          <p class="help">Hängen an der Kategorie und gelten für alle Produkte darin.</p>
-          <ul class="mat-doks">${p.kategorie_dokumente.map((d) => `<li><a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>
-            <span class="muted small">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""} · <a href="/material/katalog?kategorie=${d.herkunft.id}">${esc(d.herkunft.name)}</a></span></li>`).join("")}</ul>` : ""}
+        ${katGruppen(p.kategorie_dokumente).map((g) => `${katKopf(g.name, g.id)}
+          <ul class="mat-doks">${g.docs.map((d) => `<li><a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>
+            <span class="muted small">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}</span></li>`).join("")}</ul>`).join("")}
+        ${p.kategorie_dokumente.length ? '<p class="help">Kategoriedokumente hängen an der Kategorie und gelten für alle Produkte darin.</p>' : ""}
       </section>
       <section class="section"><h2>Journal</h2>${journalHtml(p.journal, true)}</section>`;
     aktionen = {
@@ -1603,7 +1616,7 @@
         <section class="section"><h2>Zur Prüfung</h2>
           ${pr.arten && pr.arten.length > 1 ? `<label for="pr-art">Art der Prüfung</label><select id="pr-art">${pr.arten.map((x) => `<option value="${x}" ${x === pr.art ? "selected" : ""}>${esc(PRUEFART[x] || x)}</option>`).join("")}</select>` : ""}
           <label for="pr-bem">Bemerkung</label>
-          <p class="help" id="pr-bem-hilfe">Mängel, die du während der Prüfung festgestellt und durch eine eigene Maßnahme gleich behoben hast, sind hier zu dokumentieren – jeweils mit der Maßnahme. Was sich nicht vor Ort beheben ließ, gehört als Mangel an den Prüfpunkt.</p>
+          <p class="help" id="pr-bem-hilfe">Mängel, die du während der Prüfung festgestellt und durch eine eigene Maßnahme gleich behoben hast, sind hier zu dokumentieren – jeweils mit der Maßnahme. Was sich nicht während der Prüfung beheben ließ, gehört als Mangel an den Prüfpunkt.</p>
           <textarea id="pr-bem" rows="3" maxlength="4000" aria-describedby="pr-bem-hilfe" placeholder="z. B. Schnapper schwergängig – gereinigt und geschmiert">${esc(pr.bemerkung || "")}</textarea></section>
         ${anhaengeHtml()}
         <p class="help">Alles ist gespeichert – du kannst die Prüfung jederzeit unterbrechen und später fortsetzen.

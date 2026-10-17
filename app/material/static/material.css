@@ -168,6 +168,9 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-katkopf .mat-pfad { margin-bottom: 0; }
 .mat-katdoks { margin-top: 12px; border-top: 1px solid var(--linie); padding-top: 8px; }
 .mat-unter { font-size: var(--fs-mittel); text-transform: uppercase; letter-spacing: .04em; color: var(--grau); margin: 14px 0 6px; }
+.mat-unter-zusatz { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.mat-unter-zusatz a { color: inherit; text-decoration: none; }        /* neutral wie die Zeile; Link erst beim Zeigen */
+.mat-unter-zusatz a:hover, .mat-unter-zusatz a:focus-visible { text-decoration: underline; }
 
 #kat-q { margin-bottom: 10px; }
 
