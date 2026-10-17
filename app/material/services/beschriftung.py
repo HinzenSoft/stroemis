@@ -33,7 +33,8 @@ FELD = {
     "dokumente": "Dokumente übernommen", "protocol_id": "Protokoll-ID", "pdf_sha256": "Prüfsumme",
     "pdf_hashed_bytes": "Bytes", "file_sha256": "Prüfsumme der Datei", "anhaenge_angefuegt": "Anhänge angefügt",
     "login": "Anmeldung", "berichtigung": "Berichtigung", "berichtigt": "berichtigt", "unterschrift": "Unterschrift",
-    "nicht_geprueft": "nicht geprüft",
+    "nicht_geprueft": "nicht geprüft", "uid": "Katalogkennung", "rueckruf": "Rückruf Nr.", "serials": "Seriennummern",
+    "mail": "Mail an Materialwarte und Prüfer", "close_note": "Vermerk",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",
@@ -47,6 +48,7 @@ AKTION = {
     "eingepflegt": "eingepflegt", "abgelehnt": "abgelehnt", "variante": "als Variante angelegt",
     "festgeschrieben": "festgeschrieben", "berichtigt": "berichtigt", "berichtigung_begonnen": "Berichtigung begonnen",
     "unterschrift": "Unterschrift geändert", "abgebrochen": "Durchgang abgebrochen",
+    "rueckruf": "Rückruf angelegt", "rueckruf_beendet": "Rückruf beendet",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",

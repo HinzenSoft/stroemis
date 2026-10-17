@@ -7,10 +7,13 @@ Fahrzeuginventar werden nie aufgenommen – das Modul ist kein Lagerverwaltungss
 Aufbau:
   models.py      Tabellen mat_*, Schemaversion in mat_meta, Migrationsschritte
   routes.py      Seiten (/material/…, /m/<token>), Schnittstelle (/api/material/…), Medien
-  cli.py         flask material import-catalog
+  routes_export.py, routes_katalog.py, routes_rueckruf.py
+                 Routen der Lieferung 4: Export (CSV, Protokoll-ZIP, Lebenslauf), Katalogaustausch, Rückrufe
+  cli.py         flask material import-catalog, export-catalog
   services/      Fachregeln: rechte, katalog, bestand, status, interval, search, nummern, qr, journal,
-                 importer, pruefung, durchgang, anhang, meldung, protokoll (Festschreiben, Prüfseite),
-                 pdf (WeasyPrint), stempel (Prüfsumme), unterschrift
+                 importer, katalog_export, pruefung, durchgang, anhang, meldung, protokoll (Festschreiben,
+                 Prüfseite), pdf (WeasyPrint), stempel (Prüfsumme), unterschrift, ueberblick (Fälligkeiten je
+                 Ordner), export, lebenslauf, beschriftung (Journal als Text), rueckruf
   templates/, static/   Seite und Oberfläche (material.js, material.css)
 """
 from .. import db

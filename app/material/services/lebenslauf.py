@@ -172,6 +172,26 @@ def _durchgaenge(iid, baum_pfad):
     return out
 
 
+def _rueckrufe(item):
+    """Rückrufe zum Produkt, die den Artikel betreffen (services/rueckruf.py) – mit dem Zustand für ihn, solange sie
+    laufen, und dem Vermerk, wenn sie beendet sind."""
+    from . import rueckruf
+    zustaende = {"gesperrt": "erledigt – gesperrt", "ausgesondert": "erledigt – ausgesondert",
+                 "geprueft": "erledigt – nach dem Rückruf geprüft"}
+    out = []
+    for r in rueckruf.fuer_lebenslauf(item):
+        if r["closed_at"]:
+            stand = f"beendet am {zeit_text(r['closed_at'])}" + (f" von {r['closed_by_name']}" if r["closed_by_name"] else "")
+        elif r["zustand"] == "offen":
+            stand = "läuft – für diesen Artikel offen (seit dem Rückruf weder geprüft noch gesperrt)"
+        else:
+            stand = "läuft – für diesen Artikel " + zustaende.get(r["grund"], "erledigt")
+        out.append({"titel": r["title"], "angelegt": zeit_text(r["created_at"]), "von": r["created_by_name"] or "–",
+                    "betrifft": "alle Artikel des Produkts" if r["alle"] else "betrifft diese Seriennummer",
+                    "beschreibung": r["description"], "link": r["url"], "stand": stand, "vermerk": r["close_note"]})
+    return out
+
+
 def daten(iid):
     """Alle Werte für die Vorlage, fertig formatiert."""
     item = bestand.artikel(iid)
@@ -199,6 +219,7 @@ def daten(iid):
         "hinweis": _hinweis(item, s, aussonderung),
         "pruefungen": pruefungen,
         "durchgaenge": _durchgaenge(iid, baum_pfad),
+        "rueckrufe": _rueckrufe(item),
         "ereignisse": journal_zeilen(list(reversed(eintraege)), verweise),
         "ereignisse_gekuerzt": len(eintraege) >= JOURNAL_MAX,
     }

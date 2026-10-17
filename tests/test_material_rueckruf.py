@@ -459,6 +459,50 @@ def test_beenden_und_loeschen():
     print("Rückrufe: Beenden und Löschen bestanden.")
 
 
+def test_lebenslauf_und_pruefung():
+    """Der Lebenslauf eines betroffenen Artikels nennt seine Rückrufe (laufende mit Zustand, beendete mit Vermerk),
+    die Prüfung eines betroffenen Artikels zeigt den laufenden Rückruf – und ihr Abschluss erledigt ihn."""
+    from test_material import pdf_seiten
+    post, alt = post_abfangen()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            app, k, ids, _, _, art = aufbau(tmp)
+            kp, p1 = k["katalog"], k["pruefer"]
+            r = anlegen(kp, ids["hms"], title="Schnapper klemmt", serials="RR-1", description="Nicht mehr verwenden.",
+                        url="https://hersteller.example/rr")
+            assert r.status_code == 201, r.get_json()
+            r = anlegen(kp, ids["hms"], title="Etikett fehlerhaft")
+            assert r.status_code == 201, r.get_json()
+            alt_id = r.json["rueckruf"]["id"]
+            assert kp.post(f"/api/material/rueckrufe/{alt_id}/beenden", json={"vermerk": "Hersteller hat zurückgezogen"},
+                           headers=H).status_code == 200
+
+            def lebenslauf(iid):
+                r = p1.get(f"/material/artikel/{iid}/lebenslauf.pdf")
+                assert r.status_code == 200 and r.data[:4] == b"%PDF", r.status_code
+                pfad = os.path.join(tmp, f"ll_{iid}.pdf")
+                with open(pfad, "wb") as fh:
+                    fh.write(r.data)
+                return " ".join(" ".join(pdf_seiten(pfad)).split())
+
+            text = lebenslauf(art["RR-1"])
+            for wert in ("Rückrufe", "Schnapper klemmt", "betrifft diese Seriennummer", "Nicht mehr verwenden.",
+                         "für diesen Artikel offen", "Etikett fehlerhaft", "alle Artikel des Produkts", "beendet am",
+                         "Hersteller hat zurückgezogen"):
+                assert wert in text, (wert, text[:2000])
+            text = lebenslauf(art["rr-2"])
+            assert "Etikett fehlerhaft" in text and "Schnapper klemmt" not in text, text[:2000]
+            # Die Prüfung zeigt den laufenden Rückruf; nach dem Abschluss ist er für den Artikel erledigt.
+            r = starten(p1, art["RR-1"])
+            assert r.status_code in (200, 201) and r.json["pruefung"]["artikel"]["rueckruf"] == "Schnapper klemmt", r.get_json()
+            time.sleep(1.1)                          # gleiche Sekunde zählt als „vorher“
+            assert abschluss(p1, r.json["pruefung"]["id"], ergebnis="einsatzbereit").status_code == 200
+            assert "erledigt – nach dem Rückruf geprüft" in lebenslauf(art["RR-1"])
+    finally:
+        post_zurueck(alt)
+    print("Rückrufe: Lebenslauf und Prüfung bestanden.")
+
+
 if __name__ == "__main__":
     test_rechte_und_eingaben()
     test_betroffene_und_hinweise()
@@ -466,3 +510,4 @@ if __name__ == "__main__":
     test_mail_im_hintergrund()
     test_sperre_und_zustand()
     test_beenden_und_loeschen()
+    test_lebenslauf_und_pruefung()

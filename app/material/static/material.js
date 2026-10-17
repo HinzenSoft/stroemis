@@ -2068,6 +2068,7 @@
       <div class="mat-formular">
         <p class="mat-produktzeile"><strong>${esc(produktName(p))}</strong>${p.article_no ? ` · Art.-Nr. ${esc(p.article_no)}` : ""} · Seriennummer ${esc(a.serial_no)}</p>
         ${a.lock_state !== "frei" && a.lock_state !== "ausgesondert" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.</p>` : ""}
+        ${rueckrufHinweis((a.rueckrufe || []).filter((r) => r.zustand !== "erledigt").map((r) => r.title), a.id)}
         ${lebensdauerHinweis(ld)}
         ${a.formular ? `<p>Formular: ${esc(a.formular.title || "ohne Titel")} · Version ${a.formular.version} <span class="muted">(${esc(a.formular.quelle)}, ${plural(a.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span></p>` : ""}
         ${a.durchgang ? `<p>Im Prüfdurchgang <a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a> – die Prüfung zählt dort.</p>` : ""}
@@ -2353,6 +2354,7 @@
 
     function bearbeitenHtml() {
       return `${pr.freipruefung ? `<p class="mat-banner s-gesperrt">GESPERRT – mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.</p>` : ""}
+        ${rueckrufHinweis(pr.artikel.rueckruf ? [pr.artikel.rueckruf] : [], pr.artikel.id)}
         ${lebensdauerHinweis(pr.lebensdauer)}
         ${punkteHtml()}
         <section class="section"><h2>Zur Prüfung</h2>
@@ -3010,6 +3012,14 @@
         <span class="mat-rr-marke">Rückruf</span>
         <span class="mat-rr-was"><a href="/material/katalog/produkt/${r.produkt.id}"><strong>${esc(produktName(r.produkt))}</strong></a> – ${esc(r.title)}</span>
         <span class="small">${plural(r.betroffen, "Artikel", "Artikel")} betroffen · ${r.offen ? `<strong class="mat-warn">${r.offen} offen</strong>` : "alle erledigt"}</span></li>`).join("")}</ul></section>`;
+  }
+
+  // Hinweis in der Prüfung: Für den Artikel läuft ein Rückruf, der für ihn noch offen ist. Beschreibung und Empfehlung
+  // stehen am Artikel; eine Prüfung nach dem Rückruf erledigt ihn für den Artikel.
+  function rueckrufHinweis(titel, artikelId) {
+    return titel.length ? `<div class="mat-banner mat-rr-banner" role="note"><p class="mat-rr-titel">RÜCKRUF: ${titel.map(esc).join(" · ")}</p>
+      <p class="mat-rr-zeile">Was der Hersteller empfiehlt, steht am <a href="/material/artikel/${artikelId}">Artikel</a>. Mit dem
+        Abschluss dieser Prüfung gilt der Rückruf für den Artikel als erledigt.</p></div>` : "";
   }
 
   // Banner am Artikel – je laufendem Rückruf, der ihn betrifft. Prüfer sperren von hier mit dem Grund „Rückruf“.

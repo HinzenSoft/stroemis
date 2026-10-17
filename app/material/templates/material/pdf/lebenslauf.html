@@ -4,7 +4,7 @@
    Weitergeben oder als Aussonderungsnachweis. Auf Abruf gesetzt und NICHT festgeschrieben: kein Stempel (deshalb
    unten nur der Rand für den Fuß), keine Unterschrift, keine Protokoll-ID. Verbindlich sind die Protokolle; jede
    Zeile nennt das ihre mit der Prüfsumme der Datei. Daten laut services/lebenslauf.py (dokument, artikel, zustand,
-   hinweis, pruefungen, durchgaenge, ereignisse, ereignisse_gekuerzt). #}
+   hinweis, pruefungen, durchgaenge, rueckrufe, ereignisse, ereignisse_gekuerzt). #}
 {% block titel %}Lebenslauf {{ artikel.inventarnummer }}{% endblock %}
 {% block keywords %}strömis-lebenslauf {{ artikel.inventarnummer }}{% endblock %}
 {% block rand_unten %}16mm{% endblock %}
@@ -51,6 +51,9 @@ table.runden tr.detail .lbl { display: inline; margin-right: 1mm; }
 
 /* Ereignisse aus dem Journal */
 table.ereignisse { font-size: 8pt; }
+table.rueckrufe { font-size: 8.5pt; }
+table.rueckrufe col.c-zeit { width: 33mm; }
+table.rueckrufe .text { white-space: pre-line; overflow-wrap: anywhere; margin: .5mm 0; }
 table.ereignisse col.c-zeit { width: 33mm; }
 table.ereignisse col.c-aktion { width: 28mm; }
 table.ereignisse col.c-von { width: 28mm; }
@@ -160,6 +163,28 @@ table.ereignisse .aenderung .feld { color: var(--grau); }
   <p class="hinweis">Der Artikel stand in keinem Prüfdurchgang.</p>
   {%- endif %}
 </section>
+
+{%- if rueckrufe %}
+<section>
+  <h2>Rückrufe</h2>
+  <p class="hinweis">Rückrufe des Herstellers zu diesem Produkt, die den Artikel betreffen – angelegt im Katalog.</p>
+  <table class="liste rueckrufe">
+    <colgroup><col class="c-zeit"><col></colgroup>
+    <thead><tr><th>Angelegt</th><th>Rückruf</th></tr></thead>
+    <tbody>
+    {%- for r in rueckrufe %}
+      <tr>
+        <td class="zeit">{{ r.angelegt }}<br><span class="hinweis">von {{ r.von }}</span></td>
+        <td><strong>{{ r.titel }}</strong> <span class="hinweis">({{ r.betrifft }})</span>
+          {%- if r.beschreibung %}<div class="text">{{ r.beschreibung }}</div>{% endif %}
+          {%- if r.link %}<div class="text">Meldung des Herstellers: <span class="mono">{{ r.link }}</span></div>{% endif %}
+          <div>{{ r.stand }}{% if r.vermerk %} – Vermerk: {{ r.vermerk }}{% endif %}</div></td>
+      </tr>
+    {%- endfor %}
+    </tbody>
+  </table>
+</section>
+{%- endif %}
 
 <section>
   <h2>Ereignisse</h2>

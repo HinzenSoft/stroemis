@@ -212,6 +212,25 @@ def aktive_fuer_artikel(item):
     return out
 
 
+def fuer_lebenslauf(item):
+    """Alle Rückrufe des Produkts, die diesen Artikel betreffen (Seriennummer passt oder alle) – laufende und beendete,
+    älteste zuerst; für den Lebenslauf. Laufende tragen den Zustand für den Artikel (bei ausgesonderten keinen)."""
+    rows = db.query("SELECT * FROM mat_recall WHERE product_id = ? ORDER BY id", (item["product_id"],))
+    bestand_zeile = None
+    out = []
+    for r in rows:
+        if not _passt({_norm(s) for s in serien(r)}, item):
+            continue
+        z = grund = None
+        if r["closed_at"] is None and item["lock_state"] != "ausgesondert":
+            if bestand_zeile is None:
+                bestand_zeile = (_artikel_im_bestand(item["product_id"], item["id"]) or [None])[0]
+            if bestand_zeile:
+                z, grund = zustand(r, bestand_zeile)
+        out.append(dict(r, alle=not serien(r), zustand=z, grund=grund))
+    return out
+
+
 def offene_artikel():
     """Kennung → Titel des Rückrufs für jeden Artikel, an dem ein laufender Rückruf noch offen ist – für die Marke
     „Rückruf“ in Artikellisten. Einmal je Anfrage gerechnet (g): Eine Liste fragt sonst je Zeile."""

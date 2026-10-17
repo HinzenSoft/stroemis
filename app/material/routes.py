@@ -3,7 +3,10 @@
 Seiten (/material/…, /m/<token>) sind dünne Hüllen: Sie prüfen das Recht, nennen die Ansicht und
 überlassen den Inhalt material.js, das ihn über die Schnittstelle (/api/material/…) holt – dasselbe
 Muster wie im Prüfungsbereich. Jede Route prüft ihr Recht selbst; ein ausgeblendeter Knopf ist kein
-Schutz. Fachregeln stehen in services/, hier wird nur gelesen, aufgerufen und geantwortet."""
+Schutz. Fachregeln stehen in services/, hier wird nur gelesen, aufgerufen und geantwortet.
+
+Die Routen der Lieferung 4 stehen in eigenen Modulen an denselben Blueprints – routes_export.py (CSV, Protokoll-ZIP,
+Lebenslauf), routes_katalog.py (Katalogaustausch) und routes_rueckruf.py –, eingebunden am Ende dieser Datei."""
 import json
 import os
 import sqlite3
