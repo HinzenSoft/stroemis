@@ -127,7 +127,6 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-qr { display: flex; gap: 6px; margin-bottom: 22px; }
 .mat-qr input { flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; }
 .mat-doks { padding-left: 18px; }
-.mat-doks + .mat-doks { margin-top: 1.2em; }      /* Produkt- und Kategoriedokumente: eine Leerzeile dazwischen */
 @media (max-width: 900px) { .mat-spalten { grid-template-columns: 1fr; } }
 @media (max-width: 560px) {
   .mat-artikelkopf { flex-direction: column; }

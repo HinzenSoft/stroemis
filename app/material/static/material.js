@@ -1128,14 +1128,16 @@
         ${d.sha256 ? `<div class="small muted mat-hash" title="SHA-256 ${esc(d.sha256)}">${esc(d.sha256.slice(0, 12))}…</div>` : ""}</td>
       <td>${k ? `<div class="btn-row"><button class="btn ghost small" data-act="dok-name" data-id="${d.id}">Umbenennen</button>${!d.abgeloest_durch && !d.withdrawn_on ? `<button class="btn ghost small" data-act="dok-version" data-id="${d.id}">Neue Version</button><button class="btn ghost small" data-act="dok-zurueck" data-id="${d.id}">Zurückziehen</button>` : ""}</div>` : ""}</td></tr>`;
   }
-  // Herstellerdokumente als Liste: erst die des Produkts, dann – nur durch Abstand getrennt – die seiner
+  // Herstellerdokumente als Liste: erst die des Produkts, dann unter einer kleinen Zwischenzeile die seiner
   // Kategorien (Artikel: herkunft; Prüfung: kategorie, der Name vom Prüftag). verlinkt: Titel als Link.
   function dokListe(docs, verlinkt) {
     const kat = (d) => (d.herkunft ? d.herkunft.name : d.kategorie);
     const eintrag = (d) => `<li>${verlinkt ? `<a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>` : esc(d.title)}
       <span class="muted${verlinkt ? "" : " small"}">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}${kat(d) ? ` · für die Kategorie ${esc(kat(d))}` : ""}</span></li>`;
-    return [docs.filter((d) => !kat(d)), docs.filter((d) => kat(d))].filter((l) => l.length)
-      .map((l) => `<ul class="mat-doks">${l.map(eintrag).join("")}</ul>`).join("");
+    const eigene = docs.filter((d) => !kat(d));
+    const geerbte = docs.filter((d) => kat(d));
+    return `${eigene.length ? `<ul class="mat-doks">${eigene.map(eintrag).join("")}</ul>` : ""}
+      ${geerbte.length ? `<h3 class="mat-unter">Kategoriedokumente</h3><ul class="mat-doks">${geerbte.map(eintrag).join("")}</ul>` : ""}`;
   }
   const dokTabelle = (docs, k) => `<table class="list mat-tabelle"><thead><tr><th>Dokument</th><th>Version</th><th>Gültig ab</th><th>Stand</th><th></th></tr></thead><tbody>${docs.map((d) => dokZeile(d, k)).join("")}</tbody></table>`;
 
@@ -1207,7 +1209,8 @@
         <p class="help">Gelten für alle Artikel dieses Produkts. Ein Protokoll verweist auf die Version, die am Prüftag galt.</p>
         ${p.dokumente.length ? dokTabelle(p.dokumente, k) : leer("Noch keine Dokumente am Produkt.")}
         ${k ? '<button class="btn secondary small" data-act="dok-neu">+ Dokument</button>' : ""}
-        ${p.kategorie_dokumente.length ? `<h3 class="mat-unter">Aus der Kategorie – gelten für alle Produkte darin</h3>
+        ${p.kategorie_dokumente.length ? `<h3 class="mat-unter">Kategoriedokumente</h3>
+          <p class="help">Hängen an der Kategorie und gelten für alle Produkte darin.</p>
           <ul class="mat-doks">${p.kategorie_dokumente.map((d) => `<li><a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>
             <span class="muted small">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""} · <a href="/material/katalog?kategorie=${d.herkunft.id}">${esc(d.herkunft.name)}</a></span></li>`).join("")}</ul>` : ""}
       </section>
