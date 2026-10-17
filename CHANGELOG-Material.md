@@ -9,7 +9,8 @@ Lieferungen; jede ist für sich deploybar.
 | 1 – Fundament | Schema, Migration, Rollen, Katalog mit Dokumenten und Formularen, Ordnerbaum, Artikel, Suche, Journal | geliefert 16.10.2026, freigegeben 17.10.2026 |
 | 2 – Prüfung | Prüfformular, Mangelfoto, Anhänge, Ergebnis, Sperre, Aussonderung, Lebenslauf, Prüfdurchgang; dazu Status „neu“ mit Eingangsprüfung, Prüfen jederzeit, Ordnernavigation | geliefert 17.10.2026, freigegeben 17.10.2026 |
 | 3 – Nachweis | Unterschrift, Festschreiben, PDF mit Prüfsumme, Prüfseite; dazu Berichtigung und Unterschriftsfelder | geliefert 17.10.2026, freigegeben 17.10.2026 |
-| 4 – Überblick | Übersicht mit Fälligkeiten je Ordner, Führungskraft nur lesend, QR-Adresse mit Status, Export (CSV, Protokoll-ZIP, Lebenslauf-PDF); dazu Katalogaustausch (Katalog und Formulare von dev in die Produktion, ohne Bestand und Prüfungen) und Rückrufe zu Produkten (Hinweis in der Anwendung und per Mail). Kein Etikettenbogen (nicht gewünscht) | geliefert 17.10.2026 |
+| 4 – Überblick | Übersicht mit Fälligkeiten je Ordner, Führungskraft nur lesend, QR-Adresse mit Status, Export (CSV, Protokoll-ZIP, Lebenslauf-PDF); dazu Katalogaustausch (Katalog und Formulare von dev in die Produktion, ohne Bestand und Prüfungen) und Rückrufe zu Produkten (Hinweis in der Anwendung und per Mail). Kein Etikettenbogen (nicht gewünscht) | geliefert 17.10.2026, freigegeben 17.10.2026 |
+| 5 – Feinschliff | Rückmeldungen aus dem Pilotbetrieb: Bedienung am Telefon, auf Foldables und Tablets; Ordnerkopf aufgeräumt | in Arbeit |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -889,6 +890,20 @@ Rückrufen mit Seriennummern (folgt dem Datenmodell), Abfragen je Artikel auf de
   bevor die Produkte der Datei übernommen sind – im ungünstigen Fall eine Prüfung früher als nötig, nie später.
 - **Python-Version**: Die Prüfung des ZIP-Inhaltsverzeichnisses nutzt `zipfile._EndRecData` (Python 3.12 und 3.14
   geprüft); ändert eine künftige Version sie, schlägt `test_zip_verzeichnis_vor_dem_lesen` an.
+
+## Lieferung 5 – Feinschliff nach Pilot (in Arbeit)
+
+Rückmeldungen aus dem Pilotbetrieb. Lieferung 4 wurde am 17.10.2026 mit „Lieferung 5 starten“ freigegeben.
+
+### Neu
+
+- **Ordnerkopf aufgeräumt**: „+ Prüfdurchgang“ steht nicht mehr im Kopf jedes Ordners – eröffnet wird ein Durchgang
+  unter „Prüfungen“ (mit Wahl des Ordners). An seiner Stelle sitzt der Knopf **„Export“** mit einem Untermenü:
+  „Artikelliste (CSV)“ und „Protokolle (ZIP)“, je mit einem Satz, was drinsteckt; die beiden Knöpfe und der Hinweis
+  unter dem Kopf entfallen. Das Menü schließt mit einem Klick daneben, auf einen Eintrag oder mit Escape und bleibt
+  am Telefon ganz im Bild.
+- **Ordnerfoto im Dialog „Bearbeiten“** (wie das Produktbild): Foto wählen, ersetzen oder entfernen beim Bearbeiten –
+  und schon beim Anlegen; der eigene Knopf „Foto“ entfällt.
 
 ## Katalogdatei (Format 1)
 

@@ -751,9 +751,17 @@
           <div class="help">Nur zum Verschärfen: Gilt die Herstellervorgabe kürzer, gilt sie.</div></div>
       </div>
       <label for="od-desc">Beschreibung</label><textarea id="od-desc" rows="3" maxlength="2000">${esc(o.description || "")}</textarea>
+      <label for="od-foto">Foto</label>
+      <div class="mat-bildfeld">${o.foto && o.vorschau ? `<img src="${esc(o.vorschau)}" alt="Bisheriges Foto">` : ""}
+        <div><input type="file" id="od-foto" accept="image/*">
+          ${o.foto ? '<label class="inline"><input type="checkbox" id="od-foto-weg"> Foto entfernen</label>' : ""}
+          <div class="help">${o.foto ? "Ein neues Foto ersetzt das bisherige. " : ""}JPEG, PNG, WebP oder HEIC vom Telefon; Web- und Vorschaufassung entstehen beim Hochladen.</div></div></div>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="od-ok" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
     (dlg, body) => {
       fokus($("#od-name", body));
+      // Erst die Angaben, dann das Foto. Scheitert nur das Foto, kennt der Dialog den Ordner schon: Ein zweiter Klick
+      // speichert die Angaben erneut und lädt das Foto nach, statt den Ordner doppelt anzulegen (wie beim Produktbild).
+      let oid = o.id || null;
       $("#od-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
         if (knopf.disabled) return;
@@ -761,11 +769,21 @@
         const daten = { name: $("#od-name", body).value, kind: oben ? "gliederung" : $("#od-kind", body).value,
                         interval_months: $("#od-int", body).value || null, description: $("#od-desc", body).value };
         if (!neu && o.kind === "gliederung") daten.kind = "gliederung";
+        const foto = $("#od-foto", body).files[0];
+        const weg = $("#od-foto-weg", body);
         try {
-          const r = neu ? await api(`${API}/ordner`, { method: "POST", body: Object.assign(daten, { parent_id: parentId || null }) })
-                        : await api(`${API}/ordner/${o.id}`, { method: "PUT", body: daten });
+          const r = oid ? await api(`${API}/ordner/${oid}`, { method: "PUT", body: daten })
+                        : await api(`${API}/ordner`, { method: "POST", body: Object.assign(daten, { parent_id: parentId || null }) });
+          oid = r.ordner.id;
+          if (foto) {
+            const fd = new FormData();
+            fd.append("file", foto);
+            await api(`${API}/ordner/${oid}/foto`, { method: "POST", body: fd });
+          } else if (weg && weg.checked) {
+            await api(`${API}/ordner/${oid}/foto`, { method: "DELETE" });
+          }
           dlg.close();
-          location.href = `/material/ordner/${r.ordner.id}`;
+          location.href = `/material/ordner/${oid}`;
         } catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
     });
@@ -789,15 +807,14 @@
         <div class="page-head"><h1>${system ? "🔒 " : ""}${esc(d.name)} ${system ? "" : `<span class="mat-art">${esc(ORDNERART[d.kind])}</span>`}${demoMarke(d.demo)}</h1>
           <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="unterordner">+ Unterordner</button>
             <a class="btn small" href="/material/artikel/neu?ordner=${d.id}">+ Artikel</a>
-            <button class="btn ghost small" data-act="bearbeiten">Bearbeiten</button><button class="btn ghost small" data-act="foto">Foto</button>
+            <button class="btn ghost small" data-act="bearbeiten">Bearbeiten</button>
             <button class="btn ghost small" data-act="verschieben">Verschieben</button><button class="btn ghost small" data-act="loeschen">Löschen</button>` : ""}
-            ${!system && (DARF.verwalten || DARF.pruefen) ? '<button class="btn ghost small" data-act="runde">+ Prüfdurchgang</button>' : ""}</div></div>
+            ${DARF.lesen ? exportMenue(d) : ""}</div></div>
         ${system ? `<p class="notice">${d.system_kind === "gesperrt" ? "Hierher verschiebt eine Sperre die Artikel der Gliederung. Zurück in ihren Herkunftsordner bringt sie nur eine Freiprüfung." : "Ausgesonderte Artikel bleiben hier mit ihrem vollen Lebenslauf sichtbar, zählen aber nirgends mehr als Bestand und lassen sich nicht zurückholen."}</p>` : ""}
         <div class="mat-ordnerkopf">${d.foto ? `<img class="mat-ordnerfoto" src="${esc(d.vorschau)}" alt="">` : ""}
           <div>${d.description ? `<p class="mat-text">${esc(d.description)}</p>` : ""}
           ${d.interval_months ? `<p class="small">Prüfintervall hier: höchstens ${d.interval_months} Monate.</p>` : ""}
           <p class="small">${system ? plural(Object.values(z).reduce((a, b) => a + b, 0), "Artikel", "Artikel") : `Bestand im ganzen Zweig: <strong>${d.bestand}</strong> ${zahlen(z)}`}</p></div></div>
-        ${DARF.lesen ? ordnerExport(d) : ""}
         ${d.unterordner.length ? `<section class="section"><h2>Unterordner</h2>${unterordnerHtml(d.unterordner)}</section>` : ""}
         <section class="section"><h2>Artikel in diesem Ordner</h2>
           <div class="c-tabs mat-filter">${["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"].map((s) => `<button type="button" data-act="filter" data-f="${s}" class="${s === filter ? "sel" : ""}">${s ? esc(STATUS[s]) : "alle"}${s && d.direkt && d.direkt[s] ? ` (${d.direkt[s]})` : ""}</button>`).join("")}</div>
@@ -823,7 +840,6 @@
         unterordner: () => ordnerDialog({ kind: "standort" }, d.id),
         runde: () => rundeDialog(d.id),
         bearbeiten: () => ordnerDialog(d, d.parent_id),
-        foto: () => fotoDialog(`${API}/ordner/${d.id}/foto`, !!d.foto, zeichnen),
         verschieben: async () => {
           const ziel = await ordnerWaehlen("Ordner verschieben nach …", { ohneZweig: d.id, obersteEbene: d.kind === "gliederung" });
           if (ziel === null) return;
@@ -848,37 +864,20 @@
     await zeichnen();
   }
 
-  function fotoDialog(url, hatFoto, danach) {
-    dialog(`<h2>Foto</h2><p class="help">JPEG, PNG, WebP oder HEIC vom Telefon; Web- und Vorschaufassung entstehen beim Hochladen.</p>
-      <input type="file" id="fd-datei" accept="image/*">
-      <div class="dlg-actions">${hatFoto ? '<button class="btn danger" id="fd-weg" type="button">Foto entfernen</button>' : ""}
-        <button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="fd-ok" type="button">Hochladen</button></div>`,
-    (dlg, body) => {
-      $("#fd-ok", body).onclick = async (ev) => {
-        const f = $("#fd-datei", body).files[0];
-        if (!f) { toast("Bitte ein Foto wählen.", true); return; }
-        const fd = new FormData(); fd.append("file", f);
-        const knopf = ev.currentTarget;
-        knopf.disabled = true;
-        try { await api(url, { method: "POST", body: fd }); dlg.close(); toast("Foto gespeichert"); await danach(); }
-        catch (e) { toast(e.message, true); knopf.disabled = false; }
-      };
-      const weg = $("#fd-weg", body);
-      if (weg) weg.onclick = async () => {
-        try { await api(url, { method: "DELETE" }); dlg.close(); toast("Foto entfernt"); await danach(); } catch (e) { toast(e.message, true); }
-      };
-    });
-  }
-
   /* --- Export (Lieferung 4) ----------------------------------------------------------------------------
      Ordner: Artikelliste als CSV und alle Protokolle als ZIP; Artikel: Lebenslauf als PDF. Gewöhnliche Links,
      kein fetch – der Server prüft das Leserecht selbst und zeigt einen Fehler als Seite. Ein Download lässt die
      Seite stehen; damit niemand doppelt klickt, während das ZIP entsteht, sagt ein Hinweis, dass es kommt. */
-  const ordnerExport = (d) => `<div class="mat-export">
-      <div class="btn-row"><a class="btn secondary small" href="/material/export/${d.id}.csv" data-export="Die Artikelliste wird heruntergeladen …">CSV</a>
-        <a class="btn secondary small" href="/material/export/${d.id}-protokolle.zip" data-export="Die Protokolle werden zusammengestellt – bei vielen dauert das einen Moment …">Protokolle (ZIP)</a></div>
-      <p class="help"><strong>CSV</strong>: alle Artikel hier und darunter, auch die von hier gesperrten (ausgesonderte bei ihrer Gliederung), mit Status, Fälligkeiten und Stammdaten – für Excel.
-        <strong>ZIP</strong>: die Protokolle dieser Artikel und die Sammelprotokolle der Durchgänge hier, mit Verzeichnis und Prüfsummen.</p></div>`;
+  // Export eines Ordners als Untermenü im Ordnerkopf: Knopf „Export“, darunter die beiden Downloads mit einem Satz,
+  // was drinsteckt. <details> öffnet und schließt ohne eigenes Skript (auch per Tastatur und Touch).
+  const exportMenue = (d) => `<details class="mat-menue">
+      <summary class="btn ghost small" aria-haspopup="true">Export</summary>
+      <div class="mat-menue-liste">
+        <a href="/material/export/${d.id}.csv" data-export="Die Artikelliste wird heruntergeladen …"><strong>Artikelliste (CSV)</strong>
+          <span>Alle Artikel hier und darunter, auch die von hier gesperrten (ausgesonderte bei ihrer Gliederung), mit Status, Fälligkeiten und Stammdaten – für Excel.</span></a>
+        <a href="/material/export/${d.id}-protokolle.zip" data-export="Die Protokolle werden zusammengestellt – bei vielen dauert das einen Moment …"><strong>Protokolle (ZIP)</strong>
+          <span>Die Protokolle dieser Artikel und die Sammelprotokolle der Durchgänge hier, mit Verzeichnis und Prüfsummen.</span></a>
+      </div></details>`;
   const lebenslaufKnopf = (a) => `<a class="btn secondary small" href="/material/artikel/${a.id}/lebenslauf.pdf" target="_blank" rel="noopener"
     title="Stammdaten, alle Prüfungen in zeitlicher Reihenfolge, Prüfdurchgänge und Ereignisse als PDF – zum Weitergeben oder als Aussonderungsnachweis. Stand jetzt, nicht festgeschrieben.">Lebenslauf (PDF)</a>`;
   document.addEventListener("click", (e) => {
@@ -886,6 +885,29 @@
     if (!l || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
     toast(l.dataset.export);
   });
+  // Untermenüs (details.mat-menue): ein Klick daneben, auf einen Eintrag oder Escape schließt. Beim Öffnen steht die
+  // Liste rechtsbündig unter dem Knopf – ragte sie dabei aus dem Bild (am Telefon steht der Knopf irgendwo in der
+  // umgebrochenen Knopfzeile), rückt sie so weit, dass sie mit 8 px Abstand ganz hineinpasst.
+  document.addEventListener("click", (e) => {
+    $$("details.mat-menue[open]").forEach((m) => {
+      if (!m.contains(e.target) || e.target.closest(".mat-menue-liste a")) m.open = false;
+    });
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    $$("details.mat-menue[open]").forEach((m) => { m.open = false; $("summary", m).focus(); });
+  });
+  document.addEventListener("toggle", (e) => {
+    const m = e.target;
+    if (!(m instanceof HTMLDetailsElement) || !m.classList.contains("mat-menue") || !m.open) return;
+    const liste = $(".mat-menue-liste", m);
+    const knopf = m.getBoundingClientRect();
+    const breite = liste.offsetWidth;
+    const rand = document.documentElement.clientWidth;
+    const links = Math.max(8, Math.min(knopf.right - breite, rand - 8 - breite));
+    liste.style.right = "auto";
+    liste.style.left = `${Math.round(links - knopf.left)}px`;
+  }, true);
 
   /* --- Artikel --------------------------------------------------------------------------------------- */
   async function artikel() {
