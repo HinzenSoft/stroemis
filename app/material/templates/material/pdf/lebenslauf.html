@@ -1,0 +1,197 @@
+{% extends "material/pdf/basis.html" %}
+{# Lebenslauf eines Artikels (Export, Lieferung 4): Stammdaten, Zustand, alle abgeschlossenen Prüfungen und die
+   Aussonderung in zeitlicher Reihenfolge, die Prüfdurchgänge und die Ereignisse aus dem Journal des Artikels – zum
+   Weitergeben oder als Aussonderungsnachweis. Auf Abruf gesetzt und NICHT festgeschrieben: kein Stempel (deshalb
+   unten nur der Rand für den Fuß), keine Unterschrift, keine Protokoll-ID. Verbindlich sind die Protokolle; jede
+   Zeile nennt das ihre mit der Prüfsumme der Datei. Daten laut services/lebenslauf.py (dokument, artikel, zustand,
+   hinweis, pruefungen, durchgaenge, ereignisse, ereignisse_gekuerzt). #}
+{% block titel %}Lebenslauf {{ artikel.inventarnummer }}{% endblock %}
+{% block keywords %}strömis-lebenslauf {{ artikel.inventarnummer }}{% endblock %}
+{% block rand_unten %}16mm{% endblock %}
+{% block kopf_rechts %}Material · Lebenslauf{% endblock %}
+{# string(protokoll) ist hier die Inventarnummer (.kopf-id .pid), string(stand) der Zeitpunkt aus dem Kopf. #}
+{% block fuss_links %}"Lebenslauf " string(protokoll) " · Stand " string(stand) " · nicht festgeschrieben"{% endblock %}
+{% block demo_hinweis %}Dieser Lebenslauf stammt aus der Demo-Umgebung von {{ dokument.plattform }} und belegt keine Prüfung.{% endblock %}
+
+{% block stil %}
+.kopf-id .stand { string-set: stand content(); }
+
+/* Prüfungen: je Vorgang eine Hauptzeile und darunter eine Zeile über die ganze Breite für Grund, Bemerkung,
+   Verweise und die Prüfsumme der Protokolldatei (in voller Länge, nicht in einer schmalen Spalte umgebrochen). */
+table.vorgaenge col.c-nr { width: 7mm; }
+table.vorgaenge col.c-datum { width: 20mm; }
+table.vorgaenge col.c-art { width: 30mm; }
+table.vorgaenge col.c-ergebnis { width: 25mm; }
+table.vorgaenge col.c-maengel { width: 12mm; }
+table.vorgaenge col.c-naechste { width: 20mm; }
+table.vorgaenge td.datum { white-space: nowrap; }
+table.vorgaenge tbody.vorgang { break-inside: avoid; }
+table.vorgaenge tbody.vorgang tr.haupt td { border-bottom: 0; padding-bottom: .4mm; }
+table.vorgaenge tr.detail td { padding-top: 0; font-size: 8pt; color: var(--anthrazit); }
+table.vorgaenge tr.detail .zeile { margin-top: .5mm; }
+table.vorgaenge tr.detail .lbl { display: inline; margin-right: 1mm; }
+table.vorgaenge td.nr { text-align: right; }
+table.vorgaenge tbody.ersetzt tr.haupt td { color: var(--grau); }
+.erg-instandsetzen { font-weight: 700; color: var(--schwarz); }
+.erg-aussondern { font-weight: 700; color: var(--rot-dunkel); }
+.erg-einsatzbereit { color: var(--ok); }
+.marke { display: inline-block; font-size: 6pt; font-weight: 700; letter-spacing: .04em; border: .6pt solid var(--grau);
+  color: var(--grau); padding: 0 .8mm; line-height: 1.4; margin-top: .6mm; }
+.marke.rot { border-color: var(--rot-dunkel); color: var(--rot-dunkel); }
+.pruefsumme { line-height: 1.3; }
+
+/* Prüfdurchgänge */
+table.runden col.c-ordner { width: 46mm; }
+table.runden col.c-zeit { width: 34mm; }
+table.runden col.c-darin { width: 44mm; }
+table.runden tbody.runde { break-inside: avoid; }
+table.runden tbody.runde tr.haupt td { border-bottom: 0; padding-bottom: .4mm; }
+table.runden tr.detail td { padding-top: 0; font-size: 8pt; }
+table.runden tr.detail .lbl { display: inline; margin-right: 1mm; }
+
+/* Ereignisse aus dem Journal */
+table.ereignisse { font-size: 8pt; }
+table.ereignisse col.c-zeit { width: 33mm; }
+table.ereignisse col.c-aktion { width: 28mm; }
+table.ereignisse col.c-von { width: 28mm; }
+table.ereignisse td.zeit { white-space: nowrap; }
+table.ereignisse td { padding: 1mm 1.5mm; }
+table.ereignisse .aenderung { margin-bottom: .4mm; }
+table.ereignisse .aenderung .feld { color: var(--grau); }
+.schluss { margin-top: 6mm; font-size: 8pt; color: var(--anthrazit); }
+{% endblock %}
+
+{% block unterzeile %}{{ artikel.produkt }} · Status: <strong>{{ zustand.status_text }}</strong>{% endblock %}
+
+{% block kopf_id %}
+      <div class="lbl">Inventarnummer</div>
+      <div class="pid">{{ artikel.inventarnummer }}</div>
+      <div class="zeit">Stand <span class="stand">{{ dokument.stand }}</span></div>
+      <div class="zeit">nicht festgeschrieben</div>
+    {% endblock %}
+
+{% block kopfzeile %}
+{%- if hinweis %}
+<div class="kasten{{ ' rot' if zustand.status in ('ausgesondert', 'gesperrt', 'lebensdauer') }}">
+  <div class="titel">{{ hinweis.titel }}</div>
+  <div class="text">{{ hinweis.text }}</div>
+</div>
+{%- endif %}
+{% endblock %}
+
+{% block inhalt %}
+{{ artikel_block(artikel) }}
+
+<section>
+  <h2>Zustand</h2>
+  {{ felder([
+      ("Status", zustand.status_text), ("Zuletzt geprüft", zustand.zuletzt), ("Nächste Prüfung", zustand.naechste),
+    ]) }}
+  {{ felder([("Sperrzustand", zustand.sperrzustand), ("Grund der Sperre bzw. Aussonderung", zustand.grund)], spalten=2) }}
+  {{ felder([("Herkunftsordner (dorthin bringt ihn die Freiprüfung)", zustand.herkunft),
+             ("Prüfintervall", zustand.intervall), ("Lebensdauer", zustand.lebensdauer)], spalten=1) }}
+  {%- if zustand.bemerkung %}
+  <div><div class="lbl">Bemerkung</div><div class="wert text">{{ zustand.bemerkung }}</div></div>
+  {%- endif %}
+</section>
+
+<section>
+  <h2>Prüfungen und Aussonderung</h2>
+  {%- if pruefungen %}
+  <table class="liste vorgaenge">
+    <colgroup><col class="c-nr"><col class="c-datum"><col class="c-art"><col><col class="c-ergebnis"><col class="c-maengel"><col class="c-naechste"></colgroup>
+    <thead><tr><th class="zahl">Nr.</th><th>Datum</th><th>Art</th><th>Prüfer bzw. durch</th><th>Ergebnis</th><th class="zahl">Mängel</th><th>Nächste Prüfung</th></tr></thead>
+    {%- for x in pruefungen %}
+    <tbody class="vorgang{{ ' ersetzt' if x.berichtigt_durch }}">
+      <tr class="haupt">
+        <td class="nr">{{ x.nr }}</td>
+        <td class="datum">{{ x.datum }}</td>
+        <td>{{ x.art }}
+          {%- if x.berichtigung_von %}<br><span class="marke rot">BERICHTIGUNG</span>{% endif %}
+          {%- if x.berichtigt_durch %}<br><span class="marke">BERICHTIGT</span>{% endif %}</td>
+        <td>{{ x.pruefer }}{% if x.urkunde %}<div class="hinweis">Urkunde {{ x.urkunde }}</div>{% endif %}</td>
+        <td class="erg-{{ x.ergebnis }}">{{ x.ergebnis_text }}</td>
+        <td class="zahl">{{ "–" if x.maengel is none else x.maengel }}</td>
+        <td class="datum">{{ x.naechste }}</td>
+      </tr>
+      <tr class="detail">
+        <td></td>
+        <td colspan="6">
+          {%- if x.grund %}<div class="zeile"><span class="lbl">Grund</span><span class="text">{{ x.grund }}</span></div>{% endif %}
+          {%- if x.bemerkung %}<div class="zeile"><span class="lbl">Bemerkung</span><span class="text">{{ x.bemerkung }}</span></div>{% endif %}
+          {%- if x.durchgang %}<div class="zeile"><span class="lbl">Prüfdurchgang</span>{{ x.durchgang }}</div>{% endif %}
+          {%- if x.basis %}<div class="zeile"><span class="lbl">Aus Prüfung</span><span class="mono">{{ x.basis }}</span></div>{% endif %}
+          {%- if x.berichtigung_von %}<div class="zeile"><span class="lbl">Berichtigung von</span><span class="mono">{{ x.berichtigung_von.protokoll_id }}</span> vom {{ x.berichtigung_von.datum }}
+            {%- if x.berichtigung_von.grund %} – Grund: <span class="text">{{ x.berichtigung_von.grund }}</span>{% endif %}</div>{% endif %}
+          {%- if x.berichtigt_durch %}<div class="zeile"><span class="lbl">Berichtigt durch</span><span class="mono">{{ x.berichtigt_durch }}</span> – dieses Protokoll bleibt unverändert erhalten</div>{% endif %}
+          {%- if x.protokoll_id %}
+          <div class="zeile pruefsumme"><span class="lbl">Protokoll</span><span class="mono">{{ x.protokoll_id }}</span>
+            <span class="lbl">SHA-256 der Datei</span><span class="hash">{{ x.datei_sha256 }}</span></div>
+          {%- else %}<div class="zeile hinweis">{{ x.ohne_protokoll }}</div>{% endif %}
+        </td>
+      </tr>
+    </tbody>
+    {%- endfor %}
+  </table>
+  {%- else %}
+  <p class="hinweis">Für diesen Artikel ist noch keine abgeschlossene Prüfung verzeichnet.</p>
+  {%- endif %}
+</section>
+
+<section>
+  <h2>Prüfdurchgänge</h2>
+  {%- if durchgaenge %}
+  <table class="liste runden">
+    <colgroup><col><col class="c-ordner"><col class="c-zeit"><col class="c-darin"></colgroup>
+    <thead><tr><th>Durchgang</th><th>Ordner</th><th>Zeitraum</th><th>Dieser Artikel</th></tr></thead>
+    {%- for r in durchgaenge %}
+    <tbody class="runde">
+      <tr class="haupt"><td>{{ r.titel }}</td><td>{{ r.ordner }}</td><td>{{ r.zeitraum }}</td><td>{{ r.darin }}</td></tr>
+      <tr class="detail"><td colspan="4">
+        {%- if r.protokoll_id %}<div class="pruefsumme"><span class="lbl">Sammelprotokoll</span><span class="mono">{{ r.protokoll_id }}</span>
+          <span class="lbl">SHA-256 der Datei</span><span class="hash">{{ r.datei_sha256 }}</span></div>
+        {%- elif r.ohne_protokoll %}<span class="hinweis">{{ r.ohne_protokoll }}</span>
+        {%- else %}<span class="hinweis">Das Sammelprotokoll entsteht mit dem Abschluss des Durchgangs.</span>{% endif %}
+      </td></tr>
+    </tbody>
+    {%- endfor %}
+  </table>
+  {%- else %}
+  <p class="hinweis">Der Artikel stand in keinem Prüfdurchgang.</p>
+  {%- endif %}
+</section>
+
+<section>
+  <h2>Ereignisse</h2>
+  <p class="hinweis">Aus dem Journal des Artikels, älteste zuerst: Anlegen, Verschieben, Sperren, Freiprüfen, Aussondern
+    und jede Änderung der Stammdaten.{% if ereignisse_gekuerzt %} Es enthält mehr Einträge, als hier Platz haben – die
+    ältesten fehlen.{% endif %}</p>
+  {%- if ereignisse %}
+  <table class="liste ereignisse">
+    <colgroup><col class="c-zeit"><col class="c-aktion"><col class="c-von"><col></colgroup>
+    <thead><tr><th>Zeitpunkt</th><th>Ereignis</th><th>von</th><th>Änderung</th></tr></thead>
+    <tbody>
+    {%- for e in ereignisse %}
+      <tr>
+        <td class="zeit">{{ e.zeit }}</td>
+        <td>{{ e.aktion }}</td>
+        <td>{{ e.von }}</td>
+        <td>
+          {%- for f in e.felder %}
+          <div class="aenderung"><span class="feld">{{ f.feld }}:</span>
+            {% if f.nur_nachher %}<span class="text">{{ f.nachher }}</span>{% else %}<span class="text">{{ f.vorher }}</span> → <span class="text">{{ f.nachher }}</span>{% endif %}</div>
+          {%- endfor %}
+        </td>
+      </tr>
+    {%- endfor %}
+    </tbody>
+  </table>
+  {%- else %}
+  <p class="hinweis">Keine Einträge.</p>
+  {%- endif %}
+</section>
+
+<p class="schluss">Dieser Lebenslauf ist ein Auszug auf Abruf (Stand {{ dokument.stand }}) und nicht festgeschrieben.
+  Verbindlich sind die festgeschriebenen Protokolle; ihre Dateien lassen sich mit der angegebenen Prüfsumme prüfen:
+  <span class="nowrap">{{ dokument.pruefseite }}</span></p>
+{% endblock %}

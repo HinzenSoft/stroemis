@@ -8,7 +8,11 @@
    Schriften: DLRG Univers aus static/fonts (Basisadresse ist dieses Verzeichnis); Zeichen, die ihr fehlen,
    setzt DejaVu Sans. Prüfsummen und Kennungen in DejaVu Sans Mono.
    Die Makros unten (felder, artikel_block, unterschrift_block, festschreibung) benutzen die abgeleiteten
-   Vorlagen; sie stehen vor dem Block „inhalt“ und sind deshalb dort sichtbar. #}
+   Vorlagen; sie stehen vor dem Block „inhalt“ und sind deshalb dort sichtbar.
+   Der Lebenslauf (lebenslauf.html) ist kein Protokoll: Er überschreibt Titel, Stichwörter, Kopf rechts, Fuß,
+   Kennungskasten und Demo-Hinweis (Blöcke titel, keywords, kopf_rechts, fuss_links, kopf_id, demo_hinweis) und
+   braucht unten keinen Platz für den Stempel (rand_unten). Die Vorgaben der Blöcke sind genau der Text der
+   Protokolle – die drei Protokollvorlagen setzen damit unverändert. #}
 {%- macro felder(paare, spalten=3) -%}
   {# paare: Liste von (Beschriftung, Wert); leere Werte fallen weg, der Rest füllt Zeilen zu je „spalten“ Feldern. #}
   {%- set voll = paare | selectattr(1) | list -%}
@@ -82,9 +86,9 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<title>{{ dokument.titel }} {{ dokument.protokoll_id }}</title>
+<title>{% block titel %}{{ dokument.titel }} {{ dokument.protokoll_id }}{% endblock %}</title>
 <meta name="author" content="strömis.de">
-<meta name="keywords" content="strömis-protokoll {{ dokument.protokoll_id }}">
+<meta name="keywords" content="{% block keywords %}strömis-protokoll {{ dokument.protokoll_id }}{% endblock %}">
 <style>
 @font-face { font-family: "DLRG Univers"; src: url("dlrg-univers-regular.woff2") format("woff2"); font-weight: 400; font-style: normal; }
 @font-face { font-family: "DLRG Univers"; src: url("dlrg-univers-italic.woff2") format("woff2"); font-weight: 400; font-style: italic; }
@@ -100,7 +104,7 @@
 /* Seite: 15 mm seitlich und oben. Unten 24 mm: 0–14 mm für den Stempel, darüber der Fuß (ab etwa 20 mm). */
 @page {
   size: A4;
-  margin: 15mm 15mm 24mm 15mm;
+  margin: 15mm 15mm {% block rand_unten %}24mm{% endblock %} 15mm;
   font-family: "DLRG Univers", "DejaVu Sans", sans-serif;
   font-size: 7.5pt;
   color: #6d6d6c;
@@ -110,12 +114,12 @@
     background: #e30613; color: #ffffff; font-size: 9pt; font-weight: 700; vertical-align: middle;
   }
   @top-right {
-    content: "{% if dokument.demo %}DEMO – nicht für echte Prüfungen{% else %}Material · Prüfnachweis{% endif %}";
+    content: "{% if dokument.demo %}DEMO – nicht für echte Prüfungen{% else %}{% block kopf_rechts %}Material · Prüfnachweis{% endblock %}{% endif %}";
     width: 90mm; height: 5.5mm; margin-top: 5mm; margin-bottom: auto; padding: 0 3mm;
     background: #e30613; color: #ffffff; font-size: 7.5pt; font-weight: 700; vertical-align: middle; text-align: right;
   }
   @bottom-left {
-    content: string(titel) " " string(protokoll);
+    content: {% block fuss_links %}string(titel) " " string(protokoll){% endblock %};
     width: 120mm; vertical-align: top; padding-top: 3.5mm; border-top: .5pt solid #dadada;
   }
   @bottom-right {
@@ -245,17 +249,17 @@ table.unterschrift > tbody > tr > td { vertical-align: bottom; padding: 0; }
       <h1>{{ dokument.titel }}</h1>
       <div class="unterzeile">{% block unterzeile %}{% endblock %}</div>
     </td>
-    <td class="kopf-id">
+    <td class="kopf-id">{% block kopf_id %}
       <div class="lbl">Protokoll-ID</div>
       <div class="pid">{{ dokument.protokoll_id }}</div>
       <div class="zeit">festgeschrieben {{ dokument.festgeschrieben }}</div>
-    </td>
+    {% endblock %}</td>
   </tr></table>
 </header>
 <div class="kopfzeile">{% block kopfzeile %}{% endblock %}</div>
 {%- if dokument.demo %}
 <div class="demo-hinweis"><strong>DEMO – nicht für echte Prüfungen</strong>
-  Dieses Protokoll stammt aus der Demo-Umgebung von {{ dokument.plattform }} und belegt keine Prüfung.</div>
+  {% block demo_hinweis %}Dieses Protokoll stammt aus der Demo-Umgebung von {{ dokument.plattform }} und belegt keine Prüfung.{% endblock %}</div>
 {%- endif %}
 {% block inhalt %}{% endblock %}
 </body>

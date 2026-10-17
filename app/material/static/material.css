@@ -556,3 +556,9 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
   gap: 4px 10px; }
 .mat-rr-liste li:last-child { border-bottom: 0; }
 .mat-rr-was { overflow-wrap: anywhere; }
+
+/* Lieferung 4 – export */
+/* Export eines Ordners: CSV und Protokolle (ZIP) unter dem Ordnerkopf, der Hinweis darunter klein und auf eine
+   lesbare Zeilenlänge begrenzt; am Telefon brechen die Knöpfe um wie jede .btn-row. */
+.mat-export { margin: 0 0 16px; }
+.mat-export .help { max-width: 72ch; margin-top: 6px; }
