@@ -623,3 +623,110 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mv-leer { padding: 12px; color: var(--grau); font-size: var(--fs-klein); }
 @media (max-width: 640px) { .mat-vorschlaege { left: 0; right: 0; width: auto; } }
 
+/* Lieferung 5 – Geräte: pruefform */
+/* Prüfformular auf Telefon (hoch und quer), Faltgerät und Tablet. Hochkant am Telefon bleibt es, wie es war: große
+   Umschalter über die volle Breite, die Abschlussleiste unten im Daumenbereich. Am Rechner mit Maus bleibt die
+   Anordnung, wie sie war. Dazu kommen drei Fälle:
+   – Tastatur offen (.tippt, setzt material.js nur bei Bildschirmtastatur): Solange in einem Feld außerhalb der
+     Leiste getippt wird, kleben weder Kopfleiste noch Abschlussleiste – das Feld bleibt sichtbar. Quer neben der
+     Tastatur deckten beide vorher das ganze Fenster ab.
+   – Wenig Höhe (Telefon quer, Faltgerät zugeklappt quer, Tablet mit Tastatur): Die Kopfleiste klebt nicht, die
+     Abschlussleiste ist niedrig – Ergebnis, Fälligkeit oder Grund und Festschreiben in einer Zeile, der Hinweis
+     darunter in einer Zeile (antippen zeigt ihn ganz).
+   – Breite Touch-Geräte (ab 600 px): Die Prüfpunkte stehen dichter wie am Rechner – Umschalter, Foto und
+     „+ Bemerkung“ in einer Zeile –, die Umschalter bleiben aber 46 px hoch; Festschreiben rückt neben die
+     Ergebnisse, wo Platz ist. */
+
+/* Was beim Fokussieren ins Bild rollt, landet weder unter der Kopfleiste noch unter der Abschlussleiste: Deren
+   tatsächliche Höhe setzt material.js (--mat-leiste-h) statt fester 210 px – quer war das mehr als das Fenster.
+   Ziehen zum Neuladen gibt es auf dem Prüfformular nicht (wie bei offenem Dialog). */
+html:has(.mat-mit-leiste) { scroll-padding-top: calc(var(--topbar) + 8px); scroll-padding-bottom: calc(var(--mat-leiste-h, 198px) + 12px);
+  overscroll-behavior-y: contain; }
+.mat-pruefung.tippt .mat-abschluss { position: static; }
+html:has(.mat-pruefung.tippt) .bauchbinde { position: relative; }
+html:has(.mat-pruefung.tippt) { scroll-padding-top: 8px; scroll-padding-bottom: 12px; }
+
+/* Abschlussleiste in einer Zeile, wo Platz ist: Ergebnisse links, Fälligkeit oder Grund und Festschreiben rechts
+   daneben; reicht die Breite nicht, rutscht der rechte Teil als Ganzes in die zweite Zeile. */
+@media (max-height: 500px) and (min-width: 561px), (pointer: coarse) and (min-width: 600px) {
+  .mat-abschluss { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .mat-ergebnis { flex: 1 1 330px; }
+  .mat-abschluss-zeile { flex: 1 1 auto; margin-top: 0; }
+  .mat-abschluss-zeile input[type=text] { flex-basis: 140px; width: 140px; }
+  .mat-abschluss-zeile .mat-due { white-space: nowrap; }
+  .mat-abschluss-hinweis { flex: 1 1 100%; margin-top: 0; }
+}
+
+/* Prüfpunkte dichter auf breiten Touch-Geräten (Faltgerät offen, Tablet, Telefon quer) – wie am Rechner, nur mit
+   den großen Umschaltern. */
+@media (pointer: coarse) and (min-width: 600px) {
+  .mat-punkt { padding: 8px 12px; margin-bottom: 8px; }
+  .mat-punkt-kopf { margin-bottom: 6px; }
+  .mat-punkt-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+  .mat-punkt-zeile .mat-wahl3 { margin: 0; flex: 0 1 420px; }
+  .mat-punkt-zeile .mat-pwert { flex: 1 1 260px; width: auto; margin: 0; }
+  .mat-punkt-zeile .mat-us-feld { margin: 0; }
+  .mat-punkt-foto { margin-top: 0; }
+  .mat-punkt-foto label.btn { margin: 0; }
+  .mat-punkt-zeile .mat-punkt-foto img { width: 46px; height: 46px; }
+  .mat-punkt .mat-pnotiz { margin-top: 6px; }
+}
+
+/* Wenig Höhe: Telefon quer, Faltgerät zugeklappt quer, Tablet mit offener Tastatur. */
+@media (max-height: 500px) {
+  html:has(.mat-mit-leiste) .bauchbinde { position: relative; }
+  html:has(.mat-mit-leiste) { scroll-padding-top: 8px; }
+  #mat[data-ansicht="pruefung"] .mat-suche { display: none; }
+  .mat-pruefung h1 { font-size: 1.35rem; }
+  .mat-pruefung .page-head { margin-bottom: 12px; }
+  .mat-abschluss { padding-top: 6px; padding-bottom: calc(6px + env(safe-area-inset-bottom)); margin-top: 16px; }
+  .mat-ergebnis button { min-height: 44px; }
+  .mat-abschluss-zeile .btn { min-height: 44px; }
+  /* „Nächste Prüfung“ klein über dem Datum statt daneben – so passt die Fälligkeit mit in die Zeile. */
+  .mat-abschluss-zeile .mat-due { flex-direction: column; align-items: stretch; gap: 0; font-size: var(--fs-klein); line-height: 1.2; }
+  .mat-abschluss-hinweis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  .mat-abschluss-hinweis.ganz { white-space: normal; }
+}
+
+/* Foto zum Prüfpunkt: „Galerie“ nur mit dem Finger – am Rechner öffnet „📷 Foto“ ohnehin die Dateiauswahl.
+   „Foto entfernen“ ist ein gewöhnlicher grauer Knopf mit Abstand zum Kamera-Knopf (und fragt nach). */
+.mat-punkt-foto .mat-galerie { display: none; }
+.mat-punkt-foto .mat-foto-weg { margin-left: 10px; }
+@media (pointer: coarse) {
+  .mat-punkt-foto .mat-galerie { display: inline-flex; }
+  /* Am Telefon steht die Fotozeile allein: „Foto entfernen“ ganz rechts, weit weg vom Kamera-Knopf. */
+  .mat-punkt-foto .mat-foto-weg { margin-left: auto; }
+}
+@media (pointer: coarse) and (min-width: 600px) { .mat-punkt-foto .mat-foto-weg { margin-left: 18px; } }
+
+/* Kein Doppeltipp-Zoom (iOS), wenn man schnell zweimal tippt – etwa „n. z.“ und gleich zurück. */
+.mat :is(button, .btn, label.btn, summary), .mat-lightbox button { touch-action: manipulation; }
+
+/* Fotos groß (material.js, bildZeigen): ein modaler <dialog> über die ganze Fläche. Die Seite dahinter rollt nicht
+   mit (html.mat-lb-offen; touch-action: none – das Wischen gehört der Großansicht). Schließen 44 px groß mit dem
+   Finger, außerhalb von Kerbe und Rundung. */
+dialog.mat-lightbox, html.tastatur dialog.mat-lightbox[open] { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none;
+  max-height: none; margin: 0; padding: 24px; border: 0; border-radius: 0; box-shadow: none; background: rgba(60, 60, 59, .9);
+  color: var(--weiss); cursor: zoom-out; overflow: hidden; overscroll-behavior: contain; touch-action: none; }
+dialog.mat-lightbox[open] { display: flex; align-items: center; justify-content: center; }
+dialog.mat-lightbox::backdrop { background: transparent; }
+html.mat-lb-offen { overflow: hidden; }
+.mat-lightbox img { max-height: calc(100dvh - 110px); object-fit: contain; cursor: default; }
+.mat-lightbox .md-lightbox-close { top: max(12px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); }
+.mat-lb-pfeil.zurueck { left: max(10px, env(safe-area-inset-left)); }
+.mat-lb-pfeil.weiter { right: max(10px, env(safe-area-inset-right)); }
+@media (pointer: coarse) {
+  .mat-lightbox .md-lightbox-close { width: 44px; height: 44px; top: max(6px, env(safe-area-inset-top)); right: max(6px, env(safe-area-inset-right)); }
+  .mat-lightbox .mat-lb-original { display: inline-block; padding: 13px 10px; margin: -13px -10px; }
+}
+@media (max-width: 640px) {
+  .mat-lightbox img { max-height: calc(100dvh - 150px); }
+  .mat-lb-pfeil { bottom: calc(14px + env(safe-area-inset-bottom)); }
+}
+/* Quer wenig Höhe: Das Foto bekommt fast die ganze Höhe, die Pfeile bleiben seitlich (dort ist Platz). */
+@media (max-height: 500px) and (min-width: 641px) {
+  dialog.mat-lightbox { padding: 8px 12px; }
+  .mat-lightbox img { max-height: calc(100dvh - 56px); }
+  .mat-lightbox figure { gap: 4px; }
+}
+

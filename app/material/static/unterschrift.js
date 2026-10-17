@@ -10,15 +10,29 @@ window.MatUnterschrift = (function () {
   const esc = (s) => S.esc(s);
   let zaehler = 0;
 
-  /* Die Fläche hat sich geändert (Telefon gedreht): das Gezeichnete so umrechnen, dass es ganz hineinpasst –
-     gleichmäßig verkleinert (nie vergrößert, nie verzerrt) und im selben Abstand über der Linie. */
-  function umrechnen(daten, alt, neu) {
-    const s = Math.min(1, neu.b / alt.b, neu.linie / alt.linie);
-    const mal = (v) => (typeof v === "number" ? v * s : v);
+  /* Striche umrechnen: x mal s, y im s-fachen Abstand zur Linie (von.linie → nach.linie). Die Strichstärke bleibt die
+     des Stifts – sonst wäre ein Strich, der auf der kleinen Fläche dazukam, nach dem Aufklappen fast doppelt so dick. */
+  function umrechnen(daten, s, von, nach) {
     return daten.map((g) => Object.assign({}, g, {
-      minWidth: mal(g.minWidth), maxWidth: mal(g.maxWidth), dotSize: mal(g.dotSize),
-      points: g.points.map((p) => Object.assign({}, p, { x: p.x * s, y: neu.linie + (p.y - alt.linie) * s })),
+      points: g.points.map((p) => Object.assign({}, p, { x: p.x * s, y: nach.linie + (p.y - von.linie) * s })),
     }));
+  }
+
+  /* Wie groß die Unterschrift auf einer Fläche stehen kann: in Originalgröße, wenn sie hineinpasst, sonst gleichmäßig
+     so weit verkleinert, dass sie ganz hineinpasst (nie vergrößert, nie verzerrt) – im selben Abstand über der Linie. */
+  function massstab(daten, linie, flaeche) {
+    const rand = 4;                  // halbe Strichstärke und etwas Luft
+    let rechts = 0, oben = 0, unten = 0;
+    daten.forEach((g) => g.points.forEach((p) => {
+      rechts = Math.max(rechts, p.x);
+      oben = Math.max(oben, linie - p.y);
+      unten = Math.max(unten, p.y - linie);
+    }));
+    let s = 1;
+    if (rechts + rand > flaeche.b) s = Math.min(s, (flaeche.b - rand) / Math.max(rechts, 1));
+    if (oben + rand > flaeche.linie) s = Math.min(s, (flaeche.linie - rand) / Math.max(oben, 1));
+    if (unten + rand > flaeche.h - flaeche.linie) s = Math.min(s, (flaeche.h - flaeche.linie - rand) / Math.max(unten, 1));
+    return Math.max(s, 0.05);
   }
 
   function zeichnen(opts) {
@@ -56,25 +70,36 @@ window.MatUnterschrift = (function () {
         platz.hidden = !leer;
       };
       /* Die Zeichenfläche hat so viele Pixel wie das Gerät (devicePixelRatio) – sonst wird der Strich auf dem
-         Telefon unscharf und sitzt versetzt neben dem Finger. Ändert sich die Fläche (Telefon gedreht), bleibt
-         Gezeichnetes erhalten und wird so umgerechnet, dass es ganz hineinpasst – sonst schnitte die schmalere
-         Fläche das Ende der Unterschrift ab, und abgeschnitten käme sie ins Protokoll. */
-      let alt = null;
+         Telefon unscharf und sitzt versetzt neben dem Finger. Ändert sich die Fläche (Telefon gedreht, Faltgerät
+         auf- oder zugeklappt), bleibt Gezeichnetes erhalten und wird so umgerechnet, dass es ganz hineinpasst –
+         sonst schnitte die schmalere Fläche das Ende der Unterschrift ab, und abgeschnitten käme sie ins Protokoll.
+         Gerechnet wird immer von der Bezugsfassung aus (die Striche in der Größe, in der sie gezeichnet wurden),
+         nicht von der zuletzt gezeigten: Sonst schrumpfte die Unterschrift bei jedem Zu- und Aufklappen weiter und
+         wüchse auf der großen Fläche nie zurück. */
+      let flaeche = null;            // wie die Fläche gerade ist: b, h, dpr, linie – und s, der Maßstab des Gezeigten
+      let bezug = null;              // { daten, linie }: die Striche in Originalgröße, y bezogen auf diese Linie
       function anpassen() {
         const dpr = Math.max(window.devicePixelRatio || 1, 1);
         const b = canvas.offsetWidth, h = canvas.offsetHeight;
-        if (!b || !h || (alt && alt.b === b && alt.h === h && alt.dpr === dpr)) return;
+        if (!b || !h || (flaeche && flaeche.b === b && flaeche.h === h && flaeche.dpr === dpr)) return;
         // Die Linie liegt über der Fläche; ihre Höhe in der Fläche ist der Anker beim Umrechnen.
-        const neu = { b, h, dpr, linie: Math.max(1, linie.getBoundingClientRect().bottom - canvas.getBoundingClientRect().top) };
-        let daten = pad.toData();
-        if (alt && daten.length && (alt.b !== b || alt.h !== h)) daten = umrechnen(daten, alt, neu);
-        alt = neu;
+        const neu = { b, h, dpr, linie: Math.max(1, linie.getBoundingClientRect().bottom - canvas.getBoundingClientRect().top), s: 1 };
+        if (bezug && bezug.daten.length) neu.s = massstab(bezug.daten, bezug.linie, neu);
+        flaeche = neu;
         canvas.width = Math.round(b * dpr);
         canvas.height = Math.round(h * dpr);
         canvas.getContext("2d").scale(dpr, dpr);
         pad.clear();
-        if (daten.length) pad.fromData(daten);
+        if (bezug && bezug.daten.length) pad.fromData(umrechnen(bezug.daten, neu.s, bezug, neu));
         zustand();
+      }
+      // Nach jedem Strich: alles, was auf der Fläche steht, zurück in die Bezugsgröße – ein Strich auf der
+      // verkleinerten Fläche wächst beim Aufklappen mit dem Rest.
+      function bezugMerken() {
+        const daten = pad.toData();
+        if (!flaeche || !daten.length) { bezug = null; return; }
+        const linieBezug = bezug ? bezug.linie : flaeche.linie;
+        bezug = { linie: linieBezug, daten: umrechnen(daten, 1 / flaeche.s, flaeche, { linie: linieBezug }) };
       }
       /* Die Berührung gehört ganz dem Pad: Endet ein Strich mit Schwung, wertete der Browser das sonst als Wischen
          (touch-action allein hält nur das Rollen auf), und das nächste Tippen – etwa auf „Übernehmen“ – ginge im
@@ -83,8 +108,8 @@ window.MatUnterschrift = (function () {
       canvas.addEventListener("touchstart", schlucken, { passive: false });
       canvas.addEventListener("touchmove", schlucken, { passive: false });
       pad.addEventListener("beginStroke", () => { platz.hidden = true; });
-      pad.addEventListener("endStroke", zustand);
-      knopf("leeren").addEventListener("click", () => { pad.clear(); zustand(); });
+      pad.addEventListener("endStroke", () => { bezugMerken(); zustand(); });
+      knopf("leeren").addEventListener("click", () => { pad.clear(); bezug = null; zustand(); });
       knopf("ab").addEventListener("click", () => dlg.close());
       knopf("ok").addEventListener("click", async () => {
         if (pad.isEmpty() || laeuft) return;
