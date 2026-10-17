@@ -1271,7 +1271,7 @@
   // Umbenennen, neue Version, zurückziehen – für Produkt- und Kategoriedokumente gleich; danach neu zeichnen.
   function dokAktionen(docs, neuUrl, danach) {
     return {
-      "dok-neu": () => dokumentDialog(typeof neuUrl === "function" ? neuUrl() : neuUrl, null, danach),
+      "dok-neu": () => dokumenteDialog(typeof neuUrl === "function" ? neuUrl() : neuUrl, danach),
       "dok-version": (b) => dokumentDialog(`${API}/dokumente/${b.dataset.id}/version`, docs().find((d) => d.id === +b.dataset.id), danach),
       "dok-zurueck": async (b) => {
         const d = docs().find((x) => x.id === +b.dataset.id);
@@ -1353,6 +1353,112 @@
       formular: () => formularFuer({ produkt_id: p.id }),
       ...dokAktionen(() => p.dokumente, `${API}/produkte/${p.id}/dokumente`, () => zeigen(produkt)),
     };
+  }
+
+  // Mehrere Dokumente auf einmal: Dateien per Knopf (Mehrfachauswahl) oder hineinziehen, dazu Links; je Eintrag
+  // Titel, Art und Versionsstand. Jede Datei geht einzeln an den Server – was scheitert, bleibt mit Grund stehen.
+  const DOK_ENDUNGEN = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
+  const DOK_MAX_BYTES = 50 * 1024 * 1024;
+  // Die Art aus dem Dateinamen raten – nur, wo es eindeutig ist; sonst wählt man sie selbst.
+  function dokArtRaten(name, bild) {
+    const n = name.toLowerCase();
+    if (/konformit|declaration.?of.?conformity|(^|[^a-z])doc([^a-z]|$)/.test(n)) return "konformitaetserklaerung";
+    if (/pr(ü|ue)f|inspection|checklist/.test(n)) return "pruefanweisung";
+    if (/pflege|wartung|reinigung|care|maintenance|cleaning/.test(n)) return "pflegehinweis";
+    if (/datenblatt|data.?sheet|technical|technisch|specification|spezifikation/.test(n)) return "datenblatt";
+    if (/anleitung|gebrauch|bedienung|manual|instruction|notice|user.?guide/.test(n)) return "gebrauchsanleitung";
+    return bild ? "produktbild" : "";
+  }
+  function dokumenteDialog(url, danach) {
+    const eintraege = [];
+    dialog(`<h2>Dokumente hinzufügen</h2>
+      <div class="mat-ablage" id="dm-ablage">
+        <p><strong>Dateien hierher ziehen</strong> oder <label class="btn secondary small">Dateien wählen<input type="file" id="dm-dateien" class="mat-datei" accept="application/pdf,image/jpeg,image/png,image/webp" multiple></label></p>
+        <p class="help">PDF oder Bild, bis 50 MB je Datei – gern mehrere auf einmal.</p>
+      </div>
+      <div id="dm-liste" class="mat-dokliste"></div>
+      <p><button type="button" class="lnk" id="dm-link">+ Link beim Hersteller hinzufügen</button></p>
+      <label for="dm-ab">Gültig ab (für alle)</label><input type="date" id="dm-ab">
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="dm-ok" type="button">Speichern</button></div>`,
+    (dlg, body) => {
+      const liste = $("#dm-liste", body);
+      const artWahl = (w) => `<option value="">– Art wählen –</option>${Object.entries(DOKART).map(([k, t]) => `<option value="${k}" ${k === w ? "selected" : ""}>${esc(t)}</option>`).join("")}`;
+      // Was getippt wurde, vor jedem Neuzeichnen übernehmen.
+      const merken = () => $$(".mat-dokzeile", liste).forEach((z) => {
+        const e = eintraege[+z.dataset.i];
+        e.titel = $(".dm-titel", z).value; e.art = $(".dm-art", z).value; e.version = $(".dm-ver", z).value;
+        if (!e.datei) e.url = $(".dm-url", z).value.trim();
+      });
+      function zeichnen() {
+        liste.innerHTML = eintraege.map((e, i) => `<div class="mat-dokzeile${e.fehler ? " fehler" : ""}" data-i="${i}">
+            <div class="mat-dokzeile-name">${e.datei ? `${esc(e.datei.name)} <span class="muted small">${esc(groesse(e.datei.size))}</span>` : "Link"}</div>
+            ${e.datei ? "" : `<input type="text" class="dm-url" maxlength="500" placeholder="https://…" value="${esc(e.url || "")}" aria-label="Adresse">`}
+            <input type="text" class="dm-titel" maxlength="200" value="${esc(e.titel)}" placeholder="${e.datei ? "Titel" : "Titel (leer = Adresse)"}" aria-label="Titel">
+            <select class="dm-art" aria-label="Art">${artWahl(e.art)}</select>
+            <input type="text" class="dm-ver" maxlength="40" value="${esc(e.version)}" placeholder="Version" aria-label="Versionsstand">
+            <button type="button" class="lnk dm-weg" title="Entfernen" aria-label="Entfernen">✕</button>
+            ${e.fehler ? `<div class="dm-status">${esc(e.fehler)}</div>` : ""}</div>`).join("");
+        $$(".dm-weg", liste).forEach((b) => { b.onclick = () => { merken(); eintraege.splice(+b.closest(".mat-dokzeile").dataset.i, 1); zeichnen(); }; });
+      }
+      function hinzufuegen(dateien) {
+        merken();
+        for (const f of dateien) {
+          const endung = (f.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
+          if (!DOK_ENDUNGEN.includes(endung)) { toast(`„${f.name}“: nur PDF oder Bild (JPEG, PNG, WebP).`, true); continue; }
+          if (f.size > DOK_MAX_BYTES) { toast(`„${f.name}“ ist größer als 50 MB.`, true); continue; }
+          if (eintraege.some((e) => e.datei && e.datei.name === f.name && e.datei.size === f.size)) continue;
+          eintraege.push({ datei: f, titel: f.name.replace(/\.[^.]+$/, "").replace(/_+/g, " ").trim(), art: dokArtRaten(f.name, endung !== ".pdf"), version: "" });
+        }
+        zeichnen();
+      }
+      $("#dm-dateien", body).addEventListener("change", (ev) => { hinzufuegen(Array.from(ev.target.files)); ev.target.value = ""; });
+      const ablage = $("#dm-ablage", body);
+      // Abgelegt wird überall im Dialog – nie soll der Browser die Datei stattdessen selbst öffnen.
+      body.addEventListener("dragover", (ev) => { ev.preventDefault(); ablage.classList.add("ueber"); });
+      body.addEventListener("dragleave", (ev) => { if (!body.contains(ev.relatedTarget)) ablage.classList.remove("ueber"); });
+      body.addEventListener("drop", (ev) => {
+        ev.preventDefault();
+        ablage.classList.remove("ueber");
+        if (ev.dataTransfer && ev.dataTransfer.files.length) hinzufuegen(Array.from(ev.dataTransfer.files));
+      });
+      $("#dm-link", body).onclick = () => { merken(); eintraege.push({ datei: null, url: "", titel: "", art: "", version: "" }); zeichnen(); fokus($(".mat-dokzeile:last-child .dm-url", liste)); };
+      $("#dm-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        merken();
+        if (!eintraege.length) { toast("Bitte zuerst Dateien wählen oder hineinziehen.", true); return; }
+        eintraege.forEach((e) => {
+          e.fehler = !e.art ? "Bitte die Art wählen." : !e.datei && !/^https?:\/\/\S+/.test(e.url || "") ? "Bitte eine Adresse mit https:// angeben." : "";
+        });
+        if (eintraege.some((e) => e.fehler)) { zeichnen(); toast("Bitte die markierten Einträge ergänzen.", true); return; }
+        const ab = $("#dm-ab", body).value;
+        knopf.disabled = true;
+        let gespeichert = 0;
+        for (const [i, e] of eintraege.entries()) {
+          knopf.textContent = `Speichere ${i + 1} von ${eintraege.length} …`;
+          try {
+            if (e.datei) {
+              const fd = new FormData();
+              Object.entries({ kind: e.art, title: e.titel, version: e.version, valid_from: ab }).forEach(([k, w]) => fd.append(k, w));
+              fd.append("file", e.datei);
+              await api(url, { method: "POST", body: fd });
+            } else {
+              await api(url, { method: "POST", body: { kind: e.art, title: e.titel, version: e.version, valid_from: ab || null, url: e.url } });
+            }
+            e.fertig = true;
+            gespeichert += 1;
+          } catch (err) { e.fehler = err.message; }
+        }
+        knopf.textContent = "Speichern";
+        knopf.disabled = false;
+        const rest = eintraege.filter((e) => !e.fertig);
+        eintraege.splice(0, eintraege.length, ...rest);
+        if (gespeichert && danach) await danach();
+        if (!rest.length) { dlg.close(); toast(plural(gespeichert, "Dokument gespeichert", "Dokumente gespeichert")); return; }
+        zeichnen();
+        toast(`${gespeichert} gespeichert, ${rest.length} nicht – der Grund steht am Eintrag.`, true);
+      };
+      zeichnen();
+    });
   }
 
   function dokumentDialog(url, alt, danach) {

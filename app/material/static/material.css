@@ -303,6 +303,23 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-kamera { cursor: pointer; }
 /* Dateiauswahl hinter einem Knopf: nur optisch versteckt, damit sie per Tastatur erreichbar bleibt. */
 .mat-datei { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
+/* Mehrere Dokumente auf einmal: Ablagefläche, darunter je Datei eine Zeile mit Titel, Art und Versionsstand. */
+.mat-ablage { border: 2px dashed var(--linie); background: var(--grau-hell); padding: 12px 14px; text-align: center; }
+.mat-ablage.ueber { border-color: var(--wasser); background: var(--co-info-fl); }
+.mat-ablage p { margin: 4px 0; }
+.mat-dokliste { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 4px; }
+.mat-dokliste:empty { display: none; }
+.mat-dokzeile { display: grid; grid-template-columns: minmax(0, 1fr) 205px 100px auto; gap: 6px 8px; align-items: center;
+  border: 1px solid var(--linie); padding: 8px 10px; }
+.mat-dokzeile.fehler { border-color: var(--rot); }
+.mat-dokzeile-name { grid-column: 1 / -1; font-weight: 600; overflow-wrap: anywhere; }
+.mat-dokzeile .dm-url, .mat-dokzeile .dm-status { grid-column: 1 / -1; }
+.mat-dokzeile .dm-status { color: var(--rot); font-size: var(--fs-klein); font-weight: 600; }
+.mat-dokzeile input, .mat-dokzeile select { margin: 0; min-width: 0; width: 100%; }
+@media (max-width: 560px) {
+  .mat-dokzeile { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .mat-dokzeile .dm-titel { grid-column: 1 / -1; }
+}
 label:has(> .mat-datei:focus-visible) { outline: 3px solid var(--gelb); outline-offset: 2px; }
 label:has(> .mat-datei) { position: relative; }
 .mat-pflicht { color: var(--rot); font-weight: 700; font-size: var(--fs-klein); }
