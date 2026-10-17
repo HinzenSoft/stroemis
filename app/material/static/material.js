@@ -473,7 +473,7 @@
       inhalt.innerHTML = `<div class="page-head"><h1>Prüfungen</h1>
           <div class="btn-row">${DARF.verwalten || DARF.pruefen ? '<button class="btn secondary" data-act="runde">+ Prüfdurchgang</button>' : ""}</div></div>
         ${!DARF.pruefen ? '<p class="notice">Prüfen dürfen nur Prüfer mit hinterlegter Urkundennummer (Nutzerverwaltung → Häkchen „Prüfer“).</p>' : ""}
-        <div id="pr-offen"></div><div id="pr-runden"></div>
+        <div id="pr-runden"></div><div id="pr-offen"></div>
         <section class="section"><h2>Zu prüfen</h2><div id="pr-liste"><p class="help">Wird geladen …</p></div></section>`;
       await Promise.all([zeigenIn(liste, "#pr-liste"), zeigenIn(offene, "#pr-offen"), rundenKasten($("#pr-runden"), false)]);
     }
