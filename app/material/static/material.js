@@ -726,7 +726,7 @@
           <div class="mat-qr"><input type="text" readonly value="${esc(a.qr_adresse)}" id="mat-qr" aria-label="Adresse für QR, NFC und RFID">
           <button class="btn secondary small" data-act="qr-kopieren">Kopieren</button></div>
           <h2>Herstellerdokumente</h2>
-          ${a.dokumente.length ? `<ul class="mat-doks">${a.dokumente.map((d) => `<li><a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a> <span class="muted">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}${d.herkunft ? ` · für die Kategorie ${esc(d.herkunft.name)}` : ""}</span></li>`).join("")}</ul>` : leer("Am Produkt und seiner Kategorie sind keine Dokumente hinterlegt.")}
+          ${a.dokumente.length ? dokListe(a.dokumente, true) : leer("Am Produkt und seiner Kategorie sind keine Dokumente hinterlegt.")}
         </section>
       </div>
       <section class="section"><h2>Prüfungen</h2>${pruefListe(a.pruefungen)}</section>
@@ -1127,6 +1127,15 @@
       <td data-l="Stand">${d.gilt ? '<span class="mat-status s-einsatzbereit">gilt</span>' : d.withdrawn_on ? `zurückgezogen ${esc(fmtTag(d.withdrawn_on))}` : d.abgeloest_durch ? "abgelöst" : "noch nicht gültig"}
         ${d.sha256 ? `<div class="small muted mat-hash" title="SHA-256 ${esc(d.sha256)}">${esc(d.sha256.slice(0, 12))}…</div>` : ""}</td>
       <td>${k ? `<div class="btn-row"><button class="btn ghost small" data-act="dok-name" data-id="${d.id}">Umbenennen</button>${!d.abgeloest_durch && !d.withdrawn_on ? `<button class="btn ghost small" data-act="dok-version" data-id="${d.id}">Neue Version</button><button class="btn ghost small" data-act="dok-zurueck" data-id="${d.id}">Zurückziehen</button>` : ""}</div>` : ""}</td></tr>`;
+  }
+  // Herstellerdokumente als Liste: erst die des Produkts, dann – nur durch Abstand getrennt – die seiner
+  // Kategorien (Artikel: herkunft; Prüfung: kategorie, der Name vom Prüftag). verlinkt: Titel als Link.
+  function dokListe(docs, verlinkt) {
+    const kat = (d) => (d.herkunft ? d.herkunft.name : d.kategorie);
+    const eintrag = (d) => `<li>${verlinkt ? `<a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>` : esc(d.title)}
+      <span class="muted${verlinkt ? "" : " small"}">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}${kat(d) ? ` · für die Kategorie ${esc(kat(d))}` : ""}</span></li>`;
+    return [docs.filter((d) => !kat(d)), docs.filter((d) => kat(d))].filter((l) => l.length)
+      .map((l) => `<ul class="mat-doks">${l.map(eintrag).join("")}</ul>`).join("");
   }
   const dokTabelle = (docs, k) => `<table class="list mat-tabelle"><thead><tr><th>Dokument</th><th>Version</th><th>Gültig ab</th><th>Stand</th><th></th></tr></thead><tbody>${docs.map((d) => dokZeile(d, k)).join("")}</tbody></table>`;
 
@@ -1581,7 +1590,7 @@
       return `${ergebnisBox}
         ${pr.punkte.length ? `<section class="section"><h2>Befunde</h2><table class="list mat-tabelle mat-befunde"><thead><tr><th>Prüfpunkt</th><th>Befund</th><th>Wert</th><th>Bemerkung</th><th>Foto</th></tr></thead><tbody>${zeilen}</tbody></table></section>` : ""}
         ${pr.art !== "aussonderung" ? anhaengeHtml() : ""}
-        ${pr.dokumente.length ? `<section class="section"><h2>Herstellerdokumente am Prüftag</h2><ul class="mat-doks">${pr.dokumente.map((d) => `<li>${esc(d.title)} <span class="muted small">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}${d.kategorie ? ` · für die Kategorie ${esc(d.kategorie)}` : ""}</span></li>`).join("")}</ul></section>` : ""}`;
+        ${pr.dokumente.length ? `<section class="section"><h2>Herstellerdokumente am Prüftag</h2>${dokListe(pr.dokumente, false)}</section>` : ""}`;
     }
 
     function bearbeitenHtml() {
