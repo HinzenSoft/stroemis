@@ -13,11 +13,15 @@ und der Bericht zählt es eigens.
 Aufbau des Archivs:
   katalog.json                          Format 2 (CHANGELOG-Material.md, „Katalogdatei (Format 2)“)
   dateien/bilder/<sha256>.<endung>      Originale der Produktbilder, unverändert (mit ihren Metadaten)
-  dateien/dokumente/<sha256>.<endung>   aktuelle Herstellerdokumente (nicht zurückgezogen, nicht abgelöst)
+  dateien/dokumente/<sha256>.<endung>   aktuelle Herstellerdokumente (nicht zurückgezogen, nicht abgelöst); ihre
+                                        früheren Versionen nur als Kennung („vorgaenger“ in katalog.json)
   bericht.txt                           was drin ist und was nicht – zum Lesen, der Import übergeht ihn
 
 Je Ziel kommt ein Formular mit: das aktive („aktivieren“: true), ohne aktives die neueste Version mit Prüfpunkten
 („aktivieren“: false). Ältere Versionen nicht – ihre Nummern sind ohnehin je Instanz eigene.
+
+Eine Datei, die der Import nicht annähme (größer als seine Grenze, importer.BILD_MAX_IMPORT bzw. DOK_MAX_BYTES), bleibt
+draußen und steht im Bericht unter „zu_gross“ – sonst stünde der ganze Import.
 """
 import hashlib
 import json
@@ -79,9 +83,12 @@ def sammeln(mit_dateien=True):
                "enthalten": {"kategorien": 0, "produkte": 0, "bilder": 0, "formulare": 0, "dokumente": 0},
                "ausgelassen": {"kategorien": 0, "produkte": 0, "formulare": 0, "dokumente": 0, "ohne_kennzeichen": 0,
                                "namen": []},
-               "ohne_punkte": 0, "fehlende_dateien": [], "groesse": 0, "grenze": EXPORT_MAX_BYTES}
+               "ohne_punkte": 0, "fehlende_dateien": [], "zu_gross": [], "groesse": 0, "grenze": EXPORT_MAX_BYTES}
     raus_n = bericht["ausgelassen"]
     dateien = {}
+    # Alle Dokumente für die Versionsketten („vorgaenger“): je Version, welche sie ersetzt, und woran sie zu erkennen ist.
+    alle_dokumente = {d["id"]: d for d in db.query(
+        "SELECT id, replaces_id, file_path, url, version, sha256 FROM mat_product_document")}
 
     def pfad(kid):
         teile, gesehen = [], set()
@@ -91,12 +98,19 @@ def sammeln(mit_dateien=True):
             kid = nach_id[kid]["parent_id"]
         return teile
 
-    def datei(unter, quelle_dir, name, sha=None):
-        """Eine Datei unter media/material in den Export aufnehmen – nur, wenn sie wirklich dort liegt. Liefert den
-        Pfad im Archiv oder None."""
-        quelle = os.path.join(medien, quelle_dir, name)
+    def datei(unter, quelle_dir, name, was, grenze, sha=None):
+        """Eine Datei unter media/material in den Export aufnehmen – nur, wenn sie wirklich dort liegt und der Import
+        sie annimmt (höchstens grenze Bytes). Liefert den Pfad im Archiv oder None; was (etwa „Produktbild von …“)
+        steht dann im Bericht unter fehlende_dateien bzw. zu_gross."""
+        quelle = os.path.join(medien, quelle_dir, name or "")
         echt = os.path.realpath(quelle)
         if not name or os.path.commonpath([medien, echt]) != medien or not os.path.isfile(echt):
+            bericht["fehlende_dateien"].append(was)
+            return None
+        groesse = os.path.getsize(echt)
+        if groesse > grenze:
+            bericht["zu_gross"].append(f"{was}: {groesse / (1024 * 1024):.1f} MB – der Import nimmt höchstens "
+                                       f"{grenze // (1024 * 1024)} MB")
             return None
         if not mit_dateien and not sha:
             schluessel = f"{unter}:{name}"            # Vorschau: Platzhalter, nur für Zahl und Größe
@@ -104,8 +118,34 @@ def sammeln(mit_dateien=True):
             schluessel = f"dateien/{unter}/{sha or _summe(echt)}{os.path.splitext(name)[1].lower()}"
         if schluessel not in dateien:
             dateien[schluessel] = echt
-            bericht["groesse"] += os.path.getsize(echt)
+            bericht["groesse"] += groesse
         return schluessel
+
+    def dok_summe(d):
+        """SHA-256 der Datei eines Dokuments: gespeichert, sonst (ältere Einträge) aus der Datei – None ohne Datei."""
+        if len(d["sha256"] or "") == 64:
+            return d["sha256"]
+        echt = os.path.realpath(os.path.join(medien, "dok", d["file_path"] or ""))
+        if not mit_dateien or not d["file_path"] or os.path.commonpath([medien, echt]) != medien \
+                or not os.path.isfile(echt):
+            return None
+        return _summe(echt)
+
+    def vorgaenger(d):
+        """Die früheren Versionen von d, neueste zuerst, als Kennung: SHA-256 der Datei bzw. Link und Versionsstand.
+        Daran findet der Import die Kette auch dann, wenn am Ziel mehrere Dokumente gleich heißen."""
+        out, gesehen, vid = [], {d["id"]}, d["replaces_id"]
+        while vid in alle_dokumente and vid not in gesehen:
+            gesehen.add(vid)
+            v = alle_dokumente[vid]
+            if v["url"]:
+                out.append({"url": v["url"], "version": v["version"] or ""})
+            else:
+                summe = dok_summe(v)
+                if summe:
+                    out.append({"sha256": summe})
+            vid = v["replaces_id"]
+        return out
 
     def dokumente(spalte, ziel, zielname):
         out = []
@@ -115,10 +155,13 @@ def sammeln(mit_dateien=True):
                 e["url"] = d["url"]
             else:
                 sha = d["sha256"] if len(d["sha256"] or "") == 64 else None
-                e["datei"] = datei("dokumente", "dok", d["file_path"], sha)
+                e["datei"] = datei("dokumente", "dok", d["file_path"], f"Dokument „{d['title']}“ an „{zielname}“",
+                                   katalog.DOK_MAX_BYTES, sha)
                 if not e["datei"]:
-                    bericht["fehlende_dateien"].append(f"Dokument „{d['title']}“ an „{zielname}“")
                     continue
+            frueher = vorgaenger(d)
+            if frueher:
+                e["vorgaenger"] = frueher
             out.append(e)
         bericht["enthalten"]["dokumente"] += len(out)
         return out
@@ -174,13 +217,16 @@ def sammeln(mit_dateien=True):
              "lebensdauer_jahre": p["lifetime_years"], "lebensdauer_quelle": p["lifetime_source"],
              "beschreibung": p["description"]}
         if p["image"]:
-            bild = datei("bilder", "orig", p["image"]) if os.path.splitext(p["image"])[1].lower() in ALLOWED_EXT else None
+            was = f"Produktbild von „{name}“"
+            if os.path.splitext(p["image"])[1].lower() in ALLOWED_EXT:
+                bild = datei("bilder", "orig", p["image"], was, importer.BILD_MAX_IMPORT)
+            else:
+                bild = None
+                bericht["fehlende_dateien"].append(was)
             if bild:
                 if mit_dateien:
                     e["bild"] = bild
                 bericht["enthalten"]["bilder"] += 1
-            else:
-                bericht["fehlende_dateien"].append(f"Produktbild von „{name}“")
         docs = dokumente("product_id", p["id"], name)
         if docs:
             e["dokumente"] = docs
@@ -247,6 +293,8 @@ def bericht_text(b):
         zeilen += ["", f"Nicht im Export: {b['ohne_punkte']} Formularentwürfe ohne Prüfpunkte (ohne aktives Formular)."]
     if b["fehlende_dateien"]:
         zeilen += ["", "Nicht im Export, weil die Datei hier fehlt:"] + [f"  {x}" for x in b["fehlende_dateien"]]
+    if b["zu_gross"]:
+        zeilen += ["", "Nicht im Export, weil der Import die Datei nicht annähme:"] + [f"  {x}" for x in b["zu_gross"]]
     zeilen += ["", "Bestand, Artikel, Prüfungen, Meldungen und Rückrufe sind nie Teil des Katalog-Exports.",
                "Importieren: Katalog → „Katalog importieren“ oder flask material import-catalog <datei.zip>.", ""]
     return "\n".join(zeilen)

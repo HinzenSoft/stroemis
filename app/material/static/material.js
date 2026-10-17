@@ -1418,6 +1418,7 @@
       ${a.ohne_kennzeichen ? `<p class="help">${plural(a.ohne_kennzeichen, "Eintrag", "Einträge")} ohne eigenes DEMO-Kennzeichen fallen mit heraus: Sie stehen in einer DEMO-Kategorie bzw. gehören zu einem DEMO-Ziel.</p>` : ""}
       ${a.namen.length ? `<details class="mat-auf"><summary>DEMO-Einträge (oberste Ebene)</summary><ul class="mat-austausch-aenderungen">${a.namen.map((n) => `<li>${esc(n)}</li>`).join("")}</ul></details>` : ""}
       ${austauschListe("Nicht im Export, weil die Datei hier fehlt", v.fehlende_dateien, "warnung")}
+      ${austauschListe("Nicht im Export, weil der Import die Datei nicht annähme (zu groß)", v.zu_gross, "warnung")}
       ${v.ohne_punkte ? `<p class="help">${plural(v.ohne_punkte, "Formularentwurf", "Formularentwürfe")} ohne Prüfpunkte (und ohne aktives Formular) bleibt draußen.</p>` : ""}
       ${v.groesse ? `<p class="help">Dateien zusammen etwa ${esc(groesse(v.groesse))}.${e.bilder ? " Die Produktbilder gehen als Original mit – samt ihren Metadaten." : ""}</p>` : ""}
       ${v.groesse > v.grenze ? `<p class="error">Der Export wäre größer als ${esc(groesse(v.grenze))} – so groß wird er nicht gebaut.</p>` : ""}

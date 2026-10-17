@@ -49,6 +49,25 @@ def exportieren(c):
     return r.get_data()
 
 
+def umschreiben(roh, aendern):
+    """Derselbe Export mit geänderter katalog.json: aendern(daten) ändert sie an Ort und Stelle, die Dateien bleiben."""
+    aus = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(roh)) as z, zipfile.ZipFile(aus, "w", zipfile.ZIP_DEFLATED) as neu:
+        for info in z.infolist():
+            inhalt = z.read(info)
+            if info.filename == "katalog.json":
+                daten = json.loads(inhalt)
+                aendern(daten)
+                inhalt = json.dumps(daten, ensure_ascii=False).encode()
+            neu.writestr(info.filename, inhalt, compress_type=info.compress_type)
+    return aus.getvalue()
+
+
+def katalogjson(roh):
+    with zipfile.ZipFile(io.BytesIO(roh)) as z:
+        return json.loads(z.read("katalog.json"))
+
+
 def dateien_zaehlen(tmp):
     """Alle Dateien unter media/material – jede abgelegte Datei zählt."""
     n = 0
@@ -394,9 +413,10 @@ def test_zip_sicherheit():
                "produkte[0].dokumente[0]", "passt nicht zur Endung")
         fehler(_zip({"dateien/bilder/x.jpg": b"\xff\xd8\xffkein Bild"}, _katalog(bild="dateien/bilder/x.jpg")),
                "nicht als Bild lesen")
-        # Übergröße: größer als die Grenze für Bilder – und eine Packbombe (stark gepackt) als Dokument.
-        fehler(_zip({"dateien/bilder/gross.jpg": b"\0" * (31 * 1024 * 1024)}, _katalog(bild="dateien/bilder/gross.jpg")),
-               "größer als 30 MB")
+        # Übergröße: größer als die Grenze für Bilder (die des Hochladens, 30 MB + 1 MB je Anfrage) – und eine
+        # Packbombe (stark gepackt) als Dokument.
+        fehler(_zip({"dateien/bilder/gross.jpg": b"\0" * (32 * 1024 * 1024)}, _katalog(bild="dateien/bilder/gross.jpg")),
+               "größer als 31 MB")
         fehler(_zip({"dateien/dokumente/bombe.pdf": b"%PDF-" + b"\0" * (8 * 1024 * 1024)},
                     _katalog(dokument="dateien/dokumente/bombe.pdf")), "ungewöhnlich stark gepackt")
         # Verschlüsselt (Kennzeichen im Eintrag) und beschädigt (Prüfsumme stimmt nicht).
@@ -519,9 +539,387 @@ def test_rechte():
     print("Rechtetest bestanden.")
 
 
+# --- 6. Befunde aus der Durchsicht ----------------------------------------------------------------------
+
+def _admin(tmp):
+    app = make_app(tmp)
+    return app, anmelden(app, "admin@example.org", "geheim123")
+
+
+def test_intervall_wandert_von_kategorie_ans_produkt():
+    """Die Kategorie verliert ihre Vorgabe, das Produkt bekommt in derselben Datei ein eigenes Intervall – in A gültig,
+    also auch im Import. „Jedes Produkt hat ein Prüfintervall“ prüft der Import erst nach den Produkten; die Oberfläche
+    prüft wie bisher, und zwar bevor sie etwas schreibt."""
+    from app import db
+    from app.material.services import Abgelehnt, katalog
+    with tempfile.TemporaryDirectory() as tmp_a, tempfile.TemporaryDirectory() as tmp_b:
+        app_a, a = _admin(tmp_a)
+        app_b, b = _admin(tmp_b)
+        ids = katalog_grund(a)
+        assert importieren(b, exportieren(a), False)["gespeichert"]
+        assert a.put(f"/api/material/produkte/{ids['gurt']}", json={"interval_months": 24}).status_code == 200
+        r = a.put(f"/api/material/kategorien/{ids['gurte']}", json={"default_interval_months": None})
+        assert r.status_code == 200, r.get_json()
+        roh = exportieren(a)
+        ber = importieren(b, roh, True)
+        assert not ber["fehler"] and ber["kategorien"]["geaendert"] == 1 and ber["produkte"]["geaendert"] == 1, ber
+        ber = importieren(b, roh, False)
+        assert ber["gespeichert"] and not ber["fehler"], ber
+        with app_b.app_context():
+            gurt_b = db.query("SELECT * FROM mat_product WHERE model = 'Gurt Alpha'", one=True)
+            assert gurt_b["interval_months"] == 24
+            gurte_b = db.query("SELECT * FROM mat_category WHERE name = 'Gurte'", one=True)
+            assert gurte_b["default_interval_months"] is None
+
+        # Bliebe danach wirklich ein Produkt ohne Intervall (hier eins, das es nur in B gibt), meldet der Import das an
+        # der Kategorie – mit der Meldung der Oberfläche – und speichert nichts.
+        assert b.put(f"/api/material/kategorien/{gurte_b['id']}", json={"default_interval_months": 12}).status_code == 200
+        r = b.post("/api/material/produkte", json={"category_id": gurte_b["id"], "manufacturer": "Testwerk",
+                                                   "model": "Nur in B", "material_kind": "textil", "lifetime_years": 10})
+        assert r.status_code == 201, r.get_json()
+        vorher = zahlen(app_b, *TABELLEN)
+        ber = importieren(b, roh, False)
+        assert not ber["gespeichert"] and len(ber["fehler"]) == 1, ber
+        assert ber["fehler"][0].startswith("kategorien[0].unterkategorien[0] (Gurte): Danach hätten diese Produkte kein "
+                                           "Prüfintervall mehr: Testwerk Nur in B"), ber
+        assert zahlen(app_b, *TABELLEN) == vorher
+
+        # Die Oberfläche lehnt wie bisher ab – und hat vorher nichts geschrieben, auch nicht in einer äußeren
+        # Transaktion, in der ein halber Stand sonst stehen bliebe.
+        assert a.put(f"/api/material/kategorien/{ids['gurte']}", json={"default_interval_months": 12}).status_code == 200
+        assert a.put(f"/api/material/produkte/{ids['gurt']}", json={"interval_months": None}).status_code == 200
+        r = a.put(f"/api/material/kategorien/{ids['gurte']}", json={"default_interval_months": None})
+        assert r.status_code == 409 and "kein Prüfintervall mehr: Testwerk Gurt Alpha" in r.json["error"], r.get_json()
+        with app_a.app_context():
+            with db.transaction():
+                try:
+                    katalog.kategorie_aendern(ids["gurte"], {"default_interval_months": None})
+                    raise AssertionError("Die Kategorie verlor ihre Vorgabe, obwohl ein Produkt sie braucht.")
+                except Abgelehnt as exc:
+                    assert exc.code == 409 and "Gurt Alpha" in str(exc), exc
+                assert katalog.kategorie(ids["gurte"])["default_interval_months"] == 12
+            # Verschoben unter eine Oberkategorie ohne Vorgabe – dieselbe Regel, ebenfalls vor dem Schreiben geprüft.
+            with db.transaction():
+                try:
+                    katalog.kategorie_aendern(ids["gurte"], {"default_interval_months": None,
+                                                             "parent_id": ids["karabiner"]})
+                    raise AssertionError("Verschoben ohne Intervall.")
+                except Abgelehnt as exc:
+                    assert exc.code == 409, exc
+                assert katalog.kategorie(ids["gurte"])["parent_id"] == ids["psa"]
+    print("Intervall-Reihenfolgetest bestanden.")
+
+
+def _ohne_vorgaenger(daten):
+    for p in daten["produkte"]:
+        for x in p.get("dokumente", []):
+            x.pop("vorgaenger", None)
+
+
+def test_dokumentketten_mit_gleichem_titel():
+    """Zwei aktuelle Dokumente gleicher Art und gleichen Titels an einem Produkt (Fassung de als Datei, en als Link)
+    bekommen beide eine neue Version. Der Export nennt je Dokument seine früheren Versionen, der Import hängt damit jede
+    neue Version an ihre eigene Kette. Ohne diese Angabe (ältere Exporte) nur, wenn es eindeutig ist – sonst ein
+    Fehler „mehrdeutig“ statt über Kreuz verknüpfter Ketten."""
+    from app import db
+    for de2, en2 in (("2024-06-01", "2025-06-01"), ("2025-06-01", "2025-07-01")):
+        with tempfile.TemporaryDirectory() as tmp_a, tempfile.TemporaryDirectory() as tmp_b:
+            app_a, a = _admin(tmp_a)
+            app_b, b = _admin(tmp_b)
+            ids = katalog_grund(a)
+            url = f"/api/material/produkte/{ids['gurt']}/dokumente"
+            r = hoch(a, url, PDF + b"%de-1", "db.pdf", kind="datenblatt", title="Datenblatt", version="de",
+                     valid_from="2024-01-01")
+            assert r.status_code == 201, r.get_json()
+            de = r.json["dokument_id"]
+            r = a.post(url, json={"kind": "datenblatt", "title": "Datenblatt", "version": "en",
+                                  "url": "https://hersteller.example/db-en", "valid_from": "2025-01-01"})
+            assert r.status_code == 201, r.get_json()
+            en = r.json["dokument_id"]
+            assert importieren(b, exportieren(a), False)["gespeichert"]
+            r = hoch(a, f"/api/material/dokumente/{de}/version", PDF + b"%de-2", "db.pdf", version="de2", valid_from=de2)
+            assert r.status_code == 201, r.get_json()
+            r = a.post(f"/api/material/dokumente/{en}/version", json={"url": "https://hersteller.example/db-en-2",
+                                                                       "version": "en2", "valid_from": en2})
+            assert r.status_code == 201, r.get_json()
+            roh = exportieren(a)
+            gurt = next(p for p in katalogjson(roh)["produkte"] if p["modell"] == "Gurt Alpha")
+            docs = {d["version"]: d for d in gurt["dokumente"]}
+            assert docs["de2"]["vorgaenger"] == [{"sha256": sha(PDF + b"%de-1")}], docs
+            assert docs["en2"]["vorgaenger"] == [{"url": "https://hersteller.example/db-en", "version": "en"}], docs
+
+            # Ohne „vorgaenger“: eindeutig nur, wenn bei Beginn der neuen Version genau eins der beiden schon gilt.
+            ber = importieren(b, umschreiben(roh, _ohne_vorgaenger), True)
+            if de2 < "2025-01-01":
+                assert not ber["fehler"] and ber["dokumente"]["neue_version"] == 2, ber
+            else:
+                assert ber["fehler"] and all("Mehrdeutig" in f and "„Datenblatt“" in f for f in ber["fehler"]), ber
+
+            ber = importieren(b, roh, False)
+            assert ber["gespeichert"] and not ber["fehler"], ber
+            assert ber["dokumente"] == {"neu": 0, "neue_version": 2, "unveraendert": 0}, ber
+            with app_b.app_context():
+                alle = {x["id"]: x for x in db.query("SELECT * FROM mat_product_document")}
+                kette = {x["version"]: alle[x["replaces_id"]]["version"] for x in alle.values() if x["replaces_id"]}
+                assert kette == {"de2": "de", "en2": "en"}, kette
+            ber = importieren(b, roh, False)
+            assert ber["dokumente"] == {"neu": 0, "neue_version": 0, "unveraendert": 2}, ber
+    print("Dokumentkettentest bestanden.")
+
+
+def test_formular_ohne_titel_bleibt_unveraendert():
+    """Ein Formular ohne Titel in der Datei gibt keinen Titel vor: Ein zweiter Import derselben Datei legt keine neue
+    Version an, auch wenn das Formular hier einen Titel trägt."""
+    from app import db
+    punkte1 = [{"text": "Testpunkt eins", "art": "yesno", "soll": "ja"}]
+    punkte2 = punkte1 + [{"text": "Testpunkt zwei", "art": "yesno", "soll": "ja"}]
+
+    def formulare(app):
+        with app.app_context():
+            return [(f["version"], f["title"], f["active"]) for f in db.query("SELECT * FROM mat_form ORDER BY id")]
+
+    with tempfile.TemporaryDirectory() as tmp_a, tempfile.TemporaryDirectory() as tmp_b:
+        app_a, a = _admin(tmp_a)
+        app_b, b = _admin(tmp_b)
+        ids = katalog_grund(a)
+        # Wie in der Oberfläche: erst ohne Titel angelegt, im Editor betitelt und mit Punkten gefüllt, aktiviert.
+        r = a.post("/api/material/formulare", json={"kategorie_id": ids["gurte"]})
+        assert r.status_code == 201, r.get_json()
+        f1 = r.json["formular"]["id"]
+        assert a.put(f"/api/material/formulare/{f1}", json={"titel": "Gurtprüfung", "punkte": punkte1}).status_code == 200
+        assert a.post(f"/api/material/formulare/{f1}/aktivieren", json={}).status_code == 200
+        assert importieren(b, exportieren(a), False)["gespeichert"]
+        # Neue Version in A, Titel geleert (kein Pflichtfeld), ein Punkt dazu, aktiviert.
+        r = a.post("/api/material/formulare", json={"kategorie_id": ids["gurte"], "vorlage_id": f1})
+        f2 = r.json["formular"]["id"]
+        assert a.put(f"/api/material/formulare/{f2}", json={"titel": "", "punkte": punkte2}).status_code == 200
+        assert a.post(f"/api/material/formulare/{f2}/aktivieren", json={}).status_code == 200
+        roh = exportieren(a)
+        assert [f["titel"] for f in katalogjson(roh)["formulare"]] == [""]
+        ber = importieren(b, roh, False)
+        assert ber["gespeichert"] and ber["formulare"] == {"neu": 1, "unveraendert": 0}, ber
+        for _ in range(2):
+            ber = importieren(b, roh, False)
+            assert ber["gespeichert"] and ber["formulare"] == {"neu": 0, "unveraendert": 1}, ber
+            assert not ber["aenderungen"], ber["aenderungen"]
+        assert formulare(app_b) == [(1, "Gurtprüfung", 0), (2, "Gurtprüfung", 1)], formulare(app_b)
+    print("Formulartiteltest bestanden.")
+
+
+def test_namenskette():
+    """„Das alte Modell bekommt einen Zusatz, das neue den alten Namen“ – bei Produkten und bei Geschwisterkategorien,
+    die beide schon in B stehen, gleich in welcher Reihenfolge die Datei sie bringt; ebenso eine Artikelnummer, die
+    von einem Produkt zum anderen wandert. Ein echter Tausch bleibt ein klarer Fehler."""
+    from app import db
+    with tempfile.TemporaryDirectory() as tmp_a, tempfile.TemporaryDirectory() as tmp_b:
+        app_a, a = _admin(tmp_a)
+        app_b, b = _admin(tmp_b)
+        ids = katalog_grund(a)
+
+        def produkt(modell):
+            r = a.post("/api/material/produkte", json={"category_id": ids["karabiner"], "manufacturer": "Testwerk",
+                                                       "model": modell, "material_kind": "metall_hardware",
+                                                       "interval_months": 12})
+            assert r.status_code == 201, r.get_json()
+            return r.json["produkt"]["id"]
+
+        def kategorie(name):
+            r = a.post("/api/material/kategorien", json={"name": name, "parent_id": ids["psa"]})
+            assert r.status_code == 201, r.get_json()
+            return r.json["kategorie"]["id"]
+
+        def aendern(*schritte):
+            for url, felder in schritte:
+                r = a.put(f"/api/material/{url}", json=felder)
+                assert r.status_code == 200, (url, r.get_json())
+
+        def namen(app):
+            with app.app_context():
+                return ({r["uid"]: (r["model"], r["article_no"]) for r in db.query("SELECT * FROM mat_product")},
+                        {r["uid"]: r["name"] for r in db.query("SELECT * FROM mat_category")})
+
+        p1, p2 = produkt("Karabiner K"), produkt("Karabiner K Neu")
+        s1, s2 = kategorie("Seile"), kategorie("Seile neu")
+        assert importieren(b, exportieren(a), False)["gespeichert"]
+        aendern((f"produkte/{p1}", {"model": "Karabiner K 2019"}), (f"produkte/{p2}", {"model": "Karabiner K"}),
+                (f"kategorien/{s1}", {"name": "Seile alt"}), (f"kategorien/{s2}", {"name": "Seile"}))
+        roh = exportieren(a)
+        vorher = zahlen(app_b, "mat_product", "mat_category")
+        ber = importieren(b, roh, True)
+        assert not ber["fehler"], ber
+        ber = importieren(b, roh, False)
+        assert ber["gespeichert"] and not ber["fehler"], ber
+        assert ber["produkte"]["geaendert"] == 2 and ber["kategorien"]["geaendert"] == 2, ber
+        assert namen(app_b) == namen(app_a) and zahlen(app_b, "mat_product", "mat_category") == vorher
+
+        # Die Artikelnummer wandert: „HMS Beta“ (in der Datei vorn) übernimmt die, die „Karabiner K 2019“ abgibt.
+        aendern((f"produkte/{p1}", {"article_no": "KK-1"}))
+        assert importieren(b, exportieren(a), False)["gespeichert"]
+        aendern((f"produkte/{p1}", {"article_no": "KK-1-alt"}), (f"produkte/{ids['hms']}", {"article_no": "KK-1"}))
+        ber = importieren(b, exportieren(a), False)
+        assert ber["gespeichert"] and not ber["fehler"] and ber["produkte"]["geaendert"] == 2, ber
+        assert namen(app_b) == namen(app_a)
+
+        # Zwei Geschwister tauschen die Namen: Das löst kein zweiter Versuch – beide Fehler, nichts gespeichert.
+        aendern((f"kategorien/{s1}", {"name": "Zwischenname"}), (f"kategorien/{s2}", {"name": "Seile alt"}),
+                (f"kategorien/{s1}", {"name": "Seile"}))
+        vorher = zahlen(app_b, *TABELLEN)
+        ber = importieren(b, exportieren(a), False)
+        assert not ber["gespeichert"] and len(ber["fehler"]) == 2, ber
+        assert all("gibt es an dieser Stelle schon" in f for f in ber["fehler"]), ber
+        assert zahlen(app_b, *TABELLEN) == vorher
+    print("Namenskettentest bestanden.")
+
+
+def test_namenskette_grenze():
+    """Zurückgestellte Einträge kommen höchstens MAX_NACHHOLRUNDEN-mal erneut dran – eine längere Kette ist ein Fehler
+    mit Hinweis, statt die Schreibsperre quadratisch lange zu halten."""
+    from app.material.services import importer
+    with tempfile.TemporaryDirectory() as tmp_a, tempfile.TemporaryDirectory() as tmp_b:
+        app_a, a = _admin(tmp_a)
+        app_b, b = _admin(tmp_b)
+        ids = katalog_grund(a)
+        neu = [a.post("/api/material/produkte", json={"category_id": ids["karabiner"], "manufacturer": "Testwerk",
+                                                      "model": m, "material_kind": "metall_hardware",
+                                                      "interval_months": 12}).json["produkt"]["id"]
+               for m in ("Kette A", "Kette B")]
+        assert importieren(b, exportieren(a), False)["gespeichert"]
+        # „Kette B“ übernimmt den Namen von „Kette A“, das „Kette Z“ heißt – in der Datei steht „Kette A“ (neu) vorn.
+        assert a.put(f"/api/material/produkte/{neu[0]}", json={"model": "Kette Z"}).status_code == 200
+        assert a.put(f"/api/material/produkte/{neu[1]}", json={"model": "Kette A"}).status_code == 200
+        roh = exportieren(a)
+        alt = importer.MAX_NACHHOLRUNDEN
+        try:
+            importer.MAX_NACHHOLRUNDEN = 0
+            ber = importieren(b, roh, True)
+            assert ber["fehler"] and "Umbenennungen warten hier aufeinander" in ber["fehler"][0], ber
+        finally:
+            importer.MAX_NACHHOLRUNDEN = alt
+        ber = importieren(b, roh, False)
+        assert ber["gespeichert"] and not ber["fehler"], ber
+    print("Namenskettengrenze bestanden.")
+
+
+def test_bild_an_der_uploadgrenze():
+    """Ein Produktbild, das das Hochladen annimmt (begrenzt ist dort die Anfrage: BILD_MAX_BYTES + 1 MB), nimmt auch
+    der Import an. Eine noch größere Datei (von früher, von Hand abgelegt) lässt der Export aus und nennt sie."""
+    from PIL import Image
+    from app import db
+    from app.material.routes import UPLOAD_GRENZEN
+    from app.material.services import importer, katalog
+    buf = io.BytesIO()
+    Image.frombytes("RGB", (3260, 3260), os.urandom(3260 * 3260 * 3)).save(buf, "PNG", compress_level=0)
+    gross = buf.getvalue()
+    assert katalog.BILD_MAX_BYTES < len(gross) < UPLOAD_GRENZEN["material_api.produkt_bild"] - 64 * 1024, len(gross)
+    with tempfile.TemporaryDirectory() as tmp_a, tempfile.TemporaryDirectory() as tmp_b:
+        app_a, a = _admin(tmp_a)
+        app_b, b = _admin(tmp_b)
+        ids = katalog_grund(a)
+        r = hoch(a, f"/api/material/produkte/{ids['gurt']}/bild", gross, "foto.png")
+        assert r.status_code == 200, r.get_json()
+        v = a.get("/api/material/katalog/export/vorschau").json["export"]
+        assert v["enthalten"]["bilder"] == 1 and not v.get("zu_gross"), v
+        roh = exportieren(a)
+        ber = importieren(b, roh, True)
+        assert not ber["fehler"] and ber["bilder"]["neu"] == 1, ber
+        ber = importieren(b, roh, False)
+        assert ber["gespeichert"] and ber["bilder"]["neu"] == 1, ber
+        assert importer.BILD_MAX_IMPORT >= UPLOAD_GRENZEN["material_api.produkt_bild"]
+
+        # Größer, als der Import annähme: Das Bild bleibt draußen (der Import ginge sonst gar nicht), Vorschau und
+        # bericht.txt sagen es.
+        with app_a.app_context():
+            name = db.query("SELECT image FROM mat_product WHERE id = ?", (ids["gurt"],), one=True)["image"]
+            with open(os.path.join(katalog.medien_dir(), "orig", name), "r+b") as fh:
+                fh.truncate(importer.BILD_MAX_IMPORT + 1)
+        v = a.get("/api/material/katalog/export/vorschau").json["export"]
+        assert v["enthalten"]["bilder"] == 0 and len(v["zu_gross"]) == 1, v
+        assert "Gurt Alpha" in v["zu_gross"][0] and "höchstens 31 MB" in v["zu_gross"][0], v
+        roh = exportieren(a)
+        with zipfile.ZipFile(io.BytesIO(roh)) as z:
+            assert "nicht annähme" in z.read("bericht.txt").decode()
+            assert not any(n.startswith("dateien/bilder/") for n in z.namelist())
+        assert "bild" not in next(p for p in katalogjson(roh)["produkte"] if p["modell"] == "Gurt Alpha")
+        ber = importieren(b, roh, False)
+        assert ber["gespeichert"] and ber["bilder"] == {"neu": 0, "geaendert": 0, "unveraendert": 0}, ber
+    print("Bildgrenzentest bestanden.")
+
+
+def _zip64(eintraege):
+    """Ein Archiv mit Zip64-Ende-Satz, wie es Packprogramme ab 65 535 Einträgen schreiben: Im alten Ende-Satz stehen
+    dann nur Platzhalter (0xFFFF Einträge, 0xFFFFFFFF Bytes), die echten Zahlen im Zip64-Satz davor."""
+    grenze = zipfile.ZIP_FILECOUNT_LIMIT
+    try:
+        zipfile.ZIP_FILECOUNT_LIMIT = 1           # sonst schreibt zipfile den Zip64-Satz erst ab 65 535 Einträgen
+        roh = bytearray(_zip(eintraege, _katalog()))
+    finally:
+        zipfile.ZIP_FILECOUNT_LIMIT = grenze
+    assert b"PK\x06\x06" in roh
+    struct.pack_into("<HHII", roh, roh.rfind(b"PK\x05\x06") + 8, 0xFFFF, 0xFFFF, 0xFFFFFFFF, 0xFFFFFFFF)
+    return bytes(roh)
+
+
+def test_zip_verzeichnis_vor_dem_lesen():
+    """Zahl der Einträge und Größe des Inhaltsverzeichnisses werden am Ende-Satz des Archivs geprüft, bevor zipfile das
+    Verzeichnis einliest (und je Eintrag Speicher belegt) – auch im Zip64-Format."""
+    from app.material.services import Abgelehnt, importer
+    viele = _zip({f"f{i}": b"x" for i in range(30)}, _katalog())
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:                # wenige Einträge, aber ein großes Inhaltsverzeichnis
+        z.writestr("katalog.json", json.dumps(_katalog()))
+        info = zipfile.ZipInfo("lang.txt")
+        info.comment = b"k" * 4000
+        z.writestr(info, b"x")
+    lang = buf.getvalue()
+    zip64 = _zip64({f"g{i}": b"x" for i in range(5)})
+    geoeffnet = []
+    echt = zipfile.ZipFile
+
+    class Spion(echt):
+        def __init__(self, *args, **kwargs):
+            geoeffnet.append(args)
+            super().__init__(*args, **kwargs)
+
+    def lesen(roh):
+        geoeffnet.clear()
+        try:
+            _daten, archiv = importer.datei_lesen(io.BytesIO(roh))
+        except Abgelehnt as exc:
+            return str(exc)
+        archiv.close()
+        return ""
+
+    grenzen = importer.MAX_EINTRAEGE, getattr(importer, "MAX_VERZEICHNIS", None)
+    try:
+        zipfile.ZipFile = Spion
+        importer.MAX_EINTRAEGE, importer.MAX_VERZEICHNIS = 10, 2000
+        fehler = lesen(viele)
+        assert "31 Einträge" in fehler and not geoeffnet, (fehler, geoeffnet)
+        fehler = lesen(lang)
+        assert "Inhaltsverzeichnis" in fehler and not geoeffnet, (fehler, geoeffnet)
+        # Zip64: gezählt wird nach dem Zip64-Satz (6 Einträge), nicht nach den Platzhaltern im alten Ende-Satz.
+        assert lesen(zip64) == "" and geoeffnet
+        importer.MAX_EINTRAEGE = 5
+        fehler = lesen(zip64)
+        assert "6 Einträge" in fehler and not geoeffnet, (fehler, geoeffnet)
+    finally:
+        zipfile.ZipFile = echt
+        importer.MAX_EINTRAEGE, importer.MAX_VERZEICHNIS = grenzen
+    # Ein Archiv ohne Ende-Satz ist keins – wie bisher.
+    assert "beschädigt" in lesen(b"PK\x03\x04" + b"\0" * 100)
+    print("ZIP-Verzeichnistest bestanden.")
+
+
 if __name__ == "__main__":
     test_rundlauf()
     test_zuordnung_und_nebenwirkungen()
     test_zip_sicherheit()
     test_format1_und_json()
     test_rechte()
+    test_intervall_wandert_von_kategorie_ans_produkt()
+    test_dokumentketten_mit_gleichem_titel()
+    test_formular_ohne_titel_bleibt_unveraendert()
+    test_namenskette()
+    test_namenskette_grenze()
+    test_bild_an_der_uploadgrenze()
+    test_zip_verzeichnis_vor_dem_lesen()

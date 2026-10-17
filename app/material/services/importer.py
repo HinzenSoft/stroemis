@@ -17,7 +17,8 @@ Format 2 (ZIP mit katalog.json und den Dateien; als reine JSON-Datei nur ohne Da
     übernimmt der Datensatz hier die uid der Datei, und der nächste Lauf findet ihn auch nach Umbenennen oder
     Verschieben wieder.
   - Produktbilder (gleich heißt: gleiche SHA-256 des Originals) und die aktuellen Dokumente an Kategorien und
-    Produkten.
+    Produkten, je Dokument mit den Kennungen seiner früheren Versionen („vorgaenger“) – daran findet eine neue Version
+    ihre Kette hier, auch wenn mehrere Dokumente gleich heißen.
   Gelöscht, zurückgezogen oder deaktiviert wird nie etwas: Was hier mehr ist als in der Datei, bleibt.
 
 Dateien sind nicht Teil der Datenbanktransaktion. Ein Probelauf schreibt deshalb keine einzige. Der echte Lauf
@@ -52,12 +53,21 @@ VERSIONEN = (1, 2)
 # Megabyte; die Bilder und PDF darin packen sich kaum, mehr als 2 GB hat keiner.
 ZIP_MAX_BYTES = 2 * 1024 ** 3
 MAX_EINTRAEGE = 20_000                 # Einträge im Archiv
+# Bytes im Inhaltsverzeichnis: Ein Eintrag eines Exports braucht dort gut 130 (46 Kopf, dazu der Pfad), andere
+# Packprogramme legen Zeitstempel dazu. zipfile liest das Verzeichnis nach dieser Größe ein, nicht nach der Zahl.
+MAX_VERZEICHNIS = MAX_EINTRAEGE * 256
 MAX_ENTPACKT = 3 * 1024 ** 3           # Summe der entpackten Größen laut Inhaltsverzeichnis
 JSON_MAX_BYTES = 5 * 1024 * 1024       # katalog.json bzw. eine reine JSON-Datei
 MAX_VERHAELTNIS = 100                  # entpackt zu gepackt je Eintrag ab 1 MB – mehr ist eine Packbombe
 MAX_TIEFE = 30                         # Ebenen im Kategorienbaum
 MAX_LISTE = 2000                       # Zeilen in der Änderungsliste des Berichts
+MAX_VORGAENGER = 1000                  # Kennungen früherer Versionen je Dokument
+# Produktbilder: dieselbe Grenze wie beim Hochladen. Dort begrenzt nur die ganze Anfrage (routes.UPLOAD_GRENZEN:
+# BILD_MAX_BYTES + 1 MB) – ein angenommenes Original kann also etwas größer sein als BILD_MAX_BYTES, und der Import
+# darf es dann nicht abweisen. Dokumente prüft schon das Hochladen genau gegen DOK_MAX_BYTES.
+BILD_MAX_IMPORT = katalog.BILD_MAX_BYTES + 1024 * 1024
 _UID = re.compile(r"[0-9a-f]{32}")
+_SHA256 = re.compile(r"[0-9a-f]{64}")
 # Was beim Lesen eines Archiveintrags schiefgehen kann: kaputte Kompression, falsche Prüfsumme (CRC),
 # Verschlüsselung, abgeschnittene Datei, unbekanntes Packverfahren.
 _LESEFEHLER = (zipfile.BadZipFile, zipfile.LargeZipFile, zlib.error, EOFError, RuntimeError, OSError,
@@ -74,6 +84,23 @@ _FELDNAMEN = {"name": "Name", "parent_id": "Oberkategorie", "norm": "Norm", "def
 
 class _Rueckgaengig(Exception):
     pass
+
+
+class _Konflikt(Exception):
+    """Ein Namens-, Dubletten- oder Artikelnummernkonflikt mit einem Datensatz hier, gemeldet von einer Regel aus
+    katalog.py, bevor sie etwas geschrieben hat. Ein späterer Eintrag der Datei kann ihn auflösen – die übliche Kette
+    „das alte Modell bekommt einen Zusatz, das neue den alten Namen“ –, deshalb wird der Eintrag zurückgestellt
+    (_nachholen) statt gleich als Fehler gemeldet."""
+
+
+def _ohne_konflikt(regel, *args, **kwargs):
+    """regel aus katalog.py aufrufen; ihr Abgelehnt mit 409 wird zum _Konflikt."""
+    try:
+        return regel(*args, **kwargs)
+    except Abgelehnt as exc:
+        if exc.code == 409:
+            raise _Konflikt(str(exc)) from exc
+        raise
 
 
 def _name(wert, was="Name", n=120):
@@ -157,6 +184,8 @@ class _Lauf:
         self.belegt = set()                   # Dokumente hier, die schon einem Eintrag der Datei entsprechen
         self.summen = {}                      # Produktbild hier → SHA-256 des Originals
         self.zugeordnet = {"category": 0, "product": 0}
+        self.zurueckgestellt = []             # (nochmal, Fehlermeldung) – Einträge mit _Konflikt, siehe _nachholen
+        self.intervall_offen = {}             # geänderte Kategorie → (Fundstelle, Name), siehe _intervalle_pruefen
         self.bericht = _bericht()
 
     def notiz(self, zeile):
@@ -277,6 +306,48 @@ def _geaendert(vorher, nachher):
     return ", ".join(_FELDNAMEN.get(k, k) for k in nachher if nachher[k] != vorher.get(k))
 
 
+# So oft kommen zurückgestellte Einträge höchstens noch einmal dran. Jede Runde löst mindestens ein Glied einer
+# Namenskette; ohne Grenze kostete eine (von Hand gebaute) Kette aus Tausenden Gliedern in ungünstiger Reihenfolge
+# quadratisch viele Versuche – unter der Schreibsperre.
+MAX_NACHHOLRUNDEN = 50
+
+
+def _nachholen(lauf):
+    """Zurückgestellte Einträge (_Konflikt) erneut versuchen, solange dabei einer durchgeht – so löst sich eine
+    Namenskette auf, gleich in welcher Reihenfolge die Datei sie bringt. Eine Kategorie kommt mit ihrem Teilbaum dran.
+    Was sich nicht mehr bewegt (etwa zwei Namen, die die Plätze tauschen), ist ein Fehler mit dem Grund des letzten
+    Versuchs. Ein Versuch schreibt erst, wenn die Regeln in katalog.py durch sind – vorher steht nichts halb."""
+    runden = 0
+    while lauf.zurueckgestellt and runden < MAX_NACHHOLRUNDEN:
+        runden += 1
+        offen, lauf.zurueckgestellt = lauf.zurueckgestellt, []
+        # Jeder Versuch liefert, ob der Eintrag erledigt ist; ein erneuter Konflikt stellt ihn wieder zurück.
+        if not any([nochmal() for nochmal, _ in offen]):
+            break
+    zusatz = (f" (Mehr als {MAX_NACHHOLRUNDEN} Umbenennungen warten hier aufeinander – so lange Ketten löst der Import "
+              "nicht auf; die Namen hier zuerst von Hand angleichen.)") if runden >= MAX_NACHHOLRUNDEN and lauf.zurueckgestellt else ""
+    for _, meldung in lauf.zurueckgestellt:
+        lauf.bericht["fehler"].append(meldung + zusatz)
+    lauf.zurueckgestellt = []
+
+
+def _intervalle_pruefen(lauf):
+    """Jedes Produkt hat ein Prüfintervall – geprüft für die Kategorien, die der Import geändert hat, erst nach den
+    Produkten: katalog.kategorie_aendern prüft es im Import nicht (intervall_pruefen=False), weil ein Produkt in
+    derselben Datei ein eigenes Intervall bekommen kann, während seine Kategorie die Vorgabe verliert. Gemeldet an der
+    Stelle der Kategorie, mit der Meldung der Oberfläche; jedes Produkt einmal."""
+    gemeldet = set()
+    for kid, (ort, name) in lauf.intervall_offen.items():
+        bedingung, args = in_kategorie(kid)
+        ohne = []
+        for p in db.query(f"SELECT * FROM mat_product p WHERE {bedingung} ORDER BY p.id", args):
+            if p["id"] not in gemeldet and herstellerseite(p)[0] is None:
+                gemeldet.add(p["id"])
+                ohne.append(f"{p['manufacturer']} {p['model']}")
+        if ohne:
+            lauf.bericht["fehler"].append(f"{ort} ({name}): {katalog.ohne_intervall_meldung(ohne)}")
+
+
 # --- Kategorien ------------------------------------------------------------------------------------
 
 def _kategorie_vorhanden(uid, name, parent, lauf):
@@ -301,51 +372,62 @@ def _kategorien(liste, parent, stelle, lauf, tiefe=0):
         raise Abgelehnt(f"{stelle}: „kategorien“ muss eine Liste sein.")
     if tiefe > MAX_TIEFE:
         raise Abgelehnt(f"{stelle}: Der Kategorienbaum ist tiefer als {MAX_TIEFE} Ebenen.")
-    bericht = lauf.bericht
     for n, e in _reihenfolge(liste, "mat_category", lauf):
-        ort = f"{stelle}[{n}]"
-        try:
-            if not isinstance(e, dict):
-                raise Abgelehnt("Eintrag ist kein Objekt.")
-            name = _name(e.get("name")) if isinstance(e.get("name"), str) else ""
-            if not name:
-                raise Abgelehnt("„name“ fehlt.")
-            uid = lauf.uid(e)
-            d = dict(_abbilden(e, _KATEGORIE_ABBILDUNG), name=name, parent_id=parent)
-            vorhanden = _kategorie_vorhanden(uid, name, parent, lauf)
-            if vorhanden:
-                kid = vorhanden["id"]
-                vorher = katalog.kategorie_werte({}, vorhanden)
-                nachher = katalog.kategorie_werte(d, vorhanden)
-                if vorher != nachher:
-                    seit = _journalstand()
-                    katalog.kategorie_aendern(kid, d)
-                    bericht["kategorien"]["geaendert"] += 1
-                    lauf.notiz(f"Kategorie „{_kategorie_pfadname(kid)}“: geändert ({_geaendert(vorher, nachher)})")
-                    teile = []
-                    if nachher["default_interval_months"] != vorher["default_interval_months"]:
-                        teile.append(f"Prüfintervall (Vorgabe) {vorher['default_interval_months'] or '–'} → "
-                                     f"{nachher['default_interval_months'] or '–'} Monate")
-                    if teile or nachher["parent_id"] != vorher["parent_id"]:
-                        bedingung, args = in_kategorie(kid)
-                        artikel = db.query("SELECT COUNT(*) AS n FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
-                                           f"WHERE i.lock_state <> 'ausgesondert' AND {bedingung}", args, one=True)["n"]
-                        _folgen_melden(lauf, ort, name, artikel, teile, seit)
-                else:
-                    bericht["kategorien"]["unveraendert"] += 1
-                lauf.uid_uebernehmen("mat_category", "category", vorhanden, uid)
+        _kategorie(e, parent, f"{stelle}[{n}]", lauf, tiefe)
+
+
+def _kategorie(e, parent, ort, lauf, tiefe):
+    """Ein Eintrag samt Teilbaum. Liefert, ob er erledigt ist – False: zurückgestellt (_Konflikt), dann kommt er mit
+    seinem Teilbaum in _nachholen noch einmal dran."""
+    bericht = lauf.bericht
+    try:
+        if not isinstance(e, dict):
+            raise Abgelehnt("Eintrag ist kein Objekt.")
+        name = _name(e.get("name")) if isinstance(e.get("name"), str) else ""
+        if not name:
+            raise Abgelehnt("„name“ fehlt.")
+        uid = lauf.uid(e)
+        d = dict(_abbilden(e, _KATEGORIE_ABBILDUNG), name=name, parent_id=parent)
+        vorhanden = _kategorie_vorhanden(uid, name, parent, lauf)
+        if vorhanden:
+            kid = vorhanden["id"]
+            vorher = katalog.kategorie_werte({}, vorhanden)
+            nachher = _ohne_konflikt(katalog.kategorie_werte, d, vorhanden)
+            if vorher != nachher:
+                seit = _journalstand()
+                # „Jedes Produkt hat ein Prüfintervall“ erst nach den Produkten der Datei (_intervalle_pruefen).
+                _ohne_konflikt(katalog.kategorie_aendern, kid, d, intervall_pruefen=False)
+                lauf.intervall_offen.setdefault(kid, (ort, name))
+                bericht["kategorien"]["geaendert"] += 1
+                lauf.notiz(f"Kategorie „{_kategorie_pfadname(kid)}“: geändert ({_geaendert(vorher, nachher)})")
+                teile = []
+                if nachher["default_interval_months"] != vorher["default_interval_months"]:
+                    teile.append(f"Prüfintervall (Vorgabe) {vorher['default_interval_months'] or '–'} → "
+                                 f"{nachher['default_interval_months'] or '–'} Monate")
+                if teile or nachher["parent_id"] != vorher["parent_id"]:
+                    bedingung, args = in_kategorie(kid)
+                    artikel = db.query("SELECT COUNT(*) AS n FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
+                                       f"WHERE i.lock_state <> 'ausgesondert' AND {bedingung}", args, one=True)["n"]
+                    _folgen_melden(lauf, ort, name, artikel, teile, seit)
             else:
-                kid = katalog.kategorie_anlegen(d, demo=lauf.demo)
-                lauf.uid_setzen("mat_category", kid, uid)
-                bericht["kategorien"]["neu"] += 1
-                lauf.notiz(f"Kategorie „{_kategorie_pfadname(kid)}“: neu")
-            if lauf.version == 2:
-                _dokumente(e.get("dokumente"), "category_id", kid, ort, name, lauf)
-        except Abgelehnt as exc:
-            bericht["fehler"].append(f"{ort} ({e.get('name') if isinstance(e, dict) else '?'}): {exc}")
-            continue
-        if e.get("unterkategorien"):
-            _kategorien(e["unterkategorien"], kid, f"{ort}.unterkategorien", lauf, tiefe + 1)
+                bericht["kategorien"]["unveraendert"] += 1
+            lauf.uid_uebernehmen("mat_category", "category", vorhanden, uid)
+        else:
+            kid = _ohne_konflikt(katalog.kategorie_anlegen, d, demo=lauf.demo)
+            lauf.uid_setzen("mat_category", kid, uid)
+            bericht["kategorien"]["neu"] += 1
+            lauf.notiz(f"Kategorie „{_kategorie_pfadname(kid)}“: neu")
+        if lauf.version == 2:
+            _dokumente(e.get("dokumente"), "category_id", kid, ort, name, lauf)
+    except _Konflikt as exc:
+        lauf.zurueckgestellt.append((lambda: _kategorie(e, parent, ort, lauf, tiefe), f"{ort} ({e.get('name')}): {exc}"))
+        return False
+    except Abgelehnt as exc:
+        bericht["fehler"].append(f"{ort} ({e.get('name') if isinstance(e, dict) else '?'}): {exc}")
+        return True
+    if e.get("unterkategorien"):
+        _kategorien(e["unterkategorien"], kid, f"{ort}.unterkategorien", lauf, tiefe + 1)
+    return True
 
 
 def _kategorie_ziel(e, lauf):
@@ -395,57 +477,71 @@ def _materialart_pruefen(alt, w):
 def _produkte(liste, lauf):
     if not isinstance(liste, list):
         raise Abgelehnt("„produkte“ muss eine Liste sein.")
-    bericht = lauf.bericht
     for n, e in _reihenfolge(liste, "mat_product", lauf):
-        ort = f"produkte[{n}]"
-        name = f"{e.get('hersteller', '?')} {e.get('modell', '?')}" if isinstance(e, dict) else "?"
-        try:
-            if not isinstance(e, dict):
-                raise Abgelehnt("Eintrag ist kein Objekt.")
-            uid = lauf.uid(e)
-            d = _abbilden(e, _PRODUKT_ABBILDUNG)
-            d["category_id"] = _kategorie_ziel(e, lauf)
-            vorhanden = _produkt_vorhanden(e, uid, lauf)
-            if vorhanden:
-                pid = vorhanden["id"]
+        _produkt(n, e, lauf)
+
+
+def _produkt(n, e, lauf):
+    """Ein Eintrag mit Bild und Dokumenten. Liefert, ob er erledigt ist – False: zurückgestellt (_Konflikt)."""
+    bericht = lauf.bericht
+    ort = f"produkte[{n}]"
+    name = f"{e.get('hersteller', '?')} {e.get('modell', '?')}" if isinstance(e, dict) else "?"
+    try:
+        if not isinstance(e, dict):
+            raise Abgelehnt("Eintrag ist kein Objekt.")
+        uid = lauf.uid(e)
+        d = _abbilden(e, _PRODUKT_ABBILDUNG)
+        d["category_id"] = _kategorie_ziel(e, lauf)
+        vorhanden = _produkt_vorhanden(e, uid, lauf)
+        if vorhanden:
+            pid = vorhanden["id"]
+            # Der Stand hier, ungeprüft übernommen, wenn er die Regeln gerade nicht erfüllt: Hat die Kategorie in
+            # diesem Lauf ihre Vorgabe verloren, ist das Produkt erst mit dem Intervall aus der Datei wieder gültig.
+            try:
                 vorher = katalog.produkt_werte({}, vorhanden)
-                nachher = katalog.produkt_werte(d, vorhanden)
-                if vorher != nachher:
-                    _materialart_pruefen(vorhanden, nachher)
-                    intervall_vorher = herstellerseite(vorhanden)[0]
-                    seit = _journalstand()
-                    katalog.produkt_aendern(pid, d)
-                    bericht["produkte"]["geaendert"] += 1
-                    lauf.notiz(f"Produkt „{nachher['manufacturer']} {nachher['model']}“: geändert "
-                               f"({_geaendert(vorher, nachher)})")
-                    intervall = herstellerseite(katalog.produkt(pid))[0]
-                    teile = []
-                    if intervall != intervall_vorher:
-                        teile.append(f"Prüfintervall {intervall_vorher or '–'} → {intervall or '–'} Monate")
-                    if nachher["lifetime_years"] != vorher["lifetime_years"]:
-                        teile.append(f"Lebensdauer {vorher['lifetime_years'] or '–'} → {nachher['lifetime_years'] or '–'} Jahre")
-                    artikel = db.query("SELECT COUNT(*) AS n FROM mat_item WHERE product_id = ? AND lock_state <> 'ausgesondert'",
-                                       (pid,), one=True)["n"]
-                    _folgen_melden(lauf, ort, name, artikel, teile, seit)
-                else:
-                    bericht["produkte"]["unveraendert"] += 1
-                lauf.uid_uebernehmen("mat_product", "product", vorhanden, uid)
-                bild = vorhanden["image"]
+            except Abgelehnt:
+                vorher = {f: vorhanden[f] for f in katalog.PRODUKT_FELDER}
+            nachher = katalog.produkt_werte(d, vorhanden)
+            if vorher != nachher:
+                _materialart_pruefen(vorhanden, nachher)
+                intervall_vorher = herstellerseite(vorhanden)[0]
+                seit = _journalstand()
+                _ohne_konflikt(katalog.produkt_aendern, pid, d)
+                bericht["produkte"]["geaendert"] += 1
+                lauf.notiz(f"Produkt „{nachher['manufacturer']} {nachher['model']}“: geändert "
+                           f"({_geaendert(vorher, nachher)})")
+                intervall = herstellerseite(katalog.produkt(pid))[0]
+                teile = []
+                if intervall != intervall_vorher:
+                    teile.append(f"Prüfintervall {intervall_vorher or '–'} → {intervall or '–'} Monate")
+                if nachher["lifetime_years"] != vorher["lifetime_years"]:
+                    teile.append(f"Lebensdauer {vorher['lifetime_years'] or '–'} → {nachher['lifetime_years'] or '–'} Jahre")
+                artikel = db.query("SELECT COUNT(*) AS n FROM mat_item WHERE product_id = ? AND lock_state <> 'ausgesondert'",
+                                   (pid,), one=True)["n"]
+                _folgen_melden(lauf, ort, name, artikel, teile, seit)
             else:
-                pid = katalog.produkt_anlegen(d, demo=lauf.demo)
-                lauf.uid_setzen("mat_product", pid, uid)
-                bericht["produkte"]["neu"] += 1
-                lauf.notiz(f"Produkt „{name}“: neu")
-                bild = ""
+                bericht["produkte"]["unveraendert"] += 1
+            lauf.uid_uebernehmen("mat_product", "product", vorhanden, uid)
+            bild = vorhanden["image"]
+        else:
+            pid = _ohne_konflikt(katalog.produkt_anlegen, d, demo=lauf.demo)
+            lauf.uid_setzen("mat_product", pid, uid)
+            bericht["produkte"]["neu"] += 1
+            lauf.notiz(f"Produkt „{name}“: neu")
+            bild = ""
+    except _Konflikt as exc:
+        lauf.zurueckgestellt.append((lambda: _produkt(n, e, lauf), f"{ort} ({name}): {exc}"))
+        return False
+    except Abgelehnt as exc:
+        bericht["fehler"].append(f"{ort} ({name}): {exc}")
+        return True
+    if lauf.version == 2:
+        _bild(e, pid, bild, ort, name, lauf)
+        try:
+            _dokumente(e.get("dokumente"), "product_id", pid, ort, name, lauf)
         except Abgelehnt as exc:
             bericht["fehler"].append(f"{ort} ({name}): {exc}")
-            continue
-        if lauf.version == 2:
-            _bild(e, pid, bild, ort, name, lauf)
-            try:
-                _dokumente(e.get("dokumente"), "product_id", pid, ort, name, lauf)
-            except Abgelehnt as exc:
-                bericht["fehler"].append(f"{ort} ({name}): {exc}")
+    return True
 
 
 def _bild(e, pid, alt, ort, name, lauf):
@@ -479,15 +575,67 @@ class _Dateiname:
         self.filename = name
 
 
+def _vorgaenger(e):
+    """Die Kennungen der früheren Versionen eines Dokuments aus der Datei („vorgaenger“, neueste zuerst):
+    [("datei", SHA-256) | ("link", Adresse, Versionsstand)]. Ältere Exporte und Dateien von Hand haben keine."""
+    liste = e.get("vorgaenger")
+    if liste is None:
+        return []
+    if not isinstance(liste, list) or len(liste) > MAX_VORGAENGER:
+        raise Abgelehnt(f"„vorgaenger“ muss eine Liste sein (höchstens {MAX_VORGAENGER} Einträge).")
+    out = []
+    for v in liste:
+        if isinstance(v, dict) and isinstance(v.get("sha256"), str) and _SHA256.fullmatch(v["sha256"]):
+            out.append(("datei", v["sha256"]))
+        elif isinstance(v, dict) and isinstance(v.get("url"), str) and v["url"]:
+            out.append(("link", text(v, "url", "Adresse", 500), text(v, "version", "Versionsstand", 40)))
+        else:
+            raise Abgelehnt("„vorgaenger“: Jeder Eintrag braucht eine „sha256“ (64 Zeichen 0–9 und a–f) oder eine „url“.")
+    return out
+
+
+def _passt(x, kennung):
+    """Ist das Dokument x hier das mit dieser Kennung – gleiche Datei bzw. gleicher Link in gleicher Version?"""
+    if kennung[0] == "datei":
+        return bool(x["file_path"]) and x["sha256"] == kennung[1]
+    return not x["file_path"] and x["url"] == kennung[1] and (x["version"] or "") == kennung[2]
+
+
+def _vorgaenger_nach_titel(aktuelle, w):
+    """Rückgriff ohne passende Vorgängerkennung: das aktuelle Dokument gleicher Art und gleichen Titels – aber nur, wenn
+    genau eins davon schon gilt, wenn die neue Version beginnt. Bei zwei (etwa „Datenblatt“ in den Fassungen de und
+    en) wäre jede Wahl geraten und könnte die Versionsketten über Kreuz verknüpfen."""
+    kandidaten = [x for x in aktuelle if x["kind"] == w["kind"] and x["title"].casefold() == w["title"].casefold()]
+    frueher = [x for x in kandidaten if x["valid_from"] <= w["valid_from"]]
+    if len(frueher) > 1:
+        raise Abgelehnt(f"Mehrdeutig: Hier gibt es {len(frueher)} aktuelle Dokumente dieser Art mit dem Titel "
+                        f"„{w['title']}“, und welches die neue Version bekommt, steht nicht in der Datei. Die Titel hier "
+                        "unterscheiden – oder die Datei neu exportieren: Ein Export dieser Version nennt je Dokument "
+                        "seine früheren Versionen.")
+    if frueher:
+        return frueher[0]
+    return min(kandidaten, key=lambda x: x["valid_from"]) if kandidaten else None
+
+
 def _dokumente(liste, spalte, ziel, stelle, zielname, lauf):
-    """Dokumente an einer Kategorie oder einem Produkt. Je Eintrag: gleiche Datei (SHA-256) bzw. gleicher Link in
-    gleicher Version unter den aktuellen – unverändert; sonst gleiche Art und gleicher Titel aktuell vorhanden –
-    neue Version davon; sonst ein neues Dokument. Nichts wird gelöscht oder zurückgezogen."""
+    """Dokumente an einer Kategorie oder einem Produkt, in drei Schritten:
+      1. Jeder Eintrag belegt sein Gegenstück, wenn es dasselbe Dokument hier schon gibt – gleiche Datei (SHA-256)
+         bzw. gleicher Link in gleicher Version unter den aktuellen: unverändert.
+      2. Die übrigen werden neue Version des aktuellen Dokuments, das eine ihrer früheren Versionen ist
+         („vorgaenger“ in der Datei).
+      3. Sonst gleiche Art und gleicher Titel, nur eindeutig (_vorgaenger_nach_titel); sonst ein neues Dokument.
+    Erst alle exakten Treffer, dann die Ketten: Sonst nähme ein Eintrag einem späteren das Gegenstück weg. Nichts wird
+    gelöscht oder zurückgezogen."""
     if liste is None:
         return
     if not isinstance(liste, list):
         raise Abgelehnt("„dokumente“ muss eine Liste sein.")
     bericht = lauf.bericht
+
+    def frei():
+        return [x for x in aktuelle_dokumente(spalte, ziel) if x["id"] not in lauf.belegt]
+
+    offen = []
     for n, e in enumerate(liste):
         ort = f"{stelle}.dokumente[{n}]"
         titel = e.get("titel") if isinstance(e, dict) and isinstance(e.get("titel"), str) else "?"
@@ -500,29 +648,49 @@ def _dokumente(liste, spalte, ziel, stelle, zielname, lauf):
                  "valid_from": e.get("gueltig_ab"), "url": e.get("url")}
             datei = lauf.datei(e["datei"], "dokument") if "datei" in e else None
             w = katalog._dokument_werte(d, None, _Dateiname(datei["name"]) if datei else None)
-            aktuelle = [x for x in aktuelle_dokumente(spalte, ziel) if x["id"] not in lauf.belegt]
-            if datei:
-                gleich = next((x for x in aktuelle if x["file_path"] and x["sha256"] == datei["sha256"]), None)
-            else:
-                gleich = next((x for x in aktuelle if x["url"] == w["url"] and x["version"] == w["version"]), None)
-            if gleich:
-                lauf.belegt.add(gleich["id"])
-                bericht["dokumente"]["unveraendert"] += 1
-                continue
-            alt = next((x for x in aktuelle if x["kind"] == w["kind"] and x["title"].casefold() == w["title"].casefold()),
-                       None)
+            vorgaenger = _vorgaenger(e)
+            kennung = ("datei", datei["sha256"]) if datei else ("link", w["url"], w["version"])
+            gleich = next((x for x in frei() if _passt(x, kennung)), None)
+        except Abgelehnt as exc:
+            bericht["fehler"].append(f"{ort} ({zielname}: {titel}): {exc}")
+            continue
+        if gleich:
+            lauf.belegt.add(gleich["id"])
+            bericht["dokumente"]["unveraendert"] += 1
+        else:
+            offen.append({"ort": ort, "titel": titel, "w": w, "datei": datei, "vorgaenger": vorgaenger})
+
+    def einfuegen(x, alt):
+        w = x["w"]
+        try:
             if alt and w["valid_from"] < alt["valid_from"]:
                 raise Abgelehnt(f"Die neue Version gälte ab {w['valid_from']}, die vorhandene hier aber erst ab "
                                 f"{alt['valid_from']} – eine neue Version kann nicht vor der alten gültig werden. Das "
                                 "Dokument hier umbenennen oder zurückziehen, dann kommt es als eigenes dazu.")
-            abgelegt = lauf.ablegen(ort, datei) if datei else None
+            abgelegt = lauf.ablegen(x["ort"], x["datei"]) if x["datei"] else None
             did = _dokument_einfuegen(spalte, ziel, w, abgelegt, alt)
         except Abgelehnt as exc:
-            bericht["fehler"].append(f"{ort} ({zielname}: {titel}): {exc}")
-            continue
+            bericht["fehler"].append(f"{x['ort']} ({zielname}: {x['titel']}): {exc}")
+            return
         lauf.belegt.add(did)
         bericht["dokumente"]["neue_version" if alt else "neu"] += 1
         lauf.notiz(f"Dokument „{w['title']}“ an „{zielname}“: {'neue Version' if alt else 'neu'}")
+
+    rest = []
+    for x in offen:
+        kandidaten = frei()
+        alt = next((d for k in x["vorgaenger"] for d in kandidaten if _passt(d, k)), None)
+        if alt:
+            einfuegen(x, alt)
+        else:
+            rest.append(x)
+    for x in rest:
+        try:
+            alt = _vorgaenger_nach_titel(frei(), x["w"])
+        except Abgelehnt as exc:
+            bericht["fehler"].append(f"{x['ort']} ({zielname}: {x['titel']}): {exc}")
+            continue
+        einfuegen(x, alt)
 
 
 def _dokument_einfuegen(spalte, ziel, w, abgelegt, ersetzt):
@@ -587,8 +755,11 @@ def _formulare(liste, lauf):
             aktivieren = e.get("aktivieren", True) is not False
             neu = [{k: p[k] for k in _PUNKTFELDER} for p in punkte]
 
+            # Ein leerer Titel in der Datei gibt keinen vor (das erste Formular legt die Oberfläche ohne Titel an):
+            # Verglichen werden dann nur die Prüfpunkte. Eine neue Version erbt ohnehin den Titel der letzten hier.
             def gleich(f):
-                return f["title"] == titel and [{k: p[k] for k in _PUNKTFELDER} for p in katalog.punkte(f["id"])] == neu
+                return ((not titel or f["title"] == titel)
+                        and [{k: p[k] for k in _PUNKTFELDER} for p in katalog.punkte(f["id"])] == neu)
 
             # Verglichen wird mit dem aktiven Formular des Ziels (soll es aktiv werden), dann mit der neuesten
             # Version – ein Entwurf hier führt so nicht zu einer neuen Version mit dem Inhalt der aktiven.
@@ -611,7 +782,7 @@ def _formulare(liste, lauf):
                 katalog.formular_aktivieren(fid)
             if angelegt or aktiviert:
                 version = katalog.formular(fid)["version"]
-                lauf.notiz(f"Formular „{titel}“ ({zielname}): "
+                lauf.notiz(f"Formular „{titel or katalog.formular(fid)['title']}“ ({zielname}): "
                            + (f"neue Version {version}{', aktiv' if aktiviert else ''}" if angelegt
                               else f"Version {version} aktiviert"))
         except Abgelehnt as exc:
@@ -696,7 +867,7 @@ def _datei_pruefen(archiv, eintraege, pfad, art):
         raise Abgelehnt(f"„{name}“: Herstellerdokumente nur als PDF oder Bild (JPEG, PNG, WebP).")
     if info.flag_bits & 0x1:
         raise Abgelehnt(f"„{pfad}“ ist verschlüsselt.")
-    grenze = katalog.BILD_MAX_BYTES if art == "bild" else katalog.DOK_MAX_BYTES
+    grenze = BILD_MAX_IMPORT if art == "bild" else katalog.DOK_MAX_BYTES
     if info.file_size > grenze:
         raise Abgelehnt(f"„{name}“ ist größer als {grenze // (1024 * 1024)} MB.")
     if info.file_size > 1024 * 1024 and info.file_size > MAX_VERHAELTNIS * max(info.compress_size, 1):
@@ -790,9 +961,33 @@ def _json_laden(roh):
         raise Abgelehnt(f"Die Datei ließ sich nicht als JSON lesen: {exc}")
 
 
+def _verzeichnis_pruefen(fh):
+    """Zahl der Einträge und Größe des Inhaltsverzeichnisses, gelesen aus dem Ende-Satz des Archivs (bei Zip64 aus
+    dem Zip64-Ende-Satz) – bevor zipfile das Verzeichnis einliest. Das legt für jeden Eintrag ein Objekt an (gut ein
+    halbes KB) und liest dabei so viele, wie in die angegebene Größe passen, egal was im Zählfeld steht; ein Archiv
+    aus lauter leeren Einträgen brächte einen Arbeiter sonst um seinen Speicher, bevor irgendetwas abgewiesen wäre.
+    zipfile._EndRecData ist die Stelle, an der zipfile selbst den Ende-Satz liest: Die Grenzen gelten so für genau
+    die Zahlen, nach denen es danach liest."""
+    try:
+        ende = zipfile._EndRecData(fh)
+    except _LESEFEHLER:
+        ende = None
+    if not ende:
+        raise Abgelehnt("Das ZIP-Archiv ist beschädigt oder keins.")
+    eintraege, groesse = ende[zipfile._ECD_ENTRIES_TOTAL], ende[zipfile._ECD_SIZE]
+    if eintraege > MAX_EINTRAEGE:
+        raise Abgelehnt(f"Das Archiv hat {eintraege} Einträge – höchstens {MAX_EINTRAEGE} werden gelesen.")
+    if groesse > MAX_VERZEICHNIS:
+        raise Abgelehnt(f"Das Inhaltsverzeichnis des Archivs ist {groesse // 1024} KB groß – höchstens "
+                        f"{MAX_VERZEICHNIS // 1024} KB werden gelesen.")
+    fh.seek(0)
+
+
 def _archiv_oeffnen(fh):
-    """Das ZIP öffnen und seine Grenzen prüfen, bevor irgendetwas entpackt wird. zipfile hält sich beim Lesen an die
-    Größen im Inhaltsverzeichnis (mehr wird abgeschnitten), deshalb taugen sie als Obergrenze."""
+    """Das ZIP öffnen und seine Grenzen prüfen, bevor irgendetwas entpackt wird – Zahl der Einträge und Größe des
+    Inhaltsverzeichnisses sogar, bevor es eingelesen wird. zipfile hält sich beim Lesen an die Größen im
+    Inhaltsverzeichnis (mehr wird abgeschnitten), deshalb taugen sie als Obergrenze."""
+    _verzeichnis_pruefen(fh)
     try:
         archiv = zipfile.ZipFile(fh)
         eintraege = archiv.infolist()
@@ -868,7 +1063,10 @@ def _durchgang(daten, lauf, speichern):
         with db.transaction(sofort=True):
             try:
                 _kategorien(daten.get("kategorien") or [], None, "kategorien", lauf)
+                _nachholen(lauf)
                 _produkte(daten.get("produkte") or [], lauf)
+                _nachholen(lauf)
+                _intervalle_pruefen(lauf)
                 _formulare(daten.get("formulare") or [], lauf)
             except Abgelehnt as exc:
                 lauf.bericht["fehler"].append(str(exc))

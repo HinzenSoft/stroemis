@@ -126,25 +126,61 @@ def kategorie_anlegen(d, demo=False):
     return kid
 
 
-def kategorie_aendern(kid, d):
+def ohne_intervall_meldung(namen):
+    """Abgelehnt für Produkte, die nach einer Kategorieänderung kein Prüfintervall mehr hätten – auch für den Import,
+    der diese Prüfung ans Ende seines Durchgangs legt (importer._intervalle_pruefen)."""
+    return Abgelehnt("Danach hätten diese Produkte kein Prüfintervall mehr: " + ", ".join(namen[:5])
+                     + (" …" if len(namen) > 5 else "") + ". Erst am Produkt ein Intervall eintragen.", 409)
+
+
+def _ohne_intervall(kid, w):
+    """Produkte im Teilbaum von kid, die mit den neuen Werten w der Kategorie kein Prüfintervall mehr hätten – ermittelt,
+    bevor etwas geschrieben ist. Wie herstellerseite, nur gelten für kid schon Vorgabe und Oberkategorie aus w."""
+    unterbaum = ("(WITH RECURSIVE baum(id) AS (SELECT ? UNION SELECT c.id FROM mat_category c JOIN baum b "
+                 "ON c.parent_id = b.id) SELECT id FROM baum)")
+    baum = {k["id"]: k for k in db.query(
+        f"SELECT id, parent_id, default_interval_months FROM mat_category WHERE id IN {unterbaum}", (kid,))}
+    # Oberhalb von kid erbt der ganze Teilbaum dasselbe: die Vorgabe der neuen Oberkategorie (oder ihrer Vorfahren).
+    oben = herstellerseite({"category_id": w["parent_id"]})[0] if w["parent_id"] else None
+    ohne = []
+    for p in db.query(f"SELECT * FROM mat_product WHERE category_id IN {unterbaum}", (kid,)):
+        if p["interval_months"]:
+            continue
+        monate, k, gesehen = None, baum.get(p["category_id"]), set()
+        while k and k["id"] not in gesehen:
+            gesehen.add(k["id"])
+            if k["id"] == kid:
+                monate = w["default_interval_months"] or oben
+                break
+            if k["default_interval_months"]:
+                monate = k["default_interval_months"]
+                break
+            k = baum.get(k["parent_id"])
+        if not monate:
+            ohne.append(f"{p['manufacturer']} {p['model']}")
+    return ohne
+
+
+def kategorie_aendern(kid, d, intervall_pruefen=True):
+    """Eine Kategorie ändern. intervall_pruefen=False nur für den Katalogimport: Er übernimmt die Produkte erst nach
+    den Kategorien und prüft „jedes Produkt hat ein Prüfintervall“ deshalb selbst am Ende seines Durchgangs – ein
+    Produkt kann in derselben Datei ein eigenes Intervall bekommen, während seine Kategorie die Vorgabe verliert."""
     # Prüfen und Schreiben unter einer Schreibsperre: Zwei gleichzeitige Umhängungen ergäben sonst
     # einen Zyklus.
     with db.transaction(sofort=True):
         alt = kategorie(kid)
         w = kategorie_werte(d, alt)
+        # Produkte ohne eigenes Intervall erben es aus der Kategorie. Fiele es durch die Änderung weg,
+        # hätte ein Produkt keins mehr – das darf es so wenig wie beim Anlegen. Geprüft vor dem Schreiben:
+        # In einer äußeren Transaktion (Import) bliebe sonst ein halber Stand stehen.
+        if intervall_pruefen:
+            ohne = _ohne_intervall(kid, w)
+            if ohne:
+                raise ohne_intervall_meldung(ohne)
         db.execute("UPDATE mat_category SET parent_id = ?, name = ?, norm = ?, default_material_kind = ?, "
                    "default_interval_months = ?, default_lifetime_years = ?, position = ?, updated_at = ? WHERE id = ?",
                    (w["parent_id"], w["name"], w["norm"], w["default_material_kind"], w["default_interval_months"],
                     w["default_lifetime_years"], w["position"], db.now(), kid))
-        # Produkte ohne eigenes Intervall erben es aus der Kategorie. Fiele es durch die Änderung weg,
-        # hätte ein Produkt keins mehr – das darf es so wenig wie beim Anlegen.
-        ohne = [f"{p['manufacturer']} {p['model']}" for p in db.query(
-            "SELECT * FROM mat_product WHERE category_id IN (WITH RECURSIVE baum(id) AS (SELECT ? UNION "
-            "SELECT c.id FROM mat_category c JOIN baum b ON c.parent_id = b.id) SELECT id FROM baum)", (kid,))
-            if herstellerseite(p)[0] is None]
-        if ohne:
-            raise Abgelehnt("Danach hätten diese Produkte kein Prüfintervall mehr: " + ", ".join(ohne[:5])
-                            + (" …" if len(ohne) > 5 else "") + ". Erst am Produkt ein Intervall eintragen.", 409)
         journal.aenderung("category", kid, alt, w)
         if (w["default_interval_months"], w["parent_id"]) != (alt["default_interval_months"], alt["parent_id"]):
             faelligkeit.kappen(*faelligkeit.in_kategorie(kid))
