@@ -408,6 +408,15 @@ def meldung_lesen(mid):
     return jsonify(meldung=meldung.meldung_json(r))
 
 
+@api.delete("/meldungen/<int:mid>")
+def meldung_loeschen(mid):
+    """Nur der Melder selbst (meldung.loeschen prüft das)."""
+    if not current_user():
+        return jsonify(error="Nicht angemeldet"), 401
+    meldung.loeschen(mid)
+    return jsonify(ok=True)
+
+
 @api.post("/meldungen/<int:mid>/produkt")
 @katalog_required
 def meldung_produkt(mid):

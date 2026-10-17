@@ -1967,6 +1967,17 @@
 
   function meldeKarte(m, alle) {
     const wer = (name) => (name ? ` von ${esc(name)}` : "");
+    const knoepfe = [];
+    if (alle && m.status === "offen") {
+      knoepfe.push(`<button type="button" class="btn small" data-act="anlegen" data-id="${m.id}">Produkt anlegen</button>`,
+                   `<button type="button" class="btn secondary small" data-act="zuordnen" data-id="${m.id}">Vorhandenes zuordnen</button>`,
+                   `<button type="button" class="btn secondary small" data-act="ablehnen" data-id="${m.id}">Ablehnen</button>`);
+    }
+    if (m.eigen && DARF.verwalten && m.status === "eingepflegt" && m.produkt) {
+      knoepfe.push(`<a class="btn small" href="/material/artikel/neu?produkt=${m.produkt.id}${m.ordner ? `&ordner=${m.ordner.id}` : ""}">Artikel davon anlegen</a>`);
+    }
+    // Eigene Meldungen löscht der Melder selbst – offen oder erledigt.
+    if (m.eigen) knoepfe.push(`<button type="button" class="btn secondary small" data-act="loeschen" data-id="${m.id}">Löschen</button>`);
     return `<article class="mat-meldung m-${esc(m.status)}">
       <div class="mat-meldung-kopf"><h2>${esc(meldungName(m))}</h2>${meldestatusMarke(m.status)}</div>
       <p class="muted small">gemeldet${wer(m.created_by_name)} am ${esc(fmtTag(m.created_at))}${m.ordner ? ` · für ${esc(m.ordner.pfad)}` : ""}</p>
@@ -1977,10 +1988,7 @@
         ${m.produkt ? `<a href="/material/katalog/produkt/${m.produkt.id}">${esc(produktName(m.produkt))}</a>` : '<span class="muted">Produkt inzwischen gelöscht</span>'}
         ${m.answer ? `<br><span class="mat-text">${esc(m.answer)}</span>` : ""}</p>` : ""}
       ${m.status === "abgelehnt" ? `<p class="mat-meldung-ergebnis">Abgelehnt${wer(m.resolved_by_name)} am ${esc(fmtTag(m.resolved_at))}: <span class="mat-text">${esc(m.answer)}</span></p>` : ""}
-      ${alle && m.status === "offen" ? `<div class="btn-row"><button type="button" class="btn small" data-act="anlegen" data-id="${m.id}">Produkt anlegen</button>
-        <button type="button" class="btn secondary small" data-act="zuordnen" data-id="${m.id}">Vorhandenes zuordnen</button>
-        <button type="button" class="btn secondary small" data-act="ablehnen" data-id="${m.id}">Ablehnen</button></div>` : ""}
-      ${m.eigen && DARF.verwalten && m.status === "eingepflegt" && m.produkt ? `<div class="btn-row"><a class="btn small" href="/material/artikel/neu?produkt=${m.produkt.id}${m.ordner ? `&ordner=${m.ordner.id}` : ""}">Artikel davon anlegen</a></div>` : ""}
+      ${knoepfe.length ? `<div class="btn-row">${knoepfe.join("")}</div>` : ""}
     </article>`;
   }
 
@@ -2018,6 +2026,14 @@
             await api(`${API}/meldungen/${m.id}/zuordnen`, { method: "POST", body: { product_id: m.treffer.id } });
             toast("Zugeordnet – der Melder bekommt Bescheid."); await zeichnen();
           } catch (e) { toast(e.message, true); }
+        },
+        loeschen: async (b) => {
+          const m = meldung(b);
+          const folge = m.status === "offen" ? " Sie verschwindet damit auch bei den Katalogpflegern."
+            : m.status === "eingepflegt" ? " Das Produkt bleibt im Katalog." : "";
+          if (!(await confirm(`Deine Meldung „${meldungName(m)}“ löschen?${folge}`, "Löschen"))) return;
+          try { await api(`${API}/meldungen/${m.id}`, { method: "DELETE" }); toast("Meldung gelöscht"); await zeichnen(); }
+          catch (e) { toast(e.message, true); }
         },
       };
     }

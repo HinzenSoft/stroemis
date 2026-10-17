@@ -1767,6 +1767,53 @@ def test_produktmeldung():
     print("Meldungstest bestanden.")
 
 
+def test_produktmeldung_loeschen():
+    """Wer eine Meldung gemacht hat, löscht sie – offen oder erledigt; sonst niemand. Ein Produkt aus der Meldung
+    bleibt, ihre Fotos gehen mit, das Journal vermerkt die Löschung."""
+    from app.material.services import meldung
+    alt = (meldung.HINTERGRUND, meldung.send_mail)
+    meldung.HINTERGRUND = lambda f, *a: f(*a)
+    meldung.send_mail = lambda an, betreff, inhalt: True
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            app, k = umgebung(tmp)
+            ids = katalog_grund(k["adm"])
+            orig = os.path.join(app.config["MEDIA_DIR"], "material", "orig")
+            vorher = sorted(os.listdir(orig)) if os.path.isdir(orig) else []
+            r = k["wart"].post("/api/material/meldungen", headers=H, data={"manufacturer": "Bergwerk", "model": "Gurt Zeta",
+                                                                          "fotos": (jpeg(), "etikett.jpg")})
+            assert r.status_code == 201, r.get_json()
+            m1 = r.json["meldung"]["id"]
+            assert len(os.listdir(orig)) == len(vorher) + 1
+            for wer in ("katalog", "adm", "fuehrung", "nutzer"):
+                assert k[wer].delete(f"/api/material/meldungen/{m1}", headers=H).status_code == 403, wer
+            assert app.test_client().delete(f"/api/material/meldungen/{m1}", headers=H).status_code == 401
+            assert k["wart"].delete(f"/api/material/meldungen/{m1}", headers=H).status_code == 200
+            assert k["wart"].get(f"/api/material/meldungen/{m1}").status_code == 404
+            assert sorted(os.listdir(orig)) == vorher
+            # Wer die Meldung gerade abarbeiten wollte, erfährt, dass sie weg ist – und es entsteht kein Produkt.
+            gamma = {"category_id": ids["gurte"], "manufacturer": "Bergwerk", "model": "Gurt Zeta", "material_kind": "textil",
+                     "lifetime_years": 10}
+            assert k["katalog"].post(f"/api/material/meldungen/{m1}/produkt", headers=H, json=gamma).status_code == 404
+            assert k["katalog"].get("/api/material/produkte?q=Zeta").json["gesamt"] == 0
+            # Eine erledigte Meldung löschen: Das Produkt aus ihr bleibt.
+            m2 = k["wart"].post("/api/material/meldungen", headers=H, json={"manufacturer": "Bergwerk", "model": "Gurt Eta"}).json["meldung"]["id"]
+            r = k["katalog"].post(f"/api/material/meldungen/{m2}/produkt", headers=H, json=dict(gamma, model="Gurt Eta"))
+            assert r.status_code == 201, r.get_json()
+            pid = r.json["produkt"]["id"]
+            assert k["wart"].delete(f"/api/material/meldungen/{m2}", headers=H).status_code == 200
+            assert k["katalog"].get(f"/api/material/produkte/{pid}").status_code == 200
+            assert k["wart"].get("/api/material/meldungen").json["meldungen"] == []
+            with app.app_context():
+                from app import db
+                aktionen = [x["action"] for x in db.query("SELECT action FROM mat_audit WHERE entity = 'request' AND entity_id = ? "
+                                                          "ORDER BY id", (m2,))]
+            assert aktionen == ["angelegt", "eingepflegt", "geloescht"], aktionen
+    finally:
+        meldung.HINTERGRUND, meldung.send_mail = alt
+    print("Meldungs-Löschtest bestanden.")
+
+
 if __name__ == "__main__":
     test_migration()
     test_rollen()
@@ -1788,3 +1835,4 @@ if __name__ == "__main__":
     test_listen_und_formular()
     test_migration_lieferung2()
     test_produktmeldung()
+    test_produktmeldung_loeschen()

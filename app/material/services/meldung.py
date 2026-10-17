@@ -9,8 +9,9 @@ und Fotos (Etikett, Typenschild). Die Katalogpfleger bekommen eine Mail und arbe
   - ablehnen: nur mit Begründung.
 
 Der Melder bekommt in beiden Fällen eine Mail, nach dem Einpflegen mit einem Link, der „Artikel
-anlegen“ mit Produkt und Ordner öffnet. Meldungen werden nicht gelöscht: Sie sind der Weg eines
-Produkts in den Katalog und stehen im Journal (entity „request“, am Produkt mit angezeigt)."""
+anlegen“ mit Produkt und Ordner öffnet. Löschen kann eine Meldung nur, wer sie gemacht hat – offen oder
+erledigt; ein Produkt, das aus ihr entstand, bleibt. Sonst bleibt sie stehen: Sie ist der Weg eines
+Produkts in den Katalog und steht im Journal (entity „request“, am Produkt mit angezeigt)."""
 import json
 import os
 import re
@@ -190,6 +191,8 @@ def _abschliessen(mid, status, pid, antwort):
     if not db.execute_zeilen(
             "UPDATE mat_product_request SET status = ?, product_id = ?, answer = ?, resolved_by = ?, resolved_by_name = ?, "
             "resolved_at = ? WHERE id = ? AND status = 'offen'", (status, pid, antwort, uid, name, db.now(), mid)):
+        if not db.query("SELECT 1 FROM mat_product_request WHERE id = ?", (mid,), one=True):
+            raise Abgelehnt("Diese Meldung hat ihr Melder inzwischen gelöscht.", 404)
         raise Abgelehnt("Diese Meldung ist schon erledigt. Bitte neu laden.", 409)
     journal.eintragen("request", mid, status, {"status": "offen"}, {"status": status, "product_id": pid, "answer": antwort})
 
@@ -228,6 +231,22 @@ def ablehnen(mid, d):
     with db.transaction(sofort=True):
         _abschliessen(mid, "abgelehnt", None, antwort)
     _melder_benachrichtigen(meldung(mid))
+
+
+def loeschen(mid):
+    """Der Melder löscht seine Meldung – offen (sie verschwindet bei den Katalogpflegern) oder erledigt. Ein
+    Produkt, das aus ihr entstand, bleibt; die Fotos gehen mit."""
+    r = meldung(mid)
+    uid, _ = akteur()
+    if not uid or r["created_by"] != uid:
+        raise Abgelehnt("Löschen kann eine Meldung nur, wer sie gemacht hat.", 403)
+    with db.transaction(sofort=True):
+        if not db.execute_zeilen("DELETE FROM mat_product_request WHERE id = ?", (mid,)):
+            raise Abgelehnt("Meldung nicht gefunden.", 404)
+        journal.eintragen("request", mid, "geloescht", {f: r[f] for f in ("manufacturer", "model", "article_no", "status",
+                                                                         "product_id")}, None)
+    for f in json.loads(r["photos_json"] or "[]"):
+        delete_photo_files(katalog.medien_dir(), f)
 
 
 # --- Mails ----------------------------------------------------------------------------------------------
