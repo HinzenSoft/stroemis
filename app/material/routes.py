@@ -915,3 +915,6 @@ def durchgang_abbrechen(rid):
 def durchgang_loeschen(rid):
     durchgang.loeschen(rid)
     return jsonify(ok=True)
+
+
+from . import routes_export  # noqa: E402,F401

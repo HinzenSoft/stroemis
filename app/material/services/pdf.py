@@ -1,5 +1,6 @@
 """PDF-Protokolle des Moduls Material: Prüf-, Aussonderungs- und Sammelprotokoll, dazu die Vorlage des
-Prüfsummen-Stempels (Konzept „PDF-Prüfprotokoll“).
+Prüfsummen-Stempels (Konzept „PDF-Prüfprotokoll“) – und der Lebenslauf eines Artikels (lebenslauf.py), der auf
+Abruf entsteht und nicht festgeschrieben wird.
 
 WeasyPrint setzt die Jinja-Vorlagen unter templates/material/pdf/ als PDF/A-3b. Die Vorlagen bekommen alle
 Werte fertig formatiert (Datum, Ordnerpfad, Ergebnistext) und rechnen nichts mehr um; dieses Modul liefert
@@ -15,8 +16,8 @@ Anfrage (angemeldeter Nutzer), ein Protokoll entsteht aber auch ohne – im Demo
 Durchgangs. Vor dem Setzen läuft jeder Text durch _sauber(): Zeichen, die keine der beiden Schriften hat,
 würden als leeres Kästchen (.notdef) gesetzt und machten die Datei zu einem ungültigen PDF/A.
 
-Unten auf jeder Seite bleiben 14 mm frei: Dort legt services/stempel.py nach dem Festschreiben den
-Stempel aus stempelvorlage() hin."""
+Unten auf jeder Seite eines Protokolls bleiben 14 mm frei: Dort legt services/stempel.py nach dem Festschreiben
+den Stempel aus stempelvorlage() hin. Der Lebenslauf bekommt keinen Stempel und braucht den Platz nicht."""
 import base64
 import io
 import logging
@@ -28,7 +29,7 @@ from urllib.parse import unquote, urlsplit
 from flask import current_app
 
 PDF_VARIANTE = "pdf/a-3b"
-VORLAGEN = ("pruefprotokoll", "aussonderungsprotokoll", "sammelprotokoll")
+VORLAGEN = ("pruefprotokoll", "aussonderungsprotokoll", "sammelprotokoll", "lebenslauf")
 SCHRIFT_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
                                             "static", "fonts"))
 JPEG_QUALITAET = 85
@@ -239,9 +240,9 @@ def _vorlagen():
 
 
 def rendern(vorlage, daten):
-    """Ein Protokoll als PDF/A-3b (bytes). vorlage ist „pruefprotokoll“, „aussonderungsprotokoll“ oder
-    „sammelprotokoll“, daten das fertig formatierte dict dazu (dokument, artikel, pruefung, …). Braucht
-    einen Flask-App-Kontext, keine Anfrage."""
+    """Ein Protokoll als PDF/A-3b (bytes). vorlage ist „pruefprotokoll“, „aussonderungsprotokoll“,
+    „sammelprotokoll“ oder „lebenslauf“, daten das fertig formatierte dict dazu (dokument, artikel, pruefung, …).
+    Braucht einen Flask-App-Kontext, keine Anfrage."""
     if vorlage not in VORLAGEN:
         raise ValueError(f"Unbekannte Protokollvorlage: {vorlage}")
     daten = _bereinigt(daten, _zeichenvorrat())

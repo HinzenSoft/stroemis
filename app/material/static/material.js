@@ -745,6 +745,7 @@
           <div>${d.description ? `<p class="mat-text">${esc(d.description)}</p>` : ""}
           ${d.interval_months ? `<p class="small">Prüfintervall hier: höchstens ${d.interval_months} Monate.</p>` : ""}
           <p class="small">${system ? plural(Object.values(z).reduce((a, b) => a + b, 0), "Artikel", "Artikel") : `Bestand im ganzen Zweig: <strong>${d.bestand}</strong> ${zahlen(z)}`}</p></div></div>
+        ${DARF.lesen ? ordnerExport(d) : ""}
         ${d.unterordner.length ? `<section class="section"><h2>Unterordner</h2>${unterordnerHtml(d.unterordner)}</section>` : ""}
         <section class="section"><h2>Artikel in diesem Ordner</h2>
           <div class="c-tabs mat-filter">${["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"].map((s) => `<button type="button" data-act="filter" data-f="${s}" class="${s === filter ? "sel" : ""}">${s ? esc(STATUS[s]) : "alle"}${s && d.direkt && d.direkt[s] ? ` (${d.direkt[s]})` : ""}</button>`).join("")}</div>
@@ -817,6 +818,23 @@
     });
   }
 
+  /* --- Export (Lieferung 4) ----------------------------------------------------------------------------
+     Ordner: Artikelliste als CSV und alle Protokolle als ZIP; Artikel: Lebenslauf als PDF. Gewöhnliche Links,
+     kein fetch – der Server prüft das Leserecht selbst und zeigt einen Fehler als Seite. Ein Download lässt die
+     Seite stehen; damit niemand doppelt klickt, während das ZIP entsteht, sagt ein Hinweis, dass es kommt. */
+  const ordnerExport = (d) => `<div class="mat-export">
+      <div class="btn-row"><a class="btn secondary small" href="/material/export/${d.id}.csv" data-export="Die Artikelliste wird heruntergeladen …">CSV</a>
+        <a class="btn secondary small" href="/material/export/${d.id}-protokolle.zip" data-export="Die Protokolle werden zusammengestellt – bei vielen dauert das einen Moment …">Protokolle (ZIP)</a></div>
+      <p class="help"><strong>CSV</strong>: alle Artikel hier und darunter, auch die von hier gesperrten (ausgesonderte bei ihrer Gliederung), mit Status, Fälligkeiten und Stammdaten – für Excel.
+        <strong>ZIP</strong>: die Protokolle dieser Artikel und die Sammelprotokolle der Durchgänge hier, mit Verzeichnis und Prüfsummen.</p></div>`;
+  const lebenslaufKnopf = (a) => `<a class="btn secondary small" href="/material/artikel/${a.id}/lebenslauf.pdf" target="_blank" rel="noopener"
+    title="Stammdaten, alle Prüfungen in zeitlicher Reihenfolge, Prüfdurchgänge und Ereignisse als PDF – zum Weitergeben oder als Aussonderungsnachweis. Stand jetzt, nicht festgeschrieben.">Lebenslauf (PDF)</a>`;
+  document.addEventListener("click", (e) => {
+    const l = e.target.closest("a[data-export]");
+    if (!l || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    toast(l.dataset.export);
+  });
+
   /* --- Artikel --------------------------------------------------------------------------------------- */
   async function artikel() {
     const a = (await api(`${API}/artikel/${DATEN.id}`)).artikel;
@@ -860,7 +878,7 @@
             ${fremderEntwurf && DARF.verwalten ? ' · <button class="lnk" type="button" data-act="freigeben">Reservierung freigeben</button>' : ""}</p>` : ""}
           ${!aus && !DARF.pruefen && (DARF.verwalten || DARF.lesen) ? '<p class="small muted">Prüfen dürfen Prüfer mit hinterlegter Urkundennummer.</p>' : ""}
           ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang <a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>.</p>` : ""}
-          <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${frei ? '<button class="btn ghost small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen ? '<button class="btn ghost small" data-act="loeschen">Löschen</button>' : ""}` : ""}</div>
+          <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${frei ? '<button class="btn ghost small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen ? '<button class="btn ghost small" data-act="loeschen">Löschen</button>' : ""}` : ""}${DARF.lesen ? lebenslaufKnopf(a) : ""}</div>
         </div>
       </div>
       <div class="mat-spalten">

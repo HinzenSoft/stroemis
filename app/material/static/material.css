@@ -482,3 +482,9 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
   .mat-lb-pfeil { top: auto; bottom: 14px; transform: none; width: 56px; height: 48px; font-size: 2rem; }
   .mat-lightbox figcaption { max-width: calc(100vw - 150px); }
 }
+
+/* Lieferung 4 – export */
+/* Export eines Ordners: CSV und Protokolle (ZIP) unter dem Ordnerkopf, der Hinweis darunter klein und auf eine
+   lesbare Zeilenlänge begrenzt; am Telefon brechen die Knöpfe um wie jede .btn-row. */
+.mat-export { margin: 0 0 16px; }
+.mat-export .help { max-width: 72ch; margin-top: 6px; }
