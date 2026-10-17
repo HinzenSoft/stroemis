@@ -8,8 +8,8 @@ Lieferungen; jede ist für sich deploybar.
 | --- | --- | --- |
 | 1 – Fundament | Schema, Migration, Rollen, Katalog mit Dokumenten und Formularen, Ordnerbaum, Artikel, Suche, Journal | geliefert 16.10.2026, freigegeben 17.10.2026 |
 | 2 – Prüfung | Prüfformular, Mangelfoto, Anhänge, Ergebnis, Sperre, Aussonderung, Lebenslauf, Prüfdurchgang; dazu Status „neu“ mit Eingangsprüfung, Prüfen jederzeit, Ordnernavigation | geliefert 17.10.2026, freigegeben 17.10.2026 |
-| 3 – Nachweis | Unterschrift, Festschreiben, PDF mit Prüfsumme, Prüfseite; dazu Berichtigung und Unterschriftsfelder | geliefert 17.10.2026 |
-| 4 – Überblick | Dashboard, QR-Etiketten, Export; dazu Katalog-Export (Katalog und Formulare von dev in die Produktion, ohne Bestand und Prüfungen) und Rückrufe zu Produkten (Hinweis in der Anwendung und per Mail) | offen |
+| 3 – Nachweis | Unterschrift, Festschreiben, PDF mit Prüfsumme, Prüfseite; dazu Berichtigung und Unterschriftsfelder | geliefert 17.10.2026, freigegeben 17.10.2026 |
+| 4 – Überblick | Übersicht mit Fälligkeiten je Ordner, Führungskraft nur lesend, QR-Adresse mit Status, Export (CSV, Protokoll-ZIP, Lebenslauf-PDF); dazu Katalogaustausch (Katalog und Formulare von dev in die Produktion, ohne Bestand und Prüfungen) und Rückrufe zu Produkten (Hinweis in der Anwendung und per Mail). Kein Etikettenbogen (nicht gewünscht) | geliefert 17.10.2026 |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -702,6 +702,194 @@ Grenzfällen, Stempel auf jeder Seite (auch 210 Seiten), Docker-Pakete und Aufl�
   statt im Text; als Karte (schmale Bildschirme) entfällt die leere Zelle. „(Soll …)“ bricht nicht mehr um.
   Das PDF-Protokoll ist unverändert.
 
+## Lieferung 4 – Überblick (17.10.2026)
+
+Übersicht mit den Fälligkeiten je Ordner, die Führungskraft nur lesend, `/m/<token>` mit deutlichem Status, Export
+(CSV je Ordner, ZIP aller Protokolle, Lebenslauf-PDF) – dazu auf Wunsch der Katalogaustausch zwischen dev und
+Produktion und Rückrufe zu Produkten. Lieferung 3 wurde am 17.10.2026 mit „Implementiere Lieferung 4“ freigegeben.
+Den Etikettenbogen (QR-Etiketten als PDF) braucht der Nutzer nicht – er entfällt (siehe „Abweichungen“).
+
+### Neu
+
+- **Übersicht „Fälligkeiten je Ordner“** (`services/ueberblick.py`) statt der Tabelle je Gliederung: Gliederungen
+  mit ihren Unterordnern eingerückt, Spalten Bestand, überfällig, neu, bald fällig, gesperrt, Lebensdauer erreicht
+  und nächste Fälligkeit. Die Zahlen kommen aus derselben Abfrage wie die Ordnerleiste (abgeleiteter Status, auf die
+  Oberordner hochgerechnet) – keine zweite Wahrheit. Systemordner sind keine eigenen Zeilen, ihr Inhalt zählt bei
+  der Gliederung; eine Gliederung in einer Gliederung ist eine eingerückte Zeile und zählt nicht doppelt. Jede Zahl
+  öffnet die gefilterte Liste (`/material/pruefungen?ordner=…&status=…`), die nächste Fälligkeit alles Fällige im
+  Zweig. Ab 30 Zeilen starten tiefere Ebenen zugeklappt; unter 860 px Karten.
+- **Prüfungen nach Ordner**: Die Liste zeigt den gewählten Zweig („Nur … mit Unterordnern · alle Ordner“) und
+  behält ihn beim Wechsel des Filters; neuer Reiter „einsatzbereit“ (die gleichnamige Kachel führte ins Leere).
+- **„Fällig“ umfasst „Lebensdauer erreicht“** – im Standardfilter, in „Als Nächstes zu prüfen“ und in der Zahl der
+  fälligen Prüfungen, wie schon im roten Abzeichen der Ordnerleiste.
+- **Führungskraft sieht alles und ändert nichts**: Ein Test ruft jede schreibende Route aller Blueprints des Moduls
+  (auch die neuen) als Führungskraft auf und erwartet 403 aus der Rechteprüfung, jede lesende 200 – und vergleicht
+  danach alle Tabellen des Moduls. Neu lesbar für sie: die Produktmeldungen (ohne Knöpfe zum Abarbeiten).
+  Eine Unterschrift hinterlegen nur noch Prüfer und Materialwarte; wer keins von beiden ist, sieht im Profil eine
+  alte Unterschrift nur noch zum Entfernen.
+- **`/m/<token>`**: Die Artikelseite trägt bei ausgesonderten, gesperrten und abgelaufenen Artikeln schon im HTML
+  ein Banner („AUSGESONDERT – … darf nicht mehr verwendet werden“) – sofort nach dem Scan sichtbar, noch bevor die
+  Ansicht geladen ist; nur nach der Rechteprüfung. Der QR-Abschnitt am Artikel heißt „QR-Code und NFC“: Adresse
+  kopieren und auf einen Tag schreiben oder mit einem beliebigen Etikettenprogramm als QR-Code drucken.
+- **Export** (`services/export.py`, `services/lebenslauf.py`, für alle mit Zugang zum Modul):
+  - **CSV je Ordner** `/material/export/<ordner>.csv`: alle Artikel im Ordner und darunter, dazu die von hier
+    gesperrten (sie liegen in „Gesperrt“ der Gliederung); Ausgesonderte im Export ihrer Gliederung. Spalten: Nummern,
+    Produkt, Kategorie, Norm, Materialart, Ablage, Gliederung, Status, Sperrzustand und -grund, Herkunft, zuletzt
+    geprüft, nächste Prüfung, wirksames Intervall, Herstellung, Kauf, Erstgebrauch, Lebensende, Bemerkung, in Prüfung
+    bei, DEMO. Für deutsches Excel: `;`, UTF-8 mit BOM, Datumswerte TT.MM.JJJJ bzw. MM/JJJJ, Schutz gegen Formeln.
+  - **ZIP aller Protokolle** `/material/export/<ordner>-protokolle.zip`: die festgeschriebenen Prüf- und
+    Aussonderungsprotokolle dieser Artikel (auch berichtigte Originale samt Berichtigung) und die Sammelprotokolle
+    der Durchgänge im Zweig, dazu `Verzeichnis.csv` mit Protokoll-ID, Artikel, Prüfer, Ergebnis, beiden Prüfsummen und
+    Zustand. Eine fehlende oder veränderte Datei kommt nicht mit, steht aber im Verzeichnis („fehlt“, „verändert“) und
+    im Log – der Export bricht nicht ab. Höchstens 2 GB, gebaut als Zwischendatei unter `/data/tmp`.
+  - **Lebenslauf-PDF** `/material/artikel/<id>/lebenslauf.pdf`: Stammdaten mit QR-Code, Zustand (Status, Sperre,
+    Fälligkeit, wirksames Intervall, Lebensende), alle abgeschlossenen Prüfungen und die Aussonderung chronologisch
+    mit Prüfer, Urkundennummer, Ergebnis, Mängelzahl, Protokoll-ID und Prüfsumme der Datei (Berichtigungen mit
+    Verweis), die Prüfdurchgänge, die Rückrufe, die den Artikel betreffen, und die Ereignisse aus seinem Journal. PDF/A-3b
+    wie die Protokolle, aber auf Abruf und **nicht festgeschrieben**: kein Stempel, keine Ablage, kein Journaleintrag;
+    das steht im Fuß jeder Seite.
+  - Knöpfe: „CSV“ und „Protokolle (ZIP)“ in jedem Ordner, „Lebenslauf (PDF)“ an jedem Artikel.
+- **Katalogaustausch** (`services/katalog_export.py`, `services/importer.py`, Katalog → „Katalog exportieren“ /
+  „Katalog importieren“, nur Katalogpfleger und Verwaltung; Kommandozeile `export-catalog`, `import-catalog` nimmt
+  jetzt auch ZIP): Der Export ist ein ZIP im neuen **Format 2** (siehe „Katalogdatei“) mit Kategorien, Produkten samt
+  Originalbild und aktuellen Herstellerdokumenten (Datei oder Link) und je Ziel dem aktiven Prüfformular – ohne
+  DEMO-Einträge, ohne Bestand, Prüfungen, Meldungen und Rückrufe; `bericht.txt` im ZIP und eine Vorschau im Dialog
+  sagen, was drin ist und was ausgelassen wurde. Der Import gleicht über die neue **Katalogkennung** (`uid`) ab, sonst
+  wie bisher über Name bzw. Hersteller + Modell + Artikelnummer und übernimmt dann die Kennung – Umbenennen und
+  Verschieben auf dev kommen als Änderung an, nicht als Dublette. Bilder gelten über ihre SHA-256 als gleich,
+  Dokumente über Datei bzw. Link und Version (sonst neue Version bei gleicher Art und gleichem Titel). Erst ein
+  Probelauf mit Bericht (neu, geändert, unverändert je Art, Bilder, Dokumente, Hinweise) – er schreibt nichts, auch
+  keine Datei –, dann „Übernehmen“. Warnungen nennen Intervall- und Lebensdaueränderungen, die vorhandene Artikel
+  betreffen; ein Wechsel der Materialart bei vorhandenen Artikeln ist ein Fehler. Gelöscht, deaktiviert oder
+  zurückgezogen wird nie etwas.
+- **Rückrufe** (`services/rueckruf.py`): Ein Katalogpfleger legt am Produkt einen Rückruf an – Titel, was betroffen
+  ist und was zu tun ist, Link auf die Meldung des Herstellers, optional die betroffenen Seriennummern (eine je
+  Zeile, leer = alle Artikel) – und beendet ihn später mit Vermerk. Sichtbar für alle mit Zugang: am Produkt (mit den
+  betroffenen Artikeln samt Ablage und Zustand), als rotes Banner an jedem betroffenen Artikel, als Hinweis in dessen
+  Prüfung, als Marke „Rückruf“ in den Artikellisten, als Kasten auf der Übersicht und im Lebenslauf. Die Mail geht an
+  alle Materialwarte (gibt es keinen, an die Verwaltung) und an die Prüfer, die einen betroffenen Artikel schon
+  geprüft haben – entdoppelt, im Hintergrund; das Ergebnis (wie viele, wie viele nicht hinausgingen) steht am
+  Rückruf. Gesperrt wird nicht automatisch: Prüfer sperren über „Sperren (Rückruf)“ im Banner mit dem neuen
+  Sperrgrund **„Rückruf“**. Je Artikel gilt ein Rückruf als erledigt, wenn der Artikel gesperrt ist oder nach dem
+  Rückruf geprüft wurde – abgeleitet, nie gespeichert. Journal am Produkt („Rückruf angelegt“, „Rückruf beendet“).
+
+### Migration
+
+- Schemaversion 7, läuft beim Start von selbst: neue Tabelle `mat_recall` (Rückrufe, mit dem Produkt gelöscht);
+  neue Spalte `uid` an `mat_category` und `mat_product` mit eindeutigem Index – vorhandene Zeilen bekommen beim Start
+  eine zufällige Kennung, neue per Trigger. Keine Tabelle wird umgebaut; alle Zeilen bleiben.
+- Keine neuen Abhängigkeiten, keine Handarbeit: `docker compose up -d --build` genügt.
+
+### Neue Abhängigkeiten
+
+Keine. Der Lebenslauf nutzt WeasyPrint und segno aus Lieferung 3, Export und Katalogaustausch nur die
+Standardbibliothek (`csv`, `zipfile`).
+
+### Entscheidungen
+
+- **Rückrufe** (vom Nutzer entschieden): Mail an alle Materialwarte plus die Prüfer betroffener Artikel; Hinweis
+  statt automatischer Sperre, Sperrgrund „Rückruf“ nur für Prüfer. Materialwarte sind die Konten mit Stufe
+  „Verwaltung“ im Modul Material (das Startkonto gehört dazu); die Verwaltung der Plattform bekommt die Mail nur, wenn
+  es keinen Materialwart gibt. Ausgesonderte Artikel sind außer Dienst und nie betroffen. Eine Berichtigung zählt
+  nicht als Prüfung nach dem Rückruf (sie ändert eine alte Prüfung), eine Prüfung in derselben Sekunde wie der Rückruf
+  zählt als vorher. Ein laufender Rückruf blockiert die Freiprüfung nicht – der Prüfer entscheidet.
+- **Gesperrte zählen bei der Gliederung**, nicht im Herkunftsordner – dort liegen sie, so zählt die Ordnerleiste.
+  Im CSV- und ZIP-Export eines Ordners sind sie dagegen dabei (sie stammen von dort), wie beim Prüfdurchgang.
+- **Ausgesonderte gehören zum Export ihrer Gliederung**, nicht mehr zum Unterordner, aus dem sie kamen – die
+  Aussonderung löscht die Herkunft, und „Ausgesondert“ zählt nirgends mehr als Bestand.
+- **Nächste Fälligkeit** in der Übersicht: frühestes Datum unter einsatzbereiten, bald und überfälligen Artikeln;
+  neue (sofort fällig), gesperrte und abgelaufene haben ihre eigenen Spalten.
+- **Lebenslauf**: nur das Journal des Artikels (Produktänderungen stehen am Produkt), höchstens 2000 Einträge;
+  verbindlich bleiben die Protokolle, deren Prüfsummen er nennt.
+- **Katalogaustausch**: Originalbilder gehen unverändert mit (nur so stimmt die SHA-256 zwischen den Instanzen; der
+  Dialog weist darauf hin, dass Fotos ihre Metadaten mitnehmen). Formulare: je Ziel das aktive, sonst die neueste
+  Version mit Prüfpunkten; ein DEMO-Formular lässt das Ziel ganz weg. Der Import legt Dateien vor der Schreibsperre ab
+  (Bildverarbeitung blockiert nie andere) und räumt sie bei einem Fehler wieder weg; ein unveränderter Katalog kostet
+  keine Bildverarbeitung. Der Import über die Oberfläche ist ohne ausdrückliches „Übernehmen“ immer ein Probelauf.
+- **Meldungen lesen** jetzt alle mit Zugang zum Modul (auch Materialwarte fremde); abarbeiten weiter nur
+  Katalogpfleger.
+
+### Abweichungen vom Konzept, mit Begründung
+
+- **Kein Etikettenbogen**: Das Konzept nennt „Etikettenbogen als PDF für Standard-Klebeetiketten und Anhänger“ und
+  die Route `/material/etiketten/<ordner_id>.pdf`; der Nutzer braucht die Funktion ausdrücklich nicht. Die
+  QR-Adresse jedes Artikels bleibt und lässt sich kopieren (NFC/RFID oder eigenes Etikettenprogramm).
+- **Routen**: Für das Protokoll-ZIP und den Lebenslauf nennt das Konzept keine; gewählt sind
+  `/material/export/<ordner>-protokolle.zip` und `/material/artikel/<id>/lebenslauf.pdf`.
+- **Katalogaustausch und Rückrufe** stehen nicht im Konzept – Wünsche des Nutzers für diese Lieferung.
+- **„Sätze vollständig“** (Szenario der Führungskraft) lässt sich ohne Soll-Bestand und Set-Konzept nicht prüfen;
+  die Übersicht zeigt je Ordner, ob alles einsatzbereit ist.
+
+### Review vor der Auslieferung
+
+Gebaut haben vier Agenten parallel in getrennten Arbeitsbäumen (Übersicht und Rechte, Export, Katalogaustausch,
+Rückrufe), jeder mit eigenen Tests, Browserprüfung und der ganzen bestehenden Suite; zusammengeführt auf dev. Danach
+eine Durchsicht in fünf Bereichen – Katalogaustausch, Rückrufe, Export, Übersicht und Rechte, Oberfläche (mit
+Browserrundgang je Rolle bei 1280 und 390 px) – mit Gegenprüfung jedes Befunds durch einen zweiten Agenten, der ihn
+nachzustellen und zu widerlegen versuchte. Von 25 Meldungen hat die Gegenprüfung 16 bestätigt; alle sind behoben,
+die Korrekturen im Katalogaustausch noch einmal gegengeprüft (dabei kam Nr. 16 dazu). Abgesichert in
+`test_material_katalog.py` (Intervall-Reihenfolge, Dokumentketten, Formulartitel, Namenskette und ihre Grenze,
+Bildgrenze, ZIP-Verzeichnis) und je `test_review_lieferung4` in `test_material_rueckruf.py` und
+`test_material_export.py`:
+
+| # | Befund | Schwere | Behebung |
+| --- | --- | --- | --- |
+| 1 | Katalogimport: Verliert eine Kategorie ihre Intervall-Vorgabe, während ihr Produkt in derselben Datei ein eigenes Intervall bekommt, stand der ganze Import (die Prüfung lief gegen den alten Stand der Produkte und hatte schon geschrieben) | mittel | Die Prüfung „jedes Produkt hat ein Prüfintervall“ läuft im Import nach den Produkten; „Kategorie ändern“ prüft (unverändert für die Oberfläche) vor dem Schreiben |
+| 2 | Importdialog: „Übernehmen“ war von Anfang an sichtbar – `.btn` schlug das hidden-Attribut | mittel | `.btn[hidden]` bleibt verborgen; „Übernehmen“ erst nach einem fehlerfreien Probelauf mit Änderungen |
+| 3 | Zwei aktuelle Dokumente gleicher Art und gleichen Titels (etwa Datenblatt de/en): Neue Versionen landeten an der falschen Kette oder ließen den Import scheitern | niedrig | Der Export schreibt die Vorgänger einer Kette mit (`vorgaenger`); der Import belegt erst exakte Treffer, dann Vorgänger, sonst nur Eindeutiges („Mehrdeutig“ statt über Kreuz) |
+| 4 | Die Ablage-Handler von Import- und Dokumentdialog sammelten sich am gemeinsamen Dialog: doppelte Uploads, falsche Meldungen | niedrig | Handler gelten nur, solange ihr Dialog offen ist |
+| 5 | Formular ohne Titel: Jeder Import legte eine neue, aktive Formularversion an | niedrig | Leerer Titel = keine Vorgabe beim Vergleich |
+| 6 | Namenskette („altes Modell bekommt einen Zusatz, neues den alten Namen“, ebenso Geschwisterkategorien und wandernde Artikelnummern) brach den Import ab | niedrig | Konflikte werden zurückgestellt und nachgeholt, solange sich etwas bewegt |
+| 7 | Produktbild zwischen 30 und 31 MB: beim Hochladen angenommen, im Import abgewiesen – der ganze Austausch stand | niedrig | Import nimmt, was das Hochladen nimmt (31 MB); Größeres lässt der Export aus und nennt es |
+| 8 | ZIP-Import: Die Grenze von 20 000 Einträgen griff erst nach dem Einlesen des ganzen Inhaltsverzeichnisses (Speicher) | niedrig | Zahl und Größe des Verzeichnisses werden am Ende-Satz geprüft, bevor es gelesen wird (auch Zip64) |
+| 9 | Prüfung: Der Rückruf-Hinweis versprach auch in einer Berichtigung, ihr Abschluss erledige den Rückruf | niedrig | eigener Satz für Berichtigungen |
+| 10 | Ein Zeilentrenner (U+2028) im Titel ließ jede Rückruf-Mail scheitern | niedrig | Betreff wird auf eine Zeile gebracht |
+| 11 | Seriennummern mit doppeltem oder geschütztem Leerzeichen (aus kopierten Listen) trafen keinen Artikel | niedrig | Vergleich wie am Artikel: innerer Leerraum zählt als ein Leerzeichen |
+| 12 | Die Prüfung nannte nur einen von mehreren offenen Rückrufen | niedrig | alle Titel |
+| 13 | Rückrufdatum („seit“, „angelegt am“, „beendet am“) als UTC-Datum – nachts der Vortag | niedrig | in Ortszeit |
+| 14 | Datum einer Ausnahme im Durchgang als UTC-Datum – im Lebenslauf und im Sammelprotokoll (aus Lieferung 3) | niedrig | in Ortszeit |
+| 15 | „Die ältesten fehlen“ im Lebenslauf auch bei genau 2000 vollständigen Einträgen | niedrig | gekürzt heißt: es gibt mehr |
+| 16 | (aus der Gegenprüfung der Korrekturen) Eine von Hand gebaute, lange Namenskette in ungünstiger Reihenfolge kostete quadratisch viele Versuche unter der Schreibsperre | niedrig | höchstens 50 Nachholrunden, danach ein Fehler mit Hinweis |
+
+Nicht bestätigt (mit Begründung verworfen) wurden unter anderem: Artikel mit vom System vergebener Seriennummer bei
+Rückrufen mit Seriennummern (folgt dem Datenmodell), Abfragen je Artikel auf der Produktseite (gemessen: 64 ms bei
+300 Artikeln und drei Rückrufen), führende Nullen in Excel (Eigenschaft jeder CSV), der Rechte-Rundumtest
+(Testabdeckung, kein Produktfehler – jede Route prüft ihr Recht).
+
+### Zu prüfen
+
+- **Rückruf-Mail auf dev.strömis.de**: Ohne `SMTP_HOST` steht die Mail nur im Log, und die Produktseite meldet sie
+  als „nicht hinausgegangen“. Mit echtem Mailserver einmal anlegen und den Empfang prüfen. Startet Gunicorn während
+  des Versands neu, geht der Rest verloren; die Seite zeigt nach 10 Minuten „Versand nicht bestätigt“ (kein
+  Nachversand). Gespeichert wird die Zahl der Empfänger, nicht wer.
+- **CSV in Excel und LibreOffice** nicht geöffnet: erwartet passend für deutsches Excel; „03/2021“ kann Excel als
+  Datum lesen; ein Formel-Schutz-`'` (etwa `'-7`) bleibt in der Zelle sichtbar.
+- **Große Bestände** nicht gemessen: Protokoll-ZIP (jede Datei wird zweimal gelesen, ein Gunicorn-Thread ist so
+  lange belegt, `/data/tmp` braucht bis 2 GB frei) und Katalogaustausch mit echten Herstellerdokumenten (Upload ohne
+  Fortschrittsanzeige).
+- **Katalogaustausch, seltene Umbauten**: Wandert eine Kategorie in eine andere Ebene und nimmt eine neue ihren
+  alten Namen am alten Ort ein, oder tauschen zwei Geschwister ihre Namen, bricht der Import mit „gibt es an dieser
+  Stelle schon“ ab – dann in zwei Schritten austauschen. Eine neue Dokumentversion, die früher gültig wäre als ein
+  in der Produktion schon von Hand hochgeladenes Dokument gleicher Art und gleichen Titels, ist ein Fehler mit
+  Abhilfe im Text. Bricht der Prozess zwischen Ablegen und Speichern hart ab, bleiben Dateien ohne Eintrag liegen.
+- **Fotos mit Ortsangaben**: Der Katalog-Export nimmt die Originalbilder samt EXIF/GPS mit.
+- **Phase 2 (Freigaben je Ordner)**: Export eines Unterordners enthält dessen gesperrte Artikel aus „Gesperrt“ der
+  Gliederung; der Lebenslauf prüft das Recht im aktuellen Ordner; `/faellig?ordner=` und die Produktseite eines
+  Rückrufs (alle betroffenen Artikel samt Ablage) müssen dann nach Leserecht filtern.
+- **Varianten**: Ein Rückruf gilt für genau ein Produkt; über „Als Variante kopieren“ entstandene Produkte sind
+  nicht erfasst – bei Bedarf je Variante anlegen.
+- **Oberfläche** in Chromium geprüft (1280 und 390 px, je Rolle); nicht in Safari/iOS.
+- **Originalfotos mit Ortsangaben**: Wer im Modul lesen darf, kann Originale abrufen – auch die Fotos von
+  Produktmeldungen, die jetzt die Führungskraft sieht (so schon vor Lieferung 4 bei Prüffotos). Trägt ein Foto
+  GPS-Daten, gehen sie mit; ebenso im Katalog-Export.
+- **Katalogimport „Mehrdeutig“**: Hat die Produktion selbst zwei aktuelle Dokumente gleicher Art und gleichen Titels,
+  die nicht aus dem Austausch stammen, stoppt ein Dokument gleichen Titels aus der Datei den Import mit „Mehrdeutig“
+  (vorher wurde still eins gewählt). Abhilfe: Titel in der Produktion unterscheiden.
+- **Fälligkeiten im Import**: Ändert der Import das Intervall einer Kategorie, zieht er Fälligkeiten wie bisher vor,
+  bevor die Produkte der Datei übernommen sind – im ungünstigen Fall eine Prüfung früher als nötig, nie später.
+- **Python-Version**: Die Prüfung des ZIP-Inhaltsverzeichnisses nutzt `zipfile._EndRecData` (Python 3.12 und 3.14
+  geprüft); ändert eine künftige Version sie, schlägt `test_zip_verzeichnis_vor_dem_lesen` an.
+
 ## Katalogdatei (Format 1)
 
 Eine JSON-Datei, UTF-8. Kategorien werden über Namen an ihrer Stelle im Baum gefunden, Produkte über die
@@ -755,13 +943,104 @@ mit seiner Stelle (`produkte[3] (…): …`). `--trocken` prüft nur.
 Im Container liegt die Datei im Datenordner:
 `docker compose exec -e VIDEOPFLEGE=0 stroemis flask --app "app:create_app()" material import-catalog /data/import/katalog.json --trocken`
 
-## Schnittstelle (Lieferungen 1 bis 3, mit den Nachbesserungen)
+## Katalogdatei (Format 2)
+
+Ein ZIP-Archiv – so schreibt es der Katalog-Export – oder, ohne Dateien, eine reine JSON-Datei:
+
+```
+katalog.json                          die Katalogdatei, UTF-8
+dateien/bilder/<sha256>.<endung>      Originale der Produktbilder
+dateien/dokumente/<sha256>.<endung>   Herstellerdokumente (PDF, JPEG, PNG, WebP)
+bericht.txt                           was drin ist und was ausgelassen wurde – nur zum Lesen
+```
+
+`katalog.json` ist Format 1 mit `"version": 2` und diesen Ergänzungen. Gelesen werden nur die Dateien, auf die
+`katalog.json` verweist; ihre Namen sind frei, der Export benennt sie nach ihrer SHA-256. In einer reinen JSON-Datei
+ist ein Verweis auf eine Datei (`bild`, `datei`) ein Fehler.
+
+```json
+{
+  "format": "stroemis-material-katalog",
+  "version": 2,
+  "quelle": "https://dev.strömis.de",
+  "erstellt": "2026-10-17T14:03:00+02:00",
+  "kategorien": [
+    {"uid": "5edccf185bb2feaa03ca064a23b676d6", "name": "PSA gegen Absturz und Seiltechnik", "norm": "",
+     "materialart": null, "intervall_monate": null, "lebensdauer_jahre": null, "position": 0,
+     "unterkategorien": [
+       {"uid": "fa0924f611f67a059a66fa70610d8495", "name": "Gurte", "norm": "EN 361, EN 12277 oder EN 813",
+        "materialart": "textil", "intervall_monate": 12, "lebensdauer_jahre": null, "position": 0,
+        "dokumente": [
+          {"art": "pflegehinweis", "titel": "Pflegehinweis Gurte", "version": "", "gueltig_ab": "2024-01-01",
+           "datei": "dateien/dokumente/3b54….pdf"}
+        ]}
+     ]}
+  ],
+  "produkte": [
+    {"uid": "517afaa09a333286eef21f40f0ec4021", "kategorie": ["PSA gegen Absturz und Seiltechnik", "Gurte"],
+     "kategorie_uid": "fa0924f611f67a059a66fa70610d8495", "hersteller": "Beispielwerk", "modell": "Beispielgurt",
+     "artikelnummer": "BW-1", "norm": "EN 361", "materialart": "textil", "intervall_monate": null,
+     "lebensdauer_jahre": 10, "lebensdauer_quelle": "Gebrauchsanleitung, Kapitel …", "beschreibung": "",
+     "bild": "dateien/bilder/c2f8….jpg",
+     "dokumente": [
+       {"art": "gebrauchsanleitung", "titel": "Gebrauchsanleitung", "version": "03/2024", "gueltig_ab": "2024-03-01",
+        "datei": "dateien/dokumente/bcae….pdf",
+        "vorgaenger": [{"sha256": "9f1c…"}, {"url": "https://hersteller.example/anleitung-alt", "version": "2019"}]},
+       {"art": "datenblatt", "titel": "Datenblatt", "version": "2", "gueltig_ab": "2025-01-01",
+        "url": "https://hersteller.example/datenblatt"}
+     ]}
+  ],
+  "formulare": [
+    {"kategorie": ["PSA gegen Absturz und Seiltechnik", "Gurte"], "kategorie_uid": "fa0924f611f67a059a66fa70610d8495",
+     "titel": "Gurtprüfung", "aktivieren": true,
+     "punkte": [{"gruppe": "Kennzeichnung", "text": "Beispiel-Prüfpunkt", "art": "yesno", "pflicht": true,
+                 "soll": "ja", "kritisch": true}]},
+    {"produkt": {"uid": "517afaa09a333286eef21f40f0ec4021", "hersteller": "Beispielwerk", "modell": "Beispielgurt",
+                 "artikelnummer": "BW-1"},
+     "titel": "Gurtprüfung Beispielgurt (Entwurf)", "aktivieren": false,
+     "punkte": [{"gruppe": "", "text": "…", "art": "yesno", "pflicht": true, "soll": "nein", "kritisch": false}]}
+  ]
+}
+```
+
+| Feld | Bedeutung |
+| --- | --- |
+| `uid` (Kategorie, Produkt) | Katalogkennung: 32 Zeichen `0–9a–f`, in der Datei je Art eindeutig. Abgleich zuerst über sie; sonst über Name an der Stelle bzw. Dublette – dann übernimmt der Datensatz sie. Neu Angelegtes bekommt sie. Optional |
+| `kategorie_uid` (Produkt, generisches Formular) | Kategorie über ihre uid; gibt es sie hier nicht, gilt `kategorie` (Pfad) |
+| `produkt.uid` (spezifisches Formular) | Produkt über seine uid; sonst Hersteller + Modell + Artikelnummer |
+| `bild` (Produkt) | Pfad im Archiv; Foto (JPEG, PNG, WebP, HEIC, TIFF), höchstens 31 MB (wie beim Hochladen) und 60 Megapixel. Gleiche SHA-256 wie das Original hier: unverändert; sonst ersetzt. Fehlt es, bleibt das Bild hier |
+| `dokumente[]` (Kategorie, Produkt) | `art` (`produktbild`, `konformitaetserklaerung`, `gebrauchsanleitung`, `pruefanweisung`, `pflegehinweis`, `datenblatt`, `sonstiges`), `titel`, `version`, `gueltig_ab` (JJJJ-MM-TT) und entweder `datei` (Pfad im Archiv; PDF oder Bild, Inhalt muss zur Endung passen, höchstens 50 MB) oder `url` (`https://…`) |
+| `vorgaenger` (Dokument) | Kennungen der früheren Versionen dieses Dokuments, neueste zuerst: je Version `{"sha256": …}` (Datei) oder `{"url": …, "version": …}` (Link). Der Export schreibt sie mit, sobald ein Dokument Vorgänger hat. Optional |
+| Abgleich der Dokumente | Je Ziel in drei Schritten: 1. gleiche Datei (SHA-256) bzw. gleicher Link in gleicher Version unter den aktuellen: unverändert – zuerst für alle Einträge des Ziels; 2. ist eins der aktuellen Dokumente hier unter den `vorgaenger`: neue Version davon; 3. sonst gleiche Art und gleicher Titel – nur, wenn genau eins davon bei `gueltig_ab` schon gilt; bei mehreren ein Fehler („Mehrdeutig“), damit keine Versionsketten über Kreuz verknüpft werden; sonst neues Dokument. Eine neue Version gilt nie früher als die vorhandene |
+| `titel` (Formular) | Leer heißt: kein Titel vorgegeben – verglichen werden dann nur die Prüfpunkte; eine neue Version erbt den Titel der letzten hier |
+| `aktivieren` (Formular) | Der Export schreibt `true` für das aktive Formular eines Ziels, `false` für die neueste Version, wenn keins aktiv ist |
+| `quelle`, `erstellt` | woher und wann (nur zur Anzeige) |
+
+Was hier mehr ist als in der Datei, bleibt: Der Import löscht, deaktiviert und zieht nie etwas zurück. Ein Fehler
+irgendwo: nichts gespeichert, auch keine Datei abgelegt. Der Probelauf (`--trocken`, in der Oberfläche immer zuerst)
+schreibt nichts. Der Export lässt alles mit DEMO-Kennzeichen weg – Kategorien samt Teilbaum, Produkte darin, Formulare
+und Dokumente an DEMO-Zielen – und nimmt Bestand, Prüfungen, Meldungen und Rückrufe nie mit.
+
+Reihenfolge: erst die Kategorien, dann die Produkte, dann die Formulare. Scheitert ein Eintrag an einem Namen, einer
+Dublette oder einer Artikelnummer, die hier noch ein anderer Eintrag trägt, kommt er nach den übrigen noch einmal dran
+(eine Kategorie samt Teilbaum) – so lange, wie sich dabei etwas bewegt, höchstens 50 Runden. So geht die übliche Kette
+„altes Modell bekommt einen Zusatz, neues den alten Namen“ in einem Lauf durch; zwei Namen, die die Plätze tauschen,
+bleiben ein Fehler. Dass jedes Produkt ein Prüfintervall hat, prüft der Import erst nach den Produkten: Verliert eine
+Kategorie ihre Vorgabe, während das Produkt in derselben Datei ein eigenes Intervall bekommt, ist das gültig.
+
+Grenzen beim Lesen eines Archivs: höchstens 20 000 Einträge und 5 MB Inhaltsverzeichnis – beides am Ende-Satz des
+Archivs (bei Zip64 an dessen Zip64-Satz) geprüft, bevor das Verzeichnis eingelesen wird –, 3 GB entpackt,
+`katalog.json` 5 MB, Packverhältnis eines Eintrags ab 1 MB höchstens 100 : 1; verschlüsselte, beschädigte oder doppelt
+benannte Einträge werden abgewiesen. Hochladen und Export: bis 2 GB. Eine Datei über der Grenze des Imports (Bild
+31 MB, Dokument 50 MB) lässt schon der Export aus und nennt sie (Vorschau und `bericht.txt`).
+
+## Schnittstelle (Lieferungen 1 bis 4, mit den Nachbesserungen)
 
 | Methode und Pfad | Recht | Zweck |
 | --- | --- | --- |
-| `GET /api/material/start` | lesen | Rechte des Kontos, Zählung, Gliederungen, nächste Fälligkeiten |
+| `GET /api/material/start` | lesen | Rechte des Kontos, Zählung, Gliederungen, nächste Fälligkeiten; `ordner_uebersicht` (Fälligkeiten je Ordner, Zeilen in Baumreihenfolge mit `tiefe`, `bestand`, `zaehlung`, `naechste`), `rueckrufe` (laufende mit betroffenen Artikeln im Bestand) |
 | `GET /api/material/suche?q=` | lesen | Artikel nach Serien-, Inventar-, Herstellernummer; `eindeutig` bei genau einem Treffer |
-| `GET /api/material/faellig?status=&ordner=` | lesen | fällige Artikel, Standard überfällig + neu + bald fällig |
+| `GET /api/material/faellig?status=&ordner=` | lesen | fällige Artikel, Standard überfällig + Lebensdauer erreicht + neu + bald fällig; mit `ordner` auch `ordner` = {id, pfad} |
 | `GET/POST /api/material/kategorien`, `PUT/DELETE …/<id>` | lesen / Katalog | Kategoriebaum |
 | `GET/POST /api/material/produkte`, `GET/PUT/DELETE …/<id>` | lesen / Katalog | Produkte mit Suche und Seiten (`q`, `kategorie`, `seite`, `pro_seite`) |
 | `GET /api/material/produkte/artikelnummer?nr=&ausser=` | lesen | Wem gehört diese Artikelnummer schon? (`produkt` oder `null`) |
@@ -776,7 +1055,7 @@ Im Container liegt die Datei im Datenordner:
 | `GET/POST /api/material/kategorien/<id>/dokumente` | lesen / Katalog | Dokumente für alle Produkte einer Kategorie |
 | `PUT /api/material/dokumente/<id>` (`title`) | Katalog | Dokument umbenennen (Produkt- oder Kategoriedokument) |
 | `POST /api/material/meldungen` (`manufacturer`, `model`, `article_no`, `norm`, `category_id`, `folder_id`, `links`, `note`; `fotos` mehrfach) | Materialwart | Fehlendes Produkt melden |
-| `GET /api/material/meldungen?status=offen\|erledigt\|alle&eigene=1`, `GET …/<id>` | Katalog / Materialwart (eigene) | Meldungen; Katalogpfleger alle (Standard offen), sonst die eigenen |
+| `GET /api/material/meldungen?status=offen\|erledigt\|alle&eigene=0\|1`, `GET …/<id>` | lesen | Meldungen; Katalogpfleger und Lesende standardmäßig alle offenen, Materialwarte die eigenen; `bearbeiten` nur für Katalogpfleger |
 | `POST /api/material/meldungen/<id>/produkt` (Felder wie `POST /produkte`, dazu `antwort`) | Katalog | Produkt aus der Meldung anlegen und Meldung erledigen |
 | `POST /api/material/meldungen/<id>/zuordnen` (`product_id`, `antwort`), `…/ablehnen` (`antwort` Pflicht) | Katalog | vorhandenes Produkt zuordnen bzw. ablehnen |
 | `DELETE /api/material/meldungen/<id>` | nur der Melder | eigene Meldung löschen (offen oder erledigt; ein Produkt aus ihr bleibt) |
@@ -788,12 +1067,22 @@ Im Container liegt die Datei im Datenordner:
 | `POST /api/material/pruefungen/<id>/festschreiben` (`ergebnis`, `next_due_on`, `grund`, `bemerkung`; alter Pfad `…/abschliessen` gilt weiter) | Prüfer (eigener Entwurf, mit Unterschrift) | Abschluss und Festschreiben mit Protokoll |
 | `POST /api/material/pruefungen/<id>/berichtigen` (`grund`) | Prüfer (der die Prüfung gemacht hat) | Berichtigung beginnen; liefert den neuen Entwurf |
 | `PUT /api/material/pruefungen/<id>/punkte/<pid>` mit `unterschrift` (data:-URL oder `null`) | Prüfer (eigener Entwurf) | Unterschriftsfeld eines Formulars |
-| `GET/PUT/DELETE /api/material/unterschrift` (`bild`: data:-URL vom Signatur-Pad) | lesen (eigenes Konto) | eigene Unterschrift im Profil |
+| `GET/PUT/DELETE /api/material/unterschrift` (`bild`: data:-URL vom Signatur-Pad) | lesen; PUT nur Prüfer und Materialwart (eigenes Konto) | eigene Unterschrift im Profil |
 | `GET /material/pruefung/<id>/pdf`, `GET /material/durchgang/<id>/sammelprotokoll` | lesen | Protokoll als PDF (nur, solange die Datei ihre Prüfsumme hat) |
 | `GET /material/pruefen`, `POST /api/material/pruefen` (`datei`) | ohne Anmeldung | Prüfseite: `ergebnis` (unveraendert, veraendert, unbekannt), `protokoll_id`, `art`, `hinweis` – angemeldet mit Zugang dazu `link` |
 | `GET /api/material/entwuerfe` | lesen | offene Prüfungen aller Prüfer |
-| `POST /api/material/artikel/<id>/sperren` (`grund`: sturz, beschaedigung, verlust; `text`) | Prüfer | Sperre ohne Prüfung |
+| `POST /api/material/artikel/<id>/sperren` (`grund`: sturz, beschaedigung, verlust, rueckruf; `text`) | Prüfer | Sperre ohne Prüfung |
 | `POST /api/material/artikel/<id>/aussondern` (`grund`: lebensdauer, verlust, irreparabel; `datum`, `bemerkung`) | Materialwart (mit Unterschrift) | Aussonderung gesperrter Artikel mit Aussonderungsprotokoll; liefert `aussonderung` (Kennung) |
 | `GET/POST /api/material/durchgaenge`, `GET/DELETE …/<id>` | lesen / Materialwart oder Prüfer | Prüfdurchgänge (`?offen=1`); eröffnen (`folder_id`, `titel`); löschen, solange nichts geprüft ist |
 | `POST /api/material/durchgaenge/<id>/ausnehmen`, `…/einbeziehen` (`item_id`, `grund`), `…/abschliessen` | Materialwart oder Prüfer | Artikel ausnehmen, wieder einbeziehen, Durchgang abschließen (mit Sammelprotokoll) |
 | `POST /api/material/durchgaenge/<id>/abbrechen` | Materialwart oder Prüfer | vorzeitig beenden; `durchgang` ist `null`, wenn er mangels Geprüftem entfernt wurde |
+| `GET /material/export/<ordner>.csv` | lesen | Artikel des Ordners samt Unterordnern (und von hier gesperrte) als CSV für Excel |
+| `GET /material/export/<ordner>-protokolle.zip` | lesen | alle Protokolle dieser Artikel und die Sammelprotokolle der Durchgänge im Zweig, mit `Verzeichnis.csv` |
+| `GET /material/artikel/<id>/lebenslauf.pdf` | lesen | Lebenslauf als PDF/A-3b, auf Abruf, nicht festgeschrieben |
+| `GET /api/material/katalog/export`, `GET …/export/vorschau` | Katalog | Katalog ohne DEMO als ZIP (Format 2) bzw. seine Zahlen vorab |
+| `POST /api/material/katalog/import` (`file`: ZIP oder JSON, `trocken`: Vorgabe `1`) | Katalog | Katalogimport; Antwort `bericht` (neu/geändert/unverändert je Art, Bilder, Dokumente, Änderungen, Hinweise, Warnungen, Fehler) |
+| `GET /api/material/produkte/<id>/rueckrufe` | lesen | Rückrufe des Produkts: laufende mit betroffenen Artikeln, Zahlen und nicht gefundenen Seriennummern, beendete mit Vermerk |
+| `POST /api/material/produkte/<id>/rueckrufe` (`title`, `description`, `url`, `serials`, `mail`) | Katalog | Rückruf anlegen; Antwort mit betroffenen Artikeln, Empfängerzahl, nicht gefundenen Seriennummern |
+| `POST /api/material/rueckrufe/<id>/beenden` (`vermerk` Pflicht) | Katalog | Rückruf beenden |
+| `GET /api/material/rueckrufe` | lesen | alle laufenden Rückrufe mit Produkt und Zahlen |
+| (Artikel, Produkt, Listen) | lesen | neu: `artikel.rueckrufe` (laufende samt Zustand), `produkt.rueckrufe`, je Listenzeile `rueckruf` (Titel eines offenen) |
