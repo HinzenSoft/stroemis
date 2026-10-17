@@ -16,6 +16,7 @@ from ..auth import attempts_exceeded, current_user, eingabefehler_abfangen, json
 from . import models
 from .services import (Abgelehnt, anhang, bestand, durchgang, journal, katalog, kennung, meldung, protokoll, pruefung,
                        search, unterschrift)
+from .services import rueckruf
 from .services import status as st
 from .services.rechte import _ordner_aus_anfrage, darf, darf_alles, ist_katalogpfleger, katalog_required, requires_folder
 
@@ -260,7 +261,8 @@ def start():
     return jsonify(darf=darf_alles(), zaehlung=z, bestand=sum(z[s] for s in st.BESTAND),
                    gliederungen=gliederungen, naechste=naechste, faellig_gesamt=faellig,
                    schwelle_tage=st.schwelle_tage(), status_text=st.LABEL,
-                   meldungen_offen=meldung.anzahl_offen() if ist_katalogpfleger() else None)
+                   meldungen_offen=meldung.anzahl_offen() if ist_katalogpfleger() else None,
+                   rueckrufe=rueckruf.uebersicht())
 
 
 @api.get("/suche")
@@ -372,6 +374,7 @@ def produkt_lesen(pid):
     p = katalog.produkt_json(katalog.produkt(pid), voll=True)
     p["journal"] = journal.fuer_produkt(pid)
     p["formulare"] = katalog.formulare_fuer(produkt_id=pid)
+    p["rueckrufe"] = rueckruf.fuer_produkt(pid)
     return jsonify(produkt=p)
 
 
@@ -915,3 +918,6 @@ def durchgang_abbrechen(rid):
 def durchgang_loeschen(rid):
     durchgang.loeschen(rid)
     return jsonify(ok=True)
+
+
+from . import routes_rueckruf  # noqa: E402,F401
