@@ -447,3 +447,38 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
 .mat-pruefergebnis.fehler { background: var(--grau-hell); border-left: 4px solid var(--gelb); }
 .mat-befehl { background: var(--grau-hell); padding: 8px 10px; border-radius: var(--radius); overflow-x: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9rem; }
+
+/* Nur für Vorlesehilfen: unsichtbar, aber vorgelesen (etwa der Kopf der Spalte „kritisch“). */
+.mat-vorlesen { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Befunde einer abgeschlossenen Prüfung: „kritisch“ steht in einer eigenen schmalen Spalte neben dem Prüfpunkt,
+   damit der Text der Punkte untereinander ruhig bleibt. Als Karte (schmale Bildschirme) entfällt die leere Zelle. */
+.mat-befunde .mat-krit-spalte { width: 1%; white-space: nowrap; padding-left: 4px; padding-right: 4px; }
+.mat-befunde .mat-soll { white-space: nowrap; }
+@media (max-width: 860px) {
+  table.list.mat-befunde td.mat-krit-spalte:empty { display: none; }
+  table.list.mat-befunde td.mat-krit-spalte { width: auto; padding: 2px 0; }
+}
+
+/* Fotos groß zeigen: Ein Klick auf ein Foto öffnet es über der Seite statt in einem neuen Tab (Rahmen und
+   Schließen-Knopf wie die Bilder im Wiki, .md-lightbox in app.css). Mehrere Fotos derselben Gruppe – etwa
+   alle Befunde einer Prüfung – lassen sich mit den Pfeilen oder den Pfeiltasten durchblättern. */
+.mat-bildlink img { cursor: zoom-in; }
+.mat-lightbox figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 100%; }
+.mat-lightbox img { max-width: calc(100vw - 120px); max-height: calc(100vh - 110px); background: var(--weiss); }
+.mat-lightbox figcaption { color: var(--weiss); font-size: var(--fs-klein); text-align: center; cursor: default;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; max-width: 90vw; }
+.mat-lightbox .mat-lb-original { color: var(--weiss); text-decoration: underline; }
+.mat-lightbox .mat-lb-original:focus-visible, .mat-lightbox button:focus-visible { outline: 3px solid var(--gelb); outline-offset: 2px; }
+.mat-lightbox .mat-lb-zahl { opacity: .8; }
+.mat-lb-pfeil { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 64px; border: 0;
+  background: rgba(0,0,0,.25); color: var(--weiss); font-size: 2.6rem; line-height: 1; cursor: pointer; border-radius: var(--radius); }
+.mat-lb-pfeil:hover { background: rgba(0,0,0,.45); }
+.mat-lb-pfeil.zurueck { left: 10px; }
+.mat-lb-pfeil.weiter { right: 10px; }
+@media (max-width: 640px) {
+  .mat-lightbox { padding: 12px; }
+  .mat-lightbox img { max-width: 100%; max-height: calc(100vh - 150px); }
+  .mat-lb-pfeil { top: auto; bottom: 14px; transform: none; width: 56px; height: 48px; font-size: 2rem; }
+  .mat-lightbox figcaption { max-width: calc(100vw - 150px); }
+}

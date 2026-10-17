@@ -691,6 +691,17 @@ Grenzfällen, Stempel auf jeder Seite (auch 210 Seiten), Docker-Pakete und Aufl�
   erneuter Demolauf (Befehl wie bisher) schreibt die DEMO-Prüfungen nachträglich fest; eigene Testprüfungen
   bleiben ohne Protokoll (oder lassen sich berichtigen).
 
+### Nachbesserungen nach der Auslieferung (Durchsicht vom 17.10.2026)
+
+- **Fotos groß zeigen**: Ein Klick auf ein Foto öffnet es über der Seite statt in einem neuen Tab – Befundfotos
+  einer Prüfung (auch im Entwurf), Fotos einer Meldung und das Produktbild in Artikel- und Produktansicht. Mehrere
+  Fotos derselben Prüfung oder Meldung lassen sich mit den Pfeilen oder den Pfeiltasten durchblättern; darunter
+  stehen Prüfpunkt und Bemerkung, „Original“ öffnet die hochgeladene Datei. Schließen mit ×, Escape oder einem
+  Klick neben das Foto. Strg-/Cmd-Klick und die mittlere Maustaste öffnen weiter einen neuen Tab.
+- **Befunde einer abgeschlossenen Prüfung**: „kritisch“ steht in einer eigenen schmalen Spalte neben dem Prüfpunkt
+  statt im Text; als Karte (schmale Bildschirme) entfällt die leere Zelle. „(Soll …)“ bricht nicht mehr um.
+  Das PDF-Protokoll ist unverändert.
+
 ## Katalogdatei (Format 1)
 
 Eine JSON-Datei, UTF-8. Kategorien werden über Namen an ihrer Stelle im Baum gefunden, Produkte über die

@@ -16,6 +16,68 @@
   const $ = (sel, el) => (el || document).querySelector(sel);
   const $$ = (sel, el) => Array.from((el || document).querySelectorAll(sel));
 
+  /* --- Großansicht für Fotos -------------------------------------------------------------------------
+     Ein Klick auf ein Foto (Mangelfoto, Produktbild, Meldungsfoto) zeigt es groß über der Seite statt in einem neuen
+     Tab; mit Strg/⌘ oder der mittleren Maustaste öffnet der Link wie gewohnt einen Tab. Gezeigt wird die Webfassung
+     (gedreht, auch bei HEIC vom iPhone), „Original“ führt zur hochgeladenen Datei. Stehen mehrere Fotos zusammen
+     (data-gruppe, etwa alle Fotos einer Prüfung), blättern Pfeiltasten und Pfeilknöpfe. */
+  const bildLink = (web, original, titel, gruppe, bildHtml) => `<a class="mat-bildlink" href="${esc(original || web)}"
+    target="_blank" rel="noopener" data-web="${esc(web)}" data-titel="${esc(titel || "")}"${gruppe ? ` data-gruppe="${esc(gruppe)}"` : ""}
+    aria-label="${esc(titel ? `Foto groß zeigen: ${titel}` : "Foto groß zeigen")}">${bildHtml}</a>`;
+
+  function bildZeigen(link) {
+    const gruppe = link.dataset.gruppe;
+    const liste = gruppe ? $$(`a.mat-bildlink[data-gruppe="${CSS.escape(gruppe)}"]`) : [link];
+    let i = Math.max(0, liste.indexOf(link));
+    const vorher = document.activeElement;
+    const box = document.createElement("div");
+    box.className = "md-lightbox mat-lightbox";
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-modal", "true");
+    box.setAttribute("aria-label", "Foto");
+    box.innerHTML = `<button type="button" class="md-lightbox-close" aria-label="Schließen">×</button>
+      ${liste.length > 1 ? `<button type="button" class="mat-lb-pfeil zurueck" aria-label="Vorheriges Foto">‹</button>
+        <button type="button" class="mat-lb-pfeil weiter" aria-label="Nächstes Foto">›</button>` : ""}
+      <figure><img alt=""><figcaption><span class="mat-lb-titel"></span>
+        <a class="mat-lb-original" target="_blank" rel="noopener">Original</a><span class="mat-lb-zahl"></span></figcaption></figure>`;
+    const img = $("img", box);
+    const zeige = () => {
+      const l = liste[i];
+      img.src = l.dataset.web || l.href;
+      img.alt = l.dataset.titel || "Foto";
+      $(".mat-lb-titel", box).textContent = l.dataset.titel || "";
+      $(".mat-lb-original", box).href = l.href;
+      $(".mat-lb-zahl", box).textContent = liste.length > 1 ? `${i + 1} von ${liste.length}` : "";
+    };
+    const blaettern = (d) => { i = (i + d + liste.length) % liste.length; zeige(); };
+    const taste = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); schliessen(); }
+      else if (e.key === "ArrowRight" && liste.length > 1) blaettern(1);
+      else if (e.key === "ArrowLeft" && liste.length > 1) blaettern(-1);
+    };
+    function schliessen() {
+      box.remove();
+      document.removeEventListener("keydown", taste);
+      if (vorher && vorher.focus) vorher.focus({ preventScroll: true });
+    }
+    box.addEventListener("click", (e) => {
+      const pfeil = e.target.closest(".mat-lb-pfeil");
+      if (pfeil) { blaettern(pfeil.classList.contains("zurueck") ? -1 : 1); return; }
+      if (e.target === img || e.target.closest("figcaption")) return;     // „Original“ öffnet seinen Tab
+      schliessen();
+    });
+    document.addEventListener("keydown", taste);
+    document.body.appendChild(box);
+    zeige();
+    $(".md-lightbox-close", box).focus();
+  }
+  document.addEventListener("click", (e) => {
+    const l = e.target.closest("a.mat-bildlink");
+    if (!l || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    bildZeigen(l);
+  });
+
   const STATUS = { einsatzbereit: "einsatzbereit", bald_faellig: "bald fällig", ueberfaellig: "überfällig", neu: "neu",
                    gesperrt: "gesperrt", lebensdauer: "Lebensdauer erreicht", ausgesondert: "ausgesondert" };
   const PRUEFART = { eingang: "Eingangsprüfung", periodisch: "periodische Prüfung", ausserplanmaessig: "außerplanmäßige Prüfung",
@@ -785,7 +847,7 @@
       ${a.status === "neu" ? '<p class="mat-banner s-neu">NEU – die Eingangsprüfung steht aus. Bis dahin nicht einsetzen.</p>' : ""}
       <div class="mat-pfad">${bc}</div>
       <div class="mat-artikelkopf">
-        ${p.bild ? `<a href="${esc(p.original || p.bild)}" target="_blank" rel="noopener"><img class="mat-produktbild" src="${esc(p.bild)}" alt="Produktbild ${esc(produktName(p))}"></a>` : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
+        ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="Produktbild ${esc(produktName(p))}">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel">
           <h1>${esc(a.inventory_no)} ${statusMarke(a.status, true)}</h1>
           <p class="mat-produktzeile"><a href="/material/katalog/produkt/${p.id}">${esc(produktName(p))}</a>${p.article_no ? ` · Art.-Nr. ${esc(p.article_no)}` : ""}</p>
@@ -1478,7 +1540,7 @@
     inhalt.innerHTML = `${p.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen.</p>' : ""}
       <div class="mat-pfad"><a href="/material/katalog">Katalog</a> / ${p.kategorie_pfad.map((x) => `<a href="/material/katalog?kategorie=${x.id}">${esc(x.name)}</a>`).join(" / ")}</div>
       <div class="mat-artikelkopf">
-        ${p.bild ? `<a href="${esc(p.original || p.bild)}" target="_blank" rel="noopener"><img class="mat-produktbild" src="${esc(p.bild)}" alt=""></a>` : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
+        ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel"><h1>${esc(produktName(p))} ${demoMarke(p.demo)}</h1>
           ${DARF.verwalten ? `<div class="btn-row"><a class="btn small" href="/material/artikel/neu?produkt=${p.id}">+ Artikel dieses Produkts</a></div>` : ""}
           ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${p.artikel_gesamt ? "" : '<button class="btn secondary small" data-act="loeschen">Löschen</button>'}</div>
@@ -1915,7 +1977,7 @@
       }
       const fotoPflicht = mangel || (x.art === "photo" && x.pflicht && !nz);
       const foto = x.art === "signature" ? "" : `<div class="mat-punkt-foto">
-          ${x.foto ? `<a href="${esc(x.foto.web)}" target="_blank" rel="noopener"><img src="${esc(x.foto.vorschau)}" alt="Foto zu ${esc(x.text)}"></a>` : ""}
+          ${x.foto ? bildLink(x.foto.web, x.foto.original, x.text, "punkte", `<img src="${esc(x.foto.vorschau)}" alt="Foto zu ${esc(x.text)}">`) : ""}
           <label class="btn ${fotoPflicht && !x.foto ? "" : "secondary"} small mat-kamera">📷 ${x.foto ? "neues Foto" : "Foto"}<input type="file" accept="image/*" capture="environment" data-foto="${x.id}" class="mat-datei" aria-label="Foto zu ${esc(x.text)}"></label>
           ${x.foto ? `<button type="button" class="lnk small" data-act="pfoto-weg" data-rid="${x.id}">Foto entfernen</button>` : ""}
           ${fotoPflicht && !x.foto ? '<span class="mat-pflicht">Foto ist Pflicht</span>' : ""}</div>`;
@@ -2020,11 +2082,12 @@
 
     function leseHtml() {
       const zeilen = pr.punkte.map((x) => `<tr class="${x.befund === "mangel" ? "mat-mangelzeile" : ""}">
-          <td data-l="Prüfpunkt">${x.gruppe ? `<span class="muted small">${esc(x.gruppe)}</span><br>` : ""}${esc(x.text)}${x.kritisch ? ' <span class="mat-kritisch">kritisch</span>' : ""}</td>
+          <td data-l="Prüfpunkt">${x.gruppe ? `<span class="muted small">${esc(x.gruppe)}</span><br>` : ""}${esc(x.text)}</td>
+          <td class="mat-krit-spalte">${x.kritisch ? '<span class="mat-kritisch">kritisch</span>' : ""}</td>
           <td data-l="Befund">${x.art === "signature" && !x.unterschrift && x.befund !== "nicht_zutreffend" ? '<span class="muted">nicht unterschrieben</span>' : befundMarke(x.befund)}</td><td data-l="Wert">${x.art === "signature" && x.unterschrift ? `<img class="mat-us-mini" src="${esc(x.unterschrift)}" alt="Unterschrift">`
-            : x.wert ? esc(x.wert) : '<span class="muted">–</span>'}${x.art === "yesno" && x.soll ? ` <span class="muted small">(Soll ${esc(x.soll)})</span>` : ""}</td>
+            : x.wert ? esc(x.wert) : '<span class="muted">–</span>'}${x.art === "yesno" && x.soll ? ` <span class="muted small mat-soll">(Soll ${esc(x.soll)})</span>` : ""}</td>
           <td data-l="Bemerkung">${x.notiz ? `<span class="mat-text">${esc(x.notiz)}</span>` : ""}</td>
-          <td data-l="Foto">${x.foto ? `<a href="${esc(x.foto.web)}" target="_blank" rel="noopener"><img class="mat-mini" src="${esc(x.foto.vorschau)}" alt="Foto"></a>` : ""}</td></tr>`).join("");
+          <td data-l="Foto">${x.foto ? bildLink(x.foto.web, x.foto.original, `${x.text}${x.notiz ? ` – ${x.notiz}` : ""}`, "befunde", `<img class="mat-mini" src="${esc(x.foto.vorschau)}" alt="Foto">`) : ""}</td></tr>`).join("");
       const ergebnisBox = pr.entwurf ? `<p class="notice">Diese Prüfung ist noch offen – in Prüfung bei ${esc(pr.pruefer)} seit ${esc(fmtZeit(pr.begonnen_am))}. Was hier steht, ist der aktuelle Stand des Entwurfs.</p>`
         : `<div class="mat-spalten"><section class="section"><h2>Ergebnis</h2><dl class="mat-daten">
           <dt>Ergebnis</dt><dd>${ergebnisMarke(pr.ergebnis)}</dd>
@@ -2036,7 +2099,7 @@
           ${pr.basis_id ? `<dt>Grundlage</dt><dd><a href="/material/pruefung/${pr.basis_id}">Prüfung vom Tag der Aussonderung</a></dd>` : ""}
           <dt>Abgeschlossen</dt><dd>${esc(fmtZeit(pr.abgeschlossen_am))}</dd></dl></section>${protokollHtml()}</div>`;
       return `${ergebnisBox}
-        ${pr.punkte.length ? `<section class="section"><h2>Befunde</h2><table class="list mat-tabelle mat-befunde"><thead><tr><th>Prüfpunkt</th><th>Befund</th><th>Wert</th><th>Bemerkung</th><th>Foto</th></tr></thead><tbody>${zeilen}</tbody></table></section>` : ""}
+        ${pr.punkte.length ? `<section class="section"><h2>Befunde</h2><table class="list mat-tabelle mat-befunde"><thead><tr><th>Prüfpunkt</th><th class="mat-krit-spalte"><span class="mat-vorlesen">kritisch</span></th><th>Befund</th><th>Wert</th><th>Bemerkung</th><th>Foto</th></tr></thead><tbody>${zeilen}</tbody></table></section>` : ""}
         ${pr.art !== "aussonderung" ? anhaengeHtml() : ""}
         ${pr.dokumente.length ? `<section class="section"><h2>Herstellerdokumente am Prüftag</h2>${dokListe(pr.dokumente, false)}</section>` : ""}`;
     }
@@ -2520,7 +2583,7 @@
       m.links.length ? zeile("Links", m.links.map((l) => `<a href="${esc(l)}" target="_blank" rel="noopener noreferrer">${esc(kurzLink(l))}</a>`).join("<br>")) : "",
       m.note ? zeile("Bemerkung", `<span class="mat-text">${esc(m.note)}</span>`) : ""].join("");
     return `${daten ? `<dl class="mat-daten mat-meldung-daten">${daten}</dl>` : ""}
-      ${m.fotos.length ? `<div class="mat-meldung-fotos">${m.fotos.map((f) => `<a href="${esc(f.original)}" target="_blank" rel="noopener"><img src="${esc(f.vorschau)}" alt="Foto zur Meldung" loading="lazy"></a>`).join("")}</div>` : ""}`;
+      ${m.fotos.length ? `<div class="mat-meldung-fotos">${m.fotos.map((f) => bildLink(f.web, f.original, `Foto zur Meldung ${m.manufacturer || ""} ${m.model || ""}`.trim(), `meldung-${m.id}`, `<img src="${esc(f.vorschau)}" alt="Foto zur Meldung" loading="lazy">`)).join("")}</div>` : ""}`;
   }
   // Im Produktdialog: was der Melder wusste – zum Nachschlagen, während die Felder schon vorbelegt sind.
   const meldeKasten = (m) => `<div class="mat-meldekasten"><p class="small">Gemeldet von ${esc(m.created_by_name || "–")} am ${esc(fmtTag(m.created_at))}${m.ordner ? ` für ${esc(m.ordner.pfad)}` : ""}</p>${meldeDetails(m)}</div>`;
