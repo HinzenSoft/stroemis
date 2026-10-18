@@ -246,23 +246,32 @@
      Dazu im Modul Material: Wer das Häkchen „Prüfer“ setzt, während Material auf „–“ steht, sieht
      die Auswahl auf „Mitglied“ springen (ohne Stufe wirkte das Häkchen nicht; gespeichert wird erst
      mit „Speichern“). Wer Material danach ausdrücklich auf „–“ stellt, behält das Häkchen – es wirkt
-     dann nur nicht. */
+     dann nur nicht. Setzt man das Häkchen, während die Verwaltung auf „Verwaltung“ steht (Material zeigt
+     „Verwaltung“ und ist aus), kommt die Hebung beim Zurückstellen der Verwaltung, falls Material dann auf
+     „–“ stünde. Solange Material überdeckt ist, steht der Hinweis nicht da. */
   function koppleRechte(body, u) {
     const material = body.querySelector("#u-r-material");
+    const pruefer = body.querySelector("#u-mat-pruefer");
+    const auto = body.querySelector(".mat-stufe-auto");
+    let gehoben = false;      // steht Material gerade wegen des Häkchens auf „Mitglied“ (noch nicht gespeichert)?
+    let offen = false;        // Häkchen gesetzt, während die Verwaltung Material überdeckte – Hebung beim Zurückstellen
     // Über den Freigaben des Kontos: Sie wirken nicht, solange Material auf „–“ steht.
     const ohneZugang = () => {
       const hinweis = body.querySelector(".u-freigaben-kein-zugang");
       if (hinweis) hinweis.hidden = material.value !== "0" || !(u.mat_freigaben | 0);
     };
-    material.addEventListener("change", () => { body.querySelector(".mat-stufe-auto").hidden = true; ohneZugang(); });
+    // Der Hinweis zur Hebung steht, solange der Wert von ihr kommt und die Verwaltung das Feld nicht überdeckt.
+    const zeigen = () => { auto.hidden = !gehoben || material.disabled; ohneZugang(); };
+    const heben = () => { if (material.value === "0") { material.value = "1"; gehoben = true; } };
+    // Ausdrücklich gewählt: Ein „–“ von Hand bleibt, auch über ein Hin und Her der Verwaltung hinweg.
+    material.addEventListener("change", () => { gehoben = false; offen = false; zeigen(); });
     // Der Hinweis zur Urkundennummer gehört nur zu einem Prüfer – er erscheint mit dem Häkchen.
-    body.querySelector("#u-mat-pruefer").addEventListener("change", (e) => {
-      body.querySelector(".mat-urkunde").hidden = !e.target.checked;
-      if (e.target.checked && material.value === "0" && !material.disabled) {
-        material.value = "1";
-        body.querySelector(".mat-stufe-auto").hidden = false;
-        ohneZugang();
-      }
+    pruefer.addEventListener("change", () => {
+      body.querySelector(".mat-urkunde").hidden = !pruefer.checked;
+      if (!pruefer.checked) offen = false;
+      else if (material.disabled) offen = true;
+      else heben();
+      zeigen();
     });
     const chef = body.querySelector("#u-r-verwaltung");
     chef.addEventListener("change", () => {
@@ -272,7 +281,8 @@
         if (voll) { f.dataset.vorher = f.value; f.value = "2"; f.disabled = true; f.title = ERGIBT_SICH; }
         else { f.disabled = false; f.title = m.hilfe; if (f.dataset.vorher !== undefined) f.value = f.dataset.vorher; }
       });
-      ohneZugang();
+      if (!voll && offen) { offen = false; heben(); }
+      zeigen();
     });
   }
 

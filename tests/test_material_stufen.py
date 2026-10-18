@@ -673,8 +673,10 @@ def test_nutzerverwaltung_oberflaeche():
                 '"alles"', "u-mat-katalog"):
         assert weg not in js, weg
     assert "Produktkatalogpfleger" not in html and "Spalte Material ist nur Anzeige" not in html
+    # Die Hebung auch nach einem Hin und Her der Verwaltung (Häkchen gesetzt, während Material überdeckt war); der
+    # Hinweis nur, solange Material nicht überdeckt ist (im Chromium nachgeprüft, Prüfung der Modulstufen Nr. 8).
     for da in ("wirkt nicht – kein Zugang", "Frei&shy;gabe", 'material.value === "0"', 'material.value = "1"',
-               "Material steht jetzt auf „Mitglied“"):
+               "Material steht jetzt auf „Mitglied“", "if (!voll && offen)", "auto.hidden = !gehoben || material.disabled"):
         assert da in js, da
     print("Nutzerverwaltung (Oberfläche) bestanden.")
 
