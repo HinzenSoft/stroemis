@@ -81,6 +81,41 @@ def test_urkunde_korrekturen():
     print("Urkunde-Korrekturen bestanden.")
 
 
+def test_formulare_ordnerfoto_und_suchfeld():
+    """Das Ordnerfoto öffnet groß wie ein Produktbild: Der Ordner liefert neben Web- und Vorschaufassung das Original
+    (nur für Konten mit Zugang zum Modul). Das Nummernsuchfeld korrigiert nichts und schreibt groß (iOS)."""
+    import io
+
+    from PIL import Image
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        w, f = k["wart"], k["fuehrung"]
+        gid, _ = gliederung(w)
+        o = w.get(f"/api/material/ordner/{gid}").json["ordner"]
+        assert o["foto"] is None and o["original"] is None, o
+        r = w.post(f"/api/material/ordner/{gid}/foto", data={"file": (jpeg(400, 200), "regal.jpg")}, headers=H,
+                   content_type="multipart/form-data")
+        assert r.status_code == 200, r.get_json()
+        o = f.get(f"/api/material/ordner/{gid}").json["ordner"]
+        assert o["original"].startswith("/media/material/orig/") and o["foto"].startswith("/media/material/web/"), o
+        assert f.get(o["foto"]).status_code == 200
+        r = f.get(o["original"])
+        assert r.status_code == 200 and Image.open(io.BytesIO(r.data)).size == (400, 200)
+        assert k["nutzer"].get(o["original"]).status_code == 403
+        # Auch in der Liste der Ordner (Leiste) steht das Original, ohne Foto keins.
+        baum = {x["id"]: x for x in f.get("/api/material/ordner").json["ordner"]}
+        assert baum[gid]["original"] == o["original"]
+        assert w.delete(f"/api/material/ordner/{gid}/foto", headers=H).status_code == 200
+        assert f.get(f"/api/material/ordner/{gid}").json["ordner"]["original"] is None
+        html = f.get(f"/material/ordner/{gid}").get_data(as_text=True)
+        feld = html[html.index('name="q"'):]
+        feld = feld[:feld.index(">")]
+        for attr in ('autocapitalize="characters"', 'autocorrect="off"', 'spellcheck="false"', 'enterkeyhint="search"'):
+            assert attr in feld, (attr, feld)
+    print("Ordnerfoto (Original) und Suchfeld bestanden.")
+
+
 if __name__ == "__main__":
     test_mangel_braucht_bemerkung()
     test_urkunde_korrekturen()
+    test_formulare_ordnerfoto_und_suchfeld()
