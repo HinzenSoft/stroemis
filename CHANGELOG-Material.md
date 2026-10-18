@@ -10,7 +10,7 @@ Lieferungen; jede ist für sich deploybar.
 | 2 – Prüfung | Prüfformular, Mangelfoto, Anhänge, Ergebnis, Sperre, Aussonderung, Lebenslauf, Prüfdurchgang; dazu Status „neu“ mit Eingangsprüfung, Prüfen jederzeit, Ordnernavigation | geliefert 17.10.2026, freigegeben 17.10.2026 |
 | 3 – Nachweis | Unterschrift, Festschreiben, PDF mit Prüfsumme, Prüfseite; dazu Berichtigung und Unterschriftsfelder | geliefert 17.10.2026, freigegeben 17.10.2026 |
 | 4 – Überblick | Übersicht mit Fälligkeiten je Ordner, Führungskraft nur lesend, QR-Adresse mit Status, Export (CSV, Protokoll-ZIP, Lebenslauf-PDF); dazu Katalogaustausch (Katalog und Formulare von dev in die Produktion, ohne Bestand und Prüfungen) und Rückrufe zu Produkten (Hinweis in der Anwendung und per Mail). Kein Etikettenbogen (nicht gewünscht) | geliefert 17.10.2026, freigegeben 17.10.2026 |
-| 5 – Feinschliff | Rückmeldungen aus dem Pilotbetrieb: Bedienung am Telefon, auf Foldables und Tablets; Ordnerkopf aufgeräumt | in Arbeit |
+| 5 – Feinschliff | Rückmeldungen aus dem Pilotbetrieb: Ordnerkopf, einheitliche Knöpfe, Suchvorschläge, Urkundennummer im Profil, Pflicht-Bemerkung bei Mangel, Produktsuche, Bedienung auf Telefon, Foldable und Tablet | geliefert 18.10.2026, freigegeben 18.10.2026 („Starte mit Phase 2“) |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -891,9 +891,10 @@ Rückrufen mit Seriennummern (folgt dem Datenmodell), Abfragen je Artikel auf de
 - **Python-Version**: Die Prüfung des ZIP-Inhaltsverzeichnisses nutzt `zipfile._EndRecData` (Python 3.12 und 3.14
   geprüft); ändert eine künftige Version sie, schlägt `test_zip_verzeichnis_vor_dem_lesen` an.
 
-## Lieferung 5 – Feinschliff nach Pilot (in Arbeit)
+## Lieferung 5 – Feinschliff nach Pilot (18.10.2026)
 
-Rückmeldungen aus dem Pilotbetrieb. Lieferung 4 wurde am 17.10.2026 mit „Lieferung 5 starten“ freigegeben.
+Rückmeldungen aus dem Pilotbetrieb. Lieferung 4 wurde am 17.10.2026 mit „Lieferung 5 starten“ freigegeben, Lieferung 5
+am 18.10.2026 mit „Starte mit Phase 2“. Keine neue Schemaversion (bleibt 7), keine neuen Abhängigkeiten.
 
 ### Neu
 
