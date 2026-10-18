@@ -596,7 +596,8 @@ def meldung_lesen(mid):
 
 @api.delete("/meldungen/<int:mid>")
 def meldung_loeschen(mid):
-    """Nur der Melder selbst (meldung.loeschen prüft das)."""
+    """Nur der Melder selbst (meldung.loeschen prüft das). Wer die Meldung nicht sehen darf, bekommt dieselbe 404 wie
+    für eine, die es nicht gibt – auch ohne Modulzugang."""
     if not current_user():
         return jsonify(error="Nicht angemeldet"), 401
     meldung.loeschen(mid)

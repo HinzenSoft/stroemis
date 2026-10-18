@@ -291,8 +291,9 @@ def ablehnen(mid, d):
 
 def loeschen(mid):
     """Der Melder löscht seine Meldung – offen (sie verschwindet bei den Katalogpflegern) oder erledigt. Ein
-    Produkt, das aus ihr entstand, bleibt; die Fotos gehen mit."""
-    r = meldung(mid)
+    Produkt, das aus ihr entstand, bleibt; die Fotos gehen mit. Wer die Meldung nicht sehen darf, bekommt dieselbe 404
+    wie für eine, die es nicht gibt (lesbar); 403 nur, wer sie sieht, aber nicht gemacht hat."""
+    r = lesbar(mid)
     uid, _ = akteur()
     if not uid or r["created_by"] != uid:
         raise Abgelehnt("Löschen kann eine Meldung nur, wer sie gemacht hat.", 403)

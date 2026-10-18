@@ -1590,6 +1590,13 @@ def test_nichts_aus_b_paket_d():
         t, b = trennung_aufbau(tmp)
         w, ids = t.wart_a, t.ids
         gleich_wie_unbekannt(w.get(f"/api/material/meldungen/{b.meldung}"), w.get("/api/material/meldungen/999999"))
+        # Löschen ebenso – auch ohne Modulzugang (nutzer). Wer die Meldung sieht, aber nicht gemacht hat: 403.
+        for c in (w, t.k["nutzer"]):
+            gleich_wie_unbekannt(c.delete(f"/api/material/meldungen/{b.meldung}", headers=H),
+                                 c.delete("/api/material/meldungen/999999", headers=H))
+        r = t.k["katalog"].delete(f"/api/material/meldungen/{b.meldung}", headers=H)
+        assert r.status_code == 403 and "wer sie gemacht hat" in r.json["error"], r.get_json()
+        assert zeilen(t.app, "SELECT 1 FROM mat_product_request WHERE id = ?", (b.meldung,))
         for url in ("/api/material/meldungen", "/api/material/meldungen?eigene=0", "/api/material/meldungen?eigene=1"):
             r = w.get(url)
             assert r.status_code == 200 and b.meldung not in [m["id"] for m in r.json["meldungen"]], (url, r.get_json())

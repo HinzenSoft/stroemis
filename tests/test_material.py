@@ -1950,8 +1950,13 @@ def test_produktmeldung_loeschen():
             assert r.status_code == 201, r.get_json()
             m1 = r.json["meldung"]["id"]
             assert len(os.listdir(orig)) == len(vorher) + 1
-            for wer in ("katalog", "adm", "fuehrung", "nutzer"):
+            # Wer die Meldung sieht (Katalogpflege, Verwaltung), aber nicht gemacht hat: 403. Wer sie nicht sieht
+            # (ohne Ordner nur Melder, Katalogpflege und Verwaltung): dieselbe 404 wie für eine, die es nicht gibt.
+            for wer in ("katalog", "adm"):
                 assert k[wer].delete(f"/api/material/meldungen/{m1}", headers=H).status_code == 403, wer
+            for wer in ("fuehrung", "nutzer"):
+                r = k[wer].delete(f"/api/material/meldungen/{m1}", headers=H)
+                assert r.status_code == 404 and r.json == k[wer].delete("/api/material/meldungen/999999", headers=H).json, wer
             assert app.test_client().delete(f"/api/material/meldungen/{m1}", headers=H).status_code == 401
             assert k["wart"].delete(f"/api/material/meldungen/{m1}", headers=H).status_code == 200
             assert k["wart"].get(f"/api/material/meldungen/{m1}").status_code == 404
