@@ -23,9 +23,9 @@
      (data-gruppe, etwa alle Fotos einer Prüfung), blättern Pfeiltasten und Pfeilknöpfe – mit dem Finger auch
      Wischen nach links oder rechts; Wischen nach unten schließt.
      Die Großansicht ist ein modaler <dialog>: Der Fokus bleibt darin (Tab landete sonst auf der Kopfleiste dahinter),
-     die Seite dahinter ist inert und rollt nicht mit (html.mat-lb-offen, touch-action: none) – nach dem Schließen
-     steht man an derselben Stelle des Prüfformulars. Solange er offen ist, sperrt html:has(dialog[open]) (app.css)
-     auch das Ziehen zum Neuladen. */
+     die Seite dahinter ist inert und rollt nicht mit (am Touchgerät html.mat-lb-offen und touch-action: none, mit der
+     Maus ein wheel-Handler) – nach dem Schließen steht man an derselben Stelle des Prüfformulars. Solange er offen
+     ist, sperrt html:has(dialog[open]) (app.css) auch das Ziehen zum Neuladen. */
   const bildLink = (web, original, titel, gruppe, bildHtml) => `<a class="mat-bildlink" href="${esc(original || web)}"
     target="_blank" rel="noopener" data-web="${esc(web)}" data-titel="${esc(titel || "")}"${gruppe ? ` data-gruppe="${esc(gruppe)}"` : ""}
     aria-label="${esc(titel ? `Foto groß zeigen: ${titel}` : "Foto groß zeigen")}">${bildHtml}</a>`;
@@ -74,6 +74,13 @@
       start = e.pointerType !== "mouse" && e.isPrimary ? { x: e.clientX, y: e.clientY } : null;
     });
     box.addEventListener("pointercancel", () => { start = null; });
+    // Jede Bewegung im Dialog gehört der Wischgeste (touch-action: none). Chromium nahm einen Wisch trotzdem als Schwung
+    // (Fling), und der erste Tipp danach – auf ✕ oder einen Pfeil – hielt nur diesen an, statt zu schließen oder zu
+    // blättern. Wer touchmove absagt, lässt keinen Schwung entstehen; touchstart bleibt frei, sonst käme kein Klick an.
+    box.addEventListener("touchmove", (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
+    // Mit der Maus rollt das Rad die Seite dahinter nicht – die Rollsperre (html.mat-lb-offen) gilt nur am Touchgerät,
+    // sonst stünde statt des Rollbalkens ein weißer Streifen da.
+    box.addEventListener("wheel", (e) => { if (!e.ctrlKey) e.preventDefault(); }, { passive: false });   // Strg+Rad zoomt weiter
     box.addEventListener("pointerup", (e) => {
       if (!start || !e.isPrimary) return;
       const dx = e.clientX - start.x, dy = e.clientY - start.y;
@@ -677,10 +684,10 @@
      der Ordnerleiste (/start, ordner_uebersicht). Die Systemordner sind keine eigenen Zeilen: Gesperrte und ausgesonderte
      Artikel liegen in ihrer Gliederung und zählen dort. Jede Zahl führt zur Liste genau dieser Artikel (Prüfungen, nach
      Ordner und Status gefiltert), die nächste Fälligkeit zu allem Fälligen im Ordner, der Name zum Ordner. Ein großer Baum
-     (mehr als UE_GROSS Zeilen) beginnt mit zugeklappten Ordnern ab der zweiten Ebene unter der Gliederung. Bis 640 px
-     wird jede Zeile zur Karte; leere Zahlen entfallen dort. */
-  // Kurztitel mit weichen Trennstellen (\u00ad): Am Rechner stehen die Köpfe einzeilig, in der engen Tabelle (641–860 px)
-  // dürfen sie dort umbrechen – so bleibt Platz für die Ordnernamen.
+     (mehr als UE_GROSS Zeilen) beginnt mit zugeklappten Ordnern ab der zweiten Ebene unter der Gliederung. Bis 600 px
+     Inhaltsbreite wird jede Zeile zur Karte; leere Zahlen entfallen dort. */
+  // Kurztitel mit weichen Trennstellen (\u00ad): Am Rechner stehen die Köpfe einzeilig, in der engen Tabelle (601–820 px
+  // Inhaltsbreite) dürfen sie dort umbrechen – so bleibt Platz für die Ordnernamen.
   const UE_SPALTEN = [["ueberfaellig", "über\u00adfällig", "überfällig"], ["neu", "neu", "neu (Eingangsprüfung offen)"],
                       ["bald_faellig", "bald fällig", "bald fällig"], ["gesperrt", "ge\u00adsperrt", "gesperrt"],
                       ["lebensdauer", "Lebens\u00addauer erreicht", "Lebensdauer erreicht"]];
@@ -695,7 +702,7 @@
       const knopf = o.unterordner
         ? `<button type="button" class="mat-ue-klapp" data-ue-klapp="${o.id}" aria-expanded="${!zu.has(o.id)}" aria-label="Unterordner von ${esc(o.name)}"></button>`
         : '<span class="mat-ue-klapp" aria-hidden="true"></span>';
-      // Die Karte (bis 640 px) beschriftet mit dem Kurztitel – „neu“ statt „neu (Eingangsprüfung offen)“ spart eine Zeile.
+      // Die Karte (bis 600 px Inhaltsbreite) beschriftet mit dem Kurztitel – „neu“ statt „neu (Eingangsprüfung offen)“ spart eine Zeile.
       const zahlen = UE_SPALTEN.map(([s, kurz, lang]) => {
         const n = o.zaehlung[s] || 0;
         return `<td data-l="${esc(kurz.replace(/\u00ad/g, ""))}" class="mat-ue-zahl${n ? "" : " mat-ue-null"}">${n ? `<a class="mat-zahl s-${s}" href="/material/pruefungen?ordner=${o.id}&status=${s}" title="${esc(`${lang} – ${o.name}`)}">${n}</a>` : '<span class="muted">–</span>'}</td>`;
@@ -751,8 +758,9 @@
     return `<button type="button" class="mat-sort${an ? " an" : ""}" data-act="sortieren" data-feld="${feld}"
       title="nach ${esc(titel)} sortieren">${esc(titel)}<span class="mat-sort-pfeil" aria-hidden="true">${an ? (sort.richtung === "ab" ? "▼" : "▲") : "↕"}</span></button>`;
   }
-  /* mehr (Lieferung 5): klasse am <th>; vor/nach: Köpfe zusammengelegter Spalten, die nur die enge Tabelle (641–860 px)
-     zeigt – ihre eigene Spalte (mat-schmal-weg, mat-eng-weg) entfällt dort, der Inhalt steht klein in dieser Zelle. */
+  /* mehr (Lieferung 5): klasse am <th>; vor/nach: Köpfe zusammengelegter Spalten, die nur die enge Tabelle (601–820 px
+     Inhaltsbreite) zeigt – ihre eigene Spalte (mat-schmal-weg, mat-eng-weg) entfällt dort, der Inhalt steht klein in
+     dieser Zelle. */
   function sortKopf(titel, feld, sort, mehr) {
     mehr = mehr || {};
     const an = sort && sort.feld === feld;
@@ -761,7 +769,7 @@
   }
   // Ein Kopf einer zusammengelegten Spalte im Kopf der Nachbarspalte (enge Tabelle); art: "schmal" oder "eng".
   const kopfZusatz = (titel, feld, sort, art) => `<span class="mat-${art}-zusatz mat-kopf-zusatz">${sort ? sortKnopf(titel, feld, sort) : esc(titel)}</span>`;
-  /* Über den Karten (bis 640 px) fehlt der Tabellenkopf – und mit ihm Sortierung und „alle auswählen“. Die Zeile hier
+  /* Über den Karten (bis 600 px Inhaltsbreite) fehlt der Tabellenkopf – und mit ihm Sortierung und „alle auswählen“. Die Zeile hier
      holt beides zurück: „Sortieren nach“ mit denselben Spalten (felder: [[Titel, feld], …]), daneben die Richtung, und
      bei Mehrfachauswahl das Kästchen für alle. Breiter ist sie unsichtbar (material.css). */
   function kartenKopf(felder, sort, auswahl) {
@@ -781,9 +789,9 @@
   // Ein Produkt in Listen: Hersteller in eigener Spalte, hier Bild, Modell und Artikelnummer.
   const produktZelle = (a) => `${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${esc(a.model || "")}${a.article_no ? ` <span class="muted">${esc(a.article_no)}</span>` : ""}${demoMarke(a.demo)}`;
 
-  /* Drei Gestalten je nach Breite (material.css, „Lieferung 5 – Geräte: listen“): ab 861 px alle Spalten; 641–860 px
-     eine engere Tabelle – Seriennummer unter der Inventar-Nr., Hersteller über dem Produkt, nächste Prüfung unter dem
-     Status; bis 640 px je Artikel eine Karte, ebenso zusammengefasst, unten Häkchen und „Prüfen“. */
+  /* Drei Gestalten je nach Breite des Inhalts (material.css, „Lieferung 5 – Geräte: listen“): ab 821 px alle Spalten;
+     601–820 px eine engere Tabelle – Seriennummer unter der Inventar-Nr., Hersteller über dem Produkt, nächste Prüfung
+     unter dem Status; bis 600 px je Artikel eine Karte, ebenso zusammengefasst, unten Häkchen und „Prüfen“. */
   function artikelTabelle(liste, opts) {
     opts = opts || {};
     const s = opts.sort || null;
@@ -2667,7 +2675,39 @@
     function vergessen() {
       felder.forEach((e) => clearTimeout(e.timer));
       felder.clear();
-      try { sessionStorage.removeItem(ABLAGE); } catch (err) { /* egal */ }
+      try { sessionStorage.removeItem(ABLAGE); sessionStorage.removeItem(ABSCHLUSS); } catch (err) { /* egal */ }
+    }
+
+    /* Ergebnis, Grund und „Nächste Prüfung“ der Abschlussleiste gehen erst mit dem Festschreiben an den Server. Bis dahin
+       merkt sie sich dieses Fenster (sessionStorage wie oben) und setzt sie beim Laden wieder ein – Neuladen, die
+       Zurück-Geste oder ein im Hintergrund verworfener Tab nahmen sie sonst mit, obwohl „Alles ist gespeichert“ dastand.
+       Die Statuszeile sagt, dass sie nur hier liegen (standZeigen). */
+    const ABSCHLUSS = `${ABLAGE}-abschluss`;
+    // Ohne gewähltes Ergebnis gibt es nichts zu merken – Grund und Datum gehören zu ihm.
+    function abschlussStand() {
+      const grund = $("#pr-grund"), due = $("#pr-due");
+      return { ergebnis, grund: grund ? grund.value : "", faellig: due ? due.value : "", leer: !ergebnis };
+    }
+    function abschlussMerken() {
+      const d = abschlussStand();
+      try {
+        if (d.leer) sessionStorage.removeItem(ABSCHLUSS);
+        else sessionStorage.setItem(ABSCHLUSS, JSON.stringify({ ergebnis: d.ergebnis, grund: d.grund, faellig: d.faellig }));
+      } catch (err) { /* kein Speicher (privater Modus) – dann bleibt es bis zum Festschreiben im Fenster */ }
+      standZeigen();
+    }
+    function abschlussZurueck() {
+      let alt;
+      try { alt = JSON.parse(sessionStorage.getItem(ABSCHLUSS) || "null"); } catch (err) { alt = null; }
+      if (alt && typeof alt === "object") {
+        if (Object.prototype.hasOwnProperty.call(ERGEBNIS, alt.ergebnis)) ergebnis = alt.ergebnis;
+        const grund = $("#pr-grund"), due = $("#pr-due");
+        if (grund && typeof alt.grund === "string") grund.value = alt.grund.slice(0, 300);
+        if (due && typeof alt.faellig === "string" && /^\d{4}-\d{2}-\d{2}$/.test(alt.faellig)
+          && (!due.min || alt.faellig >= due.min) && (!due.max || alt.faellig <= due.max)) due.value = alt.faellig;
+        abschlussAktualisieren();
+      }
+      abschlussMerken();             // was nicht mehr gilt (etwa „einsatzbereit“ nach einem kritischen Mangel), fällt weg
     }
 
     // „Alles ist gespeichert“ nur, wenn es stimmt.
@@ -2678,7 +2718,9 @@
       let fehler = null;
       felder.forEach((e) => { if (offen(e)) { ausstehend = true; if (e.fehler && !e.unterwegs) fehler = e.fehler; } });
       el.textContent = fehler ? `Noch nicht gespeichert (${fehler}). Was du getippt hast, bleibt in diesem Fenster und geht erneut, sobald du das Feld verlässt.`
-        : ausstehend ? "Wird gespeichert …" : "Alles ist gespeichert – du kannst die Prüfung jederzeit unterbrechen und später fortsetzen.";
+        : ausstehend ? "Wird gespeichert …"
+        : !abschlussStand().leer ? "Alles außer dem Ergebnis ist gespeichert – du kannst die Prüfung jederzeit unterbrechen und später fortsetzen. Das Ergebnis samt Grund bzw. nächster Prüfung merkt sich bis zum Festschreiben nur dieses Fenster."
+        : "Alles ist gespeichert – du kannst die Prüfung jederzeit unterbrechen und später fortsetzen.";
       el.classList.toggle("mat-warn", Boolean(fehler));
     }
 
@@ -2785,7 +2827,7 @@
       if (x.art === "yesno") {
         steuer = `<div class="mat-wahl3" role="group" aria-label="Befund zu ${esc(x.text)}">
           ${["ja", "nein"].map((w) => `<button type="button" data-act="pwert" data-rid="${x.id}" data-wert="${w}" class="${w === x.soll ? "soll" : "abw"}" aria-pressed="${!nz && x.wert === w}">${w === "ja" ? "Ja" : "Nein"}</button>`).join("")}
-          <button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="nicht_zutreffend" aria-pressed="${nz}">n. z.</button></div>`;
+          <button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="nicht_zutreffend" aria-pressed="${nz}" title="nicht zutreffend">n. z.</button></div>`;
       } else if (x.art === "signature") {
         // Unterschriftsfeld: gezeichnet im Pad (unterschrift.js); „n. z.“ nimmt es heraus. Kein Foto.
         steuer = `<div class="mat-us-feld">
@@ -2799,7 +2841,7 @@
           : x.art === "number" ? `<input type="text" inputmode="decimal" class="mat-pwert" data-rid="${x.id}" value="${esc(x.wert || "")}" placeholder="${x.soll ? `Soll ${esc(x.soll)}` : "Wert"}" aria-label="${esc(x.text)}">`
           : `<textarea class="mat-pwert" data-rid="${x.id}" rows="2" maxlength="1000" aria-label="${esc(x.text)}" placeholder="${esc(x.soll || "")}">${esc(x.wert || "")}</textarea>`;
         steuer = `${feld}<div class="mat-wahl3" role="group" aria-label="Befund zu ${esc(x.text)}">
-          ${[["ok", "in Ordnung", "soll"], ["mangel", "Mangel", "abw"], ["nicht_zutreffend", "n. z.", ""]].map(([b, t, k]) => `<button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="${b}" class="${k}" aria-pressed="${x.befund === b}">${t}</button>`).join("")}</div>`;
+          ${[["ok", "in Ordnung", "soll"], ["mangel", "Mangel", "abw"], ["nicht_zutreffend", "n. z.", ""]].map(([b, t, k]) => `<button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="${b}" class="${k}" aria-pressed="${x.befund === b}"${b === "nicht_zutreffend" ? ' title="nicht zutreffend"' : ""}>${t}</button>`).join("")}</div>`;
       }
       const fotoPflicht = mangel || (x.art === "photo" && x.pflicht && !nz);
       // Zwei Wege zum Foto: „📷“ öffnet am Telefon gleich die Kamera (capture), „Galerie“ nimmt ein schon
@@ -2885,9 +2927,26 @@
         <div class="mat-abschluss-hinweis" id="pr-hinweis" aria-live="polite" data-act="hinweis-ganz"></div></div>`;
     }
 
+    // In der einzeiligen Leiste (wenig Höhe, breite Touch-Geräte – material.css) ist das Feld für den Grund oft schmal: Passt
+    // die Langform dort nicht hinein, steht nur „Grund“ darin und die Langform im title. Am Rechner bleibt sie.
+    const EINZEILIG = window.matchMedia("(max-height: 500px) and (min-width: 561px), (pointer: coarse) and (min-width: 600px)");
+    const textMass = document.createElement("canvas").getContext("2d");
+    function grundPlatzhalter() {
+      const g = $("#pr-grund");
+      if (!g) return;
+      const lang = offeneHinweise().maengel.length ? "Grund (freiwillig – die Mängel stehen oben)" : "Grund (Pflicht ohne Mangel)";
+      let kurz = false;
+      if (EINZEILIG.matches && !g.hidden) {
+        const s = getComputedStyle(g);
+        textMass.font = `${s.fontSize} ${s.fontFamily}`;
+        kurz = textMass.measureText(lang).width > g.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
+      }
+      g.placeholder = kurz ? "Grund" : lang;
+      g.title = kurz ? lang : "";
+    }
     function abschlussAktualisieren() {
       const h = offeneHinweise();
-      if (ergebnis === "einsatzbereit" && h.einsatzSperre) ergebnis = null;
+      if (ergebnis === "einsatzbereit" && h.einsatzSperre) { ergebnis = null; abschlussMerken(); }
       $$("#pr-abschluss [data-act=ergebnis]").forEach((b) => {
         b.setAttribute("aria-pressed", String(b.dataset.e === ergebnis));
         if (b.dataset.e === "einsatzbereit") {
@@ -2897,7 +2956,7 @@
       });
       $("#pr-due-feld").hidden = ergebnis !== "einsatzbereit";
       $("#pr-grund").hidden = !ergebnis || ergebnis === "einsatzbereit";
-      $("#pr-grund").placeholder = h.maengel.length ? "Grund (freiwillig – die Mängel stehen oben)" : "Grund (Pflicht ohne Mangel)";
+      grundPlatzhalter();
       $("#pr-ok").disabled = !ergebnis;
       const teile = [];
       if (h.offen.length) teile.push(`${plural(h.offen.length, "Pflichtpunkt", "Pflichtpunkte")} ohne Befund`);
@@ -2997,7 +3056,7 @@
       inhalt.innerHTML = `<div class="mat-pruefung${bearbeitbar() ? " mat-mit-leiste" : ""}">${kopf()}${ohneNummer}${bearbeitbar() ? bearbeitenHtml() : leseHtml()}</div>`;
       if (leisteBeobachter) leisteBeobachter.disconnect();
       if (bearbeitbar()) {
-        binden(); abschlussAktualisieren(); seitenZeichnen(); tipptPruefen(false);
+        binden(); abschlussAktualisieren(); abschlussZurueck(); seitenZeichnen(); tipptPruefen(false);
         if (leisteBeobachter) leisteBeobachter.observe($("#pr-abschluss"));
       } else {
         vergessen();
@@ -3065,7 +3124,9 @@
       // Beim Tippen vormerken (geht nach TIPP_MS), beim Verlassen sofort – Datumsfelder melden sich nur mit „change“.
       inhalt.addEventListener("input", (e) => {
         if (bearbeitbar() && e.target.matches(TEXT) && e.target.type !== "date") vormerken(schluessel(e.target), e.target.value);
+        if (bearbeitbar() && (e.target.id === "pr-grund" || e.target.id === "pr-due")) abschlussMerken();
       });
+      window.addEventListener("resize", () => { if (bearbeitbar()) grundPlatzhalter(); });
       inhalt.addEventListener("focusout", (e) => {
         const el = e.target;
         setTimeout(() => tipptPruefen(true), 0);
@@ -3249,7 +3310,12 @@
           $("#ah-liste").innerHTML = anhaengeListe();
         } catch (e) { toast(e.message, true); }
       },
-      ergebnis: (b) => { if (b.disabled) return; ergebnis = ergebnis === b.dataset.e ? null : b.dataset.e; abschlussAktualisieren(); if (ergebnis && ergebnis !== "einsatzbereit") fokus($("#pr-grund")); },
+      ergebnis: (b) => {
+        if (b.disabled) return;
+        ergebnis = ergebnis === b.dataset.e ? null : b.dataset.e;
+        abschlussAktualisieren(); abschlussMerken();
+        if (ergebnis && ergebnis !== "einsatzbereit") fokus($("#pr-grund"));
+      },
       festschreiben: async (b) => {
         if (!ergebnis) return;
         // Was der Server sicher ablehnt, gleich hier sagen – bevor nach der Unterschrift gefragt wird. Vorher alles

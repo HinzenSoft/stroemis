@@ -4,6 +4,7 @@
 <main class="page narrow">
   <h1>{{ code }}</h1>
   <p>{{ message }}</p>
-  <p><a href="/">Zum Wiki</a></p>
+  {# Ohne Wiki führte „Zum Wiki“ wieder hierher (die Startseite ist das Wiki) – dann zum eigenen Profil. #}
+  <p>{% if user and not rechte.wiki %}<a href="/profil">Zum Profil</a>{% else %}<a href="/">Zum Wiki</a>{% endif %}</p>
 </main>
 {% endblock %}

@@ -940,6 +940,60 @@ Rückmeldungen aus dem Pilotbetrieb. Lieferung 4 wurde am 17.10.2026 mit „Lief
 - **Produktsuche zeigt alle Treffer** (Artikel anlegen, Meldung zuordnen): statt acht Treffern und „genauer suchen“
   eine scrollbare Liste aller Treffer; je 50 kommen vom Server, die nächsten, sobald das Ende der Liste ins Bild rückt.
 
+### Telefon, Foldable und Tablet
+
+Grundlage war eine Bestandsaufnahme im Browser mit Touch-Emulation: vier Agenten, je eine Geräteklasse (Telefon hoch
+und quer, Foldable zu/auf und Doppelbildschirm mit Scharnier, Tablet hoch und quer, Bedienung mit Tastatur, Kerbe und
+Einhandbedienung), 70 Befunde mit Messwert und Bildschirmfoto. Gebaut in vier Paketen, danach je Geräteklasse und für
+die übrige App nachgeprüft, die Nachbefunde behoben und gegengeprüft. Am Rechner mit Maus ändert sich nichts (Pixelvergleich).
+
+- **Prüfformular im Feld**: Mit Bildschirmtastatur (auch quer) bleibt das Feld, in das man tippt, ganz sichtbar – Kopf-
+  und Abschlussleiste kleben dann nicht. Quer und bei wenig Höhe ist die Abschlussleiste einzeilig (58–85 statt
+  120–145 px), auf breiten Touch-Geräten stehen Umschalter, Foto und Bemerkung je Prüfpunkt in einer Zeile (Karten
+  halb so hoch) und „Festschreiben“ neben den Ergebnissen. **Wert und Bemerkungen werden schon beim Tippen
+  gespeichert** (entprellt, je Prüfpunkt nacheinander, beim Verlassen der Seite noch einmal) – ein Neuladen verliert
+  nichts mehr; Ergebnis, Grund und nächste Prüfung merkt sich das Fenster bis zum Festschreiben. „Foto entfernen“
+  fragt nach; neben „📷 Foto“ (Kamera) gibt es am Finger „Galerie“.
+- **Fotos groß**: Wischen blättert, nach unten wischen schließt; die Seite dahinter rollt nicht mit; Schließen und
+  Pfeile am Finger 44 px, mit Abstand zu Kerbe und Wischleiste. Die Unterschrift auf dem Pad bleibt beim Auf- und
+  Zuklappen eines Foldables richtig groß.
+- **Kopfleiste der ganzen App**: Was nicht in die Zeile passt, steht im Menü „Mehr ▾“ – zuerst weichen Name und
+  Schriftzug, dann wandern Abmelden, Profil und Module ins Menü; der aktive Punkt bleibt stehen. Vorher lagen
+  „Profil“ und „Abmelden“ am Telefon und am Tablet hochkant unsichtbar hinter dem Rand.
+- **Modulnavigation** in einer Zeile: Reiter rollen mit Randhinweis, die Nummernsuche liegt hinter einer Lupe (auf
+  Übersicht, Bestand und Trefferseite offen); am Telefon beginnt der Inhalt bei 130 statt 218 px, quer klebt die
+  Kopfleiste im Modul nicht mehr. Die Suchvorschläge passen bei offener Tastatur in den sichtbaren Bereich.
+- **Ordnerleiste** steht schon ab 1024 px (Tablet quer) fest neben dem Inhalt; als Schublade: Schließen 44 px,
+  Wischen nach links schließt, lange Namen brechen um statt „…“.
+- **Listen nach Inhaltsbreite** (Container-Abfragen statt Fensterbreite): volle Tabelle, ab 820 px Inhalt eine enge
+  Tabelle mit zusammengelegten Spalten, ab 600 px dichte Karten – neben der Leiste und im Doppelbildschirm passend.
+  In der Kartenansicht gibt es „Sortieren nach“, die Richtung und „alle auswählen“; leere Felder entfallen.
+  Auswahlkästchen 24 px mit Beschriftung, Knöpfe, Reiter und Zähler am Finger mindestens 44 px hoch.
+- **Dialoge**: Am Touchgerät öffnet ein Dialog keine Tastatur mehr (der Fokus liegt auf der Überschrift, außer ein
+  Feld ist ausdrücklich dafür vorgesehen, etwa der Wiki-Kommentar); die Knöpfe bleiben sichtbar, die Seite dahinter
+  rollt nicht mit. Foto im Ordner- und Produktdialog als richtiges Fotofeld: Vorschau vor dem Speichern, Kamera oder
+  Galerie, am Rechner auch Hineinziehen. Das Ordnerfoto lässt sich groß ansehen.
+- **Doppelbildschirm mit Scharnier**: Nichts Bedienbares liegt unter der Falz – Ordnerleiste links, Inhalt rechts,
+  Dialoge und Großansicht in einer Hälfte.
+- **Kleinigkeiten**: Kerbe und Wischleiste frei (safe-area) für feste Leisten, Schublade und Sammelleiste; Hinweise,
+  die nur im Tooltip standen, sind ohne Maus sichtbar (ein Tipp auf Zähler und Marken erklärt sie); Seriennummer- und
+  Suchfelder ohne Autokorrektur und Kleinschreibung; das QR-Adressfeld zoomt unter iOS nicht mehr; Brotkrumen am
+  Finger leichter zu treffen.
+- **Übrige App**: Ein Konto ohne Wiki-Recht landet nach der Anmeldung nicht mehr auf einer Fehlerseite ohne
+  Kopfleiste – mit Material-Recht geht es nach /material, sonst zeigt die Seite Kopfleiste, Profil und Abmelden.
+
+### Zu prüfen
+
+- **Auf echten Geräten** (nur emuliert geprüft): Android Chrome und iOS Safari mit Bildschirmtastatur hoch und quer
+  (Prüfformular), Wischen in der Großansicht und der erste Tipp danach, Kamera bzw. Galerie bei Prüf- und
+  Ordnerfotos, keine Tastatur beim Öffnen von Dialogen, Rollsperre hinter Dialogen ab iOS 16, Silbentrennung in der
+  schmalen Ordnerleiste, Surface Duo / Pixel Fold mit Segmenten.
+- **iOS 15 und älter** kennen keine Container-Abfragen: Dort gelten für die Listen die alten Regeln nach Fensterbreite.
+- **Tablet quer 1093–1199 px** neben der Leiste bekommt die volle Tabelle (Inhalt ab 821 px, kein Überlauf gemessen) –
+  wie ein Rechner gleicher Inhaltsbreite.
+- **Speichern beim Tippen** schickt beim Schreiben mehr Anfragen als früher (je Feld höchstens eine gleichzeitig,
+  800 ms nach dem letzten Tastendruck); sie füllen weder Journal noch Lebenslauf.
+
 ## Katalogdatei (Format 1)
 
 Eine JSON-Datei, UTF-8. Kategorien werden über Namen an ihrer Stelle im Baum gefunden, Produkte über die

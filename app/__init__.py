@@ -98,11 +98,13 @@ def index():
     """Startseite ist das Wiki – oder das erste Modul, das die Rechte-Matrix dem Konto öffnet."""
     if auth.nutzt("wiki"):
         return render_template("wiki.html", user=auth.current_user(), slug="")
-    for modul, ziel in (("karte", "/karte"), ("pruefungen", "/pruefungen"), ("verwaltung", "/admin")):
+    for modul, ziel in (("karte", "/karte"), ("pruefungen", "/pruefungen"), ("material", "/material"),
+                        ("verwaltung", "/admin")):
         if auth.nutzt(modul):
             return redirect(ziel)
-    return render_template("error.html", code=403, message="Für dein Konto ist noch kein Bereich "
-                           "freigeschaltet. Bitte wende dich an die Verwaltung."), 403
+    # Mit Kopfleiste (user): Profil und Abmelden bleiben erreichbar – ohne sie saß man auf der Fehlerseite fest.
+    return render_template("error.html", user=auth.current_user(), code=403, message="Für dein Konto ist noch kein "
+                           "Bereich freigeschaltet. Bitte wende dich an die Verwaltung."), 403
 
 
 @pages.get("/karte")
@@ -597,13 +599,13 @@ def create_app():
         # Fehlerseite als Antwort nur Ballast, einmal je Bild.
         if request.path.startswith("/media/"):
             return "", 404
-        return render_template("error.html", code=404, message="Diese Seite gibt es nicht."), 404
+        return render_template("error.html", user=auth.current_user(), code=404, message="Diese Seite gibt es nicht."), 404
 
     @app.errorhandler(403)
     def forbidden(_e):
         if request.path.startswith("/api/"):
             return jsonify(error="Keine Berechtigung"), 403
-        return render_template("error.html", code=403, message="Dafür fehlt die Berechtigung."), 403
+        return render_template("error.html", user=auth.current_user(), code=403, message="Dafür fehlt die Berechtigung."), 403
 
     @app.errorhandler(401)
     def unauthorized(_e):

@@ -1253,9 +1253,13 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 }
 .md-lightbox img { max-width: 96vw; max-height: 92vh; object-fit: contain; cursor: default; }
 .md-lightbox-close {
-  /* Kerbe und Kamera (Telefon quer) bleiben frei; 44 px für den Finger. */
-  position: absolute; top: calc(12px + var(--sicher-oben)); right: calc(16px + var(--sicher-rechts)); width: 44px; height: 44px;
+  /* Kerbe und Kamera (Telefon quer) bleiben frei. Mit der Maus 36 px wie bisher, am Finger 44 px – das × bleibt dabei
+     an derselben Stelle. Gilt auch für die Großansicht im Modul Material (dialog.mat-lightbox). */
+  position: absolute; top: calc(12px + var(--sicher-oben)); right: calc(16px + var(--sicher-rechts)); width: 36px; height: 36px;
   background: none; border: 0; color: var(--weiss); font-size: 2rem; line-height: 1; cursor: pointer;
+}
+@media (pointer: coarse) {
+  .md-lightbox-close { top: calc(8px + var(--sicher-oben)); right: calc(12px + var(--sicher-rechts)); width: 44px; height: 44px; }
 }
 .toc-list a.active { color: var(--rot); font-weight: 700; }
 
@@ -2194,8 +2198,11 @@ dialog.us-dlg { width: min(640px, 96vw); }
    in die rechte (dort steht auch der Inhalt), mit zwei Hälften übereinander in die untere. */
 @media (horizontal-viewport-segments: 2) {
   /* Die Bauchbinde: das Zeichen samt Schriftzug in der linken Hälfte, die Navigation in der rechten (zu eng wird es
-     dort für Konten mit allen Modulen – dann ordnet common.js sie wie am Telefon). */
-  .bauchbinde .brand { flex: none; min-width: calc(env(viewport-segment-left 1 0) - 8px - var(--sicher-links)); }
+     dort für Konten mit allen Modulen – dann ordnet common.js sie wie am Telefon). Begrenzt wird dafür die Navigation
+     auf die rechte Hälfte, nicht der Link des Zeichens gestreckt: Der endet bei seinem Inhalt und reicht nicht mehr
+     als leere Klickfläche unter die Falz. */
+  .bauchbinde .brand { flex: none; }
+  .bauchbinde .nav { max-width: calc(env(viewport-segment-width 1 0) - var(--sicher-rechts)); }
   .nav a, .nav button { padding: 0 9px; }
   dialog[open], html.tastatur dialog[open] { max-width: none; width: calc(env(viewport-segment-width 1 0) - 24px);
     margin-left: calc(env(viewport-segment-left 1 0) + 12px); margin-right: 12px; }

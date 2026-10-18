@@ -5,7 +5,7 @@
   const $ = (sel, root) => (root || document).querySelector(sel);
   /* Beschriftung für [Text](url) und ![Text](url): Ein Dateiname wie "Plan [v2].pdf" beendete
      mit seiner eckigen Klammer die Beschriftung, und aus dem Link wurde Fließtext. */
-  const mdBeschriftung = (s) => String(s || "").replace(/([\[\]])/g, "\\$1");
+  const mdBeschriftung = (s) => String(s || "").replace(/([[\]])/g, "\\$1");
   /* Beim Wechsel zwischen Lesen und Bearbeiten gemerkte Bildlaufhöhe: beide Ansichten setzen
      jeden Block auf dieselbe Höhe, die Stelle im Text bleibt damit unter dem Zeiger stehen.
      Ohne das Merken sprang der Editor ans Dokumentende, sobald er den Fokus bekam. */
@@ -2213,7 +2213,7 @@
        außen unerreichbar. Zeilen in Codeblöcken zählen nicht mit – ein Beispiel ist kein
        Abschnitt. */
     const bausteineImEditor = () => {
-      let md = "";
+      let md;
       try { md = ed.getMarkdown(); } catch (e) { return []; }
       const zeilen = md.split("\n");
       const raus = [];
@@ -2566,8 +2566,8 @@
       // und die zweite Taste darf die dritte nicht unmöglich machen.
       if (/--$/.test(before) && !/---$/.test(before) && !/^\s*-+$/.test(before)) { cut = 2; put = "–"; }
       else if (/\.\.\.$/.test(before)) { cut = 3; put = "…"; }
-      else if (/(^|[\s(\[])"$/.test(before)) { cut = 1; put = "„"; }
-      else if (/[^\s(\[]"$/.test(before)) { cut = 1; put = "“"; }
+      else if (/(^|[\s([])"$/.test(before)) { cut = 1; put = "„"; }
+      else if (/[^\s([]"$/.test(before)) { cut = 1; put = "“"; }
       if (!cut) return;
       const start = sel.anchorOffset - cut;
       node.nodeValue = node.nodeValue.slice(0, start) + put + node.nodeValue.slice(sel.anchorOffset);
@@ -3796,7 +3796,7 @@
       const unten = i >= 0 ? els[i + 1] : null;
       if (unten && unten.classList.contains("ed-unterschrift")) {
         const md = ed.getMarkdown();
-        const { lines, blocks } = topLevelBlocks(md);
+        const { blocks } = topLevelBlocks(md);
         if (blocks.length === els.length && blocks[i] && blocks[i + 1]) {
           const erg = EDMD.ausrichten(md, { markeZeile: blocks[i].start, endeZeile: blocks[i + 1].start,
                                             amBlockanfang: false, mode });
@@ -3816,7 +3816,7 @@
        Seite“, und die stünde dann als Vorschlag im Feld. */
     const altDialog = (el, titel, hilfe, bau) => {
       const occ = fundstelleVon(el);
-      const cur = occ ? occ.alt.replace(/\\([\[\]])/g, "$1") : (el.getAttribute("alt") || "");
+      const cur = occ ? occ.alt.replace(/\\([[\]])/g, "$1") : (el.getAttribute("alt") || "");
       hideCtx();
       dialog(`<h2>${esc(titel)}</h2>
         <p class="help">${esc(hilfe)}</p>
@@ -4689,9 +4689,9 @@
     $(".wiki-editor").appendChild(stats);
     const updateStats = () => {
       if (!lebt || state.editor !== meinEditor) return;
-      let md = "";
+      let md;
       try { md = meinEditor.getMarkdown() || ""; } catch (e) { return; }
-      const words = (md.replace(/[#*_`>|\-]+/g, " ").match(/\S+/g) || []).length;
+      const words = (md.replace(/[#*_`>|-]+/g, " ").match(/\S+/g) || []).length;
       const min = Math.max(1, Math.round(words / 200));
       stats.textContent = `${words} Wörter · ${md.length} Zeichen · ungefähr ${min} Minute${min === 1 ? "" : "n"} Lesezeit`;
     };

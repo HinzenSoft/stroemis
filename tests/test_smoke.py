@@ -1815,7 +1815,16 @@ def test_rechte():
         assert c1.get("/api/map").status_code == 403 and c1.get("/karte").status_code == 403
         r = c1.get("/")
         assert r.status_code == 403 and "kein Bereich" in r.get_data(as_text=True)
+        # … mit Kopfleiste: Profil und Abmelden bleiben erreichbar; „Zum Wiki“ führte wieder hierher.
+        seite = r.get_data(as_text=True)
+        assert 'id="logout"' in seite and 'href="/profil"' in seite and "Zum Wiki" not in seite, seite[-600:]
+        assert 'id="logout"' in c1.get("/pruefungen").get_data(as_text=True)   # ebenso die Fehlerseite ohne Recht
         assert c1.get("/profil").status_code == 200                      # das Profil bleibt immer
+        # Nur das Modul Material: Die Startseite führt dorthin, nicht auf die Fehlerseite.
+        assert adm.put(f"/api/admin/users/{uid1}", json={"rechte": {"material": 1}}).status_code == 200
+        r = c1.get("/")
+        assert r.status_code == 302 and r.headers["Location"].endswith("/material"), (r.status_code, r.headers.get("Location"))
+        assert adm.put(f"/api/admin/users/{uid1}", json={"rechte": {"material": 0}}).status_code == 200
 
         # Verwaltung im Wiki: fremde Seiten bearbeiten und veröffentlichen, aber keine Nutzer.
         c2, uid2 = member("b@example.org")

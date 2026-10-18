@@ -81,6 +81,25 @@ def test_urkunde_korrekturen():
     print("Urkunde-Korrekturen bestanden.")
 
 
+def test_css_klammern():
+    """Die Stylesheets lassen sich parsen: Jede geöffnete Klammer wird geschlossen (Kommentare und Zeichenketten
+    ausgenommen). Beim Zusammenführen der Geräte-Pakete gingen zwei „}“ verloren – die Regeln dahinter hingen dann in
+    fremden Media-Abfragen und griffen fast nirgends, ohne dass ein Test es merkte."""
+    import re
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for rel in ("app/static/css/app.css", "app/static/css/pruefungen.css", "app/material/static/material.css"):
+        text = open(os.path.join(wurzel, rel), encoding="utf-8").read()
+        text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+        text = re.sub(r'"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\'', '""', text)
+        tiefe = 0
+        for nr, zeile in enumerate(text.split("\n"), 1):
+            for z in zeile:
+                tiefe += (z == "{") - (z == "}")
+                assert tiefe >= 0, f"{rel}: überzählige }} (Zeile {nr} ohne Kommentare)"
+        assert tiefe == 0, f"{rel}: {tiefe} Block/Blöcke nicht geschlossen"
+    print("CSS-Klammern bestanden.")
+
+
 def test_shell_geruest():
     """Seitengerüst (Lieferung 5, Geräte): Die Hauptnavigation trägt das Menü „Mehr“ (verborgen, bis common.js Punkte
     hineinlegt) – innerhalb von <nav>, sonst griffe „Abmelden“ daraus nicht mehr. Der Name vor „Profil“ endet mit einem
@@ -211,6 +230,7 @@ def test_formulare_ordnerfoto_und_suchfeld():
 if __name__ == "__main__":
     test_mangel_braucht_bemerkung()
     test_urkunde_korrekturen()
+    test_css_klammern()
     test_shell_geruest()
     test_pruefform_tippen_speichern()
     test_formulare_ordnerfoto_und_suchfeld()

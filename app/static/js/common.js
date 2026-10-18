@@ -96,8 +96,11 @@ window.S = (function () {
     // showModal() setzt den Fokus selbst aufs erste Bedienelement – auf dem Telefon meist ein Textfeld, und dann ging
     // sofort die Bildschirmtastatur auf und verdeckte den halben Dialog. Am Touchgerät bekommt deshalb der Titel den
     // Fokus (autofocus; ein autofocus am <dialog> selbst übergeht Chromium); die Tastatur kommt erst, wenn man ins
-    // Feld tippt. Mit Maus und Tastatur bleibt es beim ersten Feld.
-    if (titel && window.matchMedia("(pointer: coarse)").matches) { titel.tabIndex = -1; titel.autofocus = true; }
+    // Feld tippt. Mit Maus und Tastatur bleibt es beim ersten Feld. Wer ein Feld ausdrücklich mit autofocus versieht
+    // (Kommentar und Antwort im Wiki: Der Dialog ist nur zum Schreiben da), behält es – auch am Touchgerät.
+    if (titel && window.matchMedia("(pointer: coarse)").matches && !body.querySelector("[autofocus]")) {
+      titel.tabIndex = -1; titel.autofocus = true;
+    }
     // Erst öffnen, dann onOpen: Ein geschlossener Dialog ist display:none – focus() und
     // scrollIntoView() darin liefen ins Leere, und der Fokus landete auf dem ersten Element.
     if (!dlg.open) dlg.showModal();
@@ -210,6 +213,10 @@ window.S = (function () {
       knopf.setAttribute("aria-expanded", String(auf));
     });
     document.addEventListener("click", (e) => { if (!liste.hidden && !mehr.contains(e.target)) zu(); });
+    // Schon beim Aufsetzen daneben schließen, nicht erst beim Tippen: Ein Wisch oder Zug auf der Karte erzeugt kein
+    // „click“, und das Menü stand dann weiter über der Seite. Ebenso, sobald die Seite rollt.
+    document.addEventListener("pointerdown", (e) => { if (!liste.hidden && !mehr.contains(e.target)) zu(); }, true);
+    window.addEventListener("scroll", () => { if (!liste.hidden) zu(); }, { passive: true });
     // Wer mit der Tastatur aus dem Menü herausgeht, lässt es nicht offen stehen.
     mehr.addEventListener("focusout", (e) => { if (e.relatedTarget && !mehr.contains(e.relatedTarget)) zu(); });
     document.addEventListener("keydown", (e) => {
