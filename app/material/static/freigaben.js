@@ -199,8 +199,8 @@
       </div>
       <details class="mf-notiz"><summary>Notiz</summary>
         <input type="text" id="mf-notiz" maxlength="200" aria-describedby="mf-notiz-hilfe">
-        <div class="help" id="mf-notiz-hilfe">Eine Zeile, höchstens 200 Zeichen – sehen nur Verwalter dieses Ordners, nicht die
-          Person selbst. Keine sensiblen Angaben.</div></details>
+        <div class="help" id="mf-notiz-hilfe">Eine Zeile, höchstens 200 Zeichen – sehen nur Verwalter dieses Ordners und die
+          Plattform-Verwaltung, die Person selbst also nur, wenn sie hier mitverwaltet. Keine sensiblen Angaben.</div></details>
       <div class="btn-row mf-erteilen-reihe"><button class="btn" type="button" id="mf-erteilen">Freigabe erteilen</button></div>
     </details>`;
   }
@@ -362,7 +362,8 @@
       ${datumFeld("mfa-bis", f.bis || (grund ? "" : stand.daten.grenzen.vorgabe_bis))}
       ${grund ? "" : `<div class="help">Spätestens ${fmtTag(frueher(stand.daten.grenzen.pruefen_max, ende))}.</div>`}
       ${"notiz" in f ? `<label for="mfa-notiz">Notiz</label><input type="text" id="mfa-notiz" maxlength="200" value="${esc(f.notiz || "")}">
-        <div class="help">Sehen nur Verwalter dieses Ordners. Keine sensiblen Angaben.</div>` : ""}
+        <div class="help">Sehen nur Verwalter dieses Ordners und die Plattform-Verwaltung – die Person selbst nur, wenn sie hier
+          mitverwaltet. Keine sensiblen Angaben.</div>` : ""}
       <div class="dlg-actions"><button class="btn secondary" type="button" data-close>Abbrechen</button>
         <button class="btn" type="button" id="mfa-ok">Speichern</button></div>`, (dlg, body) => {
       const bis = $("#mfa-bis", body);

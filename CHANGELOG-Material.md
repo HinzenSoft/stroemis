@@ -1087,7 +1087,8 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   verkürzen, herabsetzen oder entziehen, sich selbst gibt er nichts. Danach muss jede Gliederung noch einen Verwalter
   haben, der mindestens so lange bleibt wie er (sonst 409 „… das macht nur die Plattform-Verwaltung“). Prüffreigaben
   gibt es nur für qualifizierte Konten (409). Die Notiz (eine Zeile, höchstens 200 Zeichen) sehen nur die Verwalter
-  des Ordners und die Plattform-Verwaltung, nie der Inhaber. Die Plattform-Verwaltung vergibt überall ohne diese
+  des Ordners und die Plattform-Verwaltung – der Inhaber also nur, wenn er dort selbst verwaltet, nie unter „Meine
+  Freigaben“. Die Plattform-Verwaltung vergibt überall ohne diese
   Grenzen – Prüffreigaben aber auch sie nur an qualifizierte Konten und für höchstens 24 Monate.
 - **Meine Freigaben** auf der Übersicht: die eigenen Freigaben, gültige und im letzten Jahr abgelaufene, mit Ordner,
   Recht und Ende; gelb, was in 30 Tagen abläuft – dort und bei abgelaufenen steht, wer verlängern kann. Der Abschnitt

@@ -360,7 +360,7 @@
   }
 
   /* Ordnerpfad (Link), Recht, bis, Zustand und „Entziehen“ – angelegt und geändert wird am Ordner. Die Notiz sieht
-     die Verwaltung hier mit, der Inhaber nie. */
+     die Verwaltung hier mit, der Inhaber nie unter „Meine Freigaben“ (nur als Verwalter des Ordners im Dialog). */
   async function freigabenZeigen(el, u) {
     if (!el) return;
     let liste;
