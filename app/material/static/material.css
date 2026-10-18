@@ -272,6 +272,14 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-variante-doks legend { font-weight: 600; padding: 0 4px; }
 .mat-variante-doks label.inline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .mat-meldekasten p.small { margin: 0 0 6px; }
+/* Produktdialog: eine ältere Beschreibung, länger als der kurze Zusatz hinter dem Namen – der Hinweis mit dem vollen
+   bisherigen Text unter dem einzeiligen Feld (Nachbesserung vom 18.10.2026). */
+.mat-feld-hilfe { align-items: end; }
+.mat-feld-hilfe > .help { margin: 0 0 4px; }
+@media (max-width: 480px) { .mat-feld-hilfe > .help { margin: 3px 0 0; } }
+.mat-beschr-alt { margin: 6px 0 0; }
+.mat-beschr-alt p { margin: 0 0 6px; }
+.mat-beschr-alt .mat-text { margin: 0; overflow-wrap: anywhere; }
 
 #kat-q { margin-bottom: 10px; }
 
@@ -673,7 +681,11 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mv-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .mv-kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
 .mv-inv { color: var(--rot); }
-.mv-produkt, .mv-zeile { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mv-zeile { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Das Produkt darf zwei Zeilen haben: Die Beschreibung hinter dem Modell („Modell | Beschreibung“) unterscheidet oft
+   Varianten – am Telefon fiele sie in einer Zeile ganz weg (Nachbesserung vom 18.10.2026). */
+.mv-produkt { overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; line-clamp: 2; }
 .mv-zeile { font-size: var(--fs-klein); color: var(--grau); }
 .mat-vorschlaege mark { background: var(--gelb); color: inherit; padding: 0 1px; border-radius: 2px; }
 .mv-alle a { justify-content: center; min-height: 44px; font-weight: 700; color: var(--rot); }

@@ -93,7 +93,10 @@ def kategorie_und_unterkategorien(kid):
 
 
 def produkte(q="", kategorie_id=None, seite=1, pro_seite=25, sort=None, richtung="auf"):
-    """Katalogsuche über Hersteller, Modell, Artikelnummer und Norm. Liefert (Zeilen, Gesamtzahl)."""
+    """Katalogsuche über Hersteller, Modell, Artikelnummer, Norm und Beschreibung. Liefert (Zeilen, Gesamtzahl).
+    Jedes Wort muss irgendwo vorkommen. Die Beschreibung (der Zusatz hinter dem Modell, etwa „Screwlock“) steht nicht
+    im Volltextindex und wird mit LIKE durchsucht – sie ist kurz, und der Katalog hat Hunderte, nicht Millionen
+    Produkte; den Index umzubauen hieße einen Schemaschritt."""
     seite, pro_seite = seiten(seite, pro_seite)
     if sort == "intervall":
         if richtung not in RICHTUNGEN:
@@ -105,13 +108,15 @@ def produkte(q="", kategorie_id=None, seite=1, pro_seite=25, sort=None, richtung
     fts = volltext_an()
     lang = [w for w in woerter(q) if len(w) >= 3] if fts else []
     kurz = [w for w in woerter(q) if w not in lang]
-    if lang:
-        bedingungen.append("p.id IN (SELECT rowid FROM mat_product_fts WHERE mat_product_fts MATCH ?)")
-        args.append(" ".join(_phrase(w) for w in lang))
+    for w in lang:
+        bedingungen.append("(p.id IN (SELECT rowid FROM mat_product_fts WHERE mat_product_fts MATCH ?) "
+                           "OR p.description LIKE ? ESCAPE '\\')")
+        args += [_phrase(w), _like(w)]
     for w in kurz:
         bedingungen.append("(p.manufacturer LIKE ? ESCAPE '\\' OR p.model LIKE ? ESCAPE '\\' "
-                           "OR p.article_no LIKE ? ESCAPE '\\' OR p.norm LIKE ? ESCAPE '\\')")
-        args += [_like(w)] * 4
+                           "OR p.article_no LIKE ? ESCAPE '\\' OR p.norm LIKE ? ESCAPE '\\' "
+                           "OR p.description LIKE ? ESCAPE '\\')")
+        args += [_like(w)] * 5
     if kategorie_id:
         ids = kategorie_und_unterkategorien(kategorie_id)
         bedingungen.append(f"p.category_id IN ({','.join('?' * len(ids))})")
@@ -167,6 +172,7 @@ def artikel(q, seite=1, pro_seite=25, sort=None, richtung="auf"):
     gesamt = _abfragen(f"SELECT COUNT(*) AS n {basis}", tuple(args), one=True)["n"]
     rows = _abfragen(
         f"SELECT i.*, p.manufacturer, p.model, p.article_no, p.material_kind, p.image AS product_image, "
+        f"p.description AS product_description, "
         f"{demo_sql('i', 'p')} AS artikel_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "
         f"e.inspector_user_id AS entwurf_pruefer_id, zu.name AS zugeordnet_name "
         f"{basis.replace(' WHERE ', ' LEFT JOIN mat_inspection e ON e.item_id = i.id AND e.completed_at IS NULL '

@@ -460,7 +460,7 @@ def artikelnummer_pruefen():
         return jsonify(error="Nicht angemeldet"), 401
     _katalog_lesen()
     da = katalog.artikelnummer_vergeben(request.args.get("nr", ""), request.args.get("ausser", type=int))
-    return jsonify(produkt={"id": da["id"], "name": f"{da['manufacturer']} {da['model']}", "article_no": da["article_no"]}
+    return jsonify(produkt={"id": da["id"], "name": katalog.produktname(da), "article_no": da["article_no"]}
                    if da else None)
 
 

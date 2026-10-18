@@ -244,7 +244,8 @@ def durchgang_json(r, voll=False, pruefer_id=None):
                     if x["excluded_reason"] else None)
         if not rechte.darf_artikel("lesen", roh):
             liste.append({"sichtbar": False, "inventory_no": roh["inventory_no"], "manufacturer": roh["manufacturer"],
-                          "model": roh["model"], "pfad": ordnerspalte(zweig, roh, pfade), "zustand": zustand,
+                          "model": roh["model"], "description": roh["product_description"] or "",
+                          "pfad": ordnerspalte(zweig, roh, pfade), "zustand": zustand,
                           "zustand_text": ZUSTAND_TEXT[zustand], "ausnahme": ausnahme,
                           "pruefung": ({"ergebnis": x["ergebnis"], "pruefer": x["pruefer"], "datum": x["geprueft_am"]}
                                        if x["pruefung_id"] else None)})

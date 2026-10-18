@@ -262,7 +262,9 @@ def _artikel(item, produkt, ordner_id):
     kategorie = " › ".join(k["name"] for k in katalog.kategorie_pfad(produkt["category_id"]))
     gliederung = bestand.gliederung_von(ordner_id) if ordner_id else None
     url = qr.adresse(item["qr_token"])
-    return {"produkt": f"{produkt['manufacturer']} {produkt['model']}".strip(), "hersteller": produkt["manufacturer"],
+    # Der Name mit der Beschreibung als Zusatz („Modell | Beschreibung“, wie in der Oberfläche) – erst in Protokollen ab
+    # dem 18.10.2026; festgeschriebene bleiben, wie sie sind. Das Feld „Modell“ darunter bleibt das Modell allein.
+    return {"produkt": katalog.produktname(produkt), "hersteller": produkt["manufacturer"],
             "modell": produkt["model"], "artikelnummer": produkt["article_no"] or "", "kategorie": kategorie,
             "norm": produkt["norm"] or "", "materialart": MATERIALARTEN.get(produkt["material_kind"], ""),
             "seriennummer": item["serial_no"], "seriennummer_vergeben": bool(item["serial_generated"]),
@@ -492,7 +494,7 @@ def _sammelprotokoll(r, pid, ts):
         if z["excluded_reason"]:
             ausnahme = f"{z['excluded_reason']} ({z['excluded_by_name']}, {ortszeit(z['excluded_at']).strftime('%d.%m.%Y') if z['excluded_at'] else ''})"
         liste.append({"inventarnummer": a["inventory_no"], "seriennummer": a["serial_no"],
-                      "produkt": f"{a['manufacturer']} {a['model']}".strip(),
+                      "produkt": katalog.produktname(a, a["product_description"]),
                       "ordner": durchgang.ordnerspalte(zweig, a, pfade, _pfad_text),
                       "zustand": zustand, "ergebnis": (z["ergebnis"] or "") if x else "",
                       "ergebnis_text": ERGEBNISSE.get(z["ergebnis"], "") if x else "",

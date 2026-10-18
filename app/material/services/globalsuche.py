@@ -18,9 +18,11 @@ from . import Abgelehnt, bestand, globalprotokoll, katalog, rechte
 from .nummern import INVENTAR_VORSATZ, sieht_generiert_aus
 
 # Genau diese Schlüssel hat jeder Treffer (der Test prüft Gleichheit) – keine Kennungen, kein Prüfstatus, keine
-# Prüfungen. „sperre“ ist genau ein Wort aus SPERRE oder null (frei).
-FELDER = frozenset({"inventory_no", "serial_no", "hersteller", "modell", "artikelnummer", "norm", "materialart",
-                    "kategorie", "vorschau", "hergestellt", "lebensende", "gliederung", "ordner", "sperre", "demo"})
+# Prüfungen. „sperre“ ist genau ein Wort aus SPERRE oder null (frei); „beschreibung“ ist die des Produkts (Katalog, der
+# Zusatz hinter dem Modell).
+FELDER = frozenset({"inventory_no", "serial_no", "hersteller", "modell", "beschreibung", "artikelnummer", "norm",
+                    "materialart", "kategorie", "vorschau", "hergestellt", "lebensende", "gliederung", "ordner", "sperre",
+                    "demo"})
 MIN_ZEICHEN, MAX_ZEICHEN = 4, 80
 
 
@@ -70,7 +72,8 @@ SPERRE = {"gesperrt": "gesperrt", "ausgesondert": "ausgesondert", "verloren": "v
 
 # Was ein Steckbrief braucht – Artikel mit Heimat (lock_state, folder_id, origin_folder_id) und Produkt; nichts sonst.
 _STECKBRIEF_SQL = ("SELECT i.id, i.inventory_no, i.serial_no, i.manufactured_on, i.retire_by, i.lock_state, i.folder_id, "
-                   "i.origin_folder_id, p.manufacturer, p.model, p.article_no, p.norm, p.material_kind, p.image, "
+                   "i.origin_folder_id, p.manufacturer, p.model, p.description, p.article_no, p.norm, p.material_kind, "
+                   "p.image, "
                    f"{bestand.demo_sql('i', 'p')} AS demo, p.category_id FROM mat_item i JOIN mat_product p "
                    "ON p.id = i.product_id ")
 
@@ -118,7 +121,8 @@ def steckbrief(i, kategorien=None):
         kategorien[i["category_id"]] = " / ".join(k["name"] for k in katalog.kategorie_pfad(i["category_id"]))
     gliederung, ordner = zugehoerigkeit(bestand.heimat(i))
     out = {"inventory_no": i["inventory_no"], "serial_no": i["serial_no"], "hersteller": i["manufacturer"],
-           "modell": i["model"], "artikelnummer": i["article_no"] or "", "norm": i["norm"] or "",
+           "modell": i["model"], "beschreibung": i["description"] or "", "artikelnummer": i["article_no"] or "",
+           "norm": i["norm"] or "",
            "materialart": MATERIALARTEN.get(i["material_kind"], i["material_kind"]),
            "kategorie": kategorien[i["category_id"]], "vorschau": katalog.bild_url(i["image"], "thumb"),
            "hergestellt": i["manufactured_on"] or None,

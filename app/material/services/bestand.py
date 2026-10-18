@@ -694,8 +694,10 @@ def artikel_loeschen(iid):
 
 
 # Mit dem offenen Entwurf (höchstens einer je Artikel): Listen zeigen „in Prüfung bei …“.
-# Dazu der Name der zugeordneten Person (artikel_kurz gibt ihn nur mit Grundrecht heraus).
+# Dazu der Name der zugeordneten Person (artikel_kurz gibt ihn nur mit Grundrecht heraus) und die Beschreibung des
+# Produkts – der Zusatz hinter dem Modell („Modell | Beschreibung“, katalog.BESCHREIBUNG_MAX).
 ARTIKEL_LISTE_SQL = ("SELECT i.*, p.manufacturer, p.model, p.article_no, p.material_kind, p.image AS product_image, "
+                     "p.description AS product_description, "
                      f"{demo_sql('i', 'p')} AS artikel_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "
                      "e.inspector_user_id AS entwurf_pruefer_id, zu.name AS zugeordnet_name FROM mat_item i "
                      "JOIN mat_product p ON p.id = i.product_id "
@@ -735,6 +737,7 @@ def artikel_kurz(i, stichtag=None):
     return {"id": i["id"], "inventory_no": i["inventory_no"], "serial_no": i["serial_no"],
             "serial_generated": bool(i["serial_generated"]), "folder_id": i["folder_id"],
             "product_id": i["product_id"], "manufacturer": i.get("manufacturer"), "model": i.get("model"),
+            "description": i.get("product_description") or "",
             "article_no": i.get("article_no"), "material_kind": i.get("material_kind"),
             "vorschau": katalog.bild_url(i.get("product_image"), "thumb"),
             "demo": bool(i["artikel_demo"]) if "artikel_demo" in i else ist_demo(i["id"]),

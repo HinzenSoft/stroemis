@@ -2121,7 +2121,9 @@ def test_artikelnummer_eindeutig():
             # Hinweis beim Tippen: wem die Nummer gehört (ohne das gerade bearbeitete Produkt).
             r = kp.get("/api/material/produkte/artikelnummer?nr=ga%20100")
             assert r.status_code == 200 and r.json["produkt"]["name"] == "Testwerk Gurt Alpha", r.get_json()
-            assert kp.get(f"/api/material/produkte/artikelnummer?nr=GA-100&ausser={ids['gurt']}").json["produkt"]["name"] == "Altwerk Altmodell"
+            # Der Name mit der Beschreibung als Zusatz („Modell | Beschreibung“, Nachbesserung vom 18.10.2026).
+            assert kp.get(f"/api/material/produkte/artikelnummer?nr=GA-100&ausser={ids['gurt']}").json["produkt"]["name"] \
+                == "Altwerk Altmodell | geändert"
             for nr in ("-", "ZZ-9", ""):
                 assert kp.get(f"/api/material/produkte/artikelnummer?nr={nr}").json["produkt"] is None, nr
             assert k["wart"].get("/api/material/produkte/artikelnummer?nr=GA-100").status_code == 200

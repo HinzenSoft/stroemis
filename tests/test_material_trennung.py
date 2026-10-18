@@ -950,7 +950,7 @@ def test_unterbau():
                 assert not globalsuche.angebot(q), q
             g.user = db.query("SELECT * FROM users WHERE email = 'admin@example.org'", one=True)
             assert globalsuche.sieht_alles() and not globalsuche.angebot("AB-1234")
-        assert len(globalsuche.FELDER) == 15 and {"inventory_no", "sperre"} <= globalsuche.FELDER
+        assert len(globalsuche.FELDER) == 16 and {"inventory_no", "sperre", "beschreibung"} <= globalsuche.FELDER
         assert "id" not in globalsuche.FELDER
     print("Unterbau bestanden.")
 

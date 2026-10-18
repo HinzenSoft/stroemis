@@ -237,7 +237,8 @@ def test_betroffene_und_hinweise():
             assert r.status_code == 201 and r.json["betroffen"] == 0, r.get_json()
             s = f.get("/api/material/start").json["rueckrufe"]
             assert [x["title"] for x in s] == ["Nur zwei Seriennummern", "Alle Karabiner HMS Beta"], s
-            assert s[1]["produkt"] == {"id": hms, "manufacturer": "Testwerk", "model": "HMS Beta", "article_no": "HB-7"}
+            assert s[1]["produkt"] == {"id": hms, "manufacturer": "Testwerk", "model": "HMS Beta", "description": "",
+                                       "article_no": "HB-7"}
             assert (s[1]["betroffen"], s[1]["offen"]) == (3, 3) and (s[0]["betroffen"], s[0]["offen"]) == (2, 2)
             # GET /rueckrufe zeigt alle laufenden, auch ohne Bestand.
             liste = f.get("/api/material/rueckrufe").json["rueckrufe"]

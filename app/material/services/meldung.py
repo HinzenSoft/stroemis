@@ -149,13 +149,13 @@ def anlegen(d, dateien=()):
     if w["folder_id"]:
         bestand.ordner(w["folder_id"])
     key = katalog.dedupe_key(w["manufacturer"], w["model"], w["article_no"])
-    da = db.query("SELECT manufacturer, model FROM mat_product WHERE dedupe_key = ?", (key,), one=True)
+    da = db.query("SELECT manufacturer, model, description FROM mat_product WHERE dedupe_key = ?", (key,), one=True)
     if da:
-        raise Abgelehnt(f"„{da['manufacturer']} {da['model']}“ steht schon im Katalog – bitte in der Produktsuche "
+        raise Abgelehnt(f"„{katalog.produktname(da)}“ steht schon im Katalog – bitte in der Produktsuche "
                         "danach suchen.", 409)
     da = katalog.artikelnummer_vergeben(w["article_no"])
     if da:
-        raise Abgelehnt(f"Die Artikelnummer „{w['article_no']}“ gehört im Katalog zu „{da['manufacturer']} {da['model']}“ – "
+        raise Abgelehnt(f"Die Artikelnummer „{w['article_no']}“ gehört im Katalog zu „{katalog.produktname(da)}“ – "
                         "bitte in der Produktsuche danach suchen.", 409)
     fotos = fotos_ablegen(dateien)
     uid, name = akteur()
@@ -360,7 +360,7 @@ def _melder_benachrichtigen(r):
     zeilen = [f"Hallo {u['name'] or u['email']},", ""]
     if r["status"] == "eingepflegt":
         p = katalog.produkt(r["product_id"])
-        name = f"{p['manufacturer']} {p['model']}" + (f" ({p['article_no']})" if p["article_no"] else "")
+        name = katalog.produktname(p) + (f" ({p['article_no']})" if p["article_no"] else "")
         betreff = f"{cfg['SITE_NAME']} – „{gemeldet}“ ist im Katalog"
         zeilen.append(f"das von dir gemeldete Produkt ist jetzt im Katalog: {name}.")
         if r["answer"]:

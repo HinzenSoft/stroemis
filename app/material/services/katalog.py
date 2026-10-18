@@ -40,6 +40,15 @@ LEBENSDAUER_SONSTIGES = "Bei „sonstiges“ gibt es eine Lebensdauer nur mit He
 KEIN_INTERVALL = "Kein Prüfintervall: am Produkt angeben oder in der Kategorie als Vorgabe hinterlegen."
 # Ein Prüfpunkt ist oft eine ganze Prüfanweisung („Kontrolle des Zustands der Verriegelungshülse (z. B. …)“).
 PUNKT_TEXT_MAX = 1000
+# Die Beschreibung eines Produkts ist ein kurzer Zusatz hinter dem Modell – etwa die Verschlussart eines Karabiners – und
+# steht überall als „Modell | Beschreibung“ vor der Artikelnummer (Nachbesserung vom 18.10.2026; produktname hier,
+# produktName in material.js). Eine Zeile, höchstens so lang wie eine Artikelnummer: Das reicht für zwei Angaben
+# („Twistlock, Aluminium“) und passt mit dem Modell noch in eine Listenzeile, ein Absatz passt nicht hinein –
+# Ausführliches gehört in ein Dokument am Produkt. Bis dahin war das Feld mehrzeilig, bis 4000 Zeichen. Solche älteren
+# Beschreibungen bleiben, wie sie sind: Der Katalogimport übernimmt sie unverändert (der Austausch dev → Produktion soll
+# nicht an Altbeständen scheitern), die Anzeige kürzt sie auf eine Zeile mit „…“, und wer das Produkt über die
+# Oberfläche speichert, kürzt sie selbst – der Dialog zeigt dazu den vollen Text.
+BESCHREIBUNG_MAX = 80
 
 # Herstellerdokumente: PDF und Bilder, unverändert abgelegt. Der Inhalt muss zur Endung passen – eine
 # HTML-Datei mit .pdf-Endung wird nicht angenommen, auch wenn die Medienroute sie ohnehin nur mit
@@ -158,7 +167,7 @@ def _ohne_intervall(kid, w):
                 break
             k = baum.get(k["parent_id"])
         if not monate:
-            ohne.append(f"{p['manufacturer']} {p['model']}")
+            ohne.append(produktname(p))
     return ohne
 
 
@@ -289,7 +298,46 @@ def produkt(pid):
     return p
 
 
-def produkt_werte(d, alt=None):
+def beschreibung(d):
+    """Die Beschreibung aus einer Eingabe über die Oberfläche (Anlegen, Bearbeiten, Variante, Produkt aus einer
+    Meldung): eine Zeile, höchstens BESCHREIBUNG_MAX Zeichen. Länger ist ein Fehler mit Klartext, nie eine stille
+    Kürzung – auch für eine ältere Beschreibung, die unverändert zurückkommt (der Dialog sagt das vorher)."""
+    v = text(d, "description", "Beschreibung", 1 << 30)       # die Länge prüft die Meldung hier, mit dem Grund
+    if len(v) > BESCHREIBUNG_MAX:
+        raise Abgelehnt(f"Die Beschreibung ist ein kurzer Zusatz hinter dem Namen, etwa die Verschlussart – höchstens "
+                        f"{BESCHREIBUNG_MAX} Zeichen, hier sind es {len(v)}. Bitte kürzen; Ausführliches gehört in ein "
+                        "Dokument am Produkt.")
+    return v
+
+
+def zusatz(modell, beschr):
+    """Der Zusatz hinter dem Modell, wie ihn die Anzeige zeigt – dieselbe Regel wie produktZusatz in material.js: die
+    Beschreibung in einer Zeile; leer, wenn es keine gibt oder sie schon von Hand im Modellnamen steht („D Classic |
+    Screwlock“ mit der Beschreibung „Screwlock“). Eine ältere, längere endet nach BESCHREIBUNG_MAX Zeichen (am
+    Wortende, wenn eins in der zweiten Hälfte liegt) mit „…“."""
+    z = " ".join((beschr or "").split())
+    if not z or z.casefold() in [t.strip().casefold() for t in (modell or "").split("|")[1:]]:
+        return ""
+    if len(z) > BESCHREIBUNG_MAX:
+        z = z[:BESCHREIBUNG_MAX - 1]
+        if " " in z[BESCHREIBUNG_MAX // 2:]:
+            z = z[:z.rindex(" ")]
+        z = z.rstrip(" ,;:–-") + "…"
+    return z
+
+
+def produktname(p, beschr=None):
+    """„Hersteller Modell | Beschreibung“ – der Name eines Produkts in Protokollen, Exporten, Mails und Meldungen.
+    p: Zeile mit manufacturer, model und description; beschr statt p["description"], wo die Abfrage sie unter
+    anderem Namen liefert (product_description in den Artikellisten)."""
+    z = zusatz(p.get("model"), p.get("description") if beschr is None else beschr)
+    return f"{p.get('manufacturer') or ''} {p.get('model') or ''}{f' | {z}' if z else ''}".strip()
+
+
+def produkt_werte(d, alt=None, importiert=False):
+    """Die Stammdaten aus d (bei einer Änderung über alt ergänzt) nach den Regeln des Katalogs. importiert: aus dem
+    Katalogimport – die Beschreibung kommt wie bisher herein (mehrzeilig, bis 4000 Zeichen), siehe BESCHREIBUNG_MAX.
+    Sonst gilt beschreibung() für jede Beschreibung, die d mitschickt; eine ältere, die d nicht nennt, bleibt stehen."""
     e = _mischen(alt, d, PRODUKT_FELDER)
     w = {
         "category_id": kennung(e.get("category_id"), "Kategorie"),
@@ -303,6 +351,8 @@ def produkt_werte(d, alt=None):
         "lifetime_source": text(e, "lifetime_source", "Fundstelle der Lebensdauer", 300),
         "description": text(e, "description", "Beschreibung", 4000, einzeilig=False),
     }
+    if not importiert and "description" in d:
+        w["description"] = beschreibung(d)
     kategorie(w["category_id"])
     if w["material_kind"] == "textil" and not w["lifetime_years"]:
         raise Abgelehnt(LEBENSDAUER_TEXTIL)
@@ -316,10 +366,11 @@ def produkt_werte(d, alt=None):
 
 
 def _dublette_pruefen(key, ausser=None):
-    andere = db.query("SELECT id, manufacturer, model, article_no FROM mat_product WHERE dedupe_key = ?", (key,), one=True)
+    andere = db.query("SELECT id, manufacturer, model, description, article_no FROM mat_product WHERE dedupe_key = ?",
+                      (key,), one=True)
     if andere and andere["id"] != ausser:
         nr = f" ({andere['article_no']})" if andere["article_no"] else ""
-        raise Abgelehnt(f"Dieses Produkt steht schon im Katalog: {andere['manufacturer']} {andere['model']}{nr}.", 409)
+        raise Abgelehnt(f"Dieses Produkt steht schon im Katalog: {produktname(andere)}{nr}.", 409)
 
 
 def artikelnummer_vergeben(article_no, ausser=None):
@@ -329,19 +380,19 @@ def artikelnummer_vergeben(article_no, ausser=None):
     nr = _einheitlich(artikelnummer(article_no))
     if not nr:
         return None
-    return db.query("SELECT id, manufacturer, model, article_no FROM mat_product WHERE dedupe_key LIKE ? AND id <> ? "
-                    "ORDER BY id LIMIT 1", ("%|" + nr, ausser or 0), one=True)
+    return db.query("SELECT id, manufacturer, model, description, article_no FROM mat_product WHERE dedupe_key LIKE ? "
+                    "AND id <> ? ORDER BY id LIMIT 1", ("%|" + nr, ausser or 0), one=True)
 
 
 def _artikelnummer_pruefen(article_no, ausser=None):
     da = artikelnummer_vergeben(article_no, ausser)
     if da:
-        raise Abgelehnt(f"Die Artikelnummer „{article_no}“ ist im Katalog schon vergeben: {da['manufacturer']} {da['model']} "
+        raise Abgelehnt(f"Die Artikelnummer „{article_no}“ ist im Katalog schon vergeben: {produktname(da)} "
                         f"({da['article_no']}).", 409)
 
 
-def produkt_anlegen(d, demo=False):
-    w = produkt_werte(d)
+def produkt_anlegen(d, demo=False, importiert=False):
+    w = produkt_werte(d, importiert=importiert)
     key = dedupe_key(w["manufacturer"], w["model"], w["article_no"])
     uid, _ = akteur()
     ts = db.now()
@@ -416,9 +467,9 @@ def _datei_kopieren(name):
     return neu
 
 
-def produkt_aendern(pid, d):
+def produkt_aendern(pid, d, importiert=False):
     alt = produkt(pid)
-    w = produkt_werte(d, alt)
+    w = produkt_werte(d, alt, importiert=importiert)
     key = dedupe_key(w["manufacturer"], w["model"], w["article_no"])
     artikel = db.query("SELECT COUNT(*) AS n FROM mat_item WHERE product_id = ?", (pid,), one=True)["n"]
     if artikel and w["material_kind"] != alt["material_kind"]:
@@ -939,10 +990,10 @@ def formular_json(f, mit_punkten=True):
     if f["category_id"]:
         out["ziel"] = {"art": "kategorie", "id": f["category_id"], "pfad": kategorie_pfad(f["category_id"])}
     else:
-        p = db.query("SELECT id, manufacturer, model, article_no, category_id FROM mat_product WHERE id = ?",
+        p = db.query("SELECT id, manufacturer, model, description, article_no, category_id FROM mat_product WHERE id = ?",
                      (f["product_id"],), one=True)
         out["ziel"] = {"art": "produkt", "id": f["product_id"], "kategorie_id": p["category_id"] if p else None,
-                       "name": f"{p['manufacturer']} {p['model']}" if p else "?"}
+                       "name": produktname(p) if p else "?"}
     if mit_punkten:
         out["punkte"] = [punkt_json(p) for p in punkte(f["id"])]
     return out

@@ -202,7 +202,7 @@ def sammeln(mit_dateien=True):
 
     produkte, exportiert = [], []
     for p in db.query("SELECT * FROM mat_product ORDER BY manufacturer COLLATE NOCASE, model COLLATE NOCASE, id"):
-        name = f"{p['manufacturer']} {p['model']}"
+        name = katalog.produktname(p)
         if p["demo"] or p["category_id"] in raus:
             raus_n["produkte"] += 1
             raus_n["ohne_kennzeichen"] += 0 if p["demo"] else 1

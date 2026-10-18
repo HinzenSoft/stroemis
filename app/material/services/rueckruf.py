@@ -270,7 +270,8 @@ def offene_artikel():
 def uebersicht(nur_bestand=True):
     """Laufende Rückrufe mit Produkt und Zahlen: betroffene Artikel im eigenen Bereich, davon offen. Für die Übersicht
     (nur_bestand: nur, was Artikel im eigenen Bereich betrifft – sonst gibt es dort nichts zu tun)."""
-    rows = db.query("SELECT r.*, p.manufacturer, p.model, p.article_no FROM mat_recall r "
+    rows = db.query("SELECT r.*, p.manufacturer, p.model, p.description AS product_description, p.article_no "
+                    "FROM mat_recall r "
                     "JOIN mat_product p ON p.id = r.product_id WHERE r.closed_at IS NULL ORDER BY r.id DESC")
     out = []
     for r in rows:
@@ -279,7 +280,7 @@ def uebersicht(nur_bestand=True):
             continue
         out.append(dict(z, id=r["id"], title=r["title"], created_at=r["created_at"], alle=not serien(r),
                         produkt={"id": r["product_id"], "manufacturer": r["manufacturer"], "model": r["model"],
-                                 "article_no": r["article_no"]}))
+                                 "description": r["product_description"], "article_no": r["article_no"]}))
     # Wo noch etwas zu tun ist, zuerst.
     out.sort(key=lambda x: not x["offen"])
     return out
@@ -403,7 +404,7 @@ def _mailtext(r, p, liste):
     cfg = current_app.config
     basis = cfg["BASE_URL"].rstrip("/")
     s = serien(r)
-    name = f"{p['manufacturer']} {p['model']}"
+    name = katalog.produktname(p)
     zeilen = [f"{r['created_by_name'] or 'Die Material-Verwaltung'} hat einen Rückruf für ein Produkt im Katalog angelegt:", "",
               f"Produkt:      {name}" + (f" (Art.-Nr. {p['article_no']})" if p["article_no"] else ""),
               f"Rückruf:      {r['title']}",

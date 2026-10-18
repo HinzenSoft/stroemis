@@ -1608,6 +1608,74 @@ entschieden bzw. nicht widersprochen):
   mit dem ersten Materialwart im Reiter „Freigaben“; die Personensuche findet ein Konto ohne Stufe nicht) – keine
   Konsolenfehler, nichts rollt waagerecht.
 
+- **Produktbeschreibung als Zusatz hinter dem Namen** (Wunsch, wörtlich: „Die Beschreibung eines Produkts soll direkt
+  hinter den Namen, vor der Modellnummer auftauchen. Quasi wie der Text hinter dem Querbalken in den Beispielen. Mache
+  außerdem das Feld für Beschreibungen in bearbeiten dialog genauso "klein" wie die anderen Felder, damit es nicht so
+  aussieht, als soll ein ganzer text hinein. Gedacht ist hier nur weitere Infos, wie z.B. der Verschluss eines
+  Karabiners o.Ä.“). Am Datenbestand ändert sich nichts – kein Schemaschritt, keine Umstellung von Beschreibungen oder
+  Modellnamen.
+  - **Anzeige**: Wo ein Produkt genannt wird, steht die Beschreibung direkt hinter dem Modell und vor der Artikelnummer –
+    „D Classic | Screwlock K496B“ –, in derselben Hervorhebung und im selben Link wie das Modell. Eine Regel für alle
+    Stellen: `produktZusatz` mit den Ausgaben `produktName` (Text) und `produktHtml` (maskiert) in `material.js`, für
+    `suche.js` und `global.js` als `window.MatProdukt`; auf dem Server `katalog.zusatz` und `katalog.produktname` (PDF,
+    CSV, Mails, Meldungen). Im Chromium gegen den Server geprüft: 15 Fälle, gleiches Ergebnis. Ohne Beschreibung nur der
+    Name, kein Strich. Steht der Zusatz schon von Hand im Modellnamen („D Classic | Screwlock“) und die Beschreibung ist
+    leer, bleibt alles wie bisher; steht dieselbe Angabe in beiden, kommt sie nicht doppelt. Eine ältere, längere
+    Beschreibung steht in einer Zeile, nach 80 Zeichen am Wortende mit „…“ gekürzt, der volle Text im `title`; die
+    Produktseite zeigt sie zusätzlich ganz in den Stammdaten (mit Hinweis), eine kurze steht dort nicht noch einmal.
+    Stellen: Katalogliste und Kategorieansicht, Produktseite (Überschrift), „Artikel anlegen“ (Produktsuche und gewählte
+    Produktkarte) und „Vorhandenes zuordnen“, Artikelansicht (Produktzeile, Stammdaten), Artikellisten (Ordner,
+    Prüfungen, Trefferliste), offene Prüfungen, Prüfdurchgang (auch Zeilen außerhalb des eigenen Bereichs), Prüfung
+    starten, Prüfung und Festschreiben-Dialog, Rückruf-Kasten der Übersicht, Meldungen (Treffer, eingepflegtes
+    Produkt), Suchvorschläge, globaler Steckbrief (neues Feld `beschreibung` – Katalogdaten, keine Prüfdaten; `FELDER`
+    hat jetzt 16 Schlüssel), Titel „Variante von …“, Rückfragen, Hinweis „Schon vergeben“ zur Artikelnummer, „Produkt …
+    (spezifisch)“ am Formular, Dubletten- und Artikelnummernfehler, Rückruf- und Meldungsmail. In den Suchvorschlägen
+    darf die Produktzeile am Telefon zwei Zeilen haben – in einer fiele der Zusatz dort ganz weg.
+  - **Feld im Dialog** (Anlegen, Bearbeiten, Variante, Produkt aus einer Meldung): einzeilig und halb breit wie die
+    anderen, direkt unter Hersteller und Modell, daneben der Hilfetext „Kurzer Zusatz hinter dem Namen, z. B. die
+    Verschlussart.“; höchstens **80 Zeichen**. Warum 80: so viel wie eine Artikelnummer – das reicht für zwei Angaben
+    („Twistlock, Aluminium“) und passt mit dem Modell noch in eine Listenzeile, ein Absatz passt nicht hinein;
+    Ausführliches gehört in ein Dokument am Produkt. Der Server prüft beim Speichern über die Oberfläche
+    (`katalog.beschreibung`, für jede Anfrage, die `description` mitschickt): länger ist ein Fehler mit Klartext
+    („… höchstens 80 Zeichen, hier sind es 175. Bitte kürzen; Ausführliches gehört in ein Dokument am Produkt.“),
+    Zeilenumbrüche werden Leerzeichen. Eine Änderung, die die Beschreibung nicht nennt, lässt eine ältere stehen. **Nie still
+    gekürzt**: Öffnet man ein Produkt mit einer älteren, längeren Beschreibung (bis dahin war das Feld mehrzeilig, bis
+    4000 Zeichen), zeigt das Feld sie ganz – in einer Zeile – und darunter „Bitte kürzen“ mit dem bisherigen Text;
+    gespeichert wird erst, wenn sie kürzer ist (auch die Oberfläche sagt es schon vor dem Senden).
+  - **Katalogimport unverändert** (Format 1 und 2, also auch der Austausch dev → Produktion): Er übernimmt
+    Beschreibungen wie bisher – mehrzeilig, bis 4000 Zeichen –, sonst scheiterte die Übernahme eines Katalogs, der
+    noch Beschreibungen von vor der Grenze hat, als Ganzes (der Import ist ganz oder gar nicht). Kommt dabei eine
+    längere neu herein, nennt der Bericht sie als Hinweis (kein Fehler); die Anzeige kürzt sie. Der Export bleibt, wie
+    er ist.
+  - **Suche**: Die Produktsuche (Katalog, „Artikel anlegen“, „Vorhandenes zuordnen“) findet auch über die Beschreibung,
+    ganze und halbe Wörter, auch gemischt („Classic Screwlock“). Die Beschreibung steht nicht im Trigramm-Index, sie
+    wird mit `LIKE` durchsucht – sie ist kurz, der Katalog hat Hunderte Produkte, und den Index umzubauen hieße einen
+    Schemaschritt. Die Platzhalter der Suchfelder nennen sie.
+  - **PDF und CSV**: Neue Prüf- und Aussonderungsprotokolle, Sammelprotokolle und der Lebenslauf nennen das Produkt
+    „Hersteller Modell | Beschreibung“ (die Angabe „Modell“ darunter bleibt das Modell allein) – Varianten
+    unterscheiden sich oft nur im Verschluss, das hilft beim Erkennen. Festgeschriebene Protokolle bleiben, wie sie
+    sind (es sind die abgelegten Dateien). Die CSV je Ordner hat eine eigene Spalte „Beschreibung“ hinter „Modell“,
+    voll und ungekürzt – eine Datenausgabe, das Modell bleibt eigene Spalte; im `Verzeichnis.csv` des Protokoll-ZIP
+    steht das Produkt mit Zusatz.
+  - **DEMO-Daten**: Die DEMO-Produkte haben seit Lieferung 1 die Beschreibung „DEMO – nicht für echte Prüfungen“ und
+    heißen deshalb jetzt etwa „DEMO Gurt A | DEMO – nicht für echte Prüfungen“ (nicht geändert).
+  - **Geprüft**: neue Datei `tests/test_material_beschreibung.py` – Länge beim Speichern (81 abgewiesen, 80 und
+    Zeilenumbrüche, ältere lange bleibt bei einer Änderung ohne sie und wird unverändert zurückgeschickt abgewiesen,
+    Variante, Produkt aus Meldung), Import mit langer mehrzeiliger Beschreibung (Format 1, Wiederholung, Export und
+    Import in eine zweite Instanz, unverändert, Hinweis im Bericht), die Regel (leer, Zusatz von Hand, nicht doppelt,
+    Kürzen am Wortende), Server-Ausgaben (Artikellisten, Suche, offene Prüfungen, Prüfung, Prüfprotokoll und
+    Lebenslauf per `pdftotext`, CSV, Artikelnummer-Hinweis), Suche über die Beschreibung mit und ohne Volltextindex,
+    Oberfläche statisch (Grenze gleich, Feld, Hilfetext, Hinweis, keine eigene Verkettung mehr, Ladereihenfolge).
+    Angepasst: `test_material_globalsuche` und `test_material_trennung` (16 Schlüssel im Steckbrief),
+    `test_artikelnummer_eindeutig` (Name mit Zusatz), `test_betroffene_und_hinweise` (Produkt im Rückruf-Kasten mit
+    `description`). Im Chromium bei 1280 × 900 und 390 × 844 (Touch) mit eigenem DATA_DIR (DEMO-Katalog, ein Produkt
+    mit kurzer Beschreibung per Schnittstelle, eins mit langer mehrzeiliger per Katalogimport, eins mit dem Zusatz von
+    Hand im Modellnamen): Katalogliste, Produktseite, Dialog (Feld so hoch wie Modell, Altbestand mit Hinweis,
+    Speichern abgewiesen, nichts gekürzt), „Artikel anlegen“ (Suche „Screwlock“ findet über Beschreibung und
+    Modellnamen), Artikelansicht, Trefferliste, Suchvorschläge, Prüfung, offene Prüfungen, Prüfdurchgang, Meldungen,
+    Rückruf-Kasten, globaler Steckbrief, Prüfprotokoll-PDF (`pdftotext`: „DEMO-Hersteller DEMO D-Karabiner |
+    Screwlock“) – keine Konsolenfehler, nichts rollt waagerecht.
+
 #### Prüfung der Modulstufen
 
 Zwei unabhängige Prüfungen (Rechte mit Angriffsskripten gegen eigene Datenbanken, Oberfläche im Chromium je Rolle bei
@@ -1689,6 +1757,20 @@ Regressionstest in `tests/test_material_stufen.py` (vorher rot, jetzt grün), Ob
   Nr. 7 gilt im Reiter „Freigaben“). Ein Hinweis im Dialog wäre eine kleine Ergänzung – bitte entscheiden.
 - **Neue Konten brauchen einen Namen**: Mit der Vorgabe „Mitglied“ im Modul Material lehnt die Nutzerverwaltung ein
   neues Konto ohne Namen ab (oder Material „–“). Kontoanfragen haben den Namen ohnehin als Pflichtfeld.
+- **Zusatz von Hand im Modellnamen – selbst umstellen, nicht automatisch**: Produkte, deren Modellname den Zusatz schon
+  mit „ | “ enthält (etwa „D Classic | Screwlock“), zeigen sich wie bisher. Umstellen kannst du sie selbst: im Dialog
+  „Bearbeiten“ den Teil hinter „ | “ aus dem Modell löschen und ins Feld „Beschreibung“ schreiben – die Anzeige bleibt
+  gleich, die Suche findet weiter beide Teile. Automatisch stellt nichts um, der Katalog bleibt, wie du ihn gepflegt
+  hast. Der Katalog-Export trägt die Katalogkennung, die Produktion findet ein so umbenanntes Produkt beim nächsten
+  Import wieder. Liste auf dev (lesend): `SELECT id, manufacturer, model, description FROM mat_product WHERE model
+  LIKE '%|%';`
+- **Ältere lange Beschreibungen**: Beschreibungen über 80 Zeichen oder mit Zeilenumbruch stammen aus der Zeit vor der
+  Grenze. Sie bleiben, wie sie sind, bis jemand das Produkt bearbeitet – dann verlangt der Dialog, sie zu kürzen.
+  Liste auf dev (lesend): `SELECT id, manufacturer, model, length(description) FROM mat_product WHERE
+  length(description) > 80 OR instr(description, char(10)) > 0;` – bitte vor der Übernahme in die Produktion
+  durchsehen (der Import nimmt sie mit und nennt sie im Bericht).
+- **80 Zeichen für die Beschreibung** und die neue CSV-Spalte „Beschreibung“ hinter „Modell“ (wer eine
+  Tabellenvorlage mit festen Spaltenpositionen nutzt, muss sie anpassen): bitte bestätigen.
 
 ### Die drei offenen Fragen – entschieden
 
@@ -1899,6 +1981,7 @@ mit seiner Stelle (`produkte[3] (…): …`). `--trocken` prüft nur.
 | --- | --- |
 | `kategorien[].name`, `unterkategorien` | Name an dieser Stelle; Unterkategorien beliebig tief |
 | `norm` | Freitext, z. B. „EN 362 oder EN 12275“ |
+| `beschreibung` | kurzer Zusatz hinter dem Modell, etwa die Verschlussart – angezeigt als „Modell \| Beschreibung“. Die Oberfläche nimmt höchstens 80 Zeichen in einer Zeile; der Import übernimmt auch längere und mehrzeilige (bis 4000 Zeichen) unverändert und nennt sie im Bericht |
 | `materialart` | `textil`, `metall_hardware` oder `sonstiges` (an der Kategorie: Vorgabe für Produkte) |
 | `intervall_monate` | Prüfintervall 1–120; am Produkt optional, wenn die Kategorie eins vorgibt |
 | `lebensdauer_jahre` | 1–50; Produkt textil: Pflicht; Metall (`metall_hardware`): verboten; sonstiges: nur mit `lebensdauer_quelle`. An der Kategorie nur bei textil, nur als Vorschlag |
@@ -2020,7 +2103,7 @@ oder Plattform-Verwaltung).
 | `GET /api/material/suche?q=` | Modulzugang | Artikel nach Serien-, Inventar-, Herstellernummer im eigenen Bereich; `eindeutig` bei genau einem Treffer; `exakt_lokal` (ein sichtbarer Artikel hat genau diese Seriennummer) und `global_angebot` (zu jeder Anfrage, die für die globale Suche taugt, außer für die Material-Verwaltung; Phase 2) |
 | `GET /api/material/faellig?status=&ordner=&zugeordnet=` | Modulzugang; mit `ordner` lesen dort (sonst 404) | fällige Artikel, Standard überfällig + Lebensdauer erreicht + neu + bald fällig; mit `ordner` auch `ordner` = {id, pfad}; `zugeordnet` filtert nach Person (nur mit Grundrecht wirksam, Phase 2) |
 | `GET/POST /api/material/kategorien`, `PUT/DELETE …/<id>` | lesen / Katalog | Kategoriebaum; Löschen nur leer und ohne Dokument in einem Prüfprotokoll (409) |
-| `GET/POST /api/material/produkte`, `GET/PUT/DELETE …/<id>` | lesen / Katalog | Produkte mit Suche und Seiten (`q`, `kategorie`, `seite`, `pro_seite`) |
+| `GET/POST /api/material/produkte`, `GET/PUT/DELETE …/<id>` | lesen / Katalog | Produkte mit Suche (Hersteller, Modell, Beschreibung, Artikelnummer, Norm) und Seiten (`q`, `kategorie`, `seite`, `pro_seite`); `description` beim Speichern höchstens 80 Zeichen, eine Zeile (Nachbesserung vom 18.10.2026) |
 | `GET /api/material/produkte/artikelnummer?nr=&ausser=` | lesen | Wem gehört diese Artikelnummer schon? (`produkt` oder `null`) |
 | `POST /api/material/produkte/<id>/variante` (Felder wie `POST /produkte`, `dokumente`: Kennungen) | Katalog | Kopie als neue Variante; Bild nie, Dokumente nach Wahl |
 | `POST/DELETE /api/material/produkte/<id>/bild` | Katalog | Produktbild |

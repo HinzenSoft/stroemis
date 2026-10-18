@@ -31,7 +31,7 @@ from flask import current_app
 
 from ... import db
 from ..models import ERGEBNISSE, MATERIALARTEN
-from . import ZONE, Abgelehnt, bestand, heute, protokoll
+from . import ZONE, Abgelehnt, bestand, heute, katalog, protokoll
 from . import status as st
 from .faelligkeit import im_unterbaum
 from .interval import wirksam
@@ -42,9 +42,10 @@ ZIP_MAX_BYTES = 2 * 1024 ** 3
 FORMEL_ANFANG = ("=", "+", "-", "@", "\t", "\r")
 SPERRZUSTAND = {"frei": "frei", "gesperrt": "gesperrt", "verloren": "verloren", "ausgesondert": "ausgesondert"}
 
+# „Beschreibung“ (Nachbesserung vom 18.10.2026): der Zusatz hinter dem Modell, voll und ungekürzt – eine Datenausgabe.
 ARTIKEL_SPALTEN = (
-    "Inventarnummer", "Seriennummer", "Seriennummer vom System", "Hersteller", "Modell", "Artikelnummer", "Kategorie",
-    "Norm", "Materialart", "Ordner", "Gliederung", "Status", "Sperrzustand", "Sperr-/Aussonderungsgrund",
+    "Inventarnummer", "Seriennummer", "Seriennummer vom System", "Hersteller", "Modell", "Beschreibung", "Artikelnummer",
+    "Kategorie", "Norm", "Materialart", "Ordner", "Gliederung", "Status", "Sperrzustand", "Sperr-/Aussonderungsgrund",
     "Herkunftsordner", "zuletzt geprüft", "nächste Prüfung", "Prüfintervall wirksam (Monate)", "hergestellt",
     "gekauft", "Erstgebrauch", "Lebensende", "Bemerkung", "in Prüfung bei", "Zugeordnet an", "DEMO")
 VERZEICHNIS_SPALTEN = (
@@ -55,7 +56,8 @@ VERZEICHNIS_SPALTEN = (
 # Mit dem offenen Entwurf (höchstens einer je Artikel) für „in Prüfung bei“ und der zugeordneten Person (Name, immer
 # der aktuelle Stand); die Spalten des Produkts, die das wirksame Intervall braucht, unter eigenem Namen (i.* hat selbst
 # ein interval_months).
-ARTIKEL_SQL = ("SELECT i.*, p.manufacturer, p.model, p.article_no, p.norm, p.material_kind, p.category_id, "
+ARTIKEL_SQL = ("SELECT i.*, p.manufacturer, p.model, p.description AS product_description, p.article_no, p.norm, "
+               "p.material_kind, p.category_id, "
                f"p.interval_months AS p_int, {bestand.demo_sql('i', 'p')} AS artikel_demo, "
                "e.inspector_name AS entwurf_pruefer, "
                "zu.name AS zugeordnet_name FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
@@ -65,7 +67,8 @@ ARTIKEL_SQL = ("SELECT i.*, p.manufacturer, p.model, p.article_no, p.norm, p.mat
 PRUEFUNG_SQL = ("SELECT x.id, x.item_id, x.round_id, x.protocol_id, x.inspector_name, x.inspector_certificate, "
                 "x.inspected_on, x.kind, x.result, x.reason, x.corrects_inspection_id, x.completed_at, x.locked_at, "
                 "x.pdf_path, x.pdf_sha256, x.pdf_hashed_bytes, x.file_sha256, i.inventory_no, i.serial_no, "
-                f"p.manufacturer, p.model, {bestand.demo_sql('i', 'p')} AS artikel_demo, r.title AS durchgang "
+                f"p.manufacturer, p.model, p.description AS product_description, "
+                f"{bestand.demo_sql('i', 'p')} AS artikel_demo, r.title AS durchgang "
                 "FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id JOIN mat_product p ON p.id = i.product_id "
                 "LEFT JOIN mat_round r ON r.id = x.round_id ")
 
@@ -160,7 +163,7 @@ def artikel_csv(fid):
         ordner = baum.get(r["folder_id"], ohne)
         zeilen.append([
             r["inventory_no"], r["serial_no"], "ja" if r["serial_generated"] else "nein", r["manufacturer"], r["model"],
-            r["article_no"], kategorien.get(r["category_id"], ""), r["norm"],
+            r["product_description"], r["article_no"], kategorien.get(r["category_id"], ""), r["norm"],
             MATERIALARTEN.get(r["material_kind"], r["material_kind"]), ordner["pfad"], ordner["gliederung"], st.LABEL[s],
             SPERRZUSTAND.get(r["lock_state"], r["lock_state"]), r["lock_reason"],
             baum.get(r["origin_folder_id"], ohne)["pfad"] if r["origin_folder_id"] else "",
@@ -235,7 +238,7 @@ def protokolle_zip(fid):
         zeilen.append([
             x["protocol_id"], "Aussonderungsprotokoll" if x["kind"] == "aussonderung" else "Prüfprotokoll",
             PRUEFART_TEXT.get(x["kind"], x["kind"]), datum_text(x["inspected_on"]), zeit_text(x["locked_at"]),
-            x["inventory_no"], x["serial_no"], f"{x['manufacturer']} {x['model']}".strip(), x["durchgang"],
+            x["inventory_no"], x["serial_no"], katalog.produktname(x, x["product_description"]), x["durchgang"],
             x["inspector_name"], x["inspector_certificate"], ERGEBNISSE.get(x["result"], x["result"]), x["reason"], name,
             x["file_sha256"], x["pdf_sha256"], x["pdf_hashed_bytes"], zustand, berichtigt_durch.get(x["id"], ""),
             protokoll_von.get(x["corrects_inspection_id"], "(ohne Protokoll)") if x["corrects_inspection_id"] else "",

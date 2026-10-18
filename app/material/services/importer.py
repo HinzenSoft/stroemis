@@ -10,7 +10,9 @@ Findet er auch nur einen Fehler, wird nichts gespeichert, und der Bericht nennt 
 seiner Stelle in der Datei. Er ist wiederholbar: Vorhandene Kategorien (gleicher Name an gleicher
 Stelle) und Produkte (gleiche Dublette Hersteller + Modell + Artikelnummer) werden abgeglichen statt
 doppelt angelegt; ein Formular, dessen Prüfpunkte sich nicht geändert haben, bleibt bei seiner
-Version. Das Format steht in CHANGELOG-Material.md.
+Version. Das Format steht in CHANGELOG-Material.md. Einzige Ausnahme von den Regeln der Oberfläche: Die Beschreibung
+eines Produkts darf länger sein als katalog.BESCHREIBUNG_MAX und mehrzeilig – Beschreibungen von vor dieser Grenze
+kommen unverändert herein, der Austausch dev → Produktion scheitert nicht an ihnen.
 
 Format 2 (ZIP mit katalog.json und den Dateien; als reine JSON-Datei nur ohne Dateien) bringt dazu:
   - die Katalogkennung uid an Kategorien und Produkten. Abgeglichen wird zuerst über sie, sonst wie oben – dann
@@ -474,6 +476,16 @@ def _materialart_pruefen(alt, w):
                         "zurückändern oder dort ein eigenes Produkt dafür anlegen.", 409)
 
 
+def _lange_beschreibung(lauf, name, beschreibung):
+    """Eine Beschreibung, die länger ist als katalog.BESCHREIBUNG_MAX, kommt unverändert herein (siehe oben) – der
+    Bericht sagt es, damit sie beim nächsten Bearbeiten gekürzt wird."""
+    if len(beschreibung or "") > katalog.BESCHREIBUNG_MAX:
+        lauf.bericht["hinweise"].append(
+            f"Produkt „{name}“: Die Beschreibung hat {len(beschreibung)} Zeichen und ist so übernommen. Gedacht ist ein "
+            f"kurzer Zusatz hinter dem Namen (höchstens {katalog.BESCHREIBUNG_MAX} Zeichen) – Listen zeigen sie gekürzt, "
+            "beim nächsten Bearbeiten bitte kürzen.")
+
+
 def _produkte(liste, lauf):
     if not isinstance(liste, list):
         raise Abgelehnt("„produkte“ muss eine Liste sein.")
@@ -498,18 +510,22 @@ def _produkt(n, e, lauf):
             # Der Stand hier, ungeprüft übernommen, wenn er die Regeln gerade nicht erfüllt: Hat die Kategorie in
             # diesem Lauf ihre Vorgabe verloren, ist das Produkt erst mit dem Intervall aus der Datei wieder gültig.
             try:
-                vorher = katalog.produkt_werte({}, vorhanden)
+                vorher = katalog.produkt_werte({}, vorhanden, importiert=True)
             except Abgelehnt:
                 vorher = {f: vorhanden[f] for f in katalog.PRODUKT_FELDER}
-            nachher = katalog.produkt_werte(d, vorhanden)
+            # importiert: Die Beschreibung kommt wie bisher herein – auch länger als katalog.BESCHREIBUNG_MAX, sonst
+            # scheiterte der Austausch dev → Produktion an Beschreibungen von vor der Grenze.
+            nachher = katalog.produkt_werte(d, vorhanden, importiert=True)
             if vorher != nachher:
                 _materialart_pruefen(vorhanden, nachher)
                 intervall_vorher = herstellerseite(vorhanden)[0]
                 seit = _journalstand()
-                _ohne_konflikt(katalog.produkt_aendern, pid, d)
+                _ohne_konflikt(katalog.produkt_aendern, pid, d, importiert=True)
                 bericht["produkte"]["geaendert"] += 1
                 lauf.notiz(f"Produkt „{nachher['manufacturer']} {nachher['model']}“: geändert "
                            f"({_geaendert(vorher, nachher)})")
+                if nachher["description"] != vorher["description"]:
+                    _lange_beschreibung(lauf, name, nachher["description"])
                 intervall = herstellerseite(katalog.produkt(pid))[0]
                 teile = []
                 if intervall != intervall_vorher:
@@ -524,10 +540,11 @@ def _produkt(n, e, lauf):
             lauf.uid_uebernehmen("mat_product", "product", vorhanden, uid)
             bild = vorhanden["image"]
         else:
-            pid = _ohne_konflikt(katalog.produkt_anlegen, d, demo=lauf.demo)
+            pid = _ohne_konflikt(katalog.produkt_anlegen, d, demo=lauf.demo, importiert=True)
             lauf.uid_setzen("mat_product", pid, uid)
             bericht["produkte"]["neu"] += 1
             lauf.notiz(f"Produkt „{name}“: neu")
+            _lange_beschreibung(lauf, name, katalog.produkt(pid)["description"])
             bild = ""
     except _Konflikt as exc:
         lauf.zurueckgestellt.append((lambda: _produkt(n, e, lauf), f"{ort} ({name}): {exc}"))

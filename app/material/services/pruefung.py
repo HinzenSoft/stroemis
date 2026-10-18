@@ -177,7 +177,8 @@ def pruefung_json(p, pruefer_id=None):
     out["artikel"] = bestand.artikel_kurz(item)
     out["artikel"]["pfad"] = bestand.pfad(item["folder_id"])
     out["artikel"]["origin_folder_id"] = item["origin_folder_id"]
-    out["produkt"] = {"id": produkt["id"], "name": f"{produkt['manufacturer']} {produkt['model']}".strip(),
+    out["produkt"] = {"id": produkt["id"], "name": katalog.produktname(produkt), "manufacturer": produkt["manufacturer"],
+                      "model": produkt["model"], "description": produkt["description"],
                       "article_no": produkt["article_no"], "norm": produkt["norm"],
                       "material_kind": produkt["material_kind"], "demo": bool(produkt["demo"])}
     out["formular"] = None

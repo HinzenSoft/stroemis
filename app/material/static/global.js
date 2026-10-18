@@ -59,7 +59,8 @@ window.MatGlobal = (function () {
      Inventarnummer mit Sperrwort, Produkt, Seriennummer, Kategorie, Norm, Herstellung, Lebensende und „Gehört zu …“
      mit dem Ordner. Alles aus der Antwort wird maskiert – auch Ordnernamen fremder Gliederungen sind fremde Eingaben. */
   function karte(t) {
-    const produkt = [t.hersteller, t.modell].filter(Boolean).join(" ");
+    // „Hersteller Modell | Beschreibung“ wie überall im Modul (window.MatProdukt aus material.js), maskiert.
+    const produkt = window.MatProdukt.html({ manufacturer: t.hersteller, model: t.modell, description: t.beschreibung });
     const angaben = [["Seriennummer", t.serial_no], ["Kategorie", t.kategorie], ["Norm", t.norm],
                      ["Material", t.materialart], ["Herstellung", t.hergestellt && fmtTag(t.hergestellt)],
                      ["Lebensende", t.lebensende && fmtTag(t.lebensende)]].filter(([, wert]) => wert);
@@ -69,7 +70,7 @@ window.MatGlobal = (function () {
       <div class="mg-text">
         <p class="mg-gl"><span class="mg-gl-marke"><span class="mat-vorlesen">Gliederung </span>${esc(t.gliederung || "ohne Gliederung")}</span></p>
         <p class="mg-kopf"><strong class="mg-inv">${esc(t.inventory_no)}</strong>${sperre}${t.demo ? ' <span class="mat-demo">DEMO</span>' : ""}</p>
-        <p class="mg-produkt">${esc(produkt || "–")}${t.artikelnummer ? ` · Art.-Nr. ${esc(t.artikelnummer)}` : ""}</p>
+        <p class="mg-produkt">${produkt || "–"}${t.artikelnummer ? ` · Art.-Nr. ${esc(t.artikelnummer)}` : ""}</p>
         <dl class="mg-daten">${angaben.map(([k, w]) => `<div><dt>${esc(k)}</dt><dd>${esc(w)}</dd></div>`).join("")}</dl>
         <p class="mg-gehoert">Gehört zu <strong>${esc(t.gliederung || "–")}</strong>${t.ordner ? ` · ${esc(t.ordner)}` : ""}</p>
       </div></article>`;
