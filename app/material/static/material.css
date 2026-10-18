@@ -863,6 +863,7 @@ html.mat-lb-offen { overflow: hidden; }
   dialog.mat-lightbox { padding: 8px 12px; }
   .mat-lightbox img { max-height: calc(100dvh - 56px); }
   .mat-lightbox figure { gap: 4px; }
+}
 
 /* Lieferung 5 – Geräte: listen */
 /* Die Listen des Moduls (table.list.mat-tabelle) haben drei Gestalten, je nach Breite:
@@ -1004,6 +1005,7 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
   table.list.mat-ue td.mat-ue-zahl .mat-zahl { min-width: 30px; line-height: 26px; font-size: .8rem; }
   #mat-inhalt table.list.mat-ue td.mat-ue-zahl .mat-zahl, #mat-inhalt table.list.mat-ue td.mat-ue-tag a { position: static; }
   #mat-inhalt table.list.mat-ue td.mat-ue-zahl > a.mat-zahl::after, #mat-inhalt table.list.mat-ue td.mat-ue-tag a::after { inset: 0; }
+}
 
 /* Lieferung 5 – Geräte: formulare */
 /* Überschrift eines Feldes wie ein <label>, aber ohne eigenes Ziel: Über einem Knopf mit verstecktem Dateifeld trüge
