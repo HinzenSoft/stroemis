@@ -29,6 +29,9 @@ wenn sein Produkt aus dem echten Katalog stammt.
 
 Was danach gilt (deshalb vorher den Katalog exportieren – README):
   - Jede dabei benutzte Formularversion gilt als „benutzt“ und lässt sich nur noch über eine neue Version ändern.
+  - Jedes Produkt, von dem es danach Artikel gibt, lässt sich nicht mehr löschen und seine Materialart nicht mehr
+    ändern; seine Kategorie lässt sich nicht mehr löschen. Katalogpflege, die das braucht, vorher erledigen – oder
+    später: Katalog exportieren, dev-Datenbank zurücksetzen, Export importieren.
   - Der Bestand lässt sich nicht wieder entfernen: Prüfnachweise werden nie gelöscht, Artikel mit Prüfungen auch nicht.
     Zurück geht es nur über das Zurücksetzen der dev-Datenbank.
   - Einmalig: Gibt es eine der Gliederungen schon, legt ein weiterer Lauf nichts an.
@@ -894,6 +897,11 @@ class Beispielbestand:
         if benutzt:
             print("Jetzt „benutzt“ (nur noch über eine neue Version änderbar): "
                   + ", ".join(f"„{f['title']}“ Version {f['version']}" for f in benutzt) + ".")
+        mit_artikeln = len({p["produkt"]["id"] for p in plaene if p["iid"]})
+        if mit_artikeln:
+            print(f"Jetzt mit Artikeln: {mit_artikeln} Produkte – sie lassen sich nicht mehr löschen, ihre Materialart "
+                  "nicht mehr ändern und ihre Kategorien nicht mehr löschen. Katalogpflege, die das braucht: Katalog "
+                  "exportieren, dev-Datenbank zurücksetzen, Export importieren.")
         if self.uebersprungen:
             print("Hinweise:")
             for zeile in self.uebersprungen:

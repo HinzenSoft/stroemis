@@ -219,9 +219,12 @@ Vorher:
 1. **Katalog exportieren** (Katalog → „Katalog exportieren“ oder `material export-catalog`) und das ZIP aufheben – er
    ist es, der später in die Produktion geht. Der Beispielbestand kommt mit keinem Export mit.
 2. Wissen, was danach gilt: Jede benutzte **Formularversion ist „benutzt“** und lässt sich nur noch über eine neue
-   Version ändern. Der Bestand lässt sich **nicht entfernen** – Prüfnachweise werden nie gelöscht, Artikel mit
-   Prüfungen auch nicht. Zurück geht es nur mit einer zurückgesetzten dev-Datenbank (danach den Katalog-Export
-   importieren).
+   Version ändern. Jedes Produkt, von dem der Beispielbestand Artikel anlegt (bei 200 Artikeln meist alle echten mit
+   Prüfintervall), lässt sich **nicht mehr löschen und seine Materialart nicht mehr ändern**; seine Kategorie lässt sich
+   nicht mehr löschen. Katalogpflege, die das braucht, vorher erledigen – oder später den Katalog exportieren, die
+   dev-Datenbank zurücksetzen und den Export importieren. Der Bestand lässt sich **nicht entfernen** – Prüfnachweise
+   werden nie gelöscht, Artikel mit Prüfungen auch nicht. Zurück geht es nur mit einer zurückgesetzten dev-Datenbank
+   (danach den Katalog-Export importieren).
 
 Auf dem VPS im Klon der Entwicklung (das Abbild enthält `scripts/` nicht – das Skript geht per stdin in das flüchtige
 `/tmp` des Containers, die App liegt dort unter `/srv`, die Daten unter `/data`):
@@ -231,8 +234,8 @@ docker exec -i stroemis-dev sh -c 'cat > /tmp/material_beispielbestand.py && VID
 ```
 
 Der Lauf dauert ein paar Minuten (zählt mit; `--artikel N` für mehr oder weniger Artikel) und endet mit einem Bericht:
-Konten mit Passwörtern, Mengen, Zustände, Produkte ohne aktives Formular (deren Artikel bleiben „neu“) und die jetzt
-benutzten Formularversionen. Er läuft nur einmal – gibt es die Gliederungen schon, legt er nichts an. **Nie in der
+Konten mit Passwörtern, Mengen, Zustände, Produkte ohne aktives Formular (deren Artikel bleiben „neu“), die jetzt
+benutzten Formularversionen und wie viele Produkte jetzt Artikel haben (nicht mehr löschbar, Materialart fest). Er läuft nur einmal – gibt es die Gliederungen schon, legt er nichts an. **Nie in der
 Produktion** (Container `stroemis`) – dort gehört kein DEMO-Bestand hin; zeigt `BASE_URL` auf `strömis.de`, bricht
 das Skript ohnehin ab.
 

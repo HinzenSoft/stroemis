@@ -152,6 +152,8 @@ def test_ohne_schalter():
         for schalter in ((), ("--artikel", "10"), ("--beispielbestand", "--artikel", "null"), ("--beispiel",)):
             aus, code = laufen(*schalter)
             assert code == 2 and "Abgebrochen" in aus and "--beispielbestand" in aus, (schalter, aus[-300:])
+            # Die Hilfe nennt, was danach im Katalog nicht mehr geht.
+            assert "seine Materialart nicht mehr" in aus and "Formularversion" in aus, aus[:3000]
         # Mit der Adresse der Produktion legt das Skript nichts an – auch mit Schalter.
         for adresse in ("https://strömis.de", "https://www.xn--strmis-yxa.de/"):
             aus, code = laufen("--beispielbestand", adresse=adresse)
@@ -202,6 +204,10 @@ def test_beispielbestand():
         assert code == 0, aus[-3000:]
         assert "Beispielbestand angelegt" in aus and "Kommt nicht vor" not in aus, aus[-3000:]
         assert not re.search(r"^Hinweise:", aus, re.M), aus[-2000:]          # nichts übersprungen
+        # Der Bericht nennt die Folge für die Katalogpflege: Produkte mit Artikeln bleiben, ihre Materialart steht fest.
+        assert "Jetzt mit Artikeln: 3 Produkte" in aus, aus[-2000:]
+        r = k["katalog"].delete(f"/api/material/produkte/{ids['helm']}", headers=H)
+        assert r.status_code == 409, r.get_json()
 
         # 1. Der Katalog bleibt unverändert – Zeilen, Export und Dateien.
         nachher = katalog_stand(app)
