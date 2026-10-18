@@ -214,10 +214,7 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-meldeliste li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 0; border-bottom: 1px solid var(--linie); }
 .mat-meldeliste li > div { flex: 1 1 100%; }
 .mat-meldekasten { border: 1px dashed var(--linie); background: var(--grau-hell); padding: 8px 12px; margin: 0 0 6px; }
-/* Produktbild im Dialog „Bearbeiten“: das bisherige als Vorschau, daneben Auswahl und „entfernen“. */
-.mat-bildfeld { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
-.mat-bildfeld img { width: 72px; height: 72px; object-fit: contain; background: var(--weiss); border: 1px solid var(--linie); }
-.mat-bildfeld .help { margin: 4px 0 0; }
+/* Produktbild und Ordnerfoto im Dialog „Bearbeiten“: .mat-bildwahl (Abschnitt „Lieferung 5 – Geräte: formulare“). */
 /* Variante: Auswahl der Dokumente, die mitkommen. */
 .mat-variante-doks { border: 1px solid var(--linie); padding: 6px 12px 8px; margin: 14px 0 0; }
 .mat-variante-doks legend { font-weight: 600; padding: 0 4px; }
@@ -1007,5 +1004,72 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
   table.list.mat-ue td.mat-ue-zahl .mat-zahl { min-width: 30px; line-height: 26px; font-size: .8rem; }
   #mat-inhalt table.list.mat-ue td.mat-ue-zahl .mat-zahl, #mat-inhalt table.list.mat-ue td.mat-ue-tag a { position: static; }
   #mat-inhalt table.list.mat-ue td.mat-ue-zahl > a.mat-zahl::after, #mat-inhalt table.list.mat-ue td.mat-ue-tag a::after { inset: 0; }
+
+/* Lieferung 5 – Geräte: formulare */
+/* Überschrift eines Feldes wie ein <label>, aber ohne eigenes Ziel: Über einem Knopf mit verstecktem Dateifeld trüge
+   das Feld sonst zwei Namen („Foto“ und „Foto wählen …“). */
+.mat-feldkopf { display: block; font-weight: 600; font-size: .9rem; margin: 12px 0 4px; }
+/* Foto im Dialog (Ordnerfoto, Produktbild): links die Vorschau – bisheriges, neu gewähltes oder ein leerer Rahmen –,
+   rechts „📷 Foto wählen …“ und „entfernen“ (beide mindestens 44 px hoch), Dateiname und Hinweis. Reicht die Breite
+   nicht für den breitesten Knopf, rutschen die Knöpfe unter die Vorschau. Beim Ziehen einer Datei färbt sich das Feld. */
+.mat-bildwahl { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 14px; margin: 0 -8px; padding: 6px 8px;
+  border: 2px dashed transparent; border-radius: var(--radius); }
+.mat-bildwahl.ueber { border-color: var(--wasser); background: var(--co-info-fl); }
+.mat-bildwahl-bild { position: relative; flex: none; display: flex; align-items: center; justify-content: center; width: 96px; height: 96px;
+  overflow: hidden; background: var(--weiss); border: 1px solid var(--linie); }
+.mat-bildwahl-bild img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.mat-bildwahl-bild:has(.mat-bildwahl-leer) { background: var(--grau-hell); border-style: dashed; }
+.mat-bildwahl-leer { padding: 4px; font-size: var(--fs-klein); color: var(--grau); text-align: center; line-height: 1.25; }
+/* Zum Entfernen vorgemerkt: blass und rot durchgestrichen, bis „Speichern“ es wirklich entfernt. */
+.mat-bildwahl-bild.weg img { opacity: .35; filter: grayscale(1); }
+.mat-bildwahl-bild.weg::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to top right, transparent calc(50% - 1.5px), var(--rot) calc(50% - 1.5px), var(--rot) calc(50% + 1.5px), transparent calc(50% + 1.5px)); }
+.mat-bildwahl-steuer { flex: 1 1 165px; min-width: 0; }
+.mat-bildwahl-knopf, .mat-bildwahl-weg, .mat-dateiwahl-weg { min-height: 44px; justify-content: center; }
+.mat-bildwahl-knopf { margin: 0; }          /* ein <label> – ohne den Abstand der Feldbeschriftungen (app.css) */
+.mat-bildwahl-name { margin-top: 6px; font-size: var(--fs-klein); overflow-wrap: anywhere; }
+.mat-bildwahl-name:empty { display: none; }
+.mat-bildwahl .help { margin-top: 6px; }
+/* Datei hinter einem Knopf (Dokument, Fotos zur Meldung): daneben, was gewählt ist. */
+.mat-dateiwahl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.mat-dateiwahl-name { flex: 1 1 160px; min-width: 0; font-size: var(--fs-klein); color: var(--grau); overflow-wrap: anywhere; }
+.mat-dateiwahl-name.gewaehlt { color: var(--anthrazit); font-weight: 600; }
+/* Nur mit Maus bzw. nur ohne Hover: der Hinweis aufs Ziehen; Erklärungen, die am Rechner im title stehen. */
+.mat-nur-maus, .mat-nur-touch { display: none; }
+@media (hover: hover) and (pointer: fine) { .mat-nur-maus { display: inline; } }
+@media (hover: none) { .mat-nur-touch { display: block; } }
+.mat-artikeltitel .mat-nur-touch { margin: 6px 0 0; }
+.mat-sn-hinweis { display: block; margin-top: 2px; }
+/* Ein gesperrtes Auswahlkästchen nimmt am Touchgerät keinen Tipp an – er geht an die Zelle, die den Grund nennt
+   (material.js). Mit der Maus bleibt der Tooltip am Kästchen. */
+@media (hover: none) { td.mat-wahlspalte input:disabled { pointer-events: none; } }
+
+/* Ordnerfoto im Kopf: antippbar wie Produktbilder (Großansicht); ab Tablet-Breite größer. */
+.mat-ordnerkopf > .mat-bildlink { flex: none; display: block; }
+.mat-ordnerkopf > .mat-bildlink img { display: block; }
+@media (min-width: 768px) { .mat-ordnerfoto { width: 160px; height: 160px; } }
+
+/* hidden muss gewinnen, auch wo die Klasse display setzt („Produkt aus dem Katalog“, „Vorhandenes zuordnen“). */
+.mat-gewaehlt[hidden] { display: none; }
+
+/* QR-Adresse: 16 px wie alle Felder am Telefon – sonst zoomt iOS beim Antippen hinein (app.css). */
+@media (max-width: 640px), (max-height: 500px) { .mat-qr input { font-size: 16px; } }
+
+/* „Dokumente hinzufügen“: ab 700 px breiter, damit die Titel lesbar bleiben (:where – die Regeln für den
+   Doppelbildschirm in app.css bleiben stärker). Die Dateizeilen richten sich nach ihrer eigenen Breite statt nach dem
+   Fenster: Unter 600 px steht der Titel in einer eigenen Zeile. ✕ am Touchgerät 44 × 44. */
+@media (min-width: 700px) { dialog:where(:has(#dm-liste)) { width: min(820px, 94vw); } }
+.mat-dokliste { container-type: inline-size; }
+@container (max-width: 599px) {
+  .mat-dokzeile { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .mat-dokzeile .dm-titel { grid-column: 1 / -1; }
+}
+/* Am Telefon auch die Art in eigener Zeile – „Konformitätserklärung“ passt sonst nicht in die halbe Breite. */
+@container (max-width: 399px) {
+  .mat-dokzeile { grid-template-columns: minmax(0, 1fr) auto; }
+  .mat-dokzeile .dm-art { grid-column: 1 / -1; }
+}
+@media (pointer: coarse) {
+  .mat-dokzeile .dm-weg { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0; }
 }
 

@@ -925,6 +925,132 @@
     aktionen = { gliederung: () => ordnerDialog({ kind: "gliederung" }, null) };
   }
 
+  /* --- Foto im Dialog (Ordnerfoto, Produktbild – Lieferung 5) ------------------------------------------------
+     Statt des nackten Dateifelds („Datei auswählen / Keine ausgewählt“, 21 px hoch) ein Knopf „📷 Foto wählen …“ –
+     ohne capture: Am Telefon bietet das System Kamera ODER Galerie an, am Rechner öffnet er den Dateidialog, und das
+     Foto lässt sich auch in den Dialog ziehen. Links die Vorschau: das bisherige Foto, das neu gewählte (schon vor dem
+     Speichern) oder ein leerer Rahmen, daneben Dateiname und Größe. „entfernen“ ist ein Knopf und wirkt wie die
+     Auswahl erst beim Speichern; „Doch behalten“ nimmt es zurück. Angenommen wird, was auch der Server annimmt. */
+  const FOTO_ENDUNGEN = [".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".tif", ".tiff"];   // images.ALLOWED_EXT
+  const FOTO_MAX_BYTES = 30 * 1024 * 1024;                                                         // katalog.BILD_MAX_BYTES
+  // id: das Dateifeld; titel: Überschrift; wort: „Foto“ oder „Bild“; bisher: Vorschau des bisherigen (oder leer).
+  const fotoFeld = (id, titel, wort, bisher, hinweis) => `<div class="mat-feldkopf" id="${id}-kopf">${esc(titel)}</div>
+      <div class="mat-bildwahl" id="${id}-feld" role="group" aria-labelledby="${id}-kopf" data-wort="${esc(wort)}" data-bisher="${esc(bisher || "")}">
+        <div class="mat-bildwahl-bild"></div>
+        <div class="mat-bildwahl-steuer">
+          <div class="btn-row"><label class="btn secondary mat-bildwahl-knopf"><span aria-hidden="true">📷</span> ${esc(wort)} wählen …<input type="file" id="${id}"
+              accept="image/*" class="mat-datei" aria-describedby="${id}-name ${id}-hilfe"></label>
+            <button type="button" class="btn secondary mat-bildwahl-weg" hidden></button></div>
+          <div class="mat-bildwahl-name" id="${id}-name" aria-live="polite"></div>
+          <div class="help" id="${id}-hilfe">${esc(hinweis)}<span class="mat-nur-maus"> Die Datei lässt sich auch hierher ziehen.</span></div>
+        </div></div>`;
+  // Liefert die Auswahl als { datei: File | null, entfernen: bool } – gelesen erst beim Speichern.
+  function fotoFeldVerdrahten(dlg, body, id) {
+    const feld = $(`#${id}-feld`, body);
+    const eingabe = $(`#${id}`, body);
+    const { wort, bisher } = feld.dataset;
+    const wahl = { datei: null, entfernen: false };
+    let url = null;
+    function zeichnen() {
+      if (url) { URL.revokeObjectURL(url); url = null; }
+      const f = wahl.datei;
+      const bild = $(".mat-bildwahl-bild", feld);
+      const weg = $(".mat-bildwahl-weg", feld);
+      if (f) url = URL.createObjectURL(f);
+      bild.classList.toggle("weg", !f && wahl.entfernen);
+      bild.innerHTML = f ? `<img src="${esc(url)}" alt="Vorschau: ${esc(f.name)}">`
+        : bisher ? `<img src="${esc(bisher)}" alt="Bisheriges ${esc(wort)}${wahl.entfernen ? " – wird entfernt" : ""}">`
+        : `<span class="mat-bildwahl-leer">kein ${esc(wort)}</span>`;
+      // HEIC zeigt außer Safari kaum ein Browser an – hochgeladen und umgewandelt wird es trotzdem. (Ein schon ersetztes
+      // Bild, dessen Adresse eben freigegeben wurde, meldet sich hier nicht mehr.)
+      const img = $("img", bild);
+      if (f) img.onerror = () => { if (img.isConnected) bild.innerHTML = '<span class="mat-bildwahl-leer">Vorschau nach dem Speichern</span>'; };
+      $(".mat-bildwahl-name", feld).innerHTML = f
+        ? `<strong>${esc(f.name)}</strong> · ${esc(groesse(f.size))} – ${bisher ? `ersetzt beim Speichern das bisherige ${esc(wort)}` : "wird beim Speichern hochgeladen"}`
+        : wahl.entfernen ? `Das ${esc(wort)} wird beim Speichern entfernt.` : "";
+      weg.hidden = !f && !bisher;
+      weg.textContent = f ? "Auswahl entfernen" : wahl.entfernen ? "Doch behalten" : `${wort} entfernen`;
+    }
+    function nehmen(f) {
+      if (!f) return;
+      const endung = (f.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
+      if (!FOTO_ENDUNGEN.includes(endung)) { toast(`„${f.name}“ ist kein Foto (JPEG, PNG, WebP, HEIC oder TIFF).`, true); return; }
+      if (f.size > FOTO_MAX_BYTES) { toast(`„${f.name}“ ist größer als ${FOTO_MAX_BYTES / 1048576} MB.`, true); return; }
+      wahl.datei = f;
+      wahl.entfernen = false;
+      zeichnen();
+    }
+    // Den Wert gleich leeren: So löst dieselbe Datei nach „Auswahl entfernen“ wieder ein change aus.
+    eingabe.addEventListener("change", () => { nehmen(eingabe.files[0]); eingabe.value = ""; });
+    $(".mat-bildwahl-weg", feld).addEventListener("click", (ev) => {
+      if (wahl.datei) wahl.datei = null;
+      else wahl.entfernen = !wahl.entfernen;
+      zeichnen();
+      if (ev.currentTarget.hidden) eingabe.focus();
+    });
+    // Ablegen per Ziehen: überall im Dialog (sonst öffnete der Browser die Datei und der Dialog wäre weg). #dlg-body
+    // bleibt über alle Dialoge bestehen – die Handler gelten nur, solange dieser offen ist. Gezogener Text bleibt Text.
+    const aus = new AbortController();
+    dlg.addEventListener("close", () => { aus.abort(); if (url) URL.revokeObjectURL(url); }, { once: true });
+    const dateien = (ev) => ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes("Files");
+    body.addEventListener("dragover", (ev) => { if (!dateien(ev)) return; ev.preventDefault(); feld.classList.add("ueber"); }, { signal: aus.signal });
+    body.addEventListener("dragleave", (ev) => { if (!body.contains(ev.relatedTarget)) feld.classList.remove("ueber"); }, { signal: aus.signal });
+    body.addEventListener("drop", (ev) => {
+      if (!dateien(ev)) return;
+      ev.preventDefault();
+      feld.classList.remove("ueber");
+      nehmen(ev.dataTransfer.files[0]);
+    }, { signal: aus.signal });
+    zeichnen();
+    return wahl;
+  }
+
+  /* Datei hinter einem Knopf (Dokument, Fotos zur Meldung): daneben, was gewählt ist, und „Auswahl entfernen“. Das
+     Dateifeld behält die Dateien – gelesen wird wie bisher input.files. */
+  const dateiKnopf = (id, text, accept, mehrere) => `<div class="mat-dateiwahl"><label class="btn secondary mat-bildwahl-knopf">${text}<input type="file"
+      id="${id}" accept="${esc(accept)}" class="mat-datei"${mehrere ? " multiple" : ""} aria-describedby="${id}-name"></label>
+      <span class="mat-dateiwahl-name" id="${id}-name" aria-live="polite"></span>
+      <button type="button" class="btn secondary mat-dateiwahl-weg" hidden>Auswahl entfernen</button></div>`;
+  function dateiKnopfVerdrahten(body, id) {
+    const eingabe = $(`#${id}`, body);
+    const name = $(`#${id}-name`, body);
+    const weg = $(".mat-dateiwahl-weg", eingabe.closest(".mat-dateiwahl"));
+    const zeichnen = () => {
+      const liste = Array.from(eingabe.files);
+      name.textContent = !liste.length ? (eingabe.multiple ? "keine Dateien gewählt" : "keine Datei gewählt")
+        : liste.map((f) => `${f.name} (${groesse(f.size)})`).join(", ");
+      name.classList.toggle("gewaehlt", !!liste.length);
+      weg.hidden = !liste.length;
+    };
+    eingabe.addEventListener("change", zeichnen);
+    weg.addEventListener("click", () => { eingabe.value = ""; zeichnen(); eingabe.focus(); });
+    zeichnen();
+  }
+
+  /* Bildschirmtastatur: Bei Nummern (Serien-, Artikelnummer, Norm, Versionsstand) groß schreiben, nichts
+     „korrigieren“, keine Rechtschreibprüfung und keine Vorschläge aus früheren Eingaben – sonst macht iOS aus „ab12 c“
+     gern „Ab12 C“ oder ein Wort. Namen (Hersteller, Modell) und Suchen: nur nichts korrigieren; Adressen: Tastatur
+     für Adressen, klein. */
+  const TASTATUR_NUMMER = 'autocapitalize="characters" autocorrect="off" spellcheck="false" autocomplete="off"';
+  const TASTATUR_NAME = 'autocorrect="off" spellcheck="false"';
+  const TASTATUR_SUCHE = 'autocorrect="off" spellcheck="false" enterkeyhint="search"';
+  const TASTATUR_ADRESSE = 'inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"';
+
+  /* Hinweise, die nur im title stehen, sieht ohne Maus niemand. Dort zeigt ein Tipp auf ein nicht bedienbares Element
+     mit title – farbige Zahlen in Baum und Schublade, Marken wie „kritisch“ oder „DEMO“, gekürzte Prüfsummen – den
+     Text als Meldung. Ein gesperrtes Auswahlkästchen nimmt keinen Tipp an (material.css lässt ihn zur Zelle durch);
+     die Zelle sagt, warum es gesperrt ist. */
+  const OHNE_HOVER = window.matchMedia("(hover: none)");
+  document.addEventListener("click", (e) => {
+    if (!OHNE_HOVER.matches || e.defaultPrevented || !(e.target instanceof Element)) return;
+    const zelle = e.target.closest("td.mat-wahlspalte");
+    const gesperrt = zelle && $("input:disabled[title]", zelle);
+    if (gesperrt) { toast(gesperrt.title); return; }
+    const t = e.target.closest("[title]");
+    if (!t || !t.title || !t.closest("#mat, #mat-side, #dlg") || t.closest("a, button, input, select, textarea, label, summary, [data-act]")) return;
+    toast(t.title);
+  });
+
   function ordnerDialog(o, parentId) {
     const neu = !o.id;
     const oben = neu && !parentId;
@@ -938,14 +1064,11 @@
           <div class="help">Nur zum Verschärfen: Gilt die Herstellervorgabe kürzer, gilt sie.</div></div>
       </div>
       <label for="od-desc">Beschreibung</label><textarea id="od-desc" rows="3" maxlength="2000">${esc(o.description || "")}</textarea>
-      <label for="od-foto">Foto</label>
-      <div class="mat-bildfeld">${o.foto && o.vorschau ? `<img src="${esc(o.vorschau)}" alt="Bisheriges Foto">` : ""}
-        <div><input type="file" id="od-foto" accept="image/*">
-          ${o.foto ? '<label class="inline"><input type="checkbox" id="od-foto-weg"> Foto entfernen</label>' : ""}
-          <div class="help">${o.foto ? "Ein neues Foto ersetzt das bisherige. " : ""}JPEG, PNG, WebP oder HEIC vom Telefon; Web- und Vorschaufassung entstehen beim Hochladen.</div></div></div>
+      ${fotoFeld("od-foto", "Foto", "Foto", o.foto ? o.vorschau || o.foto : "", "JPEG, PNG, WebP oder HEIC vom Telefon; Web- und Vorschaufassung entstehen beim Hochladen.")}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="od-ok" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
     (dlg, body) => {
       fokus($("#od-name", body));
+      const fotoWahl = fotoFeldVerdrahten(dlg, body, "od-foto");
       // Erst die Angaben, dann das Foto. Scheitert nur das Foto, kennt der Dialog den Ordner schon: Ein zweiter Klick
       // speichert die Angaben erneut und lädt das Foto nach, statt den Ordner doppelt anzulegen (wie beim Produktbild).
       let oid = o.id || null;
@@ -956,8 +1079,7 @@
         const daten = { name: $("#od-name", body).value, kind: oben ? "gliederung" : $("#od-kind", body).value,
                         interval_months: $("#od-int", body).value || null, description: $("#od-desc", body).value };
         if (!neu && o.kind === "gliederung") daten.kind = "gliederung";
-        const foto = $("#od-foto", body).files[0];
-        const weg = $("#od-foto-weg", body);
+        const foto = fotoWahl.datei;
         try {
           const r = oid ? await api(`${API}/ordner/${oid}`, { method: "PUT", body: daten })
                         : await api(`${API}/ordner`, { method: "POST", body: Object.assign(daten, { parent_id: parentId || null }) });
@@ -966,7 +1088,7 @@
             const fd = new FormData();
             fd.append("file", foto);
             await api(`${API}/ordner/${oid}/foto`, { method: "POST", body: fd });
-          } else if (weg && weg.checked) {
+          } else if (fotoWahl.entfernen) {
             await api(`${API}/ordner/${oid}/foto`, { method: "DELETE" });
           }
           dlg.close();
@@ -998,7 +1120,7 @@
             <button class="btn secondary small" data-act="verschieben">Verschieben</button><button class="btn secondary small" data-act="loeschen">Löschen</button>` : ""}
             ${DARF.lesen ? exportMenue(d) : ""}</div></div>
         ${system ? `<p class="notice">${d.system_kind === "gesperrt" ? "Hierher verschiebt eine Sperre die Artikel der Gliederung. Zurück in ihren Herkunftsordner bringt sie nur eine Freiprüfung." : "Ausgesonderte Artikel bleiben hier mit ihrem vollen Lebenslauf sichtbar, zählen aber nirgends mehr als Bestand und lassen sich nicht zurückholen."}</p>` : ""}
-        ${d.foto || d.description || d.interval_months ? `<div class="mat-ordnerkopf">${d.foto ? `<img class="mat-ordnerfoto" src="${esc(d.vorschau)}" alt="">` : ""}
+        ${d.foto || d.description || d.interval_months ? `<div class="mat-ordnerkopf">${d.foto ? bildLink(d.foto, d.original, `Ordnerfoto ${d.name}`, null, `<img class="mat-ordnerfoto" src="${esc(d.vorschau)}" alt="">`) : ""}
           <div>${d.description ? `<p class="mat-text">${esc(d.description)}</p>` : ""}
           ${d.interval_months ? `<p class="small">Prüfintervall hier: höchstens ${d.interval_months} Monate.</p>` : ""}</div></div>` : ""}
         ${d.unterordner.length ? `<section class="section"><h2>Unterordner</h2>${unterordnerHtml(d.unterordner)}</section>` : ""}
@@ -1114,8 +1236,9 @@
         <a href="/material/export/${d.id}-protokolle.zip" data-export="Die Protokolle werden zusammengestellt – bei vielen dauert das einen Moment …"><strong>Protokolle (ZIP)</strong>
           <span>Die Protokolle dieser Artikel und die Sammelprotokolle der Durchgänge hier, mit Verzeichnis und Prüfsummen.</span></a>
       </div></details>`;
+  const LEBENSLAUF_TEXT = "Stammdaten, alle Prüfungen in zeitlicher Reihenfolge, Prüfdurchgänge und Ereignisse als PDF – zum Weitergeben oder als Aussonderungsnachweis. Stand jetzt, nicht festgeschrieben.";
   const lebenslaufKnopf = (a) => `<a class="btn secondary small" href="/material/artikel/${a.id}/lebenslauf.pdf" target="_blank" rel="noopener"
-    title="Stammdaten, alle Prüfungen in zeitlicher Reihenfolge, Prüfdurchgänge und Ereignisse als PDF – zum Weitergeben oder als Aussonderungsnachweis. Stand jetzt, nicht festgeschrieben.">Lebenslauf (PDF)</a>`;
+    title="${LEBENSLAUF_TEXT}">Lebenslauf (PDF)</a>`;
   document.addEventListener("click", (e) => {
     const l = e.target.closest("a[data-export]");
     if (!l || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
@@ -1194,7 +1317,7 @@
         <div class="mat-artikeltitel">
           <h1>${esc(a.inventory_no)} ${statusMarke(a.status, true)}</h1>
           <p class="mat-produktzeile"><a href="/material/katalog/produkt/${p.id}">${esc(produktName(p))}</a>${p.article_no ? ` · Art.-Nr. ${esc(p.article_no)}` : ""}</p>
-          <p>Seriennummer <strong>${esc(a.serial_no)}</strong>${a.serial_generated ? ' <span class="badge grey" title="Der Hersteller vergibt keine Seriennummer – diese Nummer bitte dauerhaft am Artikel anbringen.">vom System vergeben</span>' : ""}</p>
+          <p>Seriennummer <strong>${esc(a.serial_no)}</strong>${a.serial_generated ? ' <span class="badge grey">vom System vergeben</span><span class="help mat-sn-hinweis">Der Hersteller vergibt keine Seriennummer – diese Nummer bitte dauerhaft am Artikel anbringen.</span>' : ""}</p>
           <div class="btn-row mat-pruefknoepfe">${!aus && DARF.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
             ${frei && DARF.pruefen && !a.entwurf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
             ${gesperrt && DARF.verwalten && !a.entwurf ? '<button class="btn secondary small" data-act="aussondern">Aussondern</button>' : ""}</div>
@@ -1205,6 +1328,7 @@
             : '<p class="small muted">Prüfen dürfen Prüfer mit Urkundennummer (Häkchen „Prüfer“ in der Nutzerverwaltung, Urkundennummer im eigenen Profil).</p>'}
           ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang <a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>.</p>` : ""}
           <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${frei ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}${DARF.lesen ? lebenslaufKnopf(a) : ""}</div>
+          ${DARF.lesen ? `<p class="help mat-nur-touch">Lebenslauf (PDF): ${LEBENSLAUF_TEXT}</p>` : ""}
         </div>
       </div>
       <div class="mat-spalten">
@@ -1351,7 +1475,7 @@
   function artikelDialog(a) {
     const textil = a.produkt.material_kind === "textil";
     dialog(`<h2>Artikel ${esc(a.inventory_no)} bearbeiten</h2>
-      <label for="ad-sn">Seriennummer des Herstellers</label><input type="text" id="ad-sn" value="${a.serial_generated ? "" : esc(a.serial_no)}" placeholder="${a.serial_generated ? esc(a.serial_no) + " (vom System)" : ""}" maxlength="80">
+      <label for="ad-sn">Seriennummer des Herstellers</label><input type="text" id="ad-sn" ${TASTATUR_NUMMER} value="${a.serial_generated ? "" : esc(a.serial_no)}" placeholder="${a.serial_generated ? esc(a.serial_no) + " (vom System)" : ""}" maxlength="80">
       <div class="help">Leer lassen behält die Nummer. Eine echte Herstellernummer ersetzt die vom System vergebene.</div>
       <div class="field-row"><div><label for="ad-herst">Herstellung (Monat${textil ? ", Pflicht" : ""})</label>${datumFeld("ad-herst", a.manufactured_on, "monat")}</div>
         <div><label for="ad-kauf">Kauf (Monat)</label>${datumFeld("ad-kauf", a.purchased_on, "monat")}</div></div>
@@ -1397,13 +1521,13 @@
     inhalt.innerHTML = `<div class="page-head"><h1>Artikel anlegen</h1></div>
       <div class="mat-formular">
         <label for="an-q">Produkt aus dem Katalog</label>
-        <div class="mat-produktwahl"><input type="search" id="an-q" placeholder="Hersteller, Modell, Artikelnummer …" autocomplete="off">
+        <div class="mat-produktwahl"><input type="search" id="an-q" placeholder="Hersteller, Modell, Artikelnummer …" autocomplete="off" ${TASTATUR_SUCHE}>
           <div id="an-treffer" class="mat-treffer"></div></div>
         <div id="an-produkt" class="mat-gewaehlt" hidden></div>
         <p class="help">Fehlt das Produkt im Katalog? <button type="button" class="lnk" data-act="melden">Fehlendes Produkt melden</button>
           – ein Produktkatalogpfleger nimmt es auf, du bekommst Bescheid.</p>
         <label for="an-ordner">Ordner</label><select id="an-ordner">${optionen(0, 0)}</select>
-        <label for="an-sn">Seriennummer des Herstellers</label><input type="text" id="an-sn" maxlength="80" placeholder="leer lassen, wenn der Hersteller keine vergibt">
+        <label for="an-sn">Seriennummer des Herstellers</label><input type="text" id="an-sn" maxlength="80" placeholder="leer lassen, wenn der Hersteller keine vergibt" ${TASTATUR_NUMMER}>
         <div class="help">Ohne Herstellernummer vergibt das System eine eindeutige (STR-…), die dann am Artikel angebracht wird. Die Inventarnummer vergibt immer das System.</div>
         <div class="field-row"><div><label for="an-herst">Herstellung (Monat)</label>${datumFeld("an-herst", "", "monat")}</div>
           <div><label for="an-kauf">Kauf (Monat)</label>${datumFeld("an-kauf", "", "monat")}</div></div>
@@ -1415,6 +1539,7 @@
         <label for="an-notes">Bemerkung</label><textarea id="an-notes" rows="2" maxlength="4000"></textarea>
         <div class="btn-row mat-knoepfe"><button class="btn" data-act="anlegen">Anlegen</button>
           <button class="btn secondary" data-act="anlegen-weiter" title="Produkt und Ordner bleiben für den nächsten Artikel stehen">Anlegen und nächsten</button></div>
+        <p class="help mat-nur-touch">„Anlegen und nächsten“: Produkt und Ordner bleiben für den nächsten Artikel stehen.</p>
       </div>
       <div id="an-meldungen"></div>`;
     let vorschlagLos = null;
@@ -1627,7 +1752,7 @@
               <div id="kat-doks"><p class="help">Wird geladen …</p></div>
               ${DARF.katalog ? '<button class="btn secondary small" data-act="dok-neu">+ Dokument</button>' : ""}</div></div>`
           : (kats.length ? "" : leer(DARF.katalog ? "Noch keine Kategorien – mit „+ Kategorie“ anlegen." : "Noch keine Kategorien."))}
-        <div class="mat-suchzeile"><input type="search" id="kat-q" placeholder="Produkte suchen: Hersteller, Modell, Artikelnummer, Norm" value="${esc(q)}" autocomplete="off"></div>
+        <div class="mat-suchzeile"><input type="search" id="kat-q" placeholder="Produkte suchen: Hersteller, Modell, Artikelnummer, Norm" value="${esc(q)}" autocomplete="off" ${TASTATUR_SUCHE}></div>
         <div id="kat-liste"></div>`;
       let los = null;
       $("#kat-q").addEventListener("input", (e) => { clearTimeout(los); los = setTimeout(() => { q = e.target.value.trim(); zeigen(liste); }, 250); });
@@ -1819,7 +1944,7 @@
     dialog(`<h2>${neu ? "Kategorie anlegen" : "Kategorie bearbeiten"}</h2>
       <label for="kd-name">Name</label><input type="text" id="kd-name" value="${esc(k.name || "")}" maxlength="120">
       <label for="kd-parent">Oberkategorie</label><select id="kd-parent"><option value="">– oberste Ebene –</option>${kategorieOptionen(kats, k.parent_id, k.id)}</select>
-      <label for="kd-norm">Norm</label><input type="text" id="kd-norm" value="${esc(k.norm || "")}" maxlength="200" placeholder="z. B. EN 361">
+      <label for="kd-norm">Norm</label><input type="text" id="kd-norm" value="${esc(k.norm || "")}" maxlength="200" placeholder="z. B. EN 361" ${TASTATUR_NUMMER}>
       <div class="field-row"><div><label for="kd-art">Materialart (Vorgabe für Produkte)</label><select id="kd-art"><option value="">–</option>
           ${Object.entries(MATERIALART).map(([w, t]) => `<option value="${w}" ${k.default_material_kind === w ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
         <div><label for="kd-int">Prüfintervall (Monate, Vorgabe)</label><input type="number" id="kd-int" min="1" max="120" value="${k.default_interval_months || ""}"></div></div>
@@ -1870,20 +1995,16 @@
       ${p.variante_von ? '<p class="help">Die Stammdaten sind übernommen – bitte die neue Artikelnummer eintragen und anpassen, was sich unterscheidet.</p>' : ""}
       ${p.meldung ? meldeKasten(p.meldung) : ""}
       <label for="pd-kat">Kategorie</label><select id="pd-kat"><option value="">– bitte wählen –</option>${kategorieOptionen(kats, p.category_id)}</select>
-      <div class="field-row"><div><label for="pd-her">Hersteller</label><input type="text" id="pd-her" value="${esc(p.manufacturer || "")}" maxlength="120"></div>
-        <div><label for="pd-mod">Modell</label><input type="text" id="pd-mod" value="${esc(p.model || "")}" maxlength="160"></div></div>
-      <div class="field-row"><div><label for="pd-art">Artikelnummer des Herstellers</label><input type="text" id="pd-art" value="${esc(p.article_no || "")}" maxlength="80"><div class="help" id="pd-art-hilfe"></div></div>
-        <div><label for="pd-norm">Norm</label><input type="text" id="pd-norm" value="${esc(p.norm || "")}" maxlength="200"></div></div>
+      <div class="field-row"><div><label for="pd-her">Hersteller</label><input type="text" id="pd-her" value="${esc(p.manufacturer || "")}" maxlength="120" ${TASTATUR_NAME}></div>
+        <div><label for="pd-mod">Modell</label><input type="text" id="pd-mod" value="${esc(p.model || "")}" maxlength="160" ${TASTATUR_NAME}></div></div>
+      <div class="field-row"><div><label for="pd-art">Artikelnummer des Herstellers</label><input type="text" id="pd-art" value="${esc(p.article_no || "")}" maxlength="80" ${TASTATUR_NUMMER}><div class="help" id="pd-art-hilfe"></div></div>
+        <div><label for="pd-norm">Norm</label><input type="text" id="pd-norm" value="${esc(p.norm || "")}" maxlength="200" ${TASTATUR_NUMMER}></div></div>
       <div class="field-row"><div><label for="pd-mk">Materialart</label><select id="pd-mk">${Object.entries(MATERIALART).map(([w, t]) => `<option value="${w}" ${p.material_kind === w ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
         <div><label for="pd-int">Prüfintervall (Monate)</label><input type="number" id="pd-int" min="1" max="120" value="${p.interval_months || ""}"><div class="help" id="pd-int-hilfe"></div></div></div>
       <div class="field-row"><div><label for="pd-ld">Lebensdauer (Jahre)</label><input type="number" id="pd-ld" min="1" max="50" value="${p.lifetime_years || ""}"><div class="help" id="pd-ld-hilfe"></div></div>
         <div><label for="pd-lq">Fundstelle der Lebensdauer</label><input type="text" id="pd-lq" value="${esc(p.lifetime_source || "")}" maxlength="300" placeholder="z. B. Gebrauchsanleitung, Kap. 9"></div></div>
       <label for="pd-desc">Beschreibung</label><textarea id="pd-desc" rows="3" maxlength="4000">${esc(p.description || "")}</textarea>
-      <label for="pd-bild">Produktbild</label>
-      <div class="mat-bildfeld">${p.vorschau ? `<img src="${esc(p.vorschau)}" alt="Bisheriges Produktbild">` : ""}
-        <div><input type="file" id="pd-bild" accept="image/*">
-          ${p.bild ? '<label class="inline"><input type="checkbox" id="pd-bild-weg"> Bild entfernen</label>' : ""}
-          <div class="help">${p.bild ? "Ein neues Bild ersetzt das bisherige. " : ""}JPEG, PNG, WebP oder HEIC vom Telefon.</div></div></div>
+      ${fotoFeld("pd-bild", "Produktbild", "Bild", p.bild ? p.vorschau || p.bild : "", "JPEG, PNG, WebP oder HEIC vom Telefon.")}
       ${p.variante_von ? `<fieldset class="mat-variante-doks"><legend>Dokumente übernehmen</legend>
         ${vorbildDoks.length ? vorbildDoks.map((d) => `<label class="inline"><input type="checkbox" class="pd-dok" value="${d.id}" checked> ${esc(d.title)}
           <span class="muted small">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}${d.datei ? "" : " · Link"}</span></label>`).join("") : '<p class="help">Das Produkt hat keine aktuellen Dokumente.</p>'}
@@ -1912,6 +2033,7 @@
       if (neu && p.category_id && !p.variante_von) katSel.dispatchEvent(new Event("change"));
       hilfen();
       artikelnummerPruefen($("#pd-art", body), $("#pd-art-hilfe", body), p.id);
+      const bildWahl = fotoFeldVerdrahten(dlg, body, "pd-bild");
       // Erst die Angaben, dann das Bild. Scheitert nur das Bild, kennt der Dialog das Produkt schon: Ein zweiter
       // Klick speichert die Angaben erneut und lädt das Bild nach, statt das Produkt doppelt anzulegen.
       let pid = p.id || null;
@@ -1921,8 +2043,7 @@
                         article_no: $("#pd-art", body).value, norm: $("#pd-norm", body).value, material_kind: mk.value,
                         interval_months: $("#pd-int", body).value || null, lifetime_years: ld.value || null,
                         lifetime_source: $("#pd-lq", body).value, description: $("#pd-desc", body).value };
-        const bild = $("#pd-bild", body).files[0];
-        const weg = $("#pd-bild-weg", body);
+        const bild = bildWahl.datei;
         if (p.variante_von && !pid && !daten.article_no.trim()) { toast("Eine Variante braucht eine eigene Artikelnummer.", true); fokus($("#pd-art", body)); return; }
         knopf.disabled = true;
         try {
@@ -1936,7 +2057,7 @@
             const fd = new FormData();
             fd.append("file", bild);
             await api(`${API}/produkte/${pid}/bild`, { method: "POST", body: fd });
-          } else if (weg && weg.checked) {
+          } else if (bildWahl.entfernen) {
             await api(`${API}/produkte/${pid}/bild`, { method: "DELETE" });
           }
           dlg.close(); location.href = `/material/katalog/produkt/${pid}`;
@@ -2110,10 +2231,10 @@
       function zeichnen() {
         liste.innerHTML = eintraege.map((e, i) => `<div class="mat-dokzeile${e.fehler ? " fehler" : ""}" data-i="${i}">
             <div class="mat-dokzeile-name">${e.datei ? `${esc(e.datei.name)} <span class="muted small">${esc(groesse(e.datei.size))}</span>` : "Link"}</div>
-            ${e.datei ? "" : `<input type="text" class="dm-url" maxlength="500" placeholder="https://…" value="${esc(e.url || "")}" aria-label="Adresse">`}
+            ${e.datei ? "" : `<input type="text" class="dm-url" maxlength="500" placeholder="https://…" value="${esc(e.url || "")}" aria-label="Adresse" ${TASTATUR_ADRESSE}>`}
             <input type="text" class="dm-titel" maxlength="200" value="${esc(e.titel)}" placeholder="${e.datei ? "Titel" : "Titel (leer = Adresse)"}" aria-label="Titel">
             <select class="dm-art" aria-label="Art">${artWahl(e.art)}</select>
-            <input type="text" class="dm-ver" maxlength="40" value="${esc(e.version)}" placeholder="Version" aria-label="Versionsstand">
+            <input type="text" class="dm-ver" maxlength="40" value="${esc(e.version)}" placeholder="Version" aria-label="Versionsstand" ${TASTATUR_NUMMER}>
             <button type="button" class="lnk dm-weg" title="Entfernen" aria-label="Entfernen">✕</button>
             ${e.fehler ? `<div class="dm-status">${esc(e.fehler)}</div>` : ""}</div>`).join("");
         $$(".dm-weg", liste).forEach((b) => { b.onclick = () => { merken(); eintraege.splice(+b.closest(".mat-dokzeile").dataset.i, 1); zeichnen(); }; });
@@ -2186,12 +2307,13 @@
     dialog(`<h2>${alt ? `Neue Version von „${esc(alt.title)}“` : "Dokument hinzufügen"}</h2>
       ${alt ? "" : `<label for="dd-kind">Art</label><select id="dd-kind">${Object.entries(DOKART).map(([w, t]) => `<option value="${w}">${esc(t)}</option>`).join("")}</select>`}
       <label for="dd-title">Titel</label><input type="text" id="dd-title" value="${esc(alt ? alt.title : "")}" maxlength="200" placeholder="leer = Dateiname">
-      <div class="field-row"><div><label for="dd-ver">Versionsstand</label><input type="text" id="dd-ver" maxlength="40" placeholder="z. B. 03/2024"></div>
+      <div class="field-row"><div><label for="dd-ver">Versionsstand</label><input type="text" id="dd-ver" maxlength="40" placeholder="z. B. 03/2024" ${TASTATUR_NUMMER}></div>
         <div><label for="dd-ab">Gültig ab</label><input type="date" id="dd-ab"></div></div>
-      <label for="dd-datei">Datei (PDF oder Bild)</label><input type="file" id="dd-datei" accept="application/pdf,image/jpeg,image/png,image/webp">
-      <label for="dd-url">… oder Adresse beim Hersteller</label><input type="text" id="dd-url" maxlength="500" placeholder="https://…">
+      <div class="mat-feldkopf">Datei (PDF oder Bild)</div>${dateiKnopf("dd-datei", "Datei wählen …", "application/pdf,image/jpeg,image/png,image/webp", false)}
+      <label for="dd-url">… oder Adresse beim Hersteller</label><input type="text" id="dd-url" maxlength="500" placeholder="https://…" ${TASTATUR_ADRESSE}>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="dd-ok" type="button">Speichern</button></div>`,
     (dlg, body) => {
+      dateiKnopfVerdrahten(body, "dd-datei");
       $("#dd-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
         const datei = $("#dd-datei", body).files[0];
@@ -3448,7 +3570,7 @@
     dialog(`<h2>Vorhandenem Produkt zuordnen</h2>
       <p class="help">Für „${esc(meldungName(m))}“ – wenn das Produkt schon im Katalog steht, etwa anders geschrieben oder mit anderer Artikelnummer.</p>
       <label for="zu-q">Produkt suchen</label>
-      <div class="mat-produktwahl"><input type="search" id="zu-q" autocomplete="off" value="${esc(m.manufacturer)}"><div id="zu-treffer" class="mat-treffer"></div></div>
+      <div class="mat-produktwahl"><input type="search" id="zu-q" autocomplete="off" ${TASTATUR_SUCHE} value="${esc(m.manufacturer)}"><div id="zu-treffer" class="mat-treffer"></div></div>
       <div id="zu-gewaehlt" class="mat-gewaehlt" hidden></div>
       <label for="zu-antwort">Anmerkung für den Melder (optional, steht in seiner Mail)</label><textarea id="zu-antwort" rows="2" maxlength="1000"></textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="zu-ok" type="button" disabled>Zuordnen</button></div>`,
@@ -3513,19 +3635,20 @@
     const kats = await kategorienLaden();
     dialog(`<h2>Fehlendes Produkt melden</h2>
       <p class="help">Ein Produktkatalogpfleger nimmt es in den Katalog auf. Du bekommst eine Mail, sobald du Artikel davon anlegen kannst.</p>
-      <div class="field-row"><div><label for="me-her">Hersteller</label><input type="text" id="me-her" maxlength="120" value="${esc(v.manufacturer || "")}"></div>
-        <div><label for="me-mod">Modell</label><input type="text" id="me-mod" maxlength="160" value="${esc(v.model || "")}"></div></div>
-      <div class="field-row"><div><label for="me-art">Artikelnummer des Herstellers</label><input type="text" id="me-art" maxlength="80"><div class="help" id="me-art-hilfe"></div></div>
-        <div><label for="me-norm">Norm</label><input type="text" id="me-norm" maxlength="200" placeholder="z. B. EN 362"></div></div>
+      <div class="field-row"><div><label for="me-her">Hersteller</label><input type="text" id="me-her" maxlength="120" value="${esc(v.manufacturer || "")}" ${TASTATUR_NAME}></div>
+        <div><label for="me-mod">Modell</label><input type="text" id="me-mod" maxlength="160" value="${esc(v.model || "")}" ${TASTATUR_NAME}></div></div>
+      <div class="field-row"><div><label for="me-art">Artikelnummer des Herstellers</label><input type="text" id="me-art" maxlength="80" ${TASTATUR_NUMMER}><div class="help" id="me-art-hilfe"></div></div>
+        <div><label for="me-norm">Norm</label><input type="text" id="me-norm" maxlength="200" placeholder="z. B. EN 362" ${TASTATUR_NUMMER}></div></div>
       <label for="me-kat">Kategorie</label><select id="me-kat"><option value="">– weiß ich nicht –</option>${kategorieOptionen(kats, null)}</select>
-      <label for="me-links">Links</label><textarea id="me-links" rows="3" placeholder="https://… – je Zeile eine Adresse: Herstellerseite, Gebrauchsanleitung, Händler"></textarea>
-      <label for="me-fotos">Fotos (bis zu 3)</label><input type="file" id="me-fotos" accept="image/*" multiple>
+      <label for="me-links">Links</label><textarea id="me-links" rows="3" ${TASTATUR_ADRESSE} placeholder="https://… – je Zeile eine Adresse: Herstellerseite, Gebrauchsanleitung, Händler"></textarea>
+      <div class="mat-feldkopf">Fotos (bis zu 3)</div>${dateiKnopf("me-fotos", '<span aria-hidden="true">📷</span> Fotos wählen …', "image/*", true)}
       <div class="help">Etikett oder Typenschild – darauf stehen meist Hersteller, Modell, Norm und Herstelldatum.</div>
       <label for="me-note">Bemerkung</label><textarea id="me-note" rows="3" maxlength="2000" placeholder="Was hilft beim Einpflegen? z. B. Größe, Farbe, wo gekauft"></textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="me-ok" type="button">Melden</button></div>`,
     (dlg, body) => {
       fokus($("#me-her", body));
       artikelnummerPruefen($("#me-art", body), $("#me-art-hilfe", body), null);
+      dateiKnopfVerdrahten(body, "me-fotos");
       $("#me-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
         const fotos = Array.from($("#me-fotos", body).files);
@@ -3644,8 +3767,8 @@
       <p class="help">Für „${esc(produktName(p))}“. Der Hinweis steht danach am Produkt, an jedem betroffenen Artikel und auf der Übersicht. Gesperrt wird nichts automatisch – das tun Prüfer mit dem Grund „Rückruf“.</p>
       <label for="rr-titel">Titel</label><input type="text" id="rr-titel" maxlength="200" placeholder="kurz, wie in der Meldung des Herstellers">
       <label for="rr-text">Was ist betroffen, was ist zu tun?</label><textarea id="rr-text" rows="5" maxlength="4000" placeholder="Beschreibung und Empfehlung des Herstellers"></textarea>
-      <label for="rr-url">Link zur Meldung des Herstellers</label><input type="text" id="rr-url" inputmode="url" maxlength="500" placeholder="https://…" autocomplete="off">
-      <label for="rr-serien">Betroffene Seriennummern</label><textarea id="rr-serien" rows="4" placeholder="eine je Zeile – leer lassen, wenn alle Artikel des Produkts betroffen sind"></textarea>
+      <label for="rr-url">Link zur Meldung des Herstellers</label><input type="text" id="rr-url" maxlength="500" placeholder="https://…" ${TASTATUR_ADRESSE}>
+      <label for="rr-serien">Betroffene Seriennummern</label><textarea id="rr-serien" rows="4" ${TASTATUR_NUMMER} placeholder="eine je Zeile – leer lassen, wenn alle Artikel des Produkts betroffen sind"></textarea>
       <div class="help">Groß/klein und Leerzeichen am Rand spielen keine Rolle.</div>
       <label class="inline"><input type="checkbox" id="rr-mail" checked> Mail an Materialwarte und Prüfer</label>
       <div class="help">An alle Materialwarte und an die Prüfer, die einen betroffenen Artikel schon geprüft haben.</div>

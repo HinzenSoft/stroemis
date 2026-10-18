@@ -228,6 +228,7 @@ def ordner_json(o, direkt=None, gesamt=None):
     out["demo"] = bool(o["demo"])
     out["foto"] = katalog.bild_url(o["photo"])
     out["vorschau"] = katalog.bild_url(o["photo"], "thumb")
+    out["original"] = katalog.bild_url(o["photo"], "orig")      # „Original“ in der Großansicht (wie beim Produktbild)
     if direkt is not None:
         out["direkt"] = direkt
     if gesamt is not None:
