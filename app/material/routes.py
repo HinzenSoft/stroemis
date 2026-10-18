@@ -20,7 +20,7 @@ from flask import (Blueprint, abort, current_app, g, jsonify, redirect, render_t
                    send_from_directory, url_for)
 
 from .. import db
-from ..auth import attempts_exceeded, current_user, eingabefehler_abfangen, json_body, note_attempt
+from ..auth import attempts_exceeded, current_user, eingabefehler_abfangen, json_body, login_required, note_attempt
 from . import models
 from .services import (Abgelehnt, anhang, bestand, durchgang, eingabe, globalprotokoll, globalsuche, journal, katalog,
                        kennung, medien as medien_dienst, meldung, protokoll, pruefung, search, unterschrift)
@@ -1024,8 +1024,10 @@ def urkundennummer_setzen():
 
 
 @api.get("/unterschrift")
-@requires_zugang
+@login_required
 def unterschrift_lesen():
+    """Die eigene Unterschrift – auch ohne Zugang zum Modul: Es sind die eigenen Daten, und das Profil zeigt sie dann zum
+    Entfernen (nach einem Wechsel der Stufe auf „–“)."""
     return jsonify(unterschrift=unterschrift.daten_uri(unterschrift.von(current_user()["id"])))
 
 
@@ -1041,8 +1043,9 @@ def unterschrift_setzen():
 
 
 @api.delete("/unterschrift")
-@requires_zugang
+@login_required
 def unterschrift_entfernen():
+    """Die eigene Unterschrift entfernen darf jeder, auch ohne Zugang zum Modul – sie gehört ihm."""
     unterschrift.entfernen(current_user())
     return jsonify(unterschrift=None)
 

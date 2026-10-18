@@ -33,16 +33,17 @@
   </section>
   {# Unterschrift nur für wen, der sie braucht: Prüfer (Festschreiben) und Materialwarte (Aussondern, irgendwo
      verwalten – auch mit Stufe Mitglied) – mit Zugang zum Modul (mat_zugang: Stufe und Name). Ist schon eine
-     hinterlegt, bleibt der Abschnitt, damit sie sich nach einem Rollenwechsel entfernen lässt; neu unterschreiben
-     (PUT /api/material/unterschrift) dürfen dann nur noch Prüfer und Materialwarte (mat_unterschrift).
-     Wer das Häkchen „Prüfer“ hat (setzt die Verwaltung), trägt hier auch seine Urkundennummer ein
-     (PUT /api/material/urkundennummer) – erst mit ihr darf er prüfen. #}
-  {% set mat_abschnitt = mat_zugang and (user.mat_pruefer or mat_unterschrift or user.signature_png) %}
+     hinterlegt, bleibt der Abschnitt (mat_abschnitt, berechnet in app/__init__.py), damit sie sich nach einem
+     Rollenwechsel entfernen lässt – auch ohne Zugang zum Modul (GET und DELETE /api/material/unterschrift brauchen nur
+     die Anmeldung); neu unterschreiben (PUT) dürfen nur Prüfer und Materialwarte mit Zugang (mat_unterschrift).
+     Wer das Häkchen „Prüfer“ hat (setzt die Verwaltung), trägt hier mit Zugang zum Modul auch seine Urkundennummer
+     ein (PUT /api/material/urkundennummer) – erst mit ihr darf er prüfen. #}
   {% if mat_abschnitt %}
   {% set us_setzen = mat_unterschrift %}
+  {% set mit_urkunde = mat_zugang and user.mat_pruefer %}
   <section class="section" id="unterschrift" data-setzen="{{ 1 if us_setzen else 0 }}">
-    <h2>{% if user.mat_pruefer %}Urkundennummer und Unterschrift{% else %}Unterschrift{% endif %}</h2>
-    {% if user.mat_pruefer %}
+    <h2>{% if mit_urkunde %}Urkundennummer und Unterschrift{% else %}Unterschrift{% endif %}</h2>
+    {% if mit_urkunde %}
     <p class="notice{% if darf_pruefen %} hidden{% endif %}" id="ur-hinweis" role="status"><strong>Noch keine Urkundennummer:</strong> Die Verwaltung hat dich als Prüfer eingetragen – prüfen kannst du aber erst, wenn du hier deine Urkundennummer gespeichert hast.</p>
     <form id="f-urkunde" class="ur-form" novalidate>
       <label for="urkundennummer">Urkundennummer (Prüfernummer, Qualifikation 1012)</label>
@@ -54,7 +55,7 @@
     </form>
     <h3 class="us-titel">Unterschrift</h3>
     {% endif %}
-    <div class="help">Für das Modul Material: Sie wird beim Festschreiben einer Prüfung oder Aussonderung als Kopie ins Protokoll übernommen – zusammen mit deiner Anmeldung, dem Zeitpunkt und der Prüfsumme. Änderst oder entfernst du sie, wirkt das nur auf künftige Protokolle.{% if not us_setzen %} Du bist weder Prüfer noch Materialwart und brauchst sie nicht mehr – entferne sie, wenn du magst.{% endif %}</div>
+    <div class="help">Für das Modul Material: Sie wird beim Festschreiben einer Prüfung oder Aussonderung als Kopie ins Protokoll übernommen – zusammen mit deiner Anmeldung, dem Zeitpunkt und der Prüfsumme. Änderst oder entfernst du sie, wirkt das nur auf künftige Protokolle.{% if not mat_zugang %} Dein Konto hat keinen Zugang zum Modul Material – du brauchst sie gerade nicht. Entferne sie, wenn du magst.{% elif not us_setzen %} Du bist weder Prüfer noch Materialwart und brauchst sie nicht mehr – entferne sie, wenn du magst.{% endif %}</div>
     <div class="us-profil">
       <div class="us-vorschau leer" id="us-vorschau"><span class="muted">Wird geladen …</span></div>
       <div class="btn-row us-knoepfe">
@@ -79,6 +80,6 @@
 </main>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/profile.js') }}"></script>
-{% if mat_zugang and (user.mat_pruefer or mat_unterschrift or user.signature_png) %}<script src="{{ url_for('static', filename='vendor/signature_pad/signature_pad.umd.min.js') }}"></script>
+{% if mat_abschnitt %}<script src="{{ url_for('static', filename='vendor/signature_pad/signature_pad.umd.min.js') }}"></script>
 <script src="{{ url_for('material.static', filename='unterschrift.js') }}"></script>
 <script src="{{ url_for('material.static', filename='profil_unterschrift.js') }}"></script>{% endif %}{% endblock %}

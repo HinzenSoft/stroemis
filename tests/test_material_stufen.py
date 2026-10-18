@@ -166,6 +166,8 @@ OHNE_STUFE_ERLAUBT = {
     "material.pruefseite": 200,                  # die Prüfseite für Protokolle ist öffentlich
     ("POST", "material_api.pruefen"): 400,       # ebenso ihre Schnittstelle (ohne Datei: 400)
     "material_api.meine_freigaben": 200,         # „Meine Freigaben“ – sagt, warum keine wirkt
+    "material_api.unterschrift_lesen": 200,      # die eigene Unterschrift – im Profil nur zum Entfernen
+    ("DELETE", "material_api.unterschrift_entfernen"): 200,   # seine Daten (hier ist keine da)
     "material_api.meldung_lesen": 404,           # Meldungen: wie unbekannt (der Melder liest seine immer)
     ("DELETE", "material_api.meldung_loeschen"): 404,
 }
@@ -313,7 +315,7 @@ def test_mitglied_und_material_verwaltung():
 def test_haekchen_ohne_stufe():
     """Häkchen „Prüfer“ und Urkundennummer ohne Stufe: kein Zugang, die Prüffreigabe wirkt nicht („kein Zugang zum Modul
     Material“), keine Rückrufmail, die Personensuche für Freigaben findet das Konto nicht, die Urkundennummer lässt sich
-    nicht eintragen, das Profil zeigt den Abschnitt nicht."""
+    nicht eintragen, neu unterschreiben auch nicht – die hinterlegte Unterschrift zeigt das Profil nur zum Entfernen."""
     post, alt = post_abfangen()
     try:
         with tempfile.TemporaryDirectory() as tmp:
@@ -352,11 +354,21 @@ def test_haekchen_ohne_stufe():
             del post[:]
             assert k["katalog"].post(RR.format(ids["hms"]), json={"title": "Testrückruf"}).status_code == 201
             assert sorted(an for an, _, _ in post) == ["wart@example.org"], post
-            # Profil: kein Abschnitt, Urkundennummer und Unterschrift 403.
+            # Profil: Urkundennummer 403, neu unterschreiben 403. Die hinterlegte Unterschrift zeigt der Abschnitt
+            # trotzdem – nur zum Entfernen (ihre eigenen Daten, auch ohne Zugang); danach ist er weg.
             html = p.get("/profil").get_data(as_text=True)
-            assert 'id="unterschrift"' not in html and 'id="f-urkunde"' not in html
+            assert 'id="unterschrift" data-setzen="0"' in html and 'id="f-urkunde"' not in html, html
+            assert "<h2>Unterschrift</h2>" in html and "keinen Zugang zum Modul Material" in html
             assert p.put("/api/material/urkundennummer", json={"urkundennummer": "1012-3031"}).status_code == 403
-            assert p.get("/api/material/unterschrift").status_code == 403
+            from test_material import unterschrift_daten
+            assert p.put("/api/material/unterschrift", json={"bild": unterschrift_daten()}).status_code == 403
+            r = p.get("/api/material/unterschrift")
+            assert r.status_code == 200 and r.json["unterschrift"].startswith("data:image/png"), r.get_json()
+            assert p.delete("/api/material/unterschrift", headers=H).status_code == 200
+            assert zeilen(app, "SELECT signature_png FROM users WHERE id = ?", (pid,)) == [{"signature_png": None}]
+            assert zeilen(app, "SELECT action, user_id FROM mat_audit WHERE entity = 'user' AND entity_id = ? "
+                               "ORDER BY id DESC LIMIT 1", (pid,)) == [{"action": "unterschrift", "user_id": pid}]
+            assert 'id="unterschrift"' not in p.get("/profil").get_data(as_text=True)
     finally:
         post_zurueck(alt)
     print("Häkchen ohne Stufe bestanden.")

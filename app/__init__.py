@@ -211,13 +211,17 @@ def slide(token):
 def profile():
     u = auth.current_user()
     # Modul Material: Ob die Urkundennummer gilt, entscheidet rechte.py – das Profil zeigt einem Prüfer ohne gültige
-    # Nummer den Hinweis, dass er erst danach prüfen kann. Den Abschnitt „Unterschrift“ gibt es nur mit Zugang zum Modul;
-    # neu unterschreiben darf, wer festschreibt oder aussondert (darf_unterschreiben – auch ein Materialwart mit Stufe
-    # Mitglied, der über seine Freigabe verwaltet).
+    # Nummer den Hinweis, dass er erst danach prüfen kann. Den Abschnitt „Unterschrift“ gibt es mit Zugang zum Modul für
+    # Prüfer und wer neu unterschreiben darf (darf_unterschreiben – wer festschreibt oder aussondert, auch ein Materialwart
+    # mit Stufe Mitglied, der über seine Freigabe verwaltet); ist schon eine hinterlegt, immer – auch ohne Zugang, dann
+    # nur zum Entfernen.
     from .material.services import rechte as mat_rechte
+    mat_zugang, mat_unterschrift = mat_rechte.zugang(u), mat_rechte.darf_unterschreiben(u)
     return render_template("profil.html", user=u, avatar=auth.avatar_url(u.get("avatar") or ""),
                            initialen=auth.initialen(u.get("name") or u["email"]), darf_pruefen=mat_rechte.ist_pruefer(u),
-                           mat_zugang=mat_rechte.zugang(u), mat_unterschrift=mat_rechte.darf_unterschreiben(u))
+                           mat_zugang=mat_zugang, mat_unterschrift=mat_unterschrift,
+                           mat_abschnitt=bool((mat_zugang and (u["mat_pruefer"] or mat_unterschrift))
+                                              or u.get("signature_png")))
 
 
 @pages.get("/admin")
