@@ -13,7 +13,8 @@
   const token = shell.dataset.mode === "reset" ? resetToken() : "";
 
   function showErr(msg) { err.textContent = msg; err.classList.remove("hidden"); }
-  function busy(form, on) { form.querySelector("button[type=submit]").disabled = on; }
+  // Nach einer erfolgreichen Kontoanfrage ersetzt die Antwort das Formular samt Knopf – dann gibt es nichts zu entsperren.
+  function busy(form, on) { const k = form.querySelector("button[type=submit]"); if (k) k.disabled = on; }
 
   async function submit(form, path, body, after) {
     err.classList.add("hidden");
