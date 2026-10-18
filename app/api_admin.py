@@ -9,6 +9,7 @@ from .auth import (EMAIL_RE, MIN_PW, MODULE, STUFEN, VERWALTUNG, admin_required,
 from .images import delete_avatar
 from .mailer import send_mail, versand
 from .material.services import Abgelehnt
+from .material.services import freigaben as mat_freigaben
 from .material.services import journal as mat_journal
 from .material.services.rechte import rollen_lesen
 from werkzeug.security import generate_password_hash
@@ -21,12 +22,17 @@ eingabefehler_abfangen(bp)
 VORGABE = {"karte": 1, "wiki": 1, "pruefungen": 0, "material": 0, "verwaltung": 0}
 # Was am Konto zum Modul Material gehört – Änderungen daran stehen im Journal des Moduls.
 MATERIAL_SPALTEN = ("recht_material", "mat_pruefer", "mat_katalog", "urkundennummer")
+OHNE_NAMEN = "Erst einen Namen eintragen – Prüfer und Katalogpfleger stehen mit Namen in Journal und Protokollen."
 
 
 def _rechte_lesen(d, basis):
     """Stufen aus der Anfrage über den Bestand legen. Nur bekannte Module, nur 0/1/2 – ein Tippfehler
     verteilt keine Rechte. Verwaltung kennt kein Mitglied, und Verwaltung im Modul Verwaltung zieht
-    alle anderen Module auf Verwaltung: So steht in der Matrix, was gilt."""
+    alle anderen Module auf Verwaltung: So steht in der Matrix, was gilt.
+
+    Die Stufe im Modul Material wird übergangen: Rechte am Bestand gibt es seit Phase 2 nur über Freigaben je Ordner
+    (Bestand → Ordner → Freigaben). Die Spalte recht_material behält ihren Wert als Rückweg – außer wie bisher bei
+    Verwaltung, die alle Module auf Verwaltung zieht."""
     neu = dict(basis)
     angaben = d.get("rechte")
     if not isinstance(angaben, dict):
@@ -34,6 +40,10 @@ def _rechte_lesen(d, basis):
     for modul, wert in angaben.items():
         if modul not in MODULE:
             raise ValueError(f"Unbekanntes Modul „{modul}“.")
+        if modul == "material":
+            current_app.logger.warning("Nutzerverwaltung: Stufe im Modul Material (%r) übergangen – Rechte am Bestand "
+                                       "vergeben Freigaben je Ordner.", wert)
+            continue
         if isinstance(wert, bool) or wert not in STUFEN:
             raise ValueError("Eine Stufe ist 0 (kein Zugriff), 1 (Mitglied) oder 2 (Verwaltung).")
         if modul == "verwaltung" and wert == 1:
@@ -118,17 +128,24 @@ def videos():
 @bp.get("/users")
 @admin_required
 def list_users():
+    """Alle Konten mit ihren Inhalten. Im Modul Material zusätzlich die Zahl gültiger Freigaben (mat_freigaben) und die
+    stillgelegte Stufe aus Phase 1 (mat_stufe_alt, für die Marke „ohne Freigabe“). Die Zahlen und die wirksame Stufe
+    kommen für alle Konten aus einer gruppierten Abfrage – nicht je Konto eine."""
     rows = db.query(
         "SELECT u.*, (SELECT COUNT(*) FROM albums a WHERE a.owner_id = u.id) AS album_count, "
         "(SELECT COUNT(*) FROM photos p WHERE p.owner_id = u.id) AS photo_count, "
         # Artikel, die der Nutzer angelegt hat – ohne den Papierkorb, der zählt nicht als Inhalt.
         "(SELECT COUNT(*) FROM wiki_pages w WHERE w.created_by = u.id AND w.deleted_at IS NULL) AS page_count "
         "FROM users u ORDER BY (u.status = 'pending') DESC, u.created_at")
+    zahlen = mat_freigaben.zahlen_je_konto()
+    mat_freigaben.stufen_vormerken(rows, zahlen)
     out = []
     for r in rows:
         u = public_user(r)
         u["album_count"], u["photo_count"], u["page_count"] = r["album_count"], r["photo_count"], r["page_count"]
         u["last_login"] = r["last_login"]
+        u["mat_freigaben"] = zahlen.get(r["id"], (0,))[0]
+        u["mat_stufe_alt"] = int(r["recht_material"] or 0)
         out.append(u)
     return jsonify(users=out)
 
@@ -136,6 +153,9 @@ def list_users():
 @bp.post("/users")
 @admin_required
 def create_user():
+    """Ein Konto anlegen. Die Stufe im Modul Material wird übergangen (_rechte_lesen); die Häkchen Prüfer und Katalog
+    gibt es nur mit Namen. Der Rolleneintrag im Journal des Moduls trägt keine E-Mail – er bleibt auch nach dem Löschen
+    des Kontos stehen."""
     d = json_body()
     email = (d.get("email") or "").strip().lower()
     if not EMAIL_RE.match(email):
@@ -152,16 +172,19 @@ def create_user():
         return jsonify(error=str(exc)), 400
     except Abgelehnt as exc:
         return jsonify(error=str(exc)), exc.code
+    name = (d.get("name") or "").strip()
+    if (mat["mat_pruefer"] or mat["mat_katalog"]) and not name:
+        return jsonify(error=OHNE_NAMEN), 400
     spalten = [f"recht_{m}" for m in MODULE] + list(mat)
     with db.transaction():
         uid = db.execute(
             f"INSERT INTO users (email, password_hash, name, gliederung, phone, {', '.join(spalten)}, created_at) "
             f"VALUES ({','.join('?' * (6 + len(spalten)))})",
-            (email, generate_password_hash(pw), (d.get("name") or "").strip(), (d.get("gliederung") or "").strip(),
+            (email, generate_password_hash(pw), name, (d.get("gliederung") or "").strip(),
              (d.get("phone") or "").strip(), *(rechte[m] for m in MODULE), *mat.values(), db.now()))
         neu = dict(mat, recht_material=rechte["material"])
         if neu["recht_material"] or neu["mat_pruefer"] or neu["mat_katalog"]:
-            mat_journal.eintragen("user", uid, "rollen", None, dict(neu, email=email))
+            mat_journal.eintragen("user", uid, "rollen", None, neu)
     u = db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True)
     mailed = False
     if d.get("send_invite"):
@@ -209,6 +232,12 @@ def update_user(uid):
         for m in MODULE:
             vals[f"recht_{m}"] = rechte[m]
         vals.update(mat)
+    # Die Häkchen Prüfer und Katalog nur mit Namen – geprüft, wenn eines neu dazukommt oder der Name sich ändert, damit
+    # ein namenloses Konto aus der Zeit davor sich weiter bearbeiten lässt (etwa um das Häkchen zu nehmen).
+    name = vals.get("name", u["name"] or "")
+    haekchen = [k for k in ("mat_pruefer", "mat_katalog") if vals.get(k, u[k])]
+    if haekchen and not name and (name != (u["name"] or "") or any(not u[k] for k in haekchen)):
+        return jsonify(error=OHNE_NAMEN), 400
     if "active" in d:
         active = 1 if d.get("active") else 0
         if uid == current_user()["id"] and not active:
