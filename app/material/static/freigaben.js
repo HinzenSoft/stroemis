@@ -563,14 +563,14 @@
   /* „Verlängern …“ aus dem Ablaufhinweis im Ordnerkopf. Er zählt alles, was hier und in Unterordnern in 30 Tagen
      abläuft – auch Grundrechte, die „Alle Prüffreigaben verlängern“ nicht betrifft. Läuft eine befristete
      Prüffreigabe ab, die man ändern darf, geht es zu diesem Knopf; sonst zur ersten ablaufenden Zeile (ihr Abschnitt
-     geht auf, der Fokus auf ihr „Ändern“). Gibt es keine, wie ohne Vorlage. */
+     geht auf, der Fokus auf ihr „Ändern“). Läuft inzwischen nichts mehr ab, zum Knopf, sonst wie ohne Vorlage. */
   function zumAblauf(el, d, mitFokus) {
     const bald = (f) => f.laeuft_ab_in_tagen !== null && f.laeuft_ab_in_tagen !== undefined;
     const knopf = $("#mf-verlaengern", el);
     const teile = $$("details.mf-teil", $("#mf-listen", el));
     const zeilen = d.direkt.map((f) => [f, teile[0]]).concat(d.unten.map((f) => [f, teile[2]])).filter(([f]) => bald(f));
     let ziel = null;
-    if (knopf && zeilen.some(([f]) => f.recht === "pruefen" && f.bis && f.aenderbar)) {
+    if (knopf && (!zeilen.length || zeilen.some(([f]) => f.recht === "pruefen" && f.bis && f.aenderbar))) {
       ziel = knopf;
       knopf.scrollIntoView({ block: "center" });
     } else {
