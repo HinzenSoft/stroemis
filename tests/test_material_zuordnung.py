@@ -540,7 +540,8 @@ def test_anzeige_und_filter_a1r():
         pfad = os.path.join(tmp, "lebenslauf.pdf")
         with open(pfad, "wb") as fh:
             fh.write(r.data)
-        text = " ".join(" ".join(pdf_seiten(pfad)).split())
+        # Schmale Tabellenspalten trennen Wörter („geän‐ dert“) – die Trennung zählt hier nicht.
+        text = " ".join(" ".join(pdf_seiten(pfad)).split()).replace("\u2010 ", "")
         assert "Zuordnung geändert" in text and "(Person)" in text and "Person Zwei" not in text, text[:2000]
     print("Anzeige und Filter (A1R) bestanden.")
 
