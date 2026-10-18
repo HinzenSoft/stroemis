@@ -63,13 +63,21 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     wo das Konto dort auch lesen oder verwalten hat (oder Plattform-Verwaltung ist) und die Zeile seitdem niemand
     geändert hat; Journal „Migration Schritt 9“. Schritt 8 legt sie seitdem gleich so an (er baut die Tabelle dafür
     schon selbst um). Wiederholbar.
+  - Schritt 10 (Phase 2 · Lieferung 1, Nachbesserung „Modulstufe“ vom 18.10.2026): Die Stufe im Modul Material
+    (users.recht_material) wirkt wieder – 1 Mitglied (Modulzugang, Bestand über Freigaben), 2 Verwaltung
+    (Material-Verwaltung: Katalog, alle Bestände, Gliederungen, jede Freigabe). Kein neues Schema, nur die Stufen:
+    2 für bisherige Produktkatalogpfleger (mat_katalog) und die Plattform-Verwaltung; 1 für eine Stufe aus Phase 1
+    (auch den Materialwart mit 2 – er verwaltet weiter über seine Freigaben), eine Freigabe (auch abgelaufen) oder das
+    Häkchen Prüfer; sonst 0. mat_katalog bleibt stehen und wird nicht mehr gelesen (Rückweg). Journal „rollen“ am
+    Konto je geänderter Stufe und je aufgelöstem Katalog-Häkchen, „Migration Schritt 10“, das Konto im Inhalt nur als
+    Verweis. Wiederholbar.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -1094,11 +1102,52 @@ def _schritt_9(conn):
     _pruefer_aus_phase_1_dauerhaft(conn)
 
 
+MIGRATION_10 = "Migration Schritt 10"
+# Die Regel für Schritt 10 in SQL (über users u): bisherige Katalogpfleger und die Plattform-Verwaltung → 2; eine
+# Stufe aus Phase 1, irgendeine Freigabe (auch abgelaufen) oder das Häkchen Prüfer → 1; sonst 0.
+STUFE_10 = ("CASE WHEN COALESCE(u.mat_katalog, 0) = 1 OR COALESCE(u.recht_verwaltung, 0) >= 2 THEN 2 "
+            "WHEN COALESCE(u.recht_material, 0) >= 1 OR COALESCE(u.mat_pruefer, 0) = 1 "
+            "OR EXISTS (SELECT 1 FROM mat_folder_grant g WHERE g.user_id = u.id) THEN 1 ELSE 0 END")
+
+
+def _schritt_10(conn):
+    """Nachbesserung „Modulstufe“ (siehe oben): die Stufen im Modul Material nach STUFE_10. Der Code liest seitdem
+    wieder recht_material (Kopfleiste, Zugang, Material-Verwaltung) und mat_katalog nicht mehr. Freigaben, Häkchen
+    Prüfer, Urkundennummern und mat_katalog selbst bleiben unberührt. Ins Journal („rollen“ am Konto, wie die
+    Einträge der Nutzerverwaltung) kommt, wessen Stufe sich ändert oder wessen Katalog-Häkchen in der Stufe aufgeht –
+    das Konto nur als Verweis {"ref": mat_ref}, ohne Namen und E-Mail. Wiederholbar: Ein zweiter Lauf findet die
+    Stufen schon so vor und schreibt nichts; ein Konto mit Eintrag „Migration Schritt 10“ bekommt keinen zweiten."""
+    spalten = _spalten(conn, "users")
+    if "recht_material" not in spalten:            # legt sonst app/db.py an (MIGRATIONS) – ohne sie gibt es nichts
+        return
+    katalog = "u.mat_katalog" if "mat_katalog" in spalten else "0"
+    pruefer = "u.mat_pruefer" if "mat_pruefer" in spalten else "0"
+    regel = STUFE_10.replace("u.mat_katalog", katalog).replace("u.mat_pruefer", pruefer)
+    zeilen = conn.execute(
+        f"SELECT u.id, u.mat_ref, COALESCE(u.recht_material, 0), COALESCE({katalog}, 0), {regel}, "
+        "EXISTS (SELECT 1 FROM mat_audit a WHERE a.entity = 'user' AND a.entity_id = u.id AND a.action = 'rollen' "
+        "AND a.user_id IS NULL AND a.user_name = ?) FROM users u ORDER BY u.id", (MIGRATION_10,)).fetchall()
+    for uid, ref, alt, kat, neu, schon in zeilen:
+        if alt != neu:
+            conn.execute("UPDATE users SET recht_material = ? WHERE id = ?", (neu, uid))
+        if schon or (alt == neu and not kat):
+            continue
+        if not ref:
+            ref = conn.execute("SELECT lower(hex(randomblob(16)))").fetchone()[0]
+            conn.execute("UPDATE users SET mat_ref = ? WHERE id = ?", (ref, uid))
+        vorher = {"recht_material": alt}
+        if kat:
+            vorher["mat_katalog"] = 1
+        _journal_8(conn, "user", uid, "rollen", vorher,
+                   {"recht_material": neu, "konto": {"ref": ref}, "grund": "Modulstufe Material (Schritt 10)"},
+                   wer=MIGRATION_10)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
-            8: _schritt_8, 9: _schritt_9}
+            8: _schritt_8, 9: _schritt_9, 10: _schritt_10}
 
 
 def _meta(conn, schluessel, vorgabe=None):

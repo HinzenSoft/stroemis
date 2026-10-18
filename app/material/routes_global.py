@@ -1,9 +1,10 @@
 """Routen der globalen Seriennummernsuche und des QR-Steckbriefs (Phase 2 · Lieferung 1, Abschnitt 3).
 
 Suchen und den Steckbrief öffnen darf jeder mit Modulzugang – auch wer (noch) keinen Bestand sieht, etwa ein
-Katalogpfleger. Die Suche findet nur Artikel, die das Konto nicht sieht; die Plattform-Verwaltung sieht alles und
-bekommt 409. Beides läuft nur nach Bestätigung, durch die gemeinsame Bremse und ins Protokoll; das Protokoll liest
-nur die Plattform-Verwaltung (Abschnitt in der Nutzerverwaltung). Die Seite nach einem QR-Scan an einem fremden
+Mitglied ohne Freigabe. Die Suche findet nur Artikel, die das Konto nicht sieht; die Material-Verwaltung sieht alles
+und bekommt 409. Beides läuft nur nach Bestätigung, durch die gemeinsame Bremse und ins Protokoll; das Protokoll liest
+nur die Plattform-Verwaltung (Abschnitt in der Nutzerverwaltung) – es ist eine Aufzeichnung über Personen; die
+Material-Verwaltung sieht es nicht. Die Seite nach einem QR-Scan an einem fremden
 Artikel (/m/<token>, Ansicht „fremd“) steht in routes.py. Die Fachregeln stehen in services/globalsuche.py, Bremse
 und Protokoll in services/globalprotokoll.py."""
 from flask import jsonify, request

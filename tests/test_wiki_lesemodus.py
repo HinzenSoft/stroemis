@@ -140,7 +140,11 @@ def test_lesen():
         # Startseite ohne jedes Modul: der Lesemodus statt der Sackgasse; mit Spots führt sie wie bisher dorthin.
         r = leser.get("/")
         assert r.status_code == 302 and r.headers["Location"].endswith("/karte")
+        # Mit dem Modul Material (Vorgabe neuer Konten) führt sie dorthin, ohne jedes Modul in den Lesemodus.
         assert w["adm"].put(f"/api/admin/users/{w['leser_id']}", json={"rechte": {"karte": 0}}).status_code == 200
+        r = leser.get("/")
+        assert r.status_code == 302 and r.headers["Location"].endswith("/material")
+        assert w["adm"].put(f"/api/admin/users/{w['leser_id']}", json={"rechte": {"material": 0}}).status_code == 200
         r = leser.get("/")
         assert r.status_code == 302 and r.headers["Location"].endswith("/wiki")
         # Der Reiter steht auch auf anderen Seiten und führt nach /wiki (nicht auf die Startseite).

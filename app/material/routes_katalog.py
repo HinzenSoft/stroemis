@@ -1,8 +1,8 @@
 """Schnittstelle für den Katalogaustausch (Lieferung 4): Export des Katalogs als ZIP, Import aus ZIP oder JSON.
 
-Nur Produktkatalogpfleger und die Verwaltung. Der Export enthält keine DEMO-Einträge, keinen Bestand und keine
-Prüfungen (services/katalog_export.py); der Import gleicht ab statt doppelt anzulegen und löscht nie etwas
-(services/importer.py). Die Oberfläche macht vor jedem Import einen Probelauf und zeigt dessen Bericht."""
+Nur die Material-Verwaltung (Stufe Verwaltung im Modul Material). Der Export enthält keine DEMO-Einträge, keinen
+Bestand und keine Prüfungen (services/katalog_export.py); der Import gleicht ab statt doppelt anzulegen und löscht nie
+etwas (services/importer.py). Die Oberfläche macht vor jedem Import einen Probelauf und zeigt dessen Bericht."""
 import os
 import tempfile
 

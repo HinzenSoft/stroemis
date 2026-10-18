@@ -10,7 +10,7 @@
    Feld ein gewöhnliches Suchformular.
 
    Phase 2 (Entscheidung vom 18.10.2026): Taugt die Anfrage für die globale Suche (global_angebot der Suche – nicht für
-   die Plattform-Verwaltung, die ohnehin alles sieht), steht unter den eigenen Vorschlägen und „Alle Treffer“ – auch
+   die Material-Verwaltung, die ohnehin alles sieht), steht unter den eigenen Vorschlägen und „Alle Treffer“ – auch
    neben einem eigenen Artikel mit genau dieser Nummer – das Angebot, außerhalb des eigenen Bereichs zu suchen (nicht
    „in anderen Gliederungen“: Wer nur einen Teil einer Gliederung sieht, findet auch deren übrige Ordner). Enter oder
    Tipp darauf fragt nach (MatGlobal.bestaetigen, global.js). Danach bleiben die eigenen Vorschläge stehen; statt des

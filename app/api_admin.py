@@ -4,8 +4,8 @@ import secrets
 from flask import Blueprint, current_app, jsonify
 
 from . import db, einstellungen, medienpflege
-from .auth import (EMAIL_RE, MIN_PW, MODULE, STUFEN, VERWALTUNG, admin_required, can_reset, clear_attempts,
-                   current_user, eingabefehler_abfangen, json_body, public_user, send_reset_mail)
+from .auth import (EMAIL_RE, MIN_PW, MODULE, STUFEN, VERWALTUNG, VORGABE_NEU, admin_required, can_reset,
+                   clear_attempts, current_user, eingabefehler_abfangen, json_body, public_user, send_reset_mail)
 from .images import delete_avatar
 from .mailer import send_mail, versand
 from .material.services import Abgelehnt
@@ -19,21 +19,20 @@ bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 eingabefehler_abfangen(bp)
 
 
-# Vorgabe für neue Konten: Mitglied in Spots und Wiki, sonst nichts.
-VORGABE = {"karte": 1, "wiki": 1, "pruefungen": 0, "material": 0, "verwaltung": 0}
-# Was am Konto zum Modul Material gehört – Änderungen daran stehen im Journal des Moduls.
-MATERIAL_SPALTEN = ("recht_material", "mat_pruefer", "mat_katalog", "urkundennummer")
-OHNE_NAMEN = "Erst einen Namen eintragen – Prüfer und Katalogpfleger stehen mit Namen in Journal und Protokollen."
+# Vorgabe für neue Konten: Mitglied im Modul Material, sonst nichts (auth.VORGABE_NEU, gilt auch für Kontoanfragen).
+VORGABE = dict(VORGABE_NEU)
+# Was am Konto zum Modul Material gehört – Änderungen daran stehen im Journal des Moduls. mat_katalog wird seit
+# Schritt 10 weder gelesen noch geschrieben (Rückweg).
+MATERIAL_SPALTEN = ("recht_material", "mat_pruefer", "urkundennummer")
+OHNE_NAMEN = ("Erst einen Namen eintragen – im Modul Material steht jeder mit Namen in Journal und Protokollen. Ohne "
+              "Namen geht nur Material „–“.")
 
 
 def _rechte_lesen(d, basis):
     """Stufen aus der Anfrage über den Bestand legen. Nur bekannte Module, nur 0/1/2 – ein Tippfehler
     verteilt keine Rechte. Verwaltung kennt kein Mitglied, und Verwaltung im Modul Verwaltung zieht
-    alle anderen Module auf Verwaltung: So steht in der Matrix, was gilt.
-
-    Die Stufe im Modul Material wird übergangen: Rechte am Bestand gibt es seit Phase 2 nur über Freigaben je Ordner
-    (Bestand → Ordner → Bearbeiten → Freigaben). Die Spalte recht_material behält ihren Wert als Rückweg – außer wie
-    bisher bei Verwaltung, die alle Module auf Verwaltung zieht."""
+    alle anderen Module auf Verwaltung: So steht in der Matrix, was gilt. Das Modul Material ist seit Schritt 10
+    wieder ein Modul wie die anderen (Mitglied: Modulzugang, Bestand über Freigaben; Verwaltung: Material-Verwaltung)."""
     neu = dict(basis)
     angaben = d.get("rechte")
     if not isinstance(angaben, dict):
@@ -41,10 +40,6 @@ def _rechte_lesen(d, basis):
     for modul, wert in angaben.items():
         if modul not in MODULE:
             raise ValueError(f"Unbekanntes Modul „{modul}“.")
-        if modul == "material":
-            current_app.logger.warning("Nutzerverwaltung: Stufe im Modul Material (%r) übergangen – Rechte am Bestand "
-                                       "vergeben Freigaben je Ordner.", wert)
-            continue
         if isinstance(wert, bool) or wert not in STUFEN:
             raise ValueError("Eine Stufe ist 0 (kein Zugriff), 1 (Mitglied) oder 2 (Verwaltung).")
         if modul == "verwaltung" and wert == 1:
@@ -53,6 +48,14 @@ def _rechte_lesen(d, basis):
     if neu["verwaltung"] == VERWALTUNG:
         neu = {m: VERWALTUNG for m in MODULE}
     return neu
+
+
+def _braucht_namen(rechte, mat):
+    """Braucht das Konto einen Namen? Mit Stufe Mitglied oder Verwaltung im Modul Material (die Plattform-Verwaltung
+    ausgenommen – sie hat die Stufe von selbst, ihr Konto bleibt auch ohne Namen bearbeitbar) oder mit dem Häkchen
+    Prüfer. Ohne Namen gäbe es im Modul ohnehin keinen Zugang – wer handelt, steht namentlich im Journal."""
+    return bool((int(rechte.get("material") or 0) >= 1 and int(rechte.get("verwaltung") or 0) < VERWALTUNG)
+                or mat.get("mat_pruefer"))
 
 
 @bp.post("/testmail")
@@ -129,9 +132,9 @@ def videos():
 @bp.get("/users")
 @admin_required
 def list_users():
-    """Alle Konten mit ihren Inhalten. Im Modul Material zusätzlich die Zahl gültiger Freigaben (mat_freigaben) und die
-    stillgelegte Stufe aus Phase 1 (mat_stufe_alt, für die Marke „ohne Freigabe“). Die Zahlen und die wirksame Stufe
-    kommen für alle Konten aus einer gruppierten Abfrage – nicht je Konto eine."""
+    """Alle Konten mit ihren Inhalten. Im Modul Material zusätzlich die Zahl gültiger Freigaben (mat_freigaben, für die
+    Marken „n Freigaben“ und „wirkt nicht – kein Zugang“) – für alle Konten aus einer gruppierten Abfrage, nicht je
+    Konto eine."""
     rows = db.query(
         "SELECT u.*, (SELECT COUNT(*) FROM albums a WHERE a.owner_id = u.id) AS album_count, "
         "(SELECT COUNT(*) FROM photos p WHERE p.owner_id = u.id) AS photo_count, "
@@ -139,14 +142,12 @@ def list_users():
         "(SELECT COUNT(*) FROM wiki_pages w WHERE w.created_by = u.id AND w.deleted_at IS NULL) AS page_count "
         "FROM users u ORDER BY (u.status = 'pending') DESC, u.created_at")
     zahlen = mat_freigaben.zahlen_je_konto()
-    mat_freigaben.stufen_vormerken(rows, zahlen)
     out = []
     for r in rows:
         u = public_user(r)
         u["album_count"], u["photo_count"], u["page_count"] = r["album_count"], r["photo_count"], r["page_count"]
         u["last_login"] = r["last_login"]
         u["mat_freigaben"] = zahlen.get(r["id"], (0,))[0]
-        u["mat_stufe_alt"] = int(r["recht_material"] or 0)
         out.append(u)
     return jsonify(users=out)
 
@@ -154,9 +155,9 @@ def list_users():
 @bp.post("/users")
 @admin_required
 def create_user():
-    """Ein Konto anlegen. Die Stufe im Modul Material wird übergangen (_rechte_lesen); die Häkchen Prüfer und Katalog
-    gibt es nur mit Namen. Der Rolleneintrag im Journal des Moduls trägt keine E-Mail – er bleibt auch nach dem Löschen
-    des Kontos stehen."""
+    """Ein Konto anlegen – ohne Angabe mit der Vorgabe (Mitglied im Modul Material). Stufe Mitglied oder Verwaltung im
+    Modul Material und das Häkchen Prüfer gibt es nur mit Namen. Der Rolleneintrag im Journal des Moduls trägt keine
+    E-Mail – er bleibt auch nach dem Löschen des Kontos stehen."""
     d = json_body()
     email = (d.get("email") or "").strip().lower()
     if not EMAIL_RE.match(email):
@@ -174,7 +175,7 @@ def create_user():
     except Abgelehnt as exc:
         return jsonify(error=str(exc)), exc.code
     name = (d.get("name") or "").strip()
-    if (mat["mat_pruefer"] or mat["mat_katalog"]) and not name:
+    if _braucht_namen(rechte, mat) and not name:
         return jsonify(error=OHNE_NAMEN), 400
     spalten = [f"recht_{m}" for m in MODULE] + list(mat)
     with db.transaction():
@@ -184,7 +185,7 @@ def create_user():
             (email, generate_password_hash(pw), name, (d.get("gliederung") or "").strip(),
              (d.get("phone") or "").strip(), *(rechte[m] for m in MODULE), *mat.values(), db.now()))
         neu = dict(mat, recht_material=rechte["material"])
-        if neu["recht_material"] or neu["mat_pruefer"] or neu["mat_katalog"]:
+        if neu["recht_material"] or neu["mat_pruefer"]:
             mat_journal.eintragen("user", uid, "rollen", None, neu)
     u = db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True)
     mailed = False
@@ -217,6 +218,7 @@ def update_user(uid):
             return jsonify(error="Diese E-Mail-Adresse wird bereits verwendet."), 409
         vals["email"] = email
     if "rechte" in d or any(k in d for k in ("mat_pruefer", "mat_katalog", "urkundennummer")):
+        # mat_katalog: rollen_lesen antwortet 400 – das Häkchen gibt es nicht mehr.
         rechte = {m: u[f"recht_{m}"] for m in MODULE}
         try:
             if "rechte" in d:
@@ -233,12 +235,18 @@ def update_user(uid):
         for m in MODULE:
             vals[f"recht_{m}"] = rechte[m]
         vals.update(mat)
-    # Die Häkchen Prüfer und Katalog nur mit Namen – geprüft, wenn eines neu dazukommt oder der Name sich ändert, damit
-    # ein namenloses Konto aus der Zeit davor sich weiter bearbeiten lässt (etwa um das Häkchen zu nehmen).
+    # Stufe im Modul Material und Häkchen Prüfer nur mit Namen – geprüft, wenn eines neu dazukommt (die Stufe steigt,
+    # das Häkchen kommt) oder der Name verschwindet: So lässt sich ein namenloses Konto aus der Zeit davor weiter
+    # bearbeiten (etwa um die Stufe zu senken oder das Häkchen zu nehmen).
     name = vals.get("name", u["name"] or "")
-    haekchen = [k for k in ("mat_pruefer", "mat_katalog") if vals.get(k, u[k])]
-    if haekchen and not name and (name != (u["name"] or "") or any(not u[k] for k in haekchen)):
-        return jsonify(error=OHNE_NAMEN), 400
+    if not name:
+        stufen = {"material": vals.get("recht_material", u["recht_material"] or 0),
+                  "verwaltung": vals.get("recht_verwaltung", u["recht_verwaltung"] or 0)}
+        pruefer = vals.get("mat_pruefer", u["mat_pruefer"])
+        neu_dazu = (stufen["material"] > (u["recht_material"] or 0) and _braucht_namen(stufen, {})) or (
+            pruefer and not u["mat_pruefer"])
+        if _braucht_namen(stufen, {"mat_pruefer": pruefer}) and (name != (u["name"] or "") or neu_dazu):
+            return jsonify(error=OHNE_NAMEN), 400
     if "active" in d:
         active = 1 if d.get("active") else 0
         if uid == current_user()["id"] and not active:

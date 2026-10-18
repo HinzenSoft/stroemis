@@ -294,7 +294,7 @@ def starten(iid, pruefer, art=None, durchgang_id=None):
         formular = katalog.formular_fuer_produkt(item["product_id"])
         if not formular:
             raise Abgelehnt("Für dieses Produkt gibt es kein aktives Prüfformular – weder am Produkt noch in "
-                            "seiner Kategorie. Der Produktkatalogpfleger legt es im Katalog an.", 409)
+                            "seiner Kategorie. Die Material-Verwaltung legt es im Katalog an.", 409)
         punkte = katalog.punkte(formular["id"])
         if durchgang_id:
             runde = durchgang.runde_fuer_start(durchgang_id, iid)

@@ -1,25 +1,28 @@
-"""Rechte im Modul Material – seit Phase 2 Freigaben je Ordner.
+"""Rechte im Modul Material – Stufe im Modul und Freigaben je Ordner.
 
-Woher die Rechte kommen (Bauentwurf Phase 2 · Lieferung 1, Abschnitt 1):
+Woher die Rechte kommen (Bauentwurf Phase 2 · Lieferung 1, Abschnitt 1, mit der Nachbesserung „Modulstufe“ vom
+18.10.2026):
 
-  Plattform-Verwaltung    Verwaltung im Modul Verwaltung (auth.is_admin): sieht und verwaltet den ganzen Bestand,
-                          pflegt den Katalog, legt Gliederungen an, vergibt jede Freigabe. Prüfen nur wie alle anderen –
-                          mit Qualifikation UND Prüffreigabe; Sachkunde lässt sich nicht verwalten, nur nachweisen.
+  Stufe Material          users.recht_material, gesetzt in der Nutzerverwaltung (auth.stufe – Verwaltung im Modul
+                          Verwaltung gilt auch hier als Verwaltung). Mitglied (1) = Modulzugang: Katalog, Suche,
+                          Profil – Bestand nur über Freigaben. Verwaltung (2) = Material-Verwaltung: pflegt den
+                          Produktkatalog, sieht und verwaltet den ganzen Bestand, legt Gliederungen an, vergibt jede
+                          Freigabe. Prüfen nur wie alle anderen – mit Qualifikation UND Prüffreigabe; Sachkunde lässt
+                          sich nicht verwalten, nur nachweisen. Ohne Stufe (0) wirken weder Freigaben noch das Häkchen.
   Freigabe                eine Zeile in mat_folder_grant: lesen, pruefen oder verwalten an einem Ordner – sie gilt dort
                           und in allen Unterordnern, solange sie gültig ist (valid_until leer oder heute und später,
                           deutscher Kalendertag; der letzte Tag zählt mit). Rechte addieren sich nur. Eine Prüffreigabe
                           ohne Ende (dauerhaft) wirkt nur, solange das Konto an ihrem Anker oder darüber ein Grundrecht
                           hat – befristet ist nur noch der externe Prüfer (Nachbesserung vom 18.10.2026, Schritt 9).
-  Qualifikation Prüfer    Häkchen mat_pruefer (setzt die Verwaltung) und gültige Urkundennummer (trägt der Prüfer selbst
-                          im Profil ein, urkunde_setzen). Voraussetzung jeder Prüfhandlung und dafür, dass eine
-                          Prüffreigabe überhaupt wirkt. Allein gibt sie Modulzugang (Katalog, Profil), keinen Bestand.
-  Produktkatalogpfleger   Häkchen mat_katalog: Katalog pflegen, Meldungen abarbeiten, Rückrufe – plattformweit, ohne
-                          Bestand.
+  Qualifikation Prüfer    Häkchen mat_pruefer (setzt die Plattform-Verwaltung in der Nutzerverwaltung) und gültige
+                          Urkundennummer (trägt der Prüfer selbst im Profil ein, urkunde_setzen). Voraussetzung jeder
+                          Prüfhandlung und dafür, dass eine Prüffreigabe überhaupt wirkt – aber nur mit Modulzugang
+                          (qualifiziert); allein gibt sie keinen Zugang mehr.
   Name                    Ohne Namen gibt es keinen Modulzugang: Wer handelt, steht namentlich im Journal.
 
-Die Material-Stufe aus Phase 1 (users.recht_material) liest der Code nicht mehr – sie bleibt als Rückweg stehen;
-Schritt 8 der Migration hat aus ihr Freigaben gemacht. Die Stufe, die Kopfleiste und Profil zeigen, rechnet
-material_stufe_wirksam aus den Freigaben.
+Das Häkchen „Produktkatalogpfleger“ (users.mat_katalog) liest der Code seit Schritt 10 nicht mehr – es bleibt als
+Rückweg stehen; Schritt 10 hat aus ihm die Stufe Verwaltung gemacht. Die Stufen aus Phase 1 (1 Führungskraft,
+2 Materialwart) hat Schritt 8 in Freigaben umgesetzt und Schritt 10 zu Mitglied gemacht.
 
 Rechte in einem Ordner F (RECHTE): grund – Grundrecht, Verwaltung oder gültiges lesen/verwalten an F oder darüber;
 pruefen – qualifiziert und gültiges pruefen an F oder darüber (auch für Verwalter und die Verwaltung), ein dauerhaftes
@@ -38,13 +41,12 @@ import re
 import unicodedata
 from collections import namedtuple
 from dataclasses import dataclass, field
-from datetime import date, timedelta
 from functools import wraps
 
 from flask import g, has_app_context, has_request_context, jsonify, request
 
 from ... import db
-from ...auth import current_user, is_admin, json_body
+from ...auth import current_user, json_body, nutzt, verwaltet
 from .. import services as dienste
 from . import Abgelehnt, eingabe, journal, kennung, text, wahr
 
@@ -69,17 +71,22 @@ DURCHGANG_FEHLT = "Prüfdurchgang nicht gefunden."
 KONTO_FEHLT = "Konto nicht gefunden."
 
 NAME_FEHLT = "Für das Modul Material braucht dein Konto einen Namen – trag ihn im Profil ein."
-NICHT_FREIGESCHALTET = ("Für dein Konto ist das Modul Material nicht freigeschaltet – der Materialwart deiner Gliederung "
-                        "vergibt Freigaben.")
+NICHT_FREIGESCHALTET = ("Für dein Konto ist das Modul Material nicht freigeschaltet – das macht die Verwaltung in der "
+                        "Nutzerverwaltung.")
 KEINE_PRUEFFREIGABE = ("Häkchen und Urkundennummer hast du, aber für diesen Ordner keine Prüffreigabe – die vergibt der "
                        "Materialwart des Ordners unter Ordner → Bearbeiten → Freigaben.")
 NUR_GRUNDRECHT = ("Dafür braucht es eine Lese- oder Verwalterfreigabe für diesen Ordner – die Prüffreigabe allein "
                   "reicht nicht.")
-NUR_VERWALTUNG_GLOBAL = "Ohne Ordner nur für die Plattform-Verwaltung."
+NUR_VERWALTUNG_GLOBAL = "Ohne Ordner nur für die Material-Verwaltung."
+NUR_MATERIAL_VERWALTUNG = "Das macht die Material-Verwaltung (Stufe „Verwaltung“ im Modul Material)."
+KONTO_OHNE_ZUGANG = ("Dieses Konto hat keinen Zugang zum Modul Material – den gibt die Verwaltung in der "
+                     "Nutzerverwaltung.")
 
 URKUNDE_UNGUELTIG = "Eine Urkundennummer braucht Buchstaben oder Ziffern."
 URKUNDE_NUR_PRUEFER = ("Die Urkundennummer trägt nur ein, wer das Häkchen „Prüfer“ hat – das setzt die Verwaltung in der "
                        "Nutzerverwaltung.")
+KATALOG_HAEKCHEN_WEG = ("Das Häkchen „Produktkatalogpfleger“ gibt es nicht mehr – Katalogpflege gehört zur Stufe "
+                        "„Verwaltung“ im Modul Material.")
 # Für ein Konto mit Häkchen, aber ohne Urkundennummer: wo es weitergeht.
 URKUNDE_IM_PROFIL = ("Deine Urkundennummer fehlt noch – trage sie im Profil ein (Profil → Urkundennummer und "
                      "Unterschrift), dann kannst du prüfen.")
@@ -127,9 +134,27 @@ def urkunde_fehlt(user=None):
     return bool(user and user["mat_pruefer"] and not ist_pruefer(user))
 
 
-def ist_katalogpfleger(user=None):
+def zugang(user=None):
+    """Modulzugang: Stufe Mitglied oder Verwaltung im Modul Material (auth.nutzt – die Plattform-Verwaltung hat sie
+    überall) UND ein Name. Wer ihn hat, sieht Katalog, Suchfeld und Profil – vom Bestand nur, was seine Freigaben zeigen
+    (die Material-Verwaltung alles). Ohne ihn wirken weder Freigaben noch das Häkchen „Prüfer“. Keine Abfrage."""
     user = user or current_user()
-    return bool(user and (is_admin(user) or user["mat_katalog"]))
+    return bool(user and (user["name"] or "").strip() and nutzt("material", user))
+
+
+def ist_material_verwaltung(user=None):
+    """Material-Verwaltung: Stufe Verwaltung im Modul Material (die Plattform-Verwaltung eingeschlossen) und Zugang.
+    Pflegt den Produktkatalog, arbeitet Meldungen ab, legt Rückrufe an, sieht und verwaltet alle Bestände, legt
+    Gliederungen an und vergibt jede Freigabe – prüfen nur mit eigener Qualifikation und Prüffreigabe."""
+    user = user or current_user()
+    return bool(zugang(user) and verwaltet("material", user))
+
+
+def qualifiziert(user=None):
+    """Prüferqualifikation, die wirkt: Häkchen und Urkundennummer (ist_pruefer) UND Zugang zum Modul. Ohne Stufe wirkt
+    keine Prüffreigabe; ist_pruefer bleibt die reine Qualifikation (Marken in der Nutzerverwaltung)."""
+    user = user or current_user()
+    return bool(zugang(user) and ist_pruefer(user))
 
 
 # --- Gültigkeit und Sicht --------------------------------------------------------------------------------------
@@ -251,17 +276,20 @@ def sicht(user=None):
 
 
 def sicht_verwerfen():
-    """Zwischengespeicherte Sichten und Stufen dieser Anfrage vergessen."""
+    """Zwischengespeicherte Sichten dieser Anfrage vergessen."""
     if has_app_context():
         g.pop("mat_sicht", None)
-        g.pop("mat_stufe", None)
 
 
 def _sicht_rechnen(user):
     """Eine Abfrage für die eigenen gültigen Freigaben; nur wenn eine wirkt, eine zweite für den Ordnerbaum. Die
-    Unterbäume entstehen in Python – mit einer Menge der schon gesehenen Ordner, so hält auch ein Zyklus an."""
-    alles = is_admin(user)
-    qualifiziert = ist_pruefer(user)
+    Unterbäume entstehen in Python – mit einer Menge der schon gesehenen Ordner, so hält auch ein Zyklus an. Ohne
+    Modulzugang (Stufe und Name) gar keine Abfrage: Dann wirkt nichts – auch wenn die Sicht für ein anderes Konto
+    gerechnet wird (Empfänger eines Rückrufs, Entziehen, Verlängern)."""
+    if not zugang(user):
+        return Sicht(uid=user["id"], alles=False, qualifiziert=False)
+    alles = ist_material_verwaltung(user)
+    qualifiziert = ist_pruefer(user)           # mit Zugang (oben) = qualifiziert()
     freigaben = tuple(Freigabe(r["id"], r["folder_id"], r["permission"], r["valid_until"]) for r in db.query(
         "SELECT id, folder_id, permission, valid_until FROM mat_folder_grant WHERE user_id = ? "
         "AND (valid_until IS NULL OR valid_until >= ?) ORDER BY id", (user["id"], _stichtag())))
@@ -343,12 +371,12 @@ def darf_artikel(recht, item, user=None):
 
 
 def darf_meldung(meldung, user=None):
-    """Eine Produktmeldung sehen: Katalogpfleger und die Verwaltung, der Melder selbst und wer den Ordner der Meldung
-    sehen darf."""
+    """Eine Produktmeldung sehen: die Material-Verwaltung, der Melder selbst und wer den Ordner der Meldung sehen
+    darf."""
     user = user or current_user()
     if not user or not meldung:
         return False
-    if ist_katalogpfleger(user) or meldung.get("created_by") == user["id"]:
+    if ist_material_verwaltung(user) or meldung.get("created_by") == user["id"]:
         return True
     return meldung.get("folder_id") is not None and darf("lesen", meldung["folder_id"], user)
 
@@ -403,27 +431,36 @@ def ordner_filter(spalte, recht="lesen", user=None):
 
 
 def verwalter_von(fid, ohne_freigabe=None):
-    """Aktive Konten (ohne die Verwaltung) mit gültigem verwalten an fid oder darüber – nach Namen sortiert, je Konto
-    mit dem wirksamen Ende („ende“, None = unbefristet). Für Meldungstexte, Empfänger von Mails und die Regel
-    „keine Gliederung ohne Verwalter“. ohne_freigabe: so rechnen, als gäbe es diese Freigabezeile nicht (ob ein
-    Entzug die Regel verletzen würde – vorab, ohne zu schreiben)."""
+    """Aktive Konten mit Namen und Stufe Mitglied, die an fid oder darüber gültig verwalten – nach Namen sortiert, je
+    Konto mit dem wirksamen Ende („ende“, None = unbefristet). Die Material-Verwaltung zählt nicht (sie hat ohnehin
+    alles), ein Konto ohne Stufe oder Namen auch nicht (bei ihm wirkt die Freigabe nicht). Für Meldungstexte, Empfänger
+    von Mails und die Regel „keine Gliederung ohne Verwalter“. ohne_freigabe: so rechnen, als gäbe es diese
+    Freigabezeile nicht (ob ein Entzug die Regel verletzen würde – vorab, ohne zu schreiben)."""
     rows = db.query(
         "WITH RECURSIVE kette(id) AS (SELECT ? UNION SELECT f.parent_id FROM mat_folder f JOIN kette k ON f.id = k.id "
         "WHERE f.parent_id IS NOT NULL) "
         "SELECT u.id, u.name, u.email, MAX(COALESCE(x.valid_until, '9999-12-31')) AS ende FROM mat_folder_grant x "
         "JOIN users u ON u.id = x.user_id WHERE x.folder_id IN (SELECT id FROM kette) AND x.permission = 'verwalten' "
         "AND (x.valid_until IS NULL OR x.valid_until >= ?) AND u.active = 1 AND u.status = 'active' "
-        "AND u.recht_verwaltung < 2 AND x.id IS NOT ? GROUP BY u.id ORDER BY u.name COLLATE NOCASE, u.id",
+        "AND u.recht_verwaltung < 2 AND u.recht_material = 1 AND trim(u.name) <> '' AND x.id IS NOT ? "
+        "GROUP BY u.id ORDER BY u.name COLLATE NOCASE, u.id",
         (fid, _stichtag(), ohne_freigabe))
     return [dict(r, ende=None if r["ende"] == "9999-12-31" else r["ende"]) for r in rows]
 
 
+def grundrecht_ueberall(user):
+    """Stufe Verwaltung im Modul Material (die Plattform-Verwaltung eingeschlossen): Das Konto hat das Grundrecht an
+    jedem Ordner – für die Regel „dauerhafte Prüffreigabe nur mit Grundrecht“. Ohne Blick auf den Namen (wirken tut
+    trotzdem nur, was zugang() erlaubt)."""
+    return bool(user and verwaltet("material", user))
+
+
 def grundrecht_an(user, fid):
-    """Hat das Konto an fid oder darüber heute ein Grundrecht (lesen oder verwalten) – oder ist es die
-    Plattform-Verwaltung? Frisch aus der Datenbank, auch mitten in einer Transaktion: Eine Prüffreigabe ohne Ende ist
-    nur so erlaubt (freigaben._schreiben), und ein Grundrecht aus derselben Anfrage zählt schon mit. Ohne Sicht, ohne
-    Blick auf Name oder Aktivität."""
-    if is_admin(user):
+    """Hat das Konto an fid oder darüber heute ein Grundrecht (lesen oder verwalten) – oder hat es die Stufe
+    Verwaltung im Modul Material (Material-Verwaltung, die Plattform-Verwaltung eingeschlossen)? Frisch aus der
+    Datenbank, auch mitten in einer Transaktion: Eine Prüffreigabe ohne Ende ist nur so erlaubt (freigaben._schreiben),
+    und ein Grundrecht aus derselben Anfrage zählt schon mit. Ohne Sicht, ohne Blick auf Name oder Aktivität."""
+    if grundrecht_ueberall(user):
         return True
     return bool(db.query(
         "WITH RECURSIVE kette(id) AS (SELECT ? UNION SELECT f.parent_id FROM mat_folder f JOIN kette k ON f.id = k.id "
@@ -432,95 +469,39 @@ def grundrecht_an(user, fid):
         "LIMIT 1", (fid, user["id"], _stichtag()), one=True))
 
 
-def waehlbares_konto(user_id):
+def waehlbares_konto(user_id, modulzugang=False):
     """Ein Konto, das man auswählen darf (Freigabe, Personenzuordnung): aktiv und mit Namen. Nicht vorhanden,
-    deaktiviert und ohne Namen antworten gleich – die Auswahl verrät nicht, welche Konten es gibt (1.6 Nr. 12)."""
+    deaktiviert und ohne Namen antworten gleich – die Auswahl verrät nicht, welche Konten es gibt (1.6 Nr. 12).
+    modulzugang (Freigaben): dazu die Stufe Mitglied oder Verwaltung im Modul Material – ohne sie wirkte die Freigabe
+    nicht; 409 mit Klartext (die Personensuche für Freigaben zeigt solche Konten gar nicht erst). Die
+    Personenzuordnung fragt ohne: Wer PSA trägt, braucht keinen Modulzugang."""
     uid = kennung(user_id, "Konto")
     u = db.query("SELECT * FROM users WHERE id = ? AND active = 1 AND status = 'active' AND trim(name) <> ''", (uid,),
                  one=True)
     if not u:
         raise Abgelehnt(KONTO_FEHLT, 404)
+    if modulzugang and not zugang(u):
+        raise Abgelehnt(KONTO_OHNE_ZUGANG, 409)
     return u
 
 
-# --- Modulzugang und wirksame Stufe ------------------------------------------------------------------------------
-
-def material_stufe_wirksam(user):
-    """Stufe für Kopfleiste, Startweiche und Profil (auth.stufe): 2 = Verwaltung oder irgendwo gültig verwalten,
-    1 = Modulzugang, 0 = sonst. Ohne Namen 0. Höchstens eine Abfrage (Grundrechte, gruppiert) – nicht sicht(), denn das
-    fragt jede Seite der Plattform; je Anfrage und Konto in g.mat_stufe."""
-    if not user:
-        return 0
-    speicher = _speicher("mat_stufe")
-    if speicher is not None and user["id"] in speicher:
-        return speicher[user["id"]]
-    if not (user["name"] or "").strip():
-        n = 0
-    elif is_admin(user):
-        n = 2
-    else:
-        r = db.query("SELECT COUNT(*) AS n, MAX(permission = 'verwalten') AS v FROM mat_folder_grant WHERE user_id = ? "
-                     "AND permission IN ('lesen', 'verwalten') AND (valid_until IS NULL OR valid_until >= ?)",
-                     (user["id"], _stichtag()), one=True)
-        if r["v"]:
-            n = 2
-        elif r["n"] or user["mat_katalog"] or user["mat_pruefer"]:
-            # Mit Häkchen „Prüfer“: Katalog und Profil (Urkundennummer, Unterschrift) – eine Prüffreigabe wirkt ohnehin
-            # nur mit Qualifikation, also nie ohne Häkchen.
-            n = 1
-        else:
-            n = 0
-    if speicher is not None:
-        speicher[user["id"]] = n
-    return n
-
-
-def material_stufe(user=None):
-    return material_stufe_wirksam(user or current_user())
-
-
-def zugang(user=None):
-    """Modulzugang: Name UND (Verwaltung, ein gültiges Grundrecht, Häkchen Prüfer oder Häkchen Katalog). Wer ihn hat,
-    sieht Katalog, Suchfeld und Profil – vom Bestand nur, was seine Freigaben zeigen."""
-    return material_stufe_wirksam(user or current_user()) >= 1
-
-
-def _datum_text(iso):
-    try:
-        return date.fromisoformat(iso[:10]).strftime("%d.%m.%Y")
-    except (TypeError, ValueError):
-        return iso or ""
-
-
-def _namen(liste):
-    namen = [n for n in liste if n][:3]
-    if not namen:
-        return "die Plattform-Verwaltung"
-    return namen[0] if len(namen) == 1 else ", ".join(namen[:-1]) + " oder " + namen[-1]
-
+# --- Meldungen zum Modulzugang ------------------------------------------------------------------------------
 
 def zugang_meldung(user=None):
-    """Klartext für 403 ohne Modulzugang: was fehlt und wer hilft."""
+    """Klartext für 403 ohne Modulzugang: was fehlt und wer hilft. Abgelaufene Freigaben nehmen den Zugang nicht mehr
+    (er hängt an der Stufe) – „Meine Freigaben“ zeigt sie mit den Verwaltern, die verlängern können."""
     user = user or current_user()
     if not user:
         return "Nicht angemeldet"
     if not (user["name"] or "").strip():
         return NAME_FEHLT
-    heute_ = dienste.heute()
-    r = db.query("SELECT folder_id, valid_until FROM mat_folder_grant WHERE user_id = ? AND valid_until < ? "
-                 "AND valid_until >= ? ORDER BY valid_until DESC, id DESC LIMIT 1",
-                 (user["id"], _stichtag(heute_), _stichtag(heute_ - timedelta(days=365))), one=True)
-    if r:
-        from .bestand import pfad
-        ordner = " / ".join(o["name"] for o in pfad(r["folder_id"]))
-        return (f"Deine Freigabe für „{ordner}“ ist am {_datum_text(r['valid_until'])} abgelaufen. Verlängern kann sie: "
-                f"{_namen(v['name'] for v in verwalter_von(r['folder_id']))}.")
     return NICHT_FREIGESCHALTET
 
 
 def darf_unterschreiben(user=None):
     """Die eigene Unterschrift hinterlegen: wer festschreibt (Prüfer – schon mit dem Häkchen, damit er Urkundennummer
-    und Unterschrift in beliebiger Reihenfolge im Profil eintragen kann) oder aussondert (Verwalter irgendwo)."""
+    und Unterschrift in beliebiger Reihenfolge im Profil eintragen kann) oder aussondert (Verwalter irgendwo, auch die
+    Material-Verwaltung). Immer nur mit Zugang zum Modul."""
     user = user or current_user()
     return bool(user and zugang(user) and (user["mat_pruefer"] or sicht(user).irgendwo("verwalten")))
 
@@ -531,7 +512,7 @@ def darf_alles(user=None):
     user = user or current_user()
     s = sicht(user)
     return {"lesen": s.irgendwo("lesen"), "grund": s.irgendwo("grund"), "verwalten": s.irgendwo("verwalten"),
-            "pruefen": s.irgendwo("pruefen"), "katalog": ist_katalogpfleger(user), "alles": s.alles,
+            "pruefen": s.irgendwo("pruefen"), "katalog": ist_material_verwaltung(user), "alles": s.alles,
             "gliederung_anlegen": s.alles, "qualifiziert": s.qualifiziert,
             "uid": user["id"] if user else None,
             "urkundennummer": (user["urkundennummer"] or "") if user else "",
@@ -682,16 +663,38 @@ def _meldung(erlaubt, fid, s, user, leer="global"):
     return "Für diesen Ordner hast du keine Freigabe."
 
 
-def katalog_required(f):
-    """Katalog ändern: nur Admin und Produktkatalogpfleger."""
+def material_verwaltung_required(f):
+    """Nur die Material-Verwaltung: Katalog pflegen (Kategorien, Produkte, Dokumente, Prüfformulare, Export und
+    Import), Meldungen abarbeiten, Rückrufe anlegen und beenden. 401 ohne Anmeldung, 403 ohne Modulzugang
+    (zugang_meldung), 403 ohne Stufe Verwaltung."""
     @wraps(f)
     def wrapper(*a, **kw):
-        if not current_user():
+        u = current_user()
+        if not u:
             return jsonify(error="Nicht angemeldet"), 401
-        if not ist_katalogpfleger():
-            return jsonify(error="Den Katalog pflegen nur Produktkatalogpfleger und die Verwaltung."), 403
+        if not zugang(u):
+            return jsonify(error=zugang_meldung(u)), 403
+        if not ist_material_verwaltung(u):
+            return jsonify(error=NUR_MATERIAL_VERWALTUNG), 403
         return f(*a, **kw)
     return wrapper
+
+
+# Der alte Name steht an vielen Katalogrouten – er meint dasselbe.
+katalog_required = material_verwaltung_required
+
+
+def material_verwaltung_konten():
+    """Wer Mails zu neuen Produktmeldungen und zu Rückrufen an Artikeln ohne Verwalter bekommt: die Material-Verwaltung –
+    aktive Konten mit Namen und Stufe Verwaltung im Modul Material, ohne die Plattform-Verwaltung (sie bekommt keine
+    Fachmails, solange es eine Material-Verwaltung gibt). Gibt es keine, die Plattform-Verwaltung (aktive Konten).
+    Zeilen mit id und email, nach Kennung."""
+    rows = db.query("SELECT id, email FROM users WHERE active = 1 AND status = 'active' AND trim(name) <> '' "
+                    "AND recht_material >= 2 AND recht_verwaltung < 2 ORDER BY id")
+    if not rows:
+        rows = db.query("SELECT id, email FROM users WHERE active = 1 AND status = 'active' AND recht_verwaltung >= 2 "
+                        "ORDER BY id")
+    return rows
 
 
 # --- Rollen vergeben (aus der Nutzerverwaltung) -----------------------------------------------------
@@ -700,9 +703,11 @@ def rollen_lesen(d, user_row, rechte):
     """Material-Kennzeichen aus einer Anfrage der Nutzerverwaltung über den Bestand legen.
 
     d: JSON der Anfrage; user_row: bisheriger Datensatz (oder {} beim Anlegen); rechte: die schon gelesenen Stufen der
-    Matrix (bleiben unberührt – die Material-Stufe wirkt seit Phase 2 nicht mehr, Bestand gibt es nur über Freigaben).
-    Liefert die zu schreibenden Spalten. Das Häkchen „Prüfer“ geht auch ohne Urkundennummer – die trägt der Prüfer selbst
-    im Profil ein, bis dahin darf er nicht prüfen (ist_pruefer).
+    Matrix (bleiben unberührt – die Stufe im Modul Material liest api_admin._rechte_lesen wie jede andere). Liefert die
+    zu schreibenden Spalten. Das Häkchen „Produktkatalogpfleger“ (mat_katalog) gibt es seit Schritt 10 nicht mehr –
+    Katalogpflege gehört zur Stufe Verwaltung; wer es noch schickt, bekommt 400 statt einer stillen Übergehung. Das
+    Häkchen „Prüfer“ geht auch ohne Urkundennummer – die trägt der Prüfer selbst im Profil ein, bis dahin darf er nicht
+    prüfen (ist_pruefer).
 
     „urkundennummer“ nimmt die Schnittstelle weiter an (Skripte, Tests, eine Berichtigung durch die Verwaltung); die
     Oberfläche der Nutzerverwaltung schickt es nicht mehr. Geprüft wird wie im Profil (urkunde_lesen). Geliefert wird
@@ -711,17 +716,16 @@ def rollen_lesen(d, user_row, rechte):
     mehr entfernen). Sonst bleibt, was der Prüfer im Profil eingetragen hat."""
     basis = user_row or {}
     pruefer = bool(basis.get("mat_pruefer"))
-    katalog = bool(basis.get("mat_katalog"))
     urkunde = None
+    if "mat_katalog" in d:
+        raise Abgelehnt(KATALOG_HAEKCHEN_WEG)
     if "mat_pruefer" in d:
         pruefer = wahr(d, "mat_pruefer", "Prüfer")
-    if "mat_katalog" in d:
-        katalog = wahr(d, "mat_katalog", "Produktkatalogpfleger")
     if "urkundennummer" in d:
         urkunde = urkunde_lesen(d)
     elif basis.get("mat_pruefer") and not pruefer and (basis.get("urkundennummer") or ""):
         urkunde = ""
-    out = {"mat_pruefer": int(pruefer), "mat_katalog": int(katalog)}
+    out = {"mat_pruefer": int(pruefer)}
     if urkunde is not None:
         out["urkundennummer"] = urkunde
     return out

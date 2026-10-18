@@ -525,7 +525,7 @@ def test_rechte():
         anonym = app.test_client()
         assert anonym.get("/api/material/katalog/export").status_code == 401
         assert hoch(anonym, "/api/material/katalog/import", roh, "k.json", trocken="1").status_code == 401
-        # Ohne X-Requested-With kein Upload (CSRF), auch nicht für Katalogpfleger.
+        # Ohne X-Requested-With kein Upload (CSRF), auch nicht für die Material-Verwaltung.
         r = k["katalog"].post("/api/material/katalog/import", data={"file": (io.BytesIO(roh), "k.json")},
                               content_type="multipart/form-data")
         assert r.status_code == 403

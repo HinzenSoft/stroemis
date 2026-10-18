@@ -1,9 +1,10 @@
 """Meldungen fehlender Produkte.
 
-Wer Artikel anlegt (Materialwart), findet nicht jedes Produkt im Katalog. Anlegen dürfen es nur die
-Katalogpfleger – der Katalog gilt plattformweit und soll einheitlich bleiben. Der Materialwart meldet
+Wer Artikel anlegt (Materialwart), findet nicht jedes Produkt im Katalog. Anlegen darf es nur die
+Material-Verwaltung – der Katalog gilt plattformweit und soll einheitlich bleiben. Der Materialwart meldet
 es deshalb: Hersteller, Modell, was er sonst weiß, Links (Herstellerseite, Gebrauchsanleitung, Händler)
-und Fotos (Etikett, Typenschild). Die Katalogpfleger bekommen eine Mail und arbeiten die Meldungen ab:
+und Fotos (Etikett, Typenschild). Die Material-Verwaltung bekommt eine Mail (gibt es keine, die
+Plattform-Verwaltung) und arbeitet die Meldungen ab:
 
   - einpflegen: ein neues Produkt aus der Meldung anlegen oder ein vorhandenes zuordnen,
   - ablehnen: nur mit Begründung.
@@ -13,10 +14,10 @@ anlegen“ mit Produkt und Ordner öffnet. Löschen kann eine Meldung nur, wer s
 erledigt; ein Produkt, das aus ihr entstand, bleibt. Sonst bleibt sie stehen: Sie ist der Weg eines
 Produkts in den Katalog und steht im Journal (entity „request“, am Produkt mit angezeigt).
 
-Sehen darf eine Meldung seit Phase 2 nur, wer Katalogpfleger oder Plattform-Verwaltung ist, sie gemacht hat oder
-den Ordner sieht, für den sie gemacht wurde (rechte.darf_meldung) – eine Meldung nennt Material und Ordner einer
-Gliederung. Den Ordnerpfad zeigt sie nur, wer den Ordner sieht; sonst steht nur die Gliederung da, auch in der Mail an
-die Katalogpfleger."""
+Sehen darf eine Meldung seit Phase 2 nur, wer Material-Verwaltung ist, sie gemacht hat oder den Ordner sieht, für
+den sie gemacht wurde (rechte.darf_meldung) – eine Meldung nennt Material und Ordner einer Gliederung. Den Ordnerpfad
+zeigt sie nur, wer den Ordner sieht (die Material-Verwaltung immer); sonst steht nur die Gliederung da. Die Mail an die
+Material-Verwaltung nennt nur die Gliederung – eine Mail ist schlechter geschützt als die Seite."""
 import json
 import os
 import re
@@ -48,7 +49,7 @@ _LINK = re.compile(r"https?://[^\s/?#]+\S*", re.IGNORECASE)
 
 def links_lesen(wert):
     """Adressen aus der Meldung: eine Liste oder ein Text mit einer je Zeile. Nur http(s) – ein
-    „javascript:“-Link in der Liste der Katalogpfleger wäre eine Falle. „www.…“ ohne Schema bekommt
+    „javascript:“-Link in der Liste der Material-Verwaltung wäre eine Falle. „www.…“ ohne Schema bekommt
     https:// vorangestellt, so tippen Leute Adressen."""
     if wert is None or wert == "":
         return []
@@ -124,14 +125,14 @@ def _sichtbar(user=None):
     user = user or current_user()
     if not user:
         return "0", []
-    if rechte.ist_katalogpfleger(user):
+    if rechte.ist_material_verwaltung(user):
         return "1", []
     return (f"(created_by = ? OR (folder_id IS NOT NULL AND {rechte.ordner_filter('folder_id', user=user)}))",
             [user["id"]])
 
 
 def anlegen(d, dateien=()):
-    """Eine Meldung anlegen und die Katalogpfleger benachrichtigen. Steht das Produkt schon im Katalog
+    """Eine Meldung anlegen und die Material-Verwaltung benachrichtigen. Steht das Produkt schon im Katalog
     (gleiche Dublette wie dort: Hersteller + Modell + Artikelnummer), gibt es nichts zu melden."""
     w = {
         "manufacturer": text(d, "manufacturer", "Hersteller", 120, pflicht=True),
@@ -170,7 +171,7 @@ def anlegen(d, dateien=()):
         for f in fotos:
             delete_photo_files(katalog.medien_dir(), f)
         raise
-    _katalogpfleger_benachrichtigen(meldung(mid))
+    _verwaltung_benachrichtigen(meldung(mid))
     return mid
 
 
@@ -210,8 +211,8 @@ def meldung_json(r):
     out["kategorie"] = ({"id": k["id"], "pfad": " / ".join(x["name"] for x in katalog.kategorie_pfad(k["id"]))}
                         if k else None)
     o = db.query("SELECT id FROM mat_folder WHERE id = ?", (r["folder_id"],), one=True) if r["folder_id"] else None
-    # Den Ordner (Kennung und Pfad) nur, wer ihn sieht – Katalogpfleger ohne Bestand und ein Melder, der den Ordner
-    # nicht mehr sieht, lesen nur die Gliederung.
+    # Den Ordner (Kennung und Pfad) nur, wer ihn sieht – ein Melder, der den Ordner nicht mehr sieht, liest nur die
+    # Gliederung.
     if not o:
         out["ordner"] = None
     elif rechte.darf("lesen", o["id"]):
@@ -235,7 +236,7 @@ def meldung_json(r):
     return out
 
 
-# --- Abarbeiten (nur Katalogpfleger, routes.py prüft das) ---------------------------------------------
+# --- Abarbeiten (nur die Material-Verwaltung, routes.py prüft das) ------------------------------------
 
 def _abschliessen(mid, status, pid, antwort):
     """Innerhalb der Transaktion: Nur eine offene Meldung lässt sich erledigen – wer zweitens kommt, erfährt es."""
@@ -290,7 +291,7 @@ def ablehnen(mid, d):
 
 
 def loeschen(mid):
-    """Der Melder löscht seine Meldung – offen (sie verschwindet bei den Katalogpflegern) oder erledigt. Ein
+    """Der Melder löscht seine Meldung – offen (sie verschwindet bei der Material-Verwaltung) oder erledigt. Ein
     Produkt, das aus ihr entstand, bleibt; die Fotos gehen mit. Wer die Meldung nicht sehen darf, bekommt dieselbe 404
     wie für eine, die es nicht gibt (lesbar); 403 nur, wer sie sieht, aber nicht gemacht hat."""
     r = lesbar(mid)
@@ -313,18 +314,12 @@ def _senden(mails):
         send_mail(an, betreff, inhalt)
 
 
-def _katalogpfleger():
-    """Wer Meldungen bekommt: die Produktkatalogpfleger; gibt es keinen, die Verwaltung (sie pflegt den
-    Katalog dann selbst)."""
-    rows = db.query("SELECT id, email FROM users WHERE active = 1 AND mat_katalog = 1 ORDER BY id")
-    if not rows:
-        rows = db.query("SELECT id, email FROM users WHERE active = 1 AND recht_verwaltung = 2 ORDER BY id")
-    return rows
-
-
-def _katalogpfleger_benachrichtigen(r):
+def _verwaltung_benachrichtigen(r):
+    """Mail zu einer neuen Meldung an die Material-Verwaltung – gibt es keine, an die Plattform-Verwaltung
+    (rechte.material_verwaltung_konten); nicht an den Melder selbst."""
     cfg = current_app.config
-    an = [u["email"] for u in _katalogpfleger() if u["email"] and u["id"] != r["created_by"]][:MAX_EMPFAENGER]
+    an = [u["email"] for u in rechte.material_verwaltung_konten()
+          if u["email"] and u["id"] != r["created_by"]][:MAX_EMPFAENGER]
     if not an:
         return
     m = meldung_json(r)
@@ -337,7 +332,7 @@ def _katalogpfleger_benachrichtigen(r):
     if m["kategorie"]:
         zeilen.append(f"Kategorie:      {m['kategorie']['pfad']} (Vorschlag)")
     if m["ordner"]:
-        # Nur die Gliederung: Die Mail geht an alle Katalogpfleger, auch an die ohne Bestand.
+        # Nur die Gliederung: Eine Mail ist schlechter geschützt als die Seite (dort steht der Pfad).
         zeilen.append(f"Für:            {_gliederung(r['folder_id'])}")
     if m["fotos"]:
         zeilen.append(f"Fotos:          {len(m['fotos'])} (in der Meldung)")

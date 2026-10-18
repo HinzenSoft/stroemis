@@ -8,10 +8,13 @@ Docker-Image mit, denn das Dockerfile kopiert nur app/. Geladen wird nur mit aus
 Ohne Angabe landen die Daten wie bei run.py in ./data; für eine andere Datenbank vorher DATA_DIR setzen.
 Seit Phase 2 gibt es eine zweite Gliederung („DEMO-Gliederung Nachbarstadt“ mit „DEMO-Lager NS“) – zum Ausprobieren
 der Trennung je Gliederung und der globalen Suche (Seriennummer DEMO-NS-4711); sie kommt auch zu einem vorhandenen
-Demo-Bestand dazu. --konten legt einmalig vier DEMO-Konten mit Namen, zufälligem Passwort (wird einmal ausgedruckt)
-und Freigaben an: zwei Materialwarte (je Gliederung), einen Prüfer (lesen und prüfen in der DEMO-Gliederung, beides
-dauerhaft) und einen externen Prüfer (nur prüfen im DEMO-Lager, befristet). Nur für dev. Stammt der DEMO-Prüfer noch
-aus der Zeit, als auch er befristet prüfte, stellt --konten seine DEMO-Prüffreigabe auf dauerhaft (siehe demo_konten).
+Demo-Bestand dazu. --konten legt einmalig fünf DEMO-Konten mit Namen, zufälligem Passwort (wird einmal ausgedruckt),
+Stufe im Modul Material und Freigaben an: zwei Materialwarte (je Gliederung), einen Prüfer (lesen und prüfen in der
+DEMO-Gliederung, beides dauerhaft) und einen externen Prüfer (nur prüfen im DEMO-Lager, befristet) – alle mit Stufe
+Mitglied – sowie die DEMO-Material-Verwaltung (Stufe Verwaltung, keine Plattform-Verwaltung, keine Freigaben: Katalog
+pflegen, alle Bestände, Gliederungen anlegen). Sonst haben die Konten die Vorgabe neuer Konten. Nur für dev. Stammt
+der DEMO-Prüfer noch aus der Zeit, als auch er befristet prüfte, stellt --konten seine DEMO-Prüffreigabe auf dauerhaft
+(siehe demo_konten).
 Alles, was das Skript anlegt, trägt das Kennzeichen demo und „DEMO“ im Namen – die Oberfläche zeigt
 es überall als „DEMO – nicht für echte Prüfungen“. Prüfpunkte, Intervalle, Lebensdauern und Hersteller
 sind Platzhalter: Der echte Katalog entsteht in Phase 0 mit den Sachkundigen und kommt über
@@ -33,16 +36,18 @@ GLIEDERUNG = "DEMO-Gliederung"
 LAGER = "DEMO-Lager"
 NACHBARSTADT = "DEMO-Gliederung Nachbarstadt"
 LAGER_NS = "DEMO-Lager NS"
-# --konten: E-Mail, Name, Gliederung (Freitext im Profil), Urkundennummer (mit Häkchen „Prüfer“) oder None und die
-# Freigaben als (Ordner, Recht, Tage bis zum Ende – None heißt dauerhaft). Befristet ist nur der externe Prüfer (seit
+# --konten: E-Mail, Name, Gliederung (Freitext im Profil), Stufe im Modul Material (1 Mitglied, 2 Verwaltung),
+# Urkundennummer (mit Häkchen „Prüfer“) oder None und die Freigaben als (Ordner, Recht, Tage bis zum Ende – None heißt
+# dauerhaft). Befristet ist nur der externe Prüfer (seit
 # der Nachbesserung vom 18.10.2026); seine Prüffreigabe läuft kurz, damit der Hinweis „läuft bald ab“ und das
 # Verlängern zu sehen sind. Der interne Prüfer prüft dauerhaft – er hat dort lesen.
 DEMO_KONTEN = [
-    ("demo-wart-a@example.invalid", "DEMO-Materialwart A", GLIEDERUNG, None, [(GLIEDERUNG, "verwalten", None)]),
-    ("demo-wart-b@example.invalid", "DEMO-Materialwart B", NACHBARSTADT, None, [(NACHBARSTADT, "verwalten", None)]),
-    ("demo-pruefer@example.invalid", "DEMO-Prüfer", GLIEDERUNG, "DEMO-1012",
+    ("demo-wart-a@example.invalid", "DEMO-Materialwart A", GLIEDERUNG, 1, None, [(GLIEDERUNG, "verwalten", None)]),
+    ("demo-wart-b@example.invalid", "DEMO-Materialwart B", NACHBARSTADT, 1, None, [(NACHBARSTADT, "verwalten", None)]),
+    ("demo-pruefer@example.invalid", "DEMO-Prüfer", GLIEDERUNG, 1, "DEMO-1012",
      [(GLIEDERUNG, "lesen", None), (GLIEDERUNG, "pruefen", None)]),
-    ("demo-extern@example.invalid", "DEMO-Prüfer extern", "DEMO-extern", "DEMO-2024", [(LAGER, "pruefen", 30)]),
+    ("demo-extern@example.invalid", "DEMO-Prüfer extern", "DEMO-extern", 1, "DEMO-2024", [(LAGER, "pruefen", 30)]),
+    ("demo-mv@example.invalid", "DEMO-Material-Verwaltung", "DEMO", 2, None, []),
 ]
 
 
@@ -210,8 +215,9 @@ def demo_konten():
     from werkzeug.security import generate_password_hash
 
     from app import db
+    from app.auth import MODULE, VORGABE_NEU
     from app.material.services import heute, journal
-    for mail, name, gliederung, urkunde, freigaben in DEMO_KONTEN:
+    for mail, name, gliederung, stufe, urkunde, freigaben in DEMO_KONTEN:
         konto = db.query("SELECT * FROM users WHERE email = ?", (mail,), one=True)
         if konto:
             dauerhaft = _demo_pruefen_dauerhaft(konto, freigaben)
@@ -230,21 +236,26 @@ def demo_konten():
             print(f"Konto {mail} nicht angelegt: Ordner „{fehlt}“ fehlt (umbenannt oder gelöscht?).")
             continue
         passwort = secrets.token_urlsafe(12)
+        # Die Vorgabe neuer Konten (Mitglied im Modul Material, sonst nichts) – Material mit der Stufe aus DEMO_KONTEN.
+        stufen = dict(VORGABE_NEU, material=stufe)
         with db.transaction():
             uid = db.execute("INSERT INTO users (email, password_hash, name, gliederung, mat_pruefer, urkundennummer, "
-                             "created_at) VALUES (?,?,?,?,?,?,?)",
+                             f"{', '.join(f'recht_{m}' for m in MODULE)}, created_at) "
+                             f"VALUES (?,?,?,?,?,?,{','.join('?' * len(MODULE))},?)",
                              (mail, generate_password_hash(passwort), name, gliederung, int(bool(urkunde)), urkunde or "",
-                              db.now()))
+                              *(stufen[m] for m in MODULE), db.now()))
+            rollen = {"recht_material": stufe, "mat_pruefer": int(bool(urkunde))}
             if urkunde:
-                journal.eintragen("user", uid, "rollen", None, {"recht_material": 0, "mat_pruefer": 1, "mat_katalog": 0,
-                                                                "urkundennummer": urkunde})
+                rollen["urkundennummer"] = urkunde
+            journal.eintragen("user", uid, "rollen", None, rollen)
             for fid, _, recht, bis in ziele:
                 gid = db.execute("INSERT INTO mat_folder_grant (folder_id, user_id, permission, valid_until, granted_by, "
                                  "created_at, note) VALUES (?,?,?,?,NULL,?,?)", (fid, uid, recht, bis, db.now(), "DEMO"))
                 journal.eintragen("folder", fid, "freigabe_erteilt", None,
                                   {"freigabe": gid, "konto": journal.konto_ref(uid), "recht": recht, "bis": bis})
         rechte = ", ".join(f"{recht} {ordner}" + (f" bis {bis}" if bis else " dauerhaft") for _, ordner, recht, bis in ziele)
-        print(f"Konto {mail} ({name}) angelegt – Passwort: {passwort} (wird nicht erneut angezeigt). Freigaben: {rechte}.")
+        print(f"Konto {mail} ({name}) angelegt – Passwort: {passwort} (wird nicht erneut angezeigt). Material: "
+              f"{'Verwaltung' if stufe == 2 else 'Mitglied'}. Freigaben: {rechte or 'keine'}.")
 
 
 def _demo_pruefen_dauerhaft(konto, freigaben):

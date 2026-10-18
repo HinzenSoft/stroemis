@@ -293,7 +293,7 @@
     }
     return null;
   }
-  // Verwaltet das Konto diesen Ordner? Ohne Ordner (oberste Ebene) nur die Plattform-Verwaltung.
+  // Verwaltet das Konto diesen Ordner? Ohne Ordner (oberste Ebene) nur die Material-Verwaltung.
   const verwaltet = (o) => (o ? Boolean(o.darf && o.darf.verwalten) : Boolean(DARF.alles));
   /* Wechselt ein Verschieben die Gliederung? quelle: Heimat des Artikels bzw. alter Oberordner. Über Gliederungsgrenzen
      verschiebt nur, wer beide Gliederungen verwaltet (Bauentwurf 1.7 Nr. 2) – die Ordnerwahl bietet andere Ziele gar
@@ -311,7 +311,7 @@
                 pruefung: "pruefungen", pruefung_neu: "pruefungen", durchgang: "pruefungen" };
   $$(".mat-nav a").forEach((a) => a.classList.toggle("aktiv", a.dataset.nav === NAV[ANSICHT]));
   if (ANSICHT === "suche" && DATEN.q) $(".mat-suche input").value = DATEN.q;
-  // Ohne Freigabe im Bestand (Katalogpfleger, Prüfer ohne Prüffreigabe) fallen nur „Prüfungen“ und „Bestand“ weg. Die
+  // Ohne Freigabe im Bestand (Mitglied ohne Freigabe, Prüfer ohne Prüffreigabe) fallen nur „Prüfungen“ und „Bestand“ weg. Die
   // Nummernsuche bleibt: Über sie erreicht jeder mit Zugang die globale Seriennummernsuche.
   if (!DARF.lesen) $$('.mat-nav a[data-nav="pruefungen"], .mat-nav a[data-nav="bestand"]').forEach((el) => el.remove());
 
@@ -608,6 +608,8 @@
     if (["pruefung", "aussonderung", "basis", "berichtigung", "berichtigt"].includes(feld) && Number.isInteger(v)) return `<a href="/material/pruefung/${v}">Nr. ${v}</a>`;
     if (/sha256$/.test(feld)) return `<span class="mat-hash">${esc(v)}</span>`;
     if (feld === "lock_state") return esc({ frei: "frei", gesperrt: "gesperrt", verloren: "verloren (gesperrt)", ausgesondert: "ausgesondert" }[v] || v);
+    // Stufe im Modul Material mit Zahl – Einträge vor Schritt 10 meinten die Stufen aus Phase 1 (wie beschriftung.py).
+    if (feld === "recht_material" && Number.isInteger(v)) return esc(`${["kein Zugriff", "Mitglied", "Verwaltung"][v] || "?"} (${v})`);
     if (/_on$|^valid_from$|^retire_by$|^datum$|^begonnen$|^bis$/.test(feld)) return esc(fmtTag(v));
     if (typeof v === "object") return esc(JSON.stringify(v));
     return esc(v);
@@ -788,7 +790,7 @@
   }
 
   /* --- Übersicht ------------------------------------------------------------------------------ */
-  /* Ohne Freigabe im Bestand (Katalogpfleger, Prüfer ohne Prüffreigabe, abgelaufene Freigaben) zeigt die Übersicht keine
+  /* Ohne Freigabe im Bestand (Mitglied ohne Freigabe, Prüfer ohne Prüffreigabe, abgelaufene Freigaben) zeigt die Übersicht keine
      Zahlen – es wären nur Nullen –, sondern „Meine Freigaben“ (wer sie vergibt) und den Weg zu Katalog und Suche. */
   async function dashboard() {
     const d = await api(`${API}/start`);
@@ -1843,7 +1845,8 @@
           const meinLauf = ++lauf;
           if (q.length < 3) { treffer.innerHTML = q ? '<p class="help">Mindestens 3 Zeichen des Namens.</p>' : ""; return; }
           let r;
-          try { r = await api(`${API}/nutzer?q=${encodeURIComponent(q)}`); }
+          // Zuordnen geht an jedes aktive Konto mit Namen – wer PSA trägt, braucht keinen Zugang zum Modul.
+          try { r = await api(`${API}/nutzer?q=${encodeURIComponent(q)}&zweck=zuordnung`); }
           catch (e) { if (meinLauf === lauf) treffer.innerHTML = `<p class="error">${esc(e.message)}</p>`; return; }
           if (meinLauf !== lauf) return;
           ergebnis = r.nutzer;
@@ -2011,7 +2014,7 @@
           <div id="an-treffer" class="mat-treffer"></div></div>
         <div id="an-produkt" class="mat-gewaehlt" hidden></div>
         <p class="help">Fehlt das Produkt im Katalog? <button type="button" class="lnk" data-act="melden">Fehlendes Produkt melden</button>
-          – ein Produktkatalogpfleger nimmt es auf, du bekommst Bescheid.</p>
+          – die Material-Verwaltung nimmt es auf, du bekommst Bescheid.</p>
         <label for="an-ordner">Ordner</label><select id="an-ordner">${wahl.html}</select>
         <label for="an-sn">Seriennummer des Herstellers</label><input type="text" id="an-sn" maxlength="80" placeholder="leer lassen, wenn der Hersteller keine vergibt" ${TASTATUR_NUMMER}>
         <div class="help">Ohne Herstellernummer vergibt das System eine eindeutige (STR-…), die dann am Artikel angebracht wird. Die Inventarnummer vergibt immer das System.</div>
@@ -2221,7 +2224,7 @@
       const summe = (id) => (kats.find((x) => x.id === id).produkte || 0) + kats.filter((x) => x.parent_id === id).reduce((n, c) => n + summe(c.id), 0);
       const angaben = k ? [k.norm ? esc(k.norm) : "", k.default_material_kind ? `Materialart ${esc(MATERIALART[k.default_material_kind])}` : "",
         k.default_interval_months ? `Prüfintervall ${k.default_interval_months} Monate` : "", plural(summe(k.id), "Produkt", "Produkte")].filter(Boolean).join(" · ") : "";
-      // Zum aktiven generischen Formular führt bei Katalogpflegern der Knopf „Generisches Formular“, sonst der Verweis in der Angabenzeile.
+      // Zum aktiven generischen Formular führt bei der Material-Verwaltung der Knopf „Generisches Formular“, sonst der Verweis in der Angabenzeile.
       inhalt.innerHTML = `<div class="page-head"><h1>Katalog</h1>
           <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-export">Katalog exportieren</button><button class="btn secondary" data-act="kat-import">Katalog importieren</button>' : ""}
             ${DARF.lesen || DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/material/katalog/meldungen">Meldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>` : ""}
@@ -2958,7 +2961,7 @@
     if (a.lock_state === "ausgesondert") hinweis = "Ein ausgesonderter Artikel wird nicht mehr geprüft.";
     else if (!darf.pruefen) hinweis = pruefHinweis(a);
     else if (a.entwurf) hinweis = esc(`In Prüfung bei ${a.entwurf.pruefer} seit ${fmtZeit(a.entwurf.seit)}.${darf.verwalten ? " Eine liegen gebliebene Reservierung gibst du in der Artikelansicht frei." : " Eine liegen gebliebene Reservierung gibt der Materialwart frei."}`);
-    else if (!a.formular) hinweis = "Für dieses Produkt gibt es kein aktives Prüfformular – weder am Produkt noch in seiner Kategorie. Der Produktkatalogpfleger legt es im Katalog an.";
+    else if (!a.formular) hinweis = "Für dieses Produkt gibt es kein aktives Prüfformular – weder am Produkt noch in seiner Kategorie. Die Material-Verwaltung legt es im Katalog an.";
     const ld = a.lebensdauer && a.lebensdauer.festgeschrieben ? { ende: a.lebensdauer.ende, rest_tage: a.lebensdauer.rest_tage, erreicht: a.lebensdauer.rest_tage <= 0 } : null;
     inhalt.innerHTML = `${p.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen. Dieses Produkt stammt aus den Demodaten.</p>' : ""}
       ${artikelPfad(a)}
@@ -4039,8 +4042,8 @@
   }
 
   /* --- Produktmeldungen ------------------------------------------------------------------------------
-     Wer Artikel anlegt, meldet Produkte, die im Katalog fehlen (Links, Fotos, Bemerkung). Katalogpfleger
-     legen sie an (Produktdialog mit den Angaben der Meldung), ordnen ein vorhandenes zu oder lehnen mit
+     Wer Artikel anlegt, meldet Produkte, die im Katalog fehlen (Links, Fotos, Bemerkung). Die Material-Verwaltung
+     legt sie an (Produktdialog mit den Angaben der Meldung), ordnen ein vorhandenes zu oder lehnen mit
      Begründung ab; der Melder bekommt jeweils eine Mail. */
   const MELDESTATUS = { offen: "offen", eingepflegt: "eingepflegt", abgelehnt: "abgelehnt" };
   const meldestatusMarke = (s) => `<span class="mat-mstatus m-${esc(s)}">${esc(MELDESTATUS[s] || s)}</span>`;
@@ -4061,7 +4064,7 @@
   const meldeOrdner = (m) => (!m.ordner ? "" : m.ordner.pfad ? m.ordner.pfad : m.ordner.gliederung ? `Gliederung ${m.ordner.gliederung}` : "");
   const meldeKasten = (m) => `<div class="mat-meldekasten"><p class="small">Gemeldet von ${esc(m.created_by_name || "–")} am ${esc(fmtTag(m.created_at))}${meldeOrdner(m) ? ` für ${esc(meldeOrdner(m))}` : ""}</p>${meldeDetails(m)}</div>`;
 
-  // bearbeiten: Katalogpfleger in der Liste aller Meldungen – nur sie bekommen die Knöpfe zum Abarbeiten.
+  // bearbeiten: die Material-Verwaltung in der Liste aller Meldungen – nur sie bekommt die Knöpfe zum Abarbeiten.
   function meldeKarte(m, bearbeiten) {
     const wer = (name) => (name ? ` von ${esc(name)}` : "");
     const knoepfe = [];
@@ -4103,8 +4106,8 @@
       const meldung = (b) => liste.find((m) => m.id === +b.dataset.id);
       // Lesende (Führungskraft, Materialwart in „alle“) sehen dieselben Karten ohne Knöpfe zum Abarbeiten.
       const hilfe = d.bearbeiten ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen. „Produkt anlegen“ übernimmt ihre Angaben in den Produktdialog. Der Melder bekommt eine Mail, sobald das Produkt im Katalog ist – oder deine Begründung, wenn du ablehnst."
-        : d.alle ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen; die Katalogpfleger nehmen sie auf oder lehnen sie mit Begründung ab."
-          : "Produkte, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald ein Katalogpfleger sie bearbeitet hat.";
+        : d.alle ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen; die Material-Verwaltung nimmt sie auf oder lehnt sie mit Begründung ab."
+          : "Produkte, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald die Material-Verwaltung sie bearbeitet hat.";
       inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Produktmeldungen" : "Deine Produktmeldungen"}</h1>
           <div class="btn-row"><a class="btn secondary" href="/material/katalog">Katalog</a>${DARF.verwalten ? '<a class="btn secondary" href="/material/artikel/neu">+ Artikel</a>' : ""}</div></div>
         <p class="help">${hilfe}${DARF.verwalten && !DARF.katalog ? ` <button type="button" class="lnk" data-act="eigene">${d.alle ? "Nur deine zeigen" : "Alle Meldungen zeigen"}</button>` : ""}</p>
@@ -4134,7 +4137,7 @@
         },
         loeschen: async (b) => {
           const m = meldung(b);
-          const folge = m.status === "offen" ? " Sie verschwindet damit auch bei den Katalogpflegern."
+          const folge = m.status === "offen" ? " Sie verschwindet damit auch bei der Material-Verwaltung."
             : m.status === "eingepflegt" ? " Das Produkt bleibt im Katalog." : "";
           if (!(await confirm(`Deine Meldung „${meldungName(m)}“ löschen?${folge}`, "Löschen"))) return;
           try { await api(`${API}/meldungen/${m.id}`, { method: "DELETE" }); toast("Meldung gelöscht"); await zeichnen(); }
@@ -4213,7 +4216,7 @@
   async function meldungDialog(v, danach) {
     const kats = await kategorienLaden();
     dialog(`<h2>Fehlendes Produkt melden</h2>
-      <p class="help">Ein Produktkatalogpfleger nimmt es in den Katalog auf. Du bekommst eine Mail, sobald du Artikel davon anlegen kannst.</p>
+      <p class="help">Die Material-Verwaltung nimmt es in den Katalog auf. Du bekommst eine Mail, sobald du Artikel davon anlegen kannst.</p>
       <div class="field-row"><div><label for="me-her">Hersteller</label><input type="text" id="me-her" maxlength="120" value="${esc(v.manufacturer || "")}" ${TASTATUR_NAME}></div>
         <div><label for="me-mod">Modell</label><input type="text" id="me-mod" maxlength="160" value="${esc(v.model || "")}" ${TASTATUR_NAME}></div></div>
       <div class="field-row"><div><label for="me-art">Artikelnummer des Herstellers</label><input type="text" id="me-art" maxlength="80" ${TASTATUR_NUMMER}><div class="help" id="me-art-hilfe"></div></div>
@@ -4250,7 +4253,7 @@
   }
 
   /* --- Rückrufe (Lieferung 4) ---------------------------------------------------------------------------
-     Ein Katalogpfleger legt am Produkt einen Rückruf an; er steht am Produkt (laufende oben, beendete eingeklappt),
+     Die Material-Verwaltung legt am Produkt einen Rückruf an; er steht am Produkt (laufende oben, beendete eingeklappt),
      als Banner an jedem betroffenen Artikel und als Kasten auf der Übersicht. Gesperrt wird nichts automatisch:
      Prüfer sperren mit dem Grund „Rückruf“ (Knopf im Banner). Je Artikel ist ein Rückruf „offen“ oder „erledigt“
      (gesperrt oder nach dem Rückruf geprüft) – das rechnet der Server, nie die Oberfläche. */
@@ -4294,7 +4297,7 @@
   }
 
   // Wie es um die Mail steht: verschickt (mit Fehlschlägen), läuft noch, nicht bestätigt oder keine. Wie viele Mails
-  // hinausgingen, sieht nur die Plattform-Verwaltung (Phase 2) – sonst steht nur da, ob eine angefordert war („mail“).
+  // hinausgingen, sieht nur die Material-Verwaltung (Phase 2) – sonst steht nur da, ob eine angefordert war („mail“).
   function rrMailText(r) {
     if (!("mail_count" in r)) return r.mail ? "Mail an die Verwalter und Prüfer der betroffenen Artikel." : "Keine Mail verschickt.";
     if (r.mailed_at) {
@@ -4308,7 +4311,7 @@
       : `Mail an ${plural(r.mail_count, "Empfänger", "Empfänger")} wird verschickt …`;
   }
 
-  /* Wer keinen Bestand sieht (Katalogpfleger ohne Freigabe), bekäme bei jedem Rückruf „0 Artikel in deinem Bereich“ –
+  /* Wer keinen Bestand sieht (Mitglied ohne Freigabe), bekäme bei jedem Rückruf „0 Artikel in deinem Bereich“ –
      das klänge, als träfe er nichts. Die Zahlen gehören den Bereichen (Bauentwurf 2.6), also steht dort, wer sie sieht. */
   const OHNE_BESTAND = () => !DARF.alles && !DARF.lesen;
   const RR_OHNE_BESTAND = "Wie viele Artikel betroffen sind, sehen die Materialwarte der Gliederungen.";
@@ -4376,7 +4379,7 @@
     });
   }
 
-  /* Rückmeldung nach dem Anlegen: betroffene Artikel, Mail, Seriennummern ohne Artikel im Bestand. Die Plattform-Verwaltung
+  /* Rückmeldung nach dem Anlegen: betroffene Artikel, Mail, Seriennummern ohne Artikel im Bestand. Die Material-Verwaltung
      bekommt die Zahlen über alles, die Zahl der Empfänger und die Seriennummern ohne Artikel; alle anderen nur die Zahlen
      ihres Bereichs und ob für ihre Artikel eine Mail hinausgeht („benachrichtigt“, Phase 2) – ohne eigenen Bestand
      statt der Zahl, wer sie sieht, und bei Seriennummern, dass Tippfehler niemand meldet. */
@@ -4392,7 +4395,7 @@
     dialog(`<h2>Rückruf angelegt</h2>
       <p>${zahl}</p>
       <p>${mail}</p>
-      ${mitSerien && !verwaltung ? '<p class="help">Ob jede Seriennummer einen Artikel trifft, sieht nur die Plattform-Verwaltung – bitte die Nummern selbst genau prüfen.</p>' : ""}
+      ${mitSerien && !verwaltung ? '<p class="help">Ob jede Seriennummer einen Artikel trifft, sieht nur die Material-Verwaltung – bitte die Nummern selbst genau prüfen.</p>' : ""}
       ${nf.length ? `<p class="notice">Zu ${nf.length === 1 ? "dieser Seriennummer" : "diesen Seriennummern"} gibt es keinen Artikel im Bestand: ${nf.map(esc).join(", ")}</p>` : ""}
       <div class="dlg-actions"><button class="btn" data-close type="button" id="rr-fertig">OK</button></div>`,
     (d2, b2) => $("#rr-fertig", b2).focus());

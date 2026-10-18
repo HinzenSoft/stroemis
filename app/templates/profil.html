@@ -31,13 +31,15 @@
       <div class="btn-row" style="margin-top:14px"><button class="btn" type="submit">Speichern</button></div>
     </form>
   </section>
-  {# Unterschrift nur für wen, der sie braucht: Prüfer (Festschreiben) und Materialwarte (Aussondern) – mit Zugang
-     zum Modul. Ist schon eine hinterlegt, bleibt der Abschnitt, damit sie sich nach einem Rollenwechsel entfernen lässt;
-     neu unterschreiben (PUT /api/material/unterschrift) dürfen dann nur noch Prüfer und Materialwarte.
+  {# Unterschrift nur für wen, der sie braucht: Prüfer (Festschreiben) und Materialwarte (Aussondern, irgendwo
+     verwalten – auch mit Stufe Mitglied) – mit Zugang zum Modul (mat_zugang: Stufe und Name). Ist schon eine
+     hinterlegt, bleibt der Abschnitt, damit sie sich nach einem Rollenwechsel entfernen lässt; neu unterschreiben
+     (PUT /api/material/unterschrift) dürfen dann nur noch Prüfer und Materialwarte (mat_unterschrift).
      Wer das Häkchen „Prüfer“ hat (setzt die Verwaltung), trägt hier auch seine Urkundennummer ein
      (PUT /api/material/urkundennummer) – erst mit ihr darf er prüfen. #}
-  {% if (rechte.material or user.mat_pruefer or user.mat_katalog) and (user.mat_pruefer or (rechte.material or 0) >= 2 or user.signature_png) %}
-  {% set us_setzen = user.mat_pruefer or (rechte.material or 0) >= 2 %}
+  {% set mat_abschnitt = mat_zugang and (user.mat_pruefer or mat_unterschrift or user.signature_png) %}
+  {% if mat_abschnitt %}
+  {% set us_setzen = mat_unterschrift %}
   <section class="section" id="unterschrift" data-setzen="{{ 1 if us_setzen else 0 }}">
     <h2>{% if user.mat_pruefer %}Urkundennummer und Unterschrift{% else %}Unterschrift{% endif %}</h2>
     {% if user.mat_pruefer %}
@@ -77,6 +79,6 @@
 </main>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/profile.js') }}"></script>
-{% if (rechte.material or user.mat_pruefer or user.mat_katalog) and (user.mat_pruefer or (rechte.material or 0) >= 2 or user.signature_png) %}<script src="{{ url_for('static', filename='vendor/signature_pad/signature_pad.umd.min.js') }}"></script>
+{% if mat_zugang and (user.mat_pruefer or mat_unterschrift or user.signature_png) %}<script src="{{ url_for('static', filename='vendor/signature_pad/signature_pad.umd.min.js') }}"></script>
 <script src="{{ url_for('material.static', filename='unterschrift.js') }}"></script>
 <script src="{{ url_for('material.static', filename='profil_unterschrift.js') }}"></script>{% endif %}{% endblock %}

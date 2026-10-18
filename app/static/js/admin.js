@@ -22,33 +22,32 @@
     return `<span class="${alt.trim()}" title="${S.esc(S.fmtDate(u.last_login, true))}">${text}</span>`;
   }
 
-  /* Rechte je Modul: Jeder Nutzer hat in jedem der vier Module eine Stufe – kein Zugriff,
+  /* Rechte je Modul: Jeder Nutzer hat in jedem der fünf Module eine Stufe – kein Zugriff,
      Mitglied oder Verwaltung. Was die Stufe im Modul bedeutet, steht hier an EINER Stelle und
      erscheint als Titel am Auswahlfeld, in der Tabelle wie im Dialog. Im Modul Verwaltung gibt
      es kein „Mitglied“: Nutzer, Rechte und Einstellungen pflegt man ganz oder gar nicht.
-     Material ist seit Phase 2 nur Anzeige (nurAnzeige): Rechte am Bestand vergibt der Verwalter eines
-     Ordners als Freigabe – hier steht, was daraus folgt („alles“, „n Freigaben“ oder „–“). */
+     Im Modul Material ist die Stufe der Zugang (Mitglied) bzw. die Material-Verwaltung; den Bestand
+     zeigen einem Mitglied erst Freigaben, die der Verwalter eines Ordners vergibt. */
   const MODULE = [
     { k: "karte", t: "Spots", hilfe: "Mitglied: eigene Alben anlegen und bearbeiten. Verwaltung: alle Alben." },
     { k: "wiki", t: "Wiki", hilfe: "Ohne Zugriff (–): nur die öffentlich freigegebenen Seiten lesen. Mitglied: eigene und freigegebene Seiten. Verwaltung: alle Seiten, beschränkte lesen, veröffentlichen, HTML-Bausteine, Ersteller ändern." },
     { k: "pruefungen", t: "Prüfungen", hilfe: "Mitglied: Prüfungen abnehmen (Prüfer). Verwaltung: zusätzlich Kataloge pflegen und jeden Lehrgang leiten." },
-    { k: "material", t: "Material", nurAnzeige: true, hilfe: "Rechte am Bestand vergibt der Verwalter eines Ordners unter Bestand → Ordner → Bearbeiten → Freigaben. Die Verwaltung sieht alles und legt Gliederungen an. Prüfer und Katalogpflege sind Häkchen; beide geben allein keinen Bestand zu sehen. Prüfen braucht zusätzlich eine Prüffreigabe (befristet nur für externe Prüfer)." },
+    { k: "material", t: "Material", hilfe: "Mitglied: das Modul nutzen – Katalog, Suche, Profil; Bestand nur über Freigaben, die der Verwalter eines Ordners vergibt. Verwaltung: zusätzlich Produktkatalog pflegen (Kategorien, Produkte, Dokumente, Prüfformulare, Meldungen, Rückrufe), alle Bestände aller Gliederungen, Gliederungen anlegen, jede Freigabe. Prüfen nur mit Häkchen „Prüfer“, Urkundennummer und Prüffreigabe." },
     { k: "verwaltung", t: "Verwaltung", nurVoll: true,
       hilfe: "Verwaltung: Nutzer, Rechte und Einstellungen – schließt alle Rechte in allen Modulen ein." },
   ];
   const STUFEN = [[0, "–"], [1, "Mitglied"], [2, "Verwaltung"]];
-  const VORGABE = { karte: 1, wiki: 1, pruefungen: 0, material: 0, verwaltung: 0 };   // neues Konto
+  const VORGABE = { karte: 0, wiki: 0, pruefungen: 0, material: 1, verwaltung: 0 };   // neues Konto (wie auth.VORGABE_NEU)
   const ERGIBT_SICH = "ergibt sich aus Verwaltung";
 
   /* Ein Auswahlfeld für die Stufe eines Moduls. Steht die Verwaltung auf „Verwaltung“, sind die
-     übrigen drei Felder nur noch Anzeige: Der Server speichert dort ohnehin 2, und ein Feld, das
+     übrigen vier Felder nur noch Anzeige: Der Server speichert dort ohnehin 2, und ein Feld, das
      man umstellt und das sofort zurückspringt, wäre verwirrender als ein abgeschaltetes. Das
      eigene Konto kann sich die Verwaltung nicht entziehen – der Server lehnt es ab, also wird
      es gar nicht erst angeboten. */
   function rechtFeld(m, rechte, opts) {
     opts = opts || {};
     rechte = rechte || {};
-    if (m.nurAnzeige) return materialAnzeige(Object.assign({}, opts.konto, { rechte }), opts.id);
     const voll = (rechte.verwaltung | 0) === 2;
     let wert = rechte[m.k] | 0, aus = false, titel = m.hilfe;
     if (m.k !== "verwaltung" && voll) { wert = 2; aus = true; titel = ERGIBT_SICH; }
@@ -58,38 +57,32 @@
       title="${S.esc(titel)}"${aus ? " disabled" : ""}>${stufen.map(([v, l]) => `<option value="${v}"${v === wert ? " selected" : ""}>${l}</option>`).join("")}</select>`;
   }
 
-  /* Die Anzeige im Feld Material: „alles“ für die Verwaltung, sonst die Zahl der gültigen Freigaben – oder „–“. Als
-     <output>, damit die Beschriftung im Dialog dazugehört. */
-  function materialAnzeige(u, id) {
-    const n = u.mat_freigaben | 0;
-    const text = ((u.rechte || {}).verwaltung | 0) === 2 ? "alles" : n ? `${n} Freigabe${n === 1 ? "" : "n"}` : "–";
-    const m = MODULE.find((x) => x.k === "material");
-    return `<output class="recht-anzeige"${id ? ` id="${id}"` : ""} title="${S.esc(m.hilfe)}">${text}</output>`;
-  }
-
-  /* Die vier Zellen einer Zeile neu zeichnen – nach jeder Antwort des Servers, ob Erfolg oder
+  /* Die fünf Zellen einer Zeile neu zeichnen – nach jeder Antwort des Servers, ob Erfolg oder
      Fehler: So zeigt die Zeile immer das, was gespeichert ist, und bei verwaltung = 2 ziehen
-     die anderen drei Felder von selbst nach. */
+     die anderen vier Felder von selbst nach. */
   function zeichneRechte(tr, u) {
     MODULE.forEach((m) => {
       tr.querySelector(`td.recht[data-modul="${m.k}"]`).innerHTML = rechtZelle(m, u);
     });
   }
 
-  /* Das Material-Feld trägt darunter die beiden Kennzeichen des Moduls. Gesetzt werden sie im
-     Dialog „Bearbeiten“. Die Urkundennummer trägt der Prüfer selbst im Profil ein – bis dahin darf
-     er nicht prüfen, und seine Marke sagt das (gelb statt grau). Gelb ist auch ein Konto mit einer
-     Stufe aus Phase 1, aber ohne Freigabe: Es sah früher Bestand und sieht jetzt keinen. */
+  /* Unter dem Material-Feld: das Häkchen „Prüfer“ (gesetzt im Dialog „Bearbeiten“; gelb, solange die
+     Urkundennummer fehlt – die trägt der Prüfer selbst im Profil ein) und klein die Zahl gültiger
+     Freigaben. Gelb, was nicht wirkt: Häkchen oder Freigaben ohne Stufe im Modul Material, eine Stufe
+     ohne Namen – beides gibt keinen Zugang. */
   function rechtZelle(m, u) {
     const feld = rechtFeld(m, u.rechte, { eigenes: u.id === STROEMIS.user.id, konto: u });
     if (m.k !== "material") return feld;
     const marken = [];
-    if (u.mat_stufe_alt > 0 && !u.mat_freigaben && ((u.rechte || {}).verwaltung | 0) !== 2) {
-      marken.push(`<span class="badge" title="In Phase 1 hatte das Konto die Stufe „${u.mat_stufe_alt === 2 ? "Verwaltung" : "Mitglied"}“ im Modul Material. Sie wirkt nicht mehr – den Bestand zeigen nur Freigaben, vergeben am Ordner (Bestand → Ordner → Bearbeiten → Freigaben).">Stufe aus Phase 1 – ohne Frei&shy;gabe</span>`);
-    }
+    const stufe = (u.rechte || {}).material | 0, n = u.mat_freigaben | 0;
     if (u.mat_pruefer && u.urkunde_gueltig) marken.push(`<span class="badge grey" title="Prüfer (Sachkundiger), Urkundennummer ${S.esc(u.urkundennummer)}">Prüfer</span>`);
     else if (u.mat_pruefer) marken.push('<span class="badge urkunde-fehlt" title="Häkchen „Prüfer“ gesetzt, aber noch keine Urkundennummer – die trägt der Prüfer selbst im Profil ein. Bis dahin darf er nicht prüfen.">Prüfer – Urkunden&shy;nummer fehlt</span>');
-    if (u.mat_katalog) marken.push('<span class="badge grey" title="Produktkatalogpfleger">Katalog</span>');
+    if (!stufe && (u.mat_pruefer || n)) {
+      marken.push('<span class="badge kein-zugang" title="Ohne Stufe Mitglied oder Verwaltung im Modul Material wirken Häkchen und Freigaben nicht.">wirkt nicht – kein Zugang</span>');
+    } else if (stufe && !String(u.name || "").trim()) {
+      marken.push('<span class="badge kein-zugang" title="Im Modul Material steht jeder mit Namen in Journal und Protokollen – ohne Namen kein Zugang.">ohne Namen – kein Zugang</span>');
+    }
+    if (n) marken.push(`<span class="recht-klein" title="Gültige Freigaben im Modul Material – vergeben am Ordner (Bestand → Ordner → Bearbeiten → Freigaben)">${n} Frei&shy;gabe${n === 1 ? "" : "n"}</span>`);
     return feld + (marken.length ? `<div class="recht-marken">${marken.join(" ")}</div>` : "");
   }
 
@@ -211,22 +204,21 @@
       <label>Telefon</label><input type="tel" id="u-phone" value="${S.esc(u.phone)}">
       <label>Rechte</label>
       <div class="rechte-reihe">${MODULE.map((m) => `<div><label for="u-r-${m.k}">${m.t}</label>${rechtFeld(m, rechte, { id: "u-r-" + m.k, eigenes, konto: u })}</div>`).join("")}</div>
-      <div class="help">„–“ kein Zugriff (im Wiki: nur die öffentlichen Seiten lesen) · „Mitglied“ eigene Inhalte, bei Prüfungen: Prüfungen abnehmen ·
-        „Verwaltung“ alles im Modul. Verwaltung im Modul „Verwaltung“ schließt alle Rechte ein.
-        Was eine Stufe genau umfasst, steht als Hinweis am Feld. Material ist nur Anzeige: Rechte am Bestand vergibt der
-        Verwalter eines Ordners unter Bestand → Ordner → Bearbeiten → Freigaben; die Verwaltung sieht alles und legt Gliederungen an.</div>
+      <div class="help">„–“ kein Zugriff (im Wiki: nur die öffentlichen Seiten lesen) · „Mitglied“ eigene Inhalte, bei Prüfungen: Prüfungen abnehmen,
+        bei Material: das Modul nutzen (Bestand über Freigaben je Ordner) · „Verwaltung“ alles im Modul, bei Material auch
+        Produktkatalog und alle Bestände. Verwaltung im Modul „Verwaltung“ schließt alle Rechte ein.
+        Was eine Stufe genau umfasst, steht als Hinweis am Feld.</div>
       <fieldset class="mat-rollen"><legend>Modul Material</legend>
         <label class="inline"><input type="checkbox" id="u-mat-pruefer" ${u.mat_pruefer ? "checked" : ""}> Prüfer (Sachkundiger, Qualifikation 1012)</label>
         <p class="mat-urkunde" ${u.mat_pruefer ? "" : "hidden"}>${urkundeLesend(u)}</p>
-        <div class="help">Das Häkchen macht das Konto zum Prüfer. Urkundennummer und Unterschrift trägt der Prüfer selbst in seinem Profil ein
-          („Urkundennummer und Unterschrift“); beides steht später auf jedem Prüfprotokoll. Prüfen kann er erst mit Urkundennummer
-          und einer Prüffreigabe am Ordner (befristet nur für externe Prüfer) – auch die Verwaltung prüft nur mit eigenem Häkchen,
-          eigener Urkundennummer und eigener Prüffreigabe.</div>
-        <label class="inline"><input type="checkbox" id="u-mat-katalog" ${u.mat_katalog ? "checked" : ""}> Produktkatalogpfleger – Kategorien, Produkte, Herstellerdokumente und Prüfformulare (plattformweit)</label>
-        <div class="help">Beide Häkchen geben Zugang zum Modul (Katalog, Profil), aber keinen Bestand – den zeigen erst Freigaben.
-          Sie brauchen einen Namen: Prüfer und Katalogpfleger stehen namentlich in Journal und Protokollen.</div>
+        <p class="help mat-stufe-auto" role="status" hidden>Material steht jetzt auf „Mitglied“ – ohne Stufe wirkt das Häkchen nicht. Gespeichert wird beim Speichern.</p>
+        <div class="help">Das Häkchen wirkt nur mit Stufe „Mitglied“ oder „Verwaltung“ im Modul Material. Urkundennummer und Unterschrift
+          trägt der Prüfer selbst in seinem Profil ein („Urkundennummer und Unterschrift“); beides steht später auf jedem Prüfprotokoll.
+          Prüfen kann er erst mit Urkundennummer und einer Prüffreigabe am Ordner (befristet nur für externe Prüfer) – auch die
+          Verwaltung. Mit Material braucht das Konto einen Namen.</div>
       </fieldset>
       ${u.id ? `<fieldset class="mat-rollen"><legend>Freigaben im Modul Material</legend>
+        <p class="notice u-freigaben-kein-zugang" ${(rechte.material | 0) || !(u.mat_freigaben | 0) ? "hidden" : ""}>Diese Freigaben wirken nicht – das Konto hat keinen Zugang zum Modul Material.</p>
         <div id="u-freigaben"><p class="help">Wird geladen …</p></div>
         <div class="help">Angelegt wird eine Freigabe am Ordner (Bestand → Ordner → Bearbeiten → Freigaben), nicht hier.</div>
       </fieldset>` : ""}
@@ -238,33 +230,49 @@
 
   function read(body) {
     const rechte = {};
-    // Material schickt der Dialog nicht mit: Die Stufe dort ist Anzeige, der Server übergeht sie.
-    MODULE.filter((m) => !m.nurAnzeige).forEach((m) => { rechte[m.k] = +body.querySelector("#u-r-" + m.k).value; });
+    MODULE.forEach((m) => { rechte[m.k] = +body.querySelector("#u-r-" + m.k).value; });
     return {
       name: body.querySelector("#u-name").value, gliederung: body.querySelector("#u-gl").value,
       email: body.querySelector("#u-email").value, phone: body.querySelector("#u-phone").value,
       password: body.querySelector("#u-pw").value || undefined, rechte,
       // Die Urkundennummer schickt der Dialog nicht mit: Sie gehört dem Prüfer (Profil).
-      mat_pruefer: body.querySelector("#u-mat-pruefer").checked, mat_katalog: body.querySelector("#u-mat-katalog").checked,
+      mat_pruefer: body.querySelector("#u-mat-pruefer").checked,
     };
   }
 
   /* Im Dialog gilt dieselbe Regel wie in der Tabelle, nur ohne Server dazwischen: Wer die
-     Verwaltung auf „Verwaltung“ stellt, sieht die drei anderen Felder sofort auf „Verwaltung“
-     springen und erstarren – und bekommt beim Zurückstellen seine vorherigen Werte wieder. */
+     Verwaltung auf „Verwaltung“ stellt, sieht die vier anderen Felder sofort auf „Verwaltung“
+     springen und erstarren – und bekommt beim Zurückstellen seine vorherigen Werte wieder.
+     Dazu im Modul Material: Wer das Häkchen „Prüfer“ setzt, während Material auf „–“ steht, sieht
+     die Auswahl auf „Mitglied“ springen (ohne Stufe wirkte das Häkchen nicht; gespeichert wird erst
+     mit „Speichern“). Wer Material danach ausdrücklich auf „–“ stellt, behält das Häkchen – es wirkt
+     dann nur nicht. */
   function koppleRechte(body, u) {
+    const material = body.querySelector("#u-r-material");
+    // Über den Freigaben des Kontos: Sie wirken nicht, solange Material auf „–“ steht.
+    const ohneZugang = () => {
+      const hinweis = body.querySelector(".u-freigaben-kein-zugang");
+      if (hinweis) hinweis.hidden = material.value !== "0" || !(u.mat_freigaben | 0);
+    };
+    material.addEventListener("change", () => { body.querySelector(".mat-stufe-auto").hidden = true; ohneZugang(); });
     // Der Hinweis zur Urkundennummer gehört nur zu einem Prüfer – er erscheint mit dem Häkchen.
-    body.querySelector("#u-mat-pruefer").addEventListener("change", (e) => { body.querySelector(".mat-urkunde").hidden = !e.target.checked; });
+    body.querySelector("#u-mat-pruefer").addEventListener("change", (e) => {
+      body.querySelector(".mat-urkunde").hidden = !e.target.checked;
+      if (e.target.checked && material.value === "0" && !material.disabled) {
+        material.value = "1";
+        body.querySelector(".mat-stufe-auto").hidden = false;
+        ohneZugang();
+      }
+    });
     const chef = body.querySelector("#u-r-verwaltung");
     chef.addEventListener("change", () => {
       const voll = chef.value === "2";
-      // Die Anzeige Material geht mit: Die Verwaltung sieht alles.
-      body.querySelector("#u-r-material").outerHTML = materialAnzeige(Object.assign({}, u, { rechte: { verwaltung: voll ? 2 : 0 } }), "u-r-material");
-      MODULE.filter((m) => m.k !== "verwaltung" && !m.nurAnzeige).forEach((m) => {
+      MODULE.filter((m) => m.k !== "verwaltung").forEach((m) => {
         const f = body.querySelector("#u-r-" + m.k);
         if (voll) { f.dataset.vorher = f.value; f.value = "2"; f.disabled = true; f.title = ERGIBT_SICH; }
         else { f.disabled = false; f.title = m.hilfe; if (f.dataset.vorher !== undefined) f.value = f.dataset.vorher; }
       });
+      ohneZugang();
     });
   }
 
@@ -351,12 +359,14 @@
   function zustand(f) {
     if (!f.gueltig) return `<span class="muted">abgelaufen am ${tag(f.bis)}</span>`;
     if (!f.wirkt) {
-      const quali = f.recht === "pruefen" && !f.konto.qualifiziert;
-      // Eine dauerhafte Prüffreigabe wirkt nur zusammen mit lesen oder verwalten dort (nur externe Prüfer sind befristet).
-      const grund = !quali && f.recht === "pruefen" && f.bis === null && f.grundrecht_dort === false;
-      const titel = quali ? "Ohne Häkchen und Urkundennummer wirkt eine Prüffreigabe nicht."
-        : grund ? "Dauerhaft prüft nur, wer dort auch lesen oder verwalten hat." : "Das Konto ist deaktiviert oder hat keinen Namen.";
-      return `<span class="badge" title="${titel}">wirkt nicht${quali ? " – Qualifikation fehlt" : grund ? " – dauerhaft nur mit lesen oder verwalten" : ""}</span>`;
+      // Der Grund kommt vom Server (wirkt_nicht) – in fester Reihenfolge: deaktiviert, ohne Namen, kein Zugang zum Modul
+      // Material, Qualifikation fehlt, dauerhaft nur mit lesen oder verwalten.
+      const titel = {
+        "kein Zugang zum Modul Material": "Ohne Stufe Mitglied oder Verwaltung im Modul Material wirkt keine Freigabe.",
+        "Qualifikation fehlt": "Ohne Häkchen und Urkundennummer wirkt eine Prüffreigabe nicht.",
+        "dauerhaft nur mit lesen oder verwalten": "Dauerhaft prüft nur, wer dort auch lesen oder verwalten hat.",
+      }[f.wirkt_nicht] || "";
+      return `<span class="badge"${titel ? ` title="${titel}"` : ""}>wirkt nicht${f.wirkt_nicht ? ` – ${S.esc(f.wirkt_nicht)}` : ""}</span>`;
     }
     const t = f.laeuft_ab_in_tagen;
     if (t != null) return `<span class="badge">läuft ${t === 0 ? "heute" : t === 1 ? "morgen" : `in ${t} Tagen`} ab</span>`;
@@ -379,7 +389,9 @@
         <td data-l="Zustand">${zustand(f)}</td>
         <td class="tabelle-aktionen"><button class="btn secondary small" type="button" data-entziehen="${f.id}">Entziehen</button></td>
       </tr>`).join("")}</tbody></table>`
-      : '<p class="help">Keine Freigaben – das Konto sieht keinen Bestand.</p>';
+      : ((u.rechte || {}).material | 0) === 2
+        ? '<p class="help">Keine Freigaben – als Material-Verwaltung sieht das Konto ohnehin alle Bestände; prüfen nur mit eigener Prüffreigabe.</p>'
+        : '<p class="help">Keine Freigaben – das Konto sieht keinen Bestand.</p>';
     el.querySelectorAll("[data-entziehen]").forEach((b) => b.addEventListener("click", async () => {
       const f = liste.find((x) => x.id === +b.dataset.entziehen);
       // An einem Grundrecht können dauerhafte Prüffreigaben hängen, die ohne es nicht mehr wirken – die Rückfrage sagt es.

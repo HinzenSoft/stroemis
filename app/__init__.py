@@ -211,10 +211,13 @@ def slide(token):
 def profile():
     u = auth.current_user()
     # Modul Material: Ob die Urkundennummer gilt, entscheidet rechte.py – das Profil zeigt einem Prüfer ohne gültige
-    # Nummer den Hinweis, dass er erst danach prüfen kann.
-    from .material.services.rechte import ist_pruefer
+    # Nummer den Hinweis, dass er erst danach prüfen kann. Den Abschnitt „Unterschrift“ gibt es nur mit Zugang zum Modul;
+    # neu unterschreiben darf, wer festschreibt oder aussondert (darf_unterschreiben – auch ein Materialwart mit Stufe
+    # Mitglied, der über seine Freigabe verwaltet).
+    from .material.services import rechte as mat_rechte
     return render_template("profil.html", user=u, avatar=auth.avatar_url(u.get("avatar") or ""),
-                           initialen=auth.initialen(u.get("name") or u["email"]), darf_pruefen=ist_pruefer(u))
+                           initialen=auth.initialen(u.get("name") or u["email"]), darf_pruefen=mat_rechte.ist_pruefer(u),
+                           mat_zugang=mat_rechte.zugang(u), mat_unterschrift=mat_rechte.darf_unterschreiben(u))
 
 
 @pages.get("/admin")

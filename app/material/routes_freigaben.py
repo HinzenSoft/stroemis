@@ -3,8 +3,8 @@
 Vergeben, ändern, entziehen und verlängern darf, wer den Ordner verwaltet, an dem die Freigabe verankert ist – nach
 den Regeln in services/freigaben.py (1.6). Fremdes und Unsichtbares antwortet 404 mit derselben Meldung wie „gibt es
 nicht“; 403 gibt es nur, wenn man den Ordner sieht, ihn aber nicht verwaltet. „Meine Freigaben“ liest jeder
-Angemeldete, auch ohne Modulzugang – genau dann braucht er den Hinweis, wer verlängern kann. Die Freigaben eines
-Kontos (für die Nutzerverwaltung) liest nur die Plattform-Verwaltung."""
+Angemeldete, auch ohne Modulzugang – die Liste sagt dann, warum keine wirkt. Die Freigaben eines Kontos (für die
+Nutzerverwaltung) liest nur die Plattform-Verwaltung."""
 from functools import wraps
 
 from flask import jsonify, request
@@ -93,7 +93,8 @@ def konto_freigaben():
 @api.get("/nutzer")
 @requires_zugang
 def nutzer():
-    """?q= – Personensuche für Freigaben und Zuordnung: nur Name, Gliederung und Qualifikation."""
+    """?q=&zweck= – Personensuche für Freigaben (zweck=freigabe, Vorgabe: nur Konten mit Zugang zum Modul) und für die
+    Personenzuordnung (zweck=zuordnung: alle aktiven Konten mit Namen): nur Name, Gliederung und Qualifikation."""
     if not sicht().irgendwo("verwalten"):
-        return jsonify(error="Personen suchen nur Materialwarte und die Plattform-Verwaltung."), 403
-    return jsonify(freigaben.nutzer_suchen(request.args.get("q")))
+        return jsonify(error="Personen suchen nur Materialwarte und die Material-Verwaltung."), 403
+    return jsonify(freigaben.nutzer_suchen(request.args.get("q"), request.args.get("zweck")))

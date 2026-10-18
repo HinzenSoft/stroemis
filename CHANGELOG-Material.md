@@ -1008,11 +1008,16 @@ Löschkonzept. Erinnerungen per Mail folgen mit Lieferung 2, der CSV-Import mit 
 wurde am 18.10.2026 mit „Starte mit Phase 2“ freigegeben. Gebaut nach dem Bauentwurf vom 18.10.2026; die drei Fragen,
 die daraus offen waren, hat der Betreiber am 18.10.2026 entschieden – eingearbeitet und beschrieben unter „Die drei
 offenen Fragen – entschieden“ und „Nachbesserungen nach der Auslieferung (Entscheidungen vom 18.10.2026)“; dazu kommen
-die „Nachbesserungen nach der Auslieferung (Wünsche vom 18.10.2026)“. „Neu“ und „Schnittstelle“ beschreiben den Stand
-danach. Schemaversion 8 (mit den Nachbesserungen vom 18.10.2026: 9), keine neuen Abhängigkeiten. Stand: wartet auf
-Freigabe.
+die „Nachbesserungen nach der Auslieferung (Wünsche vom 18.10.2026)“, zuletzt die Modulstufe Material und die
+Vorgabe für neue Konten. „Neu“ und „Schnittstelle“ beschreiben den Stand danach. Schemaversion 8 (mit den
+Nachbesserungen vom 18.10.2026: 9, mit der Modulstufe: 10), keine neuen Abhängigkeiten. Stand: wartet auf Freigabe.
 
-„Plattform-Verwaltung“ heißt hier: Verwaltung im Modul Verwaltung der Rechte-Matrix (das Startkonto gehört dazu).
+„Plattform-Verwaltung“ heißt hier: Verwaltung im Modul Verwaltung der Rechte-Matrix (das Startkonto gehört dazu) –
+Nutzer, Stufen, Häkchen, Einstellungen, das Protokoll der globalen Suchen. „Material-Verwaltung“ heißt: Stufe
+„Verwaltung“ im Modul Material (seit der Nachbesserung „Modulstufe Material“; die Plattform-Verwaltung gehört immer
+dazu) – Produktkatalog, alle Bestände, Gliederungen, jede Freigabe. Bis zu dieser Nachbesserung hatte die
+Plattform-Verwaltung diese Rechte im Modul und der Produktkatalogpfleger (Häkchen) die Katalogpflege; die Texte unten
+sind angeglichen.
 
 ### Neu
 
@@ -1024,7 +1029,7 @@ Freigabe.
   Prüfer – befristet; mit Ende höchstens 24 Monate). Der letzte Tag zählt mit; ab 0:00 Uhr deutscher Zeit des
   Folgetags greift die Freigabe nicht mehr. Abgelaufene bleiben stehen („abgelaufen am …“), bis jemand sie verlängert
   oder entfernt. An „Gesperrt“ und „Ausgesondert“ gibt es keine Freigaben – sie gelten über ihre Gliederung. Die
-  Plattform-Verwaltung sieht und verwaltet alles.
+  Material-Verwaltung sieht und verwaltet alles. Freigaben wirken nur bei Konten mit Zugang zum Modul (Stufe und Name).
 - **Was die Rechte erlauben**:
   - **lesen**: alles ansehen – Bestand, Prüfungen samt Protokollen, Durchgänge, CSV und Protokoll-ZIP, Lebenslauf,
     Journal von Ordner und Artikel, zugeordnete Personen.
@@ -1033,15 +1038,16 @@ Freigabe.
     Bemerkung, ihre Prüfungen mit Protokollen und Fotos, die Durchgänge – und erlaubt prüfen, sperren und Durchgänge
     führen. Kein Export, kein Lebenslauf, kein Journal, keine Personen.
   - **verwalten**: dazu Ordner und Artikel pflegen, aussondern, Reservierungen freigeben, Personen zuordnen und
-    Freigaben vergeben. Prüfen nur mit eigener Prüffreigabe – das gilt auch für die Plattform-Verwaltung.
-- **Modulzugang**: Name im Profil **und** eins von: Plattform-Verwaltung, gültiges Grundrecht, wirksame Prüffreigabe,
-  Häkchen „Prüfer“ oder „Produktkatalogpfleger“. Die Häkchen allein öffnen Katalog, Suchfeld und Profil, aber keinen
-  Bestand. Ohne Zugang antwortet das Modul mit 403 und sagt, was fehlt: der Name, eine abgelaufene Freigabe („Deine
-  Freigabe für „…“ ist am … abgelaufen. Verlängern kann sie: …“ mit bis zu drei Verwaltern) oder eine Freigabe
-  überhaupt („… der Materialwart deiner Gliederung vergibt Freigaben“). Kopfleiste, Weiterleitung nach der Anmeldung
-  und Profil rechnen die Stufe aus den Freigaben – mit einer kurzen Abfrage je Anfrage, ohne den Ordnerbaum zu laden.
-  Ohne Leserecht fehlen nur die Reiter „Prüfungen“ und „Bestand“; das Suchfeld bleibt, und die Übersicht zeigt statt
-  der Zahlen „Meine Freigaben“ und den Weg zu Katalog und Nummernsuche.
+    Freigaben vergeben. Prüfen nur mit eigener Prüffreigabe – das gilt auch für die Material-Verwaltung.
+- **Modulzugang** (seit der Nachbesserung „Modulstufe Material“): Name im Profil **und** die Stufe „Mitglied“ oder
+  „Verwaltung“ im Modul Material, gesetzt in der Nutzerverwaltung (die Plattform-Verwaltung hat sie von selbst). Ohne
+  Stufe wirken weder Freigaben noch das Häkchen „Prüfer“. Ein Mitglied ohne Freigabe sieht Katalog, Suchfeld und
+  Profil, aber keinen Bestand. Ohne Zugang antwortet das Modul mit 403 und sagt, was fehlt: der Name oder die Stufe
+  („Für dein Konto ist das Modul Material nicht freigeschaltet – das macht die Verwaltung in der Nutzerverwaltung.“).
+  Kopfleiste, Weiterleitung nach der Anmeldung und Profil lesen die gespeicherte Stufe – ohne Abfrage. Ohne Leserecht
+  fehlen nur die Reiter „Prüfungen“ und „Bestand“; das Suchfeld bleibt, und die Übersicht zeigt statt der Zahlen
+  „Meine Freigaben“ (mit abgelaufenen samt den Verwaltern, die verlängern können) und den Weg zu Katalog und
+  Nummernsuche.
 - **Trennung je Gliederung**: Was ein Konto nicht sieht, antwortet wie etwas, das es nicht gibt – 404 mit derselben
   Meldung, ob die Kennung im Pfad steht oder im Inhalt der Anfrage (auch als `"7"` oder `7.0`). 403 gibt es nur, wenn
   man den Gegenstand sieht, die Aktion aber nicht darf, mit Klartext (etwa „Häkchen und Urkundennummer hast du, aber
@@ -1068,7 +1074,7 @@ Freigabe.
 - **Freigaben am Ordner** (`static/freigaben.js`) – seit der Nachbesserung vom 18.10.2026 der Reiter **Freigaben** im
   Dialog „Ordner bearbeiten“ (Knopf **Bearbeiten** im Ordnerkopf; einen eigenen Knopf „Freigaben“ gibt es nicht
   mehr), nur für Verwalter, nicht an Systemordnern:
-  - **+ Freigabe**: Person suchen (ab 3 Zeichen, nur aktive Konten mit Namen, ohne E-Mail), „Gilt für“ (der Ordner
+  - **+ Freigabe**: Person suchen (ab 3 Zeichen, nur aktive Konten mit Namen und Zugang zum Modul, ohne E-Mail), „Gilt für“ (der Ordner
     oder ein Oberordner, den man verwaltet; Vorgabe ist die Gliederung, wenn man sie verwaltet), eine **Vorlage** und
     optional eine Notiz. Vorlagen: „Führungskraft“ (lesen, dauerhaft), „Materialwart“ (verwalten, dauerhaft), „Prüfer“
     (lesen und prüfen, beides dauerhaft – seit der Nachbesserung), „Materialwart und Prüfer“ (ebenso), „Externer
@@ -1076,10 +1082,11 @@ Freigabe.
     ganz oder gar nicht. Vorlagen mit Prüfen gibt es nur für qualifizierte Konten; „bis“ steht auf dem 31.12. des
     Folgejahres, „dauerhaft“ gibt es nur für den, der selbst dauerhaft verwaltet (beim Prüfen dazu nur mit Grundrecht).
   - **Hier vergeben**: Person (ein Konto ohne Namen als „(Konto ohne Namen)“), Gliederung, Recht, Ende, Zustand
-    (gültig, gelb „läuft in n Tagen ab“, grau „abgelaufen am …“, „wirkt nicht – Qualifikation fehlt“ bzw. „… – dauerhaft
-    nur mit lesen oder verwalten“), Notiz, von wem
+    (gültig, gelb „läuft in n Tagen ab“, grau „abgelaufen am …“, „wirkt nicht – …“ mit dem Grund vom Server: „Konto
+    deaktiviert“, „Konto ohne Namen“, „kein Zugang zum Modul Material“, „Qualifikation fehlt“ oder „dauerhaft nur mit
+    lesen oder verwalten“), Notiz, von wem
     und wann vergeben; Ändern und Entziehen, wo man darf – „Entziehen“ nur, wo es auch gelingt (sonst steht dort, dass
-    es nur über die Plattform-Verwaltung geht). Darüber **„Alle Prüffreigaben verlängern bis …“** für den ganzen Zweig
+    es nur über die Material-Verwaltung geht). Darüber **„Alle Prüffreigaben verlängern bis …“** für den ganzen Zweig
     (auch bis zu 90 Tage abgelaufene), mit den übersprungenen Zeilen samt Grund. Am Telefon und am Tablet (bis etwa
     920 px Fensterbreite) stehen die Listen als Karten, am Rechner als Tabelle.
   - Zugeklappt **Geerbt von oben** (nur lesbar, ohne Notiz), **In Unterordnern** und **Verlauf**.
@@ -1088,29 +1095,29 @@ Freigabe.
   - Im Ordnerkopf steht für Verwalter „n Freigaben laufen in den nächsten 30 Tagen ab“ mit dem Knopf „Verlängern …“;
     er öffnet „Ordner bearbeiten“ im Reiter „Freigaben“ gleich bei „Alle Prüffreigaben verlängern bis …“. Hat sich an
     den Freigaben etwas geändert, lädt der Ordner nach dem Schließen neu (eigene Rechte, Ablaufhinweis).
-- **Wer Freigaben vergibt**: Wer einen Ordner verwaltet, vergibt dort und darunter an jedes aktive Konto mit Namen –
-  auch aus anderen Gliederungen. Nie länger, als er dort selbst verwaltet (unbefristet nur, wer selbst unbefristet
+- **Wer Freigaben vergibt**: Wer einen Ordner verwaltet, vergibt dort und darunter an jedes aktive Konto mit Namen und
+  Zugang zum Modul (Stufe Mitglied oder Verwaltung; sonst 409 mit Klartext) – auch aus anderen Gliederungen. Nie länger, als er dort selbst verwaltet (unbefristet nur, wer selbst unbefristet
   verwaltet). Eine fremde Freigabe ändert oder entzieht er nur, wenn er sie selbst so hätte vergeben dürfen – ein
   befristeter Verwalter kann einen dauerhaften weder entziehen noch kürzen noch herabsetzen. Die eigene kann er nur
   verkürzen, herabsetzen oder entziehen – das immer, auch wenn sie länger läuft als sein Verwalten –, sich selbst gibt
   er nichts. Danach muss jede Gliederung noch einen Verwalter haben, der mindestens so lange bleibt wie er (sonst 409
-  „… das macht nur die Plattform-Verwaltung“). Prüffreigaben gibt es nur für qualifizierte Konten (409). Die Notiz
-  (eine Zeile, höchstens 200 Zeichen) sehen nur die Verwalter des Ordners und die Plattform-Verwaltung – der Inhaber
-  also nur, wenn er dort selbst verwaltet, nie unter „Meine Freigaben“. Die Plattform-Verwaltung vergibt überall ohne
-  diese Grenzen – Prüffreigaben aber auch sie nur an qualifizierte Konten, befristet für höchstens 24 Monate und
+  „… das macht nur die Material-Verwaltung“; Verwalter ohne Stufe oder Namen zählen nicht). Prüffreigaben gibt es nur
+  für qualifizierte Konten (409). Die Notiz (eine Zeile, höchstens 200 Zeichen) sehen nur die Verwalter des Ordners und
+  die Material-Verwaltung – der Inhaber also nur, wenn er dort selbst verwaltet, nie unter „Meine Freigaben“. Die
+  Material-Verwaltung vergibt überall ohne diese Grenzen – Prüffreigaben aber auch sie nur an qualifizierte Konten, befristet für höchstens 24 Monate und
   dauerhaft nur mit Grundrecht (Nachbesserung).
 - **Meine Freigaben** auf der Übersicht: die eigenen Freigaben, gültige und im letzten Jahr abgelaufene, mit Ordner,
   Recht und Ende; gelb, was in 30 Tagen abläuft – dort und bei abgelaufenen steht, wer verlängern kann. Der Abschnitt
   ist zugeklappt und öffnet sich von selbst, wenn eine Freigabe bald abläuft, abgelaufen ist oder nicht wirkt. Wer noch
   keine hat, liest „Du hast noch keine Freigabe im Bestand – der Materialwart deiner Gliederung vergibt sie.“ Die
   Schnittstelle dazu antwortet jedem Angemeldeten, auch ohne Modulzugang.
-- **Gliederungen anlegen**: auf oberster Ebene nur die Plattform-Verwaltung; nach „+ Gliederung“ öffnet sich gleich
+- **Gliederungen anlegen**: auf oberster Ebene nur die Material-Verwaltung; nach „+ Gliederung“ öffnet sich gleich
   „Ordner bearbeiten“ im Reiter „Freigaben“ mit der Vorlage „Materialwart“. Eine Gliederung in einem Ordner legt an,
   wer den Oberordner verwaltet. Einen vorhandenen Ordner zur Gliederung macht nur, wer die Gliederung darüber verwaltet
   (sonst 403; der Dialog „Ordner bearbeiten“ bietet die Art dann nicht an) – alles darin wechselt dabei die
   Gliederung. Gesperrte und ausgesonderte Artikel mit Heimat darin ziehen in seine neuen Systemordner (Journal „Ordner
   zur Gliederung gemacht“).
-- **Verschieben zwischen Gliederungen**: nur, wer beide Gliederungen verwaltet, oder die Plattform-Verwaltung (sonst
+- **Verschieben zwischen Gliederungen**: nur, wer beide Gliederungen verwaltet, oder die Material-Verwaltung (sonst
   403); ein Ziel, das man nicht sieht, antwortet 404 (vorher 403). Mit einem Ordner wandern seine gesperrten und
   ausgesonderten Artikel in die Systemordner der neuen Gliederung (Journal mit Grund „Ordner in andere Gliederung
   verschoben“). Freigaben am Ordner gehen mit; was vom alten Oberordner geerbt war, gilt nicht mehr. Verlässt ein
@@ -1125,7 +1132,7 @@ Freigabe.
 - **Globale Seriennummernsuche** (`services/globalsuche.py`, `static/global.js`): Unter den eigenen Treffern bieten
   Trefferseite und Suchvorschläge „In anderen Gliederungen nach der Seriennummer „…“ suchen“ an – zu jeder Anfrage,
   die dafür taugt, auch neben eigenen Treffern und wenn ein eigener Artikel genau diese Nummer hat; nicht der
-  Plattform-Verwaltung, die alles sieht. Nach einer Bestätigung („wird mit deinem Namen protokolliert“) sucht der
+  Material-Verwaltung, die alles sieht. Nach einer Bestätigung („wird mit deinem Namen protokolliert“) sucht der
   Server exakt (Groß/klein egal) nach Herstellerseriennummern ab 4 Zeichen – nie nach Inventar- oder STR-Nummern, die
   sind fortlaufend – und nur unter den Artikeln, die das Konto nicht sieht. Höchstens zehn Steckbriefe ohne Link
   stehen direkt unter der eigenen Liste, ab der Trennlinie „Aus anderen Gliederungen“, gestrichelt umrandet und mit
@@ -1133,7 +1140,7 @@ Freigabe.
   Lebensende, ein Sperrwort („gesperrt“, „verloren gemeldet“, „ausgesondert“) und „Gehört zu <Gliederung> · <Ordner>“
   (ein persönlicher Ordner heißt dort nur „persönlicher Ordner“). Keine Kennungen, kein Prüfstatus, kein Sperrgrund,
   keine Prüfungen, Fotos, Bemerkungen oder Personen. Das Suchfeld haben jetzt alle mit Modulzugang, auch
-  Katalogpfleger und Prüfer ohne Freigabe.
+  Mitglieder und Prüfer ohne Freigabe.
 - **QR-Steckbrief**: Ein Scan an einem Artikel außerhalb des eigenen Bereichs zeigt „Dieser Artikel gehört nicht zu
   deinem Bereich.“ und auf Wunsch („Steckbrief anzeigen (wird protokolliert)“) denselben Steckbrief – mit dem
   Sperrwort, damit ein Finder sieht, ob ein fremdes Seil gesperrt, verloren gemeldet oder ausgesondert ist.
@@ -1143,9 +1150,11 @@ Freigabe.
 - **Bremse und Protokoll**: Globale Suche, QR-Steckbrief und fremde Dublette zusammen höchstens zehnmal je Konto in 15
   Minuten (danach 429). Jede steht mit Konto, Name, Art, Anfrage und Treffern in `mat_global_search` – zwölf Monate
   lang, dann fällt sie heraus (aufgeräumt beim Schreiben, beim Start und beim Lesen). Die Plattform-Verwaltung liest
-  das Protokoll in der Nutzerverwaltung unter „Globale Suchen (Modul Material)“.
+  das Protokoll in der Nutzerverwaltung unter „Globale Suchen (Modul Material)“ – die Material-Verwaltung nicht, es ist
+  eine Aufzeichnung über Personen.
 - **Personenzuordnung** (`services/zuordnung.py`): Wer einen Artikel verwaltet, ordnet ihn einer Person zu, ändert
-  oder löst die Zuordnung – an jedes aktive Konto mit Namen; die Person braucht keinen Modulzugang. In der
+  oder löst die Zuordnung – an jedes aktive Konto mit Namen; die Person braucht keinen Modulzugang (die Personensuche
+  dafür fragt mit `zweck=zuordnung` und findet auch Konten ohne Stufe). In der
   Artikelansicht steht „Zugeordnet an“ mit „Zuordnen …“, „Ändern“ und „Lösen“ (Personensuche wie bei den Freigaben;
   Hinweis „Nur für PSA, die eine Person dauerhaft nutzt. Erscheint nicht in Protokollen.“), in der Ordnerliste die
   Spalte „Person“, der Filter „Zugeordnet an …“ (sobald im Zweig jemandem etwas zugeordnet ist) und neben „Verschieben
@@ -1156,16 +1165,16 @@ Freigabe.
   „Zugeordnet an“ (vor „DEMO“). Aussondern löst die Zuordnung; ausgesonderte Artikel lassen sich niemandem zuordnen
   (409). Deaktivierte Konten sind nicht wählbar, eine bestehende Zuordnung steht mit „(deaktiviert)“ da.
 - **Rückrufe je Bereich**: Liste, Zahlen, Übersicht und Produktseite zeigen jedem nur die betroffenen Artikel, die er
-  sieht. Die Mail geht je betroffenem Artikel an die Verwalter seiner Heimat und an die Prüfer, die ihn geprüft haben
-  und dort heute prüfen dürfen; hat er keinen Verwalter, an die Plattform-Verwaltung. Jeder Empfänger bekommt eine
-  Mail mit genau den Artikeln, die er sehen darf. Nicht gefundene Seriennummern und die Zahl der Mails sieht nur die
-  Plattform-Verwaltung; alle anderen – etwa ein Katalogpfleger ohne Bestand – bekommen beim Anlegen und Beenden nur
-  die Zahlen ihres Bereichs und ob benachrichtigt wurde. Wer gar keinen Bestand sieht, liest statt „0 Artikel“: „Wie
-  viele Artikel betroffen sind, sehen die Materialwarte der Gliederungen.“; wer Seriennummern eingibt, erfährt, dass
-  nur die Plattform-Verwaltung sieht, ob jede einen Artikel trifft.
-- **Meldungen je Bereich**: Eine Produktmeldung sehen Katalogpfleger, Plattform-Verwaltung, der Melder und wer ihren
-  Ordner sieht – auch im Produktjournal; im Artikeljournal steht sie gar nicht mehr. Den Ordnerpfad zeigt sie nur dem,
-  der den Ordner sieht, sonst nur die Gliederung; ebenso die Mail an die Katalogpfleger.
+  sieht. Die Mail geht je betroffenem Artikel an die Verwalter seiner Heimat (mit Stufe und Namen) und an die Prüfer,
+  die ihn geprüft haben und dort heute prüfen dürfen; hat er keinen Verwalter, an die Material-Verwaltung (ohne die
+  Plattform-Verwaltung; gibt es keine, an die Plattform-Verwaltung). Jeder Empfänger bekommt eine Mail mit genau den
+  Artikeln, die er sehen darf. Anlegen und beenden darf nur die Material-Verwaltung; sie sieht alle Bestände und
+  bekommt die vollen Zahlen, nicht gefundene Seriennummern und die Zahl der Mails. Ein Mitglied ohne Bestand liest
+  statt „0 Artikel“: „Wie viele Artikel betroffen sind, sehen die Materialwarte der Gliederungen.“
+- **Meldungen je Bereich**: Eine Produktmeldung sehen die Material-Verwaltung, der Melder und wer ihren Ordner sieht –
+  auch im Produktjournal; im Artikeljournal steht sie gar nicht mehr. Den Ordnerpfad zeigt sie nur dem, der den
+  Ordner sieht (die Material-Verwaltung sieht jeden), sonst nur die Gliederung. Die Mail zu einer neuen Meldung geht an
+  die Material-Verwaltung (gibt es keine außer der Plattform-Verwaltung, an diese) und nennt nur die Gliederung.
 - **Medien je Datei** (`services/medien.py`): Ordnerfotos nur mit Leserecht am Ordner, Befundfotos und Prüfanhänge mit
   Leserecht am Artikel, Meldungsfotos wie die Meldung; Produktbilder und Herstellerdokumente für alle mit Modulzugang.
   Sonst 404.
@@ -1178,26 +1187,30 @@ Freigabe.
   18.10.2026). Der Dialog „Löschen“ der
   Nutzerverwaltung nennt die Folgen vorher („n Freigaben werden entfernt, m Artikel verlieren ihre Zuordnung, k offene
   Prüfungen werden zu Reservierungen ohne Prüfer …“). Deaktivieren ändert im Modul nichts – Freigaben wirken nicht
-  mehr, Zuordnungen bleiben.
+  mehr, Zuordnungen bleiben. Die Stufe bleibt am Konto und geht mit ihm.
 - **Journal**: Freigaben stehen am Ordner, an dem sie vergeben sind („Freigabe erteilt“, „geändert“, „entzogen“,
   „entfernt“), und nur dessen Verwalter sehen sie; Zuordnungen stehen am Artikel. Betroffene stehen darin nur als
   pseudonymer Kontoverweis (`users.mat_ref`, 128 Bit Zufall), der erst beim Lesen zum Namen wird; die Notiz nie, nur
   „Notiz geändert“. Handelnde stehen mit Namen, nie mehr mit E-Mail – auch der Rolleneintrag beim Anlegen eines Kontos
   nicht. Ordner- und Artikeljournal gibt es nur mit Grundrecht.
-- **Nutzerverwaltung**: Die Spalte „Material“ ist nur noch Anzeige – „alles“ (Plattform-Verwaltung), „n Freigaben“
-  oder „–“; die gelbe Marke „Stufe aus Phase 1 – ohne Freigabe“ zeigt Konten, die früher Bestand sahen und jetzt
-  keinen. Die Häkchen „Prüfer“ und „Produktkatalogpfleger“ gibt es nur mit Namen (400). „Bearbeiten“ zeigt die
+- **Nutzerverwaltung** (seit der Nachbesserung „Modulstufe Material“): Die Spalte „Material“ ist eine Auswahl wie die
+  anderen Module – „–“, „Mitglied“, „Verwaltung“ –, darunter die Marke „Prüfer“ (gelb „Prüfer – Urkundennummer
+  fehlt“), klein „n Freigaben“ und gelb „wirkt nicht – kein Zugang“ (Häkchen oder Freigaben ohne Stufe) bzw. „ohne
+  Namen – kein Zugang“. Stufe Mitglied oder Verwaltung und das Häkchen „Prüfer“ gibt es nur mit Namen (400); das
+  Häkchen „Produktkatalogpfleger“ gibt es nicht mehr (400, wenn es jemand schickt). „Bearbeiten“ zeigt die
   Freigaben des Kontos mit Ordner, Recht, Ende und Zustand (Entziehen ja, angelegt und geändert wird am Ordner – der
   Ordnerpfad führt dort gleich in den Reiter „Freigaben“; bleiben offene Prüfungen, führt ein Hinweis zu Material →
-  Prüfungen → „Offene Prüfungen“). Die Liste holt die Zahlen aller Konten mit einer Abfrage. Der Hilfetext erklärt das
-  neue Modell.
+  Prüfungen → „Offene Prüfungen“; ohne Stufe darüber „Diese Freigaben wirken nicht …“). Die Liste holt die Zahlen
+  aller Konten mit einer Abfrage. Der Hilfetext erklärt das Modell.
 - **DEMO-Daten** (`scripts/material_demo.py`): zweite Gliederung „DEMO-Gliederung Nachbarstadt“ mit „DEMO-Lager NS“
   und drei Artikeln, einer davon mit der Seriennummer `DEMO-NS-4711` für die globale Suche; sie kommt auch zu einem
-  vorhandenen Demo-Bestand dazu. `--demo --konten` legt einmalig vier DEMO-Konten mit Namen und zufälligem Passwort an
-  (wird einmal ausgegeben): `demo-wart-a@example.invalid` (verwaltet die DEMO-Gliederung),
+  vorhandenen Demo-Bestand dazu. `--demo --konten` legt einmalig fünf DEMO-Konten mit Namen und zufälligem Passwort
+  an (wird einmal ausgegeben): `demo-wart-a@example.invalid` (verwaltet die DEMO-Gliederung),
   `demo-wart-b@example.invalid` (verwaltet die Nachbarstadt), `demo-pruefer@example.invalid` (lesen und prüfen in der
   DEMO-Gliederung, seit der Nachbesserung beides dauerhaft) und `demo-extern@example.invalid` (nur 30 Tage prüfen im
-  DEMO-Lager). Nur für dev.
+  DEMO-Lager) – alle mit Stufe Mitglied – sowie seit der Modulstufe `demo-mv@example.invalid`
+  („DEMO-Material-Verwaltung“: Stufe Verwaltung im Modul Material, keine Plattform-Verwaltung, keine Freigaben). Nur
+  für dev.
 
 ### Migration
 
@@ -1214,7 +1227,8 @@ Freigabe.
   einem Start 2026: **31.12.2027**); sie wirkt erst mit Urkundennummer. Seit der Nachbesserung (Schritt 9) ist sie
   dauerhaft, wo das Konto dort ein Grundrecht hat oder Plattform-Verwaltung ist – befristet bleibt sie nur bei Konten
   ohne Stufe aus Phase 1 (externe Prüfer). Katalogpfleger hatten mindestens die Stufe
-  „Mitglied“ und lesen damit weiter; das entzieht bei Bedarf die Verwaltung. Je Freigabe ein Journaleintrag am Ordner
+  „Mitglied“ und lesen damit weiter; das entzieht bei Bedarf die Verwaltung. Schritt 10 (Modulstufe, unten) macht sie
+  zur Material-Verwaltung. Je Freigabe ein Journaleintrag am Ordner
   („Migration Schritt 8“, das Konto nur als Verweis). In der Produktion gibt es noch keine Gliederung – dort entstehen
   keine Freigaben (siehe „Zu prüfen“).
 - **Altfälle**: Gesperrte und verlorene Artikel, die im „Gesperrt“ einer anderen Gliederung liegen als ihr
@@ -1222,12 +1236,13 @@ Freigabe.
   nicht im Zweig des Durchgangs liegt, werden ausgenommen („verschoben (Bereinigung Schritt 8)“), offene Entwürfe dazu
   verlieren den Durchgang. Ausgesonderte aus Phase 1 bleiben ohne Herkunft und gehören zur Gliederung. Alles mit
   Journal.
-- Die Stufe im Modul Material (`users.recht_material`) bleibt stehen, wird aber nicht mehr gelesen und nicht mehr
-  geschrieben (außer wie bisher automatisch bei Verwaltung = 2). `mat_pruefer` und `mat_katalog` bleiben unverändert.
+- Die Stufe im Modul Material (`users.recht_material`) bleibt stehen; bis Schritt 10 wurde sie nicht mehr gelesen und
+  nicht mehr geschrieben (außer wie bisher automatisch bei Verwaltung = 2), seit Schritt 10 ist sie wieder die Stufe
+  (siehe „Modulstufe Material“). `mat_pruefer` und `mat_katalog` bleiben unverändert.
 - **Rückweg**: nur neue Spalten, Tabellen, Indizes und Trigger. Eine Fassung aus Phase 1 startet auf einer Datenbank
   mit Schritt 8 und arbeitet wieder mit den globalen Stufen; Freigaben, Suchprotokoll und Kontoverweise übergeht sie.
-  Die behaltene Herkunft an Ausgesonderten macht dort nur das Löschen eines Ordners strenger. Schritt 9 (Nachbesserung)
-  siehe unten.
+  Die behaltene Herkunft an Ausgesonderten macht dort nur das Löschen eines Ordners strenger. Schritt 9 und 10
+  (Nachbesserungen) siehe unten.
 - Keine Handarbeit beim Update: `docker compose up -d --build` genügt. Danach braucht die Produktion ihre erste
   Gliederung (README, „Inbetriebnahme in der Produktion“).
 
@@ -1237,14 +1252,16 @@ Keine.
 
 ### Entscheidungen
 
-- **Sichtbarkeit nur über Freigaben**: Die Stufe der Rechte-Matrix im Modul Material ist stillgelegt (der Wert bleibt
-  als Rückweg stehen). Rechte am Bestand haben damit genau eine Quelle, und jede Gliederung vergibt sie selbst.
-- **Prüfen braucht für alle eine Prüffreigabe** – auch für Verwalter und die Plattform-Verwaltung: nur an Konten mit
+- **Sichtbarkeit nur über Freigaben** – für Mitglieder: Rechte am Bestand haben genau eine Quelle, und jede Gliederung
+  vergibt sie selbst. Die Stufe der Rechte-Matrix war dafür zunächst stillgelegt; seit der Nachbesserung „Modulstufe
+  Material“ gibt sie wieder den Zugang zum Modul (Mitglied) und die Material-Verwaltung (Verwaltung), die alles sieht –
+  getrennt vom Rechtekonzept der Gliederungen und ihrer Ordner.
+- **Prüfen braucht für alle eine Prüffreigabe** – auch für Verwalter und die Material-Verwaltung: nur an Konten mit
   Häkchen und Urkundennummer; befristet (höchstens 24 Monate) seit der Nachbesserung nur noch für externe Prüfer, wer
   dort lesen oder verwalten hat, prüft dauerhaft. `verwalten` schließt prüfen nicht ein. Eine
   Prüffreigabe allein gibt nur die Prüfsicht; die Bemerkung bleibt darin, weil dort Prüfhinweise stehen
   (Sturzbelastung, Vorschaden). Das Häkchen „Prüfer“ setzt weiter nur die Plattform-Verwaltung – es ist eine
-  Qualifikation für alle Gliederungen.
+  Qualifikation für alle Gliederungen und wirkt nur mit Stufe im Modul.
 - **Eine Heimat je Artikel**, auch für Ausgesonderte (die Herkunft bleibt beim Aussondern). Ein Artikel gehört genau
   einem Bereich – kein „Herkunft oder Ablage“ mehr.
 - **Verschieben über Gliederungsgrenzen** nur mit verwalten an beiden Gliederungen: Ein externer Materialwart mit
@@ -1264,9 +1281,9 @@ Keine.
   ist **Pseudonymisierung, keine Anonymisierung** – aus dem Zusammenhang (Zeitpunkt, wer gleichzeitig handelte) bleibt
   ein Rückschluss möglich. So steht es auch im Textvorschlag fürs Verfahrensverzeichnis (README, „Austritt und
   Löschen“).
-- **Rückrufe**: Empfänger sind die Verwalter der betroffenen Bereiche, nicht mehr alle Materialwarte. Die Antwort auf
-  „Rückruf anlegen“ und „beenden“ enthält außer für die Plattform-Verwaltung nur die Zahlen des eigenen Bereichs –
-  sonst ließe sich mit einem Rückruf ohne Mail abfragen, welche Seriennummern es anderswo gibt.
+- **Rückrufe**: Empfänger sind die Verwalter der betroffenen Bereiche, nicht mehr alle Materialwarte. Anlegen und
+  beenden darf nur die Material-Verwaltung, die alle Bestände sieht – so taugt ein Rückruf ohne Mail nicht als Abfrage,
+  welche Seriennummern es anderswo gibt (die Antwort enthielte für andere nur die Zahlen des eigenen Bereichs).
 - **Handelnde nur mit Namen**: Ohne Namen gibt es keinen Modulzugang; einen Rückfall auf die E-Mail gibt es nicht
   mehr, weder im Journal noch im Prüfernamen.
 
@@ -1293,9 +1310,9 @@ Keine.
 ### Abweichungen vom Bauentwurf
 
 - **Prüfsicht ohne Qualifikation** (Entwurf 8.2/11 „nimmt die Verwaltung das Häkchen weg → alles 404“): Ohne Häkchen
-  hat ein externer Prüfer keinen Modulzugang mehr – alles antwortet 403 „… nicht freigeschaltet …“, bevor nach dem
-  Gegenstand gefragt wird. Fehlt nur die Urkundennummer, bleibt der Modulzugang (Häkchen), die Prüffreigabe wirkt
-  nicht, und alles antwortet wie Unbekanntes mit 404.
+  oder Urkundennummer wirkt die Prüffreigabe nicht, und alles antwortet wie Unbekanntes mit 404 – den Modulzugang gibt
+  seit der Modulstufe die Stufe, nicht mehr das Häkchen. Ohne Stufe antwortet alles 403 „… nicht freigeschaltet …“,
+  bevor nach dem Gegenstand gefragt wird.
 - **Journal beim Ausnehmen nach dem Verschieben**: Am Durchgang steht als „ausgenommen von“ „System“
   (`excluded_by_name`), der Journaleintrag „ausgenommen“ steht aber unter dem Namen dessen, der verschoben hat – das
   Journal hält fest, wer gehandelt hat. Die Bereinigung in Schritt 8 schreibt „Migration Schritt 8“.
@@ -1322,16 +1339,18 @@ sich:
   eines Durchgangs, die man nicht sieht, haben `sichtbar: false` und keine Kennung.
 - `GET /suche` liefert `exakt_lokal` (ein sichtbarer Artikel hat genau diese Seriennummer) und `global_angebot` (zu
   jeder Anfrage, die für die globale Suche taugt – unabhängig von den lokalen Treffern –, außer für die
-  Plattform-Verwaltung); `GET /ordner/<id>` und `GET /faellig` nehmen `zugeordnet=<Konto>`.
+  Material-Verwaltung); `GET /ordner/<id>` und `GET /faellig` nehmen `zugeordnet=<Konto>`.
 - `POST /globalsuche` findet nur Artikel, die das Konto nicht sieht; ein Treffer im eigenen Bereich ist kein 409 mehr.
-  409 bekommt nur die Plattform-Verwaltung („Du siehst den Bestand aller Gliederungen – die normale Suche findet jeden
+  409 bekommt nur die Material-Verwaltung („Du siehst den Bestand aller Gliederungen – die normale Suche findet jeden
   Artikel.“). Jeder Steckbrief (Suche und QR) trägt `sperre`: „gesperrt“, „verloren gemeldet“, „ausgesondert“ oder
   `null`.
 - `DELETE /kategorien/<id>`: 409, wenn ein Dokument der Kategorie in einem Prüfprotokoll steht.
-- Rückruf anlegen und beenden: `nicht_gefunden` und `empfaenger` nur für die Plattform-Verwaltung, sonst `betroffen`,
-  `offen` und `benachrichtigt`.
+- Rückruf anlegen und beenden (nur die Material-Verwaltung): `betroffen`, `offen`, `nicht_gefunden`, `empfaenger`; ein
+  Konto mit Teilsicht bekäme `betroffen`, `offen` und `benachrichtigt` seines Bereichs (kommt seit der Modulstufe nicht
+  mehr vor).
 - Ziel beim Verschieben nicht sichtbar: 404 statt 403. Fremde Dublette: 409 mit festem Text, 429 über der Bremse. 403
-  ohne Modulzugang nennt, was fehlt.
+  ohne Modulzugang nennt, was fehlt. Listeneinträge der Freigaben tragen `wirkt_nicht` (Grund oder `null`) und am
+  Konto `zugang`; die Personensuche nimmt `zweck` (`freigabe` | `zuordnung`).
 
 ### Im Browser geprüft
 
@@ -1366,7 +1385,7 @@ Regressionstest. Danach liefen alle Suiten grün.
 | 6 | Nutzerverwaltung: Nach dem Entziehen einer Prüffreigabe schickte der Hinweis nach „Prüfungen → Entwürfe freigeben“ – das gibt es nicht | niedrig | bleibender Hinweis mit Link: Material → Prüfungen → „Offene Prüfungen“ freigeben |
 | 7 | „Entziehen“ an der eigenen Verwalterfreigabe wurde angeboten, obwohl der Server sicher mit 409 ablehnte (1.6 Nr. 7) | niedrig | Feld `entziehbar` je Zeile, Nr. 7 vorab gerechnet; statt des Knopfs „Entziehen nur über die Plattform-Verwaltung – sonst verwaltet hier niemand so lange wie du.“ Test `test_uebernahme_schutz` |
 | 8 | Die Freigabe eines Kontos ohne Namen (etwa aus der Migration) stand ohne jede Personenangabe in der Liste | niedrig | „(Konto ohne Namen)“, nie die E-Mail – auch bei „vergeben von“ und beim Verlängern. Test `test_listen_und_verlaengern` |
-| 9 | Rückruf als Katalogpfleger ohne Bestand: „0 Artikel in deinem Bereich betroffen“ klang, als träfe er nichts; Tippfehler in Seriennummern blieben unbemerkt | niedrig | Datenregel 2.6 unverändert; ohne Bestand statt der Zahl „Wie viele Artikel betroffen sind, sehen die Materialwarte der Gliederungen.“, bei Seriennummern der Hinweis, dass nur die Plattform-Verwaltung Nummern ohne Treffer sieht |
+| 9 | Rückruf als Katalogpfleger ohne Bestand: „0 Artikel in deinem Bereich betroffen“ klang, als träfe er nichts; Tippfehler in Seriennummern blieben unbemerkt | niedrig | Datenregel 2.6 unverändert; ohne Bestand statt der Zahl „Wie viele Artikel betroffen sind, sehen die Materialwarte der Gliederungen.“, bei Seriennummern der Hinweis, dass nur die Plattform-Verwaltung Nummern ohne Treffer sieht. Seit der Modulstufe gegenstandslos: Rückrufe legt nur die Material-Verwaltung an, und die sieht alles |
 | 10 | Eine eigene Freigabe, die länger lief als das eigene Verwalten, ließ sich weder verkürzen noch entziehen (1.6 Nr. 5) | niedrig | Grenze Nr. 4 („reicht weiter als deine eigene“) nur für fremde Zeilen; für eigene gelten Nr. 5 und Nr. 3. Test `test_eigene_laenger_als_verwalten` |
 | 11 | Freigabenliste: eine Abfrage je Verlaufseintrag (bis 200) | niedrig | `journal.konto_namen` löst alle Kontoverweise mit einer Abfrage auf. Test `test_liste_abfragen` |
 | 12 | DEMO-Skript: Herstell-, Erstgebrauchs- und Prüfdaten mit `date.today()` – im UTC-Container nachts einen Tag daneben | niedrig | `services.heute()` wie im übrigen Modul |
@@ -1469,12 +1488,128 @@ Datenfehler mit Regressionstest, die Oberfläche im Chromium nachgeprüft. Danac
 | 5 | „Verlängern …“ im Ordnerkopf führte ins Leere, wenn nur ein Grundrecht ablief, und der Fokus blieb auf dem nicht gewählten Reiter „Ordner“ | niedrig | Zur ersten ablaufenden Zeile (Abschnitt auf, Fokus auf „Ändern“), läuft eine befristete Prüffreigabe ab, wie bisher zum Knopf; Fokus beim Öffnen auf dem gewählten Reiter. Nachgeprüft bei 1280, 820 und 390 px |
 | 6 | Die Phasenübersicht oben nannte noch den „Freigaben-Dialog“ | niedrig | Jetzt „Freigaben im Dialog „Ordner bearbeiten“ (Reiter)“ |
 
+Zwei weitere Wünsche vom selben Tag – Modulstufe Material und Vorgabe für neue Konten – mit Migration Schritt 10
+(Bauentwurf „Stufen Mitglied und Verwaltung“ vom 18.10.2026; seine offenen Fragen hat der Betreiber am selben Tag
+entschieden bzw. nicht widersprochen):
+
+- **Modulstufe Material** (Wunsch, wörtlich: „In der Verwaltung soll die Rollenvergabe Mitglied (sieht das Modul
+  überhaupt und kann damit arbeiten), Produktkatalogpfleger/Verwaltung (Recht zusätzlich Produkte/Katalog zu
+  verwalten, Zugriff auf alle Bestände im System, etc.) haben, um das Wording und die Ebenen gleich zu ziehen. Das soll
+  separat vom Rechtekonzept der Gliederungen und ihren Ordnern sein. Die Gliederungsordner werden von Verwaltern
+  initial angelegt und dann die ersten Personen hinzugefügt, die ihren Ordner dann weiter selbstständig verwalten.“):
+  - **Die Stufe wirkt wieder** (`auth.stufe` liest `users.recht_material`; die Plattform-Verwaltung hat überall 2 – das
+    Ableiten aus den Freigaben, `material_stufe_wirksam` und `freigaben.stufen_vormerken` sind entfallen, die Kopfleiste
+    fragt keine Freigaben mehr ab). **Mitglied** = Modulzugang: Katalog, Suche, Profil, „Meine Freigaben“ – Bestand
+    nur über Freigaben je Ordner. **Verwaltung** = **Material-Verwaltung**: alles, was im Modul bisher an der
+    Plattform-Verwaltung hing (alle Bestände, `darf.alles`, Freigaben überall ohne die Grenzen 3–7 samt Notizen,
+    Gliederungen anlegen, verschieben, löschen, Meldungen abarbeiten, Rückrufe anlegen und beenden mit vollen Zahlen),
+    dazu die Katalogpflege (bisher Häkchen „Produktkatalogpfleger“, `mat_katalog` – wird nicht mehr gelesen und bleibt
+    als Rückweg). Prüfen nie über die Stufe: Häkchen, Urkundennummer und Prüffreigabe – auch die Material-Verwaltung
+    (sie kann sich die Prüffreigabe wie bisher die Plattform-Verwaltung selbst geben, dauerhaft auch ohne Zeile für
+    lesen oder verwalten). Nutzer, Stufen, Häkchen, die Freigaben eines Kontos, die Löschfolgen und das Protokoll der
+    globalen Suchen bleiben bei der Plattform-Verwaltung.
+  - **Ohne Stufe wirkt nichts** (Modulzugang = Konto mit Namen, aktiv, Stufe ≥ 1): Jede Route des Moduls antwortet
+    403 „… nicht freigeschaltet – das macht die Verwaltung in der Nutzerverwaltung.“, bevor sie nach dem Gegenstand
+    fragt; die Sicht ist leer – auch wenn sie für ein anderes Konto gerechnet wird (Rückruf-Empfänger, Entziehen,
+    Verlängern). Freigaben wirken nicht (Listen: „wirkt nicht – kein Zugang zum Modul Material“), das Häkchen „Prüfer“
+    macht nicht qualifiziert, ein Verwalter ohne Stufe oder Namen zählt nicht als Verwalter (Regel 1.6 Nr. 7,
+    Rückruf-Empfänger, „Verlängern kann …“). „Meine Freigaben“ antwortet weiter und nennt den Grund.
+  - **Nutzerverwaltung** (`api_admin.py`, `static/js/admin.js`, `templates/admin.html`): Material ist eine Auswahl wie
+    die anderen Module („–“, „Mitglied“, „Verwaltung“, gleiche Hilfetexte); Verwaltung im Modul Verwaltung zieht
+    Material mit, ihr Entzug lässt es stehen (wie bei den anderen Modulen). Unter der Auswahl: „Prüfer“ (gelb
+    „Prüfer – Urkundennummer fehlt“), klein „n Freigaben“, gelb „wirkt nicht – kein Zugang“ (Häkchen oder Freigaben
+    ohne Stufe) und „ohne Namen – kein Zugang“. „alles“, die Marke „Katalog“, das Häkchen „Produktkatalogpfleger“ und
+    „Stufe aus Phase 1 – ohne Freigabe“ (`mat_stufe_alt`) sind weg. Setzt man im Dialog das Häkchen „Prüfer“, während
+    Material auf „–“ steht, springt die Auswahl sichtbar auf „Mitglied“ (mit Hinweis, gespeichert erst mit
+    „Speichern“); stellt man Material danach ausdrücklich auf „–“, bleiben Häkchen und Urkundennummer gespeichert,
+    wirken aber nicht. Über den Freigaben eines Kontos ohne Stufe: „Diese Freigaben wirken nicht – das Konto hat keinen
+    Zugang zum Modul Material.“ Stufe Mitglied oder Verwaltung (außer bei der Plattform-Verwaltung) und das Häkchen
+    gibt es nur mit Namen (400 „Erst einen Namen eintragen – … Ohne Namen geht nur Material „–“.“); ein namenloses
+    Konto von früher bleibt bearbeitbar (Stufe senken, Häkchen nehmen). `mat_katalog` in einer Anfrage: 400.
+  - **Personensuche je Zweck** (`GET /nutzer?zweck=`): Für Freigaben (`freigabe`, Vorgabe) nur Konten mit Zugang zum
+    Modul – erteilen an ein Konto ohne Stufe antwortet 409 mit Klartext („Dieses Konto hat keinen Zugang zum Modul
+    Material – den gibt die Verwaltung in der Nutzerverwaltung.“); für die Personenzuordnung (`zuordnung`) alle aktiven
+    Konten mit Namen. Die Suche dürfen Verwalter und die Material-Verwaltung.
+  - **Listen der Freigaben** (Reiter, „Meine Freigaben“, Nutzerverwaltung): neues Feld `wirkt_nicht` mit dem Grund in
+    fester Reihenfolge – „Konto deaktiviert“ › „Konto ohne Namen“ › „kein Zugang zum Modul Material“ › „Qualifikation
+    fehlt“ › „dauerhaft nur mit lesen oder verwalten“ –, am Konto `zugang`; „Alle verlängern“ überspringt ein Konto
+    ohne Zugang mit diesem Grund.
+  - **Mails**: Neue Produktmeldungen und Rückrufe an Artikeln ohne wirksamen Verwalter gehen an die
+    Material-Verwaltung (aktive Konten mit Namen und Stufe Verwaltung, ohne die Plattform-Verwaltung), an die
+    Plattform-Verwaltung nur, wenn es keine Material-Verwaltung gibt.
+  - **Profil**: Den Abschnitt „Unterschrift“ und das Hinterlegen bekommt, wer mit Zugang festschreibt oder aussondert
+    (`rechte.darf_unterschreiben`) – auch der Materialwart mit Stufe Mitglied, der über seine Freigabe verwaltet. Bisher
+    hing das an „Stufe 2“, die jetzt die Material-Verwaltung bedeutet; ohne die Änderung verlöre der Materialwart den
+    Abschnitt.
+  - **Texte**: „Material-Verwaltung“ statt „Plattform-Verwaltung“ und „(Produkt-)Katalogpfleger“, wo die Stufe
+    Verwaltung gemeint ist – Meldungen des Servers, Hilfen, Rückfragen, Mails („Die Material-Verwaltung hat einen
+    Rückruf … angelegt“). Das Journal zeigt `recht_material` als „kein Zugriff (0)“, „Mitglied (1)“, „Verwaltung (2)“
+    – mit der Zahl, weil Einträge vor Schritt 10 die Stufen aus Phase 1 meinten.
+  - **DEMO-Daten**: Die vier DEMO-Konten bekommen beim Anlegen die Stufe Mitglied, dazu `demo-mv@example.invalid`
+    („DEMO-Material-Verwaltung“, Stufe Verwaltung, keine Plattform-Verwaltung, keine Freigaben). Vorhandene DEMO-Konten
+    hebt Schritt 10 auf Mitglied; das neue Konto entsteht beim nächsten `material_demo.py --demo --konten`
+    (**auf dev nach dem Deploy einmal laufen lassen**).
+- **Vorgabe für neue Konten** (Wunsch, wörtlich: „Neue Konten sollen nun Zugriff Mitglied auf Material bekommen und
+  nicht mehr automatisch Zugriff auf Spots und Wiki.“): Kontoanfrage und Nutzerverwaltung ohne Angabe geben Mitglied im
+  Modul Material und sonst nichts (Spots, Wiki, Prüfungen, Verwaltung „–“; im Wiki gilt damit der Lesemodus). Die
+  Vorgabe steht an einer Stelle (`auth.VORGABE_NEU`, auch für `api_admin.VORGABE`, in `admin.js` dieselbe). Der
+  allererste Nutzer bekommt weiter überall Verwaltung; vorhandene Konten behalten ihre Stufen. Die Startseite führt ein
+  neues Konto ins Modul Material. In der Nutzerverwaltung braucht ein neues Konto damit einen Namen – oder Material „–“.
+- **Migration Schritt 10** (Schemaversion 10, beim Start, wiederholbar, ohne neues Schema): `recht_material` := 2,
+  wenn `mat_katalog = 1` oder Plattform-Verwaltung; sonst 1, wenn eine Stufe aus Phase 1 (`recht_material ≥ 1` – auch
+  der Phase-1-Materialwart mit 2 wird **Mitglied**, er verwaltet weiter über seine Freigabe aus Schritt 8), irgendeine
+  Freigabe (auch abgelaufen) oder das Häkchen „Prüfer“; sonst 0. Name, Aktivität und Status zählen nicht. Häkchen,
+  Urkundennummern, Freigaben und `mat_katalog` bleiben. Je Konto mit geänderter Stufe oder aufgelöstem Katalog-Häkchen
+  ein Journaleintrag „rollen“ am Konto (`user_name` „Migration Schritt 10“, das Konto im Inhalt nur als Verweis
+  `{"ref": mat_ref}`, Grund „Modulstufe Material (Schritt 10)“); keiner für 2 → 2, 1 → 1, 0 → 0. Damit verliert
+  niemand Zugang. **Rechteausweitung, gewollt:** Jeder bisherige Katalogpfleger wird Material-Verwaltung und sieht
+  danach alle Bestände aller Gliederungen samt Prüfungen, Protokollen, Journal, zugeordneten Personen und den Notizen
+  an Freigaben, vergibt jede Freigabe und legt Gliederungen an. Konten mit einer Stufe aus Phase 1 ohne wirksame
+  Freigabe und solche mit nur abgelaufenen Freigaben bekommen den Zugang zurück (Katalog, Suche – keinen Bestand). In
+  der Produktion (ohne Modul) ändert Schritt 10 nichts: Die Plattform-Verwaltung hat 2, alle anderen 0. Rückweg: Eine
+  Fassung bis Schritt 9 liest `recht_material` nicht und `mat_katalog` wieder – ohne Datenverlust. Eine Fassung aus
+  Phase 1 deutete die Stufen um (bisherige Katalogpfleger wären dort Materialwarte, Phase-1-Materialwarte nur
+  Führungskräfte) – nur auf dev denkbar.
+- **Eigene Entscheidungen beim Bau**: Mail-Empfänger „Material-Verwaltung“ sind Konten mit Stufe Verwaltung **ohne**
+  Plattform-Verwaltung (sonst bekäme die Plattform-Verwaltung, die immer Stufe 2 hat, die Fachmails stets mit). Das
+  Journal von Schritt 10 schreibt nur geänderte Konten (nicht 1 → 1, obwohl die Stufe ab jetzt wirkt). Das Profil
+  fragt für „Unterschrift“ die Sicht (wer irgendwo verwaltet) – die einzige Seite außerhalb des Moduls mit einer
+  Abfrage auf Freigaben. `katalog_required` heißt jetzt `material_verwaltung_required` (der alte Name bleibt als
+  Alias) und verlangt Zugang und Stufe Verwaltung – ein namenloses Konto pflegt den Katalog nicht mehr.
+  `rechte.grundrecht_an` und die Listen zählen die Material-Verwaltung als „Grundrecht überall“ (dauerhafte
+  Prüffreigabe ohne lesen oder verwalten), wie bisher die Plattform-Verwaltung. Schritt 8 liest `recht_material` als
+  Stufe aus Phase 1 – er läuft nie nach Schritt 10.
+- **Geprüft**: neue Datei `tests/test_material_stufen.py` – Migration 9 → 10 mit allen Fällen (Phase-1-Mitglied,
+  Phase-1-Materialwart 2 → 1, Katalogpfleger mit Stufe 1 und 0, nur Häkchen, gültige und abgelaufene Freigabe,
+  nichts, Plattform-Verwaltung mit 2 und 0, ohne Namen, deaktiviert, wartend; Journal, zweiter Start, direkter zweiter
+  Aufruf), Produktion ohne Modul, ein Konto mit Verwalter- und Prüffreigabe, Häkchen und Urkunde, aber ohne Stufe
+  gegen jede Route der `url_map` (403, nichts geändert), Mitglied und Material-Verwaltung ohne Plattform-Verwaltung
+  (alles sehen, Katalog, Gliederung, erster Materialwart, Rückruf; prüfen nur mit Prüffreigabe), Häkchen ohne Stufe,
+  Personensuche je Zweck, Verwalter ohne Stufe (Regel Nr. 7, Rückrufmail an die Material-Verwaltung), Mails zu
+  Meldungen, Profil „Unterschrift“, Vorgabe neuer Konten (auch der allererste), Oberfläche der Nutzerverwaltung.
+  Angepasst: `umgebung` (Materialwart Stufe 1 statt 2 – mit 2 wäre er Material-Verwaltung und die Trennungstests
+  prüften nichts mehr –, „katalog“ ist Material-Verwaltung, `neues_konto(…, stufe=)` mit Vorgabe Mitglied),
+  `test_rollen`, `test_nutzerverwaltung`, `test_list_users_abfragen`, `test_ablauf`, `test_abfragezahl` (Seiten außerhalb
+  des Moduls: keine Abfrage auf `mat_folder_grant`), `test_migration_7_8` (bis Stand 9, dann Schritt 10),
+  Rückruf- und Meldungstests, `test_smoke.test_rechte` (Vorgabe neuer Konten), `test_wiki_lesemodus` (Startseite mit
+  Material). Migration an echtem Stand: Datenbank mit der Fassung 20085f1 (Stand 9) und ihren DEMO-Daten samt
+  Konten angelegt, dazu ein Katalogpfleger, ein Phase-1-Mitglied, ein Phase-1-Materialwart (DEMO-Materialwart A mit
+  2), ein Konto nur mit Häkchen und eins ohne alles; dann diese Fassung gestartet – Schemaversion 10, Stufen wie die
+  Regel (Katalogpfleger 2, Phase-1-Materialwart 1, DEMO-Konten 1, Häkchen 1, ohne alles 0, Plattform-Verwaltung 2),
+  sechs Journaleinträge, sonst nur `mat_meta` und zwei neue Kontoverweise anders, alle Zeilenzahlen gleich; ein zweiter
+  Start ändert nichts; `--demo --konten` legt danach nur die DEMO-Material-Verwaltung an. Im Chromium bei 1280 und
+  390 px: Nutzerverwaltung (Spalte, Marken, Häkchen-Automatik, neues Konto mit Vorgabe, ohne Namen der Klartext,
+  Freigaben ohne Stufe im Dialog), das Modul als Mitglied ohne Freigabe, als Materialwart (Bestand, Profil mit
+  „Unterschrift“) und als DEMO-Material-Verwaltung (Katalog mit Pflegeknöpfen, beide DEMO-Gliederungen, „+ Gliederung“
+  mit dem ersten Materialwart im Reiter „Freigaben“; die Personensuche findet ein Konto ohne Stufe nicht) – keine
+  Konsolenfehler, nichts rollt waagerecht.
+
 ### Zu prüfen
 
 - **Leistung mit vielen Ordnern**: Die Sicht eines Kontos wird je Anfrage einmal gerechnet – eine Abfrage der eigenen
   Freigaben, gibt es welche, dazu eine des ganzen Ordnerbaums –, die Filter setzen die Ordnerkennungen als Liste ein.
-  Gemessen ist nur die Zahl der Abfragen für die Kopfleiste (300 Ordner: höchstens zwei, kein Ordnerbaum), nicht die
-  Laufzeit mit echten Beständen mehrerer Gliederungen.
+  Gemessen ist nur die Zahl der Abfragen (Kopfleiste seit der Modulstufe ohne jede Abfrage auf Freigaben; im Modul
+  die Sicht einmal je Anfrage), nicht die Laufzeit mit echten Beständen mehrerer Gliederungen.
 - **Inventar- und Protokollnummern verraten die Gesamtzahl**: `M-000123` und `P-2026-000123` sind plattformweit
   fortlaufend; wer zwei eigene Nummern vergleicht, sieht grob, wie viel es insgesamt gibt. Hingenommen – das Konzept
   verlangt eineindeutige Nummern; eine Nummer je Gliederung wäre ein Umbau der Etiketten.
@@ -1486,7 +1621,7 @@ Datenfehler mit Regressionstest, die Oberfläche im Chromium nachgeprüft. Danac
   Freigabenlisten jetzt Karten – im Browser nachgemessen, auf einem echten Gerät noch nicht gesehen.
 - **Notiz an der eigenen Freigabe**: Wer einen Ordner mitverwaltet, liest dort auch die Notiz zu seiner eigenen
   Freigabe (Bauentwurf 1.6 Nr. 10; die Hilfe im Dialog sagt das). Soll sie bei eigenen Zeilen verborgen bleiben (außer
-  für die Plattform-Verwaltung), ist das eine kleine Änderung – bitte entscheiden.
+  für die Material-Verwaltung), ist das eine kleine Änderung – bitte entscheiden.
 - **Erledigte Zeilen und neue Durchgänge**: Eine schon erledigte Zeile eines offenen Durchgangs sperrt keinen neuen
   mehr (Prüfung vor Auslieferung, Nr. 4) – das gilt auch innerhalb einer Gliederung: Sind alle Artikel eines
   Unterordners im laufenden Durchgang schon geprüft, lässt sich dort ein eigener eröffnen. Bitte bestätigen.
@@ -1497,9 +1632,9 @@ Datenfehler mit Regressionstest, die Oberfläche im Chromium nachgeprüft. Danac
   juristisch prüfen zu lassen; die Fristen weiterer Sicherungen trägt der Betreiber ein. Dazu gehört jetzt die
   **unbefristete Aufbewahrung der Prüfnachweise** (Entscheidung vom 18.10.2026): Ihre Begründung im
   Verfahrensverzeichnis sollte juristisch geprüft werden – die Anwendung behauptet dazu nichts.
-- **Inbetriebnahme in der Produktion**: Dort gibt es keine Gliederung, also nach dem Update auch keine Freigaben, und
-  Konten mit einer Stufe aus Phase 1 tragen die gelbe Marke „Stufe aus Phase 1 – ohne Freigabe“. Die
-  Plattform-Verwaltung legt die Gliederung an und wählt im selben Schritt den ersten Materialwart (README).
+- **Inbetriebnahme in der Produktion**: Dort gibt es keine Gliederung, also nach dem Update auch keine Freigaben; nur
+  die Plattform-Verwaltung hat das Modul. Sie gibt der Material-Verwaltung und den Mitgliedern die Stufe; die
+  Material-Verwaltung legt die Gliederung an und wählt im selben Schritt den ersten Materialwart (README).
 - **Protokollinhalt nach EN 365** (aus Lieferung 3): Die zugeordnete Person kommt bewusst nicht ins Protokoll – mit
   den Sachkundigen bestätigen, dass die Prüfkarte sie nicht verlangt.
 - **Bremse bei immer angebotener Suche**: Weil das Angebot jetzt auch neben eigenen Treffern steht, zählt auch eine
@@ -1509,8 +1644,21 @@ Datenfehler mit Regressionstest, die Oberfläche im Chromium nachgeprüft. Danac
   nimmt die Weiterleitung die Anfrage mit (`?q=`), und die Artikelseite bietet die Suche außerhalb des eigenen
   Bereichs unter dem Kopf an – „immer angeboten“ gilt damit auch dort. Bitte ansehen, ob der Platz zwischen
   Artikelkopf und Stammdaten passt.
-- **Sperrwort für alle mit Modulzugang**: Auch ein Katalogpfleger oder ein Prüfer ohne Freigabe sieht über Suche und
-  QR, ob ein fremder Artikel gesperrt, verloren gemeldet oder ausgesondert ist (ein Wort, kein Grund, kein Datum).
+- **Sperrwort für alle mit Modulzugang**: Auch ein Mitglied oder ein Prüfer ohne Freigabe sieht über Suche und QR, ob
+  ein fremder Artikel gesperrt, verloren gemeldet oder ausgesondert ist (ein Wort, kein Grund, kein Datum).
+- **Wer durch Schritt 10 Material-Verwaltung wird – vor dem Übernehmen auf main durchsehen**: Jeder bisherige
+  Produktkatalogpfleger sieht danach alle Bestände aller Gliederungen (samt Prüfungen, Personen, Notizen) und vergibt
+  jede Freigabe. Liste auf dev (lesend): `SELECT id, name, gliederung FROM users WHERE mat_katalog = 1 AND
+  recht_verwaltung < 2;` – wer das nicht sein soll, bekommt in der Nutzerverwaltung „Mitglied“. Die Zahl der Konten
+  mit Stufe Verwaltung klein halten. Ebenso ansehen, wer den Zugang zurückbekommt (Stufe aus Phase 1 oder nur
+  abgelaufene Freigaben): Er sieht Katalog und Suche, keinen Bestand.
+- **Entzug der Plattform-Verwaltung lässt Material auf „Verwaltung“** (wie die anderen Module): Wer nur kurz
+  Plattform-Verwaltung war, sieht weiter alle Bestände, bis jemand Material einzeln senkt. Bitte bestätigen.
+- **Letzter Materialwart ohne Stufe**: Senkt die Plattform-Verwaltung die Stufe des einzigen Materialwarts einer
+  Gliederung auf „–“, verwaltet sie nur noch die Material-Verwaltung; die Nutzerverwaltung warnt davor nicht (Regel
+  Nr. 7 gilt im Reiter „Freigaben“). Ein Hinweis im Dialog wäre eine kleine Ergänzung – bitte entscheiden.
+- **Neue Konten brauchen einen Namen**: Mit der Vorgabe „Mitglied“ im Modul Material lehnt die Nutzerverwaltung ein
+  neues Konto ohne Namen ab (oder Material „–“). Kontoanfragen haben den Namen ohnehin als Pflichtfeld.
 
 ### Die drei offenen Fragen – entschieden
 
@@ -1751,12 +1899,13 @@ Seit Phase 2 gilt jedes Recht an einem Ordner (Freigaben je Ordner, vererbt nach
 Gegenstand (Artikel und Prüfungen: an der Heimat des Artikels), „Grundrecht“ lesen oder verwalten, „Materialwart“
 verwalten dort, „Prüfer“ Häkchen, Urkundennummer und Prüffreigabe dort. Listen über den ganzen Bestand verlangen
 Modulzugang und zeigen nur, was das Konto sieht; Fremdes antwortet 404 wie Unbekanntes. „Katalog“ heißt
-Produktkatalogpfleger oder Plattform-Verwaltung.
+Material-Verwaltung (Stufe „Verwaltung“ im Modul Material; bis zur Nachbesserung „Modulstufe“: Produktkatalogpfleger
+oder Plattform-Verwaltung).
 
 | Methode und Pfad | Recht | Zweck |
 | --- | --- | --- |
 | `GET /api/material/start` | Modulzugang (Inhalt gefiltert) | Rechte des Kontos, Zählung, Gliederungen, nächste Fälligkeiten; `ordner_uebersicht` (Fälligkeiten je Ordner, Zeilen in Baumreihenfolge mit `tiefe`, `bestand`, `zaehlung`, `naechste`), `rueckrufe` (laufende mit betroffenen Artikeln im Bestand) |
-| `GET /api/material/suche?q=` | Modulzugang | Artikel nach Serien-, Inventar-, Herstellernummer im eigenen Bereich; `eindeutig` bei genau einem Treffer; `exakt_lokal` (ein sichtbarer Artikel hat genau diese Seriennummer) und `global_angebot` (zu jeder Anfrage, die für die globale Suche taugt, außer für die Plattform-Verwaltung; Phase 2) |
+| `GET /api/material/suche?q=` | Modulzugang | Artikel nach Serien-, Inventar-, Herstellernummer im eigenen Bereich; `eindeutig` bei genau einem Treffer; `exakt_lokal` (ein sichtbarer Artikel hat genau diese Seriennummer) und `global_angebot` (zu jeder Anfrage, die für die globale Suche taugt, außer für die Material-Verwaltung; Phase 2) |
 | `GET /api/material/faellig?status=&ordner=&zugeordnet=` | Modulzugang; mit `ordner` lesen dort (sonst 404) | fällige Artikel, Standard überfällig + Lebensdauer erreicht + neu + bald fällig; mit `ordner` auch `ordner` = {id, pfad}; `zugeordnet` filtert nach Person (nur mit Grundrecht wirksam, Phase 2) |
 | `GET/POST /api/material/kategorien`, `PUT/DELETE …/<id>` | lesen / Katalog | Kategoriebaum; Löschen nur leer und ohne Dokument in einem Prüfprotokoll (409) |
 | `GET/POST /api/material/produkte`, `GET/PUT/DELETE …/<id>` | lesen / Katalog | Produkte mit Suche und Seiten (`q`, `kategorie`, `seite`, `pro_seite`) |
@@ -1765,14 +1914,14 @@ Produktkatalogpfleger oder Plattform-Verwaltung.
 | `POST/DELETE /api/material/produkte/<id>/bild` | Katalog | Produktbild |
 | `POST /api/material/produkte/<id>/dokumente`, `POST /api/material/dokumente/<id>/version`, `…/zurueckziehen` | Katalog | Herstellerdokumente |
 | `GET/POST /api/material/formulare`, `GET/PUT/DELETE …/<id>`, `POST …/<id>/aktivieren`, `…/deaktivieren` | lesen / Katalog | Prüfformulare |
-| `GET/POST /api/material/ordner`, `GET/PUT/DELETE …/<id>`, `POST …/<id>/verschieben`, `POST/DELETE …/<id>/foto` | lesen / Materialwart (Löschen: am Oberordner; Gliederung auf oberster Ebene anlegen und löschen: Plattform-Verwaltung) | Ordnerbaum; über Gliederungsgrenzen verschiebt nur, wer beide Gliederungen verwaltet, und zur Gliederung macht einen Ordner (`PUT` mit `kind: "gliederung"`) nur, wer die bisherige verwaltet (Phase 2) |
+| `GET/POST /api/material/ordner`, `GET/PUT/DELETE …/<id>`, `POST …/<id>/verschieben`, `POST/DELETE …/<id>/foto` | lesen / Materialwart (Löschen: am Oberordner; Gliederung auf oberster Ebene anlegen und löschen: Material-Verwaltung) | Ordnerbaum; über Gliederungsgrenzen verschiebt nur, wer beide Gliederungen verwaltet, und zur Gliederung macht einen Ordner (`PUT` mit `kind: "gliederung"`) nur, wer die bisherige verwaltet (Phase 2) |
 | `GET /api/material/artikel/vorschlag` | Modulzugang; mit `folder_id` lesen dort (sonst 404) | Vorschläge (Intervall, nächste Prüfung, Lebensende) vor dem Anlegen |
 | `POST /api/material/artikel`, `GET/PUT/DELETE …/<id>`, `POST /api/material/artikel/verschieben` | lesen / Materialwart | Artikel, auch mehrere auf einmal verschieben |
 | `GET /media/material/<orig\|web\|thumb\|dok\|anhang>/<datei>` | je Datei (Phase 2): Produktbild und Dokument Modulzugang, Ordnerfoto lesen am Ordner, Befundfoto und Anhang lesen am Artikel, Meldungsfoto wie die Meldung; sonst 404 | Fotos, Dokumente, Prüfanhänge; privat, strenge CSP |
 | `GET/POST /api/material/kategorien/<id>/dokumente` | lesen / Katalog | Dokumente für alle Produkte einer Kategorie |
 | `PUT /api/material/dokumente/<id>` (`title`) | Katalog | Dokument umbenennen (Produkt- oder Kategoriedokument) |
 | `POST /api/material/meldungen` (`manufacturer`, `model`, `article_no`, `norm`, `category_id`, `folder_id`, `links`, `note`; `fotos` mehrfach) | Materialwart (am `folder_id`; ohne Ordner: verwalten irgendwo) | Fehlendes Produkt melden |
-| `GET /api/material/meldungen?status=offen\|erledigt\|alle&eigene=0\|1`, `GET …/<id>` | Modulzugang; je Meldung nur Katalog, der Melder und wer ihren Ordner sieht (sonst 404, Phase 2) | Meldungen; Katalogpfleger und Lesende standardmäßig alle offenen, Materialwarte die eigenen; `bearbeiten` nur für Katalogpfleger |
+| `GET /api/material/meldungen?status=offen\|erledigt\|alle&eigene=0\|1`, `GET …/<id>` | Modulzugang; je Meldung nur Katalog, der Melder und wer ihren Ordner sieht (sonst 404, Phase 2) | Meldungen; Material-Verwaltung und Lesende standardmäßig alle offenen, Materialwarte die eigenen; `bearbeiten` nur für die Material-Verwaltung |
 | `POST /api/material/meldungen/<id>/produkt` (Felder wie `POST /produkte`, dazu `antwort`) | Katalog | Produkt aus der Meldung anlegen und Meldung erledigen |
 | `POST /api/material/meldungen/<id>/zuordnen` (`product_id`, `antwort`), `…/ablehnen` (`antwort` Pflicht) | Katalog | vorhandenes Produkt zuordnen bzw. ablehnen |
 | `DELETE /api/material/meldungen/<id>` | nur der Melder | eigene Meldung löschen (offen oder erledigt; ein Produkt aus ihr bleibt); wer sie nicht sehen darf, bekommt 404 wie für eine unbekannte (Phase 2) |
@@ -1799,8 +1948,8 @@ Produktkatalogpfleger oder Plattform-Verwaltung.
 | `GET /material/artikel/<id>/lebenslauf.pdf` | Grundrecht an der Heimat (Phase 2) | Lebenslauf als PDF/A-3b, auf Abruf, nicht festgeschrieben |
 | `GET /api/material/katalog/export`, `GET …/export/vorschau` | Katalog | Katalog ohne DEMO als ZIP (Format 2) bzw. seine Zahlen vorab |
 | `POST /api/material/katalog/import` (`file`: ZIP oder JSON, `trocken`: Vorgabe `1`) | Katalog | Katalogimport; Antwort `bericht` (neu/geändert/unverändert je Art, Bilder, Dokumente, Änderungen, Hinweise, Warnungen, Fehler) |
-| `GET /api/material/produkte/<id>/rueckrufe` | Modulzugang | Rückrufe des Produkts: laufende mit den betroffenen Artikeln, die das Konto sieht, und ihren Zahlen (nicht gefundene Seriennummern nur für die Plattform-Verwaltung, Phase 2), beendete mit Vermerk |
-| `POST /api/material/produkte/<id>/rueckrufe` (`title`, `description`, `url`, `serials`, `mail`) | Katalog | Rückruf anlegen; Antwort mit betroffenen Artikeln, Empfängerzahl, nicht gefundenen Seriennummern – seit Phase 2 nur für die Plattform-Verwaltung, sonst `betroffen` und `offen` des eigenen Bereichs und `benachrichtigt` |
+| `GET /api/material/produkte/<id>/rueckrufe` | Modulzugang | Rückrufe des Produkts: laufende mit den betroffenen Artikeln, die das Konto sieht, und ihren Zahlen (nicht gefundene Seriennummern nur für die Material-Verwaltung, Phase 2), beendete mit Vermerk |
+| `POST /api/material/produkte/<id>/rueckrufe` (`title`, `description`, `url`, `serials`, `mail`) | Katalog | Rückruf anlegen; Antwort mit betroffenen Artikeln, Empfängerzahl, nicht gefundenen Seriennummern (Phase 2: nur, wer alle Bestände sieht – die Material-Verwaltung; ein Konto mit Teilsicht bekäme `betroffen` und `offen` des eigenen Bereichs und `benachrichtigt`) |
 | `POST /api/material/rueckrufe/<id>/beenden` (`vermerk` Pflicht) | Katalog | Rückruf beenden |
 | `GET /api/material/rueckrufe` | Modulzugang | alle laufenden Rückrufe mit Produkt und den Zahlen des eigenen Bereichs |
 | (Artikel, Produkt, Listen) | lesen | neu: `artikel.rueckrufe` (laufende samt Zustand), `produkt.rueckrufe`, je Listenzeile `rueckruf` (Titel eines offenen) |
@@ -1808,10 +1957,10 @@ Produktkatalogpfleger oder Plattform-Verwaltung.
 | `POST /api/material/ordner/<id>/freigaben` (`user_id`, `grundrecht`: `lesen`\|`verwalten`\|`null`, `grund_bis`, `pruefen`, `pruefen_bis`, `notiz`) | Materialwart am Ordner | Grundrecht und/oder Prüffreigabe in einem Schritt anlegen oder ändern, ganz oder gar nicht → 201 `freigaben`, `liste`; Prüffreigabe ohne Ende (`pruefen`: true, `pruefen_bis` leer) nur mit Grundrecht am Anker oder darüber, sonst 400; 404 „Konto nicht gefunden.“ für unbekannte, deaktivierte und namenlose Konten, 409 ohne Qualifikation, an Systemordnern oder ohne verbleibenden Verwalter (Phase 2) |
 | `POST /api/material/ordner/<id>/freigaben/verlaengern` (`bis`) | Materialwart am Ordner | alle befristeten Prüffreigaben im Zweig, die man ändern darf (auch bis zu 90 Tage abgelaufene) → `verlaengert`, `uebersprungen` (Konto, Ordner, Grund) (Phase 2) |
 | `PUT /api/material/freigaben/<id>` (`recht`, `bis` – `null` = unbefristet, bei Prüffreigaben nur mit Grundrecht –, `notiz`), `DELETE …/<id>` | Materialwart am Ordner der Freigabe | Freigabe ändern bzw. entziehen; DELETE liefert `offene_entwuerfe` (Phase 2) |
-| `GET /api/material/freigaben/meine` | angemeldet, auch ohne Modulzugang | eigene Freigaben (gültige und im letzten Jahr abgelaufene) mit Pfad, `recht`, `bis`, `gueltig`, `wirkt`, `grundrecht_dort`, `laeuft_ab_in_tagen` und `verwalter` (bis zu drei Namen) – ohne Notiz; dazu `zugang`, `qualifiziert` (Phase 2) |
+| `GET /api/material/freigaben/meine` | angemeldet, auch ohne Modulzugang | eigene Freigaben (gültige und im letzten Jahr abgelaufene) mit Pfad, `recht`, `bis`, `gueltig`, `wirkt`, `wirkt_nicht` (Grund oder `null`), `grundrecht_dort`, `laeuft_ab_in_tagen` und `verwalter` (bis zu drei Namen) – ohne Notiz; dazu `zugang`, `qualifiziert` (wirkt nur mit Zugang), `alles` (Material-Verwaltung) (Phase 2) |
 | `GET /api/material/freigaben?user_id=` | Plattform-Verwaltung | alle Freigaben eines Kontos mit Notiz (Nutzerverwaltung) (Phase 2) |
-| `GET /api/material/nutzer?q=` (ab 3 Zeichen) | verwalten irgendwo oder Plattform-Verwaltung | Personensuche für Freigaben und Zuordnung: höchstens 20 aktive Konten mit Namen, je `id`, `name`, `gliederung`, `qualifiziert`, `grundrecht_ueberall` (Plattform-Verwaltung, seit der Nachbesserung) – keine E-Mail, keine Urkundennummer; `mehr` (Phase 2) |
-| `POST /api/material/globalsuche` (`q`, `bestaetigt: true`) | Modulzugang | globale Seriennummernsuche nur unter den Artikeln, die das Konto nicht sieht → `treffer` (höchstens 10 Steckbriefe, ohne Kennungen, mit `sperre`), `mehr`, `hinweis`; 400 ohne Bestätigung, unter 4 Zeichen oder bei Inventar- und STR-Nummern, 409 für die Plattform-Verwaltung (sieht alles), 429 über der Bremse (Phase 2) |
+| `GET /api/material/nutzer?q=&zweck=` (ab 3 Zeichen) | verwalten irgendwo oder Material-Verwaltung | Personensuche: `zweck=freigabe` (Vorgabe) nur Konten mit Zugang zum Modul (Stufe Mitglied oder Verwaltung), `zweck=zuordnung` alle; höchstens 20 aktive Konten mit Namen, je `id`, `name`, `gliederung`, `qualifiziert` (wirkt nur mit Stufe), `grundrecht_ueberall` (Material-Verwaltung) – keine E-Mail, keine Urkundennummer; `mehr` (Phase 2, `zweck` seit der Modulstufe) |
+| `POST /api/material/globalsuche` (`q`, `bestaetigt: true`) | Modulzugang | globale Seriennummernsuche nur unter den Artikeln, die das Konto nicht sieht → `treffer` (höchstens 10 Steckbriefe, ohne Kennungen, mit `sperre`), `mehr`, `hinweis`; 400 ohne Bestätigung, unter 4 Zeichen oder bei Inventar- und STR-Nummern, 409 für die Material-Verwaltung (sieht alles), 429 über der Bremse (Phase 2) |
 | `POST /api/material/globalsuche/qr` (`token`, `bestaetigt: true`) | Modulzugang | Steckbrief nach einem QR-Scan an einem fremden Artikel (ein Treffer, mit `sperre`); `weiter` (Adresse), wenn der Artikel inzwischen sichtbar ist (Phase 2) |
 | `GET /api/material/globalsuche/protokoll?seite=` | Plattform-Verwaltung | Protokoll der globalen Suchen, QR-Steckbriefe und fremden Dubletten, neueste zuerst: `eintraege` (Zeit, Name, Art, Anfrage, Treffer, Gliederungen), `gesamt`, `seite`, `pro_seite` (Phase 2) |
 | `PUT /api/material/artikel/<id>/zuordnung` (`user_id` oder `null`) | Materialwart am Artikel | Person zuordnen oder Zuordnung lösen → `artikel`; 409 bei ausgesonderten (Phase 2) |

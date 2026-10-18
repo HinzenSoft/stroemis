@@ -108,7 +108,8 @@ def test_migration_7_8():
     """Eine Datenbank auf Stand 7 (Phase 1): Stufen und Häkchen werden Freigaben an den vorhandenen Gliederungen – je
     eingefügter Zeile ein Journaleintrag –, jedes Konto bekommt ein mat_ref, die Altfälle werden bereinigt; die Spalten
     aus Phase 1 bleiben, und ein zweiter Start ändert nichts. Seit Schritt 9 (Nachbesserung vom 18.10.2026) läuft das
-    bis Stand 9 durch: Prüffreigaben dauerhaft, wo ein Grundrecht entsteht, nur der externe Prüfer befristet."""
+    bis Stand 9 durch: Prüffreigaben dauerhaft, wo ein Grundrecht entsteht, nur der externe Prüfer befristet; seit
+    Schritt 10 (Modulstufe) bis Stand 10 – die Stufen prüft test_material_stufen.test_migration_9_10 genauer."""
     from app.material.services.interval import plus_monate
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
@@ -154,7 +155,9 @@ def test_migration_7_8():
         stufen_vorher = zeilen(app, "SELECT id, recht_material, mat_pruefer, mat_katalog FROM users ORDER BY id")
         journal_vorher = zeilen(app, "SELECT MAX(id) AS m FROM mat_audit")[0]["m"]
 
-        app = make_app(tmp)                                    # Neustart: Schritt 8 und 9 laufen
+        from app.material import models
+        bis_9 = bis_schritt(9)
+        app = bis_9(make_app, tmp)                             # Neustart: Schritt 8 und 9 laufen
         assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "9"
         assert not ohne_check_noch_da(app)
         h = _heute()
@@ -203,7 +206,7 @@ def test_migration_7_8():
         assert zeilen(app, "SELECT round_id FROM mat_inspection WHERE id = ?", (entwurf,))[0]["round_id"] is None
         assert zeilen(app, "SELECT 1 FROM mat_audit WHERE entity = 'round' AND entity_id = ? AND action = 'ausgenommen' "
                            "AND user_name = 'Migration Schritt 8'", (rid,))
-        # Die Spalten aus Phase 1 bleiben, wie sie waren (Rückweg).
+        # Die Spalten aus Phase 1 bleiben, wie sie waren (Rückweg) – bis Schritt 10 die Stufe umdeutet (unten).
         assert zeilen(app, "SELECT id, recht_material, mat_pruefer, mat_katalog FROM users ORDER BY id") == stufen_vorher
 
         # Ein zweiter Start ändert nichts – und Schritt 8 selbst ist wiederholbar.
@@ -212,9 +215,8 @@ def test_migration_7_8():
                     for t in ("mat_folder_grant", "mat_audit", "mat_item", "mat_round_item", "mat_inspection")} | {
                 "users": zeilen(app, "SELECT id, mat_ref, recht_material FROM users ORDER BY id")}
         vorher = stand()
-        app = make_app(tmp)
+        app = bis_9(make_app, tmp)
         assert stand() == vorher
-        from app.material import models
         conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
         conn.execute("BEGIN")
         n = conn.total_changes
@@ -223,12 +225,38 @@ def test_migration_7_8():
         assert conn.total_changes == n
         conn.rollback()
         conn.close()
+
+        # Schritt 10 (Modulstufe): Häkchen und mat_katalog bleiben; die Stufe folgt seiner Regel – aus den Stufen von
+        # Phase 1, den Freigaben aus Schritt 8 und den Häkchen. Genauer: test_material_stufen.test_migration_9_10.
+        app = make_app(tmp)
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "10"
+        assert zeilen(app, "SELECT id, mat_pruefer, mat_katalog FROM users ORDER BY id") == [
+            {k_: v for k_, v in z.items() if k_ != "recht_material"} for z in stufen_vorher]
+        stufen = {u["id"]: u["recht_material"] for u in zeilen(app, "SELECT id, recht_material FROM users")}
+        assert {n_: stufen[uid] for n_, uid in konten.items()} == {"stufe1": 1, "stufe2": 1, "ohne_urkunde": 1,
+                                                                   "katalogpflege": 2, "pv": 2, "extern": 1}, stufen
+        assert zeilen(app, "SELECT * FROM mat_folder_grant ORDER BY rowid") == vorher["mat_folder_grant"]
     print("Migration 7 → 8 bestanden.")
 
 
 # --- Schritt 9: Prüffreigaben dauerhaft mit Grundrecht (Nachbesserung vom 18.10.2026) ------------------------------
 
 PRUEF_CHECK = re.compile(r"permission\s*<>\s*'pruefen'\s+or\s+valid_until\s+is\s+not\s+null", re.IGNORECASE)
+
+
+def bis_schritt(version):
+    """Eine Funktion, die f(*a) aufruft, während die Migration des Moduls nur bis zu dieser Version läuft – so lässt
+    sich ein früherer Stand nachstellen (Schritt 8 liest recht_material als Stufe aus Phase 1, nur bis Schritt 10 sie
+    umdeutet)."""
+    def lauf(f, *a):
+        from app.material import models
+        alt = models.SCHEMA_VERSION
+        models.SCHEMA_VERSION = version
+        try:
+            return f(*a)
+        finally:
+            models.SCHEMA_VERSION = alt
+    return lauf
 
 
 def grant_tabelle_wie_schritt_8(pfad):
@@ -331,8 +359,8 @@ def test_migration_8_9():
                                       "mat_grant_systemordner_aendern", "mat_grant_datum", "mat_grant_datum_aendern"}
         journal_vorher = zeilen(app, "SELECT MAX(id) AS m FROM mat_audit")[0]["m"]
 
-        app = make_app(tmp)                                    # Neustart: Schritt 9 läuft
-        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "9"
+        app = make_app(tmp)                                    # Neustart: Schritt 9 (und 10) läuft
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "10"
         assert not ohne_check_noch_da(app)
         assert _schema_grant(app) == schema_vorher             # Indizes und Trigger wie vorher, Wort für Wort
         assert not zeilen(app, "SELECT name FROM sqlite_master WHERE name LIKE '%grant_neu%'")
@@ -351,7 +379,7 @@ def test_migration_8_9():
         assert pruefen["extern"]["valid_until"] == bis and pruefen["normal"]["valid_until"] == bis
         assert pruefen["geaendert"]["valid_until"] == "2027-06-30" and pruefen["abgelaufen"]["valid_until"] == bis
         # Journal: je umgewandelter Zeile „Migration Schritt 9“, das Konto nur als Verweis; der Verlauf zeigt es.
-        e = zeilen(app, "SELECT * FROM mat_audit WHERE id > ? ORDER BY id", (journal_vorher,))
+        e = zeilen(app, "SELECT * FROM mat_audit WHERE id > ? AND entity = 'folder' ORDER BY id", (journal_vorher,))
         assert len(e) == 3 and {x["user_name"] for x in e} == {"Migration Schritt 9"}, e
         assert all(x["entity"] == "folder" and x["entity_id"] == gid and x["action"] == "freigabe_geaendert"
                    and x["user_id"] is None for x in e)
@@ -411,11 +439,11 @@ def test_migration_8_9():
 
 
 def test_neue_datenbank_ohne_check():
-    """Eine neue Datenbank kommt auf Stand 9 und hat das CHECK „Prüfrechte nur befristet“ nicht mehr (Schritt 1 bleibt,
+    """Eine neue Datenbank kommt auf Stand 10 und hat das CHECK „Prüfrechte nur befristet“ nicht mehr (Schritt 1 bleibt,
     wie er ausgeliefert wurde; Schritt 8 baut die Tabelle um) – mit allen Indizes und Triggern."""
     with tempfile.TemporaryDirectory() as tmp:
         app = make_app(tmp)
-        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "9"
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "10"
         assert not ohne_check_noch_da(app)
         assert set(_schema_grant(app)) == {"sqlite_autoindex_mat_folder_grant_1", "idx_mat_grant_user",
                                            "idx_mat_grant_folder", "ux_mat_grant_grundrecht", "mat_grant_systemordner",
@@ -604,7 +632,7 @@ def test_requires_folder():
         r = w.post("/api/material/artikel", json={"product_id": t.ids["hms"]})
         assert r.status_code == 403, r.get_json()
         r = w.post("/api/material/ordner", json={"name": "OG Eigen", "kind": "gliederung"})
-        assert r.status_code == 403 and "Plattform-Verwaltung" in r.json["error"], r.get_json()
+        assert r.status_code == 403 and "Material-Verwaltung" in r.json["error"], r.get_json()
         gleich_wie_unbekannt(w.post("/api/material/ordner", json={"name": "Darin", "parent_id": str(t.lager_b)}),
                              w.post("/api/material/ordner", json={"name": "Darin", "parent_id": 999999}))
         assert w.post("/api/material/ordner", json={"name": "Darin", "parent_id": t.lager_a}).status_code == 201
@@ -724,19 +752,23 @@ def test_ablauf():
         finally:
             services.datetime = alt
 
-        # Nur noch eine abgelaufene Freigabe: kein Modulzugang – der Text nennt Ordner, Datum und wer verlängert.
+        # Nur noch eine abgelaufene Freigabe: Den Zugang zum Modul gibt die Stufe (Mitglied) – er bleibt, nur der
+        # Bestand ist weg. „Meine Freigaben“ nennt Ordner, Datum und wer verlängert.
         gestern = h - timedelta(days=1)
         sql(app, "UPDATE mat_folder_grant SET valid_until = ? WHERE user_id = ?", (gestern.isoformat(), k["fuehrung_id"]))
         r = k["fuehrung"].get("/api/material/start")
-        assert r.status_code == 403, r.get_json()
-        assert r.json["error"] == (f"Deine Freigabe für „OG Musterstadt“ ist am {gestern.strftime('%d.%m.%Y')} abgelaufen. "
-                                   "Verlängern kann sie: wart."), r.get_json()
-        assert k["fuehrung"].get("/api/me").json["user"]["rechte"]["material"] == 0
+        assert r.status_code == 200 and not r.json["darf"]["lesen"] and r.json["bestand"] == 0, r.get_json()
+        assert k["fuehrung"].get("/api/me").json["user"]["rechte"]["material"] == 1
+        assert k["fuehrung"].get("/material").status_code == 200
+        m = k["fuehrung"].get("/api/material/freigaben/meine").json["freigaben"]
+        assert [(x["ordner"]["pfad"], x["bis"], x["gueltig"], x["verwalter"]) for x in m] == [
+            ("OG Musterstadt", gestern.isoformat(), False, ["wart"])], m
+        # Ohne Stufe: kein Modulzugang – der Hinweis sagt, wer freischaltet.
+        sql(app, "UPDATE users SET recht_material = 0 WHERE id = ?", (k["fuehrung_id"],))
+        r = k["fuehrung"].get("/api/material/start")
+        assert r.status_code == 403 and r.json["error"] == rechte.NICHT_FREIGESCHALTET, r.get_json()
+        assert "Nutzerverwaltung" in rechte.NICHT_FREIGESCHALTET
         assert k["fuehrung"].get("/material").status_code == 403
-        # Länger als ein Jahr her: der allgemeine Hinweis.
-        sql(app, "UPDATE mat_folder_grant SET valid_until = ? WHERE user_id = ?",
-            ((h - timedelta(days=400)).isoformat(), k["fuehrung_id"]))
-        assert "Materialwart deiner Gliederung" in k["fuehrung"].get("/api/material/start").json["error"]
     print("Ablauf bestanden.")
 
 
@@ -775,8 +807,9 @@ def test_pruefen_nur_mit_prueffreigabe():
 # --- 8.2/14: Abfragezahl ----------------------------------------------------------------------------------------
 
 def test_abfragezahl():
-    """Die Materialstufe fragt jede Seite der Plattform (Kopfleiste) – höchstens zwei Abfragen, ohne Ordnerbaum, auch
-    bei 300 Ordnern. Im Modul selbst rechnet eine Anfrage die Sicht genau einmal."""
+    """Die Materialstufe braucht jede Seite der Plattform (Kopfleiste) – seit Schritt 10 ist sie gespeichert: keine
+    Abfrage auf Freigaben oder den Ordnerbaum außerhalb des Moduls, auch bei 300 Ordnern. Im Modul selbst rechnet eine
+    Anfrage die Sicht genau einmal."""
     from app import db as db_mod
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
@@ -805,11 +838,15 @@ def test_abfragezahl():
             assert r.status_code == 200 and abfragen, (url, r.status_code)
             return ([q for q in abfragen if "mat_folder_grant" in q],
                     [q for q in abfragen if re.search(r"FROM mat_folder\b(?!_)", q)])
-        freigaben, baum = zaehlen(k["fuehrung"], "/wiki")
-        assert 1 <= len(freigaben) <= 2 and not baum, (freigaben, baum)
+        # (Das Profil fragt die Sicht – ob das Konto irgendwo verwaltet und unterschreiben darf –, sonst keine Seite.)
+        for c in (k["fuehrung"], k["wart"], k["katalog"], k["nutzer"], k["adm"]):
+            for url in ("/wiki", "/api/me", "/api/wiki/tree" if c is not k["nutzer"] else "/karte"):
+                if c.get(url).status_code != 200:
+                    continue
+                freigaben, baum = zaehlen(c, url)
+                assert not freigaben and not baum, (url, freigaben, baum)
         assert 'href="/material"' in k["fuehrung"].get("/wiki").get_data(as_text=True)
-        freigaben, baum = zaehlen(k["wart"], "/wiki")
-        assert len(freigaben) <= 2 and not baum, (freigaben, baum)
+        assert 'href="/material"' not in k["nutzer"].get("/wiki").get_data(as_text=True)
         # Im Modul: eine Abfrage der eigenen Freigaben für die Sicht, eine für den Baum – trotz Decorator, darf_alles und
         # Zählung in derselben Anfrage.
         freigaben, baum = zaehlen(k["fuehrung"], f"/api/material/ordner/{gid}")
@@ -873,7 +910,7 @@ def test_unterbau():
             v = {x["name"]: x["ende"] for x in rechte.verwalter_von(lager)}
             assert v == {"wart": None, "Gast Verwalter": (_heute() + timedelta(days=30)).isoformat()}, v
             assert [x["name"] for x in rechte.verwalter_von(gid)] == ["wart"]
-            # Meldungen sieht der Melder, wer den Ordner sehen darf, Katalogpfleger und die Verwaltung.
+            # Meldungen sieht der Melder, wer den Ordner sehen darf, und die Material-Verwaltung.
             fuehrung = db.query("SELECT * FROM users WHERE id = ?", (k["fuehrung_id"],), one=True)
             nutzer = db.query("SELECT * FROM users WHERE id = ?", (k["nutzer_id"],), one=True)
             assert rechte.darf_meldung({"created_by": None, "folder_id": lager}, fuehrung)
@@ -1675,7 +1712,7 @@ def test_pruefsicht():
             assert ext.get(url).status_code == 403, url
         for url in (f"/material/export/{t.a}.csv", f"/material/export/{t.a}-protokolle.zip"):
             assert ext.get(url).status_code == 404, url
-        # Ohne Urkundennummer (Häkchen bleibt, also Modulzugang): Die Prüffreigabe wirkt nicht – alles wie unbekannt.
+        # Ohne Urkundennummer (Stufe bleibt, also Modulzugang): Die Prüffreigabe wirkt nicht – alles wie unbekannt.
         assert adm.put(f"/api/admin/users/{ext_id}", json={"urkundennummer": ""}).status_code == 200
         for pfad in (f"artikel/{iid}", f"pruefungen/{pid}", f"ordner/{t.lager_a}", f"artikel/{iid}/pruefungen"):
             gleich_wie_unbekannt(ext.get(f"/api/material/{pfad}"), ext.get(f"/api/material/{pfad.split('/')[0]}/999999"
@@ -1683,8 +1720,9 @@ def test_pruefsicht():
                                                                               and pfad.startswith("artikel") else "")))
         assert ext.get(f"/material/export/{t.lager_a}.csv").status_code == 404
         assert ext.get(f"/material/artikel/{iid}").status_code == 404
-        # Ohne Häkchen: kein Modulzugang – 403 vor jeder Frage nach dem Gegenstand.
-        assert adm.put(f"/api/admin/users/{ext_id}", json={"mat_pruefer": False}).status_code == 200
+        # Ohne Stufe im Modul: kein Modulzugang – 403 vor jeder Frage nach dem Gegenstand (auch mit Häkchen und Nummer).
+        assert adm.put(f"/api/admin/users/{ext_id}", json={"urkundennummer": "1012-9999",
+                                                           "rechte": {"material": 0}}).status_code == 200
         r = ext.get(f"/api/material/artikel/{iid}")
         assert r.status_code == 403 and "nicht freigeschaltet" in r.json["error"], r.get_json()
         assert ext.get("/api/material/artikel/999999").status_code == 403
@@ -1845,24 +1883,25 @@ def test_nichts_aus_b_paket_d():
 
 
 def test_rueckruf_antwort():
-    """8.2/9 (Paket D): Ein Katalogpfleger ohne Bestand legt einen Rückruf mit mail=false und Seriennummern aus B an und
-    beendet ihn – die Antworten nennen weder nicht gefundene Nummern noch Empfänger, betroffen ist 0. Die Verwaltung
-    bekommt die vollen Zahlen."""
+    """8.2/9 (Paket D), seit Schritt 10: Den „Katalogpfleger ohne Bestand“ gibt es nicht mehr – einen Rückruf legt nur
+    die Material-Verwaltung an, und die sieht alle Bestände. Ein Mitglied ohne Bestand bekommt 403 (ein Rückruf taugt
+    also nicht als Abfrage fremder Bestände); die Material-Verwaltung bekommt die vollen Zahlen – mit und ohne
+    Plattform-Verwaltung."""
     with tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
-        kp, _ = neues_konto(t.app, "katalog_ohne@example.org", name="Katalog ohne Bestand", mat_katalog=True)
+        mg, _ = neues_konto(t.app, "mitglied_ohne@example.org", name="Mitglied ohne Bestand")
         daten = {"title": "Testrückruf", "serials": "TEST-B-0001\nTEST-X-0404", "mail": False}
-        r = kp.post(f"/api/material/produkte/{t.ids['hms']}/rueckrufe", json=daten)
-        assert r.status_code == 201, r.get_json()
-        j = r.get_json()
-        assert "nicht_gefunden" not in j and "empfaenger" not in j and j["betroffen"] == 0, j
-        assert "nicht_gefunden" not in j["rueckruf"] and not j["rueckruf"].get("artikel"), j["rueckruf"]
-        r = kp.post(f"/api/material/rueckrufe/{j['rueckruf']['id']}/beenden", json={"vermerk": "Testvermerk"})
-        assert r.status_code == 200, r.get_json()
-        assert "nicht_gefunden" not in r.get_data(as_text=True) and "empfaenger" not in r.get_data(as_text=True)
-        r = t.adm.post(f"/api/material/produkte/{t.ids['hms']}/rueckrufe", json=daten)
-        assert r.status_code == 201 and r.json["betroffen"] == 1 and r.json["nicht_gefunden"] == ["TEST-X-0404"], r.get_json()
-        assert "empfaenger" in r.json
+        r = mg.post(f"/api/material/produkte/{t.ids['hms']}/rueckrufe", json=daten)
+        assert r.status_code == 403 and "Material-Verwaltung" in r.json["error"], r.get_json()
+        for c in (t.k["katalog"], t.adm):
+            r = c.post(f"/api/material/produkte/{t.ids['hms']}/rueckrufe", json=daten)
+            assert r.status_code == 201 and r.json["betroffen"] == 1 and r.json["nicht_gefunden"] == ["TEST-X-0404"], \
+                r.get_json()
+            assert "empfaenger" in r.json
+            r = c.post(f"/api/material/rueckrufe/{r.json['rueckruf']['id']}/beenden", json={"vermerk": "Testvermerk"})
+            assert r.status_code == 200, r.get_json()
+        x = mg.get(f"/api/material/produkte/{t.ids['hms']}/rueckrufe").json["rueckrufe"][0]
+        assert "nicht_gefunden" not in x and "mail_count" not in x and not x.get("artikel"), x
     print("Rückruf-Antwort bestanden.")
 
 

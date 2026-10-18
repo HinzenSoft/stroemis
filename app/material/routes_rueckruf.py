@@ -1,8 +1,8 @@
 """Routen der Rückrufe (Lieferung 4, Überblick).
 
-Lesen dürfen alle mit Zugang zum Modul (wie den Katalog), anlegen und beenden nur Katalogpfleger und die
-Verwaltung. Betroffene Artikel und ihre Zahlen zeigt jede Antwort nur aus dem eigenen Bereich (Phase 2); was darüber
-hinausgeht, nur der Plattform-Verwaltung. Gesperrt wird über die vorhandene Route der Prüfer (POST
+Lesen dürfen alle mit Zugang zum Modul (wie den Katalog), anlegen und beenden nur die Material-Verwaltung.
+Betroffene Artikel und ihre Zahlen zeigt jede Antwort nur aus dem eigenen Bereich (Phase 2); die Material-Verwaltung
+sieht alle Bestände und damit alles. Gesperrt wird über die vorhandene Route der Prüfer (POST
 /artikel/<iid>/sperren, Grund „rueckruf“).
 Die Kennung eines Rückrufs heißt in den Pfaden ruid – rid ist der Prüfdurchgang. Die Fachregeln stehen in
 services/rueckruf.py."""
@@ -28,7 +28,7 @@ def produkt_rueckrufe(pid):
 def rueckruf_anlegen(pid):
     """Felder: title (Pflicht), description, url (nur http/https), serials (eine je Zeile; leer = alle Artikel),
     mail (Vorgabe ja). Die Antwort sagt, wie viele Artikel im eigenen Bereich betroffen sind und ob für sie eine Mail
-    hinausgeht („benachrichtigt“); der Plattform-Verwaltung dazu, wie viele Mails hinausgehen („empfaenger“) und welche
+    hinausgeht („benachrichtigt“); der Material-Verwaltung dazu, wie viele Mails hinausgehen („empfaenger“) und welche
     Seriennummern zu keinem Artikel im Bestand passen („nicht_gefunden“)."""
     ruid, info = rueckruf.anlegen(pid, json_body(), current_user())
     return jsonify(rueckruf=rueckruf.rueckruf_json(rueckruf.rueckruf(ruid), mit_artikel=True), **info), 201

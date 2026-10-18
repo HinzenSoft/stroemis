@@ -130,7 +130,8 @@ def test_urkundennummer_im_profil():
         assert 'class="notice" id="ur-hinweis"' in p.get("/profil").get_data(as_text=True)
         assert _journal(app, neu_id)[-1] == ("urkundennummer", {"urkundennummer": "1012-0901"}, {"urkundennummer": ""})
 
-        # 8. Ohne Häkchen „Prüfer“: 403 – Materialwart, Führungskraft, Katalogpfleger, Verwaltung; ohne Modul ebenso.
+        # 8. Ohne Häkchen „Prüfer“: 403 – Materialwart, Führungskraft, Material-Verwaltung, Plattform-Verwaltung; ohne
+        # Modul ebenso.
         for c in (k["wart"], k["fuehrung"], k["katalog"], adm, k["nutzer"]):
             r = c.put(URL, json={"urkundennummer": "1012-0999"})
             assert r.status_code == 403, r.get_json()

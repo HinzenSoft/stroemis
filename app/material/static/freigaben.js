@@ -68,17 +68,13 @@
     throw new Error(`„${name}“: bitte als TT.MM.JJJJ angeben, z. B. 31.12.2027.`);
   }
 
-  /* Zustand einer Zeile: gültig · läuft in n Tagen ab (gelb) · abgelaufen am … (grau) · wirkt nicht. qualifiziert:
-     für „Meine Freigaben“ (dort steht es nicht an der Zeile, sondern einmal für das eigene Konto). */
-  function zustand(f, qualifiziert) {
+  /* Zustand einer Zeile: gültig · läuft in n Tagen ab (gelb) · abgelaufen am … (grau) · wirkt nicht – mit dem Grund
+     vom Server (wirkt_nicht: Konto deaktiviert › Konto ohne Namen › kein Zugang zum Modul Material › Qualifikation
+     fehlt › dauerhaft nur mit lesen oder verwalten). */
+  function zustand(f) {
     if (!f.gueltig) return `<span class="mf-zustand abgelaufen">abgelaufen am ${fmtTag(f.bis)}</span>`;
     if (f.wirkt === false) {
-      const quali = f.konto ? f.konto.qualifiziert : qualifiziert;
-      const grund = f.konto && !f.konto.aktiv ? "Konto deaktiviert"
-        : f.recht === "pruefen" && quali === false ? "Qualifikation fehlt"
-        : f.recht === "pruefen" && f.bis === null && f.grundrecht_dort === false ? "dauerhaft nur mit lesen oder verwalten"
-        : "Konto ohne Namen";
-      return `<span class="mf-zustand wirkt-nicht">wirkt nicht – ${grund}</span>`;
+      return `<span class="mf-zustand wirkt-nicht">wirkt nicht${f.wirkt_nicht ? ` – ${esc(f.wirkt_nicht)}` : ""}</span>`;
     }
     const t = f.laeuft_ab_in_tagen;
     if (t !== null && t !== undefined) {
@@ -120,7 +116,8 @@
 
   // art: „direkt“ (hier vergeben), „geerbt“ (von oben, nur lesbar), „unten“ (in Unterordnern, mit Pfad).
   function zeileHtml(f, art) {
-    const quali = f.recht === "pruefen" && !f.konto.qualifiziert ? ' <span class="badge">Qualifikation fehlt</span>' : "";
+    // Ohne Zugang zum Modul sagt der Zustand den Grund – die Marke nur, wenn allein die Qualifikation fehlt.
+    const quali = f.recht === "pruefen" && f.konto.zugang !== false && !f.konto.qualifiziert ? ' <span class="badge">Qualifikation fehlt</span>' : "";
     const ordner = art === "geerbt" ? `<div class="small muted">geerbt von ${esc(f.ordner.pfad)}</div>`
       : art === "unten" ? `<div class="small muted">${esc(f.ordner.pfad)}</div>` : "";
     let knoepfe = "";
@@ -134,7 +131,7 @@
         ${f.entziehbar === false ? "" : `<button class="btn secondary small" type="button" data-act="entziehen" data-id="${f.id}">Entziehen</button>`}`;
     }
     const nurVerwaltung = art !== "geerbt" && f.aenderbar && f.entziehbar === false
-      ? '<div class="small muted mf-nur-pv">Entziehen nur über die Plattform-Verwaltung – sonst verwaltet hier niemand so lange wie du.</div>' : "";
+      ? '<div class="small muted mf-nur-pv">Entziehen nur über die Material-Verwaltung – sonst verwaltet hier niemand so lange wie du.</div>' : "";
     return `<tr data-zeile="${f.id}"${f.gueltig ? "" : ' class="mf-alt"'}>
       <td data-l="Person" class="mf-k-person">${personHtml(f.konto)}${f.eigen ? ' <span class="badge grey">du</span>' : ""}${quali}${ordner}</td>
       <td data-l="Recht" class="mf-k-halb">${esc(RECHT[f.recht] || f.recht)}</td>
@@ -191,7 +188,7 @@
       <div class="mf-personwahl">
         <input type="search" id="mf-person" placeholder="Name – ab 3 Zeichen" autocomplete="off" enterkeyhint="search"
           aria-describedby="mf-person-hilfe" aria-controls="mf-treffer">
-        <div class="help" id="mf-person-hilfe">Jedes aktive Konto mit Namen, auch aus anderen Gliederungen.</div>
+        <div class="help" id="mf-person-hilfe">Jedes aktive Konto mit Namen und Zugang zum Modul Material, auch aus anderen Gliederungen.</div>
         <ul class="mf-treffer" id="mf-treffer" aria-label="Gefundene Personen" hidden></ul>
         <div class="mf-gewaehlt" id="mf-gewaehlt" hidden></div>
       </div>
@@ -223,7 +220,7 @@
       <details class="mf-notiz"><summary>Notiz</summary>
         <input type="text" id="mf-notiz" maxlength="200" aria-describedby="mf-notiz-hilfe">
         <div class="help" id="mf-notiz-hilfe">Eine Zeile, höchstens 200 Zeichen – sehen nur Verwalter dieses Ordners und die
-          Plattform-Verwaltung, die Person selbst also nur, wenn sie hier mitverwaltet. Keine sensiblen Angaben.</div></details>
+          Material-Verwaltung, die Person selbst also nur, wenn sie hier mitverwaltet. Keine sensiblen Angaben.</div></details>
       <div class="btn-row mf-erteilen-reihe"><button class="btn" type="button" id="mf-erteilen">Freigabe erteilen</button></div>
     </details>`;
   }
@@ -247,7 +244,7 @@
       return { grund: v.grund, pruefen: v.pruefen };
     }
 
-    // Hat die gewählte Person am Anker oder darüber schon ein gültiges Grundrecht? Die Plattform-Verwaltung hat es
+    // Hat die gewählte Person am Anker oder darüber schon ein gültiges Grundrecht? Die Material-Verwaltung hat es
     // überall (grundrecht_ueberall aus der Personensuche), sonst aus den Listen (direkt und geerbt decken den Ordner und
     // alle Oberordner ab) – verbindlich entscheidet der Server.
     function grundrechtDort(a) {
@@ -333,13 +330,14 @@
       if (q.length < 3) { liste.hidden = true; return; }
       const lauf = ++suchlauf;
       let r;
-      try { r = await api(`${API}/nutzer?q=${encodeURIComponent(q)}`); }
+      // Nur Konten mit Zugang zum Modul – an andere wirkte keine Freigabe (der Server lehnt sie ab).
+      try { r = await api(`${API}/nutzer?q=${encodeURIComponent(q)}&zweck=freigabe`); }
       catch (e) { if (lauf === suchlauf) { liste.innerHTML = `<li class="mf-treffer-leer">${esc(e.message)}</li>`; liste.hidden = false; } return; }
       if (lauf !== suchlauf) return;          // eine neuere Eingabe ist schon unterwegs
       liste.innerHTML = r.nutzer.length ? r.nutzer.map((p) => `<li><button type="button" class="mf-person" data-id="${p.id}">
           ${personHtml(p)}${p.qualifiziert ? ' <span class="badge grey">Prüfer</span>' : ""}</button></li>`).join("")
           + (r.mehr ? '<li class="mf-treffer-leer">Mehr als 20 – bitte genauer.</li>' : "")
-        : '<li class="mf-treffer-leer">Niemand gefunden – nur aktive Konten mit Namen.</li>';
+        : '<li class="mf-treffer-leer">Niemand gefunden – nur aktive Konten mit Namen und Zugang zum Modul Material (den gibt die Verwaltung).</li>';
       liste.hidden = false;
       $$("button.mf-person", liste).forEach((b) => b.addEventListener("click", () => personWaehlen(r.nutzer.find((p) => p.id === +b.dataset.id))));
     }
@@ -433,7 +431,7 @@
       ${grund ? (f.traegt_pruefen ? `<div class="help">${esc(traegtText(f))}</div>` : "") : `<div class="help" id="mfa-hilfe">${esc(pruefHilfe)}</div>`}
       ${!grund && f.bis === null && f.grundrecht_dort === false ? `<p class="help">${esc(OHNE_GRUNDRECHT)}</p>` : ""}
       ${"notiz" in f ? `<label for="mfa-notiz">Notiz</label><input type="text" id="mfa-notiz" maxlength="200" value="${esc(f.notiz || "")}">
-        <div class="help">Sehen nur Verwalter dieses Ordners und die Plattform-Verwaltung – die Person selbst nur, wenn sie hier
+        <div class="help">Sehen nur Verwalter dieses Ordners und die Material-Verwaltung – die Person selbst nur, wenn sie hier
           mitverwaltet. Keine sensiblen Angaben.</div>` : ""}
       <div class="dlg-actions"><button class="btn secondary" type="button" data-close>Abbrechen</button>
         <button class="btn" type="button" id="mfa-ok">Speichern</button></div>`, (dlg, body) => {
@@ -596,20 +594,21 @@
     try { d = await api(`${API}/freigaben/meine`); } catch (e) { el.innerHTML = ""; return; }
     if (!d.freigaben.length) {
       el.innerHTML = d.alles
-        ? (d.qualifiziert ? '<p class="help mf-meine-leer">Prüfen kannst du auch als Plattform-Verwaltung nur mit eigener Prüffreigabe – die gibst du dir am Ordner unter „Bearbeiten“ → „Freigaben“.</p>' : "")
+        ? (d.qualifiziert ? '<p class="help mf-meine-leer">Prüfen kannst du auch als Material-Verwaltung nur mit eigener Prüffreigabe – die gibst du dir am Ordner unter „Bearbeiten“ → „Freigaben“.</p>' : "")
         : '<p class="notice mf-meine-leer">Du hast noch keine Freigabe im Bestand – der Materialwart deiner Gliederung vergibt sie.</p>';
       return;
     }
     const wichtig = d.freigaben.filter((f) => !f.gueltig || f.laeuft_ab_in_tagen !== null || !f.wirkt);
-    const wer = (f) => (f.verwalter.length ? f.verwalter.join(", ").replace(/, ([^,]*)$/, " oder $1") : "die Plattform-Verwaltung");
+    const wer = (f) => (f.verwalter.length ? f.verwalter.join(", ").replace(/, ([^,]*)$/, " oder $1") : "die Material-Verwaltung");
     el.innerHTML = `<details class="section mat-auf mf-meine"${wichtig.length ? " open" : ""}><summary>Meine Freigaben <span class="mf-zahl">${d.freigaben.length}</span></summary>
       <ul class="mf-meine-liste">${d.freigaben.map((f) => `<li class="${!f.gueltig ? "abgelaufen" : f.laeuft_ab_in_tagen !== null ? "bald" : ""}">
         <span class="mf-meine-ordner">${f.gueltig && f.wirkt ? `<a href="/material/ordner/${f.ordner.id}">${esc(f.ordner.pfad)}</a>` : esc(f.ordner.pfad)}</span>
-        <span class="mf-meine-recht">${esc(RECHT[f.recht] || f.recht)} · ${bisText(f.bis)}</span> ${zustand(f, d.qualifiziert)}
+        <span class="mf-meine-recht">${esc(RECHT[f.recht] || f.recht)} · ${bisText(f.bis)}</span> ${zustand(f)}
         ${!f.gueltig || f.laeuft_ab_in_tagen !== null ? `<div class="small muted">Verlängern kann: ${esc(wer(f))}.</div>` : ""}
-        ${f.gueltig && !f.wirkt && f.recht === "pruefen" && !d.qualifiziert ? `<div class="small muted">${esc(OHNE_QUALIFIKATION)}</div>`
-          : f.gueltig && !f.wirkt && f.recht === "pruefen" && f.bis === null && f.grundrecht_dort === false
+        ${f.wirkt_nicht === "Qualifikation fehlt" ? `<div class="small muted">${esc(OHNE_QUALIFIKATION)}</div>`
+          : f.wirkt_nicht === "dauerhaft nur mit lesen oder verwalten"
             ? `<div class="small muted">${esc(`${OHNE_GRUNDRECHT} Vergeben kann es: ${wer(f)}.`)}</div>` : ""}</li>`).join("")}</ul>
+      ${d.zugang ? "" : '<p class="help">Deine Freigaben wirken erst, wenn die Verwaltung dir das Modul Material freischaltet.</p>'}
     </details>`;
   }
 

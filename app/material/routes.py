@@ -29,7 +29,8 @@ from .services import status as st
 from .services import ueberblick
 from .services.bestand import FremdeDublette
 from .services.rechte import (ARTIKEL_FEHLT, ORDNER_FEHLT, _bezug, darf, darf_alles, darf_artikel, darf_unterschreiben,
-                              ist_katalogpfleger, ist_pruefer, katalog_required, requires_folder, requires_zugang, sicht,
+                              ist_material_verwaltung, katalog_required, qualifiziert, requires_folder, requires_zugang,
+                              sicht,
                               sicht_verwerfen, urkunde_setzen, zugang, zugang_meldung)
 from .services.importer import ZIP_MAX_BYTES as KATALOG_ZIP_MAX_BYTES
 
@@ -278,8 +279,8 @@ def formular_seite(fid):
 
 @seiten.get("/material/katalog/meldungen")
 def meldungen_seite():
-    """Katalogpfleger arbeiten hier die Meldungen fehlender Produkte ab; Materialwarte sehen ihre eigenen (oder alle),
-    wer sonst Zugang zum Modul hat, liest alle."""
+    """Die Material-Verwaltung arbeitet hier die Meldungen fehlender Produkte ab; Materialwarte sehen ihre eigenen
+    (oder alle), wer sonst Zugang zum Modul hat, liest alle."""
     return _seite("meldungen", katalog_seite=True, status=request.args.get("status"))
 
 
@@ -355,7 +356,7 @@ def start():
                    ordner_uebersicht=ueberblick.ordner_uebersicht(alle),
                    gliederungen=gliederungen, naechste=naechste, faellig_gesamt=faellig,
                    schwelle_tage=st.schwelle_tage(), status_text=st.LABEL,
-                   meldungen_offen=meldung.anzahl_offen() if ist_katalogpfleger() else None,
+                   meldungen_offen=meldung.anzahl_offen() if ist_material_verwaltung() else None,
                    rueckrufe=rueckruf.uebersicht())
 
 
@@ -365,7 +366,7 @@ def suche():
     """Lokale Suche über das, was das Konto sieht (Treffer, gesamt, eindeutig). exakt_lokal: ein sichtbarer Artikel hat
     genau diese Seriennummer (die Oberfläche sagt dann, dass die globale Suche nur die anderen zeigt); global_angebot:
     die Oberfläche bietet unter den eigenen Treffern die globale Suche an (globalsuche.angebot – zu jeder tauglichen
-    Anfrage, nicht der Plattform-Verwaltung)."""
+    Anfrage, nicht der Material-Verwaltung)."""
     q = request.args.get("q", "")
     seite, pro_seite = _seite_args()
     rows, gesamt = search.artikel(q, seite, pro_seite, *_sortier_args())
@@ -570,9 +571,10 @@ def dokument_zurueckziehen(did):
 @api.get("/meldungen")
 def meldungen():
     """Lesen darf jeder mit Zugang zum Modul – jeder nur die Meldungen, die er sehen darf (rechte.darf_meldung):
-    Katalogpfleger und Verwaltung alle, sonst die eigenen und die aus Ordnern, die er sieht; „offen“ zählt ebenso.
-    Standard: Katalogpfleger und Lesende (Führungskraft) sehen alle davon (offene zuerst), Materialwarte ihre eigenen
-    (alle Stände); „eigene=1“ bzw. „eigene=0“ wählt ausdrücklich. Abarbeiten („bearbeiten“) dürfen nur Katalogpfleger."""
+    die Material-Verwaltung alle, sonst die eigenen und die aus Ordnern, die er sieht; „offen“ zählt ebenso.
+    Standard: Material-Verwaltung und Lesende (Führungskraft) sehen alle davon (offene zuerst), Materialwarte ihre
+    eigenen (alle Stände); „eigene=1“ bzw. „eigene=0“ wählt ausdrücklich. Abarbeiten („bearbeiten“) darf nur die
+    Material-Verwaltung."""
     u = current_user()
     if not u:
         return jsonify(error="Nicht angemeldet"), 401
@@ -581,11 +583,11 @@ def meldungen():
     if eigene in ("0", "1"):
         alle = eigene == "0"
     else:
-        alle = ist_katalogpfleger() or not sicht().irgendwo("verwalten")
+        alle = ist_material_verwaltung() or not sicht().irgendwo("verwalten")
     filter_ = request.args.get("status") if request.args.get("status") in meldung.FILTER else ("offen" if alle else "alle")
     rows = meldung.liste(filter_, None if alle else u["id"])
     return jsonify(meldungen=[meldung.meldung_json(r) for r in rows], alle=alle, filter=filter_,
-                   bearbeiten=alle and ist_katalogpfleger(), offen=meldung.anzahl_offen() if alle else None)
+                   bearbeiten=alle and ist_material_verwaltung(), offen=meldung.anzahl_offen() if alle else None)
 
 
 @api.post("/meldungen")
@@ -598,7 +600,7 @@ def meldung_anlegen():
 
 @api.get("/meldungen/<int:mid>")
 def meldung_lesen(mid):
-    """Lesen darf, wer die Meldung sehen darf: Katalogpfleger, die Verwaltung, der Melder und wer den Ordner der Meldung
+    """Lesen darf, wer die Meldung sehen darf: die Material-Verwaltung, der Melder und wer den Ordner der Meldung
     sieht. Sonst dieselbe 404 wie für eine, die es nicht gibt."""
     if not current_user():
         return jsonify(error="Nicht angemeldet"), 401
@@ -732,9 +734,9 @@ def ordner_lesen(fid):
 
 
 ZWISCHEN_GLIEDERUNGEN = ("Zwischen Gliederungen verschiebt nur, wer beide Gliederungen verwaltet – oder die "
-                         "Plattform-Verwaltung.")
+                         "Material-Verwaltung.")
 ZUR_GLIEDERUNG = ("Zur Gliederung macht einen Ordner nur, wer die Gliederung darüber verwaltet – oder die "
-                  "Plattform-Verwaltung.")
+                  "Material-Verwaltung.")
 
 
 @api.put("/ordner/<int:fid>")
@@ -777,7 +779,7 @@ def _gliederungswechsel(quelle, ziel):
 @api.post("/ordner/<int:fid>/verschieben")
 @requires_folder("verwalten", "fid")
 def ordner_verschieben(fid):
-    """Verwalten am alten Oberordner und am Ziel (auf oberster Ebene: nur die Verwaltung), bei einem Wechsel der
+    """Verwalten am alten Oberordner und am Ziel (auf oberster Ebene: nur die Material-Verwaltung), bei einem Wechsel der
     Gliederung an beiden Gliederungen. Gesperrte und ausgesonderte Artikel wandern mit, offene Durchgänge nehmen, was
     ihren Zweig verlässt, mit Grund heraus (bestand.ordner_verschieben)."""
     d = json_body()
@@ -790,13 +792,13 @@ def ordner_verschieben(fid):
         if o["kind"] != "gliederung":
             raise Abgelehnt(bestand.NUR_GLIEDERUNG_OBEN)
         if not darf("verwalten", None):
-            raise Abgelehnt("Auf die oberste Ebene verschiebt nur die Plattform-Verwaltung.", 403)
+            raise Abgelehnt("Auf die oberste Ebene verschiebt nur die Material-Verwaltung.", 403)
     else:
         _ziel_pruefen(ziel, ausser=bestand.unterbaum(fid))
     alt = o["parent_id"]
     if not darf("verwalten", alt):
         raise Abgelehnt("Verschieben darf nur, wer den Ordner darüber verwaltet – eine Gliederung auf oberster Ebene "
-                        "nur die Plattform-Verwaltung.", 403)
+                        "nur die Material-Verwaltung.", 403)
     if ziel != alt:
         _gliederungswechsel(alt, ziel)
     bestand.ordner_verschieben(fid, ziel)
@@ -806,10 +808,10 @@ def ordner_verschieben(fid):
 @api.delete("/ordner/<int:fid>")
 @requires_folder("verwalten", "fid")
 def ordner_loeschen(fid):
-    """Löschen darf, wer den Oberordner verwaltet – eine Gliederung auf oberster Ebene nur die Verwaltung."""
+    """Löschen darf, wer den Oberordner verwaltet – eine Gliederung auf oberster Ebene nur die Material-Verwaltung."""
     if not darf("verwalten", bestand.ordner(fid)["parent_id"]):
         raise Abgelehnt("Diesen Ordner löscht nur, wer den Ordner darüber verwaltet – eine Gliederung auf oberster "
-                        "Ebene nur die Plattform-Verwaltung.", 403)
+                        "Ebene nur die Material-Verwaltung.", 403)
     bestand.ordner_loeschen(fid)
     return jsonify(ok=True)
 
@@ -1018,7 +1020,7 @@ def urkundennummer_setzen():
     Nutzerverwaltung, nur fürs eigene Konto (eine Kennung in der Anfrage gibt es nicht). Erst mit ihr darf er prüfen."""
     nummer = urkunde_setzen(current_user(), json_body())
     u = db.query("SELECT * FROM users WHERE id = ?", (current_user()["id"],), one=True)
-    return jsonify(urkundennummer=nummer, pruefen=ist_pruefer(u))
+    return jsonify(urkundennummer=nummer, pruefen=qualifiziert(u))
 
 
 @api.get("/unterschrift")

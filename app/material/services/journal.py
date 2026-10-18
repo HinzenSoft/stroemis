@@ -145,7 +145,7 @@ def konto_namen(refs):
 def fuer_produkt(pid, user=None, meldungen=True):
     """Journal eines Produkts: seine Stammdaten, seine Dokumente, seine spezifischen Formulare und die
     Meldungen, über die es in den Katalog kam – diese nur, soweit das Konto die Meldung sehen darf
-    (rechte.darf_meldung: Melder, Katalogpfleger, Verwaltung, wer den Ordner der Meldung sieht). meldungen=False lässt
+    (rechte.darf_meldung: Melder, Material-Verwaltung, wer den Ordner der Meldung sieht). meldungen=False lässt
     sie ganz weg."""
     paare = [("product", pid)]
     paare += [("document", r["id"]) for r in db.query("SELECT id FROM mat_product_document WHERE product_id = ?", (pid,))]

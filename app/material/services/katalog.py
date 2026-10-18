@@ -1,7 +1,8 @@
 """Katalog: Kategorien, Produkte, Dokumente (am Produkt oder für alle Produkte einer Kategorie) und
 Prüfformulare.
 
-Pflegen dürfen ihn nur Admins und Produktkatalogpfleger (routes.py prüft das an jeder Route). Die
+Pflegen darf ihn nur die Material-Verwaltung – Stufe Verwaltung im Modul Material (routes.py prüft das an jeder
+Route). Die
 Regeln stehen hier, weil der Katalogimport (importer.py) dieselben braucht wie die Oberfläche.
 
 Fachliche Grenzen aus dem Konzept:

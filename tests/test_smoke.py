@@ -20,6 +20,15 @@ from PIL import Image  # noqa: E402
 H = {"X-Requested-With": "XMLHttpRequest"}
 
 
+# Die Stufen, mit denen Konten bis zum 18.10.2026 starteten (Mitglied in Spots und Wiki, kein Material). Die Tests der
+# Spots und des Wikis legen ihre Konten so an; die heutige Vorgabe (nur Material „Mitglied“) prüft test_rechte.
+BISHER = {"karte": 1, "wiki": 1, "material": 0}
+
+
+def wie_bisher(adm, uid):
+    assert adm.put(f"/api/admin/users/{uid}", json={"rechte": BISHER}).status_code == 200
+
+
 def make_app(tmp):
     os.environ.update({
         "DATA_DIR": tmp, "COOKIE_SECURE": "false", "BASE_URL": "http://localhost",
@@ -162,6 +171,9 @@ def test_everything():
         pend = [u for u in c.get("/api/admin/users").json["users"] if u["status"] == "pending"]
         assert len(pend) == 1 and pend[0]["reason"] == "SR2, Ausbildung"
         assert c.post(f"/api/admin/users/{pend[0]['id']}/approve", json={}).status_code == 200
+        # Die Vorgabe neuer Konten: Mitglied im Modul Material, sonst nichts – für die Spots hier von Hand.
+        assert pend[0]["rechte"] == {"karte": 0, "wiki": 0, "pruefungen": 0, "material": 1, "verwaltung": 0}, pend[0]
+        wie_bisher(c, pend[0]["id"])
         assert c2.post("/api/auth/login", json={"email": "sr@example.org", "password": "passwort1"}).status_code == 200
 
         # Album + Uploads (ein Bild mit, eins ohne Geotag)
@@ -273,6 +285,7 @@ def test_everything():
         c3.post("/api/auth/register", json={"email": "x@example.org", "password": "passwort1", "name": "Xaver", "gliederung": "OG X"})
         x_id = [u for u in c.get("/api/admin/users").json["users"] if u["email"] == "x@example.org"][0]["id"]
         c.post(f"/api/admin/users/{x_id}/approve", json={})
+        wie_bisher(c, x_id)
         c3.post("/api/auth/login", json={"email": "x@example.org", "password": "passwort1"})
         assert c3.put(f"/api/albums/{aid}", json={"title": "Hack"}).status_code == 403
         # Das Deckblatt darf nur festlegen, wer das Album bearbeiten darf.
@@ -634,6 +647,7 @@ def test_haertung():
                                                "gliederung": "OG Test"})
             uid = [u for u in adm.get("/api/admin/users").json["users"] if u["email"] == mail][0]["id"]
             adm.post(f"/api/admin/users/{uid}/approve", json={})
+            wie_bisher(adm, uid)
             c.post("/api/auth/login", json={"email": mail, "password": "passwort1"})
             return c, uid
         c1, uid1 = member("a@example.org")
@@ -1596,6 +1610,7 @@ def test_befunde():
                                                "gliederung": "OG Test"})
             uid = [u for u in adm.get("/api/admin/users").json["users"] if u["email"] == mail][0]["id"]
             adm.post(f"/api/admin/users/{uid}/approve", json={})
+            wie_bisher(adm, uid)
             c.post("/api/auth/login", json={"email": mail, "password": "passwort1"})
             return c, uid
         c1, uid1 = member("a@example.org")
@@ -1787,11 +1802,35 @@ def test_rechte():
                                                "gliederung": "OG Test"})
             uid = [u for u in adm.get("/api/admin/users").json["users"] if u["email"] == mail][0]["id"]
             adm.post(f"/api/admin/users/{uid}/approve", json={})
+            wie_bisher(adm, uid)
             c.post("/api/auth/login", json={"email": mail, "password": "passwort1"})
             return c, uid
 
-        # Der Administrator aus der .env hat überall Verwaltung; ein neues Konto die Vorgabe.
+        # Der Administrator aus der .env hat überall Verwaltung; ein neues Konto die Vorgabe (seit dem 18.10.2026):
+        # Mitglied im Modul Material, sonst nichts – die Startseite führt dorthin, Spots sind zu, das Wiki zeigt den
+        # Lesemodus. Vorhandene Konten behalten ihre Stufen.
         assert adm.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "material": 2, "verwaltung": 2}
+        neu = app.test_client()
+        assert neu.post("/api/auth/register", json={"email": "neu@example.org", "password": "passwort1", "name": "Neu Konto",
+                                                    "gliederung": "OG Test"}).status_code == 201
+        neu_id = [u for u in adm.get("/api/admin/users").json["users"] if u["email"] == "neu@example.org"][0]["id"]
+        assert adm.post(f"/api/admin/users/{neu_id}/approve", json={}).status_code == 200
+        assert neu.post("/api/auth/login", json={"email": "neu@example.org", "password": "passwort1"}).status_code == 200
+        assert neu.get("/api/me").json["user"]["rechte"] == {"karte": 0, "wiki": 0, "pruefungen": 0, "material": 1, "verwaltung": 0}
+        assert neu.get("/").headers["Location"].endswith("/material")
+        assert neu.get("/material").status_code == 200 and neu.get("/api/material/start").status_code == 200
+        assert neu.get("/karte").status_code == 403 and neu.get("/api/map").status_code == 403
+        assert 'data-modus="lesemodus"' in neu.get("/wiki").text and neu.get("/api/wiki/tree").status_code == 403
+        # Ebenso in der Nutzerverwaltung ohne Angabe – mit Namen, denn Material braucht einen; ohne Namen nur mit „–“.
+        r = adm.post("/api/admin/users", json={"email": "neu2@example.org", "password": "geheim12345", "name": "Neu Zwei"})
+        assert r.status_code == 201 and r.json["user"]["rechte"] == {"karte": 0, "wiki": 0, "pruefungen": 0, "material": 1,
+                                                                    "verwaltung": 0}, r.get_json()
+        r = adm.post("/api/admin/users", json={"email": "neu3@example.org", "password": "geheim12345"})
+        assert r.status_code == 400 and "Namen" in r.json["error"], r.get_json()
+        r = adm.post("/api/admin/users", json={"email": "neu3@example.org", "password": "geheim12345",
+                                                "rechte": {"material": 0}})
+        assert r.status_code == 201 and r.json["user"]["rechte"]["material"] == 0, r.get_json()
+        # Die übrigen Konten hier starten wie Konten von früher (Mitglied in Spots und Wiki).
         c1, uid1 = member("a@example.org")
         assert c1.get("/api/me").json["user"]["rechte"] == {"karte": 1, "wiki": 1, "pruefungen": 0, "material": 0, "verwaltung": 0}
         assert c1.get("/").status_code == 200 and c1.get("/karte").status_code == 200
@@ -1826,14 +1865,15 @@ def test_rechte():
         fehler = c1.get("/pruefungen").get_data(as_text=True)              # ebenso die Fehlerseite ohne Recht
         assert 'id="logout"' in fehler and '<a href="/wiki">Zum Wiki</a>' in fehler, fehler[-600:]
         assert c1.get("/profil").status_code == 200                      # das Profil bleibt immer
-        # Nur das Modul Material: Die Startseite führt dorthin, nicht in den Lesemodus. Seit Phase 2 kommt der Zugang
-        # aus Freigaben oder einem Häkchen (hier: Produktkatalogpfleger) – die Stufe der Matrix wirkt dort nicht mehr.
+        # Nur das Modul Material: Die Startseite führt dorthin, nicht in den Lesemodus. Den Zugang gibt die Stufe
+        # (seit Schritt 10 wieder); das Häkchen „Produktkatalogpfleger“ gibt es nicht mehr.
         assert adm.put(f"/api/admin/users/{uid1}", json={"rechte": {"material": 1}}).status_code == 200
-        assert c1.get("/").headers["Location"].endswith("/wiki")
-        assert adm.put(f"/api/admin/users/{uid1}", json={"mat_katalog": True}).status_code == 200
         r = c1.get("/")
         assert r.status_code == 302 and r.headers["Location"].endswith("/material"), (r.status_code, r.headers.get("Location"))
-        assert adm.put(f"/api/admin/users/{uid1}", json={"mat_katalog": False, "rechte": {"material": 0}}).status_code == 200
+        r = adm.put(f"/api/admin/users/{uid1}", json={"mat_katalog": True})
+        assert r.status_code == 400 and "Produktkatalogpfleger" in r.json["error"], r.get_json()
+        assert adm.put(f"/api/admin/users/{uid1}", json={"rechte": {"material": 0}}).status_code == 200
+        assert c1.get("/").headers["Location"].endswith("/wiki")
 
         # Verwaltung im Wiki: fremde Seiten bearbeiten und veröffentlichen, aber keine Nutzer.
         c2, uid2 = member("b@example.org")
@@ -1857,14 +1897,14 @@ def test_rechte():
         assert c2.put(f"/api/admin/users/{uid2}", json={"rechte": {"pruefungen": 0}}).status_code == 200
         assert c2.get("/api/me").json["user"]["rechte"]["pruefungen"] == 2
         assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"verwaltung": 0}}).status_code == 200
-        # Material ist die Ausnahme: Die Stufe dort kommt seit Phase 2 aus den Freigaben je Ordner – ohne Freigabe 0.
-        assert c2.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "material": 0, "verwaltung": 0}
+        # Auch Material bleibt auf Verwaltung (Material-Verwaltung: alle Bestände), bis jemand es einzeln senkt.
+        assert c2.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "material": 2, "verwaltung": 0}
         assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"pruefungen": 0}}).status_code == 200
         assert c2.get("/api/me").json["user"]["rechte"]["pruefungen"] == 0
         # Anlegen mit Matrix, ohne Angabe die Vorgabe.
-        r = adm.post("/api/admin/users", json={"email": "p@example.org", "password": "geheim12345",
+        r = adm.post("/api/admin/users", json={"email": "p@example.org", "password": "geheim12345", "name": "Pe",
                                                 "rechte": {"pruefungen": 1}})
-        assert r.status_code == 201 and r.json["user"]["rechte"] == {"karte": 1, "wiki": 1, "pruefungen": 1, "material": 0, "verwaltung": 0}
+        assert r.status_code == 201 and r.json["user"]["rechte"] == {"karte": 0, "wiki": 0, "pruefungen": 1, "material": 1, "verwaltung": 0}
         assert adm.post("/api/admin/users", json={"email": "q@example.org", "password": "geheim12345",
                                                    "rechte": {"verwaltung": 1}}).status_code == 400
 

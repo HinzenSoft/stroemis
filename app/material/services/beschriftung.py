@@ -68,7 +68,11 @@ PRUEFART_KURZ = PRUEFARTEN
 SPERRZUSTAND = {"frei": "frei", "gesperrt": "gesperrt", "verloren": "verloren (gesperrt)", "ausgesondert": "ausgesondert"}
 RECHT = {"lesen": "lesen", "pruefen": "prüfen", "verwalten": "verwalten"}
 PERSON = "(Person)"
+# „mat_katalog“ bleibt für alte Einträge stehen (das Häkchen gibt es seit Schritt 10 nicht mehr).
 _JA_NEIN = ("serial_generated", "active", "mat_pruefer", "mat_katalog", "notiz_geaendert")
+# Stufe im Modul Material – mit der Zahl dahinter: Einträge vor „Migration Schritt 10“ meinten die Stufen aus Phase 1
+# (1 Führungskraft, 2 Materialwart), die Zahl hält das eindeutig.
+STUFE_MATERIAL = {0: "kein Zugriff", 1: "Mitglied", 2: "Verwaltung"}
 _VERWEISE = ("pruefung", "aussonderung", "basis", "berichtigung", "berichtigt")
 
 
@@ -97,6 +101,8 @@ def wert_text(v, feld, verweise=None):
         return (verweise or {}).get(v) or f"Nr. {v}"
     if feld == "lock_state":
         return SPERRZUSTAND.get(v, str(v))
+    if feld == "recht_material" and isinstance(v, int) and not isinstance(v, bool):
+        return f"{STUFE_MATERIAL.get(v, '?')} ({v})"
     if feld == "recht":
         return RECHT.get(v, str(v))
     if _ist_datumsfeld(feld) and isinstance(v, str):

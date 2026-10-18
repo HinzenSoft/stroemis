@@ -110,7 +110,7 @@ def nichts_geheimes(t, r, *weitere):
 # --- Eingaben ---------------------------------------------------------------------------------------------------
 
 def test_eingaben():
-    """Ohne Bestätigung, zu kurz oder zu lang, vergebene Nummern: 400. Die Plattform-Verwaltung sieht alles: 409. Nichts
+    """Ohne Bestätigung, zu kurz oder zu lang, vergebene Nummern: 400. Die Material-Verwaltung sieht alles: 409. Nichts
     davon zählt in der Bremse oder steht im Protokoll. Eine Seriennummer aus dem eigenen Bereich hält die Suche nicht
     mehr auf (Entscheidung vom 18.10.2026) – sie läuft, zählt und findet nur Fremdes. Ohne Anmeldung 401, ohne
     Modulzugang 403."""
@@ -138,7 +138,7 @@ def test_eingaben():
         assert versuche(t.app, uid) == 4
         assert [(z["anfrage"], z["treffer"]) for z in protokoll(t.app)][1:] == [
             ("TEST-A-0001", 0), ("test-a-0001", 0), ("TEST-A-0001", 0)]
-        # Die Plattform-Verwaltung sieht alles – für sie gibt es nichts Fremdes: 409, nicht gezählt, nicht protokolliert.
+        # Die Material-Verwaltung sieht alles – für sie gibt es nichts Fremdes: 409, nicht gezählt, nicht protokolliert.
         # Eine unbrauchbare Anfrage bleibt auch bei ihr beim eigenen Fehler (400).
         adm_id = zeilen(t.app, "SELECT id FROM users WHERE email = 'admin@example.org'")[0]["id"]
         for q in ("TEST-B-0001", "TEST-A-0001", "TEST-NIRGENDS-0815"):
@@ -223,18 +223,26 @@ def test_steckbrief():
         r = global_suchen(w, "TEST-NIRGENDS-0815")
         assert r.status_code == 200 and r.json == {"treffer": [], "mehr": False, "hinweis": globalsuche.HINWEIS}, r.json
         assert protokoll(t.app)[-1]["treffer"] == 0
-        # Suchen darf jeder mit Modulzugang: ein Katalogpfleger ohne Bestand, ein Prüfer mit Häkchen ohne Freigabe.
-        kp, _ = neues_konto(t.app, "katalog2@example.org", name="Katalogpflege Test", mat_katalog=True)
-        assert kp.get("/api/material/start").json["darf"]["lesen"] is False
-        assert global_suchen(kp, "TEST-B-0001").json["treffer"][0]["inventory_no"] == t.art_b["inventory_no"]
+        # Suchen darf jeder mit Modulzugang: ein Mitglied ohne Bestand, ein Prüfer mit Häkchen ohne Freigabe – das Häkchen
+        # ohne Stufe im Modul gibt keinen Zugang.
+        mg, _ = neues_konto(t.app, "mitglied2@example.org", name="Mitglied Test")
+        assert mg.get("/api/material/start").json["darf"]["lesen"] is False
+        assert global_suchen(mg, "TEST-B-0001").json["treffer"][0]["inventory_no"] == t.art_b["inventory_no"]
         pr, _ = neues_konto(t.app, "pruefer3@example.org", name="Prüfer Test", mat_pruefer=True, urkundennummer="1012-0003")
         assert global_suchen(pr, "TEST-B-0001").status_code == 200
+        nur_haken, _ = neues_konto(t.app, "pruefer4@example.org", name="Prüfer ohne Stufe", stufe=0, mat_pruefer=True,
+                                   urkundennummer="1012-0004")
+        r = global_suchen(nur_haken, "TEST-B-0001")
+        assert r.status_code == 403 and "nicht freigeschaltet" in r.json["error"], r.get_json()
         # Wer B sieht – auch nur zum Prüfen –, findet den Artikel mit der normalen Suche; die globale zeigt nur Fremdes
         # (hier nichts). Die Verwaltung sieht alles: 409.
         for c in (t.wart_b, t.pruefer_b):
             r = global_suchen(c, "TEST-B-0001")
             assert r.status_code == 200 and r.json["treffer"] == [], r.get_json()
         r = global_suchen(t.adm, "TEST-B-0001")
+        assert r.status_code == 409 and r.json["error"] == globalsuche.SIEHT_ALLES, r.get_json()
+        # Ebenso die Material-Verwaltung ohne Plattform-Verwaltung.
+        r = global_suchen(t.k["katalog"], "TEST-B-0001")
         assert r.status_code == 409 and r.json["error"] == globalsuche.SIEHT_ALLES, r.get_json()
         # Vom System vergebene Seriennummern findet die globale Suche nie (die Anfrage käme ohnehin nicht durch).
         sql(t.app, "UPDATE mat_item SET serial_generated = 1 WHERE id = ?", (t.art_b["id"],))
@@ -334,8 +342,9 @@ def test_protokoll():
             ("wart", "suche", "TEST-B-0001", 1, ["OG Nachbarstadt"])], e
         assert all(set(x) == {"id", "zeit", "name", "art", "anfrage", "treffer", "gliederungen"} for x in e), e
         assert datetime.fromisoformat(e[0]["zeit"]) >= datetime.fromisoformat(e[-1]["zeit"])
-        # Nur die Verwaltung – Materialwarte (auch der Gliederung der Treffer), Führungskraft, Katalogpfleger und Prüfer
-        # nicht; ohne Modulzugang ebenso 403, ohne Anmeldung 401.
+        # Nur die Plattform-Verwaltung – Materialwarte (auch der Gliederung der Treffer), Führungskraft, die
+        # Material-Verwaltung und Prüfer nicht (ein Protokoll über Personen); ohne Modulzugang ebenso 403, ohne Anmeldung
+        # 401.
         for c in (t.wart_a, t.wart_b, t.k["fuehrung"], t.k["katalog"], t.k["pruefer"], t.pruefer_b, t.k["nutzer"]):
             r = c.get(PROTOKOLL)
             assert r.status_code == 403 and r.json["error"] == NUR_VERWALTUNG, r.get_json()
@@ -466,8 +475,8 @@ def test_sperrwort():
 def test_angebot():
     """Entscheidung 2: Angeboten wird die globale Suche zu jeder tauglichen Anfrage (4–80 Zeichen, keine vergebene
     Nummer) – unabhängig von lokalen Treffern, auch wenn ein eigener Artikel genau diese Nummer hat. Nur wer alles
-    sieht (Plattform-Verwaltung), bekommt kein Angebot; ein Konto ganz ohne Bestand (Katalogpfleger) schon. Die
-    Schalter der Lieferung sind fort."""
+    sieht (Material-Verwaltung, die Plattform-Verwaltung eingeschlossen), bekommt kein Angebot; ein Konto ganz ohne
+    Bestand (Mitglied ohne Freigabe) schon. Die Schalter der Lieferung sind fort."""
     from flask import g
 
     from app.material.services import globalsuche
@@ -475,7 +484,7 @@ def test_angebot():
         assert not hasattr(globalsuche, name), name
     with tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
-        _, kp_id = neues_konto(t.app, "katalog2@example.org", name="Katalogpflege Test", mat_katalog=True)
+        _, mg_id = neues_konto(t.app, "mitglied2@example.org", name="Mitglied Test")
         adm_id = zeilen(t.app, "SELECT id FROM users WHERE email = 'admin@example.org'")[0]["id"]
         fragen = ("TEST-A-0001", " test-a-0001 ", "TEST-B-0001", "TEST-A-000", "TEST", "ABC", "x" * 81, "STR-000001",
                   "M-000001")
@@ -487,8 +496,9 @@ def test_angebot():
                 g.user = db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True)
                 return [globalsuche.angebot(q) for q in fragen], globalsuche.sieht_alles()
         assert als(t.k["wart_id"]) == (tauglich, False)          # eigene, fremde und Teilnummern
-        assert als(kp_id) == (tauglich, False)                   # ohne Bestand (artikel_filter „0“)
+        assert als(mg_id) == (tauglich, False)                   # ohne Bestand (artikel_filter „0“)
         assert als(adm_id) == ([False] * len(fragen), True)      # sieht alles
+        assert als(t.k["katalog_id"]) == ([False] * len(fragen), True)     # Material-Verwaltung: ebenso
     print("Angebot bestanden.")
 
 
@@ -597,7 +607,7 @@ def test_eindeutiger_treffer():
     """Prüfung der Nachbesserung, Entscheidung 2 („immer angeboten“): Ein eindeutiger eigener Treffer öffnet den
     Artikel weiter direkt – taugt die Anfrage für die globale Suche, nimmt die Weiterleitung sie mit (?q=), und die
     Artikelseite bekommt sie als „suche“, für das Angebot unter dem Kopf. Auch bei einem Teiltreffer. Ohne q bei
-    Inventarnummern, zu kurzen Anfragen und für die Plattform-Verwaltung; das Laden zählt nicht in der Bremse und
+    Inventarnummern, zu kurzen Anfragen und für die Material-Verwaltung; das Laden zählt nicht in der Bremse und
     steht nicht im Protokoll; ein fremder Artikel bleibt 404, auch mit q."""
     with tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
@@ -614,7 +624,7 @@ def test_eindeutiger_treffer():
         # Was nicht taugt, übergeht die Artikelseite.
         for q in (a["inventory_no"], "STR-000001", "ABC", "x" * 81, ""):
             assert seiten_daten(w.get(f"/material/artikel/{a['id']}", query_string={"q": q})) == {"id": a["id"]}, q
-        # Die Plattform-Verwaltung sieht alles: kein Angebot, also auch kein q.
+        # Die Material-Verwaltung (hier die Plattform-Verwaltung) sieht alles: kein Angebot, also auch kein q.
         r = t.adm.get("/material/suche", query_string={"q": "TEST-B-0001"})
         assert r.status_code == 302 and r.headers["Location"].endswith(f"/material/artikel/{t.art_b['id']}"), r.headers
         r = t.adm.get(f"/material/artikel/{t.art_b['id']}", query_string={"q": "TEST-B-0001"})
@@ -631,7 +641,7 @@ def test_eindeutiger_treffer():
 def test_angebot_ueber_suche():
     """GET /suche liefert exakt_lokal und global_angebot (A1R, über globalsuche.angebot): Angebot bei fremder und bei
     eigener Seriennummer, auch neben Teiltreffern – exakt_lokal sagt, ob ein eigener Artikel genau diese Nummer hat.
-    Der Katalogpfleger ohne Bestand bekommt das Angebot (und keinen Treffer), die Plattform-Verwaltung nie."""
+    Ein Mitglied ohne Bestand bekommt das Angebot (und keinen Treffer), die Material-Verwaltung nie."""
     with tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
         w = t.wart_a
@@ -644,12 +654,13 @@ def test_angebot_ueber_suche():
         assert r.json["gesamt"] >= 1 and r.json["exakt_lokal"] is False and r.json["global_angebot"] is True, r.json
         for q in ("ABC", "M-000001", "STR-000001"):
             assert w.get("/api/material/suche", query_string={"q": q}).json["global_angebot"] is False, q
-        kp, _ = neues_konto(t.app, "katalog2@example.org", name="Katalogpflege Test", mat_katalog=True)
-        r = kp.get("/api/material/suche", query_string={"q": "TEST-B-0001"})
+        mg, _ = neues_konto(t.app, "mitglied2@example.org", name="Mitglied Test")
+        r = mg.get("/api/material/suche", query_string={"q": "TEST-B-0001"})
         assert r.status_code == 200 and r.json["treffer"] == [] and r.json["global_angebot"] is True, r.get_json()
         for q in ("TEST-A-0001", "TEST-B-0001", "TEST-NIRGENDS-0815"):
-            r = t.adm.get("/api/material/suche", query_string={"q": q})
-            assert r.status_code == 200 and r.json["global_angebot"] is False, (q, r.json)
+            for c in (t.adm, t.k["katalog"]):
+                r = c.get("/api/material/suche", query_string={"q": q})
+                assert r.status_code == 200 and r.json["global_angebot"] is False, (q, r.json)
         assert t.adm.get("/api/material/suche", query_string={"q": "TEST-B-0001"}).json["gesamt"] == 1
         assert protokoll(t.app) == []                     # die lokale Suche protokolliert nichts
     print("Angebot über /suche bestanden.")

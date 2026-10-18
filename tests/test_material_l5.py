@@ -63,7 +63,7 @@ def test_urkunde_korrekturen():
         assert nummer() == "1012-4711"
         # Der Prüfer ändert seine Nummer; die Verwaltung speichert danach nur die Rechte – die Nummer bleibt die neue.
         assert p1.put("/api/material/urkundennummer", json={"urkundennummer": "1012-0815"}).status_code == 200
-        assert adm.put(f"/api/admin/users/{pid}", json={"gliederung": "OG Test", "rechte": {"material": 2}}).status_code == 200
+        assert adm.put(f"/api/admin/users/{pid}", json={"gliederung": "OG Test", "rechte": {"material": 1}}).status_code == 200
         assert nummer() == "1012-0815"
         # Häkchen weg → Nummer weg; Häkchen wieder → ohne Nummer, also noch kein Prüfer.
         assert adm.put(f"/api/admin/users/{pid}", json={"mat_pruefer": False}).status_code == 200

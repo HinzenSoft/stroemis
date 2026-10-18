@@ -220,8 +220,8 @@ AUSNAHMEN_LESEN = {
     "material.qr_ziel": 302,                       # /m/<token> leitet zum Artikel weiter
     "material.artikel_neu": 403,                   # Artikel anlegen nur, wer irgendwo verwaltet (Phase 2)
 }
-# Werkzeuge der Katalogpflege (Katalogaustausch, Lieferung 4) sind nur für Katalogpfleger; den Katalog selbst liest die
-# Führungskraft über /kategorien und /produkte.
+# Werkzeuge der Katalogpflege (Katalogaustausch, Lieferung 4) sind nur für die Material-Verwaltung; den Katalog selbst
+# liest die Führungskraft über /kategorien und /produkte.
 NUR_KATALOGPFLEGE = ("/api/material/katalog/",)
 # Phase 2: Freigaben eines Ordners oder Kontos, die Nutzersuche und das Protokoll der globalen Suche liest nur, wer
 # verwaltet (bzw. die Verwaltung) – die Führungskraft bekommt 403. „Meine Freigaben“ liest jeder Angemeldete.

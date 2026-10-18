@@ -2,7 +2,7 @@
 
 Gesucht wird nur nach der exakten Herstellerseriennummer. Angeboten wird die Suche zu jeder Anfrage, die dafür taugt
 (suchbar) – auch neben eigenen Treffern, auch wenn ein eigener Artikel genau diese Nummer hat; nur wer ohnehin alles
-sieht (Plattform-Verwaltung), bekommt sie nicht. Sie läuft nach Bestätigung, durch die Bremse und ins Protokoll
+sieht (Material-Verwaltung), bekommt sie nicht. Sie läuft nach Bestätigung, durch die Bremse und ins Protokoll
 (globalprotokoll) und findet nur Artikel, die das Konto nicht sieht – die eigenen zeigt die lokale Suche darüber. Ein
 Treffer zeigt nur Stammdaten, Zugehörigkeit und ein Sperrwort – genau die Schlüssel in FELDER (Entscheidungen des
 Betreibers vom 18.10.2026: Sperrwort ja, Angebot immer, fremde Treffer unter den eigenen).
@@ -38,7 +38,7 @@ def suchbar(q):
 
 
 def sieht_alles():
-    """Sieht das Konto jeden Artikel (Plattform-Verwaltung)? Dann gibt es nichts Fremdes – die lokale Suche findet
+    """Sieht das Konto jeden Artikel (Material-Verwaltung)? Dann gibt es nichts Fremdes – die lokale Suche findet
     alles. Dieselbe Bedingung wie in der Abfrage der Suche (artikel_filter „1“)."""
     return rechte.artikel_filter("i") == "1"
 
@@ -61,7 +61,7 @@ BESTAETIGEN_QR = "Bitte den Steckbrief bestätigen."
 ZU_KURZ = (f"Mindestens {MIN_ZEICHEN} und höchstens {MAX_ZEICHEN} Zeichen – global wird nur nach der ganzen Seriennummer "
            "gesucht.")
 NUR_HERSTELLER = "Global wird nur nach Herstellerseriennummern gesucht."
-# Die Plattform-Verwaltung sieht jeden Artikel – für sie gäbe es nichts Fremdes zu finden.
+# Die Material-Verwaltung sieht jeden Artikel – für sie gäbe es nichts Fremdes zu finden.
 SIEHT_ALLES = "Du siehst den Bestand aller Gliederungen – die normale Suche findet jeden Artikel."
 # Was unter einem persönlichen Ordner liegt, heißt im Steckbrief nur so – wem er gehört, geht Fremde nichts an.
 PERSOENLICH = "persönlicher Ordner"

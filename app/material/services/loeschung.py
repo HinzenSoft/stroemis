@@ -22,7 +22,8 @@ ab, bleibt das Konto samt allem stehen:
 Abgeschlossene Prüfungen, Durchgänge, Ausnahmen, Anhänge, Rückrufe und das Journal bleiben, wie sie sind. Deaktivieren
 ändert im Modul nichts: Freigaben wirken nicht mehr (current_user verlangt ein aktives Konto), Zuordnungen bleiben und
 erscheinen mit „(deaktiviert)“. Ablauf beim Austritt: PSA zurücknehmen (Zuordnung lösen), Konto deaktivieren, nach
-Klärung offener Prüfungen löschen.
+Klärung offener Prüfungen löschen. Die Stufe im Modul Material steht am Konto und geht mit ihm; die Einträge „rollen“
+am Konto (Nutzerverwaltung, Profil, „Migration Schritt 10“) bleiben unter der Kontokennung stehen wie bisher.
 
 Prüfnachweise werden unbefristet aufbewahrt, auch nach der Aussonderung (Entscheidung des Betreibers vom 18.10.2026):
 abgeschlossene und festgeschriebene Prüfungen samt Befunden, Befundfotos und Anhängen, Aussonderungen, Prüf-,

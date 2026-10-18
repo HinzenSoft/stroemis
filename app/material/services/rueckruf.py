@@ -1,16 +1,17 @@
 """Rückrufe: Der Hersteller ruft ein Produkt zurück oder warnt davor.
 
-Ein Katalogpfleger (oder die Verwaltung) legt den Rückruf am Produkt an: Titel, was betroffen ist und was zu tun
+Die Material-Verwaltung legt den Rückruf am Produkt an: Titel, was betroffen ist und was zu tun
 ist, ein Link auf die Meldung des Herstellers und – wenn der Hersteller sie nennt – die betroffenen Seriennummern,
 eine je Zeile; ohne Seriennummern gilt er für alle Artikel des Produkts. Sichtbar ist er für alle mit Zugang zum
 Modul: am Produkt, als Banner an jedem betroffenen Artikel und als Kasten auf der Übersicht.
 
 Seit Phase 2 gehört jeder betroffene Artikel zu einem Bereich (Freigaben je Ordner, über seine Heimat): Liste und
 Zahlen zeigen jedem nur, was er sieht. Eine Mail geht je betroffenem Artikel an die Verwalter seiner Heimat und an die
-Prüfer, die ihn geprüft haben und dort heute prüfen dürfen; hat er keinen Verwalter, an die Plattform-Verwaltung.
-Jeder Empfänger bekommt eine Mail mit genau den betroffenen Artikeln, die er sehen darf. Wie viele Mails hinausgingen
-und welche Seriennummern zu keinem Artikel passen, erfährt nur die Plattform-Verwaltung – sonst taugte ein Rückruf
-(auch einer ohne Mail, gleich wieder beendet) als Abfrage fremder Bestände.
+Prüfer, die ihn geprüft haben und dort heute prüfen dürfen; hat er keinen Verwalter, an die Material-Verwaltung (gibt
+es keine, an die Plattform-Verwaltung). Jeder Empfänger bekommt eine Mail mit genau den betroffenen Artikeln, die er
+sehen darf. Wie viele Mails hinausgingen und welche Seriennummern zu keinem Artikel passen, erfährt nur, wer alle
+Bestände sieht (die Material-Verwaltung) – sonst taugte ein Rückruf (auch einer ohne Mail, gleich wieder beendet) als
+Abfrage fremder Bestände.
 
 Gesperrt wird nichts automatisch – sperren dürfen ohne Prüfung nur Prüfer (pruefung.sperren), dafür gibt es den
 Sperrgrund „Rückruf“. Je Artikel wird der Zustand abgeleitet, nie gespeichert:
@@ -166,7 +167,7 @@ def betroffene(r, alle=None):
 
 def nicht_gefunden(r, alle=None):
     """Seriennummern des Rückrufs, zu denen kein Artikel im Bestand passt – ein Tippfehler oder Material, das
-    die Organisation nicht hat. Ein Hinweis, kein Fehler – und nur für die Plattform-Verwaltung: Für alle anderen
+    die Organisation nicht hat. Ein Hinweis, kein Fehler – und nur für die Material-Verwaltung: Für alle anderen
     hieße „nicht gefunden“ auch „nicht in fremden Gliederungen“."""
     alle = _artikel_im_bestand(r["product_id"], sichtbar=False) if alle is None else alle
     da = {_norm(a["serial_no"]) for a in alle}
@@ -180,7 +181,7 @@ def _zahlen(liste):
 def rueckruf_json(r, mit_artikel=False):
     """Ein Rückruf für das Konto der Anfrage: betroffene Artikel und ihre Zahlen nur aus dem eigenen Bereich. „mail“
     sagt, ob eine Mail angefordert war; wie viele hinausgingen (mailed_at, mail_count, mail_failed) und welche
-    Seriennummern zu keinem Artikel passen (nicht_gefunden), steht nur für die Plattform-Verwaltung darin."""
+    Seriennummern zu keinem Artikel passen (nicht_gefunden), steht nur für die Material-Verwaltung darin."""
     verwaltung = rechte.sicht().alles
     out = {f: r[f] for f in ("id", "product_id", "title", "description", "url", "created_by_name", "created_at",
                              "closed_at", "closed_by_name", "close_note")}
@@ -284,12 +285,12 @@ def uebersicht(nur_bestand=True):
     return out
 
 
-# --- Anlegen und beenden (nur Katalogpfleger, routes_rueckruf.py prüft das) -------------------------------
+# --- Anlegen und beenden (nur die Material-Verwaltung, routes_rueckruf.py prüft das) ----------------------
 
 def anlegen(pid, d, nutzer=None):
     """Einen Rückruf am Produkt anlegen und – wenn gewünscht („mail“, Vorgabe ja) – die Verwalter und Prüfer der
     betroffenen Artikel benachrichtigen. Liefert (Kennung, Rückmeldung). Die Rückmeldung zählt den eigenen Bereich:
-    betroffene und offene Artikel und ob für sie eine Mail hinausging („benachrichtigt“). Die Plattform-Verwaltung
+    betroffene und offene Artikel und ob für sie eine Mail hinausging („benachrichtigt“). Die Material-Verwaltung
     bekommt stattdessen die Zahlen über alles, die Zahl der Empfänger und die Seriennummern, zu denen kein Artikel im
     Bestand passt."""
     katalog.produkt(pid)
@@ -343,9 +344,9 @@ def _konten(ids):
 
 
 def _verwaltung():
-    """Die Plattform-Verwaltung (aktive Konten) – sie bekommt, was keinen Verwalter hat."""
-    return {u["id"] for u in db.query("SELECT id FROM users WHERE active = 1 AND status = 'active' "
-                                      "AND recht_verwaltung = 2")}
+    """Die Material-Verwaltung (aktive Konten mit Namen; gibt es keine, die Plattform-Verwaltung) – sie bekommt, was
+    keinen Verwalter hat (rechte.material_verwaltung_konten)."""
+    return {u["id"] for u in rechte.material_verwaltung_konten()}
 
 
 def _gepruefte(pid, ids):
@@ -362,7 +363,7 @@ def _gepruefte(pid, ids):
 def empfaenger(r, liste):
     """Wer zum Rückruf eine Mail bekommt (Bauentwurf 2.6): je betroffenem Artikel die Verwalter seiner Heimat
     (rechte.verwalter_von) und die Prüfer, die ihn geprüft haben und dort heute prüfen dürfen (Qualifikation und
-    gültige Prüffreigabe); hat ein Artikel keinen Verwalter, die Plattform-Verwaltung. Nur aktive Konten mit Adresse,
+    gültige Prüffreigabe); hat ein Artikel keinen Verwalter, die Material-Verwaltung. Nur aktive Konten mit Adresse,
     jedes einmal, keine Obergrenze – ein Rückruf muss alle erreichen.
 
     Liefert [(Konto, Artikel)]: je Empfänger genau die betroffenen Artikel, die er sehen darf – Artikel aus Bereichen,
@@ -403,7 +404,7 @@ def _mailtext(r, p, liste):
     basis = cfg["BASE_URL"].rstrip("/")
     s = serien(r)
     name = f"{p['manufacturer']} {p['model']}"
-    zeilen = [f"{r['created_by_name'] or 'Ein Katalogpfleger'} hat einen Rückruf für ein Produkt im Katalog angelegt:", "",
+    zeilen = [f"{r['created_by_name'] or 'Die Material-Verwaltung'} hat einen Rückruf für ein Produkt im Katalog angelegt:", "",
               f"Produkt:      {name}" + (f" (Art.-Nr. {p['article_no']})" if p["article_no"] else ""),
               f"Rückruf:      {r['title']}",
               "Betroffen:    " + ("alle Artikel dieses Produkts" if not s else f"{len(s)} Seriennummer{'' if len(s) == 1 else 'n'} (unten)"),

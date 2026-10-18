@@ -352,7 +352,7 @@ def test_rechte():
             assert r.status_code == 302 and "/login" in r.headers["Location"], (url, r.status_code)
             # Konto ohne Recht im Modul: 403 – auch für Kennungen, die es nicht gibt (verrät nichts).
             assert k["nutzer"].get(url).status_code == 403, url
-            # Führungskraft (lesend), Prüfer, Materialwart, Katalogpfleger: dürfen.
+            # Führungskraft (lesend), Prüfer, Materialwart, Material-Verwaltung: dürfen.
             for wer in ("fuehrung", "pruefer", "wart", "katalog", "adm"):
                 assert k[wer].get(url).status_code == 200, (wer, url)
         for url in ("/material/export/99999.csv", "/material/export/99999-protokolle.zip",

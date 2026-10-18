@@ -29,9 +29,9 @@ from test_material_ueberblick import ordner_neu  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FR = "/api/material/ordner/{}/freigaben"
-EINTRAG = {"id", "ordner", "konto", "recht", "bis", "gueltig", "wirkt", "grundrecht_dort", "traegt_pruefen",
+EINTRAG = {"id", "ordner", "konto", "recht", "bis", "gueltig", "wirkt", "wirkt_nicht", "grundrecht_dort", "traegt_pruefen",
            "laeuft_ab_in_tagen", "vergeben_von", "seit", "aenderbar", "entziehbar", "eigen"}
-KONTO = {"id", "name", "gliederung", "aktiv", "haekchen", "qualifiziert"}
+KONTO = {"id", "name", "gliederung", "aktiv", "haekchen", "qualifiziert", "zugang"}
 
 
 def braucht(paket, vorhanden):
@@ -116,7 +116,9 @@ def test_erteilen_aendern_entziehen():
         gid, _ = gliederung(adm)
         lager = ordner_neu(w, gid, "Lager")
         helfer, helfer_id = neues_konto(app, "helfer@example.org", name="Helfer Test")
-        assert helfer.get("/api/material/start").status_code == 403            # ohne Freigabe kein Modulzugang
+        # Mitglied ohne Freigabe: Modulzugang (Katalog, Suche), aber kein Bestand.
+        r = helfer.get("/api/material/start")
+        assert r.status_code == 200 and not r.json["darf"]["lesen"], r.get_json()
 
         r = erteilen(w, lager, user_id=helfer_id, grundrecht="lesen", notiz="Testnotiz Schrank 3")
         assert r.status_code == 201, r.get_json()
@@ -158,7 +160,7 @@ def test_erteilen_aendern_entziehen():
         assert e[-1]["action"] == "freigabe_entzogen" and e[-1]["nachher"] is None
         assert e[-1]["vorher"] == {"freigabe": f["id"], "konto": {"ref": ref(app, helfer_id)}, "recht": "verwalten",
                                    "bis": tag(100)}
-        assert helfer.get(f"/api/material/ordner/{lager}").status_code == 403
+        assert helfer.get(f"/api/material/ordner/{lager}").status_code == 404     # Mitglied ohne Freigabe: wie unbekannt
         assert w.delete(f"/api/material/freigaben/{f['id']}", headers=H).json == w.delete("/api/material/freigaben/999999", headers=H).json
 
         # Die Notiz steht nirgends im Journal – auch Name und E-Mail der Person nicht (nur der Verweis).
@@ -196,9 +198,10 @@ def test_vorlagen_eine_transaktion():
         gid, _ = gliederung(adm)
         vorher = len(journal(app, gid))
         # „Prüfer“ an ein Konto ohne Qualifikation: Die Prüffreigabe scheitert – und das Grundrecht entsteht auch nicht.
-        r = erteilen(w, gid, user_id=k["nutzer_id"], grundrecht="lesen", pruefen_bis=tag(200))
+        _, ohne_id = neues_konto(app, "ohne-quali@example.org", name="Ohne Quali")
+        r = erteilen(w, gid, user_id=ohne_id, grundrecht="lesen", pruefen_bis=tag(200))
         assert r.status_code == 409 and "Prüferqualifikation" in r.json["error"], r.get_json()
-        assert not zeilen(app, "SELECT 1 FROM mat_folder_grant WHERE user_id = ?", (k["nutzer_id"],))
+        assert not zeilen(app, "SELECT 1 FROM mat_folder_grant WHERE user_id = ?", (ohne_id,))
         assert len(journal(app, gid)) == vorher
 
         p2, p2_id = neues_konto(app, "pruefer2@example.org", name="Prüferin Zwei", mat_pruefer=True, urkundennummer="1012-4712")
@@ -268,7 +271,8 @@ def test_grenzen():
         # Nr. 12: nicht vorhanden, deaktiviert, ohne Namen – dieselbe 404; Unsinn 400; „7“ und 7.0 gelten.
         inaktiv, inaktiv_id = neues_konto(app, "inaktiv@example.org", name="Inaktiv Test")
         assert adm.put(f"/api/admin/users/{inaktiv_id}", json={"active": False}).status_code == 200
-        ohne = adm.post("/api/admin/users", json={"email": "ohne@example.org", "password": "passwort1"}).json["user"]["id"]
+        ohne = adm.post("/api/admin/users", json={"email": "ohne@example.org", "password": "passwort1",
+                                                  "rechte": {"material": 0}}).json["user"]["id"]
         antworten = [erteilen(w, gid, user_id=u, grundrecht="lesen") for u in (999999, inaktiv_id, ohne)]
         assert all(r.status_code == 404 for r in antworten) and len({json.dumps(r.json) for r in antworten}) == 1, \
             [r.get_json() for r in antworten]
@@ -276,6 +280,12 @@ def test_grenzen():
         assert erteilen(w, gid, user_id="sieben", grundrecht="lesen").status_code == 400
         assert erteilen(w, gid, user_id=str(helfer_id), grundrecht="lesen").status_code == 201
         assert erteilen(w, gid, user_id=float(helfer_id), grundrecht="verwalten").status_code == 201
+        # Nr. 2/12: ein aktives Konto mit Namen, aber ohne Zugang zum Modul (Stufe 0) – 409 mit Klartext, nichts
+        # geschrieben; zuordnen ließe sich ihm dagegen ein Artikel (test_material_stufen).
+        stufenlos, stufenlos_id = neues_konto(app, "stufenlos@example.org", name="Stufenlos Test", stufe=0)
+        r = erteilen(w, gid, user_id=stufenlos_id, grundrecht="lesen")
+        assert r.status_code == 409 and "keinen Zugang zum Modul Material" in r.json["error"], r.get_json()
+        assert grant(app, gid, stufenlos_id, "lesen") is None
 
         # Nr. 8 und 9: Enddaten. Ohne Ende („“ oder null) nur mit Grundrecht am Anker – das hat der Prüfer (lesen an
         # der Gliederung), der externe Prüfer nicht (Nachbesserung vom 18.10.2026, mehr in test_dauerhaft_pruefen).
@@ -364,7 +374,7 @@ def test_uebernahme_schutz():
         assert g_eigen["aenderbar"] and g_eigen["entziehbar"], g_eigen
         for m, d in (("delete", None), ("put", {"bis": tag(30)}), ("put", {"recht": "lesen"})):
             r = getattr(w, m)(f"/api/material/freigaben/{dauer}", json=d, headers=H)
-            assert r.status_code == 409 and "das macht nur die Plattform-Verwaltung" in r.json["error"], (m, d, r.get_json())
+            assert r.status_code == 409 and "das macht nur die Material-Verwaltung" in r.json["error"], (m, d, r.get_json())
         assert grant(app, gid, k["wart_id"], "verwalten")["valid_until"] is None
         assert not [x for x in journal(app, gid) if x["action"] != "freigabe_erteilt"]
         # Mit einem zweiten dauerhaften geht es.
@@ -449,7 +459,7 @@ def test_notiz_geerbt_und_meine():
         r = helfer.get("/api/material/freigaben/meine")
         assert r.status_code == 200 and "Testnotiz" not in r.get_data(as_text=True), r.get_json()
         m = r.json["freigaben"]
-        assert len(m) == 1 and set(m[0]) == {"id", "ordner", "recht", "bis", "gueltig", "wirkt", "grundrecht_dort",
+        assert len(m) == 1 and set(m[0]) == {"id", "ordner", "recht", "bis", "gueltig", "wirkt", "wirkt_nicht", "grundrecht_dort",
                                              "laeuft_ab_in_tagen", "verwalter"}, m
         assert m[0]["ordner"]["pfad"] == "OG Musterstadt" and m[0]["verwalter"] == ["wart"] and m[0]["wirkt"]
         assert r.json["zugang"] and not r.json["alles"]
@@ -544,10 +554,11 @@ def test_listen_und_verlaengern():
 
         # Ein Konto ohne Namen (etwa aus der Migration, die Freigaben unabhängig vom Namen vergibt): Die Liste nennt es
         # „(Konto ohne Namen)“ – nie mit E-Mail – und die Zeile wirkt nicht.
-        ohne_name = adm.post("/api/admin/users", json={"email": "ohne-name@example.org", "password": "passwort1"}).json["user"]["id"]
+        ohne_name = adm.post("/api/admin/users", json={"email": "ohne-name@example.org", "password": "passwort1",
+                                                       "rechte": {"material": 0}}).json["user"]["id"]
         freigeben(adm, fach, ohne_name, "lesen")
         x = [x for x in liste(w, lager)["unten"] if x["konto"]["id"] == ohne_name][0]
-        assert x["konto"]["name"] == "(Konto ohne Namen)" and not x["wirkt"], x
+        assert x["konto"]["name"] == "(Konto ohne Namen)" and not x["wirkt"] and x["wirkt_nicht"] == "Konto ohne Namen", x
         assert "ohne-name@example.org" not in w.get(FR.format(lager)).get_data(as_text=True)
     print("Listen und Verlängern bestanden.")
 
@@ -769,7 +780,8 @@ def test_nutzersuche():
         inaktiv = adm.post("/api/admin/users", json={"email": "ti@example.org", "password": "passwort1",
                                                      "name": "Testperson Inaktiv"}).json["user"]["id"]
         assert adm.put(f"/api/admin/users/{inaktiv}", json={"active": False}).status_code == 200
-        adm.post("/api/admin/users", json={"email": "Testperson@example.org", "password": "passwort1"})   # ohne Namen
+        adm.post("/api/admin/users", json={"email": "Testperson@example.org", "password": "passwort1",
+                                           "rechte": {"material": 0}})                                     # ohne Namen
         neues_konto(app, "joerg@example.org", name="Jörg Prüfmann", mat_pruefer=True, urkundennummer="1012-7001")
 
         r = w.get("/api/material/nutzer", query_string={"q": "Testperson"})
@@ -784,21 +796,40 @@ def test_nutzersuche():
         r = w.get("/api/material/nutzer", query_string={"q": "PRÜFM"})
         assert [(x["name"], x["qualifiziert"]) for x in r.json["nutzer"]] == [("Jörg Prüfmann", True)], r.get_json()
         assert "1012-7001" not in r.get_data(as_text=True)
-        # Die Plattform-Verwaltung hat das Grundrecht überall – der Reiter bietet ihr beim Prüfen „dauerhaft“ auch ohne
-        # lesen oder verwalten an, wie der Dienst es annimmt (grundrecht_an).
+        # Die Material-Verwaltung (Plattform-Verwaltung eingeschlossen) hat das Grundrecht überall – der Reiter bietet
+        # ihr beim Prüfen „dauerhaft“ auch ohne lesen oder verwalten an, wie der Dienst es annimmt (grundrecht_an).
         r = w.get("/api/material/nutzer", query_string={"q": "Administrator"})
         assert [(x["name"], x["grundrecht_ueberall"]) for x in r.json["nutzer"]] == [("Administrator", True)], r.get_json()
-        # Unter 3 Zeichen 400; Führungskraft und Katalogpfleger 403; Verwaltung darf; ohne Anmeldung 401.
+        r = w.get("/api/material/nutzer", query_string={"q": "katalog"})
+        assert [(x["name"], x["grundrecht_ueberall"]) for x in r.json["nutzer"]] == [("katalog", True)], r.get_json()
+        # Unter 3 Zeichen 400; Führungskraft 403; Material-Verwaltung und Plattform-Verwaltung dürfen; ohne Anmeldung 401.
         for q in ("Te", " T ", "", None):
             r = w.get("/api/material/nutzer", query_string={"q": q} if q is not None else None)
             assert r.status_code == 400 and "3 Zeichen" in r.json["error"], (q, r.get_json())
         assert k["fuehrung"].get("/api/material/nutzer", query_string={"q": "Test"}).status_code == 403
-        assert k["katalog"].get("/api/material/nutzer", query_string={"q": "Test"}).status_code == 403
+        assert k["katalog"].get("/api/material/nutzer", query_string={"q": "Test"}).status_code == 200
         assert adm.get("/api/material/nutzer", query_string={"q": "Test"}).status_code == 200
         assert app.test_client().get("/api/material/nutzer", query_string={"q": "Test"}).status_code == 401
 
+        # Zweck: Für Freigaben (Vorgabe) nur Konten mit Zugang zum Modul, für die Zuordnung alle aktiven mit Namen.
+        stufenlos = neues_konto(app, "tp-ohne@example.org", name="Testperson ohne Stufe", stufe=0)[1]
+        haekchen = neues_konto(app, "tp-haken@example.org", name="Testperson Häkchen", stufe=0, mat_pruefer=True,
+                               urkundennummer="1012-7002")[1]
+        for zweck in (None, "freigabe"):
+            q = {"q": "Testperson", **({"zweck": zweck} if zweck else {})}
+            namen = {x["name"] for x in w.get("/api/material/nutzer", query_string=dict(q, q="ohne Stufe")).json["nutzer"]}
+            assert namen == set(), (zweck, namen)
+            assert w.get("/api/material/nutzer", query_string=dict(q, q="Häkchen")).json["nutzer"] == []
+        r = w.get("/api/material/nutzer", query_string={"q": "ohne Stufe", "zweck": "zuordnung"})
+        assert [x["id"] for x in r.json["nutzer"]] == [stufenlos], r.get_json()
+        # Das Häkchen ohne Stufe wirkt nicht: nicht qualifiziert.
+        r = w.get("/api/material/nutzer", query_string={"q": "Häkchen", "zweck": "zuordnung"})
+        assert [(x["id"], x["qualifiziert"]) for x in r.json["nutzer"]] == [(haekchen, False)], r.get_json()
+        assert w.get("/api/material/nutzer", query_string={"q": "Testperson", "zweck": "irgendwas"}).status_code == 400
+
         # Der Kontoverweis löst sich zum Namen auf – ohne Namen „(ohne Namen)“, nie zur E-Mail.
-        ohne = adm.post("/api/admin/users", json={"email": "ohne@example.org", "password": "passwort1"}).json["user"]["id"]
+        ohne = adm.post("/api/admin/users", json={"email": "ohne@example.org", "password": "passwort1",
+                                                  "rechte": {"material": 0}}).json["user"]["id"]
         with app.app_context():
             from app.material.services import journal as mj
             assert mj.konto_name(mj.konto_ref(ohne)["ref"]) == "(ohne Namen)"
@@ -824,14 +855,26 @@ def test_meine_ohne_zugang():
         freigeben(adm, lager, k["nutzer_id"], "pruefen", bis=tag(-400))
         assert k["nutzer"].get("/api/material/start").status_code == 403
         m = k["nutzer"].get("/api/material/freigaben/meine").json["freigaben"]
-        assert [(x["ordner"]["id"], x["gueltig"], x["bis"], x["verwalter"]) for x in m] == [
-            (gid, False, tag(-100), ["wart"])], m
+        assert [(x["ordner"]["id"], x["gueltig"], x["bis"], x["verwalter"], x["wirkt_nicht"]) for x in m] == [
+            (gid, False, tag(-100), ["wart"], None)], m
+        # Eine gültige Freigabe ohne Stufe im Modul wirkt nicht – und sagt warum.
+        freigeben(adm, lager, k["nutzer_id"], "lesen")
+        assert k["nutzer"].get("/api/material/start").status_code == 403
+        x = [x for x in k["nutzer"].get("/api/material/freigaben/meine").json["freigaben"] if x["gueltig"]][0]
+        assert (x["wirkt"], x["wirkt_nicht"]) == (False, "kein Zugang zum Modul Material"), x
+        z = [f for f in adm.get("/api/material/freigaben", query_string={"user_id": k["nutzer_id"]}).json["freigaben"]
+             if f["gueltig"]][0]
+        assert (z["wirkt"], z["wirkt_nicht"], z["konto"]["zugang"]) == (False, "kein Zugang zum Modul Material", False), z
+        sql(app, "DELETE FROM mat_folder_grant WHERE folder_id = ? AND user_id = ? AND permission = 'lesen'",
+            (lager, k["nutzer_id"]))
         # Höchstens drei Verwalter, nach Namen.
         for n in "bcde":
             freigeben(adm, gid, neues_konto(app, f"w{n}@example.org", name=f"Verwalter {n}")[1], "verwalten")
         assert k["nutzer"].get("/api/material/freigaben/meine").json["freigaben"][0]["verwalter"] == [
             "Verwalter b", "Verwalter c", "Verwalter d"]
         assert adm.get("/api/material/freigaben/meine").json["alles"]
+        assert k["katalog"].get("/api/material/freigaben/meine").json["alles"]          # Material-Verwaltung
+        assert not k["wart"].get("/api/material/freigaben/meine").json["alles"]
     print("Meine Freigaben ohne Modulzugang bestanden.")
 
 
@@ -861,57 +904,72 @@ def test_nutzerverwaltung():
         assert adm.get("/api/material/freigaben", query_string={"user_id": k["nutzer_id"]}).json["freigaben"][0][
             "vergeben_von"] == "Migration"
 
-        # list_users: Zahl gültiger Freigaben und Stufe aus Phase 1; Material ist die wirksame Stufe.
+        # list_users: Zahl gültiger Freigaben; Material ist die gespeicherte Stufe (die Plattform-Verwaltung hat 2).
         sql(app, "UPDATE mat_folder_grant SET valid_until = ? WHERE id = ?", (tag(-1), z))
         nutzer = {u["id"]: u for u in adm.get("/api/admin/users").json["users"]}
-        assert (nutzer[k["nutzer_id"]]["mat_freigaben"], nutzer[k["nutzer_id"]]["mat_stufe_alt"]) == (0, 1)
-        assert nutzer[k["nutzer_id"]]["rechte"]["material"] == 0
+        assert (nutzer[k["nutzer_id"]]["mat_freigaben"], nutzer[k["nutzer_id"]]["rechte"]["material"]) == (0, 1)
         assert (nutzer[k["pruefer_id"]]["mat_freigaben"], nutzer[k["pruefer_id"]]["rechte"]["material"]) == (2, 1)
-        assert (nutzer[k["wart_id"]]["mat_freigaben"], nutzer[k["wart_id"]]["rechte"]["material"]) == (1, 2)
-        # Angelegt wurde der Materialwart mit „material“: 2 – übergangen, die Spalte bleibt 0.
-        assert nutzer[k["wart_id"]]["mat_stufe_alt"] == 0
-        assert nutzer[adm_id(adm)]["rechte"]["material"] == 2
+        assert (nutzer[k["wart_id"]]["mat_freigaben"], nutzer[k["wart_id"]]["rechte"]["material"]) == (1, 1)
+        assert nutzer[k["katalog_id"]]["rechte"]["material"] == 2 and nutzer[adm_id(adm)]["rechte"]["material"] == 2
+        assert all("mat_stufe_alt" not in u and "mat_katalog" not in u for u in nutzer.values())
 
-        # rechte.material in der Anfrage wird übergangen – beim Anlegen wie beim Ändern; Verwaltung zieht alles auf 2.
+        # Material wie jedes Modul: 0/1/2 wird gespeichert und gelesen – beim Anlegen wie beim Ändern; Unsinn 400;
+        # Verwaltung zieht auf 2.
         r = adm.post("/api/admin/users", json={"email": "neu@example.org", "password": "passwort1", "name": "Neu Test",
                                                "rechte": {"material": 2, "wiki": 2}})
-        assert r.status_code == 201 and r.json["user"]["rechte"]["material"] == 0 and r.json["user"]["rechte"]["wiki"] == 2
+        assert r.status_code == 201 and r.json["user"]["rechte"]["material"] == 2 and r.json["user"]["rechte"]["wiki"] == 2
         neu = r.json["user"]["id"]
-        assert zeilen(app, "SELECT recht_material FROM users WHERE id = ?", (neu,))[0]["recht_material"] == 0
-        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"material": 1}}).status_code == 200
-        assert zeilen(app, "SELECT recht_material FROM users WHERE id = ?", (neu,))[0]["recht_material"] == 0
-        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"material": "Unsinn"}}).status_code == 200
-        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"verwaltung": 2}}).status_code == 200
-        assert zeilen(app, "SELECT recht_material FROM users WHERE id = ?", (neu,))[0]["recht_material"] == 2
+        stufe = lambda: zeilen(app, "SELECT recht_material FROM users WHERE id = ?", (neu,))[0]["recht_material"]  # noqa: E731
+        assert stufe() == 2
+        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"material": 1}}).status_code == 200 and stufe() == 1
+        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"material": "Unsinn"}}).status_code == 400
+        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"material": 3}}).status_code == 400 and stufe() == 1
+        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"verwaltung": 2}}).status_code == 200 and stufe() == 2
+        # Die Plattform-Verwaltung wieder weg: Material bleibt auf Verwaltung, bis es jemand einzeln senkt.
+        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"verwaltung": 0}}).status_code == 200 and stufe() == 2
+        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"material": 1}}).status_code == 200 and stufe() == 1
 
-        # Der Rolleneintrag beim Anlegen trägt keine E-Mail.
+        # Der Rolleneintrag beim Anlegen trägt keine E-Mail – und die Stufe.
         r = adm.post("/api/admin/users", json={"email": "rolle@example.org", "password": "passwort1", "name": "Rolle Test",
                                                "mat_pruefer": True})
         assert r.status_code == 201, r.get_json()
         e = zeilen(app, "SELECT * FROM mat_audit WHERE entity = 'user' AND entity_id = ?", (r.json["user"]["id"],))
         assert len(e) == 1 and e[0]["action"] == "rollen" and "@" not in e[0]["after_json"], e
-        assert json.loads(e[0]["after_json"]) == {"mat_katalog": 0, "mat_pruefer": 1, "recht_material": 0}
-        # Häkchen nur mit Namen – beim Anlegen und wenn eines dazukommt oder der Name verschwindet.
-        for feld in ("mat_pruefer", "mat_katalog"):
-            r = adm.post("/api/admin/users", json={"email": f"{feld}@example.org", "password": "passwort1", feld: True})
-            assert r.status_code == 400 and "Erst einen Namen eintragen" in r.json["error"], r.get_json()
-        ohne = adm.post("/api/admin/users", json={"email": "ohne@example.org", "password": "passwort1"}).json["user"]["id"]
-        r = adm.put(f"/api/admin/users/{ohne}", json={"mat_katalog": True})
-        assert r.status_code == 400 and "Erst einen Namen eintragen" in r.json["error"], r.get_json()
-        assert adm.put(f"/api/admin/users/{ohne}", json={"mat_katalog": True, "name": "Jetzt mit Namen"}).status_code == 200
+        assert json.loads(e[0]["after_json"]) == {"mat_pruefer": 1, "recht_material": 1}
+        # Stufe und Häkchen nur mit Namen – beim Anlegen und wenn eines dazukommt oder der Name verschwindet.
+        for wunsch in ({"mat_pruefer": True, "rechte": {"material": 0}}, {"rechte": {"material": 1}},
+                       {"rechte": {"material": 2}}, {}):
+            r = adm.post("/api/admin/users", json=dict({"email": "x@example.org", "password": "passwort1"}, **wunsch))
+            assert r.status_code == 400 and "Erst einen Namen eintragen" in r.json["error"], (wunsch, r.get_json())
+        # Das Häkchen „Produktkatalogpfleger“ gibt es nicht mehr – auch nicht beim Anlegen.
+        r = adm.post("/api/admin/users", json={"email": "x@example.org", "password": "passwort1", "name": "X",
+                                               "mat_katalog": False})
+        assert r.status_code == 400 and "Produktkatalogpfleger" in r.json["error"], r.get_json()
+        ohne = adm.post("/api/admin/users", json={"email": "ohne@example.org", "password": "passwort1",
+                                                  "rechte": {"material": 0}}).json["user"]["id"]
+        for wunsch in ({"mat_pruefer": True}, {"rechte": {"material": 1}}):
+            r = adm.put(f"/api/admin/users/{ohne}", json=wunsch)
+            assert r.status_code == 400 and "Erst einen Namen eintragen" in r.json["error"], (wunsch, r.get_json())
+        assert adm.put(f"/api/admin/users/{ohne}", json={"rechte": {"material": 1}, "name": "Jetzt mit Namen"}).status_code == 200
         r = adm.put(f"/api/admin/users/{k['pruefer_id']}", json={"name": ""})
         assert r.status_code == 400 and "Erst einen Namen eintragen" in r.json["error"], r.get_json()
-        # Ein namenloses Konto mit Häkchen aus der Zeit davor bleibt bearbeitbar – etwa um das Häkchen zu nehmen.
-        sql(app, "UPDATE users SET name = '', mat_pruefer = 1 WHERE id = ?", (neu,))
+        # Plattform-Verwaltung ohne Namen geht (sie hat Material von selbst, die Stufe bringt dort nichts Neues).
+        assert adm.put(f"/api/admin/users/{ohne}", json={"name": "", "rechte": {"material": 0}}).status_code == 200
+        assert adm.put(f"/api/admin/users/{ohne}", json={"rechte": {"verwaltung": 2}}).status_code == 200
+        assert adm.put(f"/api/admin/users/{ohne}", json={"rechte": {"verwaltung": 0}}).status_code == 200
+        # Ein namenloses Konto mit Stufe und Häkchen aus der Zeit davor bleibt bearbeitbar – etwa um beides zu nehmen.
+        sql(app, "UPDATE users SET name = '', mat_pruefer = 1, recht_material = 1 WHERE id = ?", (neu,))
         assert adm.put(f"/api/admin/users/{neu}", json={"phone": "0000"}).status_code == 200
-        assert adm.put(f"/api/admin/users/{neu}", json={"name": "", "mat_pruefer": True}).status_code == 200   # wie der Dialog
-        assert adm.put(f"/api/admin/users/{neu}", json={"mat_pruefer": False}).status_code == 200
+        assert adm.put(f"/api/admin/users/{neu}", json={"name": "", "mat_pruefer": True,
+                                                        "rechte": {"material": 1}}).status_code == 200   # wie der Dialog
+        assert adm.put(f"/api/admin/users/{neu}", json={"rechte": {"material": 2}}).status_code == 400
+        assert adm.put(f"/api/admin/users/{neu}", json={"mat_pruefer": False, "rechte": {"material": 0}}).status_code == 200
     print("Nutzerverwaltung bestanden.")
 
 
 def test_list_users_abfragen():
-    """list_users: die Zahl der Abfragen hängt nicht an der Zahl der Konten (gruppierte Abfrage, Stufe vorgemerkt), und
-    die vorgemerkte Stufe ist dieselbe wie rechte.material_stufe_wirksam je Konto."""
+    """list_users: die Zahl der Abfragen hängt nicht an der Zahl der Konten (gruppierte Abfrage für die Freigaben), und
+    die Stufe Material ist die gespeicherte (die Plattform-Verwaltung hat 2)."""
     from app import db as db_mod
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
@@ -938,7 +996,7 @@ def test_list_users_abfragen():
         def konten(von, bis):
             for n in range(von, bis):
                 uid = adm.post("/api/admin/users", json={"email": f"k{n}@example.org", "password": "passwort1",
-                                                         "name": f"Konto {n}", "mat_katalog": n % 3 == 0}).json["user"]["id"]
+                                                         "name": f"Konto {n}", "rechte": {"material": n % 3}}).json["user"]["id"]
                 if n % 2:
                     freigeben(adm, gid, uid, "verwalten" if n % 4 == 1 else "lesen")
         konten(0, 10)
@@ -948,10 +1006,9 @@ def test_list_users_abfragen():
         assert len(users) >= 55 and viele == wenige, (wenige, viele)
         with app.app_context():
             from app import db
-            from app.material.services import rechte
             for u in users:
-                assert u["rechte"]["material"] == rechte.material_stufe_wirksam(
-                    db.query("SELECT * FROM users WHERE id = ?", (u["id"],), one=True)), u
+                r = db.query("SELECT recht_material, recht_verwaltung FROM users WHERE id = ?", (u["id"],), one=True)
+                assert u["rechte"]["material"] == (2 if r["recht_verwaltung"] == 2 else r["recht_material"]), u
     print("list_users: Abfragezahl bestanden.")
 
 
@@ -1044,14 +1101,16 @@ def _demo_laufen(*schalter, konten=None):
 
 
 def test_demo_zweimal():
-    """Zweimal hintereinander mit --konten: Beim ersten Mal entstehen die zweite Gliederung und die vier Konten (das
-    Passwort steht genau einmal da), beim zweiten Mal nichts. Die Konten sehen, was ihre Freigaben zeigen."""
+    """Zweimal hintereinander mit --konten: Beim ersten Mal entstehen die zweite Gliederung und die fünf Konten (das
+    Passwort steht genau einmal da), beim zweiten Mal nichts. Die Konten sehen, was ihre Freigaben zeigen; die
+    DEMO-Material-Verwaltung sieht alles, ohne Plattform-Verwaltung zu sein."""
     with tempfile.TemporaryDirectory() as tmp:
         make_app(tmp)
         erst = _demo_laufen("--demo", "--konten")
         passwoerter = dict(re.findall(r"Konto (\S+@example\.invalid) .*?Passwort: (\S+)", erst))
         assert set(passwoerter) == {"demo-wart-a@example.invalid", "demo-wart-b@example.invalid",
-                                    "demo-pruefer@example.invalid", "demo-extern@example.invalid"}, erst
+                                    "demo-pruefer@example.invalid", "demo-extern@example.invalid",
+                                    "demo-mv@example.invalid"}, erst
         app = make_app(tmp)
 
         def stand():
@@ -1059,7 +1118,7 @@ def test_demo_zweimal():
                                                                                "mat_inspection", "mat_audit", "users")}
         vorher = stand()
         zweit = _demo_laufen("--demo", "--konten")
-        assert "Passwort" not in zweit and zweit.count("ist schon da – unverändert") == 4, zweit
+        assert "Passwort" not in zweit and zweit.count("ist schon da – unverändert") == 5, zweit
         assert stand() == vorher
         # Ohne --konten keine Konten – der Lauf ändert nichts mehr.
         assert "Konto" not in _demo_laufen("--demo") and stand() == vorher
@@ -1074,6 +1133,11 @@ def test_demo_zweimal():
         assert all(u["name"].startswith("DEMO-") for u in konten.values())
         assert (konten["demo-pruefer@example.invalid"]["urkundennummer"], konten["demo-extern@example.invalid"]["urkundennummer"]) == (
             "DEMO-1012", "DEMO-2024")
+        # Stufen: alle Mitglied, die DEMO-Material-Verwaltung Verwaltung – keine Plattform-Verwaltung, keine Spots/Wiki.
+        assert {m: (u["recht_material"], u["recht_verwaltung"], u["recht_karte"], u["recht_wiki"])
+                for m, u in konten.items()} == {m: (2 if m == "demo-mv@example.invalid" else 1, 0, 0, 0) for m in konten}
+        rollen = [x for x in vorher["mat_audit"] if x["entity"] == "user" and x["action"] == "rollen"]
+        assert len(rollen) == 5 and not any("@" in x["after_json"] or "mat_katalog" in x["after_json"] for x in rollen)
         freigaben = {(u_mail, g["permission"], next(o["name"] for o in vorher["mat_folder"] if o["id"] == g["folder_id"]),
                       g["valid_until"])
                      for g in vorher["mat_folder_grant"] for u_mail, u in konten.items() if g["user_id"] == u["id"]}
@@ -1092,6 +1156,10 @@ def test_demo_zweimal():
         assert a.get(f"/api/material/ordner/{gl}").status_code == 200 and a.get(f"/api/material/ordner/{ns['id']}").status_code == 404
         assert b.get(f"/api/material/ordner/{ns['id']}").status_code == 200 and b.get(f"/api/material/ordner/{gl}").status_code == 404
         assert {x["vergeben_von"] for x in liste(a, gl)["direkt"]} == {"Demodaten"}
+        mv = anmelden(app, "demo-mv@example.invalid", passwoerter["demo-mv@example.invalid"])
+        d = mv.get("/api/material/start").json["darf"]
+        assert d["alles"] and d["katalog"] and d["gliederung_anlegen"] and not d["pruefen"], d
+        assert mv.get(f"/api/material/ordner/{ns['id']}").status_code == 200 and mv.get("/api/admin/users").status_code == 403
     print("DEMO-Skript zweimal bestanden.")
 
 
@@ -1100,7 +1168,7 @@ def test_demo_pruefer_von_frueher():
     dessen DEMO-Prüffreigabe auf dauerhaft – mit Journaleintrag unter „Demodaten“, einmal; der externe DEMO-Prüfer
     bleibt befristet. Eine Zeile, die seitdem jemand geändert hat, oder eine ohne Grundrecht dort bleibt, wie sie ist."""
     def frueher(konten):
-        return [(m, n, gl, u, [(o, r, 30 if r == "pruefen" else t) for o, r, t in f]) for m, n, gl, u, f in konten]
+        return [(m, n, gl, st, u, [(o, r, 30 if r == "pruefen" else t) for o, r, t in f]) for m, n, gl, st, u, f in konten]
 
     def pruefen(app):
         return {x["email"]: x["valid_until"] for x in zeilen(
@@ -1113,7 +1181,7 @@ def test_demo_pruefer_von_frueher():
         app = make_app(tmp)
         assert pruefen(app) == {"demo-pruefer@example.invalid": tag(30), "demo-extern@example.invalid": tag(30)}
         aus = _demo_laufen("--demo", "--konten")
-        assert aus.count("ist schon da – unverändert") == 3 and "Passwort" not in aus, aus
+        assert aus.count("ist schon da – unverändert") == 4 and "Passwort" not in aus, aus
         assert "demo-pruefer@example.invalid ist schon da – Prüffreigabe DEMO-Gliederung jetzt dauerhaft" in aus, aus
         assert pruefen(app) == {"demo-pruefer@example.invalid": None, "demo-extern@example.invalid": tag(30)}
         e = [x for x in zeilen(app, "SELECT * FROM mat_audit WHERE action = 'freigabe_geaendert'")]
@@ -1121,7 +1189,7 @@ def test_demo_pruefer_von_frueher():
         assert (json.loads(e[0]["before_json"])["bis"], json.loads(e[0]["after_json"])["bis"]) == (tag(30), None)
         assert "@" not in e[0]["before_json"] + e[0]["after_json"]
         vorher = zeilen(app, "SELECT * FROM mat_folder_grant ORDER BY id")
-        assert _demo_laufen("--demo", "--konten").count("ist schon da – unverändert") == 4
+        assert _demo_laufen("--demo", "--konten").count("ist schon da – unverändert") == 5
         assert zeilen(app, "SELECT * FROM mat_folder_grant ORDER BY id") == vorher
 
     # Geändert seitdem (updated_at) oder das Grundrecht weg: bleibt befristet.
@@ -1133,7 +1201,7 @@ def test_demo_pruefer_von_frueher():
             app = make_app(tmp)
             sql(app, eingriff)
             aus = _demo_laufen("--demo", "--konten")
-            assert aus.count("ist schon da – unverändert") == 4 and pruefen(app)["demo-pruefer@example.invalid"] == tag(30), aus
+            assert aus.count("ist schon da – unverändert") == 5 and pruefen(app)["demo-pruefer@example.invalid"] == tag(30), aus
     print("DEMO-Prüfer von früher bestanden.")
 
 

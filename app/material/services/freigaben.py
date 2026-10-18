@@ -4,10 +4,11 @@ Was eine Freigabe ist und wie sie wirkt, steht in rechte.py. Hier stehen die Reg
 1.6, mit der Nachbesserung vom 18.10.2026 zu Nr. 8), und die Listen für den Reiter „Freigaben“ in „Ordner bearbeiten“
 (freigaben.js), „Meine Freigaben“ und die Nutzerverwaltung:
 
-  1  Die Plattform-Verwaltung vergibt überall, ohne die Grenzen 3–7. Für Prüffreigaben gilt auch für sie Nr. 8 –
-     Sachkunde lässt sich nicht verwalten, nur nachweisen.
-  2  Wer einen Ordner verwaltet, vergibt dort und darunter – an jedes aktive Konto mit Namen, auch aus anderen
-     Gliederungen (rechte.waehlbares_konto).
+  1  Die Material-Verwaltung (Stufe Verwaltung im Modul Material) vergibt überall, ohne die Grenzen 3–7. Für
+     Prüffreigaben gilt auch für sie Nr. 8 – Sachkunde lässt sich nicht verwalten, nur nachweisen.
+  2  Wer einen Ordner verwaltet, vergibt dort und darunter – an jedes aktive Konto mit Namen und Zugang zum Modul
+     (Stufe Mitglied oder Verwaltung, die gibt die Plattform-Verwaltung in der Nutzerverwaltung), auch aus anderen
+     Gliederungen (rechte.waehlbares_konto mit modulzugang).
   3  Was er vergibt oder nach einer Änderung hinterlässt, endet nicht später als sein eigenes Verwalten am Anker
      (Sicht.ende). Unbefristet vergibt nur, wer selbst unbefristet verwaltet.
   4  Eine fremde Zeile ändert oder entzieht er nur, wenn sie schon vorher in diesen Grenzen liegt – ein befristeter
@@ -17,16 +18,17 @@ Was eine Freigabe ist und wie sie wirkt, steht in rechte.py. Hier stehen die Reg
   6  Zeilen oberhalb des eigenen Bereichs sieht er als „geerbt“, ohne Notiz, und ändert sie nicht.
   7  Danach hat jede Gliederung im Zweig des Ankers noch einen Verwalter, der mindestens so lange bleibt wie er – sonst
      409 (_verwaltung_danach).
-  8  Prüffreigaben nur an qualifizierte Konten. Befristet nur für externe Prüfer: Dauerhaft (ohne Ende) darf eine
-     Prüffreigabe sein, wenn das Konto am Anker oder darüber heute ein Grundrecht hat – auch eines aus derselben
-     Anfrage (Vorlagen „Prüfer“, „Materialwart und Prüfer“) – oder Plattform-Verwaltung ist (rechte.grundrecht_an,
-     nach dem Schreiben gefragt; sonst 400). Wirken tut sie nur, solange das Grundrecht gilt (rechte.Sicht). Mit Ende
+  8  Prüffreigaben nur an qualifizierte Konten (Häkchen, Urkundennummer und Zugang zum Modul). Befristet nur für
+     externe Prüfer: Dauerhaft (ohne Ende) darf eine Prüffreigabe sein, wenn das Konto am Anker oder darüber heute ein
+     Grundrecht hat – auch eines aus derselben Anfrage (Vorlagen „Prüfer“, „Materialwart und Prüfer“) – oder
+     Material-Verwaltung ist (rechte.grundrecht_an, nach dem Schreiben gefragt; sonst 400). Wirken tut sie nur, solange das Grundrecht gilt (rechte.Sicht). Mit Ende
      höchstens 24 Monate – für alle. Nr. 3 gilt auch hier: dauerhaft nur, wer selbst dauerhaft verwaltet.
   9  lesen und verwalten: Enddatum frei, wenn gesetzt nicht in der Vergangenheit.
- 10  Die Notiz (200 Zeichen, eine Zeile) sehen nur Verwalter des Ankers und die Verwaltung – ins Journal kommt nur
-     „notiz_geaendert“.
+ 10  Die Notiz (200 Zeichen, eine Zeile) sehen nur Verwalter des Ankers und die Material-Verwaltung – ins Journal
+     kommt nur „notiz_geaendert“.
  11  Nicht an „Gesperrt“ und „Ausgesondert“ (409); Unsichtbares antwortet 404 (requires_folder).
- 12  Ein Konto, das es nicht gibt, das deaktiviert ist oder keinen Namen hat: dieselbe 404.
+ 12  Ein Konto, das es nicht gibt, das deaktiviert ist oder keinen Namen hat: dieselbe 404. Ein Konto ohne Zugang zum
+     Modul: 409 mit Klartext (die Personensuche für Freigaben zeigt es gar nicht erst).
  13  Nach jedem Schreiben rechte.sicht_verwerfen() – die Antwort zeigt schon den neuen Stand.
 
 Journal am Ordner, an dem die Freigabe verankert ist: freigabe_erteilt, freigabe_geaendert, freigabe_entzogen mit
@@ -35,10 +37,8 @@ dessen, der handelt, steht wie immer in user_name."""
 import json
 from datetime import date, timedelta
 
-from flask import g
-
 from ... import db
-from ...auth import current_user, is_admin
+from ...auth import current_user
 from .. import services as dienste
 from ..models import FREIGABEN, MIGRATION_8
 from . import Abgelehnt, auswahl, datum, journal, kennung, text, wahr
@@ -48,14 +48,14 @@ from .interval import plus_monate
 
 SYSTEMORDNER = "Freigaben gibt es nicht für „Gesperrt“ und „Ausgesondert“ – sie gelten über die Gliederung."
 FREIGABE_FEHLT = "Freigabe nicht gefunden."
-NICHT_QUALIFIZIERT = ("Prüffreigaben nur an Konten mit Prüferqualifikation (Häkchen der Verwaltung und Urkundennummer im "
-                      "Profil).")
+NICHT_QUALIFIZIERT = ("Prüffreigaben nur an Konten mit Zugang zum Modul und Prüferqualifikation (Häkchen der Verwaltung "
+                      "und Urkundennummer im Profil).")
 LETZTER_VERWALTER = ("Danach hätte die Gliederung keinen Verwalter mehr, der so lange bleibt wie du – das macht nur die "
-                     "Plattform-Verwaltung.")
+                     "Material-Verwaltung.")
 EIGENE = "Deine eigene Freigabe kannst du nur verkürzen, herabsetzen oder entziehen."
-EIGENE_NEU = "Dir selbst vergibst du keine Freigabe – das macht ein anderer Verwalter oder die Plattform-Verwaltung."
+EIGENE_NEU = "Dir selbst vergibst du keine Freigabe – das macht ein anderer Verwalter oder die Material-Verwaltung."
 NICHT_AENDERBAR = ("Diese Freigabe reicht weiter als deine eigene – ändern kann sie nur, wer mindestens so lange "
-                   "verwaltet, oder die Plattform-Verwaltung.")
+                   "verwaltet, oder die Material-Verwaltung.")
 NUR_VERWALTER = "Freigaben ändert nur, wer den Ordner verwaltet, an dem sie vergeben sind."
 PRUEFEN_BIS = "Für die Prüffreigabe bitte „bis“ angeben – ein Enddatum oder null für dauerhaft."
 PRUEFEN_DAUERHAFT = ("Dauerhaft gibt es eine Prüffreigabe nur zusammen mit lesen oder verwalten an diesem Ordner oder "
@@ -64,6 +64,14 @@ VERGANGEN = "Das Enddatum liegt in der Vergangenheit."
 KEIN_RECHT = "Bitte ein Recht wählen – Grundrecht, Prüffreigabe oder beides."
 SUCHE_KURZ = "Bitte mindestens 3 Zeichen des Namens eingeben."
 NUR_VERWALTUNG = "Nur für die Plattform-Verwaltung."
+# Warum eine Freigabe nicht wirkt (Feld „wirkt_nicht“ der Listen) – in dieser Reihenfolge geprüft.
+DEAKTIVIERT = "Konto deaktiviert"
+OHNE_NAMEN = "Konto ohne Namen"
+OHNE_ZUGANG = "kein Zugang zum Modul Material"
+OHNE_QUALI = "Qualifikation fehlt"
+OHNE_GRUNDRECHT_DORT = "dauerhaft nur mit lesen oder verwalten"
+# Wofür die Personensuche sucht: Freigabe (nur Konten mit Zugang zum Modul) oder Personenzuordnung (alle mit Namen).
+ZWECKE = ("freigabe", "zuordnung")
 
 NOTIZ_MAX = 200
 PRUEFEN_MONATE = 24                 # längste Prüffreigabe (1.6 Nr. 8)
@@ -205,10 +213,11 @@ def _regeln(s, ich, anker, alt, neu, konto):
                     neu["permission"] != alt["permission"]
                     and (alt["permission"], neu["permission"]) != ("verwalten", "lesen"))):
                 raise Abgelehnt(EIGENE, 403)
-    # Nr. 8: Eine Prüffreigabe entsteht oder reicht weiter – das Konto muss qualifiziert sein. Kürzen geht immer.
+    # Nr. 8: Eine Prüffreigabe entsteht oder reicht weiter – das Konto muss qualifiziert sein (mit Zugang zum Modul).
+    # Kürzen geht immer.
     if neu is not None and neu["permission"] == "pruefen" and (
             alt is None or alt["permission"] != "pruefen" or _spaeter(neu["valid_until"], alt["valid_until"])):
-        if not rechte.ist_pruefer(konto):
+        if not rechte.qualifiziert(konto):
             raise Abgelehnt(NICHT_QUALIFIZIERT, 409)
 
 
@@ -315,7 +324,7 @@ def erteilen(fid, d):
     ich, s = current_user(), rechte.sicht()
     ordner = _ordner_alle()
     _anker_pruefen(fid, ordner)
-    konto = rechte.waehlbares_konto(d.get("user_id"))
+    konto = rechte.waehlbares_konto(d.get("user_id"), modulzugang=True)
     grund = auswahl(d.get("grundrecht"), rechte.GRUNDRECHTE, "Grundrecht", leer_erlaubt=True)
     grund_bis = _bis(d.get("grund_bis"), grund) if grund else None
     mit_pruefen = wahr(d, "pruefen", "Prüffreigabe") if "pruefen" in d else d.get("pruefen_bis") is not None
@@ -395,7 +404,7 @@ def entziehen(gid):
 def verlaengern(fid, d):
     """POST /ordner/<fid>/freigaben/verlaengern: alle befristeten Prüffreigaben an fid oder darunter, die noch gelten
     oder seit höchstens 90 Tagen abgelaufen sind, auf „bis“ – soweit der Handelnde sie nach 1.6 ändern darf, das Konto
-    qualifiziert und aktiv ist und die Freigabe dadurch länger wird. Dauerhafte laufen nicht ab und kommen gar nicht
+    aktiv ist, Zugang zum Modul hat und qualifiziert ist und die Freigabe dadurch länger wird. Dauerhafte laufen nicht ab und kommen gar nicht
     erst in die Auswahl (auch nicht unter „übersprungen“). Je Zeile ein Journaleintrag; was übersprungen wurde, steht
     mit Grund in der Antwort."""
     ich, s = current_user(), rechte.sicht()
@@ -419,9 +428,11 @@ def verlaengern(fid, d):
             konto = _konto(r["user_id"])
             grund = None
             if not _aktiv(konto):
-                grund = "Konto deaktiviert"
-            elif not rechte.ist_pruefer(konto):
-                grund = "Qualifikation fehlt"
+                grund = DEAKTIVIERT
+            elif not rechte.zugang(konto):
+                grund = OHNE_NAMEN if not (konto["name"] or "").strip() else OHNE_ZUGANG
+            elif not rechte.qualifiziert(konto):
+                grund = OHNE_QUALI
             elif not s.alles and r["user_id"] == ich["id"]:
                 grund = "eigene Freigabe"
             elif not s.alles and _spaeter(r["valid_until"], _ende(s, r["folder_id"])):
@@ -442,6 +453,7 @@ def verlaengern(fid, d):
 
 _ZEILEN_SQL = ("SELECT g.*, u.name AS u_name, u.gliederung AS u_gliederung, u.active AS u_active, u.status AS u_status, "
                "u.mat_pruefer AS u_pruefer, u.urkundennummer AS u_urkunde, u.recht_verwaltung AS u_verwaltung, "
+               "u.recht_material AS u_stufe, "
                "v.name AS von_name FROM mat_folder_grant g JOIN users u ON u.id = g.user_id "
                "LEFT JOIN users v ON v.id = g.granted_by ")
 
@@ -449,11 +461,11 @@ _ZEILEN_SQL = ("SELECT g.*, u.name AS u_name, u.gliederung AS u_gliederung, u.ac
 def _grundlage(rows, verwaltung=None):
     """Was neben einer Zeile für „grundrecht_dort“, „wirkt“ und „traegt_pruefen“ zählt (eine Abfrage für alle Konten
     der Liste): je Konto die gültigen Grundrechte {Kennung: Ordner}, die Anker der dauerhaften Prüffreigaben und ob es
-    die Plattform-Verwaltung ist (die hat das Grundrecht überall). verwaltung: diese Konten sind es (sonst aus
-    u_verwaltung der Zeilen)."""
+    die Stufe Verwaltung im Modul Material hat (Material-Verwaltung – die hat das Grundrecht überall, wie
+    rechte.grundrecht_an). verwaltung: diese Konten sind es (sonst aus u_stufe und u_verwaltung der Zeilen)."""
     uids = sorted({r["user_id"] for r in rows})
     if verwaltung is None:
-        verwaltung = {r["user_id"] for r in rows if int(r["u_verwaltung"] or 0) >= 2}
+        verwaltung = {r["user_id"] for r in rows if _stufe(r) >= 2}
     out = {uid: {"grund": {}, "dauer": [], "alles": uid in verwaltung} for uid in uids}
     if uids:
         for x in db.query("SELECT id, user_id, folder_id, permission FROM mat_folder_grant WHERE user_id IN "
@@ -470,7 +482,7 @@ def _grundlage(rows, verwaltung=None):
 
 def _am_grundrecht(r, g, ordner):
     """(grundrecht_dort, traegt_pruefen) einer Zeile r mit der Grundlage g ihres Kontos (_grundlage):
-    grundrecht_dort – das Konto hat am Anker oder darüber heute ein Grundrecht (oder ist Plattform-Verwaltung): Nur dann
+    grundrecht_dort – das Konto hat am Anker oder darüber heute ein Grundrecht (oder ist Material-Verwaltung): Nur dann
     darf eine Prüffreigabe dort dauerhaft sein und wirkt es eine dauerhafte. traegt_pruefen – bei einem gültigen
     Grundrecht: an wie vielen dauerhaften Prüffreigaben des Kontos es allein hängt (ohne es wirkten sie nicht mehr) – so
     sagen Entziehen und Kürzen es vorher."""
@@ -500,11 +512,31 @@ def _von_system(rows):
     return out
 
 
+def _stufe(r):
+    """Stufe im Modul Material eines Kontos aus einer Zeile von _ZEILEN_SQL (die Plattform-Verwaltung hat 2)."""
+    return 2 if int(r["u_verwaltung"] or 0) >= 2 else int(r["u_stufe"] or 0)
+
+
+def _wirkt_nicht(gueltig, aktiv, mit_namen, zugang, quali_fehlt, pruefen_wirkt):
+    """Warum eine gültige Freigabe nicht wirkt – als Text für die Listen, in fester Reihenfolge – oder None (sie wirkt,
+    oder sie ist abgelaufen; das sagen „gueltig“ und „bis“)."""
+    if not gueltig:
+        return None
+    for fehlt, grund in ((not aktiv, DEAKTIVIERT), (not mit_namen, OHNE_NAMEN), (not zugang, OHNE_ZUGANG),
+                         (quali_fehlt, OHNE_QUALI), (not pruefen_wirkt, OHNE_GRUNDRECHT_DORT)):
+        if fehlt:
+            return grund
+    return None
+
+
 def _eintrag(r, ordner, s, system, notiz, grundlage):
-    """Eine Zeile für die Listen (4.1). notiz: ob die Notiz mitkommt (V am Anker oder Verwaltung, nie geerbt);
-    grundlage: _grundlage der Liste. Eine dauerhafte Prüffreigabe ohne Grundrecht am Anker wirkt nicht."""
+    """Eine Zeile für die Listen (4.1). notiz: ob die Notiz mitkommt (V am Anker oder Material-Verwaltung, nie
+    geerbt); grundlage: _grundlage der Liste. Ohne Zugang zum Modul (Stufe und Name) wirkt keine Freigabe; eine
+    dauerhafte Prüffreigabe ohne Grundrecht am Anker auch nicht. Warum nicht, sagt „wirkt_nicht“."""
     heute = _heute()
-    qualifiziert = rechte.ist_pruefer({"mat_pruefer": r["u_pruefer"], "urkundennummer": r["u_urkunde"]})
+    mit_namen = bool((r["u_name"] or "").strip())
+    zugang = mit_namen and _stufe(r) >= 1
+    qualifiziert = zugang and rechte.ist_pruefer({"mat_pruefer": r["u_pruefer"], "urkundennummer": r["u_urkunde"]})
     aktiv = bool(r["u_active"]) and (r["u_status"] or "active") == "active"
     gueltig = rechte.gueltig(r["valid_until"])
     tage = (date.fromisoformat(r["valid_until"]) - heute).days if gueltig and r["valid_until"] else None
@@ -514,9 +546,11 @@ def _eintrag(r, ordner, s, system, notiz, grundlage):
     pruefen_wirkt = r["permission"] != "pruefen" or (qualifiziert and (r["valid_until"] is not None or dort))
     out = {"id": r["id"], "ordner": {"id": anker, "pfad": _pfad(anker, ordner)},
            "konto": {"id": r["user_id"], "name": _name(r["u_name"]), "gliederung": r["u_gliederung"], "aktiv": aktiv,
-                     "haekchen": bool(r["u_pruefer"]), "qualifiziert": qualifiziert},
+                     "haekchen": bool(r["u_pruefer"]), "qualifiziert": qualifiziert, "zugang": zugang},
            "recht": r["permission"], "bis": r["valid_until"], "gueltig": gueltig,
-           "wirkt": gueltig and aktiv and bool((r["u_name"] or "").strip()) and pruefen_wirkt,
+           "wirkt": gueltig and aktiv and zugang and pruefen_wirkt,
+           "wirkt_nicht": _wirkt_nicht(gueltig, aktiv, mit_namen, zugang,
+                                       r["permission"] == "pruefen" and not qualifiziert, pruefen_wirkt),
            "grundrecht_dort": dort, "traegt_pruefen": traegt,
            "laeuft_ab_in_tagen": tage if tage is not None and tage <= ABLAUF_TAGE else None,
            "vergeben_von": _name(r["von_name"]) if r["granted_by"] is not None
@@ -621,15 +655,18 @@ def des_kontos(uid):
 def meine(user):
     """GET /freigaben/meine (jeder Angemeldete, auch ohne Modulzugang): die eigenen Freigaben – gültige und in den
     letzten 365 Tagen abgelaufene – mit Pfad, Zustand und bis zu drei Verwaltern des Ankers (wer verlängern kann).
-    Ohne Notiz. Eine dauerhafte Prüffreigabe läuft nicht ab; ohne Grundrecht dort wirkt sie nicht (grundrecht_dort)."""
+    Ohne Notiz. Ohne Zugang zum Modul (Stufe und Name) wirkt keine; eine dauerhafte Prüffreigabe läuft nicht ab und
+    wirkt ohne Grundrecht dort nicht (grundrecht_dort). Warum eine nicht wirkt, sagt „wirkt_nicht“ wie in den Listen;
+    „alles“: das Konto ist Material-Verwaltung."""
     heute = _heute()
     ab = (heute - timedelta(days=MEINE_TAGE)).isoformat()
     rows = db.query("SELECT * FROM mat_folder_grant WHERE user_id = ? AND (valid_until IS NULL OR valid_until >= ?) "
                     "ORDER BY id", (user["id"], ab))
     ordner = _ordner_alle()
-    qualifiziert = rechte.ist_pruefer(user)
+    zugang = rechte.zugang(user)
+    qualifiziert = rechte.qualifiziert(user)
     mit_namen = bool((user["name"] or "").strip())
-    grundlage = _grundlage(rows, {user["id"]} if is_admin(user) else set())
+    grundlage = _grundlage(rows, {user["id"]} if rechte.grundrecht_ueberall(user) else set())
     out = []
     for r in _sortiert([dict(r, u_name=user["name"]) for r in rows], ordner):
         gueltig = rechte.gueltig(r["valid_until"])
@@ -638,28 +675,34 @@ def meine(user):
         pruefen_wirkt = r["permission"] != "pruefen" or (qualifiziert and (r["valid_until"] is not None or dort))
         out.append({"id": r["id"], "ordner": {"id": r["folder_id"], "pfad": _pfad(r["folder_id"], ordner)},
                     "recht": r["permission"], "bis": r["valid_until"], "gueltig": gueltig,
-                    "wirkt": gueltig and mit_namen and pruefen_wirkt, "grundrecht_dort": dort,
+                    "wirkt": gueltig and zugang and pruefen_wirkt, "grundrecht_dort": dort,
+                    "wirkt_nicht": _wirkt_nicht(gueltig, True, mit_namen, zugang,
+                                                r["permission"] == "pruefen" and not qualifiziert, pruefen_wirkt),
                     "laeuft_ab_in_tagen": tage if tage is not None and tage <= ABLAUF_TAGE else None,
                     "verwalter": [v["name"] for v in rechte.verwalter_von(r["folder_id"]) if v["id"] != user["id"]][:3]})
-    return {"freigaben": out, "alles": is_admin(user), "qualifiziert": qualifiziert, "zugang": rechte.zugang(user)}
+    return {"freigaben": out, "alles": rechte.sicht(user).alles, "qualifiziert": qualifiziert, "zugang": zugang}
 
 
-def nutzer_suchen(q):
-    """GET /nutzer?q= (Verwalter irgendwo, Verwaltung): aktive Konten mit Namen, deren Name q enthält (ab 3 Zeichen,
-    Groß/klein egal, auch bei Umlauten), höchstens 20 – nur Name, Gliederung (Freitext), ob qualifiziert und ob das
-    Konto das Grundrecht überall hat (Plattform-Verwaltung – dann darf eine Prüffreigabe auch ohne lesen oder verwalten
-    dauerhaft sein, grundrecht_an). Keine E-Mail, keine Urkundennummer: kaum mehr, als die Wiki-Nutzerliste jedem
-    Mitglied zeigt."""
+def nutzer_suchen(q, zweck=None):
+    """GET /nutzer?q=&zweck= (Verwalter irgendwo, Material-Verwaltung): aktive Konten mit Namen, deren Name q enthält
+    (ab 3 Zeichen, Groß/klein egal, auch bei Umlauten), höchstens 20 – nur Name, Gliederung (Freitext), ob qualifiziert
+    und ob das Konto das Grundrecht überall hat (Material-Verwaltung – dann darf eine Prüffreigabe auch ohne lesen oder
+    verwalten dauerhaft sein, grundrecht_an). Keine E-Mail, keine Urkundennummer: kaum mehr, als die Wiki-Nutzerliste
+    jedem Mitglied zeigt. zweck „freigabe“ (Vorgabe): nur Konten mit Zugang zum Modul (Stufe Mitglied oder Verwaltung) –
+    an andere ließe sich keine Freigabe vergeben (erteilen antwortet 409); „zuordnung“: alle, denn wer PSA trägt,
+    braucht keinen Modulzugang."""
+    zweck = auswahl(zweck or "freigabe", ZWECKE, "Zweck")
     q = text({"q": q}, "q", "Suche", n=80)
     if len(q) < SUCHE_MIN:
         raise Abgelehnt(SUCHE_KURZ)
     such = q.casefold()
-    treffer = [u for u in db.query("SELECT id, name, gliederung, mat_pruefer, urkundennummer, recht_verwaltung FROM users "
-                                   "WHERE active = 1 AND status = 'active' AND trim(name) <> '' "
-                                   "ORDER BY name COLLATE NOCASE, id")
+    stufe = " AND (recht_material >= 1 OR recht_verwaltung >= 2)" if zweck == "freigabe" else ""
+    treffer = [u for u in db.query("SELECT id, name, gliederung, mat_pruefer, urkundennummer, recht_material, "
+                                   "recht_verwaltung FROM users WHERE active = 1 AND status = 'active' "
+                                   f"AND trim(name) <> ''{stufe} ORDER BY name COLLATE NOCASE, id")
                if such in u["name"].casefold()]
     return {"nutzer": [{"id": u["id"], "name": u["name"], "gliederung": u["gliederung"],
-                        "qualifiziert": rechte.ist_pruefer(u), "grundrecht_ueberall": is_admin(u)}
+                        "qualifiziert": rechte.qualifiziert(u), "grundrecht_ueberall": rechte.grundrecht_ueberall(u)}
                        for u in treffer[:SUCHE_MAX]],
             "mehr": len(treffer) > SUCHE_MAX}
 
@@ -673,21 +716,3 @@ def zahlen_je_konto():
         "SELECT user_id, COUNT(*) AS n, SUM(permission IN ('lesen', 'verwalten')) AS grund, "
         "MAX(permission = 'verwalten') AS v FROM mat_folder_grant WHERE valid_until IS NULL OR valid_until >= ? "
         "GROUP BY user_id", (_heute().isoformat(),))}
-
-
-def stufen_vormerken(users, zahlen):
-    """Die wirksame Material-Stufe aller Konten der Liste aus zahlen_je_konto in den Zwischenspeicher der Anfrage
-    (g.mat_stufe) legen – dieselbe Regel wie rechte.material_stufe_wirksam (der Test vergleicht beide), aber ohne eine
-    Abfrage je Konto. public_user liest sie dann von dort."""
-    speicher = g.setdefault("mat_stufe", {})
-    for u in users:
-        _, grund, verwalten = zahlen.get(u["id"], (0, 0, False))
-        if not (u["name"] or "").strip():
-            n = 0
-        elif is_admin(u) or verwalten:
-            n = 2
-        elif grund or u["mat_katalog"] or u["mat_pruefer"]:
-            n = 1
-        else:
-            n = 0
-        speicher[u["id"]] = n

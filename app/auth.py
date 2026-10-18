@@ -99,28 +99,29 @@ def _im_hintergrund(funktion, *args):
 #               veröffentlichen, HTML-Bausteine, Ersteller ändern, endgültig löschen. Kein Zugriff heißt hier:
 #               Lesemodus – nur die Seiten, die der öffentliche Teil zeigt (siehe wiki_lesemodus).
 #   pruefungen  Mitglied: Prüfungen abnehmen; Verwaltung: Kataloge pflegen, jeden Lehrgang leiten.
-#   material    seit Phase 2 keine gespeicherte Stufe mehr: Rechte am Bestand vergibt der Verwalter eines Ordners als
-#               Freigabe (lesen, prüfen, verwalten). Die Stufe hier ist abgeleitet – 2 = irgendwo verwalten,
-#               1 = Modulzugang (Freigabe, Häkchen Prüfer oder Katalogpfleger), siehe app/material/services/rechte.py.
-#               recht_material bleibt als Rückweg stehen und wird nicht mehr gelesen.
+#   material    Mitglied: das Modul nutzen (Katalog, Suche, Profil) – Bestand nur über Freigaben je Ordner, die der
+#               Verwalter eines Ordners vergibt; Verwaltung (Material-Verwaltung): zusätzlich Produktkatalog pflegen,
+#               alle Bestände, Gliederungen anlegen, jede Freigabe. Prüfen nie über die Stufe – nur mit Häkchen
+#               „Prüfer“, Urkundennummer und Prüffreigabe. Ohne Stufe wirken weder Freigaben noch das Häkchen
+#               (app/material/services/rechte.py).
 #   verwaltung  Verwaltung: Nutzer, Rechte, Einstellungen – und damit alle Rechte überall; eine
 #               Mitglied-Stufe gibt es hier nicht.
 # Die Werte liegen als Spalten recht_<modul> am Nutzer (db.py); api_admin schreibt sie.
 MODULE = ("karte", "wiki", "pruefungen", "material", "verwaltung")
 KEIN_ZUGRIFF, MITGLIED, VERWALTUNG = 0, 1, 2
 STUFEN = (KEIN_ZUGRIFF, MITGLIED, VERWALTUNG)
+# Vorgabe für neue Konten (Kontoanfrage und Nutzerverwaltung): Mitglied im Modul Material, sonst nichts – Spots und
+# Wiki gibt es nicht mehr von selbst (Wunsch vom 18.10.2026; ohne Wiki-Stufe bleibt der Lesemodus). Vorhandene Konten
+# behalten ihre Stufen.
+VORGABE_NEU = {"karte": KEIN_ZUGRIFF, "wiki": KEIN_ZUGRIFF, "pruefungen": KEIN_ZUGRIFF, "material": MITGLIED,
+               "verwaltung": KEIN_ZUGRIFF}
 
 
 def stufe(modul, user=None):
-    """Wirksame Stufe eines Nutzers im Modul – Verwaltung im Modul „verwaltung“ gilt überall. Im Modul Material kommt
-    sie seit Phase 2 aus den Freigaben je Ordner (rechte.material_stufe_wirksam); die Spalte recht_material wirkt nicht
-    mehr."""
+    """Wirksame Stufe eines Nutzers im Modul – Verwaltung im Modul „verwaltung“ gilt überall."""
     user = user or current_user()
     if not user:
         return KEIN_ZUGRIFF
-    if modul == "material":
-        from .material.services.rechte import material_stufe_wirksam
-        return material_stufe_wirksam(user)
     if int(user["recht_verwaltung"] or 0) >= VERWALTUNG:
         return VERWALTUNG
     return int(user[f"recht_{modul}"] or 0)
@@ -179,11 +180,9 @@ def public_user(u):
     out["reason"] = u.get("reason", "")
     out["avatar"] = avatar_url(u.get("avatar") or "")
     out["rechte"] = rechte_von(u)
-    # Modul Material: die beiden Kennzeichen, wie sie gespeichert sind, und die Urkundennummer.
-    # Was davon wirkt (Prüfer nur mit Urkundennummer, Katalog auch für die Verwaltung), entscheidet
-    # app/material/services/rechte.py.
+    # Modul Material: das Häkchen „Prüfer“, wie es gespeichert ist, und die Urkundennummer. Was davon wirkt (nur mit
+    # Stufe im Modul und Urkundennummer), entscheidet app/material/services/rechte.py.
     out["mat_pruefer"] = bool(u.get("mat_pruefer"))
-    out["mat_katalog"] = bool(u.get("mat_katalog"))
     out["urkundennummer"] = u.get("urkundennummer") or ""
     # Taugt die Nummer (Buchstaben oder Ziffern)? Die Nutzerverwaltung zeigt sonst „Prüfer – Urkundennummer fehlt“.
     from .material.services.rechte import urkunde_gueltig, urkunde_saeubern
@@ -445,10 +444,11 @@ def register():
                 "INSERT INTO users (email, password_hash, name, gliederung, phone, recht_karte, recht_wiki, "
                 "recht_pruefungen, recht_material, recht_verwaltung, active, status, reason, created_at) "
                 "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                # Der allererste Nutzer bekommt überall Verwaltung; alle weiteren die Vorgabe
-                # (Mitglied in Spots und Wiki) und warten auf die Freigabe.
+                # Der allererste Nutzer bekommt überall Verwaltung; alle weiteren die Vorgabe (Mitglied im
+                # Modul Material, sonst nichts – das Wiki lesen sie im Lesemodus; VORGABE in api_admin.py)
+                # und warten auf die Freigabe.
                 (email, pw_hash, name, gliederung, _einzeilig(sfield(d, "phone")),
-                 *((2, 2, 2, 2, 2) if first else (1, 1, 0, 0, 0)),
+                 *((2, 2, 2, 2, 2) if first else tuple(VORGABE_NEU[m] for m in MODULE)),
                  1 if first else 0, "active" if first else "pending",
                  sfield(d, "reason").strip()[:2000], db.now()))
     except sqlite3.IntegrityError:

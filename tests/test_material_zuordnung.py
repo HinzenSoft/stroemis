@@ -3,7 +3,7 @@ python tests/test_material_zuordnung.py  oder  pytest tests/test_material_zuordn
 
 Nach dem Bauentwurf 8.3: Zuordnen, ändern, lösen und die Sammelaktion (ganz oder gar nicht) – nur, wer den Artikel
 verwaltet, an jedes aktive Konto mit Namen; im Journal steht die Person nur als Kontoverweis. Die Personen eines
-Ordners (für den Filter) nur mit Grundrecht. Meldungen sieht nur, wer Katalogpfleger, Verwaltung oder Melder ist oder
+Ordners (für den Filter) nur mit Grundrecht. Meldungen sieht nur, wer Material-Verwaltung oder Melder ist oder
 ihren Ordner sieht (6.x, 2.2). Beim Löschen eines Kontos räumt der Code vorher auf und schreibt das Journal (7.).
 Prüfnachweise bleiben unbefristet – auf keinem Weg verschwindet einer (Entscheidung des Betreibers vom 18.10.2026,
 test_pruefnachweise_bleiben).
@@ -60,7 +60,7 @@ def aufbau(tmp):
     p = {}
     for name, mail in (("Person Eins", "person1@example.org"), ("Person Zwei", "person2@example.org"),
                        ("Person Inaktiv", "inaktiv@example.org"), ("", "namenlos@example.org")):
-        p[mail.split("@")[0]] = neues_konto(app, mail, name=name)[1]
+        p[mail.split("@")[0]] = neues_konto(app, mail, name=name, stufe=0)[1]
     assert k["adm"].put(f"/api/admin/users/{p['inaktiv']}", json={"active": False}).status_code == 200
     return app, k, ids, gid, system, lager, art, p
 
@@ -153,14 +153,15 @@ def test_zuordnen():
 
         # Rechte: nur wer den Artikel verwaltet. Führungskraft und Prüfer sehen ihn (403), wer keinen Modulzugang hat,
         # erfährt das (403), ohne Anmeldung 401.
-        for wer in ("fuehrung", "pruefer", "katalog"):
+        for wer in ("fuehrung", "pruefer"):
             r = k[wer].put(ZU.format(a2), json={"user_id": p["person1"]})
             assert r.status_code == 403 and "Materialwarte" in r.json["error"], (wer, r.get_json())
         r = k["nutzer"].put(ZU.format(a2), json={"user_id": p["person1"]})
         assert r.status_code == 403 and "nicht freigeschaltet" in r.json["error"], r.get_json()
         assert app.test_client().put(ZU.format(a2), json={"user_id": p["person1"]}, headers=H).status_code == 401
         assert w.put(ZU.format(999999), json={"user_id": p["person1"]}).status_code == 404
-        # Die Verwaltung darf überall.
+        # Die Material-Verwaltung darf überall – auch ohne Plattform-Verwaltung.
+        assert k["katalog"].put(ZU.format(a2), json={"user_id": p["person2"]}).status_code == 200
         assert k["adm"].put(ZU.format(a2), json={"user_id": p["person1"]}).status_code == 200
         assert zugeordnet(app, a2) == p["person1"]
 
@@ -299,9 +300,10 @@ def test_lebenslauf_ohne_namen():
 # --- Meldungen je Bereich -----------------------------------------------------------------------------------------
 
 def test_meldungen_je_bereich():
-    """Meldungen sieht nur, wer Katalogpfleger oder Verwaltung ist, sie gemacht hat oder ihren Ordner sieht – in der
-    Liste, in der Zahl der offenen und beim Lesen (sonst 404 wie unbekannt). Den Ordnerpfad zeigt eine Meldung nur, wer
-    den Ordner sieht; sonst nur die Gliederung – auch in der Mail an die Katalogpfleger."""
+    """Meldungen sieht nur, wer Material-Verwaltung ist, sie gemacht hat oder ihren Ordner sieht – in der Liste, in der
+    Zahl der offenen und beim Lesen (sonst 404 wie unbekannt). Den Ordnerpfad zeigt eine Meldung nur, wer den Ordner
+    sieht (die Material-Verwaltung sieht jeden); sonst nur die Gliederung. Die Mail an die Material-Verwaltung nennt nur
+    die Gliederung."""
     with post_der_meldungen() as post, tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
         app, w, kp, f = t.app, t.wart_a, t.k["katalog"], t.k["fuehrung"]
@@ -315,7 +317,7 @@ def test_meldungen_je_bereich():
         post.clear()
         m_b = melden(t.wart_b, "Testmodell B", folder_id=t.lager_b, note="Notiz Nachbarstadt")
         m_ohne = melden(t.adm, "Testmodell ohne Ordner")
-        # Die Mail an die Katalogpfleger nennt nur die Gliederung.
+        # Die Mail an die Material-Verwaltung nennt nur die Gliederung.
         an_kp = [x for x in post if x[0] == "katalog@example.org" and "Testmodell B" in x[1]]
         assert len(an_kp) == 1 and "Für:            OG Nachbarstadt\n" in an_kp[0][2], post
         assert "Lager Nachbarstadt" not in an_kp[0][2], an_kp[0][2]
@@ -326,7 +328,7 @@ def test_meldungen_je_bereich():
             r = c.get("/api/material/meldungen", query_string=q)
             assert r.status_code == 200, r.get_json()
             return [m["id"] for m in r.json["meldungen"]], r.json
-        # Katalogpflege und Verwaltung: alle; offen zählt alle.
+        # Material-Verwaltung (mit und ohne Plattform-Verwaltung): alle; offen zählt alle.
         for c in (kp, t.adm):
             liste, j = ids_(c)
             assert liste == [m_a["id"], m_b["id"], m_ohne["id"]] and j["offen"] == 3, j
@@ -342,7 +344,7 @@ def test_meldungen_je_bereich():
             assert m_b["id"] not in ids_(w, eigene="0", status=status)[0]
         # Materialwart von B entsprechend.
         assert ids_(t.wart_b, eigene="0")[0] == [m_b["id"]]
-        # Lesen: Fremdes wie Unbekanntes; der Melder, Katalogpflege und Verwaltung lesen.
+        # Lesen: Fremdes wie Unbekanntes; der Melder und die Material-Verwaltung lesen.
         unbekannt = w.get("/api/material/meldungen/999999")
         assert unbekannt.status_code == 404 and unbekannt.json["error"] == "Meldung nicht gefunden."
         for mid in (m_b["id"], m_ohne["id"]):
@@ -351,20 +353,25 @@ def test_meldungen_je_bereich():
         assert w.get(f"/api/material/meldungen/{m_a['id']}").status_code == 200
         assert f.get(f"/api/material/meldungen/{m_a['id']}").status_code == 200
         assert t.adm.get(f"/api/material/meldungen/{m_ohne['id']}").status_code == 200
-        # Wer den Ordner nicht sieht (Katalogpflege ohne Freigabe in B), liest nur die Gliederung.
+        # Die Material-Verwaltung sieht jeden Ordner – auch ohne Freigabe in B – und damit den Pfad.
+        pfad_b = {"id": t.lager_b, "pfad": "OG Nachbarstadt / Lager Nachbarstadt"}
         r = kp.get(f"/api/material/meldungen/{m_b['id']}")
-        assert r.status_code == 200 and r.json["meldung"]["ordner"] == {"gliederung": "OG Nachbarstadt"}, r.get_json()
-        assert "Lager Nachbarstadt" not in r.get_data(as_text=True)
-        assert {m["id"]: m["ordner"] for m in kp.get("/api/material/meldungen").json["meldungen"]}[m_b["id"]] == \
-            {"gliederung": "OG Nachbarstadt"}
+        assert r.status_code == 200 and r.json["meldung"]["ordner"] == pfad_b, r.get_json()
+        assert {m["id"]: m["ordner"] for m in kp.get("/api/material/meldungen").json["meldungen"]}[m_b["id"]] == pfad_b
         assert t.adm.get(f"/api/material/meldungen/{m_b['id']}").json["meldung"]["ordner"]["pfad"] == \
             "OG Nachbarstadt / Lager Nachbarstadt"
-        # Verliert der Melder seine Freigabe, liest er seine Meldung weiter – nur noch mit der Gliederung.
+        # Verliert der Melder seine Freigabe, liest er seine Meldung weiter – nur noch mit der Gliederung. Den Zugang
+        # behält er (Stufe Mitglied): Die Liste zeigt seine eigenen.
         sql(app, "DELETE FROM mat_folder_grant WHERE user_id = ?", (t.wart_b_id,))
         r = t.wart_b.get(f"/api/material/meldungen/{m_b['id']}")
         assert r.status_code == 200 and r.json["meldung"]["ordner"] == {"gliederung": "OG Nachbarstadt"}, r.get_json()
+        assert "Lager Nachbarstadt" not in r.get_data(as_text=True)
         assert r.json["meldung"]["eigen"] is True
-        assert t.wart_b.get("/api/material/meldungen").status_code == 403          # ohne Modulzugang keine Liste
+        r = t.wart_b.get("/api/material/meldungen")
+        assert r.status_code == 200 and [m["id"] for m in r.json["meldungen"]] == [m_b["id"]], r.get_json()
+        # Ohne Stufe im Modul keine Liste.
+        sql(app, "UPDATE users SET recht_material = 0 WHERE id = ?", (t.wart_b_id,))
+        assert t.wart_b.get("/api/material/meldungen").status_code == 403
         # Ohne Anmeldung nichts.
         assert app.test_client().get(f"/api/material/meldungen/{m_a['id']}").status_code == 401
     print("Meldungen je Bereich bestanden.")
@@ -386,7 +393,7 @@ def test_loeschkonzept():
     with post_der_meldungen(), tempfile.TemporaryDirectory() as tmp:
         app, k, ids, gid, system, lager, art, p = aufbau(tmp)
         adm, w = k["adm"], k["wart"]
-        geht, uid = neues_konto(app, "geht@example.org", name="Person Geht", mat_pruefer=True, mat_katalog=True,
+        geht, uid = neues_konto(app, "geht@example.org", name="Person Geht", mat_pruefer=True, rechte={"material": 2},
                                 urkundennummer="1012-0999")
         fach = ordner_neu(w, lager, "Fach")
         g_lesen = freigeben(adm, gid, uid, "lesen")
