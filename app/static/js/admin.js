@@ -30,7 +30,7 @@
      Ordners als Freigabe – hier steht, was daraus folgt („alles“, „n Freigaben“ oder „–“). */
   const MODULE = [
     { k: "karte", t: "Spots", hilfe: "Mitglied: eigene Alben anlegen und bearbeiten. Verwaltung: alle Alben." },
-    { k: "wiki", t: "Wiki", hilfe: "Mitglied: eigene und freigegebene Seiten. Verwaltung: alle Seiten, beschränkte lesen, veröffentlichen, HTML-Bausteine, Ersteller ändern." },
+    { k: "wiki", t: "Wiki", hilfe: "Ohne Zugriff (–): nur die öffentlich freigegebenen Seiten lesen. Mitglied: eigene und freigegebene Seiten. Verwaltung: alle Seiten, beschränkte lesen, veröffentlichen, HTML-Bausteine, Ersteller ändern." },
     { k: "pruefungen", t: "Prüfungen", hilfe: "Mitglied: Prüfungen abnehmen (Prüfer). Verwaltung: zusätzlich Kataloge pflegen und jeden Lehrgang leiten." },
     { k: "material", t: "Material", nurAnzeige: true, hilfe: "Rechte am Bestand vergibt der Verwalter eines Ordners unter Bestand → Ordner → Freigaben. Die Verwaltung sieht alles und legt Gliederungen an. Prüfer und Katalogpflege sind Häkchen; beide geben allein keinen Bestand zu sehen. Prüfen braucht zusätzlich eine befristete Prüffreigabe." },
     { k: "verwaltung", t: "Verwaltung", nurVoll: true,
@@ -211,7 +211,7 @@
       <label>Telefon</label><input type="tel" id="u-phone" value="${S.esc(u.phone)}">
       <label>Rechte</label>
       <div class="rechte-reihe">${MODULE.map((m) => `<div><label for="u-r-${m.k}">${m.t}</label>${rechtFeld(m, rechte, { id: "u-r-" + m.k, eigenes, konto: u })}</div>`).join("")}</div>
-      <div class="help">„–“ kein Zugriff · „Mitglied“ eigene Inhalte, bei Prüfungen: Prüfungen abnehmen ·
+      <div class="help">„–“ kein Zugriff (im Wiki: nur die öffentlichen Seiten lesen) · „Mitglied“ eigene Inhalte, bei Prüfungen: Prüfungen abnehmen ·
         „Verwaltung“ alles im Modul. Verwaltung im Modul „Verwaltung“ schließt alle Rechte ein.
         Was eine Stufe genau umfasst, steht als Hinweis am Feld. Material ist nur Anzeige: Rechte am Bestand vergibt der
         Verwalter eines Ordners unter Bestand → Ordner → Freigaben; die Verwaltung sieht alles und legt Gliederungen an.</div>

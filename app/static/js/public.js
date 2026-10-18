@@ -1,9 +1,17 @@
-/* Öffentliches Wiki (ohne Login): freigegebene Seiten lesen */
+/* Öffentliches Wiki: freigegebene Seiten lesen – ohne Login (public.html) und im Lesemodus für angemeldete Konten
+   ohne Stufe im Wiki (wiki_lesemodus.html). Beide lesen nur über /api/public: Was zu sehen ist, entscheidet der
+   Server an einer Stelle (api_wiki.is_public), nicht dieses Skript. */
 (function () {
   const esc = MD.esc;
   const $ = (s) => document.querySelector(s);
   const shell = $(".wiki-shell"), treeEl = $("#tree"), content = $("#wiki-content"), tocEl = $("#toc"), side = $("#wiki-side");
-  const prefix = location.pathname.startsWith("/oeffentlich") ? "/oeffentlich/" : "/";
+  const lesemodus = shell.dataset.modus === "lesemodus";
+  /* Seiten liegen unter prefix + slug, die Übersicht unter start. Im Lesemodus sind das /wiki/… und /wiki – eine
+     Adresse /wiki/ gibt es dort nicht, ein Neuladen der Übersicht endete sonst auf der 404-Seite. */
+  const prefix = shell.dataset.prefix || (location.pathname.startsWith("/oeffentlich") ? "/oeffentlich/" : "/");
+  const start = shell.dataset.start || prefix;
+  const adresse = (slug) => (slug ? prefix + slug : start);
+  const slugAusPfad = () => (location.pathname.startsWith(prefix) ? location.pathname.slice(prefix.length) : "");
   let stopSpy = null;
 
   async function get(path) {
@@ -28,16 +36,19 @@
     root.querySelectorAll("a[href]").forEach((a) => {
       const href = a.getAttribute("href") || "";
       if (/^https?:\/\//i.test(href) && istFremd(href)) { a.target = "_blank"; a.rel = "noopener"; }
-      else if (href.startsWith(prefix) && !isFile(href)) a.addEventListener("click", (e) => { e.preventDefault(); navigate(href.slice(prefix.length)); });
+      else if ((href.startsWith(prefix) || href === start) && !isFile(href)) a.addEventListener("click", (e) => { e.preventDefault(); navigate(href === start ? "" : href.slice(prefix.length)); });
     });
   }
 
-  function navigate(slug, push = true) {
+  function navigate(ziel, push = true) {
     side.classList.remove("open");        // auf dem Telefon liegt die Seitenleiste über dem Text
-    if (push) history.pushState({ slug }, "", prefix + slug);
+    // Ein Link mit Sprungmarke (…/seite#abschnitt): Die Marke gehört in die Adresse, nicht in den Seitennamen –
+    // sonst fragte der Leser nach „seite#abschnitt“ und meldete eine vorhandene Seite als nicht gefunden.
+    const slug = ziel.split("#")[0];
+    if (push) history.pushState({ slug }, "", adresse(slug) + ziel.slice(slug.length));
     show(slug);
   }
-  window.addEventListener("popstate", () => show(location.pathname.slice(prefix.length)));
+  window.addEventListener("popstate", () => show(slugAusPfad()));
 
   function tree(rows, current) {
     const kids = (pid) => rows.filter((r) => (r.parent_id || null) === pid);
@@ -54,7 +65,26 @@
     if (!slug) return home();
     let d;
     try { d = await get(`/api/public/pages/${encodeURIComponent(slug)}`); }
-    catch (e) { content.innerHTML = `<div class="empty"><strong>Seite nicht gefunden</strong>${esc(e.message)}<div class="btn-row" style="justify-content:center;margin-top:12px"><a class="btn secondary small" href="${prefix}">Zur Übersicht</a></div></div>`; wire(content); return; }
+    catch (e) {
+      /* Im Lesemodus sagt die Meldung, wo die Seite sonst sein könnte – für „gibt es nicht“ und „nicht öffentlich“
+         wortgleich, wie die Schnittstelle selbst: Sonst ließe sich abfragen, welche internen Seiten es gibt. */
+      const text = lesemodus && e.status === 404 ? "Diese Seite gibt es nicht, oder sie steht nur im internen Wiki." : e.message;
+      content.innerHTML = `<div class="empty"><strong>Seite nicht gefunden</strong>${esc(text)}<div class="btn-row" style="justify-content:center;margin-top:12px"><a class="btn secondary small" href="${start}">Zur Übersicht</a></div></div>`;
+      wire(content);
+      // Das Inhaltsverzeichnis gehörte der vorigen Seite – seine Sprungziele gibt es hier nicht. Ebenso ihr Titel im
+      // Reiter (und im Verlauf) und ihre Markierung im Baum: Sonst stand dort weiter die Seite, die man verlassen hat.
+      tocEl.innerHTML = "";
+      if (stopSpy) { stopSpy(); stopSpy = null; }
+      document.title = "Seite nicht gefunden – Wiki – strömis.de";
+      treeEl.querySelectorAll("a.active").forEach((a) => a.classList.remove("active"));
+      // Direkt aufgerufen stand der Baum sonst leer da: dann die Einstiegsseiten wie auf der Übersicht. Nach dem
+      // Laden noch einmal nachsehen – ist inzwischen eine andere Seite offen, hat sie ihren eigenen Baum gezeichnet.
+      if (lesemodus && !treeEl.children.length) {
+        const pages = await einstiegsseiten();
+        if (!treeEl.children.length) indexBaum(pages);
+      }
+      return;
+    }
     const p = d.page;
     if (p.slug !== slug) history.replaceState({ slug: p.slug }, "", prefix + p.slug);
     document.title = `${p.title} – Wiki – strömis.de`;
@@ -95,16 +125,31 @@
     if (!MD.scrollToHash(content)) window.scrollTo(0, 0);
   }
 
+  async function einstiegsseiten() {
+    try { return (await get("/api/public/index")).pages; } catch (e) { return []; }
+  }
+
+  function indexBaum(pages) {
+    treeEl.innerHTML = pages.length ? `<ul>${pages.map((p) => `<li class="leaf"><div class="row"><span class="tg"></span><a href="${prefix}${esc(p.slug)}">${esc(p.title)}</a></div></li>`).join("")}</ul>` : "";
+    wire(treeEl);
+  }
+
   async function home() {
     document.title = "Wiki – strömis.de";
-    let pages = [];
-    try { pages = (await get("/api/public/index")).pages; } catch (e) { /* leer */ }
-    treeEl.innerHTML = pages.length ? `<ul>${pages.map((p) => `<li class="leaf"><div class="row"><span class="tg"></span><a href="${prefix}${esc(p.slug)}">${esc(p.title)}</a></div></li>`).join("")}</ul>` : "";
+    const pages = await einstiegsseiten();
+    indexBaum(pages);
     tocEl.innerHTML = "";
-    content.innerHTML = `<div class="wiki-head"><nav class="krumen" aria-label="Pfad"><span class="krume" aria-current="page">Öffentliches Wiki</span></nav></div>
-      <h1 class="seitentitel">Öffentliches Wiki</h1>
-      <p class="help">Freigegebene Inhalte aus der Strömungsrettung. Für alles Weitere: <a href="${STROEMIS.baseUrl}/login">anmelden</a>.</p>
-      <div class="wiki-content">${pages.length ? `<ul>${pages.map((p) => `<li><a href="${prefix}${esc(p.slug)}">${esc(p.title)}</a>${p.public_children ? ' <span class="muted small">(mit Unterseiten)</span>' : ""}</li>`).join("")}</ul>` : '<p class="muted">Derzeit sind keine Seiten freigegeben.</p>'}</div>`;
+    // Im Lesemodus steht der Hinweis auf die Freischaltung schon über dem Text (wiki_lesemodus.html), und angemeldet
+    // ist das Konto bereits – deshalb dort ohne „anmelden“ und mit eigenem Text, wenn nichts freigegeben ist.
+    const titel = lesemodus ? "Wiki" : "Öffentliches Wiki";
+    const einleitung = lesemodus
+      ? "Freigegebene Inhalte aus der Strömungsrettung."
+      : `Freigegebene Inhalte aus der Strömungsrettung. Für alles Weitere: <a href="${STROEMIS.baseUrl}/login">anmelden</a>.`;
+    const leer = lesemodus ? "Derzeit sind keine Seiten öffentlich freigegeben." : "Derzeit sind keine Seiten freigegeben.";
+    content.innerHTML = `<div class="wiki-head"><nav class="krumen" aria-label="Pfad"><span class="krume" aria-current="page">${titel}</span></nav></div>
+      <h1 class="seitentitel">${titel}</h1>
+      <p class="help">${einleitung}</p>
+      <div class="wiki-content">${pages.length ? `<ul>${pages.map((p) => `<li><a href="${prefix}${esc(p.slug)}">${esc(p.title)}</a>${p.public_children ? ' <span class="muted small">(mit Unterseiten)</span>' : ""}</li>`).join("")}</ul>` : `<p class="muted">${leer}</p>`}</div>`;
     wire(content);
   }
 
@@ -136,5 +181,5 @@
     if (side.classList.contains("open") && !side.contains(e.target) && e.target.id !== "wiki-menu") side.classList.remove("open");
   }, true);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") side.classList.remove("open"); });
-  show(shell.dataset.slug || location.pathname.slice(prefix.length));
+  show(shell.dataset.slug || slugAusPfad());
 })();

@@ -96,7 +96,8 @@ def _im_hintergrund(funktion, *args):
 # Statt Rollen trägt jedes Konto je Modul eine Stufe: 0 kein Zugriff, 1 Mitglied, 2 Verwaltung.
 #   karte       Mitglied: eigene Alben anlegen und bearbeiten; Verwaltung: alle Alben.
 #   wiki        Mitglied: eigene und freigegebene Seiten; Verwaltung: alle Seiten, beschränkte lesen,
-#               veröffentlichen, HTML-Bausteine, Ersteller ändern, endgültig löschen.
+#               veröffentlichen, HTML-Bausteine, Ersteller ändern, endgültig löschen. Kein Zugriff heißt hier:
+#               Lesemodus – nur die Seiten, die der öffentliche Teil zeigt (siehe wiki_lesemodus).
 #   pruefungen  Mitglied: Prüfungen abnehmen; Verwaltung: Kataloge pflegen, jeden Lehrgang leiten.
 #   material    seit Phase 2 keine gespeicherte Stufe mehr: Rechte am Bestand vergibt der Verwalter eines Ordners als
 #               Freigabe (lesen, prüfen, verwalten). Die Stufe hier ist abgeleitet – 2 = irgendwo verwalten,
@@ -132,6 +133,16 @@ def nutzt(modul, user=None):
 
 def verwaltet(modul, user=None):
     return stufe(modul, user) >= VERWALTUNG
+
+
+def wiki_lesemodus(user=None):
+    """Angemeldet und freigeschaltet, aber ohne Stufe im Wiki: Das Konto liest die Seiten, die der öffentliche Teil
+    ohne Anmeldung zeigt – im angemeldeten Bereich, unter der eigenen Kopfleiste. Erreichen könnte es sie über
+    wiki.strömis.de ohnehin. Mehr als dort gibt es nicht: Der Lesemodus holt alles über die öffentliche Schnittstelle
+    (/api/public, api_wiki.is_public), die internen Endpunkte bleiben bei wiki_required und antworten weiter 403.
+    Wartende und deaktivierte Konten haben keine Sitzung (current_user) – für sie ändert sich nichts."""
+    user = user or current_user()
+    return bool(user and user["active"] and (user.get("status") or "active") == "active" and not nutzt("wiki", user))
 
 
 def rechte_von(user):
