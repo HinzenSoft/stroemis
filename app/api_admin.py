@@ -10,6 +10,7 @@ from .images import delete_avatar
 from .mailer import send_mail, versand
 from .material.services import Abgelehnt
 from .material.services import journal as mat_journal
+from .material.services import loeschung as mat_loeschung
 from .material.services.rechte import rollen_lesen
 from werkzeug.security import generate_password_hash
 
@@ -262,7 +263,13 @@ def delete_user(uid):
     bild = u.get("avatar") or ""
     # Inhalte bleiben erhalten und gehen an den ausführenden Administrator über –
     # entweder vollständig oder gar nicht, sonst stünde der Bestand halb umgeschrieben da.
-    with db.transaction():
+    # Die Schreibsperre von Anfang an: Zwischen dem Aufräumen im Modul Material und dem Löschen
+    # soll keine neue Freigabe oder Zuordnung an das Konto dazukommen.
+    with db.transaction(sofort=True):
+        # Modul Material (Löschkonzept): Journal je Freigabe und Zuordnung, Zuordnungen lösen,
+        # Entwürfe, Meldungen und Suchprotokoll ohne Namen – vor dem Löschen, solange der
+        # Kontoverweis noch auflösbar ist.
+        mat_loeschung.konto_loeschen_vorbereiten(uid)
         db.execute("UPDATE albums SET owner_id = ? WHERE owner_id = ?", (me, uid))
         db.execute("UPDATE photos SET owner_id = ? WHERE owner_id = ?", (me, uid))
         db.execute("UPDATE wiki_pages SET created_by = ? WHERE created_by = ?", (me, uid))
@@ -273,6 +280,16 @@ def delete_user(uid):
     # Erst nach dem Festschreiben: Bricht die Umschreibung ab, bleibt das Konto samt Bild stehen.
     delete_avatar(current_app.config["MEDIA_DIR"], bild)
     return jsonify(ok=True)
+
+
+@bp.get("/users/<int:uid>/material-folgen")
+@admin_required
+def material_folgen(uid):
+    """Was das Löschen des Kontos im Modul Material bewirkt – Zahlen für den Dialog „Löschen“: Freigaben, Zuordnungen,
+    offene Entwürfe und abgeschlossene Prüfungen (material.services.loeschung.folgen)."""
+    if not db.query("SELECT 1 FROM users WHERE id = ?", (uid,), one=True):
+        return jsonify(error="Nutzer nicht gefunden"), 404
+    return jsonify(mat_loeschung.folgen(uid))
 
 
 @bp.post("/users/<int:uid>/approve")

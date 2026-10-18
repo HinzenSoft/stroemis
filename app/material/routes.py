@@ -473,9 +473,10 @@ def dokument_zurueckziehen(did):
 
 @api.get("/meldungen")
 def meldungen():
-    """Lesen darf jeder mit Zugang zum Modul. Standard: Katalogpfleger und Lesende (Führungskraft) sehen alle
-    (offene zuerst), Materialwarte ihre eigenen (alle Stände); „eigene=1“ bzw. „eigene=0“ wählt ausdrücklich.
-    Abarbeiten („bearbeiten“) dürfen nur Katalogpfleger."""
+    """Lesen darf jeder mit Zugang zum Modul – jeder nur die Meldungen, die er sehen darf (rechte.darf_meldung):
+    Katalogpfleger und Verwaltung alle, sonst die eigenen und die aus Ordnern, die er sieht; „offen“ zählt ebenso.
+    Standard: Katalogpfleger und Lesende (Führungskraft) sehen alle davon (offene zuerst), Materialwarte ihre eigenen
+    (alle Stände); „eigene=1“ bzw. „eigene=0“ wählt ausdrücklich. Abarbeiten („bearbeiten“) dürfen nur Katalogpfleger."""
     u = current_user()
     if not u:
         return jsonify(error="Nicht angemeldet"), 401
@@ -501,13 +502,11 @@ def meldung_anlegen():
 
 @api.get("/meldungen/<int:mid>")
 def meldung_lesen(mid):
-    u = current_user()
-    if not u:
+    """Lesen darf, wer die Meldung sehen darf: Katalogpfleger, die Verwaltung, der Melder und wer den Ordner der Meldung
+    sieht. Sonst dieselbe 404 wie für eine, die es nicht gibt."""
+    if not current_user():
         return jsonify(error="Nicht angemeldet"), 401
-    r = meldung.meldung(mid)
-    if not (zugang(u) or ist_katalogpfleger() or r["created_by"] == u["id"]):
-        raise Abgelehnt("Diese Meldung sehen ihr Melder und alle mit Zugang zum Modul.", 403)
-    return jsonify(meldung=meldung.meldung_json(r))
+    return jsonify(meldung=meldung.meldung_json(meldung.lesbar(mid)))
 
 
 @api.delete("/meldungen/<int:mid>")
@@ -965,3 +964,4 @@ def durchgang_loeschen(rid):
 from . import routes_rueckruf  # noqa: E402,F401
 from . import routes_export  # noqa: E402,F401
 from . import routes_katalog  # noqa: E402,F401
+from . import routes_zuordnung  # noqa: E402,F401

@@ -1,19 +1,27 @@
 """Tests zu den Rückrufen im Modul „Material“ (Lieferung 4):  python tests/test_material_rueckruf.py
 
 Ein Katalogpfleger legt am Produkt einen Rückruf an. Der Hinweis steht am Produkt, an den betroffenen Artikeln und
-auf der Übersicht; eine Mail geht an alle Materialwarte und an die Prüfer betroffener Artikel. Gesperrt wird nicht
-automatisch – Prüfer sperren mit dem Grund „Rückruf“. Alle Namen, Hersteller, Titel und Seriennummern hier sind
-erfunden und nur für den Test da."""
+auf der Übersicht. Gesperrt wird nicht automatisch – Prüfer sperren mit dem Grund „Rückruf“.
+
+Seit Phase 2 (Bauentwurf 2.6) zeigen Liste und Zahlen jedem nur seinen Bereich; eine Mail geht je betroffenem Artikel
+an die Verwalter seiner Heimat und an die Prüfer, die ihn geprüft haben und dort heute prüfen dürfen (ohne Verwalter:
+die Plattform-Verwaltung), jeder bekommt nur die Artikel, die er sieht. Empfängerzahl und nicht gefundene
+Seriennummern erfährt nur die Plattform-Verwaltung. Alle Namen, Hersteller, Titel und Seriennummern hier sind erfunden
+und nur für den Test da."""
+import json
 import os
 import sqlite3
 import sys
 import tempfile
 import time
+from datetime import timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import (H, abschluss, anmelden, freigeben, gliederung, katalog_grund, neuer_artikel,  # noqa: E402
-                           pruef_formulare, starten, umgebung, unterschreiben, zweiter_pruefer)
+from test_material import (H, _heute, abschluss, anmelden, freigeben, gliederung, katalog_grund,  # noqa: E402
+                           neuer_artikel, neues_konto, pruef_formulare, starten, umgebung, unterschreiben,
+                           zweiter_pruefer)
+from test_material_ueberblick import ordner_neu  # noqa: E402
 
 RR = "/api/material/produkte/{}/rueckrufe"
 
@@ -151,10 +159,14 @@ def test_rechte_und_eingaben():
             x = r.json["rueckruf"]
             assert x["url"] == "https://www.example.org/rueckruf" and x["serien"] == ["RR-1", "RR-2"], x
             assert x["description"] == "Zeile eins\nZeile zwei" and not x["alle"]
-            # Ohne „mail“ gilt ja; mit mail=false geht nichts hinaus.
+            # Ohne „mail“ gilt ja; mit mail=false geht nichts hinaus. Die Zahl der Empfänger und nicht gefundene
+            # Seriennummern erfährt nur die Verwaltung – der Katalogpfleger, ob sein Bereich benachrichtigt wurde.
             assert post == []
             r = anlegen(kp, hms)
-            assert r.status_code == 201 and r.json["mail"] is True and r.json["empfaenger"] > 0 and post, r.get_json()
+            assert r.status_code == 201 and r.json["mail"] is True and r.json["benachrichtigt"] is True and post, r.get_json()
+            assert "empfaenger" not in r.json and "nicht_gefunden" not in r.json, r.get_json()
+            r = anlegen(k["adm"], hms)
+            assert r.status_code == 201 and r.json["empfaenger"] > 0 and r.json["nicht_gefunden"] == [], r.get_json()
     finally:
         post_zurueck(alt)
     print("Rückrufe: Rechte und Eingaben bestanden.")
@@ -181,17 +193,20 @@ def test_betroffene_und_hinweise():
                         url="https://example.org/rr-alle", mail=False)
             assert r.status_code == 201, r.get_json()
             alle = r.json
-            assert (alle["betroffen"], alle["offen"], alle["nicht_gefunden"], alle["empfaenger"]) == (3, 3, [], 0), alle
-            assert alle["rueckruf"]["alle"] and alle["rueckruf"]["mailed_at"] is None and alle["rueckruf"]["mail_count"] == 0
+            assert (alle["betroffen"], alle["offen"], alle["mail"], alle["benachrichtigt"]) == (3, 3, False, False), alle
+            assert alle["rueckruf"]["alle"] and alle["rueckruf"]["mail"] is False and "mail_count" not in alle["rueckruf"]
             assert {a["id"] for a in alle["rueckruf"]["artikel"]} == set(art.values())
-            # Mit Seriennummern: Vergleich ohne Groß/klein und ohne Leerraum außen; unbekannte kommen als Hinweis zurück.
-            r = anlegen(kp, hms, title="Nur zwei Seriennummern", serials=" rr-1 \nRR-2\nXY-9\nrr-4", mail=False)
+            # Mit Seriennummern: Vergleich ohne Groß/klein und ohne Leerraum außen; unbekannte kommen als Hinweis zurück –
+            # an die Verwaltung (für alle anderen hieße „nicht gefunden“ auch „nicht in fremden Gliederungen“).
+            r = anlegen(k["adm"], hms, title="Nur zwei Seriennummern", serials=" rr-1 \nRR-2\nXY-9\nrr-4", mail=False)
             assert r.status_code == 201, r.get_json()
             teil = r.json
-            assert teil["betroffen"] == 2 and teil["offen"] == 2, teil
+            assert teil["betroffen"] == 2 and teil["offen"] == 2 and teil["empfaenger"] == 0, teil
             assert teil["nicht_gefunden"] == ["XY-9", "rr-4"], teil["nicht_gefunden"]       # RR-4 ist ausgesondert
             assert {a["serial_no"] for a in teil["rueckruf"]["artikel"]} == {"RR-1", "rr-2"}
             assert teil["rueckruf"]["nicht_gefunden"] == ["XY-9", "rr-4"]
+            x = kp.get(RR.format(hms)).json["rueckrufe"][0]
+            assert x["title"] == "Nur zwei Seriennummern" and "nicht_gefunden" not in x and x["betroffen"] == 2, x
 
             # Banner-Daten am Artikel: die laufenden Rückrufe, die ihn betreffen – für alle mit Lesezugang.
             a1 = f.get(f"/api/material/artikel/{art['RR-1']}").json["artikel"]
@@ -241,90 +256,157 @@ def test_betroffene_und_hinweise():
 # --- Mail ---------------------------------------------------------------------------------------------------
 
 def test_mail_empfaenger():
+    """Empfänger je betroffenem Artikel (Phase 2, Bauentwurf 2.6): die Verwalter seiner Heimat und die Prüfer, die ihn
+    geprüft haben und dort heute prüfen dürfen; hat er keinen Verwalter, die Plattform-Verwaltung. Jeder Empfänger
+    bekommt eine Mail mit genau den betroffenen Artikeln, die er sehen darf – aus einer fremden Gliederung steht darin
+    nichts, auch keine Zahl."""
     post, alt = post_abfangen(scheitert={"wart2@example.org"})
     try:
         with tempfile.TemporaryDirectory() as tmp:
             app, k, ids, system, lager, art = aufbau(tmp)
             adm, w, kp = k["adm"], k["wart"], k["katalog"]
             hms = ids["hms"]
-            # Konten: ein zweiter Materialwart, ein inaktiver Materialwart, Prüfer mit verschiedenen Prüfungen.
-            konto(app, adm, "wart2@example.org", rechte={"material": 2})
-            _, wart3 = konto(app, adm, "wart3@example.org", rechte={"material": 2})
-            p2 = zweiter_pruefer(app, adm)                                        # prüft nur ein anderes Produkt
-            p3, p3_id = konto(app, adm, "pruefer3@example.org", mat_pruefer=True, urkundennummer="1012-4713")
-            p4, p4_id = konto(app, adm, "pruefer4@example.org", mat_pruefer=True, urkundennummer="1012-4714")
-            p5, p5_id = konto(app, adm, "pruefer5@example.org", mat_pruefer=True, urkundennummer="1012-4715")
-            for uid in (p3_id, p4_id, p5_id):          # prüfen braucht seit Phase 2 eine Prüffreigabe am Ordner
-                freigeben(adm, lager, uid, "pruefen")
-            for c in (p3, p4, p5):
-                unterschreiben(c)
+            gid = zeile(tmp, "SELECT parent_id FROM mat_folder WHERE id = ?", (lager,))["parent_id"]
+            # Verwalter der Gliederung: wart (aus aufbau), wart2 (an ihn scheitert die Mail), wart3 (danach deaktiviert);
+            # wart_fz verwaltet nur ein Fahrzeug, in dem kein betroffener Artikel liegt.
+            _, wart2 = konto(app, adm, "wart2@example.org")
+            _, wart3 = konto(app, adm, "wart3@example.org")
+            _, wart_fz = konto(app, adm, "wart_fz@example.org")
+            fahrzeug = ordner_neu(adm, gid, "Testfahrzeug", "fahrzeug")
+            for uid in (wart2, wart3):
+                freigeben(adm, gid, uid, "verwalten")
+            freigeben(adm, fahrzeug, wart_fz, "verwalten")
+            # Prüfer: pruefer (lesen und prüfen an der Gliederung), p2 prüft nur ein anderes Produkt; p3 bis p6 prüfen nur
+            # im Lager – p4 verliert danach die Urkundennummer, p5 wird deaktiviert, p6s Prüffreigabe läuft ab.
+            p2 = zweiter_pruefer(app, adm)
+            p = {}
+            for n in (3, 4, 5, 6):
+                p[n] = konto(app, adm, f"pruefer{n}@example.org", mat_pruefer=True, urkundennummer=f"1012-471{n}")
+                freigeben(adm, lager, p[n][1], "pruefen")
+                unterschreiben(p[n][0])
             anderes = produkt_anlegen(kp, ids, "HMS Gamma", "HG-1")
             fremd = neuer_artikel(w, anderes, lager, serial_no="RR-1")["id"]
             pruefen(k["pruefer"], art["RR-1"])                                     # betroffen (beide Rückrufe)
             pruefen(p2, fremd)                                                     # anderes Produkt
-            pruefen(p3, art["RR-3"])                                               # nur im Rückruf „alle“ betroffen
-            pruefen(p4, art["rr-2"])                                               # betroffen – Urkunde danach ungültig
-            pruefen(p5, art["rr-2"])                                               # betroffen – Konto danach inaktiv
-            # Das Startkonto (admin@) ist mit Stufe 2 im Modul Material auch Materialwart.
-            # Der Prüfer ist zugleich Materialwart (bekommt die Mail nur einmal); wart3 und pruefer5 sind inaktiv,
-            # pruefer4 hat keine gültige Urkundennummer mehr (das prüft nur Python, nicht SQL).
-            assert adm.put(f"/api/admin/users/{k['pruefer_id']}", json={"rechte": {"material": 2}}).status_code == 200
+            pruefen(p[3][0], art["RR-3"])                                          # nur im Rückruf „alle“ betroffen
+            for n in (4, 5, 6):
+                pruefen(p[n][0], art["rr-2"])                                      # betroffen – danach ohne P(A)
+            # Eine zweite Gliederung mit eigenem Verwalter und eigener Prüferin; eine dritte ganz ohne Verwalter.
+            ns, _ = gliederung(adm, "OG Nachbarstadt", standard=False)
+            _, wart_ns = konto(app, adm, "wart_ns@example.org")
+            freigeben(adm, ns, wart_ns, "verwalten")
+            pruefer_ns, pruefer_ns_id = konto(app, adm, "pruefer_ns@example.org", mat_pruefer=True,
+                                              urkundennummer="1012-4719")
+            freigeben(adm, ns, pruefer_ns_id, "pruefen")
+            unterschreiben(pruefer_ns)
+            ns_art = neuer_artikel(adm, hms, ordner_neu(adm, ns, "Lager Nachbarstadt"), serial_no="RR-NS")["id"]
+            pruefen(pruefer_ns, ns_art)
+            ow, _ = gliederung(adm, "OG Ohnewart", standard=False)
+            ow_art = neuer_artikel(adm, hms, ordner_neu(adm, ow, "Lager Ohnewart"), serial_no="RR-OW")["id"]
             assert adm.put(f"/api/admin/users/{wart3}", json={"active": False}).status_code == 200
-            assert adm.put(f"/api/admin/users/{p5_id}", json={"active": False}).status_code == 200
-            schreiben(tmp, "UPDATE users SET urkundennummer = ' - ' WHERE id = ?", (p4_id,))
+            assert adm.put(f"/api/admin/users/{p[5][1]}", json={"active": False}).status_code == 200
+            schreiben(tmp, "UPDATE users SET urkundennummer = ' - ' WHERE id = ?", (p[4][1],))
+            schreiben(tmp, "UPDATE mat_folder_grant SET valid_until = ? WHERE user_id = ? AND permission = 'pruefen'",
+                      ((_heute() - timedelta(days=1)).isoformat(), p[6][1]))
+            inv = {r["id"]: r["inventory_no"] for r in [zeile(tmp, "SELECT id, inventory_no FROM mat_item WHERE id = ?",
+                                                             (i,)) for i in (*art.values(), ns_art, ow_art)]}
 
-            r = anlegen(kp, hms, title="Schnapper prüfen", description="Testbeschreibung des Herstellers.",
-                        url="https://example.org/rr-1", serials="RR-1\nrr-2")
+            def mails():
+                return {an: inhalt for an, _, inhalt in post}
+
+            r = anlegen(adm, hms, title="Schnapper prüfen", description="Testbeschreibung des Herstellers.",
+                        url="https://example.org/rr-1", serials="RR-1\nrr-2\nRR-NS")
             assert r.status_code == 201, r.get_json()
             ruid = r.json["rueckruf"]["id"]
-            an = [x[0] for x in post]
-            assert sorted(an) == ["admin@example.org", "pruefer@example.org", "wart2@example.org", "wart@example.org"], an
-            assert r.json["empfaenger"] == 4
-            betreff, inhalt = post[0][1], post[0][2]
+            an = mails()
+            assert sorted(an) == ["pruefer@example.org", "pruefer_ns@example.org", "wart2@example.org",
+                                  "wart@example.org", "wart_ns@example.org"], sorted(an)
+            assert r.json["empfaenger"] == 5 and r.json["betroffen"] == 3, r.get_json()
+            betreff = post[0][1]
             assert betreff == "Rückruf: Testwerk HMS Beta – Schnapper prüfen", betreff
-            for teil in ("Testbeschreibung des Herstellers.", "https://example.org/rr-1", "  RR-1\n", "  rr-2\n",
-                         "Im Bestand:   2 betroffene Artikel", "Grund „Rückruf“",
-                         f"https://strömis.de/material/katalog/produkt/{hms}", "https://strömis.de/material\n",
-                         "OG Musterstadt / Lager"):
-                assert teil in inhalt, (teil, inhalt)
-            # Ergebnis gespeichert: drei angenommen, eine gescheitert (wart2).
+            # Musterstadt: die beiden eigenen Artikel, nichts aus der Nachbarstadt – auch nicht in der Zahl.
+            for adr in ("wart@example.org", "wart2@example.org", "pruefer@example.org"):
+                inhalt = an[adr]
+                for teil in ("Testbeschreibung des Herstellers.", "https://example.org/rr-1", "  RR-1\n", "  rr-2\n",
+                             "Dein Bereich: 2 betroffene Artikel", "Grund „Rückruf“", inv[art["RR-1"]], inv[art["rr-2"]],
+                             f"https://strömis.de/material/katalog/produkt/{hms}", "https://strömis.de/material\n",
+                             "OG Musterstadt / Lager"):
+                    assert teil in inhalt, (adr, teil, inhalt)
+                assert inv[ns_art] not in inhalt and "Nachbarstadt" not in inhalt, (adr, inhalt)
+            # Nachbarstadt: nur ihr Artikel.
+            for adr in ("wart_ns@example.org", "pruefer_ns@example.org"):
+                inhalt = an[adr]
+                assert "Dein Bereich: 1 betroffener Artikel" in inhalt and inv[ns_art] in inhalt, (adr, inhalt)
+                assert "OG Nachbarstadt / Lager Nachbarstadt" in inhalt, inhalt
+                assert "Musterstadt" not in inhalt and inv[art["RR-1"]] not in inhalt and inv[art["rr-2"]] not in inhalt
+            # Ergebnis gespeichert: vier angenommen, eine gescheitert (wart2) – sehen kann das nur die Verwaltung.
             z = zeile(tmp, "SELECT mailed_at, mail_count, mail_failed FROM mat_recall WHERE id = ?", (ruid,))
-            assert z["mailed_at"] and (z["mail_count"], z["mail_failed"]) == (3, 1), z
+            assert z["mailed_at"] and (z["mail_count"], z["mail_failed"]) == (4, 1), z
+            x = adm.get(RR.format(hms)).json["rueckrufe"][0]
+            assert (x["mail_count"], x["mail_failed"]) == (4, 1) and x["mailed_at"] == z["mailed_at"] and x["mail"], x
             x = k["fuehrung"].get(RR.format(hms)).json["rueckrufe"][0]
-            assert (x["mail_count"], x["mail_failed"]) == (3, 1) and x["mailed_at"] == z["mailed_at"], x
+            assert x["mail"] is True and not {"mailed_at", "mail_count", "mail_failed", "nicht_gefunden"} & set(x), x
+            assert (x["betroffen"], x["offen"]) == (2, 2), x
 
-            # Ohne Seriennummern ist auch RR-3 betroffen – und damit pruefer3.
+            # Ohne Seriennummern ist auch RR-3 betroffen – und damit p3 (er sieht nur das Lager) – und RR-OW: Ohne
+            # Verwalter geht er an die Plattform-Verwaltung, die alles sieht.
             del post[:]
-            r = anlegen(kp, hms, title="Alle HMS Beta")
-            assert sorted(x[0] for x in post) == ["admin@example.org", "pruefer3@example.org", "pruefer@example.org",
-                                                  "wart2@example.org", "wart@example.org"], post
-            assert "alle Artikel dieses Produkts" in post[0][2] and "Im Bestand:   3 betroffene Artikel" in post[0][2]
+            r = anlegen(adm, hms, title="Alle HMS Beta")
+            an = mails()
+            assert sorted(an) == ["admin@example.org", "pruefer3@example.org", "pruefer@example.org",
+                                  "pruefer_ns@example.org", "wart2@example.org", "wart@example.org",
+                                  "wart_ns@example.org"], sorted(an)
+            assert "alle Artikel dieses Produkts" in an["wart@example.org"]
+            assert "Dein Bereich: 3 betroffene Artikel" in an["wart@example.org"]
+            assert "Dein Bereich: 3 betroffene Artikel" in an["pruefer3@example.org"]
+            assert "Dein Bereich: 5 betroffene Artikel" in an["admin@example.org"] and inv[ow_art] in an["admin@example.org"]
+            assert inv[ow_art] not in an["wart@example.org"] and inv[ow_art] not in an["wart_ns@example.org"]
+            # Der Katalogpfleger (liest in Musterstadt) erfährt nur seinen Bereich – und dass er benachrichtigt wurde.
+            del post[:]
+            r = anlegen(kp, hms, title="Vom Katalogpfleger", serials="RR-1\nRR-NS")
+            assert r.status_code == 201 and (r.json["betroffen"], r.json["benachrichtigt"]) == (1, True), r.get_json()
+            assert "empfaenger" not in r.json and "nicht_gefunden" not in r.json, r.get_json()
+            assert sorted(mails()) == ["pruefer@example.org", "pruefer_ns@example.org", "wart2@example.org",
+                                       "wart@example.org", "wart_ns@example.org"], post
+            # Nur in der Nachbarstadt betroffen: Die Mail geht hinaus, der Katalogpfleger erfährt davon nichts.
+            del post[:]
+            r = anlegen(kp, hms, title="Nur Nachbarstadt", serials="RR-NS")
+            assert (r.json["betroffen"], r.json["offen"], r.json["benachrichtigt"]) == (0, 0, False), r.get_json()
+            assert sorted(mails()) == ["pruefer_ns@example.org", "wart_ns@example.org"], post
+
             # Solange der Versand läuft: mail_count ist die Zahl der Empfänger, mailed_at noch leer („wird verschickt“).
             from app.material.services import rueckruf
             wartend = []
             rueckruf.HINTERGRUND = lambda fn, *a: wartend.append((fn, a))
-            r = anlegen(kp, hms, title="Versand läuft", serials="RR-1")
+            r = anlegen(adm, hms, title="Versand läuft", serials="RR-1")
             x = r.json["rueckruf"]
-            assert r.json["empfaenger"] == 4 and x["mailed_at"] is None and (x["mail_count"], x["mail_failed"]) == (4, 0), x
+            assert r.json["empfaenger"] == 3 and x["mailed_at"] is None and (x["mail_count"], x["mail_failed"]) == (3, 0), x
             rueckruf.HINTERGRUND = lambda fn, *a: fn(*a)
             with app.app_context():
                 for fn, a in wartend:
                     fn(*a)
-            x = k["fuehrung"].get(RR.format(hms)).json["rueckrufe"][0]
-            assert x["title"] == "Versand läuft" and x["mailed_at"] and (x["mail_count"], x["mail_failed"]) == (3, 1), x
-            # Gibt es keinen Materialwart, bekommt die Verwaltung die Mail.
-            schreiben(tmp, "UPDATE users SET recht_material = 1 WHERE recht_material = 2")
+            x = adm.get(RR.format(hms)).json["rueckrufe"][0]
+            assert x["title"] == "Versand läuft" and x["mailed_at"] and (x["mail_count"], x["mail_failed"]) == (2, 1), x
+            # Hat der Artikel keinen Verwalter mehr, bekommt die Verwaltung die Mail (der Prüfer weiter).
+            schreiben(tmp, "DELETE FROM mat_folder_grant WHERE folder_id = ? AND permission = 'verwalten'", (gid,))
             del post[:]
-            r = anlegen(kp, hms, title="Ohne Materialwart", serials="RR-1")
-            assert sorted(x[0] for x in post) == ["admin@example.org", "pruefer@example.org"], post
-            # Ohne Empfänger (Produkt ohne geprüfte Artikel, keine Verwaltung erreichbar) ist der Versand gleich fertig.
-            schreiben(tmp, "UPDATE users SET recht_verwaltung = 1 WHERE email = 'admin@example.org'")
+            r = anlegen(adm, hms, title="Ohne Materialwart", serials="RR-1")
+            assert sorted(mails()) == ["admin@example.org", "pruefer@example.org"], post
+            # Ohne Empfänger (Produkt ohne Artikel im Bestand) ist der Versand gleich fertig.
             del post[:]
             leer = produkt_anlegen(kp, ids, "HMS Leer", "HL-2")
-            r = anlegen(kp, leer, title="Niemand da")
+            r = anlegen(adm, leer, title="Niemand da")
             assert r.status_code == 201 and r.json["empfaenger"] == 0 and post == [], r.get_json()
             x = r.json["rueckruf"]
-            assert x["mailed_at"] and x["mail_count"] == 0 and x["mail_failed"] == 0, x
+            assert x["mailed_at"] and x["mail_count"] == 0 and x["mail_failed"] == 0 and x["mail"] is True, x
+            # Ohne Verwaltung und Verwalter erreicht die Mail niemanden – auch das ist schnell fertig.
+            schreiben(tmp, "UPDATE users SET recht_verwaltung = 1 WHERE email = 'admin@example.org'")
+            del post[:]
+            r = anlegen(kp, hms, title="Niemand erreichbar", serials="rr-2")
+            assert r.status_code == 201 and post == [] and r.json["benachrichtigt"] is False, r.get_json()
+            z = zeile(tmp, "SELECT mailed_at, mail_count, mail_failed FROM mat_recall WHERE id = ?",
+                      (r.json["rueckruf"]["id"],))
+            assert z["mailed_at"] and (z["mail_count"], z["mail_failed"]) == (0, 0), z
     finally:
         post_zurueck(alt)
     print("Rückrufe: Mail-Empfänger bestanden.")
@@ -341,15 +423,16 @@ def test_mail_im_hintergrund():
         with tempfile.TemporaryDirectory() as tmp:
             app, k, ids, system, lager, art = aufbau(tmp)
             r = anlegen(k["katalog"], ids["hms"], title="Im Hintergrund")
-            assert r.status_code == 201 and r.json["empfaenger"] == 2, r.get_json()     # admin@ und wart@
+            assert r.status_code == 201 and r.json["benachrichtigt"] is True, r.get_json()
             ruid = r.json["rueckruf"]["id"]
             for _ in range(100):
                 z = zeile(tmp, "SELECT mailed_at, mail_count, mail_failed FROM mat_recall WHERE id = ?", (ruid,))
                 if z["mailed_at"]:
                     break
                 time.sleep(0.05)
-            assert z["mailed_at"] and (z["mail_count"], z["mail_failed"]) == (2, 0), z
-            assert post == [("admin@example.org", "mail"), ("wart@example.org", "mail")], post
+            # Der Verwalter der Gliederung – die Verwaltung nicht: Die Artikel haben einen Verwalter.
+            assert z["mailed_at"] and (z["mail_count"], z["mail_failed"]) == (1, 0), z
+            assert post == [("wart@example.org", "mail")], post
     finally:
         rueckruf.send_mail = alt
     print("Rückrufe: Mail im Hintergrund bestanden.")
@@ -515,7 +598,7 @@ def test_review_lieferung4():
             kp, w, p1 = k["katalog"], k["wart"], k["pruefer"]
             # Am Artikel zieht die Speicherung Leerraum zusammen („AB  12“ → „AB 12“); der Rückruf vergleicht genauso.
             ab = neuer_artikel(w, ids["hms"], lager, serial_no="AB  12")["id"]
-            r = anlegen(kp, ids["hms"], title="Leerraum", serials="ab  12\nRR\u00a01X", mail=False)
+            r = anlegen(k["adm"], ids["hms"], title="Leerraum", serials="ab  12\nRR\u00a01X", mail=False)
             assert r.status_code == 201 and r.json["betroffen"] == 1 and r.json["nicht_gefunden"] == ["RR\u00a01X"], r.get_json()
             assert [x["title"] for x in w.get(f"/api/material/artikel/{ab}").json["artikel"]["rueckrufe"]] == ["Leerraum"]
             # Ein Zeilentrenner (U+2028) im Titel: Der Betreff bleibt eine Zeile, die Mail geht hinaus.
@@ -533,6 +616,113 @@ def test_review_lieferung4():
     print("Rückrufe: Review-Befunde Lieferung 4 bestanden.")
 
 
+# --- Phase 2: jeder Bereich für sich (Bauentwurf 2.6, Kritik 7) ----------------------------------------------------------
+
+def zwei_bereiche(tmp):
+    """aufbau und dazu eine zweite Gliederung „OG Nachbarstadt“ mit eigenem Verwalter und zwei Karabinern (TEST-NS-…) –
+    niemand aus aufbau hat dort eine Freigabe."""
+    app, k, ids, system, lager, art = aufbau(tmp)
+    ns, _ = gliederung(k["adm"], "OG Nachbarstadt", standard=False)
+    wart_ns, wart_ns_id = neues_konto(app, "wart_ns@example.org", name="Wart Nachbarstadt")
+    freigeben(k["adm"], ns, wart_ns_id, "verwalten")
+    lager_ns = ordner_neu(wart_ns, ns, "Lager Nachbarstadt")
+    ns_art = {s: neuer_artikel(wart_ns, ids["hms"], lager_ns, serial_no=s)["id"] for s in ("TEST-NS-1", "TEST-NS-2")}
+    return app, k, ids, lager, art, wart_ns, ns_art
+
+
+def test_antwort_nur_eigener_bereich():
+    """Ein Katalogpfleger ohne Bestand legt einen Rückruf mit mail=false und Seriennummern aus einer fremden Gliederung
+    an und beendet ihn: Die Antworten nennen weder nicht gefundene Nummern noch Empfänger, betroffen ist 0 – ein Rückruf
+    taugt nicht als Abfrage fremder Bestände. Die Verwaltung bekommt die vollen Zahlen."""
+    post, alt = post_abfangen()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            app, k, ids, lager, art, wart_ns, ns_art = zwei_bereiche(tmp)
+            kp, _ = neues_konto(app, "katalog_ohne@example.org", name="Katalog ohne Bestand", mat_katalog=True)
+            daten = {"title": "Testrückruf", "serials": "TEST-NS-1\nTEST-X-0404", "mail": False}
+            r = kp.post(RR.format(ids["hms"]), json=daten)
+            assert r.status_code == 201, r.get_json()
+            j = r.get_json()
+            assert "nicht_gefunden" not in j and "empfaenger" not in j and j["betroffen"] == 0, j
+            assert j["benachrichtigt"] is False and j["mail"] is False, j
+            assert "nicht_gefunden" not in j["rueckruf"] and not j["rueckruf"].get("artikel"), j["rueckruf"]
+            assert not {"mailed_at", "mail_count", "mail_failed"} & set(j["rueckruf"]), j["rueckruf"]
+            r = kp.post(f"/api/material/rueckrufe/{j['rueckruf']['id']}/beenden", json={"vermerk": "Testvermerk"})
+            assert r.status_code == 200, r.get_json()
+            text = r.get_data(as_text=True)
+            assert "nicht_gefunden" not in text and "empfaenger" not in text and "mail_count" not in text, text
+            # Mit Mail: Der Verwalter der Nachbarstadt wird benachrichtigt, der Katalogpfleger erfährt es nicht.
+            r = kp.post(RR.format(ids["hms"]), json=dict(daten, mail=True))
+            assert (r.json["betroffen"], r.json["benachrichtigt"]) == (0, False), r.get_json()
+            assert [an for an, _, _ in post] == ["wart_ns@example.org"], post
+            # Die Verwaltung sieht alles: den Artikel aus der Nachbarstadt, die unbekannte Nummer, die Empfänger.
+            r = k["adm"].post(RR.format(ids["hms"]), json=daten)
+            assert r.status_code == 201 and r.json["betroffen"] == 1 and r.json["nicht_gefunden"] == ["TEST-X-0404"], \
+                r.get_json()
+            assert r.json["empfaenger"] == 0 and r.json["rueckruf"]["nicht_gefunden"] == ["TEST-X-0404"], r.get_json()
+            assert "mail_count" in r.json["rueckruf"], r.json["rueckruf"]
+    finally:
+        post_zurueck(alt)
+    print("Rückrufe: Antwort nur aus dem eigenen Bereich bestanden.")
+
+
+def test_listen_je_bereich():
+    """Übersicht (/start), Rückrufliste, Produkt und Rückrufe am Produkt zählen und zeigen je Konto nur den eigenen
+    Bereich: der Materialwart von Musterstadt seine drei Karabiner, der der Nachbarstadt seine zwei, die Verwaltung alle
+    fünf. Wer keinen betroffenen Artikel sieht, hat auf der Übersicht keinen Kasten – in der Liste steht der Rückruf
+    trotzdem (der Katalog ist global)."""
+    post, alt = post_abfangen()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            app, k, ids, lager, art, wart_ns, ns_art = zwei_bereiche(tmp)
+            hms, w = ids["hms"], k["wart"]
+
+            def inventar(iid):
+                return zeile(tmp, "SELECT inventory_no FROM mat_item WHERE id = ?", (iid,))["inventory_no"]
+            r = anlegen(k["katalog"], hms, title="Alle Karabiner", mail=False)
+            assert r.status_code == 201 and r.json["betroffen"] == 3, r.get_json()
+            r = anlegen(k["katalog"], hms, title="Nur Nachbarstadt", serials="TEST-NS-2", mail=False)
+            assert r.status_code == 201 and r.json["betroffen"] == 0, r.get_json()
+            for c, eigene, fremde in ((w, set(art.values()), set(ns_art.values())),
+                                      (wart_ns, set(ns_art.values()), set(art.values()))):
+                start = c.get("/api/material/start").json["rueckrufe"]
+                liste = {x["title"]: x for x in c.get("/api/material/rueckrufe").json["rueckrufe"]}
+                rr = {x["title"]: x for x in c.get(RR.format(hms)).json["rueckrufe"]}
+                produkt = {x["title"]: x for x in c.get(f"/api/material/produkte/{hms}").json["produkt"]["rueckrufe"]}
+                assert set(liste) == set(rr) == set(produkt) == {"Alle Karabiner", "Nur Nachbarstadt"}, liste
+                for quelle in (liste, rr, produkt):
+                    assert quelle["Alle Karabiner"]["betroffen"] == len(eigene), quelle
+                for quelle in (rr, produkt):
+                    ids_ = {a["id"] for x in quelle.values() for a in x["artikel"]}
+                    assert ids_ <= eigene and not ids_ & fremde, (quelle, eigene)
+                    assert {a["id"] for a in quelle["Alle Karabiner"]["artikel"]} == eigene
+                if c is w:
+                    assert [x["title"] for x in start] == ["Alle Karabiner"], start
+                    assert liste["Nur Nachbarstadt"]["betroffen"] == 0
+                else:
+                    assert [x["title"] for x in start] == ["Nur Nachbarstadt", "Alle Karabiner"], start
+                    assert (liste["Nur Nachbarstadt"]["betroffen"], liste["Nur Nachbarstadt"]["offen"]) == (1, 1)
+                # Inventarnummern fremder Artikel stehen nirgends (die Seriennummern des Rückrufs selbst schon – sie
+                # gehören zur Meldung des Herstellers, nicht zum Bestand).
+                text = "".join(c.get(u).get_data(as_text=True) for u in ("/api/material/rueckrufe", RR.format(hms)))
+                text += json.dumps([start, c.get(f"/api/material/produkte/{hms}").json["produkt"]["rueckrufe"]])
+                for i in fremde:
+                    assert inventar(i) not in text, (i, text)
+                for i in eigene:
+                    assert inventar(i) in text, i
+            # Die Verwaltung: alles.
+            liste = {x["title"]: x for x in k["adm"].get("/api/material/rueckrufe").json["rueckrufe"]}
+            assert (liste["Alle Karabiner"]["betroffen"], liste["Nur Nachbarstadt"]["betroffen"]) == (5, 1), liste
+            # Die Marke „Rückruf“ in der Ordnerliste und das Banner am eigenen Artikel bleiben.
+            zeilen = {x["id"]: x["rueckruf"] for x in w.get(f"/api/material/ordner/{lager}").json["ordner"]["artikel"]}
+            assert zeilen[art["RR-1"]] == "Alle Karabiner", zeilen
+            a = w.get(f"/api/material/artikel/{art['RR-1']}").json["artikel"]
+            assert [x["title"] for x in a["rueckrufe"]] == ["Alle Karabiner"], a["rueckrufe"]
+    finally:
+        post_zurueck(alt)
+    print("Rückrufe: Listen je Bereich bestanden.")
+
+
 if __name__ == "__main__":
     test_rechte_und_eingaben()
     test_betroffene_und_hinweise()
@@ -542,3 +732,5 @@ if __name__ == "__main__":
     test_beenden_und_loeschen()
     test_lebenslauf_und_pruefung()
     test_review_lieferung4()
+    test_antwort_nur_eigener_bereich()
+    test_listen_je_bereich()

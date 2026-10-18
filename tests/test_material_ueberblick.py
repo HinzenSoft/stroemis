@@ -301,8 +301,10 @@ def test_fuehrungskraft_nur_lesen():
         # Ein Entwurf des Prüfers (reserviert den zweiten Artikel) mit seinen Prüfpunkten.
         pr = starten(p1, a2["id"]).json["pruefung"]
         entwurf, punkt = pr["id"], pr["punkte"][0]["id"]
-        # Eine Meldung des Materialwarts und ein Rückruf am Produkt (direkt in die Tabelle aus Schemaschritt 7).
-        r = w.post("/api/material/meldungen", json={"manufacturer": "Meldewerk", "model": "Gurt Omega"}, headers=H)
+        # Eine Meldung des Materialwarts und ein Rückruf am Produkt (direkt in die Tabelle aus Schemaschritt 7). Die
+        # Meldung nennt das Lager – seit Phase 2 liest sie nur, wer ihren Ordner sieht (rechte.darf_meldung).
+        r = w.post("/api/material/meldungen", json={"manufacturer": "Meldewerk", "model": "Gurt Omega", "folder_id": lager},
+                   headers=H)
         assert r.status_code == 201, r.get_json()
         mid = r.json["meldung"]["id"]
         with app.app_context():
