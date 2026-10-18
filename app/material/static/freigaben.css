@@ -1,12 +1,8 @@
-/* Freigaben je Ordner (Phase 2 · Lieferung 1, Paket B): Gestaltung des Dialogs „Freigaben“ und des Hinweises
-   „Meine Freigaben“ (freigaben.js). Der Dialog misst sich selbst: Ob die Listen Tabelle oder Karte sind, entscheidet die
-   Breite seines Inhalts (Container „mf“) – wie die Modullisten am Container „mat-seite“ (material.css), denn Dialoge
-   liegen außerhalb der Seite. Am Telefon, am Außendisplay eines Fold und am Tablet hochkant werden sie zu Karten. */
-
-/* Breiter als ein gewöhnlicher Dialog – die Liste hat sieben Spalten. :where() hält die Regel so schwach wie „dialog“
-   selbst: Die Regeln für Fold mit zwei Hälften (dialog[open], app.css) gehen vor. Am Telefon gilt die Breite aus
-   app.css. */
-@media (min-width: 641px) { dialog:where(.mf-dlg) { width: min(920px, 96vw); } }
+/* Freigaben je Ordner (Phase 2 · Lieferung 1, Paket B): Gestaltung des Reiters „Freigaben“ im Dialog „Ordner
+   bearbeiten“ und des Hinweises „Meine Freigaben“ (freigaben.js). Der Reiter misst sich selbst: Ob die Listen Tabelle
+   oder Karte sind, entscheidet die Breite seines Inhalts (Container „mf“) – wie die Modullisten am Container
+   „mat-seite“ (material.css), denn Dialoge liegen außerhalb der Seite. Am Telefon, am Außendisplay eines Fold und am
+   Tablet hochkant werden sie zu Karten. Die Breite des Dialogs (sieben Spalten) steht bei ihm in material.css. */
 .mf { container: mf / inline-size; }
 .mf > .help:first-child { margin-top: 0; }
 

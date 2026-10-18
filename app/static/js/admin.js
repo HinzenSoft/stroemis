@@ -32,7 +32,7 @@
     { k: "karte", t: "Spots", hilfe: "Mitglied: eigene Alben anlegen und bearbeiten. Verwaltung: alle Alben." },
     { k: "wiki", t: "Wiki", hilfe: "Mitglied: eigene und freigegebene Seiten. Verwaltung: alle Seiten, beschränkte lesen, veröffentlichen, HTML-Bausteine, Ersteller ändern." },
     { k: "pruefungen", t: "Prüfungen", hilfe: "Mitglied: Prüfungen abnehmen (Prüfer). Verwaltung: zusätzlich Kataloge pflegen und jeden Lehrgang leiten." },
-    { k: "material", t: "Material", nurAnzeige: true, hilfe: "Rechte am Bestand vergibt der Verwalter eines Ordners unter Bestand → Ordner → Freigaben. Die Verwaltung sieht alles und legt Gliederungen an. Prüfer und Katalogpflege sind Häkchen; beide geben allein keinen Bestand zu sehen. Prüfen braucht zusätzlich eine befristete Prüffreigabe." },
+    { k: "material", t: "Material", nurAnzeige: true, hilfe: "Rechte am Bestand vergibt der Verwalter eines Ordners unter Bestand → Ordner → Bearbeiten → Freigaben. Die Verwaltung sieht alles und legt Gliederungen an. Prüfer und Katalogpflege sind Häkchen; beide geben allein keinen Bestand zu sehen. Prüfen braucht zusätzlich eine befristete Prüffreigabe." },
     { k: "verwaltung", t: "Verwaltung", nurVoll: true,
       hilfe: "Verwaltung: Nutzer, Rechte und Einstellungen – schließt alle Rechte in allen Modulen ein." },
   ];
@@ -85,7 +85,7 @@
     if (m.k !== "material") return feld;
     const marken = [];
     if (u.mat_stufe_alt > 0 && !u.mat_freigaben && ((u.rechte || {}).verwaltung | 0) !== 2) {
-      marken.push(`<span class="badge" title="In Phase 1 hatte das Konto die Stufe „${u.mat_stufe_alt === 2 ? "Verwaltung" : "Mitglied"}“ im Modul Material. Sie wirkt nicht mehr – den Bestand zeigen nur Freigaben, vergeben am Ordner (Bestand → Ordner → Freigaben).">Stufe aus Phase 1 – ohne Frei&shy;gabe</span>`);
+      marken.push(`<span class="badge" title="In Phase 1 hatte das Konto die Stufe „${u.mat_stufe_alt === 2 ? "Verwaltung" : "Mitglied"}“ im Modul Material. Sie wirkt nicht mehr – den Bestand zeigen nur Freigaben, vergeben am Ordner (Bestand → Ordner → Bearbeiten → Freigaben).">Stufe aus Phase 1 – ohne Frei&shy;gabe</span>`);
     }
     if (u.mat_pruefer && u.urkunde_gueltig) marken.push(`<span class="badge grey" title="Prüfer (Sachkundiger), Urkundennummer ${S.esc(u.urkundennummer)}">Prüfer</span>`);
     else if (u.mat_pruefer) marken.push('<span class="badge urkunde-fehlt" title="Häkchen „Prüfer“ gesetzt, aber noch keine Urkundennummer – die trägt der Prüfer selbst im Profil ein. Bis dahin darf er nicht prüfen.">Prüfer – Urkunden&shy;nummer fehlt</span>');
@@ -214,7 +214,7 @@
       <div class="help">„–“ kein Zugriff · „Mitglied“ eigene Inhalte, bei Prüfungen: Prüfungen abnehmen ·
         „Verwaltung“ alles im Modul. Verwaltung im Modul „Verwaltung“ schließt alle Rechte ein.
         Was eine Stufe genau umfasst, steht als Hinweis am Feld. Material ist nur Anzeige: Rechte am Bestand vergibt der
-        Verwalter eines Ordners unter Bestand → Ordner → Freigaben; die Verwaltung sieht alles und legt Gliederungen an.</div>
+        Verwalter eines Ordners unter Bestand → Ordner → Bearbeiten → Freigaben; die Verwaltung sieht alles und legt Gliederungen an.</div>
       <fieldset class="mat-rollen"><legend>Modul Material</legend>
         <label class="inline"><input type="checkbox" id="u-mat-pruefer" ${u.mat_pruefer ? "checked" : ""}> Prüfer (Sachkundiger, Qualifikation 1012)</label>
         <p class="mat-urkunde" ${u.mat_pruefer ? "" : "hidden"}>${urkundeLesend(u)}</p>
@@ -228,7 +228,7 @@
       </fieldset>
       ${u.id ? `<fieldset class="mat-rollen"><legend>Freigaben im Modul Material</legend>
         <div id="u-freigaben"><p class="help">Wird geladen …</p></div>
-        <div class="help">Angelegt wird eine Freigabe am Ordner (Bestand → Ordner → Freigaben), nicht hier.</div>
+        <div class="help">Angelegt wird eine Freigabe am Ordner (Bestand → Ordner → Bearbeiten → Freigaben), nicht hier.</div>
       </fieldset>` : ""}
       <label>${u.id ? "Neues Passwort (leer lassen, um es zu behalten)" : "Passwort (leer lassen, um eines zu erzeugen)"}</label>
       <input type="text" id="u-pw" autocomplete="off">
@@ -359,8 +359,9 @@
     return "gültig";
   }
 
-  /* Ordnerpfad (Link), Recht, bis, Zustand und „Entziehen“ – angelegt und geändert wird am Ordner. Die Notiz sieht
-     die Verwaltung hier mit, der Inhaber nie unter „Meine Freigaben“ (nur als Verwalter des Ordners im Dialog). */
+  /* Ordnerpfad (Link), Recht, bis, Zustand und „Entziehen“ – angelegt und geändert wird am Ordner: Der Link öffnet dort
+     „Ordner bearbeiten“ im Reiter „Freigaben“ (?freigaben). Die Notiz sieht die Verwaltung hier mit, der Inhaber nie
+     unter „Meine Freigaben“ (nur als Verwalter des Ordners im Reiter). */
   async function freigabenZeigen(el, u) {
     if (!el) return;
     let liste;
@@ -368,7 +369,7 @@
     catch (e) { el.innerHTML = `<p class="help">Die Freigaben ließen sich nicht laden: ${S.esc(e.message)}</p>`; return; }
     el.innerHTML = liste.length ? `<table class="list"><thead><tr><th>Ordner</th><th>Recht</th><th>bis</th><th>Zustand</th><th></th></tr></thead><tbody>
       ${liste.map((f) => `<tr>
-        <td data-l="Ordner"><a href="/material/ordner/${f.ordner.id}">${S.esc(f.ordner.pfad)}</a>${f.notiz ? `<div class="small muted">${S.esc(f.notiz)}</div>` : ""}</td>
+        <td data-l="Ordner"><a href="/material/ordner/${f.ordner.id}?freigaben" title="Freigaben dieses Ordners öffnen">${S.esc(f.ordner.pfad)}</a>${f.notiz ? `<div class="small muted">${S.esc(f.notiz)}</div>` : ""}</td>
         <td data-l="Recht">${S.esc(RECHT[f.recht] || f.recht)}</td>
         <td data-l="bis">${f.bis ? tag(f.bis) : "dauerhaft"}</td>
         <td data-l="Zustand">${zustand(f)}</td>
@@ -384,7 +385,7 @@
         S.toast("Freigabe entzogen");
         await freigabenZeigen(el, u);
         // Offene Prüfungen, die das Konto danach nicht fortsetzen darf, gibt ein Verwalter im Modul frei – der Hinweis
-        // bleibt stehen und führt hin (wie im Freigaben-Dialog).
+        // bleibt stehen und führt hin (wie im Reiter „Freigaben“ am Ordner).
         if (r.offene_entwuerfe) {
           el.insertAdjacentHTML("afterbegin", `<p class="notice">Entzogen – ${mehrzahl(r.offene_entwuerfe, "offene Prüfung", "offene Prüfungen")}
             des Kontos unter <a href="/material/pruefungen">Material → Prüfungen</a> → Offene Prüfungen freigeben.</p>`);

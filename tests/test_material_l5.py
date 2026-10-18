@@ -240,11 +240,19 @@ def test_oberflaeche_rechte_je_ordner():
     lesen = lambda rel: open(os.path.join(wurzel, rel), encoding="utf-8").read()  # noqa: E731
     js, frei, glob = (lesen(f"app/material/static/{d}.js") for d in ("material", "freigaben", "global"))
     # Haken für die Pakete B und C – und dass es sie dort gibt.
-    for haken in ("MatFreigaben", ".oeffnen(", ".hinweis(", ".kopfhinweis(", 'id="mat-freigaben-hinweis"',
+    for haken in ("MatFreigaben", ".inhalt(", ".hinweis(", ".kopfhinweis(", 'id="mat-freigaben-hinweis"',
                   "?freigaben=materialwart", 'adresse.get("freigaben")', "MatGlobal", ".anbieten(", ".fremd(inhalt, DATEN)",
                   "global_angebot"):
         assert haken in js, haken
-    assert re.search(r"window\.MatFreigaben = \{ oeffnen, hinweis, kopfhinweis \}", frei)
+    assert re.search(r"window\.MatFreigaben = \{ inhalt, hinweis, kopfhinweis \}", frei)
+    # Nachbesserung vom 18.10.2026: Freigaben sind ein Reiter in „Ordner bearbeiten“ – kein Knopf „Freigaben“ mehr im
+    # Ordnerkopf, kein eigener Dialog in freigaben.js, und das Neuladen nach dem Schließen hängt an einem Rückruf statt
+    # an einer Klasse am gemeinsamen #dlg. Die Reiter sind zugänglich (Rollen, aria-selected, Pfeiltasten).
+    assert 'data-act="freigaben"' not in js and "mf-dlg" not in js + frei and "dialog(" not in frei
+    for haken in ('role="tablist"', 'role="tab"', 'role="tabpanel"', "aria-selected", "ArrowRight", "ArrowLeft",
+                  "geaendert: () =>", "nachFreigaben", "kopfhinweis(el, d, () =>", "?freigaben`"):
+        assert haken in js, haken
+    assert "/material/ordner/${f.ordner.id}?freigaben" in lesen("app/static/js/admin.js")
     assert re.search(r"return \{ anbieten, bestaetigen, suchen, karte, fremd \}", glob)
     # Freigaben, Bausteine, die erst nach material.js geladen werden: material.js wartet auf die ganze Seite.
     assert "DOMContentLoaded" in js

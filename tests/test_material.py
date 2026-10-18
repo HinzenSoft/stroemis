@@ -128,10 +128,10 @@ def unterschrift_hinterlegen(app, uid):
 
 
 def freigeben(adm, fid, uid, recht, bis=None):
-    """Eine Freigabe direkt in die Datenbank schreiben (Vergeben über die Oberfläche ist Sache des Freigaben-Dialogs).
-    Ein Grundrecht (lesen, verwalten) ersetzt ein vorhandenes am selben Ordner, eine Prüffreigabe die vorhandene; ohne
-    bis läuft eine Prüffreigabe bis heute + 365 Tage, ein Grundrecht unbefristet. bis: date oder 'JJJJ-MM-TT'.
-    Liefert die Kennung der Zeile."""
+    """Eine Freigabe direkt in die Datenbank schreiben (Vergeben über die Oberfläche ist Sache des Reiters „Freigaben“
+    in „Ordner bearbeiten“). Ein Grundrecht (lesen, verwalten) ersetzt ein vorhandenes am selben Ordner, eine
+    Prüffreigabe die vorhandene; ohne bis läuft eine Prüffreigabe bis heute + 365 Tage, ein Grundrecht unbefristet.
+    bis: date oder 'JJJJ-MM-TT'. Liefert die Kennung der Zeile."""
     if recht == "pruefen" and bis is None:
         bis = _heute() + timedelta(days=365)
     bis = bis.isoformat() if hasattr(bis, "isoformat") else bis

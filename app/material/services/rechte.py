@@ -67,7 +67,7 @@ NAME_FEHLT = "Für das Modul Material braucht dein Konto einen Namen – trag ih
 NICHT_FREIGESCHALTET = ("Für dein Konto ist das Modul Material nicht freigeschaltet – der Materialwart deiner Gliederung "
                         "vergibt Freigaben.")
 KEINE_PRUEFFREIGABE = ("Häkchen und Urkundennummer hast du, aber für diesen Ordner keine Prüffreigabe – die vergibt der "
-                       "Materialwart des Ordners unter Ordner → Freigaben.")
+                       "Materialwart des Ordners unter Ordner → Bearbeiten → Freigaben.")
 NUR_GRUNDRECHT = ("Dafür braucht es eine Lese- oder Verwalterfreigabe für diesen Ordner – die Prüffreigabe allein "
                   "reicht nicht.")
 NUR_VERWALTUNG_GLOBAL = "Ohne Ordner nur für die Plattform-Verwaltung."

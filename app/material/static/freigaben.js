@@ -1,17 +1,26 @@
-/* Freigaben je Ordner (Phase 2 · Lieferung 1, Abschnitt 4.2): Dialog „Freigaben – <Pfad>“ mit Vorlagen (Führungskraft,
-   Materialwart, Prüfer, Externer Prüfer …), den Listen „Hier vergeben“, „Geerbt von oben“, „In Unterordnern“ und
-   „Verlauf“, dem Knopf „Alle Prüffreigaben verlängern bis …“ und dem Hinweis „Meine Freigaben“ auf der Übersicht.
-   Stellt window.MatFreigaben bereit:
-     oeffnen(ordner, vorlage?)  ordner: das Objekt der Ordneransicht (oder seine Kennung); vorlage: „materialwart“ usw.
-                                (?freigaben=<vorlage> nach dem Anlegen einer Gliederung) oder „verlaengern“ (springt zum
-                                Knopf „Alle Prüffreigaben verlängern“)
+/* Freigaben je Ordner (Phase 2 · Lieferung 1, Abschnitt 4.2): der Reiter „Freigaben“ im Dialog „Ordner bearbeiten“ mit
+   Vorlagen (Führungskraft, Materialwart, Prüfer, Externer Prüfer …), den Listen „Hier vergeben“, „Geerbt von oben“,
+   „In Unterordnern“ und „Verlauf“, dem Knopf „Alle Prüffreigaben verlängern bis …“ – dazu der Hinweis „Meine
+   Freigaben“ auf der Übersicht. Stellt window.MatFreigaben bereit:
+     inhalt(element, ordner, optionen?)  füllt element (den Reiter) mit Hinweis, „+ Freigabe“ und den Listen; Dialog,
+                                Reiter und Knopfzeile („Schließen“) gehören material.js. ordner: das Objekt der
+                                Ordneransicht (oder seine Kennung). optionen:
+                                  vorlage    „materialwart“ usw. (?freigaben=<vorlage> nach „+ Gliederung“) oder
+                                             „verlaengern“ (springt zum Knopf „Alle Prüffreigaben verlängern“)
+                                  fokus      nach dem Laden ins Formular (bzw. auf „verlängern“) – sonst bleibt der
+                                             Fokus, wo er ist (etwa auf dem Reiter)
+                                  geaendert  wird nach jedem Schreiben gerufen (Erteilen, Ändern, Entziehen,
+                                             Verlängern) – die Ordneransicht lädt nach dem Schließen neu
+                                  dort(id)   „Dort öffnen“ an einer geerbten Zeile; ohne: zur Ordneransicht mit
+                                             ?freigaben (öffnet dort „Ordner bearbeiten“ auf diesem Reiter)
      hinweis(element)           „Meine Freigaben“ auf der Übersicht – eigene Freigaben, gelb, was bald abläuft
-     kopfhinweis(element, ordner)  „n Freigaben laufen in den nächsten 30 Tagen ab“ im Ordnerkopf (nur für Verwalter)
+     kopfhinweis(element, ordner, verlaengern?)  „n Freigaben laufen in den nächsten 30 Tagen ab“ im Ordnerkopf (nur
+                                für Verwalter); der Knopf „Verlängern …“ ruft verlaengern() – ohne gibt es ihn nicht
    material.js ruft sie auf. Der Server prüft jede Regel selbst (services/freigaben.py); ausgeblendet wird hier nur,
    was ohnehin scheitern würde. */
 (function () {
   if (!window.S) return;
-  const { esc, api, toast, dialog, confirm } = S;
+  const { esc, api, toast, confirm } = S;
   const API = "/api/material";
   const $ = (sel, el) => (el || document).querySelector(sel);
   const $$ = (sel, el) => Array.from((el || document).querySelectorAll(sel));
@@ -70,8 +79,9 @@
   const bisText = (bis) => (bis ? fmtTag(bis) : "dauerhaft");
 
   /* --- Untere Dialoge (Ändern, Verlängern) -------------------------------------------------------------------
-     Eigene <dialog>-Elemente über dem Freigaben-Dialog – wie S.confirm: So bleibt der Dialog darunter samt
-     halb ausgefülltem „+ Freigabe“ stehen. */
+     Eigene <dialog>-Elemente über dem Dialog „Ordner bearbeiten“ – wie S.confirm: So bleibt der Dialog darunter samt
+     halb ausgefülltem „+ Freigabe“ und ungespeicherten Eingaben im Reiter „Ordner“ stehen, und man kehrt danach in
+     den Reiter „Freigaben“ zurück. */
   function unterDialog(html, onOpen) {
     const dlg = document.createElement("dialog");
     dlg.className = "mf-unter";
@@ -435,45 +445,42 @@
     });
   }
 
-  /* --- Der Dialog -------------------------------------------------------------------------------------------- */
-  async function oeffnen(ordner, vorlage) {
+  /* --- Der Reiter „Freigaben“ ---------------------------------------------------------------------------------
+     Steht im Dialog „Ordner bearbeiten“ (material.js) – Dialog, Reiter und die klebende Knopfzeile unten gehören dort
+     hin, hier nur der Inhalt. Die rote Hauptaktion des Reiters ist „Freigabe erteilen“. */
+  async function inhalt(el, ordner, optionen) {
+    const opt = optionen || {};
     const id = typeof ordner === "object" && ordner ? ordner.id : +ordner;
-    if (!id) return;
-    const pfadVorab = typeof ordner === "object" && ordner && ordner.pfad
-      ? (Array.isArray(ordner.pfad) ? ordner.pfad.map((p) => p.name).join(" / ") : ordner.pfad) : (ordner && ordner.name) || "";
-    // Die Knopfzeile bleibt direktes Kind des Dialogs – so klebt sie am Telefon unten (app.css).
-    const dlg = dialog(`<h2>Freigaben${pfadVorab ? ` – ${esc(pfadVorab)}` : ""}</h2>
-      <div class="mf" id="mf-inhalt"><p class="help">Wird geladen …</p></div>
-      <div class="dlg-actions"><button class="btn secondary" type="button" data-close>Schließen</button></div>`);
-    dlg.classList.add("mf-dlg");
-    dlg.addEventListener("close", () => dlg.classList.remove("mf-dlg"), { once: true });
-    const body = $("#dlg-body");
-    const stand = { vorlage: vorlage && vorlage !== "verlaengern" ? vorlage : null, daten: null, hinweis: "" };
-    let d;
-    try { d = await api(`${API}/ordner/${id}/freigaben`); }
-    catch (e) { $("#mf-inhalt", body).innerHTML = `<p class="notice">${esc(e.message)}</p>`; return; }
-    stand.daten = d;
-    $("h2", body).textContent = `Freigaben – ${d.ordner.pfad}`;
-    $("#mf-inhalt", body).innerHTML = `<p class="help">Eine Freigabe gilt im Ordner und in allen Unterordnern, bis einschließlich zum
-        letzten Tag. Rechte addieren sich; weiter unten lässt sich nichts entziehen.</p>
+    if (!el || !id) return;
+    el.classList.add("mf");
+    el.innerHTML = '<p class="help">Wird geladen …</p>';
+    const stand = { vorlage: opt.vorlage && opt.vorlage !== "verlaengern" ? opt.vorlage : null, daten: null, hinweis: "" };
+    const dort = opt.dort || ((oid) => { location.href = `/material/ordner/${oid}?freigaben`; });
+    try { stand.daten = await api(`${API}/ordner/${id}/freigaben`); }
+    catch (e) { el.innerHTML = `<p class="notice">${esc(e.message)}</p>`; return; }
+    const d = stand.daten;
+    el.innerHTML = `<p class="help">Freigaben für „${esc(d.ordner.pfad)}“ gelten dort und in allen Unterordnern, bis
+        einschließlich zum letzten Tag. Rechte addieren sich; weiter unten lässt sich nichts entziehen.</p>
       ${formHtml(d)}<div id="mf-hinweis"></div><div id="mf-listen">${listenHtml(d)}</div>`;
 
+    // Nach jedem Schreiben: Bescheid an material.js (lädt den Ordner nach dem Schließen neu), dann die Listen frisch.
     async function neuLaden() {
+      if (opt.geaendert) opt.geaendert();
       try { stand.daten = await api(`${API}/ordner/${id}/freigaben`); }
       catch (e) {
-        // Wer sich selbst herabgesetzt hat, verwaltet den Ordner nicht mehr – der Dialog sagt es, statt leer zu stehen.
-        $("#mf-listen", body).innerHTML = `<p class="notice">${esc(e.message)}</p>`;
-        $(".mf-neu", body).hidden = true;
+        // Wer sich selbst herabgesetzt hat, verwaltet den Ordner nicht mehr – der Reiter sagt es, statt leer zu stehen.
+        $("#mf-listen", el).innerHTML = `<p class="notice">${esc(e.message)}</p>`;
+        $(".mf-neu", el).hidden = true;
         return;
       }
-      $("#mf-hinweis", body).innerHTML = stand.hinweis ? `<p class="notice">${stand.hinweis}</p>` : "";
-      const offen = $$("details.mf-teil", $("#mf-listen", body)).map((x) => x.open);
-      $("#mf-listen", body).innerHTML = listenHtml(stand.daten);
-      $$("details.mf-teil", $("#mf-listen", body)).forEach((x, i) => { if (offen[i] !== undefined) x.open = offen[i]; });
+      $("#mf-hinweis", el).innerHTML = stand.hinweis ? `<p class="notice">${stand.hinweis}</p>` : "";
+      const offen = $$("details.mf-teil", $("#mf-listen", el)).map((x) => x.open);
+      $("#mf-listen", el).innerHTML = listenHtml(stand.daten);
+      $$("details.mf-teil", $("#mf-listen", el)).forEach((x, i) => { if (offen[i] !== undefined) x.open = offen[i]; });
     }
 
-    formVerdrahten(body, stand, neuLaden);
-    $("#mf-listen", body).addEventListener("click", (e) => {
+    formVerdrahten(el, stand, neuLaden);
+    $("#mf-listen", el).addEventListener("click", (e) => {
       const b = e.target.closest("button[data-act]");
       if (!b) return;
       const alle = stand.daten.direkt.concat(stand.daten.geerbt, stand.daten.unten);
@@ -481,13 +488,13 @@
       if (b.dataset.act === "aendern" && f) aendernDialog(f, stand, neuLaden);
       else if (b.dataset.act === "entziehen" && f) entziehen(f, stand, neuLaden);
       else if (b.dataset.act === "verlaengern") verlaengernDialog(stand, neuLaden);
-      else if (b.dataset.act === "dort") oeffnen(+b.dataset.ordner);
+      else if (b.dataset.act === "dort") dort(+b.dataset.ordner);
     });
-    if (vorlage === "verlaengern") {
-      const knopf = $("#mf-verlaengern", body);
-      if (knopf) { knopf.scrollIntoView({ block: "center" }); knopf.focus(); }
-    } else {
-      fokus($("#mf-person", body));
+    if (opt.vorlage === "verlaengern") {
+      const knopf = $("#mf-verlaengern", el);
+      if (knopf) { knopf.scrollIntoView({ block: "center" }); if (opt.fokus) knopf.focus(); }
+    } else if (opt.fokus) {
+      fokus($("#mf-person", el));
     }
   }
 
@@ -500,7 +507,7 @@
     try { d = await api(`${API}/freigaben/meine`); } catch (e) { el.innerHTML = ""; return; }
     if (!d.freigaben.length) {
       el.innerHTML = d.alles
-        ? (d.qualifiziert ? '<p class="help mf-meine-leer">Prüfen kannst du auch als Plattform-Verwaltung nur mit eigener Prüffreigabe – die gibst du dir am Ordner unter „Freigaben“.</p>' : "")
+        ? (d.qualifiziert ? '<p class="help mf-meine-leer">Prüfen kannst du auch als Plattform-Verwaltung nur mit eigener Prüffreigabe – die gibst du dir am Ordner unter „Bearbeiten“ → „Freigaben“.</p>' : "")
         : '<p class="notice mf-meine-leer">Du hast noch keine Freigabe im Bestand – der Materialwart deiner Gliederung vergibt sie.</p>';
       return;
     }
@@ -515,16 +522,17 @@
     </details>`;
   }
 
-  /* Im Ordnerkopf (nur für Verwalter): wie viele Freigaben im Zweig bald ablaufen – mit Sprung zum Verlängern. */
-  async function kopfhinweis(el, ordner) {
+  /* Im Ordnerkopf (nur für Verwalter): wie viele Freigaben im Zweig bald ablaufen – ein Hinweis, kein Menü. Sein Knopf
+     „Verlängern …“ öffnet über material.js „Ordner bearbeiten“ im Reiter „Freigaben“ beim Verlängern-Knopf. */
+  async function kopfhinweis(el, ordner, verlaengern) {
     if (!el || !ordner) return;
     let d;
     try { d = await api(`${API}/ordner/${ordner.id || ordner}/freigaben`); } catch (e) { el.innerHTML = ""; return; }
     el.innerHTML = d.laeuft_ab ? `<p class="notice mf-kopf">${plural(d.laeuft_ab, "Freigabe läuft", "Freigaben laufen")} in den nächsten 30 Tagen ab.
-      <button class="btn secondary small" type="button">Verlängern …</button></p>` : "";
+      ${verlaengern ? '<button class="btn secondary small" type="button">Verlängern …</button>' : ""}</p>` : "";
     const b = $("button", el);
-    if (b) b.addEventListener("click", () => oeffnen(ordner, "verlaengern"));
+    if (b) b.addEventListener("click", () => verlaengern());
   }
 
-  window.MatFreigaben = { oeffnen, hinweis, kopfhinweis };
+  window.MatFreigaben = { inhalt, hinweis, kopfhinweis };
 })();

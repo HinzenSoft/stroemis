@@ -1041,28 +1041,29 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
 - **Trennung je Gliederung**: Was ein Konto nicht sieht, antwortet wie etwas, das es nicht gibt – 404 mit derselben
   Meldung, ob die Kennung im Pfad steht oder im Inhalt der Anfrage (auch als `"7"` oder `7.0`). 403 gibt es nur, wenn
   man den Gegenstand sieht, die Aktion aber nicht darf, mit Klartext (etwa „Häkchen und Urkundennummer hast du, aber
-  für diesen Ordner keine Prüffreigabe – die vergibt der Materialwart des Ordners unter Ordner → Freigaben.“).
-  Gefiltert sind Übersicht, Ordnerbaum, Listen und Zählungen, Fällige, Entwürfe, Durchgänge, Suche samt Vorschlägen,
-  die Spalte „Bestand“ im Katalog, Produktseite und Produktjournal, Rückrufe, Meldungen, Exporte und Mediendateien. Ein
-  Oberordner ohne eigenes Recht steht in Ordnerleiste, Bestand, Übersicht und Pfadzeile nur als grauer Pfad (Name,
-  keine Zahlen, nicht anklickbar). „Gesperrt“ und „Ausgesondert“ einer Gliederung, die man nicht ganz sieht, zeigen nur
-  die eigenen Artikel – auf der Übersicht als Zeile „Gesperrt (deine Artikel)“. 403 und 404 zeigt die Oberfläche als
-  Klartext mit dem Knopf „Zur Übersicht“.
+  für diesen Ordner keine Prüffreigabe – die vergibt der Materialwart des Ordners unter Ordner → Bearbeiten →
+  Freigaben.“). Gefiltert sind Übersicht, Ordnerbaum, Listen und Zählungen, Fällige, Entwürfe, Durchgänge, Suche samt
+  Vorschlägen, die Spalte „Bestand“ im Katalog, Produktseite und Produktjournal, Rückrufe, Meldungen, Exporte und
+  Mediendateien. Ein Oberordner ohne eigenes Recht steht in Ordnerleiste, Bestand, Übersicht und Pfadzeile nur als
+  grauer Pfad (Name, keine Zahlen, nicht anklickbar). „Gesperrt“ und „Ausgesondert“ einer Gliederung, die man nicht
+  ganz sieht, zeigen nur die eigenen Artikel – auf der Übersicht als Zeile „Gesperrt (deine Artikel)“. 403 und 404
+  zeigt die Oberfläche als Klartext mit dem Knopf „Zur Übersicht“.
 - **Oberfläche nach dem Recht am Gegenstand** (`static/material.js`): Knöpfe richten sich nach `darf` des Ordners,
   Artikels, der Prüfung oder des Durchgangs, nicht mehr nach einer Stufe des Kontos. Export, Lebenslauf, Journal und
   die Spalte „Person“ gibt es nur mit Grundrecht, „Prüfen“ nur mit Prüffreigabe dort. Fehlt einem qualifizierten
   Prüfer nur die Prüffreigabe, sagt die Artikelansicht: „Für diesen Ordner hast du keine Prüffreigabe – die vergibt
-  der Materialwart unter Ordner → Freigaben.“ Die Ordnerwahl beim Anlegen und Verschieben bietet nur Ordner an, die
-  man verwaltet (beim Prüfdurchgang auch solche mit Prüffreigabe), Ordner einer anderen Gliederung nur, wer beide
-  verwaltet – sonst mit Hinweis darauf.
+  der Materialwart unter Ordner → Bearbeiten → Freigaben.“ Die Ordnerwahl beim Anlegen und Verschieben bietet nur
+  Ordner an, die man verwaltet (beim Prüfdurchgang auch solche mit Prüffreigabe), Ordner einer anderen Gliederung nur,
+  wer beide verwaltet – sonst mit Hinweis darauf.
 - **Eine Heimat je Artikel**: Gesperrte, verlorene und ausgesonderte Artikel gehören zu ihrem Herkunftsordner, alle
   anderen zu dem Ordner, in dem sie liegen – für Rechte, Filter, Export und Durchgänge gleich. Das Aussondern behält
   jetzt die Herkunft: Wer nur „Fahrzeug 1“ verwaltet, sieht dessen ausgesonderte Artikel und ihre
   Aussonderungsprotokolle weiter, und der Export von „Fahrzeug 1“ enthält sie. Vor Schritt 8 Ausgesonderte und solche,
   deren Herkunftsordner gelöscht wurde, gehören zur Gliederung. Das Löschen eines Ordners sperren nur noch gesperrte
   und verlorene Artikel, die dorthin zurückkehren.
-- **Dialog „Freigaben“** (`static/freigaben.js`) – am Ordner unter **Freigaben**, nur für Verwalter, nicht an
-  Systemordnern:
+- **Freigaben am Ordner** (`static/freigaben.js`) – seit der Nachbesserung vom 18.10.2026 der Reiter **Freigaben** im
+  Dialog „Ordner bearbeiten“ (Knopf **Bearbeiten** im Ordnerkopf; einen eigenen Knopf „Freigaben“ gibt es nicht
+  mehr), nur für Verwalter, nicht an Systemordnern:
   - **+ Freigabe**: Person suchen (ab 3 Zeichen, nur aktive Konten mit Namen, ohne E-Mail), „Gilt für“ (der Ordner
     oder ein Oberordner, den man verwaltet; Vorgabe ist die Gliederung, wenn man sie verwaltet), eine **Vorlage** und
     optional eine Notiz. Vorlagen: „Führungskraft“ (lesen, dauerhaft), „Materialwart“ (verwalten, dauerhaft), „Prüfer“
@@ -1080,8 +1081,8 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   - Wer eine Prüffreigabe entzieht, erfährt, wie viele offene Prüfungen das Konto dort noch hat (unter Prüfungen →
     „Offene Prüfungen“ → „Freigeben“).
   - Im Ordnerkopf steht für Verwalter „n Freigaben laufen in den nächsten 30 Tagen ab“ mit dem Knopf „Verlängern …“;
-    er öffnet den Dialog gleich bei „Alle Prüffreigaben verlängern bis …“. Schließt der Dialog, lädt der Ordner neu
-    (eigene Rechte, Ablaufhinweis).
+    er öffnet „Ordner bearbeiten“ im Reiter „Freigaben“ gleich bei „Alle Prüffreigaben verlängern bis …“. Hat sich an
+    den Freigaben etwas geändert, lädt der Ordner nach dem Schließen neu (eigene Rechte, Ablaufhinweis).
 - **Wer Freigaben vergibt**: Wer einen Ordner verwaltet, vergibt dort und darunter an jedes aktive Konto mit Namen –
   auch aus anderen Gliederungen. Nie länger, als er dort selbst verwaltet (unbefristet nur, wer selbst unbefristet
   verwaltet). Eine fremde Freigabe ändert oder entzieht er nur, wenn er sie selbst so hätte vergeben dürfen – ein
@@ -1098,11 +1099,11 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   keine hat, liest „Du hast noch keine Freigabe im Bestand – der Materialwart deiner Gliederung vergibt sie.“ Die
   Schnittstelle dazu antwortet jedem Angemeldeten, auch ohne Modulzugang.
 - **Gliederungen anlegen**: auf oberster Ebene nur die Plattform-Verwaltung; nach „+ Gliederung“ öffnet sich gleich
-  der Freigaben-Dialog mit der Vorlage „Materialwart“. Eine Gliederung in einem Ordner legt an, wer den Oberordner
-  verwaltet. Einen vorhandenen Ordner zur Gliederung macht nur, wer die Gliederung darüber verwaltet (sonst 403; der
-  Dialog „Ordner bearbeiten“ bietet die Art dann nicht an) – alles darin wechselt dabei die Gliederung. Gesperrte und
-  ausgesonderte Artikel mit Heimat darin ziehen in seine neuen Systemordner (Journal „Ordner zur Gliederung
-  gemacht“).
+  „Ordner bearbeiten“ im Reiter „Freigaben“ mit der Vorlage „Materialwart“. Eine Gliederung in einem Ordner legt an,
+  wer den Oberordner verwaltet. Einen vorhandenen Ordner zur Gliederung macht nur, wer die Gliederung darüber verwaltet
+  (sonst 403; der Dialog „Ordner bearbeiten“ bietet die Art dann nicht an) – alles darin wechselt dabei die
+  Gliederung. Gesperrte und ausgesonderte Artikel mit Heimat darin ziehen in seine neuen Systemordner (Journal „Ordner
+  zur Gliederung gemacht“).
 - **Verschieben zwischen Gliederungen**: nur, wer beide Gliederungen verwaltet, oder die Plattform-Verwaltung (sonst
   403); ein Ziel, das man nicht sieht, antwortet 404 (vorher 403). Mit einem Ordner wandern seine gesperrten und
   ausgesonderten Artikel in die Systemordner der neuen Gliederung (Journal mit Grund „Ordner in andere Gliederung
@@ -1173,9 +1174,10 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
 - **Nutzerverwaltung**: Die Spalte „Material“ ist nur noch Anzeige – „alles“ (Plattform-Verwaltung), „n Freigaben“
   oder „–“; die gelbe Marke „Stufe aus Phase 1 – ohne Freigabe“ zeigt Konten, die früher Bestand sahen und jetzt
   keinen. Die Häkchen „Prüfer“ und „Produktkatalogpfleger“ gibt es nur mit Namen (400). „Bearbeiten“ zeigt die
-  Freigaben des Kontos mit Ordner, Recht, Ende und Zustand (Entziehen ja, angelegt wird am Ordner; bleiben offene
-  Prüfungen, führt ein Hinweis zu Material → Prüfungen → „Offene Prüfungen“). Die Liste holt die
-  Zahlen aller Konten mit einer Abfrage. Der Hilfetext erklärt das neue Modell.
+  Freigaben des Kontos mit Ordner, Recht, Ende und Zustand (Entziehen ja, angelegt und geändert wird am Ordner – der
+  Ordnerpfad führt dort gleich in den Reiter „Freigaben“; bleiben offene Prüfungen, führt ein Hinweis zu Material →
+  Prüfungen → „Offene Prüfungen“). Die Liste holt die Zahlen aller Konten mit einer Abfrage. Der Hilfetext erklärt das
+  neue Modell.
 - **DEMO-Daten** (`scripts/material_demo.py`): zweite Gliederung „DEMO-Gliederung Nachbarstadt“ mit „DEMO-Lager NS“
   und drei Artikeln, einer davon mit der Seriennummer `DEMO-NS-4711` für die globale Suche; sie kommt auch zu einem
   vorhandenen Demo-Bestand dazu. `--demo --konten` legt einmalig vier DEMO-Konten mit Namen und zufälligem Passwort an
@@ -1278,9 +1280,9 @@ Keine.
   (`excluded_by_name`), der Journaleintrag „ausgenommen“ steht aber unter dem Namen dessen, der verschoben hat – das
   Journal hält fest, wer gehandelt hat. Die Bereinigung in Schritt 8 schreibt „Migration Schritt 8“.
 - **`GET /ordner/<id>/zugeordnete`** liefert je Person zusätzlich `aktiv` – für „(deaktiviert)“ im Filter.
-- **Zusätze**: `MatFreigaben.kopfhinweis(element, ordner)` für den Ablaufhinweis im Ordnerkopf und
-  `MatFreigaben.oeffnen(ordner, "verlaengern")`, das direkt zum Knopf „Alle Prüffreigaben verlängern“ springt.
-  `requires_folder` kennt neben `leer="global"` und `leer="irgendwo"` auch `leer="zugang"`: `GET /artikel/vorschlag`
+- **Zusätze**: `MatFreigaben.kopfhinweis(element, ordner, verlaengern)` für den Ablaufhinweis im Ordnerkopf und die
+  Vorlage `"verlaengern"`, die direkt zum Knopf „Alle Prüffreigaben verlängern“ springt (seit der Nachbesserung
+  `MatFreigaben.inhalt(element, ordner, {vorlage: "verlaengern"})` statt `oeffnen`). `requires_folder` kennt neben `leer="global"` und `leer="irgendwo"` auch `leer="zugang"`: `GET /artikel/vorschlag`
   braucht ohne Ordner nur Modulzugang, mit Ordner Leserecht dort (sonst 404). „Alle verlängern“ überspringt mit Grund
   auch deaktivierte Konten, die eigene Freigabe und Freigaben, die schon länger laufen.
 
@@ -1308,9 +1310,10 @@ sich:
 
 Chromium am Rechner (1280 px) mit den DEMO-Daten und den vier DEMO-Konten:
 
-- Plattform-Verwaltung: „+ Gliederung“ führt in den Freigaben-Dialog der neuen Gliederung, Vorlage „Materialwart“
-  vorgewählt, „dauerhaft“ angeboten.
-- Materialwart: Ordnerkopf mit „Freigaben“, Export und dem Ablaufhinweis samt „Verlängern …“; Spalte „Person“;
+- Plattform-Verwaltung: „+ Gliederung“ führt in den Freigaben-Dialog der neuen Gliederung (seit der Nachbesserung:
+  „Ordner bearbeiten“, Reiter „Freigaben“), Vorlage „Materialwart“ vorgewählt, „dauerhaft“ angeboten.
+- Materialwart: Ordnerkopf mit „Freigaben“ (seit der Nachbesserung im Dialog „Bearbeiten“), Export und dem
+  Ablaufhinweis samt „Verlängern …“; Spalte „Person“;
   Sammelleiste mit „Verschieben nach …“ und „Zuordnen an …“. Mit `verwalten` an beiden DEMO-Gliederungen bietet die
   Ordnerwahl beim Verschieben die Ordner beider an.
 - Prüfer mit Prüffreigabe in der DEMO-Gliederung und nur `lesen` in der Nachbarstadt: Ein Artikel der Nachbarstadt
@@ -1341,6 +1344,30 @@ Regressionstest. Danach liefen alle Suiten grün.
 | 11 | Freigabenliste: eine Abfrage je Verlaufseintrag (bis 200) | niedrig | `journal.konto_namen` löst alle Kontoverweise mit einer Abfrage auf. Test `test_liste_abfragen` |
 | 12 | DEMO-Skript: Herstell-, Erstgebrauchs- und Prüfdaten mit `date.today()` – im UTC-Container nachts einen Tag daneben | niedrig | `services.heute()` wie im übrigen Modul |
 
+### Nachbesserungen nach der Auslieferung (Wünsche vom 18.10.2026)
+
+- **Freigaben als Reiter in „Ordner bearbeiten“** (Wunsch: „Der Freigaben-Button soll verschwinden und das Menü in die
+  Bearbeiten-Funktion der Ordner verschoben werden, ggf. mit Tab statt unten einfach drangehangen.“): Der Knopf
+  „Freigaben“ im Ordnerkopf ist weg. „Bearbeiten“ öffnet einen Dialog mit zwei Reitern – **Ordner** (Name, Art,
+  Prüfintervall, Beschreibung, Foto; rote Hauptaktion „Speichern“) und **Freigaben** (Vorlagen, „+ Freigabe“ mit der
+  roten Hauptaktion „Freigabe erteilen“, Listen, „Alle Prüffreigaben verlängern bis …“, Verlauf; unten „Schließen“).
+  Die Reiter sind Tabs nach WAI-ARIA (← und → wechseln, Pos1 und Ende springen), kleben beim Rollen oben, die
+  Knopfzeile wie seit Lieferung 5 unten; der Dialog ist in beiden Reitern so breit wie früher der Freigaben-Dialog.
+  Den Reiter gibt es genau dort, wo es „Bearbeiten“ gibt: Beides verlangt verwalten am Ordner, an Systemordnern gibt
+  es keins von beiden – den Fall „darf Freigaben, aber nicht bearbeiten“ gibt es also nicht. Die Freigaben lädt der
+  Reiter erst, wenn man ihn öffnet. Ändern, Entziehen und Verlängern öffnen wie bisher eigene Dialoge darüber; danach
+  steht man wieder im Reiter „Freigaben“, und was im Reiter „Ordner“ eingetippt, aber nicht gespeichert ist, bleibt
+  stehen. Wer den Dialog aus dem Reiter „Freigaben“ heraus verlässt („Schließen“, Esc, „Dort öffnen“), während im
+  Reiter „Ordner“ noch Ungespeichertes steht, wird gefragt („Verwerfen“). Ein Foto, das man im Reiter „Freigaben“
+  auf den Dialog zieht, nimmt der Dialog nicht (Hinweis). Alle Einstiege führen jetzt dorthin: nach „+ Gliederung“
+  (`?freigaben=materialwart`), der Ablaufhinweis im Ordnerkopf mit „Verlängern …“ (er bleibt ein Hinweis am Ordner),
+  „Dort öffnen“ an geerbten Zeilen und der Ordnerpfad einer Freigabe in der Nutzerverwaltung (`?freigaben`). „Meine
+  Freigaben“ verlinkt wie bisher den Ordner selbst. Hat sich an den Freigaben etwas geändert, lädt der Ordner nach dem
+  Schließen neu – über einen Rückruf aus `MatFreigaben`, nicht mehr über eine Klasse am gemeinsamen Dialogelement.
+  Schnittstelle von `window.MatFreigaben`: `inhalt(element, ordner, optionen)` füllt den Reiter (optionen `vorlage`,
+  `fokus`, `geaendert`, `dort`) statt `oeffnen(ordner, vorlage)`; `kopfhinweis(element, ordner, verlaengern)`.
+  Hilfetexte und Meldungen sagen „Ordner → Bearbeiten → Freigaben“.
+
 ### Zu prüfen
 
 - **Leistung mit vielen Ordnern**: Die Sicht eines Kontos wird je Anfrage einmal gerechnet – eine Abfrage der eigenen
@@ -1353,8 +1380,8 @@ Regressionstest. Danach liefen alle Suiten grün.
 - **Pfadnamen in verschobenen Artikeln**: Im Journal eines Artikels aus einer anderen Gliederung, in seinen
   festgeschriebenen Protokollen und in Titel und Ordner alter Durchgänge stehen Ordnernamen der alten Gliederung – sie
   gehören zur Geschichte des Artikels. Bitte bestätigen.
-- **Telefon und Tablet**: Freigaben-Dialog (Vorlagen, Karten, Verlängern) und Zuordnen (Personensuche, Sammelaktion)
-  auf dem Telefon durchgehen. Am Tablet hochkant und quer (bis etwa 920 px) sind die Freigabenlisten jetzt Karten –
+- **Telefon und Tablet**: Reiter „Freigaben“ in „Ordner bearbeiten“ (Vorlagen, Karten, Verlängern) und Zuordnen
+  (Personensuche, Sammelaktion) auf dem Telefon durchgehen. Am Tablet hochkant und quer (bis etwa 920 px) sind die Freigabenlisten jetzt Karten –
   im Browser nachgemessen, auf einem echten Gerät noch nicht gesehen.
 - **Notiz an der eigenen Freigabe**: Wer einen Ordner mitverwaltet, liest dort auch die Notiz zu seiner eigenen
   Freigabe (Bauentwurf 1.6 Nr. 10; die Hilfe im Dialog sagt das). Soll sie bei eigenen Zeilen verborgen bleiben (außer
@@ -1596,7 +1623,7 @@ Produktkatalogpfleger oder Plattform-Verwaltung.
 | `POST /api/material/rueckrufe/<id>/beenden` (`vermerk` Pflicht) | Katalog | Rückruf beenden |
 | `GET /api/material/rueckrufe` | Modulzugang | alle laufenden Rückrufe mit Produkt und den Zahlen des eigenen Bereichs |
 | (Artikel, Produkt, Listen) | lesen | neu: `artikel.rueckrufe` (laufende samt Zustand), `produkt.rueckrufe`, je Listenzeile `rueckruf` (Titel eines offenen) |
-| `GET /api/material/ordner/<id>/freigaben` | Materialwart am Ordner | Freigaben-Dialog: `ordner`, `anker_wahl` (der Ordner und die Oberordner, die man verwaltet, je mit dem eigenen Ende), `anker_vorgabe`, `direkt`, `geerbt` (ohne Notiz), `unten` (Zeilen je mit `aenderbar` und `entziehbar`), `verlauf`, `laeuft_ab`, `grenzen` (heute, längste Prüffreigabe, Vorgabe für „bis“) (Phase 2) |
+| `GET /api/material/ordner/<id>/freigaben` | Materialwart am Ordner | Reiter „Freigaben“ in „Ordner bearbeiten“: `ordner`, `anker_wahl` (der Ordner und die Oberordner, die man verwaltet, je mit dem eigenen Ende), `anker_vorgabe`, `direkt`, `geerbt` (ohne Notiz), `unten` (Zeilen je mit `aenderbar` und `entziehbar`), `verlauf`, `laeuft_ab`, `grenzen` (heute, längste Prüffreigabe, Vorgabe für „bis“) (Phase 2) |
 | `POST /api/material/ordner/<id>/freigaben` (`user_id`, `grundrecht`: `lesen`\|`verwalten`\|`null`, `grund_bis`, `pruefen_bis`, `notiz`) | Materialwart am Ordner | Grundrecht und/oder Prüffreigabe in einem Schritt anlegen oder ändern, ganz oder gar nicht → 201 `freigaben`, `liste`; 404 „Konto nicht gefunden.“ für unbekannte, deaktivierte und namenlose Konten, 409 ohne Qualifikation, an Systemordnern oder ohne verbleibenden Verwalter (Phase 2) |
 | `POST /api/material/ordner/<id>/freigaben/verlaengern` (`bis`) | Materialwart am Ordner | alle Prüffreigaben im Zweig, die man ändern darf (auch bis zu 90 Tage abgelaufene) → `verlaengert`, `uebersprungen` (Konto, Ordner, Grund) (Phase 2) |
 | `PUT /api/material/freigaben/<id>` (`recht`, `bis` – `null` = unbefristet, nur Grundrechte –, `notiz`), `DELETE …/<id>` | Materialwart am Ordner der Freigabe | Freigabe ändern bzw. entziehen; DELETE liefert `offene_entwuerfe` (Phase 2) |
