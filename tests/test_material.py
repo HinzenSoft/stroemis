@@ -1840,13 +1840,15 @@ def test_produktmeldung():
             # Melden dürfen Materialwarte (die Verwaltung ist überall Materialwart), sonst niemand.
             for wer in ("fuehrung", "pruefer", "nutzer", "katalog"):
                 assert melden(k[wer]).status_code == 403, wer
-            r = melden(k["adm"], manufacturer="Adminwerk", model="Seil Delta")
+            r = melden(k["adm"], manufacturer="Adminwerk", model="Seil Delta", folder_id=gid)
             assert r.status_code == 201
             m2 = r.json["meldung"]["id"]
             assert post[-1][0] == "katalog@example.org"
 
             # Sehen: der Materialwart standardmäßig seine, der Katalogpfleger alle offenen (älteste zuerst). Lesen darf
-            # jeder mit Zugang zum Modul (Lieferung 4) – abarbeiten („bearbeiten“) nur der Katalogpfleger.
+            # jeder mit Zugang zum Modul (Lieferung 4), seit Phase 2 nur, wer den Ordner der Meldung sieht (beide hier
+            # für die Gliederung; ohne Ordner nur Melder und Katalogpflege: test_material_zuordnung) – abarbeiten
+            # („bearbeiten“) nur der Katalogpfleger.
             r = k["wart"].get("/api/material/meldungen")
             assert r.status_code == 200 and not r.json["alle"] and [x["id"] for x in r.json["meldungen"]] == [m["id"]]
             assert k["wart"].get(f"/api/material/meldungen/{m2}").status_code == 200

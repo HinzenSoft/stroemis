@@ -11,7 +11,12 @@ und Fotos (Etikett, Typenschild). Die Katalogpfleger bekommen eine Mail und arbe
 Der Melder bekommt in beiden Fällen eine Mail, nach dem Einpflegen mit einem Link, der „Artikel
 anlegen“ mit Produkt und Ordner öffnet. Löschen kann eine Meldung nur, wer sie gemacht hat – offen oder
 erledigt; ein Produkt, das aus ihr entstand, bleibt. Sonst bleibt sie stehen: Sie ist der Weg eines
-Produkts in den Katalog und steht im Journal (entity „request“, am Produkt mit angezeigt)."""
+Produkts in den Katalog und steht im Journal (entity „request“, am Produkt mit angezeigt).
+
+Sehen darf eine Meldung seit Phase 2 nur, wer Katalogpfleger oder Plattform-Verwaltung ist, sie gemacht hat oder
+den Ordner sieht, für den sie gemacht wurde (rechte.darf_meldung) – eine Meldung nennt Material und Ordner einer
+Gliederung. Den Ordnerpfad zeigt sie nur, wer den Ordner sieht; sonst steht nur die Gliederung da, auch in der Mail an
+die Katalogpfleger."""
 import json
 import os
 import re
@@ -19,12 +24,12 @@ import re
 from flask import current_app
 
 from ... import db
-from ...auth import _im_hintergrund
+from ...auth import _im_hintergrund, current_user
 from ...images import delete_photo_files
 from ...mailer import send_mail
 from ..models import MELDUNGSSTATUS
 from . import Abgelehnt, akteur, kennung, text
-from . import bestand, journal, katalog
+from . import bestand, journal, katalog, rechte
 
 MAX_LINKS = 5
 LINK_MAX = 500
@@ -33,6 +38,7 @@ NOTIZ_MAX = 2000
 ANTWORT_MAX = 1000
 MAX_EMPFAENGER = 10
 FILTER = {"offen": ("offen",), "erledigt": ("eingepflegt", "abgelehnt"), "alle": tuple(MELDUNGSSTATUS)}
+FEHLT = "Meldung nicht gefunden."
 
 # Mails gehen neben der Anfrage hinaus (wie bei Kontoanfragen); Tests setzen hier einen direkten Aufruf ein.
 HINTERGRUND = _im_hintergrund
@@ -99,8 +105,29 @@ def fotos_ablegen(dateien):
 def meldung(mid):
     r = db.query("SELECT * FROM mat_product_request WHERE id = ?", (mid,), one=True)
     if not r:
-        raise Abgelehnt("Meldung nicht gefunden.", 404)
+        raise Abgelehnt(FEHLT, 404)
     return r
+
+
+def lesbar(mid):
+    """Die Meldung, wenn das Konto der Anfrage sie sehen darf (rechte.darf_meldung) – sonst dieselbe 404 wie für eine,
+    die es nicht gibt."""
+    r = meldung(mid)
+    if not rechte.darf_meldung(r):
+        raise Abgelehnt(FEHLT, 404)
+    return r
+
+
+def _sichtbar(user=None):
+    """SQL-Bedingung über mat_product_request (ohne Kürzel) und ihre Parameter: die Meldungen, die das Konto sehen darf –
+    dieselbe Regel wie rechte.darf_meldung, als Filter statt je Zeile."""
+    user = user or current_user()
+    if not user:
+        return "0", []
+    if rechte.ist_katalogpfleger(user):
+        return "1", []
+    return (f"(created_by = ? OR (folder_id IS NOT NULL AND {rechte.ordner_filter('folder_id', user=user)}))",
+            [user["id"]])
 
 
 def anlegen(d, dateien=()):
@@ -148,11 +175,13 @@ def anlegen(d, dateien=()):
 
 
 def liste(filter_="offen", uid=None, grenze=200):
-    """Meldungen nach Status: offene der Reihe nach (älteste zuerst), erledigte neueste zuerst. Mit uid
-    nur die eigenen – so sieht ein Materialwart, was aus seinen Meldungen geworden ist."""
+    """Meldungen nach Status, soweit das Konto der Anfrage sie sehen darf: offene der Reihe nach (älteste zuerst),
+    erledigte neueste zuerst. Mit uid nur die eigenen – so sieht ein Materialwart, was aus seinen Meldungen geworden
+    ist."""
     stati = FILTER.get(filter_) or FILTER["offen"]
-    sql = f"SELECT * FROM mat_product_request WHERE status IN ({','.join('?' * len(stati))})"
-    args = list(stati)
+    sichtbar, args = _sichtbar()
+    sql = f"SELECT * FROM mat_product_request WHERE status IN ({','.join('?' * len(stati))}) AND {sichtbar}"
+    args = list(stati) + args
     if uid is not None:
         sql += " AND created_by = ?"
         args.append(uid)
@@ -161,7 +190,15 @@ def liste(filter_="offen", uid=None, grenze=200):
 
 
 def anzahl_offen():
-    return db.query("SELECT COUNT(*) AS n FROM mat_product_request WHERE status = 'offen'", one=True)["n"]
+    """Offene Meldungen, die das Konto der Anfrage sehen darf."""
+    sichtbar, args = _sichtbar()
+    return db.query(f"SELECT COUNT(*) AS n FROM mat_product_request WHERE status = 'offen' AND {sichtbar}", args,
+                    one=True)["n"]
+
+
+def _gliederung(fid):
+    gl = bestand.gliederung_von(fid)
+    return gl["name"] if gl else ""
 
 
 def meldung_json(r):
@@ -173,7 +210,14 @@ def meldung_json(r):
     out["kategorie"] = ({"id": k["id"], "pfad": " / ".join(x["name"] for x in katalog.kategorie_pfad(k["id"]))}
                         if k else None)
     o = db.query("SELECT id FROM mat_folder WHERE id = ?", (r["folder_id"],), one=True) if r["folder_id"] else None
-    out["ordner"] = {"id": o["id"], "pfad": " / ".join(x["name"] for x in bestand.pfad(o["id"]))} if o else None
+    # Den Ordner (Kennung und Pfad) nur, wer ihn sieht – Katalogpfleger ohne Bestand und ein Melder, der den Ordner
+    # nicht mehr sieht, lesen nur die Gliederung.
+    if not o:
+        out["ordner"] = None
+    elif rechte.darf("lesen", o["id"]):
+        out["ordner"] = {"id": o["id"], "pfad": " / ".join(x["name"] for x in bestand.pfad(o["id"]))}
+    else:
+        out["ordner"] = {"gliederung": _gliederung(o["id"])}
     out["links"] = json.loads(r["links_json"] or "[]")
     out["fotos"] = [{"vorschau": katalog.bild_url(f, "thumb"), "web": katalog.bild_url(f), "original": katalog.bild_url(f, "orig")}
                     for f in json.loads(r["photos_json"] or "[]")]
@@ -292,7 +336,8 @@ def _katalogpfleger_benachrichtigen(r):
     if m["kategorie"]:
         zeilen.append(f"Kategorie:      {m['kategorie']['pfad']} (Vorschlag)")
     if m["ordner"]:
-        zeilen.append(f"Für:            {m['ordner']['pfad']}")
+        # Nur die Gliederung: Die Mail geht an alle Katalogpfleger, auch an die ohne Bestand.
+        zeilen.append(f"Für:            {_gliederung(r['folder_id'])}")
     if m["fotos"]:
         zeilen.append(f"Fotos:          {len(m['fotos'])} (in der Meldung)")
     if m["links"]:
