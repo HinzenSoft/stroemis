@@ -1391,8 +1391,10 @@ Regressionstest. Danach liefen alle Suiten grün.
 - **Bremse bei immer angebotener Suche**: Weil das Angebot jetzt auch neben eigenen Treffern steht, zählt auch eine
   Suche nach einer eigenen Seriennummer in der Bremse (zehn je Viertelstunde, mit Suche, QR-Steckbrief und Dublette)
   und steht im Protokoll. Bitte im Betrieb beobachten, ob die Grenze im Alltag stört.
-- **Eindeutiger eigener Treffer**: `/material/suche` öffnet ihn wie bisher direkt; die Suche in anderen Gliederungen
-  gibt es dann nur über die Vorschläge unter dem Suchfeld. Bitte bestätigen, dass das so bleiben soll.
+- **Eindeutiger eigener Treffer**: `/material/suche` öffnet ihn wie bisher direkt; seit der Prüfung der Nachbesserung
+  nimmt die Weiterleitung die Anfrage mit (`?q=`), und die Artikelseite bietet die Suche außerhalb des eigenen
+  Bereichs unter dem Kopf an – „immer angeboten“ gilt damit auch dort. Bitte ansehen, ob der Platz zwischen
+  Artikelkopf und Stammdaten passt.
 - **Sperrwort für alle mit Modulzugang**: Auch ein Katalogpfleger oder ein Prüfer ohne Freigabe sieht über Suche und
   QR, ob ein fremder Artikel gesperrt, verloren gemeldet oder ausgesondert ist (ein Wort, kein Grund, kein Datum).
 
@@ -1468,6 +1470,22 @@ entschieden; die Schalter sind fort.
   DEMO-Artikeln mit derselben Nummer – lokal und fremd, je Trefferseite und Vorschläge samt Tastatur; als
   DEMO-Materialwart B ein gesperrter Artikel der DEMO-Gliederung über Suche, Vorschläge und QR-Seite „fremd“. Keine
   Konsolenfehler, nichts rollt waagerecht.
+
+#### Prüfung der Nachbesserung
+
+Zwei unabhängige Prüfungen – Sicherheit (mit eigenen Konten nachgestellt) und Browser (Rundgang mit den DEMO-Konten,
+darunter der externe Prüfer mit Freigabe nur am DEMO-Lager) – haben fünf Befunde gemeldet, zwei davon dieselbe
+Abweichung. Jeder ist vor der Behebung nachgestellt worden (Anfrage, Browser oder im Code); alle vier sind behoben,
+der Daten- und der Weiterleitungsfall mit Regressionstest, die Oberfläche im Browser nachgeprüft (Chromium,
+DEMO-Konten, 1280 × 900, 1024 × 768, 820 × 1180 und 390 × 844 bzw. 390 × 560 mit Touch; keine Konsolenfehler,
+nichts rollt waagerecht). Danach liefen alle Suiten grün.
+
+| # | Befund | Schwere | Umgang |
+| --- | --- | --- | --- |
+| 1 | „Aus anderen Gliederungen“ zeigte auch Artikel der eigenen Gliederung, wenn das Konto nur einen Teil davon sieht (externer Prüfer, Materialwart eines Standorts); der Hinweis „… wer in der Gliederung eine Freigabe hat“ stimmte dann nicht | mittel | Gesucht wird weiter über alles, was das Konto nicht sieht; die Texte sagen jetzt „außerhalb deines Bereichs“ – Angebot, Trennlinie, Überschrift, Rückfrage (nennt andere Gliederungen und Ordner ohne eigene Freigabe), exakt-Text, leeres Ergebnis. Zu welcher Gliederung ein Treffer gehört, sagt weiter die Marke auf seiner Karte. Hinweis: „… wer für den Ordner des Artikels eine Freigabe hat.“ Test `test_teilfreigabe` |
+| 2 | Bei genau einem eigenen Treffer leitete `/material/suche` gleich zum Artikel – nach Enter, „Suchen“ oder „Als Trefferliste anzeigen“ stand das Angebot nirgends, auch nicht bei einem Teiltreffer; „immer angeboten“ galt dort nicht (von beiden Prüfungen gemeldet) | niedrig | Der eindeutige Treffer öffnet weiter direkt (Phase 1), die Weiterleitung nimmt die Anfrage aber mit, wenn sie für die globale Suche taugt (`?q=`); die Artikelseite zeigt dann unter dem Kopf dasselbe Angebot wie die Trefferseite (grauer Knopf, Rückfrage, Ergebnis an seiner Stelle, bleibt beim Neuzeichnen). Ohne `q` bei Inventar- und STR-Nummern und für die Plattform-Verwaltung; die Artikelseite übergeht ein `q`, das nicht taugt. Test `test_eindeutiger_treffer` |
+| 3 | Angebot („Nur Stammdaten und Zugehörigkeit“), Rückfrage („gesperrt oder ausgesondert“) und Ergebnis (drei Sperrwörter) beschrieben den Inhalt unterschiedlich | niedrig | Angebot und Angebotszeile: „Nur Stammdaten, Zugehörigkeit und Sperrzustand“; die Rückfrage nennt „gesperrt, verloren gemeldet oder ausgesondert“ wie die QR-Ansicht „fremd“. `test_sperrwort` prüft die Texte mit |
+| 4 | Die Vorschlagsliste rollte nach der globalen Suche immer bis zur Trennzeile und schnitt eigene Vorschläge ab, auch wenn alles ohne Rollen zu sehen gewesen wäre | niedrig | Gerollt wird nur, bis Trennzeile und erste fremde Karte ganz zu sehen sind, höchstens bis die Trennzeile oben steht. Nachgemessen: 1280 × 900, 1024 × 768 und 390 × 844 rollen nicht mehr; 390 × 560 rollt 47 px |
 
 ## Katalogdatei (Format 1)
 
