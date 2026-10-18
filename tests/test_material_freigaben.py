@@ -534,6 +534,14 @@ def test_listen_und_verlaengern():
         assert grant(app, lager, konten["frisch"], "pruefen")["valid_until"] == tag(390)
         gruende = {u["konto"]: u["grund"] for u in r.json["uebersprungen"]}
         assert gruende["Prüfer lang"] == gruende["Prüfer alt"] == "reicht weiter als deine eigene Freigabe", gruende
+
+        # Ein Konto ohne Namen (etwa aus der Migration, die Freigaben unabhängig vom Namen vergibt): Die Liste nennt es
+        # „(Konto ohne Namen)“ – nie mit E-Mail – und die Zeile wirkt nicht.
+        ohne_name = adm.post("/api/admin/users", json={"email": "ohne-name@example.org", "password": "passwort1"}).json["user"]["id"]
+        freigeben(adm, fach, ohne_name, "lesen")
+        x = [x for x in liste(w, lager)["unten"] if x["konto"]["id"] == ohne_name][0]
+        assert x["konto"]["name"] == "(Konto ohne Namen)" and not x["wirkt"], x
+        assert "ohne-name@example.org" not in w.get(FR.format(lager)).get_data(as_text=True)
     print("Listen und Verlängern bestanden.")
 
 

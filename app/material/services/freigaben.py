@@ -157,6 +157,12 @@ def _konto(uid):
     return db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True)
 
 
+def _name(name):
+    """Ein Kontoname für die Listen – ohne Namen „(Konto ohne Namen)“, nie die E-Mail. So entstehen Zeilen etwa aus der
+    Migration (Schritt 8 vergibt Freigaben unabhängig vom Namen); wirken tun sie erst mit Namen."""
+    return (name or "").strip() or dienste.OHNE_NAMEN
+
+
 def _aktiv(u):
     return bool(u["active"]) and (u["status"] or "active") == "active"
 
@@ -398,7 +404,8 @@ def verlaengern(fid, d):
             elif not _spaeter(bis, r["valid_until"]):
                 grund = f"läuft schon bis {_tag(r['valid_until'])}"
             if grund:
-                uebersprungen.append({"konto": r["konto_name"], "ordner": _pfad(r["folder_id"], ordner), "grund": grund})
+                uebersprungen.append({"konto": _name(r["konto_name"]), "ordner": _pfad(r["folder_id"], ordner),
+                                      "grund": grund})
                 continue
             _schreiben(s, ich, r["folder_id"], r, dict(r, valid_until=bis), konto, grund="alle verlängert")
             verlaengert += 1
@@ -437,12 +444,12 @@ def _eintrag(r, ordner, s, system, notiz):
     anker = r["folder_id"]
     darf_anker = s.alles or s.darf("verwalten", anker)
     out = {"id": r["id"], "ordner": {"id": anker, "pfad": _pfad(anker, ordner)},
-           "konto": {"id": r["user_id"], "name": r["u_name"], "gliederung": r["u_gliederung"], "aktiv": aktiv,
+           "konto": {"id": r["user_id"], "name": _name(r["u_name"]), "gliederung": r["u_gliederung"], "aktiv": aktiv,
                      "haekchen": bool(r["u_pruefer"]), "qualifiziert": qualifiziert},
            "recht": r["permission"], "bis": r["valid_until"], "gueltig": gueltig,
            "wirkt": gueltig and aktiv and bool((r["u_name"] or "").strip()) and (r["permission"] != "pruefen" or qualifiziert),
            "laeuft_ab_in_tagen": tage if tage is not None and tage <= ABLAUF_TAGE else None,
-           "vergeben_von": (r["von_name"] or "") if r["granted_by"] is not None
+           "vergeben_von": _name(r["von_name"]) if r["granted_by"] is not None
            else system.get(r["id"], "(gelöschtes Konto)"),
            "seit": r["created_at"], "eigen": r["user_id"] == s.uid,
            "aenderbar": bool(s.alles or (darf_anker and (r["user_id"] == s.uid
