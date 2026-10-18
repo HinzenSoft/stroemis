@@ -96,12 +96,15 @@ pages = Blueprint("pages", __name__)
 @auth.page_login_required
 def index():
     """Startseite ist das Wiki – oder das erste Modul, das die Rechte-Matrix dem Konto öffnet. Ohne jedes Modul der
-    Lesemodus des Wikis (die öffentlichen Seiten) statt einer Sackgasse; ein Modul mit eigener Stufe geht ihm vor."""
+    Lesemodus des Wikis (die öffentlichen Seiten) statt einer Sackgasse; ein Modul mit eigener Stufe geht ihm vor.
+    Das Modul Material öffnet sich nur mit Stufe UND Namen (rechte.zugang) – ein namenloses Konto von früher landete
+    sonst auf der Fehlerseite des Moduls."""
     if auth.nutzt("wiki"):
         return render_template("wiki.html", user=auth.current_user(), slug="")
+    from .material.services import rechte as mat_rechte
     for modul, ziel in (("karte", "/karte"), ("pruefungen", "/pruefungen"), ("material", "/material"),
                         ("verwaltung", "/admin")):
-        if auth.nutzt(modul):
+        if mat_rechte.zugang() if modul == "material" else auth.nutzt(modul):
             return redirect(ziel)
     if auth.wiki_lesemodus():
         return redirect(url_for("pages.wiki"))
@@ -602,9 +605,13 @@ def create_app():
 
     @app.context_processor
     def inject():
+        # material_zugang: der Reiter „Material“ der Kopfleiste nur, wenn sich das Modul auch öffnet (Stufe und Name,
+        # ohne Abfrage) – rechte.material allein zeigte ihn einem namenlosen Konto, das dort nur 403 bekäme.
+        from .material.services.rechte import zugang as material_zugang
         return {"cfg": app.config, "is_admin": auth.is_admin(), "is_pruefer": auth.is_pruefer(),
                 "rechte": auth.rechte_von(auth.current_user()) if auth.current_user() else {},
                 "wiki_lesemodus": auth.wiki_lesemodus(),
+                "material_zugang": material_zugang(),
                 "csp_nonce": getattr(g, "csp_nonce", "")}
 
     @app.errorhandler(413)

@@ -442,6 +442,27 @@ def test_meldung_ohne_stufe():
     print("Meldung ohne Stufe bestanden.")
 
 
+def test_namenlos_startseite():
+    """Ein namenloses Konto von früher mit Stufe Mitglied (Schritt 10 setzt auch solche auf 1): Die Startseite führt
+    nicht in die Fehlerseite des Moduls, sondern in den Lesemodus des Wikis, und die Kopfleiste zeigt „Material“ nicht –
+    beides erst mit Namen. /material selbst sagt, was fehlt."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        uid = _konto_sql(app, "namenlos@example.org", name="", recht_material=1, recht_wiki=0, recht_karte=0)
+        c = anmelden(app, "namenlos@example.org", "passwort1")
+        r = c.get("/")
+        assert r.status_code == 302 and r.headers["Location"].endswith("/wiki"), (r.status_code, r.headers)
+        assert 'href="/material"' not in c.get("/profil").get_data(as_text=True)
+        r = c.get("/material")
+        assert r.status_code == 403 and "braucht dein Konto einen Namen" in r.get_data(as_text=True)
+        sql(app, "UPDATE users SET name = 'Namenlos Test' WHERE id = ?", (uid,))
+        r = c.get("/")
+        assert r.status_code == 302 and r.headers["Location"].endswith("/material"), (r.status_code, r.headers)
+        assert 'href="/material"' in c.get("/profil").get_data(as_text=True)
+        assert c.get("/material").status_code == 200
+    print("Namenloses Konto: Startseite bestanden.")
+
+
 def test_ruhende_freigabe_nicht_hochstufen():
     """Eine Freigabe, die ruht, weil das Konto keine Stufe hat (1.6 Nr. 12): Hochstufen (lesen → verwalten), ein
     späteres Ende oder aus lesen ein dauerhaftes Grundrecht machen geht per PUT so wenig wie beim Erteilen – 409 mit
@@ -665,6 +686,7 @@ if __name__ == "__main__":
     test_mitglied_und_material_verwaltung()
     test_haekchen_ohne_stufe()
     test_personensuche_zweck()
+    test_namenlos_startseite()
     test_ruhende_freigabe_nicht_hochstufen()
     test_meldung_ohne_stufe()
     test_verwalter_ohne_stufe()
