@@ -1188,8 +1188,9 @@ sind angeglichen.
   aufbewahrt, auch nach der Aussonderung – die Anwendung löscht sie auf keinem Weg (Entscheidung des Betreibers vom
   18.10.2026). Der Dialog „Löschen“ der
   Nutzerverwaltung nennt die Folgen vorher („n Freigaben werden entfernt, m Artikel verlieren ihre Zuordnung, k offene
-  Prüfungen werden zu Reservierungen ohne Prüfer …“). Deaktivieren ändert im Modul nichts – Freigaben wirken nicht
-  mehr, Zuordnungen bleiben. Die Stufe bleibt am Konto und geht mit ihm.
+  Prüfungen werden zu Reservierungen ohne Prüfer …“), beim einzigen Materialwart einer Gliederung auch, dass dort
+  danach nur noch die Material-Verwaltung verwaltet (Entscheidung vom 18.10.2026). Deaktivieren ändert im Modul
+  nichts – Freigaben wirken nicht mehr, Zuordnungen bleiben. Die Stufe bleibt am Konto und geht mit ihm.
 - **Journal**: Freigaben stehen am Ordner, an dem sie vergeben sind („Freigabe erteilt“, „geändert“, „entzogen“,
   „entfernt“), und nur dessen Verwalter sehen sie; Zuordnungen stehen am Artikel. Betroffene stehen darin nur als
   pseudonymer Kontoverweis (`users.mat_ref`, 128 Bit Zufall), der erst beim Lesen zum Namen wird; die Notiz nie, nur
@@ -1202,8 +1203,10 @@ sind angeglichen.
   Häkchen „Produktkatalogpfleger“ gibt es nicht mehr (400, wenn es jemand schickt). „Bearbeiten“ zeigt die
   Freigaben des Kontos mit Ordner, Recht, Ende und Zustand (Entziehen ja, angelegt und geändert wird am Ordner – der
   Ordnerpfad führt dort gleich in den Reiter „Freigaben“; bleiben offene Prüfungen, führt ein Hinweis zu Material →
-  Prüfungen → „Offene Prüfungen“; ohne Stufe darüber „Diese Freigaben wirken nicht …“). Die Liste holt die Zahlen
-  aller Konten mit einer Abfrage. Der Hilfetext erklärt das Modell.
+  Prüfungen → „Offene Prüfungen“; ohne Stufe darüber „Diese Freigaben wirken nicht …“). Ist das Konto heute der
+  einzige Materialwart einer Gliederung, fragt die Nutzerverwaltung vor Material „–“ (Tabelle und Dialog) und vor dem
+  Deaktivieren nach („Einziger Materialwart“, nur eine Warnung; Entscheidung vom 18.10.2026), und der Dialog „Löschen“
+  nennt es. Die Liste holt die Zahlen aller Konten mit einer Abfrage. Der Hilfetext erklärt das Modell.
 - **DEMO-Daten** (`scripts/material_demo.py`): zweite Gliederung „DEMO-Gliederung Nachbarstadt“ mit „DEMO-Lager NS“
   und drei Artikeln, einer davon mit der Seriennummer `DEMO-NS-4711` für die globale Suche; sie kommt auch zu einem
   vorhandenen Demo-Bestand dazu. `--demo --konten` legt einmalig fünf DEMO-Konten mit Namen und zufälligem Passwort
@@ -1864,10 +1867,10 @@ zur Nachbesserung. Der Betreiber hat sie am 18.10.2026 entschieden.
      Gliederung(en) (mit Pfad, falls verschachtelt), sagt, dass dort danach nur noch die Material-Verwaltung verwaltet
      und Freigaben vergibt, und nennt den Weg zu einem zweiten Materialwart (Bestand → Gliederung → Bearbeiten →
      Freigaben, Vorlage „Materialwart“). „Abbrechen“ (grau, vorn, mit Fokus; Esc ebenso) lässt alles, wie es war – der
-     Dialog bleibt offen, in der Tabelle springt die Auswahl zurück; „Trotzdem speichern“ ist der rote Hauptknopf, nicht
-     der Knopf für Endgültiges, denn gelöscht wird nichts. Ohne betroffene Gliederung keine Rückfrage. Die Tabelle
-     gehört dazu, weil sich die Stufe dort mit einem Wechsel ändern lässt. Der Dialog „Löschen“ nennt dieselbe Folge
-     unter den Folgen im Modul Material.
+     Dialog bleibt offen, in der Tabelle springt die Auswahl zurück, und der Fokus steht wieder auf „Speichern“ bzw. der
+     Auswahl; „Trotzdem speichern“ ist der rote Hauptknopf, nicht der Knopf für Endgültiges, denn gelöscht wird nichts.
+     Ohne betroffene Gliederung keine Rückfrage. Die Tabelle gehört dazu, weil sich die Stufe dort mit einem Wechsel
+     ändern lässt. Der Dialog „Löschen“ nennt dieselbe Folge unter den Folgen im Modul Material.
    - Tests: `test_material_stufen.test_letzter_materialwart` (einziger Verwalter, zwei Verwalter, geerbt von oben samt
      verschachtelter Gliederung, nur unterhalb verwaltet, abgelaufen – fremd und eigen –, Material-Verwaltung zählt
      nicht, deaktivierte und Mitverwalterin ohne Stufe zählen nicht, 403 für Material-Verwaltung, Materialwart und
@@ -1879,6 +1882,16 @@ zur Nachbesserung. Der Betreiber hat sie am 18.10.2026 entschieden.
      „Trotzdem speichern“ speichert; Deaktivieren ebenso; in der Tabelle ebenso; der Dialog „Löschen“ nennt die Folge;
      mit dem DEMO-Prüfer als zweitem Verwalter keine Rückfrage, weder im Dialog noch in der Tabelle. Keine
      Konsolenfehler, nichts rollt waagerecht.
+
+#### Prüfung der Rückfrage
+
+Eine unabhängige Prüfung der Rückfrage (Chromium bei 1280 und 390 px, dazu dieser Abschnitt) meldete zwei Befunde,
+beide niedrig. Beide sind nachgestellt und behoben; danach liefen alle Suiten grün.
+
+| # | Befund | Schwere | Umgang |
+| --- | --- | --- | --- |
+| 1 | Nach „Abbrechen“ oder Esc in der Rückfrage aus „Bearbeiten“ stand der Fokus auf der Seite, und Tab begann oben im langen Dialog: Beim Schließen gibt der Browser den Fokus an „Speichern“ zurück, das bis zum Ende der Rückfrage gesperrt ist. In der Tabelle verlor die Auswahl den Fokus ebenso – dort schon vorher bei jedem Wechsel, weil sie gesperrt und neu gezeichnet wird | niedrig | Behoben (`admin.js`): Bleibt der Dialog offen – nach dem Abbrechen oder einem Fehler beim Speichern, der den Fokus genauso verlor –, bekommt „Speichern“ ihn zurück, sobald der Knopf wieder frei ist; in der Tabelle nach jedem Wechsel die neu gezeichnete Auswahl desselben Moduls. Beides nur, wenn der Fokus nicht schon anderswo steht. Statischer Test in `test_letzter_materialwart_oberflaeche` (scheitert ohne die Änderung). Im Chromium nachgestellt und nachgeprüft bei 1280 × 900 (Esc, Enter auf „Abbrechen“, Maus; Tabelle mit Abbrechen, Speichern und „Trotzdem speichern“; Fehler beim Speichern ohne Namen) und 390 × 844 mit Touch: vorher BODY, jetzt „Speichern“ bzw. die Auswahl; keine Konsolenfehler, nichts rollt waagerecht |
+| 2 | „Neu“ nannte die Rückfrage nicht, obwohl die Einleitung sagt, „Neu“ beschreibe den Stand danach – weder unter „Nutzerverwaltung“ noch beim Löschkonzept | niedrig | Behoben: Der Punkt „Nutzerverwaltung“ nennt die Rückfrage (Tabelle, Dialog, Deaktivieren) und den Dialog „Löschen“, das Löschkonzept den zweiten Hinweis |
 
 ### Nachbesserungen nach der Auslieferung (Entscheidungen vom 18.10.2026)
 
