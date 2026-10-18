@@ -6,7 +6,12 @@
    Bedienung wie ein Kombinationsfeld (ARIA combobox/listbox): Pfeiltasten wählen, Enter öffnet den gewählten Artikel –
    ohne Wahl geht Enter wie bisher zur Trefferseite (ein eindeutiger Treffer öffnet dort direkt) –, Escape schließt.
    Mit Maus oder Finger öffnet ein Tipp den Artikel; „Alle Treffer“ führt zur Trefferseite. Ohne JavaScript bleibt das
-   Feld ein gewöhnliches Suchformular. */
+   Feld ein gewöhnliches Suchformular.
+
+   Phase 2: Hat kein Artikel im eigenen Bereich genau diese Seriennummer (global_angebot der Suche), steht darunter –
+   oder statt „Kein Artikel …“ – das Angebot, in allen Gliederungen zu suchen. Enter oder Tipp darauf fragt nach
+   (MatGlobal.bestaetigen, global.js); die Steckbriefe erscheinen in derselben Liste, ohne Link (aria-disabled). Eine
+   globale Antwort kommt nie in den Zwischenspeicher: Sie gilt nur, solange die Anfrage unverändert im Feld steht. */
 (function () {
   "use strict";
   const form = document.querySelector("form.mat-suche");
@@ -35,6 +40,7 @@
   let warten = 0;
   let aktiv = -1;
   let optionen = [];
+  let global = null;                   // { q, html } – das globale Ergebnis zu q, bis weitergetippt wird
 
   // Der getippte Teil in einer Nummer hervorgehoben – ohne Rücksicht auf Groß/klein, nur an der ersten Stelle.
   function markiert(wert, q) {
@@ -60,12 +66,29 @@
         </span></a></li>`;
   }
 
+  // Das Angebot der globalen Suche als eigene Zeile – ein Knopf statt eines Links: Er führt nirgendwohin, er fragt nach.
+  // Eine übliche Seriennummer bricht nicht am Bindestrich um (mg-ganz, global.css), eine sehr lange schon.
+  function angebotZeile(q, i) {
+    return `<li role="option" id="mv-${i}" aria-selected="false" class="mv-global" data-global="1">
+      <button type="button" tabindex="-1"><strong>In allen Gliederungen nach der Seriennummer „<span${q.length <= 30 ? ' class="mg-ganz"' : ""}>${esc(q)}</span>“ suchen</strong>
+        <span class="mv-zeile">Kein Artikel in deinem Bereich hat genau diese Nummer – die Suche wird protokolliert.</span></button></li>`;
+  }
+
   function zeigen(d, q) {
     const treffer = (d.treffer || []).slice(0, ANZAHL);
+    const angebot = Boolean(d.global_angebot && window.MatGlobal);
     let html = treffer.map((a, i) => karte(a, q, i)).join("");
-    if (!treffer.length) html = `<li class="mv-leer" role="presentation">Kein Artikel mit „${esc(q)}“ in Serien-, Inventar- oder Herstellernummer.</li>`;
-    else html += `<li role="option" id="mv-${treffer.length}" aria-selected="false" class="mv-alle" data-alle="1">
+    if (treffer.length) {
+      html += `<li role="option" id="mv-${treffer.length}" aria-selected="false" class="mv-alle" data-alle="1">
       <a href="/material/suche?q=${encodeURIComponent(q)}" tabindex="-1">${d.gesamt > treffer.length ? `Alle ${d.gesamt} Treffer anzeigen` : "Als Trefferliste anzeigen"}</a></li>`;
+    } else if (!angebot) {
+      html = `<li class="mv-leer" role="presentation">Kein Artikel mit „${esc(q)}“ in Serien-, Inventar- oder Herstellernummer.</li>`;
+    }
+    if (angebot) html += angebotZeile(q, treffer.length ? treffer.length + 1 : 0);
+    listeZeigen(html);
+  }
+
+  function listeZeigen(html) {
     liste.innerHTML = html;
     optionen = Array.from(liste.querySelectorAll('[role="option"]'));
     aktiv = -1;
@@ -109,9 +132,42 @@
     optionen[aktiv].scrollIntoView({ block: "nearest" });
   }
 
+  /* --- Globale Suche (global.js) --- */
+  const meldungZeile = (text) => `<li class="mv-leer" role="presentation">${esc(text)}</li>`;
+
+  // Steckbriefe ohne Link: wählbar zum Vorlesen, aber nicht zu öffnen (aria-disabled); darunter der Hinweis.
+  function globalHtml(d, q) {
+    const kopf = '<li class="mv-global-kopf" role="presentation">In allen Gliederungen</li>';
+    if (!d.treffer.length) return kopf + meldungZeile(`Auch in den anderen Gliederungen hat kein Artikel die Seriennummer „${q}“.`);
+    return kopf + d.treffer.map((t, i) => `<li role="option" id="mv-g${i}" aria-selected="false" aria-disabled="true"
+        class="mv-steckbrief">${window.MatGlobal.karte(t)}</li>`).join("")
+      + (d.mehr ? meldungZeile(`Weitere Artikel haben diese Seriennummer – gezeigt werden die ersten ${d.treffer.length}.`) : "")
+      + meldungZeile(d.hinweis || "");
+  }
+
+  async function globalSuchen(q) {
+    const G = window.MatGlobal;
+    if (!G || !q) return;
+    const ja = await G.bestaetigen(q);
+    feld.focus({ preventScroll: true });
+    if (!ja || feld.value.trim() !== q) return;
+    global = { q, html: meldungZeile("Suche in allen Gliederungen …") };
+    listeZeigen(global.html);
+    let html;
+    try {
+      html = globalHtml(await G.suchen(q), q);
+    } catch (e) {
+      html = meldungZeile(e.message);         // zu viele Suchen, keine Verbindung … – bis weitergetippt wird
+    }
+    if (!global || global.q !== q) return;    // inzwischen weitergetippt: gilt nicht mehr
+    global.html = html;
+    if (feld.value.trim() === q) listeZeigen(html);
+  }
+
   async function laden() {
     const q = feld.value.trim();
     if (q.length < MIN) { schliessen(); return; }
+    if (global && global.q === q) { listeZeigen(global.html); return; }
     if (zwischen.has(q)) { zeigen(zwischen.get(q), q); return; }
     if (laufend) laufend.abort();
     laufend = new AbortController();
@@ -121,13 +177,13 @@
       if (!r.ok) { schliessen(); return; }                // ohne Leserecht o. Ä.: einfach keine Vorschläge
       const d = await r.json();
       zwischen.set(q, d);
-      if (feld.value.trim() === q && document.activeElement === feld) zeigen(d, q);
+      if (feld.value.trim() === q && document.activeElement === feld && !(global && global.q === q)) zeigen(d, q);
     } catch (e) {
       if (e.name !== "AbortError") schliessen();
     }
   }
 
-  feld.addEventListener("input", () => { clearTimeout(warten); warten = setTimeout(laden, 180); });
+  feld.addEventListener("input", () => { global = null; clearTimeout(warten); warten = setTimeout(laden, 180); });
   feld.addEventListener("focus", () => { if (feld.value.trim().length >= MIN) laden(); });
   feld.addEventListener("keydown", (e) => {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -136,7 +192,9 @@
       waehlen(aktiv + (e.key === "ArrowDown" ? 1 : -1));
     } else if (e.key === "Enter" && !liste.hidden && aktiv >= 0) {
       e.preventDefault();
-      location.href = optionen[aktiv].querySelector("a").href;
+      const o = optionen[aktiv];
+      if (o.dataset.global) globalSuchen(feld.value.trim());
+      else if (o.querySelector("a")) location.href = o.querySelector("a").href;   // ein Steckbrief öffnet nichts
     } else if (e.key === "Escape" && !liste.hidden) {
       e.preventDefault();
       schliessen();
@@ -145,10 +203,12 @@
   // Ein Tipp in die Liste nimmt dem Feld nicht den Fokus – sonst schlösse sie, bevor der Klick ankommt.
   liste.addEventListener("pointerdown", (e) => e.preventDefault());
   liste.addEventListener("click", (e) => {
+    if (e.target.closest("[data-global]")) { globalSuchen(feld.value.trim()); return; }
     const a = e.target.closest("a");
     if (a && !(e.ctrlKey || e.metaKey || e.shiftKey || e.button)) schliessen();
   });
   feld.addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== feld) schliessen(); }, 120));
-  document.addEventListener("click", (e) => { if (!form.contains(e.target)) schliessen(); });
+  // Ein Klick in einem Dialog (die Rückfrage der globalen Suche) schließt die Liste nicht – sie zeigt gleich das Ergebnis.
+  document.addEventListener("click", (e) => { if (!form.contains(e.target) && !e.target.closest("dialog")) schliessen(); });
   form.addEventListener("submit", () => schliessen());
 })();

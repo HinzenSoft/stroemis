@@ -26,6 +26,17 @@
     <colgroup><col style="width:9%"><col style="width:11%"><col style="width:8%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:6.5%"><col style="width:6%"><col style="width:9.5%"></colgroup>
     <thead><tr><th>Name</th><th>E-Mail</th><th>Gliederung</th><th>Spots</th><th>Wiki</th><th>Prüfungen</th><th>Material</th><th>Verwaltung</th><th>Zuletzt da</th><th>Inhalte</th><th></th></tr></thead><tbody></tbody>
   </table>
+  {# Protokoll der Blicke über den eigenen Bereich hinaus (Modul Material, Phase 2): selten gebraucht, daher
+     zugeklappt; admin_globalsuche.js lädt es erst beim Aufklappen. #}
+  <details class="accordion" id="mat-globalsuche">
+    <summary>Globale Suchen (Modul Material)</summary>
+    <div class="accordion-body">
+      <p class="help">Wer im Modul Material über den eigenen Bereich hinaus nach einer Seriennummer gesucht, nach einem
+        QR-Scan den Steckbrief eines fremden Artikels geöffnet oder beim Anlegen eine Seriennummer aus einer fremden
+        Gliederung getroffen hat. Jede Zeile bleibt zwölf Monate stehen.</p>
+      <div id="mat-globalsuche-liste" aria-live="polite"></div>
+    </div>
+  </details>
   </section>
 
   <section id="bereich-einstellungen" class="hidden">
@@ -41,4 +52,5 @@
 </main>
 <dialog id="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/admin.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+<script src="{{ url_for('static', filename='js/admin_globalsuche.js') }}"></script>{% endblock %}
