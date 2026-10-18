@@ -183,6 +183,65 @@ def test_ohne_echte_produkte():
     print("Ohne echte Produkte bestanden.")
 
 
+def test_demo_grenze_beim_verschieben():
+    """Über die Grenze der Demodaten verschiebt niemand, auch nicht die Plattform-Verwaltung (409, bestand.DEMO_GRENZE) –
+    in beide Richtungen, Artikel wie Ordner, auch ein Ordner ohne Kennzeichen in einer DEMO-Gliederung und eine Auswahl,
+    in der nur einer die Grenze überschritte. Sonst wechselte „DEMO“ an Artikel, Lebenslauf, CSV und Verzeichnis, während
+    die festgeschriebenen Protokolle blieben, wie sie sind. Innerhalb der Demodaten und im echten Bestand geht es weiter."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        adm, ids = k["adm"], katalog_grund(k["adm"])
+        echt_gl, _ = gliederung(adm, "OG Musterstadt")
+
+        def ordner(name, oben, art="sonstiges"):
+            r = adm.post("/api/material/ordner", json={"name": name, "kind": art, "parent_id": oben})
+            assert r.status_code == 201, r.get_json()
+            return r.json["ordner"]["id"]
+
+        echt_lager = ordner("Lager (Test)", echt_gl, "standort")
+        with app.app_context():
+            from flask import g
+
+            from app.material.services import bestand
+            g.mat_akteur = "Test"
+            demo_gl = bestand.ordner_anlegen({"name": "DEMO-OG Testau", "kind": "gliederung"}, demo=True)
+            demo_lager = bestand.ordner_anlegen({"name": "DEMO-Lager", "kind": "standort", "parent_id": demo_gl},
+                                                demo=True)
+            demo_gl2 = bestand.ordner_anlegen({"name": "DEMO-OG Zweitau", "kind": "gliederung"}, demo=True)
+        ober = ordner("Über die Oberfläche (Test)", demo_gl)           # ohne Kennzeichen, aber in einer DEMO-Gliederung
+        ober_gl = ordner("Untergliederung (Test)", demo_gl, "gliederung")
+        echt = neuer_artikel(adm, ids["hms"], echt_lager, serial_no="ECHT-G1")
+        demo = neuer_artikel(adm, ids["hms"], demo_lager, serial_no="DEMO-G1")
+        assert demo["demo"] is True and echt["demo"] is False
+
+        def artikel(liste, ziel):
+            return adm.post("/api/material/artikel/verschieben", json={"ids": liste, "folder_id": ziel}, headers=H)
+
+        def verschieben(fid, ziel):
+            return adm.post(f"/api/material/ordner/{fid}/verschieben", json={"parent_id": ziel}, headers=H)
+
+        vorher = bestand_stand(app)
+        for r in (artikel([echt["id"]], demo_lager), artikel([echt["id"]], ober), artikel([demo["id"]], echt_lager),
+                  artikel([demo["id"]], echt_gl), artikel([demo["id"], echt["id"]], demo_gl2),
+                  verschieben(demo_lager, echt_gl), verschieben(ober, echt_lager), verschieben(ober_gl, None),
+                  verschieben(echt_lager, demo_gl), verschieben(echt_gl, demo_gl)):
+            assert r.status_code == 409 and "Demodaten" in r.get_json()["error"], r.get_json()
+        assert bestand_stand(app) == vorher
+        assert adm.get(f"/api/material/artikel/{echt['id']}").json["artikel"]["demo"] is False
+        assert adm.get(f"/api/material/artikel/{demo['id']}").json["artikel"]["demo"] is True
+
+        # Innerhalb der Demodaten und im echten Bestand verschiebt es sich wie immer.
+        assert artikel([demo["id"]], demo_gl2).status_code == 200
+        assert artikel([demo["id"]], ober).status_code == 200
+        assert artikel([echt["id"]], echt_gl).status_code == 200
+        assert verschieben(ober, demo_gl2).status_code == 200
+        assert verschieben(demo_lager, ober).status_code == 200
+        assert verschieben(echt_lager, echt_gl).status_code == 200      # schon dort: ohne Wirkung, ohne Fehler
+        assert adm.get(f"/api/material/artikel/{demo['id']}").json["artikel"]["demo"] is True
+        assert adm.get(f"/api/material/artikel/{echt['id']}").json["artikel"]["demo"] is False
+    print("Grenze der Demodaten beim Verschieben bestanden.")
+
+
 def test_beispielbestand():
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
@@ -358,4 +417,5 @@ def test_beispielbestand():
 if __name__ == "__main__":
     test_ohne_schalter()
     test_ohne_echte_produkte()
+    test_demo_grenze_beim_verschieben()
     test_beispielbestand()

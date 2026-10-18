@@ -39,6 +39,9 @@ VORZIEHEN = ("Die nächste Prüfung lässt sich nur vorziehen, nicht verschieben
 # Grund im Journal, wenn gesperrte und ausgesonderte Artikel mit ihrem Ordner die Gliederung wechseln (1.7 Nr. 3).
 GRUND_GLIEDERUNG = "Ordner in andere Gliederung verschoben"
 GRUND_UMWANDLUNG = "Ordner zur Gliederung gemacht"
+DEMO_GRENZE = ("Zwischen den Demodaten (DEMO-Gliederungen) und echtem Bestand lässt sich nichts verschieben – ob ein "
+               "Artikel DEMO ist, hängt an seinem Ordner, und Lebenslauf, CSV und Verzeichnis passten sonst nicht mehr "
+               "zu seinen Protokollen.")
 
 
 class FremdeDublette(Abgelehnt):
@@ -122,7 +125,10 @@ def demo_sql(alias="i", produkt="p"):
     """Ist ein Artikel DEMO? Die eine Regel für Oberfläche, Protokolle, Lebenslauf, CSV und Steckbrief, als SQL-Ausdruck
     über mat_item (alias) und sein mat_product (produkt): Das Produkt trägt das DEMO-Kennzeichen – oder die Heimat des
     Artikels (heimat) liegt in einem DEMO-Ordner. So ist auch ein echtes Katalogprodukt im Beispielbestand
-    (scripts/material_beispielbestand.py) überall als DEMO zu erkennen, ohne dass am Katalog etwas geändert wird."""
+    (scripts/material_beispielbestand.py) überall als DEMO zu erkennen, ohne dass am Katalog etwas geändert wird.
+    Über die Grenze zwischen DEMO-Ordnern und echtem Bestand verschieben artikel_verschieben und ordner_verschieben
+    nicht (DEMO_GRENZE): Das Kennzeichen wechselte sonst, während die festgeschriebenen Protokolle bleiben, wie sie
+    sind."""
     if not produkt.isidentifier():
         raise ValueError(produkt)
     return f"({produkt}.demo = 1 OR {demo_ordner_sql(heimat_sql(alias))})"
@@ -238,6 +244,10 @@ def ordner_verschieben(fid, ziel_id):
                 raise Abgelehnt("Ein Ordner kann nicht in sich selbst liegen.")
         if ziel_id == alt["parent_id"]:
             return
+        # Die Grenze der Demodaten (demo_sql): Was in einem DEMO-Ordner liegt, bleibt dort, echter Bestand kommt nicht
+        # hinein. Auf oberster Ebene zählt das eigene Kennzeichen.
+        if ordner_ist_demo(fid) != (ordner_ist_demo(ziel_id) if ziel_id is not None else bool(alt["demo"])):
+            raise Abgelehnt(DEMO_GRENZE, 409)
         db.execute("UPDATE mat_folder SET parent_id = ?, updated_at = ? WHERE id = ?", (ziel_id, db.now(), fid))
         journal.eintragen("folder", fid, "verschoben",
                           {"parent_id": alt["parent_id"], "pfad": _pfad_text(alt["parent_id"])},
@@ -650,6 +660,10 @@ def artikel_verschieben(ids, ziel_id):
             raise Abgelehnt("Mindestens ein Artikel wurde nicht gefunden.", 404)
         if any(z["lock_state"] != "frei" for z in zeilen):
             raise Abgelehnt(GESPERRT_BLEIBT, 409)
+        # Die Grenze der Demodaten (demo_sql) – frei heißt: Heimat ist der Ordner, in dem der Artikel liegt.
+        ziel_demo = ordner_ist_demo(ziel_id)
+        if any(ordner_ist_demo(f) != ziel_demo for f in {z["folder_id"] for z in zeilen if z["folder_id"] != ziel_id}):
+            raise Abgelehnt(DEMO_GRENZE, 409)
         ziel_text = _pfad_text(ziel_id)
         for z in zeilen:
             if z["folder_id"] == ziel_id:

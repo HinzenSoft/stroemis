@@ -212,7 +212,9 @@ vor: neu, einsatzbereit, bald fällig, überfällig, gesperrt, verloren gemeldet
 Lebensdauer nennt – Lebensdauer erreicht. Am Katalog ändert das Skript nichts (keine Kategorie, kein Produkt, kein
 Formular, kein Dokument, kein Bild, kein Rückruf, keine Meldung); erfunden sind nur Bestandsangaben, alle mit „DEMO“.
 Ein Artikel in einer DEMO-Gliederung gilt überall als DEMO – Oberfläche, Protokolle, Lebenslauf, CSV und Steckbrief –,
-auch wenn sein Produkt aus dem echten Katalog stammt.
+auch wenn sein Produkt aus dem echten Katalog stammt. Deshalb lässt sich zwischen DEMO-Gliederungen und echtem Bestand
+nichts verschieben, weder Artikel noch Ordner (409) – sonst wechselte das Kennzeichen, während die festgeschriebenen
+Protokolle bleiben, wie sie sind.
 
 Vorher:
 
