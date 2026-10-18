@@ -29,8 +29,8 @@ from test_material_ueberblick import ordner_neu  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FR = "/api/material/ordner/{}/freigaben"
-EINTRAG = {"id", "ordner", "konto", "recht", "bis", "gueltig", "wirkt", "laeuft_ab_in_tagen", "vergeben_von", "seit",
-           "aenderbar", "entziehbar", "eigen"}
+EINTRAG = {"id", "ordner", "konto", "recht", "bis", "gueltig", "wirkt", "grundrecht_dort", "traegt_pruefen",
+           "laeuft_ab_in_tagen", "vergeben_von", "seit", "aenderbar", "entziehbar", "eigen"}
 KONTO = {"id", "name", "gliederung", "aktiv", "haekchen", "qualifiziert"}
 
 
@@ -277,12 +277,19 @@ def test_grenzen():
         assert erteilen(w, gid, user_id=str(helfer_id), grundrecht="lesen").status_code == 201
         assert erteilen(w, gid, user_id=float(helfer_id), grundrecht="verwalten").status_code == 201
 
-        # Nr. 8 und 9: Enddaten.
-        r = erteilen(w, gid, user_id=k["pruefer_id"], pruefen_bis="")
-        assert r.status_code == 400 and r.json["error"] == "Eine Prüffreigabe braucht ein Enddatum.", r.get_json()
-        pz = grant(app, gid, k["pruefer_id"], "pruefen")["id"]
+        # Nr. 8 und 9: Enddaten. Ohne Ende („“ oder null) nur mit Grundrecht am Anker – das hat der Prüfer (lesen an
+        # der Gliederung), der externe Prüfer nicht (Nachbesserung vom 18.10.2026, mehr in test_dauerhaft_pruefen).
+        ext, ext_id = neues_konto(app, "extern@example.org", name="Extern Test", mat_pruefer=True, urkundennummer="1012-8001")
+        r = erteilen(w, gid, user_id=ext_id, pruefen_bis="")
+        assert r.status_code == 400 and "nur zusammen mit lesen oder verwalten" in r.json["error"], r.get_json()
+        assert grant(app, gid, ext_id, "pruefen") is None
+        assert erteilen(w, gid, user_id=ext_id, pruefen_bis=tag(30)).status_code == 201
+        pz = grant(app, gid, ext_id, "pruefen")["id"]
         r = w.put(f"/api/material/freigaben/{pz}", json={"bis": None})
         assert r.status_code == 400 and "Enddatum" in r.json["error"], r.get_json()
+        assert grant(app, gid, ext_id, "pruefen")["valid_until"] == tag(30)
+        assert erteilen(w, gid, user_id=k["pruefer_id"], pruefen_bis="").status_code == 201
+        assert grant(app, gid, k["pruefer_id"], "pruefen")["valid_until"] is None
         grenze = plus_monate(_heute(), 24)
         r = erteilen(w, gid, user_id=k["pruefer_id"], pruefen_bis=(grenze + timedelta(days=1)).isoformat())
         assert r.status_code == 400 and "24 Monate" in r.json["error"], r.get_json()
@@ -442,8 +449,8 @@ def test_notiz_geerbt_und_meine():
         r = helfer.get("/api/material/freigaben/meine")
         assert r.status_code == 200 and "Testnotiz" not in r.get_data(as_text=True), r.get_json()
         m = r.json["freigaben"]
-        assert len(m) == 1 and set(m[0]) == {"id", "ordner", "recht", "bis", "gueltig", "wirkt", "laeuft_ab_in_tagen",
-                                             "verwalter"}, m
+        assert len(m) == 1 and set(m[0]) == {"id", "ordner", "recht", "bis", "gueltig", "wirkt", "grundrecht_dort",
+                                             "laeuft_ab_in_tagen", "verwalter"}, m
         assert m[0]["ordner"]["pfad"] == "OG Musterstadt" and m[0]["verwalter"] == ["wart"] and m[0]["wirkt"]
         assert r.json["zugang"] and not r.json["alles"]
         # Die Verwaltung sieht sie in der Nutzerverwaltung.
@@ -479,7 +486,7 @@ def test_listen_und_verlaengern():
 
         d = liste(w, lager)
         assert set(d) == {"ordner", "anker_wahl", "anker_vorgabe", "direkt", "geerbt", "unten", "verlauf", "laeuft_ab",
-                          "grenzen", "alles"}, set(d)
+                          "grenzen", "alles", "kette"}, set(d)
         assert d["ordner"] == {"id": lager, "name": "Lager", "pfad": "OG Musterstadt / Lager", "gliederung": False}
         assert [a["id"] for a in d["anker_wahl"]] == [lager, gid] and d["anker_vorgabe"] == gid
         assert all(a["ende"] is None for a in d["anker_wahl"])
@@ -545,6 +552,187 @@ def test_listen_und_verlaengern():
     print("Listen und Verlängern bestanden.")
 
 
+# --- Prüffreigaben dauerhaft mit Grundrecht, befristet nur für externe (Nachbesserung vom 18.10.2026) ---------------
+
+def test_dauerhaft_pruefen():
+    """1.6 Nr. 8 neu: Eine Prüffreigabe darf dauerhaft sein, wo die Person am Anker oder darüber ein Grundrecht hat –
+    auch eins aus derselben Anfrage (Vorlagen) oder geerbt von oben; ohne (externer Prüfer) 400 mit Klartext. Mit Ende
+    höchstens 24 Monate, dauerhaft nur, wer selbst dauerhaft verwaltet (Nr. 3). Zur Laufzeit wirkt eine dauerhafte nur
+    mit gültigem Grundrecht am Anker oder darüber: entzogen oder abgelaufen – kein Prüfrecht, keine Prüfsicht (auch
+    nicht in einem Unterordner mit eigenem Grundrecht), „wirkt nicht“ in der Liste; wieder erteilt – wirkt wieder.
+    „Alle verlängern“ übergeht dauerhafte; Entziehen und Kürzen eines Grundrechts sagen vorher, welche dauerhafte daran
+    hängt (traegt_pruefen), und das Entziehen zählt die offenen Prüfungen mit."""
+    from app.material.services import rechte
+    from app.material.services.interval import plus_monate
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        adm, w = k["adm"], k["wart"]
+        ids = katalog_grund(adm)
+        pruef_formulare(k["katalog"], ids)
+        gid, _ = gliederung(adm)
+        lager = ordner_neu(w, gid, "Lager")
+        fach = ordner_neu(w, lager, "Fach")
+        artikel = neuer_artikel(w, ids["hms"], fach)["id"]
+
+        def konto(name, nummer):
+            return neues_konto(app, f"{name}@example.org", name=f"Prüfer {name}", mat_pruefer=True,
+                               urkundennummer=nummer)
+
+        def sicht(uid):
+            with app.app_context():
+                from app import db
+                return rechte.sicht(db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True))
+
+        def zeile_von(fid, uid, recht="pruefen", art="direkt"):
+            return [x for x in liste(w, fid)[art] if x["konto"]["id"] == uid and x["recht"] == recht][0]
+
+        # Vorlage „Prüfer“ (lesen und prüfen) und „Materialwart und Prüfer“: dauerhaft in einem Schritt – das
+        # Grundrecht aus derselben Anfrage zählt.
+        eins, eins_id = konto("eins", "1012-5001")
+        r = erteilen(w, gid, user_id=eins_id, grundrecht="lesen", pruefen=True, pruefen_bis=None)
+        assert r.status_code == 201 and [(f["recht"], f["bis"], f["wirkt"]) for f in r.json["freigaben"]] == [
+            ("lesen", None, True), ("pruefen", None, True)], r.get_json()
+        assert sicht(eins_id).darf("pruefen", fach) and sicht(eins_id).ende("pruefen", fach) is None
+        assert journal(app, gid)[-1]["nachher"]["bis"] is None
+        zwei, zwei_id = konto("zwei", "1012-5002")
+        r = erteilen(w, lager, user_id=zwei_id, grundrecht="verwalten", pruefen=True)
+        assert r.status_code == 201 and grant(app, lager, zwei_id, "pruefen")["valid_until"] is None, r.get_json()
+        # „Einzeln“: nur die Prüffreigabe, das Grundrecht geerbt von oben (lesen an der Gliederung, prüfen am Lager).
+        drei, drei_id = konto("drei", "1012-5003")
+        assert erteilen(w, gid, user_id=drei_id, grundrecht="lesen").status_code == 201
+        r = erteilen(w, lager, user_id=drei_id, pruefen=True)
+        assert r.status_code == 201 and r.json["freigaben"][0]["grundrecht_dort"], r.get_json()
+        assert sicht(drei_id).darf("pruefen", fach)
+
+        # Ohne Grundrecht am Anker oder darüber – der externe Prüfer – 400, nichts geschrieben; auch ein Grundrecht nur
+        # weiter unten zählt nicht.
+        ext, ext_id = konto("extern", "1012-8001")
+        vorher = len(journal(app, lager))
+        for d in ({"pruefen": True}, {"pruefen": True, "pruefen_bis": ""}, {"pruefen_bis": ""}):
+            r = erteilen(w, lager, user_id=ext_id, **d)
+            assert r.status_code == 400 and "nur zusammen mit lesen oder verwalten" in r.json["error"], (d, r.get_json())
+            assert "externe Prüfer" in r.json["error"] and "24 Monate" in r.json["error"]
+        assert grant(app, lager, ext_id, "pruefen") is None and len(journal(app, lager)) == vorher
+        assert erteilen(w, fach, user_id=ext_id, grundrecht="lesen").status_code == 201
+        assert erteilen(w, lager, user_id=ext_id, pruefen=True).status_code == 400
+        assert erteilen(w, lager, user_id=ext_id, pruefen=True, pruefen_bis=tag(60)).status_code == 201
+        # „pruefen“: false heißt keine Prüffreigabe, auch mit Datum; Unsinn 400.
+        assert erteilen(w, lager, user_id=eins_id, pruefen=False, pruefen_bis=tag(5)).status_code == 400   # nichts
+        assert erteilen(w, lager, user_id=eins_id, pruefen="vielleicht").status_code == 400
+        assert grant(app, lager, eins_id, "pruefen") is None
+        # Befristet höchstens 24 Monate – auch mit Grundrecht.
+        grenze = plus_monate(_heute(), 24)
+        r = erteilen(w, gid, user_id=eins_id, pruefen=True, pruefen_bis=(grenze + timedelta(days=1)).isoformat())
+        assert r.status_code == 400 and "24 Monate" in r.json["error"], r.get_json()
+        assert grant(app, gid, eins_id, "pruefen")["valid_until"] is None
+
+        # Ein befristeter Verwalter vergibt nichts Dauerhaftes (Nr. 3) – auch keine Prüffreigabe mit Grundrecht.
+        gast, gast_id = neues_konto(app, "gast@example.org", name="Gast Test")
+        freigeben(adm, gid, gast_id, "verwalten", bis=tag(80))
+        vier, vier_id = konto("vier", "1012-5004")
+        freigeben(adm, gid, vier_id, "lesen", bis=tag(200))
+        r = erteilen(gast, lager, user_id=vier_id, pruefen=True)
+        assert r.status_code == 403 and "Dauerhaft vergibt nur" in r.json["error"], r.get_json()
+        assert erteilen(gast, lager, user_id=vier_id, pruefen=True, pruefen_bis=tag(60)).status_code == 201
+        # Ändern: befristet → dauerhaft mit Grundrecht (Dauer dann so lang wie das Grundrecht), zurück auf ein Datum.
+        pv = grant(app, lager, vier_id, "pruefen")["id"]
+        assert gast.put(f"/api/material/freigaben/{pv}", json={"bis": None}).status_code == 403
+        r = w.put(f"/api/material/freigaben/{pv}", json={"bis": None})
+        assert r.status_code == 200 and r.json["freigabe"]["bis"] is None and r.json["freigabe"]["wirkt"], r.get_json()
+        assert sicht(vier_id).ende("pruefen", fach) == tag(200)              # endet mit dem Grundrecht
+        assert w.put(f"/api/material/freigaben/{pv}", json={"bis": tag(100)}).status_code == 200
+        assert w.put(f"/api/material/freigaben/{pv}", json={"bis": None}).status_code == 200
+        pe = grant(app, lager, ext_id, "pruefen")["id"]
+        r = w.put(f"/api/material/freigaben/{pe}", json={"bis": None})
+        assert r.status_code == 400 and "nur zusammen mit lesen oder verwalten" in r.json["error"], r.get_json()
+        # Aus einem Grundrecht wird eine Prüffreigabe nur mit ausdrücklichem „bis“; dauerhaft nur, wenn danach noch ein
+        # Grundrecht bleibt.
+        fuenf, fuenf_id = konto("fuenf", "1012-5005")
+        assert erteilen(w, fach, user_id=fuenf_id, grundrecht="lesen").status_code == 201
+        g5 = grant(app, fach, fuenf_id, "lesen")["id"]
+        r = w.put(f"/api/material/freigaben/{g5}", json={"recht": "pruefen"})
+        assert r.status_code == 400 and "„bis“" in r.json["error"], r.get_json()
+        r = w.put(f"/api/material/freigaben/{g5}", json={"recht": "pruefen", "bis": None})
+        assert r.status_code == 400 and "nur zusammen mit" in r.json["error"], r.get_json()
+        assert grant(app, fach, fuenf_id, "lesen")["id"] == g5
+        assert w.put(f"/api/material/freigaben/{g5}", json={"recht": "pruefen", "bis": tag(30)}).status_code == 200
+
+        # Die Plattform-Verwaltung hat das Grundrecht überall – auch ohne Zeile dauerhaft.
+        a_id = adm_id(adm)
+        assert adm.put(f"/api/admin/users/{a_id}", json={"mat_pruefer": True, "urkundennummer": "1012-0099"}).status_code == 200
+        r = erteilen(adm, lager, user_id=a_id, pruefen=True)
+        assert r.status_code == 201 and r.json["freigaben"][0]["wirkt"], r.get_json()
+        assert sicht(a_id).darf("pruefen", fach)
+
+        # Zur Laufzeit: Wer das Grundrecht verliert, prüft nicht mehr – keine Prüfsicht, „wirkt nicht“; wieder erteilt,
+        # wirkt es wieder. Entziehen und Kürzen sagen vorher, was daran hängt.
+        g3 = grant(app, gid, drei_id, "lesen")["id"]
+        oben = zeile_von(gid, drei_id, "lesen")
+        assert oben["traegt_pruefen"] == 1 and zeile_von(lager, drei_id)["grundrecht_dort"], oben
+        assert zeile_von(gid, eins_id, "lesen")["traegt_pruefen"] == 1             # trägt ihre Prüffreigabe an der Gliederung
+        assert zeile_von(gid, k["pruefer_id"], "lesen")["traegt_pruefen"] == 0     # dessen Prüffreigabe ist befristet
+        assert drei.get(f"/api/material/ordner/{fach}").status_code == 200
+        r = w.delete(f"/api/material/freigaben/{g3}", headers=H)
+        assert r.status_code == 200 and r.json["offene_entwuerfe"] == 0, r.get_json()
+        assert not sicht(drei_id).darf("pruefen", lager) and not sicht(drei_id).menge("pruefen")
+        assert drei.get(f"/api/material/ordner/{fach}").status_code == 404
+        z = zeile_von(lager, drei_id)
+        assert (z["bis"], z["gueltig"], z["wirkt"], z["grundrecht_dort"]) == (None, True, False, False), z
+        m = drei.get("/api/material/freigaben/meine").json["freigaben"]
+        assert [(x["recht"], x["wirkt"], x["grundrecht_dort"], x["laeuft_ab_in_tagen"]) for x in m] == [
+            ("pruefen", False, False, None)], m
+        assert erteilen(w, gid, user_id=drei_id, grundrecht="lesen").status_code == 201
+        assert sicht(drei_id).darf("pruefen", fach) and zeile_von(lager, drei_id)["wirkt"]
+        # Abgelaufen wie entzogen; zwei Grundrechte tragen gemeinsam – keins allein.
+        sql(app, "UPDATE mat_folder_grant SET valid_until = ? WHERE folder_id = ? AND user_id = ? AND permission = 'lesen'",
+            (tag(-1), gid, drei_id))
+        assert not sicht(drei_id).darf("pruefen", fach) and not zeile_von(lager, drei_id)["wirkt"]
+        sql(app, "UPDATE mat_folder_grant SET valid_until = NULL WHERE folder_id = ? AND user_id = ? AND permission = 'lesen'",
+            (gid, drei_id))
+        assert erteilen(w, lager, user_id=drei_id, grundrecht="lesen").status_code == 201
+        assert zeile_von(gid, drei_id, "lesen")["traegt_pruefen"] == 0 == zeile_von(lager, drei_id, "lesen")["traegt_pruefen"]
+        # Ein Grundrecht nur weiter unten trägt eine dauerhafte Prüffreigabe auch zur Laufzeit nicht – wie Schreibregel
+        # und Liste: Oben entzogen, unten behalten, prüft die Person auch im Unterordner nicht mehr.
+        sechs, sechs_id = konto("sechs", "1012-5006")
+        assert erteilen(w, gid, user_id=sechs_id, grundrecht="lesen", pruefen=True).status_code == 201
+        assert erteilen(w, fach, user_id=sechs_id, grundrecht="lesen").status_code == 201
+        assert zeile_von(gid, sechs_id, "lesen")["traegt_pruefen"] == 1
+        assert zeile_von(fach, sechs_id, "lesen")["traegt_pruefen"] == 0                # das untere trägt sie nicht
+        r = w.delete(f"/api/material/freigaben/{grant(app, gid, sechs_id, 'lesen')['id']}", headers=H)
+        assert r.status_code == 200 and r.json["offene_entwuerfe"] == 0, r.get_json()
+        assert not sicht(sechs_id).darf("pruefen", fach) and not sicht(sechs_id).menge("pruefen")
+        assert sicht(sechs_id).darf("lesen", fach) and sechs.get(f"/api/material/ordner/{fach}").status_code == 200
+        z = zeile_von(gid, sechs_id)
+        assert (z["bis"], z["wirkt"], z["grundrecht_dort"]) == (None, False, False), z
+        assert [(x["recht"], x["wirkt"]) for x in sechs.get("/api/material/freigaben/meine").json["freigaben"]] == [
+            ("pruefen", False), ("lesen", True)]
+        r = starten(sechs, artikel)
+        assert r.status_code == 403 and r.json["error"] == rechte.KEINE_PRUEFFREIGABE, r.get_json()
+        assert erteilen(w, gid, user_id=sechs_id, grundrecht="lesen").status_code == 201        # wieder erteilt
+        assert sicht(sechs_id).darf("pruefen", fach) and sicht(sechs_id).ende("pruefen", fach) is None
+
+        # „Alle Prüffreigaben verlängern“ übergeht dauerhafte – nicht einmal unter „übersprungen“; ablaufen tun sie nie.
+        dauerhaft = {x["id"] for x in zeilen(app, "SELECT id FROM mat_folder_grant WHERE permission = 'pruefen' "
+                                                  "AND valid_until IS NULL")}
+        r = w.post(f"{FR.format(gid)}/verlaengern", json={"bis": liste(w, gid)["grenzen"]["vorgabe_bis"]})
+        assert r.status_code == 200 and r.json["verlaengert"] >= 1, r.get_json()
+        namen = {u["konto"] for u in r.json["uebersprungen"]}
+        assert not namen & {"Prüfer eins", "Prüfer zwei", "Prüfer drei", "Prüfer vier"}, namen
+        assert {x["id"] for x in zeilen(app, "SELECT id FROM mat_folder_grant WHERE permission = 'pruefen' "
+                                             "AND valid_until IS NULL")} == dauerhaft
+        assert all(x["laeuft_ab_in_tagen"] is None for x in liste(w, gid)["unten"] + liste(w, gid)["direkt"]
+                   if x["bis"] is None)
+        assert w.post(f"{FR.format(gid)}/verlaengern", json={"bis": None}).status_code == 400
+
+        # Entzieht man das Grundrecht, an dem eine dauerhafte Prüffreigabe hängt, zählen offene Prüfungen mit.
+        pz = grant(app, gid, k["pruefer_id"], "pruefen")["id"]
+        assert w.put(f"/api/material/freigaben/{pz}", json={"bis": None}).status_code == 200
+        assert starten(k["pruefer"], artikel).status_code == 201
+        r = w.delete(f"/api/material/freigaben/{grant(app, gid, k['pruefer_id'], 'lesen')['id']}", headers=H)
+        assert r.status_code == 200 and r.json["offene_entwuerfe"] == 1, r.get_json()
+    print("Prüffreigaben dauerhaft mit Grundrecht bestanden.")
+
+
 # --- Entziehen mit offenen Entwürfen --------------------------------------------------------------------------------
 
 def test_entziehen_offene_entwuerfe():
@@ -586,16 +774,20 @@ def test_nutzersuche():
 
         r = w.get("/api/material/nutzer", query_string={"q": "Testperson"})
         assert r.status_code == 200 and len(r.json["nutzer"]) == 20 and r.json["mehr"], r.get_json()
-        assert all(set(x) == {"id", "name", "gliederung", "qualifiziert"} for x in r.json["nutzer"])
+        assert all(set(x) == {"id", "name", "gliederung", "qualifiziert", "grundrecht_ueberall"} for x in r.json["nutzer"])
         assert "@" not in r.get_data(as_text=True) and "Inaktiv" not in r.get_data(as_text=True)
         assert r.json["nutzer"][0] == {"id": r.json["nutzer"][0]["id"], "name": "Testperson 00", "gliederung": "OG Test",
-                                       "qualifiziert": False}
+                                       "qualifiziert": False, "grundrecht_ueberall": False}
         r = w.get("/api/material/nutzer", query_string={"q": "person 2"})
         assert [x["name"] for x in r.json["nutzer"]] == [f"Testperson {n}" for n in range(20, 25)] and not r.json["mehr"]
         # Groß und klein egal, auch bei Umlauten; qualifiziert sagt, ob Prüfvorlagen gehen. Keine Urkundennummer.
         r = w.get("/api/material/nutzer", query_string={"q": "PRÜFM"})
         assert [(x["name"], x["qualifiziert"]) for x in r.json["nutzer"]] == [("Jörg Prüfmann", True)], r.get_json()
         assert "1012-7001" not in r.get_data(as_text=True)
+        # Die Plattform-Verwaltung hat das Grundrecht überall – der Reiter bietet ihr beim Prüfen „dauerhaft“ auch ohne
+        # lesen oder verwalten an, wie der Dienst es annimmt (grundrecht_an).
+        r = w.get("/api/material/nutzer", query_string={"q": "Administrator"})
+        assert [(x["name"], x["grundrecht_ueberall"]) for x in r.json["nutzer"]] == [("Administrator", True)], r.get_json()
         # Unter 3 Zeichen 400; Führungskraft und Katalogpfleger 403; Verwaltung darf; ohne Anmeldung 401.
         for q in ("Te", " T ", "", None):
             r = w.get("/api/material/nutzer", query_string={"q": q} if q is not None else None)
@@ -833,10 +1025,13 @@ def test_braucht_a1_ordner_loeschen_journal():
 
 # --- DEMO-Skript (5.5) ------------------------------------------------------------------------------------------------
 
-def _demo_laufen(*schalter):
+def _demo_laufen(*schalter, konten=None):
+    """Das DEMO-Skript mit diesen Schaltern; konten: (DEMO_KONTEN) -> andere DEMO_KONTEN, etwa die eines früheren Stands."""
     spec = importlib.util.spec_from_file_location("material_demo_test", os.path.join(REPO, "scripts", "material_demo.py"))
     modul = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(modul)
+    if konten:
+        modul.DEMO_KONTEN = konten(modul.DEMO_KONTEN)
     alt = sys.argv
     sys.argv = ["material_demo.py", *schalter]
     puffer = io.StringIO()
@@ -885,7 +1080,7 @@ def test_demo_zweimal():
         assert freigaben == {("demo-wart-a@example.invalid", "verwalten", "DEMO-Gliederung", None),
                              ("demo-wart-b@example.invalid", "verwalten", "DEMO-Gliederung Nachbarstadt", None),
                              ("demo-pruefer@example.invalid", "lesen", "DEMO-Gliederung", None),
-                             ("demo-pruefer@example.invalid", "pruefen", "DEMO-Gliederung", tag(30)),
+                             ("demo-pruefer@example.invalid", "pruefen", "DEMO-Gliederung", None),
                              ("demo-extern@example.invalid", "pruefen", "DEMO-Lager", tag(30))}, freigaben
         # Je Freigabe ein Journaleintrag unter „Demodaten“, die Liste nennt sie so.
         e = [x for x in vorher["mat_audit"] if x["action"] == "freigabe_erteilt"]
@@ -900,6 +1095,48 @@ def test_demo_zweimal():
     print("DEMO-Skript zweimal bestanden.")
 
 
+def test_demo_pruefer_von_frueher():
+    """Eine Datenbank, auf der ein früherer Lauf den DEMO-Prüfer noch befristet prüfen ließ (dev): --konten stellt
+    dessen DEMO-Prüffreigabe auf dauerhaft – mit Journaleintrag unter „Demodaten“, einmal; der externe DEMO-Prüfer
+    bleibt befristet. Eine Zeile, die seitdem jemand geändert hat, oder eine ohne Grundrecht dort bleibt, wie sie ist."""
+    def frueher(konten):
+        return [(m, n, gl, u, [(o, r, 30 if r == "pruefen" else t) for o, r, t in f]) for m, n, gl, u, f in konten]
+
+    def pruefen(app):
+        return {x["email"]: x["valid_until"] for x in zeilen(
+            app, "SELECT u.email, g.valid_until FROM mat_folder_grant g JOIN users u ON u.id = g.user_id "
+                 "WHERE g.permission = 'pruefen' AND u.email LIKE 'demo-%'")}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        make_app(tmp)
+        assert "pruefen DEMO-Gliederung bis" in _demo_laufen("--demo", "--konten", konten=frueher)
+        app = make_app(tmp)
+        assert pruefen(app) == {"demo-pruefer@example.invalid": tag(30), "demo-extern@example.invalid": tag(30)}
+        aus = _demo_laufen("--demo", "--konten")
+        assert aus.count("ist schon da – unverändert") == 3 and "Passwort" not in aus, aus
+        assert "demo-pruefer@example.invalid ist schon da – Prüffreigabe DEMO-Gliederung jetzt dauerhaft" in aus, aus
+        assert pruefen(app) == {"demo-pruefer@example.invalid": None, "demo-extern@example.invalid": tag(30)}
+        e = [x for x in zeilen(app, "SELECT * FROM mat_audit WHERE action = 'freigabe_geaendert'")]
+        assert len(e) == 1 and e[0]["user_name"] == "Demodaten" and e[0]["user_id"] is None, e
+        assert (json.loads(e[0]["before_json"])["bis"], json.loads(e[0]["after_json"])["bis"]) == (tag(30), None)
+        assert "@" not in e[0]["before_json"] + e[0]["after_json"]
+        vorher = zeilen(app, "SELECT * FROM mat_folder_grant ORDER BY id")
+        assert _demo_laufen("--demo", "--konten").count("ist schon da – unverändert") == 4
+        assert zeilen(app, "SELECT * FROM mat_folder_grant ORDER BY id") == vorher
+
+    # Geändert seitdem (updated_at) oder das Grundrecht weg: bleibt befristet.
+    for eingriff in ("UPDATE mat_folder_grant SET updated_at = '2026-10-01T00:00:00+00:00' WHERE permission = 'pruefen'",
+                     "DELETE FROM mat_folder_grant WHERE permission = 'lesen'"):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_app(tmp)
+            _demo_laufen("--demo", "--konten", konten=frueher)
+            app = make_app(tmp)
+            sql(app, eingriff)
+            aus = _demo_laufen("--demo", "--konten")
+            assert aus.count("ist schon da – unverändert") == 4 and pruefen(app)["demo-pruefer@example.invalid"] == tag(30), aus
+    print("DEMO-Prüfer von früher bestanden.")
+
+
 if __name__ == "__main__":
     test_erteilen_aendern_entziehen()
     test_vorlagen_eine_transaktion()
@@ -908,6 +1145,7 @@ if __name__ == "__main__":
     test_eigene_laenger_als_verwalten()
     test_notiz_geerbt_und_meine()
     test_listen_und_verlaengern()
+    test_dauerhaft_pruefen()
     test_entziehen_offene_entwuerfe()
     test_nutzersuche()
     test_meine_ohne_zugang()
@@ -916,3 +1154,4 @@ if __name__ == "__main__":
     test_liste_abfragen()
     test_braucht_a1_ordner_loeschen_journal()
     test_demo_zweimal()
+    test_demo_pruefer_von_frueher()

@@ -182,9 +182,9 @@
      nur die Nummer: Er bekommt den Weg dorthin als Link. Wer qualifiziert ist, dem fehlt die Prüffreigabe. */
   const URKUNDE_IM_PROFIL = 'Du bist als Prüfer eingetragen, aber deine Urkundennummer fehlt noch – trage sie im '
     + '<a href="/profil#unterschrift">Profil unter „Urkundennummer und Unterschrift“</a> ein, dann kannst du prüfen.';
-  const KEINE_PRUEFFREIGABE = "Für diesen Ordner hast du keine Prüffreigabe – die vergibt der Materialwart unter Ordner → Freigaben.";
+  const KEINE_PRUEFFREIGABE = "Für diesen Ordner hast du keine Prüffreigabe – die vergibt der Materialwart unter Ordner → Bearbeiten → Freigaben.";
   const pruefHinweis = (obj) => (DARF.qualifiziert
-    ? (obj ? KEINE_PRUEFFREIGABE : "Du hast noch keine gültige Prüffreigabe – die vergibt der Materialwart eines Ordners unter Ordner → Freigaben.")
+    ? (obj ? KEINE_PRUEFFREIGABE : "Du hast noch keine gültige Prüffreigabe – die vergibt der Materialwart eines Ordners unter Ordner → Bearbeiten → Freigaben.")
     : DARF.pruefer_haekchen ? URKUNDE_IM_PROFIL
       : "Prüfen dürfen nur Prüfer mit Urkundennummer und Prüffreigabe: Das Häkchen „Prüfer“ setzt die Verwaltung in der "
         + "Nutzerverwaltung, die Urkundennummer trägt der Prüfer selbst in seinem Profil ein, die Prüffreigabe für einen "
@@ -1175,15 +1175,18 @@
     });
     // Ablegen per Ziehen: überall im Dialog (sonst öffnete der Browser die Datei und der Dialog wäre weg). #dlg-body
     // bleibt über alle Dialoge bestehen – die Handler gelten nur, solange dieser offen ist. Gezogener Text bleibt Text.
+    // Steht das Feld in einem gerade verborgenen Reiter („Ordner bearbeiten“ im Reiter „Freigaben“), nimmt es nichts.
     const aus = new AbortController();
     dlg.addEventListener("close", () => { aus.abort(); if (url) URL.revokeObjectURL(url); }, { once: true });
     const dateien = (ev) => ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes("Files");
-    body.addEventListener("dragover", (ev) => { if (!dateien(ev)) return; ev.preventDefault(); feld.classList.add("ueber"); }, { signal: aus.signal });
+    const sichtbar = () => !feld.closest("[hidden]");
+    body.addEventListener("dragover", (ev) => { if (!dateien(ev)) return; ev.preventDefault(); if (sichtbar()) feld.classList.add("ueber"); }, { signal: aus.signal });
     body.addEventListener("dragleave", (ev) => { if (!body.contains(ev.relatedTarget)) feld.classList.remove("ueber"); }, { signal: aus.signal });
     body.addEventListener("drop", (ev) => {
       if (!dateien(ev)) return;
       ev.preventDefault();
       feld.classList.remove("ueber");
+      if (!sichtbar()) { toast(`Das ${wort} des Ordners bitte im Reiter „Ordner“ ablegen.`, true); return; }
       nehmen(ev.dataTransfer.files[0]);
     }, { signal: aus.signal });
     zeichnen();
@@ -1236,7 +1239,18 @@
     toast(t.title);
   });
 
-  function ordnerDialog(o, parentId) {
+  /* „Ordner anlegen“ und „Ordner bearbeiten“. Beim Bearbeiten hat der Dialog zwei Reiter: „Ordner“ (Name, Art,
+     Intervall, Beschreibung, Foto – rote Hauptaktion „Speichern“) und „Freigaben“ (freigaben.js, MatFreigaben.inhalt –
+     rote Hauptaktion „Freigabe erteilen“ im Reiter). Einen eigenen Knopf „Freigaben“ im Ordnerkopf gibt es nicht mehr.
+     Den Reiter gibt es überall, wo es „Bearbeiten“ gibt, und nur dort: Beides verlangt verwalten am Ordner (PUT und
+     GET …/freigaben, requires_folder("verwalten")), an Systemordnern gibt es keins von beiden – wer Freigaben vergeben
+     darf, darf den Ordner also immer auch bearbeiten. Beide Reiter stehen die ganze Zeit im Dialog, beim Wechsel geht
+     nichts verloren; Ändern, Entziehen und Verlängern öffnen eigene Dialoge darüber. Nur wer den Dialog aus dem Reiter
+     „Freigaben“ heraus verlässt („Schließen“, Esc, „Dort öffnen“), während im Reiter „Ordner“ noch Ungespeichertes
+     steht, wird vorher gefragt. optionen: reiter („freigaben“ öffnet dort), vorlage (an MatFreigaben.inhalt, auch
+     „verlaengern“), nachFreigaben (nach dem Schließen, wenn sich an den Freigaben etwas geändert hat). */
+  function ordnerDialog(o, parentId, optionen) {
+    const opt = optionen || {};
     const neu = !o.id;
     const oben = neu && !parentId;
     // Einen vorhandenen Ordner zur Gliederung machen heißt: alles darin wechselt die Gliederung. Das darf nur, wer die
@@ -1244,8 +1258,9 @@
     // der Baum fehlt, entscheidet der Server.
     const umwandeln = neu || o.kind === "gliederung" || !Object.keys(baumIndex).length || verwaltet(gliederungVon(parentId));
     const arten = Object.entries(ORDNERART).filter(([k]) => k !== "gliederung" || umwandeln);
-    dialog(`<h2>${neu ? (oben ? "Gliederung anlegen" : "Ordner anlegen") : "Ordner bearbeiten"}</h2>
-      <label for="od-name">Name</label><input type="text" id="od-name" value="${esc(o.name || "")}" maxlength="120">
+    const F = window.MatFreigaben;
+    const mitFreigaben = !neu && !o.system_kind && verwaltet(o) && !!F;
+    const formular = `<label for="od-name">Name</label><input type="text" id="od-name" value="${esc(o.name || "")}" maxlength="120">
       <div class="field-row">
         <div><label for="od-kind">Art</label><select id="od-kind" ${oben || o.kind === "gliederung" ? "disabled" : ""}>
           ${arten.map(([k, t]) => `<option value="${k}" ${(o.kind || "standort") === k ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>
@@ -1254,11 +1269,25 @@
           <div class="help">Nur zum Verschärfen: Gilt die Herstellervorgabe kürzer, gilt sie.</div></div>
       </div>
       <label for="od-desc">Beschreibung</label><textarea id="od-desc" rows="3" maxlength="2000">${esc(o.description || "")}</textarea>
-      ${fotoFeld("od-foto", "Foto", "Foto", o.foto ? o.vorschau || o.foto : "", "JPEG, PNG, WebP oder HEIC vom Telefon; Web- und Vorschaufassung entstehen beim Hochladen.")}
+      ${fotoFeld("od-foto", "Foto", "Foto", o.foto ? o.vorschau || o.foto : "", "JPEG, PNG, WebP oder HEIC vom Telefon; Web- und Vorschaufassung entstehen beim Hochladen.")}`;
+    // Die Knopfzeile bleibt letztes Kind des Dialogs – so klebt sie am Telefon unten (app.css). Mit Reitern zeigt sie,
+    // was zum gewählten gehört (data-fuer): „Abbrechen“ und „Speichern“ bzw. „Schließen“.
+    const titel = neu ? (oben ? "Gliederung anlegen" : "Ordner anlegen") : "Ordner bearbeiten";
+    dialog(mitFreigaben ? `<h2 id="od-titel">${titel}</h2>
+      <div class="c-tabs mat-reiter" role="tablist" aria-labelledby="od-titel">
+        <button type="button" role="tab" id="od-reiter-ordner" aria-controls="od-teil-ordner" data-reiter="ordner">Ordner</button>
+        <button type="button" role="tab" id="od-reiter-freigaben" aria-controls="od-teil-freigaben" data-reiter="freigaben">Freigaben</button></div>
+      <div class="mat-reiter-teil" role="tabpanel" id="od-teil-ordner" aria-labelledby="od-reiter-ordner">${formular}</div>
+      <div class="mat-reiter-teil" role="tabpanel" id="od-teil-freigaben" aria-labelledby="od-reiter-freigaben" hidden></div>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button" data-fuer="ordner">Abbrechen</button>
+        <button class="btn" id="od-ok" type="button" data-fuer="ordner">Speichern</button>
+        <button class="btn secondary" id="od-schliessen" type="button" data-fuer="freigaben" hidden>Schließen</button></div>`
+      : `<h2>${titel}</h2>${formular}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="od-ok" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
     (dlg, body) => {
-      fokus($("#od-name", body));
       const fotoWahl = fotoFeldVerdrahten(dlg, body, "od-foto");
+      if (mitFreigaben) reiterVerdrahten(dlg, body, o, fotoWahl, opt);
+      else fokus($("#od-name", body));
       // Erst die Angaben, dann das Foto. Scheitert nur das Foto, kennt der Dialog den Ordner schon: Ein zweiter Klick
       // speichert die Angaben erneut und lädt das Foto nach, statt den Ordner doppelt anzulegen (wie beim Produktbild).
       let oid = o.id || null;
@@ -1282,11 +1311,84 @@
             await api(`${API}/ordner/${oid}/foto`, { method: "DELETE" });
           }
           dlg.close();
-          // Eine neue Gliederung braucht als Erstes ihren Materialwart: Der Freigaben-Dialog öffnet mit dieser Vorlage.
+          // Eine neue Gliederung braucht als Erstes ihren Materialwart: „Ordner bearbeiten“ öffnet dort im Reiter
+          // „Freigaben“ mit dieser Vorlage.
           location.href = `/material/ordner/${oid}${oben ? "?freigaben=materialwart" : ""}`;
         } catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
     });
+  }
+
+  /* Die Reiter von „Ordner bearbeiten“ (role tablist/tab/tabpanel; ← und → wechseln, Pos1 und Ende springen). Den
+     Reiter „Freigaben“ füllt MatFreigaben.inhalt beim ersten Zeigen – wer nur den Namen ändert, lädt keine Freigaben. */
+  function reiterVerdrahten(dlg, body, o, fotoWahl, opt) {
+    const reiter = $$('[role="tab"]', body);
+    const teilFreigaben = $("#od-teil-freigaben", body);
+    let aktiv = null;
+    let geladen = false;
+    let geaendert = false;
+    // Ungespeichert im Reiter „Ordner“: ein Feld anders als beim Öffnen oder ein Foto gewählt bzw. zum Entfernen vorgemerkt.
+    const felder = () => JSON.stringify(["od-name", "od-kind", "od-int", "od-desc"].map((id) => $(`#${id}`, body).value));
+    const anfang = felder();
+    const ungespeichert = () => felder() !== anfang || !!fotoWahl.datei || fotoWahl.entfernen;
+    async function verlassenOk() {
+      if (!ungespeichert()) return true;
+      if (await confirm("Im Reiter „Ordner“ stehen noch ungespeicherte Änderungen. Verwerfen?", "Verwerfen")) return true;
+      zeigenReiter("ordner", true);
+      return false;
+    }
+    function zeigenReiter(name, fokusReiter, fokusInhalt) {
+      aktiv = name;
+      reiter.forEach((t) => {
+        const an = t.dataset.reiter === name;
+        t.setAttribute("aria-selected", String(an));
+        t.tabIndex = an ? 0 : -1;
+        t.classList.toggle("sel", an);
+        if (an && fokusReiter) t.focus();
+      });
+      $("#od-teil-ordner", body).hidden = name !== "ordner";
+      teilFreigaben.hidden = name !== "freigaben";
+      $$("[data-fuer]", body).forEach((b) => { b.hidden = b.dataset.fuer !== name; });
+      if (name === "freigaben" && !geladen) {
+        geladen = true;
+        window.MatFreigaben.inhalt(teilFreigaben, o, {
+          vorlage: opt.vorlage, fokus: !!fokusInhalt,
+          geaendert: () => { geaendert = true; },
+          // „Dort öffnen“ (geerbte Zeile): zum Oberordner, dort gleich in diesen Reiter.
+          dort: async (id) => { if (await verlassenOk()) location.href = `/material/ordner/${id}?freigaben`; },
+        });
+      } else if (name === "ordner" && fokusInhalt) {
+        fokus($("#od-name", body));
+      }
+    }
+    reiter.forEach((t) => t.addEventListener("click", () => zeigenReiter(t.dataset.reiter)));
+    $('[role="tablist"]', body).addEventListener("keydown", (e) => {
+      const i = reiter.findIndex((t) => t.dataset.reiter === aktiv);
+      const ziel = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: reiter.length - 1 }[e.key];
+      if (ziel === undefined) return;
+      e.preventDefault();
+      zeigenReiter(reiter[(ziel + reiter.length) % reiter.length].dataset.reiter, true);
+    });
+    $("#od-schliessen", body).addEventListener("click", async () => { if (await verlassenOk()) dlg.close(); });
+    // Esc im Reiter „Freigaben“ fragt wie „Schließen“ (im Reiter „Ordner“ verwirft Esc wie „Abbrechen“).
+    const abbruch = (e) => {
+      if (aktiv !== "freigaben" || !ungespeichert()) return;
+      e.preventDefault();
+      verlassenOk().then((ok) => { if (ok) dlg.close(); });
+    };
+    dlg.addEventListener("cancel", abbruch);
+    // #dlg dient allen Dialogen der Seite: Breite und Esc-Rückfrage gelten nur, solange dieser offen ist. Hat sich an
+    // den Freigaben etwas geändert, zeichnet die Ordneransicht danach neu (eigene Rechte, Ablaufhinweis).
+    dlg.classList.add("mat-ordner-reiter");
+    dlg.addEventListener("close", () => {
+      dlg.classList.remove("mat-ordner-reiter");
+      dlg.removeEventListener("cancel", abbruch);
+      if (geaendert && opt.nachFreigaben) opt.nachFreigaben();
+    }, { once: true });
+    // Direkt in „Freigaben“: showModal hat den Fokus schon aufs erste Bedienelement gesetzt – den Reiter „Ordner“.
+    // Er geht auf den gewählten Reiter, bis MatFreigaben.inhalt geladen hat und ihn in den Inhalt setzt.
+    const start = opt.reiter === "freigaben" ? "freigaben" : "ordner";
+    zeigenReiter(start, start === "freigaben", true);
   }
 
   // Hinweise der Verschieben-Dialoge (Bauentwurf 1.7): was mit Freigaben, Systemordnern und Durchgängen geschieht.
@@ -1314,18 +1416,21 @@
       try { personen = (await api(`${API}/ordner/${id}/zugeordnete`)).zugeordnete; } catch (e) { personen = []; }
       if (person && !personen.some((p) => String(p.id) === person)) person = "";
     }
-    // ?freigaben=<vorlage> (nach dem Anlegen einer Gliederung): den Dialog einmal öffnen und aus der Adresse nehmen –
-    // sonst ginge er bei jedem Neuladen wieder auf.
+    // ?freigaben=<vorlage> (nach „+ Gliederung“ mit „materialwart“; „verlaengern“; leer aus „Dort öffnen“ und der
+    // Nutzerverwaltung): „Ordner bearbeiten“ einmal im Reiter „Freigaben“ öffnen und den Wert aus der Adresse nehmen –
+    // sonst ginge der Dialog bei jedem Neuladen wieder auf.
     const adresse = new URLSearchParams(location.search);
     let vorlage = adresse.get("freigaben");
     if (vorlage !== null) {
       adresse.delete("freigaben");
       try { history.replaceState(null, "", location.pathname + (String(adresse) ? `?${adresse}` : "")); } catch (e) { /* nur die Adresszeile */ }
     }
-    // Schließt der Freigaben-Dialog (freigaben.js kennzeichnet ihn mit „mf-dlg“) – geöffnet über „Freigaben“ oder
-    // „Verlängern …“ im Kopf –, gilt der Ordner neu: eigene Rechte, Ablaufhinweis.
-    const dlgEl = document.getElementById("dlg");
-    if (dlgEl) dlgEl.addEventListener("close", () => { if (dlgEl.classList.contains("mf-dlg")) { kopfEl = null; zeigen(zeichnen); } });
+    // „Ordner bearbeiten“ für den zuletzt gezeichneten Ordner. Haben sich darin Freigaben geändert, gilt der Ordner nach
+    // dem Schließen neu: eigene Rechte, Ablaufhinweis (Rückruf statt einer Kennzeichnung am gemeinsamen #dlg).
+    let jetzt = null;
+    const nachFreigaben = () => { kopfEl = null; zeigen(zeichnen); };
+    const bearbeiten = (opt) => { if (jetzt) ordnerDialog(jetzt, jetzt.parent_id, Object.assign({ nachFreigaben }, opt)); };
+    const freigabenOeffnen = (v) => bearbeiten({ reiter: "freigaben", vorlage: v || undefined });
     async function zeichnen() {
       if (grund && personen === null) await personenHolen();
       const q = sortParameter(new URLSearchParams({ seite, pro_seite: 200 }), sort);
@@ -1334,6 +1439,7 @@
       const [antwort] = await Promise.all([api(`${API}/ordner/${id}?${q}`), ordnerBaum().catch(() => null)]);
       const d = antwort.ordner;
       const darf = d.darf || {};
+      jetzt = d;
       grund = Boolean(darf.grund);
       if (grund && personen === null) await personenHolen();
       leisteMarkieren(d.id);
@@ -1355,7 +1461,6 @@
           <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="unterordner">+ Unterordner</button>
             <a class="btn secondary small" href="/material/artikel/neu?ordner=${d.id}">+ Artikel</a>
             <button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>
-            <button class="btn secondary small" data-act="freigaben">Freigaben</button>
             ${darfOben ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button><button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}
             ${darf.grund ? exportMenue(d) : ""}</div></div>
         ${darfPflegen ? '<div id="mat-freigaben-kopf"></div>' : ""}
@@ -1379,17 +1484,18 @@
         <p class="small mat-zweigbestand">${system ? plural(Object.values(z).reduce((a, b) => a + b, 0), "Artikel", "Artikel") : `Bestand im ganzen Zweig: <strong>${d.bestand}</strong> ${zahlen(z)}`}</p>
         ${darf.grund ? `<details class="section mat-auf"><summary>Journal des Ordners</summary>${journalHtml(d.journal)}</details>` : ""}`;
       if (darfPflegen) {
+        // Der Ablaufhinweis bleibt im Ordnerkopf – ein Hinweis, kein Menü; „Verlängern …“ führt in den Reiter.
         if (!kopfEl) {
           kopfEl = document.createElement("div");
           kopfEl.id = "mat-freigaben-kopf";
           const el = kopfEl;
-          baustein("MatFreigaben").then((f) => { if (f) f.kopfhinweis(el, d); });
+          baustein("MatFreigaben").then((f) => { if (f) f.kopfhinweis(el, d, () => freigabenOeffnen("verlaengern")); });
         }
         $("#mat-freigaben-kopf").replaceWith(kopfEl);
         if (vorlage !== null) {
           const v = vorlage;
           vorlage = null;
-          baustein("MatFreigaben").then((f) => { if (f) f.oeffnen(d, v || undefined); });
+          baustein("MatFreigaben").then((f) => { if (f) freigabenOeffnen(v); });
         }
       }
       // „alle auswählen“ gibt es zweimal – im Tabellenkopf und über den Karten (schmale Bildschirme); beide zeigen
@@ -1418,8 +1524,7 @@
         person: (s) => { person = s.value; seite = 1; zeigen(zeichnen); },
         unterordner: () => ordnerDialog({ kind: "standort" }, d.id),
         runde: () => rundeDialog(d.id),
-        bearbeiten: () => ordnerDialog(d, d.parent_id),
-        freigaben: () => window.MatFreigaben && window.MatFreigaben.oeffnen(d),
+        bearbeiten: () => bearbeiten(),
         verschieben: async () => {
           const gl = d.kind === "gliederung";
           const ziel = await ordnerWaehlen("Ordner verschieben nach …", { ohneZweig: d.id, obersteEbene: gl, quelle: d.parent_id || null,

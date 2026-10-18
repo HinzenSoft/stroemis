@@ -1,10 +1,11 @@
 """Freigaben je Ordner vergeben, ändern, entziehen und verlängern (Phase 2 · Lieferung 1, Abschnitt 4).
 
 Was eine Freigabe ist und wie sie wirkt, steht in rechte.py. Hier stehen die Regeln, wer sie schreiben darf (Bauentwurf
-1.6), und die Listen für den Dialog „Freigaben“ (freigaben.js), „Meine Freigaben“ und die Nutzerverwaltung:
+1.6, mit der Nachbesserung vom 18.10.2026 zu Nr. 8), und die Listen für den Reiter „Freigaben“ in „Ordner bearbeiten“
+(freigaben.js), „Meine Freigaben“ und die Nutzerverwaltung:
 
-  1  Die Plattform-Verwaltung vergibt überall, ohne die Grenzen 3–7. Für Prüffreigaben gelten auch für sie Nr. 8 und
-     die 24 Monate – Sachkunde lässt sich nicht verwalten, nur nachweisen.
+  1  Die Plattform-Verwaltung vergibt überall, ohne die Grenzen 3–7. Für Prüffreigaben gilt auch für sie Nr. 8 –
+     Sachkunde lässt sich nicht verwalten, nur nachweisen.
   2  Wer einen Ordner verwaltet, vergibt dort und darunter – an jedes aktive Konto mit Namen, auch aus anderen
      Gliederungen (rechte.waehlbares_konto).
   3  Was er vergibt oder nach einer Änderung hinterlässt, endet nicht später als sein eigenes Verwalten am Anker
@@ -16,7 +17,11 @@ Was eine Freigabe ist und wie sie wirkt, steht in rechte.py. Hier stehen die Reg
   6  Zeilen oberhalb des eigenen Bereichs sieht er als „geerbt“, ohne Notiz, und ändert sie nicht.
   7  Danach hat jede Gliederung im Zweig des Ankers noch einen Verwalter, der mindestens so lange bleibt wie er – sonst
      409 (_verwaltung_danach).
-  8  Prüffreigaben nur an qualifizierte Konten, immer befristet, höchstens 24 Monate.
+  8  Prüffreigaben nur an qualifizierte Konten. Befristet nur für externe Prüfer: Dauerhaft (ohne Ende) darf eine
+     Prüffreigabe sein, wenn das Konto am Anker oder darüber heute ein Grundrecht hat – auch eines aus derselben
+     Anfrage (Vorlagen „Prüfer“, „Materialwart und Prüfer“) – oder Plattform-Verwaltung ist (rechte.grundrecht_an,
+     nach dem Schreiben gefragt; sonst 400). Wirken tut sie nur, solange das Grundrecht gilt (rechte.Sicht). Mit Ende
+     höchstens 24 Monate – für alle. Nr. 3 gilt auch hier: dauerhaft nur, wer selbst dauerhaft verwaltet.
   9  lesen und verwalten: Enddatum frei, wenn gesetzt nicht in der Vergangenheit.
  10  Die Notiz (200 Zeichen, eine Zeile) sehen nur Verwalter des Ankers und die Verwaltung – ins Journal kommt nur
      „notiz_geaendert“.
@@ -36,7 +41,7 @@ from ... import db
 from ...auth import current_user, is_admin
 from .. import services as dienste
 from ..models import FREIGABEN, MIGRATION_8
-from . import Abgelehnt, auswahl, datum, journal, kennung, text
+from . import Abgelehnt, auswahl, datum, journal, kennung, text, wahr
 from . import rechte
 from .bestand import heimat
 from .interval import plus_monate
@@ -52,7 +57,9 @@ EIGENE_NEU = "Dir selbst vergibst du keine Freigabe – das macht ein anderer Ve
 NICHT_AENDERBAR = ("Diese Freigabe reicht weiter als deine eigene – ändern kann sie nur, wer mindestens so lange "
                    "verwaltet, oder die Plattform-Verwaltung.")
 NUR_VERWALTER = "Freigaben ändert nur, wer den Ordner verwaltet, an dem sie vergeben sind."
-PRUEFEN_BIS = "Eine Prüffreigabe braucht ein Enddatum."
+PRUEFEN_BIS = "Für die Prüffreigabe bitte „bis“ angeben – ein Enddatum oder null für dauerhaft."
+PRUEFEN_DAUERHAFT = ("Dauerhaft gibt es eine Prüffreigabe nur zusammen mit lesen oder verwalten an diesem Ordner oder "
+                     "darüber. Für externe Prüfer (nur prüfen) bitte ein Enddatum setzen – höchstens 24 Monate.")
 VERGANGEN = "Das Enddatum liegt in der Vergangenheit."
 KEIN_RECHT = "Bitte ein Recht wählen – Grundrecht, Prüffreigabe oder beides."
 SUCHE_KURZ = "Bitte mindestens 3 Zeichen des Namens eingeben."
@@ -99,15 +106,13 @@ def vorgabe_bis(tag=None):
 
 
 def _bis(wert, recht):
-    """Enddatum einer Freigabe aus der Anfrage (1.6 Nr. 8 und 9): bei pruefen Pflicht und höchstens 24 Monate, sonst frei;
-    gesetzt nie in der Vergangenheit."""
+    """Enddatum einer Freigabe aus der Anfrage (1.6 Nr. 8 und 9), None heißt dauerhaft. Bei pruefen mit Ende höchstens
+    24 Monate – ob sie ohne Ende sein darf, hängt am Grundrecht und wird nach dem Schreiben geprüft (_schreiben).
+    Gesetzt nie in der Vergangenheit."""
     bis = datum(wert, "bis")
-    if recht == "pruefen":
-        if bis is None:
-            raise Abgelehnt(PRUEFEN_BIS)
-        if bis > pruefen_max():
-            raise Abgelehnt(f"Eine Prüffreigabe läuft höchstens {PRUEFEN_MONATE} Monate – also bis spätestens "
-                            f"{_tag(pruefen_max())}.")
+    if recht == "pruefen" and bis is not None and bis > pruefen_max():
+        raise Abgelehnt(f"Eine Prüffreigabe läuft höchstens {PRUEFEN_MONATE} Monate – also bis spätestens "
+                        f"{_tag(pruefen_max())} – oder dauerhaft, wo die Person auch lesen oder verwalten hat.")
     if bis is not None and bis < _heute().isoformat():
         raise Abgelehnt(VERGANGEN)
     return bis
@@ -217,6 +222,19 @@ def _spur(gid, z, notiz=False, grund=None):
     return out
 
 
+def _dauerhaft_pruefen(alt, neu, anker, konto):
+    """1.6 Nr. 8: Entsteht eine Prüffreigabe ohne Ende (neu, aus einer befristeten oder aus einem Grundrecht), braucht
+    das Konto am Anker oder darüber ein Grundrecht – nach dem Schreiben gefragt, noch in der Transaktion: So zählt ein
+    Grundrecht aus derselben Anfrage mit, und eines, das die Änderung selbst wegnimmt, nicht mehr. Eine schon dauerhafte
+    Zeile bleibt änderbar (Notiz), auch wenn sie gerade nicht wirkt."""
+    if neu is None or neu["permission"] != "pruefen" or neu["valid_until"] is not None:
+        return
+    if alt is not None and alt["permission"] == "pruefen" and alt["valid_until"] is None:
+        return
+    if not rechte.grundrecht_an(konto, anker):
+        raise Abgelehnt(PRUEFEN_DAUERHAFT)
+
+
 def _schreiben(s, ich, anker, alt, neu, konto, grund=None):
     """Eine Zeile anlegen (alt None), ändern oder entziehen (neu None) – nach den Regeln, mit Journal. Liefert die
     Kennung. Läuft in der Transaktion des Aufrufers."""
@@ -227,6 +245,7 @@ def _schreiben(s, ich, anker, alt, neu, konto, grund=None):
                          "created_at, note, updated_at) VALUES (?,?,?,?,?,?,?,?)",
                          (anker, neu["user_id"], neu["permission"], neu["valid_until"], ich["id"], jetzt, neu["note"],
                           jetzt))
+        _dauerhaft_pruefen(alt, neu, anker, konto)
         journal.eintragen("folder", anker, "freigabe_erteilt", None, _spur(gid, neu, bool(neu["note"]), grund))
         return gid
     if neu is None:
@@ -237,6 +256,7 @@ def _schreiben(s, ich, anker, alt, neu, konto, grund=None):
         return alt["id"]
     db.execute("UPDATE mat_folder_grant SET permission = ?, valid_until = ?, note = ?, updated_at = ? WHERE id = ?",
                (neu["permission"], neu["valid_until"], neu["note"], jetzt, alt["id"]))
+    _dauerhaft_pruefen(alt, neu, anker, konto)
     journal.eintragen("folder", anker, "freigabe_geaendert", _spur(alt["id"], alt),
                       _spur(alt["id"], neu, neu["note"] != alt["note"], grund))
     return alt["id"]
@@ -286,17 +306,19 @@ def _anker_pruefen(fid, ordner):
 
 def erteilen(fid, d):
     """POST /ordner/<fid>/freigaben: bis zu zwei Zeilen am Anker fid in EINER Transaktion – ein Grundrecht (lesen oder
-    verwalten, Ende frei) und eine Prüffreigabe (Ende Pflicht). So entstehen die Vorlagen des Dialogs in einem Schritt;
-    scheitert die zweite Zeile, gibt es auch die erste nicht. Vorhandene Zeilen derselben Art werden geändert.
-    grundrecht null lässt das Grundrecht unberührt, pruefen_bis null (oder fehlend) die Prüffreigabe; pruefen_bis ""
-    heißt „Prüffreigabe ohne Ende“ und ist ein Fehler. Liefert die Kennungen der geschriebenen Zeilen."""
+    verwalten, Ende frei) und eine Prüffreigabe (mit Ende, oder dauerhaft, wo das Konto ein Grundrecht hat – auch das
+    aus dieser Anfrage, es wird zuerst geschrieben). So entstehen die Vorlagen des Reiters in einem Schritt; scheitert
+    die zweite Zeile, gibt es auch die erste nicht. Vorhandene Zeilen derselben Art werden geändert. grundrecht null
+    lässt das Grundrecht unberührt. Die Prüffreigabe: mit „pruefen“ true gewünscht, pruefen_bis null, "" oder fehlend
+    heißt dann dauerhaft; ohne „pruefen“ wie bisher – pruefen_bis null (oder fehlend) lässt sie unberührt, "" heißt
+    „ohne Ende“. Liefert die Kennungen der geschriebenen Zeilen."""
     ich, s = current_user(), rechte.sicht()
     ordner = _ordner_alle()
     _anker_pruefen(fid, ordner)
     konto = rechte.waehlbares_konto(d.get("user_id"))
     grund = auswahl(d.get("grundrecht"), rechte.GRUNDRECHTE, "Grundrecht", leer_erlaubt=True)
     grund_bis = _bis(d.get("grund_bis"), grund) if grund else None
-    mit_pruefen = d.get("pruefen_bis") is not None
+    mit_pruefen = wahr(d, "pruefen", "Prüffreigabe") if "pruefen" in d else d.get("pruefen_bis") is not None
     pruefen_bis = _bis(d.get("pruefen_bis"), "pruefen") if mit_pruefen else None
     if not grund and not mit_pruefen:
         raise Abgelehnt(KEIN_RECHT)
@@ -322,8 +344,9 @@ def erteilen(fid, d):
 
 
 def aendern(gid, d):
-    """PUT /freigaben/<gid>: Recht, Ende und Notiz einer Zeile. „bis“: null heißt unbefristet (nur Grundrechte). Aus
-    einem Grundrecht wird eine Prüffreigabe und umgekehrt nur, wenn es die andere Art dort noch nicht gibt (409)."""
+    """PUT /freigaben/<gid>: Recht, Ende und Notiz einer Zeile. „bis“: null heißt unbefristet – bei einer Prüffreigabe
+    nur mit Grundrecht (Nr. 8). Aus einem Grundrecht wird eine Prüffreigabe und umgekehrt nur, wenn es die andere Art
+    dort noch nicht gibt (409); zur Prüffreigabe nur mit ausdrücklichem „bis“."""
     ich, s = current_user(), rechte.sicht()
     alt = zeile(gid)
     neu = dict(alt)
@@ -352,7 +375,8 @@ def aendern(gid, d):
 
 def entziehen(gid):
     """DELETE /freigaben/<gid>. Liefert die Zahl offener Prüfungen des Kontos im Zweig des Ankers, die es danach nicht
-    mehr fortsetzen darf – die gibt ein Verwalter unter Material → Prüfungen → Offene Prüfungen frei."""
+    mehr fortsetzen darf – die gibt ein Verwalter unter Material → Prüfungen → Offene Prüfungen frei. Das gilt auch für
+    ein Grundrecht: An ihm kann eine dauerhafte Prüffreigabe hängen, die ohne es nicht mehr wirkt."""
     ich, s = current_user(), rechte.sicht()
     alt = zeile(gid)
     ordner = _ordner_alle()
@@ -361,8 +385,6 @@ def entziehen(gid):
         _schreiben(s, ich, alt["folder_id"], alt, None, _konto(alt["user_id"]))
         _verwaltung_danach(vorher)
     rechte.sicht_verwerfen()
-    if alt["permission"] != "pruefen":
-        return 0
     konto = _konto(alt["user_id"])
     zweig = _zweig(alt["folder_id"], ordner)
     offen = db.query("SELECT i.* FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id WHERE x.inspector_user_id = ? "
@@ -371,22 +393,25 @@ def entziehen(gid):
 
 
 def verlaengern(fid, d):
-    """POST /ordner/<fid>/freigaben/verlaengern: alle Prüffreigaben an fid oder darunter, die noch gelten oder seit
-    höchstens 90 Tagen abgelaufen sind, auf „bis“ – soweit der Handelnde sie nach 1.6 ändern darf, das Konto qualifiziert
-    und aktiv ist und die Freigabe dadurch länger wird. Je Zeile ein Journaleintrag; was übersprungen wurde, steht mit
-    Grund in der Antwort."""
+    """POST /ordner/<fid>/freigaben/verlaengern: alle befristeten Prüffreigaben an fid oder darunter, die noch gelten
+    oder seit höchstens 90 Tagen abgelaufen sind, auf „bis“ – soweit der Handelnde sie nach 1.6 ändern darf, das Konto
+    qualifiziert und aktiv ist und die Freigabe dadurch länger wird. Dauerhafte laufen nicht ab und kommen gar nicht
+    erst in die Auswahl (auch nicht unter „übersprungen“). Je Zeile ein Journaleintrag; was übersprungen wurde, steht
+    mit Grund in der Antwort."""
     ich, s = current_user(), rechte.sicht()
     ordner = _ordner_alle()
     _anker_pruefen(fid, ordner)
     bis = _bis(d.get("bis"), "pruefen")
+    if bis is None:
+        raise Abgelehnt("Bitte ein Enddatum angeben – verlängert werden nur befristete Prüffreigaben.")
     if not s.alles and _spaeter(bis, _ende(s, fid)):
         raise Abgelehnt(f"Länger als deine eigene Verwalterfreigabe hier (bis {_tag(_ende(s, fid))}) verlängerst du "
                         "nichts.", 403)
     zweig = _zweig(fid, ordner)
     ab = (_heute() - timedelta(days=VERLAENGERN_TAGE)).isoformat()
     rows = db.query("SELECT g.*, u.name AS konto_name FROM mat_folder_grant g JOIN users u ON u.id = g.user_id "
-                    "WHERE g.permission = 'pruefen' AND g.valid_until >= ? AND g.folder_id IN "
-                    "(SELECT value FROM json_each(?)) ORDER BY u.name COLLATE NOCASE, g.id",
+                    "WHERE g.permission = 'pruefen' AND g.valid_until IS NOT NULL AND g.valid_until >= ? "
+                    "AND g.folder_id IN (SELECT value FROM json_each(?)) ORDER BY u.name COLLATE NOCASE, g.id",
                     (ab, json.dumps(sorted(zweig))))
     verlaengert, uebersprungen = 0, []
     with db.transaction(sofort=True):
@@ -416,8 +441,49 @@ def verlaengern(fid, d):
 # --- Lesen -------------------------------------------------------------------------------------------------------
 
 _ZEILEN_SQL = ("SELECT g.*, u.name AS u_name, u.gliederung AS u_gliederung, u.active AS u_active, u.status AS u_status, "
-               "u.mat_pruefer AS u_pruefer, u.urkundennummer AS u_urkunde, v.name AS von_name FROM mat_folder_grant g "
-               "JOIN users u ON u.id = g.user_id LEFT JOIN users v ON v.id = g.granted_by ")
+               "u.mat_pruefer AS u_pruefer, u.urkundennummer AS u_urkunde, u.recht_verwaltung AS u_verwaltung, "
+               "v.name AS von_name FROM mat_folder_grant g JOIN users u ON u.id = g.user_id "
+               "LEFT JOIN users v ON v.id = g.granted_by ")
+
+
+def _grundlage(rows, verwaltung=None):
+    """Was neben einer Zeile für „grundrecht_dort“, „wirkt“ und „traegt_pruefen“ zählt (eine Abfrage für alle Konten
+    der Liste): je Konto die gültigen Grundrechte {Kennung: Ordner}, die Anker der dauerhaften Prüffreigaben und ob es
+    die Plattform-Verwaltung ist (die hat das Grundrecht überall). verwaltung: diese Konten sind es (sonst aus
+    u_verwaltung der Zeilen)."""
+    uids = sorted({r["user_id"] for r in rows})
+    if verwaltung is None:
+        verwaltung = {r["user_id"] for r in rows if int(r["u_verwaltung"] or 0) >= 2}
+    out = {uid: {"grund": {}, "dauer": [], "alles": uid in verwaltung} for uid in uids}
+    if uids:
+        for x in db.query("SELECT id, user_id, folder_id, permission FROM mat_folder_grant WHERE user_id IN "
+                          "(SELECT value FROM json_each(?)) AND ((permission IN ('lesen', 'verwalten') AND "
+                          "(valid_until IS NULL OR valid_until >= ?)) "
+                          "OR (permission = 'pruefen' AND valid_until IS NULL))",
+                          (json.dumps(uids), _heute().isoformat())):
+            if x["permission"] == "pruefen":
+                out[x["user_id"]]["dauer"].append(x["folder_id"])
+            else:
+                out[x["user_id"]]["grund"][x["id"]] = x["folder_id"]
+    return out
+
+
+def _am_grundrecht(r, g, ordner):
+    """(grundrecht_dort, traegt_pruefen) einer Zeile r mit der Grundlage g ihres Kontos (_grundlage):
+    grundrecht_dort – das Konto hat am Anker oder darüber heute ein Grundrecht (oder ist Plattform-Verwaltung): Nur dann
+    darf eine Prüffreigabe dort dauerhaft sein und wirkt es eine dauerhafte. traegt_pruefen – bei einem gültigen
+    Grundrecht: an wie vielen dauerhaften Prüffreigaben des Kontos es allein hängt (ohne es wirkten sie nicht mehr) – so
+    sagen Entziehen und Kürzen es vorher."""
+    oben = set(_kette(r["folder_id"], ordner))
+    dort = g["alles"] or any(f in oben for f in g["grund"].values())
+    traegt = 0
+    if r["permission"] != "pruefen" and r["id"] in g["grund"] and not g["alles"]:
+        andere = [f for gid, f in g["grund"].items() if gid != r["id"]]
+        for p in g["dauer"]:
+            kette = set(_kette(p, ordner))
+            if r["folder_id"] in kette and not any(f in kette for f in andere):
+                traegt += 1
+    return dort, traegt
 
 
 def _von_system(rows):
@@ -434,8 +500,9 @@ def _von_system(rows):
     return out
 
 
-def _eintrag(r, ordner, s, system, notiz):
-    """Eine Zeile für die Listen (4.1). notiz: ob die Notiz mitkommt (V am Anker oder Verwaltung, nie geerbt)."""
+def _eintrag(r, ordner, s, system, notiz, grundlage):
+    """Eine Zeile für die Listen (4.1). notiz: ob die Notiz mitkommt (V am Anker oder Verwaltung, nie geerbt);
+    grundlage: _grundlage der Liste. Eine dauerhafte Prüffreigabe ohne Grundrecht am Anker wirkt nicht."""
     heute = _heute()
     qualifiziert = rechte.ist_pruefer({"mat_pruefer": r["u_pruefer"], "urkundennummer": r["u_urkunde"]})
     aktiv = bool(r["u_active"]) and (r["u_status"] or "active") == "active"
@@ -443,11 +510,14 @@ def _eintrag(r, ordner, s, system, notiz):
     tage = (date.fromisoformat(r["valid_until"]) - heute).days if gueltig and r["valid_until"] else None
     anker = r["folder_id"]
     darf_anker = s.alles or s.darf("verwalten", anker)
+    dort, traegt = _am_grundrecht(r, grundlage[r["user_id"]], ordner)
+    pruefen_wirkt = r["permission"] != "pruefen" or (qualifiziert and (r["valid_until"] is not None or dort))
     out = {"id": r["id"], "ordner": {"id": anker, "pfad": _pfad(anker, ordner)},
            "konto": {"id": r["user_id"], "name": _name(r["u_name"]), "gliederung": r["u_gliederung"], "aktiv": aktiv,
                      "haekchen": bool(r["u_pruefer"]), "qualifiziert": qualifiziert},
            "recht": r["permission"], "bis": r["valid_until"], "gueltig": gueltig,
-           "wirkt": gueltig and aktiv and bool((r["u_name"] or "").strip()) and (r["permission"] != "pruefen" or qualifiziert),
+           "wirkt": gueltig and aktiv and bool((r["u_name"] or "").strip()) and pruefen_wirkt,
+           "grundrecht_dort": dort, "traegt_pruefen": traegt,
            "laeuft_ab_in_tagen": tage if tage is not None and tage <= ABLAUF_TAGE else None,
            "vergeben_von": _name(r["von_name"]) if r["granted_by"] is not None
            else system.get(r["id"], "(gelöschtes Konto)"),
@@ -494,7 +564,9 @@ def _verlauf(fid):
 def liste(fid):
     """GET /ordner/<fid>/freigaben (V am Ordner): die Freigaben hier („direkt“), darüber („geerbt“, ohne Notiz) und
     darunter („unten“), die Anker zur Auswahl (fid und die Oberordner, die der Handelnde verwaltet – mit seinem Ende
-    dort), den Verlauf und die Zahl der Freigaben im Zweig, die in den nächsten 30 Tagen ablaufen."""
+    dort), fid und seine Oberordner von unten nach oben („kette“ – damit „dauerhaft“ beim Prüfen nur erscheint, wo die
+    Person schon ein Grundrecht hat), den Verlauf und die Zahl der Freigaben im Zweig, die in den nächsten 30 Tagen
+    ablaufen (dauerhafte laufen nicht ab)."""
     s = rechte.sicht()
     ordner = _ordner_alle()
     _anker_pruefen(fid, ordner)
@@ -503,6 +575,7 @@ def liste(fid):
     rows = db.query(_ZEILEN_SQL + "WHERE g.folder_id IN (SELECT value FROM json_each(?))",
                     (json.dumps(sorted(set(kette) | zweig)),))
     system = _von_system(rows)
+    grundlage = _grundlage(rows)
     direkt = [r for r in rows if r["folder_id"] == fid]
     geerbt = [r for r in rows if r["folder_id"] != fid and r["folder_id"] in kette]
     unten = [r for r in rows if r["folder_id"] != fid and r["folder_id"] in zweig]
@@ -511,13 +584,13 @@ def liste(fid):
     # Vorgabe: die nächste Gliederung, wenn man sie verwaltet, sonst der Ordner selbst.
     naechste = next((x for x in kette if _gliederung(ordner[x])), None)
     vorgabe = naechste if any(a["id"] == naechste for a in anker) else fid
-    eintraege = {"direkt": [_eintrag(r, ordner, s, system, True) for r in _sortiert(direkt, ordner)],
-                 "geerbt": [_eintrag(r, ordner, s, system, False) for r in _sortiert(geerbt, ordner)],
-                 "unten": [_eintrag(r, ordner, s, system, True) for r in _sortiert(unten, ordner)]}
+    eintraege = {"direkt": [_eintrag(r, ordner, s, system, True, grundlage) for r in _sortiert(direkt, ordner)],
+                 "geerbt": [_eintrag(r, ordner, s, system, False, grundlage) for r in _sortiert(geerbt, ordner)],
+                 "unten": [_eintrag(r, ordner, s, system, True, grundlage) for r in _sortiert(unten, ordner)]}
     o = ordner[fid]
     return dict(eintraege, ordner={"id": fid, "name": o["name"], "pfad": _pfad(fid, ordner),
                                    "gliederung": _gliederung(o)},
-                anker_wahl=anker, anker_vorgabe=vorgabe, verlauf=_verlauf(fid),
+                anker_wahl=anker, anker_vorgabe=vorgabe, kette=kette, verlauf=_verlauf(fid),
                 laeuft_ab=sum(1 for e in eintraege["direkt"] + eintraege["unten"] if e["laeuft_ab_in_tagen"] is not None),
                 grenzen={"heute": _heute().isoformat(), "pruefen_max": pruefen_max(), "vorgabe_bis": vorgabe_bis()},
                 alles=s.alles)
@@ -526,7 +599,9 @@ def liste(fid):
 def eintrag(gid):
     """Eine Zeile nach dem Ändern – wie in der Liste ihres Ankers (mit Notiz, wenn der Handelnde ihn verwaltet)."""
     rows = db.query(_ZEILEN_SQL + "WHERE g.id = ?", (gid,))
-    return _eintrag(rows[0], _ordner_alle(), rechte.sicht(), _von_system(rows), True) if rows else None
+    if not rows:
+        return None
+    return _eintrag(rows[0], _ordner_alle(), rechte.sicht(), _von_system(rows), True, _grundlage(rows))
 
 
 def des_kontos(uid):
@@ -538,14 +613,15 @@ def des_kontos(uid):
     ordner = _ordner_alle()
     rows = db.query(_ZEILEN_SQL + "WHERE g.user_id = ?", (u["id"],))
     system = _von_system(rows)
+    grundlage = _grundlage(rows)
     s = rechte.sicht()
-    return [_eintrag(r, ordner, s, system, True) for r in _sortiert(rows, ordner)]
+    return [_eintrag(r, ordner, s, system, True, grundlage) for r in _sortiert(rows, ordner)]
 
 
 def meine(user):
     """GET /freigaben/meine (jeder Angemeldete, auch ohne Modulzugang): die eigenen Freigaben – gültige und in den
     letzten 365 Tagen abgelaufene – mit Pfad, Zustand und bis zu drei Verwaltern des Ankers (wer verlängern kann).
-    Ohne Notiz."""
+    Ohne Notiz. Eine dauerhafte Prüffreigabe läuft nicht ab; ohne Grundrecht dort wirkt sie nicht (grundrecht_dort)."""
     heute = _heute()
     ab = (heute - timedelta(days=MEINE_TAGE)).isoformat()
     rows = db.query("SELECT * FROM mat_folder_grant WHERE user_id = ? AND (valid_until IS NULL OR valid_until >= ?) "
@@ -553,13 +629,16 @@ def meine(user):
     ordner = _ordner_alle()
     qualifiziert = rechte.ist_pruefer(user)
     mit_namen = bool((user["name"] or "").strip())
+    grundlage = _grundlage(rows, {user["id"]} if is_admin(user) else set())
     out = []
     for r in _sortiert([dict(r, u_name=user["name"]) for r in rows], ordner):
         gueltig = rechte.gueltig(r["valid_until"])
         tage = (date.fromisoformat(r["valid_until"]) - heute).days if gueltig and r["valid_until"] else None
+        dort, _ = _am_grundrecht(r, grundlage[user["id"]], ordner)
+        pruefen_wirkt = r["permission"] != "pruefen" or (qualifiziert and (r["valid_until"] is not None or dort))
         out.append({"id": r["id"], "ordner": {"id": r["folder_id"], "pfad": _pfad(r["folder_id"], ordner)},
                     "recht": r["permission"], "bis": r["valid_until"], "gueltig": gueltig,
-                    "wirkt": gueltig and mit_namen and (r["permission"] != "pruefen" or qualifiziert),
+                    "wirkt": gueltig and mit_namen and pruefen_wirkt, "grundrecht_dort": dort,
                     "laeuft_ab_in_tagen": tage if tage is not None and tage <= ABLAUF_TAGE else None,
                     "verwalter": [v["name"] for v in rechte.verwalter_von(r["folder_id"]) if v["id"] != user["id"]][:3]})
     return {"freigaben": out, "alles": is_admin(user), "qualifiziert": qualifiziert, "zugang": rechte.zugang(user)}
@@ -567,17 +646,21 @@ def meine(user):
 
 def nutzer_suchen(q):
     """GET /nutzer?q= (Verwalter irgendwo, Verwaltung): aktive Konten mit Namen, deren Name q enthält (ab 3 Zeichen,
-    Groß/klein egal, auch bei Umlauten), höchstens 20 – nur Name, Gliederung (Freitext) und ob qualifiziert. Keine
-    E-Mail, keine Urkundennummer: nicht mehr, als die Wiki-Nutzerliste jedem Mitglied zeigt."""
+    Groß/klein egal, auch bei Umlauten), höchstens 20 – nur Name, Gliederung (Freitext), ob qualifiziert und ob das
+    Konto das Grundrecht überall hat (Plattform-Verwaltung – dann darf eine Prüffreigabe auch ohne lesen oder verwalten
+    dauerhaft sein, grundrecht_an). Keine E-Mail, keine Urkundennummer: kaum mehr, als die Wiki-Nutzerliste jedem
+    Mitglied zeigt."""
     q = text({"q": q}, "q", "Suche", n=80)
     if len(q) < SUCHE_MIN:
         raise Abgelehnt(SUCHE_KURZ)
     such = q.casefold()
-    treffer = [u for u in db.query("SELECT id, name, gliederung, mat_pruefer, urkundennummer FROM users WHERE active = 1 "
-                                   "AND status = 'active' AND trim(name) <> '' ORDER BY name COLLATE NOCASE, id")
+    treffer = [u for u in db.query("SELECT id, name, gliederung, mat_pruefer, urkundennummer, recht_verwaltung FROM users "
+                                   "WHERE active = 1 AND status = 'active' AND trim(name) <> '' "
+                                   "ORDER BY name COLLATE NOCASE, id")
                if such in u["name"].casefold()]
     return {"nutzer": [{"id": u["id"], "name": u["name"], "gliederung": u["gliederung"],
-                        "qualifiziert": rechte.ist_pruefer(u)} for u in treffer[:SUCHE_MAX]],
+                        "qualifiziert": rechte.ist_pruefer(u), "grundrecht_ueberall": is_admin(u)}
+                       for u in treffer[:SUCHE_MAX]],
             "mehr": len(treffer) > SUCHE_MAX}
 
 

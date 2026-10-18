@@ -32,8 +32,8 @@ def _rechte_lesen(d, basis):
     alle anderen Module auf Verwaltung: So steht in der Matrix, was gilt.
 
     Die Stufe im Modul Material wird übergangen: Rechte am Bestand gibt es seit Phase 2 nur über Freigaben je Ordner
-    (Bestand → Ordner → Freigaben). Die Spalte recht_material behält ihren Wert als Rückweg – außer wie bisher bei
-    Verwaltung, die alle Module auf Verwaltung zieht."""
+    (Bestand → Ordner → Bearbeiten → Freigaben). Die Spalte recht_material behält ihren Wert als Rückweg – außer wie
+    bisher bei Verwaltung, die alle Module auf Verwaltung zieht."""
     neu = dict(basis)
     angaben = d.get("rechte")
     if not isinstance(angaben, dict):
