@@ -19,7 +19,7 @@ Standardverfahren Grundlagen V1.9.
 """
 import os
 import sys
-from datetime import date, timedelta
+from datetime import timedelta
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
@@ -134,14 +134,14 @@ def main():
 
 def demo_bestand(produkt):
     """Die DEMO-Gliederung mit Lager, Fahrzeug und Seilrucksack und neun Artikeln – jeder Status kommt einmal vor."""
-    from app.material.services import bestand
+    from app.material.services import bestand, heute
     gl = bestand.ordner_anlegen({"name": GLIEDERUNG, "kind": "gliederung",
                                  "description": HINWEIS}, demo=True)
     lager = bestand.ordner_anlegen({"name": LAGER, "kind": "standort", "parent_id": gl}, demo=True)
     fahrzeug = bestand.ordner_anlegen({"name": "DEMO-Fahrzeug", "kind": "fahrzeug", "parent_id": gl,
                                        "interval_months": 6, "description": "Kürzeres Intervall als Beispiel"}, demo=True)
     rucksack = bestand.ordner_anlegen({"name": "DEMO-Seilrucksack", "kind": "set", "parent_id": fahrzeug}, demo=True)
-    h = date.today()
+    h = heute()                      # Kalendertag in Deutschland, wie überall im Modul
     artikel = [
         ("DEMO Gurt A", lager, {"manufactured_on": f"{h.year - 2}-03", "first_use_on": (h - timedelta(days=200)).isoformat()}),
         ("DEMO Gurt A", lager, {"manufactured_on": f"{h.year - 11}-05", "serial_no": "DEMO-ALT-1"}),          # Lebensdauer erreicht
@@ -176,13 +176,13 @@ def demo_nachbarstadt(produkt):
     """Phase 2: eine zweite Gliederung mit eigenem Lager und drei Artikeln – einer davon mit der Seriennummer
     DEMO-NS-4711, nach der die globale Suche aus der DEMO-Gliederung heraus fragen kann. Fehlt sie, kommt sie dazu,
     auch zu einem vorhandenen Demo-Bestand; sonst bleibt alles, wie es ist."""
-    from app.material.services import bestand
+    from app.material.services import bestand, heute
     if _demo_ordner(NACHBARSTADT):
         print(f"{NACHBARSTADT} ist schon da – nichts weiter angelegt.")
         return
     gl = bestand.ordner_anlegen({"name": NACHBARSTADT, "kind": "gliederung", "description": HINWEIS}, demo=True)
     lager = bestand.ordner_anlegen({"name": LAGER_NS, "kind": "standort", "parent_id": gl}, demo=True)
-    h = date.today()
+    h = heute()
     artikel = [
         ("DEMO Gurt A", {"manufactured_on": f"{h.year - 1}-04", "first_use_on": (h - timedelta(days=90)).isoformat()}),
         ("DEMO HMS-Karabiner", {"serial_no": "DEMO-NS-4711"}),
@@ -252,7 +252,7 @@ def demo_pruefungen():
     """DEMO-Eingangsprüfungen – einmal: Gibt es schon eine Prüfung an einem DEMO-Artikel, bleibt alles, wie es
     ist (ein Bestand aus Lieferung 1 bekommt sie beim nächsten Lauf nachgereicht)."""
     from app import db
-    from app.material.services import pruefung
+    from app.material.services import heute, pruefung
     if db.query("SELECT 1 FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id JOIN mat_product p ON "
                 "p.id = i.product_id WHERE p.demo = 1 LIMIT 1", one=True):
         print("DEMO-Prüfungen sind schon da – nichts weiter angelegt.")
@@ -261,7 +261,7 @@ def demo_pruefungen():
     offen = db.query("SELECT i.id, i.serial_no, i.retire_by, p.model FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
                      "WHERE p.demo = 1 AND i.lock_state = 'frei' AND NOT EXISTS (SELECT 1 FROM mat_inspection x WHERE "
                      "x.item_id = i.id) ORDER BY i.id")
-    h = date.today()
+    h = heute()
     angelegt = 0
     for modell, tage, ergebnis in DEMO_PRUEFUNGEN:
         kandidaten = [i for i in offen if i["model"] == modell and not (i["retire_by"] and i["retire_by"] <= h.isoformat())]
