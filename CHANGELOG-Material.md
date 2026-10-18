@@ -1911,7 +1911,8 @@ löschen und ihre Materialart nicht mehr ändern, ihre Kategorien nicht mehr lö
 
 - **`scripts/material_beispielbestand.py --beispielbestand [--artikel N]`** – nur für dev, eine Datei außerhalb von
   `app/` (nicht im Abbild; im Container per stdin, README „Beispielbestand (nur dev)“), ohne Schalter Hilfe und
-  Rückgabewert 2, mit `BASE_URL` der Produktion (`strömis.de`) Abbruch, einmalig. Drei Gliederungen „DEMO-OG
+  Rückgabewert 2, mit `BASE_URL` der Produktion (`strömis.de`) Abbruch, einmalig (ein abgebrochener Lauf heißt
+  beim nächsten „unvollständig“, Rückgabewert 1). Drei Gliederungen „DEMO-OG
   Auental“, „… Bachheim“, „… Flussstadt“ (Lager mit Regalen, GW-Wasserrettung mit zwei Seilrucksäcken, MTW, zwei
   Strömungsrettungsgruppen, persönliche Ordner), Vorgabe 200 Artikel über alle echten Produkte, je Artikel bis zu vier
   zurückdatierte Prüfungen über das aktive Formular des Katalogs im Abstand seines Intervalls und innerhalb seiner
@@ -1919,8 +1920,8 @@ löschen und ihre Materialart nicht mehr ändern, ihre Kategorien nicht mehr lö
   zwei Prüfungen auf, als außerplanmäßige Prüfung wie der Vorschlag der App) und Freiprüfung, Verlust, Aussonderung
   aus der Prüfung und durch den Materialwart. Je Gliederung sechs DEMO-Konten (`@example.invalid`, zufälliges
   Passwort nur in der Ausgabe, nur Modul Material, `recht_material` = 1): Materialwart (verwalten), Prüferin (lesen
-  und prüfen), Mitglied (lesen), externer Prüfer (nur prüfen im Lager, 30 Tage – er prüft nur heute, die
-  zurückdatierte Geschichte prüft die Prüferin), zwei Einsatzkräfte mit persönlichem Ordner und Zuordnungen (die erste
+  und prüfen, beides dauerhaft), Mitglied (lesen), externer Prüfer (nur prüfen im Lager, 30 Tage – er prüft nur
+  heute, die zurückdatierte Geschichte prüft die Prüferin), zwei Einsatzkräfte mit persönlichem Ordner und Zuordnungen (die erste
   liest ihren Ordner, die zweite hat wie die meisten PSA-Nutzer keinen Modulzugang und sieht „nicht freigeschaltet“; der
   Bericht sagt es an beiden Konten); ein heute abgeschlossener Durchgang mit Sammelprotokoll und ein offener (teils
   erledigt, einer in Prüfung, einer ausgenommen). Alle Zustände kommen vor. Keine Rückrufe, keine Meldungen. Alles über

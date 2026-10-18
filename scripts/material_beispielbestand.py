@@ -34,7 +34,10 @@ Was danach gilt (deshalb vorher den Katalog exportieren – README):
     später: Katalog exportieren, dev-Datenbank zurücksetzen, Export importieren.
   - Der Bestand lässt sich nicht wieder entfernen: Prüfnachweise werden nie gelöscht, Artikel mit Prüfungen auch nicht.
     Zurück geht es nur über das Zurücksetzen der dev-Datenbank.
-  - Einmalig: Gibt es eine der Gliederungen schon, legt ein weiterer Lauf nichts an.
+  - Einmalig: Gibt es eine der Gliederungen schon, legt ein weiterer Lauf nichts an. Erst am Ende steht der Merker
+    „beispielbestand“ in mat_meta. Bricht ein Lauf vorher ab (Strg-C, abgerissene Verbindung), bleibt ein Teilbestand
+    – Artikel ohne Durchgänge und Zuordnungen –, den kein Lauf vervollständigt: Ein weiterer meldet ihn als
+    unvollständig (Rückgabewert 1). Neu geht es dann nur mit einer zurückgesetzten dev-Datenbank und dem Katalog-Export.
 
 Alles läuft über die Dienste der App (bestand, pruefung, durchgang, zuordnung, unterschrift, freigaben) und in
 Transaktionen – je Artikel eine samt seiner ganzen Prüfhistorie; scheitert ein Artikel, fehlt er ganz und steht im
@@ -68,6 +71,7 @@ VORGABE_ARTIKEL = 200
 HOECHSTENS_ARTIKEL = 5000
 SAAT = 20261018                      # gleicher Katalog, gleiche Verteilung – nachvollziehbar
 POSTFACH = "example.invalid"
+MERKER = "beispielbestand"           # Schlüssel in mat_meta – erst am Ende eines vollständigen Laufs gesetzt
 # Die Adresse der Produktion (BASE_URL) – dort legt das Skript nichts an, auch wenn es jemand in deren Container reicht.
 PRODUKTION = {"strömis.de", "www.strömis.de", "xn--strmis-yxa.de", "www.xn--strmis-yxa.de"}
 
@@ -145,6 +149,13 @@ def produktion(adresse):
     return host in PRODUKTION
 
 
+def _unterbrochen(signum, _frame):
+    """SIGHUP (abgerissene Verbindung) und SIGTERM wie Strg-C: Der Artikel in Arbeit rollt samt seinen neuen
+    Protokolldateien zurück (protokoll.dateien_sichern), und der Hinweis unten erscheint – soweit es die Ausgabe noch
+    gibt."""
+    raise KeyboardInterrupt(f"Signal {signum}")
+
+
 def main(argv=None):
     try:
         n = schalter(sys.argv[1:] if argv is None else argv)
@@ -152,22 +163,35 @@ def main(argv=None):
         print(__doc__)
         print(exc)
         sys.exit(exc.code)
+    import signal
+
     from flask import g
 
     from app import create_app
 
     app = create_app()
-    with app.app_context():
-        g.mat_akteur = AKTEUR
-        try:
-            Beispielbestand(app, n).anlegen()
-        except Abbruch as exc:
-            print(exc)
-            sys.exit(exc.code)
-        except Exception:
-            print("Abgebrochen mit einem Fehler (unten). Was bis dahin fertig war, bleibt – jeder Artikel ganz oder gar "
-                  "nicht; ein neuer Lauf legt nichts mehr an, solange es die Gliederungen gibt.", flush=True)
-            raise
+    vorher = {sig: signal.signal(sig, _unterbrochen) for sig in (signal.SIGHUP, signal.SIGTERM)}
+    try:
+        with app.app_context():
+            g.mat_akteur = AKTEUR
+            try:
+                Beispielbestand(app, n).anlegen()
+            except Abbruch as exc:
+                print(exc)
+                sys.exit(exc.code)
+            except (Exception, KeyboardInterrupt) as exc:
+                try:
+                    print(("Unterbrochen" if isinstance(exc, KeyboardInterrupt) else "Abgebrochen mit einem Fehler "
+                           "(unten)") + ". Was bis dahin fertig war, bleibt – jeder Artikel ganz oder gar nicht. Der "
+                          "Beispielbestand ist damit unvollständig, und kein weiterer Lauf ergänzt ihn: Neu geht es nur "
+                          "mit einer zurückgesetzten dev-Datenbank und dem Katalog-Export (README, „Beispielbestand (nur "
+                          "dev)“).", flush=True)
+                except OSError:                                     # die Ausgabe gibt es nicht mehr
+                    pass
+                raise
+    finally:
+        for sig, alt in vorher.items():
+            signal.signal(sig, alt)
 
 
 # --- Bilder: DEMO-Unterschrift und DEMO-Mangelfoto -----------------------------------------------------------------------
@@ -230,6 +254,12 @@ class Beispielbestand:
     def namen():
         return [f"DEMO-OG {ort}" for _, ort, _ in GLIEDERUNGEN]
 
+    @staticmethod
+    def fertig():
+        """Hat ein Lauf den Beispielbestand vollständig angelegt (Merker in mat_meta)?"""
+        from app import db
+        return bool(db.query("SELECT 1 FROM mat_meta WHERE schluessel = ?", (MERKER,), one=True))
+
     def schon_da(self):
         from app import db
         return [r["name"] for r in db.query(
@@ -272,6 +302,10 @@ class Beispielbestand:
             raise Abbruch("Abgebrochen: Das ist die Adresse der Produktion – der Beispielbestand gehört nur auf dev. "
                           "Nichts angelegt.")
         da = self.schon_da()
+        if da and not self.fertig():
+            raise Abbruch(f"Abgebrochen: Der Beispielbestand ist unvollständig ({', '.join(da)}) – ein früherer Lauf "
+                          "wurde abgebrochen. Ergänzen lässt er sich nicht; neu geht es nur mit einer zurückgesetzten "
+                          "dev-Datenbank und dem Katalog-Export (README, „Beispielbestand (nur dev)“). Nichts angelegt.")
         if da:
             print(f"Beispielbestand ist schon da ({', '.join(da)}) – nichts angelegt. Er lässt sich nicht entfernen; "
                   "neu anlegen geht nur mit einer zurückgesetzten dev-Datenbank.")
@@ -300,6 +334,8 @@ class Beispielbestand:
         for gl in self.gl:
             self.durchgaenge(gl, plaene)
         self.zuordnen(plaene)
+        db.execute("INSERT INTO mat_meta (schluessel, wert) VALUES (?, ?) ON CONFLICT(schluessel) DO UPDATE SET "
+                   "wert = excluded.wert", (MERKER, f"fertig {self.h.isoformat()}"))
         self.bericht(plaene, produkte, ausgelassen, start)
 
     @staticmethod
@@ -376,16 +412,18 @@ class Beispielbestand:
         return {"id": uid, "mail": k["mail"], "name": k["name"]}
 
     def freigaben(self, gl):
-        """Materialwart: verwalten an der Gliederung (dauerhaft); Prüferin: lesen und prüfen (Prüffreigabe bis 31.12. des
-        Folgejahres); Mitglied: lesen; externer Prüfer: nur prüfen im Lager, 30 Tage (zeigt „läuft bald ab“); die
-        Einsatzkräfte aus SICHT_PERSON: lesen an ihrem persönlichen Ordner (dauerhaft), die übrigen nichts. Über den
-        Schreibweg des Freigaben-Dienstes mit den Rechten der Material-Verwaltung – Prüffreigaben nur an qualifizierte
-        Konten, höchstens 24 Monate; im Journal unter „Beispielbestand“, die Konten nur als Kontoverweis."""
+        """Materialwart: verwalten an der Gliederung (dauerhaft); Prüferin: lesen und prüfen, beides dauerhaft – befristet
+        ist eine Prüffreigabe nur für Externe (wie die Vorlage „Prüfer“ und scripts/material_demo.py); Mitglied: lesen;
+        externer Prüfer: nur prüfen im Lager, 30 Tage (zeigt „läuft bald ab“); die Einsatzkräfte aus SICHT_PERSON: lesen
+        an ihrem persönlichen Ordner (dauerhaft), die übrigen nichts. Über den Schreibweg des Freigaben-Dienstes mit den
+        Rechten der Material-Verwaltung – Prüffreigaben nur an qualifizierte Konten, dauerhaft nur mit Grundrecht (das
+        lesen der Prüferin steht in der Reihenfolge davor), befristet höchstens 24 Monate; im Journal unter
+        „Beispielbestand“, die Konten nur als Kontoverweis."""
         from app.material.services import freigaben, rechte
         plattform = rechte.Sicht(uid=None, alles=True, qualifiziert=False)
         extern_bis = (self.h + timedelta(days=30)).isoformat()
         for rolle, ordner, recht, ende in (("wart", gl["id"], "verwalten", None), ("pruefer", gl["id"], "lesen", None),
-                                           ("pruefer", gl["id"], "pruefen", freigaben.vorgabe_bis()),
+                                           ("pruefer", gl["id"], "pruefen", None),
                                            ("mitglied", gl["id"], "lesen", None),
                                            ("extern", gl["ordner"]["lager"], "pruefen", extern_bis),
                                            *((f"person{n}", gl["ordner"][f"person{n}"], "lesen", None)

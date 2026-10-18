@@ -6,7 +6,9 @@ dazu ein Produktbild, ein Dokument und ein DEMO-Teil). Der Generator läuft mit 
 für Zeile und Datei für Datei gleich – auch sein Export im Format 2 –, jeder Zustand kommt vor, jede abgeschlossene
 Prüfung ist festgeschrieben und hat ihr Protokoll, und die DEMO-Kennzeichnung greift an Artikel, Liste, Protokoll,
 Sammelprotokoll, Lebenslauf, CSV und Steckbrief – auch für echte Produkte, weil ihre Heimat ein DEMO-Ordner ist
-(bestand.demo_sql). Ein zweiter Lauf legt nichts an, ohne Schalter endet das Skript mit 2, ohne echte Produkte mit 1.
+(bestand.demo_sql). Ein zweiter Lauf legt nichts an, ohne Schalter endet das Skript mit 2, ohne echte Produkte mit 1;
+ein abgebrochener Lauf (Strg-C oder SIGHUP) hinterlässt einen Teilbestand, den der nächste Lauf als unvollständig meldet
+(Rückgabewert 1) statt „schon da“. Die Prüferin prüft dauerhaft, nur der externe Prüfer befristet.
 Alle Namen und Nummern hier sind erfunden und nur für den Test da."""
 import contextlib
 import hashlib
@@ -35,13 +37,16 @@ GLIEDERUNGEN = ("DEMO-OG Auental", "DEMO-OG Bachheim", "DEMO-OG Flussstadt")
 ARTIKEL = 36
 
 
-def laufen(*schalter, adresse="https://dev.strömis.de"):
+def laufen(*schalter, adresse="https://dev.strömis.de", anpassen=None):
     """Das Skript wie von der Kommandozeile – (Ausgabe, Rückgabewert). adresse: BASE_URL für den Lauf (make_app setzt die
-    der Produktion, dort legt das Skript nichts an)."""
+    der Produktion, dort legt das Skript nichts an). anpassen(modul) darf das frisch geladene Skript vorher ändern; ein
+    Lauf, der mit KeyboardInterrupt endet, liefert den Rückgabewert „unterbrochen“."""
     spec = importlib.util.spec_from_file_location("material_beispielbestand_test",
                                                   os.path.join(REPO, "scripts", "material_beispielbestand.py"))
     modul = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(modul)
+    if anpassen:
+        anpassen(modul)
     puffer, code, alt = io.StringIO(), 0, os.environ.get("BASE_URL")
     os.environ["BASE_URL"] = adresse
     try:
@@ -49,6 +54,8 @@ def laufen(*schalter, adresse="https://dev.strömis.de"):
             modul.main(list(schalter))
     except SystemExit as exc:
         code = exc.code
+    except KeyboardInterrupt:
+        code = "unterbrochen"
     finally:
         if alt is None:
             os.environ.pop("BASE_URL", None)
@@ -412,6 +419,20 @@ def test_beispielbestand():
         direkt = adm.get(f"/api/material/ordner/{au['id']}/freigaben").json["direkt"]
         assert {x["recht"] for x in direkt} == {"verwalten", "lesen", "pruefen"}, direkt
         assert {x["vergeben_von"] for x in direkt} == {"Beispielbestand"}, direkt
+        # Befristet ist eine Prüffreigabe nur für Externe: die Prüferin dauerhaft (mit lesen dort), der externe Prüfer
+        # 30 Tage im Lager.
+        pruef = [x for x in direkt if x["recht"] == "pruefen"]
+        assert [(x["konto"]["name"], x["bis"], x["grundrecht_dort"], x["wirkt"]) for x in pruef] == [
+            ("DEMO-Prüferin Auental", None, True, True)], pruef
+        with app.app_context():
+            from app import db
+            lager = db.query("SELECT id FROM mat_folder WHERE name = 'DEMO-Lager' AND parent_id = ?", (au["id"],),
+                             one=True)["id"]
+        extern = [x for x in adm.get(f"/api/material/ordner/{lager}/freigaben").json["direkt"]
+                  if x["recht"] == "pruefen"]
+        assert [(x["konto"]["name"], x["laeuft_ab_in_tagen"]) for x in extern] == [("DEMO-Prüfer extern Auental", 30)], \
+            extern
+        assert extern[0]["bis"] is not None and extern[0]["wirkt"], extern
         # Einsatzkraft 1 liest ihren persönlichen Ordner (mit zugeordneter Ausrüstung), sonst nichts; Einsatzkraft 2 hat
         # keinen Modulzugang und liest „nicht freigeschaltet“. Der Bericht sagt das an beiden Konten.
         with app.app_context():
@@ -441,8 +462,57 @@ def test_beispielbestand():
     print(f"Beispielbestand bestanden ({ARTIKEL} Artikel in {dauer:.0f} s).")
 
 
+def test_abgebrochener_lauf():
+    """Abbruch mitten im Lauf (abgerissene Verbindung, SIGHUP – wie beim SSH-Abbruch während docker exec): Der Artikel in
+    Arbeit rollt samt Protokolldateien zurück, die fertigen bleiben, der Hinweis erscheint, der Merker fehlt. Der nächste
+    Lauf meldet „unvollständig“ mit Rückgabewert 1 und legt nichts an – vorher sagte er „schon da“ mit 0."""
+    import signal
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        platzhalterkatalog(k)
+
+        stand = {}
+
+        def abreissen(modul):
+            anlegen, pruefen = modul.Beispielbestand.artikel_anlegen, modul.Beispielbestand.pruefen
+
+            def artikel_anlegen(self, plan):
+                stand["nr"] = plan["nr"]
+                return anlegen(self, plan)
+
+            def pruefen_dann_abreissen(self, *a, **kw):
+                ergebnis = pruefen(self, *a, **kw)      # ab dem dritten Artikel: Protokoll geschrieben, Transaktion
+                if stand["nr"] >= 3:                    # noch offen – jetzt reißt die Verbindung ab
+                    os.kill(os.getpid(), signal.SIGHUP)
+                return ergebnis
+            modul.Beispielbestand.artikel_anlegen = artikel_anlegen
+            modul.Beispielbestand.pruefen = pruefen_dann_abreissen
+
+        alt = signal.getsignal(signal.SIGHUP)
+        aus, code = laufen("--beispielbestand", "--artikel", "6", anpassen=abreissen)
+        assert code == "unterbrochen", (code, aus[-2000:])
+        assert "Unterbrochen." in aus and "unvollständig" in aus and "zurückgesetzten dev-Datenbank" in aus, aus[-2000:]
+        assert signal.getsignal(signal.SIGHUP) is alt                    # das Skript stellt die Signale zurück
+        with app.app_context():
+            from app import db
+            assert not db.query("SELECT 1 FROM mat_meta WHERE schluessel = 'beispielbestand'")
+            artikel = db.query("SELECT COUNT(*) AS n FROM mat_item WHERE serial_no LIKE 'DEMO-%'", one=True)["n"]
+            assert stand["nr"] >= 3 and artikel == stand["nr"] - 1, (stand, artikel)
+            assert not db.query("SELECT 1 FROM mat_round")
+            pfade = {r["pdf_path"] for r in db.query("SELECT pdf_path FROM mat_inspection WHERE pdf_path IS NOT NULL")}
+        dateien = {os.path.relpath(os.path.join(w, f), tmp) for w, _, fs in os.walk(os.path.join(tmp, "pdf"))
+                   for f in fs}
+        assert dateien == pfade, dateien ^ pfade                         # keine verwaiste Protokolldatei
+        vorher = bestand_stand(app)
+        zweit, code = laufen("--beispielbestand")
+        assert code == 1 and "unvollständig" in zweit and "schon da" not in zweit, (code, zweit)
+        assert bestand_stand(app) == vorher
+    print("Abgebrochener Lauf bestanden.")
+
+
 if __name__ == "__main__":
     test_ohne_schalter()
     test_ohne_echte_produkte()
     test_demo_grenze_beim_verschieben()
     test_beispielbestand()
+    test_abgebrochener_lauf()

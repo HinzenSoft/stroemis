@@ -201,6 +201,22 @@ noch, dann nur über ihre `.env`; `docker-compose.yml` und das Dockerfile sind f
 
 `GET /healthz` antwortet ohne Anmeldung mit `{"ok": true}` – darauf setzt der `HEALTHCHECK` des Containers auf (alle 30 s, `docker ps` zeigt den Zustand). Die Daten liegen im Volume unter `/data`: `stroemis.db` (SQLite mit WAL), `media/` (Originale, Web-Größen, Thumbnails, Wiki-Anhänge, Profilbilder), `pdf/` (festgeschriebene Protokolle des Moduls Material) und `secret_key`. Für eine Sicherung genügt es, dieses Volume zu kopieren – am besten bei gestopptem Container.
 
+### DEMO-Daten und DEMO-Konten (nur dev)
+
+`scripts/material_demo.py --demo --konten` legt den kleinen DEMO-Katalog mit DEMO-Bestand in zwei Gliederungen an und
+fünf DEMO-Konten (zwei Materialwarte, Prüfer, externer Prüfer, DEMO-Material-Verwaltung). Der Lauf ist wiederholbar:
+Vorhandenes bleibt, Fehlendes kommt dazu. So bringt er eine ältere dev-Datenbank auf den Stand – etwa die
+Prüffreigabe des DEMO-Prüfers auf dauerhaft und das Konto `demo-mv@example.invalid`. Die Passwörter neuer Konten
+stehen nur in der Ausgabe. Auf dem VPS im Klon der Entwicklung, wie beim Beispielbestand per stdin (das Abbild enthält
+`scripts/` nicht):
+
+```bash
+docker exec -i stroemis-dev sh -c 'cat > /tmp/material_demo.py && VIDEOPFLEGE=0 PYTHONPATH=/srv python /tmp/material_demo.py --demo --konten' < scripts/material_demo.py
+```
+
+**Nach dem Deploy von Phase 2 · Lieferung 1 einmal ausführen** (CHANGELOG-Material.md). **Nie in der Produktion**
+(Container `stroemis`) – dieses Skript prüft die Adresse nicht.
+
 ### Beispielbestand (nur dev)
 
 `scripts/material_beispielbestand.py` legt aus dem **vorhandenen Katalog** einen größeren Bestand zum Ausprobieren an:
@@ -208,7 +224,8 @@ drei Gliederungen „DEMO-OG Auental“, „DEMO-OG Bachheim“ und „DEMO-OG F
 und persönlichen Ordnern, 200 Artikel über alle echten Produkte (Seriennummern `DEMO-AU-0001` …), eine Prüfhistorie
 über die aktiven Prüfformulare (zurückdatiert und festgeschrieben, jede Prüfung mit Protokoll), je Gliederung sechs
 DEMO-Konten (Materialwart, Prüferin, Mitglied, externer Prüfer, zwei Einsatzkräfte – nur Modul Material, Passwörter
-stehen nur in der Ausgabe), einen abgeschlossenen und einen offenen Prüfdurchgang und Zuordnungen. Den Einsatzkräften
+stehen nur in der Ausgabe; die Prüferin prüft dauerhaft, der externe Prüfer 30 Tage – befristet sind Prüffreigaben nur
+für Externe), einen abgeschlossenen und einen offenen Prüfdurchgang und Zuordnungen. Den Einsatzkräften
 ist Ausrüstung zugeordnet: Die erste liest ihren persönlichen Ordner, die zweite hat – wie die meisten, denen PSA
 zugeordnet ist – keinen Modulzugang und sieht nach der Anmeldung „nicht freigeschaltet“. Jeder Zustand kommt vor: neu,
 einsatzbereit, bald fällig, überfällig, gesperrt, verloren gemeldet, ausgesondert und – wo der Katalog eine Lebensdauer
@@ -243,6 +260,11 @@ Konten mit Passwörtern, Mengen, Zustände, Produkte ohne aktives Formular (dere
 benutzten Formularversionen und wie viele Produkte jetzt Artikel haben (nicht mehr löschbar, Materialart fest). Er
 läuft nur einmal – gibt es die Gliederungen schon, legt er nichts an. **Nie in der Produktion** (Container `stroemis`)
 – dort gehört kein DEMO-Bestand hin; zeigt `BASE_URL` auf `strömis.de`, bricht das Skript ohnehin ab.
+
+**Den Befehl in `tmux` oder `screen` starten.** Reißt die Verbindung mitten im Lauf ab (oder Strg-C), bleibt ein
+Teilbestand – Artikel ohne Durchgänge und Zuordnungen –, und kein weiterer Lauf vervollständigt ihn: Er meldet
+„unvollständig“ mit Rückgabewert 1 und legt nichts an. Neu geht es dann nur mit einer zurückgesetzten dev-Datenbank und
+anschließendem Import des Katalog-Exports.
 
 ## Konfiguration
 
