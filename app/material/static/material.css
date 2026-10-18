@@ -216,12 +216,34 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
   max-height: min(60vh, 480px); overflow-y: auto; overscroll-behavior: contain; }
 .mat-treffer-zeile { flex: 0 0 auto; }
 .mat-treffer:empty { display: none; }
+/* Eine Zeile als Knopf (Personensuche bei „Zuordnen“). */
 .mat-treffer-zeile { display: flex; align-items: center; gap: 6px; text-align: left; background: var(--weiss); border: 0;
   border-bottom: 1px solid var(--linie); padding: 8px 10px; font: inherit; cursor: pointer; }
 .mat-treffer-zeile:hover, .mat-treffer-zeile:focus { background: var(--grau-hell); }
+/* Ein Produkt (produktTreffer) hat zwei Flächen: links das Foto (öffnet es groß), durch einen Strich getrennt der Knopf
+   mit dem Namen, der das Produkt wählt. Beide färben sich einzeln, wenn der Zeiger darüber steht – so ist klar, was ein
+   Klick tut. Am Telefon rücken Artikelnummer und DEMO unter den Namen, statt ihn in eine schmale Spalte zu drücken. */
+.mat-treffer-produkt { flex: 0 0 auto; display: flex; align-items: stretch; background: var(--weiss); border-bottom: 1px solid var(--linie); }
+.mat-treffer-produkt > .mat-bildlink { flex: none; display: flex; align-items: center; padding: 8px 12px 8px 10px;
+  border-right: 1px solid var(--linie); cursor: zoom-in; }
+.mat-treffer-wahl { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; align-content: center;
+  gap: 2px 6px; text-align: left; background: none; border: 0; padding: 8px 10px; font: inherit; color: inherit; cursor: pointer; }
+.mat-treffer-produkt > .mat-bildlink:hover, .mat-treffer-wahl:hover, .mat-treffer-wahl:focus { background: var(--grau-hell); }
+/* Der Fokusrahmen nach innen: Die Liste rollt (overflow) und schnitte ihn links und rechts ab. */
+.mat-treffer :is(.mat-treffer-wahl, .mat-bildlink):focus-visible { outline-offset: -3px; box-shadow: none; }
 .mat-treffer .help { padding: 6px 10px; margin: 0; }
 .mat-gewaehlt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px; margin-top: 6px;
   border: 1px solid var(--linie); border-left: 4px solid var(--ok); }
+/* Produktfoto der Produktwahl (material.js, produktFoto): antippbar wie jedes Foto im Modul (Großansicht, Zeiger mit
+   Lupe). Die kleine Lupe unten rechts sagt es auch am Telefon. Am gewählten Produkt ist die Trefferfläche mit dem
+   Polster 46 px groß, in den Treffern die ganze linke Fläche der Zeile (mindestens 63 × 56 px). */
+.mat-produktfoto { position: relative; display: block; line-height: 0; }
+.mat-produktfoto .mat-mini { margin-right: 0; }
+.mat-lupe-marke { position: absolute; right: -5px; bottom: -5px; width: 18px; height: 18px; display: flex; align-items: center;
+  justify-content: center; border-radius: 50%; background: var(--weiss); color: var(--anthrazit); border: 1px solid var(--linie);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .2); pointer-events: none; }
+.mat-lupe-marke svg { display: block; }
+.mat-gewaehlt > .mat-bildlink { flex: none; display: block; padding: 3px; margin-right: 6px; cursor: zoom-in; }
 .mat-knoepfe { margin-top: 18px; }
 
 /* Katalog */
@@ -542,9 +564,13 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
    (.md-lightbox-close in app.css). Die Großansicht selbst: Abschnitt „Geräte: pruefform“. */
 .mat-lb-pfeil.zurueck { left: calc(10px + var(--sicher-links)); }
 .mat-lb-pfeil.weiter { right: calc(10px + var(--sicher-rechts)); }
+/* Am Telefon (bis 640 px) stehen die Pfeile unten, seitlich braucht das Foto keinen Platz für sie: Es nutzt die ganze
+   Breite bis auf den Rand des Dialogs – vorher blieben bei 390 px links und rechts je 60 px leer. Dass es dann nicht
+   unter ✕ rutscht, regelt der Abschnitt „Geräte: pruefform“. */
 @media (max-width: 640px) {
   .mat-lb-pfeil { top: auto; bottom: calc(14px + var(--sicher-unten)); transform: none; width: 56px; height: 48px; font-size: 2rem; }
   .mat-lightbox figcaption { max-width: calc(100vw - 150px); }
+  .mat-lightbox img { max-width: calc(100vw - 48px - var(--sicher-links) - var(--sicher-rechts)); }
 }
 
 /* Lieferung 4 – ueberblick */
@@ -890,7 +916,16 @@ dialog.mat-lightbox::backdrop { background: transparent; }
   html.mat-lb-offen { overflow: hidden; }
   .mat-lightbox .mat-lb-original { display: inline-block; padding: 13px 10px; margin: -13px -10px; }
 }
-@media (max-width: 640px) { .mat-lightbox img { max-height: calc(100dvh - 150px); } }
+/* Am Telefon reicht das Foto in der Breite bis unter ✕ (Abschnitt „Fotos groß zeigen“): Der Dialog hält oben dessen
+   Streifen frei, Kerbe und Wischleiste kommen dazu. Wird es eng – ein hohes Foto mit langer, mehrzeiliger Unterschrift,
+   etwa am iPhone SE –, wird das Foto kleiner (mit seinem Seitenverhältnis), statt nach oben unter ✕ zu wachsen oder
+   „Original“ unten aus dem Bild zu schieben. */
+@media (max-width: 640px) {
+  dialog.mat-lightbox, html.tastatur dialog.mat-lightbox[open] { padding-top: calc(60px + var(--sicher-oben));
+    padding-bottom: calc(24px + var(--sicher-unten)); }
+  .mat-lightbox figure { max-height: 100%; }
+  .mat-lightbox img { max-height: calc(100dvh - 150px - var(--sicher-oben) - var(--sicher-unten)); min-height: 0; }
+}
 /* Quer wenig Höhe: Das Foto bekommt fast die ganze Höhe, die Pfeile bleiben seitlich (dort ist Platz). */
 @media (max-height: 500px) and (min-width: 641px) {
   dialog.mat-lightbox { padding: 8px 12px; }
