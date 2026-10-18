@@ -1147,11 +1147,12 @@ sind angeglichen.
 - **Fremde Dubletten**: Gibt es die Seriennummer beim selben Produkt schon in einem Bereich, den man nicht sieht,
   lehnen Anlegen und Ändern ab (409) – ohne Inventarnummer und ohne Gliederung, mit Verweis auf die globale Suche.
   Eine sichtbare Dublette nennt wie bisher die Inventarnummer.
-- **Bremse und Protokoll**: Globale Suche, QR-Steckbrief und fremde Dublette zusammen höchstens zehnmal je Konto in 15
-  Minuten (danach 429). Jede steht mit Konto, Name, Art, Anfrage und Treffern in `mat_global_search` – zwölf Monate
-  lang, dann fällt sie heraus (aufgeräumt beim Schreiben, beim Start und beim Lesen). Die Plattform-Verwaltung liest
-  das Protokoll in der Nutzerverwaltung unter „Globale Suchen (Modul Material)“ – die Material-Verwaltung nicht, es ist
-  eine Aufzeichnung über Personen.
+- **Protokoll**: Globale Suche, QR-Steckbrief und fremde Dublette stehen jedes Mal mit Konto, Name, Art, Anfrage und
+  Treffern in `mat_global_search` – zwölf Monate lang, dann fällt eine Zeile heraus (aufgeräumt beim Schreiben, beim
+  Start und beim Lesen). Die Plattform-Verwaltung liest das Protokoll in der Nutzerverwaltung unter „Globale Suchen
+  (Modul Material)“ – die Material-Verwaltung nicht, es ist eine Aufzeichnung über Personen. Ausgeliefert mit einer
+  Bremse (zusammen höchstens zehnmal je Konto in 15 Minuten, danach 429); sie ist am 18.10.2026 auf Wunsch entfernt
+  (siehe „Nachbesserungen nach der Auslieferung“) – die Kontrolle ist das Protokoll.
 - **Personenzuordnung** (`services/zuordnung.py`): Wer einen Artikel verwaltet, ordnet ihn einer Person zu, ändert
   oder löst die Zuordnung – an jedes aktive Konto mit Namen; die Person braucht keinen Modulzugang (die Personensuche
   dafür fragt mit `zweck=zuordnung` und findet auch Konten ohne Stufe). In der
@@ -1343,14 +1344,14 @@ sich:
 - `POST /globalsuche` findet nur Artikel, die das Konto nicht sieht; ein Treffer im eigenen Bereich ist kein 409 mehr.
   409 bekommt nur die Material-Verwaltung („Du siehst den Bestand aller Gliederungen – die normale Suche findet jeden
   Artikel.“). Jeder Steckbrief (Suche und QR) trägt `sperre`: „gesperrt“, „verloren gemeldet“, „ausgesondert“ oder
-  `null`.
+  `null`. Seit dem 18.10.2026 ungebremst: `POST /globalsuche` und `POST /globalsuche/qr` antworten nie 429.
 - `DELETE /kategorien/<id>`: 409, wenn ein Dokument der Kategorie in einem Prüfprotokoll steht.
 - Rückruf anlegen und beenden (nur die Material-Verwaltung): `betroffen`, `offen`, `nicht_gefunden`, `empfaenger`; ein
   Konto mit Teilsicht bekäme `betroffen`, `offen` und `benachrichtigt` seines Bereichs (kommt seit der Modulstufe nicht
   mehr vor).
-- Ziel beim Verschieben nicht sichtbar: 404 statt 403. Fremde Dublette: 409 mit festem Text, 429 über der Bremse. 403
-  ohne Modulzugang nennt, was fehlt. Listeneinträge der Freigaben tragen `wirkt_nicht` (Grund oder `null`) und am
-  Konto `zugang`; die Personensuche nimmt `zweck` (`freigabe` | `zuordnung`).
+- Ziel beim Verschieben nicht sichtbar: 404 statt 403. Fremde Dublette: 409 mit festem Text (seit dem 18.10.2026
+  ohne Bremse, nie 429). 403 ohne Modulzugang nennt, was fehlt. Listeneinträge der Freigaben tragen `wirkt_nicht`
+  (Grund oder `null`) und am Konto `zugang`; die Personensuche nimmt `zweck` (`freigabe` | `zuordnung`).
 
 ### Im Browser geprüft
 
@@ -1715,6 +1716,36 @@ entschieden bzw. nicht widersprochen):
     Importbericht, Fehlerorte, Formularziel, Meldung „kein Prüfintervall mehr“ und der Journaleintrag „als Variante
     angelegt“ nannten Produkte ohne Zusatz, sodass zwei Varianten gleich lauteten (jetzt über `katalog.produktname`;
     Tests `test_bericht_und_journal_mit_zusatz` und `test_demo_ohne_beschreibung`, vorher rot).
+- **Bremse der globalen Suche entfernt** (Wunsch, wörtlich: „Entferne die Bremse komplett“ – auf den Hinweis, dass seit
+  dem immer angebotenen Angebot auch Suchen nach eigenen Nummern gegen die Grenze von zehn Suchen je 15 Minuten
+  zählen): Globale Suche, QR-Steckbrief und fremde Dublette beim Anlegen zählen nicht mehr – kein 429, keine Meldung
+  „Zu viele Suchen außerhalb deines Bereichs …“. Die Kontrolle ist das Protokoll mit Namen. Es bleibt alles andere:
+  die ausdrückliche Bestätigung (`bestaetigt: true`, Rückfrage „Außerhalb deines Bereichs suchen“), jede Suche, jeder
+  Steckbrief und jede fremde Dublette im Protokoll (`mat_global_search`, zwölf Monate, „Globale Suchen (Modul
+  Material)“ in der Nutzerverwaltung), die Eingaberegeln (4 bis 80 Zeichen, keine Inventar- und STR-Nummern), nur
+  fremde Treffer und höchstens zehn Treffer je Suche mit „mehr“.
+  - **Code**: `globalprotokoll.bremse`, `GRENZE`, `ZU_VIELE` und der Bereich `mat-global:<Konto>` in `login_attempts`
+    sind fort, ebenso die Aufrufe in `globalsuche.suchen`, `globalsuche.steckbrief_qr` und `routes._fremde_dublette`;
+    die beiden Dienste brauchen das Konto nicht mehr. Kopf- und Hilfetexte (`globalprotokoll.py`, `globalsuche.py`,
+    `routes_global.py`, `global.js`, `suche.js`, `material.js`, README) nennen keine Bremse mehr. Unberührt bleiben die
+    Anmeldebremse (`login_attempts` für Anmeldung, „Passwort vergessen“ und Kontoanfrage) und die Bremse der
+    öffentlichen Prüfseite.
+  - **Alte Zeilen `mat-global:…`**: kein eigener Aufräumschritt und kein Schemaschritt. Jede Prüfung der
+    Anmeldebremse (`auth.attempts_exceeded` – bei jeder Anmeldung, „Passwort vergessen“, Kontoanfrage und Prüfseite)
+    löscht alle Zeilen in `login_attempts`, die älter als 15 Minuten sind, gleich welcher Bereich; gelesen werden die
+    alten Zeilen nicht mehr. Sie verfallen also von selbst.
+  - **Geprüft**: `test_keine_bremse` (zwölf Suchen nach einer fremden und zwölf nach einer eigenen Seriennummer und
+    zwölf QR-Steckbriefe hintereinander – alle 200, alle 36 mit Namen im Protokoll und in der Ansicht der Verwaltung,
+    keine Zeile `mat-global:…`; die Anmeldebremse daneben weiter 429 nach zehn Fehlversuchen) und
+    `test_dublette_ohne_bremse` (zwölf Suchen und zwölf fremde Dubletten im Wechsel, alle im Protokoll) ersetzen
+    `test_bremse` und `test_bremse_mit_dublette` – gegen den alten Stand beide rot. `test_dublette` und `test_unterbau`
+    in `test_material_trennung.py` ohne Bremse; der Test der Anmeldebremse in `test_smoke.py` ist unverändert grün.
+    Im Chromium (eigenes DATA_DIR, `material_demo.py --demo --konten`) bei 1280 × 900 und 390 × 844 (Touch): Als
+    DEMO-Materialwart A je Bildschirm zwölfmal hintereinander nach `DEMO-NS-4711` gesucht (1280: achtmal auf der
+    Trefferseite, viermal in den Vorschlägen; 390: je sechsmal) und je einen QR-Steckbrief geöffnet – jedes Mal die
+    Rückfrage und der Steckbrief, nie eine Sperrmeldung, in keinem Text „Viertelstunde“ oder „zu viele“, keine
+    Konsolenfehler, nichts rollt waagerecht. Das Protokoll in der Nutzerverwaltung zeigt alle 26 Zeilen (24 Suchen,
+    2 QR-Steckbriefe) mit Namen; das Serverprotokoll hat keine einzige 429.
 
 #### Prüfung der Modulstufen
 
@@ -1768,9 +1799,9 @@ Regressionstest in `tests/test_material_stufen.py` (vorher rot, jetzt grün), Ob
   Material-Verwaltung legt die Gliederung an und wählt im selben Schritt den ersten Materialwart (README).
 - **Protokollinhalt nach EN 365** (aus Lieferung 3): Die zugeordnete Person kommt bewusst nicht ins Protokoll – mit
   den Sachkundigen bestätigen, dass die Prüfkarte sie nicht verlangt.
-- **Bremse bei immer angebotener Suche**: Weil das Angebot jetzt auch neben eigenen Treffern steht, zählt auch eine
-  Suche nach einer eigenen Seriennummer in der Bremse (zehn je Viertelstunde, mit Suche, QR-Steckbrief und Dublette)
-  und steht im Protokoll. Bitte im Betrieb beobachten, ob die Grenze im Alltag stört.
+- **Bremse bei immer angebotener Suche – entschieden**: Bremse am 18.10.2026 auf Wunsch entfernt; Kontrolle bleibt das
+  Protokoll mit Namen. (Bis dahin zählte, seit die Suche auch neben eigenen Treffern angeboten wird, auch eine Suche
+  nach einer eigenen Seriennummer gegen die Grenze von zehn je Viertelstunde.)
 - **Eindeutiger eigener Treffer**: `/material/suche` öffnet ihn wie bisher direkt; seit der Prüfung der Nachbesserung
   nimmt die Weiterleitung die Anfrage mit (`?q=`), und die Artikelseite bietet die Suche außerhalb des eigenen
   Bereichs unter dem Kopf an – „immer angeboten“ gilt damit auch dort. Bitte ansehen, ob der Platz zwischen
@@ -2215,7 +2246,7 @@ oder Plattform-Verwaltung).
 | `GET /api/material/freigaben/meine` | angemeldet, auch ohne Modulzugang | eigene Freigaben (gültige und im letzten Jahr abgelaufene) mit Pfad, `recht`, `bis`, `gueltig`, `wirkt`, `wirkt_nicht` (Grund oder `null`), `grundrecht_dort`, `laeuft_ab_in_tagen` und `verwalter` (bis zu drei Namen) – ohne Notiz; dazu `zugang`, `qualifiziert` (wirkt nur mit Zugang), `alles` (Material-Verwaltung) (Phase 2) |
 | `GET /api/material/freigaben?user_id=` | Plattform-Verwaltung | alle Freigaben eines Kontos mit Notiz (Nutzerverwaltung) (Phase 2) |
 | `GET /api/material/nutzer?q=&zweck=` (ab 3 Zeichen) | verwalten irgendwo oder Material-Verwaltung | Personensuche: `zweck=freigabe` (Vorgabe) nur Konten mit Zugang zum Modul (Stufe Mitglied oder Verwaltung), `zweck=zuordnung` alle; höchstens 20 aktive Konten mit Namen, je `id`, `name`, `gliederung`, `qualifiziert` (wirkt nur mit Stufe), `grundrecht_ueberall` (Material-Verwaltung) – keine E-Mail, keine Urkundennummer; `mehr` (Phase 2, `zweck` seit der Modulstufe) |
-| `POST /api/material/globalsuche` (`q`, `bestaetigt: true`) | Modulzugang | globale Seriennummernsuche nur unter den Artikeln, die das Konto nicht sieht → `treffer` (höchstens 10 Steckbriefe, ohne Kennungen, mit `sperre`), `mehr`, `hinweis`; 400 ohne Bestätigung, unter 4 Zeichen oder bei Inventar- und STR-Nummern, 409 für die Material-Verwaltung (sieht alles), 429 über der Bremse (Phase 2) |
+| `POST /api/material/globalsuche` (`q`, `bestaetigt: true`) | Modulzugang | globale Seriennummernsuche nur unter den Artikeln, die das Konto nicht sieht → `treffer` (höchstens 10 Steckbriefe, ohne Kennungen, mit `sperre`), `mehr`, `hinweis`; 400 ohne Bestätigung, unter 4 Zeichen oder bei Inventar- und STR-Nummern, 409 für die Material-Verwaltung (sieht alles); ungebremst, jede Suche im Protokoll (Phase 2) |
 | `POST /api/material/globalsuche/qr` (`token`, `bestaetigt: true`) | Modulzugang | Steckbrief nach einem QR-Scan an einem fremden Artikel (ein Treffer, mit `sperre`); `weiter` (Adresse), wenn der Artikel inzwischen sichtbar ist (Phase 2) |
 | `GET /api/material/globalsuche/protokoll?seite=` | Plattform-Verwaltung | Protokoll der globalen Suchen, QR-Steckbriefe und fremden Dubletten, neueste zuerst: `eintraege` (Zeit, Name, Art, Anfrage, Treffer, Gliederungen), `gesamt`, `seite`, `pro_seite` (Phase 2) |
 | `PUT /api/material/artikel/<id>/zuordnung` (`user_id` oder `null`) | Materialwart am Artikel | Person zuordnen oder Zuordnung lösen → `artikel`; 409 bei ausgesonderten (Phase 2) |
