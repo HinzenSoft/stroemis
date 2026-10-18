@@ -2,8 +2,10 @@
    Systemordnern und Mehrfachauswahl), Artikel mit Lebenslauf (Prüfungen und Journal), Artikel anlegen,
    Prüfung (Formular fürs Telefon), Prüfdurchgang, Katalog mit Produkten, Dokumenten und Prüfformularen,
    Suche nach Nummern; links die Ordnerleiste.
-   Welche Ansicht gemeint ist, sagt data-ansicht am <main>; was das Konto darf, data-darf. Ausgeblendet
-   wird nur, was ohnehin scheitern würde – der Server prüft jede Aktion selbst. */
+   Welche Ansicht gemeint ist, sagt data-ansicht am <main>. Was das Konto darf, gilt seit Phase 2 je Ordner (Freigaben):
+   Knöpfe an einem Ordner, Artikel, einer Prüfung oder einem Durchgang fragen dessen Feld „darf“ (lesen, grund,
+   pruefen, verwalten); data-darf sagt nur, was das Konto irgendwo darf – für Reiter und die Knöpfe der Übersicht.
+   Ausgeblendet wird nur, was ohnehin scheitern würde – der Server prüft jede Aktion selbst. */
 (function () {
   const { esc, api, toast, dialog, confirm } = S;
   const root = document.getElementById("mat");
@@ -151,6 +153,8 @@
     anhaenge_angefuegt: "Anhänge angefügt", login: "Anmeldung", berichtigung: "Berichtigung", berichtigt: "berichtigt",
     unterschrift: "Unterschrift", nicht_geprueft: "nicht geprüft", uid: "Katalogkennung",
     rueckruf: "Rückruf Nr.", serials: "Seriennummern", mail: "Mail an Materialwarte und Prüfer", close_note: "Vermerk",
+    // Phase 2: Freigaben je Ordner und Personenzuordnung – dieselben Wörter wie in beschriftung.py
+    freigabe: "Freigabe Nr.", konto: "Person", recht: "Recht", bis: "bis", notiz_geaendert: "Notiz geändert",
   };
   const AKTION = { angelegt: "angelegt", geaendert: "geändert", geloescht: "gelöscht", verschoben: "verschoben",
                    bild: "Bild geändert", foto: "Foto geändert", neue_version: "neue Version", zurueckgezogen: "zurückgezogen",
@@ -163,18 +167,28 @@
                    eingepflegt: "eingepflegt", abgelehnt: "abgelehnt", variante: "als Variante angelegt",
                    festgeschrieben: "festgeschrieben", berichtigt: "berichtigt", berichtigung_begonnen: "Berichtigung begonnen",
                    unterschrift: "Unterschrift geändert", urkundennummer: "Urkundennummer geändert",
-                   abgebrochen: "Durchgang abgebrochen", rueckruf: "Rückruf angelegt", rueckruf_beendet: "Rückruf beendet" };
+                   abgebrochen: "Durchgang abgebrochen", rueckruf: "Rückruf angelegt", rueckruf_beendet: "Rückruf beendet",
+                   freigabe_erteilt: "Freigabe erteilt", freigabe_geaendert: "Freigabe geändert",
+                   freigabe_entzogen: "Freigabe entzogen", freigabe_entfernt: "Freigabe entfernt",
+                   zugeordnet: "Zuordnung geändert", zuordnung_geloest: "Zuordnung geändert" };
+  const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };
 
-  /* Warum hier nicht geprüft werden kann (DARF.pruefen ist false) – als HTML. Das Häkchen „Prüfer“ setzt die
-     Verwaltung in der Nutzerverwaltung, die Urkundennummer trägt der Prüfer selbst im Profil ein. Wer das Häkchen
-     schon hat, dem fehlt nur die Nummer: Er bekommt den Weg dorthin als Link. */
+  /* Warum hier nicht geprüft werden kann – als HTML. obj: der Ordner, Artikel oder die Prüfung (mit „darf“); ohne obj
+     gilt die Frage für das ganze Konto (Seite „Prüfungen“). Prüfen braucht seit Phase 2 dreierlei: das Häkchen
+     „Prüfer“ (setzt die Verwaltung in der Nutzerverwaltung), die Urkundennummer (trägt der Prüfer selbst im Profil ein)
+     und eine Prüffreigabe für den Ordner (vergibt dessen Materialwart). Wer das Häkchen schon hat, dem fehlt vielleicht
+     nur die Nummer: Er bekommt den Weg dorthin als Link. Wer qualifiziert ist, dem fehlt die Prüffreigabe. */
   const URKUNDE_IM_PROFIL = 'Du bist als Prüfer eingetragen, aber deine Urkundennummer fehlt noch – trage sie im '
     + '<a href="/profil#unterschrift">Profil unter „Urkundennummer und Unterschrift“</a> ein, dann kannst du prüfen.';
-  const pruefHinweis = () => DARF.pruefer_haekchen ? URKUNDE_IM_PROFIL
-    : "Prüfen dürfen nur Prüfer mit Urkundennummer: Das Häkchen „Prüfer“ setzt die Verwaltung in der Nutzerverwaltung, "
-      + "die Urkundennummer trägt der Prüfer selbst in seinem Profil ein.";
+  const KEINE_PRUEFFREIGABE = "Für diesen Ordner hast du keine Prüffreigabe – die vergibt der Materialwart unter Ordner → Freigaben.";
+  const pruefHinweis = (obj) => (DARF.qualifiziert
+    ? (obj ? KEINE_PRUEFFREIGABE : "Du hast noch keine gültige Prüffreigabe – die vergibt der Materialwart eines Ordners unter Ordner → Freigaben.")
+    : DARF.pruefer_haekchen ? URKUNDE_IM_PROFIL
+      : "Prüfen dürfen nur Prüfer mit Urkundennummer und Prüffreigabe: Das Häkchen „Prüfer“ setzt die Verwaltung in der "
+        + "Nutzerverwaltung, die Urkundennummer trägt der Prüfer selbst in seinem Profil ein, die Prüffreigabe für einen "
+        + "Ordner vergibt dessen Materialwart.");
 
   // „2026-12-04“ → „04.12.2026“, „2026-12“ → „12/2026“ – ohne Date-Objekt, damit keine Zeitzone den Tag verschiebt.
   const fmtTag = (d) => {
@@ -237,13 +251,69 @@
   const EIN = "\u00a0\u00a0\u00a0";          // Einrückung je Ebene in Auswahllisten
   const groesse = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round((b || 0) / 1024))} kB`);
 
+  /* --- Bausteine der anderen Pakete (Phase 2) --------------------------------------------------------------------
+     freigaben.js (window.MatFreigaben) und global.js (window.MatGlobal) stehen in seite.html hinter dieser Datei. Ihre
+     Objekte gibt es erst, wenn die Seite ganz gelesen ist – wer sie beim Zeichnen braucht, wartet darauf (baustein).
+     Fehlt einer, bleibt die Stelle leer. */
+  const seiteGelesen = new Promise((fertig) => {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => fertig(), { once: true });
+    else fertig();
+  });
+  const baustein = async (name) => { await seiteGelesen; return window[name] || null; };
+
+  /* --- Ordnerbaum, wie ihn das Konto sieht (Phase 2) ------------------------------------------------------------
+     Einmal je Seite geladen und geteilt (Leiste, Ordnerwahl, Pfade); wer den Baum ändert, lädt ihn neu
+     (ordnerBaum(true)). Er enthält nur, was das Konto sieht, und darüber Pfad-Knoten („nur_pfad“): Oberordner ohne
+     eigene Freigabe, nur der Weg zu den eigenen – grau, ohne Zahl, ohne Link (der Server antwortet dort 404). */
+  const OHNE_FREIGABE = "Hier hast du keine Freigabe – der Ordner steht nur als Weg zu deinen da.";
+  let baumLauf = null;
+  let baumIndex = {};
+  function ordnerBaum(neu) {
+    if (!baumLauf || neu) {
+      const lauf = api(`${API}/ordner`).then((d) => {
+        if (lauf === baumLauf) { baumIndex = {}; d.ordner.forEach((o) => { baumIndex[o.id] = o; }); }
+        return d.ordner;
+      });
+      baumLauf = lauf;
+      lauf.catch(() => { if (baumLauf === lauf) baumLauf = null; });
+    }
+    return baumLauf;
+  }
+  // Ein Ordner, den das Konto öffnen kann – kein Pfad-Knoten. Solange der Baum fehlt: ja (der Server entscheidet).
+  const offenbar = (id) => !(baumIndex[id] && baumIndex[id].nur_pfad);
+  const pfadKnoten = (name) => `<span class="mat-pfadknoten" title="${esc(OHNE_FREIGABE)}">${esc(name)}</span>`;
+  // Ein Glied eines Pfads ({id, name}): verlinkt – oder grau, wenn es nur ein Pfad-Knoten ist.
+  const pfadGlied = (o) => (offenbar(o.id) ? `<a href="/material/ordner/${o.id}">${esc(o.name)}</a>` : pfadKnoten(o.name));
+  // Die nächste Gliederung über einem Ordner (oder er selbst) – wie bestand.gliederung_von auf dem Server.
+  function gliederungVon(id) {
+    const gesehen = new Set();
+    for (let o = baumIndex[id]; o && !gesehen.has(o.id); o = baumIndex[o.parent_id]) {
+      gesehen.add(o.id);
+      if (o.kind === "gliederung" && !o.system_kind) return o;
+    }
+    return null;
+  }
+  // Verwaltet das Konto diesen Ordner? Ohne Ordner (oberste Ebene) nur die Plattform-Verwaltung.
+  const verwaltet = (o) => (o ? Boolean(o.darf && o.darf.verwalten) : Boolean(DARF.alles));
+  /* Wechselt ein Verschieben die Gliederung? quelle: Heimat des Artikels bzw. alter Oberordner. Über Gliederungsgrenzen
+     verschiebt nur, wer beide Gliederungen verwaltet (Bauentwurf 1.7 Nr. 2) – die Ordnerwahl bietet andere Ziele gar
+     nicht erst an. */
+  function wechsel(quelle, ziel) {
+    const a = gliederungVon(quelle), b = gliederungVon(ziel);
+    return (a ? a.id : null) !== (b ? b.id : null);
+  }
+  const wechselErlaubt = (quelle, ziel) => !wechsel(quelle, ziel)
+    || (verwaltet(gliederungVon(quelle)) && verwaltet(gliederungVon(ziel)));
+
   /* --- Gerüst -------------------------------------------------------------------------------- */
   const NAV = { dashboard: "dashboard", pruefungen: "pruefungen", bestand: "bestand", ordner: "bestand", artikel: "bestand",
                 artikel_neu: "bestand", katalog: "katalog", produkt: "katalog", formular: "katalog", meldungen: "katalog", suche: "",
                 pruefung: "pruefungen", pruefung_neu: "pruefungen", durchgang: "pruefungen" };
   $$(".mat-nav a").forEach((a) => a.classList.toggle("aktiv", a.dataset.nav === NAV[ANSICHT]));
   if (ANSICHT === "suche" && DATEN.q) $(".mat-suche input").value = DATEN.q;
-  if (!DARF.lesen) $$('.mat-nav a:not([data-nav="katalog"]), .mat-suche, #mat-lupe').forEach((el) => el.remove());
+  // Ohne Freigabe im Bestand (Katalogpfleger, Prüfer ohne Prüffreigabe) fallen nur „Prüfungen“ und „Bestand“ weg. Die
+  // Nummernsuche bleibt: Über sie erreicht jeder mit Zugang die globale Seriennummernsuche.
+  if (!DARF.lesen) $$('.mat-nav a[data-nav="pruefungen"], .mat-nav a[data-nav="bestand"]').forEach((el) => el.remove());
 
   /* Modulnavigation (Lieferung 5): Passen „☰ Ordner“, die Reiter und das Suchfeld nicht in eine Zeile, stand die
      Navigation am Telefon in drei Zeilen – über 200 px, bevor nach einem QR-Scan die Inventarnummer kam. Dann wird sie
@@ -325,6 +395,9 @@
   inhalt.addEventListener("change", (e) => {
     const s = e.target.closest("select[data-sortwahl]");
     if (s && aktionen.sortieren) aktionen.sortieren({ dataset: { feld: s.value } }, e);
+    // Filter „Zugeordnet an …“ im Ordner.
+    const p = e.target.closest("select[data-personwahl]");
+    if (p && aktionen.person) aktionen.person(p, e);
   });
 
   // Ein Textfeld so hoch wie sein Inhalt – lange Prüfanweisungen bleiben ganz lesbar. Ändert sich die Breite
@@ -375,11 +448,13 @@
         return `${knopf}<a href="/material/katalog?kategorie=${o.id}" data-kat="${o.id}" ${markiert} title="${esc(o.name)}${o.norm ? ` · ${esc(o.norm)}` : ""}">${esc(o.name)}</a>
           <span class="mat-side-anzahl" title="Produkte (mit Unterkategorien)">${summe(o.id)}</span>`;
       }
+      // Pfad-Knoten: nur der Name, grau, ohne Zahl und ohne Link.
+      if (o.nur_pfad) return `${knopf}<span class="mat-pfadknoten" title="${esc(OHNE_FREIGABE)}">${esc(o.name)}</span>`;
       const z = o.zaehlung || {};
       const rot = (z.ueberfaellig || 0) + (z.lebensdauer || 0);
       const zahl = o.system_kind ? `<span class="mat-side-anzahl">${Object.values(z).reduce((a, b) => a + b, 0)}</span>`
         : `${rot ? `<span class="mat-zahl s-ueberfaellig" title="überfällig oder Lebensdauer erreicht">${rot}</span>` : ""}${z.neu ? `<span class="mat-zahl s-neu" title="neu – Eingangsprüfung offen">${z.neu}</span>` : ""}`;
-      return `${knopf}<a href="/material/ordner/${o.id}" ${markiert} title="${esc(o.name)}">${o.system_kind ? "🔒 " : ""}${esc(o.name)}</a>${zahl}`;
+      return `${knopf}<a href="/material/ordner/${o.id}" ${markiert} title="${esc(o.name)}${o.teilweise ? " – nur deine Artikel" : ""}">${o.system_kind ? "🔒 " : ""}${esc(o.name)}</a>${zahl}`;
     };
     const zweig = (pid, tiefe) => (kinder[pid] || []).map((o) => {
       const hat = !!kinder[o.id];
@@ -393,7 +468,7 @@
   }
 
   async function leisteLaden() {
-    if (!leiste || !MIT_LEISTE.has(ANSICHT) || !(DARF.lesen || (LEISTE_KATALOG && DARF.katalog))) return;
+    if (!leiste || !MIT_LEISTE.has(ANSICHT) || !(DARF.lesen || LEISTE_KATALOG)) return;
     document.getElementById("mat-shell").classList.add("mit-leiste");
     navAnordnen();                     // „☰ Ordner“ steht jetzt in der Zeile
     leiste.hidden = false;
@@ -404,7 +479,7 @@
       leiste.setAttribute("aria-label", "Kategorien");
       if (leisteAuf) $(".mat-side-auf-text", leisteAuf).textContent = " Kategorien";
     }
-    try { leisteDaten = LEISTE_KATALOG ? await kategorienLaden() : (await api(`${API}/ordner`)).ordner; }
+    try { leisteDaten = LEISTE_KATALOG ? await kategorienLaden() : await ordnerBaum(); }
     catch (e) { $("#mat-baumnav").innerHTML = `<p class="error">${esc(e.message)}</p>`; return; }
     leisteZeichnen();
   }
@@ -503,7 +578,10 @@
   async function zeigen(fn) {
     try { await fn(); }
     catch (e) {
-      inhalt.innerHTML = `<p class="error">${esc(e.message)}</p>`;
+      // Fremdes oder nicht (mehr) Erlaubtes (404, 403): die Meldung des Servers im Klartext und ein Weg zurück.
+      inhalt.innerHTML = e.status === 403 || e.status === 404
+        ? `<p class="notice">${esc(e.message)}</p><p><a class="btn secondary" href="/material">Zur Übersicht</a></p>`
+        : `<p class="error">${esc(e.message)}</p>`;
     }
   }
 
@@ -516,8 +594,12 @@
   }
 
   /* --- Journal (Vorher/Nachher je Feld) ----------------------------------------------------- */
-  function wert(v, feld) {
+  // da: der Eintrag hat dieses Feld auf dieser Seite (vorher/nachher) – ein leeres „bis“ heißt dann „unbefristet“.
+  function wert(v, feld, da) {
+    if (feld === "konto") return v && v.name ? esc(v.name) : '<span class="muted">–</span>';    // Kontoverweis, beim Lesen aufgelöst
+    if (feld === "bis" && da && (v === null || v === undefined || v === "")) return "unbefristet";
     if (v === null || v === undefined || v === "") return '<span class="muted">–</span>';
+    if (feld === "recht") return esc(RECHT[v] || v);
     if (Array.isArray(v)) return v.length ? `<ul class="mat-wertliste">${v.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "–";
     if (typeof v === "boolean" || ((feld === "serial_generated" || feld === "active" || feld === "mat_pruefer" || feld === "mat_katalog") && (v === 0 || v === 1))) return v ? "ja" : "nein";
     if (feld === "material_kind" || feld === "default_material_kind") return esc(MATERIALART[v] || v);
@@ -526,7 +608,7 @@
     if (["pruefung", "aussonderung", "basis", "berichtigung", "berichtigt"].includes(feld) && Number.isInteger(v)) return `<a href="/material/pruefung/${v}">Nr. ${v}</a>`;
     if (/sha256$/.test(feld)) return `<span class="mat-hash">${esc(v)}</span>`;
     if (feld === "lock_state") return esc({ frei: "frei", gesperrt: "gesperrt", verloren: "verloren (gesperrt)", ausgesondert: "ausgesondert" }[v] || v);
-    if (/_on$|^valid_from$|^retire_by$|^datum$|^begonnen$/.test(feld)) return esc(fmtTag(v));
+    if (/_on$|^valid_from$|^retire_by$|^datum$|^begonnen$|^bis$/.test(feld)) return esc(fmtTag(v));
     if (typeof v === "object") return esc(JSON.stringify(v));
     return esc(v);
   }
@@ -537,7 +619,8 @@
       const felder = j.action === "angelegt" || j.action === "geloescht"
         ? [] : Object.keys(alle).filter((f) => !(f === "folder_id" && "ordner" in alle) && !(f === "origin_folder_id" && "herkunft" in alle)
                                        && !(f === "parent_id" && "pfad" in alle));
-      const zeilen = felder.map((f) => `<tr><th>${esc(FELD[f] || f)}</th><td>${wert((j.vorher || {})[f], f)}</td><td>${wert((j.nachher || {})[f], f)}</td></tr>`).join("");
+      const seite = (x, f) => wert((x || {})[f], f, Boolean(x) && f in x);
+      const zeilen = felder.map((f) => `<tr><th>${esc(FELD[f] || f)}</th><td>${seite(j.vorher, f)}</td><td>${seite(j.nachher, f)}</td></tr>`).join("");
       return `<li><div class="mat-j-kopf"><span class="mat-j-zeit">${esc(fmtZeit(j.created_at))}</span>
         <strong>${mitEntitaet ? esc(ENTITAET[j.entity] || j.entity) + " " : ""}${esc(AKTION[j.action] || j.action)}</strong>
         <span class="muted">von ${esc(j.user_name || "–")}</span></div>
@@ -602,45 +685,97 @@
     if (z.bald_faellig) teile.push(`<span class="mat-zahl s-bald_faellig" title="bald fällig">${z.bald_faellig}</span>`);
     return teile.join("");
   }
+  // Ein Knoten in Baum und Unterordnerliste: Pfad-Knoten grau ohne Zahl und Link; ein teilweise sichtbarer Systemordner
+  // („Gesperrt“ einer Gliederung, die das Konto nicht sieht) sagt, dass er nur die eigenen Artikel zeigt.
+  function knotenHtml(o) {
+    if (o.nur_pfad) {
+      return `${pfadKnoten(o.name)} ${o.system_kind ? "" : `<span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}`;
+    }
+    return `<a href="/material/ordner/${o.id}">${o.system_kind ? "🔒 " : ""}${esc(o.name)}</a>
+        ${o.system_kind ? "" : `<span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}${o.teilweise ? ' <span class="small muted">nur deine Artikel</span>' : ""}${demoMarke(o.demo)}
+        <span class="mat-baum-zahl">${o.system_kind ? Object.values(o.zaehlung || {}).reduce((a, b) => a + b, 0) : o.bestand}</span>${o.system_kind ? "" : zahlen(o.zaehlung)}`;
+  }
+  const knotenKlasse = (o) => (o.nur_pfad ? "pfad" : o.system_kind ? "system" : "");
   function baumHtml(liste, start) {
     const kinder = baumKinder(liste);
-    const zweig = (pid) => (kinder[pid] || []).map((o) => `<li class="${o.system_kind ? "system" : ""}">
-        <a href="/material/ordner/${o.id}">${o.system_kind ? "🔒 " : ""}${esc(o.name)}</a>
-        ${o.system_kind ? "" : `<span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}${demoMarke(o.demo)}
-        <span class="mat-baum-zahl">${o.system_kind ? (o.zaehlung ? Object.values(o.zaehlung).reduce((a, b) => a + b, 0) : 0) : o.bestand}</span>${o.system_kind ? "" : zahlen(o.zaehlung)}
+    const zweig = (pid) => (kinder[pid] || []).map((o) => `<li class="${knotenKlasse(o)}">${knotenHtml(o)}
         ${kinder[o.id] ? `<ul>${zweig(o.id)}</ul>` : ""}</li>`).join("");
     return `<ul class="mat-baum">${zweig(start || 0)}</ul>`;
   }
 
   function unterordnerHtml(liste) {
-    return `<ul class="mat-unterordner">${liste.map((o) => `<li class="${o.system_kind ? "system" : ""}">
-        <a href="/material/ordner/${o.id}">${o.system_kind ? "🔒 " : ""}${esc(o.name)}</a>
-        ${o.system_kind ? "" : `<span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}${demoMarke(o.demo)}
-        <span class="mat-baum-zahl">${o.system_kind ? Object.values(o.zaehlung || {}).reduce((a, b) => a + b, 0) : o.bestand}</span>${o.system_kind ? "" : zahlen(o.zaehlung)}</li>`).join("")}</ul>`;
+    return `<ul class="mat-unterordner">${liste.map((o) => `<li class="${knotenKlasse(o)}">${knotenHtml(o)}</li>`).join("")}</ul>`;
   }
 
-  /* Ordnerwahl im Dialog: Systemordner und (beim Verschieben eines Ordners) dessen eigener Zweig
-     sind nicht wählbar. */
+  // Welche Knoten eines Auswahlbaums dastehen: die wählbaren (wahl) und alle, unter denen ein wählbarer liegt – als Weg.
+  function auswahlBaum(kinder, wahl) {
+    const da = new Set();
+    const besuch = (pid) => (kinder[pid] || []).reduce((jemand, o) => {
+      const hier = besuch(o.id) || wahl.has(o.id);
+      if (hier) da.add(o.id);
+      return jemand || hier;
+    }, false);
+    besuch(0);
+    return da;
+  }
+  // <option>s einer Ordnerauswahl (Artikel anlegen, Prüfdurchgang): wählbar nur, was waehlbar(o) erlaubt; der Weg
+  // dorthin steht deaktiviert da, Zweige ohne wählbaren Ordner entfallen. Liefert { html, anzahl }.
+  function ordnerOptionen(liste, waehlbar, gewaehlt, mitBestand) {
+    const ohneSystem = liste.filter((o) => !o.system_kind);
+    const kinder = baumKinder(ohneSystem);
+    const wahl = new Set(ohneSystem.filter((o) => !o.nur_pfad && waehlbar(o)).map((o) => o.id));
+    const da = auswahlBaum(kinder, wahl);
+    const zweig = (pid, tiefe) => (kinder[pid] || []).filter((o) => da.has(o.id)).map((o) => `<option value="${o.id}"${wahl.has(o.id)
+      ? (o.id === gewaehlt ? " selected" : "") : " disabled"}>${EIN.repeat(tiefe)}${esc(o.name)}${mitBestand && wahl.has(o.id) ? ` (${o.bestand})` : ""}</option>${zweig(o.id, tiefe + 1)}`).join("");
+    return { html: zweig(0, 0), anzahl: wahl.size };
+  }
+
+  /* Ordnerwahl im Dialog (verschieben nach …): wählbar sind nur Ordner, die das Konto verwaltet (opts.waehlbar), und mit
+     opts.quelle nur Ziele, deren Gliederung es wechseln darf – über eine Gliederungsgrenze nur, wer beide verwaltet.
+     Systemordner und (beim Verschieben eines Ordners) dessen eigener Zweig sind nie wählbar. Was nicht wählbar ist,
+     aber zu wählbaren Ordnern führt, steht grau als Weg da; Zweige ohne wählbaren Ordner entfallen. opts.hinweis:
+     HTML über dem Baum; opts.wechselHinweis: HTML, das erscheint, sobald ein Ziel in einer anderen Gliederung gewählt
+     ist. Liefert die Kennung (0 = oberste Ebene) oder null. */
   async function ordnerWaehlen(titel, opts) {
     opts = opts || {};
-    const liste = (await api(`${API}/ordner`)).ordner;
-    const kinder = baumKinder(liste);
+    const liste = await ordnerBaum(true);
+    const ohneSystem = liste.filter((o) => !o.system_kind);
+    const kinder = baumKinder(ohneSystem);
     const gesperrt = new Set();
     if (opts.ohneZweig) {
       const weg = [opts.ohneZweig];
       while (weg.length) { const x = weg.pop(); gesperrt.add(x); (kinder[x] || []).forEach((k) => weg.push(k.id)); }
     }
-    const zweig = (pid) => (kinder[pid] || []).filter((o) => !o.system_kind).map((o) => `<li>
-        <label class="inline"><input type="radio" name="ziel" value="${o.id}" ${gesperrt.has(o.id) ? "disabled" : ""}>
-        <span class="mat-wahl-name">${esc(o.name)}</span> <span class="mat-art">${esc(ORDNERART[o.kind])}</span></label>
-        ${kinder[o.id] ? `<ul>${zweig(o.id)}</ul>` : ""}</li>`).join("");
+    const mitQuelle = "quelle" in opts;
+    let grenze = false;                  // ein verwalteter Ordner fiel nur wegen der Gliederungsgrenze weg
+    const wahl = new Set(ohneSystem.filter((o) => {
+      if (o.nur_pfad || gesperrt.has(o.id) || !(opts.waehlbar || verwaltet)(o)) return false;
+      if (mitQuelle && !wechselErlaubt(opts.quelle, o.id)) { grenze = true; return false; }
+      return true;
+    }).map((o) => o.id));
+    const oben = opts.obersteEbene && DARF.alles;
+    const da = auswahlBaum(kinder, wahl);
+    const zweig = (pid) => (kinder[pid] || []).filter((o) => da.has(o.id)).map((o) => {
+      const unten = zweig(o.id);
+      return `<li><label class="inline${wahl.has(o.id) ? "" : " mat-wahl-weg"}"><input type="radio" name="ziel" value="${o.id}" ${wahl.has(o.id) ? "" : "disabled"}>
+        <span class="mat-wahl-name">${esc(o.name)}</span> <span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span></label>
+        ${unten ? `<ul>${unten}</ul>` : ""}</li>`;
+    }).join("");
     return new Promise((resolve) => {
       let gewaehlt = null;
       const dlg = dialog(`<h2>${esc(titel)}</h2>
-        ${opts.obersteEbene ? '<label class="inline"><input type="radio" name="ziel" value="0"> oberste Ebene (nur für Gliederungen)</label>' : ""}
-        <div class="mat-wahl">${liste.length ? `<ul class="mat-baum">${zweig(0)}</ul>` : leer("Noch keine Ordner.")}</div>
+        ${opts.hinweis ? `<p class="help">${opts.hinweis}</p>` : ""}
+        ${oben ? '<label class="inline"><input type="radio" name="ziel" value="0"> oberste Ebene (nur für Gliederungen)</label>' : ""}
+        <div class="mat-wahl">${wahl.size ? `<ul class="mat-baum">${zweig(0)}</ul>` : leer("Kein Ordner, den du hierfür verwaltest.")}</div>
+        ${grenze ? '<p class="help">Ordner anderer Gliederungen stehen nur zur Wahl, wenn du beide Gliederungen verwaltest.</p>' : ""}
+        <div id="ow-wechsel" class="notice" hidden>${opts.wechselHinweis || ""}</div>
         <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
-        <button class="btn" id="ow-ok" type="button">Übernehmen</button></div>`, (d, body) => {
+        <button class="btn" id="ow-ok" type="button" ${wahl.size || oben ? "" : "disabled"}>Übernehmen</button></div>`, (d, body) => {
+        // Liegt das gewählte Ziel in einer anderen Gliederung, sagt der Dialog vorher, was dann mitwandert.
+        body.addEventListener("change", (e) => {
+          if (e.target.name !== "ziel" || !opts.wechselHinweis || !mitQuelle) return;
+          $("#ow-wechsel", body).hidden = !wechsel(opts.quelle, +e.target.value || null);
+        });
         $("#ow-ok", body).onclick = () => {
           const r = $('input[name="ziel"]:checked', body);
           if (!r) { toast("Bitte einen Ordner wählen.", true); return; }
@@ -653,16 +788,13 @@
   }
 
   /* --- Übersicht ------------------------------------------------------------------------------ */
+  /* Ohne Freigabe im Bestand (Katalogpfleger, Prüfer ohne Prüffreigabe, abgelaufene Freigaben) zeigt die Übersicht keine
+     Zahlen – es wären nur Nullen –, sondern „Meine Freigaben“ (wer sie vergibt) und den Weg zu Katalog und Suche. */
   async function dashboard() {
     const d = await api(`${API}/start`);
     const z = d.zaehlung;
     const kachel = (s, titel) => `<a class="mat-kachel s-${s}" href="/material/pruefungen?status=${s}"><strong>${z[s] || 0}</strong><span>${esc(titel)}</span></a>`;
-    inhalt.innerHTML = `<div class="page-head"><h1>Material</h1>
-        <div class="btn-row">${DARF.verwalten ? '<a class="btn secondary" href="/material/bestand">Bestand pflegen</a><a class="btn secondary" href="/material/artikel/neu">+ Artikel</a>' : ""}</div></div>
-      ${rueckrufKasten(d.rueckrufe)}
-      ${d.meldungen_offen ? `<p class="notice"><a href="/material/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produktmeldung", "offene Produktmeldungen")}</strong></a>
-        – Materialwarte warten darauf, Artikel davon anzulegen.</p>` : ""}
-      <div class="mat-kachelrahmen"><div class="mat-kacheln mat-statuskacheln">
+    const bestandTeil = DARF.lesen ? `<div class="mat-kachelrahmen"><div class="mat-kacheln mat-statuskacheln">
         <div class="mat-kachel gesamt"><strong>${d.bestand}</strong><span>Artikel im Bestand</span></div>
         ${kachel("ueberfaellig", "überfällig")}${kachel("neu", "neu (Eingangsprüfung)")}${kachel("bald_faellig", `bald fällig (${d.schwelle_tage} Tage)`)}
         ${kachel("gesperrt", "gesperrt")}${kachel("lebensdauer", "Lebensdauer erreicht")}${kachel("einsatzbereit", "einsatzbereit")}
@@ -670,14 +802,29 @@
       <div id="mat-runden"></div>
       <section class="section"><h2>Fälligkeiten je Ordner</h2>
         ${d.ordner_uebersicht.length ? ordnerUebersichtHtml(d.ordner_uebersicht)
-          : leer(DARF.verwalten ? "Noch keine Gliederung – lege unter „Bestand“ die erste an." : "Noch keine Gliederung angelegt.")}
+          : leer(DARF.gliederung_anlegen ? "Noch keine Gliederung – lege unter „Bestand“ die erste an." : "Noch keine Gliederung angelegt.")}
       </section>
       <section class="section"><h2>Als Nächstes zu prüfen</h2>
         ${d.naechste.length ? artikelTabelle(d.naechste, { pfad: true }) + (d.faellig_gesamt > d.naechste.length ? `<p><a href="/material/pruefungen">Alle ${d.faellig_gesamt} anzeigen →</a></p>` : "")
           : leer("Nichts fällig.")}
-      </section>`;
-    ordnerUebersichtKlappen($("#mat-ue"));
-    rundenKasten($("#mat-runden"), true);
+      </section>`
+      : `<p class="help">Im <a href="/material/katalog">Katalog</a> stehen alle Produkte mit Prüfformularen und Herstellerdokumenten.
+          Die Nummernsuche oben sucht eine Herstellerseriennummer auf Wunsch auch in allen Gliederungen – das wird protokolliert.</p>`;
+    inhalt.innerHTML = `<div class="page-head"><h1>Material</h1>
+        <div class="btn-row">${DARF.verwalten ? '<a class="btn secondary" href="/material/bestand">Bestand pflegen</a><a class="btn secondary" href="/material/artikel/neu">+ Artikel</a>' : ""}</div></div>
+      ${rueckrufKasten(d.rueckrufe)}
+      ${d.meldungen_offen ? `<p class="notice"><a href="/material/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produktmeldung", "offene Produktmeldungen")}</strong></a>
+        – Materialwarte warten darauf, Artikel davon anzulegen.</p>` : ""}
+      <div id="mat-freigaben-hinweis"></div>
+      ${bestandTeil}`;
+    if (DARF.lesen) {
+      ordnerUebersichtKlappen($("#mat-ue"));
+      rundenKasten($("#mat-runden"), true);
+    }
+    // „Meine Freigaben“ (freigaben.js): eigene Freigaben, gelb, was bald abläuft – ohne Freigabe, wer sie vergibt.
+    const f = await baustein("MatFreigaben");
+    const el = $("#mat-freigaben-hinweis");
+    if (f && el) f.hinweis(el);
   }
 
   /* Fälligkeiten je Ordner: Gliederungen mit ihren Ordnern eingerückt, die Zahlen für den ganzen Zweig – dieselben wie in
@@ -702,18 +849,28 @@
       const knopf = o.unterordner
         ? `<button type="button" class="mat-ue-klapp" data-ue-klapp="${o.id}" aria-expanded="${!zu.has(o.id)}" aria-label="Unterordner von ${esc(o.name)}"></button>`
         : '<span class="mat-ue-klapp" aria-hidden="true"></span>';
+      // Pfad-Knoten (Oberordner ohne eigene Freigabe): nur der Name, grau – keine Zahlen, kein Link.
+      if (o.nur_pfad) {
+        return `<tr data-weg="${weg.join(" ")}" class="mat-ue-pfad${o.tiefe ? "" : " mat-ue-oben"}" style="--tiefe:${Math.min(o.tiefe, 8)}" ${weg.some((x) => zu.has(x)) ? "hidden" : ""}>
+          <td data-l="Ordner" class="mat-ue-name">${knopf}${pfadKnoten(o.name)}${o.kind === "gliederung" ? ` <span class="mat-art">${esc(ORDNERART[o.kind])}</span>` : ""}</td>
+          ${'<td class="mat-ue-zahl mat-ue-null"></td>'.repeat(UE_SPALTEN.length + 1)}<td class="mat-ue-tag mat-ue-null"></td></tr>`;
+      }
       // Die Karte (bis 600 px Inhaltsbreite) beschriftet mit dem Kurztitel – „neu“ statt „neu (Eingangsprüfung offen)“ spart eine Zeile.
       const zahlen = UE_SPALTEN.map(([s, kurz, lang]) => {
         const n = o.zaehlung[s] || 0;
         return `<td data-l="${esc(kurz.replace(/\u00ad/g, ""))}" class="mat-ue-zahl${n ? "" : " mat-ue-null"}">${n ? `<a class="mat-zahl s-${s}" href="/material/pruefungen?ordner=${o.id}&status=${s}" title="${esc(`${lang} – ${o.name}`)}">${n}</a>` : '<span class="muted">–</span>'}</td>`;
       }).join("");
       return `<tr data-weg="${weg.join(" ")}" class="${o.tiefe ? "" : "mat-ue-oben"}" style="--tiefe:${Math.min(o.tiefe, 8)}" ${weg.some((x) => zu.has(x)) ? "hidden" : ""}>
-        <td data-l="Ordner" class="mat-ue-name">${knopf}<a href="/material/ordner/${o.id}">${esc(o.name)}</a>${o.tiefe && o.kind !== "gliederung" ? "" : ` <span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}${demoMarke(o.demo)}</td>
+        <td data-l="Ordner" class="mat-ue-name">${knopf}<a href="/material/ordner/${o.id}">${o.system_kind ? "🔒 " : ""}${esc(o.name)}</a>${o.system_kind || (o.tiefe && o.kind !== "gliederung") ? "" : ` <span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}${demoMarke(o.demo)}</td>
         <td data-l="Bestand" class="mat-ue-zahl">${o.bestand}</td>${zahlen}
         <td data-l="nächste Fälligkeit" class="mat-ue-tag${o.naechste ? "" : " mat-ue-null"}">${o.naechste ? `<a class="t-${esc(o.naechste_status)}" href="/material/pruefungen?ordner=${o.id}" title="Alles Fällige in ${esc(o.name)}">${esc(fmtTag(o.naechste))}</a>` : '<span class="muted">–</span>'}</td></tr>`;
     };
+    const pfadZeilen = zeilen.some((o) => o.nur_pfad);
+    const teilweise = zeilen.some((o) => o.teilweise);
     return `<p class="help">Die Zahlen gelten für den ganzen Zweig. Gesperrte und ausgesonderte Artikel liegen in ihrer Gliederung und zählen dort.
-        Nächste Fälligkeit: das früheste Prüfdatum im Zweig – ohne neue (Eingangsprüfung), gesperrte und Artikel am Lebensende, die ihre eigenen Spalten haben.</p>
+        Nächste Fälligkeit: das früheste Prüfdatum im Zweig – ohne neue (Eingangsprüfung), gesperrte und Artikel am Lebensende, die ihre eigenen Spalten haben.
+        ${pfadZeilen ? "Grau: übergeordnete Ordner, in denen du keine Freigabe hast – nur der Weg zu deinen." : ""}
+        ${teilweise ? "„Gesperrt (deine Artikel)“: deine gesperrten Artikel in einer Gliederung, die du sonst nicht siehst." : ""}</p>
       <table class="list mat-tabelle mat-ue" id="mat-ue"><thead><tr><th>Ordner</th><th class="mat-ue-zahl">Bestand</th>
         ${UE_SPALTEN.map(([s, kurz, lang]) => `<th class="mat-ue-zahl" title="${esc(lang)}">${esc(kurz)}</th>`).join("")}<th>nächste Fälligkeit</th></tr></thead>
       <tbody>${zeilen.map(zeile).join("")}</tbody></table>`;
@@ -799,15 +956,16 @@
     const gesperrte = opts.auswahl && liste.some((a) => a.lock_state !== "frei");
     return `${kartenKopf(ARTIKEL_SORT, s, opts.auswahl)}<table class="list mat-tabelle mat-karten mat-artikel">
       <thead><tr>${opts.auswahl ? '<th class="mat-wahlspalte"><label class="mat-wahl-feld"><input type="checkbox" id="mat-alle" class="mat-alle" aria-label="alle auswählen"></label></th>' : ""}
-        ${sortKopf("Inventar-Nr.", "inventar", s, { nach: kopfZusatz("Seriennummer", "serie", s, "schmal") })}${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: kopfZusatz("Hersteller", "hersteller", s, "schmal") })}${sortKopf("Seriennummer", "serie", s, { klasse: "mat-schmal-weg" })}
-        ${opts.pfad ? "<th>Ablage</th>" : ""}${sortKopf("Nächste Prüfung", "faellig", s, { klasse: "mat-schmal-weg" })}${sortKopf("Status", "status", s, { nach: kopfZusatz("Nächste Prüfung", "faellig", s, "schmal") })}${opts.pruefen ? "<th></th>" : ""}</tr></thead>
+        ${sortKopf("Inventar-Nr.", "inventar", s, { nach: kopfZusatz("Seriennummer", "serie", s, "schmal") })}${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: kopfZusatz("Hersteller", "hersteller", s, "schmal"), nach: opts.person ? kopfZusatz("Person", "", null, "eng") : "" })}${sortKopf("Seriennummer", "serie", s, { klasse: "mat-schmal-weg" })}
+        ${opts.person ? '<th class="mat-eng-weg">Person</th>' : ""}${opts.pfad ? "<th>Ablage</th>" : ""}${sortKopf("Nächste Prüfung", "faellig", s, { klasse: "mat-schmal-weg" })}${sortKopf("Status", "status", s, { nach: kopfZusatz("Nächste Prüfung", "faellig", s, "schmal") })}${opts.pruefen ? "<th></th>" : ""}</tr></thead>
       <tbody>${liste.map((a) => `<tr data-id="${a.id}">
         ${opts.auswahl ? `<td class="mat-wahlspalte mat-k-wahl">${wahlFeld(a)}</td>` : ""}
         <td data-l="Inventar-Nr." class="mat-k-titel"><a class="mat-inv" href="/material/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a>
           <div class="mat-schmal-zusatz small muted">SN ${esc(a.serial_no)}${a.serial_generated ? " (System)" : ""}</div></td>
         <td data-l="Hersteller" class="mat-schmal-weg">${esc(a.manufacturer || "")}</td>
-        <td data-l="Produkt" class="mat-k-ohne">${a.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(a.manufacturer)}</div>` : ""}${produktZelle(a)}</td>
+        <td data-l="Produkt" class="mat-k-ohne">${a.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(a.manufacturer)}</div>` : ""}${produktZelle(a)}${opts.person && a.zugeordnet_name ? `<div class="mat-eng-zusatz small muted">${esc(a.zugeordnet_name)}</div>` : ""}</td>
         <td data-l="Seriennummer" class="mat-schmal-weg">${esc(a.serial_no)}${a.serial_generated ? ' <span class="muted" title="vom System vergeben">(System)</span>' : ""}</td>
+        ${opts.person ? `<td data-l="Person" class="mat-eng-weg mat-k-halb">${esc(a.zugeordnet_name || "")}</td>` : ""}
         ${opts.pfad ? `<td data-l="Ablage">${esc(a.pfad || "")}</td>` : ""}
         <td data-l="Nächste Prüfung" class="mat-schmal-weg">${naechste(a) && a.status !== "neu" ? esc(naechste(a)) : `<span class="muted">${esc(naechste(a) || "–")}</span>`}</td>
         <td data-l="Status" class="mat-k-marke">${statusMarke(a.status)}${a.rueckruf ? ` <span class="mat-rr-marke" title="Rückruf: ${esc(a.rueckruf)}">Rückruf</span>` : ""}${a.entwurf ? `<div class="small muted">in Prüfung bei ${esc(a.entwurf.pruefer || "?")}</div>` : ""}${naechste(a) ? `<div class="mat-schmal-zusatz small${a.status === "neu" ? " muted" : ""}">${a.status === "neu" ? "" : "fällig "}${esc(naechste(a))}</div>` : ""}</td>
@@ -820,12 +978,12 @@
   function wahlFeld(a) {
     const frei = a.lock_state === "frei";
     const grund = a.lock_state === "ausgesondert" ? "ausgesondert" : "gesperrt";
-    return `<label class="mat-wahl-feld"><input type="checkbox" class="mat-wahl-art" value="${a.id}" ${frei ? "" : 'disabled title="Gesperrte und ausgesonderte Artikel bleiben in ihrem Systemordner."'} aria-label="${esc(a.inventory_no)} auswählen">
+    return `<label class="mat-wahl-feld"><input type="checkbox" class="mat-wahl-art" value="${a.id}"${a.zugeordnet_name ? ' data-person="1"' : ""} ${frei ? "" : 'disabled title="Gesperrte und ausgesonderte Artikel bleiben in ihrem Systemordner."'} aria-label="${esc(a.inventory_no)} auswählen">
       <span class="mat-wahl-text">${frei ? "auswählen" : `${grund} – bleibt im Systemordner`}</span></label>`;
   }
-  // „Prüfen“ in Listen: für Prüfer, solange niemand anderes den Artikel reserviert hat.
+  // „Prüfen“ in Listen: mit Prüffreigabe für den Artikel, solange niemand anderes ihn reserviert hat.
   function pruefKnopf(a, durchgangId) {
-    if (!DARF.pruefen || a.lock_state === "ausgesondert") return "";
+    if (!(a.darf && a.darf.pruefen) || a.lock_state === "ausgesondert") return "";
     if (a.entwurf && a.entwurf.pruefer_id !== DARF.uid) return "";
     const q = durchgangId ? `?durchgang=${durchgangId}` : "";
     return a.entwurf ? `<a class="btn secondary small" href="/material/pruefung/${a.entwurf.id}">Weiter prüfen</a>`
@@ -838,6 +996,9 @@
     // Alles Fällige – wie bestand.FAELLIG auf dem Server (überfällig, Lebensdauer erreicht, neu, bald fällig).
     const FAELLIG = "ueberfaellig,lebensdauer,neu,bald_faellig";
     let filter = params.get("status") || FAELLIG;
+    // Aus dem Ordner mit dem Filter „Zugeordnet an …“: nur Artikel dieser Person (der Server wendet ihn nur an, wo das
+    // Grundrecht gilt).
+    let zugeordnet = params.get("zugeordnet") || "";
     let seite = 1;
     let sort = { feld: null, richtung: "auf" };
     const FILTER = [[FAELLIG, "alles Fällige"], ["ueberfaellig", "überfällig"], ["lebensdauer", "Lebensdauer erreicht"],
@@ -847,13 +1008,17 @@
     async function liste() {
       const q = sortParameter(new URLSearchParams({ status: filter, seite, pro_seite: 50 }), sort);
       if (DATEN.ordner) q.set("ordner", DATEN.ordner);
+      if (zugeordnet) q.set("zugeordnet", zugeordnet);
       const d = await api(`${API}/faellig?${q}`);
       // Aus der Übersicht kommt die Liste nach Ordner gefiltert – samt Unterordnern; „alle Ordner“ hebt das auf.
       const ordnerZeile = d.ordner ? `<p class="mat-pr-ordner">Nur <a href="/material/ordner/${d.ordner.id}">${esc(d.ordner.pfad.map((o) => o.name).join(" / "))}</a> mit Unterordnern
-        · <a href="/material/pruefungen?status=${encodeURIComponent(filter)}">alle Ordner</a></p>` : "";
-      $("#pr-liste").innerHTML = `${ordnerZeile}<p class="help">Überfällig, Lebensdauer erreicht (die Prüfung endet mit „aussondern“), neu (die Eingangsprüfung steht aus) oder in den nächsten ${d.schwelle_tage} Tagen fällig. Prüfen lässt sich jeder Artikel aber jederzeit – auch aus seiner Ansicht.</p>
+        · <a href="${adresse({ ordner: null })}">alle Ordner</a></p>` : "";
+      const name = (d.artikel.find((a) => a.zugeordnet_name) || {}).zugeordnet_name;
+      const personZeile = zugeordnet ? `<p class="mat-pr-ordner">Nur Artikel, die ${name ? esc(name) : "einer Person"} zugeordnet sind
+        · <a href="${adresse({ zugeordnet: null })}">alle Personen</a></p>` : "";
+      $("#pr-liste").innerHTML = `${ordnerZeile}${personZeile}<p class="help">Überfällig, Lebensdauer erreicht (die Prüfung endet mit „aussondern“), neu (die Eingangsprüfung steht aus) oder in den nächsten ${d.schwelle_tage} Tagen fällig. Prüfen lässt sich jeder Artikel aber jederzeit – auch aus seiner Ansicht.</p>
         <div class="c-tabs mat-filter">${FILTER.map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}</button>`).join("")}</div>
-        ${d.artikel.length ? artikelTabelle(d.artikel, { pfad: true, pruefen: DARF.pruefen, sort }) : leer("Keine Artikel in dieser Auswahl.")}
+        ${d.artikel.length ? artikelTabelle(d.artikel, { pfad: true, pruefen: d.artikel.some((a) => a.darf && a.darf.pruefen), sort }) : leer("Keine Artikel in dieser Auswahl.")}
         ${seitenleiste(d.gesamt, seite, 50)}`;
     }
     async function offene() {
@@ -864,8 +1029,8 @@
         ${liste.map((x) => `<tr><td data-l="Artikel" class="mat-k-titel"><a href="/material/artikel/${x.item_id}"><strong>${esc(x.artikel.inventory_no)}</strong></a> ${esc(produktName(x.artikel))} <div class="small muted">${esc(x.artikel.pfad)}</div></td>
           <td data-l="Prüfung" class="mat-k-halb">${esc(PRUEFART_KURZ[x.art] || x.art)}</td><td data-l="Prüfer" class="mat-k-halb">${esc(x.pruefer)}${x.eigen ? ' <span class="badge">du</span>' : ""}</td>
           <td data-l="begonnen">${esc(fmtZeit(x.begonnen_am))}</td>
-          <td class="tabelle-aktionen">${x.eigen && DARF.pruefen ? `<a class="btn secondary small" href="/material/pruefung/${x.id}">Weiter prüfen</a>` : `<a class="btn secondary small" href="/material/pruefung/${x.id}">Ansehen</a>`}
-            ${!x.eigen && DARF.verwalten ? `<button class="btn secondary small" data-act="freigeben" data-id="${x.id}" data-wer="${esc(x.pruefer)}">Freigeben</button>` : ""}</td></tr>`).join("")}
+          <td class="tabelle-aktionen">${x.eigen && x.artikel.darf && x.artikel.darf.pruefen ? `<a class="btn secondary small" href="/material/pruefung/${x.id}">Weiter prüfen</a>` : `<a class="btn secondary small" href="/material/pruefung/${x.id}">Ansehen</a>`}
+            ${!x.eigen && x.artikel.darf && x.artikel.darf.verwalten ? `<button class="btn secondary small" data-act="freigeben" data-id="${x.id}" data-wer="${esc(x.pruefer)}">Freigeben</button>` : ""}</td></tr>`).join("")}
         </tbody></table></section>` : "";
     }
     async function zeichnen() {
@@ -877,8 +1042,15 @@
         <section class="section"><h2>Zu prüfen</h2><div id="pr-liste"><p class="help">Wird geladen …</p></div></section>`;
       await Promise.all([zeigenIn(liste, "#pr-liste"), zeigenIn(offene, "#pr-offen"), rundenKasten($("#pr-runden"), false)]);
     }
+    // Die Adresse dieser Liste mit Ordner, Person und Filter – was in aendern null ist, fällt weg.
+    function adresse(aendern) {
+      const p = new URLSearchParams();
+      const werte = Object.assign({ ordner: DATEN.ordner || null, zugeordnet: zugeordnet || null, status: filter }, aendern || {});
+      Object.entries(werte).forEach(([k, w]) => { if (w !== null && w !== "") p.set(k, w); });
+      return `/material/pruefungen?${p}`;
+    }
     aktionen = {
-      filter: (b) => { filter = b.dataset.f; seite = 1; history.replaceState(null, "", `?${DATEN.ordner ? `ordner=${DATEN.ordner}&` : ""}status=${filter}`); zeigenIn(liste, "#pr-liste"); },
+      filter: (b) => { filter = b.dataset.f; seite = 1; history.replaceState(null, "", adresse()); zeigenIn(liste, "#pr-liste"); },
       seite: (b) => { seite = +b.dataset.seite; zeigenIn(liste, "#pr-liste"); },
       sortieren: (b) => { sort = sortWeiter(sort, b.dataset.feld); seite = 1; zeigenIn(liste, "#pr-liste"); },
       freigeben: (b) => reservierungFreigeben(+b.dataset.id, b.dataset.wer, () => Promise.all([zeigenIn(offene, "#pr-offen"), zeigenIn(liste, "#pr-liste")])),
@@ -898,15 +1070,19 @@
     catch (e) { toast(e.message, true); }
   }
 
+  // Einen Durchgang eröffnet, wer den Ordner verwaltet oder dort prüfen darf – nur solche Ordner stehen zur Wahl.
   async function rundeDialog(ordnerId) {
-    const liste = (await api(`${API}/ordner`)).ordner.filter((o) => !o.system_kind);
-    if (!liste.length) { toast("Zuerst unter „Bestand“ eine Gliederung anlegen.", true); return; }
-    const kinder = baumKinder(liste);
-    const optionen = (pid, tiefe) => (kinder[pid] || []).map((o) => `<option value="${o.id}" ${o.id === ordnerId ? "selected" : ""}>${EIN.repeat(tiefe)}${esc(o.name)} (${o.bestand})</option>${optionen(o.id, tiefe + 1)}`).join("");
+    const liste = await ordnerBaum(true);
+    const wahl = ordnerOptionen(liste, (o) => Boolean(o.darf && (o.darf.verwalten || o.darf.pruefen)), ordnerId, true);
+    if (!wahl.anzahl) {
+      toast(liste.some((o) => !o.system_kind) ? "Einen Prüfdurchgang eröffnet, wer den Ordner verwaltet oder dort eine Prüffreigabe hat."
+        : "Zuerst unter „Bestand“ eine Gliederung anlegen.", true);
+      return;
+    }
     dialog(`<h2>Prüfdurchgang eröffnen</h2>
       <p class="help">Alle Artikel im gewählten Ordner und darunter (ohne ausgesonderte) kommen auf eine gemeinsame Liste. Mehrere Prüfer arbeiten sie gleichzeitig ab; wer einen Artikel öffnet, reserviert ihn.</p>
       <label for="rd-titel">Titel</label><input type="text" id="rd-titel" maxlength="160" value="Jahresprüfung ${new Date().getFullYear()}">
-      <label for="rd-ordner">Ordner</label><select id="rd-ordner">${optionen(0, 0)}</select>
+      <label for="rd-ordner">Ordner</label><select id="rd-ordner">${wahl.html}</select>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="rd-ok" type="button">Eröffnen</button></div>`,
     (dlg, body) => {
       fokus($("#rd-titel", body));
@@ -923,13 +1099,14 @@
 
   /* --- Bestand ------------------------------------------------------------------------------------ */
   async function bestand() {
-    const d = await api(`${API}/ordner`);
+    const liste = await ordnerBaum();
     inhalt.innerHTML = `<div class="page-head"><h1>Bestand</h1>
-        <div class="btn-row">${DARF.verwalten ? '<button class="btn secondary" data-act="gliederung">+ Gliederung</button>' : ""}</div></div>
+        <div class="btn-row">${DARF.gliederung_anlegen ? '<button class="btn secondary" data-act="gliederung">+ Gliederung</button>' : ""}</div></div>
       <p class="help">Oben stehen die Gliederungen, darunter frei verschachtelt Standorte, Fahrzeuge, Sets. Jede Gliederung hat die
         Systemordner „Gesperrt“ und „Ausgesondert“ – dorthin kommen Artikel nur durch eine Sperre oder Aussonderung.
-        Die Zahl hinter einem Ordner ist sein Bestand; farbig: überfällig, Lebensdauer erreicht, gesperrt, bald fällig.</p>
-      ${d.ordner.length ? baumHtml(d.ordner) : leer("Noch kein Ordner angelegt.")}`;
+        Die Zahl hinter einem Ordner ist sein Bestand; farbig: überfällig, Lebensdauer erreicht, gesperrt, bald fällig.
+        ${liste.some((o) => o.nur_pfad) ? "Grau: übergeordnete Ordner, in denen du keine Freigabe hast – nur der Weg zu deinen." : ""}</p>
+      ${liste.length ? baumHtml(liste) : leer(DARF.lesen ? "Noch kein Ordner angelegt." : "Du hast noch keine Freigabe im Bestand – der Materialwart deiner Gliederung vergibt sie.")}`;
     aktionen = { gliederung: () => ordnerDialog({ kind: "gliederung" }, null) };
   }
 
@@ -1100,10 +1277,22 @@
             await api(`${API}/ordner/${oid}/foto`, { method: "DELETE" });
           }
           dlg.close();
-          location.href = `/material/ordner/${oid}`;
+          // Eine neue Gliederung braucht als Erstes ihren Materialwart: Der Freigaben-Dialog öffnet mit dieser Vorlage.
+          location.href = `/material/ordner/${oid}${oben ? "?freigaben=materialwart" : ""}`;
         } catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
     });
+  }
+
+  // Hinweise der Verschieben-Dialoge (Bauentwurf 1.7): was mit Freigaben, Systemordnern und Durchgängen geschieht.
+  const ORDNER_VERSCHIEBEN = "Freigaben an diesem Ordner wandern mit; was vom alten Oberordner geerbt war, gilt hier nicht mehr, was am neuen Ort gilt, kommt dazu.";
+  const ORDNER_WECHSEL = "Gesperrte und ausgesonderte Artikel aus diesem Ordner wandern in die Systemordner der neuen Gliederung; offene Durchgänge der alten Gliederung nehmen die Artikel mit Grund aus.";
+  const GLIEDERUNG_WECHSEL = "Die Gliederung behält ihre Systemordner; offene Durchgänge der alten Gliederung nehmen ihre Artikel mit Grund aus.";
+  const ARTIKEL_VERSCHIEBEN = "Am neuen Ort gelten die Freigaben des Zielordners. Steht ein Artikel in einem offenen Prüfdurchgang, dessen Bereich er verlässt, nimmt ihn der Durchgang mit Grund aus.";
+  const ARTIKEL_WECHSEL = "Das Ziel liegt in einer anderen Gliederung: Wer nur dort eine Freigabe hat, wo der Artikel jetzt liegt, sieht ihn danach nicht mehr.";
+  // Nach einem Verschieben: Die Leiste zeigt den neuen Baum (der Inhalt lädt ohnehin neu).
+  function leisteNeu() {
+    ordnerBaum(true).then((l) => { if (leisteDaten && !LEISTE_KATALOG) { leisteDaten = l; leisteZeichnen(); } }).catch(() => {});
   }
 
   async function ordner() {
@@ -1111,74 +1300,164 @@
     let filter = "";
     let seite = 1;
     let sort = { feld: null, richtung: "auf" };
+    let person = "";                 // Filter „Zugeordnet an“: Kennung des Kontos
+    let personen = null;             // Konten mit Zuordnungen im Zweig – nur mit Grundrecht geholt
+    let grund = false;               // Grundrecht am Ordner – bekannt nach dem ersten Zeichnen
+    let kopfEl = null;               // Ablaufhinweis der Freigaben: einmal geholt, bei jedem Zeichnen wieder eingesetzt
+    // Die Personen für den Filter (nur mit Grundrecht). Hat die gewählte inzwischen keine Zuordnung mehr, gilt er nicht.
+    async function personenHolen() {
+      try { personen = (await api(`${API}/ordner/${id}/zugeordnete`)).zugeordnete; } catch (e) { personen = []; }
+      if (person && !personen.some((p) => String(p.id) === person)) person = "";
+    }
+    // ?freigaben=<vorlage> (nach dem Anlegen einer Gliederung): den Dialog einmal öffnen und aus der Adresse nehmen –
+    // sonst ginge er bei jedem Neuladen wieder auf.
+    const adresse = new URLSearchParams(location.search);
+    let vorlage = adresse.get("freigaben");
+    if (vorlage !== null) {
+      adresse.delete("freigaben");
+      try { history.replaceState(null, "", location.pathname + (String(adresse) ? `?${adresse}` : "")); } catch (e) { /* nur die Adresszeile */ }
+    }
+    // Schließt der Freigaben-Dialog (freigaben.js kennzeichnet ihn mit „mf-dlg“) – geöffnet über „Freigaben“ oder
+    // „Verlängern …“ im Kopf –, gilt der Ordner neu: eigene Rechte, Ablaufhinweis.
+    const dlgEl = document.getElementById("dlg");
+    if (dlgEl) dlgEl.addEventListener("close", () => { if (dlgEl.classList.contains("mf-dlg")) { kopfEl = null; zeigen(zeichnen); } });
     async function zeichnen() {
+      if (grund && personen === null) await personenHolen();
       const q = sortParameter(new URLSearchParams({ seite, pro_seite: 200 }), sort);
       if (filter) q.set("status", filter);
-      const d = (await api(`${API}/ordner/${id}?${q}`)).ordner;
+      if (person) q.set("zugeordnet", person);
+      const [antwort] = await Promise.all([api(`${API}/ordner/${id}?${q}`), ordnerBaum().catch(() => null)]);
+      const d = antwort.ordner;
+      const darf = d.darf || {};
+      grund = Boolean(darf.grund);
+      if (grund && personen === null) await personenHolen();
       leisteMarkieren(d.id);
       const system = !!d.system_kind;
-      const darfPflegen = DARF.verwalten && !system;
+      const darfPflegen = Boolean(darf.verwalten) && !system;
+      // Verschieben und Löschen: wer den Ordner darüber verwaltet – eine Gliederung auf oberster Ebene nur die Verwaltung.
+      const darfOben = darfPflegen && verwaltet(d.parent_id ? baumIndex[d.parent_id] : null);
       const z = d.zaehlung || {};
-      const bc = d.pfad.map((p, i) => i === d.pfad.length - 1 ? `<span>${esc(p.name)}</span>` : `<a href="/material/ordner/${p.id}">${esc(p.name)}</a>`).join(" / ");
+      const bc = d.pfad.map((p, i) => (i === d.pfad.length - 1 ? `<span>${esc(p.name)}</span>` : pfadGlied(p))).join(" / ");
+      const pruefbar = d.system_kind !== "ausgesondert" && d.artikel.some((a) => a.darf && a.darf.pruefen);
+      // Filter „Zugeordnet an …“ (Bauentwurf 6.4) – nur mit Grundrecht und nur, wenn im Zweig jemandem etwas zugeordnet ist.
+      const personWahl = grund && personen && personen.length ? `<select class="mat-personwahl" data-personwahl
+          aria-label="Nur Artikel, die dieser Person zugeordnet sind"><option value="">Zugeordnet an …</option>${personen.map((p) => `<option value="${p.id}" ${String(p.id) === person ? "selected" : ""}>${esc(p.name)}${p.aktiv ? "" : " (deaktiviert)"}</option>`).join("")}</select>` : "";
+      const systemText = d.system_kind === "gesperrt"
+        ? "Hierher verschiebt eine Sperre die Artikel der Gliederung. Zurück in ihren Herkunftsordner bringt sie nur eine Freiprüfung."
+        : "Ausgesonderte Artikel bleiben hier mit ihrem vollen Lebenslauf sichtbar, zählen aber nirgends mehr als Bestand und lassen sich nicht zurückholen.";
       inhalt.innerHTML = `<div class="mat-pfad"><a href="/material/bestand">Bestand</a> / ${bc}</div>
         <div class="page-head"><h1>${system ? "🔒 " : ""}${esc(d.name)} ${system ? "" : `<span class="mat-art">${esc(ORDNERART[d.kind])}</span>`}${demoMarke(d.demo)}</h1>
           <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="unterordner">+ Unterordner</button>
             <a class="btn secondary small" href="/material/artikel/neu?ordner=${d.id}">+ Artikel</a>
             <button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>
-            <button class="btn secondary small" data-act="verschieben">Verschieben</button><button class="btn secondary small" data-act="loeschen">Löschen</button>` : ""}
-            ${DARF.lesen ? exportMenue(d) : ""}</div></div>
-        ${system ? `<p class="notice">${d.system_kind === "gesperrt" ? "Hierher verschiebt eine Sperre die Artikel der Gliederung. Zurück in ihren Herkunftsordner bringt sie nur eine Freiprüfung." : "Ausgesonderte Artikel bleiben hier mit ihrem vollen Lebenslauf sichtbar, zählen aber nirgends mehr als Bestand und lassen sich nicht zurückholen."}</p>` : ""}
+            <button class="btn secondary small" data-act="freigaben">Freigaben</button>
+            ${darfOben ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button><button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}
+            ${darf.grund ? exportMenue(d) : ""}</div></div>
+        ${darfPflegen ? '<div id="mat-freigaben-kopf"></div>' : ""}
+        ${system ? `<p class="notice">${systemText}${d.teilweise ? " Du siehst hier nur deine Artikel – die Gliederung selbst gehört nicht zu deinem Bereich." : ""}</p>` : ""}
         ${d.foto || d.description || d.interval_months ? `<div class="mat-ordnerkopf">${d.foto ? bildLink(d.foto, d.original, `Ordnerfoto ${d.name}`, null, `<img class="mat-ordnerfoto" src="${esc(d.vorschau)}" alt="">`) : ""}
           <div>${d.description ? `<p class="mat-text">${esc(d.description)}</p>` : ""}
           ${d.interval_months ? `<p class="small">Prüfintervall hier: höchstens ${d.interval_months} Monate.</p>` : ""}</div></div>` : ""}
         ${d.unterordner.length ? `<section class="section"><h2>Unterordner</h2>${unterordnerHtml(d.unterordner)}</section>` : ""}
         <section class="section"><h2>Artikel in diesem Ordner</h2>
-          <div class="c-tabs mat-filter">${["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"].map((s) => `<button type="button" data-act="filter" data-f="${s}" class="${s === filter ? "sel" : ""}">${s ? esc(STATUS[s]) : "alle"}${s && d.direkt && d.direkt[s] ? ` (${d.direkt[s]})` : ""}</button>`).join("")}</div>
-          ${d.artikel.length ? artikelTabelle(d.artikel, { auswahl: darfPflegen, pruefen: DARF.pruefen && d.system_kind !== "ausgesondert", sort }) : leer(filter ? "Keine Artikel mit diesem Status." : "Hier liegen keine Artikel.")}
+          <div class="mat-filterzeile"><div class="c-tabs mat-filter">${["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"].map((s) => `<button type="button" data-act="filter" data-f="${s}" class="${s === filter ? "sel" : ""}">${s ? esc(STATUS[s]) : "alle"}${s && d.direkt && d.direkt[s] ? ` (${d.direkt[s]})` : ""}</button>`).join("")}</div>
+            ${personWahl}</div>
+          ${d.artikel.length ? artikelTabelle(d.artikel, { auswahl: darfPflegen, pruefen: pruefbar, person: darf.grund, sort })
+            : leer(person ? "Hier liegen keine Artikel, die dieser Person zugeordnet sind." : filter ? "Keine Artikel mit diesem Status." : "Hier liegen keine Artikel.")}
+          ${person ? `<p class="small"><a href="/material/pruefungen?ordner=${d.id}&zugeordnet=${encodeURIComponent(person)}">Fällige Artikel dieser Person im ganzen Zweig →</a></p>` : ""}
           ${seitenleiste(d.artikel_gesamt, seite, d.pro_seite)}
-          ${darfPflegen ? '<div class="mat-sammel" id="mat-sammel" hidden><span id="mat-sammel-n"></span><button class="btn secondary small" data-act="sammel-verschieben">Verschieben nach …</button></div>' : ""}
+          ${darfPflegen ? `<div class="mat-sammel" id="mat-sammel" hidden><span id="mat-sammel-n"></span><div class="btn-row">
+            <button class="btn secondary small" data-act="sammel-verschieben">Verschieben nach …</button>
+            <button class="btn secondary small" data-act="sammel-zuordnen">Zuordnen an …</button>
+            <button class="btn secondary small" data-act="sammel-loesen" hidden>Zuordnung lösen</button></div></div>` : ""}
         </section>
         <p class="small mat-zweigbestand">${system ? plural(Object.values(z).reduce((a, b) => a + b, 0), "Artikel", "Artikel") : `Bestand im ganzen Zweig: <strong>${d.bestand}</strong> ${zahlen(z)}`}</p>
-        <details class="section mat-auf"><summary>Journal des Ordners</summary>${journalHtml(d.journal)}</details>`;
+        ${darf.grund ? `<details class="section mat-auf"><summary>Journal des Ordners</summary>${journalHtml(d.journal)}</details>` : ""}`;
+      if (darfPflegen) {
+        if (!kopfEl) {
+          kopfEl = document.createElement("div");
+          kopfEl.id = "mat-freigaben-kopf";
+          const el = kopfEl;
+          baustein("MatFreigaben").then((f) => { if (f) f.kopfhinweis(el, d); });
+        }
+        $("#mat-freigaben-kopf").replaceWith(kopfEl);
+        if (vorlage !== null) {
+          const v = vorlage;
+          vorlage = null;
+          baustein("MatFreigaben").then((f) => { if (f) f.oeffnen(d, v || undefined); });
+        }
+      }
       // „alle auswählen“ gibt es zweimal – im Tabellenkopf und über den Karten (schmale Bildschirme); beide zeigen
       // denselben Stand, halb gesetzt, solange nur ein Teil angehakt ist.
       const waehlbar = $$(".mat-wahl-art:not(:disabled)", inhalt);
       const alleK = $$(".mat-alle", inhalt);
       const sammel = () => {
-        const n = $$(".mat-wahl-art:checked", inhalt).length;
+        const gewaehlt = $$(".mat-wahl-art:checked", inhalt);
+        const n = gewaehlt.length;
         alleK.forEach((x) => { x.checked = !!waehlbar.length && n === waehlbar.length; x.indeterminate = n > 0 && n < waehlbar.length; });
         const leiste = $("#mat-sammel");
         if (!leiste) return;
         leiste.hidden = !n;
         $("#mat-sammel-n").textContent = `${plural(n, "Artikel", "Artikel")} ausgewählt`;
+        // „Zuordnung lösen“ nur, wenn unter den gewählten einer jemandem zugeordnet ist.
+        $('[data-act="sammel-loesen"]', leiste).hidden = !gewaehlt.some((c) => c.dataset.person);
       };
       $$(".mat-wahl-art", inhalt).forEach((c) => c.addEventListener("change", sammel));
       alleK.forEach((alle) => alle.addEventListener("change", () => { waehlbar.forEach((c) => { c.checked = alle.checked; }); sammel(); }));
+      const gewaehlteIds = () => $$(".mat-wahl-art:checked", inhalt).map((c) => +c.value);
+
       aktionen = {
         filter: (b) => { filter = b.dataset.f; seite = 1; zeigen(zeichnen); },
         seite: (b) => { seite = +b.dataset.seite; zeigen(zeichnen); },
         sortieren: (b) => { sort = sortWeiter(sort, b.dataset.feld); seite = 1; zeigen(zeichnen); },
+        person: (s) => { person = s.value; seite = 1; zeigen(zeichnen); },
         unterordner: () => ordnerDialog({ kind: "standort" }, d.id),
         runde: () => rundeDialog(d.id),
         bearbeiten: () => ordnerDialog(d, d.parent_id),
+        freigaben: () => window.MatFreigaben && window.MatFreigaben.oeffnen(d),
         verschieben: async () => {
-          const ziel = await ordnerWaehlen("Ordner verschieben nach …", { ohneZweig: d.id, obersteEbene: d.kind === "gliederung" });
+          const gl = d.kind === "gliederung";
+          const ziel = await ordnerWaehlen("Ordner verschieben nach …", { ohneZweig: d.id, obersteEbene: gl, quelle: d.parent_id || null,
+                                                                          hinweis: ORDNER_VERSCHIEBEN, wechselHinweis: gl ? GLIEDERUNG_WECHSEL : ORDNER_WECHSEL });
           if (ziel === null) return;
-          try { await api(`${API}/ordner/${d.id}/verschieben`, { method: "POST", body: { parent_id: ziel || null } }); toast("Verschoben"); zeigen(zeichnen); }
+          try { await api(`${API}/ordner/${d.id}/verschieben`, { method: "POST", body: { parent_id: ziel || null } }); toast("Verschoben"); leisteNeu(); zeigen(zeichnen); }
           catch (e) { toast(e.message, true); }
         },
         loeschen: async () => {
           if (!(await confirm(`Ordner „${d.name}“ löschen? Das geht nur, solange er leer ist.`, "Löschen"))) return;
-          try { await api(`${API}/ordner/${d.id}`, { method: "DELETE" }); location.href = d.parent_id ? `/material/ordner/${d.parent_id}` : "/material/bestand"; }
+          try { await api(`${API}/ordner/${d.id}`, { method: "DELETE" }); location.href = d.parent_id && offenbar(d.parent_id) ? `/material/ordner/${d.parent_id}` : "/material/bestand"; }
           catch (e) { toast(e.message, true); }
         },
         "sammel-verschieben": async () => {
-          const ids = $$(".mat-wahl-art:checked", inhalt).map((c) => +c.value);
+          const ids = gewaehlteIds();
           if (!ids.length) return;
-          const ziel = await ordnerWaehlen(`${plural(ids.length, "Artikel", "Artikel")} verschieben nach …`);
+          const ziel = await ordnerWaehlen(`${plural(ids.length, "Artikel", "Artikel")} verschieben nach …`,
+                                           { quelle: d.id, hinweis: ARTIKEL_VERSCHIEBEN, wechselHinweis: ARTIKEL_WECHSEL });
           if (!ziel) return;
-          try { const r = await api(`${API}/artikel/verschieben`, { method: "POST", body: { ids, folder_id: ziel } }); toast(`${plural(r.verschoben, "Artikel", "Artikel")} verschoben`); zeigen(zeichnen); }
+          try { const r = await api(`${API}/artikel/verschieben`, { method: "POST", body: { ids, folder_id: ziel } }); toast(`${plural(r.verschoben, "Artikel", "Artikel")} verschoben`); leisteNeu(); zeigen(zeichnen); }
           catch (e) { toast(e.message, true); }
+        },
+        "sammel-zuordnen": async () => {
+          const ids = gewaehlteIds();
+          if (!ids.length) return;
+          const p = await personWaehlen(`${plural(ids.length, "Artikel", "Artikel")} zuordnen`);
+          if (!p) return;
+          try {
+            const r = await api(`${API}/artikel/zuordnen`, { method: "POST", body: { ids, user_id: p.id } });
+            toast(`${plural(r.geaendert, "Artikel", "Artikel")} zugeordnet an ${p.name}`);
+            personen = null;
+            zeigen(zeichnen);
+          } catch (e) { toast(e.message, true); }
+        },
+        "sammel-loesen": async () => {
+          const ids = gewaehlteIds();
+          if (!ids.length) return;
+          try {
+            const r = await api(`${API}/artikel/zuordnen`, { method: "POST", body: { ids, user_id: null } });
+            toast(`Zuordnung gelöst – ${plural(r.geaendert, "Artikel", "Artikel")}`);
+            personen = null;
+            zeigen(zeichnen);
+          } catch (e) { toast(e.message, true); }
         },
       };
     }
@@ -1292,11 +1571,13 @@
 
   /* --- Artikel --------------------------------------------------------------------------------------- */
   async function artikel() {
-    const a = (await api(`${API}/artikel/${DATEN.id}`)).artikel;
+    const [antwort] = await Promise.all([api(`${API}/artikel/${DATEN.id}`), ordnerBaum().catch(() => null)]);
+    const a = antwort.artikel;
+    const darf = a.darf || {};           // was das Konto an diesem Artikel (seiner Heimat) darf
     leisteMarkieren(a.folder_id);
     const p = a.produkt;
     const frei = a.lock_state === "frei";
-    const darfPflegen = DARF.verwalten && a.lock_state !== "ausgesondert";
+    const darfPflegen = Boolean(darf.verwalten) && a.lock_state !== "ausgesondert";
     const aus = a.lock_state === "ausgesondert";
     const gesperrt = a.lock_state === "gesperrt" || a.lock_state === "verloren";
     const eigenerEntwurf = a.entwurf && a.entwurf.pruefer_id === DARF.uid;
@@ -1311,8 +1592,15 @@
       ldText = `Herstellerangabe ${ld.jahre} Jahre${ld.quelle ? ` (${esc(ld.quelle)})` : ""} <span class="muted">– bei „${esc(MATERIALART[p.material_kind])}“ kein festgeschriebenes Lebensende</span>`;
     }
     const ivText = iv.monate ? `${iv.monate} Monate <span class="muted">(${esc(iv.quelle || "")}${iv.organisation && iv.organisation[0] && iv.hersteller && iv.hersteller[0] && iv.organisation[0] > iv.hersteller[0] ? ` – ${esc(iv.organisation[1])} wollte ${iv.organisation[0]}, die Herstellervorgabe ist kürzer` : ""})</span>` : '<span class="mat-warn">kein Intervall</span>';
-    const bc = a.pfad.map((o) => `<a href="/material/ordner/${o.id}">${esc(o.name)}</a>`).join(" / ");
+    const bc = a.pfad.map(pfadGlied).join(" / ");
     const zeile = (t, w) => `<dt>${esc(t)}</dt><dd>${w}</dd>`;
+    // Personenzuordnung (Bauentwurf 6.4): sehen nur mit Grundrecht, zuordnen, ändern und lösen, wer den Artikel verwaltet.
+    // Einem ausgesonderten Artikel ordnet niemand mehr jemanden zu; eine alte Zuordnung lässt sich noch lösen.
+    const zu = a.zugeordnet;
+    const zuKnoepfe = darf.verwalten && (!aus || zu) ? `<div class="btn-row mat-zuordnung">${aus ? "" : `<button class="btn secondary small" type="button" data-act="zuordnen">${zu ? "Ändern" : "Zuordnen …"}</button>`}${zu ? '<button class="btn secondary small" type="button" data-act="zuordnung-loesen">Lösen</button>' : ""}</div>
+      <div class="help">${esc(ZUORDNUNG_HILFE)}</div>` : "";
+    const zuordnung = darf.grund ? zeile("Zugeordnet an", `${zu ? `${esc(zu.name)}${zu.gliederung ? ` <span class="muted">· ${esc(zu.gliederung)}</span>` : ""}${zu.aktiv ? "" : ' <span class="muted">(deaktiviert)</span>'}`
+      : '<span class="muted">–</span>'}${zuKnoepfe}`) : "";
     inhalt.innerHTML = `${p.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen. Dieses Produkt stammt aus den Demodaten.</p>' : ""}
       ${a.status === "ausgesondert" ? `<p class="mat-banner s-ausgesondert">AUSGESONDERT – dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden.</p>` : ""}
       ${a.status === "gesperrt" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
@@ -1326,24 +1614,25 @@
           <h1>${esc(a.inventory_no)} ${statusMarke(a.status, true)}</h1>
           <p class="mat-produktzeile"><a href="/material/katalog/produkt/${p.id}">${esc(produktName(p))}</a>${p.article_no ? ` · Art.-Nr. ${esc(p.article_no)}` : ""}</p>
           <p>Seriennummer <strong>${esc(a.serial_no)}</strong>${a.serial_generated ? ' <span class="badge grey">vom System vergeben</span><span class="help mat-sn-hinweis">Der Hersteller vergibt keine Seriennummer – diese Nummer bitte dauerhaft am Artikel anbringen.</span>' : ""}</p>
-          <div class="btn-row mat-pruefknoepfe">${!aus && DARF.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
-            ${frei && DARF.pruefen && !a.entwurf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
-            ${gesperrt && DARF.verwalten && !a.entwurf ? '<button class="btn secondary small" data-act="aussondern">Aussondern</button>' : ""}</div>
+          <div class="btn-row mat-pruefknoepfe">${!aus && darf.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
+            ${frei && darf.pruefen && !a.entwurf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
+            ${gesperrt && darf.verwalten && !a.entwurf ? '<button class="btn secondary small" data-act="aussondern">Aussondern</button>' : ""}</div>
           ${a.entwurf ? `<p class="small">In Prüfung bei <strong>${esc(a.entwurf.pruefer)}</strong> seit ${esc(fmtZeit(a.entwurf.seit))}
             ${fremderEntwurf ? ` · <a href="/material/pruefung/${a.entwurf.id}">ansehen</a>` : ""}
-            ${fremderEntwurf && DARF.verwalten ? ' · <button class="lnk" type="button" data-act="freigeben">Reservierung freigeben</button>' : ""}</p>` : ""}
-          ${aus || DARF.pruefen ? "" : DARF.pruefer_haekchen ? `<p class="notice small">${URKUNDE_IM_PROFIL}</p>`
-            : '<p class="small muted">Prüfen dürfen Prüfer mit Urkundennummer (Häkchen „Prüfer“ in der Nutzerverwaltung, Urkundennummer im eigenen Profil).</p>'}
-          ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang <a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>.</p>` : ""}
-          <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${frei ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}${DARF.lesen ? lebenslaufKnopf(a) : ""}</div>
-          ${DARF.lesen ? `<p class="help mat-nur-touch">Lebenslauf (PDF): ${LEBENSLAUF_TEXT}</p>` : ""}
+            ${fremderEntwurf && darf.verwalten ? ' · <button class="lnk" type="button" data-act="freigeben">Reservierung freigeben</button>' : ""}</p>` : ""}
+          ${aus || darf.pruefen ? "" : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice small">${pruefHinweis(a)}</p>`
+            : '<p class="small muted">Prüfen dürfen Prüfer mit Urkundennummer und Prüffreigabe (Häkchen „Prüfer“ in der Nutzerverwaltung, Urkundennummer im eigenen Profil, Prüffreigabe vom Materialwart).</p>'}
+          ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang ${a.durchgang.sichtbar ? `<a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>` : `„${esc(a.durchgang.titel)}“`}.</p>` : ""}
+          <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${frei ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}${darf.grund ? lebenslaufKnopf(a) : ""}</div>
+          ${darf.grund ? `<p class="help mat-nur-touch">Lebenslauf (PDF): ${LEBENSLAUF_TEXT}</p>` : ""}
         </div>
       </div>
       <div class="mat-spalten">
         <section class="section"><h2>Stammdaten</h2><dl class="mat-daten">
           ${zeile("Produkt", `${esc(produktName(p))}${p.norm ? ` · ${esc(p.norm)}` : ""}`)}
           ${zeile("Materialart", esc(MATERIALART[p.material_kind] || p.material_kind))}
-          ${zeile("Gliederung", a.gliederung ? `<a href="/material/ordner/${a.gliederung.id}">${esc(a.gliederung.name)}</a>` : "–")}
+          ${zeile("Gliederung", a.gliederung ? pfadGlied(a.gliederung) : "–")}
+          ${zuordnung}
           ${zeile("Herstellung", a.manufactured_on ? esc(fmtTag(a.manufactured_on)) : '<span class="muted">–</span>')}
           ${zeile("Kauf", a.purchased_on ? esc(fmtTag(a.purchased_on)) : '<span class="muted">–</span>')}
           ${zeile("Erstgebrauch", a.first_use_on ? esc(fmtTag(a.first_use_on)) : '<span class="muted">–</span>')}
@@ -1363,7 +1652,7 @@
         </section>
       </div>
       <section class="section"><h2>Prüfungen</h2>${pruefListe(a.pruefungen)}</section>
-      <section class="section"><h2>Journal</h2><p class="help">Änderungen am Artikel und an seinem Produkt, neueste zuerst.</p>${journalHtml(a.journal, true)}</section>`;
+      ${darf.grund ? `<section class="section"><h2>Journal</h2><p class="help">Änderungen am Artikel und an seinem Produkt, neueste zuerst.</p>${journalHtml(a.journal, true)}</section>` : ""}`;
     aktionen = {
       "qr-kopieren": async () => {
         const feld = $("#mat-qr");
@@ -1377,9 +1666,19 @@
       aussondern: () => aussonderDialog(a),
       freigeben: () => reservierungFreigeben(a.entwurf.id, a.entwurf.pruefer, () => zeigen(artikel)),
       verschieben: async () => {
-        const ziel = await ordnerWaehlen("Artikel verschieben nach …");
+        const ziel = await ordnerWaehlen("Artikel verschieben nach …", { quelle: a.folder_id, hinweis: ARTIKEL_VERSCHIEBEN, wechselHinweis: ARTIKEL_WECHSEL });
         if (!ziel) return;
-        try { await api(`${API}/artikel/verschieben`, { method: "POST", body: { ids: [a.id], folder_id: ziel } }); toast("Verschoben"); zeigen(artikel); }
+        try { await api(`${API}/artikel/verschieben`, { method: "POST", body: { ids: [a.id], folder_id: ziel } }); toast("Verschoben"); leisteNeu(); zeigen(artikel); }
+        catch (e) { toast(e.message, true); }
+      },
+      zuordnen: async () => {
+        const wer = await personWaehlen(zu ? `${a.inventory_no}: Zuordnung ändern` : `${a.inventory_no} zuordnen`);
+        if (!wer) return;
+        try { await api(`${API}/artikel/${a.id}/zuordnung`, { method: "PUT", body: { user_id: wer.id } }); toast(`Zugeordnet an ${wer.name}`); zeigen(artikel); }
+        catch (e) { toast(e.message, true); }
+      },
+      "zuordnung-loesen": async () => {
+        try { await api(`${API}/artikel/${a.id}/zuordnung`, { method: "PUT", body: { user_id: null } }); toast("Zuordnung gelöst"); zeigen(artikel); }
         catch (e) { toast(e.message, true); }
       },
       loeschen: async () => {
@@ -1388,6 +1687,61 @@
         catch (e) { toast(e.message, true); }
       },
     };
+  }
+
+  /* Personenzuordnung (Bauentwurf 6.4): Ein Artikel – meist PSA, die eine Person dauerhaft nutzt – wird einem Konto
+     zugeordnet. Gesucht wird nach dem Namen (ab 3 Zeichen, GET /nutzer – ohne E-Mail, nur aktive Konten mit Namen).
+     Liefert { id, name } oder null. */
+  const ZUORDNUNG_HILFE = "Nur für PSA, die eine Person dauerhaft nutzt. Erscheint nicht in Protokollen.";
+  function personWaehlen(titel) {
+    return new Promise((resolve) => {
+      let gewaehlt = null;
+      let ja = false;
+      let ergebnis = null;
+      const dlg = dialog(`<h2>${esc(titel)}</h2>
+        <p class="help">${esc(ZUORDNUNG_HILFE)}</p>
+        <label for="zp-q">Person</label>
+        <div class="mat-produktwahl"><input type="search" id="zp-q" placeholder="Name, mindestens 3 Zeichen" autocomplete="off" ${TASTATUR_NAME}>
+          <div id="zp-treffer" class="mat-treffer" aria-live="polite"></div></div>
+        <div id="zp-gewaehlt" class="mat-gewaehlt" hidden></div>
+        <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
+          <button class="btn" id="zp-ok" type="button" disabled>Zuordnen</button></div>`,
+      (d, body) => {
+        const feld = $("#zp-q", body);
+        const treffer = $("#zp-treffer", body);
+        let los = null;
+        let lauf = 0;
+        fokus(feld);
+        async function suchen() {
+          const q = feld.value.trim();
+          const meinLauf = ++lauf;
+          if (q.length < 3) { treffer.innerHTML = q ? '<p class="help">Mindestens 3 Zeichen des Namens.</p>' : ""; return; }
+          let r;
+          try { r = await api(`${API}/nutzer?q=${encodeURIComponent(q)}`); }
+          catch (e) { if (meinLauf === lauf) treffer.innerHTML = `<p class="error">${esc(e.message)}</p>`; return; }
+          if (meinLauf !== lauf) return;
+          ergebnis = r.nutzer;
+          treffer.innerHTML = ergebnis.length ? ergebnis.map((u, i) => `<button type="button" class="mat-treffer-zeile" data-i="${i}">
+              <strong>${esc(u.name)}</strong>${u.gliederung ? ` <span class="muted">${esc(u.gliederung)}</span>` : ""}</button>`).join("")
+              + (r.mehr ? '<p class="help">Weitere Treffer – bitte genauer tippen.</p>' : "")
+            : '<p class="help">Niemand gefunden – zuordnen lässt sich jedes aktive Konto mit Namen.</p>';
+        }
+        feld.addEventListener("input", () => { clearTimeout(los); los = setTimeout(suchen, 250); });
+        treffer.addEventListener("click", (e) => {
+          const b = e.target.closest(".mat-treffer-zeile");
+          if (!b || !ergebnis) return;
+          gewaehlt = ergebnis[+b.dataset.i];
+          const anzeige = $("#zp-gewaehlt", body);
+          anzeige.hidden = false;
+          anzeige.innerHTML = `<strong>${esc(gewaehlt.name)}</strong>${gewaehlt.gliederung ? ` <span class="muted">${esc(gewaehlt.gliederung)}</span>` : ""}`;
+          treffer.innerHTML = "";
+          $("#zp-ok", body).disabled = false;
+          fokus($("#zp-ok", body));
+        });
+        $("#zp-ok", body).onclick = () => { if (gewaehlt) { ja = true; d.close(); } };
+      });
+      dlg.addEventListener("close", () => resolve(ja ? { id: gewaehlt.id, name: gewaehlt.name } : null), { once: true });
+    });
   }
 
   /* Prüfungen eines Artikels, neueste zuerst – der Prüfteil des Lebenslaufs. Je festgeschriebenem Eintrag das
@@ -1519,12 +1873,10 @@
   /* --- Artikel anlegen ---------------------------------------------------------------------------- */
   async function artikelNeu() {
     if (!DARF.verwalten) { inhalt.innerHTML = '<p class="error">Artikel legen nur Materialwarte an.</p>'; return; }
-    const ordnerListe = (await api(`${API}/ordner`)).ordner;
-    const wahl = ordnerListe.filter((o) => !o.system_kind);
-    if (!wahl.length) { inhalt.innerHTML = `<h1>Artikel anlegen</h1>${leer("Zuerst unter „Bestand“ eine Gliederung anlegen.")}`; return; }
+    // Wählbar sind nur Ordner, die das Konto verwaltet; der Weg dorthin steht grau dabei.
+    const wahl = ordnerOptionen(await ordnerBaum(), verwaltet, DATEN.ordner);
+    if (!wahl.anzahl) { inhalt.innerHTML = `<h1>Artikel anlegen</h1>${leer("Du verwaltest noch keinen Ordner – Artikel legt an, wer den Ordner verwaltet.")}`; return; }
     leisteMarkieren(DATEN.ordner);
-    const kinder = baumKinder(wahl);
-    const optionen = (pid, tiefe) => (kinder[pid] || []).map((o) => `<option value="${o.id}" ${o.id === DATEN.ordner ? "selected" : ""}>${EIN.repeat(tiefe)}${esc(o.name)}</option>${optionen(o.id, tiefe + 1)}`).join("");
     let produkt = null;
     inhalt.innerHTML = `<div class="page-head"><h1>Artikel anlegen</h1></div>
       <div class="mat-formular">
@@ -1534,7 +1886,7 @@
         <div id="an-produkt" class="mat-gewaehlt" hidden></div>
         <p class="help">Fehlt das Produkt im Katalog? <button type="button" class="lnk" data-act="melden">Fehlendes Produkt melden</button>
           – ein Produktkatalogpfleger nimmt es auf, du bekommst Bescheid.</p>
-        <label for="an-ordner">Ordner</label><select id="an-ordner">${optionen(0, 0)}</select>
+        <label for="an-ordner">Ordner</label><select id="an-ordner">${wahl.html}</select>
         <label for="an-sn">Seriennummer des Herstellers</label><input type="text" id="an-sn" maxlength="80" placeholder="leer lassen, wenn der Hersteller keine vergibt" ${TASTATUR_NUMMER}>
         <div class="help">Ohne Herstellernummer vergibt das System eine eindeutige (STR-…), die dann am Artikel angebracht wird. Die Inventarnummer vergibt immer das System.</div>
         <div class="field-row"><div><label for="an-herst">Herstellung (Monat)</label>${datumFeld("an-herst", "", "monat")}</div>
@@ -2156,7 +2508,7 @@
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel"><h1>${esc(produktName(p))} ${demoMarke(p.demo)}</h1>
           ${DARF.verwalten ? `<div class="btn-row"><a class="btn secondary small" href="/material/artikel/neu?produkt=${p.id}">+ Artikel dieses Produkts</a></div>` : ""}
-          ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${p.artikel_gesamt ? "" : '<button class="btn secondary small" data-act="loeschen">Löschen</button>'}</div>
+          ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${p.loeschbar ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}</div>
           <div class="btn-row"><button class="btn secondary small" data-act="variante">Als Variante kopieren</button><button class="btn secondary small" data-act="rr-neu">Rückruf anlegen</button></div>` : ""}</div>
       </div>
       ${rueckrufAbschnitt(p)}
@@ -2167,7 +2519,7 @@
           ${zeile("Norm", p.norm ? esc(p.norm) : '<span class="muted">–</span>')}
           ${zeile("Prüfintervall", p.intervall.monate ? `${p.intervall.monate} Monate <span class="muted">(${esc(p.intervall.quelle)})</span>` : '<span class="mat-warn">keins</span>')}
           ${zeile("Lebensdauer", p.lifetime_years ? `${p.lifetime_years} Jahre${p.lifetime_source ? ` <span class="muted">(${esc(p.lifetime_source)})</span>` : ""}${p.material_kind === "textil" ? "" : ' <span class="muted">– nicht festgeschrieben</span>'}` : '<span class="muted">keine</span>')}
-          ${zeile("Bestand", `${plural(p.bestand, "Artikel", "Artikel")}${p.artikel_gesamt > p.bestand ? ` <span class="muted">(+${p.artikel_gesamt - p.bestand} ausgesondert)</span>` : ""}`)}
+          ${zeile("Bestand", `${plural(p.bestand, "Artikel", "Artikel")}${p.artikel_gesamt > p.bestand ? ` <span class="muted">(+${p.artikel_gesamt - p.bestand} ausgesondert)</span>` : ""}${DARF.alles ? "" : ' <span class="muted">in deinem Bereich</span>'}`)}
           ${p.description ? zeile("Beschreibung", `<span class="mat-text">${esc(p.description)}</span>`) : ""}
         </dl></section>
         <section class="section"><h2>Prüfformular</h2>
@@ -2439,7 +2791,15 @@
       const p = sortParameter(new URLSearchParams({ q, seite, pro_seite: 50 }), sort);
       const d = await api(`${API}/suche?${p}`);
       inhalt.innerHTML = `<div class="page-head"><h1>Suche „${esc(q)}“</h1></div>
-        ${d.treffer.length ? artikelTabelle(d.treffer, { pfad: true, sort }) : leer("Kein Artikel gefunden.")}${seitenleiste(d.gesamt, seite, 50)}`;
+        ${d.treffer.length ? artikelTabelle(d.treffer, { pfad: true, sort }) : leer("Kein Artikel in deinem Bereich gefunden.")}${seitenleiste(d.gesamt, seite, 50)}
+        ${d.global_angebot ? '<div id="mat-global-angebot"></div>' : ""}`;
+      // Hat kein Artikel im eigenen Bereich genau diese Seriennummer: das Angebot, in allen Gliederungen zu suchen
+      // (global.js – mit Rückfrage, gebremst und protokolliert).
+      if (d.global_angebot) {
+        const g = await baustein("MatGlobal");
+        const el = $("#mat-global-angebot");
+        if (g && el) g.anbieten(el, q);
+      }
     }
     aktionen = {
       seite: (b) => { seite = +b.dataset.seite; zeigen(zeichnen); },
@@ -2450,7 +2810,7 @@
 
   /* --- Prüfung starten ---------------------------------------------------------------------------- */
   function artikelPfad(a) {
-    return `<div class="mat-pfad">${(a.pfad || []).map((o) => `<a href="/material/ordner/${o.id}">${esc(o.name)}</a>`).join(" / ")}
+    return `<div class="mat-pfad">${(a.pfad || []).map(pfadGlied).join(" / ")}
       / <a href="/material/artikel/${a.id}">${esc(a.inventory_no)}</a></div>`;
   }
   function lebensdauerHinweis(ld) {
@@ -2460,15 +2820,17 @@
   }
 
   async function pruefungNeu() {
-    const a = (await api(`${API}/artikel/${DATEN.id}`)).artikel;
+    const [antwort] = await Promise.all([api(`${API}/artikel/${DATEN.id}`), ordnerBaum().catch(() => null)]);
+    const a = antwort.artikel;
+    const darf = a.darf || {};
     leisteMarkieren(a.folder_id);
-    if (a.entwurf && a.entwurf.pruefer_id === DARF.uid && DARF.pruefen) { location.replace(`/material/pruefung/${a.entwurf.id}`); return; }
+    if (a.entwurf && a.entwurf.pruefer_id === DARF.uid && darf.pruefen) { location.replace(`/material/pruefung/${a.entwurf.id}`); return; }
     const p = a.produkt;
     const pa = a.pruefarten || { arten: [], vorschlag: null };
     let hinweis = "";                     // HTML – nur der Hinweis zum Prüferwerden enthält einen Link
     if (a.lock_state === "ausgesondert") hinweis = "Ein ausgesonderter Artikel wird nicht mehr geprüft.";
-    else if (!DARF.pruefen) hinweis = pruefHinweis();
-    else if (a.entwurf) hinweis = esc(`In Prüfung bei ${a.entwurf.pruefer} seit ${fmtZeit(a.entwurf.seit)}.${DARF.verwalten ? " Eine liegen gebliebene Reservierung gibst du in der Artikelansicht frei." : " Eine liegen gebliebene Reservierung gibt der Materialwart frei."}`);
+    else if (!darf.pruefen) hinweis = pruefHinweis(a);
+    else if (a.entwurf) hinweis = esc(`In Prüfung bei ${a.entwurf.pruefer} seit ${fmtZeit(a.entwurf.seit)}.${darf.verwalten ? " Eine liegen gebliebene Reservierung gibst du in der Artikelansicht frei." : " Eine liegen gebliebene Reservierung gibt der Materialwart frei."}`);
     else if (!a.formular) hinweis = "Für dieses Produkt gibt es kein aktives Prüfformular – weder am Produkt noch in seiner Kategorie. Der Produktkatalogpfleger legt es im Katalog an.";
     const ld = a.lebensdauer && a.lebensdauer.festgeschrieben ? { ende: a.lebensdauer.ende, rest_tage: a.lebensdauer.rest_tage, erreicht: a.lebensdauer.rest_tage <= 0 } : null;
     inhalt.innerHTML = `${p.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen. Dieses Produkt stammt aus den Demodaten.</p>' : ""}
@@ -2480,7 +2842,7 @@
         ${rueckrufHinweis((a.rueckrufe || []).filter((r) => r.zustand !== "erledigt").map((r) => r.title), a.id)}
         ${lebensdauerHinweis(ld)}
         ${a.formular ? `<p>Formular: ${esc(a.formular.title || "ohne Titel")} · Version ${a.formular.version} <span class="muted">(${esc(a.formular.quelle)}, ${plural(a.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span></p>` : ""}
-        ${a.durchgang ? `<p>Im Prüfdurchgang <a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a> – die Prüfung zählt dort.</p>` : ""}
+        ${a.durchgang ? `<p>Im Prüfdurchgang ${a.durchgang.sichtbar ? `<a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>` : `„${esc(a.durchgang.titel)}“`} – die Prüfung zählt dort.</p>` : ""}
         ${hinweis ? `<p class="notice">${hinweis}</p><p><a class="btn secondary" href="/material/artikel/${a.id}">Zum Artikel</a></p>` : `
           <fieldset class="mat-arten"><legend>Art der Prüfung</legend>
             ${pa.arten.map((x) => `<label class="mat-art-wahl"><input type="radio" name="art" value="${x}" ${x === pa.vorschlag ? "checked" : ""}> ${esc(PRUEFART[x] || x)}</label>`).join("")}
@@ -2513,7 +2875,7 @@
   };
 
   async function pruefungAnsicht() {
-    let pr = (await api(`${API}/pruefungen/${DATEN.id}`)).pruefung;
+    let pr = (await Promise.all([api(`${API}/pruefungen/${DATEN.id}`), ordnerBaum().catch(() => null)]))[0].pruefung;
     let ergebnis = null;
     let seiten = [];                 // Dateien für den nächsten Anhang (Scan: eine Seite je Foto)
     let hochladen = false;           // ein Anhang ist unterwegs – der Knopf bleibt so lange gesperrt
@@ -2524,7 +2886,9 @@
     // Die Kette selbst schluckt Fehler (gemeldet hat sie der Aufrufer schon) – sonst stünde jeder abgelehnte Wert
     // zusätzlich als „Uncaught (in promise)“ in der Konsole.
     const merken = (p) => { laufend = laufend.then(() => p, () => p).catch(() => {}); return p; };
-    const bearbeitbar = () => pr.entwurf && pr.eigen && DARF.pruefen;
+    // Was das Konto an dieser Prüfung darf, hängt am Artikel (seiner Heimat) – „darf“ kommt mit jeder Antwort neu.
+    const darfHier = (r) => Boolean(pr.darf && pr.darf[r]);
+    const bearbeitbar = () => pr.entwurf && pr.eigen && darfHier("pruefen");
     const punkt = (rid) => pr.punkte.find((x) => x.id === rid);
 
     /* Getipptes speichern, während getippt wird: Wert und Bemerkung eines Prüfpunkts und die Bemerkung zur Prüfung
@@ -2776,26 +3140,26 @@
 
     // Berichtigen darf nur, wer die Prüfung gemacht hat; ob es gerade geht, sagt der Server (berichtigbar). Eine
     // Aussonderung (auch „aussondern“ als Ergebnis) ist nie berichtigbar – dort gibt es den Knopf gar nicht.
-    const darfBerichtigen = () => !pr.entwurf && pr.eigen && DARF.pruefen && pr.berichtigbar && pr.art !== "aussonderung"
+    const darfBerichtigen = () => !pr.entwurf && pr.eigen && darfHier("pruefen") && pr.berichtigbar && pr.art !== "aussonderung"
       && pr.ergebnis !== "aussondern";
 
     function kopf() {
       const a = pr.artikel;
       const knoepfe = [];
-      if (pr.entwurf && !pr.eigen && DARF.verwalten) knoepfe.push('<button class="btn secondary small" data-act="freigeben">Reservierung freigeben</button>');
+      if (pr.entwurf && !pr.eigen && darfHier("verwalten")) knoepfe.push('<button class="btn secondary small" data-act="freigeben">Reservierung freigeben</button>');
       if (darfBerichtigen()) {
         knoepfe.push(pr.berichtigbar.ok ? '<button class="btn secondary small" data-act="berichtigen">Berichtigen</button>'
           : `<button class="btn secondary small" type="button" disabled title="${esc(pr.berichtigbar.grund)}">Berichtigen</button>`);
       }
       return `${pr.produkt.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen. Dieses Produkt stammt aus den Demodaten.</p>' : ""}
-        <div class="mat-pfad">${a.pfad.map((o) => `<a href="/material/ordner/${o.id}">${esc(o.name)}</a>`).join(" / ")} / <a href="/material/artikel/${a.id}">${esc(a.inventory_no)}</a></div>
+        <div class="mat-pfad">${a.pfad.map(pfadGlied).join(" / ")} / <a href="/material/artikel/${a.id}">${esc(a.inventory_no)}</a></div>
         <div class="page-head"><h1>${esc(PRUEFART[pr.art] || pr.art)} <span class="mat-h1-zusatz">${esc(a.inventory_no)}</span> ${pr.entwurf ? '<span class="badge">Entwurf</span>' : ergebnisMarke(pr.ergebnis)}</h1>
           ${knoepfe.length ? `<div class="btn-row">${knoepfe.join("")}</div>` : ""}</div>
         ${berichtigungHinweis()}
         <p class="mat-produktzeile"><strong>${esc(pr.produkt.name)}</strong>${pr.produkt.article_no ? ` · Art.-Nr. ${esc(pr.produkt.article_no)}` : ""} · Seriennummer ${esc(a.serial_no)} ${statusMarke(a.status)}</p>
         <p class="small muted">${pr.formular ? `Formular ${esc(pr.formular.titel || "ohne Titel")}, Version ${pr.formular.version} · ` : ""}${pr.art === "aussonderung" ? "Ausgeführt von" : "Prüfer"} ${esc(pr.pruefer || "–")}${pr.urkunde ? ` (Urkundennummer ${esc(pr.urkunde)})` : ""}
           · ${pr.entwurf && !pr.berichtigt ? `begonnen ${esc(fmtZeit(pr.begonnen_am))}` : `Prüftag ${esc(fmtTag(pr.datum))}`}
-          ${pr.durchgang ? ` · Durchgang <a href="/material/durchgang/${pr.durchgang.id}">${esc(pr.durchgang.titel)}</a>` : ""}</p>`;
+          ${pr.durchgang ? ` · Durchgang ${pr.durchgang.sichtbar ? `<a href="/material/durchgang/${pr.durchgang.id}">${esc(pr.durchgang.titel)}</a>` : `„${esc(pr.durchgang.titel)}“`}` : ""}</p>`;
     }
 
     /* Berichtigung: Die Berichtigung verweist auf ihr Original, das Original auf seine Berichtigung. */
@@ -3052,7 +3416,8 @@
 
     function zeichnen() {
       leisteMarkieren(pr.artikel.folder_id);
-      const ohneNummer = pr.entwurf && pr.eigen && !DARF.pruefen && DARF.pruefer_haekchen ? `<p class="notice">${URKUNDE_IM_PROFIL}</p>` : "";
+      // Der eigene Entwurf, aber prüfen geht gerade nicht (Urkundennummer fehlt, Prüffreigabe abgelaufen): warum.
+      const ohneNummer = pr.entwurf && pr.eigen && !darfHier("pruefen") && (DARF.pruefer_haekchen || DARF.qualifiziert) ? `<p class="notice">${pruefHinweis(pr)}</p>` : "";
       inhalt.innerHTML = `<div class="mat-pruefung${bearbeitbar() ? " mat-mit-leiste" : ""}">${kopf()}${ohneNummer}${bearbeitbar() ? bearbeitenHtml() : leseHtml()}</div>`;
       if (leisteBeobachter) leisteBeobachter.disconnect();
       if (bearbeitbar()) {
@@ -3406,7 +3771,7 @@
     const STATUS_RANG = { ueberfaellig: 0, lebensdauer: 1, neu: 2, gesperrt: 3, bald_faellig: 4, einsatzbereit: 5, ausgesondert: 6 };
     const SORTWERT = {
       inventar: (a) => a.inventory_no, hersteller: (a) => (a.manufacturer || "").toLowerCase(), produkt: (a) => (a.model || "").toLowerCase(),
-      ablage: (a) => (a.pfad || "").toLowerCase(), stand: (a) => ZUSTAND_REIHE[a.zustand], status: (a) => STATUS_RANG[a.status],
+      ablage: (a) => (a.pfad || "").toLowerCase(), stand: (a) => ZUSTAND_REIHE[a.zustand], status: (a) => STATUS_RANG[a.status] ?? 9,
     };
     function sortiert(liste) {
       if (!sort.feld) return liste;
@@ -3417,39 +3782,58 @@
         return (a < b ? -1 : a > b ? 1 : 0) * r || x.inventory_no.localeCompare(y.inventory_no);
       });
     }
-    async function laden() { d = (await api(`${API}/durchgaenge/${DATEN.id}`)).durchgang; }
+    async function laden() { d = (await Promise.all([api(`${API}/durchgaenge/${DATEN.id}`), ordnerBaum().catch(() => null)]))[0].durchgang; }
+    // Liegt ein freier Artikel noch im Zweig des Durchgangs? Wer ihn hinausverschoben hat, kann ihn nicht wieder
+    // einbeziehen (Bauentwurf 1.7 Nr. 6) – der Knopf entfällt. Ohne geladenen Baum (oder bei gesperrten): ja.
+    function imZweig(a) {
+      if (a.lock_state !== "frei" || !baumIndex[a.folder_id]) return true;
+      const gesehen = new Set();
+      for (let o = baumIndex[a.folder_id]; o && !gesehen.has(o.id); o = baumIndex[o.parent_id]) {
+        if (o.id === d.folder_id) return true;
+        gesehen.add(o.id);
+      }
+      return false;
+    }
+    /* Eine Zeile je Artikel. Knöpfe nach dem, was das Konto am Durchgang (d.darf) und am Artikel (a.darf) darf. Einen
+       Artikel, der aus dem Bereich des Durchgangs verschoben wurde und den das Konto nicht sieht („sichtbar“: false),
+       zeigt die Liste ohne Link und ohne Knöpfe – mit Nummer, Produkt, Stand und dem Grund der Ausnahme. */
     function zeile(a) {
-      const darf = d.offen && (DARF.verwalten || DARF.pruefen);
+      const darf = d.offen && Boolean(d.darf && (d.darf.verwalten || d.darf.pruefen));
+      const ad = a.darf || {};
+      const sichtbar = a.sichtbar !== false;
       let zustand;
       let knopf = "";
       if (a.zustand === "erledigt") {
-        zustand = `${ergebnisMarke(a.pruefung.ergebnis)} <a class="small" href="/material/pruefung/${a.pruefung.id}">${esc(fmtTag(a.pruefung.datum))}, ${esc(a.pruefung.pruefer)}</a>`;
+        const wann = `${esc(fmtTag(a.pruefung.datum))}, ${esc(a.pruefung.pruefer)}`;
+        zustand = `${ergebnisMarke(a.pruefung.ergebnis)} ${a.pruefung.id ? `<a class="small" href="/material/pruefung/${a.pruefung.id}">${wann}</a>` : `<span class="small">${wann}</span>`}`;
       } else if (a.zustand === "ausgenommen") {
         zustand = `<span class="badge grey">ausgenommen</span> <span class="small">${esc(a.ausnahme.grund)}</span> <span class="muted small">(${esc(a.ausnahme.von || "")})</span>`;
-        if (darf && a.lock_state !== "ausgesondert") knopf = `<button type="button" class="btn secondary small" data-act="einbeziehen" data-id="${a.id}">Einbeziehen</button>`;
+        if (darf && sichtbar && a.lock_state !== "ausgesondert" && imZweig(a)) knopf = `<button type="button" class="btn secondary small" data-act="einbeziehen" data-id="${a.id}">Einbeziehen</button>`;
       } else if (a.zustand === "nicht_geprueft") {
         zustand = '<span class="badge grey">nicht geprüft</span>';
       } else if (a.zustand === "in_pruefung") {
-        zustand = `<span class="badge">in Prüfung</span> <span class="small">bei ${esc(a.entwurf.pruefer)} seit ${esc(fmtZeit(a.entwurf.seit))}</span>`;
-        if (a.entwurf.eigen && DARF.pruefen) knopf = `<a class="btn secondary small" href="/material/pruefung/${a.entwurf.id}">Weiter prüfen</a>`;
-        else if (DARF.verwalten && d.offen) knopf = `<button type="button" class="btn secondary small" data-act="freigeben" data-id="${a.entwurf.id}" data-wer="${esc(a.entwurf.pruefer)}">Freigeben</button>`;
+        zustand = `<span class="badge">in Prüfung</span>${a.entwurf ? ` <span class="small">bei ${esc(a.entwurf.pruefer)} seit ${esc(fmtZeit(a.entwurf.seit))}</span>` : ""}`;
+        if (a.entwurf && a.entwurf.eigen && ad.pruefen) knopf = `<a class="btn secondary small" href="/material/pruefung/${a.entwurf.id}">Weiter prüfen</a>`;
+        else if (a.entwurf && ad.verwalten && d.offen) knopf = `<button type="button" class="btn secondary small" data-act="freigeben" data-id="${a.entwurf.id}" data-wer="${esc(a.entwurf.pruefer)}">Freigeben</button>`;
       } else {
         zustand = '<span class="muted">offen</span>';
-        if (d.offen && DARF.pruefen && a.lock_state !== "ausgesondert") knopf = `<a class="btn secondary small" href="/material/artikel/${a.id}/pruefung/neu?durchgang=${d.id}">Prüfen</a>`;
-        if (darf) knopf += `<button type="button" class="btn secondary small" data-act="ausnehmen" data-id="${a.id}" data-nr="${esc(a.inventory_no)}">Ausnehmen</button>`;
+        if (sichtbar && d.offen && ad.pruefen && a.lock_state !== "ausgesondert") knopf = `<a class="btn secondary small" href="/material/artikel/${a.id}/pruefung/neu?durchgang=${d.id}">Prüfen</a>`;
+        if (sichtbar && darf) knopf += `<button type="button" class="btn secondary small" data-act="ausnehmen" data-id="${a.id}" data-nr="${esc(a.inventory_no)}">Ausnehmen</button>`;
       }
+      const nummer = sichtbar ? `<a class="mat-inv" href="/material/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a>`
+        : `<strong class="mat-inv">${esc(a.inventory_no)}</strong><div class="small muted">nicht in deinem Bereich</div>`;
       // Enge Tabelle: Hersteller und Ablage stehen klein beim Produkt; Karte: Inventar-Nr. und Status oben (Lieferung 5).
-      return `<tr class="z-${a.zustand}"><td data-l="Inventar-Nr." class="mat-k-titel"><a class="mat-inv" href="/material/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a></td>
+      return `<tr class="z-${a.zustand}${sichtbar ? "" : " mat-fremd"}"><td data-l="Inventar-Nr." class="mat-k-titel">${nummer}</td>
         <td data-l="Hersteller" class="mat-schmal-weg">${esc(a.manufacturer || "")}</td>
-        <td data-l="Produkt" class="mat-k-ohne">${a.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(a.manufacturer)}</div>` : ""}${produktZelle(a)}<div class="small muted">SN ${esc(a.serial_no)}</div>
+        <td data-l="Produkt" class="mat-k-ohne">${a.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(a.manufacturer)}</div>` : ""}${produktZelle(a)}${a.serial_no ? `<div class="small muted">SN ${esc(a.serial_no)}</div>` : ""}
           <div class="mat-eng-zusatz small muted">${esc(a.pfad)}</div></td>
-        <td data-l="Ablage" class="mat-eng-weg">${esc(a.pfad)}</td><td data-l="Stand">${zustand}</td><td data-l="Status" class="mat-k-marke">${statusMarke(a.status)}</td>
+        <td data-l="Ablage" class="mat-eng-weg">${esc(a.pfad)}</td><td data-l="Stand">${zustand}</td><td data-l="Status" class="mat-k-marke">${a.status ? statusMarke(a.status) : '<span class="muted">–</span>'}</td>
         <td class="tabelle-aktionen">${knopf}</td></tr>`;
     }
     function zeichnen() {
       leisteMarkieren(d.folder_id);
       const z = d.zaehlung;
-      const darf = DARF.verwalten || DARF.pruefen;
+      const darf = Boolean(d.darf && (d.darf.verwalten || d.darf.pruefen));
       const liste = sortiert(d.artikel.filter((a) => !filter || a.zustand === filter));
       const s = sort;
       // Laufend: offen, in Prüfung, erledigt, ausgenommen. Vorbei: erledigt, ausgenommen – nach einem Abbruch
@@ -3546,7 +3930,9 @@
       ${m.fotos.length ? `<div class="mat-meldung-fotos">${m.fotos.map((f) => bildLink(f.web, f.original, `Foto zur Meldung ${m.manufacturer || ""} ${m.model || ""}`.trim(), `meldung-${m.id}`, `<img src="${esc(f.vorschau)}" alt="Foto zur Meldung" loading="lazy">`)).join("")}</div>` : ""}`;
   }
   // Im Produktdialog: was der Melder wusste – zum Nachschlagen, während die Felder schon vorbelegt sind.
-  const meldeKasten = (m) => `<div class="mat-meldekasten"><p class="small">Gemeldet von ${esc(m.created_by_name || "–")} am ${esc(fmtTag(m.created_at))}${m.ordner ? ` für ${esc(m.ordner.pfad)}` : ""}</p>${meldeDetails(m)}</div>`;
+  // Für welchen Ordner gemeldet wurde: der Pfad, wenn das Konto den Ordner sieht – sonst nur die Gliederung (Phase 2).
+  const meldeOrdner = (m) => (!m.ordner ? "" : m.ordner.pfad ? m.ordner.pfad : m.ordner.gliederung ? `Gliederung ${m.ordner.gliederung}` : "");
+  const meldeKasten = (m) => `<div class="mat-meldekasten"><p class="small">Gemeldet von ${esc(m.created_by_name || "–")} am ${esc(fmtTag(m.created_at))}${meldeOrdner(m) ? ` für ${esc(meldeOrdner(m))}` : ""}</p>${meldeDetails(m)}</div>`;
 
   // bearbeiten: Katalogpfleger in der Liste aller Meldungen – nur sie bekommen die Knöpfe zum Abarbeiten.
   function meldeKarte(m, bearbeiten) {
@@ -3558,13 +3944,13 @@
                    `<button type="button" class="btn secondary small" data-act="ablehnen" data-id="${m.id}">Ablehnen</button>`);
     }
     if (m.eigen && DARF.verwalten && m.status === "eingepflegt" && m.produkt) {
-      knoepfe.push(`<a class="btn secondary small" href="/material/artikel/neu?produkt=${m.produkt.id}${m.ordner ? `&ordner=${m.ordner.id}` : ""}">Artikel davon anlegen</a>`);
+      knoepfe.push(`<a class="btn secondary small" href="/material/artikel/neu?produkt=${m.produkt.id}${m.ordner && m.ordner.id ? `&ordner=${m.ordner.id}` : ""}">Artikel davon anlegen</a>`);
     }
     // Eigene Meldungen löscht der Melder selbst – offen oder erledigt.
     if (m.eigen) knoepfe.push(`<button type="button" class="btn secondary small" data-act="loeschen" data-id="${m.id}">Löschen</button>`);
     return `<article class="mat-meldung m-${esc(m.status)}">
       <div class="mat-meldung-kopf"><h2>${esc(meldungName(m))}</h2>${meldestatusMarke(m.status)}</div>
-      <p class="muted small">gemeldet${wer(m.created_by_name)} am ${esc(fmtTag(m.created_at))}${m.ordner ? ` · für ${esc(m.ordner.pfad)}` : ""}</p>
+      <p class="muted small">gemeldet${wer(m.created_by_name)} am ${esc(fmtTag(m.created_at))}${meldeOrdner(m) ? ` · für ${esc(meldeOrdner(m))}` : ""}</p>
       ${meldeDetails(m)}
       ${m.treffer ? `<p class="notice">Steht inzwischen im Katalog: <a href="/material/katalog/produkt/${m.treffer.id}">${esc(produktName(m.treffer))}</a>${m.treffer.article_no ? ` <span class="muted">${esc(m.treffer.article_no)}</span>` : ""}
         ${bearbeiten ? `<button type="button" class="btn secondary small" data-act="treffer" data-id="${m.id}">Zuordnen</button>` : ""}</p>` : ""}
@@ -3767,20 +4153,23 @@
   function rueckrufBanner(a) {
     return (a.rueckrufe || []).map((r) => {
       const offen = r.zustand !== "erledigt";
-      const sperren = offen && DARF.pruefen && a.lock_state === "frei" && !a.entwurf;
+      const pruefen = Boolean(a.darf && a.darf.pruefen);
+      const sperren = offen && pruefen && a.lock_state === "frei" && !a.entwurf;
       return `<div class="mat-banner mat-rr-banner${offen ? "" : " erledigt"}" role="note">
         <p class="mat-rr-titel">RÜCKRUF: ${esc(r.title)}</p>
         ${r.description ? `<p class="mat-text mat-rr-text">${esc(r.description)}</p>` : ""}
         <p class="mat-rr-zeile">${r.url ? `${rrLink(r.url, "Meldung des Herstellers")} · ` : ""}seit ${esc(S.fmtDate(r.created_at))} · ${r.alle ? "alle Artikel des Produkts" : "betrifft diese Seriennummer"}
           · für diesen Artikel ${rrZustand(r.zustand, r.grund)}${offen ? " – noch nicht gesperrt und seit dem Rückruf nicht geprüft" : ""}</p>
         ${sperren ? `<div class="btn-row"><button class="btn small" type="button" data-act="rr-sperren" data-id="${r.id}">Sperren (Rückruf)</button></div>` : ""}
-        ${offen && !DARF.pruefen ? '<p class="mat-rr-zeile">Sperren dürfen Prüfer (Grund „Rückruf“); eine Prüfung nach dem Rückruf erledigt ihn ebenso.</p>' : ""}
+        ${offen && !pruefen ? '<p class="mat-rr-zeile">Sperren dürfen Prüfer mit Prüffreigabe (Grund „Rückruf“); eine Prüfung nach dem Rückruf erledigt ihn ebenso.</p>' : ""}
       </div>`;
     }).join("");
   }
 
-  // Wie es um die Mail steht: verschickt (mit Fehlschlägen), läuft noch, nicht bestätigt oder keine.
+  // Wie es um die Mail steht: verschickt (mit Fehlschlägen), läuft noch, nicht bestätigt oder keine. Wie viele Mails
+  // hinausgingen, sieht nur die Plattform-Verwaltung (Phase 2) – sonst steht nur da, ob eine angefordert war („mail“).
   function rrMailText(r) {
+    if (!("mail_count" in r)) return r.mail ? "Mail an die Verwalter und Prüfer der betroffenen Artikel." : "Keine Mail verschickt.";
     if (r.mailed_at) {
       const n = r.mail_count + r.mail_failed;
       if (!n) return "Mail: keine Empfänger gefunden.";
@@ -3804,7 +4193,7 @@
       ${r.description ? `<p class="mat-text">${esc(r.description)}</p>` : ""}
       ${r.url ? `<p>${rrLink(r.url, `Meldung des Herstellers: ${kurzLink(r.url)}`)}</p>` : ""}
       <p><strong>Betroffen:</strong> ${r.alle ? "alle Artikel dieses Produkts" : `${serien.length === 1 ? "Seriennummer" : "Seriennummern"} ${serienText}`}</p>
-      ${r.aktiv ? `<p>${plural(r.betroffen, "Artikel", "Artikel")} im Bestand betroffen${r.betroffen ? ` · ${r.offen ? `<strong class="mat-warn">${r.offen} offen</strong>` : "alle erledigt"}` : ""}</p>
+      ${r.aktiv ? `<p>${plural(r.betroffen, "Artikel", "Artikel")} ${DARF.alles ? "im Bestand" : "in deinem Bereich"} betroffen${r.betroffen ? ` · ${r.offen ? `<strong class="mat-warn">${r.offen} offen</strong>` : "alle erledigt"}` : ""}</p>
         ${artikel.length ? `<table class="list mat-tabelle mat-karten mat-rr-artikel"><thead><tr><th>Inventar-Nr.</th><th>Seriennummer</th><th>Ablage</th><th>Zustand</th></tr></thead><tbody>
           ${artikel.map((x) => `<tr><td data-l="Inventar-Nr." class="mat-k-titel"><a class="mat-inv" href="/material/artikel/${x.id}"><strong>${esc(x.inventory_no)}</strong></a></td>
             <td data-l="Seriennummer">${esc(x.serial_no)}${x.serial_generated ? ' <span class="muted">(System)</span>' : ""}</td>
@@ -3837,7 +4226,7 @@
       <label for="rr-serien">Betroffene Seriennummern</label><textarea id="rr-serien" rows="4" ${TASTATUR_NUMMER} placeholder="eine je Zeile – leer lassen, wenn alle Artikel des Produkts betroffen sind"></textarea>
       <div class="help">Groß/klein und Leerzeichen am Rand spielen keine Rolle.</div>
       <label class="inline"><input type="checkbox" id="rr-mail" checked> Mail an Materialwarte und Prüfer</label>
-      <div class="help">An alle Materialwarte und an die Prüfer, die einen betroffenen Artikel schon geprüft haben.</div>
+      <div class="help">An die Verwalter der betroffenen Artikel und an die Prüfer, die einen davon schon geprüft haben – jeder bekommt nur die Artikel, die er sehen darf.</div>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="rr-ok" type="button">Rückruf anlegen</button></div>`,
     (dlg, body) => {
       fokus($("#rr-titel", body));
@@ -3855,12 +4244,19 @@
     });
   }
 
-  // Rückmeldung nach dem Anlegen: betroffene Artikel, Mail, Seriennummern ohne Artikel im Bestand.
+  /* Rückmeldung nach dem Anlegen: betroffene Artikel, Mail, Seriennummern ohne Artikel im Bestand. Die Plattform-Verwaltung
+     bekommt die Zahlen über alles, die Zahl der Empfänger und die Seriennummern ohne Artikel; alle anderen nur die Zahlen
+     ihres Bereichs und ob für ihre Artikel eine Mail hinausgeht („benachrichtigt“, Phase 2). */
   function rueckrufErgebnis(r) {
     const nf = r.nicht_gefunden || [];
+    const verwaltung = "empfaenger" in r;
+    const mail = !r.mail ? "Keine Mail verschickt."
+      : verwaltung ? (r.empfaenger ? `Mail an ${plural(r.empfaenger, "Empfänger", "Empfänger")} wird verschickt.` : "Für die Mail gab es keine Empfänger.")
+        : r.benachrichtigt ? "Die Verwalter und Prüfer deiner betroffenen Artikel bekommen eine Mail."
+          : "Die Mail geht an die Verwalter und Prüfer der betroffenen Artikel – jeder bekommt nur seine.";
     dialog(`<h2>Rückruf angelegt</h2>
-      <p><strong>${plural(r.betroffen, "Artikel", "Artikel")}</strong> im Bestand betroffen${r.betroffen && r.offen < r.betroffen ? `, davon ${r.offen} offen` : ""}.</p>
-      <p>${!r.mail ? "Keine Mail verschickt." : r.empfaenger ? `Mail an ${plural(r.empfaenger, "Empfänger", "Empfänger")} wird verschickt.` : "Für die Mail gab es keine Empfänger."}</p>
+      <p><strong>${plural(r.betroffen, "Artikel", "Artikel")}</strong> ${verwaltung ? "im Bestand" : "in deinem Bereich"} betroffen${r.betroffen && r.offen < r.betroffen ? `, davon ${r.offen} offen` : ""}.</p>
+      <p>${mail}</p>
       ${nf.length ? `<p class="notice">Zu ${nf.length === 1 ? "dieser Seriennummer" : "diesen Seriennummern"} gibt es keinen Artikel im Bestand: ${nf.map(esc).join(", ")}</p>` : ""}
       <div class="dlg-actions"><button class="btn" data-close type="button" id="rr-fertig">OK</button></div>`,
     (d2, b2) => $("#rr-fertig", b2).focus());
@@ -3886,8 +4282,16 @@
     });
   }
 
+  /* Nach einem QR-Scan an einem Artikel außerhalb des eigenen Bereichs (/m/<token>): Die Seite enthält nichts über ihn,
+     den Steckbrief gibt es erst nach Bestätigung (global.js; DATEN ist genau {token}). */
+  async function fremd() {
+    const g = await baustein("MatGlobal");
+    if (g) g.fremd(inhalt, DATEN);
+    else inhalt.innerHTML = leer("Dieser Artikel gehört nicht zu deinem Bereich.");
+  }
+
   const ANSICHTEN = { dashboard, pruefungen, bestand, ordner, artikel, artikel_neu: artikelNeu, katalog, produkt, formular, suche,
-                      meldungen, pruefung_neu: pruefungNeu, pruefung: pruefungAnsicht, durchgang: durchgangAnsicht };
+                      meldungen, pruefung_neu: pruefungNeu, pruefung: pruefungAnsicht, durchgang: durchgangAnsicht, fremd };
   leisteLaden();
   zeigen(ANSICHTEN[ANSICHT] || dashboard);
 })();

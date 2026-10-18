@@ -1118,3 +1118,32 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
   .mat-dokzeile .dm-weg { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0; }
 }
 
+
+/* Phase 2 · Lieferung 1 – Rechte je Ordner (material.js) */
+/* Pfad-Knoten: Oberordner, in denen das Konto keine Freigabe hat – nur der Weg zu den eigenen. Grau, ohne Zahl, ohne
+   Link: in Brotkrumen, Bestand, Übersicht und in der Ordnerleiste (dort so breit und hoch wie ein Link der Zeile). */
+.mat-pfadknoten { color: var(--grau); cursor: default; }
+.mat-baum li.pfad > .mat-pfadknoten { font-weight: 600; }
+.mat-ue .mat-ue-name > .mat-pfadknoten { font-weight: 600; }
+.mat-ue tr.mat-ue-oben .mat-ue-name > .mat-pfadknoten { font-weight: 700; }
+.mat-tree .row > .mat-pfadknoten { flex: 1 1 auto; min-width: 0; display: block; padding: 4px 6px; border-left: 3px solid transparent;
+  font-size: var(--fs-mittel); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (pointer: coarse), (max-width: 1023px) {
+  .mat-tree .row > .mat-pfadknoten { white-space: normal; overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; text-overflow: clip; }
+}
+@media (pointer: coarse) { .mat-tree .row > .mat-pfadknoten { padding-top: 11px; padding-bottom: 11px; } }
+/* Ordnerwahl: Was nicht wählbar ist, aber zu wählbaren Ordnern führt, steht grau als Weg da. */
+.mat-wahl label.mat-wahl-weg { color: var(--grau); cursor: default; }
+/* Ordner: Statusfilter und „Zugeordnet an …“ in einer Zeile, solange Platz ist. */
+.mat-filterzeile { display: flex; flex-wrap: wrap; align-items: center; gap: 0 14px; margin: 8px 0 14px; }
+.mat-filterzeile > .mat-filter { margin: 0; }
+.mat-filterzeile .mat-personwahl { width: auto; max-width: 100%; margin: 4px 0; }
+@media (pointer: coarse) { .mat-filterzeile .mat-personwahl { min-height: 44px; } }
+/* Mehrfachauswahl mit drei Aktionen: Die Knöpfe rücken unter die Zahl, wenn die Zeile nicht reicht. */
+.mat-sammel { flex-wrap: wrap; }
+.mat-sammel .btn-row { gap: 6px 8px; }
+/* Personenzuordnung in den Stammdaten: Knöpfe und Hinweis unter dem Namen. */
+.mat-daten dd .mat-zuordnung { margin-top: 6px; }
+.mat-daten dd .mat-zuordnung + .help { margin-top: 4px; }
+/* Prüfdurchgang: Artikel, die das Konto nicht (mehr) sieht – aus dem Bereich verschoben –, grau und ohne Link. */
+table.list.mat-runde tr.mat-fremd td { color: var(--grau); }
