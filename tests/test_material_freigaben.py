@@ -1025,10 +1025,13 @@ def test_braucht_a1_ordner_loeschen_journal():
 
 # --- DEMO-Skript (5.5) ------------------------------------------------------------------------------------------------
 
-def _demo_laufen(*schalter):
+def _demo_laufen(*schalter, konten=None):
+    """Das DEMO-Skript mit diesen Schaltern; konten: (DEMO_KONTEN) -> andere DEMO_KONTEN, etwa die eines früheren Stands."""
     spec = importlib.util.spec_from_file_location("material_demo_test", os.path.join(REPO, "scripts", "material_demo.py"))
     modul = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(modul)
+    if konten:
+        modul.DEMO_KONTEN = konten(modul.DEMO_KONTEN)
     alt = sys.argv
     sys.argv = ["material_demo.py", *schalter]
     puffer = io.StringIO()
@@ -1092,6 +1095,48 @@ def test_demo_zweimal():
     print("DEMO-Skript zweimal bestanden.")
 
 
+def test_demo_pruefer_von_frueher():
+    """Eine Datenbank, auf der ein früherer Lauf den DEMO-Prüfer noch befristet prüfen ließ (dev): --konten stellt
+    dessen DEMO-Prüffreigabe auf dauerhaft – mit Journaleintrag unter „Demodaten“, einmal; der externe DEMO-Prüfer
+    bleibt befristet. Eine Zeile, die seitdem jemand geändert hat, oder eine ohne Grundrecht dort bleibt, wie sie ist."""
+    def frueher(konten):
+        return [(m, n, gl, u, [(o, r, 30 if r == "pruefen" else t) for o, r, t in f]) for m, n, gl, u, f in konten]
+
+    def pruefen(app):
+        return {x["email"]: x["valid_until"] for x in zeilen(
+            app, "SELECT u.email, g.valid_until FROM mat_folder_grant g JOIN users u ON u.id = g.user_id "
+                 "WHERE g.permission = 'pruefen' AND u.email LIKE 'demo-%'")}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        make_app(tmp)
+        assert "pruefen DEMO-Gliederung bis" in _demo_laufen("--demo", "--konten", konten=frueher)
+        app = make_app(tmp)
+        assert pruefen(app) == {"demo-pruefer@example.invalid": tag(30), "demo-extern@example.invalid": tag(30)}
+        aus = _demo_laufen("--demo", "--konten")
+        assert aus.count("ist schon da – unverändert") == 3 and "Passwort" not in aus, aus
+        assert "demo-pruefer@example.invalid ist schon da – Prüffreigabe DEMO-Gliederung jetzt dauerhaft" in aus, aus
+        assert pruefen(app) == {"demo-pruefer@example.invalid": None, "demo-extern@example.invalid": tag(30)}
+        e = [x for x in zeilen(app, "SELECT * FROM mat_audit WHERE action = 'freigabe_geaendert'")]
+        assert len(e) == 1 and e[0]["user_name"] == "Demodaten" and e[0]["user_id"] is None, e
+        assert (json.loads(e[0]["before_json"])["bis"], json.loads(e[0]["after_json"])["bis"]) == (tag(30), None)
+        assert "@" not in e[0]["before_json"] + e[0]["after_json"]
+        vorher = zeilen(app, "SELECT * FROM mat_folder_grant ORDER BY id")
+        assert _demo_laufen("--demo", "--konten").count("ist schon da – unverändert") == 4
+        assert zeilen(app, "SELECT * FROM mat_folder_grant ORDER BY id") == vorher
+
+    # Geändert seitdem (updated_at) oder das Grundrecht weg: bleibt befristet.
+    for eingriff in ("UPDATE mat_folder_grant SET updated_at = '2026-10-01T00:00:00+00:00' WHERE permission = 'pruefen'",
+                     "DELETE FROM mat_folder_grant WHERE permission = 'lesen'"):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_app(tmp)
+            _demo_laufen("--demo", "--konten", konten=frueher)
+            app = make_app(tmp)
+            sql(app, eingriff)
+            aus = _demo_laufen("--demo", "--konten")
+            assert aus.count("ist schon da – unverändert") == 4 and pruefen(app)["demo-pruefer@example.invalid"] == tag(30), aus
+    print("DEMO-Prüfer von früher bestanden.")
+
+
 if __name__ == "__main__":
     test_erteilen_aendern_entziehen()
     test_vorlagen_eine_transaktion()
@@ -1109,3 +1154,4 @@ if __name__ == "__main__":
     test_liste_abfragen()
     test_braucht_a1_ordner_loeschen_journal()
     test_demo_zweimal()
+    test_demo_pruefer_von_frueher()

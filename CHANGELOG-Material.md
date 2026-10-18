@@ -1407,7 +1407,11 @@ Regressionstest. Danach liefen alle Suiten grün.
     darüber, auch in „Meine Freigaben“) und `traegt_pruefen` (an wie vielen dauerhaften Prüffreigaben ein Grundrecht
     allein hängt), die Liste hat `kette` (der Ordner und seine Oberordner). `DELETE` zählt `offene_entwuerfe` für jede
     Art. Die Personensuche `GET /nutzer` sagt je Konto neu `grundrecht_ueberall` (Plattform-Verwaltung).
-  - **DEMO-Daten**: Der DEMO-Prüfer prüft dauerhaft, der externe DEMO-Prüfer befristet.
+  - **DEMO-Daten**: Der DEMO-Prüfer prüft dauerhaft, der externe DEMO-Prüfer befristet. Auf einer Datenbank, deren
+    DEMO-Konten ein früherer Lauf angelegt hat (dev), stellt `material_demo.py --demo --konten` die befristete
+    DEMO-Prüffreigabe des DEMO-Prüfers einmal auf dauerhaft – nur die eigene Zeile der Demodaten (Notiz „DEMO“, Journal
+    „Demodaten“), wenn sie seitdem niemand geändert hat und er dort lesen hat; Journaleintrag unter „Demodaten“. Schritt
+    9 fasst DEMO-Zeilen nicht an. **Auf dev nach dem Deploy einmal `material_demo.py --demo --konten` laufen lassen.**
 - **Migration Schritt 9** (Schemaversion 9, beim Start, wiederholbar): SQLite entfernt ein CHECK nur mit einer neuen
   Tabelle – `mat_folder_grant` wird ohne „Prüfrechte nur befristet“ neu aufgebaut wie in Schritt 2 (Fremdschlüssel
   aus, neue Tabelle, alle Zeilen mit ihren Kennungen kopieren, alte löschen, umbenennen, `foreign_key_check`). Indizes

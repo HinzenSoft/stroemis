@@ -416,7 +416,8 @@ python tests/test_material_globalsuche.py  # Phase 2: globale Seriennummernsuche
 python tests/test_material_zuordnung.py  # Phase 2: Personenzuordnung, Meldungen je Bereich, Löschkonzept
 python scripts/beispieldaten.py         # füllt ./data mit zwei erfundenen Prüfungs-Lehrgängen zum Ausprobieren
 python scripts/material_demo.py --demo  # füllt ./data mit DEMO-Katalog, DEMO-Bestand in zwei Gliederungen und DEMO-Prüfungen (nie für echte Prüfungen)
-python scripts/material_demo.py --demo --konten  # dazu einmalig vier DEMO-Konten mit Freigaben; die Passwörter stehen nur in dieser Ausgabe (nur für dev)
+python scripts/material_demo.py --demo --konten  # dazu einmalig vier DEMO-Konten mit Freigaben; die Passwörter stehen nur in dieser Ausgabe (nur für dev);
+                                                 # ein DEMO-Prüfer von früher (befristet) prüft danach dauerhaft
 flask --app "app:create_app()" material import-catalog katalog.json --trocken   # Katalogdatei prüfen (JSON oder ZIP)
 flask --app "app:create_app()" material export-catalog katalog.zip              # Katalog ohne DEMO als ZIP (Format 2)
 ```

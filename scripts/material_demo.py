@@ -10,7 +10,8 @@ Seit Phase 2 gibt es eine zweite Gliederung („DEMO-Gliederung Nachbarstadt“ 
 der Trennung je Gliederung und der globalen Suche (Seriennummer DEMO-NS-4711); sie kommt auch zu einem vorhandenen
 Demo-Bestand dazu. --konten legt einmalig vier DEMO-Konten mit Namen, zufälligem Passwort (wird einmal ausgedruckt)
 und Freigaben an: zwei Materialwarte (je Gliederung), einen Prüfer (lesen und prüfen in der DEMO-Gliederung, beides
-dauerhaft) und einen externen Prüfer (nur prüfen im DEMO-Lager, befristet). Nur für dev.
+dauerhaft) und einen externen Prüfer (nur prüfen im DEMO-Lager, befristet). Nur für dev. Stammt der DEMO-Prüfer noch
+aus der Zeit, als auch er befristet prüfte, stellt --konten seine DEMO-Prüffreigabe auf dauerhaft (siehe demo_konten).
 Alles, was das Skript anlegt, trägt das Kennzeichen demo und „DEMO“ im Namen – die Oberfläche zeigt
 es überall als „DEMO – nicht für echte Prüfungen“. Prüfpunkte, Intervalle, Lebensdauern und Hersteller
 sind Platzhalter: Der echte Katalog entsteht in Phase 0 mit den Sachkundigen und kommt über
@@ -194,10 +195,16 @@ def demo_nachbarstadt(produkt):
     print(f"Bestand: {len(artikel)} Artikel in {NACHBARSTADT} angelegt.")
 
 
+def _demo_ziel(ordner):
+    """Der DEMO-Ordner einer Freigabe aus DEMO_KONTEN (das DEMO-Lager unter der DEMO-Gliederung) oder None."""
+    return _demo_ordner(ordner) if ordner != LAGER else _demo_ordner(LAGER, _demo_ordner(GLIEDERUNG))
+
+
 def demo_konten():
     """--konten: die DEMO-Konten aus DEMO_KONTEN – je einmalig, mit Namen, zufälligem Passwort (nur hier, einmal
     ausgedruckt) und ihren Freigaben (Journal am Ordner unter „Demodaten“, das Konto pseudonym). Gibt es ein Konto
-    schon, bleibt es samt Passwort und Freigaben, wie es ist."""
+    schon, bleibt es samt Passwort und Freigaben, wie es ist – bis auf eine DEMO-Prüffreigabe, die DEMO_KONTEN jetzt
+    dauerhaft vorsieht (_demo_pruefen_dauerhaft)."""
     import secrets
 
     from werkzeug.security import generate_password_hash
@@ -205,12 +212,16 @@ def demo_konten():
     from app import db
     from app.material.services import heute, journal
     for mail, name, gliederung, urkunde, freigaben in DEMO_KONTEN:
-        if db.query("SELECT 1 FROM users WHERE email = ?", (mail,), one=True):
-            print(f"Konto {mail} ist schon da – unverändert.")
+        konto = db.query("SELECT * FROM users WHERE email = ?", (mail,), one=True)
+        if konto:
+            dauerhaft = _demo_pruefen_dauerhaft(konto, freigaben)
+            print(f"Konto {mail} ist schon da – " + (
+                f"Prüffreigabe {', '.join(dauerhaft)} jetzt dauerhaft (befristet nur noch der externe Prüfer), sonst "
+                "unverändert." if dauerhaft else "unverändert."))
             continue
         ziele, fehlt = [], None
         for ordner, recht, tage in freigaben:
-            fid = _demo_ordner(ordner) if ordner != LAGER else _demo_ordner(LAGER, _demo_ordner(GLIEDERUNG))
+            fid = _demo_ziel(ordner)
             if not fid:
                 fehlt = ordner
                 break
@@ -234,6 +245,40 @@ def demo_konten():
                                   {"freigabe": gid, "konto": journal.konto_ref(uid), "recht": recht, "bis": bis})
         rechte = ", ".join(f"{recht} {ordner}" + (f" bis {bis}" if bis else " dauerhaft") for _, ordner, recht, bis in ziele)
         print(f"Konto {mail} ({name}) angelegt – Passwort: {passwort} (wird nicht erneut angezeigt). Freigaben: {rechte}.")
+
+
+def _demo_pruefen_dauerhaft(konto, freigaben):
+    """Seit der Nachbesserung vom 18.10.2026 prüft der interne DEMO-Prüfer dauerhaft. Hat ein früherer Lauf (etwa auf
+    dev) seine DEMO-Prüffreigabe noch befristet angelegt, wird sie dauerhaft – wie Migration Schritt 9 es mit den
+    Prüffreigaben aus Phase 1 macht: nur Zeilen, die die Demodaten selbst angelegt haben (Notiz „DEMO“, ohne
+    vergebendes Konto, Journal „Demodaten“) und die seitdem niemand geändert hat (kein updated_at, kein „geändert“ im
+    Journal), und nur, wo DEMO_KONTEN sie dauerhaft vorsieht und das Konto dort ein Grundrecht hat. Je Zeile ein
+    Journaleintrag unter „Demodaten“. Liefert die Ordner der umgestellten Freigaben."""
+    from app import db
+    from app.material.services import journal, rechte
+    out = []
+    for ordner, recht, tage in freigaben:
+        fid = _demo_ziel(ordner) if recht == "pruefen" and tage is None else None
+        if not fid or not rechte.grundrecht_an(konto, fid):
+            continue
+        r = db.query(
+            "SELECT * FROM mat_folder_grant g WHERE g.folder_id = ? AND g.user_id = ? AND g.permission = 'pruefen' "
+            "AND g.valid_until IS NOT NULL AND g.granted_by IS NULL AND g.note = 'DEMO' AND g.updated_at IS NULL "
+            "AND EXISTS (SELECT 1 FROM mat_audit a WHERE a.entity = 'folder' AND a.entity_id = g.folder_id "
+            "AND a.action = 'freigabe_erteilt' AND a.user_id IS NULL AND a.user_name = 'Demodaten' "
+            "AND json_extract(a.after_json, '$.freigabe') = g.id) "
+            "AND NOT EXISTS (SELECT 1 FROM mat_audit a WHERE a.entity = 'folder' AND a.entity_id = g.folder_id "
+            "AND a.action = 'freigabe_geaendert' AND json_extract(a.after_json, '$.freigabe') = g.id)",
+            (fid, konto["id"]), one=True)
+        if not r:
+            continue
+        with db.transaction():
+            spur = {"freigabe": r["id"], "konto": journal.konto_ref(konto["id"]), "recht": "pruefen"}
+            db.execute("UPDATE mat_folder_grant SET valid_until = NULL, updated_at = ? WHERE id = ?", (db.now(), r["id"]))
+            journal.eintragen("folder", fid, "freigabe_geaendert", dict(spur, bis=r["valid_until"]),
+                              dict(spur, bis=None, grund="nur externe Prüfer befristet"))
+        out.append(ordner)
+    return out
 
 
 # Eingangsprüfungen für die Demo – zurückdatiert, damit jeder Status einmal vorkommt. Schlüssel: Modell und
