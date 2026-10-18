@@ -223,6 +223,11 @@
     if (b.tagName === "A" || b.tagName === "BUTTON") e.preventDefault();
     aktionen[b.dataset.act](b, e);
   });
+  // „Sortieren nach“ über den Karten (kartenKopf): dieselbe Aktion wie ein Klick auf den Spaltenkopf.
+  inhalt.addEventListener("change", (e) => {
+    const s = e.target.closest("select[data-sortwahl]");
+    if (s && aktionen.sortieren) aktionen.sortieren({ dataset: { feld: s.value } }, e);
+  });
 
   // Ein Textfeld so hoch wie sein Inhalt – lange Prüfanweisungen bleiben ganz lesbar. Ändert sich die Breite
   // (Fenster, Telefon gedreht), rechnen alle sichtbaren neu.
@@ -489,7 +494,7 @@
     }
     const zweig = (pid) => (kinder[pid] || []).filter((o) => !o.system_kind).map((o) => `<li>
         <label class="inline"><input type="radio" name="ziel" value="${o.id}" ${gesperrt.has(o.id) ? "disabled" : ""}>
-        ${esc(o.name)} <span class="mat-art">${esc(ORDNERART[o.kind])}</span></label>
+        <span class="mat-wahl-name">${esc(o.name)}</span> <span class="mat-art">${esc(ORDNERART[o.kind])}</span></label>
         ${kinder[o.id] ? `<ul>${zweig(o.id)}</ul>` : ""}</li>`).join("");
     return new Promise((resolve) => {
       let gewaehlt = null;
@@ -519,11 +524,11 @@
       ${rueckrufKasten(d.rueckrufe)}
       ${d.meldungen_offen ? `<p class="notice"><a href="/material/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produktmeldung", "offene Produktmeldungen")}</strong></a>
         – Materialwarte warten darauf, Artikel davon anzulegen.</p>` : ""}
-      <div class="mat-kacheln">
+      <div class="mat-kachelrahmen"><div class="mat-kacheln mat-statuskacheln">
         <div class="mat-kachel gesamt"><strong>${d.bestand}</strong><span>Artikel im Bestand</span></div>
         ${kachel("ueberfaellig", "überfällig")}${kachel("neu", "neu (Eingangsprüfung)")}${kachel("bald_faellig", `bald fällig (${d.schwelle_tage} Tage)`)}
         ${kachel("gesperrt", "gesperrt")}${kachel("lebensdauer", "Lebensdauer erreicht")}${kachel("einsatzbereit", "einsatzbereit")}
-      </div>
+      </div></div>
       <div id="mat-runden"></div>
       <section class="section"><h2>Fälligkeiten je Ordner</h2>
         ${d.ordner_uebersicht.length ? ordnerUebersichtHtml(d.ordner_uebersicht)
@@ -541,11 +546,13 @@
      der Ordnerleiste (/start, ordner_uebersicht). Die Systemordner sind keine eigenen Zeilen: Gesperrte und ausgesonderte
      Artikel liegen in ihrer Gliederung und zählen dort. Jede Zahl führt zur Liste genau dieser Artikel (Prüfungen, nach
      Ordner und Status gefiltert), die nächste Fälligkeit zu allem Fälligen im Ordner, der Name zum Ordner. Ein großer Baum
-     (mehr als UE_GROSS Zeilen) beginnt mit zugeklappten Ordnern ab der zweiten Ebene unter der Gliederung. Unter 860 px
+     (mehr als UE_GROSS Zeilen) beginnt mit zugeklappten Ordnern ab der zweiten Ebene unter der Gliederung. Bis 640 px
      wird jede Zeile zur Karte; leere Zahlen entfallen dort. */
-  const UE_SPALTEN = [["ueberfaellig", "überfällig", "überfällig"], ["neu", "neu", "neu (Eingangsprüfung offen)"],
-                      ["bald_faellig", "bald fällig", "bald fällig"], ["gesperrt", "gesperrt", "gesperrt"],
-                      ["lebensdauer", "Lebensdauer erreicht", "Lebensdauer erreicht"]];
+  // Kurztitel mit weichen Trennstellen (\u00ad): Am Rechner stehen die Köpfe einzeilig, in der engen Tabelle (641–860 px)
+  // dürfen sie dort umbrechen – so bleibt Platz für die Ordnernamen.
+  const UE_SPALTEN = [["ueberfaellig", "über\u00adfällig", "überfällig"], ["neu", "neu", "neu (Eingangsprüfung offen)"],
+                      ["bald_faellig", "bald fällig", "bald fällig"], ["gesperrt", "ge\u00adsperrt", "gesperrt"],
+                      ["lebensdauer", "Lebens\u00addauer erreicht", "Lebensdauer erreicht"]];
   const UE_GROSS = 30;
   function ordnerUebersichtHtml(zeilen) {
     const nachId = {};
@@ -557,9 +564,10 @@
       const knopf = o.unterordner
         ? `<button type="button" class="mat-ue-klapp" data-ue-klapp="${o.id}" aria-expanded="${!zu.has(o.id)}" aria-label="Unterordner von ${esc(o.name)}"></button>`
         : '<span class="mat-ue-klapp" aria-hidden="true"></span>';
+      // Die Karte (bis 640 px) beschriftet mit dem Kurztitel – „neu“ statt „neu (Eingangsprüfung offen)“ spart eine Zeile.
       const zahlen = UE_SPALTEN.map(([s, kurz, lang]) => {
         const n = o.zaehlung[s] || 0;
-        return `<td data-l="${esc(lang)}" class="mat-ue-zahl${n ? "" : " mat-ue-null"}">${n ? `<a class="mat-zahl s-${s}" href="/material/pruefungen?ordner=${o.id}&status=${s}" title="${esc(`${lang} – ${o.name}`)}">${n}</a>` : '<span class="muted">–</span>'}</td>`;
+        return `<td data-l="${esc(kurz.replace(/\u00ad/g, ""))}" class="mat-ue-zahl${n ? "" : " mat-ue-null"}">${n ? `<a class="mat-zahl s-${s}" href="/material/pruefungen?ordner=${o.id}&status=${s}" title="${esc(`${lang} – ${o.name}`)}">${n}</a>` : '<span class="muted">–</span>'}</td>`;
       }).join("");
       return `<tr data-weg="${weg.join(" ")}" class="${o.tiefe ? "" : "mat-ue-oben"}" style="--tiefe:${Math.min(o.tiefe, 8)}" ${weg.some((x) => zu.has(x)) ? "hidden" : ""}>
         <td data-l="Ordner" class="mat-ue-name">${knopf}<a href="/material/ordner/${o.id}">${esc(o.name)}</a>${o.tiefe && o.kind !== "gliederung" ? "" : ` <span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}${demoMarke(o.demo)}</td>
@@ -606,35 +614,75 @@
   /* Artikelliste als Tabelle; mit auswahl:true bekommt jede Zeile ein Häkchen (Mehrfachauswahl). */
   /* Sortierbare Spaltenköpfe. Sortiert wird auf dem Server (die Listen kommen seitenweise); ein Klick sortiert
      aufsteigend, der nächste auf dieselbe Spalte absteigend. sort = { feld, richtung } oder null. */
-  function sortKopf(titel, feld, sort) {
-    if (!sort) return `<th>${esc(titel)}</th>`;
+  function sortKnopf(titel, feld, sort) {
+    if (!sort) return esc(titel);
     const an = sort.feld === feld;
-    const zustand = an ? (sort.richtung === "ab" ? "descending" : "ascending") : "none";
-    return `<th aria-sort="${zustand}"><button type="button" class="mat-sort${an ? " an" : ""}" data-act="sortieren" data-feld="${feld}"
-      title="nach ${esc(titel)} sortieren">${esc(titel)}<span class="mat-sort-pfeil" aria-hidden="true">${an ? (sort.richtung === "ab" ? "▼" : "▲") : "↕"}</span></button></th>`;
+    return `<button type="button" class="mat-sort${an ? " an" : ""}" data-act="sortieren" data-feld="${feld}"
+      title="nach ${esc(titel)} sortieren">${esc(titel)}<span class="mat-sort-pfeil" aria-hidden="true">${an ? (sort.richtung === "ab" ? "▼" : "▲") : "↕"}</span></button>`;
   }
+  /* mehr (Lieferung 5): klasse am <th>; vor/nach: Köpfe zusammengelegter Spalten, die nur die enge Tabelle (641–860 px)
+     zeigt – ihre eigene Spalte (mat-schmal-weg, mat-eng-weg) entfällt dort, der Inhalt steht klein in dieser Zelle. */
+  function sortKopf(titel, feld, sort, mehr) {
+    mehr = mehr || {};
+    const an = sort && sort.feld === feld;
+    const zustand = !sort ? "" : ` aria-sort="${an ? (sort.richtung === "ab" ? "descending" : "ascending") : "none"}"`;
+    return `<th${zustand}${mehr.klasse ? ` class="${mehr.klasse}"` : ""}>${mehr.vor || ""}${sortKnopf(titel, feld, sort)}${mehr.nach || ""}</th>`;
+  }
+  // Ein Kopf einer zusammengelegten Spalte im Kopf der Nachbarspalte (enge Tabelle); art: "schmal" oder "eng".
+  const kopfZusatz = (titel, feld, sort, art) => `<span class="mat-${art}-zusatz mat-kopf-zusatz">${sort ? sortKnopf(titel, feld, sort) : esc(titel)}</span>`;
+  /* Über den Karten (bis 640 px) fehlt der Tabellenkopf – und mit ihm Sortierung und „alle auswählen“. Die Zeile hier
+     holt beides zurück: „Sortieren nach“ mit denselben Spalten (felder: [[Titel, feld], …]), daneben die Richtung, und
+     bei Mehrfachauswahl das Kästchen für alle. Breiter ist sie unsichtbar (material.css). */
+  function kartenKopf(felder, sort, auswahl) {
+    if (!sort && !auswahl) return "";
+    const richtung = sort && sort.feld ? `<button type="button" class="btn secondary small mat-sortrichtung" data-act="sortieren" data-feld="${esc(sort.feld)}"
+      aria-label="Reihenfolge umkehren">${sort.richtung === "ab" ? "▼ absteigend" : "▲ aufsteigend"}</button>` : "";
+    return `<div class="mat-kartenkopf">
+      ${auswahl ? '<label class="mat-wahl-feld mat-alle-feld"><input type="checkbox" class="mat-alle" aria-label="alle auswählen"><span>alle auswählen</span></label>' : ""}
+      ${sort ? `<div class="mat-sortwahl"><label for="mat-sortwahl">Sortieren nach</label>
+        <select id="mat-sortwahl" data-sortwahl><option value="">Vorgabe</option>${felder.map(([t, f]) => `<option value="${f}" ${sort.feld === f ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>${richtung}</div>` : ""}
+    </div>`;
+  }
+  const ARTIKEL_SORT = [["Inventar-Nr.", "inventar"], ["Hersteller", "hersteller"], ["Produkt", "produkt"], ["Seriennummer", "serie"],
+                        ["Nächste Prüfung", "faellig"], ["Status", "status"]];
   const sortWeiter = (sort, feld) => (sort.feld === feld ? { feld, richtung: sort.richtung === "auf" ? "ab" : "auf" } : { feld, richtung: "auf" });
   const sortParameter = (q, sort) => { if (sort && sort.feld) { q.set("sort", sort.feld); q.set("richtung", sort.richtung); } return q; };
   // Ein Produkt in Listen: Hersteller in eigener Spalte, hier Bild, Modell und Artikelnummer.
   const produktZelle = (a) => `${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${esc(a.model || "")}${a.article_no ? ` <span class="muted">${esc(a.article_no)}</span>` : ""}${demoMarke(a.demo)}`;
 
+  /* Drei Gestalten je nach Breite (material.css, „Lieferung 5 – Geräte: listen“): ab 861 px alle Spalten; 641–860 px
+     eine engere Tabelle – Seriennummer unter der Inventar-Nr., Hersteller über dem Produkt, nächste Prüfung unter dem
+     Status; bis 640 px je Artikel eine Karte, ebenso zusammengefasst, unten Häkchen und „Prüfen“. */
   function artikelTabelle(liste, opts) {
     opts = opts || {};
     const s = opts.sort || null;
-    return `<table class="list mat-tabelle mat-artikel">
-      <thead><tr>${opts.auswahl ? '<th class="mat-wahlspalte"><input type="checkbox" id="mat-alle" aria-label="alle auswählen"></th>' : ""}
-        ${sortKopf("Inventar-Nr.", "inventar", s)}${sortKopf("Hersteller", "hersteller", s)}${sortKopf("Produkt", "produkt", s)}${sortKopf("Seriennummer", "serie", s)}
-        ${opts.pfad ? "<th>Ablage</th>" : ""}${sortKopf("Nächste Prüfung", "faellig", s)}${sortKopf("Status", "status", s)}${opts.pruefen ? "<th></th>" : ""}</tr></thead>
+    const naechste = (a) => (a.status === "neu" ? "Eingangsprüfung" : a.lock_state !== "frei" || !a.next_due_on ? "" : fmtTag(a.next_due_on));
+    const gesperrte = opts.auswahl && liste.some((a) => a.lock_state !== "frei");
+    return `${kartenKopf(ARTIKEL_SORT, s, opts.auswahl)}<table class="list mat-tabelle mat-karten mat-artikel">
+      <thead><tr>${opts.auswahl ? '<th class="mat-wahlspalte"><label class="mat-wahl-feld"><input type="checkbox" id="mat-alle" class="mat-alle" aria-label="alle auswählen"></label></th>' : ""}
+        ${sortKopf("Inventar-Nr.", "inventar", s, { nach: kopfZusatz("Seriennummer", "serie", s, "schmal") })}${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: kopfZusatz("Hersteller", "hersteller", s, "schmal") })}${sortKopf("Seriennummer", "serie", s, { klasse: "mat-schmal-weg" })}
+        ${opts.pfad ? "<th>Ablage</th>" : ""}${sortKopf("Nächste Prüfung", "faellig", s, { klasse: "mat-schmal-weg" })}${sortKopf("Status", "status", s, { nach: kopfZusatz("Nächste Prüfung", "faellig", s, "schmal") })}${opts.pruefen ? "<th></th>" : ""}</tr></thead>
       <tbody>${liste.map((a) => `<tr data-id="${a.id}">
-        ${opts.auswahl ? `<td class="mat-wahlspalte"><input type="checkbox" class="mat-wahl-art" value="${a.id}" ${a.lock_state !== "frei" ? 'disabled title="Gesperrte und ausgesonderte Artikel bleiben in ihrem Systemordner."' : ""} aria-label="${esc(a.inventory_no)} auswählen"></td>` : ""}
-        <td data-l="Inventar-Nr."><a class="mat-inv" href="/material/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a></td>
-        <td data-l="Hersteller">${esc(a.manufacturer || "")}</td>
-        <td data-l="Produkt">${produktZelle(a)}</td>
-        <td data-l="Seriennummer">${esc(a.serial_no)}${a.serial_generated ? ' <span class="muted" title="vom System vergeben">(System)</span>' : ""}</td>
+        ${opts.auswahl ? `<td class="mat-wahlspalte mat-k-wahl">${wahlFeld(a)}</td>` : ""}
+        <td data-l="Inventar-Nr." class="mat-k-titel"><a class="mat-inv" href="/material/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a>
+          <div class="mat-schmal-zusatz small muted">SN ${esc(a.serial_no)}${a.serial_generated ? " (System)" : ""}</div></td>
+        <td data-l="Hersteller" class="mat-schmal-weg">${esc(a.manufacturer || "")}</td>
+        <td data-l="Produkt" class="mat-k-ohne">${a.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(a.manufacturer)}</div>` : ""}${produktZelle(a)}</td>
+        <td data-l="Seriennummer" class="mat-schmal-weg">${esc(a.serial_no)}${a.serial_generated ? ' <span class="muted" title="vom System vergeben">(System)</span>' : ""}</td>
         ${opts.pfad ? `<td data-l="Ablage">${esc(a.pfad || "")}</td>` : ""}
-        <td data-l="Nächste Prüfung">${a.status === "neu" ? '<span class="muted">Eingangsprüfung</span>' : a.lock_state !== "frei" ? '<span class="muted">–</span>' : a.next_due_on ? esc(fmtTag(a.next_due_on)) : '<span class="muted">–</span>'}</td>
-        <td data-l="Status">${statusMarke(a.status)}${a.rueckruf ? ` <span class="mat-rr-marke" title="Rückruf: ${esc(a.rueckruf)}">Rückruf</span>` : ""}${a.entwurf ? `<div class="small muted">in Prüfung bei ${esc(a.entwurf.pruefer || "?")}</div>` : ""}</td>
-        ${opts.pruefen ? `<td class="tabelle-aktionen">${pruefKnopf(a)}</td>` : ""}</tr>`).join("")}</tbody></table>`;
+        <td data-l="Nächste Prüfung" class="mat-schmal-weg">${naechste(a) && a.status !== "neu" ? esc(naechste(a)) : `<span class="muted">${esc(naechste(a) || "–")}</span>`}</td>
+        <td data-l="Status" class="mat-k-marke">${statusMarke(a.status)}${a.rueckruf ? ` <span class="mat-rr-marke" title="Rückruf: ${esc(a.rueckruf)}">Rückruf</span>` : ""}${a.entwurf ? `<div class="small muted">in Prüfung bei ${esc(a.entwurf.pruefer || "?")}</div>` : ""}${naechste(a) ? `<div class="mat-schmal-zusatz small${a.status === "neu" ? " muted" : ""}">${a.status === "neu" ? "" : "fällig "}${esc(naechste(a))}</div>` : ""}</td>
+        ${opts.pruefen ? `<td class="tabelle-aktionen">${pruefKnopf(a)}</td>` : ""}</tr>`).join("")}</tbody></table>
+      ${gesperrte ? '<p class="help mat-wahl-hinweis">Graue Kästchen: Gesperrte und ausgesonderte Artikel bleiben in ihrem Systemordner und lassen sich nicht verschieben.</p>' : ""}`;
+  }
+  /* Häkchen der Mehrfachauswahl mit Beschriftung: In der Tabelle füllt das Label die Zelle (am Finger ein großes
+     Ziel), in der Karte steht „auswählen“ daneben – bei gesperrten Artikeln stattdessen, warum es nicht geht (ein title
+     erscheint ohne Maus nie). */
+  function wahlFeld(a) {
+    const frei = a.lock_state === "frei";
+    const grund = a.lock_state === "ausgesondert" ? "ausgesondert" : "gesperrt";
+    return `<label class="mat-wahl-feld"><input type="checkbox" class="mat-wahl-art" value="${a.id}" ${frei ? "" : 'disabled title="Gesperrte und ausgesonderte Artikel bleiben in ihrem Systemordner."'} aria-label="${esc(a.inventory_no)} auswählen">
+      <span class="mat-wahl-text">${frei ? "auswählen" : `${grund} – bleibt im Systemordner`}</span></label>`;
   }
   // „Prüfen“ in Listen: für Prüfer, solange niemand anderes den Artikel reserviert hat.
   function pruefKnopf(a, durchgangId) {
@@ -673,9 +721,9 @@
       const liste = (await api(`${API}/entwuerfe`)).entwuerfe;
       $("#pr-offen").innerHTML = liste.length ? `<section class="section"><h2>Offene Prüfungen</h2>
         <p class="help">Eine offene Prüfung reserviert ihren Artikel: Nur ihr Prüfer arbeitet daran weiter. Liegt eine liegen, gibt der Materialwart sie frei.</p>
-        <table class="list mat-tabelle"><thead><tr><th>Artikel</th><th>Prüfung</th><th>Prüfer</th><th>begonnen</th><th></th></tr></thead><tbody>
-        ${liste.map((x) => `<tr><td data-l="Artikel"><a href="/material/artikel/${x.item_id}"><strong>${esc(x.artikel.inventory_no)}</strong></a> ${esc(produktName(x.artikel))} <div class="small muted">${esc(x.artikel.pfad)}</div></td>
-          <td data-l="Prüfung">${esc(PRUEFART_KURZ[x.art] || x.art)}</td><td data-l="Prüfer">${esc(x.pruefer)}${x.eigen ? ' <span class="badge">du</span>' : ""}</td>
+        <table class="list mat-tabelle mat-karten"><thead><tr><th>Artikel</th><th>Prüfung</th><th>Prüfer</th><th>begonnen</th><th></th></tr></thead><tbody>
+        ${liste.map((x) => `<tr><td data-l="Artikel" class="mat-k-titel"><a href="/material/artikel/${x.item_id}"><strong>${esc(x.artikel.inventory_no)}</strong></a> ${esc(produktName(x.artikel))} <div class="small muted">${esc(x.artikel.pfad)}</div></td>
+          <td data-l="Prüfung" class="mat-k-halb">${esc(PRUEFART_KURZ[x.art] || x.art)}</td><td data-l="Prüfer" class="mat-k-halb">${esc(x.pruefer)}${x.eigen ? ' <span class="badge">du</span>' : ""}</td>
           <td data-l="begonnen">${esc(fmtZeit(x.begonnen_am))}</td>
           <td class="tabelle-aktionen">${x.eigen && DARF.pruefen ? `<a class="btn secondary small" href="/material/pruefung/${x.id}">Weiter prüfen</a>` : `<a class="btn secondary small" href="/material/pruefung/${x.id}">Ansehen</a>`}
             ${!x.eigen && DARF.verwalten ? `<button class="btn secondary small" data-act="freigeben" data-id="${x.id}" data-wer="${esc(x.pruefer)}">Freigeben</button>` : ""}</td></tr>`).join("")}
@@ -831,16 +879,20 @@
         </section>
         <p class="small mat-zweigbestand">${system ? plural(Object.values(z).reduce((a, b) => a + b, 0), "Artikel", "Artikel") : `Bestand im ganzen Zweig: <strong>${d.bestand}</strong> ${zahlen(z)}`}</p>
         <details class="section mat-auf"><summary>Journal des Ordners</summary>${journalHtml(d.journal)}</details>`;
+      // „alle auswählen“ gibt es zweimal – im Tabellenkopf und über den Karten (schmale Bildschirme); beide zeigen
+      // denselben Stand, halb gesetzt, solange nur ein Teil angehakt ist.
+      const waehlbar = $$(".mat-wahl-art:not(:disabled)", inhalt);
+      const alleK = $$(".mat-alle", inhalt);
       const sammel = () => {
         const n = $$(".mat-wahl-art:checked", inhalt).length;
+        alleK.forEach((x) => { x.checked = !!waehlbar.length && n === waehlbar.length; x.indeterminate = n > 0 && n < waehlbar.length; });
         const leiste = $("#mat-sammel");
         if (!leiste) return;
         leiste.hidden = !n;
         $("#mat-sammel-n").textContent = `${plural(n, "Artikel", "Artikel")} ausgewählt`;
       };
       $$(".mat-wahl-art", inhalt).forEach((c) => c.addEventListener("change", sammel));
-      const alle = $("#mat-alle", inhalt);
-      if (alle) alle.addEventListener("change", () => { $$(".mat-wahl-art:not(:disabled)", inhalt).forEach((c) => { c.checked = alle.checked; }); sammel(); });
+      alleK.forEach((alle) => alle.addEventListener("change", () => { waehlbar.forEach((c) => { c.checked = alle.checked; }); sammel(); }));
       aktionen = {
         filter: (b) => { filter = b.dataset.f; seite = 1; zeigen(zeichnen); },
         seite: (b) => { seite = +b.dataset.seite; zeigen(zeichnen); },
@@ -1065,15 +1117,15 @@
      Protokoll (PDF im neuen Tab); ein durch eine Berichtigung ersetztes Original steht grau mit „berichtigt“. */
   function pruefListe(liste) {
     if (!liste || !liste.length) return leer("Noch keine Prüfung.");
-    return `<table class="list mat-tabelle mat-pruefliste"><thead><tr><th>Datum</th><th>Art</th><th>Ergebnis</th><th>Prüfer</th><th>Nächste Prüfung</th><th>Protokoll</th></tr></thead><tbody>
+    return `<table class="list mat-tabelle mat-karten mat-pruefliste"><thead><tr><th>Datum</th><th>Art</th><th>Ergebnis</th><th>Prüfer</th><th>Nächste Prüfung</th><th>Protokoll</th></tr></thead><tbody>
       ${liste.map((x) => {
         const ersetzt = x.berichtigt_durch && !x.berichtigt_durch.entwurf;
-        return `<tr class="${x.entwurf ? "mat-entwurf" : ersetzt ? "mat-alt" : ""}"><td data-l="Datum"><a href="/material/pruefung/${x.id}">${x.entwurf ? "Entwurf" : esc(fmtTag(x.datum))}</a></td>
-        <td data-l="Art">${esc(PRUEFART_KURZ[x.art] || x.art)}${x.berichtigt ? ' <span class="mat-marke-ber">Berichtigung</span>' : ""}${ersetzt ? ` <span class="badge grey" title="berichtigt durch ${esc(x.berichtigt_durch.protokoll_id || "eine spätere Prüfung")}">berichtigt</span>` : ""}</td>
-        <td data-l="Ergebnis">${x.entwurf ? '<span class="muted">in Prüfung</span>' : ergebnisMarke(x.ergebnis)}${x.grund ? `<div class="small muted">${esc(x.grund)}</div>` : ""}</td>
-        <td data-l="Prüfer">${esc(x.pruefer || "")}${x.urkunde ? ` <span class="muted small">(${esc(x.urkunde)})</span>` : ""}</td>
+        return `<tr class="${x.entwurf ? "mat-entwurf" : ersetzt ? "mat-alt" : ""}"><td data-l="Datum" class="mat-k-titel"><a href="/material/pruefung/${x.id}">${x.entwurf ? "Entwurf" : esc(fmtTag(x.datum))}</a></td>
+        <td data-l="Art" class="mat-k-halb">${esc(PRUEFART_KURZ[x.art] || x.art)}${x.berichtigt ? ' <span class="mat-marke-ber">Berichtigung</span>' : ""}${ersetzt ? ` <span class="badge grey" title="berichtigt durch ${esc(x.berichtigt_durch.protokoll_id || "eine spätere Prüfung")}">berichtigt</span>` : ""}</td>
+        <td data-l="Ergebnis" class="mat-k-marke">${x.entwurf ? '<span class="muted">in Prüfung</span>' : ergebnisMarke(x.ergebnis)}${x.grund ? `<div class="small muted">${esc(x.grund)}</div>` : ""}</td>
+        <td data-l="Prüfer" class="mat-k-halb">${esc(x.pruefer || "")}${x.urkunde ? ` <span class="muted small">(${esc(x.urkunde)})</span>` : ""}</td>
         <td data-l="Nächste Prüfung">${x.naechste ? esc(fmtTag(x.naechste)) : '<span class="muted">–</span>'}</td>
-        <td data-l="Protokoll">${x.protokoll ? `<a class="mat-pdf" href="${esc(x.protokoll.url)}" target="_blank" rel="noopener" title="Protokoll ${esc(x.protokoll.id)} öffnen (PDF)">PDF</a> <span class="muted small mat-hash">${esc(x.protokoll.id)}</span>` : '<span class="muted">–</span>'}</td></tr>`;
+        <td data-l="Protokoll" class="mat-k-ohne">${x.protokoll ? `<a class="mat-pdf" href="${esc(x.protokoll.url)}" target="_blank" rel="noopener" title="Protokoll ${esc(x.protokoll.id)} öffnen (PDF)">PDF</a> <span class="muted small mat-hash">${esc(x.protokoll.id)}</span>` : '<span class="muted">–</span>'}</td></tr>`;
       }).join("")}</tbody></table>`;
   }
   const ergebnisMarke = (e) => (e ? `<span class="mat-ergebnis-marke e-${esc(e)}">${esc(ERGEBNIS[e] || e)}</span>` : "");
@@ -1329,6 +1381,8 @@
     return zweig(0, 0);
   }
 
+  const KATALOG_SORT = [["Hersteller", "hersteller"], ["Produkt", "produkt"], ["Kategorie", "kategorie"], ["Materialart", "materialart"],
+                        ["Intervall", "intervall"], ["Lebensdauer", "lebensdauer"], ["Bestand", "bestand"]];
   async function katalog() {
     let kategorie = DATEN.kategorie || null;
     let q = "";
@@ -1340,11 +1394,12 @@
     let lauf = 0;
     let beobachter = null;
     let nachladen = null;
-    const produktZeile = (x) => `<tr><td data-l="Hersteller">${esc(x.manufacturer || "")}</td>
-          <td data-l="Produkt">${x.vorschau ? `<img class="mat-mini" src="${esc(x.vorschau)}" alt="" loading="lazy">` : ""}<a href="/material/katalog/produkt/${x.id}"><strong>${esc(x.model || "")}</strong></a>${x.article_no ? ` <span class="muted">${esc(x.article_no)}</span>` : ""}${demoMarke(x.demo)}</td>
-          <td data-l="Kategorie">${esc(x.category_name || "")}</td><td data-l="Materialart">${esc(MATERIALART[x.material_kind])}</td>
-          <td data-l="Intervall">${x.intervall.monate ? `${x.intervall.monate} Mon.` : "–"}</td>
-          <td data-l="Lebensdauer">${x.lifetime_years ? `${x.lifetime_years} J.` : "–"}</td><td data-l="Bestand">${x.bestand}</td></tr>`;
+    // Enge Tabelle und Karte (Lieferung 5): der Hersteller klein über dem Produkt, die kurzen Angaben zu zweit.
+    const produktZeile = (x) => `<tr><td data-l="Hersteller" class="mat-schmal-weg">${esc(x.manufacturer || "")}</td>
+          <td data-l="Produkt" class="mat-k-titel">${x.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(x.manufacturer)}</div>` : ""}${x.vorschau ? `<img class="mat-mini" src="${esc(x.vorschau)}" alt="" loading="lazy">` : ""}<a href="/material/katalog/produkt/${x.id}"><strong>${esc(x.model || "")}</strong></a>${x.article_no ? ` <span class="muted">${esc(x.article_no)}</span>` : ""}${demoMarke(x.demo)}</td>
+          <td data-l="Kategorie">${esc(x.category_name || "")}</td><td data-l="Materialart" class="mat-k-halb">${esc(MATERIALART[x.material_kind])}</td>
+          <td data-l="Intervall" class="mat-k-halb">${x.intervall.monate ? `${x.intervall.monate} Mon.` : "–"}</td>
+          <td data-l="Lebensdauer" class="mat-k-halb">${x.lifetime_years ? `${x.lifetime_years} J.` : "–"}</td><td data-l="Bestand" class="mat-k-halb">${x.bestand}</td></tr>`;
     async function liste() {
       const meinLauf = ++lauf;
       if (beobachter) { beobachter.disconnect(); beobachter = null; }
@@ -1357,7 +1412,7 @@
       if (meinLauf !== lauf) return;
       const s = sort;
       const ziel = $("#kat-liste");
-      ziel.innerHTML = d.produkte.length ? `<table class="list mat-tabelle"><thead><tr>${sortKopf("Hersteller", "hersteller", s)}${sortKopf("Produkt", "produkt", s)}${sortKopf("Kategorie", "kategorie", s)}${sortKopf("Materialart", "materialart", s)}${sortKopf("Intervall", "intervall", s)}${sortKopf("Lebensdauer", "lebensdauer", s)}${sortKopf("Bestand", "bestand", s)}</tr></thead>
+      ziel.innerHTML = d.produkte.length ? `${kartenKopf(KATALOG_SORT, s)}<table class="list mat-tabelle mat-karten mat-katalogliste"><thead><tr>${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: kopfZusatz("Hersteller", "hersteller", s, "schmal") })}${sortKopf("Kategorie", "kategorie", s)}${sortKopf("Materialart", "materialart", s)}${sortKopf("Intervall", "intervall", s)}${sortKopf("Lebensdauer", "lebensdauer", s)}${sortKopf("Bestand", "bestand", s)}</tr></thead>
         <tbody>${d.produkte.map(produktZeile).join("")}</tbody></table><p class="help mat-endlos" id="kat-mehr"></p>`
         : leer(q || kategorie ? "Kein Produkt in dieser Auswahl." : "Der Katalog ist noch leer.");
       // War die Liste schon unter der Suchzeile weggescrollt, beginnt die neue Auswahl direkt unter ihr.
@@ -1747,12 +1802,12 @@
 
   /* --- Dokumente: am Produkt oder an einer Kategorie (gelten dann für alle Produkte darin) ------------ */
   function dokZeile(d, k) {
-    return `<tr class="${d.gilt ? "" : "mat-alt"}"><td data-l="Dokument"><a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>
+    return `<tr class="${d.gilt ? "" : "mat-alt"}"><td data-l="Dokument" class="mat-k-titel"><a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>
         <div class="small muted">${esc(DOKART[d.kind] || d.kind)}${d.datei ? ` · ${esc(groesse(d.size))}` : " · Link"}</div></td>
-      <td data-l="Version">${esc(d.version || "–")}</td><td data-l="Gültig ab">${esc(fmtTag(d.valid_from))}</td>
-      <td data-l="Stand">${d.gilt ? '<span class="mat-status s-einsatzbereit">gilt</span>' : d.withdrawn_on ? `zurückgezogen ${esc(fmtTag(d.withdrawn_on))}` : d.abgeloest_durch ? "abgelöst" : "noch nicht gültig"}
+      <td data-l="Version" class="mat-k-halb">${esc(d.version || "–")}</td><td data-l="Gültig ab" class="mat-k-halb">${esc(fmtTag(d.valid_from))}</td>
+      <td data-l="Stand" class="mat-k-marke">${d.gilt ? '<span class="mat-status s-einsatzbereit">gilt</span>' : d.withdrawn_on ? `zurückgezogen ${esc(fmtTag(d.withdrawn_on))}` : d.abgeloest_durch ? "abgelöst" : "noch nicht gültig"}
         ${d.sha256 ? `<div class="small muted mat-hash" title="SHA-256 ${esc(d.sha256)}">${esc(d.sha256.slice(0, 12))}…</div>` : ""}</td>
-      <td>${k ? `<div class="btn-row"><button class="btn secondary small" data-act="dok-name" data-id="${d.id}">Umbenennen</button>${!d.abgeloest_durch && !d.withdrawn_on ? `<button class="btn secondary small" data-act="dok-version" data-id="${d.id}">Neue Version</button><button class="btn secondary small" data-act="dok-zurueck" data-id="${d.id}">Zurückziehen</button>` : ""}</div>` : ""}</td></tr>`;
+      <td class="tabelle-aktionen">${k ? `<div class="btn-row"><button class="btn secondary small" data-act="dok-name" data-id="${d.id}">Umbenennen</button>${!d.abgeloest_durch && !d.withdrawn_on ? `<button class="btn secondary small" data-act="dok-version" data-id="${d.id}">Neue Version</button><button class="btn secondary small" data-act="dok-zurueck" data-id="${d.id}">Zurückziehen</button>` : ""}</div>` : ""}</td></tr>`;
   }
   // Herstellerdokumente als Liste: erst die des Produkts, dann unter einer kleinen Zwischenzeile die seiner
   // Kategorien (Artikel: herkunft; Prüfung: kategorie, der Name vom Prüftag). verlinkt: Titel als Link.
@@ -1778,7 +1833,7 @@
   }
   const katKopf = (name, id) => `<h3 class="mat-unter">Dokumente <span class="mat-unter-zusatz">für die Kategorie
     ${id ? `<a href="/material/katalog?kategorie=${id}">${esc(name)}</a>` : esc(name)}</span></h3>`;
-  const dokTabelle = (docs, k) => `<table class="list mat-tabelle"><thead><tr><th>Dokument</th><th>Version</th><th>Gültig ab</th><th>Stand</th><th></th></tr></thead><tbody>${docs.map((d) => dokZeile(d, k)).join("")}</tbody></table>`;
+  const dokTabelle = (docs, k) => `<table class="list mat-tabelle mat-karten"><thead><tr><th>Dokument</th><th>Version</th><th>Gültig ab</th><th>Stand</th><th></th></tr></thead><tbody>${docs.map((d) => dokZeile(d, k)).join("")}</tbody></table>`;
 
   // Umbenennen, neue Version, zurückziehen – für Produkt- und Kategoriedokumente gleich; danach neu zeichnen.
   function dokAktionen(docs, neuUrl, danach) {
@@ -2376,9 +2431,9 @@
 
     function leseHtml() {
       const zeilen = pr.punkte.map((x) => `<tr class="${x.befund === "mangel" ? "mat-mangelzeile" : ""}">
-          <td data-l="Prüfpunkt">${x.gruppe ? `<span class="muted small">${esc(x.gruppe)}</span><br>` : ""}${esc(x.text)}</td>
-          <td class="mat-krit-spalte">${x.kritisch ? '<span class="mat-kritisch">kritisch</span>' : ""}</td>
-          <td data-l="Befund">${x.art === "signature" && !x.unterschrift && x.befund !== "nicht_zutreffend" ? '<span class="muted">nicht unterschrieben</span>' : befundMarke(x.befund)}</td><td data-l="Wert">${x.art === "signature" && x.unterschrift ? `<img class="mat-us-mini" src="${esc(x.unterschrift)}" alt="Unterschrift">`
+          <td data-l="Prüfpunkt" class="mat-k-ohne">${x.gruppe ? `<span class="muted small">${esc(x.gruppe)}</span><br>` : ""}${esc(x.text)}</td>
+          <td class="mat-krit-spalte mat-k-kurz">${x.kritisch ? '<span class="mat-kritisch">kritisch</span>' : ""}</td>
+          <td data-l="Befund" class="mat-k-kurz mat-k-ohne">${x.art === "signature" && !x.unterschrift && x.befund !== "nicht_zutreffend" ? '<span class="muted">nicht unterschrieben</span>' : befundMarke(x.befund)}</td><td data-l="Wert" class="mat-k-kurz">${x.art === "signature" && x.unterschrift ? `<img class="mat-us-mini" src="${esc(x.unterschrift)}" alt="Unterschrift">`
             : x.wert ? esc(x.wert) : '<span class="muted">–</span>'}${x.art === "yesno" && x.soll ? ` <span class="muted small mat-soll">(Soll ${esc(x.soll)})</span>` : ""}</td>
           <td data-l="Bemerkung">${x.notiz ? `<span class="mat-text">${esc(x.notiz)}</span>` : ""}</td>
           <td data-l="Foto">${x.foto ? bildLink(x.foto.web, x.foto.original, `${x.text}${x.notiz ? ` – ${x.notiz}` : ""}`, "befunde", `<img class="mat-mini" src="${esc(x.foto.vorschau)}" alt="Foto">`) : ""}</td></tr>`).join("");
@@ -2393,7 +2448,7 @@
           ${pr.basis_id ? `<dt>Grundlage</dt><dd><a href="/material/pruefung/${pr.basis_id}">Prüfung vom Tag der Aussonderung</a></dd>` : ""}
           <dt>Abgeschlossen</dt><dd>${esc(fmtZeit(pr.abgeschlossen_am))}</dd></dl></section>${protokollHtml()}</div>`;
       return `${ergebnisBox}
-        ${pr.punkte.length ? `<section class="section"><h2>Befunde</h2><table class="list mat-tabelle mat-befunde"><thead><tr><th>Prüfpunkt</th><th class="mat-krit-spalte"><span class="mat-vorlesen">kritisch</span></th><th>Befund</th><th>Wert</th><th>Bemerkung</th><th>Foto</th></tr></thead><tbody>${zeilen}</tbody></table></section>` : ""}
+        ${pr.punkte.length ? `<section class="section"><h2>Befunde</h2><table class="list mat-tabelle mat-karten mat-befunde"><thead><tr><th>Prüfpunkt</th><th class="mat-krit-spalte"><span class="mat-vorlesen">kritisch</span></th><th>Befund</th><th>Wert</th><th>Bemerkung</th><th>Foto</th></tr></thead><tbody>${zeilen}</tbody></table></section>` : ""}
         ${pr.art !== "aussonderung" ? anhaengeHtml() : ""}
         ${pr.dokumente.length ? `<section class="section"><h2>Herstellerdokumente am Prüftag</h2>${dokListe(pr.dokumente, false)}</section>` : ""}`;
     }
@@ -2741,6 +2796,8 @@
   }
 
   /* --- Prüfdurchgang ---------------------------------------------------------------------------------- */
+  const DURCHGANG_SORT = [["Inventar-Nr.", "inventar"], ["Hersteller", "hersteller"], ["Produkt", "produkt"], ["Ablage", "ablage"],
+                          ["Stand", "stand"], ["Status", "status"]];
   async function durchgangAnsicht() {
     let filter = "";
     let d = null;
@@ -2782,10 +2839,12 @@
         if (d.offen && DARF.pruefen && a.lock_state !== "ausgesondert") knopf = `<a class="btn secondary small" href="/material/artikel/${a.id}/pruefung/neu?durchgang=${d.id}">Prüfen</a>`;
         if (darf) knopf += `<button type="button" class="btn secondary small" data-act="ausnehmen" data-id="${a.id}" data-nr="${esc(a.inventory_no)}">Ausnehmen</button>`;
       }
-      return `<tr class="z-${a.zustand}"><td data-l="Inventar-Nr."><a class="mat-inv" href="/material/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a></td>
-        <td data-l="Hersteller">${esc(a.manufacturer || "")}</td>
-        <td data-l="Produkt">${produktZelle(a)}<div class="small muted">SN ${esc(a.serial_no)}</div></td>
-        <td data-l="Ablage">${esc(a.pfad)}</td><td data-l="Stand">${zustand}</td><td data-l="Status">${statusMarke(a.status)}</td>
+      // Enge Tabelle: Hersteller und Ablage stehen klein beim Produkt; Karte: Inventar-Nr. und Status oben (Lieferung 5).
+      return `<tr class="z-${a.zustand}"><td data-l="Inventar-Nr." class="mat-k-titel"><a class="mat-inv" href="/material/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a></td>
+        <td data-l="Hersteller" class="mat-schmal-weg">${esc(a.manufacturer || "")}</td>
+        <td data-l="Produkt" class="mat-k-ohne">${a.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(a.manufacturer)}</div>` : ""}${produktZelle(a)}<div class="small muted">SN ${esc(a.serial_no)}</div>
+          <div class="mat-eng-zusatz small muted">${esc(a.pfad)}</div></td>
+        <td data-l="Ablage" class="mat-eng-weg">${esc(a.pfad)}</td><td data-l="Stand">${zustand}</td><td data-l="Status" class="mat-k-marke">${statusMarke(a.status)}</td>
         <td class="tabelle-aktionen">${knopf}</td></tr>`;
     }
     function zeichnen() {
@@ -2808,11 +2867,11 @@
         ${d.protokoll ? `<p class="mat-protokoll-zeile">Sammelprotokoll <strong class="mat-hash">${esc(d.protokoll.id)}</strong> · festgeschrieben ${esc(fmtZeit(d.protokoll.festgeschrieben))}
           · SHA-256 (erste ${esc(d.protokoll.bytes)} Bytes) ${summeKnopf(d.protokoll.sha256)} · <a href="/material/pruefen">Protokoll prüfen</a></p>`
           : d.offen ? "" : '<p class="small muted">Vor Einführung des Festschreibens geschlossen – ohne Sammelprotokoll.</p>'}
-        <div class="mat-kacheln mat-rundenzahlen">${zustaende.map(([k, t]) => `<div class="mat-kachel z-${k || "gesamt"}"><strong>${z[k || "gesamt"]}</strong><span>${k ? t : "Artikel"}</span></div>`).join("")}</div>
+        <div class="mat-kachelrahmen"><div class="mat-kacheln mat-rundenzahlen">${zustaende.map(([k, t]) => `<div class="mat-kachel z-${k || "gesamt"}"><strong>${z[k || "gesamt"]}</strong><span>${k ? t : "Artikel"}</span></div>`).join("")}</div></div>
         <p>${fortschritt(z)}</p>
         ${d.offen ? `<p class="help">Jeder öffnet seinen Artikel mit „Prüfen“ und reserviert ihn damit – die anderen sehen „in Prüfung bei …“. Abschließen geht, sobald jeder Artikel geprüft oder mit Grund ausgenommen ist. Beim Abschließen entsteht das Sammelprotokoll mit allen Prüfern.</p>` : ""}
         <div class="c-tabs mat-filter">${zustaende.map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}${f ? ` (${z[f]})` : ""}</button>`).join("")}</div>
-        ${liste.length ? `<table class="list mat-tabelle mat-runde"><thead><tr>${sortKopf("Inventar-Nr.", "inventar", s)}${sortKopf("Hersteller", "hersteller", s)}${sortKopf("Produkt", "produkt", s)}${sortKopf("Ablage", "ablage", s)}${sortKopf("Stand", "stand", s)}${sortKopf("Status", "status", s)}<th></th></tr></thead><tbody>${liste.map(zeile).join("")}</tbody></table>` : leer("Keine Artikel in dieser Auswahl.")}
+        ${liste.length ? `${kartenKopf(DURCHGANG_SORT, s)}<table class="list mat-tabelle mat-karten mat-runde"><thead><tr>${sortKopf("Inventar-Nr.", "inventar", s)}${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: kopfZusatz("Hersteller", "hersteller", s, "schmal"), nach: kopfZusatz("Ablage", "ablage", s, "eng") })}${sortKopf("Ablage", "ablage", s, { klasse: "mat-eng-weg" })}${sortKopf("Stand", "stand", s)}${sortKopf("Status", "status", s)}<th></th></tr></thead><tbody>${liste.map(zeile).join("")}</tbody></table>` : leer("Keine Artikel in dieser Auswahl.")}
         ${d.pruefer.length ? `<section class="section"><h2>Prüfer in diesem Durchgang</h2><ul>${d.pruefer.map((x) => `<li>${esc(x.name)}${x.urkunde ? ` · Urkundennummer ${esc(x.urkunde)}` : ""} – ${plural(x.anzahl, "Prüfung", "Prüfungen")}</li>`).join("")}</ul></section>` : ""}`;
     }
     async function neu() { await laden(); zeichnen(); }
@@ -3146,10 +3205,10 @@
       ${r.url ? `<p>${rrLink(r.url, `Meldung des Herstellers: ${kurzLink(r.url)}`)}</p>` : ""}
       <p><strong>Betroffen:</strong> ${r.alle ? "alle Artikel dieses Produkts" : `${serien.length === 1 ? "Seriennummer" : "Seriennummern"} ${serienText}`}</p>
       ${r.aktiv ? `<p>${plural(r.betroffen, "Artikel", "Artikel")} im Bestand betroffen${r.betroffen ? ` · ${r.offen ? `<strong class="mat-warn">${r.offen} offen</strong>` : "alle erledigt"}` : ""}</p>
-        ${artikel.length ? `<table class="list mat-tabelle mat-rr-artikel"><thead><tr><th>Inventar-Nr.</th><th>Seriennummer</th><th>Ablage</th><th>Zustand</th></tr></thead><tbody>
-          ${artikel.map((x) => `<tr><td data-l="Inventar-Nr."><a class="mat-inv" href="/material/artikel/${x.id}"><strong>${esc(x.inventory_no)}</strong></a></td>
+        ${artikel.length ? `<table class="list mat-tabelle mat-karten mat-rr-artikel"><thead><tr><th>Inventar-Nr.</th><th>Seriennummer</th><th>Ablage</th><th>Zustand</th></tr></thead><tbody>
+          ${artikel.map((x) => `<tr><td data-l="Inventar-Nr." class="mat-k-titel"><a class="mat-inv" href="/material/artikel/${x.id}"><strong>${esc(x.inventory_no)}</strong></a></td>
             <td data-l="Seriennummer">${esc(x.serial_no)}${x.serial_generated ? ' <span class="muted">(System)</span>' : ""}</td>
-            <td data-l="Ablage">${esc(x.pfad || "")}</td><td data-l="Zustand">${rrZustand(x.zustand, x.grund)}</td></tr>`).join("")}</tbody></table>` : ""}
+            <td data-l="Ablage">${esc(x.pfad || "")}</td><td data-l="Zustand" class="mat-k-marke">${rrZustand(x.zustand, x.grund)}</td></tr>`).join("")}</tbody></table>` : ""}
         ${(r.nicht_gefunden || []).length ? `<p class="small">Ohne Artikel im Bestand: ${r.nicht_gefunden.map(esc).join(", ")}</p>` : ""}` : ""}
       ${!r.aktiv && r.close_note ? `<p><strong>Vermerk:</strong> <span class="mat-text">${esc(r.close_note)}</span></p>` : ""}
       <p class="small muted">${rrMailText(r)}</p>
