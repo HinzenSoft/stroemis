@@ -1385,7 +1385,10 @@
       dlg.removeEventListener("cancel", abbruch);
       if (geaendert && opt.nachFreigaben) opt.nachFreigaben();
     }, { once: true });
-    zeigenReiter(opt.reiter === "freigaben" ? "freigaben" : "ordner", false, true);
+    // Direkt in „Freigaben“: showModal hat den Fokus schon aufs erste Bedienelement gesetzt – den Reiter „Ordner“.
+    // Er geht auf den gewählten Reiter, bis MatFreigaben.inhalt geladen hat und ihn in den Inhalt setzt.
+    const start = opt.reiter === "freigaben" ? "freigaben" : "ordner";
+    zeigenReiter(start, start === "freigaben", true);
   }
 
   // Hinweise der Verschieben-Dialoge (Bauentwurf 1.7): was mit Freigaben, Systemordnern und Durchgängen geschieht.

@@ -135,7 +135,7 @@
     }
     const nurVerwaltung = art !== "geerbt" && f.aenderbar && f.entziehbar === false
       ? '<div class="small muted mf-nur-pv">Entziehen nur über die Plattform-Verwaltung – sonst verwaltet hier niemand so lange wie du.</div>' : "";
-    return `<tr${f.gueltig ? "" : ' class="mf-alt"'}>
+    return `<tr data-zeile="${f.id}"${f.gueltig ? "" : ' class="mf-alt"'}>
       <td data-l="Person" class="mf-k-person">${personHtml(f.konto)}${f.eigen ? ' <span class="badge grey">du</span>' : ""}${quali}${ordner}</td>
       <td data-l="Recht" class="mf-k-halb">${esc(RECHT[f.recht] || f.recht)}</td>
       <td data-l="bis" class="mf-k-halb">${bisText(f.bis)}</td>
@@ -556,12 +556,35 @@
       else if (b.dataset.act === "verlaengern") verlaengernDialog(stand, neuLaden);
       else if (b.dataset.act === "dort") dort(+b.dataset.ordner);
     });
-    if (opt.vorlage === "verlaengern") {
-      const knopf = $("#mf-verlaengern", el);
-      if (knopf) { knopf.scrollIntoView({ block: "center" }); if (opt.fokus) knopf.focus(); }
-    } else if (opt.fokus) {
-      fokus($("#mf-person", el));
+    if (opt.vorlage === "verlaengern") zumAblauf(el, d, opt.fokus);
+    else if (opt.fokus) fokus($("#mf-person", el));
+  }
+
+  /* „Verlängern …“ aus dem Ablaufhinweis im Ordnerkopf. Er zählt alles, was hier und in Unterordnern in 30 Tagen
+     abläuft – auch Grundrechte, die „Alle Prüffreigaben verlängern“ nicht betrifft. Läuft eine befristete
+     Prüffreigabe ab, die man ändern darf, geht es zu diesem Knopf; sonst zur ersten ablaufenden Zeile (ihr Abschnitt
+     geht auf, der Fokus auf ihr „Ändern“). Gibt es keine, wie ohne Vorlage. */
+  function zumAblauf(el, d, mitFokus) {
+    const bald = (f) => f.laeuft_ab_in_tagen !== null && f.laeuft_ab_in_tagen !== undefined;
+    const knopf = $("#mf-verlaengern", el);
+    const teile = $$("details.mf-teil", $("#mf-listen", el));
+    const zeilen = d.direkt.map((f) => [f, teile[0]]).concat(d.unten.map((f) => [f, teile[2]])).filter(([f]) => bald(f));
+    let ziel = null;
+    if (knopf && zeilen.some(([f]) => f.recht === "pruefen" && f.bis && f.aenderbar)) {
+      ziel = knopf;
+      knopf.scrollIntoView({ block: "center" });
+    } else {
+      const [f, teil] = zeilen.find(([x]) => x.aenderbar) || zeilen[0] || [];
+      const zeile = f && teil ? $(`tr[data-zeile="${f.id}"]`, teil) : null;
+      if (zeile) {
+        teil.open = true;
+        zeile.scrollIntoView({ block: "center" });
+        ziel = $('[data-act="aendern"]', zeile);
+        // Ohne „Ändern“ (nicht änderbar) die Zeile selbst – sonst rollte der Fokus aufs Personenfeld zurück nach oben.
+        if (!ziel) { zeile.tabIndex = -1; ziel = zeile; }
+      }
     }
+    if (mitFokus) fokus(ziel || $("#mf-person", el));
   }
 
   /* --- „Meine Freigaben“ (Übersicht) --------------------------------------------------------------------------
