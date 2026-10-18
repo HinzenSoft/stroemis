@@ -1,2 +1,116 @@
 /* Freigaben je Ordner (Phase 2 · Lieferung 1, Paket B): Gestaltung des Dialogs „Freigaben“ und des Hinweises
-   „Meine Freigaben“ (freigaben.js). Noch ein Platzhalter: Paket B füllt die Datei. */
+   „Meine Freigaben“ (freigaben.js). Der Dialog misst sich selbst: Ob die Listen Tabelle oder Karte sind, entscheidet die
+   Breite seines Inhalts (Container „mf“) – wie die Modullisten am Container „mat-seite“ (material.css), denn Dialoge
+   liegen außerhalb der Seite. Am Telefon, am Außendisplay eines Fold und am Tablet hochkant werden sie zu Karten. */
+
+/* Breiter als ein gewöhnlicher Dialog – die Liste hat sieben Spalten. :where() hält die Regel so schwach wie „dialog“
+   selbst: Die Regeln für Fold mit zwei Hälften (dialog[open], app.css) gehen vor. Am Telefon gilt die Breite aus
+   app.css. */
+@media (min-width: 641px) { dialog:where(.mf-dlg) { width: min(920px, 96vw); } }
+.mf { container: mf / inline-size; }
+.mf > .help:first-child { margin-top: 0; }
+
+/* Abschnitte: aufklappbar, mit Zahl */
+.mf-teil { border-top: 1px solid var(--linie); padding: 4px 0 8px; }
+.mf-teil > summary { cursor: pointer; font-weight: 700; padding: 8px 0; }
+.mf-zahl { display: inline-block; min-width: 1.6em; text-align: center; margin-left: 6px; font-size: var(--fs-klein);
+  color: var(--anthrazit); background: var(--grau-hell); border-radius: var(--radius-pille); padding: 0 6px; font-weight: 400; }
+@media (pointer: coarse) { .mf-teil > summary { padding: 11px 0; } }
+
+/* „+ Freigabe“: Person, Anker, Vorlage, Enden, Notiz */
+.mf-personwahl { position: relative; }
+.mf-treffer { list-style: none; margin: 4px 0 0; padding: 0; border: 1px solid var(--linie); max-height: 240px; overflow: auto; }
+.mf-treffer[hidden] { display: none; }
+.mf-treffer li + li { border-top: 1px solid var(--linie); }
+.mf-person { display: block; width: 100%; text-align: left; background: var(--weiss); border: 0; padding: 8px 10px; font: inherit;
+  color: var(--anthrazit); cursor: pointer; overflow-wrap: anywhere; }
+.mf-person:hover, .mf-person:focus-visible { background: var(--grau-hell); }
+.mf-person:focus-visible { outline: 3px solid var(--gelb); outline-offset: -3px; }
+.mf-treffer-leer { padding: 8px 10px; color: var(--grau); font-size: var(--fs-klein); }
+.mf-gewaehlt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 8px 10px; border: 1px solid var(--linie);
+  background: var(--grau-hell); overflow-wrap: anywhere; }
+.mf-gewaehlt[hidden] { display: none; }
+.mf-gewaehlt .lnk { margin-left: auto; }
+.mf-vorlagen { border: 0; padding: 0; margin: 12px 0 0; min-width: 0; }
+.mf-vorlagen legend { font-weight: 700; padding: 0; margin-bottom: 4px; }
+/* Je Vorlage eine Kachel mit Erklärung – nebeneinander, so viele hineinpassen, am Telefon untereinander. */
+.mf-vorlagen { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 6px; }
+.mf-vorlagen legend { grid-column: 1 / -1; }
+.mf-vorlage { display: flex; gap: 8px; align-items: flex-start; border: 1px solid var(--linie); padding: 8px 10px; margin: 0;
+  font-weight: 400; cursor: pointer; background: var(--weiss); }
+.mf-vorlage input { margin-top: 3px; flex: none; }
+.mf-vorlage > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mf-vorlage .small { color: var(--grau); }
+.mf-vorlage:has(input:checked) { border-color: var(--rot); box-shadow: inset 0 0 0 1px var(--rot); }
+.mf-vorlage:has(input:disabled) { opacity: .55; cursor: default; }
+.mf-vorlage:has(input:focus-visible) { outline: 3px solid var(--gelb); outline-offset: 2px; }
+.mf-quali { margin-top: 6px; }
+.mf-einzeln, .mf-enden { margin-top: 8px; }
+.mf-einzeln[hidden], .mf-enden > [hidden], .mf-quali[hidden] { display: none; }
+.mf-pruefen-wahl { margin-top: 30px; }
+.mf-enden .mat-datum { max-width: 11em; }
+.mf-enden .mat-datum[hidden] { display: none; }
+.mf-enden label.inline { margin: 0 0 4px; }
+.mf-notiz { margin-top: 10px; }
+.mf-notiz > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.mf-erteilen-reihe { margin-top: 14px; }
+
+/* Listen: Tabelle mit Spalten nach dem Inhalt. Die Kartenregel aus app.css (Fenster bis 860 px, jede table.list) gilt
+   hier nicht – sie wird zurückgenommen und am Dialog selbst entschieden. Browser ohne Containerabfragen behalten sie. */
+table.list.mf-tabelle { table-layout: auto; margin-top: 4px; }
+table.list.mf-tabelle td { vertical-align: top; }
+table.list.mf-tabelle td.tabelle-aktionen .btn-row { flex-wrap: nowrap; justify-content: flex-end; }
+.mf-notiztext { overflow-wrap: break-word; min-width: 5em; max-width: 16em; }
+tr.mf-alt td { color: var(--grau); }
+@supports (container-type: inline-size) {
+  @media (max-width: 860px) {
+    table.list.mf-tabelle { display: table; }
+    table.list.mf-tabelle thead { display: table-header-group; }
+    table.list.mf-tabelle tbody { display: table-row-group; }
+    table.list.mf-tabelle tr { display: table-row; padding: 0; border-bottom: 0; }
+    table.list.mf-tabelle th, table.list.mf-tabelle td { display: table-cell; padding: 8px; border-bottom: 1px solid var(--linie); }
+    table.list.mf-tabelle th { border-bottom: 2px solid var(--anthrazit); }
+    table.list.mf-tabelle td[data-l]::before { content: none; }
+  }
+}
+/* Als Karte, sobald die Spalten nicht mehr nebeneinander passen: Person oben, Recht und Ende nebeneinander, darunter
+   Zustand, Notiz und wer vergeben hat, zuletzt die Knöpfe. */
+@container mf (max-width: 680px) {
+  table.list.mf-tabelle, table.list.mf-tabelle tbody, table.list.mf-tabelle tr, table.list.mf-tabelle td { display: block; }
+  table.list.mf-tabelle thead { display: none; }
+  table.list.mf-tabelle tr { padding: 10px 0 12px; border-bottom: 1px solid var(--linie);
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 12px; }
+  table.list.mf-tabelle td { border: 0; padding: 2px 0; white-space: normal; grid-column: 1 / -1; }
+  table.list.mf-tabelle td.mf-k-halb { grid-column: auto; }
+  table.list.mf-tabelle td[data-l]::before { content: attr(data-l) ": "; color: var(--grau); font-size: var(--fs-klein); }
+  table.list.mf-tabelle td.mf-k-person::before { content: none; }
+  table.list.mf-tabelle td.tabelle-aktionen { padding-top: 8px; }
+  table.list.mf-tabelle td.tabelle-aktionen .btn-row { flex-wrap: wrap; justify-content: flex-start; }
+  .mf-notiztext { max-width: none; }
+}
+
+/* Zustand einer Freigabe – gültig, gelb kurz vor Ablauf, grau abgelaufen, rot umrandet: wirkt nicht. */
+.mf-zustand { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 8px;
+  border-radius: var(--radius-pille); white-space: nowrap; }
+.mf-zustand.gueltig { color: var(--ok); padding-left: 0; }
+.mf-zustand.bald { background: var(--gelb); color: var(--anthrazit); }
+.mf-zustand.abgelaufen { background: var(--grau-hell); color: var(--grau); border: 1px solid var(--linie); }
+.mf-zustand.wirkt-nicht { color: var(--rot); border: 1px solid var(--rot); white-space: normal; border-radius: var(--radius); }
+
+.mf-verl-reihe { margin: 2px 0 6px; }
+.mf-verlauf { list-style: none; margin: 0; padding: 0; }
+.mf-verlauf li { padding: 6px 0; border-bottom: 1px solid var(--linie); overflow-wrap: anywhere; }
+.mf-uebersprungen { margin: 4px 0 0 18px; padding: 0; }
+.mf-uebersprungen li { padding: 2px 0; overflow-wrap: anywhere; }
+.mf-ablauf { margin-top: 0; }
+
+/* „Meine Freigaben“ auf der Übersicht und der Ablaufhinweis im Ordnerkopf */
+.mf-meine-liste { list-style: none; margin: 0; padding: 0; }
+.mf-meine-liste li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 8px 0;
+  border-bottom: 1px solid var(--linie); overflow-wrap: anywhere; }
+.mf-meine-liste li > div { flex-basis: 100%; }
+.mf-meine-liste li.bald { border-left: 4px solid var(--gelb); padding-left: 8px; }
+.mf-meine-liste li.abgelaufen { color: var(--grau); }
+.mf-meine-ordner { font-weight: 600; min-width: 0; }
+.mf-meine-recht { color: var(--grau); font-size: var(--fs-klein); }
+.mf-kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }

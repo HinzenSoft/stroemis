@@ -25,12 +25,14 @@
   /* Rechte je Modul: Jeder Nutzer hat in jedem der vier Module eine Stufe – kein Zugriff,
      Mitglied oder Verwaltung. Was die Stufe im Modul bedeutet, steht hier an EINER Stelle und
      erscheint als Titel am Auswahlfeld, in der Tabelle wie im Dialog. Im Modul Verwaltung gibt
-     es kein „Mitglied“: Nutzer, Rechte und Einstellungen pflegt man ganz oder gar nicht. */
+     es kein „Mitglied“: Nutzer, Rechte und Einstellungen pflegt man ganz oder gar nicht.
+     Material ist seit Phase 2 nur Anzeige (nurAnzeige): Rechte am Bestand vergibt der Verwalter eines
+     Ordners als Freigabe – hier steht, was daraus folgt („alles“, „n Freigaben“ oder „–“). */
   const MODULE = [
     { k: "karte", t: "Spots", hilfe: "Mitglied: eigene Alben anlegen und bearbeiten. Verwaltung: alle Alben." },
     { k: "wiki", t: "Wiki", hilfe: "Mitglied: eigene und freigegebene Seiten. Verwaltung: alle Seiten, beschränkte lesen, veröffentlichen, HTML-Bausteine, Ersteller ändern." },
     { k: "pruefungen", t: "Prüfungen", hilfe: "Mitglied: Prüfungen abnehmen (Prüfer). Verwaltung: zusätzlich Kataloge pflegen und jeden Lehrgang leiten." },
-    { k: "material", t: "Material", hilfe: "Mitglied: Bestand, Fälligkeiten, Lebensläufe und Protokolle ansehen (Führungskraft). Verwaltung: Materialwart – Ordner und Artikel pflegen. Prüfer und Katalogpflege sind eigene Häkchen im Dialog." },
+    { k: "material", t: "Material", nurAnzeige: true, hilfe: "Rechte am Bestand vergibt der Verwalter eines Ordners unter Bestand → Ordner → Freigaben. Die Verwaltung sieht alles und legt Gliederungen an. Prüfer und Katalogpflege sind Häkchen; beide geben allein keinen Bestand zu sehen. Prüfen braucht zusätzlich eine befristete Prüffreigabe." },
     { k: "verwaltung", t: "Verwaltung", nurVoll: true,
       hilfe: "Verwaltung: Nutzer, Rechte und Einstellungen – schließt alle Rechte in allen Modulen ein." },
   ];
@@ -46,6 +48,7 @@
   function rechtFeld(m, rechte, opts) {
     opts = opts || {};
     rechte = rechte || {};
+    if (m.nurAnzeige) return materialAnzeige(Object.assign({}, opts.konto, { rechte }), opts.id);
     const voll = (rechte.verwaltung | 0) === 2;
     let wert = rechte[m.k] | 0, aus = false, titel = m.hilfe;
     if (m.k !== "verwaltung" && voll) { wert = 2; aus = true; titel = ERGIBT_SICH; }
@@ -53,6 +56,15 @@
     const stufen = STUFEN.filter(([v]) => !(m.nurVoll && v === 1));
     return `<select class="recht-wahl" data-modul="${m.k}"${opts.id ? ` id="${opts.id}"` : ""} aria-label="${S.esc(m.t)}"
       title="${S.esc(titel)}"${aus ? " disabled" : ""}>${stufen.map(([v, l]) => `<option value="${v}"${v === wert ? " selected" : ""}>${l}</option>`).join("")}</select>`;
+  }
+
+  /* Die Anzeige im Feld Material: „alles“ für die Verwaltung, sonst die Zahl der gültigen Freigaben – oder „–“. Als
+     <output>, damit die Beschriftung im Dialog dazugehört. */
+  function materialAnzeige(u, id) {
+    const n = u.mat_freigaben | 0;
+    const text = ((u.rechte || {}).verwaltung | 0) === 2 ? "alles" : n ? `${n} Freigabe${n === 1 ? "" : "n"}` : "–";
+    const m = MODULE.find((x) => x.k === "material");
+    return `<output class="recht-anzeige"${id ? ` id="${id}"` : ""} title="${S.esc(m.hilfe)}">${text}</output>`;
   }
 
   /* Die vier Zellen einer Zeile neu zeichnen – nach jeder Antwort des Servers, ob Erfolg oder
@@ -66,11 +78,15 @@
 
   /* Das Material-Feld trägt darunter die beiden Kennzeichen des Moduls. Gesetzt werden sie im
      Dialog „Bearbeiten“. Die Urkundennummer trägt der Prüfer selbst im Profil ein – bis dahin darf
-     er nicht prüfen, und seine Marke sagt das (gelb statt grau). */
+     er nicht prüfen, und seine Marke sagt das (gelb statt grau). Gelb ist auch ein Konto mit einer
+     Stufe aus Phase 1, aber ohne Freigabe: Es sah früher Bestand und sieht jetzt keinen. */
   function rechtZelle(m, u) {
-    const feld = rechtFeld(m, u.rechte, { eigenes: u.id === STROEMIS.user.id });
+    const feld = rechtFeld(m, u.rechte, { eigenes: u.id === STROEMIS.user.id, konto: u });
     if (m.k !== "material") return feld;
     const marken = [];
+    if (u.mat_stufe_alt > 0 && !u.mat_freigaben && ((u.rechte || {}).verwaltung | 0) !== 2) {
+      marken.push(`<span class="badge" title="In Phase 1 hatte das Konto die Stufe „${u.mat_stufe_alt === 2 ? "Verwaltung" : "Mitglied"}“ im Modul Material. Sie wirkt nicht mehr – den Bestand zeigen nur Freigaben, vergeben am Ordner (Bestand → Ordner → Freigaben).">Stufe aus Phase 1 – ohne Frei&shy;gabe</span>`);
+    }
     if (u.mat_pruefer && u.urkunde_gueltig) marken.push(`<span class="badge grey" title="Prüfer (Sachkundiger), Urkundennummer ${S.esc(u.urkundennummer)}">Prüfer</span>`);
     else if (u.mat_pruefer) marken.push('<span class="badge urkunde-fehlt" title="Häkchen „Prüfer“ gesetzt, aber noch keine Urkundennummer – die trägt der Prüfer selbst im Profil ein. Bis dahin darf er nicht prüfen.">Prüfer – Urkunden&shy;nummer fehlt</span>');
     if (u.mat_katalog) marken.push('<span class="badge grey" title="Produktkatalogpfleger">Katalog</span>');
@@ -194,19 +210,26 @@
       <label>E-Mail-Adresse</label><input type="email" id="u-email" value="${S.esc(u.email)}" required>
       <label>Telefon</label><input type="tel" id="u-phone" value="${S.esc(u.phone)}">
       <label>Rechte</label>
-      <div class="rechte-reihe">${MODULE.map((m) => `<div><label for="u-r-${m.k}">${m.t}</label>${rechtFeld(m, rechte, { id: "u-r-" + m.k, eigenes })}</div>`).join("")}</div>
-      <div class="help">„–“ kein Zugriff · „Mitglied“ eigene Inhalte, bei Prüfungen: Prüfungen abnehmen, bei Material: lesen ·
-        „Verwaltung“ alles im Modul (bei Material: Materialwart). Verwaltung im Modul „Verwaltung“ schließt alle Rechte ein.
-        Was eine Stufe genau umfasst, steht als Hinweis am Feld.</div>
+      <div class="rechte-reihe">${MODULE.map((m) => `<div><label for="u-r-${m.k}">${m.t}</label>${rechtFeld(m, rechte, { id: "u-r-" + m.k, eigenes, konto: u })}</div>`).join("")}</div>
+      <div class="help">„–“ kein Zugriff · „Mitglied“ eigene Inhalte, bei Prüfungen: Prüfungen abnehmen ·
+        „Verwaltung“ alles im Modul. Verwaltung im Modul „Verwaltung“ schließt alle Rechte ein.
+        Was eine Stufe genau umfasst, steht als Hinweis am Feld. Material ist nur Anzeige: Rechte am Bestand vergibt der
+        Verwalter eines Ordners unter Bestand → Ordner → Freigaben; die Verwaltung sieht alles und legt Gliederungen an.</div>
       <fieldset class="mat-rollen"><legend>Modul Material</legend>
         <label class="inline"><input type="checkbox" id="u-mat-pruefer" ${u.mat_pruefer ? "checked" : ""}> Prüfer (Sachkundiger, Qualifikation 1012)</label>
         <p class="mat-urkunde" ${u.mat_pruefer ? "" : "hidden"}>${urkundeLesend(u)}</p>
         <div class="help">Das Häkchen macht das Konto zum Prüfer. Urkundennummer und Unterschrift trägt der Prüfer selbst in seinem Profil ein
-          („Urkundennummer und Unterschrift“); beides steht später auf jedem Prüfprotokoll. Prüfen kann er erst mit Urkundennummer –
-          auch die Verwaltung prüft nur mit eigenem Häkchen und eigener Urkundennummer.</div>
+          („Urkundennummer und Unterschrift“); beides steht später auf jedem Prüfprotokoll. Prüfen kann er erst mit Urkundennummer
+          und einer befristeten Prüffreigabe am Ordner – auch die Verwaltung prüft nur mit eigenem Häkchen, eigener Urkundennummer
+          und eigener Prüffreigabe.</div>
         <label class="inline"><input type="checkbox" id="u-mat-katalog" ${u.mat_katalog ? "checked" : ""}> Produktkatalogpfleger – Kategorien, Produkte, Herstellerdokumente und Prüfformulare (plattformweit)</label>
-        <div class="help">Beides gibt mindestens Leserecht im Modul.</div>
+        <div class="help">Beide Häkchen geben Zugang zum Modul (Katalog, Profil), aber keinen Bestand – den zeigen erst Freigaben.
+          Sie brauchen einen Namen: Prüfer und Katalogpfleger stehen namentlich in Journal und Protokollen.</div>
       </fieldset>
+      ${u.id ? `<fieldset class="mat-rollen"><legend>Freigaben im Modul Material</legend>
+        <div id="u-freigaben"><p class="help">Wird geladen …</p></div>
+        <div class="help">Angelegt wird eine Freigabe am Ordner (Bestand → Ordner → Freigaben), nicht hier.</div>
+      </fieldset>` : ""}
       <label>${u.id ? "Neues Passwort (leer lassen, um es zu behalten)" : "Passwort (leer lassen, um eines zu erzeugen)"}</label>
       <input type="text" id="u-pw" autocomplete="off">
       ${u.id ? `<label class="inline"><input type="checkbox" id="u-active" ${u.active ? "checked" : ""}> Konto aktiv</label>`
@@ -215,7 +238,8 @@
 
   function read(body) {
     const rechte = {};
-    MODULE.forEach((m) => { rechte[m.k] = +body.querySelector("#u-r-" + m.k).value; });
+    // Material schickt der Dialog nicht mit: Die Stufe dort ist Anzeige, der Server übergeht sie.
+    MODULE.filter((m) => !m.nurAnzeige).forEach((m) => { rechte[m.k] = +body.querySelector("#u-r-" + m.k).value; });
     return {
       name: body.querySelector("#u-name").value, gliederung: body.querySelector("#u-gl").value,
       email: body.querySelector("#u-email").value, phone: body.querySelector("#u-phone").value,
@@ -228,19 +252,15 @@
   /* Im Dialog gilt dieselbe Regel wie in der Tabelle, nur ohne Server dazwischen: Wer die
      Verwaltung auf „Verwaltung“ stellt, sieht die drei anderen Felder sofort auf „Verwaltung“
      springen und erstarren – und bekommt beim Zurückstellen seine vorherigen Werte wieder. */
-  function koppleRechte(body) {
+  function koppleRechte(body, u) {
     // Der Hinweis zur Urkundennummer gehört nur zu einem Prüfer – er erscheint mit dem Häkchen.
     body.querySelector("#u-mat-pruefer").addEventListener("change", (e) => { body.querySelector(".mat-urkunde").hidden = !e.target.checked; });
-    // Prüfer und Katalogpfleger haben mindestens Leserecht im Modul Material – wer das Häkchen setzt,
-    // sieht das Feld gleich mitgehen, statt nach dem Speichern eine Meldung zu bekommen.
-    ["#u-mat-pruefer", "#u-mat-katalog"].forEach((sel) => body.querySelector(sel).addEventListener("change", (e) => {
-      const mat = body.querySelector("#u-r-material");
-      if (e.target.checked && mat.value === "0") mat.value = "1";
-    }));
     const chef = body.querySelector("#u-r-verwaltung");
     chef.addEventListener("change", () => {
       const voll = chef.value === "2";
-      MODULE.filter((m) => m.k !== "verwaltung").forEach((m) => {
+      // Die Anzeige Material geht mit: Die Verwaltung sieht alles.
+      body.querySelector("#u-r-material").outerHTML = materialAnzeige(Object.assign({}, u, { rechte: { verwaltung: voll ? 2 : 0 } }), "u-r-material");
+      MODULE.filter((m) => m.k !== "verwaltung" && !m.nurAnzeige).forEach((m) => {
         const f = body.querySelector("#u-r-" + m.k);
         if (voll) { f.dataset.vorher = f.value; f.value = "2"; f.disabled = true; f.title = ERGIBT_SICH; }
         else { f.disabled = false; f.title = m.hilfe; if (f.dataset.vorher !== undefined) f.value = f.dataset.vorher; }
@@ -252,7 +272,7 @@
     S.dialog(`<h2>Nutzer anlegen</h2>${userForm()}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="u-save" type="button">Anlegen</button></div>`,
       (dlg, body) => {
-        koppleRechte(body);
+        koppleRechte(body, {});
         body.querySelector("#u-save").onclick = async (ev) => {
           const knopf = ev.currentTarget;
           if (knopf.disabled) return;          // Doppelklick legte den Nutzer zweimal an
@@ -301,7 +321,8 @@
       S.dialog(`<h2>${S.esc(u.name || u.email)}</h2>${userForm(u)}
         <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="u-save" type="button">Speichern</button></div>`,
         (dlg, body) => {
-          koppleRechte(body);
+          koppleRechte(body, u);
+          freigabenZeigen(body.querySelector("#u-freigaben"), u);
           body.querySelector("#u-save").onclick = async (ev) => {
             const knopf = ev.currentTarget;
             if (knopf.disabled) return;
@@ -317,11 +338,89 @@
       try { const r = await S.api(`/api/admin/users/${id}/reset-mail`, { method: "POST", body: {} }); S.toast(r.message); }
       catch (err) { S.toast(err.message, true); }
     } else if (btn.dataset.act === "delete") {
-      if (!(await S.confirm(`Nutzer ${u.email} löschen? Alben, Bilder und Wiki-Seiten bleiben erhalten und gehen auf dich über.`))) return;
-      try { await S.api(`/api/admin/users/${id}`, { method: "DELETE" }); await load(); S.toast("Nutzer gelöscht"); }
-      catch (err) { S.toast(err.message, true); }
+      loeschDialog(u);
     }
   });
+
+  /* --- Modul Material im Dialog „Bearbeiten“: die Freigaben des Kontos -------------------------- */
+  const RECHT = { lesen: "lesen", verwalten: "verwalten", pruefen: "prüfen" };
+  // „2027-12-31“ → „31.12.2027“ – ohne Date-Objekt, damit keine Zeitzone den Tag verschiebt.
+  const tag = (iso) => { const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}.${m[2]}.${m[1]}` : ""; };
+  const mehrzahl = (n, eins, viele) => `${n} ${n === 1 ? eins : viele}`;
+
+  function zustand(f) {
+    if (!f.gueltig) return `<span class="muted">abgelaufen am ${tag(f.bis)}</span>`;
+    if (!f.wirkt) {
+      const quali = f.recht === "pruefen" && !f.konto.qualifiziert;
+      return `<span class="badge" title="${quali ? "Ohne Häkchen und Urkundennummer wirkt eine Prüffreigabe nicht." : "Das Konto ist deaktiviert oder hat keinen Namen."}">wirkt nicht${quali ? " – Qualifikation fehlt" : ""}</span>`;
+    }
+    const t = f.laeuft_ab_in_tagen;
+    if (t != null) return `<span class="badge">läuft ${t === 0 ? "heute" : t === 1 ? "morgen" : `in ${t} Tagen`} ab</span>`;
+    return "gültig";
+  }
+
+  /* Ordnerpfad (Link), Recht, bis, Zustand und „Entziehen“ – angelegt und geändert wird am Ordner. Die Notiz sieht
+     die Verwaltung hier mit, der Inhaber nie. */
+  async function freigabenZeigen(el, u) {
+    if (!el) return;
+    let liste;
+    try { liste = (await S.api(`/api/material/freigaben?user_id=${u.id}`)).freigaben; }
+    catch (e) { el.innerHTML = `<p class="help">Die Freigaben ließen sich nicht laden: ${S.esc(e.message)}</p>`; return; }
+    el.innerHTML = liste.length ? `<table class="list"><thead><tr><th>Ordner</th><th>Recht</th><th>bis</th><th>Zustand</th><th></th></tr></thead><tbody>
+      ${liste.map((f) => `<tr>
+        <td data-l="Ordner"><a href="/material/ordner/${f.ordner.id}">${S.esc(f.ordner.pfad)}</a>${f.notiz ? `<div class="small muted">${S.esc(f.notiz)}</div>` : ""}</td>
+        <td data-l="Recht">${S.esc(RECHT[f.recht] || f.recht)}</td>
+        <td data-l="bis">${f.bis ? tag(f.bis) : "dauerhaft"}</td>
+        <td data-l="Zustand">${zustand(f)}</td>
+        <td class="tabelle-aktionen"><button class="btn secondary small" type="button" data-entziehen="${f.id}">Entziehen</button></td>
+      </tr>`).join("")}</tbody></table>`
+      : '<p class="help">Keine Freigaben – das Konto sieht keinen Bestand.</p>';
+    el.querySelectorAll("[data-entziehen]").forEach((b) => b.addEventListener("click", async () => {
+      const f = liste.find((x) => x.id === +b.dataset.entziehen);
+      if (!(await S.confirm(`Freigabe „${RECHT[f.recht] || f.recht}“ für ${f.ordner.pfad} entziehen?`, "Entziehen"))) return;
+      b.disabled = true;
+      try {
+        const r = await S.api(`/api/material/freigaben/${f.id}`, { method: "DELETE" });
+        S.toast(r.offene_entwuerfe ? `Entzogen – ${mehrzahl(r.offene_entwuerfe, "offene Prüfung", "offene Prüfungen")} unter Prüfungen → Entwürfe freigeben.`
+          : "Freigabe entzogen");
+        await freigabenZeigen(el, u);
+        load();
+      } catch (e) { S.toast(e.message, true); b.disabled = false; }
+    }));
+  }
+
+  /* Löschen: Was im Modul Material daraus folgt, steht vorher da (GET …/material-folgen). Fehlt die Auskunft, lässt
+     sich trotzdem löschen – der Dialog sagt dann nur, dass er die Folgen nicht kennt. */
+  function folgenText(f) {
+    const n = (x) => x | 0;
+    return `${mehrzahl(n(f.freigaben), "Freigabe wird", "Freigaben werden")} entfernt, ${mehrzahl(n(f.zuordnungen), "Artikel verliert seine", "Artikel verlieren ihre")} Zuordnung,
+      ${mehrzahl(n(f.entwuerfe), "offene Prüfung wird zur Reservierung", "offene Prüfungen werden zu Reservierungen")} ohne Prüfer.
+      Festgeschriebene Prüfungen (${n(f.pruefungen)}) behalten den Namen – Nachweis nach EN 365.`;
+  }
+
+  function loeschDialog(u) {
+    S.dialog(`<h2>Nutzer löschen</h2>
+      <p>${S.esc(u.name || u.email)} (${S.esc(u.email)}) löschen? Alben, Bilder und Wiki-Seiten bleiben erhalten und gehen auf dich über.</p>
+      <div id="u-folgen"><p class="help">Folgen im Modul Material werden ermittelt …</p></div>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
+        <button class="btn danger" id="u-del" type="button">Löschen</button></div>`,
+    async (dlg, body) => {
+      body.querySelector("#u-del").onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        if (knopf.disabled) return;
+        knopf.disabled = true;
+        try { await S.api(`/api/admin/users/${u.id}`, { method: "DELETE" }); dlg.close(); await load(); S.toast("Nutzer gelöscht"); }
+        catch (err) { S.toast(err.message, true); knopf.disabled = false; }
+      };
+      const el = body.querySelector("#u-folgen");
+      try {
+        el.innerHTML = `<p class="notice">Modul Material: ${folgenText(await S.api(`/api/admin/users/${u.id}/material-folgen`))}</p>`;
+      } catch (e) {
+        el.innerHTML = `<p class="help">Was das Löschen im Modul Material entfernt (Freigaben, Zuordnungen, offene Prüfungen), ließ sich
+          nicht ermitteln${e.status === 404 ? "" : `: ${S.esc(e.message)}`}. Festgeschriebene Prüfungen behalten den Namen des Prüfers.</p>`;
+      }
+    });
+  }
 
   load().catch((e) => S.toast(e.message, true));
 
