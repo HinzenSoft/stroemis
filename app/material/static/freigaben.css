@@ -75,8 +75,10 @@ tr.mf-alt td { color: var(--grau); }
   }
 }
 /* Als Karte, sobald die Spalten nicht mehr nebeneinander passen: Person oben, Recht und Ende nebeneinander, darunter
-   Zustand, Notiz und wer vergeben hat, zuletzt die Knöpfe. */
-@container mf (max-width: 680px) {
+   Zustand, Notiz und wer vergeben hat, zuletzt die Knöpfe. Die sieben Spalten brauchen mit üblichem Inhalt (Marke
+   „abgelaufen am …“, zwei Knöpfe) rund 790 px – darunter ragte die Tabelle aus dem Dialog. Tabelle also erst ab gut
+   840 px Inhaltsbreite (der volle Dialog am Rechner); am Tablet hochkant und quer bis etwa 920 px Karten. */
+@container mf (max-width: 840px) {
   table.list.mf-tabelle, table.list.mf-tabelle tbody, table.list.mf-tabelle tr, table.list.mf-tabelle td { display: block; }
   table.list.mf-tabelle thead { display: none; }
   table.list.mf-tabelle tr { padding: 10px 0 12px; border-bottom: 1px solid var(--linie);
