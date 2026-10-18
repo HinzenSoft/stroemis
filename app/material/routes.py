@@ -599,18 +599,18 @@ def meldung_anlegen():
 
 
 @api.get("/meldungen/<int:mid>")
+@requires_zugang
 def meldung_lesen(mid):
     """Lesen darf, wer die Meldung sehen darf: die Material-Verwaltung, der Melder und wer den Ordner der Meldung
-    sieht. Sonst dieselbe 404 wie für eine, die es nicht gibt."""
-    if not current_user():
-        return jsonify(error="Nicht angemeldet"), 401
+    sieht – alle nur mit Zugang zum Modul (sonst 403 vor der Frage nach der Meldung). Sonst dieselbe 404 wie für eine,
+    die es nicht gibt."""
     return jsonify(meldung=meldung.meldung_json(meldung.lesbar(mid)))
 
 
 @api.delete("/meldungen/<int:mid>")
 def meldung_loeschen(mid):
-    """Nur der Melder selbst (meldung.loeschen prüft das). Wer die Meldung nicht sehen darf, bekommt dieselbe 404 wie
-    für eine, die es nicht gibt – auch ohne Modulzugang."""
+    """Nur der Melder selbst (meldung.loeschen prüft das) – seine eigene auch ohne Zugang zum Modul. Wer eine fremde
+    Meldung nicht sehen darf, bekommt dieselbe 404 wie für eine, die es nicht gibt – auch ohne Modulzugang."""
     if not current_user():
         return jsonify(error="Nicht angemeldet"), 401
     meldung.loeschen(mid)

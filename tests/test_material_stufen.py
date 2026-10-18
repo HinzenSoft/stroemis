@@ -168,7 +168,8 @@ OHNE_STUFE_ERLAUBT = {
     "material_api.meine_freigaben": 200,         # „Meine Freigaben“ – sagt, warum keine wirkt
     "material_api.unterschrift_lesen": 200,      # die eigene Unterschrift – im Profil nur zum Entfernen
     ("DELETE", "material_api.unterschrift_entfernen"): 200,   # seine Daten (hier ist keine da)
-    "material_api.meldung_lesen": 404,           # Meldungen: wie unbekannt (der Melder liest seine immer)
+    # Die eigene Meldung löschen darf der Melder auch ohne Stufe (test_meldung_ohne_stufe) – eine fremde antwortet wie
+    # eine unbekannte.
     ("DELETE", "material_api.meldung_loeschen"): 404,
 }
 
@@ -399,6 +400,43 @@ def test_personensuche_zweck():
     print("Personensuche je Zweck bestanden.")
 
 
+def test_meldung_ohne_stufe():
+    """Ein Melder, dem die Verwaltung die Stufe nimmt, liest seine Meldung nicht mehr (403 „nicht freigeschaltet“ wie
+    jede Route des Moduls – sie zeigt Katalog und Antwort der Material-Verwaltung), die Liste und die Fotos auch nicht.
+    Löschen darf er seine eigene weiter (seine Angaben); eine fremde antwortet wie eine unbekannte. Mit Stufe liest er
+    sie wieder."""
+    with ohne_post(), tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        adm, w = k["adm"], k["wart"]
+        anderer, _ = neues_konto(app, "wart2@example.org", "verwalten", name="Wart Zwei")
+        gid, _ = gliederung(adm)
+
+        def melden(c, modell):
+            r = c.post("/api/material/meldungen", headers=H, content_type="multipart/form-data",
+                       data={"manufacturer": "Meldewerk", "model": modell, "folder_id": str(gid),
+                             "fotos": [(jpeg(), "foto.jpg")]})
+            assert r.status_code == 201, r.get_json()
+            return r.json["meldung"]
+        eigene, behalten = melden(w, "Modell Eigen"), melden(w, "Modell Bleibt")
+        fremde = melden(anderer, "Modell Fremd")
+        foto = eigene["fotos"][0]["web"]
+        assert w.get(f"/api/material/meldungen/{eigene['id']}").status_code == 200 and w.get(foto).status_code == 200
+        assert adm.put(f"/api/admin/users/{k['wart_id']}", json={"rechte": {"material": 0}}).status_code == 200
+        for url in (f"/api/material/meldungen/{eigene['id']}", f"/api/material/meldungen/{fremde['id']}",
+                    "/api/material/meldungen/999999", "/api/material/meldungen"):
+            r = w.get(url)
+            assert r.status_code == 403 and "nicht freigeschaltet" in r.json["error"], (url, r.get_json())
+        assert w.get(foto).status_code == 403
+        gleich_wie_unbekannt(w.delete(f"/api/material/meldungen/{fremde['id']}", headers=H),
+                             w.delete("/api/material/meldungen/999999", headers=H))
+        assert w.delete(f"/api/material/meldungen/{eigene['id']}", headers=H).status_code == 200
+        assert [m["id"] for m in zeilen(app, "SELECT id FROM mat_product_request ORDER BY id")] == [behalten["id"],
+                                                                                                    fremde["id"]]
+        assert adm.put(f"/api/admin/users/{k['wart_id']}", json={"rechte": {"material": 1}}).status_code == 200
+        assert w.get(f"/api/material/meldungen/{behalten['id']}").status_code == 200
+    print("Meldung ohne Stufe bestanden.")
+
+
 def test_ruhende_freigabe_nicht_hochstufen():
     """Eine Freigabe, die ruht, weil das Konto keine Stufe hat (1.6 Nr. 12): Hochstufen (lesen → verwalten), ein
     späteres Ende oder aus lesen ein dauerhaftes Grundrecht machen geht per PUT so wenig wie beim Erteilen – 409 mit
@@ -593,6 +631,7 @@ if __name__ == "__main__":
     test_haekchen_ohne_stufe()
     test_personensuche_zweck()
     test_ruhende_freigabe_nicht_hochstufen()
+    test_meldung_ohne_stufe()
     test_verwalter_ohne_stufe()
     test_mail_meldung()
     test_profil_unterschrift()

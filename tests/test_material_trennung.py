@@ -910,12 +910,14 @@ def test_unterbau():
             v = {x["name"]: x["ende"] for x in rechte.verwalter_von(lager)}
             assert v == {"wart": None, "Gast Verwalter": (_heute() + timedelta(days=30)).isoformat()}, v
             assert [x["name"] for x in rechte.verwalter_von(gid)] == ["wart"]
-            # Meldungen sieht der Melder, wer den Ordner sehen darf, und die Material-Verwaltung.
+            # Meldungen sieht der Melder, wer den Ordner sehen darf, und die Material-Verwaltung – alle nur mit Zugang
+            # zum Modul: Ohne Stufe (nutzer) liest auch der Melder seine nicht (löschen darf er sie, test_material_stufen).
             fuehrung = db.query("SELECT * FROM users WHERE id = ?", (k["fuehrung_id"],), one=True)
             nutzer = db.query("SELECT * FROM users WHERE id = ?", (k["nutzer_id"],), one=True)
             assert rechte.darf_meldung({"created_by": None, "folder_id": lager}, fuehrung)
             assert not rechte.darf_meldung({"created_by": None, "folder_id": None}, fuehrung)
-            assert rechte.darf_meldung({"created_by": k["nutzer_id"], "folder_id": None}, nutzer)
+            assert rechte.darf_meldung({"created_by": k["fuehrung_id"], "folder_id": None}, fuehrung)
+            assert not rechte.darf_meldung({"created_by": k["nutzer_id"], "folder_id": None}, nutzer)
             assert not rechte.darf_meldung({"created_by": None, "folder_id": lager}, nutzer)
             # Suchprotokoll: zehn in der Viertelstunde, die elfte 429; Zeilen mit Name, älter als ein Jahr fliegen raus.
             g.user = fuehrung

@@ -123,7 +123,7 @@ def _sichtbar(user=None):
     """SQL-Bedingung über mat_product_request (ohne Kürzel) und ihre Parameter: die Meldungen, die das Konto sehen darf –
     dieselbe Regel wie rechte.darf_meldung, als Filter statt je Zeile."""
     user = user or current_user()
-    if not user:
+    if not user or not rechte.zugang(user):
         return "0", []
     if rechte.ist_material_verwaltung(user):
         return "1", []
@@ -292,11 +292,13 @@ def ablehnen(mid, d):
 
 def loeschen(mid):
     """Der Melder löscht seine Meldung – offen (sie verschwindet bei der Material-Verwaltung) oder erledigt. Ein
-    Produkt, das aus ihr entstand, bleibt; die Fotos gehen mit. Wer die Meldung nicht sehen darf, bekommt dieselbe 404
+    Produkt, das aus ihr entstand, bleibt; die Fotos gehen mit. Die eigene auch ohne Zugang zum Modul: Lesen kann er
+    sie dann nicht mehr, aber es sind seine Angaben. Wer eine fremde Meldung nicht sehen darf, bekommt dieselbe 404
     wie für eine, die es nicht gibt (lesbar); 403 nur, wer sie sieht, aber nicht gemacht hat."""
-    r = lesbar(mid)
     uid, _ = akteur()
+    r = meldung(mid)
     if not uid or r["created_by"] != uid:
+        lesbar(mid)
         raise Abgelehnt("Löschen kann eine Meldung nur, wer sie gemacht hat.", 403)
     with db.transaction(sofort=True):
         if not db.execute_zeilen("DELETE FROM mat_product_request WHERE id = ?", (mid,)):

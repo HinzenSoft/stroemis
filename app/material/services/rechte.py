@@ -372,9 +372,10 @@ def darf_artikel(recht, item, user=None):
 
 def darf_meldung(meldung, user=None):
     """Eine Produktmeldung sehen: die Material-Verwaltung, der Melder selbst und wer den Ordner der Meldung sehen
-    darf."""
+    darf – alle nur mit Zugang zum Modul. Ohne Stufe liest auch der Melder seine Meldung nicht mehr (sie zeigt Katalog
+    und Antwort der Material-Verwaltung); löschen darf er sie weiter (meldung.loeschen)."""
     user = user or current_user()
-    if not user or not meldung:
+    if not user or not meldung or not zugang(user):
         return False
     if ist_material_verwaltung(user) or meldung.get("created_by") == user["id"]:
         return True
