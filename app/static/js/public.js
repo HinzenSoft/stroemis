@@ -71,9 +71,12 @@
       const text = lesemodus && e.status === 404 ? "Diese Seite gibt es nicht, oder sie steht nur im internen Wiki." : e.message;
       content.innerHTML = `<div class="empty"><strong>Seite nicht gefunden</strong>${esc(text)}<div class="btn-row" style="justify-content:center;margin-top:12px"><a class="btn secondary small" href="${start}">Zur Übersicht</a></div></div>`;
       wire(content);
-      // Das Inhaltsverzeichnis gehörte der vorigen Seite – seine Sprungziele gibt es hier nicht.
+      // Das Inhaltsverzeichnis gehörte der vorigen Seite – seine Sprungziele gibt es hier nicht. Ebenso ihr Titel im
+      // Reiter (und im Verlauf) und ihre Markierung im Baum: Sonst stand dort weiter die Seite, die man verlassen hat.
       tocEl.innerHTML = "";
       if (stopSpy) { stopSpy(); stopSpy = null; }
+      document.title = "Seite nicht gefunden – Wiki – strömis.de";
+      treeEl.querySelectorAll("a.active").forEach((a) => a.classList.remove("active"));
       // Direkt aufgerufen stand der Baum sonst leer da: dann die Einstiegsseiten wie auf der Übersicht. Nach dem
       // Laden noch einmal nachsehen – ist inzwischen eine andere Seite offen, hat sie ihren eigenen Baum gezeichnet.
       if (lesemodus && !treeEl.children.length) {
