@@ -345,7 +345,7 @@ def _intervalle_pruefen(lauf):
         for p in db.query(f"SELECT * FROM mat_product p WHERE {bedingung} ORDER BY p.id", args):
             if p["id"] not in gemeldet and herstellerseite(p)[0] is None:
                 gemeldet.add(p["id"])
-                ohne.append(f"{p['manufacturer']} {p['model']}")
+                ohne.append(katalog.produktname(p))
         if ohne:
             lauf.bericht["fehler"].append(f"{ort} ({name}): {katalog.ohne_intervall_meldung(ohne)}")
 
@@ -486,6 +486,17 @@ def _lange_beschreibung(lauf, name, beschreibung):
             "beim nächsten Bearbeiten bitte kürzen.")
 
 
+def _produktname_datei(e):
+    """Der Name eines Produkteintrags der Datei für Bericht und Fehlerorte – „Hersteller Modell | Beschreibung“ wie
+    katalog.produktname, damit sich Varianten unterscheiden, die nur die Beschreibung trennt (etwa die Verschlussart).
+    Noch ungeprüft: Fehlt Hersteller oder Modell, steht „?“; eine Beschreibung, die kein Text ist, bleibt weg."""
+    if not isinstance(e, dict):
+        return "?"
+    beschr = e.get("beschreibung")
+    return katalog.produktname({"manufacturer": str(e.get("hersteller", "?")), "model": str(e.get("modell", "?")),
+                                "description": beschr if isinstance(beschr, str) else ""})
+
+
 def _produkte(liste, lauf):
     if not isinstance(liste, list):
         raise Abgelehnt("„produkte“ muss eine Liste sein.")
@@ -497,7 +508,7 @@ def _produkt(n, e, lauf):
     """Ein Eintrag mit Bild und Dokumenten. Liefert, ob er erledigt ist – False: zurückgestellt (_Konflikt)."""
     bericht = lauf.bericht
     ort = f"produkte[{n}]"
-    name = f"{e.get('hersteller', '?')} {e.get('modell', '?')}" if isinstance(e, dict) else "?"
+    name = _produktname_datei(e)
     try:
         if not isinstance(e, dict):
             raise Abgelehnt("Eintrag ist kein Objekt.")
@@ -522,7 +533,7 @@ def _produkt(n, e, lauf):
                 seit = _journalstand()
                 _ohne_konflikt(katalog.produkt_aendern, pid, d, importiert=True)
                 bericht["produkte"]["geaendert"] += 1
-                lauf.notiz(f"Produkt „{nachher['manufacturer']} {nachher['model']}“: geändert "
+                lauf.notiz(f"Produkt „{katalog.produktname(nachher)}“: geändert "
                            f"({_geaendert(vorher, nachher)})")
                 if nachher["description"] != vorher["description"]:
                     _lange_beschreibung(lauf, name, nachher["description"])
@@ -764,7 +775,7 @@ def _formulare(liste, lauf):
                 p = _produkt_ziel(e["produkt"], lauf)
                 ziel = {"produkt_id": p["id"]}
                 spalte, wert = "product_id", p["id"]
-                zielname = f"Produkt „{p['manufacturer']} {p['model']}“"
+                zielname = f"Produkt „{katalog.produktname(p)}“"
             punkte = katalog.punkte_pruefen(e.get("punkte"))
             if not punkte:
                 raise Abgelehnt("Ein Formular braucht mindestens einen Prüfpunkt.")

@@ -445,7 +445,8 @@ def produkt_variante(pid, d):
                 journal.eintragen("document", did, "angelegt", None,
                                   {"product_id": neu, "kind": doc["kind"], "title": doc["title"], "version": doc["version"],
                                    "valid_from": doc["valid_from"], "kopie_von": doc["id"]})
-            journal.eintragen("product", neu, "variante", None, {"von": pid, "name": f"{quelle['manufacturer']} {quelle['model']}",
+            # Der Name der Quelle mit ihrem Zusatz: Varianten unterscheiden sich oft nur in der Beschreibung.
+            journal.eintragen("product", neu, "variante", None, {"von": pid, "name": produktname(quelle),
                                                                  "dokumente": len(kopien)})
     except BaseException:
         for _, name in kopien:

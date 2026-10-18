@@ -75,21 +75,25 @@ KATALOG = {
              "materialart": "sonstiges", "intervall_monate": 12},
             {"name": "DEMO Wassersporthelme", "norm": "EN 1385", "materialart": "sonstiges", "intervall_monate": 12}]},
     ],
+    # Die Beschreibung ist ein kurzer Zusatz hinter dem Namen („Modell | Beschreibung“, etwa die Verschlussart). Die
+    # DEMO-Produkte haben keine: Den Hinweis trägt die DEMO-Marke, als Zusatz stünde er doppelt („DEMO Gurt A | DEMO –
+    # nicht für echte Prüfungen“, Prüfung der Nachbesserung vom 18.10.2026). Der Leerwert steht ausdrücklich da – so
+    # leert ein neuer Lauf auch die Beschreibung aus einem älteren DEMO-Katalog.
     "produkte": [
         {"kategorie": ["DEMO PSA gegen Absturz und Seiltechnik", "DEMO Gurte"], "hersteller": "DEMO-Hersteller",
          "modell": "DEMO Gurt A", "artikelnummer": "DEMO-G-100", "materialart": "textil", "lebensdauer_jahre": 10,
-         "lebensdauer_quelle": "Platzhalter", "beschreibung": HINWEIS},
+         "lebensdauer_quelle": "Platzhalter", "beschreibung": ""},
         {"kategorie": ["DEMO PSA gegen Absturz und Seiltechnik", "DEMO Statikseile"], "hersteller": "DEMO-Hersteller",
          "modell": "DEMO Statikseil 11 mm", "artikelnummer": "DEMO-S-11", "materialart": "textil", "lebensdauer_jahre": 10,
-         "lebensdauer_quelle": "Platzhalter", "beschreibung": HINWEIS},
+         "lebensdauer_quelle": "Platzhalter", "beschreibung": ""},
         {"kategorie": ["DEMO PSA gegen Absturz und Seiltechnik", "DEMO HMS-Karabiner"], "hersteller": "DEMO-Hersteller",
          "modell": "DEMO HMS-Karabiner", "artikelnummer": "DEMO-K-1", "materialart": "metall_hardware",
-         "beschreibung": HINWEIS},
+         "beschreibung": ""},
         {"kategorie": ["DEMO PSA gegen Absturz und Seiltechnik", "DEMO Kletterhelme"], "hersteller": "DEMO-Hersteller",
          "modell": "DEMO Helm", "artikelnummer": "DEMO-H-1", "materialart": "sonstiges", "lebensdauer_jahre": 10,
-         "lebensdauer_quelle": "Platzhalter", "beschreibung": HINWEIS},
+         "lebensdauer_quelle": "Platzhalter", "beschreibung": ""},
         {"kategorie": ["DEMO Wasserrettung", "DEMO Schwimmhilfen"], "hersteller": "DEMO-Hersteller",
-         "modell": "DEMO Rettungsweste", "artikelnummer": "DEMO-W-1", "materialart": "sonstiges", "beschreibung": HINWEIS},
+         "modell": "DEMO Rettungsweste", "artikelnummer": "DEMO-W-1", "materialart": "sonstiges", "beschreibung": ""},
     ],
     "formulare": [
         {"kategorie": ["DEMO PSA gegen Absturz und Seiltechnik", "DEMO Gurte"], "titel": "DEMO-Formular Gurte",

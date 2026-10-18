@@ -17,7 +17,10 @@
      Strich. Steht der Zusatz schon von Hand im Modellnamen („D Classic | Screwlock“), kommt er nicht doppelt. Eine
      ältere, längere Beschreibung (bis dahin war das Feld mehrzeilig) steht in einer Zeile, nach BESCHREIBUNG_MAX Zeichen
      mit „…“ gekürzt; den vollen Text zeigt der title. Ausgaben: produktName als Text (Rückfragen, Dialogtitel, alt),
-     produktHtml maskiert für Seiten und Listen – auch für suche.js und global.js (window.MatProdukt). */
+     produktHtml maskiert für Seiten und Listen – auch für suche.js und global.js (window.MatProdukt). In produktHtml
+     hält ein Wortverbinder (U+2060) den Strich am Zusatz: Hinter „|“ darf der Browser sonst umbrechen, und das
+     geschützte Leerzeichen stünde sichtbar – im Link unterstrichen – am Anfang der nächsten Zeile. Muss die Zeile
+     dort umbrechen, dann vor dem Strich, überall gleich: „… D-Karabiner“ / „| Screwlock“. */
   const BESCHREIBUNG_MAX = 80;
   function produktZusatz(p) {
     const z = String((p && p.description) || "").replace(/\s+/g, " ").trim();
@@ -35,7 +38,7 @@
   const produktHtml = (p, ohneHersteller) => {
     const z = produktZusatz(p);
     const name = esc(`${ohneHersteller ? "" : `${p.manufacturer || ""} `}${p.model || ""}`.trim());
-    return z ? `${name} <span class="mat-zusatz"${z.voll ? ` title="${esc(z.voll)}"` : ""}>|&nbsp;${esc(z.text)}</span>` : name;
+    return z ? `${name} <span class="mat-zusatz"${z.voll ? ` title="${esc(z.voll)}"` : ""}>|&#x2060;&nbsp;${esc(z.text)}</span>` : name;
   };
   window.MatProdukt = { name: produktName, html: produktHtml, zusatz: produktZusatz, max: BESCHREIBUNG_MAX };
 

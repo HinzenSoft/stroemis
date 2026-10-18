@@ -1657,8 +1657,10 @@ entschieden bzw. nicht widersprochen):
     sind (es sind die abgelegten Dateien). Die CSV je Ordner hat eine eigene Spalte „Beschreibung“ hinter „Modell“,
     voll und ungekürzt – eine Datenausgabe, das Modell bleibt eigene Spalte; im `Verzeichnis.csv` des Protokoll-ZIP
     steht das Produkt mit Zusatz.
-  - **DEMO-Daten**: Die DEMO-Produkte haben seit Lieferung 1 die Beschreibung „DEMO – nicht für echte Prüfungen“ und
-    heißen deshalb jetzt etwa „DEMO Gurt A | DEMO – nicht für echte Prüfungen“ (nicht geändert).
+  - **DEMO-Daten**: Die DEMO-Produkte haben keine Beschreibung mehr – bis dahin „DEMO – nicht für echte Prüfungen“,
+    als Zusatz stand das doppelt zur DEMO-Marke („DEMO Gurt A | DEMO – nicht für echte Prüfungen“). Ein neuer Lauf von
+    `material_demo.py --demo` leert sie auch in einem älteren DEMO-Katalog (auf dev einmal laufen lassen); die
+    DEMO-Gliederung behält den Hinweis.
   - **Geprüft**: neue Datei `tests/test_material_beschreibung.py` – Länge beim Speichern (81 abgewiesen, 80 und
     Zeilenumbrüche, ältere lange bleibt bei einer Änderung ohne sie und wird unverändert zurückgeschickt abgewiesen,
     Variante, Produkt aus Meldung), Import mit langer mehrzeiliger Beschreibung (Format 1, Wiederholung, Export und
@@ -1675,6 +1677,14 @@ entschieden bzw. nicht widersprochen):
     Modellnamen), Artikelansicht, Trefferliste, Suchvorschläge, Prüfung, offene Prüfungen, Prüfdurchgang, Meldungen,
     Rückruf-Kasten, globaler Steckbrief, Prüfprotokoll-PDF (`pdftotext`: „DEMO-Hersteller DEMO D-Karabiner |
     Screwlock“) – keine Konsolenfehler, nichts rollt waagerecht.
+  - **Prüfung der Nachbesserung**: Eine unabhängige Prüfung meldete drei Befunde (niedrig), jeder ist nachgestellt und
+    behoben – am Telefon brach der Browser direkt hinter „|“ um, und das geschützte Leerzeichen stand im Link
+    unterstrichen am Anfang der nächsten Zeile (jetzt hält ein Wortverbinder U+2060 Strich und Zusatz zusammen; im
+    Chromium bei 360, 390, 820 und 1280 px in Artikelansicht, Ordner, Katalog, Suchvorschlägen und Steckbrief
+    nachgemessen), die DEMO-Produkte hießen „… | DEMO – nicht für echte Prüfungen“ (siehe DEMO-Daten), und
+    Importbericht, Fehlerorte, Formularziel, Meldung „kein Prüfintervall mehr“ und der Journaleintrag „als Variante
+    angelegt“ nannten Produkte ohne Zusatz, sodass zwei Varianten gleich lauteten (jetzt über `katalog.produktname`;
+    Tests `test_bericht_und_journal_mit_zusatz` und `test_demo_ohne_beschreibung`, vorher rot).
 
 #### Prüfung der Modulstufen
 

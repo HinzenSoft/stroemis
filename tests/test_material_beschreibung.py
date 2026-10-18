@@ -152,6 +152,100 @@ def test_import_lange_beschreibung():
     print("Import mit langer Beschreibung bestanden.")
 
 
+def test_bericht_und_journal_mit_zusatz():
+    """Prüfung der Nachbesserung: Importbericht und Journal nennen ein Produkt wie überall „Hersteller Modell |
+    Beschreibung“ – zwei Varianten, die nur die Beschreibung trennt, sind im Bericht zu unterscheiden: neu (auch im
+    Probelauf), geändert, als Ziel eines Formulars und in der Meldung „kein Prüfintervall mehr“; der Journaleintrag „als
+    Variante angelegt“ nennt die Quelle mit ihrem Zusatz. Vorher stand zweimal „Produkt „Testwerk D Test“: neu“ da."""
+    def katalog(zweite="Twistlock", intervall=12):
+        return json.dumps({
+            "format": "stroemis-material-katalog", "version": 1,
+            "kategorien": [{"name": "Testkategorie", "materialart": "metall_hardware", "intervall_monate": intervall}],
+            "produkte": [{"kategorie": ["Testkategorie"], "hersteller": "Testwerk", "modell": "D Test",
+                          "artikelnummer": f"DT-{i}", "materialart": "metall_hardware", "beschreibung": b}
+                         for i, b in ((1, "Screwlock"), (2, zweite))],
+            "formulare": [{"produkt": {"hersteller": "Testwerk", "modell": "D Test", "artikelnummer": "DT-1"},
+                           "titel": "Testformular", "punkte": [{"gruppe": "Testgruppe", "text": "Testpunkt (Platzhalter)",
+                                                                "art": "yesno", "soll": "ja", "kritisch": True}]}],
+        }).encode()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app = make_app(tmp)
+        c = anmelden(app, "admin@example.org", "geheim123")
+        for trocken in (True, False):
+            ber = importieren(c, katalog(), trocken, "katalog.json")
+            assert not ber["fehler"] and ber["produkte"]["neu"] == 2, ber
+            z = ber["aenderungen"]
+            assert "Produkt „Testwerk D Test | Screwlock“: neu" in z and "Produkt „Testwerk D Test | Twistlock“: neu" in z, z
+            assert any(a.startswith("Formular „Testformular“ (Produkt „Testwerk D Test | Screwlock“)") for a in z), z
+        ber = importieren(c, katalog(zweite="Ball-Lock"), False, "katalog.json")
+        assert ber["produkte"]["geaendert"] == 1, ber
+        assert [a for a in ber["aenderungen"] if a.startswith("Produkt „Testwerk D Test | Ball-Lock“: geändert")], ber
+        ber = importieren(c, katalog(zweite="Ball-Lock", intervall=None), True, "katalog.json")
+        fehler = ber["fehler"]                             # Fehlerorte und die Meldung an der Kategorie
+        assert [x[:43] for x in fehler[:2]] == ["produkte[0] (Testwerk D Test | Screwlock): ",
+                                                "produkte[1] (Testwerk D Test | Ball-Lock): "], fehler
+        assert ("kategorien[0] (Testkategorie): Danach hätten diese Produkte kein Prüfintervall mehr: Testwerk D Test | "
+                "Screwlock, Testwerk D Test | Ball-Lock.") in fehler[2], fehler
+        # Eine Variante über die Oberfläche: Der Journaleintrag nennt die Quelle mit ihrem Zusatz.
+        pid = _db(app, "SELECT id FROM mat_product WHERE article_no = 'DT-1'")["id"]
+        quelle = c.get(f"/api/material/produkte/{pid}").json["produkt"]
+        stamm = {f: quelle[f] for f in FELDER}
+        r = c.post(f"/api/material/produkte/{quelle['id']}/variante", headers=H,
+                   json=dict(stamm, article_no="DT-3", description="Triact-Lock"))
+        assert r.status_code == 201, r.get_json()
+        journal = c.get(f"/api/material/produkte/{r.json['produkt']['id']}").json["produkt"]["journal"]
+        eintrag = [e for e in journal if e["action"] == "variante"]
+        assert len(eintrag) == 1 and eintrag[0]["nachher"]["name"] == "Testwerk D Test | Screwlock", journal
+    print("Bericht und Journal mit Zusatz bestanden.")
+
+
+def test_demo_ohne_beschreibung():
+    """Prüfung der Nachbesserung: Die DEMO-Produkte haben keine Beschreibung – den Hinweis „DEMO – nicht für echte
+    Prüfungen“ trägt die DEMO-Marke, als Zusatz hinter dem Namen stand er doppelt („DEMO Gurt A | DEMO – nicht für echte
+    Prüfungen“). Ein neuer Lauf des DEMO-Skripts leert ihn auch in einem älteren DEMO-Katalog; die DEMO-Gliederung
+    behält ihn als Beschreibung."""
+    import contextlib
+    import importlib.util
+    import io
+    from app.material.services import katalog
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    def laufen(frueher=False):
+        spec = importlib.util.spec_from_file_location("material_demo_beschreibung",
+                                                      os.path.join(wurzel, "scripts", "material_demo.py"))
+        modul = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(modul)
+        if frueher:                                    # der Stand vor der Nachbesserung
+            for p in modul.KATALOG["produkte"]:
+                p["beschreibung"] = modul.HINWEIS
+        argv, sys.argv = sys.argv, ["material_demo.py", "--demo"]
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                modul.main()
+        finally:
+            sys.argv = argv
+        return modul
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app = make_app(tmp)
+        modul = laufen(frueher=True)
+        sql = "SELECT manufacturer, model, description FROM mat_product WHERE demo = 1"
+        assert {z["description"] for z in _db(app, sql, one=False)} == {modul.HINWEIS}
+        laufen()
+        zeilen = _db(app, sql, one=False)
+        assert len(zeilen) == 5 and all(z["description"] == "" for z in zeilen), zeilen
+        assert all(katalog.produktname(z) == f"{z['manufacturer']} {z['model']}" for z in zeilen), zeilen
+        assert _db(app, "SELECT description FROM mat_folder WHERE name = ?", (modul.GLIEDERUNG,))["description"] \
+            == modul.HINWEIS
+    with tempfile.TemporaryDirectory() as tmp:                # ein frischer DEMO-Katalog ebenso
+        app = make_app(tmp)
+        laufen()
+        assert {z["description"] for z in _db(app, "SELECT description FROM mat_product WHERE demo = 1", one=False)} \
+            == {""}
+    print("DEMO-Produkte ohne Beschreibung bestanden.")
+
+
 def test_regel_produktname():
     """Die Regel für den Namen (katalog.zusatz, produktname – dieselbe wie produktZusatz in material.js): ohne
     Beschreibung nur der Name ohne Strich; mit „Modell | Beschreibung“; steht der Zusatz schon von Hand im Modellnamen,
@@ -276,6 +370,9 @@ def test_oberflaeche_statisch():
     js, suche, glob = (lesen(f"app/material/static/{d}.js") for d in ("material", "suche", "global"))
     assert f"const BESCHREIBUNG_MAX = {katalog.BESCHREIBUNG_MAX};" in js
     assert "window.MatProdukt = { name: produktName, html: produktHtml, zusatz: produktZusatz" in js
+    # Strich und Zusatz bleiben zusammen (Prüfung der Nachbesserung): Ein Wortverbinder (U+2060) verbietet den Umbruch
+    # zwischen „|“ und dem geschützten Leerzeichen – sonst stand es am Anfang der nächsten Zeile, im Link unterstrichen.
+    assert '>|&#x2060;&nbsp;${esc(z.text)}</span>` : name;' in js and ">|&nbsp;" not in js
     # Die Regel steht vor „if (!root) return;“ – suche.js und global.js finden sie auf jeder Modulseite.
     assert js.index("window.MatProdukt =") < js.index("if (!root) return;")
     # Der Dialog: ein einzeiliges Feld wie die anderen, Höchstlänge, Hilfetext, Hinweis mit dem bisherigen Text.
@@ -304,6 +401,8 @@ def test_oberflaeche_statisch():
 if __name__ == "__main__":
     test_laenge_beim_speichern()
     test_import_lange_beschreibung()
+    test_bericht_und_journal_mit_zusatz()
+    test_demo_ohne_beschreibung()
     test_regel_produktname()
     test_darstellung()
     test_suche_ueber_beschreibung()
