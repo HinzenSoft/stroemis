@@ -332,6 +332,12 @@ def test_beispielbestand():
                     assert x["inspector_certificate"].startswith("DEMO-"), kurz
                 if x["kind"] != "aussonderung":
                     assert x["remarks"] == HINWEIS, kurz
+            # Der externe Prüfer hat seine Prüffreigabe erst seit heute: Er prüft nur heute, die Geschichte die Prüferin.
+            extern = {uid for uid, u in konten.items() if u["email"].startswith("demo-extern-")}
+            von_extern = [x for x in pruefungen if x["inspector_user_id"] in extern]
+            heute = bestand.heute().isoformat()
+            assert von_extern and all((x["inspected_on"] or heute) == heute for x in von_extern), \
+                [(x["id"], x["inspected_on"]) for x in von_extern]
             entwuerfe = [x for x in pruefungen if not x["completed_at"]]
             assert entwuerfe and all(x["round_id"] for x in entwuerfe)
             befunde = db.query("SELECT r.* FROM mat_inspection_result r JOIN mat_inspection x ON x.id = r.inspection_id "

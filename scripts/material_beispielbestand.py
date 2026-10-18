@@ -680,11 +680,13 @@ class Beispielbestand:
         for name in fotos:
             delete_photo_files(katalog.medien_dir(), name)
 
-    def _pruefer_fuer(self, plan):
-        """Wer prüft: die Prüferin der Gliederung, im Lager auch der externe Prüfer (seine Prüffreigabe gilt nur dort)."""
+    def _pruefer_fuer(self, plan, tag=None):
+        """Wer am Tag tag (None: heute) prüft: die Prüferin der Gliederung; im Lager heute auch der externe Prüfer –
+        seine Prüffreigabe gilt nur dort und erst ab heute (30 Tage). Die zurückdatierte Geschichte prüft also allein
+        die Prüferin."""
         gl = self.gl[plan["gl"]]
         kandidaten = [gl["konto"]["pruefer"]["id"]]
-        if plan["ordner"] in ZWEIG_OFFEN:
+        if plan["ordner"] in ZWEIG_OFFEN and (tag is None or tag == self.h):
             kandidaten.append(gl["konto"]["extern"]["id"])
         return self.pruefer(self.rnd.choice(kandidaten))
 
@@ -692,12 +694,12 @@ class Beispielbestand:
         from app.material.services import pruefung
         tag, art, ergebnis, mangel = e
         if art == "verlust":
-            pruefung.sperren(iid, {"grund": "verlust", "text": HINWEIS}, self._pruefer_fuer(plan))
+            pruefung.sperren(iid, {"grund": "verlust", "text": HINWEIS}, self._pruefer_fuer(plan, tag))
         elif art == "aussondern":
             wart = self.pruefer(self.gl[plan["gl"]]["konto"]["wart"]["id"])
             pruefung.aussondern(iid, {"grund": "verlust", "bemerkung": HINWEIS}, wart)
         else:
-            self.pruefen(iid, self._pruefer_fuer(plan), art, ergebnis, mangel, tag, fotos)
+            self.pruefen(iid, self._pruefer_fuer(plan, tag), art, ergebnis, mangel, tag, fotos)
 
     def pruefen(self, iid, pruefer, art, ergebnis, mangel, tag, fotos, durchgang_id=None, abschliessen=True):
         """Eine Prüfung über den Prüfdienst: Entwurf mit den Prüfpunkten des aktiven Formulars (vorbelegt mit ihrem Soll),
