@@ -24,7 +24,7 @@ Abgeschlossene Prüfungen, Durchgänge, Ausnahmen, Anhänge, Rückrufe und das J
 erscheinen mit „(deaktiviert)“. Ablauf beim Austritt: PSA zurücknehmen (Zuordnung lösen), Konto deaktivieren, nach
 Klärung offener Prüfungen löschen."""
 from ... import db
-from . import journal
+from . import bestand, journal
 
 GELOESCHT = "(gelöschtes Konto)"            # wie journal.konto_name für einen Verweis ohne Konto
 GRUND = "Konto gelöscht"
@@ -49,12 +49,10 @@ def konto_loeschen_vorbereiten(uid):
     Der Kontoverweis wird hier ein letztes Mal geschrieben; mit der Kontozeile ist er danach unauflösbar. Liefert
     folgen() von vor dem Aufräumen."""
     zahlen = folgen(uid)
-    ref = journal.konto_ref(uid) if zahlen["freigaben"] or zahlen["zuordnungen"] else None
     for f in db.query("SELECT * FROM mat_folder_grant WHERE user_id = ? ORDER BY id", (uid,)):
         # Dieselbe Gestalt wie beim Löschen eines Ordners: vorher die Freigabe, nachher der Grund.
-        journal.eintragen("folder", f["folder_id"], "freigabe_entfernt",
-                          {"freigabe": f["id"], "konto": ref, "recht": f["permission"], "bis": f["valid_until"]},
-                          {"grund": GRUND})
+        journal.eintragen("folder", f["folder_id"], "freigabe_entfernt", bestand.freigabe_journal(f), {"grund": GRUND})
+    ref = journal.konto_ref(uid) if zahlen["zuordnungen"] else None
     for i in db.query("SELECT id FROM mat_item WHERE assigned_user_id = ? ORDER BY id", (uid,)):
         journal.eintragen("item", i["id"], "zuordnung_geloest", None, {"konto": ref, "grund": GRUND})
     db.execute("UPDATE mat_item SET assigned_user_id = NULL, updated_at = ? WHERE assigned_user_id = ?", (db.now(), uid))
