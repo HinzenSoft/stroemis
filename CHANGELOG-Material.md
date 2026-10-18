@@ -1513,7 +1513,9 @@ entschieden bzw. nicht widersprochen):
     fragt; die Sicht ist leer – auch wenn sie für ein anderes Konto gerechnet wird (Rückruf-Empfänger, Entziehen,
     Verlängern). Freigaben wirken nicht (Listen: „wirkt nicht – kein Zugang zum Modul Material“), das Häkchen „Prüfer“
     macht nicht qualifiziert, ein Verwalter ohne Stufe oder Namen zählt nicht als Verwalter (Regel 1.6 Nr. 7,
-    Rückruf-Empfänger, „Verlängern kann …“). „Meine Freigaben“ antwortet weiter und nennt den Grund.
+    Rückruf-Empfänger, „Verlängern kann …“). „Meine Freigaben“ antwortet weiter und nennt den Grund. Ausnahmen, weil
+    es die eigenen Daten sind: die eigene Unterschrift lesen und entfernen, die eigene Meldung löschen (nicht lesen).
+    Eine ruhende Freigabe eines solchen Kontos lässt sich kürzen, herabsetzen oder entziehen, aber nicht ausweiten.
   - **Nutzerverwaltung** (`api_admin.py`, `static/js/admin.js`, `templates/admin.html`): Material ist eine Auswahl wie
     die anderen Module („–“, „Mitglied“, „Verwaltung“, gleiche Hilfetexte); Verwaltung im Modul Verwaltung zieht
     Material mit, ihr Entzug lässt es stehen (wie bei den anderen Modulen). Unter der Auswahl: „Prüfer“ (gelb
@@ -1540,7 +1542,7 @@ entschieden bzw. nicht widersprochen):
   - **Profil**: Den Abschnitt „Unterschrift“ und das Hinterlegen bekommt, wer mit Zugang festschreibt oder aussondert
     (`rechte.darf_unterschreiben`) – auch der Materialwart mit Stufe Mitglied, der über seine Freigabe verwaltet. Bisher
     hing das an „Stufe 2“, die jetzt die Material-Verwaltung bedeutet; ohne die Änderung verlöre der Materialwart den
-    Abschnitt.
+    Abschnitt. Ist eine Unterschrift hinterlegt, steht der Abschnitt auch ohne Zugang da – nur zum Entfernen.
   - **Texte**: „Material-Verwaltung“ statt „Plattform-Verwaltung“ und „(Produkt-)Katalogpfleger“, wo die Stufe
     Verwaltung gemeint ist – Meldungen des Servers, Hilfen, Rückfragen, Mails („Die Material-Verwaltung hat einen
     Rückruf … angelegt“). Das Journal zeigt `recht_material` als „kein Zugriff (0)“, „Mitglied (1)“, „Verwaltung (2)“
@@ -1554,7 +1556,8 @@ entschieden bzw. nicht widersprochen):
   Modul Material und sonst nichts (Spots, Wiki, Prüfungen, Verwaltung „–“; im Wiki gilt damit der Lesemodus). Die
   Vorgabe steht an einer Stelle (`auth.VORGABE_NEU`, auch für `api_admin.VORGABE`, in `admin.js` dieselbe). Der
   allererste Nutzer bekommt weiter überall Verwaltung; vorhandene Konten behalten ihre Stufen. Die Startseite führt ein
-  neues Konto ins Modul Material. In der Nutzerverwaltung braucht ein neues Konto damit einen Namen – oder Material „–“.
+  neues Konto ins Modul Material (ein Konto ohne Namen in den Lesemodus des Wikis). Mit der Freigabe einer
+  Kontoanfrage steht die Stufe im Journal des Moduls („rollen“, Grund „Kontoanfrage freigegeben“). In der Nutzerverwaltung braucht ein neues Konto damit einen Namen – oder Material „–“.
 - **Migration Schritt 10** (Schemaversion 10, beim Start, wiederholbar, ohne neues Schema): `recht_material` := 2,
   wenn `mat_katalog = 1` oder Plattform-Verwaltung; sonst 1, wenn eine Stufe aus Phase 1 (`recht_material ≥ 1` – auch
   der Phase-1-Materialwart mit 2 wird **Mitglied**, er verwaltet weiter über seine Freigabe aus Schritt 8), irgendeine
@@ -1565,7 +1568,8 @@ entschieden bzw. nicht widersprochen):
   niemand Zugang. **Rechteausweitung, gewollt:** Jeder bisherige Katalogpfleger wird Material-Verwaltung und sieht
   danach alle Bestände aller Gliederungen samt Prüfungen, Protokollen, Journal, zugeordneten Personen und den Notizen
   an Freigaben, vergibt jede Freigabe und legt Gliederungen an. Konten mit einer Stufe aus Phase 1 ohne wirksame
-  Freigabe und solche mit nur abgelaufenen Freigaben bekommen den Zugang zurück (Katalog, Suche – keinen Bestand). In
+  Freigabe und solche mit nur abgelaufenen Freigaben bekommen den Zugang zurück (Katalog, Suche – keinen Bestand;
+  für die abgelaufenen steht die Entscheidung des Betreibers aus, siehe Prüfung der Modulstufen Nr. 3). In
   der Produktion (ohne Modul) ändert Schritt 10 nichts: Die Plattform-Verwaltung hat 2, alle anderen 0. Rückweg: Eine
   Fassung bis Schritt 9 liest `recht_material` nicht und `mat_katalog` wieder – ohne Datenverlust. Eine Fassung aus
   Phase 1 deutete die Stufen um (bisherige Katalogpfleger wären dort Materialwarte, Phase-1-Materialwarte nur
@@ -1603,6 +1607,25 @@ entschieden bzw. nicht widersprochen):
   „Unterschrift“) und als DEMO-Material-Verwaltung (Katalog mit Pflegeknöpfen, beide DEMO-Gliederungen, „+ Gliederung“
   mit dem ersten Materialwart im Reiter „Freigaben“; die Personensuche findet ein Konto ohne Stufe nicht) – keine
   Konsolenfehler, nichts rollt waagerecht.
+
+#### Prüfung der Modulstufen
+
+Zwei unabhängige Prüfungen (Rechte mit Angriffsskripten gegen eigene Datenbanken, Oberfläche im Chromium je Rolle bei
+1280, 820 und 390 px) fanden elf Befunde, keinen hohen. Neun sind behoben, je mit eigenem Commit; Rechtefehler mit
+Regressionstest in `tests/test_material_stufen.py` (vorher rot, jetzt grün), Oberflächen im Chromium nachgeprüft.
+
+| Nr. | Befund | Schwere | Umgang |
+| --- | --- | --- | --- |
+| 1 | Eine ruhende Freigabe eines Kontos ohne Stufe ließ sich per `PUT /freigaben/<id>` hochstufen (lesen → verwalten) oder verlängern, obwohl Erteilen an dasselbe Konto 409 gab – mit der Stufe Mitglied wäre es sofort Verwalter gewesen | niedrig | Behoben: Regel 1.6 Nr. 12 auch beim Ändern – reicht die Zeile danach weiter (anderes Recht als verwalten → lesen, späteres Ende), 409 „Dieses Konto hat keinen Zugang …“, auch für die Material-Verwaltung; kürzen, herabsetzen, Notiz und entziehen gehen weiter (`freigaben._reicht_weiter`). Test `test_ruhende_freigabe_nicht_hochstufen` |
+| 2 | Ein Konto ohne Stufe konnte seine hinterlegte Unterschrift nicht mehr entfernen (Abschnitt weg, `DELETE /unterschrift` 403), obwohl das Profil es versprach | niedrig | Behoben: `GET` und `DELETE /unterschrift` brauchen nur die Anmeldung (die eigenen Daten); ist eine Unterschrift hinterlegt, zeigt das Profil den Abschnitt auch ohne Zugang – nur mit „Entfernen“, ohne Urkundennummer. `PUT` bleibt bei Zugang und Prüfer/Materialwart. Test `test_haekchen_ohne_stufe`, Chromium 1280/390 |
+| 3 | Schritt 10 gibt Konten, die nur abgelaufene Freigaben haben, die Stufe Mitglied – mit 20085f1 hatten sie keinen Zugang (Katalog, Suche, globale Suche) | niedrig | **Nicht geändert, Entscheidung beim Betreiber** (siehe „Zu prüfen“). Gründe für die jetzige Regel: Bis 20085f1 brachte das Verlängern einer abgelaufenen Freigabe durch den Verwalter des Ordners den Zugang zurück – mit Stufe 0 überspränge „Alle verlängern“ diese Konten, und erteilen ginge nicht mehr (409), der Verwalter bräuchte dafür die Plattform-Verwaltung; „Mitglied“ ist ohnehin die Vorgabe jedes neuen Kontos und zeigt keinen Bestand. Soll nur erhalten bleiben, was am Tag der Migration wirkte: in `STUFE_10` nur gültige Freigaben zählen (`valid_until IS NULL OR valid_until >= heute`) und im Test den Fall „abgelaufen“ auf 0 setzen |
+| 4 | Ein Melder ohne Stufe las seine Meldung weiter (Hersteller, Modell, Gliederung, Antwort, Produkt aus dem Katalog) und konnte sie löschen | niedrig | Behoben: Lesen nur mit Zugang (`GET /meldungen/<id>` 403 vor der Frage nach der Meldung, `darf_meldung` und Listenfilter mit `zugang()`, Meldungsfotos ebenso). Die eigene Meldung **löschen** darf der Melder weiter auch ohne Stufe – es sind seine Angaben (wie die Unterschrift); eine fremde antwortet wie eine unbekannte. Test `test_meldung_ohne_stufe` |
+| 5, 7 | Kontoanfrage und Freigabe gaben Material „Mitglied“ ohne Journaleintrag „rollen“ – beim Anlegen in der Nutzerverwaltung steht er da, und die Kontoanfrage ist seit der neuen Vorgabe der häufigste Weg ins Modul (zweimal gemeldet) | mittel | Behoben: Die Freigabe einer Kontoanfrage schreibt in derselben Transaktion „rollen“ am Konto (vorher –, nachher `recht_material`, `mat_pruefer`, Grund „Kontoanfrage freigegeben“), Handelnde ist die freigebende Plattform-Verwaltung. Erst bei der Freigabe, weil die Stufe erst dann wirkt – abgelehnte Anfragen hinterlassen nichts; ohne Stufe und Häkchen kein Eintrag. Der allererste Nutzer (überall Verwaltung) bleibt ohne Eintrag. Test `test_vorgabe_neue_konten`, Chromium 820 |
+| 6 | Ein Konto ohne Namen und ohne Stufe bekam nur den Hinweis auf den Namen – mit Namen dann „nicht freigeschaltet“, also zwei Runden | niedrig | Behoben: `zugang_meldung` fragt zuerst die Stufe, den Namen nur bei vorhandener Stufe. Test `test_migration_9_10` |
+| 8 | Dialog „Bearbeiten“: Häkchen „Prüfer“ gesetzt, während die Verwaltung auf „Verwaltung“ stand – nach dem Zurückstellen Material „–“ mit Häkchen, ohne den zugesagten Sprung auf „Mitglied“; umgekehrt blieb der Hinweis zum Sprung neben „Verwaltung (aus)“ stehen | niedrig | Behoben (`admin.js`): Das überdeckt gesetzte Häkchen hebt beim Zurückstellen, falls Material dann auf „–“ stünde (mit Hinweis); ein von Hand gewähltes „–“ bleibt auch über ein Hin und Her der Verwaltung; der Hinweis steht nur, solange Material nicht überdeckt ist. Im Chromium bei 1280 und 390 px vier Abläufe nachgeprüft |
+| 9 | Ein namenloses Konto mit Stufe (gibt es nach Schritt 10) sah „Material“ in der Kopfleiste, und die Startseite leitete es auf die 403-Seite des Moduls | niedrig | Behoben: Startseite und Kopfleiste fragen für Material `rechte.zugang` (Stufe und Name, ohne Abfrage) – ohne Namen in den Lesemodus des Wikis, der Reiter erst mit Namen; `/material` sagt weiter, was fehlt. Test `test_namenlos_startseite`, Chromium 1280/390 |
+| 10 | Kontoanfrage: Konsolenfehler `TypeError … setting 'disabled'` in `auth.js` nach dem Erfolg (vorbestehend) | niedrig | Behoben: `busy()` prüft, ob es den Absendeknopf noch gibt (die Antwort ersetzt das Formular). Chromium 390 px: vorher die Ausnahme, jetzt keine |
+| 11 | Zeilenknöpfe der Nutzerverwaltung („Bearbeiten“, „Reset-Mail“, „Löschen“) sind `btn ghost` (vorbestehend) | niedrig | **Nicht geändert**: Die Knopfsprache (grau umrandet als Standard, kein `ghost`) hat der Betreiber für das Modul Material festgelegt; die Nutzerverwaltung gehört zur Plattform, wo Wiki, Spots und Prüfungen `ghost` durchgängig nutzen. Eine Umstellung nur hier wäre eine eigene Gestaltungsentscheidung – auf Wunsch gern für die ganze Plattform |
 
 ### Zu prüfen
 
@@ -1652,6 +1675,13 @@ entschieden bzw. nicht widersprochen):
   recht_verwaltung < 2;` – wer das nicht sein soll, bekommt in der Nutzerverwaltung „Mitglied“. Die Zahl der Konten
   mit Stufe Verwaltung klein halten. Ebenso ansehen, wer den Zugang zurückbekommt (Stufe aus Phase 1 oder nur
   abgelaufene Freigaben): Er sieht Katalog und Suche, keinen Bestand.
+- **Nur abgelaufene Freigaben → Mitglied? Bitte entscheiden** (Prüfung der Modulstufen Nr. 3): Schritt 10 zählt jede
+  Freigabe, auch abgelaufene – solche Konten hatten mit 20085f1 keinen Zugang und bekommen ihn jetzt (Katalog, Suche,
+  globale Suche, kein Bestand). Dafür kann der Verwalter ihres Ordners sie wie bisher durch Verlängern zurückholen.
+  Soll nur bleiben, was am Tag der Migration wirkte, zählt Schritt 10 nur gültige Freigaben – eine Zeile in
+  `models.STUFE_10` und der Testfall „abgelaufen“. Auf dev betroffen (lesend): `SELECT id, name FROM users u WHERE
+  recht_material = 1 AND mat_pruefer = 0 AND NOT EXISTS (SELECT 1 FROM mat_folder_grant g WHERE g.user_id = u.id AND
+  (g.valid_until IS NULL OR g.valid_until >= date('now')));` (zeigt auch Konten, die aus anderem Grund Mitglied sind).
 - **Entzug der Plattform-Verwaltung lässt Material auf „Verwaltung“** (wie die anderen Module): Wer nur kurz
   Plattform-Verwaltung war, sieht weiter alle Bestände, bis jemand Material einzeln senkt. Bitte bestätigen.
 - **Letzter Materialwart ohne Stufe**: Senkt die Plattform-Verwaltung die Stufe des einzigen Materialwarts einer
@@ -1921,10 +1951,10 @@ oder Plattform-Verwaltung).
 | `GET/POST /api/material/kategorien/<id>/dokumente` | lesen / Katalog | Dokumente für alle Produkte einer Kategorie |
 | `PUT /api/material/dokumente/<id>` (`title`) | Katalog | Dokument umbenennen (Produkt- oder Kategoriedokument) |
 | `POST /api/material/meldungen` (`manufacturer`, `model`, `article_no`, `norm`, `category_id`, `folder_id`, `links`, `note`; `fotos` mehrfach) | Materialwart (am `folder_id`; ohne Ordner: verwalten irgendwo) | Fehlendes Produkt melden |
-| `GET /api/material/meldungen?status=offen\|erledigt\|alle&eigene=0\|1`, `GET …/<id>` | Modulzugang; je Meldung nur Katalog, der Melder und wer ihren Ordner sieht (sonst 404, Phase 2) | Meldungen; Material-Verwaltung und Lesende standardmäßig alle offenen, Materialwarte die eigenen; `bearbeiten` nur für die Material-Verwaltung |
+| `GET /api/material/meldungen?status=offen\|erledigt\|alle&eigene=0\|1`, `GET …/<id>` | Modulzugang (auch für den Melder); je Meldung nur Katalog, der Melder und wer ihren Ordner sieht (sonst 404, Phase 2) | Meldungen; Material-Verwaltung und Lesende standardmäßig alle offenen, Materialwarte die eigenen; `bearbeiten` nur für die Material-Verwaltung |
 | `POST /api/material/meldungen/<id>/produkt` (Felder wie `POST /produkte`, dazu `antwort`) | Katalog | Produkt aus der Meldung anlegen und Meldung erledigen |
 | `POST /api/material/meldungen/<id>/zuordnen` (`product_id`, `antwort`), `…/ablehnen` (`antwort` Pflicht) | Katalog | vorhandenes Produkt zuordnen bzw. ablehnen |
-| `DELETE /api/material/meldungen/<id>` | nur der Melder | eigene Meldung löschen (offen oder erledigt; ein Produkt aus ihr bleibt); wer sie nicht sehen darf, bekommt 404 wie für eine unbekannte (Phase 2) |
+| `DELETE /api/material/meldungen/<id>` | nur der Melder – auch ohne Modulzugang | eigene Meldung löschen (offen oder erledigt; ein Produkt aus ihr bleibt); wer eine fremde nicht sehen darf, bekommt 404 wie für eine unbekannte (Phase 2) |
 | `?sort=<spalte>&richtung=auf\|ab` an `produkte`, `ordner/<id>`, `faellig`, `suche` | – | Sortierung: Katalog `hersteller`, `produkt`, `kategorie`, `materialart`, `intervall`, `lebensdauer`, `bestand`; Artikel `inventar`, `hersteller`, `produkt`, `serie`, `faellig`, `status` |
 | `GET/POST /api/material/artikel/<id>/pruefungen` | lesen / Prüfer | Prüfungen eines Artikels; Prüfung beginnen (`art`, `durchgang_id`) – oder den eigenen Entwurf fortsetzen |
 | `GET/PUT/DELETE /api/material/pruefungen/<id>` | lesen / Prüfer / Prüfer oder Materialwart | Prüfung lesen; Art und Bemerkung am Entwurf; Entwurf verwerfen bzw. Reservierung freigeben |
@@ -1933,7 +1963,7 @@ oder Plattform-Verwaltung).
 | `POST /api/material/pruefungen/<id>/festschreiben` (`ergebnis`, `next_due_on`, `grund`, `bemerkung`; alter Pfad `…/abschliessen` gilt weiter) | Prüfer (eigener Entwurf, mit Unterschrift) | Abschluss und Festschreiben mit Protokoll |
 | `POST /api/material/pruefungen/<id>/berichtigen` (`grund`) | Prüfer (der die Prüfung gemacht hat) | Berichtigung beginnen; liefert den neuen Entwurf |
 | `PUT /api/material/pruefungen/<id>/punkte/<pid>` mit `unterschrift` (data:-URL oder `null`) | Prüfer (eigener Entwurf) | Unterschriftsfeld eines Formulars |
-| `GET/PUT/DELETE /api/material/unterschrift` (`bild`: data:-URL vom Signatur-Pad) | Modulzugang; PUT nur Prüfer (seit Lieferung 5 schon mit dem Häkchen, ohne Urkundennummer) und wer irgendwo verwaltet (eigenes Konto) | eigene Unterschrift im Profil |
+| `GET/PUT/DELETE /api/material/unterschrift` (`bild`: data:-URL vom Signatur-Pad) | GET und DELETE angemeldet (eigene Daten, auch ohne Modulzugang); PUT mit Modulzugang nur Prüfer (seit Lieferung 5 schon mit dem Häkchen, ohne Urkundennummer) und wer irgendwo verwaltet (eigenes Konto) | eigene Unterschrift im Profil |
 | `PUT /api/material/urkundennummer` (`urkundennummer`; leer entfernt sie) | Häkchen „Prüfer“ (eigenes Konto), sonst 403 | eigene Urkundennummer im Profil; Antwort `urkundennummer`, `pruefen` (darf jetzt prüfen); ungültig 400 (Lieferung 5) |
 | `GET /material/pruefung/<id>/pdf`, `GET /material/durchgang/<id>/sammelprotokoll` | lesen | Protokoll als PDF (nur, solange die Datei ihre Prüfsumme hat) |
 | `GET /material/pruefen`, `POST /api/material/pruefen` (`datei`) | ohne Anmeldung | Prüfseite: `ergebnis` (unveraendert, veraendert, unbekannt), `protokoll_id`, `art`, `hinweis` – angemeldet mit Zugang dazu `link` |
@@ -1956,7 +1986,7 @@ oder Plattform-Verwaltung).
 | `GET /api/material/ordner/<id>/freigaben` | Materialwart am Ordner | Reiter „Freigaben“ in „Ordner bearbeiten“: `ordner`, `anker_wahl` (der Ordner und die Oberordner, die man verwaltet, je mit dem eigenen Ende), `anker_vorgabe`, `direkt`, `geerbt` (ohne Notiz), `unten` (Zeilen je mit `aenderbar`, `entziehbar`, `grundrecht_dort` und `traegt_pruefen`), `kette`, `verlauf`, `laeuft_ab`, `grenzen` (heute, längste Prüffreigabe, Vorgabe für „bis“) (Phase 2) |
 | `POST /api/material/ordner/<id>/freigaben` (`user_id`, `grundrecht`: `lesen`\|`verwalten`\|`null`, `grund_bis`, `pruefen`, `pruefen_bis`, `notiz`) | Materialwart am Ordner | Grundrecht und/oder Prüffreigabe in einem Schritt anlegen oder ändern, ganz oder gar nicht → 201 `freigaben`, `liste`; Prüffreigabe ohne Ende (`pruefen`: true, `pruefen_bis` leer) nur mit Grundrecht am Anker oder darüber, sonst 400; 404 „Konto nicht gefunden.“ für unbekannte, deaktivierte und namenlose Konten, 409 ohne Qualifikation, an Systemordnern oder ohne verbleibenden Verwalter (Phase 2) |
 | `POST /api/material/ordner/<id>/freigaben/verlaengern` (`bis`) | Materialwart am Ordner | alle befristeten Prüffreigaben im Zweig, die man ändern darf (auch bis zu 90 Tage abgelaufene) → `verlaengert`, `uebersprungen` (Konto, Ordner, Grund) (Phase 2) |
-| `PUT /api/material/freigaben/<id>` (`recht`, `bis` – `null` = unbefristet, bei Prüffreigaben nur mit Grundrecht –, `notiz`), `DELETE …/<id>` | Materialwart am Ordner der Freigabe | Freigabe ändern bzw. entziehen; DELETE liefert `offene_entwuerfe` (Phase 2) |
+| `PUT /api/material/freigaben/<id>` (`recht`, `bis` – `null` = unbefristet, bei Prüffreigaben nur mit Grundrecht –, `notiz`), `DELETE …/<id>` | Materialwart am Ordner der Freigabe | Freigabe ändern bzw. entziehen; DELETE liefert `offene_entwuerfe` (Phase 2). Ausweiten (anderes Recht als verwalten → lesen, späteres Ende) nur für Konten mit Modulzugang, sonst 409 |
 | `GET /api/material/freigaben/meine` | angemeldet, auch ohne Modulzugang | eigene Freigaben (gültige und im letzten Jahr abgelaufene) mit Pfad, `recht`, `bis`, `gueltig`, `wirkt`, `wirkt_nicht` (Grund oder `null`), `grundrecht_dort`, `laeuft_ab_in_tagen` und `verwalter` (bis zu drei Namen) – ohne Notiz; dazu `zugang`, `qualifiziert` (wirkt nur mit Zugang), `alles` (Material-Verwaltung) (Phase 2) |
 | `GET /api/material/freigaben?user_id=` | Plattform-Verwaltung | alle Freigaben eines Kontos mit Notiz (Nutzerverwaltung) (Phase 2) |
 | `GET /api/material/nutzer?q=&zweck=` (ab 3 Zeichen) | verwalten irgendwo oder Material-Verwaltung | Personensuche: `zweck=freigabe` (Vorgabe) nur Konten mit Zugang zum Modul (Stufe Mitglied oder Verwaltung), `zweck=zuordnung` alle; höchstens 20 aktive Konten mit Namen, je `id`, `name`, `gliederung`, `qualifiziert` (wirkt nur mit Stufe), `grundrecht_ueberall` (Material-Verwaltung) – keine E-Mail, keine Urkundennummer; `mehr` (Phase 2, `zweck` seit der Modulstufe) |
