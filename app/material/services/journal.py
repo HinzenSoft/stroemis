@@ -3,7 +3,11 @@
 Geschrieben wird in derselben Transaktion wie die Änderung selbst: Eine Änderung ohne Eintrag gibt
 es damit nicht, ein Eintrag ohne Änderung auch nicht. Gelesen wird es am Produkt, am Artikel (dort
 zusammen mit dem Journal seines Produkts) und an Ordnern. Die Tabelle ist per Trigger nur
-fortschreibbar (models.py)."""
+fortschreibbar (models.py).
+
+Seit Phase 2 stehen Betroffene nur pseudonym darin (Kontoverweise, unten). Beim Lesen wird ein Verweis zum Namen
+aufgelöst – die Antworten tragen den Namen, nie den Verweis selbst. Wer welches Journal lesen darf, entscheiden die
+Aufrufer (Grundrecht am Ordner bzw. Artikel, Freigabe-Einträge nur für Verwalter, Meldungen über darf_meldung)."""
 import json
 import secrets
 
@@ -57,11 +61,25 @@ def aenderung(entity, entity_id, alt, neu, action="geaendert"):
     return True
 
 
-def _json(row):
+def _aufloesen(daten, namen):
+    """Kontoverweise {"ref": …} im Eintrag durch {"name": …} ersetzen (namen: Zwischenspeicher je Lesevorgang)."""
+    if not isinstance(daten, dict):
+        return daten
+    konto = daten.get("konto")
+    if isinstance(konto, dict) and "ref" in konto:
+        ref = konto["ref"]
+        if ref not in namen:
+            namen[ref] = konto_name(ref)
+        daten = dict(daten, konto={"name": namen[ref]})
+    return daten
+
+
+def _json(row, namen=None):
+    namen = {} if namen is None else namen
     return {"id": row["id"], "entity": row["entity"], "entity_id": row["entity_id"], "user_name": row["user_name"],
             "action": row["action"], "created_at": row["created_at"],
-            "vorher": json.loads(row["before_json"]) if row["before_json"] else None,
-            "nachher": json.loads(row["after_json"]) if row["after_json"] else None}
+            "vorher": _aufloesen(json.loads(row["before_json"]), namen) if row["before_json"] else None,
+            "nachher": _aufloesen(json.loads(row["after_json"]), namen) if row["after_json"] else None}
 
 
 # Womit ein Objekt endet. Prüfungen und Durchgänge vergeben ihre Kennung nie zweimal (AUTOINCREMENT,
@@ -88,7 +106,8 @@ def lesen(paare, grenze=500, ohne=()):
                      f"({','.join('?' * len(aktionen))})", (e, eid, *aktionen), one=True)
         ab[(e, eid)] = r["m"] or 0
     rows = db.query(f"SELECT * FROM mat_audit WHERE {bedingung} ORDER BY id DESC LIMIT ?", (*args, grenze))
-    return [_json(r) for r in rows if r["id"] > ab.get((r["entity"], r["entity_id"]), 0)]
+    namen = {}
+    return [_json(r, namen) for r in rows if r["id"] > ab.get((r["entity"], r["entity_id"]), 0)]
 
 
 # --- Kontoverweise ------------------------------------------------------------------------------------------
@@ -114,19 +133,27 @@ def konto_name(ref):
     return (r["name"] or "").strip() or "(ohne Namen)"
 
 
-def fuer_produkt(pid):
+def fuer_produkt(pid, user=None, meldungen=True):
     """Journal eines Produkts: seine Stammdaten, seine Dokumente, seine spezifischen Formulare und die
-    Meldungen, über die es in den Katalog kam."""
+    Meldungen, über die es in den Katalog kam – diese nur, soweit das Konto die Meldung sehen darf
+    (rechte.darf_meldung: Melder, Katalogpfleger, Verwaltung, wer den Ordner der Meldung sieht). meldungen=False lässt
+    sie ganz weg."""
     paare = [("product", pid)]
     paare += [("document", r["id"]) for r in db.query("SELECT id FROM mat_product_document WHERE product_id = ?", (pid,))]
     paare += [("form", r["id"]) for r in db.query("SELECT id FROM mat_form WHERE product_id = ?", (pid,))]
-    paare += [("request", r["id"]) for r in db.query("SELECT id FROM mat_product_request WHERE product_id = ?", (pid,))]
+    if meldungen:
+        from .rechte import darf_meldung
+        paare += [("request", r["id"]) for r in db.query(
+            "SELECT id, created_by, folder_id FROM mat_product_request WHERE product_id = ?", (pid,))
+            if darf_meldung(r, user)]
     return lesen(paare)
 
 
 def fuer_artikel(item):
-    """Lebenslauf-Journal eines Artikels: seine eigenen Einträge und die seines Produkts."""
+    """Lebenslauf-Journal eines Artikels: seine eigenen Einträge und die seines Produkts – ohne die Meldungen, über die
+    das Produkt in den Katalog kam (die gehören zum Katalog, nicht zum Artikel, und kämen oft aus einem fremden
+    Bereich)."""
     paare = [("item", item["id"])]
-    eintraege = lesen(paare) + fuer_produkt(item["product_id"])
+    eintraege = lesen(paare) + fuer_produkt(item["product_id"], meldungen=False)
     eintraege.sort(key=lambda e: e["id"], reverse=True)
     return eintraege

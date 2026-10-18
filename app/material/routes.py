@@ -6,7 +6,12 @@ Muster wie im Prüfungsbereich. Jede Route prüft ihr Recht selbst; ein ausgeble
 Schutz. Fachregeln stehen in services/, hier wird nur gelesen, aufgerufen und geantwortet.
 
 Die Routen der Lieferung 4 stehen in eigenen Modulen an denselben Blueprints – routes_export.py (CSV, Protokoll-ZIP,
-Lebenslauf), routes_katalog.py (Katalogaustausch) und routes_rueckruf.py –, eingebunden am Ende dieser Datei."""
+Lebenslauf), routes_katalog.py (Katalogaustausch) und routes_rueckruf.py –, eingebunden am Ende dieser Datei.
+
+Seit Phase 2 gelten Freigaben je Ordner (services/rechte.py): Lesende Routen über den ganzen Bestand tragen
+requires_zugang und liefern nur, was das Konto sieht; Routen zu einem Gegenstand tragen requires_folder. Fremdes – auch
+eine fremde Kennung im Inhalt einer Anfrage – antwortet wie Unbekanntes mit 404 und derselben Meldung, 403 nur, wenn
+man den Gegenstand sieht, die Aktion aber nicht darf. Seiten zeigen dafür die Fehlerseite."""
 import json
 import os
 import sqlite3
@@ -17,14 +22,15 @@ from flask import (Blueprint, abort, current_app, g, jsonify, redirect, render_t
 from .. import db
 from ..auth import attempts_exceeded, current_user, eingabefehler_abfangen, json_body, note_attempt
 from . import models
-from .services import (Abgelehnt, anhang, bestand, durchgang, eingabe, journal, katalog, kennung, meldung, protokoll,
-                       pruefung, search, unterschrift)
+from .services import (Abgelehnt, anhang, bestand, durchgang, eingabe, globalprotokoll, globalsuche, journal, katalog,
+                       kennung, medien as medien_dienst, meldung, protokoll, pruefung, search, unterschrift)
 from .services import rueckruf
 from .services import status as st
 from .services import ueberblick
-from .services.rechte import (_bezug, darf, darf_alles, darf_artikel, darf_unterschreiben, ist_katalogpfleger, ist_pruefer,
-                              katalog_required, requires_folder, requires_zugang, sicht, urkunde_setzen, zugang,
-                              zugang_meldung)
+from .services.bestand import FremdeDublette
+from .services.rechte import (ARTIKEL_FEHLT, ORDNER_FEHLT, _bezug, darf, darf_alles, darf_artikel, darf_unterschreiben,
+                              ist_katalogpfleger, ist_pruefer, katalog_required, requires_folder, requires_zugang, sicht,
+                              sicht_verwerfen, urkunde_setzen, zugang, zugang_meldung)
 from .services.importer import ZIP_MAX_BYTES as KATALOG_ZIP_MAX_BYTES
 
 seiten = Blueprint("material", __name__, template_folder="templates", static_folder="static",
@@ -60,6 +66,20 @@ def _abgelehnt(exc):
     return jsonify(error=str(exc)), exc.code
 
 
+@api.errorhandler(FremdeDublette)
+def _fremde_dublette(exc):
+    """Die Seriennummer gibt es bei diesem Produkt schon – in einem fremden Bereich (Bauentwurf 3.7). Die Transaktion ist
+    zurückgerollt; jetzt in eigener Transaktion durch dieselbe Bremse und ins selbe Protokoll wie die globale Suche, denn
+    die Meldung verrät, dass es die Nummer gibt. Der Text nennt weder Gliederung noch Inventarnummer."""
+    u = current_user()
+    try:
+        globalprotokoll.bremse(u["id"] if u else None)
+    except Abgelehnt as zu_viele:              # ein Fehlerbehandler gibt seine Antwort selbst – nichts weiterwerfen
+        return jsonify(error=str(zu_viele)), zu_viele.code
+    globalprotokoll.eintragen("dublette", globalsuche.normalform(exc.serie), [exc.item_id])
+    return jsonify(error=str(exc)), exc.code
+
+
 @api.errorhandler(sqlite3.IntegrityError)
 def _integritaet(exc):
     """Zwei Leute ändern dasselbe gleichzeitig – kein Serverfehler, sondern ein Hinweis zum Neuladen."""
@@ -87,13 +107,43 @@ def _sortier_args():
 
 # --- Seiten ------------------------------------------------------------------------------------------
 
-def _seite(ansicht, katalog_seite=False, warnung=None, **daten):
-    """warnung: eine Funktion, die erst nach der Rechteprüfung gefragt wird – ihr Hinweis steht schon im HTML."""
+def _fehlerseite(code, meldung):
+    return render_template("error.html", user=current_user(), code=code, message=meldung), code
+
+
+# Wie eine Seite ihren Gegenstand auflöst (rechte._bezug): Ordner, Artikel, Prüfung, Durchgang.
+_SEITEN_QUELLE = {"ordner": "fid", "artikel": "iid", "pruefung": "pid", "durchgang": "rid"}
+
+
+def _bezug_seite(art, kennung_wert):
+    """None, wenn das Konto den Gegenstand der Seite sehen darf – sonst die Meldung für die Fehlerseite 404 (dieselbe
+    wie für Unbekanntes). Ein Artikel zählt über seine Heimat; ein Ordner darf auch ein teilweise sichtbarer
+    Systemordner sein, kein Pfad-Knoten."""
+    quelle = _SEITEN_QUELLE[art]
+    try:
+        b = _bezug(quelle, {quelle: kennung_wert})
+    except Abgelehnt as exc:
+        return str(exc)
+    s = sicht()
+    sichtbar = s.darf("lesen", b.ordner_id) if b.art == "artikel" else s.sichtbar(b.ordner_id)
+    return None if sichtbar else b.meldung
+
+
+def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, **daten):
+    """Eine Seite des Moduls. Ohne Anmeldung zur Anmeldung, ohne Modulzugang die Fehlerseite 403 mit dem Grund
+    (zugang_meldung). bezug: („artikel“ | „ordner“ | „pruefung“ | „durchgang“, Kennung) – was das Konto nicht sehen
+    darf, antwortet vor dem Zeichnen wie Unbekanntes mit der Fehlerseite 404, ohne Banner, ohne Daten. warnung: eine
+    Funktion, die erst danach gefragt wird – ihr Hinweis steht schon im HTML. Katalogseiten brauchen nur den
+    Modulzugang (katalog_seite)."""
     u = current_user()
     if not u:
         return redirect(url_for("pages.login", next=request.full_path.rstrip("?")))
     if not zugang(u):
-        abort(403)
+        return _fehlerseite(403, zugang_meldung(u))
+    if bezug:
+        fehlt = _bezug_seite(*bezug)
+        if fehlt:
+            return _fehlerseite(404, fehlt)
     return render_template("material/seite.html", user=u, active="material", ansicht=ansicht,
                            daten=json.dumps(daten, ensure_ascii=False), darf=json.dumps(darf_alles()),
                            warnung=warnung() if warnung else None)
@@ -116,48 +166,59 @@ def bestand_seite():
 
 @seiten.get("/material/ordner/<int:fid>")
 def ordner_seite(fid):
-    return _seite("ordner", id=fid)
+    return _seite("ordner", bezug=("ordner", fid), id=fid)
 
 
 @seiten.get("/material/artikel/neu")
 def artikel_neu():
-    return _seite("artikel_neu", ordner=request.args.get("ordner", type=int),
+    """Artikel anlegen nur, wer irgendwo verwaltet; den Ordner aus der Adresse übernimmt die Seite nur, wenn das Konto
+    ihn verwaltet."""
+    u = current_user()
+    if u and zugang(u) and not sicht(u).irgendwo("verwalten"):
+        return _fehlerseite(403, "Artikel legen nur Materialwarte an – in einem Ordner, den sie verwalten.")
+    ordner = request.args.get("ordner", type=int)
+    return _seite("artikel_neu", ordner=ordner if ordner and u and darf("verwalten", ordner) else None,
                   produkt=request.args.get("produkt", type=int))
 
 
 @seiten.get("/material/artikel/<int:iid>")
 def artikel_seite(iid):
     """Ziel jedes QR-Scans: Ist der Artikel ausgesondert, gesperrt oder am Lebensende, steht das schon im HTML –
-    sofort sichtbar, bevor material.js die Ansicht (mit eigenem Banner) zeichnet."""
-    return _seite("artikel", warnung=lambda: ueberblick.warnung(iid), id=iid)
+    sofort sichtbar, bevor material.js die Ansicht (mit eigenem Banner) zeichnet. Ein fremder Artikel antwortet vorher
+    mit 404 – ohne Banner."""
+    return _seite("artikel", bezug=("artikel", iid), warnung=lambda: ueberblick.warnung(iid), id=iid)
 
 
 @seiten.get("/material/artikel/<int:iid>/pruefung/neu")
 def pruefung_neu(iid):
-    return _seite("pruefung_neu", id=iid, durchgang=request.args.get("durchgang", type=int))
+    """Sehen genügt für die Seite; den Knopf zum Beginnen blendet die Oberfläche ohne Prüffreigabe aus, und die
+    Schnittstelle prüft selbst."""
+    return _seite("pruefung_neu", bezug=("artikel", iid), id=iid, durchgang=request.args.get("durchgang", type=int))
 
 
 @seiten.get("/material/pruefung/<int:pid>")
 def pruefung_seite(pid):
-    return _seite("pruefung", id=pid)
+    return _seite("pruefung", bezug=("pruefung", pid), id=pid)
 
 
 @seiten.get("/material/durchgang/<int:rid>")
 def durchgang_seite(rid):
-    return _seite("durchgang", id=rid)
+    return _seite("durchgang", bezug=("durchgang", rid), id=rid)
 
 
 def _protokoll_senden(row, quelle, kennung_wert, inventarnummer=None):
-    """Ein festgeschriebenes Protokoll ausliefern – nur an Angemeldete mit Leserecht im Ordner und nur, wenn die
-    Datei noch genau die festgeschriebene ist (Prüfsumme). Im Browser geöffnet, nicht heruntergeladen."""
+    """Ein festgeschriebenes Protokoll ausliefern – nur an Angemeldete, die den Artikel (über seine Heimat) bzw. den
+    Durchgang sehen dürfen, und nur, wenn die Datei noch genau die festgeschriebene ist (Prüfsumme). Fremdes antwortet
+    wie Unbekanntes mit 404. Im Browser geöffnet, nicht heruntergeladen."""
     u = current_user()
     if not u:
         return redirect(url_for("pages.login", next=request.path))
     if not zugang(u):
-        abort(403)
+        return _fehlerseite(403, zugang_meldung(u))
     try:
-        if not darf("lesen", _bezug(quelle, {quelle: kennung_wert}).ordner_id):
-            abort(403)
+        b = _bezug(quelle, {quelle: kennung_wert})
+        if not darf("lesen", b.ordner_id):
+            raise Abgelehnt(b.meldung, 404)
         if not row:
             abort(404)
         pfad = protokoll.datei(row)
@@ -189,7 +250,7 @@ def sammelprotokoll(rid):
 @seiten.get("/material/pruefen")
 def pruefseite():
     """Prüfseite: Jeder – auch ohne Anmeldung – lädt ein Protokoll hoch und erfährt, ob es unverändert ist.
-    Sie zeigt nur das Ergebnis und die Protokoll-ID, keine Personendaten."""
+    Sie zeigt nur das Ergebnis und die Protokoll-ID, keine Personendaten; den Link zur Prüfung nur, wer sie sehen darf."""
     u = current_user()
     return render_template("material/pruefen.html", user=u, active="material" if u else None,
                            angemeldet=bool(u and zugang(u)))
@@ -219,7 +280,8 @@ def meldungen_seite():
 
 @seiten.get("/material/suche")
 def suche_seite():
-    """Ein eindeutiger Treffer öffnet den Artikel direkt; sonst zeigt die Seite die Trefferliste."""
+    """Ein eindeutiger Treffer öffnet den Artikel direkt; sonst zeigt die Seite die Trefferliste. Gezählt wird nur, was
+    das Konto sieht (search.artikel filtert selbst) – die Weiterleitung führt nie zu Fremdem."""
     q = (request.args.get("q") or "").strip()
     if current_user() and zugang() and q:
         try:
@@ -234,28 +296,35 @@ def suche_seite():
 @seiten.get("/m/<token>")
 def qr_ziel(token):
     """Ziel des QR-Codes: über die Anmeldung zum Artikel. Wer das Modul nicht sehen darf, bekommt
-    nichts über den Artikel zu wissen – auch nicht, ob es ihn gibt."""
+    nichts über den Artikel zu wissen – auch nicht, ob es ihn gibt. Gehört der Artikel nicht zum eigenen Bereich,
+    zeigt die Seite „fremd“ nur das (ohne Artikeldaten im HTML); den Steckbrief gibt es dort erst nach Bestätigung
+    (POST /globalsuche/qr, gebremst und protokolliert)."""
     u = current_user()
     if not u:
         return redirect(url_for("pages.login", next=f"/m/{token}"))
     if not zugang(u):
-        abort(403)
-    i = db.query("SELECT id FROM mat_item WHERE qr_token = ?", (token,), one=True)
+        return _fehlerseite(403, zugang_meldung(u))
+    i = db.query("SELECT id, folder_id, origin_folder_id, lock_state FROM mat_item WHERE qr_token = ?", (token,), one=True)
     if not i:
         abort(404)
-    return redirect(url_for("material.artikel_seite", iid=i["id"]))
+    if darf_artikel("lesen", i):
+        return redirect(url_for("material.artikel_seite", iid=i["id"]))
+    return _seite("fremd", token=token)
 
 
 @seiten.get("/media/material/<art>/<path:dateiname>")
 def medien(art, dateiname):
-    """Produkt- und Ordnerfotos, Herstellerdokumente – nur für Angemeldete mit Zugang zum Modul, nie
-    in einem gemeinsamen Zwischenspeicher. Skripte sind auch in einem PDF oder SVG wirkungslos."""
-    if art not in ("orig", "web", "thumb", "dok", "anhang"):
+    """Fotos, Anhänge und Herstellerdokumente – nur für Angemeldete mit Zugang zum Modul und je Datei nur für die, die
+    ihren Besitzer sehen dürfen (services/medien.py); sonst 404 wie für Unbekanntes. Nie in einem gemeinsamen
+    Zwischenspeicher. Skripte sind auch in einem PDF oder SVG wirkungslos."""
+    if art not in medien_dienst.ARTEN:
         abort(404)
     if not current_user():
         abort(401)
     if not zugang():
         abort(403)
+    if not medien_dienst.darf_datei(art, dateiname):
+        abort(404)
     resp = send_from_directory(os.path.join(katalog.medien_dir(), art), dateiname, max_age=60 * 60 * 24 * 7)
     resp.cache_control.public = None
     resp.cache_control.private = True
@@ -268,8 +337,9 @@ def medien(art, dateiname):
 @api.get("/start")
 @requires_zugang
 def start():
+    """Die Übersicht – alle Zahlen über das, was das Konto sieht."""
     alle = bestand.baum()
-    gliederungen = [o for o in alle if o["kind"] == "gliederung" and not o["system_kind"]]
+    gliederungen = [o for o in alle if o["kind"] == "gliederung" and not o["system_kind"] and not o.get("nur_pfad")]
     naechste, faellig = bestand.faellige(pro_seite=10)
     z = bestand.zaehlung()
     return jsonify(darf=darf_alles(), zaehlung=z, bestand=sum(z[s] for s in st.BESTAND),
@@ -283,26 +353,40 @@ def start():
 @api.get("/suche")
 @requires_zugang
 def suche():
+    """Lokale Suche über das, was das Konto sieht (Treffer, gesamt, eindeutig). exakt_lokal: ein sichtbarer Artikel hat
+    genau diese Seriennummer; global_angebot: die Oberfläche bietet die globale Suche an (globalsuche.angebot)."""
+    q = request.args.get("q", "")
     seite, pro_seite = _seite_args()
-    rows, gesamt = search.artikel(request.args.get("q", ""), seite, pro_seite, *_sortier_args())
+    rows, gesamt = search.artikel(q, seite, pro_seite, *_sortier_args())
     treffer = []
     for r in rows:
         k = bestand.artikel_kurz(r)
         k["pfad"] = " / ".join(o["name"] for o in bestand.pfad(r["folder_id"]))
         treffer.append(k)
-    return jsonify(treffer=treffer, gesamt=gesamt, eindeutig=treffer[0]["id"] if gesamt == 1 and treffer else None)
+    exakt = search.exakt_lokal(q)
+    return jsonify(treffer=treffer, gesamt=gesamt, eindeutig=treffer[0]["id"] if gesamt == 1 and treffer else None,
+                   exakt_lokal=exakt, global_angebot=globalsuche.angebot(q, gesamt, exakt))
+
+
+def _zugeordnet_arg():
+    """?zugeordnet=<Kontokennung> – der Filter „Zugeordnet an“; die Dienste wenden ihn nur an, wo das Grundrecht gilt."""
+    return kennung(request.args.get("zugeordnet"), "Zugeordnet an", leer_erlaubt=True)
 
 
 @api.get("/faellig")
 @requires_zugang
 def faellig():
+    """Fällige Artikel über das, was das Konto sieht; ?ordner= nur für einen sichtbaren Ordner (sonst 404 wie für
+    Unbekanntes)."""
     nur = request.args.get("status") or ""
     stati = tuple(s for s in nur.split(",") if s in st.STATUS) or bestand.FAELLIG
     seite, pro_seite = _seite_args()
     ordner_id = request.args.get("ordner", type=int)
     if ordner_id:
         bestand.ordner(ordner_id)
-    liste, gesamt = bestand.faellige(ordner_id, stati, seite, pro_seite, *_sortier_args())
+        if not sicht().sichtbar(ordner_id):
+            raise Abgelehnt(ORDNER_FEHLT, 404)
+    liste, gesamt = bestand.faellige(ordner_id, stati, seite, pro_seite, *_sortier_args(), zugeordnet=_zugeordnet_arg())
     # Mit Ordner (aus der Übersicht): sein Pfad für die Überschrift der Liste.
     return jsonify(artikel=liste, gesamt=gesamt, schwelle_tage=st.schwelle_tage(),
                    ordner={"id": ordner_id, "pfad": bestand.pfad(ordner_id)} if ordner_id else None)
@@ -390,7 +474,8 @@ def produkt_lesen(pid):
         return jsonify(error="Nicht angemeldet"), 401
     _katalog_lesen()
     p = katalog.produkt_json(katalog.produkt(pid), voll=True)
-    p["journal"] = journal.fuer_produkt(pid)
+    # Meldungen, über die das Produkt kam, nur soweit das Konto sie sehen darf (Melder, Ordner der Meldung …).
+    p["journal"] = journal.fuer_produkt(pid, current_user())
     p["formulare"] = katalog.formulare_fuer(produkt_id=pid)
     p["rueckrufe"] = rueckruf.fuer_produkt(pid)
     return jsonify(produkt=p)
@@ -609,25 +694,30 @@ def formular_loeschen(fid):
 @api.get("/ordner")
 @requires_zugang
 def ordner_baum():
+    """Der Baum, wie ihn das Konto sieht: sichtbare Ordner mit Zahlen und „darf“, teilweise sichtbare Systemordner,
+    Pfad-Knoten ohne Zahlen (bestand.baum)."""
     return jsonify(ordner=bestand.baum(), ordnerarten=models.ORDNERARTEN)
 
 
 @api.post("/ordner")
 @requires_folder("verwalten", "json:parent_id", leer="global")
 def ordner_anlegen():
+    """Ein Unterordner – wer den Oberordner verwaltet; eine Gliederung auf oberster Ebene nur die Verwaltung."""
     fid = bestand.ordner_anlegen(json_body())
+    sicht_verwerfen()                                  # der neue Ordner gehört ab jetzt zur Sicht
     return jsonify(ordner=bestand.ordner_json(bestand.ordner(fid))), 201
 
 
 @api.get("/ordner/<int:fid>")
 @requires_folder("lesen", "fid")
 def ordner_lesen(fid):
+    """Auch ein teilweise sichtbarer Systemordner (nur die eigenen Artikel); Journal nur mit Grundrecht."""
     # Ein Ordner zeigt bis zu 500 Artikel je Seite (Vorgabe 200) – mehr als die Suche, weil hier ganze
     # Lager durchgesehen werden.
     seite = search.seiten(request.args.get("seite", 1), 1)[0]
     pro_seite = max(1, min(500, request.args.get("pro_seite", 200, type=int) or 200))
     return jsonify(ordner=bestand.ordner_inhalt(fid, request.args.get("status") or None, seite, pro_seite,
-                                                *_sortier_args()))
+                                                *_sortier_args(), zugeordnet=_zugeordnet_arg()))
 
 
 @api.put("/ordner/<int:fid>")
@@ -637,13 +727,56 @@ def ordner_aendern(fid):
     return jsonify(ordner=bestand.ordner_json(bestand.ordner(fid)))
 
 
+ZWISCHEN_GLIEDERUNGEN = ("Zwischen Gliederungen verschiebt nur, wer beide Gliederungen verwaltet – oder die "
+                         "Plattform-Verwaltung.")
+
+
+def _ziel_pruefen(ziel, ausser=()):
+    """Ein Zielordner aus dem Inhalt der Anfrage: gibt es ihn nicht oder sieht das Konto ihn nicht, 404 wie für
+    Unbekanntes; liegt er im verschobenen Zweig (ausser), 400; ohne Verwalten dort 403."""
+    if not db.query("SELECT 1 FROM mat_folder WHERE id = ?", (ziel,), one=True) or not sicht().sichtbar(ziel):
+        raise Abgelehnt(ORDNER_FEHLT, 404)
+    if ziel in ausser:
+        raise Abgelehnt("Ein Ordner kann nicht in sich selbst liegen.")
+    if not darf("verwalten", ziel):
+        raise Abgelehnt("Im Zielordner darfst du nichts ablegen.", 403)
+
+
+def _gliederungswechsel(quelle, ziel):
+    """Über Gliederungsgrenzen (nächste Gliederung, der Ordner selbst eingeschlossen) nur mit Verwalten an beiden
+    Gliederungen (1.7 Nr. 2) – mit geliehenem Recht an einem Unterordner lässt sich nichts abziehen. Ohne Gliederung
+    (oberste Ebene) zählt das globale Recht, also nur die Verwaltung."""
+    gq, gz = bestand.gliederung_von(quelle), bestand.gliederung_von(ziel)
+    q, z = (gq["id"] if gq else None), (gz["id"] if gz else None)
+    if q != z and not (darf("verwalten", q) and darf("verwalten", z)):
+        raise Abgelehnt(ZWISCHEN_GLIEDERUNGEN, 403)
+
+
 @api.post("/ordner/<int:fid>/verschieben")
 @requires_folder("verwalten", "fid")
 def ordner_verschieben(fid):
+    """Verwalten am alten Oberordner und am Ziel (auf oberster Ebene: nur die Verwaltung), bei einem Wechsel der
+    Gliederung an beiden Gliederungen. Gesperrte und ausgesonderte Artikel wandern mit, offene Durchgänge nehmen, was
+    ihren Zweig verlässt, mit Grund heraus (bestand.ordner_verschieben)."""
     d = json_body()
     ziel = kennung(d.get("parent_id"), "Zielordner", leer_erlaubt=True)
-    if ziel and not darf("verwalten", ziel):
-        raise Abgelehnt("Im Zielordner darfst du nichts ablegen.", 403)
+    o = bestand.ordner(fid)
+    # Was ohnehin nicht geht, sagt der Dienst – hier vorweg, damit die Antwort nicht vom Recht abhängt.
+    if o["system_kind"]:
+        raise Abgelehnt(bestand.SYSTEMORDNER_FEST, 409)
+    if ziel is None:
+        if o["kind"] != "gliederung":
+            raise Abgelehnt(bestand.NUR_GLIEDERUNG_OBEN)
+        if not darf("verwalten", None):
+            raise Abgelehnt("Auf die oberste Ebene verschiebt nur die Plattform-Verwaltung.", 403)
+    else:
+        _ziel_pruefen(ziel, ausser=bestand.unterbaum(fid))
+    alt = o["parent_id"]
+    if not darf("verwalten", alt):
+        raise Abgelehnt("Verschieben darf nur, wer den Ordner darüber verwaltet – eine Gliederung auf oberster Ebene "
+                        "nur die Plattform-Verwaltung.", 403)
+    if ziel != alt:
+        _gliederungswechsel(alt, ziel)
     bestand.ordner_verschieben(fid, ziel)
     return jsonify(ordner=bestand.ordner_json(bestand.ordner(fid)))
 
@@ -678,12 +811,15 @@ def ordner_foto_entfernen(fid):
 @api.get("/artikel/vorschlag")
 @requires_folder("lesen", "arg:folder_id", leer="zugang")
 def artikel_vorschlag():
+    """Vorschlag für einen neuen Artikel – mit Ordner nur für einen, den das Konto sieht (sonst 404)."""
     return jsonify(vorschlag=bestand.vorschlag(request.args))
 
 
 @api.post("/artikel")
 @requires_folder("verwalten", "json:folder_id", leer="global")
 def artikel_anlegen():
+    """Anlegen im Ordner, den das Konto verwaltet. Gibt es die Seriennummer bei diesem Produkt schon in einem fremden
+    Bereich, antwortet _fremde_dublette (gebremst, protokolliert, ohne Inventarnummer)."""
     iid = bestand.artikel_anlegen(json_body())
     return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True)), 201
 
@@ -711,15 +847,23 @@ def artikel_loeschen(iid):
 @api.post("/artikel/verschieben")
 @requires_folder("verwalten", "json:folder_id", leer="global")
 def artikel_verschieben():
+    """Mehrere Artikel in einen Ordner, den das Konto verwaltet (der Decorator prüft das Ziel). Je Artikel: Kennung wie
+    im Dienst (kennung – „7“ und 7.0 gelten), nicht sichtbar → 404 wie für Unbekanntes, ohne Verwalten → 403; bei einem
+    Wechsel der Gliederung Verwalten an beiden (1.7 Nr. 2)."""
     d = json_body()
     ziel = kennung(d.get("folder_id"), "Zielordner")
     ids = d.get("ids")
-    if isinstance(ids, list):
-        for iid in ids:
-            row = db.query("SELECT folder_id FROM mat_item WHERE id = ?", (iid,), one=True) \
-                if isinstance(iid, int) and not isinstance(iid, bool) else None
-            if row and not darf("verwalten", row["folder_id"]):
-                raise Abgelehnt("Mindestens einen der Artikel darfst du nicht verschieben.", 403)
+    if isinstance(ids, list) and 1 <= len(ids) <= 500:
+        zeilen = []
+        for wert in ids:
+            row = db.query("SELECT * FROM mat_item WHERE id = ?", (kennung(wert, "Artikel"),), one=True)
+            if not row or not darf_artikel("lesen", row):
+                raise Abgelehnt(ARTIKEL_FEHLT, 404)
+            zeilen.append(row)
+        if any(not darf_artikel("verwalten", row) for row in zeilen):
+            raise Abgelehnt("Mindestens einen der Artikel darfst du nicht verschieben.", 403)
+        for heimat in {bestand.heimat(row) for row in zeilen}:
+            _gliederungswechsel(heimat, ziel)
     n = bestand.artikel_verschieben(ids, ziel)
     return jsonify(ok=True, verschoben=n)
 
@@ -743,6 +887,8 @@ def artikel_pruefungen(iid):
 @api.post("/artikel/<int:iid>/pruefungen")
 @requires_folder("pruefen", "iid")
 def pruefung_starten(iid):
+    """Prüfung beginnen; durchgang_id nur für einen Durchgang, in dem der Artikel steht und in dessen Zweig seine Heimat
+    liegt – sonst 404 wie für einen unbekannten Durchgang (durchgang.runde_fuer_start)."""
     d = json_body()
     rid = kennung(d.get("durchgang_id"), "Prüfdurchgang", leer_erlaubt=True)
     pid, neu = pruefung.starten(iid, _pruefer(), d.get("art") or None, rid)
@@ -823,6 +969,7 @@ def pruefung_verwerfen(pid):
 @api.get("/entwuerfe")
 @requires_zugang
 def entwuerfe():
+    """Offene Prüfungen zu Artikeln, die das Konto sieht."""
     return jsonify(entwuerfe=pruefung.entwuerfe(current_user()["id"]))
 
 
@@ -890,17 +1037,21 @@ def pruefen():
     ergebnis = protokoll.pruefen(datei.stream)
     u = current_user()
     if u and zugang(u) and ergebnis.get("protokoll_id"):
-        ergebnis["link"] = _protokoll_link(ergebnis["protokoll_id"])
+        link = _protokoll_link(ergebnis["protokoll_id"])
+        if link:
+            ergebnis["link"] = link
     return jsonify(ergebnis)
 
 
 def _protokoll_link(pid):
-    """Für Angemeldete mit Zugang: wohin das Protokoll in der Oberfläche gehört."""
+    """Für Angemeldete, die den Artikel bzw. den Durchgang sehen dürfen: wohin das Protokoll in der Oberfläche gehört –
+    sonst None (ein fremdes Protokoll prüft die Seite trotzdem, sie verlinkt nur nicht)."""
     if pid.startswith("S-"):
-        r = db.query("SELECT id FROM mat_round WHERE protocol_id = ?", (pid,), one=True)
-        return f"/material/durchgang/{r['id']}" if r else None
-    r = db.query("SELECT id FROM mat_inspection WHERE protocol_id = ?", (pid,), one=True)
-    return f"/material/pruefung/{r['id']}" if r else None
+        r = db.query("SELECT id, folder_id FROM mat_round WHERE protocol_id = ?", (pid,), one=True)
+        return f"/material/durchgang/{r['id']}" if r and darf("lesen", r["folder_id"]) else None
+    r = db.query("SELECT x.id, i.folder_id, i.origin_folder_id, i.lock_state FROM mat_inspection x "
+                 "JOIN mat_item i ON i.id = x.item_id WHERE x.protocol_id = ?", (pid,), one=True)
+    return f"/material/pruefung/{r['id']}" if r and darf_artikel("lesen", r) else None
 
 
 # --- Schnittstelle: Prüfdurchgänge ---------------------------------------------------------------------------
@@ -908,6 +1059,7 @@ def _protokoll_link(pid):
 @api.get("/durchgaenge")
 @requires_zugang
 def durchgaenge():
+    """Die Durchgänge, deren Ordner das Konto sieht."""
     return jsonify(durchgaenge=durchgang.liste(nur_offen=request.args.get("offen") == "1"))
 
 
@@ -936,6 +1088,8 @@ def durchgang_ausnehmen(rid):
 @api.post("/durchgaenge/<int:rid>/einbeziehen")
 @requires_folder(("verwalten", "pruefen"), "rid")
 def durchgang_einbeziehen(rid):
+    """item_id nicht im Durchgang: 404; hat seine Heimat den Zweig verlassen oder steht er in einem anderen offenen
+    Durchgang offen: 409 (durchgang.einbeziehen)."""
     durchgang.einbeziehen(rid, kennung(json_body().get("item_id"), "Artikel"))
     return jsonify(ok=True)
 

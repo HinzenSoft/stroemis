@@ -12,6 +12,9 @@ Regeln aus dem Konzept, wie sie hier umgesetzt sind:
     sich vorziehen, nicht verschieben. Ebenso die nächste Fälligkeit: Ein neuer Artikel bekommt einen
     Vorschlag aus dem Intervall (interval.py); höher als „heute + ein Intervall“ geht es ohne Prüfung
     nicht, und danach wird sie nur noch vorgezogen – später setzt sie allein eine Prüfung.
+  - Seit Phase 2 sieht jedes Konto nur, was seine Freigaben zeigen (rechte.sicht): Baum, Listen und Zählungen
+    filtern über die Heimat der Artikel (heimat, rechte.artikel_filter), jedes Objekt trägt „darf“. Die Zuordnung
+    an eine Person und das Journal stehen nur mit Grundrecht in den Antworten.
 """
 import hashlib
 import json
@@ -21,7 +24,7 @@ from ... import db
 from ...images import delete_photo_files
 from ..models import ORDNERARTEN, SYSTEMORDNER
 from . import Abgelehnt, akteur, auswahl, datum, erster_tag, ganzzahl, heute, kennung, monat_oder_datum, text
-from . import faelligkeit, journal, katalog, nummern, qr
+from . import faelligkeit, journal, katalog, nummern, qr, rechte
 from . import status as st
 from .interval import faelligkeit_vorschlag, herstellerseite, lebensende, spaetestens, wirksam
 
@@ -33,6 +36,20 @@ GESPERRT_BLEIBT = ("Gesperrte und ausgesonderte Artikel bleiben in ihrem Systemo
 NUR_GLIEDERUNG_OBEN = "Auf oberster Ebene stehen nur Gliederungen – lege den Ordner in einer Gliederung an."
 VORZIEHEN = ("Die nächste Prüfung lässt sich nur vorziehen, nicht verschieben – auf einen späteren Tag setzt "
              "sie nur eine Prüfung.")
+# Grund im Journal, wenn gesperrte und ausgesonderte Artikel mit ihrem Ordner die Gliederung wechseln (1.7 Nr. 3).
+GRUND_GLIEDERUNG = "Ordner in andere Gliederung verschoben"
+
+
+class FremdeDublette(Abgelehnt):
+    """Seriennummer und Produkt gibt es schon – bei einem Artikel, den das Konto nicht sieht (Bauentwurf 3.7). Die
+    Transaktion rollt zurück; der Fehlerbehandler in routes.py bremst und protokolliert das wie eine globale Suche
+    (globalprotokoll). Der Text nennt weder Gliederung noch Inventarnummer."""
+    TEXT = ("Diese Seriennummer gibt es bei diesem Produkt schon – in einem Bereich, den du nicht siehst. Wo er geführt "
+            "wird, zeigt die globale Suche.")
+
+    def __init__(self, item_id, serie):
+        super().__init__(self.TEXT, 409)
+        self.item_id, self.serie = item_id, serie
 
 
 # --- Ordner -------------------------------------------------------------------------------------------
@@ -82,6 +99,18 @@ def heimat_sql(alias="i"):
         raise ValueError(alias)
     return (f"(CASE WHEN {alias}.lock_state <> 'frei' AND {alias}.origin_folder_id IS NOT NULL "
             f"THEN {alias}.origin_folder_id ELSE {alias}.folder_id END)")
+
+
+def heimat_im_zweig(fid, alias="i"):
+    """(Bedingung, Parameter): Die Heimat des Artikels liegt in fid oder darunter – welche Artikel zu einem Ordner
+    gehören, für Durchgänge, Export und Fälligkeiten. Der Unterbaum steht in der Abfrage selbst."""
+    return (f"{heimat_sql(alias)} IN (WITH RECURSIVE baum(id) AS (SELECT ? UNION SELECT f.id FROM mat_folder f "
+            f"JOIN baum b ON f.parent_id = b.id) SELECT id FROM baum)", (fid,))
+
+
+def kette(fid):
+    """Kennungen von fid und allen Oberordnern – eine Heimat liegt im Zweig von R, wenn R darin ist."""
+    return {o["id"] for o in pfad(fid)}
 
 
 def systemordner(gliederung_id, art):
@@ -173,7 +202,36 @@ def ordner_verschieben(fid, ziel_id):
         journal.eintragen("folder", fid, "verschoben",
                           {"parent_id": alt["parent_id"], "pfad": _pfad_text(alt["parent_id"])},
                           {"parent_id": ziel_id, "pfad": _pfad_text(ziel_id)})
-        faelligkeit.kappen(*faelligkeit.im_unterbaum(fid))
+        _systemordner_nachziehen(fid)
+        from . import durchgang
+        bedingung, args = heimat_im_zweig(fid)
+        durchgang.nach_verschieben([r["id"] for r in db.query(f"SELECT i.id FROM mat_item i WHERE {bedingung}", args)],
+                                   heute())
+        faelligkeit.kappen(*heimat_im_zweig(fid))
+    # Freigaben am Ordner wandern mit, geerbte von oben gelten am neuen Ort nicht mehr – die Sicht neu rechnen.
+    rechte.sicht_verwerfen()
+
+
+def _systemordner_nachziehen(fid):
+    """Gesperrte, verlorene und ausgesonderte Artikel mit Heimat im eben verschobenen Zweig, die im Systemordner einer
+    anderen Gliederung liegen als ihre Heimat, wandern in den gleichartigen Systemordner der neuen Gliederung (1.7
+    Nr. 3) – so liegt die Heimat immer in derselben Gliederung wie der Systemordner. Eine verschachtelte Gliederung,
+    die selbst verschoben wird, behält ihre eigenen Systemordner. In der Transaktion des Aufrufers."""
+    bedingung, args = heimat_im_zweig(fid)
+    for z in db.query(f"SELECT i.* FROM mat_item i WHERE i.lock_state <> 'frei' AND {bedingung} ORDER BY i.id", args):
+        gl = gliederung_von(heimat(z))
+        jetzt = gliederung_von(z["folder_id"])
+        if not gl or (jetzt and jetzt["id"] == gl["id"]):
+            continue
+        art = "ausgesondert" if z["lock_state"] == "ausgesondert" else "gesperrt"
+        ziel = systemordner(gl["id"], art)
+        if not ziel:
+            raise Abgelehnt(f"Der Systemordner „{SYSTEMORDNER[art]}“ der Gliederung „{gl['name']}“ fehlt – bitte den "
+                            "Ordnerbaum prüfen.", 409)
+        db.execute("UPDATE mat_item SET folder_id = ?, updated_at = ? WHERE id = ?", (ziel["id"], db.now(), z["id"]))
+        journal.eintragen("item", z["id"], "verschoben",
+                          {"folder_id": z["folder_id"], "ordner": _pfad_text(z["folder_id"])},
+                          {"folder_id": ziel["id"], "ordner": _pfad_text(ziel["id"]), "grund": GRUND_GLIEDERUNG})
 
 
 def _pfad_text(fid):
@@ -193,16 +251,31 @@ def ordner_loeschen(fid):
         raise Abgelehnt("Im Ordner liegen noch Artikel (auch gesperrte oder ausgesonderte zählen).", 409)
     if db.query(f"SELECT 1 FROM mat_round WHERE folder_id IN ({marken}) LIMIT 1", betroffen, one=True):
         raise Abgelehnt("Für diesen Ordner gibt es Prüfdurchgänge – er bleibt.", 409)
-    if db.query(f"SELECT 1 FROM mat_item WHERE origin_folder_id IN ({marken}) LIMIT 1", betroffen, one=True):
+    # Gesperrte kehren zurück; Ausgesonderte nicht – sie verlieren ihre Herkunft (Fremdschlüssel) und gehören danach
+    # zur Gliederung.
+    if db.query(f"SELECT 1 FROM mat_item WHERE origin_folder_id IN ({marken}) AND lock_state IN ('gesperrt', 'verloren') "
+                f"LIMIT 1", betroffen, one=True):
         raise Abgelehnt("Gesperrte Artikel kehren nach ihrer Freiprüfung hierher zurück – der Ordner bleibt.", 409)
     with db.transaction():
+        # Die Freigaben gehen mit dem Ordner (Fremdschlüssel) – vorher je Zeile ein Eintrag, wer welches Recht hatte
+        # (Kontoverweis statt Name, 2.5).
+        for f in db.query(f"SELECT * FROM mat_folder_grant WHERE folder_id IN ({marken}) ORDER BY id", betroffen):
+            journal.eintragen("folder", f["folder_id"], "freigabe_entfernt", freigabe_journal(f),
+                              {"grund": "Ordner gelöscht"})
         for k in kinder:
             db.execute("DELETE FROM mat_folder WHERE id = ?", (k["id"],))
             journal.eintragen("folder", k["id"], "geloescht", k, None)
         db.execute("DELETE FROM mat_folder WHERE id = ?", (fid,))
         journal.eintragen("folder", fid, "geloescht", alt, None)
+    rechte.sicht_verwerfen()
     if alt["photo"]:
         delete_photo_files(katalog.medien_dir(), alt["photo"])
+
+
+def freigabe_journal(f):
+    """Eine Freigabe, wie sie ins Journal kommt (2.5): Kennung, Kontoverweis, Recht, Ende – keine Notiz, kein Name."""
+    return {"freigabe": f["id"], "konto": journal.konto_ref(f["user_id"]), "recht": f["permission"],
+            "bis": f["valid_until"]}
 
 
 def ordner_foto_setzen(fid, file_storage):
@@ -233,21 +306,26 @@ def ordner_foto_entfernen(fid):
 
 
 def _zaehlungen():
-    """Status je Ordner (nur direkt darin liegende Artikel) – eine Abfrage für den ganzen Baum."""
+    """Status je Ordner (nur direkt darin liegende Artikel, die das Konto sieht) – eine Abfrage für den ganzen Baum."""
     out = {}
     for r in db.query(f"SELECT folder_id, {st.status_sql('i')} AS s, COUNT(*) AS n FROM mat_item i "
-                      f"GROUP BY folder_id, s", st.parameter()):
+                      f"WHERE {rechte.artikel_filter('i')} GROUP BY folder_id, s", st.parameter()):
         out.setdefault(r["folder_id"], st.leere_zaehlung())[r["s"]] = r["n"]
     return out
 
 
 def ordner_json(o, direkt=None, gesamt=None):
+    """Ein Ordner mit „darf“ – was das Konto genau hier darf. Ein teilweise sichtbarer Systemordner (die eigenen
+    gesperrten oder ausgesonderten Artikel in einer fremden Gliederung) trägt „teilweise“."""
     out = {f: o[f] for f in ("id", "parent_id", "name", "description", "kind", "system_kind", "interval_months",
                              "position", "created_at", "updated_at")}
     out["demo"] = bool(o["demo"])
     out["foto"] = katalog.bild_url(o["photo"])
     out["vorschau"] = katalog.bild_url(o["photo"], "thumb")
     out["original"] = katalog.bild_url(o["photo"], "orig")      # „Original“ in der Großansicht (wie beim Produktbild)
+    out["darf"] = rechte.rechte_ordner(o["id"])
+    if o["id"] in rechte.sicht().teil_system:
+        out["teilweise"] = True
     if direkt is not None:
         out["direkt"] = direkt
     if gesamt is not None:
@@ -256,21 +334,38 @@ def ordner_json(o, direkt=None, gesamt=None):
     return out
 
 
+def pfad_knoten_json(o):
+    """Oberordner eines sichtbaren Ordners ohne eigenes Recht: nur Name und Lage im Baum – keine Zahlen, kein Foto,
+    keine Beschreibung, kein Intervall; nicht zu öffnen (GET /ordner/<id> antwortet 404)."""
+    return {"id": o["id"], "parent_id": o["parent_id"], "name": o["name"], "kind": o["kind"],
+            "system_kind": o["system_kind"], "nur_pfad": True}
+
+
 def baum():
-    """Alle Ordner flach mit Zählungen: direkt darin und im ganzen Unterbaum. Den Baum zeichnet die
-    Oberfläche aus parent_id."""
+    """Der Ordnerbaum, wie ihn das angemeldete Konto sieht (Bauentwurf 1.3), flach mit Zählungen – direkt darin und im
+    ganzen Unterbaum, beide nur über die Artikel, die das Konto sieht. Es fehlt, was es nicht sehen darf; über
+    sichtbaren Ordnern stehen Pfad-Knoten (pfad_knoten_json), teilweise sichtbare Systemordner zählen nur die eigenen
+    Artikel. Den Baum zeichnet die Oberfläche aus parent_id."""
+    s = rechte.sicht()
     ordner_alle = db.query("SELECT * FROM mat_folder ORDER BY position, name COLLATE NOCASE")
+    if not s.alles:
+        ordner_alle = [o for o in ordner_alle if s.sichtbar(o["id"]) or o["id"] in s.pfad_knoten]
+    pfad_ids = set() if s.alles else {o["id"] for o in ordner_alle if o["id"] in s.pfad_knoten}
     direkt = _zaehlungen()
-    gesamt = {o["id"]: dict(direkt.get(o["id"], st.leere_zaehlung())) for o in ordner_alle}
+    gesamt = {o["id"]: dict(direkt.get(o["id"], st.leere_zaehlung())) for o in ordner_alle if o["id"] not in pfad_ids}
     eltern = {o["id"]: o["parent_id"] for o in ordner_alle}
     for fid, z in direkt.items():
+        if fid not in gesamt:
+            continue
+        # Hochrechnen nur in sichtbare Oberordner – ein Pfad-Knoten hat keine Zahlen, darüber liegen nur Pfad-Knoten.
         p, gesehen = eltern.get(fid), set()
-        while p and p not in gesehen:
+        while p and p not in gesehen and p in gesamt:
             gesehen.add(p)
-            for s, n in z.items():
-                gesamt[p][s] += n
+            for k, n in z.items():
+                gesamt[p][k] += n
             p = eltern.get(p)
-    return [ordner_json(o, direkt.get(o["id"], st.leere_zaehlung()), gesamt[o["id"]]) for o in ordner_alle]
+    return [pfad_knoten_json(o) if o["id"] in pfad_ids
+            else ordner_json(o, direkt.get(o["id"], st.leere_zaehlung()), gesamt[o["id"]]) for o in ordner_alle]
 
 
 # --- Artikel ---------------------------------------------------------------------------------------
@@ -349,11 +444,16 @@ def _lebensende_wirksam(rechnung, manuell):
 
 
 def _serie_frei(produkt_id, serie, ausser=None):
-    andere = db.query("SELECT id, inventory_no FROM mat_item WHERE product_id = ? AND serial_no = ? COLLATE NOCASE",
-                      (produkt_id, serie), one=True)
-    if andere and andere["id"] != ausser:
+    """Seriennummer bei diesem Produkt noch frei? Ein sichtbarer Artikel mit derselben Nummer: 409 mit seiner
+    Inventarnummer; ein fremder: FremdeDublette (3.7) – ohne Inventarnummer, gebremst und protokolliert."""
+    andere = db.query("SELECT * FROM mat_item WHERE product_id = ? AND serial_no = ? COLLATE NOCASE AND id IS NOT ? "
+                      "ORDER BY id LIMIT 1", (produkt_id, serie, ausser), one=True)
+    if not andere:
+        return
+    if rechte.darf_artikel("lesen", andere):
         raise Abgelehnt(f"Diese Seriennummer gibt es bei diesem Produkt schon (Inventarnummer {andere['inventory_no']}).",
                         409)
+    raise FremdeDublette(andere["id"], serie)
 
 
 def vorschlag(d):
@@ -465,8 +565,9 @@ def artikel_aendern(iid, d):
         if "retire_by" in d and d.get("retire_by") not in (None, ""):
             raise Abgelehnt("Ein Lebensende gibt es nur bei textilem Material.")
         w["retire_by"], manuell = None, None
-    # Fälligkeit: nur vorziehen – und nie über „heute + wirksames Intervall“ hinaus, wie beim Anlegen.
-    iv = wirksam(p, alt["folder_id"], w["interval_months"])
+    # Fälligkeit: nur vorziehen – und nie über „heute + wirksames Intervall“ hinaus, wie beim Anlegen. Das Intervall
+    # kommt aus der Heimat (ein gesperrter liegt nur vorübergehend in „Gesperrt“).
+    iv = wirksam(p, heimat(alt), w["interval_months"])
     if not iv["monate"]:
         raise Abgelehnt(katalog.KEIN_INTERVALL)
     grenze = spaetestens(iv["monate"])
@@ -518,6 +619,8 @@ def artikel_verschieben(ids, ziel_id):
             journal.eintragen("item", z["id"], "verschoben",
                               {"folder_id": z["folder_id"], "ordner": _pfad_text(z["folder_id"])},
                               {"folder_id": ziel_id, "ordner": ziel_text})
+        from . import durchgang
+        durchgang.nach_verschieben(ids, heute())
         faelligkeit.kappen(f"i.id IN ({','.join('?' * len(ids))})", ids)
     return len(zeilen)
 
@@ -536,16 +639,44 @@ def artikel_loeschen(iid):
 
 
 # Mit dem offenen Entwurf (höchstens einer je Artikel): Listen zeigen „in Prüfung bei …“.
+# Dazu der Name der zugeordneten Person (artikel_kurz gibt ihn nur mit Grundrecht heraus).
 ARTIKEL_LISTE_SQL = ("SELECT i.*, p.manufacturer, p.model, p.article_no, p.material_kind, p.image AS product_image, "
                      "p.demo AS product_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "
-                     "e.inspector_user_id AS entwurf_pruefer_id FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
-                     "LEFT JOIN mat_inspection e ON e.item_id = i.id AND e.completed_at IS NULL ")
+                     "e.inspector_user_id AS entwurf_pruefer_id, zu.name AS zugeordnet_name FROM mat_item i "
+                     "JOIN mat_product p ON p.id = i.product_id "
+                     "LEFT JOIN mat_inspection e ON e.item_id = i.id AND e.completed_at IS NULL "
+                     "LEFT JOIN users zu ON zu.id = i.assigned_user_id ")
+
+
+def _zugeordnet_name(i):
+    if not i.get("assigned_user_id"):
+        return None
+    if "zugeordnet_name" in i:
+        name = i["zugeordnet_name"]
+    else:
+        u = db.query("SELECT name FROM users WHERE id = ?", (i["assigned_user_id"],), one=True)
+        name = u["name"] if u else None
+    return (name or "").strip() or "(ohne Namen)"
+
+
+def zugeordnet_json(i):
+    """Die Person, der der Artikel zugeordnet ist (6.3) – nur für Antworten an Konten mit Grundrecht."""
+    if not i.get("assigned_user_id"):
+        return None
+    u = db.query("SELECT id, name, gliederung, active, status FROM users WHERE id = ?", (i["assigned_user_id"],),
+                 one=True)
+    if not u:
+        return None
+    return {"id": u["id"], "name": (u["name"] or "").strip() or "(ohne Namen)", "gliederung": u["gliederung"] or "",
+            "aktiv": bool(u["active"]) and u["status"] == "active"}
 
 
 def artikel_kurz(i, stichtag=None):
-    """Eine Zeile für Listen: Nummern, Produkt, Ordner, Fälligkeiten, Status – und ein offener Rückruf (Titel)."""
+    """Eine Zeile für Listen: Nummern, Produkt, Ordner, Fälligkeiten, Status – und ein offener Rückruf (Titel); dazu
+    „darf“ an der Heimat und – nur mit Grundrecht – der Name der zugeordneten Person."""
     from . import rueckruf
     s = st.status(i, stichtag)
+    darf = rechte.rechte_artikel(i)
     return {"id": i["id"], "inventory_no": i["inventory_no"], "serial_no": i["serial_no"],
             "serial_generated": bool(i["serial_generated"]), "folder_id": i["folder_id"],
             "product_id": i["product_id"], "manufacturer": i.get("manufacturer"), "model": i.get("model"),
@@ -555,13 +686,18 @@ def artikel_kurz(i, stichtag=None):
             "last_inspected_on": i.get("last_inspected_on"), "status": s, "status_text": st.LABEL[s],
             "entwurf": ({"id": i["entwurf_id"], "pruefer": i.get("entwurf_pruefer"),
                          "pruefer_id": i.get("entwurf_pruefer_id")} if i.get("entwurf_id") else None),
-            "rueckruf": rueckruf.offene_artikel().get(i["id"])}
+            "rueckruf": rueckruf.offene_artikel().get(i["id"]),
+            "darf": darf, "zugeordnet_name": _zugeordnet_name(i) if darf["grund"] else None}
 
 
 def artikel_json(i, voll=False):
+    """Ein Artikel mit „darf“ an seiner Heimat. Journal und zugeordnete Person nur mit Grundrecht (sonst null) – die
+    Prüfsicht zeigt Stammdaten, Zustand, Bemerkung und Prüfungen. Der offene Durchgang steht einheitlich als
+    {id, titel, ordner, sichtbar} da (durchgang.verweis)."""
     p = katalog.produkt(i["product_id"])
     s = st.status(i)
-    iv = wirksam(p, i["folder_id"], i["interval_months"])
+    darf = rechte.rechte_artikel(i)
+    iv = wirksam(p, heimat(i), i["interval_months"])
     gl = gliederung_von(i["folder_id"])
     out = {f: i[f] for f in ("id", "product_id", "folder_id", "origin_folder_id", "serial_no", "inventory_no",
                              "manufactured_on", "purchased_on", "first_use_on", "retire_by", "lock_state",
@@ -575,6 +711,8 @@ def artikel_json(i, voll=False):
     out["gliederung"] = gl
     out["intervall"] = iv
     out["qr_adresse"] = qr.adresse(i["qr_token"])
+    out["darf"] = darf
+    out["zugeordnet"] = zugeordnet_json(i) if darf["grund"] else None
     if p["material_kind"] == "textil" and i["retire_by"]:
         out["lebensdauer"] = {"ende": i["retire_by"], "festgeschrieben": True,
                               "rest_tage": (date.fromisoformat(i["retire_by"]) - heute()).days,
@@ -585,7 +723,7 @@ def artikel_json(i, voll=False):
     else:
         out["lebensdauer"] = None
     if voll:
-        out["journal"] = journal.fuer_artikel(i)
+        out["journal"] = journal.fuer_artikel(i) if darf["grund"] else None
         out["dokumente"] = katalog.gueltige_dokumente(p["id"], heute().isoformat())   # samt denen der Kategorien
         f = katalog.formular_fuer_produkt(p["id"])
         out["formular"] = ({"id": f["id"], "version": f["version"], "title": f["title"], "quelle": f["quelle"],
@@ -599,7 +737,7 @@ def artikel_json(i, voll=False):
             arten, vorschlag = pruefung.arten_fuer(i)
             out["pruefarten"] = {"arten": arten, "vorschlag": vorschlag}
         rid = durchgang.offene_runde_fuer(i["id"])
-        out["durchgang"] = ({"id": rid, "titel": durchgang.runde(rid)["title"]} if rid else None)
+        out["durchgang"] = durchgang.verweis(rid) if rid else None
         out["darf_loeschen"] = not out["pruefungen"]
         from . import rueckruf
         out["rueckrufe"] = rueckruf.aktive_fuer_artikel(i)          # laufende, die ihn betreffen – fürs Banner
@@ -625,16 +763,23 @@ def artikel_sortierung():
     }
 
 
-def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, richtung="auf"):
-    """Ein Ordner mit Pfad, Unterordnern (mit Zählung) und den Artikeln direkt darin."""
+def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, richtung="auf", zugeordnet=None):
+    """Ein Ordner mit Pfad, Unterordnern (mit Zählung) und den Artikeln direkt darin, die das Konto sieht – in einem
+    teilweise sichtbaren Systemordner also nur die eigenen. Das Journal nur mit Grundrecht, die Einträge zu Freigaben
+    darin nur für Verwalter des Ordners. zugeordnet: nur Artikel dieser Person (und nur, wo das Grundrecht gilt)."""
     from .search import sortierung
     ordnung = sortierung(artikel_sortierung(), sort, richtung, "i.inventory_no")
     o = ordner(fid)
     alle = {x["id"]: x for x in baum()}
+    if fid not in alle or alle[fid].get("nur_pfad"):
+        raise Abgelehnt(rechte.ORDNER_FEHLT, 404)
     kinder = [x for x in alle.values() if x["parent_id"] == fid]
     kinder.sort(key=lambda x: (x["system_kind"] is not None, x["position"], x["name"].casefold()))
     params = dict(st.parameter(), fid=fid)
-    bedingung = "WHERE i.folder_id = :fid"
+    bedingung = f"WHERE i.folder_id = :fid AND {rechte.artikel_filter('i')}"
+    if zugeordnet is not None:
+        bedingung += f" AND i.assigned_user_id = :zugeordnet AND {rechte.artikel_filter('i', 'grund')}"
+        params["zugeordnet"] = zugeordnet
     if status_filter:
         if status_filter not in st.STATUS:
             raise Abgelehnt("Unbekannter Status.")
@@ -652,7 +797,10 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     out["artikel"] = [artikel_kurz(r) for r in rows]
     out["artikel_gesamt"] = gesamt
     out["seite"], out["pro_seite"] = seite, pro_seite
-    out["journal"] = journal.lesen([("folder", fid)], grenze=50)
+    darf = out["darf"]
+    out["journal"] = (journal.lesen([("folder", fid)], grenze=50,
+                                    ohne=() if darf["verwalten"] else rechte.FREIGABE_AKTIONEN)
+                      if darf["grund"] else None)
     out["intervall"] = {"monate": o["interval_months"]}
     return out
 
@@ -663,13 +811,18 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
 FAELLIG = ("ueberfaellig", "lebensdauer", "neu", "bald_faellig")
 
 
-def faellige(ordner_id=None, nur=FAELLIG, seite=1, pro_seite=100, sort=None, richtung="auf"):
+def faellige(ordner_id=None, nur=FAELLIG, seite=1, pro_seite=100, sort=None, richtung="auf", zugeordnet=None):
     """Artikel, die geprüft werden müssen – überfällige zuerst, dann die am Lebensende, dann neue
-    (Eingangsprüfung), dann nach Datum; oder nach einer gewählten Spalte."""
+    (Eingangsprüfung), dann nach Datum; oder nach einer gewählten Spalte. Nur, was das Konto sieht; zugeordnet: nur
+    Artikel dieser Person, soweit das Grundrecht gilt."""
     from .search import sortierung
     params = st.parameter()
-    bedingungen = [f"{st.status_sql('i')} IN ({','.join(':n' + str(k) for k in range(len(nur)))})"]
+    bedingungen = [f"{st.status_sql('i')} IN ({','.join(':n' + str(k) for k in range(len(nur)))})",
+                   rechte.artikel_filter("i")]
     params.update({f"n{k}": s for k, s in enumerate(nur)})
+    if zugeordnet is not None:
+        bedingungen += ["i.assigned_user_id = :zugeordnet", rechte.artikel_filter("i", "grund")]
+        params["zugeordnet"] = zugeordnet
     if ordner_id:
         # Der Unterbaum in der Abfrage selbst – nicht ein Parameter je Ordner.
         bedingungen.append("i.folder_id IN (WITH RECURSIVE baum(id) AS (SELECT :ordner UNION SELECT f.id FROM mat_folder f "
@@ -692,11 +845,12 @@ def faellige(ordner_id=None, nur=FAELLIG, seite=1, pro_seite=100, sort=None, ric
 
 
 def zaehlung(ordner_ids=None):
+    """Status über alle Artikel, die das Konto sieht (oder nur über die in diesen Ordnern)."""
     params = st.parameter()
-    where = ""
+    where = f"WHERE {rechte.artikel_filter('i')}"
     if ordner_ids is not None:
         ordner_ids = list(ordner_ids) or [0]
-        where = f"WHERE i.folder_id IN ({','.join(':f' + str(k) for k in range(len(ordner_ids)))})"
+        where += f" AND i.folder_id IN ({','.join(':f' + str(k) for k in range(len(ordner_ids)))})"
         params.update({f"f{k}": fid for k, fid in enumerate(ordner_ids)})
     z = st.leere_zaehlung()
     for r in db.query(f"SELECT {st.status_sql('i')} AS s, COUNT(*) AS n FROM mat_item i {where} GROUP BY s", params):

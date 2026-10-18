@@ -21,13 +21,18 @@ ist der Durchgang unveränderlich. Ein Artikel steht höchstens in einem offenen
 Abbrechen beendet ihn vorzeitig: Offene Prüfungen darin laufen als einzelne Prüfungen weiter. Wurde noch
 nichts abgeschlossen, verschwindet er ganz; sonst endet er als „abgebrochen“ – Geprüftes und
 Ausgenommenes bleibt ihm zugeordnet, jeder andere Artikel steht darin als „nicht geprüft“ – auch im
-Sammelprotokoll, das ein abgebrochener Durchgang ebenso bekommt."""
+Sammelprotokoll, das ein abgebrochener Durchgang ebenso bekommt.
+
+Seit Phase 2 gehört ein Artikel über seine Heimat (bestand.heimat) zum Zweig eines Durchgangs. Verlässt er ihn durch
+ein Verschieben, nimmt nach_verschieben ihn mit Grund heraus; geprüft wird in einem Durchgang nur, was dort zu Hause ist
+(offene_runde_fuer, runde_fuer_start). Sehen darf einen Durchgang, wer seinen Ordner sehen darf – vollständig: Zeilen
+mit Artikeln, die das Konto nicht sieht, stehen ohne Link da („sichtbar“: false)."""
+import json
 from datetime import date
 
 from ... import db
 from . import Abgelehnt, heute, text
-from . import bestand, journal, protokoll
-from .faelligkeit import im_unterbaum
+from . import bestand, journal, protokoll, rechte
 
 # Bedingung für Abfragen über mat_inspection: ohne Prüfungen, deren Berichtigung im selben Durchgang abgeschlossen ist.
 OHNE_BERICHTIGTE = ("AND NOT EXISTS (SELECT 1 FROM mat_inspection b WHERE b.corrects_inspection_id = mat_inspection.id "
@@ -35,6 +40,9 @@ OHNE_BERICHTIGTE = ("AND NOT EXISTS (SELECT 1 FROM mat_inspection b WHERE b.corr
 
 ZUSTAND_TEXT = {"offen": "offen", "in_pruefung": "in Prüfung", "erledigt": "erledigt", "ausgenommen": "ausgenommen",
                 "nicht_geprueft": "nicht geprüft"}
+# Ordnerspalte eines Artikels, dessen Heimat den Zweig verlassen hat (1.7 Nr. 7) – nie ein Pfad aus einem fremden Bereich.
+AUS_DEM_BEREICH = "(aus dem Bereich des Durchgangs verschoben)"
+NICHT_IM_BEREICH = "Der Artikel liegt nicht mehr im Bereich dieses Durchgangs – er bleibt ausgenommen."
 
 
 def _fmt(iso):
@@ -42,6 +50,11 @@ def _fmt(iso):
         return date.fromisoformat(iso[:10]).strftime("%d.%m.%Y")
     except (TypeError, ValueError):
         return iso or ""
+
+
+def _im_zweig(r, item):
+    """Liegt die Heimat des Artikels im Zweig des Durchgangs (dessen Ordner oder darunter)?"""
+    return r["folder_id"] in bestand.kette(bestand.heimat(item))
 
 
 def runde(rid):
@@ -57,22 +70,48 @@ def _erledigt(rid, iid):
 
 
 def offene_runde_fuer(iid):
-    """Der offene Durchgang, in dem der Artikel noch zu prüfen ist (nicht ausgenommen, nicht erledigt)."""
+    """Der offene Durchgang, in dem der Artikel noch zu prüfen ist (nicht ausgenommen, nicht erledigt) – nur einer, in
+    dessen Zweig seine Heimat liegt (1.7 Nr. 5). Nach nach_verschieben ist das eine Absicherung, kein Normalfall."""
+    i = db.query("SELECT folder_id, origin_folder_id, lock_state FROM mat_item WHERE id = ?", (iid,), one=True)
+    if not i:
+        return None
+    kette = json.dumps(sorted(bestand.kette(bestand.heimat(i))))
     r = db.query("SELECT r.id FROM mat_round r JOIN mat_round_item ri ON ri.round_id = r.id "
                  "WHERE r.closed_on IS NULL AND ri.item_id = ? AND ri.excluded_reason IS NULL "
+                 "AND r.folder_id IN (SELECT value FROM json_each(?)) "
                  "AND NOT EXISTS (SELECT 1 FROM mat_inspection x WHERE x.round_id = r.id AND x.item_id = ri.item_id "
-                 "AND x.completed_at IS NOT NULL) ORDER BY r.id DESC LIMIT 1", (iid,), one=True)
+                 "AND x.completed_at IS NOT NULL) ORDER BY r.id DESC LIMIT 1", (iid, kette), one=True)
     return r["id"] if r else None
 
 
+def verweis(rid):
+    """Ein Durchgang, wie er an Artikel und Prüfung steht – einheitlich {id, titel, ordner, sichtbar}. Titel und Ordner
+    gehören zur Geschichte des Artikels und stehen immer da; „sichtbar“ sagt, ob das Konto den Durchgang öffnen darf
+    (nur dann verlinkt die Oberfläche)."""
+    r = db.query("SELECT id, title, folder_id FROM mat_round WHERE id = ?", (rid,), one=True)
+    if not r:
+        return None
+    return {"id": r["id"], "titel": r["title"], "ordner": bestand._pfad_text(r["folder_id"]),
+            "sichtbar": rechte.darf("lesen", r["folder_id"])}
+
+
+def runde_des_artikels(rid, iid):
+    """(Durchgang, Zeile) – nur, wenn der Artikel darin steht und seine Heimat im Zweig liegt. Unbekannt, der Artikel
+    nicht darin oder die Heimat nicht im Zweig: überall dieselbe 404 wie „gibt es nicht“ (1.7 Nr. 5) – so verrät eine
+    durchgang_id aus einem fremden Bereich nichts."""
+    r = db.query("SELECT * FROM mat_round WHERE id = ?", (rid,), one=True)
+    ri = db.query("SELECT * FROM mat_round_item WHERE round_id = ? AND item_id = ?", (rid, iid), one=True) if r else None
+    if not ri or not _im_zweig(r, bestand.artikel(iid)):
+        raise Abgelehnt(rechte.DURCHGANG_FEHLT, 404)
+    return r, ri
+
+
 def runde_fuer_start(rid, iid):
-    """Prüfung ausdrücklich in diesem Durchgang beginnen – nur, wenn der Artikel dort noch offen ist."""
-    r = runde(rid)
+    """Prüfung ausdrücklich in diesem Durchgang beginnen – nur, wenn der Artikel dort noch offen ist (sonst 409);
+    fremd oder unbekannt: 404 (runde_des_artikels)."""
+    r, ri = runde_des_artikels(rid, iid)
     if r["closed_on"]:
         raise Abgelehnt("Der Durchgang ist abgeschlossen.", 409)
-    ri = db.query("SELECT * FROM mat_round_item WHERE round_id = ? AND item_id = ?", (rid, iid), one=True)
-    if not ri:
-        raise Abgelehnt("Der Artikel gehört nicht zu diesem Durchgang.", 409)
     if ri["excluded_reason"]:
         raise Abgelehnt("Der Artikel ist aus dem Durchgang ausgenommen – erst wieder einbeziehen.", 409)
     if _erledigt(rid, iid):
@@ -82,11 +121,8 @@ def runde_fuer_start(rid, iid):
 
 def eroeffnen(fid, d, akteur):
     titel = text(d, "titel", "Titel", 160, pflicht=True)
-    zweig, args = im_unterbaum(fid)
-    # Im Zweig liegen – oder aus ihm nach „Gesperrt“ gewandert sein (Herkunftsordner im Zweig).
-    herkunft = zweig.replace("i.folder_id IN", "i.origin_folder_id IN", 1)
-    bedingung = f"(({zweig}) OR (i.lock_state IN ('gesperrt', 'verloren') AND {herkunft}))"
-    args = args + args
+    # Zu Hause im Zweig – gesperrte zählen bei ihrem Herkunftsordner, auch wenn sie in „Gesperrt“ liegen.
+    bedingung, args = bestand.heimat_im_zweig(fid)
     with db.transaction(sofort=True):
         o = bestand.ordner(fid)
         if o["system_kind"]:
@@ -96,9 +132,11 @@ def eroeffnen(fid, d, akteur):
             args)]
         if not artikel:
             raise Abgelehnt("In diesem Ordner und darunter liegt kein Artikel im Bestand.", 409)
+        # Ausgenommene zählen nicht: Nach einem Verschieben eröffnet der neue Bereich seinen eigenen Durchgang.
         konflikt = db.query(
             f"SELECT r.id, r.title FROM mat_round r JOIN mat_round_item ri ON ri.round_id = r.id "
-            f"JOIN mat_item i ON i.id = ri.item_id WHERE r.closed_on IS NULL AND {bedingung} LIMIT 1", args, one=True)
+            f"JOIN mat_item i ON i.id = ri.item_id WHERE r.closed_on IS NULL AND ri.excluded_reason IS NULL "
+            f"AND {bedingung} LIMIT 1", args, one=True)
         if konflikt:
             raise Abgelehnt(f"Für Artikel hier läuft schon der Durchgang „{konflikt['title']}“ – ein Artikel steht "
                             "höchstens in einem offenen Durchgang.", 409)
@@ -158,14 +196,31 @@ def _offene_entwuerfe(rid):
     return db.query("SELECT * FROM mat_inspection WHERE round_id = ? AND completed_at IS NULL", (rid,))
 
 
+def ordnerspalte(zweig, item, pfade, pfad_text=None):
+    """Was in der Ordnerspalte von Durchgangsansicht und Sammelprotokoll steht (1.7 Nr. 7): der Pfad der Heimat, wenn
+    sie im Zweig des Durchgangs liegt – sonst nur, dass der Artikel aus dem Bereich verschoben wurde, nie ein Pfad aus
+    einem fremden Bereich. zweig: die Ordner des Zweigs (bestand.unterbaum); pfade: Zwischenspeicher je Ordner;
+    pfad_text: wie der Pfad geschrieben wird (Vorgabe bestand._pfad_text, das Protokoll hat seine eigene Form)."""
+    h = bestand.heimat(item)
+    if h not in zweig:
+        return AUS_DEM_BEREICH
+    if h not in pfade:
+        pfade[h] = (pfad_text or bestand._pfad_text)(h)
+    return pfade[h]
+
+
 def durchgang_json(r, voll=False, pruefer_id=None):
+    """Ein Durchgang mit „darf“ an seinem Ordner. voll: alle Zeilen, nichts verdeckt – zu Artikeln, die das Konto nicht
+    sieht (aus dem Bereich verschoben), nur Inventarnummer, Produkt, Zustand und Grund, ohne Kennung und Link
+    („sichtbar“: false)."""
     zeilen = _zeilen(r["id"])
     geschlossen = r["closed_on"] is not None
     z = _zaehlung(zeilen, geschlossen)
     out = {"id": r["id"], "titel": r["title"], "folder_id": r["folder_id"], "ordner": bestand._pfad_text(r["folder_id"]),
            "eroeffnet_von": r["opened_by_name"], "eroeffnet_am": r["opened_on"], "geschlossen_am": r["closed_on"],
            "geschlossen_von": r["closed_by_name"], "offen": not geschlossen, "abgebrochen": bool(r["aborted"]), "zaehlung": z,
-           "protokoll": protokoll.protokoll_json(r, f"/material/durchgang/{r['id']}/sammelprotokoll")}
+           "protokoll": protokoll.protokoll_json(r, f"/material/durchgang/{r['id']}/sammelprotokoll"),
+           "darf": rechte.rechte_ordner(r["folder_id"])}
     entwuerfe = _offene_entwuerfe(r["id"])
     out["abschliessbar"] = out["offen"] and z["offen"] == 0 and z["in_pruefung"] == 0 and not entwuerfe
     if not voll:
@@ -177,19 +232,31 @@ def durchgang_json(r, voll=False, pruefer_id=None):
         artikel = {a["id"]: a for a in db.query(
             bestand.ARTIKEL_LISTE_SQL + "WHERE i.id IN (SELECT item_id FROM mat_round_item WHERE round_id = ?)",
             (r["id"],))}
+    zweig, pfade = bestand.unterbaum(r["folder_id"]), {}
     liste = []
     for x in zeilen:
-        a = bestand.artikel_kurz(artikel[x["item_id"]])
-        a["pfad"] = bestand._pfad_text(artikel[x["item_id"]]["folder_id"])
-        a["zustand"] = _zustand(x, geschlossen)
-        a["zustand_text"] = ZUSTAND_TEXT[a["zustand"]]
+        roh = artikel[x["item_id"]]
+        zustand = _zustand(x, geschlossen)
+        ausnahme = ({"grund": x["excluded_reason"], "von": x["excluded_by_name"], "am": x["excluded_at"]}
+                    if x["excluded_reason"] else None)
+        if not rechte.darf_artikel("lesen", roh):
+            liste.append({"sichtbar": False, "inventory_no": roh["inventory_no"], "manufacturer": roh["manufacturer"],
+                          "model": roh["model"], "pfad": ordnerspalte(zweig, roh, pfade), "zustand": zustand,
+                          "zustand_text": ZUSTAND_TEXT[zustand], "ausnahme": ausnahme,
+                          "pruefung": ({"ergebnis": x["ergebnis"], "pruefer": x["pruefer"], "datum": x["geprueft_am"]}
+                                       if x["pruefung_id"] else None)})
+            continue
+        a = bestand.artikel_kurz(roh)
+        a["sichtbar"] = True
+        a["pfad"] = ordnerspalte(zweig, roh, pfade)
+        a["zustand"] = zustand
+        a["zustand_text"] = ZUSTAND_TEXT[zustand]
         a["pruefung"] = ({"id": x["pruefung_id"], "ergebnis": x["ergebnis"], "pruefer": x["pruefer"],
                           "datum": x["geprueft_am"]} if x["pruefung_id"] else None)
         a["entwurf"] = ({"id": x["entwurf_id"], "pruefer": x["entwurf_pruefer"], "seit": x["entwurf_seit"],
                          "eigen": bool(pruefer_id) and x["entwurf_pruefer_id"] == pruefer_id}
                         if x["entwurf_id"] else None)
-        a["ausnahme"] = ({"grund": x["excluded_reason"], "von": x["excluded_by_name"], "am": x["excluded_at"]}
-                         if x["excluded_reason"] else None)
+        a["ausnahme"] = ausnahme
         liste.append(a)
     reihe = {"in_pruefung": 0, "offen": 1, "nicht_geprueft": 1, "ausgenommen": 2, "erledigt": 3}
     liste.sort(key=lambda a: (reihe[a["zustand"]], a["pfad"], a["inventory_no"]))
@@ -206,8 +273,9 @@ def durchgang_json(r, voll=False, pruefer_id=None):
 
 
 def liste(nur_offen=False, grenze=50):
-    sql = "SELECT * FROM mat_round" + (" WHERE closed_on IS NULL" if nur_offen else "") + \
-          " ORDER BY closed_on IS NOT NULL, id DESC LIMIT ?"
+    """Die Durchgänge, die das Konto sehen darf (Ordner des Durchgangs sichtbar), offene zuerst."""
+    sql = f"SELECT r.* FROM mat_round r WHERE {rechte.ordner_filter('r.folder_id')}" + (
+        " AND r.closed_on IS NULL" if nur_offen else "") + " ORDER BY r.closed_on IS NOT NULL, r.id DESC LIMIT ?"
     return [durchgang_json(r) for r in db.query(sql, (grenze,))]
 
 
@@ -245,13 +313,25 @@ def ausnehmen(rid, iid, d, akteur):
 
 
 def einbeziehen(rid, iid):
+    """Einen ausgenommenen Artikel wieder einbeziehen – nicht, wenn seine Heimat den Zweig verlassen hat oder er in
+    einem anderen offenen Durchgang noch zu prüfen ist (1.7 Nr. 6)."""
     with db.transaction(sofort=True):
-        _runde_offen(rid)
+        r = _runde_offen(rid)
         ri = _im_durchgang(rid, iid)
         if not ri["excluded_reason"]:
             return
-        if bestand.artikel(iid)["lock_state"] == "ausgesondert":
+        item = bestand.artikel(iid)
+        if item["lock_state"] == "ausgesondert":
             raise Abgelehnt("Der Artikel ist ausgesondert und wird nicht mehr geprüft – er bleibt ausgenommen.", 409)
+        if not _im_zweig(r, item):
+            raise Abgelehnt(NICHT_IM_BEREICH, 409)
+        anderer = db.query(
+            "SELECT r.title FROM mat_round r JOIN mat_round_item ri ON ri.round_id = r.id WHERE r.closed_on IS NULL "
+            "AND r.id <> ? AND ri.item_id = ? AND ri.excluded_reason IS NULL AND NOT EXISTS (SELECT 1 FROM mat_inspection x "
+            "WHERE x.round_id = r.id AND x.item_id = ri.item_id AND x.completed_at IS NOT NULL) LIMIT 1", (rid, iid), one=True)
+        if anderer:
+            raise Abgelehnt(f"Der Artikel steht schon im offenen Durchgang „{anderer['title']}“ – ein Artikel steht "
+                            "höchstens in einem offenen Durchgang.", 409)
         db.execute("UPDATE mat_round_item SET excluded_reason = NULL, excluded_by = NULL, excluded_by_name = '', "
                    "excluded_at = NULL WHERE round_id = ? AND item_id = ?", (rid, iid))
         # Prüft schon jemand (begonnen, als der Artikel ausgenommen war), zählt diese Prüfung jetzt hier – eine
@@ -326,4 +406,34 @@ def nach_aussonderung(iid, tag, basis_id=None):
         db.execute("UPDATE mat_round_item SET excluded_reason = ?, excluded_by = NULL, excluded_by_name = 'System', "
                    "excluded_at = ? WHERE round_id = ? AND item_id = ?", (grund, db.now(), r["round_id"], iid))
         journal.eintragen("round", r["round_id"], "ausgenommen", None, {"item_id": iid, "grund": grund}, name="System")
+
+
+def nach_verschieben(item_ids, tag):
+    """Verschobene Artikel, deren Heimat den Zweig eines offenen Durchgangs verlassen hat, nimmt das System dort mit
+    Grund heraus (1.7 Nr. 4) – bei jedem Verschieben, auch innerhalb einer Gliederung: Ein Prüfer mit Freigabe nur für
+    den alten Zweig dürfte sie dort ohnehin nicht mehr prüfen. Ein offener Entwurf dazu verliert seinen Durchgang (wie
+    beim Abbrechen); erledigte Zeilen bleiben stehen, sie sind der Nachweis. Läuft in der Transaktion des Aufrufers."""
+    if not item_ids:
+        return
+    tag = tag.isoformat() if hasattr(tag, "isoformat") else tag
+    grund = f"verschoben am {_fmt(tag)} – nicht mehr im Bereich des Durchgangs"
+    ketten = {}
+    for z in db.query("SELECT ri.round_id, ri.item_id, r.folder_id FROM mat_round_item ri JOIN mat_round r ON r.id = "
+                      "ri.round_id WHERE r.closed_on IS NULL AND ri.excluded_reason IS NULL AND ri.item_id IN "
+                      "(SELECT value FROM json_each(?)) ORDER BY ri.round_id, ri.item_id",
+                      (json.dumps(sorted({int(i) for i in item_ids})),)):
+        rid, iid = z["round_id"], z["item_id"]
+        if _erledigt(rid, iid):
+            continue
+        if iid not in ketten:
+            ketten[iid] = bestand.kette(bestand.heimat(bestand.artikel(iid)))
+        if z["folder_id"] in ketten[iid]:
+            continue
+        db.execute("UPDATE mat_round_item SET excluded_reason = ?, excluded_by = NULL, excluded_by_name = 'System', "
+                   "excluded_at = ? WHERE round_id = ? AND item_id = ?", (grund, db.now(), rid, iid))
+        journal.eintragen("round", rid, "ausgenommen", None, {"item_id": iid, "grund": grund}, name="System")
+        for e in db.query("SELECT id FROM mat_inspection WHERE item_id = ? AND round_id = ? AND completed_at IS NULL",
+                          (iid, rid)):
+            db.execute("UPDATE mat_inspection SET round_id = NULL WHERE id = ?", (e["id"],))
+            journal.eintragen("inspection", e["id"], "geaendert", {"round_id": rid}, {"round_id": None}, name="System")
 

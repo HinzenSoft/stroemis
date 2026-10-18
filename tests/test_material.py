@@ -1246,7 +1246,8 @@ def test_sperre_und_aussonderung():
         r = w.post(f"/api/material/artikel/{b['id']}/aussondern", json={"grund": "irreparabel", "bemerkung": "Bruch"})
         assert r.status_code == 200, r.get_json()
         a = r.json["artikel"]
-        assert a["status"] == "ausgesondert" and a["folder_id"] == system["ausgesondert"] and a["origin_folder_id"] is None
+        # Seit Phase 2 behält ein ausgesonderter Artikel seine Herkunft – sie ist seine Heimat (Rechte, Export).
+        assert a["status"] == "ausgesondert" and a["folder_id"] == system["ausgesondert"] and a["origin_folder_id"] == lager
         assert a["pruefungen"][0]["art"] == "aussonderung" and a["pruefungen"][0]["grund"] == "irreparabel"
         assert a["pruefungen"][0]["pruefer"] == "wart"
         # Verlust: Der Prüfer sperrt ohne Prüfung mit Grund „Verlust“, der Materialwart sondert aus.

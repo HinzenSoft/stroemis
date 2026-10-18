@@ -8,9 +8,14 @@ Systemordner, Prüffreigabe ohne Qualifikation, Heimat im Filter, mehrere Freiga
 requires_folder (404 für Fremdes wie für Unbekanntes, 403 nur bei sichtbarem Gegenstand, Kennungen als „7“ und 7.0,
 Formular und JSON).
 
-Weitere Pakete hängen ihre Tests unten an (vor dem Block __main__) und bauen mit zwei_gliederungen() auf: zwei
-Gliederungen nebeneinander, jede mit eigenem Verwalter. Alle Namen, Hersteller und Nummern hier sind erfunden und nur
-für den Test da."""
+Paket A1R ergänzt die Durchsetzung in Diensten und Inhalten (8.2/2–11): nichts aus B in irgendeiner Antwort an A
+(Pfad und Inhalt der Anfrage, tabellengetrieben gegen url_map), Vererbung und Heimat, Verschieben und Durchgänge, eine
+Heimat beim Gliederungswechsel, kein Abziehen, Produktjournal, Dubletten, Prüfsicht. Was erst mit einem anderen Paket
+grün werden kann, steht in WARTET_AUF.
+
+Weitere Pakete hängen ihre Tests unten an (vor dem Block __main__) und bauen mit zwei_gliederungen() bzw.
+trennung_aufbau() auf: zwei Gliederungen nebeneinander, jede mit eigenem Verwalter. Alle Namen, Hersteller und Nummern
+hier sind erfunden und nur für den Test da."""
 import io
 import json
 import os
@@ -18,14 +23,17 @@ import re
 import sqlite3
 import sys
 import tempfile
+import zipfile
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import (H, _heute, freigeben, gliederung, jpeg, katalog_grund, make_app, neuer_artikel,  # noqa: E402
-                           neues_konto, pruef_formulare, starten, umgebung)
-from test_material_ueberblick import ohne_post, ordner_neu  # noqa: E402
+from test_material import (H, _flach, _heute, festschreiben, freigeben, gliederung, jpeg, katalog_grund,  # noqa: E402
+                           make_app, neuer_artikel, neues_konto, pdf_seiten, protokoll_zeile, pruef_formulare, starten,
+                           umgebung, unterschreiben, unterschrift_hinterlegen)
+from test_material_ueberblick import (MEHRDEUTIG, MULTIPART, SCHREIBEN, _stand, _url, ohne_post,  # noqa: E402
+                                      ordner_neu, sperren)
 
 
 # --- Aufbau (für alle Tests dieser Datei und die, die dazukommen) ------------------------------------------------
@@ -695,6 +703,895 @@ def test_unterbau():
     print("Unterbau bestanden.")
 
 
+# --- Aufbau für 8.2/2–11: B mit allem, was durchsickern könnte --------------------------------------------------------
+
+def _foto(c, url, name="test.jpg"):
+    r = c.post(url, data={"file": (jpeg(), name)}, headers=H, content_type="multipart/form-data")
+    assert r.status_code in (200, 201), (url, r.get_json())
+    return r.json
+
+
+def trennung_aufbau(tmp):
+    """zwei_gliederungen und dazu in B: ein Ordnerfoto, die Prüfung der Prüferin im Durchgang – mit Befundfoto und
+    Anhang festgeschrieben –, der abgeschlossene Durchgang mit Sammelprotokoll, ein gesperrter und ein ausgesonderter
+    Artikel, eine Meldung mit Foto und eine Zuordnung an eine Person aus B (direkt in der Tabelle – die Route baut Paket
+    D). In A ein abgeschlossener Durchgang mit festgeschriebener Prüfung (CSV und ZIP von A haben Inhalt), im Katalog
+    ein Produktbild. Mails der Meldung verwirft der Aufrufer (ohne_post).
+
+    Liefert (t, b): t aus zwei_gliederungen, b mit den Kennungen und Adressen aus B und b.merkmale – Zeichenketten, die in
+    keiner Antwort an wart_a stehen dürfen (Inventar- und Seriennummern, Ordner- und Kontonamen, Protokoll-IDs,
+    Dateinamen, Urkundennummer, Meldungstext)."""
+    t = zwei_gliederungen(tmp)
+    app, ids = t.app, t.ids
+    b = SimpleNamespace()
+    o = _foto(t.wart_b, f"/api/material/ordner/{t.lager_b}/foto", "lager.jpg")["ordner"]
+    b.ordnerfoto = [o["foto"], o["vorschau"], o["original"]]
+    pr = t.pruefer_b.get(f"/api/material/pruefungen/{t.entwurf_b}").json["pruefung"]
+    b.punkt = pr["punkte"][0]["id"]
+    f = _foto(t.pruefer_b, f"/api/material/pruefungen/{t.entwurf_b}/punkte/{b.punkt}/foto", "befund.jpg")["punkt"]["foto"]
+    b.befundfoto = [f["web"], f["vorschau"], f["original"]]
+    r = t.pruefer_b.post(f"/api/material/pruefungen/{t.entwurf_b}/anhaenge", headers=H, content_type="multipart/form-data",
+                         data={"file": [(jpeg(), "scan.jpg")], "art": "foto", "titel": "Testscan", "im_protokoll": "nein"})
+    assert r.status_code == 201, r.get_json()
+    b.anhang_id, b.anhang = r.json["anhang"]["id"], r.json["anhang"]["datei"]
+    unterschreiben(t.pruefer_b)
+    r = festschreiben(t.pruefer_b, t.entwurf_b, ergebnis="einsatzbereit")
+    assert r.status_code == 200, r.get_json()
+    r = t.wart_b.post(f"/api/material/durchgaenge/{t.durchgang_b}/abschliessen", json={})
+    assert r.status_code == 200, r.get_json()
+    b.gesperrt = neuer_artikel(t.wart_b, ids["hms"], t.lager_b, serial_no="TEST-B-0002")
+    sperren(t.pruefer_b, b.gesperrt["id"])
+    b.weg = neuer_artikel(t.wart_b, ids["hms"], t.lager_b, serial_no="TEST-B-0003")
+    sperren(t.pruefer_b, b.weg["id"])
+    unterschrift_hinterlegen(app, t.wart_b_id)
+    r = t.wart_b.post(f"/api/material/artikel/{b.weg['id']}/aussondern", json={"grund": "irreparabel"})
+    assert r.status_code == 200, r.get_json()
+    b.aussonderung = r.json["aussonderung"]
+    r = t.wart_b.post("/api/material/meldungen", headers=H, content_type="multipart/form-data",
+                      data={"manufacturer": "Meldewerk", "model": "Meldemodell Nachbarstadt", "note": "Notiz Nachbarstadt",
+                            "folder_id": str(t.lager_b), "fotos": (jpeg(), "etikett.jpg")})
+    assert r.status_code == 201, r.get_json()
+    b.meldung = r.json["meldung"]["id"]
+    m = r.json["meldung"]["fotos"][0]
+    b.meldungsfoto = [m["web"], m["vorschau"], m["original"]]
+    _, b.person_id = neues_konto(app, "person_b@example.org", name="Person Nachbarstadt")
+    sql(app, "UPDATE mat_item SET assigned_user_id = ? WHERE id = ?", (b.person_id, t.art_b["id"]))
+    r = t.wart_a.post("/api/material/durchgaenge", json={"folder_id": t.lager_a, "titel": "Testdurchgang Musterstadt"})
+    assert r.status_code == 201, r.get_json()
+    b.durchgang_a = r.json["durchgang"]["id"]
+    pid = starten(t.k["pruefer"], t.art_a["id"], durchgang_id=b.durchgang_a).json["pruefung"]["id"]
+    assert festschreiben(t.k["pruefer"], pid, ergebnis="einsatzbereit").status_code == 200
+    assert t.wart_a.post(f"/api/material/durchgaenge/{b.durchgang_a}/abschliessen", json={}).status_code == 200
+    b.produktbild = _foto(t.k["katalog"], f"/api/material/produkte/{ids['hms']}/bild", "hms.jpg")["produkt"]["bild"]
+    b.freigabe = zeilen(app, "SELECT id FROM mat_folder_grant WHERE user_id = ? AND folder_id = ?",
+                        (t.wart_b_id, t.b))[0]["id"]
+    b.artikel = [t.art_b["id"], b.gesperrt["id"], b.weg["id"]]
+    artikel = {r["id"]: r for r in zeilen(app, "SELECT id, inventory_no, qr_token FROM mat_item")}
+    b.token = artikel[t.art_b["id"]]["qr_token"]
+    protokolle = [r["protocol_id"] for r in zeilen(
+        app, "SELECT protocol_id FROM mat_inspection WHERE protocol_id IS NOT NULL AND item_id IN (?, ?, ?)", b.artikel)]
+    protokolle.append(zeilen(app, "SELECT protocol_id FROM mat_round WHERE id = ?", (t.durchgang_b,))[0]["protocol_id"])
+    assert len(protokolle) == 3 and all(protokolle), protokolle
+    dateien = [os.path.splitext(u.rsplit("/", 1)[1])[0] for u in b.ordnerfoto + b.befundfoto + b.meldungsfoto + [b.anhang]]
+    b.merkmale = {"Nachbarstadt", "TEST-B-", "1012-9001", "wart_b@", "pruefer_b@", "person_b@", *protokolle, *dateien,
+                  *(artikel[i]["inventory_no"] for i in b.artikel)}
+    b.ordner = {r["id"] for r in zeilen(app, "WITH RECURSIVE z(id) AS (SELECT ? UNION SELECT f.id FROM mat_folder f "
+                                             "JOIN z ON f.parent_id = z.id) SELECT id FROM z", (t.b,))}
+    return t, b
+
+
+def _text(daten):
+    return daten if isinstance(daten, str) else daten.decode("utf-8", "replace")
+
+
+def ohne_merkmale(b, wo, daten):
+    """Kein Merkmal aus B in dieser Antwort (Text, JSON, CSV)."""
+    text = _text(daten)
+    for m in b.merkmale:
+        assert m not in text, (wo, m, text[max(0, text.find(m) - 200):text.find(m) + 200])
+
+
+_PLATZHALTER = re.compile(r"<(?:[^<>:]+:)?(\w+)>")
+# Platzhalter, die in einer Route einen Gegenstand aus dem Bestand meinen (bei pid, fid, rid zählt der Abschnitt davor,
+# wie in test_material_ueberblick._url): Mit einer Kennung aus B antwortet die Route an wart_a wie für Unbekanntes.
+BESTAND_PLATZHALTER = {"iid", "mid", "aid", "token", "gid", ("pruefungen", "pid"), ("pruefung", "pid"),
+                       ("punkte", "rid"), ("ordner", "fid"), ("export", "fid"), ("durchgaenge", "rid"),
+                       ("durchgang", "rid")}
+# Was erst ein anderes Paket filtert (Bauentwurf 9.1) – geprüft in test_nichts_aus_b_paket_d.
+LESEN_ANDERES_PAKET = {"material_api.meldung_lesen": "D"}
+
+
+def _platzhalter(regel):
+    out, teile = [], regel.rule.split("/")
+    for n, teil in enumerate(teile):
+        for name in _PLATZHALTER.findall(teil):
+            out.append(name if name not in MEHRDEUTIG else (teile[n - 1], name))
+    return out
+
+
+# --- 8.2/2: Nutzer A sieht Gliederung B nirgends ----------------------------------------------------------------------
+
+def test_nichts_aus_b():
+    """Für jede Route der Material-Blueprints mit Kennungen aus B: lesen 404 wie für Unbekanntes (die Seite „fremd“ nach
+    einem QR-Scan ohne Artikeldaten), schreiben 404 oder 403 – nie 2xx, danach ist in keiner Tabelle etwas anders. In
+    keiner Antwort an wart_a steht ein Merkmal aus B: Listen, Suche, Zählungen, Katalog (Spalte Bestand), Produktseite,
+    Durchgänge, CSV und ZIP von A, die Seiten. Medien aus B antworten 404, das Produktbild 200."""
+    with ohne_post(), tempfile.TemporaryDirectory() as tmp:
+        t, b = trennung_aufbau(tmp)
+        app, w, ids = t.app, t.wart_a, t.ids
+        form = zeilen(app, "SELECT id FROM mat_form ORDER BY id LIMIT 1")[0]["id"]
+        kennungen = {"iid": t.art_b["id"], "mid": b.meldung, "aid": b.anhang_id, "token": b.token, "gid": b.freigabe,
+                     "kid": ids["karabiner"], "did": 999999, "ruid": 999999, "filename": "material.js",
+                     "art": "web", "dateiname": "x.jpg",
+                     ("produkte", "pid"): ids["hms"], ("produkt", "pid"): ids["hms"],
+                     ("pruefungen", "pid"): t.entwurf_b, ("pruefung", "pid"): t.entwurf_b, ("punkte", "rid"): b.punkt,
+                     ("ordner", "fid"): t.lager_b, ("export", "fid"): t.lager_b, ("formulare", "fid"): form,
+                     ("formular", "fid"): form, ("durchgaenge", "rid"): t.durchgang_b, ("durchgang", "rid"): t.durchgang_b}
+        regeln = [r for r in app.url_map.iter_rules() if r.endpoint.split(".")[0] in ("material", "material_api")
+                  and r.endpoint != "material.medien"]
+        vorher = _stand(app)
+        gelesen = geschrieben = 0
+        for regel in regeln:
+            fremd = any(p in BESTAND_PLATZHALTER for p in _platzhalter(regel))
+            url = _url(regel, kennungen)
+            if "GET" in regel.methods and regel.endpoint not in LESEN_ANDERES_PAKET:
+                r = w.get(url)
+                assert r.status_code < 500, (url, r.status_code)
+                if fremd:
+                    soll = 200 if regel.endpoint == "material.qr_ziel" else 404
+                    assert r.status_code == soll, (url, r.status_code, r.data[:300])
+                ohne_merkmale(b, url, r.data)
+                gelesen += 1
+            for methode in sorted(regel.methods & SCHREIBEN):
+                if not fremd:
+                    continue                    # Kennungen im Inhalt: test_felder_im_inhalt
+                if regel.endpoint in MULTIPART:
+                    r = w.open(url, method=methode, headers=H, content_type="multipart/form-data",
+                               data={"file": (jpeg(), "x.jpg"), "titel": "x"})
+                else:
+                    r = w.open(url, method=methode, headers=H, json={})
+                assert r.status_code in (403, 404), (methode, url, r.status_code, r.get_json(silent=True))
+                ohne_merkmale(b, f"{methode} {url}", r.data)
+                geschrieben += 1
+        assert gelesen >= 40 and geschrieben >= 25, (gelesen, geschrieben)          # Stand Phase 2 · L1: 47 und 29
+        assert _stand(app) == vorher, "Mit Kennungen aus B hat sich etwas geändert."
+
+        # Listen, Suche, Zählungen, Katalog: nur A.
+        inventar_b = zeilen(app, "SELECT inventory_no FROM mat_item WHERE id = ?", (t.art_b["id"],))[0]["inventory_no"]
+        for url in ("/api/material/start", "/api/material/ordner", "/api/material/suche?q=TEST-B-0001",
+                    f"/api/material/suche?q={inventar_b}", "/api/material/suche?q=TEST", "/api/material/faellig",
+                    "/api/material/faellig?status=gesperrt", "/api/material/faellig?status=ausgesondert",
+                    "/api/material/entwuerfe", "/api/material/durchgaenge", "/api/material/rueckrufe",
+                    "/api/material/produkte?q=HMS", f"/api/material/produkte/{ids['hms']}", "/api/material/meldungen",
+                    f"/api/material/ordner/{t.a}", f"/api/material/ordner/{t.lager_a}", f"/api/material/ordner/{t.sys_a['gesperrt']}",
+                    f"/api/material/artikel/{t.art_a['id']}", f"/api/material/durchgaenge/{b.durchgang_a}",
+                    f"/material/export/{t.a}.csv", f"/material/export/{t.lager_a}.csv", "/material", "/material/bestand"):
+            r = w.get(url)
+            assert r.status_code == 200, (url, r.status_code)
+            ohne_merkmale(b, url, r.data)
+        assert not {o["id"] for o in w.get("/api/material/ordner").json["ordner"]} & b.ordner
+        # Gegenprobe: An B gehen diese Merkmale sehr wohl – die Prüfung oben sucht nach dem Richtigen.
+        text_b = "".join(t.wart_b.get(u).get_data(as_text=True) for u in (
+            "/api/material/ordner", f"/api/material/ordner/{t.lager_b}", f"/api/material/artikel/{t.art_b['id']}",
+            f"/api/material/durchgaenge/{t.durchgang_b}"))
+        assert "Nachbarstadt" in text_b and "TEST-B-" in text_b and inventar_b in text_b and "1012-9001" in text_b
+        s = w.get("/api/material/suche?q=TEST-B-0001").json
+        assert s["gesamt"] == 0 and s["treffer"] == [] and s["eindeutig"] is None and s["exakt_lokal"] is False, s
+        assert s["global_angebot"] is True, s
+        assert w.get(f"/api/material/suche?q={inventar_b}").json["gesamt"] == 0
+        assert w.get("/api/material/start").json["bestand"] == 1
+        p = w.get(f"/api/material/produkte/{ids['hms']}").json["produkt"]
+        assert (p["bestand"], p["artikel_gesamt"], p["loeschbar"]) == (1, 1, False), p
+        assert [x["bestand"] for x in w.get("/api/material/produkte?q=HMS").json["produkte"]] == [1]
+        assert t.wart_b.get(f"/api/material/produkte/{ids['hms']}").json["produkt"]["bestand"] == 2   # art_b, gesperrt
+        # Das ZIP von A: Verzeichnis und Dateinamen ohne B.
+        r = w.get(f"/material/export/{t.a}-protokolle.zip")
+        assert r.status_code == 200, r.status_code
+        z = zipfile.ZipFile(io.BytesIO(r.data))
+        ohne_merkmale(b, "ZIP von A", "\n".join(z.namelist()) + _text(z.read("Verzeichnis.csv")))
+        assert len(z.namelist()) == 3                          # Verzeichnis, die Prüfung und das Sammelprotokoll von A
+        # Die Suchseite leitet nicht zu Fremdem weiter; die Artikelseite aus B ist 404 ohne Banner; der QR-Scan zeigt
+        # nur „fremd“.
+        assert w.get("/material/suche?q=TEST-B-0001").status_code == 200
+        r = w.get(f"/material/artikel/{b.gesperrt['id']}")
+        assert r.status_code == 404 and "mat-banner" not in r.get_data(as_text=True)
+        ohne_merkmale(b, "Artikelseite B", r.data)
+        r = w.get(f"/m/{b.token}")
+        assert r.status_code == 200 and 'data-ansicht="fremd"' in r.get_data(as_text=True), r.status_code
+        ohne_merkmale(b, "QR fremd", r.data)
+        assert "mat-banner" not in r.get_data(as_text=True)
+        r = t.wart_b.get(f"/m/{b.token}")
+        assert r.status_code == 302 and r.headers["Location"].endswith(f"/material/artikel/{t.art_b['id']}")
+
+        # Medien je Datei: aus B 404 (für B selbst 200), das Produktbild für alle mit Modulzugang.
+        for url in b.ordnerfoto + b.befundfoto + b.meldungsfoto + [b.anhang]:
+            assert w.get(url).status_code == 404, url
+        for url in b.ordnerfoto:
+            assert t.wart_b.get(url).status_code == 200, url
+        for url in b.befundfoto + [b.anhang]:
+            assert t.pruefer_b.get(url).status_code == 200, url
+        assert t.wart_b.get(b.meldungsfoto[0]).status_code == 200                    # der Melder
+        assert t.k["katalog"].get(b.meldungsfoto[0]).status_code == 200              # die Katalogpflege
+        assert w.get(b.produktbild).status_code == 200 and t.k["fuehrung"].get(b.produktbild).status_code == 200
+        assert w.get("/media/material/web/gibtesnicht.jpg").status_code == 404
+        assert w.get("/media/material/heimlich/x.jpg").status_code == 404
+        assert t.k["nutzer"].get(b.produktbild).status_code == 403
+    print("Nichts aus B bestanden.")
+
+
+# --- 8.2/3: Kennungen im Inhalt der Anfrage ---------------------------------------------------------------------------
+
+# Felder im Inhalt einer Anfrage, die einen Gegenstand meinen: (Methode, Regel, Feld, Format). Gegen url_map
+# abgeglichen – eine Route, deren requires_folder-Quelle ein Feld der Anfrage ist (json:, form:, eingabe:), braucht hier
+# eine Zeile. Die Felder der Pakete B und D (user_id bei Freigabe und Zuordnung, ids beim Zuordnen) ergänzt die
+# Integration.
+FELDER_IM_INHALT = (
+    ("POST", "/api/material/artikel/<int:iid>/pruefungen", "durchgang_id", "json"),
+    ("POST", "/api/material/durchgaenge/<int:rid>/ausnehmen", "item_id", "json"),
+    ("POST", "/api/material/durchgaenge/<int:rid>/einbeziehen", "item_id", "json"),
+    ("POST", "/api/material/meldungen", "folder_id", "multipart"),
+    ("POST", "/api/material/meldungen", "folder_id", "json"),
+    ("POST", "/api/material/durchgaenge", "folder_id", "json"),
+    ("POST", "/api/material/artikel", "folder_id", "json"),
+    ("POST", "/api/material/artikel/verschieben", "folder_id", "json"),
+    ("POST", "/api/material/ordner", "parent_id", "json"),
+    ("POST", "/api/material/ordner/<int:fid>/verschieben", "parent_id", "json"),
+    ("POST", "/api/material/artikel/verschieben", "ids", "json"),
+)
+
+
+def test_felder_im_inhalt():
+    """Jedes Feld × {A (Kontrolle: Erfolg), B, B als Text „7“, B als 7.0, nicht vorhanden}: Die B-Formen sind nie 2xx
+    und antworten mit Status und Text genau wie dieselbe Form von „nicht vorhanden“. Die Tabelle deckt jede Route ab,
+    deren Bezug aus dem Inhalt kommt."""
+    with ohne_post(), tempfile.TemporaryDirectory() as tmp:
+        t = zwei_gliederungen(tmp)
+        app, w, p, ids = t.app, t.wart_a, t.k["pruefer"], t.ids
+        a2, a3, a4 = (neuer_artikel(w, ids["hms"], t.lager_a)["id"] for _ in range(3))
+        halle = ordner_neu(w, t.a, "Halle Musterstadt")
+        neuer_artikel(w, ids["hms"], halle)
+        fach = ordner_neu(w, t.lager_a, "Fach Musterstadt")
+        r = w.post("/api/material/durchgaenge", json={"folder_id": t.lager_a, "titel": "Testdurchgang Musterstadt"})
+        assert r.status_code == 201, r.get_json()
+        r_a = r.json["durchgang"]["id"]
+        nummer = iter(range(1, 10000))
+
+        def melden(fid, multipart):
+            felder = {"manufacturer": "Meldewerk", "model": f"Testmodell {next(nummer)}", "folder_id": fid}
+            if multipart:
+                felder = {k_: str(v) for k_, v in felder.items()}
+                felder["fotos"] = (jpeg(), "etikett.jpg")
+                return w.post("/api/material/meldungen", headers=H, content_type="multipart/form-data", data=felder)
+            return w.post("/api/material/meldungen", headers=H, json=felder)
+
+        # In dieser Reihenfolge: Die Kontrollen ändern den Bestand (Ausnehmen vor Einbeziehen, Verschieben zuletzt).
+        faelle = [
+            (FELDER_IM_INHALT[0], lambda v: p.post(f"/api/material/artikel/{t.art_a['id']}/pruefungen",
+                                                   json={"durchgang_id": v}), r_a, 201, t.durchgang_b),
+            (FELDER_IM_INHALT[1], lambda v: w.post(f"/api/material/durchgaenge/{r_a}/ausnehmen",
+                                                   json={"item_id": v, "grund": "Testgrund"}), a2, 200, t.art_b["id"]),
+            (FELDER_IM_INHALT[2], lambda v: w.post(f"/api/material/durchgaenge/{r_a}/einbeziehen", json={"item_id": v}),
+             a2, 200, t.art_b["id"]),
+            (FELDER_IM_INHALT[3], lambda v: melden(v, True), t.lager_a, 201, t.lager_b),
+            (FELDER_IM_INHALT[4], lambda v: melden(v, False), t.lager_a, 201, t.lager_b),
+            (FELDER_IM_INHALT[5], lambda v: w.post("/api/material/durchgaenge", json={"folder_id": v, "titel": "Test"}),
+             halle, 201, t.lager_b),
+            (FELDER_IM_INHALT[6], lambda v: w.post("/api/material/artikel", json={"product_id": ids["hms"], "folder_id": v}),
+             t.lager_a, 201, t.lager_b),
+            (FELDER_IM_INHALT[7], lambda v: w.post("/api/material/artikel/verschieben", json={"ids": [a3], "folder_id": v}),
+             fach, 200, t.lager_b),
+            (FELDER_IM_INHALT[8], lambda v: w.post("/api/material/ordner", json={"name": f"Testordner {next(nummer)}",
+                                                                                "parent_id": v}), t.lager_a, 201, t.lager_b),
+            (FELDER_IM_INHALT[9], lambda v: w.post(f"/api/material/ordner/{fach}/verschieben", json={"parent_id": v}),
+             halle, 200, t.lager_b),
+            (FELDER_IM_INHALT[10], lambda v: w.post("/api/material/artikel/verschieben", json={"ids": [v], "folder_id": halle}),
+             a4, 200, t.art_b["id"]),
+        ]
+        assert [f[0] for f in faelle] == list(FELDER_IM_INHALT)
+
+        def formen(v, multipart):
+            # Im Formular ist alles Text – 7.0 kommt dort als „7.0“ an.
+            return [v, str(v), str(float(v)) if multipart else float(v)]
+        for zeile, anfrage, a_wert, soll, b_wert in faelle:
+            multipart = zeile[3] == "multipart"
+            for fremd, unbekannt in zip(formen(b_wert, multipart), formen(999999, multipart)):
+                r, u = anfrage(fremd), anfrage(unbekannt)
+                assert not 200 <= r.status_code < 300, (zeile, fremd, r.status_code, r.get_json())
+                assert u.status_code in (400, 404), (zeile, unbekannt, u.status_code, u.get_json())
+                assert (r.status_code, r.get_json()) == (u.status_code, u.get_json()), (zeile, fremd, r.get_json(),
+                                                                                        u.get_json())
+            r = anfrage(a_wert)
+            assert r.status_code == soll, (zeile, a_wert, r.status_code, r.get_json())
+        # Die Prüfung der Kontrolle hängt am Durchgang aus A; an B ging nichts.
+        assert zeilen(app, "SELECT round_id FROM mat_inspection WHERE item_id = ? AND completed_at IS NULL",
+                      (t.art_a["id"],))[0]["round_id"] == r_a
+        assert zeilen(app, "SELECT folder_id FROM mat_item WHERE id = ?", (t.art_b["id"],))[0]["folder_id"] == t.lager_b
+
+        # Abgleich mit url_map: jede Quelle aus dem Inhalt hat ihre Zeile – und jede Zeile ihre Route.
+        tabelle = {(m, regel, feld) for m, regel, feld, _ in FELDER_IM_INHALT}
+        routen = {(m, r.rule) for r in app.url_map.iter_rules() for m in r.methods}
+        assert all((m, regel) in routen for m, regel, _ in tabelle), tabelle - {x for x in tabelle if x[:2] in routen}
+        fehlt = []
+        for regel in app.url_map.iter_rules():
+            if regel.endpoint.split(".")[0] not in ("material", "material_api"):
+                continue
+            art, _, feld = (getattr(app.view_functions[regel.endpoint], "mat_quelle", "") or "").partition(":")
+            if art in ("json", "form", "eingabe"):
+                fehlt += [(m, regel.rule, feld) for m in sorted(regel.methods - {"HEAD", "OPTIONS"})
+                          if (m, regel.rule, feld) not in tabelle]
+        assert not fehlt, f"Feld im Inhalt ohne Zeile in FELDER_IM_INHALT: {fehlt}"
+    print("Felder im Inhalt bestanden.")
+
+
+# --- 8.2/4: Vererbung und Heimat ---------------------------------------------------------------------------------------
+
+def test_vererbung_und_heimat():
+    """Freigabe an der Gliederung gilt bis in den Unter-Unterordner. Nur am Fahrzeug: Gliederung und Lager sind
+    Pfad-Knoten (ohne Zahlen, GET 404), Geschwister fehlen. Der gesperrte Fahrzeug-Artikel ist sichtbar und
+    aussonderbar, danach bleiben Artikel und Aussonderungsprotokoll lesbar. „Gesperrt“ und „Ausgesondert“ sind
+    teilweise sichtbar (nur die eigenen), die Übersicht hat die Zeile „Gesperrt (deine Artikel)“."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        adm = k["adm"]
+        ids = katalog_grund(adm)
+        pruef_formulare(k["katalog"], ids)
+        gid, sys_a = gliederung(adm)
+        lager = ordner_neu(adm, gid, "Lager")
+        fahrzeug = ordner_neu(adm, lager, "Fahrzeug Eins", "fahrzeug")
+        satz = ordner_neu(adm, fahrzeug, "Satz Eins", "set")
+        halle = ordner_neu(adm, gid, "Halle")
+        leser, leser_id = neues_konto(app, "leser@example.org", name="Leser Test")
+        freigeben(adm, gid, leser_id, "lesen")
+        fahrer, fahrer_id = neues_konto(app, "fahrer@example.org", name="Fahrer Test")
+        freigeben(adm, fahrzeug, fahrer_id, "verwalten")
+        unterschrift_hinterlegen(app, fahrer_id)
+        assert leser.get(f"/api/material/ordner/{satz}").status_code == 200
+        x = neuer_artikel(fahrer, ids["hms"], satz, serial_no="TEST-HEIMAT-1")["id"]
+        neuer_artikel(adm, ids["hms"], fahrzeug, serial_no="TEST-HEIMAT-2")
+        h = neuer_artikel(adm, ids["hms"], halle, serial_no="TEST-HEIMAT-3")["id"]
+        sperren(k["pruefer"], x)
+        sperren(k["pruefer"], h)
+
+        knoten = {o["id"]: o for o in fahrer.get("/api/material/ordner").json["ordner"]}
+        assert set(knoten) == {gid, lager, fahrzeug, satz, sys_a["gesperrt"], sys_a["ausgesondert"]}, knoten
+        for pfad in (gid, lager):
+            assert knoten[pfad] == {"id": pfad, "parent_id": knoten[pfad]["parent_id"], "name": knoten[pfad]["name"],
+                                    "kind": knoten[pfad]["kind"], "system_kind": None, "nur_pfad": True}, knoten[pfad]
+        assert knoten[fahrzeug]["darf"] == {"lesen": True, "grund": True, "pruefen": False, "verwalten": True}
+        assert knoten[fahrzeug]["bestand"] == 1 and knoten[satz]["bestand"] == 0       # x liegt in „Gesperrt“
+        g = knoten[sys_a["gesperrt"]]
+        assert g["teilweise"] and g["bestand"] == 1 and g["zaehlung"]["gesperrt"] == 1, g
+        assert g["darf"] == {"lesen": False, "grund": False, "pruefen": False, "verwalten": False}
+        unbekannt = fahrer.get("/api/material/ordner/999999")
+        for fid in (gid, lager, halle):
+            gleich_wie_unbekannt(fahrer.get(f"/api/material/ordner/{fid}"), unbekannt)
+        gleich_wie_unbekannt(fahrer.get(f"/api/material/artikel/{h}"), fahrer.get("/api/material/artikel/999999"))
+        assert fahrer.get(f"/material/ordner/{gid}").status_code == 404
+        assert fahrer.get(f"/material/ordner/{sys_a['gesperrt']}").status_code == 200
+        inhalt = fahrer.get(f"/api/material/ordner/{sys_a['gesperrt']}").json["ordner"]
+        assert [a["id"] for a in inhalt["artikel"]] == [x] and inhalt["artikel_gesamt"] == 1 and inhalt["journal"] is None
+        assert {a["id"] for a in k["wart"].get(f"/api/material/ordner/{sys_a['gesperrt']}").json["ordner"]["artikel"]} == {x, h}
+        # Übersicht: Pfad-Knoten ohne Zahlen, die eigenen Gesperrten als eigene Zeile unter der Gliederung.
+        zeilen_ = fahrer.get("/api/material/start").json["ordner_uebersicht"]
+        assert [z["id"] for z in zeilen_] == [gid, lager, fahrzeug, satz, sys_a["gesperrt"]], zeilen_
+        assert zeilen_[0]["nur_pfad"] and "bestand" not in zeilen_[0] and "zaehlung" not in zeilen_[1]
+        zeile = zeilen_[-1]
+        assert zeile["name"] == "Gesperrt (deine Artikel)" and zeile["tiefe"] == 1 and zeile["zaehlung"]["gesperrt"] == 1
+        assert zeile["parent_id"] == gid and zeile["teilweise"], zeile
+        assert "Gesperrt (deine Artikel)" not in k["wart"].get("/api/material/start").get_data(as_text=True)
+        # Aussondern durch den Verwalter des Fahrzeugs; Artikel und Protokoll bleiben lesbar.
+        a = fahrer.get(f"/api/material/artikel/{x}").json["artikel"]
+        assert a["darf"]["verwalten"] and a["status"] == "gesperrt", a
+        r = fahrer.post(f"/api/material/artikel/{x}/aussondern", json={"grund": "irreparabel"})
+        assert r.status_code == 200, r.get_json()
+        aid = r.json["aussonderung"]
+        a = fahrer.get(f"/api/material/artikel/{x}").json["artikel"]
+        assert a["status"] == "ausgesondert" and a["folder_id"] == sys_a["ausgesondert"] and a["origin_folder_id"] == satz
+        assert fahrer.get(f"/api/material/pruefungen/{aid}").status_code == 200
+        r = fahrer.get(f"/material/pruefung/{aid}/pdf")
+        assert r.status_code == 200 and r.mimetype == "application/pdf", r.status_code
+        assert fahrer.get(f"/material/artikel/{x}").status_code == 200
+        inhalt = fahrer.get(f"/api/material/ordner/{sys_a['ausgesondert']}").json["ordner"]
+        assert [a["id"] for a in inhalt["artikel"]] == [x], inhalt["artikel"]
+    print("Vererbung und Heimat bestanden.")
+
+
+# --- 8.2/5: Verschieben und Durchgänge (Kritik 1) ----------------------------------------------------------------------
+
+def test_verschieben_und_durchgaenge():
+    """Ein offener Durchgang in A, X wird nach B verschoben: In A ist X „verschoben am …“ ausgenommen (A schließt ab),
+    B eröffnet ohne Konflikt einen eigenen, die Prüfung aus B hängt an Bs Durchgang, und As Sammelprotokoll nennt weder
+    Pfad noch Prüferin aus B. Einbeziehen in A: 409; Bs Prüfung mit As durchgang_id: 404 wie unbekannt. Ebenso innerhalb
+    einer Gliederung – ein offener Entwurf verliert dabei seinen Durchgang."""
+    with tempfile.TemporaryDirectory() as tmp:
+        t = zwei_gliederungen(tmp)
+        app, k, w, ids = t.app, t.k, t.wart_a, t.ids
+        x = t.art_a["id"]
+        y = neuer_artikel(w, ids["hms"], t.a, serial_no="TEST-A-0002")["id"]
+        r = w.post("/api/material/durchgaenge", json={"folder_id": t.a, "titel": "Testdurchgang Musterstadt"})
+        assert r.status_code == 201 and r.json["durchgang"]["zaehlung"]["gesamt"] == 2, r.get_json()
+        r_a = r.json["durchgang"]["id"]
+        pid = starten(k["pruefer"], y, durchgang_id=r_a).json["pruefung"]["id"]
+        assert festschreiben(k["pruefer"], pid, ergebnis="einsatzbereit").status_code == 200
+        halle_b = ordner_neu(t.wart_b, t.b, "Halle Nachbarstadt")
+        r = t.adm.post("/api/material/artikel/verschieben", json={"ids": [x], "folder_id": halle_b})
+        assert r.status_code == 200, r.get_json()
+        # In A: ausgenommen mit Grund, ohne Link (A sieht X nicht mehr), Pfad nicht aus B.
+        d = w.get(f"/api/material/durchgaenge/{r_a}").json["durchgang"]
+        zeile = next(a for a in d["artikel"] if not a["sichtbar"])
+        assert zeile["zustand"] == "ausgenommen" and zeile["ausnahme"]["von"] == "System", zeile
+        assert zeile["ausnahme"]["grund"] == f"verschoben am {_heute().strftime('%d.%m.%Y')} – nicht mehr im Bereich des Durchgangs"
+        assert zeile["pfad"] == "(aus dem Bereich des Durchgangs verschoben)" and "id" not in zeile, zeile
+        assert d["zaehlung"]["ausgenommen"] == 1 and d["abschliessbar"], d["zaehlung"]
+        assert "Nachbarstadt" not in json.dumps(d, ensure_ascii=False)
+        r = w.post(f"/api/material/durchgaenge/{r_a}/einbeziehen", json={"item_id": x})
+        assert r.status_code == 409 and "nicht mehr im Bereich" in r.json["error"], r.get_json()
+        # B: eigener Durchgang ohne Konflikt; As Durchgang taugt dort nicht (404 wie unbekannt); die Prüfung hängt an B.
+        r = t.wart_b.post("/api/material/durchgaenge", json={"folder_id": halle_b, "titel": "Testdurchgang Halle"})
+        assert r.status_code == 201, r.get_json()
+        r_b = r.json["durchgang"]["id"]
+        gleich_wie_unbekannt(starten(t.pruefer_b, x, durchgang_id=r_a), starten(t.pruefer_b, x, durchgang_id=999999))
+        r = starten(t.pruefer_b, x)
+        assert r.status_code == 201 and r.json["pruefung"]["round_id"] == r_b, r.get_json()
+        assert r.json["pruefung"]["durchgang"] == {"id": r_b, "titel": "Testdurchgang Halle",
+                                                   "ordner": "OG Nachbarstadt / Halle Nachbarstadt", "sichtbar": True}
+        unterschreiben(t.pruefer_b)
+        assert festschreiben(t.pruefer_b, r.json["pruefung"]["id"], ergebnis="einsatzbereit").status_code == 200
+        # A schließt ab; das Sammelprotokoll nennt nichts aus B.
+        r = w.post(f"/api/material/durchgaenge/{r_a}/abschliessen", json={})
+        assert r.status_code == 200, r.get_json()
+        text = _flach(" ".join(pdf_seiten(os.path.join(tmp, protokoll_zeile(app, rid=r_a)["pdf_path"]))))
+        for fremd in ("Nachbarstadt", "1012-9001", "Prüferin"):
+            assert fremd not in text, (fremd, text[:2000])
+        assert "aus dem Bereich des Durchgangs verschoben" in text, text[:2000]
+        assert "pruefer" in text and "1012-4711" in text
+
+        # Innerhalb einer Gliederung: vom Lager ins Fahrzeug – ein offener Entwurf verliert seinen Durchgang.
+        lager2 = ordner_neu(w, t.a, "Lager Zwei")
+        fahrzeug = ordner_neu(w, t.a, "Fahrzeug Eins", "fahrzeug")
+        z = neuer_artikel(w, ids["hms"], lager2, serial_no="TEST-A-0003")["id"]
+        neuer_artikel(w, ids["hms"], lager2, serial_no="TEST-A-0004")
+        r = w.post("/api/material/durchgaenge", json={"folder_id": lager2, "titel": "Testdurchgang Lager Zwei"})
+        assert r.status_code == 201, r.get_json()
+        r_l = r.json["durchgang"]["id"]
+        entwurf = starten(k["pruefer"], z, durchgang_id=r_l).json["pruefung"]["id"]
+        assert w.post("/api/material/artikel/verschieben", json={"ids": [z], "folder_id": fahrzeug}).status_code == 200
+        d = w.get(f"/api/material/durchgaenge/{r_l}").json["durchgang"]
+        zeile = next(a for a in d["artikel"] if a.get("id") == z)
+        assert zeile["sichtbar"] and zeile["zustand"] == "ausgenommen" and zeile["ausnahme"]["grund"].startswith("verschoben am")
+        assert zeile["pfad"] == "(aus dem Bereich des Durchgangs verschoben)", zeile
+        pr = k["pruefer"].get(f"/api/material/pruefungen/{entwurf}").json["pruefung"]
+        assert pr["round_id"] is None and pr["durchgang"] is None and pr["entwurf"], pr
+        assert zeilen(app, "SELECT 1 FROM mat_audit WHERE entity = 'inspection' AND entity_id = ? AND action = 'geaendert'",
+                      (entwurf,))
+        r = w.post(f"/api/material/durchgaenge/{r_l}/einbeziehen", json={"item_id": z})
+        assert r.status_code == 409 and "nicht mehr im Bereich" in r.json["error"], r.get_json()
+        # Zurück ins Lager: dann lässt er sich wieder einbeziehen – aber nicht, solange er anderswo offen steht.
+        assert w.post("/api/material/artikel/verschieben", json={"ids": [z], "folder_id": lager2}).status_code == 200
+        r = w.post("/api/material/durchgaenge", json={"folder_id": t.a, "titel": "Testdurchgang Gliederung"})
+        assert r.status_code == 409 and "Testdurchgang Lager Zwei" in r.json["error"], r.get_json()
+        assert w.post(f"/api/material/durchgaenge/{r_l}/einbeziehen", json={"item_id": z}).status_code == 200
+        pr = k["pruefer"].get(f"/api/material/pruefungen/{entwurf}").json["pruefung"]
+        assert pr["round_id"] == r_l, pr                       # der offene Entwurf zählt wieder hier
+    print("Verschieben und Durchgänge bestanden.")
+
+
+# --- 8.2/6: Eine Heimat (Kritik 2) -------------------------------------------------------------------------------------
+
+def test_eine_heimat():
+    """G verwaltet „Lager“ mit einem gesperrten und einem ausgesonderten Artikel; die Verwaltung verschiebt das Lager
+    nach H. Beide wandern in die Systemordner von H (Journal mit Grund); G sieht sie nicht mehr, prüft sie nicht frei,
+    exportiert sie nicht und nimmt sie in keinen neuen Durchgang."""
+    with tempfile.TemporaryDirectory() as tmp:
+        t = zwei_gliederungen(tmp)
+        app, k, w, ids = t.app, t.k, t.wart_a, t.ids
+        y = neuer_artikel(w, ids["hms"], t.lager_a, serial_no="TEST-A-0010")["id"]
+        sperren(k["pruefer"], y)
+        z = neuer_artikel(w, ids["hms"], t.lager_a, serial_no="TEST-A-0011")["id"]
+        sperren(k["pruefer"], z)
+        assert w.post(f"/api/material/artikel/{z}/aussondern", json={"grund": "irreparabel"}).status_code == 200
+        bleibt = neuer_artikel(w, ids["hms"], t.a, serial_no="TEST-A-0012")["id"]
+        inventar = {r["id"]: r["inventory_no"] for r in zeilen(app, "SELECT id, inventory_no FROM mat_item")}
+        assert inventar[y] in w.get(f"/material/export/{t.a}.csv").get_data(as_text=True)
+        r = t.adm.post(f"/api/material/ordner/{t.lager_a}/verschieben", json={"parent_id": t.b})
+        assert r.status_code == 200, r.get_json()
+        lage = {r["id"]: r["folder_id"] for r in zeilen(app, "SELECT id, folder_id FROM mat_item WHERE id IN (?, ?)", (y, z))}
+        assert lage == {y: t.sys_b["gesperrt"], z: t.sys_b["ausgesondert"]}, lage
+        for iid, ziel in ((y, t.sys_b["gesperrt"]), (z, t.sys_b["ausgesondert"])):
+            e = zeilen(app, "SELECT * FROM mat_audit WHERE entity = 'item' AND entity_id = ? AND action = 'verschoben' "
+                            "ORDER BY id DESC LIMIT 1", (iid,))[0]
+            nachher = json.loads(e["after_json"])
+            assert nachher["folder_id"] == ziel and nachher["grund"] == "Ordner in andere Gliederung verschoben", nachher
+        # G: nicht mehr zu sehen, nicht freizuprüfen, nicht im Export, nicht im neuen Durchgang.
+        for iid in (y, z):
+            gleich_wie_unbekannt(w.get(f"/api/material/artikel/{iid}"), w.get("/api/material/artikel/999999"))
+        gleich_wie_unbekannt(starten(k["pruefer"], y), starten(k["pruefer"], 999999))
+        csv_a = w.get(f"/material/export/{t.a}.csv").get_data(as_text=True)
+        assert inventar[y] not in csv_a and inventar[z] not in csv_a and inventar[bleibt] in csv_a
+        r = w.post("/api/material/durchgaenge", json={"folder_id": t.a, "titel": "Testdurchgang Musterstadt"})
+        assert r.status_code == 201 and r.json["durchgang"]["zaehlung"]["gesamt"] == 1, r.get_json()
+        assert {a["id"] for a in w.get(f"/api/material/durchgaenge/{r.json['durchgang']['id']}").json["durchgang"]["artikel"]} \
+            == {bleibt}
+        # H sieht beide in seinen Systemordnern – und sie gehören zum verschobenen Lager.
+        assert {a["id"] for a in t.wart_b.get(f"/api/material/ordner/{t.sys_b['gesperrt']}").json["ordner"]["artikel"]} == {y}
+        assert t.wart_b.get(f"/api/material/artikel/{z}").json["artikel"]["origin_folder_id"] == t.lager_a
+        csv_lager = t.wart_b.get(f"/material/export/{t.lager_a}.csv").get_data(as_text=True)
+        assert inventar[y] in csv_lager and inventar[z] in csv_lager
+    print("Eine Heimat bestanden.")
+
+
+# --- 8.2/7: Kein Abziehen (Kritik 3) -----------------------------------------------------------------------------------
+
+def test_kein_abziehen():
+    """Wer G/Lager und H verwaltet, aber nicht G, zieht weder Artikel noch Ordner von G nach H ab (403). Ein Ziel in
+    einer Gliederung, die er nicht sieht: 404 wie unbekannt. Mit Verwalten an G und H geht beides."""
+    with tempfile.TemporaryDirectory() as tmp:
+        t = zwei_gliederungen(tmp)
+        app, adm = t.app, t.adm
+        gast, gast_id = neues_konto(app, "gast@example.org", name="Gast Verwalter")
+        freigeben(adm, t.lager_a, gast_id, "verwalten")
+        freigeben(adm, t.b, gast_id, "verwalten")
+        fach = ordner_neu(t.wart_a, t.lager_a, "Fach Eins")
+        c, _ = gliederung(adm, "OG Drittstadt", standard=False)
+        r = gast.post("/api/material/artikel/verschieben", json={"ids": [t.art_a["id"]], "folder_id": t.b})
+        assert r.status_code == 403 and "beide Gliederungen" in r.json["error"], r.get_json()
+        r = gast.post(f"/api/material/ordner/{fach}/verschieben", json={"parent_id": t.b})
+        assert r.status_code == 403 and "beide Gliederungen" in r.json["error"], r.get_json()
+        r = gast.post(f"/api/material/ordner/{t.lager_a}/verschieben", json={"parent_id": t.b})
+        assert r.status_code == 403, r.get_json()                       # den Oberordner (G) verwaltet er nicht
+        # Innerhalb seines Lagers und innerhalb von H darf er.
+        assert gast.post("/api/material/artikel/verschieben", json={"ids": [t.art_a["id"]], "folder_id": fach}).status_code == 200
+        gleich_wie_unbekannt(gast.post("/api/material/artikel/verschieben", json={"ids": [t.art_a["id"]], "folder_id": c}),
+                             gast.post("/api/material/artikel/verschieben", json={"ids": [t.art_a["id"]],
+                                                                                  "folder_id": 999999}))
+        gleich_wie_unbekannt(gast.post(f"/api/material/ordner/{fach}/verschieben", json={"parent_id": c}),
+                             gast.post(f"/api/material/ordner/{fach}/verschieben", json={"parent_id": 999999}))
+        assert zeilen(app, "SELECT folder_id FROM mat_item WHERE id = ?", (t.art_a["id"],))[0]["folder_id"] == fach
+        # Mit Verwalten an G und H: beides.
+        freigeben(adm, t.a, gast_id, "verwalten")
+        r = gast.post("/api/material/artikel/verschieben", json={"ids": [t.art_a["id"]], "folder_id": t.b})
+        assert r.status_code == 200, r.get_json()
+        r = gast.post(f"/api/material/ordner/{fach}/verschieben", json={"parent_id": t.b})
+        assert r.status_code == 200, r.get_json()
+        # Auf die oberste Ebene und von dort weg nur die Verwaltung.
+        r = gast.post(f"/api/material/ordner/{t.b}/verschieben", json={"parent_id": t.a})
+        assert r.status_code == 403, r.get_json()
+    print("Kein Abziehen bestanden.")
+
+
+# --- 8.2/8: Produktjournal (Kritik 6) ----------------------------------------------------------------------------------
+
+def test_produktjournal():
+    """Eine Meldung aus B mit Bemerkung und Link wird zum Produkt, das A nutzt. Produkt und A-Artikel zeigen wart_a
+    weder Melder noch Bemerkung, Link oder Ordner aus B; die Katalogpflege und der Melder sehen den Eintrag."""
+    with ohne_post(), tempfile.TemporaryDirectory() as tmp:
+        t = zwei_gliederungen(tmp)
+        ids, w = t.ids, t.wart_a
+        r = t.wart_b.post("/api/material/meldungen", headers=H, json={
+            "manufacturer": "Meldewerk", "model": "Seilklemme Test", "note": "Bemerkung Nachbarstadt",
+            "links": ["https://example.org/nachbarstadt"], "folder_id": t.lager_b})
+        assert r.status_code == 201, r.get_json()
+        mid = r.json["meldung"]["id"]
+        r = t.k["katalog"].post(f"/api/material/meldungen/{mid}/produkt", json={
+            "category_id": ids["karabiner"], "manufacturer": "Meldewerk", "model": "Seilklemme Test", "article_no": "MW-1",
+            "material_kind": "metall_hardware", "interval_months": 12, "antwort": "Eingepflegt."})
+        assert r.status_code == 201, r.get_json()
+        pid = r.json["produkt"]["id"]
+        a = neuer_artikel(w, pid, t.lager_a)
+
+        def eintraege(c, url, schluessel):
+            r = c.get(url)
+            assert r.status_code == 200, (url, r.get_json())
+            return r.get_data(as_text=True), r.json[schluessel]["journal"]
+        for url, schluessel in ((f"/api/material/produkte/{pid}", "produkt"), (f"/api/material/artikel/{a['id']}", "artikel")):
+            text, journal_ = eintraege(w, url, schluessel)
+            for fremd in ("Wart Nachbarstadt", "Bemerkung Nachbarstadt", "example.org/nachbarstadt", "Nachbarstadt"):
+                assert fremd not in text, (url, fremd)
+            assert not [e for e in journal_ if e["entity"] == "request"], journal_
+            for e in journal_:
+                for teil in (e["vorher"] or {}, e["nachher"] or {}):
+                    assert teil.get("folder_id") != t.lager_b, e
+        for c in (t.k["katalog"], t.wart_b):
+            _, journal_ = eintraege(c, f"/api/material/produkte/{pid}", "produkt")
+            assert {e["action"] for e in journal_ if e["entity"] == "request"} == {"angelegt", "eingepflegt"}, journal_
+        # Im Artikeljournal stehen Meldungen nie – auch nicht für den Melder.
+        b_artikel = neuer_artikel(t.wart_b, pid, t.lager_b)
+        _, journal_ = eintraege(t.wart_b, f"/api/material/artikel/{b_artikel['id']}", "artikel")
+        assert not [e for e in journal_ if e["entity"] == "request"]
+    print("Produktjournal bestanden.")
+
+
+# --- 8.2/10: Dublette (Kritik 8) ---------------------------------------------------------------------------------------
+
+def test_dublette():
+    """Eine Seriennummer, die es bei diesem Produkt nur in B gibt: 409 ohne Inventarnummer und Gliederung, eine Zeile
+    „dublette“ im Protokoll; die elfte in einer Viertelstunde: 429. Eine sichtbare Dublette: 409 mit Inventarnummer,
+    ohne Protokoll. Ebenso beim Ändern der Seriennummer."""
+    from app.material.services import globalprotokoll
+    from app.material.services.bestand import FremdeDublette
+    with tempfile.TemporaryDirectory() as tmp:
+        t = zwei_gliederungen(tmp)
+        app, w, ids = t.app, t.wart_a, t.ids
+        inventar_b = zeilen(app, "SELECT inventory_no FROM mat_item WHERE id = ?", (t.art_b["id"],))[0]["inventory_no"]
+
+        def anlegen(serie):
+            return w.post("/api/material/artikel", json={"product_id": ids["hms"], "folder_id": t.lager_a, "serial_no": serie})
+
+        def protokoll():
+            return zeilen(app, "SELECT * FROM mat_global_search WHERE art = 'dublette' ORDER BY id")
+        r = anlegen("TEST-B-0001")
+        assert r.status_code == 409 and r.json["error"] == FremdeDublette.TEXT, r.get_json()
+        assert inventar_b not in r.json["error"] and "Nachbarstadt" not in r.json["error"]
+        z = protokoll()
+        assert [(x["user_id"], x["user_name"], x["anfrage"], x["treffer"], json.loads(x["item_ids"])) for x in z] == \
+            [(t.k["wart_id"], "wart", "TEST-B-0001", 1, [t.art_b["id"]])], z
+        assert not zeilen(app, "SELECT 1 FROM mat_item WHERE serial_no = 'TEST-B-0001' AND id <> ?", (t.art_b["id"],))
+        # Sichtbare Dublette: wie bisher mit Inventarnummer, ohne Protokoll und ohne Bremse.
+        eigen = neuer_artikel(w, ids["hms"], t.lager_a, serial_no="TEST-A-0005")
+        r = anlegen("test-a-0005")
+        assert r.status_code == 409 and eigen["inventory_no"] in r.json["error"], r.get_json()
+        assert len(protokoll()) == 1
+        # Ändern auf eine fremde Seriennummer: ebenso.
+        r = w.put(f"/api/material/artikel/{t.art_a['id']}", json={"serial_no": "TEST-B-0001"})
+        assert r.status_code == 409 and r.json["error"] == FremdeDublette.TEXT, r.get_json()
+        assert len(protokoll()) == 2
+        assert zeilen(app, "SELECT serial_no FROM mat_item WHERE id = ?", (t.art_a["id"],))[0]["serial_no"] == "TEST-A-0001"
+        # Bremse: zusammen höchstens zehn in der Viertelstunde, die elfte 429 – ohne Zeile.
+        for _ in range(globalprotokoll.GRENZE - 2):
+            assert anlegen("TEST-B-0001").status_code == 409
+        r = anlegen("TEST-B-0001")
+        assert r.status_code == 429 and r.json["error"] == globalprotokoll.ZU_VIELE, r.get_json()
+        assert len(protokoll()) == globalprotokoll.GRENZE
+        # Die Verwaltung sieht B – für sie ist es eine sichtbare Dublette.
+        r = t.adm.post("/api/material/artikel", json={"product_id": ids["hms"], "folder_id": t.lager_a,
+                                                      "serial_no": "TEST-B-0001"})
+        assert r.status_code == 409 and inventar_b in r.json["error"], r.get_json()
+    print("Dublette bestanden.")
+
+
+# --- 8.2/11: Prüfsicht (Kritik 11) -------------------------------------------------------------------------------------
+
+def test_pruefsicht():
+    """Ein externer Prüfer mit nur einer Prüffreigabe am Lager: Artikel und Prüfungen ja; CSV, ZIP und Lebenslauf nicht
+    (403 am Lager, 404 an der Gliederung, die er nicht sieht); zugeordnete Person und Journal null, der Filter
+    „zugeordnet“ findet nichts. Ohne Urkundennummer wirkt die Prüffreigabe nicht mehr: alles 404; ohne Häkchen auch
+    kein Modulzugang: 403."""
+    with tempfile.TemporaryDirectory() as tmp:
+        t = zwei_gliederungen(tmp)
+        app, w, adm = t.app, t.wart_a, t.adm
+        ext, ext_id = neues_konto(app, "extern@example.org", name="Externer Prüfer", mat_pruefer=True,
+                                  urkundennummer="1012-8001")
+        freigeben(adm, t.lager_a, ext_id, "pruefen")
+        _, person_id = neues_konto(app, "person_a@example.org", name="Person Musterstadt")
+        sql(app, "UPDATE mat_item SET assigned_user_id = ? WHERE id = ?", (person_id, t.art_a["id"]))
+        iid = t.art_a["id"]
+        a = ext.get(f"/api/material/artikel/{iid}").json["artikel"]
+        assert a["darf"] == {"lesen": True, "grund": False, "pruefen": True, "verwalten": False}, a["darf"]
+        assert a["zugeordnet"] is None and a["journal"] is None and "Person Musterstadt" not in json.dumps(a), a
+        a = w.get(f"/api/material/artikel/{iid}").json["artikel"]
+        assert a["zugeordnet"] == {"id": person_id, "name": "Person Musterstadt", "gliederung": "", "aktiv": True}, a
+        assert a["journal"], a
+        o = ext.get(f"/api/material/ordner/{t.lager_a}").json["ordner"]
+        assert o["journal"] is None and [x["zugeordnet_name"] for x in o["artikel"]] == [None], o
+        assert [x["zugeordnet_name"] for x in w.get(f"/api/material/ordner/{t.lager_a}").json["ordner"]["artikel"]] == \
+            ["Person Musterstadt"]
+        assert ext.get(f"/api/material/ordner/{t.lager_a}?zugeordnet={person_id}").json["ordner"]["artikel_gesamt"] == 0
+        assert w.get(f"/api/material/ordner/{t.lager_a}?zugeordnet={person_id}").json["ordner"]["artikel_gesamt"] == 1
+        assert ext.get(f"/api/material/faellig?zugeordnet={person_id}").json["gesamt"] == 0
+        assert w.get(f"/api/material/faellig?zugeordnet={person_id}").json["gesamt"] == 1
+        assert w.get("/api/material/faellig?zugeordnet=abc").status_code == 400
+        r = starten(ext, iid)
+        assert r.status_code == 201, r.get_json()
+        pid = r.json["pruefung"]["id"]
+        assert r.json["pruefung"]["darf"]["pruefen"] and r.json["pruefung"]["artikel"]["zugeordnet_name"] is None
+        assert ext.get(f"/api/material/artikel/{iid}/pruefungen").status_code == 200
+        assert ext.get(f"/api/material/pruefungen/{pid}").status_code == 200
+        for url in (f"/material/export/{t.lager_a}.csv", f"/material/export/{t.lager_a}-protokolle.zip",
+                    f"/material/artikel/{iid}/lebenslauf.pdf"):
+            assert ext.get(url).status_code == 403, url
+        for url in (f"/material/export/{t.a}.csv", f"/material/export/{t.a}-protokolle.zip"):
+            assert ext.get(url).status_code == 404, url
+        # Ohne Urkundennummer (Häkchen bleibt, also Modulzugang): Die Prüffreigabe wirkt nicht – alles wie unbekannt.
+        assert adm.put(f"/api/admin/users/{ext_id}", json={"urkundennummer": ""}).status_code == 200
+        for pfad in (f"artikel/{iid}", f"pruefungen/{pid}", f"ordner/{t.lager_a}", f"artikel/{iid}/pruefungen"):
+            gleich_wie_unbekannt(ext.get(f"/api/material/{pfad}"), ext.get(f"/api/material/{pfad.split('/')[0]}/999999"
+                                                                           + ("/pruefungen" if pfad.endswith("pruefungen")
+                                                                              and pfad.startswith("artikel") else "")))
+        assert ext.get(f"/material/export/{t.lager_a}.csv").status_code == 404
+        assert ext.get(f"/material/artikel/{iid}").status_code == 404
+        # Ohne Häkchen: kein Modulzugang – 403 vor jeder Frage nach dem Gegenstand.
+        assert adm.put(f"/api/admin/users/{ext_id}", json={"mat_pruefer": False}).status_code == 200
+        r = ext.get(f"/api/material/artikel/{iid}")
+        assert r.status_code == 403 and "nicht freigeschaltet" in r.json["error"], r.get_json()
+        assert ext.get("/api/material/artikel/999999").status_code == 403
+    print("Prüfsicht bestanden.")
+
+
+# --- Journal, Pseudonyme, Prüfseite und Seiten --------------------------------------------------------------------------
+
+def test_journal_und_seiten():
+    """Was sonst zur Trennung gehört: Ordner löschen schreibt je Freigabe „freigabe_entfernt“ (Kontoverweis, kein Name)
+    und hält nur noch wegen Gesperrter an; Aussondern löst die Zuordnung (Journal mit Grund, Kontoverweis); das Journal
+    liest den Verweis als Namen, der Lebenslauf schreibt „(Person)“; die Prüfseite verlinkt nur, was das Konto sieht;
+    „Artikel anlegen“ nur für Verwalter; Seiten ohne Modulzugang nennen den Grund; Prüfer stehen nie mit E-Mail da."""
+    import html as html_mod
+    with ohne_post(), tempfile.TemporaryDirectory() as tmp:
+        t = zwei_gliederungen(tmp)
+        app, k, w, ids, adm = t.app, t.k, t.wart_a, t.ids, t.adm
+
+        def refs():
+            return {u["id"]: u["mat_ref"] for u in zeilen(app, "SELECT id, mat_ref FROM users")}
+        # Ordner löschen: Gesperrte halten ihn, Ausgesonderte nicht; die Freigaben gehen mit Journal.
+        fach = ordner_neu(w, t.lager_a, "Fach Eins")
+        _, gast_id = neues_konto(app, "gast@example.org", name="Gast Fach")
+        bis = (_heute() + timedelta(days=30)).isoformat()
+        grant = freigeben(adm, fach, gast_id, "lesen", bis=bis)
+        x = neuer_artikel(w, ids["hms"], fach, serial_no="TEST-A-0020")["id"]
+        sperren(k["pruefer"], x)
+        r = w.delete(f"/api/material/ordner/{fach}", headers=H)
+        assert r.status_code == 409 and "kehren" in r.json["error"], r.get_json()
+        assert w.post(f"/api/material/artikel/{x}/aussondern", json={"grund": "irreparabel"}).status_code == 200
+        r = w.delete(f"/api/material/ordner/{fach}", headers=H)
+        assert r.status_code == 200, r.get_json()
+        e = zeilen(app, "SELECT * FROM mat_audit WHERE action = 'freigabe_entfernt'")
+        assert len(e) == 1 and e[0]["entity"] == "folder" and e[0]["entity_id"] == fach and e[0]["user_name"] == "wart", e
+        assert json.loads(e[0]["before_json"]) == {"freigabe": grant, "konto": {"ref": refs()[gast_id]}, "recht": "lesen",
+                                                   "bis": bis}, e
+        assert json.loads(e[0]["after_json"]) == {"grund": "Ordner gelöscht"} and "Gast" not in e[0]["before_json"]
+        assert not zeilen(app, "SELECT 1 FROM mat_folder_grant WHERE folder_id = ?", (fach,))
+        # Der Ausgesonderte hat seine Herkunft verloren und gehört jetzt zur Gliederung – weiter sichtbar.
+        a = w.get(f"/api/material/artikel/{x}").json["artikel"]
+        assert a["origin_folder_id"] is None and a["folder_id"] == t.sys_a["ausgesondert"], a
+        # Aussondern löst die Zuordnung – im Journal nur der Kontoverweis.
+        y = neuer_artikel(w, ids["hms"], t.lager_a, serial_no="TEST-A-0021")["id"]
+        _, person_id = neues_konto(app, "person_a@example.org", name="Person Musterstadt")
+        sql(app, "UPDATE mat_item SET assigned_user_id = ? WHERE id = ?", (person_id, y))
+        sperren(k["pruefer"], y)
+        assert w.post(f"/api/material/artikel/{y}/aussondern", json={"grund": "irreparabel"}).status_code == 200
+        assert zeilen(app, "SELECT assigned_user_id FROM mat_item WHERE id = ?", (y,))[0]["assigned_user_id"] is None
+        e = zeilen(app, "SELECT * FROM mat_audit WHERE entity = 'item' AND entity_id = ? AND action = 'zuordnung_geloest'",
+                   (y,))
+        assert len(e) == 1 and e[0]["before_json"] is None, e
+        assert json.loads(e[0]["after_json"]) == {"konto": {"ref": refs()[person_id]}, "grund": "ausgesondert"}, e
+        assert "Person" not in e[0]["after_json"] and str(person_id) not in e[0]["after_json"]
+        # Gelesen wird der Verweis als Name – ohne den Verweis selbst; im Lebenslauf steht „(Person)“.
+        a = w.get(f"/api/material/artikel/{y}").json["artikel"]
+        eintrag = next(j for j in a["journal"] if j["action"] == "zuordnung_geloest")
+        assert eintrag["nachher"] == {"konto": {"name": "Person Musterstadt"}, "grund": "ausgesondert"}, eintrag
+        assert refs()[person_id] not in json.dumps(a)
+        r = w.get(f"/material/artikel/{y}/lebenslauf.pdf")
+        assert r.status_code == 200, r.status_code
+        pfad = os.path.join(tmp, "lebenslauf.pdf")
+        with open(pfad, "wb") as fh:
+            fh.write(r.data)
+        text = _flach(" ".join(pdf_seiten(pfad)))
+        assert "Person: (Person)" in text and "Person Musterstadt" not in text, text[-1500:]      # „Zuordnung geändert“
+        from app.material.services import beschriftung
+        assert beschriftung.wert_text({"name": "Person Musterstadt"}, "konto") == "(Person)"
+        assert beschriftung.wert_text("pruefen", "recht") == "prüfen" and beschriftung.wert_text(None, "bis") == "unbefristet"
+        assert beschriftung.AKTION["freigabe_entfernt"] == "Freigabe entfernt"
+
+        # Prüfseite: der Link nur für den, der die Prüfung sehen darf.
+        pid_b = starten(t.pruefer_b, neuer_artikel(t.wart_b, ids["hms"], t.lager_b)["id"]).json["pruefung"]["id"]
+        unterschreiben(t.pruefer_b)
+        assert festschreiben(t.pruefer_b, pid_b, ergebnis="einsatzbereit").status_code == 200
+        with open(os.path.join(tmp, protokoll_zeile(app, pid_b)["pdf_path"]), "rb") as fh:
+            original = fh.read()
+
+        def pruefen(c):
+            r = c.post("/api/material/pruefen", data={"datei": (io.BytesIO(original), "protokoll.pdf")}, headers=H,
+                       content_type="multipart/form-data")
+            assert r.status_code == 200, r.get_json()
+            return r.json
+        assert pruefen(w)["ergebnis"] == "unveraendert" and "link" not in pruefen(w)
+        assert pruefen(t.wart_b)["link"] == f"/material/pruefung/{pid_b}"
+        assert w.get(f"/material/pruefung/{pid_b}/pdf").status_code == 404
+        assert w.get(f"/material/pruefung/{pid_b}").status_code == 404
+
+        # „Artikel anlegen“: nur wer irgendwo verwaltet; den Ordner aus der Adresse nur, wenn er ihn verwaltet.
+        r = k["fuehrung"].get("/material/artikel/neu")
+        assert r.status_code == 403 and "Materialwarte" in r.get_data(as_text=True)
+
+        def daten(r):
+            assert r.status_code == 200, r.status_code
+            return json.loads(html_mod.unescape(re.search(r'data-daten="([^"]*)"', r.get_data(as_text=True)).group(1)))
+        assert daten(w.get(f"/material/artikel/neu?ordner={t.lager_b}"))["ordner"] is None
+        assert daten(w.get(f"/material/artikel/neu?ordner={t.lager_a}"))["ordner"] == t.lager_a
+        # Ohne Modulzugang: 403 mit dem Grund, auf jeder Seite.
+        token = zeilen(app, "SELECT qr_token FROM mat_item WHERE id = ?", (t.art_a["id"],))[0]["qr_token"]
+        for url in ("/material", f"/m/{token}", f"/material/artikel/{t.art_a['id']}", f"/material/export/{t.a}.csv"):
+            r = k["nutzer"].get(url)
+            assert r.status_code == 403 and "nicht freigeschaltet" in r.get_data(as_text=True), url
+        # Prüfer stehen mit Namen da, nie mit der E-Mail.
+        from app.material.services import pruefung
+        with app.test_request_context():
+            u = {"id": 1, "name": "  ", "email": "ohne@example.org", "urkundennummer": "", "mat_pruefer": 0,
+                 "signature_png": None}
+            assert pruefung.pruefer_aus(u)["name"] == "(Konto ohne Namen)"
+    print("Journal und Seiten bestanden.")
+
+
+# --- Tests, die erst mit einem anderen Paket grün werden ----------------------------------------------------------------
+
+def test_nichts_aus_b_paket_d():
+    """8.2/2, Teil von Paket D: die Meldung aus B (lesen 404 wie unbekannt, in keiner Liste), ein Rückruf über alle
+    Artikel des Produkts (Übersicht, Produktseite, Rückrufliste und -antwort, Artikel) und die Rückrufmail an wart_a –
+    nirgends ein Merkmal aus B."""
+    from app.material.services import rueckruf
+    with ohne_post(), tempfile.TemporaryDirectory() as tmp:
+        t, b = trennung_aufbau(tmp)
+        w, ids = t.wart_a, t.ids
+        gleich_wie_unbekannt(w.get(f"/api/material/meldungen/{b.meldung}"), w.get("/api/material/meldungen/999999"))
+        for url in ("/api/material/meldungen", "/api/material/meldungen?eigene=0", "/api/material/meldungen?eigene=1"):
+            r = w.get(url)
+            assert r.status_code == 200 and b.meldung not in [m["id"] for m in r.json["meldungen"]], (url, r.get_json())
+            ohne_merkmale(b, url, r.data)
+        post = []
+        alt = (rueckruf.HINTERGRUND, rueckruf.send_mail)
+        rueckruf.HINTERGRUND = lambda f, *a: f(*a)
+        rueckruf.send_mail = lambda an, betreff, inhalt: post.append((an, betreff, inhalt)) or True
+        try:
+            r = t.adm.post(f"/api/material/produkte/{ids['hms']}/rueckrufe", json={"title": "Testrückruf", "mail": True})
+            assert r.status_code == 201, r.get_json()
+        finally:
+            rueckruf.HINTERGRUND, rueckruf.send_mail = alt
+        ruid = r.json["rueckruf"]["id"]
+        for url in ("/api/material/rueckrufe", "/api/material/start", f"/api/material/produkte/{ids['hms']}",
+                    f"/api/material/produkte/{ids['hms']}/rueckrufe", f"/api/material/artikel/{t.art_a['id']}",
+                    f"/material/katalog/produkt/{ids['hms']}"):
+            r = w.get(url)
+            assert r.status_code == 200, (url, r.status_code)
+            ohne_merkmale(b, url, r.data)
+        inventar_a = zeilen(t.app, "SELECT inventory_no FROM mat_item WHERE id = ?", (t.art_a["id"],))[0]["inventory_no"]
+        an_a = [m for m in post if m[0] == "wart@example.org"]
+        assert len(an_a) == 1 and inventar_a in an_a[0][2], post
+        ohne_merkmale(b, "Rückrufmail an wart_a", an_a[0][1] + an_a[0][2])
+        r = w.post(f"/api/material/rueckrufe/{ruid}/beenden", json={"vermerk": "Test"})
+        assert r.status_code == 403
+    print("Nichts aus B (Paket D) bestanden.")
+
+
+def test_rueckruf_antwort():
+    """8.2/9 (Paket D): Ein Katalogpfleger ohne Bestand legt einen Rückruf mit mail=false und Seriennummern aus B an und
+    beendet ihn – die Antworten nennen weder nicht gefundene Nummern noch Empfänger, betroffen ist 0. Die Verwaltung
+    bekommt die vollen Zahlen."""
+    with tempfile.TemporaryDirectory() as tmp:
+        t = zwei_gliederungen(tmp)
+        kp, _ = neues_konto(t.app, "katalog_ohne@example.org", name="Katalog ohne Bestand", mat_katalog=True)
+        daten = {"title": "Testrückruf", "serials": "TEST-B-0001\nTEST-X-0404", "mail": False}
+        r = kp.post(f"/api/material/produkte/{t.ids['hms']}/rueckrufe", json=daten)
+        assert r.status_code == 201, r.get_json()
+        j = r.get_json()
+        assert "nicht_gefunden" not in j and "empfaenger" not in j and j["betroffen"] == 0, j
+        assert "nicht_gefunden" not in j["rueckruf"] and not j["rueckruf"].get("artikel"), j["rueckruf"]
+        r = kp.post(f"/api/material/rueckrufe/{j['rueckruf']['id']}/beenden", json={"vermerk": "Testvermerk"})
+        assert r.status_code == 200, r.get_json()
+        assert "nicht_gefunden" not in r.get_data(as_text=True) and "empfaenger" not in r.get_data(as_text=True)
+        r = t.adm.post(f"/api/material/produkte/{t.ids['hms']}/rueckrufe", json=daten)
+        assert r.status_code == 201 and r.json["betroffen"] == 1 and r.json["nicht_gefunden"] == ["TEST-X-0404"], r.get_json()
+        assert "empfaenger" in r.json
+    print("Rückruf-Antwort bestanden.")
+
+
+def test_pruefsicht_zugeordnete():
+    """8.2/11 (Paket D): „Zugeordnete eines Ordners“ nur mit Grundrecht – der externe Prüfer bekommt 403."""
+    with tempfile.TemporaryDirectory() as tmp:
+        t = zwei_gliederungen(tmp)
+        ext, ext_id = neues_konto(t.app, "extern@example.org", name="Externer Prüfer", mat_pruefer=True,
+                                  urkundennummer="1012-8001")
+        freigeben(t.adm, t.lager_a, ext_id, "pruefen")
+        assert ext.get(f"/api/material/ordner/{t.lager_a}/zugeordnete").status_code == 403
+        assert t.wart_a.get(f"/api/material/ordner/{t.lager_a}/zugeordnete").status_code == 200
+        gleich_wie_unbekannt(t.wart_a.get(f"/api/material/ordner/{t.lager_b}/zugeordnete"),
+                             t.wart_a.get("/api/material/ordner/999999/zugeordnete"))
+    print("Prüfsicht: Zugeordnete bestanden.")
+
+
+# Was erst nach dem Zusammenführen mit einem anderen Paket grün sein kann (Bauentwurf 9.3): Name → Paket. Der Block
+# __main__ führt diese Tests aus und meldet ein Scheitern nur; die Integration leert die Tabelle.
+WARTET_AUF = {"test_nichts_aus_b_paket_d": "D", "test_rueckruf_antwort": "D", "test_pruefsicht_zugeordnete": "D"}
+
+
 if __name__ == "__main__":
     test_migration_7_8()
     test_sicht()
@@ -703,3 +1600,18 @@ if __name__ == "__main__":
     test_pruefen_nur_mit_prueffreigabe()
     test_abfragezahl()
     test_unterbau()
+    test_nichts_aus_b()
+    test_felder_im_inhalt()
+    test_vererbung_und_heimat()
+    test_verschieben_und_durchgaenge()
+    test_eine_heimat()
+    test_kein_abziehen()
+    test_produktjournal()
+    test_dublette()
+    test_pruefsicht()
+    test_journal_und_seiten()
+    for name, paket in WARTET_AUF.items():
+        try:
+            globals()[name]()
+        except Exception as exc:                 # wartet auf das andere Paket – meldet, scheitert aber nicht
+            print(f"{name}: wartet auf Paket {paket} ({type(exc).__name__}: {str(exc)[:200]})")

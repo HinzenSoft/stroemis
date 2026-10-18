@@ -86,9 +86,8 @@ def _hinweis(item, s, aussonderung):
 
 
 def _zustand(item, produkt, s, tag, baum_pfad):
-    gesperrt = item["lock_state"] in ("gesperrt", "verloren")
-    # Gesperrte liegen in „Gesperrt“; ihr Intervall kommt aus dem Herkunftsordner (wie bei der Freiprüfung).
-    heimat = item["origin_folder_id"] if gesperrt and item["origin_folder_id"] else item["folder_id"]
+    # Gesperrte liegen in „Gesperrt“; ihr Intervall kommt aus der Heimat (wie bei der Freiprüfung).
+    heimat = bestand.heimat(item)
     return {"status": s, "status_text": st.LABEL[s],
             "sperrzustand": SPERRZUSTAND.get(item["lock_state"], item["lock_state"]) if item["lock_state"] != "frei" else "",
             "grund": item["lock_reason"] or "",

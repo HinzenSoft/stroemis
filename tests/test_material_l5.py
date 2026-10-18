@@ -121,8 +121,9 @@ def test_shell_geruest():
             name = re.search(r'<span class="user">([^<]*)</span>Profil</a>', nav)
             assert name and name.group(1).endswith(" ") and name.group(1).strip(), (konto, name)
             assert "&nbsp;Profil" not in nav, konto
-        for konto in ("wart", "pruefer"):
-            html = k[konto].get("/material/artikel/neu").get_data(as_text=True)
+        # „Artikel anlegen“ ist seit Phase 2 nur für Materialwarte – der Prüfer sieht das Gerüst auf „Prüfungen“.
+        for konto, seite in (("wart", "/material/artikel/neu"), ("pruefer", "/material/pruefungen")):
+            html = k[konto].get(seite).get_data(as_text=True)
             mnav = re.search(r'<nav class="mat-nav" aria-label="Modul Material">(.*?)</nav>', html, re.S)
             assert mnav, konto
             mnav = mnav.group(1)
