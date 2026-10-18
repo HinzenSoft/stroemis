@@ -1009,8 +1009,10 @@ wurde am 18.10.2026 mit „Starte mit Phase 2“ freigegeben. Gebaut nach dem Ba
 die daraus offen waren, hat der Betreiber am 18.10.2026 entschieden – eingearbeitet und beschrieben unter „Die drei
 offenen Fragen – entschieden“ und „Nachbesserungen nach der Auslieferung (Entscheidungen vom 18.10.2026)“; dazu kommen
 die „Nachbesserungen nach der Auslieferung (Wünsche vom 18.10.2026)“, zuletzt die Modulstufe Material und die
-Vorgabe für neue Konten. „Neu“ und „Schnittstelle“ beschreiben den Stand danach. Schemaversion 8 (mit den
-Nachbesserungen vom 18.10.2026: 9, mit der Modulstufe: 10), keine neuen Abhängigkeiten. Stand: wartet auf Freigabe.
+Vorgabe für neue Konten; vier weitere offene Punkte hat der Betreiber am 18.10.2026 entschieden („Vier weitere Punkte –
+entschieden“, darunter die Rückfrage beim einzigen Materialwart). „Neu“ und „Schnittstelle“ beschreiben den Stand
+danach. Schemaversion 8 (mit den Nachbesserungen vom 18.10.2026: 9, mit der Modulstufe: 10), keine neuen
+Abhängigkeiten. Stand: wartet auf Freigabe.
 
 „Plattform-Verwaltung“ heißt hier: Verwaltung im Modul Verwaltung der Rechte-Matrix (das Startkonto gehört dazu) –
 Nutzer, Stufen, Häkchen, Einstellungen, das Protokoll der globalen Suchen. „Material-Verwaltung“ heißt: Stufe
@@ -1379,7 +1381,7 @@ Regressionstest. Danach liefen alle Suiten grün.
 | --- | --- | --- | --- |
 | 1 | Wer nur einen Unterordner verwaltete – etwa ein externer Materialwart mit verwalten an G/Lager und an H –, machte ihn über „Ordner bearbeiten“ zur Gliederung und zog danach Artikel und Ordner von G nach H ab; die Regel „über Gliederungsgrenzen nur mit Verwalten an beiden“ (1.7 Nr. 2) war umgangen, rückgängig machen konnte G nichts (von zwei Prüfungen gemeldet) | hoch | Zur Gliederung machen ist ein Gliederungswechsel für alles darin: nur mit Verwalten an der bisherigen Gliederung (oben: Plattform-Verwaltung), sonst 403; „Ordner bearbeiten“ bietet die Art sonst nicht an. Gesperrte und Ausgesonderte mit Heimat darin ziehen in die neuen Systemordner (1.3). Tests `test_kein_abziehen`, `test_eine_heimat` |
 | 2 | Freigaben-Dialog am Tablet hochkant (768–834 px): Die Tabelle mit sieben Spalten ragte aus dem Dialog, „Entziehen“ war abgeschnitten, der Dialog scrollte waagerecht | mittel | Karten bis 840 px Inhaltsbreite (Fenster bis etwa 920 px), Tabelle im vollen Dialog am Rechner; nachgemessen als Materialwart und Verwaltung bei 390–1280 px |
-| 3 | Die Hilfe zur Notiz versprach „nicht die Person selbst“ – wer den Ordner mitverwaltet, liest aber die Notiz zu seiner eigenen Freigabe | mittel | So im Bauentwurf (1.6 Nr. 10: die Notiz sehen alle Verwalter des Ankers, nie „Meine Freigaben“); die Hilfe sagt das jetzt. Verbergen bei eigenen Zeilen: siehe „Zu prüfen“ |
+| 3 | Die Hilfe zur Notiz versprach „nicht die Person selbst“ – wer den Ordner mitverwaltet, liest aber die Notiz zu seiner eigenen Freigabe | mittel | So im Bauentwurf (1.6 Nr. 10: die Notiz sehen alle Verwalter des Ankers, nie „Meine Freigaben“); die Hilfe sagt das jetzt. Verbergen bei eigenen Zeilen: am 18.10.2026 verworfen (siehe „Vier weitere Punkte – entschieden“) |
 | 4 | Eine schon erledigte Zeile im offenen Durchgang des alten Bereichs sperrte nach dem Verschieben jeden neuen Durchgang im Zielbereich (1.7 Nr. 6 verfehlt) | mittel | Die Konfliktabfrage beim Eröffnen lässt erledigte Zeilen außen vor, wie „Einbeziehen“ und der Prüfstart. Test `test_verschieben_und_durchgaenge` |
 | 5 | `DELETE /meldungen/<id>` antwortete für jede vorhandene Meldung 403, auch ohne Modulzugang – so ließ sich erfragen, welche Kennungen es gibt | niedrig | 404 wie für eine unbekannte, wenn man die Meldung nicht sieht; 403 nur für sichtbare fremde. Tests `test_nichts_aus_b_paket_d`, `test_produktmeldung` |
 | 6 | Nutzerverwaltung: Nach dem Entziehen einer Prüffreigabe schickte der Hinweis nach „Prüfungen → Entwürfe freigeben“ – das gibt es nicht | niedrig | bleibender Hinweis mit Link: Material → Prüfungen → „Offene Prüfungen“ freigeben |
@@ -1599,7 +1601,7 @@ entschieden bzw. nicht widersprochen):
   danach alle Bestände aller Gliederungen samt Prüfungen, Protokollen, Journal, zugeordneten Personen und den Notizen
   an Freigaben, vergibt jede Freigabe und legt Gliederungen an. Konten mit einer Stufe aus Phase 1 ohne wirksame
   Freigabe und solche mit nur abgelaufenen Freigaben bekommen den Zugang zurück (Katalog, Suche – keinen Bestand;
-  für die abgelaufenen steht die Entscheidung des Betreibers aus, siehe Prüfung der Modulstufen Nr. 3). In
+  für die abgelaufenen so entschieden am 18.10.2026, siehe Prüfung der Modulstufen Nr. 3). In
   der Produktion (ohne Modul) ändert Schritt 10 nichts: Die Plattform-Verwaltung hat 2, alle anderen 0. Rückweg: Eine
   Fassung bis Schritt 9 liest `recht_material` nicht und `mat_katalog` wieder – ohne Datenverlust. Eine Fassung aus
   Phase 1 deutete die Stufen um (bisherige Katalogpfleger wären dort Materialwarte, Phase-1-Materialwarte nur
@@ -1726,7 +1728,7 @@ Regressionstest in `tests/test_material_stufen.py` (vorher rot, jetzt grün), Ob
 | --- | --- | --- | --- |
 | 1 | Eine ruhende Freigabe eines Kontos ohne Stufe ließ sich per `PUT /freigaben/<id>` hochstufen (lesen → verwalten) oder verlängern, obwohl Erteilen an dasselbe Konto 409 gab – mit der Stufe Mitglied wäre es sofort Verwalter gewesen | niedrig | Behoben: Regel 1.6 Nr. 12 auch beim Ändern – reicht die Zeile danach weiter (anderes Recht als verwalten → lesen, späteres Ende), 409 „Dieses Konto hat keinen Zugang …“, auch für die Material-Verwaltung; kürzen, herabsetzen, Notiz und entziehen gehen weiter (`freigaben._reicht_weiter`). Test `test_ruhende_freigabe_nicht_hochstufen` |
 | 2 | Ein Konto ohne Stufe konnte seine hinterlegte Unterschrift nicht mehr entfernen (Abschnitt weg, `DELETE /unterschrift` 403), obwohl das Profil es versprach | niedrig | Behoben: `GET` und `DELETE /unterschrift` brauchen nur die Anmeldung (die eigenen Daten); ist eine Unterschrift hinterlegt, zeigt das Profil den Abschnitt auch ohne Zugang – nur mit „Entfernen“, ohne Urkundennummer. `PUT` bleibt bei Zugang und Prüfer/Materialwart. Test `test_haekchen_ohne_stufe`, Chromium 1280/390 |
-| 3 | Schritt 10 gibt Konten, die nur abgelaufene Freigaben haben, die Stufe Mitglied – mit 20085f1 hatten sie keinen Zugang (Katalog, Suche, globale Suche) | niedrig | **Nicht geändert, Entscheidung beim Betreiber** (siehe „Zu prüfen“). Gründe für die jetzige Regel: Bis 20085f1 brachte das Verlängern einer abgelaufenen Freigabe durch den Verwalter des Ordners den Zugang zurück – mit Stufe 0 überspränge „Alle verlängern“ diese Konten, und erteilen ginge nicht mehr (409), der Verwalter bräuchte dafür die Plattform-Verwaltung; „Mitglied“ ist ohnehin die Vorgabe jedes neuen Kontos und zeigt keinen Bestand. Soll nur erhalten bleiben, was am Tag der Migration wirkte: in `STUFE_10` nur gültige Freigaben zählen (`valid_until IS NULL OR valid_until >= heute`) und im Test den Fall „abgelaufen“ auf 0 setzen |
+| 3 | Schritt 10 gibt Konten, die nur abgelaufene Freigaben haben, die Stufe Mitglied – mit 20085f1 hatten sie keinen Zugang (Katalog, Suche, globale Suche) | niedrig | **Nicht geändert – so entschieden am 18.10.2026** (siehe „Vier weitere Punkte – entschieden“). Gründe für die Regel: Bis 20085f1 brachte das Verlängern einer abgelaufenen Freigabe durch den Verwalter des Ordners den Zugang zurück – mit Stufe 0 überspränge „Alle verlängern“ diese Konten, und erteilen ginge nicht mehr (409), der Verwalter bräuchte dafür die Plattform-Verwaltung; „Mitglied“ ist ohnehin die Vorgabe jedes neuen Kontos und zeigt keinen Bestand. Verworfene Alternative (nur erhalten, was am Tag der Migration wirkte): in `STUFE_10` nur gültige Freigaben zählen (`valid_until IS NULL OR valid_until >= heute`) und im Test den Fall „abgelaufen“ auf 0 setzen |
 | 4 | Ein Melder ohne Stufe las seine Meldung weiter (Hersteller, Modell, Gliederung, Antwort, Produkt aus dem Katalog) und konnte sie löschen | niedrig | Behoben: Lesen nur mit Zugang (`GET /meldungen/<id>` 403 vor der Frage nach der Meldung, `darf_meldung` und Listenfilter mit `zugang()`, Meldungsfotos ebenso). Die eigene Meldung **löschen** darf der Melder weiter auch ohne Stufe – es sind seine Angaben (wie die Unterschrift); eine fremde antwortet wie eine unbekannte. Test `test_meldung_ohne_stufe` |
 | 5, 7 | Kontoanfrage und Freigabe gaben Material „Mitglied“ ohne Journaleintrag „rollen“ – beim Anlegen in der Nutzerverwaltung steht er da, und die Kontoanfrage ist seit der neuen Vorgabe der häufigste Weg ins Modul (zweimal gemeldet) | mittel | Behoben: Die Freigabe einer Kontoanfrage schreibt in derselben Transaktion „rollen“ am Konto (vorher –, nachher `recht_material`, `mat_pruefer`, Grund „Kontoanfrage freigegeben“), Handelnde ist die freigebende Plattform-Verwaltung. Erst bei der Freigabe, weil die Stufe erst dann wirkt – abgelehnte Anfragen hinterlassen nichts; ohne Stufe und Häkchen kein Eintrag. Der allererste Nutzer (überall Verwaltung) bleibt ohne Eintrag. Test `test_vorgabe_neue_konten`, Chromium 820 |
 | 6 | Ein Konto ohne Namen und ohne Stufe bekam nur den Hinweis auf den Namen – mit Namen dann „nicht freigeschaltet“, also zwei Runden | niedrig | Behoben: `zugang_meldung` fragt zuerst die Stufe, den Namen nur bei vorhandener Stufe. Test `test_migration_9_10` |
@@ -1750,9 +1752,6 @@ Regressionstest in `tests/test_material_stufen.py` (vorher rot, jetzt grün), Ob
 - **Telefon und Tablet**: Reiter „Freigaben“ in „Ordner bearbeiten“ (Vorlagen, Karten, Verlängern) und Zuordnen
   (Personensuche, Sammelaktion) auf dem Telefon durchgehen. Am Tablet hochkant und quer (bis etwa 920 px) sind die
   Freigabenlisten jetzt Karten – im Browser nachgemessen, auf einem echten Gerät noch nicht gesehen.
-- **Notiz an der eigenen Freigabe**: Wer einen Ordner mitverwaltet, liest dort auch die Notiz zu seiner eigenen
-  Freigabe (Bauentwurf 1.6 Nr. 10; die Hilfe im Dialog sagt das). Soll sie bei eigenen Zeilen verborgen bleiben (außer
-  für die Material-Verwaltung), ist das eine kleine Änderung – bitte entscheiden.
 - **Erledigte Zeilen und neue Durchgänge**: Eine schon erledigte Zeile eines offenen Durchgangs sperrt keinen neuen
   mehr (Prüfung vor Auslieferung, Nr. 4) – das gilt auch innerhalb einer Gliederung: Sind alle Artikel eines
   Unterordners im laufenden Durchgang schon geprüft, lässt sich dort ein eigener eröffnen. Bitte bestätigen.
@@ -1783,18 +1782,8 @@ Regressionstest in `tests/test_material_stufen.py` (vorher rot, jetzt grün), Ob
   recht_verwaltung < 2;` – wer das nicht sein soll, bekommt in der Nutzerverwaltung „Mitglied“. Die Zahl der Konten
   mit Stufe Verwaltung klein halten. Ebenso ansehen, wer den Zugang zurückbekommt (Stufe aus Phase 1 oder nur
   abgelaufene Freigaben): Er sieht Katalog und Suche, keinen Bestand.
-- **Nur abgelaufene Freigaben → Mitglied? Bitte entscheiden** (Prüfung der Modulstufen Nr. 3): Schritt 10 zählt jede
-  Freigabe, auch abgelaufene – solche Konten hatten mit 20085f1 keinen Zugang und bekommen ihn jetzt (Katalog, Suche,
-  globale Suche, kein Bestand). Dafür kann der Verwalter ihres Ordners sie wie bisher durch Verlängern zurückholen.
-  Soll nur bleiben, was am Tag der Migration wirkte, zählt Schritt 10 nur gültige Freigaben – eine Zeile in
-  `models.STUFE_10` und der Testfall „abgelaufen“. Auf dev betroffen (lesend): `SELECT id, name FROM users u WHERE
-  recht_material = 1 AND mat_pruefer = 0 AND NOT EXISTS (SELECT 1 FROM mat_folder_grant g WHERE g.user_id = u.id AND
-  (g.valid_until IS NULL OR g.valid_until >= date('now')));` (zeigt auch Konten, die aus anderem Grund Mitglied sind).
 - **Entzug der Plattform-Verwaltung lässt Material auf „Verwaltung“** (wie die anderen Module): Wer nur kurz
   Plattform-Verwaltung war, sieht weiter alle Bestände, bis jemand Material einzeln senkt. Bitte bestätigen.
-- **Letzter Materialwart ohne Stufe**: Senkt die Plattform-Verwaltung die Stufe des einzigen Materialwarts einer
-  Gliederung auf „–“, verwaltet sie nur noch die Material-Verwaltung; die Nutzerverwaltung warnt davor nicht (Regel
-  Nr. 7 gilt im Reiter „Freigaben“). Ein Hinweis im Dialog wäre eine kleine Ergänzung – bitte entscheiden.
 - **Neue Konten brauchen einen Namen**: Mit der Vorgabe „Mitglied“ im Modul Material lehnt die Nutzerverwaltung ein
   neues Konto ohne Namen ab (oder Material „–“). Kontoanfragen haben den Namen ohnehin als Pflichtfeld.
 - **Zusatz von Hand im Modellnamen – selbst umstellen, nicht automatisch**: Produkte, deren Modellname den Zusatz schon
@@ -1840,6 +1829,56 @@ entschieden; die Schalter sind fort.
    Lücke war offen und ist geschlossen (Herstellerdokumente einer leer gewordenen Kategorie, siehe unten). README
    („Austritt und Löschen“, Verfahrensverzeichnis) und der Kopf von `services/loeschung.py` nennen die unbefristete
    Aufbewahrung.
+
+### Vier weitere Punkte – entschieden
+
+Nach der Gesamtprüfung waren vier Punkte offen – drei standen unter „Zu prüfen“, die Vorschaubilder in der Rückmeldung
+zur Nachbesserung. Der Betreiber hat sie am 18.10.2026 entschieden.
+
+1. **Nur abgelaufene Freigaben → Mitglied** (Prüfung der Modulstufen Nr. 3). Schritt 10 zählt jede Freigabe, auch
+   abgelaufene: Konten mit nur abgelaufenen Freigaben hatten mit 20085f1 keinen Zugang und bekommen „Mitglied“ – sie
+   sehen das Modul (Katalog, Suche, globale Suche), aber keinen Bestand; dafür holt der Verwalter ihres Ordners sie
+   durch Verlängern selbst zurück, ohne die Plattform-Verwaltung. **Entscheidung:** „Ja“ – bleibt so. `models.STUFE_10`
+   und der Fall „abgelaufen“ in `test_migration_9_10` sind unverändert.
+2. **Notiz an der eigenen Freigabe** (Prüfung vor Auslieferung Nr. 3). Wer einen Ordner mitverwaltet, liest im Reiter
+   „Freigaben“ auch die Notiz zu seiner eigenen Freigabe (Bauentwurf 1.6 Nr. 10). **Entscheidung:** „Nein“ – sie wird
+   bei eigenen Zeilen nicht verborgen und bleibt für Mitverwaltende sichtbar, wie die Hilfe im Dialog sagt. Unter „Meine
+   Freigaben“ steht die Notiz weiter nie. Nichts geändert.
+3. **Weitere Vorschaubilder vergrößerbar?** Nach dem Produktfoto in „Artikel anlegen“ (Wünsche vom 18.10.2026) war
+   offen, ob auch die Vorschaubilder in Artikellisten, Katalogliste, Suchvorschlägen, im globalen Steckbrief und in der
+   Bildvorschau der Dialoge groß öffnen sollen. **Entscheidung:** „Nein“ – sie bleiben, wie sie sind. Nichts geändert.
+4. **Warnung beim letzten Materialwart.** Senkte die Plattform-Verwaltung die Stufe des einzigen Materialwarts einer
+   Gliederung auf „–“, kam keine Warnung (Regel 1.6 Nr. 7 gilt nur im Reiter „Freigaben“) – danach verwaltet dort nur
+   noch die Material-Verwaltung. **Entscheidung:** „Ja“, eine Warnung soll kommen. **Umgesetzt** – nur als Warnung,
+   gesperrt wird nichts:
+   - `GET /api/admin/users/<uid>/material-folgen` (nur die Plattform-Verwaltung) liefert zusätzlich
+     `letzter_materialwart`: die Gliederungen, deren einziger wirksamer Verwalter das Konto heute ist, als
+     `[{id, name, pfad}]` (`freigaben.einziger_materialwart`). Gezählt wird wie bei Nr. 7 mit `rechte.verwalter_von` –
+     gültiges verwalten an der Gliederung oder darüber (auch bei verschachtelten Gliederungen), nur aktive Konten mit
+     Namen und Stufe Mitglied: Die Material-Verwaltung zählt nicht als Materialwart, ein Mitverwalter ohne Stufe,
+     deaktiviert oder mit abgelaufener Freigabe auch nicht. Infrage kommen nur Gliederungen in den Zweigen der eigenen
+     gültigen verwalten-Zeilen; wer nur unterhalb einer Gliederung verwaltet, ist nicht ihr Materialwart.
+   - Nutzerverwaltung (`admin.js`): Stellt der Dialog „Bearbeiten“ Material von „Mitglied“ oder „Verwaltung“ auf „–“
+     oder nimmt er „Konto aktiv“ weg, oder stellt die Tabelle Material direkt auf „–“, und ist das Konto einziger
+     Materialwart einer Gliederung, kommt vor dem Speichern die Rückfrage „Einziger Materialwart“. Sie nennt die
+     Gliederung(en) (mit Pfad, falls verschachtelt), sagt, dass dort danach nur noch die Material-Verwaltung verwaltet
+     und Freigaben vergibt, und nennt den Weg zu einem zweiten Materialwart (Bestand → Gliederung → Bearbeiten →
+     Freigaben, Vorlage „Materialwart“). „Abbrechen“ (grau, vorn, mit Fokus; Esc ebenso) lässt alles, wie es war – der
+     Dialog bleibt offen, in der Tabelle springt die Auswahl zurück; „Trotzdem speichern“ ist der rote Hauptknopf, nicht
+     der Knopf für Endgültiges, denn gelöscht wird nichts. Ohne betroffene Gliederung keine Rückfrage. Die Tabelle
+     gehört dazu, weil sich die Stufe dort mit einem Wechsel ändern lässt. Der Dialog „Löschen“ nennt dieselbe Folge
+     unter den Folgen im Modul Material.
+   - Tests: `test_material_stufen.test_letzter_materialwart` (einziger Verwalter, zwei Verwalter, geerbt von oben samt
+     verschachtelter Gliederung, nur unterhalb verwaltet, abgelaufen – fremd und eigen –, Material-Verwaltung zählt
+     nicht, deaktivierte und Mitverwalterin ohne Stufe zählen nicht, 403 für Material-Verwaltung, Materialwart und
+     Führungskraft, Speichern geht trotzdem) und `test_letzter_materialwart_oberflaeche` (statisch: Tabelle und Dialog,
+     Knöpfe, Fokus, Löschdialog); `test_material_zuordnung.test_loeschkonzept` erwartet das neue Feld.
+   - Im Browser geprüft (Chromium, eigenes DATA_DIR mit DEMO-Daten und DEMO-Konten, als Plattform-Verwaltung bei
+     1280 × 900 mit Maus und 390 × 844 mit Touch): DEMO-Materialwart A, einziger Verwalter der DEMO-Gliederung, im
+     Dialog auf Material „–“ → Rückfrage mit „DEMO-Gliederung“, Fokus auf „Abbrechen“; Abbrechen ändert nichts,
+     „Trotzdem speichern“ speichert; Deaktivieren ebenso; in der Tabelle ebenso; der Dialog „Löschen“ nennt die Folge;
+     mit dem DEMO-Prüfer als zweitem Verwalter keine Rückfrage, weder im Dialog noch in der Tabelle. Keine
+     Konsolenfehler, nichts rollt waagerecht.
 
 ### Nachbesserungen nach der Auslieferung (Entscheidungen vom 18.10.2026)
 
@@ -2222,6 +2261,6 @@ oder Plattform-Verwaltung).
 | `POST /api/material/artikel/zuordnen` (`ids` 1–500, `user_id` oder `null`) | Materialwart je Artikel | mehrere auf einmal, ganz oder gar nicht → `geaendert` (Phase 2) |
 | `GET /api/material/ordner/<id>/zugeordnete` | Grundrecht am Ordner | Personen mit Zuordnungen im Zweig: `zugeordnete` (`id`, `name`, `anzahl`, `aktiv`) – für den Filter (Phase 2) |
 | `GET /api/material/ordner/<id>?zugeordnet=` | lesen; Filter nur mit Grundrecht wirksam | Ordnerinhalt nach zugeordneter Person (Phase 2) |
-| `GET /api/admin/users/<id>/material-folgen` | Plattform-Verwaltung | was das Löschen des Kontos im Modul bewirkt: `freigaben`, `zuordnungen`, `entwuerfe`, `pruefungen` (Phase 2) |
+| `GET /api/admin/users/<id>/material-folgen` | Plattform-Verwaltung | was das Löschen des Kontos im Modul bewirkt: `freigaben`, `zuordnungen`, `entwuerfe`, `pruefungen` (Phase 2); dazu `letzter_materialwart` – die Gliederungen `[{id, name, pfad}]`, deren einziger Materialwart das Konto heute ist (Rückfrage beim Senken, Deaktivieren und Löschen; Entscheidung vom 18.10.2026) |
 | `GET /m/<token>` | Modulzugang | sichtbarer Artikel → Weiterleitung; sonst Seite „fremd“ ohne Artikeldaten mit dem Knopf für den Steckbrief (Phase 2) |
 | (Ordner, Artikel, Prüfung, Durchgang) | – | neu: `darf` (`lesen`, `grund`, `pruefen`, `verwalten`) für genau dieses Objekt; `artikel.zugeordnet` und `artikel.journal` nur mit Grundrecht (sonst `null`), Listenzeile `zugeordnet_name`; `durchgang` = `{id, titel, ordner, sichtbar}`; Baumknoten `nur_pfad` und `teilweise`; Durchgangszeilen ohne Leserecht `sichtbar: false`, ohne Kennung (Phase 2) |
