@@ -10,8 +10,9 @@ Formular und JSON).
 
 Paket A1R ergänzt die Durchsetzung in Diensten und Inhalten (8.2/2–11): nichts aus B in irgendeiner Antwort an A
 (Pfad und Inhalt der Anfrage, tabellengetrieben gegen url_map), Vererbung und Heimat, Verschieben und Durchgänge, eine
-Heimat beim Gliederungswechsel, kein Abziehen, Produktjournal, Dubletten, Prüfsicht. Was erst mit einem anderen Paket
-grün werden kann, steht in WARTET_AUF.
+Heimat beim Gliederungswechsel, kein Abziehen, Produktjournal, Dubletten, Prüfsicht – und mit Paket D die Meldungen,
+Rückrufe (Antwort, Mail) und die Personenzuordnung in der Prüfsicht. Die Felder im Inhalt umfassen auch die Routen der
+Pakete B und D (user_id bei Freigabe und Zuordnung, ids beim Zuordnen).
 
 Weitere Pakete hängen ihre Tests unten an (vor dem Block __main__) und bauen mit zwei_gliederungen() bzw.
 trennung_aufbau() auf: zwei Gliederungen nebeneinander, jede mit eigenem Verwalter. Alle Namen, Hersteller und Nummern
@@ -797,8 +798,6 @@ _PLATZHALTER = re.compile(r"<(?:[^<>:]+:)?(\w+)>")
 BESTAND_PLATZHALTER = {"iid", "mid", "aid", "token", "gid", ("pruefungen", "pid"), ("pruefung", "pid"),
                        ("punkte", "rid"), ("ordner", "fid"), ("export", "fid"), ("durchgaenge", "rid"),
                        ("durchgang", "rid")}
-# Was erst ein anderes Paket filtert (Bauentwurf 9.1) – geprüft in test_nichts_aus_b_paket_d.
-LESEN_ANDERES_PAKET = {"material_api.meldung_lesen": "D"}
 
 
 def _platzhalter(regel):
@@ -834,7 +833,7 @@ def test_nichts_aus_b():
         for regel in regeln:
             fremd = any(p in BESTAND_PLATZHALTER for p in _platzhalter(regel))
             url = _url(regel, kennungen)
-            if "GET" in regel.methods and regel.endpoint not in LESEN_ANDERES_PAKET:
+            if "GET" in regel.methods:
                 r = w.get(url)
                 assert r.status_code < 500, (url, r.status_code)
                 if fremd:
@@ -853,7 +852,7 @@ def test_nichts_aus_b():
                 assert r.status_code in (403, 404), (methode, url, r.status_code, r.get_json(silent=True))
                 ohne_merkmale(b, f"{methode} {url}", r.data)
                 geschrieben += 1
-        assert gelesen >= 40 and geschrieben >= 25, (gelesen, geschrieben)          # Stand Phase 2 · L1: 47 und 29
+        assert gelesen >= 50 and geschrieben >= 30, (gelesen, geschrieben)          # Stand Phase 2 · L1: 54 und 34
         assert _stand(app) == vorher, "Mit Kennungen aus B hat sich etwas geändert."
 
         # Listen, Suche, Zählungen, Katalog: nur A.
@@ -1549,7 +1548,7 @@ def test_journal_und_seiten():
     print("Journal und Seiten bestanden.")
 
 
-# --- Tests, die erst mit einem anderen Paket grün werden ----------------------------------------------------------------
+# --- Tests zu Paket D (Meldungen, Rückrufe, Zuordnung) ----------------------------------------------------------------
 
 def test_nichts_aus_b_paket_d():
     """8.2/2, Teil von Paket D: die Meldung aus B (lesen 404 wie unbekannt, in keiner Liste), ein Rückruf über alle
@@ -1625,11 +1624,6 @@ def test_pruefsicht_zugeordnete():
     print("Prüfsicht: Zugeordnete bestanden.")
 
 
-# Was erst nach dem Zusammenführen mit einem anderen Paket grün sein kann (Bauentwurf 9.3): Name → Paket. Der Block
-# __main__ führt diese Tests aus und meldet ein Scheitern nur; die Integration leert die Tabelle.
-WARTET_AUF = {"test_nichts_aus_b_paket_d": "D", "test_rueckruf_antwort": "D", "test_pruefsicht_zugeordnete": "D"}
-
-
 if __name__ == "__main__":
     test_migration_7_8()
     test_sicht()
@@ -1648,8 +1642,6 @@ if __name__ == "__main__":
     test_dublette()
     test_pruefsicht()
     test_journal_und_seiten()
-    for name, paket in WARTET_AUF.items():
-        try:
-            globals()[name]()
-        except Exception as exc:                 # wartet auf das andere Paket – meldet, scheitert aber nicht
-            print(f"{name}: wartet auf Paket {paket} ({type(exc).__name__}: {str(exc)[:200]})")
+    test_nichts_aus_b_paket_d()
+    test_rueckruf_antwort()
+    test_pruefsicht_zugeordnete()
