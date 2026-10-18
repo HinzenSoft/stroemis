@@ -317,8 +317,10 @@ def test_beispielbestand():
             # 4. Prüfungen: zurückdatiert, festgeschrieben mit Protokoll; Prüfer sind DEMO-Konten mit DEMO-Urkunde.
             konten = {u["id"]: u for u in db.query("SELECT * FROM users WHERE email LIKE '%@example.invalid'")}
             assert len(konten) == 18 and all(u["name"].startswith("DEMO-") for u in konten.values())
-            assert all(u["recht_material"] == 1 and u["recht_karte"] == 0 and u["recht_wiki"] == 0
-                       and u["recht_verwaltung"] == 0 for u in konten.values())
+            # Modulstufe Material: Mitglied – nur die zweite Einsatzkraft je Gliederung hat keinen Zugriff.
+            assert all(u["recht_material"] == (0 if re.search(r"^demo-einsatzkraft-\w+-2@", u["email"]) else 1)
+                       and u["recht_karte"] == 0 and u["recht_wiki"] == 0 and u["recht_verwaltung"] == 0
+                       for u in konten.values()), {u["email"]: u["recht_material"] for u in konten.values()}
             fertig = [x for x in pruefungen if x["completed_at"]]
             assert len(fertig) > ARTIKEL and min(x["inspected_on"] for x in fertig) < bestand.heute().isoformat()
             for x in fertig:

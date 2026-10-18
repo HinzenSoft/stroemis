@@ -352,7 +352,7 @@ class Beispielbestand:
         """Ein DEMO-Konto nur für das Modul Material (Karte, Wiki, Prüfungen und Verwaltung aus) mit zufälligem Passwort –
         wie in scripts/material_demo.py direkt, mit dem Journaleintrag „rollen“ wie in der Nutzerverwaltung. Prüfer
         (Häkchen und Urkundennummer) und Materialwart hinterlegen ihre DEMO-Unterschrift über den Dienst des Profils.
-        users.recht_material = 1 (Mitglied): Heute wirkt die Stufe nicht, ein späterer Umbau liest sie wieder."""
+        Modulstufe Material: Mitglied (1) – die Einsatzkraft ohne Modulzugang (OHNE_ZUGANG) bekommt „kein Zugriff“ (0)."""
         import secrets
 
         from werkzeug.security import generate_password_hash
@@ -361,12 +361,14 @@ class Beispielbestand:
         from app.material.services import journal, unterschrift
         passwort = secrets.token_urlsafe(12)
         urkunde = k.get("urkunde", "")
+        stufe = 0 if k.get("sicht") == OHNE_ZUGANG else 1
         uid = db.execute(
             "INSERT INTO users (email, password_hash, name, gliederung, recht_karte, recht_wiki, recht_pruefungen, "
             "recht_verwaltung, recht_material, mat_pruefer, mat_katalog, urkundennummer, created_at) "
-            "VALUES (?,?,?,?,0,0,0,0,1,?,0,?,?)",
-            (k["mail"], generate_password_hash(passwort), k["name"], gl["name"], int(bool(urkunde)), urkunde, db.now()))
-        journal.eintragen("user", uid, "rollen", None, {"recht_material": 1, "mat_pruefer": int(bool(urkunde)),
+            "VALUES (?,?,?,?,0,0,0,0,?,?,0,?,?)",
+            (k["mail"], generate_password_hash(passwort), k["name"], gl["name"], stufe, int(bool(urkunde)), urkunde,
+             db.now()))
+        journal.eintragen("user", uid, "rollen", None, {"recht_material": stufe, "mat_pruefer": int(bool(urkunde)),
                                                         "mat_katalog": 0, "urkundennummer": urkunde})
         if urkunde or k["rolle"] == "wart":
             unterschrift.setzen({"id": uid}, unterschrift_uri(uid))
@@ -377,7 +379,7 @@ class Beispielbestand:
         """Materialwart: verwalten an der Gliederung (dauerhaft); Prüferin: lesen und prüfen (Prüffreigabe bis 31.12. des
         Folgejahres); Mitglied: lesen; externer Prüfer: nur prüfen im Lager, 30 Tage (zeigt „läuft bald ab“); die
         Einsatzkräfte aus SICHT_PERSON: lesen an ihrem persönlichen Ordner (dauerhaft), die übrigen nichts. Über den
-        Schreibweg des Freigaben-Dienstes mit den Rechten der Plattform-Verwaltung – Prüffreigaben nur an qualifizierte
+        Schreibweg des Freigaben-Dienstes mit den Rechten der Material-Verwaltung – Prüffreigaben nur an qualifizierte
         Konten, höchstens 24 Monate; im Journal unter „Beispielbestand“, die Konten nur als Kontoverweis."""
         from app.material.services import freigaben, rechte
         plattform = rechte.Sicht(uid=None, alles=True, qualifiziert=False)
