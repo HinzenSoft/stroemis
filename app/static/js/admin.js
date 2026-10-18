@@ -184,11 +184,11 @@
   });
 
   /* Die Urkundennummer zeigt der Dialog nur – eintragen und ändern kann sie allein der Prüfer im
-     eigenen Profil (PUT /api/material/urkundennummer). */
+     eigenen Profil (PUT /api/material/urkundennummer). Hier steht nur der Zustand; dass er sie selbst im Profil
+     einträgt, sagt der Hilfetext darunter (sonst stand es zweimal untereinander). */
   function urkundeLesend(u) {
-    if (!u.id) return "Urkundennummer: trägt der Prüfer nach der ersten Anmeldung selbst im Profil ein – solange darf er nicht prüfen.";
-    if (u.urkunde_gueltig) return `Urkundennummer: <strong>${S.esc(u.urkundennummer)}</strong> – trägt der Prüfer selbst im Profil ein.`;
-    return "Urkundennummer: noch keine – solange darf er nicht prüfen. Er trägt sie selbst im Profil ein.";
+    if (u.id && u.urkunde_gueltig) return `Urkundennummer: <strong>${S.esc(u.urkundennummer)}</strong>`;
+    return "Urkundennummer: noch keine – solange darf er nicht prüfen.";
   }
 
   function userForm(u) {

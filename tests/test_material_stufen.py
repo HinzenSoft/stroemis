@@ -7,6 +7,7 @@ Häkchen „Prüfer“. Migration Schritt 10, Vorgabe neuer Konten (nur Material
 die Material-Verwaltung. Alle Namen, Nummern und Konten hier sind erfunden und nur für den Test da."""
 import json
 import os
+import re
 import sqlite3
 import sys
 import tempfile
@@ -638,6 +639,13 @@ def test_vorgabe_neue_konten():
             assert len(e) == 1 and e[0]["user_id"] == erst_id and e[0]["user_name"] == "Erste Person", e
             assert e[0]["before_json"] is None and json.loads(e[0]["after_json"]) == {
                 "recht_material": 1, "mat_pruefer": 0, "grund": "Kontoanfrage freigegeben"}, e
+            # Gesamtprüfung: Das Profil eines neuen Kontos (Wiki im Lesemodus, Material Mitglied) erklärt das Profilbild
+            # mit Wiki-Seiten – „Artikel“ heißt im Modul Material der Ausrüstungsgegenstand.
+            neu = app.test_client()
+            assert neu.post("/api/auth/login", json={"email": "zweit@example.org", "password": "passwort1"}).status_code == 200
+            profil = neu.get("/profil").get_data(as_text=True)
+            assert "neben deinem Namen an jeder Wiki-Seite, die du erstellt oder bearbeitet hast" in profil
+            assert "an jedem Artikel" not in profil
             # Eine Kontoanfrage, der die Verwaltung vor der Freigabe Material „–“ gibt, hinterlässt beim Freigeben nichts.
             assert app.test_client().post("/api/auth/register", json={
                 "email": "viert@example.org", "password": "passwort1", "name": "Vierte Person",
@@ -678,6 +686,11 @@ def test_nutzerverwaltung_oberflaeche():
     for da in ("wirkt nicht – kein Zugang", "Frei&shy;gabe", 'material.value === "0"', 'material.value = "1"',
                "Material steht jetzt auf „Mitglied“", "if (!voll && offen)", "auto.hidden = !gehoben || material.disabled"):
         assert da in js, da
+    # Gesamtprüfung: Die Zeile zur Urkundennummer nennt nur den Zustand – dass der Prüfer sie selbst im Profil einträgt,
+    # steht einmal, im Hilfetext darunter (vorher zweimal untereinander).
+    urkunde = re.search(r"function urkundeLesend\(u\) \{(.*?)\n  \}", js, re.S).group(1)
+    assert "Profil" not in urkunde and "Urkundennummer: noch keine – solange darf er nicht prüfen." in urkunde, urkunde
+    assert js.count("trägt der Prüfer selbst in seinem Profil ein") == 1
     print("Nutzerverwaltung (Oberfläche) bestanden.")
 
 

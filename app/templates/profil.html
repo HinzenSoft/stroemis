@@ -9,7 +9,7 @@
     <div class="profilbild">
       <div class="pb-vorschau" id="pb-vorschau" aria-hidden="true">{% if avatar %}<img src="{{ avatar }}" alt="">{% endif %}<span class="pb-kuerzel{% if avatar %} hidden{% endif %}">{{ initialen }}</span></div>
       <div class="pb-text">
-        <div class="help">Es steht neben dem Namen an jedem Artikel, den du erstellt oder an dem du mitgeschrieben hast. Ohne Bild werden die Initialen gezeigt.</div>
+        <div class="help">Es steht neben deinem Namen an jeder Wiki-Seite, die du erstellt oder bearbeitet hast. Ohne Bild werden die Initialen gezeigt.</div>
         <div class="btn-row">
           <button class="btn secondary" id="pb-waehlen" type="button">Bild wählen …</button>
           <button class="btn secondary{% if not avatar %} hidden{% endif %}" id="pb-weg" type="button">Entfernen</button>
