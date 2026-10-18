@@ -17,13 +17,14 @@ from flask import (Blueprint, abort, current_app, g, jsonify, redirect, render_t
 from .. import db
 from ..auth import attempts_exceeded, current_user, eingabefehler_abfangen, json_body, note_attempt
 from . import models
-from .services import (Abgelehnt, anhang, bestand, durchgang, journal, katalog, kennung, meldung, protokoll, pruefung,
-                       search, unterschrift)
+from .services import (Abgelehnt, anhang, bestand, durchgang, eingabe, journal, katalog, kennung, meldung, protokoll,
+                       pruefung, search, unterschrift)
 from .services import rueckruf
 from .services import status as st
 from .services import ueberblick
-from .services.rechte import (_ordner_aus_anfrage, darf, darf_alles, darf_unterschreiben, ist_katalogpfleger, ist_pruefer,
-                              katalog_required, requires_folder, urkunde_setzen)
+from .services.rechte import (_bezug, darf, darf_alles, darf_artikel, darf_unterschreiben, ist_katalogpfleger, ist_pruefer,
+                              katalog_required, requires_folder, requires_zugang, sicht, urkunde_setzen, zugang,
+                              zugang_meldung)
 from .services.importer import ZIP_MAX_BYTES as KATALOG_ZIP_MAX_BYTES
 
 seiten = Blueprint("material", __name__, template_folder="templates", static_folder="static",
@@ -67,10 +68,9 @@ def _integritaet(exc):
 
 
 def _eingabe():
-    """JSON-Body oder – bei Dateiuploads – die Formularfelder der Multipart-Anfrage."""
-    if request.files or (request.content_type or "").startswith("multipart/"):
-        return request.form
-    return json_body()
+    """JSON-Body oder – bei Dateiuploads – die Formularfelder der Multipart-Anfrage (services.eingabe; dieselbe Regel
+    liest requires_folder bei der Quelle „eingabe:“)."""
+    return eingabe()
 
 
 def _seite_args(maxi=search.PRO_SEITE_MAX):
@@ -92,7 +92,7 @@ def _seite(ansicht, katalog_seite=False, warnung=None, **daten):
     u = current_user()
     if not u:
         return redirect(url_for("pages.login", next=request.full_path.rstrip("?")))
-    if not (darf("lesen") or (katalog_seite and ist_katalogpfleger())):
+    if not zugang(u):
         abort(403)
     return render_template("material/seite.html", user=u, active="material", ansicht=ansicht,
                            daten=json.dumps(daten, ensure_ascii=False), darf=json.dumps(darf_alles()),
@@ -153,10 +153,10 @@ def _protokoll_senden(row, quelle, kennung_wert, inventarnummer=None):
     u = current_user()
     if not u:
         return redirect(url_for("pages.login", next=request.path))
-    if not darf("lesen"):
+    if not zugang(u):
         abort(403)
     try:
-        if not darf("lesen", _ordner_aus_anfrage(quelle, {quelle: kennung_wert})):
+        if not darf("lesen", _bezug(quelle, {quelle: kennung_wert}).ordner_id):
             abort(403)
         if not row:
             abort(404)
@@ -192,7 +192,7 @@ def pruefseite():
     Sie zeigt nur das Ergebnis und die Protokoll-ID, keine Personendaten."""
     u = current_user()
     return render_template("material/pruefen.html", user=u, active="material" if u else None,
-                           angemeldet=bool(u and darf("lesen")))
+                           angemeldet=bool(u and zugang(u)))
 
 
 @seiten.get("/material/katalog")
@@ -221,7 +221,7 @@ def meldungen_seite():
 def suche_seite():
     """Ein eindeutiger Treffer öffnet den Artikel direkt; sonst zeigt die Seite die Trefferliste."""
     q = (request.args.get("q") or "").strip()
-    if current_user() and darf("lesen") and q:
+    if current_user() and zugang() and q:
         try:
             treffer, gesamt = search.artikel(q, 1, 2)
         except Abgelehnt:
@@ -238,7 +238,7 @@ def qr_ziel(token):
     u = current_user()
     if not u:
         return redirect(url_for("pages.login", next=f"/m/{token}"))
-    if not darf("lesen"):
+    if not zugang(u):
         abort(403)
     i = db.query("SELECT id FROM mat_item WHERE qr_token = ?", (token,), one=True)
     if not i:
@@ -254,7 +254,7 @@ def medien(art, dateiname):
         abort(404)
     if not current_user():
         abort(401)
-    if not (darf("lesen") or ist_katalogpfleger()):
+    if not zugang():
         abort(403)
     resp = send_from_directory(os.path.join(katalog.medien_dir(), art), dateiname, max_age=60 * 60 * 24 * 7)
     resp.cache_control.public = None
@@ -266,7 +266,7 @@ def medien(art, dateiname):
 # --- Schnittstelle: Start und Suche --------------------------------------------------------------------
 
 @api.get("/start")
-@requires_folder("lesen")
+@requires_zugang
 def start():
     alle = bestand.baum()
     gliederungen = [o for o in alle if o["kind"] == "gliederung" and not o["system_kind"]]
@@ -281,7 +281,7 @@ def start():
 
 
 @api.get("/suche")
-@requires_folder("lesen")
+@requires_zugang
 def suche():
     seite, pro_seite = _seite_args()
     rows, gesamt = search.artikel(request.args.get("q", ""), seite, pro_seite, *_sortier_args())
@@ -294,7 +294,7 @@ def suche():
 
 
 @api.get("/faellig")
-@requires_folder("lesen")
+@requires_zugang
 def faellig():
     nur = request.args.get("status") or ""
     stati = tuple(s for s in nur.split(",") if s in st.STATUS) or bestand.FAELLIG
@@ -311,8 +311,9 @@ def faellig():
 # --- Schnittstelle: Katalog ----------------------------------------------------------------------------
 
 def _katalog_lesen():
-    if not (darf("lesen") or ist_katalogpfleger()):
-        raise Abgelehnt("Für dein Konto ist das Modul Material nicht freigeschaltet.", 403)
+    """Der Katalog ist global: lesen darf jeder mit Modulzugang."""
+    if not zugang():
+        raise Abgelehnt(zugang_meldung(), 403)
 
 
 @api.get("/kategorien")
@@ -483,7 +484,7 @@ def meldungen():
     if eigene in ("0", "1"):
         alle = eigene == "0"
     else:
-        alle = ist_katalogpfleger() or not darf("verwalten")
+        alle = ist_katalogpfleger() or not sicht().irgendwo("verwalten")
     filter_ = request.args.get("status") if request.args.get("status") in meldung.FILTER else ("offen" if alle else "alle")
     rows = meldung.liste(filter_, None if alle else u["id"])
     return jsonify(meldungen=[meldung.meldung_json(r) for r in rows], alle=alle, filter=filter_,
@@ -491,7 +492,7 @@ def meldungen():
 
 
 @api.post("/meldungen")
-@requires_folder("verwalten")
+@requires_folder("verwalten", "eingabe:folder_id", leer="irgendwo")
 def meldung_anlegen():
     """Ein fehlendes Produkt melden – Felder als JSON oder, mit Fotos, als Formular (Feld „fotos“, mehrfach)."""
     mid = meldung.anlegen(_eingabe(), request.files.getlist("fotos"))
@@ -504,7 +505,7 @@ def meldung_lesen(mid):
     if not u:
         return jsonify(error="Nicht angemeldet"), 401
     r = meldung.meldung(mid)
-    if not (darf("lesen") or ist_katalogpfleger() or r["created_by"] == u["id"]):
+    if not (zugang(u) or ist_katalogpfleger() or r["created_by"] == u["id"]):
         raise Abgelehnt("Diese Meldung sehen ihr Melder und alle mit Zugang zum Modul.", 403)
     return jsonify(meldung=meldung.meldung_json(r))
 
@@ -606,20 +607,20 @@ def formular_loeschen(fid):
 # --- Schnittstelle: Ordner -------------------------------------------------------------------------------
 
 @api.get("/ordner")
-@requires_folder("lesen")
+@requires_zugang
 def ordner_baum():
     return jsonify(ordner=bestand.baum(), ordnerarten=models.ORDNERARTEN)
 
 
 @api.post("/ordner")
-@requires_folder("verwalten", quelle="json:parent_id")
+@requires_folder("verwalten", "json:parent_id", leer="global")
 def ordner_anlegen():
     fid = bestand.ordner_anlegen(json_body())
     return jsonify(ordner=bestand.ordner_json(bestand.ordner(fid))), 201
 
 
 @api.get("/ordner/<int:fid>")
-@requires_folder("lesen", quelle="fid")
+@requires_folder("lesen", "fid")
 def ordner_lesen(fid):
     # Ein Ordner zeigt bis zu 500 Artikel je Seite (Vorgabe 200) – mehr als die Suche, weil hier ganze
     # Lager durchgesehen werden.
@@ -630,14 +631,14 @@ def ordner_lesen(fid):
 
 
 @api.put("/ordner/<int:fid>")
-@requires_folder("verwalten", quelle="fid")
+@requires_folder("verwalten", "fid")
 def ordner_aendern(fid):
     bestand.ordner_aendern(fid, json_body())
     return jsonify(ordner=bestand.ordner_json(bestand.ordner(fid)))
 
 
 @api.post("/ordner/<int:fid>/verschieben")
-@requires_folder("verwalten", quelle="fid")
+@requires_folder("verwalten", "fid")
 def ordner_verschieben(fid):
     d = json_body()
     ziel = kennung(d.get("parent_id"), "Zielordner", leer_erlaubt=True)
@@ -648,21 +649,25 @@ def ordner_verschieben(fid):
 
 
 @api.delete("/ordner/<int:fid>")
-@requires_folder("verwalten", quelle="fid")
+@requires_folder("verwalten", "fid")
 def ordner_loeschen(fid):
+    """Löschen darf, wer den Oberordner verwaltet – eine Gliederung auf oberster Ebene nur die Verwaltung."""
+    if not darf("verwalten", bestand.ordner(fid)["parent_id"]):
+        raise Abgelehnt("Diesen Ordner löscht nur, wer den Ordner darüber verwaltet – eine Gliederung auf oberster "
+                        "Ebene nur die Plattform-Verwaltung.", 403)
     bestand.ordner_loeschen(fid)
     return jsonify(ok=True)
 
 
 @api.post("/ordner/<int:fid>/foto")
-@requires_folder("verwalten", quelle="fid")
+@requires_folder("verwalten", "fid")
 def ordner_foto(fid):
     bestand.ordner_foto_setzen(fid, request.files.get("file"))
     return jsonify(ordner=bestand.ordner_json(bestand.ordner(fid)))
 
 
 @api.delete("/ordner/<int:fid>/foto")
-@requires_folder("verwalten", quelle="fid")
+@requires_folder("verwalten", "fid")
 def ordner_foto_entfernen(fid):
     bestand.ordner_foto_entfernen(fid)
     return jsonify(ordner=bestand.ordner_json(bestand.ordner(fid)))
@@ -671,40 +676,40 @@ def ordner_foto_entfernen(fid):
 # --- Schnittstelle: Artikel -----------------------------------------------------------------------------
 
 @api.get("/artikel/vorschlag")
-@requires_folder("lesen")
+@requires_folder("lesen", "arg:folder_id", leer="zugang")
 def artikel_vorschlag():
     return jsonify(vorschlag=bestand.vorschlag(request.args))
 
 
 @api.post("/artikel")
-@requires_folder("verwalten", quelle="json:folder_id")
+@requires_folder("verwalten", "json:folder_id", leer="global")
 def artikel_anlegen():
     iid = bestand.artikel_anlegen(json_body())
     return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True)), 201
 
 
 @api.get("/artikel/<int:iid>")
-@requires_folder("lesen", quelle="iid")
+@requires_folder("lesen", "iid")
 def artikel_lesen(iid):
     return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True))
 
 
 @api.put("/artikel/<int:iid>")
-@requires_folder("verwalten", quelle="iid")
+@requires_folder("verwalten", "iid")
 def artikel_aendern(iid):
     bestand.artikel_aendern(iid, json_body())
     return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True))
 
 
 @api.delete("/artikel/<int:iid>")
-@requires_folder("verwalten", quelle="iid")
+@requires_folder("verwalten", "iid")
 def artikel_loeschen(iid):
     bestand.artikel_loeschen(iid)
     return jsonify(ok=True)
 
 
 @api.post("/artikel/verschieben")
-@requires_folder("verwalten", quelle="json:folder_id")
+@requires_folder("verwalten", "json:folder_id", leer="global")
 def artikel_verschieben():
     d = json_body()
     ziel = kennung(d.get("folder_id"), "Zielordner")
@@ -730,13 +735,13 @@ def _pruefung_antwort(pid, code=200):
 
 
 @api.get("/artikel/<int:iid>/pruefungen")
-@requires_folder("lesen", quelle="iid")
+@requires_folder("lesen", "iid")
 def artikel_pruefungen(iid):
     return jsonify(pruefungen=pruefung.fuer_artikel(iid))
 
 
 @api.post("/artikel/<int:iid>/pruefungen")
-@requires_folder("pruefen", quelle="iid")
+@requires_folder("pruefen", "iid")
 def pruefung_starten(iid):
     d = json_body()
     rid = kennung(d.get("durchgang_id"), "Prüfdurchgang", leer_erlaubt=True)
@@ -745,45 +750,45 @@ def pruefung_starten(iid):
 
 
 @api.get("/pruefungen/<int:pid>")
-@requires_folder("lesen", quelle="pid")
+@requires_folder("lesen", "pid")
 def pruefung_lesen(pid):
     return _pruefung_antwort(pid)
 
 
 @api.put("/pruefungen/<int:pid>")
-@requires_folder("pruefen", quelle="pid")
+@requires_folder("pruefen", "pid")
 def pruefung_kopf(pid):
     pruefung.kopf_setzen(pid, json_body(), _pruefer())
     return _pruefung_antwort(pid)
 
 
 @api.put("/pruefungen/<int:pid>/punkte/<int:rid>")
-@requires_folder("pruefen", quelle="pid")
+@requires_folder("pruefen", "pid")
 def punkt_setzen(pid, rid):
     return jsonify(punkt=pruefung.punkt_setzen(pid, rid, json_body(), _pruefer()))
 
 
 @api.post("/pruefungen/<int:pid>/punkte/<int:rid>/foto")
-@requires_folder("pruefen", quelle="pid")
+@requires_folder("pruefen", "pid")
 def punkt_foto(pid, rid):
     return jsonify(punkt=pruefung.punkt_foto_setzen(pid, rid, request.files.get("file"), _pruefer()))
 
 
 @api.delete("/pruefungen/<int:pid>/punkte/<int:rid>/foto")
-@requires_folder("pruefen", quelle="pid")
+@requires_folder("pruefen", "pid")
 def punkt_foto_entfernen(pid, rid):
     return jsonify(punkt=pruefung.punkt_foto_entfernen(pid, rid, _pruefer()))
 
 
 @api.post("/pruefungen/<int:pid>/anhaenge")
-@requires_folder("pruefen", quelle="pid")
+@requires_folder("pruefen", "pid")
 def anhang_neu(pid):
     a = pruefung.anhang_hinzufuegen(pid, request.form, request.files.getlist("file"), _pruefer())
     return jsonify(anhang=a), 201
 
 
 @api.delete("/pruefungen/<int:pid>/anhaenge/<int:aid>")
-@requires_folder("pruefen", quelle="pid")
+@requires_folder("pruefen", "pid")
 def anhang_entfernen(pid, aid):
     pruefung.anhang_entfernen(pid, aid, _pruefer())
     return jsonify(ok=True)
@@ -791,7 +796,7 @@ def anhang_entfernen(pid, aid):
 
 @api.post("/pruefungen/<int:pid>/festschreiben")
 @api.post("/pruefungen/<int:pid>/abschliessen")
-@requires_folder("pruefen", quelle="pid")
+@requires_folder("pruefen", "pid")
 def pruefung_abschliessen(pid):
     """Abschließen heißt seit Lieferung 3 Festschreiben (der alte Pfad bleibt für offene Seiten gültig)."""
     pruefung.abschliessen(pid, json_body(), _pruefer())
@@ -799,7 +804,7 @@ def pruefung_abschliessen(pid):
 
 
 @api.post("/pruefungen/<int:pid>/berichtigen")
-@requires_folder("pruefen", quelle="pid")
+@requires_folder("pruefen", "pid")
 def pruefung_berichtigen(pid):
     """Berichtigung einer abgeschlossenen Prüfung beginnen – liefert den neuen Entwurf."""
     neu = pruefung.berichtigen(pid, json_body(), _pruefer())
@@ -807,28 +812,29 @@ def pruefung_berichtigen(pid):
 
 
 @api.delete("/pruefungen/<int:pid>")
-@requires_folder(("pruefen", "verwalten"), quelle="pid")
+@requires_folder(("pruefen", "verwalten"), "pid")
 def pruefung_verwerfen(pid):
-    """Den eigenen Entwurf verwerfen – oder als Materialwart eine liegen gebliebene Reservierung freigeben."""
-    pruefung.verwerfen(pid, _pruefer(), darf_freigeben=darf("verwalten", g.mat_ordner_id))
+    """Den eigenen Entwurf verwerfen (prüfen) – oder als Materialwart eine liegen gebliebene Reservierung freigeben
+    (verwalten am Artikel)."""
+    pruefung.verwerfen(pid, _pruefer(), darf_freigeben=darf_artikel("verwalten", g.mat_artikel))
     return jsonify(ok=True)
 
 
 @api.get("/entwuerfe")
-@requires_folder("lesen")
+@requires_zugang
 def entwuerfe():
     return jsonify(entwuerfe=pruefung.entwuerfe(current_user()["id"]))
 
 
 @api.post("/artikel/<int:iid>/sperren")
-@requires_folder("pruefen", quelle="iid")
+@requires_folder("pruefen", "iid")
 def artikel_sperren(iid):
     pruefung.sperren(iid, json_body(), _pruefer())
     return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True))
 
 
 @api.post("/artikel/<int:iid>/aussondern")
-@requires_folder("verwalten", quelle="iid")
+@requires_folder("verwalten", "iid")
 def artikel_aussondern(iid):
     aid = pruefung.aussondern(iid, json_body(), _pruefer())
     return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True), aussonderung=aid)
@@ -837,7 +843,7 @@ def artikel_aussondern(iid):
 # --- Schnittstelle: eigene Urkundennummer und Unterschrift, Prüfseite --------------------------------------------
 
 @api.put("/urkundennummer")
-@requires_folder("lesen")
+@requires_zugang
 def urkundennummer_setzen():
     """Die eigene Urkundennummer im Profil eintragen, ändern oder leer entfernen – nur mit dem Häkchen „Prüfer“ aus der
     Nutzerverwaltung, nur fürs eigene Konto (eine Kennung in der Anfrage gibt es nicht). Erst mit ihr darf er prüfen."""
@@ -847,13 +853,13 @@ def urkundennummer_setzen():
 
 
 @api.get("/unterschrift")
-@requires_folder("lesen")
+@requires_zugang
 def unterschrift_lesen():
     return jsonify(unterschrift=unterschrift.daten_uri(unterschrift.von(current_user()["id"])))
 
 
 @api.put("/unterschrift")
-@requires_folder("lesen")
+@requires_zugang
 def unterschrift_setzen():
     """Die eigene Unterschrift hinterlegen (data:-URL vom Signatur-Pad) – Grundlage jedes Festschreibens. Nur wer
     festschreibt (Prüfer, schon mit dem Häkchen – die Urkundennummer darf noch fehlen) oder aussondert (Materialwart),
@@ -864,7 +870,7 @@ def unterschrift_setzen():
 
 
 @api.delete("/unterschrift")
-@requires_folder("lesen")
+@requires_zugang
 def unterschrift_entfernen():
     unterschrift.entfernen(current_user())
     return jsonify(unterschrift=None)
@@ -883,7 +889,7 @@ def pruefen():
         return jsonify(error="Bitte eine PDF-Datei wählen."), 400
     ergebnis = protokoll.pruefen(datei.stream)
     u = current_user()
-    if u and darf("lesen") and ergebnis.get("protokoll_id"):
+    if u and zugang(u) and ergebnis.get("protokoll_id"):
         ergebnis["link"] = _protokoll_link(ergebnis["protokoll_id"])
     return jsonify(ergebnis)
 
@@ -900,13 +906,13 @@ def _protokoll_link(pid):
 # --- Schnittstelle: Prüfdurchgänge ---------------------------------------------------------------------------
 
 @api.get("/durchgaenge")
-@requires_folder("lesen")
+@requires_zugang
 def durchgaenge():
     return jsonify(durchgaenge=durchgang.liste(nur_offen=request.args.get("offen") == "1"))
 
 
 @api.post("/durchgaenge")
-@requires_folder(("verwalten", "pruefen"), quelle="json:folder_id")
+@requires_folder(("verwalten", "pruefen"), "json:folder_id", leer="global")
 def durchgang_eroeffnen():
     d = json_body()
     rid = durchgang.eroeffnen(kennung(d.get("folder_id"), "Ordner"), d, _pruefer())
@@ -914,13 +920,13 @@ def durchgang_eroeffnen():
 
 
 @api.get("/durchgaenge/<int:rid>")
-@requires_folder("lesen", quelle="rid")
+@requires_folder("lesen", "rid")
 def durchgang_lesen(rid):
     return jsonify(durchgang=durchgang.durchgang_json(durchgang.runde(rid), voll=True, pruefer_id=current_user()["id"]))
 
 
 @api.post("/durchgaenge/<int:rid>/ausnehmen")
-@requires_folder(("verwalten", "pruefen"), quelle="rid")
+@requires_folder(("verwalten", "pruefen"), "rid")
 def durchgang_ausnehmen(rid):
     d = json_body()
     durchgang.ausnehmen(rid, kennung(d.get("item_id"), "Artikel"), d, _pruefer())
@@ -928,21 +934,21 @@ def durchgang_ausnehmen(rid):
 
 
 @api.post("/durchgaenge/<int:rid>/einbeziehen")
-@requires_folder(("verwalten", "pruefen"), quelle="rid")
+@requires_folder(("verwalten", "pruefen"), "rid")
 def durchgang_einbeziehen(rid):
     durchgang.einbeziehen(rid, kennung(json_body().get("item_id"), "Artikel"))
     return jsonify(ok=True)
 
 
 @api.post("/durchgaenge/<int:rid>/abschliessen")
-@requires_folder(("verwalten", "pruefen"), quelle="rid")
+@requires_folder(("verwalten", "pruefen"), "rid")
 def durchgang_abschliessen(rid):
     durchgang.abschliessen(rid, _pruefer())
     return jsonify(durchgang=durchgang.durchgang_json(durchgang.runde(rid)))
 
 
 @api.post("/durchgaenge/<int:rid>/abbrechen")
-@requires_folder(("verwalten", "pruefen"), quelle="rid")
+@requires_folder(("verwalten", "pruefen"), "rid")
 def durchgang_abbrechen(rid):
     """Vorzeitig beenden; „durchgang“ ist null, wenn er mangels Geprüftem ganz entfernt wurde."""
     bleibt = durchgang.abbrechen(rid, _pruefer())
@@ -950,7 +956,7 @@ def durchgang_abbrechen(rid):
 
 
 @api.delete("/durchgaenge/<int:rid>")
-@requires_folder(("verwalten", "pruefen"), quelle="rid")
+@requires_folder(("verwalten", "pruefen"), "rid")
 def durchgang_loeschen(rid):
     durchgang.loeschen(rid)
     return jsonify(ok=True)

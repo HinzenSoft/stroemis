@@ -98,10 +98,10 @@ def _im_hintergrund(funktion, *args):
 #   wiki        Mitglied: eigene und freigegebene Seiten; Verwaltung: alle Seiten, beschränkte lesen,
 #               veröffentlichen, HTML-Bausteine, Ersteller ändern, endgültig löschen.
 #   pruefungen  Mitglied: Prüfungen abnehmen; Verwaltung: Kataloge pflegen, jeden Lehrgang leiten.
-#   material    Mitglied: Bestand, Fälligkeiten, Lebensläufe und Protokolle ansehen (Führungskraft);
-#               Verwaltung: Materialwart – Ordner und Artikel pflegen, Prüfdurchgänge eröffnen.
-#               Quer dazu zwei Kennzeichen am Konto: Prüfer (Sachkundiger; wirkt erst mit der Urkundennummer,
-#               die er selbst im Profil einträgt) und Produktkatalogpfleger – siehe app/material/services/rechte.py.
+#   material    seit Phase 2 keine gespeicherte Stufe mehr: Rechte am Bestand vergibt der Verwalter eines Ordners als
+#               Freigabe (lesen, prüfen, verwalten). Die Stufe hier ist abgeleitet – 2 = irgendwo verwalten,
+#               1 = Modulzugang (Freigabe, Häkchen Prüfer oder Katalogpfleger), siehe app/material/services/rechte.py.
+#               recht_material bleibt als Rückweg stehen und wird nicht mehr gelesen.
 #   verwaltung  Verwaltung: Nutzer, Rechte, Einstellungen – und damit alle Rechte überall; eine
 #               Mitglied-Stufe gibt es hier nicht.
 # Die Werte liegen als Spalten recht_<modul> am Nutzer (db.py); api_admin schreibt sie.
@@ -111,10 +111,15 @@ STUFEN = (KEIN_ZUGRIFF, MITGLIED, VERWALTUNG)
 
 
 def stufe(modul, user=None):
-    """Wirksame Stufe eines Nutzers im Modul – Verwaltung im Modul „verwaltung“ gilt überall."""
+    """Wirksame Stufe eines Nutzers im Modul – Verwaltung im Modul „verwaltung“ gilt überall. Im Modul Material kommt
+    sie seit Phase 2 aus den Freigaben je Ordner (rechte.material_stufe_wirksam); die Spalte recht_material wirkt nicht
+    mehr."""
     user = user or current_user()
     if not user:
         return KEIN_ZUGRIFF
+    if modul == "material":
+        from .material.services.rechte import material_stufe_wirksam
+        return material_stufe_wirksam(user)
     if int(user["recht_verwaltung"] or 0) >= VERWALTUNG:
         return VERWALTUNG
     return int(user[f"recht_{modul}"] or 0)

@@ -193,7 +193,7 @@ def test_zaehlung_je_ordner():
     print("Zählung je Ordner bestanden.")
 
 
-# --- 2. Führungskraft: sieht alles, ändert nichts --------------------------------------------------------------
+# --- 2. Führungskraft: sieht alles (in ihrer Gliederung), ändert nichts ------------------------------------------
 
 SCHREIBEN = {"POST", "PUT", "PATCH", "DELETE"}
 # Routen, die Dateien als Formular annehmen – sie bekommen eine Multipart-Anfrage wie aus dem Browser.
@@ -209,6 +209,12 @@ AUSNAHMEN_SCHREIBEN = {
     # Eine Meldung löscht nur ihr Melder; die des Materialwarts bleibt (403 aus dem Dienst, nicht aus der Rolle).
     ("DELETE", "material_api.meldung_loeschen"): 403,
 }
+# Ebenso nach dem Pfad (Phase 2, für die Routen der Pakete B, C, D): Die globale Suche und der QR-Steckbrief stehen
+# jedem mit Modulzugang offen – ohne Bestätigung antworten sie 400 und schreiben nichts.
+AUSNAHMEN_SCHREIBEN_PFAD = {
+    ("POST", "/api/material/globalsuche"): 400,
+    ("POST", "/api/material/globalsuche/qr"): 400,
+}
 # Lesen: was nicht 200 liefert, und warum.
 AUSNAHMEN_LESEN = {
     "material.qr_ziel": 302,                       # /m/<token> leitet zum Artikel weiter
@@ -216,6 +222,9 @@ AUSNAHMEN_LESEN = {
 # Werkzeuge der Katalogpflege (Katalogaustausch, Lieferung 4) sind nur für Katalogpfleger; den Katalog selbst liest die
 # Führungskraft über /kategorien und /produkte.
 NUR_KATALOGPFLEGE = ("/api/material/katalog/",)
+# Phase 2: Freigaben eines Ordners oder Kontos, die Nutzersuche und das Protokoll der globalen Suche liest nur, wer
+# verwaltet (bzw. die Verwaltung) – die Führungskraft bekommt 403. „Meine Freigaben“ liest jeder Angemeldete.
+NUR_VERWALTER_LESEN = re.compile(r"^/api/material/(ordner/<int:fid>/freigaben|freigaben|nutzer|globalsuche/protokoll)$")
 # Abfrageparameter, ohne die eine Route nichts zu lesen hätte (400).
 ABFRAGE = {
     "material_api.formulare": lambda e: {"produkt": e[("produkte", "pid")]},
@@ -301,8 +310,14 @@ def test_fuehrungskraft_nur_lesen():
             ruid = db.execute("INSERT INTO mat_recall (product_id, title, created_at) VALUES (?, ?, ?)",
                               (ids["hms"], "Testrückruf", db.now()))
         token = a1["qr_adresse"].rsplit("/", 1)[1]
+        with app.app_context():
+            from app import db
+            # Eine Freigabe (Phase 2) – die des Materialwarts an der Gliederung, nicht die eigene der Führungskraft.
+            freigabe = db.query("SELECT id FROM mat_folder_grant WHERE folder_id = ? AND user_id = ? AND permission = "
+                                "'verwalten'", (gid, k["wart_id"]), one=True)["id"]
         kennungen = {
             "kid": ids["gurte"], "did": did, "iid": a1["id"], "mid": mid, "aid": aid, "ruid": ruid, "token": token,
+            "gid": freigabe,
             "art": "web", "dateiname": bild.rsplit("/", 1)[1], "filename": "material.js",
             ("produkte", "pid"): ids["gurt"], ("produkt", "pid"): ids["gurt"],
             ("pruefungen", "pid"): entwurf, ("pruefung", "pid"): fest, ("punkte", "rid"): punkt,
@@ -327,7 +342,8 @@ def test_fuehrungskraft_nur_lesen():
                 else:
                     r = f.open(url, method=methode, headers=H, json={})
                 fehler = (r.get_json(silent=True) or {}).get("error", "")
-                soll = AUSNAHMEN_SCHREIBEN.get((methode, regel.endpoint), 403)
+                soll = AUSNAHMEN_SCHREIBEN.get((methode, regel.endpoint),
+                                               AUSNAHMEN_SCHREIBEN_PFAD.get((methode, regel.rule), 403))
                 assert r.status_code == soll, (methode, url, r.status_code, fehler)
                 if r.status_code == 403:
                     assert fehler and "X-Requested-With" not in fehler and "fremder Seite" not in fehler, (methode, url, fehler)
@@ -349,7 +365,8 @@ def test_fuehrungskraft_nur_lesen():
                 continue
             url = _url(regel, kennungen)
             r = f.get(url, query_string=ABFRAGE[regel.endpoint](kennungen) if regel.endpoint in ABFRAGE else None)
-            soll = 403 if url.startswith(NUR_KATALOGPFLEGE) else AUSNAHMEN_LESEN.get(regel.endpoint, 200)
+            soll = (403 if url.startswith(NUR_KATALOGPFLEGE) or NUR_VERWALTER_LESEN.match(regel.rule)
+                    else AUSNAHMEN_LESEN.get(regel.endpoint, 200))
             assert r.status_code == soll, (url, r.status_code, r.get_json(silent=True) or r.data[:200])
             gelesen += 1
         assert gelesen >= 42, gelesen                      # so viele waren es in Lieferung 4

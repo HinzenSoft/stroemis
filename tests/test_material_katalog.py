@@ -18,7 +18,7 @@ import zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from test_material import H, KATALOG, PDF, anmelden, jpeg, katalog_grund, make_app, umgebung  # noqa: E402
+from test_material import H, KATALOG, PDF, anmelden, gliederung, jpeg, katalog_grund, make_app, umgebung  # noqa: E402
 
 
 def png(farbe=(20, 120, 200)):
@@ -284,8 +284,7 @@ def test_zuordnung_und_nebenwirkungen():
         ids_b = katalog_grund(kb["adm"])                  # gleiche Namen, aber eigene Kennungen
         # In B gibt es echte Artikel der beiden Produkte.
         w = kb["wart"]
-        r = w.post("/api/material/ordner", json={"name": "OG Testdorf", "kind": "gliederung"})
-        gid = r.json["ordner"]["id"]
+        gid, _ = gliederung(w, "OG Testdorf")          # Gliederungen legt seit Phase 2 die Verwaltung an
         assert w.post("/api/material/artikel", json={"product_id": ids_b["hms"], "folder_id": gid}).status_code == 201
         r = w.post("/api/material/artikel", json={"product_id": ids_b["gurt"], "folder_id": gid, "manufactured_on": "2024-01"})
         assert r.status_code == 201, r.get_json()

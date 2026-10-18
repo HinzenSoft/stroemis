@@ -2,6 +2,8 @@
 {% block title %}Material – strömis.de{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('material.static', filename='material.css') }}">
+<link rel="stylesheet" href="{{ url_for('material.static', filename='freigaben.css') }}">
+<link rel="stylesheet" href="{{ url_for('material.static', filename='global.css') }}">
 {% endblock %}
 {% block body %}
 {# Eine Seite für alle Ansichten des Moduls (Dashboard, Prüfungen, Bestand, Katalog, Suche, Artikel, Prüfung,
@@ -48,4 +50,6 @@
 {% block scripts %}<script src="{{ url_for('static', filename='vendor/signature_pad/signature_pad.umd.min.js') }}"></script>
 <script src="{{ url_for('material.static', filename='unterschrift.js') }}"></script>
 <script src="{{ url_for('material.static', filename='material.js') }}"></script>
-<script src="{{ url_for('material.static', filename='suche.js') }}"></script>{% endblock %}
+<script src="{{ url_for('material.static', filename='suche.js') }}"></script>
+<script src="{{ url_for('material.static', filename='freigaben.js') }}"></script>
+<script src="{{ url_for('material.static', filename='global.js') }}"></script>{% endblock %}

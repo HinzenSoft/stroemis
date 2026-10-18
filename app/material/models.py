@@ -46,10 +46,20 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     die der Katalog-Export einer Instanz (dev) Kategorien und Produkte in einer anderen (Produktion) auch nach
     Umbenennen oder Verschieben wiederfindet. Vorhandene Zeilen bekommen sie bei der Migration, neue per
     Trigger, wenn der einfügende Code keine mitgibt.
+  - Schritt 8 (Phase 2 · Lieferung 1, Freigaben je Ordner): mat_folder_grant.note (Notiz, nie im Journal) und
+    updated_at, höchstens ein Grundrecht (lesen oder verwalten) je Konto und Ordner, keine Freigaben an
+    Systemordnern, Enddatum JJJJ-MM-TT (Trigger); mat_global_search – Protokoll der globalen Suche, der
+    QR-Steckbriefe und fremder Dubletten (mit Frist, deshalb nicht im Journal); Indizes für Filter und Medien;
+    users.mat_ref für alle Konten (pseudonymer Kontoverweis im Journal, Spalte in app/db.py). Dazu die Freigaben aus
+    Phase 1: Wer bisher in den vorhandenen Gliederungen sah, sieht weiter (5.3), und die Bereinigung der Altfälle –
+    Gesperrte im Systemordner einer fremden Gliederung, offene Durchgangszeilen außerhalb des Zweigs (5.4). Alles
+    wiederholbar; ein zweiter Lauf ändert nichts.
 """
+import json
 import sqlite3
+from datetime import datetime, timezone
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -772,10 +782,191 @@ def _schritt_7(conn):
         conn.execute(_uid_trigger(tabelle))
 
 
+# --- Schritt 8 (Phase 2 · Lieferung 1): Freigaben je Ordner ---------------------------------------------------------
+_KEINE_SYSTEMFREIGABE = "'Freigaben gibt es nicht für „Gesperrt“ und „Ausgesondert“ – sie gelten über die Gliederung.'"
+_FREIGABE_DATUM = "'Enddatum einer Freigabe: JJJJ-MM-TT.'"
+_SYSTEMORDNER_NEU = "(SELECT system_kind FROM mat_folder WHERE id = NEW.folder_id) IS NOT NULL"
+_DATUM_FALSCH = ("NEW.valid_until IS NOT NULL AND NEW.valid_until NOT GLOB "
+                 "'[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'")
+GLOBAL_SEARCH_8 = """CREATE TABLE IF NOT EXISTS mat_global_search (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  user_name  TEXT NOT NULL DEFAULT '',
+  art        TEXT NOT NULL CHECK (art IN ('suche', 'qr', 'dublette')),
+  anfrage    TEXT NOT NULL,                -- Normalform der Seriennummer; bei „qr“ die Inventarnummer
+  treffer    INTEGER NOT NULL,
+  item_ids   TEXT NOT NULL DEFAULT '[]',   -- Kennungen der Treffer (JSON)
+  created_at TEXT NOT NULL
+)"""
+SCHRITT_8 = [
+    "CREATE INDEX IF NOT EXISTS idx_mat_grant_folder ON mat_folder_grant(folder_id)",
+    # Je Konto und Ordner höchstens ein Grundrecht (lesen ODER verwalten) und höchstens eine Prüffreigabe (UNIQUE aus
+    # Schritt 1).
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_mat_grant_grundrecht ON mat_folder_grant(folder_id, user_id) "
+    "WHERE permission IN ('lesen', 'verwalten')",
+    _trigger("mat_grant_systemordner", "BEFORE INSERT ON mat_folder_grant", _SYSTEMORDNER_NEU, _KEINE_SYSTEMFREIGABE),
+    _trigger("mat_grant_systemordner_aendern", "BEFORE UPDATE OF folder_id ON mat_folder_grant", _SYSTEMORDNER_NEU,
+             _KEINE_SYSTEMFREIGABE),
+    _trigger("mat_grant_datum", "BEFORE INSERT ON mat_folder_grant", _DATUM_FALSCH, _FREIGABE_DATUM),
+    _trigger("mat_grant_datum_aendern", "BEFORE UPDATE OF valid_until ON mat_folder_grant", _DATUM_FALSCH,
+             _FREIGABE_DATUM),
+    GLOBAL_SEARCH_8,
+    "CREATE INDEX IF NOT EXISTS idx_mat_global_search_zeit ON mat_global_search(created_at)",
+    # Filter über die Heimat, globale Suche (exakt, ohne Groß/klein) und Medien je Datei.
+    "CREATE INDEX IF NOT EXISTS idx_mat_item_serie_nocase ON mat_item(serial_no COLLATE NOCASE)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_item_origin ON mat_item(origin_folder_id) WHERE origin_folder_id IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS idx_mat_item_assigned ON mat_item(assigned_user_id) WHERE assigned_user_id IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS idx_mat_folder_photo ON mat_folder(photo) WHERE photo <> ''",
+    "CREATE INDEX IF NOT EXISTS idx_mat_product_image ON mat_product(image) WHERE image <> ''",
+    "CREATE INDEX IF NOT EXISTS idx_mat_result_photo ON mat_inspection_result(photo) WHERE photo <> ''",
+    "CREATE INDEX IF NOT EXISTS idx_mat_attachment_file ON mat_inspection_attachment(file_path)",
+]
+MIGRATION_8 = "Migration Schritt 8"
+# Grundrecht und Notiz je Stufe aus Phase 1 – die Verwaltung (recht_verwaltung = 2) sieht ohnehin alles.
+_PHASE_1 = {2: ("verwalten", "aus Phase 1: Stufe Verwaltung"), 1: ("lesen", "aus Phase 1: Stufe Mitglied")}
+
+
+def _jetzt():
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _journal_8(conn, entity, entity_id, action, vorher, nachher):
+    """Ein Journaleintrag der Migration – direkt über die Verbindung, ohne Anfrage und ohne Konto."""
+    def text(d):
+        return json.dumps(d, ensure_ascii=False, sort_keys=True, default=str) if d is not None else None
+    conn.execute("INSERT INTO mat_audit (entity, entity_id, user_id, user_name, action, before_json, after_json, "
+                 "created_at) VALUES (?,?,NULL,?,?,?,?,?)",
+                 (entity, entity_id, MIGRATION_8, action, text(vorher), text(nachher), _jetzt()))
+
+
+def _schritt_8(conn):
+    """Phase 2 · Lieferung 1: Schema der Freigaben und des Suchprotokolls, Kontoverweise, die Freigaben aus Phase 1
+    und die Bereinigung der Altfälle (siehe oben). Wiederholbar."""
+    if "mat_ref" not in _spalten(conn, "users"):              # legt sonst app/db.py an (MIGRATIONS)
+        conn.execute("ALTER TABLE users ADD COLUMN mat_ref TEXT")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_mat_ref ON users(mat_ref) WHERE mat_ref IS NOT NULL")
+    # 128 Bit Zufall je Konto; neue Konten bekommen ihn beim ersten Journaleintrag (journal.konto_ref).
+    conn.execute("UPDATE users SET mat_ref = lower(hex(randomblob(16))) WHERE mat_ref IS NULL OR mat_ref = ''")
+    spalten = _spalten(conn, "mat_folder_grant")
+    if "note" not in spalten:
+        conn.execute("ALTER TABLE mat_folder_grant ADD COLUMN note TEXT NOT NULL DEFAULT ''")
+    if "updated_at" not in spalten:
+        conn.execute("ALTER TABLE mat_folder_grant ADD COLUMN updated_at TEXT")
+    for sql in SCHRITT_8:
+        conn.execute(sql)
+    _freigaben_aus_phase_1(conn)
+    _altfaelle_bereinigen(conn)
+
+
+def _freigaben_aus_phase_1(conn):
+    """Status quo erhalten (5.3): Stufe 1 → lesen, Stufe 2 → verwalten an jeder vorhandenen obersten Gliederung,
+    dauerhaft; jedes Konto mit Häkchen „Prüfer“ (auch Stufe 2 und die Verwaltung) dazu eine Prüffreigabe bis zum 31.12.
+    des Folgejahres, höchstens 24 Monate. Sie wirkt erst mit Urkundennummer. Je eingefügter Zeile ein Journaleintrag
+    am Ordner – mit Kontoverweis, ohne Notiz."""
+    from . import services as dienste
+    from .services.interval import plus_monate
+    tag = dienste.heute()
+    bis = min(f"{tag.year + 1}-12-31", plus_monate(tag, 24).isoformat())
+    gliederungen = [r[0] for r in conn.execute("SELECT id FROM mat_folder WHERE parent_id IS NULL AND kind = 'gliederung' "
+                                               "AND system_kind IS NULL ORDER BY id")]
+    if not gliederungen:
+        return
+    jetzt = _jetzt()
+    for uid, ref, verwaltung, material, pruefer in conn.execute(
+            "SELECT id, mat_ref, recht_verwaltung, recht_material, mat_pruefer FROM users ORDER BY id").fetchall():
+        freigaben = []
+        if int(verwaltung or 0) < 2 and int(material or 0) in _PHASE_1:
+            recht, notiz = _PHASE_1[int(material)]
+            freigaben.append((recht, None, notiz))
+        if pruefer:
+            freigaben.append(("pruefen", bis, "aus Phase 1: Häkchen Prüfer"))
+        for gid in gliederungen:
+            for recht, ende, notiz in freigaben:
+                vorher = conn.total_changes
+                cur = conn.execute("INSERT OR IGNORE INTO mat_folder_grant (folder_id, user_id, permission, valid_until, "
+                                   "granted_by, created_at, note) VALUES (?,?,?,?,NULL,?,?)",
+                                   (gid, uid, recht, ende, jetzt, notiz))
+                if conn.total_changes > vorher:
+                    _journal_8(conn, "folder", gid, "freigabe_erteilt", None,
+                               {"freigabe": cur.lastrowid, "konto": {"ref": ref}, "recht": recht, "bis": ende})
+
+
+def _altfaelle_bereinigen(conn):
+    """5.4: Gesperrte und verlorene Artikel, die im Systemordner einer anderen Gliederung liegen als ihre Heimat,
+    kommen nach „Gesperrt“ der Gliederung ihrer Heimat. Offene Zeilen offener Durchgänge, deren Heimat nicht im Zweig
+    des Durchgangs liegt, werden ausgenommen; offene Entwürfe dazu verlieren den Durchgang. Ausgesonderte aus Phase 1
+    bleiben ohne Herkunft und gehören zu ihrer Gliederung. Journal mit „Migration Schritt 8“."""
+    ordner = {r[0]: {"parent_id": r[1], "name": r[2], "kind": r[3], "system_kind": r[4]}
+              for r in conn.execute("SELECT id, parent_id, name, kind, system_kind FROM mat_folder")}
+    kinder = {}
+    for fid, o in ordner.items():
+        kinder.setdefault(o["parent_id"], []).append(fid)
+
+    def kette(fid):
+        out = []
+        while fid is not None and fid in ordner and fid not in out:
+            out.append(fid)
+            fid = ordner[fid]["parent_id"]
+        return out
+
+    def gliederung(fid):
+        return next((x for x in kette(fid) if ordner[x]["kind"] == "gliederung" and not ordner[x]["system_kind"]), None)
+
+    def pfad_text(fid):
+        return " / ".join(ordner[x]["name"] for x in reversed(kette(fid)))
+
+    def zweig(fid):
+        gesehen, offen = set(), [fid]
+        while offen:
+            x = offen.pop()
+            if x not in gesehen:
+                gesehen.add(x)
+                offen.extend(kinder.get(x, ()))
+        return gesehen
+
+    jetzt = _jetzt()
+    for iid, folder_id, origin in conn.execute(
+            "SELECT id, folder_id, origin_folder_id FROM mat_item WHERE lock_state IN ('gesperrt', 'verloren') "
+            "AND origin_folder_id IS NOT NULL ORDER BY id").fetchall():
+        hier = ordner.get(folder_id)
+        if not hier or not hier["system_kind"] or origin not in ordner:
+            continue
+        ziel_gl = gliederung(origin)
+        if ziel_gl is None or ziel_gl == hier["parent_id"]:
+            continue
+        ziel = next((k for k in kinder.get(ziel_gl, ()) if ordner[k]["system_kind"] == "gesperrt"), None)
+        if ziel is None:
+            continue
+        conn.execute("UPDATE mat_item SET folder_id = ?, updated_at = ? WHERE id = ?", (ziel, jetzt, iid))
+        _journal_8(conn, "item", iid, "verschoben", {"folder_id": folder_id, "ordner": pfad_text(folder_id)},
+                   {"folder_id": ziel, "ordner": pfad_text(ziel), "grund": "Bereinigung Schritt 8"})
+
+    grund = "verschoben (Bereinigung Schritt 8)"
+    for rid, rfid in conn.execute("SELECT id, folder_id FROM mat_round WHERE closed_on IS NULL ORDER BY id").fetchall():
+        im_zweig = zweig(rfid)
+        zeilen = conn.execute(
+            "SELECT i.id, i.lock_state, i.folder_id, i.origin_folder_id FROM mat_round_item ri "
+            "JOIN mat_item i ON i.id = ri.item_id WHERE ri.round_id = ? AND ri.excluded_reason IS NULL "
+            "AND NOT EXISTS (SELECT 1 FROM mat_inspection x WHERE x.round_id = ri.round_id AND x.item_id = ri.item_id "
+            "AND x.completed_at IS NOT NULL) ORDER BY i.id", (rid,)).fetchall()
+        for iid, sperre, folder_id, origin in zeilen:
+            heimat = origin if sperre != "frei" and origin else folder_id
+            if heimat in im_zweig:
+                continue
+            conn.execute("UPDATE mat_round_item SET excluded_reason = ?, excluded_by = NULL, excluded_by_name = 'System', "
+                         "excluded_at = ? WHERE round_id = ? AND item_id = ?", (grund, jetzt, rid, iid))
+            _journal_8(conn, "round", rid, "ausgenommen", None, {"item_id": iid, "grund": grund})
+            for (xid,) in conn.execute("SELECT id FROM mat_inspection WHERE round_id = ? AND item_id = ? "
+                                       "AND completed_at IS NULL", (rid, iid)).fetchall():
+                conn.execute("UPDATE mat_inspection SET round_id = NULL WHERE id = ?", (xid,))
+                _journal_8(conn, "inspection", xid, "geaendert", {"round_id": rid}, {"round_id": None})
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
-SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7}
+SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
+            8: _schritt_8}
 
 
 def _meta(conn, schluessel, vorgabe=None):

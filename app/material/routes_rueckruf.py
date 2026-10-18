@@ -9,7 +9,7 @@ from flask import jsonify
 from ..auth import current_user, json_body
 from .routes import _katalog_lesen, api
 from .services import katalog, rueckruf
-from .services.rechte import katalog_required, requires_folder
+from .services.rechte import katalog_required, requires_zugang
 
 
 @api.get("/produkte/<int:pid>/rueckrufe")
@@ -40,7 +40,7 @@ def rueckruf_beenden(ruid):
 
 
 @api.get("/rueckrufe")
-@requires_folder("lesen")
+@requires_zugang
 def rueckrufe():
     """Alle laufenden Rückrufe mit Produkt und Zahlen – auch solche ohne betroffene Artikel im Bestand."""
     return jsonify(rueckrufe=rueckruf.uebersicht(nur_bestand=False))

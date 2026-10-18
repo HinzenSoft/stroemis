@@ -71,28 +71,93 @@ def anmelden(app, mail, pw):
     return c
 
 
+# Je App (umgebung): der Client der Verwaltung, die Kennungen der Testkonten und das Grundrecht, das jedes von ihnen
+# an jeder neuen Gliederung bekommt (gliederung) – so, wie Schritt 8 der Migration die Stufen aus Phase 1 in Freigaben
+# umgesetzt hat. Seit Phase 2 gibt es Bestand nur über Freigaben je Ordner.
+_KONTEN = {}
+
+
+def _konten(app):
+    return _KONTEN.setdefault(app, {"adm": None, "ids": {}, "grund": {}})
+
+
+def neues_konto(app, mail, grund=None, **felder):
+    """Ein Konto über die Nutzerverwaltung anlegen und anmelden – immer mit Namen (ohne Namen kein Modulzugang).
+    grund: „lesen“ oder „verwalten“ – das Konto bekommt es an jeder Gliederung, die gliederung() danach anlegt.
+    Liefert (Client, Kennung)."""
+    adm = _konten(app)["adm"]
+    r = adm.post("/api/admin/users", json=dict({"email": mail, "password": "passwort1", "name": mail.split("@")[0]},
+                                               **felder))
+    assert r.status_code == 201, (mail, r.get_json())
+    uid = r.json["user"]["id"]
+    _konten(app)["ids"][mail.split("@")[0]] = uid
+    if grund:
+        _konten(app)["grund"][uid] = grund
+    return anmelden(app, mail, "passwort1"), uid
+
+
 def umgebung(tmp):
-    """Admin plus je ein Konto für jede Rolle des Moduls. Rollen werden über die Nutzerverwaltung
-    vergeben – so ist dieser Weg mitgeprüft."""
+    """Admin plus je ein Konto für jede Rolle des Moduls. Häkchen werden über die Nutzerverwaltung vergeben – so ist
+    dieser Weg mitgeprüft; die Rechte am Bestand vergibt gliederung() als Freigaben."""
     app = make_app(tmp)
     adm = anmelden(app, "admin@example.org", "geheim123")
-
-    def konto(mail, **felder):
-        r = adm.post("/api/admin/users", json=dict({"email": mail, "password": "passwort1", "name": mail.split("@")[0]},
-                                                   **felder))
-        assert r.status_code == 201, (mail, r.get_json())
-        return anmelden(app, mail, "passwort1"), r.json["user"]["id"]
-
+    _KONTEN.pop(app, None)
+    _konten(app)["adm"] = adm
     k = {"adm": adm}
-    k["katalog"], _ = konto("katalog@example.org", mat_katalog=True)
-    k["wart"], _ = konto("wart@example.org", rechte={"material": 2})
-    k["fuehrung"], _ = konto("fuehrung@example.org", rechte={"material": 1})
-    k["pruefer"], k["pruefer_id"] = konto("pruefer@example.org", mat_pruefer=True, urkundennummer="1012-4711")
-    k["nutzer"], _ = konto("nutzer@example.org")
-    # Prüfer und Materialwart hinterlegen ihre Unterschrift: Festschreiben und Aussondern brauchen sie.
+    k["katalog"], k["katalog_id"] = neues_konto(app, "katalog@example.org", "lesen", mat_katalog=True)
+    k["wart"], k["wart_id"] = neues_konto(app, "wart@example.org", "verwalten", rechte={"material": 2})
+    k["fuehrung"], k["fuehrung_id"] = neues_konto(app, "fuehrung@example.org", "lesen", rechte={"material": 1})
+    k["pruefer"], k["pruefer_id"] = neues_konto(app, "pruefer@example.org", "lesen", mat_pruefer=True,
+                                                urkundennummer="1012-4711")
+    k["nutzer"], k["nutzer_id"] = neues_konto(app, "nutzer@example.org")
+    # Prüfer und Materialwart hinterlegen ihre Unterschrift: Festschreiben und Aussondern brauchen sie. Der Materialwart
+    # hat vor der ersten Gliederung noch keine Freigabe und damit keinen Modulzugang – seine kommt über den Dienst.
     unterschreiben(k["pruefer"])
-    unterschreiben(k["wart"])
+    unterschrift_hinterlegen(app, k["wart_id"])
     return app, k
+
+
+def unterschrift_hinterlegen(app, uid):
+    """Wie PUT /api/material/unterschrift (mit Journal unter dem Namen des Kontos), aber ohne Modulzugang."""
+    from flask import g
+    with app.test_request_context():
+        from app import db
+        from app.material.services import unterschrift
+        g.user = db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True)
+        unterschrift.setzen(g.user, unterschrift_daten())
+
+
+def freigeben(adm, fid, uid, recht, bis=None):
+    """Eine Freigabe direkt in die Datenbank schreiben (Vergeben über die Oberfläche ist Sache des Freigaben-Dialogs).
+    Ein Grundrecht (lesen, verwalten) ersetzt ein vorhandenes am selben Ordner, eine Prüffreigabe die vorhandene; ohne
+    bis läuft eine Prüffreigabe bis heute + 365 Tage, ein Grundrecht unbefristet. bis: date oder 'JJJJ-MM-TT'.
+    Liefert die Kennung der Zeile."""
+    if recht == "pruefen" and bis is None:
+        bis = _heute() + timedelta(days=365)
+    bis = bis.isoformat() if hasattr(bis, "isoformat") else bis
+    with adm.application.app_context():
+        from app import db
+        von = db.query("SELECT id FROM users WHERE recht_verwaltung = 2 ORDER BY id LIMIT 1", one=True)
+        arten = ("lesen", "verwalten") if recht in ("lesen", "verwalten") else (recht,)
+        with db.transaction():
+            db.execute(f"DELETE FROM mat_folder_grant WHERE folder_id = ? AND user_id = ? "
+                       f"AND permission IN ({','.join('?' * len(arten))})", (fid, uid, *arten))
+            return db.execute("INSERT INTO mat_folder_grant (folder_id, user_id, permission, valid_until, granted_by, "
+                              "created_at) VALUES (?,?,?,?,?,?)", (fid, uid, recht, bis, von["id"] if von else None,
+                                                                   db.now()))
+
+
+def standardfreigaben(adm, fid):
+    """Die Freigaben der Testkonten an einer Gliederung: ihr Grundrecht (umgebung, neues_konto) und für jedes Konto mit
+    Häkchen „Prüfer“ – auch Admin und Materialwart, falls ein Test es setzt – eine Prüffreigabe."""
+    k = _konten(adm.application)
+    for uid, recht in k["grund"].items():
+        freigeben(adm, fid, uid, recht)
+    with adm.application.app_context():
+        from app import db
+        haekchen = [r["id"] for r in db.query("SELECT id FROM users WHERE mat_pruefer = 1 ORDER BY id")]
+    for uid in haekchen:
+        freigeben(adm, fid, uid, "pruefen")
 
 
 def katalog_grund(adm):
@@ -119,12 +184,21 @@ def katalog_grund(adm):
     return {"psa": psa, "gurte": gurte, "karabiner": karabiner, "gurt": gurt, "hms": hms}
 
 
-def gliederung(c, name="OG Musterstadt"):
-    r = c.post("/api/material/ordner", json={"name": name, "kind": "gliederung"})
+def gliederung(c, name="OG Musterstadt", standard=True):
+    """Eine Gliederung auf oberster Ebene mit ihren Systemordnern – angelegt von der Verwaltung, denn nur sie darf das
+    seit Phase 2. c: irgendein Client der App (er bestimmt nur die App). standard: die Testkonten bekommen dort ihre
+    Freigaben (standardfreigaben); ohne sie hat die Gliederung keinen Verwalter außer der Verwaltung – so entsteht eine
+    fremde Gliederung. Liefert (Kennung, {"gesperrt": …, "ausgesondert": …})."""
+    adm = _konten(c.application)["adm"] or c
+    r = adm.post("/api/material/ordner", json={"name": name, "kind": "gliederung"})
     assert r.status_code == 201, r.get_json()
     gid = r.json["ordner"]["id"]
-    baum = {o["id"]: o for o in c.get("/api/material/ordner").json["ordner"]}
-    system = {o["system_kind"]: o["id"] for o in baum.values() if o["parent_id"] == gid and o["system_kind"]}
+    if standard:
+        standardfreigaben(adm, gid)
+    with adm.application.app_context():
+        from app import db
+        system = {o["system_kind"]: o["id"] for o in db.query(
+            "SELECT id, system_kind FROM mat_folder WHERE parent_id = ? AND system_kind IS NOT NULL", (gid,))}
     return gid, system
 
 
@@ -170,38 +244,47 @@ def test_migration():
 # --- 2. Rollen und Rechte ------------------------------------------------------------------------------
 
 def test_rollen():
+    """Häkchen aus der Nutzerverwaltung und was jede Rolle angeboten bekommt. Seit Phase 2 gibt es Bestand nur über
+    Freigaben je Ordner (hier die Standardfreigaben von gliederung); die Material-Stufe der Matrix ist abgeleitet."""
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
         adm = k["adm"]
+        gid, _ = gliederung(adm)
         # Das Häkchen „Prüfer“ geht auch ohne Urkundennummer (die trägt der Prüfer selbst im Profil ein, Lieferung 5) –
-        # beim Anlegen wie beim Ändern; prüfen darf das Konto aber erst mit Nummer.
-        r = adm.post("/api/admin/users", json={"email": "ohne@example.org", "password": "passwort1", "mat_pruefer": True})
+        # beim Anlegen wie beim Ändern; prüfen darf das Konto aber erst mit Nummer (und Prüffreigabe).
+        r = adm.post("/api/admin/users", json={"email": "ohne@example.org", "password": "passwort1", "name": "Ohne Nummer",
+                                               "mat_pruefer": True})
         assert r.status_code == 201 and r.json["user"]["mat_pruefer"] and not r.json["user"]["urkunde_gueltig"], r.get_json()
+        # Das Häkchen allein gibt Modulzugang (Katalog, Profil) – Stufe 1, aber keinen Bestand.
         assert r.json["user"]["rechte"]["material"] == 1
-        assert anmelden(app, "ohne@example.org", "passwort1").get("/api/material/start").json["darf"]["pruefen"] is False
-        nutzer_id = [u for u in adm.get("/api/admin/users").json["users"] if u["email"] == "nutzer@example.org"][0]["id"]
+        d = anmelden(app, "ohne@example.org", "passwort1").get("/api/material/start").json["darf"]
+        assert d["pruefen"] is False and d["lesen"] is False and d["pruefer_haekchen"] and not d["qualifiziert"], d
+        nutzer_id = k["nutzer_id"]
         r = adm.put(f"/api/admin/users/{nutzer_id}", json={"mat_pruefer": True, "urkundennummer": "   "})
         assert r.status_code == 200 and r.json["user"]["urkundennummer"] == "", r.get_json()
         # Die Schnittstelle nimmt „urkundennummer“ weiter an (Skripte, Tests) – geprüft wie im Profil.
         r = adm.put(f"/api/admin/users/{nutzer_id}", json={"urkundennummer": " - "})
         assert r.status_code == 400 and "Urkundennummer" in r.json["error"], r.get_json()
-        # Mit Urkundennummer: Prüfer – und damit mindestens Leserecht im Modul.
+        # Mit Urkundennummer: qualifiziert – Modulzugang; prüfen erst mit einer Prüffreigabe am Ordner.
         r = adm.put(f"/api/admin/users/{nutzer_id}", json={"mat_pruefer": True, "urkundennummer": "1012-0815"})
         assert r.status_code == 200 and r.json["user"]["rechte"]["material"] == 1 and r.json["user"]["mat_pruefer"], r.get_json()
         assert r.json["user"]["urkunde_gueltig"]
-        # Wer das Modul ausdrücklich abschaltet, während das Kennzeichen bleibt, bekommt eine Meldung.
+        d = k["nutzer"].get("/api/material/start").json["darf"]
+        assert d["qualifiziert"] and not d["pruefen"] and not d["lesen"], d
+        # Die gespeicherte Material-Stufe wirkt nicht mehr: Abschalten ändert nichts, eine Mindeststufe gibt es nicht.
         r = adm.put(f"/api/admin/users/{nutzer_id}", json={"rechte": {"material": 0}})
-        assert r.status_code == 400
+        assert r.status_code == 200 and r.json["user"]["rechte"]["material"] == 1, r.get_json()
         assert adm.put(f"/api/admin/users/{nutzer_id}", json={"mat_pruefer": False, "rechte": {"material": 0}}).status_code == 200
         # Die Rollenänderungen stehen im Journal des Moduls – mit dem Häkchen geht auch die Urkundennummer (Lieferung 5).
         with app.app_context():
             from app import db
             eintraege = db.query("SELECT * FROM mat_audit WHERE entity = 'user' AND entity_id = ? ORDER BY id", (nutzer_id,))
-        assert [json.loads(e["after_json"]) for e in eintraege] == [{"mat_pruefer": 1, "recht_material": 1},
+        assert [json.loads(e["after_json"]) for e in eintraege] == [{"mat_pruefer": 1},
                                                                     {"urkundennummer": "1012-0815"},
-                                                                    {"mat_pruefer": 0, "recht_material": 0, "urkundennummer": ""}], eintraege
+                                                                    {"mat_pruefer": 0, "urkundennummer": ""}], eintraege
 
-        # Was jede Rolle in der Oberfläche angeboten bekommt (der Server prüft trotzdem jede Aktion).
+        # Was jede Rolle in der Oberfläche angeboten bekommt – „irgendwo“; am Objekt steht „darf“ (der Server prüft
+        # trotzdem jede Aktion).
         def darf(c):
             r = c.get("/api/material/start")
             if r.status_code != 200:
@@ -209,15 +292,26 @@ def test_rollen():
             d = dict(r.json["darf"])
             assert isinstance(d.pop("uid"), int)          # eigene Kennung: „meine Prüfung“, „in Prüfung bei mir“
             return d
-        assert darf(k["fuehrung"]) == {"lesen": True, "verwalten": False, "pruefen": False, "katalog": False,
+        assert darf(k["fuehrung"]) == {"lesen": True, "grund": True, "verwalten": False, "pruefen": False, "katalog": False,
+                                       "alles": False, "gliederung_anlegen": False, "qualifiziert": False,
                                        "urkundennummer": "", "pruefer_haekchen": False, "unterschrift": False}
         assert darf(k["wart"])["verwalten"] and not darf(k["wart"])["pruefen"]
-        assert darf(k["pruefer"])["pruefen"] and not darf(k["pruefer"])["verwalten"]
+        assert darf(k["pruefer"])["pruefen"] and darf(k["pruefer"])["qualifiziert"] and not darf(k["pruefer"])["verwalten"]
         assert darf(k["katalog"])["katalog"] and darf(k["katalog"])["lesen"] and not darf(k["katalog"])["verwalten"]
-        # Admin: überall Materialwart und Katalogpfleger – Prüfer aber nie von selbst.
-        assert darf(adm) == {"lesen": True, "verwalten": True, "pruefen": False, "katalog": True,
+        # Admin: überall Materialwart und Katalogpfleger, legt Gliederungen an – Prüfer aber nie von selbst.
+        assert darf(adm) == {"lesen": True, "grund": True, "verwalten": True, "pruefen": False, "katalog": True,
+                             "alles": True, "gliederung_anlegen": True, "qualifiziert": False,
                              "urkundennummer": "", "pruefer_haekchen": False, "unterschrift": False}
         assert darf(k["nutzer"]) == 403
+        # Die wirksame Stufe für Kopfleiste, Startweiche und Profil: 2 = irgendwo verwalten, 1 = Modulzugang.
+        stufen = {u["email"]: u["rechte"]["material"] for u in adm.get("/api/admin/users").json["users"]}
+        assert {m: stufen[m + "@example.org"] for m in ("admin", "wart", "fuehrung", "katalog", "pruefer", "nutzer")} == \
+            {"admin": 2, "wart": 2, "fuehrung": 1, "katalog": 1, "pruefer": 1, "nutzer": 0}, stufen
+        # Ohne Namen kein Modulzugang – auch nicht mit Freigabe.
+        c, uid = neues_konto(app, "namenlos@example.org", name="")
+        freigeben(adm, gid, uid, "lesen")
+        r = c.get("/api/material/start")
+        assert r.status_code == 403 and "Namen" in r.json["error"], r.get_json()
         # Seiten: Modul nur mit Recht; der Reiter erscheint nur dann.
         assert k["fuehrung"].get("/material").status_code == 200
         assert 'href="/material"' in k["fuehrung"].get("/material").get_data(as_text=True)
@@ -234,6 +328,7 @@ def test_katalog():
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
         ids = katalog_grund(k["adm"])
+        gliederung(k["adm"])          # Zugang zum Modul gibt seit Phase 2 erst eine Freigabe (hier: an der Gliederung)
         neu = {"category_id": ids["karabiner"], "manufacturer": "Andere AG", "model": "Delta", "material_kind": "metall_hardware",
                "interval_months": 12}
         # Nur Admin und Produktkatalogpfleger ändern den Katalog; alle anderen bekommen 403.
@@ -313,8 +408,9 @@ def test_ordner():
             assert w.post("/api/material/ordner", json={"name": "Darin", "parent_id": sid}).status_code == 409
             r = w.post("/api/material/artikel", json={"product_id": ids["hms"], "folder_id": sid})
             assert r.status_code == 409, r.get_json()
-        # Oben stehen nur Gliederungen.
-        assert w.post("/api/material/ordner", json={"name": "Lose", "kind": "standort"}).status_code == 400
+        # Oben stehen nur Gliederungen – und die legt seit Phase 2 nur die Verwaltung an.
+        assert w.post("/api/material/ordner", json={"name": "Lose", "kind": "standort"}).status_code == 403
+        assert k["adm"].post("/api/material/ordner", json={"name": "Lose", "kind": "standort"}).status_code == 400
         r = w.post("/api/material/ordner", json={"name": "Fahrzeug GW-W", "kind": "fahrzeug", "parent_id": gid})
         assert r.status_code == 201
         fz = r.json["ordner"]["id"]
@@ -339,10 +435,12 @@ def test_ordner():
         assert w.delete(f"/api/material/ordner/{fz}", headers=H).status_code == 409
         assert w.delete(f"/api/material/artikel/{r.json['artikel']['id']}", headers=H).status_code == 200
         assert w.delete(f"/api/material/ordner/{fz}", headers=H).status_code == 200
-        assert w.delete(f"/api/material/ordner/{gid}", headers=H).status_code == 409            # Bezirk liegt darin
+        # Löschen darf, wer den Ordner darüber verwaltet – eine Gliederung auf oberster Ebene nur die Verwaltung.
+        assert w.delete(f"/api/material/ordner/{gid}", headers=H).status_code == 403
+        assert k["adm"].delete(f"/api/material/ordner/{gid}", headers=H).status_code == 409     # Bezirk liegt darin
         assert w.delete(f"/api/material/ordner/{bez}", headers=H).status_code == 200
-        assert w.delete(f"/api/material/ordner/{gid}", headers=H).status_code == 200
-        assert not [o for o in w.get("/api/material/ordner").json["ordner"]]
+        assert k["adm"].delete(f"/api/material/ordner/{gid}", headers=H).status_code == 200
+        assert not [o for o in k["adm"].get("/api/material/ordner").json["ordner"]]
     print("Ordnertest bestanden.")
 
 
@@ -624,7 +722,8 @@ def test_formulare_und_dokumente():
             from app.material.services import katalog
             alt = katalog.gueltige_dokumente(ids["gurt"], "2025-01-01")
             assert [d["id"] for d in alt] == [d1["id"]], alt
-        # Auslieferung nur mit Zugang zum Modul.
+        # Auslieferung nur mit Zugang zum Modul – den gibt der Führungskraft seit Phase 2 erst eine Freigabe.
+        gliederung(k["adm"], "OG Zugang")
         assert k["fuehrung"].get(docs[neu_id]["datei"]).status_code == 200
         assert k["fuehrung"].get(docs[neu_id]["datei"]).headers["Content-Security-Policy"].startswith("default-src 'none'")
         assert k["nutzer"].get(docs[neu_id]["datei"]).status_code == 403
@@ -939,10 +1038,17 @@ def neuer_artikel(c, produkt_id, ordner_id, **felder):
 
 
 def zweiter_pruefer(app, adm):
-    r = adm.post("/api/admin/users", json={"email": "pruefer2@example.org", "password": "passwort1", "name": "Prüferin Zwei",
-                                           "mat_pruefer": True, "urkundennummer": "1012-4712"})
-    assert r.status_code == 201, r.get_json()
-    c = anmelden(app, "pruefer2@example.org", "passwort1")
+    """Eine zweite Prüferin mit denselben Freigaben wie „pruefer“: lesen und pruefen an jeder Gliederung – an den
+    schon vorhandenen gleich, an späteren über gliederung()."""
+    c, uid = neues_konto(app, "pruefer2@example.org", "lesen", name="Prüferin Zwei", mat_pruefer=True,
+                         urkundennummer="1012-4712")
+    with app.app_context():
+        from app import db
+        vorhanden = [r["id"] for r in db.query("SELECT id FROM mat_folder WHERE parent_id IS NULL AND kind = 'gliederung' "
+                                               "AND system_kind IS NULL")]
+    for gid in vorhanden:
+        freigeben(adm, gid, uid, "lesen")
+        freigeben(adm, gid, uid, "pruefen")
     unterschreiben(c)
     return c
 
@@ -1833,6 +1939,7 @@ def test_produktmeldung_loeschen():
         with tempfile.TemporaryDirectory() as tmp:
             app, k = umgebung(tmp)
             ids = katalog_grund(k["adm"])
+            gliederung(k["adm"])      # melden darf, wer irgendwo verwaltet – seit Phase 2 über eine Freigabe
             orig = os.path.join(app.config["MEDIA_DIR"], "material", "orig")
             vorher = sorted(os.listdir(orig)) if os.path.isdir(orig) else []
             r = k["wart"].post("/api/material/meldungen", headers=H, data={"manufacturer": "Bergwerk", "model": "Gurt Zeta",
@@ -1940,6 +2047,7 @@ def test_artikelnummer_eindeutig():
         with tempfile.TemporaryDirectory() as tmp:
             app, k = umgebung(tmp)
             ids = katalog_grund(k["adm"])
+            gliederung(k["adm"])      # Zugang zum Modul gibt seit Phase 2 erst eine Freigabe (hier: an der Gliederung)
             kp = k["katalog"]
 
             def neu(**f):

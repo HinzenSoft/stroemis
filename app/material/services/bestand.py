@@ -65,6 +65,25 @@ def gliederung_von(fid):
     return None
 
 
+def heimat(item):
+    """Der Ordner, zu dem ein Artikel gehört – genau einer je Artikel (Phase 2). Gesperrte, verlorene und ausgesonderte
+    liegen nur in einem Systemordner; sie gehören zu ihrem Herkunftsordner, solange es ihn gibt. Ohne Herkunft (vor
+    Schritt 8 ausgesondert, Herkunftsordner gelöscht) zählt der Systemordner – also die Gliederung. Dieselbe Regel für
+    Rechte, Filter, Export und Durchgänge."""
+    if item["lock_state"] != "frei" and item["origin_folder_id"]:
+        return item["origin_folder_id"]
+    return item["folder_id"]
+
+
+def heimat_sql(alias="i"):
+    """heimat() als SQL-Ausdruck über mat_item mit diesem Kürzel – für Ausgaben und Sortierung. Filter nehmen die
+    indexfreundliche Form aus rechte.artikel_filter."""
+    if not alias.isidentifier():
+        raise ValueError(alias)
+    return (f"(CASE WHEN {alias}.lock_state <> 'frei' AND {alias}.origin_folder_id IS NOT NULL "
+            f"THEN {alias}.origin_folder_id ELSE {alias}.folder_id END)")
+
+
 def systemordner(gliederung_id, art):
     return db.query("SELECT * FROM mat_folder WHERE parent_id = ? AND system_kind = ?", (gliederung_id, art), one=True)
 

@@ -108,6 +108,7 @@ def test_shell_geruest():
     import re
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
+        gliederung(k["adm"])          # Bestand und „Artikel anlegen“ gibt es seit Phase 2 nur mit Freigabe
         for konto in ("adm", "pruefer", "nutzer"):
             html = k[konto].get("/profil").get_data(as_text=True)
             nav = re.search(r'<nav class="nav" aria-label="Hauptnavigation">(.*?)</nav>', html, re.S)

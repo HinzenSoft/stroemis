@@ -10,8 +10,8 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import (H, anmelden, gliederung, katalog_grund, neuer_artikel, pruef_formulare,  # noqa: E402
-                           starten, umgebung, unterschrift_daten)
+from test_material import (H, anmelden, freigeben, gliederung, katalog_grund, neuer_artikel,  # noqa: E402
+                           pruef_formulare, starten, umgebung, unterschrift_daten)
 
 URL = "/api/material/urkundennummer"
 
@@ -48,6 +48,9 @@ def test_urkundennummer_im_profil():
                                                "mat_pruefer": True})
         assert r.status_code == 201, r.get_json()
         neu_id = r.json["user"]["id"]
+        # Seit Phase 2: Bestand und Prüfen über Freigaben am Ordner (die Prüffreigabe wirkt erst mit Urkundennummer).
+        freigeben(adm, gid, neu_id, "lesen")
+        freigeben(adm, gid, neu_id, "pruefen")
         assert r.json["user"]["mat_pruefer"] and r.json["user"]["urkundennummer"] == "" and not r.json["user"]["urkunde_gueltig"]
         liste = {u["id"]: u for u in adm.get("/api/admin/users").json["users"]}
         assert liste[neu_id]["mat_pruefer"] and not liste[neu_id]["urkunde_gueltig"]

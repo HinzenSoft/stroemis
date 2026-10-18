@@ -12,7 +12,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import (H, abschluss, anmelden, gliederung, katalog_grund, neuer_artikel,  # noqa: E402
+from test_material import (H, abschluss, anmelden, freigeben, gliederung, katalog_grund, neuer_artikel,  # noqa: E402
                            pruef_formulare, starten, umgebung, unterschreiben, zweiter_pruefer)
 
 RR = "/api/material/produkte/{}/rueckrufe"
@@ -251,9 +251,11 @@ def test_mail_empfaenger():
             konto(app, adm, "wart2@example.org", rechte={"material": 2})
             _, wart3 = konto(app, adm, "wart3@example.org", rechte={"material": 2})
             p2 = zweiter_pruefer(app, adm)                                        # prüft nur ein anderes Produkt
-            p3, _ = konto(app, adm, "pruefer3@example.org", mat_pruefer=True, urkundennummer="1012-4713")
+            p3, p3_id = konto(app, adm, "pruefer3@example.org", mat_pruefer=True, urkundennummer="1012-4713")
             p4, p4_id = konto(app, adm, "pruefer4@example.org", mat_pruefer=True, urkundennummer="1012-4714")
             p5, p5_id = konto(app, adm, "pruefer5@example.org", mat_pruefer=True, urkundennummer="1012-4715")
+            for uid in (p3_id, p4_id, p5_id):          # prüfen braucht seit Phase 2 eine Prüffreigabe am Ordner
+                freigeben(adm, lager, uid, "pruefen")
             for c in (p3, p4, p5):
                 unterschreiben(c)
             anderes = produkt_anlegen(kp, ids, "HMS Gamma", "HG-1")

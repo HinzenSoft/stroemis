@@ -2,10 +2,10 @@
 Lebenslauf eines Artikels als PDF. Das Konzept nennt dafür „Datenhoheit und Umzugsfähigkeit“.
 
 Es sind Seiten (Blueprint „material“), keine Schnittstelle: Die Knöpfe sind Links, kein fetch. Deshalb wie bei
-_protokoll_senden ohne Anmeldung zur Anmeldung, ohne Recht 403 und jeden Fehler als Seite statt als JSON. Gelesen
-werden darf, was im Ordner gelesen werden darf (darf("lesen", ordner)) – im MVP jeder mit Zugang zum Modul, in
-Phase 2 mit den Freigaben je Ordner. Den Inhalt bauen services/export.py und services/lebenslauf.py. Nichts davon
-wird zwischengespeichert: Die Antworten tragen Cache-Control no-store."""
+_protokoll_senden ohne Anmeldung zur Anmeldung, ohne Modulzugang 403 und jeden Fehler als Seite statt als JSON. Seit
+Phase 2 braucht jeder Export das Grundrecht am Ordner (beim Lebenslauf an der Heimat des Artikels) – die Prüfsicht
+allein gibt keinen Export. Fremdes antwortet wie Unbekanntes mit 404. Den Inhalt bauen services/export.py und
+services/lebenslauf.py. Nichts davon wird zwischengespeichert: Die Antworten tragen Cache-Control no-store."""
 import io
 
 from flask import abort, redirect, render_template, request, send_file, url_for
@@ -13,20 +13,24 @@ from flask import abort, redirect, render_template, request, send_file, url_for
 from ..auth import current_user
 from .routes import seiten
 from .services import Abgelehnt, export, heute, lebenslauf
-from .services.rechte import _ordner_aus_anfrage, darf
+from .services.rechte import NUR_GRUNDRECHT, _bezug, darf, zugang
 
 
 def _zugang(quelle, kennung_wert):
-    """Wie _protokoll_senden: angemeldet, Zugang zum Modul, Leserecht im Ordner. None, wenn alles stimmt – sonst die
-    Antwort (Anmeldung, Fehlerseite). Ohne Zugang zum Modul gibt es 403, bevor sich zeigt, ob es den Ordner gibt."""
+    """Angemeldet, Zugang zum Modul, Grundrecht am Ordner (bei Artikeln an der Heimat). None, wenn alles stimmt – sonst
+    die Antwort (Anmeldung, Fehlerseite). Ohne Zugang zum Modul gibt es 403, bevor sich zeigt, ob es den Ordner gibt;
+    was das Konto nicht sieht, antwortet wie Unbekanntes (404)."""
     u = current_user()
     if not u:
         return redirect(url_for("pages.login", next=request.path))
-    if not darf("lesen"):
+    if not zugang(u):
         abort(403)
     try:
-        if not darf("lesen", _ordner_aus_anfrage(quelle, {quelle: kennung_wert})):
-            abort(403)
+        bezug = _bezug(quelle, {quelle: kennung_wert})
+        if not darf("lesen", bezug.ordner_id):
+            raise Abgelehnt(bezug.meldung, 404)
+        if not darf("grund", bezug.ordner_id):
+            raise Abgelehnt(NUR_GRUNDRECHT, 403)
     except Abgelehnt as exc:
         return _fehler(exc)
     return None

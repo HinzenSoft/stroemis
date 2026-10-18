@@ -1820,11 +1820,14 @@ def test_rechte():
         assert 'id="logout"' in seite and 'href="/profil"' in seite and "Zum Wiki" not in seite, seite[-600:]
         assert 'id="logout"' in c1.get("/pruefungen").get_data(as_text=True)   # ebenso die Fehlerseite ohne Recht
         assert c1.get("/profil").status_code == 200                      # das Profil bleibt immer
-        # Nur das Modul Material: Die Startseite führt dorthin, nicht auf die Fehlerseite.
+        # Nur das Modul Material: Die Startseite führt dorthin, nicht auf die Fehlerseite. Seit Phase 2 kommt der Zugang
+        # aus Freigaben oder einem Häkchen (hier: Produktkatalogpfleger) – die Stufe der Matrix wirkt dort nicht mehr.
         assert adm.put(f"/api/admin/users/{uid1}", json={"rechte": {"material": 1}}).status_code == 200
+        assert c1.get("/").status_code == 403
+        assert adm.put(f"/api/admin/users/{uid1}", json={"mat_katalog": True}).status_code == 200
         r = c1.get("/")
         assert r.status_code == 302 and r.headers["Location"].endswith("/material"), (r.status_code, r.headers.get("Location"))
-        assert adm.put(f"/api/admin/users/{uid1}", json={"rechte": {"material": 0}}).status_code == 200
+        assert adm.put(f"/api/admin/users/{uid1}", json={"mat_katalog": False, "rechte": {"material": 0}}).status_code == 200
 
         # Verwaltung im Wiki: fremde Seiten bearbeiten und veröffentlichen, aber keine Nutzer.
         c2, uid2 = member("b@example.org")
@@ -1848,7 +1851,8 @@ def test_rechte():
         assert c2.put(f"/api/admin/users/{uid2}", json={"rechte": {"pruefungen": 0}}).status_code == 200
         assert c2.get("/api/me").json["user"]["rechte"]["pruefungen"] == 2
         assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"verwaltung": 0}}).status_code == 200
-        assert c2.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "material": 2, "verwaltung": 0}
+        # Material ist die Ausnahme: Die Stufe dort kommt seit Phase 2 aus den Freigaben je Ordner – ohne Freigabe 0.
+        assert c2.get("/api/me").json["user"]["rechte"] == {"karte": 2, "wiki": 2, "pruefungen": 2, "material": 0, "verwaltung": 0}
         assert adm.put(f"/api/admin/users/{uid2}", json={"rechte": {"pruefungen": 0}}).status_code == 200
         assert c2.get("/api/me").json["user"]["rechte"]["pruefungen"] == 0
         # Anlegen mit Matrix, ohne Angabe die Vorgabe.

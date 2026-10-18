@@ -5,11 +5,13 @@ es damit nicht, ein Eintrag ohne Änderung auch nicht. Gelesen wird es am Produk
 zusammen mit dem Journal seines Produkts) und an Ordnern. Die Tabelle ist per Trigger nur
 fortschreibbar (models.py)."""
 import json
+import secrets
 
 from flask import g, has_request_context
 
 from ... import db
 from ...auth import current_user
+from . import OHNE_NAMEN
 
 # Felder, die nie ins Journal gehören: Binärdaten und reine Zeitstempel der Zeile selbst.
 _AUSGENOMMEN = {"signature_png", "created_at", "updated_at", "dedupe_key"}
@@ -31,7 +33,8 @@ def unterschied(alt, neu):
 
 def eintragen(entity, entity_id, action, vorher=None, nachher=None, name=None):
     """Einen Eintrag schreiben. name: Anzeigename, wenn niemand angemeldet ist (Import, Startlauf);
-    ein Kommandozeilenlauf setzt ihn für alle Einträge über g.mat_akteur."""
+    ein Kommandozeilenlauf setzt ihn für alle Einträge über g.mat_akteur. Wer angemeldet handelt, steht mit Namen da –
+    nie mit der E-Mail."""
     u = current_user() if has_request_context() else None
     if not u and not name:
         name = g.get("mat_akteur")
@@ -39,7 +42,7 @@ def eintragen(entity, entity_id, action, vorher=None, nachher=None, name=None):
         "INSERT INTO mat_audit (entity, entity_id, user_id, user_name, action, before_json, after_json, created_at) "
         "VALUES (?,?,?,?,?,?,?,?)",
         (entity, entity_id, u["id"] if u else None,
-         (u["name"] or u["email"]) if u else (name or "System"), action,
+         ((u["name"] or "").strip() or OHNE_NAMEN) if u else (name or "System"), action,
          json.dumps(_sauber(vorher), ensure_ascii=False, sort_keys=True, default=str) if vorher is not None else None,
          json.dumps(_sauber(nachher), ensure_ascii=False, sort_keys=True, default=str) if nachher is not None else None,
          db.now()))
@@ -67,13 +70,17 @@ def _json(row):
 LOESCHUNG = {"inspection": ("geloescht", "verworfen", "reservierung_freigegeben")}
 
 
-def lesen(paare, grenze=500):
+def lesen(paare, grenze=500, ohne=()):
     """Einträge zu mehreren (entity, id)-Paaren, neueste zuerst – je Paar nur die seit seiner letzten
-    Löschung (siehe LOESCHUNG)."""
+    Löschung (siehe LOESCHUNG). ohne: Aktionen, die nicht mitkommen (z. B. rechte.FREIGABE_AKTIONEN für alle, die den
+    Ordner nicht verwalten)."""
     if not paare:
         return []
-    bedingung = " OR ".join("(entity = ? AND entity_id = ?)" for _ in paare)
+    bedingung = "(" + " OR ".join("(entity = ? AND entity_id = ?)" for _ in paare) + ")"
     args = [x for p in paare for x in p]
+    if ohne:
+        bedingung += f" AND action NOT IN ({','.join('?' * len(ohne))})"
+        args += list(ohne)
     ab = {}
     for e, eid in paare:
         aktionen = LOESCHUNG.get(e, ("geloescht",))
@@ -82,6 +89,29 @@ def lesen(paare, grenze=500):
         ab[(e, eid)] = r["m"] or 0
     rows = db.query(f"SELECT * FROM mat_audit WHERE {bedingung} ORDER BY id DESC LIMIT ?", (*args, grenze))
     return [_json(r) for r in rows if r["id"] > ab.get((r["entity"], r["entity_id"]), 0)]
+
+
+# --- Kontoverweise ------------------------------------------------------------------------------------------
+# Betroffene (wem eine Freigabe oder ein Artikel zugeordnet ist) stehen im Journal nur pseudonym: {"ref": users.mat_ref},
+# eine Zufallskennung, die nirgends sonst gespeichert ist. Wird das Konto gelöscht, führt von ihr nichts mehr zur Person.
+# Handelnde stehen weiter mit Namen in user_name (Nachweis).
+
+def konto_ref(uid):
+    """Der Kontoverweis fürs Journal: {"ref": mat_ref} – fehlt mat_ref (Konto nach Schritt 8 angelegt), wird es jetzt
+    gesetzt. Ein Konto, das es nicht gibt, hat keinen Verweis (ref None)."""
+    db.execute("UPDATE users SET mat_ref = ? WHERE id = ? AND (mat_ref IS NULL OR mat_ref = '')",
+               (secrets.token_hex(16), uid))
+    r = db.query("SELECT mat_ref FROM users WHERE id = ?", (uid,), one=True)
+    return {"ref": r["mat_ref"] if r else None}
+
+
+def konto_name(ref):
+    """Der Name hinter einem Kontoverweis – „(gelöschtes Konto)“, wenn es ihn nicht mehr gibt, „(ohne Namen)“ bei
+    leerem Namen. Kein Rückfall auf die E-Mail."""
+    r = db.query("SELECT name FROM users WHERE mat_ref = ?", (ref,), one=True) if ref else None
+    if not r:
+        return "(gelöschtes Konto)"
+    return (r["name"] or "").strip() or "(ohne Namen)"
 
 
 def fuer_produkt(pid):

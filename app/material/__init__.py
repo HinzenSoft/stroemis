@@ -13,7 +13,8 @@ Aufbau:
   services/      Fachregeln: rechte, katalog, bestand, status, interval, search, nummern, qr, journal,
                  importer, katalog_export, pruefung, durchgang, anhang, meldung, protokoll (Festschreiben,
                  Prüfseite), pdf (WeasyPrint), stempel (Prüfsumme), unterschrift, ueberblick (Fälligkeiten je
-                 Ordner), export, lebenslauf, beschriftung (Journal als Text), rueckruf
+                 Ordner), export, lebenslauf, beschriftung (Journal als Text), rueckruf; seit Phase 2 dazu
+                 globalprotokoll (Bremse und Protokoll der Blicke über den eigenen Bereich) und globalsuche
   templates/, static/   Seite und Oberfläche (material.js, material.css)
 """
 from .. import db
@@ -32,10 +33,16 @@ def _bilder_reparieren(conn):
     durchsichtige_bilder_reparieren(conn)
 
 
+def _suchprotokoll_aufraeumen(conn):
+    from .services.globalprotokoll import aufraeumen
+    aufraeumen(conn)
+
+
 def schema_anmelden():
-    """Die Migration dieses Moduls beim Start mitlaufen lassen (db.init_db ruft sie auf) – danach den Abgleich der
-    Protokolldateien mit der Datenbank und die einmalige Reparatur durchsichtiger Bilder."""
-    for schritt in (models.migrieren, _verwaiste_protokolle, _bilder_reparieren):
+    """Die Migration dieses Moduls beim Start mitlaufen lassen (db.init_db ruft sie auf) – danach das Protokoll der
+    globalen Suche auf seine Frist kürzen, die Protokolldateien mit der Datenbank abgleichen und durchsichtige Bilder
+    einmalig reparieren."""
+    for schritt in (models.migrieren, _suchprotokoll_aufraeumen, _verwaiste_protokolle, _bilder_reparieren):
         if schritt not in db.SCHEMA_MODULE:
             db.SCHEMA_MODULE.append(schritt)
 

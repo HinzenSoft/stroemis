@@ -468,6 +468,14 @@ MIGRATIONS = [
     ("users", "mat_katalog", "INTEGER NOT NULL DEFAULT 0"),
     ("users", "urkundennummer", "TEXT NOT NULL DEFAULT ''"),
     ("users", "signature_png", "BLOB"),
+    # Modul Material, Phase 2: pseudonymer Kontoverweis fürs Journal (Freigaben, Zuordnungen) – 128 Bit Zufall, nirgends
+    # sonst gespeichert. Gefüllt von der Migration des Moduls (Schritt 8) und beim ersten Gebrauch (journal.konto_ref).
+    ("users", "mat_ref", "TEXT"),
+]
+# Indizes auf nachträglich angelegten Spalten – erst nach MIGRATIONS, denn SCHEMA läuft vorher und kennt die Spalten
+# einer älteren Datenbank noch nicht.
+INDIZES_NACH_MIGRATION = [
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_users_mat_ref ON users(mat_ref) WHERE mat_ref IS NOT NULL",
 ]
 
 # Was nach dem Anlegen einer Spalte einmalig mit den vorhandenen Zeilen geschieht. Nur der Prozess,
@@ -558,6 +566,8 @@ def _init_db_einmal():
                 # haben. Nur genau diesen Fall abfangen, alles andere gehört gemeldet.
                 if "duplicate column" not in str(e).lower():
                     raise
+    for sql in INDIZES_NACH_MIGRATION:
+        conn.execute(sql)
     # Erst nach den Migrationen: Die Nacharbeit zu neuen Spalten liest womöglich noch aus den
     # abgelösten (role → recht_*).
     for table, column in OBSOLETE_COLUMNS:

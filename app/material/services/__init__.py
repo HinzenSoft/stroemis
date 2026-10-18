@@ -8,6 +8,9 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 ZONE = ZoneInfo("Europe/Berlin")
+# Wer handelt, steht mit Namen im Journal – nie mit der E-Mail. Ohne Namen gibt es keinen Modulzugang (rechte.zugang);
+# für den theoretischen Rest steht dieser Platzhalter da.
+OHNE_NAMEN = "(Konto ohne Namen)"
 
 
 class Abgelehnt(Exception):
@@ -27,6 +30,17 @@ def heute():
 
 
 # --- Eingaben lesen ------------------------------------------------------------------------------
+
+def eingabe():
+    """JSON-Body oder – bei Dateiuploads – die Formularfelder der Multipart-Anfrage. Dieselbe Regel für die Routen
+    (routes._eingabe) und für rechte.requires_folder („eingabe:<feld>“): Beide lesen eine Kennung aus demselben Feld."""
+    from flask import request
+
+    from ...auth import json_body
+    if request.files or (request.content_type or "").startswith("multipart/"):
+        return request.form
+    return json_body()
+
 
 def text(d, feld, name, n=200, pflicht=False, einzeilig=True):
     """Ein Textfeld aus dem JSON: Zahl, Liste oder None gelten als leer; Steuerzeichen fliegen raus;
@@ -73,7 +87,8 @@ def ganzzahl(wert, name, mini=None, maxi=None, leer_erlaubt=True):
 
 
 def kennung(wert, name, leer_erlaubt=False):
-    """Eine Datensatzkennung (positive ganze Zahl)."""
+    """Eine Datensatzkennung (positive ganze Zahl). „7“ und 7.0 gelten als 7 – im Dienst wie in der Rechteprüfung
+    (rechte._bezug), damit beide dieselbe Kennung meinen; alles andere ist 400."""
     n = ganzzahl(wert, name, 1, 10 ** 12, leer_erlaubt=leer_erlaubt)
     return n
 
@@ -146,12 +161,13 @@ def auswahl(wert, werte, name, leer_erlaubt=False):
 
 
 def akteur():
-    """Kennung und Anzeigename dessen, der gerade handelt – für created_by und *_name-Felder.
-    Ohne Anfrage (Katalogimport auf der Kommandozeile) gilt der Name aus g.mat_akteur."""
+    """Kennung und Anzeigename dessen, der gerade handelt – für created_by und *_name-Felder. Nur der Name, kein
+    Rückfall auf die E-Mail (siehe OHNE_NAMEN). Ohne Anfrage (Katalogimport auf der Kommandozeile) gilt der Name aus
+    g.mat_akteur."""
     from flask import g, has_request_context
 
     from ...auth import current_user
     u = current_user() if has_request_context() else None
     if u:
-        return u["id"], (u["name"] or u["email"])
+        return u["id"], (u["name"] or "").strip() or OHNE_NAMEN
     return None, g.get("mat_akteur") or "System"
