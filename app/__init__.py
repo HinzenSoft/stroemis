@@ -95,13 +95,16 @@ pages = Blueprint("pages", __name__)
 @pages.get("/")
 @auth.page_login_required
 def index():
-    """Startseite ist das Wiki – oder das erste Modul, das die Rechte-Matrix dem Konto öffnet."""
+    """Startseite ist das Wiki – oder das erste Modul, das die Rechte-Matrix dem Konto öffnet. Ohne jedes Modul der
+    Lesemodus des Wikis (die öffentlichen Seiten) statt einer Sackgasse; ein Modul mit eigener Stufe geht ihm vor."""
     if auth.nutzt("wiki"):
         return render_template("wiki.html", user=auth.current_user(), slug="")
     for modul, ziel in (("karte", "/karte"), ("pruefungen", "/pruefungen"), ("material", "/material"),
                         ("verwaltung", "/admin")):
         if auth.nutzt(modul):
             return redirect(ziel)
+    if auth.wiki_lesemodus():
+        return redirect(url_for("pages.wiki"))
     # Mit Kopfleiste (user): Profil und Abmelden bleiben erreichbar – ohne sie saß man auf der Fehlerseite fest.
     return render_template("error.html", user=auth.current_user(), code=403, message="Für dein Konto ist noch kein "
                            "Bereich freigeschaltet. Bitte wende dich an die Verwaltung."), 403
@@ -113,16 +116,28 @@ def karte():
     return render_template("index.html", user=auth.current_user())
 
 
+def _wiki(slug):
+    """Mitglied und Verwaltung bekommen das Wiki. Ein Konto ohne Stufe im Wiki bekommt den Lesemodus: genau die Seiten,
+    die der öffentliche Teil zeigt, unter der eigenen Kopfleiste. Die Vorlage lädt dafür den Leser des öffentlichen
+    Teils (public.js), der nur /api/public abfragt. Was „öffentlich“ ist, entscheidet so weiter eine Stelle
+    (api_wiki.is_public), und keine interne Schnittstelle musste dafür aufgehen – die bleiben bei wiki_required."""
+    if auth.nutzt("wiki"):
+        return render_template("wiki.html", user=auth.current_user(), slug=slug)
+    if auth.wiki_lesemodus():
+        return render_template("wiki_lesemodus.html", user=auth.current_user(), slug=slug)
+    abort(403)
+
+
 @pages.get("/wiki")
-@auth.page_modul_required("wiki")
+@auth.page_login_required
 def wiki():
-    return render_template("wiki.html", user=auth.current_user(), slug="")
+    return _wiki("")
 
 
 @pages.get("/wiki/<slug>")
-@auth.page_modul_required("wiki")
+@auth.page_login_required
 def wiki_page(slug):
-    return render_template("wiki.html", user=auth.current_user(), slug=slug)
+    return _wiki(slug)
 
 
 # --- Öffentliches Wiki (ohne Login; unter der Subdomain wiki.* oder unter /oeffentlich) ---------
@@ -582,6 +597,7 @@ def create_app():
     def inject():
         return {"cfg": app.config, "is_admin": auth.is_admin(), "is_pruefer": auth.is_pruefer(),
                 "rechte": auth.rechte_von(auth.current_user()) if auth.current_user() else {},
+                "wiki_lesemodus": auth.wiki_lesemodus(),
                 "csp_nonce": getattr(g, "csp_nonce", "")}
 
     @app.errorhandler(413)

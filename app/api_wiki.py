@@ -13,7 +13,7 @@ from urllib.parse import unquote
 from flask import Blueprint, current_app, jsonify, request
 
 from . import db
-from .auth import avatar_url, current_user, eingabefehler_abfangen, json_body, verwaltet, wiki_required
+from .auth import avatar_url, current_user, eingabefehler_abfangen, json_body, nutzt, verwaltet, wiki_required
 from .images import EMBED_EXT, crop_wiki_image, rotate_wiki_image, store_wiki_file, wiki_endung
 from .mailer import send_mail
 
@@ -1423,8 +1423,11 @@ def notify_watchers(page, what):
         link = f"{cfg['BASE_URL'].rstrip('/')}/wiki/{page['slug']}"
         who = (me or {}).get("name") or (me or {}).get("email") or "jemand"
         for r in rows:
-            # Wer die Seite inzwischen nicht mehr lesen darf, bekommt auch keine Nachricht.
-            if not can_read(page, {"id": r["id"], "recht_wiki": r["recht_wiki"], "recht_verwaltung": r["recht_verwaltung"]}):
+            # Wer die Seite inzwischen nicht mehr lesen darf, bekommt auch keine Nachricht. Dazu gehört ein Konto, dem
+            # die Stufe im Wiki genommen wurde: can_read prüft nur die Beschränkung, und der Lesemodus zeigt ihm allein
+            # die öffentlichen Seiten – Titel und Bearbeiter interner Seiten kämen sonst weiter per Post.
+            leser = {"id": r["id"], "recht_wiki": r["recht_wiki"], "recht_verwaltung": r["recht_verwaltung"]}
+            if not nutzt("wiki", leser) or not can_read(page, leser):
                 continue
             try:
                 send_mail(r["email"], f"{cfg['SITE_NAME']} – „{page['title']}“ wurde geändert",

@@ -1798,32 +1798,38 @@ def test_rechte():
         assert c1.get("/pruefungen").status_code == 403 and c1.get("/admin").status_code == 403
         assert c1.get("/api/pruefungen/lehrgaenge").status_code == 403
 
-        # Kein Zugang zum Wiki: Seite, Schnittstelle und Artikeldateien sind zu – die Spots bleiben.
+        # Kein Zugang zum Wiki: Schnittstelle und Artikeldateien sind zu – die Spots bleiben. Die Wiki-Adressen öffnen
+        # den Lesemodus: nur die öffentlichen Seiten, gelesen über /api/public (tests/test_wiki_lesemodus.py).
         seite = c1.post("/api/wiki/pages", json={"title": "Meine", "content": "# Meine"}).json["page"]
         bild = c1.post("/api/wiki/files", data={"file": (jpeg(False), "b.jpg")}, headers=H,
                        content_type="multipart/form-data").json["url"]
         assert c1.get(bild).status_code == 200
         assert adm.put(f"/api/admin/users/{uid1}", json={"rechte": {"wiki": 0}}).status_code == 200
         assert c1.get("/").status_code == 302 and c1.get("/").headers["Location"].endswith("/karte")
-        assert c1.get("/wiki").status_code == 403 and c1.get(f"/wiki/{seite['slug']}").status_code == 403
+        for adresse in ("/wiki", f"/wiki/{seite['slug']}"):
+            r = c1.get(adresse)
+            assert r.status_code == 200 and "js/public.js" in r.text and 'data-modus="lesemodus"' in r.text, adresse
+            assert "js/wiki.js" not in r.text and "toastui" not in r.text and "Meine" not in r.text, adresse
         assert c1.get("/api/wiki/tree").status_code == 403
         assert c1.get(f"/api/wiki/pages/{seite['slug']}").status_code == 403
         assert c1.get(bild).status_code == 403
         assert c1.get("/api/map").status_code == 200 and c1.get("/karte").status_code == 200
-        # Auch die Spots zu: kein Bereich mehr – die Startseite sagt es, statt ins Leere zu leiten.
+        # Auch die Spots zu: kein Modul mehr – die Startseite führt in den Lesemodus des Wikis statt ins Leere.
         assert adm.put(f"/api/admin/users/{uid1}", json={"rechte": {"karte": 0}}).status_code == 200
         assert c1.get("/api/map").status_code == 403 and c1.get("/karte").status_code == 403
         r = c1.get("/")
-        assert r.status_code == 403 and "kein Bereich" in r.get_data(as_text=True)
-        # … mit Kopfleiste: Profil und Abmelden bleiben erreichbar; „Zum Wiki“ führte wieder hierher.
-        seite = r.get_data(as_text=True)
-        assert 'id="logout"' in seite and 'href="/profil"' in seite and "Zum Wiki" not in seite, seite[-600:]
-        assert 'id="logout"' in c1.get("/pruefungen").get_data(as_text=True)   # ebenso die Fehlerseite ohne Recht
+        assert r.status_code == 302 and r.headers["Location"].endswith("/wiki"), (r.status_code, r.headers.get("Location"))
+        # … mit Kopfleiste: Profil und Abmelden bleiben erreichbar, der Reiter „Wiki“ führt in den Lesemodus.
+        seite = c1.get("/wiki").get_data(as_text=True)
+        assert 'id="logout"' in seite and 'href="/profil"' in seite and '<a href="/wiki"' in seite, seite[-600:]
+        assert "Du siehst die öffentlichen Seiten" in seite
+        fehler = c1.get("/pruefungen").get_data(as_text=True)              # ebenso die Fehlerseite ohne Recht
+        assert 'id="logout"' in fehler and '<a href="/wiki">Zum Wiki</a>' in fehler, fehler[-600:]
         assert c1.get("/profil").status_code == 200                      # das Profil bleibt immer
-        # Nur das Modul Material: Die Startseite führt dorthin, nicht auf die Fehlerseite. Seit Phase 2 kommt der Zugang
+        # Nur das Modul Material: Die Startseite führt dorthin, nicht in den Lesemodus. Seit Phase 2 kommt der Zugang
         # aus Freigaben oder einem Häkchen (hier: Produktkatalogpfleger) – die Stufe der Matrix wirkt dort nicht mehr.
         assert adm.put(f"/api/admin/users/{uid1}", json={"rechte": {"material": 1}}).status_code == 200
-        assert c1.get("/").status_code == 403
+        assert c1.get("/").headers["Location"].endswith("/wiki")
         assert adm.put(f"/api/admin/users/{uid1}", json={"mat_katalog": True}).status_code == 200
         r = c1.get("/")
         assert r.status_code == 302 and r.headers["Location"].endswith("/material"), (r.status_code, r.headers.get("Location"))

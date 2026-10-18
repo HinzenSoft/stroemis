@@ -4,7 +4,8 @@
 <main class="page narrow">
   <h1>{{ code }}</h1>
   <p>{{ message }}</p>
-  {# Ohne Wiki führte „Zum Wiki“ wieder hierher (die Startseite ist das Wiki) – dann zum eigenen Profil. #}
-  <p>{% if user and not rechte.wiki %}<a href="/profil">Zum Profil</a>{% else %}<a href="/">Zum Wiki</a>{% endif %}</p>
+  {# Ohne Stufe im Wiki führt „Zum Wiki“ in den Lesemodus (/wiki) – die Startseite wäre dort ein anderes Modul. Ein
+     angemeldetes Konto ohne Lesemodus gibt es praktisch nicht; dort führte der Link wieder hierher, also zum Profil. #}
+  <p>{% if user and not rechte.wiki %}{% if wiki_lesemodus %}<a href="/wiki">Zum Wiki</a>{% else %}<a href="/profil">Zum Profil</a>{% endif %}{% else %}<a href="/">Zum Wiki</a>{% endif %}</p>
 </main>
 {% endblock %}
