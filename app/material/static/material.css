@@ -73,7 +73,8 @@ a.mat-kachel:hover { background: var(--grau-hell); }
 .mat-baum li.system > a, .mat-unterordner li.system > a { font-weight: 400; color: var(--grau); }
 .mat-unterordner li { border-bottom: 1px solid var(--linie); padding: 8px 0; }
 .mat-art { display: inline-block; font-size: var(--fs-marke); color: var(--grau); border: 1px solid var(--linie);
-  border-radius: var(--radius-pille); padding: 0 7px; margin-left: 6px; vertical-align: middle; font-weight: 400; }
+  border-radius: var(--radius-pille); padding: 0 7px; margin-left: 6px; vertical-align: middle; font-weight: 400;
+  white-space: nowrap; }
 .mat-baum-zahl { display: inline-block; min-width: 1.6em; text-align: center; margin-left: 8px; font-size: var(--fs-klein);
   color: var(--anthrazit); background: var(--grau-hell); border-radius: var(--radius-pille); padding: 0 6px; }
 .mat-zahl { display: inline-block; min-width: 1.5em; text-align: center; margin-left: 4px; font-size: var(--fs-marke);
@@ -91,7 +92,8 @@ a.mat-kachel:hover { background: var(--grau-hell); }
 .mat-filter { flex-wrap: wrap; }
 
 /* Tabellen: Die Listen des Moduls teilen ihre Spalten nach dem Inhalt auf (Produktnamen sind lang,
-   Nummern kurz) – unter 860 px werden sie ohnehin zu Karten. Nur der Formular-Editor hat feste Spalten. */
+   Nummern kurz) – bis 640 px werden sie zu Karten, darüber enger (Lieferung 5 – Geräte: listen, am Ende).
+   Nur der Formular-Editor hat feste Spalten. */
 table.list.mat-tabelle { table-layout: auto; }
 table.list.mat-formtabelle { table-layout: fixed; }
 .mat-tabelle td { vertical-align: middle; }
@@ -110,7 +112,7 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-hash { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .mat-inv { white-space: nowrap; }
 .mat-seiten { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 12px 0; font-size: var(--fs-klein); }
-@media (max-width: 860px) { table.list td.mat-wahlspalte, table.list th.mat-wahlspalte { width: auto; } }
+@media (max-width: 640px) { table.list td.mat-wahlspalte, table.list th.mat-wahlspalte { width: auto; } }
 
 /* Mehrfachauswahl: Die Leiste bleibt am unteren Rand stehen, solange etwas angehakt ist. */
 .mat-sammel { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -149,8 +151,8 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-j-zeit { color: var(--grau); font-size: var(--fs-klein); }
 .mat-diff { border-collapse: collapse; margin-top: 4px; font-size: var(--fs-klein); max-width: 100%; }
 .mat-diff th, .mat-diff td { border: 1px solid var(--linie); padding: 3px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
-.mat-diff thead th { background: var(--grau-hell); color: var(--grau); }
-.mat-diff tbody th { color: var(--grau); font-weight: 600; }
+.mat-diff thead th { background: var(--grau-hell); color: var(--grau); overflow-wrap: normal; white-space: nowrap; }   /* nie „vor/her“ */
+.mat-diff tbody th { color: var(--grau); font-weight: 600; overflow-wrap: break-word; }   /* „Seriennummern“ ganz, solange es passt */
 .mat-wertliste { margin: 0; padding-left: 16px; }
 .mat-auf > summary { cursor: pointer; font-weight: 700; padding: 6px 0; }
 
@@ -456,10 +458,10 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
 .mat-vorlesen { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* Befunde einer abgeschlossenen Prüfung: „kritisch“ steht in einer eigenen schmalen Spalte neben dem Prüfpunkt,
-   damit der Text der Punkte untereinander ruhig bleibt. Als Karte (schmale Bildschirme) entfällt die leere Zelle. */
+   damit der Text der Punkte untereinander ruhig bleibt. Als Karte (bis 640 px) entfällt die leere Zelle. */
 .mat-befunde .mat-krit-spalte { width: 1%; white-space: nowrap; padding-left: 4px; padding-right: 4px; }
 .mat-befunde .mat-soll { white-space: nowrap; }
-@media (max-width: 860px) {
+@media (max-width: 640px) {
   table.list.mat-befunde td.mat-krit-spalte:empty { display: none; }
   table.list.mat-befunde td.mat-krit-spalte { width: auto; padding: 2px 0; }
 }
@@ -489,8 +491,8 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
 
 /* Lieferung 4 – ueberblick */
 /* Fälligkeiten je Ordner: Ordner eingerückt nach ihrer Tiefe (--tiefe am <tr>), Zahlen als Zähler in den Statusfarben,
-   jede ein Link zur gefilterten Liste. Zugeklappte Zweige sind verborgen – auch dort, wo die Karten-Ansicht (unter
-   860 px) jede Zeile zum Block macht; leere Zahlen entfallen in den Karten. */
+   jede ein Link zur gefilterten Liste. Zugeklappte Zweige sind verborgen – auch dort, wo die Karten-Ansicht (bis
+   640 px) jede Zeile zum Block macht; leere Zahlen entfallen in den Karten. */
 table.list.mat-ue tr[hidden] { display: none; }
 table.list.mat-ue td.mat-ue-name { padding-left: calc(6px + var(--tiefe, 0) * 22px); }
 .mat-ue tr.mat-ue-oben td { border-top: 2px solid var(--linie); }
@@ -508,7 +510,7 @@ button.mat-ue-klapp[aria-expanded="true"]::before { content: "▾"; }
 button.mat-ue-klapp[aria-expanded="false"]::before { content: "▸"; }
 button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offset: 1px; }
 .mat-pr-ordner { margin: 0 0 6px; font-weight: 600; }
-@media (max-width: 860px) {
+@media (max-width: 640px) {
   table.list.mat-ue tr { padding-left: calc(var(--tiefe, 0) * 14px); }
   table.list.mat-ue tr.mat-ue-oben { border-top: 2px solid var(--linie); }
   table.list.mat-ue tr.mat-ue-oben td { border-top: 0; }
@@ -864,5 +866,146 @@ html.mat-lb-offen { overflow: hidden; }
   dialog.mat-lightbox { padding: 8px 12px; }
   .mat-lightbox img { max-height: calc(100dvh - 56px); }
   .mat-lightbox figure { gap: 4px; }
+
+/* Lieferung 5 – Geräte: listen */
+/* Die Listen des Moduls (table.list.mat-tabelle) haben drei Gestalten, je nach Breite:
+   – ab 861 px die volle Tabelle wie bisher;
+   – 641–860 px (Fold aufgeklappt, Tablet hochkant, Telefon quer) eine engere Tabelle: Spalten mit .mat-schmal-weg
+     oder .mat-eng-weg entfallen, ihr Inhalt steht klein in der Nachbarzelle (.mat-schmal-zusatz, .mat-eng-zusatz),
+     ihr Sortierknopf im Kopf darüber (.mat-kopf-zusatz);
+   – bis 640 px je Zeile eine Karte. Listen mit .mat-karten setzen sie dicht: Titel und Marke in der ersten Zeile
+     (.mat-k-titel, .mat-k-marke), kurze Angaben zu zweit (.mat-k-halb) oder nebeneinander (.mat-k-kurz), ohne
+     Beschriftung, wo der Inhalt für sich spricht (.mat-k-ohne), Häkchen und Knöpfe unten; leere Zellen entfallen.
+     Darüber holt .mat-kartenkopf Sortierung und „alle auswählen“ zurück, die sonst im Tabellenkopf stehen.
+   Die Kartenregel in app.css (unter 860 px, für jede table.list – gebaut für die zehnspaltige Nutzerverwaltung)
+   bleibt, wie sie ist; für die Modullisten wird sie hier zwischen 641 und 860 px zurückgenommen. Der Formular-Editor
+   (.mat-formtabelle) bleibt dort Karte: Seine Eingabefelder brauchen die Breite. */
+.mat-schmal-zusatz, .mat-eng-zusatz, .mat-kartenkopf, .mat-wahl-text { display: none; }
+.mat-kopf-zusatz { font-weight: 400; }               /* der Kopf der zusammengelegten Spalte, leiser als der eigene */
+/* Häkchen der Mehrfachauswahl mit Label (material.js, wahlFeld): am Rechner unverändert ein Kästchen in der Spalte
+   (das Label nur inline drumherum); am Finger und in der Karte eine Fläche mit Beschriftung (unten). */
+.mat-wahl-feld { display: inline; margin: 0; font-size: inherit; font-weight: 400; cursor: pointer; }
+.mat-wahl-feld:has(input:disabled) { cursor: default; color: var(--grau); }
+table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info-fl); }
+
+@media (max-width: 860px) {
+  table.list.mat-tabelle th.mat-schmal-weg, table.list.mat-tabelle td.mat-schmal-weg { display: none; }
+  table.list.mat-tabelle .mat-schmal-zusatz { display: block; }
+}
+@media (min-width: 641px) and (max-width: 860px) {
+  table.list.mat-tabelle:not(.mat-formtabelle) { display: table; }
+  table.list.mat-tabelle:not(.mat-formtabelle) thead { display: table-header-group; }
+  table.list.mat-tabelle:not(.mat-formtabelle) tbody { display: table-row-group; }
+  table.list.mat-tabelle:not(.mat-formtabelle) tr { display: table-row; padding: 0; border-bottom: 0; }
+  table.list.mat-tabelle:not(.mat-formtabelle) tr[hidden] { display: none; }
+  table.list.mat-tabelle:not(.mat-formtabelle) th,
+  table.list.mat-tabelle:not(.mat-formtabelle) td { display: table-cell; padding: 8px 6px; border-bottom: 1px solid var(--linie); }
+  table.list.mat-tabelle:not(.mat-formtabelle) th { border-bottom: 2px solid var(--anthrazit); }
+  table.list.mat-tabelle:not(.mat-formtabelle) td[data-l]::before { content: none; }
+  table.list.mat-tabelle:not(.mat-formtabelle) .mat-wahlspalte { width: 34px; padding-left: 4px; padding-right: 4px; }
+  table.list.mat-tabelle:not(.mat-formtabelle) th.mat-schmal-weg, table.list.mat-tabelle:not(.mat-formtabelle) td.mat-schmal-weg,
+  table.list.mat-tabelle:not(.mat-formtabelle) th.mat-eng-weg, table.list.mat-tabelle:not(.mat-formtabelle) td.mat-eng-weg { display: none; }
+  table.list.mat-tabelle .mat-eng-zusatz { display: block; }
+  /* Fälligkeiten je Ordner: eingerückt wie am Rechner; die Spaltenköpfe dürfen umbrechen („Lebensdauer erreicht“). */
+  table.list.mat-ue:not(.mat-formtabelle) td.mat-ue-name { padding-left: calc(6px + var(--tiefe, 0) * 22px); }
+  .mat-ue th.mat-ue-zahl { white-space: normal; }
+  /* Marken dürfen hier umbrechen („Lebensdauer erreicht“): Mit dem kleineren Radius sieht eine einzeilige Marke weiter
+     wie eine Pille aus, eine zweizeilige wie ein Kästchen. */
+  table.list.mat-tabelle :is(.mat-status, .mat-rr-marke, .mat-ergebnis-marke) { white-space: normal; border-radius: 9px; }
+}
+
+@media (max-width: 640px) {
+  .mat-kartenkopf { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 6px 0 0; padding-bottom: 4px;
+    border-bottom: 2px solid var(--anthrazit); }
+  .mat-alle-feld { font-weight: 600; }
+  .mat-sortwahl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-left: auto; }
+  .mat-sortwahl label { margin: 0; font-size: var(--fs-klein); font-weight: 400; color: var(--grau); }
+  .mat-sortwahl select { width: auto; max-width: 100%; }
+  .mat-wahl-hinweis { display: none; }                  /* jede Karte sagt es selbst */
+
+  table.list.mat-karten tr { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 12px; padding: 10px 0 12px; }
+  table.list.mat-karten td { flex: 0 0 100%; min-width: 0; padding: 0; }
+  table.list.mat-karten td:empty { display: none; }
+  table.list.mat-karten td:is(.mat-k-titel, .mat-k-marke, .mat-k-ohne)::before { content: none; }
+  /* Erste Zeile: Titel und Marke; ein unsichtbarer Umbruch (tr::before) schickt alles Weitere in neue Zeilen. */
+  table.list.mat-karten td.mat-k-titel, table.list.mat-karten td.mat-k-marke { order: -2; align-self: center; }
+  table.list.mat-karten tr::before { content: ""; order: -1; flex: 0 0 100%; height: 0; margin-top: -4px; }
+  table.list.mat-karten td.mat-k-titel { flex: 1 1 0; min-width: auto; font-size: 1rem; }
+  table.list.mat-karten td.mat-k-marke { flex: 0 1 auto; max-width: 65%; margin-left: auto; text-align: right; }
+  table.list.mat-karten td.mat-k-halb { flex: 0 0 calc(50% - 6px); }
+  table.list.mat-karten td.mat-k-kurz { flex: 0 1 auto; }
+  /* Unten: links das Häkchen mit „auswählen“, rechts „Prüfen“ – oder nur der Knopf. */
+  table.list.mat-karten td.mat-k-wahl, table.list.mat-karten td.tabelle-aktionen { order: 10; align-self: center; padding-top: 4px; }
+  table.list.mat-karten td.mat-k-wahl { flex: 1 1 auto; padding: 4px 0 0; }
+  table.list.mat-karten td.tabelle-aktionen { flex: 0 1 auto; }
+  .mat-alle-feld, table.list.mat-karten .mat-wahl-feld { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding-right: 12px; }
+  .mat-alle-feld input, table.list.mat-karten .mat-wahl-feld input { margin: 0; }
+  table.list.mat-karten .mat-wahl-text { display: inline; }
+  /* Hinterlegte Zeilen (Mangel, Entwurf, ausgewählt) als ganze Karte, etwas über den Rand hinaus – statt Streifen je Zelle. */
+  table.list.mat-karten tr.mat-mangelzeile { background: var(--rot-hell); box-shadow: -8px 0 0 var(--rot-hell), 8px 0 0 var(--rot-hell); }
+  table.list.mat-karten tr.mat-entwurf, table.list.mat-karten tr:has(.mat-wahl-art:checked) { background: var(--co-info-fl);
+    box-shadow: -8px 0 0 var(--co-info-fl), 8px 0 0 var(--co-info-fl); }
+  table.list.mat-karten tr:is(.mat-mangelzeile, .mat-entwurf) td { background: none; }
+}
+
+/* Übersicht: sieben Statuskacheln in einem gleichmäßigen Raster – nebeneinander, wenn sie in eine Reihe passen
+   (wie bisher ab 900 px Inhaltsbreite), sonst vier je Reihe, am Telefon zwei; „Artikel im Bestand“ ist dann doppelt
+   breit, so gehen die Reihen auf (statt 6 + 1 oder 5 + 2). Maßgeblich ist die Breite des Inhalts, nicht des Fensters:
+   Ab 1200 px steht links die Ordnerleiste. */
+.mat-kachelrahmen { container-type: inline-size; margin: 6px 0 10px; }
+.mat-kachelrahmen > .mat-kacheln { margin: 0; }       /* der Rahmen trägt die Abstände – in ihm fallen sie nicht mehr zusammen */
+.mat-kacheln.mat-statuskacheln { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mat-statuskacheln .mat-kachel.gesamt { grid-column: span 2; }
+@container (min-width: 570px) { .mat-kacheln.mat-statuskacheln { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container (min-width: 900px) {
+  .mat-kacheln.mat-statuskacheln { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .mat-statuskacheln .mat-kachel.gesamt { grid-column: auto; }
+}
+/* Ebenso die drei bis fünf Zahlen eines Prüfdurchgangs: ab 600 px alle in einer Reihe, darunter zu zweit. */
+.mat-kachelrahmen > .mat-rundenzahlen { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mat-kachelrahmen > .mat-rundenzahlen > .mat-kachel:first-child { grid-column: span 2; }
+@container (min-width: 600px) {
+  .mat-kachelrahmen > .mat-rundenzahlen { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+  .mat-kachelrahmen > .mat-rundenzahlen > .mat-kachel:first-child { grid-column: auto; }
+}
+
+/* Hilfeabsätze in lesbarer Zeilenlänge – Tabellen, Kacheln und Banner bleiben so breit wie die Seite. */
+#mat-inhalt p.help { max-width: 80ch; }
+#mat-inhalt p.help.mat-endlos { max-width: none; }
+
+/* Ordnerwahl (Dialog „verschieben nach …“): Ein langer Name bricht um, die Art-Marke daneben bleibt ganz. */
+.mat-wahl label .mat-art { flex: none; }
+.mat-wahl .mat-wahl-name { min-width: 0; overflow-wrap: anywhere; }
+
+/* Fingerbedienung: Knöpfe, Reiter, Kästchen und Links in Listen mindestens 44 px hoch – nur bei grobem Zeiger, am
+   Rechner bleibt alles, wie es ist. Wo ein größerer Knopf die Zeile aufblähen würde (Inventar-Nr., Zähler,
+   Sortierköpfe), vergrößert ein unsichtbares ::after nur die Trefferfläche. */
+@media (pointer: coarse) {
+  :where(#mat-inhalt, #dlg) .btn { min-height: 44px; }
+  .mat-filter button, .mat-sortwahl select { min-height: 44px; }
+  .mat-pdf { min-height: 44px; }
+  :where(#mat-inhalt, #dlg) input:is([type=checkbox], [type=radio]) { width: 24px; height: 24px; flex: none; }
+  :where(#mat-inhalt, #dlg) label.inline:has(> input:is([type=checkbox], [type=radio])) { min-height: 44px; }
+  .mat-wahl label.inline { margin: 0; }
+  /* Das Häkchen in der Tabelle: Das Label füllt die Zelle. In der Karte und darüber 44 px hoch. */
+  td.mat-wahlspalte .mat-wahl-feld, th.mat-wahlspalte .mat-wahl-feld { display: inline-flex; align-items: center; justify-content: center;
+    min-width: 44px; min-height: 44px; margin: -8px -4px; }
+  .mat-alle-feld, table.list.mat-karten .mat-wahl-feld { min-height: 44px; margin: 0; justify-content: flex-start; }
+  #mat-inhalt table.list.mat-tabelle td > a:not(.btn, .mat-pdf),
+  #mat-inhalt :is(.mat-runden li > a, .mat-unterordner li > a, .mat-sort, .mat-summe) { position: relative; }
+  #mat-inhalt table.list.mat-tabelle td > a:not(.btn, .mat-pdf)::after,
+  #mat-inhalt :is(.mat-runden li > a, .mat-unterordner li > a, .mat-sort, .mat-summe)::after { content: ""; position: absolute; inset: -14px -4px; }
+  #mat-inhalt table.list.mat-ue td > a.mat-zahl::after { inset: -14px -10px; }
+  .mat-auf > summary { padding: 11px 0; }
+  .mat-ue-klapp { position: relative; width: 32px; height: 32px; }
+  .mat-ue-klapp::after { content: ""; position: absolute; inset: -6px; }
+}
+/* Fälligkeiten je Ordner als Karte am Finger: Beschriftung und Zahl sind zusammen das Ziel. */
+@media (pointer: coarse) and (max-width: 640px) {
+  table.list.mat-ue td:is(.mat-ue-zahl, .mat-ue-tag):not(.mat-ue-null) { position: relative; display: inline-flex; align-items: center;
+    gap: 5px; min-height: 44px; padding: 0; }
+  table.list.mat-ue td.mat-ue-zahl .mat-zahl { min-width: 30px; line-height: 26px; font-size: .8rem; }
+  #mat-inhalt table.list.mat-ue td.mat-ue-zahl .mat-zahl, #mat-inhalt table.list.mat-ue td.mat-ue-tag a { position: static; }
+  #mat-inhalt table.list.mat-ue td.mat-ue-zahl > a.mat-zahl::after, #mat-inhalt table.list.mat-ue td.mat-ue-tag a::after { inset: 0; }
 }
 
