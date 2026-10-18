@@ -1104,7 +1104,8 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   Artikel beim Verschieben den Zweig eines offenen Durchgangs – auch innerhalb einer Gliederung –, nimmt ihn der
   Durchgang aus („verschoben am TT.MM.JJJJ – nicht mehr im Bereich des Durchgangs“), und ein offener Entwurf darin
   verliert den Durchgang; erledigte Zeilen bleiben als Nachweis. Danach antwortet „Einbeziehen“ mit 409 und ein
-  Prüfstart mit diesem Durchgang mit 404; beim Eröffnen zählen Ausgenommene nicht mehr als Konflikt. Das
+  Prüfstart mit diesem Durchgang mit 404; beim Eröffnen zählen ausgenommene und erledigte Zeilen nicht mehr als
+  Konflikt. Das
   Sammelprotokoll druckt statt eines Pfads aus der anderen Gliederung „(aus dem Bereich des Durchgangs verschoben)“,
   und Prüfer von dort stehen nicht darin. Die Verschieben-Dialoge sagen vorher, was mit Freigaben, Systemordnern und
   Durchgängen geschieht. In der Durchgangsansicht steht ein hinausverschobener Artikel, den man nicht mehr sieht, ohne

@@ -132,11 +132,14 @@ def eroeffnen(fid, d, akteur):
             args)]
         if not artikel:
             raise Abgelehnt("In diesem Ordner und darunter liegt kein Artikel im Bestand.", 409)
-        # Ausgenommene zählen nicht: Nach einem Verschieben eröffnet der neue Bereich seinen eigenen Durchgang.
+        # Ausgenommene und erledigte Zeilen zählen nicht (wie in einbeziehen und offene_runde_fuer): Nach einem
+        # Verschieben eröffnet der neue Bereich seinen eigenen Durchgang, auch wenn der Artikel im alten schon geprüft
+        # ist – die erledigte Zeile bleibt dort als Nachweis stehen (1.7 Nr. 4 und 6).
         konflikt = db.query(
             f"SELECT r.id, r.title FROM mat_round r JOIN mat_round_item ri ON ri.round_id = r.id "
             f"JOIN mat_item i ON i.id = ri.item_id WHERE r.closed_on IS NULL AND ri.excluded_reason IS NULL "
-            f"AND {bedingung} LIMIT 1", args, one=True)
+            f"AND NOT EXISTS (SELECT 1 FROM mat_inspection x WHERE x.round_id = r.id AND x.item_id = ri.item_id "
+            f"AND x.completed_at IS NOT NULL) AND {bedingung} LIMIT 1", args, one=True)
         if konflikt:
             raise Abgelehnt(f"Für Artikel hier läuft schon der Durchgang „{konflikt['title']}“ – ein Artikel steht "
                             "höchstens in einem offenen Durchgang.", 409)

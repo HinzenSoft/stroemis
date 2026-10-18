@@ -1161,9 +1161,15 @@ def test_verschieben_und_durchgaenge():
         assert "Nachbarstadt" not in json.dumps(d, ensure_ascii=False)
         r = w.post(f"/api/material/durchgaenge/{r_a}/einbeziehen", json={"item_id": x})
         assert r.status_code == 409 and "nicht mehr im Bereich" in r.json["error"], r.get_json()
+        # Auch y, in A schon geprüft, geht nach B: Die erledigte Zeile bleibt in A als Nachweis stehen (nicht
+        # ausgenommen) – und sperrt Bs neuen Durchgang trotzdem nicht (1.7 Nr. 6).
+        r = t.adm.post("/api/material/artikel/verschieben", json={"ids": [y], "folder_id": halle_b})
+        assert r.status_code == 200, r.get_json()
+        z_a = w.get(f"/api/material/durchgaenge/{r_a}").json["durchgang"]["zaehlung"]
+        assert (z_a["erledigt"], z_a["ausgenommen"], z_a["offen"]) == (1, 1, 0), z_a
         # B: eigener Durchgang ohne Konflikt; As Durchgang taugt dort nicht (404 wie unbekannt); die Prüfung hängt an B.
         r = t.wart_b.post("/api/material/durchgaenge", json={"folder_id": halle_b, "titel": "Testdurchgang Halle"})
-        assert r.status_code == 201, r.get_json()
+        assert r.status_code == 201 and r.json["durchgang"]["zaehlung"]["gesamt"] == 2, r.get_json()
         r_b = r.json["durchgang"]["id"]
         gleich_wie_unbekannt(starten(t.pruefer_b, x, durchgang_id=r_a), starten(t.pruefer_b, x, durchgang_id=999999))
         r = starten(t.pruefer_b, x)
