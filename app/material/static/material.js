@@ -27,10 +27,11 @@
      Die Großansicht ist ein modaler <dialog>: Der Fokus bleibt darin (Tab landete sonst auf der Kopfleiste dahinter),
      die Seite dahinter ist inert und rollt nicht mit (am Touchgerät html.mat-lb-offen und touch-action: none, mit der
      Maus ein wheel-Handler) – nach dem Schließen steht man an derselben Stelle des Prüfformulars. Solange er offen
-     ist, sperrt html:has(dialog[open]) (app.css) auch das Ziehen zum Neuladen. */
-  const bildLink = (web, original, titel, gruppe, bildHtml) => `<a class="mat-bildlink" href="${esc(original || web)}"
+     ist, sperrt html:has(dialog[open]) (app.css) auch das Ziehen zum Neuladen.
+     Mit der Tastatur öffnet Enter das Foto wie jeden Link, die Leertaste wie bei einem Knopf auch; Esc schließt. */
+  const bildLink = (web, original, titel, gruppe, bildHtml, label) => `<a class="mat-bildlink" href="${esc(original || web)}"
     target="_blank" rel="noopener" data-web="${esc(web)}" data-titel="${esc(titel || "")}"${gruppe ? ` data-gruppe="${esc(gruppe)}"` : ""}
-    aria-label="${esc(titel ? `Foto groß zeigen: ${titel}` : "Foto groß zeigen")}">${bildHtml}</a>`;
+    aria-label="${esc(label || (titel ? `Foto groß zeigen: ${titel}` : "Foto groß zeigen"))}">${bildHtml}</a>`;
 
   function bildZeigen(link) {
     const gruppe = link.dataset.gruppe;
@@ -109,6 +110,12 @@
     e.preventDefault();
     bildZeigen(l);
   });
+  // Leertaste auf einem Foto: Das Drücken rollte sonst die Seite; geöffnet wird erst beim Loslassen, wie bei einem
+  // Knopf – dann steht der Fokus schon auf „Schließen“, wenn nichts mehr von der Taste nachkommt.
+  const leertasteAufFoto = (e) => e.key === " " && !e.ctrlKey && !e.metaKey && !e.altKey && e.target instanceof Element
+    && e.target.matches("a.mat-bildlink");
+  document.addEventListener("keydown", (e) => { if (leertasteAufFoto(e)) e.preventDefault(); });
+  document.addEventListener("keyup", (e) => { if (leertasteAufFoto(e)) { e.preventDefault(); bildZeigen(e.target); } });
 
   const STATUS = { einsatzbereit: "einsatzbereit", bald_faellig: "bald fällig", ueberfaellig: "überfällig", neu: "neu",
                    gesperrt: "gesperrt", lebensdauer: "Lebensdauer erreicht", ausgesondert: "ausgesondert" };
@@ -247,6 +254,14 @@
   const demoMarke = (x) => (x ? '<span class="mat-demo" title="DEMO – nicht für echte Prüfungen">DEMO</span>' : "");
   const leer = (text) => `<p class="mat-leer">${esc(text)}</p>`;
   const produktName = (p) => `${p.manufacturer || ""} ${p.model || ""}`.trim();
+  // Produktfoto in der Produktwahl (Artikel anlegen: gewähltes Produkt und Treffer der Produktsuche): die Vorschau,
+  // antippbar – sie öffnet die Webfassung groß (bildZeigen), dort führt „Original“ zur hochgeladenen Datei. Die Lupe
+  // unten rechts zeigt auch am Telefon, wo es keinen Mauszeiger gibt, dass es größer geht. Ohne Bild: nichts.
+  const LUPE_KLEIN = `<svg viewBox="0 0 24 24" width="12" height="12" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"
+    fill="none" stroke="currentColor" stroke-width="2.8"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>`;
+  const produktFoto = (p) => (p.bild && p.vorschau ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null,
+    `<span class="mat-produktfoto"><img class="mat-mini" src="${esc(p.vorschau)}" alt=""><span class="mat-lupe-marke" aria-hidden="true">${LUPE_KLEIN}</span></span>`,
+    `Produktfoto groß anzeigen: ${produktName(p)}`) : "");
   const fokus = (el) => { if (el && !window.matchMedia("(pointer: coarse)").matches) el.focus(); };
   const EIN = "\u00a0\u00a0\u00a0";          // Einrückung je Ebene in Auswahllisten
   const groesse = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round((b || 0) / 1024))} kB`);
@@ -1576,7 +1591,9 @@
 
   /* --- Produktsuche mit allen Treffern (Artikel anlegen, Meldung zuordnen) ------------------------------
      Alle Treffer in einer scrollbaren Liste unter dem Suchfeld, je 50 vom Server; rückt das Ende der Liste ins Bild,
-     kommen die nächsten. Eine Antwort zu einer älteren Eingabe zählt nicht mehr (Zähler je Liste). */
+     kommen die nächsten. Eine Antwort zu einer älteren Eingabe zählt nicht mehr (Zähler je Liste).
+     Je Treffer zwei getrennte Flächen nebeneinander: das Foto (öffnet es groß, wählt nichts) und der Knopf mit dem
+     Namen (wählt das Produkt) – ein Link in einem Knopf wäre kein gültiges HTML, und der Tipp gehörte beiden. */
   function trefferLeeren(ziel) {
     ziel._lauf = (ziel._lauf || 0) + 1;
     ziel.innerHTML = "";
@@ -1590,8 +1607,8 @@
     let seite = 0;
     let laedt = false;
     ziel.scrollTop = 0;
-    const zeile = (p, i) => `<button type="button" class="mat-treffer-zeile" data-i="${i}">
-      ${p.vorschau ? `<img class="mat-mini" src="${esc(p.vorschau)}" alt="">` : ""}<strong>${esc(produktName(p))}</strong> <span class="muted">${esc(p.article_no || "")} · ${esc(p.category_name || "")}</span>${demoMarke(p.demo)}</button>`;
+    const zeile = (p, i) => `<div class="mat-treffer-produkt">${produktFoto(p)}<button type="button" class="mat-treffer-wahl" data-i="${i}">
+      <strong>${esc(produktName(p))}</strong> <span class="muted">${esc(p.article_no || "")} · ${esc(p.category_name || "")}</span>${demoMarke(p.demo)}</button></div>`;
     async function mehr() {
       if (laedt || (seite && liste.length >= gesamt)) return;
       laedt = true;
@@ -1615,7 +1632,7 @@
       if (lauf === ziel._lauf && liste.length < gesamt && ziel.scrollHeight <= ziel.clientHeight + 60) mehr();
     }
     ziel.onscroll = () => { if (ziel.scrollTop + ziel.clientHeight >= ziel.scrollHeight - 160) mehr(); };
-    ziel.onclick = (e) => { const b = e.target.closest(".mat-treffer-zeile"); if (b && liste[+b.dataset.i]) waehlen(liste[+b.dataset.i]); };
+    ziel.onclick = (e) => { const b = e.target.closest(".mat-treffer-wahl"); if (b && liste[+b.dataset.i]) waehlen(liste[+b.dataset.i]); };
     mehr();
   }
 
@@ -2054,7 +2071,7 @@
     function waehlen(p) {
       produkt = p;
       $("#an-produkt").hidden = false;
-      $("#an-produkt").innerHTML = `${p.vorschau ? `<img class="mat-mini" src="${esc(p.vorschau)}" alt="">` : ""}<strong>${esc(produktName(p))}</strong> ${p.article_no ? `<span class="muted">${esc(p.article_no)}</span>` : ""} ${demoMarke(p.demo)}
+      $("#an-produkt").innerHTML = `${produktFoto(p)}<strong>${esc(produktName(p))}</strong> ${p.article_no ? `<span class="muted">${esc(p.article_no)}</span>` : ""} ${demoMarke(p.demo)}
         <span class="mat-art">${esc(MATERIALART[p.material_kind])}</span> <button class="lnk" type="button" id="an-anders">anderes Produkt</button>`;
       trefferLeeren($("#an-treffer"));
       $("#an-q").value = "";

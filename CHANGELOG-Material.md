@@ -1454,6 +1454,23 @@ Regressionstest. Danach liefen alle Suiten grün.
   nichts. Im Chromium als DEMO-Materialwart A und als Plattform-Verwaltung bei 1280 × 900, 820 × 1180 und 390 × 844
   (Touch) der ganze Weg – Ordnerkopf, Reiter (auch per Tastatur), Vorlagen, Erteilen, Ändern, Entziehen, Verlängern,
   Kopfhinweis, „Dort öffnen“, „+ Gliederung“, Nutzerverwaltung – ohne Konsolenfehler und ohne waagerechten Überlauf.
+- **Produktfoto beim Artikel anlegen groß** (Wunsch: „Bei Artikel anlegen die Möglichkeit, auf das Foto des Produkts
+  zu klicken, dass es groß wird, um es besser zu erkennen.“): Das Foto des gewählten Produkts unter „Produkt aus dem
+  Katalog“ öffnet beim Antippen die Großansicht des Moduls – dieselbe wie bei Produktbildern, Befund- und
+  Meldungsfotos, mit der Webfassung statt der Vorschau und „Original“; ✕, Esc oder Wischen nach unten schließt, das
+  Produkt bleibt gewählt. Ebenso die Fotos in der Trefferliste der Produktsuche (`produktTreffer`, damit auch in
+  „Vorhandenem Produkt zuordnen“ bei den Meldungen): Bisher war die ganze Zeile ein Knopf, jetzt hat jeder Treffer
+  zwei getrennte Flächen – links das Foto (öffnet groß, wählt nichts), durch einen Strich getrennt der Knopf mit dem
+  Namen (wählt). Zeiger mit Lupe, eine kleine Lupe unten rechts am Foto als Hinweis auch am Telefon, Trefferfläche
+  mindestens 46 px; aria-label „Produktfoto groß anzeigen: …“ mit dem Produktnamen, mit Tab erreichbar, Enter und –
+  neu für alle Fotos des Moduls – die Leertaste öffnen. Ohne Produktbild steht dort nichts Anklickbares. Am Telefon
+  rücken Artikelnummer und DEMO in den Treffern unter den Namen, statt ihn in eine schmale Spalte zu drücken. Geprüft:
+  `test_produktfoto_gross_in_der_produktwahl` in `test_material_l5` (die Suche liefert Web-, Vorschau- und
+  Originalfassung, ohne Bild keine; statische Haken) und im Chromium als DEMO-Materialwart A bei 1280 × 900 (Maus und
+  Tastatur) und 390 × 844 (Touch): Foto in den Treffern und am gewählten Produkt groß, schließen, Produkt bleibt
+  gewählt, ohne Bild nichts anklickbar; im Zuordnen-Dialog liegt die Großansicht über dem Dialog und Esc schließt nur
+  sie; die Personensuche („Zuordnen …“ am Artikel) sieht aus wie bisher – ohne Konsolenfehler und ohne waagerechten
+  Überlauf.
 
 **Prüfung der Nachbesserung**: Zwei unabhängige Prüfungen – Rechte (mit Angriffsskript gegen den Testclient und an
 DEMO-Datenbanken alter Stände) und Browser (Rundgang mit DEMO-Konten bei 390–1280 px) – haben sieben Befunde

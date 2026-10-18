@@ -277,6 +277,50 @@ def test_oberflaeche_rechte_je_ordner():
     print("Oberfläche: Rechte je Ordner (statisch) bestanden.")
 
 
+def test_produktfoto_gross_in_der_produktwahl():
+    """Wunsch vom 18.10.2026: Beim Artikel anlegen öffnet das Foto des gewählten Produkts – und das jedes Treffers der
+    Produktsuche (auch in „Vorhandenem Produkt zuordnen“) – die Großansicht mit der Webfassung, ohne das Produkt zu
+    wählen. Die Suche liefert dafür Web-, Vorschau- und Originalfassung; ohne Bild nichts. Statisch: dieselbe Großansicht
+    (bildLink), Foto und Wählen sind getrennte Elemente, die Leertaste öffnet wie Enter."""
+    import re
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        r = k["katalog"].post(f"/api/material/produkte/{ids['hms']}/bild", data={"file": (jpeg(300, 450), "hms.jpg")},
+                              headers=H, content_type="multipart/form-data")
+        assert r.status_code == 200, r.get_json()
+        w = k["wart"]
+        gliederung(w)                               # Modulzugang über die Freigabe an der Gliederung
+        treffer = {p["id"]: p for p in w.get("/api/material/produkte?q=Testwerk&pro_seite=50").json["produkte"]}
+        hms, gurt = treffer[ids["hms"]], treffer[ids["gurt"]]
+        assert hms["bild"].startswith("/media/material/web/") and hms["vorschau"].startswith("/media/material/thumb/"), hms
+        assert hms["original"].startswith("/media/material/orig/"), hms
+        assert w.get(hms["bild"]).status_code == 200 and w.get(hms["original"]).status_code == 200
+        assert gurt["bild"] is None and gurt["vorschau"] is None and gurt["original"] is None, gurt
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
+    css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
+    # Groß wird die Webfassung (p.bild), „Original“ führt zur Datei; ohne Bild steht nichts Anklickbares da.
+    assert "const produktFoto = (p) => (p.bild && p.vorschau ? bildLink(p.bild, p.original," in js
+    assert "`Produktfoto groß anzeigen: ${produktName(p)}`) : \"\")" in js
+    assert '$("#an-produkt").innerHTML = `${produktFoto(p)}' in js
+    # Treffer: Foto und Knopf nebeneinander, nicht ineinander; gewählt wird nur über den Knopf.
+    anfang = js.index("function produktTreffer(")
+    treffer_js = js[anfang:js.index("\n  }\n", anfang)]
+    assert '<div class="mat-treffer-produkt">${produktFoto(p)}<button type="button" class="mat-treffer-wahl"' in treffer_js
+    assert 'ziel.onclick = (e) => { const b = e.target.closest(".mat-treffer-wahl");' in treffer_js
+    assert "<img" not in treffer_js and "mat-treffer-zeile" not in treffer_js
+    # Tastatur: Enter öffnet als Link, die Leertaste beim Loslassen (wie ein Knopf); Esc schließt den modalen <dialog>
+    # von selbst.
+    assert 'document.addEventListener("keyup", (e) => { if (leertasteAufFoto(e))' in js
+    assert 'e.target.matches("a.mat-bildlink")' in js and "box.showModal()" in js
+    # Zeiger mit Lupe auf der ganzen Fotofläche, sichtbare Lupe auch am Telefon.
+    assert re.search(r"\.mat-treffer-produkt > \.mat-bildlink \{[^}]*cursor: zoom-in", css)
+    assert re.search(r"\.mat-gewaehlt > \.mat-bildlink \{[^}]*cursor: zoom-in", css)
+    assert ".mat-lupe-marke {" in css and 'class="mat-lupe-marke" aria-hidden="true"' in js
+    print("Produktfoto groß in der Produktwahl bestanden.")
+
+
 if __name__ == "__main__":
     test_mangel_braucht_bemerkung()
     test_urkunde_korrekturen()
@@ -285,3 +329,4 @@ if __name__ == "__main__":
     test_pruefform_tippen_speichern()
     test_formulare_ordnerfoto_und_suchfeld()
     test_oberflaeche_rechte_je_ordner()
+    test_produktfoto_gross_in_der_produktwahl()
