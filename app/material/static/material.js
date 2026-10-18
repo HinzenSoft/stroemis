@@ -20,7 +20,12 @@
      Ein Klick auf ein Foto (Mangelfoto, Produktbild, Meldungsfoto) zeigt es groß über der Seite statt in einem neuen
      Tab; mit Strg/⌘ oder der mittleren Maustaste öffnet der Link wie gewohnt einen Tab. Gezeigt wird die Webfassung
      (gedreht, auch bei HEIC vom iPhone), „Original“ führt zur hochgeladenen Datei. Stehen mehrere Fotos zusammen
-     (data-gruppe, etwa alle Fotos einer Prüfung), blättern Pfeiltasten und Pfeilknöpfe. */
+     (data-gruppe, etwa alle Fotos einer Prüfung), blättern Pfeiltasten und Pfeilknöpfe – mit dem Finger auch
+     Wischen nach links oder rechts; Wischen nach unten schließt.
+     Die Großansicht ist ein modaler <dialog>: Der Fokus bleibt darin (Tab landete sonst auf der Kopfleiste dahinter),
+     die Seite dahinter ist inert und rollt nicht mit (html.mat-lb-offen, touch-action: none) – nach dem Schließen
+     steht man an derselben Stelle des Prüfformulars. Solange er offen ist, sperrt html:has(dialog[open]) (app.css)
+     auch das Ziehen zum Neuladen. */
   const bildLink = (web, original, titel, gruppe, bildHtml) => `<a class="mat-bildlink" href="${esc(original || web)}"
     target="_blank" rel="noopener" data-web="${esc(web)}" data-titel="${esc(titel || "")}"${gruppe ? ` data-gruppe="${esc(gruppe)}"` : ""}
     aria-label="${esc(titel ? `Foto groß zeigen: ${titel}` : "Foto groß zeigen")}">${bildHtml}</a>`;
@@ -30,10 +35,9 @@
     const liste = gruppe ? $$(`a.mat-bildlink[data-gruppe="${CSS.escape(gruppe)}"]`) : [link];
     let i = Math.max(0, liste.indexOf(link));
     const vorher = document.activeElement;
-    const box = document.createElement("div");
-    box.className = "md-lightbox mat-lightbox";
-    box.setAttribute("role", "dialog");
-    box.setAttribute("aria-modal", "true");
+    const stelle = window.scrollY;
+    const box = document.createElement("dialog");
+    box.className = "mat-lightbox";
     box.setAttribute("aria-label", "Foto");
     box.innerHTML = `<button type="button" class="md-lightbox-close" aria-label="Schließen">×</button>
       ${liste.length > 1 ? `<button type="button" class="mat-lb-pfeil zurueck" aria-label="Vorheriges Foto">‹</button>
@@ -50,25 +54,44 @@
       $(".mat-lb-zahl", box).textContent = liste.length > 1 ? `${i + 1} von ${liste.length}` : "";
     };
     const blaettern = (d) => { i = (i + d + liste.length) % liste.length; zeige(); };
-    const taste = (e) => {
-      if (e.key === "Escape") { e.preventDefault(); schliessen(); }
-      else if (e.key === "ArrowRight" && liste.length > 1) blaettern(1);
-      else if (e.key === "ArrowLeft" && liste.length > 1) blaettern(-1);
-    };
-    function schliessen() {
+    const schliessen = () => { if (box.open) box.close(); };
+    box.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowRight" && liste.length > 1) { e.preventDefault(); blaettern(1); }
+      else if (e.key === "ArrowLeft" && liste.length > 1) { e.preventDefault(); blaettern(-1); }
+    });
+    // Escape schließt den Dialog von selbst; aufgeräumt wird in jedem Fall hier.
+    box.addEventListener("close", () => {
       box.remove();
-      document.removeEventListener("keydown", taste);
+      document.documentElement.classList.remove("mat-lb-offen");
       if (vorher && vorher.focus) vorher.focus({ preventScroll: true });
-    }
+      if (Math.abs(window.scrollY - stelle) > 1) window.scrollTo(0, stelle);
+    });
+    // Wischen mit Finger oder Stift: waagerecht blättert, nach unten schließt. Die Maus klickt wie bisher.
+    let start = null;
+    let gewischt = false;
+    box.addEventListener("pointerdown", (e) => {
+      gewischt = false;
+      start = e.pointerType !== "mouse" && e.isPrimary ? { x: e.clientX, y: e.clientY } : null;
+    });
+    box.addEventListener("pointercancel", () => { start = null; });
+    box.addEventListener("pointerup", (e) => {
+      if (!start || !e.isPrimary) return;
+      const dx = e.clientX - start.x, dy = e.clientY - start.y;
+      start = null;
+      if (liste.length > 1 && Math.abs(dx) > 50 && Math.abs(dx) > 1.5 * Math.abs(dy)) { gewischt = true; blaettern(dx < 0 ? 1 : -1); }
+      else if (dy > 90 && dy > 1.5 * Math.abs(dx)) { gewischt = true; schliessen(); }
+    });
     box.addEventListener("click", (e) => {
+      if (gewischt) { gewischt = false; return; }                          // das Ende einer Wischgeste ist kein Tippen
       const pfeil = e.target.closest(".mat-lb-pfeil");
       if (pfeil) { blaettern(pfeil.classList.contains("zurueck") ? -1 : 1); return; }
       if (e.target === img || e.target.closest("figcaption")) return;     // „Original“ öffnet seinen Tab
       schliessen();
     });
-    document.addEventListener("keydown", taste);
     document.body.appendChild(box);
     zeige();
+    document.documentElement.classList.add("mat-lb-offen");
+    box.showModal();
     $(".md-lightbox-close", box).focus();
   }
   document.addEventListener("click", (e) => {
@@ -2310,14 +2333,227 @@
     let seiten = [];                 // Dateien für den nächsten Anhang (Scan: eine Seite je Foto)
     let hochladen = false;           // ein Anhang ist unterwegs – der Knopf bleibt so lange gesperrt
     let gebunden = false;
-    // Was gerade gespeichert wird. Ein Wert wird beim Verlassen des Feldes gespeichert – tippt jemand danach
-    // sofort auf „Abschließen“, wartet der Abschluss, bis der Wert angekommen ist.
+    // Was gerade gespeichert wird. Tippt jemand nach einer Eingabe sofort auf „Festschreiben“, wartet der Abschluss,
+    // bis alles angekommen ist (allesGesendet).
     let laufend = Promise.resolve();
     // Die Kette selbst schluckt Fehler (gemeldet hat sie der Aufrufer schon) – sonst stünde jeder abgelehnte Wert
     // zusätzlich als „Uncaught (in promise)“ in der Konsole.
     const merken = (p) => { laufend = laufend.then(() => p, () => p).catch(() => {}); return p; };
     const bearbeitbar = () => pr.entwurf && pr.eigen && DARF.pruefen;
     const punkt = (rid) => pr.punkte.find((x) => x.id === rid);
+
+    /* Getipptes speichern, während getippt wird: Wert und Bemerkung eines Prüfpunkts und die Bemerkung zur Prüfung
+       gehen kurz nach dem letzten Tastendruck an den Server, nicht erst beim Verlassen des Feldes. Am Telefon
+       verlässt man ein Feld oft gar nicht – Ziehen zum Neuladen, die Zurück-Geste oder ein Browser, der den Tab im
+       Hintergrund verwirft, nahmen den Text sonst mit, obwohl darunter „Alles ist gespeichert“ stand.
+       Je Feld ist höchstens eine Anfrage unterwegs; was währenddessen dazukommt, geht danach. So kommt beim Server nie
+       ein älterer Stand nach einem neueren an, und derselbe Stand geht nicht zweimal. Die Anfragen tragen keepalive
+       und kommen auch an, wenn die Seite gerade geht; wer die Seite verlässt oder wegschaltet, schickt Ausstehendes
+       sofort. Bis der Server es bestätigt, liegt es außerdem in diesem Fenster (sessionStorage) und wird beim nächsten
+       Laden nachgetragen – aber nur, wenn am Server noch der Stand von vorher steht. */
+    const TIPP_MS = 800;
+    const ABLAGE = `stroemis-mat-pruefung-${DATEN.id}`;      // „stroemis-“: Abmelden räumt es weg (common.js)
+    const felder = new Map();        // "26:notiz", "26:wert", "bem" → { wert, bestaetigt, timer, unterwegs, laut, fehler }
+    let ersetzt = false;             // punktErsetzen tauscht gerade eine Karte aus – deren Fokuswechsel ist kein Verlassen
+    const schluessel = (el) => (el.id === "pr-bem" ? "bem" : `${el.dataset.rid}:${el.matches(".mat-pnotiz") ? "notiz" : "wert"}`);
+    const feldVon = (k) => (k === "bem" ? $("#pr-bem")
+      : $(`#pp-${k.split(":")[0]} ${k.endsWith(":notiz") ? ".mat-pnotiz" : ".mat-pwert"}`));
+    function serverWert(k) {
+      if (k === "bem") return pr.bemerkung || "";
+      const [rid, feld] = k.split(":");
+      const x = punkt(+rid);
+      return (x && x[feld]) || "";
+    }
+    function eintrag(k) {
+      let e = felder.get(k);
+      if (!e) { e = { wert: serverWert(k), bestaetigt: serverWert(k), timer: null, unterwegs: null, laut: false, fehler: null }; felder.set(k, e); }
+      return e;
+    }
+    const offen = (e) => Boolean(e.unterwegs) || e.wert !== e.bestaetigt;
+
+    // Anfragen zu einem Prüfpunkt gehen nacheinander: Jede Antwort trägt den ganzen Punkt, und die Karte wird danach
+    // gezeichnet. Liefen sie parallel – etwa die Bemerkung beim Verlassen des Feldes und gleich danach der Tipp auf
+    // „n. z.“ –, konnte die ältere Antwort zuletzt ankommen und einen überholten Befund zeigen.
+    const punktKetten = new Map();
+    function punktAnfrage(rid, los) {
+      const p = (punktKetten.get(+rid) || Promise.resolve()).then(los);
+      punktKetten.set(+rid, p.catch(() => {}));
+      return p;
+    }
+
+    function anfrage(k, wert) {
+      if (k === "bem") return api(`${API}/pruefungen/${pr.id}`, { method: "PUT", body: { bemerkung: wert }, keepalive: true });
+      const [rid, feld] = k.split(":");
+      return punktAnfrage(rid, () => api(`${API}/pruefungen/${pr.id}/punkte/${rid}`, { method: "PUT", body: { [feld]: wert }, keepalive: true }));
+    }
+
+    function vormerken(k, wert) {
+      const e = eintrag(k);
+      e.wert = wert;
+      clearTimeout(e.timer);
+      e.timer = setTimeout(() => senden(k), TIPP_MS);
+      ablegen();
+      standZeigen();
+    }
+
+    // Den neuesten Stand eines Feldes schicken. laut: Fehler als Toast (beim Verlassen des Feldes, vor dem Festschreiben);
+    // beim Tippen bleibt es still – eine halbe Zahl wie „-“ ist noch kein Fehler, und der Text bleibt ja im Feld.
+    function senden(k, laut) {
+      const e = eintrag(k);
+      clearTimeout(e.timer);
+      e.timer = null;
+      if (laut) e.laut = true;
+      if (e.unterwegs) return e.unterwegs;                 // danach geht der neueste Stand von selbst
+      if (e.wert === e.bestaetigt) { e.laut = false; standZeigen(); return Promise.resolve(); }
+      const wert = e.wert;
+      const mitToast = e.laut;
+      e.laut = false;
+      let fehler = null;
+      e.unterwegs = merken(anfrage(k, wert).then((antwort) => {
+        e.bestaetigt = wert;
+        e.fehler = null;
+        uebernehmen(k, antwort);
+      }, (err) => {
+        fehler = err;
+        e.fehler = err.message;
+        if (mitToast) toast(err.message, true);
+      }).then(() => {
+        e.unterwegs = null;
+        ablegen();
+        standZeigen();
+        // Inzwischen weitergetippt: den neuen Stand hinterher. Nach einem Fehler nur, wenn jemand darauf wartet.
+        if (e.wert !== e.bestaetigt && (!fehler || e.laut)) return senden(k);
+        return undefined;
+      }));
+      standZeigen();
+      return e.unterwegs;
+    }
+
+    // Die Antwort übernehmen. Wer noch im Feld tippt, dem wird die Karte nicht unter den Fingern neu gezeichnet –
+    // nur der Stand, der Hinweis „Bemerkung ist Pflicht“ und die Leiste folgen.
+    function uebernehmen(k, antwort) {
+      if (k === "bem") { pr.bemerkung = antwort.pruefung.bemerkung; return; }
+      const neu = antwort.punkt;
+      if (feldVon(k) === document.activeElement) {
+        pr.punkte = pr.punkte.map((x) => (x.id === neu.id ? neu : x));
+        const karte = $(`#pp-${neu.id}`);
+        const hinweis = karte && $(".mat-pflicht-notiz", karte);
+        const fehlt = neu.befund === "mangel" && !(neu.notiz || "").trim();
+        if (karte && fehlt && !hinweis) $(".mat-pnotiz", karte).insertAdjacentHTML("afterend", '<span class="mat-pflicht mat-pflicht-notiz">Bemerkung ist Pflicht</span>');
+        else if (hinweis && !fehlt) hinweis.remove();
+        abschlussAktualisieren();
+      } else {
+        punktErsetzen(neu);
+      }
+    }
+
+    // Alles Ausstehende jetzt schicken und abwarten – vor dem Festschreiben. Liefert die Felder, die danach noch
+    // nicht gespeichert sind (kein Netz, oder der Server lehnt den Wert ab).
+    async function allesGesendet() {
+      await Promise.all(Array.from(felder.keys()).map((k) => senden(k, true)));
+      await laufend.catch(() => {});
+      return Array.from(felder.keys()).filter((k) => offen(felder.get(k)));
+    }
+
+    function ablegen() {
+      const daten = {};
+      felder.forEach((e, k) => { if (offen(e)) daten[k] = { wert: e.wert, basis: e.bestaetigt }; });
+      try {
+        if (Object.keys(daten).length) sessionStorage.setItem(ABLAGE, JSON.stringify(daten));
+        else sessionStorage.removeItem(ABLAGE);
+      } catch (err) { /* kein Speicher (privater Modus) – dann bleibt es beim Senden */ }
+    }
+
+    // Beim Laden: Was in diesem Fenster getippt, aber nicht bestätigt war, ins Feld zurück und noch einmal schicken.
+    function nachtragen() {
+      let alt;
+      try { alt = JSON.parse(sessionStorage.getItem(ABLAGE) || "null"); } catch (err) { alt = null; }
+      if (!alt || typeof alt !== "object") return;
+      let n = 0;
+      Object.entries(alt).forEach(([k, v]) => {
+        const el = feldVon(k);
+        if (!el || !v || typeof v.wert !== "string" || v.wert === v.basis || serverWert(k) !== v.basis) return;
+        el.value = v.wert;
+        if (el.hidden) {
+          el.hidden = false;
+          const plus = $('[data-act="pnotiz-auf"]', el.closest(".mat-punkt"));
+          if (plus) plus.remove();
+        }
+        eintrag(k).wert = v.wert;
+        senden(k, true);
+        n += 1;
+      });
+      ablegen();
+      if (n) toast(`${plural(n, "Eingabe", "Eingaben")} aus diesem Fenster nachgetragen`);
+    }
+
+    function vergessen() {
+      felder.forEach((e) => clearTimeout(e.timer));
+      felder.clear();
+      try { sessionStorage.removeItem(ABLAGE); } catch (err) { /* egal */ }
+    }
+
+    // „Alles ist gespeichert“ nur, wenn es stimmt.
+    function standZeigen() {
+      const el = $("#pr-stand");
+      if (!el) return;
+      let ausstehend = false;
+      let fehler = null;
+      felder.forEach((e) => { if (offen(e)) { ausstehend = true; if (e.fehler && !e.unterwegs) fehler = e.fehler; } });
+      el.textContent = fehler ? `Noch nicht gespeichert (${fehler}). Was du getippt hast, bleibt in diesem Fenster und geht erneut, sobald du das Feld verlässt.`
+        : ausstehend ? "Wird gespeichert …" : "Alles ist gespeichert – du kannst die Prüfung jederzeit unterbrechen und später fortsetzen.";
+      el.classList.toggle("mat-warn", Boolean(fehler));
+    }
+
+    /* Tastatur offen: Solange in einem Feld außerhalb der Abschlussleiste getippt wird, kleben Kopf- und
+       Abschlussleiste nicht (.tippt, material.css). Quer neben der Tastatur blieb vom Feld sonst nichts zu sehen.
+       „Offen“ heißt: Android verkleinert das Fenster (interactive-widget=resizes-content), iOS nur den sichtbaren
+       Ausschnitt. Ein Rechner mit Maus bleibt, wie er ist. Die Leisten kommen erst einen Augenblick nach dem
+       Verlassen des Feldes zurück – sonst landete der Tipp auf einen Umschalter womöglich auf der Leiste, die eben
+       an dieser Stelle wieder erscheint. */
+    const TIPPFELD = "textarea, input[type=text], input[type=search], input[type=number], input:not([type])";
+    const grob = window.matchMedia("(pointer: coarse)");
+    const hoechste = new Map();      // größte Fensterhöhe je Breite – deutlich weniger heißt: Tastatur
+    let tipptAus = null;
+    function tastaturOffen() {
+      const vv = window.visualViewport;
+      if (vv && vv.scale <= 1.01 && vv.height < window.innerHeight - 100) return true;            // iOS
+      if (!grob.matches) return false;
+      if (window.innerHeight < (hoechste.get(window.innerWidth) || 0) - 100) return true;         // Android
+      // Gleich nach dem Drehen mit offener Tastatur gibt es für die neue Breite noch keinen Vergleich: dann am
+      // Bildschirm in dieser Lage messen.
+      const quer = screen.orientation ? /landscape/.test(screen.orientation.type) : window.innerWidth > window.innerHeight;
+      return window.innerHeight < (quer ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height)) * 0.6;
+    }
+    function tipptPruefen(spaeter) {
+      const box = $(".mat-mit-leiste", inhalt);
+      if (!box) return;
+      hoechste.set(window.innerWidth, Math.max(hoechste.get(window.innerWidth) || 0, window.innerHeight));
+      const ae = document.activeElement;
+      const an = Boolean(ae && ae.matches && ae.matches(TIPPFELD) && box.contains(ae) && !ae.closest(".mat-abschluss") && tastaturOffen());
+      clearTimeout(tipptAus);
+      if (an) {
+        box.classList.add("tippt");
+        // Das Feld ins Bild holen, falls es (etwa nach dem Drehen mit offener Tastatur) außerhalb liegt.
+        requestAnimationFrame(() => {
+          if (document.activeElement !== ae) return;
+          const r = ae.getBoundingClientRect();
+          if (r.top < 0 || r.bottom > window.innerHeight) ae.scrollIntoView({ block: "nearest" });
+        });
+      } else if (!box.classList.contains("tippt")) {
+        return;
+      } else if (spaeter) {
+        tipptAus = setTimeout(() => tipptPruefen(false), 300);
+      } else {
+        box.classList.remove("tippt");
+      }
+    }
+
+    // Wie hoch die Abschlussleiste gerade ist: Danach richtet sich, wie weit ein fokussiertes Feld über ihr bleibt.
+    const leisteBeobachter = window.ResizeObserver ? new ResizeObserver((eintraege) => {
+      const h = eintraege[0] && eintraege[0].target.isConnected ? eintraege[0].target.offsetHeight : 0;
+      document.documentElement.style.setProperty("--mat-leiste-h", `${h}px`);
+    }) : null;
 
     // Berichtigen darf nur, wer die Prüfung gemacht hat; ob es gerade geht, sagt der Server (berichtigbar). Eine
     // Aussonderung (auch „aussondern“ als Ergebnis) ist nie berichtigbar – dort gibt es den Knopf gar nicht.
@@ -2389,10 +2625,14 @@
           ${[["ok", "in Ordnung", "soll"], ["mangel", "Mangel", "abw"], ["nicht_zutreffend", "n. z.", ""]].map(([b, t, k]) => `<button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="${b}" class="${k}" aria-pressed="${x.befund === b}">${t}</button>`).join("")}</div>`;
       }
       const fotoPflicht = mangel || (x.art === "photo" && x.pflicht && !nz);
+      // Zwei Wege zum Foto: „📷“ öffnet am Telefon gleich die Kamera (capture), „Galerie“ nimmt ein schon
+      // gemachtes Foto (Kamera-App, ohne Netz aufgenommen, vom Kollegen). Am Rechner öffnen beide nur die
+      // Dateiauswahl – dort steht allein der erste (material.css). „Foto entfernen“ fragt nach und steht abgesetzt.
       const foto = x.art === "signature" ? "" : `<div class="mat-punkt-foto">
           ${x.foto ? bildLink(x.foto.web, x.foto.original, x.text, "punkte", `<img src="${esc(x.foto.vorschau)}" alt="Foto zu ${esc(x.text)}">`) : ""}
           <label class="btn secondary small mat-kamera">📷 ${x.foto ? "neues Foto" : "Foto"}<input type="file" accept="image/*" capture="environment" data-foto="${x.id}" class="mat-datei" aria-label="Foto zu ${esc(x.text)}"></label>
-          ${x.foto ? `<button type="button" class="lnk small" data-act="pfoto-weg" data-rid="${x.id}">Foto entfernen</button>` : ""}
+          <label class="btn secondary small mat-galerie">Galerie<input type="file" accept="image/*" data-foto="${x.id}" class="mat-datei" aria-label="Foto zu ${esc(x.text)} aus der Galerie wählen"></label>
+          ${x.foto ? `<button type="button" class="btn secondary small mat-foto-weg" data-act="pfoto-weg" data-rid="${x.id}">Foto entfernen</button>` : ""}
           ${fotoPflicht && !x.foto ? '<span class="mat-pflicht">Foto ist Pflicht</span>' : ""}</div>`;
       const notiz = mangel || x.notiz;
       return `<div class="mat-punkt${mangel ? " mangel" : ""}${nz ? " nz" : ""}" id="pp-${x.id}">
@@ -2465,7 +2705,7 @@
           <label class="mat-due" id="pr-due-feld" hidden>Nächste Prüfung <input type="date" id="pr-due" value="${esc(pr.vorschlag_naechste || "")}" max="${esc(pr.vorschlag_naechste || "")}" min="${isoHeute(1)}"></label>
           <input type="text" id="pr-grund" maxlength="300" placeholder="Grund" aria-label="Grund" value="${esc(pr.grund || "")}" hidden>
           <button type="button" class="btn" data-act="festschreiben" id="pr-ok" disabled>Festschreiben</button></div>
-        <div class="mat-abschluss-hinweis" id="pr-hinweis" aria-live="polite"></div></div>`;
+        <div class="mat-abschluss-hinweis" id="pr-hinweis" aria-live="polite" data-act="hinweis-ganz"></div></div>`;
     }
 
     function abschlussAktualisieren() {
@@ -2569,7 +2809,7 @@
           <p class="help" id="pr-bem-hilfe">Mängel, die du während der Prüfung festgestellt und durch eine eigene Maßnahme gleich behoben hast, sind hier zu dokumentieren – jeweils mit der Maßnahme. Was sich nicht während der Prüfung beheben ließ, gehört als Mangel an den Prüfpunkt.</p>
           <textarea id="pr-bem" rows="3" maxlength="4000" aria-describedby="pr-bem-hilfe" placeholder="z. B. Schnapper schwergängig – gereinigt und geschmiert">${esc(pr.bemerkung || "")}</textarea></section>
         ${anhaengeHtml()}
-        <p class="help">Alles ist gespeichert – du kannst die Prüfung jederzeit unterbrechen und später fortsetzen.
+        <p class="help"><span id="pr-stand">Alles ist gespeichert – du kannst die Prüfung jederzeit unterbrechen und später fortsetzen.</span>
           <button type="button" class="lnk" data-act="verwerfen">${pr.berichtigt ? "Berichtigung verwerfen" : "Entwurf verwerfen"}</button></p>
         ${abschlussHtml()}`;
     }
@@ -2578,13 +2818,20 @@
       leisteMarkieren(pr.artikel.folder_id);
       const ohneNummer = pr.entwurf && pr.eigen && !DARF.pruefen && DARF.pruefer_haekchen ? `<p class="notice">${URKUNDE_IM_PROFIL}</p>` : "";
       inhalt.innerHTML = `<div class="mat-pruefung${bearbeitbar() ? " mat-mit-leiste" : ""}">${kopf()}${ohneNummer}${bearbeitbar() ? bearbeitenHtml() : leseHtml()}</div>`;
-      if (bearbeitbar()) { binden(); abschlussAktualisieren(); seitenZeichnen(); }
+      if (leisteBeobachter) leisteBeobachter.disconnect();
+      if (bearbeitbar()) {
+        binden(); abschlussAktualisieren(); seitenZeichnen(); tipptPruefen(false);
+        if (leisteBeobachter) leisteBeobachter.observe($("#pr-abschluss"));
+      } else {
+        vergessen();
+      }
     }
 
     /* Die Karte neu zeichnen – ohne dem, der gerade darin tippt, etwas wegzunehmen: Was im fokussierten Feld
-       steht, aber noch nicht gespeichert ist, bleibt stehen (es wird beim Verlassen gespeichert), eine
+       steht, aber noch nicht gespeichert ist, bleibt stehen (es geht beim Tippen ohnehin an den Server), eine
        geöffnete Bemerkung bleibt offen, und der Fokus kehrt auf dasselbe Element zurück – sonst schlösse
-       sich am Telefon die Tastatur mitten im Satz und die Tastaturbedienung fiele an den Seitenanfang. */
+       sich am Telefon die Tastatur mitten im Satz und die Tastaturbedienung fiele an den Seitenanfang.
+       Was in einem anderen Feld der Karte getippt, aber noch nicht bestätigt ist, bleibt ebenso stehen. */
     function punktErsetzen(neu) {
       pr.punkte = pr.punkte.map((x) => (x.id === neu.id ? neu : x));
       const el = $(`#pp-${neu.id}`);
@@ -2594,16 +2841,25 @@
       if (aktiv) {
         if (aktiv.classList.contains("mat-pnotiz")) fokusSel = ".mat-pnotiz";
         else if (aktiv.classList.contains("mat-pwert")) fokusSel = ".mat-pwert";
-        else if (aktiv.matches("input[data-foto]")) fokusSel = "input[data-foto]";
+        else if (aktiv.matches("input[data-foto]")) fokusSel = aktiv.hasAttribute("capture") ? "input[data-foto][capture]" : "input[data-foto]:not([capture])";
         else if (aktiv.dataset.act) fokusSel = `[data-act="${aktiv.dataset.act}"]${aktiv.dataset.wert ? `[data-wert="${aktiv.dataset.wert}"]` : ""}${aktiv.dataset.befund ? `[data-befund="${aktiv.dataset.befund}"]` : ""}`;
       }
       const tippen = aktiv && (fokusSel === ".mat-pnotiz" || fokusSel === ".mat-pwert") ? { wert: aktiv.value, von: aktiv.selectionStart, bis: aktiv.selectionEnd } : null;
       const notizAlt = $(".mat-pnotiz", el);
       const notizOffen = notizAlt && !notizAlt.hidden;
-      el.outerHTML = punktHtml(neu);
+      ersetzt = true;
+      try { el.outerHTML = punktHtml(neu); } finally { ersetzt = false; }
       const karte = $(`#pp-${neu.id}`);
       const notiz = $(".mat-pnotiz", karte);
       if (notiz && notizOffen && notiz.hidden) { notiz.hidden = false; const plus = $('[data-act="pnotiz-auf"]', karte); if (plus) plus.remove(); }
+      // Noch nicht Bestätigtes aus einem anderen Feld der Karte (die Antwort einer anderen Anfrage kennt es nicht).
+      ["wert", "notiz"].forEach((feld) => {
+        const e = felder.get(`${neu.id}:${feld}`);
+        const f = $(feld === "notiz" ? ".mat-pnotiz" : ".mat-pwert", karte);
+        if (!e || !f || e.wert === e.bestaetigt || f.value === e.wert || (tippen && fokusSel === (feld === "notiz" ? ".mat-pnotiz" : ".mat-pwert"))) return;
+        f.value = e.wert;
+        if (f.hidden) { f.hidden = false; const plus = $('[data-act="pnotiz-auf"]', karte); if (plus) plus.remove(); }
+      });
       if (fokusSel && !$(fokusSel, karte)) {
         // Den Knopf gibt es nicht mehr (z. B. „Entfernen“ nach dem Entfernen): Fokus auf den ersten der Karte.
         const ersatz = $("button[data-act]", karte);
@@ -2614,43 +2870,62 @@
           if (tippen) { ziel.value = tippen.wert; }
           ziel.focus({ preventScroll: true });
           if (tippen && ziel.setSelectionRange) { try { ziel.setSelectionRange(tippen.von, tippen.bis); } catch (e) { /* Datumsfeld */ } }
-          // Gesetzter Text löst beim Verlassen kein „change“ aus – ungespeichert Gerettetes speichert der Blur.
-          const feld = fokusSel === ".mat-pnotiz" ? "notiz" : "wert";
-          if (tippen && tippen.wert !== (neu[feld] || "")) {
-            ziel.addEventListener("blur", () => { if (ziel.isConnected && ziel.value !== (punkt(neu.id)[feld] || "")) punktSetzen(neu.id, { [feld]: ziel.value }); }, { once: true });
-          }
+          // Gesetzter Text löst beim Verlassen kein „change“ aus – Gerettetes speichert das Verlassen (focusout in binden).
         }
       }
       abschlussAktualisieren();
     }
 
     async function punktSetzen(rid, body) {
-      try { punktErsetzen((await merken(api(`${API}/pruefungen/${pr.id}/punkte/${rid}`, { method: "PUT", body }))).punkt); }
+      try { punktErsetzen((await merken(punktAnfrage(rid, () => api(`${API}/pruefungen/${pr.id}/punkte/${rid}`, { method: "PUT", body })))).punkt); }
       catch (e) { toast(e.message, true); }
     }
 
     function binden() {
       if (gebunden) return;
       gebunden = true;
+      const TEXT = ".mat-pwert, .mat-pnotiz, #pr-bem";
+      // Beim Tippen vormerken (geht nach TIPP_MS), beim Verlassen sofort – Datumsfelder melden sich nur mit „change“.
+      inhalt.addEventListener("input", (e) => {
+        if (bearbeitbar() && e.target.matches(TEXT) && e.target.type !== "date") vormerken(schluessel(e.target), e.target.value);
+      });
+      inhalt.addEventListener("focusout", (e) => {
+        const el = e.target;
+        setTimeout(() => tipptPruefen(true), 0);
+        if (ersetzt || !bearbeitbar() || !el.matches || !el.matches(TEXT) || !el.isConnected) return;
+        const k = schluessel(el);
+        eintrag(k).wert = el.value;
+        senden(k, true);
+      });
+      inhalt.addEventListener("focusin", () => tipptPruefen(true));
+      const groesse = () => tipptPruefen(false);
+      window.addEventListener("resize", groesse);
+      if (window.visualViewport) window.visualViewport.addEventListener("resize", groesse);
+      // Wer die Seite verlässt oder wegschaltet: Ausstehendes sofort (die Anfrage trägt keepalive). Was gerade
+      // unterwegs ist, kommt ebenso an; was danach noch fehlt, liegt im Fenster und wird beim nächsten Laden nachgetragen.
+      const jetzt = () => felder.forEach((e, k) => { if (!e.unterwegs && e.wert !== e.bestaetigt) senden(k); });
+      window.addEventListener("pagehide", jetzt);
+      document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") jetzt(); });
+      window.addEventListener("online", jetzt);
       inhalt.addEventListener("change", async (e) => {
         if (!bearbeitbar()) return;
         const el = e.target;
-        if (el.matches(".mat-pwert")) { await punktSetzen(+el.dataset.rid, { wert: el.value }); return; }
-        if (el.matches(".mat-pnotiz")) { await punktSetzen(+el.dataset.rid, { notiz: el.value }); return; }
+        if (el.matches(TEXT)) { const k = schluessel(el); eintrag(k).wert = el.value; await senden(k, true); return; }
         if (el.matches("input[data-foto]")) {
           const f = el.files[0];
           if (!f) return;
           const fd = new FormData(); fd.append("file", f);
           const karte = el.closest(".mat-punkt");
           if (karte) karte.classList.add("laedt");
-          try { punktErsetzen((await merken(api(`${API}/pruefungen/${pr.id}/punkte/${el.dataset.foto}/foto`, { method: "POST", body: fd }))).punkt); toast("Foto gespeichert"); }
+          try { punktErsetzen((await merken(punktAnfrage(el.dataset.foto, () => api(`${API}/pruefungen/${pr.id}/punkte/${el.dataset.foto}/foto`, { method: "POST", body: fd })))).punkt); toast("Foto gespeichert"); }
           catch (err) { toast(err.message, true); if (karte) karte.classList.remove("laedt"); }
           return;
         }
-        if (el.id === "pr-bem" || el.id === "pr-art") {
+        if (el.id === "pr-art") {
           try {
-            pr = (await api(`${API}/pruefungen/${pr.id}`, { method: "PUT", body: el.id === "pr-bem" ? { bemerkung: el.value } : { art: el.value } })).pruefung;
-            if (el.id === "pr-art") { $("h1", inhalt).firstChild.textContent = `${PRUEFART[pr.art] || pr.art} `; toast("Prüfart geändert"); }
+            pr = (await api(`${API}/pruefungen/${pr.id}`, { method: "PUT", body: { art: el.value } })).pruefung;
+            $("h1", inhalt).firstChild.textContent = `${PRUEFART[pr.art] || pr.art} `;
+            toast("Prüfart geändert");
           } catch (err) { toast(err.message, true); }
           return;
         }
@@ -2736,7 +3011,7 @@
         const x = punkt(+b.dataset.rid);
         const bild = await MatUnterschrift.zeichnen({ titel: x.text, bestehend: x.unterschrift,
           hinweis: "Hier unterschreibt, wen der Prüfpunkt nennt – mit Finger, Stift oder Maus. Die Unterschrift kommt mit der Prüfung ins Protokoll.",
-          speichern: async (bild) => { punktErsetzen((await merken(api(`${API}/pruefungen/${pr.id}/punkte/${x.id}`, { method: "PUT", body: { unterschrift: bild } }))).punkt); } });
+          speichern: async (bild) => { punktErsetzen((await merken(punktAnfrage(x.id, () => api(`${API}/pruefungen/${pr.id}/punkte/${x.id}`, { method: "PUT", body: { unterschrift: bild } })))).punkt); } });
         // Die Karte ist neu gezeichnet, der Knopf von vorher weg: der Fokus geht auf „Neu unterschreiben“.
         const neu = bild && $(`#pp-${x.id} [data-act="punterschrift"]`);
         if (neu) neu.focus({ preventScroll: true });
@@ -2756,9 +3031,16 @@
       },
       "pnotiz-auf": (b) => { const k = $(`#pp-${b.dataset.rid}`); const ta = $(".mat-pnotiz", k); ta.hidden = false; b.remove(); ta.focus(); },
       "pfoto-weg": async (b) => {
-        try { punktErsetzen((await api(`${API}/pruefungen/${pr.id}/punkte/${b.dataset.rid}/foto`, { method: "DELETE" })).punkt); }
+        // Wie beim Anhang und bei der Unterschrift erst nachfragen – beim Mangel ist das Foto der Beleg.
+        const x = punkt(+b.dataset.rid);
+        const frage = x && x.befund === "mangel" ? "Das Foto zu diesem Mangel entfernen? Ohne Foto lässt sich die Prüfung nicht festschreiben."
+          : "Dieses Foto entfernen?";
+        if (!(await confirm(frage, "Entfernen"))) return;
+        try { punktErsetzen((await punktAnfrage(b.dataset.rid, () => api(`${API}/pruefungen/${pr.id}/punkte/${b.dataset.rid}/foto`, { method: "DELETE" }))).punkt); }
         catch (e) { toast(e.message, true); }
       },
+      // Wenig Höhe: Der Hinweis in der Leiste steht in einer Zeile – antippen zeigt ihn ganz.
+      "hinweis-ganz": (h) => { h.classList.toggle("ganz"); },
       "seite-weg": (b) => { seiten.splice(+b.dataset.i, 1); seitenZeichnen(); },
       "anhang-hoch": async () => {
         if (!seiten.length || hochladen) return;
@@ -2793,9 +3075,15 @@
       ergebnis: (b) => { if (b.disabled) return; ergebnis = ergebnis === b.dataset.e ? null : b.dataset.e; abschlussAktualisieren(); if (ergebnis && ergebnis !== "einsatzbereit") fokus($("#pr-grund")); },
       festschreiben: async (b) => {
         if (!ergebnis) return;
-        // Was der Server sicher ablehnt, gleich hier sagen – bevor nach der Unterschrift gefragt wird. Vorher abwarten,
-        // was gerade gespeichert wird: Eine eben getippte Bemerkung kommt beim Verlassen des Feldes an.
-        await laufend.catch(() => {});
+        // Was der Server sicher ablehnt, gleich hier sagen – bevor nach der Unterschrift gefragt wird. Vorher alles
+        // Getippte schicken und abwarten; was nicht ankam (kein Netz), hält das Festschreiben auf.
+        const ungespeichert = await allesGesendet();
+        if (ungespeichert.length) {
+          const fehler = felder.get(ungespeichert[0]).fehler;
+          toast(`Noch nicht gespeichert${fehler ? ` (${fehler})` : ""} – bitte prüfen und noch einmal festschreiben.`, true);
+          fokus(feldVon(ungespeichert[0]));
+          return;
+        }
         const h = offeneHinweise();
         const grund = ergebnis === "einsatzbereit" ? "" : $("#pr-grund").value.trim();
         if (h.offen.length) { toast("Noch ohne Befund: " + h.offen.slice(0, 5).map((x) => x.text).join("; "), true); return; }
@@ -2853,13 +3141,14 @@
           : "Den Entwurf verwerfen? Befunde, Fotos und Anhänge dieser Prüfung gehen verloren, der Artikel ist wieder frei.";
         if (!(await confirm(frage, "Verwerfen"))) return;
         // Eine verworfene Berichtigung führt zurück zum Original, das weiter gilt.
-        try { await api(`${API}/pruefungen/${pr.id}`, { method: "DELETE" }); location.href = b ? `/material/pruefung/${b.id}` : `/material/artikel/${pr.item_id}`; }
+        try { await api(`${API}/pruefungen/${pr.id}`, { method: "DELETE" }); vergessen(); location.href = b ? `/material/pruefung/${b.id}` : `/material/artikel/${pr.item_id}`; }
         catch (e) { toast(e.message, true); }
       },
       freigeben: () => reservierungFreigeben(pr.id, pr.pruefer, async () => { location.href = `/material/artikel/${pr.item_id}`; }),
     };
     await aussonderungLaden();
     zeichnen();
+    if (bearbeitbar()) nachtragen();
   }
 
   /* --- Prüfdurchgang ---------------------------------------------------------------------------------- */

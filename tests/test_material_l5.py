@@ -118,8 +118,65 @@ def test_shell_geruest():
             assert "nav-mehr" not in html
     print("Seitengerüst (shell) bestanden.")
 
+def test_pruefform_tippen_speichern():
+    """Das Prüfformular speichert Wert und Bemerkung schon beim Tippen (material.js, entprellt, mit keepalive) – oft
+    mehrmals je Feld und auch kurz vor dem Neuladen noch einmal. Darauf verlässt es sich: Ein PUT nur mit „notiz“ bzw.
+    „wert“ lässt Befund und das andere Feld stehen, derselbe Stand zweimal ändert nichts, Zwischenstände füllen weder
+    den Lebenslauf noch das Journal, eine halbe Zahl wird abgelehnt (und bleibt im Browser), und der Entwurf als Ganzes
+    gibt den letzten Stand zurück. Dasselbe gilt für die Bemerkung zur Prüfung."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w, p1 = k["wart"], k["pruefer"]
+        gid, _ = gliederung(w)
+        a = neuer_artikel(w, ids["gurt"], gid, manufactured_on="2025-01")
+        pr = starten(p1, a["id"]).json["pruefung"]
+        pk = punkte_von(pr)
+        url = f"/api/material/pruefungen/{pr['id']}/punkte"
+
+        def journal_anzahl():
+            with app.app_context():
+                from app import db
+                return db.query("SELECT COUNT(*) AS n FROM mat_audit", one=True)["n"]
+
+        vorher = journal_anzahl()
+        krit = pk["Testpunkt kritisch"]
+        r = p1.put(f"{url}/{krit}", json={"wert": "ja"})                 # Mangel
+        assert r.status_code == 200 and r.json["punkt"]["befund"] == "mangel", r.get_json()
+        # Zwischenstände der Bemerkung, wie sie beim Tippen hinausgehen – der Befund bleibt Mangel, der Wert „ja“.
+        for stand in ("Schnitt", "Schnitt im Band", "Schnitt im Band, 2 cm", "Schnitt im Band, 2 cm"):
+            r = p1.put(f"{url}/{krit}", json={"notiz": stand})
+            assert r.status_code == 200, r.get_json()
+            assert r.json["punkt"]["notiz"] == stand and r.json["punkt"]["befund"] == "mangel" and r.json["punkt"]["wert"] == "ja"
+        # Messwert getippt: „1“, „1,“ (Komma gerade getippt), „-“ (halb) wird abgelehnt, „1,5“ steht.
+        mw = pk["Testpunkt Messwert"]
+        assert p1.put(f"{url}/{mw}", json={"wert": "1"}).status_code == 200
+        assert p1.put(f"{url}/{mw}", json={"wert": "1,"}).status_code == 200
+        r = p1.put(f"{url}/{mw}", json={"wert": "-"})
+        assert r.status_code == 400 and "Zahl" in r.json["error"], r.get_json()
+        r = p1.put(f"{url}/{mw}", json={"wert": "1,5"})
+        assert r.status_code == 200 and r.json["punkt"]["wert"] == "1,5", r.get_json()
+        # Eine Bemerkung am Messwert lässt den Wert stehen.
+        r = p1.put(f"{url}/{mw}", json={"notiz": "an der dünnsten Stelle"})
+        assert r.status_code == 200 and r.json["punkt"]["wert"] == "1,5" and r.json["punkt"]["notiz"] == "an der dünnsten Stelle"
+        # Bemerkung zur Prüfung, mehrmals beim Tippen.
+        for stand in ("Schnapper", "Schnapper gereinigt"):
+            assert p1.put(f"/api/material/pruefungen/{pr['id']}", json={"bemerkung": stand}).status_code == 200
+        # Der Entwurf (so lädt ihn die Seite neu) trägt den letzten Stand.
+        d = p1.get(f"/api/material/pruefungen/{pr['id']}").json["pruefung"]
+        pkt = {x["id"]: x for x in d["punkte"]}
+        assert pkt[krit]["notiz"] == "Schnitt im Band, 2 cm" and pkt[mw]["wert"] == "1,5" and d["bemerkung"] == "Schnapper gereinigt"
+        # Zwischenstände hinterlassen keine Spur im Journal.
+        assert journal_anzahl() == vorher, (journal_anzahl(), vorher)
+        # Ohne X-Requested-With (etwa ein fremdes Formular) wird nichts gespeichert – keepalive ändert daran nichts.
+        r = p1.put(f"{url}/{krit}", data='{"notiz": "fremd"}', headers={"Content-Type": "text/plain"})
+        assert r.status_code in (400, 403), r.status_code
+    print("Prüfformular: Speichern beim Tippen bestanden.")
+
 
 if __name__ == "__main__":
     test_mangel_braucht_bemerkung()
     test_urkunde_korrekturen()
     test_shell_geruest()
+    test_pruefform_tippen_speichern()

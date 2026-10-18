@@ -4,6 +4,8 @@ window.S = (function () {
 
   async function api(path, opts = {}) {
     const init = { method: opts.method || "GET", headers: { "X-Requested-With": "XMLHttpRequest" }, credentials: "same-origin" };
+    // keepalive: Die Anfrage kommt auch an, wenn die Seite gerade geht (Neuladen, Zurück) – etwa Getipptes im Prüfformular.
+    if (opts.keepalive) init.keepalive = true;
     if (opts.body instanceof FormData) {
       init.body = opts.body;
     } else if (opts.body !== undefined) {
