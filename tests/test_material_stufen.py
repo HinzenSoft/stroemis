@@ -567,7 +567,8 @@ def test_profil_unterschrift():
 
 def test_vorgabe_neue_konten():
     """Neue Konten (Kontoanfrage und Nutzerverwaltung ohne Angabe) bekommen Mitglied im Modul Material und sonst nichts;
-    der allererste Nutzer weiter überall Verwaltung. Vorhandene Konten bleiben, wie sie sind."""
+    der allererste Nutzer weiter überall Verwaltung. Vorhandene Konten bleiben, wie sie sind. Mit der Freigabe einer
+    Kontoanfrage steht die Stufe im Journal des Moduls („rollen“)."""
     keys = ("ADMIN_EMAIL", "ADMIN_PASSWORD")
     with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as leer:
         make_app(tmp)                                          # setzt die Umgebung wie alle Tests
@@ -591,6 +592,35 @@ def test_vorgabe_neue_konten():
             assert u["rechte"] == {"karte": 0, "wiki": 0, "pruefungen": 0, "material": 1, "verwaltung": 0}, u
             assert zeilen(app, "SELECT recht_karte, recht_wiki, recht_material FROM users WHERE id = ?", (u["id"],)) == [
                 {"recht_karte": 0, "recht_wiki": 0, "recht_material": 1}]
+            # Die Stufe steht im Journal des Moduls, sobald sie wirkt – mit der Freigabe der Anfrage, die freigebende
+            # Verwaltung als Handelnde (wie beim Anlegen in der Nutzerverwaltung). Vorher und für eine abgelehnte
+            # Anfrage nichts.
+            def rollen(uid):
+                return zeilen(app, "SELECT user_id, user_name, before_json, after_json FROM mat_audit WHERE entity = 'user' "
+                                   "AND entity_id = ? AND action = 'rollen'", (uid,))
+            assert rollen(u["id"]) == []
+            dritt = app.test_client().post("/api/auth/register", json={
+                "email": "dritt@example.org", "password": "passwort1", "name": "Dritte Person", "gliederung": "OG Test"})
+            assert dritt.status_code == 201
+            d_id = [x for x in erst.get("/api/admin/users").json["users"] if x["email"] == "dritt@example.org"][0]["id"]
+            assert erst.post(f"/api/admin/users/{d_id}/reject", headers=H, json={}).status_code == 200
+            assert rollen(d_id) == []
+            r = erst.post(f"/api/admin/users/{u['id']}/approve", headers=H, json={})
+            assert r.status_code == 200, r.get_json()
+            erst_id = zeilen(app, "SELECT id FROM users WHERE email = 'erst@example.org'")[0]["id"]
+            e = rollen(u["id"])
+            assert len(e) == 1 and e[0]["user_id"] == erst_id and e[0]["user_name"] == "Erste Person", e
+            assert e[0]["before_json"] is None and json.loads(e[0]["after_json"]) == {
+                "recht_material": 1, "mat_pruefer": 0, "grund": "Kontoanfrage freigegeben"}, e
+            # Eine Kontoanfrage, der die Verwaltung vor der Freigabe Material „–“ gibt, hinterlässt beim Freigeben nichts.
+            assert app.test_client().post("/api/auth/register", json={
+                "email": "viert@example.org", "password": "passwort1", "name": "Vierte Person",
+                "gliederung": "OG Test"}).status_code == 201
+            v_id = [x for x in erst.get("/api/admin/users").json["users"] if x["email"] == "viert@example.org"][0]["id"]
+            assert erst.put(f"/api/admin/users/{v_id}", json={"rechte": {"material": 0}}).status_code == 200
+            n = len(rollen(v_id))
+            assert erst.post(f"/api/admin/users/{v_id}/approve", headers=H, json={}).status_code == 200
+            assert len(rollen(v_id)) == n
         finally:
             for x, v in alt.items():
                 os.environ[x] = v or ""

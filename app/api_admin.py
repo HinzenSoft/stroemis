@@ -340,7 +340,14 @@ def approve_user(uid):
     if (u.get("status") or "active") != "pending":
         return jsonify(error="Zu diesem Nutzer gibt es keine offene Anfrage. Ein deaktiviertes Konto "
                              "wird über die Nutzerbearbeitung wieder aktiviert."), 400
-    db.execute("UPDATE users SET status = 'active', active = 1 WHERE id = ?", (uid,))
+    with db.transaction():
+        db.execute("UPDATE users SET status = 'active', active = 1 WHERE id = ?", (uid,))
+        # Mit der Freischaltung wirkt die Stufe aus der Kontoanfrage (Vorgabe: Mitglied im Modul Material) – sie steht
+        # wie beim Anlegen in der Nutzerverwaltung im Journal des Moduls, mit der freischaltenden Verwaltung als
+        # Handelnder. Abgelehnte Anfragen hinterlassen dort nichts.
+        neu = {"recht_material": u["recht_material"] or 0, "mat_pruefer": int(bool(u["mat_pruefer"]))}
+        if neu["recht_material"] or neu["mat_pruefer"]:
+            mat_journal.eintragen("user", uid, "rollen", None, dict(neu, grund="Kontoanfrage freigegeben"))
     cfg = current_app.config
     mailed = False
     try:
