@@ -556,9 +556,13 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
    (.md-lightbox-close in app.css). Die Großansicht selbst: Abschnitt „Geräte: pruefform“. */
 .mat-lb-pfeil.zurueck { left: calc(10px + var(--sicher-links)); }
 .mat-lb-pfeil.weiter { right: calc(10px + var(--sicher-rechts)); }
+/* Am Telefon (bis 640 px) stehen die Pfeile unten, seitlich braucht das Foto keinen Platz für sie: Es nutzt die ganze
+   Breite bis auf den Rand des Dialogs – vorher blieben bei 390 px links und rechts je 60 px leer. Dass es dann nicht
+   unter ✕ rutscht, regelt der Abschnitt „Geräte: pruefform“. */
 @media (max-width: 640px) {
   .mat-lb-pfeil { top: auto; bottom: calc(14px + var(--sicher-unten)); transform: none; width: 56px; height: 48px; font-size: 2rem; }
   .mat-lightbox figcaption { max-width: calc(100vw - 150px); }
+  .mat-lightbox img { max-width: calc(100vw - 48px - var(--sicher-links) - var(--sicher-rechts)); }
 }
 
 /* Lieferung 4 – ueberblick */
@@ -900,7 +904,16 @@ dialog.mat-lightbox::backdrop { background: transparent; }
   html.mat-lb-offen { overflow: hidden; }
   .mat-lightbox .mat-lb-original { display: inline-block; padding: 13px 10px; margin: -13px -10px; }
 }
-@media (max-width: 640px) { .mat-lightbox img { max-height: calc(100dvh - 150px); } }
+/* Am Telefon reicht das Foto in der Breite bis unter ✕ (Abschnitt „Fotos groß zeigen“): Der Dialog hält oben dessen
+   Streifen frei, Kerbe und Wischleiste kommen dazu. Wird es eng – ein hohes Foto mit langer, mehrzeiliger Unterschrift,
+   etwa am iPhone SE –, wird das Foto kleiner (mit seinem Seitenverhältnis), statt nach oben unter ✕ zu wachsen oder
+   „Original“ unten aus dem Bild zu schieben. */
+@media (max-width: 640px) {
+  dialog.mat-lightbox, html.tastatur dialog.mat-lightbox[open] { padding-top: calc(60px + var(--sicher-oben));
+    padding-bottom: calc(24px + var(--sicher-unten)); }
+  .mat-lightbox figure { max-height: 100%; }
+  .mat-lightbox img { max-height: calc(100dvh - 150px - var(--sicher-oben) - var(--sicher-unten)); min-height: 0; }
+}
 /* Quer wenig Höhe: Das Foto bekommt fast die ganze Höhe, die Pfeile bleiben seitlich (dort ist Platz). */
 @media (max-height: 500px) and (min-width: 641px) {
   dialog.mat-lightbox { padding: 8px 12px; }

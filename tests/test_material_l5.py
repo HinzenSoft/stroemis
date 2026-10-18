@@ -318,6 +318,15 @@ def test_produktfoto_gross_in_der_produktwahl():
     assert re.search(r"\.mat-treffer-produkt > \.mat-bildlink \{[^}]*cursor: zoom-in", css)
     assert re.search(r"\.mat-gewaehlt > \.mat-bildlink \{[^}]*cursor: zoom-in", css)
     assert ".mat-lupe-marke {" in css and 'class="mat-lupe-marke" aria-hidden="true"' in js
+    # Am Telefon (bis 640 px stehen die Pfeile unten) nutzt das Foto die ganze Breite statt 120 px für Seitenpfeile frei
+    # zu lassen; oben hält der Dialog den Streifen von ✕ frei, und wird es eng, schrumpft das Foto (Browserprüfung).
+    telefon = re.findall(r"^@media \(max-width: 640px\) \{\n(.*?)\n\}$", css, re.S | re.M)
+    assert any(".mat-lightbox img { max-width: calc(100vw - 48px - var(--sicher-links) - var(--sicher-rechts)); }" in b
+               and ".mat-lb-pfeil { top: auto;" in b for b in telefon), "Foto am Telefon nicht in voller Breite"
+    platz = [b for b in telefon if "padding-top: calc(60px + var(--sicher-oben))" in b]
+    assert len(platz) == 1 and "html.tastatur dialog.mat-lightbox[open]" in platz[0], "✕-Streifen am Telefon nicht frei"
+    assert ".mat-lightbox figure { max-height: 100%; }" in platz[0] and "min-height: 0;" in platz[0]
+    assert "max-height: calc(100dvh - 150px - var(--sicher-oben) - var(--sicher-unten))" in platz[0]
     print("Produktfoto groß in der Produktwahl bestanden.")
 
 

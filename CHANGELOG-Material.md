@@ -1471,6 +1471,19 @@ Regressionstest. Danach liefen alle Suiten grün.
   gewählt, ohne Bild nichts anklickbar; im Zuordnen-Dialog liegt die Großansicht über dem Dialog und Esc schließt nur
   sie; die Personensuche („Zuordnen …“ am Artikel) sieht aus wie bisher – ohne Konsolenfehler und ohne waagerechten
   Überlauf.
+  Nachgebessert nach einer Browserprüfung: Am Telefon nutzte die Großansicht nur rund 70 % der Breite – 120 px blieben
+  für Blätterpfeile frei, die dort (bis 640 px) unten stehen oder bei einem einzelnen Foto ganz fehlen. Jetzt reicht
+  das Foto bis auf den Rand des Dialogs (24 px je Seite; gilt für alle Fotos des Moduls): bei 390 × 844 342 × 513 statt
+  270 × 405, bei 360 × 740 312 × 468 statt 240 × 360. Damit es dabei nicht unter ✕ rutscht – so wäre es am iPhone SE
+  (375 × 667 mit Statusleiste) und bei 320 × 568 gekommen –, hält der Dialog oben den Streifen von ✕ frei (60 px plus
+  Kerbe), und wird es eng (hohes Foto, lange Unterschrift), wird das Foto im Seitenverhältnis kleiner, statt „Original“
+  unten aus dem Bild zu schieben. Ab 641 px ändert sich nichts. Geprüft: statische Haken in
+  `test_produktfoto_gross_in_der_produktwahl` und im Chromium (Touch) mit Produktfoto, einer Gruppe von drei
+  Meldungsfotos und einem hohen Foto mit langer Unterschrift im Tastaturmodus bei 390 × 844 (auch mit Kerbe und
+  Wischleiste), 360 × 740, 375 × 667 (auch mit Statusleiste), 320 × 568, 640/641 × 900, 700 × 1050, 568 × 320,
+  844 × 390 und 1280 × 900 (Maus): Bild, ✕, Unterschrift mit „Original“ und die Pfeile überlappen nicht, „Original“
+  bleibt sichtbar, kein waagerechter Überlauf, keine weißen Ränder; Antippen von Pfeil, Foto und ✕ wirkt wie
+  bisher.
 
 **Prüfung der Nachbesserung**: Zwei unabhängige Prüfungen – Rechte (mit Angriffsskript gegen den Testclient und an
 DEMO-Datenbanken alter Stände) und Browser (Rundgang mit DEMO-Konten bei 390–1280 px) – haben sieben Befunde
