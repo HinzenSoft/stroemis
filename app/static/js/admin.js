@@ -381,9 +381,14 @@
       b.disabled = true;
       try {
         const r = await S.api(`/api/material/freigaben/${f.id}`, { method: "DELETE" });
-        S.toast(r.offene_entwuerfe ? `Entzogen – ${mehrzahl(r.offene_entwuerfe, "offene Prüfung", "offene Prüfungen")} unter Prüfungen → Entwürfe freigeben.`
-          : "Freigabe entzogen");
+        S.toast("Freigabe entzogen");
         await freigabenZeigen(el, u);
+        // Offene Prüfungen, die das Konto danach nicht fortsetzen darf, gibt ein Verwalter im Modul frei – der Hinweis
+        // bleibt stehen und führt hin (wie im Freigaben-Dialog).
+        if (r.offene_entwuerfe) {
+          el.insertAdjacentHTML("afterbegin", `<p class="notice">Entzogen – ${mehrzahl(r.offene_entwuerfe, "offene Prüfung", "offene Prüfungen")}
+            des Kontos unter <a href="/material/pruefungen">Material → Prüfungen</a> → Offene Prüfungen freigeben.</p>`);
+        }
         load();
       } catch (e) { S.toast(e.message, true); b.disabled = false; }
     }));

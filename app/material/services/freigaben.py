@@ -352,7 +352,7 @@ def aendern(gid, d):
 
 def entziehen(gid):
     """DELETE /freigaben/<gid>. Liefert die Zahl offener Prüfungen des Kontos im Zweig des Ankers, die es danach nicht
-    mehr fortsetzen darf – die gibt ein Verwalter unter Prüfungen → Entwürfe frei."""
+    mehr fortsetzen darf – die gibt ein Verwalter unter Material → Prüfungen → Offene Prüfungen frei."""
     ich, s = current_user(), rechte.sicht()
     alt = zeile(gid)
     ordner = _ordner_alle()
