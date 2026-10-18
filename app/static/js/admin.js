@@ -383,7 +383,9 @@
     el.querySelectorAll("[data-entziehen]").forEach((b) => b.addEventListener("click", async () => {
       const f = liste.find((x) => x.id === +b.dataset.entziehen);
       // An einem Grundrecht können dauerhafte Prüffreigaben hängen, die ohne es nicht mehr wirken – die Rückfrage sagt es.
-      const haengt = f.traegt_pruefen ? ` Daran hängt ${f.traegt_pruefen === 1 ? "eine dauerhafte Prüffreigabe" : `${f.traegt_pruefen} dauerhafte Prüffreigaben`} – ohne dieses Grundrecht wirkt sie nicht mehr.` : "";
+      const haengt = !f.traegt_pruefen ? "" : f.traegt_pruefen === 1
+        ? " Daran hängt eine dauerhafte Prüffreigabe – ohne dieses Grundrecht wirkt sie nicht mehr."
+        : ` Daran hängen ${f.traegt_pruefen} dauerhafte Prüffreigaben – ohne dieses Grundrecht wirken sie nicht mehr.`;
       if (!(await S.confirm(`Freigabe „${RECHT[f.recht] || f.recht}“ für ${f.ordner.pfad} entziehen?${haengt}`, "Entziehen"))) return;
       b.disabled = true;
       try {

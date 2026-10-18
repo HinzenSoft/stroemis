@@ -406,7 +406,9 @@
 
   // An einem Grundrecht hängen dauerhafte Prüffreigaben derselben Person, die ohne es nicht wirken (traegt_pruefen).
   const traegtText = (f) => (f.traegt_pruefen
-    ? `Daran hängt ${f.traegt_pruefen === 1 ? "eine dauerhafte Prüffreigabe" : `${f.traegt_pruefen} dauerhafte Prüffreigaben`} von ${f.konto.name} – ohne dieses Grundrecht wirkt sie nicht mehr.`
+    ? (f.traegt_pruefen === 1
+      ? `Daran hängt eine dauerhafte Prüffreigabe von ${f.konto.name} – ohne dieses Grundrecht wirkt sie nicht mehr.`
+      : `Daran hängen ${f.traegt_pruefen} dauerhafte Prüffreigaben von ${f.konto.name} – ohne dieses Grundrecht wirken sie nicht mehr.`)
     : "");
 
   /* --- Ändern, Entziehen, Verlängern ------------------------------------------------------------------------- */
