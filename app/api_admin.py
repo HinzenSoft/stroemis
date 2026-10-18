@@ -323,10 +323,13 @@ def delete_user(uid):
 @admin_required
 def material_folgen(uid):
     """Was das Löschen des Kontos im Modul Material bewirkt – Zahlen für den Dialog „Löschen“: Freigaben, Zuordnungen,
-    offene Entwürfe und abgeschlossene Prüfungen (material.services.loeschung.folgen)."""
+    offene Entwürfe und abgeschlossene Prüfungen (material.services.loeschung.folgen). Dazu „letzter_materialwart“: die
+    Gliederungen, deren einziger Materialwart heute dieses Konto ist (freigaben.einziger_materialwart) – Löschen,
+    Deaktivieren und Material „–“ ließen sie ohne Materialwart, Dialog und Tabelle fragen dann nach. Nur eine Warnung:
+    update_user und delete_user speichern trotzdem."""
     if not db.query("SELECT 1 FROM users WHERE id = ?", (uid,), one=True):
         return jsonify(error="Nutzer nicht gefunden"), 404
-    return jsonify(mat_loeschung.folgen(uid))
+    return jsonify(dict(mat_loeschung.folgen(uid), letzter_materialwart=mat_freigaben.einziger_materialwart(uid)))
 
 
 @bp.post("/users/<int:uid>/approve")

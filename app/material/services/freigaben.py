@@ -722,7 +722,28 @@ def nutzer_suchen(q, zweck=None):
             "mehr": len(treffer) > SUCHE_MAX}
 
 
-# --- Nutzerverwaltung (api_admin.list_users) -----------------------------------------------------------------------
+# --- Nutzerverwaltung (api_admin) ----------------------------------------------------------------------------------
+
+def einziger_materialwart(uid):
+    """Gliederungen, deren einziger Materialwart heute dieses Konto ist – Feld „letzter_materialwart“ von
+    GET /api/admin/users/<uid>/material-folgen (nur die Plattform-Verwaltung). Gezählt wird wie bei Nr. 7 mit
+    rechte.verwalter_von: gültiges verwalten an der Gliederung oder darüber, nur aktive Konten mit Namen und Stufe
+    Mitglied – die Material-Verwaltung zählt nicht als Materialwart, ein Mitverwalter ohne Stufe, ohne Namen,
+    deaktiviert oder mit abgelaufener Freigabe auch nicht. Senkt die Nutzerverwaltung die Stufe des Kontos auf „–“,
+    deaktiviert oder löscht sie es, verwaltet dort danach nur noch die Material-Verwaltung: admin.js fragt vorher nach,
+    gesperrt wird nichts (Entscheidung des Betreibers vom 18.10.2026). Infrage kommen nur Gliederungen in den Zweigen
+    der eigenen gültigen verwalten-Zeilen, auch verschachtelte; je Kandidat eine Abfrage. [{id, name, pfad}] nach Pfad."""
+    anker = {r["folder_id"] for r in db.query(
+        "SELECT folder_id FROM mat_folder_grant WHERE user_id = ? AND permission = 'verwalten' "
+        "AND (valid_until IS NULL OR valid_until >= ?)", (uid, _heute().isoformat()))}
+    if not anker:
+        return []
+    ordner = _ordner_alle()
+    kandidaten = {x for a in anker if a in ordner for x in _zweig(a, ordner) if _gliederung(ordner[x])}
+    out = [{"id": gl, "name": ordner[gl]["name"], "pfad": _pfad(gl, ordner)} for gl in kandidaten
+           if [v["id"] for v in rechte.verwalter_von(gl)] == [uid]]
+    return sorted(out, key=lambda x: (x["pfad"].casefold(), x["id"]))
+
 
 def zahlen_je_konto():
     """Für die Nutzerliste mit EINER gruppierten Abfrage: je Konto die Zahl gültiger Freigaben und ob darunter ein

@@ -314,7 +314,8 @@
   /* Rechte direkt in der Tabelle ändern: ein Wechsel, ein PUT mit nur diesem Modul. Die Antwort
      trägt die vollständigen Rechte – bei verwaltung = 2 also auch die drei nachgezogenen –, und
      daraus wird die Zeile gezeichnet. Schlägt es fehl (etwa weil man sich selbst die Verwaltung
-     entzieht), bleibt der alte Stand und das Feld springt zurück. */
+     entzieht), bleibt der alte Stand und das Feld springt zurück. Material auf „–“ beim einzigen
+     Materialwart einer Gliederung erst nach der Rückfrage (materialwartBleibt) – Abbrechen ebenso. */
   tbody.addEventListener("change", async (e) => {
     const sel = e.target.closest("select[data-modul]");
     if (!sel) return;
@@ -323,9 +324,11 @@
     if (!u) return;
     sel.disabled = true;      // kein zweiter Wechsel, solange der erste unterwegs ist
     try {
-      const r = await S.api(`/api/admin/users/${u.id}`, { method: "PUT", body: { rechte: { [sel.dataset.modul]: +sel.value } } });
-      u.rechte = (r.user && r.user.rechte) || Object.assign({}, u.rechte, { [sel.dataset.modul]: +sel.value });
-      S.toast("Gespeichert");
+      if (sel.dataset.modul !== "material" || await materialwartBleibt(u, +sel.value)) {
+        const r = await S.api(`/api/admin/users/${u.id}`, { method: "PUT", body: { rechte: { [sel.dataset.modul]: +sel.value } } });
+        u.rechte = (r.user && r.user.rechte) || Object.assign({}, u.rechte, { [sel.dataset.modul]: +sel.value });
+        S.toast("Gespeichert");
+      }
     } catch (err) { S.toast(err.message, true); }
     zeichneRechte(tr, u);
   });
@@ -347,7 +350,11 @@
             knopf.disabled = true;
             const d = read(body);
             d.active = body.querySelector("#u-active").checked;
-            try { await S.api(`/api/admin/users/${id}`, { method: "PUT", body: d }); dlg.close(); await load(); S.toast("Gespeichert"); }
+            try {
+              // Einziger Materialwart einer Gliederung: erst die Rückfrage – Abbrechen lässt den Dialog offen, nichts gespeichert.
+              if (!(await materialwartBleibt(u, d.rechte.material, d.active))) return;
+              await S.api(`/api/admin/users/${id}`, { method: "PUT", body: d }); dlg.close(); await load(); S.toast("Gespeichert");
+            }
             catch (err) { S.toast(err.message, true); }
             finally { knopf.disabled = false; }
           };
@@ -425,8 +432,59 @@
     }));
   }
 
-  /* Löschen: Was im Modul Material daraus folgt, steht vorher da (GET …/material-folgen). Fehlt die Auskunft, lässt
-     sich trotzdem löschen – der Dialog sagt dann nur, dass er die Folgen nicht kennt. */
+  /* --- Modul Material: einziger Materialwart einer Gliederung ------------------------------------ */
+  // „der Gliederung „A““, „der Gliederungen „A“ und „B““, „… „A“, „B“ und „C““ – Pfad, damit eine verschachtelte
+  // Gliederung nicht mit einer gleichnamigen verwechselt wird.
+  function gliederungenText(gl) {
+    const namen = gl.map((x) => `„${S.esc(x.pfad || x.name)}“`);
+    const liste = namen.length > 1 ? `${namen.slice(0, -1).join(", ")} und ${namen[namen.length - 1]}` : namen[0];
+    return `${namen.length > 1 ? "der Gliederungen" : "der Gliederung"} ${liste}`;
+  }
+
+  /* Rückfrage mit dem roten Hauptknopf – ein eigenes <dialog> wie S.confirm, damit „Bearbeiten“ darunter offen bleibt,
+     aber ohne dessen Knopf für Endgültiges: „Trotzdem speichern“ löscht nichts. Abbrechen steht vorn und hat den
+     Fokus, auch am Touchgerät; Esc bricht ab. */
+  function rueckfrage(titel, html, okLabel) {
+    return new Promise((resolve) => {
+      let ja = false;
+      const dlg = document.createElement("dialog");
+      dlg.setAttribute("aria-labelledby", "rf-titel");
+      dlg.innerHTML = `<div class="dlg-body"><h2 id="rf-titel">${S.esc(titel)}</h2>${html}
+        <div class="dlg-actions"><button class="btn secondary" id="rf-nein" type="button">Abbrechen</button>
+        <button class="btn" id="rf-ja" type="button">${S.esc(okLabel)}</button></div></div>`;
+      document.body.appendChild(dlg);
+      dlg.querySelector("#rf-ja").onclick = () => { ja = true; dlg.close(); };
+      dlg.querySelector("#rf-nein").onclick = () => dlg.close();
+      dlg.addEventListener("close", () => { dlg.remove(); resolve(ja); }, { once: true });
+      dlg.showModal();
+      dlg.querySelector("#rf-nein").focus();
+    });
+  }
+
+  /* Material von „Mitglied“ oder „Verwaltung“ auf „–“ oder das Konto deaktiviert: Ist es heute der einzige Materialwart
+     einer Gliederung (letzter_materialwart aus GET …/material-folgen, gezählt wie die Regel „keine Gliederung ohne
+     Verwalter“ am Ordner), fragt die Nutzerverwaltung vorher nach – danach verwaltet dort nur noch die
+     Material-Verwaltung. Nur eine Warnung, keine Sperre. Ohne Senkung, ohne betroffene Gliederung oder wenn die
+     Auskunft fehlt: keine Rückfrage. true heißt speichern. */
+  async function materialwartBleibt(u, material, aktiv) {
+    const senkt = ((u.rechte || {}).material | 0) >= 1 && (material | 0) === 0;
+    const aus = !!u.active && aktiv === false;
+    if (!senkt && !aus) return true;
+    let gl;
+    try { gl = (await S.api(`/api/admin/users/${u.id}/material-folgen`)).letzter_materialwart || []; }
+    catch (e) { return true; }
+    if (!gl.length) return true;
+    const wie = senkt && aus ? "Mit Material „–“ und dem Deaktivieren" : senkt ? "Mit Material „–“" : "Mit dem Deaktivieren";
+    return rueckfrage("Einziger Materialwart", `<p><strong>${S.esc(u.name || u.email)}</strong> ist der einzige
+        Materialwart ${gliederungenText(gl)}. ${wie} verwaltet dort danach nur noch die Material-Verwaltung und vergibt
+        Freigaben.</p>
+      <p class="help">Soll dort weiter jemand aus der Gliederung verwalten, vorher einen zweiten Materialwart eintragen:
+        Bestand → Gliederung → Bearbeiten → Freigaben, Vorlage „Materialwart“.</p>`, "Trotzdem speichern");
+  }
+
+  /* Löschen: Was im Modul Material daraus folgt, steht vorher da (GET …/material-folgen) – auch, wenn das Konto der
+     einzige Materialwart einer Gliederung ist. Fehlt die Auskunft, lässt sich trotzdem löschen – der Dialog sagt dann
+     nur, dass er die Folgen nicht kennt. */
   function folgenText(f) {
     const n = (x) => x | 0;
     return `${mehrzahl(n(f.freigaben), "Freigabe wird", "Freigaben werden")} entfernt, ${mehrzahl(n(f.zuordnungen), "Artikel verliert seine", "Artikel verlieren ihre")} Zuordnung,
@@ -450,7 +508,11 @@
       };
       const el = body.querySelector("#u-folgen");
       try {
-        el.innerHTML = `<p class="notice">Modul Material: ${folgenText(await S.api(`/api/admin/users/${u.id}/material-folgen`))}</p>`;
+        const f = await S.api(`/api/admin/users/${u.id}/material-folgen`);
+        const gl = f.letzter_materialwart || [];
+        el.innerHTML = `<p class="notice">Modul Material: ${folgenText(f)}</p>${gl.length ? `<p class="notice">${S.esc(u.name || u.email)}
+          ist der einzige Materialwart ${gliederungenText(gl)} – danach verwaltet dort nur noch die Material-Verwaltung und
+          vergibt Freigaben.</p>` : ""}`;
       } catch (e) {
         el.innerHTML = `<p class="help">Was das Löschen im Modul Material entfernt (Freigaben, Zuordnungen, offene Prüfungen), ließ sich
           nicht ermitteln${e.status === 404 ? "" : `: ${S.esc(e.message)}`}. Festgeschriebene Prüfungen behalten den Namen des Prüfers.</p>`;
