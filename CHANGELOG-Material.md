@@ -1439,6 +1439,20 @@ Regressionstest. Danach liefen alle Suiten grün.
   (Touch) der ganze Weg – Ordnerkopf, Reiter (auch per Tastatur), Vorlagen, Erteilen, Ändern, Entziehen, Verlängern,
   Kopfhinweis, „Dort öffnen“, „+ Gliederung“, Nutzerverwaltung – ohne Konsolenfehler und ohne waagerechten Überlauf.
 
+**Prüfung der Nachbesserung**: Zwei unabhängige Prüfungen – Rechte (mit Angriffsskript gegen den Testclient und an
+DEMO-Datenbanken alter Stände) und Browser (Rundgang mit DEMO-Konten bei 390–1280 px) – haben sieben Befunde
+gemeldet, zwei davon derselbe. Jeder ist vor der Behebung nachgestellt worden, alle sind behoben – Rechte- und
+Datenfehler mit Regressionstest, die Oberfläche im Chromium nachgeprüft. Danach liefen alle Suiten grün.
+
+| # | Befund | Schwere | Umgang |
+| --- | --- | --- | --- |
+| 1 | Laufzeit und Liste widersprachen sich: Lag das Grundrecht nur noch an einem Unterordner, prüfte die Person dort mit der dauerhaften Prüffreigabe von oben weiter (Prüfung starten 201), Liste und „Meine Freigaben“ sagten „wirkt nicht“, die Rückfrage beim Entziehen des unteren Grundrechts warnte nicht | mittel | Eine Regel überall, die strengere der Schreibregel: Die Sicht fragt nach dem Grundrecht am Anker oder darüber (`unter(dauerhaft & grund)`), `Sicht.ende` nach dessen Ende. Regressionstest in `test_dauerhaft_pruefen` (oben entzogen, unten behalten: kein Prüfrecht, „wirkt nicht“, Prüfung starten 403) |
+| 2 | Die Plattform-Verwaltung zählt im Dienst als Grundrecht, „Einzeln“ mit nur „prüfen“ bot ihr im Reiter aber kein „dauerhaft“ (Datum Pflicht) – von beiden Prüfungen gemeldet | niedrig | Die Personensuche sagt je Konto `grundrecht_ueberall`, der Reiter bietet damit „dauerhaft“ an; Test in `test_nutzersuche`, im Chromium als Plattform-Verwaltung (für sich selbst) und als Materialwart nachgeprüft, der externe Prüfer bekommt es weiter nicht |
+| 3 | Auf einer DEMO-Datenbank von früher (dev) blieb die DEMO-Prüffreigabe des DEMO-Prüfers befristet, `--konten` meldete „unverändert“ | niedrig | `material_demo.py --demo --konten` stellt sie einmal auf dauerhaft (nur die unveränderte eigene Zeile der Demodaten, mit Grundrecht, Journal „Demodaten“); Test `test_demo_pruefer_von_frueher`. Auf dev nach dem Deploy einmal laufen lassen |
+| 4 | „Daran hängt 2 dauerhafte Prüffreigaben … wirkt sie nicht mehr“ – Verb und Pronomen im Singular (Reiter und Nutzerverwaltung) | niedrig | Bei mehreren „Daran hängen n … wirken sie nicht mehr“; im Chromium an Ändern-Dialog und beiden Rückfragen nachgeprüft |
+| 5 | „Verlängern …“ im Ordnerkopf führte ins Leere, wenn nur ein Grundrecht ablief, und der Fokus blieb auf dem nicht gewählten Reiter „Ordner“ | niedrig | Zur ersten ablaufenden Zeile (Abschnitt auf, Fokus auf „Ändern“), läuft eine befristete Prüffreigabe ab, wie bisher zum Knopf; Fokus beim Öffnen auf dem gewählten Reiter. Nachgeprüft bei 1280, 820 und 390 px |
+| 6 | Die Phasenübersicht oben nannte noch den „Freigaben-Dialog“ | niedrig | Jetzt „Freigaben im Dialog „Ordner bearbeiten“ (Reiter)“ |
+
 ### Zu prüfen
 
 - **Leistung mit vielen Ordnern**: Die Sicht eines Kontos wird je Anfrage einmal gerechnet – eine Abfrage der eigenen
