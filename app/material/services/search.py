@@ -138,7 +138,7 @@ def artikel(q, seite=1, pro_seite=25, sort=None, richtung="auf"):
     """Suche nach Serien-, Inventar- und Herstellernummer (Artikelnummer des Produkts), mit
     Teiltreffern. Liefert (Zeilen, Gesamtzahl); Zeilen tragen Produkt- und Ordnerangaben. Ohne gewählte
     Sortierung steht ein genauer Treffer oben."""
-    from .bestand import artikel_sortierung
+    from .bestand import artikel_sortierung, demo_sql
     seite, pro_seite = seiten(seite, pro_seite)
     eigene = sortierung(artikel_sortierung(), sort, richtung, "i.inventory_no") if sort else None
     ws = woerter(q)
@@ -167,7 +167,7 @@ def artikel(q, seite=1, pro_seite=25, sort=None, richtung="auf"):
     gesamt = _abfragen(f"SELECT COUNT(*) AS n {basis}", tuple(args), one=True)["n"]
     rows = _abfragen(
         f"SELECT i.*, p.manufacturer, p.model, p.article_no, p.material_kind, p.image AS product_image, "
-        f"p.demo AS product_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "
+        f"{demo_sql('i', 'p')} AS artikel_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "
         f"e.inspector_user_id AS entwurf_pruefer_id, zu.name AS zugeordnet_name "
         f"{basis.replace(' WHERE ', ' LEFT JOIN mat_inspection e ON e.item_id = i.id AND e.completed_at IS NULL '
                          'LEFT JOIN users zu ON zu.id = i.assigned_user_id WHERE ', 1)} "

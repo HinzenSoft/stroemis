@@ -56,7 +56,8 @@ VERZEICHNIS_SPALTEN = (
 # der aktuelle Stand); die Spalten des Produkts, die das wirksame Intervall braucht, unter eigenem Namen (i.* hat selbst
 # ein interval_months).
 ARTIKEL_SQL = ("SELECT i.*, p.manufacturer, p.model, p.article_no, p.norm, p.material_kind, p.category_id, "
-               "p.interval_months AS p_int, p.demo AS product_demo, e.inspector_name AS entwurf_pruefer, "
+               f"p.interval_months AS p_int, {bestand.demo_sql('i', 'p')} AS artikel_demo, "
+               "e.inspector_name AS entwurf_pruefer, "
                "zu.name AS zugeordnet_name FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
                "LEFT JOIN mat_inspection e ON e.item_id = i.id AND e.completed_at IS NULL "
                "LEFT JOIN users zu ON zu.id = i.assigned_user_id ")
@@ -64,7 +65,7 @@ ARTIKEL_SQL = ("SELECT i.*, p.manufacturer, p.model, p.article_no, p.norm, p.mat
 PRUEFUNG_SQL = ("SELECT x.id, x.item_id, x.round_id, x.protocol_id, x.inspector_name, x.inspector_certificate, "
                 "x.inspected_on, x.kind, x.result, x.reason, x.corrects_inspection_id, x.completed_at, x.locked_at, "
                 "x.pdf_path, x.pdf_sha256, x.pdf_hashed_bytes, x.file_sha256, i.inventory_no, i.serial_no, "
-                "p.manufacturer, p.model, p.demo AS product_demo, r.title AS durchgang "
+                f"p.manufacturer, p.model, {bestand.demo_sql('i', 'p')} AS artikel_demo, r.title AS durchgang "
                 "FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id JOIN mat_product p ON p.id = i.product_id "
                 "LEFT JOIN mat_round r ON r.id = x.round_id ")
 
@@ -167,7 +168,7 @@ def artikel_csv(fid):
             datum_text(r["manufactured_on"]), datum_text(r["purchased_on"]), datum_text(r["first_use_on"]),
             datum_text(r["retire_by"]) if r["material_kind"] == "textil" else "", r["notes"], r["entwurf_pruefer"],
             ((r["zugeordnet_name"] or "").strip() or "(ohne Namen)") if r["assigned_user_id"] else "",
-            "ja" if r["product_demo"] else "nein"])
+            "ja" if r["artikel_demo"] else "nein"])
     return csv_bytes(ARTIKEL_SPALTEN, zeilen), f"Artikel_{dateiname(o['name'])}_{stichtag.isoformat()}.csv"
 
 
@@ -205,7 +206,8 @@ def protokolle_zip(fid):
     zweig, zargs = im_unterbaum(fid)
     runden = db.query(
         "SELECT r.id, r.folder_id, r.title, r.closed_on, r.closed_by_name, r.aborted, r.protocol_id, r.locked_at, "
-        "r.pdf_path, r.pdf_sha256, r.pdf_hashed_bytes, r.file_sha256, o.demo AS ordner_demo "
+        "r.pdf_path, r.pdf_sha256, r.pdf_hashed_bytes, r.file_sha256, "
+        f"{bestand.demo_ordner_sql('r.folder_id')} AS ordner_demo "
         "FROM mat_round r JOIN mat_folder o ON o.id = r.folder_id "
         f"WHERE r.closed_on IS NOT NULL AND {zweig.replace('i.folder_id IN', 'r.folder_id IN', 1)} "
         "ORDER BY r.closed_on, r.id", zargs)
@@ -237,7 +239,7 @@ def protokolle_zip(fid):
             x["inspector_name"], x["inspector_certificate"], ERGEBNISSE.get(x["result"], x["result"]), x["reason"], name,
             x["file_sha256"], x["pdf_sha256"], x["pdf_hashed_bytes"], zustand, berichtigt_durch.get(x["id"], ""),
             protokoll_von.get(x["corrects_inspection_id"], "(ohne Protokoll)") if x["corrects_inspection_id"] else "",
-            "ja" if x["product_demo"] else "nein"])
+            "ja" if x["artikel_demo"] else "nein"])
     for r in runden:
         name, zustand = aufnehmen(r, "Sammelprotokolle")
         zeilen.append([

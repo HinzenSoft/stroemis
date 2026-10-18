@@ -245,6 +245,9 @@
   const plural = (n, eins, viele) => `${n} ${n === 1 ? eins : viele}`;
   const statusMarke = (s, gross) => `<span class="mat-status s-${esc(s)}${gross ? " gross" : ""}">${esc(STATUS[s] || s)}</span>`;
   const demoMarke = (x) => (x ? '<span class="mat-demo" title="DEMO – nicht für echte Prüfungen">DEMO</span>' : "");
+  // Banner an Artikel und Prüfung: DEMO ist ein Artikel eines DEMO-Produkts oder mit Heimat in einem DEMO-Ordner
+  // (bestand.demo_sql) – auch ein echtes Katalogprodukt im Beispielbestand.
+  const DEMO_ARTIKEL = "DEMO – nicht für echte Prüfungen. Dieser Artikel gehört zu den Demodaten.";
   const leer = (text) => `<p class="mat-leer">${esc(text)}</p>`;
   const produktName = (p) => `${p.manufacturer || ""} ${p.model || ""}`.trim();
   const fokus = (el) => { if (el && !window.matchMedia("(pointer: coarse)").matches) el.focus(); };
@@ -1606,7 +1609,7 @@
       <div class="help">${esc(ZUORDNUNG_HILFE)}</div>` : "";
     const zuordnung = darf.grund ? zeile("Zugeordnet an", `${zu ? `${esc(zu.name)}${zu.gliederung ? ` <span class="muted">· ${esc(zu.gliederung)}</span>` : ""}${zu.aktiv ? "" : ' <span class="muted">(deaktiviert)</span>'}`
       : '<span class="muted">–</span>'}${zuKnoepfe}`) : "";
-    inhalt.innerHTML = `${p.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen. Dieses Produkt stammt aus den Demodaten.</p>' : ""}
+    inhalt.innerHTML = `${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${a.status === "ausgesondert" ? `<p class="mat-banner s-ausgesondert">AUSGESONDERT – dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden.</p>` : ""}
       ${a.status === "gesperrt" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
       ${a.status === "lebensdauer" ? `<p class="mat-banner s-lebensdauer">LEBENSDAUER ERREICHT – aussondern.</p>` : ""}
@@ -2838,7 +2841,7 @@
     else if (a.entwurf) hinweis = esc(`In Prüfung bei ${a.entwurf.pruefer} seit ${fmtZeit(a.entwurf.seit)}.${darf.verwalten ? " Eine liegen gebliebene Reservierung gibst du in der Artikelansicht frei." : " Eine liegen gebliebene Reservierung gibt der Materialwart frei."}`);
     else if (!a.formular) hinweis = "Für dieses Produkt gibt es kein aktives Prüfformular – weder am Produkt noch in seiner Kategorie. Der Produktkatalogpfleger legt es im Katalog an.";
     const ld = a.lebensdauer && a.lebensdauer.festgeschrieben ? { ende: a.lebensdauer.ende, rest_tage: a.lebensdauer.rest_tage, erreicht: a.lebensdauer.rest_tage <= 0 } : null;
-    inhalt.innerHTML = `${p.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen. Dieses Produkt stammt aus den Demodaten.</p>' : ""}
+    inhalt.innerHTML = `${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${artikelPfad(a)}
       <div class="page-head"><h1>Prüfung ${esc(a.inventory_no)} ${statusMarke(a.status, true)}</h1></div>
       <div class="mat-formular">
@@ -3156,7 +3159,7 @@
         knoepfe.push(pr.berichtigbar.ok ? '<button class="btn secondary small" data-act="berichtigen">Berichtigen</button>'
           : `<button class="btn secondary small" type="button" disabled title="${esc(pr.berichtigbar.grund)}">Berichtigen</button>`);
       }
-      return `${pr.produkt.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen. Dieses Produkt stammt aus den Demodaten.</p>' : ""}
+      return `${pr.artikel.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
         <div class="mat-pfad">${a.pfad.map(pfadGlied).join(" / ")} / <a href="/material/artikel/${a.id}">${esc(a.inventory_no)}</a></div>
         <div class="page-head"><h1>${esc(PRUEFART[pr.art] || pr.art)} <span class="mat-h1-zusatz">${esc(a.inventory_no)}</span> ${pr.entwurf ? '<span class="badge">Entwurf</span>' : ergebnisMarke(pr.ergebnis)}</h1>
           ${knoepfe.length ? `<div class="btn-row">${knoepfe.join("")}</div>` : ""}</div>

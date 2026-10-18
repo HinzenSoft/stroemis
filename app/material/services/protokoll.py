@@ -384,7 +384,7 @@ def _pruefprotokoll(p, pid, ts, png, login, ordner_id):
         berichtigt = {"protokoll_id": alt["protocol_id"] or "(ohne Protokoll)", "datum": datum_text(alt["inspected_on"]),
                       "grund": p["correction_reason"]}
     daten = {
-        "dokument": _dokument("pruefprotokoll", pid, ts, produkt["demo"]),
+        "dokument": _dokument("pruefprotokoll", pid, ts, bestand.ist_demo(item["id"])),
         "artikel": _artikel(item, produkt, ordner_id),
         "pruefung": {"art": PRUEFART_TEXT.get(p["kind"], p["kind"]), "datum": datum_text(p["inspected_on"]),
                      "pruefer": p["inspector_name"], "urkunde": p["inspector_certificate"], "login": login,
@@ -419,7 +419,7 @@ def _aussonderungsprotokoll(p, pid, ts, png, login, ordner_id, sperre):
                            "art": PRUEFART_TEXT.get(letzte["kind"], letzte["kind"]),
                            "ergebnis_text": ERGEBNISSE.get(letzte["result"], ""), "pruefer": letzte["inspector_name"]}
     daten = {
-        "dokument": _dokument("aussonderungsprotokoll", pid, ts, produkt["demo"]),
+        "dokument": _dokument("aussonderungsprotokoll", pid, ts, bestand.ist_demo(item["id"])),
         "artikel": _artikel(item, produkt, ordner_id),
         "aussonderung": {"datum": datum_text(p["inspected_on"]), "grund": p["reason"], "bemerkung": p["remarks"] or "",
                          "person": p["inspector_name"], "rolle": "Prüfer" if p["basis_inspection_id"] else "Materialwart",
@@ -523,9 +523,8 @@ def _sammelprotokoll(r, pid, ts):
         pruefer.append({"name": x["name"], "urkunde": x["urkunde"], "anzahl": x["anzahl"],
                         "unterschrift": _png(sig["signature_png"]) if sig else None})
     gl = bestand.gliederung_von(r["folder_id"])
-    demo = db.query("SELECT demo FROM mat_folder WHERE id = ?", (r["folder_id"],), one=True)
     return {
-        "dokument": _dokument("sammelprotokoll", pid, ts, demo and demo["demo"]),
+        "dokument": _dokument("sammelprotokoll", pid, ts, bestand.ordner_ist_demo(r["folder_id"])),
         "durchgang": {"titel": r["title"], "ordner": _pfad_text(r["folder_id"]), "gliederung": gl["name"] if gl else "",
                       "eroeffnet": f"{datum_text(r['opened_on'])} von {r['opened_by_name']}",
                       "abgeschlossen": f"{zeit_text(ts)} von {r['closed_by_name']}", "abgebrochen": bool(r["aborted"])},

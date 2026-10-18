@@ -109,6 +109,37 @@ def heimat_im_zweig(fid, alias="i"):
             f"JOIN baum b ON f.parent_id = b.id) SELECT id FROM baum)", (fid,))
 
 
+def demo_ordner_sql(ordner):
+    """SQL-Ausdruck (0/1): Der Ordner ordner (SQL-Ausdruck einer Ordnerkennung) oder einer darüber trägt das
+    DEMO-Kennzeichen. Unter einer DEMO-Gliederung ist damit alles DEMO – auch ein Ordner, den jemand dort über die
+    Oberfläche (ohne Kennzeichen) angelegt hat."""
+    return (f"EXISTS (WITH RECURSIVE demo_kette(id) AS (SELECT {ordner} UNION SELECT demo_f.parent_id FROM mat_folder "
+            f"demo_f JOIN demo_kette ON demo_f.id = demo_kette.id WHERE demo_f.parent_id IS NOT NULL) "
+            f"SELECT 1 FROM demo_kette JOIN mat_folder demo_o ON demo_o.id = demo_kette.id WHERE demo_o.demo = 1)")
+
+
+def demo_sql(alias="i", produkt="p"):
+    """Ist ein Artikel DEMO? Die eine Regel für Oberfläche, Protokolle, Lebenslauf, CSV und Steckbrief, als SQL-Ausdruck
+    über mat_item (alias) und sein mat_product (produkt): Das Produkt trägt das DEMO-Kennzeichen – oder die Heimat des
+    Artikels (heimat) liegt in einem DEMO-Ordner. So ist auch ein echtes Katalogprodukt im Beispielbestand
+    (scripts/material_beispielbestand.py) überall als DEMO zu erkennen, ohne dass am Katalog etwas geändert wird."""
+    if not produkt.isidentifier():
+        raise ValueError(produkt)
+    return f"({produkt}.demo = 1 OR {demo_ordner_sql(heimat_sql(alias))})"
+
+
+def ist_demo(iid):
+    """demo_sql für einen einzelnen Artikel."""
+    r = db.query(f"SELECT {demo_sql('i', 'p')} AS demo FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
+                 f"WHERE i.id = ?", (iid,), one=True)
+    return bool(r and r["demo"])
+
+
+def ordner_ist_demo(fid):
+    """demo_ordner_sql für einen einzelnen Ordner (Sammelprotokoll eines Durchgangs)."""
+    return bool(db.query(f"SELECT {demo_ordner_sql('?')} AS demo", (fid,), one=True)["demo"])
+
+
 def kette(fid):
     """Kennungen von fid und allen Oberordnern – eine Heimat liegt im Zweig von R, wenn R darin ist."""
     return {o["id"] for o in pfad(fid)}
@@ -651,7 +682,7 @@ def artikel_loeschen(iid):
 # Mit dem offenen Entwurf (höchstens einer je Artikel): Listen zeigen „in Prüfung bei …“.
 # Dazu der Name der zugeordneten Person (artikel_kurz gibt ihn nur mit Grundrecht heraus).
 ARTIKEL_LISTE_SQL = ("SELECT i.*, p.manufacturer, p.model, p.article_no, p.material_kind, p.image AS product_image, "
-                     "p.demo AS product_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "
+                     f"{demo_sql('i', 'p')} AS artikel_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "
                      "e.inspector_user_id AS entwurf_pruefer_id, zu.name AS zugeordnet_name FROM mat_item i "
                      "JOIN mat_product p ON p.id = i.product_id "
                      "LEFT JOIN mat_inspection e ON e.item_id = i.id AND e.completed_at IS NULL "
@@ -691,7 +722,8 @@ def artikel_kurz(i, stichtag=None):
             "serial_generated": bool(i["serial_generated"]), "folder_id": i["folder_id"],
             "product_id": i["product_id"], "manufacturer": i.get("manufacturer"), "model": i.get("model"),
             "article_no": i.get("article_no"), "material_kind": i.get("material_kind"),
-            "vorschau": katalog.bild_url(i.get("product_image"), "thumb"), "demo": bool(i.get("product_demo")),
+            "vorschau": katalog.bild_url(i.get("product_image"), "thumb"),
+            "demo": bool(i["artikel_demo"]) if "artikel_demo" in i else ist_demo(i["id"]),
             "next_due_on": i["next_due_on"], "retire_by": i["retire_by"], "lock_state": i["lock_state"],
             "last_inspected_on": i.get("last_inspected_on"), "status": s, "status_text": st.LABEL[s],
             "entwurf": ({"id": i["entwurf_id"], "pruefer": i.get("entwurf_pruefer"),
@@ -714,6 +746,7 @@ def artikel_json(i, voll=False):
                              "lock_reason", "next_due_on", "interval_months", "notes", "created_at", "updated_at",
                              "last_inspected_on")}
     out["serial_generated"] = bool(i["serial_generated"])
+    out["demo"] = ist_demo(i["id"])
     out["stand"] = stand_von(i)
     out["status"], out["status_text"] = s, st.LABEL[s]
     out["produkt"] = katalog.produkt_json(p)
