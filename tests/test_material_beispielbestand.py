@@ -471,6 +471,22 @@ def test_abgebrochener_lauf():
         app, k = umgebung(tmp)
         platzhalterkatalog(k)
 
+        # Abbruch mitten in der ersten Gliederung: Ihre Transaktion rollt zurück, es gibt nichts – und der Hinweis
+        # sagt das, statt von einem unvollständigen Bestand zu sprechen.
+        def gleich_abreissen(modul):
+            konto = modul.Beispielbestand.konto_anlegen
+
+            def konto_anlegen(self, kk, gl):
+                uid = konto(self, kk, gl)
+                os.kill(os.getpid(), signal.SIGHUP)
+                return uid
+            modul.Beispielbestand.konto_anlegen = konto_anlegen
+
+        vorher = bestand_stand(app)
+        aus, code = laufen("--beispielbestand", "--artikel", "6", anpassen=gleich_abreissen)
+        assert code == "unterbrochen" and "Unterbrochen. Nichts angelegt" in aus, (code, aus[-2000:])
+        assert bestand_stand(app) == vorher
+
         stand = {}
 
         def abreissen(modul):

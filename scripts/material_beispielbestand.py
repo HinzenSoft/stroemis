@@ -174,18 +174,16 @@ def main(argv=None):
     try:
         with app.app_context():
             g.mat_akteur = AKTEUR
+            lauf = Beispielbestand(app, n)
             try:
-                Beispielbestand(app, n).anlegen()
+                lauf.anlegen()
             except Abbruch as exc:
                 print(exc)
                 sys.exit(exc.code)
             except (Exception, KeyboardInterrupt) as exc:
                 try:
-                    print(("Unterbrochen" if isinstance(exc, KeyboardInterrupt) else "Abgebrochen mit einem Fehler "
-                           "(unten)") + ". Was bis dahin fertig war, bleibt – jeder Artikel ganz oder gar nicht. Der "
-                          "Beispielbestand ist damit unvollständig, und kein weiterer Lauf ergänzt ihn: Neu geht es nur "
-                          "mit einer zurückgesetzten dev-Datenbank und dem Katalog-Export (README, „Beispielbestand (nur "
-                          "dev)“).", flush=True)
+                    print(("Unterbrochen. " if isinstance(exc, KeyboardInterrupt) else "Abgebrochen mit einem Fehler "
+                           "(unten). ") + lauf.stand(), flush=True)
                 except OSError:                                     # die Ausgabe gibt es nicht mehr
                     pass
                 raise
@@ -245,6 +243,7 @@ class Beispielbestand:
         self.passwoerter = []
         self.uebersprungen = []
         self.zuordnungen = 0
+        self.fertig_gesetzt = False         # Merker geschrieben – der Bestand ist vollständig
         self._foto = None
         self._signatur = None
 
@@ -253,6 +252,17 @@ class Beispielbestand:
     @staticmethod
     def namen():
         return [f"DEMO-OG {ort}" for _, ort, _ in GLIEDERUNGEN]
+
+    def stand(self):
+        """Was nach einem Abbruch da ist – für den Hinweis in main."""
+        if self.fertig_gesetzt:
+            return ("Der Beispielbestand ist vollständig angelegt, nur der Bericht fehlt – die Passwörter der DEMO-Konten "
+                    "setzt die Nutzerverwaltung neu.")
+        if not self.gl:
+            return "Nichts angelegt – ein neuer Lauf beginnt von vorn."
+        return ("Was bis dahin fertig war, bleibt – jeder Artikel ganz oder gar nicht. Der Beispielbestand ist damit "
+                "unvollständig, und kein weiterer Lauf ergänzt ihn: Neu geht es nur mit einer zurückgesetzten "
+                "dev-Datenbank und dem Katalog-Export (README, „Beispielbestand (nur dev)“).")
 
     @staticmethod
     def fertig():
@@ -336,6 +346,7 @@ class Beispielbestand:
         self.zuordnen(plaene)
         db.execute("INSERT INTO mat_meta (schluessel, wert) VALUES (?, ?) ON CONFLICT(schluessel) DO UPDATE SET "
                    "wert = excluded.wert", (MERKER, f"fertig {self.h.isoformat()}"))
+        self.fertig_gesetzt = True
         self.bericht(plaene, produkte, ausgelassen, start)
 
     @staticmethod
