@@ -12,7 +12,7 @@ für sich deploybar.
 | 3 – Nachweis | Unterschrift, Festschreiben, PDF mit Prüfsumme, Prüfseite; dazu Berichtigung und Unterschriftsfelder | geliefert 17.10.2026, freigegeben 17.10.2026 |
 | 4 – Überblick | Übersicht mit Fälligkeiten je Ordner, Führungskraft nur lesend, QR-Adresse mit Status, Export (CSV, Protokoll-ZIP, Lebenslauf-PDF); dazu Katalogaustausch (Katalog und Formulare von dev in die Produktion, ohne Bestand und Prüfungen) und Rückrufe zu Produkten (Hinweis in der Anwendung und per Mail). Kein Etikettenbogen (nicht gewünscht) | geliefert 17.10.2026, freigegeben 17.10.2026 |
 | 5 – Feinschliff | Rückmeldungen aus dem Pilotbetrieb: Ordnerkopf, einheitliche Knöpfe, Suchvorschläge, Urkundennummer im Profil, Pflicht-Bemerkung bei Mangel, Produktsuche, Bedienung auf Telefon, Foldable und Tablet | geliefert 18.10.2026, freigegeben 18.10.2026 („Starte mit Phase 2“) |
-| Phase 2 · 1 – Freigaben je Ordner | Freigaben lesen/prüfen/verwalten je Ordner mit Vererbung und Enddatum, strenge Trennung je Gliederung, Freigaben-Dialog mit Vorlagen und Verlängern, „Meine Freigaben“; globale Seriennummernsuche und QR-Steckbrief mit Protokoll; Personenzuordnung; Rückrufe und Meldungen je Bereich; Löschkonzept | geliefert 18.10.2026, wartet auf Freigabe |
+| Phase 2 · 1 – Freigaben je Ordner | Freigaben lesen/prüfen/verwalten je Ordner mit Vererbung und Enddatum, strenge Trennung je Gliederung, Freigaben-Dialog mit Vorlagen und Verlängern, „Meine Freigaben“; globale Seriennummernsuche und QR-Steckbrief mit Protokoll; Personenzuordnung; Rückrufe und Meldungen je Bereich; Löschkonzept | geliefert 18.10.2026, die drei offenen Fragen am 18.10.2026 entschieden und eingearbeitet; wartet auf Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -1005,9 +1005,10 @@ die übrige App nachgeprüft, die Nachbefunde behoben und gegengeprüft. Am Rech
 Phase 2 bringt mehrere Gliederungen und externe Prüfer in dieselbe Instanz. Lieferung 1 trennt den Bestand je
 Gliederung über Freigaben je Ordner und bringt dazu die globale Seriennummernsuche, die Personenzuordnung und das
 Löschkonzept. Erinnerungen per Mail folgen mit Lieferung 2, der CSV-Import mit Lieferung 3. Lieferung 5 aus Phase 1
-wurde am 18.10.2026 mit „Starte mit Phase 2“ freigegeben. Gebaut nach dem Bauentwurf vom 18.10.2026; drei Fragen
-daraus sind offen und mit einer Vorgabe gebaut (siehe „Offene Entscheidungen“). Schemaversion 8, keine neuen
-Abhängigkeiten. Stand: wartet auf Freigabe.
+wurde am 18.10.2026 mit „Starte mit Phase 2“ freigegeben. Gebaut nach dem Bauentwurf vom 18.10.2026; die drei Fragen,
+die daraus offen waren, hat der Betreiber am 18.10.2026 entschieden – eingearbeitet und beschrieben unter „Die drei
+offenen Fragen – entschieden“ und „Nachbesserungen nach der Auslieferung (Entscheidungen vom 18.10.2026)“; „Neu“ und
+„Schnittstelle“ beschreiben den Stand danach. Schemaversion 8, keine neuen Abhängigkeiten. Stand: wartet auf Freigabe.
 
 „Plattform-Verwaltung“ heißt hier: Verwaltung im Modul Verwaltung der Rechte-Matrix (das Startkonto gehört dazu).
 
@@ -1115,16 +1116,21 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   verschoben)“, und Prüfer von dort stehen nicht darin. Die Verschieben-Dialoge sagen vorher, was mit Freigaben, Systemordnern und
   Durchgängen geschieht. In der Durchgangsansicht steht ein hinausverschobener Artikel, den man nicht mehr sieht, ohne
   Link und ohne Knöpfe mit „nicht in deinem Bereich“; „Einbeziehen“ bietet sie für Hinausverschobene nicht an.
-- **Globale Seriennummernsuche** (`services/globalsuche.py`, `static/global.js`): Hat kein sichtbarer Artikel genau
-  die gesuchte Seriennummer, bieten Trefferseite und Suchvorschläge „In allen Gliederungen nach der Seriennummer „…“
-  suchen“ an. Nach einer Bestätigung („wird mit deinem Namen protokolliert“) sucht der Server exakt (Groß/klein egal)
-  nach Herstellerseriennummern ab 4 Zeichen – nie nach Inventar- oder STR-Nummern, die sind fortlaufend – und zeigt
-  höchstens zehn Steckbriefe ohne Link: Produktbild, Inventar- und Seriennummer, Produkt, Kategorie, Norm,
-  Herstellung, Lebensende und „Gehört zu <Gliederung> · <Ordner>“ (ein persönlicher Ordner heißt dort nur
-  „persönlicher Ordner“). Keine Kennungen, kein Status, keine Sperre, keine Prüfungen, Fotos, Bemerkungen oder
-  Personen. Das Suchfeld haben jetzt alle mit Modulzugang, auch Katalogpfleger und Prüfer ohne Freigabe.
+- **Globale Seriennummernsuche** (`services/globalsuche.py`, `static/global.js`): Unter den eigenen Treffern bieten
+  Trefferseite und Suchvorschläge „In anderen Gliederungen nach der Seriennummer „…“ suchen“ an – zu jeder Anfrage,
+  die dafür taugt, auch neben eigenen Treffern und wenn ein eigener Artikel genau diese Nummer hat; nicht der
+  Plattform-Verwaltung, die alles sieht. Nach einer Bestätigung („wird mit deinem Namen protokolliert“) sucht der
+  Server exakt (Groß/klein egal) nach Herstellerseriennummern ab 4 Zeichen – nie nach Inventar- oder STR-Nummern, die
+  sind fortlaufend – und nur unter den Artikeln, die das Konto nicht sieht. Höchstens zehn Steckbriefe ohne Link
+  stehen direkt unter der eigenen Liste, ab der Trennlinie „Aus anderen Gliederungen“, gestrichelt umrandet und mit
+  der Gliederung als Marke ganz oben: Produktbild, Inventar- und Seriennummer, Produkt, Kategorie, Norm, Herstellung,
+  Lebensende, ein Sperrwort („gesperrt“, „verloren gemeldet“, „ausgesondert“) und „Gehört zu <Gliederung> · <Ordner>“
+  (ein persönlicher Ordner heißt dort nur „persönlicher Ordner“). Keine Kennungen, kein Prüfstatus, kein Sperrgrund,
+  keine Prüfungen, Fotos, Bemerkungen oder Personen. Das Suchfeld haben jetzt alle mit Modulzugang, auch
+  Katalogpfleger und Prüfer ohne Freigabe.
 - **QR-Steckbrief**: Ein Scan an einem Artikel außerhalb des eigenen Bereichs zeigt „Dieser Artikel gehört nicht zu
-  deinem Bereich.“ und auf Wunsch („Steckbrief anzeigen (wird protokolliert)“) denselben Steckbrief.
+  deinem Bereich.“ und auf Wunsch („Steckbrief anzeigen (wird protokolliert)“) denselben Steckbrief – mit dem
+  Sperrwort, damit ein Finder sieht, ob ein fremdes Seil gesperrt, verloren gemeldet oder ausgesondert ist.
 - **Fremde Dubletten**: Gibt es die Seriennummer beim selben Produkt schon in einem Bereich, den man nicht sieht,
   lehnen Anlegen und Ändern ab (409) – ohne Inventarnummer und ohne Gliederung, mit Verweis auf die globale Suche.
   Eine sichtbare Dublette nennt wie bisher die Inventarnummer.
@@ -1161,7 +1167,9 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   vorher auf – je Freigabe und je Zuordnung ein Journaleintrag (Grund „Konto gelöscht“), Zuordnungen gelöst, offene
   Entwürfe auf „(gelöschtes Konto)“ und ohne Urkundennummer (der Materialwart gibt die Reservierung frei),
   Produktmeldungen und Suchprotokoll ohne Namen. Abgeschlossene und festgeschriebene Prüfungen, Aussonderungen,
-  Durchgänge, Rückrufe und das Journal bleiben mit den Namen der Handelnden (EN 365). Der Dialog „Löschen“ der
+  Durchgänge, Rückrufe und das Journal bleiben mit den Namen der Handelnden (EN 365). Prüfnachweise werden unbefristet
+  aufbewahrt, auch nach der Aussonderung – die Anwendung löscht sie auf keinem Weg (Entscheidung des Betreibers vom
+  18.10.2026). Der Dialog „Löschen“ der
   Nutzerverwaltung nennt die Folgen vorher („n Freigaben werden entfernt, m Artikel verlieren ihre Zuordnung, k offene
   Prüfungen werden zu Reservierungen ohne Prüfer …“). Deaktivieren ändert im Modul nichts – Freigaben wirken nicht
   mehr, Zuordnungen bleiben.
@@ -1297,8 +1305,14 @@ sich:
 - Artikel: `zugeordnet` (`id`, `name`, `gliederung`, `aktiv`) und `journal` nur mit Grundrecht, sonst `null`; in
   Listen `zugeordnet_name`. `durchgang` an Artikel und Prüfung einheitlich `{id, titel, ordner, sichtbar}`. Zeilen
   eines Durchgangs, die man nicht sieht, haben `sichtbar: false` und keine Kennung.
-- `GET /suche` liefert `exakt_lokal` und `global_angebot`; `GET /ordner/<id>` und `GET /faellig` nehmen
-  `zugeordnet=<Konto>`.
+- `GET /suche` liefert `exakt_lokal` (ein sichtbarer Artikel hat genau diese Seriennummer) und `global_angebot` (zu
+  jeder Anfrage, die für die globale Suche taugt – unabhängig von den lokalen Treffern –, außer für die
+  Plattform-Verwaltung); `GET /ordner/<id>` und `GET /faellig` nehmen `zugeordnet=<Konto>`.
+- `POST /globalsuche` findet nur Artikel, die das Konto nicht sieht; ein Treffer im eigenen Bereich ist kein 409 mehr.
+  409 bekommt nur die Plattform-Verwaltung („Du siehst den Bestand aller Gliederungen – die normale Suche findet jeden
+  Artikel.“). Jeder Steckbrief (Suche und QR) trägt `sperre`: „gesperrt“, „verloren gemeldet“, „ausgesondert“ oder
+  `null`.
+- `DELETE /kategorien/<id>`: 409, wenn ein Dokument der Kategorie in einem Prüfprotokoll steht.
 - Rückruf anlegen und beenden: `nicht_gefunden` und `empfaenger` nur für die Plattform-Verwaltung, sonst `betroffen`,
   `offen` und `benachrichtigt`.
 - Ziel beim Verschieben nicht sichtbar: 404 statt 403. Fremde Dublette: 409 mit festem Text, 429 über der Bremse. 403
@@ -1366,32 +1380,94 @@ Regressionstest. Danach liefen alle Suiten grün.
   Gliederung in einem Schritt. Ablaufmails an die Verwalter kommen erst mit Lieferung 2 – bis dahin warnen nur „Meine
   Freigaben“ und der Hinweis im Ordnerkopf (30 Tage vorher).
 - **Verfahrensverzeichnis**: Der Textvorschlag (README, „Austritt und Löschen“) ist mit der Gliederung abzustimmen und
-  juristisch prüfen zu lassen; die Fristen weiterer Sicherungen trägt der Betreiber ein.
+  juristisch prüfen zu lassen; die Fristen weiterer Sicherungen trägt der Betreiber ein. Dazu gehört jetzt die
+  **unbefristete Aufbewahrung der Prüfnachweise** (Entscheidung vom 18.10.2026): Ihre Begründung im
+  Verfahrensverzeichnis sollte juristisch geprüft werden – die Anwendung behauptet dazu nichts.
 - **Inbetriebnahme in der Produktion**: Dort gibt es keine Gliederung, also nach dem Update auch keine Freigaben, und
   Konten mit einer Stufe aus Phase 1 tragen die gelbe Marke „Stufe aus Phase 1 – ohne Freigabe“. Die
   Plattform-Verwaltung legt die Gliederung an und wählt im selben Schritt den ersten Materialwart (README).
 - **Protokollinhalt nach EN 365** (aus Lieferung 3): Die zugeordnete Person kommt bewusst nicht ins Protokoll – mit
   den Sachkundigen bestätigen, dass die Prüfkarte sie nicht verlangt.
-- **Die drei offenen Entscheidungen** (nächster Abschnitt).
+- **Bremse bei immer angebotener Suche**: Weil das Angebot jetzt auch neben eigenen Treffern steht, zählt auch eine
+  Suche nach einer eigenen Seriennummer in der Bremse (zehn je Viertelstunde, mit Suche, QR-Steckbrief und Dublette)
+  und steht im Protokoll. Bitte im Betrieb beobachten, ob die Grenze im Alltag stört.
+- **Eindeutiger eigener Treffer**: `/material/suche` öffnet ihn wie bisher direkt; die Suche in anderen Gliederungen
+  gibt es dann nur über die Vorschläge unter dem Suchfeld. Bitte bestätigen, dass das so bleiben soll.
+- **Sperrwort für alle mit Modulzugang**: Auch ein Katalogpfleger oder ein Prüfer ohne Freigabe sieht über Suche und
+  QR, ob ein fremder Artikel gesperrt, verloren gemeldet oder ausgesondert ist (ein Wort, kein Grund, kein Datum).
 
-### Offene Entscheidungen
+### Die drei offenen Fragen – entschieden
 
-Gebaut ist jeweils die genannte Vorgabe.
+Mit der Auslieferung waren drei Fragen offen und mit einer Vorgabe gebaut. Der Betreiber hat sie am 18.10.2026
+entschieden; die Schalter sind fort.
 
-1. **Sperrzustand im globalen Steckbrief und nach dem QR-Scan.** Nach der Vorgabe zeigt ein Scan an einem fremden,
-   ausgesonderten oder verloren gemeldeten Seil nichts davon. Der Bauentwurf schlägt genau ein Wort dazu vor
-   („ausgesondert“, „gesperrt“ oder „verloren gemeldet“; kein Grund, kein Datum) – aus Sicherheitsgründen und damit
-   Fundstücke zurückkommen. **Gebaut ohne**; Schalter `STECKBRIEF_MIT_SPERRE` in `services/globalsuche.py` (der Test
-   kennt beide Fälle).
-2. **Wann die globale Suche angeboten wird.** Die Vorgabe sagt „wenn die Artikelsuche im sichtbaren Bereich keine
-   Treffer findet“. Die lokale Suche findet aber Teilstücke, auch in Artikelnummern – ab vier Zeichen gäbe es selten
-   null Treffer, und das Angebot erschiene fast nie. **Gebaut**: angeboten, sobald kein sichtbarer Artikel genau diese
-   Seriennummer hat (`globalsuche.ANGEBOT = "ohne_exakten_treffer"`); die wörtliche Vorgabe ist als `"ohne_treffer"`
-   umschaltbar. Bestätigung, Bremse und Protokoll gelten in beiden Fällen.
-3. **Aufbewahrungsfrist der Prüfnachweise nach der Aussonderung.** Prüfungen, Protokolle und Journal bleiben heute
-   unbegrenzt (Trigger verhindern jedes Löschen); fürs Verfahrensverzeichnis braucht es eine Frist. **Offen – vom
-   Betreiber festzulegen.** Der Bauentwurf schlägt zehn Jahre nach der Aussonderung vor; eine Löschroutine käme mit
-   einer späteren Lieferung. Am Code ändert diese Lieferung dafür nichts.
+1. **Sperrzustand im globalen Steckbrief und nach dem QR-Scan.** Gebaut war die Variante ohne – ein Finder sah nicht,
+   ob ein fremdes Seil ausgesondert, gesperrt oder verloren gemeldet ist. **Entscheidung:** „Gerne ein Wort dazu
+   anzeigen.“ **Umgesetzt:** Jeder Steckbrief trägt `sperre` – „gesperrt“, „verloren gemeldet“, „ausgesondert“ oder
+   `null` (frei); kein Grund, kein Datum, auch kein Sperrgrund „Rückruf“. Die Karte zeigt das Wort als Marke in den
+   Farben des Moduls (anthrazit gesperrt und verloren gemeldet, grau ausgesondert) – auf der Trefferseite, in den
+   Vorschlägen und in der Ansicht „fremd“ nach dem QR-Scan.
+2. **Wann die globale Suche angeboten wird.** Gebaut war „sobald kein sichtbarer Artikel genau diese Seriennummer
+   hat“. **Entscheidung:** „Die Suche kann immer angeboten werden, jedoch sollten erst die Ergebnisse der für einen
+   normal sichtbaren in der Liste angezeigt werden. Die ‚fremden‘ Ergebnisse sollten direkt erkennbar sein, z.B. mit
+   einer dezenten Umrandung, Trennung wenn sie anfangen und/oder direkt ersichtlicher Indikation zu welcher
+   Gliederung sie gehören.“ **Umgesetzt:** Angeboten wird zu jeder Anfrage, die für die globale Suche taugt (4 bis 80
+   Zeichen, keine Inventar- oder STR-Nummer) – auch neben eigenen Treffern und wenn ein eigener Artikel genau diese
+   Nummer hat (dann sagt der Text, dass nur Artikel anderer Gliederungen kommen); nur die Plattform-Verwaltung, die
+   alles sieht, bekommt kein Angebot. Die Suche findet nur, was das Konto nicht sieht. Ihre Treffer stehen unter der
+   eigenen Liste: Trennlinie mit „Aus anderen Gliederungen“, gestrichelt umrandete Karten, die Gliederung als blaue
+   Marke ganz oben. Alle drei Kennzeichen zugleich – sie sind dezent genug, um sich nicht zu stören. Bestätigung,
+   Bremse und Protokoll sind unverändert.
+3. **Aufbewahrung der Prüfnachweise nach der Aussonderung.** Offen war die Frist. **Entscheidung:** „Es soll nichts
+   gelöscht werden, Prüfnachweise sollen ewig gespeichert bleiben.“ **Umgesetzt:** keine Frist, keine Löschroutine.
+   Jeder Weg, auf dem ein Nachweis verschwinden könnte, ist durchgesehen und mit einem Regressionstest belegt; eine
+   Lücke war offen und ist geschlossen (Herstellerdokumente einer leer gewordenen Kategorie, siehe unten). README
+   („Austritt und Löschen“, Verfahrensverzeichnis) und der Kopf von `services/loeschung.py` nennen die unbefristete
+   Aufbewahrung.
+
+### Nachbesserungen nach der Auslieferung (Entscheidungen vom 18.10.2026)
+
+- **Sperrwort im Steckbrief** (`services/globalsuche.py`, `static/global.js`): `sperre` gehört fest zu den Feldern
+  (`FELDER`, der Test prüft Gleichheit); der Schalter `STECKBRIEF_MIT_SPERRE` ist entfernt. Gesperrte und Ausgesonderte
+  stehen weiter unter ihrem Herkunftsordner – den Zustand sagt nur das eine Wort.
+- **Globale Suche immer angeboten, fremde Treffer unter den eigenen** (`services/globalsuche.py`, `routes.py`,
+  `static/global.js`, `static/suche.js`, `static/material.js`, `static/global.css`):
+  - `globalsuche.angebot(q)` hängt nur noch an der Anfrage und daran, ob das Konto alles sieht; die Schalter `ANGEBOT`
+    und `ANGEBOTE`, die Meldung `IM_BEREICH` und `exakt_sichtbar` sind entfernt.
+  - Die Suche schließt sichtbare Artikel in derselben Abfrage aus (`NOT COALESCE(artikel_filter, 0)`) – zehn Treffer
+    und „mehr“ zählen nur Fremde, und das Protokoll nennt nur diese. Das COALESCE braucht es, weil der Filter bei
+    Ausgesonderten ohne Herkunft NULL ergibt; ohne fänden andere sie gar nicht.
+  - Trefferseite: erst die eigene Liste (Tabelle mit Seiten wie bisher, ohne Treffer „Kein Artikel in deinem Bereich
+    gefunden.“), darunter das Angebot als grauer Knopf mit „die Suche wird mit deinem Namen protokolliert“, nach der
+    Suche an seiner Stelle die fremden Treffer; der Fokus geht zur Überschrift „Aus anderen Gliederungen“. Blättern und
+    Sortieren der eigenen Liste behalten das Ergebnis, ohne noch einmal zu suchen.
+  - Vorschläge: erst die eigenen, dann „Alle Treffer“, dann die Angebotszeile; nach der Suche bleiben die eigenen
+    stehen, statt des Angebots folgen die Trennzeile und die fremden Steckbriefe (gewählt mit ↑/↓, `aria-disabled`,
+    Enter öffnet nichts); die Liste rollt bis zum Beginn der fremden. Weitertippen verwirft das Ergebnis, das Angebot
+    kommt zurück.
+  - Rückfrage „In anderen Gliederungen suchen“ mit dem roten Hauptknopf „Suchen“ und dem Hinweis auf das Sperrwort.
+  - Ein eindeutiger eigener Treffer öffnet `/material/suche` weiter direkt den Artikel; das Angebot steht dann in den
+    Vorschlägen unter dem Suchfeld.
+- **Prüfnachweise bleiben** (`services/katalog.py`, `services/loeschung.py`): Durchgesehen sind Artikel löschen (409
+  bei jeder Prüfung), Ordner löschen (409, solange Artikel oder Durchgänge daran hängen; ein von dort Ausgesonderter
+  verliert beim Löschen des leeren Ordners nur die Herkunft), Durchgang entfernen (409 mit Geprüftem) und abbrechen
+  (bleibt mit Sammelprotokoll), Konto löschen (nur die Kontokennung wird NULL), Anhang, Befundfoto und Prüfung
+  entfernen (nur an Entwürfen), Berichtigung verwerfen (nur ihre eigenen Kopien der Dateien), Produkt löschen (nur
+  ohne Artikel), Formular löschen (nur unbenutzt), Kategorie löschen, Protokolldateien (entfernt werden nur neue
+  Dateien einer gescheiterten Transaktion, Verwaistes legt der Start beiseite, nie gelöscht), Aufräumen beim Start
+  und die Trigger und Fremdschlüssel in `models.py`. **Geschlossen:** Eine Kategorie, aus der ein Produkt nach einer
+  Prüfung fortgezogen war, ließ sich als leere Kategorie samt ihren Herstellerdokumenten löschen – die das
+  Prüfprotokoll mit Version und Prüfsumme nennt. Jetzt 409 „Ein Dokument dieser Kategorie steht in Prüfprotokollen
+  und bleibt – damit auch die Kategorie.“ Tests `test_material_zuordnung.test_pruefnachweise_bleiben` (alle Wege,
+  Dateien Byte für Byte, Neustart) und `test_dokument_im_protokoll_bleibt`.
+- **Tests**: `test_material_globalsuche.py` mit `test_sperrwort`, `test_angebot` und `test_nur_fremde` (gleiche
+  Seriennummer in A und B, LIMIT und „mehr“ nur über Fremde, Protokoll nur mit fremden Kennungen) statt der beiden
+  Schaltertests; `test_material_trennung.test_unterbau` angeglichen.
+- **Im Browser geprüft** (Chromium, DEMO-Daten mit den DEMO-Konten, 1280 × 900, 820 × 1180 und 390 × 844 mit
+  Touch): als DEMO-Materialwart A die Seriennummer `DEMO-NS-4711` nur in der Nachbarstadt und – nach zwei eigenen
+  DEMO-Artikeln mit derselben Nummer – lokal und fremd, je Trefferseite und Vorschläge samt Tastatur; als
+  DEMO-Materialwart B ein gesperrter Artikel der DEMO-Gliederung über Suche, Vorschläge und QR-Seite „fremd“. Keine
+  Konsolenfehler, nichts rollt waagerecht.
 
 ## Katalogdatei (Format 1)
 
@@ -1548,9 +1624,9 @@ Produktkatalogpfleger oder Plattform-Verwaltung.
 | Methode und Pfad | Recht | Zweck |
 | --- | --- | --- |
 | `GET /api/material/start` | Modulzugang (Inhalt gefiltert) | Rechte des Kontos, Zählung, Gliederungen, nächste Fälligkeiten; `ordner_uebersicht` (Fälligkeiten je Ordner, Zeilen in Baumreihenfolge mit `tiefe`, `bestand`, `zaehlung`, `naechste`), `rueckrufe` (laufende mit betroffenen Artikeln im Bestand) |
-| `GET /api/material/suche?q=` | Modulzugang | Artikel nach Serien-, Inventar-, Herstellernummer im eigenen Bereich; `eindeutig` bei genau einem Treffer; `exakt_lokal` (ein sichtbarer Artikel hat genau diese Seriennummer) und `global_angebot` (Phase 2) |
+| `GET /api/material/suche?q=` | Modulzugang | Artikel nach Serien-, Inventar-, Herstellernummer im eigenen Bereich; `eindeutig` bei genau einem Treffer; `exakt_lokal` (ein sichtbarer Artikel hat genau diese Seriennummer) und `global_angebot` (zu jeder Anfrage, die für die globale Suche taugt, außer für die Plattform-Verwaltung; Phase 2) |
 | `GET /api/material/faellig?status=&ordner=&zugeordnet=` | Modulzugang; mit `ordner` lesen dort (sonst 404) | fällige Artikel, Standard überfällig + Lebensdauer erreicht + neu + bald fällig; mit `ordner` auch `ordner` = {id, pfad}; `zugeordnet` filtert nach Person (nur mit Grundrecht wirksam, Phase 2) |
-| `GET/POST /api/material/kategorien`, `PUT/DELETE …/<id>` | lesen / Katalog | Kategoriebaum |
+| `GET/POST /api/material/kategorien`, `PUT/DELETE …/<id>` | lesen / Katalog | Kategoriebaum; Löschen nur leer und ohne Dokument in einem Prüfprotokoll (409) |
 | `GET/POST /api/material/produkte`, `GET/PUT/DELETE …/<id>` | lesen / Katalog | Produkte mit Suche und Seiten (`q`, `kategorie`, `seite`, `pro_seite`) |
 | `GET /api/material/produkte/artikelnummer?nr=&ausser=` | lesen | Wem gehört diese Artikelnummer schon? (`produkt` oder `null`) |
 | `POST /api/material/produkte/<id>/variante` (Felder wie `POST /produkte`, `dokumente`: Kennungen) | Katalog | Kopie als neue Variante; Bild nie, Dokumente nach Wahl |
@@ -1603,8 +1679,8 @@ Produktkatalogpfleger oder Plattform-Verwaltung.
 | `GET /api/material/freigaben/meine` | angemeldet, auch ohne Modulzugang | eigene Freigaben (gültige und im letzten Jahr abgelaufene) mit Pfad, `recht`, `bis`, `gueltig`, `wirkt`, `laeuft_ab_in_tagen` und `verwalter` (bis zu drei Namen) – ohne Notiz; dazu `zugang`, `qualifiziert` (Phase 2) |
 | `GET /api/material/freigaben?user_id=` | Plattform-Verwaltung | alle Freigaben eines Kontos mit Notiz (Nutzerverwaltung) (Phase 2) |
 | `GET /api/material/nutzer?q=` (ab 3 Zeichen) | verwalten irgendwo oder Plattform-Verwaltung | Personensuche für Freigaben und Zuordnung: höchstens 20 aktive Konten mit Namen, je `id`, `name`, `gliederung`, `qualifiziert` – keine E-Mail, keine Urkundennummer; `mehr` (Phase 2) |
-| `POST /api/material/globalsuche` (`q`, `bestaetigt: true`) | Modulzugang | globale Seriennummernsuche → `treffer` (höchstens 10 Steckbriefe, ohne Kennungen), `mehr`, `hinweis`; 400 ohne Bestätigung, unter 4 Zeichen oder bei Inventar- und STR-Nummern, 409 bei einem Treffer im eigenen Bereich, 429 über der Bremse (Phase 2) |
-| `POST /api/material/globalsuche/qr` (`token`, `bestaetigt: true`) | Modulzugang | Steckbrief nach einem QR-Scan an einem fremden Artikel (ein Treffer); `weiter` (Adresse), wenn der Artikel inzwischen sichtbar ist (Phase 2) |
+| `POST /api/material/globalsuche` (`q`, `bestaetigt: true`) | Modulzugang | globale Seriennummernsuche nur unter den Artikeln, die das Konto nicht sieht → `treffer` (höchstens 10 Steckbriefe, ohne Kennungen, mit `sperre`), `mehr`, `hinweis`; 400 ohne Bestätigung, unter 4 Zeichen oder bei Inventar- und STR-Nummern, 409 für die Plattform-Verwaltung (sieht alles), 429 über der Bremse (Phase 2) |
+| `POST /api/material/globalsuche/qr` (`token`, `bestaetigt: true`) | Modulzugang | Steckbrief nach einem QR-Scan an einem fremden Artikel (ein Treffer, mit `sperre`); `weiter` (Adresse), wenn der Artikel inzwischen sichtbar ist (Phase 2) |
 | `GET /api/material/globalsuche/protokoll?seite=` | Plattform-Verwaltung | Protokoll der globalen Suchen, QR-Steckbriefe und fremden Dubletten, neueste zuerst: `eintraege` (Zeit, Name, Art, Anfrage, Treffer, Gliederungen), `gesamt`, `seite`, `pro_seite` (Phase 2) |
 | `PUT /api/material/artikel/<id>/zuordnung` (`user_id` oder `null`) | Materialwart am Artikel | Person zuordnen oder Zuordnung lösen → `artikel`; 409 bei ausgesonderten (Phase 2) |
 | `POST /api/material/artikel/zuordnen` (`ids` 1–500, `user_id` oder `null`) | Materialwart je Artikel | mehrere auf einmal, ganz oder gar nicht → `geaendert` (Phase 2) |
