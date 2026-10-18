@@ -1453,7 +1453,9 @@ def test_journal_und_seiten():
                    (y,))
         assert len(e) == 1 and e[0]["before_json"] is None, e
         assert json.loads(e[0]["after_json"]) == {"konto": {"ref": refs()[person_id]}, "grund": "ausgesondert"}, e
-        assert "Person" not in e[0]["after_json"] and str(person_id) not in e[0]["after_json"]
+        # Die Kennung als eigene Zahl – als Teilstück des zufälligen Hex-Verweises käme sie sonst gelegentlich vor.
+        assert "Person" not in e[0]["after_json"] and not re.search(rf"(?<![0-9a-f]){person_id}(?![0-9a-f])",
+                                                                   e[0]["after_json"]), e
         # Gelesen wird der Verweis als Name – ohne den Verweis selbst; im Lebenslauf steht „(Person)“.
         a = w.get(f"/api/material/artikel/{y}").json["artikel"]
         eintrag = next(j for j in a["journal"] if j["action"] == "zuordnung_geloest")
