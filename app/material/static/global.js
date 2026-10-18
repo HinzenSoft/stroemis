@@ -70,7 +70,7 @@ window.MatGlobal = (function () {
       <div class="mg-text">
         <p class="mg-gl"><span class="mg-gl-marke"><span class="mat-vorlesen">Gliederung </span>${esc(t.gliederung || "ohne Gliederung")}</span></p>
         <p class="mg-kopf"><strong class="mg-inv">${esc(t.inventory_no)}</strong>${sperre}${t.demo ? ' <span class="mat-demo">DEMO</span>' : ""}</p>
-        <p class="mg-produkt">${produkt || "–"}${t.artikelnummer ? ` · Art.-Nr. ${esc(t.artikelnummer)}` : ""}</p>
+        <p class="mg-produkt">${produkt || "–"}${window.MatProdukt.artNr(t.artikelnummer)}</p>
         <dl class="mg-daten">${angaben.map(([k, w]) => `<div><dt>${esc(k)}</dt><dd>${esc(w)}</dd></div>`).join("")}</dl>
         <p class="mg-gehoert">Gehört zu <strong>${esc(t.gliederung || "–")}</strong>${t.ordner ? ` · ${esc(t.ordner)}` : ""}</p>
       </div></article>`;

@@ -178,6 +178,9 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
   font-size: var(--fs-klein); background: var(--grau-hell); }
 .mat-artikeltitel h1 { margin-bottom: 4px; }
 .mat-produktzeile { margin: 0 0 6px; font-size: 1.05rem; }
+/* „Art.-Nr. …“ und „Seriennummer …“ im Fließtext als ein Stück (MatProdukt.nummer in material.js): rutscht ganz in die
+   nächste Zeile statt am Bindestrich zu brechen; nur breiter als eine Zeile bricht es darin um – nichts rollt waagerecht. */
+.mat-ganz { display: inline-block; max-width: 100%; }
 .mat-artikeltitel h1 + .btn-row { margin-top: 12px; }
 .mat-artikeltitel .btn-row + .btn-row { margin-top: 10px; }
 .mat-spalten { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 0 28px; }

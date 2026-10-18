@@ -395,6 +395,15 @@ def test_oberflaeche_statisch():
             in glob)
     seite = lesen("app/material/templates/material/seite.html")
     assert seite.index("material.js") < seite.index("suche.js") < seite.index("global.js")
+    # „Art.-Nr. …“ und „Seriennummer …“ hinter dem Produkt als ein Stück (Gesamtprüfung: mit dem Zusatz brach die Zeile
+    # sonst als „Art.-“ / „Nr. …“ oder „DEMO-K-“ / „1“) – an allen fünf Stellen über MatProdukt.artNr, keine eigene
+    # Verkettung mehr; was breiter ist als die Zeile, bricht darin um (inline-block mit max-width).
+    for datei in (js, suche, glob):
+        assert "· Art.-Nr. ${" not in datei
+    assert js.count("${artNrHtml(") == 3 and js.count('${nummerHtml("Seriennummer", a.serial_no)}') == 2
+    assert "window.MatProdukt.artNr(a.article_no, markiert(a.article_no, q))" in suche
+    assert "window.MatProdukt.artNr(t.artikelnummer)" in glob
+    assert ".mat-ganz { display: inline-block; max-width: 100%; }" in lesen("app/material/static/material.css")
     print("Oberfläche (statisch) bestanden.")
 
 

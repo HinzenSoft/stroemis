@@ -40,7 +40,14 @@
     const name = esc(`${ohneHersteller ? "" : `${p.manufacturer || ""} `}${p.model || ""}`.trim());
     return z ? `${name} <span class="mat-zusatz"${z.voll ? ` title="${esc(z.voll)}"` : ""}>|&#x2060;&nbsp;${esc(z.text)}</span>` : name;
   };
-  window.MatProdukt = { name: produktName, html: produktHtml, zusatz: produktZusatz, max: BESCHREIBUNG_MAX };
+  /* Nummern im Fließtext hinter dem Produkt – „ · Art.-Nr. DEMO-K-1“, „Seriennummer DEMO-K-0815“ – stehen als ein
+     Stück (mat-ganz, material.css): Passt es nicht mehr in die Zeile, rutscht es ganz in die nächste, statt an einem
+     Bindestrich zu brechen („Art.-“ / „Nr. …“). Nur was breiter ist als eine ganze Zeile, bricht darin um. html: die
+     Nummer schon maskiert, etwa mit markiertem Suchtext (suche.js); sonst wird nr maskiert. */
+  const nummerHtml = (label, nr, html) => `<span class="mat-ganz">${label} ${html === undefined ? esc(nr) : html}</span>`;
+  const artNrHtml = (nr, html) => (nr ? ` · ${nummerHtml("Art.-Nr.", nr, html)}` : "");
+  window.MatProdukt = { name: produktName, html: produktHtml, zusatz: produktZusatz, max: BESCHREIBUNG_MAX,
+                        artNr: artNrHtml, nummer: nummerHtml };
 
   const root = document.getElementById("mat");
   if (!root) return;
@@ -1784,7 +1791,7 @@
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="Produktbild ${esc(produktName(p))}">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel">
           <h1>${esc(a.inventory_no)} ${statusMarke(a.status, true)}</h1>
-          <p class="mat-produktzeile"><a href="/material/katalog/produkt/${p.id}">${produktHtml(p)}</a>${p.article_no ? ` · Art.-Nr. ${esc(p.article_no)}` : ""}</p>
+          <p class="mat-produktzeile"><a href="/material/katalog/produkt/${p.id}">${produktHtml(p)}</a>${artNrHtml(p.article_no)}</p>
           <p>Seriennummer <strong>${esc(a.serial_no)}</strong>${a.serial_generated ? ' <span class="badge grey">vom System vergeben</span><span class="help mat-sn-hinweis">Der Hersteller vergibt keine Seriennummer – diese Nummer bitte dauerhaft am Artikel anbringen.</span>' : ""}</p>
           <div class="btn-row mat-pruefknoepfe">${!aus && darf.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
             ${frei && darf.pruefen && !a.entwurf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
@@ -3034,7 +3041,7 @@
       ${artikelPfad(a)}
       <div class="page-head"><h1>Prüfung ${esc(a.inventory_no)} ${statusMarke(a.status, true)}</h1></div>
       <div class="mat-formular">
-        <p class="mat-produktzeile"><strong>${produktHtml(p)}</strong>${p.article_no ? ` · Art.-Nr. ${esc(p.article_no)}` : ""} · Seriennummer ${esc(a.serial_no)}</p>
+        <p class="mat-produktzeile"><strong>${produktHtml(p)}</strong>${artNrHtml(p.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)}</p>
         ${a.lock_state !== "frei" && a.lock_state !== "ausgesondert" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.</p>` : ""}
         ${rueckrufHinweis((a.rueckrufe || []).filter((r) => r.zustand !== "erledigt").map((r) => r.title), a.id)}
         ${lebensdauerHinweis(ld)}
@@ -3353,7 +3360,7 @@
         <div class="page-head"><h1>${esc(PRUEFART[pr.art] || pr.art)} <span class="mat-h1-zusatz">${esc(a.inventory_no)}</span> ${pr.entwurf ? '<span class="badge">Entwurf</span>' : ergebnisMarke(pr.ergebnis)}</h1>
           ${knoepfe.length ? `<div class="btn-row">${knoepfe.join("")}</div>` : ""}</div>
         ${berichtigungHinweis()}
-        <p class="mat-produktzeile"><strong>${produktHtml(pr.produkt)}</strong>${pr.produkt.article_no ? ` · Art.-Nr. ${esc(pr.produkt.article_no)}` : ""} · Seriennummer ${esc(a.serial_no)} ${statusMarke(a.status)}</p>
+        <p class="mat-produktzeile"><strong>${produktHtml(pr.produkt)}</strong>${artNrHtml(pr.produkt.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)} ${statusMarke(a.status)}</p>
         <p class="small muted">${pr.formular ? `Formular ${esc(pr.formular.titel || "ohne Titel")}, Version ${pr.formular.version} · ` : ""}${pr.art === "aussonderung" ? "Ausgeführt von" : "Prüfer"} ${esc(pr.pruefer || "–")}${pr.urkunde ? ` (Urkundennummer ${esc(pr.urkunde)})` : ""}
           · ${pr.entwurf && !pr.berichtigt ? `begonnen ${esc(fmtZeit(pr.begonnen_am))}` : `Prüftag ${esc(fmtTag(pr.datum))}`}
           ${pr.durchgang ? ` · Durchgang ${pr.durchgang.sichtbar ? `<a href="/material/durchgang/${pr.durchgang.id}">${esc(pr.durchgang.titel)}</a>` : `„${esc(pr.durchgang.titel)}“`}` : ""}</p>`;
