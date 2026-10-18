@@ -209,10 +209,10 @@ und persönlichen Ordnern, 200 Artikel über alle echten Produkte (Seriennummern
 DEMO-Konten (Materialwart, Prüferin, Mitglied, externer Prüfer, zwei Einsatzkräfte – nur Modul Material, Passwörter
 stehen nur in der Ausgabe), einen abgeschlossenen und einen offenen Prüfdurchgang und Zuordnungen. Den Einsatzkräften
 ist Ausrüstung zugeordnet: Die erste liest ihren persönlichen Ordner, die zweite hat – wie die meisten, denen PSA
-zugeordnet ist – keinen Modulzugang und sieht nach der Anmeldung „nicht freigeschaltet“. Jeder Zustand kommt
-vor: neu, einsatzbereit, bald fällig, überfällig, gesperrt, verloren gemeldet, ausgesondert und – wo der Katalog eine
-Lebensdauer nennt – Lebensdauer erreicht. Am Katalog ändert das Skript nichts (keine Kategorie, kein Produkt, kein
-Formular, kein Dokument, kein Bild, kein Rückruf, keine Meldung); erfunden sind nur Bestandsangaben, alle mit „DEMO“.
+zugeordnet ist – keinen Modulzugang und sieht nach der Anmeldung „nicht freigeschaltet“. Jeder Zustand kommt vor: neu,
+einsatzbereit, bald fällig, überfällig, gesperrt, verloren gemeldet, ausgesondert und – wo der Katalog eine Lebensdauer
+nennt – Lebensdauer erreicht. Am Katalog ändert das Skript nichts (keine Kategorie, kein Produkt, kein Formular, kein
+Dokument, kein Bild, kein Rückruf, keine Meldung); erfunden sind nur Bestandsangaben, alle mit „DEMO“.
 Ein Artikel in einer DEMO-Gliederung gilt überall als DEMO – Oberfläche, Protokolle, Lebenslauf, CSV und Steckbrief –,
 auch wenn sein Produkt aus dem echten Katalog stammt. Deshalb lässt sich zwischen DEMO-Gliederungen und echtem Bestand
 nichts verschieben, weder Artikel noch Ordner (409) – sonst wechselte das Kennzeichen, während die festgeschriebenen
@@ -239,9 +239,9 @@ docker exec -i stroemis-dev sh -c 'cat > /tmp/material_beispielbestand.py && VID
 
 Der Lauf dauert ein paar Minuten (zählt mit; `--artikel N` für mehr oder weniger Artikel) und endet mit einem Bericht:
 Konten mit Passwörtern, Mengen, Zustände, Produkte ohne aktives Formular (deren Artikel bleiben „neu“), die jetzt
-benutzten Formularversionen und wie viele Produkte jetzt Artikel haben (nicht mehr löschbar, Materialart fest). Er läuft nur einmal – gibt es die Gliederungen schon, legt er nichts an. **Nie in der
-Produktion** (Container `stroemis`) – dort gehört kein DEMO-Bestand hin; zeigt `BASE_URL` auf `strömis.de`, bricht
-das Skript ohnehin ab.
+benutzten Formularversionen und wie viele Produkte jetzt Artikel haben (nicht mehr löschbar, Materialart fest). Er
+läuft nur einmal – gibt es die Gliederungen schon, legt er nichts an. **Nie in der Produktion** (Container `stroemis`)
+– dort gehört kein DEMO-Bestand hin; zeigt `BASE_URL` auf `strömis.de`, bricht das Skript ohnehin ab.
 
 ## Konfiguration
 

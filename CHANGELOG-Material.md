@@ -1397,7 +1397,9 @@ Gebaut ist jeweils die genannte Vorgabe.
 
 Wunsch: ein umfangreicherer Bestand zum Testen auf dev – nur aus dem vorhandenen Katalog, der dabei unverändert bleibt,
 damit er später sauber in die Produktion geht. Entschieden: mit Prüfhistorie (die benutzten Formularversionen gelten
-danach als „benutzt“, der Bestand lässt sich nicht wieder entfernen – nur über eine zurückgesetzte dev-Datenbank).
+danach als „benutzt“, der Bestand lässt sich nicht wieder entfernen – nur über eine zurückgesetzte dev-Datenbank). Nach
+der Prüfung nachgetragen und **nicht Teil dieser Entscheidung**: Produkte mit Artikeln lassen sich danach nicht mehr
+löschen und ihre Materialart nicht mehr ändern, ihre Kategorien nicht mehr löschen (Zu prüfen).
 
 - **`scripts/material_beispielbestand.py --beispielbestand [--artikel N]`** – nur für dev, eine Datei außerhalb von
   `app/` (nicht im Abbild; im Container per stdin, README „Beispielbestand (nur dev)“), ohne Schalter Hilfe und
@@ -1409,10 +1411,12 @@ danach als „benutzt“, der Bestand lässt sich nicht wieder entfernen – nur
   zwei Prüfungen auf, als außerplanmäßige Prüfung wie der Vorschlag der App) und Freiprüfung, Verlust, Aussonderung
   aus der Prüfung und durch den Materialwart. Je Gliederung sechs DEMO-Konten (`@example.invalid`, zufälliges
   Passwort nur in der Ausgabe, nur Modul Material, `recht_material` = 1): Materialwart (verwalten), Prüferin (lesen
-  und prüfen), Mitglied (lesen), externer Prüfer (nur prüfen im Lager, 30 Tage), zwei Einsatzkräfte mit persönlichem
-  Ordner und Zuordnungen; ein heute abgeschlossener Durchgang mit Sammelprotokoll und ein offener (teils erledigt,
-  einer in Prüfung, einer ausgenommen). Alle Zustände kommen vor. Keine Rückrufe, keine Meldungen. Alles über die
-  Dienste, je Artikel eine Transaktion, Journal unter „Beispielbestand“.
+  und prüfen), Mitglied (lesen), externer Prüfer (nur prüfen im Lager, 30 Tage – er prüft nur heute, die
+  zurückdatierte Geschichte prüft die Prüferin), zwei Einsatzkräfte mit persönlichem Ordner und Zuordnungen (die erste
+  liest ihren Ordner, die zweite hat wie die meisten PSA-Nutzer keinen Modulzugang und sieht „nicht freigeschaltet“; der
+  Bericht sagt es an beiden Konten); ein heute abgeschlossener Durchgang mit Sammelprotokoll und ein offener (teils
+  erledigt, einer in Prüfung, einer ausgenommen). Alle Zustände kommen vor. Keine Rückrufe, keine Meldungen. Alles über
+  die Dienste, je Artikel eine Transaktion, Journal unter „Beispielbestand“.
 - **Der Katalog bleibt, wie er ist.** Grundlage sind genau die Produkte, die der Katalog-Export mitnimmt (ohne
   DEMO-Kennzeichen, außerhalb von DEMO-Kategorien, mit Prüfintervall); Produkte ohne aktives Formular bekommen Artikel
   ohne Prüfung („neu“), der Bericht nennt sie. Fachliches kommt nur aus dem Katalog: Ja/Nein und Zahlen stehen auf ihrem
@@ -1427,25 +1431,49 @@ danach als „benutzt“, der Bestand lässt sich nicht wieder entfernen – nur
   Prüf- und Aussonderungsprotokoll, Lebenslauf, CSV (Artikel und `Verzeichnis.csv`) und Steckbrief; das
   Sammelprotokoll fragt den Ordner des Durchgangs samt Oberordnern. Das Banner an Artikel, Prüfformular und Prüfung
   folgt dem Artikel („Dieser Artikel gehört zu den Demodaten.“). Am Katalog und am Katalog-Export ändert das nichts.
+  Weil die festgeschriebenen Protokolle den Stand ihrer Erstellung behalten, lässt sich zwischen DEMO-Gliederungen und
+  echtem Bestand nichts verschieben, weder Artikel noch Ordner (409, `bestand.DEMO_GRENZE`) – auch nicht durch die
+  Plattform-Verwaltung. In der Produktion gibt es keine DEMO-Ordner; dort greift die Regel nicht.
 - Freigaben-Dialog: Freigaben des Beispielbestands stehen als „vergeben von Beispielbestand“ da (`freigaben.SYSTEM`).
 - **Test** `tests/test_material_beispielbestand.py`: Testkatalog mit Platzhaltern, Schnappschuss aller Katalogtabellen,
   des Katalog-Exports (Format 2, ohne Zeitstempel, samt Dateien) und der Katalogdateien vor und nach dem Lauf
   (identisch); jeder Zustand, beide Wege der Aussonderung, Protokolle mit Prüfsumme, Durchgänge, Konten und Freigaben;
   DEMO an Artikel, Liste, Prüfung, Protokoll, Sammelprotokoll, Lebenslauf, CSV und Steckbrief – ein echter Artikel
-  daneben bleibt ohne; zweiter Lauf ohne Wirkung; ohne Schalter 2, ohne echte Produkte 1.
+  daneben bleibt ohne; zweiter Lauf ohne Wirkung; ohne Schalter 2, ohne echte Produkte 1. Nach der Prüfung dazu:
+  Verschieben über die Grenze der Demodaten (409 in beide Richtungen, Artikel und Ordner), Sicht der beiden
+  Einsatzkräfte, externer Prüfer nur heute, Hilfe und Bericht nennen die Folgen für die Katalogpflege.
 - **Gemessen** (Sandbox, Platzhalterkatalog mit 16 Produkten in 10 Kategorien, 8 Formularen, zwei Produkte ohne
   Formular): Vorgabe 200 Artikel – 305 Prüf- und Aussonderungsprotokolle, 3 Sammelprotokolle, 2:33 min; 240 Artikel
   mit 385 Protokollen 3:17 min. Die Laufzeit hängt an den Protokollen (gut eine halbe Sekunde je PDF). Zustände bei
   200: 108 einsatzbereit, 16 bald fällig, 19 überfällig, 32 neu, 13 gesperrt (davon 4 verloren gemeldet), 5
   Lebensdauer erreicht, 7 ausgesondert. Katalog-Export vorher und nachher identisch; im Chromium bei 1280 und 390 px
-  angesehen (Übersicht, Fälligkeiten, Artikel, Durchgänge, Protokoll mit DEMO-Kopf und -Kasten).
+  angesehen (Übersicht, Fälligkeiten, Artikel, Durchgänge, Protokoll mit DEMO-Kopf und -Kasten). Nach der Prüfung
+  erneut gemessen: dieselben Mengen und Zustände, 2:30 min, Katalog-Export vorher und nachher identisch.
+
+### Prüfung vor Auslieferung
+
+Eine unabhängige Prüfung (Lauf auf einer Kopie mit Platzhalterkatalog; Katalogpflege, Verschieben und Anmeldung mit den
+DEMO-Konten nachgestellt) hat vier Befunde gemeldet. Jeder ist vor der Behebung nachgestellt worden, alle vier sind
+behoben; die Tests zu Nr. 2 und 4 scheitern ohne die Änderung. Danach liefen alle Suiten grün.
+
+| # | Befund | Schwere | Umgang |
+| --- | --- | --- | --- |
+| 1 | Nach dem Lauf lässt sich auf dev kein Produkt mit DEMO-Artikeln mehr löschen und seine Materialart nicht mehr ändern, seine Kategorie nicht mehr löschen (je 409) – genannt waren nur „benutzte“ Formulare und der nicht entfernbare Bestand | mittel | README („Vorher“, Punkt 2), Docstring und Hilfe („Was danach gilt“) und Bericht („Jetzt mit Artikeln: n Produkte …“) nennen die Folge samt Ausweg: vorher pflegen oder später Export → dev zurücksetzen → Import. Vor dem Lauf zu bestätigen (Zu prüfen). Test: Hilfe, Bericht, 409 beim Löschen |
+| 2 | „DEMO“ wechselte beim Verschieben: Ein echter Artikel in einer DEMO-Gliederung stand als DEMO da, sein echtes Protokoll in `Verzeichnis.csv` mit DEMO=ja; ein DEMO-Artikel in der echten Gliederung verlor Kennzeichen und Banner, seine DEMO-Protokolle standen mit DEMO=nein im Verzeichnis | mittel | `bestand.artikel_verschieben` und `ordner_verschieben` lehnen das mit 409 ab (`DEMO_GRENZE`), in beide Richtungen und auch für die Plattform-Verwaltung; innerhalb der Demodaten und im echten Bestand unverändert. Test `test_demo_grenze_beim_verschieben` |
+| 3 | Die DEMO-Einsatzkräfte hatten keine Freigabe und damit keinen Modulzugang (403), der Bericht führte sie trotzdem wie die übrigen Konten mit Passwort | niedrig | Einsatzkraft 1 liest ihren persönlichen Ordner (mit mindestens einem ihr zugeordneten Artikel), Einsatzkraft 2 bleibt bewusst ohne Zugang wie die meisten PSA-Nutzer und sieht „nicht freigeschaltet“; Bericht und README sagen es an beiden. Test in `test_beispielbestand` |
+| 4 | Der externe Prüfer (Prüffreigabe ab heute, 30 Tage) stand auf zurückdatierten Prüfungen bis 2024 | niedrig | Er prüft nur heute (offener Durchgang, heute geprüfte Lagerartikel, Sperre bei Verlust), die zurückdatierte Geschichte prüft allein die Prüferin. Test in `test_beispielbestand` |
 
 ### Zu prüfen
 
+- **Vor dem Lauf auf dev bestätigen** (Prüfung Nr. 1, nicht Teil deiner Entscheidung): Jedes Produkt, von dem der
+  Beispielbestand Artikel anlegt – bei 200 Artikeln meist alle echten mit Prüfintervall –, lässt sich danach nicht
+  mehr löschen und seine Materialart nicht mehr ändern; seine Kategorie lässt sich nicht mehr löschen. Katalogpflege,
+  die das braucht, vorher erledigen – oder später Katalog exportieren, dev-Datenbank zurücksetzen, Export importieren.
 - Auf dev **vorher den Katalog exportieren** und das ZIP aufheben; dann der Befehl aus der README.
 - Danach: Übersicht und Fälligkeiten, ein Protokoll (Kopf und Kasten „DEMO – nicht für echte Prüfungen“), die
-  Durchgänge, als DEMO-Materialwart anmelden (Passwort aus der Ausgabe); im Katalog sind die benutzten Formulare jetzt
-  nur noch über eine neue Version änderbar.
+  Durchgänge, als DEMO-Materialwart anmelden (Passwort aus der Ausgabe), als Einsatzkraft 1 (nur ihr persönlicher
+  Ordner) und als Einsatzkraft 2 („nicht freigeschaltet“); im Katalog sind die benutzten Formulare jetzt nur noch über
+  eine neue Version änderbar.
 
 ## Katalogdatei (Format 1)
 
