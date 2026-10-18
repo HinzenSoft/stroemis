@@ -578,9 +578,10 @@ def test_suche():
             assert treffer(c, "000")[1] is None                              # Teil vieler Inventarnummern
             assert len(treffer(c, "HB-7")[0]) == 3                           # Herstellernummer (Artikelnummer)
             assert treffer(c, "B-7")[0] == ["AX-55501", "AX-55502", "QQ-777"]
-        # Ein eindeutiger Treffer öffnet den Artikel direkt; sonst die Trefferliste.
+        # Ein eindeutiger Treffer öffnet den Artikel direkt – mit der Anfrage für das Angebot der globalen Suche
+        # (Phase 2); sonst die Trefferliste.
         r = w.get("/material/suche?q=QQ-777")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/material/artikel/3"), r.headers.get("Location")
+        assert r.status_code == 302 and r.headers["Location"].endswith("/material/artikel/3?q=QQ-777"), r.headers.get("Location")
         assert w.get("/material/suche?q=AX").status_code == 200
         assert k["nutzer"].get("/api/material/suche?q=AX").status_code == 403
         # Ohne Volltextindex (altes SQLite) findet die Suche dasselbe über LIKE.

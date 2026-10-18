@@ -9,7 +9,8 @@ mit Paket A1R das Angebot in GET /suche, die Seite /m/<token> eines fremden Arti
 Anlegen. Seit den Entscheidungen vom 18.10.2026 außerdem: das Sperrwort im Steckbrief (test_sperrwort), das Angebot zu
 jeder tauglichen Anfrage außer für die Verwaltung (test_angebot) und nur fremde Treffer, auch bei derselben
 Seriennummer im eigenen Bereich (test_nur_fremde), auch für ein Konto, das nur einen Ordner einer Gliederung sieht
-(test_teilfreigabe). Alle Namen, Hersteller und Nummern hier sind erfunden und nur für
+(test_teilfreigabe), und das Angebot auch nach der Weiterleitung zu einem eindeutigen eigenen Treffer
+(test_eindeutiger_treffer). Alle Namen, Hersteller und Nummern hier sind erfunden und nur für
 den Test da."""
 import json
 import os
@@ -586,6 +587,45 @@ def test_teilfreigabe():
     print("Teilfreigabe bestanden.")
 
 
+def seiten_daten(r):
+    """DATEN einer Modulseite (data-daten im HTML)."""
+    html = r.get_data(as_text=True)
+    return json.loads(re.search(r'data-daten="([^"]*)"', html).group(1).replace("&#34;", '"').replace("&quot;", '"'))
+
+
+def test_eindeutiger_treffer():
+    """Prüfung der Nachbesserung, Entscheidung 2 („immer angeboten“): Ein eindeutiger eigener Treffer öffnet den
+    Artikel weiter direkt – taugt die Anfrage für die globale Suche, nimmt die Weiterleitung sie mit (?q=), und die
+    Artikelseite bekommt sie als „suche“, für das Angebot unter dem Kopf. Auch bei einem Teiltreffer. Ohne q bei
+    Inventarnummern, zu kurzen Anfragen und für die Plattform-Verwaltung; das Laden zählt nicht in der Bremse und
+    steht nicht im Protokoll; ein fremder Artikel bleibt 404, auch mit q."""
+    with tempfile.TemporaryDirectory() as tmp:
+        t = zwei_gliederungen(tmp)
+        w, a = t.wart_a, t.art_a
+        for q in ("TEST-A-0001", "test-a-0001", "TEST-A-000"):
+            r = w.get("/material/suche", query_string={"q": q})
+            assert r.status_code == 302, (q, r.status_code)
+            assert r.headers["Location"].endswith(f"/material/artikel/{a['id']}?q={q}"), r.headers["Location"]
+            r = w.get(f"/material/artikel/{a['id']}", query_string={"q": q})
+            assert r.status_code == 200 and seiten_daten(r) == {"id": a["id"], "suche": q}, seiten_daten(r)
+        # Inventarnummern taugen nicht für die globale Suche: Weiterleitung ohne q.
+        r = w.get("/material/suche", query_string={"q": a["inventory_no"]})
+        assert r.status_code == 302 and r.headers["Location"].endswith(f"/material/artikel/{a['id']}"), r.headers
+        # Was nicht taugt, übergeht die Artikelseite.
+        for q in (a["inventory_no"], "STR-000001", "ABC", "x" * 81, ""):
+            assert seiten_daten(w.get(f"/material/artikel/{a['id']}", query_string={"q": q})) == {"id": a["id"]}, q
+        # Die Plattform-Verwaltung sieht alles: kein Angebot, also auch kein q.
+        r = t.adm.get("/material/suche", query_string={"q": "TEST-B-0001"})
+        assert r.status_code == 302 and r.headers["Location"].endswith(f"/material/artikel/{t.art_b['id']}"), r.headers
+        r = t.adm.get(f"/material/artikel/{t.art_b['id']}", query_string={"q": "TEST-B-0001"})
+        assert seiten_daten(r) == {"id": t.art_b["id"]}
+        # Fremdes bleibt fremd – auch mit q.
+        r = w.get(f"/material/artikel/{t.art_b['id']}", query_string={"q": "TEST-B-0001"})
+        assert r.status_code == 404 and "TEST-B-0001" not in r.get_data(as_text=True)
+        assert protokoll(t.app) == [] and versuche(t.app, t.k["wart_id"]) == 0
+    print("Eindeutiger Treffer bestanden.")
+
+
 # --- Erst mit Paket A1R -----------------------------------------------------------------------------------------
 
 def test_angebot_ueber_suche():
@@ -664,6 +704,6 @@ def test_bremse_mit_dublette():
 
 if __name__ == "__main__":
     for test in (test_eingaben, test_steckbrief, test_zehn_und_mehr, test_bremse, test_protokoll, test_qr_steckbrief,
-                 test_sperrwort, test_angebot, test_nur_fremde, test_teilfreigabe, test_angebot_ueber_suche,
-                 test_qr_seite_fremd, test_bremse_mit_dublette):
+                 test_sperrwort, test_angebot, test_nur_fremde, test_teilfreigabe, test_eindeutiger_treffer,
+                 test_angebot_ueber_suche, test_qr_seite_fremd, test_bremse_mit_dublette):
         test()

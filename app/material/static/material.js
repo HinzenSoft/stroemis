@@ -1575,6 +1575,13 @@
   window.addEventListener("resize", () => $$("details.mat-menue[open]").forEach(menueAusrichten));
 
   /* --- Artikel --------------------------------------------------------------------------------------- */
+  /* Angeboten wird die globale Suche immer (Entscheidung vom 18.10.2026) – auch, wenn die Suche einen eindeutigen
+     eigenen Treffer gleich hier geöffnet hat (DATEN.suche, nur wenn die Anfrage dafür taugt). Dann steht das Angebot
+     unter dem Kopf des Artikels; exakt, wenn er genau diese Seriennummer hat (Leerraum und Groß/klein wie auf dem
+     Server egal). Das Ergebnis bleibt, wenn die Seite nach einer Aktion neu gezeichnet wird – gesucht wird einmal. */
+  let artikelFremde = null;
+  const nummerNormal = (s) => String(s || "").split(/\s+/).filter(Boolean).join(" ").toLowerCase();
+
   async function artikel() {
     const [antwort] = await Promise.all([api(`${API}/artikel/${DATEN.id}`), ordnerBaum().catch(() => null)]);
     const a = antwort.artikel;
@@ -1632,6 +1639,7 @@
           ${darf.grund ? `<p class="help mat-nur-touch">Lebenslauf (PDF): ${LEBENSLAUF_TEXT}</p>` : ""}
         </div>
       </div>
+      ${DATEN.suche ? '<div id="mat-global-angebot"></div>' : ""}
       <div class="mat-spalten">
         <section class="section"><h2>Stammdaten</h2><dl class="mat-daten">
           ${zeile("Produkt", `${esc(produktName(p))}${p.norm ? ` · ${esc(p.norm)}` : ""}`)}
@@ -1692,6 +1700,14 @@
         catch (e) { toast(e.message, true); }
       },
     };
+    if (DATEN.suche) {
+      const g = await baustein("MatGlobal");
+      const el = $("#mat-global-angebot");
+      if (g && el) {
+        g.anbieten(el, DATEN.suche, { exakt: nummerNormal(a.serial_no) === nummerNormal(DATEN.suche), ergebnis: artikelFremde,
+                                      gefunden: (x) => { artikelFremde = x; } });
+      }
+    }
   }
 
   /* Personenzuordnung (Bauentwurf 6.4): Ein Artikel – meist PSA, die eine Person dauerhaft nutzt – wird einem Konto

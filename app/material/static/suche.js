@@ -4,7 +4,8 @@
    (/api/material/suche: Serien-, Inventar-, Herstellernummer, auch Teile davon).
 
    Bedienung wie ein Kombinationsfeld (ARIA combobox/listbox): Pfeiltasten wählen, Enter öffnet den gewählten Artikel –
-   ohne Wahl geht Enter wie bisher zur Trefferseite (ein eindeutiger Treffer öffnet dort direkt) –, Escape schließt.
+   ohne Wahl geht Enter wie bisher zur Trefferseite (ein eindeutiger Treffer öffnet dort direkt, mit dem Angebot der
+   globalen Suche unter dem Kopf) –, Escape schließt.
    Mit Maus oder Finger öffnet ein Tipp den Artikel; „Alle Treffer“ führt zur Trefferseite. Ohne JavaScript bleibt das
    Feld ein gewöhnliches Suchformular.
 

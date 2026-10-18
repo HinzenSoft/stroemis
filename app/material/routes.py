@@ -185,8 +185,13 @@ def artikel_neu():
 def artikel_seite(iid):
     """Ziel jedes QR-Scans: Ist der Artikel ausgesondert, gesperrt oder am Lebensende, steht das schon im HTML –
     sofort sichtbar, bevor material.js die Ansicht (mit eigenem Banner) zeichnet. Ein fremder Artikel antwortet vorher
-    mit 404 – ohne Banner."""
-    return _seite("artikel", bezug=("artikel", iid), warnung=lambda: ueberblick.warnung(iid), id=iid)
+    mit 404 – ohne Banner.
+
+    ?q=: Hierher führt die Suche bei einem eindeutigen eigenen Treffer (suche_seite). Taugt die Anfrage für die
+    globale Suche (globalsuche.angebot), bietet die Seite sie an – „suche“ in den Daten; sonst bleibt q unbeachtet."""
+    q = (request.args.get("q") or "").strip()
+    weiter = {"suche": q} if q and current_user() and zugang() and globalsuche.angebot(q) else {}
+    return _seite("artikel", bezug=("artikel", iid), warnung=lambda: ueberblick.warnung(iid), id=iid, **weiter)
 
 
 @seiten.get("/material/artikel/<int:iid>/pruefung/neu")
@@ -282,8 +287,9 @@ def meldungen_seite():
 def suche_seite():
     """Ein eindeutiger Treffer öffnet den Artikel direkt; sonst zeigt die Seite die Trefferliste und darunter das
     Angebot der globalen Suche. Gezählt wird nur, was das Konto sieht (search.artikel filtert selbst) – die
-    Weiterleitung führt nie zu Fremdem. Wer nach einem eindeutigen eigenen Treffer auch außerhalb des eigenen
-    Bereichs suchen will, findet das Angebot in den Vorschlägen unter dem Suchfeld (suche.js)."""
+    Weiterleitung führt nie zu Fremdem. Angeboten wird die globale Suche immer (Entscheidung vom 18.10.2026), also
+    auch nach der Weiterleitung: Taugt die Anfrage dafür, nimmt die Weiterleitung sie mit (?q=), und die Artikelseite
+    bietet sie unter dem Kopf an (artikel_seite)."""
     q = (request.args.get("q") or "").strip()
     if current_user() and zugang() and q:
         try:
@@ -291,7 +297,8 @@ def suche_seite():
         except Abgelehnt:
             treffer, gesamt = [], 0
         if gesamt == 1:
-            return redirect(url_for("material.artikel_seite", iid=treffer[0]["id"]))
+            weiter = {"q": q} if globalsuche.angebot(q) else {}
+            return redirect(url_for("material.artikel_seite", iid=treffer[0]["id"], **weiter))
     return _seite("suche", q=q)
 
 
