@@ -315,7 +315,9 @@
      trägt die vollständigen Rechte – bei verwaltung = 2 also auch die drei nachgezogenen –, und
      daraus wird die Zeile gezeichnet. Schlägt es fehl (etwa weil man sich selbst die Verwaltung
      entzieht), bleibt der alte Stand und das Feld springt zurück. Material auf „–“ beim einzigen
-     Materialwart einer Gliederung erst nach der Rückfrage (materialwartBleibt) – Abbrechen ebenso. */
+     Materialwart einer Gliederung erst nach der Rückfrage (materialwartBleibt) – Abbrechen ebenso.
+     Gesperrt und neu gezeichnet verliert die Auswahl den Fokus, und die Rückfrage findet beim Schließen
+     nicht zu ihr zurück – die neue Auswahl des Moduls bekommt ihn, solange er nicht woanders steht. */
   tbody.addEventListener("change", async (e) => {
     const sel = e.target.closest("select[data-modul]");
     if (!sel) return;
@@ -331,6 +333,8 @@
       }
     } catch (err) { S.toast(err.message, true); }
     zeichneRechte(tr, u);
+    const neu = tr.querySelector(`select[data-modul="${sel.dataset.modul}"]`);
+    if (neu && (!document.activeElement || document.activeElement === document.body)) neu.focus();
   });
 
   tbody.addEventListener("click", async (e) => {
@@ -356,7 +360,13 @@
               await S.api(`/api/admin/users/${id}`, { method: "PUT", body: d }); dlg.close(); await load(); S.toast("Gespeichert");
             }
             catch (err) { S.toast(err.message, true); }
-            finally { knopf.disabled = false; }
+            finally {
+              knopf.disabled = false;
+              // Gesperrt verliert „Speichern“ den Fokus, und die Rückfrage gibt ihn beim Schließen nicht zurück (der Knopf
+              // ist dann noch gesperrt) – bleibt der Dialog offen (Abbrechen, Fehler), kommt er auf den Knopf zurück,
+              // sonst stünde er auf der Seite, und Tab finge oben im Dialog an.
+              if (dlg.open && !dlg.contains(document.activeElement)) knopf.focus();
+            }
           };
         });
     } else if (btn.dataset.act === "reset") {

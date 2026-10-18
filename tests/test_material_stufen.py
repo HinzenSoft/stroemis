@@ -619,7 +619,9 @@ def test_letzter_materialwart_oberflaeche():
     """Nutzerverwaltung (statisch): Material auf „–“ – in der Tabelle wie im Dialog „Bearbeiten“ – und Deaktivieren
     fragen beim einzigen Materialwart einer Gliederung erst nach (materialwartBleibt); die Rückfrage nennt die
     Gliederungen, hat „Abbrechen“ grau vorn mit dem Fokus und „Trotzdem speichern“ als roten Hauptknopf – kein Knopf für
-    Endgültiges, denn gelöscht wird nichts. Der Dialog „Löschen“ nennt dieselbe Folge."""
+    Endgültiges, denn gelöscht wird nichts. Nach dem Abbrechen steht der Fokus wieder auf „Speichern“ bzw. der Auswahl in
+    der Tabelle (der Browser fand beim Schließen nur den gesperrten Knopf und ließ ihn auf der Seite). Der Dialog
+    „Löschen“ nennt dieselbe Folge."""
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(wurzel, "app", "static", "js", "admin.js"), encoding="utf-8") as f:
         js = f.read()
@@ -639,6 +641,15 @@ def test_letzter_materialwart_oberflaeche():
     # Beide Wege, Material zu senken: die Tabelle (nur das Modul Material) und der Dialog (dazu „Konto aktiv“).
     assert 'sel.dataset.modul !== "material" || await materialwartBleibt(u, +sel.value)' in js
     assert "if (!(await materialwartBleibt(u, d.rechte.material, d.active))) return;" in js
+    # Fokus nach dem Abbrechen (oder einem Fehler): Im Dialog kommt er auf „Speichern“ zurück, sobald der Knopf wieder
+    # frei ist; in der Tabelle auf die neu gezeichnete Auswahl desselben Moduls – beides nur, wenn er nicht woanders steht.
+    speichern = js[js.index('if (btn.dataset.act === "edit")'):js.index('btn.dataset.act === "reset"')]
+    frei = speichern.index("finally {\n              knopf.disabled = false;")
+    assert speichern.index("if (dlg.open && !dlg.contains(document.activeElement)) knopf.focus();") > frei
+    tabelle = js[js.index('tbody.addEventListener("change"'):js.index('tbody.addEventListener("click"')]
+    assert tabelle.index("zeichneRechte(tr, u);") < tabelle.index("neu.focus();")
+    assert 'tr.querySelector(`select[data-modul="${sel.dataset.modul}"]`)' in tabelle
+    assert "document.activeElement === document.body)) neu.focus();" in tabelle
     loesch = funktion("loeschDialog")
     assert "letzter_materialwart" in loesch and "gliederungenText(gl)" in loesch
     assert "nur noch die Material-Verwaltung" in loesch
