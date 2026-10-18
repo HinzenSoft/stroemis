@@ -378,6 +378,36 @@ def test_uebernahme_schutz():
     print("Übernahme-Schutz bestanden.")
 
 
+# --- Eigene Zeilen: verkürzen und entziehen gehen immer (1.6 Nr. 5) ------------------------------------------------
+
+def test_eigene_laenger_als_verwalten():
+    """Eine eigene Freigabe, die länger läuft als das eigene Verwalten (hier eine Prüffreigabe von der Verwaltung), lässt
+    sich verkürzen und entziehen – Nr. 4 („reicht weiter als deine eigene“) gilt nur für fremde Zeilen. Was danach
+    bleibt, endet nach Nr. 3 nicht später als das eigene Verwalten."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        adm = k["adm"]
+        gid, _ = gliederung(adm)
+        gast, gast_id = neues_konto(app, "gast@example.org", name="Gast Test", mat_pruefer=True, urkundennummer="1012-0042")
+        freigeben(adm, gid, gast_id, "verwalten", bis=tag(30))
+        eigen = freigeben(adm, gid, gast_id, "pruefen", bis=tag(300))
+        zeile = [x for x in liste(gast, gid)["direkt"] if x["id"] == eigen][0]
+        assert zeile["eigen"] and zeile["aenderbar"], zeile
+        r = gast.put(f"/api/material/freigaben/{eigen}", json={"bis": tag(200)})          # Nr. 3: länger als bis +30
+        assert r.status_code == 403 and "eigene Verwalterfreigabe" in r.json["error"], r.get_json()
+        r = gast.put(f"/api/material/freigaben/{eigen}", json={"bis": tag(20)})
+        assert r.status_code == 200 and r.json["freigabe"]["bis"] == tag(20), r.get_json()
+        assert gast.put(f"/api/material/freigaben/{eigen}", json={"bis": tag(25)}).status_code == 403   # nie verlängern
+        freigeben(adm, gid, gast_id, "pruefen", bis=tag(300))
+        eigen = grant(app, gid, gast_id, "pruefen")["id"]
+        assert gast.delete(f"/api/material/freigaben/{eigen}", headers=H).status_code == 200
+        assert grant(app, gid, gast_id, "pruefen") is None
+        # Fremde Zeilen, die weiter reichen, bleiben gesperrt (Nr. 4).
+        fremd = grant(app, gid, k["wart_id"], "verwalten")["id"]
+        assert gast.delete(f"/api/material/freigaben/{fremd}", headers=H).status_code == 403
+    print("Eigene Freigabe länger als das eigene Verwalten bestanden.")
+
+
 # --- Notiz: nie geerbt, nie unter „Meine Freigaben“ --------------------------------------------------------------
 
 def test_notiz_geerbt_und_meine():
@@ -811,6 +841,7 @@ if __name__ == "__main__":
     test_vorlagen_eine_transaktion()
     test_grenzen()
     test_uebernahme_schutz()
+    test_eigene_laenger_als_verwalten()
     test_notiz_geerbt_und_meine()
     test_listen_und_verlaengern()
     test_entziehen_offene_entwuerfe()

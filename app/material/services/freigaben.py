@@ -11,7 +11,8 @@ Was eine Freigabe ist und wie sie wirkt, steht in rechte.py. Hier stehen die Reg
      (Sicht.ende). Unbefristet vergibt nur, wer selbst unbefristet verwaltet.
   4  Eine fremde Zeile ändert oder entzieht er nur, wenn sie schon vorher in diesen Grenzen liegt – ein befristeter
      Verwalter kann einen dauerhaften weder entziehen noch kürzen noch herabsetzen.
-  5  Die eigene Zeile nur verkürzen, herabsetzen (verwalten → lesen) oder entziehen.
+  5  Die eigene Zeile nur verkürzen, herabsetzen (verwalten → lesen) oder entziehen – das immer, auch wenn sie länger
+     läuft als das eigene Verwalten (Nr. 4 gilt nur für fremde).
   6  Zeilen oberhalb des eigenen Bereichs sieht er als „geerbt“, ohne Notiz, und ändert sie nicht.
   7  Danach hat jede Gliederung im Zweig des Ankers noch einen Verwalter, der mindestens so lange bleibt wie er – sonst
      409 (_verwaltung_danach).
@@ -177,7 +178,9 @@ def _regeln(s, ich, anker, alt, neu, konto):
     nach dem Schreiben."""
     if not s.alles:
         ende = _ende(s, anker)
-        if alt is not None and _spaeter(alt["valid_until"], ende):
+        # Nr. 4 nur für fremde Zeilen – die eigene darf man immer verkürzen und entziehen (Nr. 5), auch wenn sie
+        # länger läuft als das eigene Verwalten; was danach bleibt, prüft Nr. 3.
+        if alt is not None and alt["user_id"] != ich["id"] and _spaeter(alt["valid_until"], ende):
             raise Abgelehnt(NICHT_AENDERBAR, 403)
         if neu is not None and _spaeter(neu["valid_until"], ende):
             if neu["valid_until"] is None:
@@ -428,7 +431,8 @@ def _eintrag(r, ordner, s, system, notiz):
            "vergeben_von": (r["von_name"] or "") if r["granted_by"] is not None
            else system.get(r["id"], "(gelöschtes Konto)"),
            "seit": r["created_at"], "eigen": r["user_id"] == s.uid,
-           "aenderbar": bool(s.alles or (darf_anker and not _spaeter(r["valid_until"], _ende(s, anker))))}
+           "aenderbar": bool(s.alles or (darf_anker and (r["user_id"] == s.uid
+                                                         or not _spaeter(r["valid_until"], _ende(s, anker)))))}
     if notiz and darf_anker:
         out["notiz"] = r["note"] or ""
     return out
