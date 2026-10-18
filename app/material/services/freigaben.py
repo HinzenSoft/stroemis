@@ -245,12 +245,26 @@ def _verwaltung_vorher(s, anker, ordner, noetig=True):
             if _gliederung(ordner[x]) and s.darf("verwalten", x) and rechte.verwalter_von(x)}
 
 
-def _verwaltung_danach(vorher):
+def _verwaltung_danach(vorher, ohne_freigabe=None):
     """Nach dem Schreiben (noch in der Transaktion): Jede Gliederung aus vorher hat einen Verwalter, dessen Ende nicht
-    vor dem bisherigen eigenen liegt – sonst 409, und die Transaktion rollt zurück."""
+    vor dem bisherigen eigenen liegt – sonst 409, und die Transaktion rollt zurück. ohne_freigabe: vorab rechnen, als
+    wäre diese Zeile schon entzogen (_entziehbar)."""
     for gl, ende in vorher.items():
-        if not any(not _spaeter(ende, v["ende"]) for v in rechte.verwalter_von(gl)):
+        if not any(not _spaeter(ende, v["ende"]) for v in rechte.verwalter_von(gl, ohne_freigabe)):
             raise Abgelehnt(LETZTER_VERWALTER, 409)
+
+
+def _entziehbar(s, r, ordner, aenderbar):
+    """Ob „Entziehen“ gelingt: Die Zeile ist änderbar, und danach bleibt jede Gliederung im Zweig des Ankers so lange
+    verwaltet wie bisher (Nr. 7, vorab gerechnet). Scheitern kann das nur an der eigenen verwalten-Zeile: Bei einer
+    fremden bleibt der Handelnde selbst mit seinem Ende Verwalter jeder Gliederung, die er dort verwaltet."""
+    if not aenderbar or s.alles or r["user_id"] != s.uid or r["permission"] != "verwalten":
+        return aenderbar
+    try:
+        _verwaltung_danach(_verwaltung_vorher(s, r["folder_id"], ordner), ohne_freigabe=r["id"])
+    except Abgelehnt:
+        return False
+    return True
 
 
 def _anker_pruefen(fid, ordner):
@@ -433,6 +447,7 @@ def _eintrag(r, ordner, s, system, notiz):
            "seit": r["created_at"], "eigen": r["user_id"] == s.uid,
            "aenderbar": bool(s.alles or (darf_anker and (r["user_id"] == s.uid
                                                          or not _spaeter(r["valid_until"], _ende(s, anker)))))}
+    out["entziehbar"] = _entziehbar(s, r, ordner, out["aenderbar"])
     if notiz and darf_anker:
         out["notiz"] = r["note"] or ""
     return out

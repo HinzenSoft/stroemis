@@ -108,9 +108,13 @@
       // Geerbtes ändert man dort, wo es vergeben ist – wer jenen Ordner verwaltet, springt hin.
       if (f.aenderbar) knoepfe = `<button class="btn secondary small" type="button" data-act="dort" data-ordner="${f.ordner.id}">Dort öffnen</button>`;
     } else if (f.aenderbar) {
+      // „Entziehen“ nur, wenn es gelingt: Die eigene Verwalterfreigabe bleibt, solange sonst niemand die Gliederung so
+      // lange verwaltet (1.6 Nr. 7) – dann steht statt des Knopfs, wer helfen kann.
       knoepfe = `<button class="btn secondary small" type="button" data-act="aendern" data-id="${f.id}">Ändern</button>
-        <button class="btn secondary small" type="button" data-act="entziehen" data-id="${f.id}">Entziehen</button>`;
+        ${f.entziehbar === false ? "" : `<button class="btn secondary small" type="button" data-act="entziehen" data-id="${f.id}">Entziehen</button>`}`;
     }
+    const nurVerwaltung = art !== "geerbt" && f.aenderbar && f.entziehbar === false
+      ? '<div class="small muted mf-nur-pv">Entziehen nur über die Plattform-Verwaltung – sonst verwaltet hier niemand so lange wie du.</div>' : "";
     return `<tr${f.gueltig ? "" : ' class="mf-alt"'}>
       <td data-l="Person" class="mf-k-person">${personHtml(f.konto)}${f.eigen ? ' <span class="badge grey">du</span>' : ""}${quali}${ordner}</td>
       <td data-l="Recht" class="mf-k-halb">${esc(RECHT[f.recht] || f.recht)}</td>
@@ -118,7 +122,7 @@
       <td data-l="Zustand">${zustand(f)}</td>
       ${art === "geerbt" ? "" : `<td data-l="Notiz" class="mf-notiztext">${f.notiz ? esc(f.notiz) : '<span class="muted">–</span>'}</td>`}
       <td data-l="Vergeben" class="small">${esc(f.vergeben_von || "")}${f.seit ? ` am ${esc(S.fmtDate(f.seit))}` : ""}</td>
-      <td class="tabelle-aktionen"><div class="btn-row">${knoepfe}</div></td></tr>`;
+      <td class="tabelle-aktionen"><div class="btn-row">${knoepfe}</div>${nurVerwaltung}</td></tr>`;
   }
 
   function tabelleHtml(liste, art, leerText) {

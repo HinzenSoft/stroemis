@@ -380,17 +380,19 @@ def ordner_filter(spalte, recht="lesen", user=None):
     return f"{sp} IN {_liste(menge)}" if menge else "0"
 
 
-def verwalter_von(fid):
+def verwalter_von(fid, ohne_freigabe=None):
     """Aktive Konten (ohne die Verwaltung) mit gültigem verwalten an fid oder darüber – nach Namen sortiert, je Konto
     mit dem wirksamen Ende („ende“, None = unbefristet). Für Meldungstexte, Empfänger von Mails und die Regel
-    „keine Gliederung ohne Verwalter“."""
+    „keine Gliederung ohne Verwalter“. ohne_freigabe: so rechnen, als gäbe es diese Freigabezeile nicht (ob ein
+    Entzug die Regel verletzen würde – vorab, ohne zu schreiben)."""
     rows = db.query(
         "WITH RECURSIVE kette(id) AS (SELECT ? UNION SELECT f.parent_id FROM mat_folder f JOIN kette k ON f.id = k.id "
         "WHERE f.parent_id IS NOT NULL) "
         "SELECT u.id, u.name, u.email, MAX(COALESCE(x.valid_until, '9999-12-31')) AS ende FROM mat_folder_grant x "
         "JOIN users u ON u.id = x.user_id WHERE x.folder_id IN (SELECT id FROM kette) AND x.permission = 'verwalten' "
         "AND (x.valid_until IS NULL OR x.valid_until >= ?) AND u.active = 1 AND u.status = 'active' "
-        "AND u.recht_verwaltung < 2 GROUP BY u.id ORDER BY u.name COLLATE NOCASE, u.id", (fid, _stichtag()))
+        "AND u.recht_verwaltung < 2 AND x.id IS NOT ? GROUP BY u.id ORDER BY u.name COLLATE NOCASE, u.id",
+        (fid, _stichtag(), ohne_freigabe))
     return [dict(r, ende=None if r["ende"] == "9999-12-31" else r["ende"]) for r in rows]
 
 

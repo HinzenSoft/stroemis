@@ -30,7 +30,7 @@ from test_material_ueberblick import ordner_neu  # noqa: E402
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FR = "/api/material/ordner/{}/freigaben"
 EINTRAG = {"id", "ordner", "konto", "recht", "bis", "gueltig", "wirkt", "laeuft_ab_in_tagen", "vergeben_von", "seit",
-           "aenderbar", "eigen"}
+           "aenderbar", "entziehbar", "eigen"}
 KONTO = {"id", "name", "gliederung", "aktiv", "haekchen", "qualifiziert"}
 
 
@@ -349,7 +349,12 @@ def test_uebernahme_schutz():
         assert grant(app, gid, k["wart_id"], "verwalten")["valid_until"] is None
         assert not [x for x in liste(gast, gid)["direkt"] if x["id"] == dauer][0]["aenderbar"]
 
-        # Der dauerhafte Verwalter entzieht oder kürzt sich nicht, wenn danach nur der Gast bliebe.
+        # Der dauerhafte Verwalter entzieht oder kürzt sich nicht, wenn danach nur der Gast bliebe – die Liste sagt es
+        # vorab („entziehbar“), statt „Entziehen“ anzubieten. Der Gast dagegen kann sich selbst entziehen.
+        eigen = [x for x in liste(w, gid)["direkt"] if x["id"] == dauer][0]
+        assert eigen["eigen"] and eigen["aenderbar"] and not eigen["entziehbar"], eigen
+        g_eigen = [x for x in liste(gast, gid)["direkt"] if x["eigen"]][0]
+        assert g_eigen["aenderbar"] and g_eigen["entziehbar"], g_eigen
         for m, d in (("delete", None), ("put", {"bis": tag(30)}), ("put", {"recht": "lesen"})):
             r = getattr(w, m)(f"/api/material/freigaben/{dauer}", json=d, headers=H)
             assert r.status_code == 409 and "das macht nur die Plattform-Verwaltung" in r.json["error"], (m, d, r.get_json())
@@ -358,6 +363,10 @@ def test_uebernahme_schutz():
         # Mit einem zweiten dauerhaften geht es.
         w2, w2_id = neues_konto(app, "wart2@example.org", name="Wart Zwei")
         zweit = freigeben(adm, gid, w2_id, "verwalten")
+        assert [x for x in liste(w, gid)["direkt"] if x["id"] == dauer][0]["entziehbar"]
+        # Fremde Zeilen: entziehbar, soweit änderbar; die Verwaltung entzieht alles.
+        assert all(x["entziehbar"] == x["aenderbar"] for x in liste(w, gid)["direkt"] if not x["eigen"])
+        assert all(x["entziehbar"] for x in liste(adm, gid)["direkt"])
         assert w.delete(f"/api/material/freigaben/{dauer}", headers=H).status_code == 200
         assert grant(app, gid, k["wart_id"], "verwalten") is None
 

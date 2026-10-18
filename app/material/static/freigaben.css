@@ -61,6 +61,7 @@ table.list.mf-tabelle { table-layout: auto; margin-top: 4px; }
 table.list.mf-tabelle td { vertical-align: top; }
 table.list.mf-tabelle td.tabelle-aktionen .btn-row { flex-wrap: nowrap; justify-content: flex-end; }
 .mf-notiztext { overflow-wrap: break-word; min-width: 5em; max-width: 16em; }
+.mf-nur-pv { max-width: 13em; margin-top: 4px; }
 tr.mf-alt td { color: var(--grau); }
 @supports (container-type: inline-size) {
   @media (max-width: 860px) {
@@ -86,7 +87,7 @@ tr.mf-alt td { color: var(--grau); }
   table.list.mf-tabelle td.mf-k-person::before { content: none; }
   table.list.mf-tabelle td.tabelle-aktionen { padding-top: 8px; }
   table.list.mf-tabelle td.tabelle-aktionen .btn-row { flex-wrap: wrap; justify-content: flex-start; }
-  .mf-notiztext { max-width: none; }
+  .mf-notiztext, .mf-nur-pv { max-width: none; }
 }
 
 /* Zustand einer Freigabe – gültig, gelb kurz vor Ablauf, grau abgelaufen, rot umrandet: wirkt nicht. */
