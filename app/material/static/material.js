@@ -4186,6 +4186,11 @@
       : `Mail an ${plural(r.mail_count, "Empfänger", "Empfänger")} wird verschickt …`;
   }
 
+  /* Wer keinen Bestand sieht (Katalogpfleger ohne Freigabe), bekäme bei jedem Rückruf „0 Artikel in deinem Bereich“ –
+     das klänge, als träfe er nichts. Die Zahlen gehören den Bereichen (Bauentwurf 2.6), also steht dort, wer sie sieht. */
+  const OHNE_BESTAND = () => !DARF.alles && !DARF.lesen;
+  const RR_OHNE_BESTAND = "Wie viele Artikel betroffen sind, sehen die Materialwarte der Gliederungen.";
+
   function rueckrufKarte(r) {
     const serien = r.serien || [];
     const serienText = serien.length > 20
@@ -4198,7 +4203,7 @@
       ${r.description ? `<p class="mat-text">${esc(r.description)}</p>` : ""}
       ${r.url ? `<p>${rrLink(r.url, `Meldung des Herstellers: ${kurzLink(r.url)}`)}</p>` : ""}
       <p><strong>Betroffen:</strong> ${r.alle ? "alle Artikel dieses Produkts" : `${serien.length === 1 ? "Seriennummer" : "Seriennummern"} ${serienText}`}</p>
-      ${r.aktiv ? `<p>${plural(r.betroffen, "Artikel", "Artikel")} ${DARF.alles ? "im Bestand" : "in deinem Bereich"} betroffen${r.betroffen ? ` · ${r.offen ? `<strong class="mat-warn">${r.offen} offen</strong>` : "alle erledigt"}` : ""}</p>
+      ${r.aktiv ? `<p>${OHNE_BESTAND() ? RR_OHNE_BESTAND : `${plural(r.betroffen, "Artikel", "Artikel")} ${DARF.alles ? "im Bestand" : "in deinem Bereich"} betroffen${r.betroffen ? ` · ${r.offen ? `<strong class="mat-warn">${r.offen} offen</strong>` : "alle erledigt"}` : ""}`}</p>
         ${artikel.length ? `<table class="list mat-tabelle mat-karten mat-rr-artikel"><thead><tr><th>Inventar-Nr.</th><th>Seriennummer</th><th>Ablage</th><th>Zustand</th></tr></thead><tbody>
           ${artikel.map((x) => `<tr><td data-l="Inventar-Nr." class="mat-k-titel"><a class="mat-inv" href="/material/artikel/${x.id}"><strong>${esc(x.inventory_no)}</strong></a></td>
             <td data-l="Seriennummer">${esc(x.serial_no)}${x.serial_generated ? ' <span class="muted">(System)</span>' : ""}</td>
@@ -4242,7 +4247,7 @@
           const r = await api(`${API}/produkte/${p.id}/rueckrufe`, { method: "POST", body: {
             title: $("#rr-titel", body).value, description: $("#rr-text", body).value, url: $("#rr-url", body).value,
             serials: $("#rr-serien", body).value, mail: $("#rr-mail", body).checked } });
-          rueckrufErgebnis(r);
+          rueckrufErgebnis(r, Boolean($("#rr-serien", body).value.trim()));
           zeigen(produkt);
         } catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
@@ -4251,17 +4256,21 @@
 
   /* Rückmeldung nach dem Anlegen: betroffene Artikel, Mail, Seriennummern ohne Artikel im Bestand. Die Plattform-Verwaltung
      bekommt die Zahlen über alles, die Zahl der Empfänger und die Seriennummern ohne Artikel; alle anderen nur die Zahlen
-     ihres Bereichs und ob für ihre Artikel eine Mail hinausgeht („benachrichtigt“, Phase 2). */
-  function rueckrufErgebnis(r) {
+     ihres Bereichs und ob für ihre Artikel eine Mail hinausgeht („benachrichtigt“, Phase 2) – ohne eigenen Bestand
+     statt der Zahl, wer sie sieht, und bei Seriennummern, dass Tippfehler niemand meldet. */
+  function rueckrufErgebnis(r, mitSerien) {
     const nf = r.nicht_gefunden || [];
     const verwaltung = "empfaenger" in r;
+    const zahl = !verwaltung && OHNE_BESTAND() ? RR_OHNE_BESTAND
+      : `<strong>${plural(r.betroffen, "Artikel", "Artikel")}</strong> ${verwaltung ? "im Bestand" : "in deinem Bereich"} betroffen${r.betroffen && r.offen < r.betroffen ? `, davon ${r.offen} offen` : ""}.`;
     const mail = !r.mail ? "Keine Mail verschickt."
       : verwaltung ? (r.empfaenger ? `Mail an ${plural(r.empfaenger, "Empfänger", "Empfänger")} wird verschickt.` : "Für die Mail gab es keine Empfänger.")
         : r.benachrichtigt ? "Die Verwalter und Prüfer deiner betroffenen Artikel bekommen eine Mail."
           : "Die Mail geht an die Verwalter und Prüfer der betroffenen Artikel – jeder bekommt nur seine.";
     dialog(`<h2>Rückruf angelegt</h2>
-      <p><strong>${plural(r.betroffen, "Artikel", "Artikel")}</strong> ${verwaltung ? "im Bestand" : "in deinem Bereich"} betroffen${r.betroffen && r.offen < r.betroffen ? `, davon ${r.offen} offen` : ""}.</p>
+      <p>${zahl}</p>
       <p>${mail}</p>
+      ${mitSerien && !verwaltung ? '<p class="help">Ob jede Seriennummer einen Artikel trifft, sieht nur die Plattform-Verwaltung – bitte die Nummern selbst genau prüfen.</p>' : ""}
       ${nf.length ? `<p class="notice">Zu ${nf.length === 1 ? "dieser Seriennummer" : "diesen Seriennummern"} gibt es keinen Artikel im Bestand: ${nf.map(esc).join(", ")}</p>` : ""}
       <div class="dlg-actions"><button class="btn" data-close type="button" id="rr-fertig">OK</button></div>`,
     (d2, b2) => $("#rr-fertig", b2).focus());
