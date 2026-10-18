@@ -1120,3 +1120,4 @@ from . import routes_rueckruf  # noqa: E402,F401
 from . import routes_export  # noqa: E402,F401
 from . import routes_katalog  # noqa: E402,F401
 from . import routes_freigaben  # noqa: E402,F401
+from . import routes_global  # noqa: E402,F401
