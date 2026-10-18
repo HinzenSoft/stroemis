@@ -5,10 +5,13 @@ Nach dem Bauentwurf 8.3: Zuordnen, ändern, lösen und die Sammelaktion (ganz od
 verwaltet, an jedes aktive Konto mit Namen; im Journal steht die Person nur als Kontoverweis. Die Personen eines
 Ordners (für den Filter) nur mit Grundrecht. Meldungen sieht nur, wer Katalogpfleger, Verwaltung oder Melder ist oder
 ihren Ordner sieht (6.x, 2.2). Beim Löschen eines Kontos räumt der Code vorher auf und schreibt das Journal (7.).
+Prüfnachweise bleiben unbefristet – auf keinem Weg verschwindet einer (Entscheidung des Betreibers vom 18.10.2026,
+test_pruefnachweise_bleiben).
 
 Was erst mit Paket A1R (Lesefelder zugeordnet/zugeordnet_name, Filter ?zugeordnet, CSV-Spalte, Lösen beim Aussondern,
 Beschriftung im Lebenslauf) grün werden kann, steht in WARTET_AUF. Alle Namen, Hersteller und Nummern hier sind
 erfunden und nur für den Test da."""
+import io
 import json
 import os
 import re
@@ -20,8 +23,9 @@ from datetime import timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import (H, _heute, festschreiben, freigeben, gliederung, katalog_grund, neuer_artikel,  # noqa: E402
-                           neues_konto, pdf_seiten, pruef_formulare, starten, umgebung, unterschreiben)
+from test_material import (PDF, H, _heute, festschreiben, freigeben, gliederung, jpeg, katalog_grund,  # noqa: E402
+                           make_app, neuer_artikel, neues_konto, pdf_seiten, pruef_formulare, punkte_von, starten,
+                           umgebung, unterschreiben)
 from test_material_trennung import gleich_wie_unbekannt, sql, zeilen, zwei_gliederungen  # noqa: E402
 from test_material_ueberblick import ordner_neu, sperren  # noqa: E402
 
@@ -501,6 +505,213 @@ def test_loeschkonzept():
     print("Löschkonzept bestanden.")
 
 
+# --- Prüfnachweise bleiben (Entscheidung vom 18.10.2026) ------------------------------------------------------------
+
+# Spalten mit einer Kontokennung in den Nachweistabellen – die einzigen, die sich beim Löschen eines Kontos ändern.
+KONTOSPALTEN = ("inspector_user_id", "uploaded_by", "opened_by", "closed_by", "excluded_by")
+
+
+def _datei_summe(pfad):
+    import hashlib
+    with open(pfad, "rb") as fh:
+        return hashlib.sha256(fh.read()).hexdigest()
+
+
+def test_pruefnachweise_bleiben():
+    """Prüfnachweise werden nie gelöscht, auch nicht nach der Aussonderung (Entscheidung des Betreibers vom 18.10.2026).
+    Durchgespielt werden die Wege, auf denen einer verschwinden könnte: den Artikel mit festgeschriebener Prüfung
+    löschen, den Ordner löschen, aus dem er ausgesondert wurde, das Konto des Prüfers löschen, den Durchgang mit
+    Festgeschriebenem entfernen und abbrechen, Anhang, Befundfoto und Prüfung einer festgeschriebenen Prüfung über die
+    Schnittstelle entfernen, direktes DELETE per SQL (Trigger und Fremdschlüssel) und ein Neustart (Aufräumen beim
+    Start). Danach stehen Prüfungen, Befunde, Anhänge, Aussonderungen, Durchgang und Journal unverändert da – nur die
+    Kontokennung des gelöschten Prüfers ist NULL –, und jede Datei (Protokoll-, Aussonderungs- und Sammelprotokoll,
+    Anhang, Befundfoto in allen Fassungen) liegt Byte für Byte an ihrem Platz. Offene Entwürfe sind keine Nachweise:
+    Sie lassen sich weiter verwerfen."""
+    with post_der_meldungen(), tempfile.TemporaryDirectory() as tmp:
+        app, k, ids, gid, system, lager, art, p = aufbau(tmp)
+        adm, w = k["adm"], k["wart"]
+        geht, uid = neues_konto(app, "pruefer-geht@example.org", name="Prüfer Geht", mat_pruefer=True,
+                                urkundennummer="1012-0998")
+        freigeben(adm, gid, uid, "lesen")
+        freigeben(adm, gid, uid, "pruefen")
+        unterschreiben(geht)
+        fach = ordner_neu(w, lager, "Fach Nachweis")
+        a1, a2, _ = art
+        a4 = neuer_artikel(w, ids["hms"], fach, serial_no="NW-4")["id"]
+        rid = w.post("/api/material/durchgaenge", json={"folder_id": lager, "titel": "Testdurchgang Nachweis"}
+                     ).json["durchgang"]["id"]
+        # a1 und a4 im Durchgang geprüft – mit Mangel, Befundfoto und Anhang, „instandsetzen“ (gesperrt) –, dann
+        # ausgesondert: Prüf- und Aussonderungsprotokoll je Artikel.
+        pruefungen = []
+        for iid in (a1, a4):
+            pr = starten(geht, iid, durchgang_id=rid).json["pruefung"]
+            punkt = punkte_von(pr)["Testpunkt Verschleiß"]
+            url = f"/api/material/pruefungen/{pr['id']}"
+            assert geht.put(f"{url}/punkte/{punkt}", json={"wert": "ja", "notiz": "Kerbe Test"}).status_code == 200
+            assert geht.post(f"{url}/punkte/{punkt}/foto", data={"file": (jpeg(), "kerbe.jpg")}, headers=H,
+                             content_type="multipart/form-data").status_code == 200
+            r = geht.post(f"{url}/anhaenge", data={"file": [(jpeg(), "karte.jpg")], "art": "externes_pruefformular",
+                                                   "titel": "Prüfkarte Test", "im_protokoll": "ja"},
+                          headers=H, content_type="multipart/form-data")
+            assert r.status_code == 201, r.get_json()
+            assert festschreiben(geht, pr["id"], ergebnis="instandsetzen").status_code == 200
+            r = w.post(f"/api/material/artikel/{iid}/aussondern", json={"grund": "irreparabel", "bemerkung": "Test"})
+            assert r.status_code == 200, r.get_json()
+            pruefungen.append(pr["id"])
+        # Ein offener Entwurf (kein Nachweis) an a2.
+        entwurf = starten(k["pruefer"], a2).json["pruefung"]["id"]
+        assert entwurf
+
+        def stand():
+            """Alle Nachweiszeilen und die Prüfsummen aller ihrer Dateien."""
+            with app.app_context():
+                from app import db
+                from app.material.services import katalog
+                medien = katalog.medien_dir()
+                x = {t: db.query(f"SELECT * FROM {t} ORDER BY 1") for t in (
+                    "mat_inspection", "mat_inspection_result", "mat_inspection_attachment", "mat_round_item")}
+                x["mat_round"] = db.query("SELECT * FROM mat_round WHERE id = ?", (rid,))
+                x["mat_audit"] = db.query("SELECT * FROM mat_audit ORDER BY id")
+                fest = [z for z in x["mat_inspection"] if z["completed_at"]]
+                dateien = [os.path.join(tmp, z["pdf_path"]) for z in fest + x["mat_round"] if z["pdf_path"]]
+                dateien += [os.path.join(medien, "anhang", z["file_path"]) for z in x["mat_inspection_attachment"]
+                            if z["inspection_id"] in {f["id"] for f in fest}]
+                for z in x["mat_inspection_result"]:
+                    if z["photo"] and z["inspection_id"] in {f["id"] for f in fest}:
+                        key = os.path.splitext(z["photo"])[0]
+                        dateien += [os.path.join(medien, "orig", z["photo"]), os.path.join(medien, "web", key + ".jpg"),
+                                    os.path.join(medien, "thumb", key + ".jpg")]
+                x["dateien"] = {d: _datei_summe(d) for d in dateien}
+                x["fest"] = fest
+            return x
+
+        # Der Durchgang mit Festgeschriebenem lässt sich nicht entfernen – nur abbrechen, dann bekommt er sein
+        # Sammelprotokoll.
+        r = w.delete(f"/api/material/durchgaenge/{rid}", headers=H)
+        assert r.status_code == 409, r.get_json()
+        r = w.post(f"/api/material/durchgaenge/{rid}/abbrechen", json={})
+        assert r.status_code == 200 and r.json["durchgang"]["abgebrochen"], r.get_json()
+        vorher = stand()
+        arten = sorted(z["kind"] for z in vorher["fest"])
+        assert arten == ["aussonderung", "aussonderung", "eingang", "eingang"], arten
+        assert vorher["mat_round"][0]["pdf_path"] and len(vorher["dateien"]) == 4 + 1 + 2 + 6, sorted(vorher["dateien"])
+        assert all(os.path.isfile(d) for d in vorher["dateien"])
+
+        # Artikel mit festgeschriebener Prüfung löschen: 409 – ausgesondert wird, nicht gelöscht.
+        for iid in (a1, a4):
+            r = w.delete(f"/api/material/artikel/{iid}", headers=H)
+            assert r.status_code == 409 and "aussondern statt löschen" in r.json["error"], r.get_json()
+        # Den Ordner löschen, in dem noch Artikel liegen: 409. Den Ordner, aus dem a4 ausgesondert wurde (leer): geht –
+        # a4 verliert nur die Herkunft und gehört zur Gliederung, seine Nachweise bleiben.
+        assert w.delete(f"/api/material/ordner/{lager}", headers=H).status_code == 409
+        r = w.delete(f"/api/material/ordner/{fach}", headers=H)
+        assert r.status_code == 200, r.get_json()
+        z = zeilen(app, "SELECT folder_id, origin_folder_id, lock_state FROM mat_item WHERE id = ?", (a4,))[0]
+        assert z == {"folder_id": system["ausgesondert"], "origin_folder_id": None, "lock_state": "ausgesondert"}, z
+        # Über die Schnittstelle: Anhang, Befundfoto und die Prüfung selbst lassen sich an Festgeschriebenem nicht
+        # entfernen.
+        for pid in pruefungen:
+            pr = geht.get(f"/api/material/pruefungen/{pid}").json["pruefung"]
+            mit_foto = [x for x in pr["punkte"] if x["foto"]]
+            assert mit_foto and pr["anhaenge"], pr
+            for url in (f"/api/material/pruefungen/{pid}/anhaenge/{pr['anhaenge'][0]['id']}",
+                        f"/api/material/pruefungen/{pid}/punkte/{mit_foto[0]['id']}/foto",
+                        f"/api/material/pruefungen/{pid}"):
+                for c in (geht, w, adm):
+                    r = c.delete(url, headers=H)
+                    assert r.status_code in (403, 409), (url, r.status_code, r.get_json())
+        # Das Konto des Prüfers löschen: Seine Prüfungen bleiben mit Name und Urkundennummer.
+        assert adm.delete(f"/api/admin/users/{uid}", headers=H).status_code == 200
+        # Direkt in der Datenbank: Trigger und Fremdschlüssel lehnen jedes Löschen eines Nachweises ab.
+        fest_ids = ",".join(str(z["id"]) for z in vorher["fest"])
+        for befehl in (f"DELETE FROM mat_inspection WHERE id IN ({fest_ids})",
+                       f"DELETE FROM mat_inspection_result WHERE inspection_id IN ({fest_ids})",
+                       f"DELETE FROM mat_inspection_attachment WHERE inspection_id IN ({fest_ids})",
+                       f"DELETE FROM mat_round WHERE id = {int(rid)}",
+                       f"DELETE FROM mat_round_item WHERE round_id = {int(rid)}",
+                       f"DELETE FROM mat_item WHERE id IN ({int(a1)}, {int(a4)})",
+                       "DELETE FROM mat_audit"):
+            try:
+                sql(app, befehl)
+                raise AssertionError(f"gelöscht: {befehl}")
+            except sqlite3.IntegrityError:
+                pass
+        # Ein Neustart räumt auf (Suchprotokoll, verwaiste Protokolldateien) – Nachweise rührt er nicht an.
+        make_app(tmp)
+        nachher = stand()
+        assert nachher["dateien"] == vorher["dateien"]
+
+        def ohne_konto(zeilen_):
+            """Wie vorher, nur die Kontokennung des gelöschten Prüfers auf NULL (ON DELETE SET NULL)."""
+            return [{s_: (None if s_ in KONTOSPALTEN and v == uid else v) for s_, v in z.items()} for z in zeilen_]
+        for tabelle in ("mat_inspection_result", "mat_inspection_attachment", "mat_round", "mat_round_item", "fest"):
+            assert nachher[tabelle] == ohne_konto(vorher[tabelle]), tabelle
+        assert len(nachher["fest"]) == len(vorher["fest"]) == 4
+        assert {z["inspector_name"] for z in nachher["fest"] if z["kind"] != "aussonderung"} == {"Prüfer Geht"}
+        assert {z["inspector_certificate"] for z in nachher["fest"] if z["kind"] != "aussonderung"} == {"1012-0998"}
+        assert _ohne_kennung(nachher["mat_audit"][:len(vorher["mat_audit"])]) == _ohne_kennung(vorher["mat_audit"])
+        verwaist = os.path.join(tmp, "pdf", "verwaist")
+        assert not os.path.isdir(verwaist) or not os.listdir(verwaist)
+        # Protokolle und Lebenslauf sind weiter abrufbar.
+        for z in nachher["fest"]:
+            r = w.get(f"/material/pruefung/{z['id']}/pdf")
+            assert r.status_code == 200 and r.data.startswith(b"%PDF-"), (z["id"], r.status_code)
+        # Ein offener Entwurf ist kein Nachweis: Er lässt sich weiter verwerfen.
+        assert k["pruefer"].delete(f"/api/material/pruefungen/{entwurf}", headers=H).status_code == 200
+        assert not zeilen(app, "SELECT 1 FROM mat_inspection WHERE id = ?", (entwurf,))
+    print("Prüfnachweise bleiben bestanden.")
+
+
+def test_dokument_im_protokoll_bleibt():
+    """Ein Prüfprotokoll nennt die am Prüftag gültigen Dokumente mit Prüfsumme – auch die der Kategorie. Zieht das
+    Produkt danach in eine andere Kategorie, ist die alte leer; löschen ließ sie sich bisher samt Dokumentdatei. Jetzt:
+    409, Dokument und Datei bleiben (Prüfnachweise werden unbefristet aufbewahrt). Eine Kategorie, deren Dokumente in
+    keinem Protokoll stehen, lässt sich weiter löschen."""
+    with post_der_meldungen(), tempfile.TemporaryDirectory() as tmp:
+        app, k, ids, gid, system, lager, art, p = aufbau(tmp)
+        adm, kp, w, pr = k["adm"], k["katalog"], k["wart"], k["pruefer"]
+        unterschreiben(pr)
+
+        def kategorie(name):
+            r = adm.post("/api/material/kategorien", json={"name": name, "parent_id": ids["karabiner"],
+                                                           "default_material_kind": "metall_hardware"})
+            assert r.status_code == 201, r.get_json()
+            kid = r.json["kategorie"]["id"]
+            r = kp.post(f"/api/material/kategorien/{kid}/dokumente", data={
+                "kind": "gebrauchsanleitung", "title": f"Anleitung {name}", "valid_from": "2024-01-01",
+                "file": (io.BytesIO(PDF + name.encode()), "anleitung.pdf")}, headers=H, content_type="multipart/form-data")
+            assert r.status_code == 201, r.get_json()
+            return kid, r.json["dokument_id"]
+        kid, did = kategorie("Testkategorie Nachweis")
+        leer_kid, _ = kategorie("Testkategorie ohne Prüfung")
+        r = kp.post("/api/material/produkte", json={"category_id": kid, "manufacturer": "Testwerk", "model": "Umzug Test",
+                                                    "material_kind": "metall_hardware", "interval_months": 12})
+        assert r.status_code == 201, r.get_json()
+        pid = r.json["produkt"]["id"]
+        iid = neuer_artikel(w, pid, lager, serial_no="DOK-1")["id"]
+        r = starten(pr, iid)                      # mit dem Formular der Oberkategorie Karabiner
+        assert r.status_code == 201, r.get_json()
+        pruefung = r.json["pruefung"]["id"]
+        assert festschreiben(pr, pruefung, ergebnis="einsatzbereit").status_code == 200
+        doks = json.loads(zeilen(app, "SELECT documents_json FROM mat_inspection WHERE id = ?", (pruefung,))[0]
+                          ["documents_json"])
+        assert [d["id"] for d in doks] == [did], doks
+        datei = zeilen(app, "SELECT file_path FROM mat_product_document WHERE id = ?", (did,))[0]["file_path"]
+        with app.app_context():
+            from app.material.services import katalog
+            pfad = os.path.join(katalog.dok_dir(), datei)
+        assert os.path.isfile(pfad)
+        # Das Produkt zieht um – die alte Kategorie ist leer, ihr Dokument steht aber im Protokoll.
+        r = kp.put(f"/api/material/produkte/{pid}", json={"category_id": ids["karabiner"]})
+        assert r.status_code == 200, r.get_json()
+        r = adm.delete(f"/api/material/kategorien/{kid}", headers=H)
+        assert r.status_code == 409 and r.json["error"] == katalog.DOKUMENT_IM_PROTOKOLL, r.get_json()
+        assert zeilen(app, "SELECT id FROM mat_product_document WHERE id = ?", (did,)) and os.path.isfile(pfad)
+        # Ohne Protokoll gilt das Übliche: Die leere Kategorie geht samt Dokument.
+        assert adm.delete(f"/api/material/kategorien/{leer_kid}", headers=H).status_code == 200
+    print("Dokument im Protokoll bleibt bestanden.")
+
+
 # --- Tests, die erst mit einem anderen Paket grün werden ------------------------------------------------------------
 
 def test_anzeige_und_filter_a1r():
@@ -573,6 +784,8 @@ if __name__ == "__main__":
     test_lebenslauf_ohne_namen()
     test_meldungen_je_bereich()
     test_loeschkonzept()
+    test_pruefnachweise_bleiben()
+    test_dokument_im_protokoll_bleibt()
     for name, paket in WARTET_AUF.items():
         try:
             globals()[name]()

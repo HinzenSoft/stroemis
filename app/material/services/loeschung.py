@@ -22,7 +22,15 @@ ab, bleibt das Konto samt allem stehen:
 Abgeschlossene Prüfungen, Durchgänge, Ausnahmen, Anhänge, Rückrufe und das Journal bleiben, wie sie sind. Deaktivieren
 ändert im Modul nichts: Freigaben wirken nicht mehr (current_user verlangt ein aktives Konto), Zuordnungen bleiben und
 erscheinen mit „(deaktiviert)“. Ablauf beim Austritt: PSA zurücknehmen (Zuordnung lösen), Konto deaktivieren, nach
-Klärung offener Prüfungen löschen."""
+Klärung offener Prüfungen löschen.
+
+Prüfnachweise werden unbefristet aufbewahrt, auch nach der Aussonderung (Entscheidung des Betreibers vom 18.10.2026):
+abgeschlossene und festgeschriebene Prüfungen samt Befunden, Befundfotos und Anhängen, Aussonderungen, Prüf-,
+Aussonderungs- und Sammelprotokolle (DATA_DIR/pdf), Durchgänge mit Geprüftem, das Journal und die Dokumente, die ein
+Protokoll nennt. Es gibt keine Löschfrist und keine Löschroutine. In der Datenbank lehnen Trigger und Fremdschlüssel
+(models.py) jedes Löschen ab; die Dienste prüfen vorher selbst (Artikel, Ordner, Durchgang, Kategorie) und entfernen
+Dateien nur zu offenen Entwürfen – die dürfen verworfen werden, sie sind kein Nachweis
+(test_material_zuordnung.test_pruefnachweise_bleiben)."""
 from ... import db
 from . import bestand, journal
 

@@ -187,6 +187,9 @@ def kategorie_aendern(kid, d, intervall_pruefen=True):
     return kid
 
 
+DOKUMENT_IM_PROTOKOLL = "Ein Dokument dieser Kategorie steht in Prüfprotokollen und bleibt – damit auch die Kategorie."
+
+
 def kategorie_loeschen(kid):
     dateien = []
     with db.transaction(sofort=True):              # prüfen und löschen unter einer Sperre
@@ -198,6 +201,15 @@ def kategorie_loeschen(kid):
         if db.query("SELECT 1 FROM mat_inspection i JOIN mat_form f ON f.id = i.form_id WHERE f.category_id = ? LIMIT 1",
                     (kid,), one=True):
             raise Abgelehnt("Ein Formular dieser Kategorie wurde schon für Prüfungen benutzt.", 409)
+        # Eine Prüfung nennt die damals gültigen Dokumente mit Version und Prüfsumme (documents_json) – auch die einer
+        # Kategorie, aus der das Produkt inzwischen fortgezogen ist. Prüfnachweise werden unbefristet aufbewahrt
+        # (Entscheidung des Betreibers vom 18.10.2026), also bleibt ein solches Dokument samt Datei – und mit ihm die
+        # Kategorie.
+        if db.query("SELECT 1 FROM mat_product_document d WHERE d.category_id = ? AND EXISTS (SELECT 1 FROM mat_inspection "
+                    "x, json_each(CASE WHEN json_valid(x.documents_json) THEN x.documents_json ELSE '[]' END) j "
+                    "WHERE x.completed_at IS NOT NULL AND json_extract(j.value, '$.id') = d.id) LIMIT 1",
+                    (kid,), one=True):
+            raise Abgelehnt(DOKUMENT_IM_PROTOKOLL, 409)
         for f in db.query("SELECT id FROM mat_form WHERE category_id = ?", (kid,)):
             db.execute("DELETE FROM mat_form WHERE id = ?", (f["id"],))
             journal.eintragen("form", f["id"], "geloescht", {"kategorie": alt["name"]}, None)
