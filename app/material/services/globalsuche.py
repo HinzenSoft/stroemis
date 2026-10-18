@@ -53,7 +53,9 @@ def angebot(q):
 # --- Suche und Steckbrief -----------------------------------------------------------------------------------------
 
 TREFFER_MAX = 10                  # je Suche; ob es mehr gibt, sagt „mehr“ – eine Gesamtzahl gibt es nicht
-HINWEIS = "Prüfstatus, Prüfungen und Protokolle sieht nur, wer in der Gliederung eine Freigabe hat."
+# Wer nur einen Teil einer Gliederung sieht, findet auch Artikel derselben Gliederung – „in der Gliederung“ stimmte
+# dann nicht; maßgeblich ist der Ordner des Artikels.
+HINWEIS = "Prüfstatus, Prüfungen und Protokolle sieht nur, wer für den Ordner des Artikels eine Freigabe hat."
 BESTAETIGEN = "Bitte die globale Suche bestätigen."
 BESTAETIGEN_QR = "Bitte den Steckbrief bestätigen."
 ZU_KURZ = (f"Mindestens {MIN_ZEICHEN} und höchstens {MAX_ZEICHEN} Zeichen – global wird nur nach der ganzen Seriennummer "

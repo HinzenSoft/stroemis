@@ -282,8 +282,8 @@ def meldungen_seite():
 def suche_seite():
     """Ein eindeutiger Treffer öffnet den Artikel direkt; sonst zeigt die Seite die Trefferliste und darunter das
     Angebot der globalen Suche. Gezählt wird nur, was das Konto sieht (search.artikel filtert selbst) – die
-    Weiterleitung führt nie zu Fremdem. Wer nach einem eindeutigen eigenen Treffer auch in anderen Gliederungen suchen
-    will, findet das Angebot in den Vorschlägen unter dem Suchfeld (suche.js)."""
+    Weiterleitung führt nie zu Fremdem. Wer nach einem eindeutigen eigenen Treffer auch außerhalb des eigenen
+    Bereichs suchen will, findet das Angebot in den Vorschlägen unter dem Suchfeld (suche.js)."""
     q = (request.args.get("q") or "").strip()
     if current_user() and zugang() and q:
         try:

@@ -10,9 +10,10 @@
 
    Phase 2 (Entscheidung vom 18.10.2026): Taugt die Anfrage für die globale Suche (global_angebot der Suche – nicht für
    die Plattform-Verwaltung, die ohnehin alles sieht), steht unter den eigenen Vorschlägen und „Alle Treffer“ – auch
-   neben einem eigenen Artikel mit genau dieser Nummer – das Angebot, in anderen Gliederungen zu suchen. Enter oder
+   neben einem eigenen Artikel mit genau dieser Nummer – das Angebot, außerhalb des eigenen Bereichs zu suchen (nicht
+   „in anderen Gliederungen“: Wer nur einen Teil einer Gliederung sieht, findet auch deren übrige Ordner). Enter oder
    Tipp darauf fragt nach (MatGlobal.bestaetigen, global.js). Danach bleiben die eigenen Vorschläge stehen; statt des
-   Angebots folgen die Trennzeile „Aus anderen Gliederungen“ und deren Steckbriefe – gestrichelt umrandet, die
+   Angebots folgen die Trennzeile „Außerhalb deines Bereichs“ und die fremden Steckbriefe – gestrichelt umrandet, die
    Gliederung oben, ohne Link (aria-disabled, mit den Pfeiltasten trotzdem wählbar zum Vorlesen). Eine globale Antwort
    kommt nie in den Zwischenspeicher: Sie gilt nur, solange die Anfrage unverändert im Feld steht. */
 (function () {
@@ -74,8 +75,8 @@
   // eine sehr lange schon. exakt: ein eigener Artikel hat genau diese Nummer.
   function angebotZeile(q, i, exakt) {
     return `<li role="option" id="mv-${i}" aria-selected="false" class="mv-global" data-global="1">
-      <button type="button" tabindex="-1"><strong>In anderen Gliederungen nach der Seriennummer „<span${q.length <= 30 ? ' class="mg-ganz"' : ""}>${esc(q)}</span>“ suchen</strong>
-        <span class="mv-zeile">${exakt ? "Zeigt nur Artikel anderer Gliederungen" : "Nur Stammdaten und Zugehörigkeit"} – die Suche wird protokolliert.</span></button></li>`;
+      <button type="button" tabindex="-1"><strong>Außerhalb deines Bereichs nach der Seriennummer „<span${q.length <= 30 ? ' class="mg-ganz"' : ""}>${esc(q)}</span>“ suchen</strong>
+        <span class="mv-zeile">${exakt ? "Zeigt nur Artikel außerhalb deines Bereichs" : "Nur Stammdaten und Zugehörigkeit"} – die Suche wird protokolliert.</span></button></li>`;
   }
 
   // Erst die eigenen Vorschläge und „Alle Treffer“, darunter das Angebot – oder nach der Suche die fremden Treffer.
@@ -142,9 +143,9 @@
 
   // Der fremde Teil unter den eigenen Vorschlägen: die Trennzeile, dann Steckbriefe ohne Link – wählbar zum Vorlesen,
   // aber nicht zu öffnen (aria-disabled); darunter der Hinweis.
-  const TRENNER = '<li class="mv-trenner" role="presentation">Aus anderen Gliederungen</li>';
+  const TRENNER = '<li class="mv-trenner" role="presentation">Außerhalb deines Bereichs</li>';
   function globalHtml(d, q) {
-    if (!d.treffer.length) return TRENNER + meldungZeile(`In anderen Gliederungen hat kein Artikel die Seriennummer „${q}“.`);
+    if (!d.treffer.length) return TRENNER + meldungZeile(`Außerhalb deines Bereichs hat kein Artikel die Seriennummer „${q}“.`);
     return TRENNER + d.treffer.map((t, i) => `<li role="option" id="mv-g${i}" aria-selected="false" aria-disabled="true"
         class="mv-steckbrief">${window.MatGlobal.karte(t)}</li>`).join("")
       + (d.mehr ? meldungZeile(`Weitere Artikel haben diese Seriennummer – gezeigt werden die ersten ${d.treffer.length}.`) : "")
@@ -166,7 +167,7 @@
     const ja = await G.bestaetigen(q);
     feld.focus({ preventScroll: true });
     if (!ja || feld.value.trim() !== q) return;
-    global = { q, html: TRENNER + meldungZeile("Suche in anderen Gliederungen …") };
+    global = { q, html: TRENNER + meldungZeile("Suche außerhalb deines Bereichs …") };
     mitFremden(q);
     let html;
     try {

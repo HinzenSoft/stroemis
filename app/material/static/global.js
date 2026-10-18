@@ -4,17 +4,20 @@
    suchen(q), karte(treffer) und fremd(inhalt, daten); material.js und suche.js rufen sie auf.
 
    Nach den Entscheidungen vom 18.10.2026: Angeboten wird die Suche zu jeder Anfrage, die dafür taugt (global_angebot
-   der lokalen Suche), auch neben eigenen Treffern; sie findet nur Artikel anderer Gliederungen. Diese stehen unter der
-   eigenen Liste – ab der Trennlinie „Aus anderen Gliederungen“, jede Karte gestrichelt umrandet und mit ihrer
-   Gliederung als Marke ganz oben. Ein Treffer zeigt nur Stammdaten, Zugehörigkeit und ein Sperrwort (gesperrt,
-   verloren gemeldet, ausgesondert) – es gibt nichts weiter zu sehen, also auch keinen Link. Gesucht wird erst nach der
-   Bestätigung; der Server bremst (zehn je Viertelstunde, Suche und Steckbrief zusammen) und protokolliert jede Suche
-   mit Namen. */
+   der lokalen Suche), auch neben eigenen Treffern; sie findet nur Artikel außerhalb des eigenen Bereichs – in anderen
+   Gliederungen, bei einer Freigabe nur an einem Teil der Gliederung auch in deren übrigen Ordnern. Darum heißt es
+   überall „außerhalb deines Bereichs“, nicht „andere Gliederungen“; zu welcher Gliederung ein Treffer gehört, sagt
+   seine Karte. Die Treffer stehen unter der eigenen Liste – ab der Trennlinie „Außerhalb deines Bereichs“, jede Karte
+   gestrichelt umrandet und mit ihrer Gliederung als Marke ganz oben. Ein Treffer zeigt nur Stammdaten, Zugehörigkeit
+   und ein Sperrwort (gesperrt, verloren gemeldet, ausgesondert) – es gibt nichts weiter zu sehen, also auch keinen
+   Link. Gesucht wird erst nach der Bestätigung; der Server bremst (zehn je Viertelstunde, Suche und Steckbrief
+   zusammen) und protokolliert jede Suche mit Namen. */
 window.MatGlobal = (function () {
   "use strict";
   const { esc, api, dialog } = window.S;
   const API = "/api/material/globalsuche";
-  const ERKLAERUNG = "Die Suche geht über den Bestand der anderen Gliederungen und wird mit deinem Namen protokolliert. "
+  const ERKLAERUNG = "Die Suche geht über alle Artikel außerhalb deines Bereichs – in anderen Gliederungen und in "
+    + "Ordnern, für die du keine Freigabe hast – und wird mit deinem Namen protokolliert. "
     + "Treffer zeigen nur Stammdaten, Zugehörigkeit und ob der Artikel gesperrt oder ausgesondert ist – keine Prüfungen, "
     + "Protokolle, Fotos oder Bemerkungen.";
   // Das Sperrwort als Marke in den Farben des Moduls: anthrazit gesperrt (auch verloren gemeldet), grau ausgesondert.
@@ -36,7 +39,7 @@ window.MatGlobal = (function () {
   function bestaetigen(q) {
     return new Promise((resolve) => {
       let ja = false;
-      const dlg = dialog(`<h2>In anderen Gliederungen suchen</h2>
+      const dlg = dialog(`<h2>Außerhalb deines Bereichs suchen</h2>
         <p>Seriennummer <strong class="mg-nummer">${esc(q)}</strong></p>
         <p>${esc(ERKLAERUNG)}</p>
         <div class="dlg-actions"><button class="btn secondary" type="button" data-close>Abbrechen</button>
@@ -75,7 +78,7 @@ window.MatGlobal = (function () {
   // Die Karten mit Hinweis – auf der Trefferseite unter der Trennlinie, in der Ansicht „fremd“ allein.
   function ergebnis(d, q) {
     if (!d.treffer.length) {
-      return `<p class="mat-leer">In anderen Gliederungen hat kein Artikel die Seriennummer „${esc(q)}“.</p>`;
+      return `<p class="mat-leer">Außerhalb deines Bereichs hat kein Artikel die Seriennummer „${esc(q)}“.</p>`;
     }
     return `<div class="mg-karten">${d.treffer.map(karte).join("")}</div>
       ${d.mehr ? `<p class="help">Weitere Artikel haben diese Seriennummer – gezeigt werden die ersten ${d.treffer.length}.</p>` : ""}
@@ -85,11 +88,11 @@ window.MatGlobal = (function () {
   // Trefferseite: die fremden Treffer unter der eigenen Liste, ab der Trennlinie mit Überschrift.
   function abschnitt(d, q) {
     return `<section class="mg-fremde" aria-labelledby="mg-fremde-titel">
-      <h2 class="mg-trenner" id="mg-fremde-titel" tabindex="-1">Aus anderen Gliederungen</h2>${ergebnis(d, q)}</section>`;
+      <h2 class="mg-trenner" id="mg-fremde-titel" tabindex="-1">Außerhalb deines Bereichs</h2>${ergebnis(d, q)}</section>`;
   }
 
-  /* Trefferseite: unter der eigenen Liste das Angebot, auch in den anderen Gliederungen zu suchen – ein grauer Knopf,
-     die Hauptsache der Seite bleibt die eigene Liste. Nach der Suche steht an seiner Stelle das Ergebnis.
+  /* Trefferseite: unter der eigenen Liste das Angebot, auch außerhalb des eigenen Bereichs zu suchen – ein grauer
+     Knopf, die Hauptsache der Seite bleibt die eigene Liste. Nach der Suche steht an seiner Stelle das Ergebnis.
      optionen.exakt: ein eigener Artikel hat genau diese Seriennummer (dann sagt der Text, dass nur die anderen kommen);
      optionen.ergebnis: das Ergebnis einer früheren Suche zu q – Blättern und Sortieren der eigenen Liste zeichnen die
      Seite neu, ohne noch einmal zu suchen; optionen.gefunden(d) bekommt das Ergebnis. */
@@ -98,9 +101,9 @@ window.MatGlobal = (function () {
     if (!element || !q) return;
     element.setAttribute("aria-live", "polite");
     if (o.ergebnis) { element.innerHTML = abschnitt(o.ergebnis, q); return; }
-    element.innerHTML = `<section class="mg-angebot" aria-label="Suche in anderen Gliederungen">
-      ${o.exakt ? "<p>Diese Seriennummer gibt es auch in deinem Bereich (oben) – die Suche in anderen Gliederungen zeigt nur deren Artikel.</p>" : ""}
-      <button class="btn secondary" type="button" data-mg="suchen"><span>In anderen Gliederungen nach der Seriennummer ${nummer(q)} suchen</span></button>
+    element.innerHTML = `<section class="mg-angebot" aria-label="Suche außerhalb deines Bereichs">
+      ${o.exakt ? "<p>Diese Seriennummer gibt es auch in deinem Bereich (oben) – die Suche zeigt nur Artikel außerhalb davon.</p>" : ""}
+      <button class="btn secondary" type="button" data-mg="suchen"><span>Außerhalb deines Bereichs nach der Seriennummer ${nummer(q)} suchen</span></button>
       <p class="help">Nur Stammdaten und Zugehörigkeit – die Suche wird mit deinem Namen protokolliert.</p>
       <div class="mg-ergebnis"></div></section>`;
     const knopf = element.querySelector('[data-mg="suchen"]');
@@ -108,7 +111,7 @@ window.MatGlobal = (function () {
     knopf.addEventListener("click", async () => {
       if (!(await bestaetigen(q))) return;
       knopf.disabled = true;
-      aus.innerHTML = '<p class="help">Suche in anderen Gliederungen …</p>';
+      aus.innerHTML = '<p class="help">Suche außerhalb deines Bereichs …</p>';
       try {
         const d = await suchen(q);
         if (o.gefunden) o.gefunden(d);

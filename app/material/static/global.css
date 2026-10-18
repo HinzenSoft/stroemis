@@ -1,7 +1,7 @@
 /* Globale Seriennummernsuche und QR-Steckbrief (Phase 2 · Lieferung 1, Paket C): Gestaltung von Angebot,
    Steckbrief-Karte und der Ansicht „fremd“ (global.js) sowie von Angebot und Ergebnis in den Vorschlägen unter dem
    Suchfeld (suche.js). Fremdes ist auf einen Blick fremd (Entscheidung vom 18.10.2026): eine Trennlinie mit
-   „Aus anderen Gliederungen“, wo es beginnt, gestrichelt umrandete Karten und die Gliederung als blaue Marke ganz
+   „Außerhalb deines Bereichs“, wo es beginnt, gestrichelt umrandete Karten und die Gliederung als blaue Marke ganz
    oben – im Blau der Hinweise, eckig statt rund, damit sie nicht wie ein Status aussieht. Wie breit eine Karte wird,
    entscheidet der Inhalt (Container „mat-seite“ aus material.css); lange Nummern, Namen und Pfade brechen um –
    nichts rollt waagerecht. */

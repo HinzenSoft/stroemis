@@ -8,7 +8,8 @@ Frist (beim Schreiben, beim Neustart, beim Lesen) nur für die Verwaltung, der Q
 mit Paket A1R das Angebot in GET /suche, die Seite /m/<token> eines fremden Artikels und die fremde Dublette beim
 Anlegen. Seit den Entscheidungen vom 18.10.2026 außerdem: das Sperrwort im Steckbrief (test_sperrwort), das Angebot zu
 jeder tauglichen Anfrage außer für die Verwaltung (test_angebot) und nur fremde Treffer, auch bei derselben
-Seriennummer im eigenen Bereich (test_nur_fremde). Alle Namen, Hersteller und Nummern hier sind erfunden und nur für
+Seriennummer im eigenen Bereich (test_nur_fremde), auch für ein Konto, das nur einen Ordner einer Gliederung sieht
+(test_teilfreigabe). Alle Namen, Hersteller und Nummern hier sind erfunden und nur für
 den Test da."""
 import json
 import os
@@ -536,6 +537,46 @@ def test_nur_fremde():
     print("Nur fremde Treffer bestanden.")
 
 
+def test_teilfreigabe():
+    """Prüfung der Nachbesserung: Ein externer Prüfer mit Freigabe nur am Lager von A findet global auch einen Artikel
+    aus dem Fahrzeug von A – derselben Gliederung, aber außerhalb seiner Freigabe – mit „OG Musterstadt“ als
+    Zugehörigkeit. „Andere Gliederungen“ stimmte also nicht: Angebot, Trennlinie, Rückfrage und leeres Ergebnis
+    sprechen von „außerhalb deines Bereichs“, der Hinweis von der Freigabe am Ordner statt „in der Gliederung“."""
+    from app.material.services import globalsuche
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with tempfile.TemporaryDirectory() as tmp:
+        t = zwei_gliederungen(tmp)
+        fahrzeug_a = ordner_neu(t.wart_a, t.a, "Fahrzeug Musterstadt", "fahrzeug")
+        im_lager = neuer_artikel(t.wart_a, t.ids["hms"], t.lager_a, serial_no="TEST-TEIL-0001")
+        im_fahrzeug = neuer_artikel(t.wart_a, t.ids["gurt"], fahrzeug_a, serial_no="TEST-TEIL-0001",
+                                    manufactured_on="2024-01")
+        extern, extern_id = neues_konto(t.app, "extern@example.org", name="Prüfer extern Test", mat_pruefer=True,
+                                        urkundennummer="1012-9002")
+        freigeben(t.adm, t.lager_a, extern_id, "pruefen")
+        # Lokal sieht er nur den aus dem Lager – und bekommt das Angebot.
+        s = extern.get("/api/material/suche", query_string={"q": "TEST-TEIL-0001"}).json
+        assert [x["id"] for x in s["treffer"]] == [im_lager["id"]] and s["exakt_lokal"] is True, s
+        assert s["global_angebot"] is True, s
+        # Global der aus dem Fahrzeug: dieselbe Gliederung, außerhalb seiner Freigabe.
+        r = global_suchen(extern, "TEST-TEIL-0001")
+        assert r.status_code == 200 and r.json["mehr"] is False, r.get_json()
+        assert [(x["inventory_no"], x["gliederung"], x["ordner"]) for x in r.json["treffer"]] == [
+            (im_fahrzeug["inventory_no"], "OG Musterstadt", "Fahrzeug Musterstadt")], r.json
+        assert json.loads(protokoll(t.app)[-1]["item_ids"]) == [im_fahrzeug["id"]]
+        assert r.json["hinweis"] == globalsuche.HINWEIS and "in der Gliederung" not in globalsuche.HINWEIS
+        assert "Ordner" in globalsuche.HINWEIS
+        # Der Materialwart von A sieht beide – global findet er nichts.
+        assert global_suchen(t.wart_a, "TEST-TEIL-0001").json["treffer"] == []
+    # Die Texte der Oberfläche: nirgends „aus/in anderen Gliederungen“ als Überschrift, Knopf oder leeres Ergebnis.
+    for datei in ("global", "suche"):
+        js = open(os.path.join(wurzel, f"app/material/static/{datei}.js"), encoding="utf-8").read()
+        assert "Außerhalb deines Bereichs" in js, datei
+        for alt in ("Aus anderen Gliederungen", "In anderen Gliederungen", "Suche in anderen Gliederungen",
+                    "Artikel anderer Gliederungen"):
+            assert alt not in js, (datei, alt)
+    print("Teilfreigabe bestanden.")
+
+
 # --- Erst mit Paket A1R -----------------------------------------------------------------------------------------
 
 def test_angebot_ueber_suche():
@@ -614,6 +655,6 @@ def test_bremse_mit_dublette():
 
 if __name__ == "__main__":
     for test in (test_eingaben, test_steckbrief, test_zehn_und_mehr, test_bremse, test_protokoll, test_qr_steckbrief,
-                 test_sperrwort, test_angebot, test_nur_fremde, test_angebot_ueber_suche, test_qr_seite_fremd,
-                 test_bremse_mit_dublette):
+                 test_sperrwort, test_angebot, test_nur_fremde, test_teilfreigabe, test_angebot_ueber_suche,
+                 test_qr_seite_fremd, test_bremse_mit_dublette):
         test()
