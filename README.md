@@ -200,6 +200,42 @@ noch, dann nur über ihre `.env`; `docker-compose.yml` und das Dockerfile sind f
 
 `GET /healthz` antwortet ohne Anmeldung mit `{"ok": true}` – darauf setzt der `HEALTHCHECK` des Containers auf (alle 30 s, `docker ps` zeigt den Zustand). Die Daten liegen im Volume unter `/data`: `stroemis.db` (SQLite mit WAL), `media/` (Originale, Web-Größen, Thumbnails, Wiki-Anhänge, Profilbilder), `pdf/` (festgeschriebene Protokolle des Moduls Material) und `secret_key`. Für eine Sicherung genügt es, dieses Volume zu kopieren – am besten bei gestopptem Container.
 
+### Beispielbestand (nur dev)
+
+`scripts/material_beispielbestand.py` legt aus dem **vorhandenen Katalog** einen größeren Bestand zum Ausprobieren an:
+drei Gliederungen „DEMO-OG Auental“, „DEMO-OG Bachheim“ und „DEMO-OG Flussstadt“ mit Lager, Fahrzeugen, Einsatzgruppen
+und persönlichen Ordnern, 200 Artikel über alle echten Produkte (Seriennummern `DEMO-AU-0001` …), eine Prüfhistorie
+über die aktiven Prüfformulare (zurückdatiert und festgeschrieben, jede Prüfung mit Protokoll), je Gliederung sechs
+DEMO-Konten (Materialwart, Prüferin, Mitglied, externer Prüfer, zwei Einsatzkräfte – nur Modul Material, Passwörter
+stehen nur in der Ausgabe), einen abgeschlossenen und einen offenen Prüfdurchgang und Zuordnungen. Jeder Zustand kommt
+vor: neu, einsatzbereit, bald fällig, überfällig, gesperrt, verloren gemeldet, ausgesondert und – wo der Katalog eine
+Lebensdauer nennt – Lebensdauer erreicht. Am Katalog ändert das Skript nichts (keine Kategorie, kein Produkt, kein
+Formular, kein Dokument, kein Bild, kein Rückruf, keine Meldung); erfunden sind nur Bestandsangaben, alle mit „DEMO“.
+Ein Artikel in einer DEMO-Gliederung gilt überall als DEMO – Oberfläche, Protokolle, Lebenslauf, CSV und Steckbrief –,
+auch wenn sein Produkt aus dem echten Katalog stammt.
+
+Vorher:
+
+1. **Katalog exportieren** (Katalog → „Katalog exportieren“ oder `material export-catalog`) und das ZIP aufheben – er
+   ist es, der später in die Produktion geht. Der Beispielbestand kommt mit keinem Export mit.
+2. Wissen, was danach gilt: Jede benutzte **Formularversion ist „benutzt“** und lässt sich nur noch über eine neue
+   Version ändern. Der Bestand lässt sich **nicht entfernen** – Prüfnachweise werden nie gelöscht, Artikel mit
+   Prüfungen auch nicht. Zurück geht es nur mit einer zurückgesetzten dev-Datenbank (danach den Katalog-Export
+   importieren).
+
+Auf dem VPS im Klon der Entwicklung (das Abbild enthält `scripts/` nicht – das Skript geht per stdin in das flüchtige
+`/tmp` des Containers, die App liegt dort unter `/srv`, die Daten unter `/data`):
+
+```bash
+docker exec -i stroemis-dev sh -c 'cat > /tmp/material_beispielbestand.py && VIDEOPFLEGE=0 PYTHONPATH=/srv python /tmp/material_beispielbestand.py --beispielbestand' < scripts/material_beispielbestand.py
+```
+
+Der Lauf dauert ein paar Minuten (zählt mit; `--artikel N` für mehr oder weniger Artikel) und endet mit einem Bericht:
+Konten mit Passwörtern, Mengen, Zustände, Produkte ohne aktives Formular (deren Artikel bleiben „neu“) und die jetzt
+benutzten Formularversionen. Er läuft nur einmal – gibt es die Gliederungen schon, legt er nichts an. **Nie in der
+Produktion** (Container `stroemis`) – dort gehört kein DEMO-Bestand hin; zeigt `BASE_URL` auf `strömis.de`, bricht
+das Skript ohnehin ab.
+
 ## Konfiguration
 
 Beim ersten Start richtet `.env` die Anlage ein (Vorlage: `.env.example`). Danach lässt sich
@@ -414,9 +450,11 @@ python tests/test_material_trennung.py   # Phase 2: Trennung je Gliederung (Migr
 python tests/test_material_freigaben.py  # Phase 2: Freigaben vergeben, ändern, entziehen, verlängern; Übernahme-Schutz; Nutzerverwaltung; DEMO-Skript
 python tests/test_material_globalsuche.py  # Phase 2: globale Seriennummernsuche, QR-Steckbrief, Bremse und Protokoll, Schalter
 python tests/test_material_zuordnung.py  # Phase 2: Personenzuordnung, Meldungen je Bereich, Löschkonzept
+python tests/test_material_beispielbestand.py  # Beispielbestand: Katalog unverändert (Tabellen, Export, Dateien), alle Zustände, Protokolle, DEMO-Kennzeichnung
 python scripts/beispieldaten.py         # füllt ./data mit zwei erfundenen Prüfungs-Lehrgängen zum Ausprobieren
 python scripts/material_demo.py --demo  # füllt ./data mit DEMO-Katalog, DEMO-Bestand in zwei Gliederungen und DEMO-Prüfungen (nie für echte Prüfungen)
 python scripts/material_demo.py --demo --konten  # dazu einmalig vier DEMO-Konten mit Freigaben; die Passwörter stehen nur in dieser Ausgabe (nur für dev)
+python scripts/material_beispielbestand.py --beispielbestand  # Beispielbestand aus dem vorhandenen Katalog (nur dev, siehe „Beispielbestand (nur dev)“)
 flask --app "app:create_app()" material import-catalog katalog.json --trocken   # Katalogdatei prüfen (JSON oder ZIP)
 flask --app "app:create_app()" material export-catalog katalog.zip              # Katalog ohne DEMO als ZIP (Format 2)
 ```

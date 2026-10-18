@@ -1393,6 +1393,60 @@ Gebaut ist jeweils die genannte Vorgabe.
    Betreiber festzulegen.** Der Bauentwurf schlägt zehn Jahre nach der Aussonderung vor; eine Löschroutine käme mit
    einer späteren Lieferung. Am Code ändert diese Lieferung dafür nichts.
 
+## Beispielbestand (18.10.2026)
+
+Wunsch: ein umfangreicherer Bestand zum Testen auf dev – nur aus dem vorhandenen Katalog, der dabei unverändert bleibt,
+damit er später sauber in die Produktion geht. Entschieden: mit Prüfhistorie (die benutzten Formularversionen gelten
+danach als „benutzt“, der Bestand lässt sich nicht wieder entfernen – nur über eine zurückgesetzte dev-Datenbank).
+
+- **`scripts/material_beispielbestand.py --beispielbestand [--artikel N]`** – nur für dev, eine Datei außerhalb von
+  `app/` (nicht im Abbild; im Container per stdin, README „Beispielbestand (nur dev)“), ohne Schalter Hilfe und
+  Rückgabewert 2, mit `BASE_URL` der Produktion (`strömis.de`) Abbruch, einmalig. Drei Gliederungen „DEMO-OG
+  Auental“, „… Bachheim“, „… Flussstadt“ (Lager mit Regalen, GW-Wasserrettung mit zwei Seilrucksäcken, MTW, zwei
+  Strömungsrettungsgruppen, persönliche Ordner), Vorgabe 200 Artikel über alle echten Produkte, je Artikel bis zu vier
+  zurückdatierte Prüfungen über das aktive Formular des Katalogs im Abstand seines Intervalls und innerhalb seiner
+  Lebensdauer – festgeschrieben, jede mit Protokoll; dazu Sperren mit Mangel (DEMO-Platzhalterfoto; fällt er zwischen
+  zwei Prüfungen auf, als außerplanmäßige Prüfung wie der Vorschlag der App) und Freiprüfung, Verlust, Aussonderung
+  aus der Prüfung und durch den Materialwart. Je Gliederung sechs DEMO-Konten (`@example.invalid`, zufälliges
+  Passwort nur in der Ausgabe, nur Modul Material, `recht_material` = 1): Materialwart (verwalten), Prüferin (lesen
+  und prüfen), Mitglied (lesen), externer Prüfer (nur prüfen im Lager, 30 Tage), zwei Einsatzkräfte mit persönlichem
+  Ordner und Zuordnungen; ein heute abgeschlossener Durchgang mit Sammelprotokoll und ein offener (teils erledigt,
+  einer in Prüfung, einer ausgenommen). Alle Zustände kommen vor. Keine Rückrufe, keine Meldungen. Alles über die
+  Dienste, je Artikel eine Transaktion, Journal unter „Beispielbestand“.
+- **Der Katalog bleibt, wie er ist.** Grundlage sind genau die Produkte, die der Katalog-Export mitnimmt (ohne
+  DEMO-Kennzeichen, außerhalb von DEMO-Kategorien, mit Prüfintervall); Produkte ohne aktives Formular bekommen Artikel
+  ohne Prüfung („neu“), der Bericht nennt sie. Fachliches kommt nur aus dem Katalog: Ja/Nein und Zahlen stehen auf ihrem
+  Soll, ein Pflichtpunkt, dessen Wert nur eine echte Prüfung liefert (Messwert, Datum, Foto), auf „nicht zutreffend“
+  mit „DEMO – nicht für echte Prüfungen“; erfunden sind nur Bestandsangaben (Ordner und Seriennummern „DEMO-…“,
+  Herstell-, Kauf- und Erstgebrauchsdaten, Bemerkung „DEMO – nicht für echte Prüfungen“).
+- **DEMO je Artikel statt nur je Produkt** (`bestand.demo_sql`, `ist_demo`, `demo_ordner_sql`, `ordner_ist_demo`): Bis
+  hierher hing „DEMO“ an `mat_product.demo` – Protokolle echter Produkte im Beispielbestand wären von echten nicht zu
+  unterscheiden gewesen. Jetzt ist ein Artikel DEMO, wenn sein Produkt das Kennzeichen trägt **oder seine Heimat
+  (`bestand.heimat`) oder ein Ordner darüber ein DEMO-Ordner ist** – auch ein Ordner, den jemand ohne Kennzeichen in
+  einer DEMO-Gliederung anlegt. Eine Regel als SQL-Ausdruck für Listen und Suche, Artikel (`demo` in der Antwort),
+  Prüf- und Aussonderungsprotokoll, Lebenslauf, CSV (Artikel und `Verzeichnis.csv`) und Steckbrief; das
+  Sammelprotokoll fragt den Ordner des Durchgangs samt Oberordnern. Das Banner an Artikel, Prüfformular und Prüfung
+  folgt dem Artikel („Dieser Artikel gehört zu den Demodaten.“). Am Katalog und am Katalog-Export ändert das nichts.
+- Freigaben-Dialog: Freigaben des Beispielbestands stehen als „vergeben von Beispielbestand“ da (`freigaben.SYSTEM`).
+- **Test** `tests/test_material_beispielbestand.py`: Testkatalog mit Platzhaltern, Schnappschuss aller Katalogtabellen,
+  des Katalog-Exports (Format 2, ohne Zeitstempel, samt Dateien) und der Katalogdateien vor und nach dem Lauf
+  (identisch); jeder Zustand, beide Wege der Aussonderung, Protokolle mit Prüfsumme, Durchgänge, Konten und Freigaben;
+  DEMO an Artikel, Liste, Prüfung, Protokoll, Sammelprotokoll, Lebenslauf, CSV und Steckbrief – ein echter Artikel
+  daneben bleibt ohne; zweiter Lauf ohne Wirkung; ohne Schalter 2, ohne echte Produkte 1.
+- **Gemessen** (Sandbox, Platzhalterkatalog mit 16 Produkten in 10 Kategorien, 8 Formularen, zwei Produkte ohne
+  Formular): Vorgabe 200 Artikel – 305 Prüf- und Aussonderungsprotokolle, 3 Sammelprotokolle, 2:33 min; 240 Artikel
+  mit 385 Protokollen 3:17 min. Die Laufzeit hängt an den Protokollen (gut eine halbe Sekunde je PDF). Zustände bei
+  200: 108 einsatzbereit, 16 bald fällig, 19 überfällig, 32 neu, 13 gesperrt (davon 4 verloren gemeldet), 5
+  Lebensdauer erreicht, 7 ausgesondert. Katalog-Export vorher und nachher identisch; im Chromium bei 1280 und 390 px
+  angesehen (Übersicht, Fälligkeiten, Artikel, Durchgänge, Protokoll mit DEMO-Kopf und -Kasten).
+
+### Zu prüfen
+
+- Auf dev **vorher den Katalog exportieren** und das ZIP aufheben; dann der Befehl aus der README.
+- Danach: Übersicht und Fälligkeiten, ein Protokoll (Kopf und Kasten „DEMO – nicht für echte Prüfungen“), die
+  Durchgänge, als DEMO-Materialwart anmelden (Passwort aus der Ausgabe); im Katalog sind die benutzten Formulare jetzt
+  nur noch über eine neue Version änderbar.
+
 ## Katalogdatei (Format 1)
 
 Eine JSON-Datei, UTF-8. Kategorien werden über Namen an ihrer Stelle im Baum gefunden, Produkte über die
