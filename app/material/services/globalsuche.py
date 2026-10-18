@@ -2,10 +2,11 @@
 
 Gesucht wird nur nach der exakten Herstellerseriennummer. Angeboten wird die Suche zu jeder Anfrage, die dafür taugt
 (suchbar) – auch neben eigenen Treffern, auch wenn ein eigener Artikel genau diese Nummer hat; nur wer ohnehin alles
-sieht (Material-Verwaltung), bekommt sie nicht. Sie läuft nach Bestätigung, durch die Bremse und ins Protokoll
-(globalprotokoll) und findet nur Artikel, die das Konto nicht sieht – die eigenen zeigt die lokale Suche darüber. Ein
-Treffer zeigt nur Stammdaten, Zugehörigkeit und ein Sperrwort – genau die Schlüssel in FELDER (Entscheidungen des
-Betreibers vom 18.10.2026: Sperrwort ja, Angebot immer, fremde Treffer unter den eigenen).
+sieht (Material-Verwaltung), bekommt sie nicht. Sie läuft nach Bestätigung, steht jedes Mal mit Namen im Protokoll
+(globalprotokoll; eine Bremse gibt es seit dem 18.10.2026 nicht mehr) und findet nur Artikel, die das Konto nicht
+sieht – die eigenen zeigt die lokale Suche darüber. Ein Treffer zeigt nur Stammdaten, Zugehörigkeit und ein
+Sperrwort – genau die Schlüssel in FELDER (Entscheidungen des Betreibers vom 18.10.2026: Sperrwort ja, Angebot immer,
+fremde Treffer unter den eigenen).
 
 Oben stehen die Felder, die Normalform und das Angebot (gemeinsamer Unterbau, auch für die lokale Suche), darunter die
 Suche selbst (POST /api/material/globalsuche) und der Steckbrief nach einem QR-Scan (POST /api/material/globalsuche/qr);
@@ -79,7 +80,7 @@ _STECKBRIEF_SQL = ("SELECT i.id, i.inventory_no, i.serial_no, i.manufactured_on,
 
 
 def _bestaetigt(d, meldung):
-    """Ohne ausdrückliches „bestaetigt: true“ läuft nichts – weder Bremse noch Protokoll."""
+    """Ohne ausdrückliches „bestaetigt: true“ läuft nichts – auch keine Zeile im Protokoll."""
     if not isinstance(d, dict) or d.get("bestaetigt") is not True:
         raise Abgelehnt(meldung)
 
@@ -133,17 +134,16 @@ def steckbrief(i, kategorien=None):
     return out
 
 
-def suchen(d, uid):
+def suchen(d):
     """Die globale Suche nach einer Herstellerseriennummer: bestätigt, 4 bis 80 Zeichen, keine vergebene Nummer, nicht
-    für den, der alles sieht (409), dann durch die Bremse (429). Exakt (ohne Groß/klein) und nur unter den Artikeln,
-    die das Konto nicht sieht – die eigenen zeigt die lokale Suche; die Bedingung steht in der Abfrage, damit LIMIT
-    und „mehr“ nur Fremde zählen. Höchstens TREFFER_MAX Treffer – „mehr“ sagt, ob es weitere gibt. Jede Suche steht
-    im Protokoll, mit genau den gezeigten Treffern, auch eine ohne Treffer."""
+    für den, der alles sieht (409). Exakt (ohne Groß/klein) und nur unter den Artikeln, die das Konto nicht sieht –
+    die eigenen zeigt die lokale Suche; die Bedingung steht in der Abfrage, damit LIMIT und „mehr“ nur Fremde
+    zählen. Höchstens TREFFER_MAX Treffer – „mehr“ sagt, ob es weitere gibt. Jede Suche steht im Protokoll, mit genau
+    den gezeigten Treffern, auch eine ohne Treffer."""
     _bestaetigt(d, BESTAETIGEN)
     n = anfrage(d.get("q"))
     if sieht_alles():
         raise Abgelehnt(SIEHT_ALLES, 409)
-    globalprotokoll.bremse(uid)
     # Nicht sichtbar heißt: der Filter ist nicht wahr. COALESCE, weil er bei fehlender Herkunft NULL ergibt (NULL IN …)
     # – ohne fiele ein Ausgesonderter ohne Herkunft aus beiden Mengen und wäre nirgends zu finden.
     rows = db.query(_STECKBRIEF_SQL + "WHERE i.serial_generated = 0 AND i.serial_no = ? COLLATE NOCASE "
@@ -155,10 +155,10 @@ def suchen(d, uid):
             "hinweis": HINWEIS}
 
 
-def steckbrief_qr(d, uid):
+def steckbrief_qr(d):
     """Der Steckbrief nach einem QR-Scan an einem fremden Artikel (Seite „fremd“): bestätigt, Token bekannt (sonst 404
-    wie „gibt es nicht“). Ist der Artikel inzwischen sichtbar, geht es zu ihm („weiter“) – ohne Bremse und Protokoll.
-    Sonst Bremse und Protokoll (Art „qr“, Anfrage ist die Inventarnummer) und derselbe Steckbrief wie bei der Suche."""
+    wie „gibt es nicht“). Ist der Artikel inzwischen sichtbar, geht es zu ihm („weiter“) – ohne Protokoll. Sonst eine
+    Zeile im Protokoll (Art „qr“, Anfrage ist die Inventarnummer) und derselbe Steckbrief wie bei der Suche."""
     _bestaetigt(d, BESTAETIGEN_QR)
     token = d.get("token")
     i = db.query(_STECKBRIEF_SQL + "WHERE i.qr_token = ?", (token,), one=True) if isinstance(token, str) and token else None
@@ -166,6 +166,5 @@ def steckbrief_qr(d, uid):
         raise Abgelehnt(rechte.ARTIKEL_FEHLT, 404)
     if rechte.darf_artikel("lesen", i):
         return {"weiter": f"/material/artikel/{i['id']}"}
-    globalprotokoll.bremse(uid)
     globalprotokoll.eintragen("qr", i["inventory_no"], [i["id"]])
     return {"treffer": [steckbrief(i)], "mehr": False, "hinweis": HINWEIS}

@@ -1,10 +1,10 @@
-"""Bremse und Protokoll der Blicke über den eigenen Bereich hinaus (Phase 2 · L1, Abschnitt 3.3).
+"""Protokoll der Blicke über den eigenen Bereich hinaus (Phase 2 · L1, Abschnitt 3.3).
 
 Wer in einer Gliederung arbeitet, sieht nur ihren Bestand. Drei Wege zeigen trotzdem etwas aus fremden Gliederungen:
 die globale Seriennummernsuche (Art „suche“), der Steckbrief nach einem QR-Scan („qr“) und die Meldung, dass es eine
-Seriennummer bei diesem Produkt schon gibt („dublette“, bestand._serie_frei). Alle drei laufen durch dieselbe Bremse –
-höchstens GRENZE in 15 Minuten je Konto, gezählt in login_attempts wie die Anmeldeversuche – und schreiben je
-Anfrage eine Zeile in mat_global_search: Konto, Name, Art, Anfrage, Treffer.
+Seriennummer bei diesem Produkt schon gibt („dublette“, bestand._serie_frei). Alle drei schreiben je Anfrage eine
+Zeile in mat_global_search: Konto, Name, Art, Anfrage, Treffer. Gezählt oder gebremst wird nicht (Wunsch des
+Betreibers vom 18.10.2026: Bremse entfernt) – die Kontrolle ist dieses Protokoll mit Namen.
 
 Bewusst nicht in mat_audit: Das Journal ist unveränderlich, das Protokoll aber hat eine Frist. aufraeumen() löscht,
 was älter als AUFBEWAHRUNG_TAGE ist – vor jeder neuen Zeile, beim Start der Anwendung, beim Lesen des Protokolls und
@@ -13,27 +13,11 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from ... import db
-from ...auth import attempts_exceeded, note_attempt
-from . import Abgelehnt, akteur
+from . import akteur
 
 ARTEN = ("suche", "qr", "dublette")
-GRENZE = 10                                   # je Konto in 15 Minuten (auth.ATTEMPT_WINDOW) – Suche, QR und Dublette
 AUFBEWAHRUNG_TAGE = 365
 PRO_SEITE = 50
-ZU_VIELE = "Zu viele Suchen außerhalb deines Bereichs – bitte in einer Viertelstunde noch einmal."
-
-
-def _bereich(uid):
-    return f"mat-global:{uid}"
-
-
-def bremse(uid):
-    """Vor jeder globalen Abfrage: Ist die Grenze erreicht, 429 (Abgelehnt); sonst zählt dieser Versuch mit. Prüfen und
-    Zählen unter einer Schreibsperre – zwei gleichzeitige Anfragen kämen sonst beide an der zehnten vorbei."""
-    with db.transaction(sofort=True):
-        if attempts_exceeded([_bereich(uid)], GRENZE):
-            raise Abgelehnt(ZU_VIELE, 429)
-        note_attempt(_bereich(uid))
 
 
 def _grenze_zeit():

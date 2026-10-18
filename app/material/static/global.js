@@ -10,8 +10,7 @@
    seine Karte. Die Treffer stehen unter der eigenen Liste – ab der Trennlinie „Außerhalb deines Bereichs“, jede Karte
    gestrichelt umrandet und mit ihrer Gliederung als Marke ganz oben. Ein Treffer zeigt nur Stammdaten, Zugehörigkeit
    und ein Sperrwort (gesperrt, verloren gemeldet, ausgesondert) – es gibt nichts weiter zu sehen, also auch keinen
-   Link. Gesucht wird erst nach der Bestätigung; der Server bremst (zehn je Viertelstunde, Suche und Steckbrief
-   zusammen) und protokolliert jede Suche mit Namen. */
+   Link. Gesucht wird erst nach der Bestätigung; der Server protokolliert jede Suche und jeden Steckbrief mit Namen. */
 window.MatGlobal = (function () {
   "use strict";
   const { esc, api, dialog } = window.S;

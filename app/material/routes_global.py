@@ -2,11 +2,11 @@
 
 Suchen und den Steckbrief öffnen darf jeder mit Modulzugang – auch wer (noch) keinen Bestand sieht, etwa ein
 Mitglied ohne Freigabe. Die Suche findet nur Artikel, die das Konto nicht sieht; die Material-Verwaltung sieht alles
-und bekommt 409. Beides läuft nur nach Bestätigung, durch die gemeinsame Bremse und ins Protokoll; das Protokoll liest
-nur die Plattform-Verwaltung (Abschnitt in der Nutzerverwaltung) – es ist eine Aufzeichnung über Personen; die
-Material-Verwaltung sieht es nicht. Die Seite nach einem QR-Scan an einem fremden
-Artikel (/m/<token>, Ansicht „fremd“) steht in routes.py. Die Fachregeln stehen in services/globalsuche.py, Bremse
-und Protokoll in services/globalprotokoll.py."""
+und bekommt 409. Beides läuft nur nach Bestätigung und steht jedes Mal mit Namen im Protokoll – eine Bremse gibt es
+nicht (Wunsch des Betreibers vom 18.10.2026). Das Protokoll liest nur die Plattform-Verwaltung (Abschnitt in der
+Nutzerverwaltung) – es ist eine Aufzeichnung über Personen; die Material-Verwaltung sieht es nicht. Die Seite nach
+einem QR-Scan an einem fremden Artikel (/m/<token>, Ansicht „fremd“) steht in routes.py. Die Fachregeln stehen in
+services/globalsuche.py, das Protokoll in services/globalprotokoll.py."""
 from flask import jsonify, request
 
 from ..auth import current_user, is_admin, json_body
@@ -22,7 +22,7 @@ NUR_VERWALTUNG = "Das Protokoll der globalen Suchen sieht nur die Plattform-Verw
 def globalsuche_starten():
     """{"q": Seriennummer, "bestaetigt": true} → {"treffer": [Steckbrief …], "mehr", "hinweis"} – nur Artikel, die das
     Konto nicht sieht."""
-    return jsonify(globalsuche.suchen(json_body(), current_user()["id"]))
+    return jsonify(globalsuche.suchen(json_body()))
 
 
 @api.post("/globalsuche/qr")
@@ -30,7 +30,7 @@ def globalsuche_starten():
 def globalsuche_qr():
     """{"token": QR-Token, "bestaetigt": true} → derselbe Steckbrief (ein Treffer) oder {"weiter": Adresse}, wenn der
     Artikel inzwischen im eigenen Bereich liegt."""
-    return jsonify(globalsuche.steckbrief_qr(json_body(), current_user()["id"]))
+    return jsonify(globalsuche.steckbrief_qr(json_body()))
 
 
 @api.get("/globalsuche/protokoll")

@@ -7,7 +7,7 @@ Datenbanken ohne Index laufen über LIKE – bei ein, zwei Zeichen ist ohnehin f
 
 Seit Phase 2 findet die Artikelsuche nur, was das Konto sieht (rechte.artikel_filter) – in den Treffern wie in der
 Gesamtzahl; ebenso zählt die Spalte „Bestand“ im Katalog. Was darüber hinausgeht, ist die globale Suche nach der
-exakten Herstellerseriennummer (globalsuche, mit Bremse und Protokoll).
+exakten Herstellerseriennummer (globalsuche, mit Protokoll).
 """
 import re
 import sqlite3

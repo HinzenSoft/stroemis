@@ -860,8 +860,8 @@ def test_abfragezahl():
 def test_unterbau():
     """Was die Pakete B, C und D vom Rechtekern übernehmen: journal.konto_ref/konto_name (ohne E-Mail),
     rechte.waehlbares_konto (eine Antwort für inaktiv, ohne Namen, nicht vorhanden), verwalter_von, darf_meldung,
-    globalprotokoll (Bremse, Protokoll, Frist) und globalsuche.angebot (zu jeder tauglichen Anfrage, nicht für die
-    Verwaltung)."""
+    globalprotokoll (Protokoll und Frist, seit dem 18.10.2026 ohne Bremse) und globalsuche.angebot (zu jeder
+    tauglichen Anfrage, nicht für die Verwaltung)."""
     from flask import g
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
@@ -919,16 +919,9 @@ def test_unterbau():
             assert rechte.darf_meldung({"created_by": k["fuehrung_id"], "folder_id": None}, fuehrung)
             assert not rechte.darf_meldung({"created_by": k["nutzer_id"], "folder_id": None}, nutzer)
             assert not rechte.darf_meldung({"created_by": None, "folder_id": lager}, nutzer)
-            # Suchprotokoll: zehn in der Viertelstunde, die elfte 429; Zeilen mit Name, älter als ein Jahr fliegen raus.
+            # Suchprotokoll: Zeilen mit Name, älter als ein Jahr fliegen raus. Eine Bremse gibt es nicht mehr.
             g.user = fuehrung
-            for _ in range(globalprotokoll.GRENZE):
-                globalprotokoll.bremse(fuehrung["id"])
-            try:
-                globalprotokoll.bremse(fuehrung["id"])
-                raise AssertionError("Bremse greift nicht")
-            except rechte.Abgelehnt as exc:
-                assert exc.code == 429 and str(exc) == globalprotokoll.ZU_VIELE
-            globalprotokoll.bremse(k["wart_id"])                                 # je Konto gezählt
+            assert not hasattr(globalprotokoll, "bremse")
             zid = globalprotokoll.eintragen("suche", "TEST-0815", [])
             db.execute("INSERT INTO mat_global_search (user_id, user_name, art, anfrage, treffer, created_at) "
                        "VALUES (NULL, 'Alt', 'qr', 'M-000001', 0, '2020-01-01T00:00:00+00:00')")
@@ -1628,9 +1621,8 @@ def test_produktjournal():
 
 def test_dublette():
     """Eine Seriennummer, die es bei diesem Produkt nur in B gibt: 409 ohne Inventarnummer und Gliederung, eine Zeile
-    „dublette“ im Protokoll; die elfte in einer Viertelstunde: 429. Eine sichtbare Dublette: 409 mit Inventarnummer,
-    ohne Protokoll. Ebenso beim Ändern der Seriennummer."""
-    from app.material.services import globalprotokoll
+    „dublette“ im Protokoll – jedes Mal, ohne Bremse (seit dem 18.10.2026 auch die zwölfte). Eine sichtbare Dublette:
+    409 mit Inventarnummer, ohne Protokoll. Ebenso beim Ändern der Seriennummer."""
     from app.material.services.bestand import FremdeDublette
     with tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
@@ -1649,7 +1641,7 @@ def test_dublette():
         assert [(x["user_id"], x["user_name"], x["anfrage"], x["treffer"], json.loads(x["item_ids"])) for x in z] == \
             [(t.k["wart_id"], "wart", "TEST-B-0001", 1, [t.art_b["id"]])], z
         assert not zeilen(app, "SELECT 1 FROM mat_item WHERE serial_no = 'TEST-B-0001' AND id <> ?", (t.art_b["id"],))
-        # Sichtbare Dublette: wie bisher mit Inventarnummer, ohne Protokoll und ohne Bremse.
+        # Sichtbare Dublette: wie bisher mit Inventarnummer, ohne Protokoll.
         eigen = neuer_artikel(w, ids["hms"], t.lager_a, serial_no="TEST-A-0005")
         r = anlegen("test-a-0005")
         assert r.status_code == 409 and eigen["inventory_no"] in r.json["error"], r.get_json()
@@ -1659,12 +1651,11 @@ def test_dublette():
         assert r.status_code == 409 and r.json["error"] == FremdeDublette.TEXT, r.get_json()
         assert len(protokoll()) == 2
         assert zeilen(app, "SELECT serial_no FROM mat_item WHERE id = ?", (t.art_a["id"],))[0]["serial_no"] == "TEST-A-0001"
-        # Bremse: zusammen höchstens zehn in der Viertelstunde, die elfte 429 – ohne Zeile.
-        for _ in range(globalprotokoll.GRENZE - 2):
-            assert anlegen("TEST-B-0001").status_code == 409
-        r = anlegen("TEST-B-0001")
-        assert r.status_code == 429 and r.json["error"] == globalprotokoll.ZU_VIELE, r.get_json()
-        assert len(protokoll()) == globalprotokoll.GRENZE
+        # Keine Bremse: auch die zwölfte fremde Dublette antwortet 409 mit dem festen Text und steht im Protokoll.
+        for _ in range(10):
+            r = anlegen("TEST-B-0001")
+            assert r.status_code == 409 and r.json["error"] == FremdeDublette.TEXT, r.get_json()
+        assert len(protokoll()) == 12
         # Die Verwaltung sieht B – für sie ist es eine sichtbare Dublette.
         r = t.adm.post("/api/material/artikel", json={"product_id": ids["hms"], "folder_id": t.lager_a,
                                                       "serial_no": "TEST-B-0001"})

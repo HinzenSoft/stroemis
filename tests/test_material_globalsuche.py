@@ -3,15 +3,15 @@ python tests/test_material_globalsuche.py  oder  pytest tests/test_material_glob
 
 Die Tests aus dem Bauentwurf 8.3 für Paket C: Eingaben (Bestätigung, Länge, vergebene Nummern, die Verwaltung),
 genau die Felder des Steckbriefs (keine Kennung, Pfad der Heimat ohne Systemordner, persönlicher Ordner verdeckt),
-höchstens 10 Treffer mit „mehr“, die gemeinsame Bremse von Suche, QR-Steckbrief und Dublette, das Protokoll mit seiner
-Frist (beim Schreiben, beim Neustart, beim Lesen) nur für die Verwaltung, der QR-Steckbrief erst nach Bestätigung, dazu
-mit Paket A1R das Angebot in GET /suche, die Seite /m/<token> eines fremden Artikels und die fremde Dublette beim
-Anlegen. Seit den Entscheidungen vom 18.10.2026 außerdem: das Sperrwort im Steckbrief (test_sperrwort), das Angebot zu
+höchstens 10 Treffer mit „mehr“, das Protokoll mit seiner Frist (beim Schreiben, beim Neustart, beim Lesen) nur für
+die Verwaltung, der QR-Steckbrief erst nach Bestätigung, dazu mit Paket A1R das Angebot in GET /suche, die Seite
+/m/<token> eines fremden Artikels und die fremde Dublette beim Anlegen. Seit den Entscheidungen vom 18.10.2026 außerdem: das Sperrwort im Steckbrief (test_sperrwort), das Angebot zu
 jeder tauglichen Anfrage außer für die Verwaltung (test_angebot) und nur fremde Treffer, auch bei derselben
 Seriennummer im eigenen Bereich (test_nur_fremde), auch für ein Konto, das nur einen Ordner einer Gliederung sieht
 (test_teilfreigabe), und das Angebot auch nach der Weiterleitung zu einem eindeutigen eigenen Treffer
-(test_eindeutiger_treffer). Alle Namen, Hersteller und Nummern hier sind erfunden und nur für
-den Test da."""
+(test_eindeutiger_treffer). Seit dem Wunsch des Betreibers vom 18.10.2026 gibt es keine Bremse mehr – Suche,
+QR-Steckbrief und Dublette laufen beliebig oft und stehen alle im Protokoll (test_keine_bremse,
+test_dublette_ohne_bremse). Alle Namen, Hersteller und Nummern hier sind erfunden und nur für den Test da."""
 import json
 import os
 import re
@@ -47,9 +47,10 @@ def protokoll(app):
     return zeilen(app, "SELECT * FROM mat_global_search ORDER BY id")
 
 
-def versuche(app, uid):
-    """Wie oft das Konto in der laufenden Viertelstunde durch die Bremse ging."""
-    return zeilen(app, "SELECT COUNT(*) AS n FROM login_attempts WHERE scope = ?", (f"mat-global:{uid}",))[0]["n"]
+def bremszeilen(app):
+    """Zeilen der früheren Bremse in login_attempts (Bereich „mat-global:<Konto>“) – seit dem 18.10.2026 entsteht keine
+    mehr."""
+    return zeilen(app, "SELECT COUNT(*) AS n FROM login_attempts WHERE scope LIKE 'mat-global:%'")[0]["n"]
 
 
 def vor_tagen(tage):
@@ -111,13 +112,13 @@ def nichts_geheimes(t, r, *weitere):
 
 def test_eingaben():
     """Ohne Bestätigung, zu kurz oder zu lang, vergebene Nummern: 400. Die Material-Verwaltung sieht alles: 409. Nichts
-    davon zählt in der Bremse oder steht im Protokoll. Eine Seriennummer aus dem eigenen Bereich hält die Suche nicht
-    mehr auf (Entscheidung vom 18.10.2026) – sie läuft, zählt und findet nur Fremdes. Ohne Anmeldung 401, ohne
-    Modulzugang 403."""
+    davon steht im Protokoll. Eine Seriennummer aus dem eigenen Bereich hält die Suche nicht mehr auf (Entscheidung
+    vom 18.10.2026) – sie läuft, steht im Protokoll und findet nur Fremdes. Ohne Anmeldung 401, ohne Modulzugang
+    403."""
     from app.material.services import globalsuche
     with tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
-        w, uid = t.wart_a, t.k["wart_id"]
+        w = t.wart_a
         for d in ({"q": "TEST-B-0001"}, {"q": "TEST-B-0001", "bestaetigt": "true"},
                   {"q": "TEST-B-0001", "bestaetigt": 1}, {"q": "TEST-B-0001", "bestaetigt": False}, {}):
             r = w.post(SUCHE, json=d, headers=H)
@@ -129,24 +130,22 @@ def test_eingaben():
         for q in ("M-000001", "m-000001", "M-TEST1", "STR-000001", "str-12345", " STR-000001 "):
             r = global_suchen(w, q)
             assert r.status_code == 400 and r.json["error"] == globalsuche.NUR_HERSTELLER, (q, r.get_json())
-        assert versuche(t.app, uid) == 1 and len(protokoll(t.app)) == 1           # nur die Suche mit 80 Zeichen
+        assert len(protokoll(t.app)) == 1                                      # nur die Suche mit 80 Zeichen
         # Im eigenen Bereich – auch klein geschrieben und mit Leerraum: Die Suche läuft und zeigt nur Fremdes (hier
-        # nichts); sie zählt in der Bremse und steht im Protokoll.
+        # nichts); sie steht im Protokoll.
         for q in ("TEST-A-0001", "test-a-0001", "  TEST-A-0001 "):
             r = global_suchen(w, q)
             assert r.status_code == 200 and r.json["treffer"] == [] and r.json["mehr"] is False, (q, r.get_json())
-        assert versuche(t.app, uid) == 4
         assert [(z["anfrage"], z["treffer"]) for z in protokoll(t.app)][1:] == [
             ("TEST-A-0001", 0), ("test-a-0001", 0), ("TEST-A-0001", 0)]
-        # Die Material-Verwaltung sieht alles – für sie gibt es nichts Fremdes: 409, nicht gezählt, nicht protokolliert.
-        # Eine unbrauchbare Anfrage bleibt auch bei ihr beim eigenen Fehler (400).
-        adm_id = zeilen(t.app, "SELECT id FROM users WHERE email = 'admin@example.org'")[0]["id"]
+        # Die Material-Verwaltung sieht alles – für sie gibt es nichts Fremdes: 409, nicht protokolliert. Eine
+        # unbrauchbare Anfrage bleibt auch bei ihr beim eigenen Fehler (400).
         for q in ("TEST-B-0001", "TEST-A-0001", "TEST-NIRGENDS-0815"):
             r = global_suchen(t.adm, q)
             assert r.status_code == 409 and r.json["error"] == globalsuche.SIEHT_ALLES, (q, r.get_json())
         assert global_suchen(t.adm, "STR-000001").json["error"] == globalsuche.NUR_HERSTELLER
         assert t.adm.post(SUCHE, json={"q": "TEST-B-0001"}, headers=H).json["error"] == globalsuche.BESTAETIGEN
-        assert versuche(t.app, adm_id) == 0 and len(protokoll(t.app)) == 4
+        assert len(protokoll(t.app)) == 4 and bremszeilen(t.app) == 0
         # Leerraum in der Mitte zählt einfach, Steuerzeichen als Leerraum – so steht die Anfrage im Protokoll.
         assert global_suchen(w, "TEST \t  NIRGENDS\x00 0815").status_code == 200
         assert protokoll(t.app)[-1]["anfrage"] == "TEST NIRGENDS 0815"
@@ -275,51 +274,53 @@ def test_zehn_und_mehr():
     print("Zehn und mehr bestanden.")
 
 
-# --- Bremse -----------------------------------------------------------------------------------------------------
+# --- Keine Bremse -----------------------------------------------------------------------------------------------
 
-def test_bremse():
-    """Zehn Blicke über den eigenen Bereich je Viertelstunde und Konto – Suche, QR-Steckbrief und Dublette zusammen.
-    Die elfte Suche und der elfte Steckbrief: 429, ohne Protokollzeile. Ein anderes Konto ist frei; nach der
-    Viertelstunde geht es wieder. Unbrauchbare Anfragen antworten auch an der Grenze wie sonst (400)."""
-    from flask import g
-
+def test_keine_bremse():
+    """Wunsch des Betreibers vom 18.10.2026: „Entferne die Bremse komplett.“ Zwölf Suchen nach einer fremden und zwölf
+    nach einer eigenen Seriennummer und zwölf QR-Steckbriefe hintereinander – alle 200, nie 429, und alle 36 mit Namen
+    im Protokoll (auch in der Ansicht der Verwaltung); keine Zeile „mat-global:…“ in login_attempts. Was ohnehin
+    scheitert, antwortet wie sonst und steht nicht im Protokoll. Die Anmeldebremse bleibt (wie in test_smoke)."""
     from app.material.services import globalprotokoll, globalsuche
+    for name in ("bremse", "GRENZE", "ZU_VIELE", "_bereich"):
+        assert not hasattr(globalprotokoll, name), name
     with tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
         f, uid = t.k["fuehrung"], t.k["fuehrung_id"]
         token_b = token_von(t.art_b)
-        for _ in range(6):
-            assert global_suchen(f, "TEST-B-0001").status_code == 200
-        for _ in range(2):
-            assert steckbrief_holen(f, token_b).status_code == 200
-        # Zwei fremde Dubletten – die Dublettenprüfung beim Anlegen geht durch dieselbe Bremse (routes._fremde_dublette).
-        with t.app.test_request_context():
-            from app import db
-            g.user = db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True)
-            for _ in range(2):
-                globalprotokoll.bremse(uid)
-        assert versuche(t.app, uid) == 10
-        zeilen_vorher = len(protokoll(t.app))
-        r = global_suchen(f, "TEST-B-0001")
-        assert r.status_code == 429 and r.json["error"] == globalprotokoll.ZU_VIELE, r.get_json()
-        r = steckbrief_holen(f, token_b)
-        assert r.status_code == 429 and r.json["error"] == globalprotokoll.ZU_VIELE, r.get_json()
-        assert len(protokoll(t.app)) == zeilen_vorher == 8
-        # Was ohnehin scheitert, bleibt beim eigenen Fehler; ein eigener Artikel per QR führt weiter wie sonst. Eine
-        # eigene Seriennummer geht seit dem 18.10.2026 durch die Bremse wie jede andere.
+        for n in range(12):
+            r = global_suchen(f, "TEST-B-0001")
+            assert r.status_code == 200, (n, r.get_json())
+            assert [x["inventory_no"] for x in r.json["treffer"]] == [t.art_b["inventory_no"]], (n, r.json)
+            r = global_suchen(f, "TEST-A-0001")                     # eigene Seriennummer: zeigt nur Fremdes (nichts)
+            assert r.status_code == 200 and r.json["treffer"] == [], (n, r.get_json())
+            r = steckbrief_holen(f, token_b)
+            assert r.status_code == 200 and len(r.json["treffer"]) == 1, (n, r.get_json())
+        p = protokoll(t.app)
+        assert [(z["art"], z["anfrage"], z["treffer"]) for z in p] == [
+            ("suche", "TEST-B-0001", 1), ("suche", "TEST-A-0001", 0), ("qr", t.art_b["inventory_no"], 1)] * 12, p
+        assert {(z["user_id"], z["user_name"]) for z in p} == {(uid, "fuehrung")}, p
+        assert bremszeilen(t.app) == 0
+        r = t.adm.get(PROTOKOLL)
+        assert r.json["gesamt"] == 36 and len(r.json["eintraege"]) == 36, r.json
+        assert {x["name"] for x in r.json["eintraege"]} == {"fuehrung"}
+        # Was ohnehin scheitert, bleibt beim eigenen Fehler – ohne Protokollzeile; ein eigener Artikel per QR führt
+        # weiter wie sonst.
         r = f.post(SUCHE, json={"q": "TEST-B-0001"}, headers=H)
         assert r.status_code == 400 and r.json["error"] == globalsuche.BESTAETIGEN
         assert global_suchen(f, "ABC").status_code == 400
-        assert global_suchen(f, "TEST-A-0001").status_code == 429
         assert global_suchen(t.adm, "TEST-B-0001").status_code == 409
         assert steckbrief_holen(f, token_von(t.art_a)).json == {"weiter": f"/material/artikel/{t.art_a['id']}"}
-        # Je Konto gezählt.
-        assert global_suchen(t.wart_a, "TEST-B-0001").status_code == 200
-        # Nach der Viertelstunde geht es wieder.
-        sql(t.app, "UPDATE login_attempts SET created_at = ? WHERE scope = ?",
-            ((datetime.now(timezone.utc) - timedelta(minutes=16)).replace(microsecond=0).isoformat(), f"mat-global:{uid}"))
-        assert global_suchen(f, "TEST-B-0001").status_code == 200
-    print("Bremse bestanden.")
+        assert len(protokoll(t.app)) == 36
+        # Ein anderes Konto sucht daneben wie immer.
+        assert global_suchen(t.wart_a, "TEST-B-0001").status_code == 200 and len(protokoll(t.app)) == 37
+        # Die Anmeldebremse ist unberührt: zehn Fehlversuche, dann 429.
+        angriff = t.app.test_client()
+        codes = [angriff.post("/api/auth/login", json={"email": "admin@example.org", "password": "falsch"},
+                              headers=H).status_code for _ in range(11)]
+        assert codes[:10] == [401] * 10 and codes[10] == 429, codes
+        assert bremszeilen(t.app) == 0
+    print("Keine Bremse bestanden.")
 
 
 # --- Protokoll --------------------------------------------------------------------------------------------------
@@ -390,9 +391,9 @@ def test_protokoll():
 # --- QR-Steckbrief ----------------------------------------------------------------------------------------------
 
 def test_qr_steckbrief():
-    """POST /globalsuche/qr: erst nach Bestätigung (sonst 400, ohne Bremse und Protokoll); unbekanntes Token 404 wie
-    „gibt es nicht“; ein fremder Artikel gibt denselben Steckbrief wie die Suche (Zeile „qr“ mit der Inventarnummer);
-    ein eigener führt zum Artikel – ohne Bremse und Protokoll."""
+    """POST /globalsuche/qr: erst nach Bestätigung (sonst 400, ohne Protokoll); unbekanntes Token 404 wie „gibt es
+    nicht“; ein fremder Artikel gibt denselben Steckbrief wie die Suche (Zeile „qr“ mit der Inventarnummer); ein
+    eigener führt zum Artikel – ohne Protokoll."""
     from app.material.services import globalsuche
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
@@ -401,7 +402,7 @@ def test_qr_steckbrief():
         for d in ({"token": token_b}, {"token": token_b, "bestaetigt": "ja"}, {"token": token_b, "bestaetigt": False}, {}):
             r = w.post(QR, json=d, headers=H)
             assert r.status_code == 400 and r.json["error"] == globalsuche.BESTAETIGEN_QR, (d, r.get_json())
-        assert versuche(t.app, uid) == 0 and protokoll(t.app) == []
+        assert protokoll(t.app) == []
         unbekannt = steckbrief_holen(w, "GibtEsNicht-0000")
         assert unbekannt.status_code == 404 and unbekannt.json == {"error": "Artikel nicht gefunden."}, unbekannt.get_json()
         for token in ("", None, 123, ["x"]):
@@ -423,11 +424,11 @@ def test_qr_steckbrief():
         assert [(z["art"], z["anfrage"], z["treffer"], json.loads(z["item_ids"])) for z in p] == [
             ("qr", t.art_b["inventory_no"], 1, [t.art_b["id"]]), ("qr", t.pers_b["inventory_no"], 1, [t.pers_b["id"]]),
             ("qr", t.gesp_b["inventory_no"], 1, [t.gesp_b["id"]])], p
-        # Eigener Artikel (auch gesperrt, über die Heimat): weiter zum Artikel, nichts gezählt, nichts protokolliert.
-        vorher = (versuche(t.app, uid), len(protokoll(t.app)))
+        # Eigener Artikel (auch gesperrt, über die Heimat): weiter zum Artikel, nichts protokolliert.
+        vorher = len(protokoll(t.app))
         assert steckbrief_holen(w, token_von(t.art_a)).json == {"weiter": f"/material/artikel/{t.art_a['id']}"}
         assert steckbrief_holen(t.wart_b, token_von(t.gesp_b)).json == {"weiter": f"/material/artikel/{t.gesp_b['id']}"}
-        assert (versuche(t.app, uid), len(protokoll(t.app))) == vorher
+        assert len(protokoll(t.app)) == vorher
         # Ohne Anmeldung 401, ohne Modulzugang 403.
         assert t.app.test_client().post(QR, json={"token": token_b, "bestaetigt": True}, headers=H).status_code == 401
         assert steckbrief_holen(t.k["nutzer"], token_b).status_code == 403
@@ -507,8 +508,8 @@ def test_nur_fremde():
     """Entscheidung 2: Dieselbe Seriennummer in A (sichtbar) und B (fremd) – die globale Suche von A liefert nur die
     Artikel aus B und protokolliert nur deren Kennungen; aus Sicht von B ist es umgekehrt. Die Bedingung steht in der
     Abfrage: Elf eigene Artikel mit kleineren Kennungen verdrängen die fremden nicht aus den zehn Treffern, und „mehr“
-    zählt nur Fremde. Bestätigung, Bremse und Protokoll wie sonst; wer beide Gliederungen sieht, findet global
-    nichts mehr."""
+    zählt nur Fremde. Bestätigung und Protokoll wie sonst; wer beide Gliederungen sieht, findet global nichts
+    mehr."""
     from app.material.services import globalsuche
     with tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
@@ -534,7 +535,6 @@ def test_nur_fremde():
         p = protokoll(t.app)
         assert len(p) == vorher + 1 and (p[-1]["art"], p[-1]["anfrage"], p[-1]["treffer"]) == (
             "suche", "test-beide-0001", 2) and json.loads(p[-1]["item_ids"]) == fremd, p[-1]
-        assert versuche(t.app, t.k["wart_id"]) == 1
         # Aus Sicht von B sind die elf aus A fremd: zehn Treffer (die kleinsten Kennungen) und „mehr“.
         r = global_suchen(t.wart_b, "TEST-BEIDE-0001")
         assert len(r.json["treffer"]) == 10 and r.json["mehr"] is True, r.json
@@ -544,11 +544,11 @@ def test_nur_fremde():
         sql(t.app, "UPDATE mat_item SET serial_no = 'TEST-ANDERS-0001' WHERE id = ?", (eigen[-1],))
         r = global_suchen(t.wart_b, "TEST-BEIDE-0001")
         assert len(r.json["treffer"]) == 10 and r.json["mehr"] is False, r.json
-        # Ohne Bestätigung nichts – nicht gezählt, nicht protokolliert.
+        # Ohne Bestätigung nichts – nicht protokolliert.
         n = len(protokoll(t.app))
         r = t.wart_a.post(SUCHE, json={"q": "TEST-BEIDE-0001"}, headers=H)
         assert r.status_code == 400 and r.json["error"] == globalsuche.BESTAETIGEN
-        assert len(protokoll(t.app)) == n and versuche(t.app, t.k["wart_id"]) == 1
+        assert len(protokoll(t.app)) == n
         # Wer beide Gliederungen sieht, findet global nichts mehr – die normale Suche hat alle.
         freigeben(t.adm, t.b, t.k["wart_id"], "lesen")
         r = global_suchen(t.wart_a, "TEST-BEIDE-0001")
@@ -614,8 +614,8 @@ def test_eindeutiger_treffer():
     """Prüfung der Nachbesserung, Entscheidung 2 („immer angeboten“): Ein eindeutiger eigener Treffer öffnet den
     Artikel weiter direkt – taugt die Anfrage für die globale Suche, nimmt die Weiterleitung sie mit (?q=), und die
     Artikelseite bekommt sie als „suche“, für das Angebot unter dem Kopf. Auch bei einem Teiltreffer. Ohne q bei
-    Inventarnummern, zu kurzen Anfragen und für die Material-Verwaltung; das Laden zählt nicht in der Bremse und
-    steht nicht im Protokoll; ein fremder Artikel bleibt 404, auch mit q."""
+    Inventarnummern, zu kurzen Anfragen und für die Material-Verwaltung; das Laden steht nicht im Protokoll; ein
+    fremder Artikel bleibt 404, auch mit q."""
     with tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
         w, a = t.wart_a, t.art_a
@@ -639,7 +639,7 @@ def test_eindeutiger_treffer():
         # Fremdes bleibt fremd – auch mit q.
         r = w.get(f"/material/artikel/{t.art_b['id']}", query_string={"q": "TEST-B-0001"})
         assert r.status_code == 404 and "TEST-B-0001" not in r.get_data(as_text=True)
-        assert protokoll(t.app) == [] and versuche(t.app, t.k["wart_id"]) == 0
+        assert protokoll(t.app) == []
     print("Eindeutiger Treffer bestanden.")
 
 
@@ -697,34 +697,33 @@ def test_qr_seite_fremd():
     print("QR-Seite fremd bestanden.")
 
 
-def test_bremse_mit_dublette():
-    """Die fremde Dublette beim Anlegen (A1R, 3.7) zählt in derselben Bremse und steht im Protokoll (Art „dublette“):
-    neun Suchen und eine Dublette, dann ist die elfte Suche 429 – ebenso die nächste Dublette."""
-    from app.material.services import globalprotokoll
+def test_dublette_ohne_bremse():
+    """Die fremde Dublette beim Anlegen (A1R, 3.7) steht weiter im Protokoll (Art „dublette“), gebremst wird sie nicht
+    mehr (18.10.2026): zwölf Suchen und zwölf Dubletten im Wechsel – jede Suche 200, jede Dublette 409 mit dem festen
+    Text (ohne Inventarnummer und Gliederung), nie 429, und alle 24 im Protokoll."""
+    from app.material.services.bestand import FremdeDublette
     with tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
         w = t.wart_a
-        for _ in range(9):
-            assert global_suchen(w, "TEST-B-0001").status_code == 200
-        r = w.post("/api/material/artikel", json={"product_id": t.ids["hms"], "folder_id": t.lager_a,
-                                                  "serial_no": "TEST-B-0001"}, headers=H)
-        assert r.status_code == 409 and t.art_b["inventory_no"] not in r.json["error"], r.get_json()
-        assert "Nachbarstadt" not in r.json["error"], r.get_json()
+        for n in range(12):
+            assert global_suchen(w, "TEST-B-0001").status_code == 200, n
+            r = w.post("/api/material/artikel", json={"product_id": t.ids["hms"], "folder_id": t.lager_a,
+                                                      "serial_no": "TEST-B-0001"}, headers=H)
+            assert r.status_code == 409 and r.json["error"] == FremdeDublette.TEXT, (n, r.get_json())
+        assert t.art_b["inventory_no"] not in r.json["error"] and "Nachbarstadt" not in r.json["error"], r.get_json()
         # Gesamtprüfung: Die Meldung nennt den Weg, wie ihn die Oberfläche nennt – keine „globale Suche“.
         assert "Außerhalb deines Bereichs" in r.json["error"] and "global" not in r.json["error"], r.get_json()
-        assert [z["art"] for z in protokoll(t.app)][-1] == "dublette"
-        r = global_suchen(w, "TEST-B-0001")
-        assert r.status_code == 429 and r.json["error"] == globalprotokoll.ZU_VIELE, r.get_json()
-        assert "außerhalb deines Bereichs" in r.json["error"] and "global" not in r.json["error"], r.get_json()
-        r = w.post("/api/material/artikel", json={"product_id": t.ids["hms"], "folder_id": t.lager_a,
-                                                  "serial_no": "TEST-B-0001"}, headers=H)
-        assert r.status_code == 429, r.get_json()
-        assert len(protokoll(t.app)) == 10
-    print("Bremse mit Dublette bestanden.")
+        p = protokoll(t.app)
+        assert [z["art"] for z in p] == ["suche", "dublette"] * 12, p
+        assert {(z["user_id"], z["anfrage"], z["treffer"], z["item_ids"]) for z in p} == {
+            (t.k["wart_id"], "TEST-B-0001", 1, json.dumps([t.art_b["id"]]))}, p
+        assert bremszeilen(t.app) == 0
+        assert not zeilen(t.app, "SELECT 1 FROM mat_item WHERE serial_no = 'TEST-B-0001' AND id <> ?", (t.art_b["id"],))
+    print("Dublette ohne Bremse bestanden.")
 
 
 if __name__ == "__main__":
-    for test in (test_eingaben, test_steckbrief, test_zehn_und_mehr, test_bremse, test_protokoll, test_qr_steckbrief,
-                 test_sperrwort, test_angebot, test_nur_fremde, test_teilfreigabe, test_eindeutiger_treffer,
-                 test_angebot_ueber_suche, test_qr_seite_fremd, test_bremse_mit_dublette):
+    for test in (test_eingaben, test_steckbrief, test_zehn_und_mehr, test_keine_bremse, test_protokoll,
+                 test_qr_steckbrief, test_sperrwort, test_angebot, test_nur_fremde, test_teilfreigabe,
+                 test_eindeutiger_treffer, test_angebot_ueber_suche, test_qr_seite_fremd, test_dublette_ohne_bremse):
         test()
