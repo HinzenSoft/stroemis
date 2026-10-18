@@ -28,7 +28,9 @@ Was eine Freigabe ist und wie sie wirkt, steht in rechte.py. Hier stehen die Reg
      kommt nur „notiz_geaendert“.
  11  Nicht an „Gesperrt“ und „Ausgesondert“ (409); Unsichtbares antwortet 404 (requires_folder).
  12  Ein Konto, das es nicht gibt, das deaktiviert ist oder keinen Namen hat: dieselbe 404. Ein Konto ohne Zugang zum
-     Modul: 409 mit Klartext (die Personensuche für Freigaben zeigt es gar nicht erst).
+     Modul: 409 mit Klartext (die Personensuche für Freigaben zeigt es gar nicht erst) – ebenso beim Ändern, wenn die
+     Zeile danach weiter reicht (anderes Recht als verwalten → lesen, späteres Ende); kürzen, herabsetzen, die Notiz
+     ändern und entziehen gehen immer (_reicht_weiter).
  13  Nach jedem Schreiben rechte.sicht_verwerfen() – die Antwort zeigt schon den neuen Stand.
 
 Journal am Ordner, an dem die Freigabe verankert ist: freigabe_erteilt, freigabe_geaendert, freigabe_entzogen mit
@@ -191,9 +193,20 @@ def zeile(gid):
 
 # --- Regeln (1.6) ------------------------------------------------------------------------------------------------
 
+def _reicht_weiter(alt, neu):
+    """Gibt die Änderung dem Konto mehr als vorher? Eine neue Zeile, ein anderes Recht (außer verwalten → lesen) oder
+    ein späteres Ende (ohne Ende ist am spätesten). Kürzen, Herabsetzen, die Notiz und Entziehen (neu None) nicht."""
+    if neu is None:
+        return False
+    if alt is None:
+        return True
+    return _spaeter(neu["valid_until"], alt["valid_until"]) or (
+        neu["permission"] != alt["permission"] and (alt["permission"], neu["permission"]) != ("verwalten", "lesen"))
+
+
 def _regeln(s, ich, anker, alt, neu, konto):
     """Prüft eine Änderung an einer Zeile – vorher alt (None beim Anlegen), nachher neu (None beim Entziehen) – gegen
-    1.6 Nr. 3, 4, 5 und 8. Der Anker ist sichtbar und wird vom Handelnden verwaltet (Route); Nr. 7 prüft der Aufrufer
+    1.6 Nr. 3, 4, 5, 8 und 12. Der Anker ist sichtbar und wird vom Handelnden verwaltet (Route); Nr. 7 prüft der Aufrufer
     nach dem Schreiben."""
     if not s.alles:
         ende = _ende(s, anker)
@@ -209,10 +222,12 @@ def _regeln(s, ich, anker, alt, neu, konto):
         if (alt or neu)["user_id"] == ich["id"]:
             if alt is None:
                 raise Abgelehnt(EIGENE_NEU, 403)
-            if neu is not None and (_spaeter(neu["valid_until"], alt["valid_until"]) or (
-                    neu["permission"] != alt["permission"]
-                    and (alt["permission"], neu["permission"]) != ("verwalten", "lesen"))):
+            if _reicht_weiter(alt, neu):
                 raise Abgelehnt(EIGENE, 403)
+    # Nr. 12: Mehr bekommt nur ein Konto mit Zugang zum Modul – beim Ändern wie beim Erteilen (waehlbares_konto). Sonst
+    # ließe sich eine ruhende Zeile eines Kontos ohne Stufe hochstufen und wirkte, sobald es die Stufe bekommt.
+    if _reicht_weiter(alt, neu) and not rechte.zugang(konto):
+        raise Abgelehnt(rechte.KONTO_OHNE_ZUGANG, 409)
     # Nr. 8: Eine Prüffreigabe entsteht oder reicht weiter – das Konto muss qualifiziert sein (mit Zugang zum Modul).
     # Kürzen geht immer.
     if neu is not None and neu["permission"] == "pruefen" and (

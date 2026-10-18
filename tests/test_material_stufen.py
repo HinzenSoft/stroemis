@@ -387,6 +387,48 @@ def test_personensuche_zweck():
     print("Personensuche je Zweck bestanden.")
 
 
+def test_ruhende_freigabe_nicht_hochstufen():
+    """Eine Freigabe, die ruht, weil das Konto keine Stufe hat (1.6 Nr. 12): Hochstufen (lesen → verwalten), ein
+    späteres Ende oder aus lesen ein dauerhaftes Grundrecht machen geht per PUT so wenig wie beim Erteilen – 409 mit
+    demselben Klartext, nichts geschrieben, auch nicht durch die Material-Verwaltung. Kürzen, Herabsetzen, die Notiz und
+    Entziehen gehen weiter. Mit Stufe Mitglied geht das Hochstufen wieder."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        adm, w, mv = k["adm"], k["wart"], k["katalog"]
+        gid, _ = gliederung(adm)
+        _, uid = neues_konto(app, "ruhend@example.org", name="Ruhend Test")
+        _, uid2 = neues_konto(app, "ruhend2@example.org", name="Ruhend Zwei")
+        bis = (_heute() + timedelta(days=30)).isoformat()
+        lesen = freigeben(adm, gid, uid, "lesen", bis=bis)
+        verwalten = freigeben(adm, gid, uid2, "verwalten")
+        for x in (uid, uid2):
+            assert adm.put(f"/api/admin/users/{x}", json={"rechte": {"material": 0}}).status_code == 200
+
+        def zeile(gid_):
+            return zeilen(app, "SELECT permission, valid_until, note FROM mat_folder_grant WHERE id = ?", (gid_,))[0]
+        vorher = zeile(lesen)
+        spaeter = (_heute() + timedelta(days=60)).isoformat()
+        for c in (w, mv, adm):
+            for d in ({"recht": "verwalten"}, {"bis": spaeter}, {"bis": None}, {"recht": "verwalten", "bis": bis}):
+                r = c.put(f"/api/material/freigaben/{lesen}", headers=H, json=d)
+                assert r.status_code == 409 and "keinen Zugang zum Modul Material" in r.json["error"], (d, r.get_json())
+        assert zeile(lesen) == vorher
+        # Kürzen und die Notiz gehen, ebenso Herabsetzen und Kürzen der dauerhaften Verwalterzeile – und Entziehen.
+        kuerzer = (_heute() + timedelta(days=10)).isoformat()
+        r = w.put(f"/api/material/freigaben/{lesen}", headers=H, json={"bis": kuerzer, "notiz": "ruht"})
+        assert r.status_code == 200, r.get_json()
+        assert zeile(lesen) == {"permission": "lesen", "valid_until": kuerzer, "note": "ruht"}
+        r = w.put(f"/api/material/freigaben/{verwalten}", headers=H, json={"recht": "lesen", "bis": bis})
+        assert r.status_code == 200, r.get_json()
+        assert zeile(verwalten)["permission"] == "lesen" and zeile(verwalten)["valid_until"] == bis
+        assert w.delete(f"/api/material/freigaben/{verwalten}", headers=H).status_code == 200
+        # Mit Stufe Mitglied ist es eine gewöhnliche Zeile.
+        assert adm.put(f"/api/admin/users/{uid}", json={"rechte": {"material": 1}}).status_code == 200
+        r = w.put(f"/api/material/freigaben/{lesen}", headers=H, json={"recht": "verwalten"})
+        assert r.status_code == 200 and zeile(lesen)["permission"] == "verwalten", r.get_json()
+    print("Ruhende Freigabe nicht hochstufen bestanden.")
+
+
 def test_verwalter_ohne_stufe():
     """verwalter_von zählt nur Konten mit Stufe Mitglied und Namen – nicht die Material-Verwaltung, nicht ein Verwalter
     ohne Stufe oder ohne Namen. Regel 1.6 Nr. 7 rechnet damit: Der einzige wirksame Verwalter entzieht sich nicht. Ein
@@ -538,6 +580,7 @@ if __name__ == "__main__":
     test_mitglied_und_material_verwaltung()
     test_haekchen_ohne_stufe()
     test_personensuche_zweck()
+    test_ruhende_freigabe_nicht_hochstufen()
     test_verwalter_ohne_stufe()
     test_mail_meldung()
     test_profil_unterschrift()
