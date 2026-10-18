@@ -483,7 +483,8 @@ python tests/test_material_globalsuche.py  # Phase 2: globale Seriennummernsuche
 python tests/test_material_zuordnung.py  # Phase 2: Personenzuordnung, Meldungen je Bereich, Löschkonzept, Prüfnachweise bleiben
 python tests/test_material_stufen.py     # Phase 2: Modulstufe (Migration 9 → 10, ohne Stufe wirkt nichts – alle Routen, Material-Verwaltung,
                                         # Personensuche je Zweck, Mails, Profil, Vorgabe neuer Konten)
-python tests/test_material_beispielbestand.py  # Beispielbestand: Katalog unverändert (Tabellen, Export, Dateien), alle Zustände, Protokolle, DEMO-Kennzeichnung
+python tests/test_material_beispielbestand.py  # Beispielbestand: Katalog unverändert (Tabellen, Export, Dateien), alle Zustände, Protokolle, DEMO-Kennzeichnung,
+                                               # abgebrochener Lauf (meldet „unvollständig“)
 python scripts/beispieldaten.py         # füllt ./data mit zwei erfundenen Prüfungs-Lehrgängen zum Ausprobieren
 python scripts/material_demo.py --demo  # füllt ./data mit DEMO-Katalog, DEMO-Bestand in zwei Gliederungen und DEMO-Prüfungen (nie für echte Prüfungen)
 python scripts/material_demo.py --demo --konten  # dazu einmalig fünf DEMO-Konten (vier Mitglieder mit Freigaben, die DEMO-Material-Verwaltung);
