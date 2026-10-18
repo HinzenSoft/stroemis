@@ -152,13 +152,19 @@
       + meldungZeile(d.hinweis || "");
   }
 
-  // Die Liste zu q neu: die eigenen Vorschläge aus dem Zwischenspeicher, darunter der fremde Teil – und so weit
-  // gerollt, dass er oben beginnt (die eigenen stehen darüber).
+  /* Die Liste zu q neu: die eigenen Vorschläge aus dem Zwischenspeicher, darunter der fremde Teil. Gerollt wird nur so
+     weit, dass die Trennzeile und die Zeile danach (erste Karte oder Meldung) ganz zu sehen sind – höchstens, bis die
+     Trennzeile oben steht. Passt das ohne Rollen, bleibt die Liste, wo sie ist, und die eigenen Vorschläge bleiben im
+     Blick (Prüfung der Nachbesserung: vorher sprang sie immer bis zur Trennzeile und schnitt die eigenen ab). */
   function mitFremden(q) {
     if (zwischen.has(q)) zeigen(zwischen.get(q), q);
     else listeZeigen(global.html);
     const t = liste.querySelector(".mv-trenner");
-    if (t) liste.scrollTop += t.getBoundingClientRect().top - liste.getBoundingClientRect().top;
+    if (!t) return;
+    const oben = liste.getBoundingClientRect().top + liste.clientTop;     // Innenkante, ohne Rahmen
+    const fehlt = (t.nextElementSibling || t).getBoundingClientRect().bottom - (oben + liste.clientHeight);
+    const bisTrenner = t.getBoundingClientRect().top - oben;            // weiter nie: die Trennzeile bleibt oben
+    if (fehlt > 0 && bisTrenner > 0) liste.scrollTop += Math.min(fehlt, bisTrenner);
   }
 
   async function globalSuchen(q) {
