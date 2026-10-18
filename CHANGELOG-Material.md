@@ -1070,10 +1070,12 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
     Prüfsicht) und „Einzeln …“. Grundrecht und Prüffreigabe entstehen in einem Schritt, ganz oder gar nicht. Vorlagen
     mit Prüfen gibt es nur für qualifizierte Konten; „bis“ steht auf dem 31.12. des Folgejahres, „dauerhaft“ gibt es
     nur für den, der selbst dauerhaft verwaltet.
-  - **Hier vergeben**: Person, Gliederung, Recht, Ende, Zustand (gültig, gelb „läuft in n Tagen ab“, grau „abgelaufen
-    am …“, „wirkt nicht – Qualifikation fehlt“), Notiz, von wem und wann vergeben; Ändern und Entziehen, wo man darf.
-    Darüber **„Alle Prüffreigaben verlängern bis …“** für den ganzen Zweig (auch bis zu 90 Tage abgelaufene), mit den
-    übersprungenen Zeilen samt Grund.
+  - **Hier vergeben**: Person (ein Konto ohne Namen als „(Konto ohne Namen)“), Gliederung, Recht, Ende, Zustand
+    (gültig, gelb „läuft in n Tagen ab“, grau „abgelaufen am …“, „wirkt nicht – Qualifikation fehlt“), Notiz, von wem
+    und wann vergeben; Ändern und Entziehen, wo man darf – „Entziehen“ nur, wo es auch gelingt (sonst steht dort, dass
+    es nur über die Plattform-Verwaltung geht). Darüber **„Alle Prüffreigaben verlängern bis …“** für den ganzen Zweig
+    (auch bis zu 90 Tage abgelaufene), mit den übersprungenen Zeilen samt Grund. Am Telefon und am Tablet (bis etwa
+    920 px Fensterbreite) stehen die Listen als Karten, am Rechner als Tabelle.
   - Zugeklappt **Geerbt von oben** (nur lesbar, ohne Notiz), **In Unterordnern** und **Verlauf**.
   - Wer eine Prüffreigabe entzieht, erfährt, wie viele offene Prüfungen das Konto dort noch hat (unter Prüfungen →
     „Offene Prüfungen“ → „Freigeben“).
@@ -1084,12 +1086,12 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   auch aus anderen Gliederungen. Nie länger, als er dort selbst verwaltet (unbefristet nur, wer selbst unbefristet
   verwaltet). Eine fremde Freigabe ändert oder entzieht er nur, wenn er sie selbst so hätte vergeben dürfen – ein
   befristeter Verwalter kann einen dauerhaften weder entziehen noch kürzen noch herabsetzen. Die eigene kann er nur
-  verkürzen, herabsetzen oder entziehen, sich selbst gibt er nichts. Danach muss jede Gliederung noch einen Verwalter
-  haben, der mindestens so lange bleibt wie er (sonst 409 „… das macht nur die Plattform-Verwaltung“). Prüffreigaben
-  gibt es nur für qualifizierte Konten (409). Die Notiz (eine Zeile, höchstens 200 Zeichen) sehen nur die Verwalter
-  des Ordners und die Plattform-Verwaltung – der Inhaber also nur, wenn er dort selbst verwaltet, nie unter „Meine
-  Freigaben“. Die Plattform-Verwaltung vergibt überall ohne diese
-  Grenzen – Prüffreigaben aber auch sie nur an qualifizierte Konten und für höchstens 24 Monate.
+  verkürzen, herabsetzen oder entziehen – das immer, auch wenn sie länger läuft als sein Verwalten –, sich selbst gibt
+  er nichts. Danach muss jede Gliederung noch einen Verwalter haben, der mindestens so lange bleibt wie er (sonst 409
+  „… das macht nur die Plattform-Verwaltung“). Prüffreigaben gibt es nur für qualifizierte Konten (409). Die Notiz
+  (eine Zeile, höchstens 200 Zeichen) sehen nur die Verwalter des Ordners und die Plattform-Verwaltung – der Inhaber
+  also nur, wenn er dort selbst verwaltet, nie unter „Meine Freigaben“. Die Plattform-Verwaltung vergibt überall ohne
+  diese Grenzen – Prüffreigaben aber auch sie nur an qualifizierte Konten und für höchstens 24 Monate.
 - **Meine Freigaben** auf der Übersicht: die eigenen Freigaben, gültige und im letzten Jahr abgelaufene, mit Ordner,
   Recht und Ende; gelb, was in 30 Tagen abläuft – dort und bei abgelaufenen steht, wer verlängern kann. Der Abschnitt
   ist zugeklappt und öffnet sich von selbst, wenn eine Freigabe bald abläuft, abgelaufen ist oder nicht wirkt. Wer noch
@@ -1097,7 +1099,10 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   Schnittstelle dazu antwortet jedem Angemeldeten, auch ohne Modulzugang.
 - **Gliederungen anlegen**: auf oberster Ebene nur die Plattform-Verwaltung; nach „+ Gliederung“ öffnet sich gleich
   der Freigaben-Dialog mit der Vorlage „Materialwart“. Eine Gliederung in einem Ordner legt an, wer den Oberordner
-  verwaltet.
+  verwaltet. Einen vorhandenen Ordner zur Gliederung macht nur, wer die Gliederung darüber verwaltet (sonst 403; der
+  Dialog „Ordner bearbeiten“ bietet die Art dann nicht an) – alles darin wechselt dabei die Gliederung. Gesperrte und
+  ausgesonderte Artikel mit Heimat darin ziehen in seine neuen Systemordner (Journal „Ordner zur Gliederung
+  gemacht“).
 - **Verschieben zwischen Gliederungen**: nur, wer beide Gliederungen verwaltet, oder die Plattform-Verwaltung (sonst
   403); ein Ziel, das man nicht sieht, antwortet 404 (vorher 403). Mit einem Ordner wandern seine gesperrten und
   ausgesonderten Artikel in die Systemordner der neuen Gliederung (Journal mit Grund „Ordner in andere Gliederung
@@ -1106,9 +1111,8 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   Durchgang aus („verschoben am TT.MM.JJJJ – nicht mehr im Bereich des Durchgangs“), und ein offener Entwurf darin
   verliert den Durchgang; erledigte Zeilen bleiben als Nachweis. Danach antwortet „Einbeziehen“ mit 409 und ein
   Prüfstart mit diesem Durchgang mit 404; beim Eröffnen zählen ausgenommene und erledigte Zeilen nicht mehr als
-  Konflikt. Das
-  Sammelprotokoll druckt statt eines Pfads aus der anderen Gliederung „(aus dem Bereich des Durchgangs verschoben)“,
-  und Prüfer von dort stehen nicht darin. Die Verschieben-Dialoge sagen vorher, was mit Freigaben, Systemordnern und
+  Konflikt. Das Sammelprotokoll druckt statt eines Pfads aus der anderen Gliederung „(aus dem Bereich des Durchgangs
+  verschoben)“, und Prüfer von dort stehen nicht darin. Die Verschieben-Dialoge sagen vorher, was mit Freigaben, Systemordnern und
   Durchgängen geschieht. In der Durchgangsansicht steht ein hinausverschobener Artikel, den man nicht mehr sieht, ohne
   Link und ohne Knöpfe mit „nicht in deinem Bereich“; „Einbeziehen“ bietet sie für Hinausverschobene nicht an.
 - **Globale Seriennummernsuche** (`services/globalsuche.py`, `static/global.js`): Hat kein sichtbarer Artikel genau
@@ -1144,7 +1148,9 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   und dort heute prüfen dürfen; hat er keinen Verwalter, an die Plattform-Verwaltung. Jeder Empfänger bekommt eine
   Mail mit genau den Artikeln, die er sehen darf. Nicht gefundene Seriennummern und die Zahl der Mails sieht nur die
   Plattform-Verwaltung; alle anderen – etwa ein Katalogpfleger ohne Bestand – bekommen beim Anlegen und Beenden nur
-  die Zahlen ihres Bereichs und ob benachrichtigt wurde.
+  die Zahlen ihres Bereichs und ob benachrichtigt wurde. Wer gar keinen Bestand sieht, liest statt „0 Artikel“: „Wie
+  viele Artikel betroffen sind, sehen die Materialwarte der Gliederungen.“; wer Seriennummern eingibt, erfährt, dass
+  nur die Plattform-Verwaltung sieht, ob jede einen Artikel trifft.
 - **Meldungen je Bereich**: Eine Produktmeldung sehen Katalogpfleger, Plattform-Verwaltung, der Melder und wer ihren
   Ordner sieht – auch im Produktjournal; im Artikeljournal steht sie gar nicht mehr. Den Ordnerpfad zeigt sie nur dem,
   der den Ordner sieht, sonst nur die Gliederung; ebenso die Mail an die Katalogpfleger.
@@ -1167,7 +1173,8 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
 - **Nutzerverwaltung**: Die Spalte „Material“ ist nur noch Anzeige – „alles“ (Plattform-Verwaltung), „n Freigaben“
   oder „–“; die gelbe Marke „Stufe aus Phase 1 – ohne Freigabe“ zeigt Konten, die früher Bestand sahen und jetzt
   keinen. Die Häkchen „Prüfer“ und „Produktkatalogpfleger“ gibt es nur mit Namen (400). „Bearbeiten“ zeigt die
-  Freigaben des Kontos mit Ordner, Recht, Ende und Zustand (Entziehen ja, angelegt wird am Ordner). Die Liste holt die
+  Freigaben des Kontos mit Ordner, Recht, Ende und Zustand (Entziehen ja, angelegt wird am Ordner; bleiben offene
+  Prüfungen, führt ein Hinweis zu Material → Prüfungen → „Offene Prüfungen“). Die Liste holt die
   Zahlen aller Konten mit einer Abfrage. Der Hilfetext erklärt das neue Modell.
 - **DEMO-Daten** (`scripts/material_demo.py`): zweite Gliederung „DEMO-Gliederung Nachbarstadt“ mit „DEMO-Lager NS“
   und drei Artikeln, einer davon mit der Seriennummer `DEMO-NS-4711` für die globale Suche; sie kommt auch zu einem
@@ -1271,9 +1278,6 @@ Keine.
   (`excluded_by_name`), der Journaleintrag „ausgenommen“ steht aber unter dem Namen dessen, der verschoben hat – das
   Journal hält fest, wer gehandelt hat. Die Bereinigung in Schritt 8 schreibt „Migration Schritt 8“.
 - **`GET /ordner/<id>/zugeordnete`** liefert je Person zusätzlich `aktiv` – für „(deaktiviert)“ im Filter.
-- **Meldung löschen** (`DELETE /meldungen/<id>`) antwortet Nicht-Meldern wie bisher mit 403 „Löschen kann eine Meldung
-  nur, wer sie gemacht hat.“ – auch bei einer Meldung, die sie nicht sehen dürfen. Das verrät, dass es die Kennung
-  gibt, aber nichts von ihrem Inhalt.
 - **Zusätze**: `MatFreigaben.kopfhinweis(element, ordner)` für den Ablaufhinweis im Ordnerkopf und
   `MatFreigaben.oeffnen(ordner, "verlaengern")`, das direkt zum Knopf „Alle Prüffreigaben verlängern“ springt.
   `requires_folder` kennt neben `leer="global"` und `leer="irgendwo"` auch `leer="zugang"`: `GET /artikel/vorschlag`
@@ -1314,6 +1318,29 @@ Chromium am Rechner (1280 px) mit den DEMO-Daten und den vier DEMO-Konten:
 - Externer Prüfer: Übersicht mit „Meine Freigaben“ (gelb, „Verlängern kann: …“), grauer Gliederung über dem Lager
   und der Zeile „Gesperrt (deine Artikel)“; im Ordner „Prüfen“ je Artikel, ohne Export, Journal und Spalte „Person“.
 
+### Prüfung vor Auslieferung
+
+Drei unabhängige Prüfungen – Sicherheit (Trennung je Gliederung, mit eigenen Konten am DEMO-Server nachgestellt),
+Browser (Rundgang mit den DEMO-Konten am Telefon, am Tablet und am Rechner) und Abgleich mit dem Bauentwurf (mit
+Skripten) – haben 13 Befunde gemeldet, zwei davon dieselbe Lücke. Jeder Befund ist vor der Behebung nachvollzogen
+worden (Test, Anfrage, Browser oder im Code), alle zwölf sind behoben, die Rechte- und Trennungsfehler mit
+Regressionstest. Danach liefen alle Suiten grün.
+
+| # | Befund | Schwere | Umgang |
+| --- | --- | --- | --- |
+| 1 | Wer nur einen Unterordner verwaltete – etwa ein externer Materialwart mit verwalten an G/Lager und an H –, machte ihn über „Ordner bearbeiten“ zur Gliederung und zog danach Artikel und Ordner von G nach H ab; die Regel „über Gliederungsgrenzen nur mit Verwalten an beiden“ (1.7 Nr. 2) war umgangen, rückgängig machen konnte G nichts (von zwei Prüfungen gemeldet) | hoch | Zur Gliederung machen ist ein Gliederungswechsel für alles darin: nur mit Verwalten an der bisherigen Gliederung (oben: Plattform-Verwaltung), sonst 403; „Ordner bearbeiten“ bietet die Art sonst nicht an. Gesperrte und Ausgesonderte mit Heimat darin ziehen in die neuen Systemordner (1.3). Tests `test_kein_abziehen`, `test_eine_heimat` |
+| 2 | Freigaben-Dialog am Tablet hochkant (768–834 px): Die Tabelle mit sieben Spalten ragte aus dem Dialog, „Entziehen“ war abgeschnitten, der Dialog scrollte waagerecht | mittel | Karten bis 840 px Inhaltsbreite (Fenster bis etwa 920 px), Tabelle im vollen Dialog am Rechner; nachgemessen als Materialwart und Verwaltung bei 390–1280 px |
+| 3 | Die Hilfe zur Notiz versprach „nicht die Person selbst“ – wer den Ordner mitverwaltet, liest aber die Notiz zu seiner eigenen Freigabe | mittel | So im Bauentwurf (1.6 Nr. 10: die Notiz sehen alle Verwalter des Ankers, nie „Meine Freigaben“); die Hilfe sagt das jetzt. Verbergen bei eigenen Zeilen: siehe „Zu prüfen“ |
+| 4 | Eine schon erledigte Zeile im offenen Durchgang des alten Bereichs sperrte nach dem Verschieben jeden neuen Durchgang im Zielbereich (1.7 Nr. 6 verfehlt) | mittel | Die Konfliktabfrage beim Eröffnen lässt erledigte Zeilen außen vor, wie „Einbeziehen“ und der Prüfstart. Test `test_verschieben_und_durchgaenge` |
+| 5 | `DELETE /meldungen/<id>` antwortete für jede vorhandene Meldung 403, auch ohne Modulzugang – so ließ sich erfragen, welche Kennungen es gibt | niedrig | 404 wie für eine unbekannte, wenn man die Meldung nicht sieht; 403 nur für sichtbare fremde. Tests `test_nichts_aus_b_paket_d`, `test_produktmeldung` |
+| 6 | Nutzerverwaltung: Nach dem Entziehen einer Prüffreigabe schickte der Hinweis nach „Prüfungen → Entwürfe freigeben“ – das gibt es nicht | niedrig | bleibender Hinweis mit Link: Material → Prüfungen → „Offene Prüfungen“ freigeben |
+| 7 | „Entziehen“ an der eigenen Verwalterfreigabe wurde angeboten, obwohl der Server sicher mit 409 ablehnte (1.6 Nr. 7) | niedrig | Feld `entziehbar` je Zeile, Nr. 7 vorab gerechnet; statt des Knopfs „Entziehen nur über die Plattform-Verwaltung – sonst verwaltet hier niemand so lange wie du.“ Test `test_uebernahme_schutz` |
+| 8 | Die Freigabe eines Kontos ohne Namen (etwa aus der Migration) stand ohne jede Personenangabe in der Liste | niedrig | „(Konto ohne Namen)“, nie die E-Mail – auch bei „vergeben von“ und beim Verlängern. Test `test_listen_und_verlaengern` |
+| 9 | Rückruf als Katalogpfleger ohne Bestand: „0 Artikel in deinem Bereich betroffen“ klang, als träfe er nichts; Tippfehler in Seriennummern blieben unbemerkt | niedrig | Datenregel 2.6 unverändert; ohne Bestand statt der Zahl „Wie viele Artikel betroffen sind, sehen die Materialwarte der Gliederungen.“, bei Seriennummern der Hinweis, dass nur die Plattform-Verwaltung Nummern ohne Treffer sieht |
+| 10 | Eine eigene Freigabe, die länger lief als das eigene Verwalten, ließ sich weder verkürzen noch entziehen (1.6 Nr. 5) | niedrig | Grenze Nr. 4 („reicht weiter als deine eigene“) nur für fremde Zeilen; für eigene gelten Nr. 5 und Nr. 3. Test `test_eigene_laenger_als_verwalten` |
+| 11 | Freigabenliste: eine Abfrage je Verlaufseintrag (bis 200) | niedrig | `journal.konto_namen` löst alle Kontoverweise mit einer Abfrage auf. Test `test_liste_abfragen` |
+| 12 | DEMO-Skript: Herstell-, Erstgebrauchs- und Prüfdaten mit `date.today()` – im UTC-Container nachts einen Tag daneben | niedrig | `services.heute()` wie im übrigen Modul |
+
 ### Zu prüfen
 
 - **Leistung mit vielen Ordnern**: Die Sicht eines Kontos wird je Anfrage einmal gerechnet – eine Abfrage der eigenen
@@ -1326,8 +1353,15 @@ Chromium am Rechner (1280 px) mit den DEMO-Daten und den vier DEMO-Konten:
 - **Pfadnamen in verschobenen Artikeln**: Im Journal eines Artikels aus einer anderen Gliederung, in seinen
   festgeschriebenen Protokollen und in Titel und Ordner alter Durchgänge stehen Ordnernamen der alten Gliederung – sie
   gehören zur Geschichte des Artikels. Bitte bestätigen.
-- **Telefon**: Freigaben-Dialog (Vorlagen, Tabellen, Verlängern) und Zuordnen (Personensuche, Sammelaktion) auf dem
-  Telefon durchgehen.
+- **Telefon und Tablet**: Freigaben-Dialog (Vorlagen, Karten, Verlängern) und Zuordnen (Personensuche, Sammelaktion)
+  auf dem Telefon durchgehen. Am Tablet hochkant und quer (bis etwa 920 px) sind die Freigabenlisten jetzt Karten –
+  im Browser nachgemessen, auf einem echten Gerät noch nicht gesehen.
+- **Notiz an der eigenen Freigabe**: Wer einen Ordner mitverwaltet, liest dort auch die Notiz zu seiner eigenen
+  Freigabe (Bauentwurf 1.6 Nr. 10; die Hilfe im Dialog sagt das). Soll sie bei eigenen Zeilen verborgen bleiben (außer
+  für die Plattform-Verwaltung), ist das eine kleine Änderung – bitte entscheiden.
+- **Erledigte Zeilen und neue Durchgänge**: Eine schon erledigte Zeile eines offenen Durchgangs sperrt keinen neuen
+  mehr (Prüfung vor Auslieferung, Nr. 4) – das gilt auch innerhalb einer Gliederung: Sind alle Artikel eines
+  Unterordners im laufenden Durchgang schon geprüft, lässt sich dort ein eigener eröffnen. Bitte bestätigen.
 - **Alle migrierten Prüffreigaben laufen am 31.12.2027 ab**: Mit „Alle Prüffreigaben verlängern bis …“ geht das je
   Gliederung in einem Schritt. Ablaufmails an die Verwalter kommen erst mit Lieferung 2 – bis dahin warnen nur „Meine
   Freigaben“ und der Hinweis im Ordnerkopf (30 Tage vorher).
@@ -1523,7 +1557,7 @@ Produktkatalogpfleger oder Plattform-Verwaltung.
 | `POST/DELETE /api/material/produkte/<id>/bild` | Katalog | Produktbild |
 | `POST /api/material/produkte/<id>/dokumente`, `POST /api/material/dokumente/<id>/version`, `…/zurueckziehen` | Katalog | Herstellerdokumente |
 | `GET/POST /api/material/formulare`, `GET/PUT/DELETE …/<id>`, `POST …/<id>/aktivieren`, `…/deaktivieren` | lesen / Katalog | Prüfformulare |
-| `GET/POST /api/material/ordner`, `GET/PUT/DELETE …/<id>`, `POST …/<id>/verschieben`, `POST/DELETE …/<id>/foto` | lesen / Materialwart (Löschen: am Oberordner; Gliederung auf oberster Ebene anlegen und löschen: Plattform-Verwaltung) | Ordnerbaum; über Gliederungsgrenzen verschiebt nur, wer beide Gliederungen verwaltet (Phase 2) |
+| `GET/POST /api/material/ordner`, `GET/PUT/DELETE …/<id>`, `POST …/<id>/verschieben`, `POST/DELETE …/<id>/foto` | lesen / Materialwart (Löschen: am Oberordner; Gliederung auf oberster Ebene anlegen und löschen: Plattform-Verwaltung) | Ordnerbaum; über Gliederungsgrenzen verschiebt nur, wer beide Gliederungen verwaltet, und zur Gliederung macht einen Ordner (`PUT` mit `kind: "gliederung"`) nur, wer die bisherige verwaltet (Phase 2) |
 | `GET /api/material/artikel/vorschlag` | Modulzugang; mit `folder_id` lesen dort (sonst 404) | Vorschläge (Intervall, nächste Prüfung, Lebensende) vor dem Anlegen |
 | `POST /api/material/artikel`, `GET/PUT/DELETE …/<id>`, `POST /api/material/artikel/verschieben` | lesen / Materialwart | Artikel, auch mehrere auf einmal verschieben |
 | `GET /media/material/<orig\|web\|thumb\|dok\|anhang>/<datei>` | je Datei (Phase 2): Produktbild und Dokument Modulzugang, Ordnerfoto lesen am Ordner, Befundfoto und Anhang lesen am Artikel, Meldungsfoto wie die Meldung; sonst 404 | Fotos, Dokumente, Prüfanhänge; privat, strenge CSP |
@@ -1533,7 +1567,7 @@ Produktkatalogpfleger oder Plattform-Verwaltung.
 | `GET /api/material/meldungen?status=offen\|erledigt\|alle&eigene=0\|1`, `GET …/<id>` | Modulzugang; je Meldung nur Katalog, der Melder und wer ihren Ordner sieht (sonst 404, Phase 2) | Meldungen; Katalogpfleger und Lesende standardmäßig alle offenen, Materialwarte die eigenen; `bearbeiten` nur für Katalogpfleger |
 | `POST /api/material/meldungen/<id>/produkt` (Felder wie `POST /produkte`, dazu `antwort`) | Katalog | Produkt aus der Meldung anlegen und Meldung erledigen |
 | `POST /api/material/meldungen/<id>/zuordnen` (`product_id`, `antwort`), `…/ablehnen` (`antwort` Pflicht) | Katalog | vorhandenes Produkt zuordnen bzw. ablehnen |
-| `DELETE /api/material/meldungen/<id>` | nur der Melder | eigene Meldung löschen (offen oder erledigt; ein Produkt aus ihr bleibt) |
+| `DELETE /api/material/meldungen/<id>` | nur der Melder | eigene Meldung löschen (offen oder erledigt; ein Produkt aus ihr bleibt); wer sie nicht sehen darf, bekommt 404 wie für eine unbekannte (Phase 2) |
 | `?sort=<spalte>&richtung=auf\|ab` an `produkte`, `ordner/<id>`, `faellig`, `suche` | – | Sortierung: Katalog `hersteller`, `produkt`, `kategorie`, `materialart`, `intervall`, `lebensdauer`, `bestand`; Artikel `inventar`, `hersteller`, `produkt`, `serie`, `faellig`, `status` |
 | `GET/POST /api/material/artikel/<id>/pruefungen` | lesen / Prüfer | Prüfungen eines Artikels; Prüfung beginnen (`art`, `durchgang_id`) – oder den eigenen Entwurf fortsetzen |
 | `GET/PUT/DELETE /api/material/pruefungen/<id>` | lesen / Prüfer / Prüfer oder Materialwart | Prüfung lesen; Art und Bemerkung am Entwurf; Entwurf verwerfen bzw. Reservierung freigeben |
@@ -1562,7 +1596,7 @@ Produktkatalogpfleger oder Plattform-Verwaltung.
 | `POST /api/material/rueckrufe/<id>/beenden` (`vermerk` Pflicht) | Katalog | Rückruf beenden |
 | `GET /api/material/rueckrufe` | Modulzugang | alle laufenden Rückrufe mit Produkt und den Zahlen des eigenen Bereichs |
 | (Artikel, Produkt, Listen) | lesen | neu: `artikel.rueckrufe` (laufende samt Zustand), `produkt.rueckrufe`, je Listenzeile `rueckruf` (Titel eines offenen) |
-| `GET /api/material/ordner/<id>/freigaben` | Materialwart am Ordner | Freigaben-Dialog: `ordner`, `anker_wahl` (der Ordner und die Oberordner, die man verwaltet, je mit dem eigenen Ende), `anker_vorgabe`, `direkt`, `geerbt` (ohne Notiz), `unten`, `verlauf`, `laeuft_ab`, `grenzen` (heute, längste Prüffreigabe, Vorgabe für „bis“) (Phase 2) |
+| `GET /api/material/ordner/<id>/freigaben` | Materialwart am Ordner | Freigaben-Dialog: `ordner`, `anker_wahl` (der Ordner und die Oberordner, die man verwaltet, je mit dem eigenen Ende), `anker_vorgabe`, `direkt`, `geerbt` (ohne Notiz), `unten` (Zeilen je mit `aenderbar` und `entziehbar`), `verlauf`, `laeuft_ab`, `grenzen` (heute, längste Prüffreigabe, Vorgabe für „bis“) (Phase 2) |
 | `POST /api/material/ordner/<id>/freigaben` (`user_id`, `grundrecht`: `lesen`\|`verwalten`\|`null`, `grund_bis`, `pruefen_bis`, `notiz`) | Materialwart am Ordner | Grundrecht und/oder Prüffreigabe in einem Schritt anlegen oder ändern, ganz oder gar nicht → 201 `freigaben`, `liste`; 404 „Konto nicht gefunden.“ für unbekannte, deaktivierte und namenlose Konten, 409 ohne Qualifikation, an Systemordnern oder ohne verbleibenden Verwalter (Phase 2) |
 | `POST /api/material/ordner/<id>/freigaben/verlaengern` (`bis`) | Materialwart am Ordner | alle Prüffreigaben im Zweig, die man ändern darf (auch bis zu 90 Tage abgelaufene) → `verlaengert`, `uebersprungen` (Konto, Ordner, Grund) (Phase 2) |
 | `PUT /api/material/freigaben/<id>` (`recht`, `bis` – `null` = unbefristet, nur Grundrechte –, `notiz`), `DELETE …/<id>` | Materialwart am Ordner der Freigabe | Freigabe ändern bzw. entziehen; DELETE liefert `offene_entwuerfe` (Phase 2) |
