@@ -5,11 +5,9 @@ Die Tests aus dem Bauentwurf 8.3 für Paket C: Eingaben (Bestätigung, Länge, v
 Bereich), genau die Felder des Steckbriefs (keine Kennung, Pfad der Heimat ohne Systemordner, persönlicher Ordner
 verdeckt), höchstens 10 Treffer mit „mehr“, die gemeinsame Bremse von Suche, QR-Steckbrief und Dublette, das Protokoll
 mit seiner Frist (beim Schreiben, beim Neustart, beim Lesen) nur für die Verwaltung, der QR-Steckbrief erst nach
-Bestätigung und die beiden Schalter (STECKBRIEF_MIT_SPERRE, ANGEBOT).
-
-Was erst mit Paket A1R grün werden kann – das Angebot in GET /suche, die Seite /m/<token> eines fremden Artikels und die
-fremde Dublette beim Anlegen –, steht in WARTET_AUF; der Block __main__ meldet ihr Scheitern nur. Alle Namen, Hersteller
-und Nummern hier sind erfunden und nur für den Test da."""
+Bestätigung und die beiden Schalter (STECKBRIEF_MIT_SPERRE, ANGEBOT), dazu mit Paket A1R das Angebot in GET /suche,
+die Seite /m/<token> eines fremden Artikels und die fremde Dublette beim Anlegen. Alle Namen, Hersteller und Nummern
+hier sind erfunden und nur für den Test da."""
 import json
 import os
 import re
@@ -542,20 +540,8 @@ def test_bremse_mit_dublette():
     print("Bremse mit Dublette bestanden.")
 
 
-# Tests, die erst mit einem anderen Paket grün werden – der Block __main__ meldet ihr Scheitern nur; die Integration
-# leert die Tabelle.
-WARTET_AUF = {"test_angebot_ueber_suche": "A1R", "test_qr_seite_fremd": "A1R", "test_bremse_mit_dublette": "A1R"}
-
-
 if __name__ == "__main__":
     for test in (test_eingaben, test_steckbrief, test_zehn_und_mehr, test_bremse, test_protokoll, test_qr_steckbrief,
                  test_schalter_sperre, test_schalter_angebot, test_angebot_ueber_suche, test_qr_seite_fremd,
                  test_bremse_mit_dublette):
-        if test.__name__ not in WARTET_AUF:
-            test()
-            continue
-        try:
-            test()
-        except Exception as exc:  # noqa: BLE001 – gemeldet, nicht gescheitert
-            print(f"{test.__name__}: wartet auf Paket {WARTET_AUF[test.__name__]} – {type(exc).__name__}: "
-                  f"{str(exc)[:200]}")
+        test()
