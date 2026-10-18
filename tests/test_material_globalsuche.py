@@ -5,13 +5,14 @@ Die Tests aus dem Bauentwurf 8.3 für Paket C: Eingaben (Bestätigung, Länge, v
 genau die Felder des Steckbriefs (keine Kennung, Pfad der Heimat ohne Systemordner, persönlicher Ordner verdeckt),
 höchstens 10 Treffer mit „mehr“, das Protokoll mit seiner Frist (beim Schreiben, beim Neustart, beim Lesen) nur für
 die Verwaltung, der QR-Steckbrief erst nach Bestätigung, dazu mit Paket A1R das Angebot in GET /suche, die Seite
-/m/<token> eines fremden Artikels und die fremde Dublette beim Anlegen. Seit den Entscheidungen vom 18.10.2026 außerdem: das Sperrwort im Steckbrief (test_sperrwort), das Angebot zu
-jeder tauglichen Anfrage außer für die Verwaltung (test_angebot) und nur fremde Treffer, auch bei derselben
-Seriennummer im eigenen Bereich (test_nur_fremde), auch für ein Konto, das nur einen Ordner einer Gliederung sieht
-(test_teilfreigabe), und das Angebot auch nach der Weiterleitung zu einem eindeutigen eigenen Treffer
-(test_eindeutiger_treffer). Seit dem Wunsch des Betreibers vom 18.10.2026 gibt es keine Bremse mehr – Suche,
-QR-Steckbrief und Dublette laufen beliebig oft und stehen alle im Protokoll (test_keine_bremse,
-test_dublette_ohne_bremse). Alle Namen, Hersteller und Nummern hier sind erfunden und nur für den Test da."""
+/m/<token> eines fremden Artikels und die fremde Dublette beim Anlegen. Seit den Entscheidungen vom 18.10.2026
+außerdem: das Sperrwort im Steckbrief (test_sperrwort), das Angebot zu jeder tauglichen Anfrage außer für die
+Verwaltung (test_angebot) und nur fremde Treffer, auch bei derselben Seriennummer im eigenen Bereich
+(test_nur_fremde), auch für ein Konto, das nur einen Ordner einer Gliederung sieht (test_teilfreigabe), und das
+Angebot auch nach der Weiterleitung zu einem eindeutigen eigenen Treffer (test_eindeutiger_treffer). Seit dem Wunsch
+des Betreibers vom 18.10.2026 gibt es keine Bremse mehr – Suche, QR-Steckbrief und Dublette laufen beliebig oft und
+stehen alle im Protokoll (test_keine_bremse, test_dublette_ohne_bremse). Alle Namen, Hersteller und Nummern hier sind
+erfunden und nur für den Test da."""
 import json
 import os
 import re

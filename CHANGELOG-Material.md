@@ -1272,9 +1272,10 @@ Keine.
 - **404 statt 403 für Fremdes**: Ein Konto erfährt nicht, ob es einen Gegenstand in einer anderen Gliederung gibt.
   Pfadnamen fremder Ordner stehen nur, wo sie zur Geschichte eines Artikels gehören: im Journal eines verschobenen
   Artikels, in festgeschriebenen Protokollen und als Titel und Ordner eines Durchgangs, in dem er stand.
-- **Globale Suche nur nach der ganzen Herstellerseriennummer**, nach Bestätigung, gebremst und protokolliert – zwölf
-  Monate, deshalb nicht im unveränderlichen Journal. Dubletten beim Anlegen laufen durch dieselbe Bremse und dasselbe
-  Protokoll; sonst taugte das Anlegen als Suche.
+- **Globale Suche nur nach der ganzen Herstellerseriennummer**, nach Bestätigung und protokolliert – zwölf Monate,
+  deshalb nicht im unveränderlichen Journal. Dubletten beim Anlegen stehen im selben Protokoll; sonst taugte das
+  Anlegen als Suche am Protokoll vorbei. Ausgeliefert zusätzlich mit einer gemeinsamen Bremse für Suche, QR-Steckbrief
+  und Dublette; sie ist am 18.10.2026 auf Wunsch entfernt (siehe „Nachbesserungen nach der Auslieferung“).
 - **Personenzuordnung** an jedes aktive Konto, setzen nur Verwalter, sehen nur mit Grundrecht, nie in PDFs und im
   Steckbrief – der Lebenslauf ist zur Weitergabe gedacht. Kein Namensschnappschuss: Den Stand hält der Artikel, die
   Geschichte das Journal mit Kontoverweis.
@@ -1864,7 +1865,8 @@ entschieden; die Schalter sind fort.
    alles sieht, bekommt kein Angebot. Die Suche findet nur, was das Konto nicht sieht. Ihre Treffer stehen unter der
    eigenen Liste: Trennlinie mit „Aus anderen Gliederungen“, gestrichelt umrandete Karten, die Gliederung als blaue
    Marke ganz oben. Alle drei Kennzeichen zugleich – sie sind dezent genug, um sich nicht zu stören. Bestätigung,
-   Bremse und Protokoll sind unverändert.
+   Bremse und Protokoll sind unverändert. (Die Bremse ist danach, ebenfalls am 18.10.2026, auf Wunsch entfallen –
+   siehe „Nachbesserungen nach der Auslieferung“.)
 3. **Aufbewahrung der Prüfnachweise nach der Aussonderung.** Offen war die Frist. **Entscheidung:** „Es soll nichts
    gelöscht werden, Prüfnachweise sollen ewig gespeichert bleiben.“ **Umgesetzt:** keine Frist, keine Löschroutine.
    Jeder Weg, auf dem ein Nachweis verschwinden könnte, ist durchgesehen und mit einem Regressionstest belegt; eine
