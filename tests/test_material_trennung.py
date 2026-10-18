@@ -923,8 +923,9 @@ def test_nichts_aus_b():
 
 # Felder im Inhalt einer Anfrage, die einen Gegenstand meinen: (Methode, Regel, Feld, Format). Gegen url_map
 # abgeglichen – eine Route, deren requires_folder-Quelle ein Feld der Anfrage ist (json:, form:, eingabe:), braucht hier
-# eine Zeile. Die Felder der Pakete B und D (user_id bei Freigabe und Zuordnung, ids beim Zuordnen) ergänzt die
-# Integration.
+# eine Zeile. Dazu die Felder der Pakete B und D, die ihren Bezug im Dienst lesen: ids beim Zuordnen und user_id bei
+# Zuordnung und Freigabe. Ein Konto aus B ist dort ausdrücklich erlaubt (1.6 Nr. 2, 6.1) – für user_id zählt, dass
+# deaktiviert, ohne Namen und nicht vorhanden gleich antworten (1.6 Nr. 12).
 FELDER_IM_INHALT = (
     ("POST", "/api/material/artikel/<int:iid>/pruefungen", "durchgang_id", "json"),
     ("POST", "/api/material/durchgaenge/<int:rid>/ausnehmen", "item_id", "json"),
@@ -937,13 +938,18 @@ FELDER_IM_INHALT = (
     ("POST", "/api/material/ordner", "parent_id", "json"),
     ("POST", "/api/material/ordner/<int:fid>/verschieben", "parent_id", "json"),
     ("POST", "/api/material/artikel/verschieben", "ids", "json"),
+    ("POST", "/api/material/artikel/zuordnen", "ids", "json"),
+    ("PUT", "/api/material/artikel/<int:iid>/zuordnung", "user_id", "json"),
+    ("POST", "/api/material/artikel/zuordnen", "user_id", "json"),
+    ("POST", "/api/material/ordner/<int:fid>/freigaben", "user_id", "json"),
 )
 
 
 def test_felder_im_inhalt():
     """Jedes Feld × {A (Kontrolle: Erfolg), B, B als Text „7“, B als 7.0, nicht vorhanden}: Die B-Formen sind nie 2xx
-    und antworten mit Status und Text genau wie dieselbe Form von „nicht vorhanden“. Die Tabelle deckt jede Route ab,
-    deren Bezug aus dem Inhalt kommt."""
+    und antworten mit Status und Text genau wie dieselbe Form von „nicht vorhanden“. Für user_id stehen ein
+    deaktiviertes Konto und eines ohne Namen an der Stelle von B; die Kontrolle ist ein Konto aus B. Die Tabelle deckt
+    jede Route ab, deren Bezug aus dem Inhalt kommt."""
     with ohne_post(), tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
         app, w, p, ids = t.app, t.wart_a, t.k["pruefer"], t.ids
@@ -986,8 +992,24 @@ def test_felder_im_inhalt():
              halle, 200, t.lager_b),
             (FELDER_IM_INHALT[10], lambda v: w.post("/api/material/artikel/verschieben", json={"ids": [v], "folder_id": halle}),
              a4, 200, t.art_b["id"]),
+            (FELDER_IM_INHALT[11], lambda v: w.post("/api/material/artikel/zuordnen",
+                                                    json={"ids": [v], "user_id": t.k["fuehrung_id"]}),
+             a2, 200, t.art_b["id"]),
         ]
-        assert [f[0] for f in faelle] == list(FELDER_IM_INHALT)
+        # user_id: an der Stelle von B ein deaktiviertes Konto und eines ohne Namen; die Kontrolle ist ein Konto aus B.
+        _, inaktiv_id = neues_konto(app, "inaktiv_a@example.org", name="Inaktiv Musterstadt")
+        _, namenlos_id = neues_konto(app, "namenlos_a@example.org", name="Namenlos Musterstadt")
+        sql(app, "UPDATE users SET active = 0 WHERE id = ?", (inaktiv_id,))
+        sql(app, "UPDATE users SET name = '' WHERE id = ?", (namenlos_id,))
+        faelle_konto = [
+            (FELDER_IM_INHALT[12], lambda v: w.put(f"/api/material/artikel/{a2}/zuordnung", json={"user_id": v}),
+             t.pruefer_b_id, 200),
+            (FELDER_IM_INHALT[13], lambda v: w.post("/api/material/artikel/zuordnen", json={"ids": [a2], "user_id": v}),
+             t.wart_b_id, 200),
+            (FELDER_IM_INHALT[14], lambda v: w.post(f"/api/material/ordner/{t.lager_a}/freigaben",
+                                                    json={"user_id": v, "grundrecht": "lesen"}), t.pruefer_b_id, 201),
+        ]
+        assert [f[0] for f in faelle] + [f[0] for f in faelle_konto] == list(FELDER_IM_INHALT)
 
         def formen(v, multipart):
             # Im Formular ist alles Text – 7.0 kommt dort als „7.0“ an.
@@ -1002,6 +1024,20 @@ def test_felder_im_inhalt():
                                                                                         u.get_json())
             r = anfrage(a_wert)
             assert r.status_code == soll, (zeile, a_wert, r.status_code, r.get_json())
+        for zeile, anfrage, b_konto, soll in faelle_konto:
+            for konto in (inaktiv_id, namenlos_id):
+                for gesperrt, unbekannt in zip(formen(konto, False), formen(999999, False)):
+                    r, u = anfrage(gesperrt), anfrage(unbekannt)
+                    assert not 200 <= r.status_code < 300, (zeile, gesperrt, r.status_code, r.get_json())
+                    assert u.status_code == 404, (zeile, unbekannt, u.status_code, u.get_json())
+                    assert (r.status_code, r.get_json()) == (u.status_code, u.get_json()), (zeile, gesperrt, r.get_json(),
+                                                                                            u.get_json())
+            r = anfrage(b_konto)
+            assert r.status_code == soll, (zeile, b_konto, r.status_code, r.get_json())
+        assert zeilen(app, "SELECT assigned_user_id FROM mat_item WHERE id = ?", (a2,))[0]["assigned_user_id"] == t.wart_b_id
+        assert zeilen(app, "SELECT 1 FROM mat_folder_grant WHERE folder_id = ? AND user_id = ? AND permission = 'lesen'",
+                      (t.lager_a, t.pruefer_b_id))
+        assert not zeilen(app, "SELECT 1 FROM mat_folder_grant WHERE user_id IN (?, ?)", (inaktiv_id, namenlos_id))
         # Die Prüfung der Kontrolle hängt am Durchgang aus A; an B ging nichts.
         assert zeilen(app, "SELECT round_id FROM mat_inspection WHERE item_id = ? AND completed_at IS NULL",
                       (t.art_a["id"],))[0]["round_id"] == r_a
