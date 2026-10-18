@@ -612,6 +612,8 @@ def requires_folder(recht, quelle, leer="global"):
             g.mat_ordner_id = fid
             g.mat_artikel = bezug.artikel
             return f(*a, **kw)
+        # Woher die Route ihren Bezug liest – der Trennungstest gleicht Felder der Anfrage gegen seine Tabelle ab.
+        wrapper.mat_quelle, wrapper.mat_recht = quelle, erlaubt
         return wrapper
     return deko
 

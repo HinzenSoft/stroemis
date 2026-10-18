@@ -37,9 +37,9 @@ from flask import has_request_context
 from ... import db
 from ...images import delete_photo_files
 from ..models import ANHANGARTEN, AUSSONDERUNGSGRUENDE, BEFUNDE, ERGEBNISSE, PRUEFARTEN, SPERRGRUENDE
-from . import Abgelehnt, auswahl, datum, heute, text, wahr
+from . import OHNE_NAMEN, Abgelehnt, auswahl, datum, heute, text, wahr
 from . import anhang as anh
-from . import bestand, journal, katalog, protokoll
+from . import bestand, journal, katalog, protokoll, rechte
 from . import status as st
 from . import unterschrift as us
 from .interval import plus_monate, wirksam
@@ -54,9 +54,10 @@ UNTERSCHRIFT_FEHLT = ("Zum Festschreiben fehlt deine Unterschrift – bitte im P
 
 
 def pruefer_aus(user):
-    """Der Prüfer aus dem angemeldeten Konto – mit Unterschrift und Anmeldung fürs Festschreiben."""
+    """Der Prüfer aus dem angemeldeten Konto – mit Unterschrift und Anmeldung fürs Festschreiben. Er steht mit Namen da,
+    nie mit der E-Mail (ohne Namen gibt es keinen Modulzugang; für den theoretischen Rest der Platzhalter)."""
     from .rechte import ist_pruefer, urkunde_saeubern
-    return {"id": user["id"], "name": user["name"] or user["email"],
+    return {"id": user["id"], "name": (user["name"] or "").strip() or OHNE_NAMEN,
             "urkunde": urkunde_saeubern(user["urkundennummer"] or "") if ist_pruefer(user) else "",
             "unterschrift": user.get("signature_png") or None, "login": user["email"]}
 
@@ -109,14 +110,6 @@ def arten_fuer(item):
     if st.status(item) in ("ueberfaellig", "bald_faellig") or durchgang.offene_runde_fuer(item["id"]):
         return arten, "periodisch"
     return arten, "ausserplanmaessig"
-
-
-def _intervall_ordner(item):
-    """Gesperrte Artikel liegen in „Gesperrt“; ihr Intervall kommt aus dem Herkunftsordner, in den die
-    Freiprüfung sie zurückbringt."""
-    if item["lock_state"] in ("gesperrt", "verloren") and item["origin_folder_id"]:
-        return item["origin_folder_id"]
-    return item["folder_id"]
 
 
 def _lebensdauer(item, produkt, tag):
@@ -175,9 +168,11 @@ def _berichtigung_von(pid):
 
 
 def pruefung_json(p, pruefer_id=None):
+    """Eine Prüfung mit „darf“ an der Heimat ihres Artikels; der Durchgang einheitlich wie am Artikel."""
     item = bestand.artikel(p["item_id"])
     produkt = katalog.produkt(item["product_id"])
     out = kurz_json(p)
+    out["darf"] = rechte.rechte_artikel(item)
     out["eigen"] = bool(pruefer_id) and p["inspector_user_id"] == pruefer_id
     out["artikel"] = bestand.artikel_kurz(item)
     out["artikel"]["pfad"] = bestand.pfad(item["folder_id"])
@@ -192,11 +187,8 @@ def pruefung_json(p, pruefer_id=None):
     punkte = befunde(p["id"])
     out["punkte"] = [befund_json(r) for r in punkte]
     out["anhaenge"] = [anhang_json(a) for a in anhaenge(p["id"])]
-    out["durchgang"] = None
-    if p["round_id"]:
-        r = db.query("SELECT id, title, closed_on FROM mat_round WHERE id = ?", (p["round_id"],), one=True)
-        if r:
-            out["durchgang"] = {"id": r["id"], "titel": r["title"], "offen": r["closed_on"] is None}
+    from . import durchgang
+    out["durchgang"] = durchgang.verweis(p["round_id"]) if p["round_id"] else None
     out["dokumente"] = json.loads(p["documents_json"] or "[]")
     out["unterschrift"] = us.daten_uri(p["signature_png"])
     out["grund_berichtigung"] = p["correction_reason"]
@@ -208,7 +200,8 @@ def pruefung_json(p, pruefer_id=None):
         out["prueftag"] = tag            # der Tag, den Festschreiben jetzt setzen würde (deutsche Zeit)
     out["lebensdauer"] = _lebensdauer(item, produkt, tag)
     if out["entwurf"]:
-        iv = wirksam(produkt, _intervall_ordner(item), item["interval_months"])
+        # Gesperrte liegen in „Gesperrt“; ihr Intervall kommt aus der Heimat, in die die Freiprüfung sie zurückbringt.
+        iv = wirksam(produkt, bestand.heimat(item), item["interval_months"])
         out["intervall"] = iv
         out["vorschlag_naechste"] = plus_monate(date.fromisoformat(tag), iv["monate"]).isoformat() if iv["monate"] else None
         kritisch = [r["checklist_text"] for r in punkte if r["finding"] == "mangel" and r["is_critical"]]
@@ -231,9 +224,11 @@ def fuer_artikel(iid):
 
 
 def entwuerfe(pruefer_id=None):
-    """Offene Prüfungen (Reservierungen) mit Artikel – die eigenen zuerst, dann die ältesten."""
-    offen = db.query("SELECT * FROM mat_inspection WHERE completed_at IS NULL "
-                     "ORDER BY (inspector_user_id IS ?) DESC, created_at", (pruefer_id or -1,))
+    """Offene Prüfungen (Reservierungen) mit Artikel – die eigenen zuerst, dann die ältesten; nur zu Artikeln, die das
+    Konto sieht."""
+    offen = db.query(f"SELECT x.* FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id WHERE x.completed_at IS NULL "
+                     f"AND {rechte.artikel_filter('i')} ORDER BY (x.inspector_user_id IS ?) DESC, x.created_at",
+                     (pruefer_id or -1,))
     if not offen:
         return []
     ids = [x["item_id"] for x in offen]
@@ -281,6 +276,9 @@ def starten(iid, pruefer, art=None, durchgang_id=None):
         item = bestand.artikel(iid)
         if item["lock_state"] == "ausgesondert":
             raise Abgelehnt("Ein ausgesonderter Artikel wird nicht mehr geprüft.", 409)
+        if durchgang_id:
+            # Ein fremder oder unbekannter Durchgang antwortet 404 – auch wenn es schon einen eigenen Entwurf gibt.
+            durchgang.runde_des_artikels(durchgang_id, iid)
         offen = offener_entwurf(iid)
         if offen:
             if _eigen(offen, pruefer):
@@ -568,7 +566,7 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
             raise Abgelehnt("Der Artikel wurde inzwischen ausgesondert.", 409)
         produkt = katalog.produkt(item["product_id"])
         tag = _tag(pruefdatum or (p["inspected_on"] if p["corrects_inspection_id"] else heute()))
-        heimat = _heimat(item)
+        heimat = bestand.heimat(item)
         punkte = befunde(pid)
         offen = [r["checklist_text"] for r in punkte if r["mandatory"] and not _beantwortet(r)]
         if offen:
@@ -594,7 +592,7 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
             if lebensdauer and lebensdauer["erreicht"]:
                 raise Abgelehnt(f"Das Lebensende ist erreicht ({_fmt(lebensdauer['ende'])}) – „einsatzbereit“ ist "
                                 "nicht mehr wählbar.")
-            iv = wirksam(produkt, _intervall_ordner(item), item["interval_months"])
+            iv = wirksam(produkt, bestand.heimat(item), item["interval_months"])
             if not iv["monate"]:
                 raise Abgelehnt(katalog.KEIN_INTERVALL)
             spaetestens = plus_monate(date.fromisoformat(tag), iv["monate"]).isoformat()
@@ -625,14 +623,6 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
             journal.eintragen("inspection", p["corrects_inspection_id"], "berichtigt", None,
                               {"berichtigung": pid, "protocol_id": nr, "grund": p["correction_reason"]})
     return pid
-
-
-def _heimat(item):
-    """Der Ordner, in den der Artikel gehört: bei gesperrten der Herkunftsordner (er liegt nur vorübergehend in
-    „Gesperrt“). So steht er im Protokoll – Sperre und Aussonderung verschieben ihn erst danach."""
-    if item["lock_state"] in ("gesperrt", "verloren") and item["origin_folder_id"]:
-        return item["origin_folder_id"]
-    return item["folder_id"]
 
 
 def _wirkung(item, p, ergebnis, tag, naechste, grund, pruefer, ts=None):
@@ -728,11 +718,13 @@ def sperren(iid, d, pruefer):
 def _aussondern(item, grund, bemerkung, tag, akteur, basis_id=None, ts=None):
     """Aussonderung als eigener Vorgang (mat_inspection, Art „aussonderung“, ohne Formular) mit eigenem,
     festgeschriebenem Aussonderungsprotokoll; der Artikel wandert in „Ausgesondert“ und zählt nirgends mehr
-    als Bestand. Läuft in der Transaktion des Aufrufers, innerhalb von protokoll.dateien_sichern()."""
+    als Bestand. Seit Phase 2 behält er seine Heimat (origin_folder_id): Wer nur den Herkunftsordner verwaltet,
+    sieht ihn und sein Protokoll weiter. Eine Zuordnung an eine Person löst sich (Journal mit Grund). Läuft in der
+    Transaktion des Aufrufers, innerhalb von protokoll.dateien_sichern()."""
     from . import durchgang
     ziel = _systemziel(item, "ausgesondert")
     ts = ts or db.now()
-    heimat = _heimat(item)
+    heimat = bestand.heimat(item)
     sperre = ""
     if item["lock_state"] in ("gesperrt", "verloren"):
         sperre = ("verloren gemeldet" if item["lock_state"] == "verloren" else "gesperrt") + (
@@ -743,8 +735,8 @@ def _aussondern(item, grund, bemerkung, tag, akteur, basis_id=None, ts=None):
         "VALUES (?,?,?,?,?,'aussonderung','aussondern',?,?,?,?,?,?)",
         (item["id"], akteur.get("id"), akteur["name"], akteur.get("urkunde") or "", tag, grund, bemerkung, basis_id,
          ts, ts, ts))
-    db.execute("UPDATE mat_item SET lock_state = 'ausgesondert', lock_reason = ?, origin_folder_id = NULL, folder_id = ?, "
-               "updated_at = ? WHERE id = ?", (grund, ziel, ts, item["id"]))
+    db.execute("UPDATE mat_item SET lock_state = 'ausgesondert', lock_reason = ?, origin_folder_id = ?, folder_id = ?, "
+               "assigned_user_id = NULL, updated_at = ? WHERE id = ?", (grund, heimat, ziel, ts, item["id"]))
     journal.eintragen("inspection", aid, "ausgesondert", None,
                       {"item_id": item["id"], "reason": grund, "inspected_on": tag, "basis": basis_id})
     journal.eintragen("item", item["id"], "ausgesondert",
@@ -752,6 +744,10 @@ def _aussondern(item, grund, bemerkung, tag, akteur, basis_id=None, ts=None):
                        "ordner": bestand._pfad_text(item["folder_id"])},
                       {"lock_state": "ausgesondert", "folder_id": ziel, "ordner": bestand._pfad_text(ziel),
                        "grund": grund, "datum": tag, "aussonderung": aid})
+    if item.get("assigned_user_id"):
+        # Betroffene stehen nur pseudonym im Journal (Kontoverweis, 6.2).
+        journal.eintragen("item", item["id"], "zuordnung_geloest", None,
+                          {"konto": journal.konto_ref(item["assigned_user_id"]), "grund": "ausgesondert"})
     durchgang.nach_aussonderung(item["id"], tag, basis_id)
     protokoll.pruefung_festschreiben(aid, ts, akteur.get("unterschrift"), akteur.get("login"), heimat, sperre)
     return aid

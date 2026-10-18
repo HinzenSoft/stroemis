@@ -537,11 +537,15 @@ def produkt_json(p, voll=False):
     if "bestand" in p:
         out["bestand"] = p["bestand"]
     if voll:
+        # Der Katalog ist global, der Bestand nicht: Die Zahlen zählen nur, was das Konto sieht. Ob sich das Produkt
+        # löschen lässt, hängt dagegen an allen Artikeln – „loeschbar“ verrät nur ja oder nein (produkt_loeschen).
+        from .rechte import artikel_filter
         out["kategorie_pfad"] = kategorie_pfad(p["category_id"])
-        out["bestand"] = db.query("SELECT COUNT(*) AS n FROM mat_item WHERE product_id = ? AND lock_state <> 'ausgesondert'",
-                                  (p["id"],), one=True)["n"]
-        out["artikel_gesamt"] = db.query("SELECT COUNT(*) AS n FROM mat_item WHERE product_id = ?", (p["id"],),
-                                         one=True)["n"]
+        out["bestand"] = db.query(f"SELECT COUNT(*) AS n FROM mat_item i WHERE i.product_id = ? AND i.lock_state <> "
+                                  f"'ausgesondert' AND {artikel_filter('i')}", (p["id"],), one=True)["n"]
+        out["artikel_gesamt"] = db.query(f"SELECT COUNT(*) AS n FROM mat_item i WHERE i.product_id = ? "
+                                         f"AND {artikel_filter('i')}", (p["id"],), one=True)["n"]
+        out["loeschbar"] = not db.query("SELECT 1 FROM mat_item WHERE product_id = ? LIMIT 1", (p["id"],), one=True)
         out["dokumente"] = dokumente(p["id"])
         out["kategorie_dokumente"] = geerbte_dokumente(p["id"])
         f = formular_fuer_produkt(p["id"])

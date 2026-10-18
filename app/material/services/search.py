@@ -4,6 +4,10 @@ Der Katalog wird nie als Ganzes an den Browser geschickt (bei homebase lief die 
 ganzen Katalog in Zeitüberschreitungen). Gesucht wird mit dem Trigramm-Volltextindex aus models.py:
 Er findet Teilstücke ab drei Zeichen („234“ in „M-001234“) über einen Index. Kürzere Wörter und
 Datenbanken ohne Index laufen über LIKE – bei ein, zwei Zeichen ist ohnehin fast alles ein Treffer.
+
+Seit Phase 2 findet die Artikelsuche nur, was das Konto sieht (rechte.artikel_filter) – in den Treffern wie in der
+Gesamtzahl; ebenso zählt die Spalte „Bestand“ im Katalog. Was darüber hinausgeht, ist die globale Suche nach der
+exakten Herstellerseriennummer (globalsuche, mit Bremse und Protokoll).
 """
 import re
 import sqlite3
@@ -11,6 +15,7 @@ import sqlite3
 from ... import db
 from . import Abgelehnt
 from .nummern import inventar_ziffern
+from .rechte import artikel_filter
 
 PRO_SEITE_MAX = 100
 
@@ -114,7 +119,8 @@ def produkte(q="", kategorie_id=None, seite=1, pro_seite=25, sort=None, richtung
     where = ("WHERE " + " AND ".join(bedingungen)) if bedingungen else ""
     gesamt = _abfragen(f"SELECT COUNT(*) AS n FROM mat_product p {where}", tuple(args), one=True)["n"]
     auswahl = (f"SELECT p.*, c.name AS category_name, "
-               f"(SELECT COUNT(*) FROM mat_item i WHERE i.product_id = p.id AND i.lock_state <> 'ausgesondert') AS bestand "
+               f"(SELECT COUNT(*) FROM mat_item i WHERE i.product_id = p.id AND i.lock_state <> 'ausgesondert' "
+               f"AND {artikel_filter('i')}) AS bestand "
                f"FROM mat_product p JOIN mat_category c ON c.id = p.category_id {where} ORDER BY {ordnung}")
     if sort == "intervall":
         # Das wirksame Intervall (Produkt, sonst Kategorie oder Oberkategorie) – in Python, dann die Seite.
@@ -157,13 +163,25 @@ def artikel(q, seite=1, pro_seite=25, sort=None, richtung="auf"):
     if genau:
         where = f"(({where}) OR i.inventory_no = ?)"
         args.append(genau)
-    basis = f"FROM mat_item i JOIN mat_product p ON p.id = i.product_id WHERE {where}"
+    basis = f"FROM mat_item i JOIN mat_product p ON p.id = i.product_id WHERE ({where}) AND {artikel_filter('i')}"
     gesamt = _abfragen(f"SELECT COUNT(*) AS n {basis}", tuple(args), one=True)["n"]
     rows = _abfragen(
         f"SELECT i.*, p.manufacturer, p.model, p.article_no, p.material_kind, p.image AS product_image, "
         f"p.demo AS product_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "
-        f"e.inspector_user_id AS entwurf_pruefer_id "
-        f"{basis.replace(' WHERE ', ' LEFT JOIN mat_inspection e ON e.item_id = i.id AND e.completed_at IS NULL WHERE ', 1)} "
+        f"e.inspector_user_id AS entwurf_pruefer_id, zu.name AS zugeordnet_name "
+        f"{basis.replace(' WHERE ', ' LEFT JOIN mat_inspection e ON e.item_id = i.id AND e.completed_at IS NULL '
+                         'LEFT JOIN users zu ON zu.id = i.assigned_user_id WHERE ', 1)} "
         f"ORDER BY {eigene + ', ' if eigene else ''}(i.inventory_no = ?) DESC, (lower(i.serial_no) = lower(?)) DESC, "
         f"i.inventory_no LIMIT ? OFFSET ?", (*args, genau, " ".join(ws), pro_seite, (seite - 1) * pro_seite))
     return rows, gesamt
+
+
+def exakt_lokal(q):
+    """Hat ein Artikel, den das Konto sieht, genau diese Seriennummer (ohne Groß- und Kleinschreibung, Leerraum
+    zusammengezogen wie in der globalen Suche)? Dann gibt es nichts global zu suchen (globalsuche.angebot)."""
+    from .globalsuche import normalform
+    n = normalform(q)
+    if not n:
+        return False
+    return db.query(f"SELECT 1 FROM mat_item i WHERE i.serial_no = ? COLLATE NOCASE AND {artikel_filter('i')} LIMIT 1",
+                    (n,), one=True) is not None

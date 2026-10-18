@@ -8,12 +8,12 @@ allein gibt keinen Export. Fremdes antwortet wie Unbekanntes mit 404. Den Inhalt
 services/lebenslauf.py. Nichts davon wird zwischengespeichert: Die Antworten tragen Cache-Control no-store."""
 import io
 
-from flask import abort, redirect, render_template, request, send_file, url_for
+from flask import redirect, render_template, request, send_file, url_for
 
 from ..auth import current_user
 from .routes import seiten
 from .services import Abgelehnt, export, heute, lebenslauf
-from .services.rechte import NUR_GRUNDRECHT, _bezug, darf, zugang
+from .services.rechte import NUR_GRUNDRECHT, _bezug, darf, zugang, zugang_meldung
 
 
 def _zugang(quelle, kennung_wert):
@@ -24,7 +24,7 @@ def _zugang(quelle, kennung_wert):
     if not u:
         return redirect(url_for("pages.login", next=request.path))
     if not zugang(u):
-        abort(403)
+        return _fehler(Abgelehnt(zugang_meldung(u), 403))
     try:
         bezug = _bezug(quelle, {quelle: kennung_wert})
         if not darf("lesen", bezug.ordner_id):

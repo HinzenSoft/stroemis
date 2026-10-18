@@ -218,6 +218,7 @@ AUSNAHMEN_SCHREIBEN_PFAD = {
 # Lesen: was nicht 200 liefert, und warum.
 AUSNAHMEN_LESEN = {
     "material.qr_ziel": 302,                       # /m/<token> leitet zum Artikel weiter
+    "material.artikel_neu": 403,                   # Artikel anlegen nur, wer irgendwo verwaltet (Phase 2)
 }
 # Werkzeuge der Katalogpflege (Katalogaustausch, Lieferung 4) sind nur für Katalogpfleger; den Katalog selbst liest die
 # Führungskraft über /kategorien und /produkte.

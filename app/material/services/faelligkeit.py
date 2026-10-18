@@ -24,11 +24,11 @@ def kappen(bedingung, args=()):
         "i.interval_months AS i_int, p.interval_months AS p_int, "
         "p.category_id FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
         f"WHERE i.lock_state <> 'ausgesondert' AND i.next_due_on IS NOT NULL AND ({bedingung})", args)
+    from .bestand import heimat
     vorgezogen = 0
     for z in zeilen:
-        # Gesperrte liegen in „Gesperrt“; ihr Intervall kommt aus dem Herkunftsordner (wie bei der Prüfung).
-        ordner = z["origin_folder_id"] if z["lock_state"] in ("gesperrt", "verloren") and z["origin_folder_id"] else z["folder_id"]
-        iv = wirksam({"interval_months": z["p_int"], "category_id": z["category_id"]}, ordner, z["i_int"])
+        # Gesperrte liegen in „Gesperrt“; ihr Intervall kommt aus der Heimat (wie bei der Prüfung).
+        iv = wirksam({"interval_months": z["p_int"], "category_id": z["category_id"]}, heimat(z), z["i_int"])
         if not iv["monate"]:
             continue
         if z["last_inspected_on"]:

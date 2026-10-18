@@ -2,7 +2,10 @@
 wert() in static/material.js. Wer dort eine Beschriftung ergänzt, ergänzt sie hier auch: Oberfläche und
 Lebenslauf-PDF sollen dasselbe Wort für dasselbe Feld benutzen.
 
-Was hier nicht steht, erscheint mit seinem technischen Namen – wie in der Oberfläche."""
+Was hier nicht steht, erscheint mit seinem technischen Namen – wie in der Oberfläche.
+
+Betroffene stehen im Journal nur als Kontoverweis („konto“, Phase 2); das PDF nennt sie nie – nicht einmal den Namen,
+den journal.lesen beim Lesen auflöst: Dort steht „(Person)“. Der Lebenslauf geht weiter, an wen er auch geht."""
 import json
 
 from ..models import ANHANGARTEN, ERGEBNISSE, MATERIALARTEN, ORDNERARTEN, PRUEFARTEN
@@ -35,6 +38,8 @@ FELD = {
     "login": "Anmeldung", "berichtigung": "Berichtigung", "berichtigt": "berichtigt", "unterschrift": "Unterschrift",
     "nicht_geprueft": "nicht geprüft", "uid": "Katalogkennung", "rueckruf": "Rückruf Nr.", "serials": "Seriennummern",
     "mail": "Mail an Materialwarte und Prüfer", "close_note": "Vermerk",
+    # Phase 2: Freigaben je Ordner und Personenzuordnung
+    "freigabe": "Freigabe Nr.", "konto": "Person", "recht": "Recht", "bis": "bis", "notiz_geaendert": "Notiz geändert",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",
@@ -50,6 +55,10 @@ AKTION = {
     "unterschrift": "Unterschrift geändert", "urkundennummer": "Urkundennummer geändert",
     "abgebrochen": "Durchgang abgebrochen",
     "rueckruf": "Rückruf angelegt", "rueckruf_beendet": "Rückruf beendet",
+    "freigabe_erteilt": "Freigabe erteilt", "freigabe_geaendert": "Freigabe geändert",
+    "freigabe_entzogen": "Freigabe entzogen", "freigabe_entfernt": "Freigabe entfernt",
+    # Im Lebenslauf ohne Namen: Wem der Artikel zugeordnet war, gehört nicht in ein Dokument zur Weitergabe.
+    "zugeordnet": "Zuordnung geändert", "zuordnung_geloest": "Zuordnung geändert",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",
@@ -57,19 +66,23 @@ ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "fo
 # Wie PRUEFART_KURZ in material.js: im Journal kurz („periodisch“ statt „periodische Prüfung“).
 PRUEFART_KURZ = PRUEFARTEN
 SPERRZUSTAND = {"frei": "frei", "gesperrt": "gesperrt", "verloren": "verloren (gesperrt)", "ausgesondert": "ausgesondert"}
-_JA_NEIN = ("serial_generated", "active", "mat_pruefer", "mat_katalog")
+RECHT = {"lesen": "lesen", "pruefen": "prüfen", "verwalten": "verwalten"}
+PERSON = "(Person)"
+_JA_NEIN = ("serial_generated", "active", "mat_pruefer", "mat_katalog", "notiz_geaendert")
 _VERWEISE = ("pruefung", "aussonderung", "basis", "berichtigung", "berichtigt")
 
 
 def _ist_datumsfeld(feld):
-    return feld.endswith("_on") or feld in ("valid_from", "retire_by", "datum", "begonnen")
+    return feld.endswith("_on") or feld in ("valid_from", "retire_by", "datum", "begonnen", "bis")
 
 
 def wert_text(v, feld, verweise=None):
     """Ein Wert aus dem Journal als Text – wie wert() in material.js, nur ohne HTML. verweise: Kennung einer Prüfung →
     Protokoll-ID; im PDF gibt es keinen Link, die Protokoll-ID findet man dafür im Verzeichnis wieder."""
+    if feld == "konto":
+        return PERSON if v else "–"
     if v is None or v == "":
-        return "–"
+        return "–" if feld != "bis" else "unbefristet"
     if isinstance(v, list):
         return ", ".join(str(x) for x in v) if v else "–"
     if isinstance(v, bool) or (feld in _JA_NEIN and v in (0, 1)):
@@ -84,6 +97,8 @@ def wert_text(v, feld, verweise=None):
         return (verweise or {}).get(v) or f"Nr. {v}"
     if feld == "lock_state":
         return SPERRZUSTAND.get(v, str(v))
+    if feld == "recht":
+        return RECHT.get(v, str(v))
     if _ist_datumsfeld(feld) and isinstance(v, str):
         return datum_text(v)
     if isinstance(v, dict):

@@ -464,8 +464,11 @@ def pruefung_festschreiben(pruefung_id, ts, unterschrift, login, ordner_id, sper
 
 
 def _sammelprotokoll(r, pid, ts):
+    """Daten des Sammelprotokolls. Die Ordnerspalte zeigt die Heimat eines Artikels nur, wenn sie im Zweig des
+    Durchgangs liegt – sonst „aus dem Bereich verschoben“, nie einen Pfad aus einem fremden Bereich (1.7 Nr. 7)."""
     from . import durchgang
     zeilen = durchgang._zeilen(r["id"])
+    zweig, pfade = bestand.unterbaum(r["folder_id"]), {}
     artikel = {a["id"]: a for a in db.query(bestand.ARTIKEL_LISTE_SQL + "WHERE i.id IN (SELECT item_id FROM mat_round_item "
                                                                          "WHERE round_id = ?)", (r["id"],))}
     pruefungen = {x["id"]: x for x in db.query(
@@ -489,7 +492,8 @@ def _sammelprotokoll(r, pid, ts):
         if z["excluded_reason"]:
             ausnahme = f"{z['excluded_reason']} ({z['excluded_by_name']}, {ortszeit(z['excluded_at']).strftime('%d.%m.%Y') if z['excluded_at'] else ''})"
         liste.append({"inventarnummer": a["inventory_no"], "seriennummer": a["serial_no"],
-                      "produkt": f"{a['manufacturer']} {a['model']}".strip(), "ordner": _pfad_text(a["folder_id"]),
+                      "produkt": f"{a['manufacturer']} {a['model']}".strip(),
+                      "ordner": durchgang.ordnerspalte(zweig, a, pfade, _pfad_text),
                       "zustand": zustand, "ergebnis": (z["ergebnis"] or "") if x else "",
                       "ergebnis_text": ERGEBNISSE.get(z["ergebnis"], "") if x else "",
                       "datum": datum_text(x["inspected_on"]) if x else "", "pruefer": x["inspector_name"] if x else "",

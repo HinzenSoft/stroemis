@@ -1,13 +1,14 @@
 """Export eines Ordners (Lieferung 4; Konzept: „Export – CSV je Ordner, ZIP aller Protokolle, Lebenslauf-PDF je
 Artikel – Datenhoheit und Umzugsfähigkeit“). Das Lebenslauf-PDF steht in lebenslauf.py.
 
-Welche Artikel zu einem Ordner gehören, ist für CSV und ZIP dasselbe (menge()): alle im Ordner und darunter, dazu
-gesperrte und verlorene, die aus diesem Zweig nach „Gesperrt“ gewandert sind (Herkunftsordner im Zweig) – wie beim
-Eröffnen eines Prüfdurchgangs. Ausgesonderte liegen in „Ausgesondert“ ihrer Gliederung und gehören damit zum Export
-der Gliederung, nicht mehr zu dem des Unterordners, aus dem sie kamen: Die Aussonderung vergisst die Herkunft
-(origin_folder_id), und über das Journal ließe sie sich nur unsicher zurückverfolgen. Protokolle wandern mit dem
-Artikel: Im ZIP stehen die Protokolle der Artikel, die heute zum Ordner gehören, dazu die Sammelprotokolle der
-Durchgänge, die für den Ordner oder einen seiner Unterordner eröffnet wurden.
+Welche Artikel zu einem Ordner gehören, ist für CSV und ZIP dasselbe (menge()): alle, deren Heimat (bestand.heimat)
+im Ordner oder darunter liegt – wie beim Eröffnen eines Prüfdurchgangs. Gesperrte, verlorene und seit Phase 2 auch
+ausgesonderte zählen also bei ihrem Herkunftsordner, auch wenn sie in „Gesperrt“ oder „Ausgesondert“ liegen;
+Ausgesonderte ohne Herkunft (vor Schritt 8 ausgesondert, Herkunftsordner gelöscht) gehören zur Gliederung. Protokolle
+wandern mit dem Artikel: Im ZIP stehen die Protokolle der Artikel, die heute zum Ordner gehören, dazu die
+Sammelprotokolle der Durchgänge, die für den Ordner oder einen seiner Unterordner eröffnet wurden. Exportieren darf nur,
+wer das Grundrecht am Ordner hat (routes_export) – damit sieht er alles, was dazu gehört, auch die Spalte
+„Zugeordnet an“.
 
 CSV: Trennzeichen „;“, UTF-8 mit BOM, Zeilenende CRLF – so öffnet Excel die Datei mit Umlauten richtig. Datumswerte
 deutsch (TT.MM.JJJJ, Monatsangaben MM/JJJJ). Ein Wert, der mit = + - @ Tabulator oder Wagenrücklauf beginnt, bekommt
@@ -45,18 +46,20 @@ ARTIKEL_SPALTEN = (
     "Inventarnummer", "Seriennummer", "Seriennummer vom System", "Hersteller", "Modell", "Artikelnummer", "Kategorie",
     "Norm", "Materialart", "Ordner", "Gliederung", "Status", "Sperrzustand", "Sperr-/Aussonderungsgrund",
     "Herkunftsordner", "zuletzt geprüft", "nächste Prüfung", "Prüfintervall wirksam (Monate)", "hergestellt",
-    "gekauft", "Erstgebrauch", "Lebensende", "Bemerkung", "in Prüfung bei", "DEMO")
+    "gekauft", "Erstgebrauch", "Lebensende", "Bemerkung", "in Prüfung bei", "Zugeordnet an", "DEMO")
 VERZEICHNIS_SPALTEN = (
     "Protokoll-ID", "Art", "Prüfart", "Datum", "festgeschrieben", "Inventarnummer", "Seriennummer", "Produkt",
     "Prüfdurchgang", "Prüfer", "Urkundennummer", "Ergebnis", "Grund", "Datei im ZIP", "SHA-256 der Datei",
     "SHA-256 der ersten N Bytes", "N (Bytes)", "Zustand", "berichtigt durch", "Berichtigung von", "DEMO")
 
-# Mit dem offenen Entwurf (höchstens einer je Artikel) für „in Prüfung bei“; die Spalten des Produkts, die das
-# wirksame Intervall braucht, unter eigenem Namen (i.* hat selbst ein interval_months).
+# Mit dem offenen Entwurf (höchstens einer je Artikel) für „in Prüfung bei“ und der zugeordneten Person (Name, immer
+# der aktuelle Stand); die Spalten des Produkts, die das wirksame Intervall braucht, unter eigenem Namen (i.* hat selbst
+# ein interval_months).
 ARTIKEL_SQL = ("SELECT i.*, p.manufacturer, p.model, p.article_no, p.norm, p.material_kind, p.category_id, "
-               "p.interval_months AS p_int, p.demo AS product_demo, e.inspector_name AS entwurf_pruefer "
-               "FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
-               "LEFT JOIN mat_inspection e ON e.item_id = i.id AND e.completed_at IS NULL ")
+               "p.interval_months AS p_int, p.demo AS product_demo, e.inspector_name AS entwurf_pruefer, "
+               "zu.name AS zugeordnet_name FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
+               "LEFT JOIN mat_inspection e ON e.item_id = i.id AND e.completed_at IS NULL "
+               "LEFT JOIN users zu ON zu.id = i.assigned_user_id ")
 # Ohne signature_png: Die Unterschrift steckt schon im Protokoll, und tausend Kopien bräuchte hier niemand.
 PRUEFUNG_SQL = ("SELECT x.id, x.item_id, x.round_id, x.protocol_id, x.inspector_name, x.inspector_certificate, "
                 "x.inspected_on, x.kind, x.result, x.reason, x.corrects_inspection_id, x.completed_at, x.locked_at, "
@@ -94,9 +97,7 @@ def csv_bytes(kopf, zeilen):
 def menge(fid):
     """SQL-Bedingung (über i = mat_item) und Parameter: die Artikel, die zum Ordner fid gehören (siehe oben) – dieselbe
     Regel wie durchgang.eroeffnen, dort ohne Ausgesonderte."""
-    zweig, args = im_unterbaum(fid)
-    herkunft = zweig.replace("i.folder_id IN", "i.origin_folder_id IN", 1)
-    return f"(({zweig}) OR (i.lock_state IN ('gesperrt', 'verloren') AND {herkunft}))", args + args
+    return bestand.heimat_im_zweig(fid)
 
 
 def _ketten(alle):
@@ -146,11 +147,10 @@ def artikel_csv(fid):
     zeilen = []
     for r in rows:
         s = st.status(r, stichtag, schwelle)
-        gesperrt = r["lock_state"] in ("gesperrt", "verloren")
         intervall = None
         if r["lock_state"] != "ausgesondert":
-            # Gesperrte liegen in „Gesperrt“; ihr Intervall kommt aus dem Herkunftsordner (wie bei der Freiprüfung).
-            heimat = r["origin_folder_id"] if gesperrt and r["origin_folder_id"] else r["folder_id"]
+            # Gesperrte liegen in „Gesperrt“; ihr Intervall kommt aus der Heimat (wie bei der Freiprüfung).
+            heimat = bestand.heimat(r)
             schluessel = (r["product_id"], heimat, r["interval_months"])
             if schluessel not in intervalle:
                 intervalle[schluessel] = wirksam({"interval_months": r["p_int"], "category_id": r["category_id"]},
@@ -166,6 +166,7 @@ def artikel_csv(fid):
             datum_text(r["last_inspected_on"]), datum_text(r["next_due_on"]), intervall,
             datum_text(r["manufactured_on"]), datum_text(r["purchased_on"]), datum_text(r["first_use_on"]),
             datum_text(r["retire_by"]) if r["material_kind"] == "textil" else "", r["notes"], r["entwurf_pruefer"],
+            ((r["zugeordnet_name"] or "").strip() or "(ohne Namen)") if r["assigned_user_id"] else "",
             "ja" if r["product_demo"] else "nein"])
     return csv_bytes(ARTIKEL_SPALTEN, zeilen), f"Artikel_{dateiname(o['name'])}_{stichtag.isoformat()}.csv"
 

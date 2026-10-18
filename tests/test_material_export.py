@@ -27,7 +27,7 @@ def aufbau(tmp):
       textil    im Fahrzeug, Monatsangaben, noch ohne Prüfung („neu“)
       gesperrt  im Fahrzeug geprüft, dann gesperrt – liegt in „Gesperrt“, Herkunft Fahrzeug
       lager     im Lager
-      weg       im Fahrzeug, verloren gemeldet und ausgesondert – liegt in „Ausgesondert“"""
+      weg       im Fahrzeug, verloren gemeldet und ausgesondert – liegt in „Ausgesondert“, Herkunft Fahrzeug (Phase 2)"""
     app, k = umgebung(tmp)
     ids = katalog_grund(k["adm"])
     pruef_formulare(k["katalog"], ids)
@@ -64,7 +64,8 @@ def aufbau(tmp):
     r = p1.post(f"/api/material/artikel/{a['gesperrt']['id']}/sperren",
                 json={"grund": "beschaedigung", "text": "Riss am Schnapper"})
     assert r.status_code == 200, r.get_json()
-    # Verloren und ausgesondert: liegt danach in „Ausgesondert“ der Gliederung, ohne Herkunft.
+    # Verloren und ausgesondert: liegt danach in „Ausgesondert“ der Gliederung; seit Phase 2 bleibt die Herkunft
+    # (Fahrzeug) – sie ist seine Heimat.
     assert p1.post(f"/api/material/artikel/{a['weg']['id']}/sperren", json={"grund": "verlust"}).status_code == 200
     r = w.post(f"/api/material/artikel/{a['weg']['id']}/aussondern", json={"grund": "verlust", "bemerkung": "Bei Übung weg"})
     assert r.status_code == 200, r.get_json()
@@ -102,10 +103,12 @@ def test_csv():
         assert "no-store" in r.headers["Cache-Control"], r.headers["Cache-Control"]
         kopf, zeilen = csv_lesen(r.data)
         assert kopf == list(export.ARTIKEL_SPALTEN), kopf
-        # Im Fahrzeug und darunter – dazu der gesperrte, der von hier stammt; nicht das Lager, nicht der ausgesonderte.
-        # Reihenfolge wie im Baum: Fahrzeug, darin das Fach, dann „Gesperrt“ (Systemordner zuletzt).
+        # Im Fahrzeug und darunter – dazu der gesperrte und der ausgesonderte, die von hier stammen (ihre Heimat ist das
+        # Fahrzeug); nicht das Lager. Reihenfolge wie im Baum: Fahrzeug, darin das Fach, dann „Gesperrt“ und
+        # „Ausgesondert“ (Systemordner zuletzt).
         nummern = [z["Inventarnummer"] for z in zeilen]
-        assert nummern == [a["textil"]["inventory_no"], a["formel"]["inventory_no"], a["gesperrt"]["inventory_no"]], nummern
+        assert nummern == [a["textil"]["inventory_no"], a["formel"]["inventory_no"], a["gesperrt"]["inventory_no"],
+                           a["weg"]["inventory_no"]], nummern
         z = {x["Inventarnummer"]: x for x in zeilen}
         # Der Status ist derselbe wie überall (status.status) und wie in der Artikelansicht.
         with app.app_context():
@@ -145,7 +148,8 @@ def test_csv():
         _, zeilen = csv_lesen(r.data)
         assert {x["Inventarnummer"] for x in zeilen} == {v["inventory_no"] for v in a.values()}
         w = {x["Inventarnummer"]: x for x in zeilen}[a["weg"]["inventory_no"]]
-        assert w["Status"] == "ausgesondert" and w["Ordner"] == "OG Übungsstadt / Ausgesondert" and w["Herkunftsordner"] == ""
+        assert w["Status"] == "ausgesondert" and w["Ordner"] == "OG Übungsstadt / Ausgesondert", w
+        assert w["Herkunftsordner"] == "OG Übungsstadt / Fahrzeug GW-Wasserrettung", w
         assert w["Sperr-/Aussonderungsgrund"] == "Verlust", w
         # Ein leerer Ordner: nur die Kopfzeile.
         leer = k["wart"].post("/api/material/ordner", json={"name": "Leer", "kind": "set", "parent_id": o["lager"]}).json["ordner"]["id"]
@@ -190,12 +194,13 @@ def test_zip():
         assert "no-store" in r.headers["Cache-Control"]
         z, kopf, verz = zip_lesen(r.data)
         assert kopf == list(export.VERZEICHNIS_SPALTEN), kopf
-        # Einzelprotokolle (auch das berichtigte Original samt Berichtigung) und das Sammelprotokoll des Fachs –
-        # nicht die Aussonderung: Der ausgesonderte Artikel gehört nicht mehr zum Fahrzeug.
+        # Einzelprotokolle (auch das berichtigte Original samt Berichtigung), das Sammelprotokoll des Fachs und seit
+        # Phase 2 die Aussonderung: Der ausgesonderte Artikel gehört über seine Heimat weiter zum Fahrzeug.
         erwartet = {
             p["protocol_id"]: f"Protokolle/{jahr}/{p['protocol_id']}_{a['formel']['inventory_no']}.pdf",
             b["protocol_id"]: f"Protokolle/{jahr}/{b['protocol_id']}_{a['formel']['inventory_no']}.pdf",
             g["protocol_id"]: f"Protokolle/{jahr}/{g['protocol_id']}_{a['gesperrt']['inventory_no']}.pdf",
+            aus["protocol_id"]: f"Protokolle/{jahr}/{aus['protocol_id']}_{a['weg']['inventory_no']}.pdf",
             s["protocol_id"]: f"Sammelprotokolle/{jahr}/{s['protocol_id']}.pdf"}
         assert set(verz) == set(erwartet), set(verz)
         assert sorted(z.namelist()) == sorted(["Verzeichnis.csv", *erwartet.values()]), z.namelist()
@@ -213,9 +218,9 @@ def test_zip():
         assert verz[p["protocol_id"]]["Prüfer"] == "pruefer" and verz[p["protocol_id"]]["Urkundennummer"] == "1012-4711"
         assert verz[p["protocol_id"]]["Seriennummer"] == "'=1+2"            # Formel-Schutz auch im Verzeichnis
         assert verz[s["protocol_id"]]["Art"] == "Sammelprotokoll" and verz[s["protocol_id"]]["Ergebnis"] == "abgeschlossen"
-        # Die Gliederung: dazu das Aussonderungsprotokoll.
+        # Die Gliederung: dieselben – alles darin gehört auch zu ihr.
         z, _, verz = zip_lesen(f.get(f"/material/export/{o['gid']}-protokolle.zip").data)
-        assert set(verz) == set(erwartet) | {aus["protocol_id"]}, set(verz)
+        assert set(verz) == set(erwartet), set(verz)
         v = verz[aus["protocol_id"]]
         assert v["Art"] == "Aussonderungsprotokoll" and v["Grund"] == "Verlust" and v["Prüfer"] == "wart", v
         assert hashlib.sha256(z.read(v["Datei im ZIP"])).hexdigest() == aus["file_sha256"]
@@ -245,7 +250,8 @@ def test_zip():
         assert verz[g["protocol_id"]]["Zustand"] == "verändert" and verz[g["protocol_id"]]["Datei im ZIP"] == ""
         assert verz[s["protocol_id"]]["Zustand"] == "fehlt" and verz[s["protocol_id"]]["Datei im ZIP"] == ""
         assert verz[g["protocol_id"]]["SHA-256 der Datei"] == g["file_sha256"]           # der festgeschriebene Wert
-        assert sorted(z.namelist()) == sorted(["Verzeichnis.csv", erwartet[p["protocol_id"]], erwartet[b["protocol_id"]]])
+        assert sorted(z.namelist()) == sorted(["Verzeichnis.csv", erwartet[p["protocol_id"]], erwartet[b["protocol_id"]],
+                                               erwartet[aus["protocol_id"]]])
         assert any(g["pdf_path"] in m and "verändert" in m for m in mitschrift.zeilen), mitschrift.zeilen
         assert any(s["pdf_path"] in m and "fehlt" in m for m in mitschrift.zeilen), mitschrift.zeilen
         assert any("Protokoll-Export" in m for m in mitschrift.zeilen), mitschrift.zeilen
