@@ -48,8 +48,8 @@ class FremdeDublette(Abgelehnt):
     """Seriennummer und Produkt gibt es schon – bei einem Artikel, den das Konto nicht sieht (Bauentwurf 3.7). Die
     Transaktion rollt zurück; der Fehlerbehandler in routes.py bremst und protokolliert das wie eine globale Suche
     (globalprotokoll). Der Text nennt weder Gliederung noch Inventarnummer."""
-    TEXT = ("Diese Seriennummer gibt es bei diesem Produkt schon – in einem Bereich, den du nicht siehst. Wo er geführt "
-            "wird, zeigt die globale Suche.")
+    TEXT = ("Diese Seriennummer gibt es bei diesem Produkt schon – in einem Bereich, den du nicht siehst. Wo der Artikel "
+            "geführt wird, zeigt die Nummernsuche oben („Außerhalb deines Bereichs … suchen“).")
 
     def __init__(self, item_id, serie):
         super().__init__(self.TEXT, 409)

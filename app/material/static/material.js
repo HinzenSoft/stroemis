@@ -869,7 +869,7 @@
           : leer("Nichts fällig.")}
       </section>`
       : `<p class="help">Im <a href="/material/katalog">Katalog</a> stehen alle Produkte mit Prüfformularen und Herstellerdokumenten.
-          Die Nummernsuche oben sucht eine Herstellerseriennummer auf Wunsch auch in allen Gliederungen – das wird protokolliert.</p>`;
+          Die Nummernsuche oben findet eine Herstellerseriennummer auf Wunsch auch außerhalb deines Bereichs – das wird mit deinem Namen protokolliert.</p>`;
     inhalt.innerHTML = `<div class="page-head"><h1>Material</h1>
         <div class="btn-row">${DARF.verwalten ? '<a class="btn secondary" href="/material/bestand">Bestand pflegen</a><a class="btn secondary" href="/material/artikel/neu">+ Artikel</a>' : ""}</div></div>
       ${rueckrufKasten(d.rueckrufe)}

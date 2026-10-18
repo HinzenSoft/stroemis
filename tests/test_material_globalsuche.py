@@ -595,6 +595,12 @@ def test_teilfreigabe():
         for alt in ("Aus anderen Gliederungen", "In anderen Gliederungen", "Suche in anderen Gliederungen",
                     "Artikel anderer Gliederungen"):
             assert alt not in js, (datei, alt)
+    # Gesamtprüfung: Auch die Übersicht ohne Freigabe (die erste Seite jedes neuen Kontos) und die Rückmeldung ohne
+    # Bestätigung sagen „außerhalb deines Bereichs“, nicht „in allen Gliederungen“ oder „globale Suche“.
+    js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
+    assert "auch in allen Gliederungen" not in js
+    assert "Herstellerseriennummer auf Wunsch auch außerhalb deines Bereichs – das wird mit deinem Namen protokolliert" in js
+    assert "außerhalb deines Bereichs" in globalsuche.BESTAETIGEN and "global" not in globalsuche.BESTAETIGEN
     print("Teilfreigabe bestanden.")
 
 
@@ -704,9 +710,12 @@ def test_bremse_mit_dublette():
                                                   "serial_no": "TEST-B-0001"}, headers=H)
         assert r.status_code == 409 and t.art_b["inventory_no"] not in r.json["error"], r.get_json()
         assert "Nachbarstadt" not in r.json["error"], r.get_json()
+        # Gesamtprüfung: Die Meldung nennt den Weg, wie ihn die Oberfläche nennt – keine „globale Suche“.
+        assert "Außerhalb deines Bereichs" in r.json["error"] and "global" not in r.json["error"], r.get_json()
         assert [z["art"] for z in protokoll(t.app)][-1] == "dublette"
         r = global_suchen(w, "TEST-B-0001")
         assert r.status_code == 429 and r.json["error"] == globalprotokoll.ZU_VIELE, r.get_json()
+        assert "außerhalb deines Bereichs" in r.json["error"] and "global" not in r.json["error"], r.get_json()
         r = w.post("/api/material/artikel", json={"product_id": t.ids["hms"], "folder_id": t.lager_a,
                                                   "serial_no": "TEST-B-0001"}, headers=H)
         assert r.status_code == 429, r.get_json()

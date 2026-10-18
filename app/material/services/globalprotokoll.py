@@ -20,7 +20,7 @@ ARTEN = ("suche", "qr", "dublette")
 GRENZE = 10                                   # je Konto in 15 Minuten (auth.ATTEMPT_WINDOW) – Suche, QR und Dublette
 AUFBEWAHRUNG_TAGE = 365
 PRO_SEITE = 50
-ZU_VIELE = "Zu viele globale Suchen – bitte in einer Viertelstunde noch einmal."
+ZU_VIELE = "Zu viele Suchen außerhalb deines Bereichs – bitte in einer Viertelstunde noch einmal."
 
 
 def _bereich(uid):
