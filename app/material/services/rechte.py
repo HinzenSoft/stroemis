@@ -489,11 +489,15 @@ def waehlbares_konto(user_id, modulzugang=False):
 # --- Meldungen zum Modulzugang ------------------------------------------------------------------------------
 
 def zugang_meldung(user=None):
-    """Klartext für 403 ohne Modulzugang: was fehlt und wer hilft. Abgelaufene Freigaben nehmen den Zugang nicht mehr
-    (er hängt an der Stufe) – „Meine Freigaben“ zeigt sie mit den Verwaltern, die verlängern können."""
+    """Klartext für 403 ohne Modulzugang: was fehlt und wer hilft. Erst die Stufe, dann der Name – ohne Stufe hilft der
+    Name allein nicht, der Hinweis aufs Profil schickte sonst in eine zweite Runde. Abgelaufene Freigaben nehmen den
+    Zugang nicht mehr (er hängt an der Stufe) – „Meine Freigaben“ zeigt sie mit den Verwaltern, die verlängern
+    können."""
     user = user or current_user()
     if not user:
         return "Nicht angemeldet"
+    if not nutzt("material", user):
+        return NICHT_FREIGESCHALTET
     if not (user["name"] or "").strip():
         return NAME_FEHLT
     return NICHT_FREIGESCHALTET

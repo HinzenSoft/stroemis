@@ -119,6 +119,11 @@ def test_migration_9_10():
         assert r.status_code == 403 and "Namen" in r.json["error"], r.get_json()
         r = anmelden(app, "nichts@example.org", "passwort1").get("/api/material/start")
         assert r.status_code == 403 and "nicht freigeschaltet" in r.json["error"], r.get_json()
+        # Ohne Namen und ohne Stufe: zuerst die Stufe – der Name allein hülfe nicht (sonst zwei Runden).
+        sql(app, "UPDATE users SET name = '' WHERE email = 'nichts@example.org'")
+        r = anmelden(app, "nichts@example.org", "passwort1").get("/api/material/start")
+        assert r.status_code == 403 and "nicht freigeschaltet" in r.json["error"], r.get_json()
+        sql(app, "UPDATE users SET name = 'Test nichts' WHERE email = 'nichts@example.org'")
         r = anmelden(app, "abgelaufen@example.org", "passwort1").get("/api/material/start")
         assert r.status_code == 200 and not r.json["darf"]["lesen"], r.get_json()     # Zugang, kein Bestand
 
