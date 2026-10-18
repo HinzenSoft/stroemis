@@ -774,16 +774,20 @@ def test_nutzersuche():
 
         r = w.get("/api/material/nutzer", query_string={"q": "Testperson"})
         assert r.status_code == 200 and len(r.json["nutzer"]) == 20 and r.json["mehr"], r.get_json()
-        assert all(set(x) == {"id", "name", "gliederung", "qualifiziert"} for x in r.json["nutzer"])
+        assert all(set(x) == {"id", "name", "gliederung", "qualifiziert", "grundrecht_ueberall"} for x in r.json["nutzer"])
         assert "@" not in r.get_data(as_text=True) and "Inaktiv" not in r.get_data(as_text=True)
         assert r.json["nutzer"][0] == {"id": r.json["nutzer"][0]["id"], "name": "Testperson 00", "gliederung": "OG Test",
-                                       "qualifiziert": False}
+                                       "qualifiziert": False, "grundrecht_ueberall": False}
         r = w.get("/api/material/nutzer", query_string={"q": "person 2"})
         assert [x["name"] for x in r.json["nutzer"]] == [f"Testperson {n}" for n in range(20, 25)] and not r.json["mehr"]
         # Groß und klein egal, auch bei Umlauten; qualifiziert sagt, ob Prüfvorlagen gehen. Keine Urkundennummer.
         r = w.get("/api/material/nutzer", query_string={"q": "PRÜFM"})
         assert [(x["name"], x["qualifiziert"]) for x in r.json["nutzer"]] == [("Jörg Prüfmann", True)], r.get_json()
         assert "1012-7001" not in r.get_data(as_text=True)
+        # Die Plattform-Verwaltung hat das Grundrecht überall – der Reiter bietet ihr beim Prüfen „dauerhaft“ auch ohne
+        # lesen oder verwalten an, wie der Dienst es annimmt (grundrecht_an).
+        r = w.get("/api/material/nutzer", query_string={"q": "Administrator"})
+        assert [(x["name"], x["grundrecht_ueberall"]) for x in r.json["nutzer"]] == [("Administrator", True)], r.get_json()
         # Unter 3 Zeichen 400; Führungskraft und Katalogpfleger 403; Verwaltung darf; ohne Anmeldung 401.
         for q in ("Te", " T ", "", None):
             r = w.get("/api/material/nutzer", query_string={"q": q} if q is not None else None)

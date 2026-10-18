@@ -1396,7 +1396,7 @@ Regressionstest. Danach liefen alle Suiten grün.
   - **Reiter „Freigaben“**: Die Vorlagen „Prüfer“ („lesen und prüfen“) und „Materialwart und Prüfer“ („verwalten und
     prüfen“) wählen bei „Prüfen bis“ das neue Häkchen „dauerhaft“ vor (angeboten nur, wer selbst dauerhaft verwaltet).
     „Externer Prüfer“ verlangt ein Datum, „Einzeln“ bietet „dauerhaft“ nur mit gewähltem Grundrecht oder wenn die
-    Person dort schon eins hat. Der Ändern-Dialog einer Prüffreigabe wechselt zwischen dauerhaft und Datum (gleiche
+    Person dort schon eins hat (die Plattform-Verwaltung hat es überall). Der Ändern-Dialog einer Prüffreigabe wechselt zwischen dauerhaft und Datum (gleiche
     Regeln). „Alle Prüffreigaben verlängern“ betrifft nur befristete; dauerhafte laufen nicht ab und zählen beim
     Ablaufhinweis nicht mit. Nebenbei behoben: Das Häkchen „dauerhaft“ beim Grundrecht blieb für befristete Verwalter
     sichtbar, obwohl der Dialog es verbergen wollte (`label.inline` schlug `hidden`).
@@ -1406,7 +1406,7 @@ Regressionstest. Danach liefen alle Suiten grün.
     Grundrecht nur mit ausdrücklichem `bis`. Listeneinträge haben neu `grundrecht_dort` (Grundrecht am Anker oder
     darüber, auch in „Meine Freigaben“) und `traegt_pruefen` (an wie vielen dauerhaften Prüffreigaben ein Grundrecht
     allein hängt), die Liste hat `kette` (der Ordner und seine Oberordner). `DELETE` zählt `offene_entwuerfe` für jede
-    Art.
+    Art. Die Personensuche `GET /nutzer` sagt je Konto neu `grundrecht_ueberall` (Plattform-Verwaltung).
   - **DEMO-Daten**: Der DEMO-Prüfer prüft dauerhaft, der externe DEMO-Prüfer befristet.
 - **Migration Schritt 9** (Schemaversion 9, beim Start, wiederholbar): SQLite entfernt ein CHECK nur mit einer neuen
   Tabelle – `mat_folder_grant` wird ohne „Prüfrechte nur befristet“ neu aufgebaut wie in Schritt 2 (Fremdschlüssel
@@ -1693,7 +1693,7 @@ Produktkatalogpfleger oder Plattform-Verwaltung.
 | `PUT /api/material/freigaben/<id>` (`recht`, `bis` – `null` = unbefristet, bei Prüffreigaben nur mit Grundrecht –, `notiz`), `DELETE …/<id>` | Materialwart am Ordner der Freigabe | Freigabe ändern bzw. entziehen; DELETE liefert `offene_entwuerfe` (Phase 2) |
 | `GET /api/material/freigaben/meine` | angemeldet, auch ohne Modulzugang | eigene Freigaben (gültige und im letzten Jahr abgelaufene) mit Pfad, `recht`, `bis`, `gueltig`, `wirkt`, `grundrecht_dort`, `laeuft_ab_in_tagen` und `verwalter` (bis zu drei Namen) – ohne Notiz; dazu `zugang`, `qualifiziert` (Phase 2) |
 | `GET /api/material/freigaben?user_id=` | Plattform-Verwaltung | alle Freigaben eines Kontos mit Notiz (Nutzerverwaltung) (Phase 2) |
-| `GET /api/material/nutzer?q=` (ab 3 Zeichen) | verwalten irgendwo oder Plattform-Verwaltung | Personensuche für Freigaben und Zuordnung: höchstens 20 aktive Konten mit Namen, je `id`, `name`, `gliederung`, `qualifiziert` – keine E-Mail, keine Urkundennummer; `mehr` (Phase 2) |
+| `GET /api/material/nutzer?q=` (ab 3 Zeichen) | verwalten irgendwo oder Plattform-Verwaltung | Personensuche für Freigaben und Zuordnung: höchstens 20 aktive Konten mit Namen, je `id`, `name`, `gliederung`, `qualifiziert`, `grundrecht_ueberall` (Plattform-Verwaltung, seit der Nachbesserung) – keine E-Mail, keine Urkundennummer; `mehr` (Phase 2) |
 | `POST /api/material/globalsuche` (`q`, `bestaetigt: true`) | Modulzugang | globale Seriennummernsuche → `treffer` (höchstens 10 Steckbriefe, ohne Kennungen), `mehr`, `hinweis`; 400 ohne Bestätigung, unter 4 Zeichen oder bei Inventar- und STR-Nummern, 409 bei einem Treffer im eigenen Bereich, 429 über der Bremse (Phase 2) |
 | `POST /api/material/globalsuche/qr` (`token`, `bestaetigt: true`) | Modulzugang | Steckbrief nach einem QR-Scan an einem fremden Artikel (ein Treffer); `weiter` (Adresse), wenn der Artikel inzwischen sichtbar ist (Phase 2) |
 | `GET /api/material/globalsuche/protokoll?seite=` | Plattform-Verwaltung | Protokoll der globalen Suchen, QR-Steckbriefe und fremden Dubletten, neueste zuerst: `eintraege` (Zeit, Name, Art, Anfrage, Treffer, Gliederungen), `gesamt`, `seite`, `pro_seite` (Phase 2) |

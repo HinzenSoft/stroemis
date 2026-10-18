@@ -247,10 +247,12 @@
       return { grund: v.grund, pruefen: v.pruefen };
     }
 
-    // Hat die gewählte Person am Anker oder darüber schon ein gültiges Grundrecht? Aus den Listen (direkt und geerbt
-    // decken den Ordner und alle Oberordner ab) – verbindlich entscheidet der Server.
+    // Hat die gewählte Person am Anker oder darüber schon ein gültiges Grundrecht? Die Plattform-Verwaltung hat es
+    // überall (grundrecht_ueberall aus der Personensuche), sonst aus den Listen (direkt und geerbt decken den Ordner und
+    // alle Oberordner ab) – verbindlich entscheidet der Server.
     function grundrechtDort(a) {
       if (!person) return false;
+      if (person.grundrecht_ueberall) return true;
       const ab = stand.daten.kette.indexOf(a.id);
       const oben = new Set(ab < 0 ? [a.id] : stand.daten.kette.slice(ab));
       return stand.daten.direkt.concat(stand.daten.geerbt).some((f) => f.konto.id === person.id && f.recht !== "pruefen"

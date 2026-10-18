@@ -646,17 +646,21 @@ def meine(user):
 
 def nutzer_suchen(q):
     """GET /nutzer?q= (Verwalter irgendwo, Verwaltung): aktive Konten mit Namen, deren Name q enthält (ab 3 Zeichen,
-    Groß/klein egal, auch bei Umlauten), höchstens 20 – nur Name, Gliederung (Freitext) und ob qualifiziert. Keine
-    E-Mail, keine Urkundennummer: nicht mehr, als die Wiki-Nutzerliste jedem Mitglied zeigt."""
+    Groß/klein egal, auch bei Umlauten), höchstens 20 – nur Name, Gliederung (Freitext), ob qualifiziert und ob das
+    Konto das Grundrecht überall hat (Plattform-Verwaltung – dann darf eine Prüffreigabe auch ohne lesen oder verwalten
+    dauerhaft sein, grundrecht_an). Keine E-Mail, keine Urkundennummer: kaum mehr, als die Wiki-Nutzerliste jedem
+    Mitglied zeigt."""
     q = text({"q": q}, "q", "Suche", n=80)
     if len(q) < SUCHE_MIN:
         raise Abgelehnt(SUCHE_KURZ)
     such = q.casefold()
-    treffer = [u for u in db.query("SELECT id, name, gliederung, mat_pruefer, urkundennummer FROM users WHERE active = 1 "
-                                   "AND status = 'active' AND trim(name) <> '' ORDER BY name COLLATE NOCASE, id")
+    treffer = [u for u in db.query("SELECT id, name, gliederung, mat_pruefer, urkundennummer, recht_verwaltung FROM users "
+                                   "WHERE active = 1 AND status = 'active' AND trim(name) <> '' "
+                                   "ORDER BY name COLLATE NOCASE, id")
                if such in u["name"].casefold()]
     return {"nutzer": [{"id": u["id"], "name": u["name"], "gliederung": u["gliederung"],
-                        "qualifiziert": rechte.ist_pruefer(u)} for u in treffer[:SUCHE_MAX]],
+                        "qualifiziert": rechte.ist_pruefer(u), "grundrecht_ueberall": is_admin(u)}
+                       for u in treffer[:SUCHE_MAX]],
             "mehr": len(treffer) > SUCHE_MAX}
 
 
