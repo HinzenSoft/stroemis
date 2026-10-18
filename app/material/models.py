@@ -54,12 +54,22 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     Phase 1: Wer bisher in den vorhandenen Gliederungen sah, sieht weiter (5.3), und die Bereinigung der Altfälle –
     Gesperrte im Systemordner einer fremden Gliederung, offene Durchgangszeilen außerhalb des Zweigs (5.4). Alles
     wiederholbar; ein zweiter Lauf ändert nichts.
+  - Schritt 9 (Phase 2 · Lieferung 1, Nachbesserung vom 18.10.2026): Prüffreigaben sind nur noch für externe Prüfer
+    befristet. Die Regel „Prüfrechte nur befristet“ aus Schritt 1 (CHECK permission <> 'pruefen' OR valid_until IS
+    NOT NULL) fällt – SQLite entfernt ein CHECK nur mit einer neuen Tabelle: mat_folder_grant wird wie in Schritt 2
+    neu aufgebaut (GRANT_9), mit denselben Spalten, Constraints, Indizes und Triggern und allen Zeilen. Ob eine
+    dauerhafte Prüffreigabe erlaubt ist (nur mit Grundrecht am Anker), prüft der Dienst (freigaben.py), ob sie wirkt,
+    die Sicht (rechte.py). Die Prüffreigaben, die Schritt 8 aus dem Häkchen „Prüfer“ gemacht hat, werden dauerhaft,
+    wo das Konto dort auch lesen oder verwalten hat (oder Plattform-Verwaltung ist) und die Zeile seitdem niemand
+    geändert hat; Journal „Migration Schritt 9“. Schritt 8 legt sie seitdem gleich so an (er baut die Tabelle dafür
+    schon selbst um). Wiederholbar.
 """
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -798,7 +808,8 @@ GLOBAL_SEARCH_8 = """CREATE TABLE IF NOT EXISTS mat_global_search (
   item_ids   TEXT NOT NULL DEFAULT '[]',   -- Kennungen der Treffer (JSON)
   created_at TEXT NOT NULL
 )"""
-SCHRITT_8 = [
+# Indizes und Trigger an mat_folder_grant (Schritt 9 legt sie nach dem Neuaufbau wieder an).
+GRANT_8 = [
     "CREATE INDEX IF NOT EXISTS idx_mat_grant_folder ON mat_folder_grant(folder_id)",
     # Je Konto und Ordner höchstens ein Grundrecht (lesen ODER verwalten) und höchstens eine Prüffreigabe (UNIQUE aus
     # Schritt 1).
@@ -810,6 +821,8 @@ SCHRITT_8 = [
     _trigger("mat_grant_datum", "BEFORE INSERT ON mat_folder_grant", _DATUM_FALSCH, _FREIGABE_DATUM),
     _trigger("mat_grant_datum_aendern", "BEFORE UPDATE OF valid_until ON mat_folder_grant", _DATUM_FALSCH,
              _FREIGABE_DATUM),
+]
+SCHRITT_8 = GRANT_8 + [
     GLOBAL_SEARCH_8,
     "CREATE INDEX IF NOT EXISTS idx_mat_global_search_zeit ON mat_global_search(created_at)",
     # Filter über die Heimat, globale Suche (exakt, ohne Groß/klein) und Medien je Datei.
@@ -824,19 +837,20 @@ SCHRITT_8 = [
 MIGRATION_8 = "Migration Schritt 8"
 # Grundrecht und Notiz je Stufe aus Phase 1 – die Verwaltung (recht_verwaltung = 2) sieht ohnehin alles.
 _PHASE_1 = {2: ("verwalten", "aus Phase 1: Stufe Verwaltung"), 1: ("lesen", "aus Phase 1: Stufe Mitglied")}
+NOTIZ_PRUEFER_8 = "aus Phase 1: Häkchen Prüfer"
 
 
 def _jetzt():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def _journal_8(conn, entity, entity_id, action, vorher, nachher):
+def _journal_8(conn, entity, entity_id, action, vorher, nachher, wer=MIGRATION_8):
     """Ein Journaleintrag der Migration – direkt über die Verbindung, ohne Anfrage und ohne Konto."""
     def text(d):
         return json.dumps(d, ensure_ascii=False, sort_keys=True, default=str) if d is not None else None
     conn.execute("INSERT INTO mat_audit (entity, entity_id, user_id, user_name, action, before_json, after_json, "
                  "created_at) VALUES (?,?,NULL,?,?,?,?,?)",
-                 (entity, entity_id, MIGRATION_8, action, text(vorher), text(nachher), _jetzt()))
+                 (entity, entity_id, wer, action, text(vorher), text(nachher), _jetzt()))
 
 
 def _schritt_8(conn):
@@ -854,15 +868,21 @@ def _schritt_8(conn):
         conn.execute("ALTER TABLE mat_folder_grant ADD COLUMN updated_at TEXT")
     for sql in SCHRITT_8:
         conn.execute(sql)
+    # Seit Schritt 9 entstehen dauerhafte Prüffreigaben – dafür muss das CHECK „Prüfrechte nur befristet“ aus Schritt 1
+    # vorher weg (sonst verwürfe INSERT OR IGNORE die Zeile stillschweigend). Schritt 9 findet die Tabelle dann schon
+    # umgebaut vor.
+    _grant_ohne_prueffrist(conn)
     _freigaben_aus_phase_1(conn)
     _altfaelle_bereinigen(conn)
 
 
 def _freigaben_aus_phase_1(conn):
     """Status quo erhalten (5.3): Stufe 1 → lesen, Stufe 2 → verwalten an jeder vorhandenen obersten Gliederung,
-    dauerhaft; jedes Konto mit Häkchen „Prüfer“ (auch Stufe 2 und die Verwaltung) dazu eine Prüffreigabe bis zum 31.12.
-    des Folgejahres, höchstens 24 Monate. Sie wirkt erst mit Urkundennummer. Je eingefügter Zeile ein Journaleintrag
-    am Ordner – mit Kontoverweis, ohne Notiz."""
+    dauerhaft; jedes Konto mit Häkchen „Prüfer“ (auch Stufe 2 und die Verwaltung) dazu eine Prüffreigabe – seit der
+    Nachbesserung (Schritt 9) dauerhaft, wo das Konto dort ein Grundrecht bekommt oder Plattform-Verwaltung ist; nur
+    Konten ohne Stufe aus Phase 1 (externe Prüfer) bekommen sie bis zum 31.12. des Folgejahres, höchstens 24 Monate.
+    Sie wirkt erst mit Urkundennummer. Je eingefügter Zeile ein Journaleintrag am Ordner – mit Kontoverweis, ohne
+    Notiz."""
     from . import services as dienste
     from .services.interval import plus_monate
     tag = dienste.heute()
@@ -879,7 +899,8 @@ def _freigaben_aus_phase_1(conn):
             recht, notiz = _PHASE_1[int(material)]
             freigaben.append((recht, None, notiz))
         if pruefer:
-            freigaben.append(("pruefen", bis, "aus Phase 1: Häkchen Prüfer"))
+            mit_grund = bool(freigaben) or int(verwaltung or 0) >= 2
+            freigaben.append(("pruefen", None if mit_grund else bis, NOTIZ_PRUEFER_8))
         for gid in gliederungen:
             for recht, ende, notiz in freigaben:
                 vorher = conn.total_changes
@@ -962,11 +983,122 @@ def _altfaelle_bereinigen(conn):
                 _journal_8(conn, "inspection", xid, "geaendert", {"round_id": rid}, {"round_id": None})
 
 
+# --- Schritt 9 (Phase 2 · Lieferung 1, Nachbesserung vom 18.10.2026): Prüffreigaben dauerhaft mit Grundrecht -----
+# mat_folder_grant ohne das CHECK „Prüfrechte nur befristet“ aus Schritt 1, sonst wie bisher: die Spalten aus Schritt 1
+# und 8 in derselben Reihenfolge, ein UNIQUE je Ordner, Konto und Recht, Kennungen ohne AUTOINCREMENT. {name} ist beim
+# Umbau zuerst mat_folder_grant_neu. Ob eine Prüffreigabe ohne Ende sein darf, entscheidet der Dienst (nur mit
+# Grundrecht am Anker, freigaben.py), ob sie wirkt, die Sicht (rechte.py).
+GRANT_9 = """CREATE TABLE {name} (
+      id          INTEGER PRIMARY KEY,
+      folder_id   INTEGER NOT NULL REFERENCES mat_folder(id) ON DELETE CASCADE,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      permission  TEXT NOT NULL CHECK (permission IN """ + _in(FREIGABEN) + """),
+      valid_until TEXT,                         -- leer: dauerhaft (prüfen nur zusammen mit einem Grundrecht)
+      granted_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at  TEXT NOT NULL,
+      note        TEXT NOT NULL DEFAULT '',
+      updated_at  TEXT,
+      UNIQUE (folder_id, user_id, permission)
+    )"""
+GRANT_INDIZES = ["CREATE INDEX IF NOT EXISTS idx_mat_grant_user ON mat_folder_grant(user_id)"] + GRANT_8
+# Das CHECK aus Schritt 1, wie es in sqlite_master steht (Groß/klein und Leerraum egal).
+_NUR_BEFRISTET = re.compile(r"permission\s*<>\s*'pruefen'\s+or\s+valid_until\s+is\s+not\s+null", re.IGNORECASE)
+MIGRATION_9 = "Migration Schritt 9"
+
+
+def _grant_ohne_prueffrist(conn):
+    """mat_folder_grant ohne das CHECK „Prüfrechte nur befristet“ neu aufbauen – nur, solange es noch da ist (sonst
+    nichts). Verfahren wie Schritt 2 (Fremdschlüssel sind aus, siehe migrieren; legacy_alter_table braucht es nicht,
+    denn kein Trigger und keine Sicht einer anderen Tabelle nennt mat_folder_grant): neue Tabelle, alle Zeilen
+    kopieren, alte löschen, umbenennen. Mit der alten Tabelle gehen ihre Indizes und Trigger – sie entstehen danach
+    genau so wieder, wie sie in sqlite_master standen, dazu die bekannten aus Schritt 1 und 8, falls einer fehlte. Fehlt
+    danach eine Zeile oder bricht ein Verweis, bricht die Migration ab (die Transaktion rollt zurück)."""
+    tabelle = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+                           ("mat_folder_grant",)).fetchone()
+    if not tabelle or not _NUR_BEFRISTET.search(tabelle[0] or ""):
+        return False
+    vorher = _fk_verletzungen(conn, ("mat_folder_grant",))
+    zahl = conn.execute("SELECT COUNT(*) FROM mat_folder_grant").fetchone()[0]
+    begleiter = [r[0] for r in conn.execute(
+        "SELECT sql FROM sqlite_master WHERE tbl_name = 'mat_folder_grant' AND type IN ('index', 'trigger') "
+        "AND sql IS NOT NULL ORDER BY type, name")]
+    alt = _spalten(conn, "mat_folder_grant")
+    conn.execute("DROP TABLE IF EXISTS mat_folder_grant_neu")
+    conn.execute(GRANT_9.format(name="mat_folder_grant_neu"))
+    neu = _spalten(conn, "mat_folder_grant_neu")
+    if any(s not in neu for s in alt):
+        raise sqlite3.IntegrityError(f"mat_folder_grant hat unbekannte Spalten: {[s for s in alt if s not in neu]}")
+    spalten = ", ".join(alt)
+    conn.execute(f"INSERT INTO mat_folder_grant_neu ({spalten}) SELECT {spalten} FROM mat_folder_grant")
+    conn.execute("DROP TABLE mat_folder_grant")
+    conn.execute("ALTER TABLE mat_folder_grant_neu RENAME TO mat_folder_grant")
+    for befehl in begleiter + GRANT_INDIZES:
+        conn.execute(befehl)
+    if conn.execute("SELECT COUNT(*) FROM mat_folder_grant").fetchone()[0] != zahl:
+        raise sqlite3.IntegrityError("mat_folder_grant: Beim Neuaufbau fehlen Zeilen.")
+    neu_verletzt = _fk_verletzungen(conn, ("mat_folder_grant",)) - vorher
+    if neu_verletzt:
+        raise sqlite3.IntegrityError(f"Fremdschlüssel nach dem Umbau verletzt: {sorted(neu_verletzt)[:5]}")
+    return True
+
+
+def _pruefer_aus_phase_1_dauerhaft(conn):
+    """Die Prüffreigaben, die Schritt 8 aus dem Häkchen „Prüfer“ gemacht hat, werden dauerhaft, wo das Konto am Anker
+    oder darüber heute ein Grundrecht hat oder Plattform-Verwaltung ist – externe Prüfer behalten ihr Ende. Nur
+    unveränderte: ohne vergebendes Konto, mit der Notiz aus Schritt 8, mit dem Journaleintrag „freigabe_erteilt“ von
+    „Migration Schritt 8“, ohne Änderung seitdem (updated_at leer, kein „freigabe_geaendert“). Je Zeile ein
+    Journaleintrag „Migration Schritt 9“ am Ordner, das Konto nur als Verweis."""
+    from . import services as dienste
+    heute = dienste.heute().isoformat()
+    kandidaten = conn.execute(
+        "SELECT g.id, g.folder_id, g.user_id, g.valid_until, u.mat_ref, u.recht_verwaltung FROM mat_folder_grant g "
+        "JOIN users u ON u.id = g.user_id WHERE g.permission = 'pruefen' AND g.valid_until IS NOT NULL "
+        "AND g.granted_by IS NULL AND g.note = ? AND g.updated_at IS NULL "
+        "AND EXISTS (SELECT 1 FROM mat_audit a WHERE a.entity = 'folder' AND a.entity_id = g.folder_id "
+        "AND a.action = 'freigabe_erteilt' AND a.user_id IS NULL AND a.user_name = ? "
+        "AND json_extract(a.after_json, '$.freigabe') = g.id) "
+        "AND NOT EXISTS (SELECT 1 FROM mat_audit a WHERE a.entity = 'folder' AND a.entity_id = g.folder_id "
+        "AND a.action = 'freigabe_geaendert' AND json_extract(a.after_json, '$.freigabe') = g.id) ORDER BY g.id",
+        (NOTIZ_PRUEFER_8, MIGRATION_8)).fetchall()
+    if not kandidaten:
+        return
+    eltern = dict(conn.execute("SELECT id, parent_id FROM mat_folder").fetchall())
+    grund = {}
+    for uid, fid in conn.execute("SELECT user_id, folder_id FROM mat_folder_grant WHERE permission IN ('lesen', "
+                                 "'verwalten') AND (valid_until IS NULL OR valid_until >= ?)", (heute,)):
+        grund.setdefault(uid, set()).add(fid)
+
+    def kette(fid):
+        out = []
+        while fid is not None and fid not in out:
+            out.append(fid)
+            fid = eltern.get(fid)
+        return out
+
+    jetzt = _jetzt()
+    for gid, fid, uid, bis, ref, verwaltung in kandidaten:
+        if int(verwaltung or 0) < 2 and not grund.get(uid, set()) & set(kette(fid)):
+            continue
+        if not ref:                                   # Schritt 8 gab jedem Konto einen – nur zur Sicherheit
+            ref = conn.execute("SELECT lower(hex(randomblob(16)))").fetchone()[0]
+            conn.execute("UPDATE users SET mat_ref = ? WHERE id = ?", (ref, uid))
+        conn.execute("UPDATE mat_folder_grant SET valid_until = NULL, updated_at = ? WHERE id = ?", (jetzt, gid))
+        spur = {"freigabe": gid, "konto": {"ref": ref}, "recht": "pruefen"}
+        _journal_8(conn, "folder", fid, "freigabe_geaendert", dict(spur, bis=bis),
+                   dict(spur, bis=None, grund="nur externe Prüfer befristet"), wer=MIGRATION_9)
+
+
+def _schritt_9(conn):
+    """Nachbesserung zu Phase 2 · Lieferung 1: Prüffreigaben dauerhaft mit Grundrecht (siehe oben). Wiederholbar."""
+    _grant_ohne_prueffrist(conn)
+    _pruefer_aus_phase_1_dauerhaft(conn)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
-            8: _schritt_8}
+            8: _schritt_8, 9: _schritt_9}
 
 
 def _meta(conn, schluessel, vorgabe=None):

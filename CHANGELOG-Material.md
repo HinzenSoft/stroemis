@@ -1006,8 +1006,8 @@ Phase 2 bringt mehrere Gliederungen und externe Prüfer in dieselbe Instanz. Lie
 Gliederung über Freigaben je Ordner und bringt dazu die globale Seriennummernsuche, die Personenzuordnung und das
 Löschkonzept. Erinnerungen per Mail folgen mit Lieferung 2, der CSV-Import mit Lieferung 3. Lieferung 5 aus Phase 1
 wurde am 18.10.2026 mit „Starte mit Phase 2“ freigegeben. Gebaut nach dem Bauentwurf vom 18.10.2026; drei Fragen
-daraus sind offen und mit einer Vorgabe gebaut (siehe „Offene Entscheidungen“). Schemaversion 8, keine neuen
-Abhängigkeiten. Stand: wartet auf Freigabe.
+daraus sind offen und mit einer Vorgabe gebaut (siehe „Offene Entscheidungen“). Schemaversion 8 (mit den
+Nachbesserungen vom 18.10.2026: 9), keine neuen Abhängigkeiten. Stand: wartet auf Freigabe.
 
 „Plattform-Verwaltung“ heißt hier: Verwaltung im Modul Verwaltung der Rechte-Matrix (das Startkonto gehört dazu).
 
@@ -1017,7 +1017,8 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   Konto an einem Ordner das Recht **lesen**, **prüfen** oder **verwalten** – im Ordner und in allen Unterordnern, auch
   über verschachtelte Gliederungen hinweg. Rechte addieren sich nur; einen Entzug weiter unten gibt es nicht. Je Konto
   und Ordner höchstens ein Grundrecht (lesen oder verwalten, dauerhaft oder bis zu einem Tag) und höchstens eine
-  Prüffreigabe (immer befristet, höchstens 24 Monate). Der letzte Tag zählt mit; ab 0:00 Uhr deutscher Zeit des
+  Prüffreigabe (seit der Nachbesserung: dauerhaft, wo die Person dort auch ein Grundrecht hat, sonst – externer
+  Prüfer – befristet; mit Ende höchstens 24 Monate). Der letzte Tag zählt mit; ab 0:00 Uhr deutscher Zeit des
   Folgetags greift die Freigabe nicht mehr. Abgelaufene bleiben stehen („abgelaufen am …“), bis jemand sie verlängert
   oder entfernt. An „Gesperrt“ und „Ausgesondert“ gibt es keine Freigaben – sie gelten über ihre Gliederung. Die
   Plattform-Verwaltung sieht und verwaltet alles.
@@ -1067,12 +1068,13 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   - **+ Freigabe**: Person suchen (ab 3 Zeichen, nur aktive Konten mit Namen, ohne E-Mail), „Gilt für“ (der Ordner
     oder ein Oberordner, den man verwaltet; Vorgabe ist die Gliederung, wenn man sie verwaltet), eine **Vorlage** und
     optional eine Notiz. Vorlagen: „Führungskraft“ (lesen, dauerhaft), „Materialwart“ (verwalten, dauerhaft), „Prüfer“
-    (lesen dauerhaft und prüfen bis …), „Materialwart und Prüfer“, „Externer Prüfer“ (nur prüfen bis … – die
-    Prüfsicht) und „Einzeln …“. Grundrecht und Prüffreigabe entstehen in einem Schritt, ganz oder gar nicht. Vorlagen
-    mit Prüfen gibt es nur für qualifizierte Konten; „bis“ steht auf dem 31.12. des Folgejahres, „dauerhaft“ gibt es
-    nur für den, der selbst dauerhaft verwaltet.
+    (lesen und prüfen, beides dauerhaft – seit der Nachbesserung), „Materialwart und Prüfer“ (ebenso), „Externer
+    Prüfer“ (nur prüfen bis … – die Prüfsicht) und „Einzeln …“. Grundrecht und Prüffreigabe entstehen in einem Schritt,
+    ganz oder gar nicht. Vorlagen mit Prüfen gibt es nur für qualifizierte Konten; „bis“ steht auf dem 31.12. des
+    Folgejahres, „dauerhaft“ gibt es nur für den, der selbst dauerhaft verwaltet (beim Prüfen dazu nur mit Grundrecht).
   - **Hier vergeben**: Person (ein Konto ohne Namen als „(Konto ohne Namen)“), Gliederung, Recht, Ende, Zustand
-    (gültig, gelb „läuft in n Tagen ab“, grau „abgelaufen am …“, „wirkt nicht – Qualifikation fehlt“), Notiz, von wem
+    (gültig, gelb „läuft in n Tagen ab“, grau „abgelaufen am …“, „wirkt nicht – Qualifikation fehlt“ bzw. „… – dauerhaft
+    nur mit lesen oder verwalten“), Notiz, von wem
     und wann vergeben; Ändern und Entziehen, wo man darf – „Entziehen“ nur, wo es auch gelingt (sonst steht dort, dass
     es nur über die Plattform-Verwaltung geht). Darüber **„Alle Prüffreigaben verlängern bis …“** für den ganzen Zweig
     (auch bis zu 90 Tage abgelaufene), mit den übersprungenen Zeilen samt Grund. Am Telefon und am Tablet (bis etwa
@@ -1092,7 +1094,8 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   „… das macht nur die Plattform-Verwaltung“). Prüffreigaben gibt es nur für qualifizierte Konten (409). Die Notiz
   (eine Zeile, höchstens 200 Zeichen) sehen nur die Verwalter des Ordners und die Plattform-Verwaltung – der Inhaber
   also nur, wenn er dort selbst verwaltet, nie unter „Meine Freigaben“. Die Plattform-Verwaltung vergibt überall ohne
-  diese Grenzen – Prüffreigaben aber auch sie nur an qualifizierte Konten und für höchstens 24 Monate.
+  diese Grenzen – Prüffreigaben aber auch sie nur an qualifizierte Konten, befristet für höchstens 24 Monate und
+  dauerhaft nur mit Grundrecht (Nachbesserung).
 - **Meine Freigaben** auf der Übersicht: die eigenen Freigaben, gültige und im letzten Jahr abgelaufene, mit Ordner,
   Recht und Ende; gelb, was in 30 Tagen abläuft – dort und bei abgelaufenen steht, wer verlängern kann. Der Abschnitt
   ist zugeklappt und öffnet sich von selbst, wenn eine Freigabe bald abläuft, abgelaufen ist oder nicht wirkt. Wer noch
@@ -1182,8 +1185,9 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   und drei Artikeln, einer davon mit der Seriennummer `DEMO-NS-4711` für die globale Suche; sie kommt auch zu einem
   vorhandenen Demo-Bestand dazu. `--demo --konten` legt einmalig vier DEMO-Konten mit Namen und zufälligem Passwort an
   (wird einmal ausgegeben): `demo-wart-a@example.invalid` (verwaltet die DEMO-Gliederung),
-  `demo-wart-b@example.invalid` (verwaltet die Nachbarstadt), `demo-pruefer@example.invalid` (lesen und 30 Tage prüfen
-  in der DEMO-Gliederung) und `demo-extern@example.invalid` (nur 30 Tage prüfen im DEMO-Lager). Nur für dev.
+  `demo-wart-b@example.invalid` (verwaltet die Nachbarstadt), `demo-pruefer@example.invalid` (lesen und prüfen in der
+  DEMO-Gliederung, seit der Nachbesserung beides dauerhaft) und `demo-extern@example.invalid` (nur 30 Tage prüfen im
+  DEMO-Lager). Nur für dev.
 
 ### Migration
 
@@ -1197,7 +1201,9 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   obersten Gliederung bekommt jedes Konto (auch deaktivierte) mit Stufe „Mitglied“ `lesen`, mit Stufe „Verwaltung“
   `verwalten`, beides dauerhaft; die Plattform-Verwaltung braucht keins. Jedes Konto mit Häkchen „Prüfer“ – auch
   Materialwarte und die Plattform-Verwaltung – bekommt dazu eine Prüffreigabe bis zum 31.12. des Folgejahres (bei
-  einem Start 2026: **31.12.2027**); sie wirkt erst mit Urkundennummer. Katalogpfleger hatten mindestens die Stufe
+  einem Start 2026: **31.12.2027**); sie wirkt erst mit Urkundennummer. Seit der Nachbesserung (Schritt 9) ist sie
+  dauerhaft, wo das Konto dort ein Grundrecht hat oder Plattform-Verwaltung ist – befristet bleibt sie nur bei Konten
+  ohne Stufe aus Phase 1 (externe Prüfer). Katalogpfleger hatten mindestens die Stufe
   „Mitglied“ und lesen damit weiter; das entzieht bei Bedarf die Verwaltung. Je Freigabe ein Journaleintrag am Ordner
   („Migration Schritt 8“, das Konto nur als Verweis). In der Produktion gibt es noch keine Gliederung – dort entstehen
   keine Freigaben (siehe „Zu prüfen“).
@@ -1210,7 +1216,8 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   geschrieben (außer wie bisher automatisch bei Verwaltung = 2). `mat_pruefer` und `mat_katalog` bleiben unverändert.
 - **Rückweg**: nur neue Spalten, Tabellen, Indizes und Trigger. Eine Fassung aus Phase 1 startet auf einer Datenbank
   mit Schritt 8 und arbeitet wieder mit den globalen Stufen; Freigaben, Suchprotokoll und Kontoverweise übergeht sie.
-  Die behaltene Herkunft an Ausgesonderten macht dort nur das Löschen eines Ordners strenger.
+  Die behaltene Herkunft an Ausgesonderten macht dort nur das Löschen eines Ordners strenger. Schritt 9 (Nachbesserung)
+  siehe unten.
 - Keine Handarbeit beim Update: `docker compose up -d --build` genügt. Danach braucht die Produktion ihre erste
   Gliederung (README, „Inbetriebnahme in der Produktion“).
 
@@ -1222,8 +1229,9 @@ Keine.
 
 - **Sichtbarkeit nur über Freigaben**: Die Stufe der Rechte-Matrix im Modul Material ist stillgelegt (der Wert bleibt
   als Rückweg stehen). Rechte am Bestand haben damit genau eine Quelle, und jede Gliederung vergibt sie selbst.
-- **Prüfen braucht für alle eine Prüffreigabe** – auch für Verwalter und die Plattform-Verwaltung: befristet,
-  höchstens 24 Monate, nur an Konten mit Häkchen und Urkundennummer. `verwalten` schließt prüfen nicht ein. Eine
+- **Prüfen braucht für alle eine Prüffreigabe** – auch für Verwalter und die Plattform-Verwaltung: nur an Konten mit
+  Häkchen und Urkundennummer; befristet (höchstens 24 Monate) seit der Nachbesserung nur noch für externe Prüfer, wer
+  dort lesen oder verwalten hat, prüft dauerhaft. `verwalten` schließt prüfen nicht ein. Eine
   Prüffreigabe allein gibt nur die Prüfsicht; die Bemerkung bleibt darin, weil dort Prüfhinweise stehen
   (Sturzbelastung, Vorschaden). Das Häkchen „Prüfer“ setzt weiter nur die Plattform-Verwaltung – es ist eine
   Qualifikation für alle Gliederungen.
@@ -1262,8 +1270,10 @@ Keine.
   Schreibvorgang: Im Journal steht die Erteilung mit Enddatum, die Liste zeigt „abgelaufen am …“. Einen eigenen
   Eintrag „Freigabe abgelaufen“ schreibt ab Lieferung 2 der Nachtlauf.
 - **Materialwart prüft nicht von selbst**: Laut Konzept hat der Materialwart „bestehende Editor-Rechte, auf Ordner
-  bezogen“. Prüfen gibt es hier für jeden nur mit eigener, befristeter Prüffreigabe – strenger, damit über `verwalten`
-  kein unbefristetes Prüfrecht entsteht.
+  bezogen“. Prüfen gibt es hier für jeden nur mit eigener Prüffreigabe (Häkchen und Urkundennummer vorausgesetzt) –
+  `verwalten` allein gibt kein Prüfrecht. Seit der Nachbesserung vom 18.10.2026 darf diese Prüffreigabe dauerhaft sein
+  (Vorlage „Materialwart und Prüfer“); sie wirkt aber nur, solange das Grundrecht dort gilt – so entsteht auch über
+  `verwalten` kein unbefristetes Prüfrecht ohne Grundrecht.
 - **`mat_folder.owner_user_id`** bleibt ungenutzt; Verwalter eines Ordners sind die Konten mit `verwalten` dort oder
   darüber.
 - **Pseudonymisierung statt „Anonymisierung beim Austritt“** (Risikotabelle des Konzepts): Der Prüfername in
@@ -1282,8 +1292,9 @@ Keine.
 - **`GET /ordner/<id>/zugeordnete`** liefert je Person zusätzlich `aktiv` – für „(deaktiviert)“ im Filter.
 - **Zusätze**: `MatFreigaben.kopfhinweis(element, ordner, verlaengern)` für den Ablaufhinweis im Ordnerkopf und die
   Vorlage `"verlaengern"`, die direkt zum Knopf „Alle Prüffreigaben verlängern“ springt (seit der Nachbesserung
-  `MatFreigaben.inhalt(element, ordner, {vorlage: "verlaengern"})` statt `oeffnen`). `requires_folder` kennt neben `leer="global"` und `leer="irgendwo"` auch `leer="zugang"`: `GET /artikel/vorschlag`
-  braucht ohne Ordner nur Modulzugang, mit Ordner Leserecht dort (sonst 404). „Alle verlängern“ überspringt mit Grund
+  `MatFreigaben.inhalt(element, ordner, {vorlage: "verlaengern"})` statt `oeffnen`). `requires_folder` kennt neben
+  `leer="global"` und `leer="irgendwo"` auch `leer="zugang"`: `GET /artikel/vorschlag` braucht ohne Ordner nur
+  Modulzugang, mit Ordner Leserecht dort (sonst 404). „Alle verlängern“ überspringt mit Grund
   auch deaktivierte Konten, die eigene Freigabe und Freigaben, die schon länger laufen.
 
 ### Schnittstelle
@@ -1367,6 +1378,58 @@ Regressionstest. Danach liefen alle Suiten grün.
   Schnittstelle von `window.MatFreigaben`: `inhalt(element, ordner, optionen)` füllt den Reiter (optionen `vorlage`,
   `fokus`, `geaendert`, `dort`) statt `oeffnen(ordner, vorlage)`; `kopfhinweis(element, ordner, verlaengern)`.
   Hilfetexte und Meldungen sagen „Ordner → Bearbeiten → Freigaben“.
+- **Prüfrecht nur für externe Prüfer befristet** (Wunsch zum Freigaben-Dialog mit der Vorlage „Prüfer“: „Prüfrecht
+  soll nur für externe Prüfer befristet sein.“): Eine Prüffreigabe darf dauerhaft sein, wenn die Person am Anker oder
+  darüber heute ein Grundrecht (lesen oder verwalten) hat – auch eins aus derselben Anfrage – oder Plattform-Verwaltung
+  ist. Ohne Grundrecht, also beim externen Prüfer, bleibt es beim Enddatum (Pflicht, höchstens 24 Monate); dauerhaft
+  antwortet dort 400 mit Klartext. Befristet höchstens 24 Monate gilt weiter für alle, dauerhaft vergibt weiter nur,
+  wer selbst dauerhaft verwaltet (1.6 Nr. 3); Häkchen und Urkundennummer bleiben Pflicht.
+  - **Schutz zur Laufzeit** (`services/rechte.py`): Eine dauerhafte Prüffreigabe wirkt nur, wo zugleich ein gültiges
+    Grundrecht gilt – die Sicht schneidet sie mit dem Grundrecht. Wird das Grundrecht entzogen, gekürzt oder läuft es
+    ab, prüft die Person dort nicht mehr (auch keine Prüfsicht); so entsteht nie ein unbefristetes Prüfrecht ohne
+    Grundrecht. Die Liste sagt dann „wirkt nicht – dauerhaft nur mit lesen oder verwalten“ (ebenso „Meine Freigaben“
+    und die Nutzerverwaltung); wird das Grundrecht wieder erteilt, wirkt sie wieder. Die Rückfrage beim Entziehen eines
+    Grundrechts, an dem eine dauerhafte Prüffreigabe hängt, und der Ändern-Dialog sagen das vorher („Daran hängt eine
+    dauerhafte Prüffreigabe …“); offene Prüfungen, die die Person danach nicht fortsetzen kann, nennt das Entziehen
+    jetzt auch beim Grundrecht.
+  - **Reiter „Freigaben“**: Die Vorlagen „Prüfer“ („lesen und prüfen“) und „Materialwart und Prüfer“ („verwalten und
+    prüfen“) wählen bei „Prüfen bis“ das neue Häkchen „dauerhaft“ vor (angeboten nur, wer selbst dauerhaft verwaltet).
+    „Externer Prüfer“ verlangt ein Datum, „Einzeln“ bietet „dauerhaft“ nur mit gewähltem Grundrecht oder wenn die
+    Person dort schon eins hat. Der Ändern-Dialog einer Prüffreigabe wechselt zwischen dauerhaft und Datum (gleiche
+    Regeln). „Alle Prüffreigaben verlängern“ betrifft nur befristete; dauerhafte laufen nicht ab und zählen beim
+    Ablaufhinweis nicht mit. Nebenbei behoben: Das Häkchen „dauerhaft“ beim Grundrecht blieb für befristete Verwalter
+    sichtbar, obwohl der Dialog es verbergen wollte (`label.inline` schlug `hidden`).
+  - **Schnittstelle**: `POST …/freigaben` nimmt `pruefen` (true: mit Prüffreigabe; `pruefen_bis` null oder leer heißt
+    dann dauerhaft); ohne `pruefen` gilt wie bisher `pruefen_bis` (null: keine Prüffreigabe, "" jetzt: ohne Ende).
+    `PUT /freigaben/<id>` nimmt `bis: null` auch für Prüffreigaben (nur mit Grundrecht); zur Prüffreigabe wird ein
+    Grundrecht nur mit ausdrücklichem `bis`. Listeneinträge haben neu `grundrecht_dort` (Grundrecht am Anker oder
+    darüber, auch in „Meine Freigaben“) und `traegt_pruefen` (an wie vielen dauerhaften Prüffreigaben ein Grundrecht
+    allein hängt), die Liste hat `kette` (der Ordner und seine Oberordner). `DELETE` zählt `offene_entwuerfe` für jede
+    Art.
+  - **DEMO-Daten**: Der DEMO-Prüfer prüft dauerhaft, der externe DEMO-Prüfer befristet.
+- **Migration Schritt 9** (Schemaversion 9, beim Start, wiederholbar): SQLite entfernt ein CHECK nur mit einer neuen
+  Tabelle – `mat_folder_grant` wird ohne „Prüfrechte nur befristet“ neu aufgebaut wie in Schritt 2 (Fremdschlüssel
+  aus, neue Tabelle, alle Zeilen mit ihren Kennungen kopieren, alte löschen, umbenennen, `foreign_key_check`). Indizes
+  (auch der Teil-Unique „ein Grundrecht“) und Trigger (keine Freigaben an Systemordnern, Datumsformat) entstehen danach
+  Wort für Wort so, wie sie in `sqlite_master` standen; fehlt eine Zeile, bricht die Migration ab. Die Prüffreigaben,
+  die Schritt 8 aus dem Häkchen „Prüfer“ gemacht hat, werden dauerhaft, wo das Konto am selben Anker ein Grundrecht
+  hat oder Plattform-Verwaltung ist und niemand die Zeile seitdem geändert hat (kein `updated_at`, kein „geändert“ im
+  Journal) – je Zeile ein Journaleintrag „Migration Schritt 9“ (Konto nur als Verweis, Grund „nur externe Prüfer
+  befristet“). Externe Prüfer behalten ihr Ende. Schritt 8 legt sie für noch nicht migrierte Datenbanken (Produktion)
+  gleich so an und baut die Tabelle dafür schon selbst um. Neue Datenbanken bekommen die Tabelle ohne das CHECK über
+  denselben Weg – Schritt 1 bleibt, wie er ausgeliefert wurde. Rückweg: Eine Fassung bis Schritt 8 startet weiter auf
+  der Datenbank, kennt aber den Schutz zur Laufzeit nicht – dort wirkte eine dauerhafte Prüffreigabe auch ohne
+  Grundrecht. Vor einem Rückweg also dauerhafte Prüffreigaben ohne Grundrecht („wirkt nicht“) entziehen.
+- **Geprüft**: Tests `test_dauerhaft_pruefen`, `test_migration_8_9`, `test_neue_datenbank_ohne_check` (dazu
+  angepasst `test_migration_7_8` mit dem CHECK in der Ausgangstabelle und einem externen Prüfer) und die statische
+  Prüfung der Reiter in `test_material_l5`. Schritt 9 an echtem Stand: eine Datenbank aus Phase 1 (Stand 7) mit der
+  ausgelieferten Fassung auf Schritt 8 gebracht, DEMO-Daten mit Konten dazu, dann die neue Fassung gestartet –
+  Schemaversion 9, alle 61 Tabellen mit gleicher Zeilenzahl (nur das Journal um die drei Umwandlungen länger), alle
+  Kennungen gleich, Indizes und Trigger Wort für Wort gleich und wirksam, die Prüffreigaben aus Phase 1 mit Grundrecht
+  bzw. Verwaltung dauerhaft, die des externen Prüfers und die der DEMO-Konten unverändert; ein zweiter Start ändert
+  nichts. Im Chromium als DEMO-Materialwart A und als Plattform-Verwaltung bei 1280 × 900, 820 × 1180 und 390 × 844
+  (Touch) der ganze Weg – Ordnerkopf, Reiter (auch per Tastatur), Vorlagen, Erteilen, Ändern, Entziehen, Verlängern,
+  Kopfhinweis, „Dort öffnen“, „+ Gliederung“, Nutzerverwaltung – ohne Konsolenfehler und ohne waagerechten Überlauf.
 
 ### Zu prüfen
 
@@ -1381,17 +1444,17 @@ Regressionstest. Danach liefen alle Suiten grün.
   festgeschriebenen Protokollen und in Titel und Ordner alter Durchgänge stehen Ordnernamen der alten Gliederung – sie
   gehören zur Geschichte des Artikels. Bitte bestätigen.
 - **Telefon und Tablet**: Reiter „Freigaben“ in „Ordner bearbeiten“ (Vorlagen, Karten, Verlängern) und Zuordnen
-  (Personensuche, Sammelaktion) auf dem Telefon durchgehen. Am Tablet hochkant und quer (bis etwa 920 px) sind die Freigabenlisten jetzt Karten –
-  im Browser nachgemessen, auf einem echten Gerät noch nicht gesehen.
+  (Personensuche, Sammelaktion) auf dem Telefon durchgehen. Am Tablet hochkant und quer (bis etwa 920 px) sind die
+  Freigabenlisten jetzt Karten – im Browser nachgemessen, auf einem echten Gerät noch nicht gesehen.
 - **Notiz an der eigenen Freigabe**: Wer einen Ordner mitverwaltet, liest dort auch die Notiz zu seiner eigenen
   Freigabe (Bauentwurf 1.6 Nr. 10; die Hilfe im Dialog sagt das). Soll sie bei eigenen Zeilen verborgen bleiben (außer
   für die Plattform-Verwaltung), ist das eine kleine Änderung – bitte entscheiden.
 - **Erledigte Zeilen und neue Durchgänge**: Eine schon erledigte Zeile eines offenen Durchgangs sperrt keinen neuen
   mehr (Prüfung vor Auslieferung, Nr. 4) – das gilt auch innerhalb einer Gliederung: Sind alle Artikel eines
   Unterordners im laufenden Durchgang schon geprüft, lässt sich dort ein eigener eröffnen. Bitte bestätigen.
-- **Alle migrierten Prüffreigaben laufen am 31.12.2027 ab**: Mit „Alle Prüffreigaben verlängern bis …“ geht das je
-  Gliederung in einem Schritt. Ablaufmails an die Verwalter kommen erst mit Lieferung 2 – bis dahin warnen nur „Meine
-  Freigaben“ und der Hinweis im Ordnerkopf (30 Tage vorher).
+- **Migrierte Prüffreigaben externer Prüfer laufen am 31.12.2027 ab** (die übrigen sind seit Schritt 9 dauerhaft): Mit
+  „Alle Prüffreigaben verlängern bis …“ geht das je Gliederung in einem Schritt. Ablaufmails an die Verwalter kommen
+  erst mit Lieferung 2 – bis dahin warnen nur „Meine Freigaben“ und der Hinweis im Ordnerkopf (30 Tage vorher).
 - **Verfahrensverzeichnis**: Der Textvorschlag (README, „Austritt und Löschen“) ist mit der Gliederung abzustimmen und
   juristisch prüfen zu lassen; die Fristen weiterer Sicherungen trägt der Betreiber ein.
 - **Inbetriebnahme in der Produktion**: Dort gibt es keine Gliederung, also nach dem Update auch keine Freigaben, und
@@ -1623,11 +1686,11 @@ Produktkatalogpfleger oder Plattform-Verwaltung.
 | `POST /api/material/rueckrufe/<id>/beenden` (`vermerk` Pflicht) | Katalog | Rückruf beenden |
 | `GET /api/material/rueckrufe` | Modulzugang | alle laufenden Rückrufe mit Produkt und den Zahlen des eigenen Bereichs |
 | (Artikel, Produkt, Listen) | lesen | neu: `artikel.rueckrufe` (laufende samt Zustand), `produkt.rueckrufe`, je Listenzeile `rueckruf` (Titel eines offenen) |
-| `GET /api/material/ordner/<id>/freigaben` | Materialwart am Ordner | Reiter „Freigaben“ in „Ordner bearbeiten“: `ordner`, `anker_wahl` (der Ordner und die Oberordner, die man verwaltet, je mit dem eigenen Ende), `anker_vorgabe`, `direkt`, `geerbt` (ohne Notiz), `unten` (Zeilen je mit `aenderbar` und `entziehbar`), `verlauf`, `laeuft_ab`, `grenzen` (heute, längste Prüffreigabe, Vorgabe für „bis“) (Phase 2) |
-| `POST /api/material/ordner/<id>/freigaben` (`user_id`, `grundrecht`: `lesen`\|`verwalten`\|`null`, `grund_bis`, `pruefen_bis`, `notiz`) | Materialwart am Ordner | Grundrecht und/oder Prüffreigabe in einem Schritt anlegen oder ändern, ganz oder gar nicht → 201 `freigaben`, `liste`; 404 „Konto nicht gefunden.“ für unbekannte, deaktivierte und namenlose Konten, 409 ohne Qualifikation, an Systemordnern oder ohne verbleibenden Verwalter (Phase 2) |
-| `POST /api/material/ordner/<id>/freigaben/verlaengern` (`bis`) | Materialwart am Ordner | alle Prüffreigaben im Zweig, die man ändern darf (auch bis zu 90 Tage abgelaufene) → `verlaengert`, `uebersprungen` (Konto, Ordner, Grund) (Phase 2) |
-| `PUT /api/material/freigaben/<id>` (`recht`, `bis` – `null` = unbefristet, nur Grundrechte –, `notiz`), `DELETE …/<id>` | Materialwart am Ordner der Freigabe | Freigabe ändern bzw. entziehen; DELETE liefert `offene_entwuerfe` (Phase 2) |
-| `GET /api/material/freigaben/meine` | angemeldet, auch ohne Modulzugang | eigene Freigaben (gültige und im letzten Jahr abgelaufene) mit Pfad, `recht`, `bis`, `gueltig`, `wirkt`, `laeuft_ab_in_tagen` und `verwalter` (bis zu drei Namen) – ohne Notiz; dazu `zugang`, `qualifiziert` (Phase 2) |
+| `GET /api/material/ordner/<id>/freigaben` | Materialwart am Ordner | Reiter „Freigaben“ in „Ordner bearbeiten“: `ordner`, `anker_wahl` (der Ordner und die Oberordner, die man verwaltet, je mit dem eigenen Ende), `anker_vorgabe`, `direkt`, `geerbt` (ohne Notiz), `unten` (Zeilen je mit `aenderbar`, `entziehbar`, `grundrecht_dort` und `traegt_pruefen`), `kette`, `verlauf`, `laeuft_ab`, `grenzen` (heute, längste Prüffreigabe, Vorgabe für „bis“) (Phase 2) |
+| `POST /api/material/ordner/<id>/freigaben` (`user_id`, `grundrecht`: `lesen`\|`verwalten`\|`null`, `grund_bis`, `pruefen`, `pruefen_bis`, `notiz`) | Materialwart am Ordner | Grundrecht und/oder Prüffreigabe in einem Schritt anlegen oder ändern, ganz oder gar nicht → 201 `freigaben`, `liste`; Prüffreigabe ohne Ende (`pruefen`: true, `pruefen_bis` leer) nur mit Grundrecht am Anker oder darüber, sonst 400; 404 „Konto nicht gefunden.“ für unbekannte, deaktivierte und namenlose Konten, 409 ohne Qualifikation, an Systemordnern oder ohne verbleibenden Verwalter (Phase 2) |
+| `POST /api/material/ordner/<id>/freigaben/verlaengern` (`bis`) | Materialwart am Ordner | alle befristeten Prüffreigaben im Zweig, die man ändern darf (auch bis zu 90 Tage abgelaufene) → `verlaengert`, `uebersprungen` (Konto, Ordner, Grund) (Phase 2) |
+| `PUT /api/material/freigaben/<id>` (`recht`, `bis` – `null` = unbefristet, bei Prüffreigaben nur mit Grundrecht –, `notiz`), `DELETE …/<id>` | Materialwart am Ordner der Freigabe | Freigabe ändern bzw. entziehen; DELETE liefert `offene_entwuerfe` (Phase 2) |
+| `GET /api/material/freigaben/meine` | angemeldet, auch ohne Modulzugang | eigene Freigaben (gültige und im letzten Jahr abgelaufene) mit Pfad, `recht`, `bis`, `gueltig`, `wirkt`, `grundrecht_dort`, `laeuft_ab_in_tagen` und `verwalter` (bis zu drei Namen) – ohne Notiz; dazu `zugang`, `qualifiziert` (Phase 2) |
 | `GET /api/material/freigaben?user_id=` | Plattform-Verwaltung | alle Freigaben eines Kontos mit Notiz (Nutzerverwaltung) (Phase 2) |
 | `GET /api/material/nutzer?q=` (ab 3 Zeichen) | verwalten irgendwo oder Plattform-Verwaltung | Personensuche für Freigaben und Zuordnung: höchstens 20 aktive Konten mit Namen, je `id`, `name`, `gliederung`, `qualifiziert` – keine E-Mail, keine Urkundennummer; `mehr` (Phase 2) |
 | `POST /api/material/globalsuche` (`q`, `bestaetigt: true`) | Modulzugang | globale Seriennummernsuche → `treffer` (höchstens 10 Steckbriefe, ohne Kennungen), `mehr`, `hinweis`; 400 ohne Bestätigung, unter 4 Zeichen oder bei Inventar- und STR-Nummern, 409 bei einem Treffer im eigenen Bereich, 429 über der Bremse (Phase 2) |

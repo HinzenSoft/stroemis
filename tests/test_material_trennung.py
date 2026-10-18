@@ -107,7 +107,8 @@ def gleich_wie_unbekannt(r, unbekannt):
 def test_migration_7_8():
     """Eine Datenbank auf Stand 7 (Phase 1): Stufen und Häkchen werden Freigaben an den vorhandenen Gliederungen – je
     eingefügter Zeile ein Journaleintrag –, jedes Konto bekommt ein mat_ref, die Altfälle werden bereinigt; die Spalten
-    aus Phase 1 bleiben, und ein zweiter Start ändert nichts."""
+    aus Phase 1 bleiben, und ein zweiter Start ändert nichts. Seit Schritt 9 (Nachbesserung vom 18.10.2026) läuft das
+    bis Stand 9 durch: Prüffreigaben dauerhaft, wo ein Grundrecht entsteht, nur der externe Prüfer befristet."""
     from app.material.services.interval import plus_monate
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
@@ -124,7 +125,7 @@ def test_migration_7_8():
         freigeben(adm, gl1, k["pruefer_id"], "pruefen")
         entwurf = starten(k["pruefer"], y, durchgang_id=rid).json["pruefung"]["id"]
         konten = {n: neues_konto(app, f"{n}@example.org")[1] for n in ("stufe1", "stufe2", "ohne_urkunde", "katalogpflege",
-                                                                         "pv")}
+                                                                         "pv", "extern")}
         # So hat Phase 1 die Konten hinterlassen (Prüfer und Katalogpfleger hob die Nutzerverwaltung auf Stufe 1).
         sql(app, "UPDATE users SET recht_material = 0, mat_pruefer = 0, mat_katalog = 0, urkundennummer = '' "
                  "WHERE id NOT IN (SELECT id FROM users WHERE recht_verwaltung = 2)")
@@ -141,28 +142,37 @@ def test_migration_7_8():
         sql(app, "UPDATE mat_item SET lock_state = 'gesperrt', lock_reason = 'Testsperre', folder_id = ?, "
                  "origin_folder_id = ? WHERE id = ?", (sys1["gesperrt"], lager2, x))
         sql(app, "UPDATE mat_item SET folder_id = ? WHERE id = ?", (lager2, y))
-        # Stand 7: keine Freigaben, keine Kontoverweise, Schemaversion 7.
+        # Ein externer Prüfer: Häkchen, aber keine Stufe aus Phase 1 – nur er behält eine befristete Prüffreigabe.
+        sql(app, "UPDATE users SET mat_pruefer = 1, urkundennummer = '1012-0003' WHERE id = ?", (konten["extern"],))
+        # Stand 7: keine Freigaben, keine Kontoverweise, Schemaversion 7 – und mat_folder_grant mit dem CHECK
+        # „Prüfrechte nur befristet“ aus Schritt 1: Schritt 8 muss die Tabelle vor dem Einfügen umbauen, sonst verwürfe
+        # INSERT OR IGNORE die dauerhaften Prüffreigaben stillschweigend.
         sql(app, "DELETE FROM mat_folder_grant")
+        grant_tabelle_wie_schritt_8(os.path.join(tmp, "stroemis.db"))
         sql(app, "UPDATE users SET mat_ref = NULL")
         sql(app, "UPDATE mat_meta SET wert = '7' WHERE schluessel = 'schema_version'")
         stufen_vorher = zeilen(app, "SELECT id, recht_material, mat_pruefer, mat_katalog FROM users ORDER BY id")
         journal_vorher = zeilen(app, "SELECT MAX(id) AS m FROM mat_audit")[0]["m"]
 
-        app = make_app(tmp)                                    # Neustart: Schritt 8 läuft
-        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "8"
+        app = make_app(tmp)                                    # Neustart: Schritt 8 und 9 laufen
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "9"
+        assert not ohne_check_noch_da(app)
         h = _heute()
         bis = min(f"{h.year + 1}-12-31", plus_monate(h, 24).isoformat())
         if h.year == 2026:
             assert bis == "2027-12-31"
+        # Seit der Nachbesserung (Schritt 9): dauerhaft, wo das Konto ein Grundrecht bekommt oder Plattform-Verwaltung
+        # ist; nur der externe Prüfer (ohne Stufe) bis zum 31.12. des Folgejahres.
         erwartet = set()
         for g in (gl1, gl2):
             erwartet |= {(g, konten["stufe1"], "lesen", None, "aus Phase 1: Stufe Mitglied"),
                          (g, konten["stufe2"], "verwalten", None, "aus Phase 1: Stufe Verwaltung"),
-                         (g, konten["stufe2"], "pruefen", bis, "aus Phase 1: Häkchen Prüfer"),
+                         (g, konten["stufe2"], "pruefen", None, "aus Phase 1: Häkchen Prüfer"),
                          (g, konten["ohne_urkunde"], "lesen", None, "aus Phase 1: Stufe Mitglied"),
-                         (g, konten["ohne_urkunde"], "pruefen", bis, "aus Phase 1: Häkchen Prüfer"),
+                         (g, konten["ohne_urkunde"], "pruefen", None, "aus Phase 1: Häkchen Prüfer"),
                          (g, konten["katalogpflege"], "lesen", None, "aus Phase 1: Stufe Mitglied"),
-                         (g, konten["pv"], "pruefen", bis, "aus Phase 1: Häkchen Prüfer")}
+                         (g, konten["pv"], "pruefen", None, "aus Phase 1: Häkchen Prüfer"),
+                         (g, konten["extern"], "pruefen", bis, "aus Phase 1: Häkchen Prüfer")}
         freigaben = zeilen(app, "SELECT * FROM mat_folder_grant ORDER BY id")
         assert {(f["folder_id"], f["user_id"], f["permission"], f["valid_until"], f["note"]) for f in freigaben} == erwartet
         assert all(f["granted_by"] is None for f in freigaben)
@@ -172,7 +182,8 @@ def test_migration_7_8():
         assert len(set(refs.values())) == len(refs)
         eintraege = zeilen(app, "SELECT * FROM mat_audit WHERE id > ? AND action = 'freigabe_erteilt' ORDER BY id",
                            (journal_vorher,))
-        assert len(eintraege) == len(freigaben) == 14
+        assert len(eintraege) == len(freigaben) == 16
+        assert not zeilen(app, "SELECT 1 FROM mat_audit WHERE user_name = 'Migration Schritt 9'")   # nichts umzuwandeln
         nach_id = {f["id"]: f for f in freigaben}
         for e in eintraege:
             d = json.loads(e["after_json"])
@@ -208,10 +219,210 @@ def test_migration_7_8():
         conn.execute("BEGIN")
         n = conn.total_changes
         models._schritt_8(conn)
+        models._schritt_9(conn)
         assert conn.total_changes == n
         conn.rollback()
         conn.close()
     print("Migration 7 → 8 bestanden.")
+
+
+# --- Schritt 9: Prüffreigaben dauerhaft mit Grundrecht (Nachbesserung vom 18.10.2026) ------------------------------
+
+PRUEF_CHECK = re.compile(r"permission\s*<>\s*'pruefen'\s+or\s+valid_until\s+is\s+not\s+null", re.IGNORECASE)
+
+
+def grant_tabelle_wie_schritt_8(pfad):
+    """mat_folder_grant so, wie sie eine Datenbank bis Schritt 8 hat: das CREATE TABLE aus Schritt 1 (mit dem CHECK
+    „Prüfrechte nur befristet“), note und updated_at per ALTER TABLE wie Schritt 8, dazu die Indizes und Trigger aus
+    Schritt 1 und 8. Die Zeilen bleiben (eine dauerhafte Prüffreigabe darf es dafür nicht geben)."""
+    from app.material import models
+    conn = sqlite3.connect(pfad)
+    conn.execute("PRAGMA foreign_keys = OFF")
+    with conn:
+        conn.execute("CREATE TABLE grant_rette AS SELECT * FROM mat_folder_grant")
+        conn.execute("DROP TABLE mat_folder_grant")
+        for befehl in models.SCHRITT_1:
+            if "mat_folder_grant" in befehl:
+                conn.execute(befehl)
+        conn.execute("ALTER TABLE mat_folder_grant ADD COLUMN note TEXT NOT NULL DEFAULT ''")
+        conn.execute("ALTER TABLE mat_folder_grant ADD COLUMN updated_at TEXT")
+        for befehl in models.GRANT_8:
+            conn.execute(befehl)
+        conn.execute("INSERT INTO mat_folder_grant SELECT * FROM grant_rette")
+        conn.execute("DROP TABLE grant_rette")
+    assert PRUEF_CHECK.search(conn.execute("SELECT sql FROM sqlite_master WHERE name = 'mat_folder_grant'").fetchone()[0])
+    conn.close()
+
+
+def ohne_check_noch_da(app):
+    """Steht das CHECK „Prüfrechte nur befristet“ noch an mat_folder_grant? (Name: „ohne“ ist das Ziel.)"""
+    return bool(PRUEF_CHECK.search(zeilen(app, "SELECT sql FROM sqlite_master WHERE name = 'mat_folder_grant'")[0]["sql"]))
+
+
+def _schema_grant(app):
+    """Indizes und Trigger an mat_folder_grant: {Name: SQL}."""
+    return {r["name"]: r["sql"] for r in zeilen(app, "SELECT name, sql FROM sqlite_master WHERE tbl_name = "
+                                                      "'mat_folder_grant' AND type IN ('index', 'trigger')")}
+
+
+def test_migration_8_9():
+    """Eine Datenbank im Stand von Schritt 8 (mat_folder_grant mit dem CHECK, Freigaben aus Phase 1 mit Journal
+    „Migration Schritt 8“): Schritt 9 baut die Tabelle ohne das CHECK neu auf – alle Zeilen, Kennungen, Indizes (auch der
+    Teil-Unique „ein Grundrecht“) und Trigger bleiben und greifen weiter – und macht die Prüffreigaben aus Phase 1
+    dauerhaft, wo das Konto am Anker ein Grundrecht hat oder Plattform-Verwaltung ist, sofern niemand sie seitdem
+    geändert hat; je Zeile ein Journaleintrag „Migration Schritt 9“. Externe Prüfer, geänderte Zeilen, abgelaufene
+    Grundrechte und Prüffreigaben, die nicht aus der Migration stammen, bleiben, wie sie sind. Ein zweiter Lauf ändert
+    nichts."""
+    from app.material import models
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        adm = k["adm"]
+        gid, sys_g = gliederung(adm, "OG Eins", standard=False)
+        lager = ordner_neu(adm, gid, "Lager Eins")
+        a_id = adm.get("/api/me").json["user"]["id"]
+        konten = {n: neues_konto(app, f"{n}@example.org", name=f"Test {n}", mat_pruefer=True,
+                                 urkundennummer=f"1012-01{i:02d}")[1]
+                  for i, n in enumerate(("mitglied", "verwalter", "extern", "geaendert", "abgelaufen", "normal"))}
+        konten["pv"] = a_id
+        sql(app, "UPDATE users SET mat_pruefer = 1, urkundennummer = '1012-0199' WHERE id = ?", (a_id,))
+        bis = "2027-12-31"
+        # So hat Schritt 8 die Freigaben aus Phase 1 hinterlassen: ohne vergebendes Konto, mit Notiz, Journal
+        # „Migration Schritt 8“. Dazu eine gewöhnliche befristete Prüffreigabe (vergeben von der Verwaltung).
+        conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+        with conn:
+            conn.execute("UPDATE users SET mat_ref = lower(hex(randomblob(16))) WHERE mat_ref IS NULL")   # wie Schritt 8
+            refs = dict(conn.execute("SELECT id, mat_ref FROM users"))
+            for n, recht, ende, notiz in (("mitglied", "lesen", None, "aus Phase 1: Stufe Mitglied"),
+                                          ("verwalter", "verwalten", None, "aus Phase 1: Stufe Verwaltung"),
+                                          ("geaendert", "lesen", None, "aus Phase 1: Stufe Mitglied"),
+                                          ("abgelaufen", "lesen", None, "aus Phase 1: Stufe Mitglied"),
+                                          ("normal", "lesen", None, "aus Phase 1: Stufe Mitglied")):
+                cur = conn.execute("INSERT INTO mat_folder_grant (folder_id, user_id, permission, valid_until, granted_by, "
+                                   "created_at, note) VALUES (?,?,?,?,NULL,?,?)",
+                                   (gid, konten[n], recht, ende, "2026-10-18T05:00:00+00:00", notiz))
+                models._journal_8(conn, "folder", gid, "freigabe_erteilt", None, {
+                    "freigabe": cur.lastrowid, "konto": {"ref": refs[konten[n]]}, "recht": recht, "bis": ende})
+            for n in ("mitglied", "verwalter", "extern", "geaendert", "abgelaufen", "pv"):
+                cur = conn.execute("INSERT INTO mat_folder_grant (folder_id, user_id, permission, valid_until, granted_by, "
+                                   "created_at, note) VALUES (?,?,'pruefen',?,NULL,?,?)",
+                                   (gid, konten[n], bis, "2026-10-18T05:00:00+00:00", models.NOTIZ_PRUEFER_8))
+                models._journal_8(conn, "folder", gid, "freigabe_erteilt", None, {
+                    "freigabe": cur.lastrowid, "konto": {"ref": refs[konten[n]]}, "recht": "pruefen", "bis": bis})
+        conn.close()
+        freigeben(adm, gid, konten["normal"], "pruefen", bis=bis)
+        # Seitdem geändert (wie über den Dienst: updated_at und Journal) – bleibt; das Grundrecht von „abgelaufen“ ist
+        # abgelaufen – bleibt.
+        g = zeilen(app, "SELECT id FROM mat_folder_grant WHERE user_id = ? AND permission = 'pruefen'",
+                   (konten["geaendert"],))[0]["id"]
+        sql(app, "UPDATE mat_folder_grant SET valid_until = '2027-06-30', updated_at = '2026-10-18T06:00:00+00:00' "
+                 "WHERE id = ?", (g,))
+        sql(app, "INSERT INTO mat_audit (entity, entity_id, user_id, user_name, action, before_json, after_json, "
+                 "created_at) VALUES ('folder', ?, ?, 'Administrator', 'freigabe_geaendert', ?, ?, "
+                 "'2026-10-18T06:00:00+00:00')", (gid, a_id, json.dumps({"freigabe": g, "bis": bis}),
+                                                  json.dumps({"freigabe": g, "bis": "2027-06-30"})))
+        sql(app, "UPDATE mat_folder_grant SET valid_until = ? WHERE user_id = ? AND permission = 'lesen'",
+            ((_heute() - timedelta(days=1)).isoformat(), konten["abgelaufen"]))
+        grant_tabelle_wie_schritt_8(os.path.join(tmp, "stroemis.db"))
+        sql(app, "UPDATE mat_meta SET wert = '8' WHERE schluessel = 'schema_version'")
+        vorher = {r["id"]: r for r in zeilen(app, "SELECT * FROM mat_folder_grant")}
+        schema_vorher = _schema_grant(app)
+        assert set(schema_vorher) == {"sqlite_autoindex_mat_folder_grant_1", "idx_mat_grant_user", "idx_mat_grant_folder",
+                                      "ux_mat_grant_grundrecht", "mat_grant_systemordner",
+                                      "mat_grant_systemordner_aendern", "mat_grant_datum", "mat_grant_datum_aendern"}
+        journal_vorher = zeilen(app, "SELECT MAX(id) AS m FROM mat_audit")[0]["m"]
+
+        app = make_app(tmp)                                    # Neustart: Schritt 9 läuft
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "9"
+        assert not ohne_check_noch_da(app)
+        assert _schema_grant(app) == schema_vorher             # Indizes und Trigger wie vorher, Wort für Wort
+        assert not zeilen(app, "SELECT name FROM sqlite_master WHERE name LIKE '%grant_neu%'")
+        assert not zeilen(app, "PRAGMA foreign_key_check(mat_folder_grant)")
+        nachher = {r["id"]: r for r in zeilen(app, "SELECT * FROM mat_folder_grant")}
+        assert set(nachher) == set(vorher)
+        pruefen = {n: next(r for r in nachher.values() if r["user_id"] == konten[n] and r["permission"] == "pruefen")
+                   for n in konten}
+        umgewandelt = {n for n, r in pruefen.items() if r["valid_until"] is None}
+        assert umgewandelt == {"mitglied", "verwalter", "pv"}, umgewandelt
+        for gid_, r in nachher.items():
+            if r["permission"] == "pruefen" and r["user_id"] in {konten[n] for n in umgewandelt}:
+                assert r["updated_at"] and dict(r, valid_until=bis, updated_at=None) == vorher[gid_], (r, vorher[gid_])
+            else:
+                assert r == vorher[gid_], (r, vorher[gid_])
+        assert pruefen["extern"]["valid_until"] == bis and pruefen["normal"]["valid_until"] == bis
+        assert pruefen["geaendert"]["valid_until"] == "2027-06-30" and pruefen["abgelaufen"]["valid_until"] == bis
+        # Journal: je umgewandelter Zeile „Migration Schritt 9“, das Konto nur als Verweis; der Verlauf zeigt es.
+        e = zeilen(app, "SELECT * FROM mat_audit WHERE id > ? ORDER BY id", (journal_vorher,))
+        assert len(e) == 3 and {x["user_name"] for x in e} == {"Migration Schritt 9"}, e
+        assert all(x["entity"] == "folder" and x["entity_id"] == gid and x["action"] == "freigabe_geaendert"
+                   and x["user_id"] is None for x in e)
+        refs = {u["id"]: u["mat_ref"] for u in zeilen(app, "SELECT id, mat_ref FROM users")}
+        for x in e:
+            v, n_ = json.loads(x["before_json"]), json.loads(x["after_json"])
+            f = nachher[v["freigabe"]]
+            assert v == {"freigabe": f["id"], "konto": {"ref": refs[f["user_id"]]}, "recht": "pruefen", "bis": bis}, v
+            assert n_ == dict(v, bis=None, grund="nur externe Prüfer befristet"), n_
+        verlauf = [x for x in adm.get(f"/api/material/ordner/{gid}/freigaben").json["verlauf"]
+                   if x["wer"] == "Migration Schritt 9"]
+        assert len(verlauf) == 3 and all(x["bis_vorher"] == bis and x["bis"] is None for x in verlauf), verlauf
+
+        # Die Trigger greifen weiter: keine Freigabe an Systemordnern (auch nicht per Verschieben), Datum JJJJ-MM-TT.
+        conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+        neu = ("INSERT INTO mat_folder_grant (folder_id, user_id, permission, valid_until, created_at) "
+               "VALUES (?,?,?,?,'2026-10-18T07:00:00+00:00')")
+        for befehl, args, meldung in (
+                (neu, (sys_g["gesperrt"], konten["extern"], "lesen", None), "Gesperrt"),
+                (neu, (lager, konten["extern"], "lesen", "31.12.2027"), "JJJJ-MM-TT"),
+                ("UPDATE mat_folder_grant SET folder_id = ? WHERE id = ?", (sys_g["ausgesondert"], pruefen["extern"]["id"]),
+                 "Gesperrt"),
+                ("UPDATE mat_folder_grant SET valid_until = '2027/12/31' WHERE id = ?", (pruefen["extern"]["id"],),
+                 "JJJJ-MM-TT"),
+                # Höchstens ein Grundrecht je Konto und Ordner (Teil-Unique), höchstens eine Zeile je Recht (UNIQUE).
+                (neu, (gid, konten["mitglied"], "verwalten", None), "UNIQUE"),
+                (neu, (gid, konten["extern"], "pruefen", None), "UNIQUE")):
+            try:
+                with conn:
+                    conn.execute(befehl, args)
+                raise AssertionError(f"nicht abgewiesen: {befehl} {args}")
+            except sqlite3.IntegrityError as exc:
+                assert meldung in str(exc), (meldung, str(exc))
+        # Was das CHECK verbot, geht jetzt: eine Prüffreigabe ohne Ende neben einem Grundrecht.
+        with conn:
+            conn.execute(neu, (lager, konten["extern"], "pruefen", None))
+            conn.execute("DELETE FROM mat_folder_grant WHERE folder_id = ? AND user_id = ?", (lager, konten["extern"]))
+        conn.close()
+
+        # Ein zweiter Start ändert nichts – und Schritt 9 selbst ist wiederholbar.
+        stand = {t: zeilen(app, f"SELECT * FROM {t} ORDER BY rowid") for t in ("mat_folder_grant", "mat_audit")}
+        app = make_app(tmp)
+        assert {t: zeilen(app, f"SELECT * FROM {t} ORDER BY rowid") for t in stand} == stand
+        conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+        conn.execute("BEGIN")
+        n = conn.total_changes
+        models._schritt_9(conn)
+        assert conn.total_changes == n
+        conn.rollback()
+        conn.close()
+        # Die umgewandelten wirken (Grundrecht bzw. Plattform-Verwaltung), der externe Prüfer prüft bis zum Ende weiter.
+        eintraege = {x["konto"]["id"]: x for x in adm.get(f"/api/material/ordner/{gid}/freigaben").json["direkt"]
+                     if x["recht"] == "pruefen"}
+        assert all(eintraege[konten[n]]["wirkt"] for n in ("mitglied", "verwalter", "pv", "extern"))
+        assert not eintraege[konten["abgelaufen"]]["grundrecht_dort"]
+    print("Migration 8 → 9 bestanden.")
+
+
+def test_neue_datenbank_ohne_check():
+    """Eine neue Datenbank kommt auf Stand 9 und hat das CHECK „Prüfrechte nur befristet“ nicht mehr (Schritt 1 bleibt,
+    wie er ausgeliefert wurde; Schritt 8 baut die Tabelle um) – mit allen Indizes und Triggern."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app = make_app(tmp)
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "9"
+        assert not ohne_check_noch_da(app)
+        assert set(_schema_grant(app)) == {"sqlite_autoindex_mat_folder_grant_1", "idx_mat_grant_user",
+                                           "idx_mat_grant_folder", "ux_mat_grant_grundrecht", "mat_grant_systemordner",
+                                           "mat_grant_systemordner_aendern", "mat_grant_datum", "mat_grant_datum_aendern"}
+        assert [r["name"] for r in zeilen(app, "PRAGMA table_info(mat_folder_grant)")] == [
+            "id", "folder_id", "user_id", "permission", "valid_until", "granted_by", "created_at", "note", "updated_at"]
+    print("Neue Datenbank ohne CHECK bestanden.")
 
 
 # --- Sicht: Vererbung, Pfad-Knoten, Systemordner, Heimat ----------------------------------------------------------
@@ -1670,6 +1881,8 @@ def test_pruefsicht_zugeordnete():
 
 if __name__ == "__main__":
     test_migration_7_8()
+    test_migration_8_9()
+    test_neue_datenbank_ohne_check()
     test_sicht()
     test_requires_folder()
     test_ablauf()

@@ -9,8 +9,8 @@ Ohne Angabe landen die Daten wie bei run.py in ./data; für eine andere Datenban
 Seit Phase 2 gibt es eine zweite Gliederung („DEMO-Gliederung Nachbarstadt“ mit „DEMO-Lager NS“) – zum Ausprobieren
 der Trennung je Gliederung und der globalen Suche (Seriennummer DEMO-NS-4711); sie kommt auch zu einem vorhandenen
 Demo-Bestand dazu. --konten legt einmalig vier DEMO-Konten mit Namen, zufälligem Passwort (wird einmal ausgedruckt)
-und Freigaben an: zwei Materialwarte (je Gliederung), einen Prüfer (lesen und prüfen in der DEMO-Gliederung) und einen
-externen Prüfer (nur prüfen im DEMO-Lager). Nur für dev.
+und Freigaben an: zwei Materialwarte (je Gliederung), einen Prüfer (lesen und prüfen in der DEMO-Gliederung, beides
+dauerhaft) und einen externen Prüfer (nur prüfen im DEMO-Lager, befristet). Nur für dev.
 Alles, was das Skript anlegt, trägt das Kennzeichen demo und „DEMO“ im Namen – die Oberfläche zeigt
 es überall als „DEMO – nicht für echte Prüfungen“. Prüfpunkte, Intervalle, Lebensdauern und Hersteller
 sind Platzhalter: Der echte Katalog entsteht in Phase 0 mit den Sachkundigen und kommt über
@@ -33,13 +33,14 @@ LAGER = "DEMO-Lager"
 NACHBARSTADT = "DEMO-Gliederung Nachbarstadt"
 LAGER_NS = "DEMO-Lager NS"
 # --konten: E-Mail, Name, Gliederung (Freitext im Profil), Urkundennummer (mit Häkchen „Prüfer“) oder None und die
-# Freigaben als (Ordner, Recht, Tage bis zum Ende – None heißt dauerhaft). Die Prüffreigaben laufen kurz, damit der
-# Hinweis „läuft bald ab“ und das Verlängern zu sehen sind.
+# Freigaben als (Ordner, Recht, Tage bis zum Ende – None heißt dauerhaft). Befristet ist nur der externe Prüfer (seit
+# der Nachbesserung vom 18.10.2026); seine Prüffreigabe läuft kurz, damit der Hinweis „läuft bald ab“ und das
+# Verlängern zu sehen sind. Der interne Prüfer prüft dauerhaft – er hat dort lesen.
 DEMO_KONTEN = [
     ("demo-wart-a@example.invalid", "DEMO-Materialwart A", GLIEDERUNG, None, [(GLIEDERUNG, "verwalten", None)]),
     ("demo-wart-b@example.invalid", "DEMO-Materialwart B", NACHBARSTADT, None, [(NACHBARSTADT, "verwalten", None)]),
     ("demo-pruefer@example.invalid", "DEMO-Prüfer", GLIEDERUNG, "DEMO-1012",
-     [(GLIEDERUNG, "lesen", None), (GLIEDERUNG, "pruefen", 30)]),
+     [(GLIEDERUNG, "lesen", None), (GLIEDERUNG, "pruefen", None)]),
     ("demo-extern@example.invalid", "DEMO-Prüfer extern", "DEMO-extern", "DEMO-2024", [(LAGER, "pruefen", 30)]),
 ]
 

@@ -25,20 +25,25 @@
   const $ = (sel, el) => (el || document).querySelector(sel);
   const $$ = (sel, el) => Array.from((el || document).querySelectorAll(sel));
   const RECHT = { lesen: "lesen", verwalten: "verwalten", pruefen: "prüfen" };
-  // Die Vorlagen des Dialogs: ein Grundrecht (dauerhaft, wenn man selbst dauerhaft verwaltet) und/oder eine
-  // Prüffreigabe bis zu einem Tag. „Einzeln …“ lässt beides frei wählen.
+  // Die Vorlagen des Reiters: ein Grundrecht (dauerhaft, wenn man selbst dauerhaft verwaltet) und/oder eine
+  // Prüffreigabe. Befristet ist nur noch der externe Prüfer; wer lesen oder verwalten mitbekommt, prüft dauerhaft
+  // (pruefDauer: „dauerhaft“ vorgewählt – angeboten nur, wer selbst dauerhaft verwaltet). „Einzeln …“ lässt alles frei.
   const VORLAGEN = [
     { k: "fuehrungskraft", t: "Führungskraft", grund: "lesen", pruefen: false,
       text: "lesen – Bestand, Protokolle, Export, Lebensläufe und Journal ansehen" },
     { k: "materialwart", t: "Materialwart", grund: "verwalten", pruefen: false,
       text: "verwalten – Ordner und Artikel pflegen, aussondern, Freigaben vergeben; prüfen nur mit eigener Prüffreigabe" },
-    { k: "pruefer", t: "Prüfer", grund: "lesen", pruefen: true, text: "lesen und prüfen bis …" },
-    { k: "materialwart_pruefer", t: "Materialwart und Prüfer", grund: "verwalten", pruefen: true, text: "verwalten und prüfen bis …" },
+    { k: "pruefer", t: "Prüfer", grund: "lesen", pruefen: true, pruefDauer: true, text: "lesen und prüfen" },
+    { k: "materialwart_pruefer", t: "Materialwart und Prüfer", grund: "verwalten", pruefen: true, pruefDauer: true,
+      text: "verwalten und prüfen" },
     { k: "extern", t: "Externer Prüfer", grund: null, pruefen: true,
-      text: "nur prüfen bis … – die Prüfsicht: Artikel und Prüfungen, kein Export, kein Journal" },
+      text: "nur prüfen bis … – die Prüfsicht: Artikel und Prüfungen, kein Export, kein Journal; höchstens 24 Monate" },
     { k: "einzeln", t: "Einzeln …", grund: null, pruefen: false, text: "Grundrecht und Prüffreigabe frei wählen" },
   ];
   const OHNE_QUALIFIKATION = "Prüfen erst mit Häkchen durch die Verwaltung und Urkundennummer im Profil.";
+  const OHNE_GRUNDRECHT = "Dauerhaft prüft nur, wer hier auch lesen oder verwalten hat – sonst wirkt die Prüffreigabe nicht.";
+  // Hilfe unter „Prüfen bis“, wenn „dauerhaft“ gewählt ist.
+  const PRUEFEN_DAUERHAFT = "Gilt, solange die Person hier lesen oder verwalten hat – nur externe Prüfer brauchen ein Enddatum.";
 
   const plural = (n, eins, viele) => `${n} ${n === 1 ? eins : viele}`;
   const fokus = (el) => { if (el && !window.matchMedia("(pointer: coarse)").matches) el.focus(); };
@@ -63,11 +68,16 @@
     throw new Error(`„${name}“: bitte als TT.MM.JJJJ angeben, z. B. 31.12.2027.`);
   }
 
-  /* Zustand einer Zeile: gültig · läuft in n Tagen ab (gelb) · abgelaufen am … (grau) · wirkt nicht. */
-  function zustand(f) {
+  /* Zustand einer Zeile: gültig · läuft in n Tagen ab (gelb) · abgelaufen am … (grau) · wirkt nicht. qualifiziert:
+     für „Meine Freigaben“ (dort steht es nicht an der Zeile, sondern einmal für das eigene Konto). */
+  function zustand(f, qualifiziert) {
     if (!f.gueltig) return `<span class="mf-zustand abgelaufen">abgelaufen am ${fmtTag(f.bis)}</span>`;
     if (f.wirkt === false) {
-      const grund = f.konto && !f.konto.aktiv ? "Konto deaktiviert" : f.recht === "pruefen" ? "Qualifikation fehlt" : "Konto ohne Namen";
+      const quali = f.konto ? f.konto.qualifiziert : qualifiziert;
+      const grund = f.konto && !f.konto.aktiv ? "Konto deaktiviert"
+        : f.recht === "pruefen" && quali === false ? "Qualifikation fehlt"
+        : f.recht === "pruefen" && f.bis === null && f.grundrecht_dort === false ? "dauerhaft nur mit lesen oder verwalten"
+        : "Konto ohne Namen";
       return `<span class="mf-zustand wirkt-nicht">wirkt nicht – ${grund}</span>`;
     }
     const t = f.laeuft_ab_in_tagen;
@@ -160,7 +170,8 @@
   }
 
   function listenHtml(d) {
-    const pruefzeilen = d.direkt.concat(d.unten).filter((f) => f.recht === "pruefen" && f.aenderbar);
+    // Verlängern betrifft nur befristete – dauerhafte laufen nicht ab.
+    const pruefzeilen = d.direkt.concat(d.unten).filter((f) => f.recht === "pruefen" && f.bis && f.aenderbar);
     return `${d.laeuft_ab ? `<p class="notice mf-ablauf">${plural(d.laeuft_ab, "Freigabe läuft", "Freigaben laufen")} in den nächsten 30 Tagen ab.</p>` : ""}
       <details class="mf-teil" open><summary>Hier vergeben <span class="mf-zahl">${d.direkt.length}</span></summary>
         ${pruefzeilen.length ? '<div class="btn-row mf-verl-reihe"><button class="btn secondary small" type="button" data-act="verlaengern" id="mf-verlaengern">Alle Prüffreigaben verlängern bis …</button></div>' : ""}
@@ -204,7 +215,9 @@
           <label class="inline" id="mf-dauerhaft-wahl"><input type="checkbox" id="mf-dauerhaft" checked> dauerhaft</label>
           ${datumFeld("mf-grund-bis", "", "Grundrecht bis")}
           <div class="help" id="mf-grund-hilfe"></div></div>
-        <div id="mf-pruefen-ende" hidden><label for="mf-pruefen-bis">Prüfen bis</label>${datumFeld("mf-pruefen-bis", "")}
+        <div id="mf-pruefen-ende" hidden><label for="mf-pruefen-bis">Prüfen bis</label>
+          <label class="inline" id="mf-pruefen-dauerhaft-wahl" hidden><input type="checkbox" id="mf-pruefen-dauerhaft"> dauerhaft</label>
+          ${datumFeld("mf-pruefen-bis", "", "Prüfen bis")}
           <div class="help" id="mf-pruefen-hilfe"></div></div>
       </div>
       <details class="mf-notiz"><summary>Notiz</summary>
@@ -217,7 +230,7 @@
 
   /* Der Zustand des Formulars: gewählte Person, Vorlage und Anker – daraus folgen die sichtbaren Felder, die Vorgaben
      für „bis“ und welche Vorlagen gehen (prüfen nur mit Qualifikation; „dauerhaft“ nur, wer selbst dauerhaft
-     verwaltet). */
+     verwaltet – beim Prüfen dazu nur, wo die Person ein Grundrecht bekommt oder schon hat, nie beim externen Prüfer). */
   function formVerdrahten(body, stand, nachher) {
     const feld = (id) => $("#" + id, body);
     let person = null;
@@ -232,6 +245,16 @@
       if (!v) return { grund: null, pruefen: false };
       if (v.k === "einzeln") return { grund: feld("mf-grund").value || null, pruefen: feld("mf-pruefen").checked };
       return { grund: v.grund, pruefen: v.pruefen };
+    }
+
+    // Hat die gewählte Person am Anker oder darüber schon ein gültiges Grundrecht? Aus den Listen (direkt und geerbt
+    // decken den Ordner und alle Oberordner ab) – verbindlich entscheidet der Server.
+    function grundrechtDort(a) {
+      if (!person) return false;
+      const ab = stand.daten.kette.indexOf(a.id);
+      const oben = new Set(ab < 0 ? [a.id] : stand.daten.kette.slice(ab));
+      return stand.daten.direkt.concat(stand.daten.geerbt).some((f) => f.konto.id === person.id && f.recht !== "pruefen"
+        && f.gueltig && oben.has(f.ordner.id));
     }
 
     function zeigen() {
@@ -255,8 +278,17 @@
       if (!dauerhaftGeht) feld("mf-dauerhaft").checked = false;
       feld("mf-grund-bis").hidden = feld("mf-dauerhaft").checked;
       feld("mf-grund-hilfe").textContent = dauerhaftGeht ? "" : `Du verwaltest hier bis ${fmtTag(a.ende)} – länger vergibst du nichts.`;
-      feld("mf-pruefen-hilfe").textContent = `Spätestens ${fmtTag(frueher(stand.daten.grenzen.pruefen_max, a.ende))} – höchstens 24 Monate`
-        + (a.ende ? " und nicht länger als deine eigene Verwalterfreigabe." : ".");
+      // Prüfen dauerhaft: dazu ein Grundrecht – aus dieser Vorlage (bzw. „Einzeln“ mit Grundrecht) oder schon vorhanden.
+      // Der externe Prüfer braucht immer ein Enddatum.
+      const v = vorlage();
+      const pruefDauerGeht = dauerhaftGeht && w.pruefen && !!v && v.k !== "extern" && (!!w.grund || grundrechtDort(a));
+      feld("mf-pruefen-dauerhaft-wahl").hidden = !pruefDauerGeht;
+      if (!pruefDauerGeht) feld("mf-pruefen-dauerhaft").checked = false;
+      const pruefDauer = feld("mf-pruefen-dauerhaft").checked;
+      feld("mf-pruefen-bis").hidden = pruefDauer;
+      feld("mf-pruefen-hilfe").textContent = pruefDauer ? PRUEFEN_DAUERHAFT
+        : `Spätestens ${fmtTag(frueher(stand.daten.grenzen.pruefen_max, a.ende))} – höchstens 24 Monate`
+          + (a.ende ? " und nicht länger als deine eigene Verwalterfreigabe." : ".");
     }
 
     // Vorgaben je Anker: dauerhaft, wo man selbst dauerhaft verwaltet, sonst das eigene Ende; prüfen bis zum 31.12. des
@@ -267,6 +299,13 @@
       feld("mf-dauerhaft").checked = a.ende === null;
       feld("mf-grund-bis").value = a.ende === null ? "" : fmtTag(a.ende);
       ["mf-pruefen-bis", "mf-grund-bis"].forEach((id) => feld(id).classList.remove("ungueltig"));
+    }
+    // Vorlage gewechselt: „dauerhaft“ beim Prüfen vorwählen, wo die Vorlage es vorsieht (Prüfer, Materialwart und
+    // Prüfer); angeboten wird es nur, wo es geht (zeigen).
+    function vorlageGewechselt() {
+      const v = vorlage();
+      feld("mf-pruefen-dauerhaft").checked = !!(v && v.pruefDauer);
+      zeigen();
     }
 
     function personWaehlen(p) {
@@ -314,7 +353,9 @@
     });
     feld("mf-anker").addEventListener("change", () => { vorgabenSetzen(); zeigen(); });
     feld("mf-dauerhaft").addEventListener("change", () => { if (!feld("mf-dauerhaft").checked && !feld("mf-grund-bis").value) feld("mf-grund-bis").value = fmtTag(pruefenEnde()); zeigen(); });
-    $$('input[name="mf-vorlage"], #mf-grund, #mf-pruefen', body).forEach((x) => x.addEventListener("change", zeigen));
+    feld("mf-pruefen-dauerhaft").addEventListener("change", () => { if (!feld("mf-pruefen-dauerhaft").checked && !feld("mf-pruefen-bis").value) feld("mf-pruefen-bis").value = fmtTag(pruefenEnde()); zeigen(); });
+    $$('input[name="mf-vorlage"]', body).forEach((x) => x.addEventListener("change", vorlageGewechselt));
+    $$("#mf-grund, #mf-pruefen", body).forEach((x) => x.addEventListener("change", zeigen));
 
     feld("mf-erteilen").addEventListener("click", async (ev) => {
       const knopf = ev.currentTarget;
@@ -323,13 +364,19 @@
       if (!vorlage()) { toast("Bitte eine Vorlage wählen.", true); return; }
       const w = wunsch();
       if (!w.grund && !w.pruefen) { toast("Bitte ein Grundrecht, eine Prüffreigabe oder beides wählen.", true); return; }
-      const daten = { user_id: person.id, grundrecht: w.grund, grund_bis: null, pruefen_bis: null };
+      // pruefen: true mit pruefen_bis null heißt dauerhaft – ob das geht, entscheidet der Server (Grundrecht am Anker).
+      const daten = { user_id: person.id, grundrecht: w.grund, grund_bis: null, pruefen: w.pruefen, pruefen_bis: null };
       try {
         if (w.grund && !feld("mf-dauerhaft").checked) {
           daten.grund_bis = datumWert(feld("mf-grund-bis"), "Grundrecht bis");
           if (!daten.grund_bis) throw new Error("Bitte ein Enddatum für das Grundrecht angeben – oder „dauerhaft“.");
         }
-        if (w.pruefen) daten.pruefen_bis = datumWert(feld("mf-pruefen-bis"), "Prüfen bis");
+        if (w.pruefen && !feld("mf-pruefen-dauerhaft").checked) {
+          daten.pruefen_bis = datumWert(feld("mf-pruefen-bis"), "Prüfen bis");
+          if (!daten.pruefen_bis) {
+            throw new Error(`Bitte ein Enddatum für die Prüffreigabe angeben${feld("mf-pruefen-dauerhaft-wahl").hidden ? "" : " – oder „dauerhaft“"}.`);
+          }
+        }
       } catch (e) { toast(e.message, true); return; }
       const notiz = feld("mf-notiz").value.trim();
       if (notiz) daten.notiz = notiz;
@@ -351,9 +398,14 @@
       if (r) r.checked = true;
     }
     vorgabenSetzen();
-    zeigen();
+    vorlageGewechselt();
     return { zeigen };
   }
+
+  // An einem Grundrecht hängen dauerhafte Prüffreigaben derselben Person, die ohne es nicht wirken (traegt_pruefen).
+  const traegtText = (f) => (f.traegt_pruefen
+    ? `Daran hängt ${f.traegt_pruefen === 1 ? "eine dauerhafte Prüffreigabe" : `${f.traegt_pruefen} dauerhafte Prüffreigaben`} von ${f.konto.name} – ohne dieses Grundrecht wirkt sie nicht mehr.`
+    : "");
 
   /* --- Ändern, Entziehen, Verlängern ------------------------------------------------------------------------- */
   function aendernDialog(f, stand, nachher) {
@@ -361,7 +413,11 @@
     // Das eigene Ende am Anker – für Zeilen in Unterordnern das an diesem Ordner (dort gilt mindestens dasselbe).
     const ende = (anker || stand.daten.anker_wahl[0] || {}).ende;
     const grund = f.recht !== "pruefen";
-    const dauerhaftGeht = grund && (ende === null || ende === undefined) && (!f.eigen || f.bis === null);
+    // Dauerhaft nur, wer selbst dauerhaft verwaltet (die eigene Zeile nur, wenn sie es schon ist); eine Prüffreigabe
+    // dazu nur, wo die Person am Anker ein Grundrecht hat – eine schon dauerhafte lässt sich hier auf ein Datum setzen.
+    const dauerhaftGeht = (ende === null || ende === undefined) && (!f.eigen || f.bis === null)
+      && (grund || f.grundrecht_dort || f.bis === null);
+    const pruefHilfe = `Spätestens ${fmtTag(frueher(stand.daten.grenzen.pruefen_max, ende))} – höchstens 24 Monate.`;
     unterDialog(`<h2>Freigabe ändern</h2>
       <p>${personHtml(f.konto)} · ${esc(f.ordner.pfad)}</p>
       ${f.eigen ? '<p class="help">Deine eigene Freigabe kannst du nur verkürzen, herabsetzen oder entziehen.</p>' : ""}
@@ -369,8 +425,9 @@
       <select id="mfa-recht">${(grund ? ["lesen", "verwalten"] : ["pruefen"]).map((r) => `<option value="${r}"${r === f.recht ? " selected" : ""}>${RECHT[r]}</option>`).join("")}</select>
       <label for="mfa-bis">bis</label>
       ${dauerhaftGeht ? `<label class="inline"><input type="checkbox" id="mfa-dauerhaft"${f.bis === null ? " checked" : ""}> dauerhaft</label>` : ""}
-      ${datumFeld("mfa-bis", f.bis || (grund ? "" : stand.daten.grenzen.vorgabe_bis))}
-      ${grund ? "" : `<div class="help">Spätestens ${fmtTag(frueher(stand.daten.grenzen.pruefen_max, ende))}.</div>`}
+      ${datumFeld("mfa-bis", f.bis || (grund ? "" : stand.daten.grenzen.vorgabe_bis), "bis")}
+      ${grund ? (f.traegt_pruefen ? `<div class="help">${esc(traegtText(f))}</div>` : "") : `<div class="help" id="mfa-hilfe">${esc(pruefHilfe)}</div>`}
+      ${!grund && f.bis === null && f.grundrecht_dort === false ? `<p class="help">${esc(OHNE_GRUNDRECHT)}</p>` : ""}
       ${"notiz" in f ? `<label for="mfa-notiz">Notiz</label><input type="text" id="mfa-notiz" maxlength="200" value="${esc(f.notiz || "")}">
         <div class="help">Sehen nur Verwalter dieses Ordners und die Plattform-Verwaltung – die Person selbst nur, wenn sie hier
           mitverwaltet. Keine sensiblen Angaben.</div>` : ""}
@@ -378,7 +435,11 @@
         <button class="btn" type="button" id="mfa-ok">Speichern</button></div>`, (dlg, body) => {
       const bis = $("#mfa-bis", body);
       const dauer = $("#mfa-dauerhaft", body);
-      const zeigen = () => { bis.hidden = !!(dauer && dauer.checked); };
+      const hilfe = $("#mfa-hilfe", body);
+      const zeigen = () => {
+        bis.hidden = !!(dauer && dauer.checked);
+        if (hilfe) hilfe.textContent = dauer && dauer.checked ? PRUEFEN_DAUERHAFT : pruefHilfe;
+      };
       if (dauer) dauer.addEventListener("change", zeigen);
       zeigen();
       $("#mfa-ok", body).onclick = async (ev) => {
@@ -403,7 +464,7 @@
 
   async function entziehen(f, stand, nachher) {
     const text = `Freigabe „${RECHT[f.recht] || f.recht}“ von ${f.konto.name} an ${f.ordner.pfad} entziehen?`
-      + (f.eigen ? " Es ist deine eigene." : "");
+      + (f.eigen ? " Es ist deine eigene." : "") + (f.traegt_pruefen ? ` ${traegtText(f)}` : "");
     if (!(await confirm(text, "Entziehen"))) return;
     try {
       const r = await api(`${API}/freigaben/${f.id}`, { method: "DELETE" });
@@ -419,8 +480,9 @@
     const eigen = (d.anker_wahl.find((a) => a.id === d.ordner.id) || {}).ende;
     const vorgabe = frueher(frueher(d.grenzen.vorgabe_bis, d.grenzen.pruefen_max), eigen);
     unterDialog(`<h2>Alle Prüffreigaben verlängern</h2>
-      <p class="help">Verlängert jede Prüffreigabe an „${esc(d.ordner.pfad)}“ und darunter, die noch gilt oder seit höchstens 90 Tagen
-        abgelaufen ist – soweit du sie ändern darfst und das Konto qualifiziert ist. Kürzer wird keine.</p>
+      <p class="help">Verlängert jede befristete Prüffreigabe an „${esc(d.ordner.pfad)}“ und darunter, die noch gilt oder seit
+        höchstens 90 Tagen abgelaufen ist – soweit du sie ändern darfst und das Konto qualifiziert ist. Kürzer wird keine;
+        dauerhafte bleiben, wie sie sind.</p>
       <label for="mfv-bis">Neues Ende</label>${datumFeld("mfv-bis", vorgabe)}
       <div class="help">Spätestens ${fmtTag(frueher(d.grenzen.pruefen_max, eigen))}.</div>
       <div id="mfv-ergebnis"></div>
@@ -516,9 +578,11 @@
     el.innerHTML = `<details class="section mat-auf mf-meine"${wichtig.length ? " open" : ""}><summary>Meine Freigaben <span class="mf-zahl">${d.freigaben.length}</span></summary>
       <ul class="mf-meine-liste">${d.freigaben.map((f) => `<li class="${!f.gueltig ? "abgelaufen" : f.laeuft_ab_in_tagen !== null ? "bald" : ""}">
         <span class="mf-meine-ordner">${f.gueltig && f.wirkt ? `<a href="/material/ordner/${f.ordner.id}">${esc(f.ordner.pfad)}</a>` : esc(f.ordner.pfad)}</span>
-        <span class="mf-meine-recht">${esc(RECHT[f.recht] || f.recht)} · ${bisText(f.bis)}</span> ${zustand(f)}
+        <span class="mf-meine-recht">${esc(RECHT[f.recht] || f.recht)} · ${bisText(f.bis)}</span> ${zustand(f, d.qualifiziert)}
         ${!f.gueltig || f.laeuft_ab_in_tagen !== null ? `<div class="small muted">Verlängern kann: ${esc(wer(f))}.</div>` : ""}
-        ${f.gueltig && !f.wirkt && f.recht === "pruefen" ? `<div class="small muted">${esc(OHNE_QUALIFIKATION)}</div>` : ""}</li>`).join("")}</ul>
+        ${f.gueltig && !f.wirkt && f.recht === "pruefen" && !d.qualifiziert ? `<div class="small muted">${esc(OHNE_QUALIFIKATION)}</div>`
+          : f.gueltig && !f.wirkt && f.recht === "pruefen" && f.bis === null && f.grundrecht_dort === false
+            ? `<div class="small muted">${esc(`${OHNE_GRUNDRECHT} Vergeben kann es: ${wer(f)}.`)}</div>` : ""}</li>`).join("")}</ul>
     </details>`;
   }
 

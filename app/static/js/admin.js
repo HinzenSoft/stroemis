@@ -32,7 +32,7 @@
     { k: "karte", t: "Spots", hilfe: "Mitglied: eigene Alben anlegen und bearbeiten. Verwaltung: alle Alben." },
     { k: "wiki", t: "Wiki", hilfe: "Mitglied: eigene und freigegebene Seiten. Verwaltung: alle Seiten, beschränkte lesen, veröffentlichen, HTML-Bausteine, Ersteller ändern." },
     { k: "pruefungen", t: "Prüfungen", hilfe: "Mitglied: Prüfungen abnehmen (Prüfer). Verwaltung: zusätzlich Kataloge pflegen und jeden Lehrgang leiten." },
-    { k: "material", t: "Material", nurAnzeige: true, hilfe: "Rechte am Bestand vergibt der Verwalter eines Ordners unter Bestand → Ordner → Bearbeiten → Freigaben. Die Verwaltung sieht alles und legt Gliederungen an. Prüfer und Katalogpflege sind Häkchen; beide geben allein keinen Bestand zu sehen. Prüfen braucht zusätzlich eine befristete Prüffreigabe." },
+    { k: "material", t: "Material", nurAnzeige: true, hilfe: "Rechte am Bestand vergibt der Verwalter eines Ordners unter Bestand → Ordner → Bearbeiten → Freigaben. Die Verwaltung sieht alles und legt Gliederungen an. Prüfer und Katalogpflege sind Häkchen; beide geben allein keinen Bestand zu sehen. Prüfen braucht zusätzlich eine Prüffreigabe (befristet nur für externe Prüfer)." },
     { k: "verwaltung", t: "Verwaltung", nurVoll: true,
       hilfe: "Verwaltung: Nutzer, Rechte und Einstellungen – schließt alle Rechte in allen Modulen ein." },
   ];
@@ -220,8 +220,8 @@
         <p class="mat-urkunde" ${u.mat_pruefer ? "" : "hidden"}>${urkundeLesend(u)}</p>
         <div class="help">Das Häkchen macht das Konto zum Prüfer. Urkundennummer und Unterschrift trägt der Prüfer selbst in seinem Profil ein
           („Urkundennummer und Unterschrift“); beides steht später auf jedem Prüfprotokoll. Prüfen kann er erst mit Urkundennummer
-          und einer befristeten Prüffreigabe am Ordner – auch die Verwaltung prüft nur mit eigenem Häkchen, eigener Urkundennummer
-          und eigener Prüffreigabe.</div>
+          und einer Prüffreigabe am Ordner (befristet nur für externe Prüfer) – auch die Verwaltung prüft nur mit eigenem Häkchen,
+          eigener Urkundennummer und eigener Prüffreigabe.</div>
         <label class="inline"><input type="checkbox" id="u-mat-katalog" ${u.mat_katalog ? "checked" : ""}> Produktkatalogpfleger – Kategorien, Produkte, Herstellerdokumente und Prüfformulare (plattformweit)</label>
         <div class="help">Beide Häkchen geben Zugang zum Modul (Katalog, Profil), aber keinen Bestand – den zeigen erst Freigaben.
           Sie brauchen einen Namen: Prüfer und Katalogpfleger stehen namentlich in Journal und Protokollen.</div>
@@ -352,7 +352,11 @@
     if (!f.gueltig) return `<span class="muted">abgelaufen am ${tag(f.bis)}</span>`;
     if (!f.wirkt) {
       const quali = f.recht === "pruefen" && !f.konto.qualifiziert;
-      return `<span class="badge" title="${quali ? "Ohne Häkchen und Urkundennummer wirkt eine Prüffreigabe nicht." : "Das Konto ist deaktiviert oder hat keinen Namen."}">wirkt nicht${quali ? " – Qualifikation fehlt" : ""}</span>`;
+      // Eine dauerhafte Prüffreigabe wirkt nur zusammen mit lesen oder verwalten dort (nur externe Prüfer sind befristet).
+      const grund = !quali && f.recht === "pruefen" && f.bis === null && f.grundrecht_dort === false;
+      const titel = quali ? "Ohne Häkchen und Urkundennummer wirkt eine Prüffreigabe nicht."
+        : grund ? "Dauerhaft prüft nur, wer dort auch lesen oder verwalten hat." : "Das Konto ist deaktiviert oder hat keinen Namen.";
+      return `<span class="badge" title="${titel}">wirkt nicht${quali ? " – Qualifikation fehlt" : grund ? " – dauerhaft nur mit lesen oder verwalten" : ""}</span>`;
     }
     const t = f.laeuft_ab_in_tagen;
     if (t != null) return `<span class="badge">läuft ${t === 0 ? "heute" : t === 1 ? "morgen" : `in ${t} Tagen`} ab</span>`;
@@ -378,7 +382,9 @@
       : '<p class="help">Keine Freigaben – das Konto sieht keinen Bestand.</p>';
     el.querySelectorAll("[data-entziehen]").forEach((b) => b.addEventListener("click", async () => {
       const f = liste.find((x) => x.id === +b.dataset.entziehen);
-      if (!(await S.confirm(`Freigabe „${RECHT[f.recht] || f.recht}“ für ${f.ordner.pfad} entziehen?`, "Entziehen"))) return;
+      // An einem Grundrecht können dauerhafte Prüffreigaben hängen, die ohne es nicht mehr wirken – die Rückfrage sagt es.
+      const haengt = f.traegt_pruefen ? ` Daran hängt ${f.traegt_pruefen === 1 ? "eine dauerhafte Prüffreigabe" : `${f.traegt_pruefen} dauerhafte Prüffreigaben`} – ohne dieses Grundrecht wirkt sie nicht mehr.` : "";
+      if (!(await S.confirm(`Freigabe „${RECHT[f.recht] || f.recht}“ für ${f.ordner.pfad} entziehen?${haengt}`, "Entziehen"))) return;
       b.disabled = true;
       try {
         const r = await S.api(`/api/material/freigaben/${f.id}`, { method: "DELETE" });

@@ -24,8 +24,10 @@ def ordner_freigaben(fid):
 @api.post("/ordner/<int:fid>/freigaben")
 @requires_folder("verwalten", "fid")
 def freigabe_erteilen(fid):
-    """Felder: user_id, grundrecht („lesen“, „verwalten“ oder null), grund_bis, pruefen_bis (null: keine Prüffreigabe),
-    notiz. Antwort: die geschriebenen Zeilen und – solange man den Ordner noch verwaltet – die neue Liste."""
+    """Felder: user_id, grundrecht („lesen“, „verwalten“ oder null), grund_bis, pruefen (true: mit Prüffreigabe),
+    pruefen_bis (mit pruefen: null heißt dauerhaft – nur mit Grundrecht, sonst 400; ohne pruefen: null heißt keine
+    Prüffreigabe), notiz. Antwort: die geschriebenen Zeilen und – solange man den Ordner noch verwaltet – die neue
+    Liste."""
     ids = freigaben.erteilen(fid, json_body())
     liste = freigaben.liste(fid) if sicht().darf("verwalten", fid) else None
     return jsonify(freigaben=[freigaben.eintrag(gid) for gid in ids], liste=liste), 201
@@ -60,7 +62,8 @@ def _freigabe_recht(f):
 @api.put("/freigaben/<int:gid>")
 @_freigabe_recht
 def freigabe_aendern(gid):
-    """Felder (jedes optional): recht, bis (null = unbefristet, nur Grundrechte), notiz."""
+    """Felder (jedes optional): recht, bis (null = unbefristet; eine Prüffreigabe nur mit Grundrecht, sonst 400),
+    notiz."""
     freigaben.aendern(gid, json_body())
     return jsonify(freigabe=freigaben.eintrag(gid))
 

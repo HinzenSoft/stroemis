@@ -47,6 +47,8 @@
 .mf-enden .mat-datum { max-width: 11em; }
 .mf-enden .mat-datum[hidden] { display: none; }
 .mf-enden label.inline { margin: 0 0 4px; }
+/* „dauerhaft“ gibt es nicht immer (eigenes Ende, externer Prüfer) – hidden muss gegen label.inline (inline-flex) gewinnen. */
+.mf-enden label.inline[hidden] { display: none; }
 .mf-notiz { margin-top: 10px; }
 .mf-notiz > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
 .mf-erteilen-reihe { margin-top: 14px; }
