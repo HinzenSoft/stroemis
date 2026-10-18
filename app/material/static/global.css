@@ -1,27 +1,42 @@
 /* Globale Seriennummernsuche und QR-Steckbrief (Phase 2 · Lieferung 1, Paket C): Gestaltung von Angebot,
    Steckbrief-Karte und der Ansicht „fremd“ (global.js) sowie von Angebot und Ergebnis in den Vorschlägen unter dem
-   Suchfeld (suche.js). Wie breit eine Karte wird, entscheidet der Inhalt (Container „mat-seite“ aus material.css);
-   lange Nummern, Namen und Pfade brechen um – nichts rollt waagerecht. */
+   Suchfeld (suche.js). Fremdes ist auf einen Blick fremd (Entscheidung vom 18.10.2026): eine Trennlinie mit
+   „Aus anderen Gliederungen“, wo es beginnt, gestrichelt umrandete Karten und die Gliederung als blaue Marke ganz
+   oben – im Blau der Hinweise, eckig statt rund, damit sie nicht wie ein Status aussieht. Wie breit eine Karte wird,
+   entscheidet der Inhalt (Container „mat-seite“ aus material.css); lange Nummern, Namen und Pfade brechen um –
+   nichts rollt waagerecht. */
 
-/* Trefferseite: das Angebot unter der lokalen Liste, mit dem Rand der Hinweise im Modul */
+/* Trefferseite: das Angebot unter der eigenen Liste, mit dem Rand der Hinweise im Modul */
 .mg-angebot { margin: 18px 0; padding: 12px 14px; border: 1px solid var(--linie); border-left: 4px solid var(--grau);
   background: var(--weiss); }
 .mg-angebot > p:first-child { margin-top: 0; }
+.mg-angebot > .help { margin: 6px 0 0; }
 .mg-angebot .btn { white-space: normal; text-align: left; max-width: 100%; overflow-wrap: anywhere; }
-.mg-titel { margin: 16px 0 8px; font-size: 1.1rem; }
 .mg-nummer { overflow-wrap: anywhere; }
 /* Eine übliche Seriennummer (bis 30 Zeichen) bricht im Angebotstext nicht am Bindestrich um. */
 .mg-ganz { white-space: nowrap; }
 .mg-fremd { max-width: 760px; }
 
+/* Wo die fremden Treffer beginnen: Überschrift mit gestrichelter Linie bis zum Rand */
+.mg-fremde { margin: 26px 0 0; }
+.mg-trenner { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: var(--fs-marke);
+  font-weight: 700; line-height: 1.3; letter-spacing: .04em; text-transform: uppercase; color: var(--wasser); }
+.mg-trenner::after { content: ""; flex: 1 1 auto; min-width: 24px; border-top: 1px dashed var(--co-himmel-ka); }
+.mg-trenner:focus:not(:focus-visible) { outline: none; }
+
 /* Steckbrief-Karte: Produktbild links, daneben die Angaben – ohne Link, es gibt nichts weiter zu sehen */
 .mg-karten { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 10px; margin: 8px 0; }
-.mg-karte { display: flex; gap: 12px; align-items: flex-start; min-width: 0; padding: 12px; border: 1px solid var(--linie);
-  background: var(--weiss); }
+.mg-karte { display: flex; gap: 12px; align-items: flex-start; min-width: 0; padding: 12px;
+  border: 1px dashed var(--co-himmel-ka); background: var(--weiss); }
 .mg-bild { flex: 0 0 72px; width: 72px; height: 72px; object-fit: contain; background: var(--weiss); border: 1px solid var(--linie); }
 .mg-bild.leer { display: block; background: var(--grau-hell); }
 .mg-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .mg-text p { margin: 0 0 4px; }
+/* Die Gliederung ganz oben – eckige Marke, damit sie sich von Sperrwort und DEMO (rund bzw. gestreift) abhebt */
+.mg-text .mg-gl { margin-bottom: 6px; }
+.mg-gl-marke { display: inline-block; max-width: 100%; padding: 1px 8px; border: 1px solid var(--co-himmel-ka);
+  border-radius: var(--radius); background: var(--co-info-fl); color: var(--wasser); font-size: var(--fs-marke);
+  font-weight: 700; line-height: 1.5; }
 .mg-kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
 .mg-kopf .mat-demo { margin-left: 0; }
 .mg-inv { color: var(--rot); }
@@ -43,19 +58,21 @@
   .mg-angebot { padding: 10px 12px; }
 }
 
-/* In den Vorschlägen unter dem Suchfeld: das Angebot als Zeile (ein Knopf, groß genug für den Finger), das Ergebnis als
-   Steckbriefe ohne Rahmen – nicht anklickbar, mit der Tastatur trotzdem wählbar zum Vorlesen */
+/* In den Vorschlägen unter dem Suchfeld: das Angebot als Zeile (ein Knopf, groß genug für den Finger), danach die
+   Trennzeile und die Steckbriefe mit derselben Markierung wie auf der Trefferseite – nicht anklickbar, mit der
+   Tastatur trotzdem wählbar zum Vorlesen */
 .mat-vorschlaege .mv-global > button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;
   min-height: 56px; padding: 8px 12px; border: 0; background: none; font: inherit; color: var(--anthrazit);
   text-align: left; cursor: pointer; overflow-wrap: anywhere; }
 .mat-vorschlaege .mv-global strong { color: var(--rot); }
 .mat-vorschlaege .mv-global[aria-selected="true"] > button, .mat-vorschlaege .mv-global > button:hover { background: var(--grau-hell); }
 .mat-vorschlaege .mv-global .mv-zeile { white-space: normal; }
-.mat-vorschlaege .mv-global-kopf { padding: 8px 12px 4px; font-size: var(--fs-marke); font-weight: 700; color: var(--grau);
-  text-transform: uppercase; letter-spacing: .04em; }
-.mat-vorschlaege .mv-steckbrief { cursor: default; }
+.mat-vorschlaege li.mv-trenner { display: flex; align-items: center; gap: 8px; padding: 12px 12px 4px; border-top: 0;
+  font-size: var(--fs-marke); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--wasser); }
+.mat-vorschlaege .mv-trenner::after { content: ""; flex: 1 1 auto; min-width: 16px; border-top: 1px dashed var(--co-himmel-ka); }
+.mat-vorschlaege li.mv-steckbrief { padding: 4px 8px; border-top: 0; cursor: default; }
 .mat-vorschlaege .mv-steckbrief[aria-selected="true"] { background: var(--grau-hell); }
-.mat-vorschlaege .mv-steckbrief .mg-karte { gap: 10px; padding: 8px 12px; border: 0; background: none; }
+.mat-vorschlaege .mv-steckbrief .mg-karte { gap: 10px; padding: 8px 10px; }
 .mat-vorschlaege .mv-steckbrief .mg-bild { flex-basis: 52px; width: 52px; height: 52px; }
 .mat-vorschlaege .mv-steckbrief .mg-daten { grid-template-columns: max-content minmax(0, 1fr); gap: 0 8px; }
 .mat-vorschlaege .mv-steckbrief .mg-daten dd { margin: 0; }

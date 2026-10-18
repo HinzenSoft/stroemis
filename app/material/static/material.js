@@ -2790,6 +2790,7 @@
   async function suche() {
     let seite = 1;
     let sort = { feld: null, richtung: "auf" };
+    let fremde = null;            // Ergebnis der globalen Suche zu q – Blättern und Sortieren suchen nicht noch einmal
     async function zeichnen() {
       const q = DATEN.q || "";
       if (!q) { inhalt.innerHTML = `<h1>Suche</h1>${leer("Serien-, Inventar- oder Herstellernummer oben eingeben – auch Teile davon.")}`; return; }
@@ -2798,12 +2799,12 @@
       inhalt.innerHTML = `<div class="page-head"><h1>Suche „${esc(q)}“</h1></div>
         ${d.treffer.length ? artikelTabelle(d.treffer, { pfad: true, sort }) : leer("Kein Artikel in deinem Bereich gefunden.")}${seitenleiste(d.gesamt, seite, 50)}
         ${d.global_angebot ? '<div id="mat-global-angebot"></div>' : ""}`;
-      // Hat kein Artikel im eigenen Bereich genau diese Seriennummer: das Angebot, in allen Gliederungen zu suchen
-      // (global.js – mit Rückfrage, gebremst und protokolliert).
+      // Unter der eigenen Liste das Angebot, auch in anderen Gliederungen zu suchen (global.js – mit Rückfrage, gebremst
+      // und protokolliert); nach der Suche stehen dort deren Treffer, deutlich abgesetzt.
       if (d.global_angebot) {
         const g = await baustein("MatGlobal");
         const el = $("#mat-global-angebot");
-        if (g && el) g.anbieten(el, q);
+        if (g && el) g.anbieten(el, q, { exakt: d.exakt_lokal, ergebnis: fremde, gefunden: (x) => { fremde = x; } });
       }
     }
     aktionen = {

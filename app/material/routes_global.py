@@ -1,7 +1,8 @@
 """Routen der globalen Seriennummernsuche und des QR-Steckbriefs (Phase 2 · Lieferung 1, Abschnitt 3).
 
 Suchen und den Steckbrief öffnen darf jeder mit Modulzugang – auch wer (noch) keinen Bestand sieht, etwa ein
-Katalogpfleger. Beides läuft nur nach Bestätigung, durch die gemeinsame Bremse und ins Protokoll; das Protokoll liest
+Katalogpfleger. Die Suche findet nur Artikel, die das Konto nicht sieht; die Plattform-Verwaltung sieht alles und
+bekommt 409. Beides läuft nur nach Bestätigung, durch die gemeinsame Bremse und ins Protokoll; das Protokoll liest
 nur die Plattform-Verwaltung (Abschnitt in der Nutzerverwaltung). Die Seite nach einem QR-Scan an einem fremden
 Artikel (/m/<token>, Ansicht „fremd“) steht in routes.py. Die Fachregeln stehen in services/globalsuche.py, Bremse
 und Protokoll in services/globalprotokoll.py."""
@@ -18,7 +19,8 @@ NUR_VERWALTUNG = "Das Protokoll der globalen Suchen sieht nur die Plattform-Verw
 @api.post("/globalsuche")
 @requires_zugang
 def globalsuche_starten():
-    """{"q": Seriennummer, "bestaetigt": true} → {"treffer": [Steckbrief …], "mehr", "hinweis"}."""
+    """{"q": Seriennummer, "bestaetigt": true} → {"treffer": [Steckbrief …], "mehr", "hinweis"} – nur Artikel, die das
+    Konto nicht sieht."""
     return jsonify(globalsuche.suchen(json_body(), current_user()["id"]))
 
 

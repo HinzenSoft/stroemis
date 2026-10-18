@@ -280,8 +280,10 @@ def meldungen_seite():
 
 @seiten.get("/material/suche")
 def suche_seite():
-    """Ein eindeutiger Treffer öffnet den Artikel direkt; sonst zeigt die Seite die Trefferliste. Gezählt wird nur, was
-    das Konto sieht (search.artikel filtert selbst) – die Weiterleitung führt nie zu Fremdem."""
+    """Ein eindeutiger Treffer öffnet den Artikel direkt; sonst zeigt die Seite die Trefferliste und darunter das
+    Angebot der globalen Suche. Gezählt wird nur, was das Konto sieht (search.artikel filtert selbst) – die
+    Weiterleitung führt nie zu Fremdem. Wer nach einem eindeutigen eigenen Treffer auch in anderen Gliederungen suchen
+    will, findet das Angebot in den Vorschlägen unter dem Suchfeld (suche.js)."""
     q = (request.args.get("q") or "").strip()
     if current_user() and zugang() and q:
         try:
@@ -354,7 +356,9 @@ def start():
 @requires_zugang
 def suche():
     """Lokale Suche über das, was das Konto sieht (Treffer, gesamt, eindeutig). exakt_lokal: ein sichtbarer Artikel hat
-    genau diese Seriennummer; global_angebot: die Oberfläche bietet die globale Suche an (globalsuche.angebot)."""
+    genau diese Seriennummer (die Oberfläche sagt dann, dass die globale Suche nur die anderen zeigt); global_angebot:
+    die Oberfläche bietet unter den eigenen Treffern die globale Suche an (globalsuche.angebot – zu jeder tauglichen
+    Anfrage, nicht der Plattform-Verwaltung)."""
     q = request.args.get("q", "")
     seite, pro_seite = _seite_args()
     rows, gesamt = search.artikel(q, seite, pro_seite, *_sortier_args())
@@ -365,7 +369,7 @@ def suche():
         treffer.append(k)
     exakt = search.exakt_lokal(q)
     return jsonify(treffer=treffer, gesamt=gesamt, eindeutig=treffer[0]["id"] if gesamt == 1 and treffer else None,
-                   exakt_lokal=exakt, global_angebot=globalsuche.angebot(q, gesamt, exakt))
+                   exakt_lokal=exakt, global_angebot=globalsuche.angebot(q))
 
 
 def _zugeordnet_arg():

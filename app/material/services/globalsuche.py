@@ -1,12 +1,15 @@
 """Globale Seriennummernsuche und QR-Steckbrief fremder Artikel (Phase 2 · L1, Abschnitt 3).
 
-Gesucht wird nur nach der exakten Herstellerseriennummer, angeboten wird die Suche erst, wenn im eigenen Bereich kein
-Artikel genau diese Nummer hat; sie läuft nach Bestätigung, durch die Bremse und ins Protokoll (globalprotokoll). Ein
-Treffer zeigt nur Stammdaten und Zugehörigkeit – genau die Schlüssel in FELDER.
+Gesucht wird nur nach der exakten Herstellerseriennummer. Angeboten wird die Suche zu jeder Anfrage, die dafür taugt
+(suchbar) – auch neben eigenen Treffern, auch wenn ein eigener Artikel genau diese Nummer hat; nur wer ohnehin alles
+sieht (Plattform-Verwaltung), bekommt sie nicht. Sie läuft nach Bestätigung, durch die Bremse und ins Protokoll
+(globalprotokoll) und findet nur Artikel, die das Konto nicht sieht – die eigenen zeigt die lokale Suche darüber. Ein
+Treffer zeigt nur Stammdaten, Zugehörigkeit und ein Sperrwort – genau die Schlüssel in FELDER (Entscheidungen des
+Betreibers vom 18.10.2026: Sperrwort ja, Angebot immer, fremde Treffer unter den eigenen).
 
-Oben stehen die Schalter, die Felder, die Normalform und das Angebot (gemeinsamer Unterbau, auch für die lokale Suche),
-darunter die Suche selbst (POST /api/material/globalsuche) und der Steckbrief nach einem QR-Scan
-(POST /api/material/globalsuche/qr); die Routen stehen in routes_global.py."""
+Oben stehen die Felder, die Normalform und das Angebot (gemeinsamer Unterbau, auch für die lokale Suche), darunter die
+Suche selbst (POST /api/material/globalsuche) und der Steckbrief nach einem QR-Scan (POST /api/material/globalsuche/qr);
+die Routen stehen in routes_global.py."""
 import re
 
 from ... import db
@@ -14,15 +17,10 @@ from ..models import MATERIALARTEN
 from . import Abgelehnt, bestand, globalprotokoll, katalog, rechte
 from .nummern import INVENTAR_VORSATZ, sieht_generiert_aus
 
-# FRAGE 2 – wann die globale Suche angeboten wird: „ohne_exakten_treffer“ (gebaut) – kein sichtbarer Artikel hat genau
-# diese Seriennummer, Teiltreffer dürfen da sein; „ohne_treffer“ – wörtlich nach Vorgabe: die lokale Suche fand nichts.
-ANGEBOT = "ohne_exakten_treffer"
-ANGEBOTE = ("ohne_exakten_treffer", "ohne_treffer")
-# FRAGE 1 – Sperrzustand im Steckbrief („sperre“: ausgesondert, gesperrt, verloren gemeldet). Gebaut wird ohne.
-STECKBRIEF_MIT_SPERRE = False
-# Genau diese Schlüssel hat jeder Treffer (der Test prüft Gleichheit) – keine Kennungen, kein Status, keine Prüfungen.
+# Genau diese Schlüssel hat jeder Treffer (der Test prüft Gleichheit) – keine Kennungen, kein Prüfstatus, keine
+# Prüfungen. „sperre“ ist genau ein Wort aus SPERRE oder null (frei).
 FELDER = frozenset({"inventory_no", "serial_no", "hersteller", "modell", "artikelnummer", "norm", "materialart",
-                    "kategorie", "vorschau", "hergestellt", "lebensende", "gliederung", "ordner", "demo"})
+                    "kategorie", "vorschau", "hergestellt", "lebensende", "gliederung", "ordner", "sperre", "demo"})
 MIN_ZEICHEN, MAX_ZEICHEN = 4, 80
 
 
@@ -39,14 +37,17 @@ def suchbar(q):
             and not n.upper().startswith(INVENTAR_VORSATZ))
 
 
-def angebot(q, lokale_treffer, exakt_lokal):
-    """Soll die Trefferseite (und suche.js) die globale Suche anbieten? lokale_treffer: Zahl der sichtbaren Treffer der
-    lokalen Suche; exakt_lokal: ein sichtbarer Artikel hat genau diese Seriennummer."""
-    if not suchbar(q) or exakt_lokal:
-        return False
-    if ANGEBOT == "ohne_treffer":
-        return not lokale_treffer
-    return True
+def sieht_alles():
+    """Sieht das Konto jeden Artikel (Plattform-Verwaltung)? Dann gibt es nichts Fremdes – die lokale Suche findet
+    alles. Dieselbe Bedingung wie in der Abfrage der Suche (artikel_filter „1“)."""
+    return rechte.artikel_filter("i") == "1"
+
+
+def angebot(q):
+    """Soll die Trefferseite (und suche.js) die globale Suche anbieten? Zu jeder Anfrage, die dafür taugt – unabhängig
+    von den lokalen Treffern, auch wenn ein eigener Artikel genau diese Seriennummer hat (gesucht wird dann nur bei
+    den anderen). Nicht, wer alles sieht."""
+    return suchbar(q) and not sieht_alles()
 
 
 # --- Suche und Steckbrief -----------------------------------------------------------------------------------------
@@ -58,10 +59,11 @@ BESTAETIGEN_QR = "Bitte den Steckbrief bestätigen."
 ZU_KURZ = (f"Mindestens {MIN_ZEICHEN} und höchstens {MAX_ZEICHEN} Zeichen – global wird nur nach der ganzen Seriennummer "
            "gesucht.")
 NUR_HERSTELLER = "Global wird nur nach Herstellerseriennummern gesucht."
-IM_BEREICH = "In deinem Bereich gibt es diesen Artikel – nutze die normale Suche."
+# Die Plattform-Verwaltung sieht jeden Artikel – für sie gäbe es nichts Fremdes zu finden.
+SIEHT_ALLES = "Du siehst den Bestand aller Gliederungen – die normale Suche findet jeden Artikel."
 # Was unter einem persönlichen Ordner liegt, heißt im Steckbrief nur so – wem er gehört, geht Fremde nichts an.
 PERSOENLICH = "persönlicher Ordner"
-# Nur mit STECKBRIEF_MIT_SPERRE: genau ein Wort, kein Grund, kein Datum.
+# Der Sperrzustand als genau ein Wort – kein Grund, kein Datum, keine Sperre wegen eines Rückrufs; frei ist null.
 SPERRE = {"gesperrt": "gesperrt", "ausgesondert": "ausgesondert", "verloren": "verloren gemeldet"}
 
 # Was ein Steckbrief braucht – Artikel mit Heimat (lock_state, folder_id, origin_folder_id) und Produkt; nichts sonst.
@@ -87,14 +89,6 @@ def anfrage(q):
     return n
 
 
-def exakt_sichtbar(q):
-    """Hat ein Artikel im eigenen Bereich genau diese Seriennummer (ohne Rücksicht auf Groß/klein)? Dann gibt es nichts
-    global zu suchen."""
-    n = normalform(q)
-    return bool(n) and bool(db.query(f"SELECT 1 FROM mat_item i WHERE i.serial_no = ? COLLATE NOCASE "
-                                     f"AND {rechte.artikel_filter('i')} LIMIT 1", (n,), one=True))
-
-
 def zugehoerigkeit(fid):
     """(Gliederung, Ordner) zum Ordner fid – der Name der nächsten Gliederung und der Pfad darunter. Systemordner fallen
     weg (ein Ausgesonderter ohne Herkunft gehört nur zur Gliederung: Ordner leer), ab einem persönlichen Ordner steht nur
@@ -113,8 +107,8 @@ def zugehoerigkeit(fid):
 
 
 def steckbrief(i, kategorien=None):
-    """Ein Treffer: genau die Schlüssel aus FELDER (mit STECKBRIEF_MIT_SPERRE dazu „sperre“). Die Zugehörigkeit kommt
-    aus der Heimat – Gesperrte und Ausgesonderte stehen unter ihrem Herkunftsordner, der Pfad verrät keine Sperre.
+    """Ein Treffer: genau die Schlüssel aus FELDER. Die Zugehörigkeit kommt aus der Heimat – Gesperrte und
+    Ausgesonderte stehen unter ihrem Herkunftsordner; den Sperrzustand sagt nur das eine Wort in „sperre“.
     kategorien: Zwischenspeicher Kategorie → Pfadtext für mehrere Treffer."""
     kategorien = {} if kategorien is None else kategorien
     if i["category_id"] not in kategorien:
@@ -127,23 +121,26 @@ def steckbrief(i, kategorien=None):
            "hergestellt": i["manufactured_on"] or None,
            # Das Lebensende folgt aus Herstelldatum und Katalog – nur bei textilem Material.
            "lebensende": (i["retire_by"] or None) if i["material_kind"] == "textil" else None,
-           "gliederung": gliederung, "ordner": ordner, "demo": bool(i["demo"])}
-    if STECKBRIEF_MIT_SPERRE:
-        out["sperre"] = SPERRE.get(i["lock_state"])
+           "gliederung": gliederung, "ordner": ordner, "sperre": SPERRE.get(i["lock_state"]),
+           "demo": bool(i["demo"])}
     return out
 
 
 def suchen(d, uid):
-    """Die globale Suche nach einer Herstellerseriennummer: bestätigt, 4 bis 80 Zeichen, keine vergebene Nummer, im
-    eigenen Bereich nicht vorhanden (409), dann durch die Bremse (429). Exakt (ohne Groß/klein), höchstens TREFFER_MAX
-    Treffer – „mehr“ sagt, ob es weitere gibt. Jede Suche steht im Protokoll, auch eine ohne Treffer."""
+    """Die globale Suche nach einer Herstellerseriennummer: bestätigt, 4 bis 80 Zeichen, keine vergebene Nummer, nicht
+    für den, der alles sieht (409), dann durch die Bremse (429). Exakt (ohne Groß/klein) und nur unter den Artikeln,
+    die das Konto nicht sieht – die eigenen zeigt die lokale Suche; die Bedingung steht in der Abfrage, damit LIMIT
+    und „mehr“ nur Fremde zählen. Höchstens TREFFER_MAX Treffer – „mehr“ sagt, ob es weitere gibt. Jede Suche steht
+    im Protokoll, mit genau den gezeigten Treffern, auch eine ohne Treffer."""
     _bestaetigt(d, BESTAETIGEN)
     n = anfrage(d.get("q"))
-    if exakt_sichtbar(n):
-        raise Abgelehnt(IM_BEREICH, 409)
+    if sieht_alles():
+        raise Abgelehnt(SIEHT_ALLES, 409)
     globalprotokoll.bremse(uid)
+    # Nicht sichtbar heißt: der Filter ist nicht wahr. COALESCE, weil er bei fehlender Herkunft NULL ergibt (NULL IN …)
+    # – ohne fiele ein Ausgesonderter ohne Herkunft aus beiden Mengen und wäre nirgends zu finden.
     rows = db.query(_STECKBRIEF_SQL + "WHERE i.serial_generated = 0 AND i.serial_no = ? COLLATE NOCASE "
-                    "ORDER BY i.id LIMIT ?", (n, TREFFER_MAX + 1))
+                    f"AND NOT COALESCE(({rechte.artikel_filter('i')}), 0) ORDER BY i.id LIMIT ?", (n, TREFFER_MAX + 1))
     treffer = rows[:TREFFER_MAX]
     globalprotokoll.eintragen("suche", n, [r["id"] for r in treffer])
     kategorien = {}

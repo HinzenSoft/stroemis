@@ -8,10 +8,13 @@
    Mit Maus oder Finger öffnet ein Tipp den Artikel; „Alle Treffer“ führt zur Trefferseite. Ohne JavaScript bleibt das
    Feld ein gewöhnliches Suchformular.
 
-   Phase 2: Hat kein Artikel im eigenen Bereich genau diese Seriennummer (global_angebot der Suche), steht darunter –
-   oder statt „Kein Artikel …“ – das Angebot, in allen Gliederungen zu suchen. Enter oder Tipp darauf fragt nach
-   (MatGlobal.bestaetigen, global.js); die Steckbriefe erscheinen in derselben Liste, ohne Link (aria-disabled). Eine
-   globale Antwort kommt nie in den Zwischenspeicher: Sie gilt nur, solange die Anfrage unverändert im Feld steht. */
+   Phase 2 (Entscheidung vom 18.10.2026): Taugt die Anfrage für die globale Suche (global_angebot der Suche – nicht für
+   die Plattform-Verwaltung, die ohnehin alles sieht), steht unter den eigenen Vorschlägen und „Alle Treffer“ – auch
+   neben einem eigenen Artikel mit genau dieser Nummer – das Angebot, in anderen Gliederungen zu suchen. Enter oder
+   Tipp darauf fragt nach (MatGlobal.bestaetigen, global.js). Danach bleiben die eigenen Vorschläge stehen; statt des
+   Angebots folgen die Trennzeile „Aus anderen Gliederungen“ und deren Steckbriefe – gestrichelt umrandet, die
+   Gliederung oben, ohne Link (aria-disabled, mit den Pfeiltasten trotzdem wählbar zum Vorlesen). Eine globale Antwort
+   kommt nie in den Zwischenspeicher: Sie gilt nur, solange die Anfrage unverändert im Feld steht. */
 (function () {
   "use strict";
   const form = document.querySelector("form.mat-suche");
@@ -40,7 +43,7 @@
   let warten = 0;
   let aktiv = -1;
   let optionen = [];
-  let global = null;                   // { q, html } – das globale Ergebnis zu q, bis weitergetippt wird
+  let global = null;                   // { q, html } – der fremde Teil zu q (Ergebnis oder Meldung), bis weitergetippt wird
 
   // Der getippte Teil in einer Nummer hervorgehoben – ohne Rücksicht auf Groß/klein, nur an der ersten Stelle.
   function markiert(wert, q) {
@@ -66,25 +69,27 @@
         </span></a></li>`;
   }
 
-  // Das Angebot der globalen Suche als eigene Zeile – ein Knopf statt eines Links: Er führt nirgendwohin, er fragt nach.
-  // Eine übliche Seriennummer bricht nicht am Bindestrich um (mg-ganz, global.css), eine sehr lange schon.
-  function angebotZeile(q, i) {
+  // Das Angebot der globalen Suche als eigene Zeile unter den eigenen Vorschlägen – ein Knopf statt eines Links: Er
+  // führt nirgendwohin, er fragt nach. Eine übliche Seriennummer bricht nicht am Bindestrich um (mg-ganz, global.css),
+  // eine sehr lange schon. exakt: ein eigener Artikel hat genau diese Nummer.
+  function angebotZeile(q, i, exakt) {
     return `<li role="option" id="mv-${i}" aria-selected="false" class="mv-global" data-global="1">
-      <button type="button" tabindex="-1"><strong>In allen Gliederungen nach der Seriennummer „<span${q.length <= 30 ? ' class="mg-ganz"' : ""}>${esc(q)}</span>“ suchen</strong>
-        <span class="mv-zeile">Kein Artikel in deinem Bereich hat genau diese Nummer – die Suche wird protokolliert.</span></button></li>`;
+      <button type="button" tabindex="-1"><strong>In anderen Gliederungen nach der Seriennummer „<span${q.length <= 30 ? ' class="mg-ganz"' : ""}>${esc(q)}</span>“ suchen</strong>
+        <span class="mv-zeile">${exakt ? "Zeigt nur Artikel anderer Gliederungen" : "Nur Stammdaten und Zugehörigkeit"} – die Suche wird protokolliert.</span></button></li>`;
   }
 
+  // Erst die eigenen Vorschläge und „Alle Treffer“, darunter das Angebot – oder nach der Suche die fremden Treffer.
   function zeigen(d, q) {
     const treffer = (d.treffer || []).slice(0, ANZAHL);
-    const angebot = Boolean(d.global_angebot && window.MatGlobal);
     let html = treffer.map((a, i) => karte(a, q, i)).join("");
     if (treffer.length) {
       html += `<li role="option" id="mv-${treffer.length}" aria-selected="false" class="mv-alle" data-alle="1">
       <a href="/material/suche?q=${encodeURIComponent(q)}" tabindex="-1">${d.gesamt > treffer.length ? `Alle ${d.gesamt} Treffer anzeigen` : "Als Trefferliste anzeigen"}</a></li>`;
-    } else if (!angebot) {
-      html = `<li class="mv-leer" role="presentation">Kein Artikel mit „${esc(q)}“ in Serien-, Inventar- oder Herstellernummer.</li>`;
+    } else {
+      html = `<li class="mv-leer" role="presentation">Kein Artikel in deinem Bereich mit „${esc(q)}“ in Serien-, Inventar- oder Herstellernummer.</li>`;
     }
-    if (angebot) html += angebotZeile(q, treffer.length ? treffer.length + 1 : 0);
+    if (global && global.q === q) html += global.html;
+    else if (d.global_angebot && window.MatGlobal) html += angebotZeile(q, treffer.length ? treffer.length + 1 : 0, d.exakt_lokal);
     listeZeigen(html);
   }
 
@@ -135,14 +140,24 @@
   /* --- Globale Suche (global.js) --- */
   const meldungZeile = (text) => `<li class="mv-leer" role="presentation">${esc(text)}</li>`;
 
-  // Steckbriefe ohne Link: wählbar zum Vorlesen, aber nicht zu öffnen (aria-disabled); darunter der Hinweis.
+  // Der fremde Teil unter den eigenen Vorschlägen: die Trennzeile, dann Steckbriefe ohne Link – wählbar zum Vorlesen,
+  // aber nicht zu öffnen (aria-disabled); darunter der Hinweis.
+  const TRENNER = '<li class="mv-trenner" role="presentation">Aus anderen Gliederungen</li>';
   function globalHtml(d, q) {
-    const kopf = '<li class="mv-global-kopf" role="presentation">In allen Gliederungen</li>';
-    if (!d.treffer.length) return kopf + meldungZeile(`Auch in den anderen Gliederungen hat kein Artikel die Seriennummer „${q}“.`);
-    return kopf + d.treffer.map((t, i) => `<li role="option" id="mv-g${i}" aria-selected="false" aria-disabled="true"
+    if (!d.treffer.length) return TRENNER + meldungZeile(`In anderen Gliederungen hat kein Artikel die Seriennummer „${q}“.`);
+    return TRENNER + d.treffer.map((t, i) => `<li role="option" id="mv-g${i}" aria-selected="false" aria-disabled="true"
         class="mv-steckbrief">${window.MatGlobal.karte(t)}</li>`).join("")
       + (d.mehr ? meldungZeile(`Weitere Artikel haben diese Seriennummer – gezeigt werden die ersten ${d.treffer.length}.`) : "")
       + meldungZeile(d.hinweis || "");
+  }
+
+  // Die Liste zu q neu: die eigenen Vorschläge aus dem Zwischenspeicher, darunter der fremde Teil – und so weit
+  // gerollt, dass er oben beginnt (die eigenen stehen darüber).
+  function mitFremden(q) {
+    if (zwischen.has(q)) zeigen(zwischen.get(q), q);
+    else listeZeigen(global.html);
+    const t = liste.querySelector(".mv-trenner");
+    if (t) liste.scrollTop += t.getBoundingClientRect().top - liste.getBoundingClientRect().top;
   }
 
   async function globalSuchen(q) {
@@ -151,23 +166,23 @@
     const ja = await G.bestaetigen(q);
     feld.focus({ preventScroll: true });
     if (!ja || feld.value.trim() !== q) return;
-    global = { q, html: meldungZeile("Suche in allen Gliederungen …") };
-    listeZeigen(global.html);
+    global = { q, html: TRENNER + meldungZeile("Suche in anderen Gliederungen …") };
+    mitFremden(q);
     let html;
     try {
       html = globalHtml(await G.suchen(q), q);
     } catch (e) {
-      html = meldungZeile(e.message);         // zu viele Suchen, keine Verbindung … – bis weitergetippt wird
+      html = TRENNER + meldungZeile(e.message);   // zu viele Suchen, keine Verbindung … – bis weitergetippt wird
     }
     if (!global || global.q !== q) return;    // inzwischen weitergetippt: gilt nicht mehr
     global.html = html;
-    if (feld.value.trim() === q) listeZeigen(html);
+    if (feld.value.trim() === q) mitFremden(q);
   }
 
   async function laden() {
     const q = feld.value.trim();
     if (q.length < MIN) { schliessen(); return; }
-    if (global && global.q === q) { listeZeigen(global.html); return; }
+    if (global && global.q === q && !zwischen.has(q)) { listeZeigen(global.html); return; }
     if (zwischen.has(q)) { zeigen(zwischen.get(q), q); return; }
     if (laufend) laufend.abort();
     laufend = new AbortController();
@@ -177,7 +192,7 @@
       if (!r.ok) { schliessen(); return; }                // ohne Leserecht o. Ä.: einfach keine Vorschläge
       const d = await r.json();
       zwischen.set(q, d);
-      if (feld.value.trim() === q && document.activeElement === feld && !(global && global.q === q)) zeigen(d, q);
+      if (feld.value.trim() === q && document.activeElement === feld) zeigen(d, q);   // zeigen hängt den fremden Teil an
     } catch (e) {
       if (e.name !== "AbortError") schliessen();
     }

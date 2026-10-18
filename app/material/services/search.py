@@ -178,7 +178,8 @@ def artikel(q, seite=1, pro_seite=25, sort=None, richtung="auf"):
 
 def exakt_lokal(q):
     """Hat ein Artikel, den das Konto sieht, genau diese Seriennummer (ohne Groß- und Kleinschreibung, Leerraum
-    zusammengezogen wie in der globalen Suche)? Dann gibt es nichts global zu suchen (globalsuche.angebot)."""
+    zusammengezogen wie in der globalen Suche)? Die Oberfläche sagt dann beim Angebot der globalen Suche, dass diese
+    nur Artikel anderer Gliederungen zeigt."""
     from .globalsuche import normalform
     n = normalform(q)
     if not n:

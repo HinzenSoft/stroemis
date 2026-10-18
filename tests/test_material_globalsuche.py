@@ -1,13 +1,15 @@
 """Globale Seriennummernsuche und QR-Steckbrief (Phase 2 · Lieferung 1, Abschnitt 3):
 python tests/test_material_globalsuche.py  oder  pytest tests/test_material_globalsuche.py
 
-Die Tests aus dem Bauentwurf 8.3 für Paket C: Eingaben (Bestätigung, Länge, vergebene Nummern, Treffer im eigenen
-Bereich), genau die Felder des Steckbriefs (keine Kennung, Pfad der Heimat ohne Systemordner, persönlicher Ordner
-verdeckt), höchstens 10 Treffer mit „mehr“, die gemeinsame Bremse von Suche, QR-Steckbrief und Dublette, das Protokoll
-mit seiner Frist (beim Schreiben, beim Neustart, beim Lesen) nur für die Verwaltung, der QR-Steckbrief erst nach
-Bestätigung und die beiden Schalter (STECKBRIEF_MIT_SPERRE, ANGEBOT), dazu mit Paket A1R das Angebot in GET /suche,
-die Seite /m/<token> eines fremden Artikels und die fremde Dublette beim Anlegen. Alle Namen, Hersteller und Nummern
-hier sind erfunden und nur für den Test da."""
+Die Tests aus dem Bauentwurf 8.3 für Paket C: Eingaben (Bestätigung, Länge, vergebene Nummern, die Verwaltung),
+genau die Felder des Steckbriefs (keine Kennung, Pfad der Heimat ohne Systemordner, persönlicher Ordner verdeckt),
+höchstens 10 Treffer mit „mehr“, die gemeinsame Bremse von Suche, QR-Steckbrief und Dublette, das Protokoll mit seiner
+Frist (beim Schreiben, beim Neustart, beim Lesen) nur für die Verwaltung, der QR-Steckbrief erst nach Bestätigung, dazu
+mit Paket A1R das Angebot in GET /suche, die Seite /m/<token> eines fremden Artikels und die fremde Dublette beim
+Anlegen. Seit den Entscheidungen vom 18.10.2026 außerdem: das Sperrwort im Steckbrief (test_sperrwort), das Angebot zu
+jeder tauglichen Anfrage außer für die Verwaltung (test_angebot) und nur fremde Treffer, auch bei derselben
+Seriennummer im eigenen Bereich (test_nur_fremde). Alle Namen, Hersteller und Nummern hier sind erfunden und nur für
+den Test da."""
 import json
 import os
 import re
@@ -17,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import H, jpeg, make_app, neuer_artikel, neues_konto  # noqa: E402
+from test_material import H, freigeben, jpeg, make_app, neuer_artikel, neues_konto  # noqa: E402
 from test_material_trennung import sql, zeilen, zwei_gliederungen  # noqa: E402
 from test_material_ueberblick import ordner_neu  # noqa: E402
 
@@ -106,8 +108,10 @@ def nichts_geheimes(t, r, *weitere):
 # --- Eingaben ---------------------------------------------------------------------------------------------------
 
 def test_eingaben():
-    """Ohne Bestätigung, zu kurz oder zu lang, vergebene Nummern: 400. Ein Treffer im eigenen Bereich: 409. Nichts
-    davon zählt in der Bremse oder steht im Protokoll; ohne Anmeldung 401, ohne Modulzugang 403."""
+    """Ohne Bestätigung, zu kurz oder zu lang, vergebene Nummern: 400. Die Plattform-Verwaltung sieht alles: 409. Nichts
+    davon zählt in der Bremse oder steht im Protokoll. Eine Seriennummer aus dem eigenen Bereich hält die Suche nicht
+    mehr auf (Entscheidung vom 18.10.2026) – sie läuft, zählt und findet nur Fremdes. Ohne Anmeldung 401, ohne
+    Modulzugang 403."""
     from app.material.services import globalsuche
     with tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
@@ -123,11 +127,24 @@ def test_eingaben():
         for q in ("M-000001", "m-000001", "M-TEST1", "STR-000001", "str-12345", " STR-000001 "):
             r = global_suchen(w, q)
             assert r.status_code == 400 and r.json["error"] == globalsuche.NUR_HERSTELLER, (q, r.get_json())
-        # Im eigenen Bereich – auch klein geschrieben und mit Leerraum: die normale Suche genügt.
+        assert versuche(t.app, uid) == 1 and len(protokoll(t.app)) == 1           # nur die Suche mit 80 Zeichen
+        # Im eigenen Bereich – auch klein geschrieben und mit Leerraum: Die Suche läuft und zeigt nur Fremdes (hier
+        # nichts); sie zählt in der Bremse und steht im Protokoll.
         for q in ("TEST-A-0001", "test-a-0001", "  TEST-A-0001 "):
             r = global_suchen(w, q)
-            assert r.status_code == 409 and r.json["error"] == globalsuche.IM_BEREICH, (q, r.get_json())
-        assert versuche(t.app, uid) == 1 and len(protokoll(t.app)) == 1           # nur die Suche mit 80 Zeichen
+            assert r.status_code == 200 and r.json["treffer"] == [] and r.json["mehr"] is False, (q, r.get_json())
+        assert versuche(t.app, uid) == 4
+        assert [(z["anfrage"], z["treffer"]) for z in protokoll(t.app)][1:] == [
+            ("TEST-A-0001", 0), ("test-a-0001", 0), ("TEST-A-0001", 0)]
+        # Die Plattform-Verwaltung sieht alles – für sie gibt es nichts Fremdes: 409, nicht gezählt, nicht protokolliert.
+        # Eine unbrauchbare Anfrage bleibt auch bei ihr beim eigenen Fehler (400).
+        adm_id = zeilen(t.app, "SELECT id FROM users WHERE email = 'admin@example.org'")[0]["id"]
+        for q in ("TEST-B-0001", "TEST-A-0001", "TEST-NIRGENDS-0815"):
+            r = global_suchen(t.adm, q)
+            assert r.status_code == 409 and r.json["error"] == globalsuche.SIEHT_ALLES, (q, r.get_json())
+        assert global_suchen(t.adm, "STR-000001").json["error"] == globalsuche.NUR_HERSTELLER
+        assert t.adm.post(SUCHE, json={"q": "TEST-B-0001"}, headers=H).json["error"] == globalsuche.BESTAETIGEN
+        assert versuche(t.app, adm_id) == 0 and len(protokoll(t.app)) == 4
         # Leerraum in der Mitte zählt einfach, Steuerzeichen als Leerraum – so steht die Anfrage im Protokoll.
         assert global_suchen(w, "TEST \t  NIRGENDS\x00 0815").status_code == 200
         assert protokoll(t.app)[-1]["anfrage"] == "TEST NIRGENDS 0815"
@@ -143,11 +160,11 @@ def test_eingaben():
 # --- Der Steckbrief ---------------------------------------------------------------------------------------------
 
 def test_steckbrief():
-    """Ein fremder Treffer hat genau die Schlüssel aus FELDER – keine Kennung, kein Link, kein Status, keine Prüfdaten.
-    Die Zugehörigkeit kommt aus der Heimat: Gesperrte und Verlorene unter ihrem Herkunftsordner, Ausgesonderte ohne
-    Herkunft nur bei der Gliederung, ein persönlicher Ordner nur als „persönlicher Ordner“, eine verschachtelte
-    Gliederung mit eigenem Namen. Suchen darf jeder mit Modulzugang, auch ohne Bestand; die Verwaltung sieht alles und
-    bekommt deshalb 409."""
+    """Ein fremder Treffer hat genau die Schlüssel aus FELDER – keine Kennung, kein Link, kein Prüfstatus, keine
+    Prüfdaten; den Sperrzustand nur als ein Wort. Die Zugehörigkeit kommt aus der Heimat: Gesperrte und Verlorene unter
+    ihrem Herkunftsordner, Ausgesonderte ohne Herkunft nur bei der Gliederung, ein persönlicher Ordner nur als
+    „persönlicher Ordner“, eine verschachtelte Gliederung mit eigenem Namen. Suchen darf jeder mit Modulzugang, auch
+    ohne Bestand; wer B sieht, findet dort nichts Fremdes, und die Verwaltung sieht alles und bekommt deshalb 409."""
     from app.material.services import globalsuche
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
@@ -170,25 +187,27 @@ def test_steckbrief():
                      "modell": "Gurt Alpha", "artikelnummer": "GA-100", "norm": "", "materialart": "textil",
                      "kategorie": "PSA gegen Absturz / Gurte", "vorschau": None, "hergestellt": "2020-03",
                      "lebensende": gurt["retire_by"], "gliederung": "OG Nachbarstadt",
-                     "ordner": "Lager Nachbarstadt / Fahrzeug NS", "demo": False}, x
+                     "ordner": "Lager Nachbarstadt / Fahrzeug NS", "sperre": None, "demo": False}, x
         x, r = einer("TEST-B-0001")
         assert x["inventory_no"] == t.art_b["inventory_no"] and x["ordner"] == "Lager Nachbarstadt", x
         assert x["materialart"] == "Metall" and x["lebensende"] is None and x["hergestellt"] is None, x
+        assert x["sperre"] is None, x
         assert x["kategorie"] == "PSA gegen Absturz / Karabiner" and x["modell"] == "HMS Beta", x
         # Das Produktbild ist Katalog und ohnehin global – als Vorschau, die jeder mit Modulzugang laden darf.
         assert re.fullmatch(r"/media/material/thumb/[0-9a-f]+\.jpg", x["vorschau"]), x
         assert w.get(x["vorschau"]).status_code == 200
         x, r = einer("TEST-G-0002")
         assert x["ordner"] == "Lager Nachbarstadt / Fahrzeug NS / persönlicher Ordner", x
+        # Gesperrt, verloren und ausgesondert: genau ein Wort – der Systemordner steht nicht im Pfad, der Grund nirgends.
         x, r = einer("TEST-G-0003")                         # gesperrt, Herkunft Lager
-        assert x["ordner"] == "Lager Nachbarstadt" and "sperre" not in x, x
-        nichts_geheimes(t, r, "Gesperrt", "gesperrt")
+        assert x["ordner"] == "Lager Nachbarstadt" and x["sperre"] == "gesperrt", x
+        nichts_geheimes(t, r, "Gesperrt")
         x, r = einer("TEST-G-0005")                         # verloren, Herkunft Fahrzeug
-        assert x["ordner"] == "Lager Nachbarstadt / Fahrzeug NS", x
-        nichts_geheimes(t, r, "Gesperrt", "verloren")
-        x, r = einer("TEST-G-0004")                         # ausgesondert ohne Herkunft
-        assert x["ordner"] == "" and x["gliederung"] == "OG Nachbarstadt", x
-        nichts_geheimes(t, r, "Ausgesondert", "ausgesondert")
+        assert x["ordner"] == "Lager Nachbarstadt / Fahrzeug NS" and x["sperre"] == "verloren gemeldet", x
+        nichts_geheimes(t, r, "Gesperrt")
+        x, r = einer("TEST-G-0004")                         # ausgesondert ohne Herkunft (Filter NULL: fremd)
+        assert x["ordner"] == "" and x["gliederung"] == "OG Nachbarstadt" and x["sperre"] == "ausgesondert", x
+        nichts_geheimes(t, r, "Ausgesondert")
         x, r = einer("TEST-G-0006")
         assert x["gliederung"] == "Ortsgruppe Teil Test" and x["ordner"] == "", x
         # Jede Suche steht im Protokoll – Normalform, Treffer, Kennungen.
@@ -208,11 +227,13 @@ def test_steckbrief():
         assert global_suchen(kp, "TEST-B-0001").json["treffer"][0]["inventory_no"] == t.art_b["inventory_no"]
         pr, _ = neues_konto(t.app, "pruefer3@example.org", name="Prüfer Test", mat_pruefer=True, urkundennummer="1012-0003")
         assert global_suchen(pr, "TEST-B-0001").status_code == 200
-        # Wer B sieht – auch nur zum Prüfen –, sucht dort normal; die Verwaltung sieht alles.
-        for c in (t.wart_b, t.pruefer_b, t.adm):
+        # Wer B sieht – auch nur zum Prüfen –, findet den Artikel mit der normalen Suche; die globale zeigt nur Fremdes
+        # (hier nichts). Die Verwaltung sieht alles: 409.
+        for c in (t.wart_b, t.pruefer_b):
             r = global_suchen(c, "TEST-B-0001")
-            assert r.status_code == 409 and r.json["error"] == globalsuche.IM_BEREICH, r.get_json()
-        assert global_suchen(t.adm, "TEST-NIRGENDS-0815").json["treffer"] == []
+            assert r.status_code == 200 and r.json["treffer"] == [], r.get_json()
+        r = global_suchen(t.adm, "TEST-B-0001")
+        assert r.status_code == 409 and r.json["error"] == globalsuche.SIEHT_ALLES, r.get_json()
         # Vom System vergebene Seriennummern findet die globale Suche nie (die Anfrage käme ohnehin nicht durch).
         sql(t.app, "UPDATE mat_item SET serial_generated = 1 WHERE id = ?", (t.art_b["id"],))
         assert global_suchen(w, "TEST-B-0001").json["treffer"] == []
@@ -273,11 +294,13 @@ def test_bremse():
         r = steckbrief_holen(f, token_b)
         assert r.status_code == 429 and r.json["error"] == globalprotokoll.ZU_VIELE, r.get_json()
         assert len(protokoll(t.app)) == zeilen_vorher == 8
-        # Was ohnehin scheitert, bleibt beim eigenen Fehler; ein eigener Artikel per QR führt weiter wie sonst.
+        # Was ohnehin scheitert, bleibt beim eigenen Fehler; ein eigener Artikel per QR führt weiter wie sonst. Eine
+        # eigene Seriennummer geht seit dem 18.10.2026 durch die Bremse wie jede andere.
         r = f.post(SUCHE, json={"q": "TEST-B-0001"}, headers=H)
         assert r.status_code == 400 and r.json["error"] == globalsuche.BESTAETIGEN
         assert global_suchen(f, "ABC").status_code == 400
-        assert global_suchen(f, "TEST-A-0001").status_code == 409
+        assert global_suchen(f, "TEST-A-0001").status_code == 429
+        assert global_suchen(t.adm, "TEST-B-0001").status_code == 409
         assert steckbrief_holen(f, token_von(t.art_a)).json == {"weiter": f"/material/artikel/{t.art_a['id']}"}
         # Je Konto gezählt.
         assert global_suchen(t.wart_a, "TEST-B-0001").status_code == 200
@@ -382,8 +405,8 @@ def test_qr_steckbrief():
         assert r.json["treffer"][0]["ordner"] == "Lager Nachbarstadt / Fahrzeug NS / persönlicher Ordner", r.json
         nichts_geheimes(t, r)
         r = steckbrief_holen(w, token_von(t.gesp_b))
-        assert r.json["treffer"][0]["ordner"] == "Lager Nachbarstadt", r.json
-        nichts_geheimes(t, r, "Gesperrt", "gesperrt")
+        assert r.json["treffer"][0]["ordner"] == "Lager Nachbarstadt" and r.json["treffer"][0]["sperre"] == "gesperrt"
+        nichts_geheimes(t, r, "Gesperrt")
         p = [z for z in protokoll(t.app) if z["user_id"] == uid]
         assert [(z["art"], z["anfrage"], z["treffer"], json.loads(z["item_ids"])) for z in p] == [
             ("qr", t.art_b["inventory_no"], 1, [t.art_b["id"]]), ("qr", t.pers_b["inventory_no"], 1, [t.pers_b["id"]]),
@@ -399,74 +422,126 @@ def test_qr_steckbrief():
     print("QR-Steckbrief bestanden.")
 
 
-# --- Schalter ---------------------------------------------------------------------------------------------------
+# --- Entscheidungen vom 18.10.2026 -------------------------------------------------------------------------------
 
-def test_schalter_sperre():
-    """FRAGE 1: Gebaut wird ohne Sperrzustand. Mit STECKBRIEF_MIT_SPERRE kommt genau ein Wort dazu – „gesperrt“,
-    „verloren gemeldet“, „ausgesondert“ oder null –, ohne Grund und Datum; in der Suche wie im QR-Steckbrief."""
+def test_sperrwort():
+    """Entscheidung 1: Der Steckbrief trägt immer „sperre“ – genau ein Wort („gesperrt“, „verloren gemeldet“,
+    „ausgesondert“) oder null bei frei, ohne Grund und Datum; in der Suche wie im QR-Steckbrief. Auch ein Sperrgrund,
+    der einen Rückruf nennt, geht nicht hinaus."""
     from app.material.services import globalsuche
-    assert globalsuche.STECKBRIEF_MIT_SPERRE is False
+    assert not hasattr(globalsuche, "STECKBRIEF_MIT_SPERRE")
+    assert "sperre" in globalsuche.FELDER and len(globalsuche.FELDER) == 15
+    assert set(globalsuche.SPERRE.values()) == {"gesperrt", "verloren gemeldet", "ausgesondert"}
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
-        assert "sperre" not in global_suchen(t.wart_a, "TEST-G-0003").json["treffer"][0]
-        try:
-            globalsuche.STECKBRIEF_MIT_SPERRE = True
-            for q, sperre in (("TEST-G-0003", "gesperrt"), ("TEST-G-0005", "verloren gemeldet"),
-                              ("TEST-G-0004", "ausgesondert"), ("TEST-B-0001", None)):
-                r = global_suchen(t.wart_a, q)
-                x = r.json["treffer"][0]
-                assert set(x) == globalsuche.FELDER | {"sperre"} and x["sperre"] == sperre, (q, x)
-                assert GEHEIM[1] not in r.get_data(as_text=True)
-            x = steckbrief_holen(t.wart_a, token_von(t.aus_b)).json["treffer"][0]
-            assert x["sperre"] == "ausgesondert" and x["ordner"] == "", x
-        finally:
-            globalsuche.STECKBRIEF_MIT_SPERRE = False
-        x = steckbrief_holen(t.wart_a, token_von(t.aus_b)).json["treffer"][0]
-        assert set(x) == globalsuche.FELDER, x
-    print("Schalter Sperrzustand bestanden.")
+        sql(t.app, "UPDATE mat_item SET lock_reason = 'Rückruf Testwerk geheim' WHERE id = ?", (t.verl_b["id"],))
+        for q, sperre in (("TEST-G-0003", "gesperrt"), ("TEST-G-0005", "verloren gemeldet"),
+                          ("TEST-G-0004", "ausgesondert"), ("TEST-B-0001", None), ("TEST-G-0001", None)):
+            r = global_suchen(t.wart_a, q)
+            x = r.json["treffer"][0]
+            assert set(x) == globalsuche.FELDER and x["sperre"] == sperre, (q, x)
+            text = r.get_data(as_text=True)
+            for wort in (GEHEIM[1], "Rückruf", "lock_", "Gesperrt", "Ausgesondert"):
+                assert wort not in text, (q, wort, text)
+        for a, sperre in ((t.aus_b, "ausgesondert"), (t.verl_b, "verloren gemeldet"), (t.gesp_b, "gesperrt"),
+                          (t.art_b, None)):
+            r = steckbrief_holen(t.wart_a, token_von(a))
+            x = r.json["treffer"][0]
+            assert set(x) == globalsuche.FELDER and x["sperre"] == sperre, x
+            assert "Rückruf" not in r.get_data(as_text=True) and GEHEIM[1] not in r.get_data(as_text=True)
+    print("Sperrwort bestanden.")
 
 
-def test_schalter_angebot():
-    """FRAGE 2: Angeboten wird, wenn kein sichtbarer Artikel genau diese Seriennummer hat – auch bei Teiltreffern
-    („ohne_exakten_treffer“, gebaut). Mit „ohne_treffer“ (wörtlich nach Vorgabe) nur ohne jeden lokalen Treffer. Der
-    exakte Treffer im eigenen Bereich (exakt_sichtbar) folgt der Sicht: fremd zählt nicht, die Verwaltung sieht alles."""
+def test_angebot():
+    """Entscheidung 2: Angeboten wird die globale Suche zu jeder tauglichen Anfrage (4–80 Zeichen, keine vergebene
+    Nummer) – unabhängig von lokalen Treffern, auch wenn ein eigener Artikel genau diese Nummer hat. Nur wer alles
+    sieht (Plattform-Verwaltung), bekommt kein Angebot; ein Konto ganz ohne Bestand (Katalogpfleger) schon. Die
+    Schalter der Lieferung sind fort."""
     from flask import g
 
     from app.material.services import globalsuche
-    assert globalsuche.ANGEBOT == "ohne_exakten_treffer"
+    for name in ("ANGEBOT", "ANGEBOTE", "IM_BEREICH", "exakt_sichtbar"):
+        assert not hasattr(globalsuche, name), name
     with tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
-        with t.app.test_request_context():
-            from app import db
-            g.user = db.query("SELECT * FROM users WHERE id = ?", (t.k["wart_id"],), one=True)
-            assert globalsuche.exakt_sichtbar("TEST-A-0001") and globalsuche.exakt_sichtbar(" test-a-0001 ")
-            assert not globalsuche.exakt_sichtbar("TEST-B-0001") and not globalsuche.exakt_sichtbar("TEST-A-000")
-            exakt = globalsuche.exakt_sichtbar("TEST-B-0001")
-        with t.app.test_request_context():
-            from app import db
-            g.user = db.query("SELECT * FROM users WHERE recht_verwaltung = 2 ORDER BY id LIMIT 1", one=True)
-            assert globalsuche.exakt_sichtbar("TEST-B-0001")
-        alt = globalsuche.ANGEBOT
-        try:
-            for wert, bei_teiltreffern in (("ohne_exakten_treffer", True), ("ohne_treffer", False)):
-                globalsuche.ANGEBOT = wert
-                # TEST-B-0001 für wart_a: im eigenen Bereich nur Teiltreffer (etwa TEST-A-0001 über „TEST“), kein exakter.
-                assert globalsuche.angebot("TEST-B-0001", 2, exakt) is bei_teiltreffern, wert
-                assert globalsuche.angebot("TEST-B-0001", 0, exakt) is True, wert
-                assert globalsuche.angebot("TEST-A-0001", 1, True) is False, wert
-                assert globalsuche.angebot("STR-000001", 0, False) is False, wert
-        finally:
-            globalsuche.ANGEBOT = alt
-    print("Schalter Angebot bestanden.")
+        _, kp_id = neues_konto(t.app, "katalog2@example.org", name="Katalogpflege Test", mat_katalog=True)
+        adm_id = zeilen(t.app, "SELECT id FROM users WHERE email = 'admin@example.org'")[0]["id"]
+        fragen = ("TEST-A-0001", " test-a-0001 ", "TEST-B-0001", "TEST-A-000", "TEST", "ABC", "x" * 81, "STR-000001",
+                  "M-000001")
+        tauglich = [True] * 5 + [False] * 4
+
+        def als(uid):
+            with t.app.test_request_context():
+                from app import db
+                g.user = db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True)
+                return [globalsuche.angebot(q) for q in fragen], globalsuche.sieht_alles()
+        assert als(t.k["wart_id"]) == (tauglich, False)          # eigene, fremde und Teilnummern
+        assert als(kp_id) == (tauglich, False)                   # ohne Bestand (artikel_filter „0“)
+        assert als(adm_id) == ([False] * len(fragen), True)      # sieht alles
+    print("Angebot bestanden.")
+
+
+def test_nur_fremde():
+    """Entscheidung 2: Dieselbe Seriennummer in A (sichtbar) und B (fremd) – die globale Suche von A liefert nur die
+    Artikel aus B und protokolliert nur deren Kennungen; aus Sicht von B ist es umgekehrt. Die Bedingung steht in der
+    Abfrage: Elf eigene Artikel mit kleineren Kennungen verdrängen die fremden nicht aus den zehn Treffern, und „mehr“
+    zählt nur Fremde. Bestätigung, Bremse und Protokoll wie sonst; wer beide Gliederungen sieht, findet global
+    nichts mehr."""
+    from app.material.services import globalsuche
+    with tempfile.TemporaryDirectory() as tmp:
+        t = zwei_gliederungen(tmp)
+        produkte = []
+        for n in range(13):
+            r = t.k["katalog"].post("/api/material/produkte", json={
+                "category_id": t.ids["karabiner"], "manufacturer": "Testwerk", "model": f"Testkarabiner {n + 1:02d}",
+                "material_kind": "metall_hardware", "interval_months": 12})
+            assert r.status_code == 201, r.get_json()
+            produkte.append(r.json["produkt"]["id"])
+        # Erst elf in A (kleinere Kennungen), dann zwei in B – alle mit derselben Seriennummer, je ein anderes Produkt.
+        eigen = [neuer_artikel(t.wart_a, produkte[n], t.lager_a, serial_no="TEST-BEIDE-0001")["id"] for n in range(11)]
+        fremd = [neuer_artikel(t.wart_b, produkte[n], t.lager_b, serial_no="TEST-BEIDE-0001")["id"] for n in (11, 12)]
+        # Die lokale Suche von A findet die eigenen und bietet die globale trotzdem an.
+        s = t.wart_a.get("/api/material/suche", query_string={"q": "TEST-BEIDE-0001"}).json
+        assert s["gesamt"] == 11 and s["exakt_lokal"] is True and s["global_angebot"] is True, s
+        vorher = len(protokoll(t.app))
+        r = global_suchen(t.wart_a, "test-beide-0001")
+        assert r.status_code == 200 and r.json["mehr"] is False, r.get_json()
+        assert [(x["modell"], x["gliederung"]) for x in r.json["treffer"]] == [
+            ("Testkarabiner 12", "OG Nachbarstadt"), ("Testkarabiner 13", "OG Nachbarstadt")], r.json
+        nichts_geheimes(t, r)
+        p = protokoll(t.app)
+        assert len(p) == vorher + 1 and (p[-1]["art"], p[-1]["anfrage"], p[-1]["treffer"]) == (
+            "suche", "test-beide-0001", 2) and json.loads(p[-1]["item_ids"]) == fremd, p[-1]
+        assert versuche(t.app, t.k["wart_id"]) == 1
+        # Aus Sicht von B sind die elf aus A fremd: zehn Treffer (die kleinsten Kennungen) und „mehr“.
+        r = global_suchen(t.wart_b, "TEST-BEIDE-0001")
+        assert len(r.json["treffer"]) == 10 and r.json["mehr"] is True, r.json
+        assert {x["gliederung"] for x in r.json["treffer"]} == {"OG Musterstadt"}
+        assert json.loads(protokoll(t.app)[-1]["item_ids"]) == eigen[:10]
+        # Genau zehn fremde: „mehr“ ist falsch – die eigenen zwei in B zählen nicht mit.
+        sql(t.app, "UPDATE mat_item SET serial_no = 'TEST-ANDERS-0001' WHERE id = ?", (eigen[-1],))
+        r = global_suchen(t.wart_b, "TEST-BEIDE-0001")
+        assert len(r.json["treffer"]) == 10 and r.json["mehr"] is False, r.json
+        # Ohne Bestätigung nichts – nicht gezählt, nicht protokolliert.
+        n = len(protokoll(t.app))
+        r = t.wart_a.post(SUCHE, json={"q": "TEST-BEIDE-0001"}, headers=H)
+        assert r.status_code == 400 and r.json["error"] == globalsuche.BESTAETIGEN
+        assert len(protokoll(t.app)) == n and versuche(t.app, t.k["wart_id"]) == 1
+        # Wer beide Gliederungen sieht, findet global nichts mehr – die normale Suche hat alle.
+        freigeben(t.adm, t.b, t.k["wart_id"], "lesen")
+        r = global_suchen(t.wart_a, "TEST-BEIDE-0001")
+        assert r.status_code == 200 and r.json["treffer"] == [] and r.json["mehr"] is False, r.json
+        assert json.loads(protokoll(t.app)[-1]["item_ids"]) == [] and protokoll(t.app)[-1]["treffer"] == 0
+        assert t.wart_a.get("/api/material/suche", query_string={"q": "TEST-BEIDE-0001"}).json["gesamt"] == 12
+    print("Nur fremde Treffer bestanden.")
 
 
 # --- Erst mit Paket A1R -----------------------------------------------------------------------------------------
 
 def test_angebot_ueber_suche():
-    """GET /suche liefert exakt_lokal und global_angebot (A1R, über globalsuche.angebot): fremde Seriennummer → Angebot,
-    eigene → kein Angebot; Teiltreffer ohne exakte Seriennummer je nach ANGEBOT; der Katalogpfleger ohne Bestand
-    bekommt das Angebot (und keinen Treffer)."""
-    from app.material.services import globalsuche
+    """GET /suche liefert exakt_lokal und global_angebot (A1R, über globalsuche.angebot): Angebot bei fremder und bei
+    eigener Seriennummer, auch neben Teiltreffern – exakt_lokal sagt, ob ein eigener Artikel genau diese Nummer hat.
+    Der Katalogpfleger ohne Bestand bekommt das Angebot (und keinen Treffer), die Plattform-Verwaltung nie."""
     with tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
         w = t.wart_a
@@ -474,21 +549,18 @@ def test_angebot_ueber_suche():
         assert r.status_code == 200 and r.json["treffer"] == [] and r.json["exakt_lokal"] is False, r.get_json()
         assert r.json["global_angebot"] is True, r.json
         r = w.get("/api/material/suche", query_string={"q": "test-a-0001"})
-        assert r.json["exakt_lokal"] is True and r.json["global_angebot"] is False, r.json
-        alt = globalsuche.ANGEBOT
-        try:
-            for wert, soll in (("ohne_exakten_treffer", True), ("ohne_treffer", False)):
-                globalsuche.ANGEBOT = wert
-                r = w.get("/api/material/suche", query_string={"q": "TEST-A-000"})       # Teiltreffer, kein exakter
-                assert r.json["gesamt"] >= 1 and r.json["exakt_lokal"] is False, r.json
-                assert r.json["global_angebot"] is soll, (wert, r.json)
-        finally:
-            globalsuche.ANGEBOT = alt
+        assert r.json["gesamt"] == 1 and r.json["exakt_lokal"] is True and r.json["global_angebot"] is True, r.json
+        r = w.get("/api/material/suche", query_string={"q": "TEST-A-000"})               # Teiltreffer, kein exakter
+        assert r.json["gesamt"] >= 1 and r.json["exakt_lokal"] is False and r.json["global_angebot"] is True, r.json
         for q in ("ABC", "M-000001", "STR-000001"):
             assert w.get("/api/material/suche", query_string={"q": q}).json["global_angebot"] is False, q
         kp, _ = neues_konto(t.app, "katalog2@example.org", name="Katalogpflege Test", mat_katalog=True)
         r = kp.get("/api/material/suche", query_string={"q": "TEST-B-0001"})
         assert r.status_code == 200 and r.json["treffer"] == [] and r.json["global_angebot"] is True, r.get_json()
+        for q in ("TEST-A-0001", "TEST-B-0001", "TEST-NIRGENDS-0815"):
+            r = t.adm.get("/api/material/suche", query_string={"q": q})
+            assert r.status_code == 200 and r.json["global_angebot"] is False, (q, r.json)
+        assert t.adm.get("/api/material/suche", query_string={"q": "TEST-B-0001"}).json["gesamt"] == 1
         assert protokoll(t.app) == []                     # die lokale Suche protokolliert nichts
     print("Angebot über /suche bestanden.")
 
@@ -542,6 +614,6 @@ def test_bremse_mit_dublette():
 
 if __name__ == "__main__":
     for test in (test_eingaben, test_steckbrief, test_zehn_und_mehr, test_bremse, test_protokoll, test_qr_steckbrief,
-                 test_schalter_sperre, test_schalter_angebot, test_angebot_ueber_suche, test_qr_seite_fremd,
+                 test_sperrwort, test_angebot, test_nur_fremde, test_angebot_ueber_suche, test_qr_seite_fremd,
                  test_bremse_mit_dublette):
         test()

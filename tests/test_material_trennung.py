@@ -612,7 +612,8 @@ def test_abfragezahl():
 def test_unterbau():
     """Was die Pakete B, C und D vom Rechtekern übernehmen: journal.konto_ref/konto_name (ohne E-Mail),
     rechte.waehlbares_konto (eine Antwort für inaktiv, ohne Namen, nicht vorhanden), verwalter_von, darf_meldung,
-    globalprotokoll (Bremse, Protokoll, Frist) und globalsuche.angebot."""
+    globalprotokoll (Bremse, Protokoll, Frist) und globalsuche.angebot (zu jeder tauglichen Anfrage, nicht für die
+    Verwaltung)."""
     from flask import g
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
@@ -688,19 +689,19 @@ def test_unterbau():
                        "VALUES (NULL, 'Alt', 'qr', 'M-000001', 0, '2020-01-01T00:00:00+00:00')")
         make_app(tmp)                                                             # Neustart räumt auf
         assert zeilen(app, "SELECT user_name FROM mat_global_search") == [{"user_name": "fuehrung"}]
-        # Angebot der globalen Suche: 4–80 Zeichen, keine vergebene Nummer, kein exakter Treffer im eigenen Bereich.
+        # Angebot der globalen Suche: 4–80 Zeichen, keine vergebene Nummer – unabhängig von lokalen Treffern; nicht für
+        # die Verwaltung, die alles sieht (Entscheidung vom 18.10.2026).
         assert globalsuche.normalform("  AB  12 \n 34 ") == "AB 12 34"
-        assert globalsuche.angebot("AB-1234", 3, False) and not globalsuche.angebot("AB-1234", 3, True)
-        for q in ("AB1", "x" * 81, "STR-000123", "m-000123", "M-12345"):
-            assert not globalsuche.angebot(q, 0, False), q
-        alt = globalsuche.ANGEBOT
-        try:
-            globalsuche.ANGEBOT = "ohne_treffer"
-            assert globalsuche.angebot("AB-1234", 0, False) and not globalsuche.angebot("AB-1234", 2, False)
-        finally:
-            globalsuche.ANGEBOT = alt
-        assert alt in globalsuche.ANGEBOTE and globalsuche.STECKBRIEF_MIT_SPERRE is False
-        assert len(globalsuche.FELDER) == 14 and "inventory_no" in globalsuche.FELDER and "id" not in globalsuche.FELDER
+        with app.test_request_context():
+            from app import db
+            g.user = db.query("SELECT * FROM users WHERE id = ?", (k["wart_id"],), one=True)
+            assert globalsuche.angebot("AB-1234") and not globalsuche.sieht_alles()
+            for q in ("AB1", "x" * 81, "STR-000123", "m-000123", "M-12345"):
+                assert not globalsuche.angebot(q), q
+            g.user = db.query("SELECT * FROM users WHERE email = 'admin@example.org'", one=True)
+            assert globalsuche.sieht_alles() and not globalsuche.angebot("AB-1234")
+        assert len(globalsuche.FELDER) == 15 and {"inventory_no", "sperre"} <= globalsuche.FELDER
+        assert "id" not in globalsuche.FELDER
     print("Unterbau bestanden.")
 
 
