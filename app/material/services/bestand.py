@@ -38,6 +38,7 @@ VORZIEHEN = ("Die nächste Prüfung lässt sich nur vorziehen, nicht verschieben
              "sie nur eine Prüfung.")
 # Grund im Journal, wenn gesperrte und ausgesonderte Artikel mit ihrem Ordner die Gliederung wechseln (1.7 Nr. 3).
 GRUND_GLIEDERUNG = "Ordner in andere Gliederung verschoben"
+GRUND_UMWANDLUNG = "Ordner zur Gliederung gemacht"
 
 
 class FremdeDublette(Abgelehnt):
@@ -164,6 +165,9 @@ def ordner_anlegen(d, demo=False):
 
 
 def ordner_aendern(fid, d):
+    """Name, Beschreibung, Ordnertyp und Prüfintervall. Wird ein Ordner zur Gliederung, bekommt er „Gesperrt“ und
+    „Ausgesondert“, und gesperrte, verlorene und ausgesonderte Artikel mit Heimat darin ziehen aus den Systemordnern der
+    bisherigen Gliederung in seine (wie beim Verschieben, 1.3). Wer das darf, prüft die Route (1.7 Nr. 2)."""
     alt = ordner(fid)
     if alt["system_kind"]:
         raise Abgelehnt(SYSTEMORDNER_FEST, 409)
@@ -174,11 +178,16 @@ def ordner_aendern(fid, d):
     with db.transaction():
         db.execute("UPDATE mat_folder SET name = ?, description = ?, kind = ?, interval_months = ?, updated_at = ? "
                    "WHERE id = ?", (w["name"], w["description"], w["kind"], w["interval_months"], db.now(), fid))
-        if w["kind"] == "gliederung" and alt["kind"] != "gliederung":
+        umgewandelt = w["kind"] == "gliederung" and alt["kind"] != "gliederung"
+        if umgewandelt:
             _systemordner_anlegen(fid, alt["demo"])
         journal.aenderung("folder", fid, alt, w)
+        if umgewandelt:
+            _systemordner_nachziehen(fid, GRUND_UMWANDLUNG)
         if w["interval_months"] != alt["interval_months"]:
             faelligkeit.kappen(*faelligkeit.im_unterbaum(fid))
+    if umgewandelt:
+        rechte.sicht_verwerfen()                    # neue Systemordner, neue Gliederungsgrenze
 
 
 def ordner_verschieben(fid, ziel_id):
@@ -212,11 +221,12 @@ def ordner_verschieben(fid, ziel_id):
     rechte.sicht_verwerfen()
 
 
-def _systemordner_nachziehen(fid):
-    """Gesperrte, verlorene und ausgesonderte Artikel mit Heimat im eben verschobenen Zweig, die im Systemordner einer
-    anderen Gliederung liegen als ihre Heimat, wandern in den gleichartigen Systemordner der neuen Gliederung (1.7
-    Nr. 3) – so liegt die Heimat immer in derselben Gliederung wie der Systemordner. Eine verschachtelte Gliederung,
-    die selbst verschoben wird, behält ihre eigenen Systemordner. In der Transaktion des Aufrufers."""
+def _systemordner_nachziehen(fid, grund=GRUND_GLIEDERUNG):
+    """Gesperrte, verlorene und ausgesonderte Artikel mit Heimat im eben verschobenen (oder zur Gliederung gemachten)
+    Zweig, die im Systemordner einer anderen Gliederung liegen als ihre Heimat, wandern in den gleichartigen
+    Systemordner der neuen Gliederung (1.7 Nr. 3) – so liegt die Heimat immer in derselben Gliederung wie der
+    Systemordner. Eine verschachtelte Gliederung, die selbst verschoben wird, behält ihre eigenen Systemordner. In der
+    Transaktion des Aufrufers."""
     bedingung, args = heimat_im_zweig(fid)
     for z in db.query(f"SELECT i.* FROM mat_item i WHERE i.lock_state <> 'frei' AND {bedingung} ORDER BY i.id", args):
         gl = gliederung_von(heimat(z))
@@ -231,7 +241,7 @@ def _systemordner_nachziehen(fid):
         db.execute("UPDATE mat_item SET folder_id = ?, updated_at = ? WHERE id = ?", (ziel["id"], db.now(), z["id"]))
         journal.eintragen("item", z["id"], "verschoben",
                           {"folder_id": z["folder_id"], "ordner": _pfad_text(z["folder_id"])},
-                          {"folder_id": ziel["id"], "ordner": _pfad_text(ziel["id"]), "grund": GRUND_GLIEDERUNG})
+                          {"folder_id": ziel["id"], "ordner": _pfad_text(ziel["id"]), "grund": grund})
 
 
 def _pfad_text(fid):

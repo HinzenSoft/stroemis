@@ -1239,11 +1239,16 @@
   function ordnerDialog(o, parentId) {
     const neu = !o.id;
     const oben = neu && !parentId;
+    // Einen vorhandenen Ordner zur Gliederung machen heißt: alles darin wechselt die Gliederung. Das darf nur, wer die
+    // bisherige Gliederung verwaltet (1.7 Nr. 2, wie beim Verschieben) – sonst fehlt die Art in der Auswahl. Solange
+    // der Baum fehlt, entscheidet der Server.
+    const umwandeln = neu || o.kind === "gliederung" || !Object.keys(baumIndex).length || verwaltet(gliederungVon(parentId));
+    const arten = Object.entries(ORDNERART).filter(([k]) => k !== "gliederung" || umwandeln);
     dialog(`<h2>${neu ? (oben ? "Gliederung anlegen" : "Ordner anlegen") : "Ordner bearbeiten"}</h2>
       <label for="od-name">Name</label><input type="text" id="od-name" value="${esc(o.name || "")}" maxlength="120">
       <div class="field-row">
         <div><label for="od-kind">Art</label><select id="od-kind" ${oben || o.kind === "gliederung" ? "disabled" : ""}>
-          ${Object.entries(ORDNERART).map(([k, t]) => `<option value="${k}" ${(o.kind || "standort") === k ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>
+          ${arten.map(([k, t]) => `<option value="${k}" ${(o.kind || "standort") === k ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>
           ${o.kind === "gliederung" && !neu ? '<div class="help">Eine Gliederung bleibt eine Gliederung.</div>' : ""}</div>
         <div><label for="od-int">Prüfintervall (Monate)</label><input type="number" id="od-int" min="1" max="120" value="${o.interval_months || ""}" placeholder="vom Produkt">
           <div class="help">Nur zum Verschärfen: Gilt die Herstellervorgabe kürzer, gilt sie.</div></div>

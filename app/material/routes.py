@@ -719,15 +719,26 @@ def ordner_lesen(fid):
                                                 *_sortier_args(), zugeordnet=_zugeordnet_arg()))
 
 
+ZWISCHEN_GLIEDERUNGEN = ("Zwischen Gliederungen verschiebt nur, wer beide Gliederungen verwaltet – oder die "
+                         "Plattform-Verwaltung.")
+ZUR_GLIEDERUNG = ("Zur Gliederung macht einen Ordner nur, wer die Gliederung darüber verwaltet – oder die "
+                  "Plattform-Verwaltung.")
+
+
 @api.put("/ordner/<int:fid>")
 @requires_folder("verwalten", "fid")
 def ordner_aendern(fid):
-    bestand.ordner_aendern(fid, json_body())
+    """Bearbeiten darf, wer den Ordner verwaltet. Wird er dabei zur Gliederung, wechselt alles darin die Gliederung –
+    wie beim Verschieben über Gliederungsgrenzen braucht das Verwalten an der bisherigen Gliederung (1.7 Nr. 2). Sonst
+    machte, wer nur einen Unterordner verwaltet, ihn zur eigenen Gliederung und zöge danach von dort ab."""
+    d = json_body()
+    o = bestand.ordner(fid)
+    if d.get("kind") == "gliederung" and o["kind"] != "gliederung" and not o["system_kind"]:
+        bisher = bestand.gliederung_von(o["parent_id"])
+        if not darf("verwalten", bisher["id"] if bisher else None):
+            raise Abgelehnt(ZUR_GLIEDERUNG, 403)
+    bestand.ordner_aendern(fid, d)
     return jsonify(ordner=bestand.ordner_json(bestand.ordner(fid)))
-
-
-ZWISCHEN_GLIEDERUNGEN = ("Zwischen Gliederungen verschiebt nur, wer beide Gliederungen verwaltet – oder die "
-                         "Plattform-Verwaltung.")
 
 
 def _ziel_pruefen(ziel, ausser=()):

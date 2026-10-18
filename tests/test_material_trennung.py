@@ -1252,14 +1252,32 @@ def test_eine_heimat():
         assert t.wart_b.get(f"/api/material/artikel/{z}").json["artikel"]["origin_folder_id"] == t.lager_a
         csv_lager = t.wart_b.get(f"/material/export/{t.lager_a}.csv").get_data(as_text=True)
         assert inventar[y] in csv_lager and inventar[z] in csv_lager
+
+        # Ebenso, wenn ein Ordner zur Gliederung wird (nur wer die Gliederung darüber verwaltet): Gesperrte und
+        # Ausgesonderte mit Heimat darin ziehen in seine neuen Systemordner – die Heimat bleibt in derselben
+        # Gliederung wie der Systemordner.
+        fach = ordner_neu(t.wart_b, t.lager_a, "Fach Eins")
+        v = neuer_artikel(t.wart_b, ids["hms"], fach, serial_no="TEST-B-0012")["id"]
+        sperren(t.pruefer_b, v)
+        assert zeilen(app, "SELECT folder_id FROM mat_item WHERE id = ?", (v,))[0]["folder_id"] == t.sys_b["gesperrt"]
+        r = t.wart_b.put(f"/api/material/ordner/{fach}", json={"kind": "gliederung"})
+        assert r.status_code == 200 and r.json["ordner"]["kind"] == "gliederung", r.get_json()
+        neu_gesperrt = zeilen(app, "SELECT id FROM mat_folder WHERE parent_id = ? AND system_kind = 'gesperrt'", (fach,))
+        assert len(neu_gesperrt) == 1
+        assert zeilen(app, "SELECT folder_id FROM mat_item WHERE id = ?", (v,))[0]["folder_id"] == neu_gesperrt[0]["id"]
+        e = zeilen(app, "SELECT * FROM mat_audit WHERE entity = 'item' AND entity_id = ? AND action = 'verschoben' "
+                        "ORDER BY id DESC LIMIT 1", (v,))[0]
+        assert json.loads(e["after_json"])["grund"] == "Ordner zur Gliederung gemacht", e["after_json"]
+        assert {a["id"] for a in t.wart_b.get(f"/api/material/ordner/{t.sys_b['gesperrt']}").json["ordner"]["artikel"]} == {y}
     print("Eine Heimat bestanden.")
 
 
 # --- 8.2/7: Kein Abziehen (Kritik 3) -----------------------------------------------------------------------------------
 
 def test_kein_abziehen():
-    """Wer G/Lager und H verwaltet, aber nicht G, zieht weder Artikel noch Ordner von G nach H ab (403). Ein Ziel in
-    einer Gliederung, die er nicht sieht: 404 wie unbekannt. Mit Verwalten an G und H geht beides."""
+    """Wer G/Lager und H verwaltet, aber nicht G, zieht weder Artikel noch Ordner von G nach H ab (403) – auch nicht
+    über den Umweg, das Lager oder einen Ordner darin zur eigenen Gliederung zu machen. Ein Ziel in einer Gliederung,
+    die er nicht sieht: 404 wie unbekannt. Mit Verwalten an G und H geht beides."""
     with tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
         app, adm = t.app, t.adm
@@ -1274,6 +1292,19 @@ def test_kein_abziehen():
         assert r.status_code == 403 and "beide Gliederungen" in r.json["error"], r.get_json()
         r = gast.post(f"/api/material/ordner/{t.lager_a}/verschieben", json={"parent_id": t.b})
         assert r.status_code == 403, r.get_json()                       # den Oberordner (G) verwaltet er nicht
+        # Zur Gliederung machen hieße, alles darin wechselt die Gliederung – ohne Verwalten an G: 403, und danach ist
+        # das Abziehen weiter verboten. Bearbeiten an sich darf er.
+        for fid in (t.lager_a, fach):
+            r = gast.put(f"/api/material/ordner/{fid}", json={"kind": "gliederung"})
+            assert r.status_code == 403 and "Gliederung darüber verwaltet" in r.json["error"], r.get_json()
+        assert {r["kind"] for r in zeilen(app, "SELECT kind FROM mat_folder WHERE id IN (?, ?)", (t.lager_a, fach))} \
+            == {"standort"}
+        assert not zeilen(app, "SELECT 1 FROM mat_folder WHERE parent_id IN (?, ?) AND system_kind IS NOT NULL",
+                          (t.lager_a, fach))
+        r = gast.post("/api/material/artikel/verschieben", json={"ids": [t.art_a["id"]], "folder_id": t.b})
+        assert r.status_code == 403 and "beide Gliederungen" in r.json["error"], r.get_json()
+        r = gast.put(f"/api/material/ordner/{fach}", json={"kind": "fahrzeug", "description": "Testbeschreibung"})
+        assert r.status_code == 200 and r.json["ordner"]["kind"] == "fahrzeug", r.get_json()
         # Innerhalb seines Lagers und innerhalb von H darf er.
         assert gast.post("/api/material/artikel/verschieben", json={"ids": [t.art_a["id"]], "folder_id": fach}).status_code == 200
         gleich_wie_unbekannt(gast.post("/api/material/artikel/verschieben", json={"ids": [t.art_a["id"]], "folder_id": c}),
