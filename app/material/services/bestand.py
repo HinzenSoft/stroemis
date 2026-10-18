@@ -39,6 +39,9 @@ VORZIEHEN = ("Die nächste Prüfung lässt sich nur vorziehen, nicht verschieben
 # Grund im Journal, wenn gesperrte und ausgesonderte Artikel mit ihrem Ordner die Gliederung wechseln (1.7 Nr. 3).
 GRUND_GLIEDERUNG = "Ordner in andere Gliederung verschoben"
 GRUND_UMWANDLUNG = "Ordner zur Gliederung gemacht"
+DEMO_GRENZE = ("Zwischen den Demodaten (DEMO-Gliederungen) und echtem Bestand lässt sich nichts verschieben – ob ein "
+               "Artikel DEMO ist, hängt an seinem Ordner, und Lebenslauf, CSV und Verzeichnis passten sonst nicht mehr "
+               "zu seinen Protokollen.")
 
 
 class FremdeDublette(Abgelehnt):
@@ -107,6 +110,40 @@ def heimat_im_zweig(fid, alias="i"):
     gehören, für Durchgänge, Export und Fälligkeiten. Der Unterbaum steht in der Abfrage selbst."""
     return (f"{heimat_sql(alias)} IN (WITH RECURSIVE baum(id) AS (SELECT ? UNION SELECT f.id FROM mat_folder f "
             f"JOIN baum b ON f.parent_id = b.id) SELECT id FROM baum)", (fid,))
+
+
+def demo_ordner_sql(ordner):
+    """SQL-Ausdruck (0/1): Der Ordner ordner (SQL-Ausdruck einer Ordnerkennung) oder einer darüber trägt das
+    DEMO-Kennzeichen. Unter einer DEMO-Gliederung ist damit alles DEMO – auch ein Ordner, den jemand dort über die
+    Oberfläche (ohne Kennzeichen) angelegt hat."""
+    return (f"EXISTS (WITH RECURSIVE demo_kette(id) AS (SELECT {ordner} UNION SELECT demo_f.parent_id FROM mat_folder "
+            f"demo_f JOIN demo_kette ON demo_f.id = demo_kette.id WHERE demo_f.parent_id IS NOT NULL) "
+            f"SELECT 1 FROM demo_kette JOIN mat_folder demo_o ON demo_o.id = demo_kette.id WHERE demo_o.demo = 1)")
+
+
+def demo_sql(alias="i", produkt="p"):
+    """Ist ein Artikel DEMO? Die eine Regel für Oberfläche, Protokolle, Lebenslauf, CSV und Steckbrief, als SQL-Ausdruck
+    über mat_item (alias) und sein mat_product (produkt): Das Produkt trägt das DEMO-Kennzeichen – oder die Heimat des
+    Artikels (heimat) liegt in einem DEMO-Ordner. So ist auch ein echtes Katalogprodukt im Beispielbestand
+    (scripts/material_beispielbestand.py) überall als DEMO zu erkennen, ohne dass am Katalog etwas geändert wird.
+    Über die Grenze zwischen DEMO-Ordnern und echtem Bestand verschieben artikel_verschieben und ordner_verschieben
+    nicht (DEMO_GRENZE): Das Kennzeichen wechselte sonst, während die festgeschriebenen Protokolle bleiben, wie sie
+    sind."""
+    if not produkt.isidentifier():
+        raise ValueError(produkt)
+    return f"({produkt}.demo = 1 OR {demo_ordner_sql(heimat_sql(alias))})"
+
+
+def ist_demo(iid):
+    """demo_sql für einen einzelnen Artikel."""
+    r = db.query(f"SELECT {demo_sql('i', 'p')} AS demo FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
+                 f"WHERE i.id = ?", (iid,), one=True)
+    return bool(r and r["demo"])
+
+
+def ordner_ist_demo(fid):
+    """demo_ordner_sql für einen einzelnen Ordner (Sammelprotokoll eines Durchgangs)."""
+    return bool(db.query(f"SELECT {demo_ordner_sql('?')} AS demo", (fid,), one=True)["demo"])
 
 
 def kette(fid):
@@ -207,6 +244,10 @@ def ordner_verschieben(fid, ziel_id):
                 raise Abgelehnt("Ein Ordner kann nicht in sich selbst liegen.")
         if ziel_id == alt["parent_id"]:
             return
+        # Die Grenze der Demodaten (demo_sql): Was in einem DEMO-Ordner liegt, bleibt dort, echter Bestand kommt nicht
+        # hinein. Auf oberster Ebene zählt das eigene Kennzeichen.
+        if ordner_ist_demo(fid) != (ordner_ist_demo(ziel_id) if ziel_id is not None else bool(alt["demo"])):
+            raise Abgelehnt(DEMO_GRENZE, 409)
         db.execute("UPDATE mat_folder SET parent_id = ?, updated_at = ? WHERE id = ?", (ziel_id, db.now(), fid))
         journal.eintragen("folder", fid, "verschoben",
                           {"parent_id": alt["parent_id"], "pfad": _pfad_text(alt["parent_id"])},
@@ -619,6 +660,10 @@ def artikel_verschieben(ids, ziel_id):
             raise Abgelehnt("Mindestens ein Artikel wurde nicht gefunden.", 404)
         if any(z["lock_state"] != "frei" for z in zeilen):
             raise Abgelehnt(GESPERRT_BLEIBT, 409)
+        # Die Grenze der Demodaten (demo_sql) – frei heißt: Heimat ist der Ordner, in dem der Artikel liegt.
+        ziel_demo = ordner_ist_demo(ziel_id)
+        if any(ordner_ist_demo(f) != ziel_demo for f in {z["folder_id"] for z in zeilen if z["folder_id"] != ziel_id}):
+            raise Abgelehnt(DEMO_GRENZE, 409)
         ziel_text = _pfad_text(ziel_id)
         for z in zeilen:
             if z["folder_id"] == ziel_id:
@@ -651,7 +696,7 @@ def artikel_loeschen(iid):
 # Mit dem offenen Entwurf (höchstens einer je Artikel): Listen zeigen „in Prüfung bei …“.
 # Dazu der Name der zugeordneten Person (artikel_kurz gibt ihn nur mit Grundrecht heraus).
 ARTIKEL_LISTE_SQL = ("SELECT i.*, p.manufacturer, p.model, p.article_no, p.material_kind, p.image AS product_image, "
-                     "p.demo AS product_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "
+                     f"{demo_sql('i', 'p')} AS artikel_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "
                      "e.inspector_user_id AS entwurf_pruefer_id, zu.name AS zugeordnet_name FROM mat_item i "
                      "JOIN mat_product p ON p.id = i.product_id "
                      "LEFT JOIN mat_inspection e ON e.item_id = i.id AND e.completed_at IS NULL "
@@ -691,7 +736,8 @@ def artikel_kurz(i, stichtag=None):
             "serial_generated": bool(i["serial_generated"]), "folder_id": i["folder_id"],
             "product_id": i["product_id"], "manufacturer": i.get("manufacturer"), "model": i.get("model"),
             "article_no": i.get("article_no"), "material_kind": i.get("material_kind"),
-            "vorschau": katalog.bild_url(i.get("product_image"), "thumb"), "demo": bool(i.get("product_demo")),
+            "vorschau": katalog.bild_url(i.get("product_image"), "thumb"),
+            "demo": bool(i["artikel_demo"]) if "artikel_demo" in i else ist_demo(i["id"]),
             "next_due_on": i["next_due_on"], "retire_by": i["retire_by"], "lock_state": i["lock_state"],
             "last_inspected_on": i.get("last_inspected_on"), "status": s, "status_text": st.LABEL[s],
             "entwurf": ({"id": i["entwurf_id"], "pruefer": i.get("entwurf_pruefer"),
@@ -714,6 +760,7 @@ def artikel_json(i, voll=False):
                              "lock_reason", "next_due_on", "interval_months", "notes", "created_at", "updated_at",
                              "last_inspected_on")}
     out["serial_generated"] = bool(i["serial_generated"])
+    out["demo"] = ist_demo(i["id"])
     out["stand"] = stand_von(i)
     out["status"], out["status_text"] = s, st.LABEL[s]
     out["produkt"] = katalog.produkt_json(p)

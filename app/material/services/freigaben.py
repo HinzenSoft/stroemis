@@ -82,8 +82,8 @@ VERLAENGERN_TAGE = 90               # so lange abgelaufene Prüffreigaben nimmt 
 MEINE_TAGE = 365                    # so lange zeigt „Meine Freigaben“ abgelaufene
 SUCHE_MIN, SUCHE_MAX = 3, 20
 # Wer eine Freigabe ohne Konto (granted_by NULL) vergeben hat – Name im Journal → Anzeige. Sonst war es ein Konto, das
-# es nicht mehr gibt.
-SYSTEM = {MIGRATION_8: "Migration", "Demodaten": "Demodaten"}
+# es nicht mehr gibt. „Beispielbestand“: scripts/material_beispielbestand.py (nur dev).
+SYSTEM = {MIGRATION_8: "Migration", "Demodaten": "Demodaten", "Beispielbestand": "Beispielbestand"}
 RECHT_TEXT = {"lesen": "lesen", "verwalten": "verwalten", "pruefen": "prüfen"}
 
 

@@ -214,7 +214,7 @@ def daten(iid):
     return {
         "dokument": {"art": "lebenslauf", "titel": "Lebenslauf", "stand": zeit_text(db.now()),
                      "plattform": qr.anzeige(qr.basis()).split("://", 1)[-1], "pruefseite": protokoll.pruefseite(),
-                     "demo": bool(produkt["demo"])},
+                     "demo": bestand.ist_demo(iid)},
         "artikel": protokoll._artikel(item, produkt, item["folder_id"]),
         "zustand": _zustand(item, produkt, s, tag, baum_pfad),
         "hinweis": _hinweis(item, s, aussonderung),
