@@ -1153,9 +1153,12 @@ table.list.mat-runde tr.mat-fremd td { color: var(--grau); }
    :where() hält die Regel so schwach wie „dialog“ selbst: Die Regeln für Fold mit zwei Hälften (dialog[open], app.css)
    gehen vor; am Telefon gilt die Breite aus app.css. */
 @media (min-width: 641px) { dialog:where(.mat-ordner-reiter) { width: min(920px, 96vw); } }
-/* Die Reiter (Aussehen wie .c-tabs) kleben oben, wenn der Inhalt rollt – wie die Knopfzeile unten am Telefon. */
-.mat-reiter { position: sticky; top: 0; z-index: 2; background: var(--weiss); margin: 10px 0 12px; padding: 6px 0;
+/* Die Reiter (Aussehen wie .c-tabs) kleben oben, wenn der Inhalt rollt – wie die Knopfzeile unten am Telefon. top ist
+   minus dem oberen Innenabstand des Dialogs (app.css): Sonst hielte Chromium sie um diesen Abstand vom Rand fern, und
+   darüber schiene der Inhalt durch. */
+.mat-reiter { position: sticky; top: -18px; z-index: 2; background: var(--weiss); margin: 10px 0 12px; padding: 6px 0;
   box-shadow: 0 1px 0 var(--linie); }
+@media (max-height: 500px) { .mat-reiter { top: -12px; } }
 .mat-reiter button { font-size: var(--fs-mittel); padding: 8px 10px; }
 @media (pointer: coarse) { .mat-reiter button { min-height: 44px; } }
 .mat-reiter-teil[hidden] { display: none; }
