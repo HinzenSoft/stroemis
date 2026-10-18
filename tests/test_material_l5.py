@@ -229,6 +229,46 @@ def test_formulare_ordnerfoto_und_suchfeld():
     print("Ordnerfoto (Original) und Suchfeld bestanden.")
 
 
+def test_oberflaeche_rechte_je_ordner():
+    """Phase 2 · Lieferung 1, Paket A2 (statisch): material.js fragt Knöpfe am Gegenstand über dessen „darf“, ruft die
+    Bausteine von freigaben.js und global.js über ihre Schnittstelle auf (die es dort geben muss) und beschriftet das
+    Journal mit denselben Wörtern wie das Lebenslauf-PDF (beschriftung.py)."""
+    import re
+
+    from app.material.services import beschriftung
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    lesen = lambda rel: open(os.path.join(wurzel, rel), encoding="utf-8").read()  # noqa: E731
+    js, frei, glob = (lesen(f"app/material/static/{d}.js") for d in ("material", "freigaben", "global"))
+    # Haken für die Pakete B und C – und dass es sie dort gibt.
+    for haken in ("MatFreigaben", ".oeffnen(", ".hinweis(", ".kopfhinweis(", 'id="mat-freigaben-hinweis"',
+                  "?freigaben=materialwart", 'adresse.get("freigaben")', "MatGlobal", ".anbieten(", ".fremd(inhalt, DATEN)",
+                  "global_angebot"):
+        assert haken in js, haken
+    assert re.search(r"window\.MatFreigaben = \{ oeffnen, hinweis, kopfhinweis \}", frei)
+    assert re.search(r"return \{ anbieten, bestaetigen, suchen, karte, fremd \}", glob)
+    # Freigaben, Bausteine, die erst nach material.js geladen werden: material.js wartet auf die ganze Seite.
+    assert "DOMContentLoaded" in js
+    # Objektbezogen statt global: Das Grundrecht gibt es nur am Gegenstand; Lebenslauf, Export, Journal und
+    # Personenspalte hängen daran, Prüfen-Knöpfe an der Prüffreigabe des Artikels.
+    assert "DARF.grund" not in js
+    for stelle in ("darf.grund ? lebenslaufKnopf(a)", "darf.grund ? exportMenue(d)", "person: darf.grund",
+                   "if (!(a.darf && a.darf.pruefen)", "!aus && darf.pruefen && !fremderEntwurf", "DARF.gliederung_anlegen ?"):
+        assert stelle in js, stelle
+    # Ohne Leserecht entfallen nur die Reiter Prüfungen und Bestand – die Nummernsuche (globale Suche) bleibt.
+    zeile = next(z for z in js.split("\n") if z.strip().startswith("if (!DARF.lesen) $$("))
+    assert ".mat-suche" not in zeile and "mat-lupe" not in zeile and 'data-nav="bestand"' in zeile, zeile
+    # Journal: dieselben Beschriftungen wie im PDF – auch für Freigaben und Zuordnung.
+    for name, py in (("FELD", beschriftung.FELD), ("AKTION", beschriftung.AKTION)):
+        anfang = js.index(f"const {name} = {{")
+        block = js[anfang:js.index("}", anfang)]
+        paare = dict(re.findall(r'([a-z_0-9]+): "([^"]*)"', block))
+        assert paare == py, (name, {k: (paare.get(k), py.get(k)) for k in set(paare) | set(py) if paare.get(k) != py.get(k)})
+    for schluessel in ("freigabe_erteilt", "freigabe_geaendert", "freigabe_entzogen", "freigabe_entfernt", "zugeordnet",
+                       "zuordnung_geloest"):
+        assert schluessel in beschriftung.AKTION, schluessel
+    print("Oberfläche: Rechte je Ordner (statisch) bestanden.")
+
+
 if __name__ == "__main__":
     test_mangel_braucht_bemerkung()
     test_urkunde_korrekturen()
@@ -236,3 +276,4 @@ if __name__ == "__main__":
     test_shell_geruest()
     test_pruefform_tippen_speichern()
     test_formulare_ordnerfoto_und_suchfeld()
+    test_oberflaeche_rechte_je_ordner()
