@@ -76,7 +76,7 @@
   function angebotZeile(q, i, exakt) {
     return `<li role="option" id="mv-${i}" aria-selected="false" class="mv-global" data-global="1">
       <button type="button" tabindex="-1"><strong>Außerhalb deines Bereichs nach der Seriennummer „<span${q.length <= 30 ? ' class="mg-ganz"' : ""}>${esc(q)}</span>“ suchen</strong>
-        <span class="mv-zeile">${exakt ? "Zeigt nur Artikel außerhalb deines Bereichs" : "Nur Stammdaten und Zugehörigkeit"} – die Suche wird protokolliert.</span></button></li>`;
+        <span class="mv-zeile">${exakt ? "Zeigt nur Artikel außerhalb deines Bereichs" : "Nur Stammdaten, Zugehörigkeit und Sperrzustand"} – die Suche wird protokolliert.</span></button></li>`;
   }
 
   // Erst die eigenen Vorschläge und „Alle Treffer“, darunter das Angebot – oder nach der Suche die fremden Treffer.

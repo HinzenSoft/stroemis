@@ -18,8 +18,8 @@ window.MatGlobal = (function () {
   const API = "/api/material/globalsuche";
   const ERKLAERUNG = "Die Suche geht über alle Artikel außerhalb deines Bereichs – in anderen Gliederungen und in "
     + "Ordnern, für die du keine Freigabe hast – und wird mit deinem Namen protokolliert. "
-    + "Treffer zeigen nur Stammdaten, Zugehörigkeit und ob der Artikel gesperrt oder ausgesondert ist – keine Prüfungen, "
-    + "Protokolle, Fotos oder Bemerkungen.";
+    + "Treffer zeigen nur Stammdaten, Zugehörigkeit und ob der Artikel gesperrt, verloren gemeldet oder ausgesondert "
+    + "ist – keine Prüfungen, Protokolle, Fotos oder Bemerkungen.";
   // Das Sperrwort als Marke in den Farben des Moduls: anthrazit gesperrt (auch verloren gemeldet), grau ausgesondert.
   const SPERRE = { gesperrt: "s-gesperrt", "verloren gemeldet": "s-gesperrt", ausgesondert: "s-ausgesondert" };
 
@@ -93,6 +93,8 @@ window.MatGlobal = (function () {
 
   /* Trefferseite: unter der eigenen Liste das Angebot, auch außerhalb des eigenen Bereichs zu suchen – ein grauer
      Knopf, die Hauptsache der Seite bleibt die eigene Liste. Nach der Suche steht an seiner Stelle das Ergebnis.
+     Der Hilfetext nennt kurz, was die Rückfrage (ERKLAERUNG) ausführlich sagt – mit dem Sperrzustand, den das Ergebnis
+     zeigt; ebenso die Angebotszeile in den Vorschlägen (suche.js).
      optionen.exakt: ein eigener Artikel hat genau diese Seriennummer (dann sagt der Text, dass nur die anderen kommen);
      optionen.ergebnis: das Ergebnis einer früheren Suche zu q – Blättern und Sortieren der eigenen Liste zeichnen die
      Seite neu, ohne noch einmal zu suchen; optionen.gefunden(d) bekommt das Ergebnis. */
@@ -104,7 +106,7 @@ window.MatGlobal = (function () {
     element.innerHTML = `<section class="mg-angebot" aria-label="Suche außerhalb deines Bereichs">
       ${o.exakt ? "<p>Diese Seriennummer gibt es auch in deinem Bereich (oben) – die Suche zeigt nur Artikel außerhalb davon.</p>" : ""}
       <button class="btn secondary" type="button" data-mg="suchen"><span>Außerhalb deines Bereichs nach der Seriennummer ${nummer(q)} suchen</span></button>
-      <p class="help">Nur Stammdaten und Zugehörigkeit – die Suche wird mit deinem Namen protokolliert.</p>
+      <p class="help">Nur Stammdaten, Zugehörigkeit und Sperrzustand – die Suche wird mit deinem Namen protokolliert.</p>
       <div class="mg-ergebnis"></div></section>`;
     const knopf = element.querySelector('[data-mg="suchen"]');
     const aus = element.querySelector(".mg-ergebnis");

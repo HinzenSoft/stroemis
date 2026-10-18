@@ -450,6 +450,15 @@ def test_sperrwort():
             x = r.json["treffer"][0]
             assert set(x) == globalsuche.FELDER and x["sperre"] == sperre, x
             assert "Rückruf" not in r.get_data(as_text=True) and GEHEIM[1] not in r.get_data(as_text=True)
+    # Angebot, Rückfrage und QR-Ansicht beschreiben den Inhalt wie das Ergebnis (Prüfung der Nachbesserung): alle drei
+    # Sperrwörter in der Rückfrage, kein „Nur Stammdaten und Zugehörigkeit“ ohne den Sperrzustand.
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    glob, suche = (open(os.path.join(wurzel, f"app/material/static/{d}.js"), encoding="utf-8").read()
+                   for d in ("global", "suche"))
+    erklaerung = "".join(re.findall(r'"([^"]*)"', re.search(r"const ERKLAERUNG = (.*?);\n", glob, re.S).group(1)))
+    assert "gesperrt, verloren gemeldet oder ausgesondert" in erklaerung, erklaerung
+    for js in (glob, suche):
+        assert "Nur Stammdaten und Zugehörigkeit" not in js and "Nur Stammdaten, Zugehörigkeit und Sperrzustand" in js
     print("Sperrwort bestanden.")
 
 
