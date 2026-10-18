@@ -1384,9 +1384,10 @@ Regressionstest. Danach liefen alle Suiten grün.
   ist. Ohne Grundrecht, also beim externen Prüfer, bleibt es beim Enddatum (Pflicht, höchstens 24 Monate); dauerhaft
   antwortet dort 400 mit Klartext. Befristet höchstens 24 Monate gilt weiter für alle, dauerhaft vergibt weiter nur,
   wer selbst dauerhaft verwaltet (1.6 Nr. 3); Häkchen und Urkundennummer bleiben Pflicht.
-  - **Schutz zur Laufzeit** (`services/rechte.py`): Eine dauerhafte Prüffreigabe wirkt nur, wo zugleich ein gültiges
-    Grundrecht gilt – die Sicht schneidet sie mit dem Grundrecht. Wird das Grundrecht entzogen, gekürzt oder läuft es
-    ab, prüft die Person dort nicht mehr (auch keine Prüfsicht); so entsteht nie ein unbefristetes Prüfrecht ohne
+  - **Schutz zur Laufzeit** (`services/rechte.py`): Eine dauerhafte Prüffreigabe wirkt nur, solange die Person an
+    ihrem Anker oder darüber ein gültiges Grundrecht hat – dieselbe Frage wie beim Erteilen und in der Liste; ein
+    Grundrecht nur weiter unten trägt sie nicht, auch nicht dort. Wird das Grundrecht entzogen, gekürzt oder läuft es
+    ab, prüft die Person nicht mehr (auch keine Prüfsicht); so entsteht nie ein unbefristetes Prüfrecht ohne
     Grundrecht. Die Liste sagt dann „wirkt nicht – dauerhaft nur mit lesen oder verwalten“ (ebenso „Meine Freigaben“
     und die Nutzerverwaltung); wird das Grundrecht wieder erteilt, wirkt sie wieder. Die Rückfrage beim Entziehen eines
     Grundrechts, an dem eine dauerhafte Prüffreigabe hängt, und der Ändern-Dialog sagen das vorher („Daran hängt eine

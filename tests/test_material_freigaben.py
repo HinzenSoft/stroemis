@@ -558,9 +558,10 @@ def test_dauerhaft_pruefen():
     """1.6 Nr. 8 neu: Eine Prüffreigabe darf dauerhaft sein, wo die Person am Anker oder darüber ein Grundrecht hat –
     auch eins aus derselben Anfrage (Vorlagen) oder geerbt von oben; ohne (externer Prüfer) 400 mit Klartext. Mit Ende
     höchstens 24 Monate, dauerhaft nur, wer selbst dauerhaft verwaltet (Nr. 3). Zur Laufzeit wirkt eine dauerhafte nur
-    mit gültigem Grundrecht: entzogen oder abgelaufen – kein Prüfrecht, keine Prüfsicht, „wirkt nicht“ in der Liste;
-    wieder erteilt – wirkt wieder. „Alle verlängern“ übergeht dauerhafte; Entziehen und Kürzen eines Grundrechts sagen
-    vorher, welche dauerhafte daran hängt (traegt_pruefen), und das Entziehen zählt die offenen Prüfungen mit."""
+    mit gültigem Grundrecht am Anker oder darüber: entzogen oder abgelaufen – kein Prüfrecht, keine Prüfsicht (auch
+    nicht in einem Unterordner mit eigenem Grundrecht), „wirkt nicht“ in der Liste; wieder erteilt – wirkt wieder.
+    „Alle verlängern“ übergeht dauerhafte; Entziehen und Kürzen eines Grundrechts sagen vorher, welche dauerhafte daran
+    hängt (traegt_pruefen), und das Entziehen zählt die offenen Prüfungen mit."""
     from app.material.services import rechte
     from app.material.services.interval import plus_monate
     with tempfile.TemporaryDirectory() as tmp:
@@ -690,6 +691,25 @@ def test_dauerhaft_pruefen():
             (gid, drei_id))
         assert erteilen(w, lager, user_id=drei_id, grundrecht="lesen").status_code == 201
         assert zeile_von(gid, drei_id, "lesen")["traegt_pruefen"] == 0 == zeile_von(lager, drei_id, "lesen")["traegt_pruefen"]
+        # Ein Grundrecht nur weiter unten trägt eine dauerhafte Prüffreigabe auch zur Laufzeit nicht – wie Schreibregel
+        # und Liste: Oben entzogen, unten behalten, prüft die Person auch im Unterordner nicht mehr.
+        sechs, sechs_id = konto("sechs", "1012-5006")
+        assert erteilen(w, gid, user_id=sechs_id, grundrecht="lesen", pruefen=True).status_code == 201
+        assert erteilen(w, fach, user_id=sechs_id, grundrecht="lesen").status_code == 201
+        assert zeile_von(gid, sechs_id, "lesen")["traegt_pruefen"] == 1
+        assert zeile_von(fach, sechs_id, "lesen")["traegt_pruefen"] == 0                # das untere trägt sie nicht
+        r = w.delete(f"/api/material/freigaben/{grant(app, gid, sechs_id, 'lesen')['id']}", headers=H)
+        assert r.status_code == 200 and r.json["offene_entwuerfe"] == 0, r.get_json()
+        assert not sicht(sechs_id).darf("pruefen", fach) and not sicht(sechs_id).menge("pruefen")
+        assert sicht(sechs_id).darf("lesen", fach) and sechs.get(f"/api/material/ordner/{fach}").status_code == 200
+        z = zeile_von(gid, sechs_id)
+        assert (z["bis"], z["wirkt"], z["grundrecht_dort"]) == (None, False, False), z
+        assert [(x["recht"], x["wirkt"]) for x in sechs.get("/api/material/freigaben/meine").json["freigaben"]] == [
+            ("pruefen", False), ("lesen", True)]
+        r = starten(sechs, artikel)
+        assert r.status_code == 403 and r.json["error"] == rechte.KEINE_PRUEFFREIGABE, r.get_json()
+        assert erteilen(w, gid, user_id=sechs_id, grundrecht="lesen").status_code == 201        # wieder erteilt
+        assert sicht(sechs_id).darf("pruefen", fach) and sicht(sechs_id).ende("pruefen", fach) is None
 
         # „Alle Prüffreigaben verlängern“ übergeht dauerhafte – nicht einmal unter „übersprungen“; ablaufen tun sie nie.
         dauerhaft = {x["id"] for x in zeilen(app, "SELECT id FROM mat_folder_grant WHERE permission = 'pruefen' "

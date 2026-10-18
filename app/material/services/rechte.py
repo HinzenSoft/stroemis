@@ -8,8 +8,8 @@ Woher die Rechte kommen (Bauentwurf Phase 2 · Lieferung 1, Abschnitt 1):
   Freigabe                eine Zeile in mat_folder_grant: lesen, pruefen oder verwalten an einem Ordner – sie gilt dort
                           und in allen Unterordnern, solange sie gültig ist (valid_until leer oder heute und später,
                           deutscher Kalendertag; der letzte Tag zählt mit). Rechte addieren sich nur. Eine Prüffreigabe
-                          ohne Ende (dauerhaft) wirkt nur, wo das Konto zugleich ein Grundrecht hat – befristet ist nur
-                          noch der externe Prüfer (Nachbesserung vom 18.10.2026, Schritt 9).
+                          ohne Ende (dauerhaft) wirkt nur, solange das Konto an ihrem Anker oder darüber ein Grundrecht
+                          hat – befristet ist nur noch der externe Prüfer (Nachbesserung vom 18.10.2026, Schritt 9).
   Qualifikation Prüfer    Häkchen mat_pruefer (setzt die Verwaltung) und gültige Urkundennummer (trägt der Prüfer selbst
                           im Profil ein, urkunde_setzen). Voraussetzung jeder Prüfhandlung und dafür, dass eine
                           Prüffreigabe überhaupt wirkt. Allein gibt sie Modulzugang (Katalog, Profil), keinen Bestand.
@@ -23,11 +23,12 @@ material_stufe_wirksam aus den Freigaben.
 
 Rechte in einem Ordner F (RECHTE): grund – Grundrecht, Verwaltung oder gültiges lesen/verwalten an F oder darüber;
 pruefen – qualifiziert und gültiges pruefen an F oder darüber (auch für Verwalter und die Verwaltung), ein dauerhaftes
-nur, wo zugleich grund gilt; lesen – grund oder pruefen (mit pruefen allein: die Prüfsicht – also nur mit einer
-befristeten Prüffreigabe, der des externen Prüfers); verwalten – Verwaltung oder gültiges verwalten. Läuft das
-Grundrecht ab oder wird es entzogen, wirkt eine dauerhafte Prüffreigabe dort nicht mehr: So entsteht nie ein
-unbefristetes Prüfrecht ohne Grundrecht. Ein Artikel zählt über seine Heimat (bestand.heimat). sicht() rechnet das
-einmal je Anfrage und Konto; Listen filtern in SQL mit artikel_filter und ordner_filter, nie mit darf() je Zeile.
+nur, wo grund an seinem Anker gilt (ein Grundrecht nur weiter unten trägt es nicht); lesen – grund oder pruefen (mit
+pruefen allein: die Prüfsicht – also nur mit einer befristeten Prüffreigabe, der des externen Prüfers); verwalten –
+Verwaltung oder gültiges verwalten. Läuft das Grundrecht ab oder wird es entzogen, wirkt eine dauerhafte Prüffreigabe
+nicht mehr: So entsteht nie ein unbefristetes Prüfrecht ohne Grundrecht. Ein Artikel zählt über seine Heimat
+(bestand.heimat). sicht() rechnet das einmal je Anfrage und Konto; Listen filtern in SQL mit artikel_filter und
+ordner_filter, nie mit darf() je Zeile.
 
 Fremdes – nicht vorhanden oder nicht sichtbar – beantwortet requires_folder mit 404 und derselben Meldung wie „gibt es
 nicht“. 403 gibt es nur, wenn man den Gegenstand sehen, die Aktion aber nicht ausführen darf.
@@ -210,7 +211,8 @@ class Sicht:
     def ende(self, recht, fid):
         """Wirksames Ende des Rechts in fid: None, wenn eine deckende gültige Freigabe unbefristet ist (oder die
         Verwaltung es ohnehin hat), sonst das späteste Enddatum der deckenden. Eine dauerhafte Prüffreigabe endet mit
-        dem Grundrecht, ohne das sie nicht wirkt. Ohne das Recht: Abgelehnt."""
+        dem Grundrecht an ihrem Anker (dort oder darüber), ohne das sie nicht wirkt – ein Grundrecht nur weiter unten
+        trägt sie nicht. Ohne das Recht: Abgelehnt."""
         if not self.darf(recht, fid):
             raise Abgelehnt("Dieses Recht hast du in diesem Ordner nicht.", 403)
         if self.alles and recht != "pruefen":
@@ -222,8 +224,8 @@ class Sicht:
             if f.folder_id not in kette or f.permission not in arten:
                 continue
             if f.permission == "pruefen" and f.valid_until is None and not self.alles:
-                if self.darf("grund", fid):
-                    enden.append(self.ende("grund", fid))
+                if f.folder_id in self.grund:
+                    enden.append(self.ende("grund", f.folder_id))
             else:
                 enden.append(f.valid_until)
         return None if any(e is None for e in enden) else max(enden)
@@ -264,8 +266,9 @@ def _sicht_rechnen(user):
         "SELECT id, folder_id, permission, valid_until FROM mat_folder_grant WHERE user_id = ? "
         "AND (valid_until IS NULL OR valid_until >= ?) ORDER BY id", (user["id"], _stichtag())))
     anker = {a: {f.folder_id for f in freigaben if f.permission == a} for a in ("lesen", "pruefen", "verwalten")}
-    # Eine dauerhafte Prüffreigabe wirkt nur, wo zugleich ein Grundrecht gilt (die Verwaltung hat es überall): Sie
-    # öffnet selbst nichts, zählt also nicht als Anker und wird unten mit dem Grundrecht geschnitten.
+    # Eine dauerhafte Prüffreigabe wirkt nur, wo das Konto an ihrem Anker oder darüber ein Grundrecht hat (die
+    # Verwaltung hat es überall): Sie öffnet selbst nichts, zählt also nicht als Anker und wird unten mit dem Grundrecht
+    # geschnitten – am Anker, wie Schreibregel und Liste (freigaben.grundrecht_dort) es fragen.
     dauerhaft = {f.folder_id for f in freigaben if f.permission == "pruefen" and f.valid_until is None}
     if not alles:
         anker["pruefen"] -= dauerhaft               # je Konto und Ordner gibt es nur eine Prüffreigabe
@@ -298,7 +301,7 @@ def _sicht_rechnen(user):
         return Sicht(uid=user["id"], alles=True, qualifiziert=qualifiziert, pruefbar=pruefbar, freigaben=freigaben,
                      eltern=eltern)
     grund = unter(anker["lesen"] | anker["verwalten"])
-    pruefbar |= unter(dauerhaft) & grund
+    pruefbar |= unter(dauerhaft & grund)          # grund ist nach unten geschlossen: Anker darin = Grundrecht dort
     lesbar = grund | pruefbar
     teil, pfad = set(), set()
     # Was über einem Anker liegt, ist sichtbar oder Pfad. Liegt die nächste Gliederung eines Ankers selbst nicht im
