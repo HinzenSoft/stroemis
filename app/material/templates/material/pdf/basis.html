@@ -7,8 +7,8 @@
    (Bemerkung, Notiz, Wert) stehen in .text mit white-space: pre-wrap, nie mit |safe.
    Schriften: DLRG Univers aus static/fonts (Basisadresse ist dieses Verzeichnis); Zeichen, die ihr fehlen,
    setzt DejaVu Sans. Prüfsummen und Kennungen in DejaVu Sans Mono.
-   Die Makros unten (felder, artikel_block, unterschrift_block, festschreibung) benutzen die abgeleiteten
-   Vorlagen; sie stehen vor dem Block „inhalt“ und sind deshalb dort sichtbar.
+   Die Makros unten (felder, produkt_mit_zusatz, artikel_block, unterschrift_block, festschreibung) benutzen die
+   abgeleiteten Vorlagen; sie stehen vor dem Block „inhalt“ und sind deshalb dort sichtbar.
    Der Lebenslauf (lebenslauf.html) ist kein Protokoll: Er überschreibt Titel, Stichwörter, Kopf rechts, Fuß,
    Kennungskasten und Demo-Hinweis (Blöcke titel, keywords, kopf_rechts, fuss_links, kopf_id, demo_hinweis) und
    braucht unten keinen Platz für den Stempel (rand_unten). Die Vorgaben der Blöcke sind genau der Text der
@@ -26,12 +26,18 @@
   {%- endif -%}
 {%- endmacro -%}
 
+{%- macro produkt_mit_zusatz(x) -%}
+  {# Der Produktname, dahinter die Beschreibung grau und nicht fett wie in der Oberfläche – ohne Strich
+     (x: produkt_name, produkt_zusatz aus katalog.produkt_teile). #}
+  {{- x.produkt_name }}{% if x.produkt_zusatz %} <span class="zusatz">{{ x.produkt_zusatz }}</span>{% endif -%}
+{%- endmacro -%}
+
 {%- macro artikel_block(artikel, mit_ordner=True) -%}
   <section class="artikel">
     <h2>Artikel</h2>
     <table class="artikel-tab"><tr>
       <td class="artikel-daten">
-        <div class="produkt">{{ artikel.produkt }}</div>
+        <div class="produkt">{{ produkt_mit_zusatz(artikel) }}</div>
         <div class="kategorie">{{ artikel.kategorie }}</div>
         {%- set sn -%}
           <span class="mono">{{ artikel.seriennummer }}</span>{% if artikel.seriennummer_vergeben %} <span class="hinweis">vom System vergeben</span>{% endif %}
@@ -189,6 +195,8 @@ table.felder td { vertical-align: top; padding: 1.2mm 3mm 1.2mm 0; }
 .artikel-tab > tbody > tr > td { vertical-align: top; padding: 0; }
 .artikel .produkt { font-size: 12pt; font-weight: 700; color: var(--schwarz); line-height: 1.2; overflow-wrap: anywhere; }
 .artikel .kategorie { color: var(--grau); margin: .5mm 0 1.5mm; overflow-wrap: anywhere; }
+/* Die Beschreibung hinter dem Produktnamen (Makro produkt_mit_zusatz): grau wie die Kategorie darunter, nicht fett */
+.zusatz { color: var(--grau); font-weight: 400; }
 .artikel-bild { width: 40mm; padding-left: 4mm !important; text-align: center; }
 .artikel-bild img { max-width: 38mm; max-height: 38mm; border: .5pt solid var(--linie); }
 .ohne-bild { width: 38mm; height: 26mm; border: .5pt dashed var(--linie); color: var(--grau); font-size: 7pt;

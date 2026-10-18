@@ -9,36 +9,53 @@
 (function () {
   const { esc, api, toast, dialog, confirm } = S;
 
-  /* --- Produktname mit Beschreibung (Nachbesserung vom 18.10.2026) ------------------------------------------------
-     Die Beschreibung eines Produkts ist ein kurzer Zusatz hinter dem Namen, etwa die Verschlussart eines Karabiners. Wo
-     ein Produkt genannt wird, steht sie direkt hinter dem Modell und vor der Artikelnummer – „Modell | Beschreibung“,
-     mit derselben Hervorhebung und im selben Link wie das Modell. Eine Regel für alle Stellen (produktZusatz), dieselbe
-     wie katalog.zusatz und katalog.produktname auf dem Server (PDF, CSV, Mails): Ohne Beschreibung nur der Name, kein
-     Strich. Steht der Zusatz schon von Hand im Modellnamen („D Classic | Screwlock“), kommt er nicht doppelt. Eine
-     ältere, längere Beschreibung (bis dahin war das Feld mehrzeilig) steht in einer Zeile, nach BESCHREIBUNG_MAX Zeichen
-     mit „…“ gekürzt; den vollen Text zeigt der title. Ausgaben: produktName als Text (Rückfragen, Dialogtitel, alt),
-     produktHtml maskiert für Seiten und Listen – auch für suche.js und global.js (window.MatProdukt). In produktHtml
-     hält ein Wortverbinder (U+2060) den Strich am Zusatz: Hinter „|“ darf der Browser sonst umbrechen, und das
-     geschützte Leerzeichen stünde sichtbar – im Link unterstrichen – am Anfang der nächsten Zeile. Muss die Zeile
-     dort umbrechen, dann vor dem Strich, überall gleich: „… D-Karabiner“ / „| Screwlock“. */
+  /* --- Produktname mit Beschreibung (Nachbesserungen vom 18.10.2026) ---------------------------------------------
+     Die Beschreibung eines Produkts ist ein kurzer Zusatz hinter dem Namen, etwa die Verschlussart eines Karabiners.
+     Wo ein Produkt genannt wird, steht sie direkt hinter dem Modell und vor der Artikelnummer, ohne Strich und grau
+     wie die Artikelnummer in der Katalogliste: „D Classic Screwlock K496B“ – der Name hervorgehoben bzw. verlinkt,
+     der Zusatz außerhalb davon (class="muted mat-zusatz", nie fett, nie unterstrichen). Eine Regel für alle Stellen
+     (modellTeile, produktZusatz), dieselbe wie katalog.produkt_teile auf dem Server (PDF, CSV, Mails): Ohne
+     Beschreibung nur der Name. Steht der Zusatz schon von Hand im Modellnamen („D Classic | Screwlock“), gilt der Teil
+     vor dem Strich als Name und der Teil dahinter als Zusatz – angezeigt wie eine Beschreibung, der Katalog bleibt,
+     wie er ist; dieselbe Angabe in beiden kommt nicht doppelt, zwei verschiedene stehen mit Komma („Screwlock,
+     Aluminium“). Eine ältere, längere Beschreibung (bis dahin war das Feld mehrzeilig) steht in einer Zeile, nach
+     BESCHREIBUNG_MAX Zeichen mit „…“ gekürzt; den vollen Text zeigt der title.
+     Ausgaben: produktName als Text, Name und Zusatz durch ein Leerzeichen getrennt (Rückfragen, Dialogtitel, alt);
+     nameHtml (der Name, maskiert – kommt in den Link oder in <strong>) und dahinter zusatzHtml (der graue Zusatz mit
+     führendem Leerzeichen, oder nichts) für Seiten und Listen – auch für suche.js und global.js (window.MatProdukt). */
   const BESCHREIBUNG_MAX = 80;
+  // Der Modellname, zerlegt an „|“: vorn der Name, dahinter ein Zusatz von Hand (leere Teile fallen weg).
+  function modellTeile(model) {
+    const teile = String(model || "").split("|").map((t) => t.replace(/\s+/g, " ").trim());
+    const extra = teile.slice(1).filter(Boolean);
+    return { name: teile[0] || extra.shift() || "", extra };
+  }
+  // Der Zusatz hinter dem Namen als { text, voll } oder null; voll nur, wenn eine ältere, lange Beschreibung
+  // gekürzt ist (für den title).
   function produktZusatz(p) {
-    const z = String((p && p.description) || "").replace(/\s+/g, " ").trim();
-    if (!z || String(p.model || "").split("|").slice(1).some((t) => t.trim().toLowerCase() === z.toLowerCase())) return null;
-    if (z.length <= BESCHREIBUNG_MAX) return { text: z, voll: "" };
-    let k = z.slice(0, BESCHREIBUNG_MAX - 1);
-    if (k.indexOf(" ", BESCHREIBUNG_MAX >> 1) >= 0) k = k.slice(0, k.lastIndexOf(" "));     // am Wortende, wo es geht
-    return { text: `${k.replace(/[\s,;:–-]+$/, "")}…`, voll: z };
+    const { extra } = modellTeile(p && p.model);
+    let z = String((p && p.description) || "").replace(/\s+/g, " ").trim();
+    if (extra.some((t) => t.toLowerCase() === z.toLowerCase())) z = "";
+    let k = z;
+    if (z.length > BESCHREIBUNG_MAX) {
+      k = z.slice(0, BESCHREIBUNG_MAX - 1);
+      if (k.indexOf(" ", BESCHREIBUNG_MAX >> 1) >= 0) k = k.slice(0, k.lastIndexOf(" "));   // am Wortende, wo es geht
+      k = `${k.replace(/[\s,;:–-]+$/, "")}…`;
+    }
+    const text = [...extra, k].filter(Boolean).join(", ");
+    return text ? { text, voll: k === z ? "" : [...extra, z].join(", ") } : null;
   }
   // ohneHersteller: ab dem Modell – in Listen mit eigener Herstellerspalte.
+  const nameText = (p, ohneHersteller) =>
+    `${ohneHersteller ? "" : `${p.manufacturer || ""} `}${modellTeile(p.model).name}`.trim();
   const produktName = (p, ohneHersteller) => {
     const z = produktZusatz(p);
-    return `${ohneHersteller ? "" : `${p.manufacturer || ""} `}${p.model || ""}${z ? ` | ${z.text}` : ""}`.trim();
+    return `${nameText(p, ohneHersteller)}${z ? ` ${z.text}` : ""}`.trim();
   };
-  const produktHtml = (p, ohneHersteller) => {
+  const nameHtml = (p, ohneHersteller) => esc(nameText(p, ohneHersteller));
+  const zusatzHtml = (p) => {
     const z = produktZusatz(p);
-    const name = esc(`${ohneHersteller ? "" : `${p.manufacturer || ""} `}${p.model || ""}`.trim());
-    return z ? `${name} <span class="mat-zusatz"${z.voll ? ` title="${esc(z.voll)}"` : ""}>|&#x2060;&nbsp;${esc(z.text)}</span>` : name;
+    return z ? ` <span class="muted mat-zusatz"${z.voll ? ` title="${esc(z.voll)}"` : ""}>${esc(z.text)}</span>` : "";
   };
   /* Nummern im Fließtext hinter dem Produkt – „ · Art.-Nr. DEMO-K-1“, „Seriennummer DEMO-K-0815“ – stehen als ein
      Stück (mat-ganz, material.css): Passt es nicht mehr in die Zeile, rutscht es ganz in die nächste, statt an einem
@@ -46,7 +63,7 @@
      Nummer schon maskiert, etwa mit markiertem Suchtext (suche.js); sonst wird nr maskiert. */
   const nummerHtml = (label, nr, html) => `<span class="mat-ganz">${label} ${html === undefined ? esc(nr) : html}</span>`;
   const artNrHtml = (nr, html) => (nr ? ` · ${nummerHtml("Art.-Nr.", nr, html)}` : "");
-  window.MatProdukt = { name: produktName, html: produktHtml, zusatz: produktZusatz, max: BESCHREIBUNG_MAX,
+  window.MatProdukt = { name: produktName, nameHtml, zusatzHtml, zusatz: produktZusatz, max: BESCHREIBUNG_MAX,
                         artNr: artNrHtml, nummer: nummerHtml };
 
   const root = document.getElementById("mat");
@@ -1004,7 +1021,7 @@
   const sortWeiter = (sort, feld) => (sort.feld === feld ? { feld, richtung: sort.richtung === "auf" ? "ab" : "auf" } : { feld, richtung: "auf" });
   const sortParameter = (q, sort) => { if (sort && sort.feld) { q.set("sort", sort.feld); q.set("richtung", sort.richtung); } return q; };
   // Ein Produkt in Listen: Hersteller in eigener Spalte, hier Bild, Modell mit Beschreibung und Artikelnummer.
-  const produktZelle = (a) => `${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${produktHtml(a, true)}${a.article_no ? ` <span class="muted">${esc(a.article_no)}</span>` : ""}${demoMarke(a.demo)}`;
+  const produktZelle = (a) => `${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${nameHtml(a, true)}${zusatzHtml(a)}${a.article_no ? ` <span class="muted">${esc(a.article_no)}</span>` : ""}${demoMarke(a.demo)}`;
 
   /* Drei Gestalten je nach Breite des Inhalts (material.css, „Lieferung 5 – Geräte: listen“): ab 821 px alle Spalten;
      601–820 px eine engere Tabelle – Seriennummer unter der Inventar-Nr., Hersteller über dem Produkt, nächste Prüfung
@@ -1086,7 +1103,7 @@
       $("#pr-offen").innerHTML = liste.length ? `<section class="section"><h2>Offene Prüfungen</h2>
         <p class="help">Eine offene Prüfung reserviert ihren Artikel: Nur ihr Prüfer arbeitet daran weiter. Liegt eine liegen, gibt der Materialwart sie frei.</p>
         <table class="list mat-tabelle mat-karten"><thead><tr><th>Artikel</th><th>Prüfung</th><th>Prüfer</th><th>begonnen</th><th></th></tr></thead><tbody>
-        ${liste.map((x) => `<tr><td data-l="Artikel" class="mat-k-titel"><a href="/material/artikel/${x.item_id}"><strong>${esc(x.artikel.inventory_no)}</strong></a> ${produktHtml(x.artikel)} <div class="small muted">${esc(x.artikel.pfad)}</div></td>
+        ${liste.map((x) => `<tr><td data-l="Artikel" class="mat-k-titel"><a href="/material/artikel/${x.item_id}"><strong>${esc(x.artikel.inventory_no)}</strong></a> ${nameHtml(x.artikel)}${zusatzHtml(x.artikel)} <div class="small muted">${esc(x.artikel.pfad)}</div></td>
           <td data-l="Prüfung" class="mat-k-halb">${esc(PRUEFART_KURZ[x.art] || x.art)}</td><td data-l="Prüfer" class="mat-k-halb">${esc(x.pruefer)}${x.eigen ? ' <span class="badge">du</span>' : ""}</td>
           <td data-l="begonnen">${esc(fmtZeit(x.begonnen_am))}</td>
           <td class="tabelle-aktionen">${x.eigen && x.artikel.darf && x.artikel.darf.pruefen ? `<a class="btn secondary small" href="/material/pruefung/${x.id}">Weiter prüfen</a>` : `<a class="btn secondary small" href="/material/pruefung/${x.id}">Ansehen</a>`}
@@ -1653,7 +1670,7 @@
     let laedt = false;
     ziel.scrollTop = 0;
     const zeile = (p, i) => `<div class="mat-treffer-produkt">${produktFoto(p)}<button type="button" class="mat-treffer-wahl" data-i="${i}">
-      <strong>${produktHtml(p)}</strong> <span class="muted">${esc(p.article_no || "")} · ${esc(p.category_name || "")}</span>${demoMarke(p.demo)}</button></div>`;
+      <strong>${nameHtml(p)}</strong>${zusatzHtml(p)} <span class="muted">${esc(p.article_no || "")} · ${esc(p.category_name || "")}</span>${demoMarke(p.demo)}</button></div>`;
     async function mehr() {
       if (laedt || (seite && liste.length >= gesamt)) return;
       laedt = true;
@@ -1791,7 +1808,7 @@
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="Produktbild ${esc(produktName(p))}">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel">
           <h1>${esc(a.inventory_no)} ${statusMarke(a.status, true)}</h1>
-          <p class="mat-produktzeile"><a href="/material/katalog/produkt/${p.id}">${produktHtml(p)}</a>${artNrHtml(p.article_no)}</p>
+          <p class="mat-produktzeile"><a href="/material/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}${artNrHtml(p.article_no)}</p>
           <p>Seriennummer <strong>${esc(a.serial_no)}</strong>${a.serial_generated ? ' <span class="badge grey">vom System vergeben</span><span class="help mat-sn-hinweis">Der Hersteller vergibt keine Seriennummer – diese Nummer bitte dauerhaft am Artikel anbringen.</span>' : ""}</p>
           <div class="btn-row mat-pruefknoepfe">${!aus && darf.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
             ${frei && darf.pruefen && !a.entwurf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
@@ -1809,7 +1826,7 @@
       ${DATEN.suche ? '<div id="mat-global-angebot"></div>' : ""}
       <div class="mat-spalten">
         <section class="section"><h2>Stammdaten</h2><dl class="mat-daten">
-          ${zeile("Produkt", `${produktHtml(p)}${p.norm ? ` · ${esc(p.norm)}` : ""}`)}
+          ${zeile("Produkt", `${nameHtml(p)}${zusatzHtml(p)}${p.norm ? ` · ${esc(p.norm)}` : ""}`)}
           ${zeile("Materialart", esc(MATERIALART[p.material_kind] || p.material_kind))}
           ${zeile("Gliederung", a.gliederung ? pfadGlied(a.gliederung) : "–")}
           ${zuordnung}
@@ -2117,7 +2134,7 @@
     function waehlen(p) {
       produkt = p;
       $("#an-produkt").hidden = false;
-      $("#an-produkt").innerHTML = `${produktFoto(p)}<strong>${produktHtml(p)}</strong> ${p.article_no ? `<span class="muted">${esc(p.article_no)}</span>` : ""} ${demoMarke(p.demo)}
+      $("#an-produkt").innerHTML = `${produktFoto(p)}<strong>${nameHtml(p)}</strong>${zusatzHtml(p)} ${p.article_no ? `<span class="muted">${esc(p.article_no)}</span>` : ""} ${demoMarke(p.demo)}
         <span class="mat-art">${esc(MATERIALART[p.material_kind])}</span> <button class="lnk" type="button" id="an-anders">anderes Produkt</button>`;
       trefferLeeren($("#an-treffer"));
       $("#an-q").value = "";
@@ -2215,7 +2232,7 @@
     let nachladen = null;
     // Enge Tabelle und Karte (Lieferung 5): der Hersteller klein über dem Produkt, die kurzen Angaben zu zweit.
     const produktZeile = (x) => `<tr><td data-l="Hersteller" class="mat-schmal-weg">${esc(x.manufacturer || "")}</td>
-          <td data-l="Produkt" class="mat-k-titel">${x.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(x.manufacturer)}</div>` : ""}${x.vorschau ? `<img class="mat-mini" src="${esc(x.vorschau)}" alt="" loading="lazy">` : ""}<a href="/material/katalog/produkt/${x.id}"><strong>${produktHtml(x, true)}</strong></a>${x.article_no ? ` <span class="muted">${esc(x.article_no)}</span>` : ""}${demoMarke(x.demo)}</td>
+          <td data-l="Produkt" class="mat-k-titel">${x.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(x.manufacturer)}</div>` : ""}${x.vorschau ? `<img class="mat-mini" src="${esc(x.vorschau)}" alt="" loading="lazy">` : ""}<a href="/material/katalog/produkt/${x.id}"><strong>${nameHtml(x, true)}</strong></a>${zusatzHtml(x)}${x.article_no ? ` <span class="muted">${esc(x.article_no)}</span>` : ""}${demoMarke(x.demo)}</td>
           <td data-l="Kategorie">${esc(x.category_name || "")}</td><td data-l="Materialart" class="mat-k-halb">${esc(MATERIALART[x.material_kind])}</td>
           <td data-l="Intervall" class="mat-k-halb">${x.intervall.monate ? `${x.intervall.monate} Mon.` : "–"}</td>
           <td data-l="Lebensdauer" class="mat-k-halb">${x.lifetime_years ? `${x.lifetime_years} J.` : "–"}</td><td data-l="Bestand" class="mat-k-halb">${x.bestand}</td></tr>`;
@@ -2708,7 +2725,7 @@
       <div class="mat-pfad"><a href="/material/katalog">Katalog</a> / ${p.kategorie_pfad.map((x) => `<a href="/material/katalog?kategorie=${x.id}">${esc(x.name)}</a>`).join(" / ")}</div>
       <div class="mat-artikelkopf">
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
-        <div class="mat-artikeltitel"><h1>${produktHtml(p)} ${demoMarke(p.demo)}</h1>
+        <div class="mat-artikeltitel"><h1>${nameHtml(p)}${zusatzHtml(p)} ${demoMarke(p.demo)}</h1>
           ${DARF.verwalten ? `<div class="btn-row"><a class="btn secondary small" href="/material/artikel/neu?produkt=${p.id}">+ Artikel dieses Produkts</a></div>` : ""}
           ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${p.loeschbar ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}</div>
           <div class="btn-row"><button class="btn secondary small" data-act="variante">Als Variante kopieren</button><button class="btn secondary small" data-act="rr-neu">Rückruf anlegen</button></div>` : ""}</div>
@@ -3041,7 +3058,7 @@
       ${artikelPfad(a)}
       <div class="page-head"><h1>Prüfung ${esc(a.inventory_no)} ${statusMarke(a.status, true)}</h1></div>
       <div class="mat-formular">
-        <p class="mat-produktzeile"><strong>${produktHtml(p)}</strong>${artNrHtml(p.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)}</p>
+        <p class="mat-produktzeile"><strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrHtml(p.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)}</p>
         ${a.lock_state !== "frei" && a.lock_state !== "ausgesondert" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.</p>` : ""}
         ${rueckrufHinweis((a.rueckrufe || []).filter((r) => r.zustand !== "erledigt").map((r) => r.title), a.id)}
         ${lebensdauerHinweis(ld)}
@@ -3360,7 +3377,7 @@
         <div class="page-head"><h1>${esc(PRUEFART[pr.art] || pr.art)} <span class="mat-h1-zusatz">${esc(a.inventory_no)}</span> ${pr.entwurf ? '<span class="badge">Entwurf</span>' : ergebnisMarke(pr.ergebnis)}</h1>
           ${knoepfe.length ? `<div class="btn-row">${knoepfe.join("")}</div>` : ""}</div>
         ${berichtigungHinweis()}
-        <p class="mat-produktzeile"><strong>${produktHtml(pr.produkt)}</strong>${artNrHtml(pr.produkt.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)} ${statusMarke(a.status)}</p>
+        <p class="mat-produktzeile"><strong>${nameHtml(pr.produkt)}</strong>${zusatzHtml(pr.produkt)}${artNrHtml(pr.produkt.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)} ${statusMarke(a.status)}</p>
         <p class="small muted">${pr.formular ? `Formular ${esc(pr.formular.titel || "ohne Titel")}, Version ${pr.formular.version} · ` : ""}${pr.art === "aussonderung" ? "Ausgeführt von" : "Prüfer"} ${esc(pr.pruefer || "–")}${pr.urkunde ? ` (Urkundennummer ${esc(pr.urkunde)})` : ""}
           · ${pr.entwurf && !pr.berichtigt ? `begonnen ${esc(fmtZeit(pr.begonnen_am))}` : `Prüftag ${esc(fmtTag(pr.datum))}`}
           ${pr.durchgang ? ` · Durchgang ${pr.durchgang.sichtbar ? `<a href="/material/durchgang/${pr.durchgang.id}">${esc(pr.durchgang.titel)}</a>` : `„${esc(pr.durchgang.titel)}“`}` : ""}</p>`;
@@ -3764,7 +3781,7 @@
       const maengel = offeneHinweise().maengel.length;
       dialog(`<h2>Prüfung festschreiben</h2>
         <dl class="mat-daten mat-fs-daten">
-          <dt>Artikel</dt><dd><strong>${esc(a.inventory_no)}</strong> · ${produktHtml(pr.produkt)}</dd>
+          <dt>Artikel</dt><dd><strong>${esc(a.inventory_no)}</strong> · ${nameHtml(pr.produkt)}${zusatzHtml(pr.produkt)}</dd>
           <dt>Prüfung</dt><dd>${esc(PRUEFART[pr.art] || pr.art)} am ${esc(fmtTag(pr.prueftag || isoHeute()))}</dd>
           <dt>Ergebnis</dt><dd>${ergebnisMarke(daten.ergebnis)}${maengel ? ` <span class="small">mit ${plural(maengel, "Mangel", "Mängeln")}</span>` : ""}</dd>
           ${daten.ergebnis === "einsatzbereit" ? `<dt>Nächste Prüfung</dt><dd><strong>${esc(fmtTag(daten.next_due_on || pr.vorschlag_naechste))}</strong></dd>` : ""}
@@ -4156,10 +4173,10 @@
       <div class="mat-meldung-kopf"><h2>${esc(meldungName(m))}</h2>${meldestatusMarke(m.status)}</div>
       <p class="muted small">gemeldet${wer(m.created_by_name)} am ${esc(fmtTag(m.created_at))}${meldeOrdner(m) ? ` · für ${esc(meldeOrdner(m))}` : ""}</p>
       ${meldeDetails(m)}
-      ${m.treffer ? `<p class="notice">Steht inzwischen im Katalog: <a href="/material/katalog/produkt/${m.treffer.id}">${produktHtml(m.treffer)}</a>${m.treffer.article_no ? ` <span class="muted">${esc(m.treffer.article_no)}</span>` : ""}
+      ${m.treffer ? `<p class="notice">Steht inzwischen im Katalog: <a href="/material/katalog/produkt/${m.treffer.id}">${nameHtml(m.treffer)}</a>${zusatzHtml(m.treffer)}${m.treffer.article_no ? ` <span class="muted">${esc(m.treffer.article_no)}</span>` : ""}
         ${bearbeiten ? `<button type="button" class="btn secondary small" data-act="treffer" data-id="${m.id}">Zuordnen</button>` : ""}</p>` : ""}
       ${m.status === "eingepflegt" ? `<p class="mat-meldung-ergebnis">Eingepflegt${wer(m.resolved_by_name)} am ${esc(fmtTag(m.resolved_at))}:
-        ${m.produkt ? `<a href="/material/katalog/produkt/${m.produkt.id}">${produktHtml(m.produkt)}</a>` : '<span class="muted">Produkt inzwischen gelöscht</span>'}
+        ${m.produkt ? `<a href="/material/katalog/produkt/${m.produkt.id}">${nameHtml(m.produkt)}</a>${zusatzHtml(m.produkt)}` : '<span class="muted">Produkt inzwischen gelöscht</span>'}
         ${m.answer ? `<br><span class="mat-text">${esc(m.answer)}</span>` : ""}</p>` : ""}
       ${m.status === "abgelehnt" ? `<p class="mat-meldung-ergebnis">Abgelehnt${wer(m.resolved_by_name)} am ${esc(fmtTag(m.resolved_at))}: <span class="mat-text">${esc(m.answer)}</span></p>` : ""}
       ${knoepfe.length ? `<div class="btn-row">${knoepfe.join("")}</div>` : ""}
@@ -4239,7 +4256,7 @@
         produktTreffer($("#zu-treffer", body), q, (p) => {
           gewaehlt = p;
           $("#zu-gewaehlt", body).hidden = false;
-          $("#zu-gewaehlt", body).innerHTML = `<strong>${produktHtml(gewaehlt)}</strong> <span class="muted">${esc(gewaehlt.article_no || "")}</span>`;
+          $("#zu-gewaehlt", body).innerHTML = `<strong>${nameHtml(gewaehlt)}</strong>${zusatzHtml(gewaehlt)} <span class="muted">${esc(gewaehlt.article_no || "")}</span>`;
           trefferLeeren($("#zu-treffer", body));
           $("#zu-ok", body).disabled = false;
         }, '<p class="help">Kein Produkt gefunden.</p>');
@@ -4340,7 +4357,7 @@
     if (!liste || !liste.length) return "";
     return `<section class="section mat-rr-kasten" aria-label="Rückrufe"><h2>Rückrufe</h2><ul class="mat-rr-liste">${liste.map((r) => `<li>
         <span class="mat-rr-marke">Rückruf</span>
-        <span class="mat-rr-was"><a href="/material/katalog/produkt/${r.produkt.id}"><strong>${produktHtml(r.produkt)}</strong></a> – ${esc(r.title)}</span>
+        <span class="mat-rr-was"><a href="/material/katalog/produkt/${r.produkt.id}"><strong>${nameHtml(r.produkt)}</strong></a>${zusatzHtml(r.produkt)} – ${esc(r.title)}</span>
         <span class="small">${plural(r.betroffen, "Artikel", "Artikel")} betroffen · ${r.offen ? `<strong class="mat-warn">${r.offen} offen</strong>` : "alle erledigt"}</span></li>`).join("")}</ul></section>`;
   }
 

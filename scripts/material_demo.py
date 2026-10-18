@@ -75,7 +75,7 @@ KATALOG = {
              "materialart": "sonstiges", "intervall_monate": 12},
             {"name": "DEMO Wassersporthelme", "norm": "EN 1385", "materialart": "sonstiges", "intervall_monate": 12}]},
     ],
-    # Die Beschreibung ist ein kurzer Zusatz hinter dem Namen („Modell | Beschreibung“, etwa die Verschlussart). Die
+    # Die Beschreibung ist ein kurzer Zusatz hinter dem Namen (grau dahinter, etwa die Verschlussart). Die
     # DEMO-Produkte haben keine: Den Hinweis trägt die DEMO-Marke, als Zusatz stünde er doppelt („DEMO Gurt A | DEMO –
     # nicht für echte Prüfungen“, Prüfung der Nachbesserung vom 18.10.2026). Der Leerwert steht ausdrücklich da – so
     # leert ein neuer Lauf auch die Beschreibung aus einem älteren DEMO-Katalog.

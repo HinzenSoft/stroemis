@@ -58,16 +58,17 @@
   // Die Artikelnummer des Herstellers nur, wenn sie der Treffer ist – sonst kürzte sie die Produktzeile unnötig.
   const trifft = (wert, q) => Boolean(wert) && String(wert).toLowerCase().includes(q.toLowerCase());
 
-  // Das Produkt wie überall im Modul: „Hersteller Modell | Beschreibung“ (window.MatProdukt aus material.js).
+  // Das Produkt wie überall im Modul: „Hersteller Modell“ und dahinter grau die Beschreibung (window.MatProdukt aus
+  // material.js).
   function karte(a, q, i) {
-    const produkt = window.MatProdukt.html(a);
+    const name = window.MatProdukt.nameHtml(a);
     return `<li role="option" id="mv-${i}" aria-selected="false" data-href="/material/artikel/${a.id}">
       <a href="/material/artikel/${a.id}" tabindex="-1">
         ${a.vorschau ? `<img class="mv-bild" src="${esc(a.vorschau)}" alt="" loading="lazy">` : '<span class="mv-bild leer" aria-hidden="true"></span>'}
         <span class="mv-text">
           <span class="mv-kopf"><strong class="mv-inv">${markiert(a.inventory_no, q)}</strong>
             <span class="mat-status s-${esc(a.status)}">${esc(STATUS[a.status] || a.status)}</span>${a.rueckruf ? ' <span class="mat-rr-marke">Rückruf</span>' : ""}${a.demo ? ' <span class="mat-demo">DEMO</span>' : ""}</span>
-          <span class="mv-produkt">${produkt || "–"}${trifft(a.article_no, q) ? window.MatProdukt.artNr(a.article_no, markiert(a.article_no, q)) : ""}</span>
+          <span class="mv-produkt">${name || "–"}${window.MatProdukt.zusatzHtml(a)}${trifft(a.article_no, q) ? window.MatProdukt.artNr(a.article_no, markiert(a.article_no, q)) : ""}</span>
           <span class="mv-zeile">Seriennummer ${markiert(a.serial_no, q)}${a.pfad ? ` · ${esc(a.pfad)}` : ""}</span>
         </span></a></li>`;
   }

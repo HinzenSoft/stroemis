@@ -65,7 +65,7 @@ table.ereignisse .aenderung .feld { color: var(--grau); }
 .schluss { margin-top: 6mm; font-size: 8pt; color: var(--anthrazit); }
 {% endblock %}
 
-{% block unterzeile %}{{ artikel.produkt }} · Status: <strong>{{ zustand.status_text }}</strong>{% endblock %}
+{% block unterzeile %}{{ produkt_mit_zusatz(artikel) }} · Status: <strong>{{ zustand.status_text }}</strong>{% endblock %}
 
 {% block kopf_id %}
       <div class="lbl">Inventarnummer</div>

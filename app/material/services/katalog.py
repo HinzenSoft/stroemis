@@ -41,13 +41,14 @@ KEIN_INTERVALL = "Kein Prüfintervall: am Produkt angeben oder in der Kategorie 
 # Ein Prüfpunkt ist oft eine ganze Prüfanweisung („Kontrolle des Zustands der Verriegelungshülse (z. B. …)“).
 PUNKT_TEXT_MAX = 1000
 # Die Beschreibung eines Produkts ist ein kurzer Zusatz hinter dem Modell – etwa die Verschlussart eines Karabiners – und
-# steht überall als „Modell | Beschreibung“ vor der Artikelnummer (Nachbesserung vom 18.10.2026; produktname hier,
-# produktName in material.js). Eine Zeile, höchstens so lang wie eine Artikelnummer: Das reicht für zwei Angaben
-# („Twistlock, Aluminium“) und passt mit dem Modell noch in eine Listenzeile, ein Absatz passt nicht hinein –
-# Ausführliches gehört in ein Dokument am Produkt. Bis dahin war das Feld mehrzeilig, bis 4000 Zeichen. Solche älteren
-# Beschreibungen bleiben, wie sie sind: Der Katalogimport übernimmt sie unverändert (der Austausch dev → Produktion soll
-# nicht an Altbeständen scheitern), die Anzeige kürzt sie auf eine Zeile mit „…“, und wer das Produkt über die
-# Oberfläche speichert, kürzt sie selbst – der Dialog zeigt dazu den vollen Text.
+# steht überall direkt hinter dem Modell vor der Artikelnummer, ohne Strich, in Oberfläche und PDF grau (Nachbesserungen
+# vom 18.10.2026; produkt_teile und produktname hier, produktZusatz und produktName in material.js). Eine Zeile,
+# höchstens so lang wie eine Artikelnummer: Das reicht für zwei Angaben („Twistlock, Aluminium“) und passt mit dem
+# Modell noch in eine Listenzeile, ein Absatz passt nicht hinein – Ausführliches gehört in ein Dokument am Produkt. Bis
+# dahin war das Feld mehrzeilig, bis 4000 Zeichen. Solche älteren Beschreibungen bleiben, wie sie sind: Der
+# Katalogimport übernimmt sie unverändert (der Austausch dev → Produktion soll nicht an Altbeständen scheitern), die
+# Anzeige kürzt sie auf eine Zeile mit „…“, und wer das Produkt über die Oberfläche speichert, kürzt sie selbst – der
+# Dialog zeigt dazu den vollen Text.
 BESCHREIBUNG_MAX = 80
 
 # Herstellerdokumente: PDF und Bilder, unverändert abgelegt. Der Inhalt muss zur Endung passen – eine
@@ -310,28 +311,49 @@ def beschreibung(d):
     return v
 
 
+def modell_teile(modell):
+    """Der Modellname, zerlegt an „|“ – dieselbe Regel wie modellTeile in material.js: vorn der Name, dahinter ein
+    Zusatz von Hand („D Classic | Screwlock“ → „D Classic“, [„Screwlock“]); leere Teile fallen weg. Nur für die
+    Anzeige – im Katalog bleibt der Modellname, wie er gepflegt ist."""
+    teile = [" ".join(t.split()) for t in (modell or "").split("|")]
+    extra = [t for t in teile[1:] if t]
+    name = teile[0] or (extra.pop(0) if extra else "")
+    return name, extra
+
+
 def zusatz(modell, beschr):
-    """Der Zusatz hinter dem Modell, wie ihn die Anzeige zeigt – dieselbe Regel wie produktZusatz in material.js: die
-    Beschreibung in einer Zeile; leer, wenn es keine gibt oder sie schon von Hand im Modellnamen steht („D Classic |
-    Screwlock“ mit der Beschreibung „Screwlock“). Eine ältere, längere endet nach BESCHREIBUNG_MAX Zeichen (am
-    Wortende, wenn eins in der zweiten Hälfte liegt) mit „…“."""
+    """Der Zusatz hinter dem Namen, wie ihn die Anzeige zeigt – dieselbe Regel wie produktZusatz in material.js: ein
+    Zusatz von Hand im Modellnamen (der Teil hinter „|“) und die Beschreibung in einer Zeile, zwei verschiedene mit
+    Komma („Screwlock, Aluminium“); dieselbe Angabe in beiden nur einmal („D Classic | Screwlock“ mit der Beschreibung
+    „Screwlock“). Leer, wenn es keins von beiden gibt. Eine ältere, längere Beschreibung endet nach BESCHREIBUNG_MAX
+    Zeichen (am Wortende, wenn eins in der zweiten Hälfte liegt) mit „…“."""
+    _, extra = modell_teile(modell)
     z = " ".join((beschr or "").split())
-    if not z or z.casefold() in [t.strip().casefold() for t in (modell or "").split("|")[1:]]:
-        return ""
+    if z.casefold() in [t.casefold() for t in extra]:
+        z = ""
     if len(z) > BESCHREIBUNG_MAX:
         z = z[:BESCHREIBUNG_MAX - 1]
         if " " in z[BESCHREIBUNG_MAX // 2:]:
             z = z[:z.rindex(" ")]
         z = z.rstrip(" ,;:–-") + "…"
-    return z
+    return ", ".join(t for t in [*extra, z] if t)
+
+
+def produkt_teile(p, beschr=None):
+    """(Name, Zusatz) eines Produkts: „Hersteller Modell“ – vom Modell der Teil vor einem „|“ – und der Zusatz
+    dahinter (zusatz()), getrennt für Ausgaben, die ihn grau setzen (PDF). p: Zeile mit manufacturer, model und
+    description; beschr statt p["description"], wo die Abfrage sie unter anderem Namen liefert (product_description
+    in den Artikellisten)."""
+    name, _ = modell_teile(p.get("model"))
+    return (f"{p.get('manufacturer') or ''} {name}".strip(),
+            zusatz(p.get("model"), p.get("description") if beschr is None else beschr))
 
 
 def produktname(p, beschr=None):
-    """„Hersteller Modell | Beschreibung“ – der Name eines Produkts in Protokollen, Exporten, Mails und Meldungen.
-    p: Zeile mit manufacturer, model und description; beschr statt p["description"], wo die Abfrage sie unter
-    anderem Namen liefert (product_description in den Artikellisten)."""
-    z = zusatz(p.get("model"), p.get("description") if beschr is None else beschr)
-    return f"{p.get('manufacturer') or ''} {p.get('model') or ''}{f' | {z}' if z else ''}".strip()
+    """Der Name eines Produkts als Text in Protokollen, Exporten, Mails, Rückfragen und Meldungen: „Hersteller Modell
+    Beschreibung“ – Name und Zusatz durch ein Leerzeichen getrennt, ohne Strich (Wunsch vom 18.10.2026: „Entferne den
+    |“), wie die Oberfläche sie zeigt, nur ohne das Grau. Argumente wie produkt_teile."""
+    return " ".join(t for t in produkt_teile(p, beschr) if t)
 
 
 def produkt_werte(d, alt=None, importiert=False):

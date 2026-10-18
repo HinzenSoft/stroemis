@@ -487,7 +487,7 @@ def _lange_beschreibung(lauf, name, beschreibung):
 
 
 def _produktname_datei(e):
-    """Der Name eines Produkteintrags der Datei für Bericht und Fehlerorte – „Hersteller Modell | Beschreibung“ wie
+    """Der Name eines Produkteintrags der Datei für Bericht und Fehlerorte – „Hersteller Modell Beschreibung“ wie
     katalog.produktname, damit sich Varianten unterscheiden, die nur die Beschreibung trennt (etwa die Verschlussart).
     Noch ungeprüft: Fehlt Hersteller oder Modell, steht „?“; eine Beschreibung, die kein Text ist, bleibt weg."""
     if not isinstance(e, dict):

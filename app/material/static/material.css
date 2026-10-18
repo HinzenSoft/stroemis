@@ -181,6 +181,10 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 /* „Art.-Nr. …“ und „Seriennummer …“ im Fließtext als ein Stück (MatProdukt.nummer in material.js): rutscht ganz in die
    nächste Zeile statt am Bindestrich zu brechen; nur breiter als eine Zeile bricht es darin um – nichts rollt waagerecht. */
 .mat-ganz { display: inline-block; max-width: 100%; }
+/* Die Beschreibung hinter dem Namen (MatProdukt.zusatzHtml in material.js, class="muted mat-zusatz"): grau wie die
+   Artikelnummer in der Katalogliste und nie fett – auch in einer Überschrift oder einer halbfetten Zeile wie im
+   Steckbrief; sie steht außerhalb von Link und <strong> (Wunsch vom 18.10.2026: „Entferne den | …“). */
+.mat-zusatz { font-weight: 400; }
 .mat-artikeltitel h1 + .btn-row { margin-top: 12px; }
 .mat-artikeltitel .btn-row + .btn-row { margin-top: 10px; }
 .mat-spalten { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 0 28px; }
@@ -711,7 +715,7 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mv-kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
 .mv-inv { color: var(--rot); }
 .mv-zeile { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Das Produkt darf zwei Zeilen haben: Die Beschreibung hinter dem Modell („Modell | Beschreibung“) unterscheidet oft
+/* Das Produkt darf zwei Zeilen haben: Die Beschreibung hinter dem Modell (grau, .mat-zusatz) unterscheidet oft
    Varianten – am Telefon fiele sie in einer Zeile ganz weg (Nachbesserung vom 18.10.2026). */
 .mv-produkt { overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical;
   -webkit-line-clamp: 2; line-clamp: 2; }

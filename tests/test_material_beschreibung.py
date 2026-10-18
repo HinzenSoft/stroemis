@@ -1,11 +1,15 @@
 """Rauchtest für die Produktbeschreibung als Zusatz hinter dem Namen (Nachbesserung vom 18.10.2026):
 python tests/test_material_beschreibung.py  oder  pytest tests/test_material_beschreibung.py
 
-Die Beschreibung eines Produkts ist ein kurzer Zusatz – etwa die Verschlussart – und steht überall als „Modell |
-Beschreibung“ vor der Artikelnummer. Über die Oberfläche höchstens 80 Zeichen in einer Zeile: länger ist ein Fehler mit
-Klartext, nie eine stille Kürzung, auch nicht für eine ältere Beschreibung. Der Katalogimport (Format 1 und 2, also auch
-der Austausch dev → Produktion) übernimmt ältere, längere unverändert. Die Anzeige folgt einer Regel (katalog.zusatz und
-katalog.produktname hier, produktZusatz in material.js), die Produktsuche findet auch über die Beschreibung.
+Die Beschreibung eines Produkts ist ein kurzer Zusatz – etwa die Verschlussart – und steht überall direkt hinter dem
+Modell vor der Artikelnummer: ohne Strich, in der Oberfläche und im PDF grau außerhalb von Link und Hervorhebung, als
+Text durch ein Leerzeichen getrennt (zweiter Wunsch vom 18.10.2026: „Entferne den | und der Text der Beschreibung soll
+so wie der Produktschlüssel in grau sein“). Ein Zusatz von Hand im Modellnamen („D Classic | Screwlock“) zeigt sich
+genauso, der Katalog bleibt, wie er ist. Über die Oberfläche höchstens 80 Zeichen in einer Zeile: länger ist ein Fehler
+mit Klartext, nie eine stille Kürzung, auch nicht für eine ältere Beschreibung. Der Katalogimport (Format 1 und 2, also
+auch der Austausch dev → Produktion) übernimmt ältere, längere unverändert. Die Anzeige folgt einer Regel
+(katalog.modell_teile, zusatz, produkt_teile und produktname hier, modellTeile und produktZusatz in material.js), die
+Produktsuche findet auch über die Beschreibung.
 Alle Namen, Nummern und Texte hier sind erfunden und nur für den Test da."""
 import json
 import os
@@ -153,10 +157,11 @@ def test_import_lange_beschreibung():
 
 
 def test_bericht_und_journal_mit_zusatz():
-    """Prüfung der Nachbesserung: Importbericht und Journal nennen ein Produkt wie überall „Hersteller Modell |
-    Beschreibung“ – zwei Varianten, die nur die Beschreibung trennt, sind im Bericht zu unterscheiden: neu (auch im
-    Probelauf), geändert, als Ziel eines Formulars und in der Meldung „kein Prüfintervall mehr“; der Journaleintrag „als
-    Variante angelegt“ nennt die Quelle mit ihrem Zusatz. Vorher stand zweimal „Produkt „Testwerk D Test“: neu“ da."""
+    """Prüfung der Nachbesserung: Importbericht und Journal nennen ein Produkt wie überall „Hersteller Modell
+    Beschreibung“ (ohne Strich) – zwei Varianten, die nur die Beschreibung trennt, sind im Bericht zu unterscheiden: neu
+    (auch im Probelauf), geändert, als Ziel eines Formulars und in der Meldung „kein Prüfintervall mehr“; der
+    Journaleintrag „als Variante angelegt“ nennt die Quelle mit ihrem Zusatz. Vorher stand zweimal „Produkt „Testwerk D
+    Test“: neu“ da."""
     def katalog(zweite="Twistlock", intervall=12):
         return json.dumps({
             "format": "stroemis-material-katalog", "version": 1,
@@ -176,17 +181,19 @@ def test_bericht_und_journal_mit_zusatz():
             ber = importieren(c, katalog(), trocken, "katalog.json")
             assert not ber["fehler"] and ber["produkte"]["neu"] == 2, ber
             z = ber["aenderungen"]
-            assert "Produkt „Testwerk D Test | Screwlock“: neu" in z and "Produkt „Testwerk D Test | Twistlock“: neu" in z, z
-            assert any(a.startswith("Formular „Testformular“ (Produkt „Testwerk D Test | Screwlock“)") for a in z), z
+            assert "Produkt „Testwerk D Test Screwlock“: neu" in z, z
+            assert "Produkt „Testwerk D Test Twistlock“: neu" in z, z
+            assert any(a.startswith("Formular „Testformular“ (Produkt „Testwerk D Test Screwlock“)") for a in z), z
+            assert not [a for a in z if "|" in a], z
         ber = importieren(c, katalog(zweite="Ball-Lock"), False, "katalog.json")
         assert ber["produkte"]["geaendert"] == 1, ber
-        assert [a for a in ber["aenderungen"] if a.startswith("Produkt „Testwerk D Test | Ball-Lock“: geändert")], ber
+        assert [a for a in ber["aenderungen"] if a.startswith("Produkt „Testwerk D Test Ball-Lock“: geändert")], ber
         ber = importieren(c, katalog(zweite="Ball-Lock", intervall=None), True, "katalog.json")
         fehler = ber["fehler"]                             # Fehlerorte und die Meldung an der Kategorie
-        assert [x[:43] for x in fehler[:2]] == ["produkte[0] (Testwerk D Test | Screwlock): ",
-                                                "produkte[1] (Testwerk D Test | Ball-Lock): "], fehler
-        assert ("kategorien[0] (Testkategorie): Danach hätten diese Produkte kein Prüfintervall mehr: Testwerk D Test | "
-                "Screwlock, Testwerk D Test | Ball-Lock.") in fehler[2], fehler
+        assert fehler[0].startswith("produkte[0] (Testwerk D Test Screwlock): "), fehler
+        assert fehler[1].startswith("produkte[1] (Testwerk D Test Ball-Lock): "), fehler
+        assert ("kategorien[0] (Testkategorie): Danach hätten diese Produkte kein Prüfintervall mehr: Testwerk D Test "
+                "Screwlock, Testwerk D Test Ball-Lock.") in fehler[2], fehler
         # Eine Variante über die Oberfläche: Der Journaleintrag nennt die Quelle mit ihrem Zusatz.
         pid = _db(app, "SELECT id FROM mat_product WHERE article_no = 'DT-1'")["id"]
         quelle = c.get(f"/api/material/produkte/{pid}").json["produkt"]
@@ -196,7 +203,7 @@ def test_bericht_und_journal_mit_zusatz():
         assert r.status_code == 201, r.get_json()
         journal = c.get(f"/api/material/produkte/{r.json['produkt']['id']}").json["produkt"]["journal"]
         eintrag = [e for e in journal if e["action"] == "variante"]
-        assert len(eintrag) == 1 and eintrag[0]["nachher"]["name"] == "Testwerk D Test | Screwlock", journal
+        assert len(eintrag) == 1 and eintrag[0]["nachher"]["name"] == "Testwerk D Test Screwlock", journal
     print("Bericht und Journal mit Zusatz bestanden.")
 
 
@@ -247,38 +254,73 @@ def test_demo_ohne_beschreibung():
 
 
 def test_regel_produktname():
-    """Die Regel für den Namen (katalog.zusatz, produktname – dieselbe wie produktZusatz in material.js): ohne
-    Beschreibung nur der Name ohne Strich; mit „Modell | Beschreibung“; steht der Zusatz schon von Hand im Modellnamen,
-    nicht doppelt; Leerraum und Zeilenumbrüche werden ein Leerzeichen; eine ältere, lange Beschreibung endet in einer
-    Zeile nach höchstens 80 Zeichen am Wortende mit „…“."""
+    """Die Regel für den Namen (katalog.modell_teile, zusatz, produkt_teile, produktname – dieselbe wie modellTeile und
+    produktZusatz in material.js): ohne Beschreibung nur der Name; als Text „Modell Beschreibung“ ohne Strich, getrennt
+    (produkt_teile) für die graue Ausgabe; ein Zusatz von Hand im Modellnamen („D Test | Screwlock“) gilt als Zusatz –
+    angezeigt ohne Strich wie eine Beschreibung, nicht doppelt, mit einer anderen Beschreibung durch Komma getrennt;
+    Leerraum und Zeilenumbrüche werden ein Leerzeichen; eine ältere, lange Beschreibung endet in einer Zeile nach
+    höchstens 80 Zeichen am Wortende mit „…“."""
     from app.material.services import katalog
     assert katalog.BESCHREIBUNG_MAX == 80
 
+    def p(modell, beschreibung):
+        return {"manufacturer": "Testwerk", "model": modell, "description": beschreibung}
+
     def name(modell, beschreibung):
-        return katalog.produktname({"manufacturer": "Testwerk", "model": modell, "description": beschreibung})
+        return katalog.produktname(p(modell, beschreibung))
 
     assert name("D Test", "") == name("D Test", None) == "Testwerk D Test"
-    assert name("D Test", "Screwlock") == "Testwerk D Test | Screwlock"
-    assert name("D Test | Screwlock", "") == "Testwerk D Test | Screwlock"            # von Hand im Modellnamen
-    assert name("D Test | Screwlock", " screwlock ") == "Testwerk D Test | Screwlock"  # nicht doppelt
-    assert name("D Test | Screwlock", "Twistlock") == "Testwerk D Test | Screwlock | Twistlock"
-    assert name("D Test", "Screw\n  lock\tAlu") == "Testwerk D Test | Screw lock Alu"
-    assert katalog.produktname({"manufacturer": "Testwerk", "model": "D Test", "description": "x"}, "Ball-Lock") \
-        == "Testwerk D Test | Ball-Lock"                                                 # aus product_description
+    assert name("D Test", "Screwlock") == "Testwerk D Test Screwlock"
+    assert katalog.produkt_teile(p("D Test", "Screwlock")) == ("Testwerk D Test", "Screwlock")
+    assert katalog.produkt_teile(p("D Test", "")) == ("Testwerk D Test", "")
+    # Von Hand im Modellnamen: der Teil vor dem Strich ist der Name, der dahinter der Zusatz – wie eine Beschreibung.
+    assert katalog.modell_teile("D Test | Screwlock") == ("D Test", ["Screwlock"])
+    for modell, beschreibung in (("D Test | Screwlock", ""), ("D Test | Screwlock", " screwlock "),   # nicht doppelt
+                                 ("D Test|Screwlock", None), ("D  Test |  Screwlock | ", "")):
+        assert katalog.produkt_teile(p(modell, beschreibung)) == ("Testwerk D Test", "Screwlock"), modell
+    assert katalog.produkt_teile(p("D Test | Screwlock", "Twistlock")) == ("Testwerk D Test", "Screwlock, Twistlock")
+    assert name("D Test | Screwlock", "Twistlock") == "Testwerk D Test Screwlock, Twistlock"
+    assert katalog.modell_teile("| Nur Zusatz") == ("Nur Zusatz", []) and katalog.modell_teile(None) == ("", [])
+    assert name("D Test", "Screw\n  lock\tAlu") == "Testwerk D Test Screw lock Alu"
+    assert katalog.produktname(p("D Test", "x"), "Ball-Lock") == "Testwerk D Test Ball-Lock"   # aus product_description
+    assert katalog.produkt_teile(p("D Test", "x"), "") == ("Testwerk D Test", "")
+    for modell in ("D Test", "D Test | Screwlock", "A | B | C"):
+        for beschreibung in ("", "Twistlock", LANG):
+            assert "|" not in name(modell, beschreibung), (modell, beschreibung)
     z = katalog.zusatz("D Test", LANG)
     flach = " ".join(LANG.split())
     assert len(z) <= 80 and z.endswith("…") and "\n" not in z, z
     assert flach.startswith(z[:-1]) and flach[len(z) - 1] == " ", z                  # am Wortende abgeschnitten
     assert katalog.zusatz("D Test", "y" * 80) == "y" * 80 and katalog.zusatz("D Test", "y" * 81) == "y" * 79 + "…"
+    assert katalog.zusatz("D Test | Screwlock", LANG) == f"Screwlock, {z}"           # gekürzt wird nur die Beschreibung
     print("Regel für den Produktnamen bestanden.")
 
 
 def test_darstellung():
     """Wo der Server den Produktnamen liefert oder druckt, steht der Zusatz dabei: Artikellisten (Ordner, Suche,
     offene Prüfungen) tragen die Beschreibung des Produkts, die Prüfung Name und Felder, das neue Prüfprotokoll und der
-    Lebenslauf (PDF) „Hersteller Modell | Beschreibung“, die CSV eine eigene Spalte „Beschreibung“ hinter „Modell“ (voll, ungekürzt),
-    der Hinweis zur vergebenen Artikelnummer den Namen."""
-    from app.material.services import export
+    Lebenslauf (PDF) „Hersteller Modell“ und dahinter grau die Beschreibung (im Text „Hersteller Modell Beschreibung“,
+    kein Strich; das Feld „Modell“ ohne Zusatz), die CSV eine eigene Spalte „Beschreibung“ hinter „Modell“ (voll,
+    ungekürzt), der Hinweis zur vergebenen Artikelnummer den Namen."""
+    from app.material.services import export, pdf
+    gesetzt = []                                       # das HTML jedes gesetzten PDFs, vor WeasyPrint
+    setzen = pdf._setzen
+
+    def mitschreiben(html):
+        gesetzt.append(html)
+        return setzen(html)
+    pdf._setzen = mitschreiben
+    try:
+        _darstellung(export, gesetzt)
+    finally:
+        pdf._setzen = setzen
+    print("Darstellung (Server, PDF, CSV) bestanden.")
+
+
+def _darstellung(export, gesetzt):
+    def zuletzt():                                     # das zuletzt gesetzte Dokument mit Artikel (nicht der Stempel)
+        return next(h for h in reversed(gesetzt) if '<section class="artikel">' in h)
+
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
         ids = katalog_grund(k["adm"])
@@ -293,21 +335,41 @@ def test_darstellung():
         t = w.get("/api/material/suche", query_string={"q": a["inventory_no"]}).json["treffer"]
         assert t[0]["id"] == a["id"] and t[0]["description"] == "Twistlock" and t[0]["model"] == "HMS Beta", t
         pr = starten(p1, a["id"]).json["pruefung"]
-        assert pr["produkt"]["name"] == "Testwerk HMS Beta | Twistlock", pr["produkt"]
+        assert pr["produkt"]["name"] == "Testwerk HMS Beta Twistlock", pr["produkt"]
         assert (pr["produkt"]["model"], pr["produkt"]["description"]) == ("HMS Beta", "Twistlock"), pr["produkt"]
         offen = p1.get("/api/material/entwuerfe").json["entwuerfe"]
         assert offen[0]["artikel"]["description"] == "Twistlock", offen
         r = festschreiben(p1, pr["id"], ergebnis="einsatzbereit")
         assert r.status_code == 200, r.get_json()
         text = _flach(" ".join(pdf_seiten(os.path.join(tmp, protokoll_zeile(app, pr["id"])["pdf_path"]))))
-        assert "Testwerk HMS Beta | Twistlock" in text, text[:600]
+        assert "Testwerk HMS Beta Twistlock" in text and "Beta |" not in text, text[:600]
+        # Im HTML des Protokolls: der Zusatz grau hinter dem Namen (Makro produkt_mit_zusatz), das Feld „Modell“ allein.
+        html = zuletzt()
+        assert '<div class="produkt">Testwerk HMS Beta <span class="zusatz">Twistlock</span></div>' in html, html[:3000]
+        assert ".zusatz { color: var(--grau); font-weight: 400; }" in html
+        assert '<div class="lbl">Modell</div><div class="wert">HMS Beta</div>' in html
         # Der Lebenslauf (PDF, Stand jetzt) ebenso.
         r = w.get(f"/material/artikel/{a['id']}/lebenslauf.pdf")
         assert r.status_code == 200, r.status_code
         pfad = os.path.join(tmp, "lebenslauf.pdf")
         with open(pfad, "wb") as fh:
             fh.write(r.data)
-        assert "Testwerk HMS Beta | Twistlock" in _flach(" ".join(pdf_seiten(pfad)))
+        assert "Testwerk HMS Beta Twistlock" in _flach(" ".join(pdf_seiten(pfad)))
+        assert 'HMS Beta <span class="zusatz">Twistlock</span> · Status:' in zuletzt()            # Unterzeile im Kopf
+        # Ein Zusatz von Hand im Modellnamen (Beschreibung leer): im PDF wie eine Beschreibung, ohne Strich; das Feld
+        # „Modell“ nennt den Teil davor. Im Katalog bleibt der Modellname, wie er ist.
+        r = kp.put(f"/api/material/produkte/{ids['gurt']}", json={"model": "Gurt Alpha | Platzhalter"})
+        assert r.status_code == 200, r.get_json()
+        r = w.get(f"/material/artikel/{g['id']}/lebenslauf.pdf")
+        assert r.status_code == 200, r.status_code
+        html = zuletzt()
+        assert '<div class="produkt">Testwerk Gurt Alpha <span class="zusatz">Platzhalter</span></div>' in html
+        assert '<div class="lbl">Modell</div><div class="wert">Gurt Alpha</div>' in html and "Alpha |" not in html
+        with open(pfad, "wb") as fh:
+            fh.write(r.data)
+        assert "Testwerk Gurt Alpha Platzhalter" in _flach(" ".join(pdf_seiten(pfad)))
+        modell = _db(app, "SELECT model FROM mat_product WHERE id = ?", (ids["gurt"],))["model"]
+        assert modell == "Gurt Alpha | Platzhalter", modell
         # CSV: eigene Spalte hinter „Modell“; das Modell allein.
         r = w.get(f"/material/export/{gid}.csv")
         assert r.status_code == 200, r.status_code
@@ -317,8 +379,7 @@ def test_darstellung():
         assert z[a["inventory_no"]]["Modell"] == "HMS Beta" and z[a["inventory_no"]]["Beschreibung"] == "Twistlock", z
         assert z[g["inventory_no"]]["Beschreibung"] == "", z
         r = kp.get("/api/material/produkte/artikelnummer", query_string={"nr": "HB-7"})
-        assert r.json["produkt"]["name"] == "Testwerk HMS Beta | Twistlock", r.get_json()
-    print("Darstellung (Server, PDF, CSV) bestanden.")
+        assert r.json["produkt"]["name"] == "Testwerk HMS Beta Twistlock", r.get_json()
 
 
 def test_suche_ueber_beschreibung():
@@ -355,24 +416,32 @@ def test_suche_ueber_beschreibung():
     print("Suche über die Beschreibung bestanden.")
 
 
-def test_oberflaeche_statisch():
-    """material.js: eine Regel für den Produktnamen (produktZusatz mit den Ausgaben produktName und produktHtml, für
-    suche.js und global.js als window.MatProdukt) mit derselben Grenze wie der Server; das Feld im Produktdialog ist
-    einzeilig wie die anderen, mit Höchstlänge, Hilfetext und dem Hinweis für ältere lange Beschreibungen. Listen, Seiten,
-    Vorschläge und Steckbrief nehmen die Regel – keine eigene Verkettung von Hersteller und Modell mehr."""
-    from app.material.services import katalog
+def _lesen(rel):
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(wurzel, rel), encoding="utf-8") as fh:
+        return fh.read()
 
-    def lesen(rel):
-        with open(os.path.join(wurzel, rel), encoding="utf-8") as fh:
-            return fh.read()
 
-    js, suche, glob = (lesen(f"app/material/static/{d}.js") for d in ("material", "suche", "global"))
+def test_oberflaeche_statisch():
+    """material.js: eine Regel für den Produktnamen (modellTeile und produktZusatz mit den Ausgaben produktName,
+    nameHtml und zusatzHtml, für suche.js und global.js als window.MatProdukt) mit derselben Grenze wie der Server;
+    das Feld im Produktdialog ist einzeilig wie die anderen, mit Höchstlänge, Hilfetext und dem Hinweis für ältere
+    lange Beschreibungen. Listen, Seiten, Vorschläge und Steckbrief nehmen die Regel – keine eigene Verkettung von
+    Hersteller und Modell mehr. Der Zusatz steht ohne Strich grau hinter dem Namen (class="muted", wie die
+    Artikelnummer in der Katalogliste), außerhalb von Link und <strong>, nie fett."""
+    from app.material.services import katalog
+    js, suche, glob = (_lesen(f"app/material/static/{d}.js") for d in ("material", "suche", "global"))
+    css = _lesen("app/material/static/material.css")
     assert f"const BESCHREIBUNG_MAX = {katalog.BESCHREIBUNG_MAX};" in js
-    assert "window.MatProdukt = { name: produktName, html: produktHtml, zusatz: produktZusatz" in js
-    # Strich und Zusatz bleiben zusammen (Prüfung der Nachbesserung): Ein Wortverbinder (U+2060) verbietet den Umbruch
-    # zwischen „|“ und dem geschützten Leerzeichen – sonst stand es am Anfang der nächsten Zeile, im Link unterstrichen.
-    assert '>|&#x2060;&nbsp;${esc(z.text)}</span>` : name;' in js and ">|&nbsp;" not in js
+    assert ("window.MatProdukt = { name: produktName, nameHtml, zusatzHtml, zusatz: produktZusatz, "
+            "max: BESCHREIBUNG_MAX,") in js
+    # Kein Strich mehr (zweiter Wunsch vom 18.10.2026: „Entferne den |“) – auch kein Wortverbinder, der ihn hielt.
+    assert "&#x2060;" not in js and "| ${z.text}" not in js and "produktHtml" not in js + suche + glob
+    # Der Zusatz: grau wie die Artikelnummer in der Katalogliste (muted), mit führendem Leerzeichen, voller Text einer
+    # gekürzten älteren Beschreibung im title; nie fett (auch in der Überschrift und im halbfetten Steckbrief).
+    assert ('return z ? ` <span class="muted mat-zusatz"${z.voll ? ` title="${esc(z.voll)}"` : ""}>'
+            '${esc(z.text)}</span>` : "";') in js
+    assert ".mat-zusatz { font-weight: 400; }" in css
     # Die Regel steht vor „if (!root) return;“ – suche.js und global.js finden sie auf jeder Modulseite.
     assert js.index("window.MatProdukt =") < js.index("if (!root) return;")
     # Der Dialog: ein einzeiliges Feld wie die anderen, Höchstlänge, Hilfetext, Hinweis mit dem bisherigen Text.
@@ -382,18 +451,30 @@ def test_oberflaeche_statisch():
     for haken in ("Kurzer Zusatz hinter dem Namen, z. B. die Verschlussart.", 'id="pd-desc-alt"', "Bitte kürzen:",
                   "if (laenge > BESCHREIBUNG_MAX)"):
         assert haken in js, haken
-    # Listen und Seiten: der Zusatz im selben Link bzw. derselben Hervorhebung wie das Modell.
-    for stelle in ('<strong>${produktHtml(x, true)}</strong></a>', "${produktHtml(a, true)}${a.article_no",
-                   '<h1>${produktHtml(p)} ${demoMarke(p.demo)}</h1>', "<strong>${produktHtml(pr.produkt)}</strong>",
-                   '<strong>${produktHtml(p)}</strong> <span class="muted">${esc(p.article_no || "")} · '):
+    # Jede Stelle mit dem Namen setzt den Zusatz dahinter – erst nach dem Schluss von Link und Hervorhebung.
+    stellen = re.findall(r"\$\{nameHtml\(([^,)]+)(?:, true)?\)\}((?:</strong>|</a>)*)\$\{zusatzHtml\(([^)]+)\)\}", js)
+    assert len(stellen) == js.count("${nameHtml(") == 15, (len(stellen), js.count("${nameHtml("))
+    assert all(name == zusatz for name, _, zusatz in stellen), stellen
+    assert not re.search(r"\$\{zusatzHtml\([^)]*\)\}(</strong>|</a>)", js)      # nie im Link, nie in <strong>
+    # Die Katalogliste wie im Bildschirmfoto: Name fett im roten Link, dann grau Zusatz und Artikelnummer.
+    for stelle in ('<a href="/material/katalog/produkt/${x.id}"><strong>${nameHtml(x, true)}</strong></a>'
+                   '${zusatzHtml(x)}${x.article_no ? ` <span class="muted">${esc(x.article_no)}</span>` : ""}',
+                   "${nameHtml(a, true)}${zusatzHtml(a)}${a.article_no",
+                   '<h1>${nameHtml(p)}${zusatzHtml(p)} ${demoMarke(p.demo)}</h1>',
+                   "<strong>${nameHtml(pr.produkt)}</strong>${zusatzHtml(pr.produkt)}${artNrHtml(",
+                   '<a href="/material/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}'
+                   '${artNrHtml(p.article_no)}',
+                   '<strong>${nameHtml(p)}</strong>${zusatzHtml(p)} <span class="muted">${esc(p.article_no || "")} · '):
         assert stelle in js, stelle
     for alt in ("esc(x.model", "esc(a.model", "esc(pr.produkt.name)", "const produktName = (p) =>"):
         assert alt not in js, alt
-    # Vorschläge und Steckbrief.
-    assert "window.MatProdukt.html(a)" in suche and "a.model" not in suche
-    assert ("window.MatProdukt.html({ manufacturer: t.hersteller, model: t.modell, description: t.beschreibung })"
-            in glob)
-    seite = lesen("app/material/templates/material/seite.html")
+    # Vorschläge und Steckbrief: Name, dahinter der graue Zusatz, dann die Artikelnummer.
+    assert ('<span class="mv-produkt">${name || "–"}${window.MatProdukt.zusatzHtml(a)}${trifft(a.article_no, q)'
+            in suche) and "window.MatProdukt.nameHtml(a)" in suche and "a.model" not in suche
+    assert "const p = { manufacturer: t.hersteller, model: t.modell, description: t.beschreibung };" in glob
+    assert ('<p class="mg-produkt">${name || "–"}${window.MatProdukt.zusatzHtml(p)}${window.MatProdukt.artNr('
+            't.artikelnummer)}</p>') in glob
+    seite = _lesen("app/material/templates/material/seite.html")
     assert seite.index("material.js") < seite.index("suche.js") < seite.index("global.js")
     # „Art.-Nr. …“ und „Seriennummer …“ hinter dem Produkt als ein Stück (Gesamtprüfung: mit dem Zusatz brach die Zeile
     # sonst als „Art.-“ / „Nr. …“ oder „DEMO-K-“ / „1“) – an allen fünf Stellen über MatProdukt.artNr, keine eigene
@@ -403,8 +484,64 @@ def test_oberflaeche_statisch():
     assert js.count("${artNrHtml(") == 3 and js.count('${nummerHtml("Seriennummer", a.serial_no)}') == 2
     assert "window.MatProdukt.artNr(a.article_no, markiert(a.article_no, q))" in suche
     assert "window.MatProdukt.artNr(t.artikelnummer)" in glob
-    assert ".mat-ganz { display: inline-block; max-width: 100%; }" in lesen("app/material/static/material.css")
+    assert ".mat-ganz { display: inline-block; max-width: 100%; }" in css
+    # PDF: das Makro für Name und grauen Zusatz an allen drei Stellen (Artikelblock, Lebenslauf-Kopf, Sammelprotokoll).
+    basis = _lesen("app/material/templates/material/pdf/basis.html")
+    assert ('{{- x.produkt_name }}{% if x.produkt_zusatz %} <span class="zusatz">{{ x.produkt_zusatz }}</span>'
+            '{% endif -%}') in basis and '<div class="produkt">{{ produkt_mit_zusatz(artikel) }}</div>' in basis
+    lebenslauf = _lesen("app/material/templates/material/pdf/lebenslauf.html")
+    assert "{{ produkt_mit_zusatz(artikel) }} · Status:" in lebenslauf
+    assert '<div class="wert">{{ produkt_mit_zusatz(a) }}</div>' in _lesen(
+        "app/material/templates/material/pdf/sammelprotokoll.html")
     print("Oberfläche (statisch) bestanden.")
+
+
+def test_regel_gleich_in_material_js():
+    """Die Regel in material.js liefert dasselbe wie der Server (katalog.produktname, produkt_teile) – auch für einen
+    Zusatz von Hand im Modellnamen, eine ältere lange Beschreibung und maskierte Zeichen; nameHtml und zusatzHtml
+    ergeben zusammen den Namen mit grauem Zusatz. Läuft mit Node.js, wenn es installiert ist (sonst übersprungen)."""
+    import shutil
+    import subprocess
+    from app.material.services import katalog
+    node = shutil.which("node")
+    if not node:
+        print("Regel gleich in material.js übersprungen (kein Node.js).")
+        return
+    faelle = [["D Classic", ""], ["D Classic", None], ["D Classic", "Screwlock"], ["D Classic | Screwlock", ""],
+              ["D Classic | Screwlock", " screwlock "], ["D Classic | Screwlock", "Twistlock"],
+              ["D Classic", "Screw\n  lock\tAlu"], ["A | B | C", ""], ["| Nur", ""], ["A |", "x"], ["A||B", ""],
+              ["D Test", LANG], ["D Test | Screwlock", LANG], ['D <b>', 'a&b "c"'], ["D", "y" * 84]]
+    skript = """
+const fs = require("fs");
+const js = fs.readFileSync(process.argv[1], "utf8");
+const a = js.indexOf("  const BESCHREIBUNG_MAX"), b = js.indexOf("  /* Nummern im Fließtext");
+const esc = new Function(`${fs.readFileSync(process.argv[2], "utf8").match(/const esc = .*;/)[0]} return esc;`)();
+const f = new Function("esc", js.slice(a, b) + "; return { produktName, nameHtml, zusatzHtml };")(esc);
+const faelle = JSON.parse(process.argv[3]);
+console.log(JSON.stringify(faelle.map(([m, d]) => { const p = { manufacturer: "Testwerk", model: m, description: d };
+  return [f.produktName(p), f.nameHtml(p), f.zusatzHtml(p)]; })));
+"""
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    aus = subprocess.run([node, "-e", skript, os.path.join(wurzel, "app/material/static/material.js"),
+                          os.path.join(wurzel, "app/static/js/common.js"), json.dumps(faelle)],
+                         capture_output=True, text=True, check=True).stdout
+
+    zeichen = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}
+
+    def escape(t):                                     # wie esc in common.js
+        return re.sub("[&<>\"']", lambda m: zeichen[m[0]], t)
+    for (modell, beschr), (text, name_html, zusatz_html) in zip(faelle, json.loads(aus)):
+        p = {"manufacturer": "Testwerk", "model": modell, "description": beschr}
+        name, zusatz = katalog.produkt_teile(p)
+        assert text == katalog.produktname(p) and "|" not in text, (modell, beschr, text)
+        assert name_html == escape(name), (modell, name_html)
+        if zusatz:
+            assert zusatz_html.startswith(' <span class="muted mat-zusatz"') and zusatz_html.endswith(
+                f">{escape(zusatz)}</span>"), (modell, zusatz_html)
+            assert ("title=" in zusatz_html) == (beschr == LANG or len(beschr or "") > 80), zusatz_html
+        else:
+            assert zusatz_html == "", (modell, zusatz_html)
+    print("Regel gleich in material.js bestanden.")
 
 
 if __name__ == "__main__":
@@ -416,3 +553,4 @@ if __name__ == "__main__":
     test_darstellung()
     test_suche_ueber_beschreibung()
     test_oberflaeche_statisch()
+    test_regel_gleich_in_material_js()

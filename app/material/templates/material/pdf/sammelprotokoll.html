@@ -96,7 +96,7 @@ table.verzeichnis .hash { font-size: 7pt; }
       <tr class="{{ 'offen' if a.zustand == 'nicht_geprueft' }}">
         <td class="nr zahl"><span class="nr-marke">{{ a.nr }}</span></td>
         <td><div class="mono">{{ a.inventarnummer }}</div><div class="klein mono">{{ a.seriennummer }}</div></td>
-        <td><div class="wert">{{ a.produkt }}</div><div class="klein">{{ a.ordner }}</div></td>
+        <td><div class="wert">{{ produkt_mit_zusatz(a) }}</div><div class="klein">{{ a.ordner }}</div></td>
         <td>
           {%- if a.zustand == "erledigt" %}<span class="erg-{{ a.ergebnis }}">{{ a.ergebnis_text }}</span>
           {%- elif a.zustand == "ausgenommen" %}<span class="zustand-ausgenommen">ausgenommen</span>

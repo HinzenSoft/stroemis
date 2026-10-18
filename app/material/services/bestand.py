@@ -695,7 +695,7 @@ def artikel_loeschen(iid):
 
 # Mit dem offenen Entwurf (höchstens einer je Artikel): Listen zeigen „in Prüfung bei …“.
 # Dazu der Name der zugeordneten Person (artikel_kurz gibt ihn nur mit Grundrecht heraus) und die Beschreibung des
-# Produkts – der Zusatz hinter dem Modell („Modell | Beschreibung“, katalog.BESCHREIBUNG_MAX).
+# Produkts – der Zusatz hinter dem Modell (grau hinter dem Namen, katalog.BESCHREIBUNG_MAX).
 ARTIKEL_LISTE_SQL = ("SELECT i.*, p.manufacturer, p.model, p.article_no, p.material_kind, p.image AS product_image, "
                      "p.description AS product_description, "
                      f"{demo_sql('i', 'p')} AS artikel_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "

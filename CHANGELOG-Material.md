@@ -1644,15 +1644,18 @@ entschieden bzw. nicht widersprochen):
   aussieht, als soll ein ganzer text hinein. Gedacht ist hier nur weitere Infos, wie z.B. der Verschluss eines
   Karabiners o.Ä.“). Am Datenbestand ändert sich nichts – kein Schemaschritt, keine Umstellung von Beschreibungen oder
   Modellnamen.
-  - **Anzeige**: Wo ein Produkt genannt wird, steht die Beschreibung direkt hinter dem Modell und vor der Artikelnummer –
-    „D Classic | Screwlock K496B“ –, in derselben Hervorhebung und im selben Link wie das Modell. Eine Regel für alle
-    Stellen: `produktZusatz` mit den Ausgaben `produktName` (Text) und `produktHtml` (maskiert) in `material.js`, für
-    `suche.js` und `global.js` als `window.MatProdukt`; auf dem Server `katalog.zusatz` und `katalog.produktname` (PDF,
-    CSV, Mails, Meldungen). Im Chromium gegen den Server geprüft: 15 Fälle, gleiches Ergebnis. Ohne Beschreibung nur der
-    Name, kein Strich. Steht der Zusatz schon von Hand im Modellnamen („D Classic | Screwlock“) und die Beschreibung ist
-    leer, bleibt alles wie bisher; steht dieselbe Angabe in beiden, kommt sie nicht doppelt. Eine ältere, längere
-    Beschreibung steht in einer Zeile, nach 80 Zeichen am Wortende mit „…“ gekürzt, der volle Text im `title`; die
-    Produktseite zeigt sie zusätzlich ganz in den Stammdaten (mit Hinweis), eine kurze steht dort nicht noch einmal.
+  - **Anzeige** (Stand nach dem zweiten Wunsch, siehe „Ohne Strich, grau“ unten): Wo ein Produkt genannt wird, steht
+    die Beschreibung direkt hinter dem Modell und vor der Artikelnummer, ohne Strich und grau wie die Artikelnummer in
+    der Katalogliste – „**D Classic** Screwlock K496B“: der Name wie bisher hervorgehoben bzw. verlinkt, der Zusatz
+    außerhalb davon. Eine Regel für alle Stellen: `modellTeile` und `produktZusatz` mit den Ausgaben `produktName`
+    (Text), `nameHtml` und `zusatzHtml` (maskiert) in `material.js`, für `suche.js` und `global.js` als
+    `window.MatProdukt`; auf dem Server `katalog.modell_teile`, `zusatz`, `produkt_teile` und `produktname` (PDF, CSV,
+    Mails, Meldungen). Ohne Beschreibung nur der Name. Steht der Zusatz schon von Hand im Modellnamen („D Classic |
+    Screwlock“, Beschreibung leer), zeigt die Anzeige den Teil vor dem Strich als Namen und den dahinter grau als
+    Zusatz – genau wie bei einer Beschreibung; steht dieselbe Angabe in beiden, kommt sie nicht doppelt, zwei
+    verschiedene stehen mit Komma („Screwlock, Aluminium“). Eine ältere, längere Beschreibung steht in einer Zeile,
+    nach 80 Zeichen am Wortende mit „…“ gekürzt, der volle Text im `title`; die Produktseite zeigt sie zusätzlich ganz
+    in den Stammdaten (mit Hinweis), eine kurze steht dort nicht noch einmal.
     Stellen: Katalogliste und Kategorieansicht, Produktseite (Überschrift), „Artikel anlegen“ (Produktsuche und gewählte
     Produktkarte) und „Vorhandenes zuordnen“, Artikelansicht (Produktzeile, Stammdaten), Artikellisten (Ordner,
     Prüfungen, Trefferliste), offene Prüfungen, Prüfdurchgang (auch Zeilen außerhalb des eigenen Bereichs), Prüfung
@@ -1682,8 +1685,9 @@ entschieden bzw. nicht widersprochen):
     wird mit `LIKE` durchsucht – sie ist kurz, der Katalog hat Hunderte Produkte, und den Index umzubauen hieße einen
     Schemaschritt. Die Platzhalter der Suchfelder nennen sie.
   - **PDF und CSV**: Neue Prüf- und Aussonderungsprotokolle, Sammelprotokolle und der Lebenslauf nennen das Produkt
-    „Hersteller Modell | Beschreibung“ (die Angabe „Modell“ darunter bleibt das Modell allein) – Varianten
-    unterscheiden sich oft nur im Verschluss, das hilft beim Erkennen. Festgeschriebene Protokolle bleiben, wie sie
+    mit der Beschreibung dahinter, grau und nicht fett (seit dem zweiten Wunsch ohne Strich; die Angabe „Modell“
+    darunter bleibt das Modell ohne Zusatz) – Varianten unterscheiden sich oft nur im Verschluss, das hilft beim
+    Erkennen. Festgeschriebene Protokolle bleiben, wie sie
     sind (es sind die abgelegten Dateien). Die CSV je Ordner hat eine eigene Spalte „Beschreibung“ hinter „Modell“,
     voll und ungekürzt – eine Datenausgabe, das Modell bleibt eigene Spalte; im `Verzeichnis.csv` des Protokoll-ZIP
     steht das Produkt mit Zusatz.
@@ -1709,12 +1713,52 @@ entschieden bzw. nicht widersprochen):
     Screwlock“) – keine Konsolenfehler, nichts rollt waagerecht.
   - **Prüfung der Nachbesserung**: Eine unabhängige Prüfung meldete drei Befunde (niedrig), jeder ist nachgestellt und
     behoben – am Telefon brach der Browser direkt hinter „|“ um, und das geschützte Leerzeichen stand im Link
-    unterstrichen am Anfang der nächsten Zeile (jetzt hält ein Wortverbinder U+2060 Strich und Zusatz zusammen; im
+    unterstrichen am Anfang der nächsten Zeile (damals hielt ein Wortverbinder U+2060 Strich und Zusatz zusammen; im
     Chromium bei 360, 390, 820 und 1280 px in Artikelansicht, Ordner, Katalog, Suchvorschlägen und Steckbrief
-    nachgemessen), die DEMO-Produkte hießen „… | DEMO – nicht für echte Prüfungen“ (siehe DEMO-Daten), und
+    nachgemessen – mit dem Strich ist er seit dem zweiten Wunsch fort), die DEMO-Produkte hießen „… | DEMO – nicht
+    für echte Prüfungen“ (siehe DEMO-Daten), und
     Importbericht, Fehlerorte, Formularziel, Meldung „kein Prüfintervall mehr“ und der Journaleintrag „als Variante
     angelegt“ nannten Produkte ohne Zusatz, sodass zwei Varianten gleich lauteten (jetzt über `katalog.produktname`;
     Tests `test_bericht_und_journal_mit_zusatz` und `test_demo_ohne_beschreibung`, vorher rot).
+  - **Ohne Strich, grau** (zweiter Wunsch vom 18.10.2026, wörtlich, zu einem Bildschirmfoto der Katalogliste mit
+    „D Classic | Screwlock“ als rotem Link und grauem „K496B“: „Entferne den | und der Text der Beschreibung soll so
+    wie der Produktschlüssel in grau sein.“): Der Strich ist überall fort. In der Oberfläche steht hinter dem Namen ein
+    Leerzeichen und dann der Zusatz in derselben Gestaltung wie die Artikelnummer der Katalogliste – Klasse `muted`
+    (grau, `var(--grau)`), normale Schrift, nicht fett, nicht unterstrichen –, außerhalb des roten Links bzw. der
+    fetten Hervorhebung: „**D Classic** Screwlock K496B“. Dafür liefert `material.js` Name und Zusatz getrennt
+    (`nameHtml` kommt in den Link oder in `<strong>`, `zusatzHtml` dahinter: ` <span class="muted mat-zusatz">…</span>`,
+    bei einer gekürzten älteren Beschreibung mit `title`); `.mat-zusatz { font-weight: 400; }` hält ihn auch in der
+    Überschrift der Produktseite und in der halbfetten Produktzeile des Steckbriefs dünn. Alle 15 Stellen in
+    `material.js` (Katalogliste und Kategorieansicht, Produktseite, Treffer und gewählte Karte bei „Artikel anlegen“,
+    „Vorhandenes zuordnen“, Artikelansicht mit Stammdaten, Artikellisten, offene Prüfungen, Prüfung starten, Prüfung,
+    Festschreiben-Dialog, Meldungen, Rückruf-Kasten) und die Suchvorschläge (`suche.js`) und der globale Steckbrief
+    (`global.js`) sind umgestellt; `produktHtml` gibt es nicht mehr. Der Wortverbinder hinter dem Strich ist mit ihm
+    fort – zwischen Name und Zusatz darf die Zeile normal umbrechen. In den PDFs (Prüf- und Aussonderungsprotokoll,
+    Lebenslauf mit Kopfzeile, Sammelprotokoll) setzt das Makro `produkt_mit_zusatz` (`pdf/basis.html`) den Zusatz grau
+    wie die Kategorie darunter und nicht fett; das Feld „Modell“ nennt das Modell ohne Zusatz, bei einem Zusatz von
+    Hand also den Teil vor dem Strich. **Reiner Text** (Rückfragen, Dialogtitel, Alternativtexte, Fehlermeldungen,
+    Mails, `Verzeichnis.csv` im Protokoll-ZIP, Journal, Importbericht, Hinweis „Schon vergeben“, Name in `GET
+    /api/material/produkte/artikelnummer` und in der Prüfung): Name und Zusatz durch ein Leerzeichen getrennt –
+    „Hersteller D Classic Screwlock“. Warum kein Komma: Der Zusatz ist gewollt kurz (höchstens 80 Zeichen, meist ein Wort
+    wie die Verschlussart) und liest sich mit dem Namen wie die Handelsbezeichnung; der Text ist damit genau das, was
+    auf dem Bildschirm steht (nur ohne Grau) und was man von dort kopiert. Ein Komma stünde zudem doppelt, wo der
+    Zusatz selbst eins hat („Twistlock, Aluminium“) oder in einer Aufzählung mehrerer Produkte. Die CSV je Ordner bleibt
+    eine Datenausgabe: Spalten „Modell“ und „Beschreibung“ so, wie sie gepflegt sind (ein Zusatz von Hand steht dort
+    also weiter mit Strich im Modell). Katalogdaten ändern sich nicht. Geprüft: `test_material_beschreibung` neu bzw.
+    angepasst – Regel ohne Strich (Text, getrennte Teile, Zusatz von Hand, nicht doppelt, Komma, Kürzen nur der
+    Beschreibung), Protokoll und Lebenslauf über das gesetzte HTML (grauer Zusatz, Feld „Modell“, Zusatz von Hand) und
+    `pdftotext`, Oberfläche statisch (jede der 15 Stellen setzt `zusatzHtml` hinter den Schluss von Link und `<strong>`,
+    Klasse `muted`, nie fett, kein Strich, PDF-Makro an allen drei Stellen), dazu `test_regel_gleich_in_material_js`:
+    die Regel aus `material.js` mit Node.js gegen den Server für 15 Fälle (läuft, wenn Node.js da ist);
+    `test_artikelnummer_eindeutig` angepasst. Im Chromium bei 1280 × 900 und 390 × 844 (Touch) mit eigenem DATA_DIR
+    (`material_demo.py --demo --konten`, dazu per Schnittstelle „DEMO D Classic“ mit Beschreibung „Screwlock“ und
+    Produktbild und „Platzhalter | Twistlock“ ohne Beschreibung): Katalogliste wie im Bildschirmfoto, Produktseite,
+    „Artikel anlegen“ (Treffer, gewählte Karte), Artikelansicht mit Stammdaten, Ordnerliste, Suchvorschläge, Prüfung,
+    Prüfung starten, offene Prüfungen und – als Materialwart der anderen Gliederung – der globale Steckbrief: Zusatz da,
+    grau wie die Artikelnummer, Schriftgewicht 400, außerhalb von Link und `<strong>`, kein „|“, keine
+    Konsolenfehler, nichts rollt waagerecht (332 Prüfungen, alle erfüllt). Prüfprotokoll, Lebenslauf und
+    Sammelprotokoll per `pdftotext`: „DEMO-Hersteller DEMO D Classic Screwlock“, „DEMO-Hersteller Platzhalter
+    Twistlock“, Feld „Modell“ „Platzhalter“; `Verzeichnis.csv` ebenso ohne Strich.
 
 #### Prüfung der Modulstufen
 
@@ -1798,10 +1842,13 @@ Regressionstest in `tests/test_material_stufen.py` (vorher rot, jetzt grün), Ob
 - **Neue Konten brauchen einen Namen**: Mit der Vorgabe „Mitglied“ im Modul Material lehnt die Nutzerverwaltung ein
   neues Konto ohne Namen ab (oder Material „–“). Kontoanfragen haben den Namen ohnehin als Pflichtfeld.
 - **Zusatz von Hand im Modellnamen – selbst umstellen, nicht automatisch**: Produkte, deren Modellname den Zusatz schon
-  mit „ | “ enthält (etwa „D Classic | Screwlock“), zeigen sich wie bisher. Umstellen kannst du sie selbst: im Dialog
-  „Bearbeiten“ den Teil hinter „ | “ aus dem Modell löschen und ins Feld „Beschreibung“ schreiben – die Anzeige bleibt
-  gleich, die Suche findet weiter beide Teile. Automatisch stellt nichts um, der Katalog bleibt, wie du ihn gepflegt
-  hast. Der Katalog-Export trägt die Katalogkennung, die Produktion findet ein so umbenanntes Produkt beim nächsten
+  mit „ | “ enthält (etwa „D Classic | Screwlock“), zeigen sich schon jetzt ohne Strich – der Teil vor dem Strich als
+  Name, der dahinter grau wie eine Beschreibung, auch im PDF. Umstellen bleibt trotzdem empfohlen, denn im Katalog
+  steht der Strich weiter: im Dialog „Bearbeiten“, in der CSV je Ordner (Spalte „Modell“), im Katalog-Export und bei
+  der Dublettenprüfung, die „D Classic | Screwlock“ und „D Classic“ mit Beschreibung „Screwlock“ als zwei Modelle
+  sieht. Umstellen kannst du sie selbst: im Dialog „Bearbeiten“ den Teil hinter „ | “ aus dem Modell löschen und ins
+  Feld „Beschreibung“ schreiben – die Anzeige bleibt gleich, die Suche findet weiter beide Teile. Automatisch stellt
+  nichts um, der Katalog bleibt, wie du ihn gepflegt hast. Der Katalog-Export trägt die Katalogkennung, die Produktion findet ein so umbenanntes Produkt beim nächsten
   Import wieder. Liste auf dev (lesend): `SELECT id, manufacturer, model, description FROM mat_product WHERE model
   LIKE '%|%';`
 - **Ältere lange Beschreibungen**: Beschreibungen über 80 Zeichen oder mit Zeilenumbruch stammen aus der Zeit vor der
@@ -2041,7 +2088,7 @@ mit seiner Stelle (`produkte[3] (…): …`). `--trocken` prüft nur.
 | --- | --- |
 | `kategorien[].name`, `unterkategorien` | Name an dieser Stelle; Unterkategorien beliebig tief |
 | `norm` | Freitext, z. B. „EN 362 oder EN 12275“ |
-| `beschreibung` | kurzer Zusatz hinter dem Modell, etwa die Verschlussart – angezeigt als „Modell \| Beschreibung“. Die Oberfläche nimmt höchstens 80 Zeichen in einer Zeile; der Import übernimmt auch längere und mehrzeilige (bis 4000 Zeichen) unverändert und nennt sie im Bericht |
+| `beschreibung` | kurzer Zusatz hinter dem Modell, etwa die Verschlussart – angezeigt grau hinter dem Modell, ohne Strich („D Classic Screwlock“). Die Oberfläche nimmt höchstens 80 Zeichen in einer Zeile; der Import übernimmt auch längere und mehrzeilige (bis 4000 Zeichen) unverändert und nennt sie im Bericht |
 | `materialart` | `textil`, `metall_hardware` oder `sonstiges` (an der Kategorie: Vorgabe für Produkte) |
 | `intervall_monate` | Prüfintervall 1–120; am Produkt optional, wenn die Kategorie eins vorgibt |
 | `lebensdauer_jahre` | 1–50; Produkt textil: Pflicht; Metall (`metall_hardware`): verboten; sonstiges: nur mit `lebensdauer_quelle`. An der Kategorie nur bei textil, nur als Vorschlag |
