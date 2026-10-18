@@ -460,18 +460,23 @@ def _sortiert(rows, ordner):
 
 def _verlauf(fid):
     """Die Journaleinträge freigabe_* dieses Ordners, neueste zuerst – seit seiner letzten Löschung (eine Kennung kann
-    wiederkommen). Konten stehen mit ihrem heutigen Namen da (journal.konto_name), der Verweis selbst geht nicht hinaus."""
+    wiederkommen). Konten stehen mit ihrem heutigen Namen da (journal.konto_namen, eine Abfrage für alle), der Verweis
+    selbst geht nicht hinaus."""
     ab = db.query("SELECT MAX(id) AS m FROM mat_audit WHERE entity = 'folder' AND entity_id = ? AND action = 'geloescht'",
                   (fid,), one=True)["m"] or 0
     marken = ",".join("?" * len(rechte.FREIGABE_AKTIONEN))
-    out = []
+    eintraege = []
     for e in db.query(f"SELECT * FROM mat_audit WHERE entity = 'folder' AND entity_id = ? AND id > ? AND action IN "
                       f"({marken}) ORDER BY id DESC LIMIT 200", (fid, ab, *rechte.FREIGABE_AKTIONEN)):
         vorher = json.loads(e["before_json"]) if e["before_json"] else {}
         nachher = json.loads(e["after_json"]) if e["after_json"] else {}
+        eintraege.append((e, vorher, nachher, ((nachher or vorher).get("konto") or {}).get("ref")))
+    namen = journal.konto_namen(ref for *_, ref in eintraege)
+    out = []
+    for e, vorher, nachher, ref in eintraege:
         stand = nachher or vorher
         out.append({"id": e["id"], "zeit": e["created_at"], "wer": e["user_name"], "aktion": e["action"],
-                    "konto": journal.konto_name((stand.get("konto") or {}).get("ref")),
+                    "konto": namen.get(ref, "(gelöschtes Konto)"),
                     "recht": stand.get("recht"), "bis": stand.get("bis"),
                     "recht_vorher": vorher.get("recht") if nachher and vorher else None,
                     "bis_vorher": vorher.get("bis") if nachher and vorher else None,

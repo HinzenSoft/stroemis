@@ -755,6 +755,53 @@ def test_list_users_abfragen():
     print("list_users: Abfragezahl bestanden.")
 
 
+def test_liste_abfragen():
+    """GET /ordner/<fid>/freigaben: Die Zahl der Abfragen hängt nicht an der Länge des Verlaufs – die Namen hinter den
+    Kontoverweisen kommen mit einer Abfrage (journal.konto_namen), nicht je Eintrag."""
+    from app import db as db_mod
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        adm, w = k["adm"], k["wart"]
+        gid, _ = gliederung(adm)
+        lager = ordner_neu(w, gid, "Lager")
+        konten = [neues_konto(app, f"helfer{n}@example.org", name=f"Helfer {n}")[1] for n in range(6)]
+        abfragen = []
+        alt = db_mod.get_db
+
+        def mit_zaehler():
+            conn = alt()
+            conn.set_trace_callback(abfragen.append)
+            return conn
+
+        def zaehlen():
+            del abfragen[:]
+            db_mod.get_db = mit_zaehler
+            try:
+                r = w.get(FR.format(lager))
+            finally:
+                db_mod.get_db = alt
+            assert r.status_code == 200, r.get_json()
+            return len(abfragen), r.json["verlauf"]
+
+        assert erteilen(w, lager, user_id=konten[0], grundrecht="lesen").status_code == 201
+        wenige, verlauf = zaehlen()
+        assert len(verlauf) == 1
+        for runde in range(4):
+            for uid in konten:
+                assert erteilen(w, lager, user_id=uid, grundrecht="lesen", grund_bis=tag(10 + runde)).status_code == 201
+        viele, verlauf = zaehlen()
+        assert len(verlauf) == 25 and {v["konto"] for v in verlauf} == {f"Helfer {n}" for n in range(6)}, verlauf
+        assert viele == wenige, (wenige, viele)
+        # Dieselben Namen wie konto_name – auch für unbekannte Verweise und Konten ohne Namen.
+        sql(app, "UPDATE users SET name = '' WHERE id = ?", (konten[1],))
+        with app.app_context():
+            from app.material.services import journal as jn
+            refs = [ref(app, uid) for uid in konten[:3]] + ["0" * 32]
+            assert jn.konto_namen(refs + [None, ""]) == {r: jn.konto_name(r) for r in refs}
+            assert jn.konto_namen(refs)["0" * 32] == "(gelöschtes Konto)" and jn.konto_namen(refs)[refs[1]] == "(ohne Namen)"
+    print("Freigabenliste: Abfragezahl bestanden.")
+
+
 # --- Ordner löschen schreibt „freigabe_entfernt“ (Paket A1) ---------------------------------------------------------
 
 @braucht("A1", _a1_ordner_loeschen)
@@ -858,5 +905,6 @@ if __name__ == "__main__":
     test_meine_ohne_zugang()
     test_nutzerverwaltung()
     test_list_users_abfragen()
+    test_liste_abfragen()
     test_braucht_a1_ordner_loeschen_journal()
     test_demo_zweimal()

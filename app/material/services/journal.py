@@ -133,6 +133,15 @@ def konto_name(ref):
     return (r["name"] or "").strip() or "(ohne Namen)"
 
 
+def konto_namen(refs):
+    """Wie konto_name, für viele Verweise mit EINER Abfrage (Listen wie der Verlauf der Freigaben): {ref: Name}."""
+    refs = sorted({r for r in refs if r})
+    gefunden = {r["mat_ref"]: (r["name"] or "").strip() or "(ohne Namen)" for r in db.query(
+        "SELECT mat_ref, name FROM users WHERE mat_ref IN (SELECT value FROM json_each(?))", (json.dumps(refs),))} \
+        if refs else {}
+    return {r: gefunden.get(r, "(gelöschtes Konto)") for r in refs}
+
+
 def fuer_produkt(pid, user=None, meldungen=True):
     """Journal eines Produkts: seine Stammdaten, seine Dokumente, seine spezifischen Formulare und die
     Meldungen, über die es in den Katalog kam – diese nur, soweit das Konto die Meldung sehen darf
