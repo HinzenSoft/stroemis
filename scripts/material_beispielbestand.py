@@ -74,6 +74,10 @@ PRODUKTION = {"strömis.de", "www.strömis.de", "xn--strmis-yxa.de", "www.xn--st
 # Die Gliederungen: Kürzel (Seriennummern, Konten), Ort im Namen, Anteil am Bestand.
 GLIEDERUNGEN = [("AU", "Auental", 0.40), ("BH", "Bachheim", 0.35), ("FS", "Flussstadt", 0.25)]
 EINSATZKRAEFTE = 2                   # je Gliederung: DEMO-Personen mit persönlichem Ordner und Zuordnungen
+# Was die Einsatzkräfte sehen: die erste liest ihren persönlichen Ordner, die übrigen haben – wie die meisten, denen PSA
+# zugeordnet ist (services/zuordnung.py) – keinen Modulzugang und lesen nach der Anmeldung „nicht freigeschaltet“.
+SICHT_PERSON = {1: "liest ihren persönlichen Ordner"}
+OHNE_ZUGANG = "ohne Modulzugang – zeigt „nicht freigeschaltet“"
 
 # Ordnerbaum je Gliederung: (Schlüssel, Name, Ordnertyp, Oberordner, Gewicht beim Verteilen der Artikel). Dazu je
 # DEMO-Einsatzkraft ein persönlicher Ordner unter „persoenlich“. Kein Ordner bekommt ein eigenes Prüfintervall – es
@@ -318,7 +322,8 @@ class Beispielbestand:
                 {"rolle": "extern", "mail": f"demo-extern-{k}@{POSTFACH}", "name": f"DEMO-Prüfer extern {ort}",
                  "urkunde": f"DEMO-{kurz}-2024"},
             ] + [{"rolle": f"person{n}", "mail": f"demo-einsatzkraft-{k}-{n}@{POSTFACH}",
-                  "name": f"DEMO-Einsatzkraft {ort} {n}"} for n in range(1, EINSATZKRAEFTE + 1)]
+                  "name": f"DEMO-Einsatzkraft {ort} {n}", "sicht": SICHT_PERSON.get(n, OHNE_ZUGANG)}
+                 for n in range(1, EINSATZKRAEFTE + 1)]
             out.append({"kurz": kurz, "ort": ort, "anteil": anteil, "name": f"DEMO-OG {ort}", "konten": konten})
         return out
 
@@ -365,12 +370,13 @@ class Beispielbestand:
                                                         "mat_katalog": 0, "urkundennummer": urkunde})
         if urkunde or k["rolle"] == "wart":
             unterschrift.setzen({"id": uid}, unterschrift_uri(uid))
-        self.passwoerter.append((k["mail"], k["name"], passwort))
+        self.passwoerter.append((k["mail"], k["name"], passwort, k.get("sicht")))
         return {"id": uid, "mail": k["mail"], "name": k["name"]}
 
     def freigaben(self, gl):
         """Materialwart: verwalten an der Gliederung (dauerhaft); Prüferin: lesen und prüfen (Prüffreigabe bis 31.12. des
-        Folgejahres); Mitglied: lesen; externer Prüfer: nur prüfen im Lager, 30 Tage (zeigt „läuft bald ab“). Über den
+        Folgejahres); Mitglied: lesen; externer Prüfer: nur prüfen im Lager, 30 Tage (zeigt „läuft bald ab“); die
+        Einsatzkräfte aus SICHT_PERSON: lesen an ihrem persönlichen Ordner (dauerhaft), die übrigen nichts. Über den
         Schreibweg des Freigaben-Dienstes mit den Rechten der Plattform-Verwaltung – Prüffreigaben nur an qualifizierte
         Konten, höchstens 24 Monate; im Journal unter „Beispielbestand“, die Konten nur als Kontoverweis."""
         from app.material.services import freigaben, rechte
@@ -379,7 +385,9 @@ class Beispielbestand:
         for rolle, ordner, recht, ende in (("wart", gl["id"], "verwalten", None), ("pruefer", gl["id"], "lesen", None),
                                            ("pruefer", gl["id"], "pruefen", freigaben.vorgabe_bis()),
                                            ("mitglied", gl["id"], "lesen", None),
-                                           ("extern", gl["ordner"]["lager"], "pruefen", extern_bis)):
+                                           ("extern", gl["ordner"]["lager"], "pruefen", extern_bis),
+                                           *((f"person{n}", gl["ordner"][f"person{n}"], "lesen", None)
+                                             for n in SICHT_PERSON if n <= EINSATZKRAEFTE)):
             konto = rechte.waehlbares_konto(gl["konto"][rolle]["id"])
             neu = {"user_id": konto["id"], "permission": recht, "valid_until": freigaben._bis(ende, recht),
                    "note": "DEMO"}
@@ -427,6 +435,14 @@ class Beispielbestand:
                 rest.sort(key=lambda p: not p["produkt"]["formular"])
                 for p in rest[:max(0, fehlen)]:
                     p["ordner"] = ziel
+            # Wer seinen persönlichen Ordner liest (SICHT_PERSON), findet darin mindestens einen Artikel – nachgezogen
+            # aus Ordnern außerhalb der Durchgänge, sofern die Gliederung dort welche hat.
+            for n in (n for n in SICHT_PERSON if n <= EINSATZKRAEFTE):
+                if not any(p["ordner"] == f"person{n}" for p in eigene):
+                    rest = [p for p in eigene if p["ordner"] not in ZWEIG_ZU + ZWEIG_OFFEN
+                            and not p["ordner"].startswith("person")]
+                    if rest:
+                        rest[0]["ordner"] = f"person{n}"
         # Ohne aktives Formular gibt es keine Prüfung: neu. Nur wenn kein Produkt mit Formular eine Lebensdauer hat, steht
         # ein Artikel eines textilen Produkts mit Lebensdauer ohne Prüfung auf „Lebensdauer erreicht“ – sonst käme der
         # Zustand nicht vor (der Bericht nennt ihn).
@@ -856,14 +872,15 @@ class Beispielbestand:
         demo = sum(1 for i in artikel if bestand.ist_demo(i["id"]))
         print()
         print("DEMO-Konten (Passwörter nur hier – sie werden nicht erneut angezeigt):")
-        for mail, name, pw in self.passwoerter:
-            print(f"  {mail:<42} {name:<32} Passwort: {pw}")
+        for mail, name, pw, sicht in self.passwoerter:
+            print(f"  {mail:<42} {name:<32} Passwort: {pw}" + (f"  ({sicht})" if sicht else ""))
         print()
         print(f"Beispielbestand angelegt – Laufzeit {self._dauer(start)}.")
         print(f"  Gliederungen  {len(self.gl)} ({', '.join(g['name'] for g in self.gl)}), je {len(self.gl[0]['ordner'])} "
               "Ordner darunter")
         print(f"  Konten        {len(self.passwoerter)} DEMO-Konten (je Gliederung Materialwart, Prüferin, Mitglied, "
-              f"externer Prüfer, {EINSATZKRAEFTE} Einsatzkräfte)")
+              f"externer Prüfer, {EINSATZKRAEFTE} Einsatzkräfte – die erste liest ihren persönlichen Ordner, die übrigen "
+              "haben keinen Modulzugang)")
         print(f"  Artikel       {len(artikel)} aus {len({p['produkt']['id'] for p in plaene if p['iid']})} Produkten, "
               f"davon {demo} als DEMO gekennzeichnet")
         print(f"  Prüfungen     {x['fest'] or 0} festgeschrieben mit Protokoll (davon {x['aus'] or 0} Aussonderungen), "

@@ -404,6 +404,25 @@ def test_beispielbestand():
         direkt = adm.get(f"/api/material/ordner/{au['id']}/freigaben").json["direkt"]
         assert {x["recht"] for x in direkt} == {"verwalten", "lesen", "pruefen"}, direkt
         assert {x["vergeben_von"] for x in direkt} == {"Beispielbestand"}, direkt
+        # Einsatzkraft 1 liest ihren persönlichen Ordner (mit zugeordneter Ausrüstung), sonst nichts; Einsatzkraft 2 hat
+        # keinen Modulzugang und liest „nicht freigeschaltet“. Der Bericht sagt das an beiden Konten.
+        with app.app_context():
+            from app import db
+            persoenlich = db.query("SELECT id FROM mat_folder WHERE name = 'DEMO-Einsatzkraft Auental 1'", one=True)["id"]
+        eins = anmelden(app, "demo-einsatzkraft-au-1@example.invalid",
+                        passwoerter["demo-einsatzkraft-au-1@example.invalid"])
+        assert eins.get("/material").status_code == 200
+        r = eins.get(f"/api/material/ordner/{persoenlich}")
+        assert r.status_code == 200 and r.json["ordner"]["artikel"], r.get_json()
+        assert all(a["zugeordnet_name"] == "DEMO-Einsatzkraft Auental 1" for a in r.json["ordner"]["artikel"]
+                   if a["lock_state"] != "ausgesondert"), r.json["ordner"]["artikel"]
+        assert eins.get(f"/api/material/ordner/{au['id']}").status_code == 404
+        zwei = anmelden(app, "demo-einsatzkraft-au-2@example.invalid",
+                        passwoerter["demo-einsatzkraft-au-2@example.invalid"])
+        r = zwei.get("/material")
+        assert r.status_code == 403 and "nicht freigeschaltet" in r.get_data(as_text=True)
+        assert re.search(r"demo-einsatzkraft-au-1@example\.invalid .*\(liest ihren persönlichen Ordner\)", aus)
+        assert re.search(r"demo-einsatzkraft-au-2@example\.invalid .*\(ohne Modulzugang", aus)
 
         # 9. Ein zweiter Lauf legt nichts an.
         vorher = bestand_stand(app)
