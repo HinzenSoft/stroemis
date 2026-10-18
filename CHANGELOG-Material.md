@@ -1036,15 +1036,25 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   Freigabe für „…“ ist am … abgelaufen. Verlängern kann sie: …“ mit bis zu drei Verwaltern) oder eine Freigabe
   überhaupt („… der Materialwart deiner Gliederung vergibt Freigaben“). Kopfleiste, Weiterleitung nach der Anmeldung
   und Profil rechnen die Stufe aus den Freigaben – mit einer kurzen Abfrage je Anfrage, ohne den Ordnerbaum zu laden.
+  Ohne Leserecht fehlen nur die Reiter „Prüfungen“ und „Bestand“; das Suchfeld bleibt, und die Übersicht zeigt statt
+  der Zahlen „Meine Freigaben“ und den Weg zu Katalog und Nummernsuche.
 - **Trennung je Gliederung**: Was ein Konto nicht sieht, antwortet wie etwas, das es nicht gibt – 404 mit derselben
   Meldung, ob die Kennung im Pfad steht oder im Inhalt der Anfrage (auch als `"7"` oder `7.0`). 403 gibt es nur, wenn
   man den Gegenstand sieht, die Aktion aber nicht darf, mit Klartext (etwa „Häkchen und Urkundennummer hast du, aber
   für diesen Ordner keine Prüffreigabe – die vergibt der Materialwart des Ordners unter Ordner → Freigaben.“).
   Gefiltert sind Übersicht, Ordnerbaum, Listen und Zählungen, Fällige, Entwürfe, Durchgänge, Suche samt Vorschlägen,
-  die Spalte „Bestand“ im Katalog, Produktseite und Produktjournal, Rückrufe, Meldungen, Exporte und Mediendateien. Im
-  Baum steht ein Oberordner ohne eigenes Recht nur als grauer Pfad (Name, keine Zahlen, nicht anklickbar). „Gesperrt“
-  und „Ausgesondert“ einer Gliederung, die man nicht ganz sieht, zeigen nur die eigenen Artikel – auf der Übersicht
-  als Zeile „Gesperrt (deine Artikel)“.
+  die Spalte „Bestand“ im Katalog, Produktseite und Produktjournal, Rückrufe, Meldungen, Exporte und Mediendateien. Ein
+  Oberordner ohne eigenes Recht steht in Ordnerleiste, Bestand, Übersicht und Pfadzeile nur als grauer Pfad (Name,
+  keine Zahlen, nicht anklickbar). „Gesperrt“ und „Ausgesondert“ einer Gliederung, die man nicht ganz sieht, zeigen nur
+  die eigenen Artikel – auf der Übersicht als Zeile „Gesperrt (deine Artikel)“. 403 und 404 zeigt die Oberfläche als
+  Klartext mit dem Knopf „Zur Übersicht“.
+- **Oberfläche nach dem Recht am Gegenstand** (`static/material.js`): Knöpfe richten sich nach `darf` des Ordners,
+  Artikels, der Prüfung oder des Durchgangs, nicht mehr nach einer Stufe des Kontos. Export, Lebenslauf, Journal und
+  die Spalte „Person“ gibt es nur mit Grundrecht, „Prüfen“ nur mit Prüffreigabe dort. Fehlt einem qualifizierten
+  Prüfer nur die Prüffreigabe, sagt die Artikelansicht: „Für diesen Ordner hast du keine Prüffreigabe – die vergibt
+  der Materialwart unter Ordner → Freigaben.“ Die Ordnerwahl beim Anlegen und Verschieben bietet nur Ordner an, die
+  man verwaltet (beim Prüfdurchgang auch solche mit Prüffreigabe), Ordner einer anderen Gliederung nur, wer beide
+  verwaltet – sonst mit Hinweis darauf.
 - **Eine Heimat je Artikel**: Gesperrte, verlorene und ausgesonderte Artikel gehören zu ihrem Herkunftsordner, alle
   anderen zu dem Ordner, in dem sie liegen – für Rechte, Filter, Export und Durchgänge gleich. Das Aussondern behält
   jetzt die Herkunft: Wer nur „Fahrzeug 1“ verwaltet, sieht dessen ausgesonderte Artikel und ihre
@@ -1066,8 +1076,10 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
     übersprungenen Zeilen samt Grund.
   - Zugeklappt **Geerbt von oben** (nur lesbar, ohne Notiz), **In Unterordnern** und **Verlauf**.
   - Wer eine Prüffreigabe entzieht, erfährt, wie viele offene Prüfungen das Konto dort noch hat (unter Prüfungen →
-    Entwürfe freigeben).
-  - Im Ordnerkopf steht für Verwalter „n Freigaben laufen in den nächsten 30 Tagen ab“ mit Sprung zum Verlängern.
+    „Offene Prüfungen“ → „Freigeben“).
+  - Im Ordnerkopf steht für Verwalter „n Freigaben laufen in den nächsten 30 Tagen ab“ mit dem Knopf „Verlängern …“;
+    er öffnet den Dialog gleich bei „Alle Prüffreigaben verlängern bis …“. Schließt der Dialog, lädt der Ordner neu
+    (eigene Rechte, Ablaufhinweis).
 - **Wer Freigaben vergibt**: Wer einen Ordner verwaltet, vergibt dort und darunter an jedes aktive Konto mit Namen –
   auch aus anderen Gliederungen. Nie länger, als er dort selbst verwaltet (unbefristet nur, wer selbst unbefristet
   verwaltet). Eine fremde Freigabe ändert oder entzieht er nur, wenn er sie selbst so hätte vergeben dürfen – ein
@@ -1078,9 +1090,10 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   des Ordners und die Plattform-Verwaltung, nie der Inhaber. Die Plattform-Verwaltung vergibt überall ohne diese
   Grenzen – Prüffreigaben aber auch sie nur an qualifizierte Konten und für höchstens 24 Monate.
 - **Meine Freigaben** auf der Übersicht: die eigenen Freigaben, gültige und im letzten Jahr abgelaufene, mit Ordner,
-  Recht, Ende und wer verlängern kann; gelb, was in 30 Tagen abläuft. Wer noch keine hat, liest „Du hast noch keine
-  Freigabe im Bestand – der Materialwart deiner Gliederung vergibt sie.“ Die Schnittstelle dazu antwortet jedem
-  Angemeldeten, auch ohne Modulzugang.
+  Recht und Ende; gelb, was in 30 Tagen abläuft – dort und bei abgelaufenen steht, wer verlängern kann. Der Abschnitt
+  ist zugeklappt und öffnet sich von selbst, wenn eine Freigabe bald abläuft, abgelaufen ist oder nicht wirkt. Wer noch
+  keine hat, liest „Du hast noch keine Freigabe im Bestand – der Materialwart deiner Gliederung vergibt sie.“ Die
+  Schnittstelle dazu antwortet jedem Angemeldeten, auch ohne Modulzugang.
 - **Gliederungen anlegen**: auf oberster Ebene nur die Plattform-Verwaltung; nach „+ Gliederung“ öffnet sich gleich
   der Freigaben-Dialog mit der Vorlage „Materialwart“. Eine Gliederung in einem Ordner legt an, wer den Oberordner
   verwaltet.
@@ -1093,7 +1106,9 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   verliert den Durchgang; erledigte Zeilen bleiben als Nachweis. Danach antwortet „Einbeziehen“ mit 409 und ein
   Prüfstart mit diesem Durchgang mit 404; beim Eröffnen zählen Ausgenommene nicht mehr als Konflikt. Das
   Sammelprotokoll druckt statt eines Pfads aus der anderen Gliederung „(aus dem Bereich des Durchgangs verschoben)“,
-  und Prüfer von dort stehen nicht darin.
+  und Prüfer von dort stehen nicht darin. Die Verschieben-Dialoge sagen vorher, was mit Freigaben, Systemordnern und
+  Durchgängen geschieht. In der Durchgangsansicht steht ein hinausverschobener Artikel, den man nicht mehr sieht, ohne
+  Link und ohne Knöpfe mit „nicht in deinem Bereich“; „Einbeziehen“ bietet sie für Hinausverschobene nicht an.
 - **Globale Seriennummernsuche** (`services/globalsuche.py`, `static/global.js`): Hat kein sichtbarer Artikel genau
   die gesuchte Seriennummer, bieten Trefferseite und Suchvorschläge „In allen Gliederungen nach der Seriennummer „…“
   suchen“ an. Nach einer Bestätigung („wird mit deinem Namen protokolliert“) sucht der Server exakt (Groß/klein egal)
@@ -1113,9 +1128,12 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
   das Protokoll in der Nutzerverwaltung unter „Globale Suchen (Modul Material)“.
 - **Personenzuordnung** (`services/zuordnung.py`): Wer einen Artikel verwaltet, ordnet ihn einer Person zu, ändert
   oder löst die Zuordnung – an jedes aktive Konto mit Namen; die Person braucht keinen Modulzugang. In der
-  Artikelansicht steht „Zugeordnet an“ mit „Zuordnen …“, „Ändern“ und „Lösen“ (Personensuche wie bei den Freigaben),
-  in der Ordnerliste die Spalte „Person“, der Filter „Zugeordnet an …“ und die Sammelaktion neben „Verschieben nach …“
-  (bis 500 Artikel, ganz oder gar nicht). Sehen nur mit Grundrecht – nicht in der Prüfsicht, nicht im Steckbrief,
+  Artikelansicht steht „Zugeordnet an“ mit „Zuordnen …“, „Ändern“ und „Lösen“ (Personensuche wie bei den Freigaben;
+  Hinweis „Nur für PSA, die eine Person dauerhaft nutzt. Erscheint nicht in Protokollen.“), in der Ordnerliste die
+  Spalte „Person“, der Filter „Zugeordnet an …“ (sobald im Zweig jemandem etwas zugeordnet ist) und neben „Verschieben
+  nach …“ die Sammelaktionen „Zuordnen an …“ und „Zuordnung lösen“ (bis 500 Artikel, ganz oder gar nicht). Mit
+  gesetztem Filter führt „Fällige Artikel dieser Person im ganzen Zweig →“ in die Liste unter Prüfungen
+  (`?zugeordnet=`). Sehen nur mit Grundrecht – nicht in der Prüfsicht, nicht im Steckbrief,
   nicht in Prüf-, Aussonderungs- und Sammelprotokollen und nicht im Lebenslauf-PDF. Die CSV hat die neue Spalte
   „Zugeordnet an“ (vor „DEMO“). Aussondern löst die Zuordnung; ausgesonderte Artikel lassen sich niemandem zuordnen
   (409). Deaktivierte Konten sind nicht wählbar, eine bestehende Zuordnung steht mit „(deaktiviert)“ da.
@@ -1279,6 +1297,20 @@ sich:
   `offen` und `benachrichtigt`.
 - Ziel beim Verschieben nicht sichtbar: 404 statt 403. Fremde Dublette: 409 mit festem Text, 429 über der Bremse. 403
   ohne Modulzugang nennt, was fehlt.
+
+### Im Browser geprüft
+
+Chromium am Rechner (1280 px) mit den DEMO-Daten und den vier DEMO-Konten:
+
+- Plattform-Verwaltung: „+ Gliederung“ führt in den Freigaben-Dialog der neuen Gliederung, Vorlage „Materialwart“
+  vorgewählt, „dauerhaft“ angeboten.
+- Materialwart: Ordnerkopf mit „Freigaben“, Export und dem Ablaufhinweis samt „Verlängern …“; Spalte „Person“;
+  Sammelleiste mit „Verschieben nach …“ und „Zuordnen an …“. Mit `verwalten` an beiden DEMO-Gliederungen bietet die
+  Ordnerwahl beim Verschieben die Ordner beider an.
+- Prüfer mit Prüffreigabe in der DEMO-Gliederung und nur `lesen` in der Nachbarstadt: Ein Artikel der Nachbarstadt
+  zeigt „Für diesen Ordner hast du keine Prüffreigabe …“.
+- Externer Prüfer: Übersicht mit „Meine Freigaben“ (gelb, „Verlängern kann: …“), grauer Gliederung über dem Lager
+  und der Zeile „Gesperrt (deine Artikel)“; im Ordner „Prüfen“ je Artikel, ohne Export, Journal und Spalte „Person“.
 
 ### Zu prüfen
 

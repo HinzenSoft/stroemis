@@ -406,6 +406,9 @@ python tests/test_material_ueberblick.py  # Lieferung 4: Zählung je Ordner, Fü
 python tests/test_material_export.py     # Lieferung 4: CSV je Ordner, Protokoll-ZIP, Lebenslauf-PDF
 python tests/test_material_katalog.py    # Lieferung 4: Katalog-Export und -Import (Rundlauf, ohne DEMO, ZIP-Sicherheit)
 python tests/test_material_rueckruf.py   # Lieferung 4: Rückrufe (Rechte, betroffene Artikel, Mail, Sperre, Lebenslauf)
+python tests/test_material_l5.py         # Lieferung 5: Mangel mit Bemerkung, Urkundennummer, Oberfläche (Gerüst, CSS, Prüfformular, Ordnerfoto, Suchfeld);
+                                        # Phase 2: Oberfläche nach Rechten je Ordner (statisch)
+python tests/test_material_profil.py     # Lieferung 5: Urkundennummer im Profil
 python tests/test_material_trennung.py   # Phase 2: Trennung je Gliederung (Migration 7 → 8, nichts aus einer fremden Gliederung in irgendeiner Antwort,
                                         # Kennungen im Inhalt, Heimat, Verschieben und Durchgänge, Prüfsicht, Ablauf)
 python tests/test_material_freigaben.py  # Phase 2: Freigaben vergeben, ändern, entziehen, verlängern; Übernahme-Schutz; Nutzerverwaltung; DEMO-Skript
@@ -486,6 +489,9 @@ tests/
                    Protokolle mit Prüfsumme, Prüfseite, Berichtigung, Unterschrift
   test_material_ueberblick.py, test_material_export.py, test_material_katalog.py, test_material_rueckruf.py
                    Modul Material, Lieferung 4: Übersicht und Rechte, Export, Katalogaustausch, Rückrufe
+  test_material_l5.py, test_material_profil.py
+                   Modul Material, Lieferung 5: Feinschliff nach Pilot, Urkundennummer im Profil; dazu die
+                   statische Prüfung der Oberfläche nach Rechten je Ordner (Phase 2)
   test_material_trennung.py, test_material_freigaben.py, test_material_globalsuche.py, test_material_zuordnung.py
                    Modul Material, Phase 2: Trennung je Gliederung, Freigaben, globale Suche, Personenzuordnung
                    und Löschkonzept
