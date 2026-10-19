@@ -2524,7 +2524,7 @@ einzige Verwalter, an die Material-Verwaltung. **Entscheidung:** „beide sollen
 Am 19.10.2026 entschieden: Nr. 3, 4, 11, 14, 15 und 18 bestätigt, Nr. 13 geändert (siehe „Entscheidungen vom
 19.10.2026“); Nr. 20 und 21 sind danach dazugekommen.
 
-1. **Schalter in der Vorgabe aus**, eingeschaltet wird in der Produktion **im Browser** (nicht in der `.env`, weil
+1. **Schalter in der Vorgabe aus – bestätigt am 19.10.2026**, eingeschaltet wird in der Produktion **im Browser** (nicht in der `.env`, weil
    dev sie kopiert). Danach kommen die ersten Mails binnen 15 Minuten, dann jeden Morgen ab 6 Uhr.
 2. **Ab 6:00 Uhr deutscher Zeit**, fest, einmal am Tag; ausgefallene Tage holt der nächste Lauf mit der höchsten
    erreichten Stufe nach.
