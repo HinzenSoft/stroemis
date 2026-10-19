@@ -1793,7 +1793,10 @@ entschieden bzw. nicht widersprochen):
   Kasten oben „Bemerkung des Melders“. **Bewusst geblieben:** der Schlüssel `beschreibung` im Katalogformat 1 und 2
   (vorhandene Katalog-ZIPs bleiben lesbar, der Export schreibt ihn weiter) – der Import nimmt `bemerkung` gleichwertig
   an, beide mit verschiedenen Werten sind ein Fehler; Spalte `description`, Schnittstelle, Namen im Code; die
-  Beschreibung von Ordnern und Rückrufen. Kein Schemaschritt, Katalogdaten unverändert. Geprüft:
+  Beschreibung von Ordnern und Rückrufen. In „Artikel anlegen“ nennt der Platzhalter der Produktsuche unter „Produkt
+  aus dem Katalog“ die Bemerkung des Produkts, weiter unten steht das eigene Feld „Bemerkung“ des Artikels – ohne
+  Zusatz, weil der Platzhalter sichtbar zur Produktsuche gehört, beim Tippen verschwindet und die Umbenennung auch
+  für die Suchfelder gilt. Kein Schemaschritt, Katalogdaten unverändert. Geprüft:
   `test_bemerkung_heisst_so` (neu, gegen den alten Stand rot) und die angepassten Tests in
   `test_material_beschreibung`; im Chromium bei 1280 × 900 und 390 × 844 (Touch) mit DEMO-Daten (Dialoge, Meldung bei
   81 Zeichen, Altbemerkung, Produktseite, Suchfelder, CSV-Köpfe) – keine Konsolenfehler, nichts rollt waagerecht.
