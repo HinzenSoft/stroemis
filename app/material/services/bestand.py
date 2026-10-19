@@ -46,7 +46,7 @@ DEMO_GRENZE = ("Zwischen den Demodaten (DEMO-Gliederungen) und echtem Bestand l�
 
 class FremdeDublette(Abgelehnt):
     """Seriennummer und Produkt gibt es schon – bei einem Artikel, den das Konto nicht sieht (Bauentwurf 3.7). Die
-    Transaktion rollt zurück; der Fehlerbehandler in routes.py bremst und protokolliert das wie eine globale Suche
+    Transaktion rollt zurück; der Fehlerbehandler in routes.py protokolliert das wie eine globale Suche
     (globalprotokoll). Der Text nennt weder Gliederung noch Inventarnummer."""
     TEXT = ("Diese Seriennummer gibt es bei diesem Produkt schon – in einem Bereich, den du nicht siehst. Wo der Artikel "
             "geführt wird, zeigt die Nummernsuche oben („Außerhalb deines Bereichs … suchen“).")
@@ -496,7 +496,7 @@ def _lebensende_wirksam(rechnung, manuell):
 
 def _serie_frei(produkt_id, serie, ausser=None):
     """Seriennummer bei diesem Produkt noch frei? Ein sichtbarer Artikel mit derselben Nummer: 409 mit seiner
-    Inventarnummer; ein fremder: FremdeDublette (3.7) – ohne Inventarnummer, gebremst und protokolliert."""
+    Inventarnummer; ein fremder: FremdeDublette (3.7) – ohne Inventarnummer, protokolliert."""
     andere = db.query("SELECT * FROM mat_item WHERE product_id = ? AND serial_no = ? COLLATE NOCASE AND id IS NOT ? "
                       "ORDER BY id LIMIT 1", (produkt_id, serie, ausser), one=True)
     if not andere:

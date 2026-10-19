@@ -70,13 +70,8 @@ def _abgelehnt(exc):
 @api.errorhandler(FremdeDublette)
 def _fremde_dublette(exc):
     """Die Seriennummer gibt es bei diesem Produkt schon – in einem fremden Bereich (Bauentwurf 3.7). Die Transaktion ist
-    zurückgerollt; jetzt in eigener Transaktion durch dieselbe Bremse und ins selbe Protokoll wie die globale Suche, denn
-    die Meldung verrät, dass es die Nummer gibt. Der Text nennt weder Gliederung noch Inventarnummer."""
-    u = current_user()
-    try:
-        globalprotokoll.bremse(u["id"] if u else None)
-    except Abgelehnt as zu_viele:              # ein Fehlerbehandler gibt seine Antwort selbst – nichts weiterwerfen
-        return jsonify(error=str(zu_viele)), zu_viele.code
+    zurückgerollt; jetzt in eigener Transaktion ins selbe Protokoll wie die globale Suche, denn die Meldung verrät, dass
+    es die Nummer gibt. Der Text nennt weder Gliederung noch Inventarnummer."""
     globalprotokoll.eintragen("dublette", globalsuche.normalform(exc.serie), [exc.item_id])
     return jsonify(error=str(exc)), exc.code
 
@@ -308,7 +303,7 @@ def qr_ziel(token):
     """Ziel des QR-Codes: über die Anmeldung zum Artikel. Wer das Modul nicht sehen darf, bekommt
     nichts über den Artikel zu wissen – auch nicht, ob es ihn gibt. Gehört der Artikel nicht zum eigenen Bereich,
     zeigt die Seite „fremd“ nur das (ohne Artikeldaten im HTML); den Steckbrief gibt es dort erst nach Bestätigung
-    (POST /globalsuche/qr, gebremst und protokolliert)."""
+    (POST /globalsuche/qr, protokolliert)."""
     u = current_user()
     if not u:
         return redirect(url_for("pages.login", next=f"/m/{token}"))
@@ -846,7 +841,7 @@ def artikel_vorschlag():
 @requires_folder("verwalten", "json:folder_id", leer="global")
 def artikel_anlegen():
     """Anlegen im Ordner, den das Konto verwaltet. Gibt es die Seriennummer bei diesem Produkt schon in einem fremden
-    Bereich, antwortet _fremde_dublette (gebremst, protokolliert, ohne Inventarnummer)."""
+    Bereich, antwortet _fremde_dublette (protokolliert, ohne Inventarnummer)."""
     iid = bestand.artikel_anlegen(json_body())
     return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True)), 201
 

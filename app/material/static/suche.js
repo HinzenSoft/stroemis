@@ -182,7 +182,7 @@
     try {
       html = globalHtml(await G.suchen(q), q);
     } catch (e) {
-      html = TRENNER + meldungZeile(e.message);   // zu viele Suchen, keine Verbindung … – bis weitergetippt wird
+      html = TRENNER + meldungZeile(e.message);   // keine Verbindung, abgewiesen … – bis weitergetippt wird
     }
     if (!global || global.q !== q) return;    // inzwischen weitergetippt: gilt nicht mehr
     global.html = html;

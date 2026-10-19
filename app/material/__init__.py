@@ -14,7 +14,7 @@ Aufbau:
                  importer, katalog_export, pruefung, durchgang, anhang, meldung, protokoll (Festschreiben,
                  Prüfseite), pdf (WeasyPrint), stempel (Prüfsumme), unterschrift, ueberblick (Fälligkeiten je
                  Ordner), export, lebenslauf, beschriftung (Journal als Text), rueckruf; seit Phase 2 dazu
-                 globalprotokoll (Bremse und Protokoll der Blicke über den eigenen Bereich) und globalsuche
+                 globalprotokoll (Protokoll der Blicke über den eigenen Bereich) und globalsuche
   templates/, static/   Seite und Oberfläche (material.js, material.css)
 """
 from .. import db

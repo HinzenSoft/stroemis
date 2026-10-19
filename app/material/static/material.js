@@ -3015,8 +3015,8 @@
       inhalt.innerHTML = `<div class="page-head"><h1>Suche „${esc(q)}“</h1></div>
         ${d.treffer.length ? artikelTabelle(d.treffer, { pfad: true, sort }) : leer("Kein Artikel in deinem Bereich gefunden.")}${seitenleiste(d.gesamt, seite, 50)}
         ${d.global_angebot ? '<div id="mat-global-angebot"></div>' : ""}`;
-      // Unter der eigenen Liste das Angebot, auch außerhalb des eigenen Bereichs zu suchen (global.js – mit Rückfrage,
-      // gebremst und protokolliert); nach der Suche stehen dort die fremden Treffer, deutlich abgesetzt.
+      // Unter der eigenen Liste das Angebot, auch außerhalb des eigenen Bereichs zu suchen (global.js – mit Rückfrage
+      // und Protokoll); nach der Suche stehen dort die fremden Treffer, deutlich abgesetzt.
       if (d.global_angebot) {
         const g = await baustein("MatGlobal");
         const el = $("#mat-global-angebot");
