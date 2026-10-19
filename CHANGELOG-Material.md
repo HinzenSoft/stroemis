@@ -1866,10 +1866,11 @@ entschieden bzw. nicht widersprochen):
     sehr breiten Strich an der Lage des Bilds im PDF (gegen den alten Stand rot); bei 600 dpi an neu erzeugten
     DEMO-Protokollen nachgemessen. Behoben: Die Angabe der eingebetteten Schriften oben nannte DejaVu Sans Mono fett
     (Protokoll-ID im Kopf) nicht. Ein Zeichen, das DLRG Univers nicht hat (etwa „≤“ in einem Soll), setzt WeasyPrint
-    wie bisher in DejaVu Sans, das dann ebenfalls eingebettet ist. Nicht geändert: Fällt die Bemerkung zum Ergebnis
-    an ein Seitenende, kann ihre Beschriftung „Bemerkung“ allein unten stehen und der Text auf der nächsten Seite – das
-    war schon vor dieser Änderung so (`.bemerkung` ohne `break-inside: avoid`), die neue Spalte verschiebt nur die
-    Seitenumbrüche. Es gehört nicht zum Wunsch und wartet auf die Entscheidung des Betreibers.
+    wie bisher in DejaVu Sans, das dann ebenfalls eingebettet ist. Ebenfalls behoben (schon vor dieser Änderung so,
+    die neue Spalte verschob nur die Seitenumbrüche): Fiel die Bemerkung zum Ergebnis an ein Seitenende, konnte ihre
+    Beschriftung „Bemerkung“ allein unten stehen und der Text auf der nächsten Seite. `.bemerkung` hat jetzt
+    `break-inside: avoid` (gilt auch für „Folge“); an den nachgestellten DEMO-Protokollen neu gerendert stehen
+    Beschriftung und Text zusammen, veraPDF: PDF/A-3b gültig.
 
 #### Prüfung der Modulstufen
 

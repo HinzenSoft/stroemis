@@ -51,7 +51,7 @@ table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-ni
 .ergebnis-einsatzbereit .ergebnis-text { color: var(--ok); }
 .ergebnis-aussondern .ergebnis-text { color: var(--rot-dunkel); }
 .ergebnis .maengel { margin-top: 1mm; color: var(--schwarz); }
-.bemerkung { margin-top: 2mm; }
+.bemerkung { margin-top: 2mm; break-inside: avoid; }   /* Beschriftung nie allein am Seitenende */
 
 /* Fotos zu den Prüfpunkten: zwei je Zeile */
 /* Fotos sind Zeilenboxen: ohne orphans/widows 1 bliebe die Überschrift bei langen Bildunterschriften allein stehen. */
