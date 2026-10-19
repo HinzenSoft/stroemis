@@ -224,12 +224,12 @@
     freigabe: "Freigabe Nr.", konto: "Person", recht: "Recht", bis: "bis", notiz_geaendert: "Notiz geändert",
     // Phase 2 · Lieferung 2: Erinnerungen
     reminders_off: "Erinnerungsmails aus",
-    // Phase 2 · Lieferung 3: Bestandsimport
+    // Phase 2 · Lieferung 3: Bestandsimport und Prüfanleitung aus dem Wiki
     bestandsimport: "Bestandsimport Nr.", datei: "Datei", zeile: "Zeile", zeilen: "Zeilen",
     artikel_angelegt: "Artikel angelegt", schon_im_bestand: "schon im Bestand", nacharbeit: "Nacharbeit (Zeilen)",
     ersetzt: "neu eingelesen (Zeilen)", aus_nacharbeit: "aus der Nacharbeit",
     liste_inventarnummer: "bisherige Inventarnummer", liste_zuletzt_geprueft: "zuletzt geprüft laut Liste",
-    liste_naechste_pruefung: "nächste Prüfung laut Liste",
+    liste_naechste_pruefung: "nächste Prüfung laut Liste", seite: "Wiki-Seite Nr.",
   };
   // Die Beschriftung eines Feldes in einem Journaleintrag – wie beschriftung.feld_name: „description“ ist am Produkt der
   // kurze Zusatz hinter dem Namen und heißt dort seit dem Wunsch vom 18.10.2026 „Bemerkung“; an Ordnern und in den
@@ -253,7 +253,7 @@
                    freigabe_abgelaufen: "Freigabe abgelaufen",
                    zugeordnet: "Zuordnung geändert", zuordnung_geloest: "Zuordnung geändert",
                    bestandsimport: "Bestandsimport", nacharbeit_uebernommen: "Nacharbeit übernommen",
-                   nacharbeit_verworfen: "Nacharbeit verworfen" };
+                   nacharbeit_verworfen: "Nacharbeit verworfen", wiki: "Prüfanleitung (Wiki) geändert" };
   const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };

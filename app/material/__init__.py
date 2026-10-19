@@ -9,8 +9,8 @@ Aufbau:
   routes.py      Seiten (/material/…, /m/<token>), Schnittstelle (/api/material/…), Medien
   routes_export.py, routes_katalog.py, routes_rueckruf.py
                  Routen der Lieferung 4: Export (CSV, Protokoll-ZIP, Lebenslauf), Katalogaustausch, Rückrufe
-  routes_import.py
-                 Routen der Phase 2 · Lieferung 3: Bestandsimport und Nacharbeit
+  routes_import.py, routes_wiki.py
+                 Routen der Phase 2 · Lieferung 3: Bestandsimport und Nacharbeit, Prüfanleitung aus dem Wiki
   cli.py         flask material import-catalog, export-catalog, remind
   tageslauf.py   Thread je Arbeitsprozess: einmal am Tag ab 6 Uhr Pflege und Erinnerungsmails (seit Phase 2 · L2)
   services/      Fachregeln: rechte, katalog, bestand, status, interval, search, nummern, qr, journal,
@@ -19,7 +19,7 @@ Aufbau:
                  Ordner), export, lebenslauf, beschriftung (Journal als Text), rueckruf; seit Phase 2 dazu
                  globalprotokoll (Protokoll der Blicke über den eigenen Bereich) und globalsuche, seit Lieferung 2
                  erinnerung (Erinnerungsmails, Pflege, Laufstand und Probelauf), seit Lieferung 3 tabelle und
-                 bestandsimport (Bestandsimport mit Nacharbeit)
+                 bestandsimport (Bestandsimport mit Nacharbeit) und wikiverweis (Prüfanleitung aus dem Wiki)
   templates/, static/   Seite und Oberfläche (material.js, material.css)
 """
 from .. import db

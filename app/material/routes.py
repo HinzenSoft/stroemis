@@ -7,7 +7,7 @@ Schutz. Fachregeln stehen in services/, hier wird nur gelesen, aufgerufen und ge
 
 Die Routen der Lieferung 4 stehen in eigenen Modulen an denselben Blueprints – routes_export.py (CSV, Protokoll-ZIP,
 Lebenslauf), routes_katalog.py (Katalogaustausch) und routes_rueckruf.py –, eingebunden am Ende dieser Datei; ebenso die
-der Phase 2 (Freigaben, globale Suche, Zuordnung, Erinnerungen, Bestandsimport).
+der Phase 2 (Freigaben, globale Suche, Zuordnung, Erinnerungen, Bestandsimport, Prüfanleitung aus dem Wiki).
 
 Seit Phase 2 gelten Freigaben je Ordner (services/rechte.py): Lesende Routen über den ganzen Bestand tragen
 requires_zugang und liefern nur, was das Konto sieht; Routen zu einem Gegenstand tragen requires_folder. Fremdes – auch
@@ -1158,4 +1158,4 @@ from . import routes_freigaben  # noqa: E402,F401
 from . import routes_global  # noqa: E402,F401
 from . import routes_zuordnung  # noqa: E402,F401
 from . import routes_erinnerung  # noqa: E402,F401
-from . import routes_import  # noqa: E402,F401
+from . import routes_import, routes_wiki  # noqa: E402,F401

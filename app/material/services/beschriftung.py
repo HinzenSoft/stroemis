@@ -42,12 +42,12 @@ FELD = {
     "freigabe": "Freigabe Nr.", "konto": "Person", "recht": "Recht", "bis": "bis", "notiz_geaendert": "Notiz geändert",
     # Phase 2 · Lieferung 2: Erinnerungen
     "reminders_off": "Erinnerungsmails aus",
-    # Phase 2 · Lieferung 3: Bestandsimport
+    # Phase 2 · Lieferung 3: Bestandsimport und Prüfanleitung aus dem Wiki
     "bestandsimport": "Bestandsimport Nr.", "datei": "Datei", "zeile": "Zeile", "zeilen": "Zeilen",
     "artikel_angelegt": "Artikel angelegt", "schon_im_bestand": "schon im Bestand", "nacharbeit": "Nacharbeit (Zeilen)",
     "ersetzt": "neu eingelesen (Zeilen)", "aus_nacharbeit": "aus der Nacharbeit",
     "liste_inventarnummer": "bisherige Inventarnummer", "liste_zuletzt_geprueft": "zuletzt geprüft laut Liste",
-    "liste_naechste_pruefung": "nächste Prüfung laut Liste",
+    "liste_naechste_pruefung": "nächste Prüfung laut Liste", "seite": "Wiki-Seite Nr.",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",
@@ -69,7 +69,7 @@ AKTION = {
     # Im Lebenslauf ohne Namen: Wem der Artikel zugeordnet war, gehört nicht in ein Dokument zur Weitergabe.
     "zugeordnet": "Zuordnung geändert", "zuordnung_geloest": "Zuordnung geändert",
     "bestandsimport": "Bestandsimport", "nacharbeit_uebernommen": "Nacharbeit übernommen",
-    "nacharbeit_verworfen": "Nacharbeit verworfen",
+    "nacharbeit_verworfen": "Nacharbeit verworfen", "wiki": "Prüfanleitung (Wiki) geändert",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",
