@@ -118,7 +118,7 @@ def test_setzen():
                 (fid,))]
         f = ok(verknuepfen(t.mvw, fid, p.intern["id"]))["formular"]
         assert f["wiki"] == {"seite": p.intern["id"], "titel": "Platzhalter Anleitung Intern", "reichweite": "intern",
-                             "zustand": "ok"} and f["wiki_aendern"]
+                             "url": f"/wiki/{p.intern['slug']}", "zustand": "ok"} and f["wiki_aendern"]
         assert journal() == [({"seite": None}, {"seite": p.intern["id"]})]
         assert "Platzhalter Anleitung" not in json.dumps(zeilen(t.app, "SELECT * FROM mat_audit WHERE entity = 'form'"),
                                                           ensure_ascii=False)
@@ -133,8 +133,8 @@ def test_setzen():
         ok(verknuepfen(t.adm, fid, p.geheim["id"]))
         n = len(journal())
         f = ok(verknuepfen(t.mvw, fid, p.geheim["id"]))["formular"]
-        assert len(journal()) == n and f["wiki"] == {"seite": p.geheim["id"], "titel": None, "reichweite": None,
-                                                    "zustand": "kein_zugang"}
+        assert len(journal()) == n and f["wiki"] == {"seite": p.geheim["id"], "titel": None, "url": None,
+                                                    "reichweite": None, "zustand": "kein_zugang"}
         assert GEHEIM not in t.mvw.get(f"/api/material/formulare/{fid}").get_data(as_text=True)
         # Ohne Wiki-Stufe: 403; sie sieht den Stand, darf ihn aber nicht ändern. Wer nicht Material-Verwaltung ist,
         # sieht nichts davon.
@@ -276,10 +276,52 @@ def test_kein_nachweis():
     print("Kein Nachweis bestanden.")
 
 
+# --- 6. Oberfläche (statisch) ---------------------------------------------------------------------------------------
+
+def test_oberflaeche_statisch():
+    """material.js (Paket OBERFLÄCHE, Bauentwurf 3.5.2 und 4.4): eigene strenge Reinigung der Einblendung, Abschnitt
+    „Prüfung“ im <template> ausgeschnitten, geschlossener Shadow-Root, kein MD.enhance; die Klick-Delegation übergeht
+    .mat-anleitung, Festschreiben liest Grund, Datum und Bemerkung nur aus den eigenen Behältern; Formularzeile mit
+    „Ändern …“ nur bei wiki_aendern. Die Wirkung (DOM-Clobbering-Probe) prüft die Durchsicht im Browser."""
+    import re
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
+    rein = js[js.index("const ANLEITUNG_REINIGUNG = {"):js.index("ALLOW_DATA_ATTR: false };")]
+    tags = re.search(r"FORBID_TAGS: \[([^\]]*)\]", rein).group(1)
+    attr = re.search(r"FORBID_ATTR: \[([^\]]*)\]", rein).group(1)
+    for t_ in ("style", "form", "textarea", "select", "button", "dialog", "iframe", "input", "label", "output", "data",
+               "object", "embed", "base", "meta", "link"):
+        assert f'"{t_}"' in tags, t_
+    for a in ("style", "id", "name", "for", "form", "formaction", "target"):
+        assert f'"{a}"' in attr, a
+    assert '"target"' not in rein[rein.index("ADD_ATTR"):rein.index("FORBID_TAGS")]
+    teil = js[js.index("  function anleitungBauen(a) {"):js.index("  async function pruefungAnsicht() {")]
+    assert 'attachShadow({ mode: "closed" })' in teil and "DOMPurify.sanitize(MD.render(" in teil
+    assert "ANLEITUNG_REINIGUNG)" in teil and "MD.enhance" not in js[js.index("const ANLEITUNG_REINIGUNG"):js.index("  async function pruefungAnsicht() {")]
+    ab = js[js.index("  function abschnittPruefung(html) {"):js.index("  function anleitungBauen(a) {")]
+    assert 'document.createElement("template")' in ab and "/^H[1-5]$/" in ab and 'text(n) === "prüfung"' in ab
+    assert 'a.setAttribute("target", "_blank")' in ab and '".md-marker"' in ab and '".einbau"' in ab
+    # Härtung der Prüfansicht
+    assert 'if (b.closest(".mat-anleitung")) return;' in js
+    pr = js[js.index("  async function pruefungAnsicht() {"):js.index("  async function durchgangAnsicht() {")]
+    for sel in ('$("#pr-grund")', '$("#pr-due")', '$("#pr-bem")', '$("#pr-abschluss")', '$$("#pr-abschluss'):
+        assert sel not in pr, sel
+    assert 'grund = ergebnis === "einsatzbereit" ? "" : imAbschluss("#pr-grund").value.trim()' in pr
+    assert "bemerkung: bemFeld().value" in pr and 'daten.next_due_on = imAbschluss("#pr-due").value || null' in pr
+    assert "anleitungEinsetzen();" in pr and '${pr.anleitung ? \'<div class="mat-anleitung-platz"></div>\' : ""}' in pr
+    # Formularzeile und Seitenwahl
+    assert 'f.wiki_aendern ? \'<button type="button" class="lnk" data-act="wiki-waehlen">Ändern …</button>\'' in js
+    assert "Verknüpfen kann, wer im Wiki mindestens Mitglied ist." in js and "Seite Nr. ${esc(w.seite)} – du darfst sie nicht lesen" in js
+    ww = js[js.index("  function wikiWahl(formular, danach) {"):js.index("/* --- Suche ---")]
+    assert ww.count('class="btn"') == 1 and "Verknüpfung entfernen" in ww and "setTimeout(suchen, 300)" in ww
+    print("Oberfläche (statisch) bestanden.")
+
+
 if __name__ == "__main__":
     test_seitenwahl()
     test_setzen()
     test_vererbung_und_katalog()
     test_anleitung_und_rechte()
     test_kein_nachweis()
+    test_oberflaeche_statisch()
     print("Alle Tests zur Prüfanleitung aus dem Wiki bestanden.")

@@ -290,8 +290,13 @@ def test_vereinsliste_ende_zu_ende():
             assert b["zahlen"]["uebernehmbar"] == 5 and b["zahlen"]["nacharbeit"] == 2, b["zahlen"]
             assert codes(z[7]) == ["datum"] and codes(z[9]) and codes(z[9])[0].startswith("produkt_"), (z[7], z[9])
             assert b["zahlen"]["ohne_serie"] == 1 and any("STR-Nummer" in w_ for w_ in b["warnungen"])
+            # Einzahl, wenn es nur eine Zeile ist (Durchsicht der Oberfläche vom 19.10.2026: „1 Zeilen“).
+            assert ("1 Zeile ohne Seriennummer – bekommt eine STR-Nummer vom System (bitte am Artikel anbringen)."
+                    in b["warnungen"]), b["warnungen"]
             r = ok(uebernehmen(t.w, t.lager, daten, name), 201)
             assert r["import"]["angelegt"] == 5 and r["import"]["nacharbeit"] == 2, r["import"]
+            assert any(w_.startswith("1 Artikel ohne Herstellerseriennummer hat eine Seriennummer vom System")
+                       for w_ in r["warnungen"]), r["warnungen"]
             z = nach_nr(r)
             with t.app.app_context():
                 from app import db
@@ -1362,6 +1367,56 @@ def test_seite_und_hinweise():
     print("Seite und Hinweise bestanden.")
 
 
+# --- 27. Oberfläche (statisch) -------------------------------------------------------------------------------------
+
+def test_oberflaeche_statisch():
+    """material.js (Paket OBERFLÄCHE): Ansicht „bestandsimport“ im Reiter „Bestand“ mit Ordnerleiste; Einstieg über das
+    Untermenü „Export / Import“ im Ordnerkopf, Hinweise im Ordnerkopf und auf der Übersicht; ein roter Knopf
+    „Übernehmen: …“ mit Zahlen, Probelauf abbrechbar (AbortController), 413/429 im Klartext; Nacharbeit mit Filter nach
+    Grund, „alle n offenen“ (→ "alle"), Frist und offen_bis; Melden über die Nacharbeit (angabe, ohne folder_id),
+    „Im Katalog anlegen …“ ohne Seitenwechsel; Knopfregel (kein btn ghost, danger nur über die Rückfrage)."""
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
+    css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
+    assert 'bestandsimport: "bestand" };' in js and '"meldungen", "bestandsimport"]);' in js
+    assert re.search(r"const ANSICHTEN = \{[^}]*\bbestandsimport \};", js), "Ansicht fehlt in ANSICHTEN"
+    anfang = js.index("  async function bestandsimport() {")
+    block = js[anfang:js.index("\n  }\n", anfang)]
+    # Einstieg und Hinweise
+    assert '${importieren ? "Export / Import" : "Export"}' in js and "exportMenue(d, darfPflegen)" in js
+    assert "<strong>Bestandsliste importieren …</strong>" in js and "<strong>Nacharbeit (${d.nacharbeit} offen)</strong>" in js
+    assert "auf Nacharbeit." in js and "Nacharbeit öffnen</a>" in js and "${nacharbeitHinweis(d.nacharbeit)}" in js
+    # Probelauf, Übernehmen, Fehler
+    assert "new AbortController()" in block and "lauf.abort()" in block and "setTimeout(probelauf, 600)" in block
+    assert 'return `Übernehmen: ${a} anlegen, ${n} in die Nacharbeit`;' in block
+    assert 'return `${n} in die Nacharbeit übernehmen`;' in block
+    assert "fehler.status === 429" in block and 'data-act="bi-wiederholen">Erneut versuchen' in block
+    assert "e.status === 413 ? IMPORT_ZU_GROSS" in js and "f.size > IMPORT_MAX_BYTES" in block
+    assert "IMPORT_MAX_BYTES = 5 * 1024 * 1024" in js
+    assert "angelegtTabelle(teil)" in block and "IMPORT_NEUBESCHRIFTEN" in block
+    # Nacharbeit
+    assert 'gruppe: naGruppe || "alle"' in block and '["produkt", "Produkt"], ["seriennummer", "Seriennummer"]' in js
+    assert 'naAlle ? "alle" : Array.from(naWahl)' in block and "esc(fmtTag(z.offen_bis))" in block
+    assert "esc(na.frist)" in block and "esc(b.frist)" in block
+    assert "url: `${API}/ordner/${fid}/nacharbeit/melden`" in block and "angabe: g.angabe" in block
+    assert "if (v.url) felder.angabe = v.angabe" in js and "await api(v.url || `${API}/meldungen`" in js
+    assert "if (opt.danach) await opt.danach(r.produkt);" in js
+    assert "/nacharbeit/produkt`, { method: \"POST\", body: { angabe: g.angabe, product_id: p.id } }" in block
+    assert "if (DARF.katalog) knoepfe.push(" in block and "Im Katalog anlegen …" in block
+    # Knopfregel: rot nur „Übernehmen: …“ (Seite), „Zuordnen“ und „n Artikel übernehmen“ (je ein Dialog)
+    assert block.count('class="btn"') == 2 and 'class="btn" data-act="bi-uebernehmen"' in block, block.count('class="btn"')
+    assert block.count('class="btn mat-knopf-umbruch"') == 1 and "btn danger" not in block
+    assert "btn ghost" not in js
+    # Dateiinhalte nur maskiert: Gründe, Hinweise, Beispiele
+    assert '<li data-code="${esc(x.code)}">${esc(x.text)}</li>' in js and "<li>${esc(x)}</li>" in js
+    assert '<span class="mat-beispiel">${esc(w)}</span>' in block
+    # Schmale Ansichten über den Container „mat-seite“; der lange Knopf bricht um
+    teil = css[css.index("/* Phase 2 · Lieferung 3"):]
+    assert "@container mat-seite (max-width: 600px)" in teil and ".mat-import-knoepfe .btn { width: 100%; }" in teil
+    assert ".mat-import-knoepfe .btn, .mat-knopf-umbruch { white-space: normal;" in teil
+    print("Oberfläche (statisch) bestanden.")
+
+
 if __name__ == "__main__":
     test_migration_12()
     test_vereinsliste_ende_zu_ende()
@@ -1389,4 +1444,5 @@ if __name__ == "__main__":
     test_datenschutz_und_frist()
     test_demo()
     test_seite_und_hinweise()
+    test_oberflaeche_statisch()
     print("Alle Tests zum Bestandsimport bestanden.")

@@ -259,7 +259,7 @@ def test_oberflaeche_rechte_je_ordner():
     # Objektbezogen statt global: Das Grundrecht gibt es nur am Gegenstand; Lebenslauf, Export, Journal und
     # Personenspalte hängen daran, Prüfen-Knöpfe an der Prüffreigabe des Artikels.
     assert "DARF.grund" not in js
-    for stelle in ("darf.grund ? lebenslaufKnopf(a)", "darf.grund ? exportMenue(d)", "person: darf.grund",
+    for stelle in ("darf.grund ? lebenslaufKnopf(a)", "darf.grund ? exportMenue(d, darfPflegen)", "person: darf.grund",
                    "if (!(a.darf && a.darf.pruefen)", "!aus && darf.pruefen && !fremderEntwurf", "DARF.gliederung_anlegen ?"):
         assert stelle in js, stelle
     # Ohne Leserecht entfallen nur die Reiter Prüfungen und Bestand – die Nummernsuche (globale Suche) bleibt.

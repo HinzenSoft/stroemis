@@ -470,7 +470,8 @@ def test_oberflaeche_statisch():
         assert haken in js, haken
     # Jede Stelle mit dem Namen setzt den Zusatz dahinter – erst nach dem Schluss von Link und Hervorhebung.
     stellen = re.findall(r"\$\{nameHtml\(([^,)]+)(?:, true)?\)\}((?:</strong>|</a>)*)\$\{zusatzHtml\(([^)]+)\)\}", js)
-    assert len(stellen) == js.count("${nameHtml(") == 16, (len(stellen), js.count("${nameHtml("))
+    # 17 seit Phase 2 · L3: die Produktwahl der Nacharbeit (Bestandsimport) zeigt das gewählte Produkt ebenso.
+    assert len(stellen) == js.count("${nameHtml(") == 17, (len(stellen), js.count("${nameHtml("))
     assert all(name == zusatz for name, _, zusatz in stellen), stellen
     assert not re.search(r"\$\{zusatzHtml\([^)]*\)\}(</strong>|</a>)", js)      # nie im Link, nie in <strong>
     # Die Katalogliste wie im Bildschirmfoto: Name fett im roten Link, dann grau Zusatz und Artikelnummer.
@@ -532,7 +533,7 @@ def test_bemerkung_heisst_so():
     from app.material.services import beschriftung, importer
     js = _lesen("app/material/static/material.js")
     # Der Produktdialog: Feld „Bemerkung“, Hinweis und Meldung vor dem Senden mit demselben Wort, kein „Beschreibung“.
-    a = js.index("async function produktDialog(p)")
+    a = js.index("async function produktDialog(p, opt)")
     dialog = js[js.index("dialog(`", a):js.index("(dlg, body) =>", a)]
     assert '<label for="pd-desc">Bemerkung</label><input type="text" id="pd-desc"' in dialog, dialog[:2000]
     assert "Die bisherige Bemerkung hat ${beschreibung.length} Zeichen" in dialog

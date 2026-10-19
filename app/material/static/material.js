@@ -401,7 +401,7 @@
   /* --- Gerüst -------------------------------------------------------------------------------- */
   const NAV = { dashboard: "dashboard", pruefungen: "pruefungen", bestand: "bestand", ordner: "bestand", artikel: "bestand",
                 artikel_neu: "bestand", katalog: "katalog", produkt: "katalog", formular: "katalog", meldungen: "katalog", suche: "",
-                pruefung: "pruefungen", pruefung_neu: "pruefungen", durchgang: "pruefungen" };
+                pruefung: "pruefungen", pruefung_neu: "pruefungen", durchgang: "pruefungen", bestandsimport: "bestand" };
   $$(".mat-nav a").forEach((a) => a.classList.toggle("aktiv", a.dataset.nav === NAV[ANSICHT]));
   if (ANSICHT === "suche" && DATEN.q) $(".mat-suche input").value = DATEN.q;
   // Ohne Freigabe im Bestand (Mitglied ohne Freigabe, Prüfer ohne Prüffreigabe) fallen nur „Prüfungen“ und „Bestand“ weg. Die
@@ -476,16 +476,20 @@
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(navAnordnen);
   }
 
-  // Klicks auf [data-act] gehen an die Aktionen der gerade gezeichneten Ansicht.
+  // Klicks auf [data-act] gehen an die Aktionen der gerade gezeichneten Ansicht. Was aus dem Wiki eingeblendet ist
+  // (Prüfanleitung, .mat-anleitung), löst nie eine Aktion aus – auch dann nicht, wenn dort ein Element data-act trüge:
+  // Die Reinigung nimmt es weg und der Schatten schirmt ab, das hier ist der dritte Riegel (Bauentwurf L3 3.5.2 Nr. 7).
   let aktionen = {};
   inhalt.addEventListener("click", (e) => {
     const b = e.target.closest("[data-act]");
     if (!b || !inhalt.contains(b) || !aktionen[b.dataset.act]) return;
+    if (b.closest(".mat-anleitung")) return;
     if (b.tagName === "A" || b.tagName === "BUTTON") e.preventDefault();
     aktionen[b.dataset.act](b, e);
   });
   // „Sortieren nach“ über den Karten (kartenKopf): dieselbe Aktion wie ein Klick auf den Spaltenkopf.
   inhalt.addEventListener("change", (e) => {
+    if (e.target.closest(".mat-anleitung")) return;
     const s = e.target.closest("select[data-sortwahl]");
     if (s && aktionen.sortieren) aktionen.sortieren({ dataset: { feld: s.value } }, e);
     // Filter „Zugeordnet an …“ im Ordner.
@@ -510,7 +514,7 @@
      der Seite „Bestand“: dort ist der Ordnerbaum selbst der Inhalt. Auf- und Zuklappen merkt sich der Browser, je Baum getrennt. */
   const KATALOG_ANSICHTEN = new Set(["katalog", "produkt", "formular", "meldungen"]);
   const MIT_LEISTE = new Set(["dashboard", "pruefungen", "ordner", "artikel", "artikel_neu", "suche", "pruefung",
-                              "pruefung_neu", "durchgang", "katalog", "produkt", "formular", "meldungen"]);
+                              "pruefung_neu", "durchgang", "katalog", "produkt", "formular", "meldungen", "bestandsimport"]);
   const LEISTE_KATALOG = KATALOG_ANSICHTEN.has(ANSICHT);
   const leiste = document.getElementById("mat-side");
   const leisteAuf = document.getElementById("mat-side-auf");
@@ -910,6 +914,7 @@
       ${rueckrufKasten(d.rueckrufe)}
       ${d.meldungen_offen ? `<p class="notice"><a href="/material/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produktmeldung", "offene Produktmeldungen")}</strong></a>
         – Materialwarte warten darauf, Artikel davon anzulegen.</p>` : ""}
+      ${nacharbeitHinweis(d.nacharbeit)}
       ${erinnerungHinweise(d.erinnerungen)}
       <div id="mat-freigaben-hinweis"></div>
       ${bestandTeil}
@@ -1693,8 +1698,10 @@
             <a class="btn secondary small" href="/material/artikel/neu?ordner=${d.id}">+ Artikel</a>
             <button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>
             ${darfOben ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button><button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}
-            ${darf.grund ? exportMenue(d) : ""}</div></div>
+            ${darf.grund ? exportMenue(d, darfPflegen) : ""}</div></div>
         ${darfPflegen ? '<div id="mat-freigaben-kopf"></div>' : ""}
+        ${darfPflegen && d.nacharbeit ? `<p class="notice small">Aus einem Bestandsimport ${d.nacharbeit === 1 ? "wartet 1 Zeile" : `warten ${d.nacharbeit} Zeilen`} auf Nacharbeit.
+          <a href="/material/ordner/${d.id}/import#bi-nacharbeit">Nacharbeit öffnen</a></p>` : ""}
         ${system ? `<p class="notice">${systemText}${d.teilweise ? " Du siehst hier nur deine Artikel – die Gliederung selbst gehört nicht zu deinem Bereich." : ""}</p>` : ""}
         ${d.foto || d.description || d.interval_months || erinnerungAus ? `<div class="mat-ordnerkopf">${d.foto ? bildLink(d.foto, d.original, `Ordnerfoto ${d.name}`, null, `<img class="mat-ordnerfoto" src="${esc(d.vorschau)}" alt="">`) : ""}
           <div>${d.description ? `<p class="mat-text">${esc(d.description)}</p>` : ""}
@@ -1858,14 +1865,22 @@
      kein fetch – der Server prüft das Leserecht selbst und zeigt einen Fehler als Seite. Ein Download lässt die
      Seite stehen; damit niemand doppelt klickt, während das ZIP entsteht, sagt ein Hinweis, dass es kommt. */
   // Export eines Ordners als Untermenü im Ordnerkopf: Knopf „Export“, darunter die beiden Downloads mit einem Satz,
-  // was drinsteckt. <details> öffnet und schließt ohne eigenes Skript (auch per Tastatur und Touch).
-  const exportMenue = (d) => `<details class="mat-menue">
-      <summary class="btn secondary small" aria-haspopup="true">Export</summary>
+  // was drinsteckt. <details> öffnet und schließt ohne eigenes Skript (auch per Tastatur und Touch). Wer den Ordner
+  // pflegt (verwalten, kein Systemordner – importieren), findet hier seit Phase 2 · L3 auch den Bestandsimport: Das
+  // Menü heißt dann „Export / Import“ und hat unter einem Strich „Bestandsliste importieren …“ und, solange etwas
+  // offen ist, „Nacharbeit (n offen)“ – seltene Funktionen gehören ins Untermenü, kein neuer Knopf in der Kopfzeile.
+  const exportMenue = (d, importieren) => `<details class="mat-menue">
+      <summary class="btn secondary small" aria-haspopup="true">${importieren ? "Export / Import" : "Export"}</summary>
       <div class="mat-menue-liste">
         <a href="/material/export/${d.id}.csv" data-export="Die Artikelliste wird heruntergeladen …"><strong>Artikelliste (CSV)</strong>
           <span>Alle Artikel hier und darunter, auch die von hier gesperrten (ausgesonderte bei ihrer Gliederung), mit Status, Fälligkeiten und Stammdaten – für Excel.</span></a>
         <a href="/material/export/${d.id}-protokolle.zip" data-export="Die Protokolle werden zusammengestellt – bei vielen dauert das einen Moment …"><strong>Protokolle (ZIP)</strong>
           <span>Die Protokolle dieser Artikel und die Sammelprotokolle der Durchgänge hier, mit Verzeichnis und Prüfsummen.</span></a>
+        ${importieren ? `<hr class="mat-menue-trenner">
+        <a href="/material/ordner/${d.id}/import"><strong>Bestandsliste importieren …</strong>
+          <span>Eine Liste aus Excel oder CSV in diesen Ordner übernehmen: erst ein Probelauf, dann übernehmen; was nicht passt, kommt in die Nacharbeit.</span></a>
+        ${d.nacharbeit ? `<a href="/material/ordner/${d.id}/import#bi-nacharbeit"><strong>Nacharbeit (${d.nacharbeit} offen)</strong>
+          <span>Zeilen aus Bestandsimporten, die noch ein Produkt, eine Angabe oder eine Entscheidung brauchen.</span></a>` : ""}` : ""}
       </div></details>`;
   const LEBENSLAUF_TEXT = "Stammdaten, alle Prüfungen in zeitlicher Reihenfolge, Prüfdurchgänge und Ereignisse als PDF – zum Weitergeben oder als Aussonderungsnachweis. Stand jetzt, nicht festgeschrieben.";
   const lebenslaufKnopf = (a) => `<a class="btn secondary small" href="/material/artikel/${a.id}/lebenslauf.pdf" target="_blank" rel="noopener"
@@ -2707,7 +2722,10 @@
     if (feld.value.trim()) pruefen();
   }
 
-  async function produktDialog(p) {
+  /* opt.danach (Phase 2 · L3, „Im Katalog anlegen …“ aus der Nacharbeit): Nach dem Anlegen bleibt die Seite stehen und
+     danach(produkt) ordnet das neue Produkt zu – sonst geht es wie bisher zur Produktseite. */
+  async function produktDialog(p, opt) {
+    opt = opt || {};
     const kats = await kategorienLaden();
     const neu = !p.id;
     const kat = (id) => kats.find((k) => k.id === +id) || {};
@@ -2793,7 +2811,9 @@
           } else if (bildWahl.entfernen) {
             await api(`${API}/produkte/${pid}/bild`, { method: "DELETE" });
           }
-          dlg.close(); location.href = `/material/katalog/produkt/${pid}`;
+          dlg.close();
+          if (opt.danach) await opt.danach(r.produkt);
+          else location.href = `/material/katalog/produkt/${pid}`;
         } catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
     });
@@ -3103,12 +3123,33 @@
         p.pflicht = $(".fp-pflicht", tr).checked; p.kritisch = $(".fp-kritisch", tr).checked && p.art === "yesno";
       });
     }
+    /* Prüfanleitung aus dem Wiki (Phase 2 · L3): nur die Material-Verwaltung sieht die Zeile (formular.wiki kommt sonst
+       null); „Ändern …“ nur mit Stufe Mitglied im Wiki (wiki_aendern, Entscheidung vom 19.10.2026). Auch an benutzten
+       Versionen – die Verknüpfung gehört nicht zum Prüfinhalt. */
+    function wikiZeile() {
+      if (!DARF.katalog) return "";
+      const w = f.wiki;
+      let anzeige = '<span class="muted">keine</span>';
+      if (w && w.zustand === "ok") {
+        anzeige = `${w.url ? `<a href="${esc(w.url)}" target="_blank" rel="noopener">${esc(w.titel)}</a>` : `<strong>${esc(w.titel)}</strong>`}
+          ${w.reichweite ? `<span class="badge grey">${esc(REICHWEITE[w.reichweite] || w.reichweite)}</span>` : ""}`;
+      } else if (w && w.zustand === "papierkorb") anzeige = "Die verknüpfte Seite liegt im Wiki-Papierkorb.";
+      else if (w) anzeige = `Seite Nr. ${esc(w.seite)} – du darfst sie nicht lesen`;
+      const warnung = w && w.zustand === "ok" ? REICHWEITE_HINWEIS[w.reichweite] : "";
+      return `<div class="mat-wikizeile" id="fp-wiki"><p><strong>Prüfanleitung im Wiki:</strong> ${anzeige}
+          ${f.wiki_aendern ? '<button type="button" class="lnk" data-act="wiki-waehlen">Ändern …</button>' : ""}</p>
+        ${warnung ? `<p class="small mat-warn-leise">${esc(warnung)}</p>` : ""}
+        ${f.benutzt && f.wiki_aendern ? '<p class="help">Die Verknüpfung gehört nicht zum Prüfinhalt und lässt sich auch an benutzten Versionen ändern.</p>' : ""}
+        <p class="help">Hat die Seite eine Überschrift „Prüfung“, wird dieser Abschnitt in der Prüfung eingeblendet, sonst nur verlinkt. Neue Konten haben keine Wiki-Stufe und sehen nur öffentliche Seiten.</p>
+        ${f.wiki_aendern ? "" : '<p class="help">Verknüpfen kann, wer im Wiki mindestens Mitglied ist.</p>'}</div>`;
+    }
     function zeichnen() {
       inhalt.innerHTML = `${f.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen.</p>' : ""}
         <div class="mat-pfad"><a href="/material/katalog">Katalog</a> / <a href="${zielLink}">${esc(zielText)}</a></div>
         <div class="page-head"><h1>${esc(f.titel || "Prüfformular")} <span class="badge grey">Version ${f.version}</span> ${f.aktiv ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : '<span class="badge grey">inaktiv</span>'} ${demoMarke(f.demo)}</h1>
           <div class="btn-row">${DARF.katalog ? `${f.aktiv ? '<button class="btn secondary small" data-act="deaktivieren">Deaktivieren</button>' : '<button class="btn secondary small" data-act="aktivieren">Aktivieren</button>'}
             <button class="btn secondary small" data-act="neue-version">Neue Version</button>${!f.aktiv && !f.benutzt ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}</div></div>
+        ${wikiZeile()}
         <p class="help">${esc(zielText)}. ${f.gueltig_ab ? `Gültig ab ${esc(fmtTag(f.gueltig_ab))}.` : "Noch nie aktiviert."}
           ${f.benutzt ? " Diese Version wurde schon für Prüfungen benutzt und bleibt unverändert – Änderungen gehen über eine neue Version." : ""}
           Bei der Prüfung ist jeder Befund mit „in Ordnung“ vorbelegt, Ja/Nein-Punkte mit ihrem Sollwert; bei Text und Zahl ist das Soll ein Hinweis für den Prüfer. Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus.</p>
@@ -3153,8 +3194,86 @@
         if (!(await confirm(`Version ${f.version} löschen?`, "Löschen"))) return;
         try { await api(`${API}/formulare/${f.id}`, { method: "DELETE" }); location.href = zielLink; } catch (e) { toast(e.message, true); }
       },
+      // Nur die Zeile neu – was in den Prüfpunkten getippt, aber noch nicht gespeichert ist, bleibt stehen.
+      "wiki-waehlen": () => wikiWahl(f, (neu) => {
+        f.wiki = neu.wiki;
+        f.wiki_aendern = neu.wiki_aendern;
+        const alt = $("#fp-wiki", inhalt);
+        if (alt) alt.outerHTML = wikiZeile();
+      }),
     };
     zeichnen();
+  }
+
+  /* --- Prüfanleitung aus dem Wiki: Seitenwahl am Formular (Phase 2 · L3, nur Material-Verwaltung mit Wiki-Stufe) ---
+     Titelsuche über die Seiten, die dieses Konto im Wiki lesen darf (300 ms Ruhe; ohne Suchwort die zuletzt
+     geänderten); je Treffer die Reichweite als graue Marke und, bei interner oder beschränkter Seite, wer sie nicht sieht.
+     Gespeichert wird sofort (PUT …/formulare/<id>/wiki), danach zeichnet die Formularansicht ihre Zeile neu. */
+  const REICHWEITE = { oeffentlich: "öffentlich", intern: "intern", beschraenkt: "beschränkt" };
+  const REICHWEITE_HINWEIS = { intern: "Prüfer ohne Wiki-Zugang – das sind alle neuen Konten – sehen nur, dass es eine Anleitung gibt.",
+                               beschraenkt: "Nur für Freigegebene lesbar – die meisten Prüfer sehen sie nicht." };
+  function wikiWahl(formular, danach) {
+    const aktuell = formular.wiki ? formular.wiki.seite : null;
+    dialog(`<h2>Prüfanleitung aus dem Wiki</h2>
+      <p class="help">Hat die Seite eine Überschrift „Prüfung“, wird dieser Abschnitt in offenen Prüfungen eingeblendet, sonst nur verlinkt.
+        Jeder sieht nur, was er im Wiki lesen darf.</p>
+      <label for="ww-q">Seite suchen (Titel)</label>
+      <input type="search" id="ww-q" autocomplete="off" ${TASTATUR_SUCHE} placeholder="z. B. Karabiner">
+      <p class="help" id="ww-lesemodus" hidden>Du siehst nur öffentliche Seiten.</p>
+      <div class="mat-wikiwahl" id="ww-liste"></div>
+      <p class="help" id="ww-stand" aria-live="polite">Wird geladen …</p>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
+        ${aktuell ? '<button class="btn secondary" id="ww-weg" type="button">Verknüpfung entfernen</button>' : ""}
+        <button class="btn" id="ww-ok" type="button" disabled>Verknüpfen</button></div>`,
+    (dlg, body) => {
+      let gewaehlt = null;
+      let los = null;
+      let lauf = 0;
+      const liste = $("#ww-liste", body);
+      const stand = $("#ww-stand", body);
+      const ok = $("#ww-ok", body);
+      let seiten = [];
+      function zeichnen() {
+        liste.innerHTML = seiten.map((x, i) => `<button type="button" data-i="${i}" aria-pressed="${gewaehlt === x.id}">
+          <span class="mat-wikiwahl-titel">${x.icon ? `<span aria-hidden="true">${esc(x.icon)}</span> ` : ""}${esc(x.titel)}</span>
+          <span class="badge grey">${esc(REICHWEITE[x.reichweite] || x.reichweite)}</span>${x.id === aktuell ? ' <span class="small muted">verknüpft</span>' : ""}
+          ${REICHWEITE_HINWEIS[x.reichweite] ? `<span class="small muted mat-wikiwahl-hinweis">${esc(REICHWEITE_HINWEIS[x.reichweite])}</span>` : ""}</button>`).join("");
+      }
+      async function suchen() {
+        const meins = ++lauf;
+        const q = $("#ww-q", body).value.trim();
+        try {
+          const d = await api(`${API}/wiki/seiten?${new URLSearchParams({ q })}`);
+          if (meins !== lauf) return;
+          seiten = d.seiten;
+          $("#ww-lesemodus", body).hidden = !d.lesemodus;
+          stand.textContent = !seiten.length ? (q ? "Keine Seite gefunden." : "Keine Seite, die du lesen darfst.")
+            : q.length >= 2 ? plural(seiten.length, "Treffer", "Treffer") : "Zuletzt geänderte Seiten – oder oben nach dem Titel suchen.";
+          zeichnen();
+        } catch (e) { if (meins === lauf) { stand.textContent = e.message; seiten = []; zeichnen(); } }
+      }
+      $("#ww-q", body).addEventListener("input", () => { clearTimeout(los); los = setTimeout(suchen, 300); });
+      liste.addEventListener("click", (ev) => {
+        const b = ev.target.closest("button[data-i]");
+        if (!b) return;
+        gewaehlt = seiten[+b.dataset.i].id;
+        ok.disabled = gewaehlt === aktuell;
+        zeichnen();
+      });
+      suchen();
+      async function speichern(seite, knopf) {
+        knopf.disabled = true;
+        try {
+          const r = await api(`${API}/formulare/${formular.id}/wiki`, { method: "PUT", body: { seite } });
+          dlg.close();
+          toast(seite ? "Prüfanleitung verknüpft" : "Verknüpfung entfernt");
+          danach(r.formular);
+        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+      }
+      ok.onclick = () => { if (gewaehlt) speichern(gewaehlt, ok); };
+      const weg = $("#ww-weg", body);
+      if (weg) weg.onclick = () => speichern(null, weg);
+    });
   }
 
   /* --- Suche -------------------------------------------------------------------------------------------- */
@@ -3251,6 +3370,140 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
 
+  /* --- Prüfanleitung aus dem Wiki in offenen Prüfungen (Phase 2 · Lieferung 3) ----------------------------------
+     pruefung.anleitung: {titel, url, quelle} | {kein_zugang: true} | null (abgeschlossen, nichts verknüpft, Papierkorb).
+     Im Kopf der Prüfung steht dann „Prüfanleitung aus dem Wiki“ zum Aufklappen. Erst beim ersten Öffnen lädt die Seite
+     marked, DOMPurify und markdown.js nach (gleiche Quelle, CSP „script-src 'self'“) und holt die Wiki-Seite über den
+     Endpunkt des Wikis selbst (anleitung.quelle – mit dessen Rechten). Eingeblendet wird nur der Abschnitt „Prüfung“.
+     Der Inhalt stammt aus einer Wiki-Seite, die andere ändern können als die, die verknüpft hat. Darum, in dieser Folge:
+     1. gerendert wie im Wiki (MD.render, mit dessen Reinigung), 2. ein zweites Mal streng gereinigt (ANLEITUNG_REINIGUNG:
+     keine ids, keine Namen, keine data-*, keine Formularelemente, keine Labels, keine Stile), 3. der Abschnitt
+     ausgeschnitten (abschnittPruefung), 4. eingesetzt in einen geschlossenen Shadow-Root: document.querySelector,
+     getElementById, $/$$, benannte Eigenschaften von window/document und die Klick-Delegation an #mat-inhalt reichen
+     nicht hinein, die Stile der Prüfansicht nicht hinein und die des Abschnitts nicht hinaus. Dazu übergeht die
+     Klick-Delegation alles in .mat-anleitung, und Festschreiben liest seine Felder nur aus dem eigenen Behälter.
+     MD.enhance läuft nicht (es lüde eingebundene Seiten nach und vergäbe ids); eingebundene Bausteine stehen als
+     Hinweis da, Inhaltsverzeichnis und Unterseiten-Liste entfallen, jeder Link öffnet einen neuen Tab. */
+  const ANLEITUNG_REINIGUNG = {
+    ADD_TAGS: ["video", "audio", "source"], ADD_ATTR: ["controls", "preload", "playsinline"],
+    FORBID_TAGS: ["style", "form", "textarea", "select", "button", "dialog", "iframe", "input", "label", "output",
+                  "data", "object", "embed", "base", "meta", "link"],
+    FORBID_ATTR: ["style", "id", "name", "for", "form", "formaction", "target"],
+    ALLOW_DATA_ATTR: false };
+  const ANLEITUNG_KEIN_ZUGANG = "Zu diesem Formular gibt es eine Prüfanleitung im Wiki, die du nicht lesen darfst.";
+  const ANLEITUNG_OHNE_ABSCHNITT = "Die Seite hat keinen Abschnitt „Prüfung“ – bitte im Wiki lesen.";
+  const ANLEITUNG_ALT = "Diese Seite lässt sich hier nicht einblenden – bitte im Wiki lesen.";
+  const ANLEITUNG_FEHLER = "Die Anleitung ließ sich nicht laden.";
+  const ANLEITUNG_EINBAU = "Eingebundener Abschnitt – nur im Wiki sichtbar.";
+  // Stile nur im Schatten: Bilder und Filme höchstens so breit wie der Kasten, breite Tabellen und Code rollen seitlich.
+  const ANLEITUNG_STIL = `:host { display: block; }
+    article.wiki-content { padding: 2px 2px 6px; overflow-wrap: anywhere; }
+    article.wiki-content > :first-child { margin-top: 4px; }
+    img, video { max-width: 100%; height: auto; }
+    table { display: block; max-width: 100%; overflow-x: auto; }
+    th, td { overflow-wrap: normal; min-width: 4em; }
+    pre { max-width: 100%; overflow-x: auto; }
+    .anleitung-einbau { color: var(--grau); font-size: var(--fs-klein); font-style: italic; }`;
+  // Nur eigene Adressen („/wiki/…“, „/api/…“) – was sonst käme, wird kein Link und keine Anfrage.
+  const eigeneAdresse = (u) => (typeof u === "string" && /^\/(?![/\\])/.test(u) ? u : null);
+  const skriptLaden = (src) => new Promise((fertig, fehler) => {
+    const el = document.createElement("script");
+    el.src = src;
+    el.onload = () => fertig();
+    el.onerror = () => fehler(new Error(`${src} ließ sich nicht laden.`));
+    document.head.appendChild(el);
+  });
+  let markdownLauf = null;
+  function markdownBereit() {
+    if (window.MD && window.DOMPurify) return Promise.resolve();
+    if (!markdownLauf) {
+      markdownLauf = (async () => {
+        if (!window.marked) await skriptLaden("/static/vendor/marked/marked.min.js");
+        if (!window.DOMPurify) await skriptLaden("/static/vendor/dompurify/purify.min.js");
+        if (!window.MD) await skriptLaden("/static/js/markdown.js");
+      })();
+      markdownLauf.catch(() => { markdownLauf = null; });
+    }
+    return markdownLauf;
+  }
+  /* Der Abschnitt „Prüfung“: die erste Überschrift h1–h5 der obersten Ebene (nicht in einem Kasten), deren Text ohne
+     Rand und ohne abschließenden Doppelpunkt, Groß/klein egal „Prüfung“ lautet – und alles bis vor die nächste
+     Überschrift gleicher oder höherer Ebene. html ist schon streng gereinigt; gelesen wird es in ein <template> (dort
+     lädt nichts und läuft nichts). Liefert ein DocumentFragment oder null. */
+  function abschnittPruefung(html) {
+    const t = document.createElement("template");
+    t.innerHTML = html;
+    const knoten = Array.from(t.content.childNodes);
+    const ebene = (n) => (n.nodeType === 1 && /^H[1-5]$/.test(n.tagName) ? +n.tagName[1] : 0);
+    const text = (n) => n.textContent.normalize("NFC").trim().replace(/\s*:$/, "").toLocaleLowerCase("de");
+    const start = knoten.findIndex((n) => ebene(n) && text(n) === "prüfung");
+    if (start < 0) return null;
+    const hoehe = ebene(knoten[start]);
+    const teil = document.createDocumentFragment();
+    for (let i = start; i < knoten.length; i++) {
+      if (i > start && ebene(knoten[i]) && ebene(knoten[i]) <= hoehe) break;
+      teil.appendChild(knoten[i]);
+    }
+    teil.querySelectorAll("a").forEach((a) => { a.setAttribute("target", "_blank"); a.setAttribute("rel", "noopener noreferrer"); });
+    teil.querySelectorAll(".einbau").forEach((el) => {
+      const p = document.createElement("p");
+      p.className = "anleitung-einbau";
+      p.textContent = ANLEITUNG_EINBAU;
+      el.replaceWith(p);
+    });
+    teil.querySelectorAll(".md-marker").forEach((el) => el.remove());
+    return teil;
+  }
+  function anleitungBauen(a) {
+    if (a.kein_zugang) {
+      const p = document.createElement("p");
+      p.className = "small muted mat-anleitung-kein";
+      p.textContent = ANLEITUNG_KEIN_ZUGANG;
+      return p;
+    }
+    const url = eigeneAdresse(a.url);
+    const d = document.createElement("details");
+    d.className = "mat-anleitung";
+    d.innerHTML = `<summary><span aria-hidden="true">📖</span> Prüfanleitung aus dem Wiki: <span class="mat-anleitung-titel">${esc(a.titel)}</span></summary>
+      <div class="mat-anleitung-koerper"><p class="help mat-anleitung-stand" aria-live="polite">wird geladen …</p>
+        ${url ? `<p class="small mat-anleitung-link"><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Ganze Seite im Wiki öffnen ↗</a></p>` : ""}</div>`;
+    let geladen = false;
+    d.addEventListener("toggle", () => {
+      if (!d.open || geladen) return;
+      geladen = true;
+      anleitungLaden(d, a);
+    });
+    return d;
+  }
+  async function anleitungLaden(d, a) {
+    const stand = $(".mat-anleitung-stand", d);
+    const sagen = (text) => { stand.textContent = text; stand.className = "small mat-anleitung-stand"; };
+    let abschnitt;
+    try {
+      const quelle = eigeneAdresse(a.quelle);
+      if (!quelle) throw new Error(ANLEITUNG_FEHLER);
+      await markdownBereit();
+      const seite = (await api(quelle)).page;
+      if (!seite || seite.format !== "markdown") { sagen(ANLEITUNG_ALT); return; }
+      abschnitt = abschnittPruefung(DOMPurify.sanitize(MD.render(seite.content || ""), ANLEITUNG_REINIGUNG));
+    } catch (e) { sagen(ANLEITUNG_FEHLER); return; }
+    if (!abschnitt) { sagen(ANLEITUNG_OHNE_ABSCHNITT); return; }
+    const wirt = document.createElement("div");
+    wirt.className = "mat-anleitung-inhalt";
+    const schatten = wirt.attachShadow({ mode: "closed" });
+    const css = document.createElement("link");
+    css.rel = "stylesheet";
+    const seitenCss = document.querySelector('link[rel="stylesheet"][href*="/css/app.css"]');
+    css.href = seitenCss ? seitenCss.href : "/static/css/app.css";
+    const stil = document.createElement("style");
+    stil.textContent = ANLEITUNG_STIL;
+    const artikel = document.createElement("article");
+    artikel.className = "wiki-content";
+    artikel.appendChild(abschnitt);
+    schatten.append(css, stil, artikel);
+    stand.replaceWith(wirt);
+  }
+
   async function pruefungAnsicht() {
     let pr = (await Promise.all([api(`${API}/pruefungen/${DATEN.id}`), ordnerBaum().catch(() => null)]))[0].pruefung;
     let ergebnis = null;
@@ -3267,6 +3520,14 @@
     const darfHier = (r) => Boolean(pr.darf && pr.darf[r]);
     const bearbeitbar = () => pr.entwurf && pr.eigen && darfHier("pruefen");
     const punkt = (rid) => pr.punkte.find((x) => x.id === rid);
+    /* Abschlussleiste und Bemerkung nur aus ihren eigenen Behältern – nie etwas Gleichnamiges aus der eingeblendeten
+       Prüfanleitung (.mat-anleitung). Die Reinigung nimmt dort ids weg und der Schatten schirmt ab; das hier hält auch,
+       wenn sich eins davon einmal ändert (Bauentwurf L3 3.5.2 Nr. 7). */
+    const echt = (sel) => $$(sel, inhalt).find((el) => !el.closest(".mat-anleitung")) || null;
+    const abschlussBox = () => echt("#pr-abschluss");
+    const imAbschluss = (sel) => { const a = abschlussBox(); return a ? $(sel, a) : null; };
+    const bemFeld = () => echt("#pr-bem");
+    let anleitungEl = null;          // die Prüfanleitung: einmal gebaut, bei jedem Zeichnen wieder eingesetzt (bleibt offen)
 
     /* Getipptes speichern, während getippt wird: Wert und Bemerkung eines Prüfpunkts und die Bemerkung zur Prüfung
        gehen kurz nach dem letzten Tastendruck an den Server, nicht erst beim Verlassen des Feldes. Am Telefon
@@ -3282,7 +3543,7 @@
     const felder = new Map();        // "26:notiz", "26:wert", "bem" → { wert, bestaetigt, timer, unterwegs, laut, fehler }
     let ersetzt = false;             // punktErsetzen tauscht gerade eine Karte aus – deren Fokuswechsel ist kein Verlassen
     const schluessel = (el) => (el.id === "pr-bem" ? "bem" : `${el.dataset.rid}:${el.matches(".mat-pnotiz") ? "notiz" : "wert"}`);
-    const feldVon = (k) => (k === "bem" ? $("#pr-bem")
+    const feldVon = (k) => (k === "bem" ? bemFeld()
       : $(`#pp-${k.split(":")[0]} ${k.endsWith(":notiz") ? ".mat-pnotiz" : ".mat-pwert"}`));
     function serverWert(k) {
       if (k === "bem") return pr.bemerkung || "";
@@ -3426,7 +3687,7 @@
     const ABSCHLUSS = `${ABLAGE}-abschluss`;
     // Ohne gewähltes Ergebnis gibt es nichts zu merken – Grund und Datum gehören zu ihm.
     function abschlussStand() {
-      const grund = $("#pr-grund"), due = $("#pr-due");
+      const grund = imAbschluss("#pr-grund"), due = imAbschluss("#pr-due");
       return { ergebnis, grund: grund ? grund.value : "", faellig: due ? due.value : "", leer: !ergebnis };
     }
     function abschlussMerken() {
@@ -3442,7 +3703,7 @@
       try { alt = JSON.parse(sessionStorage.getItem(ABSCHLUSS) || "null"); } catch (err) { alt = null; }
       if (alt && typeof alt === "object") {
         if (Object.prototype.hasOwnProperty.call(ERGEBNIS, alt.ergebnis)) ergebnis = alt.ergebnis;
-        const grund = $("#pr-grund"), due = $("#pr-due");
+        const grund = imAbschluss("#pr-grund"), due = imAbschluss("#pr-due");
         if (grund && typeof alt.grund === "string") grund.value = alt.grund.slice(0, 300);
         if (due && typeof alt.faellig === "string" && /^\d{4}-\d{2}-\d{2}$/.test(alt.faellig)
           && (!due.min || alt.faellig >= due.min) && (!due.max || alt.faellig <= due.max)) due.value = alt.faellig;
@@ -3536,7 +3797,16 @@
         <p class="mat-produktzeile"><strong>${nameHtml(pr.produkt)}</strong>${zusatzHtml(pr.produkt)}${artNrHtml(pr.produkt.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)} ${statusMarke(a.status)}</p>
         <p class="small muted">${pr.formular ? `Formular ${esc(pr.formular.titel || "ohne Titel")}, Version ${pr.formular.version} · ` : ""}${pr.art === "aussonderung" ? "Ausgeführt von" : "Prüfer"} ${esc(pr.pruefer || "–")}${pr.urkunde ? ` (Urkundennummer ${esc(pr.urkunde)})` : ""}
           · ${pr.entwurf && !pr.berichtigt ? `begonnen ${esc(fmtZeit(pr.begonnen_am))}` : `Prüftag ${esc(fmtTag(pr.datum))}`}
-          ${pr.durchgang ? ` · Durchgang ${pr.durchgang.sichtbar ? `<a href="/material/durchgang/${pr.durchgang.id}">${esc(pr.durchgang.titel)}</a>` : `„${esc(pr.durchgang.titel)}“`}` : ""}</p>`;
+          ${pr.durchgang ? ` · Durchgang ${pr.durchgang.sichtbar ? `<a href="/material/durchgang/${pr.durchgang.id}">${esc(pr.durchgang.titel)}</a>` : `„${esc(pr.durchgang.titel)}“`}` : ""}</p>
+        ${pr.anleitung ? '<div class="mat-anleitung-platz"></div>' : ""}`;
+    }
+    // Die Prüfanleitung aus dem Wiki (nur offene Prüfungen, Phase 2 · L3) an ihren Platz im Kopf – dasselbe Element wie
+    // beim letzten Zeichnen, damit eine aufgeklappte Anleitung offen und geladen bleibt.
+    function anleitungEinsetzen() {
+      const platz = $(".mat-anleitung-platz", inhalt);
+      if (!platz) return;
+      if (!anleitungEl) anleitungEl = anleitungBauen(pr.anleitung);
+      platz.replaceWith(anleitungEl);
     }
 
     /* Berichtigung: Die Berichtigung verweist auf ihr Original, das Original auf seine Berichtigung. */
@@ -3673,7 +3943,7 @@
     const EINZEILIG = window.matchMedia("(max-height: 500px) and (min-width: 561px), (pointer: coarse) and (min-width: 600px)");
     const textMass = document.createElement("canvas").getContext("2d");
     function grundPlatzhalter() {
-      const g = $("#pr-grund");
+      const g = imAbschluss("#pr-grund");
       if (!g) return;
       const lang = offeneHinweise().maengel.length ? "Grund (freiwillig – die Mängel stehen oben)" : "Grund (Pflicht ohne Mangel)";
       let kurz = false;
@@ -3688,17 +3958,18 @@
     function abschlussAktualisieren() {
       const h = offeneHinweise();
       if (ergebnis === "einsatzbereit" && h.einsatzSperre) { ergebnis = null; abschlussMerken(); }
-      $$("#pr-abschluss [data-act=ergebnis]").forEach((b) => {
+      const box = abschlussBox();
+      $$("[data-act=ergebnis]", box).forEach((b) => {
         b.setAttribute("aria-pressed", String(b.dataset.e === ergebnis));
         if (b.dataset.e === "einsatzbereit") {
           b.disabled = !!h.einsatzSperre;
           b.title = h.einsatzSperre ? (pr.einsatzbereit_gesperrt.concat(h.kritisch.length ? ["kritischer Mangel"] : [])).join("; ") : "";
         }
       });
-      $("#pr-due-feld").hidden = ergebnis !== "einsatzbereit";
-      $("#pr-grund").hidden = !ergebnis || ergebnis === "einsatzbereit";
+      $("#pr-due-feld", box).hidden = ergebnis !== "einsatzbereit";
+      $("#pr-grund", box).hidden = !ergebnis || ergebnis === "einsatzbereit";
       grundPlatzhalter();
-      $("#pr-ok").disabled = !ergebnis;
+      $("#pr-ok", box).disabled = !ergebnis;
       const teile = [];
       if (h.offen.length) teile.push(`${plural(h.offen.length, "Pflichtpunkt", "Pflichtpunkte")} ohne Befund`);
       if (h.ohneFoto.length) teile.push(`${plural(h.ohneFoto.length, "Mangel", "Mängel")} ohne Foto`);
@@ -3709,8 +3980,8 @@
       if (ergebnis === "instandsetzen" && !pr.freipruefung) teile.push("„instandsetzen“ sperrt den Artikel");
       if (ergebnis === "aussondern") teile.push("„aussondern“ ist endgültig");
       if (!DARF.unterschrift) teile.push("Deine Unterschrift fehlt noch – „Festschreiben“ fragt danach");
-      $("#pr-hinweis").textContent = teile.join(" · ");
-      $("#pr-hinweis").classList.toggle("warn", !!(h.offen.length || h.ohneFoto.length || h.ohneNotiz.length || h.kritisch.length));
+      $("#pr-hinweis", box).textContent = teile.join(" · ");
+      $("#pr-hinweis", box).classList.toggle("warn", !!(h.offen.length || h.ohneFoto.length || h.ohneNotiz.length || h.kritisch.length));
     }
 
     function leseHtml() {
@@ -3796,10 +4067,11 @@
       // Der eigene Entwurf, aber prüfen geht gerade nicht (Urkundennummer fehlt, Prüffreigabe abgelaufen): warum.
       const ohneNummer = pr.entwurf && pr.eigen && !darfHier("pruefen") && (DARF.pruefer_haekchen || DARF.qualifiziert) ? `<p class="notice">${pruefHinweis(pr)}</p>` : "";
       inhalt.innerHTML = `<div class="mat-pruefung${bearbeitbar() ? " mat-mit-leiste" : ""}">${kopf()}${ohneNummer}${bearbeitbar() ? bearbeitenHtml() : leseHtml()}</div>`;
+      anleitungEinsetzen();
       if (leisteBeobachter) leisteBeobachter.disconnect();
       if (bearbeitbar()) {
         binden(); abschlussAktualisieren(); abschlussZurueck(); seitenZeichnen(); tipptPruefen(false);
-        if (leisteBeobachter) leisteBeobachter.observe($("#pr-abschluss"));
+        if (leisteBeobachter) leisteBeobachter.observe(abschlussBox());
       } else {
         vergessen();
       }
@@ -4056,7 +4328,7 @@
         if (b.disabled) return;
         ergebnis = ergebnis === b.dataset.e ? null : b.dataset.e;
         abschlussAktualisieren(); abschlussMerken();
-        if (ergebnis && ergebnis !== "einsatzbereit") fokus($("#pr-grund"));
+        if (ergebnis && ergebnis !== "einsatzbereit") fokus(imAbschluss("#pr-grund"));
       },
       festschreiben: async (b) => {
         if (!ergebnis) return;
@@ -4070,21 +4342,21 @@
           return;
         }
         const h = offeneHinweise();
-        const grund = ergebnis === "einsatzbereit" ? "" : $("#pr-grund").value.trim();
+        const grund = ergebnis === "einsatzbereit" ? "" : imAbschluss("#pr-grund").value.trim();
         if (h.offen.length) { toast("Noch ohne Befund: " + h.offen.slice(0, 5).map((x) => x.text).join("; "), true); return; }
         if (h.ohneFoto.length) { toast("Jeder Mangel braucht ein Foto – es fehlt bei: " + h.ohneFoto.slice(0, 5).map((x) => x.text).join("; "), true); return; }
         if (h.ohneNotiz.length) {
           toast("Jeder Mangel braucht eine Bemerkung – sie fehlt bei: " + h.ohneNotiz.slice(0, 5).map((x) => x.text).join("; "), true);
           fokus($(`#pp-${h.ohneNotiz[0].id} .mat-pnotiz`)); return;
         }
-        if (ergebnis !== "einsatzbereit" && !h.maengel.length && !grund) { toast(`Ohne Mangel braucht „${ERGEBNIS[ergebnis]}“ einen Grund.`, true); fokus($("#pr-grund")); return; }
+        if (ergebnis !== "einsatzbereit" && !h.maengel.length && !grund) { toast(`Ohne Mangel braucht „${ERGEBNIS[ergebnis]}“ einen Grund.`, true); fokus(imAbschluss("#pr-grund")); return; }
         b.disabled = true;
         try {
           if (!(await eigeneUnterschrift(HINWEIS_FEST))) return;
           abschlussAktualisieren();
           await laufend.catch(() => {});
-          const daten = { ergebnis, grund, bemerkung: $("#pr-bem").value };
-          if (ergebnis === "einsatzbereit") daten.next_due_on = $("#pr-due").value || null;
+          const daten = { ergebnis, grund, bemerkung: bemFeld().value };
+          if (ergebnis === "einsatzbereit") daten.next_due_on = imAbschluss("#pr-due").value || null;
           await festschreibDialog(daten);
         } finally { if (b.isConnected) b.disabled = !ergebnis; }
       },
@@ -4462,14 +4734,17 @@
     } catch (e) { /* der Zähler ist Beiwerk */ }
   }
 
-  // Ein Produkt melden, das beim Anlegen eines Artikels im Katalog fehlt. v: Vorbelegung (aus der Suche) und Ordner.
+  /* Ein Produkt melden, das beim Anlegen eines Artikels im Katalog fehlt. v: Vorbelegung (aus der Suche) und Ordner.
+     Aus der Nacharbeit eines Bestandsimports (Phase 2 · L3) kommen dazu v.url (…/nacharbeit/melden – der Zielordner
+     steht in der Adresse, kein folder_id) und v.angabe (die Produktangabe der Liste); vorbelegt sind dann Hersteller,
+     Modell und Artikelnummer aus der Liste. */
   async function meldungDialog(v, danach) {
     const kats = await kategorienLaden();
     dialog(`<h2>Fehlendes Produkt melden</h2>
       <p class="help">Die Material-Verwaltung nimmt es in den Katalog auf. Du bekommst eine Mail, sobald du Artikel davon anlegen kannst.</p>
       <div class="field-row"><div><label for="me-her">Hersteller</label><input type="text" id="me-her" maxlength="120" value="${esc(v.manufacturer || "")}" ${TASTATUR_NAME}></div>
         <div><label for="me-mod">Modell</label><input type="text" id="me-mod" maxlength="160" value="${esc(v.model || "")}" ${TASTATUR_NAME}></div></div>
-      <div class="field-row"><div><label for="me-art">Artikelnummer des Herstellers</label><input type="text" id="me-art" maxlength="80" ${TASTATUR_NUMMER}><div class="help" id="me-art-hilfe"></div></div>
+      <div class="field-row"><div><label for="me-art">Artikelnummer des Herstellers</label><input type="text" id="me-art" maxlength="80" value="${esc(v.article_no || "")}" ${TASTATUR_NUMMER}><div class="help" id="me-art-hilfe"></div></div>
         <div><label for="me-norm">Norm</label><input type="text" id="me-norm" maxlength="200" placeholder="z. B. EN 362" ${TASTATUR_NUMMER}></div></div>
       <label for="me-kat">Kategorie</label><select id="me-kat"><option value="">– weiß ich nicht –</option>${kategorieOptionen(kats, null)}</select>
       <label for="me-links">Links</label><textarea id="me-links" rows="3" ${TASTATUR_ADRESSE} placeholder="https://… – je Zeile eine Adresse: Herstellerseite, Gebrauchsanleitung, Händler"></textarea>
@@ -4487,13 +4762,15 @@
         if (fotos.length > 3) { toast("Höchstens 3 Fotos.", true); return; }
         const fd = new FormData();
         const felder = { manufacturer: $("#me-her", body).value, model: $("#me-mod", body).value, article_no: $("#me-art", body).value,
-                         norm: $("#me-norm", body).value, category_id: $("#me-kat", body).value, folder_id: v.folder_id || "",
+                         norm: $("#me-norm", body).value, category_id: $("#me-kat", body).value,
                          links: $("#me-links", body).value, note: $("#me-note", body).value };
+        if (v.url) felder.angabe = v.angabe || "";
+        else felder.folder_id = v.folder_id || "";
         Object.entries(felder).forEach(([k, w]) => fd.append(k, w));
         fotos.forEach((f) => fd.append("fotos", f));
         knopf.disabled = true;
         try {
-          await api(`${API}/meldungen`, { method: "POST", body: fd });
+          await api(v.url || `${API}/meldungen`, { method: "POST", body: fd });
           dlg.close();
           toast("Gemeldet – du bekommst eine Mail, sobald das Produkt im Katalog ist.");
           if (danach) await danach();
@@ -4671,6 +4948,598 @@
     });
   }
 
+  /* --- Bestandsimport (Phase 2 · Lieferung 3) ----------------------------------------------------------------------
+     Seite /material/ordner/<id>/import – nur mit „verwalten“ am Ordner, kein Systemordner (das prüft schon die
+     Seitenroute). Oben „Neue Liste“: Datei wählen (oder hineinziehen), der Probelauf läuft sofort mit der automatischen
+     Spaltenzuordnung. Ändert man eine Zuordnung, läuft er nach 600 ms Ruhe neu; eine laufende Anfrage bricht dabei ab
+     (AbortController), nur die neueste Antwort zählt. Dann „Übernehmen: n Artikel anlegen, m Zeilen in die Nacharbeit“ –
+     der eine rote Knopf der Seite; danach die Tabelle „angelegt“ mit den neuen Inventarnummern zum Beschriften.
+     Darunter die Nacharbeit dieses Zielordners (über alle Importe hierher): Produkte je Angabe oder für ausgewählte
+     Zeilen zuordnen, melden (Materialwart) bzw. im Katalog anlegen (Material-Verwaltung), erneut prüfen und übernehmen,
+     verwerfen, als CSV herunterladen. Werte werden hier nicht bearbeitet – dafür ist die CSV mit „Nacharbeit-Nr.“ da.
+     Alles, was aus der Datei kommt (Spaltentitel, Beispiele, Werte, Ordner, Gründe, Hinweise), ist reiner Text und geht
+     nur über esc() in die Seite (Bauentwurf 4.9) – in der Nacharbeit sehen es auch andere Verwalter. */
+  const IMPORT_MAX_BYTES = 5 * 1024 * 1024;                     // bestandsimport.MAX_BYTES
+  const IMPORT_ZU_GROSS = "Die Datei ist größer als 5 MB – bitte nur die Liste speichern (ohne Bilder und weitere Blätter) oder als CSV.";
+  const IMPORT_FEHLT = "Ordne mindestens Hersteller und Modell (oder Artikelnummer) zu.";        // bestandsimport.FEHLT_ZUORDNUNG
+  const IMPORT_NICHTS = "Nichts zu übernehmen – alles steht schon im Bestand oder ist erledigt.";  // bestandsimport.NICHTS
+  const IMPORT_PERSONEN = "Personen werden nicht übernommen – Artikel ordnest du im Ordner über „Zuordnen an …“ zu.";
+  const IMPORT_NEUBESCHRIFTEN = "Alte Inventarnummern stehen in der Bemerkung und sind nicht suchbar – die Artikel bitte neu beschriften. Eine Liste dafür liefert „Export“ im Ordner.";
+  const IMPORT_CSV_SATZ = "Korrigieren, speichern und hier als neue Liste hochladen – die Zeilen werden dabei erledigt. Die Spalte „Nacharbeit-Nr.“ bitte nicht ändern.";
+  const IMPORT_SEITE = 100;                                      // Zeilen je Reiter, „weitere …“ zeigt die nächsten
+  const PRODUKT_ART = { mehrdeutig: "mehrdeutig", vorschlag: "ähnlich", unbekannt: "nicht im Katalog" };
+  const NA_STATUS = { uebernommen: "übernommen", im_bestand: "schon im Bestand", verworfen: "verworfen", ersetzt: "neu eingelesen" };
+  const NA_GRUPPEN = [["", "alle"], ["produkt", "Produkt"], ["seriennummer", "Seriennummer"], ["daten", "Daten"], ["ordner", "Ordner"],
+                      ["sonstige", "Sonstige"]];
+  const KODIERUNG = { "utf-8": "UTF-8", "utf-8-sig": "UTF-8", "utf-16": "UTF-16", cp1252: "Windows-1252" };
+  const TRENNER = { ";": "Semikolon", ",": "Komma", "\t": "Tabulator" };
+  const REITER_VORHER = [["uebernehmbar", "übernehmbar"], ["im_bestand", "schon im Bestand"], ["nacharbeit", "Nacharbeit"], ["erledigt", "schon erledigt"]];
+  const REITER_NACHHER = [["angelegt", "angelegt"], ["im_bestand", "schon im Bestand"], ["nacharbeit", "in die Nacharbeit"], ["erledigt", "schon erledigt"]];
+  // Spaltenbuchstabe wie in Excel (0 → A, 26 → AA) – für Spalten ohne Titel.
+  const spalteBuchstabe = (i) => { let t = ""; for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) t = String.fromCharCode(65 + ((n - 1) % 26)) + t; return t; };
+  const gruendeHtml = (g) => (g && g.length ? `<ul class="mat-gruende">${g.map((x) => `<li data-code="${esc(x.code)}">${esc(x.text)}</li>`).join("")}</ul>` : "");
+  const hinweiseHtml = (h) => (h && h.length ? `<ul class="mat-hinweise">${h.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "");
+  const angabeAus = (w) => [w.hersteller, w.modell, w.artikelnummer].filter(Boolean).join(" ");
+  const produktKurz = (p) => `${esc(p.name)}${p.article_no ? ` <span class="muted">${esc(p.article_no)}</span>` : ""}${demoMarke(p.demo)}`;
+  const importFehler = (e) => (e.status === 413 ? IMPORT_ZU_GROSS : e.message);
+  function faelligSaetze(f) {
+    const out = [];
+    if (!f) return out;
+    const n = f.laut_liste_ueberfaellig, m = f.ohne_pruefdatum, k = f.lebensdauer_erreicht;
+    if (n) out.push(n === 1 ? "1 Artikel ist laut Liste überfällig – er steht in der nächsten Erinnerung."
+      : `${n} Artikel sind laut Liste überfällig – sie stehen in der nächsten Erinnerung.`);
+    if (m) out.push(`${m} Artikel ohne Prüfdatum in der Liste – Eingangsprüfung sofort fällig.`);
+    if (k) out.push(k === 1 ? "1 Artikel hat seine Lebensdauer erreicht – nach dem Import aussondern."
+      : `${k} Artikel haben ihre Lebensdauer erreicht – nach dem Import aussondern.`);
+    return out;
+  }
+  // Die angelegten Artikel zum Beschriften: Zeile, bisherige Nummer, Seriennummer (STR-… vom System), neue Inventarnummer.
+  const angelegtTabelle = (liste, mitNr) => `<table class="list mat-tabelle mat-karten mat-angelegt">
+      <thead><tr>${mitNr ? "<th>Nacharbeit-Nr.</th>" : ""}<th>Zeile</th><th>Neue Inventarnummer</th><th>Bisherige Nummer</th><th>Seriennummer</th><th>Fällig</th></tr></thead>
+      <tbody>${liste.map((x) => `<tr>${mitNr ? `<td data-l="Nacharbeit-Nr." class="mat-k-halb">${esc(x.id)}</td>` : ""}
+        <td data-l="Zeile" class="mat-k-kurz">${esc(x.nr)}</td>
+        <td data-l="Neue Inventarnummer" class="mat-k-titel">${x.artikel ? `<a class="mat-inv" href="/material/artikel/${esc(x.artikel.id)}"><strong>${esc(x.artikel.inventory_no)}</strong></a>` : "–"}</td>
+        <td data-l="Bisherige Nummer" class="mat-k-halb">${x.bisherige_nummer ? esc(x.bisherige_nummer) : '<span class="muted">–</span>'}</td>
+        <td data-l="Seriennummer" class="mat-k-halb">${esc(x.seriennummer || "–")}${/^STR-/.test(x.seriennummer || "") ? ' <span class="muted" title="vom System vergeben">(System)</span>' : ""}</td>
+        <td data-l="Fällig" class="mat-k-halb">${x.faellig ? esc(fmtTag(x.faellig)) : '<span class="muted">–</span>'}</td></tr>`).join("")}</tbody></table>`;
+  // Wie S.api für ein Formular mit Datei, aber abbrechbar (signal): Beim Probelauf zählt nur die neueste Anfrage.
+  async function importSenden(pfad, fd, signal) {
+    let res;
+    try {
+      res = await fetch(pfad, { method: "POST", body: fd, signal, credentials: "same-origin", headers: { "X-Requested-With": "XMLHttpRequest" } });
+    } catch (e) {
+      if (e.name === "AbortError") throw e;
+      const netz = new Error("Keine Verbindung zum Server.");
+      netz.status = 0;
+      throw netz;
+    }
+    if (res.status === 401) {
+      location.href = "/login?next=" + encodeURIComponent(location.pathname);
+      throw new Error("Nicht angemeldet");
+    }
+    let daten = {};
+    try { daten = await res.json(); } catch (e) { /* kein JSON (etwa ein 413 vom Proxy) */ }
+    if (!res.ok) {
+      const err = new Error(daten.error || `Fehler ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return daten;
+  }
+  // Übersicht: offene Nacharbeit je Zielordner, den das Konto verwaltet (/start, höchstens 20).
+  const nacharbeitHinweis = (liste) => (liste && liste.length ? `<p class="notice">Nacharbeit aus Bestandsimporten:
+      ${liste.map((x) => `<a href="/material/ordner/${esc(x.ordner.id)}/import#bi-nacharbeit">${esc(x.ordner.pfad)}</a> (${esc(x.offen)})`).join(", ")}</p>` : "");
+
+  async function bestandsimport() {
+    const fid = DATEN.id;
+    const [antwort] = await Promise.all([api(`${API}/ordner/${fid}?pro_seite=1`), ordnerBaum().catch(() => null)]);
+    const o = antwort.ordner;
+    leisteMarkieren(o.id);
+    // „Neue Liste“
+    let datei = null;            // die gewählte Datei
+    let wahl = {};               // eigene Spaltenzuordnung {index: feld} – geht der Erkennung vor
+    let bericht = null;          // der letzte Bericht (Probelauf, nach dem Übernehmen das Ergebnis)
+    let fertig = false;          // bericht ist das Ergebnis des Übernehmens
+    let lauf = null;             // AbortController des laufenden Probelaufs
+    let ruhe = null;             // Zeitgeber nach einer geänderten Zuordnung
+    let fehler = null;           // letzter Fehler des Probelaufs
+    let reiter = null;           // Ergebnis-Reiter
+    let bis = IMPORT_SEITE;      // so viele Zeilen zeigt der Reiter
+    let spaltenAuf = null;       // Zuordnungstabelle auf/zu (null: nach Lage)
+    let uebernimmt = false;
+    let berichtFuer = "";        // die Zuordnung, zu der bericht gehört – weicht sie ab, gilt „Übernehmen“ nicht
+    inhalt.innerHTML = `<div class="mat-pfad"><a href="/material/bestand">Bestand</a> / ${o.pfad.map(pfadGlied).join(" / ")} / <span>Import</span></div>
+      <div class="page-head"><h1>Bestandsliste importieren ${demoMarke(o.demo)}</h1></div>
+      <p class="help">Zielordner: <strong>${esc(o.pfad.map((x) => x.name).join(" / "))}</strong> – mit der Spalte „Ordner“ auch seine Unterordner.</p>
+      <section class="section mat-import" id="bi-neu" aria-labelledby="bi-neu-titel"><h2 id="bi-neu-titel">Neue Liste</h2>
+        <div class="mat-ablage" id="bi-ablage">
+          <p><strong>Datei hierher ziehen</strong> oder <label class="btn secondary small mat-ablage-knopf">Datei wählen<input type="file" id="bi-datei" class="mat-datei"
+            accept=".xlsx,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"></label></p>
+          <p class="help" id="bi-name">Excel-Arbeitsmappe (.xlsx) oder CSV, höchstens 5 MB.</p></div>
+        <details class="mat-auf mat-import-hilfe"><summary>Welche Listen passen?</summary>
+          <p class="help">Excel-Arbeitsmappe (.xlsx) oder CSV, höchstens 5 MB und 2000 Zeilen. Eine Zeile je Artikel, oben eine Kopfzeile.
+            Erkannt werden Spalten wie Hersteller, Modell, Artikelnummer, Seriennummer, Inventarnummer, Ordner, Herstelldatum, Kaufdatum,
+            Erstgebrauch, zuletzt geprüft, nächste Prüfung, Prüfintervall, Anzahl und Bemerkung; Größe, Farbe und Standort kommen in die Bemerkung.
+            Die Spalte „Ordner“ nennt einen vorhandenen Unterordner dieses Ordners (etwa „Fahrzeug 1 / Kiste A“).</p>
+          <p class="help">Seriennummern bitte vor dem Speichern als Text formatieren – sonst schneidet Excel führende Nullen ab oder schreibt 1,23E+11.
+            Datum als TT.MM.JJJJ oder MM/JJJJ. Personen (Ausgegeben an, Telefon …) werden nicht übernommen. Was schon im Bestand steht
+            (Produkt und Seriennummer), erkennt der Import und überspringt es; Zeilen ohne Seriennummer bekommen eine Seriennummer vom System (STR-…).</p></details>
+        <p class="help">Importierte Artikel stehen auf „neu“, bis sie im System geprüft sind. Die Fälligkeit kommt aus „nächste Prüfung“ oder
+          „zuletzt geprüft“ der Liste; ohne beides ist die Eingangsprüfung sofort fällig.</p>
+        <div id="bi-stand" class="mat-import-stand" aria-live="polite"></div>
+        <div id="bi-bericht" class="mat-import-bericht"></div>
+      </section>
+      <section class="section mat-nacharbeit" id="bi-nacharbeit"><h2>Nacharbeit</h2><p class="help">Wird geladen …</p></section>`;
+    const standEl = $("#bi-stand"), berichtEl = $("#bi-bericht"), naBox = $("#bi-nacharbeit");
+
+    function standZeichnen() {
+      if (lauf || ruhe) { standEl.innerHTML = `<p class="help">${ruhe && !lauf ? "Zuordnung geändert – der Probelauf folgt gleich …" : "Probelauf läuft …"}</p>`; return; }
+      if (!fehler) { standEl.innerHTML = ""; return; }
+      const nochmal = fehler.status === 429 || fehler.status === 0;
+      standEl.innerHTML = `<p class="error">${esc(importFehler(fehler))}${nochmal ? ' <button type="button" class="lnk" data-act="bi-wiederholen">Erneut versuchen</button>' : ""}</p>`;
+    }
+    function waehlen(f) {
+      if (!f) return;
+      clearTimeout(ruhe); ruhe = null;
+      if (lauf) { lauf.abort(); lauf = null; }
+      datei = null; wahl = {}; bericht = null; fertig = false; reiter = null; bis = IMPORT_SEITE; spaltenAuf = null; fehler = null;
+      $("#bi-name").textContent = `${f.name} · ${groesse(f.size)}`;
+      if (f.size > IMPORT_MAX_BYTES) { fehler = { message: IMPORT_ZU_GROSS, status: 413 }; berichtZeichnen(); return; }
+      datei = f;
+      berichtZeichnen();              // der Bericht der vorigen Datei gilt nicht mehr
+      probelauf();
+    }
+    function formular() {
+      const fd = new FormData();
+      fd.append("file", datei);
+      if (Object.keys(wahl).length) fd.append("zuordnung", JSON.stringify(wahl));
+      return fd;
+    }
+    const ersterReiter = (b) => {
+      const liste = fertig ? REITER_NACHHER : REITER_VORHER;
+      return (liste.find(([s]) => b.zahlen[s]) || liste[0])[0];
+    };
+    async function probelauf() {
+      clearTimeout(ruhe); ruhe = null;
+      if (!datei) return;
+      if (lauf) lauf.abort();
+      const meins = new AbortController();
+      lauf = meins;
+      fehler = null;
+      standZeichnen();
+      berichtEl.classList.add("laedt");
+      const fuer = JSON.stringify(wahl);
+      try {
+        const b = await importSenden(`${API}/ordner/${fid}/import/probelauf`, formular(), meins.signal);
+        if (lauf !== meins) return;
+        bericht = b;
+        berichtFuer = fuer;
+        fertig = false;
+        if (!reiter || !b.zahlen[reiter]) { reiter = ersterReiter(b); bis = IMPORT_SEITE; }
+      } catch (e) {
+        if (e.name === "AbortError" || lauf !== meins) return;
+        fehler = e;
+      } finally {
+        if (lauf === meins) { lauf = null; berichtZeichnen(); }
+      }
+    }
+    function dateiZeile(b) {
+      const d = b.datei;
+      const art = d.art === "xlsx" ? "Excel-Arbeitsmappe" : `CSV, ${esc(KODIERUNG[d.kodierung] || d.kodierung)}, getrennt durch ${esc(TRENNER[d.trennzeichen] || d.trennzeichen)}`;
+      return `<p class="small mat-import-datei">${art} · Kopfzeile in Zeile ${esc(d.kopfzeile)} · ${plural(d.datenzeilen, "Datenzeile", "Datenzeilen")}${d.leerzeilen ? ` · ${plural(d.leerzeilen, "leere Zeile", "leere Zeilen")} übergangen` : ""}</p>`;
+    }
+    function spaltenHtml(b) {
+      const fehlt = b.fehlt && b.fehlt.length;
+      if (fertig) return "";
+      if (b.nacharbeit_csv && !spaltenAuf && !fehlt) {
+        return `<p class="mat-import-csv">Nacharbeits-CSV erkannt – Spalten zugeordnet. <button type="button" class="lnk" data-act="bi-spalten">Zuordnung ändern</button></p>`;
+      }
+      const auf = fehlt || spaltenAuf !== false;
+      const zugeordnet = b.spalten.filter((x) => x.zuordnung !== "ignorieren").length;
+      const optionen = (x) => b.felder.map((f) => `<option value="${esc(f.feld)}" ${f.feld === x.zuordnung ? "selected" : ""}>${esc(f.text)}</option>`).join("");
+      const zeile = (x) => {
+        const titel = x.titel || `Spalte ${spalteBuchstabe(x.index)}`;
+        return `<tr class="${x.zuordnung === "ignorieren" ? "mat-alt" : ""}"><td data-l="Spalte" class="mat-k-titel"><strong>${esc(titel)}</strong></td>
+          <td data-l="Beispiele" class="mat-k-ohne">${x.gesperrt ? "" : x.beispiele.length ? x.beispiele.map((w) => `<span class="mat-beispiel">${esc(w)}</span>`).join('<span class="muted"> · </span>') : '<span class="muted">–</span>'}</td>
+          <td data-l="Feld" class="mat-k-ohne">${x.gesperrt ? '<span class="muted">Personenangaben – werden nicht übernommen</span>'
+            : `<select data-spalte="${esc(x.index)}" aria-label="Feld für die Spalte ${esc(titel)}">${optionen(x)}</select>`}</td></tr>`;
+      };
+      return `<details class="mat-auf mat-import-spalten" ${auf ? "open" : ""}><summary>Spalten – ${zugeordnet} von ${b.spalten.length} zugeordnet</summary>
+          <table class="list mat-tabelle mat-karten mat-spaltenwahl"><thead><tr><th>Spalte in der Datei</th><th>Beispiele</th><th>Feld</th></tr></thead>
+            <tbody>${b.spalten.map(zeile).join("")}</tbody></table>
+          <p class="help">Mehrere Spalten in der Bemerkung erscheinen als „Titel: Wert“.${b.spalten.some((x) => x.gesperrt) ? ` ${esc(IMPORT_PERSONEN)}` : ""}</p></details>
+        ${fehlt ? `<p class="error">${esc(IMPORT_FEHLT)}</p>` : ""}`;
+    }
+    function zeilenHtml(b) {
+      const liste = b.zeilen.filter((x) => x.status === reiter);
+      if (!liste.length) return leer("Keine Zeilen.");
+      const teil = liste.slice(0, bis);
+      const weitere = liste.length > bis ? `<p><button type="button" class="btn secondary small" data-act="bi-weitere">weitere ${Math.min(IMPORT_SEITE, liste.length - bis)} von ${liste.length - bis} …</button></p>` : "";
+      if (reiter === "angelegt") return `${angelegtTabelle(teil)}${weitere}`;
+      const produkt = (x) => (x.produkt ? produktKurz(x.produkt) : x.angabe_text ? `<span class="muted">${esc(x.angabe_text)}</span>` : '<span class="muted">ohne Produktangabe</span>');
+      return `<table class="list mat-tabelle mat-karten mat-import-zeilen">
+          <thead><tr><th>Zeile</th><th>Produkt</th><th>Seriennummer</th><th>Ordner</th><th>Fällig</th><th>Gründe und Hinweise</th></tr></thead>
+          <tbody>${teil.map((x) => `<tr><td data-l="Zeile" class="mat-k-titel"><strong>Zeile ${esc(x.nr)}</strong>${x.rueckruf ? ` <span class="mat-rr-marke" title="Rückruf: ${esc(x.rueckruf)}">Rückruf</span>` : ""}</td>
+            <td data-l="Produkt" class="mat-k-ohne">${produkt(x)}${x.artikel ? `<div class="small">schon im Bestand: <a href="/material/artikel/${esc(x.artikel.id)}">${esc(x.artikel.inventory_no)}</a></div>` : ""}</td>
+            <td data-l="Seriennummer" class="mat-k-halb">${x.seriennummer ? esc(x.seriennummer) : '<span class="muted">ohne</span>'}</td>
+            <td data-l="Ordner" class="mat-k-halb">${x.ordner ? esc(x.ordner) : '<span class="muted">–</span>'}</td>
+            <td data-l="Fällig" class="mat-k-halb">${x.faellig ? esc(fmtTag(x.faellig)) : '<span class="muted">–</span>'}</td>
+            <td data-l="Gründe und Hinweise" class="mat-k-ohne">${gruendeHtml(x.gruende)}${hinweiseHtml(x.hinweise)}</td></tr>`).join("")}</tbody></table>${weitere}`;
+    }
+    function knopfText(b) {
+      const z = b.zahlen;
+      const a = plural(z.uebernehmbar, "Artikel", "Artikel"), n = plural(z.nacharbeit, "Zeile", "Zeilen");
+      if (z.uebernehmbar && z.nacharbeit) return `Übernehmen: ${a} anlegen, ${n} in die Nacharbeit`;
+      if (z.uebernehmbar) return `Übernehmen: ${a} anlegen`;
+      if (z.nacharbeit) return `${n} in die Nacharbeit übernehmen`;
+      // Eine Nacharbeits-CSV, deren Zeilen inzwischen im Bestand stehen: Übernehmen erledigt die alten Zeilen.
+      if (b.nacharbeit_csv && z.im_bestand) return "Übernehmen: Nacharbeit abgleichen (nichts anzulegen)";
+      return "";
+    }
+    function ergebnisHtml(b) {
+      const z = b.zahlen;
+      const warn = b.warnungen.concat(b.ordner_unbekannt.map((u) => `Ordner „${u.wert}“ (${plural(u.zeilen, "Zeile", "Zeilen")}) gibt es unter „${o.name}“ nicht – bitte im Bestand anlegen und den Probelauf wiederholen, oder die Spalte als Bemerkung zuordnen.`));
+      const fehlt = b.fehlt && b.fehlt.length;
+      const imp = b.import;
+      const stand = fertig && imp ? `<p class="mat-austausch-stand ok">Übernommen: ${plural(imp.angelegt, "Artikel", "Artikel")} angelegt${imp.nacharbeit ? `, ${plural(imp.nacharbeit, "Zeile", "Zeilen")} in die Nacharbeit` : ""}${imp.im_bestand ? `, ${plural(imp.im_bestand, "Zeile", "Zeilen")} schon im Bestand oder erledigt` : ""}${imp.ersetzt ? `, ${plural(imp.ersetzt, "Zeile", "Zeilen")} der Nacharbeit neu eingelesen` : ""}.</p>
+        ${imp.angelegt ? `<p class="help">${esc(IMPORT_NEUBESCHRIFTEN)}</p>` : ""}` : "";
+      const offen = !fertig && b.produkte_offen.length ? `<div class="mat-austausch-liste mat-import-produkte"><strong>Produkte, die der Katalog nicht sicher kennt</strong>
+          <ul>${b.produkte_offen.map((p) => `<li>${esc(angabeAus(p) || "ohne Angabe")} – ${plural(p.zeilen, "Zeile", "Zeilen")} – ${esc(PRODUKT_ART[p.art] || p.art)}</li>`).join("")}</ul>
+          <p class="help">Diese Zeilen kommen in die Nacharbeit. Dort ordnest du das Produkt zu – auch zeilenweise, etwa bei verschiedenen Größen – oder meldest es.</p></div>` : "";
+      const reiterListe = (fertig ? REITER_NACHHER : REITER_VORHER).filter(([s]) => s !== "erledigt" || z.erledigt);
+      const text = fehlt ? "" : knopfText(b);
+      const knoepfe = fertig
+        ? '<div class="btn-row mat-import-knoepfe"><button type="button" class="btn secondary" data-act="bi-neu">Weitere Liste importieren</button></div>'
+        : `<p class="small mat-import-wieder"><button type="button" class="lnk" data-act="bi-wiederholen">Probelauf wiederholen</button>${Object.keys(wahl).length ? ' · <button type="button" class="lnk" data-act="bi-automatisch">Zuordnung wie erkannt</button>' : ""}</p>
+          ${!fehlt && !text && z.zeilen ? `<p class="mat-leer">${esc(IMPORT_NICHTS)}</p>` : ""}
+          <div class="btn-row mat-import-knoepfe"><button type="button" class="btn secondary" data-act="bi-neu">Neu wählen</button>${text ? `<button type="button" class="btn" data-act="bi-uebernehmen" ${uebernimmt || lauf || ruhe || JSON.stringify(wahl) !== berichtFuer ? "disabled" : ""}>${esc(uebernimmt ? "Wird übernommen …" : text)}</button>` : ""}</div>
+          ${!fehlt && z.nacharbeit ? `<p class="help">${esc(b.frist)}</p>` : ""}`;
+      return `${stand}${austauschListe("Bitte beachten", warn, "warnung")}${offen}
+        ${fehlt ? "" : `${austauschListe("Fälligkeit", faelligSaetze(b.faelligkeit), "")}
+        <div class="c-tabs mat-filter mat-import-reiter" role="group" aria-label="Zeilen nach Ergebnis">${reiterListe.map(([s, t]) => `<button type="button" data-act="bi-reiter" data-r="${s}" class="${s === reiter ? "sel" : ""}" aria-pressed="${s === reiter}">${esc(t)} ${z[s] || 0}</button>`).join("")}</div>
+        ${zeilenHtml(b)}`}
+        ${knoepfe}`;
+    }
+    function berichtZeichnen() {
+      standZeichnen();
+      berichtEl.classList.remove("laedt");
+      // Wer gerade eine Zuordnung wählt, behält den Fokus auf derselben Spalte.
+      const aktiv = berichtEl.contains(document.activeElement) && document.activeElement.dataset ? document.activeElement.dataset.spalte : undefined;
+      if (!bericht) { berichtEl.innerHTML = ""; return; }
+      berichtEl.innerHTML = `${dateiZeile(bericht)}${spaltenHtml(bericht)}${ergebnisHtml(bericht)}`;
+      if (aktiv !== undefined) { const s = $(`select[data-spalte="${CSS.escape(aktiv)}"]`, berichtEl); if (s) s.focus({ preventScroll: true }); }
+    }
+    async function uebernehmen() {
+      if (!datei || uebernimmt || lauf || ruhe || JSON.stringify(wahl) !== berichtFuer) return;
+      uebernimmt = true;
+      berichtZeichnen();
+      try {
+        const b = await importSenden(`${API}/ordner/${fid}/import`, formular());
+        bericht = b;
+        fertig = true;
+        fehler = null;
+        reiter = ersterReiter(b);
+        bis = IMPORT_SEITE;
+        const n = b.import ? b.import.angelegt : 0;
+        toast(n ? `${plural(n, "Artikel", "Artikel")} angelegt` : "Übernommen – kein Artikel angelegt");
+        leisteNeu();
+        nacharbeitLaden();
+      } catch (e) {
+        toast(importFehler(e), true);
+      } finally {
+        uebernimmt = false;
+        berichtZeichnen();
+      }
+      if (fertig) $("#bi-neu-titel").scrollIntoView({ block: "start" });
+    }
+
+    // Datei wählen oder in den Abschnitt ziehen; daneben Abgelegtes öffnet der Browser nie selbst (die Seite wäre weg).
+    $("#bi-datei").addEventListener("change", (ev) => { const f = ev.target.files[0]; ev.target.value = ""; waehlen(f); });
+    const ablage = $("#bi-ablage"), bereich = $("#bi-neu");
+    bereich.addEventListener("dragover", (ev) => { ev.preventDefault(); ablage.classList.add("ueber"); });
+    bereich.addEventListener("dragleave", (ev) => { if (!bereich.contains(ev.relatedTarget)) ablage.classList.remove("ueber"); });
+    bereich.addEventListener("drop", (ev) => {
+      ev.preventDefault();
+      ablage.classList.remove("ueber");
+      if (ev.dataTransfer && ev.dataTransfer.files.length) waehlen(ev.dataTransfer.files[0]);
+    });
+    inhalt.addEventListener("dragover", (ev) => ev.preventDefault());
+    inhalt.addEventListener("drop", (ev) => ev.preventDefault());
+    // Eine geänderte Zuordnung: Was gerade läuft, zählt nicht mehr; nach 600 ms Ruhe der neue Probelauf. Bis dahin ist
+    // „Übernehmen“ gesperrt – seine Zahlen gehören zur alten Zuordnung.
+    berichtEl.addEventListener("change", (ev) => {
+      const s = ev.target.closest("select[data-spalte]");
+      if (!s) return;
+      wahl[s.dataset.spalte] = s.value;
+      if (lauf) { lauf.abort(); lauf = null; }
+      clearTimeout(ruhe);
+      ruhe = setTimeout(probelauf, 600);
+      const k = $('[data-act="bi-uebernehmen"]', berichtEl);
+      if (k) k.disabled = true;
+      standZeichnen();
+    });
+    berichtEl.addEventListener("toggle", (ev) => { if (ev.target.classList && ev.target.classList.contains("mat-import-spalten")) spaltenAuf = ev.target.open; }, true);
+
+    /* --- Nacharbeit dieses Zielordners --- */
+    let na = null;               // Antwort von GET …/nacharbeit
+    let naGruppe = "";           // Filter nach Grund
+    let naZeilen = [];           // geladene offene Zeilen (Seite 1 … naSeite)
+    let naSeite = 1;
+    let naAlle = false;          // „alle n offenen“ gewählt – dann geht "alle" an den Server
+    const naWahl = new Set();    // gewählte Nacharbeit-Nr.
+    let naGeladen = false;
+    async function nacharbeitLaden() {
+      try {
+        na = await api(`${API}/ordner/${fid}/nacharbeit?${new URLSearchParams({ gruppe: naGruppe || "alle", seite: 1 })}`);
+      } catch (e) {
+        naBox.innerHTML = `<h2>Nacharbeit</h2><p class="error">${esc(e.message)}</p>`;
+        return;
+      }
+      naZeilen = na.zeilen;
+      naSeite = na.seite;
+      naWahl.clear();
+      naAlle = false;
+      nacharbeitZeichnen();
+      if (!naGeladen && location.hash === "#bi-nacharbeit") naBox.scrollIntoView({ block: "start" });
+      naGeladen = true;
+    }
+    async function naMehr(knopf) {
+      knopf.disabled = true;
+      try {
+        const d = await api(`${API}/ordner/${fid}/nacharbeit?${new URLSearchParams({ gruppe: naGruppe || "alle", seite: naSeite + 1 })}`);
+        naZeilen = naZeilen.concat(d.zeilen);
+        naSeite = d.seite;
+        na.seiten = d.seiten;
+        nacharbeitZeichnen();
+      } catch (e) { toast(e.message, true); knopf.disabled = false; }
+    }
+    const naAuswahl = () => (naAlle ? "alle" : Array.from(naWahl));
+    const naAnzahl = () => (naAlle ? na.zahlen.offen : naWahl.size);
+    function naGruppenHtml() {
+      if (!na.gruppen.length) return "";
+      return `<h3 class="mat-unter">Produkte zuordnen</h3><div class="mat-na-karten">${na.gruppen.map((g, i) => {
+        const m = g.meldung;
+        const meldung = !m ? "" : m.status === "offen" ? "Gemeldet – die Material-Verwaltung nimmt das Produkt auf."
+          : m.status === "eingepflegt" ? `Eingepflegt: ${m.produkt ? produktKurz(m.produkt) : "–"} – „Erneut prüfen“ übernimmt die Zeilen.`
+            : `Abgelehnt${m.antwort ? `: ${esc(m.antwort)}` : ""}`;
+        const knoepfe = [`<button type="button" class="btn secondary small" data-act="na-gruppe-zuordnen" data-i="${i}">Produkt zuordnen …</button>`];
+        if (DARF.katalog) knoepfe.push(`<button type="button" class="btn secondary small" data-act="na-anlegen" data-i="${i}">Im Katalog anlegen …</button>`);
+        else if (!m || m.status === "abgelehnt") knoepfe.push(`<button type="button" class="btn secondary small" data-act="na-melden" data-i="${i}">Produkt melden …</button>`);
+        return `<div class="mat-na-karte"><p class="mat-na-angabe"><strong>${esc(angabeAus(g) || "ohne Angabe")}</strong> <span class="mat-na-art">${esc(PRODUKT_ART[g.art] || g.art)}</span></p>
+          <p class="small">${plural(g.offen, "Zeile", "Zeilen")}${g.produkt ? ` · zugeordnet: <strong>${produktKurz(g.produkt)}</strong>` : ""}</p>
+          ${m ? `<p class="small">${meldestatusMarke(m.status)} ${meldung}</p>` : ""}
+          <p class="help">${g.offen === 1 ? "Gilt für die Zeile dieser Angabe." : `Gilt für alle ${g.offen} Zeilen dieser Angabe. Sind es verschiedene Größen oder Varianten, die Zeilen unten auswählen und einzeln zuordnen.`}</p>
+          <div class="btn-row">${knoepfe.join("")}</div></div>`;
+      }).join("")}</div>`;
+    }
+    function naZeileHtml(z) {
+      const w = z.werte || {};
+      const angabe = angabeAus(w);
+      const bem = w.bemerkung ? (w.bemerkung.length > 80 ? `${w.bemerkung.slice(0, 80)}…` : w.bemerkung) : "";
+      return `<tr data-id="${esc(z.id)}">
+        <td class="mat-wahlspalte mat-k-wahl"><label class="mat-wahl-feld"><input type="checkbox" class="mat-na-wahl" value="${esc(z.id)}" ${naAlle || naWahl.has(z.id) ? "checked" : ""}
+          aria-label="Nacharbeit-Nr. ${esc(z.id)} auswählen"><span class="mat-wahl-text">auswählen</span></label></td>
+        <td data-l="Nacharbeit-Nr." class="mat-k-titel"><strong>Nr. ${esc(z.id)}</strong><div class="small muted">${esc(z.import.datei)} · Zeile ${esc(z.nr)}</div></td>
+        <td data-l="Angaben" class="mat-k-ohne">${angabe ? `<strong>${esc(angabe)}</strong>` : '<span class="muted">ohne Produktangabe</span>'}
+          ${z.produkt ? `<div class="small">zugeordnet: ${produktKurz(z.produkt)}</div>` : ""}
+          <div class="small">${w.seriennummer ? `SN ${esc(w.seriennummer)}` : '<span class="muted">ohne Seriennummer</span>'}${w.ordner ? ` · Ordner ${esc(w.ordner)}` : ""}</div>
+          ${bem ? `<div class="small muted mat-na-bem">${esc(bem)}</div>` : ""}</td>
+        <td data-l="Gründe" class="mat-k-ohne">${gruendeHtml(z.gruende)}<div class="small muted">offen bis ${esc(fmtTag(z.offen_bis))}</div></td>
+        <td data-l="Werte" class="mat-k-ohne"><details class="mat-na-werte"><summary>alle Werte</summary><dl class="mat-daten">${na.felder.filter((f) => w[f.feld]).map((f) => `<dt>${esc(f.text)}</dt><dd class="mat-text">${esc(w[f.feld])}</dd>`).join("")}</dl></details></td></tr>`;
+    }
+    function naErledigtHtml() {
+      if (!na.erledigt.length) return "";
+      return `<details class="mat-auf mat-na-erledigt"><summary>Zuletzt erledigt (${na.erledigt.length})</summary>
+        <table class="list mat-tabelle mat-karten"><thead><tr><th>Nacharbeit-Nr.</th><th>Ergebnis</th><th>Grund</th><th>Wer, wann</th></tr></thead>
+        <tbody>${na.erledigt.map((x) => `<tr><td data-l="Nacharbeit-Nr." class="mat-k-titel">Nr. ${esc(x.id)} <span class="small muted">Zeile ${esc(x.nr)}</span></td>
+          <td data-l="Ergebnis" class="mat-k-marke">${esc(NA_STATUS[x.status] || x.status)}${x.artikel ? ` – <a href="/material/artikel/${esc(x.artikel.id)}">${esc(x.artikel.inventory_no)}</a>` : ""}</td>
+          <td data-l="Grund">${x.grund ? esc(x.grund) : '<span class="muted">–</span>'}</td>
+          <td data-l="Wer, wann">${esc(x.von || "–")}, ${esc(fmtZeit(x.am))}</td></tr>`).join("")}</tbody></table></details>`;
+    }
+    function nacharbeitZeichnen() {
+      const z = na.zahlen;
+      const kopf = `<div class="mat-nacharbeit-kopf"><h2>Nacharbeit – ${z.offen} offen</h2>
+        ${z.offen ? `<details class="mat-menue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary><div class="mat-menue-liste">
+          <a href="/material/ordner/${esc(fid)}/nacharbeit.csv" data-export="Die Nacharbeit wird heruntergeladen …"><strong>Als CSV herunterladen</strong><span>${esc(IMPORT_CSV_SATZ)}</span></a></div></details>` : ""}</div>`;
+      if (!z.offen) {
+        naBox.innerHTML = `${kopf}${leer("Nichts offen – was ein Import nicht übernehmen konnte, steht hier.")}${naErledigtHtml()}`;
+        return;
+      }
+      const filter = NA_GRUPPEN.filter(([g]) => !g || z[g] || g === naGruppe).map(([g, t]) => `<button type="button" data-act="na-filter" data-g="${g}" class="${g === naGruppe ? "sel" : ""}" aria-pressed="${g === naGruppe}">${esc(t)} (${g ? z[g] : z.offen})</button>`).join("");
+      naBox.innerHTML = `${kopf}<p class="help">${esc(na.frist)} Werte lassen sich hier nicht bearbeiten: „Mehr → Als CSV herunterladen“, korrigieren und oben als neue Liste hochladen.</p>
+        ${naGruppenHtml()}
+        <h3 class="mat-unter">Offene Zeilen</h3>
+        <div class="c-tabs mat-filter" role="group" aria-label="Offene Zeilen nach Grund">${filter}</div>
+        <div class="mat-na-liste">
+          ${naZeilen.length ? `<div class="mat-kartenkopf"><label class="mat-wahl-feld mat-alle-feld"><input type="checkbox" class="mat-na-alle"><span>alle auf dieser Seite auswählen</span></label></div>
+          <table class="list mat-tabelle mat-karten mat-na-zeilen"><thead><tr><th class="mat-wahlspalte"><label class="mat-wahl-feld"><input type="checkbox" class="mat-na-alle" aria-label="alle auf dieser Seite auswählen"></label></th>
+            <th>Nacharbeit-Nr.</th><th>Angaben</th><th>Gründe</th><th>Werte</th></tr></thead>
+            <tbody>${naZeilen.map(naZeileHtml).join("")}</tbody></table>` : leer("Keine offenen Zeilen mit diesem Grund.")}
+          ${naSeite < na.seiten ? '<p><button type="button" class="btn secondary small" data-act="na-weitere">weitere …</button></p>' : ""}
+          <div class="mat-sammel" id="na-sammel" hidden><span><span id="na-sammel-n"></span> <button type="button" class="lnk" data-act="na-alle-offen" hidden></button></span>
+            <div class="btn-row"><button type="button" class="btn secondary small" data-act="na-zeilen-zuordnen">Produkt zuordnen …</button>
+              <button type="button" class="btn secondary small" data-act="na-pruefen">Erneut prüfen</button>
+              <button type="button" class="btn secondary small" data-act="na-verwerfen">Verwerfen</button></div></div>
+        </div>
+        ${naErledigtHtml()}`;
+      naSammel();
+    }
+    function naSammel() {
+      const boxen = $$(".mat-na-wahl", naBox);
+      const n = boxen.filter((c) => c.checked).length;
+      $$(".mat-na-alle", naBox).forEach((x) => { x.checked = boxen.length > 0 && n === boxen.length; x.indeterminate = n > 0 && n < boxen.length; });
+      const leiste = $("#na-sammel", naBox);
+      if (!leiste) return;
+      leiste.hidden = !n;
+      $("#na-sammel-n", naBox).textContent = naAlle ? `alle ${na.zahlen.offen} offenen Zeilen ausgewählt` : `${plural(naWahl.size, "Zeile", "Zeilen")} ausgewählt`;
+      const alle = $('[data-act="na-alle-offen"]', leiste);
+      alle.hidden = naAlle || n < boxen.length || na.zahlen.offen <= naWahl.size;
+      alle.textContent = `alle ${na.zahlen.offen} offenen auswählen${naGruppe ? " (alle Gründe)" : ""}`;
+    }
+    naBox.addEventListener("change", (ev) => {
+      const c = ev.target;
+      if (c.classList.contains("mat-na-wahl")) {
+        if (naAlle) { naAlle = false; $$(".mat-na-wahl", naBox).forEach((x) => { if (x.checked) naWahl.add(+x.value); }); }
+        if (c.checked) naWahl.add(+c.value); else naWahl.delete(+c.value);
+        naSammel();
+      } else if (c.classList.contains("mat-na-alle")) {
+        naAlle = false;
+        $$(".mat-na-wahl", naBox).forEach((x) => { x.checked = c.checked; if (c.checked) naWahl.add(+x.value); else naWahl.delete(+x.value); });
+        naSammel();
+      }
+    });
+
+    // Produkt zuordnen – für eine Angabe (Karte) oder für die ausgewählten Zeilen.
+    function zuordnenDialogNa(titel, hilfe, vorschlaege, ziel, aktuell) {
+      dialog(`<h2>${esc(titel)}</h2><p class="help">${esc(hilfe)}</p>
+        ${vorschlaege.length ? `<div class="mat-feldkopf">Vorschläge</div><div class="mat-treffer mat-na-vorschlaege">${vorschlaege.map((p, i) => `<div class="mat-treffer-produkt">${p.vorschau ? `<img class="mat-mini" src="${esc(p.vorschau)}" alt="">` : ""}<button type="button" class="mat-treffer-wahl" data-v="${i}"><strong>${esc(p.name)}</strong> <span class="muted">${esc(p.article_no || "")}</span>${demoMarke(p.demo)}</button></div>`).join("")}</div>` : ""}
+        <label for="nz-q">Produkt suchen</label>
+        <div class="mat-produktwahl"><input type="search" id="nz-q" autocomplete="off" ${TASTATUR_SUCHE}><div id="nz-treffer" class="mat-treffer"></div></div>
+        <div id="nz-gewaehlt" class="mat-gewaehlt" hidden></div>
+        <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
+          ${aktuell ? '<button class="btn secondary" id="nz-weg" type="button">Zuordnung entfernen</button>' : ""}
+          <button class="btn" id="nz-ok" type="button" disabled>Zuordnen</button></div>`,
+      (dlg, body) => {
+        let gewaehlt = null;
+        let los = null;
+        const zeigeWahl = (id, html) => {
+          gewaehlt = id;
+          const el = $("#nz-gewaehlt", body);
+          el.hidden = false;
+          el.innerHTML = `<span>Gewählt: ${html}</span>`;
+          $("#nz-ok", body).disabled = false;
+        };
+        const vor = $(".mat-na-vorschlaege", body);
+        if (vor) vor.addEventListener("click", (ev) => { const b = ev.target.closest("[data-v]"); if (b) { const p = vorschlaege[+b.dataset.v]; zeigeWahl(p.id, produktKurz(p)); } });
+        $("#nz-q", body).addEventListener("input", () => {
+          clearTimeout(los);
+          los = setTimeout(() => {
+            const q = $("#nz-q", body).value.trim();
+            if (!q) { trefferLeeren($("#nz-treffer", body)); return; }
+            produktTreffer($("#nz-treffer", body), q, (p) => { zeigeWahl(p.id, `<strong>${nameHtml(p)}</strong>${zusatzHtml(p)} <span class="muted">${esc(p.article_no || "")}</span>${demoMarke(p.demo)}`); trefferLeeren($("#nz-treffer", body)); },
+              '<p class="help">Kein Produkt gefunden.</p>');
+          }, 200);
+        });
+        async function setzen(pid, knopf) {
+          knopf.disabled = true;
+          try {
+            const r = await api(`${API}/ordner/${fid}/nacharbeit/produkt`, { method: "POST", body: Object.assign({ product_id: pid }, ziel) });
+            dlg.close();
+            toast(pid ? `Zugeordnet – ${plural(r.gesetzt, "Zeile", "Zeilen")}. „Erneut prüfen“ übernimmt sie.` : `Zuordnung entfernt – ${plural(r.gesetzt, "Zeile", "Zeilen")}`);
+            nacharbeitLaden();
+          } catch (e) { toast(e.message, true); knopf.disabled = false; }
+        }
+        $("#nz-ok", body).onclick = (ev) => { if (gewaehlt) setzen(gewaehlt, ev.currentTarget); };
+        const weg = $("#nz-weg", body);
+        if (weg) weg.onclick = () => setzen(null, weg);
+      });
+    }
+    // Erneut prüfen: erst das Ergebnis (schreibt nichts), dann auf Wunsch übernehmen.
+    async function nachpruefen() {
+      const zeilen = naAuswahl();
+      if (zeilen !== "alle" && !zeilen.length) return;
+      let r;
+      try { r = await api(`${API}/ordner/${fid}/nacharbeit/pruefen`, { method: "POST", body: { zeilen, uebernehmen: false } }); }
+      catch (e) { toast(e.message, true); return; }
+      const z = r.zahlen;
+      const offen = r.zeilen.filter((x) => x.status === "nacharbeit");
+      const n = z.uebernehmbar, m = z.im_bestand;
+      const label = n ? `${plural(n, "Artikel", "Artikel")} übernehmen` : m ? `${plural(m, "Zeile", "Zeilen")} als „schon im Bestand“ erledigen` : "";
+      dialog(`<h2>Erneut prüfen</h2>
+        <p>${plural(z.zeilen, "Zeile", "Zeilen")} geprüft: <strong>${n} übernehmbar</strong>${m ? `, ${m} schon im Bestand` : ""}, ${z.nacharbeit} weiter offen.</p>
+        ${austauschListe("Bitte beachten", r.hinweise.concat(faelligSaetze(r.faelligkeit)), "warnung")}
+        ${offen.length ? `<details class="mat-auf" ${offen.length <= 10 ? "open" : ""}><summary>Weiter offen (${offen.length})</summary>
+          <ul class="mat-na-offen">${offen.slice(0, 200).map((x) => `<li><strong>Nr. ${esc(x.id)}</strong> <span class="muted">(Zeile ${esc(x.nr)})</span>${gruendeHtml(x.gruende)}</li>`).join("")}</ul></details>` : ""}
+        <div class="dlg-actions"><button class="btn secondary" data-close type="button">${label ? "Abbrechen" : "Schließen"}</button>
+          ${label ? `<button class="btn mat-knopf-umbruch" id="np-ok" type="button">${esc(label)}</button>` : ""}</div>`,
+      (dlg, body) => {
+        const ok = $("#np-ok", body);
+        if (!ok) return;
+        ok.onclick = async () => {
+          ok.disabled = true;
+          ok.textContent = "Wird übernommen …";
+          let e;
+          try { e = await api(`${API}/ordner/${fid}/nacharbeit/pruefen`, { method: "POST", body: { zeilen, uebernehmen: true } }); }
+          catch (err) { toast(err.message, true); ok.disabled = false; ok.textContent = label; return; }
+          const angelegt = e.zeilen.filter((x) => x.status === "angelegt");
+          toast(angelegt.length ? `${plural(angelegt.length, "Artikel", "Artikel")} angelegt` : "Erledigt");
+          dialog(`<h2>Übernommen</h2>
+            <p>${plural(e.zahlen.angelegt, "Artikel", "Artikel")} angelegt${e.zahlen.im_bestand ? `, ${plural(e.zahlen.im_bestand, "Zeile", "Zeilen")} schon im Bestand` : ""}${e.zahlen.nacharbeit ? `, ${plural(e.zahlen.nacharbeit, "Zeile", "Zeilen")} weiter offen` : ""}.</p>
+            ${austauschListe("Bitte beachten", e.hinweise, "warnung")}
+            ${angelegt.length ? `${angelegtTabelle(angelegt, true)}<p class="help">${esc(IMPORT_NEUBESCHRIFTEN)}</p>` : ""}
+            <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`);
+          leisteNeu();
+          nacharbeitLaden();
+        };
+      });
+    }
+    async function naVerwerfen() {
+      const zeilen = naAuswahl();
+      const n = naAnzahl();
+      if (!n) return;
+      if (!(await confirm(`${plural(n, "Zeile", "Zeilen")} verwerfen? Sie verschwinden aus der Nacharbeit; ihre Werte werden gelöscht.`, "Verwerfen"))) return;
+      try {
+        const r = await api(`${API}/ordner/${fid}/nacharbeit/verwerfen`, { method: "POST", body: { zeilen } });
+        toast(`${plural(r.verworfen, "Zeile", "Zeilen")} verworfen`);
+        nacharbeitLaden();
+      } catch (e) { toast(e.message, true); }
+    }
+
+    aktionen = {
+      "bi-reiter": (b) => { reiter = b.dataset.r; bis = IMPORT_SEITE; berichtZeichnen(); },
+      "bi-weitere": () => { bis += IMPORT_SEITE; berichtZeichnen(); },
+      "bi-spalten": () => { spaltenAuf = true; berichtZeichnen(); },
+      "bi-wiederholen": () => probelauf(),
+      "bi-automatisch": () => { wahl = {}; probelauf(); },
+      "bi-uebernehmen": () => uebernehmen(),
+      "bi-neu": () => {
+        clearTimeout(ruhe); ruhe = null;
+        if (lauf) { lauf.abort(); lauf = null; }
+        datei = null; wahl = {}; bericht = null; fertig = false; fehler = null; reiter = null; spaltenAuf = null;
+        $("#bi-name").textContent = "Excel-Arbeitsmappe (.xlsx) oder CSV, höchstens 5 MB.";
+        berichtZeichnen();
+        $("#bi-datei").click();
+      },
+      "na-filter": (b) => { naGruppe = b.dataset.g; nacharbeitLaden(); },
+      "na-weitere": (b) => naMehr(b),
+      "na-alle-offen": () => {
+        naAlle = true;
+        $$(".mat-na-wahl", naBox).forEach((x) => { x.checked = true; naWahl.add(+x.value); });
+        naSammel();
+      },
+      "na-gruppe-zuordnen": (b) => {
+        const g = na.gruppen[+b.dataset.i];
+        zuordnenDialogNa(`Produkt zuordnen: ${angabeAus(g) || "ohne Angabe"}`,
+          `Gilt für ${g.offen === 1 ? "die Zeile" : `alle ${g.offen} offenen Zeilen`} dieser Angabe. Danach übernimmt „Erneut prüfen“ die Zeilen.`,
+          g.vorschlaege || [], { angabe: g.angabe }, g.produkt);
+      },
+      "na-zeilen-zuordnen": () => {
+        const n = naAnzahl();
+        if (!n) return;
+        zuordnenDialogNa(`Produkt zuordnen: ${plural(n, "Zeile", "Zeilen")}`,
+          "Etwa für eine Größe oder Variante. Danach übernimmt „Erneut prüfen“ die Zeilen.", [], { zeilen: naAuswahl() },
+          naZeilen.some((x) => x.produkt && (naAlle || naWahl.has(x.id))));
+      },
+      "na-melden": (b) => {
+        const g = na.gruppen[+b.dataset.i];
+        meldungDialog({ manufacturer: g.hersteller, model: g.modell, article_no: g.artikelnummer, angabe: g.angabe,
+                        url: `${API}/ordner/${fid}/nacharbeit/melden` }, () => nacharbeitLaden());
+      },
+      "na-anlegen": (b) => {
+        const g = na.gruppen[+b.dataset.i];
+        produktDialog({ manufacturer: g.hersteller, model: g.modell, article_no: g.artikelnummer }, {
+          danach: async (p) => {
+            const r = await api(`${API}/ordner/${fid}/nacharbeit/produkt`, { method: "POST", body: { angabe: g.angabe, product_id: p.id } });
+            toast(`Angelegt und zugeordnet – ${plural(r.gesetzt, "Zeile", "Zeilen")}. „Erneut prüfen“ übernimmt sie.`);
+            nacharbeitLaden();
+          } });
+      },
+      "na-pruefen": () => nachpruefen(),
+      "na-verwerfen": () => naVerwerfen(),
+    };
+    await nacharbeitLaden();
+  }
+
   /* Nach einem QR-Scan an einem Artikel außerhalb des eigenen Bereichs (/m/<token>): Die Seite enthält nichts über ihn,
      den Steckbrief gibt es erst nach Bestätigung (global.js; DATEN ist genau {token}). */
   async function fremd() {
@@ -4680,7 +5549,8 @@
   }
 
   const ANSICHTEN = { dashboard, pruefungen, bestand, ordner, artikel, artikel_neu: artikelNeu, katalog, produkt, formular, suche,
-                      meldungen, pruefung_neu: pruefungNeu, pruefung: pruefungAnsicht, durchgang: durchgangAnsicht, fremd };
+                      meldungen, pruefung_neu: pruefungNeu, pruefung: pruefungAnsicht, durchgang: durchgangAnsicht, fremd,
+                      bestandsimport };
   leisteLaden();
   zeigen(ANSICHTEN[ANSICHT] || dashboard);
 })();

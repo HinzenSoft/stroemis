@@ -1235,3 +1235,85 @@ table.list.mat-runde tr.mat-fremd td { color: var(--grau); }
 .mat-probemail .small { margin: 0 0 6px; overflow-wrap: anywhere; }
 .mat-mailtext { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 50vh; overflow: auto; margin: 0 0 10px;
   padding: 8px 10px; background: var(--grau-hell); font-size: var(--fs-klein); line-height: 1.45; }
+
+/* Phase 2 · Lieferung 3 – Bestandsimport und Prüfanleitung (material.js, bestandsimport, anleitungBauen, wikiWahl) */
+/* Untermenü „Export / Import“ im Ordnerkopf: ein Strich zwischen den Downloads und dem Import. */
+.mat-menue-trenner { border: 0; border-top: 2px solid var(--linie); margin: 0; }
+/* Importseite: Ablagefläche, Stand des Probelaufs, Zuordnung der Spalten, Ergebnis je Reiter. Während ein neuer Probelauf
+   läuft, steht der alte Bericht blass da. */
+.mat-import .mat-ablage { margin: 10px 0 6px; }
+.mat-import-hilfe { margin: 4px 0; }
+.mat-import-hilfe .help { margin: 4px 0 8px; }
+.mat-import-stand:empty { display: none; }
+.mat-import-stand p { margin: 8px 0; }
+.mat-import-bericht.laedt { opacity: .55; transition: opacity .2s; }
+.mat-import-datei, .mat-import-csv { margin: 10px 0 4px; overflow-wrap: anywhere; }
+.mat-import-spalten { margin: 6px 0 10px; }
+table.list.mat-spaltenwahl select { width: 100%; max-width: 300px; margin: 0; }
+table.list.mat-spaltenwahl td { overflow-wrap: anywhere; }
+.mat-beispiel { overflow-wrap: anywhere; }
+.mat-import-reiter { margin-top: 14px; }
+.mat-gruende { margin: 0; padding-left: 18px; color: var(--rot-dunkel); }
+.mat-hinweise { margin: 2px 0 0; padding-left: 18px; color: var(--grau); font-size: var(--fs-klein); }
+.mat-gruende li, .mat-hinweise li { overflow-wrap: anywhere; }
+table.list.mat-import-zeilen td, table.list.mat-angelegt td { overflow-wrap: anywhere; }
+.mat-import-wieder { margin: 12px 0 0; }
+.mat-import-knoepfe { margin-top: 12px; }
+/* Knöpfe mit Zahlen („Übernehmen: 380 Artikel anlegen, 32 Zeilen in die Nacharbeit“) brechen um, statt am Telefon
+   seitlich überzustehen. */
+.mat-import-knoepfe .btn, .mat-knopf-umbruch { white-space: normal; max-width: 100%; text-align: center; }
+/* Nacharbeit: Kopf mit „Mehr“, Karten je Produktangabe, Zeilen mit Kästchen; die Sammelleiste klebt unten, solange die
+   Liste im Bild ist (eigener Behälter .mat-na-liste – nicht bis in „zuletzt erledigt“). */
+.mat-nacharbeit-kopf { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.mat-nacharbeit-kopf h2 { margin: 0; }
+.mat-na-karten { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 12px; margin-bottom: 8px; }
+.mat-na-karte { border: 1px solid var(--linie); border-left: 4px solid var(--wasser); padding: 10px 14px; background: var(--weiss); min-width: 0; }
+.mat-na-karte p { margin: 4px 0; overflow-wrap: anywhere; }
+.mat-na-karte .btn-row { margin-top: 8px; }
+.mat-na-art { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 7px; border-radius: var(--radius-pille);
+  background: var(--grau-hell); color: var(--anthrazit); white-space: nowrap; vertical-align: middle; }
+.mat-na-bem { overflow-wrap: anywhere; }
+.mat-na-werte > summary { cursor: pointer; color: var(--rot); font-size: var(--fs-klein); }
+.mat-na-werte .mat-daten { margin-top: 6px; grid-template-columns: minmax(90px, auto) minmax(0, 1fr); }
+.mat-na-werte dd { overflow-wrap: anywhere; }
+table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-info-fl); }
+.mat-sammel .lnk { color: var(--weiss); text-decoration: underline; font-size: var(--fs-klein); }
+.mat-na-erledigt { margin-top: 18px; }
+.mat-na-offen { margin: 6px 0 0; padding-left: 18px; max-height: 40vh; overflow-y: auto; }
+.mat-na-offen li { margin: 4px 0; overflow-wrap: anywhere; }
+.mat-na-vorschlaege { border-top: 1px solid var(--linie); margin-bottom: 10px; }
+/* Formular: die Zeile „Prüfanleitung im Wiki“ (nur Material-Verwaltung) und die Seitenwahl. */
+.mat-wikizeile { margin: 4px 0 12px; padding: 8px 12px; border-left: 4px solid var(--linie); background: var(--grau-hell); }
+.mat-wikizeile p { margin: 2px 0; overflow-wrap: anywhere; }
+.mat-wikizeile .badge { vertical-align: middle; }
+.mat-warn-leise { color: var(--anthrazit); font-weight: 600; }
+.mat-wikiwahl { max-height: min(50vh, 420px); overflow-y: auto; border: 1px solid var(--linie); margin: 6px 0; }
+.mat-wikiwahl:empty { display: none; }
+.mat-wikiwahl button { display: block; width: 100%; text-align: left; background: var(--weiss); color: inherit; border: 0;
+  border-bottom: 1px solid var(--linie); padding: 8px 12px; font: inherit; cursor: pointer; overflow-wrap: anywhere; }
+.mat-wikiwahl button:last-child { border-bottom: 0; }
+.mat-wikiwahl button:hover, .mat-wikiwahl button:focus-visible { background: var(--grau-hell); }
+.mat-wikiwahl button[aria-pressed="true"] { background: var(--co-info-fl); box-shadow: inset 4px 0 0 var(--wasser); }
+.mat-wikiwahl-titel { font-weight: 600; margin-right: 6px; }
+.mat-wikiwahl-hinweis { display: block; margin-top: 2px; }
+/* Prüfung: die Anleitung aus dem Wiki im Kopf – aufklappbar, höchstens 60 % der Fensterhöhe, rollt in sich. Ihr Inhalt
+   steht im Schatten (eigene Stile dort, material.js ANLEITUNG_STIL). */
+.mat-anleitung { border: 1px solid var(--linie); border-left: 4px solid var(--wasser); margin: 6px 0 12px; background: var(--weiss); }
+.mat-anleitung > summary { cursor: pointer; padding: 8px 12px; font-weight: 600; overflow-wrap: anywhere; }
+.mat-anleitung-koerper { padding: 0 12px 8px; }
+.mat-anleitung-stand { margin: 4px 0; }
+.mat-anleitung-inhalt { max-height: 60vh; overflow: auto; overscroll-behavior: contain; border-top: 1px solid var(--linie); }
+.mat-anleitung-link { margin: 6px 0 0; }
+@media (pointer: coarse) {
+  .mat-anleitung > summary, .mat-wikiwahl button { min-height: 44px; box-sizing: border-box; }
+  table.list.mat-spaltenwahl select { min-height: 44px; }
+  .mat-na-werte > summary { padding: 8px 0; }
+}
+@container mat-seite (max-width: 600px) {
+  table.list.mat-spaltenwahl select { max-width: none; }
+  /* Am Telefon untereinander, „Übernehmen“ in voller Breite unten im Abschnitt (nicht klebend – erst lesen, dann drücken). */
+  .mat-import-knoepfe { flex-direction: column; align-items: stretch; }
+  .mat-import-knoepfe .btn { width: 100%; }
+  .mat-nacharbeit-kopf h2 { font-size: 1.2rem; }
+  .mat-sammel { flex-wrap: wrap; }
+}

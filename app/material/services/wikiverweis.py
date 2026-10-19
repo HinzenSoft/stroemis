@@ -99,17 +99,19 @@ def seiten(q, user=None):
 
 
 def editor_json(page_id, user=None):
-    """Die Verknüpfung, wie die Material-Verwaltung sie am Formular sieht: {seite, titel, reichweite, zustand} – Titel
-    und Reichweite nur bei „ok“; „papierkorb“ (die Seite liegt im Wiki-Papierkorb) oder „kein_zugang“ (dieses Konto darf
-    sie nicht lesen). None, wenn nichts verknüpft ist."""
+    """Die Verknüpfung, wie die Material-Verwaltung sie am Formular sieht: {seite, titel, url, reichweite, zustand} –
+    Titel, Adresse der Seite im Wiki (für den Link in der Formularansicht, Bauentwurf 4.4) und Reichweite nur bei „ok“;
+    „papierkorb“ (die Seite liegt im Wiki-Papierkorb) oder „kein_zugang“ (dieses Konto darf sie nicht lesen). None, wenn
+    nichts verknüpft ist."""
     if not page_id:
         return None
     p = seite(page_id)
     if p and p.get("deleted_at"):
-        return {"seite": page_id, "titel": None, "reichweite": None, "zustand": "papierkorb"}
+        return {"seite": page_id, "titel": None, "url": None, "reichweite": None, "zustand": "papierkorb"}
     if not darf_lesen(p, user):
-        return {"seite": page_id, "titel": None, "reichweite": None, "zustand": "kein_zugang"}
-    return {"seite": page_id, "titel": p["title"], "reichweite": reichweite(p), "zustand": "ok"}
+        return {"seite": page_id, "titel": None, "url": None, "reichweite": None, "zustand": "kein_zugang"}
+    return {"seite": page_id, "titel": p["title"], "url": f"/wiki/{quote(p['slug'], safe='')}",
+            "reichweite": reichweite(p), "zustand": "ok"}
 
 
 def setzen(fid, d):

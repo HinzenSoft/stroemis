@@ -1172,9 +1172,11 @@ def _hinweis_ohne_serie(ergebnisse):
     """Der Satz zu den STR-Nummern – vor dem Übernehmen und danach."""
     angelegt = sum(1 for e in ergebnisse if e.ohne_serie and e.status == "angelegt")
     if angelegt:
-        return (f"{angelegt} Artikel ohne Herstellerseriennummer haben eine Seriennummer vom System (STR-…) bekommen – "
-                "bitte am Artikel anbringen.")
+        return (f"{angelegt} Artikel ohne Herstellerseriennummer {'hat' if angelegt == 1 else 'haben'} eine Seriennummer "
+                "vom System (STR-…) bekommen – bitte am Artikel anbringen.")
     kommt = sum(1 for e in ergebnisse if e.ohne_serie and e.status == "uebernehmbar")
+    if kommt == 1:
+        return "1 Zeile ohne Seriennummer – bekommt eine STR-Nummer vom System (bitte am Artikel anbringen)."
     if kommt:
         return f"{kommt} Zeilen ohne Seriennummer – bekommen eine STR-Nummer vom System (bitte am Artikel anbringen)."
     return None
