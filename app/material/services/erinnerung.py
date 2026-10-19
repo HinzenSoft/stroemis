@@ -24,8 +24,11 @@ Plattform-Verwaltung eingeschlossen, wenn sie dort eingetragen sind (ordnerverwa
 Verwaltet dort niemand, bekommt es die Material-Verwaltung, ohne sie die Plattform-Verwaltung; die Mail kennzeichnet
 solche Gruppen mit „kein Materialwart eingetragen“ – bzw. „nur der Inhaber selbst verwaltet hier“, wenn bei einer
 Freigabe allein ihr Inhaber dort verwaltet. Nur aktive Konten mit Namen, Modulzugang und Adresse, nie
-DEMO-Konten (Adresse …@….invalid), jeder nur mit dem, was er sieht. Zugeordnete Personen, Prüfer und der Inhaber einer
-ablaufenden Freigabe bekommen nichts. Je Empfänger und Tag eine Mail, gruppiert nach Ordnerpfad.
+DEMO-Konten (Adresse …@….invalid), jeder nur mit dem, was er sieht. Zugeordnete Personen und Prüfer bekommen nichts.
+Der Inhaber einer ablaufenden Freigabe bekommt sie zusätzlich selbst (Entscheidung vom 19.10.2026) – nach denselben
+Regeln und mit eigenem Vermerk im Log, aber nie als Verwalter, sondern im Abschnitt „Deine Freigaben“: Recht, Ende,
+Pfad des Ankers, seine offenen Prüfungen und wer verlängern kann, nicht mehr, als „Meine Freigaben“ ihm zeigt
+(inhaber_eintrag). Je Empfänger und Tag eine Mail, gruppiert nach Ordnerpfad.
 
 Der Versand hängt am Schalter MATERIAL_ERINNERUNGEN (Verwaltung → Einstellungen, Vorgabe aus) und an der Sperre
 MATERIAL_ERINNERUNGEN_SPERRE (nur Umgebung, ohne Eintrag an, wenn STROEMIS_NAME auf -dev endet). Der Pflegeteil
@@ -46,7 +49,7 @@ mit demo – so führt kein Weg von der Ansicht zu Versand, Log oder Journal.
 Das Erinnerungslog ist kein Prüfnachweis: Es dient nur dazu, nicht doppelt zu mahnen."""
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta, timezone
 
 from flask import current_app, g
@@ -76,7 +79,7 @@ M_LAEUFT, M_PFLEGE, M_MAILS, M_STAND = "tageslauf_laeuft", "tageslauf_pflege_tag
 
 RUECKFALL_TEXT = {"material": "Material-Verwaltung", "plattform": "Plattform-Verwaltung"}
 # Warum eine Gruppe im Rückfall steht – Kennung „<Stelle>_inhaber“: Am Anker verwaltet nur der Inhaber der ablaufenden
-# Freigabe selbst (er bekommt sie nicht, siehe empfaenger).
+# Freigabe selbst (als Verwalter bekommt er sie nicht, siehe empfaenger – nur im Abschnitt „Deine Freigaben“).
 RUECKFALL_GRUND = {"": "kein Materialwart eingetragen", "inhaber": "nur der Inhaber selbst verwaltet hier"}
 RECHT_TEXT = {"lesen": "lesen", "pruefen": "prüfen", "verwalten": "verwalten"}
 
@@ -92,10 +95,11 @@ class Eintrag:            # eine Erinnerung für eine Mail
     rueckfall: str = ""   # "" | "material" | "plattform": Empfänger nur, weil am Ordner niemand verwaltet;
                           # "material_inhaber" | "plattform_inhaber": niemand außer dem Inhaber der Freigabe
     demo: bool = False    # DEMO-Artikel bzw. -Freigabe – nur im Probelauf mit DEMO (planen(…, demo=True))
+    inhaber: bool = False # Freigabe: dieselbe für ihren Inhaber (Abschnitt „Deine Freigaben“, inhaber_eintrag)
 
     @property
     def schluessel(self):
-        return self.art, self.kennung, self.stufe, self.faellig_am
+        return self.art, self.kennung, self.stufe, self.faellig_am, self.inhaber
 
 
 @dataclass
@@ -413,6 +417,23 @@ def empfaenger(eintrag, zwischen):
     return konten, stelle
 
 
+def inhaber_eintrag(e, u, zwischen):
+    """Die ablaufende Freigabe e für ihren Inhaber u – Abschnitt „Deine Freigaben“ (Entscheidung vom 19.10.2026) –
+    oder None, wenn er keine Mail bekommen darf: _zulaessig wie jeder Empfänger (Adresse, keine DEMO-Adresse außer im
+    Probelauf mit DEMO, Modulzugang); aktiv, mit Namen und nicht DEMO ist er schon als Kandidat. Er erfährt nur, was
+    „Meine Freigaben“ ihm ohnehin zeigt (freigaben.meine): Recht, Ende, Pfad des Ankers und bis zu drei Verwalter, die
+    verlängern können (rechte.verwalter_von ohne ihn – ohne sie „die Material-Verwaltung“), dazu seine eigenen offenen
+    Prüfungen. Selbst verlängern kann er sie nicht (freigaben, Nr. 5 – außer als Material-Verwaltung), darum bleiben
+    die Verwalter Empfänger wie bisher; als Verwalter bekommt er die eigene nie (empfaenger nimmt ihn aus)."""
+    if not u or not _zulaessig(u, zwischen.get("demo")):
+        return None
+    verwalter = zwischen.setdefault("verlaengern", {})
+    if e.ordner_id not in verwalter:
+        verwalter[e.ordner_id] = rechte.verwalter_von(e.ordner_id)
+    namen = [(v["name"] or "").strip() for v in verwalter[e.ordner_id] if v["id"] != u["id"]][:3]
+    return replace(e, daten=dict(e.daten, verlaengern=namen), rueckfall="", inhaber=True)
+
+
 # --- Planen ------------------------------------------------------------------------------------------------------
 
 def _log(eintraege):
@@ -442,8 +463,24 @@ def _offen(e, ref, log):
     return (e.art, e.kennung, e.stufe, e.faellig_am, ref) not in log
 
 
+def _einreihen(post, u, e):
+    """e in die Mail an die Adresse von u (post: Adresse in casefold → Mail) – je Konto seine Einträge fürs Log, in der
+    Mail jeder Eintrag einmal."""
+    adr = u["email"].strip()
+    m = post.get(adr.casefold())
+    if m is None:
+        m = post[adr.casefold()] = Mail(konten=[], adresse=adr, name=(u["name"] or "").strip(), eintraege=[])
+    if u["id"] not in m.je_konto:
+        m.konten.append(u)
+        m.je_konto[u["id"]] = []
+    m.je_konto[u["id"]].append(e)
+    if all(x.schluessel != e.schluessel for x in m.eintraege):
+        m.eintraege.append(e)
+
+
 def planen(stichtag, demo=False):
     """Wer heute (am Stichtag) welche Mail bekäme: Kandidaten, Empfänger, Rechteschnitt, Abgleich mit dem Log, Texte.
+    Eine ablaufende Freigabe geht an die Verwalter des Ankers und zusätzlich an ihren Inhaber (inhaber_eintrag).
     Schreibt nichts – auch keinen Kontoverweis. Fehlerhafte Datenzeilen werden übersprungen und gezählt.
     demo: DEMO-Artikel, DEMO-Freigaben und DEMO-Konten zählen wie echte – NUR für die Ansicht (probelauf, remind
     --trocken --demo). Der Plan heißt dann nur_ansicht, Mails mit DEMO tragen demo; verschicken lehnt beides ab."""
@@ -455,6 +492,7 @@ def planen(stichtag, demo=False):
     eintraege = artikel + freigaben
     log = _log(eintraege)
     zwischen = {"stichtag": stichtag, "demo": demo}
+    inhaber = _konten(e.daten["inhaber"] for e in freigaben)
     post, ohne = {}, []                              # Adresse (casefold) → Mail
     for e in eintraege:
         konten, e.rueckfall = empfaenger(e, zwischen)
@@ -464,20 +502,16 @@ def planen(stichtag, demo=False):
             if not s.darf("lesen" if e.art == "artikel" else "verwalten", e.ordner_id):
                 continue
             erreicht = True
-            if not _offen(e, u.get("mat_ref"), log):
-                continue
-            adr = u["email"].strip()
-            m = post.get(adr.casefold())
-            if m is None:
-                m = post[adr.casefold()] = Mail(konten=[], adresse=adr, name=(u["name"] or "").strip(), eintraege=[])
-            if u["id"] not in m.je_konto:
-                m.konten.append(u)
-                m.je_konto[u["id"]] = []
-            m.je_konto[u["id"]].append(e)
-            if all(x.schluessel != e.schluessel for x in m.eintraege):
-                m.eintraege.append(e)
+            if _offen(e, u.get("mat_ref"), log):
+                _einreihen(post, u, e)
         if not erreicht:
             ohne.append(e)
+        if e.art == "freigabe":
+            # Der Inhaber zusätzlich – mit eigenem Vermerk (sein Kontoverweis), also einmal je Freigabe und Enddatum.
+            u = inhaber.get(e.daten["inhaber"])
+            eigen = inhaber_eintrag(e, u, zwischen)
+            if eigen and _offen(eigen, u.get("mat_ref"), log):
+                _einreihen(post, u, eigen)
     mails = sorted(post.values(), key=lambda m: (m.name.casefold(), m.adresse.casefold()))
     for m in mails:
         m.demo = _mit_demo(m)
@@ -530,8 +564,13 @@ def _angabe(e, stichtag):
 
 
 def _betreff(eintraege, stichtag):
+    """„strömis.de – Material: 2 überfällig, 1 Freigabe läuft ab“; eigene Freigaben vorn: „Deine Freigabe läuft ab“
+    bzw. „…, außerdem 2 überfällig“. Eine eigene zählt nur dort (wie im Text)."""
     zahl = {}
+    deine = {e.kennung for e in eintraege if e.inhaber}
     for e in eintraege:
+        if e.art == "freigabe" and e.kennung in deine:
+            continue
         k = _klasse(e, stichtag)[1]
         zahl[k] = zahl.get(k, 0) + 1
     teile = []
@@ -545,16 +584,36 @@ def _betreff(eintraege, stichtag):
     if zahl.get("freigabe"):
         n = zahl["freigabe"]
         teile.append("1 Freigabe läuft ab" if n == 1 else f"{n} Freigaben laufen ab")
+    n = len(deine)
+    vorn = "" if not n else "Deine Freigabe läuft ab" if n == 1 else f"{n} deiner Freigaben laufen ab"
+    inhalt = f"{vorn}, außerdem {', '.join(teile)}" if vorn and teile else vorn or ", ".join(teile)
     site = current_app.config.get("SITE_NAME") or "strömis.de"
     # Ein Betreff ist eine Zeile – auch U+2028/U+0085 aus Namen fliegen raus (wie beim Rückruf).
-    return " ".join(f"{site} – Material: {', '.join(teile)}".split())
+    return " ".join(f"{site} – Material: {inhalt}".split())
+
+
+def _namen(liste):
+    """„A“, „A oder B“, „A, B oder C“ – wie „Verlängern kann:“ unter „Meine Freigaben“ (freigaben.js)."""
+    return liste[0] if len(liste) == 1 else f"{', '.join(liste[:-1])} oder {liste[-1]}"
+
+
+def zahlen(mail):
+    """(Artikel, Freigaben als Verwalter, eigene Freigaben) einer Mail – für Probelauf und Kommandozeile. Eine Freigabe
+    im Abschnitt „Deine Freigaben“ zählt nur dort."""
+    deine = {e.kennung for e in mail.eintraege if e.inhaber}
+    return (len({e.kennung for e in mail.eintraege if e.art == "artikel"}),
+            len({e.kennung for e in mail.eintraege if e.art == "freigabe"} - deine), len(deine))
 
 
 def mailtext(mail, stichtag, pfade=None):
     """Betreff und Text einer Mail: je Ordner (Heimat bzw. Anker) eine Gruppe mit Pfad, Zahl und Link – immer, auch wenn
     ihre Zeilen gekürzt sind. Über die ganze Mail höchstens MAIL_ARTIKEL_MAX Artikel- und MAIL_FREIGABEN_MAX
     Freigabezeilen, vergeben nach Dringlichkeit; der Rest einer Gruppe steht als „… und n weitere in diesem Ordner“.
-    Gemeldet (und vermerkt) ist alles, was die Mail nennt – auch die gezählten weiteren."""
+    Gemeldet (und vermerkt) ist alles, was die Mail nennt – auch die gezählten weiteren. Eigene Freigaben (Inhaber,
+    Entscheidung vom 19.10.2026) stehen vorn im Abschnitt „Deine Freigaben“: je Anker Recht, Ende, offene Prüfungen und
+    wer verlängern kann – ohne Obergrenze (es sind die eigenen) und ohne Link in den Ordner, dafür mit dem Link auf die
+    Übersicht („Meine Freigaben“). Eine Freigabe, die dort steht, fehlt unter den Freigaben der Verwalter (zwei Konten
+    mit derselben Adresse)."""
     basis = (current_app.config.get("BASE_URL") or "").rstrip("/")
     pfade = pfade if pfade is not None else {}
 
@@ -575,9 +634,11 @@ def mailtext(mail, stichtag, pfade=None):
         z["eintraege"].sort(key=lambda e: (_klasse(e, stichtag)[0], e.faellig_am))
         erste = z["eintraege"][0]
         z["rang"] = (_klasse(erste, stichtag)[0], erste.faellig_am, z["daten"]["inventory_no"])
+    deine = [e for e in mail.eintraege if e.inhaber]
     zeilen_f = {e.kennung: {"ordner": e.ordner_id, "eintraege": [e], "daten": e.daten, "rueckfall": e.rueckfall,
                             "rang": (e.faellig_am, e.daten["name"].casefold(), e.kennung)}
-                for e in mail.eintraege if e.art == "freigabe"}
+                for e in mail.eintraege if e.art == "freigabe" and not e.inhaber
+                and all(x.kennung != e.kennung for x in deine)}
 
     def gezeigt(zeilen, grenze):
         return {k for k, _ in sorted(zeilen.items(), key=lambda x: x[1]["rang"])[:grenze]}
@@ -604,11 +665,38 @@ def mailtext(mail, stichtag, pfade=None):
         return text, rf
 
     demo = _mit_demo(mail)
+    nur_deine = bool(deine) and not zeilen_a and not zeilen_f
     teile = ["DEMO – geht nie hinaus. Diese Mail zeigt nur der Probelauf mit DEMO-Bestand.", ""] if demo else []
-    teile += [f"Hallo {mail.name},", "",
-              f"hier steht nur, was seit der letzten Erinnerung neu fällig ist oder eine neue Stufe erreicht hat "
-              f"(Stand {stichtag.strftime('%d.%m.%Y')}) – was schon gemeldet wurde, kommt nicht noch einmal. "
-              f"Alles Fällige: {basis}/material/pruefungen"]
+    teile += [f"Hallo {mail.name},", ""]
+    if nur_deine:
+        teile.append(f"hier steht, welche deiner Freigaben im Modul Material bald ablaufen (Stand "
+                     f"{stichtag.strftime('%d.%m.%Y')}) und wer sie verlängern kann.")
+    else:
+        teile.append(f"hier steht nur, was seit der letzten Erinnerung neu fällig ist oder eine neue Stufe erreicht "
+                     f"hat (Stand {stichtag.strftime('%d.%m.%Y')}) – was schon gemeldet wurde, kommt nicht noch "
+                     f"einmal. Alles Fällige: {basis}/material/pruefungen")
+    if deine:
+        teile += ["", "DEINE FREIGABEN, DIE BALD ABLAUFEN"]
+        je_anker = {}
+        for e in deine:
+            je_anker.setdefault(e.ordner_id, []).append(e)
+        for fid, liste in sorted(je_anker.items(), key=lambda x: (pfad(x[0]).casefold(), x[0])):
+            teile += ["", pfad(fid)]
+            for e in sorted(liste, key=lambda e: (e.faellig_am, e.kennung)):
+                d = e.daten
+                zeile = f"  {RECHT_TEXT.get(d['recht'], d['recht'])} bis {_datum(d['bis'])} ({_in_tagen(d['tage'])})"
+                if d.get("offen"):
+                    zeile += f" · {d['offen']} offene Prüfung{'' if d['offen'] == 1 else 'en'}"
+                if e.demo:
+                    zeile += " · DEMO"
+                teile.append(zeile)
+            namen = liste[0].daten.get("verlaengern") or []
+            teile.append(f"  Verlängern kann: {_namen(namen) if namen else 'die Material-Verwaltung'}.")
+        teile.append("")
+        if any(e.daten.get("offen") for e in deine):
+            teile.append("Offene Prüfungen schließt du am besten vor dem Ablauf ab – danach kannst du sie nicht mehr "
+                         "fortsetzen.")
+        teile.append(f"Deine Freigaben im Überblick („Meine Freigaben“): {basis}/material")
     if zeilen_a:
         teile += ["", "ARTIKEL"]
         for fid, liste in gruppen(zeilen_a):
@@ -661,11 +749,15 @@ def mailtext(mail, stichtag, pfade=None):
         if gruende:
             saetze.append(f"Gruppen mit {' oder '.join(f'„{RUECKFALL_GRUND[g]}“' for g in gruende)} bekommst du, weil "
                           f"du zur {RUECKFALL_TEXT[stelle]} gehörst.")
-    # Der Schalter am Ordner hält nur Artikel an – ablaufende Freigaben melden sich weiter (Entwurf 2.4 b).
+    if deine:
+        saetze.append("Du bekommst diese Mail, weil es deine eigenen Freigaben sind – einmal je Freigabe und Enddatum."
+                      if nur_deine else "„Deine Freigaben“ bekommst du, weil es deine eigenen sind.")
+    # Der Schalter am Ordner hält nur Artikel an – ablaufende Freigaben melden sich weiter (Entwurf 2.4 b), auch die
+    # eigenen. Eine Mail nur mit eigenen Freigaben sagt dazu nichts: Den Schalter bedienen Verwalter.
     if zeilen_a:
         saetze.append("Für einen Ordner abschalten: Ordner → Bearbeiten → „Erinnerungsmails aus“."
-                      + (" Ablaufende Freigaben melden sich weiter." if zeilen_f else ""))
-    else:
+                      + (" Ablaufende Freigaben melden sich weiter." if zeilen_f or deine else ""))
+    elif zeilen_f:
         saetze.append("Ablaufende Freigaben melden sich immer – auch in Ordnern mit „Erinnerungsmails aus“.")
     fuss = " ".join(saetze)
     teile += ["", fuss]
@@ -944,7 +1036,8 @@ def probelauf(stichtag=None, demo=False):
     """planen() für die Oberfläche: wer bei welchem Lauf welche Mail bekäme – mit Namen und Gliederung statt Adresse,
     Betreff und Text, ohne Empfänger und Ausgelassenes mit Pfaden. Ohne Stichtag der nächste echte Lauf
     (naechster_stichtag). Schreibt nichts: kein Log, kein Journal, keine Meta-Daten, keinen Kontoverweis. demo: den
-    DEMO-Bestand einbeziehen (nur Ansicht, siehe planen) – Mails mit DEMO tragen demo: true."""
+    DEMO-Bestand einbeziehen (nur Ansicht, siehe planen) – Mails mit DEMO tragen demo: true. Je Mail die Zahl der
+    Artikel, der Freigaben als Verwalter und der eigenen Freigaben (eigene, Abschnitt „Deine Freigaben“)."""
     heute = dienste.heute()
     if stichtag is None:
         stichtag, morgen = naechster_stichtag()
@@ -956,9 +1049,9 @@ def probelauf(stichtag=None, demo=False):
             "versand": bool(current_app.config.get("MATERIAL_ERINNERUNGEN")), "gesperrt": gesperrt(), "smtp": smtp_da(),
             "letzter": {k: letzter.get(k) for k in ("tag", "beginn", "mails", "fehlgeschlagen", "fehlgeschlagen_an",
                                                     "fehler")} if letzter else None,
-            "mails": [{"name": m.name, "gliederung": (m.konten[0].get("gliederung") or "").strip(), "betreff": m.betreff,
-                       "text": m.text, "artikel": len({e.kennung for e in m.eintraege if e.art == "artikel"}),
-                       "freigaben": len({e.kennung for e in m.eintraege if e.art == "freigabe"}), "demo": m.demo}
+            "mails": [dict(zip(("artikel", "freigaben", "eigene"), zahlen(m)), name=m.name,
+                           gliederung=(m.konten[0].get("gliederung") or "").strip(), betreff=m.betreff, text=m.text,
+                           demo=m.demo)
                       for m in plan.mails],
             "ohne_empfaenger": _ohne_empfaenger(plan), "ausgelassen": plan.ausgelassen, "fehlerhaft": plan.fehlerhaft}
 

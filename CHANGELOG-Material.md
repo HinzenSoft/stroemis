@@ -2164,15 +2164,17 @@ Schemaversion 11, keine neuen Abhängigkeiten. Der Versand ist in der Vorgabe **
   Gruppe an die Material-Verwaltung, ohne sie an die Plattform-Verwaltung, gekennzeichnet mit „kein Materialwart
   eingetragen“ und dem Link „Materialwart vergeben“ – bei einer Freigabe, an deren Anker nur ihr Inhaber selbst
   verwaltet, mit „nur der Inhaber selbst verwaltet hier“ und nur „Verlängern“. Nur aktive Konten mit Namen, Modulzugang und Adresse, nie
-  DEMO-Konten (Adresse `….invalid`). Jeder bekommt nur, was er sieht. Zugeordnete Personen, Prüfer und der Inhaber
-  einer ablaufenden Freigabe bekommen nichts. Bei einer Freigabe werden die offenen Prüfungen des Inhabers im Zweig
-  genannt – bei befristetem lesen oder verwalten die, deren dauerhafte Prüffreigabe an diesem Grundrecht hängt.
+  DEMO-Konten (Adresse `….invalid`). Jeder bekommt nur, was er sieht. Zugeordnete Personen und Prüfer bekommen nichts.
+  Der Inhaber einer ablaufenden Freigabe bekommt sie zusätzlich selbst, im Abschnitt „Deine Freigaben“ mit den Namen
+  derer, die verlängern können (Entscheidung vom 19.10.2026, siehe unten). Bei einer Freigabe werden die offenen
+  Prüfungen des Inhabers im Zweig genannt – bei befristetem lesen oder verwalten die, deren dauerhafte Prüffreigabe an
+  diesem Grundrecht hängt.
 - **Mail**: eine je Empfänger und Tag, Artikel und Freigaben zusammen, gruppiert nach Ordnerpfad, in der Gruppe nach
   Dringlichkeit. Jede Gruppe steht mit Pfad, Zahl und Link zum Ordner da (Links aus `BASE_URL`). Höchstens 100
   Artikel- und 50 Freigabezeilen je Mail, der Rest einer Gruppe als „… und n weitere in diesem Ordner“. Die Einleitung
   sagt in einem Satz, dass nur Neues drinsteht, mit dem Link auf alles Fällige. Die Fußzeile nennt den Weg zum
-  Abschalten, wenn die Mail Artikel nennt; eine Mail nur mit Freigaben sagt, dass die sich immer melden. Keine
-  Adressen anderer Personen.
+  Abschalten, wenn die Mail Artikel nennt; eine Mail nur mit Freigaben sagt, dass die sich immer melden (eine Mail nur
+  mit eigenen Freigaben sagt dazu nichts). Keine Adressen anderer Personen.
 - **Erinnerungslog** `mat_reminder_log`: Ziel (Artikel oder Freigabe), Stufe, Datum, pseudonymer Kontoverweis
   (`users.mat_ref`, nie die Adresse) und Zeitpunkt. Eine Zeile entsteht nur, wenn der Mailserver die Mail angenommen
   hat; was scheitert, kommt am nächsten Morgen wieder. Das Log ist **kein Prüfnachweis**: 13 Monate, beim Löschen des
@@ -2286,7 +2288,8 @@ Die Vorgaben des Auftrags, so gebaut (zur Bestätigung unter „Zu prüfen“):
     protokolliert nichts.
 11. **Ablaufmail für Freigaben**: nur befristete, einmal je Freigabe und Enddatum 30 Tage vorher (nach Verlängern neu),
     an die Verwalter des Ankers ohne den Inhaber (ohne Verwalter: Material- bzw. Plattform-Verwaltung); offene
-    Prüfungen des Inhabers im Zweig werden genannt.
+    Prüfungen des Inhabers im Zweig werden genannt. **Geändert am 19.10.2026:** Der Inhaber bekommt sie zusätzlich
+    selbst (siehe „Entscheidungen vom 19.10.2026“).
 
 ### Abweichungen vom Konzept, mit Begründung
 
@@ -2350,13 +2353,18 @@ Die neuen Routen stehen in der Tabelle „Schnittstelle“ unten (Zeilen mit „
   `ausgelassen.demo_freigaben` (ausgelassene DEMO-Freigaben neben `ausgelassen.demo`, den DEMO-Artikeln); mit `demo=1`
   sind beide Zahlen 0. Rechte unverändert (Material- und Plattform-Verwaltung). `remind --trocken --demo` zeigt
   dasselbe mit Adressen; `--demo` ohne `--trocken` → Exit 2. Der Laufstand (`/start`) bleibt, wie er war.
+- `GET /api/material/erinnerungen/probelauf` (Entscheidungen vom 19.10.2026): neu `mails[].eigene` – wie viele eigene
+  ablaufende Freigaben die Mail dem Empfänger nennt (Abschnitt „Deine Freigaben“); `mails[].freigaben` zählt nur noch
+  die Freigaben, die er als Verwalter bekommt. Der Laufstand zählt die Mails an Inhaber unter `mails` mit.
 
 ### Verfahrensverzeichnis (Ergänzung)
 
 Zweck „Erinnerung an Prüffristen und ablaufende Freigaben“. Empfänger: Verwalter des Ordners (auch Material- oder
 Plattform-Verwaltung, wenn dort eingetragen); ohne Verwalter die Material-Verwaltung, ohne sie die
-Plattform-Verwaltung. Inhalt: Artikel und Freigaben, die der Empfänger in der Anwendung ohnehin sieht, bei Freigaben
-der Name des Inhabers, nie eine Adresse. Erinnerungslog: Artikel bzw. Freigabe, Stufe, Datum, pseudonymer
+Plattform-Verwaltung; bei einer ablaufenden Freigabe zusätzlich ihr Inhaber, nur mit seiner eigenen (seit dem
+19.10.2026). Inhalt: Artikel und Freigaben, die der Empfänger in der Anwendung ohnehin sieht, bei Freigaben der Name
+des Inhabers, dem Inhaber die Namen von bis zu drei Verwaltern des Ankers (wie unter „Meine Freigaben“), nie eine
+Adresse. Erinnerungslog: Artikel bzw. Freigabe, Stufe, Datum, pseudonymer
 Kontoverweis, Zeitpunkt – 13 Monate (täglich und bei jedem Start durchgesetzt), Zeilen eines gelöschten Kontos
 sofort. Der Laufstand hält nur Zahlen und die Kontoverweise der Fehlschläge des letzten Laufs.
 
@@ -2427,19 +2435,104 @@ Code mit Test, die übrigen in der Dokumentation. Danach lief die ganze Suite gr
 | 6 | Bei eingeschaltetem Versand ohne `SMTP_HOST` sagte der Probelauf „Heute ab 6 Uhr gingen hinaus:“ ohne Einschränkung – tatsächlich geht nichts hinaus | niedrig | Der Probelauf liefert `smtp`; der Dialog zeigt dann gelb „Kein Mailserver eingerichtet – so gingen sie hinaus, wenn einer eingerichtet wäre.“ (wie bei aus und gesperrt). Test `test_routen`; im Browser als Material-Verwaltung bei 1280 und 360 px nachgesehen |
 | 7 | README nannte für Rückgabewert 2 nur „Versand aus, gesperrt oder kein Mailserver“ – `remind` gibt 2 auch bei `--stichtag` ohne `--trocken` und bei einem unlesbaren Datum | niedrig | README und Docstring von `remind`: „… oder falscher Aufruf (`--stichtag` ohne `--trocken`, unlesbares Datum)“; ebenso „Neu“ und „Zu prüfen“ Nr. 16 |
 
+### Entscheidungen vom 19.10.2026
+
+Der Betreiber hat am 19.10.2026 sieben Punkte aus „Zu prüfen“ entschieden – sechs bestätigt, einer geändert.
+
+**Bestätigt** (bleibt, wie gebaut):
+
+- Nr. 3 – **Der erste Lauf schickt den Rückstand**: alles, was schon in einem Fenster liegt, einmal; kein „stiller
+  Start“.
+- Nr. 4 – **Überfällig einmal je Fälligkeitsdatum**, keine Wiederholung.
+- Nr. 11 – **„Erinnerungsmails aus“ hält Freigabe-Ablaufmails nicht an** – das gilt auch für die neue Mail an den
+  Inhaber (unten).
+- Nr. 14 – **Nachtrag „Freigabe abgelaufen“ beim ersten Lauf** (heutiges Datum, echtes Enddatum), auch bei
+  ausgeschaltetem Versand.
+- Nr. 15 – **DEMO-Konten erkennt man an der Adresse `….invalid`.**
+- Nr. 18 – **Einmaligkeit mit einer Lücke**: Endet ein Prozess zwischen der Annahme einer Mail und ihrem Vermerk, kommt
+  diese eine Mail am nächsten Morgen noch einmal (erst senden, dann vermerken).
+
+**Geändert – Nr. 13, Ablaufmail und Inhaber.** Gebaut war: an die Verwalter des Ankers ohne den Inhaber; ist er der
+einzige Verwalter, an die Material-Verwaltung. **Entscheidung:** „beide sollen eine Mail bekommen“. **Umgesetzt**
+(`services/erinnerung.py`, `cli.py`, `static/material.js`):
+
+- Der **Inhaber** einer befristeten Freigabe, die in höchstens 30 Tagen endet, bekommt sie **zusätzlich** zu den
+  Verwaltern – in seiner täglichen Sammelmail im eigenen Abschnitt **„DEINE FREIGABEN, DIE BALD ABLAUFEN“**, vor
+  Artikeln und Freigaben, die er als Verwalter bekommt. Je Anker steht der Ordnerpfad da, darunter je Freigabe Recht
+  und Ende („lesen bis 22.11.2026 (in 20 Tagen)“), seine offenen Prüfungen im Zweig (dieselbe Zählung wie für die
+  Verwalter, auch bei befristetem lesen oder verwalten mit daran hängender dauerhafter Prüffreigabe) und „Verlängern
+  kann: Max Muster, wart oder Wilma Wartin.“ – bis zu drei Verwalter des Ankers mit Namen, genau wie unter „Meine
+  Freigaben“ (`rechte.verwalter_von` ohne ihn selbst), ohne sie „die Material-Verwaltung“. Hat er dort offene
+  Prüfungen, folgt „Offene Prüfungen schließt du am besten vor dem Ablauf ab – danach kannst du sie nicht mehr
+  fortsetzen.“ Der einzige Link führt auf die Übersicht mit „Meine Freigaben“ (`/material`), die jeder mit
+  Modulzugang öffnet – keiner in den Ordner, der nach dem Ablauf ins Leere führte. Er erfährt nichts, was „Meine
+  Freigaben“ ihm nicht ohnehin zeigt: keine Adressen, keine Notiz, keine fremden Freigaben. Der Abschnitt hat keine
+  Obergrenze (100/50 gelten weiter für Artikel und Freigaben der Verwalter) – es sind nur die eigenen.
+- **Betreff und Text**: „strömis.de – Material: Deine Freigabe läuft ab“ (bei mehreren „2 deiner Freigaben laufen
+  ab“), mit weiterem Inhalt „Deine Freigabe läuft ab, außerdem 1 in 7 Tagen fällig, 1 Freigabe läuft ab“. Eine Mail
+  nur für den Inhaber beginnt mit „hier steht, welche deiner Freigaben im Modul Material bald ablaufen (Stand …) und
+  wer sie verlängern kann.“ und endet mit „Du bekommst diese Mail, weil es deine eigenen Freigaben sind – einmal je
+  Freigabe und Enddatum.“ – ohne Satz zu „Erinnerungsmails aus“, den Schalter bedienen Verwalter. In einer gemischten
+  Mail sagt die Fußzeile zusätzlich „„Deine Freigaben“ bekommst du, weil es deine eigenen sind.“ (und „Ablaufende
+  Freigaben melden sich weiter.“, wenn sie Artikel nennt).
+- **Die Verwalter wie bisher**: Sie bekommen die Freigabe weiter, ohne den Inhaber; ist er der einzige Verwalter, die
+  Material-Verwaltung (ohne sie die Plattform-Verwaltung) mit „nur der Inhaber selbst verwaltet hier“ und
+  „Verlängern“ – jetzt bekommen **beide** eine Mail. Im Code geprüft: Wer nicht Material-Verwaltung ist, kann die
+  eigene Freigabe nur verkürzen, herabsetzen oder entziehen (`freigaben._regeln`, Regel 1.6 Nr. 5: „Deine eigene
+  Freigabe kannst du nur verkürzen, herabsetzen oder entziehen.“) – der Rückfall bleibt also nötig. Die
+  Material-Verwaltung ist von dieser Regel ausgenommen (Nr. 1) und könnte die eigene verlängern – siehe „Zu prüfen“
+  Nr. 20.
+- **Nur einmal**: Als Verwalter bekommt der Inhaber die eigene Freigabe nie (er ist bei den Verwaltern ausgenommen wie
+  bisher). Verwaltet er den Anker mit – etwa mit einer eigenen befristeten verwalten-Freigabe dort –, steht seine
+  Freigabe in seiner Mail einmal, unter „Deine Freigaben“; die übrigen Freigaben des Ankers bekommt er als Verwalter.
+  Haben zwei Konten dieselbe Adresse (nur Groß/klein verschieden), steht eine Freigabe unter „Deine Freigaben“ nicht
+  noch einmal bei den Verwaltern und zählt im Betreff nur dort.
+- **Dieselben Regeln wie für jeden Empfänger**: nur befristete Freigaben, die heute wirken; nur aktive Konten mit
+  Namen, Modulzugang und Adresse; nie DEMO-Konten (`….invalid`) und nie Freigaben an DEMO-Ordnern – außer im Probelauf
+  mit DEMO, dort gekennzeichnet. „Erinnerungsmails aus“ am Ordner hält auch diese Mail nicht an.
+- **Einmal je Freigabe und Enddatum je Empfänger**: Der Inhaber bekommt einen eigenen Vermerk im Log (sein
+  Kontoverweis, Stufe `freigabe_ablauf`, UNIQUE wie bisher – keine Schemaänderung). Nach „Verlängern“ meldet sich die
+  Freigabe 30 Tage vor dem neuen Ende wieder, auch bei ihm. Seine Zeilen verschwinden wie alle: mit dem Konto, mit der
+  Freigabe, nach 13 Monaten. Scheitert seine Mail, kommt sie am nächsten Morgen wieder.
+- **Probelauf** (Dialog und `remind --trocken`, auch mit DEMO-Bestand) zeigt die Mails der Inhaber. Die Zeile je
+  Mail nennt die eigenen Freigaben getrennt: „Erika Extern – 1 eigene Freigabe“, „Wilma Wartin – 1 Artikel, 1
+  Freigabe, 1 eigene Freigabe“; eine Mail ohne eigene bleibt bei „n Artikel, m Freigaben“. `remind --trocken`:
+  „An: Erika Extern <…> (0 Artikel, 0 Freigaben, 1 eigene Freigabe)“. Neues Feld `mails[].eigene` (siehe
+  „Schnittstelle“); `mails[].freigaben` zählt nur noch die Freigaben, die er als Verwalter bekommt. Im Laufstand zählt
+  `mails` die Mails an Inhaber mit, `freigaben` jede gemeldete Freigabe weiter einmal.
+- Dazu: README (Empfänger), Hilfetext der Einstellung „Erinnerungsmails verschicken“ („wessen Freigabe abläuft,
+  bekommt sie auch selbst“), „Neu“, Entscheidung 11 und Verfahrensverzeichnis oben, Kopf von `erinnerung.py`.
+- **Tests**: `test_inhaber` (neu) – der Inhaber bekommt die Mail (ganzer Text), mit denselben Verwaltern, demselben
+  Pfad und Ende wie unter „Meine Freigaben“; Probelauf mit `eigene` und `remind --trocken`; die Inhaberin, die den
+  Anker mitverwaltet, bekommt ihre eigene einmal (unter „Deine Freigaben“) und die übrigen als Verwalterin, mit
+  gemischtem Betreff; eigener Vermerk je Freigabe und Enddatum; am nächsten Tag nichts, nach Verlängern erneut; ein
+  DEMO-Inhaber nie (im Probelauf mit DEMO gekennzeichnet), ein Inhaber ohne Adresse nie; „Erinnerungsmails aus“ am
+  Anker hält nicht an; zwei Konten mit derselben Adresse; die Zeile im Dialog (statisch). Angepasst:
+  `test_freigabe_ablauf` (Inhaber und Verwalter; einziger Verwalter → Inhaber und Material-Verwaltung; nach
+  Verlängern beide), `test_ordner_aus`, `test_demo_probelauf` (Inhaber einer DEMO-Freigabe nur in der Ansicht),
+  `test_gescheitert`, `test_kontoloeschen` (die Zeile des Inhabers geht mit Konto und Freigabe), `test_nachholen`.
+- **Im Browser geprüft** (Chromium, lokaler Server ohne `SMTP_HOST`, Bestand ohne DEMO mit Platzhaltern: OG
+  Musterstadt mit Lager, Materialwart „wart“ und „Max Muster“, Erika Extern mit befristetem lesen am Lager, Wilma
+  Wartin mit befristetem verwalten am Lager, ein Artikel in 5 Tagen fällig), als Material-Verwaltung bei 1280 und
+  360 px: Probelauf mit „Erika Extern – 1 eigene Freigabe“ und „Wilma Wartin – 1 Artikel, 1 Freigabe, 1 eigene
+  Freigabe“, aufgeklappt Betreff und Text wie oben; als Erika bei 360 px nennt „Meine Freigaben“ dieselben Namen
+  („Verlängern kann: Max Muster, wart oder Wilma Wartin.“). Keine Konsolenfehler, kein waagerechter Bildlauf.
+
 ### Zu prüfen
 
-**Bitte bestätigen** (Vorgaben 1–11 oben sind gebaut wie formuliert; dazu die Folgen, die beim Bau festgelegt wurden):
+**Bitte bestätigen** (Vorgaben 1–11 oben sind gebaut wie formuliert; dazu die Folgen, die beim Bau festgelegt wurden).
+Am 19.10.2026 entschieden: Nr. 3, 4, 11, 14, 15 und 18 bestätigt, Nr. 13 geändert (siehe „Entscheidungen vom
+19.10.2026“); Nr. 20 und 21 sind danach dazugekommen.
 
 1. **Schalter in der Vorgabe aus**, eingeschaltet wird in der Produktion **im Browser** (nicht in der `.env`, weil
    dev sie kopiert). Danach kommen die ersten Mails binnen 15 Minuten, dann jeden Morgen ab 6 Uhr.
 2. **Ab 6:00 Uhr deutscher Zeit**, fest, einmal am Tag; ausgefallene Tage holt der nächste Lauf mit der höchsten
    erreichten Stufe nach.
-3. **Der erste Lauf nach dem Einschalten schickt den Rückstand**: jeden schon überfälligen Artikel einmal, alles im
+3. **Der erste Lauf nach dem Einschalten schickt den Rückstand – bestätigt am 19.10.2026**: jeden schon überfälligen Artikel einmal, alles im
    7- und 30-Tage-Fenster und alles, was in 90 Tagen das Lebensende erreicht – höchstens 100 Zeilen je Mail, der Rest
    einer Gruppe als „… und n weitere“, gilt ebenfalls als gemahnt. Einen „stillen Start“, der den Bestand nur
    vermerkt, gibt es nicht.
-4. **Überfällig nur einmal je Fälligkeitsdatum**; erneut frühestens nach 13 Monaten, wenn die Log-Zeile verfallen ist.
+4. **Überfällig nur einmal je Fälligkeitsdatum – bestätigt am 19.10.2026**; erneut frühestens nach 13 Monaten, wenn die Log-Zeile verfallen ist.
 5. **Stufen 30/7 fest, Lebensende 90 Tage, Freigaben 30 Tage.** Weitere Stufen bräuchten einen Neuaufbau der Tabelle.
 6. **Artikel ohne Fälligkeitsdatum bekommen keine Mail**; „neu“ wird nach dem Datum gemahnt, mit „Eingangsprüfung
    offen“.
@@ -2451,26 +2544,38 @@ Code mit Test, die übrigen in der Dokumentation. Danach lief die ganze Suite gr
 9. **Kein Link je Artikel**, ein Link je Ordner – die Mail bleibt lesbar. Die Stufenregeln stehen in der Hilfe der
    Einstellung, nicht in der Mail.
 10. **Bei eingeschaltetem Versand ohne `SMTP_HOST`** wird nichts versucht (Hinweis auf der Übersicht).
-11. **„Erinnerungsmails aus“ hält Freigabe-Ablaufmails nicht an** – Freigaben sind Rechte, keine Prüffristen.
+11. **„Erinnerungsmails aus“ hält Freigabe-Ablaufmails nicht an – bestätigt am 19.10.2026** – Freigaben sind Rechte,
+    keine Prüffristen; das gilt auch für die Mail an den Inhaber.
 12. **Laufstand unten als Textlink**, Handlungsbedarf oben gelb; der Probelauf zeigt nach dem Morgenlauf den Lauf von
     morgen.
-13. **Ablaufmail ohne den Inhaber**, der die eigene Freigabe nicht verlängern kann; ist er der einzige Verwalter, geht
+13. **Geändert am 19.10.2026 – der Inhaber bekommt jetzt auch eine Mail**, im Abschnitt „Deine Freigaben“, die
+    Verwalter wie bisher (siehe „Entscheidungen vom 19.10.2026“). Gebaut war: **Ablaufmail ohne den Inhaber**, der die
+    eigene Freigabe nicht verlängern kann; ist er der einzige Verwalter, geht
     sie an die Material-Verwaltung („nur der Inhaber selbst verwaltet hier“, mit „Verlängern“). Freigaben, die kürzer
     als 30 Tage laufen, melden sich am nächsten Morgen. Offene Prüfungen nennt die Mail auch beim Ablauf eines
     befristeten lesen oder verwalten, an dem eine dauerhafte Prüffreigabe hängt.
-14. **„Freigabe abgelaufen“**: Der erste Lauf trägt alle früher abgelaufenen Freigaben ins Journal nach (heutiges
+14. **„Freigabe abgelaufen“ – bestätigt am 19.10.2026**: Der erste Lauf trägt alle früher abgelaufenen Freigaben ins Journal nach (heutiges
     Datum, echtes Enddatum), auch bei ausgeschaltetem Versand.
-15. **DEMO-Konten erkennt man an der Adresse `….invalid`** – neu; die Skripte vergeben nur solche.
+15. **DEMO-Konten erkennt man an der Adresse `….invalid` – bestätigt am 19.10.2026** – neu; die Skripte vergeben nur solche.
 16. **Kommandozeile**: `--stichtag` nur mit `--trocken`, `--erneut` für einen zweiten Mailteil am selben Tag; Exit 1
     bei Fehlschlag oder Fehler, 2 bei aus, gesperrt, ohne Mailserver oder falschem Aufruf.
 17. **Sperre `MATERIAL_ERINNERUNGEN_SPERRE`** nur in der Umgebung; ohne Eintrag an, wenn `STROEMIS_NAME` auf `-dev`
     endet. Einen Notschalter nur für den Thread gibt es nicht.
-18. **Einmaligkeit mit einer Lücke**: Endet ein Prozess genau zwischen der Annahme einer Mail und ihrem Vermerk (etwa
+18. **Einmaligkeit mit einer Lücke – bestätigt am 19.10.2026**: Endet ein Prozess genau zwischen der Annahme einer Mail und ihrem Vermerk (etwa
     beim Deploy-Neustart kurz nach 6 Uhr), kommt diese eine Mail am nächsten Morgen noch einmal. Umgekehrt (erst
     vermerken, dann senden) ginge bei einem Abbruch eine Mahnung verloren – das schien schlechter.
 19. **DEMO im Probelauf nur zur Ansicht** (Nachtrag): Das Kästchen erscheint nur, wenn DEMO ausgelassen wurde. Mit
     Haken zählen auch DEMO-Konten als Empfänger und im Rückfall – eine DEMO-Material-Verwaltung bekommt dann auch die
     echten Gruppen „kein Materialwart eingetragen“ (gekennzeichnet). Der echte Lauf bleibt ohne DEMO.
+20. **Material-Verwaltung als Inhaberin** (zu Nr. 13): Läuft eine eigene befristete Freigabe eines Kontos mit Stufe
+    Verwaltung ab (für sie zählt praktisch nur eine Prüffreigabe), sagt ihre Mail wie „Meine Freigaben“ „Verlängern
+    kann: … / die Material-Verwaltung“ – tatsächlich kann sie die eigene selbst verlängern (Regel 1.6 Nr. 1). Die
+    übrige Material-Verwaltung bekommt die Freigabe trotzdem, wenn am Anker niemand sonst verwaltet. Belassen, damit
+    Mail und „Meine Freigaben“ dasselbe sagen.
+21. **Externe Prüfer bekommen jetzt Mails** (zu Nr. 13): Wer nur eine befristete Prüffreigabe hat, bekommt 30 Tage vor
+    ihrem Ende eine Mail – erstmals überhaupt eine Erinnerungsmail aus dem Modul. Die migrierten Prüffreigaben externer
+    Prüfer enden alle am 31.12.2027 (Phase 2 · Lieferung 1, „Zu prüfen“): Ohne Verlängern bekommt am 01.12.2027 jeder
+    von ihnen eine Mail mit allen seinen Ordnern, dazu die Materialwarte ihre.
 
 **Nach dem Deploy**:
 
@@ -2478,7 +2583,9 @@ Code mit Test, die übrigen in der Dokumentation. Danach lief die ganze Suite gr
   dieser Umgebung gesperrt“. „Probelauf ansehen“: ohne Haken nichts aus DEMO – DEMO wird absichtlich nie gemahnt;
   „Ausgelassen: n DEMO-Artikel; n DEMO-Freigaben“. Dann das Kästchen **„DEMO-Bestand einbeziehen (nur Ansicht)“**
   anhaken: Die Mails an die DEMO-Materialwarte und die DEMO-Material-Verwaltung erscheinen mit Marke „DEMO“ –
-  aufklappen und Betreff und Text ansehen. Hinaus gehen sie nie (auf dev sperrt ohnehin die Sperre). Gelb oben „Der
+  aufklappen und Betreff und Text ansehen; wer eine befristete DEMO-Freigabe hat, die in 30 Tagen endet, steht dort
+  mit „… eigene Freigabe“ (Abschnitt „Deine Freigaben“, Entscheidung vom 19.10.2026). Hinaus gehen sie nie (auf dev
+  sperrt ohnehin die Sperre). Gelb oben „Der
   tägliche Lauf … ist noch nie gelaufen“ verschwindet nach der ersten Runde (1–3 Minuten nach der ersten Anfrage, ab
   6 Uhr).
 - **In der Produktion nach dem Merge**: erst den Probelauf ansehen (oder `remind --trocken`), dann unter Verwaltung →
@@ -2795,7 +2902,7 @@ oder Plattform-Verwaltung).
 | `GET /api/admin/users/<id>/material-folgen` | Plattform-Verwaltung | was das Löschen des Kontos im Modul bewirkt: `freigaben`, `zuordnungen`, `entwuerfe`, `pruefungen` (Phase 2); dazu `letzter_materialwart` – die Gliederungen `[{id, name, pfad}]`, deren einziger Materialwart das Konto heute ist (Rückfrage beim Senken, Deaktivieren und Löschen; Entscheidung vom 18.10.2026) |
 | `GET /m/<token>` | Modulzugang | sichtbarer Artikel → Weiterleitung; sonst Seite „fremd“ ohne Artikeldaten mit dem Knopf für den Steckbrief (Phase 2) |
 | (Ordner, Artikel, Prüfung, Durchgang) | – | neu: `darf` (`lesen`, `grund`, `pruefen`, `verwalten`) für genau dieses Objekt; `artikel.zugeordnet` und `artikel.journal` nur mit Grundrecht (sonst `null`), Listenzeile `zugeordnet_name`; `durchgang` = `{id, titel, ordner, sichtbar}`; Baumknoten `nur_pfad` und `teilweise`; Durchgangszeilen ohne Leserecht `sichtbar: false`, ohne Kennung (Phase 2) |
-| `GET /api/material/erinnerungen/probelauf` | Material-Verwaltung (Plattform-Verwaltung eingeschlossen) | Probelauf der Erinnerungsmails für den nächsten Lauf (heute oder, wenn heute schon verschickt wurde, morgen): `stichtag`, `morgen`, `versand`, `gesperrt`, `smtp`, `letzter` (`tag`, `beginn`, `mails`, `fehlgeschlagen`, `fehlgeschlagen_an`, `fehler`), `mails` (`name`, `gliederung`, `betreff`, `text`, `artikel`, `freigaben` – keine Adressen), `ohne_empfaenger` (`ordner`, `artikel`, `freigaben`), `ausgelassen` (`ordner_aus`: `id`, `pfad`, `artikel`; `demo`, `demo_freigaben`), `fehlerhaft`, `demo`; `mails` je mit `demo`; `?demo=1` bezieht den DEMO-Bestand ein – nur Ansicht, DEMO-Mails gekennzeichnet, gehen nie hinaus; schreibt nichts (Phase 2 · 2) |
+| `GET /api/material/erinnerungen/probelauf` | Material-Verwaltung (Plattform-Verwaltung eingeschlossen) | Probelauf der Erinnerungsmails für den nächsten Lauf (heute oder, wenn heute schon verschickt wurde, morgen): `stichtag`, `morgen`, `versand`, `gesperrt`, `smtp`, `letzter` (`tag`, `beginn`, `mails`, `fehlgeschlagen`, `fehlgeschlagen_an`, `fehler`), `mails` (`name`, `gliederung`, `betreff`, `text`, `artikel`, `freigaben` als Verwalter, `eigene` – eigene ablaufende Freigaben, Abschnitt „Deine Freigaben“; keine Adressen), `ohne_empfaenger` (`ordner`, `artikel`, `freigaben`), `ausgelassen` (`ordner_aus`: `id`, `pfad`, `artikel`; `demo`, `demo_freigaben`), `fehlerhaft`, `demo`; `mails` je mit `demo`; `?demo=1` bezieht den DEMO-Bestand ein – nur Ansicht, DEMO-Mails gekennzeichnet, gehen nie hinaus; schreibt nichts (Phase 2 · 2) |
 | `GET /api/material/ordner/<id>` | lesen | neu: `ordner.reminders_off` (eigener Wert) und `ordner.erinnerungen` = `{aus, eigen, geerbt_von: {id, pfad, sichtbar} \| null}`; Ordnerbaum mit `reminders_off` (Phase 2 · 2) |
 | `PUT /api/material/ordner/<id>` mit `reminders_off` (ja/nein) | Materialwart am Ordner | „Erinnerungsmails aus“ für Ordner und Unterordner; fehlt das Feld, bleibt der Wert; anderes als ja/nein → 400; mit Journal (Phase 2 · 2) |
 | `flask --app "app:create_app()" material remind [--trocken [--demo]] [--stichtag JJJJ-MM-TT] [--erneut]` | Kommandozeile im Container | Erinnerungslauf: `--trocken` zeigt die Mails des nächsten Laufs mit Adressen und schreibt nichts (auch bei „aus“ oder gesperrt), `--stichtag` und `--demo` (DEMO-Bestand einbeziehen, nur Ansicht) nur mit `--trocken`; ohne `--trocken` ein echter Lauf für heute (nie DEMO), `--erneut` noch einmal am selben Tag (nur, was nicht im Log steht). Exit 0, 1 (Mail gescheitert, Fehler), 2 (aus, gesperrt, kein Mailserver, `--stichtag` oder `--demo` ohne `--trocken`, unlesbares Datum) (Phase 2 · 2) |

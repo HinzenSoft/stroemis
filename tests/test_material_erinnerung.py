@@ -2,8 +2,9 @@
 
 Ein Tageslauf ab 6 Uhr deutscher Zeit schickt den Verwaltern eines Ordners eine Sammelmail zu Fälligkeiten (30 und 7 Tage
 vorher, überfällig), zum Lebensende (90 Tage vorher) und zu Freigaben, die in 30 Tagen ablaufen – je Stufe einmal (Log
-mit Kontoverweis). Dazu der Pflegeteil (Journal „freigabe_abgelaufen“, Aufräumen), der Schalter je Ordner, Laufstand und
-Probelauf, die Kommandozeile „flask material remind“ und der Thread. Echte Mails gehen nie hinaus: erinnerung.send_mail
+mit Kontoverweis); eine ablaufende Freigabe auch ihrem Inhaber selbst (Abschnitt „Deine Freigaben“, test_inhaber). Dazu
+der Pflegeteil (Journal „freigabe_abgelaufen“, Aufräumen), der Schalter je Ordner, Laufstand und Probelauf, die
+Kommandozeile „flask material remind“ und der Thread. Echte Mails gehen nie hinaus: erinnerung.send_mail
 ist ersetzt, der Mailserver heißt smtp.example.invalid. Alle Namen, Produkte, Nummern und Daten sind erfunden."""
 import json
 import os
@@ -371,7 +372,12 @@ def test_nachholen():
             assert not [z for z in log(app) if z["item_id"] == a2["id"] and z["kind"] == "30_tage"]
             # Tag D1 (letzter Tag, Status „bald fällig“): nichts – 7_tage steht schon im Log.
             assert gesehen[20] == set()
-            assert len(liste) == len(mailtage) and {n for n, neu in gesehen.items() if neu} <= mailtage   # je Tag eine
+            # Je Tag eine an den Materialwart. Läuft die Prüffreigabe der Standardfreigaben in dieser Zeit ab, bekommt
+            # der Prüfer als ihr Inhaber dazu seine eigene (test_inhaber).
+            assert len(an(liste, "wart@example.org")) == len(mailtage), liste
+            assert {n for n, neu in gesehen.items() if neu} <= mailtage
+            assert all(m[0] == "pruefer@example.org" and m[1].endswith("Deine Freigabe läuft ab")
+                       for m in liste if m[0] != "wart@example.org"), liste
     print("Nachholen bestanden.")
 
 
@@ -660,8 +666,9 @@ def test_gescheitert():
             grant = freigeben(adm, gid, ext_id, "lesen", bis=T0 + timedelta(days=20))
             artikel(app, w2, ids["hms"], g2, "GS-8", faellig=T0 + timedelta(days=20))
 
+            # Gelöscht wird vor der ersten Mail – das ist die an extern, den Inhaber der Freigabe.
             def loeschen(adresse):
-                if adresse == "wart@example.org":
+                if adresse == "extern@example.org":
                     conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
                     conn.execute("DELETE FROM mat_item WHERE id = ?", (weg["id"],))
                     conn.execute("DELETE FROM mat_folder_grant WHERE id = ?", (grant,))
@@ -672,6 +679,7 @@ def test_gescheitert():
                 r = lauf(app)
             reihe = [m for m in liste if m[0] in ("wart@example.org", "zweite@example.org")]
             assert [m[0] for m in reihe] == ["wart@example.org", "zweite@example.org"], liste
+            assert liste[0][0] == "extern@example.org", liste
             assert "GS-6" in reihe[0][2] and "extern – lesen bis" in reihe[0][2], reihe[0][2]
             assert r["mails"]["vermerk_fehler"] == 0 and r["mails"]["fehlgeschlagen"] == 0, r
             neu_log = log(app, ab)
@@ -824,7 +832,13 @@ def test_demo_probelauf():
             assert p["demo"] is True and p["ausgelassen"]["demo"] == 0 and p["ausgelassen"]["demo_freigaben"] == 0, p
             assert "@" not in json.dumps(p, ensure_ascii=False)
             namen = {m["name"]: m for m in p["mails"]}
-            assert set(namen) == {"wart", "katalog", "demo-wart"}, namen
+            assert set(namen) == {"wart", "katalog", "demo-wart", "extern"}, namen
+            # Der Inhaber der DEMO-Freigabe bekommt seine eigene – im Probelauf, gekennzeichnet (test_inhaber).
+            x = namen["extern"]
+            assert x["demo"] is True and (x["artikel"], x["freigaben"], x["eigene"]) == (0, 0, 1), x
+            assert x["betreff"] == "[DEMO] strömis.de – Material: Deine Freigabe läuft ab", x["betreff"]
+            assert "DEINE FREIGABEN, DIE BALD ABLAUFEN" in x["text"] and "Verlängern kann: demo-wart." in x["text"], x
+            assert "  lesen bis 12.11.2026 (in 10 Tagen) · DEMO\n" in x["text"], x["text"]
             w, d, kv = namen["wart"], namen["demo-wart"], namen["katalog"]
             assert w["demo"] is True and w["artikel"] == 2 and w["betreff"].startswith("[DEMO] "), w
             assert w["text"].startswith("DEMO – geht nie hinaus."), w["text"]
@@ -873,6 +887,7 @@ def test_demo_probelauf():
             code, text = cli(app, "--trocken", "--demo")
             assert code == 0 and "DEMO-Bestand einbezogen" in text, text
             assert "An: demo-wart <demo-wart@example.invalid>" in text and "[DEMO – geht nie hinaus]" in text, text
+            assert "An: extern <extern@example.org> (0 Artikel, 0 Freigaben, 1 eigene Freigabe)  [DEMO" in text, text
             assert "DM-1" in text and "DM-2" in text and "Ausgelassen" not in text, text
             assert tabellen() == vorher
 
@@ -881,6 +896,7 @@ def test_demo_probelauf():
                 erg = lauf(app)
             assert erg["mails"]["mails"] == 2 and erg["mails"]["ausgelassen"]["demo"] == 2, erg
             assert {m[0] for m in liste} == {"wart@example.org", "katalog@example.org"}, [m[0] for m in liste]
+            assert ref(app, ext_id) is None                                     # der Inhaber der DEMO-Freigabe: nie
             text = "\n".join(m[2] for m in liste)
             assert "DM-1" not in text and "DM-2" not in text and "DEMO" not in text, text
             gemahnt = log(app)
@@ -942,10 +958,15 @@ def test_ordner_aus():
             assert w.put(f"/api/material/ordner/{system['gesperrt']}", json={"reminders_off": True}).status_code == 409
             r = w.put(f"/api/material/ordner/{lager}", json={"reminders_off": "vielleicht"})
             assert r.status_code == 400 and "Erinnerungsmails aus" in r.json["error"], r.get_json()
-            # Nichts zum Artikel, die Ablaufmail der Freigabe geht weiter; der Probelauf nennt den Ordner.
+            # Nichts zum Artikel, die Ablaufmail der Freigabe geht weiter – auch an ihren Inhaber; der Probelauf nennt
+            # den Ordner.
             with post() as liste:
                 lauf(app)
-            assert len(liste) == 1 and "OA-1" not in liste[0][2] and "extern – lesen bis" in liste[0][2], liste
+            assert [m[0] for m in liste] == ["extern@example.org", "wart@example.org"], liste
+            wm = an(liste, "wart@example.org")[0][2]
+            assert "OA-1" not in wm and "extern – lesen bis" in wm, wm
+            eigen = an(liste, "extern@example.org")[0][2]
+            assert "OG Musterstadt / Lager\n  lesen bis 22.11.2026 (in 20 Tagen)\n" in eigen, eigen
             p = mit(app, e.probelauf)
             assert p["ausgelassen"]["ordner_aus"] == [{"id": regal, "pfad": "OG Musterstadt / Lager / Regal",
                                                        "artikel": 1}], p
@@ -981,15 +1002,23 @@ def test_freigabe_ablauf():
                 assert r.status_code in (200, 201), r.get_json()
             with post() as liste:
                 lauf(app)
-            assert [m[0] for m in liste] == ["wart@example.org"], liste
-            text = liste[0][2]
+            # An die Verwalter des Ankers und – Entscheidung vom 19.10.2026 – an den Inhaber selbst (test_inhaber).
+            assert [m[0] for m in liste] == ["extern@example.org", "wart@example.org"], liste
+            eigen = an(liste, "extern@example.org")[0]
+            assert eigen[1] == "strömis.de – Material: Deine Freigabe läuft ab", eigen[1]
+            assert "OG Musterstadt\n  prüfen bis 02.12.2026 (in 30 Tagen) · 2 offene Prüfungen\n" \
+                   "  Verlängern kann: wart.\n" in eigen[2], eigen[2]
+            assert "Offene Prüfungen schließt du am besten vor dem Ablauf ab" in eigen[2]
+            text = an(liste, "wart@example.org")[0][2]
             assert "Erika Extern – prüfen bis 02.12.2026 (in 30 Tagen) · 2 offene Prüfungen" in text, text
             assert f"Verlängern: {BASIS}/material/ordner/{gid}?freigaben=verlaengern" in text
-            assert "1 Freigabe läuft ab" in liste[0][1]
+            assert "1 Freigabe läuft ab" in an(liste, "wart@example.org")[0][1]
             # Nur Freigaben: Der Schalter am Ordner hält sie nicht an – die Fußzeile verspricht es auch nicht.
             assert "abschalten" not in text and text.rstrip().endswith(
                 "Ablaufende Freigaben melden sich immer – auch in Ordnern mit „Erinnerungsmails aus“."), text
-            assert [(z["grant_id"], z["kind"], z["due_on"]) for z in log(app)] == [(grant, "freigabe_ablauf", v.isoformat())]
+            assert {(z["grant_id"], z["kind"], z["due_on"], z["konto_ref"]) for z in log(app)} == {
+                (grant, "freigabe_ablauf", v.isoformat(), ref(app, ext_id)),
+                (grant, "freigabe_ablauf", v.isoformat(), ref(app, k["wart_id"]))}
             tag(1)
             with post() as liste:
                 lauf(app)
@@ -1004,7 +1033,8 @@ def test_freigabe_ablauf():
             tag(70)
             with post() as liste:
                 lauf(app)
-            assert len(liste) == 1 and "(in 30 Tagen)" in liste[0][2], liste
+            assert [m[0] for m in liste] == ["extern@example.org", "wart@example.org"], liste
+            assert all("(in 30 Tagen)" in m[2] for m in liste), liste
             # Dauerhafte Freigaben laufen nicht ab; die eines deaktivierten Kontos und eine Prüffreigabe ohne
             # Qualifikation wirken nicht – keine Mail.
             tag(71)
@@ -1018,15 +1048,20 @@ def test_freigabe_ablauf():
             with post() as liste:
                 lauf(app)
             assert not liste, liste
-            # Ist der Inhaber der einzige Verwalter, geht die Mail an die Material-Verwaltung – nicht an ihn.
+            # Ist der Inhaber der einzige Verwalter, geht die Mail an die Material-Verwaltung – er kann die eigene nicht
+            # verlängern – und an ihn selbst, im Abschnitt „Deine Freigaben“ (nicht als Verwalter).
             tag(72)
             gx, _ = gliederung(adm, "OG Einzelwart", standard=False)
             _, ew_id = konto(app, adm, "einzel@example.org")
             freigeben(adm, gx, ew_id, "verwalten", bis=T0 + timedelta(days=90))
             with post() as liste:
                 lauf(app)
-            assert [m[0] for m in liste] == ["katalog@example.org"], liste
-            text = liste[0][2]
+            assert [m[0] for m in liste] == ["einzel@example.org", "katalog@example.org"], liste
+            eigen = an(liste, "einzel@example.org")[0][2]
+            assert "OG Einzelwart\n  verwalten bis 31.01.2027 (in 18 Tagen)\n" \
+                   "  Verlängern kann: die Material-Verwaltung.\n" in eigen, eigen
+            assert "FREIGABEN, DIE BALD ABLAUFEN\n" not in eigen.replace("DEINE FREIGABEN", ""), eigen
+            text = an(liste, "katalog@example.org")[0][2]
             # Ein Materialwart ist eingetragen – nur eben der Inhaber selbst: kein „kein Materialwart eingetragen“, kein
             # „Materialwart vergeben“, aber „Verlängern“.
             assert "OG Einzelwart (1) – nur der Inhaber selbst verwaltet hier, darum an die Material-Verwaltung" in text, text
@@ -1053,6 +1088,140 @@ def test_freigabe_ablauf():
             assert "Paul Probe – lesen bis 03.02.2027 (in 20 Tagen) · 1 offene Prüfung\n" in text, text
             assert "Lena Leser – lesen bis 05.02.2027 (in 22 Tagen)\n" in text, text
     print("Ablaufmail für Freigaben bestanden.")
+
+
+def test_inhaber():
+    """Entscheidung vom 19.10.2026: Der Inhaber einer ablaufenden befristeten Freigabe bekommt sie selbst – im Abschnitt
+    „Deine Freigaben“, zusätzlich zu den Verwaltern des Ankers, nach denselben Regeln, einmal je Freigabe und Enddatum
+    (eigener Vermerk), nach Verlängern neu; nie als Verwalter, nie DEMO, nie ohne Adresse; „Erinnerungsmails aus“ hält
+    sie nicht an. Er sieht nur, was „Meine Freigaben“ zeigt."""
+    from dataclasses import replace
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, ids, gid, system, lager = aufbau(tmp)
+        adm = k["adm"]
+        e = erinnerung_modul()
+        url = "/api/material/erinnerungen/probelauf"
+        with uhr(um(T0)), versand(app):
+            _, max_id = konto(app, adm, "max@example.org", name="Max Muster")
+            freigeben(adm, gid, max_id, "verwalten")
+            erika, erika_id = konto(app, adm, "erika@example.org", name="Erika Extern")
+            g_erika = freigeben(adm, lager, erika_id, "lesen", bis=T0 + timedelta(days=20))
+            # Wilma verwaltet „Lager“ selbst befristet: Sie ist Verwalterin für Erikas Freigabe und Inhaberin ihrer
+            # eigenen – die steht in ihrer Mail nur einmal, unter „Deine Freigaben“.
+            _, wilma_id = konto(app, adm, "wilma@example.org", name="Wilma Wartin")
+            g_wilma = freigeben(adm, lager, wilma_id, "verwalten", bis=T0 + timedelta(days=25))
+            _, demo_id = konto(app, adm, "demo-gast@example.invalid", name="DEMO-Gast")      # DEMO-Konto
+            g_demo = freigeben(adm, lager, demo_id, "lesen", bis=T0 + timedelta(days=15))
+            _, otto_id = konto(app, adm, "otto@example.org", name="Otto Ohnepost")
+            g_otto = freigeben(adm, lager, otto_id, "lesen", bis=T0 + timedelta(days=18))
+            sql(app, "UPDATE users SET email = '' WHERE id = ?", (otto_id,))                  # ohne Adresse
+            sql(app, "UPDATE mat_folder SET reminders_off = 1 WHERE id = ?", (lager,))      # hält Freigaben nicht an
+
+            # Probelauf: die Mails der Inhaber mit eigener Zahl, ohne Adressen; DEMO nur mit demo=1.
+            p = k["katalog"].get(url).json
+            namen = {m["name"]: m for m in p["mails"]}
+            assert set(namen) == {"Erika Extern", "Max Muster", "wart", "Wilma Wartin"}, namen
+            zahl = {n: (m["artikel"], m["freigaben"], m["eigene"]) for n, m in namen.items()}
+            assert zahl == {"Erika Extern": (0, 0, 1), "Max Muster": (0, 3, 0), "wart": (0, 3, 0),
+                            "Wilma Wartin": (0, 2, 1)}, zahl
+            assert p["ausgelassen"]["demo_freigaben"] == 1 and "@" not in json.dumps(p, ensure_ascii=False), p
+            p = k["katalog"].get(url + "?demo=1").json
+            gast = next(m for m in p["mails"] if m["name"] == "DEMO-Gast")
+            assert gast["demo"] is True and gast["eigene"] == 1 and gast["betreff"].startswith("[DEMO] "), gast
+            code, text = cli(app, "--trocken")
+            assert code == 0, text
+            assert "An: Erika Extern <erika@example.org> (0 Artikel, 0 Freigaben, 1 eigene Freigabe)" in text, text
+            assert "An: Wilma Wartin <wilma@example.org> (0 Artikel, 2 Freigaben, 1 eigene Freigabe)" in text, text
+            assert "demo-gast@" not in text and "Otto Ohnepost <" not in text, text
+
+            with post() as liste:
+                erg = lauf(app)
+            assert [m[0] for m in liste] == ["erika@example.org", "max@example.org", "wart@example.org",
+                                             "wilma@example.org"], [m[0] for m in liste]
+            assert erg["mails"]["mails"] == 4 and erg["mails"]["fehlgeschlagen"] == 0, erg
+            betreff, text = an(liste, "erika@example.org")[0][1:]
+            assert betreff == "strömis.de – Material: Deine Freigabe läuft ab", betreff
+            assert text == (
+                "Hallo Erika Extern,\n\n"
+                "hier steht, welche deiner Freigaben im Modul Material bald ablaufen (Stand 02.11.2026) und wer sie "
+                "verlängern kann.\n\n"
+                "DEINE FREIGABEN, DIE BALD ABLAUFEN\n\n"
+                "OG Musterstadt / Lager\n"
+                "  lesen bis 22.11.2026 (in 20 Tagen)\n"
+                "  Verlängern kann: Max Muster, wart oder Wilma Wartin.\n\n"
+                f"Deine Freigaben im Überblick („Meine Freigaben“): {BASIS}/material\n\n"
+                "Du bekommst diese Mail, weil es deine eigenen Freigaben sind – einmal je Freigabe und "
+                "Enddatum.\n"), text
+            # Nicht mehr, als „Meine Freigaben“ ihr zeigt: dieselben Verwalter, dasselbe Ende, derselbe Pfad.
+            meine = erika.get("/api/material/freigaben/meine").json["freigaben"]
+            assert [(f["ordner"]["pfad"], f["recht"], f["bis"], f["verwalter"]) for f in meine] == [
+                ("OG Musterstadt / Lager", "lesen", (T0 + timedelta(days=20)).isoformat(),
+                 ["Max Muster", "wart", "Wilma Wartin"])], meine
+            # Wilma: ihre eigene Freigabe nur unter „Deine Freigaben“, Erikas und Ottos als Verwalterin.
+            betreff, text = an(liste, "wilma@example.org")[0][1:]
+            assert betreff == "strömis.de – Material: Deine Freigabe läuft ab, außerdem 2 Freigaben laufen ab", betreff
+            assert "DEINE FREIGABEN, DIE BALD ABLAUFEN\n\nOG Musterstadt / Lager\n  verwalten bis 27.11.2026 " \
+                   "(in 25 Tagen)\n  Verlängern kann: Max Muster oder wart.\n" in text, text
+            assert "Wilma Wartin –" not in text and text.count("verwalten bis 27.11.2026") == 1, text
+            assert "  Otto Ohnepost – lesen bis 20.11.2026 (in 18 Tagen)\n  Erika Extern – lesen bis" in text, text
+            assert text.index("DEINE FREIGABEN") < text.index("\nFREIGABEN, DIE BALD ABLAUFEN"), text
+            assert text.rstrip().endswith("Du bekommst diese Mail, weil du diese Ordner verwaltest. „Deine Freigaben“ "
+                                          "bekommst du, weil es deine eigenen sind. Ablaufende Freigaben melden sich "
+                                          "immer – auch in Ordnern mit „Erinnerungsmails aus“."), text
+            # Max und der Materialwart bekommen alle drei als Verwalter, keinen Abschnitt „Deine Freigaben“.
+            for adr in ("max@example.org", "wart@example.org"):
+                t = an(liste, adr)[0][2]
+                assert "DEINE FREIGABEN" not in t and all(f"{n} – " in t for n in ("Erika Extern", "Wilma Wartin",
+                                                                                    "Otto Ohnepost")), t
+            alle = "\n".join(m[2] for m in liste)
+            assert "DEMO" not in alle and "Deine Freigaben" not in an(liste, "max@example.org")[0][2], alle
+            # Log: der Inhaber mit eigenem Vermerk, je Freigabe und Enddatum einmal; DEMO und ohne Adresse nie.
+            vermerkt = {}
+            for z in log(app):
+                vermerkt.setdefault(z["grant_id"], set()).add(z["konto_ref"])
+            r = {n: ref(app, u) for n, u in (("erika", erika_id), ("max", max_id), ("wart", k["wart_id"]),
+                                             ("wilma", wilma_id))}
+            assert vermerkt == {g_erika: {r["erika"], r["max"], r["wart"], r["wilma"]},
+                                g_wilma: {r["max"], r["wart"], r["wilma"]},
+                                g_otto: {r["max"], r["wart"], r["wilma"]}}, vermerkt
+            assert g_demo not in vermerkt and ref(app, demo_id) is None and ref(app, otto_id) is None
+
+            # Am nächsten Tag nichts; nach Verlängern kommt sie 30 Tage vor dem neuen Ende wieder – auch an Erika.
+            tag(1)
+            with post() as liste:
+                lauf(app)
+            assert not liste, liste
+            sql(app, "UPDATE mat_folder_grant SET valid_until = ? WHERE id = ?",
+                ((T0 + timedelta(days=60)).isoformat(), g_erika))
+            tag(29)
+            with post() as liste:
+                lauf(app)
+            assert not liste, liste
+            tag(30)
+            with post() as liste:
+                lauf(app)
+            assert [m[0] for m in liste] == ["erika@example.org", "max@example.org", "wart@example.org"], liste
+            assert "  lesen bis 01.01.2027 (in 30 Tagen)\n  Verlängern kann: Max Muster oder wart.\n" in liste[0][2]
+            assert [z["due_on"] for z in log(app) if z["grant_id"] == g_erika and z["konto_ref"] == r["erika"]] == [
+                (T0 + timedelta(days=20)).isoformat(), (T0 + timedelta(days=60)).isoformat()]
+
+        # Zwei Konten mit derselben Adresse (Groß/klein), das eine Inhaber, das andere Verwalter: Die Freigabe steht
+        # in der einen Mail nur unter „Deine Freigaben“ und zählt nur dort.
+        with app.app_context():
+            f = e.Eintrag("freigabe", 999, "freigabe_ablauf", "2026-11-22", lager,
+                          {"name": "Erika Extern", "recht": "lesen", "bis": "2026-11-22", "tage": 20, "inhaber": 1,
+                           "offen": 0})
+            m = e.Mail(konten=[], adresse="erika@example.org", name="Erika Extern",
+                       eintraege=[f, replace(f, inhaber=True, daten=dict(f.daten, verlaengern=["wart"]))])
+            betreff, text = e.mailtext(m, T0)
+            assert e.zahlen(m) == (0, 0, 1) and betreff.endswith("Material: Deine Freigabe läuft ab"), betreff
+            assert "Erika Extern – lesen" not in text and "  Verlängern kann: wart.\n" in text, text
+    # Oberfläche (statisch): Die Zeile je Mail nennt die eigenen Freigaben.
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
+    assert 'm.eigene ? plural(m.eigene, "eigene Freigabe", "eigene Freigaben")' in js
+    assert "– ${mailZahlen(m)}" in js[js.index("async function probelaufDialog("):]
+    print("Inhaber bestanden.")
 
 
 # --- 11. Journal „freigabe_abgelaufen“ ---------------------------------------------------------------------------
@@ -1338,11 +1507,11 @@ def test_kontoloeschen():
             grant = freigeben(adm, gid, ext_id, "lesen", bis=T0 + timedelta(days=10))
             with post():
                 lauf(app)
-            r2, rw = ref(app, w2_id), ref(app, k["wart_id"])
-            assert {z["konto_ref"] for z in log(app)} == {r2, rw}
+            r2, rw, re = ref(app, w2_id), ref(app, k["wart_id"]), ref(app, ext_id)
+            assert {z["konto_ref"] for z in log(app)} == {r2, rw, re}           # re: der Inhaber der Freigabe
             r = adm.delete(f"/api/admin/users/{w2_id}", headers=H)
             assert r.status_code == 200, r.get_json()
-            assert {z["konto_ref"] for z in log(app)} == {rw}
+            assert {z["konto_ref"] for z in log(app)} == {rw, re}
             # Löschen eines Artikels und einer Freigabe nimmt ihre Zeilen mit (Fremdschlüssel).
             sql(app, "DELETE FROM mat_item WHERE id = ?", (a["id"],))
             sql(app, "DELETE FROM mat_folder_grant WHERE id = ?", (grant,))
@@ -1572,6 +1741,7 @@ if __name__ == "__main__":
     test_demo_probelauf()
     test_ordner_aus()
     test_freigabe_ablauf()
+    test_inhaber()
     test_freigabe_abgelaufen_journal()
     test_mailtext()
     test_schalter_aus()

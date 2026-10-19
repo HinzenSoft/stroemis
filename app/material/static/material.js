@@ -975,8 +975,13 @@
   /* Probelauf: wer beim nächsten echten Lauf welche Mail bekäme – heute, oder morgen, wenn heute schon verschickt wurde.
      Betreff und Text kommen fertig vom Server; nichts wird verschickt oder vermerkt. Das Kästchen „DEMO-Bestand
      einbeziehen (nur Ansicht)“ erscheint nur, wenn DEMO ausgelassen wurde oder schon einbezogen ist (auf dev ist alles
-     DEMO); Umschalten lädt den Dialog neu. Mails mit DEMO tragen die Marke – sie gehen nie hinaus. */
+     DEMO); Umschalten lädt den Dialog neu. Mails mit DEMO tragen die Marke – sie gehen nie hinaus. Bekommt jemand die
+     Mail (auch) als Inhaber einer ablaufenden Freigabe, nennt die Zeile „n eigene Freigaben“ (Abschnitt „Deine
+     Freigaben“); eine Mail nur dafür nennt keine leeren Zahlen. */
   const DEMO_NIE = "DEMO – geht nie hinaus";
+  const mailZahlen = (m) => [m.artikel || !m.eigene ? plural(m.artikel, "Artikel", "Artikel") : "",
+    m.freigaben || !m.eigene ? plural(m.freigaben, "Freigabe", "Freigaben") : "",
+    m.eigene ? plural(m.eigene, "eigene Freigabe", "eigene Freigaben") : ""].filter(Boolean).join(", ");
   async function probelaufDialog(demo, kaestchen) {
     let p;
     try { p = await api(`${API}/erinnerungen/probelauf${demo ? "?demo=1" : ""}`); } catch (e) { toast(e.message, true); return false; }
@@ -986,7 +991,7 @@
     const l = p.letzter;
     const zahlText = (a, f) => [a ? plural(a, "Artikel", "Artikel") : "", f ? plural(f, "Freigabe", "Freigaben") : ""].filter(Boolean).join(", ");
     const mails = p.mails.map((m) => `<details class="mat-probemail"><summary>${esc(m.name)}${m.gliederung ? ` (${esc(m.gliederung)})` : ""}
-        – ${plural(m.artikel, "Artikel", "Artikel")}, ${plural(m.freigaben, "Freigabe", "Freigaben")}${m.demo ? `<span class="mat-demo" title="${DEMO_NIE}">DEMO</span>` : ""}</summary>
+        – ${mailZahlen(m)}${m.demo ? `<span class="mat-demo" title="${DEMO_NIE}">DEMO</span>` : ""}</summary>
         ${m.demo ? `<p class="small"><strong>${DEMO_NIE}</strong> – nur zur Ansicht.</p>` : ""}
         <p class="small"><strong>Betreff:</strong> ${esc(m.betreff)}</p><pre class="mat-mailtext">${esc(m.text)}</pre></details>`).join("");
     const ohne = p.ohne_empfaenger.length ? `<p class="small"><strong>Ohne Empfänger:</strong> ${p.ohne_empfaenger.map((o) => `${esc(o.ordner)} (${zahlText(o.artikel, o.freigaben)})`).join("; ")}

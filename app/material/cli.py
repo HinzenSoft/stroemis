@@ -108,12 +108,13 @@ def _trocken(stichtag, demo=False):
     if not plan.mails:
         click.echo("Es stünde nichts an.")
     for m in plan.mails:
-        artikel = len({e.kennung for e in m.eintraege if e.art == "artikel"})
-        freigaben = len({e.kennung for e in m.eintraege if e.art == "freigabe"})
+        artikel, freigaben, eigene = erinnerung.zahlen(m)
+        zahl = f"{artikel} Artikel, {freigaben} {'Freigabe' if freigaben == 1 else 'Freigaben'}"
+        if eigene:                                   # Abschnitt „Deine Freigaben“ (der Empfänger ist ihr Inhaber)
+            zahl += f", {eigene} {'eigene Freigabe' if eigene == 1 else 'eigene Freigaben'}"
         click.echo("")
         click.echo("=" * 78)
-        click.echo(f"An: {m.name} <{m.adresse}> ({artikel} Artikel, {freigaben} {'Freigabe' if freigaben == 1 else 'Freigaben'})"
-                   + ("  [DEMO – geht nie hinaus]" if m.demo else ""))
+        click.echo(f"An: {m.name} <{m.adresse}> ({zahl})" + ("  [DEMO – geht nie hinaus]" if m.demo else ""))
         click.echo(f"Betreff: {m.betreff}")
         click.echo("")
         click.echo(m.text.rstrip("\n"))
