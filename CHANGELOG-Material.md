@@ -12,7 +12,8 @@ für sich deploybar.
 | 3 – Nachweis | Unterschrift, Festschreiben, PDF mit Prüfsumme, Prüfseite; dazu Berichtigung und Unterschriftsfelder | geliefert 17.10.2026, freigegeben 17.10.2026 |
 | 4 – Überblick | Übersicht mit Fälligkeiten je Ordner, Führungskraft nur lesend, QR-Adresse mit Status, Export (CSV, Protokoll-ZIP, Lebenslauf-PDF); dazu Katalogaustausch (Katalog und Formulare von dev in die Produktion, ohne Bestand und Prüfungen) und Rückrufe zu Produkten (Hinweis in der Anwendung und per Mail). Kein Etikettenbogen (nicht gewünscht) | geliefert 17.10.2026, freigegeben 17.10.2026 |
 | 5 – Feinschliff | Rückmeldungen aus dem Pilotbetrieb: Ordnerkopf, einheitliche Knöpfe, Suchvorschläge, Urkundennummer im Profil, Pflicht-Bemerkung bei Mangel, Produktsuche, Bedienung auf Telefon, Foldable und Tablet | geliefert 18.10.2026, freigegeben 18.10.2026 („Starte mit Phase 2“) |
-| Phase 2 · 1 – Freigaben je Ordner | Freigaben lesen/prüfen/verwalten je Ordner mit Vererbung und Enddatum, strenge Trennung je Gliederung, Freigaben im Dialog „Ordner bearbeiten“ (Reiter) mit Vorlagen und Verlängern, „Meine Freigaben“; globale Seriennummernsuche und QR-Steckbrief mit Protokoll; Personenzuordnung; Rückrufe und Meldungen je Bereich; Löschkonzept | geliefert 18.10.2026, die drei offenen Fragen am 18.10.2026 entschieden und eingearbeitet; wartet auf Freigabe |
+| Phase 2 · 1 – Freigaben je Ordner | Freigaben lesen/prüfen/verwalten je Ordner mit Vererbung und Enddatum, strenge Trennung je Gliederung, Freigaben im Dialog „Ordner bearbeiten“ (Reiter) mit Vorlagen und Verlängern, „Meine Freigaben“; globale Seriennummernsuche und QR-Steckbrief mit Protokoll; Personenzuordnung; Rückrufe und Meldungen je Bereich; Löschkonzept | geliefert 18.10.2026, die drei offenen Fragen am 18.10.2026 entschieden und eingearbeitet; freigegeben 19.10.2026 („Starte Lieferung 2“) |
+| Phase 2 · 2 – Erinnerungen | Täglicher Erinnerungslauf ab 6 Uhr (eingebaut, abschaltbar, dazu `flask material remind`): Sammelmail an die Verwalter zu Fälligkeit (30/7 Tage, überfällig), Lebensende (90 Tage) und ablaufenden Freigaben (30 Tage); Erinnerungslog mit Kontoverweis; „Erinnerungsmails aus“ je Ordner; Laufstand und Probelauf auf der Übersicht | geliefert 19.10.2026, wartet auf Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -1012,7 +1013,7 @@ die „Nachbesserungen nach der Auslieferung (Wünsche vom 18.10.2026)“, zulet
 Vorgabe für neue Konten; vier weitere offene Punkte hat der Betreiber am 18.10.2026 entschieden („Vier weitere Punkte –
 entschieden“, darunter die Rückfrage beim einzigen Materialwart). „Neu“ und „Schnittstelle“ beschreiben den Stand
 danach. Schemaversion 8 (mit den Nachbesserungen vom 18.10.2026: 9, mit der Modulstufe: 10), keine neuen
-Abhängigkeiten. Stand: wartet auf Freigabe.
+Abhängigkeiten. Stand: freigegeben am 19.10.2026 („Starte Lieferung 2“).
 
 „Plattform-Verwaltung“ heißt hier: Verwaltung im Modul Verwaltung der Rechte-Matrix (das Startkonto gehört dazu) –
 Nutzer, Stufen, Häkchen, Einstellungen, das Protokoll der globalen Suchen. „Material-Verwaltung“ heißt: Stufe
@@ -2129,6 +2130,296 @@ einem DEMO-Produkt mit Beschreibung; keine Konsolenfehler, nichts rollt waagerec
 | 7 | Nutzerverwaltung, Dialog „Bearbeiten“: Dass der Prüfer die Urkundennummer selbst im Profil einträgt, stand zweimal untereinander | niedrig | Die Zeile unter dem Häkchen nennt nur den Zustand („Urkundennummer: noch keine – solange darf er nicht prüfen.“ bzw. die Nummer), den Weg nennt allein der Hilfetext. Test `test_nutzerverwaltung_oberflaeche` |
 | 8 | Profil: Das Profilbild stehe „an jedem Artikel“ – im Modul Material ist ein Artikel der Ausrüstungsgegenstand, und neue Konten lesen das Wiki nur | niedrig | „Es steht neben deinem Namen an jeder Wiki-Seite, die du erstellt oder bearbeitet hast.“ – für jedes Konto richtig, ohne Fallunterscheidung. Test `test_vorgabe_neue_konten` |
 
+## Phase 2 · Lieferung 2 – Erinnerungen (19.10.2026)
+
+Lieferung 1 von Phase 2 wurde am 19.10.2026 mit „Starte Lieferung 2“ freigegeben. Lieferung 2 bringt den
+Erinnerungslauf aus dem Konzept: eine Sammelmail am Morgen an die Materialwarte zu Prüffristen, Lebensende und
+ablaufenden Freigaben, abschaltbar je Ordner, mit Laufstand und Probelauf für die Material-Verwaltung. Gebaut nach dem
+Bauentwurf vom 19.10.2026 (überarbeitet nach zwei Kritiken, „Betrieb“ und „Fach“) in zwei Paketen: KERN (Schema,
+Dienst, Tageslauf, Kommandozeile, Tests) und OBERFLÄCHE (Ordnerdialog, Ordnerkopf, Übersicht, Verlauf, Doku).
+Schemaversion 11, keine neuen Abhängigkeiten. Der Versand ist in der Vorgabe **aus**. Stand: wartet auf Freigabe.
+
+### Neu
+
+- **Tageslauf, eingebaut** (`app/material/tageslauf.py`, `services/erinnerung.py`): Jeder Arbeitsprozess startet mit
+  der ersten Anfrage einen Hintergrundthread. Er wacht alle 15 Minuten auf und arbeitet **einmal am Tag ab 6 Uhr
+  deutscher Zeit** (Sommerzeit über `zoneinfo`). Es gibt keinen Cron und keine Arbeit auf dem VPS. Jede Runde legt
+  vorher die Einstellungen aus dem Browser über die Konfiguration (Schalter, Mailserver, `BASE_URL`, `SITE_NAME`).
+  Der Lauf hat zwei Teile:
+  - **Pflege** (täglich, auch bei ausgeschaltetem Versand): Journaleintrag „Freigabe abgelaufen“ am Ankerordner für
+    jede befristete Freigabe, deren Enddatum vorbei ist (einmal je Freigabe und Enddatum, `user_name` „Tageslauf“,
+    Konto nur als Verweis). Dazu das Löschen des Erinnerungslogs nach 13 Monaten, die Zeilen gelöschter Konten und das
+    Kürzen des Protokolls der globalen Suche. Log und Waisen räumt zusätzlich jeder Start auf.
+  - **Erinnerungsmails** (nur bei eingeschaltetem Versand, ohne Sperre und mit `SMTP_HOST`).
+- **Stufen** (fest): Prüfung fällig in höchstens 30 Tagen, in höchstens 7 Tagen, überfällig (einmal je
+  Fälligkeitsdatum), Lebensende in höchstens 90 Tagen oder erreicht (nur textiles Material, einmal je Lebensende) und
+  befristete Freigaben, die in höchstens 30 Tagen enden (einmal je Freigabe und Enddatum, nach „Verlängern“ neu).
+  Gemeldet wird je Ziel nur die höchste erreichte Stufe, die für das Konto noch nicht im Log steht. Ausgefallene Tage
+  holt der nächste Lauf so nach, ohne eine Stufe doppelt zu melden.
+- **Auswahl**: nur Artikel im Zustand „frei“ mit Fälligkeit bzw. Lebensende; nie DEMO-Artikel, nie Artikel in Ordnern
+  mit „Erinnerungsmails aus“ (vererbt). Artikel im Status „neu“ werden nach ihrem Datum gemahnt, mit dem Zusatz
+  „Eingangsprüfung offen“. Freigaben nur befristete, die heute wirken, nie an DEMO-Ordnern oder von DEMO-Konten.
+- **Empfänger**: wer an der Heimat des Artikels (bzw. am Anker der Freigabe) oder darüber gültig verwaltet –
+  Material- und Plattform-Verwaltung eingeschlossen, wenn sie dort eingetragen sind. Verwaltet dort niemand, geht die
+  Gruppe an die Material-Verwaltung, ohne sie an die Plattform-Verwaltung, gekennzeichnet mit „kein Materialwart
+  eingetragen“ und dem Link „Materialwart vergeben“. Nur aktive Konten mit Namen, Modulzugang und Adresse, nie
+  DEMO-Konten (Adresse `….invalid`). Jeder bekommt nur, was er sieht. Zugeordnete Personen, Prüfer und der Inhaber
+  einer ablaufenden Freigabe bekommen nichts. Bei einer Freigabe werden die offenen Prüfungen des Inhabers im Zweig
+  genannt.
+- **Mail**: eine je Empfänger und Tag, Artikel und Freigaben zusammen, gruppiert nach Ordnerpfad, in der Gruppe nach
+  Dringlichkeit. Jede Gruppe steht mit Pfad, Zahl und Link zum Ordner da (Links aus `BASE_URL`). Höchstens 100
+  Artikel- und 50 Freigabezeilen je Mail, der Rest einer Gruppe als „… und n weitere in diesem Ordner“. Die Einleitung
+  sagt in einem Satz, dass nur Neues drinsteht, mit dem Link auf alles Fällige. Die Fußzeile nennt den Weg zum
+  Abschalten. Keine Adressen anderer Personen.
+- **Erinnerungslog** `mat_reminder_log`: Ziel (Artikel oder Freigabe), Stufe, Datum, pseudonymer Kontoverweis
+  (`users.mat_ref`, nie die Adresse) und Zeitpunkt. Eine Zeile entsteht nur, wenn der Mailserver die Mail angenommen
+  hat; was scheitert, kommt am nächsten Morgen wieder. Das Log ist **kein Prüfnachweis**: 13 Monate, beim Löschen des
+  Kontos sofort weg (`loeschung.py`).
+- **Einmaligkeit**: Tagesmarken und ein Herzschlag in `mat_meta`, gesetzt unter `BEGIN IMMEDIATE`, dazu UNIQUE-Indizes
+  im Log – zwei Arbeitsprozesse, ein Neustart oder Thread und Kommandozeile mahnen nie doppelt. Pflege, Mailteil und
+  jede einzelne Mail laufen in eigenem `try`: Ein Fehler kostet nicht den Rest des Laufs und steht im Laufstand.
+- **Schalter „Erinnerungsmails verschicken“** unter Verwaltung → Einstellungen → Material (`MATERIAL_ERINNERUNGEN`,
+  Vorgabe aus), mit Hilfetext zu den Stufen. Dazu die **Sperre** `MATERIAL_ERINNERUNGEN_SPERRE`, nur über die
+  Umgebung: Kein Wert im Browser übersteuert sie. Ohne Eintrag greift sie, wenn `STROEMIS_NAME` auf `-dev` endet – die
+  Entwicklung bleibt so ohne Handgriff still. `dev-einrichten.sh` trägt sie künftig ausdrücklich ein, `.env.example`
+  nennt beide.
+- **„Erinnerungsmails aus“ je Ordner**: Kästchen im Dialog „Ordner bearbeiten“, Reiter „Ordner“, unter Art und
+  Prüfintervall – nur beim Bearbeiten eines vorhandenen Ordners, nicht an Systemordnern, also nur mit verwalten. Es
+  gilt für den Ordner und alle Unterordner, auch für die Verwalter darüber und die Material-Verwaltung; ablaufende
+  Freigaben melden sich weiter. Das Kästchen zeigt den eigenen Wert; ist es von oben geerbt, sagt ein Hinweis „Ohnehin
+  aus – geerbt von „…““. Ungespeichert erkennt der Dialog auch das Kästchen (Rückfrage beim Verlassen aus dem Reiter
+  „Freigaben“). Jede Änderung steht im Journal des Ordners („Erinnerungsmails aus: nein → ja“). Im Ordnerkopf steht
+  für Verwalter „Erinnerungsmails aus“ bzw. „Erinnerungsmails aus – geerbt von <Pfad>“ (Link zum Oberordner).
+- **Laufstand und Probelauf** (nur Material- und Plattform-Verwaltung): ganz unten auf der Übersicht eine Zeile
+  „Erinnerungsmails: an · letzter Lauf heute 06:02 – 4 Mails, 1 fehlgeschlagen (Name) · Probelauf ansehen“ (bzw.
+  „aus – einschalten unter Verwaltung → Einstellungen (Plattform-Verwaltung)“, „in dieser Umgebung gesperrt“, „an,
+  aber kein Mailserver eingerichtet“, „noch kein Lauf“). Die Uhrzeit steht in deutscher Zeit. „Probelauf ansehen“ ist
+  ein Textlink, kein Knopf im Kopf. Was Handeln verlangt, steht zusätzlich gelb oben neben dem Hinweis auf
+  Produktmeldungen, mit „Einzelheiten unten“: Lauf steht (nach 7 Uhr heute keiner, auch für den Pflegeteil bei
+  ausgeschaltetem Versand), an ohne Mailserver, gescheiterte Mails („… geht morgen erneut“), Fehler des Mail- oder
+  Pflegeteils, unlesbare Datenzeilen, nicht vermerkte Mails.
+- **Probelauf-Dialog** „Probelauf Erinnerungsmails“: rechnet den **nächsten** echten Lauf – heute, oder morgen, wenn
+  heute schon verschickt wurde (mit dem heutigen Log) – und sagt das in der Überschrift („Heute ab 6 Uhr gingen
+  hinaus:“ / „Morgen …“). Oben die Zeile zum letzten Lauf und, wenn der Versand aus oder gesperrt ist, „… so gingen sie
+  hinaus, wenn sie an wären“. Je Empfänger ein aufklappbarer Eintrag „Name (Gliederung) – n Artikel, m Freigaben“ mit
+  Betreff und Text wie verschickt. Darunter „Ohne Empfänger“ und „Ausgelassen: Erinnerungen aus in <Pfade mit Link>
+  (n Artikel); n DEMO-Artikel“. Keine Adressen. Nichts wird verschickt, vermerkt oder ins Journal geschrieben. Einziger
+  Knopf „Schließen“ (grau umrandet).
+- **Verlauf der Freigaben** (Reiter „Freigaben“ → „Verlauf“): „„lesen“ von Eva Probe abgelaufen (bis 18.10.2026)“, als
+  Handelnder „Tageslauf“. Im Ordnerjournal heißt die Aktion „Freigabe abgelaufen“ (nur für Verwalter, wie die übrigen
+  Freigabe-Einträge).
+- **Kommandozeile** `flask material remind` (README, „Erinnerungsmails (Modul Material)“): `--trocken` zeigt die Mails
+  des nächsten Laufs mit Adressen und schreibt nichts, auch bei ausgeschaltetem oder gesperrtem Versand;
+  `--stichtag JJJJ-MM-TT` nur mit `--trocken`; ohne `--trocken` ein echter Lauf, `--erneut` schickt am selben Tag noch
+  einmal, was nicht im Log steht. Rückgabewert 0, 1 (Mail gescheitert oder Fehler) oder 2 (aus, gesperrt, kein
+  Mailserver, `--stichtag` ohne `--trocken`).
+
+### Migration
+
+- Schemaversion 11, läuft beim Start von selbst, wiederholbar – ein zweiter Lauf ändert nichts:
+  - `mat_folder.reminders_off` (0/1, Vorgabe 0) – rein additiv.
+  - `mat_reminder_log` wird **verworfen und neu angelegt**: Kontoverweis `konto_ref` statt der Adresse `sent_to`,
+    `due_on` Pflicht, Artikel **oder** Freigabe (`grant_id`, CASCADE), die neue Stufe `freigabe_ablauf`, UNIQUE je
+    Ziel, Stufe, Datum und Konto. Bis Schritt 11 hat kein Code ins Log geschrieben; es gibt nichts zu übernehmen.
+  - `mat_meta` bekommt beim ersten Lauf die Schlüssel `tageslauf_laeuft`, `tageslauf_pflege_tag`, `erinnerung_tag` und
+    `tageslauf_stand` (der Schritt legt keinen an).
+- Geprüft: frische Datenbank, 10→11 (auch mit zwei gleichen Altzeilen im alten Log), 7→11 an einer Kopie des Stands 7
+  (dieselben Freigaben, Stufen, Journalzahlen, Artikel und Ordner wie 7→10 mit dem Stand vor dieser Lieferung;
+  Fremdschlüssel und `integrity_check` in Ordnung).
+- **Rückweg**: Eine Fassung mit Schemaversion 10 übergeht `reminders_off` und das neue Log; sie schreibt beides nicht.
+- Keine Handarbeit beim Update: `docker compose up -d --build` genügt. **Der Versand bleibt aus**, bis ihn die
+  Plattform-Verwaltung in der Produktion im Browser einschaltet. Der erste Lauf danach schickt den Rückstand (Zu
+  prüfen, Nr. 3).
+
+### Neue Abhängigkeiten
+
+Keine.
+
+### Entscheidungen
+
+Die Vorgaben des Auftrags, so gebaut (zur Bestätigung unter „Zu prüfen“):
+
+1. **Schalter „Erinnerungsmails verschicken“** in Verwaltung → Einstellungen (Gruppe Material, `.env`
+   `MATERIAL_ERINNERUNGEN`), **Vorgabe aus**. Dev bleibt still – zusätzlich über die Sperre aus der Umgebung, die kein
+   Browserwert übersteuert. In der Produktion schaltet der Betreiber nach dem Merge im Browser ein. Der Probelauf geht
+   auch bei „aus“.
+2. **Einmal am Tag ab 6 Uhr deutscher Zeit**, Einmaligkeit über Tagesmarken und Herzschlag in `mat_meta` unter
+   Schreibsperre plus UNIQUE im Log: Arbeitsprozesse, Neustarts und Kommandozeile mahnen nie doppelt. Ausgefallene
+   Tage holt der nächste Lauf nach (Fenster mit `<=`, höchste erreichte Stufe).
+3. **Überfällig einmal je Fälligkeitsdatum**, nicht wiederholt – den Rest zeigt die Übersicht „Fällig“.
+4. **Mailstufen 30/7 Tage fest**, unabhängig von „bald fällig“; Lebensdauer-Vorlauf 90 Tage fest (Konzept).
+5. **Nur Artikel im Zustand frei mit Fälligkeit**; nie DEMO-Artikel, nie DEMO-Konten als Empfänger; Ordner mit
+   „Erinnerungsmails aus“ (vererbt) fallen weg.
+6. **Empfänger**: Verwalter des Heimatordners über die Freigaben, sonst Material-Verwaltung, Rückfall
+   Plattform-Verwaltung – wie bei Rückruf und Meldung; nur aktive Konten mit Namen und Modulzugang, jeder nur mit dem,
+   was er sieht. Zugeordnete Personen bekommen keine Mails. (Anders als Rückruf und Meldung zählen Material- und
+   Plattform-Verwaltung als Verwalter, wenn sie am Ordner eingetragen sind – siehe „Abweichungen“, Nr. 2.)
+7. **Eine Mail je Empfänger und Tag**, Artikelstufen und ablaufende Freigaben zusammen, gruppiert nach Ordnerpfad, mit
+   Links (`BASE_URL`) und Obergrenze (100 Artikel-, 50 Freigabezeilen; jede Gruppe erscheint).
+8. **Log-Eintrag nur bei angenommener Mail** (sonst am nächsten Tag erneut), mit Kontoverweis statt Adresse;
+   Aufbewahrung 13 Monate (täglich und bei jedem Start); Kontolöschen räumt die Zeilen des Kontos.
+9. **„Erinnerungsmails aus“ je Ordner** im Dialog „Ordner bearbeiten“, Reiter „Ordner“, nur mit verwalten; vererbt
+   auf Unterordner, Anzeige „Ohnehin aus – geerbt von …“ im Dialog und „aus – geerbt von …“ im Ordnerkopf; Änderung im
+   Journal.
+10. **Laufstand und Probelauf** für Material- und Plattform-Verwaltung: ganz unten auf der Übersicht als Zeile mit
+    Textlink, kein Knopf im Kopf; was Handeln verlangt, zusätzlich gelb oben. Der Probelauf verschickt und
+    protokolliert nichts.
+11. **Ablaufmail für Freigaben**: nur befristete, einmal je Freigabe und Enddatum 30 Tage vorher (nach Verlängern neu),
+    an die Verwalter des Ankers ohne den Inhaber (ohne Verwalter: Material- bzw. Plattform-Verwaltung); offene
+    Prüfungen des Inhabers im Zweig werden genannt.
+
+### Abweichungen vom Konzept, mit Begründung
+
+1. **Kein nächtlicher Cron-Lauf** (Konzept: „flask material remind, nachts per Cron“), sondern ein eingebauter
+   Tageslauf ab 6 Uhr plus derselbe Befehl auf der Kommandozeile – so entschieden: keine Arbeit auf dem VPS, Mails
+   kommen morgens. Ein Cron mit `remind` ginge weiterhin und mahnte nie doppelt.
+2. **Empfänger mit Rückfall.** Laut Konzept die Verwalter des Ordners; ohne Verwalter hier die Material-Verwaltung,
+   ohne sie die Plattform-Verwaltung, wie bei Rückruf und Meldung – sonst bliebe ein Bestand ohne Materialwart stumm.
+   Anders als dort zählen Material- und Plattform-Verwaltung als Verwalter, wenn sie am Ordner eingetragen sind: Sonst
+   fiele ein eingetragener Materialwart mit dieser Stufe heraus, und die ganze übrige Material-Verwaltung bekäme seine
+   Gliederung täglich.
+3. **Ablaufmails für Freigaben** sind neu (Vorgabe aus Lieferung 1), mit eigener Stufe in derselben Tabelle.
+4. **`mat_reminder_log` neu aufgebaut**: Kontoverweis statt Adresse, Datum Pflicht, Freigaben, UNIQUE.
+5. **„Erinnerungen konfigurieren“** heißt in dieser Lieferung: der Schalter je Ordner, vererbt. Feste Stufen ohne
+   Einstellung, keine Abmeldung einzelner Verwalter, keine Wiederholung bei Überfälligkeit.
+6. Die **Mailstufen sind fest** (30/7) und hängen nicht an der Einstellung „bald fällig“.
+7. Ein **Pflegeteil** (Journal „Freigabe abgelaufen“, Aufräumen von Log und Suchprotokoll) läuft täglich, auch bei
+   ausgeschaltetem Versand.
+
+### Abweichungen vom Bauentwurf
+
+- `veraltet` (gelber Hinweis „heute ist noch keiner gelaufen“) bleibt falsch, solange nie ein Mailteil lief – sonst
+  stünde er gleich nach dem Einschalten bis zur nächsten Runde da. Ein Thread, der nie lief, fällt über den Hinweis zum
+  Pflegeteil auf.
+- Ein unklarer Wert in `MATERIAL_ERINNERUNGEN_SPERRE` (weder 1/true/yes/on noch 0/false/no/off) sperrt.
+- Beim Rückfall werden Material- und Plattform-Verwaltung vorher auf zulässige Konten geschnitten (Adresse, kein
+  DEMO, Modulzugang): Eine Material-Verwaltung ohne Adresse führt wie eine DEMO-Material-Verwaltung zur
+  Plattform-Verwaltung.
+- Mailtext: „(heute)“ und „(in 1 Tag)“; Fälligkeit und Lebensende eines Artikels in einer Zeile; nennt eine Mail nur
+  Rückfallgruppen, entfällt „Du bekommst diese Mail, weil du diese Ordner verwaltest.“
+- `reminders_off: null` im PUT gilt wie „nein“; unverändert bleibt der Wert nur, wenn das Feld fehlt.
+- Der Probelauf liefert zusätzlich `fehlerhaft`, `letzter` dort auch `tag` und `fehler`; `remind --trocken` sagt, wenn
+  der Versand aus oder gesperrt ist.
+- Oberfläche: Bei ausgeschaltetem Versand ohne je einen Lauf entfällt „noch kein Lauf“ in der Zeile. Die gelben
+  Hinweise zu Fehlschlägen erscheinen nur bei eingeschaltetem, nicht gesperrtem Versand („geht morgen erneut“ stimmte
+  sonst nicht). Der Probelauf-Dialog ist am Rechner 820 px breit (Mailzeilen), am Telefon wie jeder Dialog.
+
+### Schnittstelle
+
+Die neuen Routen stehen in der Tabelle „Schnittstelle“ unten (Zeilen mit „Phase 2 · 2“). An vorhandenen Antworten
+ändert sich:
+
+- `GET /api/material/start`: neu `erinnerungen` – der Laufstand (`versand`, `gesperrt`, `smtp`, `startzeit`, `laeuft`,
+  `veraltet`, `pflege_veraltet`, `letzter` mit `tag`, `beginn`, `ende`, `ausloeser`, `mails`, `fehlgeschlagen`,
+  `fehlgeschlagen_an` (Namen), `artikel`, `freigaben`, `ohne_empfaenger`, `ausgelassen`, `fehlerhaft`,
+  `vermerk_fehler`, `fehler`; `pflege` mit `tag`, `abgelaufen`, `log`, `waisen`, `suche`, `fehler`). Zeitpunkte in UTC.
+  Nur für Material- und Plattform-Verwaltung, sonst `null`.
+- `GET /api/material/ordner/<id>`: `ordner.reminders_off` (eigener Wert) und `ordner.erinnerungen` = `{aus, eigen,
+  geerbt_von: {id, pfad} | null}`; der Ordnerbaum liefert `reminders_off`.
+- `PUT /api/material/ordner/<id>` nimmt `reminders_off` (ja/nein; fehlt = unverändert; anderes → 400 „„Erinnerungsmails
+  aus“ muss ja oder nein sein.“).
+- Journal: Ordner `geaendert` mit `{"reminders_off": 0 → 1}` („Erinnerungsmails aus“); neue Aktion
+  `freigabe_abgelaufen` („Freigabe abgelaufen“, nur für Verwalter), im Verlauf von `GET …/ordner/<id>/freigaben` mit
+  `konto`, `recht`, `bis`, `wer: "Tageslauf"`.
+- Einstellung `MATERIAL_ERINNERUNGEN` (Gruppe „Material“, Art Schalter, Vorgabe aus) in `GET/PUT /api/admin/einstellungen`.
+
+### Verfahrensverzeichnis (Ergänzung)
+
+Zweck „Erinnerung an Prüffristen und ablaufende Freigaben“. Empfänger: Verwalter des Ordners (auch Material- oder
+Plattform-Verwaltung, wenn dort eingetragen); ohne Verwalter die Material-Verwaltung, ohne sie die
+Plattform-Verwaltung. Inhalt: Artikel und Freigaben, die der Empfänger in der Anwendung ohnehin sieht, bei Freigaben
+der Name des Inhabers, nie eine Adresse. Erinnerungslog: Artikel bzw. Freigabe, Stufe, Datum, pseudonymer
+Kontoverweis, Zeitpunkt – 13 Monate (täglich und bei jedem Start durchgesetzt), Zeilen eines gelöschten Kontos
+sofort. Der Laufstand hält nur Zahlen und die Kontoverweise der Fehlschläge des letzten Laufs.
+
+### Im Browser geprüft
+
+Chromium gegen einen lokalen Server **ohne `SMTP_HOST`**, mit einem Bestand ohne DEMO-Kennzeichen wie in den Tests
+(Platzhalter: OG Musterstadt mit Lager, „Fahrzeug 1“ mit „Erinnerungsmails aus“ und Unterordner „Kiste A“, OG
+Nachbarstadt ohne Materialwart, eine befristete und eine abgelaufene Freigabe), je bei 1280 px und 360 px, ohne
+JavaScript-Fehler und ohne waagerechten Bildlauf:
+
+- **Plattform-Verwaltung**: Zeile unten auf der Übersicht in allen Zuständen – aus, an ohne Mailserver, gesperrt
+  (Server mit `MATERIAL_ERINNERUNGEN_SPERRE=1`) –, Probelauf heute und (nach einem Lauf heute) morgen; Einstellung
+  „Erinnerungsmails verschicken“ mit Hilfetext, eingeschaltet über „Speichern“. Die gelben Hinweise sind mit einem
+  in den Stand geschriebenen Lauf nachgestellt (Fehlschlag mit Namen, Fehler beider Teile – HTML im Fehlertext
+  bleibt Text –, unlesbare Zeilen, nicht vermerkte Mail), „veraltet“ mit Mailserver über eine im Browser
+  umgeschriebene Antwort von `/start` (lokal läuft nie ein Mailserver). „Einzelheiten unten“ springt zur Zeile.
+- **Material-Verwaltung**: dieselbe Zeile; Probelauf mit Rückfallgruppe „kein Materialwart eingetragen“ (OG
+  Nachbarstadt), der Mail des Materialwarts und „Ausgelassen: Erinnerungen aus in … Fahrzeug 1 (1 Artikel), … Kiste A
+  (1 Artikel)“ mit Links; nur „Schließen“ (grau umrandet). Am Telefon bricht der Mailtext um und rollt im Kasten.
+- **Materialwart** (verwaltet OG Musterstadt): keine Zeile, kein Hinweis auf der Übersicht. Kästchen im Dialog
+  „Ordner bearbeiten“ an „Fahrzeug 1“ gesetzt, an „Kiste A“ leer mit „Ohnehin aus – geerbt von „OG Musterstadt /
+  Fahrzeug 1““; Kopfzeile „Erinnerungsmails aus – geerbt von <Link>“. Am „Lager“ gesetzt: Rückfrage „ungespeicherte
+  Änderungen“ beim Schließen aus dem Reiter „Freigaben“, nach „Speichern“ Kopfzeile und Journal („Erinnerungsmails
+  aus: nein → ja“), danach wieder zurückgesetzt. Verlauf „„lesen“ von Eva Probe abgelaufen (bis 18.10.2026)“ von
+  „Tageslauf“ – geschrieben vom echten Thread des lokalen Servers (Pflegeteil bei ausgeschaltetem Versand).
+- **Mitglied** (nur lesen): keine Zeile, kein Hinweis, keine Kopfzeile im Ordner; `GET /erinnerungen/probelauf` 403.
+
+### Prüfung vor Auslieferung
+
+- Bauentwurf vorher von zwei Kritiken geprüft („Betrieb“: 8 Befunde, „Fach“: 9 Befunde); alle übernommen –
+  unter anderem eigene Fehlerbehandlung je Teil und Mail, die Sperre für dev ohne Handgriff auf dem VPS, Aufräumen auch
+  beim Start, eigene Empfängerregel für eingetragene Material- und Plattform-Verwaltung, Kennzeichnung der
+  Rückfallgruppen und der Probelauf für den nächsten Lauf.
+- Neue Testdatei `tests/test_material_erinnerung.py` mit dem Testplan des Entwurfs (Migration, Stufen, Nachholen,
+  Doppelläufe mit zwei Threads, Zeitzone und Zeitumstellung, Rechteschnitt, Fehler je Teil, Ordnerschalter,
+  Freigaben, Journal, Mailtext und Obergrenzen, Schalter und Sperre, Aufräumen, Kontolöschen, Routen, Thread-Start,
+  Einstellung); echte Mails gehen in keinem Test hinaus (`send_mail` ersetzt). Die ganze Suite läuft grün, `st-js`,
+  `st-css` und `st-py` ohne neue Meldungen.
+
+### Zu prüfen
+
+**Bitte bestätigen** (Vorgaben 1–11 oben sind gebaut wie formuliert; dazu die Folgen, die beim Bau festgelegt wurden):
+
+1. **Schalter in der Vorgabe aus**, eingeschaltet wird in der Produktion **im Browser** (nicht in der `.env`, weil
+   dev sie kopiert). Danach kommen die ersten Mails binnen 15 Minuten, dann jeden Morgen ab 6 Uhr.
+2. **Ab 6:00 Uhr deutscher Zeit**, fest, einmal am Tag; ausgefallene Tage holt der nächste Lauf mit der höchsten
+   erreichten Stufe nach.
+3. **Der erste Lauf nach dem Einschalten schickt den Rückstand**: jeden schon überfälligen Artikel einmal, alles im
+   7- und 30-Tage-Fenster und alles, was in 90 Tagen das Lebensende erreicht – höchstens 100 Zeilen je Mail, der Rest
+   einer Gruppe als „… und n weitere“, gilt ebenfalls als gemahnt. Einen „stillen Start“, der den Bestand nur
+   vermerkt, gibt es nicht.
+4. **Überfällig nur einmal je Fälligkeitsdatum**; erneut frühestens nach 13 Monaten, wenn die Log-Zeile verfallen ist.
+5. **Stufen 30/7 fest, Lebensende 90 Tage, Freigaben 30 Tage.** Weitere Stufen bräuchten einen Neuaufbau der Tabelle.
+6. **Artikel ohne Fälligkeitsdatum bekommen keine Mail**; „neu“ wird nach dem Datum gemahnt, mit „Eingangsprüfung
+   offen“.
+7. **Wer neu Empfänger wird** (neuer Materialwart, Artikel verschoben), bekommt am nächsten Morgen einmal alles, was
+   dort schon in einem Fenster liegt – das Log gilt je Empfänger.
+8. **Empfänger auch Material- und Plattform-Verwaltung, wenn am Ordner eingetragen** (anders als bei Rückruf und
+   Meldung), sonst Material-Verwaltung, sonst Plattform-Verwaltung, gekennzeichnet. Eine Plattform-Verwaltung ohne
+   Namen bekommt nichts; ihre Artikel stehen im Probelauf unter „Ohne Empfänger“.
+9. **Kein Link je Artikel**, ein Link je Ordner – die Mail bleibt lesbar. Die Stufenregeln stehen in der Hilfe der
+   Einstellung, nicht in der Mail.
+10. **Bei eingeschaltetem Versand ohne `SMTP_HOST`** wird nichts versucht (Hinweis auf der Übersicht).
+11. **„Erinnerungsmails aus“ hält Freigabe-Ablaufmails nicht an** – Freigaben sind Rechte, keine Prüffristen.
+12. **Laufstand unten als Textlink**, Handlungsbedarf oben gelb; der Probelauf zeigt nach dem Morgenlauf den Lauf von
+    morgen.
+13. **Ablaufmail ohne den Inhaber**, der die eigene Freigabe nicht verlängern kann; ist er der einzige Verwalter, geht
+    sie an die Material-Verwaltung. Freigaben, die kürzer als 30 Tage laufen, melden sich am nächsten Morgen.
+14. **„Freigabe abgelaufen“**: Der erste Lauf trägt alle früher abgelaufenen Freigaben ins Journal nach (heutiges
+    Datum, echtes Enddatum), auch bei ausgeschaltetem Versand.
+15. **DEMO-Konten erkennt man an der Adresse `….invalid`** – neu; die Skripte vergeben nur solche.
+16. **Kommandozeile**: `--stichtag` nur mit `--trocken`, `--erneut` für einen zweiten Mailteil am selben Tag; Exit 1
+    bei Fehlschlag oder Fehler, 2 bei aus, gesperrt oder ohne Mailserver.
+17. **Sperre `MATERIAL_ERINNERUNGEN_SPERRE`** nur in der Umgebung; ohne Eintrag an, wenn `STROEMIS_NAME` auf `-dev`
+    endet. Einen Notschalter nur für den Thread gibt es nicht.
+
+**Nach dem Deploy**:
+
+- **Auf dev**: Material → Übersicht (als Material- oder Plattform-Verwaltung) zeigt ganz unten „Erinnerungsmails: in
+  dieser Umgebung gesperrt“. Der Probelauf zeigt für den DEMO-Bestand nichts – DEMO wird absichtlich nie gemahnt;
+  „Ausgelassen: n DEMO-Artikel“. Gelb oben „Der tägliche Lauf … ist noch nie gelaufen“ verschwindet nach der ersten
+  Runde (1–3 Minuten nach der ersten Anfrage, ab 6 Uhr).
+- **In der Produktion nach dem Merge**: erst den Probelauf ansehen (oder `remind --trocken`), dann unter Verwaltung →
+  Einstellungen „Erinnerungsmails verschicken“ einschalten. Am nächsten Tag die Zeile auf der Übersicht ansehen
+  (Uhrzeit, Zahl der Mails, Fehlschläge).
+- **Produktionsdatenbank auf dev**: Die Sperre schützt vor Mails; `EINSTELLUNGEN_AUS=1` dazu, damit Mailserver und
+  `BASE_URL` der Produktion nicht gelten.
+- **Verfahrensverzeichnis** um den Abschnitt oben ergänzen.
+- **Nicht in dieser Lieferung**: CSV-Import, Wiki-Verknüpfung (Lieferung 3), Mails an zugeordnete Personen, „Meine
+  PSA“.
+
 ## Beispielbestand (18.10.2026)
 
 Wunsch: ein umfangreicherer Bestand zum Testen auf dev – nur aus dem vorhandenen Katalog, der dabei unverändert bleibt,
@@ -2357,7 +2648,7 @@ Archivs (bei Zip64 an dessen Zip64-Satz) geprüft, bevor das Verzeichnis eingele
 benannte Einträge werden abgewiesen. Hochladen und Export: bis 2 GB. Eine Datei über der Grenze des Imports (Bild
 31 MB, Dokument 50 MB) lässt schon der Export aus und nennt sie (Vorschau und `bericht.txt`).
 
-## Schnittstelle (Phase 1 mit den Nachbesserungen, Phase 2 · Lieferung 1)
+## Schnittstelle (Phase 1 mit den Nachbesserungen, Phase 2 · Lieferung 1 und 2)
 
 Seit Phase 2 gilt jedes Recht an einem Ordner (Freigaben je Ordner, vererbt nach unten): „lesen“ heißt Leserecht am
 Gegenstand (Artikel und Prüfungen: an der Heimat des Artikels), „Grundrecht“ lesen oder verwalten, „Materialwart“
@@ -2368,7 +2659,7 @@ oder Plattform-Verwaltung).
 
 | Methode und Pfad | Recht | Zweck |
 | --- | --- | --- |
-| `GET /api/material/start` | Modulzugang (Inhalt gefiltert) | Rechte des Kontos, Zählung, Gliederungen, nächste Fälligkeiten; `ordner_uebersicht` (Fälligkeiten je Ordner, Zeilen in Baumreihenfolge mit `tiefe`, `bestand`, `zaehlung`, `naechste`), `rueckrufe` (laufende mit betroffenen Artikeln im Bestand) |
+| `GET /api/material/start` | Modulzugang (Inhalt gefiltert) | Rechte des Kontos, Zählung, Gliederungen, nächste Fälligkeiten; `ordner_uebersicht` (Fälligkeiten je Ordner, Zeilen in Baumreihenfolge mit `tiefe`, `bestand`, `zaehlung`, `naechste`), `rueckrufe` (laufende mit betroffenen Artikeln im Bestand); `erinnerungen` – Laufstand der Erinnerungsmails (Schalter, Sperre, Mailserver, letzter Mail- und Pflegeteil, `veraltet`, `pflege_veraltet`; Zeitpunkte UTC) nur für Material- und Plattform-Verwaltung, sonst `null` (Phase 2 · 2) |
 | `GET /api/material/suche?q=` | Modulzugang | Artikel nach Serien-, Inventar-, Herstellernummer im eigenen Bereich; `eindeutig` bei genau einem Treffer; `exakt_lokal` (ein sichtbarer Artikel hat genau diese Seriennummer) und `global_angebot` (zu jeder Anfrage, die für die globale Suche taugt, außer für die Material-Verwaltung; Phase 2) |
 | `GET /api/material/faellig?status=&ordner=&zugeordnet=` | Modulzugang; mit `ordner` lesen dort (sonst 404) | fällige Artikel, Standard überfällig + Lebensdauer erreicht + neu + bald fällig; mit `ordner` auch `ordner` = {id, pfad}; `zugeordnet` filtert nach Person (nur mit Grundrecht wirksam, Phase 2) |
 | `GET/POST /api/material/kategorien`, `PUT/DELETE …/<id>` | lesen / Katalog | Kategoriebaum; Löschen nur leer und ohne Dokument in einem Prüfprotokoll (409) |
@@ -2434,3 +2725,7 @@ oder Plattform-Verwaltung).
 | `GET /api/admin/users/<id>/material-folgen` | Plattform-Verwaltung | was das Löschen des Kontos im Modul bewirkt: `freigaben`, `zuordnungen`, `entwuerfe`, `pruefungen` (Phase 2); dazu `letzter_materialwart` – die Gliederungen `[{id, name, pfad}]`, deren einziger Materialwart das Konto heute ist (Rückfrage beim Senken, Deaktivieren und Löschen; Entscheidung vom 18.10.2026) |
 | `GET /m/<token>` | Modulzugang | sichtbarer Artikel → Weiterleitung; sonst Seite „fremd“ ohne Artikeldaten mit dem Knopf für den Steckbrief (Phase 2) |
 | (Ordner, Artikel, Prüfung, Durchgang) | – | neu: `darf` (`lesen`, `grund`, `pruefen`, `verwalten`) für genau dieses Objekt; `artikel.zugeordnet` und `artikel.journal` nur mit Grundrecht (sonst `null`), Listenzeile `zugeordnet_name`; `durchgang` = `{id, titel, ordner, sichtbar}`; Baumknoten `nur_pfad` und `teilweise`; Durchgangszeilen ohne Leserecht `sichtbar: false`, ohne Kennung (Phase 2) |
+| `GET /api/material/erinnerungen/probelauf` | Material-Verwaltung (Plattform-Verwaltung eingeschlossen) | Probelauf der Erinnerungsmails für den nächsten Lauf (heute oder, wenn heute schon verschickt wurde, morgen): `stichtag`, `morgen`, `versand`, `gesperrt`, `letzter` (`tag`, `beginn`, `mails`, `fehlgeschlagen`, `fehlgeschlagen_an`, `fehler`), `mails` (`name`, `gliederung`, `betreff`, `text`, `artikel`, `freigaben` – keine Adressen), `ohne_empfaenger` (`ordner`, `artikel`, `freigaben`), `ausgelassen` (`ordner_aus`: `id`, `pfad`, `artikel`; `demo`), `fehlerhaft`; schreibt nichts (Phase 2 · 2) |
+| `GET /api/material/ordner/<id>` | lesen | neu: `ordner.reminders_off` (eigener Wert) und `ordner.erinnerungen` = `{aus, eigen, geerbt_von: {id, pfad} \| null}`; Ordnerbaum mit `reminders_off` (Phase 2 · 2) |
+| `PUT /api/material/ordner/<id>` mit `reminders_off` (ja/nein) | Materialwart am Ordner | „Erinnerungsmails aus“ für Ordner und Unterordner; fehlt das Feld, bleibt der Wert; anderes als ja/nein → 400; mit Journal (Phase 2 · 2) |
+| `flask --app "app:create_app()" material remind [--trocken] [--stichtag JJJJ-MM-TT] [--erneut]` | Kommandozeile im Container | Erinnerungslauf: `--trocken` zeigt die Mails des nächsten Laufs mit Adressen und schreibt nichts (auch bei „aus“ oder gesperrt), `--stichtag` nur mit `--trocken`; ohne `--trocken` ein echter Lauf für heute, `--erneut` noch einmal am selben Tag (nur, was nicht im Log steht). Exit 0, 1 (Mail gescheitert, Fehler), 2 (aus, gesperrt, kein Mailserver, `--stichtag` ohne `--trocken`) (Phase 2 · 2) |
