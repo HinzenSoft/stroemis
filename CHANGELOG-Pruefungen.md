@@ -4,6 +4,22 @@ Erweiterung von strömis.de um Lehrgänge, Teilnehmende, Voraussetzungen, Prüfu
 Stoppuhr, Nachprüfungen, Medien und eine Mängelübersicht für Feedbackrunden – nur für Nutzer mit dem neuen
 Zusatzrecht „Prüfer“.
 
+## Nachtrag (19.10.2026): Importgrenzen schon vor dem Laden – verbundene Zellen, Links, Kommentare
+
+Befund der Sicherheitsprüfung zum Bestandsimport im Modul Material, der den Excel-Import hier genauso traf: openpyxl
+legt schon beim Laden der Arbeitsmappe ein Zellobjekt für jedes Feld eines Bereichs verbundener Zellen
+(`<mergeCell ref="A3:KN20000"/>`), eines Links und eines Kommentars an, dazu eines je `<c/>` – auch leer. Eine 5-KB-Datei
+kostete so 1,6–2,8 GB und bis 76 s, ein Bereich bis XFD1048576 den ganzen Arbeitsprozess; die Grenzen aus dem Nachtrag
+vom 15.10. greifen erst nach dem Laden. Neu zählt `_blaetter_vorpruefen` (in `_arbeitsblatt` zwischen
+`_archiv_pruefen` und `load_workbook`, gemeinsam mit dem Bestandsimport) jeden XML-Teil des Archivs mit demselben
+Parser wie openpyxl, ohne etwas aufzubauen: Zellen, Zeilen und Bereichsflächen zusammen höchstens 500.000, kein Bereich
+über Zeile 20.000 oder Spalte 300 hinaus, höchstens 20 Arbeitsblätter und 5 Mio. XML-Elemente insgesamt
+(`MAX_XML_ELEMENTE`). Abgelehnt wird mit Klartext (400), in unter einer halben Sekunde; eine Liste mit verbundenen
+Kopfzellen und Links bleibt lesbar, sonst ändert sich am Import nichts – außer dass weitere Blätter mitzählen
+(openpyxl lud sie schon immer vollständig, auch wenn nur das erste mit Inhalt gelesen wird). Abgesichert durch `test_grenzen_vor_dem_laden`
+(`tests/test_pruefungen_import.py`, Dateien aus `xlsx_bomben` – auch mit Präfix, Zeichenreferenz, UTF-16, Entität und
+Blatt unter fremdem Pfad).
+
 ## Nachtrag (16.10.2026): Rechte-Matrix statt Prüfer-Häkchen
 
 Das Zusatzrecht `is_pruefer` ist in der Rechte-Matrix aufgegangen (`users.recht_pruefungen`, siehe `auth.MODULE`):

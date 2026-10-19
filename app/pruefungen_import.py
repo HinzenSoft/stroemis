@@ -16,7 +16,9 @@ import io
 import re
 import warnings
 import zipfile
+import zlib
 from datetime import date, datetime, timedelta
+from xml.parsers import expat
 
 import openpyxl
 from openpyxl.utils import get_column_letter
@@ -59,6 +61,14 @@ MAX_SPALTEN = 300                     # höchste belegte Spalte eines Blatts
 # 2 Millionen ≈ 490 MB und 4 s – das Dreifache der größten zulässigen Liste (2.000 Zeilen × 80
 # Spalten) reicht, mehr frisst einen Gunicorn-Arbeiter.
 MAX_ZELLEN = 500_000
+# Was openpyxl schon BEIM LADEN anlegt, bevor die Grenzen oben greifen: ein Zellobjekt je <c> (auch leer, „<c/>“ sind
+# 4 Bytes), ein Zeilenformat je <row> und ein Zellobjekt für JEDES Feld eines Bereichs verbundener Zellen
+# (<mergeCell ref="A3:KN20000"/>), eines Links (<hyperlink ref=…>) und eines Kommentars (<comment ref=…>) – ein paar
+# Bytes XML ergaben 6 Mio. Zellen (gemessen 1,6–2,8 GB und bis 76 s), „A3:XFD1048576“ 17 Milliarden. Deshalb zählt
+# _blaetter_vorpruefen das vorher – Zellen, Zeilen und Bereichsflächen zusammen höchstens MAX_ZELLEN, kein Bereich
+# über MAX_ZEILEN/MAX_SPALTEN hinaus, höchstens MAX_ARBEITSBLAETTER Blätter – und begrenzt die Arbeit dafür selbst:
+# höchstens MAX_XML_ELEMENTE Elemente in allen Teilen zusammen (eine Zelle sind zwei bis vier: <c>, <v>, <f>, <t>).
+MAX_XML_ELEMENTE = 5_000_000
 MAX_DATENZEILEN = 2_000               # Zeilen mit Inhalt unter der Kopfzeile je Import
 MAX_EXTRA_SPALTEN = 50                # Spalten mit „weiteren Angaben“ je Datei …
 MAX_EXTRA_TITEL = 100                 # … Länge ihres Titels (Schlüssel im JSON) …
@@ -237,6 +247,90 @@ def _archiv_pruefen(roh):
                            f"{MAX_ENTPACKT // (1024 * 1024)} MB lassen sich einlesen. Bitte nur die Teilnehmerliste hochladen.")
 
 
+_BEREICH = re.compile(r"\$?([A-Za-z]{1,3})\$?(\d{1,10})(?::\$?([A-Za-z]{1,3})\$?(\d{1,10}))?")
+_BEREICH_ART = {"mergeCell": "verbundene Zellen", "hyperlink": "einen Link", "comment": "einen Kommentar"}
+_UNLESBAR = "Die Excel-Datei konnte nicht gelesen werden (beschädigt oder kein .xlsx)."
+
+
+def _spalte_nummer(buchstaben):
+    n = 0
+    for z in buchstaben.upper():
+        n = n * 26 + ord(z) - 64
+    return n
+
+
+def _blaetter_vorpruefen(roh):
+    """Grenzen der Blätter, BEVOR openpyxl lädt (siehe MAX_XML_ELEMENTE): jeder Teil des Archivs, der sich als XML
+    lesen lässt, geht durch denselben Parser wie bei openpyxl (expat – Zeichenreferenzen, Entitäten, UTF-16 und
+    Namensraum-Präfixe wirken also hier wie dort), aber nur zählend: Zellen und Zeilen, Fläche und Ausdehnung jedes
+    Bereichs verbundener Zellen, Links und Kommentare, Blätter. Unabhängig vom Pfad der Teile – ein Blatt kann unter
+    jedem Namen im Archiv liegen. Ein Teil, den expat nicht lesen kann (Bilder, Kaputtes), zählt nur bis dahin – so
+    weit käme auch openpyxl. Ein Bereich, der sich nicht als „A1“ oder „A1:B2“ lesen lässt (ganze Spalten, mehrere
+    Bereiche), wird abgelehnt; Excel schreibt dort nur einzelne Rechtecke. Wirft ImportFehler mit Klartext."""
+    stand = {"felder": 0, "elemente": 0, "blaetter": 0}
+
+    def zu_gross():
+        n = f"{MAX_ZELLEN:,}".replace(",", ".")
+        return ImportFehler(f"Die Arbeitsmappe enthält mehr als {n} Felder (Zellen, Zeilen, verbundene oder verlinkte "
+                            f"Bereiche) – höchstens {n} lassen sich einlesen. Bitte nur die Teilnehmerliste hochladen "
+                            "und Inhalte weit außerhalb der Liste entfernen (auch vermeintlich leere Zellen).")
+
+    def start(name, attrs):
+        stand["elemente"] += 1
+        if stand["elemente"] > MAX_XML_ELEMENTE:
+            raise ImportFehler("Die Arbeitsmappe ist zu umfangreich, um sie einzulesen – bitte nur die Teilnehmerliste "
+                               "in eine neue Arbeitsmappe kopieren und diese hochladen.")
+        lokal = name.rpartition(":")[2]
+        if stand["erstes"]:
+            stand["erstes"] = False
+            if lokal == "worksheet":
+                stand["blaetter"] += 1
+                if stand["blaetter"] > MAX_ARBEITSBLAETTER:
+                    raise ImportFehler(f"Die Arbeitsmappe hat mehr als {MAX_ARBEITSBLAETTER} Arbeitsblätter – höchstens "
+                                       f"{MAX_ARBEITSBLAETTER} lassen sich einlesen. Bitte nur die Teilnehmerliste "
+                                       "hochladen.")
+        if lokal in ("c", "row"):
+            stand["felder"] += 1
+        elif lokal in _BEREICH_ART and "ref" in attrs:
+            m = _BEREICH.fullmatch(attrs["ref"].strip())
+            if not m:
+                raise ImportFehler(_UNLESBAR)
+            s1, z1 = _spalte_nummer(m.group(1)), int(m.group(2))
+            s2, z2 = (_spalte_nummer(m.group(3)), int(m.group(4))) if m.group(3) else (s1, z1)
+            if max(z1, z2) > MAX_ZEILEN or max(s1, s2) > MAX_SPALTEN:
+                raise ImportFehler(f"Die Arbeitsmappe enthält {_BEREICH_ART[lokal]} bis Zeile {max(z1, z2)} und Spalte "
+                                   f"{max(s1, s2)} – höchstens {MAX_ZEILEN} Zeilen und {MAX_SPALTEN} Spalten lassen sich "
+                                   "einlesen. Bitte Inhalte weit außerhalb der Liste entfernen.")
+            stand["felder"] += (abs(z2 - z1) + 1) * (abs(s2 - s1) + 1)
+        if stand["felder"] > MAX_ZELLEN:
+            raise zu_gross()
+
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(roh))
+    except Exception as e:                                   # noqa: BLE001 – jede Leseausnahme ist ein Dateiproblem
+        raise ImportFehler(_UNLESBAR) from e
+    with zf:
+        for eintrag in zf.infolist():
+            if eintrag.is_dir():
+                continue
+            parser = expat.ParserCreate()
+            parser.StartElementHandler = start
+            stand["erstes"] = True
+            try:
+                with zf.open(eintrag) as fh:
+                    while True:
+                        stueck = fh.read(1 << 20)
+                        parser.Parse(stueck, not stueck)
+                        if not stueck:
+                            break
+            except ImportFehler:
+                raise
+            except expat.ExpatError:
+                continue                                     # kein XML (Bild) oder kaputt: so weit käme auch openpyxl
+            except (zipfile.BadZipFile, zlib.error, RuntimeError, NotImplementedError, EOFError, OSError):
+                continue                                     # unlesbarer Eintrag (verschlüsselt, Prüfsumme): dito
+
+
 def _arbeitsblatt(datei, dateiname):
     """Liest die Datei und liefert das erste Arbeitsblatt mit Inhalt als Liste von Zeilen
     (jede Zeile eine Liste der Zellwerte). Alles, was hier schiefgeht, ist ein Fehler der Datei,
@@ -259,6 +353,7 @@ def _arbeitsblatt(datei, dateiname):
     if not roh.startswith(b"PK"):
         raise ImportFehler("Das ist keine .xlsx-Datei. Bitte die Liste in Excel als „Excel-Arbeitsmappe (.xlsx)“ speichern.")
     _archiv_pruefen(roh)
+    _blaetter_vorpruefen(roh)
     try:
         # openpyxl warnt bei Kopf-/Fußzeilen, die es nicht versteht (Seminarsystem-Exporte) –
         # für den Import ohne Belang, soll aber nicht das Protokoll füllen.

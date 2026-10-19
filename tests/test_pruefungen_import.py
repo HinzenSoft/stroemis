@@ -7,6 +7,8 @@ aber ausschließlich mit erfundenen Namen."""
 import io
 import os
 import sys
+import time
+import tracemalloc
 import zipfile
 from datetime import date, datetime
 
@@ -459,6 +461,117 @@ def test_grenzen():
     assert len(extra) == pi.MAX_EXTRA_SPALTEN and extra["T" * pi.MAX_EXTRA_TITEL] == "w" * pi.MAX_EXTRA_WERT
 
 
+def xlsx_bomben():
+    """Kleine Arbeitsmappen (je ein paar KB), die openpyxl beim LADEN aufbläht – Sicherheitsprüfung zum Bestandsimport
+    (Material, Phase 2 · L3, Befund 1); gemessen vorher 1,6–2,8 GB und bis 76 s je Datei, „riesig“ unbegrenzt:
+    ein Bereich verbundener Zellen, ein Link und ein Kommentar über A3:KN20000 (6 Mio. Felder innerhalb der Grenzen für
+    Zeilen und Spalten), verbundene Zellen bis XFD1048576 und 9,5 MB dichte leere Zellen „<c/>“. Dazu Verkleidungen,
+    an denen eine Textsuche vorbeiliefe: Namensraum-Präfix, Zeichenreferenz im Bereich, UTF-16, eine Entität, die
+    leere Zellen vervielfacht, ein Blatt unter fremdem Pfad und ein Link über ganze Spalten. Kopfzeile mit Vorname,
+    Nachname, Hersteller, Modell und Seriennummer – beide Importe (Prüfungen, Bestandsimport) erkennen sie."""
+    from openpyxl.comments import Comment
+
+    def grund(kommentar=False):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["Vorname", "Nachname", "Hersteller", "Modell", "Seriennummer"])
+        ws.append(["Max", "Muster", "Testwerk", "HMS Beta", "SN-0001"])
+        if kommentar:
+            ws["A1"].comment = Comment("Platzhalter", "Platzhalter")
+        b = io.BytesIO()
+        wb.save(b)
+        return b.getvalue()
+
+    def umbauen(roh, aendern, teil="xl/worksheets/sheet1.xml", umbenennen=None):
+        zin, out = zipfile.ZipFile(io.BytesIO(roh)), io.BytesIO()
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zo:
+            for e in zin.infolist():
+                name, daten = e.filename, zin.read(e.filename)
+                if name == teil:
+                    daten = aendern(daten.decode())
+                    daten = daten if isinstance(daten, bytes) else daten.encode()
+                if umbenennen:
+                    name, daten = umbenennen(name, daten)
+                zo.writestr(name, daten)
+        return out.getvalue()
+
+    def danach(teil):
+        return lambda x: x.replace("</sheetData>", "</sheetData>" + teil)
+    merge = '<mergeCells count="1"><mergeCell ref="A3:KN20000"/></mergeCells>'
+    ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    return {
+        "merge_6m": umbauen(grund(), danach(merge)),
+        "link_6m": umbauen(grund(), danach('<hyperlinks><hyperlink ref="A3:KN20000" display="x" location="A1"/>'
+                                           "</hyperlinks>")),
+        "kommentar_6m": umbauen(grund(True), lambda x: x.replace('ref="A1"', 'ref="A3:KN20000"'),
+                                "xl/comments/comment1.xml"),
+        "merge_riesig": umbauen(grund(), danach('<mergeCells count="1"><mergeCell ref="A3:XFD1048576"/></mergeCells>')),
+        "leere_c": umbauen(grund(), lambda x: x.replace("</sheetData>", ("<row>" + "<c/>" * 290 + "</row>") * 8121
+                                                        + "</sheetData>")),
+        "praefix": umbauen(grund(), danach(f'<x:mergeCells xmlns:x="{ns}" count="1"><x:mergeCell ref="A3:KN20000"/>'
+                                           "</x:mergeCells>")),
+        "zeichenreferenz": umbauen(grund(), danach(merge.replace("A3:KN", "A3&#58;KN"))),
+        "utf16": umbauen(grund(), lambda x: danach(merge)(x).encode("utf-16")),
+        "entitaet": umbauen(grund(), lambda x: x.replace(
+            "<worksheet", '<!DOCTYPE worksheet [<!ENTITY z "' + "<c/>" * 1000 + '"><!ENTITY y "' + "&z;" * 1000
+            + '">]><worksheet', 1).replace("</sheetData>", "<row>" + "&y;" * 6 + "</row></sheetData>")),
+        "fremder_pfad": umbauen(grund(), danach(merge), umbenennen=lambda n, d: (
+            ("xl/daten/blatt.dat", d) if n == "xl/worksheets/sheet1.xml" else
+            (n, d.replace(b"worksheets/sheet1.xml", b"daten/blatt.dat")) if n == "xl/_rels/workbook.xml.rels"
+            else (n, d))),
+        "ganze_spalten": umbauen(grund(), lambda x: danach('<hyperlinks><hyperlink ref="A:KN" display="x" '
+                                                           'location="A1"/></hyperlinks>')(x.replace(
+                                                               "</sheetData>", '<row r="20000"><c r="A20000" '
+                                                               't="inlineStr"><is><t>x</t></is></c></row></sheetData>'))),
+    }
+
+
+def test_grenzen_vor_dem_laden():
+    """Was openpyxl schon beim Laden anlegt (Zellen je <c>, Felder verbundener Zellen, Links, Kommentare), wird vorher
+    gezählt (_blaetter_vorpruefen): Jede Datei aus xlsx_bomben wird abgelehnt, ohne dass openpyxl lädt – in unter
+    2 s und mit wenig Speicher. Zulässige Listen mit verbundenen Kopfzellen und Links bleiben lesbar."""
+    geladen = []
+    alt = pi.openpyxl.load_workbook
+    pi.openpyxl.load_workbook = lambda *a, **k: geladen.append(1) or alt(*a, **k)
+    try:
+        for name, roh in xlsx_bomben().items():
+            assert len(roh) < 40_000, (name, len(roh))
+            tracemalloc.start()
+            t0 = time.time()
+            with pytest.raises(ImportFehler) as e:
+                analysieren(roh, dateiname=f"{name}.xlsx")
+            dauer, spitze = time.time() - t0, tracemalloc.get_traced_memory()[1]
+            tracemalloc.stop()
+            text = str(e.value)
+            assert not geladen and dauer < 2 and spitze < 50 * 1024 * 1024, (name, dauer, spitze, text)
+            soll = ("bis Zeile 1048576 und Spalte 16384" if name == "merge_riesig" else
+                    "konnte nicht gelesen werden" if name == "ganze_spalten" else "mehr als 500.000 Felder")
+            assert soll in text, (name, text)
+        # Zu viele Elemente insgesamt (Grenze künstlich klein – geprüft wird der Weg, nicht die Zahl).
+        alt_max = pi.MAX_XML_ELEMENTE
+        pi.MAX_XML_ELEMENTE = 100
+        try:
+            with pytest.raises(ImportFehler) as e:
+                analysieren(beispiel_xlsx())
+            assert "zu umfangreich" in str(e.value) and not geladen
+        finally:
+            pi.MAX_XML_ELEMENTE = alt_max
+        # Zulässig: Kopfpaare mit verbundenen Zellen (beispiel_xlsx) und eine Liste mit Links.
+        assert analysieren(beispiel_xlsx())["kopfzeile"] == 7 and geladen
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["Vorname", "Nachname", "Link"])
+        for n in range(20):
+            ws.append([f"V{n}", f"N{n}", "Wiki"])
+            ws.cell(n + 2, 3).hyperlink = "https://example.org/platzhalter"
+        ws.merge_cells("D1:G1")
+        b = io.BytesIO()
+        wb.save(b)
+        assert len(analysieren(b)["teilnehmer"]) == 20
+    finally:
+        pi.openpyxl.load_workbook = alt
+
+
 if __name__ == "__main__":
     test_helfer()
     test_analysieren_beispieldatei()
@@ -467,4 +580,5 @@ if __name__ == "__main__":
     test_importfehler()
     test_leitungsrolle()
     test_grenzen()
+    test_grenzen_vor_dem_laden()
     print("Import-Test bestanden.")
