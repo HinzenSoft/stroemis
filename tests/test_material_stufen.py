@@ -546,6 +546,116 @@ def test_verwalter_ohne_stufe():
     print("Verwalter ohne Stufe bestanden.")
 
 
+def test_letzter_materialwart():
+    """Feld „letzter_materialwart“ von GET /api/admin/users/<uid>/material-folgen (Entscheidung des Betreibers vom
+    18.10.2026: Die Nutzerverwaltung fragt nach, bevor sie den einzigen Materialwart einer Gliederung auf Material „–“
+    stellt oder deaktiviert; der Dialog „Löschen“ nennt es). Darin stehen die Gliederungen, deren einziger wirksamer
+    Verwalter das Konto heute ist – mit verwalten an der Gliederung oder geerbt von oben, auch eine verschachtelte. Nicht
+    mitgezählt: die Material-Verwaltung, ein Mitverwalter mit abgelaufener Freigabe, ein deaktivierter und einer ohne
+    Stufe. Eine eigene abgelaufene Freigabe oder eine nur unterhalb der Gliederung macht niemanden zum Materialwart. Nur
+    die Plattform-Verwaltung liest das Feld; gesperrt wird nichts."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        adm, wart_id = k["adm"], k["wart_id"]
+        gid, _ = gliederung(adm)                                    # der Materialwart verwaltet dort (Grundrecht)
+        ot = ordner_neu(adm, gid, "OT Nord", kind="gliederung")     # verschachtelt: verwaltet geerbt von oben
+        lager = ordner_neu(adm, gid, "Lager")
+        nachbar, _ = gliederung(adm, "OG Nachbarstadt", standard=False)
+        gestern = _heute() - timedelta(days=1)
+
+        def folgen(uid):
+            r = adm.get(f"/api/admin/users/{uid}/material-folgen")
+            assert r.status_code == 200, r.get_json()
+            assert set(r.json) == {"freigaben", "zuordnungen", "entwuerfe", "pruefungen", "letzter_materialwart"}, r.json
+            return [(x["id"], x["name"], x["pfad"]) for x in r.json["letzter_materialwart"]]
+
+        beide = [(gid, "OG Musterstadt", "OG Musterstadt"), (ot, "OT Nord", "OG Musterstadt / OT Nord")]
+        assert folgen(wart_id) == beide
+        assert folgen(k["fuehrung_id"]) == [] and folgen(k["nutzer_id"]) == []
+        # Die Material-Verwaltung zählt nicht als Materialwart – weder neben ihm noch selbst.
+        freigeben(adm, gid, k["katalog_id"], "verwalten")
+        assert folgen(wart_id) == beide and folgen(k["katalog_id"]) == []
+        # Eine Mitverwalterin mit abgelaufener Freigabe zählt nicht; verwaltet sie die verschachtelte Gliederung gültig,
+        # hat die zwei Materialwarte, die obere weiter einen.
+        _, zweit = neues_konto(app, "zweit@example.org", name="Zweite Verwalterin")
+        freigeben(adm, gid, zweit, "verwalten", bis=gestern)
+        assert folgen(wart_id) == beide and folgen(zweit) == []
+        freigeben(adm, ot, zweit, "verwalten")
+        assert folgen(wart_id) == beide[:1] and folgen(zweit) == []
+        # Verwalten nur unterhalb der Gliederung (Lager) macht niemanden zu ihrem Materialwart.
+        _, lagerwart = neues_konto(app, "lagerwart@example.org", name="Lagerwart")
+        freigeben(adm, lager, lagerwart, "verwalten")
+        assert folgen(lagerwart) == [] and folgen(wart_id) == beide[:1]
+        # Zwei wirksame Materialwarte an der Gliederung: keiner ist der einzige.
+        freigeben(adm, gid, zweit, "verwalten")
+        assert folgen(wart_id) == [] and folgen(zweit) == []
+        # Deaktiviert zählt die Mitverwalterin nicht, ohne Stufe auch nicht.
+        assert adm.put(f"/api/admin/users/{zweit}", json={"active": False}).status_code == 200
+        assert folgen(wart_id) == beide and folgen(zweit) == []
+        assert adm.put(f"/api/admin/users/{zweit}", json={"active": True}).status_code == 200
+        assert folgen(wart_id) == []
+        assert adm.put(f"/api/admin/users/{zweit}", json={"rechte": {"material": 0}}).status_code == 200
+        assert folgen(wart_id) == beide
+        # Die eigene abgelaufene Freigabe an einer Gliederung ohne Verwalter zählt nicht.
+        freigeben(adm, nachbar, wart_id, "verwalten", bis=gestern)
+        assert folgen(wart_id) == beide
+        # Nur die Plattform-Verwaltung liest das – die Material-Verwaltung und der Materialwart selbst nicht.
+        for c in (k["katalog"], k["wart"], k["fuehrung"]):
+            assert c.get(f"/api/admin/users/{wart_id}/material-folgen").status_code == 403
+        # Nur eine Warnung: Material „–“ und Deaktivieren speichern trotzdem; danach ist er kein Materialwart mehr.
+        assert adm.put(f"/api/admin/users/{wart_id}", json={"rechte": {"material": 0}}).status_code == 200
+        assert folgen(wart_id) == []
+        with app.app_context():
+            from app.material.services import rechte
+            assert rechte.verwalter_von(gid) == [] and rechte.verwalter_von(ot) == []
+        assert adm.put(f"/api/admin/users/{wart_id}", json={"rechte": {"material": 1}}).status_code == 200
+        assert folgen(wart_id) == beide
+        assert adm.put(f"/api/admin/users/{wart_id}", json={"active": False}).status_code == 200
+        assert folgen(wart_id) == []
+    print("Letzter Materialwart bestanden.")
+
+
+def test_letzter_materialwart_oberflaeche():
+    """Nutzerverwaltung (statisch): Material auf „–“ – in der Tabelle wie im Dialog „Bearbeiten“ – und Deaktivieren
+    fragen beim einzigen Materialwart einer Gliederung erst nach (materialwartBleibt); die Rückfrage nennt die
+    Gliederungen, hat „Abbrechen“ grau vorn mit dem Fokus und „Trotzdem speichern“ als roten Hauptknopf – kein Knopf für
+    Endgültiges, denn gelöscht wird nichts. Nach dem Abbrechen steht der Fokus wieder auf „Speichern“ bzw. der Auswahl in
+    der Tabelle (der Browser fand beim Schließen nur den gesperrten Knopf und ließ ihn auf der Seite). Der Dialog
+    „Löschen“ nennt dieselbe Folge."""
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(wurzel, "app", "static", "js", "admin.js"), encoding="utf-8") as f:
+        js = f.read()
+
+    def funktion(name):
+        return re.search(r"\n  (?:async )?function " + name + r"\(.*?\n  \}\n", js, re.S).group(0)
+
+    rueck = funktion("rueckfrage")
+    assert '<button class="btn secondary" id="rf-nein" type="button">Abbrechen</button>' in rueck
+    assert '<button class="btn" id="rf-ja" type="button">' in rueck and "danger" not in rueck and "ghost" not in rueck
+    assert rueck.index("rf-nein") < rueck.index("rf-ja") and 'dlg.querySelector("#rf-nein").focus();' in rueck
+    bleibt = funktion("materialwartBleibt")
+    for da in ("letzter_materialwart", "/material-folgen", "(material | 0) === 0", "aktiv === false",
+               "gliederungenText(gl)", "nur noch die Material-Verwaltung", '"Trotzdem speichern"',
+               "if (!gl.length) return true;"):
+        assert da in bleibt, da
+    # Beide Wege, Material zu senken: die Tabelle (nur das Modul Material) und der Dialog (dazu „Konto aktiv“).
+    assert 'sel.dataset.modul !== "material" || await materialwartBleibt(u, +sel.value)' in js
+    assert "if (!(await materialwartBleibt(u, d.rechte.material, d.active))) return;" in js
+    # Fokus nach dem Abbrechen (oder einem Fehler): Im Dialog kommt er auf „Speichern“ zurück, sobald der Knopf wieder
+    # frei ist; in der Tabelle auf die neu gezeichnete Auswahl desselben Moduls – beides nur, wenn er nicht woanders steht.
+    speichern = js[js.index('if (btn.dataset.act === "edit")'):js.index('btn.dataset.act === "reset"')]
+    frei = speichern.index("finally {\n              knopf.disabled = false;")
+    assert speichern.index("if (dlg.open && !dlg.contains(document.activeElement)) knopf.focus();") > frei
+    tabelle = js[js.index('tbody.addEventListener("change"'):js.index('tbody.addEventListener("click"')]
+    assert tabelle.index("zeichneRechte(tr, u);") < tabelle.index("neu.focus();")
+    assert 'tr.querySelector(`select[data-modul="${sel.dataset.modul}"]`)' in tabelle
+    assert "document.activeElement === document.body)) neu.focus();" in tabelle
+    loesch = funktion("loeschDialog")
+    assert "letzter_materialwart" in loesch and "gliederungenText(gl)" in loesch
+    assert "nur noch die Material-Verwaltung" in loesch
+    print("Letzter Materialwart (Oberfläche) bestanden.")
+
+
 # --- Mails, Profil, Vorgabe ------------------------------------------------------------------------------------
 
 def test_mail_meldung():
@@ -705,6 +815,8 @@ if __name__ == "__main__":
     test_ruhende_freigabe_nicht_hochstufen()
     test_meldung_ohne_stufe()
     test_verwalter_ohne_stufe()
+    test_letzter_materialwart()
+    test_letzter_materialwart_oberflaeche()
     test_mail_meldung()
     test_profil_unterschrift()
     test_vorgabe_neue_konten()

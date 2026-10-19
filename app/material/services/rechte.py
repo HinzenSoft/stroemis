@@ -435,8 +435,9 @@ def verwalter_von(fid, ohne_freigabe=None):
     """Aktive Konten mit Namen und Stufe Mitglied, die an fid oder darüber gültig verwalten – nach Namen sortiert, je
     Konto mit dem wirksamen Ende („ende“, None = unbefristet). Die Material-Verwaltung zählt nicht (sie hat ohnehin
     alles), ein Konto ohne Stufe oder Namen auch nicht (bei ihm wirkt die Freigabe nicht). Für Meldungstexte, Empfänger
-    von Mails und die Regel „keine Gliederung ohne Verwalter“. ohne_freigabe: so rechnen, als gäbe es diese
-    Freigabezeile nicht (ob ein Entzug die Regel verletzen würde – vorab, ohne zu schreiben)."""
+    von Mails, die Regel „keine Gliederung ohne Verwalter“ und die Rückfrage der Nutzerverwaltung beim einzigen
+    Materialwart (freigaben.einziger_materialwart). ohne_freigabe: so rechnen, als gäbe es diese Freigabezeile nicht (ob
+    ein Entzug die Regel verletzen würde – vorab, ohne zu schreiben)."""
     rows = db.query(
         "WITH RECURSIVE kette(id) AS (SELECT ? UNION SELECT f.parent_id FROM mat_folder f JOIN kette k ON f.id = k.id "
         "WHERE f.parent_id IS NOT NULL) "
