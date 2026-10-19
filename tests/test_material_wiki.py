@@ -297,6 +297,8 @@ def test_oberflaeche_statisch():
     assert '"target"' not in rein[rein.index("ADD_ATTR"):rein.index("FORBID_TAGS")]
     teil = js[js.index("  function anleitungBauen(a) {"):js.index("  async function pruefungAnsicht() {")]
     assert 'attachShadow({ mode: "closed" })' in teil and "DOMPurify.sanitize(MD.render(" in teil
+    # Klassen aus app.css mit position: fixed (.md-lightbox) bleiben im Kasten (Prüfung vor Auslieferung, Sicherheit 2).
+    assert "const ANLEITUNG_STIL = `:host { display: block; contain: paint; }" in js
     assert "ANLEITUNG_REINIGUNG)" in teil and "MD.enhance" not in js[js.index("const ANLEITUNG_REINIGUNG"):js.index("  async function pruefungAnsicht() {")]
     ab = js[js.index("  function abschnittPruefung(html) {"):js.index("  function anleitungBauen(a) {")]
     assert 'document.createElement("template")' in ab and "/^H[1-5]$/" in ab and 'text(n) === "prüfung"' in ab

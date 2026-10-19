@@ -3259,6 +3259,8 @@
         gewaehlt = seiten[+b.dataset.i].id;
         ok.disabled = gewaehlt === aktuell;
         zeichnen();
+        const neu = $(`button[data-i="${b.dataset.i}"]`, liste);      // neu gezeichnet – sonst stünde der Fokus auf <body>
+        if (neu) neu.focus();
       });
       suchen();
       async function speichern(seite, knopf) {
@@ -3396,7 +3398,9 @@
   const ANLEITUNG_FEHLER = "Die Anleitung ließ sich nicht laden.";
   const ANLEITUNG_EINBAU = "Eingebundener Abschnitt – nur im Wiki sichtbar.";
   // Stile nur im Schatten: Bilder und Filme höchstens so breit wie der Kasten, breite Tabellen und Code rollen seitlich.
-  const ANLEITUNG_STIL = `:host { display: block; }
+  // contain: paint – der Kasten ist Bezugsrahmen auch für position: fixed und schneidet ab: Klassen aus app.css, die im
+  // Abschnitt stehen dürfen (etwa .md-lightbox, fix über dem ganzen Fenster), legen sich nicht über die Prüfansicht.
+  const ANLEITUNG_STIL = `:host { display: block; contain: paint; }
     article.wiki-content { padding: 2px 2px 6px; overflow-wrap: anywhere; }
     article.wiki-content > :first-child { margin-top: 4px; }
     img, video { max-width: 100%; height: auto; }
@@ -4965,6 +4969,7 @@
   const IMPORT_NICHTS = "Nichts zu übernehmen – alles steht schon im Bestand oder ist erledigt.";  // bestandsimport.NICHTS
   const IMPORT_PERSONEN = "Personen werden nicht übernommen – Artikel ordnest du im Ordner über „Zuordnen an …“ zu.";
   const IMPORT_NEUBESCHRIFTEN = "Alte Inventarnummern stehen in der Bemerkung und sind nicht suchbar – die Artikel bitte neu beschriften. Eine Liste dafür liefert „Export“ im Ordner.";
+  const IMPORT_OHNE_SERIENSPALTE = "Keine Spalte ist als Seriennummer zugeordnet – alle Artikel bekämen eine Seriennummer vom System (STR-…). Steht sie in einer Spalte, ordne sie oben unter „Spalten“ zu.";
   const IMPORT_CSV_SATZ = "Korrigieren, speichern und hier als neue Liste hochladen – die Zeilen werden dabei erledigt. Die Spalte „Nacharbeit-Nr.“ bitte nicht ändern.";
   const IMPORT_SEITE = 100;                                      // Zeilen je Reiter, „weitere …“ zeigt die nächsten
   const PRODUKT_ART = { mehrdeutig: "mehrdeutig", vorschlag: "ähnlich", unbekannt: "nicht im Katalog" };
@@ -4994,14 +4999,15 @@
     return out;
   }
   // Die angelegten Artikel zum Beschriften: Zeile, bisherige Nummer, Seriennummer (STR-… vom System), neue Inventarnummer.
+  // Nummern und Daten (.mat-ungeteilt) brechen nicht mitten in der Zahl um.
   const angelegtTabelle = (liste, mitNr) => `<table class="list mat-tabelle mat-karten mat-angelegt">
       <thead><tr>${mitNr ? "<th>Nacharbeit-Nr.</th>" : ""}<th>Zeile</th><th>Neue Inventarnummer</th><th>Bisherige Nummer</th><th>Seriennummer</th><th>Fällig</th></tr></thead>
-      <tbody>${liste.map((x) => `<tr>${mitNr ? `<td data-l="Nacharbeit-Nr." class="mat-k-halb">${esc(x.id)}</td>` : ""}
-        <td data-l="Zeile" class="mat-k-kurz">${esc(x.nr)}</td>
+      <tbody>${liste.map((x) => `<tr>${mitNr ? `<td data-l="Nacharbeit-Nr." class="mat-k-halb mat-ungeteilt">${esc(x.id)}</td>` : ""}
+        <td data-l="Zeile" class="mat-k-kurz mat-ungeteilt">${esc(x.nr)}</td>
         <td data-l="Neue Inventarnummer" class="mat-k-titel">${x.artikel ? `<a class="mat-inv" href="/material/artikel/${esc(x.artikel.id)}"><strong>${esc(x.artikel.inventory_no)}</strong></a>` : "–"}</td>
         <td data-l="Bisherige Nummer" class="mat-k-halb">${x.bisherige_nummer ? esc(x.bisherige_nummer) : '<span class="muted">–</span>'}</td>
         <td data-l="Seriennummer" class="mat-k-halb">${esc(x.seriennummer || "–")}${/^STR-/.test(x.seriennummer || "") ? ' <span class="muted" title="vom System vergeben">(System)</span>' : ""}</td>
-        <td data-l="Fällig" class="mat-k-halb">${x.faellig ? esc(fmtTag(x.faellig)) : '<span class="muted">–</span>'}</td></tr>`).join("")}</tbody></table>`;
+        <td data-l="Fällig" class="mat-k-halb mat-ungeteilt">${x.faellig ? esc(fmtTag(x.faellig)) : '<span class="muted">–</span>'}</td></tr>`).join("")}</tbody></table>`;
   // Wie S.api für ein Formular mit Datei, aber abbrechbar (signal): Beim Probelauf zählt nur die neueste Anfrage.
   async function importSenden(pfad, fd, signal) {
     let res;
@@ -5159,11 +5165,11 @@
       const produkt = (x) => (x.produkt ? produktKurz(x.produkt) : x.angabe_text ? `<span class="muted">${esc(x.angabe_text)}</span>` : '<span class="muted">ohne Produktangabe</span>');
       return `<table class="list mat-tabelle mat-karten mat-import-zeilen">
           <thead><tr><th>Zeile</th><th>Produkt</th><th>Seriennummer</th><th>Ordner</th><th>Fällig</th><th>Gründe und Hinweise</th></tr></thead>
-          <tbody>${teil.map((x) => `<tr><td data-l="Zeile" class="mat-k-titel"><strong>Zeile ${esc(x.nr)}</strong>${x.rueckruf ? ` <span class="mat-rr-marke" title="Rückruf: ${esc(x.rueckruf)}">Rückruf</span>` : ""}</td>
+          <tbody>${teil.map((x) => `<tr><td data-l="Zeile" class="mat-k-titel"><strong class="mat-ungeteilt">Zeile ${esc(x.nr)}</strong>${x.rueckruf ? ` <span class="mat-rr-marke" title="Rückruf: ${esc(x.rueckruf)}">Rückruf</span>` : ""}</td>
             <td data-l="Produkt" class="mat-k-ohne">${produkt(x)}${x.artikel ? `<div class="small">schon im Bestand: <a href="/material/artikel/${esc(x.artikel.id)}">${esc(x.artikel.inventory_no)}</a></div>` : ""}</td>
-            <td data-l="Seriennummer" class="mat-k-halb">${x.seriennummer ? esc(x.seriennummer) : '<span class="muted">ohne</span>'}</td>
+            <td data-l="Seriennummer" class="mat-k-halb">${x.seriennummer ? esc(x.seriennummer) : `<span class="muted">${x.status === "erledigt" ? "–" : "ohne"}</span>`}</td>
             <td data-l="Ordner" class="mat-k-halb">${x.ordner ? esc(x.ordner) : '<span class="muted">–</span>'}</td>
-            <td data-l="Fällig" class="mat-k-halb">${x.faellig ? esc(fmtTag(x.faellig)) : '<span class="muted">–</span>'}</td>
+            <td data-l="Fällig" class="mat-k-halb mat-ungeteilt">${x.faellig ? esc(fmtTag(x.faellig)) : '<span class="muted">–</span>'}</td>
             <td data-l="Gründe und Hinweise" class="mat-k-ohne">${gruendeHtml(x.gruende)}${hinweiseHtml(x.hinweise)}</td></tr>`).join("")}</tbody></table>${weitere}`;
     }
     function knopfText(b) {
@@ -5181,17 +5187,21 @@
       const warn = b.warnungen.concat(b.ordner_unbekannt.map((u) => `Ordner „${u.wert}“ (${plural(u.zeilen, "Zeile", "Zeilen")}) gibt es unter „${o.name}“ nicht – bitte im Bestand anlegen und den Probelauf wiederholen, oder die Spalte als Bemerkung zuordnen.`));
       const fehlt = b.fehlt && b.fehlt.length;
       const imp = b.import;
-      const stand = fertig && imp ? `<p class="mat-austausch-stand ok">Übernommen: ${plural(imp.angelegt, "Artikel", "Artikel")} angelegt${imp.nacharbeit ? `, ${plural(imp.nacharbeit, "Zeile", "Zeilen")} in die Nacharbeit` : ""}${imp.im_bestand ? `, ${plural(imp.im_bestand, "Zeile", "Zeilen")} schon im Bestand oder erledigt` : ""}${imp.ersetzt ? `, ${plural(imp.ersetzt, "Zeile", "Zeilen")} der Nacharbeit neu eingelesen` : ""}.</p>
+      const stand = fertig && imp ? `<p class="mat-austausch-stand ok" tabindex="-1">Übernommen: ${plural(imp.angelegt, "Artikel", "Artikel")} angelegt${imp.nacharbeit ? `, ${plural(imp.nacharbeit, "Zeile", "Zeilen")} in die Nacharbeit` : ""}${imp.im_bestand ? `, ${plural(imp.im_bestand, "Zeile", "Zeilen")} schon im Bestand oder erledigt` : ""}${imp.ersetzt ? `, ${plural(imp.ersetzt, "Zeile", "Zeilen")} der Nacharbeit neu eingelesen` : ""}.</p>
         ${imp.angelegt ? `<p class="help">${esc(IMPORT_NEUBESCHRIFTEN)}</p>` : ""}` : "";
       const offen = !fertig && b.produkte_offen.length ? `<div class="mat-austausch-liste mat-import-produkte"><strong>Produkte, die der Katalog nicht sicher kennt</strong>
           <ul>${b.produkte_offen.map((p) => `<li>${esc(angabeAus(p) || "ohne Angabe")} – ${plural(p.zeilen, "Zeile", "Zeilen")} – ${esc(PRODUKT_ART[p.art] || p.art)}</li>`).join("")}</ul>
           <p class="help">Diese Zeilen kommen in die Nacharbeit. Dort ordnest du das Produkt zu – auch zeilenweise, etwa bei verschiedenen Größen – oder meldest es.</p></div>` : "";
       const reiterListe = (fertig ? REITER_NACHHER : REITER_VORHER).filter(([s]) => s !== "erledigt" || z.erledigt);
-      const text = fehlt ? "" : knopfText(b);
+      // Dieselbe Datei ist eben in diesen Ordner übernommen worden (zehn Minuten gesperrt): kein Knopf, der sicher scheitert.
+      const sperre = !fertig && b.sperre_bis ? uhrBerlin(b.sperre_bis) : "";      // wie die Uhrzeit in der Warnung
+      const text = fehlt || sperre ? "" : knopfText(b);
       const knoepfe = fertig
         ? '<div class="btn-row mat-import-knoepfe"><button type="button" class="btn secondary" data-act="bi-neu">Weitere Liste importieren</button></div>'
         : `<p class="small mat-import-wieder"><button type="button" class="lnk" data-act="bi-wiederholen">Probelauf wiederholen</button>${Object.keys(wahl).length ? ' · <button type="button" class="lnk" data-act="bi-automatisch">Zuordnung wie erkannt</button>' : ""}</p>
-          ${!fehlt && !text && z.zeilen ? `<p class="mat-leer">${esc(IMPORT_NICHTS)}</p>` : ""}
+          ${sperre ? `<p class="notice">Diese Datei ist eben in diesen Ordner übernommen worden – noch einmal übernehmen geht erst ab ${esc(sperre)} Uhr (dann „Probelauf wiederholen“). Was offen blieb, steht unten in der Nacharbeit.</p>` : ""}
+          ${!fehlt && !sperre && !text && z.zeilen ? `<p class="mat-leer">${esc(IMPORT_NICHTS)}</p>` : ""}
+          ${text && b.keine_seriennummer ? `<p class="notice">${esc(IMPORT_OHNE_SERIENSPALTE)}</p>` : ""}
           <div class="btn-row mat-import-knoepfe"><button type="button" class="btn secondary" data-act="bi-neu">Neu wählen</button>${text ? `<button type="button" class="btn" data-act="bi-uebernehmen" ${uebernimmt || lauf || ruhe || JSON.stringify(wahl) !== berichtFuer ? "disabled" : ""}>${esc(uebernimmt ? "Wird übernommen …" : text)}</button>` : ""}</div>
           ${!fehlt && z.nacharbeit ? `<p class="help">${esc(b.frist)}</p>` : ""}`;
       return `${stand}${austauschListe("Bitte beachten", warn, "warnung")}${offen}
@@ -5210,7 +5220,7 @@
       if (aktiv !== undefined) { const s = $(`select[data-spalte="${CSS.escape(aktiv)}"]`, berichtEl); if (s) s.focus({ preventScroll: true }); }
     }
     async function uebernehmen() {
-      if (!datei || uebernimmt || lauf || ruhe || JSON.stringify(wahl) !== berichtFuer) return;
+      if (!datei || uebernimmt || lauf || ruhe || JSON.stringify(wahl) !== berichtFuer || (bericht && bericht.sperre_bis)) return;
       uebernimmt = true;
       berichtZeichnen();
       try {
@@ -5230,6 +5240,9 @@
         uebernimmt = false;
         berichtZeichnen();
       }
+      // Der Knopf ist neu gezeichnet worden – der Fokus geht auf das Ergebnis bzw. zurück auf den Knopf.
+      const fokus = fertig ? $(".mat-austausch-stand", berichtEl) : $('[data-act="bi-uebernehmen"]', berichtEl);
+      if (fokus) fokus.focus({ preventScroll: true });
       if (fertig) $("#bi-neu-titel").scrollIntoView({ block: "start" });
     }
 
@@ -5303,10 +5316,13 @@
           : m.status === "eingepflegt" ? `Eingepflegt: ${m.produkt ? produktKurz(m.produkt) : "–"} – „Erneut prüfen“ übernimmt die Zeilen.`
             : `Abgelehnt${m.antwort ? `: ${esc(m.antwort)}` : ""}`;
         const knoepfe = [`<button type="button" class="btn secondary small" data-act="na-gruppe-zuordnen" data-i="${i}">Produkt zuordnen …</button>`];
-        if (DARF.katalog) knoepfe.push(`<button type="button" class="btn secondary small" data-act="na-anlegen" data-i="${i}">Im Katalog anlegen …</button>`);
-        else if (!m || m.status === "abgelehnt") knoepfe.push(`<button type="button" class="btn secondary small" data-act="na-melden" data-i="${i}">Produkt melden …</button>`);
-        return `<div class="mat-na-karte"><p class="mat-na-angabe"><strong>${esc(angabeAus(g) || "ohne Angabe")}</strong> <span class="mat-na-art">${esc(PRODUKT_ART[g.art] || g.art)}</span></p>
-          <p class="small">${plural(g.offen, "Zeile", "Zeilen")}${g.produkt ? ` · zugeordnet: <strong>${produktKurz(g.produkt)}</strong>` : ""}</p>
+        // Ist schon ein Produkt zugeordnet (auch gerade erst im Katalog angelegt), braucht es kein Anlegen und Melden mehr –
+        // „Produkt zuordnen …“ ändert die Wahl.
+        if (!g.produkt && DARF.katalog) knoepfe.push(`<button type="button" class="btn secondary small" data-act="na-anlegen" data-i="${i}">Im Katalog anlegen …</button>`);
+        else if (!g.produkt && (!m || m.status === "abgelehnt")) knoepfe.push(`<button type="button" class="btn secondary small" data-act="na-melden" data-i="${i}">Produkt melden …</button>`);
+        const zeilenweise = !g.produkt && g.zugeordnet ? ` · zeilenweise zugeordnet: ${g.zugeordnet} von ${g.offen}` : "";
+        return `<div class="mat-na-karte"><p class="mat-na-angabe"><strong>${esc(angabeAus(g) || "ohne Angabe")}</strong> <span class="mat-na-art">${esc(g.produkt ? "zugeordnet" : PRODUKT_ART[g.art] || g.art)}</span></p>
+          <p class="small">${plural(g.offen, "Zeile", "Zeilen")}${g.produkt ? ` · zugeordnet: <strong>${produktKurz(g.produkt)}</strong>` : ""}${zeilenweise}</p>
           ${m ? `<p class="small">${meldestatusMarke(m.status)} ${meldung}</p>` : ""}
           <p class="help">${g.offen === 1 ? "Gilt für die Zeile dieser Angabe." : `Gilt für alle ${g.offen} Zeilen dieser Angabe. Sind es verschiedene Größen oder Varianten, die Zeilen unten auswählen und einzeln zuordnen.`}</p>
           <div class="btn-row">${knoepfe.join("")}</div></div>`;
@@ -5319,7 +5335,7 @@
       return `<tr data-id="${esc(z.id)}">
         <td class="mat-wahlspalte mat-k-wahl"><label class="mat-wahl-feld"><input type="checkbox" class="mat-na-wahl" value="${esc(z.id)}" ${naAlle || naWahl.has(z.id) ? "checked" : ""}
           aria-label="Nacharbeit-Nr. ${esc(z.id)} auswählen"><span class="mat-wahl-text">auswählen</span></label></td>
-        <td data-l="Nacharbeit-Nr." class="mat-k-titel"><strong>Nr. ${esc(z.id)}</strong><div class="small muted">${esc(z.import.datei)} · Zeile ${esc(z.nr)}</div></td>
+        <td data-l="Nacharbeit-Nr." class="mat-k-titel"><strong>Nr. ${esc(z.id)}</strong><div class="small muted">${esc(z.import.datei)} · Zeile&nbsp;${esc(z.nr)}</div></td>
         <td data-l="Angaben" class="mat-k-ohne">${angabe ? `<strong>${esc(angabe)}</strong>` : '<span class="muted">ohne Produktangabe</span>'}
           ${z.produkt ? `<div class="small">zugeordnet: ${produktKurz(z.produkt)}</div>` : ""}
           <div class="small">${w.seriennummer ? `SN ${esc(w.seriennummer)}` : '<span class="muted">ohne Seriennummer</span>'}${w.ordner ? ` · Ordner ${esc(w.ordner)}` : ""}</div>
@@ -5416,7 +5432,11 @@
           los = setTimeout(() => {
             const q = $("#nz-q", body).value.trim();
             if (!q) { trefferLeeren($("#nz-treffer", body)); return; }
-            produktTreffer($("#nz-treffer", body), q, (p) => { zeigeWahl(p.id, `<strong>${nameHtml(p)}</strong>${zusatzHtml(p)} <span class="muted">${esc(p.article_no || "")}</span>${demoMarke(p.demo)}`); trefferLeeren($("#nz-treffer", body)); },
+            produktTreffer($("#nz-treffer", body), q, (p) => {
+              zeigeWahl(p.id, `<strong>${nameHtml(p)}</strong>${zusatzHtml(p)} <span class="muted">${esc(p.article_no || "")}</span>${demoMarke(p.demo)}`);
+              trefferLeeren($("#nz-treffer", body));
+              $("#nz-ok", body).focus();          // der gewählte Treffer ist weg – sonst landete der Fokus auf <body>
+            },
               '<p class="help">Kein Produkt gefunden.</p>');
           }, 200);
         });
@@ -5466,8 +5486,16 @@
           dialog(`<h2>Übernommen</h2>
             <p>${plural(e.zahlen.angelegt, "Artikel", "Artikel")} angelegt${e.zahlen.im_bestand ? `, ${plural(e.zahlen.im_bestand, "Zeile", "Zeilen")} schon im Bestand` : ""}${e.zahlen.nacharbeit ? `, ${plural(e.zahlen.nacharbeit, "Zeile", "Zeilen")} weiter offen` : ""}.</p>
             ${austauschListe("Bitte beachten", e.hinweise, "warnung")}
-            ${angelegt.length ? `${angelegtTabelle(angelegt, true)}<p class="help">${esc(IMPORT_NEUBESCHRIFTEN)}</p>` : ""}
+            ${angelegt.length ? `<div class="mat-dlg-liste">${angelegtTabelle(angelegt, true)}</div><p class="help">${esc(IMPORT_NEUBESCHRIFTEN)}</p>` : ""}
             <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`);
+          // #dlg dient allen Dialogen der Seite – die Breite gilt nur, solange dieses Ergebnis offen ist.
+          if (angelegt.length && !dlg.classList.contains("mat-uebernommen")) {
+            dlg.classList.add("mat-uebernommen");
+            dlg.addEventListener("close", () => dlg.classList.remove("mat-uebernommen"), { once: true });
+          }
+          // Der Inhalt ist ersetzt – der Fokus geht auf den neuen Titel, nicht hinter den Dialog.
+          const titel = $("h2", body);
+          if (titel) { titel.tabIndex = -1; titel.focus(); }
           leisteNeu();
           nacharbeitLaden();
         };
@@ -5509,9 +5537,10 @@
       },
       "na-gruppe-zuordnen": (b) => {
         const g = na.gruppen[+b.dataset.i];
+        const ueber = !g.produkt && g.zugeordnet ? ` Das ersetzt die zeilenweise Zuordnung (${plural(g.zugeordnet, "Zeile", "Zeilen")}) – für verschiedene Größen oder Varianten die Zeilen unten einzeln zuordnen.` : "";
         zuordnenDialogNa(`Produkt zuordnen: ${angabeAus(g) || "ohne Angabe"}`,
-          `Gilt für ${g.offen === 1 ? "die Zeile" : `alle ${g.offen} offenen Zeilen`} dieser Angabe. Danach übernimmt „Erneut prüfen“ die Zeilen.`,
-          g.vorschlaege || [], { angabe: g.angabe }, g.produkt);
+          `Gilt für ${g.offen === 1 ? "die Zeile" : `alle ${g.offen} offenen Zeilen`} dieser Angabe.${ueber} Danach übernimmt „Erneut prüfen“ die Zeilen.`,
+          g.vorschlaege || [], { angabe: g.angabe }, g.produkt || g.zugeordnet);
       },
       "na-zeilen-zuordnen": () => {
         const n = naAnzahl();

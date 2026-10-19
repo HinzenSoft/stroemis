@@ -1582,7 +1582,7 @@ def test_oberflaeche_statisch():
     assert "if (v.url) felder.angabe = v.angabe" in js and "await api(v.url || `${API}/meldungen`" in js
     assert "if (opt.danach) await opt.danach(r.produkt);" in js
     assert "/nacharbeit/produkt`, { method: \"POST\", body: { angabe: g.angabe, product_id: p.id } }" in block
-    assert "if (DARF.katalog) knoepfe.push(" in block and "Im Katalog anlegen …" in block
+    assert "if (!g.produkt && DARF.katalog) knoepfe.push(" in block and "Im Katalog anlegen …" in block
     # Knopfregel: rot nur „Übernehmen: …“ (Seite), „Zuordnen“ und „n Artikel übernehmen“ (je ein Dialog)
     assert block.count('class="btn"') == 2 and 'class="btn" data-act="bi-uebernehmen"' in block, block.count('class="btn"')
     assert block.count('class="btn mat-knopf-umbruch"') == 1 and "btn danger" not in block
@@ -1594,6 +1594,24 @@ def test_oberflaeche_statisch():
     teil = css[css.index("/* Phase 2 · Lieferung 3"):]
     assert "@container mat-seite (max-width: 600px)" in teil and ".mat-import-knoepfe .btn { width: 100%; }" in teil
     assert ".mat-import-knoepfe .btn, .mat-knopf-umbruch { white-space: normal;" in teil
+    # Prüfung vor Auslieferung (Browser): 1 Ergebnis „Übernommen“ im Dialog breit und mit eigenem Behälter (Karten am
+    # Telefon); 2 dieselbe Datei gesperrt – kein „Übernehmen“, sondern ab wann; 3 Nummern und Daten am Stück; 4 Fokus
+    # nach dem Neuzeichnen; 5/6 Karten mit zeilenweiser Zuordnung bzw. schon zugeordnet; 7 „–“ statt „ohne“ bei
+    # erledigten Zeilen; 8 Bemerkung mit Zeilenumbrüchen; 9 Telefon: „Datei wählen“ breit, Kästchen links oben.
+    assert '<div class="mat-dlg-liste">${angelegtTabelle(angelegt, true)}</div>' in block and '"mat-uebernommen"' in block
+    assert ".mat-dlg-liste { container: mat-seite / inline-size; }" in teil and "dialog:where(.mat-uebernommen)" in teil
+    assert 'const text = fehlt || sperre ? "" : knopfText(b);' in block and "noch einmal übernehmen geht erst ab" in block
+    assert "|| (bericht && bericht.sperre_bis)) return;" in block
+    assert "table.list:is(.mat-import-zeilen, .mat-angelegt) .mat-ungeteilt { white-space: nowrap; overflow-wrap: normal; }" in teil
+    assert js.count('mat-ungeteilt') >= 5
+    assert "if (titel) { titel.tabIndex = -1; titel.focus(); }" in block and '$("#nz-ok", body).focus();' in block
+    assert 'const fokus = fertig ? $(".mat-austausch-stand", berichtEl)' in block and 'ok" tabindex="-1">Übernommen:' in block
+    assert "if (neu) neu.focus();" in js[js.index("  function wikiWahl(formular, danach) {"):js.index("/* --- Suche ---")]
+    assert "zeilenweise zugeordnet: ${g.zugeordnet} von ${g.offen}" in block and "Das ersetzt die zeilenweise Zuordnung" in block
+    assert 'esc(g.produkt ? "zugeordnet" : PRODUKT_ART[g.art] || g.art)' in block and "if (!g.produkt && DARF.katalog)" in block
+    assert '${x.status === "erledigt" ? "–" : "ohne"}' in block and "white-space: pre-line;" in teil
+    assert "${text && b.keine_seriennummer ? `<p class=\"notice\">${esc(IMPORT_OHNE_SERIENSPALTE)}</p>` : \"\"}" in block
+    assert ".mat-import .mat-ablage-knopf { display: flex;" in teil and "table.list.mat-na-zeilen td.mat-k-wahl { order: -3;" in teil
     print("Oberfläche (statisch) bestanden.")
 
 

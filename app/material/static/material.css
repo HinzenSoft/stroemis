@@ -1257,6 +1257,16 @@ table.list.mat-spaltenwahl td { overflow-wrap: anywhere; }
 .mat-hinweise { margin: 2px 0 0; padding-left: 18px; color: var(--grau); font-size: var(--fs-klein); }
 .mat-gruende li, .mat-hinweise li { overflow-wrap: anywhere; }
 table.list.mat-import-zeilen td, table.list.mat-angelegt td { overflow-wrap: anywhere; }
+/* Zeilennummern, Nacharbeit-Nr. und Daten nie mitten in der Zahl umbrechen („19.03.2 / 027“): „anywhere“ zählte jede
+   Stelle als Umbruchstelle und machte die Spalte so schmal wie ein Zeichen. */
+table.list:is(.mat-import-zeilen, .mat-angelegt) .mat-ungeteilt { white-space: nowrap; overflow-wrap: normal; }
+/* Das Ergebnis „Übernommen“ der Nacharbeit im Dialog: breit wie der Probelauf, und die Tabelle hat einen eigenen
+   Behälter „mat-seite“ – Dialoge liegen außerhalb von #mat, sonst würde sie am Telefon keine Karten. */
+@media (min-width: 641px) { dialog:where(.mat-uebernommen) { width: min(820px, 96vw); } }
+.mat-dlg-liste { container: mat-seite / inline-size; }
+/* Nach „Übernehmen“ trägt der Satz „Übernommen: …“ bzw. der Titel des Ergebnisdialogs den Fokus – kein Bedienelement:
+   der Ring nur für die Tastatur (wie .mg-trenner in global.css). */
+.mat-austausch-stand:focus:not(:focus-visible), #dlg h2:focus:not(:focus-visible) { outline: none; }
 .mat-import-wieder { margin: 12px 0 0; }
 .mat-import-knoepfe { margin-top: 12px; }
 /* Knöpfe mit Zahlen („Übernehmen: 380 Artikel anlegen, 32 Zeilen in die Nacharbeit“) brechen um, statt am Telefon
@@ -1272,7 +1282,7 @@ table.list.mat-import-zeilen td, table.list.mat-angelegt td { overflow-wrap: any
 .mat-na-karte .btn-row { margin-top: 8px; }
 .mat-na-art { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 7px; border-radius: var(--radius-pille);
   background: var(--grau-hell); color: var(--anthrazit); white-space: nowrap; vertical-align: middle; }
-.mat-na-bem { overflow-wrap: anywhere; }
+.mat-na-bem { overflow-wrap: anywhere; white-space: pre-line; }   /* „Größe: L“ und „Standort: Lager“ je eine Zeile */
 .mat-na-werte > summary { cursor: pointer; color: var(--rot); font-size: var(--fs-klein); }
 .mat-na-werte .mat-daten { margin-top: 6px; grid-template-columns: minmax(90px, auto) minmax(0, 1fr); }
 .mat-na-werte dd { overflow-wrap: anywhere; }
@@ -1316,4 +1326,15 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
   .mat-import-knoepfe .btn { width: 100%; }
   .mat-nacharbeit-kopf h2 { font-size: 1.2rem; }
   .mat-sammel { flex-wrap: wrap; }
+  /* Am Telefon (Bauentwurf 4.6): „Datei wählen“ als ganze Breite – Ziehen gibt es dort nicht; in den Karten der
+     Nacharbeit das Kästchen links oben vor der Nacharbeit-Nr. statt unten (die Karte ist lang, gewählt wird von oben). */
+  .mat-import .mat-ablage-knopf { display: flex; justify-content: center; width: 100%; margin-top: 8px; box-sizing: border-box; }
+  table.list.mat-na-zeilen td.mat-k-wahl { order: -3; flex: 0 0 auto; align-self: center; padding: 0; }
+  table.list.mat-na-zeilen td.mat-k-wahl .mat-wahl-feld { min-width: 44px; padding-right: 0; }   /* Fläche zum Tippen */
+  table.list.mat-na-zeilen td.mat-k-wahl .mat-wahl-text { display: none; }
+  /* In den Karten des Probelaufs und der angelegten Artikel steht die Seriennummer in ganzer Breite – halb breit brach
+     „Seriennummer: GM-0103“ am Bindestrich um; für die angelegten darunter Bisherige Nummer und Fällig. */
+  table.list:is(.mat-import-zeilen, .mat-angelegt) td[data-l="Seriennummer"] { flex-basis: 100%; }
+  table.list.mat-angelegt td[data-l="Seriennummer"] { order: 1; }
+  table.list.mat-angelegt td:is([data-l="Bisherige Nummer"], [data-l="Fällig"]) { order: 2; }
 }
