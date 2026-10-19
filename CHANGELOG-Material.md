@@ -1830,6 +1830,34 @@ entschieden bzw. nicht widersprochen):
     Rückfrage und der Steckbrief, nie eine Sperrmeldung, in keinem Text „Viertelstunde“ oder „zu viele“, keine
     Konsolenfehler, nichts rollt waagerecht. Das Protokoll in der Nutzerverwaltung zeigt alle 26 Zeilen (24 Suchen,
     2 QR-Steckbriefe) mit Namen; das Serverprotokoll hat keine einzige 429.
+- **„kritisch“ als eigene Spalte im Prüfprotokoll** (Wunsch vom 19.10.2026, wörtlich: „Das Kritisch soll auch in den
+  PDFs eine eigene Spalte erhalten.“): In der Befundtabelle des Prüfprotokolls steht „kritisch“ jetzt wie in der
+  Oberfläche (seit der Nachbesserung zu Lieferung 3) in einer eigenen schmalen Spalte rechts neben dem Prüfpunkt; die
+  Marke hinter dem Text des Prüfpunkts entfällt. Kopf „kritisch“ wie die übrigen Spaltenköpfe, in der Zelle die Marke
+  klein geschrieben wie in der Oberfläche (DLRG Univers fett, 6 pt, dunkelrot mit Rahmen – auch schwarz-weiß gedruckt
+  erkennbar); bei nicht kritischen Punkten bleibt die Zelle leer. Die Spalte steht immer da, auch wenn kein Punkt
+  kritisch ist – wie in der Oberfläche. Breiten (A4 hoch, 180 mm): Nr. 10 mm, Prüfpunkt 70 mm, kritisch 13 mm, Soll
+  14 mm, Befund 27 mm (fasst „nicht zutreffend“ weiter in einer Zeile), Wert / Bemerkung 46 mm – vorher Prüfpunkt
+  79 mm, Befund 29 mm, Wert / Bemerkung 48 mm, und die Marke nahm einem kritischen Prüfpunkt gut 12 mm seiner letzten
+  Zeile. Gruppenzeilen gehen über alle sechs Spalten, der Tabellenkopf wiederholt sich auf jeder Seite wie bisher. Die
+  Legende unter der Tabelle zeigt die Marke als Muster wie die rote Nummer: „[Nr.] Mangel · [kritisch] Ein kritischer
+  Punkt mit Mangel schließt „einsatzbereit“ aus.“ (der Satz wie im Prüfformular der Oberfläche; vorher „KRITISCH: …“).
+  Prüfpunkte hat nur das Prüfprotokoll (auch als Berichtigung) – Aussonderungsprotokoll, Sammelprotokoll und
+  Lebenslauf zeigen keine und sind unverändert. Die neue Gestaltung gilt für neu erzeugte Protokolle; festgeschriebene
+  bleiben Byte für Byte, wie sie sind. Kein Schemaschritt.
+  - **Geprüft**: `test_kritisch_eigene_spalte` (neu) am HTML der Vorlage – sechs Spalten, Köpfe, Gruppenzeilen über
+    sechs Spalten, die Marke nur in der Spalte und nie im Text des Prüfpunkts, nicht kritische Zellen leer, Legende –
+    und am PDF mit `pdftotext -layout`: Kopf zwischen „Prüfpunkt“ und „Soll“, Zeilen mit und ohne Marke, Mangel am
+    kritischen Punkt, langer Prüfpunkt, 45 Punkte in zwei Gruppen über mehrere Seiten mit wiederholtem Kopf.
+    `test_festschreiben` prüft die Spalte zusätzlich am ersten Protokoll. Beide gegen den alten Stand rot.
+    DEMO-Nachweis mit eigenem DATA_DIR (`material_demo.py --demo --konten`, dazu ein DEMO-Formular mit 36
+    Platzhalter-Punkten in drei Gruppen für den DEMO HMS-Karabiner): Prüfung mit Mangel an einem kritischen (langer
+    Platzhaltertext) und an einem nicht kritischen Punkt und einem Punkt „nicht zutreffend“, Ergebnis „aussondern“
+    (Prüfprotokoll mit Befundtabelle über drei Seiten, Aussonderungsprotokoll), eine zweite Prüfung ohne Mangel, der
+    Durchgang abgeschlossen (Sammelprotokoll). Seitenbilder angesehen, auch in Graustufen. veraPDF: alle zehn neu
+    erzeugten Protokolle PDF/A-3b gültig; eingebettet nur DLRG Univers (normal und fett) und DejaVu Sans Mono
+    (Stempel). Stempel auf jeder Seite, `head -c N | sha256sum` gleich dem aufgedruckten Wert, die Prüfseite sagt
+    „unverändert“, mit einem geänderten Byte „verändert“.
 
 #### Prüfung der Modulstufen
 
