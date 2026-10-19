@@ -2278,6 +2278,24 @@ def pdf_layout_seiten(pfad):
     return [s.extract_text(extraction_mode="layout") or "" for s in PdfReader(pfad).pages]
 
 
+def bilder_im_pdf(pfad):
+    """Alle Bilder im PDF mit Seite, Pixelgröße und waagerechter Lage auf der Seite in mm (links, rechts) – aus der
+    Transformationsmatrix beim Zeichnen (Operator Do)."""
+    from pypdf import PdfReader
+    bilder = []
+    for nr, seite in enumerate(PdfReader(pfad).pages, 1):
+        xo = seite["/Resources"].get("/XObject")
+        xo = xo.get_object() if xo else {}
+
+        def besuch(op, args, cm, tm, xo=xo, nr=nr):
+            if op == b"Do" and args[0] in xo and xo[args[0]].get_object().get("/Subtype") == "/Image":
+                o = xo[args[0]].get_object()
+                bilder.append({"seite": nr, "px": (int(o["/Width"]), int(o["/Height"])),
+                               "links": cm[4] * 25.4 / 72, "rechts": (cm[4] + cm[0]) * 25.4 / 72})
+        seite.extract_text(visitor_operand_before=besuch)
+    return bilder
+
+
 def befund_zeile(seiten, punkt):
     """Die Textzeile der Befundtabelle, die mit dem Prüfpunkt „punkt“ beginnt (nach der laufenden Nummer)."""
     import re
@@ -2739,12 +2757,28 @@ def test_unterschriftsfeld():
         r = p1.put(url, json={"befund": "nicht_zutreffend"})
         assert r.json["punkt"]["befund"] == "nicht_zutreffend" and r.json["punkt"]["unterschrift"] is None
         assert p1.put(url, json={"unterschrift": unterschrift_daten("G")}).json["punkt"]["befund"] == "ok"
+        # Eine sehr breite Unterschrift (ein langer Strich) bleibt im Protokoll in der Spalte „Wert / Bemerkung“: Sie
+        # endet am Polster der Zelle (rechter Tabellenrand 195 mm, Polster 1,5 mm) – mit der früheren festen Breite
+        # von 48 mm ragte sie seit der Spalte „kritisch“ 3 mm über den Tabellenrand.
+        import base64
+        from PIL import ImageDraw
+        strich = Image.new("RGBA", (900, 60), (0, 0, 0, 0))
+        ImageDraw.Draw(strich).line([(10, 30), (890, 30)], fill=(10, 20, 90, 255), width=5)
+        buf = io.BytesIO()
+        strich.save(buf, "PNG")
+        breit = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+        assert p1.put(url, json={"unterschrift": breit}).json["punkt"]["befund"] == "ok"
         r = festschreiben(p1, pr["id"], ergebnis="einsatzbereit")
         assert r.status_code == 200, r.get_json()
         with app.app_context():
             from app import db
             zeile = db.query("SELECT signature_png FROM mat_inspection_result WHERE id = ?", (sig,), one=True)
         assert zeile["signature_png"].startswith(b"\x89PNG")
+        groesse = Image.open(io.BytesIO(zeile["signature_png"])).size
+        bilder = [b for b in bilder_im_pdf(os.path.join(tmp, protokoll_zeile(app, pr["id"])["pdf_path"]))
+                  if b["px"] == groesse]
+        assert len(bilder) == 1, (groesse, bilder)
+        assert bilder[0]["rechts"] <= 195 - 1.5 + 0.05 and bilder[0]["rechts"] - bilder[0]["links"] > 30, bilder
         assert p1.put(url, json={"unterschrift": None}).status_code == 409
     print("Unterschriftsfeldtest bestanden.")
 

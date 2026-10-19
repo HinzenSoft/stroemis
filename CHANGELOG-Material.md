@@ -1855,9 +1855,21 @@ entschieden bzw. nicht widersprochen):
     Platzhaltertext) und an einem nicht kritischen Punkt und einem Punkt „nicht zutreffend“, Ergebnis „aussondern“
     (Prüfprotokoll mit Befundtabelle über drei Seiten, Aussonderungsprotokoll), eine zweite Prüfung ohne Mangel, der
     Durchgang abgeschlossen (Sammelprotokoll). Seitenbilder angesehen, auch in Graustufen. veraPDF: alle zehn neu
-    erzeugten Protokolle PDF/A-3b gültig; eingebettet nur DLRG Univers (normal und fett) und DejaVu Sans Mono
-    (Stempel). Stempel auf jeder Seite, `head -c N | sha256sum` gleich dem aufgedruckten Wert, die Prüfseite sagt
-    „unverändert“, mit einem geänderten Byte „verändert“.
+    erzeugten Protokolle PDF/A-3b gültig; eingebettet nur DLRG Univers (normal und fett) und DejaVu Sans Mono normal
+    und fett (Stempel, Protokoll-ID). Stempel auf jeder Seite, `head -c N | sha256sum` gleich dem aufgedruckten Wert,
+    die Prüfseite sagt „unverändert“, mit einem geänderten Byte „verändert“.
+  - **Prüfung der Änderung**: Eine unabhängige Prüfung meldete drei Befunde (niedrig), jeder ist nachgestellt. Behoben:
+    Die Unterschrift eines Unterschriftsfelds behielt ihre feste Höchstbreite von 48 mm und ragte in der schmaleren
+    Spalte „Wert / Bemerkung“ (46 mm, davon 43 mm Inhalt) rund 3 mm über den rechten Tabellenrand – rund 1 mm schon
+    vorher. Sie ist jetzt höchstens so breit wie der Inhalt der Spalte (`max-width: 100%`) und endet bei 193,5 mm,
+    innerhalb der Tabelle (195 mm); die Höhe bleibt auf 14 mm begrenzt. `test_unterschriftsfeld` prüft das mit einem
+    sehr breiten Strich an der Lage des Bilds im PDF (gegen den alten Stand rot); bei 600 dpi an neu erzeugten
+    DEMO-Protokollen nachgemessen. Behoben: Die Angabe der eingebetteten Schriften oben nannte DejaVu Sans Mono fett
+    (Protokoll-ID im Kopf) nicht. Ein Zeichen, das DLRG Univers nicht hat (etwa „≤“ in einem Soll), setzt WeasyPrint
+    wie bisher in DejaVu Sans, das dann ebenfalls eingebettet ist. Nicht geändert: Fällt die Bemerkung zum Ergebnis
+    an ein Seitenende, kann ihre Beschriftung „Bemerkung“ allein unten stehen und der Text auf der nächsten Seite – das
+    war schon vor dieser Änderung so (`.bemerkung` ohne `break-inside: avoid`), die neue Spalte verschiebt nur die
+    Seitenumbrüche. Es gehört nicht zum Wunsch und wartet auf die Entscheidung des Betreibers.
 
 #### Prüfung der Modulstufen
 

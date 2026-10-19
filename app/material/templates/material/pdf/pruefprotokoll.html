@@ -33,7 +33,9 @@ table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-ni
 .notiz { color: var(--anthrazit); margin-top: .8mm; font-size: 8pt; }
 .notiz .lbl { display: inline; }
 .fotoverweis { font-weight: 700; color: var(--schwarz); }
-.punkt-unterschrift img { max-width: 48mm; max-height: 14mm; }
+/* Unterschrift eines Unterschriftsfelds: höchstens so breit wie der Inhalt der Spalte „Wert / Bemerkung“. Die
+   frühere feste Breite (48 mm) ragte über den rechten Tabellenrand – um 1 mm, seit der Spalte „kritisch“ um 3 mm. */
+.punkt-unterschrift img { max-width: 100%; max-height: 14mm; }
 .legende .muster { display: inline-block; padding: 0 .7mm; background: var(--rot); color: #ffffff; font-weight: 700; }
 
 /* Ergebnis */
