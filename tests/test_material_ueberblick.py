@@ -199,7 +199,9 @@ SCHREIBEN = {"POST", "PUT", "PATCH", "DELETE"}
 # Routen, die Dateien als Formular annehmen – sie bekommen eine Multipart-Anfrage wie aus dem Browser.
 MULTIPART = {"material_api.produkt_bild", "material_api.ordner_foto", "material_api.dokument_neu",
              "material_api.dokument_version", "material_api.kategorie_dokument_neu", "material_api.punkt_foto",
-             "material_api.anhang_neu", "material_api.meldung_anlegen", "material_api.pruefen"}
+             "material_api.anhang_neu", "material_api.meldung_anlegen", "material_api.pruefen",
+             # Phase 2 · L3: Bestandsimport (Datei) und „Produkt melden“ aus der Nacharbeit (Fotos)
+             "material_api.import_probelauf", "material_api.import_uebernehmen", "material_api.nacharbeit_melden"}
 # Ausdrücklich erlaubt – mit Begründung und der Antwort, die die Führungskraft dort bekommt.
 AUSNAHMEN_SCHREIBEN = {
     # Die Prüfseite ist für jeden, auch ohne Anmeldung; sie speichert nichts (ohne Datei: 400).
@@ -219,13 +221,17 @@ AUSNAHMEN_SCHREIBEN_PFAD = {
 AUSNAHMEN_LESEN = {
     "material.qr_ziel": 302,                       # /m/<token> leitet zum Artikel weiter
     "material.artikel_neu": 403,                   # Artikel anlegen nur, wer irgendwo verwaltet (Phase 2)
+    "material.bestandsimport": 403,                # Bestandsimport nur, wer den Zielordner verwaltet (Phase 2 · L3)
+    "material.nacharbeit_csv": 403,                # ebenso die Nacharbeit als CSV
 }
 # Werkzeuge der Katalogpflege (Katalogaustausch, Lieferung 4) sind nur für die Material-Verwaltung; den Katalog selbst
 # liest die Führungskraft über /kategorien und /produkte. Ebenso der Probelauf der Erinnerungsmails (Phase 2 · L2).
 NUR_KATALOGPFLEGE = ("/api/material/katalog/", "/api/material/erinnerungen/")
 # Phase 2: Freigaben eines Ordners oder Kontos, die Nutzersuche und das Protokoll der globalen Suche liest nur, wer
-# verwaltet (bzw. die Verwaltung) – die Führungskraft bekommt 403. „Meine Freigaben“ liest jeder Angemeldete.
-NUR_VERWALTER_LESEN = re.compile(r"^/api/material/(ordner/<int:fid>/freigaben|freigaben|nutzer|globalsuche/protokoll)$")
+# verwaltet (bzw. die Verwaltung) – die Führungskraft bekommt 403. „Meine Freigaben“ liest jeder Angemeldete. Ebenso
+# die Nacharbeit eines Bestandsimports (Phase 2 · L3).
+NUR_VERWALTER_LESEN = re.compile(r"^/api/material/(ordner/<int:fid>/freigaben|ordner/<int:fid>/nacharbeit|freigaben|nutzer"
+                                 r"|globalsuche/protokoll)$")
 # Abfrageparameter, ohne die eine Route nichts zu lesen hätte (400).
 ABFRAGE = {
     "material_api.formulare": lambda e: {"produkt": e[("produkte", "pid")]},

@@ -224,6 +224,12 @@
     freigabe: "Freigabe Nr.", konto: "Person", recht: "Recht", bis: "bis", notiz_geaendert: "Notiz geändert",
     // Phase 2 · Lieferung 2: Erinnerungen
     reminders_off: "Erinnerungsmails aus",
+    // Phase 2 · Lieferung 3: Bestandsimport
+    bestandsimport: "Bestandsimport Nr.", datei: "Datei", zeile: "Zeile", zeilen: "Zeilen",
+    artikel_angelegt: "Artikel angelegt", schon_im_bestand: "schon im Bestand", nacharbeit: "Nacharbeit (Zeilen)",
+    ersetzt: "neu eingelesen (Zeilen)", aus_nacharbeit: "aus der Nacharbeit",
+    liste_inventarnummer: "bisherige Inventarnummer", liste_zuletzt_geprueft: "zuletzt geprüft laut Liste",
+    liste_naechste_pruefung: "nächste Prüfung laut Liste",
   };
   // Die Beschriftung eines Feldes in einem Journaleintrag – wie beschriftung.feld_name: „description“ ist am Produkt der
   // kurze Zusatz hinter dem Namen und heißt dort seit dem Wunsch vom 18.10.2026 „Bemerkung“; an Ordnern und in den
@@ -245,7 +251,9 @@
                    freigabe_erteilt: "Freigabe erteilt", freigabe_geaendert: "Freigabe geändert",
                    freigabe_entzogen: "Freigabe entzogen", freigabe_entfernt: "Freigabe entfernt",
                    freigabe_abgelaufen: "Freigabe abgelaufen",
-                   zugeordnet: "Zuordnung geändert", zuordnung_geloest: "Zuordnung geändert" };
+                   zugeordnet: "Zuordnung geändert", zuordnung_geloest: "Zuordnung geändert",
+                   bestandsimport: "Bestandsimport", nacharbeit_uebernommen: "Nacharbeit übernommen",
+                   nacharbeit_verworfen: "Nacharbeit verworfen" };
   const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };
@@ -686,7 +694,7 @@
     if (v === null || v === undefined || v === "") return '<span class="muted">–</span>';
     if (feld === "recht") return esc(RECHT[v] || v);
     if (Array.isArray(v)) return v.length ? `<ul class="mat-wertliste">${v.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "–";
-    if (typeof v === "boolean" || ((feld === "serial_generated" || feld === "active" || feld === "mat_pruefer" || feld === "mat_katalog" || feld === "reminders_off") && (v === 0 || v === 1))) return v ? "ja" : "nein";
+    if (typeof v === "boolean" || ((feld === "serial_generated" || feld === "active" || feld === "mat_pruefer" || feld === "mat_katalog" || feld === "reminders_off" || feld === "aus_nacharbeit") && (v === 0 || v === 1))) return v ? "ja" : "nein";
     if (feld === "material_kind" || feld === "default_material_kind") return esc(MATERIALART[v] || v);
     if (feld === "kind" || feld === "art") return esc(PRUEFART_KURZ[v] || ORDNERART[v] || ANHANGART[v] || v);
     if (feld === "result" || feld === "ergebnis") return esc(ERGEBNIS[v] || v);

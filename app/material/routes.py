@@ -6,7 +6,8 @@ Muster wie im Prüfungsbereich. Jede Route prüft ihr Recht selbst; ein ausgeble
 Schutz. Fachregeln stehen in services/, hier wird nur gelesen, aufgerufen und geantwortet.
 
 Die Routen der Lieferung 4 stehen in eigenen Modulen an denselben Blueprints – routes_export.py (CSV, Protokoll-ZIP,
-Lebenslauf), routes_katalog.py (Katalogaustausch) und routes_rueckruf.py –, eingebunden am Ende dieser Datei.
+Lebenslauf), routes_katalog.py (Katalogaustausch) und routes_rueckruf.py –, eingebunden am Ende dieser Datei; ebenso die
+der Phase 2 (Freigaben, globale Suche, Zuordnung, Erinnerungen, Bestandsimport).
 
 Seit Phase 2 gelten Freigaben je Ordner (services/rechte.py): Lesende Routen über den ganzen Bestand tragen
 requires_zugang und liefern nur, was das Konto sieht; Routen zu einem Gegenstand tragen requires_folder. Fremdes – auch
@@ -22,8 +23,9 @@ from flask import (Blueprint, abort, current_app, g, jsonify, redirect, render_t
 from .. import db
 from ..auth import attempts_exceeded, current_user, eingabefehler_abfangen, json_body, login_required, note_attempt
 from . import models
-from .services import (Abgelehnt, anhang, bestand, durchgang, eingabe, globalprotokoll, globalsuche, journal, katalog,
-                       kennung, medien as medien_dienst, meldung, protokoll, pruefung, search, unterschrift)
+from .services import (Abgelehnt, anhang, bestand, bestandsimport, durchgang, eingabe, globalprotokoll, globalsuche,
+                       journal, katalog, kennung, medien as medien_dienst, meldung, protokoll, pruefung, search,
+                       unterschrift)
 from .services import erinnerung, rueckruf
 from .services import status as st
 from .services import ueberblick
@@ -58,6 +60,10 @@ UPLOAD_GRENZEN = {
     "material_api.pruefen": 200 * 1024 * 1024,
     # Katalogimport (routes_katalog.py): ZIP mit Bildern und Dokumenten – so groß, wie der Export werden darf.
     "material_api.katalog_importieren": KATALOG_ZIP_MAX_BYTES + 1024 * 1024,
+    # Bestandsimport (routes_import.py): eine Liste von höchstens 5 MB; „Produkt melden“ aus der Nacharbeit wie die Meldung.
+    "material_api.import_probelauf": bestandsimport.MAX_BYTES + 1024 * 1024,
+    "material_api.import_uebernehmen": bestandsimport.MAX_BYTES + 1024 * 1024,
+    "material_api.nacharbeit_melden": meldung.MAX_FOTOS * katalog.BILD_MAX_BYTES + 1024 * 1024,
 }
 PRUEFEN_JE_VIERTELSTUNDE = 20
 
@@ -343,7 +349,8 @@ def medien(art, dateiname):
 @requires_zugang
 def start():
     """Die Übersicht – alle Zahlen über das, was das Konto sieht. „erinnerungen“: der Laufstand der Erinnerungsmails
-    (erinnerung.stand) nur für die Material-Verwaltung (die Plattform-Verwaltung eingeschlossen), sonst null."""
+    (erinnerung.stand) nur für die Material-Verwaltung (die Plattform-Verwaltung eingeschlossen), sonst null.
+    „nacharbeit“: offene Nacharbeit aus Bestandsimporten je Zielordner, den das Konto verwaltet (sonst leer)."""
     alle = bestand.baum()
     gliederungen = [o for o in alle if o["kind"] == "gliederung" and not o["system_kind"] and not o.get("nur_pfad")]
     naechste, faellig = bestand.faellige(pro_seite=10)
@@ -354,7 +361,8 @@ def start():
                    schwelle_tage=st.schwelle_tage(), status_text=st.LABEL,
                    meldungen_offen=meldung.anzahl_offen() if ist_material_verwaltung() else None,
                    rueckrufe=rueckruf.uebersicht(),
-                   erinnerungen=erinnerung.stand() if ist_material_verwaltung() else None)
+                   erinnerungen=erinnerung.stand() if ist_material_verwaltung() else None,
+                   nacharbeit=bestandsimport.offen_uebersicht())
 
 
 @api.get("/suche")
@@ -1150,3 +1158,4 @@ from . import routes_freigaben  # noqa: E402,F401
 from . import routes_global  # noqa: E402,F401
 from . import routes_zuordnung  # noqa: E402,F401
 from . import routes_erinnerung  # noqa: E402,F401
+from . import routes_import  # noqa: E402,F401

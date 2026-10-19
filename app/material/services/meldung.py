@@ -10,7 +10,7 @@ Plattform-Verwaltung) und arbeitet die Meldungen ab:
   - ablehnen: nur mit Begründung.
 
 Der Melder bekommt in beiden Fällen eine Mail, nach dem Einpflegen mit einem Link, der „Artikel
-anlegen“ mit Produkt und Ordner öffnet. Löschen kann eine Meldung nur, wer sie gemacht hat – offen oder
+anlegen“ mit Produkt und Ordner öffnet – kam die Meldung aus der Nacharbeit eines Bestandsimports, mit dem Link dorthin. Löschen kann eine Meldung nur, wer sie gemacht hat – offen oder
 erledigt; ein Produkt, das aus ihr entstand, bleibt. Sonst bleibt sie stehen: Sie ist der Weg eines
 Produkts in den Katalog und steht im Journal (entity „request“, am Produkt mit angezeigt).
 
@@ -365,8 +365,14 @@ def _melder_benachrichtigen(r):
         zeilen.append(f"das von dir gemeldete Produkt ist jetzt im Katalog: {name}.")
         if r["answer"]:
             zeilen += ["", f"Anmerkung von {r['resolved_by_name']}:", r["answer"]]
-        ziel = f"{basis}/material/artikel/neu?produkt={r['product_id']}" + (f"&ordner={r['folder_id']}" if r["folder_id"] else "")
-        zeilen += ["", f"Artikel anlegen: {ziel}"]
+        # Kam die Meldung aus der Nacharbeit eines Bestandsimports, führt der Link dorthin (Phase 2 · L3).
+        imp = db.query("SELECT i.folder_id FROM mat_import_row r JOIN mat_import i ON i.id = r.import_id "
+                       "WHERE r.request_id = ? LIMIT 1", (r["id"],), one=True)
+        if imp:
+            zeilen += ["", f"Nacharbeit des Bestandsimports: {basis}/material/ordner/{imp['folder_id']}/import"]
+        else:
+            ziel = f"{basis}/material/artikel/neu?produkt={r['product_id']}" + (f"&ordner={r['folder_id']}" if r["folder_id"] else "")
+            zeilen += ["", f"Artikel anlegen: {ziel}"]
     else:
         betreff = f"{cfg['SITE_NAME']} – Produktmeldung „{gemeldet}“ nicht aufgenommen"
         zeilen += [f"{r['resolved_by_name']} hat deine Meldung „{gemeldet}“ nicht in den Katalog aufgenommen.", "",

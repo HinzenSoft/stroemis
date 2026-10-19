@@ -234,6 +234,19 @@ def aktive_fuer_artikel(item):
     return out
 
 
+def betrifft(produkt_id, serie):
+    """Laufende Rückrufe des Produkts, die einen (noch nicht angelegten) Artikel mit dieser Seriennummer betreffen –
+    alle Artikel des Produkts oder S in der Seriennummernliste (Vergleich wie _passt). Für den Probelauf des
+    Bestandsimports: [{"id", "title", "alle"}], neueste zuerst. Titel von Rückrufen sieht jedes Konto mit Modulzugang
+    ohnehin am Produkt."""
+    out = []
+    for r in db.query("SELECT * FROM mat_recall WHERE product_id = ? AND closed_at IS NULL ORDER BY id DESC",
+                      (produkt_id,)):
+        if _passt({_norm(s) for s in serien(r)}, {"serial_no": serie}):
+            out.append({"id": r["id"], "title": r["title"], "alle": not serien(r)})
+    return out
+
+
 def fuer_lebenslauf(item):
     """Alle Rückrufe des Produkts, die diesen Artikel betreffen (Seriennummer passt oder alle) – laufende und beendete,
     älteste zuerst; für den Lebenslauf. Laufende tragen den Zustand für den Artikel (bei ausgesonderten keinen)."""

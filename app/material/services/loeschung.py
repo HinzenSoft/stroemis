@@ -18,6 +18,8 @@ ab, bleibt das Konto samt allem stehen:
   offene Entwürfe    Prüfername „(gelöschtes Konto)“ und Urkundennummer leer – ein Entwurf ist kein Nachweis; die
                      Kennung setzt die Datenbank auf NULL, der Materialwart gibt die Reservierung frei
   Produktmeldungen   Name des Melders und des Bearbeiters „(gelöschtes Konto)“
+  Bestandsimporte    Name dessen, der importiert hat (mat_import), und dessen, der eine Zeile der Nacharbeit erledigt
+                     hat (mat_import_row), „(gelöschtes Konto)“ – Arbeitsdaten; der Nachweis steht im Journal
   Suchprotokoll      Name „(gelöschtes Konto)“ (nach zwölf Monaten ohnehin weg)
   Erinnerungslog     Zeilen des Kontos gelöscht (sonst nach 13 Monaten weg; kein Prüfnachweis)
 Abgeschlossene Prüfungen, Durchgänge, Ausnahmen, Anhänge, Rückrufe und das Journal bleiben, wie sie sind. Deaktivieren
@@ -71,5 +73,7 @@ def konto_loeschen_vorbereiten(uid):
     db.execute("UPDATE mat_product_request SET created_by_name = ? WHERE created_by = ?", (GELOESCHT, uid))
     db.execute("UPDATE mat_product_request SET resolved_by_name = ? WHERE resolved_by = ?", (GELOESCHT, uid))
     db.execute("UPDATE mat_global_search SET user_name = ? WHERE user_id = ?", (GELOESCHT, uid))
+    db.execute("UPDATE mat_import SET created_by_name = ? WHERE created_by = ?", (GELOESCHT, uid))
+    db.execute("UPDATE mat_import_row SET resolved_by_name = ? WHERE resolved_by = ?", (GELOESCHT, uid))
     erinnerung.konto_loeschen(uid)                  # vor dem Löschen der Kontozeile: der Verweis geht über mat_ref
     return zahlen

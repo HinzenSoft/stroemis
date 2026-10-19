@@ -247,6 +247,13 @@ def test_migration_7_8():
         assert erinnerungslog_wie_schritt_11(app)
         assert not zeilen(app, "SELECT 1 FROM mat_reminder_log")
         assert not zeilen(app, "SELECT 1 FROM mat_folder WHERE reminders_off <> 0")
+        # Schritt 12 (Bestandsimport, Prüfanleitung) im selben Start: zwei leere Tabellen, eine leere Spalte am Formular.
+        assert {"mat_import", "mat_import_row"} <= {r["name"] for r in zeilen(app, "SELECT name FROM sqlite_master "
+                                                                             "WHERE type = 'table'")}
+        assert not zeilen(app, "SELECT 1 FROM mat_import") and not zeilen(app, "SELECT 1 FROM mat_import_row")
+        assert zeilen(app, "SELECT COUNT(*) AS n FROM mat_form")[0]["n"] and not zeilen(
+            app, "SELECT 1 FROM mat_form WHERE wiki_page_id IS NOT NULL")
+        assert zeilen(app, "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_mat_form_wiki'")
     print("Migration 7 → 8 bestanden.")
 
 
@@ -1218,6 +1225,10 @@ FELDER_IM_INHALT = (
     ("POST", "/api/material/ordner/<int:fid>/verschieben", "parent_id", "json"),
     ("POST", "/api/material/artikel/verschieben", "ids", "json"),
     ("POST", "/api/material/artikel/zuordnen", "ids", "json"),
+    # Phase 2 · L3: Zeilen der Nacharbeit – der Bezug steht im Pfad (Zielordner), die Zeilen prüft der Dienst gegen ihn.
+    ("POST", "/api/material/ordner/<int:fid>/nacharbeit/produkt", "zeilen", "json"),
+    ("POST", "/api/material/ordner/<int:fid>/nacharbeit/pruefen", "zeilen", "json"),
+    ("POST", "/api/material/ordner/<int:fid>/nacharbeit/verwerfen", "zeilen", "json"),
     ("PUT", "/api/material/artikel/<int:iid>/zuordnung", "user_id", "json"),
     ("POST", "/api/material/artikel/zuordnen", "user_id", "json"),
     ("POST", "/api/material/ordner/<int:fid>/freigaben", "user_id", "json"),
@@ -1240,6 +1251,19 @@ def test_felder_im_inhalt():
         assert r.status_code == 201, r.get_json()
         r_a = r.json["durchgang"]["id"]
         nummer = iter(range(1, 10000))
+        # Nacharbeit in A und in B: je ein Import mit unbekannten Produkten (Platzhalter).
+        nacharbeit = {}
+        for c, ordner in ((w, t.lager_a), (t.wart_b, t.lager_b)):
+            liste = ("Hersteller;Modell;Seriennummer\r\nUnbekanntwerk;Modell Eins;UNB-0001\r\n"
+                     "Unbekanntwerk;Modell Zwei;UNB-0002\r\n").encode("utf-8")
+            r = c.post(f"/api/material/ordner/{ordner}/import", headers=H, content_type="multipart/form-data",
+                       data={"file": (io.BytesIO(liste), "liste.csv")})
+            assert r.status_code == 201 and r.json["import"]["nacharbeit"] == 2, r.get_json()
+            nacharbeit[ordner] = [z["id"] for z in zeilen(app, "SELECT r.id FROM mat_import_row r JOIN mat_import i "
+                                                              "ON i.id = r.import_id WHERE i.folder_id = ? ORDER BY r.id",
+                                                              (ordner,))]
+        na, nb = nacharbeit[t.lager_a], nacharbeit[t.lager_b]
+        na_url = f"/api/material/ordner/{t.lager_a}/nacharbeit"
 
         def melden(fid, multipart):
             felder = {"manufacturer": "Meldewerk", "model": f"Testmodell {next(nummer)}", "folder_id": fid}
@@ -1274,6 +1298,10 @@ def test_felder_im_inhalt():
             (FELDER_IM_INHALT[11], lambda v: w.post("/api/material/artikel/zuordnen",
                                                     json={"ids": [v], "user_id": t.k["fuehrung_id"]}),
              a2, 200, t.art_b["id"]),
+            (FELDER_IM_INHALT[12], lambda v: w.post(f"{na_url}/produkt", json={"zeilen": [v], "product_id": ids["hms"]}),
+             na[0], 200, nb[0]),
+            (FELDER_IM_INHALT[13], lambda v: w.post(f"{na_url}/pruefen", json={"zeilen": [v]}), na[0], 200, nb[0]),
+            (FELDER_IM_INHALT[14], lambda v: w.post(f"{na_url}/verwerfen", json={"zeilen": [v]}), na[1], 200, nb[1]),
         ]
         # user_id: an der Stelle von B ein deaktiviertes Konto und eines ohne Namen; die Kontrolle ist ein Konto aus B.
         _, inaktiv_id = neues_konto(app, "inaktiv_a@example.org", name="Inaktiv Musterstadt")
@@ -1281,11 +1309,11 @@ def test_felder_im_inhalt():
         sql(app, "UPDATE users SET active = 0 WHERE id = ?", (inaktiv_id,))
         sql(app, "UPDATE users SET name = '' WHERE id = ?", (namenlos_id,))
         faelle_konto = [
-            (FELDER_IM_INHALT[12], lambda v: w.put(f"/api/material/artikel/{a2}/zuordnung", json={"user_id": v}),
+            (FELDER_IM_INHALT[15], lambda v: w.put(f"/api/material/artikel/{a2}/zuordnung", json={"user_id": v}),
              t.pruefer_b_id, 200),
-            (FELDER_IM_INHALT[13], lambda v: w.post("/api/material/artikel/zuordnen", json={"ids": [a2], "user_id": v}),
+            (FELDER_IM_INHALT[16], lambda v: w.post("/api/material/artikel/zuordnen", json={"ids": [a2], "user_id": v}),
              t.wart_b_id, 200),
-            (FELDER_IM_INHALT[14], lambda v: w.post(f"/api/material/ordner/{t.lager_a}/freigaben",
+            (FELDER_IM_INHALT[17], lambda v: w.post(f"/api/material/ordner/{t.lager_a}/freigaben",
                                                     json={"user_id": v, "grundrecht": "lesen"}), t.pruefer_b_id, 201),
         ]
         assert [f[0] for f in faelle] + [f[0] for f in faelle_konto] == list(FELDER_IM_INHALT)
@@ -1317,6 +1345,10 @@ def test_felder_im_inhalt():
         assert zeilen(app, "SELECT 1 FROM mat_folder_grant WHERE folder_id = ? AND user_id = ? AND permission = 'lesen'",
                       (t.lager_a, t.pruefer_b_id))
         assert not zeilen(app, "SELECT 1 FROM mat_folder_grant WHERE user_id IN (?, ?)", (inaktiv_id, namenlos_id))
+        # Die Nacharbeit in B ist unberührt: offen, ohne Produktwahl.
+        assert [(r["status"], r["product_id"]) for r in zeilen(app, "SELECT status, product_id FROM mat_import_row "
+                                                                    "WHERE id IN (?, ?) ORDER BY id", nb)] == [
+            ("offen", None), ("offen", None)]
         # Die Prüfung der Kontrolle hängt am Durchgang aus A; an B ging nichts.
         assert zeilen(app, "SELECT round_id FROM mat_inspection WHERE item_id = ? AND completed_at IS NULL",
                       (t.art_a["id"],))[0]["round_id"] == r_a

@@ -9,6 +9,8 @@ Aufbau:
   routes.py      Seiten (/material/…, /m/<token>), Schnittstelle (/api/material/…), Medien
   routes_export.py, routes_katalog.py, routes_rueckruf.py
                  Routen der Lieferung 4: Export (CSV, Protokoll-ZIP, Lebenslauf), Katalogaustausch, Rückrufe
+  routes_import.py
+                 Routen der Phase 2 · Lieferung 3: Bestandsimport und Nacharbeit
   cli.py         flask material import-catalog, export-catalog, remind
   tageslauf.py   Thread je Arbeitsprozess: einmal am Tag ab 6 Uhr Pflege und Erinnerungsmails (seit Phase 2 · L2)
   services/      Fachregeln: rechte, katalog, bestand, status, interval, search, nummern, qr, journal,
@@ -16,7 +18,8 @@ Aufbau:
                  Prüfseite), pdf (WeasyPrint), stempel (Prüfsumme), unterschrift, ueberblick (Fälligkeiten je
                  Ordner), export, lebenslauf, beschriftung (Journal als Text), rueckruf; seit Phase 2 dazu
                  globalprotokoll (Protokoll der Blicke über den eigenen Bereich) und globalsuche, seit Lieferung 2
-                 erinnerung (Erinnerungsmails, Pflege, Laufstand und Probelauf)
+                 erinnerung (Erinnerungsmails, Pflege, Laufstand und Probelauf), seit Lieferung 3 tabelle und
+                 bestandsimport (Bestandsimport mit Nacharbeit)
   templates/, static/   Seite und Oberfläche (material.js, material.css)
 """
 from .. import db
@@ -45,12 +48,18 @@ def _erinnerungslog_aufraeumen(conn):
     aufraeumen(conn)
 
 
+def _nacharbeit_aufraeumen(conn):
+    from .services.bestandsimport import aufraeumen
+    aufraeumen(conn)
+
+
 def schema_anmelden():
     """Die Migration dieses Moduls beim Start mitlaufen lassen (db.init_db ruft sie auf) – danach das Protokoll der
-    globalen Suche und das Erinnerungslog auf ihre Frist kürzen (auch wenn der Tageslauf steht), die Protokolldateien
-    mit der Datenbank abgleichen und durchsichtige Bilder einmalig reparieren."""
-    for schritt in (models.migrieren, _suchprotokoll_aufraeumen, _erinnerungslog_aufraeumen, _verwaiste_protokolle,
-                    _bilder_reparieren):
+    globalen Suche, das Erinnerungslog und die offene Nacharbeit aus Bestandsimporten auf ihre Frist kürzen (auch wenn
+    der Tageslauf steht), die Protokolldateien mit der Datenbank abgleichen und durchsichtige Bilder einmalig
+    reparieren."""
+    for schritt in (models.migrieren, _suchprotokoll_aufraeumen, _erinnerungslog_aufraeumen, _nacharbeit_aufraeumen,
+                    _verwaiste_protokolle, _bilder_reparieren):
         if schritt not in db.SCHEMA_MODULE:
             db.SCHEMA_MODULE.append(schritt)
 

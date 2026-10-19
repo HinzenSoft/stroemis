@@ -39,6 +39,7 @@ VORZIEHEN = ("Die nächste Prüfung lässt sich nur vorziehen, nicht verschieben
 # Grund im Journal, wenn gesperrte und ausgesonderte Artikel mit ihrem Ordner die Gliederung wechseln (1.7 Nr. 3).
 GRUND_GLIEDERUNG = "Ordner in andere Gliederung verschoben"
 GRUND_UMWANDLUNG = "Ordner zur Gliederung gemacht"
+NACHARBEIT_OFFEN = "Im Ordner wartet Nacharbeit aus einem Bestandsimport – erst übernehmen oder verwerfen."
 DEMO_GRENZE = ("Zwischen den Demodaten (DEMO-Gliederungen) und echtem Bestand lässt sich nichts verschieben – ob ein "
                "Artikel DEMO ist, hängt an seinem Ordner, und Lebenslauf, CSV und Verzeichnis passten sonst nicht mehr "
                "zu seinen Protokollen.")
@@ -306,6 +307,11 @@ def ordner_loeschen(fid):
         raise Abgelehnt("Im Ordner liegen noch Artikel (auch gesperrte oder ausgesonderte zählen).", 409)
     if db.query(f"SELECT 1 FROM mat_round WHERE folder_id IN ({marken}) LIMIT 1", betroffen, one=True):
         raise Abgelehnt("Für diesen Ordner gibt es Prüfdurchgänge – er bleibt.", 409)
+    # Offene Nacharbeit eines Bestandsimports in diesen Ordner verschwände sonst samt Produktwahl und Meldungsbezug ohne
+    # Journal (mat_import hängt mit ON DELETE CASCADE am Ordner); Erledigtes geht mit, der Nachweis steht im Journal.
+    if db.query("SELECT 1 FROM mat_import_row r JOIN mat_import i ON i.id = r.import_id WHERE i.folder_id = ? "
+                "AND r.status = 'offen' LIMIT 1", (fid,), one=True):
+        raise Abgelehnt(NACHARBEIT_OFFEN, 409)
     # Gesperrte kehren zurück; Ausgesonderte nicht – sie verlieren ihre Herkunft (Fremdschlüssel) und gehören danach
     # zur Gliederung.
     if db.query(f"SELECT 1 FROM mat_item WHERE origin_folder_id IN ({marken}) AND lock_state IN ('gesperrt', 'verloren') "
@@ -499,17 +505,27 @@ def _lebensende_wirksam(rechnung, manuell):
     return rechnung or manuell
 
 
-def _serie_frei(produkt_id, serie, ausser=None):
-    """Seriennummer bei diesem Produkt noch frei? Ein sichtbarer Artikel mit derselben Nummer: 409 mit seiner
-    Inventarnummer; ein fremder: FremdeDublette (3.7) – ohne Inventarnummer, protokolliert."""
+def serie_konflikt(produkt_id, serie, ausser=None):
+    """Gibt es diese Seriennummer bei diesem Produkt schon? {"item": Zeile, "sichtbar": bool} oder None – die Abfrage aus
+    _serie_frei, ohne zu werfen und ohne Protokoll (für den Bestandsimport, der Sichtbares und Fremdes selbst
+    unterscheidet)."""
     andere = db.query("SELECT * FROM mat_item WHERE product_id = ? AND serial_no = ? COLLATE NOCASE AND id IS NOT ? "
                       "ORDER BY id LIMIT 1", (produkt_id, serie, ausser), one=True)
     if not andere:
+        return None
+    return {"item": andere, "sichtbar": rechte.darf_artikel("lesen", andere)}
+
+
+def _serie_frei(produkt_id, serie, ausser=None):
+    """Seriennummer bei diesem Produkt noch frei? Ein sichtbarer Artikel mit derselben Nummer: 409 mit seiner
+    Inventarnummer; ein fremder: FremdeDublette (3.7) – ohne Inventarnummer, protokolliert."""
+    k = serie_konflikt(produkt_id, serie, ausser)
+    if not k:
         return
-    if rechte.darf_artikel("lesen", andere):
-        raise Abgelehnt(f"Diese Seriennummer gibt es bei diesem Produkt schon (Inventarnummer {andere['inventory_no']}).",
+    if k["sichtbar"]:
+        raise Abgelehnt(f"Diese Seriennummer gibt es bei diesem Produkt schon (Inventarnummer {k['item']['inventory_no']}).",
                         409)
-    raise FremdeDublette(andere["id"], serie)
+    raise FremdeDublette(k["item"]["id"], serie)
 
 
 def vorschlag(d):
@@ -535,7 +551,11 @@ def vorschlag(d):
             "lifetime_source": p["lifetime_source"]}
 
 
-def artikel_anlegen(d):
+def artikel_plan(d):
+    """Alles aus artikel_anlegen bis vor die Schreibsperre: artikel_werte, Ablageordner, wirksames Intervall, Lebensende
+    (nur vorziehen), Fälligkeit (Vorschlag bzw. höchstens heute + Intervall). Liest nur – der Bestandsimport prüft damit
+    jede Zeile nach denselben Regeln wie das Anlegen von Hand. Liefert {"w": w, "p": p, "fid": fid, "manuell": manuell};
+    wirft Abgelehnt wie bisher."""
     w, p = artikel_werte(d)
     fid = kennung(d.get("folder_id"), "Ordner")
     ablageordner_pruefen(fid)
@@ -557,6 +577,14 @@ def artikel_anlegen(d):
     elif w["next_due_on"] > grenze:
         raise Abgelehnt(f"Ohne Prüfung liegt die nächste Fälligkeit höchstens ein Intervall in der Zukunft "
                         f"(spätestens {grenze}).")
+    return {"w": w, "p": p, "fid": fid, "manuell": manuell}
+
+
+def artikel_schreiben(plan, journal_zusatz=None):
+    """Unter BEGIN IMMEDIATE (in einer äußeren Transaktion läuft sie flach mit): Inventarnummer, ggf. STR-Nummer,
+    _serie_frei, INSERT, Journal „angelegt“ – journal_zusatz wird ins Nachher gemischt (Bestandsimport: Import und
+    Zeile). Liefert die Kennung des Artikels."""
+    w, p, fid, manuell = plan["w"], plan["p"], plan["fid"], plan["manuell"]
     uid, _ = akteur()
     ts = db.now()
     with db.transaction(sofort=True):
@@ -571,8 +599,12 @@ def artikel_anlegen(d):
              w["retire_by"], manuell, w["next_due_on"], w["interval_months"], qr.neues_token(), w["notes"], uid, ts, ts))
         journal.eintragen("item", iid, "angelegt", None,
                           dict(w, folder_id=fid, serial_no=serie, serial_generated=generiert, inventory_no=inventar,
-                               retire_by_manual=manuell, ordner=_pfad_text(fid)))
+                               retire_by_manual=manuell, ordner=_pfad_text(fid), **(journal_zusatz or {})))
     return iid
+
+
+def artikel_anlegen(d):
+    return artikel_schreiben(artikel_plan(d))
 
 
 def stand_von(i):
@@ -831,7 +863,8 @@ def artikel_sortierung():
 def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, richtung="auf", zugeordnet=None):
     """Ein Ordner mit Pfad, Unterordnern (mit Zählung) und den Artikeln direkt darin, die das Konto sieht – in einem
     teilweise sichtbaren Systemordner also nur die eigenen. Das Journal nur mit Grundrecht, die Einträge zu Freigaben
-    darin nur für Verwalter des Ordners. zugeordnet: nur Artikel dieser Person (und nur, wo das Grundrecht gilt)."""
+    darin nur für Verwalter des Ordners. zugeordnet: nur Artikel dieser Person (und nur, wo das Grundrecht gilt).
+    „nacharbeit“: offene Zeilen aus Bestandsimporten in diesen Ordner – nur für Verwalter, sonst null."""
     from .search import sortierung
     ordnung = sortierung(artikel_sortierung(), sort, richtung, "i.inventory_no")
     o = ordner(fid)
@@ -869,6 +902,9 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     out["intervall"] = {"monate": o["interval_months"]}
     from .erinnerung import ordner_stand
     out["erinnerungen"] = ordner_stand(fid)
+    # Offene Zeilen der Nacharbeit aus Bestandsimporten mit genau diesem Zielordner – nur für Verwalter (sonst null).
+    from .bestandsimport import offen_im_ordner
+    out["nacharbeit"] = offen_im_ordner(fid) if darf["verwalten"] else None
     return out
 
 
