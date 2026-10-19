@@ -677,7 +677,7 @@ Grenzfällen, Stempel auf jeder Seite (auch 210 Seiten), Docker-Pakete und Aufl�
   erscheinen. Den eingebauten Betrachter von Chrome zeigt das kopflose Chromium hier nicht; die Antwort der Route ist
   `200 application/pdf` mit einer CSP ohne `sandbox`.
 - **Schrift**: DLRG Univers wird als Teilmenge eingebettet; die Schrift erlaubt laut ihren Angaben die Einbettung
-  für Ansicht und Druck. Bitte bestätigen, dass die Lizenz der DLRG das für PDF-Protokolle abdeckt.
+  für Ansicht und Druck. Bestätigt am 19.10.2026: Die Lizenz der DLRG deckt das für PDF-Protokolle ab.
 - **Rechtliche Einordnung**: Die Unterschrift im Protokoll ist eine einfache elektronische Unterschrift (Bild plus
   Anmeldung, Zeitpunkt und Prüfsumme), keine qualifizierte. Eine PDF-Signatur (PAdES), die Acrobat selbst prüft,
   wäre ein späterer Schritt.
@@ -1903,13 +1903,13 @@ Regressionstest in `tests/test_material_stufen.py` (vorher rot, jetzt grün), Ob
   verlangt eineindeutige Nummern; eine Nummer je Gliederung wäre ein Umbau der Etiketten.
 - **Pfadnamen in verschobenen Artikeln**: Im Journal eines Artikels aus einer anderen Gliederung, in seinen
   festgeschriebenen Protokollen und in Titel und Ordner alter Durchgänge stehen Ordnernamen der alten Gliederung – sie
-  gehören zur Geschichte des Artikels. Bitte bestätigen.
+  gehören zur Geschichte des Artikels. Bestätigt am 19.10.2026.
 - **Telefon und Tablet**: Reiter „Freigaben“ in „Ordner bearbeiten“ (Vorlagen, Karten, Verlängern) und Zuordnen
   (Personensuche, Sammelaktion) auf dem Telefon durchgehen. Am Tablet hochkant und quer (bis etwa 920 px) sind die
   Freigabenlisten jetzt Karten – im Browser nachgemessen, auf einem echten Gerät noch nicht gesehen.
 - **Erledigte Zeilen und neue Durchgänge**: Eine schon erledigte Zeile eines offenen Durchgangs sperrt keinen neuen
   mehr (Prüfung vor Auslieferung, Nr. 4) – das gilt auch innerhalb einer Gliederung: Sind alle Artikel eines
-  Unterordners im laufenden Durchgang schon geprüft, lässt sich dort ein eigener eröffnen. Bitte bestätigen.
+  Unterordners im laufenden Durchgang schon geprüft, lässt sich dort ein eigener eröffnen. Bestätigt am 19.10.2026.
 - **Migrierte Prüffreigaben externer Prüfer laufen am 31.12.2027 ab** (die übrigen sind seit Schritt 9 dauerhaft): Mit
   „Alle Prüffreigaben verlängern bis …“ geht das je Gliederung in einem Schritt. Ablaufmails an die Verwalter kommen
   erst mit Lieferung 2 – bis dahin warnen nur „Meine Freigaben“ und der Hinweis im Ordnerkopf (30 Tage vorher).
@@ -1920,7 +1920,7 @@ Regressionstest in `tests/test_material_stufen.py` (vorher rot, jetzt grün), Ob
 - **Inbetriebnahme in der Produktion**: Dort gibt es keine Gliederung, also nach dem Update auch keine Freigaben; nur
   die Plattform-Verwaltung hat das Modul. Sie gibt der Material-Verwaltung und den Mitgliedern die Stufe; die
   Material-Verwaltung legt die Gliederung an und wählt im selben Schritt den ersten Materialwart (README).
-- **Protokollinhalt nach EN 365** (aus Lieferung 3): Die zugeordnete Person kommt bewusst nicht ins Protokoll – mit
+- **Protokollinhalt nach EN 365 – bestätigt am 19.10.2026** (aus Lieferung 3): Die zugeordnete Person kommt bewusst nicht ins Protokoll – mit
   den Sachkundigen bestätigen, dass die Prüfkarte sie nicht verlangt.
 - **Bremse bei immer angebotener Suche – entschieden**: Bremse am 18.10.2026 auf Wunsch entfernt; Kontrolle bleibt das
   Protokoll mit Namen. (Bis dahin zählte, seit die Suche auch neben eigenen Treffern angeboten wird, auch eine Suche
@@ -1938,7 +1938,7 @@ Regressionstest in `tests/test_material_stufen.py` (vorher rot, jetzt grün), Ob
   mit Stufe Verwaltung klein halten. Ebenso ansehen, wer den Zugang zurückbekommt (Stufe aus Phase 1 oder nur
   abgelaufene Freigaben): Er sieht Katalog und Suche, keinen Bestand.
 - **Entzug der Plattform-Verwaltung lässt Material auf „Verwaltung“** (wie die anderen Module): Wer nur kurz
-  Plattform-Verwaltung war, sieht weiter alle Bestände, bis jemand Material einzeln senkt. Bitte bestätigen.
+  Plattform-Verwaltung war, sieht weiter alle Bestände, bis jemand Material einzeln senkt. Bestätigt am 19.10.2026.
 - **Neue Konten brauchen einen Namen**: Mit der Vorgabe „Mitglied“ im Modul Material lehnt die Nutzerverwaltung ein
   neues Konto ohne Namen ab (oder Material „–“). Kontoanfragen haben den Namen ohnehin als Pflichtfeld.
 - **Zusatz von Hand im Modellnamen – selbst umstellen, nicht automatisch**: Produkte, deren Modellname den Zusatz schon
@@ -2129,6 +2129,20 @@ einem DEMO-Produkt mit Beschreibung; keine Konsolenfehler, nichts rollt waagerec
 | 6 | Übersicht ohne Freigabe – die erste Seite jedes neuen Kontos – mit dem alten Wortlaut „… auch in allen Gliederungen“ | niedrig | „Die Nummernsuche oben findet eine Herstellerseriennummer auf Wunsch auch außerhalb deines Bereichs – das wird mit deinem Namen protokolliert.“ Test `test_teilfreigabe` |
 | 7 | Nutzerverwaltung, Dialog „Bearbeiten“: Dass der Prüfer die Urkundennummer selbst im Profil einträgt, stand zweimal untereinander | niedrig | Die Zeile unter dem Häkchen nennt nur den Zustand („Urkundennummer: noch keine – solange darf er nicht prüfen.“ bzw. die Nummer), den Weg nennt allein der Hilfetext. Test `test_nutzerverwaltung_oberflaeche` |
 | 8 | Profil: Das Profilbild stehe „an jedem Artikel“ – im Modul Material ist ein Artikel der Ausrüstungsgegenstand, und neue Konten lesen das Wiki nur | niedrig | „Es steht neben deinem Namen an jeder Wiki-Seite, die du erstellt oder bearbeitet hast.“ – für jedes Konto richtig, ohne Fallunterscheidung. Test `test_vorgabe_neue_konten` |
+
+### Bestätigungen vom 19.10.2026
+
+Alle bis dahin offenen Annahmen hat der Nutzer am 19.10.2026 bestätigt (an Ort und Stelle als „bestätigt“ markiert):
+
+- **Pfadnamen in verschobenen Artikeln** bleiben in Journal, Protokollen und alten Durchgängen (Zu prüfen oben).
+- **Erledigte Zeilen sperren keinen neuen Durchgang**, auch innerhalb einer Gliederung (Zu prüfen oben).
+- **Entzug der Plattform-Verwaltung lässt Material auf „Verwaltung“** (Zu prüfen oben).
+- **Reiner Text „Name Zusatz“** mit Leerzeichen, ohne Komma (Bemerkung statt Beschreibung).
+- **„Bemerkung (Produkt)“** als CSV-Spalte und **„Bemerkung des Melders“** im Dialog „Produkt aus Meldung anlegen“.
+- **Warnung beim letzten Materialwart** auch in der Tabelle der Nutzerverwaltung und im Dialog „Löschen“.
+- **Spalte „kritisch“ im Prüfprotokoll** steht immer da, die Marke klein geschrieben wie in der Oberfläche.
+- **Protokollinhalt nach EN 365**: Die zugeordnete Person kommt nicht ins Protokoll.
+- **Schrift**: Die Lizenz der DLRG deckt das Einbetten von DLRG Univers in PDF-Protokolle (Lieferung 3, Zu prüfen).
 
 ## Phase 2 · Lieferung 2 – Erinnerungen (19.10.2026)
 
@@ -2526,27 +2540,27 @@ Am 19.10.2026 entschieden: Nr. 3, 4, 11, 14, 15 und 18 bestätigt, Nr. 13 geänd
 
 1. **Schalter in der Vorgabe aus – bestätigt am 19.10.2026**, eingeschaltet wird in der Produktion **im Browser** (nicht in der `.env`, weil
    dev sie kopiert). Danach kommen die ersten Mails binnen 15 Minuten, dann jeden Morgen ab 6 Uhr.
-2. **Ab 6:00 Uhr deutscher Zeit**, fest, einmal am Tag; ausgefallene Tage holt der nächste Lauf mit der höchsten
+2. **Ab 6:00 Uhr deutscher Zeit – bestätigt am 19.10.2026**, fest, einmal am Tag; ausgefallene Tage holt der nächste Lauf mit der höchsten
    erreichten Stufe nach.
 3. **Der erste Lauf nach dem Einschalten schickt den Rückstand – bestätigt am 19.10.2026**: jeden schon überfälligen Artikel einmal, alles im
    7- und 30-Tage-Fenster und alles, was in 90 Tagen das Lebensende erreicht – höchstens 100 Zeilen je Mail, der Rest
    einer Gruppe als „… und n weitere“, gilt ebenfalls als gemahnt. Einen „stillen Start“, der den Bestand nur
    vermerkt, gibt es nicht.
 4. **Überfällig nur einmal je Fälligkeitsdatum – bestätigt am 19.10.2026**; erneut frühestens nach 13 Monaten, wenn die Log-Zeile verfallen ist.
-5. **Stufen 30/7 fest, Lebensende 90 Tage, Freigaben 30 Tage.** Weitere Stufen bräuchten einen Neuaufbau der Tabelle.
-6. **Artikel ohne Fälligkeitsdatum bekommen keine Mail**; „neu“ wird nach dem Datum gemahnt, mit „Eingangsprüfung
+5. **Stufen 30/7 fest, Lebensende 90 Tage, Freigaben 30 Tage – bestätigt am 19.10.2026.** Weitere Stufen bräuchten einen Neuaufbau der Tabelle.
+6. **Artikel ohne Fälligkeitsdatum bekommen keine Mail – bestätigt am 19.10.2026**; „neu“ wird nach dem Datum gemahnt, mit „Eingangsprüfung
    offen“.
-7. **Wer neu Empfänger wird** (neuer Materialwart, Artikel verschoben), bekommt am nächsten Morgen einmal alles, was
+7. **Wer neu Empfänger wird – bestätigt am 19.10.2026** (neuer Materialwart, Artikel verschoben), bekommt am nächsten Morgen einmal alles, was
    dort schon in einem Fenster liegt – das Log gilt je Empfänger.
-8. **Empfänger auch Material- und Plattform-Verwaltung, wenn am Ordner eingetragen** (anders als bei Rückruf und
+8. **Empfänger auch Material- und Plattform-Verwaltung, wenn am Ordner eingetragen – bestätigt am 19.10.2026** (anders als bei Rückruf und
    Meldung), sonst Material-Verwaltung, sonst Plattform-Verwaltung, gekennzeichnet. Eine Plattform-Verwaltung ohne
    Namen bekommt nichts; ihre Artikel stehen im Probelauf unter „Ohne Empfänger“.
-9. **Kein Link je Artikel**, ein Link je Ordner – die Mail bleibt lesbar. Die Stufenregeln stehen in der Hilfe der
+9. **Kein Link je Artikel – bestätigt am 19.10.2026**, ein Link je Ordner – die Mail bleibt lesbar. Die Stufenregeln stehen in der Hilfe der
    Einstellung, nicht in der Mail.
-10. **Bei eingeschaltetem Versand ohne `SMTP_HOST`** wird nichts versucht (Hinweis auf der Übersicht).
+10. **Bei eingeschaltetem Versand ohne `SMTP_HOST` – bestätigt am 19.10.2026** wird nichts versucht (Hinweis auf der Übersicht).
 11. **„Erinnerungsmails aus“ hält Freigabe-Ablaufmails nicht an – bestätigt am 19.10.2026** – Freigaben sind Rechte,
     keine Prüffristen; das gilt auch für die Mail an den Inhaber.
-12. **Laufstand unten als Textlink**, Handlungsbedarf oben gelb; der Probelauf zeigt nach dem Morgenlauf den Lauf von
+12. **Laufstand unten als Textlink – bestätigt am 19.10.2026**, Handlungsbedarf oben gelb; der Probelauf zeigt nach dem Morgenlauf den Lauf von
     morgen.
 13. **Geändert am 19.10.2026 – der Inhaber bekommt jetzt auch eine Mail**, im Abschnitt „Deine Freigaben“, die
     Verwalter wie bisher (siehe „Entscheidungen vom 19.10.2026“). Gebaut war: **Ablaufmail ohne den Inhaber**, der die
@@ -2557,14 +2571,14 @@ Am 19.10.2026 entschieden: Nr. 3, 4, 11, 14, 15 und 18 bestätigt, Nr. 13 geänd
 14. **„Freigabe abgelaufen“ – bestätigt am 19.10.2026**: Der erste Lauf trägt alle früher abgelaufenen Freigaben ins Journal nach (heutiges
     Datum, echtes Enddatum), auch bei ausgeschaltetem Versand.
 15. **DEMO-Konten erkennt man an der Adresse `….invalid` – bestätigt am 19.10.2026** – neu; die Skripte vergeben nur solche.
-16. **Kommandozeile**: `--stichtag` nur mit `--trocken`, `--erneut` für einen zweiten Mailteil am selben Tag; Exit 1
+16. **Kommandozeile – bestätigt am 19.10.2026**: `--stichtag` nur mit `--trocken`, `--erneut` für einen zweiten Mailteil am selben Tag; Exit 1
     bei Fehlschlag oder Fehler, 2 bei aus, gesperrt, ohne Mailserver oder falschem Aufruf.
-17. **Sperre `MATERIAL_ERINNERUNGEN_SPERRE`** nur in der Umgebung; ohne Eintrag an, wenn `STROEMIS_NAME` auf `-dev`
+17. **Sperre `MATERIAL_ERINNERUNGEN_SPERRE` – bestätigt am 19.10.2026** nur in der Umgebung; ohne Eintrag an, wenn `STROEMIS_NAME` auf `-dev`
     endet. Einen Notschalter nur für den Thread gibt es nicht.
 18. **Einmaligkeit mit einer Lücke – bestätigt am 19.10.2026**: Endet ein Prozess genau zwischen der Annahme einer Mail und ihrem Vermerk (etwa
     beim Deploy-Neustart kurz nach 6 Uhr), kommt diese eine Mail am nächsten Morgen noch einmal. Umgekehrt (erst
     vermerken, dann senden) ginge bei einem Abbruch eine Mahnung verloren – das schien schlechter.
-19. **DEMO im Probelauf nur zur Ansicht** (Nachtrag): Das Kästchen erscheint nur, wenn DEMO ausgelassen wurde. Mit
+19. **DEMO im Probelauf nur zur Ansicht – bestätigt am 19.10.2026** (Nachtrag): Das Kästchen erscheint nur, wenn DEMO ausgelassen wurde. Mit
     Haken zählen auch DEMO-Konten als Empfänger und im Rückfall – eine DEMO-Material-Verwaltung bekommt dann auch die
     echten Gruppen „kein Materialwart eingetragen“ (gekennzeichnet). Der echte Lauf bleibt ohne DEMO.
 20. **Material-Verwaltung als Inhaberin – bestätigt am 19.10.2026** (zu Nr. 13): Läuft eine eigene befristete Freigabe eines Kontos mit Stufe
