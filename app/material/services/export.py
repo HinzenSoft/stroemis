@@ -42,12 +42,15 @@ ZIP_MAX_BYTES = 2 * 1024 ** 3
 FORMEL_ANFANG = ("=", "+", "-", "@", "\t", "\r")
 SPERRZUSTAND = {"frei": "frei", "gesperrt": "gesperrt", "verloren": "verloren", "ausgesondert": "ausgesondert"}
 
-# „Beschreibung“ (Nachbesserung vom 18.10.2026): der Zusatz hinter dem Modell, voll und ungekürzt – eine Datenausgabe.
+# „Bemerkung (Produkt)“ (Nachbesserung vom 18.10.2026): der Zusatz hinter dem Modell (description), voll und ungekürzt –
+# eine Datenausgabe. Das Feld heißt in der Oberfläche „Bemerkung“; der Zusatz „(Produkt)“ hält die Spalte von
+# „Bemerkung“ weiter hinten getrennt, der des Artikels (notes) – die bleibt, wie sie seit Lieferung 4 heißt.
 ARTIKEL_SPALTEN = (
-    "Inventarnummer", "Seriennummer", "Seriennummer vom System", "Hersteller", "Modell", "Beschreibung", "Artikelnummer",
-    "Kategorie", "Norm", "Materialart", "Ordner", "Gliederung", "Status", "Sperrzustand", "Sperr-/Aussonderungsgrund",
-    "Herkunftsordner", "zuletzt geprüft", "nächste Prüfung", "Prüfintervall wirksam (Monate)", "hergestellt",
-    "gekauft", "Erstgebrauch", "Lebensende", "Bemerkung", "in Prüfung bei", "Zugeordnet an", "DEMO")
+    "Inventarnummer", "Seriennummer", "Seriennummer vom System", "Hersteller", "Modell", "Bemerkung (Produkt)",
+    "Artikelnummer", "Kategorie", "Norm", "Materialart", "Ordner", "Gliederung", "Status", "Sperrzustand",
+    "Sperr-/Aussonderungsgrund", "Herkunftsordner", "zuletzt geprüft", "nächste Prüfung",
+    "Prüfintervall wirksam (Monate)", "hergestellt", "gekauft", "Erstgebrauch", "Lebensende", "Bemerkung",
+    "in Prüfung bei", "Zugeordnet an", "DEMO")
 VERZEICHNIS_SPALTEN = (
     "Protokoll-ID", "Art", "Prüfart", "Datum", "festgeschrieben", "Inventarnummer", "Seriennummer", "Produkt",
     "Prüfdurchgang", "Prüfer", "Urkundennummer", "Ergebnis", "Grund", "Datei im ZIP", "SHA-256 der Datei",

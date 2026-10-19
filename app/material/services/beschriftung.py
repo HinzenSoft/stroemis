@@ -76,6 +76,16 @@ STUFE_MATERIAL = {0: "kein Zugriff", 1: "Mitglied", 2: "Verwaltung"}
 _VERWEISE = ("pruefung", "aussonderung", "basis", "berichtigung", "berichtigt")
 
 
+def feld_name(feld, eintrag):
+    """Die Beschriftung eines Feldes in einem Journaleintrag – wie feldName() in material.js. „description“ ist am
+    Produkt der kurze Zusatz hinter dem Namen und heißt dort seit dem Wunsch vom 18.10.2026 „Bemerkung“; an Ordnern und
+    in den Einträgen eines Rückrufs (auch sie stehen am Produkt) bleibt es die Beschreibung."""
+    if (feld == "description" and eintrag.get("entity") == "product"
+            and not str(eintrag.get("action")).startswith("rueckruf")):
+        return "Bemerkung"
+    return FELD.get(feld, feld)
+
+
 def _ist_datumsfeld(feld):
     return feld.endswith("_on") or feld in ("valid_from", "retire_by", "datum", "begonnen", "bis")
 
@@ -129,7 +139,7 @@ def journal_zeilen(eintraege, verweise=None, mit_entitaet=False):
         if mit_entitaet:
             aktion = f"{ENTITAET.get(j['entity'], j['entity'])} {aktion}"
         out.append({"zeit": zeit_text(j["created_at"]), "aktion": aktion, "von": j.get("user_name") or "–",
-                    "felder": [{"feld": FELD.get(f, f), "vorher": wert_text(vorher.get(f), f, verweise),
+                    "felder": [{"feld": feld_name(f, j), "vorher": wert_text(vorher.get(f), f, verweise),
                                 "nachher": wert_text(nachher.get(f), f, verweise),
                                 "nur_nachher": j["action"] in ("angelegt",) or f not in vorher}
                                for f in felder]})

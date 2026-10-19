@@ -11,15 +11,17 @@
 
   /* --- Produktname mit Beschreibung (Nachbesserungen vom 18.10.2026) ---------------------------------------------
      Die Beschreibung eines Produkts ist ein kurzer Zusatz hinter dem Namen, etwa die Verschlussart eines Karabiners.
-     Wo ein Produkt genannt wird, steht sie direkt hinter dem Modell und vor der Artikelnummer, ohne Strich und grau
-     wie die Artikelnummer in der Katalogliste: „D Classic Screwlock K496B“ – der Name hervorgehoben bzw. verlinkt,
-     der Zusatz außerhalb davon (class="muted mat-zusatz", nie fett, nie unterstrichen). Eine Regel für alle Stellen
-     (modellTeile, produktZusatz), dieselbe wie katalog.produkt_teile auf dem Server (PDF, CSV, Mails): Ohne
-     Beschreibung nur der Name. Steht der Zusatz schon von Hand im Modellnamen („D Classic | Screwlock“), gilt der Teil
-     vor dem Strich als Name und der Teil dahinter als Zusatz – angezeigt wie eine Beschreibung, der Katalog bleibt,
-     wie er ist; dieselbe Angabe in beiden kommt nicht doppelt, zwei verschiedene stehen mit Komma („Screwlock,
-     Aluminium“). Eine ältere, längere Beschreibung (bis dahin war das Feld mehrzeilig) steht in einer Zeile, nach
-     BESCHREIBUNG_MAX Zeichen mit „…“ gekürzt; den vollen Text zeigt der title.
+     Sichtbar heißt sie seit dem Wunsch vom 18.10.2026 „Bemerkung“ (Produktdialog, Produktseite, Platzhalter der
+     Produktsuche, Journal am Produkt – feldName); description und die Namen hier im Code bleiben. Wo ein Produkt
+     genannt wird, steht sie direkt hinter dem Modell und vor der Artikelnummer, ohne Strich und grau wie die
+     Artikelnummer in der Katalogliste: „D Classic Screwlock K496B“ – der Name hervorgehoben bzw. verlinkt, der Zusatz
+     außerhalb davon (class="muted mat-zusatz", nie fett, nie unterstrichen). Eine Regel für alle Stellen (modellTeile,
+     produktZusatz), dieselbe wie katalog.produkt_teile auf dem Server (PDF, CSV, Mails): Ohne Beschreibung nur der
+     Name. Steht der Zusatz schon von Hand im Modellnamen („D Classic | Screwlock“), gilt der Teil vor dem Strich als
+     Name und der Teil dahinter als Zusatz – angezeigt wie eine Beschreibung, der Katalog bleibt, wie er ist; dieselbe
+     Angabe in beiden kommt nicht doppelt, zwei verschiedene stehen mit Komma („Screwlock, Aluminium“). Eine ältere,
+     längere Beschreibung (bis dahin war das Feld mehrzeilig) steht in einer Zeile, nach BESCHREIBUNG_MAX Zeichen mit
+     „…“ gekürzt; den vollen Text zeigt der title.
      Ausgaben: produktName als Text, Name und Zusatz durch ein Leerzeichen getrennt (Rückfragen, Dialogtitel, alt);
      nameHtml (der Name, maskiert – kommt in den Link oder in <strong>) und dahinter zusatzHtml (der graue Zusatz mit
      führendem Leerzeichen, oder nichts) für Seiten und Listen – auch für suche.js und global.js (window.MatProdukt). */
@@ -221,6 +223,11 @@
     // Phase 2: Freigaben je Ordner und Personenzuordnung – dieselben Wörter wie in beschriftung.py
     freigabe: "Freigabe Nr.", konto: "Person", recht: "Recht", bis: "bis", notiz_geaendert: "Notiz geändert",
   };
+  // Die Beschriftung eines Feldes in einem Journaleintrag – wie beschriftung.feld_name: „description“ ist am Produkt der
+  // kurze Zusatz hinter dem Namen und heißt dort seit dem Wunsch vom 18.10.2026 „Bemerkung“; an Ordnern und in den
+  // Einträgen eines Rückrufs (auch sie stehen am Produkt) bleibt es die Beschreibung.
+  const feldName = (f, j) => (f === "description" && j.entity === "product" && !/^rueckruf/.test(j.action || "")
+    ? "Bemerkung" : FELD[f] || f);
   const AKTION = { angelegt: "angelegt", geaendert: "geändert", geloescht: "gelöscht", verschoben: "verschoben",
                    bild: "Bild geändert", foto: "Foto geändert", neue_version: "neue Version", zurueckgezogen: "zurückgezogen",
                    aktiviert: "aktiviert", deaktiviert: "deaktiviert", lebensende: "Lebensende nachgezogen", rollen: "Rollen",
@@ -697,7 +704,7 @@
         ? [] : Object.keys(alle).filter((f) => !(f === "folder_id" && "ordner" in alle) && !(f === "origin_folder_id" && "herkunft" in alle)
                                        && !(f === "parent_id" && "pfad" in alle));
       const seite = (x, f) => wert((x || {})[f], f, Boolean(x) && f in x);
-      const zeilen = felder.map((f) => `<tr><th>${esc(FELD[f] || f)}</th><td>${seite(j.vorher, f)}</td><td>${seite(j.nachher, f)}</td></tr>`).join("");
+      const zeilen = felder.map((f) => `<tr><th>${esc(feldName(f, j))}</th><td>${seite(j.vorher, f)}</td><td>${seite(j.nachher, f)}</td></tr>`).join("");
       return `<li><div class="mat-j-kopf"><span class="mat-j-zeit">${esc(fmtZeit(j.created_at))}</span>
         <strong>${mitEntitaet ? esc(ENTITAET[j.entity] || j.entity) + " " : ""}${esc(AKTION[j.action] || j.action)}</strong>
         <span class="muted">von ${esc(j.user_name || "–")}</span></div>
@@ -2087,7 +2094,7 @@
     inhalt.innerHTML = `<div class="page-head"><h1>Artikel anlegen</h1></div>
       <div class="mat-formular">
         <label for="an-q">Produkt aus dem Katalog</label>
-        <div class="mat-produktwahl"><input type="search" id="an-q" placeholder="Hersteller, Modell, Beschreibung, Artikelnummer …" autocomplete="off" ${TASTATUR_SUCHE}>
+        <div class="mat-produktwahl"><input type="search" id="an-q" placeholder="Hersteller, Modell, Bemerkung, Artikelnummer …" autocomplete="off" ${TASTATUR_SUCHE}>
           <div id="an-treffer" class="mat-treffer"></div></div>
         <div id="an-produkt" class="mat-gewaehlt" hidden></div>
         <p class="help">Fehlt das Produkt im Katalog? <button type="button" class="lnk" data-act="melden">Fehlendes Produkt melden</button>
@@ -2318,7 +2325,7 @@
               <div id="kat-doks"><p class="help">Wird geladen …</p></div>
               ${DARF.katalog ? '<button class="btn secondary small" data-act="dok-neu">+ Dokument</button>' : ""}</div></div>`
           : (kats.length ? "" : leer(DARF.katalog ? "Noch keine Kategorien – mit „+ Kategorie“ anlegen." : "Noch keine Kategorien."))}
-        <div class="mat-suchzeile"><input type="search" id="kat-q" placeholder="Produkte suchen: Hersteller, Modell, Beschreibung, Artikelnummer, Norm" value="${esc(q)}" autocomplete="off" ${TASTATUR_SUCHE}></div>
+        <div class="mat-suchzeile"><input type="search" id="kat-q" placeholder="Produkte suchen: Hersteller, Modell, Bemerkung, Artikelnummer, Norm" value="${esc(q)}" autocomplete="off" ${TASTATUR_SUCHE}></div>
         <div id="kat-liste"></div>`;
       let los = null;
       $("#kat-q").addEventListener("input", (e) => { clearTimeout(los); los = setTimeout(() => { q = e.target.value.trim(); zeigen(liste); }, 250); });
@@ -2558,10 +2565,10 @@
     const kat = (id) => kats.find((k) => k.id === +id) || {};
     // Als Variante: die aktuellen Dokumente des Vorbilds (neueste Version, nicht zurückgezogen) zur Auswahl.
     const vorbildDoks = p.variante_von ? p.variante_von.dokumente.filter((d) => !d.abgeloest_durch && (!d.withdrawn_on || d.withdrawn_on > isoHeute(0))) : [];
-    /* Beschreibung: ein Feld wie die anderen – halb breit, der Hilfetext daneben –, eine Zeile, höchstens
-       BESCHREIBUNG_MAX Zeichen (der Server prüft beim Speichern, katalog.beschreibung). Eine ältere, längere wird nie
-       still gekürzt: Das Feld zeigt sie ganz (in einer Zeile – ein Textfeld verschluckte Zeilenumbrüche sonst ohne
-       Leerzeichen), darunter der Hinweis mit dem bisherigen Text; gespeichert wird erst, wenn sie kürzer ist. */
+    /* Beschreibung (sichtbar „Bemerkung“): ein Feld wie die anderen – halb breit, der Hilfetext daneben –, eine Zeile,
+       höchstens BESCHREIBUNG_MAX Zeichen (der Server prüft beim Speichern, katalog.beschreibung). Eine ältere, längere
+       wird nie still gekürzt: Das Feld zeigt sie ganz (in einer Zeile – ein Textfeld verschluckte Zeilenumbrüche sonst
+       ohne Leerzeichen), darunter der Hinweis mit dem bisherigen Text; gespeichert wird erst, wenn sie kürzer ist. */
     const beschreibung = String(p.description || "").replace(/\s+/g, " ").trim();
     const zuLang = beschreibung.length > BESCHREIBUNG_MAX;
     dialog(`<h2>${p.variante_von ? `Variante von „${esc(produktName(p.variante_von))}“` : p.meldung ? "Produkt aus Meldung anlegen" : neu ? "Produkt anlegen" : "Produkt bearbeiten"}</h2>
@@ -2570,9 +2577,9 @@
       <label for="pd-kat">Kategorie</label><select id="pd-kat"><option value="">– bitte wählen –</option>${kategorieOptionen(kats, p.category_id)}</select>
       <div class="field-row"><div><label for="pd-her">Hersteller</label><input type="text" id="pd-her" value="${esc(p.manufacturer || "")}" maxlength="120" ${TASTATUR_NAME}></div>
         <div><label for="pd-mod">Modell</label><input type="text" id="pd-mod" value="${esc(p.model || "")}" maxlength="160" ${TASTATUR_NAME}></div></div>
-      <div class="field-row mat-feld-hilfe"><div><label for="pd-desc">Beschreibung</label><input type="text" id="pd-desc" value="${esc(beschreibung)}" maxlength="${BESCHREIBUNG_MAX}" ${TASTATUR_NAME} aria-describedby="pd-desc-hilfe${zuLang ? " pd-desc-alt" : ""}"></div>
+      <div class="field-row mat-feld-hilfe"><div><label for="pd-desc">Bemerkung</label><input type="text" id="pd-desc" value="${esc(beschreibung)}" maxlength="${BESCHREIBUNG_MAX}" ${TASTATUR_NAME} aria-describedby="pd-desc-hilfe${zuLang ? " pd-desc-alt" : ""}"></div>
         <div class="help" id="pd-desc-hilfe">Kurzer Zusatz hinter dem Namen, z. B. die Verschlussart.</div></div>
-      ${zuLang ? `<div class="notice mat-beschr-alt" id="pd-desc-alt"><p><strong>Bitte kürzen:</strong> Die bisherige Beschreibung hat ${beschreibung.length} Zeichen, hinter den Namen passen höchstens ${BESCHREIBUNG_MAX}. Gespeichert wird erst, wenn sie kürzer ist – Ausführliches gehört in ein Dokument am Produkt. Bisher:</p>
+      ${zuLang ? `<div class="notice mat-beschr-alt" id="pd-desc-alt"><p><strong>Bitte kürzen:</strong> Die bisherige Bemerkung hat ${beschreibung.length} Zeichen, hinter den Namen passen höchstens ${BESCHREIBUNG_MAX}. Gespeichert wird erst, wenn sie kürzer ist – Ausführliches gehört in ein Dokument am Produkt. Bisher:</p>
         <p class="mat-text">${esc(p.description)}</p></div>` : ""}
       <div class="field-row"><div><label for="pd-art">Artikelnummer des Herstellers</label><input type="text" id="pd-art" value="${esc(p.article_no || "")}" maxlength="80" ${TASTATUR_NUMMER}><div class="help" id="pd-art-hilfe"></div></div>
         <div><label for="pd-norm">Norm</label><input type="text" id="pd-norm" value="${esc(p.norm || "")}" maxlength="200" ${TASTATUR_NUMMER}></div></div>
@@ -2622,7 +2629,7 @@
         const bild = bildWahl.datei;
         if (p.variante_von && !pid && !daten.article_no.trim()) { toast("Eine Variante braucht eine eigene Artikelnummer.", true); fokus($("#pd-art", body)); return; }
         const laenge = daten.description.replace(/\s+/g, " ").trim().length;
-        if (laenge > BESCHREIBUNG_MAX) { toast(`Die Beschreibung ist ein kurzer Zusatz hinter dem Namen – höchstens ${BESCHREIBUNG_MAX} Zeichen, hier sind es ${laenge}. Bitte kürzen.`, true); fokus($("#pd-desc", body)); return; }
+        if (laenge > BESCHREIBUNG_MAX) { toast(`Die Bemerkung ist ein kurzer Zusatz hinter dem Namen – höchstens ${BESCHREIBUNG_MAX} Zeichen, hier sind es ${laenge}. Bitte kürzen.`, true); fokus($("#pd-desc", body)); return; }
         knopf.disabled = true;
         try {
           // Aus einer Meldung: Produkt anlegen und Meldung erledigen in einem Zug (der Melder bekommt Bescheid).
@@ -2720,7 +2727,7 @@
     const k = DARF.katalog;
     const zeile = (t, w) => `<dt>${esc(t)}</dt><dd>${w}</dd>`;
     const formulare = p.formulare || [];
-    // Die Beschreibung steht als Zusatz in der Überschrift; nur eine ältere, dort gekürzte zusätzlich ganz hier.
+    // Die Bemerkung steht als Zusatz in der Überschrift; nur eine ältere, dort gekürzte zusätzlich ganz hier.
     const zusatz = produktZusatz(p);
     inhalt.innerHTML = `${p.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen.</p>' : ""}
       <div class="mat-pfad"><a href="/material/katalog">Katalog</a> / ${p.kategorie_pfad.map((x) => `<a href="/material/katalog?kategorie=${x.id}">${esc(x.name)}</a>`).join(" / ")}</div>
@@ -2740,7 +2747,7 @@
           ${zeile("Prüfintervall", p.intervall.monate ? `${p.intervall.monate} Monate <span class="muted">(${esc(p.intervall.quelle)})</span>` : '<span class="mat-warn">keins</span>')}
           ${zeile("Lebensdauer", p.lifetime_years ? `${p.lifetime_years} Jahre${p.lifetime_source ? ` <span class="muted">(${esc(p.lifetime_source)})</span>` : ""}${p.material_kind === "textil" ? "" : ' <span class="muted">– nicht festgeschrieben</span>'}` : '<span class="muted">keine</span>')}
           ${zeile("Bestand", `${plural(p.bestand, "Artikel", "Artikel")}${p.artikel_gesamt > p.bestand ? ` <span class="muted">(+${p.artikel_gesamt - p.bestand} ausgesondert)</span>` : ""}${DARF.alles ? "" : ' <span class="muted">in deinem Bereich</span>'}`)}
-          ${zusatz && zusatz.voll ? zeile("Beschreibung", `<span class="mat-text">${esc(p.description)}</span>
+          ${zusatz && zusatz.voll ? zeile("Bemerkung", `<span class="mat-text">${esc(p.description)}</span>
             <div class="help">Länger als ${BESCHREIBUNG_MAX} Zeichen, in der Überschrift gekürzt – gedacht ist ein kurzer Zusatz hinter dem Namen.${k ? " Bitte unter „Bearbeiten“ kürzen." : ""}</div>`) : ""}
         </dl></section>
         <section class="section"><h2>Prüfformular</h2>
@@ -4142,19 +4149,22 @@
   const meldungName = (m) => `${m.manufacturer} ${m.model}`;
   const kurzLink = (u) => u.replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, "");
 
-  function meldeDetails(m) {
+  // notizTitel: Im Produktdialog („Produkt aus Meldung anlegen“) heißt die Bemerkung der Meldung „Bemerkung des
+  // Melders“ – darunter steht das Feld „Bemerkung“ des Produkts (Wunsch vom 18.10.2026), zwei gleiche Wörter wären dort
+  // nicht zu unterscheiden. In der Liste der Meldungen bleibt es „Bemerkung“ wie im Dialog „Fehlendes Produkt melden“.
+  function meldeDetails(m, notizTitel = "Bemerkung") {
     const zeile = (t, w) => `<dt>${esc(t)}</dt><dd>${w}</dd>`;
     const daten = [m.article_no ? zeile("Artikelnummer", esc(m.article_no)) : "", m.norm ? zeile("Norm", esc(m.norm)) : "",
       m.kategorie ? zeile("Kategorie (Vorschlag)", esc(m.kategorie.pfad)) : "",
       m.links.length ? zeile("Links", m.links.map((l) => `<a href="${esc(l)}" target="_blank" rel="noopener noreferrer">${esc(kurzLink(l))}</a>`).join("<br>")) : "",
-      m.note ? zeile("Bemerkung", `<span class="mat-text">${esc(m.note)}</span>`) : ""].join("");
+      m.note ? zeile(notizTitel, `<span class="mat-text">${esc(m.note)}</span>`) : ""].join("");
     return `${daten ? `<dl class="mat-daten mat-meldung-daten">${daten}</dl>` : ""}
       ${m.fotos.length ? `<div class="mat-meldung-fotos">${m.fotos.map((f) => bildLink(f.web, f.original, `Foto zur Meldung ${m.manufacturer || ""} ${m.model || ""}`.trim(), `meldung-${m.id}`, `<img src="${esc(f.vorschau)}" alt="Foto zur Meldung" loading="lazy">`)).join("")}</div>` : ""}`;
   }
   // Im Produktdialog: was der Melder wusste – zum Nachschlagen, während die Felder schon vorbelegt sind.
   // Für welchen Ordner gemeldet wurde: der Pfad, wenn das Konto den Ordner sieht – sonst nur die Gliederung (Phase 2).
   const meldeOrdner = (m) => (!m.ordner ? "" : m.ordner.pfad ? m.ordner.pfad : m.ordner.gliederung ? `Gliederung ${m.ordner.gliederung}` : "");
-  const meldeKasten = (m) => `<div class="mat-meldekasten"><p class="small">Gemeldet von ${esc(m.created_by_name || "–")} am ${esc(fmtTag(m.created_at))}${meldeOrdner(m) ? ` für ${esc(meldeOrdner(m))}` : ""}</p>${meldeDetails(m)}</div>`;
+  const meldeKasten = (m) => `<div class="mat-meldekasten"><p class="small">Gemeldet von ${esc(m.created_by_name || "–")} am ${esc(fmtTag(m.created_at))}${meldeOrdner(m) ? ` für ${esc(meldeOrdner(m))}` : ""}</p>${meldeDetails(m, "Bemerkung des Melders")}</div>`;
 
   // bearbeiten: die Material-Verwaltung in der Liste aller Meldungen – nur sie bekommt die Knöpfe zum Abarbeiten.
   function meldeKarte(m, bearbeiten) {

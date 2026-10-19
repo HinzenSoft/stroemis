@@ -1650,7 +1650,8 @@ entschieden bzw. nicht widersprochen):
   außerdem das Feld für Beschreibungen in bearbeiten dialog genauso "klein" wie die anderen Felder, damit es nicht so
   aussieht, als soll ein ganzer text hinein. Gedacht ist hier nur weitere Infos, wie z.B. der Verschluss eines
   Karabiners o.Ä.“). Am Datenbestand ändert sich nichts – kein Schemaschritt, keine Umstellung von Beschreibungen oder
-  Modellnamen.
+  Modellnamen. (Stand heute: Sichtbar heißt das Feld „Bemerkung“, die CSV-Spalte „Bemerkung (Produkt)“ – siehe
+  „Bemerkung statt Beschreibung“ unten; dieser Eintrag beschreibt die Auslieferung mit dem alten Namen.)
   - **Anzeige** (Stand nach dem zweiten Wunsch, siehe „Ohne Strich, grau“ unten): Wo ein Produkt genannt wird, steht
     die Beschreibung direkt hinter dem Modell und vor der Artikelnummer, ohne Strich und grau wie die Artikelnummer in
     der Katalogliste – „**D Classic** Screwlock K496B“: der Name wie bisher hervorgehoben bzw. verlinkt, der Zusatz
@@ -1782,6 +1783,20 @@ entschieden bzw. nicht widersprochen):
     weiter grau und heller als der Text daneben; ein Browser ohne `color-mix()` erbt das Textgrau
     (`--anthrazit`, 80 % Schwarz). Katalogdaten unverändert. Tests in `test_material_beschreibung` erweitert (Teile in
     der Schnittstelle, auch mit Zusatz von Hand; 16 Stellen; Regel für den Kasten), mit dem alten Stand rot.
+- **Bemerkung statt Beschreibung** (Antwort auf die Rückfrage „80 Zeichen und CSV-Spalte“, wörtlich: „Grundsätzlich
+  bestätigt. Benenne ‚Beschreibung‘ in Bemerkung um.“): Das Produktfeld (der Zusatz hinter dem Namen) heißt überall,
+  wo man es sieht, **Bemerkung** – Feld und Hinweis „Bitte kürzen“ im Produktdialog (auch Variante und Produkt aus
+  Meldung), Fehlermeldungen von Oberfläche und Server, Zeile auf der Produktseite, Platzhalter der Produktsuche,
+  Importbericht und Journal am Produkt. **Eindeutig gemacht:** die CSV-Spalte hinter „Modell“ heißt „Bemerkung
+  (Produkt)“, weil weiter hinten seit Lieferung 4 die „Bemerkung“ des Artikels steht (die bleibt, damit Auswertungen
+  über den Spaltennamen weiter laufen); im Dialog „Produkt aus Meldung anlegen“ heißt die Bemerkung der Meldung im
+  Kasten oben „Bemerkung des Melders“. **Bewusst geblieben:** der Schlüssel `beschreibung` im Katalogformat 1 und 2
+  (vorhandene Katalog-ZIPs bleiben lesbar, der Export schreibt ihn weiter) – der Import nimmt `bemerkung` gleichwertig
+  an, beide mit verschiedenen Werten sind ein Fehler; Spalte `description`, Schnittstelle, Namen im Code; die
+  Beschreibung von Ordnern und Rückrufen. Kein Schemaschritt, Katalogdaten unverändert. Geprüft:
+  `test_bemerkung_heisst_so` (neu, gegen den alten Stand rot) und die angepassten Tests in
+  `test_material_beschreibung`; im Chromium bei 1280 × 900 und 390 × 844 (Touch) mit DEMO-Daten (Dialoge, Meldung bei
+  81 Zeichen, Altbemerkung, Produktseite, Suchfelder, CSV-Köpfe) – keine Konsolenfehler, nichts rollt waagerecht.
 - **Bremse der globalen Suche entfernt** (Wunsch, wörtlich: „Entferne die Bremse komplett“ – auf den Hinweis, dass seit
   dem immer angebotenen Angebot auch Suchen nach eigenen Nummern gegen die Grenze von zehn Suchen je 15 Minuten
   zählen): Globale Suche, QR-Steckbrief und fremde Dublette beim Anlegen zählen nicht mehr – kein 429, keine Meldung
@@ -1883,21 +1898,23 @@ Regressionstest in `tests/test_material_stufen.py` (vorher rot, jetzt grün), Ob
   neues Konto ohne Namen ab (oder Material „–“). Kontoanfragen haben den Namen ohnehin als Pflichtfeld.
 - **Zusatz von Hand im Modellnamen – selbst umstellen, nicht automatisch**: Produkte, deren Modellname den Zusatz schon
   mit „ | “ enthält (etwa „D Classic | Screwlock“), zeigen sich schon jetzt ohne Strich – der Teil vor dem Strich als
-  Name, der dahinter grau wie eine Beschreibung, auch im PDF. Umstellen bleibt trotzdem empfohlen, denn im Katalog
+  Name, der dahinter grau wie eine Bemerkung, auch im PDF. Umstellen bleibt trotzdem empfohlen, denn im Katalog
   steht der Strich weiter: im Dialog „Bearbeiten“, in der CSV je Ordner (Spalte „Modell“), im Katalog-Export und bei
-  der Dublettenprüfung, die „D Classic | Screwlock“ und „D Classic“ mit Beschreibung „Screwlock“ als zwei Modelle
+  der Dublettenprüfung, die „D Classic | Screwlock“ und „D Classic“ mit Bemerkung „Screwlock“ als zwei Modelle
   sieht. Umstellen kannst du sie selbst: im Dialog „Bearbeiten“ den Teil hinter „ | “ aus dem Modell löschen und ins
-  Feld „Beschreibung“ schreiben – die Anzeige bleibt gleich, die Suche findet weiter beide Teile. Automatisch stellt
+  Feld „Bemerkung“ schreiben – die Anzeige bleibt gleich, die Suche findet weiter beide Teile. Automatisch stellt
   nichts um, der Katalog bleibt, wie du ihn gepflegt hast. Der Katalog-Export trägt die Katalogkennung, die Produktion findet ein so umbenanntes Produkt beim nächsten
   Import wieder. Liste auf dev (lesend): `SELECT id, manufacturer, model, description FROM mat_product WHERE model
   LIKE '%|%';`
-- **Ältere lange Beschreibungen**: Beschreibungen über 80 Zeichen oder mit Zeilenumbruch stammen aus der Zeit vor der
-  Grenze. Sie bleiben, wie sie sind, bis jemand das Produkt bearbeitet – dann verlangt der Dialog, sie zu kürzen.
-  Liste auf dev (lesend): `SELECT id, manufacturer, model, length(description) FROM mat_product WHERE
+- **Ältere lange Bemerkungen**: Bemerkungen über 80 Zeichen oder mit Zeilenumbruch stammen aus der Zeit vor der
+  Grenze (damals hieß das Feld noch „Beschreibung“). Sie bleiben, wie sie sind, bis jemand das Produkt bearbeitet –
+  dann verlangt der Dialog, sie zu kürzen. Liste auf dev (lesend): `SELECT id, manufacturer, model, length(description) FROM mat_product WHERE
   length(description) > 80 OR instr(description, char(10)) > 0;` – bitte vor der Übernahme in die Produktion
   durchsehen (der Import nimmt sie mit und nennt sie im Bericht).
-- **80 Zeichen für die Beschreibung** und die neue CSV-Spalte „Beschreibung“ hinter „Modell“ (wer eine
-  Tabellenvorlage mit festen Spaltenpositionen nutzt, muss sie anpassen): bitte bestätigen.
+- **80 Zeichen und CSV-Spalte – bestätigt am 18.10.2026**, mit dem Namen „Bemerkung“ („Grundsätzlich bestätigt.
+  Benenne ‚Beschreibung‘ in Bemerkung um.“): höchstens 80 Zeichen; in der CSV je Ordner steht hinter „Modell“ die
+  Spalte „Bemerkung (Produkt)“ (die „Bemerkung“ des Artikels weiter hinten bleibt). Wer eine Tabellenvorlage mit
+  festen Spaltenpositionen nutzt, muss sie einmal anpassen. Umgesetzt unter „Bemerkung statt Beschreibung“.
 
 ### Die drei offenen Fragen – entschieden
 
@@ -2189,7 +2206,7 @@ mit seiner Stelle (`produkte[3] (…): …`). `--trocken` prüft nur.
 | --- | --- |
 | `kategorien[].name`, `unterkategorien` | Name an dieser Stelle; Unterkategorien beliebig tief |
 | `norm` | Freitext, z. B. „EN 362 oder EN 12275“ |
-| `beschreibung` | kurzer Zusatz hinter dem Modell, etwa die Verschlussart – angezeigt grau hinter dem Modell, ohne Strich („D Classic Screwlock“). Die Oberfläche nimmt höchstens 80 Zeichen in einer Zeile; der Import übernimmt auch längere und mehrzeilige (bis 4000 Zeichen) unverändert und nennt sie im Bericht |
+| `beschreibung` | die **Bemerkung** des Produkts (so heißt das Feld in der Oberfläche seit dem 18.10.2026; der Schlüssel bleibt, der Export schreibt ihn): kurzer Zusatz hinter dem Modell, etwa die Verschlussart – angezeigt grau hinter dem Modell, ohne Strich („D Classic Screwlock“). Gleichwertig nimmt der Import den Schlüssel `bemerkung` an; stehen beide da, müssen sie gleich sein. Die Oberfläche nimmt höchstens 80 Zeichen in einer Zeile; der Import übernimmt auch längere und mehrzeilige (bis 4000 Zeichen) unverändert und nennt sie im Bericht |
 | `materialart` | `textil`, `metall_hardware` oder `sonstiges` (an der Kategorie: Vorgabe für Produkte) |
 | `intervall_monate` | Prüfintervall 1–120; am Produkt optional, wenn die Kategorie eins vorgibt |
 | `lebensdauer_jahre` | 1–50; Produkt textil: Pflicht; Metall (`metall_hardware`): verboten; sonstiges: nur mit `lebensdauer_quelle`. An der Kategorie nur bei textil, nur als Vorschlag |
@@ -2311,7 +2328,7 @@ oder Plattform-Verwaltung).
 | `GET /api/material/suche?q=` | Modulzugang | Artikel nach Serien-, Inventar-, Herstellernummer im eigenen Bereich; `eindeutig` bei genau einem Treffer; `exakt_lokal` (ein sichtbarer Artikel hat genau diese Seriennummer) und `global_angebot` (zu jeder Anfrage, die für die globale Suche taugt, außer für die Material-Verwaltung; Phase 2) |
 | `GET /api/material/faellig?status=&ordner=&zugeordnet=` | Modulzugang; mit `ordner` lesen dort (sonst 404) | fällige Artikel, Standard überfällig + Lebensdauer erreicht + neu + bald fällig; mit `ordner` auch `ordner` = {id, pfad}; `zugeordnet` filtert nach Person (nur mit Grundrecht wirksam, Phase 2) |
 | `GET/POST /api/material/kategorien`, `PUT/DELETE …/<id>` | lesen / Katalog | Kategoriebaum; Löschen nur leer und ohne Dokument in einem Prüfprotokoll (409) |
-| `GET/POST /api/material/produkte`, `GET/PUT/DELETE …/<id>` | lesen / Katalog | Produkte mit Suche (Hersteller, Modell, Beschreibung, Artikelnummer, Norm) und Seiten (`q`, `kategorie`, `seite`, `pro_seite`); `description` beim Speichern höchstens 80 Zeichen, eine Zeile (Nachbesserung vom 18.10.2026) |
+| `GET/POST /api/material/produkte`, `GET/PUT/DELETE …/<id>` | lesen / Katalog | Produkte mit Suche (Hersteller, Modell, Bemerkung, Artikelnummer, Norm) und Seiten (`q`, `kategorie`, `seite`, `pro_seite`); `description` (in der Oberfläche „Bemerkung“) beim Speichern höchstens 80 Zeichen, eine Zeile (Nachbesserung vom 18.10.2026) |
 | `GET /api/material/produkte/artikelnummer?nr=&ausser=` | lesen | Wem gehört diese Artikelnummer schon? (`produkt` oder `null`) |
 | `POST /api/material/produkte/<id>/variante` (Felder wie `POST /produkte`, `dokumente`: Kennungen) | Katalog | Kopie als neue Variante; Bild nie, Dokumente nach Wahl |
 | `POST/DELETE /api/material/produkte/<id>/bild` | Katalog | Produktbild |
@@ -2346,7 +2363,7 @@ oder Plattform-Verwaltung).
 | `GET/POST /api/material/durchgaenge`, `GET/DELETE …/<id>` | lesen / Materialwart oder Prüfer | Prüfdurchgänge (`?offen=1`); eröffnen (`folder_id`, `titel`); löschen, solange nichts geprüft ist |
 | `POST /api/material/durchgaenge/<id>/ausnehmen`, `…/einbeziehen` (`item_id`, `grund`), `…/abschliessen` | Materialwart oder Prüfer | Artikel ausnehmen, wieder einbeziehen, Durchgang abschließen (mit Sammelprotokoll) |
 | `POST /api/material/durchgaenge/<id>/abbrechen` | Materialwart oder Prüfer | vorzeitig beenden; `durchgang` ist `null`, wenn er mangels Geprüftem entfernt wurde |
-| `GET /material/export/<ordner>.csv` | Grundrecht am Ordner (Phase 2) | Artikel, deren Heimat im Ordner oder darunter liegt (auch von hier gesperrte und ausgesonderte), als CSV für Excel; Spalte „Zugeordnet an“ (Phase 2) |
+| `GET /material/export/<ordner>.csv` | Grundrecht am Ordner (Phase 2) | Artikel, deren Heimat im Ordner oder darunter liegt (auch von hier gesperrte und ausgesonderte), als CSV für Excel; Spalte „Zugeordnet an“ (Phase 2), hinter „Modell“ „Bemerkung (Produkt)“ (Nachbesserung vom 18.10.2026) |
 | `GET /material/export/<ordner>-protokolle.zip` | Grundrecht am Ordner (Phase 2) | alle Protokolle dieser Artikel und die Sammelprotokolle der Durchgänge im Zweig, mit `Verzeichnis.csv` |
 | `GET /material/artikel/<id>/lebenslauf.pdf` | Grundrecht an der Heimat (Phase 2) | Lebenslauf als PDF/A-3b, auf Abruf, nicht festgeschrieben |
 | `GET /api/material/katalog/export`, `GET …/export/vorschau` | Katalog | Katalog ohne DEMO als ZIP (Format 2) bzw. seine Zahlen vorab |

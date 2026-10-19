@@ -42,7 +42,9 @@ KEIN_INTERVALL = "Kein Prüfintervall: am Produkt angeben oder in der Kategorie 
 PUNKT_TEXT_MAX = 1000
 # Die Beschreibung eines Produkts ist ein kurzer Zusatz hinter dem Modell – etwa die Verschlussart eines Karabiners – und
 # steht überall direkt hinter dem Modell vor der Artikelnummer, ohne Strich, in Oberfläche und PDF grau (Nachbesserungen
-# vom 18.10.2026; produkt_teile und produktname hier, produktZusatz und produktName in material.js). Eine Zeile,
+# vom 18.10.2026; produkt_teile und produktname hier, produktZusatz und produktName in material.js). Sichtbar heißt sie
+# seit dem Wunsch vom 18.10.2026 „Bemerkung“ (Dialog, Meldungen, Produktseite, CSV, Importbericht); Spalte description,
+# Schnittstelle und der Schlüssel „beschreibung“ im Katalogformat bleiben, die Namen im Code auch. Eine Zeile,
 # höchstens so lang wie eine Artikelnummer: Das reicht für zwei Angaben („Twistlock, Aluminium“) und passt mit dem
 # Modell noch in eine Listenzeile, ein Absatz passt nicht hinein – Ausführliches gehört in ein Dokument am Produkt. Bis
 # dahin war das Feld mehrzeilig, bis 4000 Zeichen. Solche älteren Beschreibungen bleiben, wie sie sind: Der
@@ -303,9 +305,9 @@ def beschreibung(d):
     """Die Beschreibung aus einer Eingabe über die Oberfläche (Anlegen, Bearbeiten, Variante, Produkt aus einer
     Meldung): eine Zeile, höchstens BESCHREIBUNG_MAX Zeichen. Länger ist ein Fehler mit Klartext, nie eine stille
     Kürzung – auch für eine ältere Beschreibung, die unverändert zurückkommt (der Dialog sagt das vorher)."""
-    v = text(d, "description", "Beschreibung", 1 << 30)       # die Länge prüft die Meldung hier, mit dem Grund
+    v = text(d, "description", "Bemerkung", 1 << 30)       # die Länge prüft die Meldung hier, mit dem Grund
     if len(v) > BESCHREIBUNG_MAX:
-        raise Abgelehnt(f"Die Beschreibung ist ein kurzer Zusatz hinter dem Namen, etwa die Verschlussart – höchstens "
+        raise Abgelehnt(f"Die Bemerkung ist ein kurzer Zusatz hinter dem Namen, etwa die Verschlussart – höchstens "
                         f"{BESCHREIBUNG_MAX} Zeichen, hier sind es {len(v)}. Bitte kürzen; Ausführliches gehört in ein "
                         "Dokument am Produkt.")
     return v
@@ -371,7 +373,7 @@ def produkt_werte(d, alt=None, importiert=False):
         "interval_months": ganzzahl(e.get("interval_months"), "Prüfintervall (Monate)", 1, 120),
         "lifetime_years": ganzzahl(e.get("lifetime_years"), "Lebensdauer (Jahre)", 1, 50),
         "lifetime_source": text(e, "lifetime_source", "Fundstelle der Lebensdauer", 300),
-        "description": text(e, "description", "Beschreibung", 4000, einzeilig=False),
+        "description": text(e, "description", "Bemerkung", 4000, einzeilig=False),
     }
     if not importiert and "description" in d:
         w["description"] = beschreibung(d)

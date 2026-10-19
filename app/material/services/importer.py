@@ -12,7 +12,9 @@ Stelle) und Produkte (gleiche Dublette Hersteller + Modell + Artikelnummer) werd
 doppelt angelegt; ein Formular, dessen Prüfpunkte sich nicht geändert haben, bleibt bei seiner
 Version. Das Format steht in CHANGELOG-Material.md. Einzige Ausnahme von den Regeln der Oberfläche: Die Beschreibung
 eines Produkts darf länger sein als katalog.BESCHREIBUNG_MAX und mehrzeilig – Beschreibungen von vor dieser Grenze
-kommen unverändert herein, der Austausch dev → Produktion scheitert nicht an ihnen.
+kommen unverändert herein, der Austausch dev → Produktion scheitert nicht an ihnen. In der Oberfläche und im Bericht
+heißt sie seit dem Wunsch vom 18.10.2026 „Bemerkung“; die Datei nennt sie weiter „beschreibung“ (so schreibt der
+Export), gleichwertig nimmt der Import „bemerkung“ an (_bemerkung_pruefen).
 
 Format 2 (ZIP mit katalog.json und den Dateien; als reine JSON-Datei nur ohne Dateien) bringt dazu:
   - die Katalogkennung uid an Kategorien und Produkten. Abgeglichen wird zuerst über sie, sonst wie oben – dann
@@ -81,7 +83,7 @@ _FELDNAMEN = {"name": "Name", "parent_id": "Oberkategorie", "norm": "Norm", "def
               "position": "Reihenfolge", "category_id": "Kategorie", "manufacturer": "Hersteller", "model": "Modell",
               "article_no": "Artikelnummer", "material_kind": "Materialart", "interval_months": "Prüfintervall",
               "lifetime_years": "Lebensdauer", "lifetime_source": "Fundstelle der Lebensdauer",
-              "description": "Beschreibung"}
+              "description": "Bemerkung"}
 
 
 class _Rueckgaengig(Exception):
@@ -141,7 +143,7 @@ _KATEGORIE_ABBILDUNG = {"norm": "norm", "materialart": "default_material_kind",
 _PRODUKT_ABBILDUNG = {"hersteller": "manufacturer", "modell": "model", "artikelnummer": "article_no", "norm": "norm",
                       "materialart": "material_kind", "intervall_monate": "interval_months",
                       "lebensdauer_jahre": "lifetime_years", "lebensdauer_quelle": "lifetime_source",
-                      "beschreibung": "description"}
+                      "beschreibung": "description", "bemerkung": "description"}
 
 
 def _abbilden(eintrag, abbildung):
@@ -481,9 +483,18 @@ def _lange_beschreibung(lauf, name, beschreibung):
     Bericht sagt es, damit sie beim nächsten Bearbeiten gekürzt wird."""
     if len(beschreibung or "") > katalog.BESCHREIBUNG_MAX:
         lauf.bericht["hinweise"].append(
-            f"Produkt „{name}“: Die Beschreibung hat {len(beschreibung)} Zeichen und ist so übernommen. Gedacht ist ein "
+            f"Produkt „{name}“: Die Bemerkung hat {len(beschreibung)} Zeichen und ist so übernommen. Gedacht ist ein "
             f"kurzer Zusatz hinter dem Namen (höchstens {katalog.BESCHREIBUNG_MAX} Zeichen) – Listen zeigen sie gekürzt, "
             "beim nächsten Bearbeiten bitte kürzen.")
+
+
+def _bemerkung_pruefen(e):
+    """„beschreibung“ und „bemerkung“ sind in einem Produkteintrag gleichwertig (das Feld heißt in der Oberfläche seit
+    dem 18.10.2026 „Bemerkung“, der Export schreibt weiter „beschreibung“). Stehen beide da, müssen sie gleich sein –
+    sonst wäre offen, welche gilt."""
+    if "beschreibung" in e and "bemerkung" in e and e["beschreibung"] != e["bemerkung"]:
+        raise Abgelehnt("„beschreibung“ und „bemerkung“ meinen dasselbe Feld (die Bemerkung hinter dem Namen), stehen "
+                        "hier aber mit verschiedenen Werten – bitte nur eins angeben.")
 
 
 def _produktname_datei(e):
@@ -492,7 +503,7 @@ def _produktname_datei(e):
     Noch ungeprüft: Fehlt Hersteller oder Modell, steht „?“; eine Beschreibung, die kein Text ist, bleibt weg."""
     if not isinstance(e, dict):
         return "?"
-    beschr = e.get("beschreibung")
+    beschr = e.get("beschreibung", e.get("bemerkung"))
     return katalog.produktname({"manufacturer": str(e.get("hersteller", "?")), "model": str(e.get("modell", "?")),
                                 "description": beschr if isinstance(beschr, str) else ""})
 
@@ -512,6 +523,7 @@ def _produkt(n, e, lauf):
     try:
         if not isinstance(e, dict):
             raise Abgelehnt("Eintrag ist kein Objekt.")
+        _bemerkung_pruefen(e)
         uid = lauf.uid(e)
         d = _abbilden(e, _PRODUKT_ABBILDUNG)
         d["category_id"] = _kategorie_ziel(e, lauf)

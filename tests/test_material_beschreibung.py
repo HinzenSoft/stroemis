@@ -9,7 +9,10 @@ genauso, der Katalog bleibt, wie er ist. Über die Oberfläche höchstens 80 Zei
 mit Klartext, nie eine stille Kürzung, auch nicht für eine ältere Beschreibung. Der Katalogimport (Format 1 und 2, also
 auch der Austausch dev → Produktion) übernimmt ältere, längere unverändert. Die Anzeige folgt einer Regel
 (katalog.modell_teile, zusatz, produkt_teile und produktname hier, modellTeile und produktZusatz in material.js), die
-Produktsuche findet auch über die Beschreibung.
+Produktsuche findet auch über die Beschreibung. Sichtbar heißt das Feld seit dem Wunsch vom 18.10.2026 „Bemerkung“
+(Dialog, Fehlermeldungen, Produktseite, CSV-Spalte „Bemerkung (Produkt)“, Platzhalter der Suche, Importbericht, Journal
+am Produkt); Spalte description, Schnittstelle und der Schlüssel „beschreibung“ im Katalogformat bleiben, „bemerkung“
+nimmt der Import gleichwertig an (test_bemerkung_heisst_so).
 Alle Namen, Nummern und Texte hier sind erfunden und nur für den Test da."""
 import json
 import os
@@ -58,6 +61,7 @@ def test_laenge_beim_speichern():
                                                             description="x" * 81))
             assert r.status_code == 400, r.get_json()
             assert "kurzer Zusatz" in r.json["error"] and "höchstens 80 Zeichen, hier sind es 81" in r.json["error"], r.json
+            assert r.json["error"].startswith("Die Bemerkung ist ein kurzer Zusatz") and "Beschreibung" not in r.json["error"]
             assert _db(app, "SELECT COUNT(*) AS n FROM mat_product")["n"] == zahl
             # Genau 80 gehen; Zeilenumbrüche und doppelter Leerraum werden zu einem Leerzeichen (das Feld ist einzeilig).
             r = kp.post("/api/material/produkte", json=dict(basis, model="Karabiner Zeta", article_no="KZ-1",
@@ -130,13 +134,13 @@ def test_import_lange_beschreibung():
         c = anmelden(app, "admin@example.org", "geheim123")
         ber = importieren(c, json.dumps(katalog).encode(), False, "katalog.json")
         assert ber["gespeichert"] and not ber["fehler"] and ber["produkte"]["neu"] == 2, ber
-        lang = [h for h in ber["hinweise"] if "Beschreibung" in h]
+        lang = [h for h in ber["hinweise"] if "Bemerkung" in h]
         assert len(lang) == 1 and "Karabiner Lang" in lang[0] and f"{len(LANG)} Zeichen" in lang[0], ber["hinweise"]
         assert _db(app, "SELECT description FROM mat_product WHERE model = 'Karabiner Lang'")["description"] == LANG
         # Wiederholt: unverändert, kein Hinweis.
         ber = importieren(c, json.dumps(katalog).encode(), False, "katalog.json")
         assert ber["produkte"] == {"neu": 0, "geaendert": 0, "unveraendert": 2}, ber
-        assert not [h for h in ber["hinweise"] if "Beschreibung" in h], ber["hinweise"]
+        assert not [h for h in ber["hinweise"] if "Bemerkung" in h], ber["hinweise"]
 
         # Austausch in eine zweite Instanz (Format 2): erst der Probelauf, dann der echte Lauf.
         roh = exportieren(c)
@@ -300,8 +304,8 @@ def test_darstellung():
     """Wo der Server den Produktnamen liefert oder druckt, steht der Zusatz dabei: Artikellisten (Ordner, Suche,
     offene Prüfungen) tragen die Beschreibung des Produkts, die Prüfung Name und Felder, das neue Prüfprotokoll und der
     Lebenslauf (PDF) „Hersteller Modell“ und dahinter grau die Beschreibung (im Text „Hersteller Modell Beschreibung“,
-    kein Strich; das Feld „Modell“ ohne Zusatz), die CSV eine eigene Spalte „Beschreibung“ hinter „Modell“ (voll,
-    ungekürzt), der Hinweis zur vergebenen Artikelnummer den Namen."""
+    kein Strich; das Feld „Modell“ ohne Zusatz), die CSV eine eigene Spalte „Bemerkung (Produkt)“ hinter „Modell“ (voll,
+    ungekürzt; die „Bemerkung“ des Artikels weiter hinten bleibt), der Hinweis zur vergebenen Artikelnummer den Namen."""
     from app.material.services import export, pdf
     gesetzt = []                                       # das HTML jedes gesetzten PDFs, vor WeasyPrint
     setzen = pdf._setzen
@@ -328,7 +332,7 @@ def _darstellung(export, gesetzt):
         kp, w, p1 = k["katalog"], k["wart"], k["pruefer"]
         assert kp.put(f"/api/material/produkte/{ids['hms']}", json={"description": "Twistlock"}).status_code == 200
         gid, _ = gliederung(w)
-        a = neuer_artikel(w, ids["hms"], gid)
+        a = neuer_artikel(w, ids["hms"], gid, notes="Testnotiz am Artikel")
         g = neuer_artikel(w, ids["gurt"], gid, manufactured_on="2025-01")
         liste = {x["id"]: x for x in w.get(f"/api/material/ordner/{gid}").json["ordner"]["artikel"]}
         assert liste[a["id"]]["description"] == "Twistlock" and liste[g["id"]]["description"] == "", liste
@@ -370,14 +374,19 @@ def _darstellung(export, gesetzt):
         assert "Testwerk Gurt Alpha Platzhalter" in _flach(" ".join(pdf_seiten(pfad)))
         modell = _db(app, "SELECT model FROM mat_product WHERE id = ?", (ids["gurt"],))["model"]
         assert modell == "Gurt Alpha | Platzhalter", modell
-        # CSV: eigene Spalte hinter „Modell“; das Modell allein.
+        # CSV: eigene Spalte hinter „Modell“; das Modell allein. Seit dem Wunsch vom 18.10.2026 heißt sie „Bemerkung
+        # (Produkt)“ – die „Bemerkung“ des Artikels (notes) steht weiter hinten, jeder Spaltenkopf nur einmal.
         r = w.get(f"/material/export/{gid}.csv")
         assert r.status_code == 200, r.status_code
         kopf, zeilen = csv_lesen(r.data)
-        assert kopf == list(export.ARTIKEL_SPALTEN) and kopf[kopf.index("Modell") + 1] == "Beschreibung", kopf
+        assert kopf == list(export.ARTIKEL_SPALTEN) and kopf[kopf.index("Modell") + 1] == "Bemerkung (Produkt)", kopf
+        assert len(set(kopf)) == len(kopf) and "Beschreibung" not in kopf, kopf
+        assert kopf.index("Bemerkung") > kopf.index("Lebensende"), kopf
         z = {x["Inventarnummer"]: x for x in zeilen}
-        assert z[a["inventory_no"]]["Modell"] == "HMS Beta" and z[a["inventory_no"]]["Beschreibung"] == "Twistlock", z
-        assert z[g["inventory_no"]]["Beschreibung"] == "", z
+        assert z[a["inventory_no"]]["Modell"] == "HMS Beta", z
+        assert z[a["inventory_no"]]["Bemerkung (Produkt)"] == "Twistlock", z
+        assert z[a["inventory_no"]]["Bemerkung"] == "Testnotiz am Artikel" and z[g["inventory_no"]]["Bemerkung"] == "", z
+        assert z[g["inventory_no"]]["Bemerkung (Produkt)"] == "", z
         r = kp.get("/api/material/produkte/artikelnummer", query_string={"nr": "HB-7"})
         assert r.json["produkt"]["name"] == "Testwerk HMS Beta Twistlock", r.get_json()
         # Für den Hinweis „Schon vergeben“ auch die Teile: Die Oberfläche setzt den Zusatz grau hinter den Link
@@ -510,6 +519,131 @@ def test_oberflaeche_statisch():
     print("Oberfläche (statisch) bestanden.")
 
 
+def test_bemerkung_heisst_so():
+    """Wunsch vom 18.10.2026 („Benenne ‚Beschreibung‘ in Bemerkung um.“): Sichtbar heißt das Produktfeld „Bemerkung“ –
+    im Produktdialog (auch Variante und Produkt aus Meldung) samt Hinweis und Fehlermeldung, auf der Produktseite, in den
+    Platzhaltern der Produktsuche, im Importbericht und im Journal am Produkt; in der CSV „Bemerkung (Produkt)“
+    (test_darstellung). Wo zwei gleiche Wörter in einer Ansicht stünden, ist das andere genauer: die Bemerkung der
+    Meldung im Dialog „Produkt aus Meldung anlegen“ heißt „Bemerkung des Melders“. Unverändert bleiben die Beschreibung
+    von Ordnern und Rückrufen, Spalte, Schnittstelle (description) und der Schlüssel „beschreibung“ im Katalogformat;
+    „bemerkung“ nimmt der Import gleichwertig an, beide mit verschiedenen Werten sind ein Fehler."""
+    import shutil
+    import subprocess
+    from app.material.services import beschriftung, importer
+    js = _lesen("app/material/static/material.js")
+    # Der Produktdialog: Feld „Bemerkung“, Hinweis und Meldung vor dem Senden mit demselben Wort, kein „Beschreibung“.
+    a = js.index("async function produktDialog(p)")
+    dialog = js[js.index("dialog(`", a):js.index("(dlg, body) =>", a)]
+    assert '<label for="pd-desc">Bemerkung</label><input type="text" id="pd-desc"' in dialog, dialog[:2000]
+    assert "Die bisherige Bemerkung hat ${beschreibung.length} Zeichen" in dialog
+    assert "Beschreibung" not in dialog, dialog
+    for haken in ("toast(`Die Bemerkung ist ein kurzer Zusatz hinter dem Namen – höchstens ${BESCHREIBUNG_MAX} Zeichen",
+                  'zeile("Bemerkung", `<span class="mat-text">${esc(p.description)}</span>',      # Produktseite
+                  'placeholder="Hersteller, Modell, Bemerkung, Artikelnummer …"',                  # Artikel anlegen
+                  'placeholder="Produkte suchen: Hersteller, Modell, Bemerkung, Artikelnummer, Norm"',  # Katalog
+                  '${meldeDetails(m, "Bemerkung des Melders")}</div>`;'):                         # Produkt aus Meldung
+        assert haken in js, haken
+    for alt in ('<label for="pd-desc">Beschreibung', "Die bisherige Beschreibung", "Die Beschreibung ist ein kurzer",
+                'zeile("Beschreibung"', "Modell, Beschreibung, Artikelnummer"):
+        assert alt not in js, alt
+    # Bleibt: die Beschreibung eines Ordners und der Platzhalter am Rückruf.
+    assert '<label for="od-desc">Beschreibung</label>' in js
+    assert 'placeholder="Beschreibung und Empfehlung des Herstellers"' in js
+
+    # Journal: am Produkt „Bemerkung“, an Ordnern und in Rückrufeinträgen weiter „Beschreibung“ – Server (PDF) und
+    # Oberfläche (feldName, mit Node.js, wenn es da ist) gleich.
+    faelle = [({"entity": "product", "action": "geaendert"}, "Bemerkung"),
+              ({"entity": "product", "action": "variante"}, "Bemerkung"),
+              ({"entity": "product", "action": "rueckruf"}, "Beschreibung"),
+              ({"entity": "product", "action": "rueckruf_beendet"}, "Beschreibung"),
+              ({"entity": "folder", "action": "geaendert"}, "Beschreibung"),
+              ({"entity": "item", "action": "geaendert"}, "Beschreibung")]
+    for eintrag, erwartet in faelle:
+        assert beschriftung.feld_name("description", eintrag) == erwartet, eintrag
+    assert beschriftung.feld_name("notes", {"entity": "item", "action": "geaendert"}) == "Bemerkung"
+    assert beschriftung.feld_name("model", {"entity": "product", "action": "geaendert"}) == "Modell"
+    assert "${esc(feldName(f, j))}" in js and "esc(FELD[f] || f)" not in js
+    node = shutil.which("node")
+    if node:
+        skript = """
+const fs = require("fs");
+const js = fs.readFileSync(process.argv[1], "utf8");
+const a = js.indexOf("  const FELD = {"), b = js.indexOf("  const AKTION = {");
+const feldName = new Function(js.slice(a, b) + "; return feldName;")();
+console.log(JSON.stringify(JSON.parse(process.argv[2]).map(([f, j]) => feldName(f, j))));
+"""
+        eingaben = [["description", e] for e, _ in faelle] + [["notes", {"entity": "item", "action": "geaendert"}],
+                                                              ["model", {"entity": "product", "action": "geaendert"}]]
+        wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        aus = subprocess.run([node, "-e", skript, os.path.join(wurzel, "app/material/static/material.js"),
+                              json.dumps(eingaben)], capture_output=True, text=True, check=True).stdout
+        assert json.loads(aus) == [w for _, w in faelle] + ["Bemerkung", "Modell"], aus
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        kp = k["katalog"]
+        # Fehlermeldung des Servers mit dem neuen Wort (auch „muss Text sein“).
+        r = kp.put(f"/api/material/produkte/{ids['hms']}", json={"description": "x" * 81})
+        assert r.status_code == 400 and r.json["error"].startswith("Die Bemerkung ist ein kurzer Zusatz"), r.get_json()
+        r = kp.put(f"/api/material/produkte/{ids['hms']}", json={"description": 5})
+        assert r.status_code == 400 and r.json["error"] == "„Bemerkung“ muss Text sein.", r.get_json()
+        # Journal am Produkt: die Änderung heißt „Bemerkung“ – in der Schnittstelle bleibt der Schlüssel description.
+        assert kp.put(f"/api/material/produkte/{ids['hms']}", json={"description": "Screwlock"}).status_code == 200
+        journal = kp.get(f"/api/material/produkte/{ids['hms']}").json["produkt"]["journal"]
+        eintrag = next(j for j in journal if j["action"] == "geaendert" and "description" in (j["nachher"] or {}))
+        zeilen = beschriftung.journal_zeilen([eintrag])
+        assert {"feld": "Bemerkung", "vorher": "–", "nachher": "Screwlock", "nur_nachher": False} \
+            in zeilen[0]["felder"], zeilen
+
+    # Katalogimport: „beschreibung“ wie bisher, „bemerkung“ gleichwertig; beide gleich geht, verschieden ist ein Fehler.
+    # Bericht (Änderungsliste, Hinweis zur langen) mit dem neuen Wort; der Export schreibt weiter „beschreibung“.
+    assert importer._FELDNAMEN["description"] == "Bemerkung"
+
+    def datei(*eintraege):
+        return json.dumps({"format": "stroemis-material-katalog", "version": 1,
+                           "kategorien": [{"name": "Testkategorie", "materialart": "metall_hardware",
+                                           "intervall_monate": 12}],
+                           "produkte": [dict({"kategorie": ["Testkategorie"], "hersteller": "Testwerk",
+                                              "materialart": "metall_hardware"}, **e) for e in eintraege]}).encode()
+    with tempfile.TemporaryDirectory() as tmp:
+        app = make_app(tmp)
+        c = anmelden(app, "admin@example.org", "geheim123")
+        ber = importieren(c, datei({"modell": "D Neu", "artikelnummer": "DN-1", "bemerkung": "Screwlock"},
+                                   {"modell": "D Alt", "artikelnummer": "DA-1", "beschreibung": "Twistlock"},
+                                   {"modell": "D Beide", "artikelnummer": "DB-1", "beschreibung": "Ball-Lock",
+                                    "bemerkung": "Ball-Lock"}), False, "katalog.json")
+        assert ber["gespeichert"] and not ber["fehler"] and ber["produkte"]["neu"] == 3, ber
+        zeilen = {r["model"]: r["description"] for r in _db(app, "SELECT model, description FROM mat_product",
+                                                            one=False)}
+        assert zeilen == {"D Neu": "Screwlock", "D Alt": "Twistlock", "D Beide": "Ball-Lock"}, zeilen
+        assert "Produkt „Testwerk D Neu Screwlock“: neu" in ber["aenderungen"], ber["aenderungen"]
+        # Verschieden: ein Fehler mit Ort, nichts gespeichert (ganz oder gar nicht).
+        ber = importieren(c, datei({"modell": "D Neu", "artikelnummer": "DN-1", "bemerkung": "Twistlock",
+                                    "beschreibung": "Screwlock"}), False, "katalog.json")
+        assert not ber["gespeichert"] and len(ber["fehler"]) == 1, ber
+        assert ber["fehler"][0].startswith("produkte[0] (Testwerk D Neu Screwlock): „beschreibung“ und „bemerkung“ "
+                                           "meinen dasselbe Feld"), ber["fehler"]
+        assert _db(app, "SELECT description FROM mat_product WHERE model = 'D Neu'")["description"] == "Screwlock"
+        # Geändert über „bemerkung“: die Änderungsliste nennt „Bemerkung“; eine lange bekommt den Hinweis.
+        ber = importieren(c, datei({"modell": "D Neu", "artikelnummer": "DN-1", "bemerkung": LANG}), False,
+                          "katalog.json")
+        assert ber["gespeichert"] and ber["produkte"]["geaendert"] == 1, ber
+        assert [z for z in ber["aenderungen"] if z.startswith("Produkt „Testwerk D Neu ") and z.endswith(
+            ": geändert (Bemerkung)")], ber["aenderungen"]
+        assert [h for h in ber["hinweise"] if f"Die Bemerkung hat {len(LANG)} Zeichen" in h], ber["hinweise"]
+        # (hinter dem Produktnamen – der Platzhalter LANG selbst enthält das alte Wort)
+        assert not [t for t in ber["aenderungen"] + ber["hinweise"] if "Beschreibung" in t.split("“: ", 1)[1]], ber
+        # Der Export bleibt beim Schlüssel „beschreibung“ – vorhandene Katalog-ZIPs und ältere Instanzen lesen ihn.
+        import io
+        import zipfile
+        with zipfile.ZipFile(io.BytesIO(exportieren(c))) as z:
+            produkte = json.loads(z.read("katalog.json"))["produkte"]
+        neu = next(p for p in produkte if p["modell"] == "D Neu")
+        assert neu["beschreibung"] == LANG and "bemerkung" not in neu, neu
+    print("Bemerkung statt Beschreibung bestanden.")
+
+
 def test_regel_gleich_in_material_js():
     """Die Regel in material.js liefert dasselbe wie der Server (katalog.produktname, produkt_teile) – auch für einen
     Zusatz von Hand im Modellnamen, eine ältere lange Beschreibung und maskierte Zeichen; nameHtml und zusatzHtml
@@ -567,4 +701,5 @@ if __name__ == "__main__":
     test_darstellung()
     test_suche_ueber_beschreibung()
     test_oberflaeche_statisch()
+    test_bemerkung_heisst_so()
     test_regel_gleich_in_material_js()
