@@ -14,6 +14,7 @@ für sich deploybar.
 | 5 – Feinschliff | Rückmeldungen aus dem Pilotbetrieb: Ordnerkopf, einheitliche Knöpfe, Suchvorschläge, Urkundennummer im Profil, Pflicht-Bemerkung bei Mangel, Produktsuche, Bedienung auf Telefon, Foldable und Tablet | geliefert 18.10.2026, freigegeben 18.10.2026 („Starte mit Phase 2“) |
 | Phase 2 · 1 – Freigaben je Ordner | Freigaben lesen/prüfen/verwalten je Ordner mit Vererbung und Enddatum, strenge Trennung je Gliederung, Freigaben im Dialog „Ordner bearbeiten“ (Reiter) mit Vorlagen und Verlängern, „Meine Freigaben“; globale Seriennummernsuche und QR-Steckbrief mit Protokoll; Personenzuordnung; Rückrufe und Meldungen je Bereich; Löschkonzept | geliefert 18.10.2026, die drei offenen Fragen am 18.10.2026 entschieden und eingearbeitet; freigegeben 19.10.2026 („Starte Lieferung 2“) |
 | Phase 2 · 2 – Erinnerungen | Täglicher Erinnerungslauf ab 6 Uhr (eingebaut, abschaltbar, dazu `flask material remind`): Sammelmail an die Verwalter zu Fälligkeit (30/7 Tage, überfällig), Lebensende (90 Tage) und ablaufenden Freigaben (30 Tage); Erinnerungslog mit Kontoverweis; „Erinnerungsmails aus“ je Ordner; Laufstand und Probelauf auf der Übersicht | geliefert 19.10.2026, wartet auf Freigabe |
+| Phase 2 · 3 – Bestandsimport und Prüfanleitung | Bestandslisten aus Excel oder CSV in einen Ordner: Probelauf, Übernehmen in einer Transaktion (Artikel auf „neu“, Fälligkeit aus der Liste, STR-Nummern für Zeilen ohne Seriennummer) und Nacharbeit je Zielordner (Produkte zuordnen, melden oder im Katalog anlegen, erneut prüfen, CSV-Rundweg, Frist ein Monat); Prüfanleitung aus dem Wiki am Prüfformular, Abschnitt „Prüfung“ eingeblendet in offenen Prüfungen | geliefert 19.10.2026, wartet auf Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -2611,6 +2612,313 @@ Am 19.10.2026 entschieden: Nr. 3, 4, 11, 14, 15 und 18 bestätigt, Nr. 13 geänd
 - **Nicht in dieser Lieferung**: CSV-Import, Wiki-Verknüpfung (Lieferung 3), Mails an zugeordnete Personen, „Meine
   PSA“.
 
+## Phase 2 · Lieferung 3 – Bestandsimport und Prüfanleitung (19.10.2026)
+
+Lieferung 3 bringt zwei Punkte aus dem Konzept: den **Bestandsimport** – vorhandene Bestandslisten aus Excel oder CSV
+in einen Ordner übernehmen, mit Probelauf und einer Nacharbeit für alles, was nicht sicher passt – und die
+**Prüfanleitung aus dem Wiki** am Prüfformular, deren Abschnitt „Prüfung“ in offenen Prüfungen eingeblendet wird.
+Gebaut nach dem Bauentwurf vom 19.10.2026 (zweite Fassung nach zwei Kritiken, „Fach“ und „Sicherheit“, mit den
+Entscheidungen des Betreibers vom selben Tag) in zwei Paketen: KERN (Schema, Dienste, Routen, Tests) und OBERFLÄCHE
+(Importseite mit Nacharbeit, Formularzeile, Einblendung in der Prüfung, Doku). Schemaversion 12, keine neuen
+Abhängigkeiten. Stand: wartet auf Freigabe.
+
+### Neu
+
+- **Bestandsimport** (`services/tabelle.py`, `services/bestandsimport.py`, `routes_import.py`; Oberfläche in
+  `material.js`, Ansicht `bestandsimport`): Wer einen Ordner verwaltet, findet im Ordnerkopf das Untermenü
+  **„Export / Import“** (für alle anderen weiter „Export“) mit „Bestandsliste importieren …“ und, solange etwas offen
+  ist, „Nacharbeit (n offen)“. Beide führen auf die Seite `/material/ordner/<id>/import` (Pfad „Bestand / … / Import“).
+  - **Dateien**: Excel-Arbeitsmappe (.xlsx, erstes Blatt mit Inhalt) oder CSV (UTF-8 mit oder ohne BOM, sonst
+    Windows-1252 wie deutsches Excel, UTF-16 mit BOM; Trennzeichen `;`, `,` oder Tab erkannt). Höchstens 5 MB, als
+    xlsx entpackt 10 MB, als CSV 10 000 Zeilen bzw. 600 000 Felder – geprüft, **bevor** die Datei geladen wird; dann
+    2000 Datenzeilen, 300 Spalten, Kopfzeile in den ersten 40 Zeilen. Alte .xls, .ods, PDF und Bilder werden am
+    Dateikopf erkannt und mit einem Satz zum richtigen Speichern abgelehnt.
+  - **Probelauf sofort** nach der Wahl (oder dem Hineinziehen) der Datei, mit automatischer Spaltenzuordnung:
+    Synonyme mit Rangfolge (Modell vor Typ vor Bezeichnung, Seriennummer vor Hersteller, Artikelnummer vor Modell),
+    mehrere Spalten in die Bemerkung („Größe: M“, „Standort: MTW“), Personenspalten (Ausgegeben an, Telefon …) lassen
+    sich keinem Feld zuordnen. Die Zuordnung steht als Tabelle (am Telefon als Karten) mit Beispielen und Auswahl je
+    Spalte; eine Änderung startet den Probelauf nach 600 ms Ruhe neu, eine laufende Anfrage bricht dabei ab, und bis
+    zum neuen Ergebnis ist „Übernehmen“ gesperrt. Eine eigene Nacharbeits-CSV wird erkannt („Nacharbeits-CSV erkannt –
+    Spalten zugeordnet“, „Zuordnung ändern“).
+  - **Ergebnis** vor dem Übernehmen: Hinweise (schon importiert, Bezeichnung nicht als Modell, unbekannte Ordner mit
+    Zahl der Zeilen, „n Zeilen ohne Seriennummer – bekommen eine STR-Nummer …“), „Produkte, die der Katalog nicht
+    sicher kennt“ (je Angabe mit Zahl und Art), Fälligkeit (laut Liste überfällig, ohne Prüfdatum sofort fällig,
+    Lebensdauer erreicht) und die Zeilen nach Reitern „übernehmbar“, „schon im Bestand“, „Nacharbeit“, „schon
+    erledigt“ (je 100, „weitere …“) mit Produkt, Seriennummer, Ordner, Fälligkeit, Gründen (rot) und Hinweisen (grau),
+    Rückrufe als rote Marke.
+  - **„Übernehmen: n Artikel anlegen, m Zeilen in die Nacharbeit“** – der eine rote Knopf der Seite – schreibt in einer
+    Transaktion: übernehmbare Zeilen werden Artikel (Nummern in Dateireihenfolge), der Rest kommt in die Nacharbeit.
+    Danach die Tabelle **„angelegt“** mit Zeile, neuer Inventarnummer (Link), bisheriger Nummer, Seriennummer (vom
+    System vergebene STR-Nummern mit „(System)“) und Fälligkeit – zum Beschriften –, dazu „Alte Inventarnummern stehen
+    in der Bemerkung und sind nicht suchbar …“. Importierte Artikel stehen auf **„neu“**; die Fälligkeit kommt aus
+    „nächste Prüfung“ bzw. „zuletzt geprüft“ + Intervall (höchstens heute + Intervall), ohne beides ist die
+    Eingangsprüfung sofort fällig. Was schon im Bestand ist (Produkt und Seriennummer), wird erkannt und übersprungen;
+    dieselbe Datei in denselben Ordner innerhalb von 10 Minuten wird abgelehnt.
+  - **Nacharbeit** (Abschnitt derselben Seite, eine Liste je Zielordner über alle Importe dorthin): Karten je
+    Produktangabe mit „Produkt zuordnen …“ (Vorschläge und Produktsuche) und – für Materialwarte – „Produkt melden …“
+    (die vorhandene Meldung, vorbelegt, mit Link zur Nacharbeit in der Mail nach dem Einpflegen) bzw. – für die
+    Material-Verwaltung – „Im Katalog anlegen …“ (der Produktdialog, vorbelegt; danach wird das neue Produkt der
+    Angabe zugeordnet, die Seite bleibt stehen). Darunter die offenen Zeilen mit Kästchen, Nacharbeit-Nr., „Datei ·
+    Zeile n“, den Gründen als Liste, den wichtigsten Werten, „alle Werte“ und „offen bis …“; Filter nach Grund
+    (Produkt, Seriennummer, Daten, Ordner, Sonstige); je Seite 200, „weitere …“. Die Sammelleiste (klebt unten) hat
+    „alle n offenen auswählen“, „Produkt zuordnen …“ (auch zeilenweise – Größen und Varianten), „Erneut prüfen“ (erst
+    das Ergebnis, dann „n Artikel übernehmen“ mit der Tabelle der neuen Inventarnummern) und „Verwerfen“ (Rückfrage).
+    „Mehr → Als CSV herunterladen“ liefert die offenen Zeilen mit „Nacharbeit-Nr.“; korrigiert und hier wieder
+    hochgeladen, erledigt die Datei die alten Zeilen in derselben Transaktion – zweimal hochgeladen legt sie nichts
+    doppelt an. „Zuletzt erledigt“ zeigt die letzten 100 mit wer und wann. **Offene Zeilen verfallen einen Monat nach
+    dem Import** (Startschritt und Tageslauf; danach verworfen, Werte gelöscht, „System“).
+  - **Hinweise**: im Ordnerkopf „Aus einem Bestandsimport warten n Zeilen auf Nacharbeit. Nacharbeit öffnen“ (nur für
+    Verwalter), auf der Übersicht „Nacharbeit aus Bestandsimporten: <Ordnerpfad> (n), …“ mit Links.
+  - Alles aus der Datei (Spaltentitel, Beispiele, Werte, Ordner, Gründe, Hinweise) ist reiner Text und geht nur
+    maskiert in die Seite.
+  - Ein Import je Arbeitsprozess gleichzeitig; sonst „Gerade läuft ein anderer Bestandsimport – bitte in einem Moment
+    noch einmal.“ mit „Erneut versuchen“. Zu große Dateien sagt die Seite schon vor dem Hochladen.
+- **Prüfanleitung aus dem Wiki** (`services/wikiverweis.py`, `routes_wiki.py`; Oberfläche in `material.js`):
+  - **Am Formular**: Die Material-Verwaltung sieht unter dem Titel „Prüfanleitung im Wiki: <Titel>“ (Link, graue Marke
+    der Reichweite „öffentlich“, „intern“ oder „beschränkt“ mit Hinweis, wer sie nicht sieht), „Seite Nr. n – du darfst
+    sie nicht lesen“, „Die verknüpfte Seite liegt im Wiki-Papierkorb.“ oder „keine“. **„Ändern …“** öffnet die
+    Seitenwahl (Titelsuche über die Seiten, die man im Wiki lesen darf, „Verknüpfen“, „Verknüpfung entfernen“) – nur
+    mit Stufe Mitglied im Wiki; ohne sie steht dort „Verknüpfen kann, wer im Wiki mindestens Mitglied ist.“ Auch an
+    benutzten Versionen (die Verknüpfung gehört nicht zum Prüfinhalt); neue Versionen und der Katalogimport erben sie.
+  - **In offenen Prüfungen** steht im Kopf „📖 Prüfanleitung aus dem Wiki: <Titel>“ zum Aufklappen. Beim ersten
+    Öffnen holt die Seite die Wiki-Seite über den Endpunkt des Wikis selbst (mit dessen Rechten, ohne als Besuch zu
+    zählen) und blendet den **Abschnitt „Prüfung“** ein – die erste Überschrift h1–h5 „Prüfung“ (auch „Prüfung:“) bis
+    zur nächsten gleich hohen –, darunter immer „Ganze Seite im Wiki öffnen ↗“. Ohne solchen Abschnitt: „Die Seite hat
+    keinen Abschnitt „Prüfung“ – bitte im Wiki lesen.“ und der Link. Der Kasten ist höchstens 60 % der Fensterhöhe
+    hoch und rollt in sich, breite Tabellen rollen seitlich. Wer die Seite nicht lesen darf, sieht nur „Zu diesem
+    Formular gibt es eine Prüfanleitung im Wiki, die du nicht lesen darfst.“ – ohne Titel. An abgeschlossenen Prüfungen
+    erscheint nichts; festgehalten wird die Seite nirgends (kein Protokoll, kein PDF, nur die Seitennummer im Journal
+    des Formulars).
+  - **Abgeschirmt**: Der Abschnitt wird nach dem Rendern wie im Wiki ein zweites Mal streng gereinigt (keine ids,
+    Namen, `data-*`, Formularelemente, Labels, Stile), im `<template>` ausgeschnitten und in einen geschlossenen
+    Shadow-Root gesetzt. Die Klick-Delegation der Prüfansicht übergeht die Einblendung, Festschreiben liest Grund,
+    Datum und Bemerkung nur aus den eigenen Feldern.
+- Journal-Beschriftungen (Bestandsimport, Nacharbeit übernommen/verworfen, Prüfanleitung (Wiki) geändert) gleich in
+  Oberfläche und Lebenslauf-PDF.
+
+### Migration
+
+- **Schritt 12**, Schemaversion 12, läuft beim Start von selbst, rein additiv und wiederholbar (ein zweiter Lauf ändert
+  nichts): neue Tabellen `mat_import` (ein Lauf „Übernehmen“: Zielordner, Dateiname, SHA-256, Art, Zahlen, wer, wann)
+  und `mat_import_row` (Zeile der Nacharbeit: Werte, Gründe, Produktangabe, Wahl, Meldung, Status mit „ersetzt“; offen
+  ⇔ ohne `resolved_at`, UNIQUE je Import und Zeile), beide mit AUTOINCREMENT; Spalte `mat_form.wiki_page_id`
+  (`ON DELETE SET NULL`) mit Teilindex.
+- Geprüft: frische Datenbank, 11→12, 7→12 (Trennungstest) und 1→12 (Altbestand); einmalig an einer Kopie des Stands 7
+  über `create_app` bis 12 (Fremdschlüssel und `integrity_check` in Ordnung, Formulare und Artikel unverändert).
+- **Rückweg**: Eine Fassung mit Schemaversion 11 übergeht die neuen Tabellen und die Spalte. Sie zeigt weder
+  Nacharbeit noch Anleitung, neue Formularversionen erben die Verknüpfung nicht, und ein Ordner mit offener Nacharbeit
+  ließe sich dort löschen (die Nacharbeit verschwände mit).
+- Keine Handarbeit beim Update: `docker compose up -d --build` genügt.
+
+### Neue Abhängigkeiten
+
+Keine (openpyxl kommt aus dem Prüfungsimport, marked und DOMPurify liegen schon unter `app/static/vendor`).
+
+### Entscheidungen
+
+Entschieden bzw. bestätigt am 19.10.2026 – die Entscheidungen des Betreibers vor dem Bau:
+
+1. **Importierte Artikel stehen immer auf „neu“**, bis sie im System geprüft sind – kein „Prüfstand aus der Liste“.
+2. **Wiki-Verknüpfung nur am Prüfformular** – nicht am Produkt, nicht am Prüfpunkt; beim generischen Formular ist sie
+   die Anleitung der ganzen Kategorie.
+3. **In der Prüfung wird der Abschnitt „Prüfung“ eingeblendet** (aufklappbar) plus Link zur ganzen Seite; ohne
+   Abschnitt nur der Link. Kein wählbarer Abschnitt, kein Anker.
+4. **Die Wiki-Seite wird beim Festschreiben nicht festgehalten**; eingeblendet nur in offenen Prüfungen.
+5. **Monatsangabe in einem Tagesfeld** („03/2027“) gilt als 1. des Monats, mit Hinweis.
+6. **Zeilen mit laufendem Rückruf werden mit Hinweis übernommen**; der Artikel trägt danach das Banner.
+7. **Nur „letzte Prüfung“ in der Liste**: Fälligkeit = letzte Prüfung + Intervall, höchstens heute + Intervall;
+   laut Liste Überfällige stehen in der nächsten Erinnerung.
+
+Die Liste „Bitte bestätigen“ des Bauentwurfs (20 Punkte) – bestätigt am 19.10.2026, mit **drei Änderungen**:
+
+- **Geändert (Nr. 5)**: **Zeilen ohne Herstellerseriennummer brauchen keinen Haken mehr** – sie bekommen beim
+  Übernehmen automatisch eine Seriennummer vom System (STR-…) wie beim Anlegen von Hand. Der Probelauf nennt die Zahl,
+  das Ergebnis listet die vergebenen Nummern mit Inventarnummer. Doppeltes Anlegen begrenzen weiter die 10-Minuten-
+  Sperre derselben Datei und die Nacharbeit-Nr. der Nacharbeits-CSV.
+- **Geändert (Frist)**: **Offene Nacharbeit verfällt nach einem Monat** statt nach 12 Monaten. Der Betreiber schrieb
+  „reduziere auf 1 Monat“ bei Nr. 12; gemeint ist die 12-Monats-Frist aus Nr. 13 (Nr. 12 hat keine Frist). Die
+  Oberfläche nennt die Frist und je Zeile „offen bis …“.
+- **Geändert (Nr. 18)**: **Verknüpfen darf nur die Material-Verwaltung mit mindestens Stufe Mitglied im Wiki** (die
+  Plattform-Verwaltung hat sie überall); ohne Wiki-Stufe sieht sie die Verknüpfung und einen Hinweis statt
+  „Ändern …“, die Schnittstelle antwortet 403 mit Klartext.
+
+Bestätigt, wie im Entwurf: nur mit „verwalten“ am Zielordner, Ordnerspalte als Pfad unter dem Ziel (Standort und
+Lagerort werden Bemerkung) (Nr. 1); Einstieg im Untermenü „Export / Import“, eigene Seite, Hinweise im Ordnerkopf und
+auf der Übersicht (2); Probelauf beim Wählen, Produkte erst in der Nacharbeit zuordnen (3); Übernehmen in einer
+Transaktion, alte Inventarnummern nur in der Bemerkung (4); wiederholbar ohne Aktualisierung, 10-Minuten-Sperre (5,
+ohne den Haken); ohne Prüfdatum sofort fällig (6); nur Pflicht- und Sicherheitswerte blockieren, nichts wird erfunden
+(7); Intervall nur kürzer, Lebensende nur früher (8); Sammelzeilen in die Nacharbeit (9); Seriennummern aus
+Excel-Zahlen mit mehr als 15 Stellen in die Nacharbeit (10); kurze Seriennummern nie angelegt, fremde Dubletten ohne
+Merkmale mit einer Protokollzeile je Lauf (11); Spaltenregeln, „Prüffrist“ und „Bestellnummer“ nicht automatisch (12);
+Nacharbeit je Zielordner, Werte nur über die CSV (13, mit der Frist von einem Monat); Melden bzw. „Im Katalog anlegen
+…“ (14); Grenzen (15); Datenschutz und Löschen – Dateiname nur am Import und im Ordnerjournal, Namen beim Kontolöschen
+„(gelöschtes Konto)“, Ordner mit offener Nacharbeit nicht löschbar (16); kein Import über die Kommandozeile, keine
+Aktualisierung, keine Produkt- oder Ordneranlage durch den Import (17); jeder sieht im Wiki nur, was er lesen darf,
+neue Konten nur öffentliche Seiten (18, mit der Änderung oben); benutzte Formulare: Verknüpfung änderbar ohne neue
+Version, vererbt, nicht im Katalogaustausch (19); Einblendung der ersten Überschrift „Prüfung“, Bausteine nur als
+Hinweis, Aufgabenlisten ohne Kästchen (20).
+
+### Abweichungen vom Konzept, mit Begründung
+
+1. **Auch .xlsx, nicht nur CSV** – Materialwarte haben Excel-Listen; „Speichern unter CSV“ verliert Kodierung und
+   Seriennummern (1,23E+11, führende Nullen).
+2. **Produktabgleich nicht nur über Hersteller und Modell**: zuerst der Dublettenschlüssel, dann die katalogweit
+   eindeutige Artikelnummer, Hersteller + Modellname nur bei genau einem Produkt des Herstellers – Varianten wären
+   sonst mehrdeutig. Nie raten.
+3. **Nacharbeit für jede Zeile, die nicht sicher übernehmbar ist** (Produkt, Pflichtangaben, Dubletten, Ordner,
+   Sammelzeilen), gespeichert als Tabelle.
+4. **Teilübernahme**: Übernommen wird, was passt; der Rest wartet (anders als der Katalogimport).
+5. **Prüfdaten aus der Liste**: Artikel stehen auf „neu“, die Fälligkeit kommt aus der Liste.
+6. **Alte Inventarnummern** nur in der Bemerkung (keine eigene, suchbare Spalte).
+7. **Wiki am Formular statt am Produkt**; eingeblendet im Browser über die Endpunkte des Wikis; keine Anzeige
+   „verwendet im Modul Material“ im Wiki.
+8. **Wiki-Verknüpfung an benutzten Formularen änderbar** ohne neue Version.
+9. **Produkte werden in der Nacharbeit zugeordnet**, nicht schon im Probelauf – diese Artikel bekommen ihre Nummern
+   erst dort, also nicht in Dateireihenfolge.
+
+### Abweichungen vom Bauentwurf
+
+Paket KERN (Bauentwurf, Abschnitt 10):
+
+1. `mat_import_row.reason_code` hält alle Codes der Zeile, mit „,“ getrennt und nach Gruppe geordnet – so trägt die
+   Nacharbeit die Gründe als Liste wie der Probelauf.
+2. Über 5 MB lehnt schon das Lesen mit 413 ab (der Rahmen von `size_guard` ließe 5 MB + 1 Byte sonst durch).
+3. Die Frist der Nacharbeit läuft außer beim Start auch in jeder Runde des Tageslaufs (bei einem Monat käme der
+   nächste Start zu selten); `services/erinnerung.py` bleibt unberührt.
+4. Zusätzlich an der Schnittstelle: `frist`, `offen_bis`, `hinweise` beim erneuten Prüfen, `formular.wiki_aendern`.
+5. Spaltentitel werden auch ohne Umlaute verglichen („Pruefdatum“), dazu wenige Synonyme mehr („artikel nr“,
+   „art.nr“, „hersteller seriennummer“, „lfd.-nr“).
+6. „Nacharbeit-Nr.“ steht in `spalten` als „ignorieren“, gelesen wird sie immer aus ihrer Spalte; dieselbe Nummer
+   zweimal: nur die erste Zeile ersetzt die alte; inzwischen erledigt → 409.
+7. Grenzen der Nacharbeit: höchstens 2000 Zeilen je Aktion, 100 Produktkarten; „alle“ ohne Offenes → 409.
+8. Doppelt beim erneuten Prüfen nennt die Nacharbeit-Nr. statt der Zeilennummer.
+9. Innere Aufteilung (Klasse `Lauf`, `zeilen_pruefen`) statt der Signatur `zeile_pruefen(…)`.
+10. In der Seitenwahl ist `lesemodus` immer falsch (ohne Wiki-Stufe gibt es sie nicht mehr); die Formularansicht zeigt
+    der Material-Verwaltung die Verknüpfung auch ohne Wiki-Stufe.
+11. Ordner löschen prüft offene Nacharbeit nur am Ordner selbst.
+
+Paket OBERFLÄCHE:
+
+1. **Link in der Formularzeile**: `formular.wiki` trägt zusätzlich `url` („/wiki/<slug>“, nur bei „ok“) – die
+   Schnittstelle 8.5 hatte keinen, der Entwurf (4.4) verlangt „<Titel> mit Link“. Python-Änderung in
+   `wikiverweis.editor_json` mit angepasstem Test.
+2. **Einzahl im STR-Satz** („1 Zeile ohne Seriennummer – bekommt …“, „1 Artikel … hat …“) – vorher „1 Zeilen“;
+   behoben in `bestandsimport._hinweis_ohne_serie` mit Test.
+3. Nach einer geänderten Zuordnung ist „Übernehmen“ gesperrt, bis der neue Probelauf da ist (seine Zahlen gehörten
+   sonst zur alten Zuordnung); dazu der Textlink „Zuordnung wie erkannt“.
+4. Eine Nacharbeits-CSV, deren Zeilen inzwischen alle im Bestand stehen, zeigt „Übernehmen: Nacharbeit abgleichen
+   (nichts anzulegen)“ – sonst blieben die alten Zeilen offen.
+5. „Erneut prüfen“ mit nur „schon im Bestand“ bietet „m Zeilen als „schon im Bestand“ erledigen“ an (rot); der
+   Entwurf kannte nur „n Artikel übernehmen“.
+6. Nach dem Übernehmen ersetzt der Reiter „angelegt“ den Reiter „übernehmbar“ und ist die Tabelle „Angelegt“ (keine
+   zweite Tabelle darüber).
+7. Die Karte einer Meldung sagt „Gemeldet – die Material-Verwaltung nimmt das Produkt auf.“ ohne Datum (die
+   Schnittstelle liefert keins); „Produkt melden …“ steht auch nach einer abgelehnten Meldung wieder da.
+8. Alte HTML-Seiten im Wiki: „Diese Seite lässt sich hier nicht einblenden – bitte im Wiki lesen.“ und der Link.
+9. Die strenge Reinigung nimmt auch `target` weg; jeder Link im Abschnitt bekommt danach `target="_blank"
+   rel="noopener noreferrer"`.
+10. Ergebnis- und Filterreiter brechen am Telefon um wie im Ordner (statt seitlich zu rollen).
+
+### Schnittstelle
+
+Die neuen Routen stehen in der Tabelle „Schnittstelle“ unten (Zeilen mit „Phase 2 · 3“). An vorhandenen Antworten
+ändert sich:
+
+- `GET /api/material/start`: neu `nacharbeit` = `[{ordner: {id, pfad}, offen}]` – Zielordner mit offener Nacharbeit,
+  die das Konto verwaltet (höchstens 20, sonst `[]`).
+- `GET /api/material/ordner/<id>`: neu `ordner.nacharbeit` – Zahl offener Zeilen mit diesem Ziel, nur mit verwalten
+  (sonst `null`). `DELETE` antwortet 409, solange dort Nacharbeit offen ist.
+- `GET /api/material/pruefungen/<id>`: neu `anleitung` = `{titel, url, quelle}` | `{kein_zugang: true}` | `null` (an
+  abgeschlossenen Prüfungen immer `null`).
+- `GET /api/material/formulare/<id>`: neu `formular.wiki` = `{seite, titel, url, reichweite, zustand}` | `null` (nur
+  für die Material-Verwaltung) und `formular.wiki_aendern`.
+- Journal: Ordner `bestandsimport` (Import Nr., Datei, Zeilen, angelegt, schon im Bestand, Nacharbeit, neu
+  eingelesen), `nacharbeit_uebernommen`, `nacharbeit_verworfen`; Artikel `angelegt` mit `bestandsimport`, `zeile` und
+  den Werten „laut Liste“ (ohne Dateinamen); Formular `wiki` (nur die Seitennummer).
+- Meldung aus der Nacharbeit: Die Mail an den Melder nach dem Einpflegen verlinkt die Nacharbeit statt „Artikel
+  anlegen“.
+
+### Messwerte
+
+Beim Bau gemessen (KERN, Proben außerhalb des Repositorys):
+
+| Fall | Ergebnis | Zeit | Speicher (maxRSS) |
+| --- | --- | --- | --- |
+| Zip-Bombe aus der Sicherheitskritik, auf 4,87 MB verkleinert (51 MB XML) | 400 „entpackt 49 MB … höchstens 10 MB“, ohne openpyxl | 0,10 s | 84 MB (vorher mit openpyxl: 2,67 GB bei 14,8 MB) |
+| dieselbe Bombe mit 11,8 MB (126 MB XML) | 413 vor dem Lesen | 0,00 s | – |
+| zulässige Grenze: xlsx mit 9,9 MB XML | von openpyxl gelesen (Probedaten ohne Kopfzeile → 400) | 2,5 s | 222–239 MB |
+| CSV 5 MB „a\n“ | 400 nach 10 000 Zeilen | 0,12 s | 105 MB (vorher bei 25 MB: 1,47 GB) |
+| CSV 5 MB, 299 Spalten je Zeile | 400 nach 600 000 Feldern | 0,19 s | 136 MB |
+| 2000 Zeilen | Probelauf / Übernehmen | 0,8 s / 1,3 s | 10 bzw. 29 Abfragen je Zeile |
+| Kopie des Stands 7 → 12 über `create_app` | Version 12, Fremdschlüssel und `integrity_check` in Ordnung | – | – |
+
+### Im Browser geprüft
+
+Chromium gegen einen lokalen Server **ohne `SMTP_HOST`** mit Platzhalter-Katalog (Testwerk HMS Beta, Gurt Alpha, Gurt
+Sigma in zwei Varianten), -Bestand (OG Musterstadt mit Lager, Fahrzeug 1, Kiste A) und -Wiki (öffentliche Anleitung
+mit Abschnitt „Prüfung:“, Kasten, Liste und breiter Tabelle; Seite ohne Abschnitt; interne Seite; Probeseite), bei
+1280 und 360 px, ohne Fehler in der Konsole und ohne waagerechten Bildlauf:
+
+- **Materialwart**: Ordnerkopf mit „Export / Import“; Vereinsliste als xlsx (Titelzeilen, Personenspalte, Bezeichnung
+  links vom Typ, Größe und Standort) – Zuordnung ohne Eingriff, „Ausgegeben an“ ohne Auswahl; zweimal schnell
+  umgestellt: nur die neueste Antwort zählt; Übernehmen „5 Artikel anlegen, 4 Zeilen in die Nacharbeit“, Tabelle
+  „angelegt“ mit Inventarnummern und „STR-000012 (System)“; Hinweise im Ordnerkopf und auf der Übersicht; Varianten
+  zeilenweise zugeordnet (Größe S und M), Helm gemeldet (Dialog vorbelegt), alle ausgewählt, erneut geprüft und
+  übernommen (Tabelle mit Nacharbeit-Nr. und Inventarnummer), eine Zeile verworfen (Rückfrage mit „Verwerfen“);
+  CSV heruntergeladen, korrigiert und wieder hochgeladen („Nacharbeits-CSV erkannt“, alte Zeile „neu eingelesen“),
+  dieselbe Datei neu gespeichert noch einmal: alles „schon erledigt“, nichts übernommen, Nacharbeit unverändert.
+  Zu große Datei (Hinweis vor dem Hochladen), 413 ohne JSON (Proxy) und 429 mit „Erneut versuchen“ nachgestellt.
+- **Maskierung**: Spaltentitel `<b>Titel</b>`, Werte `<img src=x>` und `<img src=x onerror=alert(1)>`, Ordner
+  `<a href="/x">MTW</a>`, Hersteller `<b>Fett GmbH</b>` erscheinen als Text in Zuordnung, Ergebnis, Gründen,
+  Nacharbeit, Karten und „alle Werte“ – kein Element daraus im Dokument.
+- **Material-Verwaltung** mit Wiki-Stufe: Formularzeile, Seitenwahl (Reichweite und Hinweis je Treffer, Suche),
+  Verknüpfen der internen Probeseite, Satz zu benutzten Versionen. **Ohne Wiki-Stufe**: „Seite Nr. 8 – du darfst sie
+  nicht lesen“, kein „Ändern …“, Hinweis auf die Wiki-Stufe; Import der cp1252-CSV, unbekanntes Produkt mit „Im
+  Katalog anlegen …“ angelegt und zugeordnet (Seite bleibt stehen), erneut geprüft und übernommen.
+- **Plattform-Verwaltung**: Formularzeile mit „Ändern …“, Übersicht mit „Nacharbeit aus Bestandsimporten: OG
+  Musterstadt / Lager Musterstadt (2)“.
+- **Prüfer mit Wiki-Stufe** und **externer Prüfer ohne**: Anleitung aufgeklappt – nur der Abschnitt „Prüfung:“ bis
+  vor „Pflege“ (Einleitung und Pflege nicht), Kasten, Liste, Tabelle (am Telefon seitlich rollend), Link in neuem Tab;
+  der Kasten rollt bei 360 px in sich, die Umschalter darunter bleiben bedienbar. Seite ohne Abschnitt: Satz und Link.
+  Interne Seite für den externen Prüfer: nur der Satz, kein Titel im HTML. Abgeschlossene Prüfung: keine Anleitung.
+- **Abschirmung** (DOM-Clobbering-Probe der Sicherheitskritik und Bauentwurf 6.3 an der echten Einblendung): Abschnitt
+  mit `<data id="pr-grund" value=…>`, `<data id="pr-due">`, `<output id="pr-bem">`, `<form id="pr-abschluss">` mit
+  `<input id="pr-grund">`, `<a id="pr-ok" data-act="festschreiben">`, `<a data-act="ergebnis" data-e="einsatzbereit">`,
+  `<span class="mat-pwert" data-rid="1">`, `<div id="pp-26">`, `<label for="pr-grund">`, `<img name="pr-ok">`.
+  Im Schatten bleiben davon nur Text, Links ohne `data-*`, ein `<span class="mat-pwert">` ohne Attribute und das Bild
+  ohne Namen; alle Elemente mit echten Mausklicks angeklickt – kein Ergebnis gesetzt, `#pr-grund`, `#pr-due`, `#pr-bem`,
+  `#pr-abschluss` und `window["pr-ok"]` sind die echten Felder, `.mat-pwert` wie vorher, kein `#pp-26`. Festgeschrieben
+  mit „einsatzbereit“ und Bemerkung „ECHTE-BEMERKUNG“: Ergebnis, leerer Grund, Bemerkung und Datum kamen aus den
+  echten Feldern; danach keine Anleitung mehr.
+- **Mitglied (Führungskraft, lesen)**: Menü nur „Export“, Importseite 403 „Bestandslisten importiert, wer den Ordner
+  verwaltet.“, kein Hinweis auf Nacharbeit.
+
+Zwei Befunde der Durchsicht sind behoben: Nach der Wahl einer neuen Datei stand bis zur Antwort der Bericht der
+vorigen; der lange rote Knopf brach am Telefon nicht um (waagerechter Bildlauf). Dazu Abweichung 2 (Einzahl).
+
+### Prüfung vor Auslieferung
+
+- Bauentwurf vorher von zwei Kritiken geprüft („Fach“: 15 Befunde, „Sicherheit“: 15 Befunde) – alle übernommen oder
+  begründet abgelehnt (Bauentwurf, Abschnitt 9).
+- Neue Testdateien `tests/test_material_import.py` (Testplan 6.1, dazu statisch die Oberfläche: Ansicht, Einstieg,
+  Knopfregel, Abbruch, 413/429, Nacharbeit, Maskierung) und `tests/test_material_wiki.py` (Testplan 6.2, dazu statisch
+  Reinigung, Schatten, Ausschneiden, Härtung der Prüfansicht, Formularzeile); angepasst: Trennungs-, Überblicks-,
+  Erinnerungs-, L5- und Beschreibungstest. `tests/test_pruefungen_import.py` unverändert grün. Die ganze Suite läuft grün, `st-js`,
+  `st-css` und `st-py` ohne Meldungen.
+
+### Zu prüfen
+
+1. **Eine echte Liste der Gliederung** im Probelauf (dev oder anonymisiert): Gebaut und geprüft ist mit einer
+   typischen Vereinsliste aus Platzhaltern. Ungewöhnliche Listen (verbundene Zellen, mehrere Tabellen auf einem Blatt,
+   Summenzeilen) fangen Kopfzeilensuche und Sammelzeilen nur grob ab.
+2. **Anleitungen für alle Prüfer gehören in den öffentlichen Teil des Wikis**: Neue Konten haben keine Wiki-Stufe und
+   sehen interne Seiten nur als Satz ohne Titel. Bitte mit der Wiki-Redaktion abstimmen, welche Anleitungen
+   öffentlich werden.
+3. **Mail an den Melder** aus der Nacharbeit (Link zur Nacharbeit) einmal auf dev mit Mailserver ansehen – lokal ist
+   ohne `SMTP_HOST` geprüft.
+4. **Frist von einem Monat** im Betrieb: Was nach einem Monat offen ist, verwirft „System“ ohne Rückfrage; danach hilft
+   nur ein neuer Import (die Datei bleibt beim Materialwart).
+
 ## Beispielbestand (18.10.2026)
 
 Wunsch: ein umfangreicherer Bestand zum Testen auf dev – nur aus dem vorhandenen Katalog, der dabei unverändert bleibt,
@@ -2839,7 +3147,11 @@ Archivs (bei Zip64 an dessen Zip64-Satz) geprüft, bevor das Verzeichnis eingele
 benannte Einträge werden abgewiesen. Hochladen und Export: bis 2 GB. Eine Datei über der Grenze des Imports (Bild
 31 MB, Dokument 50 MB) lässt schon der Export aus und nennt sie (Vorschau und `bericht.txt`).
 
-## Schnittstelle (Phase 1 mit den Nachbesserungen, Phase 2 · Lieferung 1 und 2)
+**Wiki-Verknüpfungen gehören nicht zum Katalogformat** (Phase 2 · 3): Der Export schreibt die Prüfanleitung eines
+Formulars nicht mit, der Import setzt nie eine – eine neue Formularversion aus dem Import erbt aber die Verknüpfung
+der letzten Version. Verknüpft wird in der Instanz, in der die Anleitungen im Wiki stehen.
+
+## Schnittstelle (Phase 1 mit den Nachbesserungen, Phase 2 · Lieferung 1 bis 3)
 
 Seit Phase 2 gilt jedes Recht an einem Ordner (Freigaben je Ordner, vererbt nach unten): „lesen“ heißt Leserecht am
 Gegenstand (Artikel und Prüfungen: an der Heimat des Artikels), „Grundrecht“ lesen oder verwalten, „Materialwart“
@@ -2920,3 +3232,15 @@ oder Plattform-Verwaltung).
 | `GET /api/material/ordner/<id>` | lesen | neu: `ordner.reminders_off` (eigener Wert) und `ordner.erinnerungen` = `{aus, eigen, geerbt_von: {id, pfad, sichtbar} \| null}`; Ordnerbaum mit `reminders_off` (Phase 2 · 2) |
 | `PUT /api/material/ordner/<id>` mit `reminders_off` (ja/nein) | Materialwart am Ordner | „Erinnerungsmails aus“ für Ordner und Unterordner; fehlt das Feld, bleibt der Wert; anderes als ja/nein → 400; mit Journal (Phase 2 · 2) |
 | `flask --app "app:create_app()" material remind [--trocken [--demo]] [--stichtag JJJJ-MM-TT] [--erneut]` | Kommandozeile im Container | Erinnerungslauf: `--trocken` zeigt die Mails des nächsten Laufs mit Adressen und schreibt nichts (auch bei „aus“ oder gesperrt), `--stichtag` und `--demo` (DEMO-Bestand einbeziehen, nur Ansicht) nur mit `--trocken`; ohne `--trocken` ein echter Lauf für heute (nie DEMO), `--erneut` noch einmal am selben Tag (nur, was nicht im Log steht). Exit 0, 1 (Mail gescheitert, Fehler), 2 (aus, gesperrt, kein Mailserver, `--stichtag` oder `--demo` ohne `--trocken`, unlesbares Datum) (Phase 2 · 2) |
+| `GET /material/ordner/<id>/import` | Materialwart am Ordner (sonst 403-Seite, fremd 404, Systemordner 409) | Seite „Bestandsliste importieren“ mit der Nacharbeit dieses Zielordners (Phase 2 · 3) |
+| `POST /api/material/ordner/<id>/import/probelauf` (Formular: `file`, `zuordnung` JSON `{"<Spalte>": feld}`) | Materialwart am Ordner | Probelauf, schreibt nichts (außer einer Protokollzeile, wenn er fremde Dubletten nennt) → Bericht: `datei`, `nacharbeit_csv`, `spalten`, `felder`, `fehlt`, `warnungen`, `schon_importiert`, `zahlen` (mit `ohne_serie`), `faelligkeit`, `produkte_offen`, `ordner_unbekannt`, `zeilen`, `frist`; 400 unlesbar, 409 Systemordner, 413 zu groß, 429 anderer Import läuft (Phase 2 · 3) |
+| `POST /api/material/ordner/<id>/import` (wie der Probelauf) | Materialwart am Ordner | Übernehmen in einer Transaktion → 201, Bericht mit Zeilen `angelegt` (`artikel` {id, inventory_no}, vergebene STR-Nummer) und `import` {id, angelegt, im_bestand, nacharbeit, ersetzt}; 409 nichts zu tun, dieselbe Datei vor weniger als 10 Minuten, Ordnerbaum geändert (Phase 2 · 3) |
+| `GET /api/material/ordner/<id>/nacharbeit?gruppe=alle\|produkt\|seriennummer\|daten\|ordner\|sonstige&seite=` | Materialwart am Ordner | offene Nacharbeit dieses Ziels: `zahlen` je Gruppe, `gruppen` (Produktangaben mit Vorschlägen und Meldung), `zeilen` (200 je Seite, mit `gruende`, `werte`, `offen_bis`), `erledigt` (die letzten 100), `frist` (Phase 2 · 3) |
+| `POST /api/material/ordner/<id>/nacharbeit/produkt` (`angabe` oder `zeilen` [Nr.] \| `"alle"`, `product_id` oder `null`) | Materialwart am Ordner | Produkt zuordnen bzw. Wahl zurücknehmen → `gesetzt`; fremde Zeile 404, erledigte 409, DEMO-Produkt im echten Ordner 400 (Phase 2 · 3) |
+| `POST /api/material/ordner/<id>/nacharbeit/melden` (Felder wie `POST /meldungen` ohne `folder_id`, dazu `angabe`; `fotos` mehrfach) | Materialwart am Ordner | Produkt melden; die Meldung hängt an allen offenen Zeilen der Angabe → 201 `meldung` (Phase 2 · 3) |
+| `POST /api/material/ordner/<id>/nacharbeit/pruefen` (`zeilen` [Nr.] \| `"alle"`, `uebernehmen`) | Materialwart am Ordner | erneut prüfen (Bericht, schreibt nichts) bzw. mit `uebernehmen` in einer Transaktion übernehmen → `zahlen`, `faelligkeit`, `zeilen` (mit `id`), `hinweise`; 429 wie oben (Phase 2 · 3) |
+| `POST /api/material/ordner/<id>/nacharbeit/verwerfen` (`zeilen` [Nr.] \| `"alle"`) | Materialwart am Ordner | offene Zeilen verwerfen (Werte gelöscht, Journal) → `verworfen` (Phase 2 · 3) |
+| `GET /material/ordner/<id>/nacharbeit.csv` | Materialwart am Ordner (Fehler als Seite) | offene Zeilen als CSV mit „Nacharbeit-Nr.“ (`;`, UTF-8 mit BOM, Formelschutz) – korrigiert wieder hochgeladen, erledigt sie die alten Zeilen (Phase 2 · 3) |
+| `GET /api/material/wiki/seiten?q=` | Material-Verwaltung mit Stufe Mitglied im Wiki (sonst 403 mit Klartext) | Seitenwahl: lesbare Seiten ohne Papierkorb und Vorlagen, höchstens 30, je `{id, titel, icon, reichweite}`; `lesemodus` (Phase 2 · 3) |
+| `PUT /api/material/formulare/<id>/wiki` (`seite`: Kennung oder `null`) | wie die Seitenwahl; auch an benutzten Formularen | Prüfanleitung verknüpfen bzw. entfernen; nicht lesbare, unbekannte oder Papierkorb-Seite 404 „Wiki-Seite nicht gefunden.“; schreibt nur diese Spalte, Journal mit der Seitennummer → `formular` (Phase 2 · 3) |
+| (Übersicht, Ordner, Prüfung, Formular) | – | neu: `start.nacharbeit`, `ordner.nacharbeit` (nur mit verwalten), `pruefung.anleitung` (nur Entwürfe), `formular.wiki` und `formular.wiki_aendern` (nur Material-Verwaltung); `DELETE /ordner/<id>` 409 bei offener Nacharbeit (Phase 2 · 3) |
