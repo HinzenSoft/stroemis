@@ -404,6 +404,29 @@ def test_lesen_xlsx_und_grenzen():
     finally:
         pi._arbeitsblatt = alt
     assert "nicht als Excel-Arbeitsmappe" in _abgelehnt(tabelle.lesen, b"PK\x03\x04kaputt" + b"\x00" * 50, "l.xlsx")
+    # Verbundene Zellen, Links, Kommentare über große Bereiche und dichte leere Zellen (Prüfung vor Auslieferung,
+    # Sicherheit 1 – vorher bis 2,8 GB und 76 s): abgelehnt, bevor openpyxl lädt (pi._blaetter_vorpruefen), auch
+    # verkleidet; über die Route in unter 2 s.
+    from test_pruefungen_import import xlsx_bomben
+    geladen = []
+    alt_laden = pi.openpyxl.load_workbook
+    pi.openpyxl.load_workbook = lambda *a, **k: geladen.append(1) or alt_laden(*a, **k)
+    try:
+        bomben = xlsx_bomben()
+        for name, roh in bomben.items():
+            text = _abgelehnt(tabelle.lesen, roh, f"{name}.xlsx")
+            assert not geladen and "Teilnehmerliste" not in text, (name, text)
+        with tempfile.TemporaryDirectory() as tmp:
+            t = aufbau(tmp)
+            for name in ("merge_6m", "link_6m", "merge_riesig", "leere_c"):
+                t0 = time.time()
+                r = probelauf(t.w, t.lager, bomben[name], f"{name}.xlsx")
+                assert r.status_code == 400 and time.time() - t0 < 2 and not geladen, (name, r.get_json())
+        tab = tabelle.lesen(xlsx_bytes([["Bestandsliste (Platzhalter)"], KOPF, ["Testwerk", "HMS Beta", "SN-0001"]]),
+                            "liste.xlsx")
+        assert tab.zeilen[2] == ["Testwerk", "HMS Beta", "SN-0001"] and geladen
+    finally:
+        pi.openpyxl.load_workbook = alt_laden
     # 5 MB + 1 Byte: 413 (über dem Dienst), deutlich mehr: 413 schon von der Upload-Grenze der Route.
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
@@ -471,6 +494,12 @@ def test_spalten():
     assert daten[0]["werte"]["bemerkung"] == "Größe: M\nneu\nFarbe: rot", daten
     assert sp["Telefon"]["gesperrt"] and sp["Telefon"]["zuordnung"] == "ignorieren" and sp["Telefon"]["beispiele"] == []
     assert any("„Telefon“ enthält Personenangaben" in w for w in warn) and not fehlt
+    # Auch in der Nacharbeits-CSV (feste Zuordnung): eine ergänzte Personenspalte bleibt gesperrt, auch über die Zuordnung.
+    sp, warn, daten, _ = lauf(["Nacharbeit-Nr.", "Hersteller", "Modell", "Seriennummer", "Ausgegeben an"],
+                              ["", "Testwerk", "HMS Beta", "A-1", "Platzhalter Person"], {"4": "bemerkung"})
+    assert sp["Ausgegeben an"]["gesperrt"] and sp["Ausgegeben an"]["zuordnung"] == "ignorieren"
+    assert sp["Ausgegeben an"]["beispiele"] == [] and "bemerkung" not in daten[0]["werte"], daten
+    assert any("„Ausgegeben an“ enthält Personenangaben" in w for w in warn), warn
     # Ein Feld zweimal (außer Bemerkung): die erste gewinnt; die Zuordnung der Anfrage überschreibt.
     sp, warn, daten, _ = lauf(["Hersteller", "Modell", "Seriennummer", "S/N"], ["Testwerk", "HMS", "A-1", "B-2"])
     assert sp["S/N"]["zuordnung"] == "ignorieren" and daten[0]["werte"]["seriennummer"] == "A-1"
@@ -1367,7 +1396,158 @@ def test_seite_und_hinweise():
     print("Seite und Hinweise bestanden.")
 
 
-# --- 27. Oberfläche (statisch) -------------------------------------------------------------------------------------
+# --- 27. Befunde der Prüfung vor Auslieferung (Importlogik) ----------------------------------------------------------
+
+def test_befunde_vor_auslieferung():
+    """Die Befunde der Prüfung „Importlogik“ vor der Auslieferung (CHANGELOG „Prüfung vor Auslieferung“): Seriennummern-
+    Synonyme und Warnung ohne Seriennummernspalte, Einheit des Prüfintervalls, dieselbe Liste noch einmal bei offener
+    Nacharbeit, Grundprodukt mit Varianten ohne Artikelnummer, gleiche Seriennummer bei zwei Varianten in einer Datei,
+    Nacharbeits-CSV nach Ablauf der Frist, übliche Schreibweisen der Anzahl, Lebensende bei Metall; dazu die Sperre
+    derselben Datei im Probelauf, die Zahl zeilenweise zugeordneter Zeilen je Karte und die Seriennummer erledigter
+    Zeilen."""
+    from app.material.services import bestandsimport as bi
+    # Lesen des Intervalls: Einheit aus dem Wert, Wörter; 1 und 2 ohne Einheit sind unklar.
+    for text, soll in (("12", (12, None)), ("12 Monate", (12, None)), ("1 Monat", (1, None)), ("12M", (12, None)),
+                       ("1 Jahr", (12, None)), ("2 Jahre", (24, None)), ("0,5 Jahre", (6, None)), ("1 J.", (12, None)),
+                       ("jährlich", (12, None)), ("1x jährlich", (12, None)), ("2 x jährlich", (6, None)),
+                       ("halbjährlich", (6, None)), ("vierteljährlich", (3, None)), ("2-jährlich", (24, None)),
+                       ("alle 12 Monate", (12, None)), ("alle 2 Jahre", (24, None)), ("1", (None, "einheit")),
+                       ("2", (None, "einheit")), ("3", (3, None)), ("ca. jährlich", (None, "unlesbar")),
+                       ("0", (None, "unlesbar")), ("11 Jahre", (None, "unlesbar"))):
+        assert bi._intervall_lesen(text) == soll, (text, bi._intervall_lesen(text))
+    for titel, soll in (("Prüfintervall (Jahre)", "jahre"), ("Intervall in Jahren", "jahre"), ("Prüfintervall [J]", "jahre"),
+                        ("Prüfintervall (Monate)", "monate"), ("Prüfzyklus [M]", "monate"), ("Prüfintervall", None)):
+        assert bi.intervall_einheit(titel) == soll, titel
+    for text, soll in (("1", 1), ("01", 1), ("1,0", 1), ("1 Stk.", 1), ("1 Stück", 1), ("2 Stk.", 2), ("ca. 5", None)):
+        assert bi._anzahl_lesen(text) == soll, text
+    with ohne_post(), tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        app, w, kar = t.app, t.w, t.ids["karabiner"]
+        # 1. Seriennummer: Synonyme; ohne zugeordnete Spalte eine deutliche Warnung mit den nicht zugeordneten Spalten.
+        for titel in ("Serien-Nummer", "Ser.-Nr.", "Ser. Nr.", "Fabr.-Nr."):
+            assert bi.erkennen(titel)[0] == "seriennummer", titel
+        r = ok(uebernehmen(w, t.lager, csv_bytes([["Hersteller", "Modell", "Serien-Nummer"],
+                                                  ["Testwerk", "HMS Beta", "BV-0001"]])), 201)
+        assert r["zeilen"][0]["seriennummer"] == "BV-0001" and not r["keine_seriennummer"]
+        b = ok(probelauf(w, t.lager, csv_bytes([["Hersteller", "Modell", "Kennung", "Ausgegeben an"],
+                                                ["Testwerk", "HMS Beta", "BV-0002", "Platzhalter Person"]])))
+        assert b["keine_seriennummer"] and b["warnungen"][0].startswith(
+            "Keine Spalte ist als Seriennummer zugeordnet – alle 1 Zeilen bekämen eine Seriennummer vom System"), b
+        assert "Nicht zugeordnet: „Kennung“." in b["warnungen"][0] and "Ausgegeben" not in b["warnungen"][0]
+        # 2. Prüfintervall: Einheit aus dem Spaltentitel; 1 ohne Einheit in die Nacharbeit; kürzer übernommen mit Hinweis.
+        b = ok(probelauf(w, t.lager, csv_bytes([["Hersteller", "Modell", "Seriennummer", "Prüfintervall (Jahre)"],
+                                                ["Testwerk", "HMS Beta", "BV-0010", "1"],
+                                                ["Testwerk", "HMS Beta", "BV-0011", "0,5"]])))
+        z = nach_nr(b)
+        assert z[2]["status"] == "uebernehmbar" and any("nicht kürzer" in h for h in z[2]["hinweise"]), z[2]
+        assert z[3]["status"] == "uebernehmbar" and any("Intervall laut Liste (6 Monate) kürzer" in h
+                                                         for h in z[3]["hinweise"]), z[3]
+        r = ok(uebernehmen(w, t.lager, csv_bytes([["Hersteller", "Modell", "Seriennummer", "Prüfintervall"],
+                                                  ["Testwerk", "HMS Beta", "BV-0012", "1"],
+                                                  ["Testwerk", "HMS Beta", "BV-0013", "halbjährlich"],
+                                                  ["Testwerk", "HMS Beta", "BV-0014", "jährlich"]])), 201)
+        z = nach_nr(r)
+        assert codes(z[2]) == ["intervall"] and "Monate oder Jahre?" in z[2]["gruende"][0]["text"]
+        assert z[3]["status"] == z[4]["status"] == "angelegt"
+        iv = {i["serial_no"]: i["interval_months"] for i in zeilen(app, "SELECT serial_no, interval_months FROM mat_item")}
+        assert iv["BV-0013"] == 6 and iv["BV-0014"] is None, iv
+        # Die Einheit bleibt in der Nacharbeit (und ihrer CSV) erhalten: „1“ unter „Prüfintervall (Jahre)“ ist „1 Jahr“.
+        ok(uebernehmen(w, t.lager, csv_bytes([["Hersteller", "Modell", "Seriennummer", "Prüfintervall (Jahre)"],
+                                              ["Nirgendwerk", "Phantom", "BV-0015", "1"]])), 201)
+        assert json.loads(offene_zeilen(app, t.lager)[-1]["values_json"])["intervall"] == "1 Jahr"
+        ok(w.post(f"/api/material/ordner/{t.lager}/nacharbeit/verwerfen", json={"zeilen": "alle"}))
+        # 3. Dieselbe Liste noch einmal, solange ihre Zeilen in der Nacharbeit stehen: ersetzt, nicht verdoppelt – auch
+        # mit der Produktwahl aus der Nacharbeit. Binnen 10 Minuten nennt der Probelauf, ab wann es wieder geht.
+        hiviz_m = produkt(t.mv, kar, "Platzwerk", "Rahmen | M", "")
+        produkt(t.mv, kar, "Platzwerk", "Rahmen | L", "")
+        liste = csv_bytes([["Hersteller", "Modell", "Seriennummer", "Bemerkung"],
+                           ["Nirgendwerk", "Phantom W", "", "Platzhalter eins"], ["Nirgendwerk", "Phantom W", "", ""],
+                           ["Nirgendwerk", "Phantom W", "DN-0003", ""], ["Platzwerk", "Rahmen", "DN-0004", "Größe M"]])
+        r = ok(uebernehmen(w, t.lager, liste), 201)
+        assert r["import"]["nacharbeit"] == 4 and r["import"]["angelegt"] == 0
+        b = ok(probelauf(w, t.lager, liste))
+        assert b["sperre_bis"] and "Noch einmal übernehmen geht erst ab" in b["warnungen"][0], b["warnungen"]
+        produkt(t.mv, kar, "Nirgendwerk", "Phantom W", "")
+        rahmen = [o for o in offene_zeilen(app, t.lager) if o["line_no"] == 5][0]
+        ok(w.post(f"/api/material/ordner/{t.lager}/nacharbeit/produkt", json={"zeilen": [rahmen["id"]],
+                                                                            "product_id": hiviz_m}))
+        sql(app, "UPDATE mat_import SET created_at = ?",
+            ((datetime.now(timezone.utc) - timedelta(days=1)).replace(microsecond=0).isoformat(),))
+        vorher = len(zeilen(app, "SELECT 1 FROM mat_item"))
+        b = ok(probelauf(w, t.lager, liste))
+        assert b["sperre_bis"] is None and "4 Zeilen dieser Datei stehen noch in der Nacharbeit" in b["warnungen"][0]
+        assert "noch einmal angelegt" not in b["warnungen"][0] and b["zahlen"]["uebernehmbar"] == 4, b["warnungen"]
+        r = ok(uebernehmen(w, t.lager, liste), 201)
+        assert (r["import"]["angelegt"], r["import"]["ersetzt"]) == (4, 4) and not offene_zeilen(app, t.lager)
+        assert len(zeilen(app, "SELECT 1 FROM mat_item")) == vorher + 4
+        assert nach_nr(r)[5]["produkt"]["id"] == hiviz_m
+        # 4. Grundprodukt und Variante ohne Artikelnummer: „Vertex Platz“ ist mehrdeutig, die Variante selbst genau.
+        produkt(t.mv, kar, "Kopfwerk", "Vertex Platz", "")
+        hiviz = produkt(t.mv, kar, "Kopfwerk", "Vertex Platz | Hi-Viz", "")
+        b = ok(probelauf(w, t.lager, csv_bytes([KOPF, ["Kopfwerk", "Vertex Platz", "BV-0020"],
+                                                ["Kopfwerk", "Vertex Platz | Hi-Viz", "BV-0021"],
+                                                ["Kopfwerk", "Vertex Platz Hi-Viz", "BV-0022"]])))
+        z = nach_nr(b)
+        assert codes(z[2]) == ["produkt_mehrdeutig"] and z[3]["produkt"]["id"] == z[4]["produkt"]["id"] == hiviz
+        # 5. Dieselbe Seriennummer bei zwei Varianten desselben Herstellers in einer Datei – und in der Auswahl.
+        produkt(t.mv, kar, "Baumwerk", "Sequ", "SQ-1")
+        produkt(t.mv, kar, "Baumwerk", "Sequ | Gross", "SQ-2")
+        r = ok(uebernehmen(w, t.lager, csv_bytes([["Hersteller", "Modell", "Artikelnummer", "Seriennummer"],
+                                                  ["Baumwerk", "Sequ", "SQ-1", "VAR-0002"],
+                                                  ["Baumwerk", "Sequ | Gross", "SQ-2", "VAR-0002"]])), 201)
+        z = nach_nr(r)
+        assert codes(z[2]) == codes(z[3]) == ["serie_variante"] and "(Zeilen 3)" in z[2]["gruende"][0]["text"], z[2]
+        assert not zeilen(app, "SELECT 1 FROM mat_item WHERE serial_no = 'VAR-0002'")
+        e = ok(w.post(f"/api/material/ordner/{t.lager}/nacharbeit/pruefen", json={"zeilen": "alle"}))
+        assert [codes(x) for x in e["zeilen"]] == [["serie_variante"]] * 2
+        assert "in der Auswahl" in e["zeilen"][0]["gruende"][0]["text"], e["zeilen"][0]
+        ok(w.post(f"/api/material/ordner/{t.lager}/nacharbeit/verwerfen", json={"zeilen": "alle"}))
+        # 6. Nacharbeits-CSV nach Ablauf der Frist: Die Zeilen werden neu geprüft; von Hand verworfene bleiben erledigt
+        # und sagen, wie es doch geht.
+        ok(uebernehmen(w, t.lager, csv_bytes([KOPF, ["Nirgendwerk", "Phantom Z", "BV-0030"]])), 201)
+        ok(uebernehmen(w, t.lager, csv_bytes([KOPF, ["Nirgendwerk", "Phantom Y", "BV-0031"]])), 201)
+        csv_alt = w.get(f"/material/ordner/{t.lager}/nacharbeit.csv").data
+        frist, hand = offene_zeilen(app, t.lager)
+        ok(w.post(f"/api/material/ordner/{t.lager}/nacharbeit/verwerfen", json={"zeilen": [hand["id"]]}))
+        sql(app, "UPDATE mat_import SET created_at = ? WHERE id = ?",
+            ((datetime.now(timezone.utc) - timedelta(days=40)).replace(microsecond=0).isoformat(), frist["import_id"]))
+        with app.app_context():
+            assert bi.aufraeumen() == 1
+        produkt(t.mv, kar, "Nirgendwerk", "Phantom Z", "")
+        produkt(t.mv, kar, "Nirgendwerk", "Phantom Y", "")
+        r = ok(uebernehmen(w, t.lager, csv_alt, "nach_frist.csv"), 201)
+        z = {x["seriennummer"]: x for x in r["zeilen"]}
+        assert z["BV-0030"]["status"] == "angelegt" and "nach Ablauf der Frist verworfen" in z["BV-0030"]["hinweise"][0]
+        assert z["BV-0031"]["status"] == "erledigt" and "Nacharbeit-Nr. leeren" in z["BV-0031"]["hinweise"][0]
+        # 7. Anzahl „01“, „1,0“, „1 Stk.“ sind eins; 8. ein Lebensende bei Metall steht in der Bemerkung.
+        r = ok(uebernehmen(w, t.lager, csv_bytes([KOPF + ["Anzahl", "Lebensende"],
+                                                  ["Testwerk", "HMS Beta", "BV-0040", "01", ""],
+                                                  ["Testwerk", "HMS Beta", "BV-0041", "1,0", ""],
+                                                  ["Testwerk", "HMS Beta", "BV-0042", "1 Stk.", "2030-01-01"],
+                                                  ["Testwerk", "HMS Beta", "BV-0043", "2 Stk.", ""]])), 201)
+        z = nach_nr(r)
+        assert [z[n]["status"] for n in range(2, 6)] == ["angelegt"] * 3 + ["nacharbeit"]
+        assert "Anzahl 2" in z[5]["gruende"][0]["text"] and any("steht in der Bemerkung" in h for h in z[4]["hinweise"])
+        assert zeilen(app, "SELECT notes FROM mat_item WHERE serial_no = 'BV-0042'")[0]["notes"] == \
+            "Lebensende laut Liste: 2030-01-01"
+        # Karte: zeilenweise zugeordnet; erledigte Zeilen tragen ihre Seriennummer.
+        ok(w.post(f"/api/material/ordner/{t.lager}/nacharbeit/verwerfen", json={"zeilen": "alle"}))
+        ok(uebernehmen(w, t.lager, csv_bytes([KOPF, ["Platzwerk", "Rahmen", "BV-0050"], ["Platzwerk", "Rahmen", "BV-0051"]])),
+           201)
+        offen = offene_zeilen(app, t.lager)
+        ok(w.post(f"/api/material/ordner/{t.lager}/nacharbeit/produkt", json={"zeilen": [offen[0]["id"]],
+                                                                            "product_id": hiviz_m}))
+        karte = ok(w.get(f"/api/material/ordner/{t.lager}/nacharbeit"))["gruppen"][0]
+        assert (karte["offen"], karte["zugeordnet"], karte["produkt"]) == (2, 1, None), karte
+        csv_neu = w.get(f"/material/ordner/{t.lager}/nacharbeit.csv").data
+        ok(w.post(f"/api/material/ordner/{t.lager}/nacharbeit/verwerfen", json={"zeilen": "alle"}))
+        b = ok(probelauf(w, t.lager, csv_neu, "erledigt.csv"))
+        assert [(x["status"], x["seriennummer"]) for x in b["zeilen"]] == [("erledigt", "BV-0050"),
+                                                                           ("erledigt", "BV-0051")], b["zeilen"]
+    print("Befunde vor Auslieferung bestanden.")
+
+
+# --- 28. Oberfläche (statisch) -------------------------------------------------------------------------------------
 
 def test_oberflaeche_statisch():
     """material.js (Paket OBERFLÄCHE): Ansicht „bestandsimport“ im Reiter „Bestand“ mit Ordnerleiste; Einstieg über das
@@ -1444,5 +1624,6 @@ if __name__ == "__main__":
     test_datenschutz_und_frist()
     test_demo()
     test_seite_und_hinweise()
+    test_befunde_vor_auslieferung()
     test_oberflaeche_statisch()
     print("Alle Tests zum Bestandsimport bestanden.")

@@ -15,7 +15,9 @@ Ablauf und Regeln (Bauentwurf L3, Abschnitt 2):
     „zuletzt geprüft“ + Intervall, höchstens heute + Intervall – ohne beides ist die Eingangsprüfung sofort fällig.
   - Zeilen ohne Herstellerseriennummer bekommen eine Seriennummer vom System (STR-…) wie beim Anlegen von Hand
     (Entscheidung vom 19.10.2026, kein Haken). Gegen doppeltes Anlegen: dieselbe Datei in denselben Ordner ist zehn
-    Minuten lang gesperrt, und die Nacharbeits-CSV erledigt ihre Zeilen über die „Nacharbeit-Nr.“.
+    Minuten lang gesperrt (der Probelauf nennt die Uhrzeit), die Nacharbeits-CSV erledigt ihre Zeilen über die
+    „Nacharbeit-Nr.“, und dieselbe Liste (gleiche Prüfsumme) ersetzt ihre noch offenen Zeilen über die Zeilennummer.
+    Ist keine Spalte als Seriennummer zugeordnet, warnt der Probelauf deutlich.
   - Offene Nacharbeit verfällt nach FRIST_MONATE (einem Monat, Entscheidung vom 19.10.2026) – beim Start der App und
     in jeder Runde des Tageslaufs.
   - Anlegen nach denselben Regeln wie von Hand: bestand.artikel_plan (nur lesen) und bestand.artikel_schreiben.
@@ -97,9 +99,10 @@ PERSONEN = ("vorname", "nachname", "besitzer", "ausgegeben an", "ausgegeben", "z
 # „Hersteller-Nr.“: Seriennummer oder Artikelnummer? Nicht raten. „Grund“ und „Zeile“: Spalten der Nacharbeits-CSV.
 VORRANG_IGNORIEREN = ("hersteller-nr", "hersteller nr", "herstellernummer", "lfd. nr", "lfd nr", "lfd.-nr", "nr",
                       "status", "kategorie", "grund", "zeile")
-SERIENNUMMER = ("seriennummer", "serien-nr", "seriennr", "serien nr", "s/n", "sn", "serial", "serial number",
+SERIENNUMMER = ("seriennummer", "serien-nummer", "serien nummer", "serien-nr", "seriennr", "serien nr", "ser.-nr",
+                "ser. nr", "ser.nr", "ser-nr", "ser nr", "s/n", "sn", "serial", "serial number", "serialnumber",
                 "hersteller-seriennummer", "herstellerseriennummer", "hersteller seriennummer", "seriennummer hersteller",
-                "fabriknummer", "fabrik-nr")
+                "fabriknummer", "fabrik-nr", "fabrikationsnummer", "fabr.-nr", "fabr. nr", "fabr.nr", "fabr-nr")
 HERSTELLER = ("hersteller", "marke", "fabrikat", "manufacturer")
 ARTIKELNUMMER = ("artikelnummer", "artikel-nr", "artikelnr", "artikel nr", "art.-nr", "art.nr", "art-nr", "art. nr",
                  "artnr", "referenz", "ref", "article number")
@@ -342,7 +345,8 @@ def spalten(tab, zuordnung=None):
         if not titel and not werte:
             continue
         if nacharbeit_csv:
-            feld, rang, gesperrt = (fest.get(_titel(titel)) or "ignorieren"), 0, False
+            # Feste Zuordnung – aber eine ergänzte Personenspalte („Ausgegeben an“) bleibt gesperrt wie überall.
+            feld, rang, gesperrt = (fest.get(_titel(titel)) or "ignorieren"), 0, bool(titel) and erkennen(titel)[2]
         elif titel:
             feld, rang, gesperrt = erkennen(titel)
         else:
@@ -412,12 +416,28 @@ def _bemerkungstext(wert):
     return "\n".join(t for t in teile if t)
 
 
+def intervall_einheit(titel):
+    """Die Einheit des Prüfintervalls aus dem Spaltentitel: „Prüfintervall (Jahre)“, „Intervall in Jahren“, „… [J]“ →
+    "jahre"; „… (Monate)“, „… [M]“ → "monate"; sonst None (dann entscheidet der Wert, siehe _intervall_lesen)."""
+    t = _titel(titel or "")
+    if "jahr" in t or re.search(r"[(\[]\s*j\.?\s*[)\]]", t):
+        return "jahre"
+    if "monat" in t or re.search(r"[(\[]\s*(?:m|mon)\.?\s*[)\]]", t):
+        return "monate"
+    return None
+
+
 def datensaetze(tab, spalten_liste, kopf_index, nacharbeit_csv=False):
     """Die Datenzeilen unter der Kopfzeile: (zeilen, leerzeilen, uebergangen). zeilen = [{nr, werte, serie_hinweis,
     nacharbeit_nr}] – werte nur mit zugeordneten, nicht leeren Feldern, als Text (je Feld gekürzt). nr zählt wie Excel
     (1 = erste Zeile der Datei). Eine Zeile, deren zugeordnete Zellen alle leer sind, wird übergangen (ihre Nummer steht
-    in uebergangen)."""
+    in uebergangen). Ein Prüfintervall als reine Zahl bekommt die Einheit aus dem Spaltentitel dazu („1“ unter
+    „Prüfintervall (Jahre)“ → „1 Jahr“) – so bleibt sie auch in der Nacharbeit und ihrer CSV erhalten. Die Spalte der
+    eigenen Nacharbeits-CSV heißt zwar „Prüfintervall (Monate)“, zählt aber nicht als Einheit: Dort steht der Wert, wie
+    er in der Liste stand, und eine „1“ ohne Einheit bleibt unklar."""
     zugeordnet = [s for s in spalten_liste if s["zuordnung"] != "ignorieren" and not s["gesperrt"]]
+    einheit = {s["index"]: intervall_einheit(s["titel"]) for s in zugeordnet
+               if s["zuordnung"] == "intervall" and not nacharbeit_csv}
     nr_spalte = None
     if nacharbeit_csv:
         kopf = tab.zeilen[kopf_index]
@@ -444,6 +464,9 @@ def datensaetze(tab, spalten_liste, kopf_index, nacharbeit_csv=False):
                 continue
             else:
                 text = tabelle.zelltext(roh)
+                if einheit.get(s["index"]) and re.fullmatch(r"\d{1,3}(?:[.,]\d{1,2})?", text):
+                    wort = ("Jahr", "Jahre") if einheit[s["index"]] == "jahre" else ("Monat", "Monate")
+                    text = f"{text} {wort[0] if text == '1' else wort[1]}"
             if text:
                 werte[f] = _kuerzen(f, text)
         if bemerkung:
@@ -549,8 +572,20 @@ def produkt_finden(hersteller, modell, artikelnummer, demo_erlaubt):
     def ok(p):
         return p and (demo_erlaubt or not p["demo"])
 
+    def gleicher_name():
+        """Produkte des Herstellers mit demselben Modellnamen vor „|“ – Grundprodukt und seine Varianten."""
+        name = katalog._einheitlich(katalog.modell_teile(m)[0])
+        return [x for x in db.query("SELECT * FROM mat_product WHERE dedupe_key LIKE ? ORDER BY id", (he + "|%",))
+                if ok(x) and katalog._einheitlich(katalog.modell_teile(x["model"])[0]) == name]
+
     p = db.query("SELECT * FROM mat_product WHERE dedupe_key = ?", (katalog.dedupe_key(h, m, a),), one=True)
     if ok(p):
+        # Ohne Artikelnummer trifft „Modell“ auch ein Grundprodukt ohne Artikelnummer – gibt es dazu Varianten
+        # („Modell | Zusatz“), ist die Angabe mehrdeutig wie in Stufe 3, nie still das Grundprodukt.
+        if not a and he and not katalog.modell_teile(m)[1] and not katalog.modell_teile(p["model"])[1]:
+            gleich = gleicher_name()
+            if len(gleich) > 1:
+                return {"art": "mehrdeutig", "produkt": None, "vorschlaege": gleich[:10]}
         return {"art": "genau", "produkt": p, "vorschlaege": []}
     vorschlaege = []
     if a:
@@ -561,9 +596,7 @@ def produkt_finden(hersteller, modell, artikelnummer, demo_erlaubt):
                 return {"art": "artikelnummer", "produkt": p, "vorschlaege": []}
             vorschlaege.append(p)
     if he and m:
-        name = katalog._einheitlich(katalog.modell_teile(m)[0])
-        gleich = [p for p in db.query("SELECT * FROM mat_product WHERE dedupe_key LIKE ? ORDER BY id", (he + "|%",))
-                  if ok(p) and katalog._einheitlich(katalog.modell_teile(p["model"])[0]) == name]
+        gleich = gleicher_name()
         if not a:
             if len(gleich) == 1:
                 return {"art": "modell", "produkt": gleich[0], "vorschlaege": []}
@@ -658,16 +691,49 @@ class Lauf:
         return rueckruf.betrifft(pid, serie) if self._rueckruf[pid] else []
 
 
+# „jährlich“ und Verwandte (nach _falten): Monate
+_INTERVALL_WORTE = {"monatlich": 1, "vierteljaehrlich": 3, "quartalsweise": 3, "halbjaehrlich": 6, "jaehrlich": 12,
+                    "einmal jaehrlich": 12, "jedes jahr": 12, "zweimal jaehrlich": 6, "viermal jaehrlich": 3,
+                    "zweijaehrlich": 24, "alle zwei jahre": 24, "dreijaehrlich": 36, "alle drei jahre": 36}
+
+
 def _intervall_lesen(text):
-    """„12“, „12 Monate“, „1 Jahr“, „2 Jahre“ → Monate (1–120) oder None (unlesbar)."""
-    t = " ".join((text or "").lower().split())
-    m = re.fullmatch(r"(\d{1,3})(?:\s*(monate?|mon\.?|m))?", t)
+    """Das Prüfintervall laut Liste in Monaten: (monate | None, fehler | None), fehler "unlesbar" oder "einheit".
+      12, 12 Monate, 12 Mon., 12M, alle 12 Monate          → 12
+      1 Jahr, 2 Jahre, 1 J., 0,5 Jahre, alle 2 Jahre        → 12, 24, 12, 6, 24
+      jährlich, 1x jährlich, halbjährlich, 2x jährlich,
+      vierteljährlich, monatlich, zweijährlich, 2-jährlich  → 12, 12, 6, 6, 3, 1, 24, 24
+      1 oder 2 ohne Einheit                                  → Fehler „einheit“: Monate oder Jahre? Eine Liste mit
+                                                              „Prüfintervall: 1“ meint fast immer ein Jahr – still als
+                                                              Monat gelesen, stünde der Artikel monatlich zur Prüfung.
+                                                              (Die Einheit im Spaltentitel hängt datensaetze an.)
+      3 … 120 ohne Einheit                                   → Monate
+    Gültig sind 1 bis 120 Monate, sonst „unlesbar“."""
+    t = _falten(" ".join((text or "").lower().split())).rstrip(".")
+    n = None
+    m = re.fullmatch(r"(?:alle\s+)?(\d{1,3})(?:[.,]0+)?(\s*(?:monate?n?|mon\.?|m))?", t)
     if m:
         n = int(m.group(1))
+        if not m.group(2) and not t.startswith("alle") and n in (1, 2):
+            return None, "einheit"
+    elif m := re.fullmatch(r"(?:alle\s+)?(\d{1,2})(?:[.,](\d{1,2}))?\s*(?:jahre?n?|j\.?)", t):
+        monate = (int(m.group(1)) + int(m.group(2) or 0) / 10 ** len(m.group(2) or "")) * 12
+        n = int(monate) if monate == int(monate) else None
+    elif m := re.fullmatch(r"(\d{1,2})\s*(?:x|mal)\s*jaehrlich", t):
+        teiler = int(m.group(1))
+        n = 12 // teiler if teiler and 12 % teiler == 0 else None
+    elif m := re.fullmatch(r"(\d)\s*-\s*jaehrlich", t):
+        n = int(m.group(1)) * 12
     else:
-        m = re.fullmatch(r"(\d{1,2})\s*(jahre?|j\.?)", t)
-        n = int(m.group(1)) * 12 if m else None
-    return n if n and 1 <= n <= 120 else None
+        n = _INTERVALL_WORTE.get(t)
+    return (n, None) if n and 1 <= n <= 120 else (None, "unlesbar")
+
+
+def _anzahl_lesen(text):
+    """Die Anzahl laut Liste: „1“, „01“, „1,0“, „1 Stk.“, „1 Stück“ → 1; „10“ → 10; Unlesbares (ca. 5) → None."""
+    t = _falten(" ".join((text or "").lower().split()))
+    m = re.fullmatch(r"0*(\d{1,6})(?:[.,]0+)?(?:\s*(?:stk\.?|stueck|st\.?|x))?", t)
+    return int(m.group(1)) if m else None
 
 
 def _seriennummer(e, lauf):
@@ -704,10 +770,17 @@ def _vorpruefen(z, lauf):
         alt = lauf.alte.get(nr_alt)
         if not alt:
             lauf.fremde_nr += 1
+        elif alt["status"] == "verworfen" and alt["reason"] == _FRIST_GRUND:
+            # Nach Ablauf der Frist verworfen: Aus der Zeile ist nie ein Artikel entstanden – die vor Ablauf
+            # heruntergeladene und korrigierte CSV soll die Arbeit nicht verlieren. Sie wird geprüft wie eine neue Zeile.
+            e.hinweise.append(f"Nacharbeit-Nr. {nr_alt} war nach Ablauf der Frist verworfen – neu geprüft")
         elif alt["status"] != "offen":
             e.status = "erledigt"
+            e.serie = _einzeilig(w.get("seriennummer", ""))
             e.hinweise.append(f"schon erledigt ({IMPORT_STATUS.get(alt['status'], alt['status'])} am "
-                              f"{_tag((alt['resolved_at'] or '')[:10])})")
+                              f"{_tag((alt['resolved_at'] or '')[:10])})"
+                              + (" – soll die Zeile doch übernommen werden, in der Datei die Nacharbeit-Nr. leeren"
+                                 if alt["status"] == "verworfen" else ""))
             e.artikel = _artikel_ref(alt["item_id"])
             return e
         elif not alt.get("_vergeben"):
@@ -717,9 +790,10 @@ def _vorpruefen(z, lauf):
                 e.wahl = {"product_id": alt["product_id"], "request_id": alt["request_id"]}
     # 1. Ohne Produkt prüfbar.
     anzahl = w.get("anzahl", "")
-    if anzahl and anzahl != "1":
-        if re.fullmatch(r"\d{1,6}", anzahl) and int(anzahl) > 1:
-            e.grund("sammelzeile", f"Sammelzeile (Anzahl {int(anzahl)}) – bitte je Artikel eine Zeile anlegen")
+    n_anzahl = _anzahl_lesen(anzahl) if anzahl else 1
+    if n_anzahl != 1:
+        if n_anzahl and n_anzahl > 1:
+            e.grund("sammelzeile", f"Sammelzeile (Anzahl {n_anzahl}) – bitte je Artikel eine Zeile anlegen")
         else:
             e.grund("sammelzeile", f"Anzahl laut Liste unlesbar („{anzahl}“) – je Artikel eine Zeile mit Anzahl 1")
     for f, (art, _) in DATEN.items():
@@ -730,8 +804,12 @@ def _vorpruefen(z, lauf):
         e.daten[f] = (iso, fehler, hinweis, text)
     _seriennummer(e, lauf)
     if w.get("intervall"):
-        e.intervall = _intervall_lesen(w["intervall"])
-        if e.intervall is None:
+        e.intervall, fehler = _intervall_lesen(w["intervall"])
+        if fehler == "einheit":
+            e.grund("intervall", f"Prüfintervall laut Liste „{w['intervall']}“: Monate oder Jahre? Bitte mit Einheit "
+                                 "angeben („12 Monate“, „1 Jahr“) oder die Einheit in den Spaltentitel schreiben "
+                                 "(„Prüfintervall (Jahre)“)")
+        elif fehler:
             e.grund("intervall", f"Prüfintervall laut Liste unlesbar („{w['intervall']}“)")
     o, fehler, unbekannt = _ordner_finden(lauf.ziel, w.get("ordner", ""))
     if fehler:
@@ -783,7 +861,7 @@ def _vorpruefen(z, lauf):
     return e
 
 
-def _fertig_pruefen(e, lauf, doppelt):
+def _fertig_pruefen(e, lauf, doppelt, varianten=None):
     """Schritte 4–9: doppelt in der Datei, fremde Bereiche, andere Variante, blockierende Werte, Fälligkeit und Plan,
     Rückruf. Danach der Status. Eine Zeile ohne Herstellerseriennummer ist übernehmbar wie jede andere – sie bekommt
     beim Anlegen eine STR-Nummer (Entscheidung vom 19.10.2026)."""
@@ -791,7 +869,7 @@ def _fertig_pruefen(e, lauf, doppelt):
         return
     p = e.produkt
     if p is not None:
-        _mit_produkt(e, lauf, doppelt)
+        _mit_produkt(e, lauf, doppelt, varianten or {})
     e.gruende.sort(key=lambda g_: _RANG.get(g_[0], 99))
     if not e.gruende:
         e.status = "uebernehmbar"
@@ -803,7 +881,7 @@ def _fertig_pruefen(e, lauf, doppelt):
         e.plan = None
 
 
-def _mit_produkt(e, lauf, doppelt):
+def _mit_produkt(e, lauf, doppelt, varianten):
     p, w, T = e.produkt, e.werte, lauf.stichtag
     textil = p["material_kind"] == "textil"
     # 4. Doppelt in der Datei – welche Zeile stimmt, wird nicht geraten.
@@ -831,6 +909,13 @@ def _mit_produkt(e, lauf, doppelt):
                                           f"{r['inventory_no']}) – andere Variante oder Größe? Bitte das Produkt "
                                           "prüfen.")
                 break
+        # … und in derselben Datei (bzw. Auswahl) bei einem anderen Produkt desselben Herstellers.
+        andere = [x for x in varianten.get((he, e.serie.casefold()), []) if x.produkt["id"] != p["id"]]
+        if andere:
+            namen = sorted({katalog.produktname(x.produkt) for x in andere})
+            e.grund("serie_variante", f"Seriennummer kommt {lauf.mehrfach_text} auch bei {', '.join(namen)} vor "
+                                      f"({lauf.zeilen_wort} {', '.join(str(x.zeile_id or x.nr) for x in andere)}) – "
+                                      "andere Variante oder Größe? Bitte das Produkt prüfen.")
     # 7. Blockierende Werte, Hinweise und Bemerkungszeilen.
     laut_liste, d = [], e.daten
     herg_iso, herg_fehler, _, herg_text = d["hergestellt"]
@@ -872,7 +957,9 @@ def _mit_produkt(e, lauf, doppelt):
     end_iso, end_fehler, end_hinweis, end_text = d["lebensende"]
     retire = None
     if end_text and not textil:
-        e.hinweise.append("Ein Lebensende gibt es nur bei textilem Material – nicht übernommen.")
+        e.hinweise.append("Ein Lebensende gibt es nur bei textilem Material – nicht übernommen (steht in der "
+                          "Bemerkung).")
+        laut_liste.append(f"Lebensende laut Liste: {end_text}")
     elif end_fehler:
         e.grund("datum", f"Lebensende laut Liste „{end_text}“: {end_fehler}")
     elif end_iso:
@@ -896,6 +983,8 @@ def _mit_produkt(e, lauf, doppelt):
     if e.intervall:
         if e.intervall < ohne:
             eigenes = e.intervall
+            e.hinweise.append(f"Intervall laut Liste ({e.intervall} Monate) kürzer als das wirksame ({ohne}) – "
+                              "übernommen, am Artikel gespeichert")
         else:
             e.hinweise.append(f"Intervall laut Liste ({e.intervall}) nicht kürzer als das wirksame ({ohne}) – es gilt "
                               f"{ohne}")
@@ -959,14 +1048,16 @@ def _mit_produkt(e, lauf, doppelt):
 
 
 def zeilen_pruefen(daten, lauf):
-    """Alle Zeilen in zwei Durchgängen (erst alle Schlüssel Produkt + Seriennummer, dann die Entscheidung)."""
+    """Alle Zeilen in zwei Durchgängen (erst alle Schlüssel Produkt + Seriennummer und Hersteller + Seriennummer, dann
+    die Entscheidung)."""
     ergebnisse = [_vorpruefen(z, lauf) for z in daten]
-    doppelt = {}
+    doppelt, varianten = {}, {}
     for e in ergebnisse:
         if e.produkt is not None and e.serie and e.status not in ("erledigt",):
             doppelt.setdefault((e.produkt["id"], e.serie.casefold()), []).append(e.zeile_id or e.nr)
+            varianten.setdefault((katalog._einheitlich(e.produkt["manufacturer"]), e.serie.casefold()), []).append(e)
     for e in ergebnisse:
-        _fertig_pruefen(e, lauf, doppelt)
+        _fertig_pruefen(e, lauf, doppelt, varianten)
     return ergebnisse
 
 
@@ -988,6 +1079,9 @@ class Bericht:
     schon_importiert: list = field(default_factory=list)
     ordner_unbekannt: dict = field(default_factory=dict)
     import_info: dict = None
+    sperre_bis: str = None          # dieselbe Datei ist bis dahin gesperrt (ISO, UTC)
+    offen_aus_datei: int = 0        # offene Nacharbeit aus früheren Importen dieser Datei, die ersetzt wird
+    keine_seriennummer: bool = False
 
     @property
     def fremde(self):
@@ -1009,6 +1103,27 @@ def _schon_importiert(fid, sha):
                               (fid, sha))]
 
 
+def _sperre_bis(schon):
+    """Bis wann dieselbe Datei nicht noch einmal in diesen Ordner übernommen werden kann (WIEDERHOLUNG_MINUTEN nach dem
+    jüngsten Import, ISO in UTC) – None, wenn das schon vorbei ist. Dieselbe Grenze prüft _schreiben unter der Sperre."""
+    if not schon:
+        return None
+    bis = datetime.fromisoformat(schon[0]["am"]) + timedelta(minutes=WIEDERHOLUNG_MINUTEN)
+    return bis.astimezone(timezone.utc).isoformat() if bis > _jetzt_utc() else None
+
+
+def _offen_aus_datei(fid, sha):
+    """Offene Zeilen der Nacharbeit, die aus früheren Importen genau dieser Datei (gleiche Prüfsumme) in diesen Ordner
+    stammen: Zeilennummer → jüngste offene Zeile. Wird dieselbe Liste noch einmal hochgeladen (etwa nachdem die
+    Material-Verwaltung das fehlende Produkt angelegt hat), ersetzt jede Zeile ihre offene Vorgängerin – wie über die
+    Nacharbeit-Nr. der Nacharbeits-CSV –, statt sie zu verdoppeln."""
+    out = {}
+    for r in db.query("SELECT r.id, r.line_no FROM mat_import_row r JOIN mat_import i ON i.id = r.import_id "
+                      "WHERE i.folder_id = ? AND i.file_sha256 = ? AND r.status = 'offen' ORDER BY r.id", (fid, sha)):
+        out[r["line_no"]] = r["id"]
+    return out
+
+
 def _pruefen(fid, roh, dateiname, zuordnung=None):
     """Prüfung einer Datei für Probelauf und Übernehmen – schreibt nichts."""
     ziel = ziel_pruefen(fid)
@@ -1016,19 +1131,44 @@ def _pruefen(fid, roh, dateiname, zuordnung=None):
     sp, nacharbeit_csv, kopf_index, warnungen = spalten(tab, zuordnung)
     b = Bericht(ziel, tab, (dateiname or "")[:200], sp, nacharbeit_csv, kopf_index, warnungen, fehlt(sp))
     b.schon_importiert = _schon_importiert(fid, tab.sha256)
-    if b.schon_importiert:
-        s = b.schon_importiert[0]
-        warnungen.insert(0, f"Diese Datei wurde am {_tag(_ortszeit(s['am']).date().isoformat())} schon in diesen "
-                            f"Ordner importiert ({s['angelegt']} Artikel). Zeilen mit Seriennummer erkennt der Import "
-                            "wieder; Zeilen ohne Seriennummer würden noch einmal angelegt (mit neuer STR-Nummer).")
+    b.sperre_bis = _sperre_bis(b.schon_importiert)
     daten, b.leerzeilen, ohne = datensaetze(tab, sp, kopf_index, nacharbeit_csv)
     b.datenzeilen = len(daten) + len(ohne)
+    if b.schon_importiert:
+        s = b.schon_importiert[0]
+        satz = [f"Diese Datei wurde am {_tag(_ortszeit(s['am']).date().isoformat())} schon in diesen Ordner importiert "
+                f"({sum(x['angelegt'] for x in b.schon_importiert)} Artikel angelegt)."]
+        if b.sperre_bis:
+            satz.append(f"Noch einmal übernehmen geht erst ab {_ortszeit(b.sperre_bis).strftime('%H:%M')} Uhr.")
+        if any(x["angelegt"] for x in b.schon_importiert):
+            satz.append("Zeilen mit Seriennummer erkennt der Import wieder; Zeilen ohne Seriennummer würden noch einmal "
+                        "angelegt (mit neuer STR-Nummer).")
+        if not nacharbeit_csv:
+            offen = _offen_aus_datei(fid, tab.sha256)
+            for z in daten:
+                if z["nr"] in offen and not z.get("nacharbeit_nr"):
+                    z["nacharbeit_nr"] = offen[z["nr"]]
+                    b.offen_aus_datei += 1
+            if b.offen_aus_datei:
+                satz.append(f"{b.offen_aus_datei} Zeilen dieser Datei stehen noch in der Nacharbeit – sie werden neu "
+                            "eingelesen und dort erledigt, nicht doppelt angelegt.")
+        warnungen.insert(0, " ".join(satz))
     if ohne:
         liste = ", ".join(str(n) for n in ohne[:20]) + (" …" if len(ohne) > 20 else "")
         warnungen.append(f"{len(ohne)} Zeilen ohne Angaben in den zugeordneten Spalten werden übergangen (Zeile "
                          f"{liste}).")
     if b.fehlt:
         return b
+    if daten and "seriennummer" not in {x["zuordnung"] for x in sp}:
+        # Seit Entscheidung 8 bekommen Zeilen ohne Seriennummer still eine STR-Nummer – eine nicht erkannte
+        # Seriennummernspalte darf das nicht unbemerkt für die ganze Liste auslösen (echte Nummern gingen verloren).
+        b.keine_seriennummer = True
+        offen = [x["titel"] or f"Spalte {tabelle.spalte_buchstabe(x['index'])}" for x in sp
+                 if x["zuordnung"] == "ignorieren" and not x["gesperrt"] and x["beispiele"]]
+        warnungen.insert(0, f"Keine Spalte ist als Seriennummer zugeordnet – alle {len(daten)} Zeilen bekämen eine "
+                            "Seriennummer vom System (STR-…). Steht die Seriennummer in einer Spalte, ordne sie unter "
+                            "„Spalten“ zu." + (f" Nicht zugeordnet: {', '.join(f'„{t}“' for t in offen[:6])}"
+                                               f"{' …' if len(offen) > 6 else ''}." if offen else ""))
     alte = _alte_zeilen(fid, [z["nacharbeit_nr"] for z in daten if z.get("nacharbeit_nr")])
     lauf = Lauf(ziel, heute(), alte)
     b.ergebnisse = zeilen_pruefen(daten, lauf)
@@ -1211,7 +1351,8 @@ def bericht_json(b):
                      "kopfzeile": b.kopf_index + 1, "datenzeilen": b.datenzeilen, "leerzeilen": b.leerzeilen},
            "nacharbeit_csv": b.nacharbeit_csv, "spalten": b.spalten, "felder": felder_json(), "fehlt": b.fehlt,
            "warnungen": list(b.warnungen) + [t for t in (_hinweis_ohne_serie(b.ergebnisse),) if t],
-           "schon_importiert": b.schon_importiert,
+           "schon_importiert": b.schon_importiert, "sperre_bis": b.sperre_bis,
+           "keine_seriennummer": b.keine_seriennummer,
            "zahlen": _zahlen(b.ergebnisse), "faelligkeit": _faelligkeit(b.ergebnisse, heute()),
            "produkte_offen": _produkte_offen(b.ergebnisse),
            "ordner_unbekannt": [{"wert": w, "zeilen": n} for w, n in sorted(b.ordner_unbekannt.items(),
@@ -1322,6 +1463,7 @@ def nacharbeit_json(fid, gruppe=None, seite=1):
         gruppen.append({"angabe": angabe, "hersteller": h, "modell": m, "artikelnummer": a, "offen": len(rows),
                         "art": PRODUKT_ART[(rows[0]["reason_code"] or "").split(",")[0]],
                         "produkt": kurz(wahl.pop()) if len(wahl) == 1 and None not in wahl else None,
+                        "zugeordnet": sum(1 for r in rows if r["product_id"]),
                         "meldung": _meldung_json(next((r["request_id"] for r in rows if r["request_id"]), None)),
                         "vorschlaege": [produkt_kurz(p) for p in vorschlaege[:5]]})
     gefiltert = [r for r in offen if gruppe is None or _gruppe(r) == gruppe]

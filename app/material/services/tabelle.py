@@ -2,16 +2,18 @@
 ohne Datenbank, damit sich jede Regel für sich prüfen lässt.
 
 Die Excel-Seite kommt aus app/pruefungen_import.py (pi: Arbeitsblatt öffnen, Zellwerte, Datumsformate, Grenzen) –
-genutzt, nicht kopiert und nicht verändert. pi lädt openpyxl beim Import des Moduls; geholt wird es deshalb erst hier
+genutzt, nicht kopiert (dort ergänzt nur die Vorprüfung vor dem Laden, für beide Importe). pi lädt openpyxl beim Import des Moduls; geholt wird es deshalb erst hier
 in der Funktion (_pi), wie api_pruefungen._import_modul: Kein Arbeitsprozess lädt openpyxl beim Start. Auch private
 Namen aus pi werden genutzt (_arbeitsblatt, _beginnt_mit, _leer, _ist_textzelle) – eine bewusste Abwägung; der Test
 test_material_import.test_migration_12 ruft jeden genutzten Namen einmal auf, damit ein Umbau von pi sofort auffällt.
 
-Grenzen VOR dem Laden: pi lädt eine Arbeitsmappe vollständig und zählt die Zellen erst danach (gemessen: 14,8 MB xlsx
-mit 6 Mio. Zellen brauchen 2,7 GB, bevor die Grenze greift), und eine CSV, die ganz in Zeilenlisten gelesen wird, wird
-aus 25 MB „a\\n“ 1,5 GB. Deshalb hier: höchstens MAX_BYTES Upload, eine xlsx entpackt höchstens MAX_ENTPACKT (eigene
-Prüfung des ZIP-Inhaltsverzeichnisses, bevor pi etwas entpackt), eine CSV Zeile für Zeile mit Abbruch nach
-MAX_CSV_ZEILEN Zeilen bzw. MAX_CSV_ZELLEN Feldern.
+Grenzen VOR dem Laden: openpyxl legt beim Laden für jede Zelle ein Objekt an – auch für jedes Feld eines Bereichs
+verbundener Zellen, eines Links oder Kommentars (ein paar Bytes „A3:KN20000“ sind 6 Mio. Felder, gemessen 1,8–2,8 GB),
+und pi zählt das Rechteck erst danach; eine CSV, die ganz in Zeilenlisten gelesen wird, wird aus 25 MB „a\\n“ 1,5 GB.
+Deshalb: höchstens MAX_BYTES Upload, eine xlsx entpackt höchstens MAX_ENTPACKT (eigene Prüfung des
+ZIP-Inhaltsverzeichnisses, bevor pi etwas entpackt), danach zählt pi._arbeitsblatt in _blaetter_vorpruefen Zellen,
+Zeilen, Bereichsflächen und Blätter, bevor openpyxl lädt (gemeinsam mit dem Excel-Import der Prüfungen); eine CSV Zeile
+für Zeile mit Abbruch nach MAX_CSV_ZEILEN Zeilen bzw. MAX_CSV_ZELLEN Feldern.
 
 Alles, was hier schiefgeht, ist ein Fehler der Datei: Abgelehnt mit Klartext (400, zu groß 413)."""
 import csv
@@ -101,7 +103,9 @@ def lesen(roh, dateiname):
 def _xlsx(roh):
     """Eigene Vorprüfung des ZIP-Inhaltsverzeichnisses, dann das erste Blatt mit Inhalt über pi. zipfile hält sich beim
     Entpacken an die eingetragenen Größen (mehr wird abgeschnitten, die Prüfsumme schlägt fehl) – die Summe taugt als
-    Obergrenze dessen, was gleich im Speicher landet (dieselbe Überlegung wie pi._archiv_pruefen)."""
+    Obergrenze dessen, was gleich im Speicher landet (dieselbe Überlegung wie pi._archiv_pruefen). Zellen, Zeilen,
+    verbundene Bereiche und Blätter zählt pi._arbeitsblatt vor dem Laden (_blaetter_vorpruefen) – höchstens 10 MB XML,
+    gemessen unter 0,4 s."""
     try:
         with zipfile.ZipFile(io.BytesIO(roh)) as zf:
             eintraege = zf.infolist()
