@@ -2906,6 +2906,60 @@ vorigen; der lange rote Knopf brach am Telefon nicht um (waagerechter Bildlauf).
   Erinnerungs-, L5- und Beschreibungstest. `tests/test_pruefungen_import.py` unverändert grün. Die ganze Suite läuft grün, `st-js`,
   `st-css` und `st-py` ohne Meldungen.
 
+Nach dem Bau drei unabhängige Prüfungen – **Sicherheit** (Datenschutz, Rechte, Robustheit; Proben gegen Dienste,
+Routen und eine Testdatenbank, Messungen je Datei in einem eigenen Prozess mit Speicherdeckel), **Importlogik**
+(Entscheidungen 1–10, Regeln 2.x, Schnittstelle 8.5, Rundweg, Frist; Proben gegen eine Testdatenbank) und **Browser**
+(Rundgang als Plattform-Verwaltung, Material-Verwaltung mit und ohne Wiki-Stufe, Materialwart, Prüfer mit und ohne
+Wiki-Stufe, Externer, Mitglied und neues Konto bei 1280 und 360 px, Server ohne `SMTP_HOST`) – haben 20 Befunde
+gemeldet (3 + 8 + 9). Jeder ist vor der Behebung mit dem Skript der Prüfung nachgestellt worden; alle 20 ließen sich
+nachstellen, alle sind behoben – im Code mit Test (Python, statisch für die Oberfläche) und, wo es um die Oberfläche
+geht, im Browser nachgesehen. Befund 1 traf genauso den älteren Excel-Import der Prüfungen: Die Vorprüfung ist eine
+gemeinsame Funktion in `pruefungen_import.py`, aufgerufen in `_arbeitsblatt`, über das beide Importe lesen (eigener
+Commit, `CHANGELOG-Pruefungen.md` Nachtrag vom 19.10.2026). Danach liefen die ganze Suite und `pytest` grün.
+
+| Nr. | Quelle | Befund | Schwere | Umgang |
+| --- | --- | --- | --- | --- |
+| 1 | Sicherheit 1 | xlsx: Ein Bereich verbundener Zellen, ein Link-Bereich (`<mergeCell ref="A3:KN20000"/>`, 5 KB) oder 9,5 MB dichte leere Zellen `<c/>` blähen openpyxl beim Laden auf (1,8–2,8 GB, bis 76 s, „A3:XFD1048576“ unbegrenzt), bevor eine Grenze greift; der Probelauf eines beliebigen Ordnerverwalters bringt den Container an die Speichergrenze | hoch | `pruefungen_import._blaetter_vorpruefen` vor `load_workbook`: jeder XML-Teil des Archivs durch denselben Parser wie openpyxl (expat), nur zählend – Zellen, Zeilen und die Fläche jedes Bereichs verbundener Zellen, Links und Kommentare (auch Kommentare legen Zellen an) zusammen höchstens 500.000, kein Bereich über Zeile 20.000/Spalte 300, höchstens 20 Blätter und 5 Mio. Elemente; unabhängig von Pfad, Präfix, Zeichenreferenz, UTF-16 und Entitäten. Jetzt 400 in höchstens 0,4 s ohne openpyxl (Messwerte unten). Tests `test_grenzen_vor_dem_laden` (Prüfungen) und `test_lesen_xlsx_und_grenzen` (Bestandsimport, auch über die Route), beide mit `xlsx_bomben` |
+| 2 | Sicherheit 2 | Prüfanleitung: Klassen aus app.css mit `position: fixed` (etwa `md-lightbox`) im Abschnitt „Prüfung“ legten sich über die ganze Prüfansicht – wer die Wiki-Seite bearbeiten darf, konnte Prüfern die Ansicht sperren oder eine Meldung vortäuschen | niedrig | `ANLEITUNG_STIL`: `:host { display: block; contain: paint; }` – der Kasten ist Bezugsrahmen auch für fixe Elemente und schneidet ab. Statischer Test in `test_material_wiki`; im Browser mit einer Probeseite (`<div class="md-lightbox">`) bei 1280 und 360 px: Überlagerung nur im Kasten, „einsatzbereit“ per echtem Mausklick erreichbar |
+| 3 | Sicherheit 3 | In der Nacharbeits-CSV (Spalte „Nacharbeit-Nr.“) war eine ergänzte Personenspalte („Ausgegeben an“) nicht gesperrt – über „Zuordnung ändern“ kam der Name in Bemerkung und Artikeljournal | niedrig | Auch dort `gesperrt` aus der Personenliste, das Feld weiter aus der festen Zuordnung. Test `test_spalten`; Probe der Prüfung danach: gesperrt, ohne Beispiele, Bemerkung leer |
+| 4 | Importlogik 1 | „Serien-Nummer“, „Ser.-Nr.“, „Ser. Nr.“ wurden nicht erkannt – jede Zeile bekam still eine STR-Nummer, die echten Nummern gingen verloren | mittel | Synonyme ergänzt (auch „ser.nr“, „ser-nr“, „serialnumber“, „Fabr.-Nr.“, „Fabrikationsnummer“). Ist keine Spalte als Seriennummer zugeordnet, steht die Warnung zuerst („Keine Spalte ist als Seriennummer zugeordnet – alle n Zeilen bekämen eine Seriennummer vom System … Nicht zugeordnet: „…““) und noch einmal über „Übernehmen“ (`keine_seriennummer`). Bewusst keine Pflichtzuordnung: Listen ohne Seriennummern sollen nach Entscheidung 8 ohne Rückfrage gehen, und eine Zuordnung „keine Seriennummer“ gäbe es nur als neuen Haken. Tests `test_spalten`, `test_befunde_vor_auslieferung`; im Browser bei 1280 und 360 px |
+| 5 | Importlogik 2 | „Prüfintervall (Jahre)“ = 1 wurde als 1 Monat gelesen und ohne Hinweis am Artikel gespeichert | mittel | Die Einheit kommt aus dem Spaltentitel („(Jahre)“, „in Jahren“, „[J]“; „(Monate)“, „[M]“) und bleibt am Wert („1 Jahr“) – auch in Nacharbeit und CSV; eine 1 oder 2 ohne Einheit geht in die Nacharbeit („Monate oder Jahre?“, die Spalte „Prüfintervall (Monate)“ der eigenen CSV zählt dafür nicht als Einheit); ein übernommenes kürzeres Intervall steht als Hinweis an der Zeile. Test `test_befunde_vor_auslieferung` |
+| 6 | Importlogik 3 | Dieselbe Ursprungsliste nach mehr als 10 Minuten noch einmal, während ihre Zeilen in der Nacharbeit standen: Die Nacharbeit entstand doppelt, Zeilen ohne Seriennummer wurden zweimal angelegt (5 Artikel aus 3 Zeilen); die Warnung führte in die Irre | mittel | Bei gleicher Prüfsumme ersetzt jede Zeile ihre offene Vorgängerin gleicher Zeilennummer wie über die Nacharbeit-Nr. (Produktwahl aus der Nacharbeit gilt weiter); die Warnung nennt die Zahl („… werden neu eingelesen und dort erledigt, nicht doppelt angelegt“) und den STR-Satz nur noch, wenn damals Artikel angelegt wurden. Test `test_befunde_vor_auslieferung`; Probe der Prüfung danach: 3 Artikel, nichts offen |
+| 7 | Importlogik 4 | Stufe 1 (Dublettenschlüssel) ordnete „Modell“ ohne Artikelnummer still dem Grundprodukt zu, obwohl es „Modell \| Zusatz“ gibt | mittel | Trifft Stufe 1 ohne Artikelnummer ein Grundprodukt, das Varianten hat, ist die Angabe „mehrdeutig“ wie in Stufe 3; „Modell \| Zusatz“ und „Modell Zusatz“ bleiben genau. Test `test_befunde_vor_auslieferung` |
+| 8 | Importlogik 5 | Dieselbe Seriennummer bei zwei Varianten desselben Herstellers in einer Datei (oder Auswahl der Nacharbeit) wurde zweimal angelegt | niedrig | Im ersten Durchgang auch nach Hersteller + Seriennummer gesammelt: alle betroffenen Zeilen bekommen „Seriennummer bei anderer Variante“ mit den Zeilen bzw. Nacharbeit-Nr. Test `test_befunde_vor_auslieferung` |
+| 9 | Importlogik 6 | Eine vor Ablauf der Frist heruntergeladene Nacharbeits-CSV wurde danach komplett als „schon erledigt“ übersprungen – nie ein Artikel entstanden | niedrig | Nach Ablauf der Frist verworfene Zeilen werden wie neue geprüft (Hinweis „Nacharbeit-Nr. n war nach Ablauf der Frist verworfen – neu geprüft“); von Hand verworfene bleiben erledigt und sagen „… in der Datei die Nacharbeit-Nr. leeren“. Test `test_befunde_vor_auslieferung` |
+| 10 | Importlogik 7 | Anzahl „01“, „1,0“, „1 Stk.“ wurden Sammelzeilen, Intervall „jährlich“, „halbjährlich“, „alle 12 Monate“ unlesbar | niedrig | Anzahl mit Nullen, Dezimal-0 oder Stückwort ist 1 (größere bleiben Sammelzeilen); Intervall: „jährlich“, „1x jährlich“, „2x jährlich“, „halbjährlich“, „vierteljährlich“, „monatlich“, „2-jährlich“, „alle n Monate/Jahre“, „0,5 Jahre“. Tests `test_befunde_vor_auslieferung` (Tabellen) und `test_sammelzeilen` |
+| 11 | Importlogik 8 | Ein Lebensende laut Liste bei nicht-textilem Material verschwand nach dem Import ohne Spur | niedrig | „Lebensende laut Liste: …“ in die Bemerkung wie die anderen Angaben, der Hinweis sagt es. Tests `test_daten_und_blockieren`, `test_befunde_vor_auslieferung` |
+| 12 | Browser 1 | Dialog „Übernommen“ der Nacharbeit bei 360 px: die Tabelle „angelegt“ ohne Karten, zeichenweise umbrochen („Nac/har/beit“) | mittel | Die Tabelle hat im Dialog einen eigenen Behälter `mat-seite` (`.mat-dlg-liste`), der Dialog ist ab 641 px 820 px breit (`mat-uebernommen`, nur solange er offen ist); in den Karten steht die Seriennummer in ganzer Breite. Statischer Test; im Browser: 360 px Karten, 1280 px Tabelle |
+| 13 | Browser 2 | Der Probelauf bot „Übernehmen“ an, obwohl die 10-Minuten-Sperre greift – erst die Fehlermeldung, und die Warnung sagte „würden noch einmal angelegt“ | leicht bis mittel | Der Bericht trägt `sperre_bis`; die Warnung sagt „Noch einmal übernehmen geht erst ab hh:mm Uhr.“, über den Knöpfen steht es noch einmal mit „(dann „Probelauf wiederholen“)“, der rote Knopf entfällt (der Server lehnt weiter mit 409 ab). Tests `test_befunde_vor_auslieferung` und statisch; im Browser bei 1280 und 360 px |
+| 14 | Browser 3 | „Fällig“ und „Zeile“ brachen bei 1280 px mitten in der Zahl um („19.03.2 / 027“) | leicht | Zeile, Nacharbeit-Nr. und Fällig tragen `.mat-ungeteilt` (`white-space: nowrap`, `overflow-wrap: normal`) – Produkt, Ordner, Gründe und Seriennummer brechen weiter überall; „Zeile n“ in der Nacharbeit mit festem Leerzeichen. Statischer Test; im Browser je Zelle eine Zeile (1280 und 360 px, auch im Dialog) |
+| 15 | Browser 4 | Nach einer Auswahl landete der Fokus auf `<body>` (Seitenwahl, Suchtreffer im Dialog „Produkt zuordnen“, „n Artikel übernehmen“, „Übernehmen“) | leicht | Seitenwahl: der gewählte Eintrag; Suchtreffer: „Zuordnen“; Ergebnisdialog: sein Titel; Übernehmen: der Satz „Übernommen: …“ (Ring nur bei Tastatur). Statischer Test; im Browser per Tastatur |
+| 16 | Browser 5 | Nach zeilenweiser Zuordnung sagte die Karte nichts davon, ihr Dialog überschrieb die Wahl ohne Hinweis | leicht | `gruppen[].zugeordnet` (Zahl zugeordneter Zeilen); die Karte zeigt „zeilenweise zugeordnet: k von n“, ihr Dialog „Das ersetzt die zeilenweise Zuordnung (k Zeilen) …“ und „Zuordnung entfernen“. Tests `test_befunde_vor_auslieferung`, statisch; im Browser |
+| 17 | Browser 6 | Nach „Im Katalog anlegen …“ blieb die Karte bei „nicht im Katalog“ und bot das Anlegen weiter an | leicht | Ist allen Zeilen ein Produkt zugeordnet, trägt die Karte die Marke „zugeordnet“ und nur „Produkt zuordnen …“ (kein Anlegen, kein Melden). Statischer Test; im Browser als Material-Verwaltung bei 1280 und 360 px |
+| 18 | Browser 7 | Zeilen „schon erledigt“ zeigten „Seriennummer: ohne“, obwohl die Datei eine hat | leicht | `zeile_json` liefert auch dort die Seriennummer der Datei; ohne steht „–“. Test `test_befunde_vor_auslieferung`; im Browser (CSV zweimal) |
+| 19 | Browser 8 | Die Bemerkungsvorschau der Nacharbeit verschluckte die Zeilenumbrüche („Gurt Größe: L Standort: Lager“) | leicht | `.mat-na-bem { white-space: pre-line }`. Statischer Test; im Browser |
+| 20 | Browser 9 | Telefon: „Datei wählen“ nicht in ganzer Breite, Kästchen der Nacharbeit-Karten unten statt links oben (Bauentwurf 4.6, nicht als Abweichung genannt) | leicht | Gebaut wie im Entwurf statt nachgetragen: bis 600 px Inhaltsbreite „Datei wählen“ über die ganze Ablagefläche, das Kästchen links oben vor der Nacharbeit-Nr. („auswählen“ nur noch für die Vorlesehilfe). Statischer Test; im Browser bei 360 px |
+
+**Messwerte xlsx vor dem Laden** (je Datei ein eigener Prozess mit 3-GB-Speicherdeckel; Weg Bestandsimport =
+`tabelle.lesen`, Weg Prüfungen = `pruefungen_import.analysieren`; die Werte beider Wege lagen je Datei gleichauf):
+
+| Datei (Upload) | vorher: Ergebnis, maxRSS, Zeit | nachher |
+| --- | --- | --- |
+| verbundene Zellen A3:KN20000 (5 KB) | 400 nach dem Laden, 1,85 GB, 60 s | 400, 79 MB, < 0,1 s |
+| Link-Bereich A3:KN20000 (5 KB) | 400 nach dem Laden, 2,85 GB, 76 s | 400, 79 MB, < 0,1 s |
+| Kommentar über A3:KN20000 (6 KB) | 400 nach dem Laden, 1,55 GB, 14 s | 400, 79 MB, < 0,1 s |
+| verbundene Zellen A3:XFD1048576 (5 KB) | Speicherdeckel (2,9 GB) nach 14 s, ohne Deckel unbegrenzt | 400 („bis Zeile 1048576“), 79 MB, < 0,1 s |
+| 9,5 MB leere Zellen `<c/>` (31 KB) | 400 nach dem Laden, 0,83 GB, 8 s | 400, 79 MB, 0,3–0,4 s |
+| dieselben verkleidet (Präfix, Zeichenreferenz, UTF-16, Blatt unter fremdem Pfad) | wie oben: 1,85 GB, 60 s | 400, 79 MB, < 0,1 s |
+| leere Zellen über eine Entität vervielfacht (5 KB) | 400 (unlesbar) erst nach dem Laden, 377 MB, 1,6 s | 400, 79 MB, 0,3–0,4 s |
+| Link über ganze Spalten „A:KN“ mit einer Zelle in Zeile 20000 | Speicherdeckel (2,9 GB) nach 73 s | 400 (unlesbar), 79 MB, < 0,1 s |
+| zulässig: 2000 Zeilen × 80 Spalten (7,8 MB XML) | gelesen, 115 MB, 2,4 s | gelesen, 115 MB, 2,9 s |
+| zulässig: Liste mit verbundenen Kopfzellen und Links | gelesen | gelesen |
+
+Über die Route (Probe der Sicherheitsprüfung, Materialwart, `merge_6m.xlsx`): vorher 400 nach 61 s bei 1,88 GB, ein
+gleichzeitiger Probelauf im selben Arbeitsprozess bekam nach 10 s 429; nachher 400 nach 0,1 s bei 117 MB, der zweite
+Probelauf läuft durch.
+
 ### Zu prüfen
 
 1. **Eine echte Liste der Gliederung** im Probelauf (dev oder anonymisiert): Gebaut und geprüft ist mit einer
@@ -2917,7 +2971,19 @@ vorigen; der lange rote Knopf brach am Telefon nicht um (waagerechter Bildlauf).
 3. **Mail an den Melder** aus der Nacharbeit (Link zur Nacharbeit) einmal auf dev mit Mailserver ansehen – lokal ist
    ohne `SMTP_HOST` geprüft.
 4. **Frist von einem Monat** im Betrieb: Was nach einem Monat offen ist, verwirft „System“ ohne Rückfrage; danach hilft
-   nur ein neuer Import (die Datei bleibt beim Materialwart).
+   ein neuer Import der Liste oder eine vorher heruntergeladene Nacharbeits-CSV (deren verfallene Zeilen werden wie
+   neue geprüft).
+5. **Ohne Seriennummernspalte** (Prüfung vor Auslieferung, Nr. 4): Der Probelauf warnt deutlich, blockiert aber nicht –
+   nach Entscheidung 8 soll eine Liste ohne Seriennummern ohne Rückfrage gehen. Bitte bestätigen oder entscheiden, ob
+   eine Liste ohne zugeordnete Seriennummer erst nach einer ausdrücklichen Wahl übernommen werden soll.
+6. **Prüfintervall 1 oder 2 ohne Einheit** (Nr. 5) kommt in die Nacharbeit („Monate oder Jahre?“); ab 3 gilt eine Zahl
+   ohne Einheit als Monate. Bitte bestätigen – oder eine andere Grenze nennen.
+7. **Dieselbe Liste noch einmal** (Nr. 6): Offene Zeilen der Nacharbeit werden über die Zeilennummer ersetzt; Zeilen
+   ohne Seriennummer, die beim ersten Mal angelegt wurden, entstehen nach 10 Minuten weiterhin noch einmal (wie in
+   Entscheidung 8 vorgesehen, der Probelauf sagt es). Bitte bestätigen.
+8. **Weitere Blätter zählen mit** (Nr. 1): Die Vorprüfung zählt alle Blätter der Arbeitsmappe – openpyxl lud sie schon
+   immer ganz. Eine Arbeitsmappe, deren weitere Blätter zusammen mehr als 500.000 Felder haben, wird jetzt abgelehnt
+   (auch im Prüfungsimport); bitte dann nur die Liste speichern.
 
 ## Beispielbestand (18.10.2026)
 
@@ -3233,9 +3299,9 @@ oder Plattform-Verwaltung).
 | `PUT /api/material/ordner/<id>` mit `reminders_off` (ja/nein) | Materialwart am Ordner | „Erinnerungsmails aus“ für Ordner und Unterordner; fehlt das Feld, bleibt der Wert; anderes als ja/nein → 400; mit Journal (Phase 2 · 2) |
 | `flask --app "app:create_app()" material remind [--trocken [--demo]] [--stichtag JJJJ-MM-TT] [--erneut]` | Kommandozeile im Container | Erinnerungslauf: `--trocken` zeigt die Mails des nächsten Laufs mit Adressen und schreibt nichts (auch bei „aus“ oder gesperrt), `--stichtag` und `--demo` (DEMO-Bestand einbeziehen, nur Ansicht) nur mit `--trocken`; ohne `--trocken` ein echter Lauf für heute (nie DEMO), `--erneut` noch einmal am selben Tag (nur, was nicht im Log steht). Exit 0, 1 (Mail gescheitert, Fehler), 2 (aus, gesperrt, kein Mailserver, `--stichtag` oder `--demo` ohne `--trocken`, unlesbares Datum) (Phase 2 · 2) |
 | `GET /material/ordner/<id>/import` | Materialwart am Ordner (sonst 403-Seite, fremd 404, Systemordner 409) | Seite „Bestandsliste importieren“ mit der Nacharbeit dieses Zielordners (Phase 2 · 3) |
-| `POST /api/material/ordner/<id>/import/probelauf` (Formular: `file`, `zuordnung` JSON `{"<Spalte>": feld}`) | Materialwart am Ordner | Probelauf, schreibt nichts (außer einer Protokollzeile, wenn er fremde Dubletten nennt) → Bericht: `datei`, `nacharbeit_csv`, `spalten`, `felder`, `fehlt`, `warnungen`, `schon_importiert`, `zahlen` (mit `ohne_serie`), `faelligkeit`, `produkte_offen`, `ordner_unbekannt`, `zeilen`, `frist`; 400 unlesbar, 409 Systemordner, 413 zu groß, 429 anderer Import läuft (Phase 2 · 3) |
+| `POST /api/material/ordner/<id>/import/probelauf` (Formular: `file`, `zuordnung` JSON `{"<Spalte>": feld}`) | Materialwart am Ordner | Probelauf, schreibt nichts (außer einer Protokollzeile, wenn er fremde Dubletten nennt) → Bericht: `datei`, `nacharbeit_csv`, `spalten`, `felder`, `fehlt`, `warnungen`, `schon_importiert`, `sperre_bis` (dieselbe Datei bis dahin gesperrt, ISO in UTC, sonst `null`), `keine_seriennummer`, `zahlen` (mit `ohne_serie`), `faelligkeit`, `produkte_offen`, `ordner_unbekannt`, `zeilen`, `frist`; 400 unlesbar, 409 Systemordner, 413 zu groß, 429 anderer Import läuft (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/import` (wie der Probelauf) | Materialwart am Ordner | Übernehmen in einer Transaktion → 201, Bericht mit Zeilen `angelegt` (`artikel` {id, inventory_no}, vergebene STR-Nummer) und `import` {id, angelegt, im_bestand, nacharbeit, ersetzt}; 409 nichts zu tun, dieselbe Datei vor weniger als 10 Minuten, Ordnerbaum geändert (Phase 2 · 3) |
-| `GET /api/material/ordner/<id>/nacharbeit?gruppe=alle\|produkt\|seriennummer\|daten\|ordner\|sonstige&seite=` | Materialwart am Ordner | offene Nacharbeit dieses Ziels: `zahlen` je Gruppe, `gruppen` (Produktangaben mit Vorschlägen und Meldung), `zeilen` (200 je Seite, mit `gruende`, `werte`, `offen_bis`), `erledigt` (die letzten 100), `frist` (Phase 2 · 3) |
+| `GET /api/material/ordner/<id>/nacharbeit?gruppe=alle\|produkt\|seriennummer\|daten\|ordner\|sonstige&seite=` | Materialwart am Ordner | offene Nacharbeit dieses Ziels: `zahlen` je Gruppe, `gruppen` (Produktangaben mit Vorschlägen, Meldung und `zugeordnet` – Zahl der Zeilen mit Produktwahl), `zeilen` (200 je Seite, mit `gruende`, `werte`, `offen_bis`), `erledigt` (die letzten 100), `frist` (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/nacharbeit/produkt` (`angabe` oder `zeilen` [Nr.] \| `"alle"`, `product_id` oder `null`) | Materialwart am Ordner | Produkt zuordnen bzw. Wahl zurücknehmen → `gesetzt`; fremde Zeile 404, erledigte 409, DEMO-Produkt im echten Ordner 400 (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/nacharbeit/melden` (Felder wie `POST /meldungen` ohne `folder_id`, dazu `angabe`; `fotos` mehrfach) | Materialwart am Ordner | Produkt melden; die Meldung hängt an allen offenen Zeilen der Angabe → 201 `meldung` (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/nacharbeit/pruefen` (`zeilen` [Nr.] \| `"alle"`, `uebernehmen`) | Materialwart am Ordner | erneut prüfen (Bericht, schreibt nichts) bzw. mit `uebernehmen` in einer Transaktion übernehmen → `zahlen`, `faelligkeit`, `zeilen` (mit `id`), `hinweise`; 429 wie oben (Phase 2 · 3) |
