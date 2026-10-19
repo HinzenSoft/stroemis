@@ -1220,3 +1220,16 @@ table.list.mat-runde tr.mat-fremd td { color: var(--grau); }
 .mat-reiter button { font-size: var(--fs-mittel); padding: 8px 10px; }
 @media (pointer: coarse) { .mat-reiter button { min-height: 44px; } }
 .mat-reiter-teil[hidden] { display: none; }
+
+/* Erinnerungsmails (Übersicht, nur Material- und Plattform-Verwaltung): die Zeile mit dem Stand des letzten Laufs
+   unten und der Probelauf (material.js, probelaufDialog). Der Mailtext steht wie verschickt – Zeilen umbrechen statt
+   seitwärts zu rollen, lange Links brechen überall; ein langer Text rollt im Kasten. */
+.mat-erinnerungen { margin-top: 24px; overflow-wrap: anywhere; }
+@media (min-width: 641px) { dialog:where(.mat-probelauf) { width: min(820px, 96vw); } }
+.mat-probemail { border-top: 1px solid var(--linie); }
+.mat-probemail:last-of-type { border-bottom: 1px solid var(--linie); }
+.mat-probemail > summary { cursor: pointer; padding: 8px 0; overflow-wrap: anywhere; }
+@media (pointer: coarse) { .mat-probemail > summary { min-height: 44px; box-sizing: border-box; } }
+.mat-probemail .small { margin: 0 0 6px; overflow-wrap: anywhere; }
+.mat-mailtext { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 50vh; overflow: auto; margin: 0 0 10px;
+  padding: 8px 10px; background: var(--grau-hell); font-size: var(--fs-klein); line-height: 1.45; }

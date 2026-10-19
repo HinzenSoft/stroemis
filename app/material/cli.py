@@ -108,7 +108,7 @@ def _trocken(stichtag):
         freigaben = len({e.kennung for e in m.eintraege if e.art == "freigabe"})
         click.echo("")
         click.echo("=" * 78)
-        click.echo(f"An: {m.name} <{m.adresse}> ({artikel} Artikel, {freigaben} Freigaben)")
+        click.echo(f"An: {m.name} <{m.adresse}> ({artikel} Artikel, {freigaben} {'Freigabe' if freigaben == 1 else 'Freigaben'})")
         click.echo(f"Betreff: {m.betreff}")
         click.echo("")
         click.echo(m.text.rstrip("\n"))
@@ -179,7 +179,8 @@ def remind(trocken, stichtag, erneut):
             fehler = True
     m = erg.get("mails")
     if m:
-        click.echo(f"Mails: {m['mails']} verschickt ({m['artikel']} Artikel, {m['freigaben']} Freigaben), "
+        click.echo(f"Mails: {m['mails']} verschickt ({m['artikel']} Artikel, {m['freigaben']} "
+                   f"{'Freigabe' if m['freigaben'] == 1 else 'Freigaben'}), "
                    f"{m['fehlgeschlagen']} gescheitert, {m['ohne_empfaenger']} ohne Empfänger.")
         if m["fehlgeschlagen"]:
             namen = journal.konto_namen(m.get("fehlgeschlagen_refs") or [])

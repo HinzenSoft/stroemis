@@ -902,8 +902,11 @@
       ${rueckrufKasten(d.rueckrufe)}
       ${d.meldungen_offen ? `<p class="notice"><a href="/material/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produktmeldung", "offene Produktmeldungen")}</strong></a>
         – Materialwarte warten darauf, Artikel davon anzulegen.</p>` : ""}
+      ${erinnerungHinweise(d.erinnerungen)}
       <div id="mat-freigaben-hinweis"></div>
-      ${bestandTeil}`;
+      ${bestandTeil}
+      ${erinnerungZeile(d.erinnerungen)}`;
+    aktionen = { probelauf: () => probelaufDialog() };
     if (DARF.lesen) {
       ordnerUebersichtKlappen($("#mat-ue"));
       rundenKasten($("#mat-runden"), true);
@@ -912,6 +915,91 @@
     const f = await baustein("MatFreigaben");
     const el = $("#mat-freigaben-hinweis");
     if (f && el) f.hinweis(el);
+  }
+
+  /* Erinnerungsmails (nur Material- und Plattform-Verwaltung; /start liefert sonst erinnerungen: null). Unten auf der
+     Übersicht eine Zeile mit dem Stand – an/aus/gesperrt, der letzte Lauf – und dem Textlink „Probelauf ansehen“; was
+     Handeln verlangt (Lauf steht, kein Mailserver, Fehlschläge, Fehler), steht zusätzlich oben gelb. Die Zeitpunkte
+     kommen als UTC und werden in deutscher Zeit gezeigt, der Tag des Laufs ist schon der deutsche. */
+  const ZONE = "Europe/Berlin";
+  const tagBerlin = (versatz) => new Intl.DateTimeFormat("sv-SE", { timeZone: ZONE })
+    .format(new Date(Date.now() + (versatz || 0) * 86400000));
+  const uhrBerlin = (iso) => (iso ? new Date(iso).toLocaleTimeString("de-DE", { timeZone: ZONE, hour: "2-digit", minute: "2-digit" }) : "");
+  const tagKurz = (tag) => fmtTag(tag).slice(0, 6);
+  // „heute 06:02“, „gestern 06:02“, „am 17.10. 06:02“
+  function laufWann(l) {
+    const tag = l.tag === tagBerlin() ? "heute" : l.tag === tagBerlin(-1) ? "gestern" : `am ${tagKurz(l.tag)}`;
+    return `${tag}${l.beginn ? ` ${uhrBerlin(l.beginn)}` : ""}`;
+  }
+  // „4 Mails, 1 fehlgeschlagen (Erika Beispiel)“
+  function laufErgebnis(l) {
+    const an = (l.fehlgeschlagen_an || []).length ? ` (${l.fehlgeschlagen_an.map(esc).join(", ")})` : "";
+    return `${plural(l.mails || 0, "Mail", "Mails")}${l.fehlgeschlagen ? `, ${l.fehlgeschlagen} fehlgeschlagen${an}` : ""}`;
+  }
+  const versandAktiv = (e) => e.versand && !e.gesperrt;
+
+  function erinnerungZeile(e) {
+    if (!e) return "";
+    const l = e.letzter;
+    const zustand = e.gesperrt ? "in dieser Umgebung gesperrt"
+      : !e.versand ? "aus – einschalten unter Verwaltung → Einstellungen (Plattform-Verwaltung)"
+        : e.smtp ? "an" : "an, aber kein Mailserver eingerichtet";
+    const lauf = l ? ` · letzter Lauf ${laufWann(l)} – ${laufErgebnis(l)}` : versandAktiv(e) ? " · noch kein Lauf" : "";
+    return `<p class="help mat-erinnerungen" id="mat-erinnerungen">Erinnerungsmails: ${zustand}${lauf}${e.laeuft ? " · ein Lauf ist gerade im Gange" : ""}
+      · <button type="button" class="lnk" data-act="probelauf">Probelauf ansehen</button></p>`;
+  }
+
+  function erinnerungHinweise(e) {
+    if (!e) return "";
+    const l = e.letzter;
+    const p = e.pflege;
+    const hinweise = [];
+    if (e.veraltet && l) hinweise.push(`Erinnerungsmails: Letzter Lauf am ${esc(tagKurz(l.tag))} – heute ist noch keiner gelaufen.`);
+    if (e.pflege_veraltet) {
+      hinweise.push(p && p.tag ? `Der tägliche Lauf (Journal, Aufräumen) ist seit dem ${esc(tagKurz(p.tag))} nicht gelaufen.`
+        : "Der tägliche Lauf (Journal, Aufräumen) ist noch nie gelaufen.");
+    }
+    if (versandAktiv(e) && !e.smtp) hinweise.push("Erinnerungsmails sind an, aber kein Mailserver eingerichtet – es geht nichts hinaus.");
+    if (l && l.fehlgeschlagen && versandAktiv(e)) {
+      const namen = l.fehlgeschlagen_an || [];
+      hinweise.push(namen.length === 1 ? `Erinnerungsmail an ${esc(namen[0])} ist gescheitert – sie geht morgen erneut.`
+        : `${l.fehlgeschlagen} Erinnerungsmails${namen.length ? ` an ${namen.map(esc).join(", ")}` : ""} sind gescheitert – sie gehen morgen erneut.`);
+    }
+    if (l && l.fehler) hinweise.push(`Beim letzten Lauf der Erinnerungsmails ist ein Fehler aufgetreten: ${esc(l.fehler)}`);
+    if (p && p.fehler) hinweise.push(`Beim letzten täglichen Lauf (Journal, Aufräumen) ist ein Fehler aufgetreten: ${esc(p.fehler)}`);
+    if (l && l.fehlerhaft) hinweise.push(`Beim letzten Lauf ${l.fehlerhaft === 1 ? "konnte 1 Artikel bzw. 1 Freigabe" : `konnten ${l.fehlerhaft} Artikel bzw. Freigaben`} nicht gelesen werden – siehe Server-Log.`);
+    if (l && l.vermerk_fehler) hinweise.push(`${plural(l.vermerk_fehler, "verschickte Erinnerungsmail konnte", "verschickte Erinnerungsmails konnten")} nicht vermerkt werden – was darin stand, kommt morgen noch einmal. Siehe Server-Log.`);
+    return hinweise.map((h) => `<p class="notice">${h} <a href="#mat-erinnerungen">Einzelheiten unten</a></p>`).join("");
+  }
+
+  /* Probelauf: wer beim nächsten echten Lauf welche Mail bekäme – heute, oder morgen, wenn heute schon verschickt wurde.
+     Betreff und Text kommen fertig vom Server; nichts wird verschickt oder vermerkt. */
+  async function probelaufDialog() {
+    let p;
+    try { p = await api(`${API}/erinnerungen/probelauf`); } catch (e) { toast(e.message, true); return; }
+    const wann = p.stichtag === tagBerlin() ? "Heute" : p.morgen ? "Morgen" : `Am ${fmtTag(p.stichtag)}`;
+    const l = p.letzter;
+    const zahlText = (a, f) => [a ? plural(a, "Artikel", "Artikel") : "", f ? plural(f, "Freigabe", "Freigaben") : ""].filter(Boolean).join(", ");
+    const mails = p.mails.map((m) => `<details class="mat-probemail"><summary>${esc(m.name)}${m.gliederung ? ` (${esc(m.gliederung)})` : ""}
+        – ${plural(m.artikel, "Artikel", "Artikel")}, ${plural(m.freigaben, "Freigabe", "Freigaben")}</summary>
+        <p class="small"><strong>Betreff:</strong> ${esc(m.betreff)}</p><pre class="mat-mailtext">${esc(m.text)}</pre></details>`).join("");
+    const ohne = p.ohne_empfaenger.length ? `<p class="small"><strong>Ohne Empfänger:</strong> ${p.ohne_empfaenger.map((o) => `${esc(o.ordner)} (${zahlText(o.artikel, o.freigaben)})`).join("; ")}
+        – niemand mit Adresse und Modulzugang verwaltet dort, auch keine Material- oder Plattform-Verwaltung.</p>` : "";
+    const aus = p.ausgelassen.ordner_aus || [];
+    const ausgelassen = aus.length || p.ausgelassen.demo ? `<p class="small"><strong>Ausgelassen:</strong> ${aus.length ? `Erinnerungen aus in ${aus.map((o) => `<a href="/material/ordner/${o.id}">${esc(o.pfad)}</a> (${plural(o.artikel, "Artikel", "Artikel")})`).join(", ")}` : ""}${aus.length && p.ausgelassen.demo ? "; " : ""}${p.ausgelassen.demo ? `${p.ausgelassen.demo} DEMO-Artikel` : ""}</p>` : "";
+    const dlg = dialog(`<h2>Probelauf Erinnerungsmails</h2>
+      ${l ? `<p class="small">${esc(laufWann(l).replace(/^\w/, (c) => c.toUpperCase()))} verschickt: ${laufErgebnis(l)}.</p>` : ""}
+      ${p.gesperrt ? '<p class="notice small">Erinnerungsmails sind in dieser Umgebung gesperrt – so gingen sie hinaus, wenn sie an wären.</p>'
+        : !p.versand ? '<p class="notice small">Erinnerungsmails sind aus – so gingen sie hinaus, wenn sie an wären.</p>' : ""}
+      <p class="help">Nichts wird verschickt oder vermerkt. Gerechnet mit den Rechten und Ordnern von jetzt.</p>
+      ${p.fehlerhaft ? `<p class="notice small">${p.fehlerhaft === 1 ? "1 Artikel bzw. 1 Freigabe konnte" : `${p.fehlerhaft} Artikel bzw. Freigaben konnten`} nicht gelesen werden – siehe Server-Log.</p>` : ""}
+      <h3>${wann} ab 6 Uhr gingen hinaus:</h3>
+      ${mails || leer(`${wann} stünde nichts an.`)}
+      ${ohne}${ausgelassen}
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`);
+    // #dlg dient allen Dialogen der Seite – die Breite gilt nur, solange der Probelauf offen ist.
+    dlg.classList.add("mat-probelauf");
+    dlg.addEventListener("close", () => dlg.classList.remove("mat-probelauf"), { once: true });
   }
 
   /* Fälligkeiten je Ordner: Gliederungen mit ihren Ordnern eingerückt, die Zahlen für den ganzen Zweig – dieselben wie in
@@ -1347,6 +1435,14 @@
     const arten = Object.entries(ORDNERART).filter(([k]) => k !== "gliederung" || umwandeln);
     const F = window.MatFreigaben;
     const mitFreigaben = !neu && !o.system_kind && verwaltet(o) && !!F;
+    // „Erinnerungsmails aus“ nur an einem vorhandenen Ordner (kein Systemordner). Das Kästchen zeigt den eigenen Wert;
+    // ist es ohnehin aus, weil ein Oberordner abschaltet, sagt der Hinweis, wo.
+    const mitErinnerung = !neu && !o.system_kind;
+    const geerbt = mitErinnerung && o.erinnerungen && o.erinnerungen.geerbt_von;
+    const erinnerungFeld = mitErinnerung ? `<label class="inline"><input type="checkbox" id="od-erinnerung" ${o.reminders_off ? "checked" : ""}> Erinnerungsmails aus</label>
+      <div class="help">Für diesen Ordner und alle Unterordner bekommt niemand eine Sammelmail zu Fälligkeit und Lebensende –
+        auch nicht die Verwalter der Ordner darüber und die Material-Verwaltung. Ablaufende Freigaben melden sich weiter.</div>
+      ${geerbt ? `<div class="help">Ohnehin aus – geerbt von „${esc(geerbt.pfad)}“.</div>` : ""}` : "";
     const formular = `<label for="od-name">Name</label><input type="text" id="od-name" value="${esc(o.name || "")}" maxlength="120">
       <div class="field-row">
         <div><label for="od-kind">Art</label><select id="od-kind" ${oben || o.kind === "gliederung" ? "disabled" : ""}>
@@ -1355,6 +1451,7 @@
         <div><label for="od-int">Prüfintervall (Monate)</label><input type="number" id="od-int" min="1" max="120" value="${o.interval_months || ""}" placeholder="vom Produkt">
           <div class="help">Nur zum Verschärfen: Gilt die Herstellervorgabe kürzer, gilt sie.</div></div>
       </div>
+      ${erinnerungFeld}
       <label for="od-desc">Beschreibung</label><textarea id="od-desc" rows="3" maxlength="2000">${esc(o.description || "")}</textarea>
       ${fotoFeld("od-foto", "Foto", "Foto", o.foto ? o.vorschau || o.foto : "", "JPEG, PNG, WebP oder HEIC vom Telefon; Web- und Vorschaufassung entstehen beim Hochladen.")}`;
     // Die Knopfzeile bleibt letztes Kind des Dialogs – so klebt sie am Telefon unten (app.css). Mit Reitern zeigt sie,
@@ -1385,6 +1482,7 @@
         const daten = { name: $("#od-name", body).value, kind: oben ? "gliederung" : $("#od-kind", body).value,
                         interval_months: $("#od-int", body).value || null, description: $("#od-desc", body).value };
         if (!neu && o.kind === "gliederung") daten.kind = "gliederung";
+        if (mitErinnerung) daten.reminders_off = $("#od-erinnerung", body).checked;
         const foto = fotoWahl.datei;
         try {
           const r = oid ? await api(`${API}/ordner/${oid}`, { method: "PUT", body: daten })
@@ -1415,7 +1513,8 @@
     let geladen = false;
     let geaendert = false;
     // Ungespeichert im Reiter „Ordner“: ein Feld anders als beim Öffnen oder ein Foto gewählt bzw. zum Entfernen vorgemerkt.
-    const felder = () => JSON.stringify(["od-name", "od-kind", "od-int", "od-desc"].map((id) => $(`#${id}`, body).value));
+    const felder = () => JSON.stringify(["od-name", "od-kind", "od-int", "od-desc"].map((id) => $(`#${id}`, body).value)
+      .concat($("#od-erinnerung", body) ? [$("#od-erinnerung", body).checked] : []));
     const anfang = felder();
     const ungespeichert = () => felder() !== anfang || !!fotoWahl.datei || fotoWahl.entfernen;
     async function verlassenOk() {
@@ -1540,6 +1639,9 @@
       // Filter „Zugeordnet an …“ (Bauentwurf 6.4) – nur mit Grundrecht und nur, wenn im Zweig jemandem etwas zugeordnet ist.
       const personWahl = grund && personen && personen.length ? `<select class="mat-personwahl" data-personwahl
           aria-label="Nur Artikel, die dieser Person zugeordnet sind"><option value="">Zugeordnet an …</option>${personen.map((p) => `<option value="${p.id}" ${String(p.id) === person ? "selected" : ""}>${esc(p.name)}${p.aktiv ? "" : " (deaktiviert)"}</option>`).join("")}</select>` : "";
+      // „Erinnerungsmails aus“ (selbst oder von einem Oberordner geerbt) sieht, wer den Ordner pflegt – dort schaltet man es.
+      const erinnerungAus = darfPflegen && d.erinnerungen && d.erinnerungen.aus;
+      const geerbtVon = erinnerungAus && !d.erinnerungen.eigen ? d.erinnerungen.geerbt_von : null;
       const systemText = d.system_kind === "gesperrt"
         ? "Hierher verschiebt eine Sperre die Artikel der Gliederung. Zurück in ihren Herkunftsordner bringt sie nur eine Freiprüfung."
         : "Ausgesonderte Artikel bleiben hier mit ihrem vollen Lebenslauf sichtbar, zählen aber nirgends mehr als Bestand und lassen sich nicht zurückholen.";
@@ -1552,9 +1654,10 @@
             ${darf.grund ? exportMenue(d) : ""}</div></div>
         ${darfPflegen ? '<div id="mat-freigaben-kopf"></div>' : ""}
         ${system ? `<p class="notice">${systemText}${d.teilweise ? " Du siehst hier nur deine Artikel – die Gliederung selbst gehört nicht zu deinem Bereich." : ""}</p>` : ""}
-        ${d.foto || d.description || d.interval_months ? `<div class="mat-ordnerkopf">${d.foto ? bildLink(d.foto, d.original, `Ordnerfoto ${d.name}`, null, `<img class="mat-ordnerfoto" src="${esc(d.vorschau)}" alt="">`) : ""}
+        ${d.foto || d.description || d.interval_months || erinnerungAus ? `<div class="mat-ordnerkopf">${d.foto ? bildLink(d.foto, d.original, `Ordnerfoto ${d.name}`, null, `<img class="mat-ordnerfoto" src="${esc(d.vorschau)}" alt="">`) : ""}
           <div>${d.description ? `<p class="mat-text">${esc(d.description)}</p>` : ""}
-          ${d.interval_months ? `<p class="small">Prüfintervall hier: höchstens ${d.interval_months} Monate.</p>` : ""}</div></div>` : ""}
+          ${d.interval_months ? `<p class="small">Prüfintervall hier: höchstens ${d.interval_months} Monate.</p>` : ""}
+          ${erinnerungAus ? `<p class="small">Erinnerungsmails aus${geerbtVon ? ` – geerbt von <a href="/material/ordner/${geerbtVon.id}">${esc(geerbtVon.pfad)}</a>` : ""}</p>` : ""}</div></div>` : ""}
         ${d.unterordner.length ? `<section class="section"><h2>Unterordner</h2>${unterordnerHtml(d.unterordner)}</section>` : ""}
         <section class="section"><h2>Artikel in diesem Ordner</h2>
           <div class="mat-filterzeile"><div class="c-tabs mat-filter">${["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"].map((s) => `<button type="button" data-act="filter" data-f="${s}" class="${s === filter ? "sel" : ""}">${s ? esc(STATUS[s]) : "alle"}${s && d.direkt && d.direkt[s] ? ` (${d.direkt[s]})` : ""}</button>`).join("")}</div>

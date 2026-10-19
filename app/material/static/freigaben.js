@@ -155,6 +155,8 @@
       const recht = `„${RECHT[e.recht] || e.recht || "?"}“`;
       if (e.aktion === "freigabe_erteilt") return `${recht} an ${esc(e.konto)} erteilt – ${bisText(e.bis)}`;
       if (e.aktion === "freigabe_entzogen") return `${recht} von ${esc(e.konto)} entzogen`;
+      // Vom Tageslauf eingetragen (wer: „Tageslauf“), sobald das Enddatum vorbei ist.
+      if (e.aktion === "freigabe_abgelaufen") return `${recht} von ${esc(e.konto)} abgelaufen (bis ${bisText(e.bis)})`;
       if (e.aktion === "freigabe_entfernt") return `${recht} von ${esc(e.konto)} entfernt${e.grund ? ` (${esc(e.grund)})` : ""}`;
       const teile = [];
       if (e.recht_vorher && e.recht_vorher !== e.recht) teile.push(`${esc(RECHT[e.recht_vorher] || e.recht_vorher)} → ${esc(RECHT[e.recht] || e.recht)}`);
