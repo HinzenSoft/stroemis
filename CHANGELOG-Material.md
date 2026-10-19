@@ -1728,16 +1728,17 @@ entschieden bzw. nicht widersprochen):
     fetten Hervorhebung: „**D Classic** Screwlock K496B“. Dafür liefert `material.js` Name und Zusatz getrennt
     (`nameHtml` kommt in den Link oder in `<strong>`, `zusatzHtml` dahinter: ` <span class="muted mat-zusatz">…</span>`,
     bei einer gekürzten älteren Beschreibung mit `title`); `.mat-zusatz { font-weight: 400; }` hält ihn auch in der
-    Überschrift der Produktseite und in der halbfetten Produktzeile des Steckbriefs dünn. Alle 15 Stellen in
+    Überschrift der Produktseite und in der halbfetten Produktzeile des Steckbriefs dünn. Alle 16 Stellen in
     `material.js` (Katalogliste und Kategorieansicht, Produktseite, Treffer und gewählte Karte bei „Artikel anlegen“,
     „Vorhandenes zuordnen“, Artikelansicht mit Stammdaten, Artikellisten, offene Prüfungen, Prüfung starten, Prüfung,
-    Festschreiben-Dialog, Meldungen, Rückruf-Kasten) und die Suchvorschläge (`suche.js`) und der globale Steckbrief
+    Festschreiben-Dialog, Meldungen, Rückruf-Kasten, seit der Prüfung unten auch der Hinweis „Schon vergeben“ zur
+    Artikelnummer) und die Suchvorschläge (`suche.js`) und der globale Steckbrief
     (`global.js`) sind umgestellt; `produktHtml` gibt es nicht mehr. Der Wortverbinder hinter dem Strich ist mit ihm
     fort – zwischen Name und Zusatz darf die Zeile normal umbrechen. In den PDFs (Prüf- und Aussonderungsprotokoll,
     Lebenslauf mit Kopfzeile, Sammelprotokoll) setzt das Makro `produkt_mit_zusatz` (`pdf/basis.html`) den Zusatz grau
     wie die Kategorie darunter und nicht fett; das Feld „Modell“ nennt das Modell ohne Zusatz, bei einem Zusatz von
     Hand also den Teil vor dem Strich. **Reiner Text** (Rückfragen, Dialogtitel, Alternativtexte, Fehlermeldungen,
-    Mails, `Verzeichnis.csv` im Protokoll-ZIP, Journal, Importbericht, Hinweis „Schon vergeben“, Name in `GET
+    Mails, `Verzeichnis.csv` im Protokoll-ZIP, Journal, Importbericht, Feld `name` in `GET
     /api/material/produkte/artikelnummer` und in der Prüfung): Name und Zusatz durch ein Leerzeichen getrennt –
     „Hersteller D Classic Screwlock“. Warum kein Komma: Der Zusatz ist gewollt kurz (höchstens 80 Zeichen, meist ein Wort
     wie die Verschlussart) und liest sich mit dem Namen wie die Handelsbezeichnung; der Text ist damit genau das, was
@@ -1747,7 +1748,7 @@ entschieden bzw. nicht widersprochen):
     also weiter mit Strich im Modell). Katalogdaten ändern sich nicht. Geprüft: `test_material_beschreibung` neu bzw.
     angepasst – Regel ohne Strich (Text, getrennte Teile, Zusatz von Hand, nicht doppelt, Komma, Kürzen nur der
     Beschreibung), Protokoll und Lebenslauf über das gesetzte HTML (grauer Zusatz, Feld „Modell“, Zusatz von Hand) und
-    `pdftotext`, Oberfläche statisch (jede der 15 Stellen setzt `zusatzHtml` hinter den Schluss von Link und `<strong>`,
+    `pdftotext`, Oberfläche statisch (jede der 16 Stellen setzt `zusatzHtml` hinter den Schluss von Link und `<strong>`,
     Klasse `muted`, nie fett, kein Strich, PDF-Makro an allen drei Stellen), dazu `test_regel_gleich_in_material_js`:
     die Regel aus `material.js` mit Node.js gegen den Server für 15 Fälle (läuft, wenn Node.js da ist);
     `test_artikelnummer_eindeutig` angepasst. Im Chromium bei 1280 × 900 und 390 × 844 (Touch) mit eigenem DATA_DIR
@@ -1759,6 +1760,21 @@ entschieden bzw. nicht widersprochen):
     Konsolenfehler, nichts rollt waagerecht (332 Prüfungen, alle erfüllt). Prüfprotokoll, Lebenslauf und
     Sammelprotokoll per `pdftotext`: „DEMO-Hersteller DEMO D Classic Screwlock“, „DEMO-Hersteller Platzhalter
     Twistlock“, Feld „Modell“ „Platzhalter“; `Verzeichnis.csv` ebenso ohne Strich.
+  - **Prüfung von „Ohne Strich, grau“**: Eine unabhängige Prüfung meldete zwei Befunde (niedrig); beide sind im
+    Chromium bei 1280 × 900 und 390 × 844 (Touch) nachgestellt und behoben. (1) Der Hinweis „Schon vergeben“ beim
+    Tippen der Artikelnummer (Dialog „+ Produkt“ bzw. „Produkt bearbeiten“ und „Fehlendes Produkt melden“) setzte noch
+    Name und Zusatz zusammen in den roten, fetten, unterstrichenen Link – „DEMO-Hersteller DEMO Altname Twistlock“ –,
+    als einzige Stelle der Oberfläche. Jetzt liefert `GET /api/material/produkte/artikelnummer` neben `name` auch
+    `manufacturer`, `model` und `description` (wie gepflegt, ein Zusatz von Hand also mit Strich im Modell – zerlegt
+    wird erst in der Anzeige), und die Zeile lautet wie überall `nameHtml` im Link, `zusatzHtml` grau dahinter:
+    „Schon vergeben: **DEMO-Hersteller DEMO Altname** Twistlock (DEMO-K-ALT1)“; Zusatz `rgb(109, 109, 108)`,
+    Schriftgewicht 400, nicht unterstrichen, außerhalb des Links, Maskierung unverändert. (2) Im Rückruf-Kasten der
+    Übersicht (hellroter Grund `--rot-hell`) hatte der graue Zusatz nur 4,48:1 – knapp unter 4,5:1 (WCAG AA) für
+    normale Schrift; auf weißem Grund sind es 5,18:1. Dort ist er jetzt ein Viertel zum Textgrau hin abgedunkelt
+    (`.mat-rr-kasten .mat-zusatz { color: color-mix(in srgb, var(--grau) 75%, var(--anthrazit)); }`): gemessen 4,86:1,
+    weiter grau und heller als der Text daneben; ein Browser ohne `color-mix()` erbt das Textgrau
+    (`--anthrazit`, 80 % Schwarz). Katalogdaten unverändert. Tests in `test_material_beschreibung` erweitert (Teile in
+    der Schnittstelle, auch mit Zusatz von Hand; 16 Stellen; Regel für den Kasten), mit dem alten Stand rot.
 
 #### Prüfung der Modulstufen
 

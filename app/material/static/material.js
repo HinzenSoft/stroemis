@@ -2544,7 +2544,8 @@
       try {
         const p = (await api(`${API}/produkte/artikelnummer?${new URLSearchParams({ nr, ausser: ausser || "" })}`)).produkt;
         if (feld.value.trim() !== nr) return;          // inzwischen weitergetippt
-        hilfe.innerHTML = p ? `<span class="mat-warn">Schon vergeben: <a href="/material/katalog/produkt/${p.id}" target="_blank" rel="noopener">${esc(p.name)}</a>${p.article_no ? ` (${esc(p.article_no)})` : ""}</span>` : "";
+        // Der Name im Link, der Zusatz grau dahinter – wie überall im Modul, auch in dieser Warnzeile.
+        hilfe.innerHTML = p ? `<span class="mat-warn">Schon vergeben: <a href="/material/katalog/produkt/${p.id}" target="_blank" rel="noopener">${nameHtml(p)}</a>${zusatzHtml(p)}${p.article_no ? ` (${esc(p.article_no)})` : ""}</span>` : "";
       } catch (e) { hilfe.innerHTML = ""; }
     };
     feld.addEventListener("input", () => { clearTimeout(los); los = setTimeout(pruefen, 300); });

@@ -380,6 +380,14 @@ def _darstellung(export, gesetzt):
         assert z[g["inventory_no"]]["Beschreibung"] == "", z
         r = kp.get("/api/material/produkte/artikelnummer", query_string={"nr": "HB-7"})
         assert r.json["produkt"]["name"] == "Testwerk HMS Beta Twistlock", r.get_json()
+        # Für den Hinweis „Schon vergeben“ auch die Teile: Die Oberfläche setzt den Zusatz grau hinter den Link
+        # (Befund der Prüfung vom 18.10.2026: dort stand er noch im roten Link). Ein Zusatz von Hand kommt, wie er
+        # gepflegt ist – zerlegt wird er erst in der Anzeige.
+        p = r.json["produkt"]
+        assert (p["manufacturer"], p["model"], p["description"]) == ("Testwerk", "HMS Beta", "Twistlock"), p
+        p = kp.get("/api/material/produkte/artikelnummer", query_string={"nr": "GA-100"}).json["produkt"]
+        assert (p["name"], p["model"], p["description"]) == ("Testwerk Gurt Alpha Platzhalter",
+                                                              "Gurt Alpha | Platzhalter", ""), p
 
 
 def test_suche_ueber_beschreibung():
@@ -453,7 +461,7 @@ def test_oberflaeche_statisch():
         assert haken in js, haken
     # Jede Stelle mit dem Namen setzt den Zusatz dahinter – erst nach dem Schluss von Link und Hervorhebung.
     stellen = re.findall(r"\$\{nameHtml\(([^,)]+)(?:, true)?\)\}((?:</strong>|</a>)*)\$\{zusatzHtml\(([^)]+)\)\}", js)
-    assert len(stellen) == js.count("${nameHtml(") == 15, (len(stellen), js.count("${nameHtml("))
+    assert len(stellen) == js.count("${nameHtml(") == 16, (len(stellen), js.count("${nameHtml("))
     assert all(name == zusatz for name, _, zusatz in stellen), stellen
     assert not re.search(r"\$\{zusatzHtml\([^)]*\)\}(</strong>|</a>)", js)      # nie im Link, nie in <strong>
     # Die Katalogliste wie im Bildschirmfoto: Name fett im roten Link, dann grau Zusatz und Artikelnummer.
@@ -464,8 +472,14 @@ def test_oberflaeche_statisch():
                    "<strong>${nameHtml(pr.produkt)}</strong>${zusatzHtml(pr.produkt)}${artNrHtml(",
                    '<a href="/material/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}'
                    '${artNrHtml(p.article_no)}',
-                   '<strong>${nameHtml(p)}</strong>${zusatzHtml(p)} <span class="muted">${esc(p.article_no || "")} · '):
+                   '<strong>${nameHtml(p)}</strong>${zusatzHtml(p)} <span class="muted">${esc(p.article_no || "")} · ',
+                   # Hinweis „Schon vergeben“ (Produkt- und Meldedialog) – bis zur Prüfung vom 18.10.2026 der ganze
+                   # Name samt Zusatz im roten Link (esc(p.name)).
+                   'target="_blank" rel="noopener">${nameHtml(p)}</a>${zusatzHtml(p)}${p.article_no ? ` ('):
         assert stelle in js, stelle
+    assert 'rel="noopener">${esc(p.name)}</a>' not in js
+    # Im Rückruf-Kasten der Übersicht (hellroter Grund) ein Viertel zum Textgrau hin – sonst 4,48:1, unter WCAG AA.
+    assert ".mat-rr-kasten .mat-zusatz { color: color-mix(in srgb, var(--grau) 75%, var(--anthrazit)); }" in css
     for alt in ("esc(x.model", "esc(a.model", "esc(pr.produkt.name)", "const produktName = (p) =>"):
         assert alt not in js, alt
     # Vorschläge und Steckbrief: Name, dahinter der graue Zusatz, dann die Artikelnummer.

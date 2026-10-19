@@ -648,6 +648,10 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mat-rr-kasten { border: 1px solid var(--linie); border-left: 6px solid var(--rot); padding: 10px 14px;
   background: var(--co-danger-fl); }
 .mat-rr-kasten h2 { margin-top: 0; }
+/* Der graue Zusatz hinter dem Produkt (.mat-zusatz) käme auf dem hellroten Grund nur auf 4,48:1 – knapp unter 4,5:1
+   (WCAG AA) für normale Schrift. Hier ein Viertel zum Textgrau hin abgedunkelt: 4,86:1 und weiter grau wie die
+   Artikelnummer, nicht so dunkel wie der Text daneben. Kennt ein Browser color-mix() nicht, erbt er das Textgrau. */
+.mat-rr-kasten .mat-zusatz { color: color-mix(in srgb, var(--grau) 75%, var(--anthrazit)); }
 .mat-rr-liste { list-style: none; margin: 0; padding: 0; }
 .mat-rr-liste li { padding: 6px 0; border-bottom: 1px solid var(--linie); display: flex; flex-wrap: wrap; align-items: baseline;
   gap: 4px 10px; }
