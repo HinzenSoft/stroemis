@@ -2207,16 +2207,30 @@ Schemaversion 11, keine neuen Abhängigkeiten. Der Versand ist in der Vorgabe **
   hinaus:“ / „Morgen …“). Oben die Zeile zum letzten Lauf und, wenn der Versand aus oder gesperrt ist, „… so gingen sie
   hinaus, wenn sie an wären“. Je Empfänger ein aufklappbarer Eintrag „Name (Gliederung) – n Artikel, m Freigaben“ mit
   Betreff und Text wie verschickt. Darunter „Ohne Empfänger“ und „Ausgelassen: Erinnerungen aus in <Pfade mit Link>
-  (n Artikel); n DEMO-Artikel“. Keine Adressen. Nichts wird verschickt, vermerkt oder ins Journal geschrieben. Einziger
-  Knopf „Schließen“ (grau umrandet).
+  (n Artikel); n DEMO-Artikel; n DEMO-Freigaben“. Keine Adressen. Nichts wird verschickt, vermerkt oder ins Journal
+  geschrieben. Einziger Knopf „Schließen“ (grau umrandet).
+- **Probelauf mit DEMO-Bestand (nur Ansicht)** – Nachtrag vom 19.10.2026: Auf dev ist der ganze Bestand DEMO, und DEMO
+  wird absichtlich nie gemahnt – der Probelauf zeigte dort nichts. Hat er DEMO ausgelassen, steht im Dialog jetzt das
+  Kästchen „DEMO-Bestand einbeziehen (nur Ansicht)“; Anhaken lädt den Probelauf neu (`?demo=1`). Dann zählen
+  DEMO-Artikel, DEMO-Freigaben und DEMO-Konten als Empfänger wie echte (gleiche Stufen, Rechte, Gruppen, Rückfall).
+  Jede Mail mit DEMO-Empfänger oder DEMO-Einträgen trägt die gelbe Marke „DEMO“ und „DEMO – geht nie hinaus“, der
+  Betreff beginnt mit „[DEMO]“, der Text mit „DEMO – geht nie hinaus. Diese Mail zeigt nur der Probelauf mit
+  DEMO-Bestand.“, jede DEMO-Zeile endet auf „· DEMO“. Gelb darüber: „DEMO-Bestand einbezogen – nur zur Ansicht …“.
+  Ohne DEMO im Bestand (Produktion) erscheint das Kästchen nicht. Kein neuer Knopf. Der echte Lauf (Tageslauf,
+  `remind` ohne `--trocken`, Log, Journal, Laufstand) ist unverändert und lässt DEMO weiter aus – im Code
+  abgesichert: Nur Probelauf und `remind --trocken --demo` rufen `planen(…, demo=True)`; ein solcher Plan heißt
+  `nur_ansicht`, und `verschicken` und `vermerken` lehnen jeden Plan und jede Mail mit DEMO-Kennzeichen oder
+  DEMO-Adresse ab (`ValueError`), bevor etwas hinausgeht oder ein Kontoverweis entsteht.
 - **Verlauf der Freigaben** (Reiter „Freigaben“ → „Verlauf“): „„lesen“ von Eva Probe abgelaufen (bis 18.10.2026)“, als
   Handelnder „Tageslauf“. Im Ordnerjournal heißt die Aktion „Freigabe abgelaufen“ (nur für Verwalter, wie die übrigen
   Freigabe-Einträge).
 - **Kommandozeile** `flask material remind` (README, „Erinnerungsmails (Modul Material)“): `--trocken` zeigt die Mails
   des nächsten Laufs mit Adressen und schreibt nichts, auch bei ausgeschaltetem oder gesperrtem Versand;
   `--stichtag JJJJ-MM-TT` nur mit `--trocken`; ohne `--trocken` ein echter Lauf, `--erneut` schickt am selben Tag noch
-  einmal, was nicht im Log steht. Rückgabewert 0, 1 (Mail gescheitert oder Fehler) oder 2 (aus, gesperrt, kein
-  Mailserver, `--stichtag` ohne `--trocken`, unlesbares Datum).
+  einmal, was nicht im Log steht; `--trocken --demo` bezieht den DEMO-Bestand ein (nur Ansicht, Nachtrag vom
+  19.10.2026; `--trocken` nennt dazu unter „Ausgelassen“ DEMO-Artikel und DEMO-Freigaben getrennt und den Hinweis
+  „DEMO-Bestand ansehen: remind --trocken --demo“). Rückgabewert 0, 1 (Mail gescheitert oder Fehler) oder 2 (aus,
+  gesperrt, kein Mailserver, `--stichtag` oder `--demo` ohne `--trocken`, unlesbares Datum).
 
 ### Migration
 
@@ -2255,7 +2269,7 @@ Die Vorgaben des Auftrags, so gebaut (zur Bestätigung unter „Zu prüfen“):
 3. **Überfällig einmal je Fälligkeitsdatum**, nicht wiederholt – den Rest zeigt die Übersicht „Fällig“.
 4. **Mailstufen 30/7 Tage fest**, unabhängig von „bald fällig“; Lebensdauer-Vorlauf 90 Tage fest (Konzept).
 5. **Nur Artikel im Zustand frei mit Fälligkeit**; nie DEMO-Artikel, nie DEMO-Konten als Empfänger; Ordner mit
-   „Erinnerungsmails aus“ (vererbt) fallen weg.
+   „Erinnerungsmails aus“ (vererbt) fallen weg. (Der Probelauf zeigt DEMO auf Wunsch zur Ansicht – siehe „Neu“.)
 6. **Empfänger**: Verwalter des Heimatordners über die Freigaben, sonst Material-Verwaltung, Rückfall
    Plattform-Verwaltung – wie bei Rückruf und Meldung; nur aktive Konten mit Namen und Modulzugang, jeder nur mit dem,
    was er sieht. Zugeordnete Personen bekommen keine Mails. (Anders als Rückruf und Meldung zählen Material- und
@@ -2330,6 +2344,12 @@ Die neuen Routen stehen in der Tabelle „Schnittstelle“ unten (Zeilen mit „
   `freigabe_abgelaufen` („Freigabe abgelaufen“, nur für Verwalter), im Verlauf von `GET …/ordner/<id>/freigaben` mit
   `konto`, `recht`, `bis`, `wer: "Tageslauf"`.
 - Einstellung `MATERIAL_ERINNERUNGEN` (Gruppe „Material“, Art Schalter, Vorgabe aus) in `GET/PUT /api/admin/einstellungen`.
+- `GET /api/material/erinnerungen/probelauf?demo=1` (Nachtrag vom 19.10.2026): bezieht den DEMO-Bestand ein (nur
+  Ansicht; `demo` ja/nein, anderes → 400 „„DEMO-Bestand einbeziehen“ muss ja oder nein sein.“). Neu in jeder Antwort:
+  `demo` (einbezogen ja/nein), `mails[].demo` (Mail mit DEMO-Empfänger oder DEMO-Einträgen – geht nie hinaus) und
+  `ausgelassen.demo_freigaben` (ausgelassene DEMO-Freigaben neben `ausgelassen.demo`, den DEMO-Artikeln); mit `demo=1`
+  sind beide Zahlen 0. Rechte unverändert (Material- und Plattform-Verwaltung). `remind --trocken --demo` zeigt
+  dasselbe mit Adressen; `--demo` ohne `--trocken` → Exit 2. Der Laufstand (`/start`) bleibt, wie er war.
 
 ### Verfahrensverzeichnis (Ergänzung)
 
@@ -2363,6 +2383,13 @@ JavaScript-Fehler und ohne waagerechten Bildlauf:
   aus: nein → ja“), danach wieder zurückgesetzt. Verlauf „„lesen“ von Eva Probe abgelaufen (bis 18.10.2026)“ von
   „Tageslauf“ – geschrieben vom echten Thread des lokalen Servers (Pflegeteil bei ausgeschaltetem Versand).
 - **Mitglied** (nur lesen): keine Zeile, kein Hinweis, keine Kopfzeile im Ordner; `GET /erinnerungen/probelauf` 403.
+- **DEMO im Probelauf** (Nachtrag vom 19.10.2026): derselbe Bestand plus `scripts/material_demo.py --demo --konten`
+  (DEMO-Gliederungen, fünf DEMO-Konten), Server ohne `SMTP_HOST`, als Plattform- und als Material-Verwaltung bei
+  1280 und 360 px. Ohne Haken: „Ausgelassen: … 3 DEMO-Artikel; 1 DEMO-Freigabe“ und das Kästchen. Mit Haken: gelber
+  Hinweis, Mails an „DEMO-Material-Verwaltung“ und „DEMO-Materialwart A“ mit Marke „DEMO“, aufgeklappt „DEMO – geht
+  nie hinaus“, Betreff „[DEMO] …“, Zeilen „· DEMO“; die Mails an „katalog“ und „wart“ unverändert ohne Marke. Zurück
+  ohne Haken wie vorher; der Fokus bleibt am Kästchen; nur „Schließen“ (grau umrandet); kein waagerechter Bildlauf,
+  keine Fehler in der Konsole. Materialwart: keine Zeile, kein Probelauf.
 
 ### Prüfung vor Auslieferung
 
@@ -2374,7 +2401,15 @@ JavaScript-Fehler und ohne waagerechten Bildlauf:
   Doppelläufe mit zwei Threads, Zeitzone und Zeitumstellung, Rechteschnitt, Fehler je Teil, Ordnerschalter,
   Freigaben, Journal, Mailtext und Obergrenzen, Schalter und Sperre, Aufräumen, Kontolöschen, Routen, Thread-Start,
   Einstellung); echte Mails gehen in keinem Test hinaus (`send_mail` ersetzt). Die ganze Suite läuft grün, `st-js`,
-  `st-css` und `st-py` ohne neue Meldungen.
+  `st-css` und `st-py` ohne neue Meldungen. Nachtrag vom 19.10.2026: `test_demo_probelauf` (ohne `demo` nichts aus
+  DEMO, mit `demo=1` DEMO-Mails mit Kennzeichen und echte Mails unverändert, nichts geschrieben; `verschicken` und
+  `vermerken` lehnen einen Plan bzw. eine Mail mit DEMO ab, auch eine einzelne DEMO-Mail in einem echten Plan;
+  Tageslauf mahnt und vermerkt kein DEMO; `remind --demo` ohne `--trocken` → Exit 2, `--trocken --demo` mit Adressen).
+  Unabhängige Prüfung des Nachtrags (Proben gegen eine Testdatenbank und im Browser): Ohne `demo` sind Probelauf,
+  Mails, Log, Kontoverweise und Laufstand dieselben wie vor dem Nachtrag (bis auf die getrennte Zählung unter
+  „Ausgelassen“); `demo=1` als POST, PUT, PATCH oder DELETE → 405, andere Werte als ja/nein → 400, kein Weg zu
+  Versand, Log, Journal oder Laufstand (Thread, `remind`, `--erneut`). Ein Befund behoben: Wer den Dialog schloss,
+  während er nach dem Umschalten neu lud, bekam ihn wieder geöffnet – jetzt bleibt er zu (mit statischem Test).
 
 Nach dem Bau zwei unabhängige Prüfungen – Lauf (Mailtexte, Empfänger, Einmaligkeit mit Abbruch zwischen Annahme und
 Vermerk, Kommandozeile, mit Skripten gegen eine Testdatenbank) und Browser (Rundgang als Plattform-Verwaltung,
@@ -2428,18 +2463,24 @@ Code mit Test, die übrigen in der Dokumentation. Danach lief die ganze Suite gr
 15. **DEMO-Konten erkennt man an der Adresse `….invalid`** – neu; die Skripte vergeben nur solche.
 16. **Kommandozeile**: `--stichtag` nur mit `--trocken`, `--erneut` für einen zweiten Mailteil am selben Tag; Exit 1
     bei Fehlschlag oder Fehler, 2 bei aus, gesperrt, ohne Mailserver oder falschem Aufruf.
+17. **Sperre `MATERIAL_ERINNERUNGEN_SPERRE`** nur in der Umgebung; ohne Eintrag an, wenn `STROEMIS_NAME` auf `-dev`
+    endet. Einen Notschalter nur für den Thread gibt es nicht.
 18. **Einmaligkeit mit einer Lücke**: Endet ein Prozess genau zwischen der Annahme einer Mail und ihrem Vermerk (etwa
     beim Deploy-Neustart kurz nach 6 Uhr), kommt diese eine Mail am nächsten Morgen noch einmal. Umgekehrt (erst
     vermerken, dann senden) ginge bei einem Abbruch eine Mahnung verloren – das schien schlechter.
-17. **Sperre `MATERIAL_ERINNERUNGEN_SPERRE`** nur in der Umgebung; ohne Eintrag an, wenn `STROEMIS_NAME` auf `-dev`
-    endet. Einen Notschalter nur für den Thread gibt es nicht.
+19. **DEMO im Probelauf nur zur Ansicht** (Nachtrag): Das Kästchen erscheint nur, wenn DEMO ausgelassen wurde. Mit
+    Haken zählen auch DEMO-Konten als Empfänger und im Rückfall – eine DEMO-Material-Verwaltung bekommt dann auch die
+    echten Gruppen „kein Materialwart eingetragen“ (gekennzeichnet). Der echte Lauf bleibt ohne DEMO.
 
 **Nach dem Deploy**:
 
 - **Auf dev**: Material → Übersicht (als Material- oder Plattform-Verwaltung) zeigt ganz unten „Erinnerungsmails: in
-  dieser Umgebung gesperrt“. Der Probelauf zeigt für den DEMO-Bestand nichts – DEMO wird absichtlich nie gemahnt;
-  „Ausgelassen: n DEMO-Artikel“. Gelb oben „Der tägliche Lauf … ist noch nie gelaufen“ verschwindet nach der ersten
-  Runde (1–3 Minuten nach der ersten Anfrage, ab 6 Uhr).
+  dieser Umgebung gesperrt“. „Probelauf ansehen“: ohne Haken nichts aus DEMO – DEMO wird absichtlich nie gemahnt;
+  „Ausgelassen: n DEMO-Artikel; n DEMO-Freigaben“. Dann das Kästchen **„DEMO-Bestand einbeziehen (nur Ansicht)“**
+  anhaken: Die Mails an die DEMO-Materialwarte und die DEMO-Material-Verwaltung erscheinen mit Marke „DEMO“ –
+  aufklappen und Betreff und Text ansehen. Hinaus gehen sie nie (auf dev sperrt ohnehin die Sperre). Gelb oben „Der
+  tägliche Lauf … ist noch nie gelaufen“ verschwindet nach der ersten Runde (1–3 Minuten nach der ersten Anfrage, ab
+  6 Uhr).
 - **In der Produktion nach dem Merge**: erst den Probelauf ansehen (oder `remind --trocken`), dann unter Verwaltung →
   Einstellungen „Erinnerungsmails verschicken“ einschalten. Am nächsten Tag die Zeile auf der Übersicht ansehen
   (Uhrzeit, Zahl der Mails, Fehlschläge).
@@ -2754,7 +2795,7 @@ oder Plattform-Verwaltung).
 | `GET /api/admin/users/<id>/material-folgen` | Plattform-Verwaltung | was das Löschen des Kontos im Modul bewirkt: `freigaben`, `zuordnungen`, `entwuerfe`, `pruefungen` (Phase 2); dazu `letzter_materialwart` – die Gliederungen `[{id, name, pfad}]`, deren einziger Materialwart das Konto heute ist (Rückfrage beim Senken, Deaktivieren und Löschen; Entscheidung vom 18.10.2026) |
 | `GET /m/<token>` | Modulzugang | sichtbarer Artikel → Weiterleitung; sonst Seite „fremd“ ohne Artikeldaten mit dem Knopf für den Steckbrief (Phase 2) |
 | (Ordner, Artikel, Prüfung, Durchgang) | – | neu: `darf` (`lesen`, `grund`, `pruefen`, `verwalten`) für genau dieses Objekt; `artikel.zugeordnet` und `artikel.journal` nur mit Grundrecht (sonst `null`), Listenzeile `zugeordnet_name`; `durchgang` = `{id, titel, ordner, sichtbar}`; Baumknoten `nur_pfad` und `teilweise`; Durchgangszeilen ohne Leserecht `sichtbar: false`, ohne Kennung (Phase 2) |
-| `GET /api/material/erinnerungen/probelauf` | Material-Verwaltung (Plattform-Verwaltung eingeschlossen) | Probelauf der Erinnerungsmails für den nächsten Lauf (heute oder, wenn heute schon verschickt wurde, morgen): `stichtag`, `morgen`, `versand`, `gesperrt`, `smtp`, `letzter` (`tag`, `beginn`, `mails`, `fehlgeschlagen`, `fehlgeschlagen_an`, `fehler`), `mails` (`name`, `gliederung`, `betreff`, `text`, `artikel`, `freigaben` – keine Adressen), `ohne_empfaenger` (`ordner`, `artikel`, `freigaben`), `ausgelassen` (`ordner_aus`: `id`, `pfad`, `artikel`; `demo`), `fehlerhaft`; schreibt nichts (Phase 2 · 2) |
+| `GET /api/material/erinnerungen/probelauf` | Material-Verwaltung (Plattform-Verwaltung eingeschlossen) | Probelauf der Erinnerungsmails für den nächsten Lauf (heute oder, wenn heute schon verschickt wurde, morgen): `stichtag`, `morgen`, `versand`, `gesperrt`, `smtp`, `letzter` (`tag`, `beginn`, `mails`, `fehlgeschlagen`, `fehlgeschlagen_an`, `fehler`), `mails` (`name`, `gliederung`, `betreff`, `text`, `artikel`, `freigaben` – keine Adressen), `ohne_empfaenger` (`ordner`, `artikel`, `freigaben`), `ausgelassen` (`ordner_aus`: `id`, `pfad`, `artikel`; `demo`, `demo_freigaben`), `fehlerhaft`, `demo`; `mails` je mit `demo`; `?demo=1` bezieht den DEMO-Bestand ein – nur Ansicht, DEMO-Mails gekennzeichnet, gehen nie hinaus; schreibt nichts (Phase 2 · 2) |
 | `GET /api/material/ordner/<id>` | lesen | neu: `ordner.reminders_off` (eigener Wert) und `ordner.erinnerungen` = `{aus, eigen, geerbt_von: {id, pfad, sichtbar} \| null}`; Ordnerbaum mit `reminders_off` (Phase 2 · 2) |
 | `PUT /api/material/ordner/<id>` mit `reminders_off` (ja/nein) | Materialwart am Ordner | „Erinnerungsmails aus“ für Ordner und Unterordner; fehlt das Feld, bleibt der Wert; anderes als ja/nein → 400; mit Journal (Phase 2 · 2) |
-| `flask --app "app:create_app()" material remind [--trocken] [--stichtag JJJJ-MM-TT] [--erneut]` | Kommandozeile im Container | Erinnerungslauf: `--trocken` zeigt die Mails des nächsten Laufs mit Adressen und schreibt nichts (auch bei „aus“ oder gesperrt), `--stichtag` nur mit `--trocken`; ohne `--trocken` ein echter Lauf für heute, `--erneut` noch einmal am selben Tag (nur, was nicht im Log steht). Exit 0, 1 (Mail gescheitert, Fehler), 2 (aus, gesperrt, kein Mailserver, `--stichtag` ohne `--trocken`) (Phase 2 · 2) |
+| `flask --app "app:create_app()" material remind [--trocken [--demo]] [--stichtag JJJJ-MM-TT] [--erneut]` | Kommandozeile im Container | Erinnerungslauf: `--trocken` zeigt die Mails des nächsten Laufs mit Adressen und schreibt nichts (auch bei „aus“ oder gesperrt), `--stichtag` und `--demo` (DEMO-Bestand einbeziehen, nur Ansicht) nur mit `--trocken`; ohne `--trocken` ein echter Lauf für heute (nie DEMO), `--erneut` noch einmal am selben Tag (nur, was nicht im Log steht). Exit 0, 1 (Mail gescheitert, Fehler), 2 (aus, gesperrt, kein Mailserver, `--stichtag` oder `--demo` ohne `--trocken`, unlesbares Datum) (Phase 2 · 2) |

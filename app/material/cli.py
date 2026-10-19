@@ -86,8 +86,9 @@ def _tag_text(t):
     return t.strftime("%d.%m.%Y")
 
 
-def _trocken(stichtag):
-    """Probelauf auf der Kommandozeile: wie in der Übersicht, aber mit Adressen – wer bekäme welche Mail."""
+def _trocken(stichtag, demo=False):
+    """Probelauf auf der Kommandozeile: wie in der Übersicht, aber mit Adressen – wer bekäme welche Mail. demo: den
+    DEMO-Bestand einbeziehen (nur Ansicht, erinnerung.planen)."""
     if stichtag is None:
         stichtag, morgen = erinnerung.naechster_stichtag()
         click.echo(f"Probelauf für {'morgen' if morgen else 'heute'}, den {_tag_text(stichtag)}"
@@ -96,11 +97,14 @@ def _trocken(stichtag):
         click.echo(f"Probelauf für den {_tag_text(stichtag)}. Fälligkeiten und Freigabenende gelten für diesen Tag, "
                    f"die Rechte mit dem Stand von heute ({_tag_text(heute())}).")
     click.echo("Nichts wird verschickt oder vermerkt.")
+    if demo:
+        click.echo("DEMO-Bestand einbezogen – nur zur Ansicht. Mails mit DEMO gehen nie hinaus; der echte Lauf lässt "
+                   "DEMO weiter aus.")
     if not erinnerung.versand_an():
         grund = ("gesperrt (MATERIAL_ERINNERUNGEN_SPERRE)" if erinnerung.gesperrt()
                  else "ausgeschaltet (Verwaltung → Einstellungen)")
         click.echo(f"Hinweis: Erinnerungsmails sind {grund} – so gingen sie hinaus, wenn sie an wären.")
-    plan = erinnerung.planen(stichtag)
+    plan = erinnerung.planen(stichtag, demo=demo)
     if not plan.mails:
         click.echo("Es stünde nichts an.")
     for m in plan.mails:
@@ -108,7 +112,8 @@ def _trocken(stichtag):
         freigaben = len({e.kennung for e in m.eintraege if e.art == "freigabe"})
         click.echo("")
         click.echo("=" * 78)
-        click.echo(f"An: {m.name} <{m.adresse}> ({artikel} Artikel, {freigaben} {'Freigabe' if freigaben == 1 else 'Freigaben'})")
+        click.echo(f"An: {m.name} <{m.adresse}> ({artikel} Artikel, {freigaben} {'Freigabe' if freigaben == 1 else 'Freigaben'})"
+                   + ("  [DEMO – geht nie hinaus]" if m.demo else ""))
         click.echo(f"Betreff: {m.betreff}")
         click.echo("")
         click.echo(m.text.rstrip("\n"))
@@ -121,9 +126,13 @@ def _trocken(stichtag):
     aus = plan.ausgelassen
     teile = [f"Erinnerungen aus in {o['pfad']} ({o['artikel']} Artikel)" for o in aus["ordner_aus"]]
     if aus["demo"]:
-        teile.append(f"{aus['demo']} DEMO")
+        teile.append(f"{aus['demo']} DEMO-Artikel")
+    if aus.get("demo_freigaben"):
+        teile.append(f"{aus['demo_freigaben']} DEMO-{'Freigabe' if aus['demo_freigaben'] == 1 else 'Freigaben'}")
     if teile:
         click.echo("Ausgelassen: " + "; ".join(teile))
+    if not demo and (aus["demo"] or aus.get("demo_freigaben")):
+        click.echo("DEMO-Bestand ansehen: remind --trocken --demo (nur Ansicht).")
     if plan.fehlerhaft:
         click.echo(f"ACHTUNG {plan.fehlerhaft} Datenzeilen ließen sich nicht lesen – siehe Log.", err=True)
 
@@ -132,17 +141,22 @@ def _trocken(stichtag):
 @click.option("--trocken", is_flag=True, help="Nur zeigen, wer welche Mail bekäme – nichts verschicken oder vermerken.")
 @click.option("--stichtag", default=None, metavar="JJJJ-MM-TT", help="Mit --trocken: für diesen Tag rechnen.")
 @click.option("--erneut", is_flag=True, help="Den Mailteil heute noch einmal – nur, was noch nicht gemeldet ist.")
+@click.option("--demo", is_flag=True, help="Nur mit --trocken: den DEMO-Bestand einbeziehen (nur Ansicht, geht nie hinaus).")
 @with_appcontext
-def remind(trocken, stichtag, erneut):
+def remind(trocken, stichtag, erneut, demo):
     """Erinnerungsmails an die Materialwarte: der Tageslauf, wie ihn die Anwendung jeden Morgen ab 6 Uhr selbst
     anstößt (Pflege und Mails). Mehrfach aufgerufen mahnt er nie doppelt (zur einen Ausnahme siehe erinnerung.py).
     Exit 1, wenn eine Mail scheiterte oder ein Fehler auftrat; 2, wenn der Versand aus, gesperrt oder kein Mailserver
-    eingerichtet ist oder der Aufruf nicht stimmt (--stichtag ohne --trocken, unlesbares Datum)."""
+    eingerichtet ist oder der Aufruf nicht stimmt (--stichtag oder --demo ohne --trocken, unlesbares Datum). --demo
+    zeigt den DEMO-Bestand nur im Probelauf; ein echter Lauf lässt DEMO immer aus."""
     from .. import einstellungen
     einstellungen.anwenden()
     g.mat_akteur = erinnerung.AKTEUR
     if stichtag is not None and not trocken:
         click.echo("Ein echter Lauf gilt immer für heute.", err=True)
+        sys.exit(2)
+    if demo and not trocken:
+        click.echo("--demo nur mit --trocken: DEMO-Bestand wird nie gemahnt, nur angesehen.", err=True)
         sys.exit(2)
     if trocken:
         try:
@@ -150,7 +164,7 @@ def remind(trocken, stichtag, erneut):
         except Abgelehnt as exc:
             click.echo(str(exc), err=True)
             sys.exit(2)
-        _trocken(tag)
+        _trocken(tag, demo=demo)
         return
     if not current_app.config.get("MATERIAL_ERINNERUNGEN"):
         click.echo("Erinnerungsmails sind ausgeschaltet (Verwaltung → Einstellungen) – nur --trocken.", err=True)

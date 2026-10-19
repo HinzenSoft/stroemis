@@ -771,6 +771,135 @@ def test_demo():
     print("DEMO bestanden.")
 
 
+def test_demo_probelauf():
+    """Probelauf mit DEMO (nur Ansicht): Ohne demo zeigt er nichts aus DEMO, mit demo=1 DEMO-Artikel, -Freigaben und
+    -Konten wie echte, mit DEMO-Kennzeichen. Verschicken und Vermerken lehnen einen solchen Plan ab; Tageslauf und
+    Kommandozeile ohne --trocken lassen DEMO weiter aus."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, ids, gid, system, lager = aufbau(tmp)
+        adm = k["adm"]
+        url = "/api/material/erinnerungen/probelauf"
+        with uhr(um(T0)):
+            f = T0 + timedelta(days=5)
+            r = adm.post("/api/material/produkte", json={"category_id": ids["karabiner"], "manufacturer": "Testwerk",
+                                                         "model": "Demo Gamma", "material_kind": "metall_hardware",
+                                                         "interval_months": 12})
+            demo_produkt = r.json["produkt"]["id"]
+            sql(app, "UPDATE mat_product SET demo = 1 WHERE id = ?", (demo_produkt,))
+            dm1 = artikel(app, k["wart"], demo_produkt, lager, "DM-1", faellig=f)        # DEMO-Produkt, echter Ordner
+            gdemo, _ = gliederung(adm, "DEMO OG Beispiel", standard=False)
+            sql(app, "UPDATE mat_folder SET demo = 1 WHERE id = ?", (gdemo,))
+            dm2 = artikel(app, adm, ids["hms"], gdemo, "DM-2", faellig=f)                  # echtes Produkt, DEMO-Ordner
+            artikel(app, k["wart"], ids["hms"], lager, "DM-3", faellig=f)                  # echt
+            _, dw_id = konto(app, adm, "demo-wart@example.invalid")                        # DEMO-Materialwart
+            freigeben(adm, gdemo, dw_id, "verwalten")
+            _, ext_id = konto(app, adm, "extern@example.org")
+            demo_freigabe = freigeben(adm, gdemo, ext_id, "lesen", bis=T0 + timedelta(days=10))   # DEMO-Freigabe
+            gc, _ = gliederung(adm, "OG Ohnewart", standard=False)
+            artikel(app, adm, ids["hms"], gc, "DM-5", faellig=f)                           # echt, Rückfall
+
+            def tabellen():
+                return [zeilen(app, f"SELECT * FROM {t} ORDER BY rowid") for t in ("mat_reminder_log", "mat_audit",
+                                                                                   "mat_meta")] + \
+                    [zeilen(app, "SELECT id, mat_ref FROM users ORDER BY id")]
+            vorher = tabellen()
+
+            # Ohne demo: nichts aus DEMO, aber gezählt – das Kästchen der Oberfläche hängt daran.
+            p = k["katalog"].get(url).json
+            assert p["demo"] is False and all(m["demo"] is False for m in p["mails"]), p
+            alle = "\n".join(m["text"] for m in p["mails"])
+            assert "DM-1" not in alle and "DM-2" not in alle and "DEMO" not in alle and "DM-3" in alle, alle
+            assert p["ausgelassen"]["demo"] == 2 and p["ausgelassen"]["demo_freigaben"] == 1, p["ausgelassen"]
+            assert {m["name"] for m in p["mails"]} == {"wart", "katalog"}
+            assert k["katalog"].get(url + "?demo=0").json == p
+
+            # Mit demo=1: DEMO-Artikel, die DEMO-Freigabe und der DEMO-Materialwart als Empfänger – gekennzeichnet.
+            for c in (k["katalog"], adm):
+                assert c.get(url + "?demo=1").status_code == 200
+            for c in (k["wart"], k["nutzer"]):
+                assert c.get(url + "?demo=1").status_code == 403
+            assert k["katalog"].get(url + "?demo=vielleicht").status_code == 400
+            p = k["katalog"].get(url + "?demo=1").json
+            assert tabellen() == vorher                                         # schreibt nichts
+            assert p["demo"] is True and p["ausgelassen"]["demo"] == 0 and p["ausgelassen"]["demo_freigaben"] == 0, p
+            assert "@" not in json.dumps(p, ensure_ascii=False)
+            namen = {m["name"]: m for m in p["mails"]}
+            assert set(namen) == {"wart", "katalog", "demo-wart"}, namen
+            w, d, kv = namen["wart"], namen["demo-wart"], namen["katalog"]
+            assert w["demo"] is True and w["artikel"] == 2 and w["betreff"].startswith("[DEMO] "), w
+            assert w["text"].startswith("DEMO – geht nie hinaus."), w["text"]
+            zeile_dm1 = next(z for z in w["text"].splitlines() if "DM-1" in z)
+            zeile_dm3 = next(z for z in w["text"].splitlines() if "DM-3" in z)
+            assert zeile_dm1.endswith(" · DEMO") and "DEMO" not in zeile_dm3, (zeile_dm1, zeile_dm3)
+            assert d["demo"] is True and d["artikel"] == 1 and d["freigaben"] == 1, d
+            assert "DM-2" in d["text"] and "extern – lesen bis" in d["text"] and "DEMO OG Beispiel (1)" in d["text"], d
+            assert "kein Materialwart" not in d["text"]                         # DEMO-Wart zählt wie ein echter
+            assert kv["demo"] is False and "DEMO" not in kv["text"] + kv["betreff"] and "DM-5" in kv["text"], kv
+
+            # Strukturell: Ein Plan mit DEMO geht nie hinaus und wird nie vermerkt.
+            e = erinnerung_modul()
+            with post() as liste:
+                with app.app_context():
+                    plan = e.planen(T0, demo=True)
+                    assert plan.nur_ansicht and any(m.demo for m in plan.mails)
+                    for versuch in (lambda: e.verschicken(plan), lambda: e.vermerken(plan.mails[0])):
+                        try:
+                            versuch()
+                            raise AssertionError("Plan mit DEMO wurde angenommen")
+                        except ValueError as exc:
+                            assert "nur zur Ansicht" in str(exc)
+                    # Auch eine einzelne DEMO-Mail in einem sonst echten Plan hält verschicken an.
+                    echt = e.planen(T0)
+                    assert not echt.nur_ansicht and not any(m.demo for m in echt.mails)
+                    echt.mails.append(next(m for m in plan.mails if m.demo))
+                    try:
+                        e.verschicken(echt)
+                        raise AssertionError("DEMO-Mail wurde angenommen")
+                    except ValueError:
+                        pass
+                    assert e.planen(T0, demo=1).nur_ansicht is False       # nur ein echtes True
+                assert liste == []
+            assert tabellen() == vorher
+
+            # Kommandozeile: --demo nur mit --trocken; --trocken --demo zeigt dasselbe mit Adressen.
+            code, text = cli(app, "--demo")
+            assert code == 2 and "--demo nur mit --trocken" in text, text
+            with versand(app):
+                code, text = cli(app, "--demo", "--erneut")
+                assert code == 2, text
+            code, text = cli(app, "--trocken")
+            assert code == 0 and "DM-2" not in text and "demo-wart@" not in text, text
+            assert "Ausgelassen: 2 DEMO-Artikel; 1 DEMO-Freigabe" in text and "remind --trocken --demo" in text, text
+            code, text = cli(app, "--trocken", "--demo")
+            assert code == 0 and "DEMO-Bestand einbezogen" in text, text
+            assert "An: demo-wart <demo-wart@example.invalid>" in text and "[DEMO – geht nie hinaus]" in text, text
+            assert "DM-1" in text and "DM-2" in text and "Ausgelassen" not in text, text
+            assert tabellen() == vorher
+
+            # Der echte Lauf lässt DEMO weiter aus: keine DEMO-Zeile in Mail, Log und Stand.
+            with versand(app), post() as liste:
+                erg = lauf(app)
+            assert erg["mails"]["mails"] == 2 and erg["mails"]["ausgelassen"]["demo"] == 2, erg
+            assert {m[0] for m in liste} == {"wart@example.org", "katalog@example.org"}, [m[0] for m in liste]
+            text = "\n".join(m[2] for m in liste)
+            assert "DM-1" not in text and "DM-2" not in text and "DEMO" not in text, text
+            gemahnt = log(app)
+            assert gemahnt and not {r["item_id"] for r in gemahnt} & {dm1["id"], dm2["id"]}, gemahnt
+            assert demo_freigabe not in {r["grant_id"] for r in gemahnt}
+            assert ref(app, dw_id) is None                                      # kein Kontoverweis für DEMO
+    # Oberfläche (statisch): Kästchen nur bei ausgelassenem oder einbezogenem DEMO, kein neuer Knopf; Umschalten lädt
+    # neu, öffnet den Dialog aber nicht wieder, wenn er inzwischen geschlossen wurde (Prüfung vom 19.10.2026).
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
+    anfang = js.index("async function probelaufDialog(")
+    block = js[anfang:js.index("\n  }\n", anfang)]
+    assert "const demoFeld = p.demo || demoAus.length ?" in block and "DEMO-Bestand einbeziehen (nur Ansicht)" in block
+    assert '${demo ? "?demo=1" : ""}' in block and "probelaufDialog(neu, feld)" in block
+    assert "if (kaestchen && !(kaestchen.isConnected && $(\"#dlg\").open)) return false;" in block
+    assert block.count('class="btn') == 1 and 'class="btn secondary" data-close' in block, block
+    print("DEMO im Probelauf bestanden.")
+
+
 # --- 9. Schalter je Ordner ---------------------------------------------------------------------------------------
 
 def test_ordner_aus():
@@ -1254,7 +1383,8 @@ def test_routen():
             assert namen["wart"]["artikel"] == 1 and "RT-1" in namen["wart"]["text"] and namen["wart"]["gliederung"] == ""
             assert "kein Materialwart eingetragen" in namen["katalog"]["text"]
             assert p["ausgelassen"] == {"ordner_aus": [{"id": aus, "pfad": "OG Musterstadt / Fahrzeug 1", "artikel": 1}],
-                                        "demo": 0}, p["ausgelassen"]
+                                        "demo": 0, "demo_freigaben": 0}, p["ausgelassen"]
+            assert p["demo"] is False
             assert "@" not in json.dumps(p, ensure_ascii=False)
             # Nach dem Mailteil: der Probelauf zeigt morgen – mit dem heutigen Log und der Zeile zum letzten Lauf.
             with versand(app), post():
@@ -1439,6 +1569,7 @@ if __name__ == "__main__":
     test_rechteschnitt()
     test_gescheitert()
     test_demo()
+    test_demo_probelauf()
     test_ordner_aus()
     test_freigabe_ablauf()
     test_freigabe_abgelaufen_journal()

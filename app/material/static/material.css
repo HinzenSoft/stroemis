@@ -1227,6 +1227,8 @@ table.list.mat-runde tr.mat-fremd td { color: var(--grau); }
 .mat-erinnerungen { margin-top: 24px; overflow-wrap: anywhere; }
 @media (min-width: 641px) { dialog:where(.mat-probelauf) { width: min(820px, 96vw); } }
 .mat-probemail { border-top: 1px solid var(--linie); }
+.mat-probelauf-demo { margin: 0 0 10px; }
+.mat-probemail > summary .mat-demo { margin-left: 8px; }
 .mat-probemail:last-of-type { border-bottom: 1px solid var(--linie); }
 .mat-probemail > summary { cursor: pointer; padding: 8px 0; overflow-wrap: anywhere; }
 @media (pointer: coarse) { .mat-probemail > summary { min-height: 44px; box-sizing: border-box; } }

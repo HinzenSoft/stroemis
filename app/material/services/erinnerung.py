@@ -36,6 +36,13 @@ Prozess genau zwischen der Annahme einer Mail und ihrem Vermerk (etwa beim Neust
 ein Daemon), fehlt die Log-Zeile, und diese eine Mail kommt am nächsten Morgen noch einmal. Erst senden, dann vermerken
 lässt diese Lücke; umgekehrt ginge bei einem Abbruch eine Mahnung verloren.
 
+Probelauf mit DEMO (nur Ansicht): Auf dev ist der ganze Bestand DEMO, der Probelauf zeigte dort nichts. planen(…,
+demo=True) – erreichbar nur über probelauf(demo=True) und „remind --trocken --demo“ – nimmt DEMO-Artikel, DEMO-Freigaben
+und DEMO-Konten als Empfänger dazu, nach denselben Regeln. Solche Einträge, Mails und der ganze Plan tragen ein
+Kennzeichen (Eintrag.demo, Mail.demo, Plan.nur_ansicht); Betreff und Text sagen „DEMO – geht nie hinaus“. verschicken
+und vermerken lehnen jeden Plan und jede Mail mit Kennzeichen oder DEMO-Adresse ab, und der Tageslauf ruft planen nie
+mit demo – so führt kein Weg von der Ansicht zu Versand, Log oder Journal.
+
 Das Erinnerungslog ist kein Prüfnachweis: Es dient nur dazu, nicht doppelt zu mahnen."""
 import json
 import os
@@ -84,6 +91,7 @@ class Eintrag:            # eine Erinnerung für eine Mail
     daten: dict           # was die Zeile zeigt (Nummern, Produkt, Name, Recht, offene Prüfungen, neu)
     rueckfall: str = ""   # "" | "material" | "plattform": Empfänger nur, weil am Ordner niemand verwaltet;
                           # "material_inhaber" | "plattform_inhaber": niemand außer dem Inhaber der Freigabe
+    demo: bool = False    # DEMO-Artikel bzw. -Freigabe – nur im Probelauf mit DEMO (planen(…, demo=True))
 
     @property
     def schluessel(self):
@@ -99,6 +107,7 @@ class Mail:
     betreff: str = ""
     text: str = ""
     je_konto: dict = field(default_factory=dict)     # Kennung des Kontos → seine Einträge (fürs Log)
+    demo: bool = False    # DEMO-Empfänger oder DEMO-Einträge – nur zur Ansicht, geht nie hinaus
 
 
 @dataclass
@@ -106,9 +115,11 @@ class Plan:
     stichtag: date
     mails: list           # [Mail]
     ohne_empfaenger: list # [Eintrag] – niemand Zulässiges sieht sie
-    ausgelassen: dict     # {"ordner_aus": [{"id", "pfad", "artikel"}], "demo": n} – der Stand speichert nur Zahlen
+    ausgelassen: dict     # {"ordner_aus": [{"id", "pfad", "artikel"}], "demo": n Artikel, "demo_freigaben": n} – der
+                          # Stand speichert nur Zahlen; mit DEMO einbezogen sind beide DEMO-Zahlen 0
     fehlerhaft: int = 0   # Datenzeilen, die beim Planen übersprungen wurden
     pfade: dict = field(default_factory=dict)        # Ordnerkennung → Pfadtext (aus dem einmal geladenen Baum)
+    nur_ansicht: bool = False                        # mit DEMO geplant – verschicken lehnt ab
 
 
 # --- Schalter --------------------------------------------------------------------------------------------------
@@ -227,10 +238,11 @@ def _zweig(fid, baum):
     return gesehen
 
 
-def artikel_kandidaten(stichtag):
+def artikel_kandidaten(stichtag, demo=False):
     """Auswahl der Artikel (frei, mit Fälligkeit in 30 Tagen oder Lebensende in 90 Tagen): je Artikel bis zu zwei
     Einträge – Fälligkeit und Lebensende. Dazu die Zahlen des Ausgelassenen: {"ordner_aus": {Ordner: Zahl}, "demo": n,
-    "fehlerhaft": n}. Eine Zeile, die sich nicht lesen lässt, wird geloggt und übersprungen."""
+    "fehlerhaft": n}. Eine Zeile, die sich nicht lesen lässt, wird geloggt und übersprungen. demo (nur Probelauf): auch
+    DEMO-Artikel, als Eintrag mit demo=True – sie zählen dann nicht als ausgelassen."""
     rows = db.query(
         "WITH RECURSIVE aus(id) AS (SELECT id FROM mat_folder WHERE reminders_off = 1 "
         "UNION SELECT f.id FROM mat_folder f JOIN aus a ON f.parent_id = a.id) "
@@ -246,7 +258,7 @@ def artikel_kandidaten(stichtag):
     eintraege, info = [], {"ordner_aus": {}, "demo": 0, "fehlerhaft": 0}
     bis_90 = (stichtag + timedelta(days=LEBENSDAUER_VORLAUF)).isoformat()
     for r in rows:
-        if r["ist_demo"]:
+        if r["ist_demo"] and not demo:
             info["demo"] += 1
             continue
         if r["ist_aus"]:
@@ -260,9 +272,11 @@ def artikel_kandidaten(stichtag):
             if r["next_due_on"]:
                 s = stufe(r["next_due_on"], stichtag)
                 if s:
-                    neu.append(Eintrag("artikel", r["id"], s, r["next_due_on"], r["folder_id"], daten))
+                    neu.append(Eintrag("artikel", r["id"], s, r["next_due_on"], r["folder_id"], daten,
+                                       demo=bool(r["ist_demo"])))
             if r["retire_by"] and r["retire_by"] <= bis_90 and _tag(r["retire_by"]):
-                neu.append(Eintrag("artikel", r["id"], "lebensdauer", r["retire_by"], r["folder_id"], daten))
+                neu.append(Eintrag("artikel", r["id"], "lebensdauer", r["retire_by"], r["folder_id"], daten,
+                                   demo=bool(r["ist_demo"])))
         except (ValueError, TypeError) as exc:
             current_app.logger.error("Erinnerungen: Artikel %s übersprungen – %s", r["id"], exc)
             info["fehlerhaft"] += 1
@@ -280,26 +294,29 @@ def _konten(ids):
                                          "AND active = 1 AND status = 'active'", (json.dumps(ids),))}
 
 
-def freigaben_kandidaten(stichtag, baum=None):
+def freigaben_kandidaten(stichtag, baum=None, demo=False):
     """Auswahl der befristeten Freigaben, die in höchstens 30 Tagen enden und heute wirken (Konto aktiv, mit Namen und
     Zugang; prüfen nur qualifiziert) – nie an DEMO-Ordnern, nie von DEMO-Konten. Je Freigabe ein Eintrag
     freigabe_ablauf mit den offenen Prüfungen des Kontos im Zweig des Ankers – bei jeder Art: Mit einem befristeten
     lesen oder verwalten endet auch eine dauerhafte Prüffreigabe, die daran hängt (L1). Liefert
-    (Einträge, {"fehlerhaft": n})."""
+    (Einträge, {"fehlerhaft": n, "demo": n}). demo (nur Probelauf): DEMO-Freigaben auch, als Eintrag mit demo=True."""
     rows = db.query(
-        "SELECT g.* FROM mat_folder_grant g JOIN users u ON u.id = g.user_id "
+        f"SELECT g.*, (lower(u.email) LIKE '%{DEMO_POSTFACH}' OR {bestand.demo_ordner_sql('g.folder_id')}) AS ist_demo "
+        "FROM mat_folder_grant g JOIN users u ON u.id = g.user_id "
         "WHERE g.valid_until IS NOT NULL AND g.valid_until >= :heute AND g.valid_until <= :bis "
         "AND u.active = 1 AND u.status = 'active' AND trim(u.name) <> '' "
-        f"AND lower(u.email) NOT LIKE '%{DEMO_POSTFACH}' AND NOT {bestand.demo_ordner_sql('g.folder_id')} "
         "ORDER BY g.valid_until, g.id",
         {"heute": stichtag.isoformat(), "bis": (stichtag + timedelta(days=FREIGABE_VORLAUF)).isoformat()})
     konten = _konten(r["user_id"] for r in rows)
     baum = _ordnerbaum() if baum is None else baum
-    eintraege, info, offen_je_konto = [], {"fehlerhaft": 0}, {}
+    eintraege, info, offen_je_konto = [], {"fehlerhaft": 0, "demo": 0}, {}
     for r in rows:
         u = konten.get(r["user_id"])
         if not u or not rechte.zugang(u) or (r["permission"] == "pruefen" and not rechte.qualifiziert(u)):
             continue                                 # wirkt ohnehin nicht
+        if r["ist_demo"] and not demo:
+            info["demo"] += 1
+            continue
         try:
             ende = _tag(r["valid_until"])
             daten = {"name": (u["name"] or "").strip(), "recht": r["permission"], "bis": r["valid_until"],
@@ -320,7 +337,8 @@ def freigaben_kandidaten(stichtag, baum=None):
             current_app.logger.error("Erinnerungen: Freigabe %s übersprungen – %s", r["id"], exc)
             info["fehlerhaft"] += 1
             continue
-        eintraege.append(Eintrag("freigabe", r["id"], "freigabe_ablauf", r["valid_until"], r["folder_id"], daten))
+        eintraege.append(Eintrag("freigabe", r["id"], "freigabe_ablauf", r["valid_until"], r["folder_id"], daten,
+                                 demo=bool(r["ist_demo"])))
     return eintraege, info
 
 
@@ -342,10 +360,16 @@ def ordnerverwalter(fid, ohne=None, stichtag=None):
     return [r["id"] for r in rows]
 
 
-def _zulaessig(u):
-    """Darf dieses Konto eine Erinnerung bekommen? Adresse (keine DEMO-Adresse) und Modulzugang (Stufe und Name)."""
+def demo_adresse(adr):
+    """Ist das die Adresse eines DEMO-Kontos (…@….invalid)?"""
+    return (adr or "").strip().casefold().endswith(DEMO_POSTFACH)
+
+
+def _zulaessig(u, demo=False):
+    """Darf dieses Konto eine Erinnerung bekommen? Adresse (keine DEMO-Adresse – außer im Probelauf mit DEMO) und
+    Modulzugang (Stufe und Name)."""
     adr = (u.get("email") or "").strip()
-    return bool(adr) and not adr.casefold().endswith(DEMO_POSTFACH) and rechte.zugang(u)
+    return bool(adr) and (demo or not demo_adresse(adr)) and rechte.zugang(u)
 
 
 def _verwaltung(zwischen, ohne=None):
@@ -357,7 +381,8 @@ def _verwaltung(zwischen, ohne=None):
                       "AND recht_material >= 2 AND recht_verwaltung < 2 ORDER BY name COLLATE NOCASE, id")
         pv = db.query("SELECT * FROM users WHERE active = 1 AND status = 'active' AND recht_verwaltung >= 2 "
                       "ORDER BY name COLLATE NOCASE, id")
-        zwischen["verwaltung"] = ([u for u in mv if _zulaessig(u)], [u for u in pv if _zulaessig(u)])
+        demo = zwischen.get("demo", False)
+        zwischen["verwaltung"] = ([u for u in mv if _zulaessig(u, demo)], [u for u in pv if _zulaessig(u, demo)])
     mv, pv = zwischen["verwaltung"]
     mv = [u for u in mv if u["id"] != ohne]
     if mv:
@@ -368,14 +393,14 @@ def _verwaltung(zwischen, ohne=None):
 def empfaenger(eintrag, zwischen):
     """Wer den Eintrag bekommt – vor dem Rechteschnitt – und die Art des Rückfalls ("" = Verwalter des Ordners; mit
     „_inhaber“, wenn bei einer Freigabe nur ihr Inhaber selbst dort verwaltet). zwischen hält je Plan die Verwalter je
-    Ordner, die Verwaltung und den Stichtag."""
+    Ordner, die Verwaltung, den Stichtag und ob DEMO-Konten mitzählen (demo, nur Probelauf)."""
     ohne = eintrag.daten.get("inhaber") if eintrag.art == "freigabe" else None
     schluessel = (eintrag.ordner_id, ohne)
     verwalter = zwischen.setdefault("verwalter", {})
     if schluessel not in verwalter:
         ids = ordnerverwalter(eintrag.ordner_id, ohne=ohne, stichtag=zwischen.get("stichtag"))
         konten = _konten(ids)
-        verwalter[schluessel] = [konten[i] for i in ids if i in konten and _zulaessig(konten[i])]
+        verwalter[schluessel] = [konten[i] for i in ids if i in konten and _zulaessig(konten[i], zwischen.get("demo"))]
     if verwalter[schluessel]:
         return verwalter[schluessel], ""
     konten, stelle = _verwaltung(zwischen, ohne)
@@ -417,16 +442,19 @@ def _offen(e, ref, log):
     return (e.art, e.kennung, e.stufe, e.faellig_am, ref) not in log
 
 
-def planen(stichtag):
+def planen(stichtag, demo=False):
     """Wer heute (am Stichtag) welche Mail bekäme: Kandidaten, Empfänger, Rechteschnitt, Abgleich mit dem Log, Texte.
-    Schreibt nichts – auch keinen Kontoverweis. Fehlerhafte Datenzeilen werden übersprungen und gezählt."""
+    Schreibt nichts – auch keinen Kontoverweis. Fehlerhafte Datenzeilen werden übersprungen und gezählt.
+    demo: DEMO-Artikel, DEMO-Freigaben und DEMO-Konten zählen wie echte – NUR für die Ansicht (probelauf, remind
+    --trocken --demo). Der Plan heißt dann nur_ansicht, Mails mit DEMO tragen demo; verschicken lehnt beides ab."""
     rechte.sicht_verwerfen()                         # Freigaben können sich seit dem letzten Plan geändert haben
+    demo = demo is True                              # nur ein echtes True schaltet DEMO ein
     baum = _ordnerbaum()
-    artikel, info_a = artikel_kandidaten(stichtag)
-    freigaben, info_f = freigaben_kandidaten(stichtag, baum)
+    artikel, info_a = artikel_kandidaten(stichtag, demo=demo)
+    freigaben, info_f = freigaben_kandidaten(stichtag, baum, demo=demo)
     eintraege = artikel + freigaben
     log = _log(eintraege)
-    zwischen = {"stichtag": stichtag}
+    zwischen = {"stichtag": stichtag, "demo": demo}
     post, ohne = {}, []                              # Adresse (casefold) → Mail
     for e in eintraege:
         konten, e.rueckfall = empfaenger(e, zwischen)
@@ -451,11 +479,13 @@ def planen(stichtag):
         if not erreicht:
             ohne.append(e)
     mails = sorted(post.values(), key=lambda m: (m.name.casefold(), m.adresse.casefold()))
-    plan = Plan(stichtag=stichtag, mails=mails, ohne_empfaenger=ohne,
+    for m in mails:
+        m.demo = _mit_demo(m)
+    plan = Plan(stichtag=stichtag, mails=mails, ohne_empfaenger=ohne, nur_ansicht=demo,
                 ausgelassen={"ordner_aus": [{"id": fid, "pfad": _pfad(fid, baum), "artikel": n}
                                             for fid, n in sorted(info_a["ordner_aus"].items(),
                                                                  key=lambda x: _pfad(x[0], baum).casefold())],
-                             "demo": info_a["demo"]},
+                             "demo": info_a["demo"], "demo_freigaben": info_f["demo"]},
                 fehlerhaft=info_a["fehlerhaft"] + info_f["fehlerhaft"],
                 pfade={fid: _pfad(fid, baum) for fid in {e.ordner_id for e in eintraege}})
     for m in mails:
@@ -573,10 +603,12 @@ def mailtext(mail, stichtag, pfade=None):
             text += f" – {RUECKFALL_GRUND[grund]}, darum an die {RUECKFALL_TEXT[stelle]}"
         return text, rf
 
-    teile = [f"Hallo {mail.name},", "",
-             f"hier steht nur, was seit der letzten Erinnerung neu fällig ist oder eine neue Stufe erreicht hat "
-             f"(Stand {stichtag.strftime('%d.%m.%Y')}) – was schon gemeldet wurde, kommt nicht noch einmal. "
-             f"Alles Fällige: {basis}/material/pruefungen"]
+    demo = _mit_demo(mail)
+    teile = ["DEMO – geht nie hinaus. Diese Mail zeigt nur der Probelauf mit DEMO-Bestand.", ""] if demo else []
+    teile += [f"Hallo {mail.name},", "",
+              f"hier steht nur, was seit der letzten Erinnerung neu fällig ist oder eine neue Stufe erreicht hat "
+              f"(Stand {stichtag.strftime('%d.%m.%Y')}) – was schon gemeldet wurde, kommt nicht noch einmal. "
+              f"Alles Fällige: {basis}/material/pruefungen"]
     if zeilen_a:
         teile += ["", "ARTIKEL"]
         for fid, liste in gruppen(zeilen_a):
@@ -590,6 +622,8 @@ def mailtext(mail, stichtag, pfade=None):
                 angaben = " · ".join(_angabe(e, stichtag) for e in z["eintraege"])
                 if d.get("neu"):
                     angaben += " · Eingangsprüfung offen"
+                if any(e.demo for e in z["eintraege"]):
+                    angaben += " · DEMO"
                 teile.append(f"  {d['inventory_no']}  {d['produkt']}, SN {d['serial_no']}   {angaben}")
             rest = sum(1 for k, _ in liste if k not in zeigen_a)
             if rest:
@@ -611,6 +645,8 @@ def mailtext(mail, stichtag, pfade=None):
                         f"({_in_tagen(d['tage'])})"
                 if d.get("offen"):
                     zeile += f" · {d['offen']} offene Prüfung{'' if d['offen'] == 1 else 'en'}"
+                if z["eintraege"][0].demo:
+                    zeile += " · DEMO"
                 teile.append(zeile)
             rest = sum(1 for k, _ in liste if k not in zeigen_f)
             if rest:
@@ -633,15 +669,28 @@ def mailtext(mail, stichtag, pfade=None):
         saetze.append("Ablaufende Freigaben melden sich immer – auch in Ordnern mit „Erinnerungsmails aus“.")
     fuss = " ".join(saetze)
     teile += ["", fuss]
-    return _betreff(mail.eintraege, stichtag), "\n".join(teile) + "\n"
+    betreff = _betreff(mail.eintraege, stichtag)
+    return (f"[DEMO] {betreff}" if demo else betreff), "\n".join(teile) + "\n"
 
 
 # --- Versand und Log ---------------------------------------------------------------------------------------------
 
+NUR_ANSICHT = "Ein Plan mit DEMO-Bestand ist nur zur Ansicht – er wird nie verschickt oder vermerkt."
+
+
+def _mit_demo(mail):
+    """Hat die Mail etwas mit DEMO zu tun – Kennzeichen, ein DEMO-Eintrag, eine DEMO-Adresse oder ein DEMO-Konto?"""
+    return bool(mail.demo or any(e.demo for e in mail.eintraege) or demo_adresse(mail.adresse)
+                or any(demo_adresse(u.get("email")) for u in mail.konten))
+
+
 def vermerken(mail):
     """Die Log-Zeilen einer angenommenen Mail – je Konto seine Einträge, in einer kurzen Transaktion. INSERT OR IGNORE
     hilft gegen UNIQUE (ein zweiter Lauf), WHERE EXISTS gegen einen Artikel oder eine Freigabe, die während des Versands
-    gelöscht wurde (sonst „FOREIGN KEY constraint failed“ – dort gibt es ohnehin nichts mehr zu mahnen)."""
+    gelöscht wurde (sonst „FOREIGN KEY constraint failed“ – dort gibt es ohnehin nichts mehr zu mahnen). Eine Mail mit
+    DEMO (nur Probelauf) wird nie vermerkt (ValueError)."""
+    if _mit_demo(mail):
+        raise ValueError(NUR_ANSICHT)
     jetzt = _utc()
     with db.transaction():
         for u in mail.konten:
@@ -663,7 +712,10 @@ def verschicken(plan):
     """Die Mails des Plans einzeln verschicken, angenommene vermerken. Vorher bekommt jedes Konto des Plans seinen
     Kontoverweis (journal.konto_ref) – Konten nach Schritt 8 haben sonst keinen, und ein Fehlschlag soll im Stand mit
     Namen stehen. Jede Mail in einem eigenen try: Eine Ausnahme beim Senden zählt als Fehlschlag, eine beim Vermerken
-    als vermerk_fehler; die nächste Mail geht trotzdem hinaus. Nach jeder Mail schlägt der Herzschlag."""
+    als vermerk_fehler; die nächste Mail geht trotzdem hinaus. Nach jeder Mail schlägt der Herzschlag. Einen Plan zur
+    Ansicht (mit DEMO) lehnt es vorher ganz ab (ValueError) – nichts geht hinaus, kein Kontoverweis entsteht."""
+    if plan.nur_ansicht or any(_mit_demo(m) for m in plan.mails):
+        raise ValueError(NUR_ANSICHT)
     with db.transaction():
         for m in plan.mails:
             for u in m.konten:
@@ -888,24 +940,26 @@ def _ohne_empfaenger(plan):
                    for z in gruppen.values()), key=lambda z: z["ordner"].casefold())
 
 
-def probelauf(stichtag=None):
+def probelauf(stichtag=None, demo=False):
     """planen() für die Oberfläche: wer bei welchem Lauf welche Mail bekäme – mit Namen und Gliederung statt Adresse,
     Betreff und Text, ohne Empfänger und Ausgelassenes mit Pfaden. Ohne Stichtag der nächste echte Lauf
-    (naechster_stichtag). Schreibt nichts: kein Log, kein Journal, keine Meta-Daten, keinen Kontoverweis."""
+    (naechster_stichtag). Schreibt nichts: kein Log, kein Journal, keine Meta-Daten, keinen Kontoverweis. demo: den
+    DEMO-Bestand einbeziehen (nur Ansicht, siehe planen) – Mails mit DEMO tragen demo: true."""
     heute = dienste.heute()
     if stichtag is None:
         stichtag, morgen = naechster_stichtag()
     else:
         morgen = stichtag == heute + timedelta(days=1)
-    plan = planen(stichtag)
+    plan = planen(stichtag, demo=demo)
     letzter = _letzter_mit_namen(_stand_lesen().get("letzter"))
-    return {"stichtag": stichtag.isoformat(), "morgen": morgen,
+    return {"stichtag": stichtag.isoformat(), "morgen": morgen, "demo": plan.nur_ansicht,
             "versand": bool(current_app.config.get("MATERIAL_ERINNERUNGEN")), "gesperrt": gesperrt(), "smtp": smtp_da(),
             "letzter": {k: letzter.get(k) for k in ("tag", "beginn", "mails", "fehlgeschlagen", "fehlgeschlagen_an",
                                                     "fehler")} if letzter else None,
             "mails": [{"name": m.name, "gliederung": (m.konten[0].get("gliederung") or "").strip(), "betreff": m.betreff,
                        "text": m.text, "artikel": len({e.kennung for e in m.eintraege if e.art == "artikel"}),
-                       "freigaben": len({e.kennung for e in m.eintraege if e.art == "freigabe"})} for m in plan.mails],
+                       "freigaben": len({e.kennung for e in m.eintraege if e.art == "freigabe"}), "demo": m.demo}
+                      for m in plan.mails],
             "ohne_empfaenger": _ohne_empfaenger(plan), "ausgelassen": plan.ausgelassen, "fehlerhaft": plan.fehlerhaft}
 
 

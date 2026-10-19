@@ -973,34 +973,62 @@
   }
 
   /* Probelauf: wer beim nächsten echten Lauf welche Mail bekäme – heute, oder morgen, wenn heute schon verschickt wurde.
-     Betreff und Text kommen fertig vom Server; nichts wird verschickt oder vermerkt. */
-  async function probelaufDialog() {
+     Betreff und Text kommen fertig vom Server; nichts wird verschickt oder vermerkt. Das Kästchen „DEMO-Bestand
+     einbeziehen (nur Ansicht)“ erscheint nur, wenn DEMO ausgelassen wurde oder schon einbezogen ist (auf dev ist alles
+     DEMO); Umschalten lädt den Dialog neu. Mails mit DEMO tragen die Marke – sie gehen nie hinaus. */
+  const DEMO_NIE = "DEMO – geht nie hinaus";
+  async function probelaufDialog(demo, kaestchen) {
     let p;
-    try { p = await api(`${API}/erinnerungen/probelauf`); } catch (e) { toast(e.message, true); return; }
+    try { p = await api(`${API}/erinnerungen/probelauf${demo ? "?demo=1" : ""}`); } catch (e) { toast(e.message, true); return false; }
+    // Beim Umschalten: Wurde der Dialog inzwischen geschlossen (oder steht ein anderer darin), nicht wieder öffnen.
+    if (kaestchen && !(kaestchen.isConnected && $("#dlg").open)) return false;
     const wann = p.stichtag === tagBerlin() ? "Heute" : p.morgen ? "Morgen" : `Am ${fmtTag(p.stichtag)}`;
     const l = p.letzter;
     const zahlText = (a, f) => [a ? plural(a, "Artikel", "Artikel") : "", f ? plural(f, "Freigabe", "Freigaben") : ""].filter(Boolean).join(", ");
     const mails = p.mails.map((m) => `<details class="mat-probemail"><summary>${esc(m.name)}${m.gliederung ? ` (${esc(m.gliederung)})` : ""}
-        – ${plural(m.artikel, "Artikel", "Artikel")}, ${plural(m.freigaben, "Freigabe", "Freigaben")}</summary>
+        – ${plural(m.artikel, "Artikel", "Artikel")}, ${plural(m.freigaben, "Freigabe", "Freigaben")}${m.demo ? `<span class="mat-demo" title="${DEMO_NIE}">DEMO</span>` : ""}</summary>
+        ${m.demo ? `<p class="small"><strong>${DEMO_NIE}</strong> – nur zur Ansicht.</p>` : ""}
         <p class="small"><strong>Betreff:</strong> ${esc(m.betreff)}</p><pre class="mat-mailtext">${esc(m.text)}</pre></details>`).join("");
     const ohne = p.ohne_empfaenger.length ? `<p class="small"><strong>Ohne Empfänger:</strong> ${p.ohne_empfaenger.map((o) => `${esc(o.ordner)} (${zahlText(o.artikel, o.freigaben)})`).join("; ")}
         – niemand mit Adresse und Modulzugang verwaltet dort, auch keine Material- oder Plattform-Verwaltung.</p>` : "";
     const aus = p.ausgelassen.ordner_aus || [];
-    const ausgelassen = aus.length || p.ausgelassen.demo ? `<p class="small"><strong>Ausgelassen:</strong> ${aus.length ? `Erinnerungen aus in ${aus.map((o) => `<a href="/material/ordner/${o.id}">${esc(o.pfad)}</a> (${plural(o.artikel, "Artikel", "Artikel")})`).join(", ")}` : ""}${aus.length && p.ausgelassen.demo ? "; " : ""}${p.ausgelassen.demo ? `${p.ausgelassen.demo} DEMO-Artikel` : ""}</p>` : "";
+    const demoAus = [p.ausgelassen.demo ? `${p.ausgelassen.demo} DEMO-Artikel` : "",
+      p.ausgelassen.demo_freigaben ? plural(p.ausgelassen.demo_freigaben, "DEMO-Freigabe", "DEMO-Freigaben") : ""].filter(Boolean);
+    const ausTeile = [aus.length ? `Erinnerungen aus in ${aus.map((o) => `<a href="/material/ordner/${o.id}">${esc(o.pfad)}</a> (${plural(o.artikel, "Artikel", "Artikel")})`).join(", ")}` : "", ...demoAus].filter(Boolean);
+    const ausgelassen = ausTeile.length ? `<p class="small"><strong>Ausgelassen:</strong> ${ausTeile.join("; ")}</p>` : "";
+    // Nur, wenn es DEMO gibt (oder es schon einbezogen ist) – in der Produktion ohne DEMO-Bestand bleibt der Dialog, wie er war.
+    const demoFeld = p.demo || demoAus.length ? `<p class="mat-probelauf-demo"><label class="inline"><input type="checkbox" id="pl-demo" ${p.demo ? "checked" : ""}>
+        DEMO-Bestand einbeziehen (nur Ansicht)</label></p>
+      ${p.demo ? `<p class="notice small">DEMO-Bestand einbezogen – nur zur Ansicht. Mails mit DEMO gehen nie hinaus; der echte Lauf lässt DEMO weiter aus.</p>` : ""}` : "";
     const dlg = dialog(`<h2>Probelauf Erinnerungsmails</h2>
       ${l ? `<p class="small">${esc(laufWann(l).replace(/^\w/, (c) => c.toUpperCase()))} verschickt: ${laufErgebnis(l)}.</p>` : ""}
       ${p.gesperrt ? '<p class="notice small">Erinnerungsmails sind in dieser Umgebung gesperrt – so gingen sie hinaus, wenn sie an wären.</p>'
         : !p.versand ? '<p class="notice small">Erinnerungsmails sind aus – so gingen sie hinaus, wenn sie an wären.</p>'
         : !p.smtp ? '<p class="notice small">Kein Mailserver eingerichtet – so gingen sie hinaus, wenn einer eingerichtet wäre.</p>' : ""}
       <p class="help">Nichts wird verschickt oder vermerkt. Gerechnet mit den Rechten und Ordnern von jetzt.</p>
+      ${demoFeld}
       ${p.fehlerhaft ? `<p class="notice small">${p.fehlerhaft === 1 ? "1 Artikel bzw. 1 Freigabe konnte" : `${p.fehlerhaft} Artikel bzw. Freigaben konnten`} nicht gelesen werden – siehe Server-Log.</p>` : ""}
       <h3>${wann} ab 6 Uhr gingen hinaus:</h3>
       ${mails || leer(`${wann} stünde nichts an.`)}
       ${ohne}${ausgelassen}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`);
     // #dlg dient allen Dialogen der Seite – die Breite gilt nur, solange der Probelauf offen ist.
-    dlg.classList.add("mat-probelauf");
-    dlg.addEventListener("close", () => dlg.classList.remove("mat-probelauf"), { once: true });
+    if (!dlg.classList.contains("mat-probelauf")) {
+      dlg.classList.add("mat-probelauf");
+      dlg.addEventListener("close", () => dlg.classList.remove("mat-probelauf"), { once: true });
+    }
+    const feld = $("#pl-demo", dlg);
+    if (feld) {
+      feld.addEventListener("change", async () => {
+        feld.disabled = true;
+        const neu = feld.checked;
+        if (await probelaufDialog(neu, feld)) {
+          const f = $("#pl-demo", dlg);
+          if (f) f.focus();                        // der Fokus bleibt am Kästchen, auch nach dem Neuladen
+        } else { feld.checked = !neu; feld.disabled = false; }
+      });
+    }
+    return true;
   }
 
   /* Fälligkeiten je Ordner: Gliederungen mit ihren Ordnern eingerückt, die Zahlen für den ganzen Zweig – dieselben wie in
