@@ -82,6 +82,12 @@ def sql(app, befehl, args=()):
         db.execute(befehl, args)
 
 
+def endversion():
+    """Die Schemaversion, auf die jeder Start migriert (seit Phase 2 · L2: 11) – als Text wie in mat_meta."""
+    from app.material import models
+    return str(models.SCHEMA_VERSION)
+
+
 def zeilen(app, abfrage, args=()):
     with app.app_context():
         from app import db
@@ -151,6 +157,7 @@ def test_migration_7_8():
         sql(app, "DELETE FROM mat_folder_grant")
         grant_tabelle_wie_schritt_8(os.path.join(tmp, "stroemis.db"))
         sql(app, "UPDATE users SET mat_ref = NULL")
+        erinnerungslog_wie_schritt_1(os.path.join(tmp, "stroemis.db"))
         sql(app, "UPDATE mat_meta SET wert = '7' WHERE schluessel = 'schema_version'")
         stufen_vorher = zeilen(app, "SELECT id, recht_material, mat_pruefer, mat_katalog FROM users ORDER BY id")
         journal_vorher = zeilen(app, "SELECT MAX(id) AS m FROM mat_audit")[0]["m"]
@@ -229,13 +236,17 @@ def test_migration_7_8():
         # Schritt 10 (Modulstufe): Häkchen und mat_katalog bleiben; die Stufe folgt seiner Regel – aus den Stufen von
         # Phase 1, den Freigaben aus Schritt 8 und den Häkchen. Genauer: test_material_stufen.test_migration_9_10.
         app = make_app(tmp)
-        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "10"
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
         assert zeilen(app, "SELECT id, mat_pruefer, mat_katalog FROM users ORDER BY id") == [
             {k_: v for k_, v in z.items() if k_ != "recht_material"} for z in stufen_vorher]
         stufen = {u["id"]: u["recht_material"] for u in zeilen(app, "SELECT id, recht_material FROM users")}
         assert {n_: stufen[uid] for n_, uid in konten.items()} == {"stufe1": 1, "stufe2": 1, "ohne_urkunde": 1,
                                                                    "katalogpflege": 2, "pv": 2, "extern": 1}, stufen
         assert zeilen(app, "SELECT * FROM mat_folder_grant ORDER BY rowid") == vorher["mat_folder_grant"]
+        # Schritt 11 (Erinnerungen) im selben Start: das Log in neuer Form und leer, der Schalter je Ordner aus.
+        assert erinnerungslog_wie_schritt_11(app)
+        assert not zeilen(app, "SELECT 1 FROM mat_reminder_log")
+        assert not zeilen(app, "SELECT 1 FROM mat_folder WHERE reminders_off <> 0")
     print("Migration 7 → 8 bestanden.")
 
 
@@ -280,6 +291,31 @@ def grant_tabelle_wie_schritt_8(pfad):
         conn.execute("DROP TABLE grant_rette")
     assert PRUEF_CHECK.search(conn.execute("SELECT sql FROM sqlite_master WHERE name = 'mat_folder_grant'").fetchone()[0])
     conn.close()
+
+
+def erinnerungslog_wie_schritt_1(pfad, ohne_schalter=True):
+    """mat_reminder_log so, wie Schritt 1 sie anlegt (Adresse sent_to, due_on nullbar, vier Stufen, kein UNIQUE) – wie in
+    jeder Datenbank vor Schritt 11; ohne_schalter: dazu mat_folder.reminders_off wieder weg."""
+    from app.material import models
+    conn = sqlite3.connect(pfad)
+    with conn:
+        conn.execute("DROP TABLE mat_reminder_log")
+        for befehl in models.SCHRITT_1:
+            if "mat_reminder_log" in befehl:
+                conn.execute(befehl)
+        if ohne_schalter:
+            conn.execute("ALTER TABLE mat_folder DROP COLUMN reminders_off")
+    conn.close()
+
+
+def erinnerungslog_wie_schritt_11(app):
+    """Hat das Log die Form aus Schritt 11 (Kontoverweis, Artikel oder Freigabe, UNIQUE) und mat_folder den Schalter?"""
+    spalten = [r["name"] for r in zeilen(app, "SELECT name FROM pragma_table_info('mat_reminder_log')")]
+    indizes = {r["name"] for r in zeilen(app, "SELECT name FROM sqlite_master WHERE type = 'index' "
+                                              "AND tbl_name = 'mat_reminder_log'")}
+    ordner = [r["name"] for r in zeilen(app, "SELECT name FROM pragma_table_info('mat_folder')")]
+    return (spalten == ["id", "item_id", "grant_id", "kind", "due_on", "konto_ref", "sent_at"]
+            and {"ux_mat_reminder_artikel", "ux_mat_reminder_freigabe"} <= indizes and "reminders_off" in ordner)
 
 
 def ohne_check_noch_da(app):
@@ -360,7 +396,7 @@ def test_migration_8_9():
         journal_vorher = zeilen(app, "SELECT MAX(id) AS m FROM mat_audit")[0]["m"]
 
         app = make_app(tmp)                                    # Neustart: Schritt 9 (und 10) läuft
-        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "10"
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
         assert not ohne_check_noch_da(app)
         assert _schema_grant(app) == schema_vorher             # Indizes und Trigger wie vorher, Wort für Wort
         assert not zeilen(app, "SELECT name FROM sqlite_master WHERE name LIKE '%grant_neu%'")
@@ -443,7 +479,7 @@ def test_neue_datenbank_ohne_check():
     wie er ausgeliefert wurde; Schritt 8 baut die Tabelle um) – mit allen Indizes und Triggern."""
     with tempfile.TemporaryDirectory() as tmp:
         app = make_app(tmp)
-        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "10"
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
         assert not ohne_check_noch_da(app)
         assert set(_schema_grant(app)) == {"sqlite_autoindex_mat_folder_grant_1", "idx_mat_grant_user",
                                            "idx_mat_grant_folder", "ux_mat_grant_grundrecht", "mat_grant_systemordner",

@@ -19,6 +19,7 @@ ab, bleibt das Konto samt allem stehen:
                      Kennung setzt die Datenbank auf NULL, der Materialwart gibt die Reservierung frei
   Produktmeldungen   Name des Melders und des Bearbeiters „(gelöschtes Konto)“
   Suchprotokoll      Name „(gelöschtes Konto)“ (nach zwölf Monaten ohnehin weg)
+  Erinnerungslog     Zeilen des Kontos gelöscht (sonst nach 13 Monaten weg; kein Prüfnachweis)
 Abgeschlossene Prüfungen, Durchgänge, Ausnahmen, Anhänge, Rückrufe und das Journal bleiben, wie sie sind. Deaktivieren
 ändert im Modul nichts: Freigaben wirken nicht mehr (current_user verlangt ein aktives Konto), Zuordnungen bleiben und
 erscheinen mit „(deaktiviert)“. Ablauf beim Austritt: PSA zurücknehmen (Zuordnung lösen), Konto deaktivieren, nach
@@ -33,7 +34,7 @@ Protokoll nennt. Es gibt keine Löschfrist und keine Löschroutine. In der Daten
 Dateien nur zu offenen Entwürfen – die dürfen verworfen werden, sie sind kein Nachweis
 (test_material_zuordnung.test_pruefnachweise_bleiben)."""
 from ... import db
-from . import bestand, journal
+from . import bestand, erinnerung, journal
 
 GELOESCHT = "(gelöschtes Konto)"            # wie journal.konto_name für einen Verweis ohne Konto
 GRUND = "Konto gelöscht"
@@ -70,4 +71,5 @@ def konto_loeschen_vorbereiten(uid):
     db.execute("UPDATE mat_product_request SET created_by_name = ? WHERE created_by = ?", (GELOESCHT, uid))
     db.execute("UPDATE mat_product_request SET resolved_by_name = ? WHERE resolved_by = ?", (GELOESCHT, uid))
     db.execute("UPDATE mat_global_search SET user_name = ? WHERE user_id = ?", (GELOESCHT, uid))
+    erinnerung.konto_loeschen(uid)                  # vor dem Löschen der Kontozeile: der Verweis geht über mat_ref
     return zahlen

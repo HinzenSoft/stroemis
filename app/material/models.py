@@ -71,13 +71,19 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     Häkchen Prüfer; sonst 0. mat_katalog bleibt stehen und wird nicht mehr gelesen (Rückweg). Journal „rollen“ am
     Konto je geänderter Stufe und je aufgelöstem Katalog-Häkchen, „Migration Schritt 10“, das Konto im Inhalt nur als
     Verweis. Wiederholbar.
+  - Schritt 11 (Phase 2 · Lieferung 2, Erinnerungen): mat_reminder_log wird verworfen und neu angelegt (REMINDER_11) –
+    bis dahin hat kein Code hineingeschrieben, es gibt nichts zu übernehmen. Neu: Kontoverweis konto_ref (users.mat_ref
+    des Empfängers) statt der Adresse, Artikel ODER Freigabe (grant_id, Stufe „freigabe_ablauf“), due_on Pflicht und
+    UNIQUE je Ziel, Stufe, Fälligkeit und Konto – dieselbe Stufe geht nie zweimal an dasselbe Konto, auch nicht bei
+    zwei Läufen gleichzeitig. Dazu mat_folder.reminders_off (1 = keine Erinnerungen zu Artikeln in diesem Ordner und
+    darunter; die Vererbung rechnet services/erinnerung.py). Wiederholbar.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -109,7 +115,9 @@ ANHANGARTEN = {"externes_pruefformular": "externes Prüfformular", "pruefbericht
                "sonstiges": "Sonstiges"}
 MELDUNGSSTATUS = {"offen": "offen", "eingepflegt": "eingepflegt", "abgelehnt": "abgelehnt"}
 FREIGABEN = ("lesen", "pruefen", "verwalten")
-ERINNERUNGEN = ("30_tage", "7_tage", "faellig", "lebensdauer")
+# Die Stufen, mit denen Schritt 1 das Erinnerungslog angelegt hat – Schritt 1 bleibt, wie er ausgeliefert wurde.
+ERINNERUNGEN_1 = ("30_tage", "7_tage", "faellig", "lebensdauer")
+ERINNERUNGEN = ERINNERUNGEN_1 + ("freigabe_ablauf",)
 
 
 def _in(werte):
@@ -382,7 +390,7 @@ SCHRITT_1 = [
     """CREATE TABLE IF NOT EXISTS mat_reminder_log (
       id      INTEGER PRIMARY KEY,
       item_id INTEGER NOT NULL REFERENCES mat_item(id) ON DELETE CASCADE,
-      kind    TEXT NOT NULL CHECK (kind IN """ + _in(ERINNERUNGEN) + """),
+      kind    TEXT NOT NULL CHECK (kind IN """ + _in(ERINNERUNGEN_1) + """),
       due_on  TEXT,                                -- Fälligkeit, auf die sich die Erinnerung bezieht
       sent_to TEXT NOT NULL DEFAULT '',
       sent_at TEXT NOT NULL
@@ -1020,7 +1028,11 @@ def _grant_ohne_prueffrist(conn):
     denn kein Trigger und keine Sicht einer anderen Tabelle nennt mat_folder_grant): neue Tabelle, alle Zeilen
     kopieren, alte löschen, umbenennen. Mit der alten Tabelle gehen ihre Indizes und Trigger – sie entstehen danach
     genau so wieder, wie sie in sqlite_master standen, dazu die bekannten aus Schritt 1 und 8, falls einer fehlte. Fehlt
-    danach eine Zeile oder bricht ein Verweis, bricht die Migration ab (die Transaktion rollt zurück)."""
+    danach eine Zeile oder bricht ein Verweis, bricht die Migration ab (die Transaktion rollt zurück).
+
+    Seit Schritt 11 verweist auch mat_reminder_log.grant_id auf mat_folder_grant: Ein künftiger Neuaufbau dieser Tabelle
+    muss das bedenken (Fremdschlüssel aus, Kennungen behalten). Auf den Wegen 7→11 und frisch läuft dieser Schritt vor
+    Schritt 11 und findet noch das alte Log ohne diesen Verweis vor."""
     tabelle = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
                            ("mat_folder_grant",)).fetchone()
     if not tabelle or not _NUR_BEFRISTET.search(tabelle[0] or ""):
@@ -1143,11 +1155,59 @@ def _schritt_10(conn):
                    wer=MIGRATION_10)
 
 
+# --- Schritt 11 (Phase 2 · Lieferung 2, Erinnerungen) ------------------------------------------------------------
+# Das Erinnerungslog in seiner Form ab Schritt 11: je Zeile eine Erinnerung an genau ein Ziel (Artikel ODER Freigabe), die
+# ein Konto bekommen hat – nur, wenn der Mailserver die Mail angenommen hat. Das Konto steht als Kontoverweis
+# (users.mat_ref) da, nie mit Adresse; eine user_id könnte SQLite nach dem Löschen neu vergeben. Auf mat_ref gibt es
+# keinen Fremdschlüssel (der UNIQUE-Index dort ist partiell) – die Zeilen eines gelöschten Kontos räumen loeschung.py
+# und das Aufräumen des Tageslaufs selbst weg. Wird ein Artikel oder eine Freigabe gelöscht, gehen ihre Zeilen mit.
+REMINDER_11 = """CREATE TABLE IF NOT EXISTS {name} (
+      id        INTEGER PRIMARY KEY,
+      item_id   INTEGER REFERENCES mat_item(id) ON DELETE CASCADE,
+      grant_id  INTEGER REFERENCES mat_folder_grant(id) ON DELETE CASCADE,
+      kind      TEXT NOT NULL CHECK (kind IN """ + _in(ERINNERUNGEN) + """),
+      due_on    TEXT NOT NULL CHECK (due_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+                                                -- Fälligkeit, Lebensende bzw. Enddatum der Freigabe
+      konto_ref TEXT NOT NULL CHECK (konto_ref <> ''),   -- users.mat_ref des Empfängers, nie die Adresse
+      sent_at   TEXT NOT NULL,                  -- UTC, vom Mailserver angenommen
+      CHECK ((item_id IS NULL) <> (grant_id IS NULL)),
+      CHECK ((kind = 'freigabe_ablauf') = (grant_id IS NOT NULL))
+    )"""
+REMINDER_INDIZES = [
+    # Dieselbe Stufe zur selben Fälligkeit an dasselbe Konto höchstens einmal – auch bei zwei Läufen gleichzeitig.
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_mat_reminder_artikel ON mat_reminder_log(item_id, kind, due_on, konto_ref) "
+    "WHERE item_id IS NOT NULL",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_mat_reminder_freigabe ON mat_reminder_log(grant_id, due_on, konto_ref) "
+    "WHERE grant_id IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS idx_mat_reminder_zeit ON mat_reminder_log(sent_at)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_reminder_konto ON mat_reminder_log(konto_ref)",
+]
+
+
+def _erinnerungslog_neu(conn):
+    """Verwerfen und neu anlegen: Bis Schritt 11 hat kein Code ins Log geschrieben, Zeilen aus Schritt 1 gibt es nicht.
+    Ohne Übernahme kann auch keine doppelte Altzeile den UNIQUE-Index (in _schritt_11 danach) scheitern lassen."""
+    conn.execute("DROP TABLE IF EXISTS mat_reminder_log")
+    conn.execute(REMINDER_11.format(name="mat_reminder_log"))
+
+
+def _schritt_11(conn):
+    """Phase 2 · Lieferung 2: Erinnerungslog mit Kontoverweis und Freigaben (Neuaufbau), Schalter je Ordner. Wiederholbar:
+    Ein zweiter Lauf findet Spalte und Tabelle schon vor und legt nur fehlende Indizes an."""
+    if "reminders_off" not in _spalten(conn, "mat_folder"):
+        conn.execute("ALTER TABLE mat_folder ADD COLUMN reminders_off INTEGER NOT NULL DEFAULT 0 "
+                     "CHECK (reminders_off IN (0, 1))")
+    if "konto_ref" not in _spalten(conn, "mat_reminder_log"):
+        _erinnerungslog_neu(conn)
+    for sql in REMINDER_INDIZES:
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
-            8: _schritt_8, 9: _schritt_9, 10: _schritt_10}
+            8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11}
 
 
 def _meta(conn, schluessel, vorgabe=None):

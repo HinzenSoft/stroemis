@@ -435,6 +435,9 @@ def create_app():
         SPRACHEINGABE=_env_bool("SPRACHEINGABE", True),     # Diktat an den Kommentarfeldern der Prüfungen
         # Modul Material: Ab wie vielen Tagen vor der Fälligkeit ein Artikel „bald fällig“ heißt.
         MATERIAL_BALD_FAELLIG_TAGE=int(os.environ.get("MATERIAL_BALD_FAELLIG_TAGE", "30")),
+        # Modul Material: Erinnerungsmails an die Materialwarte (täglich ab 6 Uhr). Vorgabe aus – eingeschaltet wird in
+        # der Produktion unter Verwaltung → Einstellungen; MATERIAL_ERINNERUNGEN_SPERRE (nur Umgebung) sperrt hart.
+        MATERIAL_ERINNERUNGEN=_env_bool("MATERIAL_ERINNERUNGEN", False),
         PUBLIC_HOST=_idna(os.environ.get("PUBLIC_HOST", "wiki.strömis.de")),
         PUBLIC_URL=os.environ.get("PUBLIC_URL", "https://wiki.strömis.de").rstrip("/"),
         SESSION_COOKIE_HTTPONLY=True,

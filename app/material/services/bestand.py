@@ -23,7 +23,7 @@ from datetime import date
 from ... import db
 from ...images import delete_photo_files
 from ..models import ORDNERARTEN, SYSTEMORDNER
-from . import Abgelehnt, akteur, auswahl, datum, erster_tag, ganzzahl, heute, kennung, monat_oder_datum, text
+from . import Abgelehnt, akteur, auswahl, datum, erster_tag, ganzzahl, heute, kennung, monat_oder_datum, text, wahr
 from . import faelligkeit, journal, katalog, nummern, qr, rechte
 from . import status as st
 from .interval import faelligkeit_vorschlag, herstellerseite, lebensende, spaetestens, wirksam
@@ -161,7 +161,8 @@ def unterbaum(fid):
         "SELECT id FROM baum", (fid,))}
 
 
-ORDNER_FELDER = ("name", "description", "kind", "interval_months")
+# reminders_off (Phase 2 · L2): „Erinnerungsmails aus“ für diesen Ordner und alle darunter (services/erinnerung.py).
+ORDNER_FELDER = ("name", "description", "kind", "interval_months", "reminders_off")
 
 
 def ordner_werte(d, alt=None):
@@ -170,7 +171,8 @@ def ordner_werte(d, alt=None):
     return {"name": text(e, "name", "Name", 120, pflicht=True),
             "description": text(e, "description", "Beschreibung", 2000, einzeilig=False),
             "kind": auswahl(e.get("kind") or "sonstiges", ORDNERARTEN, "Ordnertyp"),
-            "interval_months": ganzzahl(e.get("interval_months"), "Prüfintervall (Monate)", 1, 120)}
+            "interval_months": ganzzahl(e.get("interval_months"), "Prüfintervall (Monate)", 1, 120),
+            "reminders_off": int(wahr(e, "reminders_off", "Erinnerungsmails aus"))}
 
 
 def _systemordner_anlegen(gid, demo):
@@ -192,9 +194,10 @@ def ordner_anlegen(d, demo=False):
         raise Abgelehnt(NUR_SYSTEM, 409)
     ts = db.now()
     with db.transaction(sofort=True):
-        fid = db.execute("INSERT INTO mat_folder (parent_id, name, description, kind, interval_months, demo, created_at, "
-                         "updated_at) VALUES (?,?,?,?,?,?,?,?)",
-                         (parent_id, w["name"], w["description"], w["kind"], w["interval_months"], int(bool(demo)), ts, ts))
+        fid = db.execute("INSERT INTO mat_folder (parent_id, name, description, kind, interval_months, reminders_off, "
+                         "demo, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                         (parent_id, w["name"], w["description"], w["kind"], w["interval_months"], w["reminders_off"],
+                          int(bool(demo)), ts, ts))
         journal.eintragen("folder", fid, "angelegt", None, dict(w, parent_id=parent_id))
         if w["kind"] == "gliederung":
             _systemordner_anlegen(fid, demo)
@@ -202,7 +205,7 @@ def ordner_anlegen(d, demo=False):
 
 
 def ordner_aendern(fid, d):
-    """Name, Beschreibung, Ordnertyp und Prüfintervall. Wird ein Ordner zur Gliederung, bekommt er „Gesperrt“ und
+    """Name, Beschreibung, Ordnertyp, Prüfintervall und „Erinnerungsmails aus“. Wird ein Ordner zur Gliederung, bekommt er „Gesperrt“ und
     „Ausgesondert“, und gesperrte, verlorene und ausgesonderte Artikel mit Heimat darin ziehen aus den Systemordnern der
     bisherigen Gliederung in seine (wie beim Verschieben, 1.3). Wer das darf, prüft die Route (1.7 Nr. 2)."""
     alt = ordner(fid)
@@ -213,8 +216,9 @@ def ordner_aendern(fid, d):
         raise Abgelehnt("Eine Gliederung bleibt eine Gliederung – an ihr hängen „Gesperrt“ und „Ausgesondert“. "
                         "Lege einen neuen Ordner an und verschiebe den Inhalt.", 409)
     with db.transaction():
-        db.execute("UPDATE mat_folder SET name = ?, description = ?, kind = ?, interval_months = ?, updated_at = ? "
-                   "WHERE id = ?", (w["name"], w["description"], w["kind"], w["interval_months"], db.now(), fid))
+        db.execute("UPDATE mat_folder SET name = ?, description = ?, kind = ?, interval_months = ?, reminders_off = ?, "
+                   "updated_at = ? WHERE id = ?",
+                   (w["name"], w["description"], w["kind"], w["interval_months"], w["reminders_off"], db.now(), fid))
         umgewandelt = w["kind"] == "gliederung" and alt["kind"] != "gliederung"
         if umgewandelt:
             _systemordner_anlegen(fid, alt["demo"])
@@ -371,6 +375,7 @@ def ordner_json(o, direkt=None, gesamt=None):
     out = {f: o[f] for f in ("id", "parent_id", "name", "description", "kind", "system_kind", "interval_months",
                              "position", "created_at", "updated_at")}
     out["demo"] = bool(o["demo"])
+    out["reminders_off"] = bool(o.get("reminders_off"))         # der eigene Wert; geerbt: ordner_inhalt → erinnerungen
     out["foto"] = katalog.bild_url(o["photo"])
     out["vorschau"] = katalog.bild_url(o["photo"], "thumb")
     out["original"] = katalog.bild_url(o["photo"], "orig")      # „Original“ in der Großansicht (wie beim Produktbild)
@@ -862,6 +867,8 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
                                     ohne=() if darf["verwalten"] else rechte.FREIGABE_AKTIONEN)
                       if darf["grund"] else None)
     out["intervall"] = {"monate": o["interval_months"]}
+    from .erinnerung import ordner_stand
+    out["erinnerungen"] = ordner_stand(fid)
     return out
 
 

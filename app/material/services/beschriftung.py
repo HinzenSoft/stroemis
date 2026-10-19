@@ -40,6 +40,8 @@ FELD = {
     "mail": "Mail an Materialwarte und Prüfer", "close_note": "Vermerk",
     # Phase 2: Freigaben je Ordner und Personenzuordnung
     "freigabe": "Freigabe Nr.", "konto": "Person", "recht": "Recht", "bis": "bis", "notiz_geaendert": "Notiz geändert",
+    # Phase 2 · Lieferung 2: Erinnerungen
+    "reminders_off": "Erinnerungsmails aus",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",
@@ -57,6 +59,7 @@ AKTION = {
     "rueckruf": "Rückruf angelegt", "rueckruf_beendet": "Rückruf beendet",
     "freigabe_erteilt": "Freigabe erteilt", "freigabe_geaendert": "Freigabe geändert",
     "freigabe_entzogen": "Freigabe entzogen", "freigabe_entfernt": "Freigabe entfernt",
+    "freigabe_abgelaufen": "Freigabe abgelaufen",
     # Im Lebenslauf ohne Namen: Wem der Artikel zugeordnet war, gehört nicht in ein Dokument zur Weitergabe.
     "zugeordnet": "Zuordnung geändert", "zuordnung_geloest": "Zuordnung geändert",
 }
@@ -69,7 +72,7 @@ SPERRZUSTAND = {"frei": "frei", "gesperrt": "gesperrt", "verloren": "verloren (g
 RECHT = {"lesen": "lesen", "pruefen": "prüfen", "verwalten": "verwalten"}
 PERSON = "(Person)"
 # „mat_katalog“ bleibt für alte Einträge stehen (das Häkchen gibt es seit Schritt 10 nicht mehr).
-_JA_NEIN = ("serial_generated", "active", "mat_pruefer", "mat_katalog", "notiz_geaendert")
+_JA_NEIN = ("serial_generated", "active", "mat_pruefer", "mat_katalog", "notiz_geaendert", "reminders_off")
 # Stufe im Modul Material – mit der Zahl dahinter: Einträge vor „Migration Schritt 10“ meinten die Stufen aus Phase 1
 # (1 Führungskraft, 2 Materialwart), die Zahl hält das eindeutig.
 STUFE_MATERIAL = {0: "kein Zugriff", 1: "Mitglied", 2: "Verwaltung"}

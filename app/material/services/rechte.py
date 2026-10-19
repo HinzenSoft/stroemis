@@ -52,7 +52,9 @@ from . import Abgelehnt, eingabe, journal, kennung, text, wahr
 
 # Rechte, nach denen darf() fragt. Die Arten einer Freigabe (lesen, pruefen, verwalten) stehen in models.FREIGABEN.
 RECHTE = ("lesen", "grund", "pruefen", "verwalten")
-FREIGABE_AKTIONEN = ("freigabe_erteilt", "freigabe_geaendert", "freigabe_entzogen", "freigabe_entfernt")
+# Journaleinträge zu Freigaben – nur für Verwalter des Ordners. „freigabe_abgelaufen“ schreibt der Tageslauf (Phase 2 · L2).
+FREIGABE_AKTIONEN = ("freigabe_erteilt", "freigabe_geaendert", "freigabe_entzogen", "freigabe_entfernt",
+                     "freigabe_abgelaufen")
 GRUNDRECHTE = ("lesen", "verwalten")
 # Welche Arten einer Freigabe ein Recht tragen (pruefen nur bei Qualifikation, siehe Sicht.ende).
 _ARTEN = {"lesen": ("lesen", "verwalten", "pruefen"), "grund": GRUNDRECHTE, "pruefen": ("pruefen",),

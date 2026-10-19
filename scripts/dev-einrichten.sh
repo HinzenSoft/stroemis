@@ -68,6 +68,9 @@ setze PUBLIC_HOST "wiki.$DOMAIN"
 setze PUBLIC_URL "https://$DOMAIN/oeffentlich"
 setze SITE_NAME "strömis.de (DEV)"
 setze SECRET_KEY ""
+# Erinnerungsmails des Moduls Material bleiben hier hart gesperrt – auch wenn jemand den Schalter im Browser einschaltet
+# oder eine Datenbank der Produktion einspielt (die kopierte .env trägt die SMTP-Zugangsdaten der Produktion).
+setze MATERIAL_ERINNERUNGEN_SPERRE 1
 
 # --- Datenordner für den Nutzer im Container ----------------------------------------------------------
 mkdir -p "$ZIEL/data"

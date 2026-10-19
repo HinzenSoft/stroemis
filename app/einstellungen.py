@@ -99,6 +99,12 @@ FELDER = [
          wandeln=lambda roh: max(0, min(365, int(str(roh).strip()))) if str(roh).strip().isdigit() else None,
          hilfe="So viele Tage vor der nächsten Prüfung steht ein Artikel im Dashboard und in den Listen als "
                "„bald fällig“. Vorgabe 30.", platzhalter="30"),
+    Feld("MATERIAL_ERINNERUNGEN", "Material", "Erinnerungsmails verschicken", art="schalter",
+         hilfe="Jeden Morgen ab 6 Uhr bekommen die Materialwarte eine Sammelmail zu Fälligkeiten, Lebensende und "
+               "ablaufenden Freigaben. Aus: keine Mails – Journal und Aufräumen laufen trotzdem. Jede Fälligkeit wird "
+               "je Stufe einmal gemeldet: 30 und 7 Tage vorher und einmal, wenn sie überschritten ist; das Lebensende "
+               "90 Tage vorher, eine Freigabe 30 Tage vor ihrem Ende. Stand und Probelauf: Material → Übersicht "
+               "(unten). Hier einschalten, nicht in der .env: Die Entwicklung kopiert die .env der Produktion."),
 
     # --- E-Mail -----------------------------------------------------------------------------
     Feld("MAIL_FROM", "E-Mail", "Absender",

@@ -24,7 +24,7 @@ from ..auth import attempts_exceeded, current_user, eingabefehler_abfangen, json
 from . import models
 from .services import (Abgelehnt, anhang, bestand, durchgang, eingabe, globalprotokoll, globalsuche, journal, katalog,
                        kennung, medien as medien_dienst, meldung, protokoll, pruefung, search, unterschrift)
-from .services import rueckruf
+from .services import erinnerung, rueckruf
 from .services import status as st
 from .services import ueberblick
 from .services.bestand import FremdeDublette
@@ -342,7 +342,8 @@ def medien(art, dateiname):
 @api.get("/start")
 @requires_zugang
 def start():
-    """Die Übersicht – alle Zahlen über das, was das Konto sieht."""
+    """Die Übersicht – alle Zahlen über das, was das Konto sieht. „erinnerungen“: der Laufstand der Erinnerungsmails
+    (erinnerung.stand) nur für die Material-Verwaltung (die Plattform-Verwaltung eingeschlossen), sonst null."""
     alle = bestand.baum()
     gliederungen = [o for o in alle if o["kind"] == "gliederung" and not o["system_kind"] and not o.get("nur_pfad")]
     naechste, faellig = bestand.faellige(pro_seite=10)
@@ -352,7 +353,8 @@ def start():
                    gliederungen=gliederungen, naechste=naechste, faellig_gesamt=faellig,
                    schwelle_tage=st.schwelle_tage(), status_text=st.LABEL,
                    meldungen_offen=meldung.anzahl_offen() if ist_material_verwaltung() else None,
-                   rueckrufe=rueckruf.uebersicht())
+                   rueckrufe=rueckruf.uebersicht(),
+                   erinnerungen=erinnerung.stand() if ist_material_verwaltung() else None)
 
 
 @api.get("/suche")
@@ -1147,3 +1149,4 @@ from . import routes_katalog  # noqa: E402,F401
 from . import routes_freigaben  # noqa: E402,F401
 from . import routes_global  # noqa: E402,F401
 from . import routes_zuordnung  # noqa: E402,F401
+from . import routes_erinnerung  # noqa: E402,F401

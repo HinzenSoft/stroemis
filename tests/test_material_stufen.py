@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_material import (H, _heute, abschluss, anmelden, freigeben, gliederung, jpeg, katalog_grund,  # noqa: E402
                            make_app, neuer_artikel, neues_konto, pruef_formulare, starten, umgebung, unterschreiben)
 from test_material_rueckruf import post_abfangen, post_zurueck  # noqa: E402
-from test_material_trennung import gleich_wie_unbekannt, sql, trennung_aufbau, zeilen  # noqa: E402
+from test_material_trennung import endversion, gleich_wie_unbekannt, sql, trennung_aufbau, zeilen  # noqa: E402
 from test_material_ueberblick import MULTIPART, _stand, _url, ohne_post, ordner_neu  # noqa: E402
 from test_material_zuordnung import post_der_meldungen  # noqa: E402
 
@@ -83,7 +83,7 @@ def test_migration_9_10():
         journal_vorher = zeilen(app, "SELECT MAX(id) AS m FROM mat_audit")[0]["m"] or 0
 
         app = make_app(tmp)                                    # Neustart: Schritt 10 läuft
-        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "10"
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
         nachher = {u["id"]: u for u in zeilen(app, "SELECT * FROM users")}
         assert {n: nachher[ids[n]]["recht_material"] for n in faelle} == {n: f[2] for n, f in faelle.items()}
         assert nachher[admin_id]["recht_material"] == 2
@@ -160,7 +160,7 @@ def test_migration_produktion():
         stufen = {u["email"]: u["recht_material"] for u in zeilen(app, "SELECT email, recht_material FROM users")}
         assert stufen == {"admin@example.org": 2, "mitglied@example.org": 0, "gast@example.org": 0}, stufen
         assert not zeilen(app, "SELECT 1 FROM mat_audit WHERE user_name = 'Migration Schritt 10'")
-        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "10"
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
     print("Migration ohne Modul (Produktion) bestanden.")
 
 

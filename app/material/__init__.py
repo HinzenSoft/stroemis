@@ -9,12 +9,14 @@ Aufbau:
   routes.py      Seiten (/material/…, /m/<token>), Schnittstelle (/api/material/…), Medien
   routes_export.py, routes_katalog.py, routes_rueckruf.py
                  Routen der Lieferung 4: Export (CSV, Protokoll-ZIP, Lebenslauf), Katalogaustausch, Rückrufe
-  cli.py         flask material import-catalog, export-catalog
+  cli.py         flask material import-catalog, export-catalog, remind
+  tageslauf.py   Thread je Arbeitsprozess: einmal am Tag ab 6 Uhr Pflege und Erinnerungsmails (seit Phase 2 · L2)
   services/      Fachregeln: rechte, katalog, bestand, status, interval, search, nummern, qr, journal,
                  importer, katalog_export, pruefung, durchgang, anhang, meldung, protokoll (Festschreiben,
                  Prüfseite), pdf (WeasyPrint), stempel (Prüfsumme), unterschrift, ueberblick (Fälligkeiten je
                  Ordner), export, lebenslauf, beschriftung (Journal als Text), rueckruf; seit Phase 2 dazu
-                 globalprotokoll (Protokoll der Blicke über den eigenen Bereich) und globalsuche
+                 globalprotokoll (Protokoll der Blicke über den eigenen Bereich) und globalsuche, seit Lieferung 2
+                 erinnerung (Erinnerungsmails, Pflege, Laufstand und Probelauf)
   templates/, static/   Seite und Oberfläche (material.js, material.css)
 """
 from .. import db
@@ -38,22 +40,31 @@ def _suchprotokoll_aufraeumen(conn):
     aufraeumen(conn)
 
 
+def _erinnerungslog_aufraeumen(conn):
+    from .services.erinnerung import aufraeumen
+    aufraeumen(conn)
+
+
 def schema_anmelden():
     """Die Migration dieses Moduls beim Start mitlaufen lassen (db.init_db ruft sie auf) – danach das Protokoll der
-    globalen Suche auf seine Frist kürzen, die Protokolldateien mit der Datenbank abgleichen und durchsichtige Bilder
-    einmalig reparieren."""
-    for schritt in (models.migrieren, _suchprotokoll_aufraeumen, _verwaiste_protokolle, _bilder_reparieren):
+    globalen Suche und das Erinnerungslog auf ihre Frist kürzen (auch wenn der Tageslauf steht), die Protokolldateien
+    mit der Datenbank abgleichen und durchsichtige Bilder einmalig reparieren."""
+    for schritt in (models.migrieren, _suchprotokoll_aufraeumen, _erinnerungslog_aufraeumen, _verwaiste_protokolle,
+                    _bilder_reparieren):
         if schritt not in db.SCHEMA_MODULE:
             db.SCHEMA_MODULE.append(schritt)
 
 
 def init_app(app):
-    """Blueprints, Kommandozeile und Vorgaben eintragen. Wird in create_app vor db.init_db gerufen."""
-    from . import cli
+    """Blueprints, Kommandozeile und Vorgaben eintragen – dazu den Anstoß des Tageslaufs (startet bei der ersten
+    Anfrage, tageslauf.py). Wird in create_app vor db.init_db gerufen."""
+    from . import cli, tageslauf
     from .routes import api, seiten
     schema_anmelden()
     cli.anmelden(seiten)
     app.config.setdefault("MATERIAL_BALD_FAELLIG_TAGE", MATERIAL_BALD_FAELLIG_TAGE)
+    app.config.setdefault("MATERIAL_ERINNERUNGEN", False)
+    app.before_request(tageslauf.anstossen)
     app.register_blueprint(seiten)
     app.register_blueprint(api)
 

@@ -22,11 +22,17 @@ class Abgelehnt(Exception):
         self.code = code
 
 
+def jetzt():
+    """Die Uhrzeit in Deutschland (mit Zeitzone) – für den Tageslauf der Erinnerungen: ab 6 Uhr deutscher Zeit, Herzschlag
+    und Stichtag aus derselben Uhr. Tests stellen sie über services.datetime um (wie heute)."""
+    return datetime.now(ZONE)
+
+
 def heute():
     """Der Kalendertag in Deutschland, gegen den Fälligkeiten und Lebensdauer gemessen werden und der als Prüftag
     ins Protokoll kommt. Der Container läuft in UTC – zwischen Mitternacht und 1 bzw. 2 Uhr wäre sonst noch
     gestern. Eine eigene Funktion, damit Tests einen Stichtag setzen können, ohne die Uhr zu verstellen."""
-    return datetime.now(ZONE).date()
+    return jetzt().date()
 
 
 # --- Eingaben lesen ------------------------------------------------------------------------------
