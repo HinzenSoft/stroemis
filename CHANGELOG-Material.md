@@ -2567,12 +2567,12 @@ Am 19.10.2026 entschieden: Nr. 3, 4, 11, 14, 15 und 18 bestätigt, Nr. 13 geänd
 19. **DEMO im Probelauf nur zur Ansicht** (Nachtrag): Das Kästchen erscheint nur, wenn DEMO ausgelassen wurde. Mit
     Haken zählen auch DEMO-Konten als Empfänger und im Rückfall – eine DEMO-Material-Verwaltung bekommt dann auch die
     echten Gruppen „kein Materialwart eingetragen“ (gekennzeichnet). Der echte Lauf bleibt ohne DEMO.
-20. **Material-Verwaltung als Inhaberin** (zu Nr. 13): Läuft eine eigene befristete Freigabe eines Kontos mit Stufe
+20. **Material-Verwaltung als Inhaberin – bestätigt am 19.10.2026** (zu Nr. 13): Läuft eine eigene befristete Freigabe eines Kontos mit Stufe
     Verwaltung ab (für sie zählt praktisch nur eine Prüffreigabe), sagt ihre Mail wie „Meine Freigaben“ „Verlängern
     kann: … / die Material-Verwaltung“ – tatsächlich kann sie die eigene selbst verlängern (Regel 1.6 Nr. 1). Die
     übrige Material-Verwaltung bekommt die Freigabe trotzdem, wenn am Anker niemand sonst verwaltet. Belassen, damit
     Mail und „Meine Freigaben“ dasselbe sagen.
-21. **Externe Prüfer bekommen jetzt Mails** (zu Nr. 13): Wer nur eine befristete Prüffreigabe hat, bekommt 30 Tage vor
+21. **Externe Prüfer bekommen jetzt Mails – bestätigt am 19.10.2026** (zu Nr. 13): Wer nur eine befristete Prüffreigabe hat, bekommt 30 Tage vor
     ihrem Ende eine Mail – erstmals überhaupt eine Erinnerungsmail aus dem Modul. Die migrierten Prüffreigaben externer
     Prüfer enden alle am 31.12.2027 (Phase 2 · Lieferung 1, „Zu prüfen“): Ohne Verlängern bekommt am 01.12.2027 jeder
     von ihnen eine Mail mit allen seinen Ordnern, dazu die Materialwarte ihre.
