@@ -5,10 +5,16 @@
    anhaenge_angefuegt, unterschrift). #}
 {% block stil %}
 /* Befunde */
+/* „kritisch“ steht wie in der Oberfläche (Befunde einer abgeschlossenen Prüfung) in einer eigenen schmalen Spalte
+   neben dem Prüfpunkt, nicht im Text: Die Prüfpunkte bleiben untereinander ruhig, die Marke steht in jeder Zeile an
+   derselben Stelle. Die Spalte fasst die Marke (gut 10 mm) mit je 1 mm Rand. Platz dafür geben Befund (fasst
+   „nicht zutreffend“ weiter in einer Zeile) und Wert / Bemerkung; dem Prüfpunkt bleiben 70 mm. */
 table.befunde col.c-nr { width: 10mm; }
+table.befunde col.c-krit { width: 13mm; }
 table.befunde col.c-soll { width: 14mm; }
-table.befunde col.c-befund { width: 29mm; }
-table.befunde col.c-wert { width: 48mm; }
+table.befunde col.c-befund { width: 27mm; }
+table.befunde col.c-wert { width: 46mm; }
+table.befunde .krit { padding-left: 1mm; padding-right: 1mm; white-space: nowrap; overflow-wrap: normal; hyphens: manual; }
 table.befunde tr.gruppe td { padding: 3mm 1.5mm 1mm; border-bottom: .8pt solid var(--linie); font-weight: 700;
   color: var(--schwarz); }
 table.befunde tr.gruppe { break-after: avoid; }
@@ -20,8 +26,10 @@ table.befunde tr.mangel .nr-marke { background: var(--rot); color: #ffffff; font
 .befund-nicht_zutreffend { color: var(--grau); }
 /* „nicht zutreffend“ nicht trennen – die Regel für alle Tabellenzellen (table.liste td) setzt hyphens: auto */
 table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-nicht_zutreffend { hyphens: manual; }
+/* Marke „kritisch“ in der Spalte und in der Legende: klein geschrieben wie in der Oberfläche, fett mit Rahmen –
+   auch schwarz-weiß gedruckt erkennbar. */
 .kritisch { display: inline-block; font-size: 6pt; font-weight: 700; letter-spacing: .05em; color: var(--rot-dunkel);
-  border: .6pt solid var(--rot-dunkel); padding: 0 .8mm; margin-left: 1mm; line-height: 1.4; vertical-align: 1pt; }
+  border: .6pt solid var(--rot-dunkel); padding: 0 .8mm; line-height: 1.4; vertical-align: 1pt; }
 .notiz { color: var(--anthrazit); margin-top: .8mm; font-size: 8pt; }
 .notiz .lbl { display: inline; }
 .fotoverweis { font-weight: 700; color: var(--schwarz); }
@@ -91,12 +99,12 @@ table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-ni
   <h2>Befunde</h2>
   {%- if gruppen %}
   <table class="liste befunde">
-    <colgroup><col class="c-nr"><col><col class="c-soll"><col class="c-befund"><col class="c-wert"></colgroup>
-    <thead><tr><th class="zahl">Nr.</th><th>Prüfpunkt</th><th>Soll</th><th>Befund</th><th>Wert / Bemerkung</th></tr></thead>
+    <colgroup><col class="c-nr"><col><col class="c-krit"><col class="c-soll"><col class="c-befund"><col class="c-wert"></colgroup>
+    <thead><tr><th class="zahl">Nr.</th><th>Prüfpunkt</th><th class="krit">kritisch</th><th>Soll</th><th>Befund</th><th>Wert / Bemerkung</th></tr></thead>
     <tbody>
     {%- for g in gruppen %}
       {%- if g.name and g.punkte %}
-      <tr class="gruppe"><td colspan="5">{{ g.name }}</td></tr>
+      <tr class="gruppe"><td colspan="6">{{ g.name }}</td></tr>
       {%- endif %}
       {%- for p in g.punkte %}
       {#- Eine Zeile, die höher als eine Seite werden kann (Wert und Bemerkung zusammen sehr lang oder sehr viele
@@ -105,7 +113,8 @@ table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-ni
                      or ((p.wert or "") ~ (p.notiz or "")).count("\n") > 20 %}
       <tr class="befund{{ ' mangel' if p.befund == 'mangel' }}{{ ' lang' if lang }}">
         <td class="nr"><span class="nr-marke">{{ p.nr }}</span></td>
-        <td><span class="text">{{ p.text }}</span>{% if p.kritisch %}<span class="kritisch">KRITISCH</span>{% endif %}</td>
+        <td><span class="text">{{ p.text }}</span></td>
+        <td class="krit">{% if p.kritisch %}<span class="kritisch">kritisch</span>{% endif %}</td>
         <td>{{ p.soll }}</td>
         <td class="befund-{{ p.befund }}">{{ p.befund_text }}</td>
         <td>
@@ -125,7 +134,7 @@ table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-ni
   <div class="legende">
     {%- if maengel %}<span class="muster">Nr.</span> Mangel{% endif %}
     {%- if maengel and mit_kritisch %} · {% endif %}
-    {%- if mit_kritisch %}KRITISCH: Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus.{% endif %}</div>
+    {%- if mit_kritisch %}<span class="kritisch">kritisch</span> Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus.{% endif %}</div>
   {%- endif %}
   {%- else %}
   <p class="hinweis">Diese Prüfung hat keine Prüfpunkte.</p>

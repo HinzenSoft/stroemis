@@ -2266,6 +2266,27 @@ def _flach(text):
     return " ".join(text.split())
 
 
+def pdf_layout_seiten(pfad):
+    """Text je Seite in der Anordnung der Seite (pdftotext -layout; fehlt es, pypdf im Layout-Modus): Die Zellen
+    einer Tabellenzeile stehen in einer Textzeile, in der Reihenfolge der Spalten."""
+    import shutil
+    import subprocess
+    if shutil.which("pdftotext"):
+        return [subprocess.run(["pdftotext", "-q", "-layout", "-f", str(i), "-l", str(i), pfad, "-"], capture_output=True,
+                               check=True).stdout.decode("utf-8", "replace") for i in range(1, _seitenzahl(pfad) + 1)]
+    from pypdf import PdfReader
+    return [s.extract_text(extraction_mode="layout") or "" for s in PdfReader(pfad).pages]
+
+
+def befund_zeile(seiten, punkt):
+    """Die Textzeile der Befundtabelle, die mit dem Prüfpunkt „punkt“ beginnt (nach der laufenden Nummer)."""
+    import re
+    muster = re.compile(r"^\s*\d+\s+" + re.escape(punkt) + r"(\s|$)")
+    treffer = [z for s in seiten for z in s.splitlines() if muster.search(z)]
+    assert len(treffer) == 1, (punkt, treffer)
+    return treffer[0]
+
+
 def protokoll_zeile(app, pid=None, rid=None):
     with app.app_context():
         from app import db
@@ -2375,6 +2396,13 @@ def test_festschreiben():
         for ah in (ah1, ah2):
             assert ah["titel"] in text and ah["sha256"] in text.replace(" ", ""), ah
         assert "pruefer" in text and "1012-4711" in text and f"P-{jahr}-{pid:06d}" in text and a["inventory_no"] in text
+        # „kritisch“ hat eine eigene Spalte neben dem Prüfpunkt (Wunsch vom 19.10.2026): markiert nur der kritische Punkt.
+        import re
+        lay = pdf_layout_seiten(pfad)
+        assert re.search(r"Nr\.\s+Prüfpunkt\s+kritisch\s+Soll\s+Befund\s+Wert / Bemerkung", lay[0]), lay[0][:1500]
+        assert re.search(r"Testpunkt Verschluss\s+kritisch\s+Ja\s+in Ordnung\s+Ja$", befund_zeile(lay, "Testpunkt Verschluss"))
+        assert re.search(r"Testpunkt Verschleiß\s+Nein\s+in Ordnung\s+Nein$", befund_zeile(lay, "Testpunkt Verschleiß"))
+        assert "KRITISCH" not in text and "Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus." in text
         # Ausliefern: nur mit Leserecht, nur unverändert.
         r = k["fuehrung"].get(f"/material/pruefung/{pid}/pdf")
         assert r.status_code == 200 and r.mimetype == "application/pdf" and r.data == daten
@@ -3012,6 +3040,133 @@ def test_review_lieferung3():
     print("Review-Befunde Lieferung 3 nachgestellt und behoben.")
 
 
+def _befundtabelle(html):
+    """Aus dem HTML eines Prüfprotokolls: Spaltenköpfe, Spalten (colgroup), Gruppenzeilen und je Befundzeile die
+    Zellen als (Klassen, Inhalt), nach dem Text des Prüfpunkts."""
+    import re
+    tabelle = re.search(r'<table class="liste befunde">(.*?)</table>', html, re.S).group(1)
+    koepfe = re.findall(r"<th(?:\s[^>]*)?>(.*?)</th>", tabelle)
+    spalten = re.findall(r"<col[ >]", tabelle)
+    gruppen = re.findall(r'<tr class="gruppe"><td colspan="(\d+)">(.*?)</td></tr>', tabelle)
+    zeilen = {}
+    for klasse, inhalt in re.findall(r'<tr class="(befund[^"]*)">(.*?)</tr>', tabelle, re.S):
+        zellen = [(re.search(r'class="([^"]*)"', attr).group(1) if "class=" in attr else "", z.strip())
+                  for attr, z in re.findall(r"<td([^>]*)>(.*?)</td>", inhalt, re.S)]
+        text = re.search(r'<span class="text">(.*?)</span>', zellen[1][1], re.S).group(1)
+        zeilen[text] = {"klasse": klasse, "zellen": zellen}
+    return koepfe, spalten, gruppen, zeilen
+
+
+def test_kritisch_eigene_spalte():
+    """Wunsch vom 19.10.2026: „kritisch“ steht im Prüfprotokoll wie in der Oberfläche in einer eigenen schmalen Spalte
+    neben dem Prüfpunkt, nicht mehr als Marke im Text des Prüfpunkts. Geprüft am HTML der Vorlage (Kopf, Zellen,
+    Gruppenzeilen über alle Spalten, Legende) und am PDF (pdftotext -layout): kritische Punkte in der Spalte markiert,
+    nicht kritische leer, auch mit Mangel am kritischen Punkt, langem Text und über mehrere Seiten mit wiederholtem
+    Tabellenkopf. Prüfpunkte erfunden, nur für den Test."""
+    import re
+
+    from app.material.services import pdf
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w, p1 = k["wart"], k["pruefer"]
+        gid, _ = gliederung(w)
+        gesetzt = []
+        original = pdf._setzen
+
+        def mitschreiben(html):
+            gesetzt.append(html)
+            return original(html)
+
+        def protokoll(pid, **d):
+            """Festschreiben; liefert das HTML des Prüfprotokolls und den Text je Seite."""
+            gesetzt.clear()
+            pdf._setzen = mitschreiben
+            try:
+                r = festschreiben(p1, pid, **d)
+            finally:
+                pdf._setzen = original
+            assert r.status_code == 200, r.get_json()
+            html = [h for h in gesetzt if 'class="liste befunde"' in h]
+            assert len(html) == 1, len(html)
+            pfad = os.path.join(tmp, protokoll_zeile(app, pid)["pdf_path"])
+            return html[0], pfad
+
+        # 1. Gurt Alpha, Formular „Gurt spezifisch“: Gruppe „Band“ mit einem kritischen und einem nicht kritischen
+        #    Punkt, dahinter zwei Punkte ohne Gruppe. Mangel am kritischen Punkt (mit Foto und Bemerkung).
+        a = neuer_artikel(w, ids["gurt"], gid, manufactured_on=f"{_heute().year - 2}-01")
+        pr = starten(p1, a["id"]).json["pruefung"]
+        pk = punkte_von(pr)
+        url = f"/api/material/pruefungen/{pr['id']}/punkte"
+        assert p1.put(f"{url}/{pk['Testpunkt kritisch']}", json={"wert": "ja", "notiz": "Schnitt im Band"}).status_code == 200
+        r = p1.post(f"{url}/{pk['Testpunkt kritisch']}/foto", data={"file": (jpeg(), "m.jpg")}, headers=H,
+                    content_type="multipart/form-data")
+        assert r.status_code == 200, r.get_json()
+        assert p1.put(f"{url}/{pk['Testpunkt Messwert']}", json={"wert": "3"}).status_code == 200
+        html, pfad = protokoll(pr["id"], ergebnis="instandsetzen", grund="Schnitt im Band")
+        koepfe, spalten, gruppen, zeilen = _befundtabelle(html)
+        assert koepfe == ["Nr.", "Prüfpunkt", "kritisch", "Soll", "Befund", "Wert / Bemerkung"], koepfe
+        assert len(spalten) == 6 and gruppen == [("6", "Band")], (spalten, gruppen)
+        assert set(zeilen) == {"Testpunkt kritisch", "Testpunkt Kennzeichnung", "Testpunkt Messwert", "Testpunkt Bemerkung"}
+        for text, z in zeilen.items():
+            assert len(z["zellen"]) == 6, (text, z)
+            klasse, inhalt = z["zellen"][2]
+            assert klasse == "krit", (text, z)
+            assert "kritisch" not in z["zellen"][1][1].replace(text, ""), (text, z)     # keine Marke im Text
+            if text == "Testpunkt kritisch":
+                assert inhalt == '<span class="kritisch">kritisch</span>' and "mangel" in z["klasse"], z
+            else:
+                assert inhalt == "", (text, z)
+        assert "KRITISCH" not in html
+        assert ('<span class="kritisch">kritisch</span> Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus.'
+                in html), html[html.find('class="legende"'):][:400]
+        # Im PDF: Kopf mit „kritisch“ zwischen Prüfpunkt und Soll; die Marke steht in der Spalte, nicht im Text.
+        lay = pdf_layout_seiten(pfad)
+        assert re.search(r"Nr\.\s+Prüfpunkt\s+kritisch\s+Soll\s+Befund\s+Wert / Bemerkung", "\n".join(lay))
+        assert re.search(r"Testpunkt kritisch\s+kritisch\s+Nein\s+Mangel\s+Ja$", befund_zeile(lay, "Testpunkt kritisch"))
+        z = befund_zeile(lay, "Testpunkt Kennzeichnung")
+        assert "kritisch" not in z and re.search(r"Testpunkt Kennzeichnung\s+Ja\s+in Ordnung\s+Ja$", z), z
+        text = _flach(" ".join(pdf_seiten(pfad)))
+        assert "KRITISCH" not in text and "Mangel · kritisch Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus." in text
+
+        # 2. Ein Formular über mehrere Seiten: zwei Gruppen, jeder dritte Punkt kritisch, einer mit langem Text. Der Kopf
+        #    mit „kritisch“ wiederholt sich auf jeder Seite der Tabelle; markiert sind genau die kritischen Punkte.
+        lang = ("Testpunkt 7 mit langem Text, der in der Spalte Prüfpunkt über mehrere Zeilen umbrechen muss – "
+                "Platzhalter für eine ausführliche Prüfanweisung, nur für den Test. ") * 3
+        punkte = [{"gruppe": "Testgruppe A" if i <= 20 else "Testgruppe B",
+                   "text": lang.strip() if i == 7 else f"Testpunkt {i}", "art": "yesno", "soll": "nein",
+                   "kritisch": i % 3 == 1} for i in range(1, 46)]
+        r = k["katalog"].post("/api/material/formulare", json={"produkt_id": ids["hms"], "titel": "HMS lang", "punkte": punkte})
+        assert r.status_code == 201, r.get_json()
+        assert k["katalog"].post(f"/api/material/formulare/{r.json['formular']['id']}/aktivieren", json={}).status_code == 200
+        b = neuer_artikel(w, ids["hms"], gid)
+        pid = starten(p1, b["id"]).json["pruefung"]["id"]
+        html, pfad = protokoll(pid, ergebnis="einsatzbereit")
+        koepfe, spalten, gruppen, zeilen = _befundtabelle(html)
+        assert gruppen == [("6", "Testgruppe A"), ("6", "Testgruppe B")] and len(zeilen) == 45, (gruppen, len(zeilen))
+        for i, p in enumerate(punkte, 1):
+            inhalt = zeilen[p["text"]]["zellen"][2][1]
+            assert inhalt == ('<span class="kritisch">kritisch</span>' if p["kritisch"] else ""), (i, inhalt)
+        lay = pdf_layout_seiten(pfad)
+        mit_tabelle = [s for s in lay if re.search(r"^\s*\d+\s+Testpunkt \d", s, re.M)]
+        assert len(mit_tabelle) >= 2, len(mit_tabelle)
+        for s in mit_tabelle:
+            assert re.search(r"Nr\.\s+Prüfpunkt\s+kritisch\s+Soll\s+Befund\s+Wert / Bemerkung", s), s[:600]
+        for i, p in enumerate(punkte, 1):
+            if i == 7:
+                continue
+            z = befund_zeile(lay, p["text"])
+            assert bool(re.search(p["text"] + r"\s+kritisch\s+Nein", z)) == p["kritisch"], z
+            assert ("kritisch" in z) == p["kritisch"], z
+        z = befund_zeile(lay, "Testpunkt 7 mit langem Text,")
+        assert re.search(r"\s+kritisch\s+Nein\s+in Ordnung\s+Nein$", z), z
+        # Ohne Mangel steht in der Legende nur die Marke „kritisch“.
+        text = _flach(" ".join(pdf_seiten(pfad)))
+        assert "Mangel ·" not in text and "kritisch Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus." in text
+    print("Spalte „kritisch“ im Prüfprotokoll bestanden.")
+
+
 def test_durchsichtige_bilder():
     """Produktbilder mit durchsichtigem Hintergrund (freigestellte PNGs) stehen auf Weiß, nicht auf Schwarz – neu
     hochgeladene sofort, schon vorhandene nach der einmaligen Reparatur beim Start."""
@@ -3083,4 +3238,5 @@ if __name__ == "__main__":
     test_unterschriftsfeld()
     test_lieferung2_bestand()
     test_review_lieferung3()
+    test_kritisch_eigene_spalte()
     test_durchsichtige_bilder()
