@@ -215,7 +215,8 @@ def test_migration_11():
     with tempfile.TemporaryDirectory() as tmp:
         app = make_app(tmp)
         pfad = os.path.join(tmp, "stroemis.db")
-        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == "11"
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == str(
+            models.SCHEMA_VERSION)
         assert erinnerungslog_wie_schritt_11(app)
         tabelle = zeilen(app, "SELECT sql FROM sqlite_master WHERE name = 'mat_reminder_log'")[0]["sql"]
         assert "freigabe_ablauf" in tabelle and "sent_to" not in tabelle, tabelle

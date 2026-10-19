@@ -77,13 +77,20 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     UNIQUE je Ziel, Stufe, Fälligkeit und Konto – dieselbe Stufe geht nie zweimal an dasselbe Konto, auch nicht bei
     zwei Läufen gleichzeitig. Dazu mat_folder.reminders_off (1 = keine Erinnerungen zu Artikeln in diesem Ordner und
     darunter; die Vererbung rechnet services/erinnerung.py). Wiederholbar.
+  - Schritt 12 (Phase 2 · Lieferung 3, Bestandsimport und Prüfanleitung): mat_import – ein Lauf „Übernehmen“ eines
+    Bestandsimports (Zielordner, Dateiname und SHA-256, Zahlen, wer, wann; die Datei selbst wird nicht gespeichert) –
+    und mat_import_row – eine Zeile der Nacharbeit mit den zugeordneten Werten (nur solange sie offen ist), Gründen,
+    Produktangabe, Produktwahl und Meldung; beide mit AUTOINCREMENT (das Journal nennt Importe). Dazu
+    mat_form.wiki_page_id: die Wiki-Seite mit der Prüfanleitung zur Formularversion (ON DELETE SET NULL beim
+    endgültigen Löschen der Seite). Rein additiv, wiederholbar. Wer mat_folder künftig neu aufbaut, muss den Verweis
+    mat_import.folder_id (ON DELETE CASCADE) bedenken – wie mat_reminder_log.grant_id bei mat_folder_grant.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -118,6 +125,9 @@ FREIGABEN = ("lesen", "pruefen", "verwalten")
 # Die Stufen, mit denen Schritt 1 das Erinnerungslog angelegt hat – Schritt 1 bleibt, wie er ausgeliefert wurde.
 ERINNERUNGEN_1 = ("30_tage", "7_tage", "faellig", "lebensdauer")
 ERINNERUNGEN = ERINNERUNGEN_1 + ("freigabe_ablauf",)
+# Zustand einer Zeile der Nacharbeit (Bestandsimport, Schritt 12) – „ersetzt“: über die Nacharbeits-CSV neu eingelesen.
+IMPORT_STATUS = {"offen": "offen", "uebernommen": "übernommen", "im_bestand": "schon im Bestand",
+                 "verworfen": "verworfen", "ersetzt": "neu eingelesen"}
 
 
 def _in(werte):
@@ -1203,11 +1213,81 @@ def _schritt_11(conn):
         conn.execute(sql)
 
 
+# --- Schritt 12 (Phase 2 · Lieferung 3, Bestandsimport und Prüfanleitung aus dem Wiki) ----------------------------
+SCHRITT_12_IMPORT = [
+    # Ein Lauf „Übernehmen“ eines Bestandsimports – auch einer, der nur Nacharbeit hinterlässt.
+    """CREATE TABLE IF NOT EXISTS mat_import (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      folder_id       INTEGER NOT NULL REFERENCES mat_folder(id) ON DELETE CASCADE,   -- Zielordner
+      file_name       TEXT NOT NULL DEFAULT '',          -- Name der Datei, wie hochgeladen (höchstens 200 Zeichen)
+      file_sha256     TEXT NOT NULL DEFAULT '',          -- „dieselbe Datei schon importiert?“
+      file_kind       TEXT NOT NULL CHECK (file_kind IN ('csv', 'xlsx')),
+      rows_total      INTEGER NOT NULL DEFAULT 0,        -- Datenzeilen mit Inhalt
+      rows_created    INTEGER NOT NULL DEFAULT 0,        -- beim Übernehmen angelegte Artikel
+      rows_existing   INTEGER NOT NULL DEFAULT 0,        -- schon im Bestand oder schon erledigt (übersprungen)
+      rows_rework     INTEGER NOT NULL DEFAULT 0,        -- in die Nacharbeit
+      created_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_by_name TEXT NOT NULL DEFAULT '',
+      created_at      TEXT NOT NULL
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_mat_import_folder ON mat_import(folder_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_import_datei ON mat_import(folder_id, file_sha256)",
+    # Eine Zeile der Nacharbeit. values_json hält nur die zugeordneten Felder (Schlüssel aus bestandsimport.FELDER) als
+    # Text, so wie sie gelesen wurden (je Feld gekürzt) – solange die Zeile offen ist; beim Erledigen wird es geleert.
+    """CREATE TABLE IF NOT EXISTS mat_import_row (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,                            -- = „Nacharbeit-Nr.“
+      import_id        INTEGER NOT NULL REFERENCES mat_import(id) ON DELETE CASCADE,
+      line_no          INTEGER NOT NULL CHECK (line_no >= 1),        -- Zeile in der Datei, wie Excel zählt
+      values_json      TEXT NOT NULL DEFAULT '{}',
+      reason_code      TEXT NOT NULL DEFAULT '',                     -- Codes der Gründe (bestandsimport.GRUENDE), mit
+                                                                     -- „,“ getrennt; der erste bestimmt die Gruppe
+      reason           TEXT NOT NULL DEFAULT '',                     -- alle Gründe in Klartext, „ · “ getrennt
+      offer_key        TEXT NOT NULL DEFAULT '',                     -- Produktangabe vereinheitlicht (katalog.dedupe_key)
+      product_id       INTEGER REFERENCES mat_product(id) ON DELETE SET NULL,            -- zugeordnetes Produkt
+      request_id       INTEGER REFERENCES mat_product_request(id) ON DELETE SET NULL,    -- „Produkt melden“
+      status           TEXT NOT NULL DEFAULT 'offen'
+                       CHECK (status IN """ + _in(IMPORT_STATUS) + """),
+      item_id          INTEGER REFERENCES mat_item(id) ON DELETE SET NULL,               -- angelegt/gefunden
+      resolved_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      resolved_by_name TEXT NOT NULL DEFAULT '',
+      resolved_at      TEXT,
+      CHECK ((status = 'offen') = (resolved_at IS NULL)),
+      UNIQUE (import_id, line_no)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_mat_import_row_status ON mat_import_row(import_id, status)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_import_row_angabe ON mat_import_row(import_id, offer_key)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_import_row_meldung ON mat_import_row(request_id) WHERE request_id IS NOT NULL",
+]
+SCHRITT_12_WIKI = [
+    # Prüfanleitung zur Formularversion: eine Wiki-Seite. Kein Abschnitt, kein Anker – eingeblendet wird immer der
+    # Abschnitt „Prüfung“, wenn die Seite ihn hat. ADD COLUMN mit REFERENCES geht in SQLite nur mit Vorgabe NULL.
+    ("mat_form", "wiki_page_id", "INTEGER REFERENCES wiki_pages(id) ON DELETE SET NULL"),
+]
+WIKI_INDIZES = [
+    # ON DELETE SET NULL beim endgültigen Löschen einer Wiki-Seite (purge) sucht hier.
+    "CREATE INDEX IF NOT EXISTS idx_mat_form_wiki ON mat_form(wiki_page_id) WHERE wiki_page_id IS NOT NULL",
+]
+
+
+def _schritt_12(conn):
+    """Phase 2 · Lieferung 3: Bestandsimport (mat_import, mat_import_row) und Wiki-Verknüpfung am Prüfformular
+    (mat_form.wiki_page_id). Rein additiv; ein zweiter Lauf findet alles vor und ändert nichts. Keine Trigger an
+    mat_form: Die Unveränderlichkeit benutzter Formulare setzt weiter der Dienst durch, und die Wiki-Route schreibt nur
+    diese eine Spalte (das SET NULL eines Wiki-Purge ist ebenfalls ein UPDATE an mat_form)."""
+    for sql in SCHRITT_12_IMPORT:
+        conn.execute(sql)
+    for tabelle, spalte, art in SCHRITT_12_WIKI:
+        if spalte not in _spalten(conn, tabelle):
+            conn.execute(f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {art}")
+    for sql in WIKI_INDIZES:
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
-            8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11}
+            8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12}
 
 
 def _meta(conn, schluessel, vorgabe=None):
