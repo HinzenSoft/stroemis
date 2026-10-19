@@ -272,8 +272,9 @@ anschließendem Import des Katalog-Exports.
 Die Anwendung verschickt die Erinnerungsmails selbst – ohne Cron und ohne Handgriff auf dem VPS: Jeder
 Arbeitsprozess startet mit der ersten Anfrage einen Hintergrundlauf, der alle 15 Minuten aufwacht und **einmal am Tag
 ab 6 Uhr deutscher Zeit** arbeitet. Dass zwei Arbeitsprozesse, ein Neustart oder die Kommandozeile nie doppelt mahnen,
-regeln Tagesmarken in der Datenbank und das Erinnerungslog. Ausgefallene Tage holt der nächste Lauf nach (mit der
-höchsten erreichten Stufe).
+regeln Tagesmarken in der Datenbank und das Erinnerungslog – außer, wenn ein Prozess genau zwischen der Annahme einer
+Mail und ihrem Vermerk endet (etwa beim Neustart nach einem Deploy kurz nach 6 Uhr); dann kommt diese eine Mail am
+nächsten Morgen noch einmal. Ausgefallene Tage holt der nächste Lauf nach (mit der höchsten erreichten Stufe).
 
 - **Einschalten in der Produktion im Browser**: Verwaltung → Einstellungen → Material → „Erinnerungsmails
   verschicken“. Die **Vorgabe ist aus**. Nicht in der `.env` einschalten – die Entwicklung kopiert sie. Nach dem
@@ -301,7 +302,8 @@ höchsten erreichten Stufe).
   ```
 
   Rückgabewert 0 = in Ordnung, 1 = eine Mail ist gescheitert oder ein Fehler steht im Stand, 2 = Versand aus,
-  gesperrt oder kein Mailserver. Ein Cron auf dem Host ist nicht nötig; einer mit `remind` mahnte trotzdem nie doppelt.
+  gesperrt, kein Mailserver oder falscher Aufruf (`--stichtag` ohne `--trocken`, unlesbares Datum). Ein Cron auf dem
+  Host ist nicht nötig; einer mit `remind` mahnte trotzdem nicht doppelt.
 - **Die Entwicklung bleibt still**: `MATERIAL_ERINNERUNGEN_SPERRE` (nur in der `.env`, kein Wert im Browser übersteuert
   sie) sperrt den Versand. Ohne Eintrag greift sie, wenn `STROEMIS_NAME` auf `-dev` endet – das setzt
   `dev-einrichten.sh`, die bestehende Entwicklung ist also ohne Handgriff gesperrt; künftige Einrichtungen tragen

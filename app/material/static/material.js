@@ -990,7 +990,8 @@
     const dlg = dialog(`<h2>Probelauf Erinnerungsmails</h2>
       ${l ? `<p class="small">${esc(laufWann(l).replace(/^\w/, (c) => c.toUpperCase()))} verschickt: ${laufErgebnis(l)}.</p>` : ""}
       ${p.gesperrt ? '<p class="notice small">Erinnerungsmails sind in dieser Umgebung gesperrt – so gingen sie hinaus, wenn sie an wären.</p>'
-        : !p.versand ? '<p class="notice small">Erinnerungsmails sind aus – so gingen sie hinaus, wenn sie an wären.</p>' : ""}
+        : !p.versand ? '<p class="notice small">Erinnerungsmails sind aus – so gingen sie hinaus, wenn sie an wären.</p>'
+        : !p.smtp ? '<p class="notice small">Kein Mailserver eingerichtet – so gingen sie hinaus, wenn einer eingerichtet wäre.</p>' : ""}
       <p class="help">Nichts wird verschickt oder vermerkt. Gerechnet mit den Rechten und Ordnern von jetzt.</p>
       ${p.fehlerhaft ? `<p class="notice small">${p.fehlerhaft === 1 ? "1 Artikel bzw. 1 Freigabe konnte" : `${p.fehlerhaft} Artikel bzw. Freigaben konnten`} nicht gelesen werden – siehe Server-Log.</p>` : ""}
       <h3>${wann} ab 6 Uhr gingen hinaus:</h3>
@@ -1657,7 +1658,7 @@
         ${d.foto || d.description || d.interval_months || erinnerungAus ? `<div class="mat-ordnerkopf">${d.foto ? bildLink(d.foto, d.original, `Ordnerfoto ${d.name}`, null, `<img class="mat-ordnerfoto" src="${esc(d.vorschau)}" alt="">`) : ""}
           <div>${d.description ? `<p class="mat-text">${esc(d.description)}</p>` : ""}
           ${d.interval_months ? `<p class="small">Prüfintervall hier: höchstens ${d.interval_months} Monate.</p>` : ""}
-          ${erinnerungAus ? `<p class="small">Erinnerungsmails aus${geerbtVon ? ` – geerbt von <a href="/material/ordner/${geerbtVon.id}">${esc(geerbtVon.pfad)}</a>` : ""}</p>` : ""}</div></div>` : ""}
+          ${erinnerungAus ? `<p class="small">Erinnerungsmails aus${geerbtVon ? ` – geerbt von ${geerbtVon.sichtbar ? `<a href="/material/ordner/${geerbtVon.id}">${esc(geerbtVon.pfad)}</a>` : esc(geerbtVon.pfad)}` : ""}</p>` : ""}</div></div>` : ""}
         ${d.unterordner.length ? `<section class="section"><h2>Unterordner</h2>${unterordnerHtml(d.unterordner)}</section>` : ""}
         <section class="section"><h2>Artikel in diesem Ordner</h2>
           <div class="mat-filterzeile"><div class="c-tabs mat-filter">${["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"].map((s) => `<button type="button" data-act="filter" data-f="${s}" class="${s === filter ? "sel" : ""}">${s ? esc(STATUS[s]) : "alle"}${s && d.direkt && d.direkt[s] ? ` (${d.direkt[s]})` : ""}</button>`).join("")}</div>

@@ -135,8 +135,9 @@ def _trocken(stichtag):
 @with_appcontext
 def remind(trocken, stichtag, erneut):
     """Erinnerungsmails an die Materialwarte: der Tageslauf, wie ihn die Anwendung jeden Morgen ab 6 Uhr selbst
-    anstößt (Pflege und Mails). Mehrfach aufgerufen mahnt er nie doppelt. Exit 1, wenn eine Mail scheiterte oder ein
-    Fehler auftrat; 2, wenn der Versand aus, gesperrt oder kein Mailserver eingerichtet ist."""
+    anstößt (Pflege und Mails). Mehrfach aufgerufen mahnt er nie doppelt (zur einen Ausnahme siehe erinnerung.py).
+    Exit 1, wenn eine Mail scheiterte oder ein Fehler auftrat; 2, wenn der Versand aus, gesperrt oder kein Mailserver
+    eingerichtet ist oder der Aufruf nicht stimmt (--stichtag ohne --trocken, unlesbares Datum)."""
     from .. import einstellungen
     einstellungen.anwenden()
     g.mat_akteur = erinnerung.AKTEUR

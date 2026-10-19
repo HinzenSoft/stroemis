@@ -1,7 +1,9 @@
 """Der eingebaute Tageslauf des Moduls Material: ein Thread je Gunicorn-Arbeitsprozess, der alle 15 Minuten aufwacht und
 ab 6 Uhr deutscher Zeit einmal am Tag services/erinnerung.tageslauf anstößt (Pflege und Erinnerungsmails). Keine
 Arbeit auf dem Server nötig – kein cron im Container. Dass zwei Arbeitsprozesse, ein Neustart oder die Kommandozeile
-(flask material remind) nie doppelt mahnen, regeln Tagesmarken, Herzschlag und das Log (erinnerung.py).
+(flask material remind) nie doppelt mahnen, regeln Tagesmarken, Herzschlag und das Log (erinnerung.py) – außer, wenn
+ein Prozess genau zwischen der Annahme einer Mail und ihrem Vermerk endet; dann kommt diese eine Mail am nächsten
+Morgen noch einmal.
 
 Gestartet wird bei der ersten Anfrage, nicht in create_app: Kommandozeile, Skripte und Tests rufen create_app auch,
 bedienen aber keine Anfragen – ein Thread dort könnte nach 6 Uhr den Tag belegen, während der Prozess gleich endet. Tests

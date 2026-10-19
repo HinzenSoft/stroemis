@@ -787,7 +787,16 @@ def test_ordner_aus():
             assert r.status_code == 200 and r.json["ordner"]["reminders_off"] is True, r.get_json()
             o = w.get(f"/api/material/ordner/{regal}").json["ordner"]
             assert o["reminders_off"] is False and o["erinnerungen"] == {
-                "aus": True, "eigen": False, "geerbt_von": {"id": lager, "pfad": "OG Musterstadt / Lager"}}, o
+                "aus": True, "eigen": False, "geerbt_von": {"id": lager, "pfad": "OG Musterstadt / Lager",
+                                                            "sichtbar": True}}, o
+            # Wer nur „Regal“ verwaltet, sieht „Lager“ nur als Pfad – ohne Link (sonst 404).
+            rw, rw_id = konto(app, adm, "regalwart@example.org")
+            freigeben(adm, regal, rw_id, "verwalten")
+            o = rw.get(f"/api/material/ordner/{regal}").json["ordner"]
+            assert o["erinnerungen"]["geerbt_von"] == {"id": lager, "pfad": "OG Musterstadt / Lager",
+                                                       "sichtbar": False}, o
+            assert rw.get(f"/api/material/ordner/{lager}").status_code == 404
+            sql(app, "DELETE FROM mat_folder_grant WHERE user_id = ?", (rw_id,))     # bekäme sonst unten auch Mails
             o = w.get(f"/api/material/ordner/{lager}").json["ordner"]
             assert o["erinnerungen"] == {"aus": True, "eigen": True, "geerbt_von": None}, o
             journal_e = zeilen(app, "SELECT * FROM mat_audit WHERE entity = 'folder' AND entity_id = ? "
@@ -848,6 +857,9 @@ def test_freigabe_ablauf():
             assert "Erika Extern – prüfen bis 02.12.2026 (in 30 Tagen) · 2 offene Prüfungen" in text, text
             assert f"Verlängern: {BASIS}/material/ordner/{gid}?freigaben=verlaengern" in text
             assert "1 Freigabe läuft ab" in liste[0][1]
+            # Nur Freigaben: Der Schalter am Ordner hält sie nicht an – die Fußzeile verspricht es auch nicht.
+            assert "abschalten" not in text and text.rstrip().endswith(
+                "Ablaufende Freigaben melden sich immer – auch in Ordnern mit „Erinnerungsmails aus“."), text
             assert [(z["grant_id"], z["kind"], z["due_on"]) for z in log(app)] == [(grant, "freigabe_ablauf", v.isoformat())]
             tag(1)
             with post() as liste:
@@ -885,7 +897,32 @@ def test_freigabe_ablauf():
             with post() as liste:
                 lauf(app)
             assert [m[0] for m in liste] == ["katalog@example.org"], liste
-            assert "einzel – verwalten bis" in liste[0][2] and "kein Materialwart eingetragen" in liste[0][2]
+            text = liste[0][2]
+            # Ein Materialwart ist eingetragen – nur eben der Inhaber selbst: kein „kein Materialwart eingetragen“, kein
+            # „Materialwart vergeben“, aber „Verlängern“.
+            assert "OG Einzelwart (1) – nur der Inhaber selbst verwaltet hier, darum an die Material-Verwaltung" in text, text
+            assert "einzel – verwalten bis" in text and "kein Materialwart" not in text
+            assert f"Verlängern: {BASIS}/material/ordner/{gx}?freigaben=verlaengern" in text
+            assert "freigaben=materialwart" not in text, text
+            assert "Gruppen mit „nur der Inhaber selbst verwaltet hier“ bekommst du, weil du zur Material-Verwaltung " \
+                   "gehörst." in " ".join(text.split()), text
+            # Befristetes lesen, daran eine dauerhafte Prüffreigabe mit offenem Entwurf: Mit dem lesen endet auch das
+            # Prüfen – die Mail nennt den Entwurf. Ein befristetes lesen ohne dauerhaftes Prüfen nennt keine.
+            tag(73)
+            p_c, p_id = konto(app, adm, "pruef2@example.org", name="Paul Probe", mat_pruefer=True,
+                              urkundennummer="1012-4800")
+            freigeben(adm, gid, p_id, "lesen", bis=T0 + timedelta(days=93))
+            gp = freigeben(adm, gid, p_id, "pruefen")
+            sql(app, "UPDATE mat_folder_grant SET valid_until = NULL WHERE id = ?", (gp,))
+            a = artikel(app, k["wart"], ids["hms"], lager, "FA-3")
+            assert starten(p_c, a["id"]).status_code in (200, 201)
+            _, l_id = konto(app, adm, "leser@example.org", name="Lena Leser")
+            freigeben(adm, gid, l_id, "lesen", bis=T0 + timedelta(days=95))
+            with post() as liste:
+                lauf(app)
+            text = an(liste, "wart@example.org")[0][2]
+            assert "Paul Probe – lesen bis 03.02.2027 (in 20 Tagen) · 1 offene Prüfung\n" in text, text
+            assert "Lena Leser – lesen bis 05.02.2027 (in 22 Tagen)\n" in text, text
     print("Ablaufmail für Freigaben bestanden.")
 
 
@@ -975,6 +1012,7 @@ def test_mailtext():
                 zeilen_lager
             links = [z for z in t.splitlines() if "http" in z]
             assert links and all(f"{BASIS}/material/" in z for z in links), links
+            assert t.endswith("Für einen Ordner abschalten: Ordner → Bearbeiten → „Erinnerungsmails aus“.\n"), t
             assert "@" not in t, t
             # Steuerzeichen im Namen der Seite: der Betreff bleibt eine Zeile.
             app.config["SITE_NAME"] = "strömis .de\n"
@@ -1024,6 +1062,14 @@ def test_mailtext():
             with post():
                 lauf(app)
             assert len({z["item_id"] for z in log(app) if z["konto_ref"] == ref(app, k["wart_id"])}) >= 120
+            # Artikel und Freigaben in einer Mail: Abschalten gilt nur für die Artikel.
+            _, f_id = konto(app, k["adm"], "fuss@example.org", name="Fritz Fuss")
+            freigeben(k["adm"], gid, f_id, "lesen", bis=T0 + timedelta(days=20))
+            artikel(app, w, ids["hms"], lager, "MT-9", faellig=T0 + timedelta(days=12))
+            t = {x.adresse: x for x in planen(app).mails}["wart@example.org"].text
+            assert "MT-9" in t and "Fritz Fuss – lesen bis" in t, t
+            assert t.endswith("Für einen Ordner abschalten: Ordner → Bearbeiten → „Erinnerungsmails aus“. Ablaufende "
+                              "Freigaben melden sich weiter.\n"), t
     print("Mailtext bestanden.")
 
 
@@ -1202,7 +1248,7 @@ def test_routen():
             p = k["katalog"].get(url).json
             assert tabellen() == vorher
             assert p["stichtag"] == T0.isoformat() and p["morgen"] is False and p["letzter"] is None, p
-            assert p["versand"] is False and p["gesperrt"] is False
+            assert p["versand"] is False and p["gesperrt"] is False and p["smtp"] is False
             namen = {m["name"]: m for m in p["mails"]}
             assert set(namen) == {"wart", "katalog"}, namen
             assert namen["wart"]["artikel"] == 1 and "RT-1" in namen["wart"]["text"] and namen["wart"]["gliederung"] == ""
@@ -1213,6 +1259,7 @@ def test_routen():
             # Nach dem Mailteil: der Probelauf zeigt morgen – mit dem heutigen Log und der Zeile zum letzten Lauf.
             with versand(app), post():
                 lauf(app)
+                assert k["katalog"].get(url).json["smtp"] is True
             p = k["katalog"].get(url).json
             assert p["stichtag"] == (T0 + timedelta(days=1)).isoformat() and p["morgen"] is True, p
             assert p["letzter"]["mails"] == 2 and p["letzter"]["fehlgeschlagen"] == 0, p["letzter"]

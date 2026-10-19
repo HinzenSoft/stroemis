@@ -22,7 +22,8 @@ nie an DEMO-Ordnern oder von DEMO-Konten; der Schalter am Ordner hält sie nicht
 Empfänger sind, wer an der Heimat (bzw. am Anker der Freigabe) oder darüber gültig verwaltet – Material- und
 Plattform-Verwaltung eingeschlossen, wenn sie dort eingetragen sind (ordnerverwalter, anders als rechte.verwalter_von).
 Verwaltet dort niemand, bekommt es die Material-Verwaltung, ohne sie die Plattform-Verwaltung; die Mail kennzeichnet
-solche Gruppen mit „kein Materialwart eingetragen“. Nur aktive Konten mit Namen, Modulzugang und Adresse, nie
+solche Gruppen mit „kein Materialwart eingetragen“ – bzw. „nur der Inhaber selbst verwaltet hier“, wenn bei einer
+Freigabe allein ihr Inhaber dort verwaltet. Nur aktive Konten mit Namen, Modulzugang und Adresse, nie
 DEMO-Konten (Adresse …@….invalid), jeder nur mit dem, was er sieht. Zugeordnete Personen, Prüfer und der Inhaber einer
 ablaufenden Freigabe bekommen nichts. Je Empfänger und Tag eine Mail, gruppiert nach Ordnerpfad.
 
@@ -30,7 +31,10 @@ Der Versand hängt am Schalter MATERIAL_ERINNERUNGEN (Verwaltung → Einstellung
 MATERIAL_ERINNERUNGEN_SPERRE (nur Umgebung, ohne Eintrag an, wenn STROEMIS_NAME auf -dev endet). Der Pflegeteil
 (Journal „freigabe_abgelaufen“, Aufräumen des Logs nach 13 Monaten und des Suchprotokolls) läuft unabhängig davon
 täglich, der Probelauf immer. Einmaligkeit: Tagesmarken und Herzschlag in mat_meta unter BEGIN IMMEDIATE, dazu die
-UNIQUE-Indizes des Logs – Arbeitsprozesse, Neustarts und Kommandozeile mahnen nie doppelt.
+UNIQUE-Indizes des Logs – Arbeitsprozesse, Neustarts und Kommandozeile mahnen nie doppelt. Ausnahme: Endet ein
+Prozess genau zwischen der Annahme einer Mail und ihrem Vermerk (etwa beim Neustart nach einem Deploy – der Thread ist
+ein Daemon), fehlt die Log-Zeile, und diese eine Mail kommt am nächsten Morgen noch einmal. Erst senden, dann vermerken
+lässt diese Lücke; umgekehrt ginge bei einem Abbruch eine Mahnung verloren.
 
 Das Erinnerungslog ist kein Prüfnachweis: Es dient nur dazu, nicht doppelt zu mahnen."""
 import json
@@ -64,6 +68,9 @@ SPERRE = "MATERIAL_ERINNERUNGEN_SPERRE"             # nur Umgebung (siehe gesper
 M_LAEUFT, M_PFLEGE, M_MAILS, M_STAND = "tageslauf_laeuft", "tageslauf_pflege_tag", "erinnerung_tag", "tageslauf_stand"
 
 RUECKFALL_TEXT = {"material": "Material-Verwaltung", "plattform": "Plattform-Verwaltung"}
+# Warum eine Gruppe im Rückfall steht – Kennung „<Stelle>_inhaber“: Am Anker verwaltet nur der Inhaber der ablaufenden
+# Freigabe selbst (er bekommt sie nicht, siehe empfaenger).
+RUECKFALL_GRUND = {"": "kein Materialwart eingetragen", "inhaber": "nur der Inhaber selbst verwaltet hier"}
 RECHT_TEXT = {"lesen": "lesen", "pruefen": "prüfen", "verwalten": "verwalten"}
 
 
@@ -75,7 +82,8 @@ class Eintrag:            # eine Erinnerung für eine Mail
     faellig_am: str       # due_on: next_due_on, retire_by bzw. valid_until
     ordner_id: int        # Heimat (bei frei = folder_id) bzw. Anker
     daten: dict           # was die Zeile zeigt (Nummern, Produkt, Name, Recht, offene Prüfungen, neu)
-    rueckfall: str = ""   # "" | "material" | "plattform": Empfänger nur, weil am Ordner niemand verwaltet
+    rueckfall: str = ""   # "" | "material" | "plattform": Empfänger nur, weil am Ordner niemand verwaltet;
+                          # "material_inhaber" | "plattform_inhaber": niemand außer dem Inhaber der Freigabe
 
     @property
     def schluessel(self):
@@ -275,7 +283,8 @@ def _konten(ids):
 def freigaben_kandidaten(stichtag, baum=None):
     """Auswahl der befristeten Freigaben, die in höchstens 30 Tagen enden und heute wirken (Konto aktiv, mit Namen und
     Zugang; prüfen nur qualifiziert) – nie an DEMO-Ordnern, nie von DEMO-Konten. Je Freigabe ein Eintrag
-    freigabe_ablauf; bei Prüffreigaben stehen die offenen Prüfungen des Kontos im Zweig des Ankers dabei. Liefert
+    freigabe_ablauf mit den offenen Prüfungen des Kontos im Zweig des Ankers – bei jeder Art: Mit einem befristeten
+    lesen oder verwalten endet auch eine dauerhafte Prüffreigabe, die daran hängt (L1). Liefert
     (Einträge, {"fehlerhaft": n})."""
     rows = db.query(
         "SELECT g.* FROM mat_folder_grant g JOIN users u ON u.id = g.user_id "
@@ -295,13 +304,18 @@ def freigaben_kandidaten(stichtag, baum=None):
             ende = _tag(r["valid_until"])
             daten = {"name": (u["name"] or "").strip(), "recht": r["permission"], "bis": r["valid_until"],
                      "tage": (ende - stichtag).days, "inhaber": u["id"], "offen": 0}
-            if r["permission"] == "pruefen":
-                if u["id"] not in offen_je_konto:
-                    offen_je_konto[u["id"]] = db.query(
-                        "SELECT i.* FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id "
-                        "WHERE x.inspector_user_id = ? AND x.completed_at IS NULL", (u["id"],))
-                zweig = _zweig(r["folder_id"], baum)
-                daten["offen"] = sum(1 for i in offen_je_konto[u["id"]] if bestand.heimat(i) in zweig)
+            if u["id"] not in offen_je_konto:
+                offen_je_konto[u["id"]] = (
+                    db.query("SELECT i.* FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id "
+                             "WHERE x.inspector_user_id = ? AND x.completed_at IS NULL", (u["id"],)),
+                    [x["folder_id"] for x in db.query("SELECT folder_id FROM mat_folder_grant WHERE user_id = ? "
+                                                      "AND permission = 'pruefen' AND valid_until IS NULL", (u["id"],))])
+            offen, dauerhaft = offen_je_konto[u["id"]]
+            zweig = _zweig(r["folder_id"], baum)
+            if r["permission"] != "pruefen":
+                # Mit dem Grundrecht endet das dauerhafte Prüfen an diesem Anker und darunter – dort hängen die Entwürfe.
+                zweig = set().union(*(_zweig(f, baum) for f in dauerhaft if f in zweig))
+            daten["offen"] = sum(1 for i in offen if bestand.heimat(i) in zweig)
         except (ValueError, TypeError) as exc:
             current_app.logger.error("Erinnerungen: Freigabe %s übersprungen – %s", r["id"], exc)
             info["fehlerhaft"] += 1
@@ -352,8 +366,9 @@ def _verwaltung(zwischen, ohne=None):
 
 
 def empfaenger(eintrag, zwischen):
-    """Wer den Eintrag bekommt – vor dem Rechteschnitt – und die Art des Rückfalls ("" = Verwalter des Ordners).
-    zwischen hält je Plan die Verwalter je Ordner, die Verwaltung und den Stichtag."""
+    """Wer den Eintrag bekommt – vor dem Rechteschnitt – und die Art des Rückfalls ("" = Verwalter des Ordners; mit
+    „_inhaber“, wenn bei einer Freigabe nur ihr Inhaber selbst dort verwaltet). zwischen hält je Plan die Verwalter je
+    Ordner, die Verwaltung und den Stichtag."""
     ohne = eintrag.daten.get("inhaber") if eintrag.art == "freigabe" else None
     schluessel = (eintrag.ordner_id, ohne)
     verwalter = zwischen.setdefault("verwalter", {})
@@ -363,7 +378,14 @@ def empfaenger(eintrag, zwischen):
         verwalter[schluessel] = [konten[i] for i in ids if i in konten and _zulaessig(konten[i])]
     if verwalter[schluessel]:
         return verwalter[schluessel], ""
-    return _verwaltung(zwischen, ohne)
+    konten, stelle = _verwaltung(zwischen, ohne)
+    if ohne is not None:
+        alle = zwischen.setdefault("verwalter_ids", {})
+        if eintrag.ordner_id not in alle:
+            alle[eintrag.ordner_id] = ordnerverwalter(eintrag.ordner_id, stichtag=zwischen.get("stichtag"))
+        if ohne in alle[eintrag.ordner_id]:
+            return konten, f"{stelle}_inhaber"
+    return konten, stelle
 
 
 # --- Planen ------------------------------------------------------------------------------------------------------
@@ -547,7 +569,8 @@ def mailtext(mail, stichtag, pfade=None):
             eigene.append(fid)
         if rf:
             rueckfall_arten.add(rf)
-            text += f" – kein Materialwart eingetragen, darum an die {RUECKFALL_TEXT[rf]}"
+            stelle, _, grund = rf.partition("_")
+            text += f" – {RUECKFALL_GRUND[grund]}, darum an die {RUECKFALL_TEXT[stelle]}"
         return text, rf
 
     teile = [f"Hallo {mail.name},", "",
@@ -593,15 +616,21 @@ def mailtext(mail, stichtag, pfade=None):
             if rest:
                 teile.append(f"  … und {rest} weitere in diesem Ordner")
             teile.append(f"  Verlängern: {basis}/material/ordner/{fid}?freigaben=verlaengern")
-            if rf:
+            if rf and not rf.endswith("_inhaber"):
                 teile.append(f"  Materialwart vergeben: {basis}/material/ordner/{fid}?freigaben=materialwart")
     # Der erste Satz nur, wenn die Mail auch eigene Ordner nennt – sonst stimmte er für die Verwaltung im Rückfall nicht.
     saetze = ["Du bekommst diese Mail, weil du diese Ordner verwaltest."] if eigene else []
-    for rf in ("material", "plattform"):
-        if rf in rueckfall_arten:
-            saetze.append(f"Gruppen mit „kein Materialwart eingetragen“ bekommst du, weil du zur {RUECKFALL_TEXT[rf]} "
-                          "gehörst.")
-    saetze.append("Für einen Ordner abschalten: Ordner → Bearbeiten → „Erinnerungsmails aus“.")
+    for stelle in ("material", "plattform"):
+        gruende = [g for g in ("", "inhaber") if f"{stelle}_{g}".rstrip("_") in rueckfall_arten]
+        if gruende:
+            saetze.append(f"Gruppen mit {' oder '.join(f'„{RUECKFALL_GRUND[g]}“' for g in gruende)} bekommst du, weil "
+                          f"du zur {RUECKFALL_TEXT[stelle]} gehörst.")
+    # Der Schalter am Ordner hält nur Artikel an – ablaufende Freigaben melden sich weiter (Entwurf 2.4 b).
+    if zeilen_a:
+        saetze.append("Für einen Ordner abschalten: Ordner → Bearbeiten → „Erinnerungsmails aus“."
+                      + (" Ablaufende Freigaben melden sich weiter." if zeilen_f else ""))
+    else:
+        saetze.append("Ablaufende Freigaben melden sich immer – auch in Ordnern mit „Erinnerungsmails aus“.")
     fuss = " ".join(saetze)
     teile += ["", fuss]
     return _betreff(mail.eintraege, stichtag), "\n".join(teile) + "\n"
@@ -871,7 +900,7 @@ def probelauf(stichtag=None):
     plan = planen(stichtag)
     letzter = _letzter_mit_namen(_stand_lesen().get("letzter"))
     return {"stichtag": stichtag.isoformat(), "morgen": morgen,
-            "versand": bool(current_app.config.get("MATERIAL_ERINNERUNGEN")), "gesperrt": gesperrt(),
+            "versand": bool(current_app.config.get("MATERIAL_ERINNERUNGEN")), "gesperrt": gesperrt(), "smtp": smtp_da(),
             "letzter": {k: letzter.get(k) for k in ("tag", "beginn", "mails", "fehlgeschlagen", "fehlgeschlagen_an",
                                                     "fehler")} if letzter else None,
             "mails": [{"name": m.name, "gliederung": (m.konten[0].get("gliederung") or "").strip(), "betreff": m.betreff,
@@ -882,12 +911,14 @@ def probelauf(stichtag=None):
 
 def ordner_stand(fid):
     """Erinnerungen an einem Ordner: aus (selbst oder geerbt), der eigene Wert und der nächste Oberordner mit
-    „Erinnerungen aus“ (mit Pfad) – für Ordneransicht und Dialog."""
+    „Erinnerungen aus“ (mit Pfad und ob das Konto ihn öffnen darf – sonst zeigt die Ansicht ihn ohne Link, wie den
+    grauen Pfad im Brotkrumen) – für Ordneransicht und Dialog."""
     rows = db.query(
         "WITH RECURSIVE kette(id, tiefe) AS (SELECT ?, 0 UNION ALL SELECT f.parent_id, k.tiefe + 1 FROM mat_folder f "
         "JOIN kette k ON f.id = k.id WHERE f.parent_id IS NOT NULL AND k.tiefe < 200) "
         "SELECT m.id, m.reminders_off, k.tiefe FROM kette k JOIN mat_folder m ON m.id = k.id ORDER BY k.tiefe", (fid,))
     eigen = bool(rows and rows[0]["tiefe"] == 0 and rows[0]["reminders_off"])
     oben = next((r for r in rows if r["tiefe"] > 0 and r["reminders_off"]), None)
-    geerbt = {"id": oben["id"], "pfad": bestand._pfad_text(oben["id"])} if oben else None
+    geerbt = {"id": oben["id"], "pfad": bestand._pfad_text(oben["id"]),
+              "sichtbar": rechte.sicht().sichtbar(oben["id"])} if oben else None
     return {"aus": eigen or geerbt is not None, "eigen": eigen, "geerbt_von": geerbt}
