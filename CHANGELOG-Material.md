@@ -3037,7 +3037,7 @@ Am 20.10.2026 entschieden: Nr. 5 geändert, Nr. 6 und 7 bestätigt (siehe „Ent
    öffentlich werden.
 3. **Mail an den Melder** aus der Nacharbeit (Link zur Nacharbeit) einmal auf dev mit Mailserver ansehen – lokal ist
    ohne `SMTP_HOST` geprüft.
-4. **Frist von einem Monat** im Betrieb: Was nach einem Monat offen ist, verwirft „System“ ohne Rückfrage; danach hilft
+4. **Frist von einem Monat – bestätigt am 20.10.2026** im Betrieb: Was nach einem Monat offen ist, verwirft „System“ ohne Rückfrage; danach hilft
    ein neuer Import der Liste oder eine vorher heruntergeladene Nacharbeits-CSV (deren verfallene Zeilen werden wie
    neue geprüft).
 5. **Geändert am 20.10.2026 – ohne Seriennummernspalte nur mit ausdrücklicher Bestätigung** (Kästchen über dem Knopf,
@@ -3049,7 +3049,7 @@ Am 20.10.2026 entschieden: Nr. 5 geändert, Nr. 6 und 7 bestätigt (siehe „Ent
 7. **Dieselbe Liste noch einmal – bestätigt am 20.10.2026** (Nr. 6): Offene Zeilen der Nacharbeit werden über die
    Zeilennummer ersetzt; Zeilen ohne Seriennummer, die beim ersten Mal angelegt wurden, entstehen nach 10 Minuten
    weiterhin noch einmal (wie in Entscheidung 8 vorgesehen, der Probelauf sagt es).
-8. **Weitere Blätter zählen mit** (Nr. 1): Die Vorprüfung zählt alle Blätter der Arbeitsmappe – openpyxl lud sie schon
+8. **Weitere Blätter zählen mit – bestätigt am 20.10.2026** (Nr. 1): Die Vorprüfung zählt alle Blätter der Arbeitsmappe – openpyxl lud sie schon
    immer ganz. Eine Arbeitsmappe, deren weitere Blätter zusammen mehr als 500.000 Felder haben, wird jetzt abgelehnt
    (auch im Prüfungsimport); bitte dann nur die Liste speichern.
 
