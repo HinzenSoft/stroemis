@@ -3057,7 +3057,8 @@ Am 20.10.2026 entschieden: Nr. 5 geändert, Nr. 6 und 7 bestätigt (siehe „Ent
 
 - **Katalog: „Export / Import“ als Untermenü** – „Katalog exportieren“ und „Katalog importieren“ sind keine eigenen
   Knöpfe mehr, sondern zwei Einträge im Untermenü „Export / Import“ im Kopf des Katalogs, je mit einem Satz dazu (wie
-  „Export / Import“ im Ordnerkopf). Die Dialoge sind unverändert.
+  „Export / Import“ im Ordnerkopf). Die Dialoge sind unverändert. Reihenfolge im Kopf: „Kategorie anlegen“, „Produkt anlegen“, „Meldungen“, ganz rechts
+  „Export / Import“.
 - **Ordnerkopf: „Bearbeiten“ als Untermenü** – „Verschieben“ und „Löschen“ stehen nicht mehr als eigene Knöpfe im
   Ordnerkopf, sondern mit „Ordner bearbeiten …“ im Untermenü „Bearbeiten“. Wer den Ordner pflegt, ihn aber nicht
   verschieben oder löschen darf, behält den einfachen Knopf „Bearbeiten“.
