@@ -909,8 +909,8 @@
       </section>`
       : `<p class="help">Im <a href="/material/katalog">Katalog</a> stehen alle Produkte mit Prüfformularen und Herstellerdokumenten.
           Die Nummernsuche oben findet eine Herstellerseriennummer auf Wunsch auch außerhalb deines Bereichs – das wird mit deinem Namen protokolliert.</p>`;
-    inhalt.innerHTML = `<div class="page-head"><h1>Material</h1>
-        <div class="btn-row">${DARF.verwalten ? '<a class="btn secondary" href="/material/bestand">Bestand pflegen</a><a class="btn secondary" href="/material/artikel/neu">+ Artikel</a>' : ""}</div></div>
+    // Ohne Knöpfe im Kopf (Wunsch vom 20.10.2026): Bestand und „Artikel anlegen“ erreicht man über den Reiter „Bestand“.
+    inhalt.innerHTML = `<div class="page-head"><h1>Material</h1></div>
       ${rueckrufKasten(d.rueckrufe)}
       ${d.meldungen_offen ? `<p class="notice"><a href="/material/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produktmeldung", "offene Produktmeldungen")}</strong></a>
         – Materialwarte warten darauf, Artikel davon anzulegen.</p>` : ""}
@@ -1258,7 +1258,7 @@
     async function zeichnen() {
       inhalt.innerHTML = `<div class="page-head"><h1>Prüfungen</h1>
           <div class="btn-row"><a class="btn secondary" href="/material/pruefen" title="Ist ein PDF-Protokoll unverändert?">Protokoll prüfen</a>
-            ${DARF.verwalten || DARF.pruefen ? '<button class="btn secondary" data-act="runde">+ Prüfdurchgang</button>' : ""}</div></div>
+            ${DARF.verwalten || DARF.pruefen ? '<button class="btn secondary" data-act="runde">Prüfdurchgang anlegen</button>' : ""}</div></div>
         ${!DARF.pruefen ? `<p class="notice">${pruefHinweis()}</p>` : ""}
         <div id="pr-runden"></div><div id="pr-offen"></div>
         <section class="section"><h2>Zu prüfen</h2><div id="pr-liste"><p class="help">Wird geladen …</p></div></section>`;
@@ -1323,7 +1323,7 @@
   async function bestand() {
     const liste = await ordnerBaum();
     inhalt.innerHTML = `<div class="page-head"><h1>Bestand</h1>
-        <div class="btn-row">${DARF.gliederung_anlegen ? '<button class="btn secondary" data-act="gliederung">+ Gliederung</button>' : ""}</div></div>
+        <div class="btn-row">${DARF.gliederung_anlegen ? '<button class="btn secondary" data-act="gliederung">Gliederung anlegen</button>' : ""}</div></div>
       <p class="help">Oben stehen die Gliederungen, darunter frei verschachtelt Standorte, Fahrzeuge, Sets. Jede Gliederung hat die
         Systemordner „Gesperrt“ und „Ausgesondert“ – dorthin kommen Artikel nur durch eine Sperre oder Aussonderung.
         Die Zahl hinter einem Ordner ist sein Bestand; farbig: überfällig, Lebensdauer erreicht, gesperrt, bald fällig.
@@ -1649,7 +1649,7 @@
       try { personen = (await api(`${API}/ordner/${id}/zugeordnete`)).zugeordnete; } catch (e) { personen = []; }
       if (person && !personen.some((p) => String(p.id) === person)) person = "";
     }
-    // ?freigaben=<vorlage> (nach „+ Gliederung“ mit „materialwart“; „verlaengern“; leer aus „Dort öffnen“ und der
+    // ?freigaben=<vorlage> (nach „Gliederung anlegen“ mit „materialwart“; „verlaengern“; leer aus „Dort öffnen“ und der
     // Nutzerverwaltung): „Ordner bearbeiten“ einmal im Reiter „Freigaben“ öffnen und den Wert aus der Adresse nehmen –
     // sonst ginge der Dialog bei jedem Neuladen wieder auf.
     const adresse = new URLSearchParams(location.search);
@@ -1694,10 +1694,9 @@
         : "Ausgesonderte Artikel bleiben hier mit ihrem vollen Lebenslauf sichtbar, zählen aber nirgends mehr als Bestand und lassen sich nicht zurückholen.";
       inhalt.innerHTML = `<div class="mat-pfad"><a href="/material/bestand">Bestand</a> / ${bc}</div>
         <div class="page-head"><h1>${system ? "🔒 " : ""}${esc(d.name)} ${system ? "" : `<span class="mat-art">${esc(ORDNERART[d.kind])}</span>`}${demoMarke(d.demo)}</h1>
-          <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="unterordner">+ Unterordner</button>
-            <a class="btn secondary small" href="/material/artikel/neu?ordner=${d.id}">+ Artikel</a>
-            <button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>
-            ${darfOben ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button><button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}
+          <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="unterordner">Unterordner anlegen</button>
+            <a class="btn secondary small" href="/material/artikel/neu?ordner=${d.id}">Artikel anlegen</a>
+            ${darfOben ? bearbeitenMenue : '<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>'}` : ""}
             ${darf.grund ? exportMenue(d, darfPflegen) : ""}</div></div>
         ${darfPflegen ? '<div id="mat-freigaben-kopf"></div>' : ""}
         ${darfPflegen && d.nacharbeit ? `<p class="notice small">Aus einem Bestandsimport ${d.nacharbeit === 1 ? "wartet 1 Zeile" : `warten ${d.nacharbeit} Zeilen`} auf Nacharbeit.
@@ -1881,6 +1880,28 @@
           <span>Eine Liste aus Excel oder CSV in diesen Ordner übernehmen: erst ein Probelauf, dann übernehmen; was nicht passt, kommt in die Nacharbeit.</span></a>
         ${d.nacharbeit ? `<a href="/material/ordner/${d.id}/import#bi-nacharbeit"><strong>Nacharbeit (${d.nacharbeit} offen)</strong>
           <span>Zeilen aus Bestandsimporten, die noch ein Produkt, eine Angabe oder eine Entscheidung brauchen.</span></a>` : ""}` : ""}
+      </div></details>`;
+  // Katalog-Export und -Import im Kopf des Katalogs: wie „Export / Import“ im Ordnerkopf ein Untermenü statt zweier
+  // Knöpfe (Wunsch vom 20.10.2026). Die Einträge öffnen die Dialoge über data-act; ohne Skript führen sie zum Katalog.
+  const katalogMenue = `<details class="mat-menue">
+      <summary class="btn secondary" aria-haspopup="true">Export / Import</summary>
+      <div class="mat-menue-liste">
+        <a href="/material/katalog" role="button" data-act="kat-export"><strong>Katalog exportieren …</strong>
+          <span>Kategorien, Produkte und Prüfformulare samt Bildern und Herstellerdokumenten als ZIP – etwa von dev in die Produktion. Bestand, Prüfungen und DEMO bleiben draußen.</span></a>
+        <a href="/material/katalog" role="button" data-act="kat-import"><strong>Katalog importieren …</strong>
+          <span>Eine Katalogdatei (ZIP oder JSON) übernehmen: erst ein Probelauf, dann übernehmen. Gelöscht wird dabei nichts.</span></a>
+      </div></details>`;
+  // „Bearbeiten“ im Ordnerkopf: Verschieben und Löschen stehen im Untermenü statt als eigene Knöpfe (Wunsch vom
+  // 20.10.2026). Wer den Ordner nur bearbeiten, aber nicht verschieben oder löschen darf, behält den einfachen Knopf.
+  const bearbeitenMenue = `<details class="mat-menue">
+      <summary class="btn secondary small" aria-haspopup="true">Bearbeiten</summary>
+      <div class="mat-menue-liste">
+        <a href="#" role="button" data-act="bearbeiten"><strong>Ordner bearbeiten …</strong>
+          <span>Name, Art, Prüfintervall, Beschreibung, Foto, Erinnerungsmails und Freigaben.</span></a>
+        <a href="#" role="button" data-act="verschieben"><strong>Verschieben …</strong>
+          <span>Den Ordner samt Unterordnern und Artikeln an eine andere Stelle im Bestand hängen.</span></a>
+        <a href="#" role="button" data-act="loeschen"><strong>Löschen …</strong>
+          <span>Geht nur bei einem leeren Ordner – ohne Unterordner, Artikel und Prüfdurchgänge; vorher wird nachgefragt.</span></a>
       </div></details>`;
   const LEBENSLAUF_TEXT = "Stammdaten, alle Prüfungen in zeitlicher Reihenfolge, Prüfdurchgänge und Ereignisse als PDF – zum Weitergeben oder als Aussonderungsnachweis. Stand jetzt, nicht festgeschrieben.";
   const lebenslaufKnopf = (a) => `<a class="btn secondary small" href="/material/artikel/${a.id}/lebenslauf.pdf" target="_blank" rel="noopener"
@@ -2473,9 +2494,9 @@
         k.default_interval_months ? `Prüfintervall ${k.default_interval_months} Monate` : "", plural(summe(k.id), "Produkt", "Produkte")].filter(Boolean).join(" · ") : "";
       // Zum aktiven generischen Formular führt bei der Material-Verwaltung der Knopf „Generisches Formular“, sonst der Verweis in der Angabenzeile.
       inhalt.innerHTML = `<div class="page-head"><h1>Katalog</h1>
-          <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-export">Katalog exportieren</button><button class="btn secondary" data-act="kat-import">Katalog importieren</button>' : ""}
+          <div class="btn-row">${DARF.katalog ? katalogMenue : ""}
             ${DARF.lesen || DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/material/katalog/meldungen">Meldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>` : ""}
-            ${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu">+ Kategorie</button><button class="btn secondary" data-act="produkt-neu">+ Produkt</button>' : ""}</div></div>
+            ${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu">Kategorie anlegen</button><button class="btn secondary" data-act="produkt-neu">Produkt anlegen</button>' : ""}</div></div>
         ${k ? `<div class="mat-katkopf">
             <div class="mat-pfad"><a href="/material/katalog" data-act="kategorie" data-id="">alle Kategorien</a>${pfad.slice(0, -1).map((x) => ` / <a href="/material/katalog?kategorie=${x.id}" data-act="kategorie" data-id="${x.id}">${esc(x.name)}</a>`).join("")}</div>
             <h2>${esc(k.name)} ${demoMarke(k.demo)}</h2>
@@ -2486,8 +2507,8 @@
             <div class="mat-katdoks"><h3 class="mat-unter">Dokumente für alle Produkte dieser Kategorie</h3>
               <p class="help">Pflegehinweise, allgemeine Anleitungen … – sie gelten für jedes Produkt hier und in den Unterkategorien und stehen dort bei den Herstellerdokumenten.</p>
               <div id="kat-doks"><p class="help">Wird geladen …</p></div>
-              ${DARF.katalog ? '<button class="btn secondary small" data-act="dok-neu">+ Dokument</button>' : ""}</div></div>`
-          : (kats.length ? "" : leer(DARF.katalog ? "Noch keine Kategorien – mit „+ Kategorie“ anlegen." : "Noch keine Kategorien."))}
+              ${DARF.katalog ? '<button class="btn secondary small" data-act="dok-neu">Dokument anlegen</button>' : ""}</div></div>`
+          : (kats.length ? "" : leer(DARF.katalog ? "Noch keine Kategorien – mit „Kategorie anlegen“." : "Noch keine Kategorien."))}
         <div class="mat-suchzeile"><input type="search" id="kat-q" placeholder="Produkte suchen: Hersteller, Modell, Bemerkung, Artikelnummer, Norm" value="${esc(q)}" autocomplete="off" ${TASTATUR_SUCHE}></div>
         <div id="kat-liste"></div>`;
       let los = null;
@@ -2902,7 +2923,7 @@
       <div class="mat-artikelkopf">
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel"><h1>${nameHtml(p)}${zusatzHtml(p)} ${demoMarke(p.demo)}</h1>
-          ${DARF.verwalten ? `<div class="btn-row"><a class="btn secondary small" href="/material/artikel/neu?produkt=${p.id}">+ Artikel dieses Produkts</a></div>` : ""}
+          ${DARF.verwalten ? `<div class="btn-row"><a class="btn secondary small" href="/material/artikel/neu?produkt=${p.id}">Artikel dieses Produkts anlegen</a></div>` : ""}
           ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${p.loeschbar ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}</div>
           <div class="btn-row"><button class="btn secondary small" data-act="variante">Als Variante kopieren</button><button class="btn secondary small" data-act="rr-neu">Rückruf anlegen</button></div>` : ""}</div>
       </div>
@@ -2928,7 +2949,7 @@
       <section class="section"><h2>Herstellerdokumente</h2>
         <p class="help">Gelten für alle Artikel dieses Produkts. Ein Protokoll verweist auf die Version, die am Prüftag galt.</p>
         ${p.dokumente.length ? dokTabelle(p.dokumente, k) : leer("Noch keine Dokumente am Produkt.")}
-        ${k ? '<button class="btn secondary small" data-act="dok-neu">+ Dokument</button>' : ""}
+        ${k ? '<button class="btn secondary small" data-act="dok-neu">Dokument anlegen</button>' : ""}
         ${katGruppen(p.kategorie_dokumente).map((g) => `${katKopf(g.name, g.id)}
           <ul class="mat-doks">${g.docs.map((d) => `<li><a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>
             <span class="muted small">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}</span></li>`).join("")}</ul>`).join("")}
@@ -2972,7 +2993,7 @@
         <p class="help">PDF oder Bild, bis 50 MB je Datei – gern mehrere auf einmal.</p>
       </div>
       <div id="dm-liste" class="mat-dokliste"></div>
-      <p><button type="button" class="lnk" id="dm-link">+ Link beim Hersteller hinzufügen</button></p>
+      <p><button type="button" class="lnk" id="dm-link">Link beim Hersteller anlegen</button></p>
       <label for="dm-ab">Gültig ab (für alle)</label><input type="date" id="dm-ab">
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="dm-ok" type="button">Speichern</button></div>`,
     (dlg, body) => {
@@ -3158,7 +3179,7 @@
           <colgroup><col style="width:13%"><col style="width:48%"><col style="width:12%"><col style="width:11%"><col style="width:16%"></colgroup><thead><tr><th>Gruppe</th><th>Prüfpunkt</th><th>Art</th><th>Soll</th><th></th></tr></thead>
           <tbody>${punkte.map(punktZeile).join("")}</tbody></table>
         ${!punkte.length ? leer("Noch keine Prüfpunkte.") : ""}
-        ${bearbeitbar ? '<div class="btn-row mat-knoepfe"><button class="btn secondary" data-act="punkt-neu">+ Prüfpunkt</button><button class="btn" data-act="speichern">Speichern</button></div>' : ""}
+        ${bearbeitbar ? '<div class="btn-row mat-knoepfe"><button class="btn secondary" data-act="punkt-neu">Prüfpunkt anlegen</button><button class="btn" data-act="speichern">Speichern</button></div>' : ""}
         <section class="section"><h2>Versionen</h2><ul class="mat-versionen">${f.versionen.map((v) => `<li>${v.id === f.id ? `<strong>Version ${v.version}</strong>` : `<a href="/material/katalog/formular/${v.id}">Version ${v.version}</a>`}
           ${v.aktiv ? '<span class="mat-status s-einsatzbereit">aktiv</span>' : ""}${v.benutzt ? ' <span class="badge grey">benutzt</span>' : ""} <span class="muted">${esc(v.titel || "")} · ${plural(v.punkte_anzahl, "Prüfpunkt", "Prüfpunkte")}</span></li>`).join("")}</ul></section>
         <details class="section mat-auf"><summary>Journal</summary>${journalHtml(f.journal)}</details>`;
@@ -3874,7 +3895,7 @@
           ${x.kritisch ? '<span class="mat-kritisch" title="Ein Mangel hier schließt „einsatzbereit“ aus">kritisch</span>' : ""}
           ${x.art === "yesno" && x.soll ? `<span class="muted small">Soll ${esc(x.soll)}</span>` : ""}${x.pflicht ? "" : '<span class="muted small">optional</span>'}</div>
         <div class="mat-punkt-zeile">${steuer}${foto}
-          ${notiz ? "" : `<button type="button" class="lnk small" data-act="pnotiz-auf" data-rid="${x.id}">+ Bemerkung</button>`}</div>
+          ${notiz ? "" : `<button type="button" class="lnk small" data-act="pnotiz-auf" data-rid="${x.id}">Bemerkung anlegen</button>`}</div>
         <textarea class="mat-pnotiz" data-rid="${x.id}" rows="2" maxlength="1000" placeholder="${mangel ? "Pflicht bei Mangel: Was ist wo zu sehen?" : "Bemerkung"}" ${notiz ? "" : "hidden"}${mangel ? ' aria-required="true"' : ""}>${esc(x.notiz || "")}</textarea>
         ${mangel && !(x.notiz || "").trim() ? '<span class="mat-pflicht mat-pflicht-notiz">Bemerkung ist Pflicht</span>' : ""}</div>`;
     }
@@ -4635,7 +4656,7 @@
         : d.alle ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen; die Material-Verwaltung nimmt sie auf oder lehnt sie mit Begründung ab."
           : "Produkte, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald die Material-Verwaltung sie bearbeitet hat.";
       inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Produktmeldungen" : "Deine Produktmeldungen"}</h1>
-          <div class="btn-row"><a class="btn secondary" href="/material/katalog">Katalog</a>${DARF.verwalten ? '<a class="btn secondary" href="/material/artikel/neu">+ Artikel</a>' : ""}</div></div>
+          <div class="btn-row"><a class="btn secondary" href="/material/katalog">Katalog</a>${DARF.verwalten ? '<a class="btn secondary" href="/material/artikel/neu">Artikel anlegen</a>' : ""}</div></div>
         <p class="help">${hilfe}${DARF.verwalten && !DARF.katalog ? ` <button type="button" class="lnk" data-act="eigene">${d.alle ? "Nur deine zeigen" : "Alle Meldungen zeigen"}</button>` : ""}</p>
         <div class="c-tabs mat-filter" role="group" aria-label="Status">${[["offen", "offen"], ["erledigt", "erledigt"], ["alle", "alle"]].map(([w, t]) => `<button type="button" class="${w === filter ? "sel" : ""}" data-act="filter" data-f="${w}" aria-pressed="${w === filter}">${t}${w === "offen" && d.offen ? ` (${d.offen})` : ""}</button>`).join("")}</div>
         ${liste.length ? liste.map((m) => meldeKarte(m, d.bearbeiten)).join("") : leer(filter === "offen" ? "Keine offenen Meldungen." : "Keine Meldungen.")}`;

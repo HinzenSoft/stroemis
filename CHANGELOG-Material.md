@@ -3053,6 +3053,23 @@ Am 20.10.2026 entschieden: Nr. 5 geändert, Nr. 6 und 7 bestätigt (siehe „Ent
    immer ganz. Eine Arbeitsmappe, deren weitere Blätter zusammen mehr als 500.000 Felder haben, wird jetzt abgelehnt
    (auch im Prüfungsimport); bitte dann nur die Liste speichern.
 
+### Nachbesserungen nach der Auslieferung (Wünsche vom 20.10.2026)
+
+- **Katalog: „Export / Import“ als Untermenü** – „Katalog exportieren“ und „Katalog importieren“ sind keine eigenen
+  Knöpfe mehr, sondern zwei Einträge im Untermenü „Export / Import“ im Kopf des Katalogs, je mit einem Satz dazu (wie
+  „Export / Import“ im Ordnerkopf). Die Dialoge sind unverändert.
+- **Ordnerkopf: „Bearbeiten“ als Untermenü** – „Verschieben“ und „Löschen“ stehen nicht mehr als eigene Knöpfe im
+  Ordnerkopf, sondern mit „Ordner bearbeiten …“ im Untermenü „Bearbeiten“. Wer den Ordner pflegt, ihn aber nicht
+  verschieben oder löschen darf, behält den einfachen Knopf „Bearbeiten“.
+- **Übersicht ohne Knöpfe im Kopf** – „Bestand pflegen“ und „+ Artikel“ sind entfallen; beides erreicht man über den
+  Reiter „Bestand“ (dort „Artikel anlegen“ im Ordnerkopf).
+- **Prüfungen: „Prüfdurchgang anlegen“** statt „+ Prüfdurchgang“ als Beschriftung des Knopfs.
+- **Bestand: „Gliederung anlegen“** statt „+ Gliederung“ als Beschriftung des Knopfs (README nachgezogen).
+- **Überall „… anlegen“ statt „+ …“** im Modul: Unterordner, Artikel, Artikel dieses Produkts, Kategorie, Produkt,
+  Dokument, Prüfpunkt, Freigabe (Abschnitt im Reiter „Freigaben“), Link beim Hersteller und Bemerkung (in der Prüfung).
+- Im Browser bei 1280 und 360 px geprüft (Untermenüs öffnen die Dialoge, das Menü schließt dabei, kein waagerechter
+  Bildlauf, keine Konsolenfehler).
+
 ## Beispielbestand (18.10.2026)
 
 Wunsch: ein umfangreicherer Bestand zum Testen auf dev – nur aus dem vorhandenen Katalog, der dabei unverändert bleibt,

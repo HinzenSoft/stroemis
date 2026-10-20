@@ -2,10 +2,10 @@
    Vorlagen (Führungskraft, Materialwart, Prüfer, Externer Prüfer …), den Listen „Hier vergeben“, „Geerbt von oben“,
    „In Unterordnern“ und „Verlauf“, dem Knopf „Alle Prüffreigaben verlängern bis …“ – dazu der Hinweis „Meine
    Freigaben“ auf der Übersicht. Stellt window.MatFreigaben bereit:
-     inhalt(element, ordner, optionen?)  füllt element (den Reiter) mit Hinweis, „+ Freigabe“ und den Listen; Dialog,
+     inhalt(element, ordner, optionen?)  füllt element (den Reiter) mit Hinweis, „Freigabe anlegen“ und den Listen; Dialog,
                                 Reiter und Knopfzeile („Schließen“) gehören material.js. ordner: das Objekt der
                                 Ordneransicht (oder seine Kennung). optionen:
-                                  vorlage    „materialwart“ usw. (?freigaben=<vorlage> nach „+ Gliederung“) oder
+                                  vorlage    „materialwart“ usw. (?freigaben=<vorlage> nach „Gliederung anlegen“) oder
                                              „verlaengern“ (springt zum Knopf „Alle Prüffreigaben verlängern“)
                                   fokus      nach dem Laden ins Formular (bzw. auf „verlängern“) – sonst bleibt der
                                              Fokus, wo er ist (etwa auf dem Reiter)
@@ -86,7 +86,7 @@
 
   /* --- Untere Dialoge (Ändern, Verlängern) -------------------------------------------------------------------
      Eigene <dialog>-Elemente über dem Dialog „Ordner bearbeiten“ – wie S.confirm: So bleibt der Dialog darunter samt
-     halb ausgefülltem „+ Freigabe“ und ungespeicherten Eingaben im Reiter „Ordner“ stehen, und man kehrt danach in
+     halb ausgefülltem „Freigabe anlegen“ und ungespeicherten Eingaben im Reiter „Ordner“ stehen, und man kehrt danach in
      den Reiter „Freigaben“ zurück. */
   function unterDialog(html, onOpen) {
     const dlg = document.createElement("dialog");
@@ -183,9 +183,9 @@
       <details class="mf-teil"><summary>Verlauf</summary>${verlaufHtml(d.verlauf)}</details>`;
   }
 
-  /* --- „+ Freigabe“ ------------------------------------------------------------------------------------------ */
+  /* --- „Freigabe anlegen“ ------------------------------------------------------------------------------------------ */
   function formHtml(d) {
-    return `<details class="mf-teil mf-neu" open><summary>+ Freigabe</summary>
+    return `<details class="mf-teil mf-neu" open><summary>Freigabe anlegen</summary>
       <label for="mf-person">Person</label>
       <div class="mf-personwahl">
         <input type="search" id="mf-person" placeholder="Name – ab 3 Zeichen" autocomplete="off" enterkeyhint="search"
