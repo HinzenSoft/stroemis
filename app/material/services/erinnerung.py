@@ -24,7 +24,11 @@ Plattform-Verwaltung eingeschlossen, wenn sie dort eingetragen sind (ordnerverwa
 Verwaltet dort niemand, bekommt es die Material-Verwaltung, ohne sie die Plattform-Verwaltung; die Mail kennzeichnet
 solche Gruppen mit „kein Materialwart eingetragen“ – bzw. „nur der Inhaber selbst verwaltet hier“, wenn bei einer
 Freigabe allein ihr Inhaber dort verwaltet. Nur aktive Konten mit Namen, Modulzugang und Adresse, nie
-DEMO-Konten (Adresse …@….invalid), jeder nur mit dem, was er sieht. Zugeordnete Personen und Prüfer bekommen nichts.
+DEMO-Konten (Adresse …@….invalid), jeder nur mit dem, was er sieht. Prüfer bekommen nichts. Die zugeordnete Person
+bekommt ihre eigenen Artikel im Abschnitt „Deine PSA“ (Phase 3 · L1) – auch ohne Modulstufe, abbestellbar im Profil
+(users.mat_psa_mails): 30 Tage vor der Prüfung, überfällig, Lebensende in 90 Tagen (kein 7-Tage-Schritt, PSA_STUFE),
+höchstens MAIL_PSA_MAX Zeilen, einziger Link „Meine PSA“. Wer den Artikel zugleich verwaltet, bekommt ihn wie bisher
+unter ARTIKEL und nicht noch einmal unter „Deine PSA“.
 Der Inhaber einer ablaufenden Freigabe bekommt sie zusätzlich selbst (Entscheidung vom 19.10.2026) – nach denselben
 Regeln und mit eigenem Vermerk im Log, aber nie als Verwalter, sondern im Abschnitt „Deine Freigaben“: Recht, Ende,
 Pfad des Ankers, seine offenen Prüfungen und wer verlängern kann, nicht mehr, als „Meine Freigaben“ ihm zeigt
@@ -67,6 +71,10 @@ FREIGABE_VORLAUF = 30                               # Vorgabe aus L1
 STARTZEIT = time(6, 0)                              # deutsche Zeit
 WARNZEIT = time(7, 0)                               # danach gilt ein fehlender Lauf als „steht“ (stand)
 MAIL_ARTIKEL_MAX, MAIL_FREIGABEN_MAX = 100, 50     # Einzelzeilen je Mail; Ordnergruppen stehen immer da
+MAIL_PSA_MAX = 50                                   # Zeilen „Deine PSA“ je Mail; der Rest steht unter „Meine PSA“
+# „Deine PSA“ kennt keinen 7-Tage-Schritt: Liegt eine Fälligkeit beim ersten Lauf schon in 7 Tagen, kommt sie als
+# 30_tage (einmal) – danach erst wieder bei „überfällig“ (Entscheidung 5).
+PSA_STUFE = {"30_tage": "30_tage", "7_tage": "30_tage", "faellig": "faellig", "lebensdauer": "lebensdauer"}
 AUFBEWAHRUNG_MONATE = 13
 HERZSCHLAG_MINUTEN = 30
 FEHLER_MAX = 300                                    # so lang steht ein Fehlertext im Laufstand
@@ -96,10 +104,11 @@ class Eintrag:            # eine Erinnerung für eine Mail
                           # "material_inhaber" | "plattform_inhaber": niemand außer dem Inhaber der Freigabe
     demo: bool = False    # DEMO-Artikel bzw. -Freigabe – nur im Probelauf mit DEMO (planen(…, demo=True))
     inhaber: bool = False # Freigabe: dieselbe für ihren Inhaber (Abschnitt „Deine Freigaben“, inhaber_eintrag)
+    psa: bool = False     # Artikel für die zugeordnete Person – Abschnitt „Deine PSA“ (Phase 3 · L1)
 
     @property
     def schluessel(self):
-        return self.art, self.kennung, self.stufe, self.faellig_am, self.inhaber
+        return self.art, self.kennung, self.stufe, self.faellig_am, self.inhaber, self.psa
 
 
 @dataclass
@@ -251,6 +260,7 @@ def artikel_kandidaten(stichtag, demo=False):
         "WITH RECURSIVE aus(id) AS (SELECT id FROM mat_folder WHERE reminders_off = 1 "
         "UNION SELECT f.id FROM mat_folder f JOIN aus a ON f.parent_id = a.id) "
         "SELECT i.id, i.inventory_no, i.serial_no, i.folder_id, i.next_due_on, i.retire_by, i.last_inspected_on, "
+        "i.assigned_user_id, "
         "p.manufacturer, p.model, p.description AS product_description, p.article_no, "
         f"{bestand.demo_sql('i', 'p')} AS ist_demo, i.folder_id IN (SELECT id FROM aus) AS ist_aus "
         "FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
@@ -271,7 +281,7 @@ def artikel_kandidaten(stichtag, demo=False):
         try:
             daten = {"inventory_no": r["inventory_no"], "serial_no": r["serial_no"],
                      "produkt": katalog.produktname(r, r["product_description"]),
-                     "neu": not r["last_inspected_on"]}
+                     "neu": not r["last_inspected_on"], "zugeordnet": r["assigned_user_id"]}
             neu = []
             if r["next_due_on"]:
                 s = stufe(r["next_due_on"], stichtag)
@@ -494,7 +504,9 @@ def _einreihen(post, u, e):
 
 def planen(stichtag, demo=False):
     """Wer heute (am Stichtag) welche Mail bekäme: Kandidaten, Empfänger, Rechteschnitt, Abgleich mit dem Log, Texte.
-    Eine ablaufende Freigabe geht an die Verwalter des Ankers und zusätzlich an ihren Inhaber (inhaber_eintrag).
+    Eine ablaufende Freigabe geht an die Verwalter des Ankers und zusätzlich an ihren Inhaber (inhaber_eintrag); ein
+    Artikel zusätzlich an die zugeordnete Person (Abschnitt „Deine PSA“, Stufe nach PSA_STUFE) – außer sie bekommt ihn
+    ohnehin als Verwalterin unter ARTIKEL.
     Schreibt nichts – auch keinen Kontoverweis. Fehlerhafte Datenzeilen werden übersprungen und gezählt.
     demo: DEMO-Artikel, DEMO-Freigaben und DEMO-Konten zählen wie echte – NUR für die Ansicht (probelauf, remind
     --trocken --demo). Der Plan heißt dann nur_ansicht, Mails mit DEMO tragen demo; verschicken lehnt beides ab."""
@@ -507,19 +519,26 @@ def planen(stichtag, demo=False):
     log = _log(eintraege)
     zwischen = {"stichtag": stichtag, "demo": demo}
     inhaber = _konten(e.daten["inhaber"] for e in freigaben)
+    psa_konten = _konten(e.daten["zugeordnet"] for e in artikel if e.daten.get("zugeordnet"))
     post, ohne = {}, []                              # Adresse (casefold) → Mail
     for e in eintraege:
         konten, e.rueckfall = empfaenger(e, zwischen)
-        erreicht = False
+        z = psa_konten.get(e.daten.get("zugeordnet")) if e.art == "artikel" else None
+        erreicht = verwaltet = False
         for u in konten:
             s = rechte.sicht(u)
             if not s.darf("lesen" if e.art == "artikel" else "verwalten", e.ordner_id):
                 continue
             erreicht = True
+            verwaltet = verwaltet or (z is not None and u["id"] == z["id"])     # bleibt unter ARTIKEL
             if _offen(e, u.get("mat_ref"), log):
                 _einreihen(post, u, e)
+        if z and not verwaltet and _zulaessig_psa(z, demo):
+            eigen = replace(e, stufe=PSA_STUFE[e.stufe], rueckfall="", psa=True)
+            if _offen(eigen, z.get("mat_ref"), log):
+                _einreihen(post, z, eigen)
         if not erreicht:
-            ohne.append(e)
+            ohne.append(e)                           # „ohne Empfänger“ meint weiter: kein Materialwart sieht ihn
         if e.art == "freigabe":
             # Der Inhaber zusätzlich – mit eigenem Vermerk (sein Kontoverweis), also einmal je Freigabe und Enddatum.
             u = inhaber.get(e.daten["inhaber"])
@@ -577,32 +596,60 @@ def _angabe(e, stichtag):
     return f"fällig am {_datum(e.faellig_am)} ({_in_tagen(tage)})"
 
 
-def _betreff(eintraege, stichtag):
-    """„strömis.de – Material: 2 überfällig, 1 Freigabe läuft ab“; eigene Freigaben vorn: „Deine Freigabe läuft ab“
-    bzw. „…, außerdem 2 überfällig“. Eine eigene zählt nur dort (wie im Text)."""
+def _angabe_psa(e, stichtag):
+    """Eine Angabe im Abschnitt „Deine PSA“ – für die Person, die die Ausrüstung trägt."""
+    tage = (_tag(e.faellig_am) - stichtag).days
+    if e.stufe == "faellig":
+        return f"Prüfung überfällig – fällig war der {_datum(e.faellig_am)}. Nicht verwenden, bis sie geprüft ist."
+    if e.stufe == "lebensdauer":
+        if tage <= 0:
+            return (f"Lebensdauer erreicht seit {_datum(e.faellig_am)} – nicht mehr verwenden, gib sie deinem "
+                    "Materialwart.")
+        return f"Lebensende am {_datum(e.faellig_am)} ({_in_tagen(tage)}) – sprich mit deinem Materialwart über Ersatz."
+    return (f"zur Prüfung fällig am {_datum(e.faellig_am)} ({_in_tagen(tage)}) – bitte rechtzeitig deinem Materialwart "
+            "geben.")
+
+
+def _zaehlgruppen(eintraege, stichtag, texte):
     zahl = {}
-    deine = {e.kennung for e in eintraege if e.inhaber}
     for e in eintraege:
-        if e.art == "freigabe" and e.kennung in deine:
-            continue
         k = _klasse(e, stichtag)[1]
         zahl[k] = zahl.get(k, 0) + 1
     teile = []
-    for k, text in (("ueberfaellig", "{} überfällig"), ("lebensdauer_erreicht", "{} Lebensdauer erreicht"),
-                    ("7_tage", "{} in 7 Tagen fällig"), ("30_tage", "{} in 30 Tagen fällig")):
+    for k, text in texte:
         if zahl.get(k):
             teile.append(text.format(zahl[k]))
     if zahl.get("lebensende_bald"):
         n = zahl["lebensende_bald"]
         teile.append("1 erreicht bald das Lebensende" if n == 1 else f"{n} erreichen bald das Lebensende")
+    return teile, zahl
+
+
+def _betreff(eintraege, stichtag):
+    """„strömis.de – Material: 2 überfällig, 1 Freigabe läuft ab“; eigene Freigaben vorn: „Deine Freigabe läuft ab“
+    bzw. „…, außerdem 2 überfällig“. Eine eigene zählt nur dort (wie im Text). Die eigene PSA ganz vorn: nur sie –
+    „strömis.de – Deine PSA: 1 überfällig“, sonst „Material: Deine PSA (1 überfällig), außerdem …“."""
+    deine = {e.kennung for e in eintraege if e.inhaber}
+    teile, zahl = _zaehlgruppen(
+        [e for e in eintraege if not e.psa and not (e.art == "freigabe" and e.kennung in deine)], stichtag,
+        (("ueberfaellig", "{} überfällig"), ("lebensdauer_erreicht", "{} Lebensdauer erreicht"),
+         ("7_tage", "{} in 7 Tagen fällig"), ("30_tage", "{} in 30 Tagen fällig")))
     if zahl.get("freigabe"):
         n = zahl["freigabe"]
         teile.append("1 Freigabe läuft ab" if n == 1 else f"{n} Freigaben laufen ab")
-    n = len(deine)
-    vorn = "" if not n else "Deine Freigabe läuft ab" if n == 1 else f"{n} deiner Freigaben laufen ab"
-    inhalt = f"{vorn}, außerdem {', '.join(teile)}" if vorn and teile else vorn or ", ".join(teile)
+    psa, _ = _zaehlgruppen([e for e in eintraege if e.psa], stichtag,
+                           (("ueberfaellig", "{} überfällig"), ("lebensdauer_erreicht", "{} Lebensdauer erreicht"),
+                            ("30_tage", "{} in 30 Tagen fällig")))
     site = current_app.config.get("SITE_NAME") or "strömis.de"
-    # Ein Betreff ist eine Zeile – auch U+2028/U+0085 aus Namen fliegen raus (wie beim Rückruf).
+    n = len(deine)
+    if psa and not n and not teile:
+        # Ein Betreff ist eine Zeile – auch U+2028/U+0085 aus Namen fliegen raus (wie beim Rückruf).
+        return " ".join(f"{site} – Deine PSA: {', '.join(psa)}".split())
+    vorn = [f"Deine PSA ({', '.join(psa)})"] if psa else []
+    if n:
+        vorn.append("Deine Freigabe läuft ab" if n == 1 else f"{n} deiner Freigaben laufen ab")
+    vorn = ", ".join(vorn)
+    inhalt = f"{vorn}, außerdem {', '.join(teile)}" if vorn and teile else vorn or ", ".join(teile)
     return " ".join(f"{site} – Material: {inhalt}".split())
 
 
@@ -612,11 +659,12 @@ def _namen(liste):
 
 
 def zahlen(mail):
-    """(Artikel, Freigaben als Verwalter, eigene Freigaben) einer Mail – für Probelauf und Kommandozeile. Eine Freigabe
-    im Abschnitt „Deine Freigaben“ zählt nur dort."""
+    """(Artikel, Freigaben als Verwalter, eigene Freigaben, PSA) einer Mail – für Probelauf und Kommandozeile. Eine
+    Freigabe im Abschnitt „Deine Freigaben“ zählt nur dort, ein Artikel unter „Deine PSA“ nur dort."""
     deine = {e.kennung for e in mail.eintraege if e.inhaber}
-    return (len({e.kennung for e in mail.eintraege if e.art == "artikel"}),
-            len({e.kennung for e in mail.eintraege if e.art == "freigabe"} - deine), len(deine))
+    psa = {e.kennung for e in mail.eintraege if e.psa}
+    return (len({e.kennung for e in mail.eintraege if e.art == "artikel" and not e.psa}),
+            len({e.kennung for e in mail.eintraege if e.art == "freigabe"} - deine), len(deine), len(psa))
 
 
 def mailtext(mail, stichtag, pfade=None):
@@ -637,14 +685,22 @@ def mailtext(mail, stichtag, pfade=None):
         return pfade[fid]
 
     # Artikel: eine Zeile je Artikel (Fälligkeit und Lebensende zusammen), Rang = dringendste Angabe.
-    zeilen_a = {}
+    zeilen_a, zeilen_p = {}, {}
     for e in mail.eintraege:
         if e.art != "artikel":
+            continue
+        if e.psa:
+            z = zeilen_p.setdefault(e.kennung, {"eintraege": [], "daten": e.daten})
+            z["eintraege"].append(e)
             continue
         z = zeilen_a.setdefault(e.kennung, {"ordner": e.ordner_id, "eintraege": [], "daten": e.daten,
                                             "rueckfall": e.rueckfall})
         z["eintraege"].append(e)
     for z in zeilen_a.values():
+        z["eintraege"].sort(key=lambda e: (_klasse(e, stichtag)[0], e.faellig_am))
+        erste = z["eintraege"][0]
+        z["rang"] = (_klasse(erste, stichtag)[0], erste.faellig_am, z["daten"]["inventory_no"])
+    for z in zeilen_p.values():
         z["eintraege"].sort(key=lambda e: (_klasse(e, stichtag)[0], e.faellig_am))
         erste = z["eintraege"][0]
         z["rang"] = (_klasse(erste, stichtag)[0], erste.faellig_am, z["daten"]["inventory_no"])
@@ -679,16 +735,34 @@ def mailtext(mail, stichtag, pfade=None):
         return text, rf
 
     demo = _mit_demo(mail)
-    nur_deine = bool(deine) and not zeilen_a and not zeilen_f
+    nur_deine = bool(deine) and not zeilen_a and not zeilen_f and not zeilen_p
+    nur_psa = bool(zeilen_p) and not zeilen_a and not zeilen_f and not deine
     teile = ["DEMO – geht nie hinaus. Diese Mail zeigt nur der Probelauf mit DEMO-Bestand.", ""] if demo else []
     teile += [f"Hallo {mail.name},", ""]
-    if nur_deine:
+    if nur_psa:
+        teile.append(f"hier steht, was an der Ausrüstung, die dir persönlich zugeordnet ist, ansteht (Stand "
+                     f"{stichtag.strftime('%d.%m.%Y')}). Jede Erinnerung kommt nur einmal.")
+    elif nur_deine:
         teile.append(f"hier steht, welche deiner Freigaben im Modul Material bald ablaufen (Stand "
                      f"{stichtag.strftime('%d.%m.%Y')}) und wer sie verlängern kann.")
     else:
         teile.append(f"hier steht nur, was seit der letzten Erinnerung neu fällig ist oder eine neue Stufe erreicht "
                      f"hat (Stand {stichtag.strftime('%d.%m.%Y')}) – was schon gemeldet wurde, kommt nicht noch "
                      f"einmal. Alles Fällige: {basis}/material/pruefungen")
+    if zeilen_p:
+        # Keine Ordner, kein Ordnerlink: Die Person sieht ihre PSA unter „Meine PSA“ – auch ohne Modulstufe.
+        teile += ["", "DEINE PSA", ""]
+        reihe = sorted(zeilen_p.values(), key=lambda z: z["rang"])
+        for z in reihe[:MAIL_PSA_MAX]:
+            d = z["daten"]
+            teile.append(f"  {d['inventory_no']}  {d['produkt']}, SN {d['serial_no']}"
+                         + ("  · DEMO" if any(e.demo for e in z["eintraege"]) else ""))
+            teile += [f"    {_angabe_psa(e, stichtag)}" for e in z["eintraege"]]
+            if d.get("neu"):
+                teile.append("    Die Eingangsprüfung steht noch aus.")
+        if len(reihe) > MAIL_PSA_MAX:
+            teile.append(f"  … und {len(reihe) - MAIL_PSA_MAX} weitere – alle unter Meine PSA")
+        teile += ["", f"Deine PSA im Überblick: {basis}/material/meine-psa"]
     if deine:
         teile += ["", "DEINE FREIGABEN, DIE BALD ABLAUFEN"]
         je_anker = {}
@@ -766,6 +840,11 @@ def mailtext(mail, stichtag, pfade=None):
     if deine:
         saetze.append("Du bekommst diese Mail, weil es deine eigenen Freigaben sind – einmal je Freigabe und Enddatum."
                       if nur_deine else "„Deine Freigaben“ bekommst du, weil es deine eigenen sind.")
+    if nur_psa:
+        saetze.append("Du bekommst diese Mail, weil dir diese Ausrüstung im Modul Material zugeordnet ist. Abbestellen: "
+                      f"Profil → „Erinnerungen zu meiner PSA“ ({basis}/profil).")
+    elif zeilen_p:
+        saetze.append("„Deine PSA“ bekommst du, weil dir diese Ausrüstung zugeordnet ist (abbestellen im Profil).")
     # Der Schalter am Ordner hält nur Artikel an – ablaufende Freigaben melden sich weiter (Entwurf 2.4 b), auch die
     # eigenen. Eine Mail nur mit eigenen Freigaben sagt dazu nichts: Den Schalter bedienen Verwalter.
     if zeilen_a:
@@ -828,8 +907,8 @@ def verschicken(plan):
                 if not u.get("mat_ref"):
                     u["mat_ref"] = journal.konto_ref(u["id"])["ref"]
     erg = {"mails": 0, "fehlgeschlagen": 0, "fehlgeschlagen_refs": [], "vermerk_fehler": 0, "artikel": 0,
-           "freigaben": 0}
-    artikel, freigaben = set(), set()
+           "freigaben": 0, "psa": 0}
+    artikel, freigaben, psa = set(), set(), set()
     for m in plan.mails:
         try:
             ok = send_mail(m.adresse, m.betreff, m.text)
@@ -840,6 +919,7 @@ def verschicken(plan):
             erg["mails"] += 1
             artikel |= {e.kennung for e in m.eintraege if e.art == "artikel"}
             freigaben |= {e.kennung for e in m.eintraege if e.art == "freigabe"}
+            psa |= {e.kennung for e in m.eintraege if e.psa}
             try:
                 vermerken(m)
             except Exception as exc:
@@ -852,7 +932,7 @@ def verschicken(plan):
             _herzschlag()
         except Exception as exc:
             current_app.logger.error("Tageslauf: Herzschlag nicht geschrieben: %s", exc)
-    erg["artikel"], erg["freigaben"] = len(artikel), len(freigaben)
+    erg["artikel"], erg["freigaben"], erg["psa"] = len(artikel), len(freigaben), len(psa)
     return erg
 
 
@@ -955,7 +1035,8 @@ def tageslauf(ausloeser="automatisch", erneut=False, jetzt=None):
             out["pflege"] = p
         if mails:
             m = {"tag": tag, "beginn": _utc(jetzt), "ende": None, "ausloeser": ausloeser, "mails": 0,
-                 "fehlgeschlagen": 0, "fehlgeschlagen_refs": [], "artikel": 0, "freigaben": 0, "ohne_empfaenger": 0,
+                 "fehlgeschlagen": 0, "fehlgeschlagen_refs": [], "artikel": 0, "freigaben": 0, "psa": 0,
+                 "ohne_empfaenger": 0,
                  "ausgelassen": {"ordner_aus": 0, "demo": 0}, "fehlerhaft": 0, "vermerk_fehler": 0, "fehler": None}
             try:
                 plan = planen(stichtag)
@@ -1051,7 +1132,8 @@ def probelauf(stichtag=None, demo=False):
     Betreff und Text, ohne Empfänger und Ausgelassenes mit Pfaden. Ohne Stichtag der nächste echte Lauf
     (naechster_stichtag). Schreibt nichts: kein Log, kein Journal, keine Meta-Daten, keinen Kontoverweis. demo: den
     DEMO-Bestand einbeziehen (nur Ansicht, siehe planen) – Mails mit DEMO tragen demo: true. Je Mail die Zahl der
-    Artikel, der Freigaben als Verwalter und der eigenen Freigaben (eigene, Abschnitt „Deine Freigaben“)."""
+    Artikel, der Freigaben als Verwalter, der eigenen Freigaben (eigene, Abschnitt „Deine Freigaben“) und der eigenen
+    PSA (psa, Abschnitt „Deine PSA“)."""
     heute = dienste.heute()
     if stichtag is None:
         stichtag, morgen = naechster_stichtag()
@@ -1063,7 +1145,7 @@ def probelauf(stichtag=None, demo=False):
             "versand": bool(current_app.config.get("MATERIAL_ERINNERUNGEN")), "gesperrt": gesperrt(), "smtp": smtp_da(),
             "letzter": {k: letzter.get(k) for k in ("tag", "beginn", "mails", "fehlgeschlagen", "fehlgeschlagen_an",
                                                     "fehler")} if letzter else None,
-            "mails": [dict(zip(("artikel", "freigaben", "eigene"), zahlen(m)), name=m.name,
+            "mails": [dict(zip(("artikel", "freigaben", "eigene", "psa"), zahlen(m)), name=m.name,
                            gliederung=(m.konten[0].get("gliederung") or "").strip(), betreff=m.betreff, text=m.text,
                            demo=m.demo)
                       for m in plan.mails],

@@ -108,10 +108,12 @@ def _trocken(stichtag, demo=False):
     if not plan.mails:
         click.echo("Es stünde nichts an.")
     for m in plan.mails:
-        artikel, freigaben, eigene = erinnerung.zahlen(m)
+        artikel, freigaben, eigene, psa = erinnerung.zahlen(m)
         zahl = f"{artikel} Artikel, {freigaben} {'Freigabe' if freigaben == 1 else 'Freigaben'}"
         if eigene:                                   # Abschnitt „Deine Freigaben“ (der Empfänger ist ihr Inhaber)
             zahl += f", {eigene} {'eigene Freigabe' if eigene == 1 else 'eigene Freigaben'}"
+        if psa:                                      # Abschnitt „Deine PSA“ (der Empfänger ist die zugeordnete Person)
+            zahl += f", {psa} PSA"
         click.echo("")
         click.echo("=" * 78)
         click.echo(f"An: {m.name} <{m.adresse}> ({zahl})" + ("  [DEMO – geht nie hinaus]" if m.demo else ""))
@@ -195,7 +197,8 @@ def remind(trocken, stichtag, erneut, demo):
             fehler = True
     m = erg.get("mails")
     if m:
-        click.echo(f"Mails: {m['mails']} verschickt ({m['artikel']} Artikel, {m['freigaben']} "
+        davon = f", davon {m['psa']} PSA" if m.get("psa") else ""
+        click.echo(f"Mails: {m['mails']} verschickt ({m['artikel']} Artikel{davon}, {m['freigaben']} "
                    f"{'Freigabe' if m['freigaben'] == 1 else 'Freigaben'}), "
                    f"{m['fehlgeschlagen']} gescheitert, {m['ohne_empfaenger']} ohne Empfänger.")
         if m["fehlgeschlagen"]:

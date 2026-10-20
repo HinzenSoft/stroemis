@@ -530,7 +530,10 @@ def test_rechteschnitt():
                 p = p or planen(app)
                 return {m.adresse.casefold(): m for m in p.mails}
             m = mails()
-            assert set(m) == {"wart@example.org", "wart_b@example.org"}, set(m)
+            # Die zugeordnete Führungskraft bekommt RS-A nur im Abschnitt „Deine PSA“ (Phase 3 · L1), nie als Verwalterin.
+            assert set(m) == {"wart@example.org", "wart_b@example.org", "fuehrung@example.org"}, set(m)
+            assert erinnerung_modul().zahlen(m["fuehrung@example.org"]) == (0, 0, 0, 1)
+            assert "DEINE PSA" in m["fuehrung@example.org"].text and "\nARTIKEL" not in m["fuehrung@example.org"].text
             assert "RS-A" in m["wart@example.org"].text and "RS-B" not in m["wart@example.org"].text
             assert "OG Nachbarstadt" not in m["wart@example.org"].text
             assert "RS-B" in m["wart_b@example.org"].text and "OG Musterstadt" not in m["wart_b@example.org"].text
@@ -573,7 +576,8 @@ def test_rechteschnitt():
             assert "RS-C" in m["mv2@example.org"].text and "RS-C" in m["katalog@example.org"].text
 
             # Befristet: gültiger Verwalter ja, abgelaufener nicht. Kein Mail an Deaktivierte, Konten ohne Namen oder
-            # ohne Stufe, Prüfer (auch mit Prüffreigabe), Führungskraft (lesen) und die zugeordnete Person.
+            # ohne Stufe, Prüfer (auch mit Prüffreigabe), Führungskraft (lesen) – die zugeordnete Person nur mit ihrer
+            # eigenen PSA.
             gf, _ = gliederung(adm, "OG Befristet", standard=False)
             wf, wf_id = konto(app, adm, "wart_f@example.org")
             wg, wg_id = konto(app, adm, "wart_g@example.org")
@@ -590,8 +594,9 @@ def test_rechteschnitt():
             m = mails()
             assert "RS-F" in m["wart_f@example.org"].text and "wart_g@example.org" not in m
             for adresse in ("deaktiviert@example.org", "namenlos@example.org", "stufe0@example.org", "pruefer@example.org",
-                            "fuehrung@example.org", "nutzer@example.org"):
+                            "nutzer@example.org"):
                 assert adresse not in m, adresse
+            assert erinnerung_modul().zahlen(m["fuehrung@example.org"]) == (0, 0, 0, 1)
 
             # Zwei Konten mit derselben Adresse in anderer Schreibung: eine Mail, beide vermerkt.
             _, dopp_id = konto(app, adm, "doppelt@example.org")
@@ -836,7 +841,7 @@ def test_demo_probelauf():
             assert set(namen) == {"wart", "katalog", "demo-wart", "extern"}, namen
             # Der Inhaber der DEMO-Freigabe bekommt seine eigene – im Probelauf, gekennzeichnet (test_inhaber).
             x = namen["extern"]
-            assert x["demo"] is True and (x["artikel"], x["freigaben"], x["eigene"]) == (0, 0, 1), x
+            assert x["demo"] is True and (x["artikel"], x["freigaben"], x["eigene"], x["psa"]) == (0, 0, 1, 0), x
             assert x["betreff"] == "[DEMO] strömis.de – Material: Deine Freigabe läuft ab", x["betreff"]
             assert "DEINE FREIGABEN, DIE BALD ABLAUFEN" in x["text"] and "Verlängern kann: demo-wart." in x["text"], x
             assert "  lesen bis 12.11.2026 (in 10 Tagen) · DEMO\n" in x["text"], x["text"]
@@ -1215,7 +1220,7 @@ def test_inhaber():
             m = e.Mail(konten=[], adresse="erika@example.org", name="Erika Extern",
                        eintraege=[f, replace(f, inhaber=True, daten=dict(f.daten, verlaengern=["wart"]))])
             betreff, text = e.mailtext(m, T0)
-            assert e.zahlen(m) == (0, 0, 1) and betreff.endswith("Material: Deine Freigabe läuft ab"), betreff
+            assert e.zahlen(m) == (0, 0, 1, 0) and betreff.endswith("Material: Deine Freigabe läuft ab"), betreff
             assert "Erika Extern – lesen" not in text and "  Verlängern kann: wart.\n" in text, text
     # Oberfläche (statisch): Die Zeile je Mail nennt die eigenen Freigaben.
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -1714,6 +1719,267 @@ def test_einstellung():
 
 # --- Stand-7-Kopie (nur von Hand, wenn eine Kopie da ist) ----------------------------------------------------------
 
+# --- Phase 3 · L1: Abschnitt „Deine PSA“ ---------------------------------------------------------------------------
+
+def psa_person(app, adm, mail="person@example.org", name="Person Platzhalter", stufe=0):
+    """Eine Person, der PSA zugeordnet wird – ohne Angabe ohne Modulstufe."""
+    return konto(app, adm, mail, name=name, rechte={"material": stufe})
+
+
+def zuordnen_sql(app, iid, uid):
+    sql(app, "UPDATE mat_item SET assigned_user_id = ? WHERE id = ?", (uid, iid))
+
+
+def psa_mail(p, adresse="person@example.org"):
+    return next((m for m in p.mails if m.adresse.casefold() == adresse), None)
+
+
+def psa_log(app, uid):
+    return [(z["item_id"], z["kind"]) for z in log(app) if z["konto_ref"] == ref(app, uid)]
+
+
+def test_psa_stufen():
+    """Person ohne Stufe: 30 Tage vorher „DEINE PSA“ (Log 30_tage), kein 7-Tage-Schritt, überfällig einmal, Lebensende
+    in 80 Tagen einmal; liegt die Fälligkeit beim ersten Lauf schon in 3 Tagen, kommt sie als 30_tage."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, ids, gid, system, lager = aufbau(tmp)
+        with uhr(um(T0)):
+            _, pid = psa_person(app, k["adm"])
+            a = artikel(app, k["wart"], ids["hms"], lager, "PS-1", faellig=T0 + timedelta(days=25))
+            g = artikel(app, k["wart"], ids["gurt"], lager, "PS-2", faellig=T0 + timedelta(days=200),
+                        lebensende=T0 + timedelta(days=80))
+            for iid in (a["id"], g["id"]):
+                zuordnen_sql(app, iid, pid)
+            with versand(app), post() as liste:
+                lauf(app)
+            m = an(liste, "person@example.org")
+            assert len(m) == 1 and "DEINE PSA" in m[0][2] and "PS-1" in m[0][2] and "PS-2" in m[0][2], liste
+            assert sorted(psa_log(app, pid)) == sorted([(a["id"], "30_tage"), (g["id"], "lebensdauer")])
+            for n, soll in ((20, []), (26, [(a["id"], "faellig")]), (27, [])):
+                tag(n)
+                vorher = len(psa_log(app, pid))
+                with versand(app), post() as liste:
+                    lauf(app)
+                assert psa_log(app, pid)[vorher:] == soll, (n, psa_log(app, pid))
+                assert bool(an(liste, "person@example.org")) == bool(soll), (n, liste)
+            assert an(liste, "wart@example.org") == []                     # (die Verwaltermail kam am Tag 26)
+        with uhr(um(T0 + timedelta(days=40))):
+            b = artikel(app, k["wart"], ids["hms"], lager, "PS-3", faellig=T0 + timedelta(days=43))
+            zuordnen_sql(app, b["id"], pid)
+            p = planen(app)
+            assert [(e.kennung, e.stufe, e.psa) for e in psa_mail(p).eintraege] == [(b["id"], "30_tage", True)]
+            assert "in 3 Tagen" in psa_mail(p).text
+    print("PSA: Stufen bestanden.")
+
+
+def test_psa_doppelrolle():
+    """Ein Materialwart mit eigener PSA im verwalteten Ordner: unter ARTIKEL wie bisher (auch 7_tage), nicht unter
+    „Deine PSA“; verliert er danach die Verwalterrolle, kommt die gemeldete Stufe nicht noch einmal als PSA."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, ids, gid, system, lager = aufbau(tmp)
+        with uhr(um(T0)):
+            a = artikel(app, k["wart"], ids["hms"], lager, "DR-1", faellig=T0 + timedelta(days=25))
+            zuordnen_sql(app, a["id"], k["wart_id"])
+            for n, stufe_ in ((0, "30_tage"), (18, "7_tage")):
+                tag(n)
+                with versand(app), post() as liste:
+                    lauf(app)
+                m = an(liste, "wart@example.org")
+                assert len(m) == 1 and "DR-1" in m[0][2] and "DEINE PSA" not in m[0][2], liste
+                assert "\nARTIKEL\n" in m[0][2] and psa_log(app, k["wart_id"])[-1] == (a["id"], stufe_)
+            assert psa_log(app, k["wart_id"]) == [(a["id"], "30_tage"), (a["id"], "7_tage")]
+            sql(app, "DELETE FROM mat_folder_grant WHERE user_id = ? AND permission = 'verwalten'", (k["wart_id"],))
+            tag(19)
+            p = planen(app)
+            assert psa_mail(p, "wart@example.org") is None, [m.adresse for m in p.mails]
+    print("PSA: Doppelrolle bestanden.")
+
+
+def test_psa_obergrenze():
+    """60 fällige zugeordnete Artikel: 50 Zeilen und „… und 10 weitere – alle unter Meine PSA“, alle 60 vermerkt;
+    „Meine PSA“ mit 210 Zuordnungen: 200 Karten, gesamt 210."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, ids, gid, system, lager = aufbau(tmp)
+        with uhr(um(T0)):
+            c, pid = psa_person(app, k["adm"])
+            viele(app, ids["hms"], lager, 60, T0 + timedelta(days=10), "OB")
+            sql(app, "UPDATE mat_item SET assigned_user_id = ? WHERE serial_no LIKE 'OB-%'", (pid,))
+            with versand(app), post() as liste:
+                erg = lauf(app)
+            text = an(liste, "person@example.org")[0][2]
+            assert text.count("    zur Prüfung fällig am") == 50, text
+            assert "  … und 10 weitere – alle unter Meine PSA" in text
+            assert len(psa_log(app, pid)) == 60 and erg["mails"]["psa"] == 60, erg
+            viele(app, ids["hms"], lager, 150, T0 + timedelta(days=100), "OC")
+            sql(app, "UPDATE mat_item SET assigned_user_id = ? WHERE serial_no LIKE 'OC-%'", (pid,))
+            d = c.get("/api/material/meine-psa").json
+            assert len(d["artikel"]) == 200 and d["gesamt"] == 210, (len(d["artikel"]), d["gesamt"])
+    print("PSA: Obergrenze bestanden.")
+
+
+def test_psa_abmeldung():
+    """Abbestellt (mat_psa_mails = 0): kein Abschnitt „Deine PSA“; als Verwalter weiter unter ARTIKEL."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, ids, gid, system, lager = aufbau(tmp)
+        with uhr(um(T0)):
+            _, pid = psa_person(app, k["adm"])
+            a = artikel(app, k["wart"], ids["hms"], lager, "AB-1", faellig=T0 + timedelta(days=10))
+            b = artikel(app, k["wart"], ids["hms"], lager, "AB-2", faellig=T0 + timedelta(days=10))
+            zuordnen_sql(app, a["id"], pid)
+            zuordnen_sql(app, b["id"], k["wart_id"])
+            sql(app, "UPDATE users SET mat_psa_mails = 0 WHERE id IN (?, ?)", (pid, k["wart_id"]))
+            p = planen(app)
+            assert psa_mail(p) is None
+            w = psa_mail(p, "wart@example.org")
+            assert "AB-1" in w.text and "AB-2" in w.text and "DEINE PSA" not in w.text
+    print("PSA: Abmeldung bestanden.")
+
+
+def test_psa_zulaessig():
+    """Ohne Adresse, mit DEMO-Adresse, deaktiviert, ohne Namen: nichts; ohne Stufe: ja."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, ids, gid, system, lager = aufbau(tmp)
+        with uhr(um(T0)):
+            leute = {}
+            for n, spalten in enumerate(("email = ''", "email = 'x@demo.invalid'", "active = 0", "name = ''", None)):
+                _, uid = psa_person(app, k["adm"], f"p{n}@example.org", name=f"Person {n}")
+                a = artikel(app, k["wart"], ids["hms"], lager, f"ZL-{n}", faellig=T0 + timedelta(days=10))
+                zuordnen_sql(app, a["id"], uid)
+                if spalten:
+                    sql(app, f"UPDATE users SET {spalten} WHERE id = ?", (uid,))
+                leute[n] = uid
+            p = planen(app)
+            psa = [m for m in p.mails if any(e.psa for e in m.eintraege)]
+            assert [m.adresse for m in psa] == ["p4@example.org"], [m.adresse for m in psa]
+            assert len(p.mails) == 2                                         # p4 und der Materialwart
+    print("PSA: Zulässigkeit bestanden.")
+
+
+def test_psa_auswahl():
+    """Ordner mit „Erinnerungsmails aus“ (geerbt): nichts; gesperrt (auch durch eine Mangelmeldung): nichts;
+    DEMO-Artikel an eine DEMO-Einsatzkraft nur im Probelauf mit DEMO, gekennzeichnet."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, ids, gid, system, lager = aufbau(tmp)
+        with uhr(um(T0)):
+            _, pid = psa_person(app, k["adm"])
+            unter = ordner_neu(k["wart"], lager, "Fach")
+            a = artikel(app, k["wart"], ids["hms"], unter, "AW-1", faellig=T0 + timedelta(days=10))
+            b = artikel(app, k["wart"], ids["hms"], lager, "AW-2", faellig=T0 + timedelta(days=10))
+            for iid in (a["id"], b["id"]):
+                zuordnen_sql(app, iid, pid)
+            sql(app, "UPDATE mat_folder SET reminders_off = 1 WHERE id = ?", (lager,))
+            assert psa_mail(planen(app)) is None
+            sql(app, "UPDATE mat_folder SET reminders_off = 0 WHERE id = ?", (lager,))
+            sql(app, "UPDATE mat_item SET lock_state = 'gesperrt' WHERE id IN (?, ?)", (a["id"], b["id"]))
+            assert psa_mail(planen(app)) is None
+            gdemo, _ = gliederung(k["adm"], "DEMO OG Platzhalter", standard=False)
+            sql(app, "UPDATE mat_folder SET demo = 1 WHERE id = ?", (gdemo,))
+            d = artikel(app, k["adm"], ids["hms"], gdemo, "AW-D", faellig=T0 + timedelta(days=10))
+            _, kraft = psa_person(app, k["adm"], "einsatzkraft@beispiel.invalid", name="DEMO-Einsatzkraft")
+            zuordnen_sql(app, d["id"], kraft)
+            assert psa_mail(planen(app), "einsatzkraft@beispiel.invalid") is None
+            with app.app_context():
+                p = erinnerung_modul().planen(T0, demo=True)
+            m = psa_mail(p, "einsatzkraft@beispiel.invalid")
+            assert m and m.demo and "AW-D" in m.text and m.betreff.startswith("[DEMO] "), m
+            assert "DEINE PSA" in m.text and "· DEMO" in m.text
+    print("PSA: Auswahl bestanden.")
+
+
+def test_psa_mailtext():
+    """Ganzer Text und Betreff (nur PSA); gemischt mit Artikeln und mit eigenen Freigaben; Links der reinen PSA-Mail nur
+    „Meine PSA“ und Profil."""
+    import re
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, ids, gid, system, lager = aufbau(tmp)
+        with uhr(um(T0)):
+            _, pid = psa_person(app, k["adm"])
+            a = artikel(app, k["wart"], ids["hms"], lager, "MT-1", faellig=T0 - timedelta(days=1))
+            b = artikel(app, k["wart"], ids["hms"], lager, "MT-2", faellig=T0 + timedelta(days=12), neu=True)
+            for x in (a, b):
+                zuordnen_sql(app, x["id"], pid)
+            m = psa_mail(planen(app))
+            inv = {r["id"]: r["inventory_no"] for r in zeilen(app, "SELECT id, inventory_no FROM mat_item")}
+            assert m.betreff == "strömis.de – Deine PSA: 1 überfällig, 1 in 30 Tagen fällig", m.betreff
+            soll = (
+                "Hallo Person Platzhalter,\n\n"
+                "hier steht, was an der Ausrüstung, die dir persönlich zugeordnet ist, ansteht (Stand 02.11.2026). "
+                "Jede Erinnerung kommt nur einmal.\n\n"
+                "DEINE PSA\n\n"
+                f"  {inv[a['id']]}  Testwerk HMS Beta, SN MT-1\n"
+                "    Prüfung überfällig – fällig war der 01.11.2026. Nicht verwenden, bis sie geprüft ist.\n"
+                f"  {inv[b['id']]}  Testwerk HMS Beta, SN MT-2\n"
+                "    zur Prüfung fällig am 14.11.2026 (in 12 Tagen) – bitte rechtzeitig deinem Materialwart geben.\n"
+                "    Die Eingangsprüfung steht noch aus.\n\n"
+                f"Deine PSA im Überblick: {BASIS}/material/meine-psa\n\n"
+                "Du bekommst diese Mail, weil dir diese Ausrüstung im Modul Material zugeordnet ist. Abbestellen: "
+                f"Profil → „Erinnerungen zu meiner PSA“ ({BASIS}/profil).\n")
+            assert m.text == soll, m.text
+            assert set(re.findall(r"https://\S+?(?=[)\s])", m.text)) == {f"{BASIS}/material/meine-psa", f"{BASIS}/profil"}
+            # Gemischt: Verwalterin in Gliederung A, eigene PSA in B (dort verwaltet sie nicht).
+            _, mid = konto(app, k["adm"], "misch@example.org", name="Misch Platzhalter")
+            freigeben(k["adm"], gid, mid, "verwalten")
+            gb, _ = gliederung(k["adm"], "OG Nachbarstadt", standard=False)
+            c = artikel(app, k["adm"], ids["hms"], gb, "MT-3", faellig=T0 - timedelta(days=2))
+            zuordnen_sql(app, c["id"], mid)
+            m = psa_mail(planen(app), "misch@example.org")
+            assert m.betreff == "strömis.de – Material: Deine PSA (1 überfällig), außerdem 1 überfällig, " \
+                               "1 in 30 Tagen fällig", m.betreff
+            assert m.text.index("DEINE PSA") < m.text.index("\nARTIKEL\n") and "MT-3" in m.text
+            assert "„Deine PSA“ bekommst du, weil dir diese Ausrüstung zugeordnet ist (abbestellen im Profil)." in m.text
+            assert erinnerung_modul().zahlen(m) == (2, 0, 0, 1)
+            # Mit einer eigenen ablaufenden Freigabe.
+            freigeben(k["adm"], gb, mid, "lesen", bis=T0 + timedelta(days=10))
+            m = psa_mail(planen(app), "misch@example.org")
+            assert m.betreff.startswith("strömis.de – Material: Deine PSA (1 überfällig), Deine Freigabe läuft ab, "
+                                        "außerdem "), m.betreff
+            assert m.text.index("DEINE PSA") < m.text.index("DEINE FREIGABEN") < m.text.index("\nARTIKEL\n")
+    print("PSA: Mailtext bestanden.")
+
+
+def test_psa_probelauf():
+    """Probelauf: mails[].psa; remind --trocken „(0 Artikel, 0 Freigaben, 2 PSA)“; echter Lauf „davon 2 PSA“ und
+    Laufstand mit psa."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, ids, gid, system, lager = aufbau(tmp)
+        with uhr(um(T0)):
+            _, pid = psa_person(app, k["adm"])
+            for n in (1, 2):
+                a = artikel(app, k["wart"], ids["hms"], lager, f"PL-{n}", faellig=T0 + timedelta(days=10))
+                zuordnen_sql(app, a["id"], pid)
+            p = k["katalog"].get("/api/material/erinnerungen/probelauf").json
+            x = next(m for m in p["mails"] if m["name"] == "Person Platzhalter")
+            assert (x["artikel"], x["freigaben"], x["eigene"], x["psa"]) == (0, 0, 0, 2), x
+            w = next(m for m in p["mails"] if m["name"] == "wart")
+            assert (w["artikel"], w["psa"]) == (2, 0), w
+            code, text = cli(app, "--trocken")
+            assert code == 0 and "An: Person Platzhalter <person@example.org> (0 Artikel, 0 Freigaben, 2 PSA)" in text
+            assert "An: wart <wart@example.org> (2 Artikel, 0 Freigaben)\n" in text, text
+            with versand(app), post():
+                code, text = cli(app)
+            assert code == 0 and "Mails: 2 verschickt (2 Artikel, davon 2 PSA, 0 Freigaben)" in text, text
+            stand = json.loads(zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'tageslauf_stand'")[0]["wert"])
+            assert stand["letzter"]["psa"] == 2 and stand["letzter"]["artikel"] == 2, stand
+    print("PSA: Probelauf bestanden.")
+
+
+def test_psa_kontoloeschen():
+    """Die Log-Zeilen aus „Deine PSA“ gehen mit dem Konto."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, ids, gid, system, lager = aufbau(tmp)
+        with uhr(um(T0)):
+            _, pid = psa_person(app, k["adm"])
+            a = artikel(app, k["wart"], ids["hms"], lager, "KL-1", faellig=T0 + timedelta(days=10))
+            zuordnen_sql(app, a["id"], pid)
+            with versand(app), post():
+                lauf(app)
+            r = ref(app, pid)
+            assert psa_log(app, pid) == [(a["id"], "30_tage")]
+            assert k["adm"].delete(f"/api/admin/users/{pid}", headers=H).status_code == 200
+            assert not [z for z in log(app) if z["konto_ref"] == r]
+    print("PSA: Kontolöschen bestanden.")
+
+
 def migration_aus_kopie(quelle):
     """Eine KOPIE einer Datenbank auf Stand 7 durch alle Schritte bis 11 – von Hand:
     python tests/test_material_erinnerung.py --kopie /pfad/zur/kopie.db (die Quelle bleibt unberührt)."""
@@ -1751,4 +2017,13 @@ if __name__ == "__main__":
     test_routen()
     test_thread_start()
     test_einstellung()
+    test_psa_stufen()
+    test_psa_doppelrolle()
+    test_psa_obergrenze()
+    test_psa_abmeldung()
+    test_psa_zulaessig()
+    test_psa_auswahl()
+    test_psa_mailtext()
+    test_psa_probelauf()
+    test_psa_kontoloeschen()
     print("Alle Erinnerungstests bestanden.")
