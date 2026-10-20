@@ -26,6 +26,9 @@ Anhängen, demselben Prüftag und Verweis auf das Original, das unverändert ble
     eigenem Aussonderungsprotokoll).
   - Festschreiben verlangt eine Urkundennummer und eine im Profil hinterlegte Unterschrift; Unterschrifts-
     felder des Formulars sind wie andere Pflichtpunkte zu füllen.
+  - Gemeldete Mängel (Phase 3 · L1, mangel.py): „einsatzbereit“ geht bei offenen Meldungen nur, wenn der Prüfer jede
+    einzeln als geprüft abgehakt hat (maengel_gesehen) – dann erledigt die Freiprüfung sie; eine Berichtigung gibt bei
+    offener Meldung nie frei. Die Aussonderung erledigt sie ebenso, „instandsetzen“ nicht.
 
 Wer handelt, kommt als „pruefer“-dict herein ({id, name, urkunde, unterschrift, login}) – aus dem
 angemeldeten Konto (pruefer_aus) oder, für die Demodaten auf der Kommandozeile, von Hand."""
@@ -105,7 +108,10 @@ def arten_fuer(item):
         return ["eingang"], "eingang"
     arten = ["periodisch", "ausserplanmaessig", "reparatur"]
     if item["lock_state"] in ("gesperrt", "verloren"):
-        return arten, "reparatur"
+        # Nach einer Mangelmeldung, die noch kein Prüfer angesehen hat, ist die Freiprüfung außerplanmäßig – erst nach
+        # „instandsetzen“ wieder eine Prüfung nach Reparatur.
+        from . import mangel
+        return arten, ("ausserplanmaessig" if mangel.ungeprueft(item["id"]) else "reparatur")
     from . import durchgang
     if st.status(item) in ("ueberfaellig", "bald_faellig") or durchgang.offene_runde_fuer(item["id"]):
         return arten, "periodisch"
@@ -214,6 +220,9 @@ def pruefung_json(p, pruefer_id=None):
         out["einsatzbereit_gesperrt"] = gruende
         out["freipruefung"] = item["lock_state"] in ("gesperrt", "verloren")
         out["arten"] = arten_fuer(item)[0]
+        # Offene Mangelmeldungen – die Grundlage der Häkchen im Festschreib-Dialog; mit Melder für Grund- oder Prüfrecht.
+        from . import mangel
+        out["maengel"] = mangel.offene_json(item, mangel.darf_name(item))
     # Prüfanleitung aus dem Wiki (Phase 2 · L3) – nur in offenen Prüfungen; an abgeschlossenen nichts (die heutige
     # Fassung ist nicht die, nach der geprüft wurde). Festgehalten wird sie nirgends.
     from . import wikiverweis
@@ -564,11 +573,21 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
     if not pruefer.get("unterschrift"):
         raise Abgelehnt(UNTERSCHRIFT_FEHLT, 403)
     ergebnis = auswahl(d.get("ergebnis"), ERGEBNISSE, "Ergebnis")
+    gesehen = _maengel_gesehen(d)
     with protokoll.dateien_sichern(), db.transaction(sofort=True):
         p = _entwurf_des(pid, pruefer)
         item = bestand.artikel(p["item_id"])
         if item["lock_state"] == "ausgesondert":
             raise Abgelehnt("Der Artikel wurde inzwischen ausgesondert.", 409)
+        if ergebnis == "einsatzbereit":
+            # Gemeldete Mängel: frisch gelesen – auch eine Meldung, die während der Prüfung kam. Jede offene muss der
+            # Prüfer einzeln abgehakt haben; eine Berichtigung gibt bei offener Meldung nie frei.
+            from . import mangel
+            offen = mangel.offene_ids(item["id"])
+            if offen and p["corrects_inspection_id"]:
+                raise Abgelehnt(mangel.NUR_NEUE_PRUEFUNG, 409)
+            if offen - gesehen:
+                raise Abgelehnt(mangel.MANGEL_NEU, 409)
         produkt = katalog.produkt(item["product_id"])
         tag = _tag(pruefdatum or (p["inspected_on"] if p["corrects_inspection_id"] else heute()))
         heimat = bestand.heimat(item)
@@ -630,6 +649,18 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
     return pid
 
 
+def _maengel_gesehen(d):
+    """„maengel_gesehen“: die Kennungen der gemeldeten Mängel, die der Prüfer im Festschreib-Dialog einzeln als geprüft
+    abgehakt hat (fehlt es, keine). Liefert eine Menge."""
+    from . import kennung
+    werte = d.get("maengel_gesehen")
+    if werte is None:
+        return set()
+    if not isinstance(werte, list) or len(werte) > 1000:
+        raise Abgelehnt("„maengel_gesehen“ muss eine Liste von Kennungen sein.")
+    return {kennung(x, "Mangelmeldung") for x in werte}
+
+
 def _wirkung(item, p, ergebnis, tag, naechste, grund, pruefer, ts=None):
     """Was das Ergebnis am Artikel bewirkt – in der Transaktion des Abschlusses."""
     iid = item["id"]
@@ -649,6 +680,10 @@ def _wirkung(item, p, ergebnis, tag, naechste, grund, pruefer, ts=None):
         alt, neu = journal.unterschied(vorher, nachher)
         journal.eintragen("item", iid, "freigeprueft" if gesperrt else "geprueft",
                           alt, dict(neu, pruefung=p["id"], ergebnis=ergebnis, art=p["kind"]))
+        if not p["corrects_inspection_id"]:
+            # Die Freiprüfung erledigt gemeldete Mängel (abgehakt hat sie der Prüfer, abschliessen prüft das).
+            from . import mangel
+            mangel.erledigen(iid, p["id"])
     elif ergebnis == "instandsetzen":
         db.execute("UPDATE mat_item SET last_inspected_on = ?, updated_at = ? WHERE id = ?", (tag, db.now(), iid))
         if gesperrt:
@@ -685,8 +720,9 @@ def _systemziel(item, art):
     return ziel["id"]
 
 
-def _sperren(item, zustand, grund, pruefung_id=None):
-    """Sperre wirken lassen: in „Gesperrt“ der Gliederung, Herkunft merken."""
+def _sperren(item, zustand, grund, pruefung_id=None, aktion="gesperrt", zusatz=None):
+    """Sperre wirken lassen: in „Gesperrt“ der Gliederung, Herkunft merken – ein Journaleintrag (aktion; die
+    Mangelmeldung schreibt „mangel_gemeldet“ mit zusatz {"mangel": Kennung})."""
     ziel = _systemziel(item, "gesperrt")
     db.execute("UPDATE mat_item SET lock_state = ?, lock_reason = ?, origin_folder_id = ?, folder_id = ?, "
                "last_inspected_on = ?, updated_at = ? WHERE id = ?",
@@ -695,7 +731,9 @@ def _sperren(item, zustand, grund, pruefung_id=None):
                "origin_folder_id": item["folder_id"], "herkunft": bestand._pfad_text(item["folder_id"])}
     if pruefung_id:
         nachher["pruefung"] = pruefung_id
-    journal.eintragen("item", item["id"], "gesperrt",
+    if zusatz:
+        nachher.update(zusatz)
+    journal.eintragen("item", item["id"], aktion,
                       {"lock_state": item["lock_state"], "folder_id": item["folder_id"],
                        "ordner": bestand._pfad_text(item["folder_id"])}, nachher)
 
@@ -753,14 +791,18 @@ def _aussondern(item, grund, bemerkung, tag, akteur, basis_id=None, ts=None):
         # Betroffene stehen nur pseudonym im Journal (Kontoverweis, 6.2).
         journal.eintragen("item", item["id"], "zuordnung_geloest", None,
                           {"konto": journal.konto_ref(item["assigned_user_id"]), "grund": "ausgesondert"})
+    from . import mangel
+    mangel.erledigen(item["id"], aid)              # die Aussonderung erledigt gemeldete Mängel
     durchgang.nach_aussonderung(item["id"], tag, basis_id)
     protokoll.pruefung_festschreiben(aid, ts, akteur.get("unterschrift"), akteur.get("login"), heimat, sperre)
     return aid
 
 
 def aussondern(iid, d, akteur):
-    """Aussonderung durch den Materialwart – nur für Artikel, die ein Prüfer vorher gesperrt hat. Auch sie
-    wird festgeschrieben und braucht daher die Unterschrift dessen, der aussondert."""
+    """Aussonderung durch den Materialwart – nur für Artikel, die ein Prüfer vorher gesperrt hat. Eine Sperre aus einer
+    Mangelmeldung zählt erst, wenn ein Prüfer den Artikel danach geprüft hat (mangel.nur_gemeldet) – so hat, was der
+    Materialwart aussondert, vorher ein Sachkundiger gesehen. Auch sie wird festgeschrieben und braucht daher die
+    Unterschrift dessen, der aussondert."""
     if not akteur.get("unterschrift"):
         raise Abgelehnt("Zum Aussondern fehlt deine Unterschrift – das Aussonderungsprotokoll wird damit "
                         "festgeschrieben. Bitte im Profil hinterlegen.", 403)
@@ -775,12 +817,16 @@ def aussondern(iid, d, akteur):
             raise Abgelehnt("Der Artikel ist schon ausgesondert.", 409)
         if item["lock_state"] not in ("gesperrt", "verloren"):
             raise Abgelehnt("Aussondern lassen sich nur gesperrte Artikel – zuerst sperrt ein Prüfer (aus einer "
-                            "Prüfung mit „instandsetzen“ oder direkt nach Sturz, Beschädigung oder Verlust).", 409)
+                            "Prüfung mit „instandsetzen“ oder direkt nach Sturz, Beschädigung oder Verlust). Eine Sperre "
+                            "aus einer Mangelmeldung zählt erst, wenn ein Prüfer den Artikel danach geprüft hat.", 409)
         if tag < item["created_at"][:10]:
             raise Abgelehnt("Das Datum liegt vor der Erfassung des Artikels.")
         offen = offener_entwurf(iid)
         if offen:
             raise Abgelehnt(reserviert_text(offen) + " Erst die Reservierung freigeben.", 409)
+        from . import mangel
+        if mangel.nur_gemeldet(iid):
+            raise Abgelehnt(mangel.NUR_GEMELDET, 409)
         return _aussondern(item, AUSSONDERUNGSGRUENDE[art], bemerkung, tag, akteur)
 
 
@@ -797,6 +843,9 @@ def berichtigbar(p, item=None):
     item = item or bestand.artikel(p["item_id"])
     if item["lock_state"] == "ausgesondert":
         return nein("Der Artikel ist ausgesondert.")
+    from . import mangel
+    if mangel.offene_ids(item["id"]):
+        return nein(mangel.NUR_NEUE_PRUEFUNG)
     # Gesperrt, ohne dass diese Prüfung gesperrt hat („instandsetzen“): Dann kam die Sperre danach (Sturz,
     # Beschädigung, Verlust). Eine Berichtigung mit dem alten Prüftag gäbe den Artikel sonst als Freiprüfung frei.
     if item["lock_state"] in ("gesperrt", "verloren") and p["result"] != "instandsetzen":

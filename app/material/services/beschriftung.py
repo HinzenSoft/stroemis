@@ -5,7 +5,8 @@ Lebenslauf-PDF sollen dasselbe Wort für dasselbe Feld benutzen.
 Was hier nicht steht, erscheint mit seinem technischen Namen – wie in der Oberfläche.
 
 Betroffene stehen im Journal nur als Kontoverweis („konto“, Phase 2); das PDF nennt sie nie – nicht einmal den Namen,
-den journal.lesen beim Lesen auflöst: Dort steht „(Person)“. Der Lebenslauf geht weiter, an wen er auch geht."""
+den journal.lesen beim Lesen auflöst: Dort steht „(Person)“. Der Lebenslauf geht weiter, an wen er auch geht. Ebenso
+steht bei „Mangel gemeldet“ als Handelnder „(Person)“ – der Melder kann die zugeordnete Person sein (Phase 3 · L1)."""
 import json
 
 from ..models import ANHANGARTEN, ERGEBNISSE, MATERIALARTEN, ORDNERARTEN, PRUEFARTEN
@@ -48,6 +49,8 @@ FELD = {
     "ersetzt": "neu eingelesen (Zeilen)", "aus_nacharbeit": "aus der Nacharbeit",
     "liste_inventarnummer": "bisherige Inventarnummer", "liste_zuletzt_geprueft": "zuletzt geprüft laut Liste",
     "liste_naechste_pruefung": "nächste Prüfung laut Liste", "seite": "Wiki-Seite Nr.",
+    # Phase 3 · Lieferung 1: Mangelmeldung
+    "mangel": "Mangelmeldung Nr.",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",
@@ -70,6 +73,7 @@ AKTION = {
     "zugeordnet": "Zuordnung geändert", "zuordnung_geloest": "Zuordnung geändert",
     "bestandsimport": "Bestandsimport", "nacharbeit_uebernommen": "Nacharbeit übernommen",
     "nacharbeit_verworfen": "Nacharbeit verworfen", "wiki": "Prüfanleitung (Wiki) geändert",
+    "mangel_gemeldet": "Mangel gemeldet",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",
@@ -150,7 +154,9 @@ def journal_zeilen(eintraege, verweise=None, mit_entitaet=False):
         aktion = AKTION.get(j["action"], j["action"])
         if mit_entitaet:
             aktion = f"{ENTITAET.get(j['entity'], j['entity'])} {aktion}"
-        out.append({"zeit": zeit_text(j["created_at"]), "aktion": aktion, "von": j.get("user_name") or "–",
+        # Wer einen Mangel meldet, kann die zugeordnete Person sein – im Lebenslauf ohne Namen.
+        von = PERSON if j["action"] == "mangel_gemeldet" else (j.get("user_name") or "–")
+        out.append({"zeit": zeit_text(j["created_at"]), "aktion": aktion, "von": von,
                     "felder": [{"feld": feld_name(f, j), "vorher": wert_text(vorher.get(f), f, verweise),
                                 "nachher": wert_text(nachher.get(f), f, verweise),
                                 "nur_nachher": j["action"] in ("angelegt",) or f not in vorher}

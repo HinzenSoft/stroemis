@@ -218,11 +218,16 @@ def profile():
     # Prüfer und wer neu unterschreiben darf (darf_unterschreiben – wer festschreibt oder aussondert, auch ein Materialwart
     # mit Stufe Mitglied, der über seine Freigabe verwaltet); ist schon eine hinterlegt, immer – auch ohne Zugang, dann
     # nur zum Entfernen.
+    # Abschnitt „Meine PSA“ (Phase 3 · L1): mit Zuordnung oder abbestellten Erinnerungen – so lässt sich eine Abmeldung
+    # auch ohne Zuordnung zurücknehmen.
+    from .material.services import psa as mat_psa
     from .material.services import rechte as mat_rechte
     mat_zugang, mat_unterschrift = mat_rechte.zugang(u), mat_rechte.darf_unterschreiben(u)
     return render_template("profil.html", user=u, avatar=auth.avatar_url(u.get("avatar") or ""),
                            initialen=auth.initialen(u.get("name") or u["email"]), darf_pruefen=mat_rechte.ist_pruefer(u),
                            mat_zugang=mat_zugang, mat_unterschrift=mat_unterschrift,
+                           psa_anzahl=mat_psa.anzahl(u["id"]) if mat_psa.konto(u) else 0,
+                           psa_mails=bool(u["mat_psa_mails"]),
                            mat_abschnitt=bool((mat_zugang and (u["mat_pruefer"] or mat_unterschrift))
                                               or u.get("signature_png")))
 
@@ -610,8 +615,12 @@ def create_app():
     def inject():
         # material_zugang: der Reiter „Material“ der Kopfleiste nur, wenn sich das Modul auch öffnet (Stufe und Name,
         # ohne Abfrage) – rechte.material allein zeigte ihn einem namenlosen Konto, das dort nur 403 bekäme.
+        # meine_psa: der Eintrag „Meine PSA“ für Konten mit Zuordnung, die nirgends im Bestand lesen dürfen (Phase 3 ·
+        # L1) – eine Abfrage über den Index der Zuordnung, die Sicht nur mit Zuordnung und Modulzugang.
+        from .material.services.psa import kopfleiste as material_psa
         from .material.services.rechte import zugang as material_zugang
         return {"cfg": app.config, "is_admin": auth.is_admin(), "is_pruefer": auth.is_pruefer(),
+                "meine_psa": material_psa() if auth.current_user() else 0,
                 "rechte": auth.rechte_von(auth.current_user()) if auth.current_user() else {},
                 "wiki_lesemodus": auth.wiki_lesemodus(),
                 "material_zugang": material_zugang(),

@@ -230,6 +230,8 @@
     ersetzt: "neu eingelesen (Zeilen)", aus_nacharbeit: "aus der Nacharbeit",
     liste_inventarnummer: "bisherige Inventarnummer", liste_zuletzt_geprueft: "zuletzt geprüft laut Liste",
     liste_naechste_pruefung: "nächste Prüfung laut Liste", seite: "Wiki-Seite Nr.",
+    // Phase 3 · Lieferung 1: Mangelmeldung
+    mangel: "Mangelmeldung Nr.",
   };
   // Die Beschriftung eines Feldes in einem Journaleintrag – wie beschriftung.feld_name: „description“ ist am Produkt der
   // kurze Zusatz hinter dem Namen und heißt dort seit dem Wunsch vom 18.10.2026 „Bemerkung“; an Ordnern und in den
@@ -253,7 +255,8 @@
                    freigabe_abgelaufen: "Freigabe abgelaufen",
                    zugeordnet: "Zuordnung geändert", zuordnung_geloest: "Zuordnung geändert",
                    bestandsimport: "Bestandsimport", nacharbeit_uebernommen: "Nacharbeit übernommen",
-                   nacharbeit_verworfen: "Nacharbeit verworfen", wiki: "Prüfanleitung (Wiki) geändert" };
+                   nacharbeit_verworfen: "Nacharbeit verworfen", wiki: "Prüfanleitung (Wiki) geändert",
+                   mangel_gemeldet: "Mangel gemeldet" };
   const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };

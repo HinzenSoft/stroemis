@@ -1980,6 +1980,43 @@ def test_pruefsicht_zugeordnete():
     print("Prüfsicht: Zugeordnete bestanden.")
 
 
+def test_psa_ohne_tuer():
+    """Phase 3 · L1: Ein Konto aus B ohne Stufe, dem ein B-Artikel zugeordnet ist, sieht über den QR-Link, Medien und
+    „Meine PSA“ nichts aus A – und meldet dort nichts. Der fremde Artikel antwortet wie ein unbekannter."""
+    import re as _re
+    with ohne_post(), tempfile.TemporaryDirectory() as tmp:
+        t, b = trennung_aufbau(tmp)
+        app = t.app
+        c, uid = neues_konto(app, "psa_b@example.org", name="PSA Nachbarstadt", stufe=0)
+        sql(app, "UPDATE mat_item SET assigned_user_id = ? WHERE id = ?", (uid, t.art_b["id"]))
+        token_a = zeilen(app, "SELECT qr_token FROM mat_item WHERE id = ?", (t.art_a["id"],))[0]["qr_token"]
+        foto_a = _foto(t.wart_a, f"/api/material/ordner/{t.lager_a}/foto", "lager_a.jpg")["ordner"]["foto"]
+
+        def ohne_nonce(r):
+            return _re.sub(rb'nonce="[^"]*"', b"", r.data)
+        r = c.get(f"/m/{token_a}")
+        assert r.status_code == 403 and ohne_nonce(r) == ohne_nonce(c.get("/m/gibtesnicht"))
+        r = c.get(f"/m/{b.token}")
+        assert r.status_code == 302 and r.headers["Location"].endswith(f"/material/meine-psa/{t.art_b['id']}")
+        r = c.get(f"/material/meine-psa/{t.art_a['id']}")
+        assert r.status_code == 404 and ohne_nonce(r) == ohne_nonce(c.get("/material/meine-psa/999999"))
+        d = c.get("/api/material/meine-psa").json
+        assert [a["id"] for a in d["artikel"]] == [t.art_b["id"]] and d["artikel"][0]["gliederung"] == "OG Nachbarstadt"
+        for antwort in (json.dumps(d, ensure_ascii=False), c.get("/material/meine-psa").get_data(as_text=True)):
+            for merkmal in ("Musterstadt", "TEST-A-0001", "wart@", "pruefer@"):
+                assert merkmal not in antwort, merkmal
+        for url in [foto_a] + b.ordnerfoto + b.befundfoto + b.meldungsfoto + [b.anhang]:
+            assert c.get(url).status_code == 403, url
+        assert c.get(b.produktbild).status_code == 200                       # das Produkt der eigenen PSA
+        vorher = _stand(app)
+        r = c.post(f"/api/material/artikel/{t.art_a['id']}/mangel", headers=H, json={"beschreibung": "x"})
+        assert r.status_code == 403 and "nicht freigeschaltet" in r.json["error"], r.get_json()
+        assert _stand(app) == vorher
+        r = c.get(f"/api/material/artikel/{t.art_b['id']}")
+        assert r.status_code == 403, r.status_code
+    print("PSA ohne Tür bestanden.")
+
+
 if __name__ == "__main__":
     test_migration_7_8()
     test_migration_8_9()
@@ -2003,3 +2040,4 @@ if __name__ == "__main__":
     test_nichts_aus_b_paket_d()
     test_rueckruf_antwort()
     test_pruefsicht_zugeordnete()
+    test_psa_ohne_tuer()

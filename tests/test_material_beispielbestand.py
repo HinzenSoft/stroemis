@@ -448,7 +448,11 @@ def test_beispielbestand():
         assert eins.get(f"/api/material/ordner/{au['id']}").status_code == 404
         zwei = anmelden(app, "demo-einsatzkraft-au-2@example.invalid",
                         passwoerter["demo-einsatzkraft-au-2@example.invalid"])
+        # Ohne Modulzugang, aber mit zugeordneter PSA: „Material“ führt zu „Meine PSA“ (Phase 3 · L1), sonst 403.
         r = zwei.get("/material")
+        assert r.status_code == 302 and r.headers["Location"].endswith("/material/meine-psa"), r.status_code
+        assert zwei.get("/material/meine-psa").status_code == 200 and zwei.get("/api/material/meine-psa").json["artikel"]
+        r = zwei.get("/material/bestand")
         assert r.status_code == 403 and "nicht freigeschaltet" in r.get_data(as_text=True)
         assert re.search(r"demo-einsatzkraft-au-1@example\.invalid .*\(liest ihren persönlichen Ordner\)", aus)
         assert re.search(r"demo-einsatzkraft-au-2@example\.invalid .*\(ohne Modulzugang", aus)

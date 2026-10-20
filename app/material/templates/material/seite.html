@@ -13,15 +13,16 @@
 <div class="mat-shell" id="mat-shell">
 {# Ordnerleiste links (material.js füllt sie): in den Ansichten des Bestands neben dem Inhalt, auf schmalen
    Bildschirmen als Schublade hinter „☰ Ordner“ – wie die Seitenleiste im Wiki. #}
-<aside class="mat-side" id="mat-side" aria-label="Ordner" hidden>
+{# Ohne Modulzugang („Meine PSA“, nur_psa) gibt es weder Ordnerleiste noch Modulnavigation. #}
+{% if not nur_psa %}<aside class="mat-side" id="mat-side" aria-label="Ordner" hidden>
   <div class="mat-side-kopf"><a href="/material/bestand">Ordner</a>
     <button class="lnk mat-side-zu" type="button" id="mat-side-zu" aria-label="Ordnerleiste schließen">✕</button></div>
   <div id="mat-baumnav"><p class="help">Wird geladen …</p></div>
-</aside>
+</aside>{% endif %}
 <main class="page breit mat" id="mat" data-ansicht="{{ ansicht }}" data-daten="{{ daten }}" data-darf="{{ darf }}">
   {# Passt die Zeile nicht (Telefon, Fold, Tablet hochkant), ordnet material.js sie um (navAnordnen): Die Reiter rollen
      seitlich in einer Zeile, die Nummernsuche wartet hinter der Lupe und öffnet als eigene Zeile darunter. #}
-  <nav class="mat-nav" aria-label="Modul Material">
+  {% if not nur_psa %}<nav class="mat-nav" aria-label="Modul Material">
     <button class="btn secondary small mat-side-auf" type="button" id="mat-side-auf" aria-controls="mat-side"
             aria-expanded="false">☰<span class="mat-side-auf-text"> Ordner</span></button>
     <div class="mat-reiter">
@@ -39,7 +40,7 @@
              autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="search">
       <button class="btn secondary small" type="submit">Suchen</button>
     </form>
-  </nav>
+  </nav>{% endif %}
   {# Ausgesondert, gesperrt, Lebensdauer erreicht: steht nach einem QR-Scan schon im HTML; material.js ersetzt den
      Inhalt beim Zeichnen durch die Ansicht mit ihrem eigenen Banner. #}
   <div id="mat-inhalt">{% if warnung %}<p class="mat-banner s-{{ warnung.status }}" role="alert">{{ warnung.text }}</p>{% endif %}<p class="help">Wird geladen …</p></div>

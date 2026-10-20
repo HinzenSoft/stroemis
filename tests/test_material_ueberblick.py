@@ -201,7 +201,9 @@ MULTIPART = {"material_api.produkt_bild", "material_api.ordner_foto", "material_
              "material_api.dokument_version", "material_api.kategorie_dokument_neu", "material_api.punkt_foto",
              "material_api.anhang_neu", "material_api.meldung_anlegen", "material_api.pruefen",
              # Phase 2 · L3: Bestandsimport (Datei) und „Produkt melden“ aus der Nacharbeit (Fotos)
-             "material_api.import_probelauf", "material_api.import_uebernehmen", "material_api.nacharbeit_melden"}
+             "material_api.import_probelauf", "material_api.import_uebernehmen", "material_api.nacharbeit_melden",
+             # Phase 3 · L1: Mangelmeldung mit Fotos
+             "material_api.artikel_mangel"}
 # Ausdrücklich erlaubt – mit Begründung und der Antwort, die die Führungskraft dort bekommt.
 AUSNAHMEN_SCHREIBEN = {
     # Die Prüfseite ist für jeden, auch ohne Anmeldung; sie speichert nichts (ohne Datei: 400).
@@ -210,6 +212,10 @@ AUSNAHMEN_SCHREIBEN = {
     ("DELETE", "material_api.unterschrift_entfernen"): 200,
     # Eine Meldung löscht nur ihr Melder; die des Materialwarts bleibt (403 aus dem Dienst, nicht aus der Rolle).
     ("DELETE", "material_api.meldung_loeschen"): 403,
+    # Phase 3 · L1: Einen Mangel melden darf jeder mit Leserecht (das sperrt) – ohne Beschreibung 400, nichts geändert.
+    ("POST", "material_api.artikel_mangel"): 400,
+    # Die eigene Einstellung „Erinnerungen zu meiner PSA“ – ohne „an“ 400.
+    ("PUT", "material_api.psa_mails"): 400,
 }
 # Ebenso nach dem Pfad (Phase 2, für die Routen der Pakete B, C, D): Die globale Suche und der QR-Steckbrief stehen
 # jedem mit Modulzugang offen – ohne Bestätigung antworten sie 400 und schreiben nichts.
@@ -223,6 +229,7 @@ AUSNAHMEN_LESEN = {
     "material.artikel_neu": 403,                   # Artikel anlegen nur, wer irgendwo verwaltet (Phase 2)
     "material.bestandsimport": 403,                # Bestandsimport nur, wer den Zielordner verwaltet (Phase 2 · L3)
     "material.nacharbeit_csv": 403,                # ebenso die Nacharbeit als CSV
+    "material.meine_psa_artikel": 404,             # „Meine PSA“: der Führungskraft ist nichts zugeordnet (Phase 3 · L1)
 }
 # Werkzeuge der Katalogpflege (Katalogaustausch, Lieferung 4) sind nur für die Material-Verwaltung; den Katalog selbst
 # liest die Führungskraft über /kategorien und /produkte. Ebenso der Probelauf der Erinnerungsmails (Phase 2 · L2) und

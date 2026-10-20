@@ -26,6 +26,7 @@
     {% if rechte.karte %}<a href="/karte" class="{% if active == 'map' %}active{% endif %}">Spots</a>{% endif %}
     {% if rechte.pruefungen %}<a href="/pruefungen" class="{% if active == 'pruefungen' %}active{% endif %}">Prüfungen</a>{% endif %}
     {% if material_zugang %}<a href="/material" class="{% if active == 'material' %}active{% endif %}">Material</a>{% endif %}
+    {% if meine_psa %}<a href="/material/meine-psa" class="{% if active == 'meine_psa' %}active{% endif %}">Meine PSA</a>{% endif %}
     {% if rechte.verwaltung %}<a href="/admin" class="{% if active == 'admin' %}active{% endif %}">Verwaltung</a>{% endif %}
     <a href="/profil" class="{% if active == 'profile' %}active{% endif %}"><span class="user">{{ user.name or user.email }} </span>Profil</a>
     <button type="button" id="logout">Abmelden</button>

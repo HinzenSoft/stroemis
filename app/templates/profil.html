@@ -65,6 +65,14 @@
     </div>
   </section>
   {% endif %}
+  {% if psa_anzahl or not psa_mails %}
+  <section class="section" id="psa">
+    <h2>Meine PSA</h2>
+    <p class="help">{% if psa_anzahl %}Dir ist Ausrüstung zugeordnet ({{ psa_anzahl }} Artikel) – <a href="/material/meine-psa">Meine PSA ansehen</a>.{% else %}Dir ist zurzeit keine Ausrüstung zugeordnet.{% endif %}</p>
+    <label class="inline"><input type="checkbox" id="psa-mails"{% if psa_mails %} checked{% endif %}> Erinnerungen zu meiner PSA per Mail</label>
+    <div class="help">Eine Mail am Morgen, wenn deine PSA in 30 Tagen zur Prüfung muss, wenn die Prüfung überfällig ist und 90 Tage vor ihrem Lebensende – jede Erinnerung nur einmal. Meldet jemand anderes einen Mangel an deiner PSA, bekommst du immer sofort eine Mail – sie betrifft deine Sicherheit.</div>
+  </section>
+  {% endif %}
   <section class="section">
     <h2>Passwort ändern</h2>
     <form id="f-password">
@@ -82,4 +90,5 @@
 {% block scripts %}<script src="{{ url_for('static', filename='js/profile.js') }}"></script>
 {% if mat_abschnitt %}<script src="{{ url_for('static', filename='vendor/signature_pad/signature_pad.umd.min.js') }}"></script>
 <script src="{{ url_for('material.static', filename='unterschrift.js') }}"></script>
-<script src="{{ url_for('material.static', filename='profil_unterschrift.js') }}"></script>{% endif %}{% endblock %}
+<script src="{{ url_for('material.static', filename='profil_unterschrift.js') }}"></script>{% endif %}
+{% if psa_anzahl or not psa_mails %}<script src="{{ url_for('material.static', filename='profil_psa.js') }}"></script>{% endif %}{% endblock %}

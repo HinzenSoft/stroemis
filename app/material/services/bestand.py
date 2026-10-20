@@ -726,6 +726,9 @@ def artikel_loeschen(iid):
             raise Abgelehnt("Der Artikel hat Prüfungen und bleibt mit seinem Lebenslauf – aussondern statt löschen.", 409)
         if db.query("SELECT 1 FROM mat_round_item WHERE item_id = ? LIMIT 1", (iid,), one=True):
             raise Abgelehnt("Der Artikel steht in einem Prüfdurchgang und bleibt.", 409)
+        if db.query("SELECT 1 FROM mat_defect_report WHERE item_id = ? LIMIT 1", (iid,), one=True):
+            raise Abgelehnt("Am Artikel ist ein Mangel gemeldet – er bleibt mit seinem Lebenslauf; aussondern statt "
+                            "löschen.", 409)
         db.execute("DELETE FROM mat_item WHERE id = ?", (iid,))
         journal.eintragen("item", iid, "geloescht", dict(alt, ordner=_pfad_text(alt["folder_id"])), None)
 
@@ -766,9 +769,10 @@ def zugeordnet_json(i):
 
 
 def artikel_kurz(i, stichtag=None):
-    """Eine Zeile für Listen: Nummern, Produkt, Ordner, Fälligkeiten, Status – und ein offener Rückruf (Titel); dazu
-    „darf“ an der Heimat und – nur mit Grundrecht – der Name der zugeordneten Person."""
-    from . import rueckruf
+    """Eine Zeile für Listen: Nummern, Produkt, Ordner, Fälligkeiten, Status – und ein offener Rückruf (Titel) und ob ein
+    Mangel gemeldet ist (offene Meldung, Phase 3 · L1); dazu „darf“ an der Heimat und – nur mit Grundrecht – der Name
+    der zugeordneten Person."""
+    from . import mangel, rueckruf
     s = st.status(i, stichtag)
     darf = rechte.rechte_artikel(i)
     return {"id": i["id"], "inventory_no": i["inventory_no"], "serial_no": i["serial_no"],
@@ -783,6 +787,7 @@ def artikel_kurz(i, stichtag=None):
             "entwurf": ({"id": i["entwurf_id"], "pruefer": i.get("entwurf_pruefer"),
                          "pruefer_id": i.get("entwurf_pruefer_id")} if i.get("entwurf_id") else None),
             "rueckruf": rueckruf.offene_artikel().get(i["id"]),
+            "mangel": i["id"] in mangel.offene_artikel(),
             "darf": darf, "zugeordnet_name": _zugeordnet_name(i) if darf["grund"] else None}
 
 
@@ -835,9 +840,13 @@ def artikel_json(i, voll=False):
             out["pruefarten"] = {"arten": arten, "vorschlag": vorschlag}
         rid = durchgang.offene_runde_fuer(i["id"])
         out["durchgang"] = durchgang.verweis(rid) if rid else None
-        out["darf_loeschen"] = not out["pruefungen"]
-        from . import rueckruf
+        from . import mangel, rueckruf
         out["rueckrufe"] = rueckruf.aktive_fuer_artikel(i)          # laufende, die ihn betreffen – fürs Banner
+        # Gemeldete Mängel (Phase 3 · L1): offene zuerst, den Melder mit Grund- oder Prüfrecht; ob die Sperre allein aus
+        # einer Meldung stammt, die noch kein Prüfer angesehen hat (dann sondert der Materialwart nicht aus).
+        out["maengel"] = mangel.fuer_artikel(i, darf["grund"] or darf["pruefen"])
+        out["mangel_nur_gemeldet"] = mangel.nur_gemeldet(i["id"])
+        out["darf_loeschen"] = not out["pruefungen"] and not out["maengel"]
     return out
 
 

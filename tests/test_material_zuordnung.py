@@ -23,9 +23,9 @@ from datetime import timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import (PDF, H, _heute, festschreiben, freigeben, gliederung, jpeg, katalog_grund,  # noqa: E402
-                           make_app, neuer_artikel, neues_konto, pdf_seiten, pruef_formulare, punkte_von, starten,
-                           umgebung, unterschreiben)
+from test_material import (PDF, H, _heute, anmelden, festschreiben, freigeben, gliederung, jpeg,  # noqa: E402
+                           katalog_grund, make_app, neuer_artikel, neues_konto, pdf_seiten, pruef_formulare, punkte_von,
+                           starten, umgebung, unterschreiben)
 from test_material_trennung import gleich_wie_unbekannt, sql, zeilen, zwei_gliederungen  # noqa: E402
 from test_material_ueberblick import ordner_neu, sperren  # noqa: E402
 
@@ -428,7 +428,7 @@ def test_loeschkonzept():
         r = adm.get(f"/api/admin/users/{uid}/material-folgen")
         # Material-Verwaltung: kein Materialwart, also auch nicht der einzige (test_material_stufen.test_letzter_materialwart).
         assert r.status_code == 200 and r.json == {"freigaben": 4, "zuordnungen": 2, "entwuerfe": 1, "pruefungen": 1,
-                                                   "letzter_materialwart": []}, r.get_json()
+                                                   "maengel": 0, "letzter_materialwart": []}, r.get_json()
         assert w.get(f"/api/admin/users/{uid}/material-folgen").status_code == 403
         assert adm.get("/api/admin/users/999999/material-folgen").status_code == 404
         # Deaktivieren ändert im Modul nichts.
@@ -772,7 +772,17 @@ def test_loesen_beim_aussondern_a1r():
         w = k["wart"]
         assert w.put(ZU.format(art[0]), json={"user_id": p["person1"]}).status_code == 200
         sperren(k["pruefer"], art[0])
-        assert w.post(f"/api/material/artikel/{art[0]}/aussondern", json={"grund": "irreparabel"}).status_code == 200
+        # Phase 3 · L1: Die zugeordnete Person meldet einen Mangel (die Sperre des Prüfers bleibt) – das Aussondern
+        # erledigt die Meldung mit.
+        from test_material_meine_psa import post_mangel
+        with post_mangel():
+            r = anmelden(app, "person1@example.org", "passwort1").post(
+                f"/api/material/artikel/{art[0]}/mangel", headers=H, json={"beschreibung": "Platzhaltermangel"})
+        assert r.status_code == 201 and r.json["gesperrt"] is False, r.get_json()
+        r = w.post(f"/api/material/artikel/{art[0]}/aussondern", json={"grund": "irreparabel"})
+        assert r.status_code == 200, r.get_json()
+        assert zeilen(app, "SELECT closed_inspection_id FROM mat_defect_report WHERE item_id = ?", (art[0],)) == [
+            {"closed_inspection_id": r.json["aussonderung"]}]
         assert zugeordnet(app, art[0]) is None
         e = journal_am(app, art[0], "zuordnung_geloest")
         assert len(e) == 1, e

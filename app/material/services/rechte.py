@@ -645,6 +645,39 @@ def requires_folder(recht, quelle, leer="global"):
     return deko
 
 
+def requires_artikel_oder_zugeordnet(recht):
+    """Wie requires_folder(recht, "iid") – zusätzlich darf die Person, der der Artikel zugeordnet ist (PSA-Konto,
+    psa.konto), auch ohne Modulstufe und ohne Freigabe (Phase 3 · L1, nur für POST /artikel/<iid>/mangel). Ablauf: 401
+    ohne Anmeldung; Artikel lesen; zugeordnet und PSA-Konto → weiter (g.mat_zugeordnet = True); sonst ohne Modulzugang
+    403 mit zugang_meldung – auch für unbekannte Artikel, damit 404 gegen 403 nichts verrät; dann genau
+    requires_folder: unbekannt oder nicht sichtbar 404, Recht fehlt 403. Der Dienst prüft das Recht am frisch gelesenen
+    Artikel noch einmal (mangel._recht)."""
+    erlaubt = recht if isinstance(recht, tuple) else (recht,)
+
+    def deko(f):
+        ueber_freigabe = requires_folder(recht, "iid")(f)
+
+        @wraps(f)
+        def wrapper(*a, **kw):
+            from .bestand import heimat
+            from .psa import konto
+            u = current_user()
+            if not u:
+                return jsonify(error="Nicht angemeldet"), 401
+            i = db.query("SELECT * FROM mat_item WHERE id = ?", (kw.get("iid"),), one=True)
+            if i and i["assigned_user_id"] is not None and i["assigned_user_id"] == u["id"] and konto(u):
+                g.mat_zugeordnet = True
+                g.mat_ordner_id = heimat(i)
+                g.mat_artikel = i
+                return f(*a, **kw)
+            if not zugang(u):
+                return jsonify(error=zugang_meldung(u)), 403
+            return ueber_freigabe(*a, **kw)
+        wrapper.mat_quelle, wrapper.mat_recht = "iid", erlaubt
+        return wrapper
+    return deko
+
+
 def _meldung(erlaubt, fid, s, user, leer="global"):
     """Klartext, wenn das Recht fehlt. Wer das Häkchen „Prüfer“ schon hat, erfährt, was ihm fehlt und wo er es bekommt."""
     if fid is None:

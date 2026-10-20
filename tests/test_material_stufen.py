@@ -177,6 +177,13 @@ OHNE_STUFE_ERLAUBT = {
     # Die eigene Meldung löschen darf der Melder auch ohne Stufe (test_meldung_ohne_stufe) – eine fremde antwortet wie
     # eine unbekannte.
     ("DELETE", "material_api.meldung_loeschen"): 404,
+    # „Meine PSA“ (Phase 3 · L1) für jedes aktive Konto mit Namen: die Seite und die Liste öffnen sich (hier leer), ein
+    # Artikel, der nicht zugeordnet ist, antwortet wie ein unbekannter; die eigene Einstellung ohne „an“ 400. Mangel
+    # melden ohne Stufe nur an der eigenen PSA – sonst 403 „nicht freigeschaltet“ wie jede Route.
+    "material.meine_psa": 200,
+    "material.meine_psa_artikel": 404,
+    "material_api.psa_liste": 200,
+    ("PUT", "material_api.psa_mails"): 400,
 }
 
 
@@ -566,7 +573,7 @@ def test_letzter_materialwart():
         def folgen(uid):
             r = adm.get(f"/api/admin/users/{uid}/material-folgen")
             assert r.status_code == 200, r.get_json()
-            assert set(r.json) == {"freigaben", "zuordnungen", "entwuerfe", "pruefungen", "letzter_materialwart"}, r.json
+            assert set(r.json) == {"freigaben", "zuordnungen", "entwuerfe", "pruefungen", "maengel", "letzter_materialwart"}, r.json
             return [(x["id"], x["name"], x["pfad"]) for x in r.json["letzter_materialwart"]]
 
         beide = [(gid, "OG Musterstadt", "OG Musterstadt"), (ot, "OT Nord", "OG Musterstadt / OT Nord")]

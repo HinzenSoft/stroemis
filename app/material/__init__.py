@@ -11,6 +11,7 @@ Aufbau:
                  Routen der Lieferung 4: Export (CSV, Protokoll-ZIP, Lebenslauf), Katalogaustausch, Rückrufe
   routes_import.py, routes_wiki.py
                  Routen der Phase 2 · Lieferung 3: Bestandsimport und Nacharbeit, Prüfanleitung aus dem Wiki
+  routes_psa.py  Routen der Phase 3 · Lieferung 1: „Meine PSA“ (auch ohne Modulstufe) und Mangelmeldung
   cli.py         flask material import-catalog, export-catalog, remind
   tageslauf.py   Thread je Arbeitsprozess: einmal am Tag ab 6 Uhr Pflege und Erinnerungsmails (seit Phase 2 · L2)
   services/      Fachregeln: rechte, katalog, bestand, status, interval, search, nummern, qr, journal,
@@ -19,7 +20,8 @@ Aufbau:
                  Ordner), export, lebenslauf, beschriftung (Journal als Text), rueckruf; seit Phase 2 dazu
                  globalprotokoll (Protokoll der Blicke über den eigenen Bereich) und globalsuche, seit Lieferung 2
                  erinnerung (Erinnerungsmails, Pflege, Laufstand und Probelauf), seit Lieferung 3 tabelle und
-                 bestandsimport (Bestandsimport mit Nacharbeit) und wikiverweis (Prüfanleitung aus dem Wiki)
+                 bestandsimport (Bestandsimport mit Nacharbeit) und wikiverweis (Prüfanleitung aus dem Wiki); seit
+                 Phase 3 psa („Meine PSA“) und mangel (Mangelmeldung mit sofortiger Sperre)
   templates/, static/   Seite und Oberfläche (material.js, material.css)
 """
 from .. import db

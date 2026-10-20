@@ -376,6 +376,20 @@ def _zulaessig(u, demo=False):
     return bool(adr) and (demo or not demo_adresse(adr)) and rechte.zugang(u)
 
 
+def _erreichbar(u, demo=False):
+    """Kann dieses Konto eine Mail zu seiner eigenen PSA bekommen? Adresse (keine DEMO-Adresse – außer im Probelauf mit
+    DEMO bzw. bei einem DEMO-Artikel), aktiv und freigeschaltet, mit Namen – ohne Modulstufe (Phase 3 · L1). Auch für
+    die Sperrmitteilung bei einer Mangelmeldung (mangel.empfaenger), dort ohne Blick auf die Abmeldung."""
+    adr = (u.get("email") or "").strip()
+    return bool(adr and (demo or not demo_adresse(adr)) and u.get("active")
+                and (u.get("status") or "active") == "active" and (u.get("name") or "").strip())
+
+
+def _zulaessig_psa(u, demo=False):
+    """Darf dieses Konto den Abschnitt „Deine PSA“ bekommen? _erreichbar und nicht abbestellt (users.mat_psa_mails)."""
+    return _erreichbar(u, demo) and u.get("mat_psa_mails", 1) == 1
+
+
 def _verwaltung(zwischen, ohne=None):
     """Rückfall, wenn am Ordner niemand verwaltet: die Material-Verwaltung (Stufe 2, ohne die Plattform-Verwaltung), ohne
     sie die Plattform-Verwaltung – je nach Abzug unzulässiger Konten (DEMO, ohne Adresse, ohne Zugang). Liefert

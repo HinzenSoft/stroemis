@@ -7,7 +7,8 @@ Schutz. Fachregeln stehen in services/, hier wird nur gelesen, aufgerufen und ge
 
 Die Routen der Lieferung 4 stehen in eigenen Modulen an denselben Blueprints – routes_export.py (CSV, Protokoll-ZIP,
 Lebenslauf), routes_katalog.py (Katalogaustausch) und routes_rueckruf.py –, eingebunden am Ende dieser Datei; ebenso die
-der Phase 2 (Freigaben, globale Suche, Zuordnung, Erinnerungen, Bestandsimport, Prüfanleitung aus dem Wiki).
+der Phase 2 (Freigaben, globale Suche, Zuordnung, Erinnerungen, Bestandsimport, Prüfanleitung aus dem Wiki) und der
+Phase 3 (routes_psa.py: „Meine PSA“ und Mangelmeldung).
 
 Seit Phase 2 gelten Freigaben je Ordner (services/rechte.py): Lesende Routen über den ganzen Bestand tragen
 requires_zugang und liefern nur, was das Konto sieht; Routen zu einem Gegenstand tragen requires_folder. Fremdes – auch
@@ -26,7 +27,7 @@ from . import models
 from .services import (Abgelehnt, anhang, bestand, bestandsimport, durchgang, eingabe, globalprotokoll, globalsuche,
                        journal, katalog, kennung, medien as medien_dienst, meldung, protokoll, pruefung, search,
                        unterschrift)
-from .services import erinnerung, rueckruf
+from .services import erinnerung, mangel, psa, rueckruf
 from .services import status as st
 from .services import ueberblick
 from .services.bestand import FremdeDublette
@@ -64,6 +65,8 @@ UPLOAD_GRENZEN = {
     "material_api.import_probelauf": bestandsimport.MAX_BYTES + 1024 * 1024,
     "material_api.import_uebernehmen": bestandsimport.MAX_BYTES + 1024 * 1024,
     "material_api.nacharbeit_melden": meldung.MAX_FOTOS * katalog.BILD_MAX_BYTES + 1024 * 1024,
+    # Mangelmeldung (Phase 3 · L1, routes_psa.py): bis zu drei Fotos.
+    "material_api.artikel_mangel": mangel.MAX_FOTOS * katalog.BILD_MAX_BYTES + 1024 * 1024,
 }
 PRUEFEN_JE_VIERTELSTUNDE = 20
 
@@ -153,6 +156,11 @@ def _seite(ansicht, katalog_seite=False, warnung=None, bezug=None, **daten):
 
 @seiten.get("/material")
 def dashboard():
+    """Die Übersicht. Ohne Modulzugang, aber mit zugeordneter PSA führt „Material“ (alte Links, Lesezeichen) zu „Meine
+    PSA“ (Phase 3 · L1); sonst wie jede Modulseite."""
+    u = current_user()
+    if u and not zugang(u) and psa.konto(u) and psa.anzahl(u["id"]):
+        return redirect(url_for("material.meine_psa"))
     return _seite("dashboard")
 
 
@@ -307,19 +315,27 @@ def suche_seite():
 @seiten.get("/m/<token>")
 def qr_ziel(token):
     """Ziel des QR-Codes: über die Anmeldung zum Artikel. Wer das Modul nicht sehen darf, bekommt
-    nichts über den Artikel zu wissen – auch nicht, ob es ihn gibt. Gehört der Artikel nicht zum eigenen Bereich,
-    zeigt die Seite „fremd“ nur das (ohne Artikeldaten im HTML); den Steckbrief gibt es dort erst nach Bestätigung
-    (POST /globalsuche/qr, protokolliert)."""
+    nichts über den Artikel zu wissen – auch nicht, ob es ihn gibt; nur die eigene PSA (zugeordnet, nicht ausgesondert)
+    öffnet „Meine PSA“ (Phase 3 · L1) – den Artikel kennt die Person ohnehin, die Antwort ist kein Orakel. Mit
+    Leserecht die volle Artikelseite; ohne Leserecht die eigene PSA unter „Meine PSA“. Gehört der Artikel sonst nicht
+    zum eigenen Bereich, zeigt die Seite „fremd“ nur das (ohne Artikeldaten im HTML); den Steckbrief gibt es dort erst
+    nach Bestätigung (POST /globalsuche/qr, protokolliert)."""
     u = current_user()
     if not u:
         return redirect(url_for("pages.login", next=f"/m/{token}"))
+    i = db.query("SELECT id, folder_id, origin_folder_id, lock_state, assigned_user_id FROM mat_item WHERE qr_token = ?",
+                 (token,), one=True)
+    eigen = bool(i) and i["assigned_user_id"] == u["id"] and i["lock_state"] != "ausgesondert" and psa.konto(u)
     if not zugang(u):
-        return _fehlerseite(403, zugang_meldung(u))
-    i = db.query("SELECT id, folder_id, origin_folder_id, lock_state FROM mat_item WHERE qr_token = ?", (token,), one=True)
+        # Ohne Stufe: nur die eigene PSA. Fremd, unbekannt und „ohne Stufe“ antworten weiter gleich (403, gleicher Text).
+        return redirect(url_for("material.meine_psa_artikel", iid=i["id"])) if eigen else _fehlerseite(
+            403, zugang_meldung(u))
     if not i:
         abort(404)
     if darf_artikel("lesen", i):
         return redirect(url_for("material.artikel_seite", iid=i["id"]))
+    if eigen:
+        return redirect(url_for("material.meine_psa_artikel", iid=i["id"]))
     return _seite("fremd", token=token)
 
 
@@ -330,11 +346,14 @@ def medien(art, dateiname):
     Zwischenspeicher. Skripte sind auch in einem PDF oder SVG wirkungslos."""
     if art not in medien_dienst.ARTEN:
         abort(404)
-    if not current_user():
+    u = current_user()
+    if not u:
         abort(401)
-    if not zugang():
-        abort(403)
-    if not medien_dienst.darf_datei(art, dateiname):
+    if not zugang(u):
+        # Ohne Stufe nur, was „Meine PSA“ zeigt (Phase 3 · L1) – sonst wie bisher 403, ohne etwas zu verraten.
+        if not (psa.konto(u) and medien_dienst.darf_datei_psa(art, dateiname, u["id"])):
+            abort(403)
+    elif not medien_dienst.darf_datei(art, dateiname):
         abort(404)
     resp = send_from_directory(os.path.join(katalog.medien_dir(), art), dateiname, max_age=60 * 60 * 24 * 7)
     resp.cache_control.public = None
@@ -350,8 +369,11 @@ def medien(art, dateiname):
 def start():
     """Die Übersicht – alle Zahlen über das, was das Konto sieht. „erinnerungen“: der Laufstand der Erinnerungsmails
     (erinnerung.stand) nur für die Material-Verwaltung (die Plattform-Verwaltung eingeschlossen), sonst null.
-    „nacharbeit“: offene Nacharbeit aus Bestandsimporten je Zielordner, den das Konto verwaltet (sonst leer)."""
+    „nacharbeit“: offene Nacharbeit aus Bestandsimporten je Zielordner, den das Konto verwaltet (sonst leer).
+    „maengel“: gemeldete Mängel im eigenen Bereich, nach denen noch kein Prüfer geprüft hat (höchstens 50, dazu
+    „maengel_gesamt“); „meine_psa“: {anzahl, dringend} der eigenen PSA oder null (Phase 3 · L1)."""
     alle = bestand.baum()
+    maengel, maengel_gesamt = mangel.offene_liste()
     gliederungen = [o for o in alle if o["kind"] == "gliederung" and not o["system_kind"] and not o.get("nur_pfad")]
     naechste, faellig = bestand.faellige(pro_seite=10)
     z = bestand.zaehlung()
@@ -362,7 +384,8 @@ def start():
                    meldungen_offen=meldung.anzahl_offen() if ist_material_verwaltung() else None,
                    rueckrufe=rueckruf.uebersicht(),
                    erinnerungen=erinnerung.stand() if ist_material_verwaltung() else None,
-                   nacharbeit=bestandsimport.offen_uebersicht())
+                   nacharbeit=bestandsimport.offen_uebersicht(),
+                   maengel=maengel, maengel_gesamt=maengel_gesamt, meine_psa=psa.kurz(current_user()))
 
 
 @api.get("/suche")
@@ -1159,3 +1182,4 @@ from . import routes_global  # noqa: E402,F401
 from . import routes_zuordnung  # noqa: E402,F401
 from . import routes_erinnerung  # noqa: E402,F401
 from . import routes_import, routes_wiki  # noqa: E402,F401
+from . import routes_psa  # noqa: E402,F401
