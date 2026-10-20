@@ -162,7 +162,8 @@ def test_migration_12():
            201)
         pfad = os.path.join(tmp, "stroemis.db")
         conn = sqlite3.connect(pfad)
-        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "12"
+        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == str(
+            models.SCHEMA_VERSION)
         spalten = {t_: [r[1] for r in conn.execute(f"PRAGMA table_info({t_})")] for t_ in ("mat_import", "mat_import_row")}
         assert spalten["mat_import"] == ["id", "folder_id", "file_name", "file_sha256", "file_kind", "rows_total",
                                          "rows_created", "rows_existing", "rows_rework", "created_by", "created_by_name",
@@ -219,12 +220,13 @@ def test_migration_12():
         conn.close()
         make_app(tmp)
         conn = sqlite3.connect(pfad)
-        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "12"
+        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == str(
+            models.SCHEMA_VERSION)                   # 11 → Endversion (seit Phase 3 · L1: 13)
         assert {"mat_import", "mat_import_row"} <= {r[0] for r in conn.execute("SELECT name FROM sqlite_master")}
         assert conn.execute("SELECT COUNT(*) FROM mat_form WHERE wiki_page_id IS NOT NULL").fetchone()[0] == 0
         assert stand() == vorher
         # Zweiter Lauf: keine Änderung (auch Schritt 12 selbst nicht).
-        assert models.migrieren(conn) == 12
+        assert models.migrieren(conn) == models.SCHEMA_VERSION
         conn.execute("BEGIN")
         n = conn.total_changes
         models._schritt_12(conn)

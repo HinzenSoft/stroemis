@@ -473,6 +473,9 @@ MIGRATIONS = [
     # Modul Material, Phase 2: pseudonymer Kontoverweis fürs Journal (Freigaben, Zuordnungen) – 128 Bit Zufall, nirgends
     # sonst gespeichert. Gefüllt von der Migration des Moduls (Schritt 8) und beim ersten Gebrauch (journal.konto_ref).
     ("users", "mat_ref", "TEXT"),
+    # Modul Material, Phase 3 · L1: Erinnerungen zur eigenen PSA (Abschnitt „Deine PSA“ der Sammelmail) – 1 an
+    # (Vorgabe, auch für vorhandene Konten), 0 abbestellt im Profil. Geht mit dem Konto.
+    ("users", "mat_psa_mails", "INTEGER NOT NULL DEFAULT 1 CHECK (mat_psa_mails IN (0, 1))"),
 ]
 # Indizes auf nachträglich angelegten Spalten – erst nach MIGRATIONS, denn SCHEMA läuft vorher und kennt die Spalten
 # einer älteren Datenbank noch nicht.

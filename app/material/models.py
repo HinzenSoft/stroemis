@@ -84,13 +84,22 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     mat_form.wiki_page_id: die Wiki-Seite mit der Prüfanleitung zur Formularversion (ON DELETE SET NULL beim
     endgültigen Löschen der Seite). Rein additiv, wiederholbar. Wer mat_folder künftig neu aufbaut, muss den Verweis
     mat_import.folder_id (ON DELETE CASCADE) bedenken – wie mat_reminder_log.grant_id bei mat_folder_grant.
+  - Schritt 13 (Phase 3 · Lieferung 1, Mangelmeldung): mat_defect_report – ein Mangel, den die zugeordnete Person oder
+    ein Konto mit Leserecht am Artikel meldet: Beschreibung, Fotos (nur Web- und Vorschaufassung, das Original wird
+    sofort gelöscht), Melder (Kennung und Namensschnappschuss), Sperrzustand vor der Meldung, Zeitpunkt; erledigt durch
+    die Freiprüfung oder Aussonderung, die sie erledigt hat (closed_inspection_id, closed_at). AUTOINCREMENT – das
+    Journal nennt Meldungen. Trigger (TRIGGER_13): Inhalt unveränderlich, kein Löschen (auch nicht per INSERT OR
+    REPLACE), nur offen einfügbar, einmal erledigen und nur durch eine abgeschlossene Prüfung desselben Artikels; die
+    Kontokennung darf nur auf NULL gehen (Konto gelöscht, der Name bleibt). Dazu users.mat_psa_mails (Erinnerungen zur
+    eigenen PSA abbestellen) im Kernschema (app/db.py). Rein additiv, wiederholbar. Wer mat_item oder mat_inspection
+    künftig neu aufbaut (wie Schritt 2), muss die Verweise item_id und closed_inspection_id bedenken.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -1283,11 +1292,65 @@ def _schritt_12(conn):
         conn.execute(sql)
 
 
+# --- Schritt 13 (Phase 3 · Lieferung 1, Mangelmeldung) ------------------------------------------------------------
+MANGEL_FEST = "'Eine Mangelmeldung lässt sich weder ändern noch löschen.'"
+SCHRITT_13 = [
+    """CREATE TABLE IF NOT EXISTS mat_defect_report (
+      id                   INTEGER PRIMARY KEY AUTOINCREMENT,         -- das Journal nennt Meldungen: nie wiederverwendet
+      item_id              INTEGER NOT NULL REFERENCES mat_item(id),  -- kein CASCADE: ein Artikel mit Meldung bleibt
+      description          TEXT NOT NULL CHECK (trim(description) <> '' AND length(description) <= 2000),
+      photos_json          TEXT NOT NULL DEFAULT '[]',                -- Dateinamen; nur web/thumb liegen vor
+      reporter_id          INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      reporter_name        TEXT NOT NULL CHECK (trim(reporter_name) <> ''),
+      lock_before          TEXT NOT NULL CHECK (lock_before IN ('frei', 'gesperrt', 'verloren')),
+      created_at           TEXT NOT NULL,                             -- UTC wie db.now()
+      closed_inspection_id INTEGER REFERENCES mat_inspection(id),     -- Freiprüfung bzw. Aussonderung, die erledigt
+      closed_at            TEXT,
+      CHECK ((closed_at IS NULL) = (closed_inspection_id IS NULL))
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_mat_defect_item ON mat_defect_report(item_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_defect_offen ON mat_defect_report(item_id) WHERE closed_at IS NULL",
+    # Für ON DELETE SET NULL beim Kontolöschen und die Zahl im Dialog „Konto löschen“ (loeschung.folgen).
+    "CREATE INDEX IF NOT EXISTS idx_mat_defect_melder ON mat_defect_report(reporter_id)",
+]
+TRIGGER_13 = [
+    # Inhalt einer Meldung: nie ändern.
+    _trigger("mat_defect_aendern", "BEFORE UPDATE OF id, item_id, description, photos_json, reporter_name, lock_before, "
+             "created_at ON mat_defect_report", "1", MANGEL_FEST),
+    # Die Kontokennung darf nur auf NULL gehen (Konto gelöscht, ON DELETE SET NULL).
+    _trigger("mat_defect_melder", "BEFORE UPDATE OF reporter_id ON mat_defect_report",
+             "NEW.reporter_id IS NOT NULL AND NEW.reporter_id IS NOT OLD.reporter_id", MANGEL_FEST),
+    # Erledigt wird einmal – danach steht es fest.
+    _trigger("mat_defect_erledigt", "BEFORE UPDATE OF closed_inspection_id, closed_at ON mat_defect_report",
+             "OLD.closed_at IS NOT NULL", MANGEL_FEST),
+    _trigger("mat_defect_loeschen", "BEFORE DELETE ON mat_defect_report", "1", MANGEL_FEST),
+    # INSERT OR REPLACE löscht ohne Lösch-Trigger (recursive_triggers aus) – deshalb auch beim Einfügen prüfen.
+    _trigger("mat_defect_ersetzen", "BEFORE INSERT ON mat_defect_report",
+             "EXISTS (SELECT 1 FROM mat_defect_report d WHERE d.id = NEW.id)", MANGEL_FEST),
+    # Eine Meldung entsteht immer offen – erledigt wird sie nur per UPDATE (mangel.erledigen).
+    _trigger("mat_defect_neu_erledigt", "BEFORE INSERT ON mat_defect_report",
+             "NEW.closed_at IS NOT NULL OR NEW.closed_inspection_id IS NOT NULL", MANGEL_FEST),
+    # Erledigen nur durch eine abgeschlossene Prüfung (oder Aussonderung) desselben Artikels.
+    _trigger("mat_defect_erledigt_durch", "BEFORE UPDATE OF closed_inspection_id ON mat_defect_report",
+             "NOT EXISTS (SELECT 1 FROM mat_inspection x WHERE x.id = NEW.closed_inspection_id "
+             "AND x.item_id = OLD.item_id AND x.completed_at IS NOT NULL)", MANGEL_FEST),
+]
+
+
+def _schritt_13(conn):
+    """Phase 3 · Lieferung 1: Mangelmeldungen (mat_defect_report) mit Triggern. Rein additiv; ein zweiter Lauf findet
+    alles vor und ändert nichts. Wer mat_item oder mat_inspection künftig neu aufbaut (wie Schritt 2), muss die
+    Verweise item_id und closed_inspection_id bedenken – wie mat_reminder_log.grant_id bei mat_folder_grant.
+    users.mat_psa_mails legt das Kernschema an (app/db.py, MIGRATIONS) – init_db läuft vor der Modulmigration."""
+    for sql in SCHRITT_13 + TRIGGER_13:
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
-            8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12}
+            8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13}
 
 
 def _meta(conn, schluessel, vorgabe=None):
