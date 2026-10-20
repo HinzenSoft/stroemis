@@ -2978,7 +2978,7 @@ Der Betreiber hat am 20.10.2026 vier Punkte entschieden – einen geändert, dre
   es mit `ohne_seriennummern_bestaetigen` (nach dem Übernehmen `false`); `keine_seriennummer` bleibt.
 - **Einzelne Zeilen ohne Seriennummer bei vorhandener Spalte** bekommen ihre STR-Nummer weiter ohne Bestätigung (wie am
   19.10.2026 entschieden). Wird eine Spalte von Hand als Seriennummer zugeordnet, entfällt die Bestätigung.
-- **Auch wenn nur Nacharbeit entstünde**: Die Bestätigung gilt für alles, was der Lauf schreibt – auch für eine Liste,
+- **Auch wenn nur Nacharbeit entstünde – bestätigt am 20.10.2026**: Die Bestätigung gilt für alles, was der Lauf schreibt – auch für eine Liste,
   deren Zeilen alle in die Nacharbeit gehen. Grund: Die Nacharbeit speichert nur die Werte der zugeordneten Spalten und
   weiß später nicht mehr, ob die Liste eine Seriennummernspalte hatte; „erneut prüfen und übernehmen“ vergäbe dort
   sonst STR-Nummern, ohne dass je jemand gefragt wurde. Darum wird beim Import gefragt und **in der Nacharbeit nicht
