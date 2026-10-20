@@ -97,9 +97,12 @@ def import_probelauf(fid):
 @requires_folder("verwalten", "fid")
 def import_uebernehmen(fid):
     """Übernehmen: dieselbe Prüfung, dann in einer Transaktion – Artikel anlegen, Nacharbeit schreiben. Zeilen ohne
-    Herstellerseriennummer bekommen eine STR-Nummer (ein Feld „ohne_serie“ wird nicht mehr gebraucht und übergangen)."""
+    Herstellerseriennummer bekommen eine STR-Nummer. Ist keine Spalte als Seriennummer zugeordnet (der Probelauf sagt
+    es mit „ohne_seriennummern_bestaetigen“), braucht es das Feld „ohne_seriennummern“ = true – sonst 409 (Entscheidung
+    vom 20.10.2026). Das alte Feld „ohne_serie“ wird übergangen."""
     roh, name, zuordnung = _datei_und_zuordnung()
-    b, _ = bestandsimport.uebernehmen(fid, roh, name, zuordnung)
+    ohne = wahr(eingabe(), "ohne_seriennummern", "Ohne Seriennummern")
+    b, _ = bestandsimport.uebernehmen(fid, roh, name, zuordnung, ohne_seriennummern=ohne)
     return _privat(jsonify(bestandsimport.bericht_json(b)), 201)
 
 

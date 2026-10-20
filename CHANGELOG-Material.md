@@ -14,7 +14,7 @@ für sich deploybar.
 | 5 – Feinschliff | Rückmeldungen aus dem Pilotbetrieb: Ordnerkopf, einheitliche Knöpfe, Suchvorschläge, Urkundennummer im Profil, Pflicht-Bemerkung bei Mangel, Produktsuche, Bedienung auf Telefon, Foldable und Tablet | geliefert 18.10.2026, freigegeben 18.10.2026 („Starte mit Phase 2“) |
 | Phase 2 · 1 – Freigaben je Ordner | Freigaben lesen/prüfen/verwalten je Ordner mit Vererbung und Enddatum, strenge Trennung je Gliederung, Freigaben im Dialog „Ordner bearbeiten“ (Reiter) mit Vorlagen und Verlängern, „Meine Freigaben“; globale Seriennummernsuche und QR-Steckbrief mit Protokoll; Personenzuordnung; Rückrufe und Meldungen je Bereich; Löschkonzept | geliefert 18.10.2026, die drei offenen Fragen am 18.10.2026 entschieden und eingearbeitet; freigegeben 19.10.2026 („Starte Lieferung 2“) |
 | Phase 2 · 2 – Erinnerungen | Täglicher Erinnerungslauf ab 6 Uhr (eingebaut, abschaltbar, dazu `flask material remind`): Sammelmail an die Verwalter zu Fälligkeit (30/7 Tage, überfällig), Lebensende (90 Tage) und ablaufenden Freigaben (30 Tage); Erinnerungslog mit Kontoverweis; „Erinnerungsmails aus“ je Ordner; Laufstand und Probelauf auf der Übersicht | geliefert 19.10.2026, wartet auf Freigabe |
-| Phase 2 · 3 – Bestandsimport und Prüfanleitung | Bestandslisten aus Excel oder CSV in einen Ordner: Probelauf, Übernehmen in einer Transaktion (Artikel auf „neu“, Fälligkeit aus der Liste, STR-Nummern für Zeilen ohne Seriennummer) und Nacharbeit je Zielordner (Produkte zuordnen, melden oder im Katalog anlegen, erneut prüfen, CSV-Rundweg, Frist ein Monat); Prüfanleitung aus dem Wiki am Prüfformular, Abschnitt „Prüfung“ eingeblendet in offenen Prüfungen | geliefert 19.10.2026, wartet auf Freigabe |
+| Phase 2 · 3 – Bestandsimport und Prüfanleitung | Bestandslisten aus Excel oder CSV in einen Ordner: Probelauf, Übernehmen in einer Transaktion (Artikel auf „neu“, Fälligkeit aus der Liste, STR-Nummern für Zeilen ohne Seriennummer, eine Liste ganz ohne Seriennummernspalte nur mit Häkchen) und Nacharbeit je Zielordner (Produkte zuordnen, melden oder im Katalog anlegen, erneut prüfen, CSV-Rundweg, Frist ein Monat); Prüfanleitung aus dem Wiki am Prüfformular, Abschnitt „Prüfung“ eingeblendet in offenen Prüfungen | geliefert 19.10.2026, vier Punkte am 20.10.2026 entschieden (einer geändert und eingearbeitet), wartet auf Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -2639,7 +2639,8 @@ Abhängigkeiten. Stand: wartet auf Freigabe.
     sich keinem Feld zuordnen. Die Zuordnung steht als Tabelle (am Telefon als Karten) mit Beispielen und Auswahl je
     Spalte; eine Änderung startet den Probelauf nach 600 ms Ruhe neu, eine laufende Anfrage bricht dabei ab, und bis
     zum neuen Ergebnis ist „Übernehmen“ gesperrt. Eine eigene Nacharbeits-CSV wird erkannt („Nacharbeits-CSV erkannt –
-    Spalten zugeordnet“, „Zuordnung ändern“).
+    Spalten zugeordnet“, „Zuordnung ändern“). Ist keine Spalte als Seriennummer zugeordnet, gibt erst ein Häkchen
+    direkt über „Übernehmen“ den Knopf frei (Entscheidung vom 20.10.2026, siehe unten).
   - **Ergebnis** vor dem Übernehmen: Hinweise (schon importiert, Bezeichnung nicht als Modell, unbekannte Ordner mit
     Zahl der Zeilen, „n Zeilen ohne Seriennummer – bekommen eine STR-Nummer …“), „Produkte, die der Katalog nicht
     sicher kennt“ (je Angabe mit Zahl und Art), Fälligkeit (laut Liste überfällig, ohne Prüfdatum sofort fällig,
@@ -2922,7 +2923,7 @@ Commit, `CHANGELOG-Pruefungen.md` Nachtrag vom 19.10.2026). Danach liefen die ga
 | 1 | Sicherheit 1 | xlsx: Ein Bereich verbundener Zellen, ein Link-Bereich (`<mergeCell ref="A3:KN20000"/>`, 5 KB) oder 9,5 MB dichte leere Zellen `<c/>` blähen openpyxl beim Laden auf (1,8–2,8 GB, bis 76 s, „A3:XFD1048576“ unbegrenzt), bevor eine Grenze greift; der Probelauf eines beliebigen Ordnerverwalters bringt den Container an die Speichergrenze | hoch | `pruefungen_import._blaetter_vorpruefen` vor `load_workbook`: jeder XML-Teil des Archivs durch denselben Parser wie openpyxl (expat), nur zählend – Zellen, Zeilen und die Fläche jedes Bereichs verbundener Zellen, Links und Kommentare (auch Kommentare legen Zellen an) zusammen höchstens 500.000, kein Bereich über Zeile 20.000/Spalte 300, höchstens 20 Blätter und 5 Mio. Elemente; unabhängig von Pfad, Präfix, Zeichenreferenz, UTF-16 und Entitäten. Jetzt 400 in höchstens 0,4 s ohne openpyxl (Messwerte unten). Tests `test_grenzen_vor_dem_laden` (Prüfungen) und `test_lesen_xlsx_und_grenzen` (Bestandsimport, auch über die Route), beide mit `xlsx_bomben` |
 | 2 | Sicherheit 2 | Prüfanleitung: Klassen aus app.css mit `position: fixed` (etwa `md-lightbox`) im Abschnitt „Prüfung“ legten sich über die ganze Prüfansicht – wer die Wiki-Seite bearbeiten darf, konnte Prüfern die Ansicht sperren oder eine Meldung vortäuschen | niedrig | `ANLEITUNG_STIL`: `:host { display: block; contain: paint; }` – der Kasten ist Bezugsrahmen auch für fixe Elemente und schneidet ab. Statischer Test in `test_material_wiki`; im Browser mit einer Probeseite (`<div class="md-lightbox">`) bei 1280 und 360 px: Überlagerung nur im Kasten, „einsatzbereit“ per echtem Mausklick erreichbar |
 | 3 | Sicherheit 3 | In der Nacharbeits-CSV (Spalte „Nacharbeit-Nr.“) war eine ergänzte Personenspalte („Ausgegeben an“) nicht gesperrt – über „Zuordnung ändern“ kam der Name in Bemerkung und Artikeljournal | niedrig | Auch dort `gesperrt` aus der Personenliste, das Feld weiter aus der festen Zuordnung. Test `test_spalten`; Probe der Prüfung danach: gesperrt, ohne Beispiele, Bemerkung leer |
-| 4 | Importlogik 1 | „Serien-Nummer“, „Ser.-Nr.“, „Ser. Nr.“ wurden nicht erkannt – jede Zeile bekam still eine STR-Nummer, die echten Nummern gingen verloren | mittel | Synonyme ergänzt (auch „ser.nr“, „ser-nr“, „serialnumber“, „Fabr.-Nr.“, „Fabrikationsnummer“). Ist keine Spalte als Seriennummer zugeordnet, steht die Warnung zuerst („Keine Spalte ist als Seriennummer zugeordnet – alle n Zeilen bekämen eine Seriennummer vom System … Nicht zugeordnet: „…““) und noch einmal über „Übernehmen“ (`keine_seriennummer`). Bewusst keine Pflichtzuordnung: Listen ohne Seriennummern sollen nach Entscheidung 8 ohne Rückfrage gehen, und eine Zuordnung „keine Seriennummer“ gäbe es nur als neuen Haken. Tests `test_spalten`, `test_befunde_vor_auslieferung`; im Browser bei 1280 und 360 px |
+| 4 | Importlogik 1 | „Serien-Nummer“, „Ser.-Nr.“, „Ser. Nr.“ wurden nicht erkannt – jede Zeile bekam still eine STR-Nummer, die echten Nummern gingen verloren | mittel | Synonyme ergänzt (auch „ser.nr“, „ser-nr“, „serialnumber“, „Fabr.-Nr.“, „Fabrikationsnummer“). Ist keine Spalte als Seriennummer zugeordnet, steht die Warnung zuerst („Keine Spalte ist als Seriennummer zugeordnet – alle n Zeilen bekämen eine Seriennummer vom System … Nicht zugeordnet: „…““) und noch einmal über „Übernehmen“ (`keine_seriennummer`). Bewusst keine Pflichtzuordnung: Listen ohne Seriennummern sollen nach Entscheidung 8 ohne Rückfrage gehen, und eine Zuordnung „keine Seriennummer“ gäbe es nur als neuen Haken. Tests `test_spalten`, `test_befunde_vor_auslieferung`; im Browser bei 1280 und 360 px. **Geändert am 20.10.2026**: Übernehmen nur mit ausdrücklicher Bestätigung (Häkchen, `ohne_seriennummern`) – siehe „Entscheidungen vom 20.10.2026“ |
 | 5 | Importlogik 2 | „Prüfintervall (Jahre)“ = 1 wurde als 1 Monat gelesen und ohne Hinweis am Artikel gespeichert | mittel | Die Einheit kommt aus dem Spaltentitel („(Jahre)“, „in Jahren“, „[J]“; „(Monate)“, „[M]“) und bleibt am Wert („1 Jahr“) – auch in Nacharbeit und CSV; eine 1 oder 2 ohne Einheit geht in die Nacharbeit („Monate oder Jahre?“, die Spalte „Prüfintervall (Monate)“ der eigenen CSV zählt dafür nicht als Einheit); ein übernommenes kürzeres Intervall steht als Hinweis an der Zeile. Test `test_befunde_vor_auslieferung` |
 | 6 | Importlogik 3 | Dieselbe Ursprungsliste nach mehr als 10 Minuten noch einmal, während ihre Zeilen in der Nacharbeit standen: Die Nacharbeit entstand doppelt, Zeilen ohne Seriennummer wurden zweimal angelegt (5 Artikel aus 3 Zeilen); die Warnung führte in die Irre | mittel | Bei gleicher Prüfsumme ersetzt jede Zeile ihre offene Vorgängerin gleicher Zeilennummer wie über die Nacharbeit-Nr. (Produktwahl aus der Nacharbeit gilt weiter); die Warnung nennt die Zahl („… werden neu eingelesen und dort erledigt, nicht doppelt angelegt“) und den STR-Satz nur noch, wenn damals Artikel angelegt wurden. Test `test_befunde_vor_auslieferung`; Probe der Prüfung danach: 3 Artikel, nichts offen |
 | 7 | Importlogik 4 | Stufe 1 (Dublettenschlüssel) ordnete „Modell“ ohne Artikelnummer still dem Grundprodukt zu, obwohl es „Modell \| Zusatz“ gibt | mittel | Trifft Stufe 1 ohne Artikelnummer ein Grundprodukt, das Varianten hat, ist die Angabe „mehrdeutig“ wie in Stufe 3; „Modell \| Zusatz“ und „Modell Zusatz“ bleiben genau. Test `test_befunde_vor_auslieferung` |
@@ -2960,7 +2961,73 @@ Commit, `CHANGELOG-Pruefungen.md` Nachtrag vom 19.10.2026). Danach liefen die ga
 gleichzeitiger Probelauf im selben Arbeitsprozess bekam nach 10 s 429; nachher 400 nach 0,1 s bei 117 MB, der zweite
 Probelauf läuft durch.
 
+### Entscheidungen vom 20.10.2026
+
+Der Betreiber hat am 20.10.2026 vier Punkte entschieden – einen geändert, drei bestätigt.
+
+**Geändert – Nr. 1, Liste ohne Seriennummernspalte** („Zu prüfen“ Nr. 5). Gebaut war: Der Probelauf warnt (zuerst und
+über dem Knopf, mit den nicht zugeordneten Spalten), blockiert aber nicht – alle Zeilen bekämen still STR-Nummern.
+**Entscheidung:** „Soll ausdrücklich bestätigt werden müssen.“ **Umgesetzt** (`services/bestandsimport.py`,
+`routes_import.py`, `static/material.js`, `static/material.css`):
+
+- **Schnittstelle**: Ist im Übernehmen keine Spalte als Seriennummer zugeordnet und schriebe der Lauf Zeilen (Artikel
+  oder Nacharbeit), verlangt `POST …/ordner/<id>/import` das Feld `ohne_seriennummern` = ja. Ohne das Feld (auch mit
+  „nein“, leer oder nur dem alten `ohne_serie`) antwortet er **409** „Keine Spalte ist als Seriennummer zugeordnet –
+  bitte bestätigen, dass die Liste keine Seriennummern hat (alle Artikel bekommen eine Seriennummer vom System, STR-…),
+  oder die Spalte mit den Seriennummern zuordnen.“ und schreibt nichts; anderes als ja/nein → 400. Der Probelauf sagt
+  es mit `ohne_seriennummern_bestaetigen` (nach dem Übernehmen `false`); `keine_seriennummer` bleibt.
+- **Einzelne Zeilen ohne Seriennummer bei vorhandener Spalte** bekommen ihre STR-Nummer weiter ohne Bestätigung (wie am
+  19.10.2026 entschieden). Wird eine Spalte von Hand als Seriennummer zugeordnet, entfällt die Bestätigung.
+- **Auch wenn nur Nacharbeit entstünde**: Die Bestätigung gilt für alles, was der Lauf schreibt – auch für eine Liste,
+  deren Zeilen alle in die Nacharbeit gehen. Grund: Die Nacharbeit speichert nur die Werte der zugeordneten Spalten und
+  weiß später nicht mehr, ob die Liste eine Seriennummernspalte hatte; „erneut prüfen und übernehmen“ vergäbe dort
+  sonst STR-Nummern, ohne dass je jemand gefragt wurde. Darum wird beim Import gefragt und **in der Nacharbeit nicht
+  noch einmal** (`nacharbeit/pruefen` bleibt unverändert, dessen Hinweis nennt die STR-Nummern wie bisher).
+- **Nacharbeits-CSV**: Sie läuft durch denselben Import und folgt derselben Regel. Mit ihrer Spalte „Seriennummer“ – auch
+  leer – braucht sie keine Bestätigung; ist die Spalte gelöscht oder unter „Zuordnung ändern“ auf „ignorieren“ gestellt,
+  braucht sie eine.
+- **Oberfläche**: Direkt über dem roten Knopf steht in diesem Fall ein Kästchen – „Diese Liste hat keine Seriennummern –
+  alle n Artikel bekommen eine Seriennummer vom System (STR-…)“, bei Nacharbeit „…, die m Zeilen der Nacharbeit später
+  auch“ (nur Nacharbeit: „die m Zeilen der Nacharbeit bekommen beim Übernehmen dort eine Seriennummer vom System …“),
+  darunter „Keine Spalte ist als Seriennummer zugeordnet. Steht die Seriennummer doch in einer Spalte, ordne sie oben
+  unter „Spalten“ zu – dann braucht es kein Häkchen.“ (vorher dort nur ein Hinweis). Der rote Knopf bleibt gesperrt,
+  bis das Häkchen gesetzt ist; erst dann geht `ohne_seriennummern` mit. Eine neue Datei, jeder neue Probelauf, eine
+  geänderte Zuordnung (sofort, nicht erst mit dem neuen Ergebnis) und „Neu wählen“ nehmen das Häkchen zurück. Das
+  Häkchen gibt den Knopf frei, ohne die Seite neu zu zeichnen – der Fokus bleibt am Kästchen, Tab führt weiter zu
+  „Neu wählen“ und „Übernehmen“. Die Warnung oben sagt jetzt „…, Übernehmen nur mit ausdrücklicher Bestätigung“; im
+  Ergebnis nach dem Übernehmen steht sie nicht mehr (dort nennt der STR-Satz die vergebenen Nummern). In „Welche
+  Listen passen?“ steht der Satz „Hat die Liste gar keine Spalte mit Seriennummern, bestätigst du das vor dem
+  Übernehmen mit einem Häkchen.“
+- **Tests**: `test_ohne_seriennummernspalte` (neu) – Probelauf mit `ohne_seriennummern_bestaetigen`; 409 ohne Feld, mit
+  „false“, leer und mit `ohne_serie`, 400 bei „vielleicht“, dabei nichts geschrieben; 201 mit dem Feld (STR-Nummern,
+  Warnung nicht mehr im Ergebnis); „erneut prüfen und übernehmen“ ohne Feld; nur Nacharbeit 409/201; Spalte vorhanden
+  mit leerer Zeile und Spalte von Hand zugeordnet ohne Feld; Nacharbeits-CSV mit Spalte ohne, ohne Spalte bzw. mit
+  „ignorieren“ mit Bestätigung (409, dann 201 mit „ersetzt“). Statisch: Kästchen vor der Knopfzeile, Sperre des Knopfs,
+  Feld nur mit Häkchen, Zurücksetzen, CSS. Angepasst: `test_oberflaeche_statisch` (statt des Hinweises das Kästchen).
+- **Im Browser geprüft** (Chromium, lokaler Server ohne `SMTP_HOST`, Platzhalter-Bestand OG Musterstadt mit Lager,
+  Materialwart) bei 1280 und 360 px: Liste „Hersteller; Modell; Kennung“ mit zwei bekannten und einem unbekannten
+  Produkt – Kästchen ungesetzt, Knopf gesperrt, Satz „… alle 2 Artikel bekommen …, die Zeile der Nacharbeit später
+  auch.“; ein erzwungener Klick am gesperrten Knopf schickt nichts; per Tastatur Tab zum Kästchen, Leertaste setzt das
+  Häkchen (Fokus bleibt, Knopf frei), Tab weiter zu „Neu wählen“ und „Übernehmen“; „Kennung“ auf „Bemerkung“
+  umgestellt – Häkchen sofort und nach dem neuen Probelauf zurück, Knopf gesperrt; Häkchen gesetzt und übernommen
+  („Übernommen: 2 Artikel angelegt, 1 Zeile in die Nacharbeit.“, Tabelle mit „STR-… (System)“); „Kennung“ als
+  Seriennummer zugeordnet – kein Kästchen, Knopf frei. Am Telefon bricht der Satz neben dem Kästchen um, der Knopf
+  steht in ganzer Breite darunter. Keine Konsolenfehler, kein waagerechter Bildlauf.
+
+**Bestätigt** (bleibt, wie gebaut):
+
+- Nr. 2 – **Prüfintervall 1 oder 2 ohne Einheit** kommt in die Nacharbeit („Monate oder Jahre?“); ab 3 gilt eine Zahl
+  ohne Einheit als Monate; eine Einheit im Spaltentitel („Prüfintervall (Jahre)“) wird umgerechnet („Zu prüfen“ Nr. 6).
+- Nr. 3 – **Dieselbe Liste nach mehr als 10 Minuten noch einmal** legt Zeilen ohne Seriennummer, die beim ersten Mal
+  angelegt wurden, neu an (mit neuer STR-Nummer); der Probelauf sagt es. Offene Zeilen der Nacharbeit werden über die
+  Zeilennummer ersetzt („Zu prüfen“ Nr. 7).
+- Nr. 4 – **Folge von „immer neu“** (Entscheidungen 1 und 7): Ein Artikel mit „nächste Prüfung“ in elf Monaten steht so
+  lange auf „neu – bis dahin nicht einsetzen“ und erscheint erst 30 Tage vor der Fälligkeit in einer Erinnerung (in der
+  Prüfliste sofort). Kein eigener Punkt unter „Zu prüfen“ – Befund der Prüfung „Importlogik“ zur Kenntnis.
+
 ### Zu prüfen
+
+Am 20.10.2026 entschieden: Nr. 5 geändert, Nr. 6 und 7 bestätigt (siehe „Entscheidungen vom 20.10.2026“).
 
 1. **Eine echte Liste der Gliederung** im Probelauf (dev oder anonymisiert): Gebaut und geprüft ist mit einer
    typischen Vereinsliste aus Platzhaltern. Ungewöhnliche Listen (verbundene Zellen, mehrere Tabellen auf einem Blatt,
@@ -2973,14 +3040,15 @@ Probelauf läuft durch.
 4. **Frist von einem Monat** im Betrieb: Was nach einem Monat offen ist, verwirft „System“ ohne Rückfrage; danach hilft
    ein neuer Import der Liste oder eine vorher heruntergeladene Nacharbeits-CSV (deren verfallene Zeilen werden wie
    neue geprüft).
-5. **Ohne Seriennummernspalte** (Prüfung vor Auslieferung, Nr. 4): Der Probelauf warnt deutlich, blockiert aber nicht –
-   nach Entscheidung 8 soll eine Liste ohne Seriennummern ohne Rückfrage gehen. Bitte bestätigen oder entscheiden, ob
-   eine Liste ohne zugeordnete Seriennummer erst nach einer ausdrücklichen Wahl übernommen werden soll.
-6. **Prüfintervall 1 oder 2 ohne Einheit** (Nr. 5) kommt in die Nacharbeit („Monate oder Jahre?“); ab 3 gilt eine Zahl
-   ohne Einheit als Monate. Bitte bestätigen – oder eine andere Grenze nennen.
-7. **Dieselbe Liste noch einmal** (Nr. 6): Offene Zeilen der Nacharbeit werden über die Zeilennummer ersetzt; Zeilen
-   ohne Seriennummer, die beim ersten Mal angelegt wurden, entstehen nach 10 Minuten weiterhin noch einmal (wie in
-   Entscheidung 8 vorgesehen, der Probelauf sagt es). Bitte bestätigen.
+5. **Geändert am 20.10.2026 – ohne Seriennummernspalte nur mit ausdrücklicher Bestätigung** (Kästchen über dem Knopf,
+   Feld `ohne_seriennummern`, sonst 409; siehe „Entscheidungen vom 20.10.2026“). Gebaut war: **Ohne
+   Seriennummernspalte** (Prüfung vor Auslieferung, Nr. 4): Der Probelauf warnt deutlich, blockiert aber nicht –
+   nach Entscheidung 8 sollte eine Liste ohne Seriennummern ohne Rückfrage gehen.
+6. **Prüfintervall 1 oder 2 ohne Einheit – bestätigt am 20.10.2026** (Nr. 5) kommt in die Nacharbeit („Monate oder
+   Jahre?“); ab 3 gilt eine Zahl ohne Einheit als Monate, eine Einheit im Spaltentitel wird umgerechnet.
+7. **Dieselbe Liste noch einmal – bestätigt am 20.10.2026** (Nr. 6): Offene Zeilen der Nacharbeit werden über die
+   Zeilennummer ersetzt; Zeilen ohne Seriennummer, die beim ersten Mal angelegt wurden, entstehen nach 10 Minuten
+   weiterhin noch einmal (wie in Entscheidung 8 vorgesehen, der Probelauf sagt es).
 8. **Weitere Blätter zählen mit** (Nr. 1): Die Vorprüfung zählt alle Blätter der Arbeitsmappe – openpyxl lud sie schon
    immer ganz. Eine Arbeitsmappe, deren weitere Blätter zusammen mehr als 500.000 Felder haben, wird jetzt abgelehnt
    (auch im Prüfungsimport); bitte dann nur die Liste speichern.
@@ -3299,8 +3367,8 @@ oder Plattform-Verwaltung).
 | `PUT /api/material/ordner/<id>` mit `reminders_off` (ja/nein) | Materialwart am Ordner | „Erinnerungsmails aus“ für Ordner und Unterordner; fehlt das Feld, bleibt der Wert; anderes als ja/nein → 400; mit Journal (Phase 2 · 2) |
 | `flask --app "app:create_app()" material remind [--trocken [--demo]] [--stichtag JJJJ-MM-TT] [--erneut]` | Kommandozeile im Container | Erinnerungslauf: `--trocken` zeigt die Mails des nächsten Laufs mit Adressen und schreibt nichts (auch bei „aus“ oder gesperrt), `--stichtag` und `--demo` (DEMO-Bestand einbeziehen, nur Ansicht) nur mit `--trocken`; ohne `--trocken` ein echter Lauf für heute (nie DEMO), `--erneut` noch einmal am selben Tag (nur, was nicht im Log steht). Exit 0, 1 (Mail gescheitert, Fehler), 2 (aus, gesperrt, kein Mailserver, `--stichtag` oder `--demo` ohne `--trocken`, unlesbares Datum) (Phase 2 · 2) |
 | `GET /material/ordner/<id>/import` | Materialwart am Ordner (sonst 403-Seite, fremd 404, Systemordner 409) | Seite „Bestandsliste importieren“ mit der Nacharbeit dieses Zielordners (Phase 2 · 3) |
-| `POST /api/material/ordner/<id>/import/probelauf` (Formular: `file`, `zuordnung` JSON `{"<Spalte>": feld}`) | Materialwart am Ordner | Probelauf, schreibt nichts (außer einer Protokollzeile, wenn er fremde Dubletten nennt) → Bericht: `datei`, `nacharbeit_csv`, `spalten`, `felder`, `fehlt`, `warnungen`, `schon_importiert`, `sperre_bis` (dieselbe Datei bis dahin gesperrt, ISO in UTC, sonst `null`), `keine_seriennummer`, `zahlen` (mit `ohne_serie`), `faelligkeit`, `produkte_offen`, `ordner_unbekannt`, `zeilen`, `frist`; 400 unlesbar, 409 Systemordner, 413 zu groß, 429 anderer Import läuft (Phase 2 · 3) |
-| `POST /api/material/ordner/<id>/import` (wie der Probelauf) | Materialwart am Ordner | Übernehmen in einer Transaktion → 201, Bericht mit Zeilen `angelegt` (`artikel` {id, inventory_no}, vergebene STR-Nummer) und `import` {id, angelegt, im_bestand, nacharbeit, ersetzt}; 409 nichts zu tun, dieselbe Datei vor weniger als 10 Minuten, Ordnerbaum geändert (Phase 2 · 3) |
+| `POST /api/material/ordner/<id>/import/probelauf` (Formular: `file`, `zuordnung` JSON `{"<Spalte>": feld}`) | Materialwart am Ordner | Probelauf, schreibt nichts (außer einer Protokollzeile, wenn er fremde Dubletten nennt) → Bericht: `datei`, `nacharbeit_csv`, `spalten`, `felder`, `fehlt`, `warnungen`, `schon_importiert`, `sperre_bis` (dieselbe Datei bis dahin gesperrt, ISO in UTC, sonst `null`), `keine_seriennummer` (keine Spalte als Seriennummer zugeordnet), `ohne_seriennummern_bestaetigen` (Übernehmen braucht `ohne_seriennummern`, Entscheidung vom 20.10.2026), `zahlen` (mit `ohne_serie`), `faelligkeit`, `produkte_offen`, `ordner_unbekannt`, `zeilen`, `frist`; 400 unlesbar, 409 Systemordner, 413 zu groß, 429 anderer Import läuft (Phase 2 · 3) |
+| `POST /api/material/ordner/<id>/import` (wie der Probelauf, dazu `ohne_seriennummern` ja/nein) | Materialwart am Ordner | Übernehmen in einer Transaktion → 201, Bericht mit Zeilen `angelegt` (`artikel` {id, inventory_no}, vergebene STR-Nummer) und `import` {id, angelegt, im_bestand, nacharbeit, ersetzt}; 409 nichts zu tun, ohne Seriennummernspalte ohne `ohne_seriennummern` = ja („Keine Spalte ist als Seriennummer zugeordnet – bitte bestätigen …“, nichts geschrieben), dieselbe Datei vor weniger als 10 Minuten, Ordnerbaum geändert; anderes als ja/nein → 400 (Phase 2 · 3) |
 | `GET /api/material/ordner/<id>/nacharbeit?gruppe=alle\|produkt\|seriennummer\|daten\|ordner\|sonstige&seite=` | Materialwart am Ordner | offene Nacharbeit dieses Ziels: `zahlen` je Gruppe, `gruppen` (Produktangaben mit Vorschlägen, Meldung und `zugeordnet` – Zahl der Zeilen mit Produktwahl), `zeilen` (200 je Seite, mit `gruende`, `werte`, `offen_bis`), `erledigt` (die letzten 100), `frist` (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/nacharbeit/produkt` (`angabe` oder `zeilen` [Nr.] \| `"alle"`, `product_id` oder `null`) | Materialwart am Ordner | Produkt zuordnen bzw. Wahl zurücknehmen → `gesetzt`; fremde Zeile 404, erledigte 409, DEMO-Produkt im echten Ordner 400 (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/nacharbeit/melden` (Felder wie `POST /meldungen` ohne `folder_id`, dazu `angabe`; `fotos` mehrfach) | Materialwart am Ordner | Produkt melden; die Meldung hängt an allen offenen Zeilen der Angabe → 201 `meldung` (Phase 2 · 3) |

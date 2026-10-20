@@ -4957,7 +4957,9 @@
      Seitenroute). Oben „Neue Liste“: Datei wählen (oder hineinziehen), der Probelauf läuft sofort mit der automatischen
      Spaltenzuordnung. Ändert man eine Zuordnung, läuft er nach 600 ms Ruhe neu; eine laufende Anfrage bricht dabei ab
      (AbortController), nur die neueste Antwort zählt. Dann „Übernehmen: n Artikel anlegen, m Zeilen in die Nacharbeit“ –
-     der eine rote Knopf der Seite; danach die Tabelle „angelegt“ mit den neuen Inventarnummern zum Beschriften.
+     der eine rote Knopf der Seite; ist keine Spalte als Seriennummer zugeordnet, gibt ihn erst das Kästchen „Diese Liste
+     hat keine Seriennummern …“ direkt darüber frei (Entscheidung vom 20.10.2026, jeder neue Probelauf nimmt es zurück);
+     danach die Tabelle „angelegt“ mit den neuen Inventarnummern zum Beschriften.
      Darunter die Nacharbeit dieses Zielordners (über alle Importe hierher): Produkte je Angabe oder für ausgewählte
      Zeilen zuordnen, melden (Materialwart) bzw. im Katalog anlegen (Material-Verwaltung), erneut prüfen und übernehmen,
      verwerfen, als CSV herunterladen. Werte werden hier nicht bearbeitet – dafür ist die CSV mit „Nacharbeit-Nr.“ da.
@@ -4969,7 +4971,7 @@
   const IMPORT_NICHTS = "Nichts zu übernehmen – alles steht schon im Bestand oder ist erledigt.";  // bestandsimport.NICHTS
   const IMPORT_PERSONEN = "Personen werden nicht übernommen – Artikel ordnest du im Ordner über „Zuordnen an …“ zu.";
   const IMPORT_NEUBESCHRIFTEN = "Alte Inventarnummern stehen in der Bemerkung und sind nicht suchbar – die Artikel bitte neu beschriften. Eine Liste dafür liefert „Export“ im Ordner.";
-  const IMPORT_OHNE_SERIENSPALTE = "Keine Spalte ist als Seriennummer zugeordnet – alle Artikel bekämen eine Seriennummer vom System (STR-…). Steht sie in einer Spalte, ordne sie oben unter „Spalten“ zu.";
+  const IMPORT_OHNE_SERIENSPALTE = "Keine Spalte ist als Seriennummer zugeordnet. Steht die Seriennummer doch in einer Spalte, ordne sie oben unter „Spalten“ zu – dann braucht es kein Häkchen.";
   const IMPORT_CSV_SATZ = "Korrigieren, speichern und hier als neue Liste hochladen – die Zeilen werden dabei erledigt. Die Spalte „Nacharbeit-Nr.“ bitte nicht ändern.";
   const IMPORT_SEITE = 100;                                      // Zeilen je Reiter, „weitere …“ zeigt die nächsten
   const PRODUKT_ART = { mehrdeutig: "mehrdeutig", vorschlag: "ähnlich", unbekannt: "nicht im Katalog" };
@@ -4987,6 +4989,16 @@
   const angabeAus = (w) => [w.hersteller, w.modell, w.artikelnummer].filter(Boolean).join(" ");
   const produktKurz = (p) => `${esc(p.name)}${p.article_no ? ` <span class="muted">${esc(p.article_no)}</span>` : ""}${demoMarke(p.demo)}`;
   const importFehler = (e) => (e.status === 413 ? IMPORT_ZU_GROSS : e.message);
+  // Ohne Seriennummernspalte (Entscheidung vom 20.10.2026): der Satz am Kästchen über „Übernehmen“. Die Zeilen der
+  // Nacharbeit bekommen ihre STR-Nummer dort später ohne weitere Frage – darum zählen sie hier mit.
+  function ohneSerieSatz(z) {
+    const n = z.uebernehmbar, m = z.nacharbeit;
+    const artikel = n === 1 ? "der Artikel bekommt" : `alle ${n} Artikel bekommen`;
+    const zeilen = m === 1 ? "die Zeile der Nacharbeit" : `die ${m} Zeilen der Nacharbeit`;
+    if (n && m) return `Diese Liste hat keine Seriennummern – ${artikel} eine Seriennummer vom System (STR-…), ${zeilen} später auch.`;
+    if (n) return `Diese Liste hat keine Seriennummern – ${artikel} eine Seriennummer vom System (STR-…).`;
+    return `Diese Liste hat keine Seriennummern – ${zeilen} ${m === 1 ? "bekommt" : "bekommen"} beim Übernehmen dort eine Seriennummer vom System (STR-…).`;
+  }
   function faelligSaetze(f) {
     const out = [];
     if (!f) return out;
@@ -5054,6 +5066,7 @@
     let spaltenAuf = null;       // Zuordnungstabelle auf/zu (null: nach Lage)
     let uebernimmt = false;
     let berichtFuer = "";        // die Zuordnung, zu der bericht gehört – weicht sie ab, gilt „Übernehmen“ nicht
+    let ohneSerie = false;       // Häkchen „Diese Liste hat keine Seriennummern“ – gilt nur für den Bericht, unter dem es steht
     inhalt.innerHTML = `<div class="mat-pfad"><a href="/material/bestand">Bestand</a> / ${o.pfad.map(pfadGlied).join(" / ")} / <span>Import</span></div>
       <div class="page-head"><h1>Bestandsliste importieren ${demoMarke(o.demo)}</h1></div>
       <p class="help">Zielordner: <strong>${esc(o.pfad.map((x) => x.name).join(" / "))}</strong> – mit der Spalte „Ordner“ auch seine Unterordner.</p>
@@ -5069,7 +5082,8 @@
             Die Spalte „Ordner“ nennt einen vorhandenen Unterordner dieses Ordners (etwa „Fahrzeug 1 / Kiste A“).</p>
           <p class="help">Seriennummern bitte vor dem Speichern als Text formatieren – sonst schneidet Excel führende Nullen ab oder schreibt 1,23E+11.
             Datum als TT.MM.JJJJ oder MM/JJJJ. Personen (Ausgegeben an, Telefon …) werden nicht übernommen. Was schon im Bestand steht
-            (Produkt und Seriennummer), erkennt der Import und überspringt es; Zeilen ohne Seriennummer bekommen eine Seriennummer vom System (STR-…).</p></details>
+            (Produkt und Seriennummer), erkennt der Import und überspringt es; Zeilen ohne Seriennummer bekommen eine Seriennummer vom System (STR-…).
+            Hat die Liste gar keine Spalte mit Seriennummern, bestätigst du das vor dem Übernehmen mit einem Häkchen.</p></details>
         <p class="help">Importierte Artikel stehen auf „neu“, bis sie im System geprüft sind. Die Fälligkeit kommt aus „nächste Prüfung“ oder
           „zuletzt geprüft“ der Liste; ohne beides ist die Eingangsprüfung sofort fällig.</p>
         <div id="bi-stand" class="mat-import-stand" aria-live="polite"></div>
@@ -5088,7 +5102,7 @@
       if (!f) return;
       clearTimeout(ruhe); ruhe = null;
       if (lauf) { lauf.abort(); lauf = null; }
-      datei = null; wahl = {}; bericht = null; fertig = false; reiter = null; bis = IMPORT_SEITE; spaltenAuf = null; fehler = null;
+      datei = null; wahl = {}; bericht = null; fertig = false; reiter = null; bis = IMPORT_SEITE; spaltenAuf = null; fehler = null; ohneSerie = false;
       $("#bi-name").textContent = `${f.name} · ${groesse(f.size)}`;
       if (f.size > IMPORT_MAX_BYTES) { fehler = { message: IMPORT_ZU_GROSS, status: 413 }; berichtZeichnen(); return; }
       datei = f;
@@ -5121,6 +5135,7 @@
         bericht = b;
         berichtFuer = fuer;
         fertig = false;
+        ohneSerie = false;         // ein neuer Probelauf (etwa nach geänderter Zuordnung) will ein neues Häkchen
         if (!reiter || !b.zahlen[reiter]) { reiter = ersterReiter(b); bis = IMPORT_SEITE; }
       } catch (e) {
         if (e.name === "AbortError" || lauf !== meins) return;
@@ -5172,6 +5187,9 @@
             <td data-l="Fällig" class="mat-k-halb mat-ungeteilt">${x.faellig ? esc(fmtTag(x.faellig)) : '<span class="muted">–</span>'}</td>
             <td data-l="Gründe und Hinweise" class="mat-k-ohne">${gruendeHtml(x.gruende)}${hinweiseHtml(x.hinweise)}</td></tr>`).join("")}</tbody></table>${weitere}`;
     }
+    // „Übernehmen“ gilt nur für den letzten Probelauf zur aktuellen Zuordnung – ohne Seriennummernspalte erst mit Häkchen.
+    const uebernehmenGesperrt = () => uebernimmt || Boolean(lauf || ruhe) || JSON.stringify(wahl) !== berichtFuer
+      || Boolean(bericht && bericht.ohne_seriennummern_bestaetigen && !ohneSerie);
     function knopfText(b) {
       const z = b.zahlen;
       const a = plural(z.uebernehmbar, "Artikel", "Artikel"), n = plural(z.nacharbeit, "Zeile", "Zeilen");
@@ -5201,8 +5219,9 @@
         : `<p class="small mat-import-wieder"><button type="button" class="lnk" data-act="bi-wiederholen">Probelauf wiederholen</button>${Object.keys(wahl).length ? ' · <button type="button" class="lnk" data-act="bi-automatisch">Zuordnung wie erkannt</button>' : ""}</p>
           ${sperre ? `<p class="notice">Diese Datei ist eben in diesen Ordner übernommen worden – noch einmal übernehmen geht erst ab ${esc(sperre)} Uhr (dann „Probelauf wiederholen“). Was offen blieb, steht unten in der Nacharbeit.</p>` : ""}
           ${!fehlt && !sperre && !text && z.zeilen ? `<p class="mat-leer">${esc(IMPORT_NICHTS)}</p>` : ""}
-          ${text && b.keine_seriennummer ? `<p class="notice">${esc(IMPORT_OHNE_SERIENSPALTE)}</p>` : ""}
-          <div class="btn-row mat-import-knoepfe"><button type="button" class="btn secondary" data-act="bi-neu">Neu wählen</button>${text ? `<button type="button" class="btn" data-act="bi-uebernehmen" ${uebernimmt || lauf || ruhe || JSON.stringify(wahl) !== berichtFuer ? "disabled" : ""}>${esc(uebernimmt ? "Wird übernommen …" : text)}</button>` : ""}</div>
+          ${text && b.ohne_seriennummern_bestaetigen ? `<div class="notice mat-import-ohne-serie"><label class="inline"><input type="checkbox" id="bi-ohne-serie" aria-describedby="bi-ohne-serie-hilfe" ${ohneSerie ? "checked" : ""}><span>${esc(ohneSerieSatz(z))}</span></label>
+            <p class="help" id="bi-ohne-serie-hilfe">${esc(IMPORT_OHNE_SERIENSPALTE)}</p></div>` : ""}
+          <div class="btn-row mat-import-knoepfe"><button type="button" class="btn secondary" data-act="bi-neu">Neu wählen</button>${text ? `<button type="button" class="btn" data-act="bi-uebernehmen" ${uebernehmenGesperrt() ? "disabled" : ""}>${esc(uebernimmt ? "Wird übernommen …" : text)}</button>` : ""}</div>
           ${!fehlt && z.nacharbeit ? `<p class="help">${esc(b.frist)}</p>` : ""}`;
       return `${stand}${austauschListe("Bitte beachten", warn, "warnung")}${offen}
         ${fehlt ? "" : `${austauschListe("Fälligkeit", faelligSaetze(b.faelligkeit), "")}
@@ -5220,11 +5239,13 @@
       if (aktiv !== undefined) { const s = $(`select[data-spalte="${CSS.escape(aktiv)}"]`, berichtEl); if (s) s.focus({ preventScroll: true }); }
     }
     async function uebernehmen() {
-      if (!datei || uebernimmt || lauf || ruhe || JSON.stringify(wahl) !== berichtFuer || (bericht && bericht.sperre_bis)) return;
+      if (!datei || uebernehmenGesperrt() || (bericht && bericht.sperre_bis)) return;
+      const fd = formular();
+      if (bericht && bericht.ohne_seriennummern_bestaetigen) fd.append("ohne_seriennummern", "true");   // nur mit Häkchen hier
       uebernimmt = true;
       berichtZeichnen();
       try {
-        const b = await importSenden(`${API}/ordner/${fid}/import`, formular());
+        const b = await importSenden(`${API}/ordner/${fid}/import`, fd);
         bericht = b;
         fertig = true;
         fehler = null;
@@ -5260,14 +5281,24 @@
     inhalt.addEventListener("drop", (ev) => ev.preventDefault());
     // Eine geänderte Zuordnung: Was gerade läuft, zählt nicht mehr; nach 600 ms Ruhe der neue Probelauf. Bis dahin ist
     // „Übernehmen“ gesperrt – seine Zahlen gehören zur alten Zuordnung.
+    // Das Häkchen ohne Seriennummernspalte gibt den Knopf frei, ohne neu zu zeichnen (der Fokus bleibt am Kästchen); eine
+    // geänderte Zuordnung nimmt es zurück.
     berichtEl.addEventListener("change", (ev) => {
+      const k = $('[data-act="bi-uebernehmen"]', berichtEl);
+      if (ev.target.id === "bi-ohne-serie") {
+        ohneSerie = ev.target.checked;
+        if (k) k.disabled = uebernehmenGesperrt();
+        return;
+      }
       const s = ev.target.closest("select[data-spalte]");
       if (!s) return;
       wahl[s.dataset.spalte] = s.value;
       if (lauf) { lauf.abort(); lauf = null; }
       clearTimeout(ruhe);
       ruhe = setTimeout(probelauf, 600);
-      const k = $('[data-act="bi-uebernehmen"]', berichtEl);
+      ohneSerie = false;
+      const h = $("#bi-ohne-serie", berichtEl);
+      if (h) h.checked = false;
       if (k) k.disabled = true;
       standZeichnen();
     });
@@ -5523,7 +5554,7 @@
       "bi-neu": () => {
         clearTimeout(ruhe); ruhe = null;
         if (lauf) { lauf.abort(); lauf = null; }
-        datei = null; wahl = {}; bericht = null; fertig = false; fehler = null; reiter = null; spaltenAuf = null;
+        datei = null; wahl = {}; bericht = null; fertig = false; fehler = null; reiter = null; spaltenAuf = null; ohneSerie = false;
         $("#bi-name").textContent = "Excel-Arbeitsmappe (.xlsx) oder CSV, höchstens 5 MB.";
         berichtZeichnen();
         $("#bi-datei").click();

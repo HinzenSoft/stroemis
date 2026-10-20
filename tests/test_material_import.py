@@ -1,7 +1,8 @@
 """Bestandsimport (Phase 2 · Lieferung 3):  python tests/test_material_import.py  oder  pytest tests/test_material_import.py
 
 Testplan 6.1 des Bauentwurfs L3 – angepasst an die Entscheidungen vom 19.10.2026: Zeilen ohne Seriennummer bekommen
-ohne Haken eine STR-Nummer, offene Nacharbeit verfällt nach einem Monat. Dateien entstehen im Test (CSV in mehreren
+ohne Haken eine STR-Nummer, offene Nacharbeit verfällt nach einem Monat; und vom 20.10.2026: Eine Liste ohne
+Seriennummernspalte wird nur mit ausdrücklicher Bestätigung übernommen. Dateien entstehen im Test (CSV in mehreren
 Kodierungen, xlsx mit openpyxl, ZIP mit zipfile). Alle Namen, Hersteller, Produkte und Nummern sind erfundene
 Platzhalter („Testwerk“, „Gurt Alpha“, „OG Musterstadt“, „SN-0001“)."""
 import csv
@@ -1549,6 +1550,83 @@ def test_befunde_vor_auslieferung():
 
 # --- 28. Oberfläche (statisch) -------------------------------------------------------------------------------------
 
+# --- Entscheidung vom 20.10.2026: ohne Seriennummernspalte nur mit Bestätigung ---------------------------------------
+
+def test_ohne_seriennummernspalte():
+    """Entscheidung vom 20.10.2026: Ist keine Spalte als Seriennummer zugeordnet, verlangt Übernehmen das Feld
+    „ohne_seriennummern“ – ohne es 409 und nichts geschrieben, auch wenn alle Zeilen in die Nacharbeit gingen (dort
+    bekämen sie ihre STR-Nummer später ohne Frage). Der Probelauf sagt es mit „ohne_seriennummern_bestaetigen“. Einzelne
+    Zeilen ohne Nummer bei vorhandener Spalte brauchen nichts. Die Nacharbeits-CSV folgt derselben Regel; „erneut prüfen
+    und übernehmen“ fragt nicht noch einmal – bestätigt wurde beim Import."""
+    from app.material.services import bestandsimport as bi
+    with ohne_post(), tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        app, w, hms = t.app, t.w, t.ids["hms"]
+        kopf = ["Hersteller", "Modell", "Kennung"]
+        ohne = csv_bytes([kopf, ["Testwerk", "HMS Beta", "OS-0001"], ["Testwerk", "HMS Beta", "OS-0002"],
+                          ["Nirgendwerk", "Phantom", "OS-0003"]])
+        b = ok(probelauf(w, t.lager, ohne))
+        assert b["keine_seriennummer"] and b["ohne_seriennummern_bestaetigen"], b
+        assert (b["zahlen"]["uebernehmbar"], b["zahlen"]["nacharbeit"], b["zahlen"]["ohne_serie"]) == (2, 1, 2)
+        assert "Übernehmen nur mit ausdrücklicher Bestätigung" in b["warnungen"][0], b["warnungen"]
+        # Ohne das Feld, mit „false“ oder nur dem alten „ohne_serie“: 409 mit Klartext, nichts geschrieben.
+        vorher = stand_aller_tabellen(app)
+        for felder in ({}, {"ohne_seriennummern": "false"}, {"ohne_seriennummern": ""}, {"ohne_serie": "1"}):
+            r = uebernehmen(w, t.lager, ohne, **felder)
+            assert r.status_code == 409 and r.json["error"] == bi.OHNE_SERIENNUMMERN, (felder, r.get_json())
+        r = uebernehmen(w, t.lager, ohne, ohne_seriennummern="vielleicht")
+        assert r.status_code == 400 and "ja oder nein" in r.json["error"], r.get_json()
+        assert stand_aller_tabellen(app) == vorher
+        # Mit dem Feld: 201, die Artikel bekommen STR-Nummern, die Zeile ohne Produkt geht in die Nacharbeit.
+        r = ok(uebernehmen(w, t.lager, ohne, ohne_seriennummern="true"), 201)
+        assert (r["import"]["angelegt"], r["import"]["nacharbeit"]) == (2, 1) and not r["ohne_seriennummern_bestaetigen"]
+        assert [z["seriennummer"][:4] for z in r["zeilen"] if z["status"] == "angelegt"] == ["STR-", "STR-"]
+        assert not any("Keine Spalte" in x for x in r["warnungen"]) and "haben eine Seriennummer" in r["warnungen"][-1]
+        # Die Nacharbeit weiß nichts mehr von der Spalte – „erneut prüfen und übernehmen“ braucht kein Feld.
+        offen = offene_zeilen(app, t.lager)
+        assert len(offen) == 1 and "seriennummer" not in json.loads(offen[0]["values_json"])
+        ok(w.post(f"/api/material/ordner/{t.lager}/nacharbeit/produkt", json={"zeilen": [offen[0]["id"]],
+                                                                                "product_id": hms}))
+        e = ok(w.post(f"/api/material/ordner/{t.lager}/nacharbeit/pruefen", json={"zeilen": "alle", "uebernehmen": True}))
+        assert e["zahlen"]["angelegt"] == 1 and e["zeilen"][0]["seriennummer"].startswith("STR-"), e
+        # Nur Nacharbeit (kein Artikel übernehmbar): ebenso nur mit Bestätigung.
+        nur_na = csv_bytes([kopf, ["Nirgendwerk", "Phantom", "OS-0010"]])
+        b = ok(probelauf(w, t.lager, nur_na, "nur_nacharbeit.csv"))
+        assert (b["zahlen"]["uebernehmbar"], b["zahlen"]["nacharbeit"]) == (0, 1) and b["ohne_seriennummern_bestaetigen"]
+        assert uebernehmen(w, t.lager, nur_na, "nur_nacharbeit.csv").status_code == 409
+        r = ok(uebernehmen(w, t.lager, nur_na, "nur_nacharbeit.csv", ohne_seriennummern="1"), 201)
+        assert r["import"]["nacharbeit"] == 1
+        # Spalte vorhanden, einzelne Zeilen leer: wie entschieden ohne Bestätigung (STR für die leere Zeile).
+        mit = csv_bytes([KOPF, ["Testwerk", "HMS Beta", "OS-0020"], ["Testwerk", "HMS Beta", ""]])
+        b = ok(probelauf(w, t.lager, mit, "mit.csv"))
+        assert not b["keine_seriennummer"] and not b["ohne_seriennummern_bestaetigen"] and b["zahlen"]["ohne_serie"] == 1
+        r = ok(uebernehmen(w, t.lager, mit, "mit.csv"), 201)
+        assert r["import"]["angelegt"] == 2 and r["zeilen"][1]["seriennummer"].startswith("STR-")
+        # Die Spalte von Hand als Seriennummer zugeordnet: keine Bestätigung, die Nummer der Liste gilt.
+        kennung = csv_bytes([kopf, ["Testwerk", "HMS Beta", "OS-0030"]])
+        b = ok(probelauf(w, t.lager, kennung, "kennung.csv", zuordnung={"2": "seriennummer"}))
+        assert not b["ohne_seriennummern_bestaetigen"]
+        r = ok(uebernehmen(w, t.lager, kennung, "kennung.csv", zuordnung={"2": "seriennummer"}), 201)
+        assert r["zeilen"][0]["seriennummer"] == "OS-0030"
+        # Nacharbeits-CSV: mit ihrer Spalte „Seriennummer“ (hier leer) keine Bestätigung; ohne die Spalte – gelöscht
+        # oder auf „ignorieren“ gestellt – dieselbe Regel wie jede Liste.
+        tab = _csv_lesen(w.get(f"/material/ordner/{t.lager}/nacharbeit.csv").data)
+        assert tab[0][5] == "Seriennummer" and len(tab) == 2 and tab[1][5] == "", tab
+        b = ok(probelauf(w, t.lager, csv_bytes(tab), "nacharbeit.csv"))
+        assert b["nacharbeit_csv"] and not b["keine_seriennummer"] and not b["ohne_seriennummern_bestaetigen"]
+        b = ok(probelauf(w, t.lager, csv_bytes(tab), "nacharbeit.csv", zuordnung={"5": "ignorieren"}))
+        assert b["nacharbeit_csv"] and b["ohne_seriennummern_bestaetigen"]
+        ohne_spalte = csv_bytes([z[:5] + z[6:] for z in tab])
+        b = ok(probelauf(w, t.lager, ohne_spalte, "nacharbeit.csv"))
+        assert b["nacharbeit_csv"] and b["ohne_seriennummern_bestaetigen"] and b["zahlen"]["nacharbeit"] == 1
+        r = uebernehmen(w, t.lager, ohne_spalte, "nacharbeit.csv")
+        assert r.status_code == 409 and r.json["error"] == bi.OHNE_SERIENNUMMERN
+        assert len(offene_zeilen(app, t.lager)) == 1
+        r = ok(uebernehmen(w, t.lager, ohne_spalte, "nacharbeit.csv", ohne_seriennummern="true"), 201)
+        assert (r["import"]["ersetzt"], r["import"]["nacharbeit"]) == (1, 1)
+    print("Ohne Seriennummernspalte bestanden.")
+
+
 def test_oberflaeche_statisch():
     """material.js (Paket OBERFLÄCHE): Ansicht „bestandsimport“ im Reiter „Bestand“ mit Ordnerleiste; Einstieg über das
     Untermenü „Export / Import“ im Ordnerkopf, Hinweise im Ordnerkopf und auf der Übersicht; ein roter Knopf
@@ -1610,7 +1688,24 @@ def test_oberflaeche_statisch():
     assert "zeilenweise zugeordnet: ${g.zugeordnet} von ${g.offen}" in block and "Das ersetzt die zeilenweise Zuordnung" in block
     assert 'esc(g.produkt ? "zugeordnet" : PRODUKT_ART[g.art] || g.art)' in block and "if (!g.produkt && DARF.katalog)" in block
     assert '${x.status === "erledigt" ? "–" : "ohne"}' in block and "white-space: pre-line;" in teil
-    assert "${text && b.keine_seriennummer ? `<p class=\"notice\">${esc(IMPORT_OHNE_SERIENSPALTE)}</p>` : \"\"}" in block
+    # Entscheidung vom 20.10.2026: ohne Seriennummernspalte ein Kästchen direkt über dem roten Knopf; der Knopf bleibt
+    # gesperrt, bis es gesetzt ist, und erst dann geht „ohne_seriennummern“ mit. Eine neue Datei, jeder neue Probelauf,
+    # eine geänderte Zuordnung und „Neu wählen“ nehmen das Häkchen zurück; es setzt den Knopf frei, ohne neu zu zeichnen.
+    knoepfe = block[block.index("${text && b.ohne_seriennummern_bestaetigen ?"):]
+    assert (knoepfe.index('id="bi-ohne-serie"') < knoepfe.index('<div class="btn-row mat-import-knoepfe">')
+            < knoepfe.index('data-act="bi-uebernehmen"'))
+    assert ('<input type="checkbox" id="bi-ohne-serie" aria-describedby="bi-ohne-serie-hilfe" ${ohneSerie ? "checked" : ""}>'
+            in block) and 'id="bi-ohne-serie-hilfe">${esc(IMPORT_OHNE_SERIENSPALTE)}' in block
+    assert "|| Boolean(bericht && bericht.ohne_seriennummern_bestaetigen && !ohneSerie);" in block
+    assert 'data-act="bi-uebernehmen" ${uebernehmenGesperrt() ? "disabled" : ""}' in block
+    assert "if (!datei || uebernehmenGesperrt() || (bericht && bericht.sperre_bis)) return;" in block
+    assert 'if (bericht && bericht.ohne_seriennummern_bestaetigen) fd.append("ohne_seriennummern", "true");' in block
+    assert "ohneSerie = false;" in block[block.index("async function probelauf() {"):block.index("function dateiZeile(b) {")]
+    assert block.count("ohneSerie = false;") == 5 and 'if (h) h.checked = false;' in block   # 1 + 4 Rücksetzer
+    assert "ohneSerie = ev.target.checked;\n        if (k) k.disabled = uebernehmenGesperrt();\n        return;" in block
+    assert "keine_seriennummer" not in block
+    assert "`Diese Liste hat keine Seriennummern – ${artikel} eine Seriennummer vom System (STR-…).`" in js
+    assert ".mat-import-ohne-serie label.inline { display: flex; align-items: flex-start;" in teil
     assert ".mat-import .mat-ablage-knopf { display: flex;" in teil and "table.list.mat-na-zeilen td.mat-k-wahl { order: -3;" in teil
     print("Oberfläche (statisch) bestanden.")
 
@@ -1643,5 +1738,6 @@ if __name__ == "__main__":
     test_demo()
     test_seite_und_hinweise()
     test_befunde_vor_auslieferung()
+    test_ohne_seriennummernspalte()
     test_oberflaeche_statisch()
     print("Alle Tests zum Bestandsimport bestanden.")

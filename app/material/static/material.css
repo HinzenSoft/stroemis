@@ -1269,6 +1269,12 @@ table.list:is(.mat-import-zeilen, .mat-angelegt) .mat-ungeteilt { white-space: n
 .mat-austausch-stand:focus:not(:focus-visible), #dlg h2:focus:not(:focus-visible) { outline: none; }
 .mat-import-wieder { margin: 12px 0 0; }
 .mat-import-knoepfe { margin-top: 12px; }
+/* Ohne Seriennummernspalte: das Kästchen direkt über „Übernehmen“ (Entscheidung vom 20.10.2026). Der lange Satz bricht
+   um, das Kästchen bleibt oben links neben seiner ersten Zeile. */
+.mat-import-ohne-serie { margin: 12px 0 0; }
+.mat-import-ohne-serie label.inline { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.mat-import-ohne-serie label.inline input { flex: none; margin: 3px 0 0; }
+.mat-import-ohne-serie .help { margin: 6px 0 0; }
 /* Knöpfe mit Zahlen („Übernehmen: 380 Artikel anlegen, 32 Zeilen in die Nacharbeit“) brechen um, statt am Telefon
    seitlich überzustehen. */
 .mat-import-knoepfe .btn, .mat-knopf-umbruch { white-space: normal; max-width: 100%; text-align: center; }

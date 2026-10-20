@@ -17,7 +17,11 @@ Ablauf und Regeln (Bauentwurf L3, Abschnitt 2):
     (Entscheidung vom 19.10.2026, kein Haken). Gegen doppeltes Anlegen: dieselbe Datei in denselben Ordner ist zehn
     Minuten lang gesperrt (der Probelauf nennt die Uhrzeit), die Nacharbeits-CSV erledigt ihre Zeilen über die
     „Nacharbeit-Nr.“, und dieselbe Liste (gleiche Prüfsumme) ersetzt ihre noch offenen Zeilen über die Zeilennummer.
-    Ist keine Spalte als Seriennummer zugeordnet, warnt der Probelauf deutlich.
+  - Ist KEINE Spalte als Seriennummer zugeordnet, warnt der Probelauf deutlich, und Übernehmen verlangt die
+    ausdrückliche Bestätigung „ohne_seriennummern“ (Entscheidung vom 20.10.2026) – sonst 409. Sie gilt für alles, was
+    der Lauf schreibt: auch die Zeilen, die in die Nacharbeit gehen und dort später ihre STR-Nummer bekommen. Die
+    Nacharbeit weiß nicht mehr, ob ihre Liste eine Seriennummernspalte hatte (gespeichert sind nur die Werte), darum
+    wird beim Import gefragt, nicht dort. Einzelne Zeilen ohne Seriennummer bei vorhandener Spalte brauchen nichts.
   - Offene Nacharbeit verfällt nach FRIST_MONATE (einem Monat, Entscheidung vom 19.10.2026) – beim Start der App und
     in jeder Runde des Tageslaufs.
   - Anlegen nach denselben Regeln wie von Hand: bestand.artikel_plan (nur lesen) und bestand.artikel_schreiben.
@@ -72,6 +76,9 @@ NUR_SYSTEM = "In „Gesperrt“ und „Ausgesondert“ wird nichts importiert."
 BAUM_GEAENDERT = "Der Ordnerbaum hat sich geändert – bitte den Probelauf wiederholen."
 NACHARBEIT_GEAENDERT = "Die Nacharbeit wurde inzwischen bearbeitet – bitte den Probelauf wiederholen."
 NICHTS = "Nichts zu übernehmen – alles steht schon im Bestand oder ist erledigt."
+OHNE_SERIENNUMMERN = ("Keine Spalte ist als Seriennummer zugeordnet – bitte bestätigen, dass die Liste keine "
+                      "Seriennummern hat (alle Artikel bekommen eine Seriennummer vom System, STR-…), oder die Spalte "
+                      "mit den Seriennummern zuordnen.")
 FEHLT_ZUORDNUNG = "Ordne mindestens Hersteller und Modell (oder Artikelnummer) zu."
 DEMO_PRODUKT = "Ein DEMO-Produkt passt nur in einen DEMO-Ordner."
 NEUBESCHRIFTEN = ("Alte Inventarnummern stehen in der Bemerkung und sind nicht suchbar – die Artikel bitte neu "
@@ -1081,7 +1088,14 @@ class Bericht:
     import_info: dict = None
     sperre_bis: str = None          # dieselbe Datei ist bis dahin gesperrt (ISO, UTC)
     offen_aus_datei: int = 0        # offene Nacharbeit aus früheren Importen dieser Datei, die ersetzt wird
-    keine_seriennummer: bool = False
+    keine_seriennummer: bool = False    # keine Spalte als Seriennummer zugeordnet
+    satz_ohne_spalte: str = None        # die Warnung dazu – nach dem Übernehmen überholt, dann nicht mehr im Bericht
+
+    @property
+    def ohne_seriennummern_bestaetigen(self):
+        """Übernehmen braucht „ohne_seriennummern“: keine Seriennummernspalte, und der Lauf schriebe Zeilen – Artikel
+        oder Nacharbeit (die dort ihre STR-Nummer später ohne weitere Frage bekäme)."""
+        return self.keine_seriennummer and any(e.status in ("uebernehmbar", "nacharbeit") for e in self.ergebnisse)
 
     @property
     def fremde(self):
@@ -1161,14 +1175,17 @@ def _pruefen(fid, roh, dateiname, zuordnung=None):
         return b
     if daten and "seriennummer" not in {x["zuordnung"] for x in sp}:
         # Seit Entscheidung 8 bekommen Zeilen ohne Seriennummer still eine STR-Nummer – eine nicht erkannte
-        # Seriennummernspalte darf das nicht unbemerkt für die ganze Liste auslösen (echte Nummern gingen verloren).
+        # Seriennummernspalte darf das nicht unbemerkt für die ganze Liste auslösen (echte Nummern gingen verloren):
+        # deutliche Warnung, und Übernehmen nur mit „ohne_seriennummern“ (Entscheidung vom 20.10.2026).
         b.keine_seriennummer = True
         offen = [x["titel"] or f"Spalte {tabelle.spalte_buchstabe(x['index'])}" for x in sp
                  if x["zuordnung"] == "ignorieren" and not x["gesperrt"] and x["beispiele"]]
-        warnungen.insert(0, f"Keine Spalte ist als Seriennummer zugeordnet – alle {len(daten)} Zeilen bekämen eine "
-                            "Seriennummer vom System (STR-…). Steht die Seriennummer in einer Spalte, ordne sie unter "
-                            "„Spalten“ zu." + (f" Nicht zugeordnet: {', '.join(f'„{t}“' for t in offen[:6])}"
-                                               f"{' …' if len(offen) > 6 else ''}." if offen else ""))
+        b.satz_ohne_spalte = (f"Keine Spalte ist als Seriennummer zugeordnet – alle {len(daten)} Zeilen bekämen eine "
+                              "Seriennummer vom System (STR-…), Übernehmen nur mit ausdrücklicher Bestätigung. Steht "
+                              "die Seriennummer in einer Spalte, ordne sie unter „Spalten“ zu."
+                              + (f" Nicht zugeordnet: {', '.join(f'„{t}“' for t in offen[:6])}"
+                                 f"{' …' if len(offen) > 6 else ''}." if offen else ""))
+        warnungen.insert(0, b.satz_ohne_spalte)
     alte = _alte_zeilen(fid, [z["nacharbeit_nr"] for z in daten if z.get("nacharbeit_nr")])
     lauf = Lauf(ziel, heute(), alte)
     b.ergebnisse = zeilen_pruefen(daten, lauf)
@@ -1201,16 +1218,18 @@ def _ortszeit(iso):
     return datetime.fromisoformat(iso).astimezone(ZONE)
 
 
-def uebernehmen(fid, roh, dateiname, zuordnung=None):
+def uebernehmen(fid, roh, dateiname, zuordnung=None, ohne_seriennummern=False):
     """Übernehmen: dieselbe Prüfung, dann in EINER Transaktion – übernehmbare Zeilen werden Artikel (Nummern in
-    Dateireihenfolge), der Rest kommt in die Nacharbeit, ersetzte Zeilen der Nacharbeit werden erledigt. Liefert
-    (Bericht, Kennung des Imports)."""
+    Dateireihenfolge), der Rest kommt in die Nacharbeit, ersetzte Zeilen der Nacharbeit werden erledigt. Ohne
+    Seriennummernspalte nur mit ohne_seriennummern (sonst 409). Liefert (Bericht, Kennung des Imports)."""
     with _laeuft():
         b = _pruefen(fid, roh, dateiname, zuordnung)
         if b.fehlt:
             raise Abgelehnt(FEHLT_ZUORDNUNG)
         if not any(e.status in ("uebernehmbar", "nacharbeit") or e.alte_zeile for e in b.ergebnisse):
             raise Abgelehnt(NICHTS, 409)
+        if b.ohne_seriennummern_bestaetigen and not ohne_seriennummern:
+            raise Abgelehnt(OHNE_SERIENNUMMERN, 409)
         imp = _schreiben(b)
     _protokollieren(b.fremde)
     g.pop("mat_rueckruf_offen", None)
@@ -1350,9 +1369,11 @@ def bericht_json(b):
     out = {"datei": {"name": b.dateiname, "art": t.art, "kodierung": t.kodierung, "trennzeichen": t.trennzeichen,
                      "kopfzeile": b.kopf_index + 1, "datenzeilen": b.datenzeilen, "leerzeilen": b.leerzeilen},
            "nacharbeit_csv": b.nacharbeit_csv, "spalten": b.spalten, "felder": felder_json(), "fehlt": b.fehlt,
-           "warnungen": list(b.warnungen) + [t for t in (_hinweis_ohne_serie(b.ergebnisse),) if t],
+           "warnungen": [w for w in b.warnungen if not (b.import_info and w == b.satz_ohne_spalte)]
+                        + [t for t in (_hinweis_ohne_serie(b.ergebnisse),) if t],
            "schon_importiert": b.schon_importiert, "sperre_bis": b.sperre_bis,
            "keine_seriennummer": b.keine_seriennummer,
+           "ohne_seriennummern_bestaetigen": b.ohne_seriennummern_bestaetigen and not b.import_info,
            "zahlen": _zahlen(b.ergebnisse), "faelligkeit": _faelligkeit(b.ergebnisse, heute()),
            "produkte_offen": _produkte_offen(b.ergebnisse),
            "ordner_unbekannt": [{"wert": w, "zeilen": n} for w, n in sorted(b.ordner_unbekannt.items(),
