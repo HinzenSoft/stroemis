@@ -2238,3 +2238,14 @@ dialog.us-dlg { width: min(640px, 96vw); }
 @media (min-width: 801px) and (max-width: 1024px) {
   body .wiki-shell, body.editing .wiki-shell, body.public .wiki-shell.public { grid-template-columns: min(var(--side-w), 260px) minmax(0, 1fr); }
 }
+
+/* Knöpfe zum Anlegen („Artikel anlegen“): auf dem Telefon kurz als „+ Artikel“ – „anlegen“ ist dann nur für
+   Screenreader da, die immer den ganzen Namen lesen. Tablet und Rechner zeigen den vollen Text. Markup:
+   <span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span>
+   (der äußere Behälter hält den Text zusammen, sonst setzen Knöpfe mit display: flex ihren Abstand dazwischen). */
+.k-plus { display: none; }
+@media (max-width: 600px) {
+  .k-plus { display: inline; }
+  .k-anlegen { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+}

@@ -4,6 +4,12 @@ Erweiterung von strömis.de um Lehrgänge, Teilnehmende, Voraussetzungen, Prüfu
 Stoppuhr, Nachprüfungen, Medien und eine Mängelübersicht für Feedbackrunden – nur für Nutzer mit dem neuen
 Zusatzrecht „Prüfer“.
 
+## Nachtrag (20.10.2026): Knöpfe „… anlegen“ statt „+ …“
+
+App-weit einheitlich: „Lehrgang anlegen“, „Katalog anlegen“, „Prüfungsleistung anlegen“, „Teilnehmende:n anlegen“,
+„Kriterium anlegen“, „Person anlegen“ und in der leeren Kommentarzelle „Kommentar anlegen“. Auf dem Telefon (bis 600 px)
+kurz „+ Lehrgang“ usw.; Screenreader lesen immer den vollen Namen (siehe CHANGELOG-Material.md, Wünsche vom 20.10.2026).
+
 ## Nachtrag (19.10.2026): Importgrenzen schon vor dem Laden – verbundene Zellen, Links, Kommentare
 
 Befund der Sicherheitsprüfung zum Bestandsimport im Modul Material, der den Excel-Import hier genauso traf: openpyxl

@@ -178,7 +178,7 @@
   /* Spalte „Kommentar“: die Zelle selbst öffnet den Dialog; gekürzt auf rund 60 Zeichen. */
   function kommentarZelleHtml(tn, opts = {}) {
     const t = tn.kommentar || "";
-    const leerText = tn.eingefroren ? "–" : "+ Kommentar";
+    const leerText = tn.eingefroren ? "–" : '<span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kommentar<span class="k-anlegen"> anlegen</span></span>';
     return `<button type="button" class="komm-zelle${t ? "" : " leer"}${tn.eingefroren ? " gesperrt" : ""}" data-act="tn-kommentar" data-tid="${tn.id}"
       title="${esc(t || (tn.eingefroren ? "Kommentar (eingefroren)" : "Kommentar hinzufügen"))}">${t ? esc(kuerzen(t, opts.laenge || 60)) : leerText}</button>`;
   }
@@ -427,7 +427,7 @@
         Rechte bekommt nur, wer über sein Nutzerkonto gewählt ist – ein externer Freitext-Eintrag erscheint nur in der Anzeige.</div>
       <div class="ausb-liste" id="ausb-liste">${(lg.ausbilder || []).map((a) => ausbilderZeileHtml(a, nutzer)).join("")}</div>
       <datalist id="ausb-funktionen"><option value="Referierende:r"><option value="Seiltechnik"><option value="Wasser"><option value="Helfer:in"></datalist>
-      <div class="btn-row"><button type="button" class="btn secondary small" id="ausb-plus">+ Person</button></div>
+      <div class="btn-row"><button type="button" class="btn secondary small" id="ausb-plus"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Person<span class="k-anlegen"> anlegen</span></span></button></div>
       <div class="feld-kopf"><label for="lg-besch">Beschreibung / Bemerkungen</label>${diktatKnopf("lg-besch")}</div>
       <textarea id="lg-besch" placeholder="Ablauf, Treffpunkt, Besonderheiten …">${esc(lg.beschreibung)}</textarea>
       ${neu && kataloge.length ? `<label for="lg-katalog">Prüfungsleistungen aus Katalog übernehmen (optional)</label>
@@ -526,7 +526,7 @@
       <div class="page-head"><h1>Prüfungen</h1>
         <div class="btn-row"><button class="btn secondary" data-act="lg-import">Import</button>
           <a class="btn secondary" href="/pruefungen/kataloge">Kataloge</a>
-          <button class="btn" data-act="lg-neu">+ Lehrgang anlegen</button></div></div>
+          <button class="btn" data-act="lg-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Lehrgang<span class="k-anlegen"> anlegen</span></span></button></div></div>
       <div class="su-banner hidden" id="su-banner"></div>
       <div class="filter">
         <input type="search" id="lg-suche" placeholder="Titel, Ort oder Nummer suchen …" aria-label="Lehrgänge durchsuchen" autocomplete="off">
@@ -594,7 +594,7 @@
   async function renderKataloge() {
     root.innerHTML = `<a class="zurueck" href="/pruefungen">← Alle Lehrgänge</a>
       <div class="page-head"><h1>Prüfungsleistungskataloge</h1>
-        ${istAdmin() ? '<div class="btn-row"><button class="btn" data-act="kat-neu">+ Katalog anlegen</button></div>' : ""}</div>
+        ${istAdmin() ? '<div class="btn-row"><button class="btn" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Katalog<span class="k-anlegen"> anlegen</span></span></button></div>' : ""}</div>
       <p class="help">Ein Katalog ist eine Vorlage: Seine Prüfungsleistungen lassen sich beim Anlegen eines Lehrgangs
         einmalig übernehmen. Spätere Änderungen am Katalog wirken sich nicht mehr auf schon angelegte Lehrgänge aus.</p>
       <div id="kat-liste"><p class="help">Wird geladen …</p></div>`;
@@ -681,7 +681,7 @@
         <button class="btn ghost small" data-act="kat-del" data-id="${k.id}">Löschen</button></div>` : ""}</div>
       ${k.beschreibung ? `<details class="beschreibung-kopf"><summary>Beschreibung</summary><div class="md">${esc(k.beschreibung).replace(/\n/g, "<br>")}</div></details>` : ""}
       <div class="reiter-kopf"><h2>Prüfungsleistungen</h2>
-        ${admin ? '<div class="btn-row"><button class="btn small" data-act="kl-neu">+ Prüfungsleistung</button></div>' : ""}</div>
+        ${admin ? '<div class="btn-row"><button class="btn small" data-act="kl-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfungsleistung<span class="k-anlegen"> anlegen</span></span></button></div>' : ""}</div>
       ${!ls.length ? '<div class="leer"><strong>Noch keine Prüfungsleistungen</strong>Sie werden beim Anlegen eines Lehrgangs mit diesem Katalog als Vorlage in den Lehrgang kopiert.</div>'
         : ls.map((l, i) => leistungKarteHtml(l, i, ls.length, admin, "kl")).join("")}`;
   }
@@ -901,7 +901,7 @@
     const leitung = darfLeiten();
     const kopf = `<div class="reiter-kopf"><h2>Teilnehmende</h2>
       ${leitung ? `<div class="btn-row"><button class="btn secondary small" data-act="vor-verwalten">Voraussetzungen verwalten</button>
-        <button class="btn small" data-act="tn-neu">+ Teilnehmende:r</button></div>` : ""}</div>`;
+        <button class="btn small" data-act="tn-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Teilnehmende:n<span class="k-anlegen"> anlegen</span></span></button></div>` : ""}</div>`;
     if (!tns.length) {
       return kopf + `<div class="leer"><strong>Noch keine Teilnehmenden</strong>${leitung ? "Lege sie an oder importiere die Excel-Teilnehmerliste – daraus kommen auch die Voraussetzungen." : "Die Lehrgangsleitung legt sie an oder importiert die Excel-Teilnehmerliste."}</div>`;
     }
@@ -1215,7 +1215,7 @@
     const ls = lg.leistungen || [];
     const leitung = darfLeiten();
     const kopf = `<div class="reiter-kopf"><h2>Prüfungsleistungen</h2>
-      ${leitung ? '<div class="btn-row"><button class="btn small" data-act="pl-neu">+ Prüfungsleistung</button></div>' : ""}</div>`;
+      ${leitung ? '<div class="btn-row"><button class="btn small" data-act="pl-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Prüfungsleistung<span class="k-anlegen"> anlegen</span></span></button></div>' : ""}</div>`;
     if (!ls.length) return kopf + '<div class="leer"><strong>Noch keine Prüfungsleistungen</strong>Jede:r Teilnehmende bekommt für jede Leistung ein Bewertungsfeld in der Matrix.</div>';
     return kopf + ls.map((l, i) => leistungKarteHtml(l, i, ls.length, leitung, "pl")).join("");
   }
@@ -1410,7 +1410,7 @@
         <button type="button" class="btn ghost" data-krit-del aria-label="entfernen" title="entfernen">🗑</button></li>`).join("")}</ul>`
         : '<p class="muted">Noch keine Kriterien.</p>'}
       <div class="vor-neu"><input type="text" id="krit-neu-text" placeholder="Neues Kriterium, z. B. Wurfsack sicher gegriffen" aria-label="Neues Kriterium">
-        <button type="button" class="btn secondary small" id="krit-neu-go">+ Kriterium</button></div>
+        <button type="button" class="btn secondary small" id="krit-neu-go"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kriterium<span class="k-anlegen"> anlegen</span></span></button></div>
     </div>`;
     const zeichnen = () => { $("#krit-wrap", body).outerHTML = html(); binden(); };
     function binden() {
@@ -1454,7 +1454,7 @@
         <button type="button" class="btn ghost" data-krit-del aria-label="löschen" title="löschen">🗑</button></li>`).join("")}</ul>`
         : '<p class="muted">Noch keine Kriterien.</p>'}
       <div class="vor-neu"><input type="text" id="krit-neu-text" placeholder="Neues Kriterium, z. B. Wurfsack sicher gegriffen" aria-label="Neues Kriterium">
-        <button type="button" class="btn secondary small" id="krit-neu-go">+ Kriterium</button></div>
+        <button type="button" class="btn secondary small" id="krit-neu-go"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kriterium<span class="k-anlegen"> anlegen</span></span></button></div>
     </div>`;
   }
 

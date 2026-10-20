@@ -185,7 +185,7 @@
 
   /* --- „Freigabe anlegen“ ------------------------------------------------------------------------------------------ */
   function formHtml(d) {
-    return `<details class="mf-teil mf-neu" open><summary>Freigabe anlegen</summary>
+    return `<details class="mf-teil mf-neu" open><summary><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Freigabe<span class="k-anlegen"> anlegen</span></span></summary>
       <label for="mf-person">Person</label>
       <div class="mf-personwahl">
         <input type="search" id="mf-person" placeholder="Name – ab 3 Zeichen" autocomplete="off" enterkeyhint="search"

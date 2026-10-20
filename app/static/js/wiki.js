@@ -3121,7 +3121,7 @@
       if (b.kind === "columns") {
         const cols = body.join("\n").split(/\n[ \t]*\|\|\|[ \t]*\n/);
         dialog(`<h2>Spalten bearbeiten</h2><div class="block-edit"><div class="cols">${cols.map((c, i) => `<div><label>Spalte ${i + 1}</label><textarea data-col="${i}">${esc(c)}</textarea></div>`).join("")}</div>
-          <div class="btn-row" style="margin-top:10px"><button class="btn secondary small" id="be-add" type="button">+ Spalte</button><button class="btn secondary small" id="be-del" type="button">– letzte Spalte</button></div></div>
+          <div class="btn-row" style="margin-top:10px"><button class="btn secondary small" id="be-add" type="button"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Spalte<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary small" id="be-del" type="button">– letzte Spalte</button></div></div>
           <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="be-ok" type="button">Übernehmen</button></div>`,
           (dlg, box) => {
             dlg.classList.add("wide"); dlg.addEventListener("close", () => dlg.classList.remove("wide"), { once: true });

@@ -3067,6 +3067,11 @@ Am 20.10.2026 entschieden: Nr. 5 geändert, Nr. 6 und 7 bestätigt (siehe „Ent
 - **Bestand: „Gliederung anlegen“** statt „+ Gliederung“ als Beschriftung des Knopfs (README nachgezogen).
 - **Überall „… anlegen“ statt „+ …“** im Modul: Unterordner, Artikel, Artikel dieses Produkts, Kategorie, Produkt,
   Dokument, Prüfpunkt, Freigabe (Abschnitt im Reiter „Freigaben“), Link beim Hersteller und Bemerkung (in der Prüfung).
+- **Auf dem Telefon kurz „+ …“** – bis 600 px Breite zeigen die Knöpfe zum Anlegen „+ Artikel“ statt „Artikel
+  anlegen“ (reines CSS, Klassen `k-text`/`k-plus`/`k-anlegen` in app.css); Screenreader lesen immer „Artikel anlegen“.
+  Tablet und Rechner zeigen den vollen Text. Piktogramme bewusst nicht: „+“ steht schon für Anlegen, für Unterordner,
+  Prüfpunkt, Freigabe usw. gibt es keine eindeutigen Bilder. Gilt app-weit, auch in Prüfungen, Wiki und Verwaltung
+  („Nutzer anlegen“, „Lehrgang anlegen“ …; „+ Neues Album“/„+ Neue Seite“ heißen jetzt „Neues Album“/„Neue Seite“).
 - Im Browser bei 1280 und 360 px geprüft (Untermenüs öffnen die Dialoge, das Menü schließt dabei, kein waagerechter
   Bildlauf, keine Konsolenfehler).
 
