@@ -48,34 +48,13 @@ RUN set -eux; \
 # in Chrome und Firefox stumm bei 0:00 stehen.
 # Aus der Paketverwaltung kostete ffmpeg rund 630 MB, weil es die ganze Bibliothekskette
 # mitzieht. Die statisch gebundene Ausgabe bringt alles im Programm selbst mit: zwei Dateien,
-# zusammen etwa 155 MB, und in der Laufzeitstufe bleibt keine einzige Bibliothek zurück.
-FROM python:3.12-slim AS ffmpeg
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates xz-utils \
-    && rm -rf /var/lib/apt/lists/*
-ARG TARGETARCH
-ARG FFMPEG=7.0.2
-# Wie bei den JavaScript-Bibliotheken entscheidet die Prüfsumme, nicht der Dateiname.
-# Neue Fassung: FFMPEG hochsetzen und die Prüfsumme des neuen Archivs hier eintragen
-# (sha256sum ffmpeg-release-<arch>-static.tar.xz).
-ARG FFMPEG_SHA_AMD64=abda8d77ce8309141f83ab8edf0596834087c52467f6badf376a6a2a4c87cf67
-ARG FFMPEG_SHA_ARM64=f4149bb2b0784e30e99bdda85471c9b5930d3402014e934a5098b41d0f7201b1
-RUN set -eux; \
-    case "${TARGETARCH:-amd64}" in \
-        amd64) bogen=amd64; summe="${FFMPEG_SHA_AMD64}" ;; \
-        arm64) bogen=arm64; summe="${FFMPEG_SHA_ARM64}" ;; \
-        *) echo "Keine statische ffmpeg-Ausgabe für ${TARGETARCH}." >&2; exit 1 ;; \
-    esac; \
-    # Die jeweils neueste Fassung liegt unter releases/, ältere wandern nach old-releases/.
-    # Beide Wege führen zu derselben Datei – welcher gilt, hängt nur am Alter der Fassung.
-    curl -fsSL -o ffmpeg.tar.xz \
-        "https://johnvansickle.com/ffmpeg/old-releases/ffmpeg-${FFMPEG}-${bogen}-static.tar.xz" \
-    || curl -fsSL -o ffmpeg.tar.xz \
-        "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${bogen}-static.tar.xz"; \
-    echo "${summe}  ffmpeg.tar.xz" | sha256sum -c -; \
-    mkdir -p /ffmpeg; \
-    tar -xJf ffmpeg.tar.xz --strip-components=1 -C /ffmpeg --wildcards '*/ffmpeg' '*/ffprobe' '*/GPLv3.txt'; \
-    chmod 755 /ffmpeg/ffmpeg /ffmpeg/ffprobe; \
-    /ffmpeg/ffprobe -version | head -1
+# und in der Laufzeitstufe bleibt keine einzige Bibliothek zurück.
+# Quelle seit 21.10.2026 ist das Abbild mwader/static-ffmpeg (Docker Hub), festgenagelt über seine Prüfsumme
+# (Digest des Index für amd64 und arm64): Die bisherige Quelle johnvansickle.com war nicht erreichbar und ließ
+# den Deploy scheitern; Docker Hub ist ohnehin die Quelle der Basisabbilder. Wie bei den JavaScript-Bibliotheken
+# entscheidet die Prüfsumme, nicht der Name. Neue Fassung: Tag und Digest gemeinsam ersetzen
+# (Digest: docker buildx imagetools inspect mwader/static-ffmpeg:<tag>).
+FROM mwader/static-ffmpeg:7.0.2@sha256:d9b22f65c2049d73bf8ae556bb4c5c7d45e9fb85939d87951ed98f22b0f19105 AS ffmpeg
 
 FROM python:3.12-slim
 # XDG_CACHE_HOME: Fontconfig (für WeasyPrint) legt seinen Zwischenspeicher dort ab – das Wurzeldateisystem ist
@@ -89,8 +68,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 # ffmpeg und ffprobe sind eigenständige Programme; sie werden aufgerufen, nicht eingebunden.
 # Ihre Lizenz (GPLv3) liegt daneben.
-COPY --from=ffmpeg /ffmpeg/ffmpeg /ffmpeg/ffprobe /usr/local/bin/
-COPY --from=ffmpeg /ffmpeg/GPLv3.txt /usr/local/share/ffmpeg/GPLv3.txt
+# Den Lizenztext (GPLv3) bringt das Debian-Grundabbild mit; das ffmpeg-Abbild enthält keinen.
+COPY --from=ffmpeg /ffmpeg /ffprobe /usr/local/bin/
+RUN mkdir -p /usr/local/share/ffmpeg \
+    && { cp /usr/share/common-licenses/GPL-3 /usr/local/share/ffmpeg/GPLv3.txt \
+         || echo "GNU General Public License v3: https://www.gnu.org/licenses/gpl-3.0.txt" > /usr/local/share/ffmpeg/GPLv3.txt; } \
+    && ffprobe -version | head -1
 WORKDIR /srv
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
