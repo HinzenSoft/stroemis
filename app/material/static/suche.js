@@ -67,7 +67,7 @@
         ${a.vorschau ? `<img class="mv-bild" src="${esc(a.vorschau)}" alt="" loading="lazy">` : '<span class="mv-bild leer" aria-hidden="true"></span>'}
         <span class="mv-text">
           <span class="mv-kopf"><strong class="mv-inv">${markiert(a.inventory_no, q)}</strong>
-            <span class="mat-status s-${esc(a.status)}">${esc(STATUS[a.status] || a.status)}</span>${a.rueckruf ? ' <span class="mat-rr-marke">Rückruf</span>' : ""}${a.demo ? ' <span class="mat-demo">DEMO</span>' : ""}</span>
+            <span class="mat-status s-${esc(a.status)}">${esc(STATUS[a.status] || a.status)}</span>${a.rueckruf ? ' <span class="mat-rr-marke">Rückruf</span>' : ""}${a.mangel ? ' <span class="mat-mangel-marke" title="Mangel gemeldet">Mangel</span>' : ""}${a.demo ? ' <span class="mat-demo">DEMO</span>' : ""}</span>
           <span class="mv-produkt">${name || "–"}${window.MatProdukt.zusatzHtml(a)}${trifft(a.article_no, q) ? window.MatProdukt.artNr(a.article_no, markiert(a.article_no, q)) : ""}</span>
           <span class="mv-zeile">Seriennummer ${markiert(a.serial_no, q)}${a.pfad ? ` · ${esc(a.pfad)}` : ""}</span>
         </span></a></li>`;

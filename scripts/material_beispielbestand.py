@@ -79,9 +79,9 @@ PRODUKTION = {"strömis.de", "www.strömis.de", "xn--strmis-yxa.de", "www.xn--st
 GLIEDERUNGEN = [("AU", "Auental", 0.40), ("BH", "Bachheim", 0.35), ("FS", "Flussstadt", 0.25)]
 EINSATZKRAEFTE = 2                   # je Gliederung: DEMO-Personen mit persönlichem Ordner und Zuordnungen
 # Was die Einsatzkräfte sehen: die erste liest ihren persönlichen Ordner, die übrigen haben – wie die meisten, denen PSA
-# zugeordnet ist (services/zuordnung.py) – keinen Modulzugang und lesen nach der Anmeldung „nicht freigeschaltet“.
+# zugeordnet ist (services/zuordnung.py) – keinen Modulzugang und sehen nach der Anmeldung nur „Meine PSA“.
 SICHT_PERSON = {1: "liest ihren persönlichen Ordner"}
-OHNE_ZUGANG = "ohne Modulzugang – zeigt „nicht freigeschaltet“"
+OHNE_ZUGANG = "ohne Modulzugang – sieht „Meine PSA“"
 
 # Ordnerbaum je Gliederung: (Schlüssel, Name, Ordnertyp, Oberordner, Gewicht beim Verteilen der Artikel). Dazu je
 # DEMO-Einsatzkraft ein persönlicher Ordner unter „persoenlich“. Kein Ordner bekommt ein eigenes Prüfintervall – es

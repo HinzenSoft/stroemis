@@ -470,8 +470,9 @@ def test_oberflaeche_statisch():
         assert haken in js, haken
     # Jede Stelle mit dem Namen setzt den Zusatz dahinter – erst nach dem Schluss von Link und Hervorhebung.
     stellen = re.findall(r"\$\{nameHtml\(([^,)]+)(?:, true)?\)\}((?:</strong>|</a>)*)\$\{zusatzHtml\(([^)]+)\)\}", js)
-    # 17 seit Phase 2 · L3: die Produktwahl der Nacharbeit (Bestandsimport) zeigt das gewählte Produkt ebenso.
-    assert len(stellen) == js.count("${nameHtml(") == 17, (len(stellen), js.count("${nameHtml("))
+    # 17 seit Phase 2 · L3: die Produktwahl der Nacharbeit (Bestandsimport) zeigt das gewählte Produkt ebenso; 19 seit
+    # Phase 3 · L1: Kasten „Gemeldete Mängel“ der Übersicht und Karte in „Meine PSA“.
+    assert len(stellen) == js.count("${nameHtml(") == 19, (len(stellen), js.count("${nameHtml("))
     assert all(name == zusatz for name, _, zusatz in stellen), stellen
     assert not re.search(r"\$\{zusatzHtml\([^)]*\)\}(</strong>|</a>)", js)      # nie im Link, nie in <strong>
     # Die Katalogliste wie im Bildschirmfoto: Name fett im roten Link, dann grau Zusatz und Artikelnummer.
@@ -505,7 +506,9 @@ def test_oberflaeche_statisch():
     # Verkettung mehr; was breiter ist als die Zeile, bricht darin um (inline-block mit max-width).
     for datei in (js, suche, glob):
         assert "· Art.-Nr. ${" not in datei
-    assert js.count("${artNrHtml(") == 3 and js.count('${nummerHtml("Seriennummer", a.serial_no)}') == 2
+    # Seit Phase 3 · L1 auch in der Karte „Meine PSA“ (artNrHtml, Seriennummer der Karte k).
+    assert js.count("${artNrHtml(") == 4 and js.count('${nummerHtml("Seriennummer", a.serial_no)}') == 2
+    assert js.count('${nummerHtml("Seriennummer", k.serial_no)}') == 1
     assert "window.MatProdukt.artNr(a.article_no, markiert(a.article_no, q))" in suche
     assert "window.MatProdukt.artNr(t.artikelnummer)" in glob
     assert ".mat-ganz { display: inline-block; max-width: 100%; }" in css

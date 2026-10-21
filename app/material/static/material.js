@@ -1,7 +1,8 @@
 /* Modul Material – Oberfläche aller Ansichten: Übersicht, fällige Prüfungen, Bestand (Ordnerbaum mit
    Systemordnern und Mehrfachauswahl), Artikel mit Lebenslauf (Prüfungen und Journal), Artikel anlegen,
    Prüfung (Formular fürs Telefon), Prüfdurchgang, Katalog mit Produkten, Dokumenten und Prüfformularen,
-   Suche nach Nummern; links die Ordnerleiste.
+   Suche nach Nummern; links die Ordnerleiste. Seit Phase 3 dazu „Meine PSA“ (auch ohne Modulzugang, dann ohne
+   Modulnavigation und Ordnerleiste) und die Mangelmeldung.
    Welche Ansicht gemeint ist, sagt data-ansicht am <main>. Was das Konto darf, gilt seit Phase 2 je Ordner (Freigaben):
    Knöpfe an einem Ordner, Artikel, einer Prüfung oder einem Durchgang fragen dessen Feld „darf“ (lesen, grund,
    pruefen, verwalten); data-darf sagt nur, was das Konto irgendwo darf – für Reiter und die Knöpfe der Übersicht.
@@ -914,6 +915,7 @@
           Die Nummernsuche oben findet eine Herstellerseriennummer auf Wunsch auch außerhalb deines Bereichs – das wird mit deinem Namen protokolliert.</p>`;
     // Ohne Knöpfe im Kopf (Wunsch vom 20.10.2026): Bestand und „Artikel anlegen“ erreicht man über den Reiter „Bestand“.
     inhalt.innerHTML = `<div class="page-head"><h1>Material</h1></div>
+      ${mangelKasten(d.maengel, d.maengel_gesamt)}
       ${rueckrufKasten(d.rueckrufe)}
       ${d.meldungen_offen ? `<p class="notice"><a href="/material/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produktmeldung", "offene Produktmeldungen")}</strong></a>
         – Materialwarte warten darauf, Artikel davon anzulegen.</p>` : ""}
@@ -921,6 +923,7 @@
       ${erinnerungHinweise(d.erinnerungen)}
       <div id="mat-freigaben-hinweis"></div>
       ${bestandTeil}
+      ${psaKasten(d.meine_psa)}
       ${erinnerungZeile(d.erinnerungen)}`;
     aktionen = { probelauf: () => probelaufDialog() };
     if (DARF.lesen) {
@@ -993,11 +996,13 @@
      einbeziehen (nur Ansicht)“ erscheint nur, wenn DEMO ausgelassen wurde oder schon einbezogen ist (auf dev ist alles
      DEMO); Umschalten lädt den Dialog neu. Mails mit DEMO tragen die Marke – sie gehen nie hinaus. Bekommt jemand die
      Mail (auch) als Inhaber einer ablaufenden Freigabe, nennt die Zeile „n eigene Freigaben“ (Abschnitt „Deine
-     Freigaben“); eine Mail nur dafür nennt keine leeren Zahlen. */
+     Freigaben“); eine Mail nur dafür nennt keine leeren Zahlen. Ebenso „n PSA“ für den Abschnitt „Deine PSA“ (Phase 3 ·
+     L1: Artikel, die der Person zugeordnet sind) – „PSA“ bleibt auch in der Mehrzahl. */
   const DEMO_NIE = "DEMO – geht nie hinaus";
-  const mailZahlen = (m) => [m.artikel || !m.eigene ? plural(m.artikel, "Artikel", "Artikel") : "",
-    m.freigaben || !m.eigene ? plural(m.freigaben, "Freigabe", "Freigaben") : "",
-    m.eigene ? plural(m.eigene, "eigene Freigabe", "eigene Freigaben") : ""].filter(Boolean).join(", ");
+  const mailZahlen = (m) => [m.artikel || (!m.eigene && !m.psa) ? plural(m.artikel, "Artikel", "Artikel") : "",
+    m.freigaben || (!m.eigene && !m.psa) ? plural(m.freigaben, "Freigabe", "Freigaben") : "",
+    m.eigene ? plural(m.eigene, "eigene Freigabe", "eigene Freigaben") : "",
+    m.psa ? `${m.psa} PSA` : ""].filter(Boolean).join(", ");
   async function probelaufDialog(demo, kaestchen) {
     let p;
     try { p = await api(`${API}/erinnerungen/probelauf${demo ? "?demo=1" : ""}`); } catch (e) { toast(e.message, true); return false; }
@@ -1193,7 +1198,7 @@
         ${opts.person ? `<td data-l="Person" class="mat-eng-weg mat-k-halb">${esc(a.zugeordnet_name || "")}</td>` : ""}
         ${opts.pfad ? `<td data-l="Ablage">${esc(a.pfad || "")}</td>` : ""}
         <td data-l="Nächste Prüfung" class="mat-schmal-weg">${naechste(a) && a.status !== "neu" ? esc(naechste(a)) : `<span class="muted">${esc(naechste(a) || "–")}</span>`}</td>
-        <td data-l="Status" class="mat-k-marke">${statusMarke(a.status)}${a.rueckruf ? ` <span class="mat-rr-marke" title="Rückruf: ${esc(a.rueckruf)}">Rückruf</span>` : ""}${a.entwurf ? `<div class="small muted">in Prüfung bei ${esc(a.entwurf.pruefer || "?")}</div>` : ""}${naechste(a) ? `<div class="mat-schmal-zusatz small${a.status === "neu" ? " muted" : ""}">${a.status === "neu" ? "" : "fällig "}${esc(naechste(a))}</div>` : ""}</td>
+        <td data-l="Status" class="mat-k-marke">${statusMarke(a.status)}${a.rueckruf ? ` <span class="mat-rr-marke" title="Rückruf: ${esc(a.rueckruf)}">Rückruf</span>` : ""}${mangelMarke(a.mangel)}${a.entwurf ? `<div class="small muted">in Prüfung bei ${esc(a.entwurf.pruefer || "?")}</div>` : ""}${naechste(a) ? `<div class="mat-schmal-zusatz small${a.status === "neu" ? " muted" : ""}">${a.status === "neu" ? "" : "fällig "}${esc(naechste(a))}</div>` : ""}</td>
         ${opts.pruefen ? `<td class="tabelle-aktionen">${pruefKnopf(a)}</td>` : ""}</tr>`).join("")}</tbody></table>
       ${gesperrte ? '<p class="help mat-wahl-hinweis">Graue Kästchen: Gesperrte und ausgesonderte Artikel bleiben in ihrem Systemordner und lassen sich nicht verschieben.</p>' : ""}`;
   }
@@ -1989,11 +1994,19 @@
     const zu = a.zugeordnet;
     const zuKnoepfe = darf.verwalten && (!aus || zu) ? `<div class="btn-row mat-zuordnung">${aus ? "" : `<button class="btn secondary small" type="button" data-act="zuordnen">${zu ? "Ändern" : "Zuordnen …"}</button>`}${zu ? '<button class="btn secondary small" type="button" data-act="zuordnung-loesen">Lösen</button>' : ""}</div>
       <div class="help">${esc(ZUORDNUNG_HILFE)}</div>` : "";
+    // Gemeldete Mängel (Phase 3 · L1): offene als Banner oben, erledigte eingeklappt unter „Prüfungen“. Melden darf jeder
+    // mit Leserecht, außer am ausgesonderten Artikel; „Aussondern“ des Materialwarts ist nach einer reinen Mangelsperre
+    // ausgegraut, bis ein Prüfer den Artikel geprüft hat (NUR_GEMELDET).
+    const maengel = a.maengel || [];
+    const darfMelden = !aus && Boolean(darf.lesen);
+    const sperrKnopf = frei && darf.pruefen && !a.entwurf;
+    const aussonderKnopf = gesperrt && darf.verwalten && !a.entwurf;
     const zuordnung = darf.grund ? zeile("Zugeordnet an", `${zu ? `${esc(zu.name)}${zu.gliederung ? ` <span class="muted">· ${esc(zu.gliederung)}</span>` : ""}${zu.aktiv ? "" : ' <span class="muted">(deaktiviert)</span>'}`
       : '<span class="muted">–</span>'}${zuKnoepfe}`) : "";
-    inhalt.innerHTML = `${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
+    inhalt.innerHTML = `${quittungHtml()}${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${a.status === "ausgesondert" ? `<p class="mat-banner s-ausgesondert">AUSGESONDERT – dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden.</p>` : ""}
       ${a.status === "gesperrt" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
+      ${maengel.filter((m) => m.offen).map(mangelBanner).join("")}
       ${a.status === "lebensdauer" ? `<p class="mat-banner s-lebensdauer">LEBENSDAUER ERREICHT – aussondern.</p>` : ""}
       ${a.status === "neu" ? '<p class="mat-banner s-neu">NEU – die Eingangsprüfung steht aus. Bis dahin nicht einsetzen.</p>' : ""}
       ${rueckrufBanner(a)}
@@ -2005,8 +2018,11 @@
           <p class="mat-produktzeile"><a href="/material/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}${artNrHtml(p.article_no)}</p>
           <p>Seriennummer <strong>${esc(a.serial_no)}</strong>${a.serial_generated ? ' <span class="badge grey">vom System vergeben</span><span class="help mat-sn-hinweis">Der Hersteller vergibt keine Seriennummer – diese Nummer bitte dauerhaft am Artikel anbringen.</span>' : ""}</p>
           <div class="btn-row mat-pruefknoepfe">${!aus && darf.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
-            ${frei && darf.pruefen && !a.entwurf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
-            ${gesperrt && darf.verwalten && !a.entwurf ? '<button class="btn secondary small" data-act="aussondern">Aussondern</button>' : ""}</div>
+            ${sperrKnopf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
+            ${darfMelden ? '<button class="btn secondary small" type="button" data-act="mangel">Mangel melden …</button>' : ""}
+            ${aussonderKnopf ? `<button class="btn secondary small" type="button"${a.mangel_nur_gemeldet ? ' disabled aria-describedby="mat-aussondern-hilfe"' : ' data-act="aussondern"'}>Aussondern</button>` : ""}</div>
+          ${sperrKnopf && darfMelden ? '<p class="help mat-melden-hilfe">Mangel melden: mit Beschreibung und Fotos, Materialwarte und Prüfer bekommen eine Mail. Sperren: ohne Meldung, mit Sperrgrund.</p>' : ""}
+          ${aussonderKnopf && a.mangel_nur_gemeldet ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(NUR_GEMELDET)}</p>` : ""}
           ${a.entwurf ? `<p class="small">In Prüfung bei <strong>${esc(a.entwurf.pruefer)}</strong> seit ${esc(fmtZeit(a.entwurf.seit))}
             ${fremderEntwurf ? ` · <a href="/material/pruefung/${a.entwurf.id}">ansehen</a>` : ""}
             ${fremderEntwurf && darf.verwalten ? ' · <button class="lnk" type="button" data-act="freigeben">Reservierung freigeben</button>' : ""}</p>` : ""}
@@ -2043,6 +2059,7 @@
         </section>
       </div>
       <section class="section"><h2>Prüfungen</h2>${pruefListe(a.pruefungen)}</section>
+      ${mangelErledigt(maengel.filter((m) => !m.offen))}
       ${darf.grund ? `<section class="section"><h2>Journal</h2><p class="help">Änderungen am Artikel und an seinem Produkt, neueste zuerst.</p>${journalHtml(a.journal, true)}</section>` : ""}`;
     aktionen = {
       "qr-kopieren": async () => {
@@ -2053,6 +2070,7 @@
       bearbeiten: () => artikelDialog(a),
       pruefen: () => { location.href = eigenerEntwurf ? `/material/pruefung/${a.entwurf.id}` : `/material/artikel/${a.id}/pruefung/neu`; },
       sperren: () => sperrDialog(a),
+      mangel: () => mangelDialog(a, (r, q) => { quittung = q; return zeigen(artikel); }),
       "rr-sperren": (b) => sperrDialog(a, { grund: "rueckruf", text: ((a.rueckrufe || []).find((r) => r.id === +b.dataset.id) || {}).title }),
       aussondern: () => aussonderDialog(a),
       freigeben: () => reservierungFreigeben(a.entwurf.id, a.entwurf.pruefer, () => zeigen(artikel)),
@@ -2091,7 +2109,8 @@
   /* Personenzuordnung (Bauentwurf 6.4): Ein Artikel – meist PSA, die eine Person dauerhaft nutzt – wird einem Konto
      zugeordnet. Gesucht wird nach dem Namen (ab 3 Zeichen, GET /nutzer – ohne E-Mail, nur aktive Konten mit Namen).
      Liefert { id, name } oder null. */
-  const ZUORDNUNG_HILFE = "Nur für PSA, die eine Person dauerhaft nutzt. Erscheint nicht in Protokollen.";
+  const ZUORDNUNG_HILFE = "Nur für PSA, die eine Person dauerhaft nutzt. Die Person sieht sie unter „Meine PSA“, bekommt "
+    + "Erinnerungen per Mail und kann Mängel melden (das sperrt). Erscheint nicht in Protokollen.";
   function personWaehlen(titel) {
     return new Promise((resolve) => {
       let gewaehlt = null;
@@ -3361,6 +3380,7 @@
       <div class="mat-formular">
         <p class="mat-produktzeile"><strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrHtml(p.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)}</p>
         ${a.lock_state !== "frei" && a.lock_state !== "ausgesondert" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.</p>` : ""}
+        ${mangelHinweis((a.maengel || []).filter((m) => m.offen))}
         ${rueckrufHinweis((a.rueckrufe || []).filter((r) => r.zustand !== "erledigt").map((r) => r.title), a.id)}
         ${lebensdauerHinweis(ld)}
         ${a.formular ? `<p>Formular: ${esc(a.formular.title || "ohne Titel")} · Version ${a.formular.version} <span class="muted">(${esc(a.formular.quelle)}, ${plural(a.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span></p>` : ""}
@@ -4074,6 +4094,7 @@
 
     function bearbeitenHtml() {
       return `${pr.freipruefung ? `<p class="mat-banner s-gesperrt">GESPERRT – mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.</p>` : ""}
+        ${mangelHinweis(pr.maengel, Boolean(pr.berichtigt))}
         ${rueckrufHinweis(pr.artikel.rueckruf ? [pr.artikel.rueckruf] : [], pr.artikel.id, Boolean(pr.berichtigt))}
         ${lebensdauerHinweis(pr.lebensdauer)}
         ${punkteHtml()}
@@ -4235,6 +4256,11 @@
       }
       const a = pr.artikel;
       const maengel = offeneHinweise().maengel.length;
+      /* Gemeldete Mängel (Phase 3 · L1): Mit „einsatzbereit“ hakt der Prüfer jede offene Meldung einzeln ab – erst dann ist
+         „Festschreiben“ frei, und nur die abgehakten gehen als maengel_gesehen mit. Eine Berichtigung gibt bei offener
+         Meldung ohnehin nicht frei (der Server sagt es); „instandsetzen“ und „aussondern“ brauchen kein Häkchen. */
+      const zuHaken = daten.ergebnis === "einsatzbereit" && !pr.berichtigt ? (pr.maengel || []) : [];
+      delete daten.maengel_gesehen;
       dialog(`<h2>Prüfung festschreiben</h2>
         <dl class="mat-daten mat-fs-daten">
           <dt>Artikel</dt><dd><strong>${esc(a.inventory_no)}</strong> · ${nameHtml(pr.produkt)}${zusatzHtml(pr.produkt)}</dd>
@@ -4245,13 +4271,23 @@
           <dt>Prüfer</dt><dd>${esc(pr.pruefer || "–")}${pr.urkunde ? ` · Urkundennummer ${esc(pr.urkunde)}` : ""}</dd>
           <dt>Unterschrift</dt><dd id="fs-us">${usZeile(bild)}</dd>
         </dl>
+        ${zuHaken.length ? `<fieldset class="mat-fs-maengel"><legend>Gemeldete Mängel</legend>
+          ${zuHaken.map((m) => `<div class="mat-fs-mangel"><label class="inline"><input type="checkbox" data-mangel="${Number(m.id)}">
+            Gemeldeten Mangel vom ${esc(S.fmtDate(m.created_at))} geprüft</label>
+            <p class="small mat-text">${esc(m.description.length > 300 ? `${m.description.slice(0, 299)}…` : m.description)}</p></div>`).join("")}
+          <p class="help" id="fs-maengel-hilfe">Freigeben kannst du erst, wenn du jeden gemeldeten Mangel geprüft hast.</p></fieldset>` : ""}
         ${daten.ergebnis === "aussondern" ? `<p class="mat-fs-warnung"><strong>„aussondern“ ist endgültig.</strong> Der Artikel wandert nach „Ausgesondert“ und zählt nicht mehr als Bestand; dazu entsteht ein Aussonderungsprotokoll.</p>` : ""}
         ${pr.berichtigt ? `<p>Diese Berichtigung ersetzt ${pr.berichtigt.protokoll_id ? `Protokoll ${esc(pr.berichtigt.protokoll_id)}` : "die ursprüngliche Prüfung"}; das Original bleibt unverändert erhalten.</p>` : ""}
         <p class="help">Danach ist die Prüfung unveränderlich; eine Korrektur geht nur als Berichtigung. Das Protokoll entsteht mit Prüfsumme.</p>
         <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn${daten.ergebnis === "aussondern" ? " danger" : ""}" id="fs-ok" type="button">Festschreiben</button></div>`,
       (dlg, body) => {
         const knopf = $("#fs-ok", body);
-        fokus(knopf);
+        const haken = $$("input[data-mangel]", body);
+        const alleAbgehakt = () => haken.every((h) => h.checked);
+        const knopfFrei = () => { knopf.disabled = !alleAbgehakt(); };
+        haken.forEach((h) => h.addEventListener("change", knopfFrei));
+        knopfFrei();
+        fokus(haken.length ? haken[0] : knopf);
         let erneut = false;          // nach einem 403 wegen fehlender Unterschrift genau einmal von selbst weiter
         async function festschreiben() {
           if (!DARF.unterschrift) {
@@ -4259,6 +4295,8 @@
             $("#fs-us", body).innerHTML = usZeile(eigenesBildMerk);
             abschlussAktualisieren();
           }
+          if (!alleAbgehakt()) { toast("Freigeben kannst du erst, wenn du jeden gemeldeten Mangel geprüft hast.", true); return; }
+          if (haken.length) daten.maengel_gesehen = haken.filter((h) => h.checked).map((h) => +h.dataset.mangel);
           knopf.disabled = true;
           knopf.textContent = "Wird festgeschrieben …";
           try {
@@ -4271,7 +4309,15 @@
             zeichnen();
           } catch (e) {
             unterschriftWeg(e);
+            if (e.status === 409 && e.message.startsWith(MANGEL_NEU_ANFANG)) {
+              // Inzwischen ist ein Mangel gemeldet worden: neu laden – er erscheint oben und hier mit eigenem Häkchen.
+              dlg.close();
+              try { pr = (await api(`${API}/pruefungen/${pr.id}`)).pruefung; zeichnen(); } catch (err) { /* bleibt so */ }
+              toast(e.message, true);
+              return;
+            }
             knopf.disabled = false;
+            knopfFrei();
             knopf.textContent = "Festschreiben";
             if (!DARF.unterschrift) {
               $("#fs-us", body).innerHTML = usZeile(null);
@@ -5624,6 +5670,239 @@
     await nacharbeitLaden();
   }
 
+  /* --- Meine PSA und Mangelmeldung (Phase 3 · Lieferung 1) ------------------------------------------------------
+     „Meine PSA“ (/material/meine-psa[/<iid>]) zeigt jedem Konto mit Namen die Ausrüstung, die ihm zugeordnet ist – auch
+     ohne Modulstufe; dann fehlen Modulnavigation und Ordnerleiste (seite.html, nur_psa), und diese Ansicht braucht
+     keine von beiden. Je Artikel eine Karte mit genau dem, was die Schnittstelle liefert (psa.artikel_json). Den Mangel
+     melden die zugeordnete Person und jeder mit Leserecht am Artikel – hier und auf der Artikelseite im selben Dialog.
+     Jede Meldung sperrt sofort; die Texte sagen überall dasselbe: beiseitelegen und dem Materialwart geben. */
+  const MANGEL_MAX_FOTOS = 3;                       // mangel.MAX_FOTOS
+  const MANGEL_TEXT_MAX = 2000;                     // mangel.TEXT_MAX
+  // mangel.NUR_GEMELDET – Hilfezeile am ausgegrauten „Aussondern“ des Materialwarts (kein Knopf, der nur 409 bringt).
+  const NUR_GEMELDET = "Der Artikel ist durch eine Mangelmeldung gesperrt und seitdem nicht geprüft – aussondern kann ihn jetzt nur ein Prüfer (Prüfung mit Ergebnis „aussondern“). Nach einer Prüfung mit „instandsetzen“ geht es auch hier.";
+  // Anfang von mangel.MANGEL_NEU: Eine Meldung kam während der Prüfung – die Prüfung wird neu geladen.
+  const MANGEL_NEU_ANFANG = "Am Artikel ist ein gemeldeter Mangel offen, den du nicht als geprüft abgehakt hast";
+  const BEISEITE = "Leg ihn sofort beiseite (aus Fahrzeug oder Lager) und gib ihn deinem Materialwart.";
+  const mangelMarke = (x) => (x ? ' <span class="mat-mangel-marke" title="Mangel gemeldet">Mangel</span>' : "");
+  const tagZeit = (iso) => fmtZeit(iso).replace(",", "");         // „20.10.2026 13:05“ in der Zeit des Browsers
+  // Fotos einer Meldung: Vorschau, groß die Webfassung – ein Original gibt es nicht (F4), „Original“ zeigt dieselbe.
+  const mangelFotos = (m, titel) => ((m.fotos || []).length ? `<div class="mat-mangel-fotos">${m.fotos.map((f, i) => bildLink(f.web, f.web,
+    `${titel} – Foto ${i + 1}`, `mangel-${m.id}`, `<img class="mat-mini" src="${esc(f.vorschau)}" alt="">`,
+    `Foto ${i + 1} zur Mangelmeldung groß zeigen`)).join("")}</div>` : "");
+
+  // Nach dem Melden steht oben, was geschah – der Toast allein ist am Telefon schnell weg.
+  let quittung = "";
+  const quittungHtml = () => { const q = quittung; quittung = ""; return q ? `<p class="notice mat-mangel-quittung" role="status">${esc(q)}</p>` : ""; };
+  function mangelQuittung(r) {
+    const was = r.gesperrt ? "der Artikel ist gesperrt" : "der Artikel war schon gesperrt";
+    return r.mail ? `Gemeldet – ${was}. Materialwart und Prüfer bekommen eine Mail. Leg ihn beiseite und gib ihn deinem Materialwart.`
+      : `Gemeldet – ${was}. Es ging keine Mail hinaus – sag deinem Materialwart Bescheid und gib ihm den Artikel.`;
+  }
+
+  /* Dialog „Mangel melden“ (Meine PSA und Artikelseite). a: {id, inventory_no}; danach(antwort, text) zeichnet neu.
+     Fotos ohne capture: Das Telefon bietet Kamera oder Galerie an, am Rechner öffnet sich die Dateiauswahl. Jede Wahl
+     hängt an die Liste an, die Eingabe wird danach geleert – so lassen sich drei Fotos nacheinander aufnehmen; mehr als
+     drei nimmt die Liste nicht. „Auswahl entfernen“ leert sie. Rot ist nur „Melden und sperren“ (endgültig). */
+  function mangelDialog(a, danach) {
+    const fotos = [];
+    dialog(`<h2>Mangel melden – ${esc(a.inventory_no)}</h2>
+      <p class="mat-mangel-warnung"><strong>Mit dem Melden wird der Artikel sofort gesperrt.</strong> ${BEISEITE} Freigeben kann ihn nur ein Prüfer nach einer Prüfung.</p>
+      <label for="mg-text">Was ist dir aufgefallen? <span class="mat-pflicht" aria-hidden="true">*</span></label>
+      <textarea id="mg-text" rows="5" maxlength="${MANGEL_TEXT_MAX}" required aria-required="true" aria-describedby="mg-text-fehler"
+        placeholder="Was ist passiert, was siehst du – und wo liegt er jetzt?"></textarea>
+      <p class="error mat-feld-fehler" id="mg-text-fehler" hidden></p>
+      <div class="mat-feldkopf" id="mg-fotos-kopf">Fotos (bis zu ${MANGEL_MAX_FOTOS})</div>
+      <div class="mat-mangel-fotowahl" role="group" aria-labelledby="mg-fotos-kopf">
+        <div class="mat-dateiwahl"><label class="btn secondary mat-bildwahl-knopf"><span aria-hidden="true">📷</span> Foto hinzufügen …<input type="file"
+            id="mg-fotos" accept="image/*" multiple class="mat-datei" aria-describedby="mg-fotos-stand"></label>
+          <span class="mat-dateiwahl-name" id="mg-fotos-stand" aria-live="polite"></span>
+          <button type="button" class="btn secondary mat-dateiwahl-weg" id="mg-fotos-weg" hidden>Auswahl entfernen</button></div>
+        <ol class="mat-fotoliste" id="mg-fotos-liste" hidden></ol>
+      </div>
+      <p class="help">Dein Name steht bei der Meldung.</p>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn danger" id="mg-ok" type="button">Melden und sperren</button></div>`,
+    (dlg, body) => {
+      const text = $("#mg-text", body);
+      const fehler = $("#mg-text-fehler", body);
+      const eingabe = $("#mg-fotos", body);
+      const weg = $("#mg-fotos-weg", body);
+      fokus(text);
+      function zeichnen() {
+        const ol = $("#mg-fotos-liste", body);
+        ol.innerHTML = fotos.map((f) => `<li><span class="mat-fotoliste-name">${esc(f.name)}</span> <span class="muted small">${esc(groesse(f.size))}</span></li>`).join("");
+        ol.hidden = !fotos.length;
+        $("#mg-fotos-stand", body).textContent = !fotos.length ? "keine Fotos gewählt"
+          : fotos.length >= MANGEL_MAX_FOTOS ? `${MANGEL_MAX_FOTOS} von ${MANGEL_MAX_FOTOS} Fotos – mehr gehen nicht` : `${plural(fotos.length, "Foto", "Fotos")} gewählt`;
+        weg.hidden = !fotos.length;
+        $(".mat-bildwahl-knopf", body).classList.toggle("voll", fotos.length >= MANGEL_MAX_FOTOS);
+        eingabe.disabled = fotos.length >= MANGEL_MAX_FOTOS;
+      }
+      eingabe.addEventListener("change", () => {
+        let zuviel = false;
+        Array.from(eingabe.files).forEach((f) => {
+          const endung = (f.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
+          if (!FOTO_ENDUNGEN.includes(endung)) { toast(`„${f.name}“ ist kein Foto (JPEG, PNG, WebP, HEIC oder TIFF).`, true); return; }
+          if (f.size > FOTO_MAX_BYTES) { toast(`„${f.name}“ ist größer als ${FOTO_MAX_BYTES / 1048576} MB.`, true); return; }
+          if (fotos.length >= MANGEL_MAX_FOTOS) { zuviel = true; return; }
+          fotos.push(f);
+        });
+        if (zuviel) toast(`Höchstens ${MANGEL_MAX_FOTOS} Fotos.`, true);
+        eingabe.value = "";                 // dieselbe Datei (oder das nächste Kamerafoto) löst wieder ein change aus
+        zeichnen();
+      });
+      weg.addEventListener("click", () => { fotos.length = 0; zeichnen(); eingabe.focus(); });
+      text.addEventListener("input", () => { if (text.value.trim()) { fehler.hidden = true; text.classList.remove("ungueltig"); text.removeAttribute("aria-invalid"); } });
+      zeichnen();
+      $("#mg-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        if (!text.value.trim()) {
+          fehler.textContent = "Bitte beschreib, was dir aufgefallen ist.";
+          fehler.hidden = false;
+          text.classList.add("ungueltig");
+          text.setAttribute("aria-invalid", "true");
+          text.focus();
+          return;
+        }
+        const fd = new FormData();
+        fd.append("beschreibung", text.value);
+        fotos.forEach((f) => fd.append("fotos", f));
+        knopf.disabled = true;
+        knopf.textContent = "Wird gemeldet …";
+        try {
+          const r = await api(`${API}/artikel/${a.id}/mangel`, { method: "POST", body: fd });
+          dlg.close();
+          const q = mangelQuittung(r);
+          toast(q);
+          if (danach) await danach(r, q);
+        } catch (e) {
+          toast(e.status === 413 ? "Die Fotos sind zusammen zu groß – bitte weniger oder kleinere wählen." : e.message, true);
+          knopf.disabled = false;
+          knopf.textContent = "Melden und sperren";
+        }
+      };
+    });
+  }
+
+  // Banner am Artikel: je offener Meldung ein roter Kasten unter dem GESPERRT-Banner. Den Melder nennt der Server nur
+  // dem, der ihn sehen darf (Grund- oder Prüfrecht).
+  function mangelBanner(m) {
+    return `<div class="mat-banner mat-mangel-banner" role="note">
+      <p class="mat-mangel-titel">MANGEL GEMELDET am ${esc(tagZeit(m.created_at))}${m.melder ? ` · von ${esc(m.melder)}` : ""}</p>
+      <p class="mat-text mat-mangel-text">${esc(m.description)}</p>
+      ${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}
+      <p class="mat-mangel-zeile">Nicht verwenden – beiseitelegen und beim Materialwart abgeben. Freigeben kann ihn nur ein Prüfer mit einer Prüfung („einsatzbereit“).</p></div>`;
+  }
+
+  // Erledigte Meldungen am Artikel: eingeklappt unter „Prüfungen“ – wann, wer (wenn sichtbar), was, und wodurch erledigt.
+  function mangelErledigt(liste) {
+    if (!liste.length) return "";
+    return `<section class="section"><h2>Gemeldete Mängel</h2><details class="mat-mangel-alt"><summary>${plural(liste.length, "erledigte Meldung", "erledigte Meldungen")}</summary>
+      <ul class="mat-mangel-liste">${liste.map((m) => `<li><p class="small"><strong>${esc(tagZeit(m.created_at))}</strong>${m.melder ? ` · ${esc(m.melder)}` : ""}
+          · erledigt am ${esc(S.fmtDate(m.erledigt.am))} durch <a href="/material/pruefung/${Number(m.erledigt.pruefung)}">${m.erledigt.art === "aussonderung" ? "Aussonderung" : "Freiprüfung"}</a></p>
+        <p class="mat-text">${esc(m.description)}</p>${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}</li>`).join("")}</ul></details></section>`;
+  }
+
+  // Hinweis in der Prüfung (Start und Entwurf): je offener Meldung, mit Text und Fotos.
+  function mangelHinweis(liste, berichtigung) {
+    return (liste || []).map((m) => `<div class="mat-banner mat-mangel-banner" role="note">
+      <p class="mat-mangel-titel">GEMELDETER MANGEL vom ${esc(tagZeit(m.created_at))}${m.melder ? ` (von ${esc(m.melder)})` : ""}</p>
+      <p class="mat-text mat-mangel-text">${esc(m.description)}</p>
+      ${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}
+      <p class="mat-mangel-zeile">${berichtigung ? "Eine Berichtigung gibt den Artikel nicht frei – dafür braucht es eine neue Prüfung."
+        : "Mit „einsatzbereit“ hebst du die Sperre auf (Freiprüfung) und erledigst die Meldung."}</p></div>`).join("");
+  }
+
+  // Übersicht, oben: Meldungen, nach denen noch kein Prüfer geprüft hat (nach „instandsetzen“ fallen sie heraus).
+  function mangelKasten(liste, gesamt) {
+    if (!liste || !liste.length) return "";
+    return `<section class="section mat-mangel-kasten" aria-label="Gemeldete Mängel"><h2>Gemeldete Mängel</h2>
+      <p class="help">Gesperrt durch eine Meldung und seitdem von keinem Prüfer geprüft.</p>
+      <ul class="mat-rr-liste">${liste.map((m) => `<li>
+        <span class="mat-mangel-marke">Mangel</span>
+        <span class="mat-rr-was"><a href="/material/artikel/${Number(m.item_id)}"><strong>${esc(m.inventory_no)}</strong></a> · ${nameHtml(m.produkt)}${zusatzHtml(m.produkt)}</span>
+        <span class="mat-mangel-kurz">${esc(m.kurz)}</span>
+        <span class="small">gemeldet am ${esc(S.fmtDate(m.created_at))}${m.melder ? ` · ${esc(m.melder)}` : ""}${m.fotos ? ` · ${plural(m.fotos, "Foto", "Fotos")}` : ""}</span></li>`).join("")}</ul>
+      ${gesamt > liste.length ? `<p class="small"><a href="/material/pruefungen?status=gesperrt">… und ${gesamt - liste.length} weitere</a></p>` : ""}</section>`;
+  }
+
+  // Übersicht, unten: die eigene PSA (für jeden mit Modulzugang und Zuordnung).
+  const psaKasten = (k) => (k ? `<p class="notice mat-psa-kasten${k.dringend ? " dringend" : ""}">Dir ${k.anzahl === 1 ? "ist 1 Artikel" : `sind ${k.anzahl} Artikel`} zugeordnet${k.dringend
+    ? ` – davon ${k.dringend} nicht einsatzbereit` : ""}. <a href="/material/meine-psa">Meine PSA ansehen →</a></p>` : "");
+
+  /* Eine Karte in „Meine PSA“. Banner oben (Mangel, Sperre, überfällig, Lebensdauer, neu, DEMO) – mit dem, was die
+     Person tun soll; dann Bild, Nummern, Daten, Dokumente, Rückruf, die eigenen Meldungen und „Mangel melden …“. */
+  function psaKarte(k, einzeln) {
+    const p = k.produkt;
+    const name = produktName(p);
+    const banner = [];
+    if (k.mangel) banner.push(["mat-mangel-banner", `Mangel gemeldet am ${S.fmtDate(k.mangel.seit)} – nicht verwenden. Bring sie deinem Materialwart; ein Prüfer muss sie ansehen.`]);
+    else if (k.verloren) banner.push(["s-gesperrt", "Als verloren gemeldet – taucht sie wieder auf: nicht verwenden, gib sie deinem Materialwart."]);
+    else if (k.gesperrt) banner.push(["s-gesperrt", "GESPERRT – nicht verwenden. Leg sie beiseite und gib sie deinem Materialwart."]);
+    else if (k.status === "ueberfaellig") banner.push(["mat-psa-ueberfaellig", "PRÜFUNG ÜBERFÄLLIG – nicht verwenden, bis sie geprüft ist. Gib sie deinem Materialwart."]);
+    else if (k.status === "lebensdauer") banner.push(["s-lebensdauer", "LEBENSDAUER ERREICHT – nicht mehr verwenden, gib sie deinem Materialwart."]);
+    else if (k.status === "neu") banner.push(["s-neu", "NEU – die Eingangsprüfung steht aus. Bis dahin nicht verwenden."]);
+    const zeile = (t, w) => `<dt>${esc(t)}</dt><dd>${w}</dd>`;
+    const naechste = k.gesperrt ? '<span class="muted">nach Freigabe durch einen Prüfer</span>'
+      : k.status === "neu" ? "<strong>Eingangsprüfung ausstehend</strong>"
+        : k.next_due_on ? `<strong${k.status === "ueberfaellig" ? ' class="mat-warn"' : ""}>${esc(fmtTag(k.next_due_on))}</strong>` : '<span class="muted">–</span>';
+    const offen = k.eigene_maengel.some((m) => m.offen);
+    const inv = einzeln ? esc(k.inventory_no) : `<a href="/material/meine-psa/${Number(k.id)}">${esc(k.inventory_no)}</a>`;
+    return `<article class="mat-psa-karte s-${esc(k.status)}${k.mangel ? " mit-mangel" : ""}" aria-labelledby="psa-${Number(k.id)}">
+      ${k.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
+      ${banner.map(([cls, t]) => `<p class="mat-banner ${cls}" role="note">${esc(t)}</p>`).join("")}
+      <div class="mat-psa-kopf">
+        ${p.bild && p.vorschau ? bildLink(p.bild, p.bild, `Produktbild ${name}`, null, `<img class="mat-psa-bild" src="${esc(p.vorschau)}" alt="">`, `Produktbild groß zeigen: ${name}`)
+          : '<div class="mat-psa-bild leer" aria-hidden="true">kein Bild</div>'}
+        <div class="mat-psa-titel">
+          <h2 id="psa-${Number(k.id)}">${inv} ${statusMarke(k.status)}</h2>
+          <p class="mat-produktzeile"><strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrHtml(p.article_no)}</p>
+          <p class="small">${nummerHtml("Seriennummer", k.serial_no)}${k.serial_generated ? ' <span class="muted">(vom System)</span>' : ""}</p>
+        </div>
+      </div>
+      <dl class="mat-daten mat-psa-daten">
+        ${zeile("Nächste Prüfung", naechste)}
+        ${k.retire_by ? zeile("Lebensende", `${k.status === "lebensdauer" ? '<strong class="mat-warn">' : ""}${esc(fmtTag(k.retire_by))}${k.status === "lebensdauer" ? "</strong>" : ""}`) : ""}
+        ${zeile("Zuletzt geprüft", k.last_inspected_on ? esc(fmtTag(k.last_inspected_on)) : '<span class="muted">noch nie</span>')}
+        ${k.gliederung ? zeile("Gliederung", esc(k.gliederung)) : ""}
+        ${k.gesperrt && k.lock_reason ? zeile("Sperrgrund", esc(k.lock_reason)) : ""}
+        ${k.notes ? zeile("Bemerkung", `<span class="mat-text">${esc(k.notes)}</span>`) : ""}
+      </dl>
+      ${k.rueckruf.map((t) => `<p class="mat-psa-rueckruf"><span class="mat-rr-marke">Rückruf</span> Rückruf des Herstellers: ${esc(t)} – bitte deinem Materialwart zeigen.</p>`).join("")}
+      ${k.dokumente.length ? `<div class="mat-psa-doks"><h3 class="mat-unter">Dokumente</h3><ul class="mat-doks">${k.dokumente.map((d) => `<li>${d.datei || d.url
+        ? `<a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>` : esc(d.title)} <span class="muted">${esc(DOKART[d.kind] || d.kind)}</span></li>`).join("")}</ul></div>` : ""}
+      ${k.eigene_maengel.length ? `<details class="mat-psa-meldungen"><summary>Deine Meldungen (${k.eigene_maengel.length})</summary>
+        <ul class="mat-mangel-liste">${k.eigene_maengel.map((m) => `<li><p class="small"><strong>${esc(tagZeit(m.created_at))}</strong>
+            <span class="mat-rr-zustand ${m.offen ? "offen" : "erledigt"}">${m.offen ? "offen" : "erledigt"}</span></p>
+          <p class="mat-text">${esc(m.description)}</p>${mangelFotos(m, `Deine Meldung vom ${S.fmtDate(m.created_at)}`)}</li>`).join("")}</ul></details>` : ""}
+      <div class="btn-row mat-psa-knoepfe">
+        <button class="btn secondary" type="button" data-act="mangel" data-id="${Number(k.id)}"${offen ? ' disabled aria-describedby="psa-schon-' + Number(k.id) + '"' : ""}>Mangel melden …</button>
+        ${k.artikel_link ? `<a href="/material/artikel/${Number(k.id)}">Zum Artikel</a>` : ""}</div>
+      ${offen ? `<p class="help" id="psa-schon-${Number(k.id)}">Du hast schon gemeldet – ein Prüfer sieht es sich an. Ergänzungen bitte direkt an den Materialwart.</p>` : ""}
+    </article>`;
+  }
+
+  async function meinePsa() {
+    const d = await api(`${API}/meine-psa`);
+    const einzeln = Boolean(DATEN.id);
+    const karten = einzeln ? d.artikel.filter((k) => k.id === DATEN.id) : d.artikel;
+    const kopf = `${einzeln ? '<p class="mat-psa-zurueck"><a href="/material/meine-psa">← Alle meine PSA</a></p>' : ""}
+      <div class="page-head"><h1>Meine PSA</h1></div>
+      <p class="help">Ausrüstung, die dir persönlich zugeordnet ist. Vor jedem Gebrauch ansehen; was dir auffällt, meldest du hier – und gibst sie deinem Materialwart.</p>`;
+    const liste = karten.length ? `<div class="mat-psa-liste${einzeln ? " einzeln" : ""}">${karten.map((k) => psaKarte(k, einzeln)).join("")}</div>`
+      : einzeln ? leer("Dieser Artikel ist dir nicht (mehr) zugeordnet – oder er steht nicht unter den ersten in deiner Liste.")
+        : leer("Dir ist keine Ausrüstung zugeordnet. Das macht der Materialwart deiner Gliederung.");
+    inhalt.innerHTML = `${quittungHtml()}${kopf}${liste}
+      ${!einzeln && d.gesamt > d.artikel.length ? `<p class="notice">… und ${d.gesamt - d.artikel.length} weitere – frag deinen Materialwart.</p>` : ""}
+      <p class="help mat-psa-mails">Erinnerungen per Mail: ${d.mails ? "an" : "aus"} – <a href="/profil#psa">im Profil ändern</a></p>`;
+    aktionen = {
+      mangel: (b) => {
+        const k = d.artikel.find((x) => x.id === +b.dataset.id);
+        if (!k || b.disabled) return;
+        mangelDialog(k, (r, q) => { quittung = q; return zeigen(meinePsa); });
+      },
+    };
+  }
+
   /* Nach einem QR-Scan an einem Artikel außerhalb des eigenen Bereichs (/m/<token>): Die Seite enthält nichts über ihn,
      den Steckbrief gibt es erst nach Bestätigung (global.js; DATEN ist genau {token}). */
   async function fremd() {
@@ -5634,7 +5913,7 @@
 
   const ANSICHTEN = { dashboard, pruefungen, bestand, ordner, artikel, artikel_neu: artikelNeu, katalog, produkt, formular, suche,
                       meldungen, pruefung_neu: pruefungNeu, pruefung: pruefungAnsicht, durchgang: durchgangAnsicht, fremd,
-                      bestandsimport };
+                      meine_psa: meinePsa, bestandsimport };
   leisteLaden();
   zeigen(ANSICHTEN[ANSICHT] || dashboard);
 })();

@@ -139,6 +139,7 @@ window.MatGlobal = (function () {
         <p class="help">Der Steckbrief zeigt Stammdaten, Zugehörigkeit und ob der Artikel gesperrt, verloren gemeldet oder
           ausgesondert ist – keine Prüfungen, Protokolle, Fotos oder Bemerkungen. Wer ihn öffnet, steht mit Namen im
           Protokoll der Plattform-Verwaltung.</p>
+        <p class="help">Schaden entdeckt? Sag dem Materialwart der Gliederung Bescheid.</p>
         <div class="btn-row"><button class="btn" type="button" data-mg="steckbrief">Steckbrief anzeigen (wird protokolliert)</button></div>
         <div class="mg-ergebnis" aria-live="polite"></div>
       </div>`;

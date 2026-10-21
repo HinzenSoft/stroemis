@@ -1344,3 +1344,101 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
   table.list.mat-angelegt td[data-l="Seriennummer"] { order: 1; }
   table.list.mat-angelegt td:is([data-l="Bisherige Nummer"], [data-l="Fällig"]) { order: 2; }
 }
+
+/* Phase 3 · Lieferung 1 – Meine PSA und Mangelmeldung (material.js: meinePsa, psaKarte, mangelDialog, mangelBanner,
+   mangelKasten, Festschreib-Dialog). Rot heißt hier wie überall: nicht verwenden. */
+/* Marke „Mangel“ in Listen, Suchtreffern und im Kasten der Übersicht – dieselbe Form wie „Rückruf“, dunkelrot. */
+.mat-mangel-marke { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 7px;
+  border-radius: var(--radius-pille); background: var(--rot-dunkel); color: var(--weiss); text-transform: uppercase;
+  letter-spacing: .03em; vertical-align: middle; white-space: nowrap; }
+/* Banner je offener Meldung (Artikel, Prüfung, Karte in Meine PSA): rot wie ein laufender Rückruf. */
+.mat-banner.mat-mangel-banner { background: var(--rot); }
+.mat-mangel-banner p { margin: 0 0 6px; overflow-wrap: anywhere; }
+.mat-mangel-banner p:last-child { margin-bottom: 0; }
+.mat-mangel-banner .mat-mangel-titel { font-size: 1.05rem; letter-spacing: .02em; }
+.mat-mangel-banner .mat-mangel-text, .mat-mangel-banner .mat-mangel-zeile { font-weight: 400; }
+.mat-mangel-banner .mat-mangel-zeile { font-size: var(--fs-klein); }
+.mat-mangel-fotos { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.mat-mangel-fotos .mat-mini { width: 64px; height: 64px; margin: 0; background: var(--weiss); }
+/* Überfällig in der Karte: das Rot der Statusmarke (eine eigene Bannerfarbe gibt es dafür sonst nicht). */
+.mat-banner.mat-psa-ueberfaellig { background: var(--rot); }
+/* Übersicht: Kasten „Gemeldete Mängel“ wie der Rückruf-Kasten; der Kurztext in eigener Zeile. */
+.mat-mangel-kasten { border: 1px solid var(--linie); border-left: 6px solid var(--rot-dunkel); padding: 10px 14px;
+  background: var(--co-danger-fl); }
+.mat-mangel-kasten h2 { margin-top: 0; }
+.mat-mangel-kasten .mat-zusatz { color: color-mix(in srgb, var(--grau) 75%, var(--anthrazit)); }
+.mat-mangel-kasten .mat-rr-liste li { align-items: baseline; }
+.mat-mangel-kurz { flex-basis: 100%; overflow-wrap: anywhere; }
+/* Übersicht unten: „Meine PSA“; gelb, wenn etwas davon nicht einsatzbereit ist. */
+.mat-psa-kasten.dringend { background: var(--co-warning-fl); border-left-color: var(--gelb-dunkel); }
+/* Nach dem Melden: was geschah (Sperre, Mail) – bleibt stehen, bis neu gezeichnet wird. */
+.mat-mangel-quittung { font-weight: 600; }
+/* Artikelseite: Hilfezeilen unter den Knöpfen (Unterschied Mangel melden/Sperren; warum „Aussondern“ ausgegraut ist). */
+.mat-artikeltitel .mat-melden-hilfe, .mat-artikeltitel .mat-aussondern-hilfe { margin: 6px 0 0; }
+.mat-mangel-alt > summary { cursor: pointer; color: var(--grau); margin: 4px 0 10px; }
+.mat-mangel-liste { list-style: none; margin: 0; padding: 0; }
+.mat-mangel-liste > li { padding: 8px 0; border-bottom: 1px solid var(--linie); }
+.mat-mangel-liste > li:last-child { border-bottom: 0; }
+.mat-mangel-liste p { margin: 2px 0; overflow-wrap: anywhere; }
+
+/* Dialog „Mangel melden“: der Hinweis auf die Sperre rot hinterlegt, die gesammelten Fotos als Liste. */
+.mat-mangel-warnung { border-left: 4px solid var(--rot); background: var(--rot-hell); padding: 8px 12px; margin: 6px 0 10px; }
+.mat-pflicht { color: var(--rot); }
+.mat-feld-fehler { margin: 4px 0 0; }
+#dlg textarea.ungueltig { border-color: var(--rot); box-shadow: inset 0 0 0 1px var(--rot); }
+.mat-fotoliste { margin: 8px 0 0; padding-left: 22px; font-size: var(--fs-klein); }
+.mat-fotoliste li { overflow-wrap: anywhere; }
+.mat-bildwahl-knopf.voll { opacity: .55; cursor: not-allowed; }
+/* Festschreib-Dialog: je gemeldetem Mangel ein Häkchen mit Kurztext. */
+.mat-fs-maengel { border: 1px solid var(--rot); border-left-width: 4px; background: var(--rot-hell); padding: 8px 12px; margin: 10px 0; }
+.mat-fs-maengel legend { font-weight: 700; padding: 0 4px; }
+.mat-fs-mangel label.inline { font-weight: 600; margin: 4px 0 0; }
+.mat-fs-mangel p { margin: 0 0 6px 30px; overflow-wrap: anywhere; }
+.mat-fs-maengel .help { margin: 6px 0 0; }
+
+/* Meine PSA: je Artikel eine Karte – am Telefon untereinander in voller Breite, ab 900 px Inhaltsbreite zwei
+   nebeneinander; die Einzelansicht bleibt eine Spalte. Links in der Karte die Vorschau des Produktbilds. */
+.mat-psa-zurueck { margin: 0 0 6px; }
+.mat-psa-liste { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin: 12px 0; align-items: start; }
+.mat-psa-liste.einzeln { max-width: 760px; }
+@container mat-seite (min-width: 900px) { .mat-psa-liste:not(.einzeln) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.mat-psa-karte { container: mat-psa-karte / inline-size; min-width: 0; border: 1px solid var(--linie);
+  border-left: 6px solid var(--grau); background: var(--weiss); padding: 12px 14px; }
+.mat-psa-karte.s-einsatzbereit { border-left-color: var(--ok); }
+.mat-psa-karte.s-bald_faellig { border-left-color: var(--gelb-dunkel); }
+.mat-psa-karte.s-ueberfaellig, .mat-psa-karte.mit-mangel { border-left-color: var(--rot); }
+.mat-psa-karte.s-neu { border-left-color: var(--wasser); }
+.mat-psa-karte.s-lebensdauer { border-left-color: var(--mat-lebensdauer); }
+.mat-psa-karte.s-gesperrt { border-left-color: var(--mat-gesperrt); }
+.mat-psa-karte .mat-banner, .mat-psa-karte .mat-demo-banner { margin: 0 0 10px; padding: 8px 12px; font-size: var(--fs-mittel); }
+.mat-psa-kopf { display: flex; gap: 12px; align-items: flex-start; }
+.mat-psa-kopf .mat-bildlink { flex: none; }
+.mat-psa-bild { display: block; width: 88px; height: 88px; object-fit: contain; border: 1px solid var(--linie); background: var(--weiss); }
+.mat-psa-bild.leer { display: flex; align-items: center; justify-content: center; flex: none; color: var(--grau);
+  font-size: var(--fs-marke); background: var(--grau-hell); }
+.mat-psa-titel { min-width: 0; }
+.mat-psa-titel h2 { margin: 0 0 4px; font-size: 1.25rem; overflow-wrap: anywhere; }
+.mat-psa-titel h2 .mat-status { vertical-align: middle; }
+.mat-psa-titel p { margin: 0 0 4px; overflow-wrap: anywhere; }
+.mat-psa-daten { grid-template-columns: minmax(110px, auto) minmax(0, 1fr); margin: 10px 0 4px; }
+.mat-psa-daten dd { overflow-wrap: anywhere; }
+@container mat-psa-karte (max-width: 380px) {
+  .mat-psa-daten { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .mat-psa-daten dd { margin-bottom: 6px; }
+  .mat-psa-bild { width: 64px; height: 64px; }
+}
+.mat-psa-rueckruf { margin: 8px 0; overflow-wrap: anywhere; }
+.mat-psa-doks .mat-unter { margin-top: 10px; }
+.mat-psa-doks .mat-doks { margin: 0; }
+.mat-psa-doks li { overflow-wrap: anywhere; }
+.mat-psa-meldungen { margin: 8px 0; }
+.mat-psa-meldungen > summary { cursor: pointer; color: var(--anthrazit); font-weight: 600; }
+.mat-psa-knoepfe { margin-top: 10px; align-items: center; }
+.mat-psa-karte .help { margin: 6px 0 0; }
+@media (pointer: coarse) {
+  .mat-psa-meldungen > summary, .mat-mangel-alt > summary { padding: 10px 0; }
+  .mat-psa-knoepfe > a { display: inline-flex; align-items: center; min-height: 44px; }
+}
+@container mat-seite (max-width: 600px) {
+  .mat-psa-knoepfe .btn { flex: 1 1 auto; }
+}

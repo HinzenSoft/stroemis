@@ -30,7 +30,7 @@
   // (pruefDauer: „dauerhaft“ vorgewählt – angeboten nur, wer selbst dauerhaft verwaltet). „Einzeln …“ lässt alles frei.
   const VORLAGEN = [
     { k: "fuehrungskraft", t: "Führungskraft", grund: "lesen", pruefen: false,
-      text: "lesen – Bestand, Protokolle, Export, Lebensläufe und Journal ansehen" },
+      text: "lesen – Bestand, Protokolle, Export, Lebensläufe und Journal ansehen, Mängel melden (sperrt)" },
     { k: "materialwart", t: "Materialwart", grund: "verwalten", pruefen: false,
       text: "verwalten – Ordner und Artikel pflegen, aussondern, Freigaben vergeben; prüfen nur mit eigener Prüffreigabe" },
     { k: "pruefer", t: "Prüfer", grund: "lesen", pruefen: true, pruefDauer: true, text: "lesen und prüfen" },

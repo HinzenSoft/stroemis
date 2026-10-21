@@ -966,6 +966,65 @@ def test_migration_13():
     print("Migration 13 bestanden.")
 
 
+# --- Oberfläche (statisch, Paket OBERFLÄCHE) -------------------------------------------------------------------------
+
+def test_oberflaeche_statisch():
+    """material.js, CSS und die Nebenskripte passen zur Schnittstelle: Texte wie im Dienst, Fotos ohne capture
+    gesammelt, „Melden und sperren“ die einzige rote Fläche des Dialogs, Häkchen im Festschreib-Dialog, „Meine PSA“
+    ohne Modulnavigation und Ordnerleiste, Marke in Liste und Suche, Texte zu Zuordnung, Leserecht und Kontolöschen."""
+    import re
+    from app.material.services import mangel
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    def lesen(pfad):
+        return open(os.path.join(wurzel, pfad), encoding="utf-8").read()
+    js, css = lesen("app/material/static/material.js"), lesen("app/material/static/material.css")
+    # Texte und Grenzen wie im Dienst.
+    assert f'const NUR_GEMELDET = "{mangel.NUR_GEMELDET}";' in js
+    anfang = re.search(r'const MANGEL_NEU_ANFANG = "([^"]+)";', js).group(1)
+    assert mangel.MANGEL_NEU.startswith(anfang) and len(anfang) > 40, anfang
+    assert f"const MANGEL_MAX_FOTOS = {mangel.MAX_FOTOS};" in js and f"const MANGEL_TEXT_MAX = {mangel.TEXT_MAX};" in js
+    # Dialog: ohne capture, multiple, gesammelt (Eingabe danach geleert), Beschreibung Pflicht, ein Danger-Knopf.
+    dlg = js[js.index("function mangelDialog("):js.index("function mangelBanner(")]
+    assert "capture" not in dlg and 'accept="image/*" multiple' in dlg and 'eingabe.value = "";' in dlg
+    assert "fotos.push(f)" in dlg and 'fd.append("fotos", f)' in dlg and 'fd.append("beschreibung", text.value)' in dlg
+    assert dlg.count("btn danger") == 1 and '<button class="btn danger" id="mg-ok" type="button">Melden und sperren</button>' in dlg
+    assert "${BEISEITE}" in dlg and 'const BEISEITE = "Leg ihn sofort beiseite (aus Fahrzeug oder Lager) und gib ihn deinem Materialwart.";' in js
+    assert "Höchstens ${MANGEL_MAX_FOTOS} Fotos." in dlg
+    assert "Es ging keine Mail hinaus – sag deinem Materialwart Bescheid" in js and "r.mail ?" in js
+    assert "btn ghost" not in js
+    # Eingaben nur maskiert: Beschreibung, Melder, Kurztext.
+    for stelle in ("${esc(m.description)}", "${esc(m.melder)}", "${esc(m.kurz)}", "${esc(k.notes)}", "esc(k.lock_reason)", "esc(k.gliederung)"):
+        assert stelle in js, stelle
+    assert "${m.description}" not in js and "${m.melder}" not in js
+    # Festschreiben: Häkchen je offener Meldung, nur abgehakte gehen hinaus, Knopf erst danach frei.
+    fs = js[js.index("async function festschreibDialog("):]
+    assert 'data-mangel="${Number(m.id)}"' in fs and "Gemeldeten Mangel vom" in fs
+    assert "daten.maengel_gesehen = haken.filter((h) => h.checked)" in fs and "knopf.disabled = !alleAbgehakt();" in fs
+    # Artikelseite: grauer Knopf, Hilfezeile, ausgegrautes Aussondern mit Erklärung.
+    assert 'data-act="mangel">Mangel melden …</button>' in js and "Sperren: ohne Meldung, mit Sperrgrund." in js
+    assert "a.mangel_nur_gemeldet ? ' disabled aria-describedby=\"mat-aussondern-hilfe\"'" in js
+    # Meine PSA: eigene Ansicht ohne Reiter, kommt ohne Modulnavigation und Ordnerleiste aus.
+    assert "meine_psa: meinePsa" in js and "meine_psa" not in js[js.index("const NAV = {"):js.index("};", js.index("const NAV = {"))]
+    assert "meine_psa" not in js[js.index("const MIT_LEISTE"):js.index("]);", js.index("const MIT_LEISTE"))]
+    assert "if (!matNav || !reiter) return;" in js and "if (!leiste || !MIT_LEISTE.has(ANSICHT)" in js
+    seite = lesen("app/material/templates/material/seite.html")
+    assert seite.count("{% if not nur_psa %}") == 2
+    # Marke in Listen und in der Suche, Container-Abfrage für schmale Karten.
+    assert "${mangelMarke(a.mangel)}" in js
+    assert '${a.mangel ? \' <span class="mat-mangel-marke" title="Mangel gemeldet">Mangel</span>\' : ""}' in lesen("app/material/static/suche.js")
+    for regel in (".mat-mangel-marke {", ".mat-banner.mat-mangel-banner {", ".mat-mangel-kasten {", ".mat-psa-karte {",
+                  "@container mat-seite (min-width: 900px)", "@container mat-seite (max-width: 600px)"):
+        assert regel in css, regel
+    # Texte zu Zuordnung, Leserecht, Kontolöschen und „fremd“.
+    assert "kann Mängel melden (das sperrt)" in js
+    assert "Lebensläufe und Journal ansehen, Mängel melden (sperrt)" in lesen("app/material/static/freigaben.js")
+    assert '"Mangelmeldung behält", "Mangelmeldungen behalten")} den Namen.' in lesen("app/static/js/admin.js")
+    assert "Schaden entdeckt? Sag dem Materialwart der Gliederung Bescheid." in lesen("app/material/static/global.js")
+    assert 'OHNE_ZUGANG = "ohne Modulzugang – sieht „Meine PSA“"' in lesen("scripts/material_beispielbestand.py")
+    print("Oberfläche (statisch) bestanden.")
+
+
 if __name__ == "__main__":
     test_melden_zugeordnet()
     test_rechte()
@@ -988,4 +1047,5 @@ if __name__ == "__main__":
     test_kontoloeschen_folgen()
     test_lebenslauf()
     test_migration_13()
+    test_oberflaeche_statisch()
     print("Alle Tests zur Mangelmeldung bestanden.")
