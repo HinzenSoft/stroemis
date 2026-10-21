@@ -3078,6 +3078,194 @@ Am 20.10.2026 entschieden: Nr. 5 geändert, Nr. 6 und 7 bestätigt (siehe „Ent
 - Im Browser bei 1280 und 360 px geprüft (Untermenüs öffnen die Dialoge, das Menü schließt dabei, kein waagerechter
   Bildlauf, keine Konsolenfehler).
 
+## Phase 3 · Lieferung 1 – Meine PSA und Mangelmeldung (20.10.2026)
+
+Lieferung 1 der Phase 3 bringt drei Punkte aus dem Plan (`p3/plan_phase3.md`): **„Meine PSA“** – jede Person sieht
+die Ausrüstung, die ihr zugeordnet ist, auch ohne Stufe im Modul Material –, die **Mangelmeldung**, die den Artikel
+sofort sperrt, und den Abschnitt **„Deine PSA“** in der täglichen Sammelmail. Gebaut nach dem Bauentwurf vom
+20.10.2026 (zweite Fassung nach zwei Kritiken, „Fach“ und „Sicherheit“, mit den Entscheidungen des Betreibers vom
+selben Tag) in zwei Paketen: KERN (Schema, Dienste, Routen, Vorlagen, Tests) und OBERFLÄCHE (`material.js`, CSS,
+Nebenskripte, Browser, Doku). Schemaversion 13, keine neuen Abhängigkeiten. Stand: wartet auf Freigabe.
+
+### Neu
+
+- **Meine PSA** (`services/psa.py`, `routes_psa.py`; Oberfläche in `material.js`, Ansicht `meine_psa`):
+  `/material/meine-psa` (Liste) und `/material/meine-psa/<id>` (ein Artikel) für jedes aktive Konto mit Namen –
+  **auch ohne Modulstufe**; dann fehlen Modulnavigation und Ordnerleiste (`seite.html` mit `nur_psa`), `material.js`
+  kommt ohne beide aus. Gezeigt werden nur die eigenen, nicht ausgesonderten Artikel, dringende zuerst (höchstens 200,
+  darunter „… und n weitere – frag deinen Materialwart“). Je Artikel eine Karte (am Telefon untereinander, ab 900 px
+  Inhaltsbreite zwei nebeneinander): Banner mit dem, was zu tun ist (Mangel gemeldet, gesperrt, verloren, überfällig
+  „nicht verwenden, bis sie geprüft ist“, Lebensdauer erreicht „nicht mehr verwenden“, neu, DEMO), Produktbild
+  (Vorschau, groß nur die Webfassung), Inventarnummer mit Statusmarke, Produkt, Seriennummer, nächste Prüfung,
+  Lebensende, zuletzt geprüft, Gliederung (nur der Name), Sperrgrund, Bemerkung, Herstellerdokumente
+  (Gebrauchsanleitung, Pflegehinweis, Konformitätserklärung, Datenblatt), Titel laufender Rückrufe („bitte deinem
+  Materialwart zeigen“), „Deine Meldungen“ eingeklappt mit Text, Fotos und „offen“/„erledigt“, Knopf „Mangel melden …“
+  (grau; bei eigener offener Meldung ausgegraut mit „Du hast schon gemeldet“) und mit Leserecht „Zum Artikel“. Unter
+  der Liste „Erinnerungen per Mail: an/aus – im Profil ändern“. Ohne Zuordnung: „Dir ist keine Ausrüstung zugeordnet.“
+- **Einstieg**: Kopfleiste „Meine PSA“, sobald dem Konto etwas zugeordnet ist und es nirgends im Bestand lesen darf
+  (ohne Stufe ebenso wie Mitglied ohne Freigabe); `/material` ohne Stufe mit Zuordnung führt auf „Meine PSA“. Wer
+  liest, verwaltet oder prüft, sieht unten auf der Übersicht den Kasten „Dir sind n Artikel zugeordnet – Meine PSA
+  ansehen →“ (gelb mit „davon m nicht einsatzbereit“). Der QR-Link der eigenen PSA führt ohne Leserecht auf ihre Karte,
+  mit Leserecht auf die Artikelansicht; fremde Artikel antworten ohne Stufe weiter mit 403.
+- **Mangel melden** (`services/mangel.py`, `POST /api/material/artikel/<id>/mangel`): die zugeordnete Person und jeder
+  mit lesen, verwalten oder prüfen an der Heimat. Dialog „Mangel melden – <Inventarnummer>“ (an der Karte und an der
+  Artikelansicht gleich): roter Hinweis „Mit dem Melden wird der Artikel sofort gesperrt. Leg ihn sofort beiseite (aus
+  Fahrzeug oder Lager) und gib ihn deinem Materialwart …“, Beschreibung Pflicht (bis 2000 Zeichen, Fehler am Feld),
+  bis zu 3 Fotos über die Datei-Eingabe **ohne** `capture` (am Telefon Kamera oder Galerie) – jede Wahl hängt an die
+  Liste an, „Auswahl entfernen“ leert sie, mehr als drei nimmt sie nicht („Höchstens 3 Fotos.“), „Dein Name steht bei
+  der Meldung.“; „Abbrechen“ grau, **„Melden und sperren“** `btn danger`. Danach Toast und ein Hinweis oben auf der
+  Seite, je nach Antwort: „Gemeldet – der Artikel ist gesperrt (war schon gesperrt). Materialwart und Prüfer bekommen
+  eine Mail. Leg ihn beiseite und gib ihn deinem Materialwart.“ bzw. „… Es ging keine Mail hinaus – sag deinem
+  Materialwart Bescheid und gib ihm den Artikel.“
+- **Sperre durch die Meldung**: in derselben Transaktion nach „Gesperrt“ der Gliederung (Herkunft gemerkt), Grund
+  „Mangel gemeldet am TT.MM.JJJJ“, Journal „Mangel gemeldet“ mit Namen und Nummer der Meldung (im Lebenslauf
+  „(Person)“, ohne Text) – auch bei offenem Prüfentwurf. Fotos: Original sofort nach der Verarbeitung gelöscht, es
+  bleiben Web- und Vorschaufassung ohne EXIF. Eine offene Meldung je Konto und Artikel (409), keine Tagesgrenze.
+- **Sichtbarkeit**: rotes Banner je offener Meldung an der Artikelansicht („MANGEL GEMELDET am … · von <Name>“, Text,
+  Fotos, „Nicht verwenden – beiseitelegen und beim Materialwart abgeben …“), erledigte eingeklappt unter „Gemeldete
+  Mängel“ mit Link auf die Freiprüfung bzw. Aussonderung; Marke „Mangel“ in Listen und Suchtreffern; Kasten
+  **„Gemeldete Mängel“** oben auf der Übersicht (vor den Rückrufen) mit allen Meldungen, nach denen noch kein Prüfer
+  geprüft hat; Hinweis „GEMELDETER MANGEL“ in der Prüfung (Start und Entwurf), Prüfart „außerplanmäßig“ vorgeschlagen.
+  Den Namen des Melders sieht, wer am Artikel ein Grund- oder Prüfrecht hat.
+- **Freiprüfung**: Mit „einsatzbereit“ steht im Festschreib-Dialog je offener Meldung ein Häkchen „Gemeldeten Mangel
+  vom … geprüft“ mit dem Kurztext; „Festschreiben“ ist erst frei, wenn alle abgehakt sind, und nur die abgehakten gehen
+  als `maengel_gesehen` hinaus. Kam während der Prüfung eine Meldung dazu (409), lädt die Prüfung neu und zeigt sie mit
+  eigenem Häkchen. Die Freiprüfung (oder eine Aussonderung) erledigt die Meldung; „instandsetzen“ nicht.
+- **Aussondern** durch den Materialwart nach einer reinen Mangelsperre erst, wenn ein Prüfer den Artikel seither
+  geprüft hat: Bis dahin ist der Knopf ausgegraut, darunter steht der Grund.
+- **Artikelansicht**: „Mangel melden …“ (grau, `btn secondary small`) neben „Sperren“; stehen beide da (Prüfer), sagt
+  eine Hilfezeile den Unterschied („Mangel melden: mit Beschreibung und Fotos, Materialwarte und Prüfer bekommen eine
+  Mail. Sperren: ohne Meldung, mit Sperrgrund.“). Ansicht „fremd“ (QR ohne Recht): „Schaden entdeckt? Sag dem
+  Materialwart der Gliederung Bescheid.“
+- **Mails bei einer Meldung**, sofort im Hintergrund: an die Verwalter der Heimat (ohne sie Material-, ohne diese
+  Plattform-Verwaltung) und jeden Prüfer mit wirksamer Prüffreigabe dort oder darüber; der zugeordneten Person, wenn
+  ein anderer ihre PSA meldet, eine kurze Sperrmitteilung ohne Melder und Text (nicht abbestellbar). Nie an den
+  Melder, nie an DEMO-Adressen; bei DEMO-Artikeln und Umgebungssperre (dev) ins Log statt ins Postfach.
+- **„Deine PSA“ in der Sammelmail** (`services/erinnerung.py`): 30 Tage vor der Prüfung, überfällig, Lebensende in 90
+  Tagen (kein 7-Tage-Schritt), höchstens 50 Zeilen, einziger Link „Meine PSA“; zulässig ohne Modulstufe, Vorgabe an,
+  Abmeldung im Profil (Abschnitt „Meine PSA“, `users.mat_psa_mails`). Wer den Artikel zugleich verwaltet, bekommt ihn
+  wie bisher unter ARTIKEL. Probelauf: Zeile „<Name> – 1 PSA“ bzw. „… 2 Artikel, 1 Freigabe, 1 PSA“.
+- **Texte**: Zuordnung „Die Person sieht sie unter „Meine PSA“, bekommt Erinnerungen per Mail und kann Mängel melden
+  (das sperrt).“; Vorlage „Führungskraft“ der Freigaben „… Lebensläufe und Journal ansehen, Mängel melden (sperrt)“;
+  Dialog „Konto löschen“ „n Mangelmeldungen behalten den Namen.“; Beispielbestand: die Einsatzkraft ohne Modulzugang
+  „sieht „Meine PSA““.
+
+### Migration
+
+- **Schritt 13**, Schemaversion 13, läuft beim Start von selbst, rein additiv und wiederholbar: Tabelle
+  `mat_defect_report` (Artikel, Beschreibung, Fotos, Melder mit Kennung und Namen, Sperrzustand davor, Zeitpunkt,
+  Erledigung durch eine Prüfung) mit sieben Triggern – unveränderlich, nur offen einfügbar, „erledigt“ einmal und nur
+  durch eine abgeschlossene Prüfung desselben Artikels, kein Löschen. Im Kernschema die Spalte `users.mat_psa_mails`
+  (Vorgabe 1). Keine neue Erinnerungsstufe, kein Neuaufbau.
+- Geprüft: frische Datenbank, 12→13, 7→13 an einer Kopie des Stands 7 (Zahlen aller Tabellen wie nach 7→12, Trigger
+  da), zweiter Lauf ohne Änderung.
+- **Rückweg**: Eine Fassung mit Schemaversion 12 übergeht Tabelle und Spalte; gemeldete Artikel bleiben dort gesperrt
+  (Sperrgrund „Mangel gemeldet am …“), die Meldungen sieht sie nicht.
+- Keine Handarbeit beim Update: `docker compose up -d --build` genügt.
+
+### Entscheidungen
+
+Entschieden bzw. bestätigt am 20.10.2026 – die Entscheidungen des Betreibers vor dem Bau (Plan
+`p3/plan_phase3.md`, Bauentwurf 0.2 und 0.3):
+
+1. **Meine PSA für jedes aktive Konto mit Namen und Zuordnung, auch ohne Modulstufe**; nur eigene Artikel; eng
+   geschnitten neben der Modulzugangsprüfung, ohne Trennung und 404-Regeln aufzuweichen; der QR-Link landet sinnvoll.
+2. **Keine Sichtprüfung im System.**
+3. **Mangel melden**: die zugeordnete Person und alle mit lesen, verwalten oder prüfen an der Heimat.
+4. **Jede Mangelmeldung sperrt sofort**; zurück nur über eine Freiprüfung; rotes Banner; sofort Mail an Materialwarte
+   (Rückfall Material-/Plattform-Verwaltung wie bei den Erinnerungen) und Prüfer mit Prüffreigabe; Fotos optional bis 3;
+   Beschreibung Pflicht; Missbrauch: Freiprüfung hebt auf, Journal mit Namen.
+5. **Abschnitt „Deine PSA“** in der Sammelmail: 30 Tage vorher, überfällig, Lebensende in 90 Tagen; Vorgabe an;
+   Abmeldung im Profil; Log, Einmaligkeit, Probelauf und DEMO wie bei den Erinnerungen; Link auf „Meine PSA“.
+6. **Offline und Scan entfallen.**
+7. **F1 – Einstieg**: Kopfleiste für Konten ohne Leserecht im Bestand (präzisiert: auch Mitglied ohne Freigabe – seit
+   18.10.2026 Vorgabe neuer Konten), mit Leserecht Kasten unten auf der Übersicht.
+8. **F2 – Inhalt**: zusätzlich Herstellerdokumente (Gebrauchsanleitung, Pflegehinweis, Konformitätserklärung,
+   Datenblatt – keine Prüfanweisung) und Titel laufender Rückrufe.
+9. **F3 – Aufbewahrung**: Mangelmeldungen (Text, Fotos, Melder) bleiben unbefristet mit dem Artikel; beim Löschen des
+   Kontos verschwindet nur die Kennung, der Name bleibt; der Dialog „Konto löschen“ nennt ihre Zahl.
+10. **F4 – Fotos**: Original sofort löschen (je Foto gleich nach seiner Verarbeitung), es bleiben Web- und
+    Vorschaufassung ohne EXIF.
+11. **A – Meine PSA zeigt zusätzlich** Sperrgrund (nur gesperrt/verloren), Bemerkung, Tag der letzten Prüfung und den
+    Namen der Gliederung (keinen Ordnerpfad); weiter keine Protokolle, keine Prüfhistorie, kein Journal.
+12. **B – Name und Text der Meldung** sieht, wer am Artikel ein Grund- **oder** Prüfrecht hat – auch der externe Prüfer
+    mit befristeter Prüffreigabe: am Artikel, in der Prüfung, im Kasten „Gemeldete Mängel“ und in der Mail an Prüfer.
+    Der Sperrgrund bleibt ohne Namen und Text, der Lebenslauf sagt „(Person)“.
+13. Bestätigt (Bauentwurf 8.2): Sperre auch bei offenem Prüfentwurf, Häkchen je Meldung bei „einsatzbereit“;
+    „instandsetzen“ erledigt nicht; Aussondern durch den Materialwart erst nach einer Prüfung seit der Meldung;
+    Prüfart „außerplanmäßig“; keine Freigabe per Berichtigung; eine offene Meldung je Konto und Artikel, keine
+    Tagesgrenze, kein Zurückziehen; keine Auswahl „Art des Mangels“; Sperrmitteilung an die zugeordnete Person (nicht
+    abbestellbar, keine bei einer Sperre durch den Prüfer); Mails bei DEMO und auf dev ins Log; „Deine PSA“ nur, wer den
+    Artikel nicht auch verwaltet, höchstens 50 Zeilen; „Mangel melden …“ grau, „Melden und sperren“ `btn danger`.
+14. **Prüfer weit oben als Empfänger**: Anders als beim Rückruf (nur wer den Artikel geprüft hat) bekommt jeder Prüfer
+    mit einer Prüffreigabe an der Heimat oder darüber die Mangel-Mail – so gewollt (Entscheidung 4).
+
+### Abweichungen vom Konzept, mit Begründung
+
+1. **Sperre durch die Meldung** – das Konzept ließ nur Prüfer sperren. Grund: Entscheidung 4; ein gemeldeter Mangel
+   soll nie übersehen weiter benutzt werden. Zurück nur über die Freiprüfung.
+2. **Sichtprüfung nicht quittiert** – das Konzept sah „Sichtprüfung quittieren“ vor. Grund: Entscheidung 2.
+3. **Offline und Scan gestrichen** (In-App-Scan, Herstellercodes, Offline/PWA). Grund: Entscheidung nach der Recherche
+   und Entscheidung 6; der QR-Link mit der Kamera-App des Telefons genügt.
+4. **Mails an Zugeordnete** – das Konzept nannte nur Verwalter, Phase 2 · Lieferung 2 „nie an zugeordnete Personen“.
+   Grund: Entscheidung 5, dazu die Sperrmitteilung bei fremder Meldung.
+5. **Ohne Modulstufe die eigene PSA** – der Auftrag sah im MVP keine Rechte ohne Stufe vor. Grund: Entscheidung 1.
+
+### Abweichungen vom Bauentwurf
+
+- KERN: siehe Bauentwurf Abschnitt 11 (u. a. Karte mit den Feldern aus A, `melder` nach B, `label.inline` statt
+  `label.check`, Aussondern antwortet weiter 200).
+- OBERFLÄCHE: Nach dem Melden steht der Text des Toasts zusätzlich als Hinweis oben auf der Seite, bis neu gezeichnet
+  wird – der Toast allein ist am Telefon schnell weg. „Mangel melden …“ in „Meine PSA“ ist ein normaler grauer Knopf
+  (am Telefon volle Breite), an der Artikelansicht `small` wie „Sperren“.
+
+### Schnittstelle
+
+Neu bzw. geändert (Einzelheiten in der Tabelle am Ende): `GET /material/meine-psa[/<id>]`, `GET /api/material/meine-psa`,
+`PUT /api/material/meine-psa/mails`, `POST /api/material/artikel/<id>/mangel`; `GET /m/<token>`, `GET /material`
+(ohne Stufe), Medien (eigene PSA ohne Stufe, Mangelfotos), `GET /api/material/start` (`maengel`, `maengel_gesamt`,
+`meine_psa`), Artikel (`maengel`, `mangel_nur_gemeldet`, Prüfart-Vorschlag), Listen (`mangel`), Prüfung (`maengel`,
+`maengel_gesehen`, 409), Aussondern (409), Artikel löschen (409), Kontofolgen (`maengel`), Probelauf (`mails[].psa`).
+Meldung überall in derselben Gestalt: `{id, created_at, description, fotos: [{vorschau, web}], melder|null, offen,
+lock_before, erledigt: {am, pruefung, art}|null}`.
+
+### Im Browser geprüft
+
+Chromium gegen einen lokalen Server **ohne `SMTP_HOST`** mit Platzhalter-Bestand (OG Musterstadt mit Lager und
+DEMO-Kiste, Produktbild, Gebrauchsanleitung und Prüfanweisung, ein laufender Rückruf, ein Prüfentwurf mit allen
+Punkten), bei 1280 und 360 px, Zeitzone Europe/Berlin, ohne Fehler in der Konsole und ohne waagerechten Bildlauf:
+
+- **Ohne Modulstufe, mit Zuordnung**: keine Modulnavigation, keine Ordnerleiste, Kopfleiste „Meine PSA“ aktiv; drei
+  Karten (überfällig mit Rückruf, einsatzbereit mit Bemerkung, DEMO), Prüfanweisung nicht in der Liste; QR-Link →
+  eigene Karte, fremder Artikel 403; Dialog: leere Beschreibung → Fehler am Feld; Fotos nacheinander 1, 2, „Auswahl
+  entfernen“ 0, dann 1 + 1 + 2 → 3 mit „Höchstens 3 Fotos.“ und ausgegrauter Wahl; gemeldet mit zwei Fotos →
+  „Materialwart und Prüfer bekommen eine Mail …“, Karte gesperrt mit Banner „beiseite … Materialwart“, Knopf
+  ausgegraut, Fotos groß („1 von 2“, Webfassung); DEMO-Artikel → „Es ging keine Mail hinaus …“ (Mail im Log);
+  Profil-Häkchen aus und wieder an; `/material` → „Meine PSA“.
+- **Mitglied ohne Freigabe, mit Zuordnung**: Übersicht mit Navigation, Kopfleiste „Meine PSA“, Kasten unten; „Meine
+  PSA“ ohne „Zum Artikel“; QR fremd → Ansicht „fremd“ mit „Schaden entdeckt? …“.
+- **Materialwart**: Kasten „Gemeldete Mängel“ oben (vor den Rückrufen) mit Namen, eigener Kasten „Meine PSA“ ganz
+  unten, keine Kopfleiste; Banner mit Namen und zwei Fotos, „Aussondern“ ausgegraut mit Erklärung; Marke „Mangel“ in
+  den Suchtreffern; selbst gemeldet → Prüfer bekommt die Mail (der Melder nicht), „Aussondern“ ausgegraut.
+- **Prüfer intern**: „Prüfung starten“, „Sperren“, „Mangel melden …“ mit Hilfezeile; Prüfung starten am gemeldeten
+  Artikel: Hinweis mit Namen, Prüfart „außerplanmäßig“ vorgewählt; 409-Weg: Entwurf offen, im zweiten Reiter meldet
+  die Führungskraft – Festschreiben ohne Häkchen → 409, Prüfung lädt neu, Hinweis erscheint; zweiter Versuch mit
+  Häkchen (Fokus darauf, „Festschreiben“ erst nach dem Abhaken frei) → festgeschrieben, Artikel frei, Meldung
+  „erledigt durch Freiprüfung“ unter „Gemeldete Mängel“.
+- **Externer Prüfer**: Name im Kasten und im Banner (Entscheidung B), „Mangel melden …“ da.
+- **Plattform-Verwaltung**: Dialog „Nutzer löschen“ „… 2 Mangelmeldungen behalten den Namen.“; Probelauf
+  „Person Platzhalter – 1 PSA“.
+
+### Zu prüfen
+
+1. **Am eigenen iPhone**: QR-Link einer zugeordneten PSA ohne Modulstufe, zwei Fotos nacheinander mit der Kamera
+   (Liste zeigt beide), HEIC.
+2. **Mails an Konten ohne Modulstufe** – auch die nicht abbestellbare Sperrmitteilung an die zugeordnete Person – im
+   Verfahrensverzeichnis der Gliederung (Vorschlag im README unter „Austritt und Löschen“) abstimmen.
+3. **Auf dev.strömis.de** die Mangel-Mails im Log des Dienstes lesen, bevor sie in der Produktion hinausgehen.
+4. **Prüfer weit oben**: Ob jeder Prüfer mit Prüffreigabe an einer übergeordneten Gliederung die Mangel-Mail bekommen
+   soll (so gebaut, Entscheidung 4) – nach den ersten Wochen im Betrieb ansehen.
+
 ## Beispielbestand (18.10.2026)
 
 Wunsch: ein umfangreicherer Bestand zum Testen auf dev – nur aus dem vorhandenen Katalog, der dabei unverändert bleibt,
@@ -3310,7 +3498,7 @@ benannte Einträge werden abgewiesen. Hochladen und Export: bis 2 GB. Eine Datei
 Formulars nicht mit, der Import setzt nie eine – eine neue Formularversion aus dem Import erbt aber die Verknüpfung
 der letzten Version. Verknüpft wird in der Instanz, in der die Anleitungen im Wiki stehen.
 
-## Schnittstelle (Phase 1 mit den Nachbesserungen, Phase 2 · Lieferung 1 bis 3)
+## Schnittstelle (Phase 1 mit den Nachbesserungen, Phase 2 · Lieferung 1 bis 3, Phase 3 · Lieferung 1)
 
 Seit Phase 2 gilt jedes Recht an einem Ordner (Freigaben je Ordner, vererbt nach unten): „lesen“ heißt Leserecht am
 Gegenstand (Artikel und Prüfungen: an der Heimat des Artikels), „Grundrecht“ lesen oder verwalten, „Materialwart“
@@ -3403,3 +3591,14 @@ oder Plattform-Verwaltung).
 | `GET /api/material/wiki/seiten?q=` | Material-Verwaltung mit Stufe Mitglied im Wiki (sonst 403 mit Klartext) | Seitenwahl: lesbare Seiten ohne Papierkorb und Vorlagen, höchstens 30, je `{id, titel, icon, reichweite}`; `lesemodus` (Phase 2 · 3) |
 | `PUT /api/material/formulare/<id>/wiki` (`seite`: Kennung oder `null`) | wie die Seitenwahl; auch an benutzten Formularen | Prüfanleitung verknüpfen bzw. entfernen; nicht lesbare, unbekannte oder Papierkorb-Seite 404 „Wiki-Seite nicht gefunden.“; schreibt nur diese Spalte, Journal mit der Seitennummer → `formular` (Phase 2 · 3) |
 | (Übersicht, Ordner, Prüfung, Formular) | – | neu: `start.nacharbeit`, `ordner.nacharbeit` (nur mit verwalten), `pruefung.anleitung` (nur Entwürfe), `formular.wiki` und `formular.wiki_aendern` (nur Material-Verwaltung); `DELETE /ordner/<id>` 409 bei offener Nacharbeit (Phase 2 · 3) |
+| `GET /material/meine-psa`, `GET /material/meine-psa/<id>` | angemeldet (sonst Anmeldung), aktives Konto mit Namen – auch ohne Modulstufe (sonst 403 „… braucht dein Konto einen Namen“); mit `<id>` nur ein eigener, nicht ausgesonderter Artikel (sonst 404 wie unbekannt) | Seite „Meine PSA“ (Ansicht `meine_psa`); ohne Modulzugang ohne Modulnavigation und Ordnerleiste (Phase 3 · 1) |
+| `GET /api/material/meine-psa` | wie oben (401 ohne Anmeldung) | `artikel` (Karten: `id`, `inventory_no`, `serial_no`, `serial_generated`, `produkt` {`manufacturer`, `model`, `description`, `article_no`, `material_kind`, `bild` (Webfassung), `vorschau`}, `status`, `status_text`, `next_due_on`, `retire_by`, `last_inspected_on`, `gesperrt`, `verloren`, `lock_reason`, `notes`, `gliederung`, `demo`, `mangel` {`seit`}, `eigene_maengel`, `artikel_link`, `dokumente`, `rueckruf`), `gesamt`, `mails`, `schwelle_tage` (Phase 3 · 1) |
+| `PUT /api/material/meine-psa/mails` (`an`: ja/nein) | angemeldet (eigenes Konto) | Erinnerungen „Deine PSA“ an/aus → `{an}`; 400 ohne brauchbares `an` (Phase 3 · 1) |
+| `POST /api/material/artikel/<id>/mangel` (Formular: `beschreibung`, `fotos` × 0–3; oder JSON `{beschreibung}`) | die zugeordnete Person (auch ohne Stufe) oder lesen an der Heimat; ohne Stufe und nicht eigen 403, ohne Leserecht mit Stufe 404 | Mangel melden, sperrt sofort → 201 `{mangel, gesperrt, mail}`; 400 (Beschreibung, Fotos), 409 (ausgesondert, schon gemeldet, „Gesperrt“ fehlt), 413 (Phase 3 · 1) |
+| `GET /m/<token>` | angemeldet | eigene PSA ohne Stufe oder ohne Leserecht → „Meine PSA“ des Artikels; sonst wie bisher (ohne Stufe 403, gleich ob es den Artikel gibt) (Phase 3 · 1) |
+| `GET /material` | – | ohne Stufe mit Zuordnung → 302 „Meine PSA“ (Phase 3 · 1) |
+| `GET /media/material/<art>/<datei>` | ohne Stufe: Produktbild (`web`, `thumb`) und Herstellerdokumente der Arten aus „Meine PSA“ zu eigenen Artikeln, eigene Mangelfotos (sonst 403); mit Stufe: Mangelfotos für den Melder und wer den Artikel liest | Mangelfotos ohne `orig` (Phase 3 · 1) |
+| (Übersicht, Artikel, Listen, Prüfung) | – | neu: `start.maengel` (offene, nach denen kein Prüfer geprüft hat, höchstens 50: `id`, `item_id`, `inventory_no`, `produkt`, `created_at`, `kurz`, `fotos`, `melder`), `start.maengel_gesamt`, `start.meine_psa` {`anzahl`, `dringend`} oder `null`; `artikel.maengel` (Meldungen, offene zuerst), `artikel.mangel_nur_gemeldet`, `artikel.pruefarten.vorschlag` „ausserplanmaessig“ nach einer Meldung; Listenzeile `mangel`; `pruefung.maengel` (offene, im Entwurf). `melder` nur mit Grund- oder Prüfrecht (Phase 3 · 1) |
+| `POST /api/material/pruefungen/<id>/festschreiben` | wie bisher | neu: `maengel_gesehen` (abgehakte Kennungen); „einsatzbereit“ bei offener, nicht abgehakter Meldung → 409; Berichtigung mit „einsatzbereit“ bei offener Meldung → 409 (Phase 3 · 1) |
+| `POST /api/material/artikel/<id>/aussondern`, `DELETE /api/material/artikel/<id>` | wie bisher | Aussondern 409 nach reiner Mangelsperre ohne Prüfung danach; Löschen 409, sobald eine Meldung am Artikel hängt (Phase 3 · 1) |
+| `GET /api/admin/users/<id>/material-folgen`, `GET /api/material/erinnerungen/probelauf` | wie bisher | neu: `maengel` (Zahl der Meldungen, die den Namen behalten); `mails[].psa` (Phase 3 · 1) |
