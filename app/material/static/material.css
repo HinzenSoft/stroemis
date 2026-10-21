@@ -2,7 +2,10 @@
    Statusfarben: grün einsatzbereit, gelb bald fällig, rot überfällig, blau neu (Eingangsprüfung offen –
    das Blau der Hinweiskästen), dunkelrot Lebensdauer erreicht, anthrazit gesperrt, grau ausgesondert –
    überall dieselben, in Marken, Kacheln und Zählern. */
-.mat { --mat-gesperrt: var(--schwarz); --mat-lebensdauer: var(--rot-dunkel); }
+.mat { --mat-gesperrt: var(--schwarz); --mat-lebensdauer: var(--rot-dunkel);
+  /* Lesbare Zeilenlänge für Fließtext (Hilfe, Hinweise, Beschreibungen): 38 Geviert sind rund 75 Zeichen – in em,
+     damit kleine Hilfetexte und große Hinweise gleich viele Zeichen je Zeile haben. */
+  --mat-lesemass: 38em; }
 
 /* Unternavigation des Moduls mit der Suchmaske für Nummern */
 .mat-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 4px; margin: -8px 0 18px;
@@ -56,7 +59,7 @@
   border-top: 4px solid var(--grau); text-decoration: none; color: var(--anthrazit); background: var(--weiss); }
 a.mat-kachel:hover { background: var(--grau-hell); }
 .mat-kachel strong { font-size: 1.7rem; line-height: 1.1; font-family: var(--font-marke); }
-.mat-kachel span { font-size: var(--fs-klein); color: var(--grau); }
+.mat-kachel span { font-size: var(--fs-klein); color: var(--grau); overflow-wrap: break-word; }
 .mat-kachel.gesamt { border-top-color: var(--anthrazit); }
 .mat-kachel.s-einsatzbereit { border-top-color: var(--ok); }
 .mat-kachel.s-bald_faellig { border-top-color: var(--gelb-dunkel); }
@@ -376,6 +379,8 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-ergebnis-marke.e-aussondern, .mat-befund.b-mangel { background: var(--rot); color: var(--weiss); }
 .mat-befund.b-nicht_zutreffend { background: var(--grau-hell); color: var(--grau); }
 .mat-pliste tr.mat-entwurf td, .mat-pruefliste tr.mat-entwurf td { background: var(--co-info-fl); }
+/* Links auf hellblauem Grund im dunklen Rot (Kontrast wie in Hinweisen, app.css --rot-auf-flaeche). */
+tr.mat-entwurf a:not(.btn) { color: var(--rot-auf-flaeche); }
 .mat-mangelzeile td { background: var(--rot-hell); }
 .mat-pruefknoepfe { margin: 10px 0 6px; }
 .mat-runden { list-style: none; padding: 0; margin: 0; }
@@ -811,8 +816,8 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
   .mat-tree a { white-space: normal; overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; text-overflow: clip; }
 }
 @media (pointer: coarse) {
-  .mat-tree a { padding-top: 11px; padding-bottom: 11px; }
-  .mat-tree .tg { width: 34px; height: auto; min-height: 44px; align-self: stretch; }
+  .mat-tree a { padding-top: 11px; padding-bottom: 11px; min-height: 44px; }
+  .mat-tree .tg { width: 44px; height: auto; min-height: 44px; align-self: stretch; }
 }
 
 /* Telefon quer und offene Tastatur (wenig Höhe, ohne Maus): Die Bauchbinde rollt im Modul mit weg, statt zusammen mit
@@ -1084,7 +1089,8 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
 }
 
 /* Hilfeabsätze in lesbarer Zeilenlänge – Tabellen, Kacheln und Banner bleiben so breit wie die Seite. */
-#mat-inhalt p.help { max-width: 80ch; }
+#mat-inhalt :is(p.help, p.notice, p.mat-text, p.small) { max-width: var(--mat-lesemass); }
+#mat-inhalt .mat-daten dd { max-width: var(--mat-lesemass); }          /* Stammdaten: am breiten Bildschirm nicht endlos */
 #mat-inhalt p.help.mat-endlos { max-width: none; }
 
 /* Ordnerwahl (Dialog „verschieben nach …“): Ein langer Name bricht um, die Art-Marke daneben bleibt ganz. */
@@ -1092,8 +1098,9 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
 .mat-wahl .mat-wahl-name { min-width: 0; overflow-wrap: anywhere; }
 
 /* Fingerbedienung: Knöpfe, Reiter, Kästchen und Links in Listen mindestens 44 px hoch – nur bei grobem Zeiger, am
-   Rechner bleibt alles, wie es ist. Wo ein größerer Knopf die Zeile aufblähen würde (Inventar-Nr., Zähler,
-   Sortierköpfe), vergrößert ein unsichtbares ::after nur die Trefferfläche. */
+   Rechner bleibt alles, wie es ist. Wo ein größerer Knopf die Zeile aufblähen würde (Inventar-Nr. und andere Textlinks
+   in Listen), vergrößert ein unsichtbares ::after nur die Trefferfläche; Sortierköpfe, Zähler und Klappknöpfe haben
+   seit der Geräte-Prüfung vom 21.10.2026 eine echte Fläche (Abschnitt am Ende). */
 @media (pointer: coarse) {
   :where(#mat-inhalt, #dlg) .btn { min-height: 44px; }
   .mat-filter button, .mat-sortwahl select { min-height: 44px; }
@@ -1106,21 +1113,14 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
     min-width: 44px; min-height: 44px; margin: -8px -4px; }
   .mat-alle-feld, table.list.mat-karten .mat-wahl-feld { min-height: 44px; margin: 0; justify-content: flex-start; }
   #mat-inhalt table.list.mat-tabelle td > a:not(.btn, .mat-pdf),
-  #mat-inhalt :is(.mat-runden li > a, .mat-unterordner li > a, .mat-sort, .mat-summe) { position: relative; }
-  #mat-inhalt table.list.mat-tabelle td > a:not(.btn, .mat-pdf)::after,
-  #mat-inhalt :is(.mat-runden li > a, .mat-unterordner li > a, .mat-sort, .mat-summe)::after { content: ""; position: absolute; inset: -14px -4px; }
-  #mat-inhalt table.list.mat-ue td > a.mat-zahl::after { inset: -14px -10px; }
+  #mat-inhalt :is(.mat-runden li > a, .mat-unterordner li > a, .mat-summe) { position: relative; }
+  #mat-inhalt table.list.mat-tabelle td > a:not(.btn, .mat-pdf, .mat-zahl)::after,
+  #mat-inhalt :is(.mat-runden li > a, .mat-unterordner li > a, .mat-summe)::after { content: ""; position: absolute; inset: -14px -4px; }
   .mat-auf > summary { padding: 11px 0; }
-  .mat-ue-klapp { position: relative; width: 32px; height: 32px; }
-  .mat-ue-klapp::after { content: ""; position: absolute; inset: -6px; }
-  /* Modulnavigation: Reiter, „☰ Ordner“, Lupe, Nummernsuche und „Suchen“ 44 px hoch. Die Brotkrumen bekommen eine
-     höhere Trefferfläche – Polster am Inline-Link, die Zeile selbst bleibt so hoch, wie sie war. */
+  /* Modulnavigation: Reiter, „☰ Ordner“, Lupe, Nummernsuche und „Suchen“ 44 px hoch. Die Brotkrumen: Abschnitt
+     „Nachbesserung nach der Geräte-Prüfung“ am Ende. */
   .mat-reiter > a { display: flex; align-items: center; min-height: 44px; }
   .mat-nav .btn, .mat-nav .mat-suche input, .mat-nav.eng .mat-side-auf, .mat-nav.eng .mat-lupe { min-height: 44px; }
-  /* Die Zeile wird höher statt das Polster größer: Bei umbrechendem Pfad überdeckte sonst ein Link der zweiten Zeile
-     die untere Hälfte der ersten, und ein Tipp landete beim falschen Ordner. */
-  .mat-pfad { line-height: 36px; }
-  .mat-pfad a { padding: 8px 2px; margin: 0 -2px; }
 }
 /* Fälligkeiten je Ordner als Karte am Finger: Beschriftung und Zahl sind zusammen das Ziel. */
 @media (pointer: coarse) {
@@ -1129,7 +1129,8 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
       gap: 5px; min-height: 44px; padding: 0; }
     table.list.mat-ue td.mat-ue-zahl .mat-zahl { min-width: 30px; line-height: 26px; font-size: .8rem; }
     #mat-inhalt table.list.mat-ue td.mat-ue-zahl .mat-zahl, #mat-inhalt table.list.mat-ue td.mat-ue-tag a { position: static; }
-    #mat-inhalt table.list.mat-ue td.mat-ue-zahl > a.mat-zahl::after, #mat-inhalt table.list.mat-ue td.mat-ue-tag a::after { inset: 0; }
+    #mat-inhalt table.list.mat-ue td.mat-ue-zahl > a.mat-zahl::after, #mat-inhalt table.list.mat-ue td.mat-ue-tag a::after {
+      content: ""; position: absolute; inset: 0; }
   }
 }
 
@@ -1472,4 +1473,59 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 }
 @container mat-seite (max-width: 600px) {
   .mat-psa-knoepfe .btn { flex: 1 1 auto; }
+}
+
+/* Nachbesserung nach der Geräte-Prüfung vom 21.10.2026 (st-geraete, drei Engines × 21 Geräte) */
+/* Tippflächen am Finger: Gemessen wird das Bedienelement selbst – ein unsichtbares ::after zählt für das Werkzeug wie
+   für manche Vorlesehilfe nicht. Wo die echte Fläche die Zeile aufblähen würde (Sortierköpfe, Zähler, Datum, Klapp-
+   knöpfe), holen negative Ränder den Platz zurück; Zähler und Datum behalten mit durchsichtigem Rahmen und
+   background-clip ihre bisherige Farbfläche. Nur bei grobem Zeiger – am Rechner bleibt alles, wie es war. */
+@media (pointer: coarse) {
+  #mat-inhalt .mat-sort { min-height: 44px; margin-block: -12.5px; }
+  .mat-filter button { min-width: 44px; }
+  .mat-ue-klapp { width: 44px; height: 44px; margin: -6px; }
+  #mat-inhalt table.list.mat-ue a.mat-zahl { box-sizing: border-box; min-width: 44px; min-height: 44px; margin: -13.5px -9px;
+    border: solid transparent; border-width: 13.5px 9px; background-clip: padding-box; }
+  #mat-inhalt table.list.mat-ue td.mat-ue-tag a { display: inline-block; min-height: 44px; margin-block: -12px;
+    border: solid transparent; border-width: 12px 0; background-clip: padding-box; }
+  :where(#mat-inhalt, #dlg) .lnk { min-height: 44px; }
+  /* Brotkrumen: jede Zeile 44 px hoch, jeder Link so hoch wie seine Zeile (bricht als Ganzes um). */
+  .mat-pfad { line-height: 44px; }
+  .mat-pfad a { display: inline-block; padding: 0 2px; }
+  #kat-q { min-height: 44px; }
+  .mat-side-kopf a { display: inline-flex; align-items: center; min-height: 44px; }
+}
+/* In der Karte (Telefon) ist der Zähler 26 px hoch und 30 px breit (Lieferung 5) – der Rahmen ringsum macht 44 daraus. */
+@media (pointer: coarse) {
+  @container mat-seite (max-width: 600px) {
+    #mat-inhalt table.list.mat-ue td.mat-ue-zahl a.mat-zahl { min-width: 48px; border-width: 9px; margin: -9px; }
+  }
+}
+
+/* Schloss der Systemordner (material.js, schloss): grau wie die Klapp-Dreiecke, nicht bunt; der Abstand als Rand,
+   damit im Link kein unterstrichenes Leerzeichen davorsteht (inline-block nimmt die Unterstreichung nicht mit). */
+.mat-schloss { display: inline-block; margin-right: .3em; filter: grayscale(1); text-decoration: none; }
+/* Kurze Wörter mit Bindestrich im Produktnamen („GS-S“) als ein Stück (material.js, nameHtml). */
+.mat-wort { white-space: nowrap; }
+
+/* Statusfilter im Ordner (und in den anderen Filterzeilen): jeder Knopf so breit wie sein Wort – „bald fällig“ und
+   „Lebensdauer erreicht“ brachen in gleich breiten Knöpfen um und machten die Zeile ungleich hoch. Reicht die Zeile
+   nicht, rutscht der ganze Knopf in die nächste. */
+.mat-filter button { flex: 1 1 auto; white-space: nowrap; }
+
+/* Übersicht am Telefon: Kacheln mit 0 rücken ans Ende und werden zu einer Zeile („0 gesperrt“) – vorher standen vor
+   „Als Nächstes zu prüfen“ mehr als ein Bildschirm voller Nullen. Antippbar bleiben sie (44 px). */
+@container (max-width: 569px) {
+  .mat-statuskacheln .mat-kachel.null { order: 1; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0 6px;
+    min-height: 44px; padding: 8px 12px; }
+  .mat-statuskacheln .mat-kachel.null strong { font-size: 1.1rem; }
+}
+
+/* Sehr breite Bildschirme (ab 1600 px): Der Inhalt wächst bis 2200 px statt bei 1180 px zu enden – Tabellen und Listen
+   nutzen die Breite, Fließtext bleibt beim Lesemaß (oben). Ab 1800 px Inhaltsbreite stehen auf der Übersicht
+   „Fälligkeiten je Ordner“ und „Als Nächstes zu prüfen“ nebeneinander, „Meine PSA“ in drei Spalten. */
+@media (min-width: 1600px) { .page.breit.mat { max-width: 2200px; } }
+@container mat-seite (min-width: 1800px) {
+  .mat-nebeneinander { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 0 40px; align-items: start; }
+  .mat-psa-liste:not(.einzeln) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

@@ -24,6 +24,9 @@
   --rot: #e30613;
   --rot-dunkel: #b3000e;
   --rot-hell: #fdeaec;
+  /* Rot als Schrift auf hellem Grund (Hinweiskasten grau, gewählter Reiter hellrot): Das Hausrot kommt dort nur auf
+     4,4:1 bzw. 4,2:1 – unter WCAG AA (4,5:1). Das dunkle Rot erreicht über 6:1 und bleibt als Rot erkennbar. */
+  --rot-auf-flaeche: var(--rot-dunkel);
   --gelb: #ffed00;
   --gelb-dunkel: #e0cf00;
   --anthrazit: #575756;   /* 80 % Schwarz */
@@ -156,8 +159,9 @@ img { max-width: 100%; }
 .nav a.active { border-bottom-color: var(--gelb); }
 /* 85 % Weiß auf Rot ergab nur 3,8:1 – der eigene Name stand blasser da als jede Schaltfläche. */
 /* Abstand zu „Profil“ als Rand (das Leerzeichen am Ende des Namens fällt im Flex-Element weg, trennt aber beim
-   Vorlesen): Steht „Profil“ ohne Namen im Menü „Mehr“, rückte ein festes Leerzeichen davor es sonst ein. */
-.nav .user { color: var(--weiss); font-weight: 400; opacity: .95; margin-right: .278em; }
+   Vorlesen): Steht „Profil“ ohne Namen im Menü „Mehr“, rückte ein festes Leerzeichen davor es sonst ein. Der Name
+   steht so kräftig wie „Profil“ dahinter – ein Link, eine Schriftstärke (Geräte-Prüfung vom 21.10.2026). */
+.nav .user { color: var(--weiss); font-weight: inherit; opacity: .95; margin-right: .278em; }
 .nav button {
   background: none; border: 0; color: var(--weiss); font: inherit; font-weight: 600;
   padding: 0 12px; cursor: pointer;
@@ -273,6 +277,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--anthrazit); outl
 .help { color: var(--grau); font-size: var(--fs-klein); margin-top: 3px; }
 .error { color: var(--rot); font-weight: 600; margin: 10px 0; }
 .notice { background: var(--grau-hell); border-left: 4px solid var(--gelb); padding: 10px 12px; margin: 12px 0; }
+.notice a { color: var(--rot-auf-flaeche); }
 
 /* Marken (Plaketten) tragen alle dieselbe Form – nur die Farbe unterscheidet sie: gelb für
    Hinweise, grau für Ruhendes, kräftig für die Kategorie eines Albums, Statusfarben im Text.
@@ -1298,7 +1303,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
   flex: 1; padding: 4px 6px; background: none; border: 1px solid var(--linie);
   border-radius: var(--radius); font: inherit; font-size: var(--fs-klein); color: var(--grau); cursor: pointer;
 }
-.c-tabs button.sel { background: var(--rot-hell); border-color: var(--rot); color: var(--rot); font-weight: 700; }
+.c-tabs button.sel { background: var(--rot-hell); border-color: var(--rot); color: var(--rot-auf-flaeche); font-weight: 700; }
 
 /* --- Einstellungen in der Verwaltung ---------------------------------------------------
    Ein Feld trägt drei Angaben: wofür es gut ist, woher der geltende Wert kommt und wie die
@@ -2126,6 +2131,8 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .tree .row-add, .tree .row-menu, .code-copy { opacity: 1; }
 }
 @media (pointer: coarse) {
+  /* Kurze Punkte der Bauchbinde („Wiki“) mindestens 44 px breit – am Telefon waren es 40. */
+  .nav > a, .nav > button { min-width: 44px; justify-content: center; }
   .rundknopf { width: 32px; height: 32px; }
   .lnk { padding: 8px 4px; }
   .c-tabs button { padding: 9px 6px; }

@@ -330,6 +330,55 @@ def test_produktfoto_gross_in_der_produktwahl():
     print("Produktfoto groß in der Produktwahl bestanden.")
 
 
+def test_geraete_nachbesserung():
+    """Nachbesserung nach der Geräte-Prüfung vom 21.10.2026 (statisch; geprüft in drei Engines mit st-geraete):
+    Tippflächen am Finger als echte Fläche des Bedienelements (kein ::after mehr an Sortierköpfen, Zählern,
+    Klappknöpfen), Kontrast über das Token --rot-auf-flaeche, Lesemaß als Token, Legende der Zähler im Bestand,
+    leerer Ordner mit Zahl in den Unterordnern und ohne Filter, kurze Wörter mit Bindestrich als ein Stück,
+    Schloss außerhalb der Unterstreichung, Nullkacheln am Telefon kompakt, breite Bildschirme bis 2200 px."""
+    import re
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    lies = lambda rel: open(os.path.join(wurzel, rel), encoding="utf-8").read()  # noqa: E731
+    js, css, app = lies("app/material/static/material.js"), lies("app/material/static/material.css"), lies("app/static/css/app.css")
+    # Kontrast: Rot auf hellem Grund über ein Token, nicht als Einzelfarbe.
+    assert "--rot-auf-flaeche: var(--rot-dunkel);" in app
+    assert ".notice a { color: var(--rot-auf-flaeche); }" in app
+    assert re.search(r"\.c-tabs button\.sel \{[^}]*color: var\(--rot-auf-flaeche\)", app)
+    # Kopfleiste: Name so kräftig wie „Profil“; kurze Punkte am Finger 44 px breit.
+    assert ".nav .user { color: var(--weiss); font-weight: inherit;" in app
+    assert ".nav > a, .nav > button { min-width: 44px; justify-content: center; }" in app
+    # Tippflächen: echte Flächen; die Sortierköpfe stehen nicht mehr in der ::after-Liste.
+    block = css[css.index("/* Nachbesserung nach der Geräte-Prüfung vom 21.10.2026"):]
+    for regel in ("#mat-inhalt .mat-sort { min-height: 44px; margin-block: -12.5px; }",
+                  ".mat-ue-klapp { width: 44px; height: 44px; margin: -6px; }",
+                  ":where(#mat-inhalt, #dlg) .lnk { min-height: 44px; }", "#kat-q { min-height: 44px; }",
+                  ".mat-pfad { line-height: 44px; }", "background-clip: padding-box;"):
+        assert regel in block, regel
+    assert ".mat-sort)::after" not in css and ".mat-sort, .mat-summe)::after" not in css
+    assert ".mat-ue-klapp::after" not in css
+    assert ".mat-tree .tg { width: 44px;" in css and ".mat-tree a { padding-top: 11px; padding-bottom: 11px; min-height: 44px; }" in css
+    # Lesemaß als Token für Hilfe, Hinweise und Beschreibungen.
+    assert "--mat-lesemass: 38em;" in css
+    assert "#mat-inhalt :is(p.help, p.notice, p.mat-text, p.small) { max-width: var(--mat-lesemass); }" in css
+    # Übersicht: weiche Trennstelle, Nullkacheln, nebeneinander auf breiten Bildschirmen.
+    assert 'kachel("neu", "neu (Eingangs\\u00adprüfung)")' in js
+    assert '${z[s] ? "" : " null"}' in js and ".mat-statuskacheln .mat-kachel.null { order: 1;" in css
+    assert '<div class="mat-nebeneinander">' in js and "@media (min-width: 1600px) { .page.breit.mat { max-width: 2200px; } }" in css
+    # Bestand: Legende mit allen fünf Zählern in der Reihenfolge von zahlen().
+    leg = js[js.index("const ZAEHLER_LEGENDE"):js.index("function zahlen(z)")]
+    folge = [leg.index(f'class="mat-zahl s-{s}"') for s in ("ueberfaellig", "neu", "lebensdauer", "gesperrt", "bald_faellig")]
+    assert folge == sorted(folge) and "${ZAEHLER_LEGENDE}" in js
+    # Ordner: Filter nur mit Artikeln (oder gesetztem Filter), leerer Ordner nennt die Unterordner.
+    assert "${direktAlle || filter || person ? `<div class=\"mat-filterzeile\">" in js
+    assert "Hier liegen keine Artikel direkt – ${unten} liegen in Unterordnern." in js
+    assert ".mat-filter button { flex: 1 1 auto; white-space: nowrap; }" in css
+    # Produktname, Schloss, Katalogsuche.
+    assert '`<span class="mat-wort">${esc(w)}</span>`' in js and ".mat-wort { white-space: nowrap; }" in css
+    assert "🔒 " not in js and '<span class="mat-schloss" aria-hidden="true">🔒</span>' in js
+    assert 'aria-label="${KAT_SUCHE}"' in js and '"Hersteller, Modell, Art.-Nr., Norm"' in js
+    print("Geräte-Nachbesserung bestanden.")
+
+
 if __name__ == "__main__":
     test_mangel_braucht_bemerkung()
     test_urkunde_korrekturen()
@@ -339,3 +388,4 @@ if __name__ == "__main__":
     test_formulare_ordnerfoto_und_suchfeld()
     test_oberflaeche_rechte_je_ordner()
     test_produktfoto_gross_in_der_produktwahl()
+    test_geraete_nachbesserung()

@@ -55,7 +55,12 @@
     const z = produktZusatz(p);
     return `${nameText(p, ohneHersteller)}${z ? ` ${z.text}` : ""}`.trim();
   };
-  const nameHtml = (p, ohneHersteller) => esc(nameText(p, ohneHersteller));
+  /* Kurze Wörter mit Bindestrich („GS-S“, „HB-7“) brechen nicht am Strich um („GS-“ / „S“), sondern rutschen ganz in die
+     nächste Zeile (mat-wort, material.css). Lange behalten ihre Umbruchstelle – sonst ragten sie aus einer schmalen
+     Spalte (Geräte-Prüfung vom 21.10.2026). */
+  const WORT_MAX = 16;
+  const nameHtml = (p, ohneHersteller) => nameText(p, ohneHersteller).split(" ")
+    .map((w) => (w.includes("-") && w.length <= WORT_MAX ? `<span class="mat-wort">${esc(w)}</span>` : esc(w))).join(" ");
   const zusatzHtml = (p) => {
     const z = produktZusatz(p);
     return z ? ` <span class="muted mat-zusatz"${z.voll ? ` title="${esc(z.voll)}"` : ""}>${esc(z.text)}</span>` : "";
@@ -338,6 +343,9 @@
   const plural = (n, eins, viele) => `${n} ${n === 1 ? eins : viele}`;
   const statusMarke = (s, gross) => `<span class="mat-status s-${esc(s)}${gross ? " gross" : ""}">${esc(STATUS[s] || s)}</span>`;
   const demoMarke = (x) => (x ? '<span class="mat-demo" title="DEMO – nicht für echte Prüfungen">DEMO</span>' : "");
+  // Das Schloss vor „Gesperrt“ und „Ausgesondert“: grau wie die Klapp-Dreiecke daneben und ohne Leerzeichen, das im
+  // Link mit unterstrichen würde – den Abstand hält der Rand (mat-schloss, material.css).
+  const schloss = (o) => (o.system_kind ? '<span class="mat-schloss" aria-hidden="true">🔒</span>' : "");
   // Banner an Artikel und Prüfung: DEMO ist ein Artikel eines DEMO-Produkts oder mit Heimat in einem DEMO-Ordner
   // (bestand.demo_sql) – auch ein echtes Katalogprodukt im Beispielbestand.
   const DEMO_ARTIKEL = "DEMO – nicht für echte Prüfungen. Dieser Artikel gehört zu den Demodaten.";
@@ -561,7 +569,7 @@
       const rot = (z.ueberfaellig || 0) + (z.lebensdauer || 0);
       const zahl = o.system_kind ? `<span class="mat-side-anzahl">${Object.values(z).reduce((a, b) => a + b, 0)}</span>`
         : `${rot ? `<span class="mat-zahl s-ueberfaellig" title="überfällig oder Lebensdauer erreicht">${rot}</span>` : ""}${z.neu ? `<span class="mat-zahl s-neu" title="neu – Eingangsprüfung offen">${z.neu}</span>` : ""}`;
-      return `${knopf}<a href="/material/ordner/${o.id}" ${markiert} title="${esc(o.name)}${o.teilweise ? " – nur deine Artikel" : ""}">${o.system_kind ? "🔒 " : ""}${esc(o.name)}</a>${zahl}`;
+      return `${knopf}<a href="/material/ordner/${o.id}" ${markiert} title="${esc(o.name)}${o.teilweise ? " – nur deine Artikel" : ""}">${schloss(o)}${esc(o.name)}</a>${zahl}`;
     };
     const zweig = (pid, tiefe) => (kinder[pid] || []).map((o) => {
       const hat = !!kinder[o.id];
@@ -784,6 +792,13 @@
     Object.values(kinder).forEach((l) => l.sort((a, b) => (a.system_kind ? 1 : 0) - (b.system_kind ? 1 : 0) || a.position - b.position || a.name.localeCompare(b.name, "de")));
     return kinder;
   }
+  // Legende zu zahlen(): jeder Zähler mit seinem Wort statt der Zahl – die Farbe ist nicht das einzige Merkmal, und die
+  // Reihenfolge ist dieselbe wie hinter den Ordnern.
+  const ZAEHLER_LEGENDE = `<p class="help mat-legende">Hinter einem Ordner steht sein <span class="mat-baum-zahl">Bestand</span>,
+      dahinter, wie viele davon <span class="mat-zahl s-ueberfaellig">überfällig</span> <span class="mat-zahl s-neu">neu</span>
+      (Eingangsprüfung offen) <span class="mat-zahl s-lebensdauer">Lebensdauer erreicht</span>
+      <span class="mat-zahl s-gesperrt">gesperrt</span> <span class="mat-zahl s-bald_faellig">bald fällig</span> sind –
+      in dieser Reihenfolge, nur was vorkommt.</p>`;
   function zahlen(z) {
     if (!z) return "";
     const teile = [];
@@ -800,7 +815,7 @@
     if (o.nur_pfad) {
       return `${pfadKnoten(o.name)} ${o.system_kind ? "" : `<span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}`;
     }
-    return `<a href="/material/ordner/${o.id}">${o.system_kind ? "🔒 " : ""}${esc(o.name)}</a>
+    return `<a href="/material/ordner/${o.id}">${schloss(o)}${esc(o.name)}</a>
         ${o.system_kind ? "" : `<span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}${o.teilweise ? ' <span class="small muted">nur deine Artikel</span>' : ""}${demoMarke(o.demo)}
         <span class="mat-baum-zahl">${o.system_kind ? Object.values(o.zaehlung || {}).reduce((a, b) => a + b, 0) : o.bestand}</span>${o.system_kind ? "" : zahlen(o.zaehlung)}`;
   }
@@ -902,21 +917,22 @@
   async function dashboard() {
     const d = await api(`${API}/start`);
     const z = d.zaehlung;
-    const kachel = (s, titel) => `<a class="mat-kachel s-${s}" href="/material/pruefungen?status=${s}"><strong>${z[s] || 0}</strong><span>${esc(titel)}</span></a>`;
+    // Nullen tragen „null“: Am Telefon rücken sie ans Ende und werden zu einer Zeile (material.css, Übersicht).
+    const kachel = (s, titel) => `<a class="mat-kachel s-${s}${z[s] ? "" : " null"}" href="/material/pruefungen?status=${s}"><strong>${z[s] || 0}</strong><span>${esc(titel)}</span></a>`;
     const bestandTeil = DARF.lesen ? `<div class="mat-kachelrahmen"><div class="mat-kacheln mat-statuskacheln">
         <div class="mat-kachel gesamt"><strong>${d.bestand}</strong><span>Artikel im Bestand</span></div>
-        ${kachel("ueberfaellig", "überfällig")}${kachel("neu", "neu (Eingangsprüfung)")}${kachel("bald_faellig", `bald fällig (${d.schwelle_tage} Tage)`)}
+        ${kachel("ueberfaellig", "überfällig")}${kachel("neu", "neu (Eingangs\u00adprüfung)")}${kachel("bald_faellig", `bald fällig (${d.schwelle_tage} Tage)`)}
         ${kachel("gesperrt", "gesperrt")}${kachel("lebensdauer", "Lebensdauer erreicht")}${kachel("einsatzbereit", "einsatzbereit")}
       </div></div>
       <div id="mat-runden"></div>
-      <section class="section"><h2>Fälligkeiten je Ordner</h2>
+      <div class="mat-nebeneinander"><section class="section"><h2>Fälligkeiten je Ordner</h2>
         ${d.ordner_uebersicht.length ? ordnerUebersichtHtml(d.ordner_uebersicht)
           : leer(DARF.gliederung_anlegen ? "Noch keine Gliederung – lege unter „Bestand“ die erste an." : "Noch keine Gliederung angelegt.")}
       </section>
       <section class="section"><h2>Als Nächstes zu prüfen</h2>
         ${d.naechste.length ? artikelTabelle(d.naechste, { pfad: true }) + (d.faellig_gesamt > d.naechste.length ? `<p><a href="/material/pruefungen">Alle ${d.faellig_gesamt} anzeigen →</a></p>` : "")
           : leer("Nichts fällig.")}
-      </section>`
+      </section></div>`
       : `<p class="help">Im <a href="/material/katalog">Katalog</a> stehen alle Produkte mit Prüfformularen und Herstellerdokumenten.
           Die Nummernsuche oben findet eine Herstellerseriennummer auf Wunsch auch außerhalb deines Bereichs – das wird mit deinem Namen protokolliert.</p>`;
     // Ohne Knöpfe im Kopf (Wunsch vom 20.10.2026): Bestand und „Artikel anlegen“ erreicht man über den Reiter „Bestand“.
@@ -1099,7 +1115,7 @@
         return `<td data-l="${esc(kurz.replace(/\u00ad/g, ""))}" class="mat-ue-zahl${n ? "" : " mat-ue-null"}">${n ? `<a class="mat-zahl s-${s}" href="/material/pruefungen?ordner=${o.id}&status=${s}" title="${esc(`${lang} – ${o.name}`)}">${n}</a>` : '<span class="muted">–</span>'}</td>`;
       }).join("");
       return `<tr data-weg="${weg.join(" ")}" class="${o.tiefe ? "" : "mat-ue-oben"}" style="--tiefe:${Math.min(o.tiefe, 8)}" ${weg.some((x) => zu.has(x)) ? "hidden" : ""}>
-        <td data-l="Ordner" class="mat-ue-name">${knopf}<a href="/material/ordner/${o.id}">${o.system_kind ? "🔒 " : ""}${esc(o.name)}</a>${o.system_kind || (o.tiefe && o.kind !== "gliederung") ? "" : ` <span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}${demoMarke(o.demo)}</td>
+        <td data-l="Ordner" class="mat-ue-name">${knopf}<a href="/material/ordner/${o.id}">${schloss(o)}${esc(o.name)}</a>${o.system_kind || (o.tiefe && o.kind !== "gliederung") ? "" : ` <span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}${demoMarke(o.demo)}</td>
         <td data-l="Bestand" class="mat-ue-zahl">${o.bestand}</td>${zahlen}
         <td data-l="nächste Fälligkeit" class="mat-ue-tag${o.naechste ? "" : " mat-ue-null"}">${o.naechste ? `<a class="t-${esc(o.naechste_status)}" href="/material/pruefungen?ordner=${o.id}" title="Alles Fällige in ${esc(o.name)}">${esc(fmtTag(o.naechste))}</a>` : '<span class="muted">–</span>'}</td></tr>`;
     };
@@ -1342,8 +1358,8 @@
         <div class="btn-row">${DARF.gliederung_anlegen ? '<button class="btn secondary" data-act="gliederung"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Gliederung<span class="k-anlegen"> anlegen</span></span></button>' : ""}</div></div>
       <p class="help">Oben stehen die Gliederungen, darunter frei verschachtelt Standorte, Fahrzeuge, Sets. Jede Gliederung hat die
         Systemordner „Gesperrt“ und „Ausgesondert“ – dorthin kommen Artikel nur durch eine Sperre oder Aussonderung.
-        Die Zahl hinter einem Ordner ist sein Bestand; farbig: überfällig, Lebensdauer erreicht, gesperrt, bald fällig.
         ${liste.some((o) => o.nur_pfad) ? "Grau: übergeordnete Ordner, in denen du keine Freigabe hast – nur der Weg zu deinen." : ""}</p>
+      ${ZAEHLER_LEGENDE}
       ${liste.length ? baumHtml(liste) : leer(DARF.lesen ? "Noch kein Ordner angelegt." : "Du hast noch keine Freigabe im Bestand – der Materialwart deiner Gliederung vergibt sie.")}`;
     aktionen = { gliederung: () => ordnerDialog({ kind: "gliederung" }, null) };
   }
@@ -1460,6 +1476,8 @@
   const TASTATUR_NUMMER = 'autocapitalize="characters" autocorrect="off" spellcheck="false" autocomplete="off"';
   const TASTATUR_NAME = 'autocorrect="off" spellcheck="false"';
   const TASTATUR_SUCHE = 'autocorrect="off" spellcheck="false" enterkeyhint="search"';
+  // Im Telefon passte der volle Platzhalter nicht ins Feld (abgeschnitten) – dort ein kürzerer, der volle als Beschriftung.
+  const KAT_SUCHE = "Produkte suchen: Hersteller, Modell, Bemerkung, Artikelnummer, Norm";
   const TASTATUR_ADRESSE = 'inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"';
 
   /* Hinweise, die nur im title stehen, sieht ohne Maus niemand. Dort zeigt ein Tipp auf ein nicht bedienbares Element
@@ -1705,11 +1723,24 @@
       // „Erinnerungsmails aus“ (selbst oder von einem Oberordner geerbt) sieht, wer den Ordner pflegt – dort schaltet man es.
       const erinnerungAus = darfPflegen && d.erinnerungen && d.erinnerungen.aus;
       const geerbtVon = erinnerungAus && !d.erinnerungen.eigen ? d.erinnerungen.geerbt_von : null;
+      // Liegt hier selbst nichts (die Zahlen zählen nur, was das Konto sieht), entfallen die Filter, und der leere Ordner
+      // sagt, wie viele Artikel in den Unterordnern liegen – mit dem Weg zum Fälligen im Zweig (Geräte-Prüfung vom
+      // 21.10.2026). Ist ein Filter gesetzt, bleibt die Zeile – sonst ließe er sich nicht zurücknehmen.
+      const summe = (x) => Object.values(x || {}).reduce((a, b) => a + b, 0);
+      const direktAlle = summe(d.direkt);
+      const unten = Math.max(0, summe(z) - direktAlle);
+      const faelligZweig = (z.ueberfaellig || 0) + (z.neu || 0) + (z.bald_faellig || 0) + (z.lebensdauer || 0);
+      const leerHtml = person ? leer("Hier liegen keine Artikel, die dieser Person zugeordnet sind.")
+        : filter ? leer("Keine Artikel mit diesem Status.")
+          : !unten ? leer("Hier liegen keine Artikel.")
+            : `<p class="mat-leer">${unten === 1 ? "Hier liegen keine Artikel direkt – 1 liegt in einem Unterordner."
+              : `Hier liegen keine Artikel direkt – ${unten} liegen in Unterordnern.`}${faelligZweig
+              ? ` <a href="/material/pruefungen?ordner=${d.id}">Fällige Artikel im ganzen Zweig →</a>` : ""}</p>`;
       const systemText = d.system_kind === "gesperrt"
         ? "Hierher verschiebt eine Sperre die Artikel der Gliederung. Zurück in ihren Herkunftsordner bringt sie nur eine Freiprüfung."
         : "Ausgesonderte Artikel bleiben hier mit ihrem vollen Lebenslauf sichtbar, zählen aber nirgends mehr als Bestand und lassen sich nicht zurückholen.";
       inhalt.innerHTML = `<div class="mat-pfad"><a href="/material/bestand">Bestand</a> / ${bc}</div>
-        <div class="page-head"><h1>${system ? "🔒 " : ""}${esc(d.name)} ${system ? "" : `<span class="mat-art">${esc(ORDNERART[d.kind])}</span>`}${demoMarke(d.demo)}</h1>
+        <div class="page-head"><h1>${schloss(d)}${esc(d.name)} ${system ? "" : `<span class="mat-art">${esc(ORDNERART[d.kind])}</span>`}${demoMarke(d.demo)}</h1>
           <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="unterordner"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Unterordner<span class="k-anlegen"> anlegen</span></span></button>
             <a class="btn secondary small" href="/material/artikel/neu?ordner=${d.id}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span></a>
             ${darfOben ? bearbeitenMenue : '<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>'}` : ""}
@@ -1724,10 +1755,9 @@
           ${erinnerungAus ? `<p class="small">Erinnerungsmails aus${geerbtVon ? ` – geerbt von ${geerbtVon.sichtbar ? `<a href="/material/ordner/${geerbtVon.id}">${esc(geerbtVon.pfad)}</a>` : esc(geerbtVon.pfad)}` : ""}</p>` : ""}</div></div>` : ""}
         ${d.unterordner.length ? `<section class="section"><h2>Unterordner</h2>${unterordnerHtml(d.unterordner)}</section>` : ""}
         <section class="section"><h2>Artikel in diesem Ordner</h2>
-          <div class="mat-filterzeile"><div class="c-tabs mat-filter">${["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"].map((s) => `<button type="button" data-act="filter" data-f="${s}" class="${s === filter ? "sel" : ""}">${s ? esc(STATUS[s]) : "alle"}${s && d.direkt && d.direkt[s] ? ` (${d.direkt[s]})` : ""}</button>`).join("")}</div>
-            ${personWahl}</div>
-          ${d.artikel.length ? artikelTabelle(d.artikel, { auswahl: darfPflegen, pruefen: pruefbar, person: darf.grund, sort })
-            : leer(person ? "Hier liegen keine Artikel, die dieser Person zugeordnet sind." : filter ? "Keine Artikel mit diesem Status." : "Hier liegen keine Artikel.")}
+          ${direktAlle || filter || person ? `<div class="mat-filterzeile"><div class="c-tabs mat-filter">${["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"].map((s) => `<button type="button" data-act="filter" data-f="${s}" class="${s === filter ? "sel" : ""}">${s ? esc(STATUS[s]) : "alle"}${s && d.direkt && d.direkt[s] ? ` (${d.direkt[s]})` : ""}</button>`).join("")}</div>
+            ${personWahl}</div>` : ""}
+          ${d.artikel.length ? artikelTabelle(d.artikel, { auswahl: darfPflegen, pruefen: pruefbar, person: darf.grund, sort }) : leerHtml}
           ${person ? `<p class="small"><a href="/material/pruefungen?ordner=${d.id}&zugeordnet=${encodeURIComponent(person)}">Fällige Artikel dieser Person im ganzen Zweig →</a></p>` : ""}
           ${seitenleiste(d.artikel_gesamt, seite, d.pro_seite)}
           ${darfPflegen ? `<div class="mat-sammel" id="mat-sammel" hidden><span id="mat-sammel-n"></span><div class="btn-row">
@@ -2665,7 +2695,8 @@
               <div id="kat-doks"><p class="help">Wird geladen …</p></div>
               ${DARF.katalog ? '<button class="btn secondary small" data-act="dok-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Dokument<span class="k-anlegen"> anlegen</span></span></button>' : ""}</div></div>`
           : (kats.length ? "" : leer(DARF.katalog ? "Noch keine Kategorien – mit „Kategorie anlegen“." : "Noch keine Kategorien."))}
-        <div class="mat-suchzeile"><input type="search" id="kat-q" placeholder="Produkte suchen: Hersteller, Modell, Bemerkung, Artikelnummer, Norm" value="${esc(q)}" autocomplete="off" ${TASTATUR_SUCHE}></div>
+        <div class="mat-suchzeile"><input type="search" id="kat-q" placeholder="${matchMedia("(max-width: 640px)").matches ? "Hersteller, Modell, Art.-Nr., Norm" : KAT_SUCHE}"
+          aria-label="${KAT_SUCHE}" title="${KAT_SUCHE}" value="${esc(q)}" autocomplete="off" ${TASTATUR_SUCHE}></div>
         <div id="kat-liste"></div>`;
       let los = null;
       $("#kat-q").addEventListener("input", (e) => { clearTimeout(los); los = setTimeout(() => { q = e.target.value.trim(); zeigen(liste); }, 250); });

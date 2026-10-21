@@ -545,7 +545,9 @@ def test_bemerkung_heisst_so():
     for haken in ("toast(`Die Bemerkung ist ein kurzer Zusatz hinter dem Namen – höchstens ${BESCHREIBUNG_MAX} Zeichen",
                   'zeile("Bemerkung", `<span class="mat-text">${esc(p.description)}</span>',      # Produktseite
                   'placeholder="Hersteller, Modell, Bemerkung, Artikelnummer …"',                  # Artikel anlegen
-                  'placeholder="Produkte suchen: Hersteller, Modell, Bemerkung, Artikelnummer, Norm"',  # Katalog
+                  # Katalog: voller Text als Beschriftung und Platzhalter am Rechner (am Telefon kürzer, seit der
+                  # Geräte-Prüfung vom 21.10.2026)
+                  'const KAT_SUCHE = "Produkte suchen: Hersteller, Modell, Bemerkung, Artikelnummer, Norm";',
                   '${meldeDetails(m, "Bemerkung des Melders")}</div>`;'):                         # Produkt aus Meldung
         assert haken in js, haken
     for alt in ('<label for="pd-desc">Beschreibung', "Die bisherige Beschreibung", "Die Beschreibung ist ein kurzer",

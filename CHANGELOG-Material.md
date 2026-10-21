@@ -3653,6 +3653,118 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
        zurück, „erledigt“ zeigt die grauen Marken „zurückgezogen“. Keine Konsolenfehler, kein waagerechtes Scrollen, je
        Dialog höchstens ein roter Knopf.
 
+## Nachbesserung nach der Geräte-Prüfung (21.10.2026)
+
+Der erste Lauf von `st-geraete` (Chromium, Firefox, WebKit × 21 Geräte von 344 bis 5120 px × Übersicht, Bestand,
+Ordner, Katalog; `/home/harness/geraete-laeufe/probelauf-20261021/`) fand zwei Befunde und eine Reihe von
+Verbesserungen. Wunsch: „Behebe die Befunde und die Verbesserungen.“ Nur Oberfläche (`material.js`, `material.css`,
+dazu `app.css` für die Bauchbinde und zwei Farbregeln) – keine Schnittstelle, kein Schema, keine Migration.
+
+### Befunde
+
+1. **„neu (Eingangsprüfung)“ ragte aus seiner Kachel** (Tablet quer, Laptop 1280; Firefox auch 1366/1440 und
+   Fold zugeklappt): Das Wort „(Eingangsprüfung)“ war breiter als eine von sieben Kacheln. Es trägt jetzt eine weiche
+   Trennstelle („Eingangs-/prüfung“), die Kachelbeschriftung bricht notfalls auch im Wort um (`overflow-wrap`).
+2. **Tippflächen unter 44 px am Finger.** Lieferung 5 hatte viele Ziele nur mit einem unsichtbaren `::after`
+   vergrößert – das zählt weder für die Messung noch für jede Vorlesehilfe als Fläche des Elements. Jetzt hat das
+   Bedienelement selbst 44 px, nur bei `(pointer: coarse)`, am Rechner bleibt alles wie es war:
+   - Sortierköpfe (`button.mat-sort`, 19 px hoch): `min-height: 44px` mit negativem Rand – die Kopfzeile bleibt so
+     niedrig wie bisher;
+   - Klappknöpfe der Fälligkeiten (`.mat-ue-klapp`, 32 × 32): 44 × 44, negativer Rand hält Einrückung und Zeilenhöhe;
+   - Zähler in den Fälligkeiten (`a.mat-zahl`) und das Datum „nächste Fälligkeit“ (`.mat-ue-tag a`): durchsichtiger
+     Rahmen mit `background-clip: padding-box` – die farbige Pille bleibt so groß wie bisher (in der Karte 26 px hoch,
+     in der Tabelle 17 px), die Trefferfläche ist 44 px, negative Ränder halten die Zeile;
+   - Textknöpfe `.lnk` im Modul und in Dialogen („Probelauf ansehen“): mindestens 44 px hoch;
+   - Brotkrumen über dem Ordner („Bestand“): Zeilenhöhe 44 px, jeder Link so hoch wie seine Zeile (bricht als Ganzes
+     um – vorher 31 px mit Polster);
+   - Suchfeld im Katalog (`#kat-q`, 36–37 px): 44 px;
+   - Bauchbinde: kurze Punkte („Wiki“, 40 px breit am Telefon) mindestens 44 px breit (`app.css`, nur direkte
+     Punkte der Leiste – im Menü „Mehr“ bleiben sie linksbündig);
+   - feste Ordner- und Kategorienleiste: Einträge 44 statt 43 px hoch, Klappknöpfe 44 statt 34 px breit, die
+     Überschrift „Ordner“/„Kategorien“ (17 px) als 44 px hohe Fläche.
+   Die `::after`-Vergrößerung bleibt nur für Textlinks in Listen (Inventar-Nr., Ordnernamen), die die Messung als
+   Links im Text ausnimmt (WCAG 2.5.8); für die Zähler in der Karte deckt sie weiter die ganze Zelle samt
+   Beschriftung ab.
+
+### Verbesserungen
+
+- **Kontrast (WCAG AA):** Rot auf dem grauen Hinweiskasten (4,40:1) und auf dem hellroten gewählten Filter „alle“
+  (4,22:1) lagen unter 4,5:1. Neues Token `--rot-auf-flaeche` (= `--rot-dunkel`, über 6:1) in `app.css` für Rot als
+  Schrift auf hellem Grund: Links in `.notice`, gewählter Reiter `.c-tabs button.sel` (app-weit, auch Kommentare im
+  Wiki) und Links in Entwurfszeilen des Lebenslaufs (hellblau, 4,32:1 – beim Nachprüfen gefunden).
+- **Legende im Bestand:** Statt „farbig: überfällig, …“ stehen die fünf Zähler selbst in der Legende, jeder mit
+  seinem Wort statt der Zahl, in der Reihenfolge wie hinter den Ordnern – auch das Blau für „neu (Eingangsprüfung
+  offen)“, das vorher fehlte. Die Farbe ist so nicht das einzige Merkmal.
+- **Ordner:**
+  - Liegt im Ordner selbst nichts (nach den Zahlen, die die Seite ohnehin hat: `direkt` und `zaehlung`), entfallen
+    die Statusfilter und „Zugeordnet an …“; ist ein Filter gesetzt, bleibt die Zeile, damit er sich zurücknehmen lässt.
+  - Leerer Ordner mit Artikeln darunter: „Hier liegen keine Artikel direkt – 22 liegen in Unterordnern.“ (bzw. „1 liegt
+    in einem Unterordner“), dahinter „Fällige Artikel im ganzen Zweig →“ (Prüfungen, nach dem Ordner gefiltert),
+    sofern im Zweig etwas fällig ist. Gezählt werden alle Artikel des Zweigs, die das Konto sieht, ausgesonderte
+    eingeschlossen – sie liegen ja dort.
+  - Filterknöpfe so breit wie ihr Wort statt gleich breit: „bald fällig“ und „Lebensdauer erreicht“ brechen nicht mehr
+    um, die Zeile ist gleich hoch; reicht sie nicht, rutscht der ganze Knopf weiter (alle Filterzeilen im Modul).
+- **Sehr breite Bildschirme:** Ab 1600 px Fenster wächst der Inhalt bis 2200 px statt bei 1180 px zu enden. Ab 1800 px
+  Inhaltsbreite stehen auf der Übersicht „Fälligkeiten je Ordner“ und „Als Nächstes zu prüfen“ nebeneinander (2 : 3),
+  „Meine PSA“ in drei Spalten. Fließtext bleibt beim Lesemaß (nächster Punkt). Laptop und kleiner: unverändert.
+- **Lesemaß:** Token `--mat-lesemass: 38em` (rund 75 Zeichen) für Hilfetexte, Hinweise, Beschreibungen und kleine
+  Absätze (`#mat-inhalt :is(p.help, p.notice, p.mat-text, p.small)`), dazu die Werte der Stammdaten (`.mat-daten dd`) – vorher `80ch`, das in der Hausschrift rund
+  100 Zeichen waren. In em, damit kleine und große Schrift gleich viele Zeichen je Zeile haben.
+- **Katalogsuche am Telefon:** bis 640 px der kürzere Platzhalter „Hersteller, Modell, Art.-Nr., Norm“ (der volle
+  wurde abgeschnitten); der volle Text steht als Beschriftung (`aria-label`, `title`) – das Feld hatte vorher keine.
+- **Produktnamen:** Kurze Wörter mit Bindestrich (bis 16 Zeichen, etwa „GS-S“, „HB-7“) stehen als ein Stück
+  (`.mat-wort`, `nameHtml`) und brechen nicht mehr am Strich („GS-“ / „S“); längere behalten ihre Umbruchstelle,
+  damit nichts aus einer schmalen Spalte ragt.
+- **Schloss der Systemordner:** „🔒 Gesperrt/Ausgesondert“ – das Schloss steht außerhalb der Unterstreichung (eigenes
+  Element mit Rand statt Leerzeichen im Link) und grau wie die Klapp-Dreiecke daneben statt bunt; kein neues Zeichen
+  (`schloss()` in Leiste, Bestand, Unterordnern, Fälligkeiten und Ordnertitel).
+- **Bauchbinde:** Der eigene Name steht so kräftig wie „Profil“ dahinter (vorher normal neben fett).
+- **Übersicht am Telefon:** Kacheln mit 0 rücken ans Ende und werden zu einer Zeile („0 gesperrt“, mindestens 44 px
+  hoch, weiter antippbar, mit ihrer farbigen Kante) – nur, wo die Kacheln zu zweit stehen (unter 570 px
+  Kachelbreite). Beim Platzhalterbestand am iPhone (vier Nullen) steht „Fälligkeiten je Ordner“ damit rund 70 px höher.
+
+### Tests
+
+`tests/test_material_l5.py::test_geraete_nachbesserung` (statisch: Token, Tippflächen ohne `::after`, Lesemaß,
+Legende in der Reihenfolge von `zahlen()`, Filter und Leertext im Ordner, `.mat-wort`, Schloss, Katalogsuche,
+Nullkacheln, breite Bildschirme). Angepasst: `tests/test_material_beschreibung.py::test_bemerkung_heisst_so` – der
+volle Platzhalter der Katalogsuche steht jetzt in der Konstante `KAT_SUCHE` (dort weiter mit „Bemerkung“).
+
+### Im Browser geprüft
+
+`st-geraete` gegen eine Kopie des Platzhalterbestands aus dem Probelauf (lokaler Server ohne Mailserver), dieselben
+vier Seiten, alle drei Engines und alle 21 Geräte: `/home/harness/geraete-laeufe/nachbesserung-20261021/`.
+
+| | Probelauf | Nachbesserung |
+| --- | --- | --- |
+| Aufrufe mit Befund (Chromium / Firefox / WebKit, je 84) | 48 / 50 / 48 | 0 / 0 / 0 |
+| T – Tippflächen unter 44 px (Vorkommen) | 926 | 0 |
+| U – Text ragt aus dem Kasten | 9 | 0 |
+| H, F, K, A, X | 0 | 0 |
+| Hinweis Kontrast unter 4,5:1 | 2 Farbpaare (126 Vorkommen) | 0 |
+| Hinweis Zeilen über 90 Zeichen | 3 Absätze (53) | 1 (21) – der Ordnerbaum im Bestand, keine Fließtextzeile |
+
+Fotos angesehen: iPhone (Übersicht ganz, Bestand mit Legende), Tablet quer (Übersicht, leerer Ordner mit
+Unterordnern, Ordner mit Artikeln und Filtern), Laptop 1280 (Firefox), Superwide (Übersicht zweispaltig, Katalog). Dazu
+Prüfungen, Artikel, Systemordner und Meldungen in Chromium bei 360, 390, 1180, 1280 und 5120 px: keine Befunde (der
+Filterknopf „alle“ war dabei erst 36 px breit – jetzt mindestens 44 px).
+
+### Bitte bestätigen
+
+1. **Breite Bildschirme:** Inhalt bis 2200 px und ab 1800 px Inhaltsbreite die Übersicht zweispaltig (Fälligkeiten
+   links, „Als Nächstes zu prüfen“ rechts). Bei 5120 px bleibt rechts und links trotzdem Rand – Tabellen über 4000 px
+   wären schwerer zu lesen als mit Rand.
+2. **Nullkacheln am Telefon:** ans Ende sortiert und einzeilig, statt sie ganz auszublenden oder zusammenzufassen –
+   die Reihenfolge der Kacheln weicht am Telefon damit von der am Rechner ab.
+3. **Lesemaß 38em** auch für Hinweiskästen (`p.notice`): Sie enden am Rechner jetzt bei gut 600 px statt über die
+   ganze Breite zu gehen.
+4. **Dunkles Rot** (`--rot-dunkel`) für Rot als Schrift auf grauem und hellrotem Grund, app-weit (auch der gewählte
+   Reiter der Kommentare im Wiki).
+5. **Schloss grau** (Graustufenfilter auf dem vorhandenen 🔒) statt bunt; der Name in der Bauchbinde fett wie
+   „Profil“ (statt umgekehrt „Profil“ normal).
+6. **Ordnerleiste am Finger:** Klappknöpfe 44 px breit – in der schmalen festen Leiste (Tablet quer, 240 px) bricht
+   „Lager Musterstadt“ dadurch in zwei Zeilen um.
+
 ## Beispielbestand (18.10.2026)
 
 Wunsch: ein umfangreicherer Bestand zum Testen auf dev – nur aus dem vorhandenen Katalog, der dabei unverändert bleibt,
