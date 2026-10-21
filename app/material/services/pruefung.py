@@ -220,9 +220,10 @@ def pruefung_json(p, pruefer_id=None):
         out["einsatzbereit_gesperrt"] = gruende
         out["freipruefung"] = item["lock_state"] in ("gesperrt", "verloren")
         out["arten"] = arten_fuer(item)[0]
-        # Offene Mangelmeldungen – die Grundlage der Häkchen im Festschreib-Dialog; mit Melder für Grund- oder Prüfrecht.
+        # Offene Mangelmeldungen – die Grundlage der Häkchen im Festschreib-Dialog; Text, Fotos und Melder nur für Prüfer
+        # und Materialwart (mangel.darf_inhalt) und die eigene Meldung.
         from . import mangel
-        out["maengel"] = mangel.offene_json(item, mangel.darf_name(item))
+        out["maengel"] = mangel.offene_json(item, mangel.darf_inhalt(item))
     # Prüfanleitung aus dem Wiki (Phase 2 · L3) – nur in offenen Prüfungen; an abgeschlossenen nichts (die heutige
     # Fassung ist nicht die, nach der geprüft wurde). Festgehalten wird sie nirgends.
     from . import wikiverweis

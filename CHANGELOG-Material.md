@@ -3199,7 +3199,9 @@ Entschieden bzw. bestätigt am 20.10.2026 – die Entscheidungen des Betreibers 
     Namen der Gliederung (keinen Ordnerpfad); weiter keine Protokolle, keine Prüfhistorie, kein Journal.
 12. **B – Name und Text der Meldung** sieht, wer am Artikel ein Grund- **oder** Prüfrecht hat – auch der externe Prüfer
     mit befristeter Prüffreigabe: am Artikel, in der Prüfung, im Kasten „Gemeldete Mängel“ und in der Mail an Prüfer.
-    Der Sperrgrund bleibt ohne Namen und Text, der Lebenslauf sagt „(Person)“.
+    Der Sperrgrund bleibt ohne Namen und Text, der Lebenslauf sagt „(Person)“. **Geändert am 21.10.2026** (siehe
+    „Entscheidungen vom 21.10.2026“): Text, Fotos und Name nur noch für Prüfer und Materialwarte des Artikels und den
+    Melder selbst.
 13. Bestätigt (Bauentwurf 8.2): Sperre auch bei offenem Prüfentwurf, Häkchen je Meldung bei „einsatzbereit“;
     „instandsetzen“ erledigt nicht; Aussondern durch den Materialwart erst nach einer Prüfung seit der Meldung;
     Prüfart „außerplanmäßig“; keine Freigabe per Berichtigung; eine offene Meldung je Konto und Artikel, keine
@@ -3228,7 +3230,7 @@ KERN (Bauentwurf Abschnitt 11, hier vollständig):
    A); die Gliederung kommt aus einem einmal geladenen Ordnerbaum – die Zahl der Abfragen hängt nicht an der Zahl der
    Karten.
 2. `melder` in der Schnittstelle und der Name in der Mail für Konten mit Grund- **oder** Prüfrecht (`mangel.darf_name`,
-   Entscheidung B).
+   Entscheidung B). Seit 21.10.2026 `mangel.darf_inhalt` – verwalten oder Prüfrecht, für Text, Fotos und Namen.
 3. `_mailtext_zugeordnet` bekommt das Konto als viertes Argument – „Hallo <Name>“ braucht die Person.
 4. `mangel.py` hat zusätzlich `meldung`, `fotos_json`, `offene_json`, `darf_name`, `_dateien_pruefen`, `_pruefer_von`,
    `NUR_NEUE_PRUEFUNG`, `LISTE_MAX`, `KURZ_MAX`; `offene_liste()` liefert (Zeilen, gesamt). Keine neue Schnittstelle.
@@ -3260,8 +3262,10 @@ Neu bzw. geändert (Einzelheiten in der Tabelle am Ende): `GET /material/meine-p
 `meine_psa`), Artikel (`maengel`, `mangel_nur_gemeldet`, `mangel_eigen_offen`, Prüfart-Vorschlag), Listen (`mangel`),
 Prüfung (`maengel`, `maengel_gesehen`, 409), Aussondern (409), Artikel löschen (409), Kontofolgen (`maengel`), Probelauf
 (`mails[].psa`).
-Meldung überall in derselben Gestalt: `{id, created_at, description, fotos: [{vorschau, web}], melder|null, offen,
-lock_before, erledigt: {am, pruefung, art}|null, wieder_offen: {pruefung, berichtigung, ergebnis, am}|null}` –
+Meldung überall in derselben Gestalt: `{id, created_at, inhalt, description|null, fotos: [{vorschau, web}], melder|null,
+offen, lock_before, erledigt: {am, pruefung, art}|null, wieder_offen: {pruefung, berichtigung, ergebnis, am}|null}` –
+`inhalt: false` (seit 21.10.2026) für Konten, die den Artikel nur lesen und nicht gemeldet haben: dann `description`
+und `melder` `null`, `fotos` leer;
 `wieder_offen`, wenn die erledigende Freiprüfung später zu einem nicht freigebenden Ergebnis berichtigt wurde (dann
 `offen: true`, `erledigt: null`).
 
@@ -3317,6 +3321,33 @@ liefen die ganze Suite und `pytest tests/test_pruefungen_import.py` grün, `st-p
 | 9 | Browser 4 | Ohne Modulstufe hieß der Browser-Reiter „Material – strömis.de“, obwohl die Person nirgends „Material“ sieht | Hinweis | Ohne Modulzugang „Meine PSA – strömis.de“ (`seite.html`, `nur_psa`). Statisch; im Browser |
 | 10 | Browser 5 | Nach „Melden und sperren“ zeichnete die Seite neu und der Fokus fiel auf `body` | Hinweis | Die Quittung oben (`role="status"`) hat `tabindex="-1"` und bekommt nach dem Neuzeichnen den Fokus – in „Meine PSA“ und an der Artikelseite. Statisch; im Browser |
 
+### Entscheidungen vom 21.10.2026
+
+Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
+
+1. **Geändert – Text, Fotos und Name der Mangelmeldung nur für Prüfer und Materialwarte des Artikels** (und den Melder
+   bei seiner eigenen Meldung). Ersetzt Entscheidung B (Nr. 12: jedes Grund- oder Prüfrecht). Sehen dürfen
+   (`mangel.darf_inhalt`): Konten mit Prüfrecht am Artikel (wirksame Prüffreigabe, auch die befristete des externen
+   Prüfers) und Konten, die ihn verwalten (Materialwart; Material- und Plattform-Verwaltung zählen wie verwalten). Wer
+   den Artikel nur liest, sieht weiter das Banner „MANGEL GEMELDET am …“ mit dem Satz „Was gemeldet wurde, sehen nur
+   Prüfer und Materialwart.“, die Marke „Mangel“ und – im Kasten „Gemeldete Mängel“ – Artikel und Tag, aber keinen
+   Text, kein Foto, keinen Namen. **Der Name des Melders folgt derselben Regel** (vorher sah ihn jeder mit Grundrecht):
+   in `artikel.maengel`, `pruefung.maengel`, `start.maengel` und im Verlauf am Artikel („Mangel gemeldet“ von
+   „(Person)“, außer bei der eigenen Meldung). Die Mangelfotos antworten reinen Lesern 404 wie Unbekanntes (auch die
+   Vorschau). Die Trägerin sieht eine fremde Meldung weiter nur als Zeitpunkt („Meine PSA“), der Lebenslauf sagt weiter
+   „(Person)“ ohne Text. Mails: wie bisher an Verwalter (Rückfall Material-/Plattform-Verwaltung) und Prüfer – die
+   volle Mail mit Namen und Text geht nur an Konten, die beides sehen dürfen; reine Leser bekamen ohnehin keine (die
+   Prüfung dafür ist jetzt `darf_inhalt` statt des Leserechts, der Zweig „Jemand mit Zugriff auf den Artikel“ in der
+   Mail ist entfallen). **Nicht geändert**: Prüfanweisungen und Bild-Originale im Katalog bleiben wie bisher für alle
+   mit Modulzugang sichtbar (Zu prüfen Nr. 6). Tests `test_inhalt_nur_pruefer_und_materialwart` (neu),
+   `test_sichtbarkeit`, `test_mail` und `test_material_meine_psa.test_medien` angepasst. Im Browser bei 1280 und
+   360 px gegengeprüft: Leser (Banner ohne Text, Name und Fotos, Kasten nur mit Artikel und Tag, Foto-Adresse 404),
+   Materialwart und externer Prüfer (Text, Name, Fotos groß).
+2. **Bestätigt – wieder offene Meldung nach berichtigter Freiprüfung** steht nicht im Kasten „Gemeldete Mängel“ (ein
+   Prüfer hat den Artikel angesehen), vorgeschlagen ist die Prüfart „Reparatur“ (Prüfung vor Auslieferung Nr. 4).
+3. **Bestätigt – Versandfehler im Hintergrund nur im Log** („Mangel …: Mail an … gescheitert“); die Quittung sagt
+   „unterwegs“ (Prüfung vor Auslieferung Nr. 2).
+
 ### Zu prüfen
 
 1. **Am eigenen iPhone**: QR-Link einer zugeordneten PSA ohne Modulstufe, zwei Fotos nacheinander mit der Kamera
@@ -3329,14 +3360,18 @@ liefen die ganze Suite und `pytest tests/test_pruefungen_import.py` grün, `st-p
 5. **Versand im Hintergrund** (Prüfung Nr. 2): Lehnt der Mailserver eine Mangel-Mail ab, steht das nur im Log
    („Mangel …: Mail an … gescheitert“); der Melder hat da schon „Die Mail an Materialwart und Prüfer ist unterwegs.“
    gelesen. Ohne Mailserver sagt die Quittung „Es ging keine Mail hinaus“. Ob das genügt – die Quittung sagt ohnehin,
-   den Artikel dem Materialwart zu geben –, nach den ersten Meldungen im Betrieb ansehen.
+   den Artikel dem Materialwart zu geben –, nach den ersten Meldungen im Betrieb ansehen. **Bestätigt am 21.10.2026**
+   (Entscheidungen vom 21.10.2026 Nr. 3): bleibt so.
 6. **Prüfanweisung und Bild-Original für Mitglieder ohne Freigabe** (Prüfung Nr. 3, vorbestehend): „Meine PSA“ zeigt
    keine Prüfanweisung und vom Produktbild nur Web- und Vorschaufassung – das schützt aber nur Konten **ohne**
    Modulstufe. Wer Mitglied ist (seit dem 18.10.2026 die Vorgabe neuer Konten), liest wie bisher den ganzen Katalog
    (`/api/material/produkte/<id>`, `/media/material/dok/…`, `/media/material/orig/…`), auch ohne Freigabe. Bewusst so
    gelassen; entscheiden, ob für Konten ohne Grundrecht irgendwo dieselben Grenzen wie in „Meine PSA“ gelten sollen.
+   **Am 21.10.2026 nicht geändert** (Entscheidungen vom 21.10.2026 Nr. 1): Prüfanweisungen und Bild-Originale im
+   Katalog bleiben für alle mit Modulzugang sichtbar; enger geworden sind nur Text, Fotos und Name der Mangelmeldung.
 7. **Berichtigte Freiprüfung** (Prüfung Nr. 4): Eine wieder offene Meldung steht nicht im Kasten „Gemeldete Mängel“
    (ein Prüfer hat den Artikel angesehen), Banner und Marke zeigen sie. Ob das so passt, beim ersten Fall ansehen.
+   **Bestätigt am 21.10.2026** (Entscheidungen vom 21.10.2026 Nr. 2): so lassen, Prüfart „Reparatur“.
 
 ## Beispielbestand (18.10.2026)
 
@@ -3669,8 +3704,8 @@ oder Plattform-Verwaltung).
 | `POST /api/material/artikel/<id>/mangel` (Formular: `beschreibung`, `fotos` × 0–3; oder JSON `{beschreibung}`) | die zugeordnete Person (auch ohne Stufe) oder lesen an der Heimat; ohne Stufe und nicht eigen 403, ohne Leserecht mit Stufe 404 | Mangel melden, sperrt sofort → 201 `{mangel, gesperrt, mail}` (`mail` false bei DEMO, dev-Sperre und ohne Mailserver); 400 (Beschreibung, Fotos), 409 (ausgesondert, schon gemeldet, „Gesperrt“ fehlt), 413 (Phase 3 · 1) |
 | `GET /m/<token>` | angemeldet | eigene PSA ohne Stufe oder ohne Leserecht → „Meine PSA“ des Artikels; sonst wie bisher (ohne Stufe 403, gleich ob es den Artikel gibt) (Phase 3 · 1) |
 | `GET /material` | – | ohne Stufe mit Zuordnung → 302 „Meine PSA“ (Phase 3 · 1) |
-| `GET /media/material/<art>/<datei>` | ohne Stufe: Produktbild (`web`, `thumb`) und Herstellerdokumente der Arten aus „Meine PSA“ zu eigenen Artikeln, eigene Mangelfotos (sonst 403); mit Stufe: Mangelfotos für den Melder und wer den Artikel liest | Mangelfotos ohne `orig` (Phase 3 · 1) |
-| (Übersicht, Artikel, Listen, Prüfung) | – | neu: `start.maengel` (offene, nach denen kein Prüfer geprüft hat, höchstens 50: `id`, `item_id`, `inventory_no`, `produkt`, `created_at`, `kurz`, `fotos`, `melder`), `start.maengel_gesamt`, `start.meine_psa` {`anzahl`, `dringend`} oder `null`; `artikel.maengel` (Meldungen, offene zuerst, `wieder_offen`), `artikel.mangel_nur_gemeldet`, `artikel.mangel_eigen_offen` (Zeitpunkt der eigenen offenen Meldung oder `null`), `artikel.pruefarten.vorschlag` „ausserplanmaessig“ nach einer Meldung; Listenzeile `mangel`; `pruefung.maengel` (offene, im Entwurf). `melder` nur mit Grund- oder Prüfrecht (Phase 3 · 1) |
+| `GET /media/material/<art>/<datei>` | ohne Stufe: Produktbild (`web`, `thumb`) und Herstellerdokumente der Arten aus „Meine PSA“ zu eigenen Artikeln, eigene Mangelfotos (sonst 403); mit Stufe: Mangelfotos für den Melder, Prüfer und Materialwarte des Artikels (seit 21.10.2026 nicht mehr für reine Leser – 404) | Mangelfotos ohne `orig` (Phase 3 · 1) |
+| (Übersicht, Artikel, Listen, Prüfung) | – | neu: `start.maengel` (offene, nach denen kein Prüfer geprüft hat, höchstens 50: `id`, `item_id`, `inventory_no`, `produkt`, `created_at`, `kurz`, `fotos`, `melder`), `start.maengel_gesamt`, `start.meine_psa` {`anzahl`, `dringend`} oder `null`; `artikel.maengel` (Meldungen, offene zuerst, `wieder_offen`), `artikel.mangel_nur_gemeldet`, `artikel.mangel_eigen_offen` (Zeitpunkt der eigenen offenen Meldung oder `null`), `artikel.pruefarten.vorschlag` „ausserplanmaessig“ nach einer Meldung; Listenzeile `mangel`; `pruefung.maengel` (offene, im Entwurf). Text (`description`, `kurz`), Fotos (`fotos`) und `melder` nur für Prüfer und Materialwarte des Artikels und die eigene Meldung, sonst `null` bzw. leer mit `inhalt: false` (Phase 3 · 1, geändert 21.10.2026) |
 | `POST /api/material/pruefungen/<id>/festschreiben` | wie bisher | neu: `maengel_gesehen` (abgehakte Kennungen); „einsatzbereit“ bei offener, nicht abgehakter Meldung → 409; Berichtigung mit „einsatzbereit“ bei offener Meldung → 409 (Phase 3 · 1) |
 | `POST /api/material/artikel/<id>/aussondern`, `DELETE /api/material/artikel/<id>` | wie bisher | Aussondern 409 nach reiner Mangelsperre ohne Prüfung danach; Löschen 409, sobald eine Meldung am Artikel hängt (Phase 3 · 1) |
 | `GET /api/admin/users/<id>/material-folgen`, `GET /api/material/erinnerungen/probelauf` | wie bisher | neu: `maengel` (Zahl der Meldungen, die den Namen behalten); `mails[].psa` (Phase 3 · 1) |

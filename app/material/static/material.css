@@ -1358,6 +1358,10 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-mangel-banner .mat-mangel-titel { font-size: 1.05rem; letter-spacing: .02em; }
 .mat-mangel-banner .mat-mangel-text, .mat-mangel-banner .mat-mangel-zeile { font-weight: 400; }
 .mat-mangel-banner .mat-mangel-zeile { font-size: var(--fs-klein); }
+/* Ohne Recht auf den Inhalt (nur lesen): statt des Texts ein Satz, kursiv – im Banner weiß (Grau auf Rot wäre zu
+   schwach), unter den erledigten Meldungen grau. */
+.mat-mangel-verborgen { font-style: italic; }
+.mat-mangel-alt .mat-mangel-verborgen { color: var(--grau); }
 /* Link „Freiprüfung später berichtigt“ (wieder offen): weiß wie im Rückruf-Banner, sonst Rot auf Rot. */
 .mat-mangel-banner a { color: var(--weiss); text-decoration: underline; }
 .mat-mangel-fotos { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }

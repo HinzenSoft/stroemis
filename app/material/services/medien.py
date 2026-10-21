@@ -10,9 +10,10 @@ nutzt die Indizes aus Schritt 8. Was keinem Besitzer gehört oder wofür das Rec
 (routes.medien: 404).
 
 Seit Phase 3 · L1 kommen die Fotos der Mangelmeldungen dazu (nur Web- und Vorschaufassung – ein Original gibt es
-nicht): für den Melder und wer den Artikel lesen darf. Ohne Modulzugang öffnet darf_datei_psa der zugeordneten Person
-nur, was „Meine PSA“ zeigt: Produktbilder eigener Artikel (nie das Original mit den Aufnahmedaten), eigene Mangelfotos
-und die Herstellerdokumente der Arten in psa.PSA_DOKUMENTARTEN (keine Prüfanweisung, nichts „Sonstiges“)."""
+nicht): für den Melder und für Prüfer und Materialwart des Artikels (mangel.darf_inhalt – Prüfrecht oder verwalten;
+Entscheidung vom 21.10.2026), nicht für den, der ihn nur liest. Ohne Modulzugang öffnet darf_datei_psa der zugeordneten
+Person nur, was „Meine PSA“ zeigt: Produktbilder eigener Artikel (nie das Original mit den Aufnahmedaten), eigene
+Mangelfotos und die Herstellerdokumente der Arten in psa.PSA_DOKUMENTARTEN (keine Prüfanweisung, nichts „Sonstiges“)."""
 import json
 import os
 
@@ -35,6 +36,13 @@ def _schluessel(dateiname):
 def _artikel_sichtbar(item_id):
     i = db.query("SELECT id, folder_id, origin_folder_id, lock_state FROM mat_item WHERE id = ?", (item_id,), one=True)
     return bool(i) and rechte.darf_artikel("lesen", i)
+
+
+def _mangel_inhalt(item_id):
+    """Text und Fotos einer Mangelmeldung: nur Prüfer und Materialwart des Artikels (mangel.darf_inhalt)."""
+    from .mangel import darf_inhalt
+    i = db.query("SELECT id, folder_id, origin_folder_id, lock_state FROM mat_item WHERE id = ?", (item_id,), one=True)
+    return bool(i) and darf_inhalt(i)
 
 
 def _name_ok(art, dateiname):
@@ -112,10 +120,11 @@ def darf_datei(art, dateiname):
                       "WHERE photos_json LIKE ? ESCAPE '\\'", (_muster(key),)):
         if any(os.path.splitext(f)[0] == key for f in json.loads(m["photos_json"] or "[]")) and rechte.darf_meldung(m):
             return True
-    # Mangelfotos (Phase 3 · L1): der Melder und wer den Artikel lesen darf – ein Original gibt es nicht.
+    # Mangelfotos (Phase 3 · L1): der Melder und Prüfer und Materialwart des Artikels – nicht, wer ihn nur liest; ein
+    # Original gibt es nicht.
     if art != "orig":
         u = current_user()
         for d in _mangelfotos(key):
-            if (u and d["reporter_id"] == u["id"]) or _artikel_sichtbar(d["item_id"]):
+            if (u and d["reporter_id"] == u["id"]) or _mangel_inhalt(d["item_id"]):
                 return True
     return False

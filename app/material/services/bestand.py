@@ -842,15 +842,32 @@ def artikel_json(i, voll=False):
         out["durchgang"] = durchgang.verweis(rid) if rid else None
         from . import mangel, rueckruf
         out["rueckrufe"] = rueckruf.aktive_fuer_artikel(i)          # laufende, die ihn betreffen – fürs Banner
-        # Gemeldete Mängel (Phase 3 · L1): offene zuerst, den Melder mit Grund- oder Prüfrecht; ob die Sperre allein aus
-        # einer Meldung stammt, die noch kein Prüfer angesehen hat (dann sondert der Materialwart nicht aus).
-        out["maengel"] = mangel.fuer_artikel(i, darf["grund"] or darf["pruefen"])
+        # Gemeldete Mängel (Phase 3 · L1): offene zuerst; Text, Fotos und Melder nur für Prüfer und Materialwart
+        # (mangel.darf_inhalt – dasselbe wie verwalten oder pruefen in „darf“) und die eigene Meldung; ob die Sperre
+        # allein aus einer Meldung stammt, die noch kein Prüfer angesehen hat (dann sondert der Materialwart nicht aus).
+        inhalt = darf["verwalten"] or darf["pruefen"]
+        out["maengel"] = mangel.fuer_artikel(i, inhalt)
+        if out["journal"] and not inhalt:
+            _melder_verbergen(out["journal"], i["id"])
         out["mangel_nur_gemeldet"] = mangel.nur_gemeldet(i["id"])
         # Die eigene offene Meldung (Tag) – dann ist „Mangel melden …“ ausgegraut statt erst nach dem Absenden 409.
         eigen = mangel.eigene_offene(i["id"])
         out["mangel_eigen_offen"] = eigen["created_at"] if eigen else None
         out["darf_loeschen"] = not out["pruefungen"] and not out["maengel"]
     return out
+
+
+def _melder_verbergen(eintraege, iid):
+    """Wer den Artikel nur liest, sieht im Verlauf bei „Mangel gemeldet“ nicht, wer gemeldet hat (wie der Lebenslauf:
+    „(Person)“) – außer bei seiner eigenen Meldung (zusatz „mangel“ im Eintrag, mangel.darf_inhalt)."""
+    from ...auth import current_user
+    from .beschriftung import PERSON
+    u = current_user()
+    eigene = {r["id"] for r in db.query("SELECT id FROM mat_defect_report WHERE item_id = ? AND reporter_id = ?",
+                                        (iid, u["id"]))} if u else set()
+    for e in eintraege:
+        if e["action"] == "mangel_gemeldet" and (e.get("nachher") or {}).get("mangel") not in eigene:
+            e["user_name"] = PERSON
 
 
 def artikel_sortierung():

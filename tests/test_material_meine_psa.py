@@ -291,8 +291,10 @@ def test_medien():
         assert not os.listdir(os.path.join(tmp, "media", "material", "orig")) or not any(
             f.startswith(os.path.splitext(name)[0]) for f in os.listdir(os.path.join(tmp, "media", "material", "orig")))
         assert t.k["fuehrung"].get(f"/media/material/orig/{name}").status_code == 404
-        # Mit Zugang: der Melder und wer den Artikel liest.
-        assert t.k["fuehrung"].get(eigene[0]).status_code == 200 and t.w.get(fremde[0]).status_code == 200
+        # Mit Zugang: der Melder, Prüfer und Materialwart – nicht, wer den Artikel nur liest (404 wie Unbekanntes,
+        # Entscheidung vom 21.10.2026).
+        assert t.k["fuehrung"].get(eigene[0]).status_code == 404 and t.k["fuehrung"].get(fremde[0]).status_code == 200
+        assert t.w.get(fremde[0]).status_code == 200 and t.k["pruefer"].get(eigene[0]).status_code == 200
         karte = p.get(LISTE).json["artikel"][0]
         assert karte["produkt"]["bild"] == bild and karte["produkt"]["vorschau"] == bild.replace("/web/", "/thumb/")
         assert sorted(d["datei"] for d in karte["dokumente"]) == sorted(erlaubt), karte["dokumente"]

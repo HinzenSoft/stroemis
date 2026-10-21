@@ -30,7 +30,8 @@ from test_material_meine_psa import LISTE, aufbau, melden, post_mangel, zuordnen
 from test_material_trennung import bis_schritt, endversion, erinnerungslog_wie_schritt_11, sql, zeilen  # noqa: E402
 from test_material_ueberblick import ordner_neu, sperren, zustand  # noqa: E402
 
-MELDUNG = {"id", "created_at", "description", "fotos", "melder", "offen", "lock_before", "erledigt", "wieder_offen"}
+MELDUNG = {"id", "created_at", "inhalt", "description", "fotos", "melder", "offen", "lock_before", "erledigt",
+           "wieder_offen"}
 # Eine KOPIE einer Datenbank auf Stand 7 für den Pfad 7 → 13 (test_migration_13) – nur, wenn angegeben; die Quelle
 # bleibt unberührt.
 KOPIE_STAND_7 = os.environ.get("MATERIAL_KOPIE_STAND_7") or ""
@@ -551,9 +552,9 @@ def test_grenzen():
 
 def test_mail():
     """Empfänger: Verwalter der Heimat und Prüfer mit wirksamer Prüffreigabe; nicht der Melder, keine DEMO-Adresse;
-    ohne Verwalter MV, ohne MV PV. Den Namen des Melders bekommt jeder Empfänger mit Grund- oder Prüfrecht – auch der
-    externe Prüfer (Entscheidung B); Text mit Beschreibung, Fotozahl, Link; ein Fehlschlag hält die anderen nicht auf;
-    mail true."""
+    ohne Verwalter MV, ohne MV PV. Jeder Empfänger darf Namen und Text sehen (Prüfer, Materialwart – auch der externe
+    Prüfer; Entscheidung vom 21.10.2026), wer nur liest, bekommt nichts; Text mit Beschreibung, Fotozahl, Link; ein
+    Fehlschlag hält die anderen nicht auf; mail true."""
     from app.material.services import mangel
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
@@ -580,12 +581,12 @@ def test_mail():
         _, _, text = an["extern@example.org"]
         assert text.startswith("Person Platzhalter hat am ") and "Platzhalter: Schnalle klemmt" in text
         assert text.rstrip().endswith("weil du hier prüfen darfst.")
-        with t.app.app_context():                    # ohne Grund- und Prüfrecht hieße es so (kommt nicht vor)
-            from app.material.services import katalog
-            r_ = mangel.meldung(meldungen(t.app, a1)[0]["id"])
+        # Leser (fuehrung, katalog lesen nur) bekommen keine Mail; jeder Empfänger darf den Inhalt sehen.
+        with t.app.test_request_context():
             i_ = item(t.app, a1)
-            assert mangel._mailtext(r_, i_, katalog.produkt(i_["product_id"]), "pruefer", False)[1].startswith(
-                "Jemand mit Zugriff auf den Artikel hat am ")
+            liste = mangel.empfaenger(i_, t.person_id)
+            assert all(len(x) == 2 for x in liste) and "fuehrung@example.org" not in {u["email"] for u, _ in liste}
+            assert all(mangel.darf_inhalt(i_, u) for u, warum in liste if warum != "zugeordnet")
         # Ein Fehlschlag hält die anderen nicht auf.
         alt = (mangel.HINTERGRUND, mangel.send_mail)
         gesendet = []
@@ -712,9 +713,10 @@ def test_mail_still():
 
 
 def test_sichtbarkeit():
-    """artikel.maengel (offen zuerst, Melder mit Grund- oder Prüfrecht – auch für die Prüfsicht, Entscheidung B); Marke
-    „mangel“ in Ordnerliste, Fälligen, Suche; /start.maengel nur eigener Bereich und nur ungeprüfte; pruefung.maengel
-    im Entwurf; Meine PSA: fremde Meldung nur als Zeitpunkt."""
+    """artikel.maengel (offen zuerst; Text, Fotos und Melder nur für Prüfer und Materialwart – auch die Prüfsicht – und
+    den Melder selbst, Entscheidung vom 21.10.2026); Marke „mangel“ in Ordnerliste, Fälligen, Suche; /start.maengel nur
+    eigener Bereich und nur ungeprüfte, für Leser ohne Inhalt; pruefung.maengel im Entwurf; Verlauf für Leser mit
+    „(Person)“; Meine PSA: fremde Meldung nur als Zeitpunkt."""
     with post_mangel(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
         ext, _ = extern(t)
@@ -726,10 +728,23 @@ def test_sichtbarkeit():
         assert melden(t.person, a1, "Zweite Platzhaltermeldung").status_code == 201
         ms = w.get(f"/api/material/artikel/{a1}").json["artikel"]["maengel"]
         assert [m["description"] for m in ms] == ["Zweite Platzhaltermeldung", "Erste Platzhaltermeldung"]
-        assert {m["melder"] for m in ms} == {"fuehrung", "Person Platzhalter"}
-        # Entscheidung B: Name und Text auch für Prüfer – auch den externen mit befristeter Prüffreigabe.
-        assert {m["melder"] for m in ext.get(f"/api/material/artikel/{a1}").json["artikel"]["maengel"]} == {
-            "fuehrung", "Person Platzhalter"}
+        assert {m["melder"] for m in ms} == {"fuehrung", "Person Platzhalter"} and all(m["inhalt"] for m in ms)
+        # Name und Text für Prüfer – auch den externen mit befristeter Prüffreigabe.
+        for c in (ext, p):
+            assert {(m["melder"], m["description"]) for m in c.get(f"/api/material/artikel/{a1}").json["artikel"][
+                "maengel"]} == {("fuehrung", "Erste Platzhaltermeldung"), ("Person Platzhalter", "Zweite Platzhaltermeldung")}
+        # Der Leser (fuehrung) sieht seine eigene Meldung ganz, die fremde nur als Zeitpunkt.
+        art_f = f.get(f"/api/material/artikel/{a1}").json["artikel"]
+        assert [(m["inhalt"], m["description"], m["melder"]) for m in art_f["maengel"]] == [
+            (False, None, None), (True, "Erste Platzhaltermeldung", "fuehrung")], art_f["maengel"]
+        assert art_f["maengel"][0]["fotos"] == [] and art_f["maengel"][0]["offen"]
+        assert "Zweite Platzhaltermeldung" not in json.dumps(art_f, ensure_ascii=False)
+        # Verlauf: „Mangel gemeldet“ mit „(Person)“ für den Leser – außer bei der eigenen; der Materialwart sieht Namen.
+        assert sorted(j["user_name"] for j in art_f["journal"] if j["action"] == "mangel_gemeldet") == [
+            "(Person)", "fuehrung"]
+        assert "Person Platzhalter" not in json.dumps(art_f["maengel"], ensure_ascii=False)   # (zugeordnet steht sie da)
+        assert sorted(j["user_name"] for j in w.get(f"/api/material/artikel/{a1}").json["artikel"]["journal"]
+                      if j["action"] == "mangel_gemeldet") == ["Person Platzhalter", "fuehrung"]
         # Marke in Listen.
         inv = item(t.app, a1)["inventory_no"]
         o = f.get(f"/api/material/ordner/{t.system['gesperrt']}").json["ordner"]["artikel"]
@@ -737,14 +752,18 @@ def test_sichtbarkeit():
         assert all(a["mangel"] is False for a in f.get(f"/api/material/ordner/{t.lager}").json["ordner"]["artikel"])
         assert [a["mangel"] for a in f.get("/api/material/faellig?status=gesperrt").json["artikel"]] == [True]
         assert f.get(f"/api/material/suche?q={inv}").json["treffer"][0]["mangel"] is True
-        # Übersicht: eigener Bereich, Melder nur mit Grundrecht.
+        # Übersicht: eigener Bereich; Kurztext, Fotozahl, Melder nur für Prüfer, Materialwart und die eigene Meldung.
         s = f.get("/api/material/start").json
         assert s["maengel_gesamt"] == 2 and len(s["maengel"]) == 2, s["maengel"]
-        z = s["maengel"][0]
-        assert set(z) == {"id", "item_id", "inventory_no", "produkt", "created_at", "kurz", "fotos", "melder"}
-        assert z["item_id"] == a1 and z["melder"] == "Person Platzhalter" and z["kurz"] == "Zweite Platzhaltermeldung"
+        z, z2 = s["maengel"]
+        assert set(z) == {"id", "item_id", "inventory_no", "produkt", "created_at", "inhalt", "kurz", "fotos", "melder"}
+        assert z["item_id"] == a1 and (z["inhalt"], z["melder"], z["kurz"], z["fotos"]) == (False, None, None, None), z
+        assert (z2["inhalt"], z2["melder"], z2["kurz"], z2["fotos"]) == (True, "fuehrung", "Erste Platzhaltermeldung", 0)
         assert set(z["produkt"]) == {"manufacturer", "model", "description"}
-        assert {x["melder"] for x in ext.get("/api/material/start").json["maengel"]} == {"fuehrung", "Person Platzhalter"}
+        for c in (ext, w):
+            zeilen_ = c.get("/api/material/start").json["maengel"]
+            assert [(x["melder"], x["kurz"]) for x in zeilen_] == [
+                ("Person Platzhalter", "Zweite Platzhaltermeldung"), ("fuehrung", "Erste Platzhaltermeldung")], zeilen_
         g2, _ = gliederung(t.adm, "OG Zwei", standard=False)
         l2 = ordner_neu(t.adm, g2, "Lager Zwei")
         b1 = neuer_artikel(t.adm, t.ids["hms"], l2, serial_no="SI-B")["id"]
@@ -761,6 +780,10 @@ def test_sichtbarkeit():
             "fuehrung", "Person Platzhalter"]
         assert [m["description"] for m in ext.get(f"/api/material/pruefungen/{pr['id']}").json["pruefung"]["maengel"]
                 ] == ["Erste Platzhaltermeldung", "Zweite Platzhaltermeldung"]
+        # Der Leser in der Prüfansicht: nur seine eigene Meldung mit Text.
+        r = f.get(f"/api/material/pruefungen/{pr['id']}")
+        assert r.status_code == 200 and [(m["description"], m["melder"]) for m in r.json["pruefung"]["maengel"]] == [
+            ("Erste Platzhaltermeldung", "fuehrung"), (None, None)], r.get_json()
         # Nach „instandsetzen“ fehlt die Zeile im Kasten, die Marke bleibt.
         neue_sekunde()
         assert festschreiben(p, pr["id"], ergebnis="instandsetzen", grund="Platzhaltergrund").status_code == 200
@@ -774,6 +797,51 @@ def test_sichtbarkeit():
         assert "Erste Platzhaltermeldung" not in json.dumps(t.person.get(LISTE).json, ensure_ascii=False)
         assert a2 and a3
     print("Sichtbarkeit bestanden.")
+
+
+def test_inhalt_nur_pruefer_und_materialwart():
+    """Entscheidung vom 21.10.2026: Text, Fotos und Name einer Meldung sehen Materialwart (verwalten), Material-
+    Verwaltung, interner und externer Prüfer und der Melder selbst; der Leser nur „Mangel gemeldet am …“ – seine
+    Foto-URLs antworten 404 wie Unbekanntes, auch die Vorschau. Die Trägerin sieht die fremde Meldung nur als
+    Zeitpunkt, ihre Fotos nicht (403 ohne Modulstufe)."""
+    with post_mangel(), tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        ext, _ = extern(t)
+        a1 = t.art[0]
+        zuordnen(t, a1, t.person_id)
+        f = t.k["fuehrung"]
+        r = melden(t.w, a1, "Platzhalter: Riss am Gurt", fotos=2)
+        assert r.status_code == 201, r.get_json()
+        urls = [u for x in r.json["mangel"]["fotos"] for u in (x["web"], x["vorschau"])]
+        assert len(urls) == 4
+        for c in (t.w, t.k["katalog"], t.k["pruefer"], ext):
+            m = c.get(f"/api/material/artikel/{a1}").json["artikel"]["maengel"][0]
+            assert (m["inhalt"], m["description"], m["melder"], len(m["fotos"])) == (
+                True, "Platzhalter: Riss am Gurt", "wart", 2), m
+            assert all(c.get(u).status_code == 200 for u in urls)
+        m = f.get(f"/api/material/artikel/{a1}").json["artikel"]["maengel"][0]
+        assert (m["inhalt"], m["description"], m["melder"], m["fotos"], m["offen"]) == (False, None, None, [], True), m
+        assert all(f.get(u).status_code == 404 for u in urls)
+        assert f.get("/media/material/web/gibt-es-nicht.jpg").status_code == 404
+        # Die Trägerin ohne Stufe: fremde Meldung nur als Zeitpunkt, keine Fotos.
+        k = t.person.get(LISTE).json["artikel"][0]
+        assert set(k["mangel"]) == {"seit"} and k["eigene_maengel"] == []
+        assert "Riss am Gurt" not in json.dumps(t.person.get(LISTE).json, ensure_ascii=False)
+        assert all(t.person.get(u).status_code == 403 for u in urls)
+        # Der Leser meldet selbst: seine eigene Meldung ganz, samt Fotos.
+        r = melden(f, a1, "Platzhalter: Schnalle rostig", fotos=1)
+        assert r.status_code == 201 and r.json["mangel"]["inhalt"] and r.json["mangel"]["melder"] == "fuehrung"
+        eigene = [r.json["mangel"]["fotos"][0]["web"], r.json["mangel"]["fotos"][0]["vorschau"]]
+        assert all(f.get(u).status_code == 200 for u in eigene)
+        ms = {m["id"]: m for m in f.get(f"/api/material/artikel/{a1}").json["artikel"]["maengel"]}
+        assert {m["description"] for m in ms.values()} == {None, "Platzhalter: Schnalle rostig"}
+        # Ein zweiter Leser sieht auch diese nicht; der externe Prüfer schon.
+        c2, uid = neues_konto(t.app, "leser2@example.org", name="Leser Zwei", stufe=1)
+        freigeben(t.adm, t.gid, uid, "lesen")
+        assert all(m["description"] is None for m in c2.get(f"/api/material/artikel/{a1}").json["artikel"]["maengel"])
+        assert all(c2.get(u).status_code == 404 for u in eigene + urls)
+        assert all(ext.get(u).status_code == 200 for u in eigene)
+    print("Inhalt nur für Prüfer und Materialwart bestanden.")
 
 
 def _verboten(pfad, befehl, args=()):
@@ -1173,6 +1241,10 @@ def test_oberflaeche_statisch():
     for stelle in ("${esc(m.description)}", "${esc(m.melder)}", "${esc(m.kurz)}", "${esc(k.notes)}", "esc(k.lock_reason)", "esc(k.gliederung)"):
         assert stelle in js, stelle
     assert "${m.description}" not in js and "${m.melder}" not in js
+    # Ohne Recht auf den Inhalt (nur lesen): statt Text ein Satz, im Kasten kein Kurztext (Entscheidung vom 21.10.2026).
+    assert 'const MANGEL_VERBORGEN = "Was gemeldet wurde, sehen nur Prüfer und Materialwart.";' in js
+    assert "m.inhalt ? `<p class=\"${klasse}\">${esc(m.description)}</p>`" in js
+    assert "${m.inhalt ? `<span class=\"mat-mangel-kurz\">${esc(m.kurz)}</span>` : \"\"}" in js
     # Festschreiben: Häkchen je offener Meldung, nur abgehakte gehen hinaus, Knopf erst danach frei.
     fs = js[js.index("async function festschreibDialog("):]
     assert 'data-mangel="${Number(m.id)}"' in fs and "Gemeldeten Mangel vom" in fs
@@ -1234,6 +1306,7 @@ if __name__ == "__main__":
     test_mail_zugeordnet()
     test_mail_still()
     test_sichtbarkeit()
+    test_inhalt_nur_pruefer_und_materialwart()
     test_unveraenderlich()
     test_kontoloeschen_folgen()
     test_lebenslauf()

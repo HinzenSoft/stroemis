@@ -19,10 +19,16 @@ Wird die Freiprüfung, die eine Meldung erledigt hat, später zu einem nicht fre
 und Häkchen kommen zurück, erledigt ist sie erst durch die nächste Freiprüfung oder Aussonderung (Prüfung vor
 Auslieferung L2).
 
+Text, Fotos und Namen des Melders sehen nur Prüfer und Materialwarte des Artikels – Prüfrecht (wirksame Prüffreigabe,
+auch die befristete des externen Prüfers) oder verwalten an seiner Heimat (Material- und Plattform-Verwaltung zählen
+wie verwalten) – und der Melder bei seiner eigenen Meldung (darf_inhalt, Entscheidung vom 21.10.2026). Wer den Artikel
+nur liest, sieht „Mangel gemeldet am …“ und die Marke, keinen Text, kein Foto, keinen Namen; die zugeordnete Person bei
+fremder Meldung nur den Zeitpunkt („Meine PSA“).
+
 Mails sofort, im Hintergrund: an die Verwalter der Heimat (ohne sie die Material-, ohne diese die Plattform-Verwaltung)
-und die Prüfer mit wirksamer Prüffreigabe dort – den Namen des Melders nur, wer am Artikel ein Grundrecht hat; dazu die
-zugeordnete Person, wenn ein anderer ihre PSA meldet (kurz, ohne Melder und Text, nicht abbestellbar). Nie an den Melder,
-nie an DEMO-Adressen. Bei DEMO-Artikeln und unter der Umgebungssperre (erinnerung.gesperrt, dev) stehen die Mails im Log
+und die Prüfer mit wirksamer Prüffreigabe dort – mit Namen und Text, also nur an Konten, die beides sehen dürfen; dazu
+die zugeordnete Person, wenn ein anderer ihre PSA meldet (kurz, ohne Melder und Text, nicht abbestellbar). Nie an den
+Melder, nie an DEMO-Adressen. Bei DEMO-Artikeln und unter der Umgebungssperre (erinnerung.gesperrt, dev) stehen die Mails im Log
 statt im Postfach, ebenso ohne Mailserver (SMTP_HOST leer) – dann sagt die Antwort mail: false. Die Mails hängen nicht
 am Schalter der Erinnerungsmails – sie sind die Nachricht zu einer Sperre.
 
@@ -109,10 +115,18 @@ def fotos_json(r):
             for n in json.loads(r["photos_json"] or "[]")]
 
 
-def darf_name(item, user=None):
-    """Sieht das Konto den Namen des Melders? Mit Grundrecht oder Prüfrecht am Artikel – auch der externe Prüfer mit
-    befristeter Prüffreigabe (Entscheidung B vom 20.10.2026). Den Text der Meldung sieht jeder, der die Meldung sieht."""
-    return rechte.darf_artikel("grund", item, user) or rechte.darf_artikel("pruefen", item, user)
+def darf_inhalt(item, user=None):
+    """Sieht das Konto Text, Fotos und Namen des Melders der Meldungen an diesem Artikel? Nur Prüfer und Materialwart:
+    Prüfrecht (wirksame Prüffreigabe, auch die befristete des externen Prüfers) oder verwalten an der Heimat – die
+    Material- und Plattform-Verwaltung verwalten alles (Entscheidung vom 21.10.2026; vorher Entscheidung B: jedes Grund-
+    oder Prüfrecht). Die eigene Meldung sieht der Melder immer ganz (eigen)."""
+    return rechte.darf_artikel("verwalten", item, user) or rechte.darf_artikel("pruefen", item, user)
+
+
+def eigen(r, user=None):
+    """Ist die Meldung r die des Kontos?"""
+    user = user or current_user()
+    return bool(user and r["reporter_id"] is not None and r["reporter_id"] == user["id"])
 
 
 def _art(kind):
@@ -166,22 +180,25 @@ def _nachrechnen(pid, erledigt, liste):
     return False, erledigt, None
 
 
-def mangel_json(r, darf_grund, st=None):
-    """Eine Meldung, überall in derselben Gestalt. darf_grund: darf_name(item) des anfragenden Kontos – Grundrecht oder
-    Prüfrecht am Artikel; sonst kein Name des Melders. st: ihr stand(), sonst hier gerechnet. wieder_offen: die
-    erledigende Freiprüfung wurde später berichtigt (jetzt: ergebnis) – die Meldung ist wieder offen."""
+def mangel_json(r, darf, st=None):
+    """Eine Meldung, überall in derselben Gestalt. darf: darf_inhalt(item) des anfragenden Kontos – ohne es (und nicht
+    die eigene Meldung) bleiben Text, Fotos und Melder leer (description None, fotos [], melder None; inhalt false).
+    st: ihr stand(), sonst hier gerechnet. wieder_offen: die erledigende Freiprüfung wurde später berichtigt (jetzt:
+    ergebnis) – die Meldung ist wieder offen."""
     offen, erledigt, wieder = st or stand([r])[r["id"]]
-    return {"id": r["id"], "created_at": r["created_at"], "description": r["description"], "fotos": fotos_json(r),
-            "melder": r["reporter_name"] if darf_grund else None, "offen": offen,
+    sicht = darf or eigen(r)
+    return {"id": r["id"], "created_at": r["created_at"], "inhalt": sicht,
+            "description": r["description"] if sicht else None, "fotos": fotos_json(r) if sicht else [],
+            "melder": r["reporter_name"] if sicht else None, "offen": offen,
             "lock_before": r["lock_before"], "erledigt": erledigt, "wieder_offen": wieder}
 
 
-def fuer_artikel(item, darf_grund):
+def fuer_artikel(item, darf):
     """Alle Meldungen eines Artikels: offene zuerst, dann erledigte – je neueste zuerst, höchstens LISTE_MAX."""
     rows = db.query(_MELDUNG_SQL + f"WHERE d.item_id = ? ORDER BY NOT {OFFEN_SQL}, d.created_at DESC, d.id DESC "
                     "LIMIT ?", (item["id"], LISTE_MAX))
     st = stand(rows)
-    return sorted((mangel_json(r, darf_grund, st[r["id"]]) for r in rows), key=lambda m: not m["offen"])
+    return sorted((mangel_json(r, darf, st[r["id"]]) for r in rows), key=lambda m: not m["offen"])
 
 
 def _offen(bedingung, args):
@@ -191,9 +208,9 @@ def _offen(bedingung, args):
     return [(r, st[r["id"]]) for r in rows if st[r["id"]][0]]
 
 
-def offene_json(item, darf_grund):
+def offene_json(item, darf):
     """Die offenen Meldungen eines Artikels (älteste zuerst) – für den Entwurf einer Prüfung (Häkchen je Meldung)."""
-    return [mangel_json(r, darf_grund, s) for r, s in _offen("d.item_id = ?", (item["id"],))]
+    return [mangel_json(r, darf, s) for r, s in _offen("d.item_id = ?", (item["id"],))]
 
 
 def offene_ids(iid):
@@ -225,8 +242,8 @@ def offene_artikel():
 def offene_liste():
     """Für den Kasten „Gemeldete Mängel“ der Übersicht: offene Meldungen im eigenen Bereich, nach denen noch kein Prüfer
     geprüft hat (UNGEPRUEFT – nach „instandsetzen“ fällt die Zeile heraus, Marke und Banner bleiben), neueste zuerst,
-    höchstens LISTE_MAX. Liefert (Zeilen, gesamt); den Namen des Melders je Zeile nur mit Grund- oder Prüfrecht am
-    Artikel (darf_name)."""
+    höchstens LISTE_MAX. Liefert (Zeilen, gesamt). Kurztext, Fotozahl und Melder je Zeile nur für Prüfer und
+    Materialwart des Artikels und den Melder selbst (darf_inhalt, eigen) – sonst nur Artikel und Tag (inhalt false)."""
     bedingung = f"WHERE {UNGEPRUEFT} AND {rechte.artikel_filter('i')}"
     gesamt = db.query(f"SELECT COUNT(*) AS n FROM mat_defect_report d JOIN mat_item i ON i.id = d.item_id {bedingung}",
                       one=True)["n"]
@@ -236,14 +253,15 @@ def offene_liste():
                     "LIMIT ?", (LISTE_MAX,))
     out = []
     for r in rows:
+        sicht = eigen(r) or darf_inhalt(r)
         kurz = " ".join(r["description"].split())
         out.append({"id": r["id"], "item_id": r["item_id"], "inventory_no": r["inventory_no"],
                     "produkt": {"manufacturer": r["manufacturer"], "model": r["model"],
                                 "description": r["product_description"] or ""},
-                    "created_at": r["created_at"],
-                    "kurz": kurz if len(kurz) <= KURZ_MAX else kurz[:KURZ_MAX - 1].rstrip() + "…",
-                    "fotos": len(json.loads(r["photos_json"] or "[]")),
-                    "melder": r["reporter_name"] if darf_name(r) else None})
+                    "created_at": r["created_at"], "inhalt": sicht,
+                    "kurz": (kurz if len(kurz) <= KURZ_MAX else kurz[:KURZ_MAX - 1].rstrip() + "…") if sicht else None,
+                    "fotos": len(json.loads(r["photos_json"] or "[]")) if sicht else None,
+                    "melder": r["reporter_name"] if sicht else None})
     return out, gesamt
 
 
@@ -389,13 +407,13 @@ def _pruefer_von(h, demo):
 
 
 def empfaenger(item, melder_id, demo=False):
-    """Wer die Mail zu einer Meldung bekommt – [(Konto, warum, mit_name)]: die Verwalter der Heimat
-    (erinnerung.ordnerverwalter – Material- und Plattform-Verwaltung eingeschlossen, wenn dort eingetragen), ohne sie
-    die Material-, ohne diese die Plattform-Verwaltung; dazu die Prüfer mit wirksamer Prüffreigabe dort (auch weit
-    oben – anders als beim Rückruf, Entscheidung 4). Jeder muss den Artikel lesen dürfen; den Namen des Melders bekommt,
-    wer ein Grund- oder Prüfrecht hat (darf_name). Zuletzt die zugeordnete Person, wenn ein anderer meldet (warum „zugeordnet“, ohne
-    Namen) – ohne Modulstufe und ohne Blick auf die Abmeldung der Erinnerungen. Nie der Melder; jede Adresse einmal
-    (wer verwaltet oder prüft, bekommt nur die volle Mail)."""
+    """Wer die Mail zu einer Meldung bekommt – [(Konto, warum)]: die Verwalter der Heimat (erinnerung.ordnerverwalter –
+    Material- und Plattform-Verwaltung eingeschlossen, wenn dort eingetragen), ohne sie die Material-, ohne diese die
+    Plattform-Verwaltung; dazu die Prüfer mit wirksamer Prüffreigabe dort (auch weit oben – anders als beim Rückruf,
+    Entscheidung 4). Die volle Mail trägt Namen und Text: Jeder dieser Empfänger muss sie sehen dürfen (darf_inhalt –
+    verwalten oder Prüfrecht am Artikel); wer nur liest, bekommt keine. Zuletzt die zugeordnete Person, wenn ein
+    anderer meldet (warum „zugeordnet“, ohne Namen und Text) – ohne Modulstufe und ohne Blick auf die Abmeldung der
+    Erinnerungen. Nie der Melder; jede Adresse einmal (wer verwaltet oder prüft, bekommt nur die volle Mail)."""
     h = bestand.heimat(item)
     ids = erinnerung.ordnerverwalter(h)
     konten = erinnerung._konten(ids)
@@ -409,17 +427,17 @@ def empfaenger(item, melder_id, demo=False):
         adr = (u.get("email") or "").strip().casefold()
         if u["id"] == melder_id or u["id"] in gesehen or not adr or adr in adressen:
             continue
-        if not rechte.darf_artikel("lesen", item, u):
+        if not darf_inhalt(item, u):
             continue
         gesehen.add(u["id"])
         adressen.add(adr)
-        out.append((u, warum, darf_name(item, u)))
+        out.append((u, warum))
     z = item["assigned_user_id"]
     if z and z != melder_id and z not in gesehen:
         u = erinnerung._konten([z]).get(z)
         adr = ((u or {}).get("email") or "").strip().casefold()
         if u and psa.konto(u) and erinnerung._erreichbar(u, demo) and adr not in adressen:
-            out.append((u, "zugeordnet", False))
+            out.append((u, "zugeordnet"))
     return out
 
 
@@ -427,16 +445,15 @@ def _produkt_kurz(p):
     return " ".join(t for t in (p["manufacturer"], p["model"]) if t)
 
 
-def _mailtext(r, item, produkt, warum, mit_name):
-    """Betreff und Text an Materialwarte, Prüfer und Verwaltung."""
+def _mailtext(r, item, produkt, warum):
+    """Betreff und Text an Materialwarte, Prüfer und Verwaltung – mit Namen und Text (empfaenger: darf_inhalt)."""
     basis = (current_app.config.get("BASE_URL") or "").rstrip("/")
     site = current_app.config.get("SITE_NAME") or "strömis.de"
     zeit = _ortszeit(r["created_at"])
     wann = f"am {zeit.strftime('%d.%m.%Y')} um {zeit.strftime('%H:%M')}"
-    wer = r["reporter_name"] if mit_name else "Jemand mit Zugriff auf den Artikel"
     gesperrt = r["lock_before"] == "frei"
     gl = bestand.gliederung_von(item["folder_id"])
-    zeilen = [f"{wer} hat {wann} einen Mangel gemeldet."]
+    zeilen = [f"{r['reporter_name']} hat {wann} einen Mangel gemeldet."]
     if gesperrt:
         zeilen[0] += (f" Der Artikel ist damit gesperrt und liegt in „Gesperrt“ der Gliederung "
                       f"{gl['name'] if gl else '(ohne Gliederung)'}. Freigeben kann ihn nur ein Prüfer mit einer "
@@ -493,11 +510,11 @@ def _benachrichtigen(mid):
     produkt = katalog.produkt(item["product_id"])
     demo = bestand.ist_demo(item["id"])
     mails = []
-    for u, warum, mit_name in empfaenger(item, r["reporter_id"], demo=demo):
+    for u, warum in empfaenger(item, r["reporter_id"], demo=demo):
         if warum == "zugeordnet":
             betreff, inhalt = _mailtext_zugeordnet(item, produkt, r, u)
         else:
-            betreff, inhalt = _mailtext(r, item, produkt, warum, mit_name)
+            betreff, inhalt = _mailtext(r, item, produkt, warum)
         mails.append((u["email"].strip(), f"[DEMO] {betreff}" if demo else betreff, inhalt, warum))
     if not mails:
         return False

@@ -4278,7 +4278,7 @@
         ${zuHaken.length ? `<fieldset class="mat-fs-maengel"><legend>Gemeldete Mängel</legend>
           ${zuHaken.map((m) => `<div class="mat-fs-mangel"><label class="inline"><input type="checkbox" data-mangel="${Number(m.id)}">
             Gemeldeten Mangel vom ${esc(S.fmtDate(m.created_at))} geprüft</label>
-            <p class="small mat-text">${esc(m.description.length > 300 ? `${m.description.slice(0, 299)}…` : m.description)}</p></div>`).join("")}
+            ${m.description ? `<p class="small mat-text">${esc(m.description.length > 300 ? `${m.description.slice(0, 299)}…` : m.description)}</p>` : ""}</div>`).join("")}
           <p class="help" id="fs-maengel-hilfe">Freigeben kannst du erst, wenn du jeden gemeldeten Mangel geprüft hast.</p></fieldset>` : ""}
         ${daten.ergebnis === "aussondern" ? `<p class="mat-fs-warnung"><strong>„aussondern“ ist endgültig.</strong> Der Artikel wandert nach „Ausgesondert“ und zählt nicht mehr als Bestand; dazu entsteht ein Aussonderungsprotokoll.</p>` : ""}
         ${pr.berichtigt ? `<p>Diese Berichtigung ersetzt ${pr.berichtigt.protokoll_id ? `Protokoll ${esc(pr.berichtigt.protokoll_id)}` : "die ursprüngliche Prüfung"}; das Original bleibt unverändert erhalten.</p>` : ""}
@@ -5791,15 +5791,18 @@
     });
   }
 
-  // Banner am Artikel: je offener Meldung ein roter Kasten unter dem GESPERRT-Banner. Den Melder nennt der Server nur
-  // dem, der ihn sehen darf (Grund- oder Prüfrecht).
+  // Banner am Artikel: je offener Meldung ein roter Kasten unter dem GESPERRT-Banner. Text, Fotos und Melder schickt der
+  // Server nur Prüfern und Materialwarten des Artikels und dem Melder selbst (inhalt; Entscheidung vom 21.10.2026) – wer
+  // nur liest, sieht den Zeitpunkt und den Satz MANGEL_VERBORGEN.
+  const MANGEL_VERBORGEN = "Was gemeldet wurde, sehen nur Prüfer und Materialwart.";
+  const mangelText = (m, klasse) => (m.inhalt ? `<p class="${klasse}">${esc(m.description)}</p>` : `<p class="${klasse} mat-mangel-verborgen">${MANGEL_VERBORGEN}</p>`);
   // Die erledigende Freiprüfung wurde später berichtigt und gibt nicht mehr frei – die Meldung ist wieder offen.
   const wiederOffen = (m) => (m.wieder_offen ? `<p class="mat-mangel-zeile mat-mangel-wieder"><a href="/material/pruefung/${Number(m.wieder_offen.berichtigung)}">Freiprüfung später berichtigt</a> (jetzt: ${esc(ERGEBNIS[m.wieder_offen.ergebnis] || m.wieder_offen.ergebnis)}) – die Meldung ist wieder offen, die nächste Freiprüfung hakt sie ab.</p>` : "");
 
   function mangelBanner(m) {
     return `<div class="mat-banner mat-mangel-banner" role="note">
       <p class="mat-mangel-titel">MANGEL GEMELDET am ${esc(tagZeit(m.created_at))}${m.melder ? ` · von ${esc(m.melder)}` : ""}</p>
-      <p class="mat-text mat-mangel-text">${esc(m.description)}</p>
+      ${mangelText(m, "mat-text mat-mangel-text")}
       ${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}
       ${wiederOffen(m)}
       <p class="mat-mangel-zeile">Nicht verwenden – beiseitelegen und beim Materialwart abgeben. Freigeben kann ihn nur ein Prüfer mit einer Prüfung („einsatzbereit“).</p></div>`;
@@ -5811,21 +5814,22 @@
     return `<section class="section"><h2>Gemeldete Mängel</h2><details class="mat-mangel-alt"><summary>${plural(liste.length, "erledigte Meldung", "erledigte Meldungen")}</summary>
       <ul class="mat-mangel-liste">${liste.map((m) => `<li><p class="small"><strong>${esc(tagZeit(m.created_at))}</strong>${m.melder ? ` · ${esc(m.melder)}` : ""}
           · erledigt am ${esc(S.fmtDate(m.erledigt.am))} durch <a href="/material/pruefung/${Number(m.erledigt.pruefung)}">${m.erledigt.art === "aussonderung" ? "Aussonderung" : "Freiprüfung"}</a></p>
-        <p class="mat-text">${esc(m.description)}</p>${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}</li>`).join("")}</ul></details></section>`;
+        ${mangelText(m, "mat-text")}${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}</li>`).join("")}</ul></details></section>`;
   }
 
   // Hinweis in der Prüfung (Start und Entwurf): je offener Meldung, mit Text und Fotos.
   function mangelHinweis(liste, berichtigung) {
     return (liste || []).map((m) => `<div class="mat-banner mat-mangel-banner" role="note">
       <p class="mat-mangel-titel">GEMELDETER MANGEL vom ${esc(tagZeit(m.created_at))}${m.melder ? ` (von ${esc(m.melder)})` : ""}</p>
-      <p class="mat-text mat-mangel-text">${esc(m.description)}</p>
+      ${mangelText(m, "mat-text mat-mangel-text")}
       ${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}
       ${wiederOffen(m)}
       <p class="mat-mangel-zeile">${berichtigung ? "Eine Berichtigung gibt den Artikel nicht frei – dafür braucht es eine neue Prüfung."
         : "Mit „einsatzbereit“ hebst du die Sperre auf (Freiprüfung) und erledigst die Meldung."}</p></div>`).join("");
   }
 
-  // Übersicht, oben: Meldungen, nach denen noch kein Prüfer geprüft hat (nach „instandsetzen“ fallen sie heraus).
+  // Übersicht, oben: Meldungen, nach denen noch kein Prüfer geprüft hat (nach „instandsetzen“ fallen sie heraus). Wer
+  // nur liest, sieht Artikel und Tag – Kurztext, Fotozahl und Melder fehlen dann (inhalt false).
   function mangelKasten(liste, gesamt) {
     if (!liste || !liste.length) return "";
     return `<section class="section mat-mangel-kasten" aria-label="Gemeldete Mängel"><h2>Gemeldete Mängel</h2>
@@ -5833,7 +5837,7 @@
       <ul class="mat-rr-liste">${liste.map((m) => `<li>
         <span class="mat-mangel-marke">Mangel</span>
         <span class="mat-rr-was"><a href="/material/artikel/${Number(m.item_id)}"><strong>${esc(m.inventory_no)}</strong></a> · ${nameHtml(m.produkt)}${zusatzHtml(m.produkt)}</span>
-        <span class="mat-mangel-kurz">${esc(m.kurz)}</span>
+        ${m.inhalt ? `<span class="mat-mangel-kurz">${esc(m.kurz)}</span>` : ""}
         <span class="small">gemeldet am ${esc(S.fmtDate(m.created_at))}${m.melder ? ` · ${esc(m.melder)}` : ""}${m.fotos ? ` · ${plural(m.fotos, "Foto", "Fotos")}` : ""}</span></li>`).join("")}</ul>
       ${gesamt > liste.length ? `<p class="small"><a href="/material/pruefungen?status=gesperrt">… und ${gesamt - liste.length} weitere</a></p>` : ""}</section>`;
   }
