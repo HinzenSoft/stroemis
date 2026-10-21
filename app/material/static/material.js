@@ -236,6 +236,7 @@
     // Änderungsanträge an festen Stammdaten (Entscheidungen vom 21.10.2026)
     antrag: "Änderungsantrag Nr.", begruendung: "Begründung", beantragt_von: "beantragt von", anmerkung: "Anmerkung",
     ablehnung: "Begründung der Ablehnung", feld: "Feld",
+    rueckruf_nicht_mehr: "Rückruf trifft ihn nicht mehr", rueckruf_neu: "Rückruf trifft ihn jetzt",
   };
   // Die Beschriftung eines Feldes in einem Journaleintrag – wie beschriftung.feld_name: „description“ ist am Produkt der
   // kurze Zusatz hinter dem Namen und heißt dort seit dem Wunsch vom 18.10.2026 „Bemerkung“; an Ordnern und in den
@@ -2342,6 +2343,16 @@
     const felder = new Set((a.antraege || []).map((x) => x.feld));
     return !felder.has("serial_no") || !(felder.has("manufactured_on") || a.herstellung_nachtragbar);
   };
+  // Laufende Rückrufe, aus denen der Artikel mit der beantragten Seriennummer fiele oder in die er käme (x.rueckruf,
+  // nur bei offenen Anträgen) – auf der Karte und in der Rückfrage „Bestätigen“; das Journal vermerkt es beim Bestätigen.
+  const antragRueckruf = (x) => {
+    const f = x.rueckruf || {};
+    const titel = (l) => l.map((r) => `„${esc(r.title)}“`).join(", ");
+    const raus = f.nicht_mehr || [];
+    const rein = f.neu || [];
+    return (raus.length ? `<p class="notice small">Artikel ist von ${raus.length > 1 ? "den Rückrufen" : "Rückruf"} ${titel(raus)} betroffen – nach der Änderung ${raus.length > 1 ? "treffen sie" : "trifft der Rückruf"} ihn nicht mehr.</p>` : "")
+      + (rein.length ? `<p class="notice small">Mit der neuen Seriennummer trifft ihn ${rein.length > 1 ? "die laufenden Rückrufe" : "der laufende Rückruf"} ${titel(rein)}.</p>` : "");
+  };
   const antragOffenText = (x) => `${x.inhalt ? antragAenderung(x) : esc(x.feld_text)} – Änderung beantragt am ${esc(S.fmtDate(x.created_at))}${x.antragsteller ? ` von ${esc(x.antragsteller)}` : ""} – wartet auf die Material-Verwaltung.`;
 
   // Der kleine Dialog: neue Seriennummer und/oder neues Herstelldatum, Begründung Pflicht. Ein Feld mit offenem Antrag
@@ -2353,6 +2364,8 @@
     const hdOffen = offen.manufactured_on;
     const hdDirekt = !!a.herstellung_nachtragbar;
     const hdGesperrt = hdOffen || hdDirekt;
+    // Ein laufender Rückruf mit Seriennummernliste trifft den Artikel über seine Nummer – mit einer neuen nicht mehr.
+    const rueckrufe = snOffen ? [] : (a.rueckrufe || []).filter((r) => !r.alle);
     dialog(`<h2>Änderung beantragen – ${esc(a.inventory_no)}</h2>
       <p class="help">Seriennummer und Herstellung stehen seit der ersten Prüfung fest. Die Material-Verwaltung bestätigt oder lehnt deinen Antrag ab; du bekommst Bescheid. Festgeschriebene Protokolle behalten die alte Angabe, Journal und Lebenslauf zeigen die Änderung.</p>
       <div class="field-row mat-antragzeile"><div><label for="aa-sn">Neue Seriennummer</label><input type="text" id="aa-sn" ${TASTATUR_NUMMER} maxlength="80" ${snOffen ? "disabled" : ""} placeholder="bisher ${esc(a.serial_no)}">
@@ -2361,6 +2374,7 @@
           <div class="help">${hdOffen ? "Ein Antrag läuft schon." : hdDirekt ? "Fehlt bei Metall – trägt der Materialwart direkt nach." : `bisher ${a.manufactured_on ? esc(fmtTag(a.manufactured_on)) : "leer"}`}</div></div></div>
       ${!hdGesperrt && !textil && a.manufactured_on ? '<label class="inline"><input type="checkbox" id="aa-entfernen"> Herstelldatum entfernen (unbekannt)</label>' : ""}
       ${textil ? '<p class="help">Bei textilem Material rechnet das Lebensende mit dem neuen Herstelldatum neu.</p>' : ""}
+      ${rueckrufe.length ? `<p class="notice small">Artikel ist von ${rueckrufe.length > 1 ? "den Rückrufen" : "Rückruf"} ${rueckrufe.map((r) => `„${esc(r.title)}“`).join(", ")} betroffen – nach einer Änderung der Seriennummer ${rueckrufe.length > 1 ? "treffen sie" : "trifft der Rückruf"} ihn nicht mehr (außer die neue Nummer steht ebenfalls in seiner Liste).</p>` : ""}
       <label for="aa-grund">Begründung (Pflicht)</label>
       <textarea id="aa-grund" rows="3" maxlength="1000" placeholder="z. B. Etikett beim Prüfen falsch abgelesen, Herstellernummer nachträglich gefunden"></textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="aa-ok" type="button">Antrag senden</button></div>`,
@@ -4907,6 +4921,7 @@
       <p class="muted small">beantragt${wer(x.antragsteller)} am ${esc(S.fmtDate(x.created_at))}${art.gliederung ? ` · ${esc(art.gliederung)}` : ""}${x.eigen && bearbeiten ? " · dein eigener Antrag" : ""}</p>
       <p class="mat-antrag-aenderung">${antragAenderung(x)}</p>
       <dl class="mat-daten mat-meldung-daten"><dt>Begründung</dt><dd><span class="mat-text">${esc(x.begruendung || "")}</span></dd></dl>
+      ${offen ? antragRueckruf(x) : ""}
       ${offen && !geht ? `<p class="notice small">${art.lock_state === "ausgesondert" ? "Der Artikel ist inzwischen ausgesondert – der Antrag lässt sich nur noch ablehnen." : "Der Artikel trägt inzwischen nicht mehr den alten Wert – der Antrag lässt sich nur noch ablehnen."}</p>` : ""}
       ${x.status === "bestaetigt" ? `<p class="mat-meldung-ergebnis">Bestätigt${wer(x.entschieden_von)} am ${esc(S.fmtDate(x.resolved_at))}${x.antwort ? `: <span class="mat-text">${esc(x.antwort)}</span>` : ""}</p>` : ""}
       ${x.status === "abgelehnt" ? `<p class="mat-meldung-ergebnis">Abgelehnt${wer(x.entschieden_von)} am ${esc(S.fmtDate(x.resolved_at))}: <span class="mat-text">${esc(x.antwort || "")}</span></p>` : ""}
@@ -4920,6 +4935,7 @@
       <p>${esc(art.inventory_no)} – ${nameHtml(art.produkt)}${zusatzHtml(art.produkt)}</p>
       <p class="mat-antrag-aenderung">${antragAenderung(x)}</p>
       <p class="small">Beantragt von ${esc(x.antragsteller || "–")} am ${esc(S.fmtDate(x.created_at))}: <span class="mat-text">${esc(x.begruendung || "")}</span></p>
+      ${antragRueckruf(x)}
       <p class="help">Die Änderung steht danach sofort am Artikel; Journal und Lebenslauf zeigen sie mit beiden Namen. Festgeschriebene Protokolle behalten den alten Wert.${x.feld === "manufactured_on" && art.produkt.material_kind === "textil" ? " Das Lebensende rechnet neu." : ""}</p>
       <label for="ba-antwort">Anmerkung für den Antragsteller (optional, steht in seiner Mail)</label><textarea id="ba-antwort" rows="2" maxlength="1000"></textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="ba-ok" type="button">Bestätigen</button></div>`,

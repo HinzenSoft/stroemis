@@ -5,7 +5,8 @@ Trigger mat_item_stammdaten_fest) – beide stehen im Prüfprotokoll. Zwei Wege 
 
   1. Herstelldatum NACHTRAGEN (vorher leer → Wert) bei Material „Metall“: direkt im Dialog „Artikel … bearbeiten“, ohne
      Antrag (bestand.artikel_aendern). Bei textil (dort ohnehin Pflicht) und „sonstiges“ nicht; ändern und entfernen
-     eines vorhandenen Herstelldatums bleibt gesperrt.
+     eines vorhandenen Herstelldatums bleibt gesperrt. Nur, solange der Artikel noch nie eins hatte: Hat ein Antrag es
+     entfernt, geht ein neues nur wieder per Antrag (Entscheidung zu Befund 5 der Prüfung vom 21.10.2026).
   2. Jede andere Änderung – ausdrücklich auch eine vom System vergebene STR-Nummer durch die echte Herstellernummer zu
      ersetzen – mit BEGRÜNDUNG BEANTRAGEN, ähnlich der Produktmeldung (meldung.py): Die Material-Verwaltung (die
      Plattform-Verwaltung zählt wie sie) bestätigt oder lehnt ab, im Katalog unter „Meldungen“ → „Änderungsanträge“.
@@ -24,13 +25,18 @@ Bestätigt die Material-Verwaltung, schreibt der Dienst die Änderung in derselb
 Herstellernummer ist danach keine STR-Nummer mehr; bei textil rechnet das Lebensende neu), der Trigger lässt genau diese
 Änderung zu und markiert den Antrag als angewendet (applied_at) – er wirkt einmal. Das Journal des Artikels zeigt
 Antrag, Bestätigung (alter und neuer Wert, Antragsteller, Bestätiger, Begründung) bzw. Ablehnung (mit Begründung); der
-Lebenslauf ebenso. Festgeschriebene Protokolle und ihre PDFs bleiben, wie sie sind – sie nennen weiter den alten Wert.
-Der Rückrufabgleich liest die Seriennummer am Artikel, trifft also die neue.
+Lebenslauf ebenso. Wer den Artikel nur liest, sieht dort wie in der Antragsansicht nur Feld, Werte und Zeitpunkt – ohne
+Begründung, Namen, Anmerkung und Ablehnungsgrund (journal_verbergen; Prüfung vom 21.10.2026). Festgeschriebene
+Protokolle und ihre PDFs bleiben, wie sie sind – sie nennen weiter den alten Wert; ein Sammelprotokoll, das erst danach
+entsteht, nennt in der Zeile „vormals …“. Der Rückrufabgleich liest die Seriennummer am Artikel, trifft also die neue:
+Fällt der Artikel damit aus einem laufenden Rückruf (oder kommt hinein), sagen es Antragsdialog, Karte und Rückfrage, das
+Journal der Bestätigung vermerkt es (rueckruf_folgen).
 
 Ihren eigenen Antrag darf die Material-Verwaltung selbst bestätigen (einfachste Lösung; das Journal nennt beide Namen –
 „Bitte bestätigen“ im CHANGELOG). Mails: neuer Antrag an die Material-Verwaltung (ohne sie die Plattform-Verwaltung, nicht an den
-Antragsteller), Entscheidung an den Antragsteller (nicht, wenn er selbst entschieden hat). Bei DEMO-Artikeln, unter der
-Umgebungssperre (dev) und ohne Mailserver stehen sie im Log statt im Postfach – wie bei der Mangelmeldung.
+Antragsteller), Entscheidung an den Antragsteller (nicht, wenn er selbst entschieden hat, und nur, solange er den Artikel
+noch lesen darf – sonst gar keine, wie bei der Mangelmeldung). Bei DEMO-Artikeln, unter der Umgebungssperre (dev) und
+ohne Mailserver stehen sie im Log statt im Postfach – wie bei der Mangelmeldung.
 
 Anträge sind nach der Entscheidung unveränderlich (Trigger, models.TRIGGER_15_ANTRAG), lassen sich nicht löschen und
 bleiben unbefristet mit dem Artikel; beim Löschen eines Kontos setzt die Datenbank nur die Kontokennung auf NULL, die
@@ -42,7 +48,7 @@ from ...auth import _im_hintergrund
 from ...mailer import send_mail                    # Tests ersetzen antrag.send_mail
 from ..models import ANTRAGSFELDER, ANTRAGSSTATUS
 from . import Abgelehnt, akteur, erster_tag, heute, monat_oder_datum, text
-from . import bestand, erinnerung, journal, katalog, nummern, rechte
+from . import bestand, erinnerung, journal, katalog, nummern, rechte, rueckruf
 from .interval import lebensende
 
 BEGRUENDUNG_MAX = 1000
@@ -61,6 +67,12 @@ ERLEDIGT = "Dieser Antrag ist schon entschieden. Bitte neu laden."
 STAND_ANDERS = ("Der Artikel trägt inzwischen nicht mehr den Wert, den der Antrag ändern wollte – bitte ablehnen; der "
                 "Antragsteller kann neu beantragen.")
 NUR_ABLEHNEN = "Der Artikel ist inzwischen ausgesondert – den Antrag kannst du nur noch ablehnen."
+
+# Journal der Anträge: Was darin nur sieht, wer beantragen darf (wie antrag_json mit inhalt) – Begründung, Namen,
+# Anmerkung und Ablehnungsgrund. Feld, alter und neuer Wert und der Zeitpunkt bleiben: Die Stammdaten sieht der Leser
+# ohnehin, und die Antragsansicht zeigt ihm dieselben Werte.
+AKTIONEN = ("antrag_gestellt", "antrag_bestaetigt", "antrag_abgelehnt")
+JOURNAL_INHALT = ("begruendung", "beantragt_von", "anmerkung", "ablehnung")
 
 # Mails gehen neben der Anfrage hinaus (wie bei der Mangelmeldung); Tests setzen hier einen direkten Aufruf ein.
 HINTERGRUND = _im_hintergrund
@@ -118,7 +130,36 @@ def antrag_json(r, item=None, inhalt=True):
     out["antwort"] = r["answer"] if inhalt else None
     out["antragsteller"] = r["created_by_name"] if inhalt else None
     out["entschieden_von"] = r["resolved_by_name"] if inhalt and r["status"] != "offen" else None
+    # Offen und Seriennummer: Fällt der Artikel damit aus einem laufenden Rückruf oder kommt hinein? (Titel laufender
+    # Rückrufe sieht jedes Konto mit Modulzugang ohnehin am Produkt.)
+    out["rueckruf"] = (rueckruf_folgen(item, r["field"], r["old_value"], r["new_value"])
+                       if r["status"] == "offen" else None)
     return out
+
+
+def rueckruf_folgen(item, feld, alt, neu):
+    """Was eine Änderung der Seriennummer an laufenden Rückrufen des Produkts ändert: {"nicht_mehr": […], "neu": […]}
+    mit {id, title} – Rückrufe, die den Artikel heute treffen und mit der neuen Nummer nicht mehr, und umgekehrt. Ein
+    Rückruf für alle Artikel des Produkts trifft ihn so oder so. Ein ausgesonderter Artikel zählt nicht (rueckruf)."""
+    if feld != "serial_no" or item["lock_state"] == "ausgesondert":
+        return {"nicht_mehr": [], "neu": []}
+    vorher = {r["id"]: r for r in rueckruf.betrifft(item["product_id"], alt)}
+    nachher = {r["id"]: r for r in rueckruf.betrifft(item["product_id"], neu)}
+    return {"nicht_mehr": [{"id": i, "title": r["title"]} for i, r in vorher.items() if i not in nachher],
+            "neu": [{"id": i, "title": r["title"]} for i, r in nachher.items() if i not in vorher]}
+
+
+def journal_verbergen(eintraege):
+    """Für Konten ohne Inhaltsrecht (darf_beantragen – dieselbe Regel wie antrag_json mit inhalt=False): In den
+    Journaleinträgen der Anträge stehen danach weder Begründung, Antragsteller, Anmerkung noch Ablehnungsgrund, als
+    Handelnder „(Person)“ – wie beim Melder eines Mangels (bestand._melder_verbergen). Ändert die Einträge an Ort und
+    Stelle (Artikelansicht und Lebenslauf)."""
+    from .beschriftung import PERSON
+    for e in eintraege:
+        if e["action"] in AKTIONEN:
+            e["user_name"] = PERSON
+            if e.get("nachher"):
+                e["nachher"] = {k: v for k, v in e["nachher"].items() if k not in JOURNAL_INHALT}
 
 
 def _artikel_kurz(item):
@@ -253,7 +294,8 @@ def stellen(iid, d):
         if "serial_no" in wuensche:
             _seriennummer(item, wuensche["serial_no"])
         if "manufactured_on" in wuensche:
-            if item["manufactured_on"] is None and produkt["material_kind"] == "metall_hardware":
+            # Metall ohne Herstelldatum: direkt nachtragen – außer ein Antrag hat es entfernt, dann nur per Antrag.
+            if bestand.herstellung_nachtragbar(item, produkt):
                 raise Abgelehnt(NACHTRAGEN_DIREKT, 409)
             _herstellung(item, produkt, wuensche["manufactured_on"])
         for feld, neu in wuensche.items():
@@ -294,6 +336,7 @@ def bestaetigen(aid, d):
             raise Abgelehnt(STAND_ANDERS, 409)
         produkt = katalog.produkt(item["product_id"])
         vorher, nachher = {feld: alt}, {feld: neu}
+        folgen = rueckruf_folgen(item, feld, alt, neu)
         if feld == "serial_no":
             _seriennummer(item, neu)
             # Eine echte Herstellernummer ersetzt die vergebene – danach ist sie keine STR-Nummer mehr.
@@ -318,6 +361,10 @@ def bestaetigen(aid, d):
         nachher.update({"antrag": aid, "beantragt_von": r["created_by_name"], "begruendung": r["reason"]})
         if antwort:
             nachher["anmerkung"] = antwort
+        # Laufende Rückrufe, aus denen der Artikel mit der neuen Nummer fällt (oder in die er kommt) – bewusst entschieden.
+        for schluessel, liste_ in (("rueckruf_nicht_mehr", folgen["nicht_mehr"]), ("rueckruf_neu", folgen["neu"])):
+            if liste_:
+                nachher[schluessel] = [f"{x['title']} (Nr. {x['id']})" for x in liste_]
         journal.eintragen("item", item["id"], "antrag_bestaetigt", vorher, nachher)
     _antragsteller_benachrichtigen(aid)
 
@@ -409,7 +456,10 @@ def _verwaltung_benachrichtigen(ids):
 
 def _antragsteller_benachrichtigen(aid):
     """Bescheid an den Antragsteller – nicht, wenn er selbst entschieden hat; nur an ein aktives Konto mit Adresse (keine
-    DEMO-Adresse außer bei DEMO-Artikeln)."""
+    DEMO-Adresse außer bei DEMO-Artikeln) und nur, wenn er den Artikel heute noch lesen darf (Grund- oder Prüfrecht an
+    seiner Heimat – wie seine Liste der Anträge, _sichtbar). Die Mail nennt Gliederung, Werte und Begründung; hat er das
+    Recht verloren (abgelaufene Prüffreigabe, Artikel in eine fremde Gliederung verschoben), geht gar keine hinaus – wie
+    bei der Mangelmeldung (Prüfung vom 21.10.2026)."""
     r = antrag(aid)
     if not r["created_by"] or r["created_by"] == r["resolved_by"]:
         return False
@@ -417,6 +467,9 @@ def _antragsteller_benachrichtigen(aid):
     item = bestand.artikel(r["item_id"])
     demo = bestand.ist_demo(item["id"])
     if not u or not erinnerung._erreichbar(dict(u), demo):
+        return False
+    if not rechte.darf_artikel("lesen", item, dict(u)):
+        current_app.logger.info("Änderungsantrag %s: kein Bescheid – der Antragsteller liest den Artikel nicht mehr.", aid)
         return False
     cfg = current_app.config
     basis = (cfg.get("BASE_URL") or "").rstrip("/")

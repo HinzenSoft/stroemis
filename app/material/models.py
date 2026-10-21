@@ -109,13 +109,23 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     angewendeten Antrags (alter UND neuer Wert müssen passen); mat_item_antrag_angewendet setzt danach applied_at, ein
     Antrag wirkt also genau einmal. Rein additiv, wiederholbar. Wer mat_item künftig neu aufbaut, muss beide Trigger
     und den Verweis item_id bedenken.
+  - Schritt 16 (Phase 3 · Lieferung 1, Prüfung der Änderungsanträge vom 21.10.2026): Trigger (TRIGGER_16) gegen die
+    Umwege an mat_item_stammdaten_fest vorbei, die nur ein direkter Eingriff in die Datenbank nimmt: einen Artikel per
+    INSERT OR REPLACE ersetzen (mat_item_ersetzen), seine Kennung ändern (mat_item_kennung), einen geprüften löschen
+    (mat_item_geprueft_loeschen – ohne Fremdschlüssel ginge es sonst samt Neuanlage unter derselben Kennung), sein
+    Produkt nach der ersten Prüfung wechseln (mat_item_produkt_fest – wie der Dienst, bestand.artikel_aendern) und die
+    Materialart eines Produkts mit geprüften Artikeln ändern oder ein Produkt ersetzen (mat_product_materialart_fest,
+    mat_product_ersetzen – an der Materialart hängt das Nachtragen bei Metall). Kein App-Weg tut eines davon. Dazu
+    (Entscheidung zu Befund 5): mat_item_stammdaten_fest wird ersetzt – Nachtragen bei Metall nur, solange kein
+    angewendeter Antrag ein vorhandenes Herstelldatum entfernt hat. Kein neues Schema, rein additiv, wiederholbar. Wer
+    mat_item oder mat_product künftig neu aufbaut, muss die Trigger neu anlegen.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -1482,12 +1492,67 @@ def _schritt_15(conn):
         conn.execute(sql)
 
 
+# --- Schritt 16 (Phase 3 · Lieferung 1, Prüfung der Änderungsanträge vom 21.10.2026): Umwege an der Sperre vorbei ----
+
+PRODUKT_FEST = "'Das Produkt eines Artikels steht seit seiner ersten Prüfung fest.'"
+MATERIALART_FEST = "'Die Materialart eines Produkts mit geprüften Artikeln steht fest.'"
+ERSETZEN = "'Artikel und Produkte lassen sich nicht ersetzen und ihre Kennung nicht ändern.'"
+_GEPRUEFT = "EXISTS (SELECT 1 FROM mat_inspection x WHERE x.item_id = OLD.id AND x.completed_at IS NOT NULL)"
+# Befund 5, entschieden am 21.10.2026: Nachtragen bei Metall nur, solange der Artikel noch nie ein Herstelldatum hatte –
+# nach der ersten Prüfung macht nur ein angewendeter Antrag mit vorhandenem altem Wert das Feld wieder leer.
+_NACHTRAGEN_16 = ("(" + _NACHTRAGEN + " AND NOT EXISTS (SELECT 1 FROM mat_item_change c WHERE c.item_id = OLD.id "
+                  "AND c.field = 'manufactured_on' AND c.applied_at IS NOT NULL AND c.old_value IS NOT NULL))")
+TRIGGER_16_ARTIKEL = [
+    # Ersetzt die Fassung aus Schritt 15 (gleicher Name) – nur das Nachtragen ist enger.
+    _trigger("mat_item_stammdaten_fest", "BEFORE UPDATE OF serial_no, manufactured_on ON mat_item",
+             "((NEW.serial_no IS NOT OLD.serial_no AND NOT " + _ANTRAG_DECKT.format("serial_no") + ") "
+             "OR (NEW.manufactured_on IS NOT OLD.manufactured_on AND NOT " + _NACHTRAGEN_16 + " AND NOT "
+             + _ANTRAG_DECKT.format("manufactured_on") + ")) "
+             "AND EXISTS (SELECT 1 FROM mat_inspection x WHERE x.item_id = OLD.id AND x.completed_at IS NOT NULL)",
+             STAMMDATEN_FEST),
+]
+TRIGGER_16 = [
+    # INSERT OR REPLACE löscht ohne Lösch-Trigger (recursive_triggers aus) – deshalb auch beim Einfügen prüfen. Die App
+    # legt Artikel nur neu an (bestand.artikel_anlegen, ohne Kennung).
+    _trigger("mat_item_ersetzen", "BEFORE INSERT ON mat_item", "EXISTS (SELECT 1 FROM mat_item i WHERE i.id = NEW.id)",
+             ERSETZEN),
+    # Mit anderer Kennung hinge keine Prüfung mehr am Artikel – und er wäre nicht mehr fest. Die App ändert sie nie.
+    _trigger("mat_item_kennung", "BEFORE UPDATE OF id ON mat_item", "NEW.id IS NOT OLD.id", ERSETZEN),
+    # Einen geprüften Artikel löscht die App nie (bestand.artikel_loeschen: nur ohne Prüfung); mit Fremdschlüsseln
+    # verhindert es schon mat_inspection.item_id, ohne sie ginge es samt Neuanlage unter derselben Kennung.
+    _trigger("mat_item_geprueft_loeschen", "BEFORE DELETE ON mat_item", _GEPRUEFT,
+             "'Ein geprüfter Artikel bleibt mit seinem Lebenslauf – aussondern statt löschen.'"),
+    # Produktwechsel nach der ersten Prüfung – wie der Dienst (bestand.artikel_aendern, 409). Derselbe Wert geht durch:
+    # artikel_aendern schreibt jede Spalte neu.
+    _trigger("mat_item_produkt_fest", "BEFORE UPDATE OF product_id ON mat_item",
+             "NEW.product_id IS NOT OLD.product_id AND " + _GEPRUEFT, PRODUKT_FEST),
+    # Materialart: Der Dienst (katalog.produkt_aendern) sperrt sie schon, sobald es Artikel des Produkts gibt; die
+    # Datenbank sperrt sie, sobald einer davon geprüft ist (daran hängen Nachtragen bei Metall und Lebensende).
+    _trigger("mat_product_materialart_fest", "BEFORE UPDATE OF material_kind ON mat_product",
+             "NEW.material_kind IS NOT OLD.material_kind AND EXISTS (SELECT 1 FROM mat_item i JOIN mat_inspection x "
+             "ON x.item_id = i.id WHERE i.product_id = OLD.id AND x.completed_at IS NOT NULL)", MATERIALART_FEST),
+    _trigger("mat_product_ersetzen", "BEFORE INSERT ON mat_product",
+             "EXISTS (SELECT 1 FROM mat_product p WHERE p.id = NEW.id)", ERSETZEN),
+    _trigger("mat_product_kennung", "BEFORE UPDATE OF id ON mat_product", "NEW.id IS NOT OLD.id", ERSETZEN),
+]
+
+
+def _schritt_16(conn):
+    """Prüfung vom 21.10.2026: Trigger gegen die Umwege an mat_item_stammdaten_fest vorbei (INSERT OR REPLACE, Kennung,
+    Löschen, Produktwechsel, Materialart) und mat_item_stammdaten_fest in der Fassung mit engerem Nachtragen (erst
+    entfernen, dann neu anlegen – CREATE TRIGGER IF NOT EXISTS fände sonst die alte Fassung vor). Rein additiv; ein
+    zweiter Lauf legt dieselben Trigger neu an und ändert keine Zeile."""
+    conn.execute("DROP TRIGGER IF EXISTS mat_item_stammdaten_fest")
+    for sql in TRIGGER_16_ARTIKEL + TRIGGER_16:
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
-            14: _schritt_14, 15: _schritt_15}
+            14: _schritt_14, 15: _schritt_15, 16: _schritt_16}
 
 
 def _meta(conn, schluessel, vorgabe=None):

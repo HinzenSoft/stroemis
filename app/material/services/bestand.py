@@ -48,6 +48,8 @@ GRUND_UMWANDLUNG = "Ordner zur Gliederung gemacht"
 NACHARBEIT_OFFEN = "Im Ordner wartet Nacharbeit aus einem Bestandsimport – erst übernehmen oder verwerfen."
 STAMMDATEN_FEST = ("Seriennummer und Herstelldatum stehen seit der ersten Prüfung fest – sie sind Teil des "
                    "Prüfnachweises. Eine Änderung beantragst du mit Begründung bei der Material-Verwaltung.")
+HERSTELLUNG_ENTFERNT = ("Das Herstelldatum dieses Artikels wurde per Antrag entfernt – ein neues trägst du nicht direkt "
+                        "nach, sondern beantragst es mit Begründung bei der Material-Verwaltung („Änderung beantragen …“).")
 DEMO_GRENZE = ("Zwischen den Demodaten (DEMO-Gliederungen) und echtem Bestand lässt sich nichts verschieben – ob ein "
                "Artikel DEMO ist, hängt an seinem Ordner, und Lebenslauf, CSV und Verzeichnis passten sonst nicht mehr "
                "zu seinen Protokollen.")
@@ -476,10 +478,21 @@ def stammdaten_fest(iid):
                          (iid,), one=True))
 
 
+def herstellung_entfernt(iid):
+    """Hatte der Artikel seit der ersten Prüfung schon ein Herstelldatum, das ein bestätigter Antrag entfernt hat? Nach
+    der ersten Prüfung macht nur ein solcher Antrag das Feld wieder leer (Trigger mat_item_stammdaten_fest)."""
+    return bool(db.query("SELECT 1 FROM mat_item_change WHERE item_id = ? AND field = 'manufactured_on' "
+                         "AND applied_at IS NOT NULL AND old_value IS NOT NULL LIMIT 1", (iid,), one=True))
+
+
 def herstellung_nachtragbar(item, produkt):
     """Darf das Herstelldatum trotz fester Stammdaten direkt nachgetragen werden? Nur bei Metall und nur, solange es leer
-    ist (Entscheidung vom 21.10.2026) – textil hat es ohnehin als Pflicht, „sonstiges“ geht über einen Antrag."""
-    return item["manufactured_on"] is None and produkt["material_kind"] == "metall_hardware"
+    ist (Entscheidung vom 21.10.2026) – textil hat es ohnehin als Pflicht, „sonstiges“ geht über einen Antrag. Und nur,
+    solange der Artikel noch nie eins hatte (Entscheidung zu Befund 5 der Prüfung vom 21.10.2026): Hat ein Antrag es
+    entfernt, geht ein neues nur wieder per Antrag – sonst ergäben „entfernen per Antrag“ und „direkt nachtragen“ eine
+    Änderung, deren Zielwert niemand bestätigt hat. Der Trigger prüft dasselbe (models._NACHTRAGEN_16)."""
+    return (item["manufactured_on"] is None and produkt["material_kind"] == "metall_hardware"
+            and not herstellung_entfernt(item["id"]))
 
 
 def artikel_werte(d, alt=None):
@@ -702,6 +715,9 @@ def artikel_aendern(iid, d):
                 w["manufactured_on"] = alt["manufactured_on"]
             nachtragen = herstellung_nachtragbar(alt, p) and bool(w["manufactured_on"])
             if w["serial_no"] != alt["serial_no"] or (w["manufactured_on"] != alt["manufactured_on"] and not nachtragen):
+                if (w["serial_no"] == alt["serial_no"] and alt["manufactured_on"] is None
+                        and p["material_kind"] == "metall_hardware" and herstellung_entfernt(iid)):
+                    raise Abgelehnt(HERSTELLUNG_ENTFERNT, 409)
                 raise Abgelehnt(STAMMDATEN_FEST, 409)
         neu = dict(w, serial_generated=generiert, retire_by_manual=manuell)
         _serie_frei(w["product_id"], w["serial_no"], ausser=iid)
@@ -891,8 +907,11 @@ def artikel_json(i, voll=False):
         out["mangel_eigen_offen"] = eigen["created_at"] if eigen else None
         out["darf_loeschen"] = not out["pruefungen"] and not out["maengel"]
         # Änderungsanträge (Entscheidungen vom 21.10.2026): offene am Artikel – Begründung und Namen nur für die, die
-        # beantragen dürfen (Materialwart, Prüfer); beantragen nur nach der ersten Prüfung und nicht ausgesondert.
+        # beantragen dürfen (Materialwart, Prüfer); beantragen nur nach der ersten Prüfung und nicht ausgesondert. Im
+        # Verlauf ebenso: Wer nur liest, sieht bei den Anträgen weder Begründung noch Namen (Prüfung vom 21.10.2026).
         from . import antrag
+        if out["journal"] and not inhalt:
+            antrag.journal_verbergen(out["journal"])
         out["antraege"] = antrag.fuer_artikel(i, inhalt)
         out["darf_antrag"] = inhalt and out["stammdaten_fest"] and i["lock_state"] != "ausgesondert"
     return out

@@ -9,7 +9,8 @@ templates/material/pdf/lebenslauf.html). Gelesen wird ohne Transaktion – das S
 
 Inhalt: Stammdaten (wie im Protokoll), Zustand (Status, Sperre, Fälligkeit, wirksames Intervall, Lebensdauer,
 Bemerkung), alle abgeschlossenen Prüfungen und die Aussonderung in zeitlicher Reihenfolge, die Prüfdurchgänge, in
-denen der Artikel stand, und die Ereignisse aus seinem Journal (ohne die des Produkts) mit lesbaren Beschriftungen."""
+denen der Artikel stand, und die Ereignisse aus seinem Journal (ohne die des Produkts) mit lesbaren Beschriftungen – bei
+Änderungsanträgen für Konten, die nur lesen, ohne Begründung und Namen (antrag.journal_verbergen)."""
 from datetime import date
 
 from ... import db
@@ -211,6 +212,11 @@ def daten(iid):
     eintraege = journal.lesen([("item", iid)], grenze=JOURNAL_MAX + 1)     # einer mehr: Wurde gekürzt?
     gekuerzt = len(eintraege) > JOURNAL_MAX
     eintraege = eintraege[:JOURNAL_MAX]                                      # die neuesten zuerst – der älteste fällt weg
+    # Änderungsanträge: Begründung, Namen, Anmerkung und Ablehnungsgrund nur für Materialwart und Prüfer – wie die
+    # Antragsansicht und der Verlauf am Artikel (Prüfung vom 21.10.2026).
+    from . import antrag
+    if not antrag.darf_beantragen(item):
+        antrag.journal_verbergen(eintraege)
     return {
         "dokument": {"art": "lebenslauf", "titel": "Lebenslauf", "stand": zeit_text(db.now()),
                      "plattform": qr.anzeige(qr.basis()).split("://", 1)[-1], "pruefseite": protokoll.pruefseite(),
