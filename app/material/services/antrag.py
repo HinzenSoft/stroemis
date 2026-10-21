@@ -6,10 +6,13 @@ Trigger mat_item_stammdaten_fest) – beide stehen im Prüfprotokoll. Zwei Wege 
   1. Herstelldatum NACHTRAGEN (vorher leer → Wert) bei Material „Metall“: direkt im Dialog „Artikel … bearbeiten“, ohne
      Antrag (bestand.artikel_aendern). Bei textil (dort ohnehin Pflicht) und „sonstiges“ nicht; ändern und entfernen
      eines vorhandenen Herstelldatums bleibt gesperrt. Nur, solange der Artikel noch nie eins hatte: Hat ein Antrag es
-     entfernt, geht ein neues nur wieder per Antrag (Entscheidung zu Befund 5 der Prüfung vom 21.10.2026).
+     entfernt (bis Schritt 16 möglich), geht ein neues nur wieder per Antrag (Entscheidung zu Befund 5 der Prüfung vom
+     21.10.2026 – bleibt für diese Altfälle).
   2. Jede andere Änderung – ausdrücklich auch eine vom System vergebene STR-Nummer durch die echte Herstellernummer zu
      ersetzen – mit BEGRÜNDUNG BEANTRAGEN, ähnlich der Produktmeldung (meldung.py): Die Material-Verwaltung (die
      Plattform-Verwaltung zählt wie sie) bestätigt oder lehnt ab, im Katalog unter „Meldungen“ → „Änderungsanträge“.
+     Das Herstelldatum lässt sich dabei nur ÄNDERN, nicht entfernen (Entscheidung vom 21.10.2026 zur Prüfung; Trigger
+     aus Schritt 17) – ein offener Antrag aufs Entfernen aus der Zeit davor lässt sich nur noch ablehnen oder zurückziehen.
 
 Beantragen darf, wer den Artikel verwaltet (Materialwart) oder an ihm prüfen darf (Prüfer – sie sehen Abweichungen beim
 Prüfen); die Route prüft das (requires_folder), der Dienst in der Transaktion am frisch gelesenen Artikel noch einmal.
@@ -18,8 +21,13 @@ Feld. Ein ausgesonderter Artikel bekommt keinen Antrag mehr, ein ungeprüfter br
 
 Geprüft wird beim Antrag UND beim Bestätigen (der Stand kann sich geändert haben): Seriennummer nicht leer, nicht in der
 Form „STR-…“ (die vergibt nur das System), je Produkt eindeutig (bestand._serie_frei – fremde Dublette protokolliert wie
-beim Bearbeiten); Herstelldatum als Monat oder Tag, nicht in der Zukunft, nicht nach Kauf und Erstgebrauch, bei textil
-nicht leer. Beim Bestätigen muss der Artikel noch den alten Wert tragen, sonst 409.
+beim Bearbeiten); Herstelldatum als Monat oder Tag, nicht in der Zukunft, nicht nach Kauf und Erstgebrauch, nie
+leer (seit dem 21.10.2026 bei jeder Materialart). Beim Bestätigen muss der Artikel noch den alten Wert tragen, sonst 409.
+
+Einen offenen Antrag zieht der Antragsteller selbst zurück (zurueckziehen; Entscheidung vom 21.10.2026 zur Prüfung) –
+nur seinen eigenen und nur, solange er den Artikel liest (sonst 404 wie unbekannt). „zurückgezogen“ ist ein Endzustand
+wie bestätigt und abgelehnt (Trigger, models.TRIGGER_17); keine Mail – die Material-Verwaltung sieht ihn nur nicht mehr
+unter „offen“. Das Journal des Artikels sagt „Änderungsantrag zurückgezogen“.
 
 Bestätigt die Material-Verwaltung, schreibt der Dienst die Änderung in derselben Transaktion an den Artikel (eine
 Herstellernummer ist danach keine STR-Nummer mehr; bei textil rechnet das Lebensende neu), der Trigger lässt genau diese
@@ -33,14 +41,14 @@ Fällt der Artikel damit aus einem laufenden Rückruf (oder kommt hinein), sagen
 Journal der Bestätigung vermerkt es (rueckruf_folgen).
 
 Ihren eigenen Antrag darf die Material-Verwaltung selbst bestätigen (einfachste Lösung; das Journal nennt beide Namen –
-„Bitte bestätigen“ im CHANGELOG). Mails: neuer Antrag an die Material-Verwaltung (ohne sie die Plattform-Verwaltung, nicht an den
+bestätigt am 21.10.2026). Mails: neuer Antrag an die Material-Verwaltung (ohne sie die Plattform-Verwaltung, nicht an den
 Antragsteller), Entscheidung an den Antragsteller (nicht, wenn er selbst entschieden hat, und nur, solange er den Artikel
 noch lesen darf – sonst gar keine, wie bei der Mangelmeldung). Bei DEMO-Artikeln, unter der Umgebungssperre (dev) und
 ohne Mailserver stehen sie im Log statt im Postfach – wie bei der Mangelmeldung.
 
-Anträge sind nach der Entscheidung unveränderlich (Trigger, models.TRIGGER_15_ANTRAG), lassen sich nicht löschen und
-bleiben unbefristet mit dem Artikel; beim Löschen eines Kontos setzt die Datenbank nur die Kontokennung auf NULL, die
-Namen bleiben (Handelnde, wie bei Prüfungen und Mangelmeldungen)."""
+Anträge sind nach der Entscheidung (oder dem Zurückziehen) unveränderlich (Trigger, models.TRIGGER_15_ANTRAG), lassen
+sich nicht löschen und bleiben unbefristet mit dem Artikel; beim Löschen eines Kontos setzt die Datenbank nur die
+Kontokennung auf NULL, die Namen bleiben (Handelnde, wie bei Prüfungen und Mangelmeldungen)."""
 from flask import current_app
 
 from ... import db
@@ -53,7 +61,7 @@ from .interval import lebensende
 
 BEGRUENDUNG_MAX = 1000
 MAX_EMPFAENGER = 10
-FILTER = {"offen": ("offen",), "erledigt": ("bestaetigt", "abgelehnt"), "alle": tuple(ANTRAGSSTATUS)}
+FILTER = {"offen": ("offen",), "erledigt": ("bestaetigt", "abgelehnt", "zurueckgezogen"), "alle": tuple(ANTRAGSSTATUS)}
 FEHLT = "Änderungsantrag nicht gefunden."
 NICHT_FEST = ("Der Artikel ist noch nicht geprüft – Seriennummer und Herstellung änderst du direkt im Dialog "
               "„Bearbeiten“.")
@@ -63,15 +71,18 @@ STR_GESPERRT = ("Seriennummern der Form „STR-…“ vergibt nur das System –
 NACHTRAGEN_DIREKT = ("Bei Metall trägt der Materialwart ein fehlendes Herstelldatum direkt im Dialog „Bearbeiten“ nach – "
                      "dafür braucht es keinen Antrag.")
 SCHON_BEANTRAGT = "Für {feld} dieses Artikels läuft schon ein Antrag (vom {datum}) – er wartet auf die Material-Verwaltung."
-ERLEDIGT = "Dieser Antrag ist schon entschieden. Bitte neu laden."
+ERLEDIGT = "Dieser Antrag ist schon entschieden oder zurückgezogen. Bitte neu laden."
 STAND_ANDERS = ("Der Artikel trägt inzwischen nicht mehr den Wert, den der Antrag ändern wollte – bitte ablehnen; der "
                 "Antragsteller kann neu beantragen.")
 NUR_ABLEHNEN = "Der Artikel ist inzwischen ausgesondert – den Antrag kannst du nur noch ablehnen."
+HERSTELLUNG_BLEIBT = "Das Herstelldatum lässt sich nicht entfernen – nur auf Antrag ändern (neues Datum angeben)."
+ENTFERNEN_ALT = ("Ein Herstelldatum lässt sich nicht mehr entfernen (Entscheidung vom 21.10.2026) – diesen älteren Antrag "
+                 "kannst du nur noch ablehnen.")
 
 # Journal der Anträge: Was darin nur sieht, wer beantragen darf (wie antrag_json mit inhalt) – Begründung, Namen,
 # Anmerkung und Ablehnungsgrund. Feld, alter und neuer Wert und der Zeitpunkt bleiben: Die Stammdaten sieht der Leser
 # ohnehin, und die Antragsansicht zeigt ihm dieselben Werte.
-AKTIONEN = ("antrag_gestellt", "antrag_bestaetigt", "antrag_abgelehnt")
+AKTIONEN = ("antrag_gestellt", "antrag_bestaetigt", "antrag_abgelehnt", "antrag_zurueckgezogen")
 JOURNAL_INHALT = ("begruendung", "beantragt_von", "anmerkung", "ablehnung")
 
 # Mails gehen neben der Anfrage hinaus (wie bei der Mangelmeldung); Tests setzen hier einen direkten Aufruf ein.
@@ -125,7 +136,9 @@ def antrag_json(r, item=None, inhalt=True):
                 "status_text": ANTRAGSSTATUS[r["status"]], "inhalt": inhalt,
                 "eigen": bool(uid and r["created_by"] == uid),
                 # Trägt der Artikel noch den alten Wert? Sonst lässt sich der offene Antrag nur noch ablehnen.
-                "passt": item[r["field"]] == r["old_value"]})
+                "passt": item[r["field"]] == r["old_value"],
+                # Ein Antrag aufs Entfernen des Herstelldatums (nur bis Schritt 16 gestellt): nur noch ablehnen.
+                "entfernen": r["field"] == "manufactured_on" and not r["new_value"]})
     out["begruendung"] = r["reason"] if inhalt else None
     out["antwort"] = r["answer"] if inhalt else None
     out["antragsteller"] = r["created_by_name"] if inhalt else None
@@ -230,14 +243,13 @@ def _seriennummer(item, neu):
     bestand._serie_frei(item["product_id"], neu, ausser=item["id"])
 
 
-def _herstellung(item, produkt, neu):
-    """Neues Herstelldatum prüfen (beim Antrag und beim Bestätigen) – die Regeln aus bestand.artikel_werte."""
+def _herstellung(item, neu):
+    """Neues Herstelldatum prüfen (beim Antrag und beim Bestätigen) – die Regeln aus bestand.artikel_werte. Entfernen
+    geht nicht (Entscheidung vom 21.10.2026, auch nicht per Antrag)."""
+    if not neu:
+        raise Abgelehnt(HERSTELLUNG_BLEIBT)
     if neu == item["manufactured_on"]:
         raise Abgelehnt("Das neue Herstelldatum ist dasselbe wie das bisherige.")
-    if not neu:
-        if produkt["material_kind"] == "textil":
-            raise Abgelehnt("Bei textilem Material ist das Herstelldatum Pflicht – an ihm hängt die Lebensdauer.")
-        return
     if erster_tag(neu) > heute():
         raise Abgelehnt("Das Herstelldatum liegt in der Zukunft.")
     for feld, name in (("purchased_on", "Kaufdatum"), ("first_use_on", "Erstgebrauch")):
@@ -252,18 +264,17 @@ def _zustand(item):
         raise Abgelehnt(NICHT_FEST, 409)
 
 
-def _wuensche(d, item, produkt):
-    """{feld: neuer Wert} aus der Anfrage. serial_no: Text (leer = keine Änderung beantragt). manufactured_on: Monat
-    oder Tag; mit herstellung_entfernen = ja das Entfernen (nur außer textil)."""
+def _wuensche(d):
+    """{feld: neuer Wert} aus der Anfrage. serial_no: Text, manufactured_on: Monat oder Tag (leer = keine Änderung
+    beantragt). Das Entfernen des Herstelldatums (herstellung_entfernen, bis zum 21.10.2026 möglich) gibt es nicht mehr."""
     out = {}
+    if d.get("herstellung_entfernen") in (True, 1, "1", "ja", "true"):
+        raise Abgelehnt(HERSTELLUNG_BLEIBT)
     sn = text(d, "serial_no", "Seriennummer", 80)
     if sn:
         out["serial_no"] = sn
-    entfernen = d.get("herstellung_entfernen") in (True, 1, "1", "ja", "true")
     herst = monat_oder_datum(d.get("manufactured_on"), "Herstelldatum")
-    if herst and entfernen:
-        raise Abgelehnt("Herstelldatum ändern oder entfernen – nicht beides.")
-    if herst or entfernen:
+    if herst:
         out["manufactured_on"] = herst
     if not out:
         raise Abgelehnt(NICHTS)
@@ -284,7 +295,7 @@ def stellen(iid, d):
             raise Abgelehnt("Beantragen dürfen Materialwarte und Prüfer dieses Artikels.", 403)
         _zustand(item)
         produkt = katalog.produkt(item["product_id"])
-        wuensche = _wuensche(d, item, produkt)
+        wuensche = _wuensche(d)
         for feld in wuensche:
             da = db.query("SELECT created_at FROM mat_item_change WHERE item_id = ? AND field = ? AND status = 'offen'",
                           (iid, feld), one=True)
@@ -297,7 +308,7 @@ def stellen(iid, d):
             # Metall ohne Herstelldatum: direkt nachtragen – außer ein Antrag hat es entfernt, dann nur per Antrag.
             if bestand.herstellung_nachtragbar(item, produkt):
                 raise Abgelehnt(NACHTRAGEN_DIREKT, 409)
-            _herstellung(item, produkt, wuensche["manufactured_on"])
+            _herstellung(item, wuensche["manufactured_on"])
         for feld, neu in wuensche.items():
             aid = db.execute(
                 "INSERT INTO mat_item_change (item_id, field, old_value, new_value, reason, created_by, created_by_name, "
@@ -332,6 +343,8 @@ def bestaetigen(aid, d):
         if item["lock_state"] == "ausgesondert":
             raise Abgelehnt(NUR_ABLEHNEN, 409)
         feld, alt, neu = r["field"], r["old_value"], r["new_value"]
+        if feld == "manufactured_on" and not neu:
+            raise Abgelehnt(ENTFERNEN_ALT, 409)
         if item[feld] != alt:
             raise Abgelehnt(STAND_ANDERS, 409)
         produkt = katalog.produkt(item["product_id"])
@@ -344,7 +357,7 @@ def bestaetigen(aid, d):
             if item["serial_generated"]:
                 vorher["serial_generated"], nachher["serial_generated"] = True, False
         else:
-            _herstellung(item, produkt, neu)
+            _herstellung(item, neu)
             setzen, werte = "manufactured_on = ?", [neu]
             if produkt["material_kind"] == "textil":
                 # Das Lebensende hängt am Herstelldatum: neu rechnen, ein von Hand vorgezogenes bleibt, wenn es früher liegt.
@@ -381,6 +394,24 @@ def ablehnen(aid, d):
         journal.eintragen("item", r["item_id"], "antrag_abgelehnt", None,
                           {"antrag": aid, "feld": ANTRAGSFELDER[r["field"]], "ablehnung": antwort})
     _antragsteller_benachrichtigen(aid)
+
+
+def zurueckziehen(aid):
+    """Den eigenen offenen Antrag zurückziehen (Entscheidung vom 21.10.2026 zur Prüfung): nur der Antragsteller und nur,
+    solange er den Artikel liest – sonst 404 wie unbekannt. Keine Mail; das Journal sagt „Änderungsantrag
+    zurückgezogen“. Wer zweitens kommt (schon entschieden oder zurückgezogen), erfährt es (409)."""
+    uid, _ = akteur()
+    antrag(aid)
+    with db.transaction(sofort=True):
+        r = antrag(aid)
+        item = bestand.artikel(r["item_id"])
+        if not uid or r["created_by"] != uid or not rechte.darf_artikel("lesen", item):
+            raise Abgelehnt(FEHLT, 404)
+        if r["status"] != "offen":
+            raise Abgelehnt(ERLEDIGT, 409)
+        _entscheiden(aid, "zurueckgezogen", "")
+        journal.eintragen("item", r["item_id"], "antrag_zurueckgezogen", None,
+                          {"antrag": aid, "feld": ANTRAGSFELDER[r["field"]]})
 
 
 # --- Mails ----------------------------------------------------------------------------------------------------------

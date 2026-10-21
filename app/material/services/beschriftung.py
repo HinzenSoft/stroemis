@@ -79,7 +79,7 @@ AKTION = {
     "nacharbeit_verworfen": "Nacharbeit verworfen", "wiki": "Prüfanleitung (Wiki) geändert",
     "mangel_gemeldet": "Mangel gemeldet",
     "antrag_gestellt": "Änderung beantragt", "antrag_bestaetigt": "Änderung bestätigt (Antrag)",
-    "antrag_abgelehnt": "Änderungsantrag abgelehnt",
+    "antrag_abgelehnt": "Änderungsantrag abgelehnt", "antrag_zurueckgezogen": "Änderungsantrag zurückgezogen",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",

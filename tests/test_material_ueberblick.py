@@ -216,6 +216,9 @@ AUSNAHMEN_SCHREIBEN = {
     ("POST", "material_api.artikel_mangel"): 400,
     # Die eigene Einstellung „Erinnerungen zu meiner PSA“ – ohne „an“ 400.
     ("PUT", "material_api.psa_mails"): 400,
+    # Den eigenen offenen Änderungsantrag zieht jeder mit Modulzugang zurück (Entscheidung vom 21.10.2026) – ein fremder
+    # oder unbekannter ist 404, nichts geändert.
+    ("POST", "material_api.antrag_zurueckziehen"): 404,
 }
 # Ebenso nach dem Pfad (Phase 2, für die Routen der Pakete B, C, D): Die globale Suche und der QR-Steckbrief stehen
 # jedem mit Modulzugang offen – ohne Bestätigung antworten sie 400 und schreiben nichts.

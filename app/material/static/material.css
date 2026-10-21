@@ -302,6 +302,11 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-antrag-produkt { font-weight: 400; font-size: var(--fs-mittel); }
 .mat-antrag-aenderung { margin: 4px 0 8px; overflow-wrap: anywhere; }
 .mat-antrag-offen { margin: 8px 0 4px; overflow-wrap: anywhere; }
+/* Der eigene offene Antrag trägt im Hinweis den grauen Knopf „Antrag zurückziehen …“ (Entscheidung vom 21.10.2026). */
+.mat-antrag-offen > p { margin: 0; }
+.mat-antrag-offen .btn-row { margin-top: 6px; }
+.mat-meldung.m-zurueckgezogen { border-left-color: var(--co-note-ka); }
+.mat-mstatus.m-zurueckgezogen { background: var(--co-note-fl); color: var(--grau); box-shadow: inset 0 0 0 1px var(--co-note-ka); }
 .mat-antrag-knopf { margin: 4px 0 10px; }
 /* Antragsdialog: die beiden Felder oben bündig (ihre Hilfezeilen sind verschieden lang); schmal untereinander. */
 .field-row.mat-antragzeile { align-items: start; }

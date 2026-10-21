@@ -119,13 +119,23 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     (Entscheidung zu Befund 5): mat_item_stammdaten_fest wird ersetzt – Nachtragen bei Metall nur, solange kein
     angewendeter Antrag ein vorhandenes Herstelldatum entfernt hat. Kein neues Schema, rein additiv, wiederholbar. Wer
     mat_item oder mat_product künftig neu aufbaut, muss die Trigger neu anlegen.
+  - Schritt 17 (Phase 3 · Lieferung 1, Entscheidungen vom 21.10.2026 zur Prüfung der Anträge): mat_item_change wird
+    umgebaut (alle Zeilen und Kennungen bleiben, AUTOINCREMENT-Stand ebenso) – der CHECK kennt den Stand „zurückgezogen“
+    (ANTRAGSSTATUS; Schritt 15 bleibt mit ANTRAGSSTATUS_15, wie er ausgeliefert wurde). Trigger (TRIGGER_17): einen
+    offenen Antrag zieht nur der Antragsteller selbst zurück (Endzustand wie bestätigt und abgelehnt, einmal); ein
+    Herstelldatum lässt sich nach der ersten Prüfung nicht mehr entfernen, auch nicht per Antrag – kein neuer Antrag mit
+    leerem Herstelldatum, ein alter offener lässt sich nicht mehr bestätigen, mat_item_stammdaten_fest (ersetzt, gleicher
+    Name) lässt das Feld nicht leer werden. Die Regel aus Schritt 16 (Nachtragen nach einem per Antrag entfernten
+    Herstelldatum nur per Antrag) bleibt für Altfälle. Wiederholbar: Umgebaut wird nur, wenn der CHECK den neuen Stand
+    noch nicht kennt. Wer mat_item_change künftig neu aufbaut, muss ihre Trigger und die beiden Artikeltrigger, die sie
+    lesen, neu anlegen.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -158,7 +168,9 @@ ANHANGARTEN = {"externes_pruefformular": "externes Prüfformular", "pruefbericht
 MELDUNGSSTATUS = {"offen": "offen", "eingepflegt": "eingepflegt", "abgelehnt": "abgelehnt"}
 # Änderungsanträge zu den festen Stammdaten (Schritt 15): welche Felder, welche Stände.
 ANTRAGSFELDER = {"serial_no": "Seriennummer", "manufactured_on": "Herstellung"}
-ANTRAGSSTATUS = {"offen": "offen", "bestaetigt": "bestätigt", "abgelehnt": "abgelehnt"}
+ANTRAGSSTATUS = {"offen": "offen", "bestaetigt": "bestätigt", "abgelehnt": "abgelehnt", "zurueckgezogen": "zurückgezogen"}
+# Die Stände, mit denen Schritt 15 die Tabelle angelegt hat – Schritt 17 nahm „zurückgezogen“ dazu.
+ANTRAGSSTATUS_15 = ("offen", "bestaetigt", "abgelehnt")
 FREIGABEN = ("lesen", "pruefen", "verwalten")
 # Die Stufen, mit denen Schritt 1 das Erinnerungslog angelegt hat – Schritt 1 bleibt, wie er ausgeliefert wurde.
 ERINNERUNGEN_1 = ("30_tage", "7_tage", "faellig", "lebensdauer")
@@ -1405,7 +1417,7 @@ SCHRITT_15 = [
       old_value        TEXT,                                       -- Wert beim Antrag (NULL: Herstelldatum leer)
       new_value        TEXT,                                       -- beantragter Wert (NULL: Herstelldatum entfernen)
       reason           TEXT NOT NULL CHECK (trim(reason) <> '' AND length(reason) <= 1000),
-      status           TEXT NOT NULL DEFAULT 'offen' CHECK (status IN """ + _in(ANTRAGSSTATUS) + """),
+      status           TEXT NOT NULL DEFAULT 'offen' CHECK (status IN """ + _in(ANTRAGSSTATUS_15) + """),
       answer           TEXT NOT NULL DEFAULT '' CHECK (length(answer) <= 1000),  -- bei Ablehnung Pflicht
       created_by       INTEGER REFERENCES users(id) ON DELETE SET NULL,
       created_by_name  TEXT NOT NULL CHECK (trim(created_by_name) <> ''),
@@ -1547,12 +1559,69 @@ def _schritt_16(conn):
         conn.execute(sql)
 
 
+# --- Schritt 17 (Phase 3 · Lieferung 1, Entscheidungen vom 21.10.2026 zur Prüfung): zurückziehen, nicht entfernen -----
+
+HERSTELLUNG_BLEIBT = "'Ein Herstelldatum lässt sich nach der ersten Prüfung nicht entfernen – nur auf Antrag ändern.'"
+NUR_ANTRAGSTELLER = "'Einen offenen Änderungsantrag zieht nur der Antragsteller selbst zurück.'"
+# Die Tabelle aus Schritt 15, nur mit dem Stand „zurückgezogen“ im CHECK (und dem Kommentar zu new_value).
+_ANTRAG_TABELLE_15 = SCHRITT_15[0]
+ANTRAG_TABELLE_17 = (_ANTRAG_TABELLE_15
+                     .replace("CREATE TABLE IF NOT EXISTS mat_item_change (", "CREATE TABLE {name} (", 1)
+                     .replace("CHECK (status IN " + _in(ANTRAGSSTATUS_15) + ")", "CHECK (status IN " + _in(ANTRAGSSTATUS) + ")", 1)
+                     .replace("-- beantragter Wert (NULL: Herstelldatum entfernen)",
+                              "-- beantragter Wert (NULL nur in Anträgen bis Schritt 16: Herstelldatum entfernen)", 1))
+ANTRAG_INDIZES = SCHRITT_15[1:]
+TRIGGER_17_ARTIKEL = [
+    # Ersetzt die Fassung aus Schritt 16 (gleicher Name): Das Herstelldatum wird nach der ersten Prüfung nie mehr leer –
+    # nachtragen (Metall, wie Schritt 16) und ändern per bestätigtem Antrag gehen nur auf einen Wert.
+    _trigger("mat_item_stammdaten_fest", "BEFORE UPDATE OF serial_no, manufactured_on ON mat_item",
+             "((NEW.serial_no IS NOT OLD.serial_no AND NOT " + _ANTRAG_DECKT.format("serial_no") + ") "
+             "OR (NEW.manufactured_on IS NOT OLD.manufactured_on AND (NEW.manufactured_on IS NULL OR (NOT "
+             + _NACHTRAGEN_16 + " AND NOT " + _ANTRAG_DECKT.format("manufactured_on") + ")))) "
+             "AND EXISTS (SELECT 1 FROM mat_inspection x WHERE x.item_id = OLD.id AND x.completed_at IS NOT NULL)",
+             STAMMDATEN_FEST),
+    TRIGGER_15_ARTIKEL[1],                          # mat_item_antrag_angewendet, unverändert
+]
+TRIGGER_17 = [
+    # Kein Antrag mehr, der das Herstelldatum entfernt (Entscheidung vom 21.10.2026) …
+    _trigger("mat_item_change_herstellung_leer", "BEFORE INSERT ON mat_item_change",
+             "NEW.field = 'manufactured_on' AND (NEW.new_value IS NULL OR trim(NEW.new_value) = '')", HERSTELLUNG_BLEIBT),
+    # … und ein alter offener (bis Schritt 16 gestellt) lässt sich nicht mehr bestätigen – nur ablehnen oder zurückziehen.
+    _trigger("mat_item_change_entfernen_bestaetigen", "BEFORE UPDATE OF status ON mat_item_change",
+             "OLD.status = 'offen' AND NEW.status = 'bestaetigt' AND OLD.field = 'manufactured_on' "
+             "AND OLD.new_value IS NULL", HERSTELLUNG_BLEIBT),
+    # Zurückziehen: nur der Antragsteller (Kennung), ohne Antwort; danach steht der Antrag fest wie ein entschiedener
+    # (mat_item_change_entschieden). Nur beim Übergang aus „offen“ – ON DELETE SET NULL setzt später beide Kennungen.
+    _trigger("mat_item_change_zurueckziehen", "BEFORE UPDATE OF status, resolved_by, answer ON mat_item_change",
+             "OLD.status = 'offen' AND NEW.status = 'zurueckgezogen' AND (NEW.resolved_by IS NULL "
+             "OR NEW.resolved_by IS NOT OLD.created_by OR NEW.answer <> '')", NUR_ANTRAGSTELLER),
+]
+
+
+def _schritt_17(conn):
+    """Entscheidungen vom 21.10.2026 zur Prüfung der Anträge: mat_item_change mit dem Stand „zurückgezogen“ neu aufbauen
+    (nur, wenn ihr CHECK ihn noch nicht kennt – alle Zeilen, Kennungen und der AUTOINCREMENT-Stand bleiben) und die
+    Trigger anlegen. Die beiden Artikeltrigger, die mat_item_change lesen, werden vorher entfernt (beim Umbau fehlt die
+    Tabelle kurz) und danach neu angelegt – mat_item_stammdaten_fest in der Fassung ohne Entfernen. Ein zweiter Lauf
+    baut nichts um und ändert keine Zeile."""
+    conn.execute("DROP TRIGGER IF EXISTS mat_item_stammdaten_fest")
+    conn.execute("DROP TRIGGER IF EXISTS mat_item_antrag_angewendet")
+    tabelle = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'mat_item_change'").fetchone()
+    if "'zurueckgezogen'" not in tabelle[0]:
+        stand = conn.execute("SELECT seq FROM sqlite_sequence WHERE name = 'mat_item_change'").fetchone()
+        _umbauen(conn, "mat_item_change", ANTRAG_TABELLE_17, ANTRAG_INDIZES, "item_change")
+        if stand:
+            conn.execute("UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 'mat_item_change'", (stand[0],))
+    for sql in TRIGGER_15_ANTRAG + TRIGGER_17 + TRIGGER_17_ARTIKEL:
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
-            14: _schritt_14, 15: _schritt_15, 16: _schritt_16}
+            14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17}
 
 
 def _meta(conn, schluessel, vorgabe=None):

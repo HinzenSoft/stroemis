@@ -13,6 +13,8 @@ Dazu Schritt 15 der Migration, Rückrufabgleich mit der neuen Nummer, Löschkonz
 Prüfung vom 21.10.2026 (Abschnitt 10): Leser sehen im Verlauf und im Lebenslauf weder Begründung noch Namen, Bescheid nur
 an einen Antragsteller, der den Artikel noch liest, Schritt 16 (Trigger gegen Umwege an der Sperre vorbei), Hinweis auf
 laufende Rückrufe, „vormals …“ im Sammelprotokoll.
+Entscheidungen vom 21.10.2026 zur Prüfung (Abschnitt 11): Der Antragsteller zieht seinen offenen Antrag selbst zurück;
+das Herstelldatum lässt sich nur noch ändern, nicht entfernen (auch nicht per Antrag); Schritt 17 mit Altbestand.
 Echte Mails gehen nie hinaus (antrag.send_mail ist ersetzt). Alle Namen, Nummern und Texte sind Platzhalter."""
 import logging
 import os
@@ -40,6 +42,8 @@ TRIGGER_NEU = {"mat_item_stammdaten_fest", "mat_item_antrag_angewendet", "mat_it
                "mat_item_change_angewendet", "mat_item_change_loeschen", "mat_item_change_ersetzen", "mat_item_change_neu"}
 TRIGGER_16 = {"mat_item_ersetzen", "mat_item_kennung", "mat_item_geprueft_loeschen", "mat_item_produkt_fest",
               "mat_product_materialart_fest", "mat_product_ersetzen", "mat_product_kennung"}
+TRIGGER_17 = {"mat_item_change_herstellung_leer", "mat_item_change_entfernen_bestaetigen", "mat_item_change_zurueckziehen"}
+HERST_BLEIBT = "nicht entfernen"
 
 
 # --- Helfer ---------------------------------------------------------------------------------------------------------
@@ -301,7 +305,8 @@ def test_eingaben():
             ({"manufactured_on": "03/2024"}, 400, "Monat (JJJJ-MM)"),
             ({"manufactured_on": "2099-01"}, 400, "Zukunft"),
             ({"manufactured_on": "2024-06"}, 400, "Kaufdatum"),
-            ({"manufactured_on": "2024-02", "herstellung_entfernen": True}, 400, "nicht beides"),
+            ({"manufactured_on": "2024-02", "herstellung_entfernen": True}, 400, HERST_BLEIBT),
+            ({"herstellung_entfernen": True}, 400, HERST_BLEIBT),
             ({"serial_no": "AN-101", "begruendung": "x" * 1001}, 400, "zu lang"),
         ]
         for d, code, text in faelle:
@@ -314,7 +319,7 @@ def test_eingaben():
         assert r.status_code == 409 and "Bereich, den du nicht siehst" in r.json["error"], r.get_json()
         assert zeilen(t.app, "SELECT art FROM mat_global_search ORDER BY id DESC LIMIT 1")[0]["art"] == "dublette"
         r = beantragen(t.w, t.g1, herstellung_entfernen=True)
-        assert r.status_code == 400 and "textilem Material" in r.json["error"], r.get_json()
+        assert r.status_code == 400 and HERST_BLEIBT in r.json["error"], r.get_json()
         assert antraege(t.app, t.k1) == [] and antraege(t.app, t.g1) == []
         # Beide Felder auf einmal: zwei Zeilen mit derselben Begründung, zwei Journaleinträge.
         r = beantragen(t.w, t.k1, serial_no="AN-101", manufactured_on="2024-02", begruendung="Platzhalter beide")
@@ -332,7 +337,7 @@ def test_eingaben():
         assert r.status_code == 409 and "läuft schon ein Antrag" in r.json["error"], r.get_json()
         r = beantragen(t.p, t.k1, manufactured_on="2024-01")
         assert r.status_code == 409, r.get_json()
-        # Entfernen bei Metall: als Antrag möglich (Zeile mit neuem Wert NULL).
+        # Entfernen: auch bei Metall und „sonstiges“ nicht mehr (Entscheidung vom 21.10.2026 zur Prüfung).
         r = beantragen(t.w, t.fb, herstellung_entfernen=True)
         assert r.status_code == 404
         r = beantragen(t.adm, t.fb, herstellung_entfernen=True)
@@ -441,7 +446,7 @@ def _ohne_trigger(app, befehl, args):
     try:
         conn.execute("DROP TRIGGER mat_item_stammdaten_fest")
         conn.execute(befehl, args)
-        conn.execute(models.TRIGGER_16_ARTIKEL[0])
+        conn.execute(models.TRIGGER_17_ARTIKEL[0])
         conn.commit()
     finally:
         conn.close()
@@ -536,20 +541,25 @@ def test_trigger():
                 raise AssertionError("abgelehnt ohne Begründung")
             except sqlite3.IntegrityError as e:
                 assert "CHECK" in str(e), e
-            # Nachtragen: Metall ja (einmal), „sonstiges“ nein; Entfernen bei Metall nur mit Antrag.
+            # Nachtragen: Metall ja (einmal), „sonstiges“ nein; Entfernen gar nicht – auch kein Antrag darauf (Schritt 17).
             conn.execute("UPDATE mat_item SET manufactured_on = '2023-10' WHERE id = ?", (t.k2,))
             geht_nicht("UPDATE mat_item SET manufactured_on = '2023-09' WHERE id = ?", (t.k2,))
             geht_nicht("UPDATE mat_item SET manufactured_on = NULL WHERE id = ?", (t.k2,))
             geht_nicht("UPDATE mat_item SET manufactured_on = '2023-10' WHERE id = ?", (t.s1,))
-            aid4 = neu(t.k2, "manufactured_on", "2023-10", None)
+            for leer in (None, "", "  "):
+                geht_nicht("INSERT INTO mat_item_change (item_id, field, old_value, new_value, reason, created_by, "
+                           "created_by_name, created_at) VALUES (?, 'manufactured_on', '2023-10', ?, 'x', ?, 'wart', 'x')",
+                           (t.k2, leer, wart), HERST_BLEIBT)
+            aid4 = neu(t.k2, "manufactured_on", "2023-10", "2023-08")
             entscheiden(aid4)
-            conn.execute("UPDATE mat_item SET manufactured_on = NULL WHERE id = ?", (t.k2,))
+            conn.execute("UPDATE mat_item SET manufactured_on = '2023-08' WHERE id = ?", (t.k2,))
+            geht_nicht("UPDATE mat_item SET manufactured_on = NULL WHERE id = ?", (t.k2,))
             # Ungeprüft: frei wie bisher.
             conn.execute("UPDATE mat_item SET serial_no = 'AN-NEU9', manufactured_on = NULL WHERE id = ?", (t.neu1,))
             conn.commit()
         finally:
             conn.close()
-        assert (item(t.app, t.k1)["serial_no"], item(t.app, t.k2)["manufactured_on"]) == ("AN-T1", None)
+        assert (item(t.app, t.k1)["serial_no"], item(t.app, t.k2)["manufactured_on"]) == ("AN-T1", "2023-08")
     print("Trigger bestanden.")
 
 
@@ -740,7 +750,8 @@ def test_migration_15():
         conn.execute("BEGIN")
         n = conn.total_changes
         models._schritt_15(conn)
-        models._schritt_16(conn)                   # ersetzt mat_item_stammdaten_fest wieder durch die Fassung aus 16
+        models._schritt_16(conn)
+        models._schritt_17(conn)                   # ersetzt mat_item_stammdaten_fest wieder durch die Fassung aus 17
         assert conn.total_changes == n and _schema_in(conn) == trigger
         conn.rollback()
         conn.close()
@@ -752,7 +763,8 @@ def test_migration_15():
             make_app(tmp15)
             v14, t14, _ = _schema(os.path.join(tmp14, "stroemis.db"))
             v15, t15, tab15 = _schema(os.path.join(tmp15, "stroemis.db"))
-            assert (v14, v15) == ("14", endversion()) and set(t15) == set(t14) | TRIGGER_NEU | TRIGGER_16, (v14, v15)
+            assert (v14, v15) == ("14", endversion()) and set(t15) == set(t14) | TRIGGER_NEU | TRIGGER_16 | TRIGGER_17, (
+                v14, v15)
             z14, z15 = _zahlen(os.path.join(tmp14, "stroemis.db")), _zahlen(os.path.join(tmp15, "stroemis.db"))
             assert z15.pop("mat_item_change") == 0 and z15 == z14, (z14, z15)
             # Auf den echten Daten: ein geprüfter Artikel bleibt fest.
@@ -793,7 +805,7 @@ def test_oberflaeche_statisch():
     assert "const nachtragen = fest && !!a.herstellung_nachtragbar;" in dlg
     assert 'datumFeld("ad-herst", null, "monat")' in dlg and "Nur Nachtragen möglich" in dlg
     assert ('<button class="btn secondary small" type="button" id="ad-antrag">Änderung beantragen …</button>' in dlg
-            and "antragMoeglich(a)" in dlg and "antragOffenText(x)" in dlg)
+            and "antragMoeglich(a)" in dlg and "offen.map(antragOffenHtml)" in dlg)
     assert "} else if (nachtragen) {" in dlg and "if (nach) daten.manufactured_on = nach;" in dlg
     block = js[js.index("/* --- Änderungsanträge"):js.index("/* --- Artikel anlegen")]
     antrag_dlg = block[block.index("function antragDialog(a)"):]
@@ -997,11 +1009,12 @@ def test_migration_16():
     Fassung aus 15): Daten unverändert, Trigger da und ersetzt, zweiter Lauf ohne Änderung. 7 → 16 an einer Kopie (wenn angegeben): Zahlen wie 7 → 15, Trigger greifen an einem
     geprüften Artikel der Kopie."""
     from app.material import models
+    bis16 = bis_schritt(16)                       # seit Schritt 17 läuft eine frische Datenbank weiter – hier bis 16
     with tempfile.TemporaryDirectory() as tmp:
-        make_app(tmp)
+        bis16(make_app, tmp)
         pfad = os.path.join(tmp, "stroemis.db")
         version, trigger, _ = _schema(pfad)
-        assert version == "16" == endversion() and TRIGGER_16 <= set(trigger), (version, trigger)
+        assert version == "16" and TRIGGER_16 <= set(trigger), (version, trigger)
         assert "c.old_value IS NOT NULL" in trigger["mat_item_stammdaten_fest"]
         conn = sqlite3.connect(pfad)
         for n in TRIGGER_16 | {"mat_item_stammdaten_fest"}:
@@ -1011,11 +1024,11 @@ def test_migration_16():
         conn.commit()
         conn.close()
         vorher = _zahlen(pfad)
-        make_app(tmp)
+        bis16(make_app, tmp)
         version, trigger2, _ = _schema(pfad)
         assert version == "16" and trigger2 == trigger and _zahlen(pfad) == vorher
         conn = sqlite3.connect(pfad)
-        assert models.migrieren(conn) == 16
+        assert bis16(models.migrieren, conn) == 16
         conn.execute("BEGIN")
         n = conn.total_changes
         models._schritt_16(conn)
@@ -1027,7 +1040,7 @@ def test_migration_16():
             for d in (tmp15, tmp16):
                 shutil.copyfile(KOPIE_STAND_7, os.path.join(d, "stroemis.db"))
             bis_schritt(15)(make_app, tmp15)
-            make_app(tmp16)
+            bis16(make_app, tmp16)
             v15, t15, _ = _schema(os.path.join(tmp15, "stroemis.db"))
             v16, t16, _ = _schema(os.path.join(tmp16, "stroemis.db"))
             assert (v15, v16) == ("15", "16") and set(t16) == set(t15) | TRIGGER_16, (v15, v16)
@@ -1145,15 +1158,15 @@ def test_sammelprotokoll_vormals():
 
 def test_nachtragen_nach_entfernen():
     """Befund 5, entschieden am 21.10.2026: Bei Metall direkt nachtragen nur, solange der Artikel noch nie ein
-    Herstelldatum hatte. Hat ein Antrag es entfernt, weist PUT ein neues mit 409 und dem Hinweis auf den Antrag ab, der
-    Artikel ist nicht mehr „nachtragbar“, ein Antrag auf einen neuen Wert geht (statt „trag direkt nach“) und wird
-    bestätigt. Der Trigger hält dasselbe an der Schnittstelle vorbei; ein Artikel ohne je ein Herstelldatum bleibt
-    nachtragbar."""
+    Herstelldatum hatte. Entfernen per Antrag geht seit Schritt 17 nicht mehr – die Regel gilt für Altfälle (Stand 16,
+    _altbestand_16): PUT weist ein neues mit 409 und dem Hinweis auf den Antrag ab, der Artikel ist nicht „nachtragbar“,
+    ein Antrag auf einen neuen Wert geht und wird bestätigt. Der Trigger hält dasselbe an der Schnittstelle vorbei; ein
+    Artikel ohne je ein Herstelldatum bleibt nachtragbar."""
     from app.material.services.bestand import HERSTELLUNG_ENTFERNT
     with post(), tempfile.TemporaryDirectory() as tmp:
-        t = aufbau(tmp)
-        aid = beantragen(t.w, t.k1, herstellung_entfernen=True, begruendung="Platzhalter entfernen").json["antraege"][0]["id"]
-        assert bestaetigen(t.mv, aid).status_code == 200 and item(t.app, t.k1)["manufactured_on"] is None
+        t = _altbestand_16(tmp)
+        make_app(tmp)                                                  # 16 → 17
+        assert item(t.app, t.k1)["manufactured_on"] is None
         a = lesen(t.w, t.k1)
         assert a["stammdaten_fest"] and not a["herstellung_nachtragbar"], a["herstellung_nachtragbar"]
         r = t.w.put(f"/api/material/artikel/{t.k1}", headers=H, json={"manufactured_on": "2010-01"})
@@ -1203,6 +1216,297 @@ def test_oberflaeche_pruefung():
     print("Oberfläche (Prüfung) bestanden.")
 
 
+
+# --- 11. Entscheidungen vom 21.10.2026 zur Prüfung: zurückziehen, Herstelldatum nicht entfernen, Schritt 17 ------------
+
+def zurueckziehen(c, aid):
+    return c.post(f"/api/material/antraege/{aid}/zurueckziehen", headers=H, json={})
+
+
+def _altbestand_16(tmp):
+    """Ein Stand 16 mit Anträgen, wie es ihn auf dev geben kann: aufbau unter Schemaversion 16, dazu Karabiner k3
+    (AN-300, 05/2023, geprüft). k1 (Metall) hat sein Herstelldatum per bestätigtem Antrag verloren (bis Schritt 16
+    möglich), k3 hat einen offenen Antrag aufs Entfernen, k2 einen offenen auf eine Herstellernummer. Die Antragszeilen
+    entstehen per SQL so, wie die Dienste von damals sie schrieben – die Trigger aus Schritt 16 sind dabei aktiv."""
+    def bau():
+        t = aufbau(tmp)
+        t.k3 = neuer_artikel(t.w, t.ids["hms"], t.lager, serial_no="AN-300", manufactured_on="2023-05")["id"]
+        pruefen(t.p, t.k3)
+        return t
+    t = bis_schritt(16)(bau)
+    conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+    try:
+        assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "16"
+
+        def neu(iid, feld, alt, wert):
+            return conn.execute(
+                "INSERT INTO mat_item_change (item_id, field, old_value, new_value, reason, created_by, created_by_name, "
+                "created_at) VALUES (?,?,?,?,'Platzhalter alt',?,'wart','2026-10-21T08:00:00+00:00')",
+                (iid, feld, alt, wert, t.k["wart_id"])).lastrowid
+        t.a_weg = neu(t.k1, "manufactured_on", "2024-03", None)
+        conn.execute("UPDATE mat_item_change SET status = 'bestaetigt', resolved_by = ?, resolved_by_name = 'katalog', "
+                     "resolved_at = '2026-10-21T09:00:00+00:00' WHERE id = ?", (t.k["katalog_id"], t.a_weg))
+        conn.execute("UPDATE mat_item SET manufactured_on = NULL WHERE id = ?", (t.k1,))
+        assert conn.execute("SELECT applied_at FROM mat_item_change WHERE id = ?", (t.a_weg,)).fetchone()[0]
+        t.a_offen = neu(t.k3, "manufactured_on", "2023-05", None)
+        t.a_sn = neu(t.k2, "serial_no", t.str_nr, "HN-ALT")
+        conn.commit()
+    finally:
+        conn.close()
+    return t
+
+
+def test_zurueckziehen():
+    """GEÄNDERT am 21.10.2026: Den offenen Antrag zieht der Antragsteller selbst zurück – nur seinen eigenen (sonst 404,
+    auch für die Material-Verwaltung), nur offen (sonst 409), nur solange er den Artikel liest (sonst 404). Stand
+    „zurückgezogen“ mit ihm als Handelndem, keine Antwort, keine Mail; Journal „Änderungsantrag zurückgezogen“ (für Leser
+    ohne Namen), auch im Lebenslauf; danach weder bestätigen noch ablehnen; der Zähler der Material-Verwaltung sinkt, unter
+    „erledigt“ steht er; neu beantragen geht. Der Trigger lässt das Zurückziehen nur dem Antragsteller."""
+    with post() as liste, tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        aid = beantragen(t.p, t.k1, serial_no="AN-150").json["antraege"][0]["id"]
+        aid2 = beantragen(t.w, t.k1, manufactured_on="2024-02").json["antraege"][0]["id"]
+        assert t.mv.get("/api/material/antraege").json["offen"] == 2
+        mails = len(liste)
+        for c in (t.w, t.mv, t.adm, t.f):
+            r = zurueckziehen(c, aid)
+            assert r.status_code == 404 and r.json["error"] == "Änderungsantrag nicht gefunden.", r.get_json()
+        assert zurueckziehen(t.k["nutzer"], aid).status_code in (403, 404)
+        assert zurueckziehen(t.p, 999999).status_code == 404
+        assert antraege(t.app, t.k1)[0]["status"] == "offen"
+        r = zurueckziehen(t.p, aid)
+        assert r.status_code == 200 and (r.json["antrag"]["status"], r.json["antrag"]["status_text"]) == (
+            "zurueckgezogen", "zurückgezogen"), r.get_json()
+        z = antraege(t.app, t.k1)[0]
+        assert (z["status"], z["resolved_by"], z["resolved_by_name"], z["answer"], z["applied_at"]) == (
+            "zurueckgezogen", t.k["pruefer_id"], "pruefer", "", None) and z["resolved_at"], z
+        assert item(t.app, t.k1)["serial_no"] == "AN-100" and len(liste) == mails
+        j = journal(t.app, t.k1, "antrag_zurueckgezogen")
+        assert len(j) == 1 and j[0]["user_name"] == "pruefer" and j[0]["vorher"] is None, j
+        assert j[0]["nachher"] == {"antrag": aid, "feld": "Seriennummer"}, j
+        # Endzustand: kein zweites Mal, weder bestätigen noch ablehnen.
+        r = zurueckziehen(t.p, aid)
+        assert r.status_code == 409 and "schon entschieden" in r.json["error"], r.get_json()
+        for f in (bestaetigen, ablehnen):
+            assert f(t.mv, aid, antwort="Platzhalter").status_code == 409
+        # Zähler, Listen, Artikel.
+        d = t.mv.get("/api/material/antraege").json
+        assert d["offen"] == 1 and [x["id"] for x in d["antraege"]] == [aid2]
+        erl = t.mv.get("/api/material/antraege?status=erledigt").json["antraege"]
+        assert [(x["id"], x["status"]) for x in erl] == [(aid, "zurueckgezogen")], erl
+        assert [(x["id"], x["status"]) for x in t.p.get("/api/material/antraege").json["antraege"]] == [
+            (aid, "zurueckgezogen")]
+        a = lesen(t.p, t.k1)
+        assert [(x["id"], x["eigen"]) for x in a["antraege"]] == [(aid2, False)], a["antraege"]
+        assert [(x["id"], x["eigen"]) for x in lesen(t.w, t.k1)["antraege"]] == [(aid2, True)]
+        assert beantragen(t.p, t.k1, serial_no="AN-151").status_code == 201
+        # Leser: ohne Namen; Lebenslauf nennt den Eintrag.
+        e = [x for x in lesen(t.f, t.k1)["journal"] if x["action"] == "antrag_zurueckgezogen"]
+        assert len(e) == 1 and e[0]["user_name"] == "(Person)", e
+        text = _pdf_text(t.w.get(f"/material/artikel/{t.k1}/lebenslauf.pdf").data)
+        assert "Änderungsantrag zurückgezogen" in " ".join(text.split()), text
+        # Materialwart und Material-Verwaltung ziehen ihre eigenen zurück.
+        assert zurueckziehen(t.w, aid2).status_code == 200
+        aid3 = beantragen(t.mv, t.g1, manufactured_on="2023-12").json["antraege"][0]["id"]
+        assert zurueckziehen(t.mv, aid3).status_code == 200 and item(t.app, t.g1)["manufactured_on"] == "2024-01"
+        # Wer den Artikel nicht mehr liest (in eine fremde Gliederung verschoben): 404 – wie in seiner Liste.
+        aid4 = beantragen(t.p, t.s1, serial_no="AN-S7").json["antraege"][0]["id"]
+        heimat = item(t.app, t.s1)["folder_id"]
+        sql(t.app, "UPDATE mat_item SET folder_id = ? WHERE id = ?", (item(t.app, t.fb)["folder_id"], t.s1))
+        assert zurueckziehen(t.p, aid4).status_code == 404
+        sql(t.app, "UPDATE mat_item SET folder_id = ? WHERE id = ?", (heimat, t.s1))
+        assert zurueckziehen(t.p, aid4).status_code == 200
+        # Trigger: zurückziehen nur mit der Kennung des Antragstellers, ohne Antwort; Kontolöschen danach geht.
+        aid5 = beantragen(t.p, t.s1, serial_no="AN-S8").json["antraege"][0]["id"]
+        conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+        try:
+            for wer, antwort in ((t.k["wart_id"], ""), (None, ""), (t.k["pruefer_id"], "Platzhalter")):
+                try:
+                    conn.execute("UPDATE mat_item_change SET status = 'zurueckgezogen', resolved_by = ?, answer = ?, "
+                                 "resolved_by_name = 'x', resolved_at = 'x' WHERE id = ?", (wer, antwort, aid5))
+                    raise AssertionError((wer, antwort))
+                except sqlite3.IntegrityError as e:
+                    assert "nur der Antragsteller" in str(e), e
+            conn.execute("UPDATE mat_item_change SET created_by = NULL, resolved_by = NULL WHERE id = ?", (aid,))
+            try:
+                conn.execute("UPDATE mat_item_change SET status = 'offen', resolved_at = NULL WHERE id = ?", (aid,))
+                raise AssertionError("wieder offen")
+            except sqlite3.IntegrityError as e:
+                assert ANTRAG_FEST in str(e), e
+            conn.commit()
+        finally:
+            conn.close()
+    print("Zurückziehen bestanden.")
+
+
+def test_herstellung_nicht_entfernen():
+    """GEÄNDERT am 21.10.2026: Das Herstelldatum lässt sich nach der ersten Prüfung nicht entfernen, auch nicht per Antrag
+    – bei jeder Materialart; ändern per Antrag geht weiter. Der Dienst weist herstellung_entfernen und ein leeres Datum
+    beim Bearbeiten ab, die Datenbank einen Antrag mit leerem neuem Herstelldatum und das Leeren des Feldes. Vor der
+    ersten Prüfung bleibt das Feld frei (entfernen und später nachtragen gehen – bestätigt am 21.10.2026)."""
+    with post(), tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        for iid in (t.k1, t.g1):
+            r = beantragen(t.w, iid, herstellung_entfernen=True)
+            assert r.status_code == 400 and r.json["error"].startswith("Das Herstelldatum lässt sich nicht entfernen"), (
+                r.get_json())
+            r = t.w.put(f"/api/material/artikel/{iid}", headers=H, json={"manufactured_on": None})
+            assert r.status_code in (400, 409), r.get_json()
+            assert item(t.app, iid)["manufactured_on"] is not None
+        assert antraege(t.app, t.k1) == [] and antraege(t.app, t.g1) == []
+        # Ein leeres Feld im Antrag heißt „keine Änderung beantragt“.
+        r = beantragen(t.w, t.k1, manufactured_on="")
+        assert r.status_code == 400 and "Bitte eine neue Seriennummer" in r.json["error"], r.get_json()
+        # Ändern geht.
+        r = beantragen(t.w, t.k1, manufactured_on="2024-01")
+        assert r.status_code == 201 and bestaetigen(t.mv, r.json["antraege"][0]["id"]).status_code == 200
+        assert item(t.app, t.k1)["manufactured_on"] == "2024-01"
+        # Vor der ersten Prüfung frei: entfernen, später nachtragen.
+        r = t.w.put(f"/api/material/artikel/{t.neu1}", headers=H, json={"manufactured_on": "2024-04"})
+        assert r.status_code == 200, r.get_json()
+        r = t.w.put(f"/api/material/artikel/{t.neu1}", headers=H, json={"manufactured_on": None})
+        assert r.status_code == 200 and item(t.app, t.neu1)["manufactured_on"] is None, r.get_json()
+        pruefen(t.p, t.neu1)
+        a = lesen(t.w, t.neu1)
+        assert a["herstellung_nachtragbar"], a
+        r = t.w.put(f"/api/material/artikel/{t.neu1}", headers=H, json={"manufactured_on": "2024-04"})
+        assert r.status_code == 200 and item(t.app, t.neu1)["manufactured_on"] == "2024-04", r.get_json()
+    print("Herstelldatum nicht entfernen bestanden.")
+
+
+def test_migration_17():
+    """Schritt 17: frisch Version 17, CHECK mit „zurückgezogen“, alle Trigger. 16 → 17 an einem Stand 16 mit Anträgen
+    (_altbestand_16): alle Zeilen und Kennungen gleich, AUTOINCREMENT-Stand gleich (die nächste Kennung liegt darüber),
+    Zahlen aller Tabellen gleich, Trigger = Stand 16 + TRIGGER_17, mat_item_stammdaten_fest ersetzt; zweiter Lauf ohne
+    Änderung. Danach: der alte offene Antrag aufs Entfernen lässt sich nicht bestätigen (Dienst 409, Trigger), nur
+    ablehnen oder zurückziehen; der offene auf die Herstellernummer wird bestätigt. 7 → 17 an einer Kopie (wenn
+    angegeben): Zahlen wie 7 → 16, Tabelle leer und umgebaut, Trigger greifen."""
+    from app.material import models
+    with tempfile.TemporaryDirectory() as tmp:
+        make_app(tmp)
+        pfad = os.path.join(tmp, "stroemis.db")
+        version, trigger, _ = _schema(pfad)
+        assert version == "17" == endversion() and TRIGGER_17 | TRIGGER_NEU | TRIGGER_16 <= set(trigger), trigger
+        assert "'zurueckgezogen'" in _tabelle_sql(pfad) and "NEW.manufactured_on IS NULL OR" in trigger["mat_item_stammdaten_fest"]
+    with post(), tempfile.TemporaryDirectory() as tmp:
+        t = _altbestand_16(tmp)
+        pfad = os.path.join(tmp, "stroemis.db")
+        v16, t16, _ = _schema(pfad)
+        assert v16 == "16" and "'zurueckgezogen'" not in _tabelle_sql(pfad)
+        alt = zeilen(t.app, "SELECT * FROM mat_item_change ORDER BY id")
+        seq = zeilen(t.app, "SELECT seq FROM sqlite_sequence WHERE name = 'mat_item_change'")
+        vorher = _zahlen(pfad)
+        make_app(tmp)
+        v17, t17, _ = _schema(pfad)
+        assert v17 == "17" and set(t17) == set(t16) | TRIGGER_17, (set(t17) ^ set(t16))
+        assert t17["mat_item_stammdaten_fest"] != t16["mat_item_stammdaten_fest"]
+        assert t17["mat_item_antrag_angewendet"] == t16["mat_item_antrag_angewendet"]
+        assert "'zurueckgezogen'" in _tabelle_sql(pfad)
+        assert zeilen(t.app, "SELECT * FROM mat_item_change ORDER BY id") == alt and len(alt) == 3
+        assert zeilen(t.app, "SELECT seq FROM sqlite_sequence WHERE name = 'mat_item_change'") == seq
+        assert _zahlen(pfad) == vorher
+        indizes = {r["name"] for r in zeilen(t.app, "SELECT name FROM sqlite_master WHERE type = 'index' "
+                                                    "AND tbl_name = 'mat_item_change' AND sql IS NOT NULL")}
+        assert indizes == {"ux_mat_item_change_offen", "idx_mat_item_change_item", "idx_mat_item_change_status",
+                           "idx_mat_item_change_antragsteller", "idx_mat_item_change_entscheider"}, indizes
+        conn = sqlite3.connect(pfad)
+        assert models.migrieren(conn) == 17
+        conn.execute("BEGIN")
+        n = conn.total_changes
+        models._schritt_17(conn)
+        assert conn.total_changes == n and _schema_in(conn) == t17
+        conn.rollback()
+        # Der alte offene Antrag aufs Entfernen: auch an der Schnittstelle vorbei nicht zu bestätigen.
+        try:
+            conn.execute("UPDATE mat_item_change SET status = 'bestaetigt', resolved_by_name = 'x', resolved_at = 'x' "
+                         "WHERE id = ?", (t.a_offen,))
+            raise AssertionError("Entfernen bestätigt")
+        except sqlite3.IntegrityError as e:
+            assert HERST_BLEIBT in str(e), e
+        finally:
+            conn.rollback()
+            conn.close()
+        lst = {x["id"]: x for x in t.mv.get("/api/material/antraege").json["antraege"]}
+        assert (lst[t.a_offen]["entfernen"], lst[t.a_offen]["neu"], lst[t.a_sn]["entfernen"]) == (True, None, False)
+        r = bestaetigen(t.mv, t.a_offen)
+        assert r.status_code == 409 and "nur noch ablehnen" in r.json["error"], r.get_json()
+        assert item(t.app, t.k3)["manufactured_on"] == "2023-05"
+        assert zurueckziehen(t.w, t.a_offen).status_code == 200
+        assert bestaetigen(t.mv, t.a_sn).status_code == 200 and item(t.app, t.k2)["serial_no"] == "HN-ALT"
+        neu = beantragen(t.p, t.k3, serial_no="AN-301").json["antraege"][0]["id"]
+        assert neu > max(x["id"] for x in alt)
+    if KOPIE_STAND_7 and os.path.exists(KOPIE_STAND_7):
+        with tempfile.TemporaryDirectory() as tmp16, tempfile.TemporaryDirectory() as tmp17:
+            for d in (tmp16, tmp17):
+                shutil.copyfile(KOPIE_STAND_7, os.path.join(d, "stroemis.db"))
+            bis_schritt(16)(make_app, tmp16)
+            make_app(tmp17)
+            v16, t16, _ = _schema(os.path.join(tmp16, "stroemis.db"))
+            v17, t17, _ = _schema(os.path.join(tmp17, "stroemis.db"))
+            assert (v16, v17) == ("16", "17") and set(t17) == set(t16) | TRIGGER_17, (v16, v17)
+            z16, z17 = _zahlen(os.path.join(tmp16, "stroemis.db")), _zahlen(os.path.join(tmp17, "stroemis.db"))
+            assert z16 == z17 and z17["mat_item_change"] == 0, (z16, z17)
+            assert "'zurueckgezogen'" in _tabelle_sql(os.path.join(tmp17, "stroemis.db"))
+            conn = sqlite3.connect(os.path.join(tmp17, "stroemis.db"))
+            try:
+                geprueft = conn.execute("SELECT i.id FROM mat_item i JOIN mat_inspection x ON x.item_id = i.id "
+                                        "WHERE x.completed_at IS NOT NULL AND i.manufactured_on IS NOT NULL LIMIT 1").fetchone()
+                if geprueft:
+                    try:
+                        conn.execute("UPDATE mat_item SET manufactured_on = NULL WHERE id = ?", geprueft)
+                        raise AssertionError("Trigger fehlt")
+                    except sqlite3.IntegrityError:
+                        pass
+            finally:
+                conn.rollback()
+                conn.close()
+        print("Migration 7 → 17 aus der Kopie bestanden.")
+    else:
+        print("Migration 7 → 17 übersprungen (MATERIAL_KOPIE_STAND_7 nicht gesetzt).")
+    print("Migration 17 bestanden.")
+
+
+def _tabelle_sql(pfad):
+    conn = sqlite3.connect(pfad)
+    try:
+        return conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'mat_item_change'").fetchone()[0]
+    finally:
+        conn.close()
+
+
+def test_oberflaeche_17():
+    """Oberfläche zu den Entscheidungen vom 21.10.2026 zur Prüfung: Antragsdialog ohne „Herstelldatum entfernen“; offener
+    eigener Antrag mit grauem „Antrag zurückziehen …“ (Artikelseite und Dialog „Bearbeiten“) und Rückfrage; in den
+    Meldungen „Zurückziehen …“ grau auf der eigenen offenen Karte, „zurückgezogen“ als Marke und Ergebnis; ein alter
+    Antrag aufs Entfernen nur noch ablehnen. Knopfregel unverändert; Journal-Beschriftung; CSS für die Marke."""
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
+    css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
+    block = js[js.index("/* --- Änderungsanträge"):js.index("/* --- Artikel anlegen")]
+    antrag_dlg = block[block.index("function antragDialog(a)"):]
+    assert "aa-entfernen" not in js and "herstellung_entfernen" not in js and "Herstelldatum entfernen" not in js
+    assert "nur ändern, nicht entfernen" in antrag_dlg and antrag_dlg.count('class="btn"') == 1
+    hinweis = block[block.index("const antragOffenHtml"):block.index("function antragDialog(a)")]
+    assert ('x.eigen ? `<div class="btn-row"><button class="btn secondary small" type="button" data-act="antrag-zurueck" '
+            'data-id="${x.id}">Antrag zurückziehen …</button></div>`' in hinweis)
+    assert "await confirm(" in hinweis and '"Zurückziehen"' in hinweis and "/zurueckziehen`" in hinweis
+    seite = js[js.index("async function artikel()"):js.index("function artikelDialog(a)")]
+    assert "(a.antraege || []).map(antragOffenHtml)" in seite and '"antrag-zurueck": (b) => antragZurueckziehen(' in seite
+    dlg = js[js.index("function artikelDialog(a)"):js.index("/* --- Änderungsanträge")]
+    assert "querySelectorAll('[data-act=\"antrag-zurueck\"]')" in dlg and "dlg.close(); return zeigen(artikel);" in dlg
+    m = js[js.index("async function meldungen()"):js.index("function zuordnenDialog(m, danach)")]
+    karte = m[m.index("function antragKarte(x, bearbeiten)"):m.index("function antragBestaetigenDialog")]
+    assert 'x.eigen ? `<button type="button" class="btn secondary small" data-act="antrag-zurueck"' in karte
+    assert "!x.entfernen" in karte and "Vom Antragsteller zurückgezogen am" in karte
+    assert 'class="btn"' not in karte and "btn danger" not in karte
+    assert '"antrag-zurueck": (b) => antragZurueckziehen(antrag(b), zeichnen)' in m
+    assert 'zurueckgezogen: "zurückgezogen" }' in js and 'antrag_zurueckgezogen: "Änderungsantrag zurückgezogen"' in js
+    for x in (".mat-mstatus.m-zurueckgezogen", ".mat-meldung.m-zurueckgezogen", ".mat-antrag-offen .btn-row"):
+        assert x in css, x
+    from app.material.services import beschriftung
+    assert beschriftung.AKTION["antrag_zurueckgezogen"] == "Änderungsantrag zurückgezogen"
+    print("Oberfläche (17) bestanden.")
+
 if __name__ == "__main__":
     test_nachtragen()
     test_rechte()
@@ -1222,3 +1526,7 @@ if __name__ == "__main__":
     test_sammelprotokoll_vormals()
     test_nachtragen_nach_entfernen()
     test_oberflaeche_pruefung()
+    test_zurueckziehen()
+    test_herstellung_nicht_entfernen()
+    test_migration_17()
+    test_oberflaeche_17()

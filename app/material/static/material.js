@@ -262,7 +262,8 @@
                    bestandsimport: "Bestandsimport", nacharbeit_uebernommen: "Nacharbeit übernommen",
                    nacharbeit_verworfen: "Nacharbeit verworfen", wiki: "Prüfanleitung (Wiki) geändert",
                    mangel_gemeldet: "Mangel gemeldet", antrag_gestellt: "Änderung beantragt",
-                   antrag_bestaetigt: "Änderung bestätigt (Antrag)", antrag_abgelehnt: "Änderungsantrag abgelehnt" };
+                   antrag_bestaetigt: "Änderung bestätigt (Antrag)", antrag_abgelehnt: "Änderungsantrag abgelehnt",
+                   antrag_zurueckgezogen: "Änderungsantrag zurückgezogen" };
   const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };
@@ -2061,7 +2062,7 @@
           ${zeile("Prüfformular", a.formular ? `${esc(a.formular.title || "ohne Titel")} · Version ${a.formular.version} <span class="muted">(${esc(a.formular.quelle)}, ${plural(a.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span>` : '<span class="mat-warn">kein aktives Prüfformular – im Katalog anlegen</span>')}
           ${a.notes ? zeile("Bemerkung", `<span class="mat-text">${esc(a.notes)}</span>`) : ""}
         </dl>
-        ${(a.antraege || []).map((x) => `<p class="notice small mat-antrag-offen">${antragOffenText(x)}</p>`).join("")}
+        ${(a.antraege || []).map(antragOffenHtml).join("")}
         ${antragMoeglich(a) && !darfPflegen ? `<div class="btn-row"><button class="btn secondary small" type="button" data-act="antrag">Änderung beantragen …</button></div>
           <p class="help">Seriennummer und Herstellung stehen seit der ersten Prüfung fest – eine Abweichung beantragst du mit Begründung bei der Material-Verwaltung.</p>` : ""}</section>
         <section class="section"><h2>QR-Code und NFC</h2>
@@ -2083,6 +2084,7 @@
       },
       bearbeiten: () => artikelDialog(a),
       antrag: () => antragDialog(a),
+      "antrag-zurueck": (b) => antragZurueckziehen((a.antraege || []).find((x) => x.id === +b.dataset.id), () => zeigen(artikel)),
       pruefen: () => { location.href = eigenerEntwurf ? `/material/pruefung/${a.entwurf.id}` : `/material/artikel/${a.id}/pruefung/neu`; },
       sperren: () => sperrDialog(a),
       mangel: () => mangelDialog(a, (r, q) => { quittung = q; return zeigen(artikel); }),
@@ -2289,7 +2291,7 @@
       <div class="field-row mat-stammzeile${fest ? " mat-fest" : ""}"><div>${sn}</div><div>${herst}</div></div>
       <div class="help">${fest ? `Seit der ersten Prüfung fest – Teil des Prüfnachweises.${nachtragen ? " Herstellung: Nur Nachtragen möglich – danach steht sie ebenfalls fest." : ""}`
         : "Seriennummer: Leer lassen behält die Nummer. Eine echte Herstellernummer ersetzt die vom System vergebene."}</div>
-      ${fest ? `${offen.map((x) => `<p class="notice small mat-antrag-offen">${antragOffenText(x)}</p>`).join("")}
+      ${fest ? `${offen.map(antragOffenHtml).join("")}
         ${antragMoeglich(a) ? '<div class="btn-row mat-antrag-knopf"><button class="btn secondary small" type="button" id="ad-antrag">Änderung beantragen …</button></div>' : ""}` : ""}
       <div class="field-row"><div><label for="ad-kauf">Kauf (Monat)</label>${datumFeld("ad-kauf", a.purchased_on, "monat")}</div>
         <div><label for="ad-erst">Erstgebrauch (Monat)</label>${datumFeld("ad-erst", a.first_use_on, "monat")}</div></div>
@@ -2302,6 +2304,10 @@
     (dlg, body) => {
       const zumAntrag = $("#ad-antrag", body);
       if (zumAntrag) zumAntrag.onclick = () => antragDialog(a);
+      // Den eigenen offenen Antrag zurückziehen: Rückfrage darüber, danach schließt der Dialog und die Seite zeichnet neu.
+      body.querySelectorAll('[data-act="antrag-zurueck"]').forEach((b) => {
+        b.onclick = () => antragZurueckziehen(offen.find((x) => x.id === +b.dataset.id), () => { dlg.close(); return zeigen(artikel); });
+      });
       $("#ad-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
         // Ein Tagesdatum (aus der Zeit vor den Monatsfeldern) bleibt erhalten, wenn der Monat derselbe ist.
@@ -2333,8 +2339,9 @@
      Seit der ersten Prüfung stehen Seriennummer und Herstellung fest. Materialwart und Prüfer beantragen eine Änderung
      mit Begründung; die Material-Verwaltung bestätigt oder lehnt ab (Katalog → Meldungen → Änderungsanträge). Ein
      offener Antrag je Feld; festgeschriebene Protokolle behalten den alten Wert, Journal und Lebenslauf zeigen die
-     Änderung. */
-  const ANTRAG_STATUS = { offen: "offen", bestaetigt: "bestätigt", abgelehnt: "abgelehnt" };
+     Änderung. Den eigenen offenen Antrag zieht der Antragsteller selbst zurück; das Herstelldatum lässt sich nur ändern,
+     nicht entfernen (Entscheidungen vom 21.10.2026 zur Prüfung). */
+  const ANTRAG_STATUS = { offen: "offen", bestaetigt: "bestätigt", abgelehnt: "abgelehnt", zurueckgezogen: "zurückgezogen" };
   const antragWert = (x, w) => (w === null || w === undefined || w === "" ? "(leer)" : x.feld === "manufactured_on" ? fmtTag(w) : w);
   const antragAenderung = (x) => `${esc(x.feld_text)}: ${esc(antragWert(x, x.alt))} → <strong>${esc(antragWert(x, x.neu))}</strong>`;
   // Bleibt ein Feld zum Beantragen? (Je Feld ein offener Antrag; ein fehlendes Herstelldatum bei Metall trägt man direkt nach.)
@@ -2354,6 +2361,19 @@
       + (rein.length ? `<p class="notice small">Mit der neuen Seriennummer trifft ihn ${rein.length > 1 ? "die laufenden Rückrufe" : "der laufende Rückruf"} ${titel(rein)}.</p>` : "");
   };
   const antragOffenText = (x) => `${x.inhalt ? antragAenderung(x) : esc(x.feld_text)} – Änderung beantragt am ${esc(S.fmtDate(x.created_at))}${x.antragsteller ? ` von ${esc(x.antragsteller)}` : ""} – wartet auf die Material-Verwaltung.`;
+  // Ein offener Antrag als Hinweis an Artikel und Dialog „Bearbeiten“ – der eigene mit grauem „Antrag zurückziehen …“.
+  const antragOffenHtml = (x) => `<div class="notice small mat-antrag-offen"><p>${antragOffenText(x)}</p>${x.eigen ? `<div class="btn-row"><button class="btn secondary small" type="button" data-act="antrag-zurueck" data-id="${x.id}">Antrag zurückziehen …</button></div>` : ""}</div>`;
+  // Rückfrage, dann zurückziehen (nur der Antragsteller, nur offen – der Server prüft es). Keine Mail.
+  async function antragZurueckziehen(x, danach) {
+    if (!x) return;
+    const was = `${x.feld_text}${x.inhalt ? `: ${antragWert(x, x.alt)} → ${antragWert(x, x.neu)}` : ""}`;
+    if (!(await confirm(`Deinen Antrag „${was}“ zurückziehen? Die Material-Verwaltung entscheidet dann nicht mehr darüber; neu beantragen kannst du jederzeit.`, "Zurückziehen"))) return;
+    try {
+      await api(`${API}/antraege/${x.id}/zurueckziehen`, { method: "POST", body: {} });
+      toast("Antrag zurückgezogen");
+      await danach();
+    } catch (e) { toast(e.message, true); }
+  }
 
   // Der kleine Dialog: neue Seriennummer und/oder neues Herstelldatum, Begründung Pflicht. Ein Feld mit offenem Antrag
   // ist gesperrt; bei Metall ohne Herstelldatum trägt man es direkt nach (Dialog „Bearbeiten“), nicht per Antrag.
@@ -2371,8 +2391,7 @@
       <div class="field-row mat-antragzeile"><div><label for="aa-sn">Neue Seriennummer</label><input type="text" id="aa-sn" ${TASTATUR_NUMMER} maxlength="80" ${snOffen ? "disabled" : ""} placeholder="bisher ${esc(a.serial_no)}">
           <div class="help">${snOffen ? "Ein Antrag läuft schon." : a.serial_generated ? "Ersetzt die vom System vergebene Nummer." : "Leer lassen, wenn sie bleibt."}</div></div>
         <div><label for="aa-herst">Neue Herstellung (Monat)</label>${datumFeld("aa-herst", null, "monat")}
-          <div class="help">${hdOffen ? "Ein Antrag läuft schon." : hdDirekt ? "Fehlt bei Metall – trägt der Materialwart direkt nach." : `bisher ${a.manufactured_on ? esc(fmtTag(a.manufactured_on)) : "leer"}`}</div></div></div>
-      ${!hdGesperrt && !textil && a.manufactured_on ? '<label class="inline"><input type="checkbox" id="aa-entfernen"> Herstelldatum entfernen (unbekannt)</label>' : ""}
+          <div class="help">${hdOffen ? "Ein Antrag läuft schon." : hdDirekt ? "Fehlt bei Metall – trägt der Materialwart direkt nach." : a.manufactured_on ? `bisher ${esc(fmtTag(a.manufactured_on))} – nur ändern, nicht entfernen` : "bisher leer"}</div></div></div>
       ${textil ? '<p class="help">Bei textilem Material rechnet das Lebensende mit dem neuen Herstelldatum neu.</p>' : ""}
       ${rueckrufe.length ? `<p class="notice small">Artikel ist von ${rueckrufe.length > 1 ? "den Rückrufen" : "Rückruf"} ${rueckrufe.map((r) => `„${esc(r.title)}“`).join(", ")} betroffen – nach einer Änderung der Seriennummer ${rueckrufe.length > 1 ? "treffen sie" : "trifft der Rückruf"} ihn nicht mehr (außer die neue Nummer steht ebenfalls in seiner Liste).</p>` : ""}
       <label for="aa-grund">Begründung (Pflicht)</label>
@@ -2380,21 +2399,18 @@
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="aa-ok" type="button">Antrag senden</button></div>`,
     (dlg, body) => {
       if (hdGesperrt) $("#aa-herst", body).disabled = true;
-      const entfernen = $("#aa-entfernen", body);
-      if (entfernen) entfernen.onchange = () => { $("#aa-herst", body).disabled = entfernen.checked; };
       $("#aa-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
         const daten = { begruendung: $("#aa-grund", body).value };
         try {
           const sn = $("#aa-sn", body).value.trim();
           if (sn) daten.serial_no = sn;
-          if (entfernen && entfernen.checked) daten.herstellung_entfernen = true;
-          else if (!hdGesperrt) {
+          if (!hdGesperrt) {
             const herst = datumWert($("#aa-herst", body), "Neue Herstellung");
             if (herst) daten.manufactured_on = herst;
           }
         } catch (e) { toast(e.message, true); return; }
-        if (!daten.serial_no && !daten.manufactured_on && !daten.herstellung_entfernen) { toast("Bitte eine neue Seriennummer oder ein neues Herstelldatum angeben.", true); return; }
+        if (!daten.serial_no && !daten.manufactured_on) { toast("Bitte eine neue Seriennummer oder ein neues Herstelldatum angeben.", true); return; }
         if (!daten.begruendung.trim()) { toast("Bitte begründe die Änderung.", true); fokus($("#aa-grund", body)); return; }
         knopf.disabled = true;
         try {
@@ -4888,8 +4904,8 @@
       filter = d.filter;
       const liste = d.antraege;
       const antrag = (b) => liste.find((x) => x.id === +b.dataset.id);
-      const hilfe = d.bearbeiten ? "Seriennummer und Herstellung eines Artikels stehen seit seiner ersten Prüfung fest. Materialwarte und Prüfer beantragen hier eine Änderung mit Begründung. Bestätigst du, steht die Änderung sofort am Artikel (Journal und Lebenslauf zeigen sie, festgeschriebene Protokolle behalten den alten Wert); lehnst du ab, braucht es eine Begründung. Der Antragsteller bekommt eine Mail."
-        : "Deine Anträge auf Änderung von Seriennummer oder Herstellung. Die Material-Verwaltung bestätigt oder lehnt ab; du bekommst eine Mail.";
+      const hilfe = d.bearbeiten ? "Seriennummer und Herstellung eines Artikels stehen seit seiner ersten Prüfung fest. Materialwarte und Prüfer beantragen hier eine Änderung mit Begründung. Bestätigst du, steht die Änderung sofort am Artikel (Journal und Lebenslauf zeigen sie, festgeschriebene Protokolle behalten den alten Wert); lehnst du ab, braucht es eine Begründung. Der Antragsteller bekommt eine Mail; einen offenen Antrag kann er selbst zurückziehen."
+        : "Deine Anträge auf Änderung von Seriennummer oder Herstellung. Die Material-Verwaltung bestätigt oder lehnt ab; du bekommst eine Mail. Einen offenen Antrag kannst du zurückziehen.";
       inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Änderungsanträge" : "Deine Änderungsanträge"}</h1>
           <div class="btn-row"><a class="btn secondary" href="/material/katalog">Katalog</a></div></div>
         ${bereiche(d.meldungen_offen, d.alle ? d.offen : null)}
@@ -4905,6 +4921,7 @@
         },
         bestaetigen: (b) => antragBestaetigenDialog(antrag(b), zeichnen),
         "antrag-ablehnen": (b) => antragAblehnenDialog(antrag(b), zeichnen),
+        "antrag-zurueck": (b) => antragZurueckziehen(antrag(b), zeichnen),
       };
     }
     await zeichnen();
@@ -4915,17 +4932,26 @@
     const art = x.artikel;
     const wer = (name) => (name ? ` von ${esc(name)}` : "");
     const offen = x.status === "offen";
-    const geht = x.passt && art.lock_state !== "ausgesondert";
+    // Bestätigen geht nur, solange der Artikel den alten Wert trägt, nicht ausgesondert ist und der Antrag nicht das
+    // Herstelldatum leeren will (gibt es seit dem 21.10.2026 nicht mehr – ältere offene nur noch ablehnen).
+    const geht = x.passt && !x.entfernen && art.lock_state !== "ausgesondert";
+    const nurAblehnen = art.lock_state === "ausgesondert" ? "Der Artikel ist inzwischen ausgesondert – der Antrag lässt sich nur noch ablehnen."
+      : x.entfernen ? "Ein Herstelldatum lässt sich nicht mehr entfernen – der Antrag lässt sich nur noch ablehnen."
+        : "Der Artikel trägt inzwischen nicht mehr den alten Wert – der Antrag lässt sich nur noch ablehnen.";
+    const knoepfe = [bearbeiten && geht ? `<button type="button" class="btn secondary small" data-act="bestaetigen" data-id="${x.id}">Bestätigen …</button>` : "",
+      bearbeiten ? `<button type="button" class="btn secondary small" data-act="antrag-ablehnen" data-id="${x.id}">Ablehnen …</button>` : "",
+      x.eigen ? `<button type="button" class="btn secondary small" data-act="antrag-zurueck" data-id="${x.id}">Zurückziehen …</button>` : ""].join("");
     return `<article class="mat-meldung mat-antrag m-${esc(x.status)}">
       <div class="mat-meldung-kopf"><h2><a href="/material/artikel/${art.id}">${esc(art.inventory_no)}</a> <span class="mat-antrag-produkt">${nameHtml(art.produkt)}${zusatzHtml(art.produkt)}</span></h2>${antragMarke(x.status)}${art.demo ? ' <span class="badge grey">DEMO</span>' : ""}</div>
       <p class="muted small">beantragt${wer(x.antragsteller)} am ${esc(S.fmtDate(x.created_at))}${art.gliederung ? ` · ${esc(art.gliederung)}` : ""}${x.eigen && bearbeiten ? " · dein eigener Antrag" : ""}</p>
       <p class="mat-antrag-aenderung">${antragAenderung(x)}</p>
       <dl class="mat-daten mat-meldung-daten"><dt>Begründung</dt><dd><span class="mat-text">${esc(x.begruendung || "")}</span></dd></dl>
       ${offen ? antragRueckruf(x) : ""}
-      ${offen && !geht ? `<p class="notice small">${art.lock_state === "ausgesondert" ? "Der Artikel ist inzwischen ausgesondert – der Antrag lässt sich nur noch ablehnen." : "Der Artikel trägt inzwischen nicht mehr den alten Wert – der Antrag lässt sich nur noch ablehnen."}</p>` : ""}
+      ${offen && !geht ? `<p class="notice small">${nurAblehnen}</p>` : ""}
       ${x.status === "bestaetigt" ? `<p class="mat-meldung-ergebnis">Bestätigt${wer(x.entschieden_von)} am ${esc(S.fmtDate(x.resolved_at))}${x.antwort ? `: <span class="mat-text">${esc(x.antwort)}</span>` : ""}</p>` : ""}
       ${x.status === "abgelehnt" ? `<p class="mat-meldung-ergebnis">Abgelehnt${wer(x.entschieden_von)} am ${esc(S.fmtDate(x.resolved_at))}: <span class="mat-text">${esc(x.antwort || "")}</span></p>` : ""}
-      ${bearbeiten && offen ? `<div class="btn-row">${geht ? `<button type="button" class="btn secondary small" data-act="bestaetigen" data-id="${x.id}">Bestätigen …</button>` : ""}<button type="button" class="btn secondary small" data-act="antrag-ablehnen" data-id="${x.id}">Ablehnen …</button></div>` : ""}
+      ${x.status === "zurueckgezogen" ? `<p class="mat-meldung-ergebnis">Vom Antragsteller zurückgezogen am ${esc(S.fmtDate(x.resolved_at))}.</p>` : ""}
+      ${offen && knoepfe ? `<div class="btn-row">${knoepfe}</div>` : ""}
     </article>`;
   }
 

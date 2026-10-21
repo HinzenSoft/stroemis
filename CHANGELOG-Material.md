@@ -3465,8 +3465,9 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
      das andere Feld geht. Geprüft **beim Antrag und beim Bestätigen** am frisch gelesenen Artikel: Seriennummer nicht
      leer, nicht dieselbe, nicht in der Form „STR-…“, je Produkt eindeutig (sichtbare Dublette 409 mit Inventarnummer,
      fremde 409 ohne und protokolliert wie beim Bearbeiten); Herstelldatum als Monat oder Tag, nicht in der Zukunft, nicht
-     nach Kauf oder Erstgebrauch, bei textil nicht entfernen (bei Metall und „sonstiges“ lässt sich das Entfernen
-     beantragen – „Herstelldatum entfernen (unbekannt)“). Beim Bestätigen muss der Artikel noch den alten Wert tragen
+     nach Kauf oder Erstgebrauch, bei textil nicht entfernen (bei Metall und „sonstiges“ ließ sich das Entfernen
+     beantragen – „Herstelldatum entfernen (unbekannt)“; **seit 21.10.2026 nicht mehr**, siehe „Entscheidungen vom
+     21.10.2026 zur Prüfung“). Beim Bestätigen muss der Artikel noch den alten Wert tragen
      (sonst 409 „bitte ablehnen“), ein inzwischen ausgesonderter lässt nur noch Ablehnen zu (409).
    - **Bestätigen** (`antrag.bestaetigen`): in einer Transaktion Antrag entscheiden und Artikel ändern. Eine
      Herstellernummer ersetzt die STR-Nummer (`serial_generated` 0); bei textil rechnet das Lebensende mit dem neuen
@@ -3499,7 +3500,8 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
      beantragen …“ und je offenem Antrag der Hinweis „Seriennummer: alt → neu – Änderung beantragt am … von … – wartet
      auf die Material-Verwaltung.“; Prüfer ohne Verwalterrecht finden denselben Knopf unter den Stammdaten der
      Artikelseite, dort steht auch der Hinweis (wer nur liest, sieht nur Feld und Datum). Antragsdialog: neue
-     Seriennummer und/oder neue Herstellung, bei Metall und „sonstiges“ „Herstelldatum entfernen“, Begründung Pflicht, ein
+     Seriennummer und/oder neue Herstellung, bei Metall und „sonstiges“ „Herstelldatum entfernen“ (seit 21.10.2026
+     entfallen), Begründung Pflicht, ein
      roter Knopf „Antrag senden“. Katalog → „Meldungen“: Bereichswahl „Produktmeldungen | Änderungsanträge (n)“, darunter
      offen | erledigt | alle; je Karte Artikel (Link), Produkt, Feld alt → neu, Begründung, Antragsteller, Datum und
      Gliederung, „dein eigener Antrag“; nur graue Knöpfe „Bestätigen …“ und „Ablehnen …“ (Knopfregel: mehrere Karten,
@@ -3534,17 +3536,21 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
      Blase (2), wechselt zu „Änderungsanträge“, bestätigt den einen (Rückfrage mit Anmerkung) und lehnt den anderen ab
      (ohne Begründung Hinweis), „erledigt“ zeigt beide; das Journal des Karabiners zeigt Antrag und Bestätigung.
      Keine Konsolenfehler, kein waagerechtes Scrollen, je Dialog höchstens ein roter Knopf.
-   - **Bitte bestätigen**:
+   - **Bitte bestätigen** (entschieden am 21.10.2026 – Nr. 1 bis 3 bestätigt, Nr. 4 und 5 geändert, siehe
+     „Entscheidungen vom 21.10.2026 zur Prüfung“ unten):
      1. **Eigener Antrag**: Die Material-Verwaltung darf ihren eigenen Antrag selbst bestätigen (auch wenn es eine
         zweite gibt) – das Journal nennt beide Namen, die Karte sagt „dein eigener Antrag“. Alternative: sperren, wenn es
-        eine zweite Material-Verwaltung gibt.
+        eine zweite Material-Verwaltung gibt. **Bestätigt am 21.10.2026.**
      2. **Namen beim Kontolöschen**: Anträge behalten Antragsteller und Entscheider namentlich (wie Mangelmeldungen) –
         bei Produktmeldungen werden die Namen „(gelöschtes Konto)“. Begründung: Der Antrag erklärt eine Änderung an
-        Prüfnachweisdaten; das Journal nennt dieselben Namen ohnehin.
+        Prüfnachweisdaten; das Journal nennt dieselben Namen ohnehin. **Bestätigt am 21.10.2026.**
      3. **Prüfer dürfen beantragen** (neben dem Materialwart), auch der externe Prüfer mit befristeter Prüffreigabe.
+        **Bestätigt am 21.10.2026.**
      4. **Kein Zurückziehen**: Einen offenen Antrag kann der Antragsteller nicht selbst zurücknehmen – ein Tippfehler im
-        Antrag wird von der Material-Verwaltung abgelehnt, danach lässt sich neu beantragen.
-     5. **Entfernen eines Herstelldatums** (Metall, „sonstiges“) ist als Antrag möglich; bei textil nicht.
+        Antrag wird von der Material-Verwaltung abgelehnt, danach lässt sich neu beantragen. **Geändert am 21.10.2026**:
+        Der Antragsteller zieht seinen offenen Antrag selbst zurück.
+     5. **Entfernen eines Herstelldatums** (Metall, „sonstiges“) ist als Antrag möglich; bei textil nicht. **Geändert am
+        21.10.2026**: Das Herstelldatum lässt sich nicht entfernen, auch nicht per Antrag – nur ändern.
    - **Prüfung** (unabhängige Prüfung von 315425a am 21.10.2026, Proben mit Platzhaltern, Migration nur an einer Kopie
      des Stands 7): sechs Befunde, jeder vor der Behebung mit der Probe der Prüfung nachgestellt; alle behoben, jeweils
      mit Test (`tests/test_material_antrag.py`, Abschnitt 10 – jeder neue Test scheitert ohne die Änderung), Befund 5
@@ -3556,7 +3562,7 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
      | 2 | Der Bescheid an den Antragsteller ging ohne Blick auf seine heutigen Rechte hinaus – nach abgelaufener befristeter Prüffreigabe oder nach dem Verschieben in eine fremde Gliederung mit Inventarnummer, Seriennummern, Begründung und der fremden Gliederung | niedrig–mittel | Bescheid nur, wenn der Antragsteller den Artikel heute liest (`rechte.darf_artikel("lesen", …)` – schließt Prüfrecht und befristete Prüffreigabe ein, wie seine Liste der Anträge); sonst gar keine Mail (Muster Mangelmeldung), nur eine Zeile im Log. Test `test_bescheid_nur_mit_recht` (mit Recht Mail, abgelaufen keine, verschoben keine, zurück wieder) |
      | 3 | Die Datenbanksperre ließ sich an der Schnittstelle vorbei umgehen: `INSERT OR REPLACE` eines geprüften Artikels, Produktwechsel → Metall → Nachtragen → zurück, `UPDATE mat_product.material_kind` – Widerspruch zum Satz „Wer die Datenbank direkt bearbeitet, kann damit nichts mehr ohne Antragsspur ändern“ | niedrig | **Schritt 16** (Schemaversion 16), Trigger: `mat_item_ersetzen` (BEFORE INSERT bei vorhandener Kennung, wie `mat_item_change_ersetzen`), `mat_item_kennung` (Kennung ändern), `mat_item_geprueft_loeschen` (geprüften Artikel löschen – ohne Fremdschlüssel ginge es sonst samt Neuanlage), `mat_item_produkt_fest` (anderes Produkt nach der ersten abgeschlossenen Prüfung; derselbe Wert geht, `artikel_aendern` schreibt jede Spalte neu), `mat_product_materialart_fest` (Materialart, sobald ein Artikel des Produkts geprüft ist; der Dienst sperrt schon ab dem ersten Artikel, „Die Materialart lässt sich nur ändern, solange es keine Artikel … gibt“), `mat_product_ersetzen`, `mat_product_kennung`. Vorher geprüft: Kein App-Weg ändert `product_id` nach einer Prüfung (`artikel_aendern` lehnt ab, sobald es eine Prüfung gibt; Bestandsimport und Anlegen legen nur neu an; „Variante“ legt ein neues Produkt an; ein Katalog-Zusammenführen gibt es nicht), keiner nutzt REPLACE/UPSERT auf `mat_item` oder `mat_product`, gelöscht werden nur ungeprüfte Artikel. CHANGELOG-Satz oben ehrlich abgeschwächt (`DROP TRIGGER` hilft immer). Tests `test_trigger_16` (mit und ohne Fremdschlüssel; App-Wege wie bisher), `test_migration_16` |
      | 4 | Ein Artikel fiel nach bestätigter Seriennummer still aus einem laufenden Rückruf – Antragskarte und Bestätigung sagten nichts | Hinweis | Antragsdialog: trifft ein laufender Rückruf mit Seriennummernliste den Artikel, steht dort „Artikel ist von Rückruf „…“ betroffen – nach einer Änderung der Seriennummer trifft der Rückruf ihn nicht mehr (außer die neue Nummer steht ebenfalls in seiner Liste).“ Karte und Rückfrage „Bestätigen“ nennen es genau (`antrag.rueckruf: {nicht_mehr, neu}` je offenem Seriennummern-Antrag, über `rueckruf.betrifft` mit alter und neuer Nummer): „… nach der Änderung trifft der Rückruf ihn nicht mehr.“ bzw. „Mit der neuen Seriennummer trifft ihn der laufende Rückruf „…“.“ Beim Bestätigen vermerkt das Journal `rueckruf_nicht_mehr` / `rueckruf_neu` („Rückruf trifft ihn nicht mehr / jetzt“, Titel mit Nr.). Ein Rückruf für alle Artikel des Produkts bleibt außen vor. Test `test_rueckruf_hinweis`, Oberfläche statisch `test_oberflaeche_pruefung` |
-     | 5 | Bei Metall ergibt „Herstelldatum entfernen“ per Antrag und danach „direkt nachtragen“ eine beliebige Änderung, deren Zielwert niemand bestätigt hat | Hinweis | **Entschieden am 21.10.2026**: Direkt nachtragen nur, solange der Artikel noch nie ein Herstelldatum hatte; wurde eins per Antrag entfernt, geht ein neues nur wieder per Antrag. Dienst: `herstellung_nachtragbar` ist dann falsch (`bestand.herstellung_entfernt`: ein angewendeter Antrag auf das Herstelldatum mit vorhandenem altem Wert – nach der ersten Prüfung der einzige Weg, auf dem das Feld wieder leer wird), PUT → 409 „Das Herstelldatum dieses Artikels wurde per Antrag entfernt – ein neues trägst du nicht direkt nach, sondern beantragst es mit Begründung bei der Material-Verwaltung („Änderung beantragen …“).“, der Antrag auf einen neuen Wert geht (statt „trag direkt nach“). Oberfläche ohne Änderung: Der Dialog „Bearbeiten“ zeigt das Feld dann schreibgeschützt, der Antragsdialog lässt es zu. Datenbank: Schritt 16 ersetzt `mat_item_stammdaten_fest` (gleicher Name) – Nachtragen nur ohne einen solchen Antrag. Ein Herstelldatum, das schon **vor** der ersten Prüfung entfernt wurde, zählt nicht: Es stand in keinem Protokoll, die Felder waren bis dahin frei (Bitte bestätigen). Test `test_nachtragen_nach_entfernen` (409 mit Hinweis, Trigger, Antrag auf neuen Wert bestätigt; ein Artikel ohne je ein Herstelldatum bleibt nachtragbar) |
+     | 5 | Bei Metall ergibt „Herstelldatum entfernen“ per Antrag und danach „direkt nachtragen“ eine beliebige Änderung, deren Zielwert niemand bestätigt hat | Hinweis | **Entschieden am 21.10.2026**: Direkt nachtragen nur, solange der Artikel noch nie ein Herstelldatum hatte; wurde eins per Antrag entfernt, geht ein neues nur wieder per Antrag. Dienst: `herstellung_nachtragbar` ist dann falsch (`bestand.herstellung_entfernt`: ein angewendeter Antrag auf das Herstelldatum mit vorhandenem altem Wert – nach der ersten Prüfung der einzige Weg, auf dem das Feld wieder leer wird), PUT → 409 „Das Herstelldatum dieses Artikels wurde per Antrag entfernt – ein neues trägst du nicht direkt nach, sondern beantragst es mit Begründung bei der Material-Verwaltung („Änderung beantragen …“).“, der Antrag auf einen neuen Wert geht (statt „trag direkt nach“). Oberfläche ohne Änderung: Der Dialog „Bearbeiten“ zeigt das Feld dann schreibgeschützt, der Antragsdialog lässt es zu. Datenbank: Schritt 16 ersetzt `mat_item_stammdaten_fest` (gleicher Name) – Nachtragen nur ohne einen solchen Antrag. Ein Herstelldatum, das schon **vor** der ersten Prüfung entfernt wurde, zählt nicht: Es stand in keinem Protokoll, die Felder waren bis dahin frei (**bestätigt am 21.10.2026**). Seit Schritt 17 lässt sich ein Herstelldatum nach der ersten Prüfung gar nicht mehr entfernen – die Regel gilt nur noch für Altfälle (siehe unten). Test `test_nachtragen_nach_entfernen` (409 mit Hinweis, Trigger, Antrag auf neuen Wert bestätigt; ein Artikel ohne je ein Herstelldatum bleibt nachtragbar) |
      | 6 | Sammelprotokoll und Einzelprotokoll derselben Prüfung widersprachen sich ohne Verweis (Einzelprotokoll alte, Sammelprotokoll neue Seriennummer) | Hinweis | Hat ein bestätigter Antrag die Seriennummer nach dem Festschreiben der Prüfung ersetzt, steht in der Zeile des Sammelprotokolls unter der Nummer „vormals AN-… (Änderungsantrag Nr. …)“ (`protokoll._vormals`; „danach“ über die Reihenfolge der Journaleinträge, genauer als Zeitstempel in Sekunden). Nur neue Sammelprotokolle – festgeschriebene bleiben Byte für Byte, wie sie sind. PDF/A-3b mit veraPDF (`bin/st-vera`) geprüft: PASS. Test `test_sammelprotokoll_vormals` (Änderung vor der Prüfung im Durchgang: kein Vermerk; festgeschriebenes Sammelprotokoll unverändert) |
 
      **Migration Schritt 16**: beim Start von selbst, rein additiv und wiederholbar (nur Trigger; `mat_item_stammdaten_fest`
@@ -3569,6 +3575,81 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
      **Schnittstelle**: je Antrag neu `rueckruf` (`{nicht_mehr, neu}` mit `id`, `title`; nur offen, sonst `null`); für
      Leser fehlen in den Journaleinträgen der Anträge `begruendung`, `beantragt_von`, `anmerkung`, `ablehnung`, Handelnder
      „(Person)“; Journal der Bestätigung ggf. mit `rueckruf_nicht_mehr`, `rueckruf_neu`.
+   - **Entscheidungen vom 21.10.2026 zur Prüfung** (zu „Bitte bestätigen“ oben und zu Befund 5):
+     - **Bestätigt am 21.10.2026**: Ein Herstelldatum, das **vor** der ersten Prüfung entfernt wurde, sperrt späteres
+       direktes Nachtragen nicht; die Material-Verwaltung darf ihren eigenen Antrag selbst bestätigen; Antragsteller
+       und Entscheider behalten beim Kontolöschen ihren Namen; Prüfer (auch externe mit befristeter Prüffreigabe) dürfen
+       beantragen.
+     - **Geändert 1 – Zurückziehen**: Einen **offenen** Antrag zieht der **Antragsteller selbst** zurück
+       (`antrag.zurueckziehen`, `POST /api/material/antraege/<id>/zurueckziehen`). Nur den eigenen und nur, solange er
+       den Artikel liest – sonst 404 wie unbekannt (auch für die Material-Verwaltung, wenn es nicht ihr eigener ist);
+       schon entschieden oder zurückgezogen 409. Neuer Stand **„zurückgezogen“** – ein Endzustand wie bestätigt und
+       abgelehnt, mit dem Antragsteller als Handelndem (`resolved_by`, `resolved_by_name`, `resolved_at`), ohne
+       Antwort. Journal am Artikel „Änderungsantrag zurückgezogen“ (`antrag`, `feld`; für Leser ohne Namen wie die
+       übrigen Antragseinträge), auch im Lebenslauf. **Keine Mail** – die Material-Verwaltung braucht keinen Bescheid
+       (einfachste Lösung): Der offene Zähler (Blase, Übersicht, „offen (n)“) sinkt, unter „erledigt“ steht der Antrag
+       als „zurückgezogen“. Danach lässt sich fürs Feld neu beantragen. Oberfläche: Am Artikel (Stammdaten bzw. Dialog
+       „Bearbeiten“) trägt der Hinweis „… Änderung beantragt am … – wartet auf die Material-Verwaltung.“ beim **eigenen**
+       Antrag den grauen Knopf **„Antrag zurückziehen …“**; die Rückfrage („Deinen Antrag „Seriennummer: alt → neu“
+       zurückziehen? Die Material-Verwaltung entscheidet dann nicht mehr darüber; neu beantragen kannst du jederzeit.“)
+       hat als einzigen roten Knopf „Zurückziehen“ (`btn danger` – endgültig), danach schließt der Dialog „Bearbeiten“.
+       In „Meldungen“ → „Änderungsanträge“ trägt die eigene offene Karte grau „Zurückziehen …“ (neben „Bestätigen …“
+       und „Ablehnen …“ bei der Material-Verwaltung), erledigte zeigen die graue Marke „zurückgezogen“ und „Vom
+       Antragsteller zurückgezogen am …“.
+     - **Geändert 2 – Herstelldatum nicht entfernbar**: Nach der ersten Prüfung lässt sich das Herstelldatum **nicht
+       entfernen, auch nicht per Antrag** – nur auf Antrag ändern (neuer Wert). Die Option „Herstelldatum entfernen
+       (unbekannt)“ im Antragsdialog ist weg (Hilfe: „bisher 11/2023 – nur ändern, nicht entfernen“); der Dienst weist
+       `herstellung_entfernen` mit 400 ab („Das Herstelldatum lässt sich nicht entfernen – nur auf Antrag ändern (neues
+       Datum angeben).“), ein leeres Feld heißt wie bisher „keine Änderung beantragt“. Ein offener Antrag aufs Entfernen
+       aus der Zeit davor lässt sich **nicht mehr bestätigen** (409 „… diesen älteren Antrag kannst du nur noch
+       ablehnen.“, `antrag.entfernen` = true, die Karte zeigt nur „Ablehnen …“ und den Hinweis „Ein Herstelldatum lässt
+       sich nicht mehr entfernen – der Antrag lässt sich nur noch ablehnen.“); der Antragsteller kann ihn zurückziehen.
+       **Altfälle**: Die Regel aus Befund 5 („Nachtragen nach Entfernen nur per Antrag“, `bestand.herstellung_entfernt`,
+       Trigger `_NACHTRAGEN_16`) bleibt unverändert – für neue Fälle gegenstandslos (es entsteht keiner mehr), für einen
+       auf dev womöglich schon per Antrag entfernten Fall weiter wirksam. Begründung: Sie zu streichen hieße, an genau
+       diesen Artikeln ein beliebiges Datum ohne Bestätigung eintragen zu lassen – die Lücke aus Befund 5; sie zu
+       behalten kostet nichts.
+     - **Datenbank (Schritt 17, Schemaversion 17)**: `mat_item_change` wird umgebaut (`_umbauen`: alle Zeilen und
+       Kennungen bleiben, der AUTOINCREMENT-Stand ebenso, Indizes neu angelegt) – der CHECK kennt den Stand
+       „zurückgezogen“ (Schritt 15 bleibt mit `ANTRAGSSTATUS_15`, wie er ausgeliefert wurde). Neue Trigger
+       (`TRIGGER_17`): `mat_item_change_zurueckziehen` (zurückziehen nur mit der Kennung des Antragstellers und ohne
+       Antwort; danach fest wie entschieden – `mat_item_change_entschieden`), `mat_item_change_herstellung_leer` (kein
+       Antrag mit leerem neuem Herstelldatum), `mat_item_change_entfernen_bestaetigen` (ein alter Antrag aufs Entfernen
+       lässt sich nicht bestätigen). `mat_item_stammdaten_fest` wird ersetzt (gleicher Name): Nach der ersten Prüfung
+       wird das Herstelldatum nie mehr leer – nachtragen (Metall) und ein bestätigter Antrag gehen nur auf einen Wert.
+       Die Trigger aus Schritt 15 an der Tabelle und `mat_item_antrag_angewendet` werden nach dem Umbau neu angelegt
+       (unverändert). Umgebaut wird nur, wenn der CHECK „zurückgezogen“ noch nicht kennt – ein zweiter Lauf ändert
+       nichts. **Geprüft**: frische Datenbank; 16 → 17 an einem Stand 16 **mit Anträgen** (per Antrag entferntes
+       Herstelldatum, offener Antrag aufs Entfernen, offener Antrag auf eine Herstellernummer – Test
+       `test_migration_17`: alle Zeilen gleich, `sqlite_sequence` gleich, Zahlen aller Tabellen gleich, Trigger = Stand 16
+       + die drei neuen, danach bestätigt bzw. abgewiesen wie beschrieben); 7 → 17 an einer **Kopie** des Stands 7
+       (Zahlen wie 7 → 16, Tabelle leer und umgebaut, ein geprüftes Herstelldatum der Kopie lässt sich nicht leeren);
+       zweiter Lauf ohne Änderung. **Rückweg**: Eine Fassung mit Schemaversion 16 übergeht Schritt 17; die Tabelle mit
+       dem weiteren Stand und die Trigger blieben – dort ließe sich ein Herstelldatum dann auch per Antrag nicht mehr
+       entfernen (der Trigger lehnt ab, die ältere Fassung meldete einen Fehler), sonst arbeitet sie wie bisher. Keine
+       Handarbeit beim Update.
+     - **Schnittstelle**: neu `POST /api/material/antraege/<id>/zurueckziehen` (Modulzugang; nur der Antragsteller);
+       Stand `zurueckgezogen` (`status_text` „zurückgezogen“, Filter `erledigt` schließt ihn ein); je Antrag `entfernen`
+       (true bei einem alten Antrag aufs Entfernen); `POST /api/material/artikel/<id>/antrag` ohne
+       `herstellung_entfernen` (→ 400); Journal-Aktion `antrag_zurueckgezogen`.
+     - **Tests** (`tests/test_material_antrag.py`, Abschnitt 11): `test_zurueckziehen` (nur der eigene, fremd 404 auch
+       für die Material-Verwaltung, ohne Leserecht 404, zweimal 409, danach weder bestätigen noch ablehnen, keine Mail,
+       Journal und Lebenslauf, Leser ohne Namen, Zähler sinkt, „erledigt“, neu beantragen; Trigger nur für den
+       Antragsteller), `test_herstellung_nicht_entfernen` (Metall und textil 400, Bearbeiten weist Leeren ab, ändern per
+       Antrag geht, vor der ersten Prüfung entfernen und danach nachtragen geht), `test_migration_17`,
+       `test_oberflaeche_17` (statisch). Angepasst: `test_eingaben`, `test_trigger` (Entfernen per Antrag jetzt
+       abgewiesen), `test_nachtragen_nach_entfernen` (jetzt an einem Stand 16 mit Altfall, danach 16 → 17),
+       `test_migration_15`/`_16` (Schritt 17 bzw. Stand 16 ausdrücklich), `test_oberflaeche_statisch`;
+       `test_material_stammdaten` (Kopie-Pfad 7 → Endversion: die Artikeltrigger aus Schritt 16 gehören seit dort dazu –
+       schlug mit gesetzter Kopie schon seit Schritt 16 fehl), `test_material_ueberblick` (die neue Route antwortet der
+       Führungskraft 404 – kein eigener Antrag –, nichts geändert).
+     - **Im Browser geprüft** (Platzhalterbestand, kein Mailserver) bei 1280 und 360 px: Prüfer zieht am Karabiner
+       seinen Antrag über „Antrag zurückziehen …“ zurück (Rückfrage, Hinweis weg, Journal „Änderungsantrag
+       zurückgezogen“); Materialwart bricht die Rückfrage im Dialog „Bearbeiten“ ab (Dialog bleibt) und zieht dann
+       zurück (Dialog schließt); Antragsdialog ohne „entfernen“; Prüfer zieht in „Deine Änderungsanträge“ über die Karte
+       zurück; die Material-Verwaltung sieht den alten Antrag aufs Entfernen nur mit „Ablehnen …“, zieht ihren eigenen
+       zurück, „erledigt“ zeigt die grauen Marken „zurückgezogen“. Keine Konsolenfehler, kein waagerechtes Scrollen, je
+       Dialog höchstens ein roter Knopf.
 
 ## Beispielbestand (18.10.2026)
 
@@ -3908,7 +3989,8 @@ oder Plattform-Verwaltung).
 | `GET /api/material/artikel/<id>`, `PUT /api/material/artikel/<id>` | wie bisher | `stammdaten_fest` (true, sobald eine abgeschlossene Prüfung existiert; ein Entwurf zählt nicht); PUT danach 409, wenn sich `serial_no` oder `manufactured_on` ändern – auch eine STR-Nummer; weggelassen, leere Seriennummer, dieselben Werte (Seriennummer ohne Rücksicht auf Groß/klein) gehen durch (Nachbesserung vom 21.10.2026) |
 | `GET /api/admin/users/<id>/material-folgen`, `GET /api/material/erinnerungen/probelauf` | wie bisher | neu: `maengel` (Zahl der Meldungen, die den Namen behalten); `mails[].psa` (Phase 3 · 1) |
 | `PUT /api/material/artikel/<id>` | wie bisher | seit den Entscheidungen vom 21.10.2026: bei Metall ein fehlendes `manufactured_on` nachtragen auch nach der ersten Prüfung (200); `artikel.herstellung_nachtragbar`; Text der 409 nennt den Antrag |
-| `POST /api/material/artikel/<id>/antrag` (`serial_no`, `manufactured_on` oder `herstellung_entfernen`, `begruendung` Pflicht) | Materialwart oder Prüfer am Artikel (fremd 404, nur lesen 403) | Änderung beantragen → 201 `antraege` (je Feld einer: `id`, `feld`, `feld_text`, `alt`, `neu`, `status`, `begruendung`, `antragsteller`, `eigen`, `passt`, …), `artikel`, `mail`; 400 Eingaben, 409 ungeprüft, ausgesondert, schon beantragt, Dublette, Metall-Nachtragen (21.10.2026) |
+| `POST /api/material/artikel/<id>/antrag` (`serial_no`, `manufactured_on`, `begruendung` Pflicht; `herstellung_entfernen` → 400 seit 21.10.2026) | Materialwart oder Prüfer am Artikel (fremd 404, nur lesen 403) | Änderung beantragen → 201 `antraege` (je Feld einer: `id`, `feld`, `feld_text`, `alt`, `neu`, `status`, `begruendung`, `antragsteller`, `eigen`, `passt`, …), `artikel`, `mail`; 400 Eingaben, 409 ungeprüft, ausgesondert, schon beantragt, Dublette, Metall-Nachtragen (21.10.2026) |
 | `GET /api/material/antraege?status=offen\|erledigt\|alle` | Modulzugang | Material-Verwaltung alle (Vorgabe offen), sonst die eigenen zu lesbaren Artikeln (Vorgabe alle); je Antrag `artikel` (`id`, `inventory_no`, `produkt`, `gliederung`, `pfad`, `lock_state`, `demo`) und `rueckruf` (`{nicht_mehr, neu}` – laufende Rückrufe, aus denen der Artikel mit der neuen Seriennummer fiele bzw. in die er käme; nur offen, sonst `null`); `alle`, `bearbeiten`, `offen`, `meldungen_offen` (21.10.2026) |
-| `POST /api/material/antraege/<id>/bestaetigen` (`antwort` freiwillig), `…/ablehnen` (`antwort` Pflicht) | Material-Verwaltung (Plattform-Verwaltung eingeschlossen) | entscheiden → `antrag`; 409 schon entschieden, Stand geändert, ausgesondert (nur ablehnen), Dublette (21.10.2026) |
+| `POST /api/material/antraege/<id>/bestaetigen` (`antwort` freiwillig), `…/ablehnen` (`antwort` Pflicht) | Material-Verwaltung (Plattform-Verwaltung eingeschlossen) | entscheiden → `antrag`; 409 schon entschieden, Stand geändert, ausgesondert (nur ablehnen), Dublette, alter Antrag aufs Entfernen des Herstelldatums (nur ablehnen; `antrag.entfernen`) (21.10.2026) |
+| `POST /api/material/antraege/<id>/zurueckziehen` | Modulzugang; nur der Antragsteller, solange er den Artikel liest (sonst 404) | eigenen offenen Antrag zurückziehen → `antrag` (Stand `zurueckgezogen`, keine Mail; Journal `antrag_zurueckgezogen`); 409 schon entschieden oder zurückgezogen; `GET /api/material/antraege?status=erledigt` schließt `zurueckgezogen` ein (21.10.2026) |
 | (Artikel, Übersicht, Meldungen, Kontofolgen) | – | neu: `artikel.antraege` (offene; Begründung und Namen nur für Materialwart und Prüfer, sonst `inhalt: false` – ebenso in `artikel.journal` und im Lebenslauf: ohne `begruendung`, `beantragt_von`, `anmerkung`, `ablehnung`, Handelnder „(Person)“), `artikel.darf_antrag`; `start.antraege_offen` und `meldungen.antraege_offen` (nur Material-Verwaltung, sonst `null`); `material-folgen.antraege` (21.10.2026) |

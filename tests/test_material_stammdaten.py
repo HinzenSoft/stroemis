@@ -231,7 +231,9 @@ def test_migration_14():
             make_app(tmp14)
             v13, t13 = _schema(os.path.join(tmp13, "stroemis.db"))
             v14, t14 = _schema(os.path.join(tmp14, "stroemis.db"))
-            assert (v13, v14) == ("13", endversion()) and TRIGGER not in t13 and t14 == t13 | {TRIGGER, TRIGGER_15}, (
+            # Seit Schritt 16 kommen die Trigger gegen Umwege an der Sperre vorbei dazu (test_material_antrag, TRIGGER_16).
+            umwege = {"mat_item_ersetzen", "mat_item_kennung", "mat_item_geprueft_loeschen", "mat_item_produkt_fest"}
+            assert (v13, v14) == ("13", endversion()) and TRIGGER not in t13 and t14 == t13 | {TRIGGER, TRIGGER_15} | umwege, (
                 v13, v14, t13, t14)
             vorher, nachher = _tabellen(os.path.join(tmp13, "stroemis.db")), _tabellen(os.path.join(tmp14, "stroemis.db"))
             for t in (vorher, nachher):

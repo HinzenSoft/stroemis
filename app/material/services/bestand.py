@@ -11,9 +11,10 @@ Regeln aus dem Konzept, wie sie hier umgesetzt sind:
   - Seriennummer und Herstelldatum stehen fest, sobald der Artikel eine abgeschlossene Prüfung hat (Entwürfe zählen
     nicht): Beide stehen im Prüfprotokoll und sind Teil des Prüfnachweises (Wunsch vom 21.10.2026). Das gilt auch
     für eine vom System vergebene STR-Nummer. Der Dienst lehnt mit Klartext ab (STAMMDATEN_FEST), der Trigger
-    mat_item_stammdaten_fest (models.TRIGGER_15_ARTIKEL) fängt, was an ihm vorbeiginge. Seit den Entscheidungen vom
+    mat_item_stammdaten_fest (models.TRIGGER_17_ARTIKEL) fängt, was an ihm vorbeiginge. Seit den Entscheidungen vom
     21.10.2026 zwei Ausnahmen: Bei Metall lässt sich ein fehlendes Herstelldatum hier direkt nachtragen (leer → Wert);
-    jede andere Änderung geht über einen Antrag an die Material-Verwaltung (antrag.py).
+    jede andere Änderung geht über einen Antrag an die Material-Verwaltung (antrag.py). Entfernen lässt sich ein
+    Herstelldatum nach der ersten Prüfung nicht mehr (auch nicht per Antrag).
   - retire_by (Lebensende) gibt es nur bei textilem Material: Herstelldatum + Lebensdauer. Es lässt
     sich vorziehen, nicht verschieben. Ebenso die nächste Fälligkeit: Ein neuer Artikel bekommt einen
     Vorschlag aus dem Intervall (interval.py); höher als „heute + ein Intervall“ geht es ohne Prüfung
@@ -479,8 +480,10 @@ def stammdaten_fest(iid):
 
 
 def herstellung_entfernt(iid):
-    """Hatte der Artikel seit der ersten Prüfung schon ein Herstelldatum, das ein bestätigter Antrag entfernt hat? Nach
-    der ersten Prüfung macht nur ein solcher Antrag das Feld wieder leer (Trigger mat_item_stammdaten_fest)."""
+    """Hatte der Artikel seit der ersten Prüfung schon ein Herstelldatum, das ein bestätigter Antrag entfernt hat? Das
+    ging nur bis Schritt 16 – seit den Entscheidungen vom 21.10.2026 zur Prüfung lässt sich ein Herstelldatum nach der
+    ersten Prüfung gar nicht mehr entfernen, auch nicht per Antrag (Trigger aus Schritt 17). Für solche Altfälle bleibt
+    die Regel „neues Herstelldatum nur per Antrag“, damit nichts aufweicht; neue Fälle entstehen nicht."""
     return bool(db.query("SELECT 1 FROM mat_item_change WHERE item_id = ? AND field = 'manufactured_on' "
                          "AND applied_at IS NOT NULL AND old_value IS NOT NULL LIMIT 1", (iid,), one=True))
 

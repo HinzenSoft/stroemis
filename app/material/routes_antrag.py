@@ -3,7 +3,7 @@
 Beantragen dürfen Materialwart und Prüfer des Artikels (requires_folder mit verwalten oder pruefen – fremd 404 wie
 unbekannt); der Dienst prüft in der Transaktion noch einmal. Die Liste liest jeder mit Modulzugang – die
 Material-Verwaltung alle Anträge, jedes andere Konto seine eigenen; bestätigen und ablehnen nur die Material-Verwaltung
-(die Plattform-Verwaltung eingeschlossen)."""
+(die Plattform-Verwaltung eingeschlossen), zurückziehen nur der Antragsteller seinen eigenen offenen."""
 from flask import jsonify, request
 
 from ..auth import json_body
@@ -15,9 +15,10 @@ from .services.rechte import ist_material_verwaltung, material_verwaltung_requir
 @api.post("/artikel/<int:iid>/antrag")
 @requires_folder(("verwalten", "pruefen"), "iid")
 def antrag_stellen(iid):
-    """Änderung von Seriennummer und/oder Herstelldatum beantragen (`serial_no`, `manufactured_on` oder
-    `herstellung_entfernen`, `begruendung` Pflicht) → 201 `antraege` (je Feld einer), `artikel`, `mail` (an die
-    Material-Verwaltung unterwegs; false bei DEMO, dev-Sperre, ohne Mailserver oder ohne Empfänger)."""
+    """Änderung von Seriennummer und/oder Herstelldatum beantragen (`serial_no`, `manufactured_on`, `begruendung`
+    Pflicht; entfernen lässt sich das Herstelldatum nicht – `herstellung_entfernen` → 400) → 201 `antraege` (je Feld
+    einer), `artikel`, `mail` (an die Material-Verwaltung unterwegs; false bei DEMO, dev-Sperre, ohne Mailserver oder
+    ohne Empfänger)."""
     ids, mail = antrag.stellen(iid, json_body())
     item = bestand.artikel(iid)
     return jsonify(antraege=[antrag.antrag_json(antrag.antrag(a), item) for a in ids],
@@ -51,4 +52,13 @@ def antrag_bestaetigen(anid):
 def antrag_ablehnen(anid):
     """Ablehnen (`antwort` Pflicht) – am Artikel ändert sich nichts."""
     antrag.ablehnen(anid, json_body())
+    return jsonify(antrag=antrag.antrag_json(antrag.antrag(anid)))
+
+
+@api.post("/antraege/<int:anid>/zurueckziehen")
+@requires_zugang
+def antrag_zurueckziehen(anid):
+    """Den eigenen offenen Antrag zurückziehen – nur der Antragsteller, solange er den Artikel liest (sonst 404); 409,
+    wenn er schon entschieden oder zurückgezogen ist. Keine Mail."""
+    antrag.zurueckziehen(anid)
     return jsonify(antrag=antrag.antrag_json(antrag.antrag(anid)))
