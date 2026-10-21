@@ -93,13 +93,18 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     Kontokennung darf nur auf NULL gehen (Konto gelöscht, der Name bleibt). Dazu users.mat_psa_mails (Erinnerungen zur
     eigenen PSA abbestellen) im Kernschema (app/db.py). Rein additiv, wiederholbar. Wer mat_item oder mat_inspection
     künftig neu aufbaut (wie Schritt 2), muss die Verweise item_id und closed_inspection_id bedenken.
+  - Schritt 14 (Phase 3 · Lieferung 1, Nachbesserung vom 21.10.2026): Trigger mat_item_stammdaten_fest (TRIGGER_14) –
+    Seriennummer und Herstelldatum eines Artikels ändern sich nicht mehr, sobald er eine abgeschlossene Prüfung hat
+    (completed_at gesetzt; ein Entwurf zählt nicht). Beide stehen im Prüfprotokoll. Der Dienst (bestand.artikel_aendern)
+    weist vorher mit Klartext ab; der Trigger fängt, was an ihm vorbeiginge – wie die Trigger aus Schritt 6. Kein neues
+    Schema, rein additiv, wiederholbar. Wer mat_item künftig neu aufbaut, muss den Trigger danach neu anlegen.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -1346,11 +1351,31 @@ def _schritt_13(conn):
         conn.execute(sql)
 
 
+# --- Schritt 14 (Phase 3 · Lieferung 1, Nachbesserung vom 21.10.2026): Stammdaten fest seit der ersten Prüfung -------
+
+STAMMDATEN_FEST = "'Seriennummer und Herstelldatum stehen seit der ersten Prüfung fest.'"
+TRIGGER_14 = [
+    # Nur eine echte Änderung: Derselbe Wert (auch NULL auf NULL) geht durch – artikel_aendern schreibt jede Spalte neu.
+    _trigger("mat_item_stammdaten_fest", "BEFORE UPDATE OF serial_no, manufactured_on ON mat_item",
+             "(NEW.serial_no IS NOT OLD.serial_no OR NEW.manufactured_on IS NOT OLD.manufactured_on) "
+             "AND EXISTS (SELECT 1 FROM mat_inspection x WHERE x.item_id = OLD.id AND x.completed_at IS NOT NULL)",
+             STAMMDATEN_FEST),
+]
+
+
+def _schritt_14(conn):
+    """Nachbesserung vom 21.10.2026: Seriennummer und Herstelldatum nach der ersten abgeschlossenen Prüfung fest
+    (Trigger). Rein additiv; ein zweiter Lauf findet ihn vor und ändert nichts."""
+    for sql in TRIGGER_14:
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
-            8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13}
+            8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
+            14: _schritt_14}
 
 
 def _meta(conn, schluessel, vorgabe=None):

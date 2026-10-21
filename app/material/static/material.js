@@ -2259,16 +2259,25 @@
 
   function artikelDialog(a) {
     const textil = a.produkt.material_kind === "textil";
+    // Seriennummer und Herstellung ganz oben nebeneinander: Seit der ersten abgeschlossenen Prüfung stehen beide fest
+    // (stammdaten_fest) – schreibgeschützt mit sichtbarem Wert, und sie gehen nicht mehr mit (der Server behält sie).
+    const fest = !!a.stammdaten_fest;
+    const sn = fest
+      ? `<label for="ad-sn">Seriennummer${a.serial_generated ? " (vom System)" : ""}</label><input type="text" id="ad-sn" readonly value="${esc(a.serial_no)}">`
+      : `<label for="ad-sn">Seriennummer des Herstellers</label><input type="text" id="ad-sn" ${TASTATUR_NUMMER} value="${a.serial_generated ? "" : esc(a.serial_no)}" placeholder="${a.serial_generated ? esc(a.serial_no) + " (vom System)" : ""}" maxlength="80">`;
+    const herst = fest
+      ? `<label for="ad-herst">Herstellung (Monat)</label><input type="text" id="ad-herst" class="mat-datum" readonly value="${esc(datumAnzeige(a.manufactured_on, "monat"))}" placeholder="–">`
+      : `<label for="ad-herst">Herstellung (Monat${textil ? ", Pflicht" : ""})</label>${datumFeld("ad-herst", a.manufactured_on, "monat")}`;
     dialog(`<h2>Artikel ${esc(a.inventory_no)} bearbeiten</h2>
-      <label for="ad-sn">Seriennummer des Herstellers</label><input type="text" id="ad-sn" ${TASTATUR_NUMMER} value="${a.serial_generated ? "" : esc(a.serial_no)}" placeholder="${a.serial_generated ? esc(a.serial_no) + " (vom System)" : ""}" maxlength="80">
-      <div class="help">Leer lassen behält die Nummer. Eine echte Herstellernummer ersetzt die vom System vergebene.</div>
-      <div class="field-row"><div><label for="ad-herst">Herstellung (Monat${textil ? ", Pflicht" : ""})</label>${datumFeld("ad-herst", a.manufactured_on, "monat")}</div>
-        <div><label for="ad-kauf">Kauf (Monat)</label>${datumFeld("ad-kauf", a.purchased_on, "monat")}</div></div>
-      <div class="field-row"><div><label for="ad-erst">Erstgebrauch (Monat)</label>${datumFeld("ad-erst", a.first_use_on, "monat")}</div>
-        <div><label for="ad-int">Prüfintervall am Artikel (Monate)</label><input type="number" id="ad-int" min="1" max="120" value="${a.interval_months || ""}" placeholder="vom Produkt/Ordner"></div></div>
-      <div class="field-row"><div ${a.status === "neu" ? "hidden" : ""}><label for="ad-due">Nächste Prüfung</label>${datumFeld("ad-due", a.next_due_on, "tag")}
-          <div class="help">Nur vorziehen – später setzt sie eine Prüfung.</div></div>
-        ${textil ? `<div><label for="ad-ende">Lebensende</label>${datumFeld("ad-ende", a.retire_by, "tag")}<div class="help">Nur vorziehen. Leer lassen behält das Lebensende.</div></div>` : "<div></div>"}</div>
+      <div class="field-row mat-stammzeile${fest ? " mat-fest" : ""}"><div>${sn}</div><div>${herst}</div></div>
+      <div class="help">${fest ? "Seit der ersten Prüfung fest – Teil des Prüfnachweises."
+        : "Seriennummer: Leer lassen behält die Nummer. Eine echte Herstellernummer ersetzt die vom System vergebene."}</div>
+      <div class="field-row"><div><label for="ad-kauf">Kauf (Monat)</label>${datumFeld("ad-kauf", a.purchased_on, "monat")}</div>
+        <div><label for="ad-erst">Erstgebrauch (Monat)</label>${datumFeld("ad-erst", a.first_use_on, "monat")}</div></div>
+      <div class="field-row"><div><label for="ad-int">Prüfintervall am Artikel (Monate)</label><input type="number" id="ad-int" min="1" max="120" value="${a.interval_months || ""}" placeholder="vom Produkt/Ordner"></div>
+        <div ${a.status === "neu" ? "hidden" : ""}><label for="ad-due">Nächste Prüfung</label>${datumFeld("ad-due", a.next_due_on, "tag")}
+          <div class="help">Nur vorziehen – später setzt sie eine Prüfung.</div></div></div>
+      ${textil ? `<div class="field-row"><div><label for="ad-ende">Lebensende</label>${datumFeld("ad-ende", a.retire_by, "tag")}<div class="help">Nur vorziehen. Leer lassen behält das Lebensende.</div></div><div></div></div>` : ""}
       <label for="ad-notes">Bemerkung</label><textarea id="ad-notes" rows="3" maxlength="4000">${esc(a.notes || "")}</textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="ad-ok" type="button">Speichern</button></div>`,
     (dlg, body) => {
@@ -2278,12 +2287,15 @@
         const behalten = (neu, alt) => (neu && alt && alt.slice(0, 7) === neu ? alt : neu || null);
         let daten;
         try {
-          daten = { stand: a.stand, serial_no: $("#ad-sn", body).value,
-                    manufactured_on: behalten(datumWert($("#ad-herst", body), "Herstellung"), a.manufactured_on),
+          daten = { stand: a.stand,
                     purchased_on: behalten(datumWert($("#ad-kauf", body), "Kauf"), a.purchased_on),
                     first_use_on: behalten(datumWert($("#ad-erst", body), "Erstgebrauch"), a.first_use_on),
                     interval_months: $("#ad-int", body).value || null,
                     next_due_on: datumWert($("#ad-due", body), "Nächste Prüfung") || null, notes: $("#ad-notes", body).value };
+          if (!fest) {
+            daten.serial_no = $("#ad-sn", body).value;
+            daten.manufactured_on = behalten(datumWert($("#ad-herst", body), "Herstellung"), a.manufactured_on);
+          }
           if (textil) daten.retire_by = datumWert($("#ad-ende", body), "Lebensende") || null;
         } catch (e) { toast(e.message, true); return; }
         knopf.disabled = true;

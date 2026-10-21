@@ -3373,6 +3373,66 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
    (ein Prüfer hat den Artikel angesehen), Banner und Marke zeigen sie. Ob das so passt, beim ersten Fall ansehen.
    **Bestätigt am 21.10.2026** (Entscheidungen vom 21.10.2026 Nr. 2): so lassen, Prüfart „Reparatur“.
 
+### Nachbesserungen nach der Auslieferung (Wünsche vom 21.10.2026)
+
+1. **Seriennummer und Herstelldatum stehen seit der ersten Prüfung fest.** Wunsch: „Die Seriennummer und das
+   Herstelldatum eines Artikels sollen nach der ersten Prüfung nicht mehr geändert werden dürfen. Setze sie daher im
+   Bearbeiten-Dialog auch nebeneinander ganz oben.“
+   - **Wann fest**: sobald der Artikel eine **abgeschlossene** Prüfung hat (`mat_inspection.completed_at` gesetzt – im
+     Modul heißt das zugleich festgeschrieben, mit Protokoll). Jede Prüfart zählt, auch Eingangsprüfung, Berichtigung und
+     Aussonderung; ein offener **Entwurf zählt nicht** – bis zum Festschreiben lässt sich die Nummer noch berichtigen
+     (etwa wenn der Prüfer bei der Eingangsprüfung das Etikett liest). Beide Werte stehen im Prüfprotokoll
+     („Seriennummer“, „hergestellt“) und tragen das Lebensende textiler Artikel.
+   - **Dienst** (`bestand.artikel_aendern`): eine echte Änderung von `serial_no` oder `manufactured_on` → **409**
+     „Seriennummer und Herstelldatum stehen seit der ersten Prüfung fest – sie sind Teil des Prüfnachweises.“ Geprüft
+     frisch unter der Schreibsperre (eine eben abgeschlossene Prüfung zählt schon). Keine Änderung sind: weggelassene
+     Felder, eine leere Seriennummer („behält“), dieselbe Seriennummer in anderer Groß- und Kleinschreibung (wie beim
+     Vergleich der Seriennummern; gespeichert bleibt die bisherige Schreibweise) und dasselbe Herstelldatum. Aus einem
+     Tagesdatum einen Monat zu machen (oder umgekehrt) und ein Herstelldatum nachzutragen oder zu löschen ist eine
+     Änderung. **Auch eine vom System vergebene STR-Nummer** lässt sich danach nicht mehr durch eine Herstellernummer
+     ersetzen – die STR-Nummer steht im Protokoll (siehe Offen Nr. 1). Andere Felder (Kauf, Erstgebrauch, Intervall,
+     Fälligkeit, Lebensende, Bemerkung) wie bisher. Andere Schreibwege gibt es nicht: Bestandsimport und Anlegen legen
+     nur neue Artikel an (ein vorhandener wird übersprungen, nie aktualisiert), Verschieben, Sperren, Prüfen, Zuordnen
+     und die Katalogpflege schreiben andere Spalten.
+   - **Datenbank**: Trigger `mat_item_stammdaten_fest` (Schritt 14) – `BEFORE UPDATE OF serial_no, manufactured_on ON
+     mat_item`, wenn sich ein Wert wirklich ändert und eine abgeschlossene Prüfung des Artikels existiert. Wie die
+     Trigger aus Schritt 6 fängt er, was am Dienst vorbeiginge (über die Schnittstelle käme er als 409 „Bitte neu
+     laden“ an); derselbe Wert geht durch, weil `artikel_aendern` jede Spalte neu schreibt.
+   - **Schnittstelle**: Der Artikel trägt `stammdaten_fest` (true/false).
+   - **Oberfläche** (Dialog „Artikel … bearbeiten“): Seriennummer und Herstellung (Monat) stehen **ganz oben
+     nebeneinander** – auch am Telefon (unter 480 px im Verhältnis 3 : 2, die Felder unten bündig). Sind sie fest,
+     sind beide schreibgeschützt (grau hinterlegt, Wert sichtbar, ein fehlendes Herstelldatum als „–“; bei einer
+     STR-Nummer heißt das Feld „Seriennummer (vom System)“), darunter steht „Seit der ersten Prüfung fest – Teil des
+     Prüfnachweises.“, und der Dialog schickt sie nicht mehr mit. Sonst wie bisher, mit dem Hinweis „Seriennummer:
+     Leer lassen behält die Nummer. Eine echte Herstellernummer ersetzt die vom System vergebene.“ Darunter Kauf |
+     Erstgebrauch, Prüfintervall | nächste Prüfung, Lebensende (textil), Bemerkung – die Felder selbst unverändert.
+   - **Anlegen bleibt, wie es war**: Es ist ein eigenes Formular (nicht derselbe Dialog), dort kommen Produkt und
+     Ordner zuerst, die Seriennummer hat ihren langen Hinweis zur STR-Nummer über die volle Breite, und Herstellung
+     folgt direkt darunter neben Kauf – festschreiben lässt sich beim Anlegen noch nichts.
+   - **Migration**: **Schritt 14**, Schemaversion 14, beim Start von selbst, rein additiv und wiederholbar (nur der
+     Trigger). Geprüft: frische Datenbank, 13→14 (Daten unverändert), 7→14 an einer Kopie des Stands 7 (Zahlen aller
+     Tabellen wie nach 7→13, Trigger greift an einem geprüften Artikel der Kopie), zweiter Lauf ohne Änderung.
+     **Rückweg**: Eine Fassung mit Schemaversion 13 übergeht den Trigger – er bliebe dann aber wirksam (eine Änderung
+     der Werte nach der ersten Prüfung käme dort als 409 „Bitte neu laden“ an); `DROP TRIGGER mat_item_stammdaten_fest`
+     nimmt ihn heraus. Keine Handarbeit beim Update.
+   - Tests: `tests/test_material_stammdaten.py` (neu: Dienst – 200 vor der Prüfung und mit Entwurf, 409 nach der
+     Prüfung für Seriennummer, Herstelldatum, Tag statt Monat, Löschen und STR-Nummer, 200 bei denselben Werten;
+     Trigger; Migration 14; Oberfläche statisch), `test_material_mangel.test_migration_13` liest die Endversion statt
+     „13“. Im Browser bei 1280 und 360 px gegengeprüft: Artikel vor der ersten Prüfung (beide Felder bearbeitbar, oben
+     nebeneinander), geprüfter Karabiner, geprüfter Karabiner mit STR-Nummer ohne Herstelldatum, geprüfter Gurt (textil,
+     mit Lebensende) – schreibgeschützt mit Hinweis, Speichern der Bemerkung geht, keine Konsolenfehler, kein
+     waagerechtes Scrollen.
+   - **Offen**:
+     1. **STR-Nummer nach der ersten Prüfung**: Findet sich später doch eine Herstellernummer (etwa nach einem Rückruf
+        mit Seriennummern, die eine STR-Nummer nie trifft), lässt sie sich nicht mehr eintragen – nur in die Bemerkung.
+        Eine Ausnahme „STR → Herstellernummer, einmal, mit Journal“ ist nicht gebaut; entscheiden, ob sie gewünscht ist.
+     2. **Herstelldatum nachtragen**: Bei Metall ist das Herstelldatum keine Pflicht; fehlt es bei der ersten Prüfung,
+        lässt es sich danach nicht mehr nachtragen (auch das wäre eine Änderung gegenüber dem Protokoll). Entscheiden,
+        ob „leer → Wert“ erlaubt sein soll.
+     3. **Tippfehler nach der ersten Prüfung**: Korrigieren geht nicht mehr – auch nicht über eine Berichtigung der
+        Prüfung (die berichtigt die Befunde, nicht die Stammdaten). Bleibt es dabei, ist der Weg Aussondern und neu
+        anlegen; sonst bräuchte es eine Korrektur der Material-Verwaltung mit Grund und Journal.
+
 ## Beispielbestand (18.10.2026)
 
 Wunsch: ein umfangreicherer Bestand zum Testen auf dev – nur aus dem vorhandenen Katalog, der dabei unverändert bleibt,
@@ -3708,4 +3768,5 @@ oder Plattform-Verwaltung).
 | (Übersicht, Artikel, Listen, Prüfung) | – | neu: `start.maengel` (offene, nach denen kein Prüfer geprüft hat, höchstens 50: `id`, `item_id`, `inventory_no`, `produkt`, `created_at`, `kurz`, `fotos`, `melder`), `start.maengel_gesamt`, `start.meine_psa` {`anzahl`, `dringend`} oder `null`; `artikel.maengel` (Meldungen, offene zuerst, `wieder_offen`), `artikel.mangel_nur_gemeldet`, `artikel.mangel_eigen_offen` (Zeitpunkt der eigenen offenen Meldung oder `null`), `artikel.pruefarten.vorschlag` „ausserplanmaessig“ nach einer Meldung; Listenzeile `mangel`; `pruefung.maengel` (offene, im Entwurf). Text (`description`, `kurz`), Fotos (`fotos`) und `melder` nur für Prüfer und Materialwarte des Artikels und die eigene Meldung, sonst `null` bzw. leer mit `inhalt: false` (Phase 3 · 1, geändert 21.10.2026) |
 | `POST /api/material/pruefungen/<id>/festschreiben` | wie bisher | neu: `maengel_gesehen` (abgehakte Kennungen); „einsatzbereit“ bei offener, nicht abgehakter Meldung → 409; Berichtigung mit „einsatzbereit“ bei offener Meldung → 409 (Phase 3 · 1) |
 | `POST /api/material/artikel/<id>/aussondern`, `DELETE /api/material/artikel/<id>` | wie bisher | Aussondern 409 nach reiner Mangelsperre ohne Prüfung danach; Löschen 409, sobald eine Meldung am Artikel hängt (Phase 3 · 1) |
+| `GET /api/material/artikel/<id>`, `PUT /api/material/artikel/<id>` | wie bisher | `stammdaten_fest` (true, sobald eine abgeschlossene Prüfung existiert; ein Entwurf zählt nicht); PUT danach 409, wenn sich `serial_no` oder `manufactured_on` ändern – auch eine STR-Nummer; weggelassen, leere Seriennummer, dieselben Werte (Seriennummer ohne Rücksicht auf Groß/klein) gehen durch (Nachbesserung vom 21.10.2026) |
 | `GET /api/admin/users/<id>/material-folgen`, `GET /api/material/erinnerungen/probelauf` | wie bisher | neu: `maengel` (Zahl der Meldungen, die den Namen behalten); `mails[].psa` (Phase 3 · 1) |

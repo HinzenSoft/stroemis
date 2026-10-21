@@ -8,6 +8,10 @@ Regeln aus dem Konzept, wie sie hier umgesetzt sind:
     weder umbenennen noch verschieben noch löschen, und niemand legt etwas von Hand hinein.
   - Inventarnummer und – falls der Hersteller keine vergibt – Seriennummer kommen vom System
     (nummern.py), beide eineindeutig. Das Bild kommt vom Produkt, nie vom Artikel.
+  - Seriennummer und Herstelldatum stehen fest, sobald der Artikel eine abgeschlossene Prüfung hat (Entwürfe zählen
+    nicht): Beide stehen im Prüfprotokoll und sind Teil des Prüfnachweises (Wunsch vom 21.10.2026). Das gilt auch
+    für eine vom System vergebene STR-Nummer. Der Dienst lehnt mit Klartext ab (STAMMDATEN_FEST), der Trigger
+    mat_item_stammdaten_fest (models.TRIGGER_14) fängt, was an ihm vorbeiginge.
   - retire_by (Lebensende) gibt es nur bei textilem Material: Herstelldatum + Lebensdauer. Es lässt
     sich vorziehen, nicht verschieben. Ebenso die nächste Fälligkeit: Ein neuer Artikel bekommt einen
     Vorschlag aus dem Intervall (interval.py); höher als „heute + ein Intervall“ geht es ohne Prüfung
@@ -40,6 +44,7 @@ VORZIEHEN = ("Die nächste Prüfung lässt sich nur vorziehen, nicht verschieben
 GRUND_GLIEDERUNG = "Ordner in andere Gliederung verschoben"
 GRUND_UMWANDLUNG = "Ordner zur Gliederung gemacht"
 NACHARBEIT_OFFEN = "Im Ordner wartet Nacharbeit aus einem Bestandsimport – erst übernehmen oder verwerfen."
+STAMMDATEN_FEST = "Seriennummer und Herstelldatum stehen seit der ersten Prüfung fest – sie sind Teil des Prüfnachweises."
 DEMO_GRENZE = ("Zwischen den Demodaten (DEMO-Gliederungen) und echtem Bestand lässt sich nichts verschieben – ob ein "
                "Artikel DEMO ist, hängt an seinem Ordner, und Lebenslauf, CSV und Verzeichnis passten sonst nicht mehr "
                "zu seinen Protokollen.")
@@ -461,6 +466,13 @@ def _vor(a, b):
     return a < b
 
 
+def stammdaten_fest(iid):
+    """Hat der Artikel eine abgeschlossene Prüfung (auch Aussonderung, auch Berichtigung; kein Entwurf)? Dann stehen
+    Seriennummer und Herstelldatum fest – sie stehen im Protokoll."""
+    return bool(db.query("SELECT 1 FROM mat_inspection WHERE item_id = ? AND completed_at IS NOT NULL LIMIT 1",
+                         (iid,), one=True))
+
+
 def artikel_werte(d, alt=None):
     e = {f: alt.get(f) for f in ARTIKEL_FELDER} if alt else {}
     e.update({f: d[f] for f in ARTIKEL_FELDER if f in d})
@@ -669,8 +681,18 @@ def artikel_aendern(iid, d):
         if w["next_due_on"] > grenze:
             raise Abgelehnt(f"Ohne Prüfung liegt die nächste Fälligkeit höchstens ein Intervall in der Zukunft "
                             f"(spätestens {grenze}).")
-    neu = dict(w, serial_generated=generiert, retire_by_manual=manuell)
     with db.transaction(sofort=True):
+        # Seit der ersten abgeschlossenen Prüfung stehen Seriennummer und Herstelldatum fest – frisch unter der Sperre
+        # gelesen, eine eben abgeschlossene Prüfung zählt schon. Derselbe Wert in anderer Schreibweise (Groß und klein
+        # wie beim Vergleich der Seriennummer, ein leeres Herstelldatum) ist keine Änderung: Es bleibt der gespeicherte.
+        if stammdaten_fest(iid):
+            if w["serial_no"].casefold() == alt["serial_no"].casefold():
+                w["serial_no"], generiert = alt["serial_no"], alt["serial_generated"]
+            if (w["manufactured_on"] or None) == (alt["manufactured_on"] or None):
+                w["manufactured_on"] = alt["manufactured_on"]
+            if w["serial_no"] != alt["serial_no"] or w["manufactured_on"] != alt["manufactured_on"]:
+                raise Abgelehnt(STAMMDATEN_FEST, 409)
+        neu = dict(w, serial_generated=generiert, retire_by_manual=manuell)
         _serie_frei(w["product_id"], w["serial_no"], ausser=iid)
         db.execute("UPDATE mat_item SET product_id = ?, serial_no = ?, serial_generated = ?, manufactured_on = ?, "
                    "purchased_on = ?, first_use_on = ?, retire_by = ?, retire_by_manual = ?, next_due_on = ?, "
@@ -807,6 +829,7 @@ def artikel_json(i, voll=False):
     out["serial_generated"] = bool(i["serial_generated"])
     out["demo"] = ist_demo(i["id"])
     out["stand"] = stand_von(i)
+    out["stammdaten_fest"] = stammdaten_fest(i["id"])
     out["status"], out["status_text"] = s, st.LABEL[s]
     out["produkt"] = katalog.produkt_json(p)
     out["pfad"] = pfad(i["folder_id"])

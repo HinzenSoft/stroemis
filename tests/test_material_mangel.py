@@ -965,7 +965,7 @@ def test_migration_13():
         app = make_app(tmp)
         pfad = os.path.join(tmp, "stroemis.db")
         version, trigger, indizes, spalten, psa, sql_ = _schema_13(pfad)
-        assert version == "13" == endversion() and trigger == TRIGGER_13, (version, trigger)
+        assert version == endversion() and trigger == TRIGGER_13, (version, trigger)   # seit Schritt 14: 14
         assert {"idx_mat_defect_item", "idx_mat_defect_offen", "idx_mat_defect_melder"} <= indizes, indizes
         assert spalten == ["id", "item_id", "description", "photos_json", "reporter_id", "reporter_name", "lock_before",
                            "created_at", "closed_inspection_id", "closed_at"], spalten
@@ -993,7 +993,7 @@ def test_migration_13():
         conn.close()
         make_app(tmp)
         version, trigger, _, _, psa, _ = _schema_13(pfad)
-        assert version == "13" and trigger == TRIGGER_13 and psa == {1}, (version, trigger, psa)
+        assert version == endversion() and trigger == TRIGGER_13 and psa == {1}, (version, trigger, psa)
         conn = sqlite3.connect(pfad)
         nachher = {n: conn.execute(f"SELECT * FROM {n} ORDER BY rowid").fetchall() for n in stand}
         stand["mat_meta"] = [r for r in stand["mat_meta"] if r[0] != "schema_version"]
@@ -1001,7 +1001,7 @@ def test_migration_13():
         assert nachher == stand
         assert conn.execute("SELECT COUNT(*) FROM mat_defect_report").fetchone()[0] == 0
         # Zweiter Lauf: keine Änderung.
-        assert models.migrieren(conn) == 13
+        assert models.migrieren(conn) == models.SCHEMA_VERSION
         conn.execute("BEGIN")
         n = conn.total_changes
         models._schritt_13(conn)
@@ -1018,7 +1018,7 @@ def test_migration_13():
             app13 = make_app(tmp13)
             assert erinnerungslog_wie_schritt_11(app13)
             version, trigger, _, _, psa, _ = _schema_13(os.path.join(tmp13, "stroemis.db"))
-            assert version == "13" and trigger == TRIGGER_13 and psa == {1}, (version, trigger, psa)
+            assert version == endversion() and trigger == TRIGGER_13 and psa == {1}, (version, trigger, psa)
             zahlen = []
             for d in (tmp12, tmp13):
                 c = sqlite3.connect(os.path.join(d, "stroemis.db"))
