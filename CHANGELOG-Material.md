@@ -3603,12 +3603,14 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
        Datum angeben).“), ein leeres Feld heißt wie bisher „keine Änderung beantragt“. Ein offener Antrag aufs Entfernen
        aus der Zeit davor lässt sich **nicht mehr bestätigen** (409 „… diesen älteren Antrag kannst du nur noch
        ablehnen.“, `antrag.entfernen` = true, die Karte zeigt nur „Ablehnen …“ und den Hinweis „Ein Herstelldatum lässt
-       sich nicht mehr entfernen – der Antrag lässt sich nur noch ablehnen.“); der Antragsteller kann ihn zurückziehen.
+       sich nicht mehr entfernen – der Antrag lässt sich nur noch ablehnen.“); der Antragsteller kann ihn zurückziehen. Diese
+       Altanträge bleiben offen, bis jemand sie ablehnt oder zurückzieht – kein automatisches Schließen (**bestätigt am
+       21.10.2026**).
        **Altfälle**: Die Regel aus Befund 5 („Nachtragen nach Entfernen nur per Antrag“, `bestand.herstellung_entfernt`,
        Trigger `_NACHTRAGEN_16`) bleibt unverändert – für neue Fälle gegenstandslos (es entsteht keiner mehr), für einen
        auf dev womöglich schon per Antrag entfernten Fall weiter wirksam. Begründung: Sie zu streichen hieße, an genau
        diesen Artikeln ein beliebiges Datum ohne Bestätigung eintragen zu lassen – die Lücke aus Befund 5; sie zu
-       behalten kostet nichts.
+       behalten kostet nichts. **Bestätigt am 21.10.2026.**
      - **Datenbank (Schritt 17, Schemaversion 17)**: `mat_item_change` wird umgebaut (`_umbauen`: alle Zeilen und
        Kennungen bleiben, der AUTOINCREMENT-Stand ebenso, Indizes neu angelegt) – der CHECK kennt den Stand
        „zurückgezogen“ (Schritt 15 bleibt mit `ANTRAGSSTATUS_15`, wie er ausgeliefert wurde). Neue Trigger
