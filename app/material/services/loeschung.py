@@ -26,6 +26,10 @@ ab, bleibt das Konto samt allem stehen:
                      Abschnitt „Deine PSA“
   Mangelmeldungen    nichts; die Kennung setzt die Datenbank auf NULL, der Name bleibt (Handelnder, F3) – unbefristet
                      mit dem Artikel; users.mat_psa_mails geht mit der Kontozeile
+  Änderungsanträge   nichts; Antragsteller und Entscheider sind Handelnde an festen Stammdaten (Prüfnachweis): Die
+                     Kennungen setzt die Datenbank auf NULL, die Namen bleiben – unbefristet mit dem Artikel, wie die
+                     Mangelmeldungen (anders als Produktmeldungen, die Arbeitsdaten des Katalogs sind und
+                     „(gelöschtes Konto)“ bekommen; Entscheidung vom 21.10.2026, Bitte bestätigen)
 Abgeschlossene Prüfungen, Durchgänge, Ausnahmen, Anhänge, Rückrufe und das Journal bleiben, wie sie sind. Deaktivieren
 ändert im Modul nichts: Freigaben wirken nicht mehr (current_user verlangt ein aktives Konto), Zuordnungen bleiben und
 erscheinen mit „(deaktiviert)“. Ablauf beim Austritt: PSA zurücknehmen (Zuordnung lösen), Konto deaktivieren, nach
@@ -49,7 +53,8 @@ GRUND = "Konto gelöscht"
 def folgen(uid):
     """Was das Löschen des Kontos im Modul Material bewirkt – Zahlen für den Dialog der Nutzerverwaltung: Freigaben
     (werden entfernt, auch abgelaufene), Zuordnungen (werden gelöst), offene Entwürfe (werden Reservierungen ohne
-    Prüfer), abgeschlossene Prüfungen und Mangelmeldungen (behalten den Namen)."""
+    Prüfer), abgeschlossene Prüfungen, Mangelmeldungen und Änderungsanträge (gestellt oder entschieden; behalten den
+    Namen)."""
     def zahl(sql):
         return db.query(sql, (uid,), one=True)["n"]
     return {"freigaben": zahl("SELECT COUNT(*) AS n FROM mat_folder_grant WHERE user_id = ?"),
@@ -58,7 +63,9 @@ def folgen(uid):
                               "AND completed_at IS NULL"),
             "pruefungen": zahl("SELECT COUNT(*) AS n FROM mat_inspection WHERE inspector_user_id = ? "
                                "AND completed_at IS NOT NULL"),
-            "maengel": zahl("SELECT COUNT(*) AS n FROM mat_defect_report WHERE reporter_id = ?")}
+            "maengel": zahl("SELECT COUNT(*) AS n FROM mat_defect_report WHERE reporter_id = ?"),
+            "antraege": db.query("SELECT COUNT(*) AS n FROM mat_item_change WHERE created_by = ? OR resolved_by = ?",
+                                 (uid, uid), one=True)["n"]}
 
 
 def konto_loeschen_vorbereiten(uid):

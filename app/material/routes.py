@@ -8,7 +8,7 @@ Schutz. Fachregeln stehen in services/, hier wird nur gelesen, aufgerufen und ge
 Die Routen der Lieferung 4 stehen in eigenen Modulen an denselben Blueprints – routes_export.py (CSV, Protokoll-ZIP,
 Lebenslauf), routes_katalog.py (Katalogaustausch) und routes_rueckruf.py –, eingebunden am Ende dieser Datei; ebenso die
 der Phase 2 (Freigaben, globale Suche, Zuordnung, Erinnerungen, Bestandsimport, Prüfanleitung aus dem Wiki) und der
-Phase 3 (routes_psa.py: „Meine PSA“ und Mangelmeldung).
+Phase 3 (routes_psa.py: „Meine PSA“ und Mangelmeldung; routes_antrag.py: Änderungsanträge an festen Stammdaten).
 
 Seit Phase 2 gelten Freigaben je Ordner (services/rechte.py): Lesende Routen über den ganzen Bestand tragen
 requires_zugang und liefern nur, was das Konto sieht; Routen zu einem Gegenstand tragen requires_folder. Fremdes – auch
@@ -27,7 +27,7 @@ from . import models
 from .services import (Abgelehnt, anhang, bestand, bestandsimport, durchgang, eingabe, globalprotokoll, globalsuche,
                        journal, katalog, kennung, medien as medien_dienst, meldung, protokoll, pruefung, search,
                        unterschrift)
-from .services import erinnerung, mangel, psa, rueckruf
+from .services import antrag, erinnerung, mangel, psa, rueckruf
 from .services import status as st
 from .services import ueberblick
 from .services.bestand import FremdeDublette
@@ -289,8 +289,10 @@ def formular_seite(fid):
 @seiten.get("/material/katalog/meldungen")
 def meldungen_seite():
     """Die Material-Verwaltung arbeitet hier die Meldungen fehlender Produkte ab; Materialwarte sehen ihre eigenen
-    (oder alle), wer sonst Zugang zum Modul hat, liest alle."""
-    return _seite("meldungen", katalog_seite=True, status=request.args.get("status"))
+    (oder alle), wer sonst Zugang zum Modul hat, liest alle. ?bereich=antraege: die Änderungsanträge an festen
+    Stammdaten (Entscheidungen vom 21.10.2026) – die Material-Verwaltung entscheidet, andere sehen ihre eigenen."""
+    return _seite("meldungen", katalog_seite=True, status=request.args.get("status"),
+                  bereich="antraege" if request.args.get("bereich") == "antraege" else "produkte")
 
 
 @seiten.get("/material/suche")
@@ -382,6 +384,7 @@ def start():
                    gliederungen=gliederungen, naechste=naechste, faellig_gesamt=faellig,
                    schwelle_tage=st.schwelle_tage(), status_text=st.LABEL,
                    meldungen_offen=meldung.anzahl_offen() if ist_material_verwaltung() else None,
+                   antraege_offen=antrag.anzahl_offen() if ist_material_verwaltung() else None,
                    rueckrufe=rueckruf.uebersicht(),
                    erinnerungen=erinnerung.stand() if ist_material_verwaltung() else None,
                    nacharbeit=bestandsimport.offen_uebersicht(),
@@ -618,7 +621,8 @@ def meldungen():
     filter_ = request.args.get("status") if request.args.get("status") in meldung.FILTER else ("offen" if alle else "alle")
     rows = meldung.liste(filter_, None if alle else u["id"])
     return jsonify(meldungen=[meldung.meldung_json(r) for r in rows], alle=alle, filter=filter_,
-                   bearbeiten=alle and ist_material_verwaltung(), offen=meldung.anzahl_offen() if alle else None)
+                   bearbeiten=alle and ist_material_verwaltung(), offen=meldung.anzahl_offen() if alle else None,
+                   antraege_offen=antrag.anzahl_offen() if ist_material_verwaltung() else None)
 
 
 @api.post("/meldungen")
@@ -1183,3 +1187,4 @@ from . import routes_zuordnung  # noqa: E402,F401
 from . import routes_erinnerung  # noqa: E402,F401
 from . import routes_import, routes_wiki  # noqa: E402,F401
 from . import routes_psa  # noqa: E402,F401
+from . import routes_antrag  # noqa: E402,F401

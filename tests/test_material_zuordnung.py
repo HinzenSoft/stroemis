@@ -428,7 +428,7 @@ def test_loeschkonzept():
         r = adm.get(f"/api/admin/users/{uid}/material-folgen")
         # Material-Verwaltung: kein Materialwart, also auch nicht der einzige (test_material_stufen.test_letzter_materialwart).
         assert r.status_code == 200 and r.json == {"freigaben": 4, "zuordnungen": 2, "entwuerfe": 1, "pruefungen": 1,
-                                                   "maengel": 0, "letzter_materialwart": []}, r.get_json()
+                                                   "maengel": 0, "antraege": 0, "letzter_materialwart": []}, r.get_json()
         assert w.get(f"/api/admin/users/{uid}/material-folgen").status_code == 403
         assert adm.get("/api/admin/users/999999/material-folgen").status_code == 404
         # Deaktivieren ändert im Modul nichts.

@@ -51,6 +51,9 @@ FELD = {
     "liste_naechste_pruefung": "nächste Prüfung laut Liste", "seite": "Wiki-Seite Nr.",
     # Phase 3 · Lieferung 1: Mangelmeldung
     "mangel": "Mangelmeldung Nr.",
+    # Änderungsanträge an festen Stammdaten (Entscheidungen vom 21.10.2026)
+    "antrag": "Änderungsantrag Nr.", "begruendung": "Begründung", "beantragt_von": "beantragt von",
+    "anmerkung": "Anmerkung", "ablehnung": "Begründung der Ablehnung", "feld": "Feld",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",
@@ -74,6 +77,8 @@ AKTION = {
     "bestandsimport": "Bestandsimport", "nacharbeit_uebernommen": "Nacharbeit übernommen",
     "nacharbeit_verworfen": "Nacharbeit verworfen", "wiki": "Prüfanleitung (Wiki) geändert",
     "mangel_gemeldet": "Mangel gemeldet",
+    "antrag_gestellt": "Änderung beantragt", "antrag_bestaetigt": "Änderung bestätigt (Antrag)",
+    "antrag_abgelehnt": "Änderungsantrag abgelehnt",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",

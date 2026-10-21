@@ -3432,6 +3432,115 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
      3. **Tippfehler nach der ersten Prüfung**: Korrigieren geht nicht mehr – auch nicht über eine Berichtigung der
         Prüfung (die berichtigt die Befunde, nicht die Stammdaten). Bleibt es dabei, ist der Weg Aussondern und neu
         anlegen; sonst bräuchte es eine Korrektur der Material-Verwaltung mit Grund und Journal.
+   - Die drei offenen Punkte hat der Nutzer am selben Tag entschieden – siehe Nr. 2.
+
+2. **Änderungsanträge an festen Stammdaten** (Entscheidungen des Nutzers vom 21.10.2026 zu den Offen-Punkten aus Nr. 1).
+   - **Entscheidungen**:
+     1. **Herstelldatum nachtragen** (vorher leer → Wert) ist nach der ersten Prüfung direkt erlaubt, ohne Antrag – aber
+        **nur bei Material „Metall“** (`metall_hardware`). Bei textil (dort ohnehin Pflicht) und „sonstiges“ nicht.
+        Ändern und Entfernen eines vorhandenen Herstelldatums bleibt gesperrt.
+     2. + 3. **Jede andere Änderung** von Seriennummer oder Herstelldatum nach der ersten Prüfung – ausdrücklich auch das
+        Ersetzen einer vom System vergebenen STR-Nummer durch die echte Herstellernummer – lässt sich **mit Begründung
+        beantragen**, ähnlich dem Produkt-Melden-System. Die Material-Verwaltung (die Plattform-Verwaltung zählt wie sie)
+        bestätigt oder lehnt ab, über den Knopf „Meldungen“ im Katalog (eigener Bereich „Änderungsanträge“ neben den
+        Produktmeldungen; die Blase am Knopf zählt die offenen mit). Bestätigt wird die Änderung übernommen (Journal am
+        Artikel mit altem und neuem Wert, Antragsteller, Bestätiger, Begründung), abgelehnt mit Begründung. Mail an die
+        Material-Verwaltung bei neuem Antrag (Muster Produktmeldung, Rückfall Plattform-Verwaltung) und an den
+        Antragsteller bei der Entscheidung; DEMO, dev-Sperre und ohne Mailserver ins Log wie im Modul üblich.
+   - **Nachtragen bei Metall** (`bestand.artikel_aendern`, `herstellung_nachtragbar`): Ist das Herstelldatum leer und das
+     Produkt aus Metall, geht ein Wert durch (Journal „geändert“ wie bisher); danach steht es wie die Seriennummer fest.
+     Im Dialog „Artikel … bearbeiten“ ist das Feld dann bearbeitbar, der Hinweis sagt „Herstellung: Nur Nachtragen möglich
+     – danach steht sie ebenfalls fest.“ Ein Antrag fürs Nachtragen bei Metall wird mit 409 und dem Hinweis auf den
+     direkten Weg abgewiesen. Die 409 beim Bearbeiten sagt jetzt dazu: „Eine Änderung beantragst du mit Begründung bei der
+     Material-Verwaltung.“
+   - **Wer beantragt**: wer den Artikel verwaltet (Materialwart; Material- und Plattform-Verwaltung zählen wie
+     verwalten) **und Prüfer mit wirksamem Prüfrecht am Artikel** (auch der externe mit befristeter Prüffreigabe) – sie
+     sehen Abweichungen beim Prüfen. Fremde Gliederung 404 wie unbekannt, nur Leserecht 403. Kein Antrag an einem
+     ungeprüften Artikel (dort geht es direkt, 409 mit Hinweis) und an einem ausgesonderten (409).
+   - **Wer entscheidet**: die Material-Verwaltung, die Plattform-Verwaltung eingeschlossen. **Ihren eigenen Antrag darf
+     sie selbst bestätigen** – einfachste Lösung; das Journal nennt Antragsteller und Bestätiger (Bitte bestätigen, Nr. 1).
+   - **Antrag**: je Feld eine Zeile mit altem und neuem Wert, alle aus einem Dialog mit derselben Begründung (Pflicht,
+     höchstens 1000 Zeichen); **höchstens ein offener Antrag je Artikel und Feld** (409 „läuft schon ein Antrag (vom …)“),
+     das andere Feld geht. Geprüft **beim Antrag und beim Bestätigen** am frisch gelesenen Artikel: Seriennummer nicht
+     leer, nicht dieselbe, nicht in der Form „STR-…“, je Produkt eindeutig (sichtbare Dublette 409 mit Inventarnummer,
+     fremde 409 ohne und protokolliert wie beim Bearbeiten); Herstelldatum als Monat oder Tag, nicht in der Zukunft, nicht
+     nach Kauf oder Erstgebrauch, bei textil nicht entfernen (bei Metall und „sonstiges“ lässt sich das Entfernen
+     beantragen – „Herstelldatum entfernen (unbekannt)“). Beim Bestätigen muss der Artikel noch den alten Wert tragen
+     (sonst 409 „bitte ablehnen“), ein inzwischen ausgesonderter lässt nur noch Ablehnen zu (409).
+   - **Bestätigen** (`antrag.bestaetigen`): in einer Transaktion Antrag entscheiden und Artikel ändern. Eine
+     Herstellernummer ersetzt die STR-Nummer (`serial_generated` 0); bei textil rechnet das Lebensende mit dem neuen
+     Herstelldatum neu (ein von Hand vorgezogenes bleibt, wenn es früher liegt). Journal am Artikel „Änderung bestätigt
+     (Antrag)“: vorher/nachher je Feld, dazu `antrag` (Nr.), `beantragt_von`, `begruendung`, ggf. `anmerkung`; als
+     Handelnder steht der Bestätiger. Dazu „Änderung beantragt“ beim Antrag und „Änderungsantrag abgelehnt“ (mit
+     `ablehnung`). Der **Lebenslauf** zeigt dieselben Einträge (beschriftung.py). **Festgeschriebene Protokolle und ihre
+     PDFs bleiben unverändert** – sie nennen die alte Nummer; ein Sammelprotokoll, das ein Durchgang erst nach der
+     Bestätigung festschreibt, liest den Artikel dann mit der neuen.
+   - **Rückrufe**: Der Seriennummernabgleich liest `mat_item.serial_no` beim Abfragen – nach der Bestätigung trifft ein
+     Rückruf die neue Nummer, die alte nicht mehr (Test).
+   - **Datenbank (Schritt 15)**: Tabelle `mat_item_change` (AUTOINCREMENT; Feld, alter und neuer Wert, Begründung,
+     Stand offen | bestätigt | abgelehnt, Antwort – bei Ablehnung Pflicht –, Antragsteller und Entscheider je mit Kennung
+     und Namen, `applied_at`), eindeutiger Index „ein offener je Artikel und Feld“. Der Trigger
+     `mat_item_stammdaten_fest` wird ersetzt (gleicher Name): Nach der ersten Prüfung lässt er nur noch (a) das
+     Nachtragen bei Metall und (b) **genau die Änderung eines bestätigten, noch nicht angewendeten Antrags** zu – alter
+     UND neuer Wert müssen passen. `mat_item_antrag_angewendet` (AFTER UPDATE) setzt in derselben Anweisung
+     `applied_at`: Ein Antrag wirkt genau einmal. Die Antragstabelle ist per Trigger fest: nur offen einfügbar, Inhalt
+     unveränderlich, einmal entscheiden, kein Löschen (auch nicht per INSERT OR REPLACE), `applied_at` einmal und nur
+     nach der Bestätigung, Kontokennungen nur auf NULL. Wer die Datenbank direkt bearbeitet, kann damit nichts mehr ohne
+     Antragsspur ändern.
+   - **Löschkonzept**: Antragsteller und Entscheider bleiben namentlich (Handelnde an Prüfnachweisdaten, wie Prüfer und
+     Melder eines Mangels), die Kennungen setzt die Datenbank auf NULL – anders als bei Produktmeldungen, die
+     Arbeitsdaten des Katalogs sind und „(gelöschtes Konto)“ bekommen (Bitte bestätigen, Nr. 2). Der Dialog „Konto
+     löschen“ nennt die Zahl („… Änderungsanträge behalten den Namen.“, `material-folgen.antraege`).
+   - **Oberfläche**: Dialog „Artikel … bearbeiten“ – bei festen Stammdaten unter den beiden Feldern grau „Änderung
+     beantragen …“ und je offenem Antrag der Hinweis „Seriennummer: alt → neu – Änderung beantragt am … von … – wartet
+     auf die Material-Verwaltung.“; Prüfer ohne Verwalterrecht finden denselben Knopf unter den Stammdaten der
+     Artikelseite, dort steht auch der Hinweis (wer nur liest, sieht nur Feld und Datum). Antragsdialog: neue
+     Seriennummer und/oder neue Herstellung, bei Metall und „sonstiges“ „Herstelldatum entfernen“, Begründung Pflicht, ein
+     roter Knopf „Antrag senden“. Katalog → „Meldungen“: Bereichswahl „Produktmeldungen | Änderungsanträge (n)“, darunter
+     offen | erledigt | alle; je Karte Artikel (Link), Produkt, Feld alt → neu, Begründung, Antragsteller, Datum und
+     Gliederung, „dein eigener Antrag“; nur graue Knöpfe „Bestätigen …“ und „Ablehnen …“ (Knopfregel: mehrere Karten,
+     also kein Rot in der Liste) – der rote Hauptknopf „Bestätigen“ steht im Rückfragedialog (mit freiwilliger Anmerkung),
+     „Ablehnen“ ist wie bei den Produktmeldungen endgültig und rot umrandet (`btn danger`), Begründung Pflicht. Die Blase
+     am Knopf „Meldungen“ zählt Produktmeldungen und Anträge zusammen (Titel nennt beide), die Übersicht der
+     Material-Verwaltung nennt offene Anträge mit Link. Materialwarte und Prüfer sehen im Bereich ihre eigenen Anträge.
+   - **Migration**: **Schritt 15**, Schemaversion 15, beim Start von selbst, rein additiv und wiederholbar (Tabelle,
+     Indizes, Trigger; der alte Trigger wird entfernt und in der neuen Fassung angelegt). Geprüft: frische Datenbank,
+     14 → 15 (Tabelle und Trigger entfernt, Trigger aus Schritt 14 wieder angelegt: Zahlen aller Tabellen gleich, Trigger
+     ersetzt), 7 → 15 an einer **Kopie** des Stands 7 (Zahlen wie 7 → 14, neue Tabelle leer, Trigger greift an einem
+     geprüften Artikel), zweiter Lauf ohne Änderung. **Rückweg**: Eine Fassung mit Schemaversion 14 übergeht Schritt 15;
+     der neue Trigger bliebe wirksam – gegenüber Schritt 14 lässt er nur die beiden Ausnahmen zu, und Anträge legt eine
+     ältere Fassung nicht an –, die Tabelle bliebe ungenutzt. Keine Handarbeit beim Update.
+   - **Schnittstelle**: `POST /api/material/artikel/<id>/antrag`, `GET /api/material/antraege`,
+     `POST /api/material/antraege/<id>/bestaetigen`, `…/ablehnen`; Artikel `antraege`, `darf_antrag`,
+     `herstellung_nachtragbar`; `start.antraege_offen`, `meldungen.antraege_offen`, Kontofolgen `antraege` (Tabelle
+     unten).
+   - **Tests**: `tests/test_material_antrag.py` (neu: Nachtragen Metall direkt vs. „sonstiges“ und textil 409; Rechte je
+     Rolle mit fremder Gliederung 404, ohne Stufe, Führungskraft, Prüfer, Material- und Plattform-Verwaltung; Eingaben
+     und Eindeutigkeit beim Antrag und beim Bestätigen; Bestätigen mit Journal, Lebensende, Stand geändert, ausgesondert,
+     eigener Antrag der Material-Verwaltung; Ablehnen; Trigger an der Schnittstelle vorbei; Mails mit Rückfall, dev-Sperre,
+     ohne Mailserver und DEMO; Artikel und Zahlen; Rückruf mit neuer Nummer; Löschkonzept; Migration 15; Oberfläche
+     statisch). Angepasst: `test_material_stammdaten.py` (neuer Text der 409, Endversion, Trigger 15),
+     `test_material_trennung`, `test_material_stufen`, `test_material_ueberblick` (Kennung für die neuen Routen),
+     `test_material_stufen` und `test_material_zuordnung` (Kontofolgen mit `antraege`), `test_material_mangel` (7 → 13
+     zählt die neue Tabelle nicht mit), `test_material_beschreibung` (21 statt 19 Stellen mit Produktname und Zusatz).
+   - **Im Browser geprüft** (Platzhalterbestand, kein Mailserver – die Mails standen im Log) bei 1280 und 360 px:
+     Materialwart trägt bei einem geprüften Karabiner mit STR-Nummer das Herstelldatum nach, beantragt die
+     Herstellernummer (ohne Angabe und ohne Begründung kommt ein Hinweis), sieht den offenen Antrag an Artikel und
+     Dialog; Prüfer beantragt am Gurt über die Stammdaten ein anderes Herstelldatum; die Material-Verwaltung sieht die
+     Blase (2), wechselt zu „Änderungsanträge“, bestätigt den einen (Rückfrage mit Anmerkung) und lehnt den anderen ab
+     (ohne Begründung Hinweis), „erledigt“ zeigt beide; das Journal des Karabiners zeigt Antrag und Bestätigung.
+     Keine Konsolenfehler, kein waagerechtes Scrollen, je Dialog höchstens ein roter Knopf.
+   - **Bitte bestätigen**:
+     1. **Eigener Antrag**: Die Material-Verwaltung darf ihren eigenen Antrag selbst bestätigen (auch wenn es eine
+        zweite gibt) – das Journal nennt beide Namen, die Karte sagt „dein eigener Antrag“. Alternative: sperren, wenn es
+        eine zweite Material-Verwaltung gibt.
+     2. **Namen beim Kontolöschen**: Anträge behalten Antragsteller und Entscheider namentlich (wie Mangelmeldungen) –
+        bei Produktmeldungen werden die Namen „(gelöschtes Konto)“. Begründung: Der Antrag erklärt eine Änderung an
+        Prüfnachweisdaten; das Journal nennt dieselben Namen ohnehin.
+     3. **Prüfer dürfen beantragen** (neben dem Materialwart), auch der externe Prüfer mit befristeter Prüffreigabe.
+     4. **Kein Zurückziehen**: Einen offenen Antrag kann der Antragsteller nicht selbst zurücknehmen – ein Tippfehler im
+        Antrag wird von der Material-Verwaltung abgelehnt, danach lässt sich neu beantragen.
+     5. **Entfernen eines Herstelldatums** (Metall, „sonstiges“) ist als Antrag möglich; bei textil nicht.
 
 ## Beispielbestand (18.10.2026)
 
@@ -3665,7 +3774,7 @@ benannte Einträge werden abgewiesen. Hochladen und Export: bis 2 GB. Eine Datei
 Formulars nicht mit, der Import setzt nie eine – eine neue Formularversion aus dem Import erbt aber die Verknüpfung
 der letzten Version. Verknüpft wird in der Instanz, in der die Anleitungen im Wiki stehen.
 
-## Schnittstelle (Phase 1 mit den Nachbesserungen, Phase 2 · Lieferung 1 bis 3, Phase 3 · Lieferung 1)
+## Schnittstelle (Phase 1 mit den Nachbesserungen, Phase 2 · Lieferung 1 bis 3, Phase 3 · Lieferung 1 mit den Nachbesserungen vom 21.10.2026)
 
 Seit Phase 2 gilt jedes Recht an einem Ordner (Freigaben je Ordner, vererbt nach unten): „lesen“ heißt Leserecht am
 Gegenstand (Artikel und Prüfungen: an der Heimat des Artikels), „Grundrecht“ lesen oder verwalten, „Materialwart“
@@ -3770,3 +3879,8 @@ oder Plattform-Verwaltung).
 | `POST /api/material/artikel/<id>/aussondern`, `DELETE /api/material/artikel/<id>` | wie bisher | Aussondern 409 nach reiner Mangelsperre ohne Prüfung danach; Löschen 409, sobald eine Meldung am Artikel hängt (Phase 3 · 1) |
 | `GET /api/material/artikel/<id>`, `PUT /api/material/artikel/<id>` | wie bisher | `stammdaten_fest` (true, sobald eine abgeschlossene Prüfung existiert; ein Entwurf zählt nicht); PUT danach 409, wenn sich `serial_no` oder `manufactured_on` ändern – auch eine STR-Nummer; weggelassen, leere Seriennummer, dieselben Werte (Seriennummer ohne Rücksicht auf Groß/klein) gehen durch (Nachbesserung vom 21.10.2026) |
 | `GET /api/admin/users/<id>/material-folgen`, `GET /api/material/erinnerungen/probelauf` | wie bisher | neu: `maengel` (Zahl der Meldungen, die den Namen behalten); `mails[].psa` (Phase 3 · 1) |
+| `PUT /api/material/artikel/<id>` | wie bisher | seit den Entscheidungen vom 21.10.2026: bei Metall ein fehlendes `manufactured_on` nachtragen auch nach der ersten Prüfung (200); `artikel.herstellung_nachtragbar`; Text der 409 nennt den Antrag |
+| `POST /api/material/artikel/<id>/antrag` (`serial_no`, `manufactured_on` oder `herstellung_entfernen`, `begruendung` Pflicht) | Materialwart oder Prüfer am Artikel (fremd 404, nur lesen 403) | Änderung beantragen → 201 `antraege` (je Feld einer: `id`, `feld`, `feld_text`, `alt`, `neu`, `status`, `begruendung`, `antragsteller`, `eigen`, `passt`, …), `artikel`, `mail`; 400 Eingaben, 409 ungeprüft, ausgesondert, schon beantragt, Dublette, Metall-Nachtragen (21.10.2026) |
+| `GET /api/material/antraege?status=offen\|erledigt\|alle` | Modulzugang | Material-Verwaltung alle (Vorgabe offen), sonst die eigenen zu lesbaren Artikeln (Vorgabe alle); je Antrag `artikel` (`id`, `inventory_no`, `produkt`, `gliederung`, `pfad`, `lock_state`, `demo`); `alle`, `bearbeiten`, `offen`, `meldungen_offen` (21.10.2026) |
+| `POST /api/material/antraege/<id>/bestaetigen` (`antwort` freiwillig), `…/ablehnen` (`antwort` Pflicht) | Material-Verwaltung (Plattform-Verwaltung eingeschlossen) | entscheiden → `antrag`; 409 schon entschieden, Stand geändert, ausgesondert (nur ablehnen), Dublette (21.10.2026) |
+| (Artikel, Übersicht, Meldungen, Kontofolgen) | – | neu: `artikel.antraege` (offene; Begründung und Namen nur für Materialwart und Prüfer, sonst `inhalt: false`), `artikel.darf_antrag`; `start.antraege_offen` und `meldungen.antraege_offen` (nur Material-Verwaltung, sonst `null`); `material-folgen.antraege` (21.10.2026) |

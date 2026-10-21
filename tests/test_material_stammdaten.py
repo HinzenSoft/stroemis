@@ -4,8 +4,9 @@
 Sobald ein Artikel eine abgeschlossene Prüfung hat (completed_at gesetzt – ein Entwurf zählt nicht), lehnt
 PUT /api/material/artikel/<id> eine Änderung von Seriennummer oder Herstelldatum mit 409 ab; dieselben Werte im selben
 PUT stören nicht. Das gilt auch für eine vom System vergebene STR-Nummer. Der Trigger mat_item_stammdaten_fest
-(Schritt 14) fängt, was am Dienst vorbeiginge. Der Dialog „Artikel … bearbeiten“ zeigt beide Felder oben nebeneinander,
-bei festen Werten schreibgeschützt. Alle Nummern und Namen hier sind erfunden und nur für den Test da."""
+(Schritt 14, seit Schritt 15 mit zwei Ausnahmen – test_material_antrag.py) fängt, was am Dienst vorbeiginge. Der Dialog
+„Artikel … bearbeiten“ zeigt beide Felder oben nebeneinander, bei festen Werten schreibgeschützt. Alle Nummern und Namen
+hier sind erfunden und nur für den Test da."""
 import os
 import re
 import shutil
@@ -21,8 +22,11 @@ from test_material_trennung import bis_schritt, endversion  # noqa: E402
 
 # Eine KOPIE einer Datenbank auf Stand 7 für den Pfad 7 → 14 – nur, wenn angegeben; die Quelle bleibt unberührt.
 KOPIE_STAND_7 = os.environ.get("MATERIAL_KOPIE_STAND_7") or ""
-FEST = "Seriennummer und Herstelldatum stehen seit der ersten Prüfung fest – sie sind Teil des Prüfnachweises."
+FEST = ("Seriennummer und Herstelldatum stehen seit der ersten Prüfung fest – sie sind Teil des Prüfnachweises. Eine "
+        "Änderung beantragst du mit Begründung bei der Material-Verwaltung.")
 TRIGGER = "mat_item_stammdaten_fest"
+# Seit Schritt 15 (Änderungsanträge, Entscheidungen vom 21.10.2026) dazu am Artikel: der Antrag wirkt genau einmal.
+TRIGGER_15 = "mat_item_antrag_angewendet"
 
 
 def aufbau(tmp):
@@ -187,14 +191,15 @@ def _tabellen(pfad):
 
 
 def test_migration_14():
-    """Frisch, 13 → 14 (Trigger entfernt, Version 13; Daten unverändert), zweiter Lauf ohne Änderung; 7 → 14 aus einer
-    Kopie (wenn angegeben)."""
+    """Frisch, 13 → Endversion (Trigger entfernt, Version 13; Daten unverändert), zweiter Lauf ohne Änderung; 7 → Endversion
+    aus einer Kopie (wenn angegeben). Seit Schritt 15 ersetzt dieser den Trigger aus Schritt 14 (gleicher Name, mit den
+    Ausnahmen Nachtragen bei Metall und bestätigter Antrag – test_material_antrag) und legt mat_item_change an."""
     from app.material import models
     with tempfile.TemporaryDirectory() as tmp:
         app = make_app(tmp)
         pfad = os.path.join(tmp, "stroemis.db")
         version, trigger = _schema(pfad)
-        assert version == "14" == endversion() and TRIGGER in trigger, (version, trigger)
+        assert version == endversion() and TRIGGER in trigger, (version, trigger)
         conn = sqlite3.connect(pfad)
         conn.execute("INSERT INTO mat_meta (schluessel, wert) VALUES ('probe', 'x')")
         conn.execute(f"DROP TRIGGER {TRIGGER}")
@@ -204,13 +209,13 @@ def test_migration_14():
         stand = _tabellen(pfad)
         make_app(tmp)
         version, trigger = _schema(pfad)
-        assert version == "14" and TRIGGER in trigger, (version, trigger)
+        assert version == endversion() and TRIGGER in trigger, (version, trigger)
         nachher = _tabellen(pfad)
         for t in (stand, nachher):
             t["mat_meta"] = [r for r in t["mat_meta"] if r[0] != "schema_version"]
         assert nachher == stand
         conn = sqlite3.connect(pfad)
-        assert models.migrieren(conn) == models.SCHEMA_VERSION == 14
+        assert models.migrieren(conn) == models.SCHEMA_VERSION >= 14
         conn.execute("BEGIN")
         n = conn.total_changes
         models._schritt_14(conn)
@@ -226,10 +231,12 @@ def test_migration_14():
             make_app(tmp14)
             v13, t13 = _schema(os.path.join(tmp13, "stroemis.db"))
             v14, t14 = _schema(os.path.join(tmp14, "stroemis.db"))
-            assert (v13, v14) == ("13", "14") and TRIGGER not in t13 and t14 == t13 | {TRIGGER}, (v13, v14, t13, t14)
+            assert (v13, v14) == ("13", endversion()) and TRIGGER not in t13 and t14 == t13 | {TRIGGER, TRIGGER_15}, (
+                v13, v14, t13, t14)
             vorher, nachher = _tabellen(os.path.join(tmp13, "stroemis.db")), _tabellen(os.path.join(tmp14, "stroemis.db"))
             for t in (vorher, nachher):
                 t["mat_meta"] = [r for r in t["mat_meta"] if r[0] != "schema_version"]
+            assert nachher.pop("mat_item_change") == []                    # Schritt 15: neu und leer
             # Nur Zahlen vergleichen: Migrationsläufe schreiben Zeitstempel (Journal „Migration Schritt …“).
             assert {n: len(z) for n, z in vorher.items()} == {n: len(z) for n, z in nachher.items()}
             assert len(nachher["mat_item"]) > 0
@@ -246,9 +253,9 @@ def test_migration_14():
                         pass
             finally:
                 conn.close()
-        print("Migration 7 → 14 aus der Kopie bestanden.")
+        print("Migration 7 → Endversion aus der Kopie bestanden.")
     else:
-        print("Migration 7 → 14 übersprungen (MATERIAL_KOPIE_STAND_7 nicht gesetzt).")
+        print("Migration 7 → Endversion übersprungen (MATERIAL_KOPIE_STAND_7 nicht gesetzt).")
     print("Migration 14 bestanden.")
 
 
@@ -266,9 +273,10 @@ def test_oberflaeche_statisch():
     kopf = dlg[dlg.index("bearbeiten</h2>"):]
     assert re.match(r'bearbeiten</h2>\s*<div class="field-row mat-stammzeile\$\{fest \? " mat-fest" : ""\}"><div>\$\{sn\}'
                     r'</div><div>\$\{herst\}</div></div>', kopf), kopf[:300]
-    zeilen = {z: dlg.index(z) for z in ("const sn = fest", "const herst = fest")}
-    sn = dlg[zeilen["const sn = fest"]:zeilen["const herst = fest"]]
-    herst = dlg[zeilen["const herst = fest"]:dlg.index("dialog(`")]
+    # Seit den Entscheidungen vom 21.10.2026 steht vor „fest“ der Fall „nachtragen“ (Metall ohne Herstelldatum).
+    zeilen = {z: dlg.index(z) for z in ("const sn = fest", "const herst = nachtragen")}
+    sn = dlg[zeilen["const sn = fest"]:zeilen["const herst = nachtragen"]]
+    herst = dlg[zeilen["const herst = nachtragen"]:dlg.index("dialog(`")]
     # Fest: schreibgeschützt mit sichtbarem Wert; offen: wie bisher mit dem Hinweis zur STR-Nummer.
     assert re.search(r'\? `<label for="ad-sn">Seriennummer[^`]*</label><input type="text" id="ad-sn" readonly '
                      r'value="\$\{esc\(a\.serial_no\)\}">`', sn), sn

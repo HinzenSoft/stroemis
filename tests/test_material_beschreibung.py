@@ -471,8 +471,9 @@ def test_oberflaeche_statisch():
     # Jede Stelle mit dem Namen setzt den Zusatz dahinter – erst nach dem Schluss von Link und Hervorhebung.
     stellen = re.findall(r"\$\{nameHtml\(([^,)]+)(?:, true)?\)\}((?:</strong>|</a>)*)\$\{zusatzHtml\(([^)]+)\)\}", js)
     # 17 seit Phase 2 · L3: die Produktwahl der Nacharbeit (Bestandsimport) zeigt das gewählte Produkt ebenso; 19 seit
-    # Phase 3 · L1: Kasten „Gemeldete Mängel“ der Übersicht und Karte in „Meine PSA“.
-    assert len(stellen) == js.count("${nameHtml(") == 19, (len(stellen), js.count("${nameHtml("))
+    # Phase 3 · L1: Kasten „Gemeldete Mängel“ der Übersicht und Karte in „Meine PSA“; 21 seit den Änderungsanträgen
+    # (21.10.2026): Karte und Rückfrage „Änderung bestätigen“.
+    assert len(stellen) == js.count("${nameHtml(") == 21, (len(stellen), js.count("${nameHtml("))
     assert all(name == zusatz for name, _, zusatz in stellen), stellen
     assert not re.search(r"\$\{zusatzHtml\([^)]*\)\}(</strong>|</a>)", js)      # nie im Link, nie in <strong>
     # Die Katalogliste wie im Bildschirmfoto: Name fett im roten Link, dann grau Zusatz und Artikelnummer.

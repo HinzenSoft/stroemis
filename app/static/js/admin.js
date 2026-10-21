@@ -500,7 +500,8 @@
     return `${mehrzahl(n(f.freigaben), "Freigabe wird", "Freigaben werden")} entfernt, ${mehrzahl(n(f.zuordnungen), "Artikel verliert seine", "Artikel verlieren ihre")} Zuordnung,
       ${mehrzahl(n(f.entwuerfe), "offene Prüfung wird zur Reservierung", "offene Prüfungen werden zu Reservierungen")} ohne Prüfer.
       Festgeschriebene Prüfungen (${n(f.pruefungen)}) behalten den Namen – Nachweis nach EN 365.${n(f.maengel)
-        ? ` ${mehrzahl(n(f.maengel), "Mangelmeldung behält", "Mangelmeldungen behalten")} den Namen.` : ""}`;
+        ? ` ${mehrzahl(n(f.maengel), "Mangelmeldung behält", "Mangelmeldungen behalten")} den Namen.` : ""}${n(f.antraege)
+        ? ` ${mehrzahl(n(f.antraege), "Änderungsantrag behält", "Änderungsanträge behalten")} den Namen.` : ""}`;
   }
 
   function loeschDialog(u) {

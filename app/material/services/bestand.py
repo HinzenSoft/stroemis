@@ -11,7 +11,9 @@ Regeln aus dem Konzept, wie sie hier umgesetzt sind:
   - Seriennummer und Herstelldatum stehen fest, sobald der Artikel eine abgeschlossene Prüfung hat (Entwürfe zählen
     nicht): Beide stehen im Prüfprotokoll und sind Teil des Prüfnachweises (Wunsch vom 21.10.2026). Das gilt auch
     für eine vom System vergebene STR-Nummer. Der Dienst lehnt mit Klartext ab (STAMMDATEN_FEST), der Trigger
-    mat_item_stammdaten_fest (models.TRIGGER_14) fängt, was an ihm vorbeiginge.
+    mat_item_stammdaten_fest (models.TRIGGER_15_ARTIKEL) fängt, was an ihm vorbeiginge. Seit den Entscheidungen vom
+    21.10.2026 zwei Ausnahmen: Bei Metall lässt sich ein fehlendes Herstelldatum hier direkt nachtragen (leer → Wert);
+    jede andere Änderung geht über einen Antrag an die Material-Verwaltung (antrag.py).
   - retire_by (Lebensende) gibt es nur bei textilem Material: Herstelldatum + Lebensdauer. Es lässt
     sich vorziehen, nicht verschieben. Ebenso die nächste Fälligkeit: Ein neuer Artikel bekommt einen
     Vorschlag aus dem Intervall (interval.py); höher als „heute + ein Intervall“ geht es ohne Prüfung
@@ -44,7 +46,8 @@ VORZIEHEN = ("Die nächste Prüfung lässt sich nur vorziehen, nicht verschieben
 GRUND_GLIEDERUNG = "Ordner in andere Gliederung verschoben"
 GRUND_UMWANDLUNG = "Ordner zur Gliederung gemacht"
 NACHARBEIT_OFFEN = "Im Ordner wartet Nacharbeit aus einem Bestandsimport – erst übernehmen oder verwerfen."
-STAMMDATEN_FEST = "Seriennummer und Herstelldatum stehen seit der ersten Prüfung fest – sie sind Teil des Prüfnachweises."
+STAMMDATEN_FEST = ("Seriennummer und Herstelldatum stehen seit der ersten Prüfung fest – sie sind Teil des "
+                   "Prüfnachweises. Eine Änderung beantragst du mit Begründung bei der Material-Verwaltung.")
 DEMO_GRENZE = ("Zwischen den Demodaten (DEMO-Gliederungen) und echtem Bestand lässt sich nichts verschieben – ob ein "
                "Artikel DEMO ist, hängt an seinem Ordner, und Lebenslauf, CSV und Verzeichnis passten sonst nicht mehr "
                "zu seinen Protokollen.")
@@ -473,6 +476,12 @@ def stammdaten_fest(iid):
                          (iid,), one=True))
 
 
+def herstellung_nachtragbar(item, produkt):
+    """Darf das Herstelldatum trotz fester Stammdaten direkt nachgetragen werden? Nur bei Metall und nur, solange es leer
+    ist (Entscheidung vom 21.10.2026) – textil hat es ohnehin als Pflicht, „sonstiges“ geht über einen Antrag."""
+    return item["manufactured_on"] is None and produkt["material_kind"] == "metall_hardware"
+
+
 def artikel_werte(d, alt=None):
     e = {f: alt.get(f) for f in ARTIKEL_FELDER} if alt else {}
     e.update({f: d[f] for f in ARTIKEL_FELDER if f in d})
@@ -685,12 +694,14 @@ def artikel_aendern(iid, d):
         # Seit der ersten abgeschlossenen Prüfung stehen Seriennummer und Herstelldatum fest – frisch unter der Sperre
         # gelesen, eine eben abgeschlossene Prüfung zählt schon. Derselbe Wert in anderer Schreibweise (Groß und klein
         # wie beim Vergleich der Seriennummer, ein leeres Herstelldatum) ist keine Änderung: Es bleibt der gespeicherte.
+        # Ausnahme (Entscheidung vom 21.10.2026): Bei Metall darf ein fehlendes Herstelldatum nachgetragen werden.
         if stammdaten_fest(iid):
             if w["serial_no"].casefold() == alt["serial_no"].casefold():
                 w["serial_no"], generiert = alt["serial_no"], alt["serial_generated"]
             if (w["manufactured_on"] or None) == (alt["manufactured_on"] or None):
                 w["manufactured_on"] = alt["manufactured_on"]
-            if w["serial_no"] != alt["serial_no"] or w["manufactured_on"] != alt["manufactured_on"]:
+            nachtragen = herstellung_nachtragbar(alt, p) and bool(w["manufactured_on"])
+            if w["serial_no"] != alt["serial_no"] or (w["manufactured_on"] != alt["manufactured_on"] and not nachtragen):
                 raise Abgelehnt(STAMMDATEN_FEST, 409)
         neu = dict(w, serial_generated=generiert, retire_by_manual=manuell)
         _serie_frei(w["product_id"], w["serial_no"], ausser=iid)
@@ -830,6 +841,8 @@ def artikel_json(i, voll=False):
     out["demo"] = ist_demo(i["id"])
     out["stand"] = stand_von(i)
     out["stammdaten_fest"] = stammdaten_fest(i["id"])
+    # Bei Metall ein fehlendes Herstelldatum direkt nachtragen (nur mit fester Stammdaten von Bedeutung).
+    out["herstellung_nachtragbar"] = herstellung_nachtragbar(i, p)
     out["status"], out["status_text"] = s, st.LABEL[s]
     out["produkt"] = katalog.produkt_json(p)
     out["pfad"] = pfad(i["folder_id"])
@@ -877,6 +890,11 @@ def artikel_json(i, voll=False):
         eigen = mangel.eigene_offene(i["id"])
         out["mangel_eigen_offen"] = eigen["created_at"] if eigen else None
         out["darf_loeschen"] = not out["pruefungen"] and not out["maengel"]
+        # Änderungsanträge (Entscheidungen vom 21.10.2026): offene am Artikel – Begründung und Namen nur für die, die
+        # beantragen dürfen (Materialwart, Prüfer); beantragen nur nach der ersten Prüfung und nicht ausgesondert.
+        from . import antrag
+        out["antraege"] = antrag.fuer_artikel(i, inhalt)
+        out["darf_antrag"] = inhalt and out["stammdaten_fest"] and i["lock_state"] != "ausgesondert"
     return out
 
 

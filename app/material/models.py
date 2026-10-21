@@ -98,13 +98,24 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     (completed_at gesetzt; ein Entwurf zählt nicht). Beide stehen im Prüfprotokoll. Der Dienst (bestand.artikel_aendern)
     weist vorher mit Klartext ab; der Trigger fängt, was an ihm vorbeiginge – wie die Trigger aus Schritt 6. Kein neues
     Schema, rein additiv, wiederholbar. Wer mat_item künftig neu aufbaut, muss den Trigger danach neu anlegen.
+  - Schritt 15 (Phase 3 · Lieferung 1, Entscheidungen vom 21.10.2026): mat_item_change – Antrag auf Änderung von
+    Seriennummer oder Herstelldatum nach der ersten Prüfung (je Zeile ein Feld mit altem und neuem Wert, Begründung,
+    Antragsteller; bestätigt oder abgelehnt von der Material-Verwaltung, abgelehnt nur mit Begründung; applied_at, sobald
+    die bestätigte Änderung am Artikel steht). AUTOINCREMENT – das Journal nennt Anträge. Höchstens ein offener Antrag je
+    Artikel und Feld (Index). Trigger (TRIGGER_15): Inhalt unveränderlich, nur offen einfügbar, einmal entscheiden, kein
+    Löschen (auch nicht per INSERT OR REPLACE), Kontokennungen nur auf NULL (Konto gelöscht, der Name bleibt). Der Trigger
+    mat_item_stammdaten_fest aus Schritt 14 wird ersetzt: Er lässt nach der ersten Prüfung nur noch zwei Änderungen
+    zu – das Herstelldatum bei Metall nachtragen (leer → Wert) und genau die Änderung eines bestätigten, noch nicht
+    angewendeten Antrags (alter UND neuer Wert müssen passen); mat_item_antrag_angewendet setzt danach applied_at, ein
+    Antrag wirkt also genau einmal. Rein additiv, wiederholbar. Wer mat_item künftig neu aufbaut, muss beide Trigger
+    und den Verweis item_id bedenken.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -135,6 +146,9 @@ BEFUNDE = ("ok", "mangel", "nicht_zutreffend")
 ANHANGARTEN = {"externes_pruefformular": "externes Prüfformular", "pruefbericht": "Prüfbericht", "foto": "Foto",
                "sonstiges": "Sonstiges"}
 MELDUNGSSTATUS = {"offen": "offen", "eingepflegt": "eingepflegt", "abgelehnt": "abgelehnt"}
+# Änderungsanträge zu den festen Stammdaten (Schritt 15): welche Felder, welche Stände.
+ANTRAGSFELDER = {"serial_no": "Seriennummer", "manufactured_on": "Herstellung"}
+ANTRAGSSTATUS = {"offen": "offen", "bestaetigt": "bestätigt", "abgelehnt": "abgelehnt"}
 FREIGABEN = ("lesen", "pruefen", "verwalten")
 # Die Stufen, mit denen Schritt 1 das Erinnerungslog angelegt hat – Schritt 1 bleibt, wie er ausgeliefert wurde.
 ERINNERUNGEN_1 = ("30_tage", "7_tage", "faellig", "lebensdauer")
@@ -1370,12 +1384,110 @@ def _schritt_14(conn):
         conn.execute(sql)
 
 
+# --- Schritt 15 (Phase 3 · Lieferung 1, Entscheidungen vom 21.10.2026): Änderungsanträge zu festen Stammdaten -------
+
+ANTRAG_FEST = "'Ein Änderungsantrag lässt sich nur einmal entscheiden – danach weder ändern noch löschen.'"
+SCHRITT_15 = [
+    """CREATE TABLE IF NOT EXISTS mat_item_change (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,          -- das Journal nennt Anträge: nie wiederverwendet
+      item_id          INTEGER NOT NULL REFERENCES mat_item(id),   -- kein CASCADE: ein Artikel mit Antrag bleibt
+      field            TEXT NOT NULL CHECK (field IN """ + _in(ANTRAGSFELDER) + """),
+      old_value        TEXT,                                       -- Wert beim Antrag (NULL: Herstelldatum leer)
+      new_value        TEXT,                                       -- beantragter Wert (NULL: Herstelldatum entfernen)
+      reason           TEXT NOT NULL CHECK (trim(reason) <> '' AND length(reason) <= 1000),
+      status           TEXT NOT NULL DEFAULT 'offen' CHECK (status IN """ + _in(ANTRAGSSTATUS) + """),
+      answer           TEXT NOT NULL DEFAULT '' CHECK (length(answer) <= 1000),  -- bei Ablehnung Pflicht
+      created_by       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_by_name  TEXT NOT NULL CHECK (trim(created_by_name) <> ''),
+      created_at       TEXT NOT NULL,                              -- UTC wie db.now()
+      resolved_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      resolved_by_name TEXT NOT NULL DEFAULT '',
+      resolved_at      TEXT,
+      applied_at       TEXT,                                       -- die bestätigte Änderung steht am Artikel
+      CHECK (new_value IS NOT old_value),
+      CHECK (field <> 'serial_no' OR (new_value IS NOT NULL AND trim(new_value) <> '')),
+      CHECK ((status = 'offen') = (resolved_at IS NULL)),
+      CHECK (status <> 'abgelehnt' OR trim(answer) <> ''),
+      CHECK (applied_at IS NULL OR status = 'bestaetigt')
+    )""",
+    # Höchstens ein offener Antrag je Artikel und Feld.
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_mat_item_change_offen ON mat_item_change(item_id, field) WHERE status = 'offen'",
+    "CREATE INDEX IF NOT EXISTS idx_mat_item_change_item ON mat_item_change(item_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_item_change_status ON mat_item_change(status, created_at)",
+    # Für ON DELETE SET NULL beim Kontolöschen und die Zahl im Dialog „Konto löschen“ (loeschung.folgen).
+    "CREATE INDEX IF NOT EXISTS idx_mat_item_change_antragsteller ON mat_item_change(created_by)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_item_change_entscheider ON mat_item_change(resolved_by)",
+]
+# Eine Änderung eines Feldes, die ein bestätigter, noch nicht angewendeter Antrag genau so deckt (alter und neuer Wert).
+_ANTRAG_DECKT = ("EXISTS (SELECT 1 FROM mat_item_change c WHERE c.item_id = OLD.id AND c.field = '{0}' "
+                 "AND c.status = 'bestaetigt' AND c.applied_at IS NULL AND c.old_value IS OLD.{0} "
+                 "AND c.new_value IS NEW.{0})")
+# Herstelldatum bei Metall nachtragen: vorher leer, jetzt ein Wert, das Produkt bleibt und ist aus Metall.
+_NACHTRAGEN = ("(OLD.manufactured_on IS NULL AND NEW.manufactured_on IS NOT NULL AND NEW.product_id IS OLD.product_id "
+               "AND (SELECT p.material_kind FROM mat_product p WHERE p.id = OLD.product_id) = 'metall_hardware')")
+TRIGGER_15_ARTIKEL = [
+    # Ersetzt den Trigger aus Schritt 14 (gleicher Name): fest seit der ersten abgeschlossenen Prüfung – außer für das
+    # Nachtragen bei Metall und für die Änderung eines bestätigten Antrags.
+    _trigger("mat_item_stammdaten_fest", "BEFORE UPDATE OF serial_no, manufactured_on ON mat_item",
+             "((NEW.serial_no IS NOT OLD.serial_no AND NOT " + _ANTRAG_DECKT.format("serial_no") + ") "
+             "OR (NEW.manufactured_on IS NOT OLD.manufactured_on AND NOT " + _NACHTRAGEN + " AND NOT "
+             + _ANTRAG_DECKT.format("manufactured_on") + ")) "
+             "AND EXISTS (SELECT 1 FROM mat_inspection x WHERE x.item_id = OLD.id AND x.completed_at IS NOT NULL)",
+             STAMMDATEN_FEST),
+    # Ein bestätigter Antrag wirkt genau einmal: Die Änderung, die er deckt, setzt in derselben Anweisung applied_at.
+    "CREATE TRIGGER IF NOT EXISTS mat_item_antrag_angewendet AFTER UPDATE OF serial_no, manufactured_on ON mat_item "
+    "WHEN NEW.serial_no IS NOT OLD.serial_no OR NEW.manufactured_on IS NOT OLD.manufactured_on "
+    "BEGIN UPDATE mat_item_change SET applied_at = strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now') "
+    "WHERE item_id = NEW.id AND status = 'bestaetigt' AND applied_at IS NULL AND ("
+    "(field = 'serial_no' AND NEW.serial_no IS NOT OLD.serial_no AND old_value IS OLD.serial_no "
+    "AND new_value IS NEW.serial_no) OR (field = 'manufactured_on' AND NEW.manufactured_on IS NOT OLD.manufactured_on "
+    "AND old_value IS OLD.manufactured_on AND new_value IS NEW.manufactured_on)); END",
+]
+TRIGGER_15_ANTRAG = [
+    # Inhalt eines Antrags: nie ändern.
+    _trigger("mat_item_change_inhalt", "BEFORE UPDATE OF id, item_id, field, old_value, new_value, reason, "
+             "created_by_name, created_at ON mat_item_change", "1", ANTRAG_FEST),
+    # Kontokennungen dürfen nur auf NULL gehen (Konto gelöscht, ON DELETE SET NULL) – die Namen bleiben.
+    _trigger("mat_item_change_antragsteller", "BEFORE UPDATE OF created_by ON mat_item_change",
+             "NEW.created_by IS NOT NULL AND NEW.created_by IS NOT OLD.created_by", ANTRAG_FEST),
+    _trigger("mat_item_change_entscheider", "BEFORE UPDATE OF resolved_by ON mat_item_change",
+             "OLD.status <> 'offen' AND NEW.resolved_by IS NOT NULL AND NEW.resolved_by IS NOT OLD.resolved_by",
+             ANTRAG_FEST),
+    # Entschieden wird einmal – danach steht es fest.
+    _trigger("mat_item_change_entschieden", "BEFORE UPDATE OF status, answer, resolved_by_name, resolved_at "
+             "ON mat_item_change", "OLD.status <> 'offen'", ANTRAG_FEST),
+    # applied_at setzt nur mat_item_antrag_angewendet: einmal, nach der Bestätigung (nicht in derselben Anweisung).
+    _trigger("mat_item_change_angewendet", "BEFORE UPDATE OF applied_at ON mat_item_change",
+             "OLD.applied_at IS NOT NULL OR NEW.applied_at IS NULL OR OLD.status <> 'bestaetigt'", ANTRAG_FEST),
+    _trigger("mat_item_change_loeschen", "BEFORE DELETE ON mat_item_change", "1", ANTRAG_FEST),
+    # INSERT OR REPLACE löscht ohne Lösch-Trigger (recursive_triggers aus) – deshalb auch beim Einfügen prüfen.
+    _trigger("mat_item_change_ersetzen", "BEFORE INSERT ON mat_item_change",
+             "EXISTS (SELECT 1 FROM mat_item_change c WHERE c.id = NEW.id)", ANTRAG_FEST),
+    # Ein Antrag entsteht immer offen – entschieden wird er nur per UPDATE (antrag.bestaetigen, antrag.ablehnen).
+    _trigger("mat_item_change_neu", "BEFORE INSERT ON mat_item_change",
+             "NEW.status <> 'offen' OR NEW.resolved_at IS NOT NULL OR NEW.resolved_by IS NOT NULL "
+             "OR NEW.applied_at IS NOT NULL OR NEW.answer <> ''", ANTRAG_FEST),
+]
+
+
+def _schritt_15(conn):
+    """Entscheidungen vom 21.10.2026: Änderungsanträge (mat_item_change) mit Triggern; der Trigger
+    mat_item_stammdaten_fest aus Schritt 14 wird durch die Fassung mit den beiden Ausnahmen ersetzt (erst entfernen,
+    dann neu anlegen – CREATE TRIGGER IF NOT EXISTS fände sonst die alte Fassung vor). Rein additiv; ein zweiter Lauf
+    legt dieselben Trigger neu an und ändert keine Zeile."""
+    for sql in SCHRITT_15:
+        conn.execute(sql)
+    conn.execute("DROP TRIGGER IF EXISTS mat_item_stammdaten_fest")
+    for sql in TRIGGER_15_ARTIKEL + TRIGGER_15_ANTRAG:
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
-            14: _schritt_14}
+            14: _schritt_14, 15: _schritt_15}
 
 
 def _meta(conn, schluessel, vorgabe=None):

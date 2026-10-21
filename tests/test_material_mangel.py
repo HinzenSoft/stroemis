@@ -1022,9 +1022,10 @@ def test_migration_13():
             zahlen = []
             for d in (tmp12, tmp13):
                 c = sqlite3.connect(os.path.join(d, "stroemis.db"))
+                # Ohne die Tabellen späterer Schritte (13: Mangelmeldungen, 15: Änderungsanträge) – beide neu und leer.
                 tabellen = [r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE "
-                                                    "'mat%' AND name NOT LIKE '%fts%' AND name <> 'mat_defect_report' "
-                                                    "ORDER BY name")]
+                                                    "'mat%' AND name NOT LIKE '%fts%' AND name NOT IN "
+                                                    "('mat_defect_report', 'mat_item_change') ORDER BY name")]
                 zahlen.append({n: c.execute(f"SELECT COUNT(*) FROM {n}").fetchone()[0] for n in tabellen})
                 c.close()
             assert zahlen[0] == zahlen[1] and zahlen[1]["mat_item"] > 0, zahlen
