@@ -1999,6 +1999,9 @@
     // ausgegraut, bis ein Prüfer den Artikel geprüft hat (NUR_GEMELDET).
     const maengel = a.maengel || [];
     const darfMelden = !aus && Boolean(darf.lesen);
+    // Eigene offene Meldung: Knopf ausgegraut mit Hilfezeile wie in „Meine PSA“ – kein Dialog, der erst 409 bringt.
+    // Wer den Artikel selbst verwaltet, bekommt den Satz „an den Materialwart“ nicht.
+    const schonGemeldet = darfMelden && a.mangel_eigen_offen;
     const sperrKnopf = frei && darf.pruefen && !a.entwurf;
     const aussonderKnopf = gesperrt && darf.verwalten && !a.entwurf;
     const zuordnung = darf.grund ? zeile("Zugeordnet an", `${zu ? `${esc(zu.name)}${zu.gliederung ? ` <span class="muted">· ${esc(zu.gliederung)}</span>` : ""}${zu.aktiv ? "" : ' <span class="muted">(deaktiviert)</span>'}`
@@ -2019,8 +2022,9 @@
           <p>Seriennummer <strong>${esc(a.serial_no)}</strong>${a.serial_generated ? ' <span class="badge grey">vom System vergeben</span><span class="help mat-sn-hinweis">Der Hersteller vergibt keine Seriennummer – diese Nummer bitte dauerhaft am Artikel anbringen.</span>' : ""}</p>
           <div class="btn-row mat-pruefknoepfe">${!aus && darf.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
             ${sperrKnopf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
-            ${darfMelden ? '<button class="btn secondary small" type="button" data-act="mangel">Mangel melden …</button>' : ""}
+            ${darfMelden ? `<button class="btn secondary small" type="button"${schonGemeldet ? ' disabled aria-describedby="mat-schon-gemeldet"' : ' data-act="mangel"'}>Mangel melden …</button>` : ""}
             ${aussonderKnopf ? `<button class="btn secondary small" type="button"${a.mangel_nur_gemeldet ? ' disabled aria-describedby="mat-aussondern-hilfe"' : ' data-act="aussondern"'}>Aussondern</button>` : ""}</div>
+          ${schonGemeldet ? `<p class="help mat-schon-gemeldet" id="mat-schon-gemeldet">Du hast am ${esc(S.fmtDate(a.mangel_eigen_offen))} schon gemeldet – ein Prüfer sieht es sich an.${darf.verwalten ? "" : " Ergänzungen bitte direkt an den Materialwart."}</p>` : ""}
           ${sperrKnopf && darfMelden ? '<p class="help mat-melden-hilfe">Mangel melden: mit Beschreibung und Fotos, Materialwarte und Prüfer bekommen eine Mail. Sperren: ohne Meldung, mit Sperrgrund.</p>' : ""}
           ${aussonderKnopf && a.mangel_nur_gemeldet ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(NUR_GEMELDET)}</p>` : ""}
           ${a.entwurf ? `<p class="small">In Prüfung bei <strong>${esc(a.entwurf.pruefer)}</strong> seit ${esc(fmtZeit(a.entwurf.seit))}
@@ -5692,10 +5696,11 @@
 
   // Nach dem Melden steht oben, was geschah – der Toast allein ist am Telefon schnell weg.
   let quittung = "";
-  const quittungHtml = () => { const q = quittung; quittung = ""; return q ? `<p class="notice mat-mangel-quittung" role="status">${esc(q)}</p>` : ""; };
+  const quittungHtml = () => { const q = quittung; quittung = ""; return q ? `<p class="notice mat-mangel-quittung" role="status" tabindex="-1">${esc(q)}</p>` : ""; };
   function mangelQuittung(r) {
     const was = r.gesperrt ? "der Artikel ist gesperrt" : "der Artikel war schon gesperrt";
-    return r.mail ? `Gemeldet – ${was}. Materialwart und Prüfer bekommen eine Mail. Leg ihn beiseite und gib ihn deinem Materialwart.`
+    // „unterwegs“: Die Mail geht im Hintergrund hinaus – ob der Mailserver sie annimmt, steht erst im Log.
+    return r.mail ? `Gemeldet – ${was}. Die Mail an Materialwart und Prüfer ist unterwegs. Leg ihn beiseite und gib ihn deinem Materialwart.`
       : `Gemeldet – ${was}. Es ging keine Mail hinaus – sag deinem Materialwart Bescheid und gib ihm den Artikel.`;
   }
 
@@ -5774,6 +5779,9 @@
           const q = mangelQuittung(r);
           toast(q);
           if (danach) await danach(r, q);
+          // Nach dem Neuzeichnen stünde der Fokus auf body – die Quittung oben bekommt ihn (Tastatur, Vorlesehilfe).
+          const qEl = $(".mat-mangel-quittung");
+          if (qEl) qEl.focus();
         } catch (e) {
           toast(e.status === 413 ? "Die Fotos sind zusammen zu groß – bitte weniger oder kleinere wählen." : e.message, true);
           knopf.disabled = false;
@@ -5785,11 +5793,15 @@
 
   // Banner am Artikel: je offener Meldung ein roter Kasten unter dem GESPERRT-Banner. Den Melder nennt der Server nur
   // dem, der ihn sehen darf (Grund- oder Prüfrecht).
+  // Die erledigende Freiprüfung wurde später berichtigt und gibt nicht mehr frei – die Meldung ist wieder offen.
+  const wiederOffen = (m) => (m.wieder_offen ? `<p class="mat-mangel-zeile mat-mangel-wieder"><a href="/material/pruefung/${Number(m.wieder_offen.berichtigung)}">Freiprüfung später berichtigt</a> (jetzt: ${esc(ERGEBNIS[m.wieder_offen.ergebnis] || m.wieder_offen.ergebnis)}) – die Meldung ist wieder offen, die nächste Freiprüfung hakt sie ab.</p>` : "");
+
   function mangelBanner(m) {
     return `<div class="mat-banner mat-mangel-banner" role="note">
       <p class="mat-mangel-titel">MANGEL GEMELDET am ${esc(tagZeit(m.created_at))}${m.melder ? ` · von ${esc(m.melder)}` : ""}</p>
       <p class="mat-text mat-mangel-text">${esc(m.description)}</p>
       ${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}
+      ${wiederOffen(m)}
       <p class="mat-mangel-zeile">Nicht verwenden – beiseitelegen und beim Materialwart abgeben. Freigeben kann ihn nur ein Prüfer mit einer Prüfung („einsatzbereit“).</p></div>`;
   }
 
@@ -5808,6 +5820,7 @@
       <p class="mat-mangel-titel">GEMELDETER MANGEL vom ${esc(tagZeit(m.created_at))}${m.melder ? ` (von ${esc(m.melder)})` : ""}</p>
       <p class="mat-text mat-mangel-text">${esc(m.description)}</p>
       ${mangelFotos(m, `Mangel vom ${S.fmtDate(m.created_at)}`)}
+      ${wiederOffen(m)}
       <p class="mat-mangel-zeile">${berichtigung ? "Eine Berichtigung gibt den Artikel nicht frei – dafür braucht es eine neue Prüfung."
         : "Mit „einsatzbereit“ hebst du die Sperre auf (Freiprüfung) und erledigst die Meldung."}</p></div>`).join("");
   }
@@ -5893,7 +5906,7 @@
         : leer("Dir ist keine Ausrüstung zugeordnet. Das macht der Materialwart deiner Gliederung.");
     inhalt.innerHTML = `${quittungHtml()}${kopf}${liste}
       ${!einzeln && d.gesamt > d.artikel.length ? `<p class="notice">… und ${d.gesamt - d.artikel.length} weitere – frag deinen Materialwart.</p>` : ""}
-      <p class="help mat-psa-mails">Erinnerungen per Mail: ${d.mails ? "an" : "aus"} – <a href="/profil#psa">im Profil ändern</a></p>`;
+      ${d.gesamt || !d.mails ? `<p class="help mat-psa-mails">Erinnerungen per Mail: ${d.mails ? "an" : "aus"} – <a href="/profil#psa">im Profil ändern</a></p>` : ""}`;
     aktionen = {
       mangel: (b) => {
         const k = d.artikel.find((x) => x.id === +b.dataset.id);

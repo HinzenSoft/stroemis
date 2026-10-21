@@ -30,7 +30,7 @@ from test_material_meine_psa import LISTE, aufbau, melden, post_mangel, zuordnen
 from test_material_trennung import bis_schritt, endversion, erinnerungslog_wie_schritt_11, sql, zeilen  # noqa: E402
 from test_material_ueberblick import ordner_neu, sperren, zustand  # noqa: E402
 
-MELDUNG = {"id", "created_at", "description", "fotos", "melder", "offen", "lock_before", "erledigt"}
+MELDUNG = {"id", "created_at", "description", "fotos", "melder", "offen", "lock_before", "erledigt", "wieder_offen"}
 # Eine KOPIE einer Datenbank auf Stand 7 für den Pfad 7 → 13 (test_migration_13) – nur, wenn angegeben; die Quelle
 # bleibt unberührt.
 KOPIE_STAND_7 = os.environ.get("MATERIAL_KOPIE_STAND_7") or ""
@@ -968,6 +968,182 @@ def test_migration_13():
 
 # --- Oberfläche (statisch, Paket OBERFLÄCHE) -------------------------------------------------------------------------
 
+# --- Prüfung vor Auslieferung (21.10.2026) --------------------------------------------------------------------------
+
+def test_recht_in_der_transaktion():
+    """S1: Während der Fotos wird die Lesefreigabe entzogen bzw. das Konto deaktiviert – die Transaktion prüft mit
+    frischer Sicht und frischer Kontozeile: 404, keine Meldung, keine Sperre, die Fotos sind wieder weg."""
+    from app.material.services import mangel
+    with post_mangel(), tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        a1, a2, _ = t.art
+        zuordnen(t, a2, t.person_id)
+        vorher = dateien(t.app)
+        alt = mangel.fotos_ablegen
+        for c, iid, befehl, args in (
+                (t.k["fuehrung"], a1, "DELETE FROM mat_folder_grant WHERE user_id = ?", (t.k["fuehrung_id"],)),
+                (t.person, a2, "UPDATE users SET active = 0 WHERE id = ?", (t.person_id,))):
+            def dazwischen(d, befehl=befehl, args=args):
+                namen = alt(d)
+                sql(t.app, befehl, args)               # die Rechte gehen, während die Fotos verarbeitet werden
+                return namen
+            mangel.fotos_ablegen = dazwischen
+            try:
+                r = melden(c, iid, fotos=1)
+            finally:
+                mangel.fotos_ablegen = alt
+            assert r.status_code == 404, r.get_json()
+            assert not meldungen(t.app, iid) and item(t.app, iid)["lock_state"] == "frei"
+            assert dateien(t.app) == vorher
+    print("Recht in der Transaktion bestanden.")
+
+
+def test_ohne_mailserver():
+    """L1/S2: Ohne SMTP_HOST geht keine Mail an den Versand – Betreff und Text ins Log, mail false (die Quittung sagt
+    „Es ging keine Mail hinaus“); mit Mailserver mail true."""
+    from app.material.services import erinnerung, mangel
+    with tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        f = t.k["fuehrung"]
+        a1, a2, _ = t.art
+        with post_mangel() as post, logzeilen(t.app) as log:
+            mangel.MAILSERVER = erinnerung.smtp_da       # wie im Betrieb; post_mangel stellt es danach zurück
+            t.app.config["SMTP_HOST"] = ""
+            r = melden(f, a1, "Platzhalter ohne Mailserver")
+            assert r.status_code == 201 and r.json["mail"] is False, r.get_json()
+            assert not post
+            t.app.config["SMTP_HOST"] = "smtp.example.org"       # Versand bleibt die Liste von post_mangel
+            r = melden(f, a2, "Platzhalter mit Mailserver")
+            assert r.status_code == 201 and r.json["mail"] is True, r.get_json()
+        assert sorted(m[0] for m in post) == ["pruefer@example.org", "wart@example.org"], post
+        still = [z for z in log if "Mail nicht verschickt (kein Mailserver)" in z]
+        assert len(still) == 2 and all("Platzhalter ohne Mailserver" in z for z in still), log
+    print("Ohne Mailserver bestanden.")
+
+
+def test_sperrmitteilung_vorher():
+    """L3: Die Sperrmitteilung an die Trägerin sagt, was die Meldung bewirkt hat – gesperrt durch sie, schon gesperrt
+    (bleibt), als verloren gemeldet."""
+    with post_mangel() as post, tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        a1, a2, a3 = t.art
+        for iid in t.art:
+            zuordnen(t, iid, t.person_id)
+        sperren(t.k["pruefer"], a2, "sturz")
+        sperren(t.k["pruefer"], a3, "verlust")
+        erwartet = {a1: ("ist gesperrt – nicht verwenden", "Sie ist damit gesperrt.",
+                         "Bitte nicht mehr verwenden: leg sie sofort beiseite"),
+                    a2: ("ist gesperrt – nicht verwenden", "Sie war schon gesperrt und bleibt es.",
+                         "Bitte nicht verwenden: leg sie beiseite"),
+                    a3: ("ist als verloren gemeldet – nicht verwenden", "Sie ist als verloren gemeldet.",
+                         "Taucht sie auf: nicht verwenden, gib sie deinem Materialwart.")}
+        for iid, (betreff, satz, tun) in erwartet.items():
+            del post[:]
+            assert melden(t.k["fuehrung"], iid).status_code == 201
+            an = [m for m in post if m[0] == "person@example.org"]
+            assert len(an) == 1, post
+            inv = item(t.app, iid)["inventory_no"]
+            assert an[0][1] == f"strömis.de – Deine PSA {inv} {betreff}", an[0][1]
+            assert satz in an[0][2] and tun in an[0][2], an[0][2]
+            assert ("Sie ist damit gesperrt." in an[0][2]) == (iid == a1)
+            assert "Freigeben kann sie nur ein Prüfer nach einer Prüfung." in an[0][2]
+    print("Sperrmitteilung nach Zustand bestanden.")
+
+
+def test_berichtigte_freipruefung():
+    """L2: Die Freiprüfung, die eine Meldung erledigt hat, wird zu „instandsetzen“ berichtigt – die Meldung gilt
+    (abgeleitet, die Zeile bleibt) wieder als offen: Banner mit „Freiprüfung später berichtigt“, Marke, Meine PSA,
+    eigene offene Meldung, keine weitere Berichtigung, Häkchen bei der nächsten Freiprüfung; die erledigt sie wieder.
+    Auch über eine Kette von Berichtigungen (erst „einsatzbereit“, dann „instandsetzen“). Der Kasten bleibt leer – ein
+    Prüfer hat den Artikel angesehen (wie nach „instandsetzen“)."""
+    from app.material.services import mangel
+    with post_mangel(), tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        a1, a2, _ = t.art
+        p, f = t.k["pruefer"], t.k["fuehrung"]
+        zuordnen(t, a1, t.person_id)
+        for iid in (a1, a2):
+            geprueft(t.app, iid)
+
+        def berichtigen(pid, **d):
+            r = p.post(f"/api/material/pruefungen/{pid}/berichtigen", json={"grund": "Platzhalter: falsch bewertet"})
+            assert r.status_code == 201, r.get_json()
+            ber = r.json["pruefung"]["id"]
+            assert festschreiben(p, ber, **d).status_code == 200
+            return ber
+        assert melden(f, a1, "Platzhalter: Naht offen").status_code == 201
+        mid = meldungen(t.app, a1)[0]["id"]
+        pr = pruefung(p, a1)
+        assert festschreiben(p, pr["id"], ergebnis="einsatzbereit", maengel_gesehen=[mid]).status_code == 200
+        assert f.get(f"/api/material/artikel/{a1}").json["artikel"]["maengel"][0]["offen"] is False
+        ber = berichtigen(pr["id"], ergebnis="instandsetzen", grund="Platzhalter: doch Schaden")
+        zeile = meldungen(t.app, a1)[0]
+        assert zeile["closed_inspection_id"] == pr["id"] and zeile["closed_at"]         # die Zeile bleibt
+        a = f.get(f"/api/material/artikel/{a1}").json["artikel"]
+        m = a["maengel"][0]
+        assert m["offen"] is True and m["erledigt"] is None, m
+        assert m["wieder_offen"] == {"pruefung": pr["id"], "berichtigung": ber, "ergebnis": "instandsetzen",
+                                     "am": m["wieder_offen"]["am"]} and m["wieder_offen"]["am"], m
+        assert a["lock_state"] == "gesperrt" and a["mangel_eigen_offen"] == zeile["created_at"]
+        inv = item(t.app, a1)["inventory_no"]
+        assert f.get(f"/api/material/suche?q={inv}").json["treffer"][0]["mangel"] is True
+        o = f.get(f"/api/material/ordner/{t.system['gesperrt']}").json["ordner"]["artikel"]
+        assert [x["mangel"] for x in o if x["id"] == a1] == [True]
+        assert t.person.get(LISTE).json["artikel"][0]["mangel"] == {"seit": zeile["created_at"]}
+        assert f.get("/api/material/start").json["maengel"] == []                       # geprüft – wie instandsetzen
+        r = melden(f, a1)
+        assert r.status_code == 409 and "schon einen Mangel gemeldet" in r.json["error"], r.get_json()
+        b = p.get(f"/api/material/pruefungen/{ber}").json["pruefung"]["berichtigbar"]
+        assert b == {"ok": False, "grund": mangel.NUR_NEUE_PRUEFUNG}, b
+        # Nächste Freiprüfung: ohne Häkchen 409, mit Häkchen erledigt.
+        neue_sekunde()
+        pr3 = pruefung(p, a1)
+        entwurf = p.get(f"/api/material/pruefungen/{pr3['id']}").json["pruefung"]["maengel"]
+        assert [x["id"] for x in entwurf] == [mid] and entwurf[0]["wieder_offen"]["berichtigung"] == ber
+        r = festschreiben(p, pr3["id"], ergebnis="einsatzbereit")
+        assert r.status_code == 409 and r.json["error"] == mangel.MANGEL_NEU, r.get_json()
+        assert festschreiben(p, pr3["id"], ergebnis="einsatzbereit", maengel_gesehen=[mid]).status_code == 200
+        a = f.get(f"/api/material/artikel/{a1}").json["artikel"]
+        m = a["maengel"][0]
+        assert m["offen"] is False and m["wieder_offen"] is None and m["erledigt"]["pruefung"] == pr3["id"], m
+        assert m["erledigt"]["art"] == "freipruefung" and a["lock_state"] == "frei" and a["mangel_eigen_offen"] is None
+        assert meldungen(t.app, a1)[0]["closed_inspection_id"] == pr["id"]
+        assert t.person.get(LISTE).json["artikel"][0]["mangel"] is None
+        # Kette: Freiprüfung → Berichtigung „einsatzbereit“ → deren Berichtigung „instandsetzen“.
+        assert melden(f, a2).status_code == 201
+        mid2 = meldungen(t.app, a2)[0]["id"]
+        pr = pruefung(p, a2)
+        assert festschreiben(p, pr["id"], ergebnis="einsatzbereit", maengel_gesehen=[mid2]).status_code == 200
+        ber1 = berichtigen(pr["id"], ergebnis="einsatzbereit")
+        assert f.get(f"/api/material/artikel/{a2}").json["artikel"]["maengel"][0]["offen"] is False
+        ber2 = berichtigen(ber1, ergebnis="instandsetzen", grund="Platzhalter")
+        m = f.get(f"/api/material/artikel/{a2}").json["artikel"]["maengel"][0]
+        assert m["offen"] and m["wieder_offen"]["pruefung"] == pr["id"] and m["wieder_offen"]["berichtigung"] == ber2, m
+        with t.app.test_request_context():
+            assert mangel.offene_ids(a2) == {mid2} and mangel.offene_ids(a1) == set()
+    print("Berichtigte Freiprüfung bestanden.")
+
+
+def test_eigene_offene_am_artikel():
+    """B1: artikel.mangel_eigen_offen – der Tag der eigenen offenen Meldung (sonst null): „Mangel melden …“ ist dann
+    ausgegraut statt erst nach dem Absenden 409."""
+    with post_mangel(), tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        a1 = t.art[0]
+        geprueft(t.app, a1)
+        f, w, p = t.k["fuehrung"], t.w, t.k["pruefer"]
+        assert f.get(f"/api/material/artikel/{a1}").json["artikel"]["mangel_eigen_offen"] is None
+        assert melden(f, a1).status_code == 201
+        seit = meldungen(t.app, a1)[0]["created_at"]
+        assert f.get(f"/api/material/artikel/{a1}").json["artikel"]["mangel_eigen_offen"] == seit
+        assert w.get(f"/api/material/artikel/{a1}").json["artikel"]["mangel_eigen_offen"] is None
+        pr = pruefung(p, a1)
+        mid = meldungen(t.app, a1)[0]["id"]
+        assert festschreiben(p, pr["id"], ergebnis="einsatzbereit", maengel_gesehen=[mid]).status_code == 200
+        assert f.get(f"/api/material/artikel/{a1}").json["artikel"]["mangel_eigen_offen"] is None
+    print("Eigene offene Meldung am Artikel bestanden.")
+
+
 def test_oberflaeche_statisch():
     """material.js, CSS und die Nebenskripte passen zur Schnittstelle: Texte wie im Dienst, Fotos ohne capture
     gesammelt, „Melden und sperren“ die einzige rote Fläche des Dialogs, Häkchen im Festschreib-Dialog, „Meine PSA“
@@ -1002,7 +1178,21 @@ def test_oberflaeche_statisch():
     assert 'data-mangel="${Number(m.id)}"' in fs and "Gemeldeten Mangel vom" in fs
     assert "daten.maengel_gesehen = haken.filter((h) => h.checked)" in fs and "knopf.disabled = !alleAbgehakt();" in fs
     # Artikelseite: grauer Knopf, Hilfezeile, ausgegrautes Aussondern mit Erklärung.
-    assert 'data-act="mangel">Mangel melden …</button>' in js and "Sperren: ohne Meldung, mit Sperrgrund." in js
+    assert "' data-act=\"mangel\"'}>Mangel melden …</button>" in js and "Sperren: ohne Meldung, mit Sperrgrund." in js
+    # Prüfung vor Auslieferung: eigene offene Meldung → ausgegraut mit Hilfezeile (B1), Zeile zu den Erinnerungen nur
+    # mit Profilabschnitt (B2), Quittung fokussiert (B5), vorsichtige Mail-Quittung (L1), wieder offen (L2).
+    assert "const schonGemeldet = darfMelden && a.mangel_eigen_offen;" in js
+    assert "schonGemeldet ? ' disabled aria-describedby=\"mat-schon-gemeldet\"'" in js
+    assert 'id="mat-schon-gemeldet">Du hast am ${esc(S.fmtDate(a.mangel_eigen_offen))} schon gemeldet' in js
+    assert '${darf.verwalten ? "" : " Ergänzungen bitte direkt an den Materialwart."}' in js
+    assert '${d.gesamt || !d.mails ? `<p class="help mat-psa-mails">' in js
+    assert 'class="notice mat-mangel-quittung" role="status" tabindex="-1"' in js
+    assert dlg.index("if (danach) await danach(r, q);") < dlg.index('const qEl = $(".mat-mangel-quittung");') \
+        < dlg.index("if (qEl) qEl.focus();")
+    assert "Die Mail an Materialwart und Prüfer ist unterwegs." in js and "bekommen eine Mail. Leg ihn" not in js
+    assert ">Freiprüfung später berichtigt</a> (jetzt: ${esc(ERGEBNIS[m.wieder_offen.ergebnis]" in js
+    assert js.count("${wiederOffen(m)}") == 2
+    assert ".mat-mangel-banner a { color: var(--weiss); text-decoration: underline; }" in css
     assert "a.mangel_nur_gemeldet ? ' disabled aria-describedby=\"mat-aussondern-hilfe\"'" in js
     # Meine PSA: eigene Ansicht ohne Reiter, kommt ohne Modulnavigation und Ordnerleiste aus.
     assert "meine_psa: meinePsa" in js and "meine_psa" not in js[js.index("const NAV = {"):js.index("};", js.index("const NAV = {"))]
@@ -1010,6 +1200,7 @@ def test_oberflaeche_statisch():
     assert "if (!matNav || !reiter) return;" in js and "if (!leiste || !MIT_LEISTE.has(ANSICHT)" in js
     seite = lesen("app/material/templates/material/seite.html")
     assert seite.count("{% if not nur_psa %}") == 2
+    assert "{% block title %}{% if nur_psa %}Meine PSA{% else %}Material{% endif %} – strömis.de{% endblock %}" in seite
     # Marke in Listen und in der Suche, Container-Abfrage für schmale Karten.
     assert "${mangelMarke(a.mangel)}" in js
     assert '${a.mangel ? \' <span class="mat-mangel-marke" title="Mangel gemeldet">Mangel</span>\' : ""}' in lesen("app/material/static/suche.js")
@@ -1047,5 +1238,10 @@ if __name__ == "__main__":
     test_kontoloeschen_folgen()
     test_lebenslauf()
     test_migration_13()
+    test_recht_in_der_transaktion()
+    test_ohne_mailserver()
+    test_sperrmitteilung_vorher()
+    test_berichtigte_freipruefung()
+    test_eigene_offene_am_artikel()
     test_oberflaeche_statisch()
     print("Alle Tests zur Mangelmeldung bestanden.")

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Material – strömis.de{% endblock %}
+{# Ohne Modulzugang sieht das Konto nirgends „Material“ – der Reiter heißt wie die einzige Ansicht. #}
+{% block title %}{% if nur_psa %}Meine PSA{% else %}Material{% endif %} – strömis.de{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('material.static', filename='material.css') }}">
 <link rel="stylesheet" href="{{ url_for('material.static', filename='freigaben.css') }}">

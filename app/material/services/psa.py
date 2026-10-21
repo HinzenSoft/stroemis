@@ -101,16 +101,26 @@ def liste(user):
         dict(st.parameter(), uid=user["id"], lim=MAX_ARTIKEL))
     gesamt = anzahl(user["id"])
     ids = _ids(rows)
-    offen = {r["item_id"]: r["seit"] for r in db.query(
-        "SELECT item_id, MIN(created_at) AS seit FROM mat_defect_report WHERE closed_at IS NULL "
-        "AND item_id IN (SELECT value FROM json_each(?)) GROUP BY item_id", (ids,))}
+    # Offen heißt auch: wieder offen nach einer Berichtigung der erledigenden Freiprüfung (mangel.stand) – eine
+    # weitere Abfrage nur, wenn es dafür einen Kandidaten gibt.
+    offen = {}
+    zeilen = db.query(f"SELECT d.id, d.item_id, d.created_at, d.closed_at, d.closed_inspection_id, {mangel.KANDIDAT} "
+                      "AS kandidat FROM mat_defect_report d WHERE d.item_id IN (SELECT value FROM json_each(?)) "
+                      f"AND {mangel.OFFEN_SQL} ORDER BY d.created_at, d.id", (ids,))
+    stand = mangel.stand(zeilen)
+    for r in zeilen:
+        if stand[r["id"]][0]:
+            offen.setdefault(r["item_id"], r["created_at"])
     eigene = {}
-    for r in db.query("SELECT * FROM mat_defect_report WHERE reporter_id = ? AND item_id IN (SELECT value FROM json_each(?)) "
-                      "ORDER BY created_at DESC, id DESC", (user["id"], ids)):
+    zeilen = db.query(f"SELECT d.*, {mangel.KANDIDAT} AS kandidat FROM mat_defect_report d WHERE d.reporter_id = ? "
+                      "AND d.item_id IN (SELECT value FROM json_each(?)) ORDER BY d.created_at DESC, d.id DESC",
+                      (user["id"], ids))
+    stand = mangel.stand(zeilen)
+    for r in zeilen:
         liste_ = eigene.setdefault(r["item_id"], [])
         if len(liste_) < EIGENE_MAX:
             liste_.append({"id": r["id"], "created_at": r["created_at"], "description": r["description"],
-                           "offen": r["closed_at"] is None, "fotos": mangel.fotos_json(r)})
+                           "offen": stand[r["id"]][0], "fotos": mangel.fotos_json(r)})
     produkte = sorted({r["product_id"] for r in rows})
     rueckrufe = {}
     if produkte:

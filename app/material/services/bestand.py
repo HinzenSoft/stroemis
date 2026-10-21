@@ -846,6 +846,9 @@ def artikel_json(i, voll=False):
         # einer Meldung stammt, die noch kein Prüfer angesehen hat (dann sondert der Materialwart nicht aus).
         out["maengel"] = mangel.fuer_artikel(i, darf["grund"] or darf["pruefen"])
         out["mangel_nur_gemeldet"] = mangel.nur_gemeldet(i["id"])
+        # Die eigene offene Meldung (Tag) – dann ist „Mangel melden …“ ausgegraut statt erst nach dem Absenden 409.
+        eigen = mangel.eigene_offene(i["id"])
+        out["mangel_eigen_offen"] = eigen["created_at"] if eigen else None
         out["darf_loeschen"] = not out["pruefungen"] and not out["maengel"]
     return out
 

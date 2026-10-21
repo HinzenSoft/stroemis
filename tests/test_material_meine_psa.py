@@ -63,16 +63,18 @@ def zuordnen(t, iid, uid):
 
 @contextmanager
 def post_mangel():
-    """Mangel-Mails direkt statt im Hintergrund und nur in eine Liste – nie hinaus."""
+    """Mangel-Mails direkt statt im Hintergrund und nur in eine Liste – nie hinaus. Die Liste spielt den Mailserver
+    (ohne ihn gingen die Mails nur ins Log, mangel.MAILSERVER)."""
     from app.material.services import mangel
     liste = []
-    alt = (mangel.HINTERGRUND, mangel.send_mail)
+    alt = (mangel.HINTERGRUND, mangel.send_mail, mangel.MAILSERVER)
     mangel.HINTERGRUND = lambda f, *a: f(*a)
     mangel.send_mail = lambda an, betreff, inhalt: liste.append((an, betreff, inhalt)) or True
+    mangel.MAILSERVER = lambda: True
     try:
         yield liste
     finally:
-        mangel.HINTERGRUND, mangel.send_mail = alt
+        mangel.HINTERGRUND, mangel.send_mail, mangel.MAILSERVER = alt
 
 
 def melden(c, iid, text="Platzhalter: Mangel am Testartikel", fotos=0, namen=None):

@@ -11,13 +11,20 @@ Recht, Zustand und eigene offene Meldung werden vor dem Verarbeiten der Fotos ge
 gelesenen Artikel wiederholt – ein Konto ohne Recht oder mit offener Meldung bringt den Server nicht dazu, Bilder zu
 dekodieren. Höchstens eine offene Meldung je Konto und Artikel (409), keine Tagesgrenze: Kontrolle ist der Name im
 Journal (wie bei der globalen Suche). Fotos: nur Web- und Vorschaufassung bleiben (ohne EXIF), jedes Original geht gleich
-nach seiner Verarbeitung (F4).
+nach seiner Verarbeitung (F4). Das Recht in der Transaktion rechnet mit frischer Sicht und frisch gelesener Kontozeile –
+eine während der Fotos entzogene Freigabe oder ein deaktiviertes Konto meldet nicht mehr (Prüfung vor Auslieferung S1).
+
+Wird die Freiprüfung, die eine Meldung erledigt hat, später zu einem nicht freigebenden Ergebnis berichtigt
+(„instandsetzen“), gilt die Meldung wieder als offen – abgeleitet (stand), die Zeile bleibt unverändert: Banner, Marke
+und Häkchen kommen zurück, erledigt ist sie erst durch die nächste Freiprüfung oder Aussonderung (Prüfung vor
+Auslieferung L2).
 
 Mails sofort, im Hintergrund: an die Verwalter der Heimat (ohne sie die Material-, ohne diese die Plattform-Verwaltung)
 und die Prüfer mit wirksamer Prüffreigabe dort – den Namen des Melders nur, wer am Artikel ein Grundrecht hat; dazu die
 zugeordnete Person, wenn ein anderer ihre PSA meldet (kurz, ohne Melder und Text, nicht abbestellbar). Nie an den Melder,
 nie an DEMO-Adressen. Bei DEMO-Artikeln und unter der Umgebungssperre (erinnerung.gesperrt, dev) stehen die Mails im Log
-statt im Postfach. Die Mails hängen nicht am Schalter der Erinnerungsmails – sie sind die Nachricht zu einer Sperre.
+statt im Postfach, ebenso ohne Mailserver (SMTP_HOST leer) – dann sagt die Antwort mail: false. Die Mails hängen nicht
+am Schalter der Erinnerungsmails – sie sind die Nachricht zu einer Sperre.
 
 Meldungen sind unveränderlich (Trigger, models.TRIGGER_13), lassen sich nicht löschen und bleiben unbefristet mit dem
 Artikel; beim Löschen eines Kontos setzt die Datenbank nur die Kontokennung auf NULL, der Name bleibt (F3)."""
@@ -50,11 +57,22 @@ NUR_NEUE_PRUEFUNG = "Am Artikel ist ein Mangel gemeldet – freigeben kann ihn n
 
 # Mails gehen neben der Anfrage hinaus (wie beim Rückruf); Tests setzen hier einen direkten Aufruf ein.
 HINTERGRUND = _im_hintergrund
+# Ist ein Mailserver eingerichtet? Tests, die send_mail ersetzen, setzen hier lambda: True.
+MAILSERVER = erinnerung.smtp_da
 
 # Offene Meldung d, nach der noch keine Prüfung des Artikels abgeschlossen wurde. Berichtigungen und Aussonderungen
 # zählen nicht; gleiche Sekunde zählt als vorher (wie rueckruf.zustand) – im Zweifel gilt sie als ungeprüft.
 UNGEPRUEFT = ("d.closed_at IS NULL AND NOT EXISTS (SELECT 1 FROM mat_inspection x WHERE x.item_id = d.item_id "
               "AND x.completed_at > d.created_at AND x.kind <> 'aussonderung' AND x.corrects_inspection_id IS NULL)")
+
+# Wieder offen (Prüfung vor Auslieferung L2): Die Zeile ist unveränderlich, „erledigt“ steht einmal fest. Wurde die
+# erledigende Freiprüfung danach zu einem nicht freigebenden Ergebnis berichtigt, rechnet stand() die Meldung wieder als
+# offen. KANDIDAT ist die billige Vorauswahl in SQL (am Artikel gibt es nach der Erledigung eine solche Berichtigung) –
+# ohne sie keine weitere Abfrage; OFFEN_SQL ist eine Obermenge der offenen Meldungen, stand() siebt genau.
+KANDIDAT = ("(d.closed_at IS NOT NULL AND EXISTS (SELECT 1 FROM mat_inspection b WHERE b.item_id = d.item_id "
+            "AND b.corrects_inspection_id IS NOT NULL AND b.completed_at IS NOT NULL AND b.result <> 'einsatzbereit' "
+            "AND b.completed_at >= d.closed_at))")
+OFFEN_SQL = f"(d.closed_at IS NULL OR {KANDIDAT})"
 
 # Warum ein Empfänger die Mail bekommt – der letzte Satz der Mail.
 WARUM = {"verwalter": "weil du diesen Ordner verwaltest.",
@@ -63,7 +81,7 @@ WARUM = {"verwalter": "weil du diesen Ordner verwaltest.",
          "plattform": "weil du zur Plattform-Verwaltung gehörst und für diesen Ordner kein Materialwart eingetragen ist."}
 
 # Die Meldung mit der Art der Prüfung, die sie erledigt hat (Freiprüfung oder Aussonderung).
-_MELDUNG_SQL = ("SELECT d.*, x.kind AS closed_kind FROM mat_defect_report d "
+_MELDUNG_SQL = (f"SELECT d.*, x.kind AS closed_kind, {KANDIDAT} AS kandidat FROM mat_defect_report d "
                 "LEFT JOIN mat_inspection x ON x.id = d.closed_inspection_id ")
 
 
@@ -97,44 +115,110 @@ def darf_name(item, user=None):
     return rechte.darf_artikel("grund", item, user) or rechte.darf_artikel("pruefen", item, user)
 
 
-def mangel_json(r, darf_grund):
+def _art(kind):
+    return "aussonderung" if kind == "aussonderung" else "freipruefung"
+
+
+def stand(rows):
+    """{Kennung: (offen, erledigt, wieder)} für Meldungszeilen aus _MELDUNG_SQL (oder mit den Spalten id, item_id,
+    closed_at, closed_inspection_id, kandidat). erledigt: {am, pruefung, art} oder None; wieder: {pruefung, berichtigung,
+    ergebnis, am} – die erledigende Freiprüfung wurde später so berichtigt, dass sie nicht mehr freigibt; dann ist die
+    Meldung wieder offen, bis die nächste Freiprüfung (keine Berichtigung, mit Häkchen – abschliessen verlangt es über
+    offene_ids) oder Aussonderung danach kommt. Eine Abfrage nur, wenn eine Zeile Kandidat ist."""
+    kandidaten = sorted({r["item_id"] for r in rows if r.get("kandidat")})
+    pruefungen = {}
+    if kandidaten:
+        for x in db.query("SELECT id, item_id, kind, result, corrects_inspection_id, completed_at FROM mat_inspection "
+                          "WHERE item_id IN (SELECT value FROM json_each(?)) AND completed_at IS NOT NULL "
+                          "ORDER BY completed_at, id", (json.dumps(kandidaten),)):
+            pruefungen.setdefault(x["item_id"], []).append(x)
+    out = {}
+    for r in rows:
+        if r["closed_at"] is None:
+            out[r["id"]] = (True, None, None)
+            continue
+        erledigt = {"am": r["closed_at"], "pruefung": r["closed_inspection_id"], "art": _art(r.get("closed_kind"))}
+        out[r["id"]] = (_nachrechnen(r["closed_inspection_id"], erledigt, pruefungen.get(r["item_id"], []))
+                        if r.get("kandidat") else (False, erledigt, None))
+    return out
+
+
+def _nachrechnen(pid, erledigt, liste):
+    """Wie stand() für eine erledigte Meldung mit den abgeschlossenen Prüfungen ihres Artikels (nach Zeit). Berichtigt
+    wird immer nur die letzte Prüfung – die Kette pid → Berichtigung → Berichtigung … ist also eindeutig."""
+    berichtigt = {x["corrects_inspection_id"]: x for x in liste if x["corrects_inspection_id"]}
+    for _ in range(len(liste) + 1):                  # jede Runde geht in der Zeit weiter – endet sicher
+        x, b = pid, None
+        while x in berichtigt:
+            if berichtigt[x]["result"] != "einsatzbereit":
+                b = berichtigt[x]
+                break
+            x = berichtigt[x]["id"]
+        if b is None:
+            return False, erledigt, None
+        wieder = {"pruefung": pid, "berichtigung": b["id"], "ergebnis": b["result"], "am": b["completed_at"]}
+        y = next((z for z in liste if (z["completed_at"], z["id"]) > (b["completed_at"], b["id"])
+                  and (z["kind"] == "aussonderung" or (z["result"] == "einsatzbereit"
+                                                      and not z["corrects_inspection_id"]))), None)
+        if y is None:
+            return True, None, wieder
+        pid, erledigt = y["id"], {"am": y["completed_at"], "pruefung": y["id"], "art": _art(y["kind"])}
+    return False, erledigt, None
+
+
+def mangel_json(r, darf_grund, st=None):
     """Eine Meldung, überall in derselben Gestalt. darf_grund: darf_name(item) des anfragenden Kontos – Grundrecht oder
-    Prüfrecht am Artikel; sonst kein Name des Melders."""
-    erledigt = None
-    if r["closed_at"]:
-        erledigt = {"am": r["closed_at"], "pruefung": r["closed_inspection_id"],
-                    "art": "aussonderung" if r.get("closed_kind") == "aussonderung" else "freipruefung"}
+    Prüfrecht am Artikel; sonst kein Name des Melders. st: ihr stand(), sonst hier gerechnet. wieder_offen: die
+    erledigende Freiprüfung wurde später berichtigt (jetzt: ergebnis) – die Meldung ist wieder offen."""
+    offen, erledigt, wieder = st or stand([r])[r["id"]]
     return {"id": r["id"], "created_at": r["created_at"], "description": r["description"], "fotos": fotos_json(r),
-            "melder": r["reporter_name"] if darf_grund else None, "offen": r["closed_at"] is None,
-            "lock_before": r["lock_before"], "erledigt": erledigt}
+            "melder": r["reporter_name"] if darf_grund else None, "offen": offen,
+            "lock_before": r["lock_before"], "erledigt": erledigt, "wieder_offen": wieder}
 
 
 def fuer_artikel(item, darf_grund):
     """Alle Meldungen eines Artikels: offene zuerst, dann erledigte – je neueste zuerst, höchstens LISTE_MAX."""
-    rows = db.query(_MELDUNG_SQL + "WHERE d.item_id = ? ORDER BY d.closed_at IS NOT NULL, d.created_at DESC, d.id DESC "
+    rows = db.query(_MELDUNG_SQL + f"WHERE d.item_id = ? ORDER BY NOT {OFFEN_SQL}, d.created_at DESC, d.id DESC "
                     "LIMIT ?", (item["id"], LISTE_MAX))
-    return [mangel_json(r, darf_grund) for r in rows]
+    st = stand(rows)
+    return sorted((mangel_json(r, darf_grund, st[r["id"]]) for r in rows), key=lambda m: not m["offen"])
+
+
+def _offen(bedingung, args):
+    """Die offenen Meldungen (genau, nach stand) unter einer Bedingung – Zeilen aus _MELDUNG_SQL, älteste zuerst."""
+    rows = db.query(_MELDUNG_SQL + f"WHERE {bedingung} AND {OFFEN_SQL} ORDER BY d.created_at, d.id", args)
+    st = stand(rows)
+    return [(r, st[r["id"]]) for r in rows if st[r["id"]][0]]
 
 
 def offene_json(item, darf_grund):
     """Die offenen Meldungen eines Artikels (älteste zuerst) – für den Entwurf einer Prüfung (Häkchen je Meldung)."""
-    rows = db.query(_MELDUNG_SQL + "WHERE d.item_id = ? AND d.closed_at IS NULL ORDER BY d.created_at, d.id",
-                    (item["id"],))
-    return [mangel_json(r, darf_grund) for r in rows]
+    return [mangel_json(r, darf_grund, s) for r, s in _offen("d.item_id = ?", (item["id"],))]
 
 
 def offene_ids(iid):
     """Kennungen der offenen Meldungen eines Artikels – frisch, auch mitten in einer Transaktion."""
-    return {r["id"] for r in db.query("SELECT id FROM mat_defect_report WHERE item_id = ? AND closed_at IS NULL", (iid,))}
+    return {r["id"] for r, _ in _offen("d.item_id = ?", (iid,))}
+
+
+def eigene_offene(iid, user=None):
+    """Die älteste offene Meldung des Kontos am Artikel (Zeile) oder None – für 409 und den ausgegrauten Knopf."""
+    user = user or current_user()
+    if not user:
+        return None
+    eigene = _offen("d.item_id = ? AND d.reporter_id = ?", (iid, user["id"]))
+    return eigene[0][0] if eigene else None
 
 
 def offene_artikel():
     """Kennungen der Artikel im eigenen Bereich mit offener Meldung – für die Marke „Mangel“ in Listen. Einmal je
     Anfrage gerechnet (g.mat_mangel_offen); melden und erledigen verwerfen den Zwischenspeicher."""
     if "mat_mangel_offen" not in g:
-        g.mat_mangel_offen = {r["item_id"] for r in db.query(
-            "SELECT DISTINCT d.item_id FROM mat_defect_report d JOIN mat_item i ON i.id = d.item_id "
-            f"WHERE d.closed_at IS NULL AND {rechte.artikel_filter('i')}")}
+        rows = db.query(f"SELECT d.id, d.item_id, d.closed_at, d.closed_inspection_id, {KANDIDAT} AS kandidat "
+                        "FROM mat_defect_report d JOIN mat_item i ON i.id = d.item_id "
+                        f"WHERE {OFFEN_SQL} AND {rechte.artikel_filter('i')}")
+        st = stand(rows)
+        g.mat_mangel_offen = {r["item_id"] for r in rows if st[r["id"]][0]}
     return g.mat_mangel_offen
 
 
@@ -163,6 +247,8 @@ def offene_liste():
     return out, gesamt
 
 
+# UNGEPRUEFT (Kasten, Prüfart-Vorschlag, nur_gemeldet) bleibt bei closed_at: Eine wieder offene Meldung hat ein Prüfer
+# schon angesehen (die berichtigte Freiprüfung) – sie steht wie nach „instandsetzen“.
 def ungeprueft(iid):
     """Gibt es am Artikel eine offene Meldung, nach der noch keine Prüfung abgeschlossen wurde?"""
     return bool(db.query(f"SELECT 1 FROM mat_defect_report d WHERE d.item_id = ? AND {UNGEPRUEFT} LIMIT 1", (iid,),
@@ -180,7 +266,8 @@ def nur_gemeldet(iid):
 
 def _recht(item, user):
     """Das Recht am frisch gelesenen Artikel: „zugeordnet“ (PSA-Konto, auch ohne Modulstufe) oder „lesen“ (Grundrecht
-    oder wirksame Prüffreigabe an der Heimat, nur mit Modulzugang) – sonst 404 wie für einen unbekannten Artikel."""
+    oder wirksame Prüffreigabe an der Heimat, nur mit Modulzugang) – sonst 404 wie für einen unbekannten Artikel. In der
+    Transaktion mit frisch gelesener Kontozeile und verworfener Sicht (melden)."""
     if item["assigned_user_id"] is not None and item["assigned_user_id"] == user["id"] and psa.konto(user):
         return "zugeordnet"
     if rechte.zugang(user) and rechte.darf_artikel("lesen", item, user):
@@ -195,8 +282,7 @@ def _pruefen(iid, user):
     art = _recht(item, user)
     if item["lock_state"] == "ausgesondert":
         raise Abgelehnt(AUSGESONDERT, 409)
-    eigen = db.query("SELECT created_at FROM mat_defect_report WHERE item_id = ? AND reporter_id = ? AND closed_at IS NULL "
-                     "ORDER BY id LIMIT 1", (iid, user["id"]), one=True)
+    eigen = eigene_offene(iid, user)
     if eigen:
         raise Abgelehnt(SCHON_GEMELDET.format(datum=_datum(eigen["created_at"])), 409)
     return item, art
@@ -250,7 +336,13 @@ def melden(iid, d, dateien=()):
     fotos = fotos_ablegen(dateien)
     try:
         with db.transaction(sofort=True):
-            item, _ = _pruefen(iid, u)            # inzwischen verschoben, ausgesondert, entzogen, schon gemeldet?
+            # Inzwischen verschoben, ausgesondert, Freigabe entzogen, Konto deaktiviert, schon gemeldet? Die Sicht vom
+            # Anfang der Anfrage und die Kontozeile von dort gelten nicht mehr – die Fotos können Sekunden dauern.
+            rechte.sicht_verwerfen()
+            u = db.query("SELECT * FROM users WHERE id = ? AND active = 1", (u["id"],), one=True)
+            if not u:
+                raise Abgelehnt(rechte.ARTIKEL_FEHLT, 404)
+            item, _ = _pruefen(iid, u)
             mid = db.execute(
                 "INSERT INTO mat_defect_report (item_id, description, photos_json, reporter_id, reporter_name, "
                 "lock_before, created_at) VALUES (?,?,?,?,?,?,?)",
@@ -368,26 +460,34 @@ def _mailtext(r, item, produkt, warum, mit_name):
 
 def _mailtext_zugeordnet(item, produkt, r, u):
     """Betreff und Text an die zugeordnete Person – ohne Melder, Beschreibung, Fotos und Ordner: nicht mehr, als „Meine
-    PSA“ ihr zeigt."""
+    PSA“ ihr zeigt. Wie _mailtext nach dem Zustand vor der Meldung: gesperrt durch sie, schon gesperrt, verloren."""
     basis = (current_app.config.get("BASE_URL") or "").rstrip("/")
     site = current_app.config.get("SITE_NAME") or "strömis.de"
+    vorher = r["lock_before"]
+    zustand, tun = {
+        "frei": ("Sie ist damit gesperrt.", "Bitte nicht mehr verwenden: leg sie sofort beiseite und gib sie deinem "
+                 "Materialwart."),
+        "verloren": ("Sie ist als verloren gemeldet.", "Taucht sie auf: nicht verwenden, gib sie deinem Materialwart."),
+    }.get(vorher, ("Sie war schon gesperrt und bleibt es.", "Bitte nicht verwenden: leg sie beiseite und gib sie deinem "
+                   "Materialwart."))
     zeilen = [f"Hallo {(u['name'] or '').strip()},", "",
               f"an deiner Ausrüstung {item['inventory_no']} – {katalog.produktname(produkt)}, SN {item['serial_no']} "
-              f"wurde am {_datum(r['created_at'])} ein Mangel gemeldet. Sie ist damit gesperrt.", "",
-              "Bitte nicht mehr verwenden: leg sie sofort beiseite und gib sie deinem Materialwart. Freigeben kann sie "
-              "nur ein Prüfer nach einer Prüfung.", "",
+              f"wurde am {_datum(r['created_at'])} ein Mangel gemeldet. {zustand}", "",
+              f"{tun} Freigeben kann sie nur ein Prüfer nach einer Prüfung.", "",
               f"Deine PSA: {basis}/material/meine-psa/{item['id']}", "",
               "Du bekommst diese Mail, weil dir diese Ausrüstung im Modul Material zugeordnet ist. Sie kommt einmal je "
               "Meldung und lässt sich nicht abbestellen, weil sie deine Sicherheit betrifft."]
-    betreff = f"{site} – Deine PSA {item['inventory_no']} ist gesperrt – nicht verwenden"
+    betreff = (f"{site} – Deine PSA {item['inventory_no']} "
+               + ("ist als verloren gemeldet" if vorher == "verloren" else "ist gesperrt") + " – nicht verwenden")
     return " ".join(betreff.split()), "\n".join(zeilen) + "\n"
 
 
 def _benachrichtigen(mid):
-    """Nach dem Commit: Mails vorbereiten und neben der Anfrage verschicken. Bei einem DEMO-Artikel oder unter der
-    Umgebungssperre geht nichts hinaus – Betreff und Text stehen dann im Log (wie send_mail ohne Mailserver). Liefert,
-    ob mindestens eine Mail an Materialwart, Prüfer oder Verwaltung an den Versand ging (die an die zugeordnete Person
-    zählt nicht: der Toast spricht vom Materialwart)."""
+    """Nach dem Commit: Mails vorbereiten und neben der Anfrage verschicken. Bei einem DEMO-Artikel, unter der
+    Umgebungssperre oder ohne Mailserver geht nichts hinaus – Betreff und Text stehen dann im Log (wie send_mail ohne
+    Mailserver). Liefert, ob mindestens eine Mail an Materialwart, Prüfer oder Verwaltung an den Versand ging (die an die
+    zugeordnete Person zählt nicht: der Toast spricht vom Materialwart). Ob der Mailserver sie annimmt, zeigt erst das
+    Log – die Quittung sagt deshalb „unterwegs“, nicht „angekommen“."""
     r = meldung(mid)
     item = bestand.artikel(r["item_id"])
     produkt = katalog.produkt(item["product_id"])
@@ -401,7 +501,8 @@ def _benachrichtigen(mid):
         mails.append((u["email"].strip(), f"[DEMO] {betreff}" if demo else betreff, inhalt, warum))
     if not mails:
         return False
-    still = "DEMO-Artikel" if demo else "Umgebungssperre" if erinnerung.gesperrt() else None
+    still = ("DEMO-Artikel" if demo else "Umgebungssperre" if erinnerung.gesperrt()
+             else "kein Mailserver" if not MAILSERVER() else None)
     if still:
         for an, betreff, inhalt, _ in mails:
             current_app.logger.warning("Mangel %s: Mail nicht verschickt (%s) – an %s\nBetreff: %s\n%s", mid, still, an,
