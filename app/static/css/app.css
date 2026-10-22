@@ -854,8 +854,10 @@ h5:hover > .h-anchor, .h-anchor:focus-visible { opacity: 1; }
      Pfad und Knöpfen zwang die Spalte so auf 458 px, das Dokument wurde breiter als das Fenster,
      und beim Herauszoomen hörte die Bauchbinde am alten Fensterrand auf. */
   .wiki-shell, body.public .wiki-shell.public, body.editing .wiki-shell { grid-template-columns: minmax(0, 1fr); }
-  .wiki-side { position: fixed; left: 0; top: var(--topbar); bottom: 0; width: min(320px, 90vw); transform: translateX(-105%); transition: transform .2s; z-index: 1100; box-shadow: 2px 0 10px rgba(0,0,0,.25); height: auto; }
-  .wiki-side.open { transform: translateX(0); }
+  /* Zugeklappt ist die Schublade auch unsichtbar (visibility, nach der Fahrt): Sie lag sonst 320 px links vom Fenster
+     als „Element außerhalb“ im Dokument, Tab-Fokus landete in ihr (Geräte-Prüfung vom 22.10.2026, C1 in P4-L1). */
+  .wiki-side { position: fixed; left: 0; top: var(--topbar); bottom: 0; width: min(320px, 90vw); transform: translateX(-105%); transition: transform .2s, visibility 0s .2s; visibility: hidden; z-index: 1100; box-shadow: 2px 0 10px rgba(0,0,0,.25); height: auto; }
+  .wiki-side.open { transform: translateX(0); visibility: visible; transition: transform .2s; }
   .wiki-menu-btn { display: inline-flex; }
   /* Sobald eine Seite offen ist, sitzt der Baum-Knopf in der Kopfzeile – die eigene Zeile
      „☰ Seiten“ darüber entfällt und gibt dem Text 40 px zurück. */
@@ -2255,4 +2257,43 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .k-plus { display: inline; }
   .k-anlegen { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
     clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+}
+
+/* Wiki und Nutzerverwaltung am Finger (Geräte-Prüfung vom 22.10.2026, Nachbesserung C1 in P4-L1): Tippziele unter
+   44 px auf 44 px – nur bei grobem Zeiger, am Rechner bleibt alles wie es war. Wiki: Kopfknöpfe (☰, 💬, Teilen, ⋯ –
+   waren 30 px), Umschalter Lesen/Bearbeiten (26 px), „Neue Seite“ und Papierkorb über dem Seitenbaum (28 px), „☰ Seiten“,
+   die Zeilenknöpfe im Seitenbaum (+ und ⋯, 20 px) und die Reiter. Nutzerverwaltung: Kopfknöpfe (36 px), Reiter (29 px),
+   die Auswahlfelder der Rechte-Matrix (26–33 px) und die Zeilenknöpfe „Bearbeiten“, „Reset-Mail“, „Löschen“ (28 px). */
+@media (pointer: coarse) {
+  .wiki-head .kopfknopf { width: 44px; height: 44px; }
+  .wiki-head .mode-toggle button { min-height: 44px; min-width: 44px; padding: 9px 12px; }
+  .wiki-side .btn-row .btn.small, .wiki-menu-btn { min-height: 44px; min-width: 44px; padding: 9px 12px; }
+  .tree .row-add, .tree .row-menu { width: 44px; height: 44px; margin-left: 0; }
+  .tree .row { min-height: 44px; }
+  /* Der Kopfknopf ☰ schrumpfte in der Kopfzeile (flex-wrap: nowrap) auf 15 px – nicht mehr; passen die Knöpfe mit
+     44 px nicht mehr in die Zeile (Telefon hochkant), brechen sie in eine zweite um. */
+  .wiki-head .kopfknopf { flex: none; }
+  .wiki-head .btn-row { flex: 0 1 auto; min-width: 0; flex-wrap: wrap; justify-content: flex-end; gap: 2px; }
+  .wiki-head .mode-toggle { margin-left: 2px; }
+  .wiki-head .mode-toggle button { padding-left: 8px; padding-right: 8px; }
+  /* Die Liste „Unterseiten“ unter dem Text: jeder Link eine 44-px-Zeile. */
+  .children-list a { display: inline-block; padding: 12px 0; }
+  .seitentitel .page-icon { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0; }
+  .autorzeile .autor-knopf { min-height: 44px; }
+  .rundknopf { width: 44px; height: 44px; }
+  /* Der Anker „#“ an Überschriften als 44-px-Fläche – die negativen Ränder halten die Zeilenhöhe. */
+  .h-anchor { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px;
+    margin: -12px 0 -12px .1em; vertical-align: middle; }
+  .tree a { padding-top: 14px; padding-bottom: 14px; }
+  .c-tabs button { min-height: 44px; }
+  #kopf-knoepfe .btn, #pending .btn, #users .btn, #users .recht-wahl { min-height: 44px; }
+  #users .recht-wahl { padding-top: 6px; padding-bottom: 6px; }
+}
+/* Nutzerverwaltung zwischen 861 und 1100 px (Fold aufgeklappt, Tablet hochkant): Die Knöpfe „Bearbeiten“ und
+   „Reset-Mail“ (92–94 px) ragten aus ihrer 80 px breiten Spalte 2 px über den Fensterrand – waagerechter Bildlauf
+   (Geräte-Prüfung vom 22.10.2026). Die Spalte (col.col-aktionen in admin.html – bei festem Tabellenlayout zählt die
+   Breite der Spalte, nicht die der Kopfzelle) bekommt die Breite der Knöpfe, „Inhalte“ rückt zusammen. */
+#users .col-aktionen { width: 9.5%; }                /* vorher als style am <col> */
+@media (min-width: 861px) and (max-width: 1100px) {
+  #users .col-aktionen { width: 112px; }
 }
