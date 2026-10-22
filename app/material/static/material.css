@@ -1412,6 +1412,10 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
   background: var(--co-danger-fl); }
 .mat-mangel-kasten h2 { margin-top: 0; }
 .mat-mangel-kasten .mat-zusatz { color: color-mix(in srgb, var(--grau) 75%, var(--anthrazit)); }
+/* Kontrast auf dem hellen Rot (Browserprüfung P4-L1): Links im dunklen Rot statt 4,2:1, Hilfetext im dunkleren Grau
+   statt 4,48:1 – beide über 4,5:1. */
+.mat-mangel-kasten a { color: var(--rot-auf-flaeche); }
+.mat-mangel-kasten .help, .mat-mangel-kasten .small { color: color-mix(in srgb, var(--grau) 75%, var(--anthrazit)); }
 .mat-mangel-kasten .mat-rr-liste li { align-items: baseline; }
 .mat-mangel-kurz { flex-basis: 100%; overflow-wrap: anywhere; }
 /* Übersicht unten: „Meine PSA“; gelb, wenn etwas davon nicht einsatzbereit ist. */
@@ -1630,30 +1634,60 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 #mat-inhalt table.list.mat-tabelle th.mat-be-zahl, #mat-inhalt table.list.mat-tabelle td.mat-be-zahl { text-align: center; white-space: nowrap; width: 1%; }
 .mat-bericht-fuss { margin: 20px 0 0; padding-left: 18px; max-width: var(--mat-lesemass); }
 .mat-bericht-fuss li { margin-bottom: 4px; }
+/* Sprungmarken zu den Blöcken (Browserprüfung P4-L1, V5) – eine umbrechende Zeile Textlinks; die Blöcke halten beim
+   Springen Abstand zum oberen Rand. Betroffene Artikel eines Rückrufs aufklappbar (V3), mehrspaltig. */
+.mat-bericht-sprung ul { list-style: none; display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 4px 0 8px; padding: 0; }
+.mat-bericht-sprung a { display: inline-block; padding: 2px 0; }
+#be-inhalt section[id] { scroll-margin-top: 12px; }
+.mat-be-rr > summary { font-weight: 400; padding: 4px 0; }
+.mat-be-rr-liste { list-style: none; margin: 4px 0 0; padding: 0; columns: 14em; column-gap: 16px; }
+.mat-be-rr-liste li { break-inside: avoid; padding: 1px 0; }
+@media (pointer: coarse) {
+  .mat-bericht-sprung a { min-height: 44px; display: inline-flex; align-items: center; }
+  .mat-be-rr > summary { min-height: 44px; display: flex; align-items: center; }
+}
 @container mat-seite (max-width: 600px) {
   #mat-inhalt table.list.mat-tabelle td.mat-be-zahl { display: inline-block; width: auto; margin-right: 14px; text-align: left; white-space: normal; }
   #mat-inhalt table.list.mat-tabelle td.mat-be-null { display: none; }
   #mat-inhalt table.list.mat-tabelle td.mat-be-zahl::before { content: attr(data-l) " "; }
   .mat-bericht-wahl { margin-top: 0; }
 }
-/* Kasten „Mailversand“: Überschrift und das Untermenü „Mehr“ (Alle erledigt) in einer Zeile; die Meldung des
-   Mailservers bricht notfalls im Wort (Platzhalter „[Mailserver]“, Antwortcodes ohne Leerzeichen). */
+/* Kasten „Mailversand“: Überschrift und das Untermenü „Mehr“ (Alle erledigt) in einer Zeile. Vier Spalten – Mail (Zeit,
+   Art, Bezug, darunter klein der Betreff), Empfänger, Fehler (deutscher Text, darunter klein die Antwort des
+   Mailservers), „Erledigt“; die Antwort bricht notfalls im Wort (Platzhalter „[Mailserver]“, Antwortcodes ohne
+   Leerzeichen). Überschrift und Meldung nehmen den Fokus, wenn nichts mehr offen ist (tabindex -1). */
 .mat-mail-kasten { margin-top: 10px; }
 .mat-kastenkopf { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
 .mat-kastenkopf h2 { flex: 1 1 auto; }
 .mat-kastenkopf .mat-menue { align-self: center; }
-#mat-inhalt table.list.mat-mail td.mat-mail-meldung { overflow-wrap: anywhere; font-size: var(--fs-klein); max-width: 22rem; }
 #mat-inhalt table.list.mat-mail td { vertical-align: top; }
-/* Acht Spalten passen erst ab etwa 1100 px Inhaltsbreite nebeneinander (Tablet hochkant, Fold: 29–49 px Überbreite,
-   Geräte-Matrix vom 22.10.2026) – bis dahin ist jede Zeile eine Karte, wie die Modullisten unter 600 px. */
-@container mat-seite (max-width: 1100px) {
-  #mat-inhalt table.list.mat-mail, #mat-inhalt table.list.mat-mail tbody, #mat-inhalt table.list.mat-mail tr, #mat-inhalt table.list.mat-mail td { display: block; }
+#mat-inhalt table.list.mat-mail td.mat-mail-an { width: 11em; }
+#mat-inhalt table.list.mat-mail td.mat-mail-fehler { width: 19rem; }
+.mat-mail-zeit { white-space: nowrap; }
+.mat-mail-betreff, .mat-mail-meldung { font-size: var(--fs-klein); color: var(--grau); overflow-wrap: anywhere; margin-top: 2px; }
+.mat-mail-mehr .btn { margin-left: 6px; }
+/* Bis 800 px Inhaltsbreite ist jede Zeile eine Karte (Browserprüfung P4-L1, V1: vorher sieben Zeilen je Karte und
+   Karten bis 1100 px): oben Mail mit „Erledigt“ rechts, darunter Empfänger und Fehler nebeneinander – am Telefon
+   untereinander, der Betreff höchstens zwei Zeilen. */
+@container mat-seite (max-width: 800px) {
+  #mat-inhalt table.list.mat-mail, #mat-inhalt table.list.mat-mail tbody { display: block; }
   #mat-inhalt table.list.mat-mail thead { display: none; }
-  #mat-inhalt table.list.mat-mail tr { padding: 10px 0 12px; border-bottom: 1px solid var(--linie); }
-  #mat-inhalt table.list.mat-mail td { border: 0; padding: 2px 0; white-space: normal; max-width: none; }
+  #mat-inhalt table.list.mat-mail tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+    column-gap: 16px; padding: 8px 0 10px; border-bottom: 1px solid var(--linie); }
+  #mat-inhalt table.list.mat-mail td { display: block; border: 0; padding: 1px 0; white-space: normal; width: auto; max-width: none; }
+  #mat-inhalt table.list.mat-mail td.mat-mail-was { grid-column: 1 / 3; grid-row: 1; }
+  #mat-inhalt table.list.mat-mail td.tabelle-aktionen { grid-column: 3; grid-row: 1 / 3; align-self: start; }
+  #mat-inhalt table.list.mat-mail td.mat-mail-an { grid-column: 1; grid-row: 2; }
+  #mat-inhalt table.list.mat-mail td.mat-mail-fehler { grid-column: 2; grid-row: 2; }
   #mat-inhalt table.list.mat-mail td[data-l]::before { content: attr(data-l) ": "; color: var(--grau); font-size: var(--fs-klein); }
-  #mat-inhalt table.list.mat-mail td.tabelle-aktionen { padding-top: 8px; }
   #mat-inhalt table.list.mat-mail tr:hover td { background: none; }
+}
+@container mat-seite (max-width: 520px) {
+  #mat-inhalt table.list.mat-mail tr { grid-template-columns: minmax(0, 1fr) auto; }
+  #mat-inhalt table.list.mat-mail td.mat-mail-was { grid-column: 1; }
+  #mat-inhalt table.list.mat-mail td.tabelle-aktionen { grid-column: 2; grid-row: 1; }
+  #mat-inhalt table.list.mat-mail td.mat-mail-an, #mat-inhalt table.list.mat-mail td.mat-mail-fehler { grid-column: 1 / -1; grid-row: auto; }
+  .mat-mail-betreff { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 }
 /* Datumsfelder als Text (C2): „Nächste Prüfung“ in der Abschlussleiste mit Hilfetext (frühestens morgen, spätestens
    laut Intervall) – klein und leise hinter dem Feld, am Telefon darunter. */

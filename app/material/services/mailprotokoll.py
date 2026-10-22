@@ -65,6 +65,7 @@ AUFBEWAHRUNG_MONATE = 13                            # wie das Erinnerungslog
 ERLEDIGT_MONATE = 3
 NACHGEHOLT = "nachgeholt"                           # erledigt_von_name einer später gelungenen Erinnerung
 LISTE_MAX = 20                                      # Zeilen im Kasten der Übersicht
+LISTE_ALLE = 200                                    # Zeilen hinter „Weitere anzeigen“ (GET /api/material/mailfehler)
 ADRESSE, MAILSERVER_TEXT, ANMELDUNG_TEXT = "[Adresse]", "[Mailserver]", "[Anmeldename]"
 ART_TEXT = {"erinnerung": "Erinnerung", "mangel": "Mangel", "antrag": "Änderungsantrag", "meldung": "Produktmeldung",
             "rueckruf": "Rückruf"}
@@ -281,16 +282,31 @@ def uebersicht(user=None):
     kein_server = verwaltung and not MAILSERVER()
     if filt == "0":
         return {"offen": 0, "zeilen": [], "kein_mailserver": True, "alle": True} if kein_server else None
+    offen, zeilen = _offene(filt, LISTE_MAX)
+    if not zeilen and not kein_server:
+        return None
+    return {"offen": offen, "zeilen": zeilen, "kein_mailserver": kein_server, "alle": verwaltung}
+
+
+def _offene(filt, grenze):
+    """(Zahl der offenen Zeilen, die neuesten grenze davon als JSON) unter der Sichtbedingung filt."""
     offen = db.query(f"SELECT COUNT(*) AS n FROM mat_mail_fehler m WHERE m.erledigt_at IS NULL AND {filt}",
                      one=True)["n"]
     rows = db.query(f"SELECT m.* FROM mat_mail_fehler m WHERE m.erledigt_at IS NULL AND {filt} "
-                    f"ORDER BY m.created_at DESC, m.id DESC LIMIT ?", (LISTE_MAX,))
-    if not rows and not kein_server:
-        return None
+                    f"ORDER BY m.created_at DESC, m.id DESC LIMIT ?", (grenze,))
     namen = journal.konto_namen(r["konto_ref"] for r in rows)
     bezuege = _bezuege(rows)
-    return {"offen": offen, "zeilen": [_json(r, namen, bezuege) for r in rows], "kein_mailserver": kein_server,
-            "alle": verwaltung}
+    return offen, [_json(r, namen, bezuege) for r in rows]
+
+
+def liste(user=None):
+    """„Weitere anzeigen“ im Kasten: die neuesten LISTE_ALLE offenen Zeilen der Sicht und ihre Zahl – wer keine Sicht
+    hat (nirgends verwaltet), 403 wie bei „Alle erledigt“."""
+    filt = sichtfilter("m", user)
+    if filt == "0":
+        raise Abgelehnt(NUR_VERWALTER, 403)
+    offen, zeilen = _offene(filt, LISTE_ALLE)
+    return {"offen": offen, "zeilen": zeilen, "grenze": LISTE_ALLE}
 
 
 def zeile(fid, user=None):

@@ -341,6 +341,13 @@ def test_sicht_und_erledigt():
         assert wb["offen"] == 1 and [x["id"] for x in wb["zeilen"]] == [z3], wb
         assert mailfehler(k["fuehrung"]) is None
         assert mailfehler(k["pruefer"]) is None
+        # „Weitere anzeigen“ (Browserprüfung V2): alle offenen Zeilen der Sicht, höchstens LISTE_ALLE; Leser 403.
+        r = k["katalog"].get("/api/material/mailfehler")
+        assert r.status_code == 200 and r.json["offen"] == 4 and len(r.json["zeilen"]) == 4, r.get_json()
+        assert r.json["grenze"] == modul().LISTE_ALLE and r.json["zeilen"][0]["id"] == z4, r.get_json()
+        r = t.wart_a.get("/api/material/mailfehler")
+        assert r.status_code == 200 and [x["id"] for x in r.json["zeilen"]] == [z1], r.get_json()
+        assert k["fuehrung"].get("/api/material/mailfehler").status_code == 403
         # Ohne Mailserver: Dauerhinweis für die Verwaltung, auch ohne Zeilen; für Verwalter und Leser kein Block.
         app.config["SMTP_HOST"] = ""
         assert mailfehler(k["katalog"])["kein_mailserver"] is True

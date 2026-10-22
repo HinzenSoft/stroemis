@@ -2,7 +2,8 @@
 
 Gelesen wird es im Block „mailfehler“ von GET /api/material/start (routes.start) – jeder in seiner Sicht: die
 Material- und Plattform-Verwaltung alles, wer einen Zweig verwaltet, die Zeilen seiner Gliederungen ohne die Rollen, die
-nur die Verwaltung angehen (mailprotokoll.sichtfilter). Hier nur das Abhaken: eine Zeile (unbekannt oder außerhalb der
+nur die Verwaltung angehen (mailprotokoll.sichtfilter). Hier die ganze Liste hinter „Weitere anzeigen“ (höchstens
+LISTE_ALLE Zeilen) und das Abhaken: eine Zeile (unbekannt oder außerhalb der
 Sicht: 404 wie unbekannt; schon erledigt: 200, nichts ändert sich) und alle Zeilen der eigenen Sicht. Wer abhakt, steht
 mit Namen in der Zeile (Handelnder, wie im Löschkonzept). Kein „Erneut senden“: Mailtexte werden nicht gespeichert;
 Erinnerungen holt der nächste Lauf nach."""
@@ -13,6 +14,14 @@ from .services import Abgelehnt, akteur, mailprotokoll
 from .services.rechte import requires_zugang
 
 FEHLT = "Mailfehler nicht gefunden."
+
+
+@api.get("/mailfehler")
+@requires_zugang
+def mailfehler_liste():
+    """Die offenen Zeilen der eigenen Sicht, neueste zuerst → `offen` (Zahl), `zeilen` (höchstens `grenze`). 403 ohne
+    Sicht (wer nirgends verwaltet)."""
+    return jsonify(**mailprotokoll.liste())
 
 
 @api.post("/mailfehler/<int:mfid>/erledigt")

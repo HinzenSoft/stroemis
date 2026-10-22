@@ -314,23 +314,31 @@
   };
   const datumFeld = (id, iso, art) => `<input type="text" id="${id}" class="mat-datum" data-art="${art}" inputmode="numeric" autocomplete="off"
     maxlength="${art === "monat" ? 7 : 10}" placeholder="${art === "monat" ? "MM/JJJJ" : "TT.MM.JJJJ"}" value="${esc(datumAnzeige(iso, art))}">`;
-  // ISO ('YYYY-MM' bzw. 'YYYY-MM-DD'), "" für leer – oder ein Fehler mit Hinweis aufs Format.
+  // ISO ('YYYY-MM' bzw. 'YYYY-MM-DD'), "" für leer – oder ein Fehler: Hinweis aufs Format, wenn es nicht passt; „gibt es
+  // nicht“, wenn das Format stimmt, der Tag aber nicht (31.02.). Das Feld trägt aria-invalid und die Klasse „ungueltig“
+  // (Browserprüfung P4-L1, V7) – Vorleser sagen damit am Feld, dass es nicht stimmt.
   function datumWert(feld, name) {
+    const falsch = (text) => {
+      feld.setAttribute("aria-invalid", "true");
+      feld.classList.add("ungueltig");
+      return new Error(`„${name}“: ${text}`);
+    };
     const s = feld.value.trim();
+    feld.removeAttribute("aria-invalid");
     if (!s) return "";
     if (feld.dataset.art === "monat") {
       const m = s.match(/^(\d{1,2})[/.](\d{4})$/);
-      if (m && +m[1] >= 1 && +m[1] <= 12) return `${m[2]}-${m[1].padStart(2, "0")}`;
-      throw new Error(`„${name}“: bitte als MM/JJJJ angeben, z. B. 03/2024.`);
+      if (!m) throw falsch("bitte als MM/JJJJ angeben, z. B. 03/2024.");
+      if (+m[1] >= 1 && +m[1] <= 12) return `${m[2]}-${m[1].padStart(2, "0")}`;
+      throw falsch(`${s} gibt es nicht – der Monat liegt zwischen 01 und 12.`);
     }
     const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-    if (m) {
-      const d = new Date(Date.UTC(+m[3], +m[2] - 1, +m[1]));
-      if (d.getUTCFullYear() === +m[3] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[1]) {
-        return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
-      }
+    if (!m) throw falsch("bitte als TT.MM.JJJJ angeben, z. B. 17.03.2024.");
+    const d = new Date(Date.UTC(+m[3], +m[2] - 1, +m[1]));
+    if (d.getUTCFullYear() === +m[3] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[1]) {
+      return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
     }
-    throw new Error(`„${name}“: bitte als TT.MM.JJJJ angeben, z. B. 17.03.2024.`);
+    throw falsch(`den ${s} gibt es nicht.`);
   }
   // Beim Tippen die Trenner setzen („032024“ → „03/2024“, „17032024“ → „17.03.2024“), beim Verlassen vereinheitlichen.
   document.addEventListener("input", (e) => {
@@ -961,7 +969,8 @@
       ${psaKasten(d.meine_psa)}
       ${erinnerungZeile(d.erinnerungen)}
       ${mailKasten(d.mailfehler)}`;
-    aktionen = { probelauf: () => probelaufDialog(), "mail-erledigt": mailErledigt, "mail-alle": mailAlleErledigt };
+    aktionen = { probelauf: () => probelaufDialog(), "mail-erledigt": mailErledigt, "mail-alle": mailAlleErledigt,
+                 "mail-mehr": () => mailMehrLaden() };
     if (DARF.lesen) {
       ordnerUebersichtKlappen($("#mat-ue"));
       rundenKasten($("#mat-runden"), true);
@@ -1093,67 +1102,133 @@
   }
 
   /* Kasten „Mailversand“ (Phase 4 · L1): die gescheiterten Modul-Mails aus /start (mailfehler – null heißt kein Kasten;
-     mailprotokoll.uebersicht), je nach Sicht: Material- und Plattform-Verwaltung alles, wer einen Zweig verwaltet, die
-     Zeilen seiner Gliederungen. Die letzten 20 offenen als Tabelle (am Telefon Karten): Zeit, Art, was schiefging
-     (Klasse als Text), Empfänger (Name – nie eine Adresse), Rolle, Bezug als Link ins Modul (vom Server aus Kennungen
-     gebaut), Betreff, Meldung des Mailservers (gereinigt). Je Zeile „Erledigt“ (grau, POST …/erledigt – die Zeile
-     verschwindet, 404 als Meldung), „Alle erledigt“ im Untermenü des Kastens (POST …/alle-erledigt, Antwort mit Zahl).
-     Fehlt der Mailserver, steht für die Verwaltung eine Dauerzeile. Kein „Erneut senden“: Mailtexte werden nicht
-     gespeichert – Erinnerungen holt der nächste Lauf von selbst nach. */
+     mailprotokoll.uebersicht), je nach Sicht: Material- und Plattform-Verwaltung alles, wer einen Ordner verwaltet, die
+     Zeilen dieses Zweigs. Die letzten 20 offenen als Tabelle mit vier Spalten (Mail: Zeit, Art, Bezug als Link ins Modul
+     – vom Server aus Kennungen gebaut –, darunter klein der Betreff; Empfänger mit Rolle – nie eine Adresse; Fehler als
+     deutscher Text, darunter klein die gereinigte Antwort des Mailservers; „Erledigt“), bis 800 px Inhaltsbreite als
+     Karte mit drei bis vier Zeilen. „Weitere anzeigen“ lädt alle offenen der Sicht nach (GET …/mailfehler, höchstens
+     200). Je Zeile „Erledigt“ (grau, POST …/erledigt – die Zeile verschwindet, der Fokus geht zur nächsten Zeile bzw.
+     zur Überschrift, 404 als Meldung), „Alle erledigt“ im Untermenü des Kastens mit Rückfrage (POST …/alle-erledigt,
+     Antwort mit Zahl; der Fokus geht auf die Meldung im Kasten). Fehlt der Mailserver, steht für die Verwaltung eine
+     Dauerzeile. Kein „Erneut senden“: Mailtexte werden nicht gespeichert – Erinnerungen holt der nächste Lauf nach. */
   const MAIL_KLASSE = { empfaenger_abgewiesen: "Empfänger abgewiesen", verbindung: "keine Verbindung zum Mailserver",
                         anmeldung: "Anmeldung am Mailserver abgelehnt", abgelehnt: "vom Mailserver abgelehnt",
                         ausnahme: "Fehler beim Versand", sonstiges: "sonstiger Fehler" };
   const MAIL_ROLLE = { verwalter: "Materialwart", pruefer: "Prüfer", zugeordnet: "zugeordnete Person", inhaber: "Inhaber der Freigabe",
                        verwaltung: "Material-Verwaltung", antragsteller: "Antragsteller", melder: "Melder" };
+  function mailZeile(z) {
+    const b = z.bezug || {};
+    const bezug = b.pfad ? `<a href="${esc(b.pfad)}">${esc(b.text || "öffnen")}</a>` : esc(b.text || "");
+    return `<tr data-mail="${Number(z.id)}">
+      <td class="mat-mail-was"><span class="mat-mail-zeit">${esc(fmtZeit(z.created_at))}</span> · <strong>${esc(z.art_text)}</strong>${bezug ? ` · ${bezug}` : ""}
+        ${z.betreff ? `<div class="mat-mail-betreff">${esc(z.betreff)}</div>` : ""}</td>
+      <td class="mat-mail-an" data-l="An">${esc(z.empfaenger)} <span class="muted">(${esc(MAIL_ROLLE[z.rolle] || z.rolle)})</span></td>
+      <td class="mat-mail-fehler">${esc(MAIL_KLASSE[z.klasse] || z.klasse)}${z.meldung ? `<div class="mat-mail-meldung">${esc(z.meldung)}</div>` : ""}</td>
+      <td class="tabelle-aktionen"><button type="button" class="btn secondary small" data-act="mail-erledigt" data-id="${Number(z.id)}">Erledigt</button></td></tr>`;
+  }
+  // „… und n weitere“ mit „Weitere anzeigen“ – oder nichts, wenn alle offenen Zeilen dastehen.
+  function mailMehr(offen, gezeigt) {
+    if (offen <= gezeigt) return "";
+    return `<p class="small mat-mail-mehr" id="mat-mail-mehr">… und ${offen - gezeigt} weitere.
+      <button type="button" class="btn secondary small" data-act="mail-mehr">Weitere anzeigen</button></p>`;
+  }
   function mailKasten(m) {
     if (!m) return "";
-    const zeile = (z) => {
-      const b = z.bezug || {};
-      const bezug = b.pfad ? `<a href="${esc(b.pfad)}">${esc(b.text || "öffnen")}</a>` : esc(b.text || "–");
-      return `<tr data-mail="${Number(z.id)}">
-        <td data-l="Zeit">${esc(fmtZeit(z.created_at))}</td><td data-l="Art">${esc(z.art_text)}</td>
-        <td data-l="Fehler">${esc(MAIL_KLASSE[z.klasse] || z.klasse)}</td>
-        <td data-l="Empfänger">${esc(z.empfaenger)} <span class="muted">(${esc(MAIL_ROLLE[z.rolle] || z.rolle)})</span></td>
-        <td data-l="Bezug">${bezug}</td><td data-l="Betreff">${esc(z.betreff || "")}</td>
-        <td data-l="Meldung" class="mat-mail-meldung">${esc(z.meldung || "")}</td>
-        <td class="tabelle-aktionen"><button type="button" class="btn secondary small" data-act="mail-erledigt" data-id="${Number(z.id)}">Erledigt</button></td></tr>`;
-    };
-    const tabelle = m.zeilen.length ? `<table class="list mat-tabelle mat-mail" id="mat-mail-tabelle"><thead><tr><th>Zeit</th><th>Art</th><th>Fehler</th>
-        <th>Empfänger</th><th>Bezug</th><th>Betreff</th><th>Meldung</th><th></th></tr></thead><tbody>${m.zeilen.map(zeile).join("")}</tbody></table>
-      ${m.offen > m.zeilen.length ? `<p class="small" id="mat-mail-mehr">… und ${m.offen - m.zeilen.length} weitere – „Alle erledigt“ hakt auch sie ab.</p>` : ""}` : "";
-    return `<section class="section mat-mail-kasten" id="mat-mail" aria-label="Mailversand"><div class="mat-kastenkopf"><h2>Mailversand</h2>
+    const tabelle = m.zeilen.length ? `<table class="list mat-tabelle mat-mail" id="mat-mail-tabelle"><thead><tr><th>Mail</th>
+        <th>Empfänger</th><th>Fehler</th><th></th></tr></thead><tbody>${m.zeilen.map(mailZeile).join("")}</tbody></table>
+      ${mailMehr(m.offen, m.zeilen.length)}` : "";
+    return `<section class="section mat-mail-kasten" id="mat-mail" aria-labelledby="mat-mail-titel" data-offen="${Number(m.offen)}"><div class="mat-kastenkopf"><h2 id="mat-mail-titel" tabindex="-1">Mailversand</h2>
         ${m.zeilen.length ? `<details class="mat-menue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary><div class="mat-menue-liste">
-          <a href="#mat-mail" role="button" data-act="mail-alle"><strong>Alle erledigt</strong><span>Alle ${m.offen} offenen Zeilen deiner Sicht abhaken – auch die, die hier nicht mehr stehen.</span></a></div></details>` : ""}</div>
+          <a href="#mat-mail" role="button" data-act="mail-alle"><strong>Alle erledigt</strong><span>Alle offenen Zeilen abhaken – auch die nicht angezeigten (mit Rückfrage).</span></a></div></details>` : ""}</div>
       ${m.kein_mailserver ? '<p class="notice">Kein Mailserver eingerichtet – keine Modul-Mail geht hinaus (Erinnerungen, Mängel, Anträge, Produktmeldungen, Rückrufe).</p>' : ""}
-      ${m.zeilen.length ? `<p class="help">Diese Mails hat der Mailserver nicht angenommen. Erinnerungen holt der nächste Lauf nach; alles andere sagst du den Betroffenen selbst – ein erneuter Versand ist nicht möglich.</p>${tabelle}` : ""}
+      ${m.zeilen.length ? `<p class="help mat-mail-hilfe">Diese Mails hat der Mailserver nicht angenommen. Erinnerungen holt der nächste Lauf nach; alles andere sagst du den Betroffenen selbst – ein erneuter Versand ist nicht möglich.</p>${tabelle}` : ""}
     </section>`;
   }
-  // „Erledigt“ an einer Zeile: abhaken, Zeile weg; war es die letzte, verschwindet der Kasten mit (ohne Mailserver-Hinweis
-  // bleibt er). 404 (fremd oder inzwischen weg) steht als Meldung.
+  // Die Zahl der offenen Zeilen steht am Kasten (data-offen) – „Erledigt“ zählt herunter, „… und n weitere“ folgt.
+  function mailOffen(kasten, n) {
+    kasten.dataset.offen = String(n);
+    const tbody = $("#mat-mail-tabelle tbody", kasten);
+    const gezeigt = tbody ? tbody.rows.length : 0;
+    const alt = $("#mat-mail-mehr", kasten);
+    if (alt) alt.remove();
+    const tabelle = $("#mat-mail-tabelle", kasten);
+    if (tabelle) tabelle.insertAdjacentHTML("afterend", mailMehr(n, gezeigt));
+  }
+  // „Erledigt“ an einer Zeile: abhaken, Zeile weg, Fokus auf „Erledigt“ der nächsten (sonst der vorigen) Zeile; war es
+  // die letzte, bleibt der Kasten mit einer Meldung stehen und die Überschrift bekommt den Fokus (sonst fiele er an den
+  // Seitenanfang). 404 (fremd oder inzwischen weg) steht als Meldung.
   async function mailErledigt(b) {
     b.disabled = true;
     try {
       await api(`${API}/mailfehler/${Number(b.dataset.id)}/erledigt`, { method: "POST", body: {} });
+      const kasten = $("#mat-mail");
       const tr = b.closest("tr");
-      const tabelle = tr.closest("table");
+      const nachbar = tr.nextElementSibling || tr.previousElementSibling;
       tr.remove();
-      if (!$("tbody tr", tabelle)) mailKastenLeeren();
-      else toast("Erledigt");
+      const offen = Math.max(0, Number(kasten.dataset.offen || 1) - 1);
+      if (!nachbar && !offen) {
+        mailKastenLeeren("Alle Zeilen sind erledigt.");
+        $("#mat-mail-titel").focus();
+      } else if (!nachbar) {
+        mailOffen(kasten, offen);
+        mailMehrLaden(kasten);
+      } else {
+        mailOffen(kasten, offen);
+        $('[data-act="mail-erledigt"]', nachbar).focus();
+      }
+      toast("Erledigt");
     } catch (e) { toast(e.message, true); b.disabled = false; }
   }
-  async function mailAlleErledigt() {
+  // „Weitere anzeigen“: alle offenen Zeilen der Sicht (höchstens 200, neueste zuerst) statt der 20.
+  async function mailMehrLaden(kasten) {
+    kasten = kasten && kasten.dataset ? kasten : $("#mat-mail");
     try {
-      const r = await api(`${API}/mailfehler/alle-erledigt`, { method: "POST", body: {} });
-      toast(r.anzahl === 1 ? "1 Zeile erledigt" : `${r.anzahl} Zeilen erledigt`);
-      mailKastenLeeren();
+      const r = await api(`${API}/mailfehler`);
+      const tbody = $("#mat-mail-tabelle tbody", kasten);
+      const vorher = tbody.rows.length;
+      if (!r.zeilen.length) {
+        mailKastenLeeren("Alle Zeilen sind erledigt.");
+        $("#mat-mail-titel").focus();
+        return;
+      }
+      tbody.innerHTML = r.zeilen.map(mailZeile).join("");
+      mailOffen(kasten, r.offen);
+      const mehr = $("#mat-mail-mehr", kasten);
+      if (mehr) mehr.innerHTML = `Es stehen die neuesten ${r.zeilen.length} von ${r.offen} offenen Zeilen da – die übrigen erscheinen, sobald du welche abhakst.`;
+      // Der Fokus geht auf die erste neu dazugekommene Zeile (beim Nachladen nach der letzten abgehakten: die erste).
+      $('[data-act="mail-erledigt"]', tbody.rows[Math.min(vorher, tbody.rows.length - 1)]).focus();
     } catch (e) { toast(e.message, true); }
   }
-  function mailKastenLeeren() {
+  // „Alle erledigt“ mit Rückfrage (die Zeilen sind danach nirgends mehr zu sehen); danach steht die Meldung im Kasten
+  // und hat den Fokus.
+  function mailAlleErledigt() {
+    const kasten = $("#mat-mail");
+    const menue = $("details.mat-menue", kasten);
+    if (menue) menue.open = false;
+    const n = Number(kasten.dataset.offen || 0);
+    dialog(`<h2>Alle erledigt?</h2>
+      <p>${n === 1 ? "1 Zeile" : `${n} Zeilen`} als erledigt markieren? Sie verschwinden aus dem Kasten und lassen sich nicht wieder zeigen – auch die, die hier nicht angezeigt sind.</p>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn danger" id="mf-alle-ok" type="button">Alle erledigt</button></div>`,
+    (dlg, body) => {
+      $("#mf-alle-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        knopf.disabled = true;
+        try {
+          const r = await api(`${API}/mailfehler/alle-erledigt`, { method: "POST", body: {} });
+          dlg.close();
+          mailKastenLeeren(r.anzahl === 1 ? "1 Zeile erledigt." : `${r.anzahl} Zeilen erledigt.`);
+          $("#mat-mail-stand").focus();
+        } catch (e) { toast(e.message, true); knopf.disabled = false; }
+      };
+    });
+  }
+  // Der Kasten ohne offene Zeilen: Überschrift, die Dauerzeile ohne Mailserver (falls da) und die Meldung.
+  function mailKastenLeeren(meldung) {
     const kasten = $("#mat-mail");
     if (!kasten) return;
-    if ($(".notice", kasten)) {                     // ohne Mailserver bleibt die Dauerzeile stehen
-      $$("table, p.help, #mat-mail-mehr, details.mat-menue", kasten).forEach((el) => el.remove());
-    } else kasten.remove();
+    $$("table, p.help, #mat-mail-mehr, details.mat-menue, #mat-mail-stand", kasten).forEach((el) => el.remove());
+    kasten.dataset.offen = "0";
+    kasten.insertAdjacentHTML("beforeend", `<p class="help" id="mat-mail-stand" tabindex="-1">${esc(meldung)}</p>`);
   }
 
   /* Fälligkeiten je Ordner: Gliederungen mit ihren Ordnern eingerückt, die Zahlen für den ganzen Zweig – dieselben wie in
@@ -2095,8 +2170,10 @@
      „-mit-pruefern“, deren Dateiname sagt, dass Namen darin stehen. Ohne Haken enthält keine Ausgabe einen
      Personennamen außer dem Ersteller. Zahlentabellen wie im PDF, Listen als Modullisten (am Telefon Karten über die
      Containerabfrage mat-seite); jede Zelle über esc(), keine DOM-ids aus Daten. DEMO: Zahl im Kopf, Marke je Zeile.
-     Die Seite zeigt Listen ganz; das PDF kürzt sie auf BERICHT_KAPPUNG Zeilen – darunter steht dann ein Hinweis. 403,
-     404 und 400 (Jahr außerhalb 1990…2100) kommen als Meldung, die Auswahl bleibt bedienbar. */
+     Die Seite zeigt Listen ganz (eine lange Liste „nicht geprüft“ und die betroffenen Artikel eines Rückrufs
+     aufklappbar); das PDF kürzt sie auf BERICHT_KAPPUNG Zeilen – darunter steht dann ein Hinweis. Unter dem Kopf
+     Sprungmarken zu den Blöcken. 403, 404 und 400 (Jahr außerhalb 1990…2100) kommen als Meldung – auch beim ersten
+     Laden mit Jahr-Auswahl (geruestFehler), damit man ein anderes Jahr wählen kann. Der Tab-Titel nennt Zweig und Jahr. */
   const BERICHT_KAPPUNG = 500;
   async function bericht() {
     const fid = Number(DATEN.id);
@@ -2110,6 +2187,13 @@
     const kappung = (n, was) => (n > BERICHT_KAPPUNG ? `<p class="small muted">Im PDF stehen nur die ersten ${BERICHT_KAPPUNG} ${was} dieser Liste.</p>` : "");
     const liste = (koepfe, zeilen, klasse) => `<table class="list mat-tabelle${klasse ? ` ${klasse}` : ""}"><thead><tr>${koepfe.map((k) => `<th${k[1] ? ` class="${k[1]}"` : ""}>${esc(k[0])}</th>`).join("")}</tr></thead><tbody>${zeilen.join("")}</tbody></table>`;
     const td = (l, inhalt, klasse) => `<td data-l="${esc(l)}"${klasse ? ` class="${klasse}"` : ""}>${inhalt}</td>`;
+    // Sprungmarken zu den Blöcken (feste ids, nichts aus Daten); „Prüfer“ nur mit Haken.
+    const BLOECKE = [["be-bestand", "Bestand"], ["be-bewegungen", "Bewegungen"], ["be-pruefungen", "Prüfungen"],
+                     ["be-durchgaenge", "Durchgänge"], ["be-pruefer", "Prüfer"], ["be-sperren", "Sperren"],
+                     ["be-aussonderungen", "Aussonderungen"], ["be-maengel", "Mängel"], ["be-rueckrufe", "Rückrufe"],
+                     ["be-ausblick", "Ausblick"]];
+    const NICHT_GEPRUEFT_OFFEN = 25;          // so viele „nicht geprüft“ stehen aufgeklappt, mehr zugeklappt
+    const titelSetzen = (k) => { document.title = `Jahresbericht ${k.ordner} ${k.jahr} – strömis.de`; };
 
     function inhaltHtml(b) {
       const k = b.kopf;
@@ -2127,57 +2211,59 @@
           <dt>Artikel im Zweig (Sicht)</dt><dd>${esc(String(k.artikel))}${k.demo ? ` – davon ${k.demo} DEMO ${demoMarke(true)}` : ""}</dd>
           <dt>Prüfer genannt</dt><dd>${k.pruefer_nennen ? "ja" : "nein"}</dd></dl>
         ${k.demo ? `<p class="notice small">Enthält ${k.demo} DEMO-Artikel – gekennzeichnet mit der Marke DEMO; nicht für echte Nachweise.</p>` : ""}`;
-      const bestand = `<section class="section"><h2>Bestand zum Stichtag ${esc(k.stichtag)}</h2>
+      const bestand = `<section class="section" id="be-bestand"><h2>Bestand zum Stichtag ${esc(k.stichtag)}</h2>
         ${paar(zahlen([...bst.zeilen.map((z) => [z.n, `${statusMarke(z.status)}${z.status === "ausgesondert" ? ' <span class="muted">(gesamt, seit je)</span>' : ""}`]),
           [bst.verloren, "davon verloren gemeldet"], [bst.bestand, "<strong>Bestand gesamt</strong> (ohne ausgesonderte)"]]),
         `<h3>Je Kategorie (oberste Ebene)</h3>${bst.kategorien.length ? zahlen(bst.kategorien.map((x) => [x.bestand, `${esc(x.name)} <span class="muted">– fällig ${x.faellig}, gesperrt ${x.gesperrt}</span>`])) : leer("Keine Artikel.")}`)}
         ${bst.unterordner.length ? `<h3>Je Unterordner (nach Heimat)</h3>${liste([["Ordner"], ["Bestand", "mat-be-zahl"], ["einsatzbereit", "mat-be-zahl"], ["bald fällig", "mat-be-zahl"], ["überfällig", "mat-be-zahl"], ["neu", "mat-be-zahl"], ["gesperrt", "mat-be-zahl"], ["Lebensdauer", "mat-be-zahl"], ["ausgesondert", "mat-be-zahl"]],
           bst.unterordner.map((u) => `<tr>${td("Ordner", `${esc(u.name)}${u.kennzeichen ? ` <span class="mat-art">${esc(u.kennzeichen)}</span>` : ""}${demoMarke(u.demo)}`, "mat-k-titel")}${td("Bestand", String(u.bestand), "mat-be-zahl")}${["einsatzbereit", "bald_faellig", "ueberfaellig", "neu", "gesperrt", "lebensdauer", "ausgesondert"].map((st) => td(STATUS[st] || st, String(u.zaehlung[st] || 0), `mat-be-zahl${u.zaehlung[st] ? "" : " mat-be-null"}`)).join("")}</tr>`), "mat-bericht-ordner")}` : ""}
         </section>`;
-      const bewegungen = `<section class="section"><h2>Bewegungen im Jahr ${esc(String(k.jahr))}</h2>
+      const bewegungen = `<section class="section" id="be-bewegungen"><h2>Bewegungen im Jahr ${esc(String(k.jahr))}</h2>
         ${zahlen([[b.bewegungen.zugaenge, "Zugänge (angelegt oder importiert)"], [b.bewegungen.aussonderungen, "Aussonderungen"], [b.bewegungen.geloescht, "gelöscht (falsch angelegt, ohne Prüfung)"]])}</section>`;
-      const pruefungen = `<section class="section"><h2>Prüfungen im Jahr ${esc(String(k.jahr))}</h2>
+      const pruefungen = `<section class="section" id="be-pruefungen"><h2>Prüfungen im Jahr ${esc(String(k.jahr))}</h2>
         ${paar(zahlen([[pr.gesamt, "<strong>Prüfungen gesamt</strong> (ohne Aussonderungen)"], ...pr.arten.map((a) => [a.n, esc(a.text)]), [pr.entwuerfe, "offene Entwürfe (nicht abgeschlossen)"]]),
           zahlen([...pr.ergebnisse.map((e) => [e.n, `Ergebnis „${esc(e.text)}“`]), [pr.mit_mangel, "mit Mangel"], [pr.kritisch, "mit kritischem Mangel"]]))}
         <h3>Prüfabdeckung</h3>
         ${zahlen([[pr.abdeckung.bestand, "Artikel im Bestand (ohne ausgesonderte)"], [pr.abdeckung.geprueft, "davon im Jahr mit abgeschlossener Prüfung"], [pr.abdeckung.nicht_geprueft, "im Jahr nicht geprüft"]])}
-        ${pr.nicht_geprueft.length ? `<p class="small">Im Jahr nicht geprüft:</p>${liste([["Inventarnummer"], ["Produkt"], ["letzte Prüfung"]],
-          pr.nicht_geprueft.map((x) => `<tr>${td("Inventarnummer", `${mono(x.inventarnummer)}${demoMarke(x.demo)}`)}${td("Produkt", esc(x.produkt))}${td("letzte Prüfung", esc(x.letzte))}</tr>`))}${kappung(pr.nicht_geprueft.length, "Artikel")}` : ""}
+        ${pr.nicht_geprueft.length ? `<details class="mat-auf"${pr.nicht_geprueft.length <= NICHT_GEPRUEFT_OFFEN ? " open" : ""}><summary>Im Jahr nicht geprüft (${pr.nicht_geprueft.length})</summary>${liste([["Inventarnummer"], ["Produkt"], ["letzte Prüfung"]],
+          pr.nicht_geprueft.map((x) => `<tr>${td("Inventarnummer", `${mono(x.inventarnummer)}${demoMarke(x.demo)}`)}${td("Produkt", esc(x.produkt))}${td("letzte Prüfung", esc(x.letzte))}</tr>`))}${kappung(pr.nicht_geprueft.length, "Artikel")}</details>` : ""}
         </section>`;
-      const durchgaenge = `<section class="section"><h2>Prüfdurchgänge</h2>
+      const durchgaenge = `<section class="section" id="be-durchgaenge"><h2>Prüfdurchgänge</h2>
         ${b.durchgaenge.length ? liste([["Durchgang"], ["Zeitraum"], ["Stand"], ["Artikel", "mat-be-zahl"], ["erledigt", "mat-be-zahl"], ["ausgenommen", "mat-be-zahl"], ["nicht geprüft", "mat-be-zahl"]],
           b.durchgaenge.map((r) => `<tr>${td("Durchgang", `<strong>${esc(r.titel)}</strong>${demoMarke(r.demo)}${r.ausnahmen.length ? `<div class="small muted">Ausnahmen: ${r.ausnahmen.map((a) => `${mono(a.inventarnummer)} (${esc(a.grund)})`).join("; ")}</div>` : ""}`)}
             ${td("Zeitraum", esc(r.zeitraum))}${td("Stand", `${esc(r.stand)}${r.protokoll_id ? ` · ${mono(r.protokoll_id)}` : ""}`)}
             ${td("Artikel", String(r.gesamt), "mat-be-zahl")}${td("erledigt", String(r.erledigt), "mat-be-zahl")}${td("ausgenommen", String(r.ausgenommen), "mat-be-zahl")}
             ${td("nicht geprüft", r.stand === "offen" ? `${r.offen} offen` : String(r.nicht_geprueft), "mat-be-zahl")}</tr>`)) : leer("Im Jahr kein Prüfdurchgang im Zweig.")}</section>`;
-      const pruefer = b.pruefer ? `<section class="section"><h2>Prüfer im Jahr ${esc(String(k.jahr))}</h2>
+      const pruefer = b.pruefer ? `<section class="section" id="be-pruefer"><h2>Prüfer im Jahr ${esc(String(k.jahr))}</h2>
         ${b.pruefer.pruefer.length ? liste([["Prüfer"], ["Urkundennummer"], ["Prüfungen", "mat-be-zahl"]],
           b.pruefer.pruefer.map((x) => `<tr>${td("Prüfer", esc(x.name))}${td("Urkundennummer", mono(x.urkunde || ""))}${td("Prüfungen", String(x.n), "mat-be-zahl")}</tr>`)) : leer("Keine Prüfungen.")}
         ${b.pruefer.aussonderungen_durch.length ? `<h3>Aussonderungen durch</h3>${liste([["Name"], ["Aussonderungen", "mat-be-zahl"]],
           b.pruefer.aussonderungen_durch.map((x) => `<tr>${td("Name", esc(x.name))}${td("Aussonderungen", String(x.n), "mat-be-zahl")}</tr>`))}` : ""}</section>` : "";
-      const sperren = `<section class="section"><h2>Sperren und Freigaben im Jahr ${esc(String(k.jahr))}</h2>
+      const sperren = `<section class="section" id="be-sperren"><h2>Sperren und Freigaben im Jahr ${esc(String(k.jahr))}</h2>
         ${zahlen([[sp.gesamt, "<strong>Sperren gesamt</strong>"], ...sp.arten.map((a) => [a.n, esc(a.text)]), [sp.freigegeben, "wieder freigegeben (Freiprüfung)"]])}
         ${sp.liste.length ? `${liste([["Datum"], ["Inventarnummer"], ["Art"], ["Grund"]],
           sp.liste.map((x) => `<tr>${td("Datum", esc(x.datum))}${td("Inventarnummer", `${mono(x.inventarnummer)}${demoMarke(x.demo)}`)}${td("Art", esc(x.art_text))}${td("Grund", esc(x.grund))}</tr>`))}${kappung(sp.liste.length, "Sperren")}` : ""}</section>`;
-      const aussonderungen = `<section class="section"><h2>Aussonderungen im Jahr ${esc(String(k.jahr))}</h2>
+      const aussonderungen = `<section class="section" id="be-aussonderungen"><h2>Aussonderungen im Jahr ${esc(String(k.jahr))}</h2>
         ${zahlen([[au.gesamt, "<strong>Aussonderungen gesamt</strong>"], ...au.arten.map((a) => [a.n, esc(a.text)])])}
         ${au.liste.length ? `${liste([["Datum"], ["Inventarnummer"], ["Produkt"], ["Grund"]],
           au.liste.map((x) => `<tr>${td("Datum", esc(x.datum))}${td("Inventarnummer", `${mono(x.inventarnummer)}${demoMarke(x.demo)}`)}${td("Produkt", esc(x.produkt))}${td("Grund", `${esc(x.grund)}${x.durch ? ` · durch ${esc(x.durch)}` : ""}${x.protokoll_id ? ` · ${mono(x.protokoll_id)}` : ""}`)}</tr>`))}${kappung(au.liste.length, "Aussonderungen")}` : ""}</section>`;
-      const maengel = `<section class="section"><h2>Mangelmeldungen</h2>
+      const maengel = `<section class="section" id="be-maengel"><h2>Mangelmeldungen</h2>
         ${zahlen([[ma.gemeldet, `<strong>gemeldet im Jahr ${esc(String(k.jahr))}</strong>`], [ma.offen, "davon heute offen"], [ma.freipruefung, "erledigt durch Freiprüfung"], [ma.aussonderung, "erledigt durch Aussonderung"], [ma.offen_stichtag, "offene Meldungen zum Stichtag (alle Jahre)"]])}
         ${ma.offen_liste.length ? `${liste([["Inventarnummer"], ["gemeldet am"]],
           ma.offen_liste.map((x) => `<tr>${td("Inventarnummer", `${mono(x.inventarnummer)}${demoMarke(x.demo)}`)}${td("gemeldet am", esc(x.gemeldet))}</tr>`))}${kappung(ma.offen_liste.length, "Meldungen")}` : ""}</section>`;
-      const rueckrufe = `<section class="section"><h2>Rückrufe</h2>
+      const rueckrufe = `<section class="section" id="be-rueckrufe"><h2>Rückrufe</h2>
         ${b.rueckrufe.length ? `<p class="help">Rückrufe, die im Jahr angelegt oder beendet wurden oder heute laufen – zu Produkten mit Artikeln im Zweig.</p>${liste([["Angelegt · beendet"], ["Rückruf"], ["betroffen", "mat-be-zahl"], ["offen", "mat-be-zahl"]],
           b.rueckrufe.map((r) => `<tr>${td("Angelegt · beendet", `${esc(r.angelegt)}<br>${r.beendet ? `beendet ${esc(r.beendet)}` : "läuft"}`)}
-            ${td("Rückruf", `<strong>${esc(r.titel)}</strong> – ${esc(r.produkt)} <span class="muted">(${r.alle ? "alle Artikel des Produkts" : "nach Seriennummern"})</span>${r.url ? `<div class="small">Meldung des Herstellers: ${mono(r.url)}</div>` : ""}${r.artikel.length ? `<div class="small">${r.artikel.map((a) => `${mono(a.inventarnummer)} (${esc(a.zustand)})${demoMarke(a.demo)}`).join(", ")}</div>` : ""}`)}
+            ${td("Rückruf", `<strong>${esc(r.titel)}</strong> – ${esc(r.produkt)} <span class="muted">(${r.alle ? "alle Artikel des Produkts" : "nach Seriennummern"})</span>${r.url ? `<div class="small">Meldung des Herstellers: ${mono(r.url)}</div>` : ""}${r.artikel.length ? `<details class="mat-auf mat-be-rr"><summary>Betroffene Artikel anzeigen (${r.artikel.length})</summary><ul class="mat-be-rr-liste">${[...r.artikel].sort((x, y) => (x.zustand !== "offen") - (y.zustand !== "offen")).map((a) => `<li>${mono(a.inventarnummer)} <span class="muted">${esc(a.zustand)}</span>${demoMarke(a.demo)}</li>`).join("")}</ul></details>` : ""}`)}
             ${td("betroffen", String(r.betroffen), "mat-be-zahl")}${td("offen", String(r.offen), "mat-be-zahl")}</tr>`))}` : leer("Kein Rückruf betrifft Artikel im Zweig.")}</section>`;
-      const ausblick = `<section class="section"><h2>Ausblick – zwölf Monate ab ${esc(k.stichtag)}</h2>
+      const ausblick = `<section class="section" id="be-ausblick"><h2>Ausblick – zwölf Monate ab ${esc(k.stichtag)}</h2>
         <p class="help">Jetzt: ${ab.jetzt.ueberfaellig} überfällig, ${ab.jetzt.neu} neu (Eingangsprüfung ausstehend), ${ab.jetzt.gesperrt} gesperrt.</p>
         ${liste([["Monat"], ["fällig", "mat-be-zahl"], ["Lebensende (textil)", "mat-be-zahl"]],
           ab.monate.map((m) => `<tr>${td("Monat", esc(m.text), "mat-k-titel")}${td("fällig", String(m.faellig), `mat-be-zahl${m.faellig ? "" : " mat-be-null"}`)}${td("Lebensende (textil)", String(m.lebensende), `mat-be-zahl${m.lebensende ? "" : " mat-be-null"}`)}</tr>`), "mat-bericht-monate")}</section>`;
       const fuss = `<ul class="small muted mat-bericht-fuss">${b.fuss.map((satz) => `<li>${esc(satz)}</li>`).join("")}</ul>`;
-      return kopf + bestand + bewegungen + pruefungen + durchgaenge + pruefer + sperren + aussonderungen + maengel + rueckrufe + ausblick + fuss;
+      const sprung = `<nav class="mat-bericht-sprung" aria-label="Blöcke des Berichts"><ul>${BLOECKE.filter(([id]) => id !== "be-pruefer" || b.pruefer)
+        .map(([id, text]) => `<li><a href="#${id}">${esc(text)}</a></li>`).join("")}</ul></nav>`;
+      return kopf + sprung + bestand + bewegungen + pruefungen + durchgaenge + pruefer + sperren + aussonderungen + maengel + rueckrufe + ausblick + fuss;
     }
 
     function dateien(b) {
@@ -2202,6 +2288,22 @@
         <div id="be-inhalt">${inhaltHtml(b)}</div>`;
       $("#be-jahr").addEventListener("change", (e) => { jahr = +e.target.value; laden(true); });
       $("#be-pruefer").addEventListener("change", (e) => { pruefer = e.target.checked; laden(true); });
+      titelSetzen(k);
+    }
+
+    // Erster Aufruf gescheitert (400 Jahr außerhalb, 403, 404): Meldung mit Jahr-Auswahl (die letzten 15 Jahre) und dem
+    // Weg zurück – ein anderes Jahr lädt den Bericht neu.
+    function geruestFehler(e) {
+      const dieses = new Date().getFullYear();
+      const jahre = Array.from({ length: 15 }, (_, i) => dieses - i);
+      const gewaehlt = jahre.includes(jahr) ? jahr : dieses;
+      inhalt.innerHTML = `<div class="mat-pfad"><a href="/material">Material</a> / <a href="/material/bestand">Bestand</a></div>
+        <div class="page-head"><h1>Jahresbericht Material</h1></div>
+        <div class="mat-bericht-wahl">
+          <label for="be-jahr">Kalenderjahr <select id="be-jahr">${jahre.map((j) => `<option value="${j}"${j === gewaehlt ? " selected" : ""}>${j}</option>`).join("")}</select></label></div>
+        <div id="be-inhalt"><p class="notice" role="alert">${esc(e.message)}</p></div>`;
+      $("#be-jahr").addEventListener("change", (ev) => { jahr = +ev.target.value; laden(false); });
+      document.title = "Jahresbericht – strömis.de";
     }
 
     // Daten holen; nachladen: nur der Inhalt wird ersetzt, Auswahl und Knöpfe bleiben (mit neuer Jahreszahl).
@@ -2214,8 +2316,8 @@
       let b;
       try { b = (await api(`${API}/ordner/${fid}/bericht?${q}`)).bericht; }
       catch (e) {
-        if (!ziel) throw e;
-        ziel.innerHTML = `<p class="notice">${esc(e.message)}</p>`;
+        if (!ziel) { geruestFehler(e); return; }
+        ziel.innerHTML = `<p class="notice" role="alert">${esc(e.message)}</p>`;
         return;
       }
       try { history.replaceState(null, "", location.pathname + (String(q) ? `?${q}` : "")); } catch (e) { /* nur die Adresszeile */ }
@@ -2223,7 +2325,7 @@
       ziel.innerHTML = inhaltHtml(b);
       $("#be-dateien").innerHTML = dateien(b);
       $("#be-titel-jahr").textContent = String(b.kopf.jahr);
-      document.title = `Jahresbericht ${b.kopf.ordner} ${b.kopf.jahr} – strömis.de`;
+      titelSetzen(b.kopf);
     }
     await laden(false);
   }

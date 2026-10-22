@@ -5,7 +5,9 @@
   <h1>{{ code }}</h1>
   <p>{{ message }}</p>
   {# Ohne Stufe im Wiki führt „Zum Wiki“ in den Lesemodus (/wiki) – die Startseite wäre dort ein anderes Modul. Ein
-     angemeldetes Konto ohne Lesemodus gibt es praktisch nicht; dort führte der Link wieder hierher, also zum Profil. #}
-  <p>{% if user and not rechte.wiki %}{% if wiki_lesemodus %}<a href="/wiki">Zum Wiki</a>{% else %}<a href="/profil">Zum Profil</a>{% endif %}{% else %}<a href="/">Zum Wiki</a>{% endif %}</p>
+     angemeldetes Konto ohne Lesemodus gibt es praktisch nicht; dort führte der Link wieder hierher, also zum Profil.
+     Eine Fehlerseite unter /material (Bericht, Ordner, Artikel, Dateien des Moduls) führt zur Material-Übersicht – nur
+     mit Modulzugang, sonst stünde dort wieder 403 (Browserprüfung P4-L1). #}
+  <p>{% if user and material_zugang and (request.path == "/material" or request.path.startswith("/material/")) %}<a href="/material">Zur Material-Übersicht</a>{% elif user and not rechte.wiki %}{% if wiki_lesemodus %}<a href="/wiki">Zum Wiki</a>{% else %}<a href="/profil">Zum Profil</a>{% endif %}{% else %}<a href="/">Zum Wiki</a>{% endif %}</p>
 </main>
 {% endblock %}
