@@ -3653,6 +3653,102 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
        zurück, „erledigt“ zeigt die grauen Marken „zurückgezogen“. Keine Konsolenfehler, kein waagerechtes Scrollen, je
        Dialog höchstens ein roter Knopf.
 
+## Zweite Nachbesserung nach der Geräte-Prüfung (22.10.2026)
+
+Eine unabhängige Prüfung von f085f12 im Browser (`st-geraete`, 20 Seiten × 21 Geräte × 3 Engines, dazu Trefferproben
+mit `elementFromPoint`; `/home/harness/geraete-laeufe/pruefung-f085f12/bericht.txt`) fand sechs Befunde und neun
+Verbesserungen im Modul. Nur Oberfläche (`material.js`, `material.css`, `seite.html`) – keine Schnittstelle, kein
+Schema, keine Migration. Berührungsregeln nur bei `(pointer: coarse)`; mit der Maus ändern sich nur Filterknöpfe,
+Seitenbreite ab 1600 px und Hinweiskästen.
+
+### Befunde
+
+1. **Sortierköpfe überlappten (neu durch f085f12).** In der engen Tabelle (601–820 px) stehen zwei Köpfe übereinander
+   („Inventar-Nr.“ über „Seriennummer“); mit `margin-block: -12.5px` überlappten sie um 25 px – der obere behielt 18 px
+   wirksame Höhe, sein Fokusring umschloss den unteren. Jetzt ist jeder Sortierknopf am Finger ein eigener 44 px hoher
+   Streifen über die Spaltenbreite, die Kopfzelle (`th[aria-sort]`) verliert dafür ihr senkrechtes Polster: ein Kopf
+   44 px, zwei 88 px. Die Knöpfe liegen über der vergrößerten Fläche des Links in der ersten Zeile. Der Klappknopf der
+   Fälligkeiten reicht nicht mehr 6 px über den Ordnerlink (nur noch nach links ins leere Polster); bricht ein langer
+   Ordnername um, beginnt die zweite Zeile hinter dem Knopf (hängender Einzug) statt unter ihm. Nachgemessen mit
+   `elementFromPoint` (Tablet hoch, iPhone, Tablet quer): Sortierköpfe, Klappknöpfe, Filter, Durchgangslink und
+   Ordnerleiste zu 100 % ihrer 44 px wirksam, keine Überlappung zweier Bedienelemente.
+2. **Prüfformular am Telefon in Firefox** rollte waagerecht, „aussondern“ wurde abgeschnitten: Die Ergebnisknöpfe
+   brechen jetzt in eine zweite Reihe um (`.mat-ergebnis { flex-wrap: wrap }`), statt die Seite zu verbreitern.
+3. **„Fälligkeiten je Ordner“ bei tiefer Verschachtelung** zu breit (Firefox, Fold, Tablet quer): Eingerückt wird bis
+   Tiefe 3 um 22 px je Ebene, darunter um 8 px (in der Karte 14/6 px); die Spaltenköpfe der Zähler dürfen umbrechen,
+   wenn die Tabelle sonst nicht passt.
+4. **Ordnerleiste (240 px) bei tiefen Bäumen** brach Zeichen für Zeichen um („Fac/h/Per/sönl/iche …“): Ab Tiefe 3 rückt
+   jede Ebene nur noch 8 px ein; der 44 px breite Klappknopf reicht nach links in die leere Einrückung (sein Dreieck
+   steht rechts darin) und nimmt dem Namen 30 statt 44 px. Namen brechen nur an Wortgrenzen um; ein Wort, das allein
+   nicht passt, endet mit „…“ (voller Name im `title`).
+5. **Tippflächen unter 44 px** auf Seiten, die der erste Nachbesserungslauf nicht enthielt: Prüfdurchgang in der Liste
+   (Übersicht, Prüfungen) und die Prüfsumme zum Kopieren (Prüfung ansehen) haben jetzt eine echte Fläche statt
+   `::after`; alle Eingabefelder, Auswahllisten und Textfelder in Modul und Dialogen sind am Finger 44 px hoch
+   (Artikel anlegen, Formular-Editor, Anhänge); die Pfeil- und Entfernen-Knöpfe im Formular-Editor 44 px breit.
+6. **Stammdaten der Prüfung** („… von pruefer3@…“) ragten in Firefox 18 px heraus: Werte brechen notfalls im Wort um.
+
+Dazu beim Nachmessen gefunden: Die volle Artikeltabelle im Ordner ragte zwischen 821 und 900 px Inhaltsbreite (Fold
+aufgeklappt, Fold Duo) um 3–8 px über den Rand. „Eingangs­prüfung“ in der Spalte „Nächste Prüfung“ und der Kopf
+„Serien­nummer“ tragen jetzt eine weiche Trennstelle.
+
+### Verbesserungen
+
+- **Nullkacheln (V1):** Die Kacheln mit 0 stehen jetzt **in jeder Breite und schon im Dokument** hinter denen mit einer
+  Zahl (`dashboard()`), nicht mehr per CSS `order` nur am Telefon – Tab- und Vorlesereihenfolge entsprechen der
+  sichtbaren. Am Rechner ändert sich damit die Reihenfolge mit dem Bestand (Beispiel: 22 Bestand, 20 neu,
+  2 einsatzbereit, dann die Nullen); „Artikel im Bestand“ bleibt vorn. Am Telefon bleiben die Nullen einzeilig.
+- **Filterknöpfe (V2):** wachsen nicht mehr mit (`flex: 0 0 auto`, auch „Produktmeldungen/Änderungsanträge“) – jetzt
+  wirklich so breit wie ihr Wort.
+- **Breite Bildschirme (V3):** Listen und Übersichten wachsen ab 1600 px Fenster nur noch bis 1800 px (vorher 2200);
+  Prüfung beginnen, ausfüllen und ansehen, Artikel anlegen und der Formular-Editor bleiben bei 1180 px. Die Übersicht
+  steht dafür schon ab 1500 px Inhaltsbreite zweispaltig (bei 1920 px Fenster also auch).
+- **Hinweiskästen (V5):** alle gleich breit, `p` wie `div`, klein wie groß: Token `--mat-kastenmass: 38rem` (608 px).
+- **Kontrast (V6):** „Ändern …“ in der Wiki-Zeile des Formular-Editors (4,40:1) und Knopf-Links in Hinweisen im
+  dunklen Rot (`--rot-auf-flaeche`). Hinweis Kontrast im Modul danach: 0.
+- **Artikelnummern (V7):** „GS-S“ bricht nicht mehr am Strich: Die leise Artikelnummer hinter dem Namen steht an allen
+  Stellen als ein Stück (`artNrKurz`, `.mat-ganz` wie bei „Art.-Nr. …“) – Listen, Katalog, Treffer, Meldungen, Dialoge.
+- **Brotkrumen (V8):** am Finger eine umbrechende Reihe mit 6 px Abstand, jeder Link 44 px hoch, ein langer bricht in
+  sich mit normalem Zeilenabstand um (vorher `line-height: 44px`, das bei Umbruch wie ein Absatz aussah).
+- **Platzhalter (V9):** Nummernsuche „Nummer suchen“ (die drei Nummernarten stehen in Beschriftung und `title`); die
+  Katalogsuche wechselt ihren Platzhalter auch nach dem Drehen des Geräts (`matchMedia`-Listener).
+
+### Tests
+
+`tests/test_material_l5.py::test_geraete_nachbesserung_zwei` (statisch, alle Punkte oben); angepasst:
+`test_geraete_nachbesserung` (Sortierköpfe, Brotkrumen, Filter, Breite, Lesemaß) und
+`tests/test_material_beschreibung.py::test_oberflaeche_statisch` (Artikelnummer über `artNrKurz`).
+
+### Im Browser geprüft
+
+`st-geraete` mit den 20 Seiten der Prüfung plus Prüfformular (`/material/pruefung/5`), Artikel 3 und den tiefen
+Ordnern 5, 7, 9, 10 (26 Seiten × 21 Geräte × 3 Engines = 1638 Aufrufe), gegen eine Kopie des Platzhalterbestands
+mit den Platzhalterdaten der Prüfung (Durchgang, Meldung, Kommentare, tiefe Ordner, angefangene Prüfung), Server ohne
+Mailserver: vorher (f085f12) `/home/harness/geraete-laeufe/nachbesserung2-20261022/lauf-vorher/`, nachher
+`…/lauf-nachher/`.
+
+| Vorkommen | Modul vorher | Modul nachher | Wiki/Admin (unverändert, außerhalb des Auftrags) |
+| --- | --- | --- | --- |
+| T – Tippflächen unter 44 px | 784 | 0 | 5040 (Wiki 1722, Admin 3318) |
+| H – waagerechter Bildlauf | 5 | 0 | 2 (Admin) |
+| A – Element außerhalb des Fensters | 5 | 0 | 51 (Wiki 21, Admin 30) |
+| U, F, K, X | 0 | 0 | 0 |
+| Hinweis Kontrast unter 4,5:1 | 63 | 0 | – |
+
+B2, B3 und B6 zeigten sich in diesem Lauf nicht (Firefox wählt hier eine schmalere Ersatzschrift als in der Prüfung);
+nachgestellt mit erzwungener „DejaVu Sans“ in Firefox: vorher 383 px bei 360 px Fenster (Prüfformular), 963/1199 px
+(Übersicht, Fold/Tablet quer), 1026 px (Prüfung ansehen) – nachher überall genau Fensterbreite. Fotos angesehen:
+Tablet hoch (Durchgang, Prüfungen – gestapelte Köpfe), Tablet quer (Ordnerleiste bei Tiefe 6, Chromium und Firefox),
+iPhone Firefox (Prüfformular), Superwide (Prüfformular 1180 px), Fold mit breiter Schrift (Ergebnisknöpfe in zwei
+Reihen).
+
+### Bitte bestätigen
+
+1. **Nullkacheln überall hinten** (statt nur am Telefon): eine Reihenfolge für alle Breiten, dafür wandern die Kacheln
+   am Rechner mit dem Bestand.
+2. **Gestapelte Sortierköpfe** in der engen Tabelle sind jetzt 88 px (im Durchgang mit drei Köpfen 132 px) hoch.
+3. **Ordnerleiste:** Silbentrennung entfällt dort am Finger (nur noch Wortgrenzen, sonst „…“).
+4. **Breiten:** Tabellen bis 1800 px, Formularseiten 1180 px; Übersicht zweispaltig schon ab 1500 px Inhaltsbreite.
+
 ## Nachbesserung nach der Geräte-Prüfung (21.10.2026)
 
 Der erste Lauf von `st-geraete` (Chromium, Firefox, WebKit × 21 Geräte von 344 bis 5120 px × Übersicht, Bestand,
@@ -3704,6 +3800,8 @@ dazu `app.css` für die Bauchbinde und zwei Farbregeln) – keine Schnittstelle,
     eingeschlossen – sie liegen ja dort.
   - Filterknöpfe so breit wie ihr Wort statt gleich breit: „bald fällig“ und „Lebensdauer erreicht“ brechen nicht mehr
     um, die Zeile ist gleich hoch; reicht sie nicht, rutscht der ganze Knopf weiter (alle Filterzeilen im Modul).
+    *Korrektur (22.10.2026):* Das stimmte nur am Telefon – mit `flex: 1 1 auto` wuchsen die Knöpfe auf die ganze
+    Zeile (am breiten Bildschirm bis 765 px). So breit wie ihr Wort sind sie erst seit der zweiten Nachbesserung.
 - **Sehr breite Bildschirme:** Ab 1600 px Fenster wächst der Inhalt bis 2200 px statt bei 1180 px zu enden. Ab 1800 px
   Inhaltsbreite stehen auf der Übersicht „Fälligkeiten je Ordner“ und „Als Nächstes zu prüfen“ nebeneinander (2 : 3),
   „Meine PSA“ in drei Spalten. Fließtext bleibt beim Lesemaß (nächster Punkt). Laptop und kleiner: unverändert.
@@ -3714,7 +3812,9 @@ dazu `app.css` für die Bauchbinde und zwei Farbregeln) – keine Schnittstelle,
   wurde abgeschnitten); der volle Text steht als Beschriftung (`aria-label`, `title`) – das Feld hatte vorher keine.
 - **Produktnamen:** Kurze Wörter mit Bindestrich (bis 16 Zeichen, etwa „GS-S“, „HB-7“) stehen als ein Stück
   (`.mat-wort`, `nameHtml`) und brechen nicht mehr am Strich („GS-“ / „S“); längere behalten ihre Umbruchstelle,
-  damit nichts aus einer schmalen Spalte ragt.
+  damit nichts aus einer schmalen Spalte ragt. *Korrektur (22.10.2026):* „GS-S“ in der Artikel- und Prüfliste ist
+  die Artikelnummer, nicht der Name – sie brach weiter am Strich (rund zehn Stellen ohne `.mat-wort`). Behoben in der
+  zweiten Nachbesserung.
 - **Schloss der Systemordner:** „🔒 Gesperrt/Ausgesondert“ – das Schloss steht außerhalb der Unterstreichung (eigenes
   Element mit Rand statt Leerzeichen im Link) und grau wie die Klapp-Dreiecke daneben statt bunt; kein neues Zeichen
   (`schloss()` in Leiste, Bestand, Unterordnern, Fälligkeiten und Ordnertitel).
@@ -3743,6 +3843,11 @@ vier Seiten, alle drei Engines und alle 21 Geräte: `/home/harness/geraete-laeuf
 | H, F, K, A, X | 0 | 0 |
 | Hinweis Kontrast unter 4,5:1 | 2 Farbpaare (126 Vorkommen) | 0 |
 | Hinweis Zeilen über 90 Zeichen | 3 Absätze (53) | 1 (21) – der Ordnerbaum im Bestand, keine Fließtextzeile |
+
+*Korrektur (22.10.2026):* „0 Befunde“ gilt nur für diese vier Seiten. Die unabhängige Prüfung von f085f12 mit 20
+Seiten (Prüfdurchgang, Prüfformular, Formular-Editor, Artikel anlegen, Meldungen, tiefere Ordner) fand im Modul weiter
+Tippflächen unter 44 px, waagerechten Bildlauf in Firefox und – neu durch diese Nachbesserung – sich überlappende
+Sortierköpfe in der engen Tabelle; siehe „Zweite Nachbesserung nach der Geräte-Prüfung“.
 
 Fotos angesehen: iPhone (Übersicht ganz, Bestand mit Legende), Tablet quer (Übersicht, leerer Ordner mit
 Unterordnern, Ordner mit Artikeln und Filtern), Laptop 1280 (Firefox), Superwide (Übersicht zweispaltig, Katalog). Dazu

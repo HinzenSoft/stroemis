@@ -71,6 +71,9 @@
      Nummer schon maskiert, etwa mit markiertem Suchtext (suche.js); sonst wird nr maskiert. */
   const nummerHtml = (label, nr, html) => `<span class="mat-ganz">${label} ${html === undefined ? esc(nr) : html}</span>`;
   const artNrHtml = (nr, html) => (nr ? ` · ${nummerHtml("Art.-Nr.", nr, html)}` : "");
+  // Die Artikelnummer allein, leise hinter dem Namen (Listen, Treffer, Meldungen): ebenfalls als ein Stück – „GS-S“
+  // brach sonst in der engen Tabelle am Strich um (Geräte-Prüfung vom 22.10.2026).
+  const artNrKurz = (nr) => (nr ? ` <span class="muted mat-ganz">${esc(nr)}</span>` : "");
   window.MatProdukt = { name: produktName, nameHtml, zusatzHtml, zusatz: produktZusatz, max: BESCHREIBUNG_MAX,
                         artNr: artNrHtml, nummer: nummerHtml };
 
@@ -917,12 +920,15 @@
   async function dashboard() {
     const d = await api(`${API}/start`);
     const z = d.zaehlung;
-    // Nullen tragen „null“: Am Telefon rücken sie ans Ende und werden zu einer Zeile (material.css, Übersicht).
-    const kachel = (s, titel) => `<a class="mat-kachel s-${s}${z[s] ? "" : " null"}" href="/material/pruefungen?status=${s}"><strong>${z[s] || 0}</strong><span>${esc(titel)}</span></a>`;
+    // Nullen tragen „null“ und stehen hinten – in jeder Breite und schon im Dokument, damit Tab- und Vorlesereihenfolge
+    // der sichtbaren entsprechen (vorher schob CSS order sie nur am Telefon ans Ende; Geräte-Prüfung vom 22.10.2026).
+    // Am Telefon werden sie dazu zu einer Zeile (material.css, Übersicht).
+    const kachel = ([s, titel]) => `<a class="mat-kachel s-${s}${z[s] ? "" : " null"}" href="/material/pruefungen?status=${s}"><strong>${z[s] || 0}</strong><span>${esc(titel)}</span></a>`;
+    const kacheln = [["ueberfaellig", "überfällig"], ["neu", "neu (Eingangs\u00adprüfung)"], ["bald_faellig", `bald fällig (${d.schwelle_tage} Tage)`],
+      ["gesperrt", "gesperrt"], ["lebensdauer", "Lebensdauer erreicht"], ["einsatzbereit", "einsatzbereit"]];
     const bestandTeil = DARF.lesen ? `<div class="mat-kachelrahmen"><div class="mat-kacheln mat-statuskacheln">
         <div class="mat-kachel gesamt"><strong>${d.bestand}</strong><span>Artikel im Bestand</span></div>
-        ${kachel("ueberfaellig", "überfällig")}${kachel("neu", "neu (Eingangs\u00adprüfung)")}${kachel("bald_faellig", `bald fällig (${d.schwelle_tage} Tage)`)}
-        ${kachel("gesperrt", "gesperrt")}${kachel("lebensdauer", "Lebensdauer erreicht")}${kachel("einsatzbereit", "einsatzbereit")}
+        ${[...kacheln.filter(([s]) => z[s]), ...kacheln.filter(([s]) => !z[s])].map(kachel).join("")}
       </div></div>
       <div id="mat-runden"></div>
       <div class="mat-nebeneinander"><section class="section"><h2>Fälligkeiten je Ordner</h2>
@@ -1198,7 +1204,7 @@
   const sortWeiter = (sort, feld) => (sort.feld === feld ? { feld, richtung: sort.richtung === "auf" ? "ab" : "auf" } : { feld, richtung: "auf" });
   const sortParameter = (q, sort) => { if (sort && sort.feld) { q.set("sort", sort.feld); q.set("richtung", sort.richtung); } return q; };
   // Ein Produkt in Listen: Hersteller in eigener Spalte, hier Bild, Modell mit Beschreibung und Artikelnummer.
-  const produktZelle = (a) => `${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${nameHtml(a, true)}${zusatzHtml(a)}${a.article_no ? ` <span class="muted">${esc(a.article_no)}</span>` : ""}${demoMarke(a.demo)}`;
+  const produktZelle = (a) => `${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${nameHtml(a, true)}${zusatzHtml(a)}${artNrKurz(a.article_no)}${demoMarke(a.demo)}`;
 
   /* Drei Gestalten je nach Breite des Inhalts (material.css, „Lieferung 5 – Geräte: listen“): ab 821 px alle Spalten;
      601–820 px eine engere Tabelle – Seriennummer unter der Inventar-Nr., Hersteller über dem Produkt, nächste Prüfung
@@ -1206,11 +1212,13 @@
   function artikelTabelle(liste, opts) {
     opts = opts || {};
     const s = opts.sort || null;
-    const naechste = (a) => (a.status === "neu" ? "Eingangsprüfung" : a.lock_state !== "frei" || !a.next_due_on ? "" : fmtTag(a.next_due_on));
+    // Weiche Trennstellen in den längsten Wörtern der Liste: Zwischen 821 und 900 px Inhaltsbreite (Fold aufgeklappt,
+    // Tablet neben der Leiste) ragte die volle Tabelle sonst um wenige Pixel über den Rand (zweite Nachbesserung).
+    const naechste = (a) => (a.status === "neu" ? "Eingangs\u00adprüfung" : a.lock_state !== "frei" || !a.next_due_on ? "" : fmtTag(a.next_due_on));
     const gesperrte = opts.auswahl && liste.some((a) => a.lock_state !== "frei");
     return `${kartenKopf(ARTIKEL_SORT, s, opts.auswahl)}<table class="list mat-tabelle mat-karten mat-artikel">
       <thead><tr>${opts.auswahl ? '<th class="mat-wahlspalte"><label class="mat-wahl-feld"><input type="checkbox" id="mat-alle" class="mat-alle" aria-label="alle auswählen"></label></th>' : ""}
-        ${sortKopf("Inventar-Nr.", "inventar", s, { nach: kopfZusatz("Seriennummer", "serie", s, "schmal") })}${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: kopfZusatz("Hersteller", "hersteller", s, "schmal"), nach: opts.person ? kopfZusatz("Person", "", null, "eng") : "" })}${sortKopf("Seriennummer", "serie", s, { klasse: "mat-schmal-weg" })}
+        ${sortKopf("Inventar-Nr.", "inventar", s, { nach: kopfZusatz("Seriennummer", "serie", s, "schmal") })}${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: kopfZusatz("Hersteller", "hersteller", s, "schmal"), nach: opts.person ? kopfZusatz("Person", "", null, "eng") : "" })}${sortKopf("Serien\u00adnummer", "serie", s, { klasse: "mat-schmal-weg" })}
         ${opts.person ? '<th class="mat-eng-weg">Person</th>' : ""}${opts.pfad ? "<th>Ablage</th>" : ""}${sortKopf("Nächste Prüfung", "faellig", s, { klasse: "mat-schmal-weg" })}${sortKopf("Status", "status", s, { nach: kopfZusatz("Nächste Prüfung", "faellig", s, "schmal") })}${opts.pruefen ? "<th></th>" : ""}</tr></thead>
       <tbody>${liste.map((a) => `<tr data-id="${a.id}">
         ${opts.auswahl ? `<td class="mat-wahlspalte mat-k-wahl">${wahlFeld(a)}</td>` : ""}
@@ -1478,6 +1486,10 @@
   const TASTATUR_SUCHE = 'autocorrect="off" spellcheck="false" enterkeyhint="search"';
   // Im Telefon passte der volle Platzhalter nicht ins Feld (abgeschnitten) – dort ein kürzerer, der volle als Beschriftung.
   const KAT_SUCHE = "Produkte suchen: Hersteller, Modell, Bemerkung, Artikelnummer, Norm";
+  // Welcher Platzhalter passt, entscheidet die Fensterbreite – auch nach dem Drehen des Geräts, nicht nur beim Zeichnen.
+  const KAT_SCHMAL = matchMedia("(max-width: 640px)");
+  const katPlatzhalter = () => (KAT_SCHMAL.matches ? "Hersteller, Modell, Art.-Nr., Norm" : KAT_SUCHE);
+  KAT_SCHMAL.addEventListener("change", () => { const feld = document.getElementById("kat-q"); if (feld) feld.placeholder = katPlatzhalter(); });
   const TASTATUR_ADRESSE = 'inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"';
 
   /* Hinweise, die nur im title stehen, sieht ohne Maus niemand. Dort zeigt ein Tipp auf ein nicht bedienbares Element
@@ -1877,7 +1889,7 @@
     let laedt = false;
     ziel.scrollTop = 0;
     const zeile = (p, i) => `<div class="mat-treffer-produkt">${produktFoto(p)}<button type="button" class="mat-treffer-wahl" data-i="${i}">
-      <strong>${nameHtml(p)}</strong>${zusatzHtml(p)} <span class="muted">${esc(p.article_no || "")} · ${esc(p.category_name || "")}</span>${demoMarke(p.demo)}</button></div>`;
+      <strong>${nameHtml(p)}</strong>${zusatzHtml(p)} <span class="muted">${p.article_no ? `<span class="mat-ganz">${esc(p.article_no)}</span> · ` : ""}${esc(p.category_name || "")}</span>${demoMarke(p.demo)}</button></div>`;
     async function mehr() {
       if (laedt || (seite && liste.length >= gesamt)) return;
       laedt = true;
@@ -2511,7 +2523,7 @@
     function waehlen(p) {
       produkt = p;
       $("#an-produkt").hidden = false;
-      $("#an-produkt").innerHTML = `${produktFoto(p)}<strong>${nameHtml(p)}</strong>${zusatzHtml(p)} ${p.article_no ? `<span class="muted">${esc(p.article_no)}</span>` : ""} ${demoMarke(p.demo)}
+      $("#an-produkt").innerHTML = `${produktFoto(p)}<strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrKurz(p.article_no)} ${demoMarke(p.demo)}
         <span class="mat-art">${esc(MATERIALART[p.material_kind])}</span> <button class="lnk" type="button" id="an-anders">anderes Produkt</button>`;
       trefferLeeren($("#an-treffer"));
       $("#an-q").value = "";
@@ -2556,7 +2568,7 @@
       try {
         const liste = (await api(`${API}/meldungen?eigene=1&status=alle`)).meldungen.slice(0, 10);
         ziel.innerHTML = liste.length ? `<section class="section"><h2>Deine Produktmeldungen</h2><ul class="mat-meldeliste">
-          ${liste.map((m) => `<li>${meldestatusMarke(m.status)} <strong>${esc(meldungName(m))}</strong>${m.article_no ? ` <span class="muted">${esc(m.article_no)}</span>` : ""}
+          ${liste.map((m) => `<li>${meldestatusMarke(m.status)} <strong>${esc(meldungName(m))}</strong>${artNrKurz(m.article_no)}
             <span class="muted small">gemeldet am ${esc(fmtTag(m.created_at))}</span>
             ${m.status === "eingepflegt" && m.produkt ? `<button type="button" class="btn secondary small" data-act="meldung-waehlen" data-pid="${m.produkt.id}">Artikel davon anlegen</button>` : ""}
             ${m.status === "abgelehnt" ? `<div class="small">Abgelehnt: <span class="mat-text">${esc(m.answer)}</span></div>` : ""}</li>`).join("")}</ul>
@@ -2609,7 +2621,7 @@
     let nachladen = null;
     // Enge Tabelle und Karte (Lieferung 5): der Hersteller klein über dem Produkt, die kurzen Angaben zu zweit.
     const produktZeile = (x) => `<tr><td data-l="Hersteller" class="mat-schmal-weg">${esc(x.manufacturer || "")}</td>
-          <td data-l="Produkt" class="mat-k-titel">${x.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(x.manufacturer)}</div>` : ""}${x.vorschau ? `<img class="mat-mini" src="${esc(x.vorschau)}" alt="" loading="lazy">` : ""}<a href="/material/katalog/produkt/${x.id}"><strong>${nameHtml(x, true)}</strong></a>${zusatzHtml(x)}${x.article_no ? ` <span class="muted">${esc(x.article_no)}</span>` : ""}${demoMarke(x.demo)}</td>
+          <td data-l="Produkt" class="mat-k-titel">${x.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(x.manufacturer)}</div>` : ""}${x.vorschau ? `<img class="mat-mini" src="${esc(x.vorschau)}" alt="" loading="lazy">` : ""}<a href="/material/katalog/produkt/${x.id}"><strong>${nameHtml(x, true)}</strong></a>${zusatzHtml(x)}${artNrKurz(x.article_no)}${demoMarke(x.demo)}</td>
           <td data-l="Kategorie">${esc(x.category_name || "")}</td><td data-l="Materialart" class="mat-k-halb">${esc(MATERIALART[x.material_kind])}</td>
           <td data-l="Intervall" class="mat-k-halb">${x.intervall.monate ? `${x.intervall.monate} Mon.` : "–"}</td>
           <td data-l="Lebensdauer" class="mat-k-halb">${x.lifetime_years ? `${x.lifetime_years} J.` : "–"}</td><td data-l="Bestand" class="mat-k-halb">${x.bestand}</td></tr>`;
@@ -2695,7 +2707,7 @@
               <div id="kat-doks"><p class="help">Wird geladen …</p></div>
               ${DARF.katalog ? '<button class="btn secondary small" data-act="dok-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Dokument<span class="k-anlegen"> anlegen</span></span></button>' : ""}</div></div>`
           : (kats.length ? "" : leer(DARF.katalog ? "Noch keine Kategorien – mit „Kategorie anlegen“." : "Noch keine Kategorien."))}
-        <div class="mat-suchzeile"><input type="search" id="kat-q" placeholder="${matchMedia("(max-width: 640px)").matches ? "Hersteller, Modell, Art.-Nr., Norm" : KAT_SUCHE}"
+        <div class="mat-suchzeile"><input type="search" id="kat-q" placeholder="${katPlatzhalter()}"
           aria-label="${KAT_SUCHE}" title="${KAT_SUCHE}" value="${esc(q)}" autocomplete="off" ${TASTATUR_SUCHE}></div>
         <div id="kat-liste"></div>`;
       let los = null;
@@ -2923,7 +2935,7 @@
         const p = (await api(`${API}/produkte/artikelnummer?${new URLSearchParams({ nr, ausser: ausser || "" })}`)).produkt;
         if (feld.value.trim() !== nr) return;          // inzwischen weitergetippt
         // Der Name im Link, der Zusatz grau dahinter – wie überall im Modul, auch in dieser Warnzeile.
-        hilfe.innerHTML = p ? `<span class="mat-warn">Schon vergeben: <a href="/material/katalog/produkt/${p.id}" target="_blank" rel="noopener">${nameHtml(p)}</a>${zusatzHtml(p)}${p.article_no ? ` (${esc(p.article_no)})` : ""}</span>` : "";
+        hilfe.innerHTML = p ? `<span class="mat-warn">Schon vergeben: <a href="/material/katalog/produkt/${p.id}" target="_blank" rel="noopener">${nameHtml(p)}</a>${zusatzHtml(p)}${p.article_no ? ` <span class="mat-ganz">(${esc(p.article_no)})</span>` : ""}</span>` : "";
       } catch (e) { hilfe.innerHTML = ""; }
     };
     feld.addEventListener("input", () => { clearTimeout(los); los = setTimeout(pruefen, 300); });
@@ -3117,7 +3129,7 @@
       ${rueckrufAbschnitt(p)}
       <div class="mat-spalten">
         <section class="section"><h2>Stammdaten</h2><dl class="mat-daten">
-          ${zeile("Artikelnummer", p.article_no ? esc(p.article_no) : '<span class="muted">–</span>')}
+          ${zeile("Artikelnummer", p.article_no ? `<span class="mat-ganz">${esc(p.article_no)}</span>` : '<span class="muted">–</span>')}
           ${zeile("Materialart", esc(MATERIALART[p.material_kind] || p.material_kind))}
           ${zeile("Norm", p.norm ? esc(p.norm) : '<span class="muted">–</span>')}
           ${zeile("Prüfintervall", p.intervall.monate ? `${p.intervall.monate} Monate <span class="muted">(${esc(p.intervall.quelle)})</span>` : '<span class="mat-warn">keins</span>')}
@@ -4813,7 +4825,7 @@
   // nicht zu unterscheiden. In der Liste der Meldungen bleibt es „Bemerkung“ wie im Dialog „Fehlendes Produkt melden“.
   function meldeDetails(m, notizTitel = "Bemerkung") {
     const zeile = (t, w) => `<dt>${esc(t)}</dt><dd>${w}</dd>`;
-    const daten = [m.article_no ? zeile("Artikelnummer", esc(m.article_no)) : "", m.norm ? zeile("Norm", esc(m.norm)) : "",
+    const daten = [m.article_no ? zeile("Artikelnummer", `<span class="mat-ganz">${esc(m.article_no)}</span>`) : "", m.norm ? zeile("Norm", esc(m.norm)) : "",
       m.kategorie ? zeile("Kategorie (Vorschlag)", esc(m.kategorie.pfad)) : "",
       m.links.length ? zeile("Links", m.links.map((l) => `<a href="${esc(l)}" target="_blank" rel="noopener noreferrer">${esc(kurzLink(l))}</a>`).join("<br>")) : "",
       m.note ? zeile(notizTitel, `<span class="mat-text">${esc(m.note)}</span>`) : ""].join("");
@@ -4843,7 +4855,7 @@
       <div class="mat-meldung-kopf"><h2>${esc(meldungName(m))}</h2>${meldestatusMarke(m.status)}</div>
       <p class="muted small">gemeldet${wer(m.created_by_name)} am ${esc(fmtTag(m.created_at))}${meldeOrdner(m) ? ` · für ${esc(meldeOrdner(m))}` : ""}</p>
       ${meldeDetails(m)}
-      ${m.treffer ? `<p class="notice">Steht inzwischen im Katalog: <a href="/material/katalog/produkt/${m.treffer.id}">${nameHtml(m.treffer)}</a>${zusatzHtml(m.treffer)}${m.treffer.article_no ? ` <span class="muted">${esc(m.treffer.article_no)}</span>` : ""}
+      ${m.treffer ? `<p class="notice">Steht inzwischen im Katalog: <a href="/material/katalog/produkt/${m.treffer.id}">${nameHtml(m.treffer)}</a>${zusatzHtml(m.treffer)}${artNrKurz(m.treffer.article_no)}
         ${bearbeiten ? `<button type="button" class="btn secondary small" data-act="treffer" data-id="${m.id}">Zuordnen</button>` : ""}</p>` : ""}
       ${m.status === "eingepflegt" ? `<p class="mat-meldung-ergebnis">Eingepflegt${wer(m.resolved_by_name)} am ${esc(fmtTag(m.resolved_at))}:
         ${m.produkt ? `<a href="/material/katalog/produkt/${m.produkt.id}">${nameHtml(m.produkt)}</a>${zusatzHtml(m.produkt)}` : '<span class="muted">Produkt inzwischen gelöscht</span>'}
@@ -5046,7 +5058,7 @@
         produktTreffer($("#zu-treffer", body), q, (p) => {
           gewaehlt = p;
           $("#zu-gewaehlt", body).hidden = false;
-          $("#zu-gewaehlt", body).innerHTML = `<strong>${nameHtml(gewaehlt)}</strong>${zusatzHtml(gewaehlt)} <span class="muted">${esc(gewaehlt.article_no || "")}</span>`;
+          $("#zu-gewaehlt", body).innerHTML = `<strong>${nameHtml(gewaehlt)}</strong>${zusatzHtml(gewaehlt)}${artNrKurz(gewaehlt.article_no)}`;
           trefferLeeren($("#zu-treffer", body));
           $("#zu-ok", body).disabled = false;
         }, '<p class="help">Kein Produkt gefunden.</p>');
@@ -5345,7 +5357,7 @@
   const gruendeHtml = (g) => (g && g.length ? `<ul class="mat-gruende">${g.map((x) => `<li data-code="${esc(x.code)}">${esc(x.text)}</li>`).join("")}</ul>` : "");
   const hinweiseHtml = (h) => (h && h.length ? `<ul class="mat-hinweise">${h.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "");
   const angabeAus = (w) => [w.hersteller, w.modell, w.artikelnummer].filter(Boolean).join(" ");
-  const produktKurz = (p) => `${esc(p.name)}${p.article_no ? ` <span class="muted">${esc(p.article_no)}</span>` : ""}${demoMarke(p.demo)}`;
+  const produktKurz = (p) => `${esc(p.name)}${artNrKurz(p.article_no)}${demoMarke(p.demo)}`;
   const importFehler = (e) => (e.status === 413 ? IMPORT_ZU_GROSS : e.message);
   // Ohne Seriennummernspalte (Entscheidung vom 20.10.2026): der Satz am Kästchen über „Übernehmen“. Die Zeilen der
   // Nacharbeit bekommen ihre STR-Nummer dort später ohne weitere Frage – darum zählen sie hier mit.
@@ -5797,7 +5809,7 @@
     // Produkt zuordnen – für eine Angabe (Karte) oder für die ausgewählten Zeilen.
     function zuordnenDialogNa(titel, hilfe, vorschlaege, ziel, aktuell) {
       dialog(`<h2>${esc(titel)}</h2><p class="help">${esc(hilfe)}</p>
-        ${vorschlaege.length ? `<div class="mat-feldkopf">Vorschläge</div><div class="mat-treffer mat-na-vorschlaege">${vorschlaege.map((p, i) => `<div class="mat-treffer-produkt">${p.vorschau ? `<img class="mat-mini" src="${esc(p.vorschau)}" alt="">` : ""}<button type="button" class="mat-treffer-wahl" data-v="${i}"><strong>${esc(p.name)}</strong> <span class="muted">${esc(p.article_no || "")}</span>${demoMarke(p.demo)}</button></div>`).join("")}</div>` : ""}
+        ${vorschlaege.length ? `<div class="mat-feldkopf">Vorschläge</div><div class="mat-treffer mat-na-vorschlaege">${vorschlaege.map((p, i) => `<div class="mat-treffer-produkt">${p.vorschau ? `<img class="mat-mini" src="${esc(p.vorschau)}" alt="">` : ""}<button type="button" class="mat-treffer-wahl" data-v="${i}"><strong>${esc(p.name)}</strong>${artNrKurz(p.article_no)}${demoMarke(p.demo)}</button></div>`).join("")}</div>` : ""}
         <label for="nz-q">Produkt suchen</label>
         <div class="mat-produktwahl"><input type="search" id="nz-q" autocomplete="off" ${TASTATUR_SUCHE}><div id="nz-treffer" class="mat-treffer"></div></div>
         <div id="nz-gewaehlt" class="mat-gewaehlt" hidden></div>
@@ -5822,7 +5834,7 @@
             const q = $("#nz-q", body).value.trim();
             if (!q) { trefferLeeren($("#nz-treffer", body)); return; }
             produktTreffer($("#nz-treffer", body), q, (p) => {
-              zeigeWahl(p.id, `<strong>${nameHtml(p)}</strong>${zusatzHtml(p)} <span class="muted">${esc(p.article_no || "")}</span>${demoMarke(p.demo)}`);
+              zeigeWahl(p.id, `<strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrKurz(p.article_no)}${demoMarke(p.demo)}`);
               trefferLeeren($("#nz-treffer", body));
               $("#nz-ok", body).focus();          // der gewählte Treffer ist weg – sonst landete der Fokus auf <body>
             },

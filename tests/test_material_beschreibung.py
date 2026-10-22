@@ -478,16 +478,16 @@ def test_oberflaeche_statisch():
     assert not re.search(r"\$\{zusatzHtml\([^)]*\)\}(</strong>|</a>)", js)      # nie im Link, nie in <strong>
     # Die Katalogliste wie im Bildschirmfoto: Name fett im roten Link, dann grau Zusatz und Artikelnummer.
     for stelle in ('<a href="/material/katalog/produkt/${x.id}"><strong>${nameHtml(x, true)}</strong></a>'
-                   '${zusatzHtml(x)}${x.article_no ? ` <span class="muted">${esc(x.article_no)}</span>` : ""}',
-                   "${nameHtml(a, true)}${zusatzHtml(a)}${a.article_no",
+                   '${zusatzHtml(x)}${artNrKurz(x.article_no)}',
+                   "${nameHtml(a, true)}${zusatzHtml(a)}${artNrKurz(a.article_no)}",
                    '<h1>${nameHtml(p)}${zusatzHtml(p)} ${demoMarke(p.demo)}</h1>',
                    "<strong>${nameHtml(pr.produkt)}</strong>${zusatzHtml(pr.produkt)}${artNrHtml(",
                    '<a href="/material/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}'
                    '${artNrHtml(p.article_no)}',
-                   '<strong>${nameHtml(p)}</strong>${zusatzHtml(p)} <span class="muted">${esc(p.article_no || "")} · ',
+                   '<strong>${nameHtml(p)}</strong>${zusatzHtml(p)} <span class="muted">${p.article_no ? `<span class="mat-ganz">${esc(p.article_no)}</span> · ` : ""}',
                    # Hinweis „Schon vergeben“ (Produkt- und Meldedialog) – bis zur Prüfung vom 18.10.2026 der ganze
                    # Name samt Zusatz im roten Link (esc(p.name)).
-                   'target="_blank" rel="noopener">${nameHtml(p)}</a>${zusatzHtml(p)}${p.article_no ? ` ('):
+                   'target="_blank" rel="noopener">${nameHtml(p)}</a>${zusatzHtml(p)}${p.article_no ? ` <span class="mat-ganz">('):
         assert stelle in js, stelle
     assert 'rel="noopener">${esc(p.name)}</a>' not in js
     # Im Rückruf-Kasten der Übersicht (hellroter Grund) ein Viertel zum Textgrau hin – sonst 4,48:1, unter WCAG AA.
