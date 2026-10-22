@@ -3655,6 +3655,281 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
        zurück, „erledigt“ zeigt die grauen Marken „zurückgezogen“. Keine Konsolenfehler, kein waagerechtes Scrollen, je
        Dialog höchstens ein roter Knopf.
 
+## Phase 4 · Lieferung 1 – Auswertung und Betriebsreife (22.10.2026)
+
+Lieferung 1 der Phase 4 bringt den **Jahresbericht je Zweig** (Seite, PDF, CSV-Prüfungsliste – Entwurf
+`planung/material-phase4/entwurf_l1.md`, Fassung 2 nach den Kritiken „Ablauf“ und „Sicherheit“, mit den Entscheidungen
+des Nutzers vom 22.10.2026, Abschnitt F), das **Mailfehler-Protokoll** mit dem Kasten „Mailversand“ auf der Übersicht
+und zwei Nachbesserungen außerhalb des Entwurfskerns: **C1** Wiki und Nutzerverwaltung am Finger, **C2** Datumsfelder
+als deutsche Textfelder. Gebaut in drei Paketen – KERN K1 (Bericht), KERN K2 (Schema 19, Versand-Wrapper, Routen) und
+OBERFLÄCHE (`material.js`, CSS, C1, C2, Doku). Schemaversion 19, keine neuen Abhängigkeiten. Stand: wartet auf die
+Prüfungen und die Freigabe.
+
+### Neu
+
+- **Jahresbericht je Zweig** (`services/bericht.py`, `routes_bericht.py`, Vorlage `pdf/bericht.html`, Ansicht
+  `bericht` in `material.js`): für einen Ordnerzweig – in der Regel die Gliederung – und ein Kalenderjahr. Einstieg im
+  Ordnerkopf über das Untermenü „Export“ → „Jahresbericht“ (nur mit Grundrecht, nicht an Systemordnern). Die Seite
+  `/material/ordner/<fid>/bericht` hat Jahr-Auswahl (frühestes Jahr aus Anlage oder Prüfung bis heute, höchstens 15),
+  Haken „Prüfer nennen“ und die grauen Knöpfe „PDF“ und „Prüfungen (CSV)“; Auswahl und Haken stehen in der Adresse
+  (`?jahr=&pruefer=1`). Blöcke in der Reihenfolge des Entwurfs (A4): Kopf (Zweig, Gliederung, Stichtag, Ersteller,
+  Empfänger „Gliederung intern“, Artikel in der Sicht, DEMO-Zahl), Bestand zum Stichtag (Statuszeilen genau nach
+  `status.STATUS`, verloren gemeldet, je Kategorie der obersten Ebene, je Unterordner nach Heimat), Bewegungen,
+  Prüfungen (je Art, je Ergebnis, mit Mangel, mit kritischem Mangel, offene Entwürfe) mit Prüfabdeckung und der Liste
+  der nicht geprüften Artikel, Prüfdurchgänge mit Ausnahmen, Prüfer (nur mit Haken: je Name und Urkundennummer, dazu
+  „Aussonderungen durch“), Sperren und Freigaben (aus dem Journal: nur der Übergang frei → gesperrt/verloren),
+  Aussonderungen mit Grundart, Mangelmeldungen (über `mangel.stand`, auch „wieder offen“), Rückrufe mit betroffenen
+  Artikeln im Zweig, Ausblick über zwölf Monate (fällig je Monat, Lebensende textil), Fußsätze. Jede Zelle über
+  `esc()`, keine DOM-ids aus Daten, Rückruf-URL nur als Text; am Telefon Karten (Containerabfrage `mat-seite`), die
+  Zahlentabellen wie im PDF, zwei nebeneinander ab 700 px Inhaltsbreite. Die Seite zeigt Listen ganz; das PDF kürzt
+  jede Liste auf 500 Zeilen (Hinweis auf der Seite, sobald eine Liste länger ist). 400 (Jahr außerhalb 1990…2100),
+  403 und 404 kommen als Meldung, die Auswahl bleibt bedienbar.
+- **PDF** `GET /material/ordner/<fid>/bericht-<jahr>.pdf` (mit Haken `…-mit-pruefern.pdf`): PDF/A-3b wie die
+  Protokolle, nicht festgeschrieben (kein Stempel, keine Unterschrift, keine Protokoll-ID), Titel „Jahresbericht
+  Material <Zweig> <Jahr>“ (mit „[DEMO] “, sobald DEMO-Artikel enthalten sind), Fuß „… · kein Prüfnachweis“, Dateiname
+  `Jahresbericht_<Ordner>_<Jahr>[-mit-pruefern].pdf` mit Präfix `DEMO-`. **CSV**
+  `GET /material/export/<fid>-pruefungen-<jahr>.csv` (`…-mit-pruefern.csv`): eine Zeile je Prüfung und Aussonderung des
+  Jahres, berichtigte Originale ausgeschlossen, Spalten nach `export.VERZEICHNIS_SPALTEN` plus Art, Prüfdurchgang,
+  Protokoll-ID, Berichtigung von, Mängel, kritischer Mangel, Prüfer und Urkundennummer (nur mit Haken), DEMO;
+  Formelschutz, „;“, CRLF, BOM, ohne Kappung.
+- **Rechte** – eine Funktion `bericht_zugang` für Seite, JSON, PDF und CSV in der Reihenfolge des Exports: 401 →
+  403 ohne Modulzugang → 404 nicht sichtbar, unbekannt oder Systemordner → 403 ohne Grundrecht (externer Prüfer).
+  Führungskraft (lesen) und Materialwart (verwalten) bekommen ihn, die Material-Verwaltung über ihre Allsicht. Eine
+  Sichtberechnung je Anfrage; INFO-Logzeile „Bericht Ordner <fid> Jahr <jahr> Konto <id> pruefer=<0/1>“ ohne Namen,
+  keine Journalzeile; alle Antworten `no-store`.
+- **Personen**: Ohne den Haken enthält keine Ausgabe einen Personennamen oder eine Urkundennummer außer dem Ersteller –
+  keine Melder, keine Durchgangs-Eröffner, keine Aussonderer, keine Zuordnungen. Mit Haken Prüferliste, „durch“ bei
+  Aussonderungen, Prüfer-Spalten in der CSV und der Dateiname „-mit-pruefern“.
+- **Mailfehler-Protokoll** (`services/mailprotokoll.py`, Tabelle `mat_mail_fehler`, Schritt 19): Jede Modul-Mail –
+  Erinnerung, Mangel, Änderungsantrag, Produktmeldung, Rückruf – geht über `senden()`; nimmt der Mailserver sie nicht an,
+  entsteht eine Zeile mit Art, Klasse (Empfänger abgewiesen, Verbindung, Anmeldung, abgelehnt, Ausnahme, sonstiges),
+  Bezug, Gliederung, Kontoverweis, Rolle, Betreff (160 Zeichen) und der gereinigten Serverantwort (300 Zeichen, ohne
+  Adressen und ohne Mailserver – Platzhalter „[Adresse]“, „[Mailserver]“; der CHECK `instr(meldung,'@') = 0` ist das
+  Netz). Erfolge werden nicht protokolliert. Stille einheitlich im Wrapper: kein Mailserver, Umgebungssperre (dev),
+  DEMO-Artikel oder DEMO-Adresse → kein Versand, keine Zeile, nur eine Logzeile (Entscheidung Nr. 6 – gilt damit neu
+  auch für Rückruf- und Produktmeldungs-Mails). Sammelmails bekommen je betroffener Gliederung eine Zeile (Nr. 5).
+  Gelingt später eine Erinnerung an dasselbe Konto, schließt sie dessen offene Erinnerungs-Fehler („nachgeholt“).
+- **Kasten „Mailversand“** auf der Übersicht unter dem Laufstand (`mailKasten` in `material.js`; Block `mailfehler`
+  aus `/api/material/start`, `null` heißt kein Kasten): Material- und Plattform-Verwaltung sehen alles, wer einen Zweig
+  verwaltet, die Zeilen seiner Gliederungen ohne die Rollen, die nur die Verwaltung angehen (verwaltung,
+  antragsteller, melder). Tabelle der letzten 20 offenen (Zeit, Art, Fehler als Text, Empfänger mit Rolle – nie eine
+  Adresse –, Bezug als Link ins Modul, Betreff, Meldung), je Zeile „Erledigt“ (grau; `POST
+  /api/material/mailfehler/<id>/erledigt`, die Zeile verschwindet, 404 als Meldung), im Untermenü „Mehr“ des Kastens
+  „Alle erledigt“ (`POST …/alle-erledigt`, Antwort mit Zahl); Dauerzeile „Kein Mailserver eingerichtet – keine
+  Modul-Mail geht hinaus“ für die Verwaltung; Hinweis „Erinnerungen holt der nächste Lauf nach; alles andere sagst du
+  den Betroffenen selbst – ein erneuter Versand ist nicht möglich.“ Der Laufstand zeigt weiter die Zahl der
+  Fehlschläge, die Namen stehen nur noch im Kasten (`fehlgeschlagen_an` entfällt).
+- **Bezug-Links** (Oberfläche, vom Server aus Kennungen gebaut – `mailprotokoll._bezuege`, nie aus Datenbanktexten):
+  Artikel und Mangelmeldung → Artikel (mit Inventarnummer), Ordner und Erinnerung → Ordner bzw. Gliederung (mit
+  Namen), Rückruf → Produktseite, Änderungsantrag → Anträge, Produktmeldung → Meldungen; was es nicht mehr gibt, bleibt
+  Text ohne Link.
+- **Pflege und Löschkonzept**: Zeilen älter als 13 Monate, erledigte älter als 3 Monate und Waisen (Kontoverweis ohne
+  Konto) löscht der Tageslauf und die Startpflege; `loeschung.konto_loeschen_vorbereiten` nimmt die Zeilen des Kontos
+  mit (Absatz im Kopf von `loeschung.py`, README „Austritt und Löschen“, Verfahrensverzeichnis-Vorschlag
+  „Mailfehler-Protokoll: Arbeitsdaten, 13 Monate, mit dem Konto gelöscht“).
+- **CLI** `flask material remind`: „Gescheitert – an wen, steht im Mailfehler-Protokoll auf der Übersicht“; die
+  Pflegezeile nennt die entfernten Mailfehler-Zeilen.
+- **C1 – Wiki und Nutzerverwaltung am Finger** (`app.css`, `admin.html`; nur bei `(pointer: coarse)`, am Rechner
+  unverändert; Befunde der Geräte-Prüfungen vom 21./22.10.2026 außerhalb des Moduls): Kopfknöpfe der Wiki-Seite (☰,
+  💬, Teilen, ⋯: 30 → 44 px, bei Bedarf in einer zweiten Reihe), Umschalter Lesen/Bearbeiten (26 → 44), „Neue Seite“
+  und Papierkorb über dem Seitenbaum (28 → 44), „☰ Seiten“, Seitensymbol und Angaben-Knopf unter dem Titel, Anker „#“
+  an Überschriften, Zeilenknöpfe im Seitenbaum (20 → 44), Links der Liste „Unterseiten“, Reiter (Kommentare,
+  Nutzerverwaltung); Nutzerverwaltung: Kopfknöpfe (36 → 44), Auswahlfelder der Rechte-Matrix (26–33 → 44),
+  Zeilenknöpfe „Bearbeiten“, „Reset-Mail“, „Löschen“ (28 → 44). Die Wiki-Schublade ist zugeklappt auch unsichtbar
+  (`visibility`, nach der Fahrt) – sie lag sonst 320 px links neben dem Fenster und fing den Tab-Fokus. Die
+  Aktionsspalte der Nutzertabelle (jetzt `col.col-aktionen`) ist zwischen 861 und 1100 px 112 px breit – die Knöpfe
+  ragten dort 2 px über den Fensterrand (waagerechter Bildlauf auf dem aufgeklappten Fold).
+- **C2 – Datumsfelder als deutsche Textfelder** (`material.js`, Muster `datumFeld`/`datumWert` wie Freigaben und
+  Artikelfelder): Aussonderungsdatum (Hilfetext „Frühestens <letzte Prüfung | Herstellung | Erfassung>, spätestens
+  heute“), „Gültig ab“ beim Hinzufügen von Dokumenten und einer neuen Version, „Nächste Prüfung“ im Prüfformular
+  (Hilfetext „frühestens morgen, spätestens <Intervall>“; ein Tippfehler bricht das Festschreiben mit Toast ab – vorher
+  wurde daraus still „spätestens“; außerhalb der Grenzen ebenfalls Toast, der Server prüft noch einmal; sessionStorage
+  weiter ISO) und Prüfpunkte der Art „Datum“ (TT.MM.JJJJ im Feld, ISO an den Server; ungültig bleibt rot im Feld und
+  wird nicht gesendet). Serverseitig (`pruefung.aussondern`): das Aussonderungsdatum liegt nicht vor der letzten
+  abgeschlossenen Prüfung und nicht vor dem Herstelldatum (bei einer Monatsangabe zählt der erste Tag) – 409 mit
+  Klartext; Zukunft und „vor der Erfassung“ wie bisher 400.
+
+### Migration
+
+- **Schritt 19**, Schemaversion 19, läuft beim Start von selbst, rein additiv und wiederholbar (nur `IF NOT EXISTS`):
+  Tabelle `mat_mail_fehler` mit CHECKs für Art, Klasse, Bezugsart und Rolle, Längen 160/300, `instr(meldung,'@') = 0`,
+  `konto_ref <> ''`, `(erledigt_at IS NULL) = (erledigt_von_name IS NULL)`, `folder_id REFERENCES mat_folder(id) ON
+  DELETE SET NULL`; Indizes (erledigt_at, created_at), (folder_id), (konto_ref); Trigger `mat_mail_fehler_fest`
+  (alle Felder außer erledigt_* unveränderlich) und `mat_mail_fehler_ordner` (folder_id darf nur auf NULL gehen – so
+  kommt das ON DELETE SET NULL des Ordners durch); dazu die Indizes für den Bericht `idx_mat_inspection_inspected_on`
+  und `idx_mat_audit_entity_action`. Kein Umbau, keine Zeilenänderung; zweiter Lauf ohne Änderung. Frisch, 18 → 19
+  (`bis_schritt(18)`) und 7 → 19 (`MATERIAL_KOPIE_STAND_7`, nur bei gesetzter Kopie) geprüft; die Startpflege auf einer
+  Datenbank vor Schritt 19 läuft über den Tabellen-Guard ohne Fehler.
+- **Neue Abhängigkeiten: keine.**
+
+### Entscheidungen
+
+Vom Nutzer am 22.10.2026 (Entwurf Abschnitt F):
+
+1. Inhalt des Berichts: **alle Blöcke** (Bestand und Bewegungen; Prüfungen mit Prüfabdeckung; Durchgänge, Sperren,
+   Aussonderungen, Mängel; Rückrufe und Ausblick über zwölf Monate).
+2. Empfänger: **Gliederung intern** (Titel „Jahresbericht Material <Zweig> <Jahr>“, Fußtext für den internen Gebrauch,
+   kein Nachweis-Charakter).
+3. Personennamen **nur mit Haken „Prüfer nennen“**; Dateiname „-mit-pruefern“.
+4. **DEMO einbeziehen und kennzeichnen** (wie der CSV-Export) – sonst wäre der Bericht auf dev leer.
+5. Mailfehler-Sicht: **MV/PV alles, Zweig-Verwalter ihre Zeilen, Sammelmails je betroffener Gliederung eine Zeile.**
+6. Versand-Wrapper hält **alle fünf Mailarten einheitlich still** (Sperre, DEMO, kein Mailserver) – gilt neu auch für
+   Rückruf- und Produktmeldungs-Mails auf dev.
+7. Zeitraum **Kalenderjahr**, Bestand zum **Stichtag heute**.
+8. **C2 in dieser Lieferung** (mit Grenzprüfung).
+
+Vorgaben des Baus, noch zu bestätigen (siehe „Zu prüfen“): Schrift DLRG Univers im Bericht; Aufbewahrung 13 Monate,
+erledigte 3 Monate; kein „Erneut senden“; Kappung 500 Zeilen im PDF; Jahr-Auswahl bis 15 Jahre; keine eigene
+Mailfehler-Seite.
+
+### Abweichungen vom Konzept, mit Begründung
+
+- Der Bericht ist **kein Nachweis** (Fußsatz „kein Prüfnachweis – Nachweise sind die Protokolle“) und wird wie der
+  Lebenslauf auf Abruf gesetzt, nicht festgeschrieben: Zahlen ändern sich mit Berichtigungen rückwirkend, ein Status
+  zum 31.12. lässt sich nicht rekonstruieren (Status wird nie gespeichert) – Bestandszahlen gelten daher zum Stichtag
+  heute, Ereignisse für das Kalenderjahr.
+- **Zuordnung nach heutiger Heimat** (wie Export und Durchgang): Artikel, die den Bereich verlassen haben, fehlen;
+  hinzugekommene bringen ihre Historie mit (Fußsatz).
+- **Mailtexte werden nicht gespeichert** – deshalb kein „Erneut senden“; Erinnerungen wiederholt der nächste Lauf von
+  selbst, alles andere sagt der Verwalter den Betroffenen.
+
+### Abweichungen vom Bauentwurf
+
+KERN K1 (Bericht):
+
+1. Jahr und Haken im **Pfad der Dateirouten** (`bericht-<jahr>.pdf`, `-pruefungen-<jahr>.csv`, eigener Pfad
+   `-mit-pruefern`) statt als Abfrageparameter – der Dateiname sagt, was weitergegeben wird; `<int:jahr>` wird zusätzlich
+   gegen 1990…2100 geprüft (400 als Fehlerseite).
+2. Sperrart „sonst“ heißt **„Sperre durch Prüfer ohne Prüfung“** (nicht „durch Materialwart“): Ohne Prüfung sperrt nur
+   ein Prüfer. Sperrdatum in der Liste ist der deutsche Kalendertag des UTC-Zeitstempels.
+3. „davon fällig“ je Kategorie nach `bestand.FAELLIG` (überfällig, Lebensdauer, neu, bald fällig) – dieselbe Regel wie
+   die Fälligkeitenliste; offene Entwürfe: Entwürfe mit Prüftag im Jahr; Prüfabdeckung zählt nur Artikel des Bestands
+   (eine im Jahr ausgesonderte Prüfung zählt in „gesamt“, nicht in der Abdeckung); Gelöschte über das Journal
+   „geloescht“ mit Heimat laut Vorher.
+4. Aufschlüsselung je Unterordner: Zeile „<Zweig> (direkt)“, Unterordner der ersten Ebene in Baumreihenfolge,
+   Untergliederungen mit Kennzeichen „Gliederung“, Systemordner ohne Zeile, Ausgesonderte ohne Herkunft unter
+   „<Zweig> (ohne Herkunftsordner)“.
+5. CSV: eine Zeile je Prüfung **und** Aussonderung (Spalte „Art“), berichtigte Originale ausgeschlossen wie in den
+   Zahlen, „Berichtigung von“ nennt das Original.
+6. Kappungshinweis im PDF „… die vollständige Liste zeigt die Berichtsseite (höchstens 500 Zeilen im PDF)“ – nicht „in
+   der CSV“: nicht geprüfte Artikel, Sperren und Meldungen stehen nicht in der Prüfungs-CSV.
+7. Ein heute laufender Rückruf steht auch im Bericht eines früheren Jahres (Regel „angelegt oder beendet im Jahr oder
+   heute laufend“ wörtlich); die Monate des Ausblicks beginnen mit dem laufenden Monat.
+8. `rechte.artikel_filter(…, s=None)` nimmt eine schon gerechnete Sicht an (additiv); `services.antwort_privat`
+   (no-store) aus `routes_export._privat` gezogen; `bericht_zugang` antwortet auf `/api/…` mit JSON (401 statt
+   Umleitung). Kennung `"jahr"` auch in `test_material_ueberblick` und `test_material_stufen` (laufen alle Routen durch).
+
+KERN K2 (Mailfehler):
+
+9. **Zweiter Trigger** `mat_mail_fehler_ordner` statt `folder_id` in `mat_mail_fehler_fest`: Ein BEFORE-UPDATE-OF-Trigger
+   auf `folder_id` feuert auch bei `ON DELETE SET NULL` – mit `folder_id` in der Spaltenliste ließe sich kein Ordner mehr
+   löschen, an dem eine Zeile hängt.
+10. Zusätzlicher CHECK `(erledigt_at IS NULL) = (erledigt_von_name IS NULL)` – Abhaken ist immer mit Handelndem.
+11. `senden(…, demo=False)` als zusätzlicher Parameter („DEMO-Artikel“ kennt nur der Dienst); die Dienste geben auch
+    stille Mails an HINTERGRUND; Stille ohne Mailserver über `mailprotokoll.MAILSERVER` (Ersatzpunkt für Tests –
+    `mangel.MAILSERVER` und `antrag.MAILSERVER` entfallen).
+12. Rolle „verwaltung“ auch beim Rückruf (Rückfall ohne Verwalter); **eine Rolle je Erinnerungsmail** (verwalter >
+    verwaltung > inhaber > zugeordnet) statt je Eintrag.
+13. Trennungstest: Platzhalter `mfid` statt des Tupels („mailfehler“, „id“); „Alle erledigt“ ohne Sicht → **403** (statt
+    200 mit 0) – für Leser gibt es keinen Kasten, Schreibrouten antworten der Führungskraft 403.
+14. Testhelfer `mails_abfangen(dienst, f)` / `mails_zurueck(alt)` in `tests/test_material.py` ersetzen an einer Stelle
+    HINTERGRUND, `mailprotokoll.versand` und MAILSERVER; alle Mail-Testdateien nutzen ihn (`<dienst>.send_mail` gibt es
+    nicht mehr). Migrationstests nachgezogen (`test_migration_17`, `test_migration_18`). `senden` innerhalb einer
+    Transaktion: Logzeile statt Ausnahme, der Versand läuft, die Zeile entfällt.
+15. README: Die Löschkonzept-Sätze stehen bei „Austritt und Löschen“ und beim Pflegeteil der Erinnerungsmails (der
+    Abschnitt „Daten und Sicherung“ hat keinen Löschkonzept-Absatz).
+
+OBERFLÄCHE:
+
+16. **Bezug-Links löst der Server auf** (`mailprotokoll._bezuege`, Feld `bezug` {text, pfad} je Zeile): Die Zeile einer
+    Mangelmeldung trägt die Meldungskennung, nicht die des Artikels – der Entwurf ließ offen, wer sie auflöst. Aus
+    Kennungen gebaute Modul-Routen, nie Links aus Datenbanktexten; höchstens vier Abfragen für den ganzen Kasten.
+17. Der Kasten heißt im Untermenü „Mehr“ (wie andere Kästen), „Alle erledigt“ nennt die Zahl der offenen Zeilen; ist
+    die letzte Zeile abgehakt, verschwindet der Kasten (ohne Mailserver bleibt die Dauerzeile).
+18. Der Laufstand-Hinweis oben („n Erinnerungsmails sind gescheitert“) verweist auf „Mailversand“ statt Namen zu
+    nennen.
+19. Berichtsseite: der Zweigpfad als Brotkrume über dem Titel (Bestand / <Pfad> → Ordner), die Blöcke als Abschnitte mit
+    denselben Überschriften wie im PDF; der Kappungshinweis steht nur, wenn eine Liste länger als 500 Zeilen ist
+    (`BERICHT_KAPPUNG` in `material.js` – der Server liefert die Grenze nicht im JSON).
+20. C1 geht über die Liste des Entwurfs hinaus (Seitensymbol, Angaben-Knopf, Anker „#“, Liste „Unterseiten“,
+    Kommentar-Reiter, Wiki-Schublade, Aktionsspalte): Nachgemessen am Platzhalter-Wiki und in der Nutzerverwaltung
+    (360 und 882 px, Touch-Emulation) – ohne diese Punkte blieben dort Tippflächen unter 44 px und ein Überlauf.
+    Zwei Punkte liegen außerhalb: Die Kopfknöpfe der Wiki-Seite brechen am Telefon (360 px) in eine zweite Reihe um
+    (vier 44-px-Knöpfe und der Umschalter passen nicht nebeneinander) – siehe „Zu prüfen“.
+21. C2: Die Datumsprüfung im Aussondern-Dialog läuft **vor** der Unterschrift (ein Tippfehler öffnet nicht erst das
+    Unterschriften-Pad). Für den Prüftag gibt es kein Feld (Entwurf-Kritik C1): Er ist immer heute bzw. der des
+    Originals.
+
+### Schnittstelle
+
+Neu bzw. geändert (Einzelheiten in der Tabelle am Ende): `GET /material/ordner/<fid>/bericht`,
+`GET /api/material/ordner/<fid>/bericht?jahr=&pruefer=`, `GET /material/ordner/<fid>/bericht-<jahr>[-mit-pruefern].pdf`,
+`GET /material/export/<fid>-pruefungen-<jahr>[-mit-pruefern].csv`; `GET /api/material/start` → `mailfehler`;
+`POST /api/material/mailfehler/<mfid>/erledigt`, `POST /api/material/mailfehler/alle-erledigt`; Laufstand
+`erinnerungen.letzter` ohne `fehlgeschlagen_an`, Pflegestand `pflege.mailfehler`; `POST /api/material/artikel/<id>/aussondern`
+409 bei Datum vor der letzten Prüfung oder dem Herstelldatum. Konstanten: `bericht.KAPPUNG` 500, `JAHRE_MAX` 15,
+`mailprotokoll.LISTE_MAX` 20, `AUFBEWAHRUNG_MONATE` 13, `ERLEDIGT_MONATE` 3, `NACHGEHOLT` „nachgeholt“.
+
+### Im Browser geprüft
+
+Chromium (cdp.py) gegen einen lokalen Server **ohne `SMTP_HOST`** mit dem DEMO-Bestand (`scripts/material_demo.py
+--demo --konten`), einer Platzhalter-Mangelmeldung, sechs von Hand erzeugten Mailfehler-Zeilen (Erinnerung an die
+Gliederung, Mangel an Materialwart und Prüfer, Antrag an die Verwaltung, Rückruf zu einem nicht vorhandenen Rückruf,
+„Deine PSA“ mit Artikel-Bezug), einem Platzhalter-Wiki mit drei Unterseiten und einem Konto „Führungskraft“ (lesen),
+bei 1280 und 360 px, ohne Konsolenfehler und ohne waagerechten Bildlauf:
+
+- **Material-Verwaltung**: Übersicht mit Kasten „Mailversand“ unter dem Laufstand (Dauerzeile ohne Mailserver, sechs
+  Zeilen mit Links „Artikel M-000002“, „Mangelmeldung M-000001“, „Änderungsantrag“, „DEMO-Gliederung“; „Rückruf“ nur als
+  Text), „Erledigt“ nimmt die Zeile weg (Toast „Erledigt“), „Mehr“ → „Alle erledigt“ → „5 Zeilen erledigt“, Tabelle weg,
+  Dauerzeile bleibt; Berichtsseite 2026 (Jahr-Auswahl 2025/2026), Haken „Prüfer nennen“ → Block „Prüfer im Jahr“, Adresse
+  `?pruefer=1`, PDF-Link `…-mit-pruefern.pdf`; `?jahr=1800` → „„Jahr“ muss zwischen 1990 und 2100 liegen.“;
+  Systemordner → 404-Seite; Dokumentdialog mit „Gültig ab“ als TT.MM.JJJJ (ungültig rot).
+- **Führungskraft**: Übersicht ohne Kasten, Bericht als Seite, PDF (inline, `DEMO-Jahresbericht_DEMO-Gliederung_2026.pdf`)
+  und CSV (`DEMO-Pruefungen_DEMO-Gliederung_2026-mit-pruefern.csv`).
+- **Prüfer**: Prüfformular, „einsatzbereit“ → Feld „Nächste Prüfung“ als TT.MM.JJJJ mit „frühestens 23.10.2026,
+  spätestens 22.04.2027“; „31.02.2027“ → Toast „bitte als TT.MM.JJJJ angeben“, Feld rot, nichts festgeschrieben;
+  „01.01.2030“ → Toast „… vorziehen geht, verschieben nicht“.
+- **Materialwart**: „Aussondern“ am gesperrten Artikel – Datum vorbelegt mit heute, Hilfetext „Frühestens 22.10.2026
+  (Erfassung), spätestens heute“; „31.11.2026“ → Toast, Dialog bleibt offen (vor der Unterschrift).
+- **Wiki und Nutzerverwaltung** (Touch-Emulation, Administrator): bei 360 px keine Tippfläche unter 44 px mehr auf
+  der Wiki-Seite und in der Nutzerverwaltung; bei 882 px (Fold aufgeklappt) kein waagerechter Bildlauf mehr in der
+  Nutzerverwaltung.
+- **Geräte-Matrix** (`st-geraete`, Chromium 155, Firefox 158, WebKit 26.6 × 21 Geräte Telefon bis Superwide;
+  Berichte und Fotos unter `/home/harness/geraete-laeufe/p4l1-oberflaeche-20261022/<rolle>/`): Material-Verwaltung
+  (Übersicht mit Mail-Kasten, Bericht 2026, Bericht 2025 mit Prüfern), Führungskraft (Übersicht, Bericht), Prüfer
+  (Prüfformular mit Entwurf, gesperrter Artikel), Administrator (Wiki-Seite, Nutzerverwaltung). Erster Lauf: der
+  Mail-Kasten mit acht Spalten ragte zwischen 601 und 1024 px Inhaltsbreite (Tablet hochkant, Fold Duo hochkant,
+  Tablet quer neben der Ordnerleiste) 29–49 px über den Rand – seitdem bis 1100 px Inhaltsbreite Karten; im Wiki
+  und in der Nutzerverwaltung blieben drei Tippziele unter 44 px (Klappdreiecke im Seitenbaum 28 × 32, Suchfeld 36,
+  Aufklapper „Globale Suchen“ 38). Zweiter Lauf (`mv2`, `admin2`): **keine Befunde** auf allen 21 Geräten in allen
+  drei Engines – kein waagerechter Bildlauf, keine Tippfläche unter 44 px, keine Konsolenfehler, nichts außerhalb des
+  Fensters.
+
+### Prüfung vor Auslieferung
+
+### Zu prüfen / Bitte bestätigen
+
+1. **Schrift DLRG Univers im Bericht** – die Lizenz nennt bisher nur „PDF-Protokolle“; sonst DejaVu einstellen.
+2. **Beschriftung „Sperre durch Prüfer ohne Prüfung“** (statt „durch Materialwart“ im Entwurf).
+3. **Kappung 500** und der Hinweistext „vollständige Liste auf der Berichtsseite“ (im PDF) bzw. „Im PDF stehen nur die
+   ersten 500 Zeilen dieser Liste“ (auf der Seite); Jahr-Auswahl bis 15 Jahre; keine eigene Mailfehler-Seite.
+4. **Aufbewahrung 13 Monate / erledigte 3 Monate**; kein „Erneut senden“.
+5. **Rückruf unter Sperre oder ohne Mailserver** zählt in `mat_recall` weiter als `mail_failed` (die Verwaltung sieht
+   „n gescheitert“) – alternativ ein eigener Zustand „still“.
+6. **Eine Rolle je Erinnerungsmail** (verwalter > verwaltung > inhaber > zugeordnet) – gemischte Mails laufen als
+   „verwalter“.
+7. **Zeilen mit Rolle „verwaltung“ aus dem Rückfall** (Mangel oder Erinnerung ohne Verwalter) sieht nur die
+   Material-Verwaltung – der Zweig-Verwalter, den es dort nicht gibt, hat nichts zu sehen.
+8. **Bezug-Links**: Mangelmeldung und „Deine PSA“ führen zum Artikel, der Rückruf zur Produktseite, Antrag und
+   Produktmeldung zur Meldungen-Seite, die Erinnerung zur Gliederung – oder anders gewünscht?
+9. **Wiki-Kopfzeile am Telefon** (C1): Mit 44 px je Knopf passen ☰, Umschalter, 💬, Teilen und ⋯ bei 360 px nicht in
+   eine Zeile; „⋯“ rutscht in eine zweite Reihe. Alternative wäre, Knöpfe unter 44 px zu lassen (WCAG 2.5.8 verlangt
+   24 px) oder „Teilen“ unter „⋯“ zu legen – bitte entscheiden.
+10. **Aussonderungsdatum vor der letzten Prüfung** ist jetzt ein Fehler (409) – auch, wenn jemand bewusst rückdatieren
+    wollte (die Aussonderung aus einer Prüfung trägt ohnehin deren Prüftag). Bitte bestätigen.
+11. **Auf dev.strömis.de** den Kasten „Mailversand“ mit echten Fehlschlägen ansehen (dort bleibt alles still –
+    Umgebungssperre; Zeilen entstehen nur, wenn ein Mailserver eingerichtet und die Sperre aus ist).
+
 ## Artikelnummern eindeutig je Hersteller (22.10.2026)
 
 Entscheidung des Nutzers vom 22.10.2026, die die Regel vom 18.10.2026 („Artikelnummern eindeutig“, Lieferung 5) einengt:
@@ -4378,7 +4653,7 @@ benannte Einträge werden abgewiesen. Hochladen und Export: bis 2 GB. Eine Datei
 Formulars nicht mit, der Import setzt nie eine – eine neue Formularversion aus dem Import erbt aber die Verknüpfung
 der letzten Version. Verknüpft wird in der Instanz, in der die Anleitungen im Wiki stehen.
 
-## Schnittstelle (Phase 1 mit den Nachbesserungen, Phase 2 · Lieferung 1 bis 3, Phase 3 · Lieferung 1 mit den Nachbesserungen vom 21.10.2026)
+## Schnittstelle (Phase 1 mit den Nachbesserungen, Phase 2 · Lieferung 1 bis 3, Phase 3 · Lieferung 1 mit den Nachbesserungen vom 21.10.2026, Phase 4 · Lieferung 1)
 
 Seit Phase 2 gilt jedes Recht an einem Ordner (Freigaben je Ordner, vererbt nach unten): „lesen“ heißt Leserecht am
 Gegenstand (Artikel und Prüfungen: an der Heimat des Artikels), „Grundrecht“ lesen oder verwalten, „Materialwart“
@@ -4490,3 +4765,11 @@ oder Plattform-Verwaltung).
 | `POST /api/material/antraege/<id>/bestaetigen` (`antwort` freiwillig), `…/ablehnen` (`antwort` Pflicht) | Material-Verwaltung (Plattform-Verwaltung eingeschlossen) | entscheiden → `antrag`; 409 schon entschieden, Stand geändert, ausgesondert (nur ablehnen), Dublette, alter Antrag aufs Entfernen des Herstelldatums (nur ablehnen; `antrag.entfernen`) (21.10.2026) |
 | `POST /api/material/antraege/<id>/zurueckziehen` | Modulzugang; nur der Antragsteller, solange er den Artikel liest (sonst 404) | eigenen offenen Antrag zurückziehen → `antrag` (Stand `zurueckgezogen`, keine Mail; Journal `antrag_zurueckgezogen`); 409 schon entschieden oder zurückgezogen; `GET /api/material/antraege?status=erledigt` schließt `zurueckgezogen` ein (21.10.2026) |
 | (Artikel, Übersicht, Meldungen, Kontofolgen) | – | neu: `artikel.antraege` (offene; Begründung und Namen nur für Materialwart und Prüfer, sonst `inhalt: false` – ebenso in `artikel.journal` und im Lebenslauf: ohne `begruendung`, `beantragt_von`, `anmerkung`, `ablehnung`, Handelnder „(Person)“), `artikel.darf_antrag`; `start.antraege_offen` und `meldungen.antraege_offen` (nur Material-Verwaltung, sonst `null`); `material-folgen.antraege` (21.10.2026) |
+| `GET /material/ordner/<fid>/bericht` | angemeldet, Modulzugang, lesen am Ordner (sonst 404 wie Systemordner), Grundrecht (externer Prüfer 403) – `bericht_zugang` | Seite „Jahresbericht“ (Ansicht `bericht`, Rahmen mit `{"id": fid}`) (Phase 4 · 1) |
+| `GET /api/material/ordner/<fid>/bericht?jahr=<1990…2100>&pruefer=<ja\|nein>` | wie die Seite (401 als JSON) | `bericht` {`dokument`, `kopf` (mit `jahre`, `demo`, `pruefer_nennen`), `bestand`, `bewegungen`, `pruefungen`, `durchgaenge`, `pruefer` (nur mit Haken, sonst `null`), `sperren`, `aussonderungen`, `maengel`, `rueckrufe`, `ausblick`, `fuss`}; jede Listenzeile mit `demo`; 400 bei Unsinn in `jahr`/`pruefer`; `Cache-Control: no-store`; INFO-Logzeile ohne Namen, keine Journalzeile (Phase 4 · 1) |
+| `GET /material/ordner/<fid>/bericht-<jahr>.pdf`, `…/bericht-<jahr>-mit-pruefern.pdf` | wie die Seite | der Bericht als PDF/A-3b, inline, nicht festgeschrieben, Listen auf 500 Zeilen gekürzt; Dateiname `[DEMO-]Jahresbericht_<Ordner>_<Jahr>[-mit-pruefern].pdf`; 400-Seite bei Jahr außerhalb 1990…2100 (Phase 4 · 1) |
+| `GET /material/export/<fid>-pruefungen-<jahr>.csv`, `…-pruefungen-<jahr>-mit-pruefern.csv` | wie die Seite | Prüfungen und Aussonderungen des Jahres im Zweig als CSV (`;`, CRLF, BOM, Formelschutz, ohne Kappung), Spalten `bericht.CSV_SPALTEN`; Prüfer und Urkundennummer nur in der Fassung „-mit-pruefern“ (Phase 4 · 1) |
+| `GET /api/material/start` | wie bisher | neu: `mailfehler` – `null`, wenn nichts zu zeigen ist, sonst {`offen`, `zeilen` (höchstens 20, neueste zuerst, nur offene: `id`, `created_at` UTC, `art`, `art_text`, `klasse`, `empfaenger` (Name, „(gelöschtes Konto)“), `rolle`, `bezug_art`, `bezug_id`, `folder_id`, `betreff`, `meldung`, `erledigt_at`, `erledigt_von_name`, `bezug` {`text`, `pfad` (Modul-Route oder `null`)}), `kein_mailserver` (nur Verwaltung), `alle` (Verwaltung)}; Sicht: Material-/Plattform-Verwaltung alles, Zweig-Verwalter die Zeilen ihrer Gliederungen ohne die Rollen verwaltung/antragsteller/melder. `erinnerungen.letzter` ohne `fehlgeschlagen_an` (nur noch `fehlgeschlagen`); `erinnerungen.pflege.mailfehler` {`alt`, `erledigt`, `waisen`} (Phase 4 · 1) |
+| `POST /api/material/mailfehler/<mfid>/erledigt` | Modulzugang; Zeile in der eigenen Sicht (sonst 404 „Mailfehler nicht gefunden.“) | abhaken → `zeile`; schon erledigt 200 ohne Änderung (idempotent) (Phase 4 · 1) |
+| `POST /api/material/mailfehler/alle-erledigt` | Modulzugang mit Sicht (sonst 403) | alle offenen Zeilen der eigenen Sicht abhaken → `anzahl` (Phase 4 · 1) |
+| `POST /api/material/artikel/<id>/aussondern` | wie bisher | neu: `datum` vor der letzten abgeschlossenen Prüfung oder vor dem Herstelldatum (Monat → erster Tag) → 409 mit Klartext; Zukunft und vor der Erfassung weiter 400 (C2, Phase 4 · 1) |
