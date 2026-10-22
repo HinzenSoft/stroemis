@@ -322,7 +322,7 @@ def test_zahlen():
         assert v["bewegungen"] == {"zugaenge": 2, "geloescht": 0, "aussonderungen": 0}, v["bewegungen"]
         assert v["sperren"]["gesamt"] == 1 and v["sperren"]["liste"][0]["grund"] == "Platzhalter Grenze früh"
         assert v["bestand"]["zaehlung"] == b["bestand"]["zaehlung"] and not v["durchgaenge"] and v["maengel"]["gemeldet"] == 0
-        assert v["rueckrufe"] and v["rueckrufe"][0]["laeuft"]             # heute laufend – steht auch im Vorjahr
+        assert v["rueckrufe"] == []          # heute laufend, aber erst in J angelegt – nicht im Vorjahr (Ablaufprüfung V1)
         # Mit Haken: Prüferliste je (Name, Urkundennummer), Aussonderungen durch getrennt (Materialwart ohne Urkunde).
         bh = bericht(f, o["gid"], pruefer=1)
         assert bh["kopf"]["pruefer_nennen"] is True
@@ -541,9 +541,74 @@ def test_kappung():
         pfad = os.path.join(tmp, "viel.pdf")
         r, seiten = pdf_text(w, f"/material/ordner/{gid}/bericht-{J}.pdf", pfad)
         text = _flach(" ".join(seiten))
-        assert "und 100 weitere Artikel" in text and f"höchstens {dienst.KAPPUNG} Zeilen" in text, text[-600:]
+        assert "und 100 weitere Artikel" in text and f"höchstens {dienst.KAPPUNG} Zeilen je Liste" in text, text[-600:]
         assert text.count("M-9") == dienst.KAPPUNG, text.count("M-9")
+
+        # Gesamtgrenze und Rückrufe (Sicherheitsprüfung B3): 30 laufende Rückrufe über alle 600 Artikel. Je Rückruf
+        # höchstens KAPPUNG_RUECKRUF Inventarnummern, alle Listen zusammen höchstens KAPPUNG_GESAMT; die Zahlen bleiben
+        # vollständig, die Seite (JSON) kürzt nicht. Laufzeit: früher ≈ 20 s und 63 Seiten bei 23 Rückrufen.
+        rueckrufe = 30
+        conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+        try:
+            with conn:
+                conn.executemany("INSERT INTO mat_recall (product_id, title, created_at) VALUES (?,?,?)",
+                                 [(ids["hms"], f"Platzhalter-Rückruf {i:02d}", f"{J}-01-03T00:00:00+00:00")
+                                  for i in range(rueckrufe)])
+        finally:
+            conn.close()
+        b = bericht(w, gid)
+        assert len(b["rueckrufe"]) == rueckrufe and all(len(r["artikel"]) == n and r["betroffen"] == n
+                                                         for r in b["rueckrufe"]), [r["betroffen"] for r in b["rueckrufe"]]
+        import time
+        t0 = time.monotonic()
+        r, seiten = pdf_text(w, f"/material/ordner/{gid}/bericht-{J}.pdf", pfad)
+        dauer = time.monotonic() - t0
+        text = _flach(" ".join(seiten))
+        assert text.count("M-9") <= dienst.KAPPUNG_GESAMT, text.count("M-9")
+        assert text.count("M-9") == dienst.KAPPUNG_GESAMT, text.count("M-9")   # 500 + 20 Rückrufe × 50
+        assert text.count("siehe Berichtsseite") >= rueckrufe, text.count("siehe Berichtsseite")
+        assert f"{n} Artikel – Liste siehe Berichtsseite" in text, text[-800:]   # Rückrufe nach erschöpfter Grenze
+        assert len(seiten) <= 60 and dauer < 60, (len(seiten), dauer)
+        print(f"PDF mit {rueckrufe} Rückrufen: {len(seiten)} Seiten, {dauer:.1f} s")
     print("Kappung bestanden.")
+
+
+def test_rueckruf_ausblick_kategorien():
+    """Ablaufprüfung V1, V3, V4: Ein laufender Rückruf, der erst nach dem Jahr angelegt wurde, steht nicht im Bericht des
+    Jahres; ein Rückruf zu einem Produkt, das im Zweig nur ausgesonderte Artikel hat, und eine Kategorie nur mit
+    Ausgesonderten fehlen; im Ausblick zählt eine überfällige Fälligkeit nur unter „jetzt“, nicht im laufenden Monat."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        w, heute = k["wart"], _heute()
+        J = heute.year
+        gid, _ = gliederung(w, "OG Ausblick")
+        lager = ordner_neu(w, "Lager", gid)
+        a = neuer_artikel(w, ids["hms"], lager, serial_no="AB-0001")
+        # Rückruf angelegt im laufenden Jahr: steht im Bericht J, nicht im Bericht J-1.
+        sql(tmp, "INSERT INTO mat_recall (product_id, title, created_at) VALUES (?,?,?)",
+            (ids["hms"], "Platzhalter-Rückruf", f"{J}-02-01T00:00:00+00:00"))
+        assert [r["titel"] for r in bericht(w, gid, jahr=J)["rueckrufe"]] == ["Platzhalter-Rückruf"]
+        assert bericht(w, gid, jahr=J - 1)["rueckrufe"] == []
+        # Überfällig seit dem Monatsersten bzw. seit 40 Tagen: nur „jetzt“, kein Monat zählt sie.
+        for tage in (max(1, heute.day - 1), 40):
+            faellig = (heute - timedelta(days=tage)).isoformat()
+            sql(tmp, "UPDATE mat_item SET next_due_on = ?, last_inspected_on = ? WHERE id = ?",
+                (faellig, (heute - timedelta(days=400)).isoformat(), a["id"]))
+            aus = bericht(w, gid)["ausblick"]
+            assert aus["jetzt"]["ueberfaellig"] == 1 and sum(m["faellig"] for m in aus["monate"]) == 0, (tage, aus)
+        # Fällig später im laufenden Monat (oder im nächsten): genau einmal in den Monaten.
+        spaeter = heute + timedelta(days=3)
+        sql(tmp, "UPDATE mat_item SET next_due_on = ? WHERE id = ?", (spaeter.isoformat(), a["id"]))
+        aus = bericht(w, gid)["ausblick"]
+        assert sum(m["faellig"] for m in aus["monate"]) == 1 and aus["jetzt"]["ueberfaellig"] == 0, aus
+        # Nur Ausgesonderte: Rückruf und Kategorie verschwinden.
+        sql(tmp, "UPDATE mat_item SET lock_state = 'ausgesondert' WHERE id = ?", (a["id"],))
+        b = bericht(w, gid)
+        assert b["rueckrufe"] == [], b["rueckrufe"]
+        kats = {x["name"]: x for x in b["bestand"]["kategorien"]}
+        assert kats == {} and b["bestand"]["zaehlung"]["ausgesondert"] == 1, kats
+    print("Rückrufe, Ausblick und Kategorien bestanden.")
 
 
 if __name__ == "__main__":
@@ -551,4 +616,5 @@ if __name__ == "__main__":
     test_rechte_und_eingaben()
     test_pdf_und_csv()
     test_kappung()
+    test_rueckruf_ausblick_kategorien()
     print("Alle Berichtstests bestanden.")

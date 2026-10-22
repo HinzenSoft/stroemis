@@ -25,7 +25,9 @@ Zählregeln (Kritiken S1–S24, A1–A19 zum Entwurf):
     dem Ersteller – keine Melder, keine Durchgangs-Eröffner, keine Aussonderer, keine Zuordnungen.
   - DEMO-Artikel zählen mit und sind gekennzeichnet (Zahl im Kopf, Marke je Zeile, Spalte DEMO, Präfix „DEMO-“ im
     Dateinamen) – wie der CSV-Export; sonst wäre der Bericht auf dev leer.
-  - Listen im PDF sind auf KAPPUNG Zeilen gekürzt (Seite und CSV nicht)."""
+  - Listen im PDF sind auf KAPPUNG Zeilen je Liste und KAPPUNG_GESAMT Zeilen im ganzen PDF gekürzt, die betroffenen
+    Artikel eines Rückrufs auf KAPPUNG_RUECKRUF (die offenen zuerst) – ein Abruf hält sonst bei vielen laufenden
+    Rückrufen einen Server-Thread lange fest (Sicherheitsprüfung B3). Seite und CSV kürzen nicht."""
 import json
 from datetime import date, datetime, timezone
 
@@ -40,6 +42,8 @@ EMPFAENGER = "Gliederung intern"
 JAHR_MIN, JAHR_MAX = 1990, 2100
 JAHRE_MAX = 15                      # so viele Jahre bietet die Auswahl höchstens an
 KAPPUNG = 500                       # so viele Zeilen je Liste im PDF
+KAPPUNG_GESAMT = 1500               # so viele Listenzeilen im ganzen PDF
+KAPPUNG_RUECKRUF = 50               # so viele betroffene Artikel je Rückruf im PDF
 # Die Sperrarten, wie sie aus dem Nachher eines Journaleintrags folgen (Reihenfolge der Ausgabe).
 SPERRARTEN = (("pruefung", "aus Prüfung (instandsetzen)"), ("mangel", "aus Mangelmeldung"), ("verlust", "Verlust"),
               ("ohne_pruefung", "Sperre durch Prüfer ohne Prüfung"))
@@ -164,8 +168,9 @@ def _bestand(fid, o, ordner, params):
             verloren += r["n"]
         if r["demo"]:
             demo += r["n"]
-        k = kategorien.setdefault(oberste(r["category_id"]), {"bestand": 0, "faellig": 0, "gesperrt": 0})
         if r["s"] != "ausgesondert":
+            # Eine Kategorie nur mit Ausgesonderten bekommt keine Zeile (sie hätte nur Nullen).
+            k = kategorien.setdefault(oberste(r["category_id"]), {"bestand": 0, "faellig": 0, "gesperrt": 0})
             k["bestand"] += r["n"]
             if r["s"] in bestand.FAELLIG:
                 k["faellig"] += r["n"]
@@ -399,13 +404,16 @@ def _maengel(params):
 
 
 def _rueckrufe(params):
-    """Rückrufe, die im Jahr angelegt oder beendet wurden oder heute laufen, zu Produkten mit Artikeln im Zweig – mit
-    Zahl und Liste der betroffenen Artikel im Zweig (Sicht); Titel und URL nur als Text."""
+    """Rückrufe, die im Jahr angelegt oder beendet wurden oder heute laufen und vor Jahresende angelegt waren (ein
+    später angelegter steht nicht im Bericht eines früheren Jahres), zu Produkten mit Artikeln im Bestand des Zweigs
+    (ohne Ausgesonderte – sonst stünde dort „betroffen 0“) – mit Zahl und Liste der betroffenen Artikel im Zweig (Sicht);
+    Titel und URL nur als Text."""
     rows = db.query(
         "SELECT r.*, p.manufacturer, p.model, p.description AS product_description FROM mat_recall r "
         "JOIN mat_product p ON p.id = r.product_id WHERE ((" + IM_JAHR_UTC.format(spalte="r.created_at") + ") OR ("
-        + IM_JAHR_UTC.format(spalte="r.closed_at") + ") OR r.closed_at IS NULL) AND EXISTS (SELECT 1 FROM mat_item i "
-        f"WHERE i.product_id = r.product_id AND {MENGE}) ORDER BY r.created_at, r.id", params)
+        + IM_JAHR_UTC.format(spalte="r.closed_at") + ") OR (r.closed_at IS NULL AND r.created_at < :bis)) "
+        "AND EXISTS (SELECT 1 FROM mat_item i WHERE i.product_id = r.product_id AND i.lock_state <> 'ausgesondert' "
+        f"AND {MENGE}) ORDER BY r.created_at, r.id", params)
     out = []
     for r in rows:
         alle = db.query(
@@ -425,21 +433,22 @@ def _rueckrufe(params):
 
 
 def _monate(tag):
-    """Die zwölf Monate ab dem laufenden: (Schlüssel JJJJ-MM, Anfang, Ende)."""
+    """Die zwölf Monate ab dem laufenden: (Schlüssel JJJJ-MM, Anfang, Ende) – der laufende beginnt mit dem Stichtag."""
     out = []
     j, m = tag.year, tag.month
     for _ in range(12):
         anfang = date(j, m, 1)
         j2, m2 = (j + 1, 1) if m == 12 else (j, m + 1)
         ende = date(j2, m2, 1).toordinal() - 1
-        out.append((f"{j:04d}-{m:02d}", anfang.isoformat(), date.fromordinal(ende).isoformat()))
+        out.append((f"{j:04d}-{m:02d}", max(anfang, tag).isoformat(), date.fromordinal(ende).isoformat()))
         j, m = j2, m2
     return out
 
 
 def _ausblick(params, zaehlung, tag):
-    """Fälligkeiten je Monat (zwölf Monate ab heute) nur für Status in ueberblick.NACH_DATUM, zweite Reihe Lebensende
-    (textil) aus retire_by freier Artikel; davor die Zeile „jetzt“."""
+    """Fälligkeiten je Monat (zwölf Monate ab dem Stichtag) nur für Status in ueberblick.NACH_DATUM, zweite Reihe
+    Lebensende (textil) aus retire_by freier Artikel; davor die Zeile „jetzt“. Das Fenster beginnt mit dem Stichtag:
+    Überfällige stehen nur in „jetzt“, nicht noch einmal im laufenden Monat."""
     monate = _monate(tag)
     p = dict(params, m_von=monate[0][1], m_bis=monate[-1][2])
     marken = ",".join(f"'{s}'" for s in ueberblick.NACH_DATUM)
@@ -507,10 +516,15 @@ def _name(o, jahr, demo, pruefer_nennen, vorsatz, endung):
 
 
 def _kappen(d):
-    """Die Listen des PDF auf KAPPUNG Zeilen kürzen; je Liste bleibt die Zahl der fehlenden Zeilen stehen."""
-    def kappen(liste):
-        rest = max(0, len(liste) - KAPPUNG)
-        return liste[:KAPPUNG], rest
+    """Die Listen des PDF kürzen – je Liste auf KAPPUNG Zeilen, alle zusammen (in der Reihenfolge des PDF) auf
+    KAPPUNG_GESAMT, die betroffenen Artikel eines Rückrufs auf KAPPUNG_RUECKRUF (die offenen zuerst); je Liste bleibt
+    die Zahl der fehlenden Zeilen stehen. Zahlen bleiben vollständig."""
+    budget = [KAPPUNG_GESAMT]
+
+    def kappen(liste, grenze=KAPPUNG):
+        n = min(grenze, budget[0], len(liste))
+        budget[0] -= n
+        return liste[:n], len(liste) - n
     d["pruefungen"]["nicht_geprueft"], d["pruefungen"]["gekappt"] = kappen(d["pruefungen"]["nicht_geprueft"])
     d["sperren"]["liste"], d["sperren"]["gekappt"] = kappen(d["sperren"]["liste"])
     d["aussonderungen"]["liste"], d["aussonderungen"]["gekappt"] = kappen(d["aussonderungen"]["liste"])
@@ -518,14 +532,15 @@ def _kappen(d):
     for r in d["durchgaenge"]:
         r["ausnahmen"], r["gekappt"] = kappen(r["ausnahmen"])
     for r in d["rueckrufe"]:
-        r["artikel"], r["gekappt"] = kappen(r["artikel"])
-    d["kappung"] = KAPPUNG
+        r["artikel"], r["gekappt"] = kappen(sorted(r["artikel"], key=lambda a: a["zustand"] != "offen"),
+                                            KAPPUNG_RUECKRUF)
+    d["kappung"], d["kappung_gesamt"] = KAPPUNG, KAPPUNG_GESAMT
     return d
 
 
 def pdf(fid, jahr, sicht=None, pruefer_nennen=False):
     """(PDF als bytes, Dateiname) – Vorlage templates/material/pdf/bericht.html, PDF/A-3b wie die Protokolle, nicht
-    festgeschrieben; Listen auf KAPPUNG Zeilen gekürzt."""
+    festgeschrieben; Listen gekürzt (_kappen)."""
     from . import pdf as pdf_dienst
     d = _kappen(daten(fid, jahr, sicht, pruefer_nennen))
     return (pdf_dienst.rendern("bericht", d),

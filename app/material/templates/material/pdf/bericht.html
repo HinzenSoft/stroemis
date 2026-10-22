@@ -4,7 +4,7 @@
    auf zwölf Monate – für die Gliederung intern. Auf Abruf gesetzt und NICHT festgeschrieben: kein Stempel, keine
    Unterschrift, keine Protokoll-ID; der Bericht ist kein Prüfnachweis. Daten laut services/bericht.py (dokument, kopf,
    bestand, bewegungen, pruefungen, durchgaenge, pruefer, sperren, aussonderungen, maengel, rueckrufe, ausblick, fuss,
-   kappung). Kein Wert aus der Datenbank wird als Link gesetzt (Rückruf-URL nur als Text), nichts mit |safe. #}
+   kappung, kappung_gesamt). Kein Wert aus der Datenbank wird als Link gesetzt (Rückruf-URL nur als Text), nichts mit |safe. #}
 {% block titel %}{{ dokument.titel }}{% endblock %}
 {% block keywords %}strömis-bericht {{ kopf.jahr }}{% endblock %}
 {% block rand_unten %}16mm{% endblock %}
@@ -58,7 +58,7 @@ h2 { break-after: avoid; }
 {%- endmacro %}
 
 {% macro rest(n, was) -%}
-  {%- if n %}<p class="rest">… und {{ n }} weitere {{ was }} – die vollständige Liste zeigt die Berichtsseite (höchstens {{ kappung }} Zeilen im PDF).</p>{% endif -%}
+  {%- if n %}<p class="rest">… und {{ n }} weitere {{ was }} – die vollständige Liste zeigt die Berichtsseite (im PDF höchstens {{ kappung }} Zeilen je Liste, {{ kappung_gesamt }} insgesamt).</p>{% endif -%}
 {%- endmacro %}
 
 {% block inhalt %}
@@ -153,8 +153,8 @@ h2 { break-after: avoid; }
     {%- endfor %}
     </tbody>
   </table>
-  {{ rest(pruefungen.gekappt, "Artikel") }}
   {%- endif %}
+  {{ rest(pruefungen.gekappt, "Artikel") }}
 </section>
 
 <section>
@@ -169,10 +169,10 @@ h2 { break-after: avoid; }
         <td>{{ r.stand }}{% if r.protokoll_id %} · <span class="mono">{{ r.protokoll_id }}</span>{% endif %}</td>
         <td class="zahl">{{ r.gesamt }}</td><td class="zahl">{{ r.erledigt }}</td><td class="zahl">{{ r.ausgenommen }}</td>
         <td class="zahl">{{ r.nicht_geprueft if r.stand != "offen" else r.offen ~ " offen" }}</td></tr>
-      {%- if r.ausnahmen %}
+      {%- if r.ausnahmen or r.gekappt %}
       <tr><td colspan="7"><span class="lbl">Ausnahmen:</span>
         {%- for a in r.ausnahmen %} <span class="mono">{{ a.inventarnummer }}</span> ({{ a.grund }}){{ ";" if not loop.last }}{% endfor %}
-        {%- if r.gekappt %} … und {{ r.gekappt }} weitere{% endif %}</td></tr>
+        {%- if r.gekappt %} … und {{ r.gekappt }} weitere, siehe Berichtsseite{% endif %}</td></tr>
       {%- endif %}
     </tbody>
     {%- endfor %}
@@ -230,8 +230,8 @@ h2 { break-after: avoid; }
     {%- endfor %}
     </tbody>
   </table>
-  {{ rest(sperren.gekappt, "Sperren") }}
   {%- endif %}
+  {{ rest(sperren.gekappt, "Sperren") }}
 </section>
 
 <section>
@@ -253,8 +253,8 @@ h2 { break-after: avoid; }
     {%- endfor %}
     </tbody>
   </table>
-  {{ rest(aussonderungen.gekappt, "Aussonderungen") }}
   {%- endif %}
+  {{ rest(aussonderungen.gekappt, "Aussonderungen") }}
 </section>
 
 <section>
@@ -276,8 +276,8 @@ h2 { break-after: avoid; }
     {%- endfor %}
     </tbody>
   </table>
-  {{ rest(maengel.gekappt, "Meldungen") }}
   {%- endif %}
+  {{ rest(maengel.gekappt, "Meldungen") }}
 </section>
 
 <section>
@@ -292,7 +292,7 @@ h2 { break-after: avoid; }
       <tr><td>{{ r.angelegt }}{% if r.beendet %}<br>beendet {{ r.beendet }}{% else %}<br>läuft{% endif %}</td>
         <td><strong>{{ r.titel }}</strong> – {{ r.produkt }} <span class="hinweis">({{ "alle Artikel des Produkts" if r.alle else "nach Seriennummern" }})</span>
           {%- if r.url %}<div class="text">Meldung des Herstellers: <span class="mono">{{ r.url }}</span></div>{% endif %}
-          {%- if r.artikel %}<div class="text">{% for a in r.artikel %}<span class="mono">{{ a.inventarnummer }}</span> ({{ a.zustand }}){{ demo_marke(a) }}{{ ", " if not loop.last }}{% endfor %}{% if r.gekappt %} … und {{ r.gekappt }} weitere{% endif %}</div>{% endif %}</td>
+          {%- if r.artikel %}<div class="text">{% for a in r.artikel %}<span class="mono">{{ a.inventarnummer }}</span> ({{ a.zustand }}){{ demo_marke(a) }}{{ ", " if not loop.last }}{% endfor %}{% if r.gekappt %} … und {{ r.gekappt }} weitere, siehe Berichtsseite{% endif %}</div>{% elif r.gekappt %}<div class="text">{{ r.gekappt }} Artikel – Liste siehe Berichtsseite</div>{% endif %}</td>
         <td class="zahl">{{ r.betroffen }}</td><td class="zahl">{{ r.offen }}</td></tr>
     </tbody>
     {%- endfor %}
