@@ -207,6 +207,7 @@ def test_ohne_stufe_rundum():
         kennungen = {"iid": t.art_b["id"], "mid": b.meldung, "aid": b.anhang_id, "token": b.token, "gid": b.freigabe,
                      "kid": ids["karabiner"], "did": 999999, "ruid": 999999, "anid": 999999, "filename": "material.js",
                      "art": "web", "dateiname": b.ordnerfoto[0].rsplit("/", 1)[1],
+                     "jahr": _heute().year,                 # Jahresbericht (P4-L1) über („ordner“/„export“, fid)
                      ("produkte", "pid"): ids["hms"], ("produkt", "pid"): ids["hms"],
                      ("pruefungen", "pid"): t.entwurf_b, ("pruefung", "pid"): t.entwurf_b, ("punkte", "rid"): b.punkt,
                      ("ordner", "fid"): t.lager_b, ("export", "fid"): t.lager_b, ("formulare", "fid"): form,

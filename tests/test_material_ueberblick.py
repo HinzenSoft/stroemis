@@ -337,6 +337,7 @@ def test_fuehrungskraft_nur_lesen():
                                 "'verwalten'", (gid, k["wart_id"]), one=True)["id"]
         kennungen = {
             "kid": ids["gurte"], "did": did, "iid": a1["id"], "mid": mid, "aid": aid, "ruid": ruid, "anid": 999999, "token": token,
+            "jahr": h.year,                                 # Jahresbericht (P4-L1): bericht-<jahr>.pdf, -pruefungen-<jahr>.csv
             "gid": freigabe,
             "art": "web", "dateiname": bild.rsplit("/", 1)[1], "filename": "material.js",
             ("produkte", "pid"): ids["gurt"], ("produkt", "pid"): ids["gurt"],

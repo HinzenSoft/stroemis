@@ -408,11 +408,12 @@ def _liste(ids):
     return f"(SELECT value FROM json_each('{json.dumps(sorted(int(x) for x in ids))}'))"
 
 
-def artikel_filter(alias="i", recht="lesen", user=None):
+def artikel_filter(alias="i", recht="lesen", user=None, s=None):
     """SQL-Bedingung über mat_item (Kürzel alias): Artikel, deren Heimat im Bereich mit diesem Recht liegt. Die Form nutzt
-    die Indizes auf folder_id und origin_folder_id; „1“ für die Verwaltung, „0“ ohne Bereich."""
+    die Indizes auf folder_id und origin_folder_id; „1“ für die Verwaltung, „0“ ohne Bereich. s: eine schon gerechnete
+    Sicht (Jahresbericht: eine je Anfrage), sonst die des Kontos."""
     a = _bezeichner(alias)
-    s = sicht(user)
+    s = s or sicht(user)
     if s.alles and recht != "pruefen":
         return "1"
     menge = s.menge(recht)
