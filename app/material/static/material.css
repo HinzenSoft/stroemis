@@ -434,6 +434,10 @@ tr.mat-entwurf a:not(.btn) { color: var(--rot-auf-flaeche); }
 /* Dateiauswahl hinter einem Knopf: nur optisch versteckt, damit sie per Tastatur erreichbar bleibt. */
 .mat-datei { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
 .mat-datum.ungueltig { border-color: var(--rot); box-shadow: inset 0 0 0 1px var(--rot); }
+/* Artikellänge (Schritt 20): ein kurzes Zahlenfeld („57,5“) in den Artikeldialogen; in der Prüfung gelten die Regeln
+   von .mat-pwert (volle Breite am Telefon, nebeneinander ab der mittleren Breite). */
+#dlg .mat-laenge-feld, .mat-formular .mat-laenge-feld { width: 9em; max-width: 100%; }
+.mat-laenge-hinweis { margin: 4px 0; }
 /* Artikel bearbeiten: Seriennummer und Herstellung ganz oben nebeneinander – breit in den Spalten der Zeilen darunter,
    schmal weiter zweispaltig (MM/JJJJ braucht wenig Platz); die Felder unten bündig, wenn ein Label umbricht. Seit der
    ersten Prüfung schreibgeschützt (grau hinterlegt). */

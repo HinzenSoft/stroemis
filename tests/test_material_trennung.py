@@ -262,19 +262,47 @@ def test_migration_7_8():
 PRUEF_CHECK = re.compile(r"permission\s*<>\s*'pruefen'\s+or\s+valid_until\s+is\s+not\s+null", re.IGNORECASE)
 
 
-def bis_schritt(version):
+def bis_schritt(version, nachruesten=True):
     """Eine Funktion, die f(*a) aufruft, während die Migration des Moduls nur bis zu dieser Version läuft – so lässt
     sich ein früherer Stand nachstellen (Schritt 8 liest recht_material als Stufe aus Phase 1, nur bis Schritt 10 sie
-    umdeutet)."""
+    umdeutet).
+
+    nachruesten: Seit Schritt 20 schreibt der Dienst zwei Spalten, die ältere Stände nicht haben
+    (mat_category.items_have_length, mat_item.length_m) – über die Schnittstelle ließe sich auf einem älteren Stand sonst
+    keine Kategorie und kein Artikel mehr anlegen. Deshalb bekommt die Datenbank während des Laufs direkt nach jeder
+    Migration nur diese beiden Spalten, wenn sie fehlen (auch wenn f die App selbst baut und gleich benutzt);
+    Schemaversion und der CHECK der Prüfpunktarten bleiben auf dem alten Stand, Schritt 20 findet die Spalten vor und
+    lässt sie (Spalten nur, wenn sie fehlen). nachruesten=False lässt den Stand ganz, wie er war (für Tests, die genau
+    das prüfen)."""
     def lauf(f, *a):
+        from app import db
         from app.material import models
         alt = models.SCHEMA_VERSION
         models.SCHEMA_VERSION = version
+        # Die Startschritte der Module stehen in db.SCHEMA_MODULE (init_db ruft sie der Reihe nach mit der Verbindung):
+        # hinten angehängt, läuft das Nachrüsten nach der Modulmigration jedes Starts in f.
+        mit = nachruesten and version < 20
+        if mit:
+            from app.material import schema_anmelden
+            schema_anmelden()                    # die Schritte des Moduls zuerst – auch vor der ersten App im Prozess
+            db.SCHEMA_MODULE.append(spalten_20_nachruesten)
         try:
             return f(*a)
         finally:
             models.SCHEMA_VERSION = alt
+            if mit:
+                db.SCHEMA_MODULE.remove(spalten_20_nachruesten)
     return lauf
+
+
+def spalten_20_nachruesten(conn):
+    """Nur die beiden Spalten aus Schritt 20 an eine Datenbank älteren Stands (siehe bis_schritt) – mit Commit."""
+    from app.material import models
+    for tabelle, spalte, art in models.SPALTEN_20:
+        if conn.execute(f"SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '{tabelle}'").fetchone() \
+                and spalte not in [r[1] for r in conn.execute(f"PRAGMA table_info({tabelle})")]:
+            conn.execute(f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {art}")
+    conn.commit()
 
 
 def grant_tabelle_wie_schritt_8(pfad):

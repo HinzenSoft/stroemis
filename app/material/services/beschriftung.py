@@ -10,6 +10,7 @@ steht bei „Mangel gemeldet“ als Handelnder „(Person)“ – der Melder kan
 import json
 
 from ..models import ANHANGARTEN, ERGEBNISSE, MATERIALARTEN, ORDNERARTEN, PRUEFARTEN
+from . import laenge_text
 from .protokoll import datum_text, zeit_text
 
 FELD = {
@@ -55,6 +56,8 @@ FELD = {
     "antrag": "Änderungsantrag Nr.", "begruendung": "Begründung", "beantragt_von": "beantragt von",
     "anmerkung": "Anmerkung", "ablehnung": "Begründung der Ablehnung", "feld": "Feld",
     "rueckruf_nicht_mehr": "Rückruf trifft ihn nicht mehr", "rueckruf_neu": "Rückruf trifft ihn jetzt",
+    # Artikellänge (Schritt 20)
+    "length_m": "Länge (m)", "items_have_length": "Artikel haben eine Länge",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",
@@ -80,6 +83,7 @@ AKTION = {
     "mangel_gemeldet": "Mangel gemeldet",
     "antrag_gestellt": "Änderung beantragt", "antrag_bestaetigt": "Änderung bestätigt (Antrag)",
     "antrag_abgelehnt": "Änderungsantrag abgelehnt", "antrag_zurueckgezogen": "Änderungsantrag zurückgezogen",
+    "laenge_geaendert": "Länge geändert",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",
@@ -90,7 +94,7 @@ SPERRZUSTAND = {"frei": "frei", "gesperrt": "gesperrt", "verloren": "verloren (g
 RECHT = {"lesen": "lesen", "pruefen": "prüfen", "verwalten": "verwalten"}
 PERSON = "(Person)"
 # „mat_katalog“ bleibt für alte Einträge stehen (das Häkchen gibt es seit Schritt 10 nicht mehr).
-_JA_NEIN = ("serial_generated", "active", "mat_pruefer", "mat_katalog", "notiz_geaendert", "reminders_off",
+_JA_NEIN = ("serial_generated", "active", "mat_pruefer", "mat_katalog", "notiz_geaendert", "reminders_off", "items_have_length",
             "aus_nacharbeit")
 # Stufe im Modul Material – mit der Zahl dahinter: Einträge vor „Migration Schritt 10“ meinten die Stufen aus Phase 1
 # (1 Führungskraft, 2 Materialwart), die Zahl hält das eindeutig.
@@ -137,6 +141,8 @@ def wert_text(v, feld, verweise=None):
         return f"{STUFE_MATERIAL.get(v, '?')} ({v})"
     if feld == "recht":
         return RECHT.get(v, str(v))
+    if feld == "length_m" and isinstance(v, (int, float)) and not isinstance(v, bool):
+        return laenge_text(v)
     if _ist_datumsfeld(feld) and isinstance(v, str):
         return datum_text(v)
     if isinstance(v, dict):

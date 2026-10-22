@@ -4,7 +4,7 @@
   "kategorien": [
     {"name": "PSA gegen Absturz und Seiltechnik", "unterkategorien": [
       {"name": "Gurte", "norm": "EN 361, EN 12277 oder EN 813", "materialart": "textil"},
-      {"name": "Statikseile", "norm": "EN 1891 Typ A/B", "materialart": "textil"},
+      {"name": "Statikseile", "norm": "EN 1891 Typ A/B", "materialart": "textil", "artikel_laenge": true},
       {"name": "Bandschlingen", "norm": "EN 354 (22 kN)", "materialart": "textil"},
       {"name": "HMS-Karabiner", "norm": "EN 362 oder EN 12275", "materialart": "metall_hardware"},
       {"name": "Kletterhelme", "norm": "EN 12492", "materialart": "sonstiges"}

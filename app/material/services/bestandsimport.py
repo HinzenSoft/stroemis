@@ -44,7 +44,7 @@ from flask import g
 
 from ... import db
 from ..models import IMPORT_STATUS
-from . import ZONE, Abgelehnt, akteur, heute, kennung
+from . import ZONE, Abgelehnt, akteur, heute, kennung, laenge
 from . import bestand, export, globalprotokoll, globalsuche, journal, katalog, meldung, nummern, rechte, rueckruf
 from . import tabelle
 from .interval import lebensende, plus_monate, spaetestens, wirksam
@@ -92,8 +92,8 @@ FELDER = (("hersteller", "Hersteller"), ("modell", "Modell"), ("artikelnummer", 
           ("ordner", "Ordner (Pfad unter dem Zielordner)"), ("hergestellt", "Herstelldatum"), ("gekauft", "Kaufdatum"),
           ("erstgebrauch", "Erstgebrauch"), ("zuletzt_geprueft", "Zuletzt geprüft"),
           ("naechste_pruefung", "Nächste Prüfung"), ("intervall", "Prüfintervall (Monate)"),
-          ("lebensende", "Lebensende"), ("anzahl", "Anzahl"), ("bemerkung", "Bemerkung (mehrfach)"),
-          ("ignorieren", "– ignorieren –"))
+          ("lebensende", "Lebensende"), ("laenge", "Länge (m)"), ("anzahl", "Anzahl"),
+          ("bemerkung", "Bemerkung (mehrfach)"), ("ignorieren", "– ignorieren –"))
 FELD_TEXT = dict(FELDER)
 
 # Synonyme der Spaltentitel – verglichen nach pi.normalisiert und ohne Umlaute („Prüfdatum“ = „Pruefdatum“), mit
@@ -116,7 +116,8 @@ ARTIKELNUMMER = ("artikelnummer", "artikel-nr", "artikelnr", "artikel nr", "art.
 MODELL = ((1, ("modell", "model", "modellbezeichnung")), (2, ("typ", "type", "typbezeichnung")),
           (3, ("bezeichnung", "produkt", "produktbezeichnung", "artikel", "artikelbezeichnung", "gegenstand")))
 BEMERKUNG_WERT = ("bemerkung", "bemerkungen", "notiz", "hinweis", "anmerkung", "kommentar")
-BEMERKUNG_TITEL = ("größe", "groesse", "farbe", "länge", "standort", "lagerort")
+# „Länge“ ist seit Schritt 20 ein eigenes Feld (Artikellänge in Metern), keine Bemerkungsspalte mehr.
+BEMERKUNG_TITEL = ("größe", "groesse", "farbe", "standort", "lagerort")
 UEBRIGE = (
     ("inventarnummer", ("inventarnummer", "inventar-nr", "inventarnr", "inv.-nr", "inv-nr", "inv. nr", "inv nr",
                         "inventar")),
@@ -132,6 +133,7 @@ UEBRIGE = (
                            "fällig", "fälligkeit")),
     ("intervall", ("prüfintervall", "intervall", "prüfzyklus")),
     ("lebensende", ("lebensende", "ablaufdatum", "ablauf", "nutzungsende", "aussondern bis", "aussonderung spätestens")),
+    ("laenge", ("länge", "laenge", "länge (m)", "laenge (m)", "länge in m", "seillänge", "seillaenge", "length")),
     ("anzahl", ("anzahl", "menge", "stück", "stückzahl", "stk")),
     ("bemerkung", BEMERKUNG_WERT + BEMERKUNG_TITEL),
 )
@@ -144,8 +146,8 @@ NACHARBEIT_SPALTEN = ((NACHARBEIT_NR, None), ("Grund", None), ("Hersteller", "he
                       ("Bisherige Inventarnummer", "inventarnummer"), ("Ordner", "ordner"),
                       ("Herstelldatum", "hergestellt"), ("Kaufdatum", "gekauft"), ("Erstgebrauch", "erstgebrauch"),
                       ("Zuletzt geprüft", "zuletzt_geprueft"), ("Nächste Prüfung", "naechste_pruefung"),
-                      ("Prüfintervall (Monate)", "intervall"), ("Lebensende", "lebensende"), ("Anzahl", "anzahl"),
-                      ("Bemerkung", "bemerkung"), ("Zeile", None))
+                      ("Prüfintervall (Monate)", "intervall"), ("Lebensende", "lebensende"), ("Länge (m)", "laenge"),
+                      ("Anzahl", "anzahl"), ("Bemerkung", "bemerkung"), ("Zeile", None))
 
 # Gründe (code → Kurztext für Filter und CSV) und ihre Gruppen – in dieser Reihenfolge stehen sie an einer Zeile; der
 # erste bestimmt die Gruppe (Filter der Nacharbeit).
@@ -990,6 +992,22 @@ def _mit_produkt(e, lauf, doppelt, varianten):
                               "übernommen (vorgezogen)")
         elif rechnung and end_iso > rechnung:
             e.hinweise.append(f"Lebensende laut Liste später als Herstellung + Lebensdauer – es gilt {_tag(rechnung)}")
+    # Länge (Schritt 20): nur, wenn die Kategorie des Produkts eine vorsieht – sonst Hinweis, der Wert steht in der
+    # Bemerkung („… laut Liste“). Ein unlesbarer Wert blockiert nicht, er wird genauso vermerkt.
+    laenge_m = None
+    if w.get("laenge"):
+        try:
+            laenge_m = laenge(w["laenge"])
+        except Abgelehnt:
+            e.hinweise.append(f"Länge laut Liste „{w['laenge']}“ unlesbar (Meter mit Komma, 0,1 bis 9999,9) – nicht "
+                              "übernommen")
+            laut_liste.append(f"Länge laut Liste: {w['laenge']}")
+        else:
+            if not katalog.laenge_wirksam(p["category_id"]):
+                laenge_m = None
+                e.hinweise.append("Für die Kategorie des Produkts ist keine Länge vorgesehen (Häkchen „Artikel haben eine "
+                                  "Länge“ an der Kategorie) – nicht übernommen (steht in der Bemerkung)")
+                laut_liste.append(f"Länge laut Liste: {w['laenge']}")
     # 8. Fälligkeit und Plan – nur mit Ordner, Intervall und (bei textilem Material) Herstelldatum.
     if e.ordner_id is None or (textil and (not herg_iso or herg_fehler)):
         return
@@ -1038,7 +1056,7 @@ def _mit_produkt(e, lauf, doppelt, varianten):
         notes = notes[:BEMERKUNG_MAX]
         e.hinweise.append(f"Bemerkung auf {BEMERKUNG_MAX} Zeichen gekürzt")
     d_plan = dict(werte_plan, product_id=p["id"], folder_id=e.ordner_id, serial_no=e.serie if e.serie_ok else "",
-                  next_due_on=faellig, retire_by=retire, interval_months=eigenes, notes=notes)
+                  next_due_on=faellig, retire_by=retire, interval_months=eigenes, notes=notes, length_m=laenge_m)
     try:
         e.plan = bestand.artikel_plan(d_plan)
     except Abgelehnt as exc:

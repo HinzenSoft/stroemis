@@ -15,6 +15,7 @@ für sich deploybar.
 | Phase 2 · 1 – Freigaben je Ordner | Freigaben lesen/prüfen/verwalten je Ordner mit Vererbung und Enddatum, strenge Trennung je Gliederung, Freigaben im Dialog „Ordner bearbeiten“ (Reiter) mit Vorlagen und Verlängern, „Meine Freigaben“; globale Seriennummernsuche und QR-Steckbrief mit Protokoll; Personenzuordnung; Rückrufe und Meldungen je Bereich; Löschkonzept | geliefert 18.10.2026, die drei offenen Fragen am 18.10.2026 entschieden und eingearbeitet; freigegeben 19.10.2026 („Starte Lieferung 2“) |
 | Phase 2 · 2 – Erinnerungen | Täglicher Erinnerungslauf ab 6 Uhr (eingebaut, abschaltbar, dazu `flask material remind`): Sammelmail an die Verwalter zu Fälligkeit (30/7 Tage, überfällig), Lebensende (90 Tage) und ablaufenden Freigaben (30 Tage); Erinnerungslog mit Kontoverweis; „Erinnerungsmails aus“ je Ordner; Laufstand und Probelauf auf der Übersicht | geliefert 19.10.2026, wartet auf Freigabe |
 | Phase 2 · 3 – Bestandsimport und Prüfanleitung | Bestandslisten aus Excel oder CSV in einen Ordner: Probelauf, Übernehmen in einer Transaktion (Artikel auf „neu“, Fälligkeit aus der Liste, STR-Nummern für Zeilen ohne Seriennummer, eine Liste ganz ohne Seriennummernspalte nur mit Häkchen) und Nacharbeit je Zielordner (Produkte zuordnen, melden oder im Katalog anlegen, erneut prüfen, CSV-Rundweg, Frist ein Monat); Prüfanleitung aus dem Wiki am Prüfformular, Abschnitt „Prüfung“ eingeblendet in offenen Prüfungen | geliefert 19.10.2026, vier Punkte am 20.10.2026 entschieden (einer geändert und eingearbeitet), wartet auf Freigabe |
+| Artikellänge (Schritt 20) | Häkchen „Artikel haben eine Länge“ je Kategorie (vererbt), Feld „Länge (m)“ am Artikel (Steckbrief, Listen, Lebenslauf, Meine PSA, CSV, Bestandsimport), Prüfpunkt-Typ „Länge“ – vorbelegt, ein abweichender Wert geht beim Festschreiben in den Artikel (Journal, Protokoll „alt → neu“) | gebaut 22.10.2026, wartet auf Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -3655,6 +3656,111 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
        zurück, „erledigt“ zeigt die grauen Marken „zurückgezogen“. Keine Konsolenfehler, kein waagerechtes Scrollen, je
        Dialog höchstens ein roter Knopf.
 
+## Artikellänge und Prüfpunkt „Länge“ (Schritt 20, 22.10.2026)
+
+Wunsch des Nutzers vom 22.10.2026: „Beim Anlegen von Seilen/Meterwaren soll im Artikel die tatsächliche Länge hinterlegt
+werden können. Diese Länge soll beim Prüfen dann als Prüfpunkt abgefragt werden und ggf. korrigiert werden können.“
+Gebaut nach seinen drei Entscheidungen (unten), Schemaversion 20, keine neuen Abhängigkeiten. Stand: gebaut in einem
+eigenen Worktree, wartet auf Prüfung und Freigabe.
+
+### Neu
+
+- **Häkchen „Artikel haben eine Länge“ an der Kategorie** (Dialog „Kategorie anlegen/bearbeiten“, nur Katalogpflege;
+  `mat_category.items_have_length`): Es gilt für die Kategorie und alle Unterkategorien (`katalog.laenge_wirksam`,
+  einmal je Anfrage berechnet); die Katalogansicht nennt es in der Angabenzeile, der Dialog einer Unterkategorie sagt
+  „hier schon durch eine Oberkategorie gesetzt“. Jede Kategorie trägt `items_have_length` und `laenge_wirksam`, jedes
+  Produkt `laenge_moeglich`. Im Journal der Kategorie als „Artikel haben eine Länge: ja/nein“.
+- **Länge am Artikel** (`mat_item.length_m`, REAL, CHECK 0 < x < 10 000; Feld „Länge (m)“ in „Artikel anlegen“ und im
+  Dialog „Bearbeiten“, nur wenn die Kategorie des Produkts sie vorsieht): Eingabe „57,5“ oder „57.5“, gerundet auf eine
+  Nachkommastelle, Grenzen 0,1 bis 9999,9 m (`services.laenge`, `dezimal`); Anzeige „57,5 m“ (`laenge_text`) im
+  Steckbrief (Zeile „Länge“, sobald die Kategorie sie vorsieht oder der Artikel eine trägt), grau hinter dem Produkt
+  in Artikellisten (ohne Umbau der Tabelle), im Lebenslauf-PDF und Prüfprotokoll (Artikelblock), in „Meine PSA“
+  (`length_m`, `laenge_text`), als CSV-Spalte **„Länge (m)“** hinter „Lebensende“ („57,5“, deutsches Komma, ohne Einheit)
+  und im Bestandsimport als Spalte „Länge“ (Synonyme „Länge (m)“, „Seillänge“, „length“; Feld `laenge`, auch in der
+  Nacharbeits-CSV; „Länge“ ist kein Bemerkungstitel mehr). Ein Wert bei einer Kategorie ohne Länge oder ein unlesbarer
+  Wert blockiert den Import nicht: Hinweis an der Zeile, der Wert steht als „Länge laut Liste: …“ in der Bemerkung.
+  Server: Länge bei einer Kategorie ohne Länge → **409** mit Klartext (`katalog.KEINE_LAENGE`); eine vorhandene Länge
+  bleibt nach dem Entfernen des Häkchens lesbar und unverändert speicherbar, nur ein anderer Wert ist 409, leeren geht.
+  Die Länge gehört **nicht** zu den festen Stammdaten (kein Änderungsantrag, auch nach der ersten Prüfung direkt
+  änderbar); Journal „geändert“ mit `length_m` (Beschriftung „Länge (m)“, Wert „57,5 m“).
+- **Prüfpunkt-Typ „Länge (m)“** (`EDITOREN["laenge"]`, Formular-Editor: Art wählbar, Soll „Artikellänge“ nicht
+  editierbar, nie kritisch): In der Prüfung ist der Punkt mit der Artikellänge vorbelegt (Soll und Wert „57,5“, leer
+  ohne Länge – dann Pflicht wie jeder Pflichtpunkt oder „n. z.“), die Kopfzeile sagt „am Artikel 57,5 m“. Eingabe
+  wie am Artikel, gespeichert als „55,0“ (`pruefung.punkt_setzen`). Beim **Festschreiben** (`abschliessen`, auch einer
+  Berichtigung) übernimmt `_laenge_uebernehmen` einen abweichenden Wert in den Artikel – vor dem Abschluss, solange die
+  Ergebniszeile ihr Soll noch annimmt: Das Soll wird auf die bis dahin gespeicherte Länge gesetzt (auch wenn sie seit
+  dem Beginn der Prüfung bearbeitet wurde), dann `mat_item.length_m` und ein eigener Journaleintrag
+  **„laenge_geaendert“** (`length_m` vorher/nachher, `pruefung`, `art`). Unverändert → kein Journal. Im Protokoll-PDF
+  steht in „Wert / Bemerkung“ „57,5 m → 55,0 m“ bzw. „55,0 m (unverändert)“, in der Lese-Ansicht „55,0 m (vorher 57,5 m)“.
+  Festgeschriebene Ergebniszeilen bleiben unveränderlich (Trigger aus Schritt 6 unberührt).
+- **Artikel ohne vorgesehene Länge** (Kategorie ohne Häkchen, Formular mit Längenpunkt – etwa ein generisches
+  Formular einer Oberkategorie, deren Seile das Häkchen tragen, ihre Karabiner nicht): Der Punkt wird angezeigt, steht
+  aber „nicht zutreffend“ mit dem Hinweis, dass für diese Kategorie keine Länge vorgesehen ist; ein Wert ist 409; das
+  Festschreiben ändert nichts am Artikel. **Entwurfsentscheidung**: Ausblenden hieße, dass das Formular je Artikel
+  anders aussieht und die Nummerierung im Protokoll springt; „nicht zutreffend“ ist der Befund, den das Modul für
+  genau diesen Fall schon kennt, und steht so auch im Protokoll.
+
+### Migration (Schritt 20, `models._schritt_20`)
+
+`ALTER TABLE mat_category ADD COLUMN items_have_length INTEGER NOT NULL DEFAULT 0 CHECK (… IN (0, 1))`,
+`ALTER TABLE mat_item ADD COLUMN length_m REAL CHECK (… IS NULL OR (… > 0 AND … < 10000))` – jeweils nur, wenn die
+Spalte fehlt. `mat_checklist_item` trägt einen CHECK über die Prüfpunktarten; SQLite ändert ihn nur mit einer neuen
+Tabelle, deshalb wird sie wie `mat_item_change` in Schritt 17 einmal neu aufgebaut (`_umbauen_checklist`: alle Zeilen
+und Kennungen bleiben, Index neu, kein AUTOINCREMENT – `mat_inspection_result.checklist_item_id` zeigt weiter hin) –
+nur, wenn der CHECK „laenge“ noch nicht kennt. Schritt 1 bleibt mit `EDITOREN_1`, wie er ausgeliefert wurde.
+Wiederholbar; zweiter Lauf ohne Änderung. Geprüft frisch, 19 → 20 an einem Datenordner mit Bestand (Tabellen, Indizes
+und Trigger danach genau wie frisch), Schritt 20 für sich. Wer `mat_checklist_item` künftig neu aufbaut, legt den Index
+neu an.
+
+### Entscheidungen des Nutzers (22.10.2026)
+
+1. Sichtbarkeit über das Kategorie-Häkchen „Artikel haben eine Länge“, vererbt auf Unterkategorien; nur dort zeigt der
+   Artikel das Feld.
+2. Neuer Prüfpunkt-Typ „Länge“ im Formular-Editor; in der Prüfung mit der Artikellänge vorbelegt; ein abweichender Wert
+   geht beim Festschreiben in den Artikel (Journal „Länge geändert“, Protokoll „alt → neu“).
+3. Einheit Meter mit einer Nachkommastelle, Eingabe mit Komma oder Punkt, Anzeige „57,5 m“ – in Steckbrief, Listen,
+   CSV-Export und Bestandsimport (Spalte „Länge“).
+
+### Abweichungen und eigene Entscheidungen
+
+- CSV-Spalte „Länge (m)“ steht hinter „Lebensende“ (nicht hinter „Bemerkung (Produkt)“ und nicht am Ende): Die Länge
+  ist eine Artikelangabe und gehört zu den Artikeldaten in der Reihenfolge des Steckbriefs (hergestellt, gekauft,
+  Erstgebrauch, Lebensende, Länge, Bemerkung); der Bestandsimport liest Spalten am Titel, nicht an der Stelle, und
+  die bestehenden Tests prüfen nur „Bemerkung (Produkt)“ direkt hinter „Modell“. Bitte bestätigen.
+- Zwei Journalaktionen: „geändert“ (Bearbeiten-Dialog, wie jedes andere Artikelfeld) und „laenge_geaendert“
+  (Festschreiben einer Prüfung, mit Verweis auf die Prüfung) – so bleibt im Lebenslauf sichtbar, ob ein Prüfer oder
+  der Materialwart die Länge gesetzt hat.
+- Der Wert eines Längenpunkts wird normalisiert gespeichert („55,0“), nicht roh wie bei Zahlpunkten – Protokoll und
+  Vergleich mit der Artikellänge brauchen eine feste Form.
+- `docs/material-katalog-vorlage.json`: „Statikseile“ trägt `"artikel_laenge": true` (Format 1 liest den Schlüssel
+  ebenso).
+
+### Schnittstelle
+
+Siehe die Tabelle unten: `GET/POST /api/material/kategorien` (`items_have_length`, `laenge_wirksam`),
+`POST/PUT /api/material/artikel` (`length_m`, `laenge_text`, `laenge_moeglich`, 409), `GET /api/material/pruefungen/<id>`
+(`laenge`), `PUT …/punkte/<pid>` (Art `laenge`), `GET /material/export/<ordner>.csv` („Länge (m)“), Bestandsimport
+(Feld `laenge`), Katalogdatei (`artikel_laenge`, `punkte[].art` = `laenge`), `GET /api/material/meine-psa` (`length_m`,
+`laenge_text`).
+
+### Geprüft
+
+`tests/test_material_laenge.py` (Migration 19 → 20 und bis Schritt 19, Häkchen mit Vererbung, Format 2 Export/Import,
+Artikel mit Länge samt Rundung, Grenzen, 409, Journal, CSV-Spalte, Bestandsimport-Spalte, Formular-Editor, Prüfung
+vorbelegt, Festschreiben übernimmt, unverändert ohne Journal, Berichtigung, Artikel ohne vorgesehene Länge, Trigger,
+Lebenslauf, Meine PSA, Trennung); `test_material_mailprotokoll.test_migration_19` auf Schemaversion 20 angepasst;
+`test_material_trennung.bis_schritt` rüstet auf älteren Ständen nur die beiden neuen Spalten nach (sonst ließe sich dort
+über den Dienst keine Kategorie und kein Artikel mehr anlegen; Schemaversion und CHECK bleiben alt, `nachruesten=False`
+für den Migrationstest); feste Listen in `test_material_import` (Kopf der Nacharbeits-CSV) und
+`test_material_meine_psa` (Schlüssel der Karte) um die Länge ergänzt; ganze
+Suite, Lint (st-py, st-js, st-css), Browserprobe 1280 und 360 px (Artikel anlegen mit Länge, Prüfung mit Längenpunkt).
+
+### Zu prüfen / Bitte bestätigen
+
+- Stelle der CSV-Spalte (siehe Abweichungen).
+- „nicht zutreffend“ für Artikel ohne vorgesehene Länge in einem Formular mit Längenpunkt (siehe Neu).
+- Nachkommastelle: „57,56“ wird still „57,6“ – kein Fehler, da die Entscheidung eine Nachkommastelle vorgibt.
+
 ## Phase 4 · Lieferung 1 – Auswertung und Betriebsreife (22.10.2026)
 
 Lieferung 1 der Phase 4 bringt den **Jahresbericht je Zweig** (Seite, PDF, CSV-Prüfungsliste – Entwurf
@@ -4545,12 +4651,13 @@ mit seiner Stelle (`produkte[3] (…): …`). `--trocken` prüft nur.
 | `beschreibung` | die **Bemerkung** des Produkts (so heißt das Feld in der Oberfläche seit dem 18.10.2026; der Schlüssel bleibt, der Export schreibt ihn): kurzer Zusatz hinter dem Modell, etwa die Verschlussart – angezeigt grau hinter dem Modell, ohne Strich („D Classic Screwlock“). Gleichwertig nimmt der Import den Schlüssel `bemerkung` an; stehen beide da, müssen sie gleich sein. Die Oberfläche nimmt höchstens 80 Zeichen in einer Zeile; der Import übernimmt auch längere und mehrzeilige (bis 4000 Zeichen) unverändert und nennt sie im Bericht |
 | `materialart` | `textil`, `metall_hardware` oder `sonstiges` (an der Kategorie: Vorgabe für Produkte) |
 | `intervall_monate` | Prüfintervall 1–120; am Produkt optional, wenn die Kategorie eins vorgibt |
+| `artikel_laenge` (Kategorie) | `true`/`false`: „Artikel haben eine Länge“ – gilt für die Kategorie und alle Unterkategorien (Schritt 20); fehlt der Schlüssel, bleibt es, wie es ist (neu: `false`) |
 | `lebensdauer_jahre` | 1–50; Produkt textil: Pflicht; Metall (`metall_hardware`): verboten; sonstiges: nur mit `lebensdauer_quelle`. An der Kategorie nur bei textil, nur als Vorschlag |
 | `kategorie` | Pfad als Liste von Namen oder als Text „Ober / Unter“ |
 | `formulare[].kategorie` / `.produkt` | generisch je Kategorie oder spezifisch je Produkt (Hersteller, Modell, Artikelnummer) |
 | `aktivieren` | Standard `true`: die Version wird aktiv, eine ältere aktive des Ziels inaktiv |
 | `punkte[].text` | der Prüfpunkt bzw. die Prüfanweisung, höchstens 1000 Zeichen |
-| `punkte[].art` | `yesno`, `text`, `date`, `number`, `photo`, `signature` |
+| `punkte[].art` | `yesno`, `text`, `date`, `number`, `photo`, `signature`, `laenge` (Länge in Metern – vorbelegt mit der Artikellänge, kein Sollwert, nie kritisch; Schritt 20) |
 | `punkte[].soll` | bei `yesno` Pflicht: `ja` oder `nein` (bei Schadensfragen `nein`); bei `text`/`number` optionaler Hinweis |
 | `punkte[].kritisch` | nur bei `yesno`: ein Mangel daran schließt „einsatzbereit“ aus |
 | `punkte[].pflicht` | Standard `true` |
@@ -4581,10 +4688,11 @@ ist ein Verweis auf eine Datei (`bild`, `datei`) ein Fehler.
   "erstellt": "2026-10-17T14:03:00+02:00",
   "kategorien": [
     {"uid": "5edccf185bb2feaa03ca064a23b676d6", "name": "PSA gegen Absturz und Seiltechnik", "norm": "",
-     "materialart": null, "intervall_monate": null, "lebensdauer_jahre": null, "position": 0,
+     "materialart": null, "intervall_monate": null, "lebensdauer_jahre": null, "position": 0, "artikel_laenge": false,
      "unterkategorien": [
        {"uid": "fa0924f611f67a059a66fa70610d8495", "name": "Gurte", "norm": "EN 361, EN 12277 oder EN 813",
         "materialart": "textil", "intervall_monate": 12, "lebensdauer_jahre": null, "position": 0,
+        "artikel_laenge": false,
         "dokumente": [
           {"art": "pflegehinweis", "titel": "Pflegehinweis Gurte", "version": "", "gueltig_ab": "2024-01-01",
            "datei": "dateien/dokumente/3b54….pdf"}
@@ -4621,6 +4729,7 @@ ist ein Verweis auf eine Datei (`bild`, `datei`) ein Fehler.
 | Feld | Bedeutung |
 | --- | --- |
 | `uid` (Kategorie, Produkt) | Katalogkennung: 32 Zeichen `0–9a–f`, in der Datei je Art eindeutig. Abgleich zuerst über sie; sonst über Name an der Stelle bzw. Dublette – dann übernimmt der Datensatz sie. Neu Angelegtes bekommt sie. Optional |
+| `artikel_laenge` (Kategorie) | `true`/`false` (auch `"ja"`/`"nein"`, 1/0): das Häkchen „Artikel haben eine Länge“ (Schritt 20, 22.10.2026) – es gilt für die Kategorie und alle Unterkategorien. Der Export schreibt es an jede Kategorie; der Import setzt oder nimmt es weg, ein fehlender Schlüssel lässt es, wie es ist (neu: `false`). Auch in Format 1 gelesen. Optional |
 | `kategorie_uid` (Produkt, generisches Formular) | Kategorie über ihre uid; gibt es sie hier nicht, gilt `kategorie` (Pfad) |
 | `produkt.uid` (spezifisches Formular) | Produkt über seine uid; sonst Hersteller + Modell + Artikelnummer |
 | `bild` (Produkt) | Pfad im Archiv; Foto (JPEG, PNG, WebP, HEIC, TIFF), höchstens 31 MB (wie beim Hochladen) und 60 Megapixel. Gleiche SHA-256 wie das Original hier: unverändert; sonst ersetzt. Fehlt es, bleibt das Bild hier |
@@ -4667,7 +4776,7 @@ oder Plattform-Verwaltung).
 | `GET /api/material/start` | Modulzugang (Inhalt gefiltert) | Rechte des Kontos, Zählung, Gliederungen, nächste Fälligkeiten; `ordner_uebersicht` (Fälligkeiten je Ordner, Zeilen in Baumreihenfolge mit `tiefe`, `bestand`, `zaehlung`, `naechste`), `rueckrufe` (laufende mit betroffenen Artikeln im Bestand); `erinnerungen` – Laufstand der Erinnerungsmails (Schalter, Sperre, Mailserver, letzter Mail- und Pflegeteil, `veraltet`, `pflege_veraltet`; Zeitpunkte UTC) nur für Material- und Plattform-Verwaltung, sonst `null` (Phase 2 · 2) |
 | `GET /api/material/suche?q=` | Modulzugang | Artikel nach Serien-, Inventar-, Herstellernummer im eigenen Bereich; `eindeutig` bei genau einem Treffer; `exakt_lokal` (ein sichtbarer Artikel hat genau diese Seriennummer) und `global_angebot` (zu jeder Anfrage, die für die globale Suche taugt, außer für die Material-Verwaltung; Phase 2) |
 | `GET /api/material/faellig?status=&ordner=&zugeordnet=` | Modulzugang; mit `ordner` lesen dort (sonst 404) | fällige Artikel, Standard überfällig + Lebensdauer erreicht + neu + bald fällig; mit `ordner` auch `ordner` = {id, pfad}; `zugeordnet` filtert nach Person (nur mit Grundrecht wirksam, Phase 2) |
-| `GET/POST /api/material/kategorien`, `PUT/DELETE …/<id>` | lesen / Katalog | Kategoriebaum; Löschen nur leer und ohne Dokument in einem Prüfprotokoll (409) |
+| `GET/POST /api/material/kategorien`, `PUT/DELETE …/<id>` | lesen / Katalog | Kategoriebaum; Löschen nur leer und ohne Dokument in einem Prüfprotokoll (409); je Kategorie `items_have_length` (das Häkchen) und `laenge_wirksam` (hier oder an einer Oberkategorie gesetzt) (Schritt 20) |
 | `GET/POST /api/material/produkte`, `GET/PUT/DELETE …/<id>` | lesen / Katalog | Produkte mit Suche (Hersteller, Modell, Bemerkung, Artikelnummer, Norm) und Seiten (`q`, `kategorie`, `seite`, `pro_seite`); `description` (in der Oberfläche „Bemerkung“) beim Speichern höchstens 80 Zeichen, eine Zeile (Nachbesserung vom 18.10.2026) |
 | `GET /api/material/produkte/artikelnummer?nr=&ausser=` | lesen | Wem gehört diese Artikelnummer schon? (`produkt` oder `null`) |
 | `POST /api/material/produkte/<id>/variante` (Felder wie `POST /produkte`, `dokumente`: Kennungen) | Katalog | Kopie als neue Variante; Bild nie, Dokumente nach Wahl |
@@ -4677,6 +4786,7 @@ oder Plattform-Verwaltung).
 | `GET/POST /api/material/ordner`, `GET/PUT/DELETE …/<id>`, `POST …/<id>/verschieben`, `POST/DELETE …/<id>/foto` | lesen / Materialwart (Löschen: am Oberordner; Gliederung auf oberster Ebene anlegen und löschen: Material-Verwaltung) | Ordnerbaum; über Gliederungsgrenzen verschiebt nur, wer beide Gliederungen verwaltet, und zur Gliederung macht einen Ordner (`PUT` mit `kind: "gliederung"`) nur, wer die bisherige verwaltet (Phase 2) |
 | `GET /api/material/artikel/vorschlag` | Modulzugang; mit `folder_id` lesen dort (sonst 404) | Vorschläge (Intervall, nächste Prüfung, Lebensende) vor dem Anlegen |
 | `POST /api/material/artikel`, `GET/PUT/DELETE …/<id>`, `POST /api/material/artikel/verschieben` | lesen / Materialwart | Artikel, auch mehrere auf einmal verschieben |
+| `POST /api/material/artikel`, `PUT …/<id>` mit `length_m` (Text „57,5“/„57.5“ oder Zahl, eine Nachkommastelle, 0,1–9999,9, `null` leert) | Materialwart | Länge (Schritt 20): nur, wenn die Kategorie des Produkts sie vorsieht – sonst 409 mit Klartext (eine vorhandene Länge bleibt unverändert speicherbar); Antworten tragen `length_m`, `laenge_text` („57,5 m“) und `laenge_moeglich`; Journal „geändert“ mit `length_m` |
 | `GET /media/material/<orig\|web\|thumb\|dok\|anhang>/<datei>` | je Datei (Phase 2): Produktbild und Dokument Modulzugang, Ordnerfoto lesen am Ordner, Befundfoto und Anhang lesen am Artikel, Meldungsfoto wie die Meldung; sonst 404 | Fotos, Dokumente, Prüfanhänge; privat, strenge CSP |
 | `GET/POST /api/material/kategorien/<id>/dokumente` | lesen / Katalog | Dokumente für alle Produkte einer Kategorie |
 | `PUT /api/material/dokumente/<id>` (`title`) | Katalog | Dokument umbenennen (Produkt- oder Kategoriedokument) |
@@ -4687,6 +4797,7 @@ oder Plattform-Verwaltung).
 | `DELETE /api/material/meldungen/<id>` | nur der Melder – auch ohne Modulzugang | eigene Meldung löschen (offen oder erledigt; ein Produkt aus ihr bleibt); wer eine fremde nicht sehen darf, bekommt 404 wie für eine unbekannte (Phase 2) |
 | `?sort=<spalte>&richtung=auf\|ab` an `produkte`, `ordner/<id>`, `faellig`, `suche` | – | Sortierung: Katalog `hersteller`, `produkt`, `kategorie`, `materialart`, `intervall`, `lebensdauer`, `bestand`; Artikel `inventar`, `hersteller`, `produkt`, `serie`, `faellig`, `status` |
 | `GET/POST /api/material/artikel/<id>/pruefungen` | lesen / Prüfer | Prüfungen eines Artikels; Prüfung beginnen (`art`, `durchgang_id`) – oder den eigenen Entwurf fortsetzen |
+| `GET /api/material/pruefungen/<id>`, `PUT …/punkte/<pid>` (Art `laenge`: `wert` wie `length_m`) | Prüfer | Prüfung trägt `laenge` {`wert`, `text`, `moeglich`}; ein Längenpunkt ist mit der Artikellänge vorbelegt (Soll und Wert „57,5“), der Wert wird als „55,0“ gespeichert; ohne vorgesehene Länge „nicht zutreffend“ und ein Wert 409. Festschreiben (`…/abschliessen`) übernimmt einen abweichenden Wert in `mat_item.length_m` – Journal „laenge_geaendert“ am Artikel (`length_m` vorher/nachher, `pruefung`, `art`), Protokoll „57,5 m → 55,0 m“ bzw. „55,0 m (unverändert)“; Berichtigung ebenso (Schritt 20) |
 | `GET/PUT/DELETE /api/material/pruefungen/<id>` | lesen / Prüfer / Prüfer oder Materialwart | Prüfung lesen; Art und Bemerkung am Entwurf; Entwurf verwerfen bzw. Reservierung freigeben |
 | `PUT /api/material/pruefungen/<id>/punkte/<pid>`, `POST/DELETE …/foto` | Prüfer (eigener Entwurf) | Befund, Wert, Bemerkung, Foto je Prüfpunkt |
 | `POST /api/material/pruefungen/<id>/anhaenge` (`file` mehrfach, `art`, `titel`, `im_protokoll`), `DELETE …/<aid>` | Prüfer (eigener Entwurf) | Anhänge |
@@ -4703,7 +4814,7 @@ oder Plattform-Verwaltung).
 | `GET/POST /api/material/durchgaenge`, `GET/DELETE …/<id>` | lesen / Materialwart oder Prüfer | Prüfdurchgänge (`?offen=1`); eröffnen (`folder_id`, `titel`); löschen, solange nichts geprüft ist |
 | `POST /api/material/durchgaenge/<id>/ausnehmen`, `…/einbeziehen` (`item_id`, `grund`), `…/abschliessen` | Materialwart oder Prüfer | Artikel ausnehmen, wieder einbeziehen, Durchgang abschließen (mit Sammelprotokoll) |
 | `POST /api/material/durchgaenge/<id>/abbrechen` | Materialwart oder Prüfer | vorzeitig beenden; `durchgang` ist `null`, wenn er mangels Geprüftem entfernt wurde |
-| `GET /material/export/<ordner>.csv` | Grundrecht am Ordner (Phase 2) | Artikel, deren Heimat im Ordner oder darunter liegt (auch von hier gesperrte und ausgesonderte), als CSV für Excel; Spalte „Zugeordnet an“ (Phase 2), hinter „Modell“ „Bemerkung (Produkt)“ (Nachbesserung vom 18.10.2026) |
+| `GET /material/export/<ordner>.csv` | Grundrecht am Ordner (Phase 2) | Artikel, deren Heimat im Ordner oder darunter liegt (auch von hier gesperrte und ausgesonderte), als CSV für Excel; Spalte „Zugeordnet an“ (Phase 2), hinter „Modell“ „Bemerkung (Produkt)“ (Nachbesserung vom 18.10.2026), hinter „Lebensende“ die Spalte „Länge (m)“ als „57,5“ (Schritt 20) |
 | `GET /material/export/<ordner>-protokolle.zip` | Grundrecht am Ordner (Phase 2) | alle Protokolle dieser Artikel und die Sammelprotokolle der Durchgänge im Zweig, mit `Verzeichnis.csv` |
 | `GET /material/artikel/<id>/lebenslauf.pdf` | Grundrecht an der Heimat (Phase 2) | Lebenslauf als PDF/A-3b, auf Abruf, nicht festgeschrieben |
 | `GET /api/material/katalog/export`, `GET …/export/vorschau` | Katalog | Katalog ohne DEMO als ZIP (Format 2) bzw. seine Zahlen vorab |
@@ -4748,7 +4859,7 @@ oder Plattform-Verwaltung).
 | `PUT /api/material/formulare/<id>/wiki` (`seite`: Kennung oder `null`) | wie die Seitenwahl; auch an benutzten Formularen | Prüfanleitung verknüpfen bzw. entfernen; nicht lesbare, unbekannte oder Papierkorb-Seite 404 „Wiki-Seite nicht gefunden.“; schreibt nur diese Spalte, Journal mit der Seitennummer → `formular` (Phase 2 · 3) |
 | (Übersicht, Ordner, Prüfung, Formular) | – | neu: `start.nacharbeit`, `ordner.nacharbeit` (nur mit verwalten), `pruefung.anleitung` (nur Entwürfe), `formular.wiki` und `formular.wiki_aendern` (nur Material-Verwaltung); `DELETE /ordner/<id>` 409 bei offener Nacharbeit (Phase 2 · 3) |
 | `GET /material/meine-psa`, `GET /material/meine-psa/<id>` | angemeldet (sonst Anmeldung), aktives Konto mit Namen – auch ohne Modulstufe (sonst 403 „… braucht dein Konto einen Namen“); mit `<id>` nur ein eigener, nicht ausgesonderter Artikel (sonst 404 wie unbekannt) | Seite „Meine PSA“ (Ansicht `meine_psa`); ohne Modulzugang ohne Modulnavigation und Ordnerleiste (Phase 3 · 1) |
-| `GET /api/material/meine-psa` | wie oben (401 ohne Anmeldung) | `artikel` (Karten: `id`, `inventory_no`, `serial_no`, `serial_generated`, `produkt` {`manufacturer`, `model`, `description`, `article_no`, `material_kind`, `bild` (Webfassung), `vorschau`}, `status`, `status_text`, `next_due_on`, `retire_by`, `last_inspected_on`, `gesperrt`, `verloren`, `lock_reason`, `notes`, `gliederung`, `demo`, `mangel` {`seit`}, `eigene_maengel`, `artikel_link`, `dokumente`, `rueckruf`), `gesamt`, `mails`, `schwelle_tage` (Phase 3 · 1) |
+| `GET /api/material/meine-psa` | wie oben (401 ohne Anmeldung) | `artikel` (Karten: `id`, `inventory_no`, `serial_no`, `serial_generated`, `produkt` {`manufacturer`, `model`, `description`, `article_no`, `material_kind`, `bild` (Webfassung), `vorschau`}, `status`, `status_text`, `next_due_on`, `retire_by`, `last_inspected_on`, `gesperrt`, `verloren`, `lock_reason`, `notes`, `gliederung`, `demo`, `mangel` {`seit`}, `eigene_maengel`, `artikel_link`, `dokumente`, `rueckruf`, seit Schritt 20 `length_m` und `laenge_text`), `gesamt`, `mails`, `schwelle_tage` (Phase 3 · 1) |
 | `PUT /api/material/meine-psa/mails` (`an`: ja/nein) | angemeldet (eigenes Konto) | Erinnerungen „Deine PSA“ an/aus → `{an}`; 400 ohne brauchbares `an` (Phase 3 · 1) |
 | `POST /api/material/artikel/<id>/mangel` (Formular: `beschreibung`, `fotos` × 0–3; oder JSON `{beschreibung}`) | die zugeordnete Person (auch ohne Stufe) oder lesen an der Heimat; ohne Stufe und nicht eigen 403, ohne Leserecht mit Stufe 404 | Mangel melden, sperrt sofort → 201 `{mangel, gesperrt, mail}` (`mail` false bei DEMO, dev-Sperre und ohne Mailserver); 400 (Beschreibung, Fotos), 409 (ausgesondert, schon gemeldet, „Gesperrt“ fehlt), 413 (Phase 3 · 1) |
 | `GET /m/<token>` | angemeldet | eigene PSA ohne Stufe oder ohne Leserecht → „Meine PSA“ des Artikels; sonst wie bisher (ohne Stufe 403, gleich ob es den Artikel gibt) (Phase 3 · 1) |

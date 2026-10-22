@@ -845,9 +845,9 @@ def test_nacharbeit_csv_rundweg():
         tabelle_ = _csv_lesen(r.data)
         assert tabelle_[0] == ["Nacharbeit-Nr.", "Grund", "Hersteller", "Modell", "Artikelnummer", "Seriennummer",
                                "Bisherige Inventarnummer", "Ordner", "Herstelldatum", "Kaufdatum", "Erstgebrauch",
-                               "Zuletzt geprüft", "Nächste Prüfung", "Prüfintervall (Monate)", "Lebensende", "Anzahl",
-                               "Bemerkung", "Zeile"], tabelle_[0]
-        assert [int(z[0]) for z in tabelle_[1:]] == [o["id"] for o in offen] and tabelle_[1][16] == "'=SUMME(A1)"
+                               "Zuletzt geprüft", "Nächste Prüfung", "Prüfintervall (Monate)", "Lebensende", "Länge (m)",
+                               "Anzahl", "Bemerkung", "Zeile"], tabelle_[0]        # „Länge (m)“ seit Schritt 20
+        assert [int(z[0]) for z in tabelle_[1:]] == [o["id"] for o in offen] and tabelle_[1][17] == "'=SUMME(A1)"    # Bemerkung (hinter „Länge (m)“)
         # Korrigiert: Herstelldatum ergänzt, Intervall richtig; dazu eine Nacharbeit-Nr. aus B. Die Zeile mit
         # zugeordnetem Produkt bleibt eine Sammelzeile (Anzahl 3).
         korr = [tabelle_[0]]

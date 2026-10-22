@@ -180,7 +180,7 @@ def sammeln(mit_dateien=True):
             reihe.append(k)
             e = {"uid": k["uid"], "name": k["name"], "norm": k["norm"], "materialart": k["default_material_kind"],
                  "intervall_monate": k["default_interval_months"], "lebensdauer_jahre": k["default_lifetime_years"],
-                 "position": k["position"]}
+                 "position": k["position"], "artikel_laenge": bool(k["items_have_length"])}
             docs = dokumente("category_id", k["id"], " / ".join(pfad(k["id"])))
             if docs:
                 e["dokumente"] = docs

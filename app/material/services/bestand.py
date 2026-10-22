@@ -30,7 +30,8 @@ from datetime import date
 from ... import db
 from ...images import delete_photo_files
 from ..models import ORDNERARTEN, SYSTEMORDNER
-from . import Abgelehnt, akteur, auswahl, datum, erster_tag, ganzzahl, heute, kennung, monat_oder_datum, text, wahr
+from . import (Abgelehnt, akteur, auswahl, datum, erster_tag, ganzzahl, heute, kennung, laenge, laenge_text,
+               monat_oder_datum, text, wahr)
 from . import faelligkeit, journal, katalog, nummern, qr, rechte
 from . import status as st
 from .interval import faelligkeit_vorschlag, herstellerseite, lebensende, spaetestens, wirksam
@@ -444,7 +445,7 @@ def baum():
 # --- Artikel ---------------------------------------------------------------------------------------
 
 ARTIKEL_FELDER = ("product_id", "serial_no", "manufactured_on", "purchased_on", "first_use_on", "next_due_on",
-                  "retire_by", "interval_months", "notes")
+                  "retire_by", "interval_months", "notes", "length_m")
 
 
 def artikel(iid):
@@ -510,8 +511,15 @@ def artikel_werte(d, alt=None):
          "next_due_on": datum(e.get("next_due_on"), "Nächste Prüfung"),
          "retire_by": datum(e.get("retire_by"), "Lebensende"),
          "interval_months": ganzzahl(e.get("interval_months"), "Prüfintervall (Monate)", 1, 120),
-         "notes": text(e, "notes", "Bemerkung", 4000, einzeilig=False)}
+         "notes": text(e, "notes", "Bemerkung", 4000, einzeilig=False),
+         # Die Länge in Metern (Schritt 20): „57,5“ oder „57.5“, eine Nachkommastelle.
+         "length_m": laenge(e.get("length_m"))}
     p = katalog.produkt(w["product_id"])
+    # Eine Länge gibt es nur, wenn die Kategorie des Produkts (oder eine Oberkategorie) sie vorsieht. Ein Artikel, der
+    # eine hat, seit das Häkchen weg ist, behält sie – nur ein anderer Wert wäre eine Änderung (409 mit Klartext).
+    if w["length_m"] is not None and not katalog.laenge_wirksam(p["category_id"]) and (
+            not alt or w["length_m"] != alt.get("length_m")):
+        raise Abgelehnt(katalog.KEINE_LAENGE, 409)
     h = heute()
     hergestellt = erster_tag(w["manufactured_on"])
     if hergestellt and hergestellt > h:
@@ -631,9 +639,10 @@ def artikel_schreiben(plan, journal_zusatz=None):
         iid = db.execute(
             "INSERT INTO mat_item (product_id, folder_id, serial_no, serial_generated, inventory_no, manufactured_on, "
             "purchased_on, first_use_on, retire_by, retire_by_manual, lock_state, next_due_on, interval_months, qr_token, "
-            "notes, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,'frei',?,?,?,?,?,?,?)",
+            "notes, length_m, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,'frei',?,?,?,?,?,?,?,?)",
             (p["id"], fid, serie, generiert, inventar, w["manufactured_on"], w["purchased_on"], w["first_use_on"],
-             w["retire_by"], manuell, w["next_due_on"], w["interval_months"], qr.neues_token(), w["notes"], uid, ts, ts))
+             w["retire_by"], manuell, w["next_due_on"], w["interval_months"], qr.neues_token(), w["notes"], w["length_m"],
+             uid, ts, ts))
         journal.eintragen("item", iid, "angelegt", None,
                           dict(w, folder_id=fid, serial_no=serie, serial_generated=generiert, inventory_no=inventar,
                                retire_by_manual=manuell, ordner=_pfad_text(fid), **(journal_zusatz or {})))
@@ -726,10 +735,10 @@ def artikel_aendern(iid, d):
         _serie_frei(w["product_id"], w["serial_no"], ausser=iid)
         db.execute("UPDATE mat_item SET product_id = ?, serial_no = ?, serial_generated = ?, manufactured_on = ?, "
                    "purchased_on = ?, first_use_on = ?, retire_by = ?, retire_by_manual = ?, next_due_on = ?, "
-                   "interval_months = ?, notes = ?, updated_at = ? WHERE id = ?",
+                   "interval_months = ?, notes = ?, length_m = ?, updated_at = ? WHERE id = ?",
                    (w["product_id"], w["serial_no"], generiert, w["manufactured_on"], w["purchased_on"],
                     w["first_use_on"], w["retire_by"], manuell, w["next_due_on"], w["interval_months"], w["notes"],
-                    db.now(), iid))
+                    w["length_m"], db.now(), iid))
         journal.aenderung("item", iid, alt, neu)
         # Ein anderes Produkt oder ein kürzeres Intervall am Artikel zieht die Fälligkeit nach.
         faelligkeit.kappen("i.id = ?", (iid,))
@@ -836,6 +845,7 @@ def artikel_kurz(i, stichtag=None):
             "demo": bool(i["artikel_demo"]) if "artikel_demo" in i else ist_demo(i["id"]),
             "next_due_on": i["next_due_on"], "retire_by": i["retire_by"], "lock_state": i["lock_state"],
             "last_inspected_on": i.get("last_inspected_on"), "status": s, "status_text": st.LABEL[s],
+            "length_m": i.get("length_m"), "laenge_text": laenge_text(i.get("length_m")),
             "entwurf": ({"id": i["entwurf_id"], "pruefer": i.get("entwurf_pruefer"),
                          "pruefer_id": i.get("entwurf_pruefer_id")} if i.get("entwurf_id") else None),
             "rueckruf": rueckruf.offene_artikel().get(i["id"]),
@@ -855,9 +865,12 @@ def artikel_json(i, voll=False):
     out = {f: i[f] for f in ("id", "product_id", "folder_id", "origin_folder_id", "serial_no", "inventory_no",
                              "manufactured_on", "purchased_on", "first_use_on", "retire_by", "lock_state",
                              "lock_reason", "next_due_on", "interval_months", "notes", "created_at", "updated_at",
-                             "last_inspected_on")}
+                             "last_inspected_on", "length_m")}
     out["serial_generated"] = bool(i["serial_generated"])
     out["demo"] = ist_demo(i["id"])
+    # Länge (Schritt 20): als Text „57,5 m“ und ob die Kategorie des Produkts sie vorsieht (Feld im Dialog).
+    out["laenge_text"] = laenge_text(i["length_m"])
+    out["laenge_moeglich"] = katalog.laenge_wirksam(p["category_id"])
     out["stand"] = stand_von(i)
     out["stammdaten_fest"] = stammdaten_fest(i["id"])
     # Bei Metall ein fehlendes Herstelldatum direkt nachtragen (nur mit fester Stammdaten von Bedeutung).

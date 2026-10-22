@@ -145,13 +145,22 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     services/mailprotokoll.senden, abgehakt von der Verwaltung (nur erledigt_* sind änderbar, Trigger
     mat_mail_fehler_fest). Dazu zwei Indizes für den Jahresbericht (inspected_on; entity, action, created_at im
     Journal). Rein additiv, nur IF NOT EXISTS, wiederholbar.
+  - Schritt 20 (Artikellänge und Prüfpunkt „Länge“, Wunsch vom 22.10.2026): mat_category.items_have_length – das
+    Häkchen „Artikel haben eine Länge“, das auf alle Unterkategorien wirkt (katalog.laenge_wirksam); mat_item.length_m –
+    die tatsächliche Länge in Metern mit einer Nachkommastelle (REAL, CHECK 0 < x < 10000), kein Teil der festen
+    Stammdaten. Der Prüfpunkt-Typ „laenge“ (EDITOREN) muss in den CHECK von mat_checklist_item: SQLite ändert einen CHECK
+    nur mit einer neuen Tabelle, deshalb wird sie wie mat_item_change in Schritt 17 einmal neu aufgebaut (alle Zeilen
+    und Kennungen bleiben – mat_inspection_result.checklist_item_id zeigt weiter auf sie; kein AUTOINCREMENT, deshalb
+    ohne sqlite_sequence). Schritt 1 bleibt mit EDITOREN_1, wie er ausgeliefert wurde. Wiederholbar: Spalten nur, wenn
+    sie fehlen, umgebaut nur, wenn der CHECK „laenge“ noch nicht kennt. Wer mat_checklist_item künftig neu aufbaut,
+    muss den Index neu anlegen.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -168,7 +177,9 @@ DOKUMENTARTEN = {"produktbild": "Produktbild", "konformitaetserklaerung": "Konfo
 DOKUMENTARTEN_1 = ("produktbild", "konformitaetserklaerung", "gebrauchsanleitung", "pruefanweisung", "datenblatt",
                    "sonstiges")
 EDITOREN = {"yesno": "Ja/Nein", "text": "Text", "date": "Datum", "number": "Zahl", "photo": "Foto",
-            "signature": "Unterschrift"}
+            "signature": "Unterschrift", "laenge": "Länge (m)"}
+# Die Prüfpunkt-Arten, mit denen Schritt 1 die Tabelle angelegt hat – Schritt 20 nahm „Länge“ dazu.
+EDITOREN_1 = ("yesno", "text", "date", "number", "photo", "signature")
 SPERRZUSTAENDE = ("frei", "gesperrt", "ausgesondert", "verloren")
 PRUEFARTEN = {"eingang": "Eingangsprüfung", "periodisch": "periodisch", "ausserplanmaessig": "außerplanmäßig",
               "reparatur": "Reparatur", "aussonderung": "Aussonderung"}
@@ -297,7 +308,7 @@ SCHRITT_1 = [
       group_name     TEXT NOT NULL DEFAULT '',
       position       INTEGER NOT NULL DEFAULT 0,
       label          TEXT NOT NULL,
-      editor         TEXT NOT NULL CHECK (editor IN """ + _in(EDITOREN) + """),
+      editor         TEXT NOT NULL CHECK (editor IN """ + _in(EDITOREN_1) + """),
       mandatory      INTEGER NOT NULL DEFAULT 1,
       expected_value TEXT NOT NULL DEFAULT '',
       is_critical    INTEGER NOT NULL DEFAULT 0
@@ -1688,12 +1699,62 @@ SCHRITT_19 = [
 ]
 
 
+# --- Schritt 20 (22.10.2026): Artikellänge und Prüfpunkt „Länge“ -----------------------------------------------------
+# Das Häkchen an der Kategorie wirkt auf den ganzen Teilbaum (katalog.laenge_wirksam); die Länge am Artikel ist eine
+# Zahl in Metern mit einer Nachkommastelle, die eine Prüfung mit dem Prüfpunkt „Länge“ beim Festschreiben übernimmt
+# (pruefung.abschliessen, Journal „laenge_geaendert“). Sie gehört nicht zu den festen Stammdaten (kein Antrag).
+# mat_checklist_item in der Form von Schritt 1, nur mit dem CHECK, der „laenge“ kennt – für _umbauen_checklist.
+CHECKLIST_20 = """CREATE TABLE {name} (
+      id             INTEGER PRIMARY KEY,
+      form_id        INTEGER NOT NULL REFERENCES mat_form(id) ON DELETE CASCADE,
+      group_name     TEXT NOT NULL DEFAULT '',
+      position       INTEGER NOT NULL DEFAULT 0,
+      label          TEXT NOT NULL,
+      editor         TEXT NOT NULL CHECK (editor IN """ + _in(EDITOREN) + """),
+      mandatory      INTEGER NOT NULL DEFAULT 1,
+      expected_value TEXT NOT NULL DEFAULT '',
+      is_critical    INTEGER NOT NULL DEFAULT 0
+    )"""
+CHECKLIST_INDIZES = ["CREATE INDEX IF NOT EXISTS idx_mat_checklist_form ON mat_checklist_item(form_id, position)"]
+SPALTEN_20 = (
+    ("mat_category", "items_have_length", "INTEGER NOT NULL DEFAULT 0 CHECK (items_have_length IN (0, 1))"),
+    ("mat_item", "length_m", "REAL CHECK (length_m IS NULL OR (length_m > 0 AND length_m < 10000))"),
+)
+
+
+def _umbauen_checklist(conn):
+    """mat_checklist_item mit dem erweiterten CHECK neu aufbauen – wie _umbauen, nur ohne AUTOINCREMENT-Pflege: Die
+    Tabelle vergibt Kennungen ohne sqlite_sequence, und Prüfpunkte stehen nicht im Journal. Alle Zeilen und Kennungen
+    bleiben; Fremdschlüssel sind aus (migrieren), mat_inspection_result.checklist_item_id zeigt danach wieder hin."""
+    alt = _spalten(conn, "mat_checklist_item")
+    conn.execute("DROP TABLE IF EXISTS mat_checklist_item_neu")
+    conn.execute(CHECKLIST_20.format(name="mat_checklist_item_neu"))
+    gemeinsam = ", ".join(s for s in alt if s in _spalten(conn, "mat_checklist_item_neu"))
+    conn.execute(f"INSERT INTO mat_checklist_item_neu ({gemeinsam}) SELECT {gemeinsam} FROM mat_checklist_item")
+    conn.execute("DROP TABLE mat_checklist_item")
+    conn.execute("ALTER TABLE mat_checklist_item_neu RENAME TO mat_checklist_item")
+    for befehl in CHECKLIST_INDIZES:
+        conn.execute(befehl)
+
+
+def _schritt_20(conn):
+    """Artikellänge (Wunsch vom 22.10.2026): die beiden Spalten, wenn sie fehlen, und mat_checklist_item mit dem CHECK,
+    der die Art „laenge“ kennt – umgebaut nur, wenn er sie noch nicht kennt. Ein zweiter Lauf ändert nichts."""
+    for tabelle, spalte, art in SPALTEN_20:
+        if spalte not in _spalten(conn, tabelle):
+            conn.execute(f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {art}")
+    tabelle = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'mat_checklist_item'").fetchone()
+    if "'laenge'" not in tabelle[0]:
+        _umbauen_checklist(conn)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
-            14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19}
+            14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
+            20: _schritt_20}
 
 
 def _meta(conn, schluessel, vorgabe=None):

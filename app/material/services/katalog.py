@@ -24,7 +24,7 @@ import re
 import secrets
 import sqlite3
 
-from flask import current_app, has_request_context
+from flask import current_app, g, has_request_context
 
 from ... import db
 from ...images import ALLOWED_EXT, delete_photo_files, store_upload
@@ -87,7 +87,9 @@ def _mischen(alt, d, felder):
 # --- Kategorien -------------------------------------------------------------------------------------
 
 KATEGORIE_FELDER = ("name", "parent_id", "norm", "default_material_kind", "default_interval_months",
-                    "default_lifetime_years", "position")
+                    "default_lifetime_years", "position", "items_have_length")
+KEINE_LAENGE = ("Für Artikel dieser Kategorie ist keine Länge vorgesehen – das Häkchen „Artikel haben eine Länge“ setzt "
+                "die Material-Verwaltung an der Kategorie (es gilt auch für Unterkategorien).")
 
 
 def kategorie(kid):
@@ -95,6 +97,39 @@ def kategorie(kid):
     if not k:
         raise Abgelehnt("Kategorie nicht gefunden.", 404)
     return k
+
+
+def laenge_kategorien():
+    """Die Kennungen aller Kategorien, deren Artikel eine Länge haben (Schritt 20): das Häkchen „Artikel haben eine
+    Länge“ an der Kategorie selbst oder an einem Vorfahren. Eine Abfrage je Anfrage (g), denn Produktlisten fragen das
+    für jedes Produkt."""
+    speicher = g if has_request_context() else None
+    if speicher is not None and "mat_laenge_kategorien" in speicher:
+        return speicher.mat_laenge_kategorien
+    alle = {k["id"]: k for k in db.query("SELECT id, parent_id, items_have_length FROM mat_category")}
+    out = set()
+    for kid in alle:
+        x, gesehen = kid, set()
+        while x in alle and x not in gesehen:
+            gesehen.add(x)
+            if alle[x]["items_have_length"]:
+                out.add(kid)
+                break
+            x = alle[x]["parent_id"]
+    if speicher is not None:
+        speicher.mat_laenge_kategorien = out
+    return out
+
+
+def laenge_wirksam(category_id):
+    """Haben die Artikel der Produkte dieser Kategorie eine Länge – durch das Häkchen an ihr oder einem Vorfahren?"""
+    return category_id in laenge_kategorien()
+
+
+def _laenge_vergessen():
+    """Nach einer Änderung an Kategorien: den Zwischenspeicher der Anfrage leeren."""
+    if has_request_context():
+        g.pop("mat_laenge_kategorien", None)
 
 
 def _unterkategorien(kid):
@@ -113,6 +148,8 @@ def kategorie_werte(d, alt=None):
         "default_interval_months": ganzzahl(e.get("default_interval_months"), "Prüfintervall (Monate)", 1, 120),
         "default_lifetime_years": ganzzahl(e.get("default_lifetime_years"), "Lebensdauer (Jahre)", 1, 50),
         "position": ganzzahl(e.get("position"), "Position", 0, 100000) or 0,
+        # „Artikel haben eine Länge“ (Schritt 20) – wirkt auf den ganzen Teilbaum (laenge_wirksam).
+        "items_have_length": int(wahr(e, "items_have_length", "Artikel haben eine Länge")),
     }
     if w["default_lifetime_years"] and w["default_material_kind"] != "textil":
         raise Abgelehnt("Eine Lebensdauer gibt es nur bei textilen Kategorien (Materialart „textil“).")
@@ -133,10 +170,12 @@ def kategorie_anlegen(d, demo=False):
     with db.transaction():
         kid = db.execute(
             "INSERT INTO mat_category (parent_id, name, norm, default_material_kind, default_interval_months, "
-            "default_lifetime_years, position, demo, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "default_lifetime_years, position, items_have_length, demo, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (w["parent_id"], w["name"], w["norm"], w["default_material_kind"], w["default_interval_months"],
-             w["default_lifetime_years"], w["position"], int(bool(demo)), ts, ts))
+             w["default_lifetime_years"], w["position"], w["items_have_length"], int(bool(demo)), ts, ts))
         journal.eintragen("category", kid, "angelegt", None, w)
+    _laenge_vergessen()
     return kid
 
 
@@ -192,12 +231,14 @@ def kategorie_aendern(kid, d, intervall_pruefen=True):
             if ohne:
                 raise ohne_intervall_meldung(ohne)
         db.execute("UPDATE mat_category SET parent_id = ?, name = ?, norm = ?, default_material_kind = ?, "
-                   "default_interval_months = ?, default_lifetime_years = ?, position = ?, updated_at = ? WHERE id = ?",
+                   "default_interval_months = ?, default_lifetime_years = ?, position = ?, items_have_length = ?, "
+                   "updated_at = ? WHERE id = ?",
                    (w["parent_id"], w["name"], w["norm"], w["default_material_kind"], w["default_interval_months"],
-                    w["default_lifetime_years"], w["position"], db.now(), kid))
+                    w["default_lifetime_years"], w["position"], w["items_have_length"], db.now(), kid))
         journal.aenderung("category", kid, alt, w)
         if (w["default_interval_months"], w["parent_id"]) != (alt["default_interval_months"], alt["parent_id"]):
             faelligkeit.kappen(*faelligkeit.in_kategorie(kid))
+    _laenge_vergessen()
     return kid
 
 
@@ -254,6 +295,9 @@ def kategorie_json(k):
     out = {f: k.get(f) for f in ("id", "parent_id", "name", "norm", "default_material_kind",
                                  "default_interval_months", "default_lifetime_years", "position")}
     out["demo"] = bool(k.get("demo"))
+    # Das Häkchen selbst und ob es hier wirkt (auch von einer Oberkategorie geerbt).
+    out["items_have_length"] = bool(k.get("items_have_length"))
+    out["laenge_wirksam"] = laenge_wirksam(k["id"])
     for f in ("produkte", "aktives_formular", "formulare"):
         if f in k:
             out[f] = k[f]
@@ -623,6 +667,8 @@ def produkt_json(p, voll=False):
     out["original"] = bild_url(p.get("image"), "orig")
     hm, hq = herstellerseite(p)
     out["intervall"] = {"monate": hm, "quelle": hq}
+    # Haben Artikel dieses Produkts eine Länge (Häkchen an der Kategorie oder einem Vorfahren)? Für die Artikeldialoge.
+    out["laenge_moeglich"] = laenge_wirksam(p["category_id"])
     if "category_name" in p:
         out["category_name"] = p["category_name"]
     if "bestand" in p:
@@ -956,8 +1002,8 @@ def punkte_pruefen(roh):
             soll = soll.lower()
             if soll not in ("ja", "nein"):
                 raise Abgelehnt(f"Prüfpunkt {n} (Ja/Nein) braucht den Sollwert „ja“ oder „nein“.")
-        elif art in ("photo", "signature", "date"):
-            soll = ""
+        elif art in ("photo", "signature", "date", "laenge"):
+            soll = ""                   # bei „Länge“ ist das Soll die Artikellänge zum Prüfzeitpunkt (pruefung.starten)
         kritisch = wahr(p, "kritisch", f"kritisch (Prüfpunkt {n})")
         if kritisch and art != "yesno":
             raise Abgelehnt(f"Prüfpunkt {n}: Kritisch kann nur ein Ja/Nein-Punkt sein – er hat einen Sollwert, "

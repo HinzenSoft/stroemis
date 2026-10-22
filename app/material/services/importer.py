@@ -139,7 +139,7 @@ def _kategorie_finden(pfad):
 
 _KATEGORIE_ABBILDUNG = {"norm": "norm", "materialart": "default_material_kind",
                         "intervall_monate": "default_interval_months", "lebensdauer_jahre": "default_lifetime_years",
-                        "position": "position"}
+                        "position": "position", "artikel_laenge": "items_have_length"}
 _PRODUKT_ABBILDUNG = {"hersteller": "manufacturer", "modell": "model", "artikelnummer": "article_no", "norm": "norm",
                       "materialart": "material_kind", "intervall_monate": "interval_months",
                       "lebensdauer_jahre": "lifetime_years", "lebensdauer_quelle": "lifetime_source",

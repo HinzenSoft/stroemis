@@ -40,7 +40,7 @@ from flask import has_request_context
 from ... import db
 from ...images import delete_photo_files
 from ..models import ANHANGARTEN, AUSSONDERUNGSGRUENDE, BEFUNDE, ERGEBNISSE, PRUEFARTEN, SPERRGRUENDE
-from . import OHNE_NAMEN, Abgelehnt, auswahl, datum, erster_tag, heute, text, wahr
+from . import OHNE_NAMEN, Abgelehnt, auswahl, datum, erster_tag, heute, laenge, laenge_text, text, wahr
 from . import anhang as anh
 from . import bestand, journal, katalog, protokoll, rechte
 from . import status as st
@@ -199,6 +199,9 @@ def pruefung_json(p, pruefer_id=None):
     out["dokumente"] = json.loads(p["documents_json"] or "[]")
     out["unterschrift"] = us.daten_uri(p["signature_png"])
     out["grund_berichtigung"] = p["correction_reason"]
+    # Länge des Artikels (Schritt 20): die gespeicherte und ob die Kategorie eine vorsieht – für den Längenpunkt.
+    out["laenge"] = {"wert": item["length_m"], "text": laenge_text(item["length_m"]),
+                     "moeglich": katalog.laenge_wirksam(produkt["category_id"])}
     if not out["entwurf"]:
         out["berichtigbar"] = berichtigbar(p, item)
     tag = p["inspected_on"] if out["entwurf"] and p["corrects_inspection_id"] else (
@@ -261,16 +264,23 @@ def entwuerfe(pruefer_id=None):
 
 # --- Entwurf ------------------------------------------------------------------------------------------
 
-def _vorbelegung(punkt):
-    """(Befund, Wert) eines frischen Prüfpunkts: Befund „in Ordnung“ und der Sollwert, denn das ist der
+def _vorbelegung(punkt, item=None, laenge_moeglich=False):
+    """(Befund, Wert, Soll) eines frischen Prüfpunkts: Befund „in Ordnung“ und der Sollwert, denn das ist der
     Normalfall. Bei Text und Zahl ist das Soll seit Lieferung 1 ein Hinweis („max. 22 mm“) – den
     übernimmt kein Wert, er steht nur als Platzhalter im Feld. Einzig ein Soll, das selbst eine Zahl ist,
-    gilt bei Zahlpunkten als Sollwert."""
+    gilt bei Zahlpunkten als Sollwert. Ein Längenpunkt (Schritt 20) bekommt als Soll und Wert die Länge des Artikels
+    („57,5“; leer, wenn er keine hat); sieht die Kategorie keine Länge vor, ist er „nicht zutreffend“."""
+    soll = punkt["expected_value"]
     if punkt["editor"] == "yesno":
-        return "ok", punkt["expected_value"]
-    if punkt["editor"] == "number" and _ist_zahl(punkt["expected_value"]):
-        return "ok", punkt["expected_value"].strip()
-    return "ok", ""
+        return "ok", soll, soll
+    if punkt["editor"] == "number" and _ist_zahl(soll):
+        return "ok", soll.strip(), soll
+    if punkt["editor"] == "laenge":
+        if not laenge_moeglich:
+            return "nicht_zutreffend", "", ""
+        jetzt = laenge_text(item["length_m"] if item else None, einheit=False)
+        return "ok", jetzt, jetzt
+    return "ok", "", soll
 
 
 def _ist_zahl(s):
@@ -321,13 +331,14 @@ def starten(iid, pruefer, art=None, durchgang_id=None):
             "form_id, form_version, inspected_on, kind, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (iid, runde, pruefer.get("id"), pruefer["name"], pruefer["urkunde"], formular["id"], formular["version"],
              heute().isoformat(), art, ts, ts))
+        laenge_moeglich = katalog.laenge_wirksam(katalog.produkt(item["product_id"])["category_id"])
         for p in punkte:
-            befund, wert = _vorbelegung(p)
+            befund, wert, soll = _vorbelegung(p, item, laenge_moeglich)
             db.execute("INSERT INTO mat_inspection_result (inspection_id, checklist_item_id, position, group_name, "
                        "checklist_text, editor, mandatory, expected_value, is_critical, finding, value) "
                        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                        (pid, p["id"], p["position"], p["group_name"], p["label"], p["editor"], p["mandatory"],
-                        p["expected_value"], p["is_critical"], befund, wert))
+                        soll, p["is_critical"], befund, wert))
         journal.eintragen("inspection", pid, "begonnen", None,
                           {"item_id": iid, "kind": art, "form_id": formular["id"], "form_version": formular["version"],
                            "round_id": runde})
@@ -382,7 +393,7 @@ def punkt_setzen(pid, rid, d, pruefer):
     befund „nicht_zutreffend“ nimmt den Punkt heraus. Andere Arten: Wert und Befund (ok, mangel,
     nicht_zutreffend) getrennt. Was die Anfrage nicht nennt, bleibt."""
     with db.transaction(sofort=True):
-        _entwurf_des(pid, pruefer)
+        p = _entwurf_des(pid, pruefer)
         r = _befund(pid, rid)
         art = r["editor"]
         befund, wert, notiz = r["finding"], r["value"], r["note"]
@@ -425,12 +436,56 @@ def punkt_setzen(pid, rid, d, pruefer):
                              r["checklist_text"])
             elif art == "text":
                 wert = text(d, "wert", r["checklist_text"], 1000, einzeilig=False)
+            elif art == "laenge":
+                # Die gemessene Länge in Metern („55“, „55,0“, „55.0“) – gespeichert als „55,0“; beim Festschreiben
+                # wird ein anderer Wert als die Artikellänge in den Artikel übernommen (abschliessen). Sieht die
+                # Kategorie keine Länge vor, bleibt der Punkt „nicht zutreffend“.
+                if not _laenge_moeglich(p):
+                    raise Abgelehnt(katalog.KEINE_LAENGE, 409)
+                roh = d.get("wert") if isinstance(d.get("wert"), str) else str(d.get("wert") or "")
+                wert = laenge_text(laenge(roh, r["checklist_text"]), einheit=False)
             else:
                 raise Abgelehnt("Dieser Prüfpunkt nimmt ein Foto auf, keinen Wert.")
         db.execute("UPDATE mat_inspection_result SET finding = ?, value = ?, note = ? WHERE id = ?",
                    (befund, wert, notiz, rid))
         _beruehrt(pid)
     return befund_json(_befund(pid, rid))
+
+
+def _laenge_moeglich(p):
+    """Sieht die Kategorie des Artikels dieser Prüfung eine Länge vor (katalog.laenge_wirksam)?"""
+    item = bestand.artikel(p["item_id"])
+    return katalog.laenge_wirksam(katalog.produkt(item["product_id"])["category_id"])
+
+
+def _laenge_uebernehmen(p, item, punkte):
+    """Beim Festschreiben (Schritt 20): Ein Längenpunkt mit Befund und Wert trägt die gemessene Länge in den Artikel,
+    wenn sie von der gespeicherten abweicht – mit eigenem Journaleintrag „laenge_geaendert“ (vorher/nachher, Verweis
+    auf die Prüfung). Das Soll der Ergebniszeile wird vorher auf die bis dahin gespeicherte Länge gesetzt, damit das
+    Protokoll „alt → neu“ zeigt, auch wenn jemand die Länge seit dem Beginn der Prüfung bearbeitet hat (die Zeile
+    ist bis zum Abschluss änderbar). Ohne vorgesehene Länge (Kategorie) gilt der Punkt als „nicht zutreffend“ –
+    dann ändert sich am Artikel nichts. Liefert die Länge nach dem Festschreiben."""
+    laengenpunkte = [r for r in punkte if r["editor"] == "laenge"]
+    if not laengenpunkte:
+        return item["length_m"]
+    aktuell = item["length_m"]
+    if not katalog.laenge_wirksam(katalog.produkt(item["product_id"])["category_id"]):
+        for r in laengenpunkte:
+            db.execute("UPDATE mat_inspection_result SET finding = 'nicht_zutreffend', value = '', expected_value = '' "
+                       "WHERE id = ?", (r["id"],))
+        return aktuell
+    for r in laengenpunkte:
+        db.execute("UPDATE mat_inspection_result SET expected_value = ? WHERE id = ?",
+                   (laenge_text(aktuell, einheit=False), r["id"]))
+        if r["finding"] == "nicht_zutreffend" or not (r["value"] or "").strip():
+            continue
+        neu = laenge(r["value"], r["checklist_text"])
+        if neu != aktuell:
+            db.execute("UPDATE mat_item SET length_m = ?, updated_at = ? WHERE id = ?", (neu, db.now(), item["id"]))
+            journal.eintragen("item", item["id"], "laenge_geaendert", {"length_m": aktuell},
+                              {"length_m": neu, "pruefung": p["id"], "art": p["kind"]})
+            aktuell = neu
+    return aktuell
 
 
 def punkt_foto_setzen(pid, rid, file_storage, pruefer):
@@ -634,6 +689,9 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
                       "kategorie": x["herkunft"]["name"] if x.get("herkunft") else None}
                      for x in katalog.gueltige_dokumente(produkt["id"], tag)]
         ts = db.now()
+        # Die gemessene Länge in den Artikel – vor dem Abschluss, solange die Ergebniszeile ihr Soll noch annimmt
+        # (Trigger mat_result_aendern); das Protokoll liest „alt → neu“ aus ihr.
+        _laenge_uebernehmen(p, item, punkte)
         db.execute("UPDATE mat_inspection SET result = ?, inspected_on = ?, next_due_on = ?, reason = ?, remarks = ?, "
                    "inspector_name = ?, inspector_certificate = ?, documents_json = ?, completed_at = ?, updated_at = ? "
                    "WHERE id = ?",

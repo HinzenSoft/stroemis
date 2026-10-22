@@ -24,7 +24,7 @@ from pypdf import PdfReader
 
 from ... import db
 from ..models import ANHANGARTEN, DOKUMENTARTEN, ERGEBNISSE, MATERIALARTEN
-from . import ZONE, Abgelehnt, bestand, journal, katalog, qr, stempel
+from . import ZONE, Abgelehnt, bestand, journal, katalog, laenge_text, qr, stempel
 VORSATZ = {"pruefprotokoll": "P", "aussonderungsprotokoll": "A", "sammelprotokoll": "S"}
 TITEL = {"pruefprotokoll": "Prüfprotokoll", "aussonderungsprotokoll": "Aussonderungsprotokoll",
          "sammelprotokoll": "Sammelprotokoll"}
@@ -275,8 +275,14 @@ def _artikel(item, produkt, ordner_id):
             "inventarnummer": item["inventory_no"], "hergestellt": datum_text(item["manufactured_on"]),
             "gekauft": datum_text(item["purchased_on"]), "erstgebrauch": datum_text(item["first_use_on"]),
             "lebensende": datum_text(item["retire_by"]) if produkt["material_kind"] == "textil" else "",
+            "laenge": laenge_text(item.get("length_m")),
             "gliederung": gliederung["name"] if gliederung else "", "ordner": _pfad_text(ordner_id),
             "bild": _bild(produkt["image"], max_kante=700), "qr_svg": pdf.qr_svg(url), "qr_url": qr.anzeige(url)}
+
+
+def _laenge_m(text):
+    """„57,5“ aus der Ergebniszeile → „57,5 m“; leer bleibt leer."""
+    return f"{text.strip()} m" if (text or "").strip() else ""
 
 
 def _wert_text(r):
@@ -284,12 +290,23 @@ def _wert_text(r):
         return {"ja": "Ja", "nein": "Nein"}.get(r["value"], r["value"] or "")
     if r["editor"] == "date":
         return datum_text(r["value"])
+    if r["editor"] == "laenge":
+        # Längenpunkt (Schritt 20): „57,5 m → 55,0 m“ bei einer Änderung, sonst „57,5 m (unverändert)“ – das Soll ist
+        # die Artikellänge vor dem Festschreiben (pruefung._laenge_uebernehmen).
+        soll, wert = _laenge_m(r["expected_value"]), _laenge_m(r["value"])
+        if r["finding"] == "nicht_zutreffend" or not wert:
+            return ""
+        if soll and soll != wert:
+            return f"{soll} → {wert}"
+        return f"{wert} (unverändert)" if soll else wert
     return r["value"] or ""
 
 
 def _soll_text(r):
     if r["editor"] == "yesno":
         return {"ja": "Ja", "nein": "Nein"}.get(r["expected_value"], r["expected_value"] or "")
+    if r["editor"] == "laenge":
+        return _laenge_m(r["expected_value"])
     return r["expected_value"] or ""
 
 

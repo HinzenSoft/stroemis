@@ -92,6 +92,51 @@ def ganzzahl(wert, name, mini=None, maxi=None, leer_erlaubt=True):
     return wert
 
 
+def dezimal(wert, name, mini=None, maxi=None, stellen=1, leer_erlaubt=True):
+    """Kommazahl oder None (leer): „57,5“ wie „57.5“ (deutsches Komma oder Punkt, auch als Zahl), gerundet auf
+    `stellen` Nachkommastellen; die Grenzen gelten nach dem Runden. Wahrheitswerte sind Tippfehler, keine Zahlen."""
+    if wert is None or wert == "":
+        if leer_erlaubt:
+            return None
+        raise Abgelehnt(f"„{name}“ fehlt.")
+    if isinstance(wert, bool):
+        raise Abgelehnt(f"„{name}“ ist keine Zahl.")
+    if isinstance(wert, str):
+        s = wert.strip().replace(" ", "").replace(",", ".")
+        if not re.fullmatch(r"-?\d{1,9}(\.\d{1,6})?", s):
+            raise Abgelehnt(f"„{name}“ ist keine Zahl (etwa 57,5).")
+        wert = float(s)
+    if not isinstance(wert, (int, float)):
+        raise Abgelehnt(f"„{name}“ ist keine Zahl.")
+    wert = round(float(wert), stellen)
+    if (mini is not None and wert < mini) or (maxi is not None and wert > maxi):
+        raise Abgelehnt(f"„{name}“ muss zwischen {dezimal_text(mini, stellen)} und {dezimal_text(maxi, stellen)} liegen.")
+    return wert
+
+
+def dezimal_text(wert, stellen=1):
+    """57.5 → „57,5“ – mit genau `stellen` Nachkommastellen und deutschem Komma; None → ''."""
+    if wert is None or wert == "":
+        return ""
+    return f"{float(wert):.{stellen}f}".replace(".", ",")
+
+
+# Die Länge eines Artikels in Metern (Schritt 20): eine Nachkommastelle, über 0 und unter 10 000 (wie der CHECK).
+LAENGE_MIN, LAENGE_MAX = 0.1, 9999.9
+
+
+def laenge(wert, name="Länge (m)"):
+    """Eine Artikellänge aus der Eingabe: Meter mit einer Nachkommastelle, Komma oder Punkt; leer → None."""
+    return dezimal(wert, name, LAENGE_MIN, LAENGE_MAX, 1)
+
+
+def laenge_text(meter, einheit=True):
+    """57.5 → „57,5 m“ (Anzeige, Protokoll, Lebenslauf); ohne Einheit „57,5“ (Eingabefeld, CSV); None → ''."""
+    if meter is None:
+        return ""
+    return dezimal_text(meter, 1) + (" m" if einheit else "")
+
+
 def kennung(wert, name, leer_erlaubt=False):
     """Eine Datensatzkennung (positive ganze Zahl). „7“ und 7.0 gelten als 7 – im Dienst wie in der Rechteprüfung
     (rechte._bezug), damit beide dieselbe Kennung meinen; alles andere ist 400."""

@@ -203,7 +203,9 @@
   const DOKART = { produktbild: "Produktbild", konformitaetserklaerung: "Konformitätserklärung",
                    gebrauchsanleitung: "Gebrauchsanleitung", pruefanweisung: "Prüfanweisung", pflegehinweis: "Pflegehinweis",
                    datenblatt: "Datenblatt", sonstiges: "Sonstiges" };
-  const EDITOR = { yesno: "Ja/Nein", text: "Text", date: "Datum", number: "Zahl", photo: "Foto", signature: "Unterschrift" };
+  const EDITOR = { yesno: "Ja/Nein", text: "Text", date: "Datum", number: "Zahl", photo: "Foto", signature: "Unterschrift", laenge: "Länge (m)" };
+  // Artikellänge (Schritt 20): 57.5 → „57,5 m“ (eine Nachkommastelle, deutsches Komma); ohne Einheit fürs Eingabefeld.
+  const laengeText = (m, einheit = true) => (m === null || m === undefined || m === "" ? "" : `${Number(m).toFixed(1).replace(".", ",")}${einheit ? " m" : ""}`);
   // Feldnamen für das Journal – was nicht hier steht, erscheint mit seinem technischen Namen.
   const FELD = {
     manufacturer: "Hersteller", model: "Modell", article_no: "Artikelnummer", norm: "Norm", material_kind: "Materialart",
@@ -245,6 +247,8 @@
     antrag: "Änderungsantrag Nr.", begruendung: "Begründung", beantragt_von: "beantragt von", anmerkung: "Anmerkung",
     ablehnung: "Begründung der Ablehnung", feld: "Feld",
     rueckruf_nicht_mehr: "Rückruf trifft ihn nicht mehr", rueckruf_neu: "Rückruf trifft ihn jetzt",
+    // Artikellänge (Schritt 20)
+    length_m: "Länge (m)", items_have_length: "Artikel haben eine Länge",
   };
   // Die Beschriftung eines Feldes in einem Journaleintrag – wie beschriftung.feld_name: „description“ ist am Produkt der
   // kurze Zusatz hinter dem Namen und heißt dort seit dem Wunsch vom 18.10.2026 „Bemerkung“; an Ordnern und in den
@@ -271,7 +275,7 @@
                    nacharbeit_verworfen: "Nacharbeit verworfen", wiki: "Prüfanleitung (Wiki) geändert",
                    mangel_gemeldet: "Mangel gemeldet", antrag_gestellt: "Änderung beantragt",
                    antrag_bestaetigt: "Änderung bestätigt (Antrag)", antrag_abgelehnt: "Änderungsantrag abgelehnt",
-                   antrag_zurueckgezogen: "Änderungsantrag zurückgezogen" };
+                   antrag_zurueckgezogen: "Änderungsantrag zurückgezogen", laenge_geaendert: "Länge geändert" };
   const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };
@@ -719,7 +723,8 @@
     if (v === null || v === undefined || v === "") return '<span class="muted">–</span>';
     if (feld === "recht") return esc(RECHT[v] || v);
     if (Array.isArray(v)) return v.length ? `<ul class="mat-wertliste">${v.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "–";
-    if (typeof v === "boolean" || ((feld === "serial_generated" || feld === "active" || feld === "mat_pruefer" || feld === "mat_katalog" || feld === "reminders_off" || feld === "aus_nacharbeit") && (v === 0 || v === 1))) return v ? "ja" : "nein";
+    if (typeof v === "boolean" || ((feld === "serial_generated" || feld === "active" || feld === "mat_pruefer" || feld === "mat_katalog" || feld === "reminders_off" || feld === "aus_nacharbeit" || feld === "items_have_length") && (v === 0 || v === 1))) return v ? "ja" : "nein";
+    if (feld === "length_m" && typeof v === "number") return esc(laengeText(v));
     if (feld === "material_kind" || feld === "default_material_kind") return esc(MATERIALART[v] || v);
     if (feld === "kind" || feld === "art") return esc(PRUEFART_KURZ[v] || ORDNERART[v] || ANHANGART[v] || v);
     if (feld === "result" || feld === "ergebnis") return esc(ERGEBNIS[v] || v);
@@ -1271,7 +1276,8 @@
   const sortWeiter = (sort, feld) => (sort.feld === feld ? { feld, richtung: sort.richtung === "auf" ? "ab" : "auf" } : { feld, richtung: "auf" });
   const sortParameter = (q, sort) => { if (sort && sort.feld) { q.set("sort", sort.feld); q.set("richtung", sort.richtung); } return q; };
   // Ein Produkt in Listen: Hersteller in eigener Spalte, hier Bild, Modell mit Beschreibung und Artikelnummer.
-  const produktZelle = (a) => `${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${nameHtml(a, true)}${zusatzHtml(a)}${artNrKurz(a.article_no)}${demoMarke(a.demo)}`;
+  // Die Länge eines Artikels (Schritt 20) steht grau hinter dem Produkt – nur, wo eine hinterlegt ist.
+  const produktZelle = (a) => `${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${nameHtml(a, true)}${zusatzHtml(a)}${artNrKurz(a.article_no)}${a.length_m ? ` <span class="muted small mat-laenge">${esc(laengeText(a.length_m))}</span>` : ""}${demoMarke(a.demo)}`;
 
   /* Drei Gestalten je nach Breite des Inhalts (material.css, „Lieferung 5 – Geräte: listen“): ab 821 px alle Spalten;
      601–820 px eine engere Tabelle – Seriennummer unter der Inventar-Nr., Hersteller über dem Produkt, nächste Prüfung
@@ -2313,6 +2319,7 @@
           ${zeile("Kauf", a.purchased_on ? esc(fmtTag(a.purchased_on)) : '<span class="muted">–</span>')}
           ${zeile("Erstgebrauch", a.first_use_on ? esc(fmtTag(a.first_use_on)) : '<span class="muted">–</span>')}
           ${zeile("Lebensende", ldText)}
+          ${a.laenge_moeglich || a.length_m ? zeile("Länge", a.length_m ? esc(laengeText(a.length_m)) : '<span class="muted">–</span>') : ""}
           ${zeile("Nächste Prüfung", aus ? '<span class="muted">–</span>' : gesperrt ? '<span class="muted">setzt die Freiprüfung</span>' : a.status === "neu" ? '<strong>Eingangsprüfung ausstehend</strong>' : a.next_due_on ? `<strong>${esc(fmtTag(a.next_due_on))}</strong>` : '<span class="mat-warn">keine</span>')}
           ${zeile("Zuletzt geprüft", a.last_inspected_on ? esc(fmtTag(a.last_inspected_on)) : '<span class="muted">noch nie</span>')}
           ${zeile("Prüfintervall", ivText)}
@@ -2546,6 +2553,8 @@
     // Ausnahme (Entscheidung vom 21.10.2026): Bei Metall lässt sich ein fehlendes Herstelldatum direkt nachtragen. Jede
     // andere Änderung geht über „Änderung beantragen …“ an die Material-Verwaltung (antragDialog).
     const nachtragen = fest && !!a.herstellung_nachtragbar;
+    // Länge (Schritt 20): nur, wenn die Kategorie des Produkts eine vorsieht – oder der Artikel noch eine trägt.
+    const mitLaenge = !!(a.laenge_moeglich || a.length_m);
     const sn = fest
       ? `<label for="ad-sn">Seriennummer${a.serial_generated ? " (vom System)" : ""}</label><input type="text" id="ad-sn" readonly value="${esc(a.serial_no)}">`
       : `<label for="ad-sn">Seriennummer des Herstellers</label><input type="text" id="ad-sn" ${TASTATUR_NUMMER} value="${a.serial_generated ? "" : esc(a.serial_no)}" placeholder="${a.serial_generated ? esc(a.serial_no) + " (vom System)" : ""}" maxlength="80">`;
@@ -2567,6 +2576,8 @@
         <div ${a.status === "neu" ? "hidden" : ""}><label for="ad-due">Nächste Prüfung</label>${datumFeld("ad-due", a.next_due_on, "tag")}
           <div class="help">Nur vorziehen – später setzt sie eine Prüfung.</div></div></div>
       ${textil ? `<div class="field-row"><div><label for="ad-ende">Lebensende</label>${datumFeld("ad-ende", a.retire_by, "tag")}<div class="help">Nur vorziehen. Leer lassen behält das Lebensende.</div></div><div></div></div>` : ""}
+      ${mitLaenge ? `<div class="field-row"><div><label for="ad-laenge">Länge (m)</label><input type="text" id="ad-laenge" class="mat-laenge-feld" inputmode="decimal" autocomplete="off" maxlength="10" placeholder="z. B. 57,5" value="${esc(laengeText(a.length_m, false))}">
+        <div class="help">Tatsächliche Länge in Metern, eine Nachkommastelle. Ein Prüfpunkt „Länge“ fragt sie bei jeder Prüfung ab.</div></div><div></div></div>` : ""}
       <label for="ad-notes">Bemerkung</label><textarea id="ad-notes" rows="3" maxlength="4000">${esc(a.notes || "")}</textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="ad-ok" type="button">Speichern</button></div>`,
     (dlg, body) => {
@@ -2595,6 +2606,7 @@
             if (nach) daten.manufactured_on = nach;
           }
           if (textil) daten.retire_by = datumWert($("#ad-ende", body), "Lebensende") || null;
+          if (mitLaenge) daten.length_m = $("#ad-laenge", body).value.trim() || null;
         } catch (e) { toast(e.message, true); return; }
         knopf.disabled = true;
         try { await api(`${API}/artikel/${a.id}`, { method: "PUT", body: daten }); dlg.close(); toast("Gespeichert"); zeigen(artikel); }
@@ -2719,6 +2731,8 @@
           <div><label for="an-int">Prüfintervall am Artikel (Monate)</label><input type="number" id="an-int" min="1" max="120" placeholder="vom Produkt/Ordner"></div></div>
         <div class="field-row"><div id="an-ende-feld" hidden><label for="an-ende">Lebensende</label>${datumFeld("an-ende", "", "tag")}<div class="help" id="an-ende-hilfe"></div></div>
           <div><p class="help" id="an-due-hilfe"></p></div></div>
+        <div class="field-row"><div id="an-laenge-feld" hidden><label for="an-laenge">Länge (m)</label><input type="text" id="an-laenge" class="mat-laenge-feld" inputmode="decimal" autocomplete="off" maxlength="10" placeholder="z. B. 57,5">
+          <div class="help">Tatsächliche Länge in Metern, eine Nachkommastelle – ein Prüfpunkt „Länge“ fragt sie bei jeder Prüfung ab.</div></div><div></div></div>
         <p class="notice">Neu angelegte Artikel stehen auf <strong>neu</strong>, bis ein Prüfer die Eingangsprüfung gemacht hat – erst sie gibt sie frei und setzt die erste Fälligkeit.</p>
         <label for="an-notes">Bemerkung</label><textarea id="an-notes" rows="2" maxlength="4000"></textarea>
         <div class="btn-row mat-knoepfe"><button class="btn" data-act="anlegen">Anlegen</button>
@@ -2758,6 +2772,9 @@
       $("#an-q").value = "";
       $("#an-anders").onclick = () => { produkt = null; $("#an-produkt").hidden = true; fokus($("#an-q")); };
       $("#an-ende").dataset.selbst = "";
+      // Das Längenfeld nur bei Produkten, deren Kategorie eine Länge vorsieht (laenge_moeglich aus produkt_json).
+      $("#an-laenge-feld").hidden = !p.laenge_moeglich;
+      if (!p.laenge_moeglich) $("#an-laenge").value = "";
       vorschlag();
     }
     let suchLos = null;
@@ -2782,6 +2799,7 @@
                   first_use_on: datumWert($("#an-erst"), "Erstgebrauch") || null, interval_months: $("#an-int").value || null,
                   notes: $("#an-notes").value };
         if (!$("#an-ende-feld").hidden) daten.retire_by = datumWert($("#an-ende"), "Lebensende") || null;
+        if (!$("#an-laenge-feld").hidden) daten.length_m = $("#an-laenge").value.trim() || null;
       } catch (e) { toast(e.message, true); return; }
       try {
         const r = await api(`${API}/artikel`, { method: "POST", body: daten });
@@ -2918,7 +2936,8 @@
       // Produkte samt Unterkategorien – dieselbe Zahl wie in der Leiste und wie die Liste darunter.
       const summe = (id) => (kats.find((x) => x.id === id).produkte || 0) + kats.filter((x) => x.parent_id === id).reduce((n, c) => n + summe(c.id), 0);
       const angaben = k ? [k.norm ? esc(k.norm) : "", k.default_material_kind ? `Materialart ${esc(MATERIALART[k.default_material_kind])}` : "",
-        k.default_interval_months ? `Prüfintervall ${k.default_interval_months} Monate` : "", plural(summe(k.id), "Produkt", "Produkte")].filter(Boolean).join(" · ") : "";
+        k.default_interval_months ? `Prüfintervall ${k.default_interval_months} Monate` : "", k.laenge_wirksam ? "Artikel haben eine Länge" : "",
+        plural(summe(k.id), "Produkt", "Produkte")].filter(Boolean).join(" · ") : "";
       // Zum aktiven generischen Formular führt bei der Material-Verwaltung der Knopf „Generisches Formular“, sonst der Verweis in der Angabenzeile.
       inhalt.innerHTML = `<div class="page-head"><h1>Katalog</h1>
           <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kategorie<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary" data-act="produkt-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Produkt<span class="k-anlegen"> anlegen</span></span></button>' : ""}
@@ -3126,6 +3145,9 @@
   async function kategorieDialog(k) {
     const kats = await kategorienLaden();
     const neu = !k.id;
+    // „Artikel haben eine Länge“ wirkt auf Unterkategorien: Setzt es schon eine Oberkategorie, sagt der Dialog das.
+    const oben = kats.find((x) => x.id === k.parent_id);
+    const geerbt = !!(oben && oben.laenge_wirksam);
     dialog(`<h2>${neu ? "Kategorie anlegen" : "Kategorie bearbeiten"}</h2>
       <label for="kd-name">Name</label><input type="text" id="kd-name" value="${esc(k.name || "")}" maxlength="120">
       <label for="kd-parent">Oberkategorie</label><select id="kd-parent"><option value="">– oberste Ebene –</option>${kategorieOptionen(kats, k.parent_id, k.id)}</select>
@@ -3135,6 +3157,8 @@
         <div><label for="kd-int">Prüfintervall (Monate, Vorgabe)</label><input type="number" id="kd-int" min="1" max="120" value="${k.default_interval_months || ""}"></div></div>
       <label for="kd-ld">Lebensdauer (Jahre, Vorschlag – nur textil)</label><input type="number" id="kd-ld" min="1" max="50" value="${k.default_lifetime_years || ""}">
       <div class="help">Nur ein Vorschlag beim Anlegen eines Produkts: Die Lebensdauer steht am Produkt, aus der Anleitung des Herstellers.</div>
+      <label class="inline mat-kd-laenge"><input type="checkbox" id="kd-laenge" ${k.items_have_length ? "checked" : ""}> Artikel haben eine Länge</label>
+      <div class="help">Seile und Meterware: Artikel dieser Kategorie und aller Unterkategorien bekommen ein Feld „Länge (m)“; ein Prüfpunkt „Länge“ fragt sie bei der Prüfung ab.${geerbt ? " Hier schon durch eine Oberkategorie gesetzt." : ""}</div>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="kd-ok" type="button">${neu ? "Anlegen" : "Speichern"}</button></div>`,
     (dlg, body) => {
       const art = $("#kd-art", body), ld = $("#kd-ld", body);
@@ -3144,7 +3168,8 @@
       $("#kd-ok", body).onclick = async () => {
         const daten = { name: $("#kd-name", body).value, parent_id: $("#kd-parent", body).value ? +$("#kd-parent", body).value : null,
                         norm: $("#kd-norm", body).value, default_material_kind: art.value || null,
-                        default_interval_months: $("#kd-int", body).value || null, default_lifetime_years: ld.value || null };
+                        default_interval_months: $("#kd-int", body).value || null, default_lifetime_years: ld.value || null,
+                        items_have_length: $("#kd-laenge", body).checked };
         try {
           const r = neu ? await api(`${API}/kategorien`, { method: "POST", body: daten }) : await api(`${API}/kategorien/${k.id}`, { method: "PUT", body: daten });
           dlg.close(); location.href = `/material/katalog?kategorie=${r.kategorie.id}`;
@@ -3567,7 +3592,8 @@
         <td data-l="Prüfpunkt"><textarea class="fp-text" rows="1" maxlength="1000" aria-label="Prüfpunkt">${esc(p.text || "")}</textarea></td>
         <td data-l="Art"><select class="fp-art">${Object.entries(EDITOR).map(([w, t]) => `<option value="${w}" ${p.art === w ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></td>
         <td data-l="Soll">${p.art === "yesno" ? `<select class="fp-soll"><option value="">–</option><option value="ja" ${p.soll === "ja" ? "selected" : ""}>ja</option><option value="nein" ${p.soll === "nein" ? "selected" : ""}>nein</option></select>`
-          : p.art === "text" || p.art === "number" ? `<input type="text" class="fp-soll" value="${esc(p.soll || "")}" maxlength="60" placeholder="optional">` : '<span class="muted">–</span>'}</td>
+          : p.art === "text" || p.art === "number" ? `<input type="text" class="fp-soll" value="${esc(p.soll || "")}" maxlength="60" placeholder="optional">`
+            : p.art === "laenge" ? '<span class="muted" title="Das Soll ist die am Artikel hinterlegte Länge">Artikellänge</span>' : '<span class="muted">–</span>'}</td>
         <td><label class="inline"><input type="checkbox" class="fp-pflicht" ${p.pflicht ? "checked" : ""}> Pflicht</label>
           <label class="inline"><input type="checkbox" class="fp-kritisch" ${p.kritisch ? "checked" : ""} ${p.art === "yesno" ? "" : "disabled"}> kritisch</label>
           <div class="btn-row"><button class="btn secondary small" data-act="hoch" data-i="${i}" aria-label="nach oben">↑</button><button class="btn secondary small" data-act="runter" data-i="${i}" aria-label="nach unten">↓</button><button class="btn secondary small" data-act="weg" data-i="${i}" aria-label="entfernen">✕</button></div></td></tr>`;
@@ -3610,7 +3636,8 @@
         ${wikiZeile()}
         <p class="help">${esc(zielText)}. ${f.gueltig_ab ? `Gültig ab ${esc(fmtTag(f.gueltig_ab))}.` : "Noch nie aktiviert."}
           ${f.benutzt ? " Diese Version wurde schon für Prüfungen benutzt und bleibt unverändert – Änderungen gehen über eine neue Version." : ""}
-          Bei der Prüfung ist jeder Befund mit „in Ordnung“ vorbelegt, Ja/Nein-Punkte mit ihrem Sollwert; bei Text und Zahl ist das Soll ein Hinweis für den Prüfer. Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus.</p>
+          Bei der Prüfung ist jeder Befund mit „in Ordnung“ vorbelegt, Ja/Nein-Punkte mit ihrem Sollwert; bei Text und Zahl ist das Soll ein Hinweis für den Prüfer. Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus.
+          Ein Punkt der Art „Länge (m)“ ist mit der Länge des Artikels vorbelegt; trägt der Prüfer eine andere ein, übernimmt das Festschreiben sie in den Artikel (nur bei Kategorien mit „Artikel haben eine Länge“).</p>
         ${bearbeitbar ? `<label for="fp-titel">Titel</label><input type="text" id="fp-titel" value="${esc(f.titel || "")}" maxlength="160">` : ""}
         <table class="list mat-tabelle mat-formtabelle" id="fp-tabelle">
           <colgroup><col style="width:13%"><col style="width:48%"><col style="width:12%"><col style="width:11%"><col style="width:16%"></colgroup><thead><tr><th>Gruppe</th><th>Prüfpunkt</th><th>Art</th><th>Soll</th><th></th></tr></thead>
@@ -4310,6 +4337,7 @@
     function punktHtml(x) {
       const mangel = x.befund === "mangel";
       const nz = x.befund === "nicht_zutreffend";
+      const laengeMoeglich = !!(pr.laenge && pr.laenge.moeglich);
       let steuer;
       if (x.art === "yesno") {
         steuer = `<div class="mat-wahl3" role="group" aria-label="Befund zu ${esc(x.text)}">
@@ -4326,6 +4354,10 @@
         const feld = x.art === "photo" ? ""
           : x.art === "date" ? `<input type="text" class="mat-pwert mat-datum" data-art="tag" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="TT.MM.JJJJ" data-rid="${x.id}" value="${esc(datumAnzeige(x.wert, "tag"))}" aria-label="${esc(x.text)}">`
           : x.art === "number" ? `<input type="text" inputmode="decimal" class="mat-pwert" data-rid="${x.id}" value="${esc(x.wert || "")}" placeholder="${x.soll ? `Soll ${esc(x.soll)}` : "Wert"}" aria-label="${esc(x.text)}">`
+          // Längenpunkt (Schritt 20): vorbelegt mit der Artikellänge; ohne vorgesehene Länge (Kategorie) nur „n. z.“.
+          : x.art === "laenge" ? (laengeMoeglich
+            ? `<input type="text" inputmode="decimal" class="mat-pwert mat-laenge-feld" data-rid="${x.id}" value="${esc(x.wert || "")}" placeholder="Länge in m" autocomplete="off" maxlength="10" aria-label="${esc(x.text)}">`
+            : `<p class="help mat-laenge-hinweis">Für Artikel dieser Kategorie ist keine Länge vorgesehen – der Punkt gilt als nicht zutreffend.</p>`)
           : `<textarea class="mat-pwert" data-rid="${x.id}" rows="2" maxlength="1000" aria-label="${esc(x.text)}" placeholder="${esc(x.soll || "")}">${esc(x.wert || "")}</textarea>`;
         steuer = `${feld}<div class="mat-wahl3" role="group" aria-label="Befund zu ${esc(x.text)}">
           ${[["ok", "in Ordnung", "soll"], ["mangel", "Mangel", "abw"], ["nicht_zutreffend", "n. z.", ""]].map(([b, t, k]) => `<button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="${b}" class="${k}" aria-pressed="${x.befund === b}"${b === "nicht_zutreffend" ? ' title="nicht zutreffend"' : ""}>${t}</button>`).join("")}</div>`;
@@ -4344,7 +4376,7 @@
       return `<div class="mat-punkt${mangel ? " mangel" : ""}${nz ? " nz" : ""}" id="pp-${x.id}">
         <div class="mat-punkt-kopf"><span class="mat-punkt-text">${esc(x.text)}</span>
           ${x.kritisch ? '<span class="mat-kritisch" title="Ein Mangel hier schließt „einsatzbereit“ aus">kritisch</span>' : ""}
-          ${x.art === "yesno" && x.soll ? `<span class="muted small">Soll ${esc(x.soll)}</span>` : ""}${x.pflicht ? "" : '<span class="muted small">optional</span>'}</div>
+          ${x.art === "yesno" && x.soll ? `<span class="muted small">Soll ${esc(x.soll)}</span>` : ""}${x.art === "laenge" && laengeMoeglich ? `<span class="muted small">${x.soll ? `am Artikel ${esc(x.soll)} m` : "am Artikel keine Länge"}</span>` : ""}${x.pflicht ? "" : '<span class="muted small">optional</span>'}</div>
         <div class="mat-punkt-zeile">${steuer}${foto}
           ${notiz ? "" : `<button type="button" class="lnk small" data-act="pnotiz-auf" data-rid="${x.id}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Bemerkung<span class="k-anlegen"> anlegen</span></span></button>`}</div>
         <textarea class="mat-pnotiz" data-rid="${x.id}" rows="2" maxlength="1000" placeholder="${mangel ? "Pflicht bei Mangel: Was ist wo zu sehen?" : "Bemerkung"}" ${notiz ? "" : "hidden"}${mangel ? ' aria-required="true"' : ""}>${esc(x.notiz || "")}</textarea>
@@ -4466,6 +4498,7 @@
           <td data-l="Prüfpunkt" class="mat-k-ohne">${x.gruppe ? `<span class="muted small">${esc(x.gruppe)}</span><br>` : ""}${esc(x.text)}</td>
           <td class="mat-krit-spalte mat-k-kurz">${x.kritisch ? '<span class="mat-kritisch">kritisch</span>' : ""}</td>
           <td data-l="Befund" class="mat-k-kurz mat-k-ohne">${x.art === "signature" && !x.unterschrift && x.befund !== "nicht_zutreffend" ? '<span class="muted">nicht unterschrieben</span>' : befundMarke(x.befund)}</td><td data-l="Wert" class="mat-k-kurz">${x.art === "signature" && x.unterschrift ? `<img class="mat-us-mini" src="${esc(x.unterschrift)}" alt="Unterschrift">`
+            : x.art === "laenge" && x.wert ? `${esc(x.wert)} m${x.soll && x.soll !== x.wert ? ` <span class="muted small mat-soll">(vorher ${esc(x.soll)} m)</span>` : x.soll ? ' <span class="muted small mat-soll">(unverändert)</span>' : ""}`
             : x.wert ? esc(x.wert) : '<span class="muted">–</span>'}${x.art === "yesno" && x.soll ? ` <span class="muted small mat-soll">(Soll ${esc(x.soll)})</span>` : ""}</td>
           <td data-l="Bemerkung">${x.notiz ? `<span class="mat-text">${esc(x.notiz)}</span>` : ""}</td>
           <td data-l="Foto">${x.foto ? bildLink(x.foto.web, x.foto.original, `${x.text}${x.notiz ? ` – ${x.notiz}` : ""}`, "befunde", `<img class="mat-mini" src="${esc(x.foto.vorschau)}" alt="Foto">`) : ""}</td></tr>`).join("");
@@ -6448,6 +6481,7 @@
       <dl class="mat-daten mat-psa-daten">
         ${zeile("Nächste Prüfung", naechste)}
         ${k.retire_by ? zeile("Lebensende", `${k.status === "lebensdauer" ? '<strong class="mat-warn">' : ""}${esc(fmtTag(k.retire_by))}${k.status === "lebensdauer" ? "</strong>" : ""}`) : ""}
+        ${k.length_m ? zeile("Länge", esc(laengeText(k.length_m))) : ""}
         ${zeile("Zuletzt geprüft", k.last_inspected_on ? esc(fmtTag(k.last_inspected_on)) : '<span class="muted">noch nie</span>')}
         ${k.gliederung ? zeile("Gliederung", esc(k.gliederung)) : ""}
         ${k.gesperrt && k.lock_reason ? zeile("Sperrgrund", esc(k.lock_reason)) : ""}

@@ -31,7 +31,7 @@ from flask import current_app
 
 from ... import db
 from ..models import ERGEBNISSE, MATERIALARTEN
-from . import ZONE, Abgelehnt, bestand, heute, katalog, protokoll
+from . import ZONE, Abgelehnt, bestand, heute, katalog, laenge_text, protokoll
 from . import status as st
 from .faelligkeit import im_unterbaum
 from .interval import wirksam
@@ -45,11 +45,14 @@ SPERRZUSTAND = {"frei": "frei", "gesperrt": "gesperrt", "verloren": "verloren", 
 # „Bemerkung (Produkt)“ (Nachbesserung vom 18.10.2026): der Zusatz hinter dem Modell (description), voll und ungekürzt –
 # eine Datenausgabe. Das Feld heißt in der Oberfläche „Bemerkung“; der Zusatz „(Produkt)“ hält die Spalte von
 # „Bemerkung“ weiter hinten getrennt, der des Artikels (notes) – die bleibt, wie sie seit Lieferung 4 heißt.
+# „Länge (m)“ (Schritt 20): die Artikellänge als „57,5“ (deutsches Komma, eine Nachkommastelle, ohne Einheit – so
+# rechnet Excel damit); sie steht bei den Artikeldaten hinter „Lebensende“, in der Reihenfolge des Steckbriefs. Der
+# Bestandsimport liest Spalten am Titel, nicht an der Stelle.
 ARTIKEL_SPALTEN = (
     "Inventarnummer", "Seriennummer", "Seriennummer vom System", "Hersteller", "Modell", "Bemerkung (Produkt)",
     "Artikelnummer", "Kategorie", "Norm", "Materialart", "Ordner", "Gliederung", "Status", "Sperrzustand",
     "Sperr-/Aussonderungsgrund", "Herkunftsordner", "zuletzt geprüft", "nächste Prüfung",
-    "Prüfintervall wirksam (Monate)", "hergestellt", "gekauft", "Erstgebrauch", "Lebensende", "Bemerkung",
+    "Prüfintervall wirksam (Monate)", "hergestellt", "gekauft", "Erstgebrauch", "Lebensende", "Länge (m)", "Bemerkung",
     "in Prüfung bei", "Zugeordnet an", "DEMO")
 VERZEICHNIS_SPALTEN = (
     "Protokoll-ID", "Art", "Prüfart", "Datum", "festgeschrieben", "Inventarnummer", "Seriennummer", "Produkt",
@@ -172,7 +175,8 @@ def artikel_csv(fid):
             baum.get(r["origin_folder_id"], ohne)["pfad"] if r["origin_folder_id"] else "",
             datum_text(r["last_inspected_on"]), datum_text(r["next_due_on"]), intervall,
             datum_text(r["manufactured_on"]), datum_text(r["purchased_on"]), datum_text(r["first_use_on"]),
-            datum_text(r["retire_by"]) if r["material_kind"] == "textil" else "", r["notes"], r["entwurf_pruefer"],
+            datum_text(r["retire_by"]) if r["material_kind"] == "textil" else "",
+            laenge_text(r["length_m"], einheit=False), r["notes"], r["entwurf_pruefer"],
             ((r["zugeordnet_name"] or "").strip() or "(ohne Namen)") if r["assigned_user_id"] else "",
             "ja" if r["artikel_demo"] else "nein"])
     return csv_bytes(ARTIKEL_SPALTEN, zeilen), f"Artikel_{dateiname(o['name'])}_{stichtag.isoformat()}.csv"

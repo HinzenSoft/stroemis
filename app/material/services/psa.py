@@ -2,8 +2,8 @@
 zugeordnet sind – auch ohne Stufe im Modul Material.
 
 Ein eigener, enger Zugangsweg neben rechte.zugang: Er öffnet nur die eigenen, nicht ausgesonderten Artikel und von ihnen
-nur die Karte (artikel_json – eine feste Liste von Schlüsseln): Status, Fälligkeit, Lebensende, Tag der letzten
-Prüfung, Produkt (Bild nur als Web- und Vorschaufassung), Nummern, Sperre mit Sperrgrund, Bemerkung, Name der
+nur die Karte (artikel_json – eine feste Liste von Schlüsseln): Status, Fälligkeit, Lebensende, Länge (Schritt 20),
+Tag der letzten Prüfung, Produkt (Bild nur als Web- und Vorschaufassung), Nummern, Sperre mit Sperrgrund, Bemerkung, Name der
 Gliederung, offener Mangel, Herstellerdokumente (Gebrauchsanleitung, Pflegehinweis, Konformitätserklärung, Datenblatt)
 und die Titel laufender Rückrufe (Sperrgrund, Bemerkung, letzte Prüfung und Gliederung: Entscheidung A vom 20.10.2026).
 Kein Ordnerpfad, keine Protokolle, keine Prüfhistorie, kein Journal. requires_folder und
@@ -16,7 +16,7 @@ from flask import g, has_request_context
 
 from ... import db
 from ...auth import current_user
-from . import Abgelehnt, heute
+from . import Abgelehnt, heute, laenge_text
 from . import bestand, katalog, rechte
 from . import status as st
 
@@ -170,6 +170,7 @@ def artikel_json(r, user, offen, eigene, dokumente=(), rueckruf=(), gliederung=N
                     "vorschau": katalog.bild_url(r["product_image"], "thumb")},
         "status": s, "status_text": st.LABEL[s], "next_due_on": r["next_due_on"], "retire_by": r["retire_by"],
         "last_inspected_on": r["last_inspected_on"],
+        "length_m": r["length_m"], "laenge_text": laenge_text(r["length_m"]),
         "gesperrt": r["lock_state"] in ("gesperrt", "verloren"), "verloren": r["lock_state"] == "verloren",
         "lock_reason": (r["lock_reason"] or "") if r["lock_state"] != "frei" else "",
         "notes": r["notes"] or "", "gliederung": gliederung,
