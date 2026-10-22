@@ -963,11 +963,15 @@
     } catch (e) { toast(e.message, true); }
   }
 
-  /* „⋯“ im Seitenkopf: Export, Duplizieren, Vorlage, Papierkorb */
+  /* „⋯“ im Seitenkopf: Export, Duplizieren, Vorlage, Papierkorb – am Telefon auch „Teilen“, dessen Knopf
+     dort ausgeblendet ist (app.css), damit die Kopfzeile mit 44-px-Knöpfen in eine Zeile passt. */
   function pageMenu(anchor, p) {
+    const teilenKnopf = $("#pg-share");
+    const teilenImMenue = (p.can_share || p.can_publish) && !(teilenKnopf && teilenKnopf.offsetWidth);
     const box = document.createElement("div");
     box.className = "tree-menu";
     box.innerHTML = `
+      ${teilenImMenue ? '<button type="button" data-a="share">Teilen …</button>' : ""}
       <button type="button" data-a="history">Verlauf …</button>
       <button type="button" data-a="fav">${p.favorite ? "Von der Merkliste nehmen" : "Zur Merkliste"}</button>
       <button type="button" data-a="watch">${p.watch ? "Nicht mehr beobachten" : "Bei Änderungen benachrichtigen"}</button>
@@ -990,6 +994,7 @@
       if (!b) return;
       const a = b.dataset.a;
       close();
+      if (a === "share") return shareDialog(p);
       if (a === "history") return showHistory(p);
       if (a === "fav") return toggleFavorite(p.id, !p.favorite);
       if (a === "watch") {

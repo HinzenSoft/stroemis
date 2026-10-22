@@ -230,7 +230,7 @@ img { max-width: 100%; }
 @media (max-width: 1024px) {
   :root { --lesepad: 24px; --panel-w: 340px; }
   .lb { grid-template-columns: 1fr 300px; }
-  /* Die drei Knöpfe über dem Seitenbaum passen in 260 px nur mit etwas weniger Polster. */
+  /* Die Knöpfe über dem Seitenbaum passen in 260 px nur mit etwas weniger Polster. */
   .wiki-side .btn-row .btn.small { padding: 5px 8px; }
 }
 @media (max-width: 480px) { :root { --lesepad: 16px; } }
@@ -694,7 +694,8 @@ progress { width: 100%; height: 10px; accent-color: var(--rot); }
 .tree li { margin: 1px 0; }
 .tree .row { display: flex; align-items: center; gap: 2px; min-width: 0; }
 /* Lange Seitentitel brechen nicht um, sondern enden mit … – sonst wird der Baum unruhig
-   und die Zeilen springen beim Auf- und Zuklappen. Der volle Titel steht im Tooltip. */
+   und die Zeilen springen beim Auf- und Zuklappen. Der volle Titel steht im Tooltip. Am Finger
+   (kein Tooltip) brechen sie um – siehe die Regeln für den groben Zeiger weiter unten. */
 .tree a {
   flex: 1 1 auto; min-width: 0; display: block; padding: 4px 6px; color: var(--anthrazit);
   text-decoration: none; border-radius: var(--radius); font-size: var(--fs-mittel);
@@ -2293,6 +2294,20 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .tree .tg { width: 44px; height: 44px; }
   .wiki-side input[type=search] { min-height: 44px; }
   details.accordion > summary { min-height: 44px; display: flex; align-items: center; }
+  /* Seitenbaum in der festen 260-px-Leiste (Telefon quer, Fold aufgeklappt, Tablet quer): Klappdreieck, „+“ und „⋯“
+     mit je 44 px ließen dem Titel 52 px – alle Unterseiten hießen „Unt…“ (Browserprüfung P4-L1, B1). Je Zeile bleibt
+     nur „⋯“; „Unterseite anlegen“ steht dort als erster Eintrag. Der Titel bricht um statt mit … zu enden – am Finger
+     gibt es keinen Tooltip, der den vollen Titel zeigte. Die oberste Ebene rückt nicht ein (die Einrückung samt Linie
+     gehört zu den Unterseiten) – 21 px mehr für jeden Titel. */
+  .tree .row-add { display: none; }
+  .tree > ul { padding-left: 0; margin-left: 0; border-left: 0; }
+  .tree a { white-space: normal; text-overflow: clip; overflow-wrap: break-word; hyphens: auto; padding-top: 12px; padding-bottom: 12px; }
+}
+/* Wiki-Kopfzeile am Telefon: ☰, Umschalter, 💬, Teilen und ⋯ passten mit 44 px bei 344–360 px nicht in eine Zeile,
+   „⋯“ stand allein in einer zweiten (Kopf 108 statt 62 px). „Teilen“ ist selten – am Telefon steht es im ⋯-Menü
+   (wiki.js pageMenu nimmt es auf, sobald der Knopf unsichtbar ist). */
+@media (pointer: coarse) and (max-width: 640px) {
+  .wiki-head #pg-share { display: none; }
 }
 /* Nutzerverwaltung zwischen 861 und 1100 px (Fold aufgeklappt, Tablet hochkant): Die Knöpfe „Bearbeiten“ und
    „Reset-Mail“ (92–94 px) ragten aus ihrer 80 px breiten Spalte 2 px über den Fensterrand – waagerechter Bildlauf
