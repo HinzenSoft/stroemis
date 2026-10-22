@@ -695,6 +695,8 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
    (WCAG AA) für normale Schrift. Hier ein Viertel zum Textgrau hin abgedunkelt: 4,86:1 und weiter grau wie die
    Artikelnummer, nicht so dunkel wie der Text daneben. Kennt ein Browser color-mix() nicht, erbt er das Textgrau. */
 .mat-rr-kasten .mat-zusatz { color: color-mix(in srgb, var(--grau) 75%, var(--anthrazit)); }
+/* Links auf dem hellroten Grund im dunklen Rot (das Rot käme fett auf 4,22:1 – Geräte-Matrix P4-L1). */
+.mat-rr-kasten a, .mat-rr-kasten .mat-warn { color: var(--rot-auf-flaeche); }
 .mat-rr-liste { list-style: none; margin: 0; padding: 0; }
 .mat-rr-liste li { padding: 6px 0; border-bottom: 1px solid var(--linie); display: flex; flex-wrap: wrap; align-items: baseline;
   gap: 4px 10px; }

@@ -2270,7 +2270,7 @@
       const k = b.kopf;
       const mit = k.pruefer_nennen ? "-mit-pruefern" : "";
       return `<a class="btn secondary small" href="/material/ordner/${fid}/bericht-${Number(k.jahr)}${mit}.pdf" target="_blank" rel="noopener"
-          title="Dieser Bericht als PDF/A – Listen auf ${BERICHT_KAPPUNG} Zeilen gekürzt. Stand jetzt, nicht festgeschrieben.">PDF</a>
+          data-export="Das PDF wird erzeugt – bei vielen Artikeln dauert das einige Sekunden …" title="Dieser Bericht als PDF/A – Listen gekürzt (${BERICHT_KAPPUNG} Zeilen je Liste, 1 500 insgesamt, 50 Artikel je Rückruf). Stand jetzt, nicht festgeschrieben.">PDF</a>
         <a class="btn secondary small" href="/material/export/${fid}-pruefungen-${Number(k.jahr)}${mit}.csv" data-export="Die Prüfungsliste wird heruntergeladen …"
           title="Alle Prüfungen und Aussonderungen des Jahres im Zweig als CSV für Excel${k.pruefer_nennen ? " – mit Prüfer und Urkundennummer" : " – ohne Prüfernamen"}.">Prüfungen (CSV)</a>`;
     }

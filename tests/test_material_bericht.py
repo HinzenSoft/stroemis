@@ -611,10 +611,41 @@ def test_rueckruf_ausblick_kategorien():
     print("Rückrufe, Ausblick und Kategorien bestanden.")
 
 
+def test_oberflaeche():
+    """Statisch (Browserprüfung P4-L1): Tab-Titel schon beim ersten Laden; erster Aufruf gescheitert → Meldung mit
+    Jahr-Auswahl (nicht nur eine rote Zeile); Sprungmarken mit festen ids; Rückruf-Artikel aufklappbar; Datumsfehler
+    unterscheidet Format und ungültigen Tag, das Feld trägt aria-invalid. Fehlerseite unter /material führt zur
+    Material-Übersicht."""
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
+    anfang = js.index("  async function bericht() {")
+    block = js[anfang:js.index("  /* --- Artikel ---", anfang)]
+    geruest = block[block.index("    function geruest(b) {"):block.index("    function geruestFehler(e) {")]
+    assert "titelSetzen(k);" in geruest
+    assert "if (!ziel) { geruestFehler(e); return; }" in block and "if (!ziel) throw e;" not in block
+    fehler = block[block.index("    function geruestFehler(e) {"):block.index("    // Daten holen;")]
+    assert 'id="be-jahr"' in fehler and 'role="alert">${esc(e.message)}' in fehler and "laden(false)" in fehler
+    for sid in ("be-bestand", "be-pruefungen", "be-rueckrufe", "be-ausblick"):
+        assert f'id="{sid}"' in block and f'["{sid}", ' in block, sid
+    assert '<details class="mat-auf mat-be-rr"><summary>Betroffene Artikel anzeigen' in block
+    datum = js[js.index("  function datumWert(feld, name) {"):js.index("  // Beim Tippen die Trenner setzen")]
+    assert 'feld.setAttribute("aria-invalid", "true")' in datum and "gibt es nicht." in datum
+    assert "bitte als TT.MM.JJJJ angeben" in datum and 'feld.removeAttribute("aria-invalid")' in datum
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        r = k["wart"].get("/material/ordner/999999/bericht")
+        text = r.get_data(as_text=True)
+        assert r.status_code == 404 and '<a href="/material">Zur Material-Übersicht</a>' in text and "Zum Wiki" not in text, text[-500:]
+        r = k["wart"].get("/material/gibt-es-nicht")
+        assert r.status_code == 404 and "Zur Material-Übersicht" in r.get_data(as_text=True)
+    print("Oberfläche bestanden.")
+
+
 if __name__ == "__main__":
     test_zahlen()
     test_rechte_und_eingaben()
     test_pdf_und_csv()
     test_kappung()
     test_rueckruf_ausblick_kategorien()
+    test_oberflaeche()
     print("Alle Berichtstests bestanden.")

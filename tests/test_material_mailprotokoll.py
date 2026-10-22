@@ -513,6 +513,27 @@ def test_unterordner_verwalter():
     print("Unterordner-Verwalter bestanden.")
 
 
+def test_oberflaeche_kasten():
+    """Statisch (Browserprüfung P4-L1): Fokus nach „Erledigt“ auf die nächste Zeile bzw. die Überschrift, nach „Alle
+    erledigt“ auf die Meldung; „Alle erledigt“ nur nach Rückfrage, btn danger nur dort; „Weitere anzeigen“ über
+    GET …/mailfehler; vier Spalten, Fehlertext vor der Serverantwort; Karten bis 800 px Inhaltsbreite."""
+    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
+    css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
+    anfang = js.index("  function mailZeile(z) {")
+    block = js[anfang:js.index("  /* Fälligkeiten je Ordner", anfang)]
+    assert "<th>Mail</th>" in block and "<th>Empfänger</th><th>Fehler</th>" in block and block.count("</th>") == 4, block[:400]
+    assert 'class="mat-mail-fehler">${esc(MAIL_KLASSE[z.klasse] || z.klasse)}${z.meldung ? `<div class="mat-mail-meldung">' in block
+    assert 'nachbar = tr.nextElementSibling || tr.previousElementSibling' in block
+    assert '$(\'[data-act="mail-erledigt"]\', nachbar).focus()' in block and '$("#mat-mail-titel").focus()' in block
+    assert '$("#mat-mail-stand").focus()' in block and 'id="mat-mail-stand" tabindex="-1"' in block
+    assert 'id="mat-mail-titel" tabindex="-1"' in block and "api(`${API}/mailfehler`)" in block
+    assert block.count('class="btn danger"') == 1 and 'id="mf-alle-ok"' in block and "als erledigt markieren?" in block
+    assert "deiner Sicht" not in block and "btn ghost" not in block
+    assert "@container mat-seite (max-width: 800px)" in css and "@container mat-seite (max-width: 1100px) {\n  #mat-inhalt table.list.mat-mail" not in css
+    print("Oberfläche Kasten bestanden.")
+
+
 # --- 6. Nachgeholt, Pflege, Konto löschen, Trigger ------------------------------------------------------------------------
 
 def test_nachgeholt_pflege_loeschen_trigger():
@@ -652,6 +673,7 @@ if __name__ == "__main__":
     test_sicht_und_erledigt()
     test_dienste()
     test_unterordner_verwalter()
+    test_oberflaeche_kasten()
     test_nachgeholt_pflege_loeschen_trigger()
     test_migration_19()
     print("Alle Tests zum Mailfehler-Protokoll bestanden.")
