@@ -535,7 +535,7 @@
      der Seite „Bestand“: dort ist der Ordnerbaum selbst der Inhalt. Auf- und Zuklappen merkt sich der Browser, je Baum getrennt. */
   const KATALOG_ANSICHTEN = new Set(["katalog", "produkt", "formular", "meldungen"]);
   const MIT_LEISTE = new Set(["dashboard", "pruefungen", "ordner", "artikel", "artikel_neu", "suche", "pruefung",
-                              "pruefung_neu", "durchgang", "katalog", "produkt", "formular", "meldungen", "bestandsimport"]);
+                              "pruefung_neu", "durchgang", "katalog", "produkt", "formular", "meldungen", "bestandsimport", "bericht"]);
   const LEISTE_KATALOG = KATALOG_ANSICHTEN.has(ANSICHT);
   const leiste = document.getElementById("mat-side");
   const leisteAuf = document.getElementById("mat-side-auf");
@@ -954,8 +954,9 @@
       <div id="mat-freigaben-hinweis"></div>
       ${bestandTeil}
       ${psaKasten(d.meine_psa)}
-      ${erinnerungZeile(d.erinnerungen)}`;
-    aktionen = { probelauf: () => probelaufDialog() };
+      ${erinnerungZeile(d.erinnerungen)}
+      ${mailKasten(d.mailfehler)}`;
+    aktionen = { probelauf: () => probelaufDialog(), "mail-erledigt": mailErledigt, "mail-alle": mailAlleErledigt };
     if (DARF.lesen) {
       ordnerUebersichtKlappen($("#mat-ue"));
       rundenKasten($("#mat-runden"), true);
@@ -969,7 +970,8 @@
   /* Erinnerungsmails (nur Material- und Plattform-Verwaltung; /start liefert sonst erinnerungen: null). Unten auf der
      Übersicht eine Zeile mit dem Stand – an/aus/gesperrt, der letzte Lauf – und dem Textlink „Probelauf ansehen“; was
      Handeln verlangt (Lauf steht, kein Mailserver, Fehlschläge, Fehler), steht zusätzlich oben gelb. Die Zeitpunkte
-     kommen als UTC und werden in deutscher Zeit gezeigt, der Tag des Laufs ist schon der deutsche. */
+     kommen als UTC und werden in deutscher Zeit gezeigt, der Tag des Laufs ist schon der deutsche. Darunter seit
+     Phase 4 · L1 der Kasten „Mailversand“ (mailKasten) mit den gescheiterten Modul-Mails. */
   const ZONE = "Europe/Berlin";
   const tagBerlin = (versatz) => new Intl.DateTimeFormat("sv-SE", { timeZone: ZONE })
     .format(new Date(Date.now() + (versatz || 0) * 86400000));
@@ -980,10 +982,9 @@
     const tag = l.tag === tagBerlin() ? "heute" : l.tag === tagBerlin(-1) ? "gestern" : `am ${tagKurz(l.tag)}`;
     return `${tag}${l.beginn ? ` ${uhrBerlin(l.beginn)}` : ""}`;
   }
-  // „4 Mails, 1 fehlgeschlagen (Erika Beispiel)“
+  // „4 Mails, 1 fehlgeschlagen“ – an wen, steht seit Phase 4 · L1 im Kasten „Mailversand“ (mailKasten), nicht mehr hier.
   function laufErgebnis(l) {
-    const an = (l.fehlgeschlagen_an || []).length ? ` (${l.fehlgeschlagen_an.map(esc).join(", ")})` : "";
-    return `${plural(l.mails || 0, "Mail", "Mails")}${l.fehlgeschlagen ? `, ${l.fehlgeschlagen} fehlgeschlagen${an}` : ""}`;
+    return `${plural(l.mails || 0, "Mail", "Mails")}${l.fehlgeschlagen ? `, ${l.fehlgeschlagen} fehlgeschlagen` : ""}`;
   }
   const versandAktiv = (e) => e.versand && !e.gesperrt;
 
@@ -1010,9 +1011,8 @@
     }
     if (versandAktiv(e) && !e.smtp) hinweise.push("Erinnerungsmails sind an, aber kein Mailserver eingerichtet – es geht nichts hinaus.");
     if (l && l.fehlgeschlagen && versandAktiv(e)) {
-      const namen = l.fehlgeschlagen_an || [];
-      hinweise.push(namen.length === 1 ? `Erinnerungsmail an ${esc(namen[0])} ist gescheitert – sie geht morgen erneut.`
-        : `${l.fehlgeschlagen} Erinnerungsmails${namen.length ? ` an ${namen.map(esc).join(", ")}` : ""} sind gescheitert – sie gehen morgen erneut.`);
+      hinweise.push(l.fehlgeschlagen === 1 ? "1 Erinnerungsmail ist gescheitert – sie geht morgen erneut; an wen, steht unter „Mailversand“."
+        : `${l.fehlgeschlagen} Erinnerungsmails sind gescheitert – sie gehen morgen erneut; an wen, steht unter „Mailversand“.`);
     }
     if (l && l.fehler) hinweise.push(`Beim letzten Lauf der Erinnerungsmails ist ein Fehler aufgetreten: ${esc(l.fehler)}`);
     if (p && p.fehler) hinweise.push(`Beim letzten täglichen Lauf (Journal, Aufräumen) ist ein Fehler aufgetreten: ${esc(p.fehler)}`);
@@ -1085,6 +1085,70 @@
       });
     }
     return true;
+  }
+
+  /* Kasten „Mailversand“ (Phase 4 · L1): die gescheiterten Modul-Mails aus /start (mailfehler – null heißt kein Kasten;
+     mailprotokoll.uebersicht), je nach Sicht: Material- und Plattform-Verwaltung alles, wer einen Zweig verwaltet, die
+     Zeilen seiner Gliederungen. Die letzten 20 offenen als Tabelle (am Telefon Karten): Zeit, Art, was schiefging
+     (Klasse als Text), Empfänger (Name – nie eine Adresse), Rolle, Bezug als Link ins Modul (vom Server aus Kennungen
+     gebaut), Betreff, Meldung des Mailservers (gereinigt). Je Zeile „Erledigt“ (grau, POST …/erledigt – die Zeile
+     verschwindet, 404 als Meldung), „Alle erledigt“ im Untermenü des Kastens (POST …/alle-erledigt, Antwort mit Zahl).
+     Fehlt der Mailserver, steht für die Verwaltung eine Dauerzeile. Kein „Erneut senden“: Mailtexte werden nicht
+     gespeichert – Erinnerungen holt der nächste Lauf von selbst nach. */
+  const MAIL_KLASSE = { empfaenger_abgewiesen: "Empfänger abgewiesen", verbindung: "keine Verbindung zum Mailserver",
+                        anmeldung: "Anmeldung am Mailserver abgelehnt", abgelehnt: "vom Mailserver abgelehnt",
+                        ausnahme: "Fehler beim Versand", sonstiges: "sonstiger Fehler" };
+  const MAIL_ROLLE = { verwalter: "Materialwart", pruefer: "Prüfer", zugeordnet: "zugeordnete Person", inhaber: "Inhaber der Freigabe",
+                       verwaltung: "Material-Verwaltung", antragsteller: "Antragsteller", melder: "Melder" };
+  function mailKasten(m) {
+    if (!m) return "";
+    const zeile = (z) => {
+      const b = z.bezug || {};
+      const bezug = b.pfad ? `<a href="${esc(b.pfad)}">${esc(b.text || "öffnen")}</a>` : esc(b.text || "–");
+      return `<tr data-mail="${Number(z.id)}">
+        <td data-l="Zeit">${esc(fmtZeit(z.created_at))}</td><td data-l="Art">${esc(z.art_text)}</td>
+        <td data-l="Fehler">${esc(MAIL_KLASSE[z.klasse] || z.klasse)}</td>
+        <td data-l="Empfänger">${esc(z.empfaenger)} <span class="muted">(${esc(MAIL_ROLLE[z.rolle] || z.rolle)})</span></td>
+        <td data-l="Bezug">${bezug}</td><td data-l="Betreff">${esc(z.betreff || "")}</td>
+        <td data-l="Meldung" class="mat-mail-meldung">${esc(z.meldung || "")}</td>
+        <td class="tabelle-aktionen"><button type="button" class="btn secondary small" data-act="mail-erledigt" data-id="${Number(z.id)}">Erledigt</button></td></tr>`;
+    };
+    const tabelle = m.zeilen.length ? `<table class="list mat-tabelle mat-mail" id="mat-mail-tabelle"><thead><tr><th>Zeit</th><th>Art</th><th>Fehler</th>
+        <th>Empfänger</th><th>Bezug</th><th>Betreff</th><th>Meldung</th><th></th></tr></thead><tbody>${m.zeilen.map(zeile).join("")}</tbody></table>
+      ${m.offen > m.zeilen.length ? `<p class="small" id="mat-mail-mehr">… und ${m.offen - m.zeilen.length} weitere – „Alle erledigt“ hakt auch sie ab.</p>` : ""}` : "";
+    return `<section class="section mat-mail-kasten" id="mat-mail" aria-label="Mailversand"><div class="mat-kastenkopf"><h2>Mailversand</h2>
+        ${m.zeilen.length ? `<details class="mat-menue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary><div class="mat-menue-liste">
+          <a href="#mat-mail" role="button" data-act="mail-alle"><strong>Alle erledigt</strong><span>Alle ${m.offen} offenen Zeilen deiner Sicht abhaken – auch die, die hier nicht mehr stehen.</span></a></div></details>` : ""}</div>
+      ${m.kein_mailserver ? '<p class="notice">Kein Mailserver eingerichtet – keine Modul-Mail geht hinaus (Erinnerungen, Mängel, Anträge, Produktmeldungen, Rückrufe).</p>' : ""}
+      ${m.zeilen.length ? `<p class="help">Diese Mails hat der Mailserver nicht angenommen. Erinnerungen holt der nächste Lauf nach; alles andere sagst du den Betroffenen selbst – ein erneuter Versand ist nicht möglich.</p>${tabelle}` : ""}
+    </section>`;
+  }
+  // „Erledigt“ an einer Zeile: abhaken, Zeile weg; war es die letzte, verschwindet der Kasten mit (ohne Mailserver-Hinweis
+  // bleibt er). 404 (fremd oder inzwischen weg) steht als Meldung.
+  async function mailErledigt(b) {
+    b.disabled = true;
+    try {
+      await api(`${API}/mailfehler/${Number(b.dataset.id)}/erledigt`, { method: "POST", body: {} });
+      const tr = b.closest("tr");
+      const tabelle = tr.closest("table");
+      tr.remove();
+      if (!$("tbody tr", tabelle)) mailKastenLeeren();
+      else toast("Erledigt");
+    } catch (e) { toast(e.message, true); b.disabled = false; }
+  }
+  async function mailAlleErledigt() {
+    try {
+      const r = await api(`${API}/mailfehler/alle-erledigt`, { method: "POST", body: {} });
+      toast(r.anzahl === 1 ? "1 Zeile erledigt" : `${r.anzahl} Zeilen erledigt`);
+      mailKastenLeeren();
+    } catch (e) { toast(e.message, true); }
+  }
+  function mailKastenLeeren() {
+    const kasten = $("#mat-mail");
+    if (!kasten) return;
+    if ($(".notice", kasten)) {                     // ohne Mailserver bleibt die Dauerzeile stehen
+      $$("table, p.help, #mat-mail-mehr, details.mat-menue", kasten).forEach((el) => el.remove());
+    } else kasten.remove();
   }
 
   /* Fälligkeiten je Ordner: Gliederungen mit ihren Ordnern eingerückt, die Zahlen für den ganzen Zweig – dieselben wie in
@@ -1929,6 +1993,8 @@
   // pflegt (verwalten, kein Systemordner – importieren), findet hier seit Phase 2 · L3 auch den Bestandsimport: Das
   // Menü heißt dann „Export / Import“ und hat unter einem Strich „Bestandsliste importieren …“ und, solange etwas
   // offen ist, „Nacharbeit (n offen)“ – seltene Funktionen gehören ins Untermenü, kein neuer Knopf in der Kopfzeile.
+  // Seit Phase 4 · L1 steht hier auch der „Jahresbericht“ (Ansicht bericht) – nicht an Systemordnern: Ein Bericht
+  // über „Gesperrt“ oder „Ausgesondert“ wäre nach der Heimat-Logik leer, der Server antwortet dort 404.
   const exportMenue = (d, importieren) => `<details class="mat-menue">
       <summary class="btn secondary small" aria-haspopup="true">${importieren ? "Export / Import" : "Export"}</summary>
       <div class="mat-menue-liste">
@@ -1936,6 +2002,8 @@
           <span>Alle Artikel hier und darunter, auch die von hier gesperrten (ausgesonderte bei ihrer Gliederung), mit Status, Fälligkeiten und Stammdaten – für Excel.</span></a>
         <a href="/material/export/${d.id}-protokolle.zip" data-export="Die Protokolle werden zusammengestellt – bei vielen dauert das einen Moment …"><strong>Protokolle exportieren (ZIP)</strong>
           <span>Die Protokolle dieser Artikel und die Sammelprotokolle der Durchgänge hier, mit Verzeichnis und Prüfsummen.</span></a>
+        ${d.system_kind ? "" : `<a href="/material/ordner/${d.id}/bericht"><strong>Jahresbericht</strong>
+          <span>Bestand, Prüfungen, Sperren, Aussonderungen, Mängel und Rückrufe dieses Zweigs für ein Kalenderjahr – als Seite, PDF und Prüfungsliste (CSV).</span></a>`}
         ${importieren ? `<hr class="mat-menue-trenner">
         <a href="/material/ordner/${d.id}/import"><strong>Bestandsliste importieren …</strong>
           <span>Eine Liste aus Excel oder CSV in diesen Ordner übernehmen: erst ein Probelauf, dann übernehmen; was nicht passt, kommt in die Nacharbeit.</span></a>
@@ -2009,6 +2077,150 @@
   // Ändert sich die Fensterbreite, während ein Menü offen ist (Fold auf- oder zugeklappt, Tablet gedreht), rückt es mit –
   // vorher behielt es die Lage vom Öffnen und ragte nach dem Zuklappen 31 px links aus dem Bild.
   window.addEventListener("resize", () => $$("details.mat-menue[open]").forEach(menueAusrichten));
+
+
+  /* --- Jahresbericht je Zweig (Phase 4 · Lieferung 1) --------------------------------------------------------------
+     Seite /material/ordner/<fid>/bericht (Ansicht „bericht“, DATEN = {id}); die Daten kommen fertig formatiert von
+     GET /api/material/ordner/<fid>/bericht?jahr=&pruefer= (services/bericht.daten) – dieselben Blöcke in derselben
+     Reihenfolge wie im PDF (Entwurf A4): Kopf, Bestand zum Stichtag, Bewegungen, Prüfungen mit Prüfabdeckung,
+     Prüfdurchgänge, Prüfer (nur mit Haken), Sperren und Freigaben, Aussonderungen, Mangelmeldungen, Rückrufe, Ausblick,
+     Fußsätze. Jahr-Auswahl (kopf.jahre) und Haken „Prüfer nennen“ laden die Daten neu und stehen in der Adresse
+     (?jahr=&pruefer=1); „PDF“ und „Prüfungen (CSV)“ (grau) führen auf die Dateirouten – mit Haken auf die Fassung
+     „-mit-pruefern“, deren Dateiname sagt, dass Namen darin stehen. Ohne Haken enthält keine Ausgabe einen
+     Personennamen außer dem Ersteller. Zahlentabellen wie im PDF, Listen als Modullisten (am Telefon Karten über die
+     Containerabfrage mat-seite); jede Zelle über esc(), keine DOM-ids aus Daten. DEMO: Zahl im Kopf, Marke je Zeile.
+     Die Seite zeigt Listen ganz; das PDF kürzt sie auf BERICHT_KAPPUNG Zeilen – darunter steht dann ein Hinweis. 403,
+     404 und 400 (Jahr außerhalb 1990…2100) kommen als Meldung, die Auswahl bleibt bedienbar. */
+  const BERICHT_KAPPUNG = 500;
+  async function bericht() {
+    const fid = Number(DATEN.id);
+    const adresse = new URLSearchParams(location.search);
+    let jahr = /^\d{4}$/.test(adresse.get("jahr") || "") ? +adresse.get("jahr") : null;
+    let pruefer = adresse.get("pruefer") === "1";
+    leisteMarkieren(fid);
+    const zahlen = (zeilen) => `<table class="mat-zahlen"><tbody>${zeilen.map(([n, text]) => `<tr><td class="mat-zahl-wert">${esc(String(n))}</td><td class="mat-zahl-text">${text}</td></tr>`).join("")}</tbody></table>`;
+    const paar = (a, b) => `<div class="mat-paar"><div>${a}</div><div>${b}</div></div>`;
+    const mono = (t) => `<span class="mat-hash">${esc(t)}</span>`;
+    const kappung = (n, was) => (n > BERICHT_KAPPUNG ? `<p class="small muted">Im PDF stehen nur die ersten ${BERICHT_KAPPUNG} ${was} dieser Liste.</p>` : "");
+    const liste = (koepfe, zeilen, klasse) => `<table class="list mat-tabelle${klasse ? ` ${klasse}` : ""}"><thead><tr>${koepfe.map((k) => `<th${k[1] ? ` class="${k[1]}"` : ""}>${esc(k[0])}</th>`).join("")}</tr></thead><tbody>${zeilen.join("")}</tbody></table>`;
+    const td = (l, inhalt, klasse) => `<td data-l="${esc(l)}"${klasse ? ` class="${klasse}"` : ""}>${inhalt}</td>`;
+
+    function inhaltHtml(b) {
+      const k = b.kopf;
+      const bst = b.bestand;
+      const pr = b.pruefungen;
+      const sp = b.sperren;
+      const au = b.aussonderungen;
+      const ma = b.maengel;
+      const ab = b.ausblick;
+      const kopf = `<dl class="mat-daten mat-bericht-daten">
+          <dt>Zweig</dt><dd>${esc(k.pfad)}</dd>${k.gliederung && k.gliederung !== k.ordner ? `<dt>Gliederung</dt><dd>${esc(k.gliederung)}</dd>` : ""}
+          <dt>Stichtag der Bestandszahlen</dt><dd>${esc(k.stichtag)}</dd>
+          <dt>Erstellt von</dt><dd>${esc(k.ersteller)} am ${esc(k.erstellt_am)}</dd>
+          <dt>Empfänger</dt><dd>${esc(k.empfaenger)}</dd>
+          <dt>Artikel im Zweig (Sicht)</dt><dd>${esc(String(k.artikel))}${k.demo ? ` – davon ${k.demo} DEMO ${demoMarke(true)}` : ""}</dd>
+          <dt>Prüfer genannt</dt><dd>${k.pruefer_nennen ? "ja" : "nein"}</dd></dl>
+        ${k.demo ? `<p class="notice small">Enthält ${k.demo} DEMO-Artikel – gekennzeichnet mit der Marke DEMO; nicht für echte Nachweise.</p>` : ""}`;
+      const bestand = `<section class="section"><h2>Bestand zum Stichtag ${esc(k.stichtag)}</h2>
+        ${paar(zahlen([...bst.zeilen.map((z) => [z.n, `${statusMarke(z.status)}${z.status === "ausgesondert" ? ' <span class="muted">(gesamt, seit je)</span>' : ""}`]),
+          [bst.verloren, "davon verloren gemeldet"], [bst.bestand, "<strong>Bestand gesamt</strong> (ohne ausgesonderte)"]]),
+        `<h3>Je Kategorie (oberste Ebene)</h3>${bst.kategorien.length ? zahlen(bst.kategorien.map((x) => [x.bestand, `${esc(x.name)} <span class="muted">– fällig ${x.faellig}, gesperrt ${x.gesperrt}</span>`])) : leer("Keine Artikel.")}`)}
+        ${bst.unterordner.length ? `<h3>Je Unterordner (nach Heimat)</h3>${liste([["Ordner"], ["Bestand", "mat-be-zahl"], ["einsatzbereit", "mat-be-zahl"], ["bald fällig", "mat-be-zahl"], ["überfällig", "mat-be-zahl"], ["neu", "mat-be-zahl"], ["gesperrt", "mat-be-zahl"], ["Lebensdauer", "mat-be-zahl"], ["ausgesondert", "mat-be-zahl"]],
+          bst.unterordner.map((u) => `<tr>${td("Ordner", `${esc(u.name)}${u.kennzeichen ? ` <span class="mat-art">${esc(u.kennzeichen)}</span>` : ""}${demoMarke(u.demo)}`, "mat-k-titel")}${td("Bestand", String(u.bestand), "mat-be-zahl")}${["einsatzbereit", "bald_faellig", "ueberfaellig", "neu", "gesperrt", "lebensdauer", "ausgesondert"].map((st) => td(STATUS[st] || st, String(u.zaehlung[st] || 0), `mat-be-zahl${u.zaehlung[st] ? "" : " mat-be-null"}`)).join("")}</tr>`), "mat-bericht-ordner")}` : ""}
+        </section>`;
+      const bewegungen = `<section class="section"><h2>Bewegungen im Jahr ${esc(String(k.jahr))}</h2>
+        ${zahlen([[b.bewegungen.zugaenge, "Zugänge (angelegt oder importiert)"], [b.bewegungen.aussonderungen, "Aussonderungen"], [b.bewegungen.geloescht, "gelöscht (falsch angelegt, ohne Prüfung)"]])}</section>`;
+      const pruefungen = `<section class="section"><h2>Prüfungen im Jahr ${esc(String(k.jahr))}</h2>
+        ${paar(zahlen([[pr.gesamt, "<strong>Prüfungen gesamt</strong> (ohne Aussonderungen)"], ...pr.arten.map((a) => [a.n, esc(a.text)]), [pr.entwuerfe, "offene Entwürfe (nicht abgeschlossen)"]]),
+          zahlen([...pr.ergebnisse.map((e) => [e.n, `Ergebnis „${esc(e.text)}“`]), [pr.mit_mangel, "mit Mangel"], [pr.kritisch, "mit kritischem Mangel"]]))}
+        <h3>Prüfabdeckung</h3>
+        ${zahlen([[pr.abdeckung.bestand, "Artikel im Bestand (ohne ausgesonderte)"], [pr.abdeckung.geprueft, "davon im Jahr mit abgeschlossener Prüfung"], [pr.abdeckung.nicht_geprueft, "im Jahr nicht geprüft"]])}
+        ${pr.nicht_geprueft.length ? `<p class="small">Im Jahr nicht geprüft:</p>${liste([["Inventarnummer"], ["Produkt"], ["letzte Prüfung"]],
+          pr.nicht_geprueft.map((x) => `<tr>${td("Inventarnummer", `${mono(x.inventarnummer)}${demoMarke(x.demo)}`)}${td("Produkt", esc(x.produkt))}${td("letzte Prüfung", esc(x.letzte))}</tr>`))}${kappung(pr.nicht_geprueft.length, "Artikel")}` : ""}
+        </section>`;
+      const durchgaenge = `<section class="section"><h2>Prüfdurchgänge</h2>
+        ${b.durchgaenge.length ? liste([["Durchgang"], ["Zeitraum"], ["Stand"], ["Artikel", "mat-be-zahl"], ["erledigt", "mat-be-zahl"], ["ausgenommen", "mat-be-zahl"], ["nicht geprüft", "mat-be-zahl"]],
+          b.durchgaenge.map((r) => `<tr>${td("Durchgang", `<strong>${esc(r.titel)}</strong>${demoMarke(r.demo)}${r.ausnahmen.length ? `<div class="small muted">Ausnahmen: ${r.ausnahmen.map((a) => `${mono(a.inventarnummer)} (${esc(a.grund)})`).join("; ")}</div>` : ""}`)}
+            ${td("Zeitraum", esc(r.zeitraum))}${td("Stand", `${esc(r.stand)}${r.protokoll_id ? ` · ${mono(r.protokoll_id)}` : ""}`)}
+            ${td("Artikel", String(r.gesamt), "mat-be-zahl")}${td("erledigt", String(r.erledigt), "mat-be-zahl")}${td("ausgenommen", String(r.ausgenommen), "mat-be-zahl")}
+            ${td("nicht geprüft", r.stand === "offen" ? `${r.offen} offen` : String(r.nicht_geprueft), "mat-be-zahl")}</tr>`)) : leer("Im Jahr kein Prüfdurchgang im Zweig.")}</section>`;
+      const pruefer = b.pruefer ? `<section class="section"><h2>Prüfer im Jahr ${esc(String(k.jahr))}</h2>
+        ${b.pruefer.pruefer.length ? liste([["Prüfer"], ["Urkundennummer"], ["Prüfungen", "mat-be-zahl"]],
+          b.pruefer.pruefer.map((x) => `<tr>${td("Prüfer", esc(x.name))}${td("Urkundennummer", mono(x.urkunde || ""))}${td("Prüfungen", String(x.n), "mat-be-zahl")}</tr>`)) : leer("Keine Prüfungen.")}
+        ${b.pruefer.aussonderungen_durch.length ? `<h3>Aussonderungen durch</h3>${liste([["Name"], ["Aussonderungen", "mat-be-zahl"]],
+          b.pruefer.aussonderungen_durch.map((x) => `<tr>${td("Name", esc(x.name))}${td("Aussonderungen", String(x.n), "mat-be-zahl")}</tr>`))}` : ""}</section>` : "";
+      const sperren = `<section class="section"><h2>Sperren und Freigaben im Jahr ${esc(String(k.jahr))}</h2>
+        ${zahlen([[sp.gesamt, "<strong>Sperren gesamt</strong>"], ...sp.arten.map((a) => [a.n, esc(a.text)]), [sp.freigegeben, "wieder freigegeben (Freiprüfung)"]])}
+        ${sp.liste.length ? `${liste([["Datum"], ["Inventarnummer"], ["Art"], ["Grund"]],
+          sp.liste.map((x) => `<tr>${td("Datum", esc(x.datum))}${td("Inventarnummer", `${mono(x.inventarnummer)}${demoMarke(x.demo)}`)}${td("Art", esc(x.art_text))}${td("Grund", esc(x.grund))}</tr>`))}${kappung(sp.liste.length, "Sperren")}` : ""}</section>`;
+      const aussonderungen = `<section class="section"><h2>Aussonderungen im Jahr ${esc(String(k.jahr))}</h2>
+        ${zahlen([[au.gesamt, "<strong>Aussonderungen gesamt</strong>"], ...au.arten.map((a) => [a.n, esc(a.text)])])}
+        ${au.liste.length ? `${liste([["Datum"], ["Inventarnummer"], ["Produkt"], ["Grund"]],
+          au.liste.map((x) => `<tr>${td("Datum", esc(x.datum))}${td("Inventarnummer", `${mono(x.inventarnummer)}${demoMarke(x.demo)}`)}${td("Produkt", esc(x.produkt))}${td("Grund", `${esc(x.grund)}${x.durch ? ` · durch ${esc(x.durch)}` : ""}${x.protokoll_id ? ` · ${mono(x.protokoll_id)}` : ""}`)}</tr>`))}${kappung(au.liste.length, "Aussonderungen")}` : ""}</section>`;
+      const maengel = `<section class="section"><h2>Mangelmeldungen</h2>
+        ${zahlen([[ma.gemeldet, `<strong>gemeldet im Jahr ${esc(String(k.jahr))}</strong>`], [ma.offen, "davon heute offen"], [ma.freipruefung, "erledigt durch Freiprüfung"], [ma.aussonderung, "erledigt durch Aussonderung"], [ma.offen_stichtag, "offene Meldungen zum Stichtag (alle Jahre)"]])}
+        ${ma.offen_liste.length ? `${liste([["Inventarnummer"], ["gemeldet am"]],
+          ma.offen_liste.map((x) => `<tr>${td("Inventarnummer", `${mono(x.inventarnummer)}${demoMarke(x.demo)}`)}${td("gemeldet am", esc(x.gemeldet))}</tr>`))}${kappung(ma.offen_liste.length, "Meldungen")}` : ""}</section>`;
+      const rueckrufe = `<section class="section"><h2>Rückrufe</h2>
+        ${b.rueckrufe.length ? `<p class="help">Rückrufe, die im Jahr angelegt oder beendet wurden oder heute laufen – zu Produkten mit Artikeln im Zweig.</p>${liste([["Angelegt · beendet"], ["Rückruf"], ["betroffen", "mat-be-zahl"], ["offen", "mat-be-zahl"]],
+          b.rueckrufe.map((r) => `<tr>${td("Angelegt · beendet", `${esc(r.angelegt)}<br>${r.beendet ? `beendet ${esc(r.beendet)}` : "läuft"}`)}
+            ${td("Rückruf", `<strong>${esc(r.titel)}</strong> – ${esc(r.produkt)} <span class="muted">(${r.alle ? "alle Artikel des Produkts" : "nach Seriennummern"})</span>${r.url ? `<div class="small">Meldung des Herstellers: ${mono(r.url)}</div>` : ""}${r.artikel.length ? `<div class="small">${r.artikel.map((a) => `${mono(a.inventarnummer)} (${esc(a.zustand)})${demoMarke(a.demo)}`).join(", ")}</div>` : ""}`)}
+            ${td("betroffen", String(r.betroffen), "mat-be-zahl")}${td("offen", String(r.offen), "mat-be-zahl")}</tr>`))}` : leer("Kein Rückruf betrifft Artikel im Zweig.")}</section>`;
+      const ausblick = `<section class="section"><h2>Ausblick – zwölf Monate ab ${esc(k.stichtag)}</h2>
+        <p class="help">Jetzt: ${ab.jetzt.ueberfaellig} überfällig, ${ab.jetzt.neu} neu (Eingangsprüfung ausstehend), ${ab.jetzt.gesperrt} gesperrt.</p>
+        ${liste([["Monat"], ["fällig", "mat-be-zahl"], ["Lebensende (textil)", "mat-be-zahl"]],
+          ab.monate.map((m) => `<tr>${td("Monat", esc(m.text), "mat-k-titel")}${td("fällig", String(m.faellig), `mat-be-zahl${m.faellig ? "" : " mat-be-null"}`)}${td("Lebensende (textil)", String(m.lebensende), `mat-be-zahl${m.lebensende ? "" : " mat-be-null"}`)}</tr>`), "mat-bericht-monate")}</section>`;
+      const fuss = `<ul class="small muted mat-bericht-fuss">${b.fuss.map((satz) => `<li>${esc(satz)}</li>`).join("")}</ul>`;
+      return kopf + bestand + bewegungen + pruefungen + durchgaenge + pruefer + sperren + aussonderungen + maengel + rueckrufe + ausblick + fuss;
+    }
+
+    function dateien(b) {
+      const k = b.kopf;
+      const mit = k.pruefer_nennen ? "-mit-pruefern" : "";
+      return `<a class="btn secondary small" href="/material/ordner/${fid}/bericht-${Number(k.jahr)}${mit}.pdf" target="_blank" rel="noopener"
+          title="Dieser Bericht als PDF/A – Listen auf ${BERICHT_KAPPUNG} Zeilen gekürzt. Stand jetzt, nicht festgeschrieben.">PDF</a>
+        <a class="btn secondary small" href="/material/export/${fid}-pruefungen-${Number(k.jahr)}${mit}.csv" data-export="Die Prüfungsliste wird heruntergeladen …"
+          title="Alle Prüfungen und Aussonderungen des Jahres im Zweig als CSV für Excel${k.pruefer_nennen ? " – mit Prüfer und Urkundennummer" : " – ohne Prüfernamen"}.">Prüfungen (CSV)</a>`;
+    }
+
+    function geruest(b) {
+      const k = b.kopf;
+      const jahre = k.jahre.includes(k.jahr) ? k.jahre : [...k.jahre, k.jahr].sort();
+      inhalt.innerHTML = `<div class="mat-pfad"><a href="/material/bestand">Bestand</a> / <a href="/material/ordner/${fid}">${esc(k.pfad)}</a></div>
+        <div class="page-head"><h1>Jahresbericht Material ${esc(k.ordner)} <span id="be-titel-jahr">${esc(String(k.jahr))}</span>${demoMarke(k.demo)}</h1>
+          <div class="btn-row" id="be-dateien">${dateien(b)}</div></div>
+        <div class="mat-bericht-wahl">
+          <label for="be-jahr">Kalenderjahr <select id="be-jahr">${jahre.map((j) => `<option value="${Number(j)}"${j === k.jahr ? " selected" : ""}>${Number(j)}</option>`).join("")}</select></label>
+          <label class="inline" for="be-pruefer"><input type="checkbox" id="be-pruefer"${k.pruefer_nennen ? " checked" : ""}> Prüfer nennen</label>
+          <span class="help">Ohne Haken nennt keine Ausgabe einen Prüfer – weder die Seite noch PDF oder CSV. Bestandszahlen gelten zum Stichtag heute, Ereignisse für das Kalenderjahr.</span></div>
+        <div id="be-inhalt">${inhaltHtml(b)}</div>`;
+      $("#be-jahr").addEventListener("change", (e) => { jahr = +e.target.value; laden(true); });
+      $("#be-pruefer").addEventListener("change", (e) => { pruefer = e.target.checked; laden(true); });
+    }
+
+    // Daten holen; nachladen: nur der Inhalt wird ersetzt, Auswahl und Knöpfe bleiben (mit neuer Jahreszahl).
+    async function laden(nachladen) {
+      const q = new URLSearchParams();
+      if (jahr) q.set("jahr", String(jahr));
+      if (pruefer) q.set("pruefer", "1");
+      const ziel = nachladen ? $("#be-inhalt") : null;
+      if (ziel) ziel.innerHTML = '<p class="help">Wird geladen …</p>';
+      let b;
+      try { b = (await api(`${API}/ordner/${fid}/bericht?${q}`)).bericht; }
+      catch (e) {
+        if (!ziel) throw e;
+        ziel.innerHTML = `<p class="notice">${esc(e.message)}</p>`;
+        return;
+      }
+      try { history.replaceState(null, "", location.pathname + (String(q) ? `?${q}` : "")); } catch (e) { /* nur die Adresszeile */ }
+      if (!ziel) { geruest(b); return; }
+      ziel.innerHTML = inhaltHtml(b);
+      $("#be-dateien").innerHTML = dateien(b);
+      $("#be-titel-jahr").textContent = String(b.kopf.jahr);
+      document.title = `Jahresbericht ${b.kopf.ordner} ${b.kopf.jahr} – strömis.de`;
+    }
+    await laden(false);
+  }
 
   /* --- Artikel --------------------------------------------------------------------------------------- */
   /* Angeboten wird die globale Suche immer (Entscheidung vom 18.10.2026) – auch, wenn die Suche einen eindeutigen
@@ -6238,7 +6450,7 @@
 
   const ANSICHTEN = { dashboard, pruefungen, bestand, ordner, artikel, artikel_neu: artikelNeu, katalog, produkt, formular, suche,
                       meldungen, pruefung_neu: pruefungNeu, pruefung: pruefungAnsicht, durchgang: durchgangAnsicht, fremd,
-                      meine_psa: meinePsa, bestandsimport };
+                      meine_psa: meinePsa, bestandsimport, bericht };
   leisteLaden();
   zeigen(ANSICHTEN[ANSICHT] || dashboard);
 })();

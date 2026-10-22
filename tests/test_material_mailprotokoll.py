@@ -294,8 +294,13 @@ def test_sicht_und_erledigt():
                 z[z1]["art_text"]) == ("wart", "verwalter", t.a, "report", 1, "Mangel"), z[z1]
         assert z[z3]["empfaenger"] == "Wart Nachbarstadt" and z[z4]["folder_id"] is None
         assert set(z[z1]) == {"id", "created_at", "art", "art_text", "klasse", "empfaenger", "rolle", "bezug_art",
-                              "bezug_id", "folder_id", "betreff", "meldung", "erledigt_at", "erledigt_von_name"}
+                              "bezug_id", "folder_id", "betreff", "meldung", "erledigt_at", "erledigt_von_name", "bezug"}
         assert all("@" not in str(v) for x in mv["zeilen"] for v in x.values())
+        # Der Bezug als Weg ins Modul (Oberfläche, P4-L1): Mangelmeldung 1 gibt es nicht → Text ohne Weg; Antrag →
+        # Meldungen-Seite; Rückruf 2 gibt es nicht → nur Text; Erinnerung ohne Gliederung → nichts.
+        assert z[z1]["bezug"] == {"text": "Mangelmeldung", "pfad": None}, z[z1]["bezug"]
+        assert z[z2]["bezug"] == {"text": "Änderungsantrag", "pfad": "/material/katalog/meldungen?bereich=antraege"}
+        assert z[z3]["bezug"] == {"text": "Rückruf", "pfad": None} and z[z4]["bezug"] == {"text": "", "pfad": None}
         wa = mailfehler(t.wart_a)
         assert wa["offen"] == 1 and [x["id"] for x in wa["zeilen"]] == [z1] and wa["alle"] is False, wa
         wb = mailfehler(t.wart_b)
@@ -368,6 +373,10 @@ def test_dienste():
         assert {x["konto_ref"] for x in rows} == {ref(app, k["wart_id"]), ref(app, k["pruefer_id"]), ref(app, person_id)}
         assert all("@" not in x["meldung"] and "[Adresse]" in x["meldung"] for x in rows), rows
         assert all("Mangel gemeldet" in x["betreff"] for x in rows if x["rolle"] != "zugeordnet"), rows
+        # Der Bezug im Kasten: die Mangelmeldung führt zum Artikel (Inventarnummer, Modul-Route) – auch für wart_a.
+        z = mailfehler(t.wart_a)["zeilen"]
+        assert z and all(x["bezug"] == {"text": f"Mangelmeldung {t.art_a['inventory_no']}",
+                                        "pfad": f"/material/artikel/{t.art_a['id']}"} for x in z), z
         sql(app, "DELETE FROM mat_mail_fehler")
 
         # Produktmeldung: Melder wart_a bekommt den Bescheid nicht – Zeile mit Rolle Melder und seiner Gliederung.

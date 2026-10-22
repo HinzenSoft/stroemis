@@ -1605,3 +1605,38 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
   .mat-tree a, .mat-tree .row > .mat-pfadknoten { overflow-wrap: normal; -webkit-hyphens: manual; hyphens: manual; overflow: hidden;
     text-overflow: ellipsis; }
 }
+
+/* Phase 4 – Lieferung 1: Jahresbericht (Ansicht bericht) und Kasten „Mailversand“ (Übersicht) */
+/* Jahresbericht: Zahlentabellen wie im PDF – Zahl rechtsbündig und fett, Text daneben; zwei davon nebeneinander
+   (Bestand und Kategorien, Prüfungen und Ergebnisse), ab 700 px Inhaltsbreite. Listen sind Modullisten (Karten am
+   Telefon über die Containerabfrage mat-seite); Zahlenspalten schmal und mittig (.mat-be-zahl), Nullen in der Karte weg
+   (.mat-be-null) – wie bei den Fälligkeiten je Ordner. */
+.mat-bericht-wahl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: -8px 0 16px; }
+.mat-bericht-wahl > label { margin: 0; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
+.mat-bericht-wahl select { width: auto; }
+.mat-bericht-wahl .help { flex: 1 1 100%; margin: 0; max-width: var(--mat-lesemass); }
+.mat-bericht-daten { margin-bottom: 12px; }
+.mat-zahlen { border-collapse: collapse; width: 100%; max-width: 34rem; margin: 6px 0 10px; }
+.mat-zahlen td { padding: 4px 8px; border-bottom: 1px solid var(--linie); vertical-align: top; }
+.mat-zahlen td.mat-zahl-wert { text-align: right; width: 4.5em; font-weight: 700; white-space: nowrap; }
+.mat-zahlen td.mat-zahl-text { color: var(--anthrazit); }
+.mat-paar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 32px; align-items: start; }
+.mat-paar h3 { margin-top: 6px; }
+@container mat-seite (min-width: 700px) { .mat-paar { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+#mat-inhalt table.list.mat-tabelle th.mat-be-zahl, #mat-inhalt table.list.mat-tabelle td.mat-be-zahl { text-align: center; white-space: nowrap; width: 1%; }
+.mat-bericht-fuss { margin: 20px 0 0; padding-left: 18px; max-width: var(--mat-lesemass); }
+.mat-bericht-fuss li { margin-bottom: 4px; }
+@container mat-seite (max-width: 600px) {
+  #mat-inhalt table.list.mat-tabelle td.mat-be-zahl { display: inline-block; width: auto; margin-right: 14px; text-align: left; white-space: normal; }
+  #mat-inhalt table.list.mat-tabelle td.mat-be-null { display: none; }
+  #mat-inhalt table.list.mat-tabelle td.mat-be-zahl::before { content: attr(data-l) " "; }
+  .mat-bericht-wahl { margin-top: 0; }
+}
+/* Kasten „Mailversand“: Überschrift und das Untermenü „Mehr“ (Alle erledigt) in einer Zeile; die Meldung des
+   Mailservers bricht notfalls im Wort (Platzhalter „[Mailserver]“, Antwortcodes ohne Leerzeichen). */
+.mat-mail-kasten { margin-top: 10px; }
+.mat-kastenkopf { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
+.mat-kastenkopf h2 { flex: 1 1 auto; }
+.mat-kastenkopf .mat-menue { align-self: center; }
+#mat-inhalt table.list.mat-mail td.mat-mail-meldung { overflow-wrap: anywhere; font-size: var(--fs-klein); max-width: 22rem; }
+#mat-inhalt table.list.mat-mail td { vertical-align: top; }

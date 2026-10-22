@@ -20,7 +20,9 @@ Die Zeile trägt nie eine Adresse: Die Serverantwort nennt den abgewiesenen Empf
 Verbindungsfehlern Host und Port des Mailservers. reinigen() ersetzt die Empfängeradresse, jede weitere Adresse,
 „<…@…>“ und „Host:Port“ durch Platzhalter und kürzt auf MAILMELDUNG_MAX; der CHECK instr(meldung, '@') = 0 in der
 Tabelle ist das Netz dahinter. Der Empfänger steht als Kontoverweis (users.mat_ref) und Rolle da; die Oberfläche löst
-den Verweis zum Namen auf (journal.konto_namen – „(gelöschtes Konto)“ ohne Konto).
+den Verweis zum Namen auf (journal.konto_namen – „(gelöschtes Konto)“ ohne Konto). Den Bezug einer Zeile liefert
+uebersicht() als Weg ins Modul (_bezuege: Artikel bzw. Mangelmeldung → Artikel, Rückruf → Produkt, Ordner und
+Erinnerung → Ordner, Antrag und Produktmeldung → Meldungen-Seite), aus Kennungen gebaut – nie aus Datenbanktexten.
 
 Sammelmails ohne einen Ordner (Erinnerung, Rückruf: Artikel mehrerer Gliederungen in einer Mail) bekommen je betroffener
 Gliederung eine Zeile mit folder_id = Gliederung (Entscheidung Nr. 5); dafür nimmt senden für folder_id auch eine Menge
@@ -198,11 +200,60 @@ def sichtfilter(alias="m", user=None):
     return f"({alias}.folder_id IS NOT NULL AND {ordner} AND {alias}.rolle NOT IN ({rollen}))"
 
 
-def _json(r, namen):
+# Der Bezug einer Zeile als Weg ins Modul (nur Modul-Routen, aus Kennungen gebaut – nie aus Datenbanktexten).
+BEZUG_TEXT = {"item": "Artikel", "folder": "Ordner", "report": "Mangelmeldung", "change": "Änderungsantrag",
+              "request": "Produktmeldung", "recall": "Rückruf", "none": ""}
+BEZUG_PFAD = {"change": "/material/katalog/meldungen?bereich=antraege", "request": "/material/katalog/meldungen"}
+
+
+def _nach_id(sql, ids):
+    """Zeilen zu einer Menge von Kennungen – oder nichts, wenn die Menge leer ist."""
+    ids = sorted(i for i in ids if i is not None)
+    if not ids:
+        return []
+    return db.query(sql.format(ids=",".join("?" * len(ids))), tuple(ids))
+
+
+def _bezuege(rows):
+    """Je Zeile {text, pfad}: Artikel und Mangelmeldung führen zum Artikel (mit Inventarnummer), Ordner und Erinnerung
+    zum Ordner bzw. zur Gliederung (mit Namen), der Rückruf zum Produkt, Antrag und Produktmeldung zur Meldungen-Seite.
+    Was es nicht mehr gibt (gelöschter Artikel, Ordner, Rückruf), bleibt Text ohne Weg. Höchstens vier Abfragen für
+    alle Zeilen – der Kasten zeigt LISTE_MAX davon."""
+    meldung_artikel = {z["id"]: z["item_id"] for z in _nach_id(
+        "SELECT id, item_id FROM mat_defect_report WHERE id IN ({ids})",
+        {r["bezug_id"] for r in rows if r["bezug_art"] == "report"})}
+    artikel = {z["id"]: z["inventory_no"] for z in _nach_id(
+        "SELECT id, inventory_no FROM mat_item WHERE id IN ({ids})",
+        {r["bezug_id"] for r in rows if r["bezug_art"] == "item"} | set(meldung_artikel.values()))}
+    produkte = {z["id"]: z["product_id"] for z in _nach_id(
+        "SELECT id, product_id FROM mat_recall WHERE id IN ({ids})",
+        {r["bezug_id"] for r in rows if r["bezug_art"] == "recall"})}
+    ordner = {z["id"]: z["name"] for z in _nach_id(
+        "SELECT id, name FROM mat_folder WHERE id IN ({ids})",
+        {r["bezug_id"] for r in rows if r["bezug_art"] == "folder"} | {r["folder_id"] for r in rows})}
+    out = {}
+    for r in rows:
+        art, bid = r["bezug_art"], r["bezug_id"]
+        text, pfad = BEZUG_TEXT.get(art, ""), BEZUG_PFAD.get(art)
+        iid = meldung_artikel.get(bid) if art == "report" else bid if art == "item" else None
+        if iid is not None and iid in artikel:
+            text, pfad = f"{text} {artikel[iid]}", f"/material/artikel/{int(iid)}"
+        elif art == "recall" and bid in produkte:
+            pfad = f"/material/katalog/produkt/{int(produkte[bid])}"
+        elif art in ("folder", "none"):
+            fid = bid if art == "folder" else r["folder_id"]
+            if fid in ordner:
+                text, pfad = ordner[fid], f"/material/ordner/{int(fid)}"
+        out[r["id"]] = {"text": text, "pfad": pfad}
+    return out
+
+
+def _json(r, namen, bezuege):
     return {"id": r["id"], "created_at": r["created_at"], "art": r["art"], "art_text": ART_TEXT.get(r["art"], r["art"]),
             "klasse": r["klasse"], "empfaenger": namen[r["konto_ref"]], "rolle": r["rolle"],
             "bezug_art": r["bezug_art"], "bezug_id": r["bezug_id"], "folder_id": r["folder_id"], "betreff": r["betreff"],
-            "meldung": r["meldung"], "erledigt_at": r["erledigt_at"], "erledigt_von_name": r["erledigt_von_name"]}
+            "meldung": r["meldung"], "erledigt_at": r["erledigt_at"], "erledigt_von_name": r["erledigt_von_name"],
+            "bezug": bezuege.get(r["id"], {"text": "", "pfad": None})}
 
 
 def uebersicht(user=None):
@@ -221,7 +272,8 @@ def uebersicht(user=None):
     if not rows and not kein_server:
         return None
     namen = journal.konto_namen(r["konto_ref"] for r in rows)
-    return {"offen": offen, "zeilen": [_json(r, namen) for r in rows], "kein_mailserver": kein_server,
+    bezuege = _bezuege(rows)
+    return {"offen": offen, "zeilen": [_json(r, namen, bezuege) for r in rows], "kein_mailserver": kein_server,
             "alle": verwaltung}
 
 
@@ -239,7 +291,7 @@ def erledigen(fid, name):
     db.execute("UPDATE mat_mail_fehler SET erledigt_at = ?, erledigt_von_name = ? WHERE id = ? AND erledigt_at IS NULL",
                (db.now(), name, fid))
     r = zeile(fid)
-    return _json(r, journal.konto_namen([r["konto_ref"]]))
+    return _json(r, journal.konto_namen([r["konto_ref"]]), _bezuege([r]))
 
 
 def alle_erledigen(name):
