@@ -52,6 +52,12 @@ ABGESCHLOSSEN = ("Die Prüfung ist festgeschrieben und lässt sich nicht mehr ä
                  "Berichtigung.")
 URKUNDE_FEHLT = ("Prüfen dürfen nur Prüfer mit Urkundennummer – das Häkchen „Prüfer“ setzt die Verwaltung in der "
                  "Nutzerverwaltung, die Urkundennummer trägt der Prüfer selbst im Profil ein.")
+# Artikellänge (Schritt 20, nach der Prüfung vom 22.10.2026): Längenpunkt ohne vorgesehene Länge; Länge während der
+# Prüfung geändert.
+KEINE_LAENGE_PUNKT = ("Für Artikel dieser Kategorie ist keine Länge vorgesehen – der Prüfpunkt ist „nicht zutreffend“ "
+                      "(das Häkchen „Artikel haben eine Länge“ setzt die Material-Verwaltung an der Kategorie).")
+LAENGE_GEAENDERT = ("Die Länge am Artikel wurde während der Prüfung auf {laenge} geändert – bitte den Messwert "
+                    "bestätigen (der Prüfpunkt zeigt jetzt die neue Länge).")
 UNTERSCHRIFT_FEHLT = ("Zum Festschreiben fehlt deine Unterschrift – bitte im Profil hinterlegen "
                       "oder direkt hier unterschreiben.")
 
@@ -428,12 +434,16 @@ def punkt_setzen(pid, rid, d, pruefer):
                 wert = r["expected_value"] if befund == "ok" else gegenteil
         elif "befund" in d:
             befund = auswahl(d.get("befund"), BEFUNDE, "Befund")
+            # Sieht die Kategorie keine Länge vor, ist der Längenpunkt nur „nicht zutreffend“ (Prüfung der Länge, B4):
+            # „in Ordnung“ führte in die Sackgasse (Pflichtpunkt ohne Wert), „Mangel“ zählte und verschwand dann.
+            if art == "laenge" and befund != "nicht_zutreffend" and not _laenge_moeglich(p):
+                raise Abgelehnt(KEINE_LAENGE_PUNKT, 409)
         if art != "yesno" and "wert" in d:
             if art == "date":
                 wert = datum(d.get("wert"), r["checklist_text"]) or ""
             elif art == "number":
-                wert = _zahl(d.get("wert") if isinstance(d.get("wert"), str) else str(d.get("wert") or ""),
-                             r["checklist_text"])
+                roh = d.get("wert")
+                wert = _zahl(roh if isinstance(roh, str) else "" if roh is None else str(roh), r["checklist_text"])
             elif art == "text":
                 wert = text(d, "wert", r["checklist_text"], 1000, einzeilig=False)
             elif art == "laenge":
@@ -442,7 +452,8 @@ def punkt_setzen(pid, rid, d, pruefer):
                 # Kategorie keine Länge vor, bleibt der Punkt „nicht zutreffend“.
                 if not _laenge_moeglich(p):
                     raise Abgelehnt(katalog.KEINE_LAENGE, 409)
-                roh = d.get("wert") if isinstance(d.get("wert"), str) else str(d.get("wert") or "")
+                roh = d.get("wert")
+                roh = "" if roh is None else roh if isinstance(roh, (str, bool)) else str(roh)   # 0 ist 0, nicht leer
                 wert = laenge_text(laenge(roh, r["checklist_text"]), einheit=False)
             else:
                 raise Abgelehnt("Dieser Prüfpunkt nimmt ein Foto auf, keinen Wert.")
@@ -458,28 +469,94 @@ def _laenge_moeglich(p):
     return katalog.laenge_wirksam(katalog.produkt(item["product_id"])["category_id"])
 
 
+def _laenge_zahl(text):
+    """Der Text eines Längenpunkts („57,5“) als Zahl – leer → None."""
+    t = (text or "").strip()
+    return laenge(t) if t else None
+
+
+def _laenge_ohne_vorgabe(item, punkte):
+    """Sieht die Kategorie (inzwischen) keine Länge vor, ist jeder Längenpunkt „nicht zutreffend“ – gesetzt vor den
+    Pflicht-, Mangel- und Grundprüfungen des Abschlusses (Prüfung der Länge, B4). Ein gemessener Wert, der vom Soll
+    abweicht, verfällt nicht still: Er steht danach in der Bemerkung des Punkts (V5). Liefert, ob etwas gesetzt wurde."""
+    zeilen = [r for r in punkte if r["editor"] == "laenge"
+              and (r["finding"] != "nicht_zutreffend" or r["value"] or r["expected_value"])]
+    if not zeilen or katalog.laenge_wirksam(katalog.produkt(item["product_id"])["category_id"]):
+        return False
+    for r in zeilen:
+        notiz = r["note"] or ""
+        wert = (r["value"] or "").strip()
+        if wert and wert != (r["expected_value"] or "").strip():
+            zusatz = f"Gemessen: {wert} m – die Kategorie sieht keine Länge mehr vor, nicht übernommen."
+            notiz = (f"{notiz}\n{zusatz}" if notiz.strip() else zusatz)[:1000]
+        db.execute("UPDATE mat_inspection_result SET finding = 'nicht_zutreffend', value = '', expected_value = '', "
+                   "note = ? WHERE id = ?", (notiz, r["id"]))
+    return True
+
+
+def _laenge_konflikte(p, item, punkte):
+    """Längenpunkte einer Prüfung (keiner Berichtigung), deren Vorbelegung (Soll) nicht mehr die Länge des Artikels ist,
+    während der Messwert davon abweicht: Jemand hat die Länge geändert, seit die Prüfung begann (Prüfung der Länge, B1).
+    Ohne diese Prüfung schriebe der alte, vorbelegte Wert die neuere Länge zurück."""
+    if p["corrects_inspection_id"]:
+        return []
+    aktuell = item["length_m"]
+    return [r for r in punkte if r["editor"] == "laenge" and r["finding"] != "nicht_zutreffend"
+            and (r["value"] or "").strip() and _laenge_zahl(r["expected_value"]) != aktuell
+            and _laenge_zahl(r["value"]) != aktuell]
+
+
+def _laenge_vormerken(pid, pruefer):
+    """Vor dem Festschreiben, in eigener Transaktion: Hat sich die Länge des Artikels seit der Vorbelegung geändert
+    (_laenge_konflikte), bekommt der Längenpunkt die neue Länge als Soll – und als Wert, wenn der Prüfer den
+    vorbelegten Wert nicht angefasst hat; ein eigener Messwert bleibt. Liefert die neue Länge als Text (dann bricht
+    abschliessen mit 409 ab und der Prüfer bestätigt den Messwert) oder None."""
+    with db.transaction(sofort=True):
+        p = _entwurf_des(pid, pruefer)
+        item = bestand.artikel(p["item_id"])
+        if not katalog.laenge_wirksam(katalog.produkt(item["product_id"])["category_id"]):
+            return None
+        konflikte = _laenge_konflikte(p, item, befunde(pid))
+        neu = laenge_text(item["length_m"], einheit=False)
+        for r in konflikte:
+            wert = neu if (r["value"] or "").strip() == (r["expected_value"] or "").strip() else r["value"]
+            db.execute("UPDATE mat_inspection_result SET expected_value = ?, value = ? WHERE id = ?", (neu, wert, r["id"]))
+        if konflikte:
+            _beruehrt(pid)
+            return laenge_text(item["length_m"]) or "keine Angabe"
+    return None
+
+
 def _laenge_uebernehmen(p, item, punkte):
     """Beim Festschreiben (Schritt 20): Ein Längenpunkt mit Befund und Wert trägt die gemessene Länge in den Artikel,
     wenn sie von der gespeicherten abweicht – mit eigenem Journaleintrag „laenge_geaendert“ (vorher/nachher, Verweis
-    auf die Prüfung). Das Soll der Ergebniszeile wird vorher auf die bis dahin gespeicherte Länge gesetzt, damit das
-    Protokoll „alt → neu“ zeigt, auch wenn jemand die Länge seit dem Beginn der Prüfung bearbeitet hat (die Zeile
-    ist bis zum Abschluss änderbar). Ohne vorgesehene Länge (Kategorie) gilt der Punkt als „nicht zutreffend“ –
-    dann ändert sich am Artikel nichts. Liefert die Länge nach dem Festschreiben."""
+    auf die Prüfung). Bei einer Prüfung ist das Soll die Vorbelegung, also die Länge zu Beginn; hat sie sich seitdem
+    geändert, hat _laenge_vormerken schon abgebrochen (hier nur noch der Wettlauf: 409). Bei einer Berichtigung bleibt
+    das Soll das des Originals – die Länge vor der berichtigten Prüfung –, damit ihr Protokoll „alt → neu“ jenes
+    Prüftags zeigt (B3); in den Artikel geht der Messwert nur, wenn die Berichtigung ihn gegenüber dem Original
+    ändert, abgeglichen mit der aktuellen Länge. Punkte ohne vorgesehene Länge hat _laenge_ohne_vorgabe schon auf
+    „nicht zutreffend“ gesetzt. Liefert die Länge nach dem Festschreiben."""
     laengenpunkte = [r for r in punkte if r["editor"] == "laenge"]
-    if not laengenpunkte:
-        return item["length_m"]
     aktuell = item["length_m"]
-    if not katalog.laenge_wirksam(katalog.produkt(item["product_id"])["category_id"]):
-        for r in laengenpunkte:
-            db.execute("UPDATE mat_inspection_result SET finding = 'nicht_zutreffend', value = '', expected_value = '' "
-                       "WHERE id = ?", (r["id"],))
+    if not laengenpunkte or not katalog.laenge_wirksam(katalog.produkt(item["product_id"])["category_id"]):
         return aktuell
+    if _laenge_konflikte(p, item, laengenpunkte):
+        raise Abgelehnt(LAENGE_GEAENDERT.format(laenge=laenge_text(aktuell) or "keine Angabe"), 409)
+    original = {}
+    if p["corrects_inspection_id"]:
+        original = {(o["checklist_item_id"], o["position"]): o["value"] for o in db.query(
+            "SELECT checklist_item_id, position, value FROM mat_inspection_result WHERE inspection_id = ?",
+            (p["corrects_inspection_id"],))}
     for r in laengenpunkte:
-        db.execute("UPDATE mat_inspection_result SET expected_value = ? WHERE id = ?",
-                   (laenge_text(aktuell, einheit=False), r["id"]))
+        if not p["corrects_inspection_id"]:
+            db.execute("UPDATE mat_inspection_result SET expected_value = ? WHERE id = ?",
+                       (laenge_text(aktuell, einheit=False), r["id"]))
         if r["finding"] == "nicht_zutreffend" or not (r["value"] or "").strip():
             continue
         neu = laenge(r["value"], r["checklist_text"])
+        vorher = original.get((r["checklist_item_id"], r["position"]))
+        if p["corrects_inspection_id"] and vorher is not None and _laenge_zahl(vorher) == neu:
+            continue                           # die Berichtigung lässt den Messwert des Originals stehen
         if neu != aktuell:
             db.execute("UPDATE mat_item SET length_m = ?, updated_at = ? WHERE id = ?", (neu, db.now(), item["id"]))
             journal.eintragen("item", item["id"], "laenge_geaendert", {"length_m": aktuell},
@@ -630,6 +707,9 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
         raise Abgelehnt(UNTERSCHRIFT_FEHLT, 403)
     ergebnis = auswahl(d.get("ergebnis"), ERGEBNISSE, "Ergebnis")
     gesehen = _maengel_gesehen(d)
+    geaendert = _laenge_vormerken(pid, pruefer)
+    if geaendert:
+        raise Abgelehnt(LAENGE_GEAENDERT.format(laenge=geaendert), 409)
     with protokoll.dateien_sichern(), db.transaction(sofort=True):
         p = _entwurf_des(pid, pruefer)
         item = bestand.artikel(p["item_id"])
@@ -647,6 +727,7 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
         produkt = katalog.produkt(item["product_id"])
         tag = _tag(pruefdatum or (p["inspected_on"] if p["corrects_inspection_id"] else heute()))
         heimat = bestand.heimat(item)
+        _laenge_ohne_vorgabe(item, befunde(pid))      # vor den Prüfungen unten: Längenpunkte „nicht zutreffend“ (B4)
         punkte = befunde(pid)
         offen = [r["checklist_text"] for r in punkte if r["mandatory"] and not _beantwortet(r)]
         if offen:

@@ -997,6 +997,9 @@ def punkte_pruefen(roh):
         if not isinstance(p, dict):
             raise Abgelehnt(f"Prüfpunkt {n} ist unbrauchbar.")
         art = auswahl(p.get("art"), EDITOREN, f"Art von Prüfpunkt {n}")
+        # Höchstens ein Längenpunkt je Formular – mit zweien gewönne beim Festschreiben still der letzte.
+        if art == "laenge" and any(x["editor"] == "laenge" for x in out):
+            raise Abgelehnt(f"Prüfpunkt {n}: Ein Formular hat höchstens einen Prüfpunkt „Länge“.")
         soll = text(p, "soll", f"Sollwert von Prüfpunkt {n}", 60)
         if art == "yesno":
             soll = soll.lower()

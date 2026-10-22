@@ -326,6 +326,13 @@ def test_katalogformat():
         kats = {k["name"]: k for k in b.get("/api/material/kategorien").json["kategorien"]}
         assert kats["Seile"]["items_have_length"] is False and kats["Statikseile"]["items_have_length"] is True
         assert kats["Seile"]["laenge_wirksam"] is False and kats["Statikseile"]["laenge_wirksam"] is True
+        # null wie ein fehlender Schlüssel (Prüfung der Länge, V8): Statikseile behält das Häkchen.
+        j["kategorien"][0]["unterkategorien"] = [{"name": "Seile", "unterkategorien": [
+            {"name": "Statikseile", "artikel_laenge": None}]}]
+        ber = importieren(b, json.dumps(j).encode(), False, "katalog.json")
+        assert ber["gespeichert"] and not ber["fehler"], ber
+        kats = {k["name"]: k for k in b.get("/api/material/kategorien").json["kategorien"]}
+        assert kats["Statikseile"]["items_have_length"] is True
         # Ein Wert, der kein Wahrheitswert ist: Fehlerzeile, nichts gespeichert.
         j["kategorien"][0]["unterkategorien"] = [{"name": "Seile", "artikel_laenge": "lang"}]
         ber = importieren(b, json.dumps(j).encode(), False, "katalog.json")
@@ -574,6 +581,169 @@ def test_pruefung_laenge():
     print("Prüfung mit Längenpunkt bestanden.")
 
 
+# --- 6b. Nachbesserungen nach der Prüfung vom 22.10.2026 -----------------------------------------------------------------
+
+def test_nachbesserung_pruefung():
+    """B1: Länge während der Prüfung geändert → 409, der Längenpunkt bekommt die neue Länge (ein eigener Messwert
+    bleibt), danach geht das Festschreiben ohne Rückschreiben der alten Länge. B2: NaN, Infinity und „1e309“ → 400, kein
+    Journal mit NaN. B3: Berichtigung behält das Soll des Originals; Tippfehler 57,5 → 5,0 berichtigt auf 57,5 →
+    „57,5 m (unverändert)“, Artikel wieder 57,5; echte Kürzung 50,0 und Berichtigung eines anderen Punkts →
+    „57,5 m → 50,0 m“, Artikel 50,0. B4: ohne vorgesehene Länge nur „nicht zutreffend“ (ok/Mangel 409); ein
+    Mangel, der vor dem Entfernen des Häkchens gesetzt war, zählt beim Festschreiben nicht mehr und der Messwert
+    steht in der Bemerkung (V5). V1: Zahl 0 ist 400, nicht leer. V3: höchstens ein Längenpunkt je Formular. V4:
+    Produktwechsel auf ein Produkt ohne Länge leert sie."""
+    with tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        kp, w, p = t.kp, t.w, t.p
+        # B2: NaN/Unendlich – roh als JSON-Text, wie eine handgemachte Anfrage.
+        a = neuer_artikel(w, t.seil, t.lager, manufactured_on=t.herst, serial_no="NB-1", length_m="57,5")
+        for roh in ('NaN', 'Infinity', '-Infinity', '1e309', '"1e309"', '"NaN"'):
+            r = w.put(f"{ART}/{a['id']}", data='{"length_m": %s}' % roh, content_type="application/json")
+            assert r.status_code == 400, (roh, r.status_code, r.get_data()[:200])
+            r = w.post(ART, data='{"product_id": %d, "folder_id": %d, "serial_no": "NB-X", "length_m": %s}'
+                       % (t.seil, t.lager, roh), content_type="application/json")
+            assert r.status_code == 400, (roh, r.status_code, r.get_data()[:200])
+        assert all("NaN" not in (x["after_json"] or "") and "Infinity" not in (x["after_json"] or "")
+                   for x in zeilen(t.app, "SELECT after_json FROM mat_audit"))
+        st = w.get(f"{ART}/{a['id']}")
+        assert st.status_code == 200 and b"NaN" not in st.data and st.json["artikel"]["length_m"] == 57.5
+        with t.app.app_context():
+            from app.material.services import journal
+            try:
+                journal.eintragen("item", a["id"], "geaendert", {"length_m": 1.0}, {"length_m": float("nan")}, name="Test")
+                raise AssertionError("NaN im Journal angenommen")
+            except ValueError:
+                pass
+
+        # B1: Vorbelegung 57,5; der Materialwart trägt währenddessen 60,0 ein; der Prüfer fasst den Punkt nicht an.
+        pr = starten(p, a["id"]).json["pruefung"]
+        x = punkt(pr, "Testpunkt Seillänge")
+        assert (x["wert"], x["soll"]) == ("57,5", "57,5")
+        assert w.put(f"{ART}/{a['id']}", json={"length_m": "60"}).status_code == 200
+        r = festschreiben(p, pr["id"], ergebnis="einsatzbereit")
+        assert r.status_code == 409 and "60,0 m geändert" in r.json["error"], r.get_json()
+        assert artikel(w, a["id"])["length_m"] == 60.0
+        x = punkt(p.get(f"/api/material/pruefungen/{pr['id']}").json["pruefung"], "Testpunkt Seillänge")
+        assert (x["wert"], x["soll"]) == ("60,0", "60,0"), x
+        fest(p, pr["id"])
+        assert artikel(w, a["id"])["length_m"] == 60.0
+        assert [j for j in journal_laenge(t.app, a["id"])] == [], journal_laenge(t.app, a["id"])
+        assert "60,0 m (unverändert)" in protokoll_text(t.app, tmp, pr["id"])
+        # B1 mit eigenem Messwert: 55,0 gemessen, währenddessen 58,0 eingetragen → 409, der Messwert bleibt, Soll 58,0.
+        pr = starten(p, a["id"]).json["pruefung"]
+        x = punkt(pr, "Testpunkt Seillänge")
+        assert setzen(p, pr["id"], x["id"], wert="55").status_code == 200
+        assert w.put(f"{ART}/{a['id']}", json={"length_m": "58"}).status_code == 200
+        r = festschreiben(p, pr["id"], ergebnis="einsatzbereit")
+        assert r.status_code == 409, r.get_json()
+        x = punkt(p.get(f"/api/material/pruefungen/{pr['id']}").json["pruefung"], "Testpunkt Seillänge")
+        assert (x["wert"], x["soll"]) == ("55,0", "58,0"), x
+        fest(p, pr["id"])
+        assert artikel(w, a["id"])["length_m"] == 55.0
+        assert journal_laenge(t.app, a["id"])[-1] == ({"length_m": 58.0}, {"length_m": 55.0, "pruefung": pr["id"],
+                                                                           "art": pr["art"]})
+        assert "58,0 m → 55,0 m" in protokoll_text(t.app, tmp, pr["id"])
+
+        # B3, Tippfehler: Original 57,5 → 5,0, berichtigt auf 57,5.
+        b = neuer_artikel(w, t.seil, t.lager, manufactured_on=t.herst, serial_no="NB-2", length_m="57,5")
+        pr = starten(p, b["id"]).json["pruefung"]
+        assert setzen(p, pr["id"], punkt(pr, "Testpunkt Seillänge")["id"], wert="5").status_code == 200
+        fest(p, pr["id"])
+        assert artikel(w, b["id"])["length_m"] == 5.0
+        r = p.post(f"/api/material/pruefungen/{pr['id']}/berichtigen", json={"grund": "Platzhalter: Tippfehler"})
+        assert r.status_code == 201, r.get_json()
+        ber = r.json["pruefung"]
+        assert setzen(p, ber["id"], punkt(ber, "Testpunkt Seillänge")["id"], wert="57,5").status_code == 200
+        fest(p, ber["id"])
+        assert artikel(w, b["id"])["length_m"] == 57.5
+        text = protokoll_text(t.app, tmp, ber["id"])
+        assert "57,5 m (unverändert)" in text and "5,0 m → 57,5 m" not in text, text[:2000]
+        assert journal_laenge(t.app, b["id"])[-1][1]["length_m"] == 57.5
+        # B3, echte Kürzung: Original 57,5 → 50,0; die Berichtigung ändert nur den Mantel-Punkt.
+        c = neuer_artikel(w, t.seil, t.lager, manufactured_on=t.herst, serial_no="NB-3", length_m="57,5")
+        pr = starten(p, c["id"]).json["pruefung"]
+        assert setzen(p, pr["id"], punkt(pr, "Testpunkt Seillänge")["id"], wert="50").status_code == 200
+        fest(p, pr["id"])
+        r = p.post(f"/api/material/pruefungen/{pr['id']}/berichtigen", json={"grund": "Platzhalter: Mantel"})
+        ber = r.json["pruefung"]
+        assert setzen(p, ber["id"], punkt(ber, "Testpunkt Mantel")["id"], notiz="Platzhalter").status_code == 200
+        fest(p, ber["id"])
+        assert artikel(w, c["id"])["length_m"] == 50.0 and len(journal_laenge(t.app, c["id"])) == 1
+        assert "57,5 m → 50,0 m" in protokoll_text(t.app, tmp, ber["id"])
+
+        # V1: die Zahl 0 ist 400 (nicht „leer“), V2: Unicode-Ziffern sind keine Länge.
+        d = neuer_artikel(w, t.seil, t.lager, manufactured_on=t.herst, serial_no="NB-4", length_m="20")
+        pr = starten(p, d["id"]).json["pruefung"]
+        xd = punkt(pr, "Testpunkt Seillänge")
+        assert setzen(p, pr["id"], xd["id"], wert=0).status_code == 400
+        assert setzen(p, pr["id"], xd["id"], wert="０５７").status_code == 400
+        assert punkt(p.get(f"/api/material/pruefungen/{pr['id']}").json["pruefung"], "Testpunkt Seillänge")["wert"] == "20,0"
+        # B4 + V5: Mangel und Messwert gesetzt, dann nimmt die Verwaltung das Häkchen weg.
+        assert setzen(p, pr["id"], xd["id"], wert="12").status_code == 200
+        assert setzen(p, pr["id"], xd["id"], befund="mangel", notiz="Platzhalter: Mantel offen").status_code == 200
+        assert kp.put(f"/api/material/kategorien/{t.seile}", json={"items_have_length": False}).status_code == 200
+        for befund in ("ok", "mangel"):
+            r = setzen(p, pr["id"], xd["id"], befund=befund)
+            assert r.status_code == 409 and "nicht zutreffend" in r.json["error"], r.get_json()
+        # Festschreiben „instandsetzen“ ohne Grund: der Längenpunkt ist kein Mangel mehr → 400 (Grund fehlt).
+        r = festschreiben(p, pr["id"], ergebnis="instandsetzen")
+        assert r.status_code == 400 and "Grund" in r.json["error"], r.get_json()
+        fest(p, pr["id"])
+        z = zeilen(t.app, "SELECT finding, value, note FROM mat_inspection_result WHERE inspection_id = ? "
+                          "AND editor = 'laenge'", (pr["id"],))[0]
+        assert z["finding"] == "nicht_zutreffend" and z["value"] == "" and "Gemessen: 12,0 m" in z["note"], dict(z)
+        assert artikel(w, d["id"])["length_m"] == 20.0
+        # Ohne Häkchen: „n. z.“ geht weiter, ok/Mangel sind 409 schon beim Setzen.
+        pr = starten(p, d["id"]).json["pruefung"]
+        xd = punkt(pr, "Testpunkt Seillänge")
+        assert setzen(p, pr["id"], xd["id"], befund="nicht_zutreffend").status_code == 200
+        assert setzen(p, pr["id"], xd["id"], befund="ok").status_code == 409
+        assert kp.put(f"/api/material/kategorien/{t.seile}", json={"items_have_length": True}).status_code == 200
+
+        # V3: zwei Längenpunkte in einem Formular → 400.
+        r = kp.post("/api/material/formulare", json={"kategorie_id": t.statik, "titel": "Zwei Längen", "punkte": [
+            {"text": "Testpunkt Länge A", "art": "laenge"}, {"text": "Testpunkt Länge B", "art": "laenge"}]})
+        assert r.status_code == 400 and "höchstens einen" in r.json["error"], r.get_json()
+        # V4: Produktwechsel eines ungeprüften Artikels auf ein Produkt ohne Länge leert sie.
+        e = neuer_artikel(w, t.seil, t.lager, manufactured_on=t.herst, serial_no="NB-5", length_m="40")
+        r = w.put(f"{ART}/{e['id']}", json={"product_id": t.ids["hms"], "length_m": "40", "manufactured_on": ""})
+        assert r.status_code == 200, r.get_json()
+        assert artikel(w, e["id"])["length_m"] is None
+    print("Nachbesserungen nach der Prüfung bestanden.")
+
+
+def test_import_einheiten():
+    """B5/V6: „Länge (cm)“ und andere Einheiten werden nicht als Meter gelesen (Hinweis, Bemerkung), „1.200“ ist
+    mehrdeutig (Hinweis), „50 m“ und „50m“ sind Meter."""
+    with tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        from app.material.services import bestandsimport
+        assert bestandsimport.erkennen("Länge (cm)")[0] == "laenge"
+        assert [bestandsimport.laenge_einheit(x) for x in ("Länge (cm)", "Länge [mm]", "Länge in ft", "Länge (Fuß)",
+                                                             "Länge in m", "Länge (m)", "Seillänge")] == \
+            ["cm", "mm", "ft", "Fuß", None, None, None]
+        daten = csv_bytes([["Hersteller", "Modell", "Artikelnummer", "Seriennummer", "Herstelldatum", "Länge (cm)"],
+                           ["Testwerk", "Seil Gamma", "SG-1", "EH-1", "03/2024", "3000"]])
+        z = nach_nr(ok(probelauf(t.w, t.lager, daten, "cm.csv")))
+        assert any("in cm – bitte in Metern" in h for h in z[2]["hinweise"]), z[2]
+        daten = csv_bytes([["Hersteller", "Modell", "Artikelnummer", "Seriennummer", "Herstelldatum", "Länge"],
+                           ["Testwerk", "Seil Gamma", "SG-1", "EH-2", "03/2024", "1.200"],
+                           ["Testwerk", "Seil Gamma", "SG-1", "EH-3", "03/2024", "50 m"],
+                           ["Testwerk", "Seil Gamma", "SG-1", "EH-4", "03/2024", "50,5m"],
+                           ["Testwerk", "Seil Gamma", "SG-1", "EH-5", "03/2024", "12 ft"]])
+        z = nach_nr(ok(probelauf(t.w, t.lager, daten, "m.csv")))
+        assert any("mehrdeutig" in h for h in z[2]["hinweise"]), z[2]
+        assert not any("Länge" in h for h in z[3]["hinweise"] + z[4]["hinweise"]), (z[3], z[4])
+        assert any("in ft" in h for h in z[5]["hinweise"]), z[5]
+        b = ok(uebernehmen(t.w, t.lager, daten, "m.csv"), 201)
+        assert b["import"]["angelegt"] == 4, b
+        nach_serie = {r["serial_no"]: r for r in zeilen(t.app, "SELECT serial_no, length_m, notes FROM mat_item")}
+        assert nach_serie["EH-2"]["length_m"] is None and "Länge laut Liste: 1.200" in nach_serie["EH-2"]["notes"]
+        assert nach_serie["EH-3"]["length_m"] == 50.0 and nach_serie["EH-4"]["length_m"] == 50.5
+        assert nach_serie["EH-5"]["length_m"] is None and "Länge laut Liste: 12 ft" in nach_serie["EH-5"]["notes"]
+    print("Einheiten im Bestandsimport bestanden.")
+
+
 # --- 7. Trennung -------------------------------------------------------------------------------------------------------
 
 def test_trennung():
@@ -599,5 +769,7 @@ if __name__ == "__main__":
     test_artikel_laenge()
     test_csv_und_import()
     test_pruefung_laenge()
+    test_nachbesserung_pruefung()
+    test_import_einheiten()
     test_trennung()
     print("Alle Tests zur Artikellänge bestanden.")

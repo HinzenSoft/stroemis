@@ -3660,8 +3660,8 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
 
 Wunsch des Nutzers vom 22.10.2026: „Beim Anlegen von Seilen/Meterwaren soll im Artikel die tatsächliche Länge hinterlegt
 werden können. Diese Länge soll beim Prüfen dann als Prüfpunkt abgefragt werden und ggf. korrigiert werden können.“
-Gebaut nach seinen drei Entscheidungen (unten), Schemaversion 20, keine neuen Abhängigkeiten. Stand: gebaut in einem
-eigenen Worktree, wartet auf Prüfung und Freigabe.
+Gebaut nach seinen drei Entscheidungen (unten), Schemaversion 20, keine neuen Abhängigkeiten. Stand: nach der
+unabhängigen Prüfung nachgebessert (siehe „Prüfung vor Auslieferung“), wartet auf Freigabe.
 
 ### Neu
 
@@ -3688,15 +3688,21 @@ eigenen Worktree, wartet auf Prüfung und Freigabe.
   ohne Länge – dann Pflicht wie jeder Pflichtpunkt oder „n. z.“), die Kopfzeile sagt „am Artikel 57,5 m“. Eingabe
   wie am Artikel, gespeichert als „55,0“ (`pruefung.punkt_setzen`). Beim **Festschreiben** (`abschliessen`, auch einer
   Berichtigung) übernimmt `_laenge_uebernehmen` einen abweichenden Wert in den Artikel – vor dem Abschluss, solange die
-  Ergebniszeile ihr Soll noch annimmt: Das Soll wird auf die bis dahin gespeicherte Länge gesetzt (auch wenn sie seit
-  dem Beginn der Prüfung bearbeitet wurde), dann `mat_item.length_m` und ein eigener Journaleintrag
+  Ergebniszeile ihr Soll noch annimmt: Hat jemand die Länge seit dem Beginn der Prüfung geändert, bricht das
+  Festschreiben mit **409** ab („Die Länge am Artikel wurde während der Prüfung auf 60,0 m geändert – bitte den
+  Messwert bestätigen“), der Punkt bekommt die neue Länge als Soll (und als Wert, wenn der Prüfer ihn nicht angefasst
+  hat) und die Prüfung lädt neu; eine Berichtigung behält das Soll ihres Originals (die Länge vor der berichtigten
+  Prüfung) und übernimmt den Messwert nur, wenn sie ihn gegenüber dem Original ändert. Dann `mat_item.length_m` und
+  ein eigener Journaleintrag
   **„laenge_geaendert“** (`length_m` vorher/nachher, `pruefung`, `art`). Unverändert → kein Journal. Im Protokoll-PDF
   steht in „Wert / Bemerkung“ „57,5 m → 55,0 m“ bzw. „55,0 m (unverändert)“, in der Lese-Ansicht „55,0 m (vorher 57,5 m)“.
   Festgeschriebene Ergebniszeilen bleiben unveränderlich (Trigger aus Schritt 6 unberührt).
 - **Artikel ohne vorgesehene Länge** (Kategorie ohne Häkchen, Formular mit Längenpunkt – etwa ein generisches
   Formular einer Oberkategorie, deren Seile das Häkchen tragen, ihre Karabiner nicht): Der Punkt wird angezeigt, steht
-  aber „nicht zutreffend“ mit dem Hinweis, dass für diese Kategorie keine Länge vorgesehen ist; ein Wert ist 409; das
-  Festschreiben ändert nichts am Artikel. **Entwurfsentscheidung**: Ausblenden hieße, dass das Formular je Artikel
+  aber „nicht zutreffend“ mit dem Hinweis, dass für diese Kategorie keine Länge vorgesehen ist; nur der Knopf „n. z.“
+  steht da, ein Wert und die Befunde „in Ordnung“/„Mangel“ sind 409; das Festschreiben setzt den Punkt vor allen
+  Pflicht-, Mangel- und Grundprüfungen auf „nicht zutreffend“ (ein vorher gemessener Wert steht dann in der Bemerkung
+  des Punkts) und ändert nichts am Artikel. **Entwurfsentscheidung**: Ausblenden hieße, dass das Formular je Artikel
   anders aussieht und die Nummerierung im Protokoll springt; „nicht zutreffend“ ist der Befund, den das Modul für
   genau diesen Fall schon kennt, und steht so auch im Protokoll.
 
@@ -3726,7 +3732,8 @@ neu an.
 - CSV-Spalte „Länge (m)“ steht hinter „Lebensende“ (nicht hinter „Bemerkung (Produkt)“ und nicht am Ende): Die Länge
   ist eine Artikelangabe und gehört zu den Artikeldaten in der Reihenfolge des Steckbriefs (hergestellt, gekauft,
   Erstgebrauch, Lebensende, Länge, Bemerkung); der Bestandsimport liest Spalten am Titel, nicht an der Stelle, und
-  die bestehenden Tests prüfen nur „Bemerkung (Produkt)“ direkt hinter „Modell“. Bitte bestätigen.
+  die bestehenden Tests prüfen nur „Bemerkung (Produkt)“ direkt hinter „Modell“. **Alle Spalten ab „Bemerkung“ rücken
+  damit eine Stelle nach hinten** – wer Excel-Auswertungen nach Spaltenbuchstaben gebaut hat, zieht sie nach.
 - Zwei Journalaktionen: „geändert“ (Bearbeiten-Dialog, wie jedes andere Artikelfeld) und „laenge_geaendert“
   (Festschreiben einer Prüfung, mit Verweis auf die Prüfung) – so bleibt im Lebenslauf sichtbar, ob ein Prüfer oder
   der Materialwart die Länge gesetzt hat.
@@ -3755,11 +3762,43 @@ für den Migrationstest); feste Listen in `test_material_import` (Kopf der Nacha
 `test_material_meine_psa` (Schlüssel der Karte) um die Länge ergänzt; ganze
 Suite, Lint (st-py, st-js, st-css), Browserprobe 1280 und 360 px (Artikel anlegen mit Länge, Prüfung mit Längenpunkt).
 
+### Prüfung vor Auslieferung
+
+Unabhängige Prüfung von Commit 80e02f0 (Bericht `planung/material-phase4/pruefung_laenge.md`, Proben unter
+`probe-laenge/`, außerhalb des Repositorys) mit der Brille Sicherheit, Rechte, Migration, Robustheit und Ablauf:
+**0 hoch, 3 mittel, 2 niedrig, 8 Verbesserungen**; Migration 19 → 20 an fünf Kopien, CHECKs, Rechte, Trennung,
+Rollback, PDF/A ohne Befund. Alle fünf Befunde sind behoben, jeweils mit Test in `tests/test_material_laenge.py`
+(`test_nachbesserung_pruefung`, `test_import_einheiten`, `test_katalogformat`):
+
+| Nr. | Befund / Verbesserung | Schwere | Umgang |
+| --- | --- | --- | --- |
+| B1 | Eine veraltete Vorbelegung überschrieb eine während der Prüfung eingetragene Länge (Materialwart 60,0, Prüfer lässt 57,5 stehen → Artikel wieder 57,5, Protokoll „60,0 m → 57,5 m“) | mittel | Vor dem Festschreiben (eigene kurze Transaktion, `_laenge_vormerken`): weicht die Artikellänge vom Soll der Vorbelegung ab und der Messwert von ihr, bekommt der Punkt die neue Länge als Soll (als Wert nur, wenn der Prüfer ihn nicht angefasst hat) und das Festschreiben bricht mit 409 ab; die Oberfläche lädt die Prüfung neu, der Prüfer bestätigt. Im Abschluss selbst noch einmal geprüft (Wettlauf: 409). Berichtigungen: siehe B3 |
+| B2 | `NaN` per JSON galt als gültige Länge, das unveränderliche Journal bekam `{"length_m": NaN}` – jede Antwort mit diesem Eintrag war kein gültiges JSON mehr, die Artikelseite lud nicht | mittel | `dezimal` weist NaN und Unendlich ab (400, auch „1e309“), nur ASCII-Ziffern (V2); `journal.eintragen` schreibt mit `allow_nan=False` (Ausnahme statt eines ungültigen Eintrags, für alle Dienste) |
+| B3 | Das Protokoll einer Berichtigung verglich mit der Länge nach dem Original: Tippfehler 57,5 → 5,0 berichtigt auf 57,5 ergab „5,0 m → 57,5 m“, eine echte Kürzung verschwand als „50,0 m (unverändert)“ | mittel | Die Berichtigung behält das Soll des Originals (Länge vor der berichtigten Prüfung) für „alt → neu“; in den Artikel geht ihr Messwert nur, wenn er sich gegenüber dem Original ändert, abgeglichen mit der aktuellen Länge (Journal). Tests: „57,5 m (unverändert)“ und Artikel 57,5; „57,5 m → 50,0 m“ und Artikel 50,0 |
+| B4 | Ohne vorgesehene Länge nahm der Punkt „in Ordnung“ (Sackgasse bei Pflicht) und „Mangel“ an (zählte als Mangel, „instandsetzen“ ohne Grund, dann still „n. z.“) | niedrig | Nur „nicht zutreffend“ (ok/Mangel → 409 mit Klartext), die Oberfläche zeigt nur „n. z.“; das Zurücksetzen läuft vor den Pflicht-, Mangel- und Grundprüfungen |
+| B5 | Bestandsimport las „Länge (cm)“ = 3000 als 3000,0 m und „1.200“ still als 1,2 m | niedrig | Einheit aus dem Spaltentitel (cm, mm, dm, km, ft/Fuß, in/Zoll, yd – „(cm)“, „[mm]“, „in ft“) oder am Wert: nur Meter wird gelesen, sonst Hinweis „Länge laut Liste „3000 cm“ in cm – bitte in Metern angeben“ und der Wert in der Bemerkung; „1.200“ ist mehrdeutig (Hinweis, Bemerkung). Wie ein unlesbarer Wert blockiert das die Zeile nicht |
+| V1 | JSON-Zahl 0 am Längenpunkt galt als „leer“ | – | 0 ist 0 (400), auch am Zahlpunkt |
+| V2 | Unicode-Ziffern („０５７“) wurden 57,0 m | – | nur ASCII-Ziffern |
+| V3 | Zwei Längenpunkte in einem Formular – der letzte gewann still | – | höchstens einer je Formular (400) |
+| V4 | Produktwechsel auf ein Produkt ohne Länge behielt die Länge | – | sie fällt weg (Journal „geändert“ nennt den alten Wert) |
+| V5 | Häkchen weg während eines Entwurfs: gemessener Wert verfiel still | – | steht in der Bemerkung des Punkts („Gemessen: 12,0 m – …“) |
+| V6 | „50 m“, „50m“ im Bestandsimport unlesbar | – | als Meter gelesen |
+| V7 | Kategorie-Dialog: Hinweis „durch eine Oberkategorie gesetzt“ folgt nicht einer im Dialog geänderten Oberkategorie | – | nicht geändert (Zu prüfen) |
+| V8 | Katalogdatei: `"artikel_laenge": null` nahm das Häkchen weg | – | null gilt wie ein fehlender Schlüssel (unverändert) |
+
 ### Zu prüfen / Bitte bestätigen
 
-- Stelle der CSV-Spalte (siehe Abweichungen).
-- „nicht zutreffend“ für Artikel ohne vorgesehene Länge in einem Formular mit Längenpunkt (siehe Neu).
-- Nachkommastelle: „57,56“ wird still „57,6“ – kein Fehler, da die Entscheidung eine Nachkommastelle vorgibt.
+- Stelle der CSV-Spalte (siehe Abweichungen; Spalten ab „Bemerkung“ eine Stelle weiter) – die Prüfung empfiehlt, sie
+  zu bestätigen.
+- „nicht zutreffend“ für Artikel ohne vorgesehene Länge in einem Formular mit Längenpunkt (siehe Neu) – jetzt
+  zusammen mit B4: der Punkt nimmt nur noch „n. z.“ an.
+- Nachkommastelle: „57,56“ wird still „57,6“ – kein Fehler, da die Entscheidung eine Nachkommastelle vorgibt (im
+  Bestandsimport werden fremde Einheiten und „1.200“ nicht mehr still gelesen).
+- **Neu: 409 bei geänderter Länge während der Prüfung** – der Prüfer muss nach dem Neuladen noch einmal
+  festschreiben; eine Berichtigung prüft das nicht (sie übernimmt nur einen gegenüber dem Original geänderten
+  Messwert). Bitte bestätigen.
+- V7 (Kategorie-Dialog mit geerbtem Häkchen als gesperrtes Kästchen) ist nicht umgesetzt – Oberfläche, eigener
+  Schritt, falls gewünscht.
 
 ## Phase 4 · Lieferung 1 – Auswertung und Betriebsreife (22.10.2026)
 
@@ -4796,7 +4835,7 @@ ist ein Verweis auf eine Datei (`bild`, `datei`) ein Fehler.
 | Feld | Bedeutung |
 | --- | --- |
 | `uid` (Kategorie, Produkt) | Katalogkennung: 32 Zeichen `0–9a–f`, in der Datei je Art eindeutig. Abgleich zuerst über sie; sonst über Name an der Stelle bzw. Dublette – dann übernimmt der Datensatz sie. Neu Angelegtes bekommt sie. Optional |
-| `artikel_laenge` (Kategorie) | `true`/`false` (auch `"ja"`/`"nein"`, 1/0): das Häkchen „Artikel haben eine Länge“ (Schritt 20, 22.10.2026) – es gilt für die Kategorie und alle Unterkategorien. Der Export schreibt es an jede Kategorie; der Import setzt oder nimmt es weg, ein fehlender Schlüssel lässt es, wie es ist (neu: `false`). Auch in Format 1 gelesen. Optional |
+| `artikel_laenge` (Kategorie) | `true`/`false` (auch `"ja"`/`"nein"`, 1/0): das Häkchen „Artikel haben eine Länge“ (Schritt 20, 22.10.2026) – es gilt für die Kategorie und alle Unterkategorien. Der Export schreibt es an jede Kategorie; der Import setzt oder nimmt es weg, ein fehlender Schlüssel oder `null` lässt es, wie es ist (neu: `false`). Auch in Format 1 gelesen. Optional |
 | `kategorie_uid` (Produkt, generisches Formular) | Kategorie über ihre uid; gibt es sie hier nicht, gilt `kategorie` (Pfad) |
 | `produkt.uid` (spezifisches Formular) | Produkt über seine uid; sonst Hersteller + Modell + Artikelnummer |
 | `bild` (Produkt) | Pfad im Archiv; Foto (JPEG, PNG, WebP, HEIC, TIFF), höchstens 31 MB (wie beim Hochladen) und 60 Megapixel. Gleiche SHA-256 wie das Original hier: unverändert; sonst ersetzt. Fehlt es, bleibt das Bild hier |
@@ -4864,7 +4903,7 @@ oder Plattform-Verwaltung).
 | `DELETE /api/material/meldungen/<id>` | nur der Melder – auch ohne Modulzugang | eigene Meldung löschen (offen oder erledigt; ein Produkt aus ihr bleibt); wer eine fremde nicht sehen darf, bekommt 404 wie für eine unbekannte (Phase 2) |
 | `?sort=<spalte>&richtung=auf\|ab` an `produkte`, `ordner/<id>`, `faellig`, `suche` | – | Sortierung: Katalog `hersteller`, `produkt`, `kategorie`, `materialart`, `intervall`, `lebensdauer`, `bestand`; Artikel `inventar`, `hersteller`, `produkt`, `serie`, `faellig`, `status` |
 | `GET/POST /api/material/artikel/<id>/pruefungen` | lesen / Prüfer | Prüfungen eines Artikels; Prüfung beginnen (`art`, `durchgang_id`) – oder den eigenen Entwurf fortsetzen |
-| `GET /api/material/pruefungen/<id>`, `PUT …/punkte/<pid>` (Art `laenge`: `wert` wie `length_m`) | Prüfer | Prüfung trägt `laenge` {`wert`, `text`, `moeglich`}; ein Längenpunkt ist mit der Artikellänge vorbelegt (Soll und Wert „57,5“), der Wert wird als „55,0“ gespeichert; ohne vorgesehene Länge „nicht zutreffend“ und ein Wert 409. Festschreiben (`…/abschliessen`) übernimmt einen abweichenden Wert in `mat_item.length_m` – Journal „laenge_geaendert“ am Artikel (`length_m` vorher/nachher, `pruefung`, `art`), Protokoll „57,5 m → 55,0 m“ bzw. „55,0 m (unverändert)“; Berichtigung ebenso (Schritt 20) |
+| `GET /api/material/pruefungen/<id>`, `PUT …/punkte/<pid>` (Art `laenge`: `wert` wie `length_m`) | Prüfer | Prüfung trägt `laenge` {`wert`, `text`, `moeglich`}; ein Längenpunkt ist mit der Artikellänge vorbelegt (Soll und Wert „57,5“), der Wert wird als „55,0“ gespeichert; ohne vorgesehene Länge „nicht zutreffend“ – ein Wert und die Befunde `ok`/`mangel` sind 409. Festschreiben (`…/abschliessen`) übernimmt einen abweichenden Wert in `mat_item.length_m` – Journal „laenge_geaendert“ am Artikel (`length_m` vorher/nachher, `pruefung`, `art`), Protokoll „57,5 m → 55,0 m“ bzw. „55,0 m (unverändert)“; 409 „Die Länge am Artikel wurde während der Prüfung auf … geändert – bitte den Messwert bestätigen“, wenn sich die Länge seit der Vorbelegung geändert hat (der Punkt trägt danach die neue Länge); eine Berichtigung behält das Soll des Originals und übernimmt nur einen gegenüber dem Original geänderten Messwert; NaN/Unendlich 400 (Schritt 20 mit Nachbesserung) |
 | `GET/PUT/DELETE /api/material/pruefungen/<id>` | lesen / Prüfer / Prüfer oder Materialwart | Prüfung lesen; Art und Bemerkung am Entwurf; Entwurf verwerfen bzw. Reservierung freigeben |
 | `PUT /api/material/pruefungen/<id>/punkte/<pid>`, `POST/DELETE …/foto` | Prüfer (eigener Entwurf) | Befund, Wert, Bemerkung, Foto je Prüfpunkt |
 | `POST /api/material/pruefungen/<id>/anhaenge` (`file` mehrfach, `art`, `titel`, `im_protokoll`), `DELETE …/<aid>` | Prüfer (eigener Entwurf) | Anhänge |

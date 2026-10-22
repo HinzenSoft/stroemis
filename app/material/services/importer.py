@@ -146,8 +146,14 @@ _PRODUKT_ABBILDUNG = {"hersteller": "manufacturer", "modell": "model", "artikeln
                       "beschreibung": "description", "bemerkung": "description"}
 
 
+# Schlüssel, deren null wie „fehlt“ gilt (bleibt unverändert) – „artikel_laenge“: null nähme das Häkchen sonst weg
+# wie false (Prüfung der Länge, V8).
+_NULL_WIE_FEHLT = ("artikel_laenge",)
+
+
 def _abbilden(eintrag, abbildung):
-    return {ziel: eintrag[quelle] for quelle, ziel in abbildung.items() if quelle in eintrag}
+    return {ziel: eintrag[quelle] for quelle, ziel in abbildung.items()
+            if quelle in eintrag and not (quelle in _NULL_WIE_FEHLT and eintrag[quelle] is None)}
 
 
 def _bericht():

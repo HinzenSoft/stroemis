@@ -517,9 +517,12 @@ def artikel_werte(d, alt=None):
     p = katalog.produkt(w["product_id"])
     # Eine Länge gibt es nur, wenn die Kategorie des Produkts (oder eine Oberkategorie) sie vorsieht. Ein Artikel, der
     # eine hat, seit das Häkchen weg ist, behält sie – nur ein anderer Wert wäre eine Änderung (409 mit Klartext).
-    if w["length_m"] is not None and not katalog.laenge_wirksam(p["category_id"]) and (
-            not alt or w["length_m"] != alt.get("length_m")):
-        raise Abgelehnt(katalog.KEINE_LAENGE, 409)
+    # Wechselt ein Artikel auf ein Produkt ohne vorgesehene Länge, fällt sie weg (das Journal nennt den alten Wert).
+    if w["length_m"] is not None and not katalog.laenge_wirksam(p["category_id"]):
+        if alt and w["product_id"] != alt.get("product_id"):
+            w["length_m"] = None
+        elif not alt or w["length_m"] != alt.get("length_m"):
+            raise Abgelehnt(katalog.KEINE_LAENGE, 409)
     h = heute()
     hergestellt = erster_tag(w["manufactured_on"])
     if hergestellt and hergestellt > h:

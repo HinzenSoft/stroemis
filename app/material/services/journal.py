@@ -35,10 +35,15 @@ def unterschied(alt, neu):
     return {k: alt[k] for k in felder}, {k: neu[k] for k in felder}
 
 
+def _als_text(werte):
+    return json.dumps(_sauber(werte), ensure_ascii=False, sort_keys=True, default=str, allow_nan=False)
+
+
 def eintragen(entity, entity_id, action, vorher=None, nachher=None, name=None):
     """Einen Eintrag schreiben. name: Anzeigename, wenn niemand angemeldet ist (Import, Startlauf);
     ein Kommandozeilenlauf setzt ihn für alle Einträge über g.mat_akteur. Wer angemeldet handelt, steht mit Namen da –
-    nie mit der E-Mail."""
+    nie mit der E-Mail. NaN und Unendlich nimmt json.dumps hier nicht an (allow_nan=False – ValueError statt eines
+    ungültigen JSON im unveränderlichen Journal, das sonst jede Antwort mit diesem Eintrag unlesbar machte)."""
     u = current_user() if has_request_context() else None
     if not u and not name:
         name = g.get("mat_akteur")
@@ -47,8 +52,7 @@ def eintragen(entity, entity_id, action, vorher=None, nachher=None, name=None):
         "VALUES (?,?,?,?,?,?,?,?)",
         (entity, entity_id, u["id"] if u else None,
          ((u["name"] or "").strip() or OHNE_NAMEN) if u else (name or "System"), action,
-         json.dumps(_sauber(vorher), ensure_ascii=False, sort_keys=True, default=str) if vorher is not None else None,
-         json.dumps(_sauber(nachher), ensure_ascii=False, sort_keys=True, default=str) if nachher is not None else None,
+         _als_text(vorher) if vorher is not None else None, _als_text(nachher) if nachher is not None else None,
          db.now()))
 
 

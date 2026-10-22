@@ -3,6 +3,7 @@
 Die Regeln stehen hier, nicht in den Routen: Schnittstelle, Katalogimport und Tests sollen dieselben
 Prüfungen durchlaufen. Eine verletzte Regel wird als Abgelehnt geworfen – mit Klartext und Statuscode;
 routes.py macht daraus die übliche JSON-Antwort, der Import eine Fehlerzeile."""
+import math
 import re
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -94,7 +95,8 @@ def ganzzahl(wert, name, mini=None, maxi=None, leer_erlaubt=True):
 
 def dezimal(wert, name, mini=None, maxi=None, stellen=1, leer_erlaubt=True):
     """Kommazahl oder None (leer): „57,5“ wie „57.5“ (deutsches Komma oder Punkt, auch als Zahl), gerundet auf
-    `stellen` Nachkommastellen; die Grenzen gelten nach dem Runden. Wahrheitswerte sind Tippfehler, keine Zahlen."""
+    `stellen` Nachkommastellen; die Grenzen gelten nach dem Runden. Wahrheitswerte sind Tippfehler, keine Zahlen; NaN
+    und Unendlich (JSON lässt „NaN“ und „Infinity“ zu) ebenso – NaN bestünde jeden Grenzvergleich. Nur ASCII-Ziffern."""
     if wert is None or wert == "":
         if leer_erlaubt:
             return None
@@ -103,12 +105,18 @@ def dezimal(wert, name, mini=None, maxi=None, stellen=1, leer_erlaubt=True):
         raise Abgelehnt(f"„{name}“ ist keine Zahl.")
     if isinstance(wert, str):
         s = wert.strip().replace(" ", "").replace(",", ".")
-        if not re.fullmatch(r"-?\d{1,9}(\.\d{1,6})?", s):
+        if not re.fullmatch(r"-?[0-9]{1,9}(\.[0-9]{1,6})?", s):
             raise Abgelehnt(f"„{name}“ ist keine Zahl (etwa 57,5).")
         wert = float(s)
     if not isinstance(wert, (int, float)):
         raise Abgelehnt(f"„{name}“ ist keine Zahl.")
-    wert = round(float(wert), stellen)
+    try:
+        wert = float(wert)
+    except OverflowError:
+        raise Abgelehnt(f"„{name}“ ist zu groß.")
+    if not math.isfinite(wert):
+        raise Abgelehnt(f"„{name}“ ist keine Zahl (etwa 57,5).")
+    wert = round(wert, stellen)
     if (mini is not None and wert < mini) or (maxi is not None and wert > maxi):
         raise Abgelehnt(f"„{name}“ muss zwischen {dezimal_text(mini, stellen)} und {dezimal_text(maxi, stellen)} liegen.")
     return wert

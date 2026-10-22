@@ -4462,7 +4462,8 @@
             : `<p class="help mat-laenge-hinweis">Für Artikel dieser Kategorie ist keine Länge vorgesehen – der Punkt gilt als nicht zutreffend.</p>`)
           : `<textarea class="mat-pwert" data-rid="${x.id}" rows="2" maxlength="1000" aria-label="${esc(x.text)}" placeholder="${esc(x.soll || "")}">${esc(x.wert || "")}</textarea>`;
         steuer = `${feld}<div class="mat-wahl3" role="group" aria-label="Befund zu ${esc(x.text)}">
-          ${[["ok", "in Ordnung", "soll"], ["mangel", "Mangel", "abw"], ["nicht_zutreffend", "n. z.", ""]].map(([b, t, k]) => `<button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="${b}" class="${k}" aria-pressed="${x.befund === b}"${b === "nicht_zutreffend" ? ' title="nicht zutreffend"' : ""}>${t}</button>`).join("")}</div>`;
+          ${[["ok", "in Ordnung", "soll"], ["mangel", "Mangel", "abw"], ["nicht_zutreffend", "n. z.", ""]]
+            .filter(([b]) => x.art !== "laenge" || laengeMoeglich || b === "nicht_zutreffend").map(([b, t, k]) => `<button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="${b}" class="${k}" aria-pressed="${x.befund === b}"${b === "nicht_zutreffend" ? ' title="nicht zutreffend"' : ""}>${t}</button>`).join("")}</div>`;
       }
       const fotoPflicht = mangel || (x.art === "photo" && x.pflicht && !nz);
       // Zwei Wege zum Foto: „📷“ öffnet am Telefon gleich die Kamera (capture), „Galerie“ nimmt ein schon
@@ -4883,8 +4884,10 @@
             zeichnen();
           } catch (e) {
             unterschriftWeg(e);
-            if (e.status === 409 && e.message.startsWith(MANGEL_NEU_ANFANG)) {
+            if (e.status === 409 && (e.message.startsWith(MANGEL_NEU_ANFANG) || e.message.startsWith(LAENGE_GEAENDERT_ANFANG))) {
               // Inzwischen ist ein Mangel gemeldet worden: neu laden – er erscheint oben und hier mit eigenem Häkchen.
+              // Ebenso, wenn jemand die Länge am Artikel geändert hat: Der Längenpunkt zeigt danach die neue Länge
+              // (ein eigener Messwert bleibt), der Prüfer bestätigt und schreibt erneut fest.
               dlg.close();
               try { pr = (await api(`${API}/pruefungen/${pr.id}`)).pruefung; zeichnen(); } catch (err) { /* bleibt so */ }
               toast(e.message, true);
@@ -6390,6 +6393,7 @@
   const NUR_GEMELDET = "Der Artikel ist durch eine Mangelmeldung gesperrt und seitdem nicht geprüft – aussondern kann ihn jetzt nur ein Prüfer (Prüfung mit Ergebnis „aussondern“). Nach einer Prüfung mit „instandsetzen“ geht es auch hier.";
   // Anfang von mangel.MANGEL_NEU: Eine Meldung kam während der Prüfung – die Prüfung wird neu geladen.
   const MANGEL_NEU_ANFANG = "Am Artikel ist ein gemeldeter Mangel offen, den du nicht als geprüft abgehakt hast";
+  const LAENGE_GEAENDERT_ANFANG = "Die Länge am Artikel wurde während der Prüfung";
   const BEISEITE = "Leg ihn sofort beiseite (aus Fahrzeug oder Lager) und gib ihn deinem Materialwart.";
   const mangelMarke = (x) => (x ? ' <span class="mat-mangel-marke" title="Mangel gemeldet">Mangel</span>' : "");
   const tagZeit = (iso) => fmtZeit(iso).replace(",", "");         // „20.10.2026 13:05“ in der Zeit des Browsers
