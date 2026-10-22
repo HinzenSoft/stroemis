@@ -436,6 +436,42 @@ def intervall_einheit(titel):
     return None
 
 
+# Einheiten einer Länge (Spaltentitel „Länge (cm)“, Wert „50 m“): gelesen wird nur in Metern – alles andere bekommt
+# einen Hinweis und steht in der Bemerkung (Prüfung der Länge, B5: „Länge (cm)“ = 3000 wurde sonst 3000,0 m).
+LAENGE_EINHEITEN = {"m": "m", "meter": "m", "metern": "m", "cm": "cm", "zentimeter": "cm", "mm": "mm",
+                    "millimeter": "mm", "dm": "dm", "km": "km", "ft": "ft", "feet": "ft", "foot": "ft", "fuß": "Fuß",
+                    "fuss": "Fuß", "in": "in", "inch": "in", "zoll": "Zoll", "yd": "yd", "yard": "yd"}
+
+
+def laenge_einheit(titel):
+    """Die Einheit der Länge aus dem Spaltentitel: „Länge (cm)“, „Länge [mm]“, „Länge in ft“ → „cm“, „mm“, „ft“;
+    Meter oder keine erkennbare Angabe → None (dann gilt Meter)."""
+    t = (titel or "").strip().lower()
+    m = re.search(r"[(\[]\s*(?:in\s+)?([a-zäöüß]+)\.?\s*[)\]]", t) or re.search(r"\bin\s+([a-zäöüß]+)\.?\s*$", t)
+    e = LAENGE_EINHEITEN.get(m.group(1)) if m else None
+    return None if e in (None, "m") else e
+
+
+def laenge_lesen(text):
+    """Eine Länge aus der Liste: (Meter, None) oder (None, Hinweis). „50“, „50,0“, „50 m“, „50m“ sind Meter; eine
+    andere Einheit („3000 cm“ – auch aus dem Spaltentitel) und ein mehrdeutiger Tausenderpunkt („1.200“: 1200 m oder
+    1,2 m?) werden nicht still gelesen. Was gar keine Länge ist, wirft wie laenge (Abgelehnt)."""
+    t = (text or "").strip()
+    m = re.fullmatch(r"([0-9][0-9.,\s]*?)\s*([^\W\d_]+)?\.?", t)
+    if m and m.group(2):
+        einheit = LAENGE_EINHEITEN.get(m.group(2).lower())
+        if einheit is None:
+            raise Abgelehnt(f"Länge „{t}“ unlesbar.")
+        if einheit != "m":
+            return None, (f"Länge laut Liste „{t}“ in {einheit} – bitte in Metern angeben; nicht übernommen (steht in "
+                          "der Bemerkung)")
+        t = m.group(1).strip()
+    if re.fullmatch(r"[0-9]{1,3}(?:\.[0-9]{3})+", t):
+        return None, (f"Länge laut Liste „{text.strip()}“ mehrdeutig (Tausenderpunkt?) – bitte in Metern mit Komma "
+                      "angeben, etwa 1200 oder 1,2; nicht übernommen (steht in der Bemerkung)")
+    return laenge(t), None
+
+
 def datensaetze(tab, spalten_liste, kopf_index, nacharbeit_csv=False):
     """Die Datenzeilen unter der Kopfzeile: (zeilen, leerzeilen, uebergangen). zeilen = [{nr, werte, serie_hinweis,
     nacharbeit_nr}] – werte nur mit zugeordneten, nicht leeren Feldern, als Text (je Feld gekürzt). nr zählt wie Excel
@@ -447,6 +483,7 @@ def datensaetze(tab, spalten_liste, kopf_index, nacharbeit_csv=False):
     zugeordnet = [s for s in spalten_liste if s["zuordnung"] != "ignorieren" and not s["gesperrt"]]
     einheit = {s["index"]: intervall_einheit(s["titel"]) for s in zugeordnet
                if s["zuordnung"] == "intervall" and not nacharbeit_csv}
+    laengen_einheit = {s["index"]: laenge_einheit(s["titel"]) for s in zugeordnet if s["zuordnung"] == "laenge"}
     nr_spalte = None
     if nacharbeit_csv:
         kopf = tab.zeilen[kopf_index]
@@ -476,6 +513,10 @@ def datensaetze(tab, spalten_liste, kopf_index, nacharbeit_csv=False):
                 if einheit.get(s["index"]) and re.fullmatch(r"\d{1,3}(?:[.,]\d{1,2})?", text):
                     wort = ("Jahr", "Jahre") if einheit[s["index"]] == "jahre" else ("Monat", "Monate")
                     text = f"{text} {wort[0] if text == '1' else wort[1]}"
+                # Eine Länge als reine Zahl unter „Länge (cm)“ bekommt die Einheit des Titels dazu – gelesen wird
+                # nur in Metern (laenge_lesen), so bleibt sie auch in der Nacharbeit erhalten.
+                if laengen_einheit.get(s["index"]) and re.fullmatch(r"[0-9][0-9.,]*", text):
+                    text = f"{text} {laengen_einheit[s['index']]}"
             if text:
                 werte[f] = _kuerzen(f, text)
         if bemerkung:
@@ -997,13 +1038,16 @@ def _mit_produkt(e, lauf, doppelt, varianten):
     laenge_m = None
     if w.get("laenge"):
         try:
-            laenge_m = laenge(w["laenge"])
+            laenge_m, laengen_hinweis = laenge_lesen(w["laenge"])
         except Abgelehnt:
             e.hinweise.append(f"Länge laut Liste „{w['laenge']}“ unlesbar (Meter mit Komma, 0,1 bis 9999,9) – nicht "
                               "übernommen")
             laut_liste.append(f"Länge laut Liste: {w['laenge']}")
         else:
-            if not katalog.laenge_wirksam(p["category_id"]):
+            if laengen_hinweis:
+                e.hinweise.append(laengen_hinweis)
+                laut_liste.append(f"Länge laut Liste: {w['laenge']}")
+            elif not katalog.laenge_wirksam(p["category_id"]):
                 laenge_m = None
                 e.hinweise.append("Für die Kategorie des Produkts ist keine Länge vorgesehen (Häkchen „Artikel haben eine "
                                   "Länge“ an der Kategorie) – nicht übernommen (steht in der Bemerkung)")
