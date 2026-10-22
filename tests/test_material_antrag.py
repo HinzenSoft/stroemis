@@ -15,7 +15,7 @@ an einen Antragsteller, der den Artikel noch liest, Schritt 16 (Trigger gegen Um
 laufende Rückrufe, „vormals …“ im Sammelprotokoll.
 Entscheidungen vom 21.10.2026 zur Prüfung (Abschnitt 11): Der Antragsteller zieht seinen offenen Antrag selbst zurück;
 das Herstelldatum lässt sich nur noch ändern, nicht entfernen (auch nicht per Antrag); Schritt 17 mit Altbestand.
-Echte Mails gehen nie hinaus (antrag.send_mail ist ersetzt). Alle Namen, Nummern und Texte sind Platzhalter."""
+Echte Mails gehen nie hinaus (die Nahtstelle mailprotokoll.versand ist ersetzt). Alle Namen, Nummern und Texte sind Platzhalter."""
 import logging
 import os
 import shutil
@@ -27,7 +27,7 @@ from contextlib import contextmanager
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_material import (H, abschluss, gliederung, katalog_grund, make_app, neuer_artikel,  # noqa: E402
-                           pruef_formulare, punkte_von, starten, umgebung)
+                           pruef_formulare, punkte_von, starten, umgebung, mails_abfangen, mails_zurueck)
 from test_material_erinnerung import umwelt  # noqa: E402
 from test_material_trennung import bis_schritt, endversion  # noqa: E402
 
@@ -43,6 +43,7 @@ TRIGGER_NEU = {"mat_item_stammdaten_fest", "mat_item_antrag_angewendet", "mat_it
 TRIGGER_16 = {"mat_item_ersetzen", "mat_item_kennung", "mat_item_geprueft_loeschen", "mat_item_produkt_fest",
               "mat_product_materialart_fest", "mat_product_ersetzen", "mat_product_kennung"}
 TRIGGER_17 = {"mat_item_change_herstellung_leer", "mat_item_change_entfernen_bestaetigen", "mat_item_change_zurueckziehen"}
+TRIGGER_19 = {"mat_mail_fehler_fest", "mat_mail_fehler_ordner"}
 HERST_BLEIBT = "nicht entfernen"
 
 
@@ -118,14 +119,11 @@ def post():
     """Mails direkt statt im Hintergrund und nur in eine Liste; ein Mailserver gilt als eingerichtet."""
     from app.material.services import antrag
     liste = []
-    alt = (antrag.HINTERGRUND, antrag.send_mail, antrag.MAILSERVER)
-    antrag.HINTERGRUND = lambda f, *a: f(*a)
-    antrag.send_mail = lambda an, betreff, inhalt: liste.append((an, betreff, inhalt)) or True
-    antrag.MAILSERVER = lambda: True
+    alt = mails_abfangen(antrag, lambda an, betreff, inhalt: liste.append((an, betreff, inhalt)) or True)
     try:
         yield liste
     finally:
-        antrag.HINTERGRUND, antrag.send_mail, antrag.MAILSERVER = alt
+        mails_zurueck(alt)
 
 
 @contextmanager
@@ -602,13 +600,13 @@ def test_mails():
         assert [m[0] for m in liste] == ["admin@example.org"], liste
         sql(t.app, "UPDATE users SET recht_material = 2 WHERE id = ?", (t.k["katalog_id"],))
         # Still: Umgebungssperre und ohne Mailserver.
-        from app.material.services import antrag
+        from app.material.services import mailprotokoll
         for umg, grund in (({"MATERIAL_ERINNERUNGEN_SPERRE": "1"}, "Umgebungssperre"),
                            ({"STROEMIS_NAME": "stroemis-dev"}, "Umgebungssperre"), ({}, "kein Mailserver")):
             liste.clear()
-            alt = antrag.MAILSERVER
+            alt = mailprotokoll.MAILSERVER
             if not umg:
-                antrag.MAILSERVER = lambda: False
+                mailprotokoll.MAILSERVER = lambda: False
             try:
                 with umwelt(**umg), logzeilen(t.app) as log:
                     r = beantragen(t.w, t.g1, manufactured_on="2023-06", begruendung="Platzhalter still")
@@ -616,7 +614,7 @@ def test_mails():
                     aid = r.json["antraege"][0]["id"]
                     assert ablehnen(t.mv, aid, antwort="Platzhalter still zurück").status_code == 200
             finally:
-                antrag.MAILSERVER = alt
+                mailprotokoll.MAILSERVER = alt
             assert liste == [], liste
             still = [z for z in log if f"Mail nicht verschickt ({grund})" in z]
             assert len(still) == 2 and "katalog@example.org" in still[0] and "Platzhalter still" in still[0], log
@@ -1398,13 +1396,15 @@ def test_migration_17():
         vorher = _zahlen(pfad)
         make_app(tmp)
         v17, t17, _ = _schema(pfad)
-        assert v17 == endversion() and set(t17) == set(t16) | TRIGGER_17, (set(t17) ^ set(t16))   # Schritt 18: keine Trigger
+        # Schritt 18: keine Trigger; Schritt 19: die zwei des Mailfehler-Protokolls.
+        assert v17 == endversion() and set(t17) == set(t16) | TRIGGER_17 | TRIGGER_19, (set(t17) ^ set(t16))
         assert t17["mat_item_stammdaten_fest"] != t16["mat_item_stammdaten_fest"]
         assert t17["mat_item_antrag_angewendet"] == t16["mat_item_antrag_angewendet"]
         assert "'zurueckgezogen'" in _tabelle_sql(pfad)
         assert zeilen(t.app, "SELECT * FROM mat_item_change ORDER BY id") == alt and len(alt) == 3
         assert zeilen(t.app, "SELECT seq FROM sqlite_sequence WHERE name = 'mat_item_change'") == seq
-        assert _zahlen(pfad) == vorher
+        # Schritt 19 legt mat_mail_fehler (leer) an – sonst keine Zeile anders.
+        assert _zahlen(pfad) == dict(vorher, mat_mail_fehler=0)
         indizes = {r["name"] for r in zeilen(t.app, "SELECT name FROM sqlite_master WHERE type = 'index' "
                                                     "AND tbl_name = 'mat_item_change' AND sql IS NOT NULL")}
         assert indizes == {"ux_mat_item_change_offen", "idx_mat_item_change_item", "idx_mat_item_change_status",

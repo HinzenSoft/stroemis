@@ -71,6 +71,25 @@ def anmelden(app, mail, pw):
     return c
 
 
+def mails_abfangen(dienst, f=None):
+    """Mails eines Dienstes (Modul mit HINTERGRUND) direkt statt im Hintergrund und über den Ersatz der Nahtstelle des
+    Versand-Wrappers (mailprotokoll.versand): f(an, betreff, text) -> bool sagt, ob der „Mailserver“ die Mail annimmt
+    (ohne f: jede). Echte Mails gehen nie hinaus; ein Mailserver gilt als eingerichtet (mailprotokoll.MAILSERVER).
+    Liefert den alten Stand für mails_zurueck."""
+    from app.material.services import mailprotokoll
+    alt = (dienst, dienst.HINTERGRUND, mailprotokoll.versand, mailprotokoll.MAILSERVER)
+    dienst.HINTERGRUND = lambda fn, *a: fn(*a)
+    mailprotokoll.versand = lambda an, betreff, text: ((True, "angenommen (Test)") if f is None or f(an, betreff, text)
+                                                      else (False, "abgewiesen (Test)"))
+    mailprotokoll.MAILSERVER = lambda: True
+    return alt
+
+
+def mails_zurueck(alt):
+    from app.material.services import mailprotokoll
+    dienst, dienst.HINTERGRUND, mailprotokoll.versand, mailprotokoll.MAILSERVER = alt
+
+
 # Je App (umgebung): der Client der Verwaltung, die Kennungen der Testkonten und das Grundrecht, das jedes von ihnen
 # an jeder neuen Gliederung bekommt (gliederung) – so, wie Schritt 8 der Migration die Stufen aus Phase 1 in Freigaben
 # umgesetzt hat. Seit Phase 2 gibt es Bestand nur über Freigaben je Ordner.
@@ -1818,10 +1837,8 @@ def test_produktmeldung():
     """Ein Materialwart meldet ein Produkt, das im Katalog fehlt; die Material-Verwaltung pflegt es ein (neu oder
     vorhanden) oder lehnt ab. Die Material-Verwaltung bekommt die Meldung, der Melder den Bescheid per Mail."""
     from app.material.services import meldung
-    alt = (meldung.HINTERGRUND, meldung.send_mail)
     post = []
-    meldung.HINTERGRUND = lambda f, *a: f(*a)
-    meldung.send_mail = lambda an, betreff, inhalt: post.append((an, betreff, inhalt)) or True
+    alt = mails_abfangen(meldung, lambda an, betreff, inhalt: post.append((an, betreff, inhalt)) or True)
     try:
         with tempfile.TemporaryDirectory() as tmp:
             app, k = umgebung(tmp)
@@ -1958,7 +1975,7 @@ def test_produktmeldung():
             assert melden(k["wart"], manufacturer="Helmwerk", model="Helm Epsilon").status_code == 201
             assert [p[0] for p in post] == ["admin@example.org"], post
     finally:
-        meldung.HINTERGRUND, meldung.send_mail = alt
+        mails_zurueck(alt)
     print("Meldungstest bestanden.")
 
 
@@ -1966,9 +1983,7 @@ def test_produktmeldung_loeschen():
     """Wer eine Meldung gemacht hat, löscht sie – offen oder erledigt; sonst niemand. Ein Produkt aus der Meldung
     bleibt, ihre Fotos gehen mit, das Journal vermerkt die Löschung."""
     from app.material.services import meldung
-    alt = (meldung.HINTERGRUND, meldung.send_mail)
-    meldung.HINTERGRUND = lambda f, *a: f(*a)
-    meldung.send_mail = lambda an, betreff, inhalt: True
+    alt = mails_abfangen(meldung, lambda an, betreff, inhalt: True)
     try:
         with tempfile.TemporaryDirectory() as tmp:
             app, k = umgebung(tmp)
@@ -2011,7 +2026,7 @@ def test_produktmeldung_loeschen():
                                                           "ORDER BY id", (m2,))]
             assert aktionen == ["angelegt", "eingepflegt", "geloescht"], aktionen
     finally:
-        meldung.HINTERGRUND, meldung.send_mail = alt
+        mails_zurueck(alt)
     print("Meldungs-Löschtest bestanden.")
 
 
@@ -2081,9 +2096,7 @@ def test_artikelnummer_eindeutig():
     und P54). Geprüft beim Anlegen, beim Ändern der Nummer oder des Herstellers, im Katalogimport und bei Meldungen;
     die Oberfläche fragt schon beim Tippen nach – mit dem Hersteller aus dem Formular."""
     from app.material.services import meldung
-    alt = (meldung.HINTERGRUND, meldung.send_mail)
-    meldung.HINTERGRUND = lambda f, *a: f(*a)
-    meldung.send_mail = lambda an, betreff, inhalt: True
+    alt = mails_abfangen(meldung, lambda an, betreff, inhalt: True)
     try:
         with tempfile.TemporaryDirectory() as tmp:
             app, k = umgebung(tmp)
@@ -2174,7 +2187,7 @@ def test_artikelnummer_eindeutig():
                 assert bericht["gespeichert"] and not bericht["fehler"], bericht
                 assert [p["manufacturer"] for p in kat.produkte_mit_artikelnummer("ga100")] == ["Testwerk", "Testwerk", "Importwerk"]
     finally:
-        meldung.HINTERGRUND, meldung.send_mail = alt
+        mails_zurueck(alt)
     print("Artikelnummerntest bestanden.")
 
 

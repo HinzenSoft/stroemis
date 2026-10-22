@@ -138,13 +138,20 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     der alten Namen; sie setzt das Kennzeichen auf „1“. Sind die Medien beim Start nicht erreichbar, bleibt es auf „0“
     und der nächste Start (oder flask material dok-zusammenfuehren) holt es nach. Wer mat_product_document künftig neu
     aufbaut, muss den Index neu anlegen.
+  - Schritt 19 (Phase 4 · Lieferung 1, Mailfehler-Protokoll und Jahresbericht): mat_mail_fehler – je gescheiterter
+    Modul-Mail (Erinnerung, Mangel, Antrag, Produktmeldung, Rückruf) eine Zeile mit Art, Fehlerklasse, gereinigter
+    Serverantwort (nie eine Adresse: CHECK instr(meldung, '@') = 0), Bezug, Gliederung (folder_id mit ON DELETE SET NULL –
+    Ordnerkennungen werden wiedervergeben), Kontoverweis und Rolle des Empfängers; geschrieben von
+    services/mailprotokoll.senden, abgehakt von der Verwaltung (nur erledigt_* sind änderbar, Trigger
+    mat_mail_fehler_fest). Dazu zwei Indizes für den Jahresbericht (inspected_on; entity, action, created_at im
+    Journal). Rein additiv, nur IF NOT EXISTS, wiederholbar.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -1637,12 +1644,56 @@ SCHRITT_18 = [
 ]
 
 
+# --- Schritt 19 (Phase 4 · Lieferung 1): Mailfehler-Protokoll und Indizes für den Jahresbericht ----------------------
+# Je gescheiterter Modul-Mail eine Zeile (services/mailprotokoll.senden) – Erfolge stehen nicht hier (Erinnerungen im
+# Erinnerungslog, Rückrufe zählen in mat_recall). Der Empfänger steht als Kontoverweis (users.mat_ref) und Rolle da, nie
+# mit Adresse; die Serverantwort kommt gereinigt (Adressen und Mailserver ersetzt) – der CHECK auf „@“ ist das Netz
+# dahinter. folder_id ist die Gliederung, deren Verwalter die Zeile sehen; der Fremdschlüssel setzt sie beim Löschen des
+# Ordners auf NULL, weil mat_folder Kennungen wiedervergibt. Nur erledigt_at und erledigt_von_name sind änderbar.
+MAILARTEN = ("erinnerung", "mangel", "antrag", "meldung", "rueckruf")
+MAILKLASSEN = ("empfaenger_abgewiesen", "verbindung", "anmeldung", "abgelehnt", "ausnahme", "sonstiges")
+MAILBEZUEGE = ("item", "folder", "report", "change", "request", "recall", "none")
+MAILROLLEN = ("verwalter", "pruefer", "zugeordnet", "inhaber", "verwaltung", "antragsteller", "melder")
+MAILBETREFF_MAX, MAILMELDUNG_MAX = 160, 300
+MAILFEHLER_FEST = "'Eine Mailfehler-Zeile lässt sich nur abhaken, nicht ändern.'"
+SCHRITT_19 = [
+    """CREATE TABLE IF NOT EXISTS mat_mail_fehler (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      art               TEXT NOT NULL CHECK (art IN """ + _in(MAILARTEN) + """),
+      klasse            TEXT NOT NULL CHECK (klasse IN """ + _in(MAILKLASSEN) + """),
+      bezug_art         TEXT NOT NULL CHECK (bezug_art IN """ + _in(MAILBEZUEGE) + """),
+      bezug_id          INTEGER,                                   -- Kennung im Ziel, das selbst prüft (404)
+      folder_id         INTEGER REFERENCES mat_folder(id) ON DELETE SET NULL,   -- Gliederung (Sicht der Verwalter)
+      konto_ref         TEXT NOT NULL CHECK (konto_ref <> ''),     -- users.mat_ref des Empfängers, nie die Adresse
+      rolle             TEXT NOT NULL CHECK (rolle IN """ + _in(MAILROLLEN) + """),
+      betreff           TEXT NOT NULL CHECK (length(betreff) <= """ + str(MAILBETREFF_MAX) + """),
+      meldung           TEXT NOT NULL CHECK (length(meldung) <= """ + str(MAILMELDUNG_MAX) + """
+                                              AND instr(meldung, '@') = 0),
+      created_at        TEXT NOT NULL,                             -- UTC wie db.now()
+      erledigt_at       TEXT,
+      erledigt_von_name TEXT,                                      -- Handelnder (Löschkonzept) bzw. „nachgeholt“
+      CHECK ((erledigt_at IS NULL) = (erledigt_von_name IS NULL))
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_mat_mail_fehler_offen ON mat_mail_fehler(erledigt_at, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_mail_fehler_ordner ON mat_mail_fehler(folder_id)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_mail_fehler_konto ON mat_mail_fehler(konto_ref)",
+    _trigger("mat_mail_fehler_fest", "BEFORE UPDATE OF id, art, klasse, bezug_art, bezug_id, konto_ref, rolle, betreff, "
+             "meldung, created_at ON mat_mail_fehler", "1", MAILFEHLER_FEST),
+    # Die Gliederung darf nur auf NULL gehen (Ordner gelöscht, ON DELETE SET NULL).
+    _trigger("mat_mail_fehler_ordner", "BEFORE UPDATE OF folder_id ON mat_mail_fehler",
+             "NEW.folder_id IS NOT NULL AND NEW.folder_id IS NOT OLD.folder_id", MAILFEHLER_FEST),
+    # Jahresbericht (services/bericht.py): Prüfungen je Jahr und Journalzeilen je Art und Zeitraum.
+    "CREATE INDEX IF NOT EXISTS idx_mat_inspection_inspected_on ON mat_inspection(inspected_on)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_audit_entity_action ON mat_audit(entity, action, created_at)",
+]
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
-            14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18}
+            14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19}
 
 
 def _meta(conn, schluessel, vorgabe=None):

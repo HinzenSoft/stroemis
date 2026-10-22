@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_material import (H, _heute, abschluss, anmelden, freigeben, gliederung, katalog_grund,  # noqa: E402
                            neuer_artikel, neues_konto, pruef_formulare, starten, umgebung, unterschreiben,
-                           zweiter_pruefer)
+                           zweiter_pruefer, mails_abfangen, mails_zurueck)
 from test_material_ueberblick import ordner_neu  # noqa: E402
 
 RR = "/api/material/produkte/{}/rueckrufe"
@@ -30,15 +30,12 @@ def post_abfangen(scheitert=()):
     """Mails direkt statt im Hintergrund und nur in eine Liste – an Adressen aus „scheitert“ geht nichts hinaus."""
     from app.material.services import rueckruf
     post = []
-    alt = (rueckruf.HINTERGRUND, rueckruf.send_mail)
-    rueckruf.HINTERGRUND = lambda f, *a: f(*a)
-    rueckruf.send_mail = lambda an, betreff, inhalt: post.append((an, betreff, inhalt)) or an not in scheitert
+    alt = mails_abfangen(rueckruf, lambda an, betreff, inhalt: post.append((an, betreff, inhalt)) or an not in scheitert)
     return post, alt
 
 
 def post_zurueck(alt):
-    from app.material.services import rueckruf
-    rueckruf.HINTERGRUND, rueckruf.send_mail = alt
+    mails_zurueck(alt)
 
 
 def aufbau(tmp):
@@ -434,10 +431,11 @@ def test_mail_empfaenger():
 def test_mail_im_hintergrund():
     """Mit dem echten Hintergrund-Thread: Er schreibt das Ergebnis in seinem eigenen App-Kontext."""
     import threading
-    from app.material.services import rueckruf
-    alt = rueckruf.send_mail
+    from app.material.services import mailprotokoll
+    alt = (mailprotokoll.versand, mailprotokoll.MAILSERVER)
     post = []
-    rueckruf.send_mail = lambda an, betreff, inhalt: post.append((an, threading.current_thread().name)) or True
+    mailprotokoll.versand = lambda an, betreff, inhalt: post.append((an, threading.current_thread().name)) or (True, "")
+    mailprotokoll.MAILSERVER = lambda: True
     try:
         with tempfile.TemporaryDirectory() as tmp:
             app, k, ids, system, lager, art = aufbau(tmp)
@@ -453,7 +451,7 @@ def test_mail_im_hintergrund():
             assert z["mailed_at"] and (z["mail_count"], z["mail_failed"]) == (1, 0), z
             assert post == [("wart@example.org", "mail")], post
     finally:
-        rueckruf.send_mail = alt
+        mailprotokoll.versand, mailprotokoll.MAILSERVER = alt
     print("Rückrufe: Mail im Hintergrund bestanden.")
 
 

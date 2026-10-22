@@ -8,7 +8,8 @@ Schutz. Fachregeln stehen in services/, hier wird nur gelesen, aufgerufen und ge
 Die Routen der Lieferung 4 stehen in eigenen Modulen an denselben Blueprints – routes_export.py (CSV, Protokoll-ZIP,
 Lebenslauf), routes_katalog.py (Katalogaustausch) und routes_rueckruf.py –, eingebunden am Ende dieser Datei; ebenso die
 der Phase 2 (Freigaben, globale Suche, Zuordnung, Erinnerungen, Bestandsimport, Prüfanleitung aus dem Wiki) und der
-Phase 3 (routes_psa.py: „Meine PSA“ und Mangelmeldung; routes_antrag.py: Änderungsanträge an festen Stammdaten).
+Phase 3 (routes_psa.py: „Meine PSA“ und Mangelmeldung; routes_antrag.py: Änderungsanträge an festen Stammdaten) und
+der Phase 4 (routes_mailfehler.py: Mailfehler-Protokoll abhaken).
 
 Seit Phase 2 gelten Freigaben je Ordner (services/rechte.py): Lesende Routen über den ganzen Bestand tragen
 requires_zugang und liefern nur, was das Konto sieht; Routen zu einem Gegenstand tragen requires_folder. Fremdes – auch
@@ -27,7 +28,7 @@ from . import models
 from .services import (Abgelehnt, anhang, bestand, bestandsimport, durchgang, eingabe, globalprotokoll, globalsuche,
                        journal, katalog, kennung, medien as medien_dienst, meldung, protokoll, pruefung, search,
                        unterschrift)
-from .services import antrag, erinnerung, mangel, psa, rueckruf
+from .services import antrag, erinnerung, mailprotokoll, mangel, psa, rueckruf
 from .services import status as st
 from .services import ueberblick
 from .services.bestand import FremdeDublette
@@ -373,7 +374,9 @@ def start():
     (erinnerung.stand) nur für die Material-Verwaltung (die Plattform-Verwaltung eingeschlossen), sonst null.
     „nacharbeit“: offene Nacharbeit aus Bestandsimporten je Zielordner, den das Konto verwaltet (sonst leer).
     „maengel“: gemeldete Mängel im eigenen Bereich, nach denen noch kein Prüfer geprüft hat (höchstens 50, dazu
-    „maengel_gesamt“); „meine_psa“: {anzahl, dringend} der eigenen PSA oder null (Phase 3 · L1)."""
+    „maengel_gesamt“); „meine_psa“: {anzahl, dringend} der eigenen PSA oder null (Phase 3 · L1); „mailfehler“:
+    gescheiterte Modul-Mails in der eigenen Sicht (mailprotokoll.uebersicht: offen, zeilen, kein_mailserver) oder null,
+    wenn es nichts zu zeigen gibt (Phase 4 · L1)."""
     alle = bestand.baum()
     maengel, maengel_gesamt = mangel.offene_liste()
     gliederungen = [o for o in alle if o["kind"] == "gliederung" and not o["system_kind"] and not o.get("nur_pfad")]
@@ -388,7 +391,8 @@ def start():
                    rueckrufe=rueckruf.uebersicht(),
                    erinnerungen=erinnerung.stand() if ist_material_verwaltung() else None,
                    nacharbeit=bestandsimport.offen_uebersicht(),
-                   maengel=maengel, maengel_gesamt=maengel_gesamt, meine_psa=psa.kurz(current_user()))
+                   maengel=maengel, maengel_gesamt=maengel_gesamt, meine_psa=psa.kurz(current_user()),
+                   mailfehler=mailprotokoll.uebersicht())
 
 
 @api.get("/suche")
@@ -1191,3 +1195,4 @@ from . import routes_erinnerung  # noqa: E402,F401
 from . import routes_import, routes_wiki  # noqa: E402,F401
 from . import routes_psa  # noqa: E402,F401
 from . import routes_antrag  # noqa: E402,F401
+from . import routes_mailfehler  # noqa: E402,F401

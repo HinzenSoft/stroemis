@@ -21,7 +21,7 @@ from types import SimpleNamespace
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_material import (H, _heute, freigeben, gliederung, katalog_grund, make_app, neuer_artikel,  # noqa: E402
-                           neues_konto, umgebung)
+                           neues_konto, umgebung, mails_abfangen, mails_zurueck)
 from test_material_trennung import sql, zeilen, zwei_gliederungen  # noqa: E402
 from test_material_ueberblick import ohne_post, ordner_neu  # noqa: E402
 
@@ -1218,9 +1218,7 @@ def test_nacharbeit():
 def test_produkt_melden():
     from app.material.services import meldung
     post = []
-    alt = (meldung.HINTERGRUND, meldung.send_mail)
-    meldung.HINTERGRUND = lambda f, *a: f(*a)
-    meldung.send_mail = lambda an, betreff, inhalt: post.append((an, betreff, inhalt)) or True
+    alt = mails_abfangen(meldung, lambda an, betreff, inhalt: post.append((an, betreff, inhalt)) or True)
     try:
         with tempfile.TemporaryDirectory() as tmp:
             t = aufbau(tmp)
@@ -1268,7 +1266,7 @@ def test_produkt_melden():
             assert ok(t.mv.post(f"{url}/produkt", json={"angabe": angabe, "product_id": pid}))["gesetzt"] == 1
             assert offene_zeilen(app, t.lager)[0]["product_id"] == pid
     finally:
-        meldung.HINTERGRUND, meldung.send_mail = alt
+        mails_zurueck(alt)
     print("Produkt melden bestanden.")
 
 

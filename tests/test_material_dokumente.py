@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_material import (H, PDF, abschluss, anmelden, gliederung, katalog_grund, make_app,  # noqa: E402
                            neuer_artikel, pruef_formulare, starten, umgebung)
-from test_material_trennung import bis_schritt  # noqa: E402
+from test_material_trennung import bis_schritt, endversion  # noqa: E402
 
 # Eine KOPIE einer Datenbank auf Stand 7 für den Pfad 7 → 18 – nur, wenn angegeben; die Quelle bleibt unberührt.
 KOPIE_STAND_7 = os.environ.get("MATERIAL_KOPIE_STAND_7") or ""
@@ -348,7 +348,7 @@ def test_migration_18():
             name_a, name_b = sha(PDF_A) + ".pdf", sha(PDF_B) + ".pdf"
 
             app = make_app(tmp)
-            assert _meta(tmp, "schema_version") == "18" and _meta(tmp, "dok_inhalt") == "1"
+            assert _meta(tmp, "schema_version") == endversion() and _meta(tmp, "dok_inhalt") == "1"
             assert dateien(tmp) == {name_a, name_b}
             docs = zeilen(app, "SELECT title, file_path, sha256, size, url FROM mat_product_document ORDER BY id")
             assert [(d["file_path"], d["sha256"], d["size"]) for d in docs[:3]] == [(name_a, sha(PDF_A), len(PDF_A))] * 3, docs
@@ -392,7 +392,7 @@ def test_migration_18():
             os.rename(dok_ordner(tmp), beiseite)
             log.zeilen.clear()
             app = make_app(tmp)
-            assert _meta(tmp, "schema_version") == "18" and _meta(tmp, "dok_inhalt") == "0"
+            assert _meta(tmp, "schema_version") == endversion() and _meta(tmp, "dok_inhalt") == "0"
             assert any("nicht erreichbar" in m for lvl, m in log.zeilen if lvl == logging.WARNING), log.zeilen
             assert not os.path.exists(dok_ordner(tmp))
             docs = zeilen(app, "SELECT file_path FROM mat_product_document WHERE file_path IS NOT NULL ORDER BY id")
@@ -422,7 +422,7 @@ def test_migration_18():
                 shutil.copyfile(KOPIE_STAND_7, os.path.join(tmp, "stroemis.db"))
                 log.zeilen.clear()
                 make_app(tmp)
-                assert _meta(tmp, "schema_version") == "18"
+                assert _meta(tmp, "schema_version") == endversion()
                 mit_datei = zeilen(make_app(tmp), "SELECT COUNT(*) AS n FROM mat_product_document WHERE file_path IS NOT NULL")
                 # Die Kopie bringt keine Medien mit: Mit Dokumentdateien bleibt das Kennzeichen offen (Warnung), ohne ist
                 # es gesetzt.

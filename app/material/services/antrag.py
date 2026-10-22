@@ -53,10 +53,9 @@ from flask import current_app
 
 from ... import db
 from ...auth import _im_hintergrund
-from ...mailer import send_mail                    # Tests ersetzen antrag.send_mail
 from ..models import ANTRAGSFELDER, ANTRAGSSTATUS
 from . import Abgelehnt, akteur, erster_tag, heute, monat_oder_datum, text
-from . import bestand, erinnerung, journal, katalog, nummern, rechte, rueckruf
+from . import bestand, erinnerung, journal, katalog, mailprotokoll, nummern, rechte, rueckruf
 from .interval import lebensende
 
 BEGRUENDUNG_MAX = 1000
@@ -85,10 +84,9 @@ ENTFERNEN_ALT = ("Ein Herstelldatum lässt sich nicht mehr entfernen (Entscheidu
 AKTIONEN = ("antrag_gestellt", "antrag_bestaetigt", "antrag_abgelehnt", "antrag_zurueckgezogen")
 JOURNAL_INHALT = ("begruendung", "beantragt_von", "anmerkung", "ablehnung")
 
-# Mails gehen neben der Anfrage hinaus (wie bei der Mangelmeldung); Tests setzen hier einen direkten Aufruf ein.
+# Mails gehen neben der Anfrage hinaus (wie bei der Mangelmeldung); Tests setzen hier einen direkten Aufruf ein. Ob ein
+# Mailserver da ist, weiß mailprotokoll.MAILSERVER; verschickt wird über mailprotokoll.senden (Mailfehler-Protokoll).
 HINTERGRUND = _im_hintergrund
-# Ist ein Mailserver eingerichtet? Tests, die send_mail ersetzen, setzen hier lambda: True.
-MAILSERVER = erinnerung.smtp_da
 
 
 # --- Lesen ----------------------------------------------------------------------------------------------------------
@@ -416,35 +414,25 @@ def zurueckziehen(aid):
 
 # --- Mails ----------------------------------------------------------------------------------------------------------
 
-def _still(demo):
-    """Warum keine Mail hinausgeht (dann steht sie im Log) – oder None."""
-    return ("DEMO-Artikel" if demo else "Umgebungssperre" if erinnerung.gesperrt()
-            else "kein Mailserver" if not MAILSERVER() else None)
-
-
-def _verschicken(art, aid, mails, demo):
-    """mails: [(an, betreff, text)]. Liefert, ob etwas an den Versand ging."""
+def _verschicken(aid, mails, item, demo):
+    """mails: [(an, betreff, text, Konto, Rolle)]. Liefert, ob etwas an den Versand ging (unter DEMO, Umgebungssperre oder
+    ohne Mailserver geht nichts hinaus – mailprotokoll.senden schreibt Betreff und Text ins Log)."""
     if not mails:
         return False
-    still = _still(demo)
-    if still:
-        for an, betreff, inhalt in mails:
-            current_app.logger.warning("Änderungsantrag %s (%s): Mail nicht verschickt (%s) – an %s\nBetreff: %s\n%s",
-                                       aid, art, still, an, betreff, inhalt)
-        return False
-    HINTERGRUND(_versenden, aid, mails)
-    return True
+    gl = bestand.gliederung_von(bestand.heimat(item))
+    HINTERGRUND(_versenden, aid, mails, gl["id"] if gl else None, demo)
+    return not mailprotokoll.still(demo)
 
 
-def _versenden(aid, mails):
-    """Läuft im Hintergrund (eigener App-Kontext). Jede Mail einzeln; eine Adresse, an der es scheitert, hält die
-    anderen nicht auf."""
-    for an, betreff, inhalt in mails:
+def _versenden(aid, mails, folder_id=None, demo=False):
+    """Läuft im Hintergrund (eigener App-Kontext). Jede Mail einzeln über mailprotokoll.senden (Bezug der Antrag,
+    Gliederung die der Heimat); eine Adresse, an der es scheitert, hält die anderen nicht auf."""
+    for an, betreff, inhalt, konto_id, rolle in mails:
         try:
-            if not send_mail(an, betreff, inhalt):
-                current_app.logger.error("Änderungsantrag %s: Mail an %s gescheitert", aid, an)
-        except Exception as exc:                     # send_mail wirft nicht – eine Ausnahme hält trotzdem nichts auf
-            current_app.logger.error("Änderungsantrag %s: Mail an %s gescheitert: %s", aid, an, exc)
+            mailprotokoll.senden(an, betreff, inhalt, art="antrag", konto_id=konto_id, rolle=rolle, bezug_art="change",
+                                 bezug_id=aid, folder_id=folder_id, demo=demo)
+        except Exception as exc:                     # senden wirft nicht – eine Ausnahme hält trotzdem nichts auf
+            current_app.logger.error("Änderungsantrag %s: Mail an Konto %s gescheitert: %s", aid, konto_id, exc)
 
 
 def _kopf(item):
@@ -462,7 +450,7 @@ def _verwaltung_benachrichtigen(ids):
     r0 = rows[0]
     item = bestand.artikel(r0["item_id"])
     demo = bestand.ist_demo(item["id"])
-    an = [u["email"].strip() for u in rechte.material_verwaltung_konten()
+    an = [(u["email"].strip(), u["id"]) for u in rechte.material_verwaltung_konten()
           if (u["email"] or "").strip() and u["id"] != r0["created_by"]
           and (demo or not erinnerung.demo_adresse(u["email"]))][:MAX_EMPFAENGER]
     if not an:
@@ -482,7 +470,7 @@ def _verwaltung_benachrichtigen(ids):
                f"({', '.join(ANTRAGSFELDER[r['field']] for r in rows)})")
     if demo:
         betreff = f"[DEMO] {betreff}"
-    return _verschicken("neu", r0["id"], [(a, betreff, "\n".join(zeilen) + "\n") for a in an], demo)
+    return _verschicken(r0["id"], [(a, betreff, "\n".join(zeilen) + "\n", uid, "verwaltung") for a, uid in an], item, demo)
 
 
 def _antragsteller_benachrichtigen(aid):
@@ -524,4 +512,5 @@ def _antragsteller_benachrichtigen(aid):
     betreff = f"{cfg.get('SITE_NAME') or 'strömis.de'} – {betreff}"
     if demo:
         betreff = f"[DEMO] {betreff}"
-    return _verschicken(r["status"], aid, [(u["email"].strip(), betreff, "\n".join(zeilen) + "\n")], demo)
+    return _verschicken(aid, [(u["email"].strip(), betreff, "\n".join(zeilen) + "\n", u["id"], "antragsteller")], item,
+                        demo)

@@ -20,7 +20,7 @@ import click
 from flask import current_app, g
 from flask.cli import with_appcontext
 
-from .services import ZONE, Abgelehnt, datum, dokablage, erinnerung, heute, importer, journal, katalog, katalog_export
+from .services import ZONE, Abgelehnt, datum, dokablage, erinnerung, heute, importer, katalog, katalog_export
 
 
 @click.command("import-catalog")
@@ -193,8 +193,10 @@ def remind(trocken, stichtag, erneut, demo):
     fehler = False
     p = erg.get("pflege")
     if p:
+        mf = p.get("mailfehler") or {}
         click.echo(f"Pflege: {p['abgelaufen']} abgelaufene Freigaben ins Journal, Log {p['log']} alte und "
-                   f"{p['waisen']} verwaiste Zeilen, Suchprotokoll {p['suche']} Zeilen entfernt.")
+                   f"{p['waisen']} verwaiste Zeilen, Suchprotokoll {p['suche']} Zeilen, Mailfehler "
+                   f"{mf.get('alt', 0) + mf.get('erledigt', 0) + mf.get('waisen', 0)} Zeilen entfernt.")
         if p.get("fehler"):
             click.echo(f"FEHLER  Pflege: {p['fehler']}", err=True)
             fehler = True
@@ -205,8 +207,8 @@ def remind(trocken, stichtag, erneut, demo):
                    f"{'Freigabe' if m['freigaben'] == 1 else 'Freigaben'}), "
                    f"{m['fehlgeschlagen']} gescheitert, {m['ohne_empfaenger']} ohne Empfänger.")
         if m["fehlgeschlagen"]:
-            namen = journal.konto_namen(m.get("fehlgeschlagen_refs") or [])
-            click.echo("Gescheitert an: " + (", ".join(namen.values()) or "?") + " – geht morgen erneut.", err=True)
+            click.echo("Gescheitert – an wen, steht im Mailfehler-Protokoll auf der Übersicht; geht morgen erneut.",
+                       err=True)
         for schluessel, text in (("fehlerhaft", "Datenzeilen ließen sich nicht lesen – siehe Log."),
                                  ("vermerk_fehler", "angenommene Mails ließen sich nicht vermerken – siehe Log.")):
             if m.get(schluessel):

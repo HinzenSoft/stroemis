@@ -11,7 +11,10 @@ Prüfer, die ihn geprüft haben und dort heute prüfen dürfen; hat er keinen Ve
 es keine, an die Plattform-Verwaltung). Jeder Empfänger bekommt eine Mail mit genau den betroffenen Artikeln, die er
 sehen darf. Wie viele Mails hinausgingen und welche Seriennummern zu keinem Artikel passen, erfährt nur, wer alle
 Bestände sieht (die Material-Verwaltung) – sonst taugte ein Rückruf (auch einer ohne Mail, gleich wieder beendet) als
-Abfrage fremder Bestände.
+Abfrage fremder Bestände. Verschickt wird über mailprotokoll.senden (Phase 4 · L1): Ohne Mailserver, unter der
+Umgebungssperre (dev) und an DEMO-Adressen geht nichts hinaus (zählt in mat_recall als gescheitert, wie bisher ohne
+Mailserver); was der Mailserver nicht annimmt, steht im Mailfehler-Protokoll – je Gliederung der Artikel in der Mail
+eine Zeile, mit der Rolle des Empfängers (Verwalter, Prüfer oder Verwaltung im Rückfall).
 
 Gesperrt wird nichts automatisch – sperren dürfen ohne Prüfung nur Prüfer (pruefung.sperren), dafür gibt es den
 Sperrgrund „Rückruf“. Je Artikel wird der Zustand abgeleitet, nie gespeichert:
@@ -29,9 +32,8 @@ from flask import current_app, g
 
 from ... import db
 from ...auth import _im_hintergrund
-from ...mailer import send_mail
 from . import OHNE_NAMEN, Abgelehnt, akteur, text, wahr
-from . import bestand, journal, katalog, rechte
+from . import bestand, journal, katalog, mailprotokoll, rechte
 
 TITEL_MAX = 200
 BESCHREIBUNG_MAX = 4000
@@ -380,25 +382,29 @@ def empfaenger(r, liste):
     gültige Prüffreigabe); hat ein Artikel keinen Verwalter, die Material-Verwaltung. Nur aktive Konten mit Adresse,
     jedes einmal, keine Obergrenze – ein Rückruf muss alle erreichen.
 
-    Liefert [(Konto, Artikel)]: je Empfänger genau die betroffenen Artikel, die er sehen darf – Artikel aus Bereichen,
-    die er nicht sieht, stehen nicht in seiner Mail (auch keine Zahl über sie)."""
+    Liefert [(Konto, Artikel, Rolle)]: je Empfänger genau die betroffenen Artikel, die er sehen darf – Artikel aus
+    Bereichen, die er nicht sieht, stehen nicht in seiner Mail (auch keine Zahl über sie) – und seine Rolle fürs
+    Mailfehler-Protokoll (verwalter vor pruefer vor verwaltung, wenn mehrere zutreffen)."""
     if not liste:
         return []
     pruefer = _gepruefte(r["product_id"], {a["id"] for a in liste})
     konten = _konten({uid for wer in pruefer.values() for uid in wer})
-    wer, verwalter, verwaltung = set(), {}, None
+    wer, verwalter, verwaltung = {}, {}, None          # Kennung → Rollen
     for a in liste:
         h = bestand.heimat(a)
         if h not in verwalter:
             verwalter[h] = {v["id"] for v in rechte.verwalter_von(h)}
         if verwalter[h]:
-            wer |= verwalter[h]
+            for uid in verwalter[h]:
+                wer.setdefault(uid, set()).add("verwalter")
         else:
             verwaltung = _verwaltung() if verwaltung is None else verwaltung
-            wer |= verwaltung
-        wer |= {uid for uid in pruefer.get(a["id"], ())
-                if uid in konten and rechte.darf_artikel("pruefen", a, konten[uid])}
-    konten.update(_konten(wer - set(konten)))
+            for uid in verwaltung:
+                wer.setdefault(uid, set()).add("verwaltung")
+        for uid in pruefer.get(a["id"], ()):
+            if uid in konten and rechte.darf_artikel("pruefen", a, konten[uid]):
+                wer.setdefault(uid, set()).add("pruefer")
+    konten.update(_konten(set(wer) - set(konten)))
     out, gesehen = [], set()
     for uid in sorted(wer):
         u = konten.get(uid)
@@ -408,7 +414,7 @@ def empfaenger(r, liste):
         sichtbar = [a for a in liste if rechte.darf_artikel("lesen", a, u)]
         if sichtbar:
             gesehen.add(adr.casefold())
-            out.append((u, sichtbar))
+            out.append((u, sichtbar, next(x for x in ("verwalter", "pruefer", "verwaltung") if x in wer[uid])))
     return out
 
 
@@ -454,21 +460,35 @@ def _benachrichtigen(r, liste):
         db.execute("UPDATE mat_recall SET mailed_at = ?, mail_count = 0, mail_failed = 0 WHERE id = ?", (db.now(), r["id"]))
         return 0, set()
     p = katalog.produkt(r["product_id"])
-    mails = [(u["email"].strip(), *_mailtext(r, p, artikel)) for u, artikel in post]
+    gliederung = {}                                  # Heimat → Gliederung, einmal je Ordner
+    mails = []
+    for u, artikel, rolle in post:
+        gl = set()
+        for a in artikel:
+            h = bestand.heimat(a)
+            if h not in gliederung:
+                g_ = bestand.gliederung_von(h)
+                gliederung[h] = g_["id"] if g_ else None
+            if gliederung[h] is not None:
+                gl.add(gliederung[h])
+        mails.append((u["email"].strip(), *_mailtext(r, p, artikel), u["id"], rolle, gl))
     db.execute("UPDATE mat_recall SET mail_count = ?, mail_failed = 0 WHERE id = ?", (len(mails), r["id"]))
     HINTERGRUND(_versenden, r["id"], mails)
-    return len(mails), {a["id"] for _, artikel in post for a in artikel}
+    return len(mails), {a["id"] for _, artikel, _ in post for a in artikel}
 
 
 def _versenden(ruid, mails):
     """Läuft im Hintergrund – mit eigenem App-Kontext und damit eigener Datenbankverbindung (_im_hintergrund).
-    Jede Mail einzeln; eine Adresse, an der es scheitert, hält die anderen nicht auf."""
+    mails: [(an, betreff, inhalt, Konto, Rolle, Gliederungen)] – jede einzeln über mailprotokoll.senden (Bezug der
+    Rückruf, je Gliederung der Artikel in der Mail eine Protokollzeile); eine Adresse, an der es scheitert, hält die
+    anderen nicht auf."""
     gut = schlecht = 0
-    for an, betreff, inhalt in mails:
+    for an, betreff, inhalt, konto_id, rolle, gl in mails:
         try:
-            ok = send_mail(an, betreff, inhalt)
-        except Exception as exc:                     # send_mail wirft nicht – eine Ausnahme soll trotzdem nur zählen
-            current_app.logger.error("Rückruf %s: Mail an %s gescheitert: %s", ruid, an, exc)
+            ok = mailprotokoll.senden(an, betreff, inhalt, art="rueckruf", konto_id=konto_id, rolle=rolle,
+                                      bezug_art="recall", bezug_id=ruid, folder_id=gl)
+        except Exception as exc:                     # senden wirft nicht – eine Ausnahme soll trotzdem nur zählen
+            current_app.logger.error("Rückruf %s: Mail an Konto %s gescheitert: %s", ruid, konto_id, exc)
             ok = False
         if ok:
             gut += 1

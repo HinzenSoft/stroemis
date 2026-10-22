@@ -32,7 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_material import (H, _flach, _heute, festschreiben, freigeben, gliederung, jpeg, katalog_grund,  # noqa: E402
                            make_app, neuer_artikel, neues_konto, pdf_seiten, protokoll_zeile, pruef_formulare, starten,
-                           umgebung, unterschreiben, unterschrift_hinterlegen)
+                           umgebung, unterschreiben, unterschrift_hinterlegen, mails_abfangen, mails_zurueck)
 from test_material_ueberblick import (MEHRDEUTIG, MULTIPART, SCHREIBEN, _stand, _url, ohne_post,  # noqa: E402
                                       ordner_neu, sperren)
 
@@ -1053,6 +1053,14 @@ def trennung_aufbau(tmp):
     b.produktbild = _foto(t.k["katalog"], f"/api/material/produkte/{ids['hms']}/bild", "hms.jpg")["produkt"]["bild"]
     b.freigabe = zeilen(app, "SELECT id FROM mat_folder_grant WHERE user_id = ? AND folder_id = ?",
                         (t.wart_b_id, t.b))[0]["id"]
+    # Phase 4 · L1: eine Mailfehler-Zeile der Gliederung B (an wart_b) – wart_a darf sie nicht abhaken (404).
+    with app.app_context():
+        from app.material.services import journal
+        from app import db
+        b.mailfehler = db.execute(
+            "INSERT INTO mat_mail_fehler (art, klasse, bezug_art, bezug_id, folder_id, konto_ref, rolle, betreff, meldung, "
+            "created_at) VALUES ('mangel', 'verbindung', 'report', 1, ?, ?, 'verwalter', 'Testbetreff Nachbarstadt', "
+            "'[Mailserver] nicht erreichbar', ?)", (t.b, journal.konto_ref(t.wart_b_id)["ref"], db.now()))
     b.artikel = [t.art_b["id"], b.gesperrt["id"], b.weg["id"]]
     artikel = {r["id"]: r for r in zeilen(app, "SELECT id, inventory_no, qr_token FROM mat_item")}
     b.token = artikel[t.art_b["id"]]["qr_token"]
@@ -1082,7 +1090,7 @@ def ohne_merkmale(b, wo, daten):
 _PLATZHALTER = re.compile(r"<(?:[^<>:]+:)?(\w+)>")
 # Platzhalter, die in einer Route einen Gegenstand aus dem Bestand meinen (bei pid, fid, rid zählt der Abschnitt davor,
 # wie in test_material_ueberblick._url): Mit einer Kennung aus B antwortet die Route an wart_a wie für Unbekanntes.
-BESTAND_PLATZHALTER = {"iid", "mid", "aid", "token", "gid", ("pruefungen", "pid"), ("pruefung", "pid"),
+BESTAND_PLATZHALTER = {"iid", "mid", "aid", "token", "gid", "mfid", ("pruefungen", "pid"), ("pruefung", "pid"),
                        ("punkte", "rid"), ("ordner", "fid"), ("export", "fid"), ("durchgaenge", "rid"),
                        ("durchgang", "rid")}
 
@@ -1108,7 +1116,7 @@ def test_nichts_aus_b():
         form = zeilen(app, "SELECT id FROM mat_form ORDER BY id LIMIT 1")[0]["id"]
         kennungen = {"iid": t.art_b["id"], "mid": b.meldung, "aid": b.anhang_id, "token": b.token, "gid": b.freigabe,
                      "kid": ids["karabiner"], "did": 999999, "ruid": 999999, "anid": 999999, "filename": "material.js",
-                     "art": "web", "dateiname": "x.jpg",
+                     "art": "web", "dateiname": "x.jpg", "mfid": b.mailfehler,
                      ("produkte", "pid"): ids["hms"], ("produkt", "pid"): ids["hms"],
                      ("pruefungen", "pid"): t.entwurf_b, ("pruefung", "pid"): t.entwurf_b, ("punkte", "rid"): b.punkt,
                      ("ordner", "fid"): t.lager_b, ("export", "fid"): t.lager_b, ("formulare", "fid"): form,
@@ -1919,14 +1927,12 @@ def test_nichts_aus_b_paket_d():
             assert r.status_code == 200 and b.meldung not in [m["id"] for m in r.json["meldungen"]], (url, r.get_json())
             ohne_merkmale(b, url, r.data)
         post = []
-        alt = (rueckruf.HINTERGRUND, rueckruf.send_mail)
-        rueckruf.HINTERGRUND = lambda f, *a: f(*a)
-        rueckruf.send_mail = lambda an, betreff, inhalt: post.append((an, betreff, inhalt)) or True
+        alt = mails_abfangen(rueckruf, lambda an, betreff, inhalt: post.append((an, betreff, inhalt)) or True)
         try:
             r = t.adm.post(f"/api/material/produkte/{ids['hms']}/rueckrufe", json={"title": "Testrückruf", "mail": True})
             assert r.status_code == 201, r.get_json()
         finally:
-            rueckruf.HINTERGRUND, rueckruf.send_mail = alt
+            mails_zurueck(alt)
         ruid = r.json["rueckruf"]["id"]
         for url in ("/api/material/rueckrufe", "/api/material/start", f"/api/material/produkte/{ids['hms']}",
                     f"/api/material/produkte/{ids['hms']}/rueckrufe", f"/api/material/artikel/{t.art_a['id']}",

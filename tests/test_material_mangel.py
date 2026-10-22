@@ -6,7 +6,8 @@ bei offenem Prüfentwurf; zurück nur über die Freiprüfung mit Häkchen je Mel
 Aussonderung); „instandsetzen“ erledigt nicht, eine Berichtigung gibt nie frei; der Materialwart sondert nach einer
 reinen Mangelsperre erst nach einer Prüfung aus. Mails an Verwalter (Rückfall MV, PV) und Prüfer, an die zugeordnete
 Person bei fremder Meldung; bei DEMO und Umgebungssperre ins Log. Meldungen sind unveränderlich (Trigger), der Name
-bleibt beim Kontolöschen. Schritt 13 der Migration. Echte Mails gehen nie hinaus (mangel.send_mail ist ersetzt).
+bleibt beim Kontolöschen. Schritt 13 der Migration. Echte Mails gehen nie hinaus (die Nahtstelle mailprotokoll.versand ist
+ersetzt).
 
 Alle Namen, Hersteller, Nummern und Texte hier sind Platzhalter und nur für den Test da."""
 import io
@@ -24,7 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PIL import Image  # noqa: E402
 from test_material import (H, _heute, festschreiben, freigeben, gliederung, jpeg, make_app, neuer_artikel,  # noqa: E402
-                           neues_konto, pdf_seiten, starten, unterschreiben)
+                           neues_konto, pdf_seiten, starten, unterschreiben, mails_abfangen, mails_zurueck)
 from test_material_erinnerung import umwelt  # noqa: E402
 from test_material_meine_psa import LISTE, aufbau, melden, post_mangel, zuordnen  # noqa: E402
 from test_material_trennung import bis_schritt, endversion, erinnerungslog_wie_schritt_11, sql, zeilen  # noqa: E402
@@ -588,7 +589,6 @@ def test_mail():
             assert all(len(x) == 2 for x in liste) and "fuehrung@example.org" not in {u["email"] for u, _ in liste}
             assert all(mangel.darf_inhalt(i_, u) for u, warum in liste if warum != "zugeordnet")
         # Ein Fehlschlag hält die anderen nicht auf.
-        alt = (mangel.HINTERGRUND, mangel.send_mail)
         gesendet = []
 
         def senden(adr, betreff, text):
@@ -596,14 +596,18 @@ def test_mail():
             if adr == "wart@example.org":
                 raise RuntimeError("Testausnahme")
             return adr != "pruefer@example.org"
-        mangel.HINTERGRUND, mangel.send_mail = (lambda fn, *a: fn(*a)), senden
+        alt = mails_abfangen(mangel, senden)
         try:
             with t.app.app_context():
-                mangel._versenden(1, [(a, "b", "t") for a in ("wart@example.org", "pruefer@example.org",
-                                                              "extern@example.org")])
+                mangel._versenden(1, [(a, "b", "t", t.k["wart_id"], "verwalter")
+                                      for a in ("wart@example.org", "pruefer@example.org", "extern@example.org")])
         finally:
-            mangel.HINTERGRUND, mangel.send_mail = alt
+            mails_zurueck(alt)
         assert gesendet == ["wart@example.org", "pruefer@example.org", "extern@example.org"]
+        # Die zwei Fehlschläge stehen im Mailfehler-Protokoll (Ausnahme und abgewiesen), die angenommene Mail nicht.
+        fehler = zeilen(t.app, "SELECT art, klasse, bezug_art, bezug_id, rolle FROM mat_mail_fehler ORDER BY id")
+        assert fehler == [{"art": "mangel", "klasse": "ausnahme", "bezug_art": "report", "bezug_id": 1, "rolle": "verwalter"},
+                          {"art": "mangel", "klasse": "sonstiges", "bezug_art": "report", "bezug_id": 1, "rolle": "verwalter"}], fehler
         # Rückfall: Gliederung ohne Verwalter – MV, ohne MV die PV.
         g2, _ = gliederung(t.adm, "OG Zwei", standard=False)
         l2 = ordner_neu(t.adm, g2, "Lager Zwei")
@@ -666,7 +670,7 @@ def test_mail_zugeordnet():
 
 
 def test_mail_still():
-    """Umgebungssperre (MATERIAL_ERINNERUNGEN_SPERRE=1, STROEMIS_NAME=…-dev) und DEMO-Artikel: kein send_mail, aber je
+    """Umgebungssperre (MATERIAL_ERINNERUNGEN_SPERRE=1, STROEMIS_NAME=…-dev) und DEMO-Artikel: kein Versand, aber je
     Mail ein Logeintrag mit Betreff und Text, mail false; ohne Empfänger mail false."""
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
@@ -1070,13 +1074,13 @@ def test_recht_in_der_transaktion():
 def test_ohne_mailserver():
     """L1/S2: Ohne SMTP_HOST geht keine Mail an den Versand – Betreff und Text ins Log, mail false (die Quittung sagt
     „Es ging keine Mail hinaus“); mit Mailserver mail true."""
-    from app.material.services import erinnerung, mangel
+    from app.material.services import erinnerung, mailprotokoll
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
         f = t.k["fuehrung"]
         a1, a2, _ = t.art
         with post_mangel() as post, logzeilen(t.app) as log:
-            mangel.MAILSERVER = erinnerung.smtp_da       # wie im Betrieb; post_mangel stellt es danach zurück
+            mailprotokoll.MAILSERVER = erinnerung.smtp_da  # wie im Betrieb; post_mangel stellt es danach zurück
             t.app.config["SMTP_HOST"] = ""
             r = melden(f, a1, "Platzhalter ohne Mailserver")
             assert r.status_code == 201 and r.json["mail"] is False, r.get_json()

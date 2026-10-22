@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from test_material import (H, _flach, anmelden, festschreiben, gliederung, katalog_grund, make_app,  # noqa: E402
-                           neuer_artikel, pdf_seiten, protokoll_zeile, pruef_formulare, starten, umgebung)
+                           neuer_artikel, pdf_seiten, protokoll_zeile, pruef_formulare, starten, umgebung, mails_abfangen, mails_zurueck)
 from test_material_export import csv_lesen  # noqa: E402
 from test_material_katalog import exportieren, importieren  # noqa: E402
 
@@ -46,9 +46,7 @@ def test_laenge_beim_speichern():
     lange Beschreibung bleibt bei einer Änderung, die sie nicht nennt; schickt der Dialog sie unverändert mit, ist das
     ein Fehler (der Dialog sagt vorher „Bitte kürzen“) – gespeichert wird nichts davon."""
     from app.material.services import meldung
-    alt = (meldung.HINTERGRUND, meldung.send_mail)
-    meldung.HINTERGRUND = lambda f, *a: f(*a)
-    meldung.send_mail = lambda an, betreff, inhalt: True
+    alt = mails_abfangen(meldung, lambda an, betreff, inhalt: True)
     try:
         with tempfile.TemporaryDirectory() as tmp:
             app, k = umgebung(tmp)
@@ -115,7 +113,7 @@ def test_laenge_beim_speichern():
             r = kp.post(f"/api/material/meldungen/{mid}/produkt", json=d)
             assert r.status_code == 201 and r.json["produkt"]["description"] == "Ball-Lock", r.get_json()
     finally:
-        meldung.HINTERGRUND, meldung.send_mail = alt
+        mails_zurueck(alt)
     print("Länge beim Speichern bestanden.")
 
 

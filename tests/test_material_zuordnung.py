@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_material import (PDF, H, _heute, anmelden, festschreiben, freigeben, gliederung, jpeg,  # noqa: E402
                            katalog_grund, make_app, neuer_artikel, neues_konto, pdf_seiten, pruef_formulare, punkte_von,
-                           starten, umgebung, unterschreiben)
+                           starten, umgebung, unterschreiben, mails_abfangen, mails_zurueck)
 from test_material_trennung import gleich_wie_unbekannt, sql, zeilen, zwei_gliederungen  # noqa: E402
 from test_material_ueberblick import ordner_neu, sperren  # noqa: E402
 
@@ -38,13 +38,11 @@ def post_der_meldungen():
     """Mails der Produktmeldungen direkt statt im Hintergrund und nur in eine Liste."""
     from app.material.services import meldung
     post = []
-    alt = (meldung.HINTERGRUND, meldung.send_mail)
-    meldung.HINTERGRUND = lambda f, *a: f(*a)
-    meldung.send_mail = lambda an, betreff, inhalt: post.append((an, betreff, inhalt)) or True
+    alt = mails_abfangen(meldung, lambda an, betreff, inhalt: post.append((an, betreff, inhalt)) or True)
     try:
         yield post
     finally:
-        meldung.HINTERGRUND, meldung.send_mail = alt
+        mails_zurueck(alt)
 
 
 def aufbau(tmp):

@@ -56,6 +56,11 @@ def _nacharbeit_aufraeumen(conn):
     aufraeumen(conn)
 
 
+def _mailfehler_aufraeumen(conn):
+    from .services.mailprotokoll import aufraeumen
+    aufraeumen(conn)
+
+
 def _dokumente_zusammenfuehren(conn):
     from .services.dokablage import beim_start
     beim_start(conn)
@@ -64,11 +69,11 @@ def _dokumente_zusammenfuehren(conn):
 def schema_anmelden():
     """Die Migration dieses Moduls beim Start mitlaufen lassen (db.init_db ruft sie auf) – gleich danach den Altbestand
     der Herstellerdokumente einmal je Inhalt zusammenführen (Schritt 18, Kennzeichen in mat_meta), dann das Protokoll der
-    globalen Suche, das Erinnerungslog und die offene Nacharbeit aus Bestandsimporten auf ihre Frist kürzen (auch wenn
-    der Tageslauf steht), die Protokolldateien mit der Datenbank abgleichen und durchsichtige Bilder einmalig
-    reparieren."""
+    globalen Suche, das Erinnerungslog, das Mailfehler-Protokoll und die offene Nacharbeit aus Bestandsimporten auf ihre
+    Frist kürzen (auch wenn der Tageslauf steht), die Protokolldateien mit der Datenbank abgleichen und durchsichtige
+    Bilder einmalig reparieren."""
     for schritt in (models.migrieren, _dokumente_zusammenfuehren, _suchprotokoll_aufraeumen, _erinnerungslog_aufraeumen,
-                    _nacharbeit_aufraeumen, _verwaiste_protokolle, _bilder_reparieren):
+                    _mailfehler_aufraeumen, _nacharbeit_aufraeumen, _verwaiste_protokolle, _bilder_reparieren):
         if schritt not in db.SCHEMA_MODULE:
             db.SCHEMA_MODULE.append(schritt)
 

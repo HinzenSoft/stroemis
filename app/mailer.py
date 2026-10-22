@@ -47,17 +47,38 @@ def _abgewiesen_text(abgewiesen):
     return "; ".join(teile)
 
 
+# Womit eine Fehlermeldung von versand() beginnt – je Fehlerklasse ein fester Anfang, damit das Modul Material
+# (services/mailprotokoll) die Klasse aus der Meldung lesen kann, ohne den Wortlaut zu kennen. Der Text dahinter
+# (Serverantwort, Host und Port) bleibt, wie er war.
+ANFANG = {
+    "anmeldung": "Anmeldung am Mailserver abgelehnt",
+    "empfaenger_abgewiesen": "Der Mailserver hat den Empfänger abgewiesen",
+    "abgelehnt": "Der Mailserver hat abgelehnt",
+    "verbindung": "Keine Verbindung zum Mailserver",
+    "sonstiges": "SMTP ist nicht eingerichtet",
+}
+
+
+def klasse(meldung):
+    """Die Fehlerklasse zu einer Meldung aus versand() – „sonstiges“, wenn sie mit keinem bekannten Anfang beginnt."""
+    for name, anfang in ANFANG.items():
+        if (meldung or "").startswith(anfang):
+            return name
+    return "sonstiges"
+
+
 def versand(to, subject, body):
     """Verschickt eine Mail und berichtet, was dabei herauskam: (ok, Meldung).
 
     Wirft nicht. Die Meldung ist das, was der Mailserver gesagt hat – sie steht im Log und
     hinter „Testmail senden“ in der Nutzerverwaltung. Ohne sie war eine Ablehnung nicht zu
     erkennen: Ein abgewiesener Empfänger kommt nicht als Ausnahme, sondern als Rückgabewert
-    von send_message, und der wurde früher weggeworfen."""
+    von send_message, und der wurde früher weggeworfen. Eine Fehlermeldung beginnt mit dem
+    Text ihrer Klasse (ANFANG, klasse())."""
     cfg = current_app.config
     host = cfg.get("SMTP_HOST")
     if not host:
-        return False, "SMTP ist nicht eingerichtet (SMTP_HOST fehlt) – die Mail steht nur im Log."
+        return False, f"{ANFANG['sonstiges']} (SMTP_HOST fehlt) – die Mail steht nur im Log."
 
     umschlag, domain = _umschlag_und_domain(cfg)
     msg = EmailMessage()
@@ -90,17 +111,17 @@ def versand(to, subject, body):
             # keinen einzigen an, wirft es stattdessen – beides ist hier ein Fehlschlag.
             abgewiesen = server.send_message(msg, from_addr=umschlag)
     except smtplib.SMTPAuthenticationError as exc:
-        return False, f"Anmeldung am Mailserver abgelehnt ({host}:{port}): {exc}"
+        return False, f"{ANFANG['anmeldung']} ({host}:{port}): {exc}"
     except smtplib.SMTPRecipientsRefused as exc:
         # Kein einziger Empfänger angenommen – dieselbe Auskunft wie unten, nur als Ausnahme.
-        return False, f"Der Mailserver hat den Empfänger abgewiesen – {_abgewiesen_text(exc.recipients)}"
+        return False, f"{ANFANG['empfaenger_abgewiesen']} – {_abgewiesen_text(exc.recipients)}"
     except smtplib.SMTPException as exc:
-        return False, f"Der Mailserver hat abgelehnt ({host}:{port}): {exc}"
+        return False, f"{ANFANG['abgelehnt']} ({host}:{port}): {exc}"
     except OSError as exc:
-        return False, f"Keine Verbindung zum Mailserver {host}:{port}: {exc}"
+        return False, f"{ANFANG['verbindung']} {host}:{port}: {exc}"
 
     if abgewiesen:
-        return False, f"Der Mailserver hat den Empfänger abgewiesen – {_abgewiesen_text(abgewiesen)}"
+        return False, f"{ANFANG['empfaenger_abgewiesen']} – {_abgewiesen_text(abgewiesen)}"
     return True, f"Vom Mailserver {host}:{port} angenommen (Umschlagabsender {umschlag})."
 
 

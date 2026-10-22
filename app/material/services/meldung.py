@@ -17,7 +17,11 @@ Produkts in den Katalog und steht im Journal (entity „request“, am Produkt m
 Sehen darf eine Meldung seit Phase 2 nur, wer Material-Verwaltung ist, sie gemacht hat oder den Ordner sieht, für
 den sie gemacht wurde (rechte.darf_meldung) – eine Meldung nennt Material und Ordner einer Gliederung. Den Ordnerpfad
 zeigt sie nur, wer den Ordner sieht (die Material-Verwaltung immer); sonst steht nur die Gliederung da. Die Mail an die
-Material-Verwaltung nennt nur die Gliederung – eine Mail ist schlechter geschützt als die Seite."""
+Material-Verwaltung nennt nur die Gliederung – eine Mail ist schlechter geschützt als die Seite.
+
+Verschickt wird über mailprotokoll.senden (Phase 4 · L1): Ohne Mailserver, unter der Umgebungssperre (dev) und an
+DEMO-Adressen geht nichts hinaus; was der Mailserver nicht annimmt, steht im Mailfehler-Protokoll (Rolle Verwaltung
+bzw. Melder, Gliederung die des Ordners der Meldung – nur die Material-Verwaltung sieht diese Zeilen)."""
 import json
 import os
 import re
@@ -27,10 +31,9 @@ from flask import current_app
 from ... import db
 from ...auth import _im_hintergrund, current_user
 from ...images import delete_photo_files
-from ...mailer import send_mail
 from ..models import MELDUNGSSTATUS
 from . import Abgelehnt, akteur, kennung, text
-from . import bestand, journal, katalog, rechte
+from . import bestand, journal, katalog, mailprotokoll, rechte
 
 MAX_LINKS = 5
 LINK_MAX = 500
@@ -314,16 +317,27 @@ def loeschen(mid):
 
 # --- Mails ----------------------------------------------------------------------------------------------
 
-def _senden(mails):
-    for an, betreff, inhalt in mails:
-        send_mail(an, betreff, inhalt)
+def _gliederung_id(fid):
+    gl = bestand.gliederung_von(fid) if fid else None
+    return gl["id"] if gl else None
+
+
+def _senden(mails, mid, folder_id=None):
+    """Läuft im Hintergrund. mails: [(an, betreff, inhalt, Konto, Rolle)] – jede einzeln über mailprotokoll.senden (Bezug
+    die Meldung, Gliederung die des Ordners, für den gemeldet wurde)."""
+    for an, betreff, inhalt, konto_id, rolle in mails:
+        try:
+            mailprotokoll.senden(an, betreff, inhalt, art="meldung", konto_id=konto_id, rolle=rolle, bezug_art="request",
+                                 bezug_id=mid, folder_id=folder_id)
+        except Exception as exc:                     # senden wirft nicht – eine Ausnahme hält trotzdem nichts auf
+            current_app.logger.error("Produktmeldung %s: Mail an Konto %s gescheitert: %s", mid, konto_id, exc)
 
 
 def _verwaltung_benachrichtigen(r):
     """Mail zu einer neuen Meldung an die Material-Verwaltung – gibt es keine, an die Plattform-Verwaltung
     (rechte.material_verwaltung_konten); nicht an den Melder selbst."""
     cfg = current_app.config
-    an = [u["email"] for u in rechte.material_verwaltung_konten()
+    an = [(u["email"], u["id"]) for u in rechte.material_verwaltung_konten()
           if u["email"] and u["id"] != r["created_by"]][:MAX_EMPFAENGER]
     if not an:
         return
@@ -347,14 +361,15 @@ def _verwaltung_benachrichtigen(r):
         zeilen += ["", "Bemerkung:", r["note"]]
     zeilen += ["", f"Einpflegen oder ablehnen: {cfg['BASE_URL'].rstrip('/')}/material/katalog/meldungen"]
     betreff = f"{cfg['SITE_NAME']} – Produktmeldung: {r['manufacturer']} {r['model']}"
-    HINTERGRUND(_senden, [(a, betreff, "\n".join(zeilen) + "\n") for a in an])
+    HINTERGRUND(_senden, [(a, betreff, "\n".join(zeilen) + "\n", uid, "verwaltung") for a, uid in an], r["id"],
+                _gliederung_id(r["folder_id"]))
 
 
 def _melder_benachrichtigen(r):
     """Bescheid an den Melder – nicht, wenn er seine Meldung selbst erledigt hat."""
     if not r["created_by"] or r["created_by"] == r["resolved_by"]:
         return
-    u = db.query("SELECT email, name, active FROM users WHERE id = ?", (r["created_by"],), one=True)
+    u = db.query("SELECT id, email, name, active FROM users WHERE id = ?", (r["created_by"],), one=True)
     if not u or not u["active"] or not u["email"]:
         return
     cfg = current_app.config
@@ -380,4 +395,5 @@ def _melder_benachrichtigen(r):
         betreff = f"{cfg['SITE_NAME']} – Produktmeldung „{gemeldet}“ nicht aufgenommen"
         zeilen += [f"{r['resolved_by_name']} hat deine Meldung „{gemeldet}“ nicht in den Katalog aufgenommen.", "",
                    "Begründung:", r["answer"], "", f"Deine Meldungen: {basis}/material/katalog/meldungen"]
-    HINTERGRUND(_senden, [(u["email"], betreff, "\n".join(zeilen) + "\n")])
+    HINTERGRUND(_senden, [(u["email"], betreff, "\n".join(zeilen) + "\n", u["id"], "melder")], r["id"],
+                _gliederung_id(r["folder_id"]))

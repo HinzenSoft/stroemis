@@ -29,8 +29,10 @@ Mails sofort, im Hintergrund: an die Verwalter der Heimat (ohne sie die Material
 und die Prüfer mit wirksamer Prüffreigabe dort – mit Namen und Text, also nur an Konten, die beides sehen dürfen; dazu
 die zugeordnete Person, wenn ein anderer ihre PSA meldet (kurz, ohne Melder und Text, nicht abbestellbar). Nie an den
 Melder, nie an DEMO-Adressen. Bei DEMO-Artikeln und unter der Umgebungssperre (erinnerung.gesperrt, dev) stehen die Mails im Log
-statt im Postfach, ebenso ohne Mailserver (SMTP_HOST leer) – dann sagt die Antwort mail: false. Die Mails hängen nicht
-am Schalter der Erinnerungsmails – sie sind die Nachricht zu einer Sperre.
+statt im Postfach, ebenso ohne Mailserver (SMTP_HOST leer) – dann sagt die Antwort mail: false (mailprotokoll.still).
+Verschickt wird über mailprotokoll.senden: Was der Mailserver nicht annimmt, steht im Mailfehler-Protokoll der
+Gliederung (Rolle Verwalter, Prüfer, zugeordnete Person oder Verwaltung). Die Mails hängen nicht am Schalter der
+Erinnerungsmails – sie sind die Nachricht zu einer Sperre.
 
 Meldungen sind unveränderlich (Trigger, models.TRIGGER_13), lassen sich nicht löschen und bleiben unbefristet mit dem
 Artikel; beim Löschen eines Kontos setzt die Datenbank nur die Kontokennung auf NULL, der Name bleibt (F3)."""
@@ -42,9 +44,8 @@ from flask import current_app, g
 from ... import db
 from ...auth import _im_hintergrund, current_user
 from ...images import _rm, delete_photo_files
-from ...mailer import send_mail                    # Tests ersetzen mangel.send_mail
 from . import OHNE_NAMEN, Abgelehnt, heute, text
-from . import bestand, erinnerung, journal, katalog, psa, rechte
+from . import bestand, erinnerung, journal, katalog, mailprotokoll, psa, rechte
 
 TEXT_MAX = 2000
 MAX_FOTOS = 3
@@ -61,10 +62,12 @@ NUR_GEMELDET = ("Der Artikel ist durch eine Mangelmeldung gesperrt und seitdem n
                 "auch hier.")
 NUR_NEUE_PRUEFUNG = "Am Artikel ist ein Mangel gemeldet – freigeben kann ihn nur eine neue Prüfung."
 
-# Mails gehen neben der Anfrage hinaus (wie beim Rückruf); Tests setzen hier einen direkten Aufruf ein.
+# Mails gehen neben der Anfrage hinaus (wie beim Rückruf); Tests setzen hier einen direkten Aufruf ein. Ob ein Mailserver
+# da ist, weiß mailprotokoll.MAILSERVER.
 HINTERGRUND = _im_hintergrund
-# Ist ein Mailserver eingerichtet? Tests, die send_mail ersetzen, setzen hier lambda: True.
-MAILSERVER = erinnerung.smtp_da
+# Rolle im Mailfehler-Protokoll je Grund des Empfangs (empfaenger).
+ROLLE = {"verwalter": "verwalter", "pruefer": "pruefer", "zugeordnet": "zugeordnet", "material": "verwaltung",
+         "plattform": "verwaltung"}
 
 # Offene Meldung d, nach der noch keine Prüfung des Artikels abgeschlossen wurde. Berichtigungen und Aussonderungen
 # zählen nicht; gleiche Sekunde zählt als vorher (wie rueckruf.zustand) – im Zweifel gilt sie als ungeprüft.
@@ -501,10 +504,10 @@ def _mailtext_zugeordnet(item, produkt, r, u):
 
 def _benachrichtigen(mid):
     """Nach dem Commit: Mails vorbereiten und neben der Anfrage verschicken. Bei einem DEMO-Artikel, unter der
-    Umgebungssperre oder ohne Mailserver geht nichts hinaus – Betreff und Text stehen dann im Log (wie send_mail ohne
-    Mailserver). Liefert, ob mindestens eine Mail an Materialwart, Prüfer oder Verwaltung an den Versand ging (die an die
+    Umgebungssperre oder ohne Mailserver geht nichts hinaus – Betreff und Text stehen dann im Log (mailprotokoll.senden).
+    Liefert, ob mindestens eine Mail an Materialwart, Prüfer oder Verwaltung an den Versand ging (die an die
     zugeordnete Person zählt nicht: der Toast spricht vom Materialwart). Ob der Mailserver sie annimmt, zeigt erst das
-    Log – die Quittung sagt deshalb „unterwegs“, nicht „angekommen“."""
+    Mailfehler-Protokoll – die Quittung sagt deshalb „unterwegs“, nicht „angekommen“."""
     r = meldung(mid)
     item = bestand.artikel(r["item_id"])
     produkt = katalog.produkt(item["product_id"])
@@ -515,26 +518,21 @@ def _benachrichtigen(mid):
             betreff, inhalt = _mailtext_zugeordnet(item, produkt, r, u)
         else:
             betreff, inhalt = _mailtext(r, item, produkt, warum)
-        mails.append((u["email"].strip(), f"[DEMO] {betreff}" if demo else betreff, inhalt, warum))
+        mails.append((u["email"].strip(), f"[DEMO] {betreff}" if demo else betreff, inhalt, u["id"], ROLLE[warum]))
     if not mails:
         return False
-    still = ("DEMO-Artikel" if demo else "Umgebungssperre" if erinnerung.gesperrt()
-             else "kein Mailserver" if not MAILSERVER() else None)
-    if still:
-        for an, betreff, inhalt, _ in mails:
-            current_app.logger.warning("Mangel %s: Mail nicht verschickt (%s) – an %s\nBetreff: %s\n%s", mid, still, an,
-                                       betreff, inhalt)
-        return False
-    HINTERGRUND(_versenden, mid, [(an, betreff, inhalt) for an, betreff, inhalt, _ in mails])
-    return any(warum != "zugeordnet" for *_, warum in mails)
+    HINTERGRUND(_versenden, mid, mails, bestand.heimat(item), demo)
+    return not mailprotokoll.still(demo) and any(rolle != "zugeordnet" for *_, rolle in mails)
 
 
-def _versenden(mid, mails):
-    """Läuft im Hintergrund (eigener App-Kontext). Jede Mail einzeln; eine Adresse, an der es scheitert, hält die
-    anderen nicht auf. Kein Zähler an der Meldung – ob der Mailserver annahm, steht im Log."""
-    for an, betreff, inhalt in mails:
+def _versenden(mid, mails, folder_id=None, demo=False):
+    """Läuft im Hintergrund (eigener App-Kontext). mails: [(an, betreff, inhalt, Konto, Rolle)]; jede Mail einzeln über
+    mailprotokoll.senden (Bezug die Meldung, Gliederung die der Heimat) – eine Adresse, an der es scheitert, hält die
+    anderen nicht auf. Kein Zähler an der Meldung – ob der Mailserver annahm, steht im Mailfehler-Protokoll."""
+    gl = bestand.gliederung_von(folder_id) if folder_id else None
+    for an, betreff, inhalt, konto_id, rolle in mails:
         try:
-            if not send_mail(an, betreff, inhalt):
-                current_app.logger.error("Mangel %s: Mail an %s gescheitert", mid, an)
-        except Exception as exc:                     # send_mail wirft nicht – eine Ausnahme hält trotzdem nichts auf
-            current_app.logger.error("Mangel %s: Mail an %s gescheitert: %s", mid, an, exc)
+            mailprotokoll.senden(an, betreff, inhalt, art="mangel", konto_id=konto_id, rolle=rolle, bezug_art="report",
+                                 bezug_id=mid, folder_id=gl["id"] if gl else None, demo=demo)
+        except Exception as exc:                     # senden wirft nicht – eine Ausnahme hält trotzdem nichts auf
+            current_app.logger.error("Mangel %s: Mail an Konto %s gescheitert: %s", mid, konto_id, exc)

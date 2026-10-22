@@ -13,7 +13,9 @@ Ein Tageslauf (tageslauf, gestartet vom Thread in tageslauf.py oder von „flask
 Die Stufen sind fest (Konzept), unabhängig von der Einstellung „bald fällig“. Gemeldet wird je Ziel nur die höchste
 erreichte Stufe, die für das Konto noch nicht im Log steht (mat_reminder_log, UNIQUE je Ziel, Stufe, Fälligkeit und
 Konto) – so holt der nächste Lauf ausgefallene Tage nach, ohne eine Stufe doppelt zu melden. Eine Log-Zeile entsteht
-nur, wenn der Mailserver die Mail angenommen hat; was scheitert, kommt am nächsten Tag wieder.
+nur, wenn der Mailserver die Mail angenommen hat; was scheitert, kommt am nächsten Tag wieder – und steht bis dahin im
+Mailfehler-Protokoll (mailprotokoll.senden: je betroffener Gliederung eine Zeile; die gelungene Wiederholung hakt sie
+als „nachgeholt“ ab). Der Laufstand zählt die Fehlschläge nur; die Namen stehen im Protokoll.
 
 Gemahnt werden nur Artikel im Zustand „frei“, nie DEMO-Artikel (bestand.demo_sql) und nie Artikel in Ordnern mit
 „Erinnerungen aus“ (mat_folder.reminders_off, vererbt auf alle Unterordner). Freigaben nur befristete, die heute wirken,
@@ -36,12 +38,12 @@ Pfad des Ankers, seine offenen Prüfungen und wer verlängern kann, nicht mehr, 
 
 Der Versand hängt am Schalter MATERIAL_ERINNERUNGEN (Verwaltung → Einstellungen, Vorgabe aus) und an der Sperre
 MATERIAL_ERINNERUNGEN_SPERRE (nur Umgebung, ohne Eintrag an, wenn STROEMIS_NAME auf -dev endet). Der Pflegeteil
-(Journal „freigabe_abgelaufen“, Aufräumen des Logs nach 13 Monaten und des Suchprotokolls) läuft unabhängig davon
-täglich, der Probelauf immer. Einmaligkeit: Tagesmarken und Herzschlag in mat_meta unter BEGIN IMMEDIATE, dazu die
-UNIQUE-Indizes des Logs – Arbeitsprozesse, Neustarts und Kommandozeile mahnen nie doppelt. Ausnahme: Endet ein
-Prozess genau zwischen der Annahme einer Mail und ihrem Vermerk (etwa beim Neustart nach einem Deploy – der Thread ist
-ein Daemon), fehlt die Log-Zeile, und diese eine Mail kommt am nächsten Morgen noch einmal. Erst senden, dann vermerken
-lässt diese Lücke; umgekehrt ginge bei einem Abbruch eine Mahnung verloren.
+(Journal „freigabe_abgelaufen“, Aufräumen des Logs nach 13 Monaten, des Suchprotokolls und des Mailfehler-Protokolls)
+läuft unabhängig davon täglich, der Probelauf immer. Einmaligkeit: Tagesmarken und Herzschlag in mat_meta unter BEGIN
+IMMEDIATE, dazu die UNIQUE-Indizes des Logs – Arbeitsprozesse, Neustarts und Kommandozeile mahnen nie doppelt. Ausnahme:
+Endet ein Prozess genau zwischen der Annahme einer Mail und ihrem Vermerk (etwa beim Neustart nach einem Deploy – der
+Thread ist ein Daemon), fehlt die Log-Zeile, und diese eine Mail kommt am nächsten Morgen noch einmal. Erst senden, dann
+vermerken lässt diese Lücke; umgekehrt ginge bei einem Abbruch eine Mahnung verloren.
 
 Probelauf mit DEMO (nur Ansicht): Auf dev ist der ganze Bestand DEMO, der Probelauf zeigte dort nichts. planen(…,
 demo=True) – erreichbar nur über probelauf(demo=True) und „remind --trocken --demo“ – nimmt DEMO-Artikel, DEMO-Freigaben
@@ -59,9 +61,8 @@ from datetime import date, datetime, time, timedelta, timezone
 from flask import current_app, g
 
 from ... import db
-from ...mailer import send_mail                    # Tests ersetzen erinnerung.send_mail
 from .. import services as dienste
-from . import bestand, globalprotokoll, journal, katalog, rechte
+from . import bestand, globalprotokoll, journal, katalog, mailprotokoll, rechte
 from .interval import plus_monate
 
 STUFEN_RANG = {"30_tage": 1, "7_tage": 2, "faellig": 3}   # „faellig“ heißt in Mails „überfällig“
@@ -121,6 +122,7 @@ class Mail:
     text: str = ""
     je_konto: dict = field(default_factory=dict)     # Kennung des Kontos → seine Einträge (fürs Log)
     demo: bool = False    # DEMO-Empfänger oder DEMO-Einträge – nur zur Ansicht, geht nie hinaus
+    gliederungen: set = field(default_factory=set)   # Gliederungen der Einträge (Mailfehler-Protokoll: je eine Zeile)
 
 
 @dataclass
@@ -225,8 +227,10 @@ def stufe(faellig_am, stichtag):
 
 
 def _ordnerbaum():
-    """Alle Ordner einmal: Kennung → (Oberordner, Name). Pfadtexte und Zweige entstehen daraus ohne weitere Abfrage."""
-    return {o["id"]: (o["parent_id"], o["name"]) for o in db.query("SELECT id, parent_id, name FROM mat_folder")}
+    """Alle Ordner einmal: Kennung → (Oberordner, Name, ist Gliederung). Pfadtexte, Zweige und die Gliederung eines Ordners
+    entstehen daraus ohne weitere Abfrage."""
+    return {o["id"]: (o["parent_id"], o["name"], o["kind"] == "gliederung" and not o["system_kind"])
+            for o in db.query("SELECT id, parent_id, name, kind, system_kind FROM mat_folder")}
 
 
 def _pfad(fid, baum):
@@ -238,9 +242,20 @@ def _pfad(fid, baum):
     return " / ".join(namen) if namen else "(oberste Ebene)"
 
 
+def _gliederung(fid, baum):
+    """Die Gliederung über dem Ordner (oder er selbst) – wie bestand.gliederung_von, aus dem Baum; None ohne."""
+    gesehen = set()
+    while fid is not None and fid in baum and fid not in gesehen:
+        gesehen.add(fid)
+        if baum[fid][2]:
+            return fid
+        fid = baum[fid][0]
+    return None
+
+
 def _zweig(fid, baum):
     kinder = {}
-    for k, (eltern, _) in baum.items():
+    for k, (eltern, *_) in baum.items():
         kinder.setdefault(eltern, []).append(k)
     gesehen, offen = set(), [fid]
     while offen:
@@ -548,6 +563,7 @@ def planen(stichtag, demo=False):
     mails = sorted(post.values(), key=lambda m: (m.name.casefold(), m.adresse.casefold()))
     for m in mails:
         m.demo = _mit_demo(m)
+        m.gliederungen = {g for g in (_gliederung(e.ordner_id, baum) for e in m.eintraege) if g is not None}
     plan = Plan(stichtag=stichtag, mails=mails, ohne_empfaenger=ohne, nur_ansicht=demo,
                 ausgelassen={"ordner_aus": [{"id": fid, "pfad": _pfad(fid, baum), "artikel": n}
                                             for fid, n in sorted(info_a["ordner_aus"].items(),
@@ -893,12 +909,22 @@ def vermerken(mail):
                                (e.kennung, e.stufe, e.faellig_am, ref, jetzt, e.kennung))
 
 
+def _rolle(mail):
+    """Die Rolle des Empfängers fürs Mailfehler-Protokoll – eine je Mail: Verwalter, sobald ein Eintrag ihn als Verwalter
+    erreicht; sonst Verwaltung (nur Rückfall-Einträge), sonst Inhaber (nur „Deine Freigaben“), sonst zugeordnete Person
+    (nur „Deine PSA“)."""
+    arten = {"verwalter" if not (e.rueckfall or e.inhaber or e.psa) else "verwaltung" if e.rueckfall
+             else "inhaber" if e.inhaber else "zugeordnet" for e in mail.eintraege}
+    return next((r for r in ("verwalter", "verwaltung", "inhaber", "zugeordnet") if r in arten), "verwalter")
+
+
 def verschicken(plan):
-    """Die Mails des Plans einzeln verschicken, angenommene vermerken. Vorher bekommt jedes Konto des Plans seinen
-    Kontoverweis (journal.konto_ref) – Konten nach Schritt 8 haben sonst keinen, und ein Fehlschlag soll im Stand mit
-    Namen stehen. Jede Mail in einem eigenen try: Eine Ausnahme beim Senden zählt als Fehlschlag, eine beim Vermerken
-    als vermerk_fehler; die nächste Mail geht trotzdem hinaus. Nach jeder Mail schlägt der Herzschlag. Einen Plan zur
-    Ansicht (mit DEMO) lehnt es vorher ganz ab (ValueError) – nichts geht hinaus, kein Kontoverweis entsteht."""
+    """Die Mails des Plans einzeln verschicken (mailprotokoll.senden – ein Fehlschlag steht damit im Mailfehler-Protokoll,
+    je Gliederung der Mail eine Zeile), angenommene vermerken. Vorher bekommt jedes Konto des Plans seinen Kontoverweis
+    (journal.konto_ref) – Konten nach Schritt 8 haben sonst keinen. Jede Mail in einem eigenen try: Eine Ausnahme beim
+    Senden zählt als Fehlschlag, eine beim Vermerken als vermerk_fehler; die nächste Mail geht trotzdem hinaus. Nach
+    jeder Mail schlägt der Herzschlag. Einen Plan zur Ansicht (mit DEMO) lehnt es vorher ganz ab (ValueError) – nichts
+    geht hinaus, kein Kontoverweis entsteht."""
     if plan.nur_ansicht or any(_mit_demo(m) for m in plan.mails):
         raise ValueError(NUR_ANSICHT)
     with db.transaction():
@@ -906,13 +932,13 @@ def verschicken(plan):
             for u in m.konten:
                 if not u.get("mat_ref"):
                     u["mat_ref"] = journal.konto_ref(u["id"])["ref"]
-    erg = {"mails": 0, "fehlgeschlagen": 0, "fehlgeschlagen_refs": [], "vermerk_fehler": 0, "artikel": 0,
-           "freigaben": 0, "psa": 0}
+    erg = {"mails": 0, "fehlgeschlagen": 0, "vermerk_fehler": 0, "artikel": 0, "freigaben": 0, "psa": 0}
     artikel, freigaben, psa = set(), set(), set()
     for m in plan.mails:
         try:
-            ok = send_mail(m.adresse, m.betreff, m.text)
-        except Exception as exc:                     # send_mail wirft nicht – eine Ausnahme soll trotzdem nur zählen
+            ok = mailprotokoll.senden(m.adresse, m.betreff, m.text, art="erinnerung", konto_id=m.konten[0]["id"],
+                                      rolle=_rolle(m), folder_id=m.gliederungen)
+        except Exception as exc:                     # senden wirft nicht – eine Ausnahme soll trotzdem nur zählen
             current_app.logger.error("Erinnerung an %s gescheitert: %s", m.name, exc)
             ok = False
         if ok:
@@ -927,7 +953,6 @@ def verschicken(plan):
                 erg["vermerk_fehler"] += 1
         else:
             erg["fehlgeschlagen"] += 1
-            erg["fehlgeschlagen_refs"] += [u["mat_ref"] for u in m.konten[:1] if u.get("mat_ref")]
         try:
             _herzschlag()
         except Exception as exc:
@@ -971,7 +996,9 @@ _WAISEN = "DELETE FROM mat_reminder_log WHERE konto_ref NOT IN (SELECT mat_ref F
 def aufraeumen(conn=None):
     """Das Erinnerungslog auf seine Frist kürzen (13 Monate) und Zeilen ohne Konto entfernen (falls ein Weg an
     loeschung.py vorbeiführte); ohne conn dazu das Protokoll der globalen Suche. conn: die Verbindung des Startlaufs
-    (schema_anmelden) – so hält die Frist auch, wenn der Thread steht. Liefert {"log", "waisen", "suche"}."""
+    (schema_anmelden) – so hält die Frist auch, wenn der Thread steht; ohne conn außerdem das Mailfehler-Protokoll
+    (mailprotokoll.aufraeumen – beim Start ruft schema_anmelden es selbst). Liefert {"log", "waisen", "suche",
+    "mailfehler"}."""
     if conn is not None:
         if "konto_ref" not in [r[1] for r in conn.execute("PRAGMA table_info(mat_reminder_log)")]:
             return {"log": 0, "waisen": 0, "suche": 0}   # Schema vor Schritt 11 (nur in Tests, die früher anhalten)
@@ -982,7 +1009,7 @@ def aufraeumen(conn=None):
     with db.transaction():
         n = db.execute_zeilen(_ALT, (_grenze(),))
         w = db.execute_zeilen(_WAISEN)
-    return {"log": n, "waisen": w, "suche": globalprotokoll.aufraeumen()}
+    return {"log": n, "waisen": w, "suche": globalprotokoll.aufraeumen(), "mailfehler": mailprotokoll.aufraeumen()}
 
 
 def konto_loeschen(uid):
@@ -1025,7 +1052,7 @@ def tageslauf(ausloeser="automatisch", erneut=False, jetzt=None):
     out = {"pflege": None, "mails": None}
     try:
         if pflege:
-            p = {"tag": tag, "abgelaufen": 0, "log": 0, "waisen": 0, "suche": 0, "fehler": None}
+            p = {"tag": tag, "abgelaufen": 0, "log": 0, "waisen": 0, "suche": 0, "mailfehler": None, "fehler": None}
             try:
                 p["abgelaufen"] = abgelaufene_eintragen(stichtag)
                 p.update(aufraeumen())
@@ -1035,7 +1062,7 @@ def tageslauf(ausloeser="automatisch", erneut=False, jetzt=None):
             out["pflege"] = p
         if mails:
             m = {"tag": tag, "beginn": _utc(jetzt), "ende": None, "ausloeser": ausloeser, "mails": 0,
-                 "fehlgeschlagen": 0, "fehlgeschlagen_refs": [], "artikel": 0, "freigaben": 0, "psa": 0,
+                 "fehlgeschlagen": 0, "artikel": 0, "freigaben": 0, "psa": 0,
                  "ohne_empfaenger": 0,
                  "ausgelassen": {"ordner_aus": 0, "demo": 0}, "fehlerhaft": 0, "vermerk_fehler": 0, "fehler": None}
             try:
@@ -1080,15 +1107,12 @@ def tageslauf_versuchen():
 
 # --- Stand und Probelauf -----------------------------------------------------------------------------------------
 
-def _letzter_mit_namen(letzter):
-    """Der gespeicherte Mailteil für die Oberfläche: Kontoverweise der Fehlschläge als Namen, die Verweise selbst nicht."""
+def _letzter(letzter):
+    """Der gespeicherte Mailteil für die Oberfläche – ohne die Kontoverweise, die Läufe vor Schritt 19 darin abgelegt
+    haben (fehlgeschlagen_refs); wer eine Mail nicht bekam, steht seither im Mailfehler-Protokoll."""
     if not letzter:
         return None
-    out = {k: v for k, v in letzter.items() if k != "fehlgeschlagen_refs"}
-    refs = letzter.get("fehlgeschlagen_refs") or []
-    namen = journal.konto_namen(refs)
-    out["fehlgeschlagen_an"] = [namen[r] for r in refs if r in namen]
-    return out
+    return {k: v for k, v in letzter.items() if k != "fehlgeschlagen_refs"}
 
 
 def stand():
@@ -1105,7 +1129,7 @@ def stand():
             "smtp": smtp_da(), "startzeit": STARTZEIT.strftime("%H:%M"), "laeuft": _laeuft_noch(laeuft, jetzt),
             "veraltet": bool(versand_an() and smtp_da() and spaet and letzter and letzter.get("tag", "") < tag),
             "pflege_veraltet": bool(spaet and (not pflege or pflege.get("tag", "") < tag)),
-            "letzter": _letzter_mit_namen(letzter), "pflege": pflege}
+            "letzter": _letzter(letzter), "pflege": pflege}
 
 
 def naechster_stichtag():
@@ -1140,11 +1164,11 @@ def probelauf(stichtag=None, demo=False):
     else:
         morgen = stichtag == heute + timedelta(days=1)
     plan = planen(stichtag, demo=demo)
-    letzter = _letzter_mit_namen(_stand_lesen().get("letzter"))
+    letzter = _letzter(_stand_lesen().get("letzter"))
     return {"stichtag": stichtag.isoformat(), "morgen": morgen, "demo": plan.nur_ansicht,
             "versand": bool(current_app.config.get("MATERIAL_ERINNERUNGEN")), "gesperrt": gesperrt(), "smtp": smtp_da(),
-            "letzter": {k: letzter.get(k) for k in ("tag", "beginn", "mails", "fehlgeschlagen", "fehlgeschlagen_an",
-                                                    "fehler")} if letzter else None,
+            "letzter": {k: letzter.get(k) for k in ("tag", "beginn", "mails", "fehlgeschlagen", "fehler")}
+            if letzter else None,
             "mails": [dict(zip(("artikel", "freigaben", "eigene", "psa"), zahlen(m)), name=m.name,
                            gliederung=(m.konten[0].get("gliederung") or "").strip(), betreff=m.betreff, text=m.text,
                            demo=m.demo)

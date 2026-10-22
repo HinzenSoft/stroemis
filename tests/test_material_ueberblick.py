@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_material import (H, PDF, _heute, festschreiben, gliederung, jpeg, katalog_grund,  # noqa: E402
-                           neuer_artikel, pruef_formulare, starten, umgebung)
+                           neuer_artikel, pruef_formulare, starten, umgebung, mails_abfangen, mails_zurueck)
 
 
 def ordner_neu(c, parent_id, name, kind="standort"):
@@ -42,13 +42,11 @@ def sperren(p, iid, grund="beschaedigung"):
 def ohne_post():
     """Mails der Produktmeldungen nicht verschicken, sondern verwerfen (wie in test_material.test_produktmeldung)."""
     from app.material.services import meldung
-    alt = (meldung.HINTERGRUND, meldung.send_mail)
-    meldung.HINTERGRUND = lambda f, *a: f(*a)
-    meldung.send_mail = lambda an, betreff, inhalt: True
+    alt = mails_abfangen(meldung, lambda an, betreff, inhalt: True)
     try:
         yield
     finally:
-        meldung.HINTERGRUND, meldung.send_mail = alt
+        mails_zurueck(alt)
 
 
 # --- 1. Zählung je Ordner ---------------------------------------------------------------------------------
@@ -219,6 +217,8 @@ AUSNAHMEN_SCHREIBEN = {
     # Den eigenen offenen Änderungsantrag zieht jeder mit Modulzugang zurück (Entscheidung vom 21.10.2026) – ein fremder
     # oder unbekannter ist 404, nichts geändert.
     ("POST", "material_api.antrag_zurueckziehen"): 404,
+    # Phase 4 · L1: Eine Mailfehler-Zeile außerhalb der eigenen Sicht (hier: keine Sicht) ist 404 wie unbekannt.
+    ("POST", "material_api.mailfehler_erledigt"): 404,
 }
 # Ebenso nach dem Pfad (Phase 2, für die Routen der Pakete B, C, D): Die globale Suche und der QR-Steckbrief stehen
 # jedem mit Modulzugang offen – ohne Bestätigung antworten sie 400 und schreiben nichts.
@@ -337,7 +337,7 @@ def test_fuehrungskraft_nur_lesen():
                                 "'verwalten'", (gid, k["wart_id"]), one=True)["id"]
         kennungen = {
             "kid": ids["gurte"], "did": did, "iid": a1["id"], "mid": mid, "aid": aid, "ruid": ruid, "anid": 999999, "token": token,
-            "gid": freigabe,
+            "gid": freigabe, "mfid": 999999,
             "art": "web", "dateiname": bild.rsplit("/", 1)[1], "filename": "material.js",
             ("produkte", "pid"): ids["gurt"], ("produkt", "pid"): ids["gurt"],
             ("pruefungen", "pid"): entwurf, ("pruefung", "pid"): fest, ("punkte", "rid"): punkt,

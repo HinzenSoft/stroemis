@@ -20,7 +20,7 @@ from types import SimpleNamespace
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_material import (H, PDF, freigeben, gliederung, jpeg, katalog_grund, neuer_artikel,  # noqa: E402
-                           neues_konto, pruef_formulare, starten, umgebung)
+                           neues_konto, pruef_formulare, starten, umgebung, mails_abfangen, mails_zurueck)
 from test_material_trennung import sql, zeilen  # noqa: E402
 from test_material_ueberblick import ohne_post, ordner_neu, sperren, zustand  # noqa: E402
 
@@ -64,17 +64,14 @@ def zuordnen(t, iid, uid):
 @contextmanager
 def post_mangel():
     """Mangel-Mails direkt statt im Hintergrund und nur in eine Liste – nie hinaus. Die Liste spielt den Mailserver
-    (ohne ihn gingen die Mails nur ins Log, mangel.MAILSERVER)."""
+    (ohne ihn gingen die Mails nur ins Log, mailprotokoll.MAILSERVER)."""
     from app.material.services import mangel
     liste = []
-    alt = (mangel.HINTERGRUND, mangel.send_mail, mangel.MAILSERVER)
-    mangel.HINTERGRUND = lambda f, *a: f(*a)
-    mangel.send_mail = lambda an, betreff, inhalt: liste.append((an, betreff, inhalt)) or True
-    mangel.MAILSERVER = lambda: True
+    alt = mails_abfangen(mangel, lambda an, betreff, inhalt: liste.append((an, betreff, inhalt)) or True)
     try:
         yield liste
     finally:
-        mangel.HINTERGRUND, mangel.send_mail, mangel.MAILSERVER = alt
+        mails_zurueck(alt)
 
 
 def melden(c, iid, text="Platzhalter: Mangel am Testartikel", fotos=0, namen=None):

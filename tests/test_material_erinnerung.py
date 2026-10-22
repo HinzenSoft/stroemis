@@ -4,8 +4,8 @@ Ein Tageslauf ab 6 Uhr deutscher Zeit schickt den Verwaltern eines Ordners eine 
 vorher, überfällig), zum Lebensende (90 Tage vorher) und zu Freigaben, die in 30 Tagen ablaufen – je Stufe einmal (Log
 mit Kontoverweis); eine ablaufende Freigabe auch ihrem Inhaber selbst (Abschnitt „Deine Freigaben“, test_inhaber). Dazu
 der Pflegeteil (Journal „freigabe_abgelaufen“, Aufräumen), der Schalter je Ordner, Laufstand und Probelauf, die
-Kommandozeile „flask material remind“ und der Thread. Echte Mails gehen nie hinaus: erinnerung.send_mail
-ist ersetzt, der Mailserver heißt smtp.example.invalid. Alle Namen, Produkte, Nummern und Daten sind erfunden."""
+Kommandozeile „flask material remind“ und der Thread. Echte Mails gehen nie hinaus: die Nahtstelle des Versand-Wrappers
+(mailprotokoll.versand) ist ersetzt, der Mailserver heißt smtp.example.invalid. Alle Namen, Produkte, Nummern und Daten sind erfunden."""
 import json
 import os
 import shutil
@@ -72,12 +72,13 @@ def tag(n, stunde=8):
 
 @contextmanager
 def post(scheitert=(), wirft=(), bei=None, schlaf=0):
-    """erinnerung.send_mail durch eine Liste ersetzen: an Adressen aus scheitert geht nichts hinaus (False), an Adressen
-    aus wirft gibt es eine Ausnahme; bei(an) läuft vor jeder Mail (etwa: etwas löschen, die Uhr stellen)."""
+    """mailprotokoll.versand (die Nahtstelle des Versand-Wrappers) durch eine Liste ersetzen: an Adressen aus scheitert
+    geht nichts hinaus (abgewiesen), an Adressen aus wirft gibt es eine Ausnahme; bei(an) läuft vor jeder Mail (etwa:
+    etwas löschen, die Uhr stellen)."""
     import time
-    from app.material.services import erinnerung
+    from app.material.services import mailprotokoll
     liste = []
-    alt = erinnerung.send_mail
+    alt = mailprotokoll.versand
 
     def senden(an, betreff, text):
         liste.append((an, betreff, text))
@@ -87,12 +88,14 @@ def post(scheitert=(), wirft=(), bei=None, schlaf=0):
             time.sleep(schlaf)
         if an in wirft:
             raise RuntimeError("Testausnahme beim Senden")
-        return an not in scheitert
-    erinnerung.send_mail = senden
+        if an in scheitert:
+            return False, f"Der Mailserver hat den Empfänger abgewiesen – {an}: 550 Testablehnung"
+        return True, "angenommen (Test)"
+    mailprotokoll.versand = senden
     try:
         yield liste
     finally:
-        erinnerung.send_mail = alt
+        mailprotokoll.versand = alt
 
 
 @contextmanager
@@ -631,17 +634,29 @@ def test_gescheitert():
             assert r["mails"]["mails"] == 1 and r["mails"]["fehlgeschlagen"] == 1 and len(liste) == 2, r
             assert {z["konto_ref"] for z in log(app)} == {ref(app, w2_id)}
             st = mit(app, e.stand)
-            assert st["letzter"]["fehlgeschlagen_an"] == ["wart"] and "fehlgeschlagen_refs" not in st["letzter"], st
-            r = k["katalog"].get("/api/material/start").json["erinnerungen"]
-            assert r["letzter"]["fehlgeschlagen"] == 1 and r["letzter"]["fehlgeschlagen_an"] == ["wart"], r
+            assert st["letzter"]["fehlgeschlagen"] == 1 and "fehlgeschlagen_refs" not in st["letzter"], st
+            assert "fehlgeschlagen_an" not in st["letzter"], st
+            # Wer die Mail nicht bekam, steht im Mailfehler-Protokoll – mit Gliederung, Rolle und ohne Adresse.
+            r = k["katalog"].get("/api/material/start").json
+            assert r["erinnerungen"]["letzter"]["fehlgeschlagen"] == 1, r["erinnerungen"]
+            mf = r["mailfehler"]
+            assert mf["offen"] == 1 and len(mf["zeilen"]) == 1, mf
+            z = mf["zeilen"][0]
+            assert (z["art"], z["klasse"], z["empfaenger"], z["rolle"], z["folder_id"], z["bezug_art"]) == \
+                ("erinnerung", "empfaenger_abgewiesen", "wart", "verwalter", gid, "none"), z
+            assert "@" not in z["meldung"] and "[Adresse]" in z["meldung"] and "550 Testablehnung" in z["meldung"], z
             tag(1)
             with post() as liste:
                 lauf(app)
             assert [m[0] for m in liste] == ["wart@example.org"] and "GS-1" in liste[0][2]
             assert [(z["item_id"], z["kind"]) for z in log(app) if z["konto_ref"] == ref(app, k["wart_id"])] == \
                 [(a["id"], "7_tage")]
+            # Nachgeholt: Die gelungene Mail hakt den Fehler des Kontos ab.
+            mf = zeilen(app, "SELECT erledigt_von_name FROM mat_mail_fehler")
+            assert mf == [{"erledigt_von_name": "nachgeholt"}], mf
+            assert k["katalog"].get("/api/material/start").json["mailfehler"] is None
 
-            # send_mail wirft: zählt als Fehlschlag, der nächste Empfänger bekommt seine Mail.
+            # versand wirft: zählt als Fehlschlag, der nächste Empfänger bekommt seine Mail.
             tag(2)
             artikel(app, k["wart"], ids["hms"], lager, "GS-3", faellig=T0 + timedelta(days=20))
             artikel(app, w2, ids["hms"], g2, "GS-4", faellig=T0 + timedelta(days=20))
@@ -659,8 +674,10 @@ def test_gescheitert():
             artikel(app, adm, ids["hms"], g3, "GS-5", faellig=T0 + timedelta(days=10))
             with post(scheitert=("neu-mv@example.org",)):
                 r = lauf(app)
-            assert mit(app, e.stand)["letzter"]["fehlgeschlagen_an"] == ["Neue Verwaltung"], r
+            assert mit(app, e.stand)["letzter"]["fehlgeschlagen"] == 1, r
             assert ref(app, neu_id)
+            mf = zeilen(app, "SELECT konto_ref, rolle, folder_id FROM mat_mail_fehler WHERE erledigt_at IS NULL")
+            assert mf == [{"konto_ref": ref(app, neu_id), "rolle": "verwaltung", "folder_id": g3}], mf
             sql(app, "UPDATE users SET recht_material = 2 WHERE id = ?", (k["katalog_id"],))
 
             # Während des Versands werden ein Artikel gelöscht und eine Freigabe der Mail entzogen: kein
@@ -1444,7 +1461,8 @@ def test_schalter_aus():
             artikel(app, k["wart"], ids["hms"], lager, "SA-2", faellig=T0 + timedelta(days=20))
             with versand(app), post(scheitert=("wart@example.org",)):
                 code, text = cli(app)
-            assert code == 1 and "Gescheitert an: wart" in text, text
+            assert code == 1 and "Gescheitert – an wen, steht im Mailfehler-Protokoll" in text, text
+            assert [z["rolle"] for z in zeilen(app, "SELECT rolle FROM mat_mail_fehler WHERE erledigt_at IS NULL")] == ["verwalter"]
             with versand(app, smtp=""):
                 code, text = cli(app, "--erneut")
             assert code == 2 and "Kein Mailserver eingerichtet" in text, text
@@ -1472,7 +1490,7 @@ def test_aufraeumen():
             sql(app, "INSERT INTO mat_global_search (user_id, user_name, art, anfrage, treffer, item_ids, created_at) "
                      "VALUES (NULL, 'Test', 'suche', 'x', 0, '[]', '2025-01-01T00:00:00+00:00')")
             r = mit(app, e.aufraeumen)
-            assert r == {"log": 1, "waisen": 1, "suche": 1}, r
+            assert r == {"log": 1, "waisen": 1, "suche": 1, "mailfehler": {"alt": 0, "erledigt": 0, "waisen": 0}}, r
             assert [z["kind"] for z in log(app)] == ["7_tage"]
             # Beim Start: dieselbe Frist, ohne Thread.
             zeile("30_tage", "2025-09-29", wart, "2025-09-30T04:00:00+00:00")
