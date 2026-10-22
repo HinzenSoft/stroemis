@@ -2288,6 +2288,11 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .c-tabs button { min-height: 44px; }
   #kopf-knoepfe .btn, #pending .btn, #users .btn, #users .recht-wahl { min-height: 44px; }
   #users .recht-wahl { padding-top: 6px; padding-bottom: 6px; }
+  /* Nachgemessen mit der Geräte-Matrix: Klappdreiecke im Seitenbaum (28 × 32), Suchfeld des Wikis (36 px) und der
+     Aufklapper „Globale Suchen“ in der Nutzerverwaltung (38 px). */
+  .tree .tg { width: 44px; height: 44px; }
+  .wiki-side input[type=search] { min-height: 44px; }
+  details.accordion > summary { min-height: 44px; display: flex; align-items: center; }
 }
 /* Nutzerverwaltung zwischen 861 und 1100 px (Fold aufgeklappt, Tablet hochkant): Die Knöpfe „Bearbeiten“ und
    „Reset-Mail“ (92–94 px) ragten aus ihrer 80 px breiten Spalte 2 px über den Fensterrand – waagerechter Bildlauf

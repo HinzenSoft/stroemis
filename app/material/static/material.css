@@ -1640,6 +1640,17 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-kastenkopf .mat-menue { align-self: center; }
 #mat-inhalt table.list.mat-mail td.mat-mail-meldung { overflow-wrap: anywhere; font-size: var(--fs-klein); max-width: 22rem; }
 #mat-inhalt table.list.mat-mail td { vertical-align: top; }
+/* Acht Spalten passen erst ab etwa 1100 px Inhaltsbreite nebeneinander (Tablet hochkant, Fold: 29–49 px Überbreite,
+   Geräte-Matrix vom 22.10.2026) – bis dahin ist jede Zeile eine Karte, wie die Modullisten unter 600 px. */
+@container mat-seite (max-width: 1100px) {
+  #mat-inhalt table.list.mat-mail, #mat-inhalt table.list.mat-mail tbody, #mat-inhalt table.list.mat-mail tr, #mat-inhalt table.list.mat-mail td { display: block; }
+  #mat-inhalt table.list.mat-mail thead { display: none; }
+  #mat-inhalt table.list.mat-mail tr { padding: 10px 0 12px; border-bottom: 1px solid var(--linie); }
+  #mat-inhalt table.list.mat-mail td { border: 0; padding: 2px 0; white-space: normal; max-width: none; }
+  #mat-inhalt table.list.mat-mail td[data-l]::before { content: attr(data-l) ": "; color: var(--grau); font-size: var(--fs-klein); }
+  #mat-inhalt table.list.mat-mail td.tabelle-aktionen { padding-top: 8px; }
+  #mat-inhalt table.list.mat-mail tr:hover td { background: none; }
+}
 /* Datumsfelder als Text (C2): „Nächste Prüfung“ in der Abschlussleiste mit Hilfetext (frühestens morgen, spätestens
    laut Intervall) – klein und leise hinter dem Feld, am Telefon darunter. */
 .mat-abschluss-zeile .mat-due { flex-wrap: wrap; }
