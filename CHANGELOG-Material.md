@@ -3611,6 +3611,8 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
        auf dev womöglich schon per Antrag entfernten Fall weiter wirksam. Begründung: Sie zu streichen hieße, an genau
        diesen Artikeln ein beliebiges Datum ohne Bestätigung eintragen zu lassen – die Lücke aus Befund 5; sie zu
        behalten kostet nichts. **Bestätigt am 21.10.2026.**
+       **Vom Nutzer am 22.10.2026 auf dev geprüft und bestätigt**: Antrag gestellt und wieder zurückgezogen; im
+       Antragsdialog gibt es keine Option „Herstelldatum entfernen“ mehr.
      - **Datenbank (Schritt 17, Schemaversion 17)**: `mat_item_change` wird umgebaut (`_umbauen`: alle Zeilen und
        Kennungen bleiben, der AUTOINCREMENT-Stand ebenso, Indizes neu angelegt) – der CHECK kennt den Stand
        „zurückgezogen“ (Schritt 15 bleibt mit `ANTRAGSSTATUS_15`, wie er ausgeliefert wurde). Neue Trigger
