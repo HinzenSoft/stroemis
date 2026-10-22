@@ -12,7 +12,7 @@ from flask import redirect, render_template, request, send_file, url_for
 
 from ..auth import current_user
 from .routes import seiten
-from .services import Abgelehnt, export, heute, lebenslauf
+from .services import Abgelehnt, antwort_privat, export, heute, lebenslauf
 from .services.rechte import NUR_GRUNDRECHT, _bezug, darf, zugang, zugang_meldung
 
 
@@ -40,13 +40,9 @@ def _fehler(exc):
     return render_template("error.html", user=current_user(), code=exc.code, message=str(exc)), exc.code
 
 
-def _privat(resp):
-    """Personenbezogene Daten (Prüfer, Urkundennummern): nie in einen Zwischenspeicher."""
-    resp.cache_control.public = None
-    resp.cache_control.max_age = None
-    resp.cache_control.private = True
-    resp.cache_control.no_store = True
-    return resp
+# Personenbezogene Daten (Prüfer, Urkundennummern): nie in einen Zwischenspeicher – seit P4-L1 in services
+# (antwort_privat), weil der Jahresbericht (routes_bericht) dieselbe Regel braucht.
+_privat = antwort_privat
 
 
 @seiten.get("/material/export/<int:fid>.csv")

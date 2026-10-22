@@ -166,6 +166,16 @@ def auswahl(wert, werte, name, leer_erlaubt=False):
     return wert
 
 
+def antwort_privat(resp):
+    """Personenbezogene Daten (Prüfer, Urkundennummern): nie in einen Zwischenspeicher – für Export, Lebenslauf und
+    Jahresbericht (routes_export, routes_bericht)."""
+    resp.cache_control.public = None
+    resp.cache_control.max_age = None
+    resp.cache_control.private = True
+    resp.cache_control.no_store = True
+    return resp
+
+
 def akteur():
     """Kennung und Anzeigename dessen, der gerade handelt – für created_by und *_name-Felder. Nur der Name, kein
     Rückfall auf die E-Mail (siehe OHNE_NAMEN). Ohne Anfrage (Katalogimport auf der Kommandozeile) gilt der Name aus

@@ -1,0 +1,326 @@
+{% extends "material/pdf/basis.html" %}
+{# Jahresbericht je Zweig (Phase 4 · Lieferung 1): Bestand zum Stichtag, Bewegungen, Prüfungen und Prüfabdeckung,
+   Durchgänge, Prüfer (nur mit Haken), Sperren und Freigaben, Aussonderungen, Mangelmeldungen, Rückrufe und der Ausblick
+   auf zwölf Monate – für die Gliederung intern. Auf Abruf gesetzt und NICHT festgeschrieben: kein Stempel, keine
+   Unterschrift, keine Protokoll-ID; der Bericht ist kein Prüfnachweis. Daten laut services/bericht.py (dokument, kopf,
+   bestand, bewegungen, pruefungen, durchgaenge, pruefer, sperren, aussonderungen, maengel, rueckrufe, ausblick, fuss,
+   kappung). Kein Wert aus der Datenbank wird als Link gesetzt (Rückruf-URL nur als Text), nichts mit |safe. #}
+{% block titel %}{{ dokument.titel }}{% endblock %}
+{% block keywords %}strömis-bericht {{ kopf.jahr }}{% endblock %}
+{% block rand_unten %}16mm{% endblock %}
+{% block kopf_rechts %}Material · Jahresbericht{% endblock %}
+{# string(titel) ist die Überschrift (h1), string(stand) der Zeitpunkt aus dem Kopf. #}
+{% block fuss_links %}string(titel) " · Stand " string(stand) " · kein Prüfnachweis"{% endblock %}
+{% block demo_hinweis %}Dieser Bericht enthält {{ kopf.demo }} DEMO-Artikel aus der Demo-Umgebung von {{ dokument.plattform }} – nicht für echte Nachweise.{% endblock %}
+
+{% block stil %}
+.kopf-id .stand { string-set: stand content(); }
+.kopf-id .pid { font-size: 13pt; }
+table.zahlen { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 2mm; }
+table.zahlen td { padding: .8mm 1.5mm; border-bottom: .5pt solid var(--linie); vertical-align: top; }
+table.zahlen td.zahl { text-align: right; width: 18mm; font-weight: 700; color: var(--schwarz); }
+table.zahlen td.lbl { font-size: 8.5pt; color: var(--anthrazit); }
+table.zahlen.zwei { width: 50%; }
+/* Zwei Zahlentabellen nebeneinander (Bestand und Kategorien, Prüfungen und Ergebnisse). */
+table.paar { width: 100%; border-collapse: collapse; table-layout: fixed; }
+table.paar > tbody > tr > td { vertical-align: top; padding: 0 3mm 0 0; }
+table.paar table.zahlen { width: 100%; }
+table.liste { font-size: 8pt; }
+table.liste col.c-nr { width: 26mm; }
+table.liste col.c-datum { width: 20mm; }
+table.liste col.c-art { width: 34mm; }
+table.liste col.c-zahl { width: 14mm; }
+table.liste col.c-marke { width: 12mm; }
+table.liste td.datum { white-space: nowrap; }
+.marke { display: inline-block; font-size: 6pt; font-weight: 700; letter-spacing: .04em; border: .6pt solid var(--grau);
+  color: var(--grau); padding: 0 .8mm; line-height: 1.4; }
+.marke.rot { border-color: var(--rot-dunkel); color: var(--rot-dunkel); }
+.kennzeichen { font-size: 7pt; color: var(--grau); margin-left: 1mm; }
+p.vor-tabelle { break-after: avoid; }
+p.rest { font-size: 7.5pt; color: var(--grau); margin-top: 1mm; }
+.schluss { margin-top: 6mm; font-size: 8pt; color: var(--anthrazit); }
+.schluss li { margin-bottom: .6mm; }
+section { break-inside: auto; }
+h2 { break-after: avoid; }
+{% endblock %}
+
+{% block unterzeile %}{{ kopf.pfad }}{% if kopf.gliederung and kopf.gliederung != kopf.ordner %} · Gliederung {{ kopf.gliederung }}{% endif %}{% endblock %}
+
+{% block kopf_id %}
+      <div class="lbl">Kalenderjahr</div>
+      <div class="pid">{{ kopf.jahr }}</div>
+      <div class="zeit">Stichtag {{ kopf.stichtag }} · Stand <span class="stand">{{ dokument.stand }}</span></div>
+      <div class="zeit">nicht festgeschrieben</div>
+    {% endblock %}
+
+{% macro demo_marke(x) -%}
+  {%- if x.demo %} <span class="marke">DEMO</span>{% endif -%}
+{%- endmacro %}
+
+{% macro rest(n, was) -%}
+  {%- if n %}<p class="rest">… und {{ n }} weitere {{ was }} – die vollständige Liste zeigt die Berichtsseite (höchstens {{ kappung }} Zeilen im PDF).</p>{% endif -%}
+{%- endmacro %}
+
+{% block inhalt %}
+<section>
+  <h2>Bericht</h2>
+  {{ felder([("Zweig", kopf.pfad), ("Gliederung", kopf.gliederung), ("Kalenderjahr", kopf.jahr ~ ""),
+             ("Stichtag der Bestandszahlen", kopf.stichtag), ("Erstellt von", kopf.ersteller), ("Erstellt am", kopf.erstellt_am),
+             ("Empfänger", kopf.empfaenger), ("Artikel im Zweig (Sicht)", kopf.artikel ~ ""),
+             ("Prüfer genannt", "ja" if kopf.pruefer_nennen else "nein")]) }}
+  {%- if kopf.demo %}<p class="hinweis">Enthält {{ kopf.demo }} DEMO-Artikel – gekennzeichnet mit der Marke DEMO; nicht für echte Nachweise.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Bestand zum Stichtag {{ kopf.stichtag }}</h2>
+  <table class="paar"><tr><td>
+  <table class="zahlen">
+    {%- for z in bestand.zeilen %}
+    <tr><td class="zahl">{{ z.n }}</td><td class="lbl">{{ z.text }}{% if z.status == "ausgesondert" %} (gesamt, seit je){% endif %}</td></tr>
+    {%- endfor %}
+    <tr><td class="zahl">{{ bestand.verloren }}</td><td class="lbl">davon verloren gemeldet</td></tr>
+    <tr><td class="zahl">{{ bestand.bestand }}</td><td class="lbl">Bestand gesamt (ohne ausgesonderte)</td></tr>
+  </table>
+  </td><td>
+  <table class="zahlen">
+    <tr><td class="lbl" colspan="2"><strong>Je Kategorie (oberste Ebene)</strong> – Bestand, davon fällig, gesperrt</td></tr>
+    {%- for k in bestand.kategorien %}
+    <tr><td class="zahl">{{ k.bestand }}</td><td class="lbl">{{ k.name }} – fällig {{ k.faellig }}, gesperrt {{ k.gesperrt }}</td></tr>
+    {%- else %}
+    <tr><td class="lbl" colspan="2">keine Artikel</td></tr>
+    {%- endfor %}
+  </table>
+  </td></tr></table>
+  {%- if bestand.unterordner %}
+  <h3>Je Unterordner (nach Heimat)</h3>
+  <table class="liste">
+    <colgroup><col><col class="c-zahl"><col class="c-zahl"><col class="c-zahl"><col class="c-zahl"><col class="c-zahl"><col class="c-zahl"><col class="c-zahl"><col class="c-zahl"></colgroup>
+    <thead><tr><th>Ordner</th><th class="zahl">Bestand</th><th class="zahl">einsatzbereit</th><th class="zahl">bald fällig</th><th class="zahl">überfällig</th><th class="zahl">neu</th><th class="zahl">gesperrt</th><th class="zahl">Lebensd.</th><th class="zahl">ausges.</th></tr></thead>
+    <tbody>
+    {%- for u in bestand.unterordner %}
+      <tr><td>{{ u.name }}{% if u.kennzeichen %}<span class="kennzeichen">{{ u.kennzeichen }}</span>{% endif %}{{ demo_marke(u) }}</td>
+        <td class="zahl">{{ u.bestand }}</td><td class="zahl">{{ u.zaehlung.einsatzbereit }}</td><td class="zahl">{{ u.zaehlung.bald_faellig }}</td>
+        <td class="zahl">{{ u.zaehlung.ueberfaellig }}</td><td class="zahl">{{ u.zaehlung.neu }}</td><td class="zahl">{{ u.zaehlung.gesperrt }}</td>
+        <td class="zahl">{{ u.zaehlung.lebensdauer }}</td><td class="zahl">{{ u.zaehlung.ausgesondert }}</td></tr>
+    {%- endfor %}
+    </tbody>
+  </table>
+  {%- endif %}
+</section>
+
+<section>
+  <h2>Bewegungen im Jahr {{ kopf.jahr }}</h2>
+  <table class="zahlen zwei">
+    <tr><td class="zahl">{{ bewegungen.zugaenge }}</td><td class="lbl">Zugänge (angelegt oder importiert)</td></tr>
+    <tr><td class="zahl">{{ bewegungen.aussonderungen }}</td><td class="lbl">Aussonderungen</td></tr>
+    <tr><td class="zahl">{{ bewegungen.geloescht }}</td><td class="lbl">gelöscht (falsch angelegt, ohne Prüfung)</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Prüfungen im Jahr {{ kopf.jahr }}</h2>
+  <table class="paar"><tr><td>
+  <table class="zahlen">
+    <tr><td class="zahl">{{ pruefungen.gesamt }}</td><td class="lbl">Prüfungen gesamt (ohne Aussonderungen)</td></tr>
+    {%- for a in pruefungen.arten %}
+    <tr><td class="zahl">{{ a.n }}</td><td class="lbl">{{ a.text }}</td></tr>
+    {%- endfor %}
+    <tr><td class="zahl">{{ pruefungen.entwuerfe }}</td><td class="lbl">offene Entwürfe (nicht abgeschlossen)</td></tr>
+  </table>
+  </td><td>
+  <table class="zahlen">
+    {%- for e in pruefungen.ergebnisse %}
+    <tr><td class="zahl">{{ e.n }}</td><td class="lbl">Ergebnis „{{ e.text }}“</td></tr>
+    {%- endfor %}
+    <tr><td class="zahl">{{ pruefungen.mit_mangel }}</td><td class="lbl">mit Mangel</td></tr>
+    <tr><td class="zahl">{{ pruefungen.kritisch }}</td><td class="lbl">mit kritischem Mangel</td></tr>
+  </table>
+  </td></tr></table>
+  <h3>Prüfabdeckung</h3>
+  <table class="zahlen zwei">
+    <tr><td class="zahl">{{ pruefungen.abdeckung.bestand }}</td><td class="lbl">Artikel im Bestand (ohne ausgesonderte)</td></tr>
+    <tr><td class="zahl">{{ pruefungen.abdeckung.geprueft }}</td><td class="lbl">davon im Jahr mit abgeschlossener Prüfung</td></tr>
+    <tr><td class="zahl">{{ pruefungen.abdeckung.nicht_geprueft }}</td><td class="lbl">im Jahr nicht geprüft</td></tr>
+  </table>
+  {%- if pruefungen.nicht_geprueft %}
+  <p class="hinweis vor-tabelle">Im Jahr nicht geprüft:</p>
+  <table class="liste">
+    <colgroup><col class="c-nr"><col><col class="c-datum"><col class="c-marke"></colgroup>
+    <thead><tr><th>Inventarnummer</th><th>Produkt</th><th>letzte Prüfung</th><th></th></tr></thead>
+    <tbody>
+    {%- for x in pruefungen.nicht_geprueft %}
+      <tr><td class="mono">{{ x.inventarnummer }}</td><td>{{ x.produkt }}</td><td class="datum">{{ x.letzte }}</td><td>{{ demo_marke(x) }}</td></tr>
+    {%- endfor %}
+    </tbody>
+  </table>
+  {{ rest(pruefungen.gekappt, "Artikel") }}
+  {%- endif %}
+</section>
+
+<section>
+  <h2>Prüfdurchgänge</h2>
+  {%- if durchgaenge %}
+  <table class="liste">
+    <colgroup><col><col class="c-art"><col class="c-art"><col class="c-zahl"><col class="c-zahl"><col class="c-zahl"><col class="c-zahl"></colgroup>
+    <thead><tr><th>Durchgang</th><th>Zeitraum</th><th>Stand · Sammelprotokoll</th><th class="zahl">Artikel</th><th class="zahl">erledigt</th><th class="zahl">ausgen.</th><th class="zahl">nicht gepr.</th></tr></thead>
+    {%- for r in durchgaenge %}
+    <tbody>
+      <tr><td>{{ r.titel }}{{ demo_marke(r) }}</td><td>{{ r.zeitraum }}</td>
+        <td>{{ r.stand }}{% if r.protokoll_id %} · <span class="mono">{{ r.protokoll_id }}</span>{% endif %}</td>
+        <td class="zahl">{{ r.gesamt }}</td><td class="zahl">{{ r.erledigt }}</td><td class="zahl">{{ r.ausgenommen }}</td>
+        <td class="zahl">{{ r.nicht_geprueft if r.stand != "offen" else r.offen ~ " offen" }}</td></tr>
+      {%- if r.ausnahmen %}
+      <tr><td colspan="7"><span class="lbl">Ausnahmen:</span>
+        {%- for a in r.ausnahmen %} <span class="mono">{{ a.inventarnummer }}</span> ({{ a.grund }}){{ ";" if not loop.last }}{% endfor %}
+        {%- if r.gekappt %} … und {{ r.gekappt }} weitere{% endif %}</td></tr>
+      {%- endif %}
+    </tbody>
+    {%- endfor %}
+  </table>
+  {%- else %}
+  <p class="hinweis">Im Jahr kein Prüfdurchgang im Zweig.</p>
+  {%- endif %}
+</section>
+
+{%- if pruefer %}
+<section>
+  <h2>Prüfer im Jahr {{ kopf.jahr }}</h2>
+  <table class="liste">
+    <colgroup><col><col class="c-art"><col class="c-zahl"></colgroup>
+    <thead><tr><th>Prüfer</th><th>Urkundennummer</th><th class="zahl">Prüfungen</th></tr></thead>
+    <tbody>
+    {%- for p in pruefer.pruefer %}
+      <tr><td>{{ p.name }}</td><td class="mono">{{ p.urkunde }}</td><td class="zahl">{{ p.n }}</td></tr>
+    {%- else %}
+      <tr><td colspan="3" class="hinweis">keine Prüfungen</td></tr>
+    {%- endfor %}
+    </tbody>
+  </table>
+  {%- if pruefer.aussonderungen_durch %}
+  <h3>Aussonderungen durch</h3>
+  <table class="liste">
+    <colgroup><col><col class="c-zahl"></colgroup>
+    <thead><tr><th>Name</th><th class="zahl">Aussonderungen</th></tr></thead>
+    <tbody>
+    {%- for p in pruefer.aussonderungen_durch %}
+      <tr><td>{{ p.name }}</td><td class="zahl">{{ p.n }}</td></tr>
+    {%- endfor %}
+    </tbody>
+  </table>
+  {%- endif %}
+</section>
+{%- endif %}
+
+<section>
+  <h2>Sperren und Freigaben im Jahr {{ kopf.jahr }}</h2>
+  <table class="zahlen zwei">
+    <tr><td class="zahl">{{ sperren.gesamt }}</td><td class="lbl">Sperren gesamt</td></tr>
+    {%- for a in sperren.arten %}
+    <tr><td class="zahl">{{ a.n }}</td><td class="lbl">{{ a.text }}</td></tr>
+    {%- endfor %}
+    <tr><td class="zahl">{{ sperren.freigegeben }}</td><td class="lbl">wieder freigegeben (Freiprüfung)</td></tr>
+  </table>
+  {%- if sperren.liste %}
+  <table class="liste">
+    <colgroup><col class="c-datum"><col class="c-nr"><col class="c-art"><col><col class="c-marke"></colgroup>
+    <thead><tr><th>Datum</th><th>Inventarnummer</th><th>Art</th><th>Grund</th><th></th></tr></thead>
+    <tbody>
+    {%- for s in sperren.liste %}
+      <tr><td class="datum">{{ s.datum }}</td><td class="mono">{{ s.inventarnummer }}</td><td>{{ s.art_text }}</td><td class="text">{{ s.grund }}</td><td>{{ demo_marke(s) }}</td></tr>
+    {%- endfor %}
+    </tbody>
+  </table>
+  {{ rest(sperren.gekappt, "Sperren") }}
+  {%- endif %}
+</section>
+
+<section>
+  <h2>Aussonderungen im Jahr {{ kopf.jahr }}</h2>
+  <table class="zahlen zwei">
+    <tr><td class="zahl">{{ aussonderungen.gesamt }}</td><td class="lbl">Aussonderungen gesamt</td></tr>
+    {%- for a in aussonderungen.arten %}
+    <tr><td class="zahl">{{ a.n }}</td><td class="lbl">{{ a.text }}</td></tr>
+    {%- endfor %}
+  </table>
+  {%- if aussonderungen.liste %}
+  <table class="liste">
+    <colgroup><col class="c-datum"><col class="c-nr"><col><col><col class="c-marke"></colgroup>
+    <thead><tr><th>Datum</th><th>Inventarnummer</th><th>Produkt</th><th>Grund{% if kopf.pruefer_nennen %} · durch{% endif %}</th><th></th></tr></thead>
+    <tbody>
+    {%- for a in aussonderungen.liste %}
+      <tr><td class="datum">{{ a.datum }}</td><td class="mono">{{ a.inventarnummer }}</td><td>{{ a.produkt }}</td>
+        <td class="text">{{ a.grund }}{% if a.durch %} · durch {{ a.durch }}{% endif %}{% if a.protokoll_id %} · <span class="mono">{{ a.protokoll_id }}</span>{% endif %}</td><td>{{ demo_marke(a) }}</td></tr>
+    {%- endfor %}
+    </tbody>
+  </table>
+  {{ rest(aussonderungen.gekappt, "Aussonderungen") }}
+  {%- endif %}
+</section>
+
+<section>
+  <h2>Mangelmeldungen</h2>
+  <table class="zahlen zwei">
+    <tr><td class="zahl">{{ maengel.gemeldet }}</td><td class="lbl">gemeldet im Jahr {{ kopf.jahr }}</td></tr>
+    <tr><td class="zahl">{{ maengel.offen }}</td><td class="lbl">davon heute offen</td></tr>
+    <tr><td class="zahl">{{ maengel.freipruefung }}</td><td class="lbl">erledigt durch Freiprüfung</td></tr>
+    <tr><td class="zahl">{{ maengel.aussonderung }}</td><td class="lbl">erledigt durch Aussonderung</td></tr>
+    <tr><td class="zahl">{{ maengel.offen_stichtag }}</td><td class="lbl">offene Meldungen zum Stichtag (alle Jahre)</td></tr>
+  </table>
+  {%- if maengel.offen_liste %}
+  <table class="liste">
+    <colgroup><col class="c-nr"><col><col class="c-marke"></colgroup>
+    <thead><tr><th>Inventarnummer</th><th>gemeldet am</th><th></th></tr></thead>
+    <tbody>
+    {%- for m in maengel.offen_liste %}
+      <tr><td class="mono">{{ m.inventarnummer }}</td><td>{{ m.gemeldet }}</td><td>{{ demo_marke(m) }}</td></tr>
+    {%- endfor %}
+    </tbody>
+  </table>
+  {{ rest(maengel.gekappt, "Meldungen") }}
+  {%- endif %}
+</section>
+
+<section>
+  <h2>Rückrufe</h2>
+  {%- if rueckrufe %}
+  <p class="hinweis vor-tabelle">Rückrufe, die im Jahr angelegt oder beendet wurden oder heute laufen – zu Produkten mit Artikeln im Zweig.</p>
+  <table class="liste">
+    <colgroup><col class="c-art"><col><col class="c-zahl"><col class="c-zahl"></colgroup>
+    <thead><tr><th>Angelegt · beendet</th><th>Rückruf</th><th class="zahl">betroffen</th><th class="zahl">offen</th></tr></thead>
+    {%- for r in rueckrufe %}
+    <tbody>
+      <tr><td>{{ r.angelegt }}{% if r.beendet %}<br>beendet {{ r.beendet }}{% else %}<br>läuft{% endif %}</td>
+        <td><strong>{{ r.titel }}</strong> – {{ r.produkt }} <span class="hinweis">({{ "alle Artikel des Produkts" if r.alle else "nach Seriennummern" }})</span>
+          {%- if r.url %}<div class="text">Meldung des Herstellers: <span class="mono">{{ r.url }}</span></div>{% endif %}
+          {%- if r.artikel %}<div class="text">{% for a in r.artikel %}<span class="mono">{{ a.inventarnummer }}</span> ({{ a.zustand }}){{ demo_marke(a) }}{{ ", " if not loop.last }}{% endfor %}{% if r.gekappt %} … und {{ r.gekappt }} weitere{% endif %}</div>{% endif %}</td>
+        <td class="zahl">{{ r.betroffen }}</td><td class="zahl">{{ r.offen }}</td></tr>
+    </tbody>
+    {%- endfor %}
+  </table>
+  {%- else %}
+  <p class="hinweis">Kein Rückruf betrifft Artikel im Zweig.</p>
+  {%- endif %}
+</section>
+
+<section>
+  <h2>Ausblick – zwölf Monate ab {{ kopf.stichtag }}</h2>
+  <p class="hinweis">Jetzt: {{ ausblick.jetzt.ueberfaellig }} überfällig, {{ ausblick.jetzt.neu }} neu (Eingangsprüfung ausstehend), {{ ausblick.jetzt.gesperrt }} gesperrt.</p>
+  <table class="liste">
+    <colgroup><col class="c-art"><col class="c-zahl"><col class="c-zahl"><col></colgroup>
+    <thead><tr><th>Monat</th><th class="zahl">fällig</th><th class="zahl">Lebensende (textil)</th><th></th></tr></thead>
+    <tbody>
+    {%- for m in ausblick.monate %}
+      <tr><td>{{ m.text }}</td><td class="zahl">{{ m.faellig }}</td><td class="zahl">{{ m.lebensende }}</td><td></td></tr>
+    {%- endfor %}
+    </tbody>
+  </table>
+</section>
+
+<div class="schluss">
+  <ul>
+  {%- for satz in fuss %}
+    <li>{{ satz }}</li>
+  {%- endfor %}
+  </ul>
+</div>
+{% endblock %}
