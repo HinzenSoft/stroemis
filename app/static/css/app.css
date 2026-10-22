@@ -2288,6 +2288,8 @@ dialog.us-dlg { width: min(640px, 96vw); }
   .tree a { padding-top: 14px; padding-bottom: 14px; }
   .c-tabs button { min-height: 44px; }
   #kopf-knoepfe .btn, #pending .btn, #users .btn, #users .recht-wahl { min-height: 44px; }
+  /* Lesemodus: „Zur Übersicht“ unter „Seite nicht gefunden“ (Geräte-Matrix P4-L1, 36 px). */
+  .empty .btn-row .btn { min-height: 44px; display: inline-flex; align-items: center; }
   #users .recht-wahl { padding-top: 6px; padding-bottom: 6px; }
   /* Nachgemessen mit der Geräte-Matrix: Klappdreiecke im Seitenbaum (28 × 32), Suchfeld des Wikis (36 px) und der
      Aufklapper „Globale Suchen“ in der Nutzerverwaltung (38 px). */
