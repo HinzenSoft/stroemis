@@ -2107,9 +2107,10 @@
           ${zeile("Prüfformular", a.formular ? `${esc(a.formular.title || "ohne Titel")} · Version ${a.formular.version} <span class="muted">(${esc(a.formular.quelle)}, ${plural(a.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span>` : '<span class="mat-warn">kein aktives Prüfformular – im Katalog anlegen</span>')}
           ${a.notes ? zeile("Bemerkung", `<span class="mat-text">${esc(a.notes)}</span>`) : ""}
         </dl>
-        ${(a.antraege || []).map(antragOffenHtml).join("")}
         ${antragMoeglich(a) && !darfPflegen ? `<div class="btn-row"><button class="btn secondary small" type="button" data-act="antrag">Änderung beantragen …</button></div>
           <p class="help">Seriennummer und Herstellung stehen seit der ersten Prüfung fest – eine Abweichung beantragst du mit Begründung bei der Material-Verwaltung.</p>` : ""}</section>
+        <div class="mat-spalte">
+        ${(a.antraege || []).length ? `<section class="section mat-antraege-offen"><h2>Offene Änderungsanträge</h2>${a.antraege.map(antragOffenHtml).join("")}</section>` : ""}
         <section class="section"><h2>QR-Code und NFC</h2>
           <p class="help">Diese Adresse öffnet nach der Anmeldung diesen Artikel. Kopiere sie und schreibe sie auf einen NFC- oder RFID-Tag oder drucke sie mit einem beliebigen Etikettenprogramm als QR-Code – die Kamera-App des Telefons öffnet sie.</p>
           <div class="mat-qr"><input type="text" readonly value="${esc(a.qr_adresse)}" id="mat-qr" aria-label="Adresse für QR, NFC und RFID">
@@ -2117,6 +2118,7 @@
           <h2>Herstellerdokumente</h2>
           ${a.dokumente.length ? dokListe(a.dokumente, true) : leer("Am Produkt und seiner Kategorie sind keine Dokumente hinterlegt.")}
         </section>
+        </div>
       </div>
       <section class="section"><h2>Prüfungen</h2>${pruefListe(a.pruefungen)}</section>
       ${mangelErledigt(maengel.filter((m) => !m.offen))}
@@ -2407,6 +2409,9 @@
   };
   const antragOffenText = (x) => `${x.inhalt ? antragAenderung(x) : esc(x.feld_text)} – Änderung beantragt am ${esc(S.fmtDate(x.created_at))}${x.antragsteller ? ` von ${esc(x.antragsteller)}` : ""} – wartet auf die Material-Verwaltung.`;
   // Ein offener Antrag als Hinweis an Artikel und Dialog „Bearbeiten“ – der eigene mit grauem „Antrag zurückziehen …“.
+  // Auf der Artikelseite stehen die Anträge als Abschnitt „Offene Änderungsanträge“ am Anfang der rechten Spalte, am
+  // Rechner neben dem Steckbrief im sonst leeren Raum (Wunsch vom 22.10.2026); in einer Spalte (unter 900 px) folgen sie
+  // so direkt auf die Stammdaten und vor QR-Code und Dokumenten – Lesefolge = DOM-Folge, ohne CSS order.
   const antragOffenHtml = (x) => `<div class="notice small mat-antrag-offen"><p>${antragOffenText(x)}</p>${x.eigen ? `<div class="btn-row"><button class="btn secondary small" type="button" data-act="antrag-zurueck" data-id="${x.id}">Antrag zurückziehen …</button></div>` : ""}</div>`;
   // Rückfrage, dann zurückziehen (nur der Antragsteller, nur offen – der Server prüft es). Keine Mail.
   async function antragZurueckziehen(x, danach) {

@@ -194,6 +194,9 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 .mat-artikeltitel h1 + .btn-row { margin-top: 12px; }
 .mat-artikeltitel .btn-row + .btn-row { margin-top: 10px; }
 .mat-spalten { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 0 28px; }
+/* Rechte Spalte der Artikelseite mit mehreren Abschnitten (offene Änderungsanträge über QR-Code und Dokumenten, Wunsch
+   vom 22.10.2026): ein Kasten als ein Gitterfeld, damit der zweite Abschnitt nicht in die nächste Zeile links rutscht. */
+.mat-spalte { min-width: 0; }
 .mat-daten { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 6px 14px; margin: 0; }
 .mat-daten dt { color: var(--grau); font-size: var(--fs-mittel); }
 .mat-daten dd { margin: 0; }

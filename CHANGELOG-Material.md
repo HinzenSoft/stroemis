@@ -3653,6 +3653,26 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
        zurück, „erledigt“ zeigt die grauen Marken „zurückgezogen“. Keine Konsolenfehler, kein waagerechtes Scrollen, je
        Dialog höchstens ein roter Knopf.
 
+## Artikelseite: offene Änderungsanträge rechts neben dem Steckbrief (22.10.2026)
+
+Wunsch vom 22.10.2026: „Die ausstehenden Anträge sollen, zumindest am Desktop rechts, neben dem Steckbrief in dem
+leeren Bereich stehen.“ Die grauen Hinweiskästen der offenen Änderungsanträge (mit „Antrag zurückziehen …“ für den
+eigenen) standen links unter der Stammdatenliste. Jetzt bilden sie einen eigenen Abschnitt **„Offene Änderungsanträge“**
+am Anfang der rechten Spalte – über „QR-Code und NFC“ und „Herstellerdokumente“, auf gleicher Höhe mit „Stammdaten“, nur
+wenn es offene Anträge gibt. Der Knopf „Änderung beantragen …“ mit seiner Hilfe bleibt links bei den Stammdaten, der
+Hinweis im Dialog „Bearbeiten“ unverändert; Knöpfe, Rückfrage und Schnittstelle sind dieselben. Die rechte Spalte liegt
+dafür in einem Kasten (`.mat-spalte`), damit die beiden Abschnitte ein Gitterfeld bleiben. Nur `material.js`,
+`material.css` – keine Schnittstelle, kein Schema.
+
+- **Telefon und Tablet (eine Spalte unter 900 px).** Die rechte Spalte folgt im Dokument auf die linke; die Anträge
+  stehen also direkt nach den Stammdaten und vor QR-Code und Dokumenten – dieselbe Lesefolge wie am Rechner (links
+  oben → rechts oben), ohne CSS `order` (Tab- und Vorlesereihenfolge = Bildfolge). Browserprobe mit `st-geraete`
+  (iPhone, Tablet hoch/quer, Laptop 1280, Desktop QHD × Chromium, Firefox, WebKit, zwei offene Anträge am geprüften
+  Artikel): 15 × OK, keine Befunde; Fotos unter `/home/harness/geraete-laeufe/antraege-rechts-20261022/lauf/`.
+- **Bitte bestätigen:** Der Abschnitt steht **über** „QR-Code und NFC“ (die Anträge sind das Dringende, QR und
+  Dokumente ändern sich nie). Alternative wäre unter „Herstellerdokumente“ – dann stünden sie am Rechner nicht neben dem
+  Steckbrief, sondern darunter rechts.
+
 ## Zweite Nachbesserung nach der Geräte-Prüfung (22.10.2026)
 
 Eine unabhängige Prüfung von f085f12 im Browser (`st-geraete`, 20 Seiten × 21 Geräte × 3 Engines, dazu Trefferproben

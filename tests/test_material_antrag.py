@@ -1491,7 +1491,17 @@ def test_oberflaeche_17():
             'data-id="${x.id}">Antrag zurückziehen …</button></div>`' in hinweis)
     assert "await confirm(" in hinweis and '"Zurückziehen"' in hinweis and "/zurueckziehen`" in hinweis
     seite = js[js.index("async function artikel()"):js.index("function artikelDialog(a)")]
-    assert "(a.antraege || []).map(antragOffenHtml)" in seite and '"antrag-zurueck": (b) => antragZurueckziehen(' in seite
+    assert '"antrag-zurueck": (b) => antragZurueckziehen(' in seite
+    # Die offenen Anträge stehen als eigener Abschnitt am Anfang der rechten Spalte (Kasten .mat-spalte), vor „QR-Code und
+    # NFC“, nicht mehr unter den Stammdaten; der Knopf „Änderung beantragen …“ bleibt links bei den Stammdaten (22.10.2026).
+    spalten = seite[seite.index('<div class="mat-spalten">'):seite.index('<section class="section"><h2>Prüfungen</h2>')]
+    links, rechts = spalten.split('<div class="mat-spalte">')
+    assert "antragOffenHtml" not in links and 'data-act="antrag">Änderung beantragen …' in links
+    abschnitt = ('`<section class="section mat-antraege-offen"><h2>Offene Änderungsanträge</h2>'
+                 '${a.antraege.map(antragOffenHtml).join("")}</section>`')
+    assert "(a.antraege || []).length ? " + abschnitt in rechts
+    assert rechts.index("Offene Änderungsanträge") < rechts.index("<h2>QR-Code und NFC</h2>") < rechts.index("<h2>Herstellerdokumente</h2>")
+    assert "order:" not in css[css.index(".mat-spalten {"):css.index(".mat-daten {")] and ".mat-spalte { min-width: 0; }" in css
     dlg = js[js.index("function artikelDialog(a)"):js.index("/* --- Änderungsanträge")]
     assert "querySelectorAll('[data-act=\"antrag-zurueck\"]')" in dlg and "dlg.close(); return zeigen(artikel);" in dlg
     m = js[js.index("async function meldungen()"):js.index("function zuordnenDialog(m, danach)")]
