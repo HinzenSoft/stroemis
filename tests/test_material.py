@@ -2189,17 +2189,19 @@ def test_produkt_variante():
         docs = {d["title"]: d for d in neu["dokumente"]}
         assert set(docs) == {"Anleitung", "Datenblatt"} and docs["Anleitung"]["version"] == "2026", docs
         alt_v2 = next(d for d in quelle["dokumente"] if d["id"] == v2)
-        assert docs["Anleitung"]["sha256"] == alt_v2["sha256"] and docs["Anleitung"]["datei"] != alt_v2["datei"]
+        # Seit Schritt 18 nennt die Variante dieselbe Datei (eine je Inhalt) – bis dahin wurde sie kopiert.
+        assert docs["Anleitung"]["sha256"] == alt_v2["sha256"] and docs["Anleitung"]["datei"] == alt_v2["datei"]
         assert docs["Datenblatt"]["url"] == "https://example.org/gurt" and not docs["Datenblatt"]["datei"]
-        assert len(set(os.listdir(orig)) - vorher) == 1                        # eine Datei kopiert, der Link nicht
+        assert set(os.listdir(orig)) == vorher                                 # keine Kopie, der Link ohnehin nicht
         assert kp.get(f"/api/material/formulare?produkt={neu['id']}").json["formulare"] == []
         journal = kp.get(f"/api/material/produkte/{neu['id']}").json["produkt"]["journal"]
         assert any(e["action"] == "variante" and e["nachher"]["von"] == gurt for e in journal), journal
-        # Ohne Dokumente geht es auch; und das Löschen der Variante nimmt nur ihre eigenen Dateien mit.
+        # Ohne Dokumente geht es auch; und das Löschen der Variante lässt die gemeinsame Datei beim Original.
         r = kp.post(url, json=dict(stamm, article_no="GA-300", model="Gurt Alpha XL"), headers=H)
         assert r.status_code == 201 and r.json["produkt"]["dokumente"] == [], r.get_json()
         assert kp.delete(f"/api/material/produkte/{neu['id']}", headers=H).status_code == 200
         assert set(os.listdir(orig)) == vorher
+        assert kp.get(alt_v2["datei"]).status_code == 200
         assert kp.get(f"/api/material/produkte/{gurt}").json["produkt"]["bild"]
     print("Variantentest bestanden.")
 

@@ -20,7 +20,6 @@ import hashlib
 import os
 import re
 import secrets
-import shutil
 import sqlite3
 
 from flask import current_app, has_request_context
@@ -236,7 +235,7 @@ def kategorie_loeschen(kid):
         db.execute("DELETE FROM mat_category WHERE id = ?", (kid,))
         journal.eintragen("category", kid, "geloescht", alt, None)
     for name in dateien:
-        _entfernen(os.path.join(dok_dir(), name))
+        _datei_freigeben(name)
 
 
 def kategorien():
@@ -440,8 +439,9 @@ def produkt_anlegen(d, demo=False, importiert=False):
 def produkt_variante(pid, d):
     """Kopie eines Produkts als neue Variante. Die Stammdaten kommen aus d (der Dialog schickt sie vorbelegt mit),
     eine eigene Artikelnummer ist Pflicht. Auf Wunsch die aktuellen Dokumente des Produkts dazu – je Dokument die
-    neueste, nicht zurückgezogene Version; die Dateien werden kopiert, damit das Löschen des einen Produkts die
-    Dokumente des anderen nicht mitnimmt. Das Produktbild nie, spezifische Formulare auch nicht."""
+    neueste, nicht zurückgezogene Version; die neue Zeile nennt dieselbe Datei (seit Schritt 18 heißt sie nach ihrem
+    Inhalt und bleibt, bis keine Zeile sie mehr nennt – bis dahin wurde sie kopiert, damit das Löschen des einen
+    Produkts die Dokumente des anderen nicht mitnimmt). Das Produktbild nie, spezifische Formulare auch nicht."""
     quelle = produkt(pid)
     if not artikelnummer(text(d, "article_no", "Artikelnummer", 80)):
         raise Abgelehnt("Eine Variante braucht eine eigene Artikelnummer.")
@@ -453,42 +453,22 @@ def produkt_variante(pid, d):
         "AND NOT EXISTS (SELECT 1 FROM mat_product_document n WHERE n.replaces_id = d.id)", (pid, heute().isoformat()))}
     if any(x not in aktuelle for x in wahl):
         raise Abgelehnt("Übernehmen lassen sich nur die aktuellen Dokumente dieses Produkts.")
-    kopien = []
-    try:
-        for doc in (aktuelle[x] for x in dict.fromkeys(wahl)):
-            kopien.append((doc, _datei_kopieren(doc["file_path"]) if doc["file_path"] else None))
-        uid, uname = akteur()
-        with db.transaction(sofort=True):
-            neu = produkt_anlegen(d, demo=bool(quelle["demo"]))
-            for doc, name in kopien:
-                did = db.execute(
-                    "INSERT INTO mat_product_document (product_id, kind, title, file_path, url, mime, size, sha256, version, "
-                    "valid_from, uploaded_by, uploaded_by_name, uploaded_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    (neu, doc["kind"], doc["title"], name, doc["url"], doc["mime"], doc["size"], doc["sha256"],
-                     doc["version"], doc["valid_from"], uid, uname, db.now()))
-                journal.eintragen("document", did, "angelegt", None,
-                                  {"product_id": neu, "kind": doc["kind"], "title": doc["title"], "version": doc["version"],
-                                   "valid_from": doc["valid_from"], "kopie_von": doc["id"]})
-            # Der Name der Quelle mit ihrem Zusatz: Varianten unterscheiden sich oft nur in der Beschreibung.
-            journal.eintragen("product", neu, "variante", None, {"von": pid, "name": produktname(quelle),
-                                                                 "dokumente": len(kopien)})
-    except BaseException:
-        for _, name in kopien:
-            if name:
-                _entfernen(os.path.join(dok_dir(), name))
-        raise
-    return neu
-
-
-def _datei_kopieren(name):
-    """Eine Dokumentdatei unter neuem Namen ablegen – gleicher Inhalt, gleiche Endung."""
-    neu = secrets.token_hex(10) + os.path.splitext(name)[1]
-    try:
-        shutil.copyfile(os.path.join(dok_dir(), name), os.path.join(dok_dir(), neu))
-    except OSError as exc:
-        _entfernen(os.path.join(dok_dir(), neu))
-        current_app.logger.warning("Dokumentdatei „%s“ ließ sich nicht kopieren: %s", name, exc)
-        raise Abgelehnt("Ein Dokument ließ sich nicht kopieren. Bitte später erneut versuchen – oder ohne Dokumente anlegen.")
+    kopien = [aktuelle[x] for x in dict.fromkeys(wahl)]
+    uid, uname = akteur()
+    with db.transaction(sofort=True):
+        neu = produkt_anlegen(d, demo=bool(quelle["demo"]))
+        for doc in kopien:
+            did = db.execute(
+                "INSERT INTO mat_product_document (product_id, kind, title, file_path, url, mime, size, sha256, version, "
+                "valid_from, uploaded_by, uploaded_by_name, uploaded_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (neu, doc["kind"], doc["title"], doc["file_path"], doc["url"], doc["mime"], doc["size"], doc["sha256"],
+                 doc["version"], doc["valid_from"], uid, uname, db.now()))
+            journal.eintragen("document", did, "angelegt", None,
+                              {"product_id": neu, "kind": doc["kind"], "title": doc["title"], "version": doc["version"],
+                               "valid_from": doc["valid_from"], "kopie_von": doc["id"]})
+        # Der Name der Quelle mit ihrem Zusatz: Varianten unterscheiden sich oft nur in der Beschreibung.
+        journal.eintragen("product", neu, "variante", None, {"von": pid, "name": produktname(quelle),
+                                                             "dokumente": len(kopien)})
     return neu
 
 
@@ -551,12 +531,13 @@ def produkt_loeschen(pid):
         db.execute("DELETE FROM mat_product WHERE id = ?", (pid,))
         journal.eintragen("product", pid, "geloescht", alt, None)
     for name in dateien:
-        _entfernen(os.path.join(dok_dir(), name))
+        _datei_freigeben(name)
     if alt["image"]:
         delete_photo_files(medien_dir(), alt["image"])
 
 
 def _entfernen(pfad):
+    """Nur für Zwischendateien und über _datei_freigeben – eine Dokumentdatei nie direkt."""
     try:
         os.remove(pfad)
     except OSError:
@@ -652,8 +633,20 @@ def dokument(did):
     return doc
 
 
+def inhaltsname(sha, ext):
+    """Der Dateiname eines Dokuments seit Schritt 18: die SHA-256 seines Inhalts mit der Endung – derselbe Inhalt heißt
+    immer gleich und liegt deshalb nur einmal unter media/material/dok, egal wie viele Dokumente (Produkte, Varianten,
+    Kategorien) ihn nennen. Vor Schritt 18 trug jede Datei einen Zufallsnamen; dokablage.zusammenfuehren bringt den
+    Altbestand einmal auf die neuen Namen."""
+    return sha + ext
+
+
 def _datei_ablegen(file_storage):
-    """Datei unverändert unter media/material/dok ablegen; liefert (Name, MIME, Größe, SHA-256)."""
+    """Datei unverändert unter media/material/dok ablegen; liefert (Name, MIME, Größe, SHA-256). Geschrieben wird
+    zuerst in eine Zwischendatei im selben Ordner (Name mit Punkt davor – die Medienroute liefert so etwas nie aus),
+    dabei wird gezählt und gehasht; dann bekommt sie ihren Inhaltsnamen (inhaltsname). Liegt der schon da, ist es
+    derselbe Inhalt: Die Zwischendatei geht weg, die vorhandene Datei gilt – zwei gleichzeitige Uploads desselben
+    Inhalts gelingen so beide."""
     if not file_storage or not file_storage.filename:
         raise Abgelehnt("Es wurde keine Datei mitgeschickt.")
     ext = os.path.splitext(file_storage.filename)[1].lower()
@@ -664,11 +657,10 @@ def _datei_ablegen(file_storage):
     kopf = stream.read(16)
     if not any(kopf.startswith(k) for k in kennungen) or (ext == ".webp" and kopf[8:12] != b"WEBP"):
         raise Abgelehnt(f"Der Inhalt von „{file_storage.filename}“ passt nicht zur Endung {ext}.")
-    name = secrets.token_hex(10) + ext
-    pfad = os.path.join(dok_dir(), name)
+    zwischen = os.path.join(dok_dir(), ".neu-" + secrets.token_hex(10) + ext)
     summe, groesse = hashlib.sha256(), 0
     try:
-        with open(pfad, "wb") as fh:
+        with open(zwischen, "wb") as fh:
             stueck = kopf
             while stueck:
                 groesse += len(stueck)
@@ -677,14 +669,48 @@ def _datei_ablegen(file_storage):
                 summe.update(stueck)
                 fh.write(stueck)
                 stueck = stream.read(1024 * 1024)
+        name = inhaltsname(summe.hexdigest(), ext)
+        _einordnen(zwischen, os.path.join(dok_dir(), name), groesse)
     except Abgelehnt:
-        _entfernen(pfad)
+        _entfernen(zwischen)
         raise
     except OSError as exc:
-        _entfernen(pfad)
+        _entfernen(zwischen)
         current_app.logger.warning("Dokument „%s“ ließ sich nicht ablegen: %s", file_storage.filename, exc)
         raise Abgelehnt("Das Dokument ließ sich nicht speichern. Bitte später erneut versuchen.", 500)
     return name, mime, groesse, summe.hexdigest()
+
+
+def _einordnen(zwischen, ziel, groesse):
+    """Die fertig geschriebene Zwischendatei unter ihren Inhaltsnamen bringen. Gibt es den schon in derselben Größe,
+    ist es derselbe Inhalt (gleiche SHA-256) – die Zwischendatei geht weg. Eine andere Größe hieße, die vorhandene
+    Datei ist beschädigt (etwa abgebrochen kopiert); dann ersetzt die eben geprüfte sie – mit Vermerk im Log."""
+    try:
+        vorhanden = os.path.getsize(ziel)
+    except OSError:
+        vorhanden = None
+    if vorhanden == groesse:
+        _entfernen(zwischen)
+        return
+    if vorhanden is not None:
+        current_app.logger.warning("Dokumentdatei %s hatte %d statt %d Bytes – durch die neue Fassung ersetzt.",
+                                   os.path.basename(ziel), vorhanden, groesse)
+    os.replace(zwischen, ziel)
+
+
+def _datei_freigeben(name):
+    """Eine Dokumentdatei nach dem Ende ihrer Zeile entfernen – aber nur, wenn kein Dokument sie mehr nennt. Seit
+    Schritt 18 heißt eine Datei nach ihrem Inhalt und gehört allen Dokumenten mit diesem Inhalt zugleich (Varianten,
+    Katalogimport mit einer Anleitung für viele Produkte). Aufgerufen nach dem Commit, der die eigene Zeile entfernt
+    hat, bzw. nach dem Rollback, der sie nie entstehen ließ. Die Regel, dass ein Dokument aus einem festgeschriebenen
+    Prüfprotokoll seine Zeile nie verliert (kategorie_loeschen; produkt_loeschen scheitert an den Artikeln), hält
+    damit auch seine Datei: Solange die Zeile steht, wird die Datei nicht angerührt. Jede Stelle, die Dokumentdateien
+    entfernt, geht hier durch – kein os.remove sonst."""
+    if not name or "/" in name or "\\" in name or name.startswith("."):
+        return
+    if db.query("SELECT 1 FROM mat_product_document WHERE file_path = ? LIMIT 1", (name,), one=True):
+        return
+    _entfernen(os.path.join(dok_dir(), name))
 
 
 def _dokument_werte(d, alt=None, datei=None):
@@ -740,7 +766,7 @@ def dokument_anlegen(pid, d, datei=None, ersetzt=None, kid=None):
                               {"ersetzt": ersetzt["id"]} if ersetzt else None, nachher)
     except BaseException:
         if name:
-            _entfernen(os.path.join(dok_dir(), name))
+            _datei_freigeben(name)
         raise
     return did
 

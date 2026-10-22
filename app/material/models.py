@@ -129,13 +129,22 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     Herstelldatum nur per Antrag) bleibt für Altfälle. Wiederholbar: Umgebaut wird nur, wenn der CHECK den neuen Stand
     noch nicht kennt. Wer mat_item_change künftig neu aufbaut, muss ihre Trigger und die beiden Artikeltrigger, die sie
     lesen, neu anlegen.
+  - Schritt 18 (Herstellerdokumente einmal je Inhalt, 22.10.2026): Eine Dokumentdatei heißt seither nach ihrem Inhalt
+    (<SHA-256><Endung> unter media/material/dok) und gehört allen Zeilen von mat_product_document mit diesem Inhalt
+    (katalog._datei_ablegen, _datei_freigeben). Der Schritt selbst ist klein: Index auf file_path (Auslieferung,
+    Freigeben) und das Kennzeichen mat_meta.dok_inhalt = „0“ – die Dateiarbeit (Altbestand umbenennen, Dubletten
+    zusammenführen, Prüfsummen aus den Dateien nachtragen) macht nicht die Schematransaktion, sondern
+    services/dokablage.beim_start gleich danach im selben Start, in eigener Transaktion mit Commit vor dem Entfernen
+    der alten Namen; sie setzt das Kennzeichen auf „1“. Sind die Medien beim Start nicht erreichbar, bleibt es auf „0“
+    und der nächste Start (oder flask material dok-zusammenfuehren) holt es nach. Wer mat_product_document künftig neu
+    aufbaut, muss den Index neu anlegen.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -1616,12 +1625,24 @@ def _schritt_17(conn):
         conn.execute(sql)
 
 
+# --- Schritt 18 (22.10.2026): Herstellerdokumente einmal je Inhalt -----------------------------------------------------
+# Eine Dokumentdatei heißt nach ihrem Inhalt und gehört allen Zeilen, die sie nennen (katalog._datei_ablegen,
+# _datei_freigeben). Der Index trägt die Auslieferung (medien.darf_datei: WHERE file_path = ?) und das Freigeben; das
+# Kennzeichen „0“ sagt services/dokablage.beim_start, dass der Altbestand noch zusammenzuführen ist – es setzt „1“, sobald
+# das mit erreichbaren Medien einmal durchgelaufen ist. Beides wiederholbar; die Dateiarbeit steht bewusst nicht hier
+# (siehe Modulbeschreibung).
+SCHRITT_18 = [
+    "CREATE INDEX IF NOT EXISTS idx_mat_document_file ON mat_product_document(file_path)",
+    "INSERT OR IGNORE INTO mat_meta (schluessel, wert) VALUES ('dok_inhalt', '0')",
+]
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
-            14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17}
+            14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18}
 
 
 def _meta(conn, schluessel, vorgabe=None):

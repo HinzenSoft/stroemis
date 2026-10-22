@@ -3655,6 +3655,120 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
        zurück, „erledigt“ zeigt die grauen Marken „zurückgezogen“. Keine Konsolenfehler, kein waagerechtes Scrollen, je
        Dialog höchstens ein roter Knopf.
 
+## Herstellerdokumente einmal je Inhalt (Schritt 18, 22.10.2026)
+
+Anlass: Der Katalogimport der Karabiner-Lieferung (472 Produkte, 320 verschiedene PDF, 1240 Verweise Produkt ↔ Dokument)
+hätte 1240 Dateien mit 1,9 GB auf den VPS geschrieben – die Gebrauchsanleitung von Kong 115-mal, weil jede hochgeladene
+oder importierte Dokumentdatei einen Zufallsnamen bekam und je Dokumentzeile einmal abgelegt wurde (`produkt_variante`
+kopierte sie sogar eigens, damit das Löschen des einen Produkts die Dokumente des anderen nicht mitnahm). Entscheidung des
+Nutzers vom 22.10.2026: „Ja“ zum Zusammenführen gleicher Dokumentdateien.
+
+### Entwurf
+
+- **Dateiname = Inhalt** (`katalog._datei_ablegen`, `inhaltsname`): Eine Dokumentdatei liegt unter
+  `media/material/dok/<SHA-256><Endung>`. Hochladen und Import schreiben in eine Zwischendatei im selben Ordner (Name mit
+  Punkt davor – die Medienroute liefert so etwas nie aus, `_name_ok`), zählen und hashen dabei und bringen sie dann per
+  `os.replace` auf den Inhaltsnamen. Liegt der schon da, ist es derselbe Inhalt: Die Zwischendatei geht weg, die vorhandene
+  gilt (`_einordnen`); zwei gleichzeitige Uploads desselben Inhalts gelingen so beide. Stimmt die Größe der vorhandenen
+  Datei nicht (abgebrochene Kopie), ersetzt die eben geprüfte sie mit Vermerk im Log. Endungs-Whitelist, Kennbytes und die
+  50-MB-Grenze bleiben, wie sie waren. Varianten nennen dieselbe Datei – `_datei_kopieren` ist weg.
+- **Löschen nur ohne Verweis** (`katalog._datei_freigeben`, die eine Stelle für alle): Produkt löschen, Kategorie löschen,
+  gescheiterter Upload, Rollback und Aufräumen im Importer (`importer._wegraeumen`) gehen alle hier durch – die Datei
+  verschwindet nur, wenn **keine** Zeile von `mat_product_document` sie mehr nennt (Abfrage über den neuen Index). Die
+  Regel aus Phase 1/P2, dass ein Dokument aus einem festgeschriebenen Protokoll seine Zeile nie verliert
+  (`kategorie_loeschen` → 409 „steht in Prüfprotokollen“; `produkt_loeschen` scheitert an den Artikeln), hält damit auch
+  seine Datei: Solange die Zeile steht, wird die Datei nicht angerührt. Kein `os.remove` auf eine Dokumentdatei außerhalb
+  dieses Helfers (`_entfernen` nur noch für Zwischendateien). Eine zweite Tabelle mit Dokumentdateien gibt es nicht –
+  `models.py` Zeile ~639 ist die Fassung derselben Tabelle aus Schritt 3; `mat_inspection_attachment` (Prüfanhänge unter
+  `media/material/anhang`) ist ein anderer Ordner mit eigener Ablage (`anhang.py`) und bleibt unberührt.
+- **Auslieferung** `/media/material/dok/<name>` unverändert (die Rechteprüfung `medien.darf_datei` fragt nach der Zeile
+  mit diesem `file_path`; `darf_datei_psa` lässt eine gemeinsame Datei jedem sehen, der eines der Produkte sieht, die sie
+  nennen – richtig so). Export/Import unverändert: Der Katalog-Export benannte seine Dateien schon nach der Prüfsumme;
+  der Import legt denselben Inhalt nur einmal ab, egal wie viele Produkte ihn nennen, und ein Inhalt, der hier schon
+  liegt, wird nicht noch einmal geschrieben. Oberfläche ohne Änderung.
+
+### Migration (Schritt 18, Schemaversion 18)
+
+- **Der Schemaschritt selbst ist klein**: Index `idx_mat_document_file` auf `mat_product_document(file_path)` (für die
+  Auslieferung und das Freigeben) und das Kennzeichen `mat_meta.dok_inhalt = "0"`. Die Dateiarbeit steht **nicht** in
+  der Schematransaktion: Die läuft mit abgeschalteten Fremdschlüsseln, alle Schritte eines Starts in einer Transaktion,
+  und ein Dateisystem lässt sich nicht mit zurückrollen – hätte ein späterer Fehler die Transaktion verworfen, hießen die
+  Dateien neu und die Zeilen alt. Deshalb macht sie `services/dokablage.beim_start`, gleich nach `models.migrieren` im
+  selben Start (angemeldet in `db.SCHEMA_MODULE`, wie `durchsichtige_bilder_reparieren` und `verwaiste_beiseite`), in
+  eigener Transaktion unter der Schreibsperre (nur ein Arbeitsprozess tut es; die anderen finden das Kennzeichen „1“).
+- **Ablauf je alter Datei**: SHA-256 aus der Datei gerechnet (die Datenbank hat bei älteren Zeilen keine oder eine
+  fremde), Zielname `<sha><ext>`; gibt es ihn noch nicht, entsteht er als **harter Verweis** (Kopie über Zwischendatei,
+  wo das Dateisystem keine Verweise kann), sonst ist die alte Datei eine Dublette (Größe geprüft; bei Abweichung ersetzt
+  die geprüfte Datei den Zielnamen mit Warnung). Alle Zeilen mit dem alten Namen bekommen den neuen samt Prüfsumme und
+  Größe aus der Datei; Zeilen, die schon den Inhaltsnamen tragen, nur die Berichtigung von Prüfsumme/Größe. **Commit,
+  dann** verschwinden die alten Namen. Ein Abbruch dazwischen lässt beide Namen stehen, und der nächste Lauf findet die
+  alte Datei wieder vor – nichts geht verloren, nichts passiert zweimal; ein zweiter Lauf ändert nichts.
+- **Fehlt die Datei einer Zeile**, behält die Zeile ihren Namen und steht als Warnung im Log (`Dokumentdatei fehlt unter
+  media/material/dok: <name> (Dokument <id> „<Titel>“)`); das Kennzeichen wird trotzdem gesetzt – der Rest ist erledigt.
+- **Sind die Medien beim Start nicht erreichbar** (kein Ordner `media/material/dok`, aber Zeilen mit Datei), geschieht
+  nichts Destruktives, die Anwendung startet, das Log warnt (`media/material/dok ist nicht erreichbar – die
+  Zusammenführung … wartet auf den nächsten Start`), das Kennzeichen bleibt „0“ und der nächste Start (oder die
+  Kommandozeile) holt es nach. Eine frische Datenbank ohne Dokumente setzt das Kennzeichen sofort.
+- **Kommandozeile** `flask --app "app:create_app()" material dok-zusammenfuehren [--probe]`: derselbe Lauf von Hand, mit
+  Bericht (Dokumente mit Datei, Dateien und MB vorher/nachher, frei, umbenannt, Dubletten, berichtigte Prüfsummen, Zeilen
+  umgeschrieben, fehlende Dateien als `ACHTUNG`); `--probe` rechnet nur. Exit 0; 1, wenn Dateien fehlen; 2, wenn der
+  Ordner nicht erreichbar ist. Läuft auch, wenn das Kennzeichen schon gesetzt ist (dann ohne Änderung).
+- **Rückweg**: Eine Fassung mit Schemaversion 17 liest die Inhaltsnamen anstandslos (sie stehen in `file_path` wie
+  jeder andere Name), legt Neues aber wieder unter Zufallsnamen ab und löscht beim Produktlöschen ohne Verweisprüfung –
+  eine gemeinsame Datei verschwände dann für die anderen Dokumente. Nach einem Rückweg also keine Produkte mit
+  Dokumenten löschen, oder den Katalog vorher exportieren.
+- Wer `mat_product_document` künftig neu aufbaut, muss den Index neu anlegen (Hinweis in `models.py`).
+
+### Kong-Teil, echt gemessen
+
+Import von `katalog-karabiner-teil03.zip` (Kong, 89 Produkte, 27 MB ZIP) über `material import-catalog` in einen frischen
+Datenordner (`python3 -I`): Probelauf → 0 Dateien unter `media/material/dok`; echter Lauf → **178 Dokumentzeilen, 34
+Dateien, 20 602 515 Bytes (19,6 MiB)**. Bisheriges Verhalten (eine Datei je Verweis, aus `katalog.json` gerechnet): 178
+Dateien, 296 575 667 Bytes (282,8 MiB) – die Kong-Anleitung 89-mal. `dok-zusammenfuehren --probe` findet danach nichts
+mehr zu tun; `dok_inhalt` = 1, Schemaversion 18. Hochgerechnet auf die ganze Lieferung (1240 Verweise, 320 PDF): 320
+Dateien statt 1240.
+
+### Tests
+
+`tests/test_material_dokumente.py` (neu, läuft in `st-test` mit): dasselbe PDF an zwei Produkten → eine Datei, zwei
+Zeilen; Variante ohne Kopie; Produkt löschen lässt die Datei, solange ein anderes sie nennt, mit der letzten Zeile ist
+sie weg; keine Zwischendatei bleibt liegen; Upload an ein unbekanntes Produkt legt nichts ab. Neue Version lässt die alte
+Datei liegen, auch nach Löschen des zweiten Produkts. Dokument aus einem festgeschriebenen Protokoll: Kategorie nicht
+löschbar (409), Datei bleibt – auch nachdem das Produkt mit derselben Datei gelöscht ist. Katalogimport Format 2: ein
+PDF für drei Produkte → eine Datei; Verweis auf einen hier schon liegenden Inhalt legt nichts Neues ab; Probelauf ohne
+Datei; späterer Fehler im zweiten Durchgang (Formularteil ausgehebelt) → Rollback ohne neue Datei und ohne Verlust der
+vorhandenen, Zeilen wie vorher; danach geht derselbe Import durch. Migration 17 → 18 auf einem Datenordner mit
+Altbestand (drei Kopien eines PDF unter Zufallsnamen mit leerer, falscher und richtiger Prüfsumme, ein zweites PDF mit
+falscher Prüfsumme, eine Zeile ohne Datei, ein Link): eine Datei je Inhalt, Zeilen umgeschrieben, Warnung für die
+fehlende Datei, Info-Zeile im Log, Index da, zweiter Lauf (Start und von Hand) ohne Änderung, Auslieferung und Export mit
+den neuen Namen. Medien beim Start nicht erreichbar: Kennzeichen „0“, Warnung, nichts angelegt; `dok-zusammenfuehren
+--probe` (Exit 2) und nach dem Zurückhängen `--probe` (rechnet, ändert nichts, Exit 1 wegen der fehlenden Datei) und echt
+(zusammengeführt, Kennzeichen „1“, nächster Start still). 7 → 18 aus `MATERIAL_KOPIE_STAND_7`, wenn gesetzt (hier
+nicht). Angepasst: `test_material.py::test_produkt_variante` (dieselbe Datei statt Kopie; Löschen der Variante lässt sie
+beim Original); `test_material_meine_psa.py::test_medien` (jedes Testdokument mit eigenem Inhalt – mit demselben PDF
+überall wäre die gemeinsame Datei über die erlaubte Gebrauchsanleitung zu Recht sichtbar gewesen; dieser Fall wird jetzt
+ausdrücklich geprüft); `test_material_antrag.py::test_migration_17` (Endversion statt „17“). Ganze Suite, `st-py`,
+`st-js`, `st-css`: siehe Bericht.
+
+### Bitte bestätigen
+
+1. **Löschregel**: Eine Dokumentdatei verschwindet erst, wenn **keine** Zeile von `mat_product_document` sie mehr nennt –
+   auch keine alte Version, kein zurückgezogenes Dokument, kein Dokument eines anderen Produkts. Dateien ohne Zeile
+   (Waisen aus Abbrüchen vor Schritt 18) räumt niemand weg; sie werden im Bericht nicht gesondert gezählt.
+2. **Fehlende Datei**: Die Zeile behält ihren alten Namen, steht als Warnung im Log und die Zusammenführung gilt trotzdem
+   als erledigt (Kennzeichen „1“). Alternative wäre, das Kennzeichen offen zu lassen und bei jedem Start zu warnen.
+3. **Automatisch und von Hand**: Die Zusammenführung läuft beim ersten Start nach dem Update von selbst (keine
+   Wartung nötig); `material dok-zusammenfuehren [--probe]` ist nur Bericht und Nachholen, kein Pflichtschritt.
+4. **Prüfsumme berichtigt**: Stimmt die gespeicherte Prüfsumme oder Größe einer Zeile nicht mit der Datei überein, wird
+   sie aus der Datei berichtigt. Ein Protokoll, das die alte (falsche) Prüfsumme in `documents_json` trägt, bleibt
+   unverändert – es ist festgeschrieben.
+5. **Beschädigter Inhaltsname**: Liegt unter einem Inhaltsnamen eine Datei anderer Größe, ersetzt die eben geprüfte sie
+   (Upload wie Zusammenführung) mit Warnung im Log statt abzubrechen.
+6. **Restfenster**: Löscht jemand das letzte Produkt mit einer Datei im selben Augenblick, in dem jemand anderes genau
+   diesen Inhalt hochlädt (Datei schon abgelegt, Zeile noch nicht geschrieben), könnte die Datei fehlen. Bis Schritt 18
+   war das durch die Zufallsnamen ausgeschlossen; jetzt braucht es denselben Inhalt in derselben Millisekunde – nicht
+   abgesichert, weil eine Dateisperre dafür den Aufwand nicht wert scheint.
+
 ## Artikelseite: offene Änderungsanträge rechts neben dem Steckbrief (22.10.2026)
 
 Wunsch vom 22.10.2026: „Die ausstehenden Anträge sollen, zumindest am Desktop rechts, neben dem Steckbrief in dem
@@ -4218,6 +4332,7 @@ oder Plattform-Verwaltung).
 | `GET /api/material/ordner/<id>` | lesen | neu: `ordner.reminders_off` (eigener Wert) und `ordner.erinnerungen` = `{aus, eigen, geerbt_von: {id, pfad, sichtbar} \| null}`; Ordnerbaum mit `reminders_off` (Phase 2 · 2) |
 | `PUT /api/material/ordner/<id>` mit `reminders_off` (ja/nein) | Materialwart am Ordner | „Erinnerungsmails aus“ für Ordner und Unterordner; fehlt das Feld, bleibt der Wert; anderes als ja/nein → 400; mit Journal (Phase 2 · 2) |
 | `flask --app "app:create_app()" material remind [--trocken [--demo]] [--stichtag JJJJ-MM-TT] [--erneut]` | Kommandozeile im Container | Erinnerungslauf: `--trocken` zeigt die Mails des nächsten Laufs mit Adressen und schreibt nichts (auch bei „aus“ oder gesperrt), `--stichtag` und `--demo` (DEMO-Bestand einbeziehen, nur Ansicht) nur mit `--trocken`; ohne `--trocken` ein echter Lauf für heute (nie DEMO), `--erneut` noch einmal am selben Tag (nur, was nicht im Log steht). Exit 0, 1 (Mail gescheitert, Fehler), 2 (aus, gesperrt, kein Mailserver, `--stichtag` oder `--demo` ohne `--trocken`, unlesbares Datum) (Phase 2 · 2) |
+| `flask --app "app:create_app()" material dok-zusammenfuehren [--probe]` | Kommandozeile im Container | Herstellerdokumente einmal je Inhalt (Schritt 18): Altbestand unter `media/material/dok` auf Inhaltsnamen bringen, Dubletten zusammenführen, Prüfsummen aus den Dateien nachtragen – läuft beim ersten Start nach dem Update von selbst; hier mit Bericht (Dateien und MB vorher/nachher, frei, fehlende Dateien), `--probe` rechnet nur. Exit 0, 1 (Dateien fehlen), 2 (Ordner nicht erreichbar) (22.10.2026) |
 | `GET /material/ordner/<id>/import` | Materialwart am Ordner (sonst 403-Seite, fremd 404, Systemordner 409) | Seite „Bestandsliste importieren“ mit der Nacharbeit dieses Zielordners (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/import/probelauf` (Formular: `file`, `zuordnung` JSON `{"<Spalte>": feld}`) | Materialwart am Ordner | Probelauf, schreibt nichts (außer einer Protokollzeile, wenn er fremde Dubletten nennt) → Bericht: `datei`, `nacharbeit_csv`, `spalten`, `felder`, `fehlt`, `warnungen`, `schon_importiert`, `sperre_bis` (dieselbe Datei bis dahin gesperrt, ISO in UTC, sonst `null`), `keine_seriennummer` (keine Spalte als Seriennummer zugeordnet), `ohne_seriennummern_bestaetigen` (Übernehmen braucht `ohne_seriennummern`, Entscheidung vom 20.10.2026), `zahlen` (mit `ohne_serie`), `faelligkeit`, `produkte_offen`, `ordner_unbekannt`, `zeilen`, `frist`; 400 unlesbar, 409 Systemordner, 413 zu groß, 429 anderer Import läuft (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/import` (wie der Probelauf, dazu `ohne_seriennummern` ja/nein) | Materialwart am Ordner | Übernehmen in einer Transaktion → 201, Bericht mit Zeilen `angelegt` (`artikel` {id, inventory_no}, vergebene STR-Nummer) und `import` {id, angelegt, im_bestand, nacharbeit, ersetzt}; 409 nichts zu tun, ohne Seriennummernspalte ohne `ohne_seriennummern` = ja („Keine Spalte ist als Seriennummer zugeordnet – bitte bestätigen …“, nichts geschrieben), dieselbe Datei vor weniger als 10 Minuten, Ordnerbaum geändert; anderes als ja/nein → 400 (Phase 2 · 3) |

@@ -95,10 +95,13 @@ def token_von(app, iid):
     return zeilen(app, "SELECT qr_token FROM mat_item WHERE id = ?", (iid,))[0]["qr_token"]
 
 
-def _dokument(kp, pid, kind, name, kategorie=False):
+def _dokument(kp, pid, kind, name, kategorie=False, inhalt=None):
+    """Ein Dokument mit eigenem Inhalt je Art und Name: Seit Schritt 18 liegt gleicher Inhalt nur einmal und gehört allen
+    Dokumenten, die ihn nennen – mit demselben PDF überall ließe sich die Art nicht mehr prüfen."""
     url = f"/api/material/{'kategorien' if kategorie else 'produkte'}/{pid}/dokumente"
     r = kp.post(url, headers=H, content_type="multipart/form-data",
-                data={"kind": kind, "title": f"Platzhalter {kind}", "file": (io.BytesIO(PDF), name)})
+                data={"kind": kind, "title": f"Platzhalter {kind}",
+                      "file": (io.BytesIO(inhalt or PDF + f"%{kind}-{name}".encode()), name)})
     assert r.status_code == 201, r.get_json()
     return next(d["datei"] for d in r.json["dokumente"] if d["id"] == r.json["dokument_id"])
 
@@ -286,6 +289,12 @@ def test_medien():
             assert p.get(url).status_code == 403, url
         for url in eigene + erlaubt:
             assert p.get(url).status_code == 200, url
+        # Eine Datei je Inhalt (Schritt 18): Trägt ein „Sonstiges“ am eigenen Produkt denselben Inhalt wie eine fremde
+        # Gebrauchsanleitung, ist es dieselbe Datei – und die ist über die eigene Gebrauchsanleitung erlaubt.
+        gemeinsam = _dokument(kp, ids["hms"], "gebrauchsanleitung", "g2.pdf", inhalt=PDF + b"%gemeinsam")
+        assert _dokument(kp, ids["gurt"], "sonstiges", "s2.pdf", inhalt=PDF + b"%gemeinsam") == gemeinsam
+        assert p.get(gemeinsam).status_code == 200, gemeinsam
+        erlaubt.append(gemeinsam)                       # auf der Karte wie jede eigene Gebrauchsanleitung
         # Ein Original eines Mangelfotos gibt es nicht.
         name = os.path.basename(eigene[0])
         assert not os.listdir(os.path.join(tmp, "media", "material", "orig")) or not any(

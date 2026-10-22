@@ -7,9 +7,12 @@ Im Container:
         flask --app "app:create_app()" material export-catalog /data/import/katalog.zip
     docker compose exec -e VIDEOPFLEGE=0 stroemis \
         flask --app "app:create_app()" material remind --trocken
+    docker compose exec -e VIDEOPFLEGE=0 stroemis \
+        flask --app "app:create_app()" material dok-zusammenfuehren --probe
 (Die Datei muss im Datenordner liegen, nur der ist im Container sichtbar. VIDEOPFLEGE=0 hält den
 Hintergrundlauf für Videos aus diesem kurzen Prozess heraus.)"""
 import os
+import sqlite3
 import sys
 from datetime import date, datetime
 
@@ -17,7 +20,7 @@ import click
 from flask import current_app, g
 from flask.cli import with_appcontext
 
-from .services import ZONE, Abgelehnt, datum, erinnerung, heute, importer, journal, katalog_export
+from .services import ZONE, Abgelehnt, datum, dokablage, erinnerung, heute, importer, journal, katalog, katalog_export
 
 
 @click.command("import-catalog")
@@ -215,8 +218,28 @@ def remind(trocken, stichtag, erneut, demo):
         sys.exit(1)
 
 
+@click.command("dok-zusammenfuehren")
+@click.option("--probe", is_flag=True, help="Nur rechnen und berichten – nichts umbenennen, nichts löschen.")
+@with_appcontext
+def dok_zusammenfuehren(probe):
+    """Herstellerdokumente einmal je Inhalt (Schritt 18): Dateien unter media/material/dok auf ihren Inhaltsnamen
+    bringen, Dubletten zusammenführen, Prüfsummen nachtragen. Läuft beim ersten Start nach dem Update von selbst; hier
+    noch einmal mit Bericht – etwa mit --probe vorher, oder nachdem die Medien beim Start nicht erreichbar waren."""
+    ordner = os.path.join(katalog.medien_dir(), "dok")           # nicht dok_dir(): der Ordner wird hier nicht angelegt
+    conn = sqlite3.connect(current_app.config["DB_PATH"], timeout=30)
+    try:
+        bericht = dokablage.zusammenfuehren(conn, ordner, probe=probe)
+    finally:
+        conn.close()
+    click.echo(dokablage.bericht_text(bericht))
+    if bericht["ordner_fehlt"]:
+        sys.exit(2)
+    if bericht["fehlend"]:
+        sys.exit(1)
+
+
 def anmelden(blueprint):
     """Die Befehle an der Kommandozeilengruppe des Blueprints eintragen („flask material …“)."""
-    for befehl in (import_catalog, export_catalog, remind):
+    for befehl in (import_catalog, export_catalog, remind, dok_zusammenfuehren):
         if befehl.name not in blueprint.cli.commands:
             blueprint.cli.add_command(befehl)

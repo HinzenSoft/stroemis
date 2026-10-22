@@ -1386,7 +1386,7 @@ def test_migration_17():
         make_app(tmp)
         pfad = os.path.join(tmp, "stroemis.db")
         version, trigger, _ = _schema(pfad)
-        assert version == "17" == endversion() and TRIGGER_17 | TRIGGER_NEU | TRIGGER_16 <= set(trigger), trigger
+        assert version == endversion() and TRIGGER_17 | TRIGGER_NEU | TRIGGER_16 <= set(trigger), trigger   # seit Schritt 18: 18
         assert "'zurueckgezogen'" in _tabelle_sql(pfad) and "NEW.manufactured_on IS NULL OR" in trigger["mat_item_stammdaten_fest"]
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = _altbestand_16(tmp)
@@ -1398,7 +1398,7 @@ def test_migration_17():
         vorher = _zahlen(pfad)
         make_app(tmp)
         v17, t17, _ = _schema(pfad)
-        assert v17 == "17" and set(t17) == set(t16) | TRIGGER_17, (set(t17) ^ set(t16))
+        assert v17 == endversion() and set(t17) == set(t16) | TRIGGER_17, (set(t17) ^ set(t16))   # Schritt 18: keine Trigger
         assert t17["mat_item_stammdaten_fest"] != t16["mat_item_stammdaten_fest"]
         assert t17["mat_item_antrag_angewendet"] == t16["mat_item_antrag_angewendet"]
         assert "'zurueckgezogen'" in _tabelle_sql(pfad)
@@ -1410,7 +1410,7 @@ def test_migration_17():
         assert indizes == {"ux_mat_item_change_offen", "idx_mat_item_change_item", "idx_mat_item_change_status",
                            "idx_mat_item_change_antragsteller", "idx_mat_item_change_entscheider"}, indizes
         conn = sqlite3.connect(pfad)
-        assert models.migrieren(conn) == 17
+        assert models.migrieren(conn) == models.SCHEMA_VERSION
         conn.execute("BEGIN")
         n = conn.total_changes
         models._schritt_17(conn)
@@ -1443,7 +1443,7 @@ def test_migration_17():
             make_app(tmp17)
             v16, t16, _ = _schema(os.path.join(tmp16, "stroemis.db"))
             v17, t17, _ = _schema(os.path.join(tmp17, "stroemis.db"))
-            assert (v16, v17) == ("16", "17") and set(t17) == set(t16) | TRIGGER_17, (v16, v17)
+            assert (v16, v17) == ("16", endversion()) and set(t17) == set(t16) | TRIGGER_17, (v16, v17)
             z16, z17 = _zahlen(os.path.join(tmp16, "stroemis.db")), _zahlen(os.path.join(tmp17, "stroemis.db"))
             assert z16 == z17 and z17["mat_item_change"] == 0, (z16, z17)
             assert "'zurueckgezogen'" in _tabelle_sql(os.path.join(tmp17, "stroemis.db"))

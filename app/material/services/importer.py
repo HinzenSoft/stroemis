@@ -984,12 +984,14 @@ def _ablegen(archiv, eintrag):
 
 
 def _wegraeumen(liste):
-    """Abgelegte Dateien wieder entfernen: [(Art, abgelegt)]."""
+    """Abgelegte Dateien wieder entfernen: [(Art, abgelegt)]. Eine Dokumentdatei heißt nach ihrem Inhalt und kann
+    schon vor diesem Import dagewesen sein (dasselbe PDF an einem anderen Produkt) – katalog._datei_freigeben lässt
+    sie stehen, solange irgendein Dokument sie nennt, und entfernt nur, was ohne diese Zeilen übrig bliebe."""
     for art, wert in liste:
         if art == "bild":
             delete_photo_files(katalog.medien_dir(), wert)
         else:
-            katalog._entfernen(os.path.join(katalog.dok_dir(), wert[0]))
+            katalog._datei_freigeben(wert[0])
 
 
 # --- Katalogdatei lesen ----------------------------------------------------------------------------

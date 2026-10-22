@@ -12,7 +12,7 @@ Aufbau:
   routes_import.py, routes_wiki.py
                  Routen der Phase 2 · Lieferung 3: Bestandsimport und Nacharbeit, Prüfanleitung aus dem Wiki
   routes_psa.py  Routen der Phase 3 · Lieferung 1: „Meine PSA“ (auch ohne Modulstufe) und Mangelmeldung
-  cli.py         flask material import-catalog, export-catalog, remind
+  cli.py         flask material import-catalog, export-catalog, remind, dok-zusammenfuehren
   tageslauf.py   Thread je Arbeitsprozess: einmal am Tag ab 6 Uhr Pflege und Erinnerungsmails (seit Phase 2 · L2)
   services/      Fachregeln: rechte, katalog, bestand, status, interval, search, nummern, qr, journal,
                  importer, katalog_export, pruefung, durchgang, anhang, meldung, protokoll (Festschreiben,
@@ -21,7 +21,8 @@ Aufbau:
                  globalprotokoll (Protokoll der Blicke über den eigenen Bereich) und globalsuche, seit Lieferung 2
                  erinnerung (Erinnerungsmails, Pflege, Laufstand und Probelauf), seit Lieferung 3 tabelle und
                  bestandsimport (Bestandsimport mit Nacharbeit) und wikiverweis (Prüfanleitung aus dem Wiki); seit
-                 Phase 3 psa („Meine PSA“) und mangel (Mangelmeldung mit sofortiger Sperre)
+                 Phase 3 psa („Meine PSA“) und mangel (Mangelmeldung mit sofortiger Sperre); seit Schritt 18 dokablage
+                 (Herstellerdokumente einmal je Inhalt – Zusammenführen des Altbestands beim Start und von Hand)
   templates/, static/   Seite und Oberfläche (material.js, material.css)
 """
 from .. import db
@@ -55,13 +56,19 @@ def _nacharbeit_aufraeumen(conn):
     aufraeumen(conn)
 
 
+def _dokumente_zusammenfuehren(conn):
+    from .services.dokablage import beim_start
+    beim_start(conn)
+
+
 def schema_anmelden():
-    """Die Migration dieses Moduls beim Start mitlaufen lassen (db.init_db ruft sie auf) – danach das Protokoll der
+    """Die Migration dieses Moduls beim Start mitlaufen lassen (db.init_db ruft sie auf) – gleich danach den Altbestand
+    der Herstellerdokumente einmal je Inhalt zusammenführen (Schritt 18, Kennzeichen in mat_meta), dann das Protokoll der
     globalen Suche, das Erinnerungslog und die offene Nacharbeit aus Bestandsimporten auf ihre Frist kürzen (auch wenn
     der Tageslauf steht), die Protokolldateien mit der Datenbank abgleichen und durchsichtige Bilder einmalig
     reparieren."""
-    for schritt in (models.migrieren, _suchprotokoll_aufraeumen, _erinnerungslog_aufraeumen, _nacharbeit_aufraeumen,
-                    _verwaiste_protokolle, _bilder_reparieren):
+    for schritt in (models.migrieren, _dokumente_zusammenfuehren, _suchprotokoll_aufraeumen, _erinnerungslog_aufraeumen,
+                    _nacharbeit_aufraeumen, _verwaiste_protokolle, _bilder_reparieren):
         if schritt not in db.SCHEMA_MODULE:
             db.SCHEMA_MODULE.append(schritt)
 
