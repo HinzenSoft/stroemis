@@ -3836,6 +3836,12 @@ ausdrücklich geprüft); `test_material_antrag.py::test_migration_17` (Endversio
    zwischen „Datei liegt schon“ und der Zeile ein Fenster – beim Hochladen Millisekunden, beim Katalogimport die ganze
    Ablage- und Schreibphase (bei der Karabiner-Lieferung Minuten); die Formulierung „dieselbe Millisekunde“ war falsch.
 
+**Alle sechs Punkte bestätigt am 22.10.2026**, dazu die Entscheidungen der Nachbesserung: Der Import legt eine fehlende
+Datei aus dem Archiv nach, die Variante bricht mit 409 ab; das Aufräumen (Dateien ohne Zeile, Zwischendateien) läuft bei
+jedem Start; nicht umgesetzt bleiben die beiden Vorschläge der Prüfung, bei jedem Start erneut zu warnen, solange eine
+Datei fehlt (Nr. 2), und beim Ablegen eine vorhandene gleichnamige Datei zusätzlich zu hashen statt nur die Größe zu
+vergleichen (Nr. 5) – beides als entbehrlich bestätigt.
+
 ## Artikelseite: offene Änderungsanträge rechts neben dem Steckbrief (22.10.2026)
 
 Wunsch vom 22.10.2026: „Die ausstehenden Anträge sollen, zumindest am Desktop rechts, neben dem Steckbrief in dem
