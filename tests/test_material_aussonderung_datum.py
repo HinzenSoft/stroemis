@@ -2,7 +2,8 @@
 
 Der Materialwart sondert mit Datum aus (TT.MM.JJJJ in der Oberfläche, ISO an den Server). Der Server weist ab: in der
 Zukunft (400, wie bisher), vor der Erfassung des Artikels (400, wie bisher), vor der letzten abgeschlossenen Prüfung
-(409 mit Klartext) und vor dem Herstelldatum (409 – auch bei einer Monatsangabe: der erste Tag des Monats zählt).
+(409 mit Klartext), vor dem Herstelldatum (409 – auch bei einer Monatsangabe: der erste Tag des Monats zählt) und vor
+dem Tag der Sperre (409, Ablaufprüfung V2: Verlust heute gemeldet, Aussonderung gestern).
 Ein Datum am Tag der letzten Prüfung geht durch (eine abgeschlossene Prüfung ist unveränderlich – geprüft wird
 mit dem Prüftag heute). Alle Namen sind erfunden."""
 import os
@@ -66,7 +67,13 @@ def test_grenzen():
         assert p1.post(f"/api/material/artikel/{c['id']}/sperren", json={"grund": "verlust"}).status_code == 200
         r = w.post(f"/api/material/artikel/{c['id']}/aussondern", json={"grund": "verlust", "datum": f"{h.year - 2}-05-31"})
         assert r.status_code == 409 and "Herstelldatum" in r.json["error"] and f"01.06.{h.year - 2}" in r.json["error"], r.get_json()
-        assert w.post(f"/api/material/artikel/{c['id']}/aussondern", json={"grund": "verlust", "datum": f"{h.year - 2}-06-01"}).status_code == 200
+        # Am Herstelltag selbst hält erst die Sperre (heute gemeldet) – das Herstelldatum ist durch; heute geht es.
+        r = w.post(f"/api/material/artikel/{c['id']}/aussondern", json={"grund": "verlust", "datum": f"{h.year - 2}-06-01"})
+        assert r.status_code == 409 and "vor der Sperre" in r.json["error"] and "Herstelldatum" not in r.json["error"], r.get_json()
+        assert h.strftime("%d.%m.%Y") in r.json["error"], r.get_json()
+        r = w.post(f"/api/material/artikel/{c['id']}/aussondern", json={"grund": "verlust", "datum": gestern})
+        assert r.status_code == 409 and "vor der Sperre" in r.json["error"], r.get_json()
+        assert w.post(f"/api/material/artikel/{c['id']}/aussondern", json={"grund": "verlust", "datum": heute}).status_code == 200
         # Textil ohne Prüfung, Herstelldatum als Tag: Verlust gemeldet, Aussonderung am Vortag der Herstellung 409, am Tag 200.
         b = neuer_artikel(w, ids["gurt"], lager, manufactured_on=f"{h.year - 1}-03-15")
         with app.app_context():
@@ -76,7 +83,16 @@ def test_grenzen():
         r = w.post(f"/api/material/artikel/{b['id']}/aussondern", json={"grund": "verlust", "datum": f"{h.year - 1}-03-14"})
         assert r.status_code == 409 and "Herstelldatum" in r.json["error"], r.get_json()
         r = w.post(f"/api/material/artikel/{b['id']}/aussondern", json={"grund": "verlust", "datum": f"{h.year - 1}-03-15"})
+        assert r.status_code == 409 and "vor der Sperre" in r.json["error"], r.get_json()
+        # Altbestand ohne Journaleintrag der Sperre (vor dem Journal gesperrt): dann hält nur das Herstelldatum.
+        d = neuer_artikel(w, ids["gurt"], lager, manufactured_on=f"{h.year - 1}-03-15", serial_no="D-1")
+        with app.app_context():
+            from app import db
+            db.execute("UPDATE mat_item SET created_at = ?, lock_state = 'verloren', lock_reason = 'Platzhalter' "
+                       "WHERE id = ?", (f"{h.year - 1}-01-01T00:00:00+00:00", d["id"]))
+        r = w.post(f"/api/material/artikel/{d['id']}/aussondern", json={"grund": "verlust", "datum": f"{h.year - 1}-03-15"})
         assert r.status_code == 200, r.get_json()
+        assert w.post(f"/api/material/artikel/{b['id']}/aussondern", json={"grund": "verlust", "datum": heute}).status_code == 200
     print("Aussonderungsdatum: Grenzen bestanden.")
 
 

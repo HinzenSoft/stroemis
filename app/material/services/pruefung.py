@@ -857,6 +857,16 @@ def _aussondern(item, grund, bemerkung, tag, akteur, basis_id=None, ts=None):
     return aid
 
 
+def sperrtag(item):
+    """Der Kalendertag (deutsche Ortszeit) der aktuellen Sperre: der jüngste Journaleintrag des Artikels mit dem Übergang
+    frei → gesperrt/verloren (wie die Sperren im Jahresbericht) – oder None (Altbestand ohne Journal)."""
+    r = db.query("SELECT MAX(created_at) AS ts FROM mat_audit WHERE entity = 'item' AND entity_id = ? "
+                 "AND created_at >= ? AND json_extract(before_json, '$.lock_state') = 'frei' "
+                 "AND json_extract(after_json, '$.lock_state') IN ('gesperrt', 'verloren')",
+                 (item["id"], item["created_at"]), one=True)
+    return protokoll.ortszeit(r["ts"]).date().isoformat() if r and r["ts"] else None
+
+
 def aussondern(iid, d, akteur):
     """Aussonderung durch den Materialwart – nur für Artikel, die ein Prüfer vorher gesperrt hat. Eine Sperre aus einer
     Mangelmeldung zählt erst, wenn ein Prüfer den Artikel danach geprüft hat (mangel.nur_gemeldet) – so hat, was der
@@ -890,6 +900,12 @@ def aussondern(iid, d, akteur):
         if hergestellt and tag < hergestellt.isoformat():
             raise Abgelehnt(f"Das Datum der Aussonderung ({_fmt(tag)}) liegt vor dem Herstelldatum "
                             f"({_fmt(hergestellt.isoformat())}).", 409)
+        # Nicht vor dem Tag der Sperre (Ablaufprüfung V2): Ausgesondert wird, was gesperrt ist – sonst wäre ein Artikel
+        # laut Datum ausgesondert, bevor er verloren ging, und der Jahresbericht zählte beides in verschiedenen Jahren.
+        gesperrt = sperrtag(item)
+        if gesperrt and tag < gesperrt:
+            raise Abgelehnt(f"Das Datum der Aussonderung ({_fmt(tag)}) liegt vor der Sperre ({_fmt(gesperrt)}) – "
+                            "ausgesondert wird, was gesperrt ist.", 409)
         offen = offener_entwurf(iid)
         if offen:
             raise Abgelehnt(reserviert_text(offen) + " Erst die Reservierung freigeben.", 409)
