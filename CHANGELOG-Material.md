@@ -3655,6 +3655,67 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
        zurück, „erledigt“ zeigt die grauen Marken „zurückgezogen“. Keine Konsolenfehler, kein waagerechtes Scrollen, je
        Dialog höchstens ein roter Knopf.
 
+## Nachbesserung zu Schritt 18 nach der Sicherheitsprüfung (22.10.2026)
+
+Die unabhängige Prüfung von Commit 9f6522c (Bericht `pruefung-schritt18/bericht.md`, außerhalb des Repositories) fand
+drei Befunde, alle nachgestellt; Push auf dev war vertretbar, vor dem Import der ganzen Karabiner-Lieferung sollte
+Befund 1 behoben sein. Alles drei ist behoben, sonst bleibt Schritt 18, wie er war (keine Schemaänderung).
+
+- **Befund 1 (mittel) – Wettlauf „letztes Produkt löschen“ gegen „denselben Inhalt ablegen“.** `_datei_freigeben` fragte
+  „nennt noch eine Zeile die Datei?“ und löschte ohne Sperre; `_einordnen` sah „Datei liegt schon“ und verwarf die
+  Zwischendatei, die Zeile kam erst danach. Traf das Löschen des letzten Produkts mit dieser Datei dazwischen, nannte
+  die neue Zeile eine Datei, die es nicht mehr gab – beim Hochladen ein Fenster von Millisekunden, beim Katalogimport
+  (alle Dateien zuerst, Zeilen im zweiten Durchgang) Sekunden bis Minuten. Jetzt entscheiden Freigeben und Anlegen
+  unter **derselben Schreibsperre**:
+  - `katalog._datei_freigeben`: Abfrage und `os.remove` in `BEGIN IMMEDIATE` (`db.transaction(sofort=True)`); nie
+    innerhalb einer Transaktion aufzurufen (Docstring) – alle Aufrufer stehen nach dem Commit bzw. Rollback.
+  - Hochladen (`dokument_anlegen`): `_datei_schreiben` schreibt und hasht die Zwischendatei außerhalb der Sperre (bei
+    50 MB dauert das); in der Transaktion der Zeile folgt erst der INSERT, dann `_einordnen` (Zwischendatei an ihren
+    Inhaltsnamen oder weg, weil der Inhalt schon liegt). Scheitert die Transaktion, geht die Zwischendatei weg und
+    `_datei_freigeben` räumt den Inhaltsnamen, wenn ihn keine Zeile nennt. `_datei_ablegen` (schreiben + einordnen)
+    bleibt für den Import.
+  - Katalogimport (`importer._Lauf.ablegen`): Die vorab abgelegten Dateien werden beim Schreiben jeder Zeile unter der
+    Sperre geprüft (`os.path.isfile`); fehlt eine (inzwischen freigegeben), legt der Durchgang sie **aus dem Archiv
+    nach** – der Import gelingt, kein Fehler für den Nutzer. Die nachgelegte Datei steht in `abgelegt` und geht bei
+    einem Rollback mit weg.
+  - Variante (`produkt_variante`): In der Transaktion prüft `_datei_sichern` je kopiertem Dokument, dass die Datei
+    liegt; sonst **409** „Die Datei des Dokuments „…“ liegt nicht mehr unter media/material/dok – das Dokument wurde
+    inzwischen gelöscht oder seine Datei fehlt. Bitte die Seite neu laden.“ und kein neues Produkt (Rollback). Das
+    trifft auch eine Altzeile ohne Datei (Schritt 18 ließ sie stehen): Sie lässt sich nicht auf eine Variante
+    kopieren, bis das Dokument neu hochgeladen ist.
+- **Befund 2 (niedrig) – Waisen nach einem Abbruch zwischen Commit und Entfernen der alten Namen.** Ein zweiter Lauf
+  sah nur Zeilen, die alten Namen (bei der Karabiner-Lieferung 269 MB) blieben still liegen; `--probe` meldete „nichts zu
+  tun“. Jetzt (`dokablage.aufraeumen`): Jeder Lauf zählt **Dateien ohne Zeile** und entfernt die, deren SHA-256 einem
+  Inhaltsnamen entspricht, den eine Zeile nennt (das sind genau die alten Namen); alle anderen bleiben liegen (eine
+  Datei, die schon ihren Inhaltsnamen trägt, immer – ein laufender Import legt seine Dateien vor den Zeilen ab) und
+  stehen im Bericht („Dateien ohne Zeile: n (x MB) – bleiben liegen; entfernt, weil der Inhalt unter seinem Inhaltsnamen
+  liegt: k“) und im Log (`media/material/dok: n Dateien ohne Zeile (x MB) – sie bleiben liegen …` als Warnung,
+  `media/material/dok aufgeräumt: k Dateien ohne Zeile entfernt …, z Zwischendateien älter als ein Tag entfernt.` als
+  Info). Das Aufräumen läuft auch bei **jedem Start** mit gesetztem Kennzeichen (unter der Schreibsperre, damit es nur ein
+  Arbeitsprozess tut; still, wenn nichts zu tun ist) – so heilt der Abbruch nach dem Commit beim nächsten Start von
+  selbst, ohne Kommandozeile. Docstring von `dokablage.py` und „Bitte bestätigen 1“ berichtigt.
+- **Befund 3 (niedrig) – Zwischendateien überleben einen Absturz, `.teil` zählte als Dokumentdatei.** Die Zwischendatei
+  des Kopier-Rückfalls heißt jetzt `.<sha><ext>.teil` (Punkt davor wie `.neu-<token><ext>`); `_bestand` übergeht alle
+  Punkt-Namen. Zwischendateien älter als einen Tag (`ZWISCHENDATEI_ALTER`) entfernt `aufraeumen` beim Start und in der
+  Kommandozeile mit Zählung („Zwischendateien älter als ein Tag entfernt: z“); jüngere gehören einem laufenden Vorgang.
+- **Nicht geändert**: Schema (18 bleibt), Auslieferung, Rechte, Export/Import-Format, Oberfläche. Die Hinweise des
+  Berichts zu den „Bitte bestätigen“-Punkten 2 (bei jedem Start warnen) und 5 (Größenvergleich statt Hash beim
+  Inhaltsnamen) sind offen und nicht Teil dieser Nachbesserung.
+- **Tests** (`tests/test_material_dokumente.py`, aus den Proben der Prüfung): `test_wettlauf_loeschen_ablegen` – Haken an
+  der Stelle außerhalb der Sperre (Hochladen: nach `_datei_schreiben`; Import: nach dem Ablegen vor dem zweiten
+  Durchgang) löscht das letzte Produkt mit dem Inhalt; danach hat jede Zeile mit `file_path` ihre Datei, Abruf 200,
+  Import gespeichert mit zwei neuen Zeilen; Variante mit fehlender Datei 409 ohne neues Produkt, mit Datei 201.
+  `test_aufraeumen` – nach der Zusammenführung liegen die alten Namen wieder (Abbruch nach dem Commit), dazu eine
+  fremde Datei ohne Zeile, zwei alte und eine junge Zwischendatei: der nächste Start entfernt die vier Dubletten und die
+  zwei alten Zwischendateien, lässt fremde Datei und junge Zwischendatei liegen, Log mit Warnung und Info, kein zweiter
+  Schritt-18-Lauf; noch ein Start meldet nur die fremde Datei; `dok-zusammenfuehren --probe` zählt (Zwischendateien
+  nicht in „Dateien vorher“), echt räumt; Kopier-Rückfall ohne harte Verweise lässt keine `.teil`-Datei zurück. Die
+  Wettlaufprobe der Prüfung (`proben/wettlauf_probe.py`) liefert nach der Änderung in beiden Fällen „Datei vorhanden:
+  True“, Fall A Abruf 200, Fall B gespeichert mit 2 Zeilen.
+- **Bitte bestätigen**: (1) Beim Import wird eine fehlende Datei nachgelegt, bei der Variante gibt es 409 – beim Import
+  ist das Archiv da, bei der Variante gäbe es nur die Quellzeile, deren Datei eben fehlt. (2) Das Aufräumen bei jedem
+  Start (nicht nur beim ersten) – es kostet ein Verzeichnislisting und hasht nur Dateien ohne Zeile.
+
 ## Herstellerdokumente einmal je Inhalt (Schritt 18, 22.10.2026)
 
 Anlass: Der Katalogimport der Karabiner-Lieferung (472 Produkte, 320 verschiedene PDF, 1240 Verweise Produkt ↔ Dokument)
@@ -3754,7 +3815,10 @@ ausdrücklich geprüft); `test_material_antrag.py::test_migration_17` (Endversio
 
 1. **Löschregel**: Eine Dokumentdatei verschwindet erst, wenn **keine** Zeile von `mat_product_document` sie mehr nennt –
    auch keine alte Version, kein zurückgezogenes Dokument, kein Dokument eines anderen Produkts. Dateien ohne Zeile
-   (Waisen aus Abbrüchen vor Schritt 18) räumt niemand weg; sie werden im Bericht nicht gesondert gezählt.
+   zählt seit der Nachbesserung vom 22.10.2026 jeder Start und jeder Lauf von `dok-zusammenfuehren` („Dateien ohne
+   Zeile: n (x MB)“); entfernt werden davon nur die, deren Inhalt unter seinem Inhaltsnamen liegt und von einer Zeile
+   genannt wird (alte Namen aus einem Abbruch der Zusammenführung nach dem Commit) – alle anderen bleiben liegen und
+   stehen als Warnung im Log (siehe „Nachbesserung zu Schritt 18“, Befund 2).
 2. **Fehlende Datei**: Die Zeile behält ihren alten Namen, steht als Warnung im Log und die Zusammenführung gilt trotzdem
    als erledigt (Kennzeichen „1“). Alternative wäre, das Kennzeichen offen zu lassen und bei jedem Start zu warnen.
 3. **Automatisch und von Hand**: Die Zusammenführung läuft beim ersten Start nach dem Update von selbst (keine
@@ -3764,10 +3828,13 @@ ausdrücklich geprüft); `test_material_antrag.py::test_migration_17` (Endversio
    unverändert – es ist festgeschrieben.
 5. **Beschädigter Inhaltsname**: Liegt unter einem Inhaltsnamen eine Datei anderer Größe, ersetzt die eben geprüfte sie
    (Upload wie Zusammenführung) mit Warnung im Log statt abzubrechen.
-6. **Restfenster**: Löscht jemand das letzte Produkt mit einer Datei im selben Augenblick, in dem jemand anderes genau
-   diesen Inhalt hochlädt (Datei schon abgelegt, Zeile noch nicht geschrieben), könnte die Datei fehlen. Bis Schritt 18
-   war das durch die Zufallsnamen ausgeschlossen; jetzt braucht es denselben Inhalt in derselben Millisekunde – nicht
-   abgesichert, weil eine Dateisperre dafür den Aufwand nicht wert scheint.
+6. **Restfenster** – *geschlossen mit der Nachbesserung vom 22.10.2026 (Befund 1)*: Löschen des letzten Produkts mit
+   einer Datei und Anlegen einer Zeile mit demselben Inhalt entscheiden jetzt unter derselben Schreibsperre.
+   `_datei_freigeben` fragt und entfernt in `BEGIN IMMEDIATE`; das Hochladen ordnet die Datei erst in der Transaktion
+   der Zeile ein, der Katalogimport prüft beim Schreiben jeder Zeile, ob die vorab abgelegte Datei noch liegt, und legt
+   sie sonst aus dem Archiv nach; die Variante bricht mit 409 ab, wenn die Datei des Quelldokuments fehlt. Vorher lag
+   zwischen „Datei liegt schon“ und der Zeile ein Fenster – beim Hochladen Millisekunden, beim Katalogimport die ganze
+   Ablage- und Schreibphase (bei der Karabiner-Lieferung Minuten); die Formulierung „dieselbe Millisekunde“ war falsch.
 
 ## Artikelseite: offene Änderungsanträge rechts neben dem Steckbrief (22.10.2026)
 
@@ -4332,7 +4399,7 @@ oder Plattform-Verwaltung).
 | `GET /api/material/ordner/<id>` | lesen | neu: `ordner.reminders_off` (eigener Wert) und `ordner.erinnerungen` = `{aus, eigen, geerbt_von: {id, pfad, sichtbar} \| null}`; Ordnerbaum mit `reminders_off` (Phase 2 · 2) |
 | `PUT /api/material/ordner/<id>` mit `reminders_off` (ja/nein) | Materialwart am Ordner | „Erinnerungsmails aus“ für Ordner und Unterordner; fehlt das Feld, bleibt der Wert; anderes als ja/nein → 400; mit Journal (Phase 2 · 2) |
 | `flask --app "app:create_app()" material remind [--trocken [--demo]] [--stichtag JJJJ-MM-TT] [--erneut]` | Kommandozeile im Container | Erinnerungslauf: `--trocken` zeigt die Mails des nächsten Laufs mit Adressen und schreibt nichts (auch bei „aus“ oder gesperrt), `--stichtag` und `--demo` (DEMO-Bestand einbeziehen, nur Ansicht) nur mit `--trocken`; ohne `--trocken` ein echter Lauf für heute (nie DEMO), `--erneut` noch einmal am selben Tag (nur, was nicht im Log steht). Exit 0, 1 (Mail gescheitert, Fehler), 2 (aus, gesperrt, kein Mailserver, `--stichtag` oder `--demo` ohne `--trocken`, unlesbares Datum) (Phase 2 · 2) |
-| `flask --app "app:create_app()" material dok-zusammenfuehren [--probe]` | Kommandozeile im Container | Herstellerdokumente einmal je Inhalt (Schritt 18): Altbestand unter `media/material/dok` auf Inhaltsnamen bringen, Dubletten zusammenführen, Prüfsummen aus den Dateien nachtragen – läuft beim ersten Start nach dem Update von selbst; hier mit Bericht (Dateien und MB vorher/nachher, frei, fehlende Dateien), `--probe` rechnet nur. Exit 0, 1 (Dateien fehlen), 2 (Ordner nicht erreichbar) (22.10.2026) |
+| `flask --app "app:create_app()" material dok-zusammenfuehren [--probe]` | Kommandozeile im Container | Herstellerdokumente einmal je Inhalt (Schritt 18): Altbestand unter `media/material/dok` auf Inhaltsnamen bringen, Dubletten zusammenführen, Prüfsummen aus den Dateien nachtragen – läuft beim ersten Start nach dem Update von selbst; hier mit Bericht (Dateien und MB vorher/nachher, frei, fehlende Dateien, Dateien ohne Zeile und davon entfernte Dubletten, entfernte Zwischendateien älter als ein Tag), `--probe` rechnet nur. Exit 0, 1 (Dateien fehlen), 2 (Ordner nicht erreichbar) (22.10.2026) |
 | `GET /material/ordner/<id>/import` | Materialwart am Ordner (sonst 403-Seite, fremd 404, Systemordner 409) | Seite „Bestandsliste importieren“ mit der Nacharbeit dieses Zielordners (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/import/probelauf` (Formular: `file`, `zuordnung` JSON `{"<Spalte>": feld}`) | Materialwart am Ordner | Probelauf, schreibt nichts (außer einer Protokollzeile, wenn er fremde Dubletten nennt) → Bericht: `datei`, `nacharbeit_csv`, `spalten`, `felder`, `fehlt`, `warnungen`, `schon_importiert`, `sperre_bis` (dieselbe Datei bis dahin gesperrt, ISO in UTC, sonst `null`), `keine_seriennummer` (keine Spalte als Seriennummer zugeordnet), `ohne_seriennummern_bestaetigen` (Übernehmen braucht `ohne_seriennummern`, Entscheidung vom 20.10.2026), `zahlen` (mit `ohne_serie`), `faelligkeit`, `produkte_offen`, `ordner_unbekannt`, `zeilen`, `frist`; 400 unlesbar, 409 Systemordner, 413 zu groß, 429 anderer Import läuft (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/import` (wie der Probelauf, dazu `ohne_seriennummern` ja/nein) | Materialwart am Ordner | Übernehmen in einer Transaktion → 201, Bericht mit Zeilen `angelegt` (`artikel` {id, inventory_no}, vergebene STR-Nummer) und `import` {id, angelegt, im_bestand, nacharbeit, ersetzt}; 409 nichts zu tun, ohne Seriennummernspalte ohne `ohne_seriennummern` = ja („Keine Spalte ist als Seriennummer zugeordnet – bitte bestätigen …“, nichts geschrieben), dieselbe Datei vor weniger als 10 Minuten, Ordnerbaum geändert; anderes als ja/nein → 400 (Phase 2 · 3) |

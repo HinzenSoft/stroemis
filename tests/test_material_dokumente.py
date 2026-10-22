@@ -6,7 +6,10 @@ diesem Inhalt; entfernt wird sie erst, wenn kein Dokument sie mehr nennt. Geprü
 Datei), Variante, Löschen von Produkt und Kategorie, die Regel „ein Dokument aus einem festgeschriebenen Protokoll
 bleibt“, neue Versionen, der Katalogimport (eine Datei für drei Produkte, Probelauf, Rollback nach spätem Fehler) und die
 Zusammenführung des Altbestands beim Start (Schritt 18: Dubletten, falsche Prüfsummen, fehlende Datei, zweiter Lauf,
-Medien nicht erreichbar, Kommandozeile). Alle Inhalte sind Platzhalter."""
+Medien nicht erreichbar, Kommandozeile). Nach der Sicherheitsprüfung vom 22.10.2026 dazu: der Wettlauf „letztes Produkt
+löschen“ gegen „denselben Inhalt ablegen“ (Hochladen, Import, Variante – Befund 1) und das Aufräumen des Ordners
+(Dateien ohne Zeile nach einem Abbruch nach dem Commit, alte Zwischendateien – Befunde 2 und 3). Alle Inhalte sind
+Platzhalter."""
 import hashlib
 import io
 import json
@@ -432,9 +435,205 @@ def test_migration_18():
     print("Migration 18 bestanden.")
 
 
+# --- 5. Wettlauf Löschen gegen Ablegen (Befund 1 der Prüfung vom 22.10.2026) ------------------------------------------
+
+def _import_zip(name_y, inhalt):
+    daten = {"format": "stroemis-material-katalog", "version": 2,
+             "kategorien": [{"uid": "b" * 32, "name": "Importkategorie", "materialart": "metall_hardware",
+                             "intervall_monate": 12}],
+             "produkte": [{"uid": f"{n:032x}", "kategorie": ["Importkategorie"], "hersteller": "Importwerk",
+                           "modell": f"Modell {n}", "artikelnummer": f"IW-{n}", "materialart": "metall_hardware",
+                           "intervall_monate": 12,
+                           "dokumente": [{"art": "gebrauchsanleitung", "titel": "Anleitung",
+                                          "datei": f"dateien/dokumente/{name_y}"}]} for n in (1, 2)]}
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("katalog.json", json.dumps(daten))
+        z.writestr(f"dateien/dokumente/{name_y}", inhalt)
+    return buf.getvalue()
+
+
+def test_wettlauf_loeschen_ablegen():
+    """Produkt Gurt hat Datei F. Während jemand denselben Inhalt an ein anderes Produkt bringt – Datei geschrieben,
+    Zeile noch nicht –, löscht ein anderer Arbeitsprozess das letzte Produkt mit F (_datei_freigeben). Nachher muss
+    jede Zeile mit file_path ihre Datei haben. Der „andere Prozess“ ist ein Haken an der Stelle außerhalb der
+    Schreibsperre: beim Hochladen nach _datei_schreiben (die Zwischendatei liegt, eingeordnet wird erst in der
+    Transaktion), beim Import nach dem Ablegen der Dateien vor dem zweiten Durchgang (dort legt _Lauf.ablegen unter
+    der Sperre aus dem Archiv nach). Variante: Fehlt die Datei des Quelldokuments beim Kopieren, 409 und kein neues
+    Produkt (_datei_sichern) – vorher wäre eine Zeile ohne Datei entstanden."""
+    from app.material.services import importer, katalog
+    pdf_x, pdf_y = PDF + b"%wettlauf-x", PDF + b"%wettlauf-y"
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        kp = k["katalog"]
+        ids = katalog_grund(k["adm"])
+        name_x = sha(pdf_x) + ".pdf"
+        dokument_anlegen(kp, ids["gurt"], pdf_x)
+        echt = katalog._datei_schreiben
+        zustand = {"n": 0}
+
+        def haken(file_storage):
+            out = echt(file_storage)
+            zustand["n"] += 1
+            if zustand["n"] == 1:
+                katalog.produkt_loeschen(ids["gurt"])          # „gleichzeitig“: der andere Arbeitsprozess
+                assert not os.path.isfile(os.path.join(dok_ordner(tmp), name_x)), "Freigeben hat F nicht entfernt"
+            return out
+
+        katalog._datei_schreiben = haken
+        try:
+            did, _ = dokument_anlegen(kp, ids["hms"], pdf_x)
+        finally:
+            katalog._datei_schreiben = echt
+        z = zeilen(app, "SELECT id FROM mat_product_document WHERE file_path = ?", (name_x,))
+        assert [r["id"] for r in z] == [did] and dateien(tmp) == {name_x}, (z, dateien(tmp))
+        assert kp.get(f"/media/material/dok/{name_x}").status_code == 200
+        print("Wettlauf Hochladen gegen Löschen bestanden.")
+
+        # Import: Inhalt Y liegt schon (Produkt HMS); die Lieferung nennt ihn für zwei Produkte. Nach dem Ablegen
+        # (zweiter Aufruf – eine Ablage je Fundstelle) löscht jemand HMS, die Datei ist weg; der zweite Durchgang
+        # legt sie nach.
+        name_y = sha(pdf_y) + ".pdf"
+        dokument_anlegen(kp, ids["hms"], pdf_y)
+        echt = importer._ablegen
+        zustand = {"n": 0}
+
+        def haken_import(archiv, eintrag):
+            out = echt(archiv, eintrag)
+            zustand["n"] += 1
+            if zustand["n"] == 2:
+                katalog.produkt_loeschen(ids["hms"])
+                assert not os.path.isfile(os.path.join(dok_ordner(tmp), name_y))
+            return out
+
+        importer._ablegen = haken_import
+        try:
+            r = hoch(kp, "/api/material/katalog/import", _import_zip(name_y, pdf_y), "katalog.zip", trocken="0")
+        finally:
+            importer._ablegen = echt
+        b = r.json["bericht"]
+        assert r.status_code == 200 and b["gespeichert"] and not b["fehler"], b
+        assert b["dokumente"] == {"neu": 2, "neue_version": 0, "unveraendert": 0}, b
+        z = zeilen(app, "SELECT id FROM mat_product_document WHERE file_path = ?", (name_y,))
+        # Mit HMS ging auch sein Dokument X (das letzte mit dieser Datei) – richtig so; Y hat der Import nachgelegt.
+        assert len(z) == 2 and zustand["n"] == 3 and dateien(tmp) == {name_y}, (z, zustand, dateien(tmp))
+        print("Wettlauf Import gegen Löschen bestanden.")
+
+        # Variante: Produkt IW-1 hat die Zeile mit Y; die Datei ist weg (wie nach einem Freigeben zwischen dem Lesen
+        # der Dokumente und der Transaktion, oder ein Altbestand ohne Datei) → 409, kein neues Produkt.
+        iw1 = zeilen(app, "SELECT id FROM mat_product WHERE article_no = 'IW-1'")[0]["id"]
+        dok = zeilen(app, "SELECT id FROM mat_product_document WHERE product_id = ?", (iw1,))[0]["id"]
+        os.rename(os.path.join(dok_ordner(tmp), name_y), os.path.join(tmp, "beiseite.pdf"))
+        r = kp.post(f"/api/material/produkte/{iw1}/variante", json={
+            "category_id": ids["karabiner"], "manufacturer": "Importwerk", "model": "Modell 1", "article_no": "IW-1V",
+            "material_kind": "metall_hardware", "interval_months": 12, "dokumente": [dok]}, headers=H)
+        assert r.status_code == 409 and "liegt nicht mehr" in r.json["error"], r.get_json()
+        assert not zeilen(app, "SELECT id FROM mat_product WHERE article_no = 'IW-1V'")
+        os.rename(os.path.join(tmp, "beiseite.pdf"), os.path.join(dok_ordner(tmp), name_y))
+        r = kp.post(f"/api/material/produkte/{iw1}/variante", json={
+            "category_id": ids["karabiner"], "manufacturer": "Importwerk", "model": "Modell 1", "article_no": "IW-1V",
+            "material_kind": "metall_hardware", "interval_months": 12, "dokumente": [dok]}, headers=H)
+        assert r.status_code == 201, r.get_json()
+        assert len(zeilen(app, "SELECT id FROM mat_product_document WHERE file_path = ?", (name_y,))) == 3
+        # Am Ende: jede Zeile mit Datei hat ihre Datei, keine Zwischendatei.
+        for d in zeilen(app, "SELECT file_path FROM mat_product_document WHERE file_path IS NOT NULL"):
+            assert os.path.isfile(os.path.join(dok_ordner(tmp), d["file_path"])), d
+        assert dateien(tmp) == {name_y}
+    print("Wettlauf-Test bestanden.")
+
+
+# --- 6. Aufräumen: Dateien ohne Zeile, alte Zwischendateien (Befunde 2 und 3) -------------------------------------------
+
+def _alt_machen(pfad, tage):
+    alt = os.path.getmtime(pfad) - tage * 86400
+    os.utime(pfad, (alt, alt))
+
+
+def test_aufraeumen():
+    """Nach der Zusammenführung bricht der Prozess zwischen Commit und Entfernen der alten Namen ab (nachgestellt:
+    die alten Namen liegen wieder als Dubletten da). Dazu eine fremde Datei ohne Zeile, eine alte und eine junge
+    Zwischendatei vom Hochladen und ein alter Kopierrest. Der nächste Start (Kennzeichen schon „1“) entfernt die
+    Dubletten und die alten Zwischendateien, lässt die fremde Datei und die junge Zwischendatei liegen und sagt es im
+    Log; die Kommandozeile zählt es im Bericht (--probe rechnet nur). Der Kopier-Rückfall in _verweisen lässt keine
+    Zwischendatei zurück."""
+    from app.material.services import dokablage
+    log = _Log()
+    logging.getLogger("app.material.services.dokablage").addHandler(log)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            app17 = bis_schritt(17)(make_app, tmp)
+            adm = anmelden(app17, "admin@example.org", "geheim123")
+            ids = katalog_grund(adm)
+            namen = _altbestand(tmp, app17, ids["gurt"])
+            ordner = dok_ordner(tmp)
+            app = make_app(tmp)
+            name_a, name_b = sha(PDF_A) + ".pdf", sha(PDF_B) + ".pdf"
+            assert _meta(tmp, "dok_inhalt") == "1" and dateien(tmp) == {name_a, name_b}
+            # Abbruch nach dem Commit: die alten Namen liegen noch (harte Verweise wie vor dem Entfernen).
+            for n in namen[:3]:
+                os.link(os.path.join(ordner, name_a), os.path.join(ordner, n))
+            os.link(os.path.join(ordner, name_b), os.path.join(ordner, namen[3]))
+            fremd = os.path.join(ordner, "fremd.pdf")              # kein Inhalt einer Zeile – bleibt
+            with open(fremd, "wb") as fh:
+                fh.write(PDF_C)
+            reste = {".neu-" + "a" * 20 + ".pdf": 2, "." + name_a + ".teil": 3, ".neu-" + "b" * 20 + ".pdf": 0}
+            for n, tage in reste.items():
+                with open(os.path.join(ordner, n), "wb") as fh:
+                    fh.write(b"%PDF-rest")
+                _alt_machen(os.path.join(ordner, n), tage)
+            log.zeilen.clear()
+            make_app(tmp)
+            rest = sorted(os.listdir(ordner))
+            assert rest == sorted([".neu-" + "b" * 20 + ".pdf", name_a, name_b, "fremd.pdf"]), rest
+            info = [m for lvl, m in log.zeilen if lvl == logging.INFO]
+            warn = [m for lvl, m in log.zeilen if lvl == logging.WARNING]
+            assert any("4 Dateien ohne Zeile entfernt" in m and "2 Zwischendateien" in m for m in info), log.zeilen
+            assert any("1 Dateien ohne Zeile" in m and "bleiben liegen" in m for m in warn), log.zeilen
+            assert not any("Schritt 18" in m for m in info), "die Zusammenführung selbst darf nicht noch einmal laufen"
+            # Noch ein Start: nichts mehr zu melden außer der fremden Datei.
+            log.zeilen.clear()
+            make_app(tmp)
+            assert [lvl for lvl, m in log.zeilen] == [logging.WARNING] and "1 Dateien ohne Zeile" in log.zeilen[0][1]
+            # Kommandozeile: dieselbe Lage noch einmal hergestellt, --probe zählt, echt räumt.
+            os.link(os.path.join(ordner, name_a), os.path.join(ordner, namen[0]))
+            with open(os.path.join(ordner, ".neu-" + "c" * 20 + ".pdf"), "wb") as fh:
+                fh.write(b"%PDF-rest")
+            _alt_machen(os.path.join(ordner, ".neu-" + "c" * 20 + ".pdf"), 2)
+            r = app.test_cli_runner().invoke(args=["material", "dok-zusammenfuehren", "--probe"])
+            assert r.exit_code == 1 and "Dateien vorher: 4 (" in r.output, r.output   # Zwischendateien zählen nicht
+            assert "Dateien ohne Zeile: 1 (0.0 MB) – bleiben liegen; zu entfernen, weil der Inhalt unter seinem " \
+                   "Inhaltsnamen liegt: 1" in r.output and "Zwischendateien älter als ein Tag zu entfernen: 1" in r.output, r.output
+            assert "Dateien nachher: 3 (" in r.output, r.output
+            assert os.path.isfile(os.path.join(ordner, namen[0]))
+            r = app.test_cli_runner().invoke(args=["material", "dok-zusammenfuehren"])
+            assert r.exit_code == 1 and "entfernt, weil der Inhalt unter seinem Inhaltsnamen liegt: 1" in r.output, r.output
+            assert "Zwischendateien älter als ein Tag entfernt: 1" in r.output and "Dateien nachher: 3 (" in r.output, r.output
+            assert sorted(os.listdir(ordner)) == sorted([".neu-" + "b" * 20 + ".pdf", name_a, name_b, "fremd.pdf"])
+            # Kopier-Rückfall ohne harte Verweise: Zwischendatei mit Punkt davor, nachher weg.
+            echt = os.link
+
+            def kein_link(*a, **kw):
+                raise OSError("keine harten Verweise (Probe)")
+
+            os.link = kein_link
+            try:
+                dokablage._verweisen(os.path.join(ordner, name_a), os.path.join(ordner, "kopie.pdf"))
+            finally:
+                os.link = echt
+            with open(os.path.join(ordner, "kopie.pdf"), "rb") as fh:
+                assert fh.read() == PDF_A
+            assert not [n for n in os.listdir(ordner) if n.endswith(".teil")]
+            os.remove(os.path.join(ordner, "kopie.pdf"))
+    finally:
+        logging.getLogger("app.material.services.dokablage").removeHandler(log)
+    print("Aufräumen-Test bestanden.")
+
+
 if __name__ == "__main__":
     test_gemeinsame_datei()
     test_version_und_protokoll()
     test_import()
     test_migration_18()
+    test_wettlauf_loeschen_ablegen()
+    test_aufraeumen()
     print("Alle Dokumenttests bestanden.")

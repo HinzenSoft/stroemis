@@ -250,7 +250,13 @@ class _Lauf:
             return "probelauf" + ext, katalog.DOK_TYPEN[ext][0], eintrag["info"].file_size, eintrag["sha256"]
         if ort in self.ablage:
             self.benutzt.add(ort)
-            return self.ablage[ort][1]
+            art, wert = self.ablage[ort]
+            # Eine Dokumentdatei muss noch liegen: Zwischen dem Ablegen (vor der Transaktion, bei einer großen Lieferung
+            # minutenlang) und jetzt kann jemand das letzte Dokument mit diesem Inhalt gelöscht und die Datei
+            # freigegeben haben – dann unter der Schreibsperre, die dieser Durchgang hält, noch einmal aus dem Archiv
+            # (Befund 1 der Prüfung vom 22.10.2026).
+            if art == "bild" or os.path.isfile(os.path.join(katalog.dok_dir(), wert[0])):
+                return wert
         neu = _ablegen(self.archiv, eintrag)
         self.abgelegt.append((eintrag["art"], neu))
         return neu
@@ -735,7 +741,9 @@ def _dokumente(liste, spalte, ziel, stelle, zielname, lauf):
 
 def _dokument_einfuegen(spalte, ziel, w, abgelegt, ersetzt):
     """Wie katalog.dokument_anlegen – nur mit einer schon abgelegten Datei (abgelegt: Name, MIME, Größe, SHA-256),
-    die der Import selbst wieder entfernt, wenn die Transaktion scheitert."""
+    die der Import selbst wieder entfernt, wenn die Transaktion scheitert. Dass die Datei unter der Schreibsperre
+    dieses Durchgangs wirklich liegt, hat _Lauf.ablegen eben davor sichergestellt (beim Planen ist sie ein
+    Platzhalter)."""
     name, mime, groesse, sha = abgelegt or (None, "", 0, None)
     pid, kid = (ziel, None) if spalte == "product_id" else (None, ziel)
     uid, uname = akteur()
@@ -1171,7 +1179,8 @@ def importieren(daten, trocken=False, quelle="Datei", archiv=None):
         if gespeichert or trocken or erster.bericht["fehler"]:
             erster.bericht["gespeichert"] = gespeichert
             return _abschluss(erster, basis)
-        # Die Dateien zuerst – außerhalb der Schreibsperre –, dann die Datenbank.
+        # Die Dateien zuerst – außerhalb der Schreibsperre –, dann die Datenbank. Fehlt eine Datei beim Schreiben der
+        # Zeile wieder (inzwischen freigegeben), legt _Lauf.ablegen sie unter der Sperre aus dem Archiv nach.
         ablage = {}
         try:
             for ort, eintrag in erster.bedarf.items():

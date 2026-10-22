@@ -458,6 +458,7 @@ def produkt_variante(pid, d):
     with db.transaction(sofort=True):
         neu = produkt_anlegen(d, demo=bool(quelle["demo"]))
         for doc in kopien:
+            _datei_sichern(doc["file_path"], doc["title"])      # unter der Sperre: seit dem Lesen oben nicht freigegeben
             did = db.execute(
                 "INSERT INTO mat_product_document (product_id, kind, title, file_path, url, mime, size, sha256, version, "
                 "valid_from, uploaded_by, uploaded_by_name, uploaded_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -641,12 +642,12 @@ def inhaltsname(sha, ext):
     return sha + ext
 
 
-def _datei_ablegen(file_storage):
-    """Datei unverändert unter media/material/dok ablegen; liefert (Name, MIME, Größe, SHA-256). Geschrieben wird
-    zuerst in eine Zwischendatei im selben Ordner (Name mit Punkt davor – die Medienroute liefert so etwas nie aus),
-    dabei wird gezählt und gehasht; dann bekommt sie ihren Inhaltsnamen (inhaltsname). Liegt der schon da, ist es
-    derselbe Inhalt: Die Zwischendatei geht weg, die vorhandene Datei gilt – zwei gleichzeitige Uploads desselben
-    Inhalts gelingen so beide."""
+def _datei_schreiben(file_storage):
+    """Datei unverändert in eine Zwischendatei unter media/material/dok schreiben (Name mit Punkt davor – die Medienroute
+    liefert so etwas nie aus), dabei zählen und hashen; liefert (Zwischendatei, Inhaltsname, MIME, Größe, SHA-256).
+    Ihren Inhaltsnamen (inhaltsname) bekommt die Datei erst mit _einordnen – beim Hochladen unter der Schreibsperre, in
+    derselben Transaktion wie die Zeile (dokument_anlegen): So kann kein _datei_freigeben eines anderen Arbeitsprozesses
+    zwischen Datei und Zeile treffen (Befund 1 der Prüfung vom 22.10.2026)."""
     if not file_storage or not file_storage.filename:
         raise Abgelehnt("Es wurde keine Datei mitgeschickt.")
     ext = os.path.splitext(file_storage.filename)[1].lower()
@@ -669,8 +670,6 @@ def _datei_ablegen(file_storage):
                 summe.update(stueck)
                 fh.write(stueck)
                 stueck = stream.read(1024 * 1024)
-        name = inhaltsname(summe.hexdigest(), ext)
-        _einordnen(zwischen, os.path.join(dok_dir(), name), groesse)
     except Abgelehnt:
         _entfernen(zwischen)
         raise
@@ -678,39 +677,75 @@ def _datei_ablegen(file_storage):
         _entfernen(zwischen)
         current_app.logger.warning("Dokument „%s“ ließ sich nicht ablegen: %s", file_storage.filename, exc)
         raise Abgelehnt("Das Dokument ließ sich nicht speichern. Bitte später erneut versuchen.", 500)
-    return name, mime, groesse, summe.hexdigest()
+    return zwischen, inhaltsname(summe.hexdigest(), ext), mime, groesse, summe.hexdigest()
+
+
+def _datei_ablegen(file_storage):
+    """Schreiben und gleich einordnen; liefert (Name, MIME, Größe, SHA-256). Für den Katalogimport, der seine Dateien
+    vor der Transaktion ablegt (minutenlang bei einer großen Lieferung) und beim Schreiben jeder Zeile unter der
+    Schreibsperre prüft, ob die Datei noch liegt – sonst legt er sie aus dem Archiv nach (importer._Lauf.ablegen)."""
+    zwischen, name, mime, groesse, sha = _datei_schreiben(file_storage)
+    _einordnen(zwischen, os.path.join(dok_dir(), name), groesse)
+    return name, mime, groesse, sha
 
 
 def _einordnen(zwischen, ziel, groesse):
     """Die fertig geschriebene Zwischendatei unter ihren Inhaltsnamen bringen. Gibt es den schon in derselben Größe,
     ist es derselbe Inhalt (gleiche SHA-256) – die Zwischendatei geht weg. Eine andere Größe hieße, die vorhandene
-    Datei ist beschädigt (etwa abgebrochen kopiert); dann ersetzt die eben geprüfte sie – mit Vermerk im Log."""
+    Datei ist beschädigt (etwa abgebrochen kopiert); dann ersetzt die eben geprüfte sie – mit Vermerk im Log.
+    Scheitert das Dateisystem, geht die Zwischendatei weg und der Aufrufer bekommt Abgelehnt (500)."""
     try:
         vorhanden = os.path.getsize(ziel)
     except OSError:
         vorhanden = None
-    if vorhanden == groesse:
+    try:
+        if vorhanden == groesse:
+            _entfernen(zwischen)
+            return
+        if vorhanden is not None:
+            current_app.logger.warning("Dokumentdatei %s hatte %d statt %d Bytes – durch die neue Fassung ersetzt.",
+                                       os.path.basename(ziel), vorhanden, groesse)
+        os.replace(zwischen, ziel)
+    except OSError as exc:
         _entfernen(zwischen)
-        return
-    if vorhanden is not None:
-        current_app.logger.warning("Dokumentdatei %s hatte %d statt %d Bytes – durch die neue Fassung ersetzt.",
-                                   os.path.basename(ziel), vorhanden, groesse)
-    os.replace(zwischen, ziel)
+        current_app.logger.warning("Dokumentdatei %s ließ sich nicht ablegen: %s", os.path.basename(ziel), exc)
+        raise Abgelehnt("Das Dokument ließ sich nicht speichern. Bitte später erneut versuchen.", 500)
+
+
+def _datei_sichern(name, titel):
+    """Vor dem Einfügen einer Zeile, die eine schon liegende Datei nennt (produkt_variante), unter der Schreibsperre
+    prüfen, dass die Datei da ist – sonst Abgelehnt (409). Zwischen dem Nachsehen außerhalb der Sperre und der eigenen
+    Transaktion kann ein anderer das letzte Dokument mit diesem Inhalt gelöscht und die Datei freigegeben haben; eine
+    Zeile ohne Datei soll daraus nie entstehen. Der Katalogimport prüft dasselbe in importer._Lauf.ablegen und legt die
+    Datei aus dem Archiv nach, statt abzubrechen."""
+    if name and not os.path.isfile(os.path.join(dok_dir(), name)):
+        raise Abgelehnt(f"Die Datei des Dokuments „{titel}“ liegt nicht mehr unter media/material/dok – das Dokument "
+                        "wurde inzwischen gelöscht oder seine Datei fehlt. Bitte die Seite neu laden.", 409)
 
 
 def _datei_freigeben(name):
     """Eine Dokumentdatei nach dem Ende ihrer Zeile entfernen – aber nur, wenn kein Dokument sie mehr nennt. Seit
     Schritt 18 heißt eine Datei nach ihrem Inhalt und gehört allen Dokumenten mit diesem Inhalt zugleich (Varianten,
     Katalogimport mit einer Anleitung für viele Produkte). Aufgerufen nach dem Commit, der die eigene Zeile entfernt
-    hat, bzw. nach dem Rollback, der sie nie entstehen ließ. Die Regel, dass ein Dokument aus einem festgeschriebenen
-    Prüfprotokoll seine Zeile nie verliert (kategorie_loeschen; produkt_loeschen scheitert an den Artikeln), hält
-    damit auch seine Datei: Solange die Zeile steht, wird die Datei nicht angerührt. Jede Stelle, die Dokumentdateien
-    entfernt, geht hier durch – kein os.remove sonst."""
+    hat, bzw. nach dem Rollback, der sie nie entstehen ließ – nie innerhalb einer Transaktion, denn das Entfernen
+    ließe sich nicht zurückrollen. Die Regel, dass ein Dokument aus einem festgeschriebenen Prüfprotokoll seine Zeile
+    nie verliert (kategorie_loeschen; produkt_loeschen scheitert an den Artikeln), hält damit auch seine Datei: Solange
+    die Zeile steht, wird die Datei nicht angerührt. Jede Stelle, die Dokumentdateien entfernt, geht hier durch – kein
+    os.remove sonst.
+
+    Abfrage und Entfernen stehen unter der Schreibsperre (BEGIN IMMEDIATE), und wer eine Zeile mit dieser Datei anlegt,
+    tut das in seiner eigenen Transaktion unter derselben Sperre – dokument_anlegen ordnet die Datei dort erst ein,
+    produkt_variante (_datei_sichern) und der Katalogimport (_Lauf.ablegen) prüfen dort, dass sie liegt. So gibt es
+    nur zwei Ausgänge:
+    Die Zeile steht schon und die Datei bleibt, oder die Datei ist weg und der andere legt sie nach bzw. bricht ab
+    (Befund 1 der Prüfung vom 22.10.2026; vorher lag zwischen „liegt schon“ und der Zeile ein Fenster, beim Import
+    minutenlang)."""
     if not name or "/" in name or "\\" in name or name.startswith("."):
         return
-    if db.query("SELECT 1 FROM mat_product_document WHERE file_path = ? LIMIT 1", (name,), one=True):
-        return
-    _entfernen(os.path.join(dok_dir(), name))
+    with db.transaction(sofort=True):
+        if db.query("SELECT 1 FROM mat_product_document WHERE file_path = ? LIMIT 1", (name,), one=True):
+            return
+        _entfernen(os.path.join(dok_dir(), name))
 
 
 def _dokument_werte(d, alt=None, datei=None):
@@ -744,10 +779,11 @@ def dokument_anlegen(pid, d, datei=None, ersetzt=None, kid=None):
     else:
         produkt(pid)
     w = _dokument_werte(d, ersetzt, datei)
-    name = mime = sha = None
+    zwischen = name = mime = sha = None
     groesse = 0
     if datei:
-        name, mime, groesse, sha = _datei_ablegen(datei)
+        # Geschrieben und gehasht außerhalb der Sperre (dauert bei 50 MB), eingeordnet erst unten in der Transaktion.
+        zwischen, name, mime, groesse, sha = _datei_schreiben(datei)
     uid, uname = akteur()
     try:
         with db.transaction(sofort=True):
@@ -760,11 +796,18 @@ def dokument_anlegen(pid, d, datei=None, ersetzt=None, kid=None):
                 "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (pid, kid, w["kind"], w["title"], name, w["url"], mime or "", groesse, sha or "", w["version"],
                  w["valid_from"], ersetzt["id"] if ersetzt else None, uid, uname, db.now()))
+            if zwischen:
+                # Zeile und Datei unter derselben Schreibsperre, die auch _datei_freigeben hält: Liegt der Inhalt
+                # schon, gilt er und bleibt – die Zeile steht ja –, sonst kommt die Zwischendatei an seinen Platz.
+                _einordnen(zwischen, os.path.join(dok_dir(), name), groesse)
+                zwischen = None
             nachher = dict(w, file_path=name, sha256=sha, size=groesse)
             nachher.update({"category_id": kid} if kid else {"product_id": pid})
             journal.eintragen("document", did, "neue_version" if ersetzt else "angelegt",
                               {"ersetzt": ersetzt["id"]} if ersetzt else None, nachher)
     except BaseException:
+        if zwischen:
+            _entfernen(zwischen)
         if name:
             _datei_freigeben(name)
         raise
