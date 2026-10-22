@@ -422,7 +422,7 @@
   /* --- Gerüst -------------------------------------------------------------------------------- */
   const NAV = { dashboard: "dashboard", pruefungen: "pruefungen", bestand: "bestand", ordner: "bestand", artikel: "bestand",
                 artikel_neu: "bestand", katalog: "katalog", produkt: "katalog", formular: "katalog", meldungen: "katalog", suche: "",
-                pruefung: "pruefungen", pruefung_neu: "pruefungen", durchgang: "pruefungen", bestandsimport: "bestand" };
+                pruefung: "pruefungen", pruefung_neu: "pruefungen", durchgang: "pruefungen", bestandsimport: "bestand", bericht: "bestand" };
   $$(".mat-nav a").forEach((a) => a.classList.toggle("aktiv", a.dataset.nav === NAV[ANSICHT]));
   if (ANSICHT === "suche" && DATEN.q) $(".mat-suche input").value = DATEN.q;
   // Ohne Freigabe im Bestand (Mitglied ohne Freigabe, Prüfer ohne Prüffreigabe) fallen nur „Prüfungen“ und „Bestand“ weg. Die
@@ -2477,13 +2477,18 @@
   /* Aussonderung durch den Materialwart: wird mit seiner Unterschrift festgeschrieben (Aussonderungsprotokoll).
      Fehlt sie, unterschreibt er im Dialog – vorab mit „Unterschreiben“ oder spätestens beim Aussondern. */
   function aussonderDialog(a) {
-    const heute = new Date();
-    const tag = `${heute.getFullYear()}-${String(heute.getMonth() + 1).padStart(2, "0")}-${String(heute.getDate()).padStart(2, "0")}`;
+    const tag = isoHeute(0);
+    // Das Datum als deutsches Textfeld (TT.MM.JJJJ, C2 in P4-L1): spätestens heute, nicht vor der letzten Prüfung, dem
+    // Herstelldatum und der Erfassung – der Server prüft dieselben Grenzen (409 mit Klartext).
+    const herst = a.manufactured_on ? (a.manufactured_on.length === 7 ? `${a.manufactured_on}-01` : a.manufactured_on) : "";
+    const grenzen = [[a.last_inspected_on, "letzte Prüfung"], [herst, "Herstellung"], [(a.created_at || "").slice(0, 10), "Erfassung"]].filter(([d]) => d);
+    const fruehestens = grenzen.length ? grenzen.reduce((x, y) => (y[0] > x[0] ? y : x)) : null;
     const HINWEIS = "Die Aussonderung wird mit deiner Unterschrift festgeschrieben. Sie wird in deinem Profil gespeichert und als Kopie ins Aussonderungsprotokoll übernommen.";
     dialog(`<h2>${esc(a.inventory_no)} aussondern</h2>
       <p class="help">Die Aussonderung ist endgültig: Der Artikel wandert nach „Ausgesondert“, bleibt dort mit seinem Lebenslauf sichtbar und zählt nirgends mehr als Bestand.</p>
       <div class="field-row"><div><label for="au-grund">Grund</label><select id="au-grund">${Object.entries(AUSSONDERUNGSGRUND).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
-        <div><label for="au-datum">Datum</label><input type="date" id="au-datum" value="${tag}" max="${tag}"></div></div>
+        <div><label for="au-datum">Datum</label>${datumFeld("au-datum", tag, "tag")}
+          <div class="help">${fruehestens ? `Frühestens ${esc(fmtTag(fruehestens[0]))} (${esc(fruehestens[1])}), spätestens` : "Spätestens"} heute (${esc(fmtTag(tag))}).</div></div></div>
       <label for="au-bem">Bemerkung</label><textarea id="au-bem" rows="3" maxlength="2000"></textarea>
       <p class="help">Die Aussonderung wird mit deiner Unterschrift festgeschrieben (Aussonderungsprotokoll).</p>
       <div id="au-us"></div>
@@ -2505,13 +2510,17 @@
       usZeigen();
       $("#au-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
+        // Erst das Datum (ein Tippfehler bricht ab), dann die Unterschrift.
+        let datum;
+        try { datum = datumWert($("#au-datum", body), "Datum"); }
+        catch (e) { toast(e.message, true); $("#au-datum", body).focus(); return; }
         const hatte = DARF.unterschrift;
         if (!(await eigeneUnterschrift(HINWEIS))) return;
         if (!hatte) usZeigen();
         knopf.disabled = true;
         knopf.textContent = "Wird festgeschrieben …";
         try {
-          const r = await api(`${API}/artikel/${a.id}/aussondern`, { method: "POST", body: { grund: $("#au-grund", body).value, datum: $("#au-datum", body).value, bemerkung: $("#au-bem", body).value } });
+          const r = await api(`${API}/artikel/${a.id}/aussondern`, { method: "POST", body: { grund: $("#au-grund", body).value, datum, bemerkung: $("#au-bem", body).value } });
           let prot = null;
           try { prot = (await api(`${API}/pruefungen/${r.aussonderung}`)).pruefung.protokoll; } catch (e) { /* Link genügt */ }
           toast(prot ? `Ausgesondert – Protokoll ${prot.id}` : "Ausgesondert");
@@ -3417,7 +3426,7 @@
       </div>
       <div id="dm-liste" class="mat-dokliste"></div>
       <p><button type="button" class="lnk" id="dm-link"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Link beim Hersteller<span class="k-anlegen"> anlegen</span></span></button></p>
-      <label for="dm-ab">Gültig ab (für alle)</label><input type="date" id="dm-ab">
+      <label for="dm-ab">Gültig ab (für alle)</label>${datumFeld("dm-ab", "", "tag")}
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="dm-ok" type="button">Speichern</button></div>`,
     (dlg, body) => {
       const liste = $("#dm-liste", body);
@@ -3472,7 +3481,9 @@
           e.fehler = !e.art ? "Bitte die Art wählen." : !e.datei && !/^https?:\/\/\S+/.test(e.url || "") ? "Bitte eine Adresse mit https:// angeben." : "";
         });
         if (eintraege.some((e) => e.fehler)) { zeichnen(); toast("Bitte die markierten Einträge ergänzen.", true); return; }
-        const ab = $("#dm-ab", body).value;
+        let ab;
+        try { ab = datumWert($("#dm-ab", body), "Gültig ab"); }
+        catch (e) { toast(e.message, true); $("#dm-ab", body).focus(); return; }
         knopf.disabled = true;
         let gespeichert = 0;
         for (const [i, e] of eintraege.entries()) {
@@ -3508,7 +3519,7 @@
       ${alt ? "" : `<label for="dd-kind">Art</label><select id="dd-kind">${Object.entries(DOKART).map(([w, t]) => `<option value="${w}">${esc(t)}</option>`).join("")}</select>`}
       <label for="dd-title">Titel</label><input type="text" id="dd-title" value="${esc(alt ? alt.title : "")}" maxlength="200" placeholder="leer = Dateiname">
       <div class="field-row"><div><label for="dd-ver">Versionsstand</label><input type="text" id="dd-ver" maxlength="40" placeholder="z. B. 03/2024" ${TASTATUR_NUMMER}></div>
-        <div><label for="dd-ab">Gültig ab</label><input type="date" id="dd-ab"></div></div>
+        <div><label for="dd-ab">Gültig ab</label>${datumFeld("dd-ab", "", "tag")}</div></div>
       <div class="mat-feldkopf">Datei (PDF oder Bild)</div>${dateiKnopf("dd-datei", "Datei wählen …", "application/pdf,image/jpeg,image/png,image/webp", false)}
       <label for="dd-url">… oder Adresse beim Hersteller</label><input type="text" id="dd-url" maxlength="500" placeholder="https://…" ${TASTATUR_ADRESSE}>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="dd-ok" type="button">Speichern</button></div>`,
@@ -3517,7 +3528,10 @@
       $("#dd-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
         const datei = $("#dd-datei", body).files[0];
-        const felder = { title: $("#dd-title", body).value, version: $("#dd-ver", body).value, valid_from: $("#dd-ab", body).value };
+        let ab;
+        try { ab = datumWert($("#dd-ab", body), "Gültig ab"); }
+        catch (e) { toast(e.message, true); $("#dd-ab", body).focus(); return; }
+        const felder = { title: $("#dd-title", body).value, version: $("#dd-ver", body).value, valid_from: ab };
         if (!alt) felder.kind = $("#dd-kind", body).value;
         knopf.disabled = true;
         try {
@@ -3992,6 +4006,14 @@
     const felder = new Map();        // "26:notiz", "26:wert", "bem" → { wert, bestaetigt, timer, unterwegs, laut, fehler }
     let ersetzt = false;             // punktErsetzen tauscht gerade eine Karte aus – deren Fokuswechsel ist kein Verlassen
     const schluessel = (el) => (el.id === "pr-bem" ? "bem" : `${el.dataset.rid}:${el.matches(".mat-pnotiz") ? "notiz" : "wert"}`);
+    // Datumspunkte (mat-datum, C2 in P4-L1) zeigen TT.MM.JJJJ und speichern ISO: feldWert liefert den Wert für den
+    // Server – oder null, wenn das Datum nicht lesbar ist (bleibt rot im Feld; laut: mit Toast); anzeige den Feldtext.
+    function feldWert(el, laut) {
+      if (!el.classList.contains("mat-datum")) return el.value;
+      try { const w = datumWert(el, el.getAttribute("aria-label") || "Datum"); el.classList.remove("ungueltig"); return w; }
+      catch (err) { el.classList.add("ungueltig"); if (laut) toast(err.message, true); return null; }
+    }
+    const anzeige = (el, wert) => (el.classList.contains("mat-datum") ? datumAnzeige(wert, "tag") : wert);
     const feldVon = (k) => (k === "bem" ? bemFeld()
       : $(`#pp-${k.split(":")[0]} ${k.endsWith(":notiz") ? ".mat-pnotiz" : ".mat-pwert"}`));
     function serverWert(k) {
@@ -4109,7 +4131,7 @@
       Object.entries(alt).forEach(([k, v]) => {
         const el = feldVon(k);
         if (!el || !v || typeof v.wert !== "string" || v.wert === v.basis || serverWert(k) !== v.basis) return;
-        el.value = v.wert;
+        el.value = anzeige(el, v.wert);
         if (el.hidden) {
           el.hidden = false;
           const plus = $('[data-act="pnotiz-auf"]', el.closest(".mat-punkt"));
@@ -4135,9 +4157,14 @@
        Die Statuszeile sagt, dass sie nur hier liegen (standZeigen). */
     const ABSCHLUSS = `${ABLAGE}-abschluss`;
     // Ohne gewähltes Ergebnis gibt es nichts zu merken – Grund und Datum gehören zu ihm.
+    // „Nächste Prüfung“ ist ein deutsches Textfeld (TT.MM.JJJJ, C2 in P4-L1); gemerkt und gesendet wird ISO. Ungültig
+    // Getipptes zählt hier als leer – beim Festschreiben gibt es dafür den Toast (dueWert).
+    function dueIso(due) {
+      try { return datumWert(due, "Nächste Prüfung"); } catch (e) { return ""; }
+    }
     function abschlussStand() {
       const grund = imAbschluss("#pr-grund"), due = imAbschluss("#pr-due");
-      return { ergebnis, grund: grund ? grund.value : "", faellig: due ? due.value : "", leer: !ergebnis };
+      return { ergebnis, grund: grund ? grund.value : "", faellig: due ? dueIso(due) : "", leer: !ergebnis };
     }
     function abschlussMerken() {
       const d = abschlussStand();
@@ -4155,7 +4182,7 @@
         const grund = imAbschluss("#pr-grund"), due = imAbschluss("#pr-due");
         if (grund && typeof alt.grund === "string") grund.value = alt.grund.slice(0, 300);
         if (due && typeof alt.faellig === "string" && /^\d{4}-\d{2}-\d{2}$/.test(alt.faellig)
-          && (!due.min || alt.faellig >= due.min) && (!due.max || alt.faellig <= due.max)) due.value = alt.faellig;
+          && alt.faellig >= isoHeute(1) && (!pr.vorschlag_naechste || alt.faellig <= pr.vorschlag_naechste)) due.value = datumAnzeige(alt.faellig, "tag");
         abschlussAktualisieren();
       }
       abschlussMerken();             // was nicht mehr gilt (etwa „einsatzbereit“ nach einem kritischen Mangel), fällt weg
@@ -4297,7 +4324,7 @@
             <button type="button" class="btn secondary small mat-nz-knopf" data-act="pbefund" data-rid="${x.id}" data-befund="nicht_zutreffend" aria-pressed="${nz}" title="nicht zutreffend">n. z.</button></div></div>`;
       } else {
         const feld = x.art === "photo" ? ""
-          : x.art === "date" ? `<input type="date" class="mat-pwert" data-rid="${x.id}" value="${esc(x.wert || "")}" aria-label="${esc(x.text)}">`
+          : x.art === "date" ? `<input type="text" class="mat-pwert mat-datum" data-art="tag" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="TT.MM.JJJJ" data-rid="${x.id}" value="${esc(datumAnzeige(x.wert, "tag"))}" aria-label="${esc(x.text)}">`
           : x.art === "number" ? `<input type="text" inputmode="decimal" class="mat-pwert" data-rid="${x.id}" value="${esc(x.wert || "")}" placeholder="${x.soll ? `Soll ${esc(x.soll)}` : "Wert"}" aria-label="${esc(x.text)}">`
           : `<textarea class="mat-pwert" data-rid="${x.id}" rows="2" maxlength="1000" aria-label="${esc(x.text)}" placeholder="${esc(x.soll || "")}">${esc(x.wert || "")}</textarea>`;
         steuer = `${feld}<div class="mat-wahl3" role="group" aria-label="Befund zu ${esc(x.text)}">
@@ -4381,7 +4408,8 @@
         <div class="mat-ergebnis" role="group" aria-label="Ergebnis">
           ${Object.keys(ERGEBNIS).map((e) => `<button type="button" data-act="ergebnis" data-e="${e}" class="e-${e}" aria-pressed="false">${esc(ERGEBNIS[e])}</button>`).join("")}</div>
         <div class="mat-abschluss-zeile">
-          <label class="mat-due" id="pr-due-feld" hidden>Nächste Prüfung <input type="date" id="pr-due" value="${esc(pr.vorschlag_naechste || "")}" max="${esc(pr.vorschlag_naechste || "")}" min="${isoHeute(1)}"></label>
+          <label class="mat-due" id="pr-due-feld" hidden>Nächste Prüfung ${datumFeld("pr-due", pr.vorschlag_naechste || "", "tag")}
+            <span class="mat-due-hilfe">frühestens ${esc(fmtTag(isoHeute(1)))}${pr.vorschlag_naechste ? `, spätestens ${esc(fmtTag(pr.vorschlag_naechste))}` : ""}</span></label>
           <input type="text" id="pr-grund" maxlength="300" placeholder="Grund" aria-label="Grund" value="${esc(pr.grund || "")}" hidden>
           <button type="button" class="btn" data-act="festschreiben" id="pr-ok" disabled>Festschreiben</button></div>
         <div class="mat-abschluss-hinweis" id="pr-hinweis" aria-live="polite" data-act="hinweis-ganz"></div></div>`;
@@ -4556,8 +4584,8 @@
       ["wert", "notiz"].forEach((feld) => {
         const e = felder.get(`${neu.id}:${feld}`);
         const f = $(feld === "notiz" ? ".mat-pnotiz" : ".mat-pwert", karte);
-        if (!e || !f || e.wert === e.bestaetigt || f.value === e.wert || (tippen && fokusSel === (feld === "notiz" ? ".mat-pnotiz" : ".mat-pwert"))) return;
-        f.value = e.wert;
+        if (!e || !f || e.wert === e.bestaetigt || f.value === anzeige(f, e.wert) || (tippen && fokusSel === (feld === "notiz" ? ".mat-pnotiz" : ".mat-pwert"))) return;
+        f.value = anzeige(f, e.wert);
         if (f.hidden) { f.hidden = false; const plus = $('[data-act="pnotiz-auf"]', karte); if (plus) plus.remove(); }
       });
       if (fokusSel && !$(fokusSel, karte)) {
@@ -4585,9 +4613,10 @@
       if (gebunden) return;
       gebunden = true;
       const TEXT = ".mat-pwert, .mat-pnotiz, #pr-bem";
-      // Beim Tippen vormerken (geht nach TIPP_MS), beim Verlassen sofort – Datumsfelder melden sich nur mit „change“.
+      // Beim Tippen vormerken (geht nach TIPP_MS), beim Verlassen sofort – Datumsfelder erst mit „change“ (halb getippt
+      // ist noch kein Datum).
       inhalt.addEventListener("input", (e) => {
-        if (bearbeitbar() && e.target.matches(TEXT) && e.target.type !== "date") vormerken(schluessel(e.target), e.target.value);
+        if (bearbeitbar() && e.target.matches(TEXT) && !e.target.classList.contains("mat-datum")) vormerken(schluessel(e.target), e.target.value);
         if (bearbeitbar() && (e.target.id === "pr-grund" || e.target.id === "pr-due")) abschlussMerken();
       });
       window.addEventListener("resize", () => { if (bearbeitbar()) grundPlatzhalter(); });
@@ -4596,7 +4625,9 @@
         setTimeout(() => tipptPruefen(true), 0);
         if (ersetzt || !bearbeitbar() || !el.matches || !el.matches(TEXT) || !el.isConnected) return;
         const k = schluessel(el);
-        eintrag(k).wert = el.value;
+        const wert = feldWert(el, false);          // ungültiges Datum: „change“ hat es schon gesagt
+        if (wert === null) return;
+        eintrag(k).wert = wert;
         senden(k, true);
       });
       inhalt.addEventListener("focusin", () => tipptPruefen(true));
@@ -4612,7 +4643,14 @@
       inhalt.addEventListener("change", async (e) => {
         if (!bearbeitbar()) return;
         const el = e.target;
-        if (el.matches(TEXT)) { const k = schluessel(el); eintrag(k).wert = el.value; await senden(k, true); return; }
+        if (el.matches(TEXT)) {
+          const k = schluessel(el);
+          const wert = feldWert(el, true);
+          if (wert === null) return;
+          eintrag(k).wert = wert;
+          await senden(k, true);
+          return;
+        }
         if (el.matches("input[data-foto]")) {
           const f = el.files[0];
           if (!f) return;
@@ -4825,13 +4863,24 @@
           fokus($(`#pp-${h.ohneNotiz[0].id} .mat-pnotiz`)); return;
         }
         if (ergebnis !== "einsatzbereit" && !h.maengel.length && !grund) { toast(`Ohne Mangel braucht „${ERGEBNIS[ergebnis]}“ einen Grund.`, true); fokus(imAbschluss("#pr-grund")); return; }
+        // „Nächste Prüfung“: ein Tippfehler bricht ab (vorher wurde daraus still „spätestens“ – S20); die Grenzen
+        // prüft der Server noch einmal.
+        let due = null;
+        if (ergebnis === "einsatzbereit") {
+          try { due = datumWert(imAbschluss("#pr-due"), "Nächste Prüfung") || null; }
+          catch (e) { toast(e.message, true); fokus(imAbschluss("#pr-due")); return; }
+          if (due && (due < isoHeute(1) || (pr.vorschlag_naechste && due > pr.vorschlag_naechste))) {
+            toast(`„Nächste Prüfung“: frühestens ${fmtTag(isoHeute(1))}${pr.vorschlag_naechste ? `, spätestens ${fmtTag(pr.vorschlag_naechste)}` : ""} – vorziehen geht, verschieben nicht.`, true);
+            fokus(imAbschluss("#pr-due")); return;
+          }
+        }
         b.disabled = true;
         try {
           if (!(await eigeneUnterschrift(HINWEIS_FEST))) return;
           abschlussAktualisieren();
           await laufend.catch(() => {});
           const daten = { ergebnis, grund, bemerkung: bemFeld().value };
-          if (ergebnis === "einsatzbereit") daten.next_due_on = imAbschluss("#pr-due").value || null;
+          if (ergebnis === "einsatzbereit") daten.next_due_on = due;
           await festschreibDialog(daten);
         } finally { if (b.isConnected) b.disabled = !ergebnis; }
       },

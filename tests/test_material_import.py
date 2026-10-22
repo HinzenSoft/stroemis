@@ -1648,8 +1648,9 @@ def test_oberflaeche_statisch():
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
     css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
-    assert 'bestandsimport: "bestand" };' in js and '"meldungen", "bestandsimport"]);' in js
-    assert re.search(r"const ANSICHTEN = \{[^}]*\bbestandsimport \};", js), "Ansicht fehlt in ANSICHTEN"
+    # Seit P4-L1 steht hinter „bestandsimport“ die Ansicht „bericht“ (Jahresbericht) – beide mit Ordnerleiste.
+    assert 'bestandsimport: "bestand", bericht: "bestand" };' in js and '"meldungen", "bestandsimport", "bericht"]);' in js
+    assert re.search(r"const ANSICHTEN = \{[^}]*\bbestandsimport\b[^}]*\};", js), "Ansicht fehlt in ANSICHTEN"
     anfang = js.index("  async function bestandsimport() {")
     block = js[anfang:js.index("\n  }\n", anfang)]
     # Einstieg und Hinweise

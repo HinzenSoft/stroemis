@@ -40,7 +40,7 @@ from flask import has_request_context
 from ... import db
 from ...images import delete_photo_files
 from ..models import ANHANGARTEN, AUSSONDERUNGSGRUENDE, BEFUNDE, ERGEBNISSE, PRUEFARTEN, SPERRGRUENDE
-from . import OHNE_NAMEN, Abgelehnt, auswahl, datum, heute, text, wahr
+from . import OHNE_NAMEN, Abgelehnt, auswahl, datum, erster_tag, heute, text, wahr
 from . import anhang as anh
 from . import bestand, journal, katalog, protokoll, rechte
 from . import status as st
@@ -822,6 +822,16 @@ def aussondern(iid, d, akteur):
                             "aus einer Mangelmeldung zählt erst, wenn ein Prüfer den Artikel danach geprüft hat.", 409)
         if tag < item["created_at"][:10]:
             raise Abgelehnt("Das Datum liegt vor der Erfassung des Artikels.")
+        # Nicht vor der letzten abgeschlossenen Prüfung und nicht vor dem Herstelldatum (C2 in P4-L1, S20): „01.03.2016“
+        # statt 2026 ging vorher durch – 409 mit Klartext, die Oberfläche nennt dieselben Grenzen als Hilfetext.
+        letzte = db.query("SELECT MAX(inspected_on) AS tag FROM mat_inspection WHERE item_id = ? AND completed_at IS NOT NULL",
+                          (iid,), one=True)["tag"]
+        if letzte and tag < letzte:
+            raise Abgelehnt(f"Das Datum der Aussonderung ({_fmt(tag)}) liegt vor der letzten Prüfung ({_fmt(letzte)}).", 409)
+        hergestellt = erster_tag(item["manufactured_on"])
+        if hergestellt and tag < hergestellt.isoformat():
+            raise Abgelehnt(f"Das Datum der Aussonderung ({_fmt(tag)}) liegt vor dem Herstelldatum "
+                            f"({_fmt(hergestellt.isoformat())}).", 409)
         offen = offener_entwurf(iid)
         if offen:
             raise Abgelehnt(reserviert_text(offen) + " Erst die Reservierung freigeben.", 409)

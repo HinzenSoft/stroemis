@@ -309,7 +309,9 @@ def test_oberflaeche_statisch():
     for sel in ('$("#pr-grund")', '$("#pr-due")', '$("#pr-bem")', '$("#pr-abschluss")', '$$("#pr-abschluss'):
         assert sel not in pr, sel
     assert 'grund = ergebnis === "einsatzbereit" ? "" : imAbschluss("#pr-grund").value.trim()' in pr
-    assert "bemerkung: bemFeld().value" in pr and 'daten.next_due_on = imAbschluss("#pr-due").value || null' in pr
+    # Seit C2 (P4-L1) ist „Nächste Prüfung“ ein Textfeld TT.MM.JJJJ: datumWert mit Toast und Abbruch statt stillem „|| null“.
+    assert "bemerkung: bemFeld().value" in pr and "daten.next_due_on = due;" in pr
+    assert 'due = datumWert(imAbschluss("#pr-due"), "Nächste Prüfung") || null;' in pr and 'imAbschluss("#pr-due").value || null' not in pr
     assert "anleitungEinsetzen();" in pr and '${pr.anleitung ? \'<div class="mat-anleitung-platz"></div>\' : ""}' in pr
     # Formularzeile und Seitenwahl
     assert 'f.wiki_aendern ? \'<button type="button" class="lnk" data-act="wiki-waehlen">Ändern …</button>\'' in js

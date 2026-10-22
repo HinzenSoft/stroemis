@@ -1640,3 +1640,8 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-kastenkopf .mat-menue { align-self: center; }
 #mat-inhalt table.list.mat-mail td.mat-mail-meldung { overflow-wrap: anywhere; font-size: var(--fs-klein); max-width: 22rem; }
 #mat-inhalt table.list.mat-mail td { vertical-align: top; }
+/* Datumsfelder als Text (C2): „Nächste Prüfung“ in der Abschlussleiste mit Hilfetext (frühestens morgen, spätestens
+   laut Intervall) – klein und leise hinter dem Feld, am Telefon darunter. */
+.mat-abschluss-zeile .mat-due { flex-wrap: wrap; }
+.mat-abschluss-zeile .mat-due .mat-datum { width: 8.5em; flex: none; }
+.mat-due-hilfe { font-weight: 400; font-size: var(--fs-klein); color: var(--grau); flex: 1 1 100%; }
