@@ -16,17 +16,23 @@ eigenen kurzen Transaktion. Schritt 2 wirft nie – die Mailschleife der übrige
 nie innerhalb einer äußeren Transaktion (g.tx_depth): Die Dienste rufen senden erst nach ihrem Commit, meist im
 Hintergrund-Thread (auth._im_hintergrund, eigener App-Kontext).
 
-Die Zeile trägt nie eine Adresse: Die Serverantwort nennt den abgewiesenen Empfänger, oft in spitzen Klammern, und bei
-Verbindungsfehlern Host und Port des Mailservers. reinigen() ersetzt die Empfängeradresse, jede weitere Adresse,
-„<…@…>“ und „Host:Port“ durch Platzhalter und kürzt auf MAILMELDUNG_MAX; der CHECK instr(meldung, '@') = 0 in der
-Tabelle ist das Netz dahinter. Der Empfänger steht als Kontoverweis (users.mat_ref) und Rolle da; die Oberfläche löst
-den Verweis zum Namen auf (journal.konto_namen – „(gelöschtes Konto)“ ohne Konto). Den Bezug einer Zeile liefert
-uebersicht() als Weg ins Modul (_bezuege: Artikel bzw. Mangelmeldung → Artikel, Rückruf → Produkt, Ordner und
-Erinnerung → Ordner, Antrag und Produktmeldung → Meldungen-Seite), aus Kennungen gebaut – nie aus Datenbanktexten.
+Die Zeile trägt nie eine Adresse: Die Serverantwort nennt den abgewiesenen Empfänger, oft in spitzen Klammern, bei
+Verbindungsfehlern Host und Port des Mailservers und bei einer abgelehnten Anmeldung oft den Anmeldenamen (Exim:
+„535 … (set_id=<SMTP_USER>)“). reinigen() ersetzt die Empfängeradresse, den Anmeldenamen, jede weitere Adresse,
+„<…@…>“ und „Host:Port“ durch Platzhalter und kürzt auf MAILMELDUNG_MAX; der Betreff läuft durch dieselbe Reinigung
+(Rückruf-Titel und Produktmeldungen sind freier Text) und wird auf MAILBETREFF_MAX gekürzt. Die CHECKs
+instr(meldung, '@') = 0 und instr(betreff, '@') = 0 in der Tabelle sind das Netz dahinter. Der Empfänger steht als
+Kontoverweis (users.mat_ref) und Rolle da; die Oberfläche löst den Verweis zum Namen auf (journal.konto_namen –
+„(gelöschtes Konto)“ ohne Konto). Den Bezug einer Zeile liefert uebersicht() als Weg ins Modul (_bezuege: Artikel bzw.
+Mangelmeldung → Artikel, Rückruf → Produkt, Ordner und Erinnerung → Ordner, Antrag und Produktmeldung →
+Meldungen-Seite), aus Kennungen gebaut – nie aus Datenbanktexten.
 
-Sammelmails ohne einen Ordner (Erinnerung, Rückruf: Artikel mehrerer Gliederungen in einer Mail) bekommen je betroffener
-Gliederung eine Zeile mit folder_id = Gliederung (Entscheidung Nr. 5); dafür nimmt senden für folder_id auch eine Menge
-von Kennungen. Ihre Betreffe nennen nur Zahlen bzw. Produkt und Titel – nichts aus einer fremden Gliederung.
+Einzelmails (Mangel, Änderungsantrag, Produktmeldung) tragen als folder_id die Heimat des Artikels bzw. den Ordner der
+Meldung: Die Freigabe „verwalten“ gilt nach unten – wer nur einen Unterordner verwaltet, sieht den Fehlschlag seiner Mail
+und hakt ihn ab, der Gliederungs-Verwalter ebenso. Sammelmails ohne einen Ordner (Erinnerung, Rückruf: Artikel mehrerer
+Gliederungen in einer Mail) bekommen je betroffener Gliederung eine Zeile mit folder_id = Gliederung (Entscheidung
+Nr. 5); dafür nimmt senden für folder_id auch eine Menge von Kennungen. Ihre Betreffe nennen nur Zahlen bzw. Produkt
+und Titel – nichts aus einer fremden Gliederung.
 
 Nachholen: Gelingt später eine Erinnerungsmail an dasselbe Konto, schließt senden dessen offene Erinnerungs-Fehler mit
 erledigt_von_name „nachgeholt“ – der nächste Lauf wiederholt, was scheiterte (erinnerung.py), die Zeile wäre sonst
@@ -59,7 +65,7 @@ AUFBEWAHRUNG_MONATE = 13                            # wie das Erinnerungslog
 ERLEDIGT_MONATE = 3
 NACHGEHOLT = "nachgeholt"                           # erledigt_von_name einer später gelungenen Erinnerung
 LISTE_MAX = 20                                      # Zeilen im Kasten der Übersicht
-ADRESSE, MAILSERVER_TEXT = "[Adresse]", "[Mailserver]"
+ADRESSE, MAILSERVER_TEXT, ANMELDUNG_TEXT = "[Adresse]", "[Mailserver]", "[Anmeldename]"
 ART_TEXT = {"erinnerung": "Erinnerung", "mangel": "Mangel", "antrag": "Änderungsantrag", "meldung": "Produktmeldung",
             "rueckruf": "Rückruf"}
 # Zeilen dieser Rollen sieht nur die Material-Verwaltung: Rückfall-Empfänger und Einzelpersonen, die ein Zweig-Verwalter
@@ -82,29 +88,39 @@ def still(demo=False):
 
 # --- Reinigung ------------------------------------------------------------------------------------------------------
 
-def reinigen(meldung, an=None):
-    """Die Serverantwort ohne Adressen und ohne Mailserver, einzeilig, höchstens MAILMELDUNG_MAX Zeichen: erst die
-    Empfängeradresse (ohne Rücksicht auf Groß- und Kleinschreibung), dann „<…@…>“ und jede weitere Adresse, dann
-    „Host:Port“ und der Host aus der Konfiguration. Ein „@“, das danach noch steht, wird ebenfalls ersetzt – die Tabelle
-    nimmt keins an."""
-    t = " ".join(str(meldung or "").split())
+def _saeubern(t, an=None):
+    """Einzeilig, ohne Adressen, ohne Anmeldenamen und ohne Mailserver – für Meldung und Betreff: erst die
+    Empfängeradresse (ohne Rücksicht auf Groß- und Kleinschreibung), dann der Anmeldename aus der Konfiguration (als
+    ganzes Wort; enthält er ein „@“, ist er eine Adresse und fällt spätestens im nächsten Schritt), dann „<…@…>“ und
+    jede weitere Adresse, dann „Host:Port“ und der Host. Ein „@“, das danach noch steht, wird ebenfalls ersetzt – die
+    Tabelle nimmt keins an."""
+    t = " ".join(str(t or "").split())
     adr = (an or "").strip()
     if adr:
         t = re.sub(re.escape(adr), ADRESSE, t, flags=re.IGNORECASE)
+    cfg = current_app.config
+    nutzer = (cfg.get("SMTP_USER") or "").strip()
+    if nutzer:
+        t = re.sub(rf"(?<![\w.@-]){re.escape(nutzer)}(?![\w.@-])", ANMELDUNG_TEXT, t, flags=re.IGNORECASE)
     t = _SPITZ.sub(ADRESSE, t)
     t = _ADRESSE.sub(ADRESSE, t)
-    cfg = current_app.config
     host = (cfg.get("SMTP_HOST") or "").strip()
     if host:
         port = int(cfg.get("SMTP_PORT") or (465 if cfg.get("SMTP_SSL") else 587))
         t = re.sub(re.escape(f"{host}:{port}"), MAILSERVER_TEXT, t, flags=re.IGNORECASE)
         t = re.sub(re.escape(host), MAILSERVER_TEXT, t, flags=re.IGNORECASE)
-    t = t.replace("@", ADRESSE)
-    return t[:MAILMELDUNG_MAX]
+    return t.replace("@", ADRESSE)
 
 
-def _betreff(betreff):
-    return " ".join(str(betreff or "").split())[:MAILBETREFF_MAX]
+def reinigen(meldung, an=None):
+    """Die Serverantwort gesäubert (_saeubern), höchstens MAILMELDUNG_MAX Zeichen."""
+    return _saeubern(meldung, an)[:MAILMELDUNG_MAX]
+
+
+def _betreff(betreff, an=None):
+    """Der Betreff gesäubert wie die Meldung (Rückruf-Titel, Hersteller und Modell sind freier Text), höchstens
+    MAILBETREFF_MAX Zeichen."""
+    return _saeubern(betreff, an)[:MAILBETREFF_MAX]
 
 
 # --- Senden ---------------------------------------------------------------------------------------------------------
@@ -113,9 +129,9 @@ def senden(an, betreff, text, *, art, konto_id, rolle, bezug_art="none", bezug_i
     """Eine Mail verschicken und einen Fehlschlag protokollieren. Liefert, ob der Mailserver sie angenommen hat.
     art: aus models.MAILARTEN; konto_id: das Konto des Empfängers (Kontoverweis); rolle: aus MAILROLLEN; bezug_art und
     bezug_id: der Gegenstand (Artikel, Meldung, Antrag, Produktmeldung, Rückruf – „none“ für die Erinnerung);
-    folder_id: die Gliederung, deren Verwalter die Zeile sehen – eine Kennung, None oder eine Menge von Kennungen
-    (Sammelmail: je Gliederung eine Zeile); demo: der Gegenstand ist DEMO (dann still). Wirft nur bei einer unbekannten
-    Art, Rolle oder Bezugsart (Programmfehler) – Versand und Protokoll werfen nie."""
+    folder_id: der Ordner, dessen Verwalter die Zeile sehen (Einzelmail: die Heimat) – eine Kennung, None oder eine
+    Menge von Kennungen (Sammelmail: je Gliederung eine Zeile); demo: der Gegenstand ist DEMO (dann still). Wirft nur
+    bei einer unbekannten Art, Rolle oder Bezugsart (Programmfehler) – Versand und Protokoll werfen nie."""
     if art not in MAILARTEN or rolle not in MAILROLLEN or bezug_art not in MAILBEZUEGE:
         raise ValueError(f"Mailprotokoll: unbekannt – art {art!r}, rolle {rolle!r}, bezug {bezug_art!r}")
     grund = still(demo or erinnerung.demo_adresse(an))
@@ -146,7 +162,7 @@ def senden(an, betreff, text, *, art, konto_id, rolle, bezug_art="none", bezug_i
 
 def _protokollieren(an, betreff, meldung, klasse, *, art, konto_id, rolle, bezug_art, bezug_id, folder_id):
     """Die Zeile(n) zu einem Fehlschlag – in eigener kurzer Transaktion, nie in einer äußeren (dann nur eine Logzeile:
-    die Dienste rufen senden nach dem Commit). Je Gliederung aus folder_id eine Zeile; ohne Konto keine."""
+    die Dienste rufen senden nach dem Commit). Je Ordner aus folder_id eine Zeile; ohne Konto keine."""
     if getattr(g, "tx_depth", 0):
         current_app.logger.error("Mailprotokoll: senden innerhalb einer Transaktion gerufen – Zeile zu %s nicht "
                                  "geschrieben.", art)
@@ -163,12 +179,12 @@ def _protokollieren(an, betreff, meldung, klasse, *, art, konto_id, rolle, bezug
             return
         jetzt = db.now()
         for fid in ordner or [None]:
-            # Der Ordner kann inzwischen gelöscht sein (Fremdschlüssel): dann ohne Gliederung.
+            # Der Ordner kann inzwischen gelöscht sein (Fremdschlüssel): dann ohne Ordner.
             if fid is not None and not db.query("SELECT 1 FROM mat_folder WHERE id = ?", (fid,), one=True):
                 fid = None
             db.execute("INSERT INTO mat_mail_fehler (art, klasse, bezug_art, bezug_id, folder_id, konto_ref, rolle, "
                        "betreff, meldung, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                       (art, klasse, bezug_art, bezug_id, fid, ref, rolle, _betreff(betreff), text, jetzt))
+                       (art, klasse, bezug_art, bezug_id, fid, ref, rolle, _betreff(betreff, an), text, jetzt))
 
 
 def _nachgeholt(konto_id):
@@ -186,7 +202,7 @@ def _nachgeholt(konto_id):
 
 def sichtfilter(alias="m", user=None):
     """SQL-Bedingung: welche Zeilen das Konto sieht und abhakt. Material- und Plattform-Verwaltung alles; wer einen Zweig
-    verwaltet, die Zeilen mit Gliederung in seiner Sicht (rechte.ordner_filter mit verwalten) – ohne die Rollen, die nur
+    verwaltet, die Zeilen mit Ordner in seiner Sicht (rechte.ordner_filter mit verwalten – nach unten vererbt) – ohne die Rollen, die nur
     die Verwaltung angehen (NUR_VERWALTUNG); sonst nichts."""
     if not alias.isidentifier():
         raise ValueError(alias)

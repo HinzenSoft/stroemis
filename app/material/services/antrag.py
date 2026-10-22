@@ -419,14 +419,14 @@ def _verschicken(aid, mails, item, demo):
     ohne Mailserver geht nichts hinaus – mailprotokoll.senden schreibt Betreff und Text ins Log)."""
     if not mails:
         return False
-    gl = bestand.gliederung_von(bestand.heimat(item))
-    HINTERGRUND(_versenden, aid, mails, gl["id"] if gl else None, demo)
+    HINTERGRUND(_versenden, aid, mails, bestand.heimat(item), demo)
     return not mailprotokoll.still(demo)
 
 
 def _versenden(aid, mails, folder_id=None, demo=False):
     """Läuft im Hintergrund (eigener App-Kontext). Jede Mail einzeln über mailprotokoll.senden (Bezug der Antrag,
-    Gliederung die der Heimat); eine Adresse, an der es scheitert, hält die anderen nicht auf."""
+    Ordner die Heimat des Artikels – eine Einzelmail wie beim Mangel); eine Adresse, an der es scheitert, hält die anderen
+    nicht auf."""
     for an, betreff, inhalt, konto_id, rolle in mails:
         try:
             mailprotokoll.senden(an, betreff, inhalt, art="antrag", konto_id=konto_id, rolle=rolle, bezug_art="change",

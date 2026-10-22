@@ -140,7 +140,8 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     aufbaut, muss den Index neu anlegen.
   - Schritt 19 (Phase 4 · Lieferung 1, Mailfehler-Protokoll und Jahresbericht): mat_mail_fehler – je gescheiterter
     Modul-Mail (Erinnerung, Mangel, Antrag, Produktmeldung, Rückruf) eine Zeile mit Art, Fehlerklasse, gereinigter
-    Serverantwort (nie eine Adresse: CHECK instr(meldung, '@') = 0), Bezug, Gliederung (folder_id mit ON DELETE SET NULL –
+    Serverantwort und gereinigtem Betreff (nie eine Adresse: CHECK instr(…, '@') = 0 auf beiden), Bezug, Ordner
+    (folder_id: bei Einzelmails die Heimat des Artikels, bei Sammelmails die Gliederung; ON DELETE SET NULL –
     Ordnerkennungen werden wiedervergeben), Kontoverweis und Rolle des Empfängers; geschrieben von
     services/mailprotokoll.senden, abgehakt von der Verwaltung (nur erledigt_* sind änderbar, Trigger
     mat_mail_fehler_fest). Dazu zwei Indizes für den Jahresbericht (inspected_on; entity, action, created_at im
@@ -1658,9 +1659,10 @@ SCHRITT_18 = [
 # --- Schritt 19 (Phase 4 · Lieferung 1): Mailfehler-Protokoll und Indizes für den Jahresbericht ----------------------
 # Je gescheiterter Modul-Mail eine Zeile (services/mailprotokoll.senden) – Erfolge stehen nicht hier (Erinnerungen im
 # Erinnerungslog, Rückrufe zählen in mat_recall). Der Empfänger steht als Kontoverweis (users.mat_ref) und Rolle da, nie
-# mit Adresse; die Serverantwort kommt gereinigt (Adressen und Mailserver ersetzt) – der CHECK auf „@“ ist das Netz
-# dahinter. folder_id ist die Gliederung, deren Verwalter die Zeile sehen; der Fremdschlüssel setzt sie beim Löschen des
-# Ordners auf NULL, weil mat_folder Kennungen wiedervergibt. Nur erledigt_at und erledigt_von_name sind änderbar.
+# mit Adresse; Serverantwort und Betreff kommen gereinigt (Adressen, Anmeldename und Mailserver ersetzt) – die CHECKs
+# auf „@“ sind das Netz dahinter. folder_id ist der Ordner, dessen Verwalter die Zeile sehen (Einzelmail: die Heimat des
+# Artikels, Sammelmail: die Gliederung); der Fremdschlüssel setzt ihn beim Löschen des Ordners auf NULL, weil mat_folder
+# Kennungen wiedervergibt. Nur erledigt_at und erledigt_von_name sind änderbar.
 MAILARTEN = ("erinnerung", "mangel", "antrag", "meldung", "rueckruf")
 MAILKLASSEN = ("empfaenger_abgewiesen", "verbindung", "anmeldung", "abgelehnt", "ausnahme", "sonstiges")
 MAILBEZUEGE = ("item", "folder", "report", "change", "request", "recall", "none")
@@ -1677,7 +1679,8 @@ SCHRITT_19 = [
       folder_id         INTEGER REFERENCES mat_folder(id) ON DELETE SET NULL,   -- Gliederung (Sicht der Verwalter)
       konto_ref         TEXT NOT NULL CHECK (konto_ref <> ''),     -- users.mat_ref des Empfängers, nie die Adresse
       rolle             TEXT NOT NULL CHECK (rolle IN """ + _in(MAILROLLEN) + """),
-      betreff           TEXT NOT NULL CHECK (length(betreff) <= """ + str(MAILBETREFF_MAX) + """),
+      betreff           TEXT NOT NULL CHECK (length(betreff) <= """ + str(MAILBETREFF_MAX) + """
+                                              AND instr(betreff, '@') = 0),
       meldung           TEXT NOT NULL CHECK (length(meldung) <= """ + str(MAILMELDUNG_MAX) + """
                                               AND instr(meldung, '@') = 0),
       created_at        TEXT NOT NULL,                             -- UTC wie db.now()

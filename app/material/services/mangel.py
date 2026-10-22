@@ -30,8 +30,9 @@ und die Prüfer mit wirksamer Prüffreigabe dort – mit Namen und Text, also nu
 die zugeordnete Person, wenn ein anderer ihre PSA meldet (kurz, ohne Melder und Text, nicht abbestellbar). Nie an den
 Melder, nie an DEMO-Adressen. Bei DEMO-Artikeln und unter der Umgebungssperre (erinnerung.gesperrt, dev) stehen die Mails im Log
 statt im Postfach, ebenso ohne Mailserver (SMTP_HOST leer) – dann sagt die Antwort mail: false (mailprotokoll.still).
-Verschickt wird über mailprotokoll.senden: Was der Mailserver nicht annimmt, steht im Mailfehler-Protokoll der
-Gliederung (Rolle Verwalter, Prüfer, zugeordnete Person oder Verwaltung). Die Mails hängen nicht am Schalter der
+Verschickt wird über mailprotokoll.senden: Was der Mailserver nicht annimmt, steht im Mailfehler-Protokoll mit der
+Heimat des Artikels als Ordner – sichtbar für jeden, der sie verwaltet, auch nur den Unterordner (Rolle Verwalter,
+Prüfer, zugeordnete Person oder Verwaltung). Die Mails hängen nicht am Schalter der
 Erinnerungsmails – sie sind die Nachricht zu einer Sperre.
 
 Meldungen sind unveränderlich (Trigger, models.TRIGGER_13), lassen sich nicht löschen und bleiben unbefristet mit dem
@@ -527,12 +528,13 @@ def _benachrichtigen(mid):
 
 def _versenden(mid, mails, folder_id=None, demo=False):
     """Läuft im Hintergrund (eigener App-Kontext). mails: [(an, betreff, inhalt, Konto, Rolle)]; jede Mail einzeln über
-    mailprotokoll.senden (Bezug die Meldung, Gliederung die der Heimat) – eine Adresse, an der es scheitert, hält die
-    anderen nicht auf. Kein Zähler an der Meldung – ob der Mailserver annahm, steht im Mailfehler-Protokoll."""
-    gl = bestand.gliederung_von(folder_id) if folder_id else None
+    mailprotokoll.senden (Bezug die Meldung, Ordner die Heimat des Artikels – so sieht auch, wer nur den Unterordner
+    verwaltet, den Fehlschlag; „verwalten“ gilt nach unten, der Gliederungs-Verwalter sieht ihn ebenso) – eine Adresse,
+    an der es scheitert, hält die anderen nicht auf. Kein Zähler an der Meldung – ob der Mailserver annahm, steht im
+    Mailfehler-Protokoll."""
     for an, betreff, inhalt, konto_id, rolle in mails:
         try:
             mailprotokoll.senden(an, betreff, inhalt, art="mangel", konto_id=konto_id, rolle=rolle, bezug_art="report",
-                                 bezug_id=mid, folder_id=gl["id"] if gl else None, demo=demo)
+                                 bezug_id=mid, folder_id=folder_id, demo=demo)
         except Exception as exc:                     # senden wirft nicht – eine Ausnahme hält trotzdem nichts auf
             current_app.logger.error("Mangel %s: Mail an Konto %s gescheitert: %s", mid, konto_id, exc)

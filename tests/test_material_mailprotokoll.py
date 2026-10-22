@@ -146,7 +146,41 @@ def test_reinigung():
                    folder_id=t.a)
         r = fehler(app)[-1]
         assert len(r["meldung"]) == 300 and "@" not in r["meldung"] and r["klasse"] == "abgelehnt", r
-        # Eine Zeile mit „@“ nimmt die Tabelle nicht an (Netz hinter der Reinigung).
+        # Befund B1 der Sicherheitsprüfung: der Anmeldename in der 535-Antwort (Exim „set_id=…“, ohne „@“) wird ersetzt –
+        # als ganzes Wort, ohne Rücksicht auf die Schreibweise; Wörter, die ihn nur enthalten, bleiben.
+        app.config["SMTP_USER"] = "smtp-login-xyz"
+        with Ersatz(lambda a, b, x: (False, f"Anmeldung am Mailserver abgelehnt ({SMTP}:587): (535, b'Incorrect "
+                                            "authentication data (set_id=SMTP-Login-XYZ)') smtp-login-xyz2")):
+            senden(app, an, "B", "T", art="mangel", konto_id=wart, rolle="verwalter", bezug_art="report", bezug_id=7,
+                   folder_id=t.a)
+        r = fehler(app)[-1]
+        assert r["meldung"] == ("Anmeldung am Mailserver abgelehnt ([Mailserver]): (535, b'Incorrect authentication "
+                                "data (set_id=[Anmeldename])') smtp-login-xyz2"), r["meldung"]
+        with app.app_context():
+            assert modul().reinigen("Username smtp-login-xyz and password not accepted") == \
+                "Username [Anmeldename] and password not accepted"
+        # Ein Anmeldename mit „@“ ist eine Adresse und fällt ebenso.
+        app.config["SMTP_USER"] = "Login@Example.org"
+        with app.app_context():
+            assert modul().reinigen("535 set_id=login@example.org") == "535 set_id=[Anmeldename]"
+        app.config["SMTP_USER"] = ""
+        # Befund B2: Der Betreff läuft durch dieselbe Reinigung (Rückruf-Titel ist freier Text).
+        with Ersatz(lambda a, b, x: (False, VERBINDUNG)):
+            senden(app, an, f"Rückruf: Produkt – Kontakt {an.lower()}, <info@example.org> über {SMTP}", "T",
+                   art="rueckruf", konto_id=wart, rolle="verwalter", bezug_art="recall", bezug_id=3, folder_id=t.a)
+        r = fehler(app)[-1]
+        assert r["betreff"] == "Rückruf: Produkt – Kontakt [Adresse], [Adresse] über [Mailserver]", r["betreff"]
+        n = len(fehler(app))
+        # Eine Zeile mit „@“ – in der Meldung oder im Betreff – nimmt die Tabelle nicht an (Netz hinter der Reinigung).
+        with app.app_context():
+            from app import db
+            try:
+                db.execute("INSERT INTO mat_mail_fehler (art, klasse, bezug_art, folder_id, konto_ref, rolle, betreff, "
+                           "meldung, created_at) VALUES ('mangel', 'verbindung', 'none', NULL, 'abc', 'verwalter', "
+                           "'an x@y', 'm', 't')")
+                raise AssertionError("Betreff mit @ angenommen")
+            except sqlite3.IntegrityError:
+                pass
         with app.app_context():
             from app import db
             try:
@@ -160,7 +194,7 @@ def test_reinigung():
         with Ersatz() as liste, logzeilen(app) as log:
             assert senden(app, an, art="mangel", konto_id=wart, rolle="pruefer", bezug_art="report", bezug_id=7,
                           folder_id=t.a) is True
-        assert len(liste) == 1 and len(fehler(app)) == 5 and not log, (liste, log)
+        assert len(liste) == 1 and len(fehler(app)) == n and not log, (liste, log)
         # Unbekannte Art oder Rolle: Programmfehler, laut.
         for kw in ({"art": "sms", "rolle": "verwalter"}, {"art": "mangel", "rolle": "chef"},
                    {"art": "mangel", "rolle": "verwalter", "bezug_art": "x"}):
@@ -347,9 +381,9 @@ def test_sicht_und_erledigt():
 # --- 5. Dienste schreiben mit Bezug, Rolle und Gliederung ----------------------------------------------------------------
 
 def test_dienste():
-    """Mangelmeldung: je Empfänger eine Zeile mit Rolle (Verwalter, Prüfer, zugeordnete Person) und Gliederung der Heimat;
-    Produktmeldung: Bescheid an den Melder mit Rolle Melder (Konto-Kennung aus der Abfrage); Rückruf: je Gliederung der
-    Artikel in der Mail eine Zeile."""
+    """Mangelmeldung: je Empfänger eine Zeile mit Rolle (Verwalter, Prüfer, zugeordnete Person) und der Heimat des
+    Artikels als Ordner (Einzelmail); Produktmeldung: Bescheid an den Melder mit Rolle Melder (Konto-Kennung aus der
+    Abfrage) und dem Ordner der Meldung; Rückruf: je Gliederung der Artikel in der Mail eine Zeile (Sammelmail)."""
     from app.material.services import mangel, meldung
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
@@ -368,8 +402,8 @@ def test_dienste():
         rows = fehler(app)
         assert sorted(m[0] for m in liste) == ["person@example.org", "pruefer@example.org", "wart@example.org"], liste
         assert sorted((x["rolle"], x["folder_id"], x["bezug_art"], x["bezug_id"], x["art"]) for x in rows) == \
-            sorted([("verwalter", t.a, "report", 1, "mangel"), ("pruefer", t.a, "report", 1, "mangel"),
-                    ("zugeordnet", t.a, "report", 1, "mangel")]), rows
+            sorted([("verwalter", t.lager_a, "report", 1, "mangel"), ("pruefer", t.lager_a, "report", 1, "mangel"),
+                    ("zugeordnet", t.lager_a, "report", 1, "mangel")]), rows
         assert {x["konto_ref"] for x in rows} == {ref(app, k["wart_id"]), ref(app, k["pruefer_id"]), ref(app, person_id)}
         assert all("@" not in x["meldung"] and "[Adresse]" in x["meldung"] for x in rows), rows
         assert all("Mangel gemeldet" in x["betreff"] for x in rows if x["rolle"] != "zugeordnet"), rows
@@ -379,7 +413,7 @@ def test_dienste():
                                         "pfad": f"/material/artikel/{t.art_a['id']}"} for x in z), z
         sql(app, "DELETE FROM mat_mail_fehler")
 
-        # Produktmeldung: Melder wart_a bekommt den Bescheid nicht – Zeile mit Rolle Melder und seiner Gliederung.
+        # Produktmeldung: Melder wart_a bekommt den Bescheid nicht – Zeile mit Rolle Melder und dem Ordner der Meldung.
         alt = meldung.HINTERGRUND
         meldung.HINTERGRUND = lambda f, *a: f(*a)
         try:
@@ -395,8 +429,8 @@ def test_dienste():
         rows = fehler(app)
         assert [m[0] for m in liste] == ["katalog@example.org", "wart@example.org"], liste
         assert [(x["rolle"], x["folder_id"], x["bezug_art"], x["bezug_id"], x["art"], x["konto_ref"]) for x in rows] == \
-            [("verwaltung", t.a, "request", mid, "meldung", ref(app, k["katalog_id"])),
-             ("melder", t.a, "request", mid, "meldung", ref(app, k["wart_id"]))], rows
+            [("verwaltung", t.lager_a, "request", mid, "meldung", ref(app, k["katalog_id"])),
+             ("melder", t.lager_a, "request", mid, "meldung", ref(app, k["wart_id"]))], rows
         # Der Zweig-Verwalter sieht beide Zeilen nicht (Rollen nur für die Verwaltung), die Verwaltung schon.
         assert mailfehler(t.wart_a) is None and mailfehler(k["katalog"])["offen"] == 2
         sql(app, "DELETE FROM mat_mail_fehler")
@@ -424,6 +458,52 @@ def test_dienste():
         assert [x["folder_id"] for x in mailfehler(t.wart_a)["zeilen"]] == [t.a]
         assert mailfehler(t.wart_b)["offen"] == 2
     print("Dienste bestanden.")
+
+
+def test_unterordner_verwalter():
+    """Befund B1 der Ablaufprüfung: Wer nur einen Unterordner verwaltet (Freigabe „verwalten“ am Lager), bekommt die
+    Mangel-Mail als Verwalter der Heimat – und sieht deren Fehlschlag im Kasten, hakt ihn ab; den Fehlschlag aus dem
+    Nachbarordner sieht er nicht (404). Der Gliederungs-Verwalter sieht beide (Vererbung nach unten)."""
+    from app.material.services import mangel
+    with tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        app, k = t.app, t.k
+        fahrzeug = ordner_neu(t.wart_a, t.a, "Fahrzeug Platzhalter")
+        art_f = neuer_artikel(t.wart_a, t.ids["hms"], fahrzeug, serial_no="TEST-F-0001")
+        lagerwart, lagerwart_id = neues_konto(app, "lagerwart@example.org", name="Lagerwart Platzhalter")
+        freigeben(t.adm, t.lager_a, lagerwart_id, "verwalten")
+        alt = mangel.HINTERGRUND
+        mangel.HINTERGRUND = lambda f, *a: f(*a)
+        try:
+            with Ersatz(lambda a, b, x: (False, ABGEWIESEN.format(an=a))) as liste:
+                for iid in (t.art_a["id"], art_f["id"]):
+                    r = k["fuehrung"].post(f"/api/material/artikel/{iid}/mangel", headers=H,
+                                           json={"beschreibung": "Platzhalter Mangel"})
+                    assert r.status_code == 201, r.get_json()
+        finally:
+            mangel.HINTERGRUND = alt
+        assert "lagerwart@example.org" in [m[0] for m in liste], liste
+        eigene = fehler(app, "WHERE konto_ref = ?", (ref(app, lagerwart_id),))
+        assert [(x["folder_id"], x["rolle"]) for x in eigene] == [(t.lager_a, "verwalter")], eigene
+        nachbar = [x for x in fehler(app) if x["folder_id"] == fahrzeug]
+        assert nachbar, fehler(app)
+        # Der Lagerwart sieht nur die Zeilen des Lagers (seine und die des Gliederungs-Verwalters bzw. Prüfers dort).
+        lw = mailfehler(lagerwart)
+        assert lw and {x["folder_id"] for x in lw["zeilen"]} == {t.lager_a} and eigene[0]["id"] in \
+            [x["id"] for x in lw["zeilen"]], lw
+        # Der Gliederungs-Verwalter sieht beide Ordner.
+        assert {x["folder_id"] for x in mailfehler(t.wart_a)["zeilen"]} == {t.lager_a, fahrzeug}
+        # Nachbarordner: 404 wie unbekannt; eigene Zeile abhaken: 200.
+        r = lagerwart.post(f"/api/material/mailfehler/{nachbar[0]['id']}/erledigt", headers=H)
+        assert r.status_code == 404, r.get_json()
+        r = lagerwart.post(f"/api/material/mailfehler/{eigene[0]['id']}/erledigt", headers=H)
+        assert r.status_code == 200 and r.json["zeile"]["erledigt_von_name"] == "Lagerwart Platzhalter", r.get_json()
+        # „Alle erledigt“ trifft nur das Lager – die Zeilen des Fahrzeugs bleiben offen.
+        r = lagerwart.post("/api/material/mailfehler/alle-erledigt", headers=H)
+        assert r.status_code == 200, r.get_json()
+        assert all(x["erledigt_at"] is None for x in fehler(app) if x["folder_id"] == fahrzeug)
+        assert all(x["erledigt_at"] for x in fehler(app) if x["folder_id"] == t.lager_a)
+    print("Unterordner-Verwalter bestanden.")
 
 
 # --- 6. Nachgeholt, Pflege, Konto löschen, Trigger ------------------------------------------------------------------------
@@ -564,6 +644,7 @@ if __name__ == "__main__":
     test_stille()
     test_sicht_und_erledigt()
     test_dienste()
+    test_unterordner_verwalter()
     test_nachgeholt_pflege_loeschen_trigger()
     test_migration_19()
     print("Alle Tests zum Mailfehler-Protokoll bestanden.")

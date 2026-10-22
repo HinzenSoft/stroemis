@@ -21,7 +21,7 @@ Material-Verwaltung nennt nur die Gliederung – eine Mail ist schlechter gesch�
 
 Verschickt wird über mailprotokoll.senden (Phase 4 · L1): Ohne Mailserver, unter der Umgebungssperre (dev) und an
 DEMO-Adressen geht nichts hinaus; was der Mailserver nicht annimmt, steht im Mailfehler-Protokoll (Rolle Verwaltung
-bzw. Melder, Gliederung die des Ordners der Meldung – nur die Material-Verwaltung sieht diese Zeilen)."""
+bzw. Melder, Ordner der Meldung – nur die Material-Verwaltung sieht diese Zeilen)."""
 import json
 import os
 import re
@@ -317,14 +317,10 @@ def loeschen(mid):
 
 # --- Mails ----------------------------------------------------------------------------------------------
 
-def _gliederung_id(fid):
-    gl = bestand.gliederung_von(fid) if fid else None
-    return gl["id"] if gl else None
-
-
 def _senden(mails, mid, folder_id=None):
     """Läuft im Hintergrund. mails: [(an, betreff, inhalt, Konto, Rolle)] – jede einzeln über mailprotokoll.senden (Bezug
-    die Meldung, Gliederung die des Ordners, für den gemeldet wurde)."""
+    die Meldung, Ordner der, für den gemeldet wurde – eine Einzelmail; die Zeilen der Rollen verwaltung und melder sieht
+    ohnehin nur die Material-Verwaltung)."""
     for an, betreff, inhalt, konto_id, rolle in mails:
         try:
             mailprotokoll.senden(an, betreff, inhalt, art="meldung", konto_id=konto_id, rolle=rolle, bezug_art="request",
@@ -362,7 +358,7 @@ def _verwaltung_benachrichtigen(r):
     zeilen += ["", f"Einpflegen oder ablehnen: {cfg['BASE_URL'].rstrip('/')}/material/katalog/meldungen"]
     betreff = f"{cfg['SITE_NAME']} – Produktmeldung: {r['manufacturer']} {r['model']}"
     HINTERGRUND(_senden, [(a, betreff, "\n".join(zeilen) + "\n", uid, "verwaltung") for a, uid in an], r["id"],
-                _gliederung_id(r["folder_id"]))
+                r["folder_id"])
 
 
 def _melder_benachrichtigen(r):
@@ -396,4 +392,4 @@ def _melder_benachrichtigen(r):
         zeilen += [f"{r['resolved_by_name']} hat deine Meldung „{gemeldet}“ nicht in den Katalog aufgenommen.", "",
                    "Begründung:", r["answer"], "", f"Deine Meldungen: {basis}/material/katalog/meldungen"]
     HINTERGRUND(_senden, [(u["email"], betreff, "\n".join(zeilen) + "\n", u["id"], "melder")], r["id"],
-                _gliederung_id(r["folder_id"]))
+                r["folder_id"])
