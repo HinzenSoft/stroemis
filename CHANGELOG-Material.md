@@ -3744,10 +3744,19 @@ Reihen).
 ### Bitte bestätigen
 
 1. **Nullkacheln überall hinten** (statt nur am Telefon): eine Reihenfolge für alle Breiten, dafür wandern die Kacheln
-   am Rechner mit dem Bestand.
+   am Rechner mit dem Bestand. **Bestätigt am 22.10.2026.**
 2. **Gestapelte Sortierköpfe** in der engen Tabelle sind jetzt 88 px (im Durchgang mit drei Köpfen 132 px) hoch.
-3. **Ordnerleiste:** Silbentrennung entfällt dort am Finger (nur noch Wortgrenzen, sonst „…“).
+   **Bestätigt am 22.10.2026.**
+3. **Ordnerleiste:** Silbentrennung entfällt dort am Finger (nur noch Wortgrenzen, sonst „…“). **Bestätigt am 22.10.2026.**
 4. **Breiten:** Tabellen bis 1800 px, Formularseiten 1180 px; Übersicht zweispaltig schon ab 1500 px Inhaltsbreite.
+   **Bestätigt am 22.10.2026**, mit einer Nachjustierung: Der Nutzer bemängelte den Versatz der beiden Spalten – der
+   Absatz „Die Zahlen gelten für den ganzen Zweig …“ stand über der Tabelle „Fälligkeiten je Ordner“, deren Kopf
+   dadurch rund 100 px tiefer begann als der von „Als Nächstes zu prüfen“. Die Erklärung steht jetzt in allen Breiten
+   **unter** der Tabelle (`ordnerUebersichtHtml`, material.js); beide Tabellen beginnen direkt unter ihrer Überschrift
+   auf gleicher Höhe. Geprüft mit `st-geraete` (Chromium, iPhone, Laptop 1280, Desktop QHD, Superwide): keine Befunde,
+   Fotos unter /home/harness/geraete-nachjustierung/lauf/. Außerdem bestätigt am 22.10.2026: Hinweiskästen einheitlich
+   38rem, dunkles Rot app-weit, Schloss grau und Name fett, Ordnerleiste ab Tiefe 3 mit kleinerem Einzug, Platzhalter
+   „Nummer suchen“ (die Punkte der ersten Nachbesserung unten).
 
 ## Nachbesserung nach der Geräte-Prüfung (21.10.2026)
 
@@ -3869,6 +3878,10 @@ Filterknopf „alle“ war dabei erst 36 px breit – jetzt mindestens 44 px).
    „Profil“ (statt umgekehrt „Profil“ normal).
 6. **Ordnerleiste am Finger:** Klappknöpfe 44 px breit – in der schmalen festen Leiste (Tablet quer, 240 px) bricht
    „Lager Musterstadt“ dadurch in zwei Zeilen um.
+
+**Alle sechs Punkte bestätigt am 22.10.2026** – in der Fassung der zweiten Nachbesserung: Breiten 1800/1180 px und
+zweispaltig ab 1500 px (Nr. 1), Nullkacheln in allen Breiten hinten statt per CSS `order` (Nr. 2), Ordnerleiste mit
+kleinerem Einzug ab Tiefe 3 und Umbruch nur an Wortgrenzen (Nr. 6).
 
 ## Beispielbestand (18.10.2026)
 

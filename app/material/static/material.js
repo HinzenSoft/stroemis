@@ -1127,13 +1127,16 @@
     };
     const pfadZeilen = zeilen.some((o) => o.nur_pfad);
     const teilweise = zeilen.some((o) => o.teilweise);
-    return `<p class="help">Die Zahlen gelten für den ganzen Zweig. Gesperrte und ausgesonderte Artikel liegen in ihrer Gliederung und zählen dort.
+    // Die Erklärung steht UNTER der Tabelle (Wunsch vom 22.10.2026): Nebeneinander mit „Als Nächstes zu prüfen“ (ab
+    // 1500 px Inhaltsbreite) beginnen so beide Tabellen direkt unter ihrer Überschrift auf gleicher Höhe – mit dem
+    // Absatz davor stand der linke Tabellenkopf rund 100 px tiefer als der rechte.
+    return `<table class="list mat-tabelle mat-ue" id="mat-ue"><thead><tr><th>Ordner</th><th class="mat-ue-zahl">Bestand</th>
+        ${UE_SPALTEN.map(([s, kurz, lang]) => `<th class="mat-ue-zahl" title="${esc(lang)}">${esc(kurz)}</th>`).join("")}<th>nächste Fälligkeit</th></tr></thead>
+      <tbody>${zeilen.map(zeile).join("")}</tbody></table>
+      <p class="help">Die Zahlen gelten für den ganzen Zweig. Gesperrte und ausgesonderte Artikel liegen in ihrer Gliederung und zählen dort.
         Nächste Fälligkeit: das früheste Prüfdatum im Zweig – ohne neue (Eingangsprüfung), gesperrte und Artikel am Lebensende, die ihre eigenen Spalten haben.
         ${pfadZeilen ? "Grau: übergeordnete Ordner, in denen du keine Freigabe hast – nur der Weg zu deinen." : ""}
-        ${teilweise ? "„Gesperrt (deine Artikel)“: deine gesperrten Artikel in einer Gliederung, die du sonst nicht siehst." : ""}</p>
-      <table class="list mat-tabelle mat-ue" id="mat-ue"><thead><tr><th>Ordner</th><th class="mat-ue-zahl">Bestand</th>
-        ${UE_SPALTEN.map(([s, kurz, lang]) => `<th class="mat-ue-zahl" title="${esc(lang)}">${esc(kurz)}</th>`).join("")}<th>nächste Fälligkeit</th></tr></thead>
-      <tbody>${zeilen.map(zeile).join("")}</tbody></table>`;
+        ${teilweise ? "„Gesperrt (deine Artikel)“: deine gesperrten Artikel in einer Gliederung, die du sonst nicht siehst." : ""}</p>`;
   }
   // Auf- und Zuklappen: Eine Zeile ist verborgen, solange einer ihrer Oberordner zugeklappt ist.
   function ordnerUebersichtKlappen(tabelle) {
