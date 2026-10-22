@@ -566,11 +566,14 @@ def _baum_unveraendert(fid, ordner_ids):
 def produkt_finden(hersteller, modell, artikelnummer, demo_erlaubt):
     """Das Produkt zu einer Produktangabe – nie geraten. {"art", "produkt", "vorschlaege"}:
       genau          gleicher Dublettenschlüssel
-      artikelnummer  die (katalogweit eindeutige) Artikelnummer, beim selben Hersteller
+      artikelnummer  die Artikelnummer beim selben Hersteller (je Hersteller eindeutig – seit dem 22.10.2026 nicht
+                     mehr katalogweit: P53 ist bei Petzl und bei Rock Exotica je ein anderes Produkt)
       modell         ohne Artikelnummer in der Liste: genau ein Produkt des Herstellers mit diesem Modellnamen (vor „|“)
-      mehrdeutig     mehrere davon (Varianten, Größen) – die Treffer als Vorschläge
-      vorschlag      Artikelnummer bei anderem Hersteller, gleicher Modellname mit anderer Artikelnummer oder ein
-                     unscharfer Treffer der Katalogsuche – nur ein Angebot
+      mehrdeutig     mehrere davon (Varianten, Größen) – oder die Artikelnummer bei mehreren Herstellern, ohne dass der
+                     Hersteller der Liste einen davon trifft („warum“: "varianten" | "hersteller"); die Treffer als
+                     Vorschläge
+      vorschlag      Artikelnummer bei genau einem anderen Hersteller, gleicher Modellname mit anderer Artikelnummer
+                     oder ein unscharfer Treffer der Katalogsuche – nur ein Angebot
       unbekannt      nichts
     DEMO-Produkte zählen nur für einen DEMO-Zielordner (demo_erlaubt) – in keiner Stufe und keinem Vorschlag sonst."""
     h, m, a = hersteller or "", modell or "", katalog.artikelnummer(artikelnummer)
@@ -592,23 +595,27 @@ def produkt_finden(hersteller, modell, artikelnummer, demo_erlaubt):
         if not a and he and not katalog.modell_teile(m)[1] and not katalog.modell_teile(p["model"])[1]:
             gleich = gleicher_name()
             if len(gleich) > 1:
-                return {"art": "mehrdeutig", "produkt": None, "vorschlaege": gleich[:10]}
+                return {"art": "mehrdeutig", "warum": "varianten", "produkt": None, "vorschlaege": gleich[:10]}
         return {"art": "genau", "produkt": p, "vorschlaege": []}
     vorschlaege = []
     if a:
-        v = katalog.artikelnummer_vergeben(a)
-        p = katalog.produkt(v["id"]) if v else None
-        if ok(p):
-            if he and katalog._einheitlich(p["manufacturer"]) == he:
-                return {"art": "artikelnummer", "produkt": p, "vorschlaege": []}
-            vorschlaege.append(p)
+        traeger = [x for x in katalog.produkte_mit_artikelnummer(a) if ok(x)]
+        eigene = [x for x in traeger if he and katalog._einheitlich(x["manufacturer"]) == he]
+        if len(eigene) == 1:
+            return {"art": "artikelnummer", "produkt": eigene[0], "vorschlaege": []}
+        if len(eigene) > 1 or len(traeger) > 1:
+            # Zweimal beim selben Hersteller (Dopplung aus der Zeit vor der Regel) oder bei mehreren Herstellern, ohne
+            # dass der Hersteller der Liste einen trifft: nie raten.
+            return {"art": "mehrdeutig", "warum": "varianten" if eigene else "hersteller", "produkt": None,
+                    "vorschlaege": (eigene or traeger)[:10]}
+        vorschlaege += traeger
     if he and m:
         gleich = gleicher_name()
         if not a:
             if len(gleich) == 1:
                 return {"art": "modell", "produkt": gleich[0], "vorschlaege": []}
             if len(gleich) > 1:
-                return {"art": "mehrdeutig", "produkt": None, "vorschlaege": gleich[:10]}
+                return {"art": "mehrdeutig", "warum": "varianten", "produkt": None, "vorschlaege": gleich[:10]}
         vorschlaege += [p for p in gleich if p["id"] not in {x["id"] for x in vorschlaege}]
     if not vorschlaege:
         from .search import produkte
@@ -847,7 +854,11 @@ def _vorpruefen(z, lauf):
         t = lauf.treffer(h, m, a)
         p = t["produkt"]
         if not p:
-            if t["art"] == "mehrdeutig":
+            if t["art"] == "mehrdeutig" and t.get("warum") == "hersteller":
+                hersteller = ", ".join(dict.fromkeys(x["manufacturer"] for x in t["vorschlaege"]))
+                e.grund("produkt_mehrdeutig", f"Artikelnummer „{a}“ gibt es bei mehreren Herstellern ({hersteller}) – "
+                                              "bitte den Hersteller in der Liste angeben oder in der Nacharbeit zuordnen.")
+            elif t["art"] == "mehrdeutig":
                 e.grund("produkt_mehrdeutig", "Produkt nicht eindeutig – im Katalog gibt es mehrere Varianten dazu; "
                                               "bitte in der Nacharbeit zuordnen.")
             elif t["art"] == "vorschlag":

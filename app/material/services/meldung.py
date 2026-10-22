@@ -153,7 +153,9 @@ def anlegen(d, dateien=()):
     if da:
         raise Abgelehnt(f"„{katalog.produktname(da)}“ steht schon im Katalog – bitte in der Produktsuche "
                         "danach suchen.", 409)
-    da = katalog.artikelnummer_vergeben(w["article_no"])
+    # Dieselbe Artikelnummer bei diesem Hersteller (seit dem 22.10.2026 nur je Hersteller eindeutig – bei einem anderen
+    # Hersteller ist sie ein anderes Produkt).
+    da = katalog.artikelnummer_vergeben(w["article_no"], w["manufacturer"])
     if da:
         raise Abgelehnt(f"Die Artikelnummer „{w['article_no']}“ gehört im Katalog zu „{katalog.produktname(da)}“ – "
                         "bitte in der Produktsuche danach suchen.", 409)
@@ -226,11 +228,12 @@ def meldung_json(r):
     out["produkt"] = katalog.produkt_json(p) if p else None
     out["produkt_geloescht"] = r["status"] == "eingepflegt" and not p
     # Steht das Produkt inzwischen im Katalog (angelegt aus einer anderen Meldung oder direkt; gleiche Dublette
-    # oder gleiche Artikelnummer), genügt ein Klick.
+    # oder gleiche Artikelnummer beim selben Hersteller – bei einem anderen ist es ein anderes Produkt), genügt ein
+    # Klick.
     t = None
     if r["status"] == "offen":
         t = db.query("SELECT * FROM mat_product WHERE dedupe_key = ?", (r["dedupe_key"],), one=True)
-        v = None if t else katalog.artikelnummer_vergeben(r["article_no"])
+        v = None if t else katalog.artikelnummer_vergeben(r["article_no"], r["manufacturer"])
         t = t or (katalog.produkt(v["id"]) if v else None)
     out["treffer"] = katalog.produkt_json(t) if t else None
     return out

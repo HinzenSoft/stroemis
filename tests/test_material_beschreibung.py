@@ -387,14 +387,14 @@ def _darstellung(export, gesetzt):
         assert z[a["inventory_no"]]["Bemerkung (Produkt)"] == "Twistlock", z
         assert z[a["inventory_no"]]["Bemerkung"] == "Testnotiz am Artikel" and z[g["inventory_no"]]["Bemerkung"] == "", z
         assert z[g["inventory_no"]]["Bemerkung (Produkt)"] == "", z
-        r = kp.get("/api/material/produkte/artikelnummer", query_string={"nr": "HB-7"})
+        r = kp.get("/api/material/produkte/artikelnummer", query_string={"nr": "HB-7", "hersteller": "Testwerk"})
         assert r.json["produkt"]["name"] == "Testwerk HMS Beta Twistlock", r.get_json()
         # Für den Hinweis „Schon vergeben“ auch die Teile: Die Oberfläche setzt den Zusatz grau hinter den Link
         # (Befund der Prüfung vom 18.10.2026: dort stand er noch im roten Link). Ein Zusatz von Hand kommt, wie er
         # gepflegt ist – zerlegt wird er erst in der Anzeige.
         p = r.json["produkt"]
         assert (p["manufacturer"], p["model"], p["description"]) == ("Testwerk", "HMS Beta", "Twistlock"), p
-        p = kp.get("/api/material/produkte/artikelnummer", query_string={"nr": "GA-100"}).json["produkt"]
+        p = kp.get("/api/material/produkte/artikelnummer", query_string={"nr": "GA-100", "hersteller": "Testwerk"}).json["produkt"]
         assert (p["name"], p["model"], p["description"]) == ("Testwerk Gurt Alpha Platzhalter",
                                                               "Gurt Alpha | Platzhalter", ""), p
 

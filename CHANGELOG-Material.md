@@ -3655,6 +3655,60 @@ Nach der Prüfung vor Auslieferung entschieden bzw. bestätigt:
        zurück, „erledigt“ zeigt die grauen Marken „zurückgezogen“. Keine Konsolenfehler, kein waagerechtes Scrollen, je
        Dialog höchstens ein roter Knopf.
 
+## Artikelnummern eindeutig je Hersteller (22.10.2026)
+
+Entscheidung des Nutzers vom 22.10.2026, die die Regel vom 18.10.2026 („Artikelnummern eindeutig“, Lieferung 5) einengt:
+Eine Artikelnummer muss nur noch **innerhalb eines Herstellers** eindeutig sein, nicht mehr katalogweit. Anlass: Echte
+Herstellernummern kollidieren – Petzl MICRO TRAXION = P53 und JAG TRAXION = P54, Rock Exotica Omni-Block 2.0 Single =
+P53 und Omni-Block 1.1 Single = P54; der Katalogimport „Seilrollen“ scheiterte an diesen zwei Produkten. Der
+Dublettenschlüssel (Hersteller | Modell | Artikelnummer, UNIQUE) bleibt, kein Schemaschritt.
+
+### Verhalten
+
+- **Katalog** (`katalog.artikelnummer_vergeben(article_no, hersteller, ausser)`): Treffer nur beim selben
+  vereinheitlichten Hersteller („Test-Werk“ = „Testwerk“); die Abfrage sucht `dedupe_key LIKE '<herst>|%|<nr>'` –
+  vereinheitlichte Werte bestehen nur aus Buchstaben und Ziffern, enthalten also weder „|“ noch die Platzhalter von
+  LIKE. Leer oder „-“ zählt weiter nicht. Fehlermeldung beim Anlegen, Ändern und Kopieren als Variante: „Die
+  Artikelnummer „…“ ist bei <Hersteller> schon vergeben: …“ (409). Beim Ändern wird jetzt auch geprüft, wenn nur der
+  **Hersteller** wechselt (die Nummer dann beim neuen Hersteller frei sein muss); eine Dopplung aus der Zeit vor der
+  Regel blockiert andere Änderungen weiterhin nicht. Neu `katalog.produkte_mit_artikelnummer(article_no)`: alle
+  Produkte mit dieser Nummer, gleich bei welchem Hersteller – für Aufrufer, die ein Produkt nur über die Nummer suchen.
+- **Hinweis beim Tippen** (`GET /api/material/produkte/artikelnummer?nr=&hersteller=&ausser=`): neuer Parameter
+  `hersteller` (wie im Formular getippt); Produkt- und Meldedialog schicken ihr Herstellerfeld mit und prüfen erneut,
+  wenn sich der Hersteller ändert. Ohne Hersteller oder bei einem anderen gibt es keinen Hinweis; die Antwort ist
+  unverändert.
+- **Katalogimport** (Format 1 und 2): keine eigene Prüfung – die Regel greift über `produkt_anlegen`/`produkt_aendern`;
+  dieselbe Nummer bei zwei Herstellern geht durch, beim selben Hersteller bleibt es die Fehlerzeile ohne Speichern.
+- **Bestandsimport** (`bestandsimport.produkt_finden`): Stufe „artikelnummer“ trifft das Produkt des Herstellers der
+  Liste. Tragen mehrere Hersteller die Nummer und die Liste nennt keinen davon (Hersteller fehlt oder passt zu keinem),
+  geht die Zeile als „Produkt mehrdeutig“ in die Nacharbeit – Text: „Artikelnummer „P53“ gibt es bei mehreren
+  Herstellern (A, B) – bitte den Hersteller in der Liste angeben oder in der Nacharbeit zuordnen.“, die Träger als
+  Vorschläge. Gibt es die Nummer bei genau einem anderen Hersteller, bleibt es wie bisher ein Vorschlag. Eine
+  Hersteller-Spalte hat der Import schon (Hersteller, Marke, Fabrikat, manufacturer) – damit ist die Zeile eindeutig.
+- **Produktmeldung**: Beim Melden zählt nur die Nummer beim selben Hersteller als „gehört schon zu …“ (409); der
+  Treffer „steht inzwischen im Katalog – ein Klick ordnet zu“ ist nur noch das Produkt desselben Herstellers mit der
+  Nummer (oder die Dublette), nie eines eines anderen Herstellers. Beim Anlegen aus der Meldung prüft `produkt_anlegen`
+  mit dem Hersteller.
+
+### Tests
+
+- `tests/test_material.py::test_artikelnummer_eindeutig` umgeschrieben: gleiche Nummer beim selben Hersteller
+  (auch anders geschrieben) → 409 beim Anlegen, Ändern der Nummer und Wechsel des Herstellers; bei einem anderen
+  Hersteller → 201/200; Hinweis beim Tippen mit und ohne Hersteller; Meldung bei anderem Hersteller erlaubt, Treffer
+  nur beim selben; Katalogimport Format 1 (Fehlerzeile) und Format 2 (durch).
+- `tests/test_material.py::test_produkt_variante`: Variante mit anderem Hersteller und der Nummer HB-7 → 201.
+- `tests/test_material_import.py::test_produktabgleich`: P-53 bei zwei Herstellern – Zeile mit dem Hersteller
+  übernehmbar, ohne Hersteller oder mit einem dritten → Nacharbeit „bei mehreren Herstellern (…)“.
+- `tests/test_material_beschreibung.py`: der Hinweis beim Tippen mit `hersteller`.
+
+### Bitte bestätigen
+
+- Nacharbeit-Text „Artikelnummer „…“ gibt es bei mehreren Herstellern (A, B) – bitte den Hersteller in der Liste
+  angeben oder in der Nacharbeit zuordnen.“ (Gruppe „Produkt mehrdeutig“, die Träger als Vorschläge).
+- Produktmeldung: Der Ein-Klick-Treffer berücksichtigt nur den Hersteller der Meldung; ein Produkt eines anderen
+  Herstellers mit derselben Nummer wird nicht angeboten (die Material-Verwaltung findet es über die Produktsuche).
+- Beim Ändern wird die Nummer jetzt auch geprüft, wenn nur der Hersteller wechselt (vorher nur bei neuer Nummer).
+
 ## Nachbesserung zu Schritt 18 nach der Sicherheitsprüfung (22.10.2026)
 
 Die unabhängige Prüfung von Commit 9f6522c (Bericht `pruefung-schritt18/bericht.md`, außerhalb des Repositories) fand

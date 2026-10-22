@@ -486,13 +486,16 @@ def produkte():
 
 @api.get("/produkte/artikelnummer")
 def artikelnummer_pruefen():
-    """Für den Hinweis beim Tippen: Wem gehört diese Artikelnummer schon? („ausser“: das Produkt, das man bearbeitet)
-    name ist der Name als Text (katalog.produktname); manufacturer, model und description braucht die Oberfläche, um
-    den Zusatz wie überall grau hinter den Link zu setzen (nameHtml/zusatzHtml in material.js)."""
+    """Für den Hinweis beim Tippen: Welchem Produkt dieses Herstellers („hersteller“, wie im Formular getippt) gehört
+    die Artikelnummer schon? („ausser“: das Produkt, das man bearbeitet.) Seit dem 22.10.2026 zählt nur derselbe
+    Hersteller – ohne Hersteller im Formular gibt es keinen Treffer. name ist der Name als Text (katalog.produktname);
+    manufacturer, model und description braucht die Oberfläche, um den Zusatz wie überall grau hinter den Link zu
+    setzen (nameHtml/zusatzHtml in material.js)."""
     if not current_user():
         return jsonify(error="Nicht angemeldet"), 401
     _katalog_lesen()
-    da = katalog.artikelnummer_vergeben(request.args.get("nr", ""), request.args.get("ausser", type=int))
+    da = katalog.artikelnummer_vergeben(request.args.get("nr", ""), request.args.get("hersteller", ""),
+                                        request.args.get("ausser", type=int))
     return jsonify(produkt={"id": da["id"], "name": katalog.produktname(da), "manufacturer": da["manufacturer"],
                             "model": da["model"], "description": da["description"], "article_no": da["article_no"]}
                    if da else None)

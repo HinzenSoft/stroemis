@@ -7,7 +7,9 @@ Regeln stehen hier, weil der Katalogimport (importer.py) dieselben braucht wie d
 
 Fachliche Grenzen aus dem Konzept:
   - Dublette = Hersteller + Modell + Artikelnummer (vereinheitlicht, siehe dedupe_key). Dazu gibt es jede
-    Artikelnummer im Katalog nur einmal (gleich vereinheitlicht; leer zählt nicht), siehe artikelnummer_vergeben.
+    Artikelnummer je Hersteller nur einmal (gleich vereinheitlicht; leer zählt nicht), siehe artikelnummer_vergeben –
+    nicht mehr katalogweit (Entscheidung vom 22.10.2026): Echte Herstellernummern kollidieren zwischen Herstellern
+    (Petzl MICRO TRAXION = P53, Rock Exotica Omni-Block 2.0 Single = P53).
   - Lebensdauer: Pflicht bei textilem Material, verboten bei Metall, bei „sonstiges“ nur mit
     Herstellerangabe (Fundstelle).
   - Formulare: je Kategorie ein generisches, je Produkt optional ein spezifisches, das das generische
@@ -396,21 +398,38 @@ def _dublette_pruefen(key, ausser=None):
         raise Abgelehnt(f"Dieses Produkt steht schon im Katalog: {produktname(andere)}{nr}.", 409)
 
 
-def artikelnummer_vergeben(article_no, ausser=None):
-    """Das Produkt, das diese Artikelnummer schon trägt – Schreibweise egal (wie in der Dublette), leer zählt
-    nicht. Hinter dem letzten „|“ des dedupe_key steht genau die vereinheitlichte Artikelnummer; Hersteller und
-    Modell enthalten vereinheitlicht weder „|“ noch die Platzhalter von LIKE („%“, „_“)."""
+def _nummer_muster(article_no):
+    """Das LIKE-Muster hinter dem letzten „|“ des dedupe_key: genau die vereinheitlichte Artikelnummer. Hersteller und
+    Modell enthalten vereinheitlicht weder „|“ noch die Platzhalter von LIKE („%“, „_“) – _einheitlich lässt nur
+    Buchstaben und Ziffern stehen. Leer: None (keine Nummer zählt nicht)."""
     nr = _einheitlich(artikelnummer(article_no))
-    if not nr:
+    return "|" + nr if nr else None
+
+
+def artikelnummer_vergeben(article_no, hersteller, ausser=None):
+    """Das Produkt DIESES Herstellers (Schreibweise egal, wie in der Dublette), das die Artikelnummer schon trägt –
+    leer zählt nicht. Seit dem 22.10.2026 nur je Hersteller: Dieselbe Nummer bei einem anderen Hersteller ist kein
+    Treffer (produkte_mit_artikelnummer findet sie)."""
+    muster = _nummer_muster(article_no)
+    if not muster:
         return None
     return db.query("SELECT id, manufacturer, model, description, article_no FROM mat_product WHERE dedupe_key LIKE ? "
-                    "AND id <> ? ORDER BY id LIMIT 1", ("%|" + nr, ausser or 0), one=True)
+                    "AND id <> ? ORDER BY id LIMIT 1", (_einheitlich(hersteller) + "|%" + muster, ausser or 0), one=True)
 
 
-def _artikelnummer_pruefen(article_no, ausser=None):
-    da = artikelnummer_vergeben(article_no, ausser)
+def produkte_mit_artikelnummer(article_no):
+    """Alle Produkte mit dieser Artikelnummer, gleich bei welchem Hersteller (nach Kennung) – für Aufrufer, die ein
+    Produkt nur über die Nummer suchen (Bestandsimport, Meldung) und selbst entscheiden, ob der Hersteller passt."""
+    muster = _nummer_muster(article_no)
+    if not muster:
+        return []
+    return db.query("SELECT * FROM mat_product WHERE dedupe_key LIKE ? ORDER BY id", ("%" + muster,))
+
+
+def _artikelnummer_pruefen(article_no, hersteller, ausser=None):
+    da = artikelnummer_vergeben(article_no, hersteller, ausser)
     if da:
-        raise Abgelehnt(f"Die Artikelnummer „{article_no}“ ist im Katalog schon vergeben: {produktname(da)} "
+        raise Abgelehnt(f"Die Artikelnummer „{article_no}“ ist bei {da['manufacturer']} schon vergeben: {produktname(da)} "
                         f"({da['article_no']}).", 409)
 
 
@@ -421,7 +440,7 @@ def produkt_anlegen(d, demo=False, importiert=False):
     ts = db.now()
     with db.transaction(sofort=True):
         _dublette_pruefen(key)
-        _artikelnummer_pruefen(w["article_no"])
+        _artikelnummer_pruefen(w["article_no"], w["manufacturer"])
         try:
             pid = db.execute(
                 "INSERT INTO mat_product (category_id, manufacturer, model, article_no, dedupe_key, norm, material_kind, "
@@ -483,10 +502,11 @@ def produkt_aendern(pid, d, importiert=False):
                         "an ihr hängen Lebensdauer und Aussonderung.", 409)
     with db.transaction(sofort=True):
         _dublette_pruefen(key, ausser=pid)
-        # Geprüft, wenn sich die Nummer ändert: Eine Dopplung aus der Zeit vor dieser Regel soll nicht jede
-        # andere Änderung am Produkt blockieren.
-        if _einheitlich(w["article_no"]) != _einheitlich(artikelnummer(alt["article_no"])):
-            _artikelnummer_pruefen(w["article_no"], ausser=pid)
+        # Geprüft, wenn sich die Nummer oder der Hersteller ändert: Eine Dopplung aus der Zeit vor dieser Regel soll
+        # nicht jede andere Änderung am Produkt blockieren.
+        if (_einheitlich(w["article_no"]), _einheitlich(w["manufacturer"])) != \
+                (_einheitlich(artikelnummer(alt["article_no"])), _einheitlich(alt["manufacturer"])):
+            _artikelnummer_pruefen(w["article_no"], w["manufacturer"], ausser=pid)
         db.execute("UPDATE mat_product SET category_id = ?, manufacturer = ?, model = ?, article_no = ?, dedupe_key = ?, "
                    "norm = ?, material_kind = ?, interval_months = ?, lifetime_years = ?, lifetime_source = ?, "
                    "description = ?, updated_at = ? WHERE id = ?",

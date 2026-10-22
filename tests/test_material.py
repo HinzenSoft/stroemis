@@ -2076,8 +2076,10 @@ def test_durchgang_abbrechen():
 
 
 def test_artikelnummer_eindeutig():
-    """Eine Artikelnummer gibt es im Katalog nur einmal – Schreibweise egal, leer zählt nicht. Geprüft beim Anlegen,
-    beim Ändern der Nummer, im Katalogimport und bei Meldungen; die Oberfläche fragt schon beim Tippen nach."""
+    """Eine Artikelnummer gibt es je Hersteller nur einmal – Schreibweise egal, leer zählt nicht; bei einem anderen
+    Hersteller ist sie ein anderes Produkt (Entscheidung vom 22.10.2026: Petzl und Rock Exotica vergeben beide P53
+    und P54). Geprüft beim Anlegen, beim Ändern der Nummer oder des Herstellers, im Katalogimport und bei Meldungen;
+    die Oberfläche fragt schon beim Tippen nach – mit dem Hersteller aus dem Formular."""
     from app.material.services import meldung
     alt = (meldung.HINTERGRUND, meldung.send_mail)
     meldung.HINTERGRUND = lambda f, *a: f(*a)
@@ -2090,55 +2092,87 @@ def test_artikelnummer_eindeutig():
             kp = k["katalog"]
 
             def neu(**f):
-                return kp.post("/api/material/produkte", json=dict({"category_id": ids["karabiner"], "manufacturer": "Anderwerk",
+                return kp.post("/api/material/produkte", json=dict({"category_id": ids["karabiner"], "manufacturer": "Testwerk",
                                                                    "model": "Karabiner X", "material_kind": "metall_hardware",
                                                                    "interval_months": 12}, **f))
-            # Anlegen: dieselbe Nummer bei anderem Hersteller und Modell – auch anders geschrieben – wird abgewiesen.
+            # Anlegen: dieselbe Nummer beim selben Hersteller (anders geschrieben, anderes Modell) wird abgewiesen …
             for nr in ("GA-100", "ga 100", "GA100"):
                 r = neu(article_no=nr)
-                assert r.status_code == 409 and "schon vergeben" in r.json["error"] and "Gurt Alpha" in r.json["error"], r.get_json()
+                assert r.status_code == 409 and "bei Testwerk schon vergeben" in r.json["error"] \
+                    and "Gurt Alpha" in r.json["error"], r.get_json()
+            # … bei einem anderen Hersteller (auch nur anders geschrieben zählt nicht: „Test-Werk“ ist Testwerk) nicht.
+            assert neu(manufacturer="Test-Werk", article_no="GA-100").status_code == 409
+            r = neu(manufacturer="Anderwerk", article_no="GA-100")
+            assert r.status_code == 201, r.get_json()
+            fremd = r.json["produkt"]["id"]
             # Ohne Artikelnummer (auch „-“ oder „/“) beliebig oft.
             for i, nr in enumerate(("", "-", "", "/")):
                 assert neu(model=f"Ohne Nummer {i}", article_no=nr).status_code == 201, nr
             r = neu(article_no="AX-1")
             assert r.status_code == 201
             ax = r.json["produkt"]["id"]
-            # Ändern: auf eine vergebene Nummer nicht; die eigene (anders geschrieben) behalten schon.
+            # Ändern: auf eine beim Hersteller vergebene Nummer nicht; die eigene (anders geschrieben) behalten schon.
             r = kp.put(f"/api/material/produkte/{ax}", json={"article_no": "HB 7"})
             assert r.status_code == 409 and "HMS Beta" in r.json["error"], r.get_json()
             assert kp.put(f"/api/material/produkte/{ax}", json={"article_no": "ax1", "description": "neu"}).status_code == 200
+            # Auch der Hersteller zählt: Das Anderwerk-Produkt mit GA-100 darf nicht zu Testwerk werden …
+            r = kp.put(f"/api/material/produkte/{fremd}", json={"manufacturer": "Testwerk"})
+            assert r.status_code == 409 and "Gurt Alpha" in r.json["error"], r.get_json()
+            # … zu einem dritten Hersteller schon; und die Nummer des anderen Herstellers ist für Anderwerk frei.
+            assert kp.put(f"/api/material/produkte/{fremd}", json={"manufacturer": "Drittwerk"}).status_code == 200
+            assert kp.put(f"/api/material/produkte/{fremd}", json={"article_no": "HB-7"}).status_code == 200
             # Eine Dopplung aus der Zeit vor der Regel blockiert andere Änderungen nicht – nur eine neue vergebene Nummer.
             with app.app_context():
                 from app import db
                 from app.material.services import katalog as kat
                 ts = "2026-01-01T00:00:00+00:00"
                 db.execute("INSERT INTO mat_product (category_id, manufacturer, model, article_no, dedupe_key, material_kind, "
-                           "interval_months, created_at, updated_at) VALUES (?, 'Altwerk', 'Altmodell', 'GA-100', ?, "
-                           "'metall_hardware', 12, ?, ?)", (ids["karabiner"], kat.dedupe_key("Altwerk", "Altmodell", "GA-100"), ts, ts))
-                altid = db.query("SELECT id FROM mat_product WHERE manufacturer = 'Altwerk'", one=True)["id"]
+                           "interval_months, created_at, updated_at) VALUES (?, 'Testwerk', 'Altmodell', 'GA-100', ?, "
+                           "'metall_hardware', 12, ?, ?)", (ids["karabiner"], kat.dedupe_key("Testwerk", "Altmodell", "GA-100"), ts, ts))
+                altid = db.query("SELECT id FROM mat_product WHERE model = 'Altmodell'", one=True)["id"]
             assert kp.put(f"/api/material/produkte/{altid}", json={"description": "geändert"}).status_code == 200
-            assert kp.put(f"/api/material/produkte/{altid}", json={"article_no": "HB-7"}).status_code == 409
-            # Hinweis beim Tippen: wem die Nummer gehört (ohne das gerade bearbeitete Produkt).
-            r = kp.get("/api/material/produkte/artikelnummer?nr=ga%20100")
+            assert kp.put(f"/api/material/produkte/{altid}", json={"article_no": "AX-1"}).status_code == 409
+            # Hinweis beim Tippen: wem die Nummer bei diesem Hersteller gehört (ohne das gerade bearbeitete Produkt);
+            # ohne Hersteller oder bei einem anderen kein Treffer.
+            r = kp.get("/api/material/produkte/artikelnummer?nr=ga%20100&hersteller=test-werk")
             assert r.status_code == 200 and r.json["produkt"]["name"] == "Testwerk Gurt Alpha", r.get_json()
             # Der Name mit der Beschreibung als Zusatz, ohne Strich (Nachbesserungen vom 18.10.2026).
-            assert kp.get(f"/api/material/produkte/artikelnummer?nr=GA-100&ausser={ids['gurt']}").json["produkt"]["name"] \
-                == "Altwerk Altmodell geändert"
-            for nr in ("-", "ZZ-9", ""):
-                assert kp.get(f"/api/material/produkte/artikelnummer?nr={nr}").json["produkt"] is None, nr
-            assert k["wart"].get("/api/material/produkte/artikelnummer?nr=GA-100").status_code == 200
-            assert k["nutzer"].get("/api/material/produkte/artikelnummer?nr=GA-100").status_code == 403
-            # Meldungen: Gehört die Nummer schon einem Produkt, gibt es nichts zu melden.
-            r = k["wart"].post("/api/material/meldungen", headers=H, json={"manufacturer": "Fremdwerk", "model": "Irgendwas",
+            assert kp.get(f"/api/material/produkte/artikelnummer?nr=GA-100&hersteller=Testwerk&ausser={ids['gurt']}").json["produkt"]["name"] \
+                == "Testwerk Altmodell geändert"
+            for q in ("nr=-&hersteller=Testwerk", "nr=ZZ-9&hersteller=Testwerk", "nr=&hersteller=Testwerk", "nr=GA-100",
+                      "nr=GA-100&hersteller=Anderwerk"):
+                assert kp.get(f"/api/material/produkte/artikelnummer?{q}").json["produkt"] is None, q
+            assert k["wart"].get("/api/material/produkte/artikelnummer?nr=GA-100&hersteller=Testwerk").status_code == 200
+            assert k["nutzer"].get("/api/material/produkte/artikelnummer?nr=GA-100&hersteller=Testwerk").status_code == 403
+            # Meldungen: Gehört die Nummer bei diesem Hersteller schon einem Produkt, gibt es nichts zu melden –
+            # bei einem anderen Hersteller ist es ein anderes Produkt.
+            r = k["wart"].post("/api/material/meldungen", headers=H, json={"manufacturer": "Testwerk", "model": "Irgendwas",
                                                                           "article_no": "hb-7"})
             assert r.status_code == 409 and "HMS Beta" in r.json["error"], r.get_json()
-            # Katalogimport: dieselbe Regel, mit Fehlerzeile – und nichts gespeichert.
+            r = k["wart"].post("/api/material/meldungen", headers=H, json={"manufacturer": "Fremdwerk", "model": "Irgendwas",
+                                                                          "article_no": "hb-7"})
+            assert r.status_code == 201, r.get_json()
+            mid = r.json["meldung"]["id"]
+            # Als Treffer („steht inzwischen im Katalog“) zählt nur das Produkt desselben Herstellers mit der Nummer –
+            # nicht Testwerk HMS Beta oder das Drittwerk-Produkt, die sie auch tragen.
+            assert kp.get(f"/api/material/meldungen/{mid}").json["meldung"]["treffer"] is None
+            r = neu(manufacturer="Fremdwerk", model="Irgendwas Neu", article_no="HB-7")
+            assert r.status_code == 201, r.get_json()
+            assert kp.get(f"/api/material/meldungen/{mid}").json["meldung"]["treffer"]["id"] == r.json["produkt"]["id"]
+            # Katalogimport: dieselbe Regel, mit Fehlerzeile – und nichts gespeichert; bei einem anderen Hersteller
+            # geht die Nummer durch (Format 2 wie Format 1).
             with app.app_context():
                 from app.material.services import importer
-                bericht = importer.importieren({"format": "stroemis-material-katalog", "version": 1, "produkte": [
-                    {"kategorie": ["PSA gegen Absturz", "Karabiner"], "hersteller": "Importwerk", "modell": "Kopie",
-                     "artikelnummer": "GA 100", "materialart": "metall_hardware", "intervall_monate": 12}]})
-            assert not bericht["gespeichert"] and any("schon vergeben" in f for f in bericht["fehler"]), bericht
+                zeile = {"kategorie": ["PSA gegen Absturz", "Karabiner"], "hersteller": "Testwerk", "modell": "Kopie",
+                         "artikelnummer": "GA 100", "materialart": "metall_hardware", "intervall_monate": 12}
+                bericht = importer.importieren({"format": "stroemis-material-katalog", "version": 1, "produkte": [zeile]})
+                assert not bericht["gespeichert"] and any("schon vergeben" in f for f in bericht["fehler"]), bericht
+                bericht = importer.importieren({"format": "stroemis-material-katalog", "version": 2,
+                                                "kategorien": [{"uid": "c" * 32, "name": "Importkategorie"}],
+                                                "produkte": [dict(zeile, uid="d" * 32, kategorie=["Importkategorie"],
+                                                                  hersteller="Importwerk")]})
+                assert bericht["gespeichert"] and not bericht["fehler"], bericht
+                assert [p["manufacturer"] for p in kat.produkte_mit_artikelnummer("ga100")] == ["Testwerk", "Testwerk", "Importwerk"]
     finally:
         meldung.HINTERGRUND, meldung.send_mail = alt
     print("Artikelnummerntest bestanden.")
@@ -2176,6 +2210,9 @@ def test_produkt_variante():
         assert r.status_code == 409 and "Gurt Alpha" in r.json["error"], r.get_json()
         r = kp.post(url, json=dict(stamm, model="Gurt Alpha L", article_no="HB-7"), headers=H)   # vergeben an HMS Beta
         assert r.status_code == 409 and "schon vergeben" in r.json["error"], r.get_json()
+        # Bei einem anderen Hersteller ist dieselbe Nummer frei (seit dem 22.10.2026 nur je Hersteller eindeutig).
+        r = kp.post(url, json=dict(stamm, manufacturer="Fremdwerk", article_no="HB-7"), headers=H)
+        assert r.status_code == 201 and r.json["produkt"]["manufacturer"] == "Fremdwerk", r.get_json()
         for falsch in ([alt_v1], [weg], [999999], ["x"]):
             r = kp.post(url, json=dict(stamm, article_no="GA-200", dokumente=falsch), headers=H)
             assert r.status_code == 400, (falsch, r.get_json())

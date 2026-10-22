@@ -2932,21 +2932,25 @@
     });
   }
 
-  // Eine Artikelnummer gibt es im Katalog nur einmal. Schon beim Tippen sagen, wem sie gehört – der Server
-  // prüft beim Speichern ohnehin. ausser: das Produkt, das gerade bearbeitet wird.
-  function artikelnummerPruefen(feld, hilfe, ausser) {
+  // Eine Artikelnummer gibt es je Hersteller nur einmal (seit dem 22.10.2026 nicht mehr katalogweit – P53 ist bei
+  // Petzl und bei Rock Exotica je ein anderes Produkt). Schon beim Tippen sagen, wem sie bei diesem Hersteller gehört –
+  // der Server prüft beim Speichern ohnehin. herstellerFeld: das Herstellerfeld desselben Formulars (ein anderer
+  // Hersteller dort nimmt den Hinweis weg); ausser: das Produkt, das gerade bearbeitet wird.
+  function artikelnummerPruefen(feld, herstellerFeld, hilfe, ausser) {
     let los = null;
     const pruefen = async () => {
-      const nr = feld.value.trim();
+      const nr = feld.value.trim(), hersteller = herstellerFeld.value.trim();
       if (!nr) { hilfe.innerHTML = ""; return; }
       try {
-        const p = (await api(`${API}/produkte/artikelnummer?${new URLSearchParams({ nr, ausser: ausser || "" })}`)).produkt;
-        if (feld.value.trim() !== nr) return;          // inzwischen weitergetippt
+        const p = (await api(`${API}/produkte/artikelnummer?${new URLSearchParams({ nr, hersteller, ausser: ausser || "" })}`)).produkt;
+        if (feld.value.trim() !== nr || herstellerFeld.value.trim() !== hersteller) return;   // inzwischen weitergetippt
         // Der Name im Link, der Zusatz grau dahinter – wie überall im Modul, auch in dieser Warnzeile.
         hilfe.innerHTML = p ? `<span class="mat-warn">Schon vergeben: <a href="/material/katalog/produkt/${p.id}" target="_blank" rel="noopener">${nameHtml(p)}</a>${zusatzHtml(p)}${p.article_no ? ` <span class="mat-ganz">(${esc(p.article_no)})</span>` : ""}</span>` : "";
       } catch (e) { hilfe.innerHTML = ""; }
     };
-    feld.addEventListener("input", () => { clearTimeout(los); los = setTimeout(pruefen, 300); });
+    const spaeter = () => { clearTimeout(los); los = setTimeout(pruefen, 300); };
+    feld.addEventListener("input", spaeter);
+    herstellerFeld.addEventListener("input", spaeter);
     if (feld.value.trim()) pruefen();
   }
 
@@ -3009,7 +3013,7 @@
       // Neu in einer Kategorie: deren Vorgaben übernehmen – nicht bei einer Variante, die hat ihre eigenen.
       if (neu && p.category_id && !p.variante_von) katSel.dispatchEvent(new Event("change"));
       hilfen();
-      artikelnummerPruefen($("#pd-art", body), $("#pd-art-hilfe", body), p.id);
+      artikelnummerPruefen($("#pd-art", body), $("#pd-her", body), $("#pd-art-hilfe", body), p.id);
       const bildWahl = fotoFeldVerdrahten(dlg, body, "pd-bild");
       // Erst die Angaben, dann das Bild. Scheitert nur das Bild, kennt der Dialog das Produkt schon: Ein zweiter
       // Klick speichert die Angaben erneut und lädt das Bild nach, statt das Produkt doppelt anzulegen.
@@ -5136,7 +5140,7 @@
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="me-ok" type="button">Melden</button></div>`,
     (dlg, body) => {
       fokus($("#me-her", body));
-      artikelnummerPruefen($("#me-art", body), $("#me-art-hilfe", body), null);
+      artikelnummerPruefen($("#me-art", body), $("#me-her", body), $("#me-art-hilfe", body), null);
       dateiKnopfVerdrahten(body, "me-fotos");
       $("#me-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;

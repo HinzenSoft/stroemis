@@ -635,6 +635,10 @@ def test_produktabgleich():
         sq = produkt(t.mv, kar, "Baumwerk", "Sequoia | SRT", "SQ-1")
         demo = produkt(t.mv, kar, "Demowerk", "Demo Gerät", "DE-1")
         sql(t.app, "UPDATE mat_product SET demo = 1 WHERE id = ?", (demo,))
+        # Dieselbe Artikelnummer bei zwei Herstellern (seit dem 22.10.2026 erlaubt – Petzl und Rock Exotica vergeben
+        # beide P53): nur der Hersteller der Liste entscheidet, nie geraten.
+        rolle_a = produkt(t.mv, kar, "Rollwerk A", "Rolle Eins", "P-53")
+        produkt(t.mv, kar, "Rollwerk B", "Rolle Zwei", "P-53")
         kopf = ["Hersteller", "Modell", "Artikelnummer", "Seriennummer"]
         b = ok(probelauf(t.w, t.lager, csv_bytes([kopf,
             ["testwerk", "hms-beta", "HB 7", "PA-0001"],            # 2: genau (Schreibweise egal)
@@ -647,16 +651,24 @@ def test_produktabgleich():
             ["Testwerk", "Gurt Alph", "", "PA-0008"],               # 9: unscharf → Vorschlag
             ["Nirgendwerk", "Phantom", "", "PA-0009"],              # 10: unbekannt
             ["", "HMS Beta", "", "PA-0010"],                        # 11: Hersteller fehlt
-            ["Demowerk", "Demo Gerät", "DE-1", "PA-0011"]])))       # 12: DEMO-Produkt im echten Ordner
+            ["Demowerk", "Demo Gerät", "DE-1", "PA-0011"],          # 12: DEMO-Produkt im echten Ordner
+            ["Rollwerk A", "", "P53", "PA-0012"],                   # 13: Artikelnummer beim Hersteller der Liste
+            ["", "", "P53", "PA-0013"],                             # 14: ohne Hersteller bei zwei Herstellern → mehrdeutig
+            ["Drittwerk", "Rolle", "P-53", "PA-0014"]])))           # 15: Hersteller trifft keinen → mehrdeutig
         z = nach_nr(b)
-        for n, pid in ((2, t.ids["hms"]), (3, t.ids["hms"]), (5, t.ids["hms"]), (7, sq)):
+        for n, pid in ((2, t.ids["hms"]), (3, t.ids["hms"]), (5, t.ids["hms"]), (7, sq), (13, rolle_a)):
             assert z[n]["status"] == "uebernehmbar" and z[n]["produkt"]["id"] == pid, (n, z[n])
         for n in (4, 8, 9):
             assert codes(z[n]) == ["produkt_vorschlag"], (n, z[n])
         assert codes(z[6]) == ["produkt_mehrdeutig"] and codes(z[10]) == ["produkt_unbekannt"]
         assert codes(z[11]) == ["produkt_fehlt"] and codes(z[12]) == ["produkt_unbekannt"], (z[11], z[12])
+        for n in (14, 15):
+            assert codes(z[n]) == ["produkt_mehrdeutig"], (n, z[n])
+            grund = z[n]["gruende"][0]["text"]
+            assert "bei mehreren Herstellern (Rollwerk A, Rollwerk B)" in grund and "Hersteller in der Liste angeben" in grund, grund
         offen = {p["angabe"]: p for p in b["produkte_offen"]}
         assert offen["kopfwerk|vertexvent|"]["art"] == "mehrdeutig" and offen["nirgendwerk|phantom|"]["art"] == "unbekannt"
+        assert offen["||p53"]["art"] == "mehrdeutig" and offen["drittwerk|rolle|p53"]["art"] == "mehrdeutig", offen
         # Vorschläge der Nacharbeit: Varianten beide, nie ein DEMO-Produkt im echten Ordner.
         ok(uebernehmen(t.w, t.lager, csv_bytes([kopf, ["Kopfwerk", "Vertex Vent", "", "PA-0005"],
                                                 ["Demowerk", "Demo Geraet", "", "PA-0012"]])), 201)
