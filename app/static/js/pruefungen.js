@@ -1648,7 +1648,7 @@
       ${a === "tn" ? `<select id="bew-sel-tn" aria-label="Teilnehmende:r">${tns.map((t) => `<option value="${t.id}" ${t.id === state.bewTn ? "selected" : ""}>${esc(tnName(t))}${t.gliederung ? ` (${esc(t.gliederung)})` : ""}</option>`).join("")}</select>
         <button type="button" class="btn secondary small" data-act="bew-tn-druck" title="Alle Leistungen dieser Person mit Kommentaren und Bildern drucken oder als PDF speichern">🖨 Druckansicht</button>` : ""}
     </div>`;
-    let inhalt = "";
+    let inhalt;
     if (a === "matrix") {
       // Nur die Leistungen: Der freie Kommentar und das Lehrgangsergebnis stehen in der Ansicht
       // „je TN“ – in der Matrix machten die beiden Spalten die Tabelle am Gewässer nur breiter.

@@ -377,7 +377,7 @@ window.EDLAYOUT = (function () {
      Grund gemeldet – wie bei Entf und Rücktaste. */
   function auswahlGeschuetzt(sicht) {
     if (sicht.state.selection.empty) return false;
-    let art = null;
+    let art;
     try { art = loeschenAbwehren(sicht.state, false); } catch (e) { return false; }
     if (!art) return false;
     meldeSchutz(art);
@@ -534,7 +534,7 @@ window.EDLAYOUT = (function () {
           },
           handleKeyDown(sicht, ereignis) {
             if (ereignis.key !== "Backspace" && ereignis.key !== "Delete") return false;
-            let art = null;
+            let art;
             try { art = loeschenAbwehren(sicht.state, ereignis.key === "Backspace"); }
             catch (e) { return false; }        // im Zweifel lieber nicht dazwischenfunken
             if (!art) return false;
