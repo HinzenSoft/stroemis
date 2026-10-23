@@ -242,7 +242,7 @@ NUR_KATALOGPFLEGE = ("/api/material/katalog/", "/api/material/erinnerungen/", "/
 # verwaltet (bzw. die Verwaltung) – die Führungskraft bekommt 403. „Meine Freigaben“ liest jeder Angemeldete. Ebenso
 # die Nacharbeit eines Bestandsimports (Phase 2 · L3).
 NUR_VERWALTER_LESEN = re.compile(r"^/api/material/(ordner/<int:fid>/freigaben|ordner/<int:fid>/nacharbeit|freigaben|nutzer"
-                                 r"|globalsuche/protokoll)$")
+                                 r"|globalsuche/protokoll|mailfehler)$")      # mailfehler: „Weitere anzeigen“ (P4-L1)
 # Abfrageparameter, ohne die eine Route nichts zu lesen hätte (400).
 ABFRAGE = {
     "material_api.formulare": lambda e: {"produkt": e[("produkte", "pid")]},

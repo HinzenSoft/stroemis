@@ -4062,6 +4062,14 @@ bei 1280 und 360 px, ohne Konsolenfehler und ohne waagerechten Bildlauf:
   Aufklapper „Globale Suchen“ 38). Zweiter Lauf (`mv2`, `admin2`): **keine Befunde** auf allen 21 Geräten in allen
   drei Engines – kein waagerechter Bildlauf, keine Tippfläche unter 44 px, keine Konsolenfehler, nichts außerhalb des
   Fensters.
+- **Nach den Nachbesserungen** (Server ohne `SMTP_HOST`; reiche Platzhalterdaten der Browserprüfung mit 533 Artikeln,
+  31 Mailfehler-Zeilen und laufendem Rückruf; Läufe unter `/home/harness/geraete-laeufe/p4l1-nachbesserung-20261022-final/`):
+  Material-Verwaltung (Übersicht, Bericht 2026, `?jahr=1800`), Führungskraft (Übersicht, Bericht), Materialwart
+  (Übersicht) auf allen 21 Geräten in Chromium, Firefox und WebKit; Wiki-Seite als Material-Verwaltung, Führungskraft
+  (beide mit Wiki-Leserecht) und Administrator auf Telefon quer, Fold aufgeklappt und Tablet quer: **keine Befunde**
+  außer der gewollten 400 bei `?jahr=1800`, keine Kontrasthinweise mehr. Abläufe in Chromium (cdp.py) bei 1280 und
+  360 px: Fokus nach „Erledigt“, „Weitere anzeigen“ (28 Zeilen), Rückfrage „Alle erledigt“, Fehlerauswahl beim Jahr,
+  Sprungmarken, Rückruf-Liste, Datumsfehler mit `aria-invalid`, Fehlerseiten mit „Zur Material-Übersicht“.
 
 ### Prüfung vor Auslieferung
 
