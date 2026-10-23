@@ -943,7 +943,7 @@ html:has(.mat-pruefung.tippt) { scroll-padding-top: 8px; scroll-padding-bottom: 
   .mat-abschluss-hinweis.ganz { white-space: normal; }
 }
 
-/* Foto zum Prüfpunkt: „Galerie“ nur mit dem Finger – am Rechner öffnet „📷 Foto“ ohnehin die Dateiauswahl.
+/* Foto zum Prüfpunkt: „Galerie“ nur mit dem Finger – am Rechner öffnet „Foto“ ohnehin die Dateiauswahl.
    „Foto entfernen“ ist ein gewöhnlicher grauer Knopf mit Abstand zum Kamera-Knopf (und fragt nach). */
 .mat-punkt-foto .mat-galerie { display: none; }
 .mat-punkt-foto .mat-foto-weg { margin-left: 10px; }
@@ -1154,7 +1154,7 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
    das Feld sonst zwei Namen („Foto“ und „Foto wählen …“). */
 .mat-feldkopf { display: block; font-weight: 600; font-size: .9rem; margin: 12px 0 4px; }
 /* Foto im Dialog (Ordnerfoto, Produktbild): links die Vorschau – bisheriges, neu gewähltes oder ein leerer Rahmen –,
-   rechts „📷 Foto wählen …“ und „entfernen“ (beide mindestens 44 px hoch), Dateiname und Hinweis. Reicht die Breite
+   rechts „Foto wählen …“ und „entfernen“ (beide mindestens 44 px hoch), Dateiname und Hinweis. Reicht die Breite
    nicht für den breitesten Knopf, rutschen die Knöpfe unter die Vorschau. Beim Ziehen einer Datei färbt sich das Feld. */
 .mat-bildwahl { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 14px; margin: 0 -8px; padding: 6px 8px;
   border: 2px dashed transparent; border-radius: var(--radius); }
@@ -1879,9 +1879,12 @@ dialog.mat-produkt-reiter { margin-top: min(6vh, 48px); margin-bottom: auto; }
 .mat-set-teile tr.mat-ohne-zeile td { color: var(--anthrazit); }
 /* Zählsatz unter den Kacheln, im Jahresbericht und kurz in der Ordner-Übersicht; Zusatz unter Statuslisten. */
 .mat-set-satz { margin: 6px 0 0; overflow-wrap: anywhere; }
-.mat-ue-sets { display: block; font-size: var(--fs-klein); font-weight: 400; color: var(--grau); white-space: normal; line-height: 1.25; }
-.mat-andere-sets { margin: 8px 0 0; overflow-wrap: anywhere; }
-.mat-ersetzt-lebensende { margin-top: 8px; }
+/* „k Teile in m Sets“ in einer Zeile – sonst wurden Zeilen mit Sets dreizeilig (Nachbesserung, Browser V9). */
+.mat-ue-sets { display: block; font-size: var(--fs-klein); font-weight: 400; color: var(--grau); white-space: nowrap; line-height: 1.25; }
+.mat-andere-sets { margin: 12px 0 0; overflow-wrap: anywhere; }
+.mat-andere-sets .mat-status { vertical-align: baseline; }
+/* Knopf mit Pflichtbestätigung (pflichtBestaetigung, V2): sieht aus wie ausgeschaltet, bleibt aber antippbar. */
+.btn.mat-aus, .btn.mat-aus:hover { opacity: .55; background: var(--rot); border-color: var(--rot); color: var(--weiss); }
 /* V18: Journalzeilen höchstens lesbar breit. */
 .mat-journal > li { max-width: 90ch; }
 @container mat-seite (max-width: 600px) {
@@ -1889,7 +1892,9 @@ dialog.mat-produkt-reiter { margin-top: min(6vh, 48px); margin-bottom: auto; }
   .mat-ue-sets::before { content: " · "; }
 }
 @media (pointer: coarse) {
-  .mat-an-teil-quelle label.inline { min-height: 44px; align-items: center; }
+  /* Beide Wahlen in einer Zeile (V15) – der Text bricht in seinem Feld um, das Feld bleibt 44 px hoch. */
+  .mat-an-teil-quelle { flex-wrap: nowrap; gap: 0 14px; }
+  .mat-an-teil-quelle label.inline { min-height: 44px; align-items: center; flex: 0 1 auto; min-width: 0; line-height: 1.25; }
   .mat-treffer-zeile.mat-kandidat, .mat-andere-sets a.mat-inv { min-height: 44px; }
   .mat-andere-sets a.mat-inv { display: inline-flex; align-items: center; }
 }

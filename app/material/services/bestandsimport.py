@@ -83,8 +83,9 @@ FEHLT_ZUORDNUNG = "Ordne mindestens Hersteller und Modell (oder Artikelnummer) z
 DEMO_PRODUKT = "Ein DEMO-Produkt passt nur in einen DEMO-Ordner."
 # Schritt 21: Der Import legt keine Hersteller-Sets an – ihre Teile kennt die Liste nicht (Entwurf I). Seit L2b (Entwurf A,
 # U11/U12): Teile, die die Liste als eigene Zeilen führt, sind nach dem Import vorhandene Artikel – das Set setzt sie ein.
-SET_PRODUKT = ("Hersteller-Set – der Import legt keine Sets an. Set über „Artikel anlegen“ mit vorhandenen Teilen anlegen "
-               "(„aus dem Bestand wählen“), Angaben der Zeile übernehmen, dann „erneut prüfen“.")
+# Kurz (Nachbesserung, Browser V16): steht als roter Satz in der Spalte „Gründe“ der Nacharbeit.
+SET_PRODUKT = ("Sets legt der Import nicht an – über „Artikel anlegen“ mit „aus dem Bestand wählen“ erfassen, dann "
+               "„erneut prüfen“.")
 NEUBESCHRIFTEN = ("Alte Inventarnummern stehen in der Bemerkung und sind nicht suchbar – die Artikel bitte neu "
                   "beschriften (Liste: „Export“ im Ordner).")
 
@@ -123,8 +124,11 @@ BEMERKUNG_WERT = ("bemerkung", "bemerkungen", "notiz", "hinweis", "anmerkung", "
 # „Länge“ ist seit Schritt 20 ein eigenes Feld (Artikellänge in Metern), keine Bemerkungsspalte mehr.
 BEMERKUNG_TITEL = ("größe", "groesse", "farbe", "standort", "lagerort")
 UEBRIGE = (
+    # „Bisherige …“/„Alte …“ (Browser B2): so heißt das Zielfeld selbst – eine Liste mit genau dieser Überschrift fiel
+    # sonst auf „ignorieren“. „Set (Inventarnummer)“ aus dem eigenen CSV-Export beginnt mit „Set“ und bleibt ignoriert.
     ("inventarnummer", ("inventarnummer", "inventar-nr", "inventarnr", "inv.-nr", "inv-nr", "inv. nr", "inv nr",
-                        "inventar")),
+                        "inventar", "bisherige inventarnummer", "alte inventarnummer", "bisherige nummer",
+                        "alte nummer")),
     ("ordner", ("ordner", "unterordner")),
     ("hergestellt", ("hergestellt", "herstelldatum", "herstellungsdatum", "herstellung", "herstellungsjahr",
                      "produktionsdatum", "baujahr")),
@@ -403,9 +407,18 @@ def spalten(tab, zuordnung=None):
             else:
                 warnungen.append(f"Spalte „{name}“ ist ein zweites Mal als „{FELD_TEXT[f]}“ zugeordnet – sie wird "
                                  "ignoriert.")
-            s["zuordnung"] = "ignorieren"
+            s["zuordnung"], s["_doppelt"] = "ignorieren", True
+    # Eine Spalte mit „Inventar“ im Titel, die die Erkennung ignoriert, sagt der Probelauf (Browser B2) – außer den
+    # Set-Spalten des eigenen CSV-Exports und einer ausdrücklichen Wahl.
+    for s in out:
+        t = _titel(s["titel"])
+        if (s["zuordnung"] == "ignorieren" and not s["gesperrt"] and not s["_explizit"] and not s.get("_doppelt")
+                and "inventar" in t and not t.startswith("set") and not nacharbeit_csv):
+            warnungen.append(f"Spalte „{s['titel']}“ wird ignoriert – ist sie die bisherige Inventarnummer, in der "
+                             "Zuordnung „Bisherige Inventarnummer“ wählen.")
     for s in out:
         del s["_rang"], s["_explizit"]
+        s.pop("_doppelt", None)
     return out, nacharbeit_csv, kopf_index, warnungen
 
 

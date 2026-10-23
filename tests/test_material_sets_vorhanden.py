@@ -95,7 +95,7 @@ def test_anlegen_mit_vorhandenen():
             bericht = ok(probelauf(w, t.lager_a, daten))
             satz = nach_nr(bericht)[5]
             assert satz["status"] == "nacharbeit", satz
-            assert any("mit vorhandenen Teilen" in g["text"] and "erneut prüfen" in g["text"] for g in satz["gruende"]), satz
+            assert any("aus dem Bestand wählen" in g["text"] and "erneut prüfen" in g["text"] for g in satz["gruende"]), satz
             r = ok(w.post(f"/api/material/ordner/{t.lager_a}/import", headers=H, content_type="multipart/form-data",
                           data={"file": (io.BytesIO(daten), "liste.csv")}), 201)
             assert r["import"]["angelegt"] == 3, r
@@ -105,7 +105,7 @@ def test_anlegen_mit_vorhandenen():
             # Auswahl im Ordner: Inventar-, Serien- und bisherige Inventarnummer; nur Produkt der Position, frei, ohne Set.
             hms = t.ids["hms"]
             r = ok(kandidaten(w, t.lager_a, hms, "0815"))
-            assert [x["id"] for x in r["treffer"]] == [k1] and r["weitere"] is False, r
+            assert [x["id"] for x in r["treffer"]] == [k1] and r["weitere"] is False and r["hinweis"] is None, r
             assert r["treffer"][0]["bisherige_inventarnummer"] == "ALT-0815", r
             assert set(r["treffer"][0]) == {"id", "inventory_no", "serial_no", "bisherige_inventarnummer", "produkt",
                                             "ordner", "status", "status_text", "zugeordnet"}, r
@@ -113,15 +113,17 @@ def test_anlegen_mit_vorhandenen():
             inv_k2 = zeile(app, k2)["inventory_no"]
             assert [x["id"] for x in ok(kandidaten(w, t.lager_a, hms, inv_k2))["treffer"]] == [k2]
             # Teil eines Sets und Artikel mit anderem Produkt sind keine Kandidaten; die Nummer eines anderen Produkts genau
-            # → 409 mit beiden Namen; fremd und unbekannt gleich (404); zu kurz, zu lang 400; LIKE-Zeichen wörtlich.
+            # → 200 mit „hinweis“ (beide Namen, der Artikel); fremd und unbekannt gleich (200, leer – Nachbesserung B3);
+            # zu kurz, zu lang 400; LIKE-Zeichen wörtlich.
             unbekannt = kandidaten(w, t.lager_a, hms, "GIBTESNICHT")
-            assert unbekannt.status_code == 404, unbekannt.get_json()
+            assert unbekannt.status_code == 200 and unbekannt.get_json() == {"treffer": [], "weitere": False,
+                                                                             "hinweis": None}, unbekannt.get_json()
             for q in ("SET-A-K1", "TEST-B-0001", "SET-B-K1", "%%", "_M"):
                 r = kandidaten(w, t.lager_a, hms, q)
-                assert (r.status_code, r.get_json()) == (404, unbekannt.get_json()), (q, r.get_json())
-            r = kandidaten(w, t.lager_a, hms, "imp-r1")
-            assert r.status_code == 409 and "Rolle Gamma" in r.json["error"] and "HMS Beta" in r.json["error"] \
-                and "Produkt am Artikel korrigieren" in r.json["error"], r.get_json()
+                assert (r.status_code, r.get_json()) == (200, unbekannt.get_json()), (q, r.get_json())
+            r = ok(kandidaten(w, t.lager_a, hms, "imp-r1"))
+            assert r["treffer"] == [] and "Rolle Gamma" in r["hinweis"]["text"] and "HMS Beta" in r["hinweis"]["text"] \
+                and "Einsetzen lässt sich nur" in r["hinweis"]["text"] and r["hinweis"]["artikel"]["id"] == r1, r
             for q, code in (("a", 400), ("x" * 81, 400)):
                 assert kandidaten(w, t.lager_a, hms, q).status_code == code, q
             assert kandidaten(w, t.lager_a, t.set_p, "IMP").status_code == 400            # ein Set-Produkt ist kein Teil
@@ -135,9 +137,9 @@ def test_anlegen_mit_vorhandenen():
             demo = ordner_neu(w, t.a, "Demo Musterstadt")
             sql(app, "UPDATE mat_folder SET demo = 1 WHERE id = ?", (demo,))
             d1 = neuer_artikel(w, hms, demo, serial_no="DEMO-K1")["id"]
-            assert kandidaten(w, t.lager_a, hms, "DEMO-K1").status_code == 404
+            assert ok(kandidaten(w, t.lager_a, hms, "DEMO-K1"))["treffer"] == []
             andere = neuer_artikel(adm, hms, t.lager_b, serial_no="ANDERE-GL-1")["id"]
-            assert kandidaten(adm, t.lager_a, hms, "ANDERE-GL").status_code == 404
+            assert ok(kandidaten(adm, t.lager_a, hms, "ANDERE-GL"))["treffer"] == []
 
             # Zuordnung und Ablage vor dem Einsetzen: K1 einer Person zugeordnet, R1 in einem Fach.
             person, person_id = neues_konto(app, "psa_vorhanden@example.org", name="PSA Vorhanden", stufe=0)
@@ -161,7 +163,7 @@ def test_anlegen_mit_vorhandenen():
             # Produkt vor Gliederung und Zustand: die Rolle an der HMS-Position, das Set selbst.
             for falsch in (r1, t.s["id"]):
                 r = anlegen(w, t, t.lager_a, "SET-V-1", hms=(falsch, k2), rolle="neu:SET-V-1-R")
-                assert r.status_code == 409 and "Produkt am Artikel korrigieren" in r.json["error"], r.get_json()
+                assert r.status_code == 409 and "Einsetzen lässt sich nur" in r.json["error"], r.get_json()
             # Gliederung (die Verwaltung sieht beide) und DEMO-Grenze.
             r = anlegen(adm, t, t.lager_a, "SET-V-1", hms=(andere, k2), rolle=r1)
             assert r.status_code == 409 and "anderen Gliederung" in r.json["error"], r.get_json()
@@ -214,13 +216,12 @@ def test_anlegen_mit_vorhandenen():
             ein = eintraege(app, r1, ab)[-1]
             assert f'"set": {s}' in ein["after_json"] and "Rolle" in ein["after_json"], ein
             j = eintraege(app, s, ab)
-            assert [x["action"] for x in j] == ["angelegt", "set_angelegt", "teil_eingesetzt", "teil_eingesetzt",
-                                                "teil_eingesetzt"], j
+            # Ein Eintrag am Set (Nachbesserung V11): „set_angelegt“ nennt die drei als vorhanden, ohne Herkunftspfad.
+            assert [x["action"] for x in j] == ["angelegt", "set_angelegt"], j
             assert j[1]["after_json"].count('"vorhanden": true') == 3, j[1]
-            assert all('"vorhanden": true' in x["after_json"] and "ordner" not in x["after_json"]
-                       and "herkunft" not in x["after_json"] for x in j[2:]), j
+            assert "ordner" not in j[1]["after_json"] and "herkunft" not in j[1]["after_json"], j[1]
             # Danach sind die drei keine Kandidaten mehr.
-            assert kandidaten(w, t.lager_a, hms, "IMP-K").status_code == 404
+            assert ok(kandidaten(w, t.lager_a, hms, "IMP-K"))["treffer"] == []
     finally:
         mails_zurueck(alt)
     print("Set anlegen mit vorhandenen Teilen bestanden.")
@@ -416,8 +417,8 @@ def test_loeschen_und_aufloesen():
         r = anlegen(w, t, t.lager_a, "AUF-PA", hms=(f, "neu:AUF-PA-K2"))
         s = r.json["artikel"]["id"]
         r = w.delete(f"/api/material/artikel/{s}", headers=H)
-        assert r.status_code == 409 and "Set auflösen" in r.json["error"] and t.f["inventory_no"] in r.json["error"], \
-            r.get_json()
+        assert r.status_code == 409 and "„Set auflösen“ gibt die Teile frei" in r.json["error"] \
+            and t.f["inventory_no"] in r.json["error"], r.get_json()
         assert zeile(app, f)["parent_item_id"] == s
         a = ok(w.get(f"/api/material/artikel/{s}"))["artikel"]
         assert a["darf_loeschen"] is False and a["set"]["vorhandene_teile"] == [t.f["inventory_no"]], a["set"]
@@ -478,6 +479,10 @@ def test_loeschen_und_aufloesen():
         pruefen(p, alt_t)
         r = aufloesen(s_t)
         assert r.status_code == 409 and "als Teil dieses Sets geprüft" in r.json["error"], r.get_json()
+        # „Set löschen“ verweist dann nicht auf „Set auflösen“, sondern nennt, warum auch das nicht geht.
+        r = w.delete(f"/api/material/artikel/{s_t}", headers=H)
+        assert r.status_code == 409 and "Auflösen geht auch nicht" in r.json["error"] \
+            and "als Teil dieses Sets geprüft" in r.json["error"] and "gibt die Teile frei" not in r.json["error"], r.get_json()
         assert stimmig(app)
 
         # Erfolg: das Set aus P-A, einer Person zugeordnet, mit offenem Lauf ohne Prüfung.
@@ -551,6 +556,12 @@ def test_bestandteil_ersetzt():
             assert r.status_code == 400 and teil in r.json["error"], (d, r.get_json())
         r = ersetzt(slot_id=tasche["id"])
         assert r.status_code == 400 and "Herstellerunterlagen" in r.json["error"], r.get_json()
+        # Untergrenze (Nachbesserung, Sicherheit Hinweis): nicht vor der Erfassung des Sets.
+        from datetime import date
+        vor = (date.fromisoformat(zeile(app, s)["created_at"][:10]) - timedelta(days=1)).isoformat()
+        for d in (vor, "1900-01-01"):
+            r = ersetzt(slot_id=tasche["id"], bestaetigt=True, datum=d)
+            assert r.status_code == 400 and "vor der Erfassung des Sets" in r.json["error"], (d, r.get_json())
         # Rechte: Prüfer und Leser 403; ein Set aus B 404.
         assert ersetzt(p, slot_id=tasche["id"], bestaetigt=True).status_code == 403
         assert ersetzt(t.k["fuehrung"], slot_id=tasche["id"], bestaetigt=True).status_code == 403
@@ -585,13 +596,25 @@ def test_bestandteil_ersetzt():
         j = eintraege(app, s, ab)
         assert [x["action"] for x in j] == ["bestandteil_ersetzt", "gesperrt"], j
         assert '"set_grund": "bestandteil"' in j[1]["after_json"]
+        # B1: die Position der Stückliste (1, 2, …), nicht die Kennung der Kopie. A2: Journal „gesperrt“ und
+        # Jahresbericht nennen den Anlass, nicht „Set-Prüfung ausstehend“.
+        assert f'"position": {tasche["position"]}' in j[0]["after_json"] and '"slot"' not in j[0]["after_json"], j[0]
+        assert '"lock_reason": "Bestandteil ersetzt – Set prüfen"' in j[1]["after_json"], j[1]
+        mit = [x["after_json"] for x in eintraege(app, k1, ab) if x["action"] == "set_gesperrt"]
+        assert mit and all("(Bestandteil ersetzt – Set prüfen)" in x for x in mit), mit
         assert '"bestaetigt": "laut Herstellerunterlagen zulässig"' in j[0]["after_json"] and "Charge 0000" in j[0]["after_json"]
         b = sperren_bericht(w, t.a)
         assert b["gesamt"] == vorher["gesamt"] + 1, (vorher, b)
         assert {a["art"]: a["n"] for a in b["arten"]}["set"] == {a["art"]: a["n"] for a in vorher["arten"]}["set"] + 1
         assert "Bestandteil ersetzt" in {a["art"]: a["text"] for a in b["arten"]}["set"]
-        # Am schon gesperrten Set: noch ein Eintrag, keine neue Sperre.
-        ok(ersetzt(slot_id=tasche["id"], bestaetigt=True))
+        assert [x["grund"] for x in b["liste"] if x["inventarnummer"] == inv] == ["Bestandteil ersetzt – Set prüfen"], b
+        # Doppelklick: dieselbe Position, dasselbe Datum, dieselbe Bemerkung gleich noch einmal → 409, kein Eintrag.
+        ab2 = letzte_id(app)
+        r = ersetzt(slot_id=tasche["id"], bestaetigt=True, datum=_heute().isoformat(), bemerkung="Charge 0000 (Platzhalter)")
+        assert r.status_code == 409 and "schon eingetragen" in r.json["error"], r.get_json()
+        assert letzte_id(app) == ab2
+        # Am schon gesperrten Set: noch ein Eintrag (andere Bemerkung), keine neue Sperre.
+        ok(ersetzt(slot_id=tasche["id"], bestaetigt=True, bemerkung="zweiter Ersatz (Platzhalter)"))
         assert sperren_bericht(w, t.a)["gesamt"] == b["gesamt"]
         # Set prüfen: der Set-Artikel mit seinen Bestandteil-Zeilen; einsatzbereit gibt frei, die Marke ist weg.
         lf = lauf_auf(p, s)
@@ -635,7 +658,7 @@ def test_beschriftungen():
                            "material.js"), encoding="utf-8").read()
     for schluessel in ("eingesetzt", "aus_set_geloest", "bestandteil_ersetzt"):
         assert f'{schluessel}: "{beschriftung.AKTION[schluessel]}"' in js, schluessel
-    for schluessel in ("vorhanden", "slot", "bemerkung"):
+    for schluessel in ("vorhanden", "slot", "position", "bemerkung"):
         assert f'{schluessel}: "{beschriftung.FELD[schluessel]}"' in js, schluessel
     assert beschriftung.SET_WERTE["set_grund"]["bestandteil"] == sets.BESTANDTEIL_ERSETZT
     assert f'bestandteil: "{sets.BESTANDTEIL_ERSETZT}"' in js

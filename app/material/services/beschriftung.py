@@ -68,7 +68,10 @@ FELD = {
     "ersetzt_teil": "ersetzt Teil", "austausch": "Austausch laut Hersteller", "hinweis": "Hinweis",
     "geprueft": "abgeschlossene Prüfungen",
     # Sets, Teil 2 (L2b): vorhandenen Artikel einsetzen, „Bestandteil ersetzt“
-    "vorhanden": "vorhandener Artikel", "slot": "Position Nr.", "bemerkung": "Bemerkung",
+    "vorhanden": "vorhandener Artikel", "bemerkung": "Bemerkung",
+    # „position“: Nummer der Position in der Stückliste; „slot“ (die interne Kennung) schrieb nur der Stand vor der
+    # Nachbesserung (Browser B1) – solche Einträge sagen ehrlich, was die Zahl ist.
+    "position": "Position", "slot": "Kennung der Position",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",

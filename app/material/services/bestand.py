@@ -1211,18 +1211,21 @@ def andere_set_status(where, params, stati):
     """Zusatz unter einer Liste mit Statusfilter (Phase 4 · L2b, Entwurf C, Kritik U7): Die Liste zeigt ein Set mit seinem
     Set-Status – ein Teil, das selbst einen der gefilterten Status hat, fehlt darin, wenn sein Set einen anderen hat
     („einsatzbereit 2“ in der Übersicht, die Liste leer, weil das Set überfällig ist). {teile: k, sets: [{id,
-    inventory_no, teile}], sets_gesamt} – nur aus der gefilterten Menge: das Set erfüllt die Bedingung der Liste ohne den
+    inventory_no, teile, status, status_text}], sets_gesamt} – nur aus der gefilterten Menge: das Set erfüllt die Bedingung der Liste ohne den
     Statusfilter (where über i, mit artikel_filter), das Teil artikel_filter. Höchstens ANDERE_SETS_MAX Sets, nach
     Inventarnummer; k zählt alle."""
     params = dict(params)
     params.update({f"as{k}": s for k, s in enumerate(stati)})
     marken = ",".join(f":as{k}" for k in range(len(stati)))
-    rows = db.query(f"SELECT i.id, i.inventory_no, COUNT(*) AS n FROM mat_item i JOIN mat_item t ON t.parent_item_id = i.id "
+    rows = db.query(f"SELECT i.id, i.inventory_no, {sets.gruppen_status_sql('i')} AS set_status, COUNT(*) AS n "
+                    f"FROM mat_item i JOIN mat_item t ON t.parent_item_id = i.id "
                     f"{where} AND {rechte.artikel_filter('t')} AND {st.status_sql('t')} IN ({marken}) "
                     f"AND {sets.gruppen_status_sql('i')} NOT IN ({marken}) GROUP BY i.id, i.inventory_no "
                     f"ORDER BY i.inventory_no, i.id", params)
+    # status/status_text: der Set-Status, unter dem das Set in seiner Liste steht (Nachbesserung, Browser V1).
     return {"teile": sum(r["n"] for r in rows), "sets_gesamt": len(rows),
-            "sets": [{"id": r["id"], "inventory_no": r["inventory_no"], "teile": r["n"]} for r in rows[:ANDERE_SETS_MAX]]}
+            "sets": [{"id": r["id"], "inventory_no": r["inventory_no"], "teile": r["n"], "status": r["set_status"],
+                      "status_text": st.LABEL[r["set_status"]]} for r in rows[:ANDERE_SETS_MAX]]}
 
 
 def zaehlung(ordner_ids=None):

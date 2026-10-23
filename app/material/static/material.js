@@ -279,7 +279,9 @@
     ersetzt_teil: "ersetzt Teil", austausch: "Austausch laut Hersteller", hinweis: "Hinweis",
     geprueft: "abgeschlossene Prüfungen",
     // Sets, Teil 2 (L2b): vorhandenen Artikel einsetzen, „Bestandteil ersetzt“
-    vorhanden: "vorhandener Artikel", slot: "Position Nr.", bemerkung: "Bemerkung",
+    vorhanden: "vorhandener Artikel", bemerkung: "Bemerkung",
+    // „position“: Nummer der Position in der Stückliste; „slot“ schrieb nur der Stand vor der Nachbesserung (B1).
+    position: "Position", slot: "Kennung der Position",
   };
   // Die Beschriftung eines Feldes in einem Journaleintrag – wie beschriftung.feld_name: „description“ ist am Produkt der
   // kurze Zusatz hinter dem Namen und heißt dort seit dem Wunsch vom 18.10.2026 „Bemerkung“; an Ordnern und in den
@@ -351,8 +353,10 @@
     if (!m) return "";
     return art === "monat" || !m[3] ? `${m[2]}/${m[1]}` : `${m[3]}.${m[2]}.${m[1]}`;
   };
-  const datumFeld = (id, iso, art) => `<input type="text" id="${id}" class="mat-datum" data-art="${art}" inputmode="numeric" autocomplete="off"
-    maxlength="${art === "monat" ? 7 : 10}" placeholder="${art === "monat" ? "MM/JJJJ" : "TT.MM.JJJJ"}" value="${esc(datumAnzeige(iso, art))}">`;
+  // grenzen: {min, max} als ISO-Tag (nur „tag“) – datumWert lehnt Tage davor bzw. danach am Feld ab (Nachbesserung P4-L2b,
+  // Browser B3: „max“ gibt es an einem Textfeld nicht).
+  const datumFeld = (id, iso, art, grenzen) => `<input type="text" id="${id}" class="mat-datum" data-art="${art}" inputmode="numeric" autocomplete="off"
+    maxlength="${art === "monat" ? 7 : 10}" placeholder="${art === "monat" ? "MM/JJJJ" : "TT.MM.JJJJ"}" value="${esc(datumAnzeige(iso, art))}"${grenzen && grenzen.min ? ` data-min="${esc(grenzen.min)}"` : ""}${grenzen && grenzen.max ? ` data-max="${esc(grenzen.max)}"` : ""}>`;
   // ISO ('YYYY-MM' bzw. 'YYYY-MM-DD'), "" für leer – oder ein Fehler: Hinweis aufs Format, wenn es nicht passt; „gibt es
   // nicht“, wenn das Format stimmt, der Tag aber nicht (31.02.). Das Feld trägt aria-invalid und die Klasse „ungueltig“
   // (Browserprüfung P4-L1, V7) – Vorleser sagen damit am Feld, dass es nicht stimmt.
@@ -375,7 +379,10 @@
     if (!m) throw falsch("bitte als TT.MM.JJJJ angeben, z. B. 17.03.2024.");
     const d = new Date(Date.UTC(+m[3], +m[2] - 1, +m[1]));
     if (d.getUTCFullYear() === +m[3] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[1]) {
-      return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+      const iso = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+      if (feld.dataset.max && iso > feld.dataset.max) throw falsch(`spätestens ${feld.dataset.max === isoHeute(0) ? "heute, " : ""}${fmtTag(feld.dataset.max)}.`);
+      if (feld.dataset.min && iso < feld.dataset.min) throw falsch(`frühestens ${fmtTag(feld.dataset.min)}.`);
+      return iso;
     }
     throw falsch(`den ${s} gibt es nicht.`);
   }
@@ -898,9 +905,12 @@
     if (o.nur_pfad) {
       return `${pfadKnoten(o.name)} ${o.system_kind ? "" : `<span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}`;
     }
+    // Zählsatz: als Tooltip und – für Vorlesehilfen, Touch und Tastatur bleibt ein title stumm – als versteckter Text
+    // (Nachbesserung, Browser V8).
+    const satz = !o.system_kind && zaehlSatz(o.bestand, o.bestand_sets);
     return `<a href="/material/ordner/${o.id}">${schloss(o)}${esc(o.name)}</a>
         ${o.system_kind ? "" : `<span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}${o.teilweise ? ' <span class="small muted">nur deine Artikel</span>' : ""}${demoMarke(o.demo)}
-        <span class="mat-baum-zahl"${!o.system_kind && zaehlSatz(o.bestand, o.bestand_sets) ? ` title="${esc(zaehlSatz(o.bestand, o.bestand_sets))}"` : ""}>${o.system_kind ? Object.values(o.zaehlung || {}).reduce((a, b) => a + b, 0) : o.bestand}</span>${o.system_kind ? "" : zahlen(o.zaehlung)}`;
+        <span class="mat-baum-zahl"${satz ? ` title="${esc(satz)}"` : ""}>${o.system_kind ? Object.values(o.zaehlung || {}).reduce((a, b) => a + b, 0) : o.bestand}${satz ? `<span class="mat-vorlesen"> Artikel, darunter ${esc(SETS_SATZ(o.bestand_sets))}</span>` : ""}</span>${o.system_kind ? "" : zahlen(o.zaehlung)}`;
   }
   const knotenKlasse = (o) => (o.nur_pfad ? "pfad" : o.system_kind ? "system" : "");
   function baumHtml(liste, start) {
@@ -1435,13 +1445,22 @@
     return a.teil_von ? `<div class="small mat-set-info">Teil von Set <a class="mat-inv" href="/material/artikel/${a.teil_von.id}">${esc(a.teil_von.inventory_no)}</a> ${esc(a.teil_von.produkt)}</div>` : "";
   };
   /* Unter einer Statusliste (P4-L2b, Entwurf C, U7): Teile mit dem gefilterten Status, deren Set einen anderen Set-Status
-     hat (andere_set_status: {teile, sets: [{id, inventory_no, teile}], sets_gesamt}) – die Liste zeigt nur die Set-Zeile.
-     mehrere: die Liste filtert nach mehreren Status („alles Fällige“). */
-  function andereSetsHtml(x, mehrere) {
+     hat (andere_set_status: {teile, sets: [{id, inventory_no, teile, status, status_text}], sets_gesamt}) – die Liste
+     zeigt nur die Set-Zeile. filter: der Statusfilter der Liste (mit Komma: mehrere, „alles Fällige“). Seit der
+     Nachbesserung (Browser V1) als Hinweiskasten mit dem Set-Status und der Liste, in der das Set steht. */
+  const istStatus = (k, s) => (s === "lebensdauer" ? `${k === 1 ? "hat" : "haben"} die Lebensdauer erreicht` : `${k === 1 ? "ist" : "sind"} ${STATUS[s] || s}`);
+  function andereSetsHtml(x, filter) {
     if (!x || !x.teile) return "";
     const rest = (x.sets_gesamt || 0) - x.sets.length;
-    return `<p class="small mat-andere-sets">Dazu ${plural(x.teile, "Teil", "Teile")} mit ${mehrere ? "einem dieser Status" : "diesem Status"} in ${x.sets_gesamt === 1 ? "einem Set" : "Sets"} mit anderem Set-Status:
-      ${x.sets.map((s) => `<a class="mat-inv" href="/material/artikel/${s.id}">${esc(s.inventory_no)}</a>`).join(", ")}${rest > 0 ? ` und ${rest} weitere` : ""}.</p>`;
+    const mehrere = String(filter || "").includes(",");
+    const teile = `${plural(x.teile, "Teil", "Teile")} ${mehrere ? `${x.teile === 1 ? "hat" : "haben"} einen dieser Status` : istStatus(x.teile, filter)}`;
+    const setLink = (z) => `<a class="mat-inv" href="/material/artikel/${z.id}">${esc(z.inventory_no)}</a>`;
+    if (x.sets_gesamt === 1 && x.sets.length === 1) {
+      const z = x.sets[0];
+      return `<p class="notice small mat-andere-sets">${teile}, ${x.teile === 1 ? "sein" : "ihr"} Set ${setLink(z)} ist insgesamt ${statusMarke(z.status)} und steht in der Liste „${esc(z.status_text)}“.</p>`;
+    }
+    return `<p class="notice small mat-andere-sets">${teile}; ihre Sets haben insgesamt einen anderen Status und stehen in dessen Liste:
+      ${x.sets.map((z) => `<span class="mat-nowrap">${setLink(z)} ${statusMarke(z.status)}</span>`).join(", ")}${rest > 0 ? ` und ${rest} weitere` : ""}.</p>`;
   }
   // Kopf einer Liste mit Sets: „n Einträge, davon m Sets mit k Teilen“ – ohne Set bleibt die Liste, wie sie war.
   const setKopf = (gesamt, sets) => (sets && sets.anzahl ? `<p class="small muted mat-set-kopf">${plural(gesamt, "Eintrag", "Einträge")}, davon ${plural(sets.anzahl, "Set", "Sets")} mit ${plural(sets.teile, "Teil", "Teilen")}</p>` : "");
@@ -1528,7 +1547,7 @@
       $("#pr-liste").innerHTML = `${ordnerZeile}${personZeile}<p class="help">Überfällig, Lebensdauer erreicht (die Prüfung endet mit „aussondern“), neu (die Eingangsprüfung steht aus) oder in den nächsten ${d.schwelle_tage} Tagen fällig. Prüfen lässt sich jeder Artikel aber jederzeit – auch aus seiner Ansicht.</p>
         <div class="c-tabs mat-filter">${FILTER.map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}</button>`).join("")}</div>
         ${setKopf(d.gesamt, d.sets)}${d.artikel.length ? artikelTabelle(d.artikel, { pfad: true, pruefen: d.artikel.some((a) => a.darf && a.darf.pruefen), sort }) : leer("Keine Artikel in dieser Auswahl.")}
-        ${andereSetsHtml(d.andere_set_status, filter.includes(","))}
+        ${andereSetsHtml(d.andere_set_status, filter)}
         ${seitenleiste(d.gesamt, seite, 50)}`;
     }
     async function offene() {
@@ -1621,7 +1640,7 @@
   }
 
   /* --- Foto im Dialog (Ordnerfoto, Produktbild – Lieferung 5) ------------------------------------------------
-     Statt des nackten Dateifelds („Datei auswählen / Keine ausgewählt“, 21 px hoch) ein Knopf „📷 Foto wählen …“ –
+     Statt des nackten Dateifelds („Datei auswählen / Keine ausgewählt“, 21 px hoch) ein Knopf „Foto wählen …“ –
      ohne capture: Am Telefon bietet das System Kamera ODER Galerie an, am Rechner öffnet er den Dateidialog, und das
      Foto lässt sich auch in den Dialog ziehen. Links die Vorschau: das bisherige Foto, das neu gewählte (schon vor dem
      Speichern) oder ein leerer Rahmen, daneben Dateiname und Größe. „entfernen“ ist ein Knopf und wirkt wie die
@@ -1633,7 +1652,7 @@
       <div class="mat-bildwahl" id="${id}-feld" role="group" aria-labelledby="${id}-kopf" data-wort="${esc(wort)}" data-bisher="${esc(bisher || "")}">
         <div class="mat-bildwahl-bild"></div>
         <div class="mat-bildwahl-steuer">
-          <div class="btn-row"><label class="btn secondary mat-bildwahl-knopf"><span aria-hidden="true">📷</span> ${esc(wort)} wählen …<input type="file" id="${id}"
+          <div class="btn-row"><label class="btn secondary mat-bildwahl-knopf">${esc(wort)} wählen …<input type="file" id="${id}"
               accept="image/*" class="mat-datei" aria-describedby="${id}-name ${id}-hilfe"></label>
             <button type="button" class="btn secondary mat-bildwahl-weg" hidden></button></div>
           <div class="mat-bildwahl-name" id="${id}-name" aria-live="polite"></div>
@@ -1999,7 +2018,7 @@
       const systemText = d.system_kind === "gesperrt"
         ? "Hierher verschiebt eine Sperre die Artikel der Gliederung. Zurück in ihren Herkunftsordner bringt sie nur eine Freiprüfung."
         : "Ausgesonderte Artikel bleiben hier mit ihrem vollen Lebenslauf sichtbar, zählen aber nirgends mehr als Bestand und lassen sich nicht zurückholen.";
-      inhalt.innerHTML = `<div class="mat-pfad"><a href="/material/bestand">Bestand</a> / ${bc}</div>
+      inhalt.innerHTML = `${quittungHtml()}<div class="mat-pfad"><a href="/material/bestand">Bestand</a> / ${bc}</div>
         <div class="page-head"><h1>${schloss(d)}${esc(d.name)} ${system ? "" : `<span class="mat-art">${esc(ORDNERART[d.kind])}</span>`}${demoMarke(d.demo)}</h1>
           <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="unterordner"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Unterordner<span class="k-anlegen"> anlegen</span></span></button>
             <a class="btn secondary small" href="/material/artikel/neu?ordner=${d.id}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span></a>
@@ -2018,7 +2037,7 @@
           ${direktAlle || filter || person ? `<div class="mat-filterzeile"><div class="c-tabs mat-filter">${["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"].map((s) => `<button type="button" data-act="filter" data-f="${s}" class="${s === filter ? "sel" : ""}">${s ? esc(STATUS[s]) : "alle"}${s && d.direkt && d.direkt[s] ? ` (${d.direkt[s]})` : ""}</button>`).join("")}</div>
             ${personWahl}</div>` : ""}
           ${setKopf(d.artikel_gesamt, d.sets)}${d.artikel.length ? artikelTabelle(d.artikel, { auswahl: darfPflegen, pruefen: pruefbar, person: darf.grund, sort }) : leerHtml}
-          ${andereSetsHtml(d.andere_set_status, false)}
+          ${andereSetsHtml(d.andere_set_status, filter)}
           ${person ? `<p class="small"><a href="/material/pruefungen?ordner=${d.id}&zugeordnet=${encodeURIComponent(person)}">Fällige Artikel dieser Person im ganzen Zweig →</a></p>` : ""}
           ${seitenleiste(d.artikel_gesamt, seite, d.pro_seite)}
           ${darfPflegen ? `<div class="mat-sammel" id="mat-sammel" hidden><span id="mat-sammel-n"></span><div class="btn-row">
@@ -2117,6 +2136,9 @@
       };
     }
     await zeichnen();
+    // Quittung von der Seite davor (nach „Set auflösen“, V3) – Fokus darauf wie nach „Mangel melden“.
+    const qEl = $(".mat-mangel-quittung");
+    if (qEl) qEl.focus();
   }
 
   /* --- Produktsuche mit allen Treffern (Artikel anlegen, Meldung zuordnen) ------------------------------
@@ -2491,13 +2513,17 @@
     const aussonderAus = a.mangel_nur_gemeldet || setOhneGrund;
     /* Sets, Teil 2 (P4-L2b): „Set löschen“ löscht nur Teile, die mit dem Set angelegt wurden – mit eingesetzten
        vorhandenen Artikeln (sb.vorhandene_teile) führt „Löschen …“ zu „Set auflösen“, wenn das ginge. „Set auflösen …“
-       steht im Untermenü „Mehr“; geht es nicht (sb.aufloesen_hindernis), sagt ein Dialog warum (keine Erklärtexte unter
-       Knöpfen). */
+       steht im Untermenü „Auflösen“; geht es nicht (sb.aufloesen_hindernis), sagt ein Dialog warum (keine Erklärtexte unter
+       Knöpfen). Seit der Nachbesserung (Browser V4) steht „Set löschen …“ dort mit – beide selten, beide mit Punkten; das
+       Menü heißt nach seinem Inhalt („Auflösen / Löschen“). Am einzelnen Artikel und am Teil bleibt „Löschen“ ein Knopf. */
     const setPflege = Boolean(sb) && darfPflegen;
     const loeschenVerweis = setPflege && !a.darf_loeschen && (sb.vorhandene_teile || []).length > 0 && !sb.aufloesen_hindernis;
-    const setMenue = setPflege ? `<details class="mat-menue mat-set-menue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary>
+    const setLoeschen = setPflege && (a.darf_loeschen || loeschenVerweis);
+    const setMenue = setPflege ? `<details class="mat-menue mat-set-menue"><summary class="btn secondary small" aria-haspopup="true">${setLoeschen ? "Auflösen / Löschen" : "Auflösen"}</summary>
       <div class="mat-menue-liste"><a href="#" role="button" data-act="set-aufloesen"><strong>Set auflösen …</strong>
-        <span>Die Teile bleiben frei im Ordner des Sets, mit ihrer Zuordnung; das Set selbst wird gelöscht.</span></a></div></details>` : "";
+        <span>Die Teile bleiben frei im Ordner des Sets, mit ihrer Zuordnung; das Set selbst wird gelöscht.</span></a>
+      ${setLoeschen ? `<a href="#" role="button" data-act="${a.darf_loeschen ? "loeschen" : "loeschen-verweis"}"><strong>Set löschen …</strong>
+        <span>${a.darf_loeschen ? "Nur für ein falsch angelegtes Set ohne Prüfung – das Set und seine Teile werden gelöscht." : "Das Set enthält vorhandene Artikel – sie löscht „Set löschen“ nie."}</span></a>` : ""}</div></details>` : "";
     const zuordnung = darf.grund ? zeile("Zugeordnet an", `${zu ? `${esc(zu.name)}${zu.gliederung ? ` <span class="muted">· ${esc(zu.gliederung)}</span>` : ""}${zu.aktiv ? "" : ' <span class="muted">(deaktiviert)</span>'}`
       : '<span class="muted">–</span>'}${tv ? "" : zuKnoepfe}`) : "";
     inhalt.innerHTML = `${quittungHtml()}${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
@@ -2529,7 +2555,7 @@
           ${aus || darf.pruefen || sb ? "" : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice small">${pruefHinweis(a)}</p>`
             : '<p class="small muted">Prüfen dürfen Prüfer mit Urkundennummer und Prüffreigabe (Häkchen „Prüfer“ in der Nutzerverwaltung, Urkundennummer im eigenen Profil, Prüffreigabe vom Materialwart).</p>'}
           ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang ${a.durchgang.sichtbar ? `<a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>` : `„${esc(a.durchgang.titel)}“`}.</p>` : ""}
-          <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${frei && !tv ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : loeschenVerweis ? '<button class="btn secondary small" type="button" data-act="loeschen-verweis">Löschen …</button>' : ""}` : ""}${darf.grund ? lebenslaufKnopf(a) : ""}${setMenue}</div>
+          <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${frei && !tv ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen && !sb ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}${darf.grund ? lebenslaufKnopf(a) : ""}${setMenue}</div>
           ${tv && darf.verwalten ? `<p class="help mat-teil-hinweis">Verschieben, Zuordnen und Aussondern gehen nur mit dem ganzen Set – <a href="/material/artikel/${tv.id}">zum Set <span class="mat-inv">${esc(tv.inventory_no)}</span></a>.</p>` : ""}
           ${darf.grund ? `<p class="help mat-nur-touch">Lebenslauf (PDF): ${LEBENSLAUF_TEXT}</p>` : ""}
         </div>
@@ -2586,14 +2612,14 @@
       // V1 (Browser-Prüfung): Warum „Set aussondern“ hier nicht geht, steht im Dialog – nicht als Text unter den Knöpfen.
       "aussondern-warum": () => dialog(`<h2>Set ${esc(a.inventory_no)} aussondern</h2>
         <p>${esc(a.mangel_nur_gemeldet ? NUR_GEMELDET : SET_OHNE_GRUND)}</p>
-        <div class="dlg-actions"><button class="btn" data-close type="button">Schließen</button></div>`),
+        <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`),
       "teil-tauschen": (b) => teilDialog(a, "tauschen", sb.teile.find((t) => t.id === +b.dataset.id)),
       "teil-entnehmen": (b) => teilDialog(a, "entnehmen", sb.teile.find((t) => t.id === +b.dataset.id)),
       "teil-einsetzen": (b) => teilDialog(a, "einsetzen", null, sb.bestandteile.find((z) => z.id === +b.dataset.id)),
       "bestandteil-ersetzt": (b) => bestandteilDialog(a, sb.bestandteile.find((z) => z.id === +b.dataset.id)),
       "set-aufloesen": () => (sb.aufloesen_hindernis ? dialog(`<h2>Set ${esc(a.inventory_no)} auflösen</h2>
         <p>${esc(sb.aufloesen_hindernis)}</p>
-        <div class="dlg-actions"><button class="btn" data-close type="button">Schließen</button></div>`) : setAufloesen(a)),
+        <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`) : setAufloesen(a)),
       "loeschen-verweis": () => dialog(`<h2>Set ${esc(a.inventory_no)} löschen</h2>
         <p>Das Set enthält vorhandene Artikel (${esc(sb.vorhandene_teile.join(", "))}). „Löschen“ löscht nur Teile, die mit dem Set angelegt wurden – vorhandene Artikel nie.</p>
         <p>„Set auflösen“ gibt alle Teile frei in den Ordner des Sets zurück und löscht das Set selbst; ungeprüfte neue Teile lassen sich danach einzeln löschen.</p>
@@ -2649,8 +2675,9 @@
     : `Teil <a class="mat-inv" href="/material/artikel/${d.id}">${esc(d.inventory_no)}</a>`);
   const fehltText = (sb) => sb.fehlend.map((f) => `${f.fehlt} × ${esc(f.bezeichnung)}`).join(", ");
   // Der eine GESPERRT-Banner am Set (V2): der Grund, bei Unvollständigkeit dazu, was fehlt.
+  // Der Grund nach einem Doppelpunkt – er trägt oft selbst einen Gedankenstrich („Bestandteil ersetzt – Set prüfen“; V7).
   function setGesperrtBanner(sb, a) {
-    if (sb.vollstaendig) return `GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Nicht verwenden, bis „Set prüfen“ das Set freigibt.`;
+    if (sb.vollstaendig) return `GESPERRT${a.lock_reason ? `: ${esc(a.lock_reason)}` : ""}. Nicht verwenden, bis „Set prüfen“ das Set freigibt.`;
     // Der abgeleitete Grund (sets.anlass_text) nennt die Unvollständigkeit selbst – hier steht sie einmal, mit Stückzahl.
     const sonst = (a.lock_reason || "").split("; ").filter((x) => x && !x.startsWith("unvollständig: ")).join("; ");
     return `GESPERRT – Set unvollständig, es fehlt: ${fehltText(sb)}${sonst ? `; ${esc(sonst)}` : ""}. Nicht verwenden, bis das Set wieder vollständig und geprüft ist.`;
@@ -2973,6 +3000,29 @@
     einsetzen: "Das Set bleibt gesperrt, bis „Set prüfen“ es freigibt – dort wird das eingesetzte Teil geprüft.",
   };
   const TEIL_KNOPF = { tauschen: "Teil tauschen", entnehmen: "Teil entnehmen", einsetzen: "Teil einsetzen" };
+  /* Knopf mit Pflichtbestätigung („Austausch laut Hersteller: nicht belegt“): Bis zum Häkchen sieht er aus wie
+     ausgeschaltet (aria-disabled, Klasse „mat-aus“), bleibt aber antippbar – ein Tipp holt die Bestätigung ins Bild, setzt
+     den Fokus darauf und sagt, was fehlt (Nachbesserung, Browser V2: am Telefon lag sie hinter der Knopfleiste, der
+     Knopf war grau ohne sichtbaren Grund). Liefert {stand, fehlt}; fehlt() true heißt: nicht absenden. */
+  const BESTAETIGUNG_FEHLT = "Bitte erst bestätigen, dass der Austausch laut Herstellerunterlagen zulässig ist.";
+  function pflichtBestaetigung(ok, best, hinweis) {
+    const stand = () => {
+      const aus = Boolean(best) && !best.checked;
+      if (aus) ok.setAttribute("aria-disabled", "true"); else ok.removeAttribute("aria-disabled");
+      ok.classList.toggle("mat-aus", aus);
+      if (!aus && hinweis) hinweis.hidden = true;
+    };
+    const fehlt = () => {
+      if (!best || best.checked) return false;
+      if (hinweis) hinweis.hidden = false;
+      best.closest("label").scrollIntoView({ block: "center" });
+      best.focus();
+      return true;
+    };
+    if (best) best.addEventListener("change", stand);
+    stand();
+    return { stand, fehlt };
+  }
   function teilDialog(a, art, t, z) {
     const sb = a.set;
     if (art === "einsetzen" ? !z : !t) return;
@@ -2993,24 +3043,26 @@
         ${darfAus ? "" : `<p class="help" id="td-aus-nein">Aussondern geht hier nur nach einer Sperre des Teils durch einen Prüfer oder wenn es verloren ist.</p>`}
         <div id="td-aus" hidden>
           <div class="field-row"><div><label for="td-grund">Grund der Aussonderung</label><select id="td-grund">${Object.entries(AUSSONDERUNGSGRUND).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
-            <div><label for="td-datum">Datum</label>${datumFeld("td-datum", tag, "tag")}<div class="help">Spätestens heute (${esc(fmtTag(tag))}).</div></div></div>
+            <div><label for="td-datum">Datum</label>${datumFeld("td-datum", tag, "tag", { max: tag })}<div class="help">Spätestens heute (${esc(fmtTag(tag))}).</div></div></div>
           <label for="td-bem">Bemerkung</label><textarea id="td-bem" rows="2" maxlength="2000"></textarea>
           <p class="help">Die Aussonderung wird mit deiner Unterschrift festgeschrieben (Aussonderungsprotokoll).</p></div></fieldset>` : ""}
       ${neuesTeil ? `${teilBlockHtml(pos, 0, "td", new Set(TEIL_FELDER), art === "einsetzen" ? "Teil" : "Neues Teil", art === "einsetzen")}
         ${pos.austausch === "nicht_belegt" ? `<label class="inline mat-bestaetigen"><input type="checkbox" id="td-best"> Der Austausch ist laut Herstellerunterlagen zulässig.</label>
-          <p class="help">Für „${esc(pos.bezeichnung)}“ ist im Katalog nicht belegt, ob der Hersteller den Austausch zulässt. Deine Bestätigung steht im Journal des Sets.</p>` : ""}` : ""}
+          <p class="help">Für „${esc(pos.bezeichnung)}“ ist im Katalog nicht belegt, ob der Hersteller den Austausch zulässt. Deine Bestätigung steht im Journal des Sets.</p>
+          <p class="error" id="td-best-fehlt" role="alert" hidden>${esc(BESTAETIGUNG_FEHLT)}</p>` : ""}` : ""}
       <p class="error" id="td-fehler" role="alert" hidden></p>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="td-ok" type="button">${TEIL_KNOPF[art]}</button></div>`,
     (dlg, body) => {
       const ok = $("#td-ok", body);
       const best = $("#td-best", body);
       const verbleib = () => { const x = $('input[name="td-vb"]:checked', body); return x ? x.value : null; };
+      const pflicht = pflichtBestaetigung(ok, best, $("#td-best-fehlt", body));
       function stand() {
         const aus = verbleib() === "aussondern";
         if ($("#td-aus", body)) $("#td-aus", body).hidden = !aus;
         if ($("#td-vb-hilfe", body)) $("#td-vb-hilfe", body).textContent = aus ? "Es verlässt das Set und wird ausgesondert – endgültig." : weiterText;
         ok.classList.toggle("danger", aus);
-        ok.disabled = Boolean(best) && !best.checked;
+        pflicht.stand();
       }
       body.addEventListener("change", stand);
       stand();
@@ -3018,6 +3070,7 @@
       if (art === "einsetzen") bestandWahl(block, (q) => `${API}/artikel/${a.id}/kandidaten?${new URLSearchParams({ slot_id: z.id, q })}`);
       fokus($(".at-sn", body) || ok);
       ok.onclick = async () => {
+        if (pflicht.fehlt()) return;
         const fehler = $("#td-fehler", body);
         fehler.hidden = true;
         const daten = {};
@@ -3062,6 +3115,7 @@
           if (block && /^Neues Teil/.test(e.message)) block.classList.add("ungueltig");
           // Ein vorhandener Artikel: der Text des Servers (404/409) am Feld der Auswahl.
           if (block && daten.item_id && block.bestandFehler) { fehler.hidden = true; block.bestandFehler(e.message); }
+          ok.disabled = false;
           stand();
         }
       };
@@ -3078,49 +3132,67 @@
     if (!(await confirm(frage, "Set auflösen"))) return;
     try {
       const r = await api(`${API}/artikel/${a.id}/aufloesen`, { method: "POST", body: {} });
-      toast(`Set ${a.inventory_no} aufgelöst – ${plural(r.teile.length, "Teil", "Teile")} frei im Ordner`);
+      // Quittung auf der Zielseite (V3) – der Toast allein verschwindet mit dem Seitenwechsel.
+      const ort = a.pfad.length ? a.pfad[a.pfad.length - 1].name : "dem Ordner des Sets";
+      const nummern = r.teile.map((t) => t.inventory_no);
+      const liste = nummern.length > 1 ? `${nummern.slice(0, -1).join(", ")} und ${nummern[nummern.length - 1]}` : nummern.join("");
+      const satz = `Set ${a.inventory_no} aufgelöst – ${nummern.length ? `${liste} ${nummern.length === 1 ? "liegt" : "liegen"} jetzt frei in ${ort}.` : "es hatte keine Teile."}`;
+      quittungMitnehmen(satz);
+      toast(satz);
       leisteNeu();
       location.href = `/material/ordner/${a.folder_id}`;
     } catch (e) { toast(e.message, true); zeigen(artikel); }
   }
 
   /* „Bestandteil ersetzt“ (P4-L2b, Entwurf B; Kritiken T4, T5, T15, U5, U13, U14) an einer Position ohne eigenen Artikel
-     (Tasche, Seilsatz): Datum (höchstens heute), Bemerkung (eine Zeile, höchstens 200 Zeichen, keine Personennamen –
-     das Journal ist unveränderlich), bei „Austausch laut Hersteller: nicht belegt“ die Pflichtbestätigung. Das Set ist
-     danach gesperrt, bis „Set prüfen“ es freigibt; das Lebensende des Sets bleibt – ist der Ersatz älter als das Set,
-     zieht man es am Set vor (Bearbeiten → Lebensende, nur bei textilem Material). Der Knopf ist während der Anfrage
-     gesperrt. */
+     (Tasche, Seilsatz): Datum (frühestens am Tag der Erfassung des Sets, höchstens heute – der Server prüft dasselbe),
+     Bemerkung (eine Zeile, höchstens 200 Zeichen, keine Personennamen – das Journal ist unveränderlich), bei „Austausch
+     laut Hersteller: nicht belegt“ die Pflichtbestätigung. Das Set ist danach gesperrt, bis „Set prüfen“ es freigibt;
+     das Lebensende des Sets bleibt – ist der Ersatz älter als das Set, zieht man es am Set vor (nur bei textilem
+     Material, dort hat „Bearbeiten“ das Feld). Der Knopf ist während der Anfrage gesperrt. Nachbesserung (Browser V6,
+     V17): ein Hinweiskasten statt vier Erklärblöcken, der Lebensende-Satz nur bei textilem Material (als Weg, ohne Link –
+     der schloss den Dialog und verwarf Datum und Bemerkung), ein falsches Datum steht am Feld. */
   const ERSETZT_BEMERKUNG_MAX = 200;
   function bestandteilDialog(a, z) {
     if (!z) return;
     const tag = isoHeute(0);
+    const ab = String(a.created_at || "").slice(0, 10);
     const textil = a.produkt.material_kind === "textil";
+    const nichtBelegt = z.austausch === "nicht_belegt";
     dialog(`<h2>Bestandteil ersetzt – ${esc(z.bezeichnung)}</h2>
-      <p class="notice small">Das Set ${esc(a.inventory_no)} ist danach gesperrt, bis „Set prüfen“ es freigibt – dort wird das Set mit dem ersetzten Bestandteil geprüft.</p>
-      <div class="field-row"><div><label for="be-datum">Ersetzt am</label>${datumFeld("be-datum", tag, "tag")}<div class="help">Spätestens heute (${esc(fmtTag(tag))}).</div></div><div></div></div>
+      <p class="notice small">Das Set ${esc(a.inventory_no)} ist danach gesperrt, bis „Set prüfen“ es mit dem ersetzten Bestandteil freigibt.${nichtBelegt ? ` Für „${esc(z.bezeichnung)}“ ist im Katalog nicht belegt, ob der Hersteller den Austausch zulässt – deine Bestätigung steht im Journal des Sets.` : ""}${textil ? " Ist der Ersatz älter als das Set, das Lebensende am Set vorziehen („Bearbeiten“ → „Lebensende“)." : ""}</p>
+      <div class="field-row"><div><label for="be-datum">Ersetzt am</label>${datumFeld("be-datum", tag, "tag", { min: ab, max: tag })}
+        <div class="help">${ab ? `Vom ${esc(fmtTag(ab))} (Erfassung des Sets) bis heute.` : `Spätestens heute (${esc(fmtTag(tag))}).`}</div>
+        <p class="error" id="be-datum-fehler" hidden></p></div><div></div></div>
       <label for="be-bem">Bemerkung</label><input type="text" id="be-bem" maxlength="${ERSETZT_BEMERKUNG_MAX}" aria-describedby="be-bem-hilfe">
       <div class="help" id="be-bem-hilfe">Eine Zeile, höchstens ${ERSETZT_BEMERKUNG_MAX} Zeichen – keine Personennamen (das Journal lässt sich nicht ändern).</div>
-      ${z.austausch === "nicht_belegt" ? `<label class="inline mat-bestaetigen"><input type="checkbox" id="be-best"> Der Austausch ist laut Herstellerunterlagen zulässig.</label>
-        <p class="help">Für „${esc(z.bezeichnung)}“ ist im Katalog nicht belegt, ob der Hersteller den Austausch zulässt. Deine Bestätigung steht im Journal des Sets.</p>` : ""}
-      <p class="help mat-ersetzt-lebensende">Ist der Ersatz älter als das Set, Lebensende am Set vorziehen${textil ? ` – <button type="button" class="lnk" id="be-lebensende">Lebensende am Set ändern</button>` : "."}</p>
+      ${nichtBelegt ? `<label class="inline mat-bestaetigen"><input type="checkbox" id="be-best"> Der Austausch ist laut Herstellerunterlagen zulässig.</label>
+        <p class="error" id="be-best-fehlt" role="alert" hidden>${esc(BESTAETIGUNG_FEHLT)}</p>` : ""}
       <p class="error" id="be-fehler" role="alert" hidden></p>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="be-ok" type="button">Ersatz eintragen</button></div>`,
     (dlg, body) => {
       const ok = $("#be-ok", body);
-      const best = $("#be-best", body);
-      const stand = () => { ok.disabled = Boolean(best) && !best.checked; };
-      if (best) best.addEventListener("change", stand);
-      stand();
-      if ($("#be-lebensende", body)) $("#be-lebensende", body).onclick = () => { dlg.close(); artikelDialog(a); fokus($("#ad-ende")); };
+      const feld = $("#be-datum", body);
+      const datumFehler = $("#be-datum-fehler", body);
+      const pflicht = pflichtBestaetigung(ok, $("#be-best", body), $("#be-best-fehlt", body));
+      // Ein falsches Datum steht am Feld (V17) – aria-invalid setzt datumWert, der Text steht darunter.
+      const amDatum = (text) => {
+        datumFehler.textContent = text || "";
+        datumFehler.hidden = !text;
+        if (text) { feld.setAttribute("aria-invalid", "true"); feld.setAttribute("aria-describedby", "be-datum-fehler"); feld.focus(); }
+        else feld.removeAttribute("aria-describedby");
+      };
       fokus($("#be-bem", body));
       ok.onclick = async () => {
         const fehler = $("#be-fehler", body);
         fehler.hidden = true;
+        amDatum("");
+        if (pflicht.fehlt()) return;
         let datum;
-        try { datum = datumWert($("#be-datum", body), "Ersetzt am") || null; }
-        catch (e) { toast(e.message, true); $("#be-datum", body).focus(); return; }
+        try { datum = datumWert(feld, "Ersetzt am") || null; }
+        catch (e) { amDatum(e.message); return; }
         const daten = { slot_id: z.id, datum, bemerkung: $("#be-bem", body).value.trim() };
-        if (best) daten.bestaetigt = best.checked;
+        if (nichtBelegt) daten.bestaetigt = $("#be-best", body).checked;
         ok.disabled = true;
         ok.textContent = "Wird eingetragen …";
         try {
@@ -3129,11 +3201,13 @@
           toast(`${z.bezeichnung}: Ersatz eingetragen – das Set ist gesperrt bis „Set prüfen“`);
           zeigen(artikel);
         } catch (e) {
-          fehler.textContent = e.message;
-          fehler.hidden = false;
+          // Ein Datum, das der Server ablehnt (vor der Erfassung, in der Zukunft), ebenfalls am Feld.
+          if (/^„Ersetzt am“|^Das Datum/.test(e.message)) amDatum(e.message);
+          else { fehler.textContent = e.message; fehler.hidden = false; }
           toast(e.message, true);
           ok.textContent = "Ersatz eintragen";
-          stand();
+          ok.disabled = false;
+          pflicht.stand();
         }
       };
     });
@@ -3339,6 +3413,7 @@
      heißt: genauer tippen. Fehlertexte des Servers (404 kein Treffer, 409 anderes Produkt) stehen am Feld. f: der
      Teilblock; adresse(q): die Such-URL; belegt(id): schon in einem anderen Block gewählt (nur beim Anlegen). Der
      gewählte Treffer liegt in WAHL (teilBlockDaten schickt seine Kennung als „item_id“). */
+  const KEIN_KANDIDAT = "Kein passender Artikel gefunden.";
   const BESTAND_HILFE = "Lebenslauf und Protokolle gehen mit – der Artikel behält Inventar- und Seriennummer. Wählbar sind freie Artikel dieses Produkts aus deiner Gliederung, die zu keinem Set gehören.";
   const WAHL = new WeakMap();
   function kandidatHtml(x) {
@@ -3354,8 +3429,11 @@
     let liste = [];
     let los = null;
     let lauf = 0;
-    const fehlerZeigen = (text) => {
+    // artikel: bei „anderes Produkt“ der gefundene Artikel ({id, inventory_no}) – zum Nachsehen in einem neuen Reiter, das
+    // Formular bleibt stehen (V12).
+    const fehlerZeigen = (text, artikel) => {
       fehler.textContent = text || "";
+      if (text && artikel) fehler.insertAdjacentHTML("beforeend", ` <a href="/material/artikel/${artikel.id}" target="_blank" rel="noopener">${esc(artikel.inventory_no)} öffnen</a>`);
       fehler.hidden = !text;
       if (text) feld.setAttribute("aria-invalid", "true"); else feld.removeAttribute("aria-invalid");
       f.classList.toggle("ungueltig", Boolean(text));
@@ -3378,6 +3456,9 @@
       catch (e) { if (meinLauf === lauf) { treffer.innerHTML = ""; fehlerZeigen(e.message); } return; }
       if (meinLauf !== lauf) return;
       liste = r.treffer;
+      // Kein Treffer ist eine normale Antwort (200, Browser B3); „hinweis“: die Nummer gehört zu einem Artikel mit anderem
+      // Produkt (U8).
+      if (!liste.length) { treffer.innerHTML = ""; fehlerZeigen(r.hinweis ? r.hinweis.text : KEIN_KANDIDAT, r.hinweis && r.hinweis.artikel); return; }
       treffer.innerHTML = liste.map((x, i) => {
         const schon = belegt && belegt(x.id, f);
         return `<button type="button" class="mat-treffer-zeile mat-kandidat" data-i="${i}"${schon ? " disabled" : ""}>${kandidatHtml(x)}${schon ? '<span class="small">schon für ein anderes Teil gewählt</span>' : ""}</button>`;
@@ -3507,7 +3588,7 @@
       const block = (z, k) => { n += 1; return teilBlockHtml(z, k, `at-${n}`, felder, null, true); };
       el.hidden = false;
       el.innerHTML = `<h2>Teile des Sets</h2>
-        <p class="help">Jedes Stück eines einzeln geführten Bestandteils wird ein eigener Artikel mit Inventarnummer, QR und Etikett. Ohne Herstellernummer vergibt das System eine STR-Nummer – die dann am Teil anbringen (Etikett oder Gravur). Führt ihr ein Teil schon im Bestand (etwa aus einer importierten Liste), wähle es dort aus.</p>
+        <p class="help">Jedes Stück eines einzeln geführten Bestandteils wird ein eigener Artikel mit Inventarnummer, QR und Etikett. Ohne Herstellernummer vergibt das System eine STR-Nummer – die dann am Teil anbringen (Etikett oder Gravur). Führst du ein Teil schon im Bestand, wähle es aus dem Bestand.</p>
         ${einzeln.map((z) => Array.from({ length: z.anzahl }, (x, k) => block(z, k)).join("")).join("")}
         ${einzeln.length ? "" : '<p class="mat-leer">Laut Stückliste wird kein Bestandteil einzeln geführt – das Set hat keine Teil-Artikel.</p>'}
         ${ohne.length ? `<p class="small">Dazu ohne eigenen Artikel: ${ohne.map((z) => `${z.anzahl} × ${esc(z.bezeichnung)}`).join(", ")}</p>` : ""}
@@ -3580,26 +3661,28 @@
         return Object.assign({ bestandteil_id: +f.dataset.bestandteil }, teilBlockDaten(f, `Teil ${i + 1} (${f.dataset.bez})`));
       });
     }
-    // Ein Fehler des Servers beim Anlegen eines Sets: über dem Knopf und am Teil. Nennt er das Stück („Teil
-    // „Bezeichnung“ 2 von 2 (Seriennummer „X“): …“, sets.teil_wo), ist genau dieses Feld rot (aria-invalid, der Text
-    // darunter, Fokus dorthin – Nachbesserung B2); sonst die Felder mit einer genannten Seriennummer („…“) oder die
-    // Blöcke des genannten Bestandteils („„Bezeichnung“: genau …“).
+    // Ein Fehler des Servers beim Anlegen eines Sets: am Teil, wo er eines nennt – sonst über dem Knopf (dazu immer der
+    // Toast). Nennt er das Stück („Teil „Bezeichnung“ 2 von 2 (Seriennummer „X“): …“, sets.teil_wo), ist genau dieses
+    // Feld rot (aria-invalid, der Text darunter, Fokus dorthin – Nachbesserung B2); sonst die Felder mit einer genannten
+    // Seriennummer („…“) oder die Blöcke des genannten Bestandteils („„Bezeichnung“: genau …“). Steht der Text am Block,
+    // entfällt der Absatz über dem Knopf (Nachbesserung L2b, Browser V5 – vorher stand er dreifach da).
     function teileServerFehler(text) {
       const allg = $("#an-teile-fehler");
       if (!allg) return;
       allg.textContent = text;
       allg.hidden = false;
+      const amBlock = (block, ziel) => { allg.hidden = true; block.scrollIntoView({ block: "center" }); if (ziel) fokus(ziel); };
       const stueck = text.match(/^Teil „([^“]+)“ (\d+) von \d+(?: \(Seriennummer „[^“]*“\))?: (.*)$/s);
       if (stueck) {
         const bloecke = $$(".mat-an-teil").filter((f) => f.dataset.bez === stueck[1]);
         const block = bloecke[+stueck[2] - 1];
         if (block) {
           const sn = $(".at-sn", block);
-          if (/Seriennummer/.test(stueck[3])) { teilFehler(sn, text); sn.focus(); return; }
+          if (/Seriennummer/.test(stueck[3])) { teilFehler(sn, text); amBlock(block, sn); return; }
           block.classList.add("ungueltig");
           const el = $(".mat-an-teil-fehler", block);
           if (el) { el.textContent = text; el.hidden = false; }
-          block.scrollIntoView({ block: "center" });
+          amBlock(block, ausBestand(block) ? null : sn);
           return;
         }
       }
@@ -3607,15 +3690,15 @@
       const vorhanden = $$(".mat-an-teil").filter((f) => ausBestand(f) && f.dataset.inv && text.includes(f.dataset.inv));
       if (vorhanden.length) {
         vorhanden.forEach((f) => f.bestandFehler(text));
-        vorhanden[0].scrollIntoView({ block: "center" });
+        amBlock(vorhanden[0], $(".at-gewaehlt button", vorhanden[0]));
         return;
       }
-      let getroffen = false;
-      $$(".mat-an-teil .at-sn").forEach((f) => {
-        const w = f.value.trim();
-        if (w && text.includes(`„${w}“`)) { teilFehler(f, ""); getroffen = true; }
-      });
-      if (getroffen) return;
+      const getroffen = $$(".mat-an-teil .at-sn").filter((f) => f.value.trim() && text.includes(`„${f.value.trim()}“`));
+      if (getroffen.length) {
+        getroffen.forEach((f) => teilFehler(f, text));
+        amBlock(getroffen[0].closest(".mat-an-teil"), getroffen[0]);
+        return;
+      }
       const m = text.match(/^(?:Teil )?„([^“]+)“/);
       if (m) $$(".mat-an-teil").filter((f) => f.dataset.bez === m[1]).forEach((f) => f.classList.add("ungueltig"));
     }
@@ -5262,7 +5345,7 @@
     const url = eigeneAdresse(a.url);
     const d = document.createElement("details");
     d.className = "mat-anleitung";
-    d.innerHTML = `<summary><span aria-hidden="true">📖</span> Prüfanleitung aus dem Wiki: <span class="mat-anleitung-titel">${esc(a.titel)}</span></summary>
+    d.innerHTML = `<summary>Prüfanleitung aus dem Wiki: <span class="mat-anleitung-titel">${esc(a.titel)}</span></summary>
       <div class="mat-anleitung-koerper"><p class="help mat-anleitung-stand" aria-live="polite">wird geladen …</p>
         ${url ? `<p class="small mat-anleitung-link"><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Ganze Seite im Wiki öffnen ↗</a></p>` : ""}</div>`;
     let geladen = false;
@@ -5760,12 +5843,12 @@
             .filter(([b]) => x.art !== "laenge" || laengeMoeglich || b === "nicht_zutreffend").map(([b, t, k]) => `<button type="button" data-act="pbefund" data-rid="${x.id}" data-befund="${b}" class="${k}" aria-pressed="${x.befund === b}"${b === "nicht_zutreffend" ? ' title="nicht zutreffend"' : ""}>${t}</button>`).join("")}</div>`;
       }
       const fotoPflicht = mangel || (x.art === "photo" && x.pflicht && !nz);
-      // Zwei Wege zum Foto: „📷“ öffnet am Telefon gleich die Kamera (capture), „Galerie“ nimmt ein schon
+      // Zwei Wege zum Foto: „Foto“ öffnet am Telefon gleich die Kamera (capture), „Galerie“ nimmt ein schon
       // gemachtes Foto (Kamera-App, ohne Netz aufgenommen, vom Kollegen). Am Rechner öffnen beide nur die
       // Dateiauswahl – dort steht allein der erste (material.css). „Foto entfernen“ fragt nach und steht abgesetzt.
       const foto = x.art === "signature" ? "" : `<div class="mat-punkt-foto">
           ${x.foto ? bildLink(x.foto.web, x.foto.original, x.text, "punkte", `<img src="${esc(x.foto.vorschau)}" alt="Foto zu ${esc(x.text)}">`) : ""}
-          <label class="btn secondary small mat-kamera">📷 ${x.foto ? "neues Foto" : "Foto"}<input type="file" accept="image/*" capture="environment" data-foto="${x.id}" class="mat-datei" aria-label="Foto zu ${esc(x.text)}"></label>
+          <label class="btn secondary small mat-kamera">${x.foto ? "neues Foto" : "Foto"}<input type="file" accept="image/*" capture="environment" data-foto="${x.id}" class="mat-datei" aria-label="Foto zu ${esc(x.text)}"></label>
           <label class="btn secondary small mat-galerie">Galerie<input type="file" accept="image/*" data-foto="${x.id}" class="mat-datei" aria-label="Foto zu ${esc(x.text)} aus der Galerie wählen"></label>
           ${x.foto ? `<button type="button" class="btn secondary small mat-foto-weg" data-act="pfoto-weg" data-rid="${x.id}">Foto entfernen</button>` : ""}
           ${fotoPflicht && !x.foto ? '<span class="mat-pflicht">Foto ist Pflicht</span>' : ""}</div>`;
@@ -5803,7 +5886,7 @@
       const neu = bearbeitbar() ? `<div class="mat-anhang-neu">
           <div class="field-row"><div><label for="ah-art">Art</label><select id="ah-art">${Object.entries(ANHANGART).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
             <div><label for="ah-titel">Titel</label><input type="text" id="ah-titel" maxlength="160" placeholder="z. B. Prüfkarte des Herstellers"></div></div>
-          <div class="btn-row"><label class="btn secondary small">📷 Seite fotografieren<input type="file" accept="image/*" capture="environment" id="ah-kamera" class="mat-datei"></label>
+          <div class="btn-row"><label class="btn secondary small">Seite fotografieren<input type="file" accept="image/*" capture="environment" id="ah-kamera" class="mat-datei"></label>
             <label class="btn secondary small">Dateien wählen<input type="file" accept="application/pdf,image/*" multiple id="ah-dateien" class="mat-datei"></label></div>
           <ol class="mat-scan" id="ah-seiten"></ol>
           <label class="inline"><input type="checkbox" id="ah-protokoll" checked> hinten ans Protokoll hängen</label>
@@ -6875,7 +6958,7 @@
         <div><label for="me-norm">Norm</label><input type="text" id="me-norm" maxlength="200" placeholder="z. B. EN 362" ${TASTATUR_NUMMER}></div></div>
       <label for="me-kat">Kategorie</label><select id="me-kat"><option value="">– weiß ich nicht –</option>${kategorieOptionen(kats, null)}</select>
       <label for="me-links">Links</label><textarea id="me-links" rows="3" ${TASTATUR_ADRESSE} placeholder="https://… – je Zeile eine Adresse: Herstellerseite, Gebrauchsanleitung, Händler"></textarea>
-      <div class="mat-feldkopf">Fotos (bis zu 3)</div>${dateiKnopf("me-fotos", '<span aria-hidden="true">📷</span> Fotos wählen …', "image/*", true)}
+      <div class="mat-feldkopf">Fotos (bis zu 3)</div>${dateiKnopf("me-fotos", 'Fotos wählen …', "image/*", true)}
       <div class="help">Etikett oder Typenschild – darauf stehen meist Hersteller, Modell, Norm und Herstelldatum.</div>
       <label for="me-note">Bemerkung</label><textarea id="me-note" rows="3" maxlength="2000" placeholder="Was hilft beim Einpflegen? z. B. Größe, Farbe, wo gekauft"></textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="me-ok" type="button">Melden</button></div>`,
@@ -7745,8 +7828,16 @@
     `${titel} – Foto ${i + 1}`, `mangel-${m.id}`, `<img class="mat-mini" src="${esc(f.vorschau)}" alt="">`,
     `Foto ${i + 1} zur Mangelmeldung groß zeigen`)).join("")}</div>` : "");
 
-  // Nach dem Melden steht oben, was geschah – der Toast allein ist am Telefon schnell weg.
+  // Nach dem Melden steht oben, was geschah – der Toast allein ist am Telefon schnell weg. Führt die Aktion auf eine andere
+  // Seite (nach „Set auflösen“ zum Ordner – Nachbesserung, Browser V3), nimmt dieses Fenster die Quittung einmal mit
+  // (sessionStorage; ohne Speicher bleibt es beim Toast).
   let quittung = "";
+  const QUITTUNG_ABLAGE = "mat-quittung";
+  const quittungMitnehmen = (text) => { try { sessionStorage.setItem(QUITTUNG_ABLAGE, text); } catch (e) { /* dann nur der Toast */ } };
+  const quittungAbholen = () => {
+    try { quittung = sessionStorage.getItem(QUITTUNG_ABLAGE) || ""; sessionStorage.removeItem(QUITTUNG_ABLAGE); }
+    catch (e) { quittung = ""; }
+  };
   const quittungHtml = () => { const q = quittung; quittung = ""; return q ? `<p class="notice mat-mangel-quittung" role="status" tabindex="-1">${esc(q)}</p>` : ""; };
   function mangelQuittung(r, v) {
     // v: das Set, über das die Meldung sperrt (Hersteller-Sets, K2) – dann sagt die Quittung es fürs ganze Set (und
@@ -7782,7 +7873,7 @@
       <p class="error mat-feld-fehler" id="mg-text-fehler" hidden></p>
       <div class="mat-feldkopf" id="mg-fotos-kopf">Fotos (bis zu ${MANGEL_MAX_FOTOS})</div>
       <div class="mat-mangel-fotowahl" role="group" aria-labelledby="mg-fotos-kopf">
-        <div class="mat-dateiwahl"><label class="btn secondary mat-bildwahl-knopf"><span aria-hidden="true">📷</span> Foto hinzufügen …<input type="file"
+        <div class="mat-dateiwahl"><label class="btn secondary mat-bildwahl-knopf">Foto hinzufügen …<input type="file"
             id="mg-fotos" accept="image/*" multiple class="mat-datei" aria-describedby="mg-fotos-stand"></label>
           <span class="mat-dateiwahl-name" id="mg-fotos-stand" aria-live="polite"></span>
           <button type="button" class="btn secondary mat-dateiwahl-weg" id="mg-fotos-weg" hidden>Auswahl entfernen</button></div>
@@ -8039,5 +8130,6 @@
                       meldungen, pruefung_neu: pruefungNeu, pruefung: pruefungAnsicht, durchgang: durchgangAnsicht, fremd,
                       meine_psa: meinePsa, bestandsimport, bericht, set_lauf: setLaufAnsicht };
   leisteLaden();
+  quittungAbholen();
   zeigen(ANSICHTEN[ANSICHT] || dashboard);
 })();

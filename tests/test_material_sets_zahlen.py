@@ -114,7 +114,8 @@ def test_andere_set_status():
         o = ok(w.get(f"/api/material/ordner/{t.lager_a}?status=einsatzbereit"))["ordner"]
         assert s not in [x["id"] for x in o["artikel"]]
         assert o["andere_set_status"] == {"teile": 3, "sets_gesamt": 1,
-                                          "sets": [{"id": s, "inventory_no": inv(app, s), "teile": 3}]}, o
+                                          "sets": [{"id": s, "inventory_no": inv(app, s), "teile": 3,
+                                                    "status": "ueberfaellig", "status_text": "überfällig"}]}, o
         o = ok(w.get(f"/api/material/ordner/{t.lager_a}?status=ueberfaellig"))["ordner"]
         assert s in [x["id"] for x in o["artikel"]] and o["andere_set_status"]["teile"] == 0
         f = ok(w.get("/api/material/faellig?status=einsatzbereit"))

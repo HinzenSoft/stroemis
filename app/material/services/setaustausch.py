@@ -53,7 +53,9 @@ Seit P4-L2b (Entwurf A und B, Kritiken T1–T16 und U1–U16):
     „ja“, „nicht belegt“ nur mit Bestätigung, „nein“ 409; nicht bei offenem Entwurf am Set-Artikel (T5, U5). Journal am
     Set, Sperre wie beim Tausch (set_grund „bestandteil“), danach die Marke an der Set-Zeile (sets.bestandteil_markieren,
     T4). Das Lebensende des Sets bleibt."""
+import json
 import re
+from datetime import datetime, timedelta, timezone
 
 from ... import db
 from ..models import AUSSONDERUNGSGRUENDE
@@ -76,12 +78,15 @@ SCHON_ENTNOMMEN = "Das Teil wurde inzwischen anderswo entnommen – bitte neu la
 NUR_NEU_TAUSCHEN = ("Tauschen geht nur mit einem neuen Teil – einen vorhandenen Artikel setzt du ein, nachdem das alte "
                     "Teil entnommen ist („Teil entnehmen“, dann „Teil einsetzen“).")
 NICHT_BEIDES = "Entweder einen vorhandenen Artikel („item_id“) oder die Angaben eines neuen Teils – nicht beides."
-ANDERES_PRODUKT = "{inv} ist {ist}; an dieser Position steht {soll} – Produkt am Artikel korrigieren."
+# Ohne „Produkt am Artikel korrigieren“ (Browser V12): „Bearbeiten“ hat kein Produktfeld – der Satz zeigte auf einen Weg,
+# den es in der Oberfläche nicht gibt. Die Auswahl verlinkt den Artikel.
+ANDERES_PRODUKT = "{inv} ist {ist}; an dieser Position steht {soll}. Einsetzen lässt sich nur ein Artikel dieses Produkts."
 ANDERE_GLIEDERUNG = ("{inv} liegt in einer anderen Gliederung als das Set – erst in die Gliederung des Sets verschieben "
                      "(„Verschieben“), dann einsetzen.")
 INZWISCHEN_GEAENDERT = "{inv} wurde inzwischen geändert (Ordner, Sperre oder Zuordnung) – bitte neu laden."
-KEIN_KANDIDAT = "Kein passender Artikel gefunden."
+KEIN_KANDIDAT = "Kein passender Artikel gefunden."      # zeigt die Oberfläche bei leerer Trefferliste (material.js)
 KANDIDATEN_MAX = 20
+KANDIDATEN_SEITE = 200                # so viele Zeilen liest die Auswahl je Seite der Vorauswahl (kandidaten)
 SUCHE_MIN, SUCHE_MAX = 2, 80
 BISHERIGE = "Bisherige Inventarnummer: "             # wie bestandsimport (Zeile der Bemerkung)
 _BISHERIGE = re.compile(r"^" + re.escape(BISHERIGE) + r"(.*)$", re.MULTILINE)
@@ -89,8 +94,11 @@ _BISHERIGE = re.compile(r"^" + re.escape(BISHERIGE) + r"(.*)$", re.MULTILINE)
 AUFGELOEST = "Set aufgelöst"
 NUR_FREIES_SET = ("Auflösen lässt sich nur ein freies Set – ein gesperrtes gibt nur „Set prüfen“ frei; einzelne Teile "
                   "verlassen es über „Teil entnehmen“.")
-# „Bestandteil ersetzt“ (L2b, Entwurf B; Kritiken T4, T5, T15, U5, U13).
+# „Bestandteil ersetzt“ (L2b, Entwurf B; Kritiken T4, T5, T15, U5, U13; Nachbesserung).
 BEMERKUNG_MAX = 200
+DOPPELT_SEKUNDEN = 60                 # derselbe Eintrag in dieser Zeit noch einmal: 409 (Doppelklick)
+SCHON_EINGETRAGEN = "Der Ersatz von „{bez}“ ist schon eingetragen (eben, mit demselben Datum und derselben Bemerkung)."
+VOR_ERFASSUNG = "„Ersetzt am“ liegt vor der Erfassung des Sets ({datum}) – frühestens an diesem Tag."
 NICHT_ENTNEHMBAR = ("Laut Hersteller nicht austauschbar – das Set aussondern. „{bez}“ lässt sich nicht einzeln entnehmen; "
                     "beim Aussondern des Sets lassen sich die übrigen Teile entnehmen und weiterführen.")
 
@@ -330,7 +338,9 @@ def teil_bleibt_gesperrt(t, p, grund):
     eigenem Grund (grund nennt „das Set aussondern“) – auch eine schon vorhandene eigene Sperre bekommt diesen Grund, damit
     der Materialwart ihn sieht. In der Transaktion des Festschreibens; das Set sperrt mit (Kaskade)."""
     set_id = t["parent_item_id"]
-    if t["lock_cause"] == "eigen":
+    # Am Sperrzustand festgemacht, nicht an der Ursache allein: ein freies Teil mit Altwert „eigen“ ist nicht gesperrt
+    # (Prüfung Sicherheit, H1) – dann sperrt die Kaskade wie bei jedem freien Teil.
+    if sets._eigen_gesperrt(t):
         sets.set_lage(set_id, je_zeile={"lock_reason": ({t["id"]: grund}, sets.BLEIBT)})
         journal.eintragen("item", t["id"], "geprueft", {"lock_reason": t["lock_reason"]},
                           {"lock_reason": grund, "pruefung": p["id"], "ergebnis": "aussondern", "set": set_id})
@@ -484,9 +494,12 @@ def vorhandenen_einsetzen(s, pid, bez, item_id, ziel, sperren=True):
                        one=True):
         raise Abgelehnt(f"{inv} wurde in der offenen Set-Prüfung dieses Sets schon geprüft – erst die Set-Prüfung "
                         "abschließen oder abbrechen, dann einsetzen.", 409)
-    # Wirkung: Lage und Zuordnung wie das Set – nur, wenn der Artikel noch so ist, wie er eben gelesen wurde (U9).
+    # Wirkung: Lage und Zuordnung wie das Set – nur, wenn der Artikel noch so ist, wie er eben gelesen wurde (U9). Ein
+    # freier Artikel hat keine Sperrursache: ein Altwert (etwa „eigen“ nach Entnehmen aus einem gesperrten Set und
+    # Einzel-Freiprüfung vor dieser Nachbesserung) fiele sonst im Set als eigene Sperre aus (Prüfung Sicherheit, H1).
     if not db.execute_zeilen("UPDATE mat_item SET parent_item_id = ?, folder_id = ?, origin_folder_id = ?, "
-                             "assigned_user_id = ?, updated_at = ? WHERE id = ? AND parent_item_id IS NULL "
+                             "assigned_user_id = ?, lock_cause = NULL, lock_reason = '', set_pruefen = 0, updated_at = ? "
+                             "WHERE id = ? AND parent_item_id IS NULL "
                              "AND lock_state = 'frei' AND folder_id = ? AND assigned_user_id IS ?",
                              (s["id"], s["folder_id"], s["origin_folder_id"], s["assigned_user_id"], db.now(), a["id"],
                               a["folder_id"], a["assigned_user_id"])):
@@ -534,51 +547,62 @@ def kandidaten(ziel, pid, q):
     verwaltet (rechte.artikel_filter), in der Gliederung von ziel (Heimat des Sets bzw. Ablageordner) und auf derselben
     Seite der DEMO-Grenze. Suche in Inventar- und Seriennummer und in der Zeile „Bisherige Inventarnummer: …“ der Bemerkung
     (Bestandsimport) – LIKE mit ESCAPE, höchstens KANDIDATEN_MAX Treffer. Antwort: {treffer: [{id, inventory_no,
-    serial_no, bisherige_inventarnummer, produkt, ordner, status, status_text, zugeordnet}], weitere}. Ohne Treffer:
-    passt die Nummer genau auf einen verwalteten Artikel mit anderem Produkt, 409 mit beiden Namen (U8) – sonst 404, für
-    fremd und unbekannt gleich. Kein Suchprotokoll, kein Hinweis auf Fremdes."""
+    serial_no, bisherige_inventarnummer, produkt, ordner, status, status_text, zugeordnet}], weitere, hinweis}.
+    Die LIKE-Vorauswahl trifft in der Bemerkung auch Text hinter der Zeile (etwa „Standort: …“); was nur so trifft, fällt
+    in Python heraus – darum wird seitenweise weitergelesen, bis KANDIDATEN_MAX + 1 echte Treffer da sind oder nichts
+    mehr kommt (Prüfung Ablauf A3: vorher schnitt LIMIT 200 vor dem Nachfiltern ab). Die DEMO-Grenze steht in der Abfrage.
+    Ohne Treffer 200 mit leerer Liste (Browser B3 – kein Konsolenfehler im Normalfall), für fremd und unbekannt gleich;
+    passt die Nummer genau auf einen verwalteten Artikel mit anderem Produkt, nennt „hinweis“ ihn ({text, artikel: {id,
+    inventory_no}}, U8) – das Konto verwaltet ihn, es erfährt nichts Neues. Kein Suchprotokoll, kein Hinweis auf
+    Fremdes."""
     gl = bestand.gliederung_von(ziel)
     treffer, weitere = [], False
+    nadel = q.casefold()
     if gl:
         zweig, zweig_args = bestand.heimat_im_zweig(gl["id"], "i")
         muster = _muster(q)
-        rows = db.query(
-            "SELECT i.*, p.manufacturer, p.model, p.description AS product_description, p.article_no FROM mat_item i "
-            "JOIN mat_product p ON p.id = i.product_id WHERE i.product_id = ? AND i.lock_state = 'frei' "
-            f"AND i.parent_item_id IS NULL AND p.is_set = 0 AND {rechte.artikel_filter('i', 'verwalten')} AND {zweig} "
-            "AND (i.inventory_no LIKE ? ESCAPE '\\' OR i.serial_no LIKE ? ESCAPE '\\' OR i.notes LIKE ? ESCAPE '\\') "
-            "ORDER BY i.inventory_no LIMIT 200",
-            (pid, *zweig_args, muster, muster, "%" + BISHERIGE + muster))
-        demo = bestand.ordner_ist_demo(ziel)
-        nadel = q.casefold()
-        for i in rows:
-            alt = [b for b in _bisherige(i["notes"]) if nadel in b.casefold()]
-            if not (nadel in i["inventory_no"].casefold() or nadel in i["serial_no"].casefold() or alt):
-                continue
-            if bestand.ordner_ist_demo(i["folder_id"]) != demo:
-                continue
-            if len(treffer) == KANDIDATEN_MAX:
-                weitere = True
+        demo = 1 if bestand.ordner_ist_demo(ziel) else 0
+        nach = ("", 0)                     # Schlüssel der Seite: (Inventarnummer, Kennung) der letzten gelesenen Zeile
+        while not weitere:
+            rows = db.query(
+                "SELECT i.*, p.manufacturer, p.model, p.description AS product_description, p.article_no FROM mat_item i "
+                "JOIN mat_product p ON p.id = i.product_id WHERE i.product_id = ? AND i.lock_state = 'frei' "
+                f"AND i.parent_item_id IS NULL AND p.is_set = 0 AND {rechte.artikel_filter('i', 'verwalten')} AND {zweig} "
+                f"AND {bestand.demo_ordner_sql('i.folder_id')} = ? "
+                "AND (i.inventory_no LIKE ? ESCAPE '\\' OR i.serial_no LIKE ? ESCAPE '\\' OR i.notes LIKE ? ESCAPE '\\') "
+                "AND (i.inventory_no > ? OR (i.inventory_no = ? AND i.id > ?)) "
+                f"ORDER BY i.inventory_no, i.id LIMIT {KANDIDATEN_SEITE}",
+                (pid, *zweig_args, demo, muster, muster, "%" + BISHERIGE + muster, nach[0], nach[0], nach[1]))
+            for i in rows:
+                alt = [b for b in _bisherige(i["notes"]) if nadel in b.casefold()]
+                if not (nadel in i["inventory_no"].casefold() or nadel in i["serial_no"].casefold() or alt):
+                    continue
+                if len(treffer) == KANDIDATEN_MAX:
+                    weitere = True
+                    break
+                status = st.status(i)
+                treffer.append({"id": i["id"], "inventory_no": i["inventory_no"], "serial_no": i["serial_no"],
+                                "bisherige_inventarnummer": ", ".join(_bisherige(i["notes"])) or None,
+                                "produkt": katalog.produktname(i, i["product_description"]),
+                                "ordner": bestand._pfad_text(i["folder_id"]), "status": status,
+                                "status_text": st.LABEL[status], "zugeordnet": bestand.zugeordnet_json(i)})
+            if len(rows) < KANDIDATEN_SEITE:
                 break
-            status = st.status(i)
-            treffer.append({"id": i["id"], "inventory_no": i["inventory_no"], "serial_no": i["serial_no"],
-                            "bisherige_inventarnummer": ", ".join(_bisherige(i["notes"])) or None,
-                            "produkt": katalog.produktname(i, i["product_description"]),
-                            "ordner": bestand._pfad_text(i["folder_id"]), "status": status, "status_text": st.LABEL[status],
-                            "zugeordnet": bestand.zugeordnet_json(i)})
+            nach = (rows[-1]["inventory_no"], rows[-1]["id"])
     if treffer:
-        return {"treffer": treffer, "weitere": weitere}
-    nadel = q.casefold()
+        return {"treffer": treffer, "weitere": weitere, "hinweis": None}
     for i in db.query(f"SELECT i.* FROM mat_item i WHERE i.product_id <> ? AND i.lock_state <> 'ausgesondert' "
                       f"AND {rechte.artikel_filter('i', 'verwalten')} AND (i.inventory_no = ? COLLATE NOCASE "
                       "OR i.serial_no = ? COLLATE NOCASE OR i.notes LIKE ? ESCAPE '\\') ORDER BY i.id LIMIT 50",
                       (pid, q, q, "%" + BISHERIGE + _muster(q)[1:])):
         if (i["inventory_no"].casefold() == nadel or i["serial_no"].casefold() == nadel
                 or nadel in (b.casefold() for b in _bisherige(i["notes"]))):
-            raise Abgelehnt(ANDERES_PRODUKT.format(inv=i["inventory_no"],
-                                                   ist=katalog.produktname(katalog.produkt(i["product_id"])),
-                                                   soll=katalog.produktname(katalog.produkt(pid))), 409)
-    raise Abgelehnt(KEIN_KANDIDAT, 404)
+            return {"treffer": [], "weitere": False, "hinweis": {
+                "text": ANDERES_PRODUKT.format(inv=i["inventory_no"],
+                                               ist=katalog.produktname(katalog.produkt(i["product_id"])),
+                                               soll=katalog.produktname(katalog.produkt(pid))),
+                "artikel": {"id": i["id"], "inventory_no": i["inventory_no"]}}}
+    return {"treffer": [], "weitere": False, "hinweis": None}
 
 
 def kandidaten_am_set(set_id, slot_roh, q_roh):
@@ -688,10 +712,14 @@ def bestandteil_ersetzt(set_id, d):
     bestaetigt = wahr(d, "bestaetigt", "Austausch laut Herstellerunterlagen zulässig")
     from . import pruefung
     with db.transaction(sofort=True):
-        _set(set_id)
+        s = _set(set_id)
         z = next((x for x in sets.slots(set_id) if x["id"] == slot_id and not x["einzeln"]), None)
         if not z:
             raise Abgelehnt("Position nicht gefunden.", 404)
+        # Untergrenze (Prüfung Sicherheit, Hinweis): Was vor der Erfassung des Sets ersetzt wurde, gehört nicht in seinen
+        # Verlauf – das Journal ist unveränderlich, „01.01.1900“ bliebe sonst stehen.
+        if tag < s["created_at"][:10]:
+            raise Abgelehnt(VOR_ERFASSUNG.format(datum=pruefung._fmt(s["created_at"][:10])))
         if z["austausch"] == "nein":
             raise Abgelehnt(NICHT_AUSTAUSCHBAR.format(bez=z["bezeichnung"]), 409)
         if z["austausch"] == "nicht_belegt" and not bestaetigt:
@@ -700,7 +728,16 @@ def bestandteil_ersetzt(set_id, d):
         if offen:
             raise Abgelehnt(pruefung.reserviert_text(offen) + " Erst festschreiben oder verwerfen – die begonnene Prüfung "
                             "hat den ersetzten Bestandteil nicht gesehen.", 409)
-        eintrag = {"slot": z["id"], "bestandteil": z["bezeichnung"], "datum": tag, "bemerkung": bemerkung,
+        # Doppelklick, zweiter Reiter (Prüfung Sicherheit, Hinweis): Dieselbe Position mit demselben Datum und derselben
+        # Bemerkung kurz hintereinander ist schon eingetragen – sonst stünden zwei unveränderliche Einträge im Journal.
+        grenze = (datetime.now(timezone.utc).replace(microsecond=0) - timedelta(seconds=DOPPELT_SEKUNDEN)).isoformat()
+        for r in db.query("SELECT after_json FROM mat_audit WHERE entity = 'item' AND entity_id = ? "
+                          "AND action = 'bestandteil_ersetzt' AND created_at >= ?", (set_id, grenze)):
+            x = json.loads(r["after_json"] or "{}")
+            if (x.get("position"), x.get("datum"), x.get("bemerkung")) == (z["position"], tag, bemerkung):
+                raise Abgelehnt(SCHON_EINGETRAGEN.format(bez=z["bezeichnung"]), 409)
+        # „position“: die Nummer der Position in der Stückliste (1, 2, …), nicht die Kennung der Kopie (Browser B1).
+        eintrag = {"position": z["position"], "bestandteil": z["bezeichnung"], "datum": tag, "bemerkung": bemerkung,
                    "austausch": z["austausch"]}
         if z["austausch"] == "nicht_belegt":
             eintrag["bestaetigt"] = BESTAETIGT

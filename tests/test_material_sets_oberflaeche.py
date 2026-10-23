@@ -367,7 +367,7 @@ def test_oberflaeche_nachbesserung_statisch():
     assert '<div class="c-tabs mat-reiter" role="tablist" aria-labelledby="pd-titel" ${istSet ? "" : "hidden"}>' in js
     # B2: Server-Fehler am einen Feld (Stück und Seriennummer aus sets.teil_wo), aria-invalid über teilFehler, Fokus.
     tsf = js[js.index("function teileServerFehler("):js.index('$("#an-ende").addEventListener')]
-    assert "(\\d+) von \\d+" in tsf and "teilFehler(sn, text); sn.focus();" in tsf
+    assert "(\\d+) von \\d+" in tsf and "teilFehler(sn, text); amBlock(block, sn);" in tsf      # seit L2b-Nachbesserung V5
     assert 'feld.setAttribute("aria-invalid", "true")' in js
     # B3/V2: ausgesondert ohne Unvollständig-Banner und „fehlt“-Zeilen; unvollständig im einen GESPERRT-Banner.
     banner = funktion(js, "setBanner")
@@ -465,7 +465,8 @@ def test_oberflaeche_l2b_statisch():
     # Set auflösen und Löschen mit vorhandenen Teilen.
     for haken in ('data-act="set-aufloesen"><strong>Set auflösen …</strong>', '<details class="mat-menue mat-set-menue">',
                   '"set-aufloesen": () => (sb.aufloesen_hindernis ? dialog(', "esc(sb.aufloesen_hindernis)",
-                  'data-act="loeschen-verweis">Löschen …</button>', "(sb.vorhandene_teile || []).length > 0 && !sb.aufloesen_hindernis",
+                  'data-act="${a.darf_loeschen ? "loeschen" : "loeschen-verweis"}"><strong>Set löschen …</strong>',
+                  "(sb.vorhandene_teile || []).length > 0 && !sb.aufloesen_hindernis",
                   '<button class="btn" id="lv-aufloesen" type="button">Set auflösen …</button>'):
         assert haken in js, haken
     auf = funktion(js, "setAufloesen")
@@ -478,8 +479,8 @@ def test_oberflaeche_l2b_statisch():
     be = funktion(js, "bestandteilDialog")
     assert re.search(r"const ERSETZT_BEMERKUNG_MAX = (\d+);", js).group(1) == str(setaustausch.BEMERKUNG_MAX)
     for haken in ("/bestandteil-ersetzt`", 'maxlength="${ERSETZT_BEMERKUNG_MAX}"', "keine Personennamen",
-                  "Ist der Ersatz älter als das Set, Lebensende am Set vorziehen", 'z.austausch === "nicht_belegt"',
-                  "ok.disabled = true;", "daten.bestaetigt = best.checked", "artikelDialog(a)"):
+                  "Ist der Ersatz älter als das Set, das Lebensende am Set vorziehen", 'z.austausch === "nicht_belegt"',
+                  "ok.disabled = true;", 'daten.bestaetigt = $("#be-best", body).checked', "pflicht.fehlt()"):
         assert haken in be, haken
     assert be.count('class="btn"') == 1 and "btn danger" not in be and "btn ghost" not in be
     # Zahlen: Zählsatz wie bestand.zaehlsatz, Zusatz unter Statuslisten (Ordner und Fällige).
@@ -488,11 +489,10 @@ def test_oberflaeche_l2b_statisch():
     assert 'const SETS_SATZ = (s) => `${plural(s.teile, "Teil", "Teile")} in ${plural(s.anzahl, "Set", "Sets")}`;' in js
     assert '`${plural(n, "Artikel", "Artikel")}, darunter ${SETS_SATZ(s)}`' in js
     for haken in ("zaehlSatz(d.bestand, d.bestand_sets)", "zaehlSatz(o.bestand, o.bestand_sets)", "SETS_SATZ(o.bestand_sets)",
-                  "SETS_SATZ(d.bestand_sets)", "esc(bst.sets_satz)", 'andereSetsHtml(d.andere_set_status, filter.includes(","))',
-                  "andereSetsHtml(d.andere_set_status, false)"):
+                  "SETS_SATZ(d.bestand_sets)", "esc(bst.sets_satz)"):
         assert haken in js, haken
     andere = funktion(js, "andereSetsHtml")
-    assert "x.sets_gesamt" in andere and "/material/artikel/${s.id}" in andere and "esc(s.inventory_no)" in andere
+    assert "x.sets_gesamt" in andere and "/material/artikel/${z.id}" in andere and "esc(z.inventory_no)" in andere
     # Knöpfe (F): „Sperren“ und „Melden und sperren“ rot gefüllt, nicht btn danger.
     assert '<button class="btn" id="sd-ok" type="button">Sperren</button>' in js and 'danger" id="sd-ok"' not in js
     assert '<button class="btn" id="mg-ok" type="button">Melden und sperren</button>' in js and 'danger" id="mg-ok"' not in js
@@ -523,11 +523,11 @@ def test_vertrag_l2b():
         hms = t.ids["hms"]
         # Auswahl im Ordner (Anlegen) und am Set (Teil einsetzen).
         r = ok(w.get(f"/api/material/ordner/{fid}/kandidaten", query_string={"product_id": hms, "q": "FREI-A"}))
-        assert set(r) == {"treffer", "weitere"} and r["treffer"][0]["id"] == t.f["id"]
+        assert set(r) == {"treffer", "weitere", "hinweis"} and r["treffer"][0]["id"] == t.f["id"]
         assert {"id", "inventory_no", "serial_no", "bisherige_inventarnummer", "produkt", "ordner", "status",
                 "zugeordnet"} <= set(r["treffer"][0])
-        r = w.get(f"/api/material/ordner/{fid}/kandidaten", query_string={"product_id": hms, "q": "GIBTESNICHT"})
-        assert r.status_code == 404 and r.json["error"], r.get_json()
+        r = ok(w.get(f"/api/material/ordner/{fid}/kandidaten", query_string={"product_id": hms, "q": "GIBTESNICHT"}))
+        assert r == {"treffer": [], "weitere": False, "hinweis": None}, r                # seit der Nachbesserung (B3)
         sb = ok(w.get(f"/api/material/artikel/{s}"))["artikel"]["set"]
         assert sb["vorhandene_teile"] == [] and sb["aufloesen_hindernis"] is None
         ohne = next(b for b in sb["bestandteile"] if not b["einzeln"])
@@ -569,10 +569,66 @@ def test_vertrag_l2b():
         assert set(o["andere_set_status"]) == {"teile", "sets", "sets_gesamt"}
         f = ok(w.get("/api/material/faellig", query_string={"status": "einsatzbereit"}))
         a = f["andere_set_status"]
-        assert set(a) == {"teile", "sets", "sets_gesamt"} and all(set(x) == {"id", "inventory_no", "teile"} for x in a["sets"])
+        assert set(a) == {"teile", "sets", "sets_gesamt"} and all(set(x) == {"id", "inventory_no", "teile", "status", "status_text"} for x in a["sets"])
         b = ok(w.get(f"/api/material/ordner/{fid}/bericht"))["bericht"]
         assert "sets_satz" in b["bestand"] and "sets" in b["bestand"]
     print("Vertrag mit dem Server (L2b) bestanden.")
+
+
+def test_oberflaeche_l2b_nachbesserung_statisch():
+    """P4-L2b, Nachbesserung nach den drei Prüfungen: je Befund der Haken im Quelltext (B3, B4, V1–V13, V15–V17)."""
+    from app.material.services import bestandsimport, setaustausch
+    js = lies("app/material/static/material.js")
+    css = lies("app/material/static/material.css")
+    # B3: kein Treffer ist eine normale Antwort; „hinweis“ mit Link (V12); Text gleich dem Dienst.
+    wahl = funktion(js, "bestandWahl")
+    assert "if (!liste.length)" in wahl and "r.hinweis ? r.hinweis.text : KEIN_KANDIDAT" in wahl
+    assert 'target="_blank" rel="noopener">${esc(artikel.inventory_no)} öffnen</a>' in wahl
+    assert f'const KEIN_KANDIDAT = "{setaustausch.KEIN_KANDIDAT}";' in js
+    assert "Produkt am Artikel korrigieren" not in setaustausch.ANDERES_PRODUKT
+    # B3/V17: Datumsfelder mit Grenzen, Fehler am Feld.
+    assert 'data-max="${esc(grenzen.max)}"' in js and "feld.dataset.max && iso > feld.dataset.max" in funktion(js, "datumWert")
+    be = funktion(js, "bestandteilDialog")
+    for haken in ('datumFeld("be-datum", tag, "tag", { min: ab, max: tag })', 'id="be-datum-fehler"', "amDatum(e.message)",
+                  'feld.setAttribute("aria-invalid", "true")'):
+        assert haken in be, haken
+    # B4: „Schließen“ in den reinen Hinweis-Dialogen grau.
+    assert '"btn" data-close type="button">Schließen' not in js
+    assert js.count('<button class="btn secondary" data-close type="button">Schließen</button>') >= 2
+    # V1: Hinweiskasten mit Set-Status und Liste.
+    andere = funktion(js, "andereSetsHtml")
+    for haken in ('class="notice small mat-andere-sets"', "statusMarke(z.status)", "steht in der Liste „${esc(z.status_text)}“",
+                  "/material/artikel/${z.id}"):
+        assert haken in andere, haken
+    assert js.count("andereSetsHtml(d.andere_set_status, filter)") == 2
+    # V2: Pflichtbestätigung antippbar (aria-disabled statt disabled), Fokus und Hinweis.
+    pb = funktion(js, "pflichtBestaetigung")
+    assert 'ok.setAttribute("aria-disabled", "true")' in pb and "best.focus()" in pb and "scrollIntoView" in pb
+    assert "if (pflicht.fehlt()) return;" in funktion(js, "teilDialog") and "pflicht.fehlt()" in be
+    assert ".btn.mat-aus" in css
+    # V3: Quittung nach „Set auflösen“ auf der Zielseite.
+    assert "quittungMitnehmen(satz)" in funktion(js, "setAufloesen") and "quittungAbholen();" in js
+    assert "${quittungHtml()}<div class=\"mat-pfad\"><a href=\"/material/bestand\">Bestand</a>" in js
+    # V4: „Set löschen …“ im Menü „Auflösen / Löschen“, am Set kein eigener Löschknopf mehr.
+    assert '${setLoeschen ? "Auflösen / Löschen" : "Auflösen"}</summary>' in js and "a.darf_loeschen && !sb ?" in js
+    assert 'data-act="loeschen-verweis">Löschen …</button>' not in js
+    # V5: der Absatz über dem Knopf entfällt, wenn der Fehler am Block steht.
+    assert "allg.hidden = true; block.scrollIntoView" in js
+    # V6/V7: ein Hinweiskasten, kein Lebensende-Link, kein doppelter Gedankenstrich im Banner.
+    assert be.count('class="notice small"') == 1 and "be-lebensende" not in be and "(dlg, body) => { $(\"#be-lebensende\"" not in be
+    assert "GESPERRT${a.lock_reason ? `: ${esc(a.lock_reason)}`" in funktion(js, "setGesperrtBanner")
+    # V8, V9, V10, V15.
+    assert '<span class="mat-vorlesen"> Artikel, darunter ${esc(SETS_SATZ(o.bestand_sets))}</span>' in js
+    assert ".mat-ue-sets { display: block; font-size: var(--fs-klein); font-weight: 400; color: var(--grau); white-space: nowrap;" in css
+    assert "Führst du ein Teil schon im Bestand, wähle es aus dem Bestand." in js and "Führt ihr" not in js
+    grob = css[css.index("/* Phase 4 – Lieferung 2b: Sets, Teil 2 (Oberfläche) */"):]
+    grob = grob[grob.index("@media (pointer: coarse)"):]
+    assert ".mat-an-teil-quelle { flex-wrap: nowrap;" in grob and "min-height: 44px" in grob
+    # V13: keine Piktogramme in Knöpfen des Moduls.
+    assert "📷" not in js and "📖" not in js
+    # V16: kurzer Hinweis an der Set-Zeile der Nacharbeit.
+    assert len(bestandsimport.SET_PRODUKT) < 130 and "aus dem Bestand wählen" in bestandsimport.SET_PRODUKT
+    print("Oberfläche L2b, Nachbesserung (statisch) bestanden.")
 
 
 if __name__ == "__main__":
@@ -585,3 +641,4 @@ if __name__ == "__main__":
     test_oberflaeche_nachbesserung_statisch()
     test_oberflaeche_l2b_statisch()
     test_vertrag_l2b()
+    test_oberflaeche_l2b_nachbesserung_statisch()

@@ -104,8 +104,8 @@ def teil_einsetzen(iid):
 @requires_folder("verwalten", "iid")
 def set_kandidaten(iid):
     """Auswahl „aus dem Bestand wählen“ für „Teil einsetzen“: ?slot_id= (einzeln geführte Position dieses Sets), ?q=
-    (mindestens 2 Zeichen) – {treffer, weitere}; ohne Treffer 404, bei genau passender Nummer mit anderem Produkt 409
-    (setaustausch.kandidaten)."""
+    (mindestens 2 Zeichen) – {treffer, weitere, hinweis}; ohne Treffer 200 mit leerer Liste, bei genau passender Nummer
+    mit anderem Produkt dazu „hinweis“ (setaustausch.kandidaten; Nachbesserung, Browser B3)."""
     return jsonify(setaustausch.kandidaten_am_set(iid, request.args.get("slot_id"), request.args.get("q")))
 
 

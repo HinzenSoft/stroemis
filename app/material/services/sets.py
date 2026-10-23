@@ -92,7 +92,8 @@ NUR_AUSGESONDERT = "Das Set ist ausgesondert."
 SET_GRUENDE = ("unvollstaendig", "tausch", "ausgesondert", "bestandteil")
 # „Set löschen“ mit eingesetzten vorhandenen Artikeln (L2b, Entwurf A; Kritik U2).
 VORHANDENE_TEILE = ("Das Set enthält vorhandene Artikel ({nummern}) – „Set löschen“ löscht nur Teile, die mit dem Set "
-                    "angelegt wurden. „Set auflösen“ gibt die Teile frei in den Ordner zurück.")
+                    "angelegt wurden.")
+AUFLOESEN_WEG = " „Set auflösen“ gibt die Teile frei in den Ordner zurück."
 
 
 class SetUnstimmig(Abgelehnt):
@@ -263,11 +264,24 @@ def unstimmige(conn=None):
     return [r["id"] for r in db.query(UNSTIMMIG_SQL)]
 
 
+ALTE_URSACHE_SQL = "FROM mat_item WHERE lock_state = 'frei' AND lock_cause IS NOT NULL"
+
+
 def beim_start(conn):
     """Startprüfung „Sets stimmig“ (Entwurf B, S1) – nur ein Log, kein Abbruch (wie die Fremdschlüssel nach einem
-    Umbau). Vor Schritt 21 (keine Spalte parent_item_id) gibt es nichts zu prüfen."""
+    Umbau). Vor Schritt 21 (keine Spalte parent_item_id) gibt es nichts zu prüfen. Davor die Bereinigung freier Artikel
+    mit Sperrursache (Nachbesserung P4-L2b, Prüfung Sicherheit H1): Bis dahin ließ die Einzel-Freiprüfung lock_cause
+    stehen – ein frei geprüftes, früher aus einem gesperrten Set entnommenes Teil trug weiter „eigen“ und wäre in einem
+    neuen Set als eigene Sperre ausgefallen. Frei heißt ohne Ursache; kein Journaleintrag (die Ursache zeigt keine
+    Ansicht und kein Lebenslauf), die Kennungen stehen im Log. Wiederholbar, mehrere Arbeitsprozesse stören sich nicht."""
     if "parent_item_id" not in [r[1] for r in conn.execute("PRAGMA table_info(mat_item)")]:
         return
+    alt = [r[0] for r in conn.execute(f"SELECT id {ALTE_URSACHE_SQL} ORDER BY id")]
+    if alt:
+        conn.execute(f"UPDATE mat_item SET lock_cause = NULL WHERE id IN (SELECT id {ALTE_URSACHE_SQL})")
+        conn.commit()
+        log.warning("Freie Artikel mit Sperrursache bereinigt (lock_cause entfernt, Nachbesserung P4-L2b): %d – %s",
+                    len(alt), ", ".join(str(x) for x in alt[:20]) + (" …" if len(alt) > 20 else ""))
     falsch = unstimmige(conn)
     if falsch:
         log.warning("Sets nicht stimmig (Teile liegen, sperren oder gehören anders als ihr Set): %s",
@@ -356,7 +370,9 @@ def _kaskade(set_id, eigen, zustand, grund, aktion, zusatz, set_grund, anlass, n
             "lock_state": (zustaende, "verloren" if verlust_am_set else "gesperrt"),
             "lock_cause": (ursachen, "set"),
             "lock_reason": (gruende, MIT_SET_ANLASS.format(inv=s["inventory_no"], anlass=anlass)),
-            "set_pruefen": ({t: 1 for t in pruefen}, 0),
+            # „Bestandteil ersetzt“: die Marke am Set-Artikel im selben Schritt – so nennen das Journal „gesperrt“ und der
+            # Jahresbericht schon den Anlass, nicht „Set-Prüfung ausstehend“ (Prüfung Ablauf, A2).
+            "set_pruefen": ({**{t: 1 for t in pruefen}, **({set_id: 1} if set_grund == "bestandteil" else {})}, 0),
             "set_lock_origin": ({set_id: "set" if eigen == set_id else "teil"}, None)})
         gruende_nachziehen(set_id)
         s2, tz2 = zeilen(set_id)
@@ -511,8 +527,9 @@ def gruende_nachziehen(set_id):
 
 def bestandteil_markieren(set_id):
     """„Bestandteil ersetzt“ (L2b, Entwurf B; Kritik T4): set_pruefen = 1 an der Zeile des Set-Artikels selbst – NACH der
-    Kaskade (sperren setzt die Marke an einem freien Set sonst wieder auf 0) und nie über „neu“ (das überschriebe eine
-    eigene Sperre des Set-Artikels). Danach den abgeleiteten Grund nachziehen. In der Transaktion des Aufrufers."""
+    Kaskade und nie über „neu“ (das überschriebe eine eigene Sperre des Set-Artikels). Am freien Set setzt die Kaskade
+    die Marke mit set_grund „bestandteil“ schon selbst (Nachbesserung, Ablauf A2); hier bleibt sie für das schon
+    gesperrte Set. Danach den abgeleiteten Grund nachziehen. In der Transaktion des Aufrufers."""
     set_lage(set_id, je_zeile={"set_pruefen": ({set_id: 1}, BLEIBT)})
     gruende_nachziehen(set_id)
 
@@ -561,17 +578,37 @@ def sperrgruende(s, teil_zeilen, voll=None, slot_zeilen=None):
                     "text": "Das Set ist unvollständig: " + ", ".join(
                         f"„{f['bezeichnung']}“ fehlt" + (f" {f['fehlt']}×" if f["fehlt"] > 1 else "") for f in fehlend) + "."})
     if s.get("set_pruefen"):
+        # Eine Fassung überall (Banner, Status, Meine PSA, Journal – Nachbesserung, Browser V7).
         out.append({"art": "bestandteil", "artikel": None,
-                    "text": "Ein Bestandteil wurde ersetzt – in der Set-Prüfung die Bestandteile ansehen."})
+                    "text": f"{BESTANDTEIL_ERSETZT} (dabei die Bestandteile ansehen)."})
     for t in teil_zeilen:
         if t["set_pruefen"] and not _eigen_gesperrt(t):
             out.append({"art": "pruefen", "artikel": _artikel_verweis(t, s["id"]),
-                        "text": (f"{t['inventory_no']} ist neu im Set" if not t["last_inspected_on"]
-                                 else f"{t['inventory_no']} war selbst gesperrt") +
+                        "text": PRUEF_ANLASS[_pruef_anlass(t, s["id"])].format(inv=t["inventory_no"]) +
                         " – in der Set-Prüfung zur Freigabe prüfen."})
     out.append({"art": "set_pruefung", "artikel": None,
                 "text": "Frei gibt das Set nur „Set prüfen“ mit dem Ergebnis „einsatzbereit“."})
     return out
+
+
+PRUEF_ANLASS = {"neu": "{inv} ist neu im Set", "eingesetzt": "{inv} wurde eingesetzt (vorhandener Artikel)",
+               "selbst": "{inv} war selbst gesperrt", "sonst": "{inv} ist zu prüfen"}
+
+
+def _pruef_anlass(t, set_id):
+    """Warum ein Teil (set_pruefen, ohne eigene Sperre) im Prüfumfang steht – für den Satz unter „Gesperrt, weil“: „neu“
+    (noch nie geprüft), „selbst“ (seit es im Set ist, hatte es eine eigene Sperre – eine Freiprüfung hob sie auf),
+    „eingesetzt“ (ein vorhandener Artikel, seither ohne eigene Sperre – L2b; vorher sagte der Satz „war selbst
+    gesperrt“, Prüfung Ablauf A1), sonst „sonst“. Maß ist das Journal des Teils: der Beitritt (beitritt) gegen den
+    letzten Eintrag mit eigener Ursache."""
+    if not t["last_inspected_on"]:
+        return "neu"
+    j, art = beitritt(t["id"], set_id)
+    eigen = db.query("SELECT MAX(id) AS m FROM mat_audit WHERE entity = 'item' AND entity_id = ? "
+                     "AND json_extract(after_json, '$.lock_cause') = 'eigen'", (t["id"],), one=True)["m"]
+    if eigen and eigen > (j or 0):
+        return "selbst"
+    return "eingesetzt" if j and art == "vorhanden" else "sonst"
 
 
 def verbleib_vorschlag(t):
@@ -707,13 +744,11 @@ def set_anlegen(d, plan):
                           "bestandteil": z["bezeichnung"], "produkt": katalog.produktname(pt["p"])})
             if t["serial_generated"]:
                 hinweise.append(_hinweis_str(STR_HINWEIS, t["inventory_no"], pt["p"], t["serial_no"]))
+        # Ein Eintrag am Set: „set_angelegt“ nennt je Teil „vorhanden“ (Nachbesserung, Browser V11 – vorher stand je
+        # vorhandenem Teil zusätzlich „teil_eingesetzt“ am Set, derselbe Vorgang dreimal; der Lebenslauf des Sets zeigt
+        # die Liste mit „vorhandener Artikel“, beschriftung._listen_wert).
         journal.eintragen("item", sid, "set_angelegt", None,
                           {"teile": liste, "bestandteile": [z["bezeichnung"] for z in stueck if not z["einzeln"]]})
-        for x in liste:
-            if x.get("vorhanden"):
-                journal.eintragen("item", sid, "teil_eingesetzt", None,
-                                  {"teil": x["inventory_no"], "serial_no": x["serial_no"], "bestandteil": x["bestandteil"],
-                                   "vorhanden": True})
         if eingesetzt:
             ids = [t["id"] for t in eingesetzt]
             durchgang.nach_verschieben(ids, heute())
@@ -1002,7 +1037,7 @@ def set_loeschen(item):
     „geloescht“ mit Grund „mit dem Set gelöscht“), dann der Set-Artikel – die Kopie der Stückliste geht mit (ON DELETE
     CASCADE). Inventarnummern werden nie wieder vergeben. Nur Teile, die mit dem Set angelegt wurden (beitritt „neu“) –
     mit einem eingesetzten vorhandenen Artikel 409 mit Verweis auf „Set auflösen“ (L2b, Kritik U2)."""
-    from . import bestand
+    from . import bestand, setaustausch
     tz = db.query("SELECT * FROM mat_item WHERE parent_item_id = ? ORDER BY id", (item["id"],))
     vorhanden = vorhandene(item)
     # Erst, was auch ohne die vorhandenen Artikel gegen das Löschen spricht – dann hilft „Set auflösen“ nicht.
@@ -1010,7 +1045,10 @@ def set_loeschen(item):
         raise Abgelehnt("Das Set oder eines seiner Teile hat Prüfungen, eine Mangelmeldung oder steht in einem "
                         "Prüfdurchgang – es bleibt mit seinem Lebenslauf; aussondern statt löschen.", 409)
     if vorhanden:
-        raise Abgelehnt(VORHANDENE_TEILE.format(nummern=", ".join(t["inventory_no"] for t in vorhanden)), 409)
+        # „Set auflösen“ nur nennen, wenn es auch geht – sonst den Grund dagegen (Prüfung Ablauf, Anmerkung zu 4).
+        hindernis = setaustausch.aufloesen_hindernis(item["id"])
+        raise Abgelehnt(VORHANDENE_TEILE.format(nummern=", ".join(t["inventory_no"] for t in vorhanden)) +
+                        (f" Auflösen geht auch nicht: {hindernis}" if hindernis else AUFLOESEN_WEG), 409)
     for t in tz:
         db.execute("DELETE FROM mat_item WHERE id = ?", (t["id"],))
         journal.eintragen("item", t["id"], "geloescht", dict(t, ordner=bestand._pfad_text(t["folder_id"])),

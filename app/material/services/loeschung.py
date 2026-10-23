@@ -37,7 +37,9 @@ ab, bleibt das Konto samt allem stehen:
                      Kennungen setzt die Datenbank auf NULL, die Namen bleiben – unbefristet mit dem Artikel, wie die
                      Mangelmeldungen (anders als Produktmeldungen, die Arbeitsdaten des Katalogs sind und
                      „(gelöschtes Konto)“ bekommen; Entscheidung vom 21.10.2026, Bitte bestätigen)
-Abgeschlossene Prüfungen, Durchgänge, Ausnahmen, Anhänge, Rückrufe und das Journal bleiben, wie sie sind. Deaktivieren
+Abgeschlossene Prüfungen, Durchgänge, Ausnahmen, Anhänge, Rückrufe und das Journal bleiben, wie sie sind – auch die
+Freitext-Bemerkung von „Bestandteil ersetzt“ (Hersteller-Sets, P4-L2b: höchstens 200 Zeichen, einzeilig, unveränderlich
+im Journal des Sets; der Dialog sagt „keine Personennamen“). Deaktivieren
 ändert im Modul nichts: Freigaben wirken nicht mehr (current_user verlangt ein aktives Konto), Zuordnungen bleiben und
 erscheinen mit „(deaktiviert)“. Ablauf beim Austritt: PSA zurücknehmen (Zuordnung lösen), Konto deaktivieren, nach
 Klärung offener Prüfungen löschen. Die Stufe im Modul Material steht am Konto und geht mit ihm; die Einträge „rollen“

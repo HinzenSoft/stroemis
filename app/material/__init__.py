@@ -79,7 +79,8 @@ def schema_anmelden():
     der Herstellerdokumente einmal je Inhalt zusammenführen (Schritt 18, Kennzeichen in mat_meta), dann das Protokoll der
     globalen Suche, das Erinnerungslog, das Mailfehler-Protokoll und die offene Nacharbeit aus Bestandsimporten auf ihre
     Frist kürzen (auch wenn der Tageslauf steht), die Protokolldateien mit der Datenbank abgleichen und durchsichtige
-    Bilder einmalig reparieren. Zuletzt die Startprüfung „Sets stimmig“ (Schritt 21, nur Log)."""
+    Bilder einmalig reparieren. Zuletzt die Startprüfung „Sets stimmig“ (Schritt 21, nur Log) mit
+    der Bereinigung freier Artikel mit Sperrursache davor (Nachbesserung P4-L2b)."""
     for schritt in (models.migrieren, _dokumente_zusammenfuehren, _suchprotokoll_aufraeumen, _erinnerungslog_aufraeumen,
                     _mailfehler_aufraeumen, _nacharbeit_aufraeumen, _verwaiste_protokolle, _bilder_reparieren,
                     _sets_pruefen):

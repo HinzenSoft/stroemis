@@ -940,14 +940,14 @@ def test_meine_psa_und_import():
                            ["Testwerk", "Testset Alpha", "TS-1", "SET-IMP-1", f"{_heute().year - 1}-01"]])
         b = ok(probelauf(w, t.lager_a, daten))
         zeile = nach_nr(b)[2]
-        assert zeile["status"] == "nacharbeit" and any("Hersteller-Set" in g["text"] for g in zeile["gruende"]), zeile
+        assert zeile["status"] == "nacharbeit" and any("Sets legt der Import nicht an" in g["text"] for g in zeile["gruende"]), zeile
         r = ok(w.post(f"/api/material/ordner/{t.lager_a}/import", headers=H, content_type="multipart/form-data",
                       data={"file": (io.BytesIO(daten), "liste.csv")}), 201)
         zeile_id = zeilen(app, "SELECT id FROM mat_import_row WHERE status = 'offen'")[0]["id"]
         assert r["import"]["angelegt"] == 0
         r = w.post(f"/api/material/ordner/{t.lager_a}/nacharbeit/produkt", json={"zeilen": [zeile_id],
                                                                                 "product_id": t.set_p})
-        assert r.status_code == 400 and "Hersteller-Set" in r.json["error"], r.get_json()
+        assert r.status_code == 400 and "Sets legt der Import nicht an" in r.json["error"], r.get_json()
     print("Meine PSA und Bestandsimport bei Sets bestanden.")
 
 

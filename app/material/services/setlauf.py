@@ -51,6 +51,9 @@ NUR_IM_LAUF = ("Den Set-Artikel prüfst du über „Set prüfen“ – zusammen 
 KEIN_LAUF = "Für dieses Set läuft keine Set-Prüfung."
 NUR_SET = "„Set prüfen“ gibt es nur am Set-Artikel eines Hersteller-Sets."
 VORHANDEN = {1: "vorhanden", 0: "fehlt", None: "nicht zutreffend"}
+FREI_TROTZ_ERGEBNIS = ("In dieser Set-Prüfung wurde {nummern} nicht mit „einsatzbereit“ geprüft, das Set ist aber frei – "
+                       "„einsatzbereit“ lässt sich so nicht festschreiben. Erst {nummern} sperren („Sperren“ am Teil), "
+                       "dann das Set festschreiben.")
 
 
 def _fmt(iso):
@@ -402,6 +405,14 @@ def wirkung(item, p, ergebnis, tag, naechste, grund, pruefer, ts, v):
                    (naechste, tag, db.now(), sid))
         mangel.erledigen(sid, p["id"])
         if s0["lock_state"] == "frei":
+            # Absicherung (Prüfung Sicherheit, H1): Ein freies Set mit einem Teil, das in diesem Lauf schlechter als
+            # „einsatzbereit“ geprüft wurde, darf nicht „einsatzbereit“ heißen – dessen Ergebnis hätte das Set sperren
+            # müssen. Kommt nur bei unstimmigen Daten vor; dann nichts festschreiben.
+            _, tz0 = sets.zeilen(sid)
+            lp0 = lauf_pruefungen(v["lauf"]["id"])
+            schlecht = [t["inventory_no"] for t in tz0 if t["id"] in lp0 and lp0[t["id"]]["result"] != "einsatzbereit"]
+            if schlecht:
+                raise Abgelehnt(FREI_TROTZ_ERGEBNIS.format(nummern=", ".join(schlecht)), 409)
             alt, neu = journal.unterschied(vorher, dict(vorher, next_due_on=naechste, last_inspected_on=tag))
             journal.eintragen("item", sid, "geprueft", alt, dict(neu, **zusatz))
         else:

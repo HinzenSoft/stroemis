@@ -853,8 +853,9 @@ def _wirkung(item, p, ergebnis, tag, naechste, grund, pruefer, ts=None, d=None):
         ziel = item["folder_id"]
         if gesperrt:
             ziel = _rueckweg(item)
-        db.execute("UPDATE mat_item SET lock_state = 'frei', lock_reason = '', origin_folder_id = NULL, folder_id = ?, "
-                   "next_due_on = ?, last_inspected_on = ?, updated_at = ? WHERE id = ?",
+        # Frei heißt ohne Sperrursache – ein „eigen“ aus „Teil entnehmen“ blieb sonst stehen (Prüfung Sicherheit, H1).
+        db.execute("UPDATE mat_item SET lock_state = 'frei', lock_cause = NULL, lock_reason = '', origin_folder_id = NULL, "
+                   "folder_id = ?, next_due_on = ?, last_inspected_on = ?, updated_at = ? WHERE id = ?",
                    (ziel, naechste, tag, db.now(), iid))
         nachher = {"lock_state": "frei", "next_due_on": naechste, "last_inspected_on": tag, "folder_id": ziel,
                    "ordner": bestand._pfad_text(ziel)}

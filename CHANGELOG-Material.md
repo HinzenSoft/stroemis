@@ -17,7 +17,7 @@ für sich deploybar.
 | Phase 2 · 3 – Bestandsimport und Prüfanleitung | Bestandslisten aus Excel oder CSV in einen Ordner: Probelauf, Übernehmen in einer Transaktion (Artikel auf „neu“, Fälligkeit aus der Liste, STR-Nummern für Zeilen ohne Seriennummer, eine Liste ganz ohne Seriennummernspalte nur mit Häkchen) und Nacharbeit je Zielordner (Produkte zuordnen, melden oder im Katalog anlegen, erneut prüfen, CSV-Rundweg, Frist ein Monat); Prüfanleitung aus dem Wiki am Prüfformular, Abschnitt „Prüfung“ eingeblendet in offenen Prüfungen | geliefert 19.10.2026, vier Punkte am 20.10.2026 entschieden (einer geändert und eingearbeitet), wartet auf Freigabe |
 | Artikellänge (Schritt 20) | Häkchen „Artikel haben eine Länge“ je Kategorie (vererbt), Feld „Länge (m)“ am Artikel (Steckbrief, Listen, Lebenslauf, Meine PSA, CSV, Bestandsimport), Prüfpunkt-Typ „Länge“ – vorbelegt, ein abweichender Wert geht beim Festschreiben in den Artikel (Journal, Protokoll „alt → neu“) | gebaut 22.10.2026, wartet auf Freigabe |
 | Phase 4 · 2 – Sets mit Komponenten | Hersteller-Sets: Stückliste im Katalog (auch in der Katalogdatei), Set-Artikel mit Teil-Artikeln, Set-Status, -Fälligkeit und -Lebensende, Listen mit der Set-Zeile, Verschieben und Zuordnen mit allen Teilen, Meine PSA; Sperr-Kaskade, Set prüfen mit Set-Protokoll, Austausch, Aussondern mit Wahl je Teil, Oberfläche | Kern (K1, K2) und Oberfläche (O1, O2) gebaut 23.10.2026 (Schema 21), drei Prüfungen und Nachbesserung 23.10.2026 |
-| Phase 4 · 2b – Sets, Teil 2 | Vorhandenen Artikel als Teil einsetzen (mit Auswahl, auch über die bisherige Inventarnummer), Set auflösen, „Bestandteil ersetzt“, Prüfumfang eines nie geprüften Sets; dazu (KERN Z) Zahlen, CSV-Spalten, gebündelte Mails | KERN A, KERN Z, Oberfläche gebaut 23.10.2026 (Schema bleibt 21); Prüfungen folgen |
+| Phase 4 · 2b – Sets, Teil 2 | Vorhandenen Artikel als Teil einsetzen (mit Auswahl, auch über die bisherige Inventarnummer), Set auflösen, „Bestandteil ersetzt“, Prüfumfang eines nie geprüften Sets; dazu (KERN Z) Zahlen, CSV-Spalten, gebündelte Mails | KERN A, KERN Z, Oberfläche gebaut 23.10.2026 (Schema bleibt 21); drei Prüfungen und Nachbesserung 23.10.2026 |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4152,7 +4152,7 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
-## Phase 4 · Lieferung 2b – Sets, Teil 2 (Stand: KERN A, KERN Z, Oberfläche)
+## Phase 4 · Lieferung 2b – Sets, Teil 2 (Stand: KERN A, KERN Z, Oberfläche, Nachbesserung nach den drei Prüfungen)
 
 Grundlage: `planung/material-phase4/entwurf_l2b.md` (Fassung 2 nach den Kritiken „Sicherheit“ T1–T16 und „Ablauf“
 U1–U16, mit den Entscheidungen des Nutzers vom 23.10.2026). Gebaut in Paketen: **KERN A** (vorhandenen Artikel einsetzen,
@@ -4537,6 +4537,159 @@ Formulierungen für die Oberfläche (Vorschlag aus Entwurf C):
 5. „Sperren“ und „Melden und sperren“ rot gefüllt (`btn`) – umgesetzt wie entschieden; damit ist V19 erledigt.
 6. Bemerkung bei „Bestandteil ersetzt“ als einzeiliges Feld mit Hinweis „keine Personennamen“; Datum „Ersetzt am“ mit
    Vorgabe heute.
+
+### Prüfung vor Auslieferung (23.10.2026)
+
+Drei Prüfungen am Stand 3028eda: **Sicherheit** (`planung/material-phase4/pruefung_l2b_sicherheit.md`, ein Befund hoch,
+dazu Hinweise), **Ablauf** (`pruefung_l2b_ablauf.md`, A1–A3 niedrig, eine Anmerkung) und **Browser**
+(`pruefung_l2b_browser.md`, B1–B4, V1–V17; `st-geraete` in drei Engines ohne Befund). Danach die Nachbesserung (Dienste,
+Oberfläche, Tests `tests/test_material_sets_l2b_nachbesserung.py` neu, `test_oberflaeche_l2b_nachbesserung_statisch`
+neu, `test_material_sets_vorhanden` erweitert). **Kein Schemaschritt** (Schema bleibt 21), keine neuen Abhängigkeiten.
+
+**Sicherheit**
+
+| Nr. | Befund | Stand |
+| --- | --- | --- |
+| H1 (hoch) | Vorhandener Artikel mit übrig gebliebenem `lock_cause` „eigen“: „aussondern“ an einer Position „Austausch: nein“ wirkungslos, Set-Protokoll „einsatzbereit“ | Behoben, vierfach: (a) `vorhandenen_einsetzen` setzt im bedingten UPDATE `lock_cause = NULL, lock_reason = '', set_pruefen = 0`; (b) die Einzel-Freiprüfung (`pruefung._wirkung`, „einsatzbereit“) setzt `lock_cause = NULL`; Altzeilen (frei mit Ursache) bereinigt `sets.beim_start` bei jedem Start (wiederholbar, ohne Journaleintrag – die Ursache zeigt keine Ansicht –, Kennungen im Log); (c) `setaustausch.teil_bleibt_gesperrt` hängt an `sets._eigen_gesperrt` (Sperrzustand), sonst sperrt die Kaskade wie bei jedem freien Teil; (d) `setlauf.wirkung`: An einem freien Set mit einem Teil, das im Lauf nicht „einsatzbereit“ geprüft wurde, schreibt „einsatzbereit“ am Set-Artikel nicht fest (409 „… Erst … sperren …“). Test genau nach der Probe p9/p9b (`test_h1_altwert_eigen`), dazu Absicherung und Startbereinigung (`test_h1_absicherung_und_start`) |
+| Hinweis | „Bestandteil ersetzt“: Datum ohne Untergrenze („01.01.1900“ bleibt unveränderlich im Journal) | Behoben: frühestens am Tag der Erfassung des Sets (`created_at`; 400 „„Ersetzt am“ liegt vor der Erfassung des Sets …“); die Oberfläche nennt die Grenze und prüft sie am Feld |
+| Hinweis | „Bestandteil ersetzt“ dreimal gleichzeitig → drei Einträge | Behoben: dieselbe Position mit demselben Datum und derselben Bemerkung innerhalb von 60 s (`DOPPELT_SEKUNDEN`) → 409 „… ist schon eingetragen …“ (in BEGIN IMMEDIATE, also auch für gleichzeitige Anfragen) |
+| Hinweis | Löschkonzept nennt die Freitext-Bemerkung von „Bestandteil ersetzt“ nicht | Behoben: `loeschung.py` und Absatz „Löschkonzept“ unten |
+| Hinweis | Journal „verschoben“ nennt beim Einsetzen in ein gesperrtes Set die Heimat als Ziel | Nicht geändert: nur Darstellung; der folgende Eintrag „set_gesperrt“ nennt „Gesperrt“ – so steht der Weg vollständig im Lebenslauf |
+
+**Ablauf**
+
+| Nr. | Befund | Stand |
+| --- | --- | --- |
+| A1 | Sperrgrund „… war selbst gesperrt“ an einem eingesetzten vorhandenen Artikel | Behoben: `sets._pruef_anlass` vergleicht im Journal des Teils den Beitritt (`sets.beitritt`) mit dem letzten Eintrag mit eigener Ursache – „wurde eingesetzt (vorhandener Artikel)“, „war selbst gesperrt“, „ist neu im Set“ oder neutral „ist zu prüfen“ (`test_a1_sperrgrund_eingesetzt`) |
+| A2 | Journal „gesperrt“ und Jahresbericht nennen bei „Bestandteil ersetzt“ „Set-Prüfung ausstehend“ | Behoben: Die Kaskade setzt bei `set_grund` „bestandteil“ die Marke `set_pruefen` an der Set-Zeile im selben `set_lage` (nur am freien Set; ein schon gesperrtes markiert wie bisher `bestandteil_markieren`, eine eigene Sperre bleibt, T4). Journal, mitgesperrte Teile und Sperrliste des Berichts: „Bestandteil ersetzt – Set prüfen“ (Test in `test_bestandteil_ersetzt`) |
+| A3 | Auswahl schneidet nach 200 Zeilen vor dem Nachfiltern ab | Behoben: Die Auswahl liest seitenweise (200 je Seite, Schlüssel Inventarnummer + Kennung) weiter, bis 21 echte Treffer da sind oder nichts mehr kommt; die DEMO-Grenze steht in der Abfrage. Test mit 250 Bemerkungen „Standort: Halle K-2“ (`test_a3_auswahl_viele_fehltreffer`) |
+| Anmerkung 4 | 409 beim Löschen verweist auf „Set auflösen“, auch wenn das nicht geht | Behoben: Ist das Set nicht auflösbar, nennt der Text den Grund („Auflösen geht auch nicht: …“) |
+| Probe 6 | Nacharbeitshinweis an einem schon angelegten Set nach Re-Import | Nicht geändert: schadet nicht (Prüfung: „überflüssig“); die Zeile „erneut prüfen“ erledigt ihn |
+
+**Browser** (Befunde)
+
+| Nr. | Befund | Stand |
+| --- | --- | --- |
+| B1 | Journal „Bestandteil ersetzt“: „Position Nr.“ ist die interne Kennung der Kopie | Behoben: Feld `position` = Nummer der Position in der Stückliste (1, 2, …), beschriftet „Position“ (Journal und Lebenslauf-PDF); `slot` schreibt niemand mehr, ältere Einträge (nur Stand vor der Nachbesserung, nicht ausgeliefert) heißen ehrlich „Kennung der Position“ |
+| B2 | Bestandsimport erkennt „Bisherige Inventarnummer“ nicht | Behoben: „bisherige inventarnummer“, „alte inventarnummer“, „bisherige nummer“, „alte nummer“ in `UEBRIGE`; „Set (Inventarnummer)“ bleibt ignoriert (Export → Import hält, `test_csv_set_spalten`); der Probelauf warnt bei einer ignorierten Spalte mit „Inventar“ im Titel (außer den Set-Spalten des Exports, einer ausdrücklichen Wahl und einer Doppelung) |
+| B3 | Normale Leerzustände und Eingabefehler erzeugen HTTP 4xx (Konsolenfehler) | Behoben: Auswahl ohne Treffer 200 `{treffer: [], weitere: false, hinweis: null}` – fremd und unbekannt weiter gleich; anderes Produkt als `hinweis` {text, artikel} in der 200-Antwort (kein Informationsleck: genannt wird nur ein Artikel, den das Konto verwaltet – wie bisher im 409). Datumsfelder mit Grenzen (`datumFeld(…, {min, max})`, `datumWert` prüft) – der Fehler steht am Feld, bevor etwas gesendet wird |
+| B4 | „Schließen“ in Hinweis-Dialogen rot | Behoben: `btn secondary` in „Set auflösen“ (Grund) und `aussondern-warum` |
+
+**Browser** (Verbesserungen)
+
+| Nr. | Vorschlag | Stand |
+| --- | --- | --- |
+| V1 | Statuslisten-Hinweis ohne Set-Status, wie Kleingedrucktes | Behoben: `.notice small`, „2 Teile sind einsatzbereit, ihr Set M-… ist insgesamt [neu] und steht in der Liste „neu““; bei mehreren Sets je Set Link und Statusmarke. Server: `andere_set_status.sets[]` mit `status`, `status_text` |
+| V2 | „Teil einsetzen“ am Telefon: Pflichtbestätigung unter dem Falz, Knopf grau ohne Grund | Behoben: Der Knopf sieht bis zum Häkchen ausgeschaltet aus (`aria-disabled`, `.btn.mat-aus`), bleibt aber antippbar – ein Tipp holt die Bestätigung ins Bild, setzt den Fokus darauf und sagt „Bitte erst bestätigen …“ (`pflichtBestaetigung`; auch „Teil tauschen“ und „Bestandteil ersetzt“) |
+| V3 | „Set auflösen“ ohne sichtbare Quittung | Behoben: Quittung auf der Ordnerseite (`role="status"`, Fokus): „Set M-… aufgelöst – M-… und M-… liegen jetzt frei in <Ordner>.“ – über `sessionStorage` dieses Fensters, einmal; ohne Speicher bleibt der Toast |
+| V4 | Menü „Mehr“ mit einem Eintrag, „Löschen …“ uneinheitlich | Behoben: Untermenü „Auflösen / Löschen“ (bzw. „Auflösen“) mit „Set auflösen …“ und „Set löschen …“; am Set kein eigener Löschknopf mehr (am Artikel und am Teil bleibt „Löschen“) |
+| V5 | Serverfehler beim Anlegen dreifach | Behoben: am Block (Fokus dorthin) und als Toast; der Absatz über dem Knopf nur, wenn kein Block getroffen ist |
+| V6 | Zu viel Erklärtext im Dialog „Bestandteil ersetzt“, Lebensende-Satz auch bei Metall | Behoben: ein Hinweiskasten (Sperre, „nicht belegt“, Lebensende); der Lebensende-Satz nur bei textilem Material, als Weg („Bearbeiten“ → „Lebensende“) statt Link – der schloss den Dialog und verwarf Datum und Bemerkung |
+| V7 | Sperrgrund in drei Wortlauten, doppelter Gedankenstrich im Banner | Behoben: überall „Bestandteil ersetzt – Set prüfen“ (unter „Gesperrt, weil“ mit „(dabei die Bestandteile ansehen)“); Set-Banner „GESPERRT: <Grund>. …“ |
+| V8 | Zählsatz im Baum nur als Tooltip | Behoben: zusätzlich als versteckter Text für Vorlesehilfen (`.mat-vorlesen`) statt `aria-label` – an einem `span` ohne Rolle lesen Vorlesehilfen `aria-label` nicht zuverlässig |
+| V9 | „k Teile in m Sets“ bricht um | Behoben: `white-space: nowrap` |
+| V10 | „Führt ihr …“ | Behoben: „Führst du ein Teil schon im Bestand, wähle es aus dem Bestand.“ |
+| V11 | Journal beim Anlegen mit vorhandenen Teilen dreifach | Behoben: am Set nur „Set mit Teilen angelegt“ (je Teil „vorhandener Artikel“, auch im Lebenslauf-PDF); die Einzel-Einträge „Teil eingesetzt“ am Set beim Anlegen entfallen (S15 hält: der Lebenslauf des Sets zeigt die Liste; die Teile tragen „eingesetzt“ selbst). Ersetzt KERN-A-Abweichung 4 |
+| V12 | Meldung „anderes Produkt“ ohne Weg | Behoben: „M-… ist <Produkt>; an dieser Position steht <Produkt>. Einsetzen lässt sich nur ein Artikel dieses Produkts.“ mit Link „M-… öffnen“ (neuer Reiter). Der vorgeschlagene Weg „Artikel öffnen → Bearbeiten“ existiert nicht – „Bearbeiten“ hat kein Produktfeld (siehe Bitte bestätigen) |
+| V13 | Piktogramm „📷“ im Mangel-Dialog | Behoben modulweit: „📷“ in allen Datei- und Kamera-Knöpfen (Mangel, Foto wählen, Prüfpunkt-Foto, Anhang fotografieren, Produktmeldung) und „📖“ an „Prüfanleitung aus dem Wiki“ entfernt. Nicht geändert: 🔒 an Systemordnern im Baum (kein Knopf) und die Bedienzeichen ☰, ✕, ↑ ↓, ▲ ▼ (siehe Bitte bestätigen) |
+| V14 | WebKit-„x“ im Suchfeld | Nicht geändert (Auftrag): Engine-Unterschied |
+| V15 | Teilquelle-Radios am Telefon je eine Zeile | Behoben: unter `pointer: coarse` nebeneinander (`flex-wrap: nowrap`), der Text bricht im Feld um, 44 px bleiben |
+| V16 | Nacharbeit-Hinweis der Set-Zeile zu lang | Behoben: „Sets legt der Import nicht an – über „Artikel anlegen“ mit „aus dem Bestand wählen“ erfassen, dann „erneut prüfen“.“ |
+| V17 | Datum in der Zukunft nicht am Feld | Behoben mit B3 |
+| Abgleich | CHANGELOG/README „Ordnerleiste“ | README: „Übersicht, Ordnerbaum und Jahresbericht“ |
+
+**Schnittstelle (Nachbesserung)** – Änderungen gegenüber KERN A/Z:
+- `GET …/artikel/<Set>/kandidaten`, `GET …/ordner/<fid>/kandidaten`: immer 200 `{treffer, weitere, hinweis}` (bisher 404
+  ohne Treffer, 409 bei anderem Produkt); `hinweis` = null oder {text, artikel: {id, inventory_no}}. 400/403/404 für
+  Eingabe, Recht und Position/Produkt wie bisher.
+- `andere_set_status.sets[]` zusätzlich `status`, `status_text`.
+- `POST …/bestandteil-ersetzt`: Datum vor der Erfassung des Sets 400; Doppelung 409. Journal `position` statt `slot`.
+- `DELETE /artikel/<Set>` mit vorhandenen Teilen: Text mit Grund, wenn Auflösen nicht geht.
+- `POST /artikel` mit vorhandenen Teilen: am Set nur „set_angelegt“ (kein „teil_eingesetzt“ je Teil).
+- Festschreiben der Set-Prüfung: 409 an einem freien Set mit nicht „einsatzbereit“ geprüftem Teil im Lauf.
+
+**Löschkonzept**: Die Freitext-Bemerkung von „Bestandteil ersetzt“ (höchstens 200 Zeichen, einzeilig) steht unveränderlich
+im Journal des Sets und bleibt beim Löschen eines Kontos wie das übrige Journal; der Dialog sagt „keine Personennamen“.
+Steht in `services/loeschung.py`.
+
+**Rückweg** (auf c5e1b06 bzw. 3028eda): unverändert unkritisch – kein Schemaschritt. Die Startbereinigung ist eine
+Datenkorrektur ohne Gegenstück (ein freier Artikel ohne Ursache ist auf jedem Stand richtig). Journaleinträge mit
+`position` erscheinen auf älteren Ständen roh.
+
+**Tests**: `tests/test_material_sets_l2b_nachbesserung.py` (neu, 5 Tests: H1 nach p9/p9b, Absicherung und
+Startbereinigung, A1, A3 mit 250 Fehltreffern, B2), `test_material_sets_vorhanden` (Auswahl 200/`hinweis`, ein Eintrag
+beim Anlegen, Löschtext mit und ohne Auflösen, „Bestandteil ersetzt“ mit Untergrenze, Doppelklick, `position`,
+Journal- und Berichtsgrund), `test_material_sets_oberflaeche` (`test_oberflaeche_l2b_nachbesserung_statisch` neu,
+Vertrag nachgezogen).
+
+**Browser** (Chromium über `cdp.py`, DEMO-Daten im eigenen Datenordner, Materialwart) bei 1280 und 360 px: Set-Seite mit
+Menü „Auflösen / Löschen“ und Löschen-Verweis, Hindernis-Dialog („Schließen“ grau), Ordnerliste und Fällige mit
+Statuslisten-Hinweis, „Teil einsetzen“ (kein Treffer ohne Konsolenfehler, anderes Produkt mit Link, Treffer über die
+bisherige Inventarnummer, Pflichtbestätigung mit Fokus), „Bestandteil ersetzt“ (Hinweiskasten, Bestätigung, Datum am
+Feld, danach Banner, „Gesperrt, weil“, Journal mit „Position 2“), „Set auflösen“ mit Quittung auf der Ordnerseite,
+Zählsätze (Baum, Übersicht), Anlegen mit Set-Produkt (Radios nebeneinander), Mangel-Dialog ohne Piktogramm – ohne
+Konsolenfehler, ohne waagerechten Bildlauf. `st-geraete` (Chromium, Firefox, WebKit × 21 Geräte) für zwei Set-Seiten
+(frei mit vorhandenen Teilen, gesperrt nach „Bestandteil ersetzt“), Anlegen, Übersicht und Ordner: alle 315 Aufrufe ohne
+Befund.
+
+### Bitte bestätigen (zusammengeführt)
+
+Aus KERN A:
+1. Vorhandenen Artikel nur beim Anlegen und Einsetzen, nicht beim Tauschen.
+2. Eingesetzte vorhandene Teile kommen in den Prüfumfang; ein nie geprüftes Set prüft alle Teile.
+3. Nicht einsetzbar: offener Rückruf, offene Meldung, offener Entwurf, „Lebensdauer erreicht“, Prüfung im offenen Lauf
+   desselben Sets.
+4. „Set löschen“ mit vorhandenen Teilen → Verweis auf „Set auflösen“ (seit der Nachbesserung nur, wenn Auflösen geht).
+5. „Bestandteil ersetzt“ sperrt bis zur Set-Prüfung; nicht während einer offenen Prüfung des Sets; Lebensende bleibt.
+6. „Austausch laut Hersteller“ gilt auch beim Einsetzen eines vorhandenen Artikels.
+7. Die Auswahl zeigt die bisherige Inventarnummer mit; ohne Treffer und bei anderem Produkt seit der Nachbesserung 200
+   (siehe 28).
+8. „Set auflösen“ auch nicht bei offenem Entwurf an einem Teil.
+9. *(entfällt mit der Nachbesserung V11, siehe 33)* Beim Anlegen am Set je vorhandenem Teil zusätzlich „Teil eingesetzt“.
+
+Aus KERN Z:
+10. Zählsatz „N Artikel, darunter k Teile in m Sets“ an Baum, Übersicht (gesamt und je Zeile) und Jahresbericht, nur wenn
+    es Sets gibt; ausgesonderte zählen nicht.
+11. Zusatz an Statuslisten (`andere_set_status`), an der Ordnerliste nur mit Statusfilter, an den Fälligen immer;
+    höchstens 50 Sets genannt.
+12. CSV-Spalten hinter „Herkunftsordner“, an der Set-Zeile die eigenen Werte.
+13. Mails: Teile immer unter ihrem Set mit Set-Fälligkeit und Link; die Gruppe zählt einmal in ihrer dringendsten Stufe.
+14. `MAIL_SET_TEILE_MAX` = 10 Artikel je Set in einer Mail.
+15. Link aufs Set unter „Deine PSA“ auf die Karte unter „Meine PSA“.
+16. Mangel-Mail an nur mitgesperrten Artikeln: Wortlaut siehe KERN Z.
+17. `routes.py` zwei Zeilen (erledigt beim Zusammenführen).
+
+Aus der Oberfläche:
+18. „Set auflösen …“ im Untermenü der Set-Seite; geht es nicht, ein Dialog mit dem Grund (Menü seit der Nachbesserung
+    „Auflösen / Löschen“, siehe 30).
+19. Positionen ohne eigenen Artikel als Zeilen der Tabelle „Bestandteile“ mit „Austausch → Bestandteil ersetzt …“; bei
+    „nein“ ausgegraut mit Grund.
+20. Rückfrage „Zuordnung endet“ als rote Hauptaktion (`btn`), nicht als `btn danger`.
+21. Zählsatz kurz in „Fälligkeiten je Ordner“, als Tooltip im Baum, ganz unter den Kacheln, im Ordnerkopf und im
+    Jahresbericht.
+22. „Sperren“ und „Melden und sperren“ rot gefüllt (`btn`).
+23. Bemerkung bei „Bestandteil ersetzt“ einzeilig mit Hinweis „keine Personennamen“; Datum mit Vorgabe heute.
+
+Aus der Nachbesserung:
+24. **Startbereinigung**: freie Artikel mit Sperrursache verlieren sie bei jedem Start – ohne Journaleintrag, nur Log
+    (die Ursache zeigt keine Ansicht). Alternative: ein Systemeintrag je Artikel.
+25. **Absicherung beim Festschreiben**: ein freies Set mit einem im Lauf schlechter geprüften Teil → 409 mit Weg („erst
+    sperren“) statt einer automatischen Sperre.
+26. **„Bestandteil ersetzt“**: frühestens am Tag der Erfassung des Sets – ein Ersatz von vor dem Import lässt sich nicht
+    mit seinem Datum eintragen (dann mit dem Erfassungstag und dem Datum in der Bemerkung). Doppelklick-Schutz: derselbe
+    Eintrag (Position, Datum, Bemerkung) innerhalb von 60 s → 409.
+27. Journal „Bestandteil ersetzt“ mit `position` (Nummer in der Stückliste) statt `slot`.
+28. Auswahl ohne Treffer und mit anderem Produkt als 200 mit `hinweis` (mit Link auf den Artikel) statt 404/409.
+29. **Produkt am Artikel**: „Bearbeiten“ hat kein Produktfeld; der Dienst ließe den Wechsel vor der ersten Prüfung zu. Soll
+    die Oberfläche das anbieten (etwa für falsch importierte Artikel)? Bis dahin sagt die Meldung nur, dass das Produkt
+    nicht passt.
+30. Untermenü „Auflösen / Löschen“ (nur „Auflösen“, wenn Löschen nicht in Frage kommt); am Set kein eigener Löschknopf.
+31. Pflichtbestätigung: Knopf sieht ausgeschaltet aus, bleibt antippbar und führt zur Bestätigung (statt `disabled`).
+32. Zählsatz im Baum für Vorlesehilfen als versteckter Text statt `aria-label`.
+33. Beim Anlegen mit vorhandenen Teilen nur ein Eintrag am Set (ersetzt 9).
+34. Lebensende-Hinweis im Dialog „Bestandteil ersetzt“ nur bei textilem Material und als Weg ohne Link.
+35. Piktogramme: „📷“ und „📖“ entfernt; 🔒 an Systemordnern im Baum und die Bedienzeichen ☰, ✕, ↑ ↓, ▲ ▼ bleiben.
+36. Set-Banner „GESPERRT: <Grund>“ mit Doppelpunkt (am einzelnen Artikel bleibt „GESPERRT – <Grund>“).
 
 ## Phase 4 · Lieferung 2 – Sets mit Komponenten (23.10.2026, Stand: geliefert, wartet auf Freigabe)
 
