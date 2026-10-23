@@ -473,14 +473,18 @@ def test_oberflaeche_statisch():
     # Phase 3 · L1: Kasten „Gemeldete Mängel“ der Übersicht und Karte in „Meine PSA“; 21 seit den Änderungsanträgen
     # (21.10.2026): Karte und Rückfrage „Änderung bestätigen“; 27 seit den Hersteller-Sets (P4-L2 O1): Stückliste der
     # Produktseite, Produktwahl im Reiter „Bestandteile“, Teilblock beim Anlegen, Teil und fehlende Position im Kasten
-    # „Bestandteile“, Teil-Karte in „Meine PSA“.
-    assert len(stellen) == js.count("${nameHtml(") == 27, (len(stellen), js.count("${nameHtml("))
+    # „Bestandteile“, Teil-Karte in „Meine PSA“; 28 seit dem Produktnamen als Link in Artikellisten (23.10.2026): mit
+    # und ohne Link.
+    assert len(stellen) == js.count("${nameHtml(") == 28, (len(stellen), js.count("${nameHtml("))
     assert all(name == zusatz for name, _, zusatz in stellen), stellen
     assert not re.search(r"\$\{zusatzHtml\([^)]*\)\}(</strong>|</a>)", js)      # nie im Link, nie in <strong>
     # Die Katalogliste wie im Bildschirmfoto: Name fett im roten Link, dann grau Zusatz und Artikelnummer.
     for stelle in ('<a href="/material/katalog/produkt/${x.id}"><strong>${nameHtml(x, true)}</strong></a>'
                    '${zusatzHtml(x)}${artNrKurz(x.article_no)}',
                    "${nameHtml(a, true)}${zusatzHtml(a)}${artNrKurz(a.article_no)}",
+                   # Artikellisten (23.10.2026): der Name als roter Link auf den Artikel, Zusatz und Nummer grau dahinter.
+                   '<a class="mat-produktname" href="/material/artikel/${a.id}" tabindex="-1">${nameHtml(a, true)}</a>'
+                   '${zusatzHtml(a)}${artNrKurz(a.article_no)}',
                    '<h1>${nameHtml(p)}${zusatzHtml(p)} ${demoMarke(p.demo)}</h1>',
                    "<strong>${nameHtml(pr.produkt)}</strong>${zusatzHtml(pr.produkt)}${artNrHtml(",
                    '<a href="/material/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}'

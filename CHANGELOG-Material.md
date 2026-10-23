@@ -4733,6 +4733,11 @@ Dublettenschlüssel (Hersteller | Modell | Artikelnummer, UNIQUE) bleibt, kein S
   nachgezogen; auf der Artikelseite bleiben „· ansehen“ und „· Reservierung aufheben“ beim Umbruch je zusammen (kein
   Trennpunkt allein am Zeilenende); am Finger sind auch die Knöpfe der Rückfrage „Bist du sicher?“ 44 px hoch (vorher
   36 px, galt für alle Rückfragen im Modul).
+- Artikellisten (Ordner, Prüfungen/Fällige, Suche, Durchgang): Der **Produktname** ist ein roter Link auf den Artikel
+  wie die Ordner im Bestand und hebt sich so von Bemerkung, Artikelnummer, Länge und DEMO-Marke ab (die bleiben grau
+  bzw. dahinter). Für die Tastatur bleibt die Inventar-Nr. der Link der Zeile (Name mit tabindex -1); eine fremde Zeile
+  im Durchgang (nicht in deinem Bereich) zeigt den Namen weiter als Text. Statischer Test in
+  tests/test_material_beschreibung.py; Browserprobe Chromium 1280/360 px ohne Konsolenfehler und ohne waagerechtes Rollen.
 
 ## Nachbesserung zu Schritt 18 nach der Sicherheitsprüfung (22.10.2026)
 
