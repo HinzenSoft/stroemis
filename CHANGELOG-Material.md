@@ -4216,6 +4216,11 @@ Dublettenschlüssel (Hersteller | Modell | Artikelnummer, UNIQUE) bleibt, kein S
   „Mit Beschreibung und Fotos – Materialwarte und Prüfer bekommen eine Mail.“ (der Dialog „Sperren“ erklärt sich schon
   selbst). Unter „Zuordnen …“ entfällt der Erklärtext – er steht im Dialog.
 - Tests: statischer Oberflächentest in tests/test_material_mangel.py angepasst; Suite grün.
+- Nach der Browserprobe (Chromium 1280/360 px, st-geraete für die Artikelseite: 21 Geräte × 3 Engines ohne Befund):
+  Hilfetext über „Offene Prüfungen“ („Bleibt eine Prüfung liegen, hebt der Materialwart die Reservierung auf.“) und Schnittstellentabelle
+  nachgezogen; auf der Artikelseite bleiben „· ansehen“ und „· Reservierung aufheben“ beim Umbruch je zusammen (kein
+  Trennpunkt allein am Zeilenende); am Finger sind auch die Knöpfe der Rückfrage „Bist du sicher?“ 44 px hoch (vorher
+  36 px, galt für alle Rückfragen im Modul).
 
 ## Nachbesserung zu Schritt 18 nach der Sicherheitsprüfung (22.10.2026)
 
@@ -4925,7 +4930,7 @@ oder Plattform-Verwaltung).
 | `?sort=<spalte>&richtung=auf\|ab` an `produkte`, `ordner/<id>`, `faellig`, `suche` | – | Sortierung: Katalog `hersteller`, `produkt`, `kategorie`, `materialart`, `intervall`, `lebensdauer`, `bestand`; Artikel `inventar`, `hersteller`, `produkt`, `serie`, `faellig`, `status` |
 | `GET/POST /api/material/artikel/<id>/pruefungen` | lesen / Prüfer | Prüfungen eines Artikels; Prüfung beginnen (`art`, `durchgang_id`) – oder den eigenen Entwurf fortsetzen |
 | `GET /api/material/pruefungen/<id>`, `PUT …/punkte/<pid>` (Art `laenge`: `wert` wie `length_m`) | Prüfer | Prüfung trägt `laenge` {`wert`, `text`, `moeglich`}; ein Längenpunkt ist mit der Artikellänge vorbelegt (Soll und Wert „57,5“), der Wert wird als „55,0“ gespeichert; ohne vorgesehene Länge „nicht zutreffend“ – ein Wert und die Befunde `ok`/`mangel` sind 409. Festschreiben (`…/abschliessen`) übernimmt einen abweichenden Wert in `mat_item.length_m` – Journal „laenge_geaendert“ am Artikel (`length_m` vorher/nachher, `pruefung`, `art`), Protokoll „57,5 m → 55,0 m“ bzw. „55,0 m (unverändert)“; 409 „Die Länge am Artikel wurde während der Prüfung auf … geändert – bitte den Messwert bestätigen“, wenn sich die Länge seit der Vorbelegung geändert hat (der Punkt trägt danach die neue Länge); eine Berichtigung behält das Soll des Originals und übernimmt nur einen gegenüber dem Original geänderten Messwert; NaN/Unendlich 400 (Schritt 20 mit Nachbesserung) |
-| `GET/PUT/DELETE /api/material/pruefungen/<id>` | lesen / Prüfer / Prüfer oder Materialwart | Prüfung lesen; Art und Bemerkung am Entwurf; Entwurf verwerfen bzw. Reservierung freigeben |
+| `GET/PUT/DELETE /api/material/pruefungen/<id>` | lesen / Prüfer / Prüfer oder Materialwart | Prüfung lesen; Art und Bemerkung am Entwurf; Entwurf verwerfen bzw. Reservierung aufheben |
 | `PUT /api/material/pruefungen/<id>/punkte/<pid>`, `POST/DELETE …/foto` | Prüfer (eigener Entwurf) | Befund, Wert, Bemerkung, Foto je Prüfpunkt |
 | `POST /api/material/pruefungen/<id>/anhaenge` (`file` mehrfach, `art`, `titel`, `im_protokoll`), `DELETE …/<aid>` | Prüfer (eigener Entwurf) | Anhänge |
 | `POST /api/material/pruefungen/<id>/festschreiben` (`ergebnis`, `next_due_on`, `grund`, `bemerkung`; alter Pfad `…/abschliessen` gilt weiter) | Prüfer (eigener Entwurf, mit Unterschrift) | Abschluss und Festschreiben mit Protokoll |

@@ -168,7 +168,7 @@ table.list.mat-tabelle tr[hidden] { display: none; }
 table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspalte { padding-left: 4px; padding-right: 4px; }
 .mat-alt td { color: var(--grau); }
 .mat-hash { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-.mat-inv { white-space: nowrap; }
+.mat-inv, .mat-nowrap { white-space: nowrap; }
 .mat-seiten { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 12px 0; font-size: var(--fs-klein); }
 @container mat-seite (max-width: 600px) { table.list td.mat-wahlspalte, table.list th.mat-wahlspalte { width: auto; } }
 
@@ -1117,7 +1117,7 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
    in Listen), vergrößert ein unsichtbares ::after nur die Trefferfläche; Sortierköpfe, Zähler und Klappknöpfe haben
    seit der Geräte-Prüfung vom 21.10.2026 eine echte Fläche (Abschnitt am Ende). */
 @media (pointer: coarse) {
-  :where(#mat-inhalt, #dlg) .btn { min-height: 44px; }
+  :where(#mat-inhalt, #dlg, dialog .dlg-actions) .btn { min-height: 44px; }   /* auch die Rückfrage aus common.js */
   .mat-filter button, .mat-sortwahl select { min-height: 44px; }
   .mat-pdf { min-height: 44px; }
   :where(#mat-inhalt, #dlg) input:is([type=checkbox], [type=radio]) { width: 24px; height: 24px; flex: none; }

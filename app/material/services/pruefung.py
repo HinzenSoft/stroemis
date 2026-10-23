@@ -5,8 +5,8 @@ Ablauf: Ein Prüfer startet die Prüfung eines Artikels – jederzeit, nicht ers
 entsteht ein Entwurf mit einer Kopie der Prüfpunkte des passenden Formulars (aktives spezifisches des
 Produkts, sonst aktives generisches der Kategorie), jeder mit seinem Sollwert vorbelegt: Der Prüfer
 ändert nur Abweichungen. Der Entwurf ist die Reservierung – höchstens einer je Artikel (eindeutiger
-Index), die anderen sehen „in Prüfung bei …“. Eine liegen gebliebene Reservierung gibt der
-Materialwart frei. Die erste Prüfung eines Artikels ist immer die Eingangsprüfung; bis sie
+Index), die anderen sehen „in Prüfung bei …“. Eine liegen gebliebene Reservierung hebt der
+Materialwart auf. Die erste Prüfung eines Artikels ist immer die Eingangsprüfung; bis sie
 abgeschlossen ist, steht er auf „neu“.
 
 Abschließen heißt Festschreiben (Lieferung 3): Es setzt Ergebnis, Sperrzustand und Fälligkeit und erzeugt in
