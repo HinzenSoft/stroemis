@@ -387,18 +387,53 @@ def ordner_foto_entfernen(fid):
     delete_photo_files(katalog.medien_dir(), alt["photo"])
 
 
+# Zählsatz „N Artikel, darunter k Teile in m Sets“ (Phase 4 · L2b, Entwurf C): Gezählt wird weiter je Artikel; m und k
+# kommen aus DERSELBEN gefilterten Menge wie N – m = Zeilen mit Set-Produkt, k = Zeilen mit Set (Teile), beide ohne
+# ausgesonderte (mit dem Set ausgesonderte Teile behalten ihr Set). Kein Blick auf die Set-Zeile, also kein JOIN und keine
+# Unterabfrage auf sie (sets.TEILE_ZAHL_SQL ist ungefiltert, Kritik T11/U7) – nur aufs Produkt der Zeile selbst.
+SET_PRODUKT_SQL = "EXISTS (SELECT 1 FROM mat_product zp WHERE zp.id = i.product_id AND zp.is_set = 1)"
+
+
+def leere_sets():
+    return {"anzahl": 0, "teile": 0}
+
+
+def set_zahlen(where, params):
+    """{anzahl: m, teile: k} über mat_item i mit dieser Bedingung (where: „WHERE …“, schon mit artikel_filter bzw. der
+    Zweigmenge) – ohne ausgesonderte."""
+    r = db.query(f"SELECT COALESCE(SUM({SET_PRODUKT_SQL}), 0) AS m, COALESCE(SUM(i.parent_item_id IS NOT NULL), 0) AS k "
+                 f"FROM mat_item i {where} AND i.lock_state <> 'ausgesondert'", params, one=True)
+    return {"anzahl": r["m"], "teile": r["k"]}
+
+
+def zaehlsatz(n, sets_zahl):
+    """„N Artikel, darunter k Teile in m Sets“ – None, wenn es in der Menge keine Sets gibt (dann bleibt es bei „N“)."""
+    m, k = sets_zahl["anzahl"], sets_zahl["teile"]
+    if not m and not k:
+        return None
+    return f"{n} Artikel, darunter {k} {'Teil' if k == 1 else 'Teile'} in {m} {'Set' if m == 1 else 'Sets'}"
+
+
 def _zaehlungen():
-    """Status je Ordner (nur direkt darin liegende Artikel, die das Konto sieht) – eine Abfrage für den ganzen Baum."""
-    out = {}
-    for r in db.query(f"SELECT folder_id, {st.status_sql('i')} AS s, COUNT(*) AS n FROM mat_item i "
-                      f"WHERE {rechte.artikel_filter('i')} GROUP BY folder_id, s", st.parameter()):
-        out.setdefault(r["folder_id"], st.leere_zaehlung())[r["s"]] = r["n"]
-    return out
+    """Status je Ordner (nur direkt darin liegende Artikel, die das Konto sieht) – eine Abfrage für den ganzen Baum. Dazu
+    je Ordner {anzahl, teile} für den Zählsatz (aus derselben Gruppierung, ohne ausgesonderte)."""
+    out, mit_sets = {}, {}
+    for r in db.query(f"SELECT folder_id, {st.status_sql('i')} AS s, {SET_PRODUKT_SQL} AS ist_set, "
+                      f"i.parent_item_id IS NOT NULL AS teil, COUNT(*) AS n FROM mat_item i "
+                      f"WHERE {rechte.artikel_filter('i')} GROUP BY folder_id, s, ist_set, teil", st.parameter()):
+        z = out.setdefault(r["folder_id"], st.leere_zaehlung())
+        z[r["s"]] += r["n"]
+        if r["s"] != "ausgesondert" and (r["ist_set"] or r["teil"]):
+            x = mit_sets.setdefault(r["folder_id"], leere_sets())
+            x["anzahl"] += r["n"] if r["ist_set"] else 0
+            x["teile"] += r["n"] if r["teil"] else 0
+    return out, mit_sets
 
 
-def ordner_json(o, direkt=None, gesamt=None):
+def ordner_json(o, direkt=None, gesamt=None, sets_gesamt=None):
     """Ein Ordner mit „darf“ – was das Konto genau hier darf. Ein teilweise sichtbarer Systemordner (die eigenen
-    gesperrten oder ausgesonderten Artikel in einer fremden Gliederung) trägt „teilweise“."""
+    gesperrten oder ausgesonderten Artikel in einer fremden Gliederung) trägt „teilweise“. „bestand_sets“ (mit gesamt):
+    {anzahl, teile} im ganzen Zweig – für den Zählsatz „N Artikel, darunter k Teile in m Sets“ an „bestand“."""
     out = {f: o[f] for f in ("id", "parent_id", "name", "description", "kind", "system_kind", "interval_months",
                              "position", "created_at", "updated_at")}
     out["demo"] = bool(o["demo"])
@@ -414,6 +449,7 @@ def ordner_json(o, direkt=None, gesamt=None):
     if gesamt is not None:
         out["zaehlung"] = gesamt
         out["bestand"] = sum(gesamt[s] for s in st.BESTAND)
+        out["bestand_sets"] = sets_gesamt or leere_sets()
     return out
 
 
@@ -428,14 +464,16 @@ def baum():
     """Der Ordnerbaum, wie ihn das angemeldete Konto sieht (Bauentwurf 1.3), flach mit Zählungen – direkt darin und im
     ganzen Unterbaum, beide nur über die Artikel, die das Konto sieht. Es fehlt, was es nicht sehen darf; über
     sichtbaren Ordnern stehen Pfad-Knoten (pfad_knoten_json), teilweise sichtbare Systemordner zählen nur die eigenen
-    Artikel. Den Baum zeichnet die Oberfläche aus parent_id."""
+    Artikel. Den Baum zeichnet die Oberfläche aus parent_id. Gezählt wird je Artikel (ein Set mit drei Teilen sind vier);
+    „bestand_sets“ sagt, wie viele davon Set-Artikel und Teile sind (Zählsatz, Phase 4 · L2b)."""
     s = rechte.sicht()
     ordner_alle = db.query("SELECT * FROM mat_folder ORDER BY position, name COLLATE NOCASE")
     if not s.alles:
         ordner_alle = [o for o in ordner_alle if s.sichtbar(o["id"]) or o["id"] in s.pfad_knoten]
     pfad_ids = set() if s.alles else {o["id"] for o in ordner_alle if o["id"] in s.pfad_knoten}
-    direkt = _zaehlungen()
+    direkt, direkt_sets = _zaehlungen()
     gesamt = {o["id"]: dict(direkt.get(o["id"], st.leere_zaehlung())) for o in ordner_alle if o["id"] not in pfad_ids}
+    sets_gesamt = {fid: dict(direkt_sets.get(fid, leere_sets())) for fid in gesamt}
     eltern = {o["id"]: o["parent_id"] for o in ordner_alle}
     for fid, z in direkt.items():
         if fid not in gesamt:
@@ -446,9 +484,12 @@ def baum():
             gesehen.add(p)
             for k, n in z.items():
                 gesamt[p][k] += n
+            for k, n in direkt_sets.get(fid, leere_sets()).items():
+                sets_gesamt[p][k] += n
             p = eltern.get(p)
     return [pfad_knoten_json(o) if o["id"] in pfad_ids
-            else ordner_json(o, direkt.get(o["id"], st.leere_zaehlung()), gesamt[o["id"]]) for o in ordner_alle]
+            else ordner_json(o, direkt.get(o["id"], st.leere_zaehlung()), gesamt[o["id"]], sets_gesamt[o["id"]])
+            for o in ordner_alle]
 
 
 # --- Artikel ---------------------------------------------------------------------------------------
@@ -1046,7 +1087,8 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     „nacharbeit“: offene Zeilen aus Bestandsimporten in diesen Ordner – nur für Verwalter, sonst null.
     Hersteller-Sets (Schritt 21): nur die Set-Zeile mit Set-Status, Set-Fälligkeit und „set“ (sets.listenzeile) –
     gefiltert und sortiert nach den Set-Werten; Teile stehen auf der Set-Seite. „sets“: {anzahl, teile} unter allen
-    Zeilen der Liste (Kopf „n Einträge, davon m Sets mit k Teilen“)."""
+    Zeilen der Liste (Kopf „n Einträge, davon m Sets mit k Teilen“). „andere_set_status“ (nur mit Statusfilter, sonst
+    None): Teile mit diesem Status in Sets mit anderem Set-Status (andere_set_status)."""
     from .search import sortierung
     ordnung = sortierung(artikel_sortierung(gruppe=True), sort, richtung, "i.inventory_no")
     o = ordner(fid)
@@ -1060,6 +1102,7 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     if zugeordnet is not None:
         bedingung += f" AND i.assigned_user_id = :zugeordnet AND {rechte.artikel_filter('i', 'grund')}"
         params["zugeordnet"] = zugeordnet
+    ohne_status = bedingung
     if status_filter:
         if status_filter not in st.STATUS:
             raise Abgelehnt("Unbekannter Status.")
@@ -1077,6 +1120,8 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     out["artikel"] = [sets.listenzeile(artikel_kurz(r), r) for r in rows]
     out["artikel_gesamt"] = gesamt
     out["sets"] = sets.zahlen(f"FROM mat_item i {bedingung}", params)
+    out["andere_set_status"] = (andere_set_status(ohne_status, {k: v for k, v in params.items() if k != "sf"},
+                                                  (status_filter,)) if status_filter else None)
     # Die Zahlen an den Statusfiltern zählen wie die Liste (Oberfläche O2): je Zeile, ein Set einmal mit seinem
     # Set-Status – nicht jedes Teil einzeln (baum() zählt für Leiste und Übersicht weiter je Artikel).
     zaehlung = st.leere_zaehlung()
@@ -1105,13 +1150,14 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
 FAELLIG = ("ueberfaellig", "lebensdauer", "neu", "bald_faellig")
 
 
-def _faellig_bedingung(ordner_id, nur, zugeordnet):
-    """(WHERE …, Parameter) der Fälligen – Set-Zeilen mit ihrem Set-Status, keine Teile (Schritt 21)."""
+def _faellig_bedingung(ordner_id, nur, zugeordnet, mit_status=True):
+    """(WHERE …, Parameter) der Fälligen – Set-Zeilen mit ihrem Set-Status, keine Teile (Schritt 21). mit_status=False:
+    dieselbe Menge ohne den Statusfilter (für andere_set_status)."""
     params = st.parameter()
-    bedingungen = ["i.parent_item_id IS NULL",
-                   f"{sets.gruppen_status_sql('i')} IN ({','.join(':n' + str(k) for k in range(len(nur)))})",
-                   rechte.artikel_filter("i")]
-    params.update({f"n{k}": s for k, s in enumerate(nur)})
+    bedingungen = ["i.parent_item_id IS NULL", rechte.artikel_filter("i")]
+    if mit_status:
+        bedingungen.insert(1, f"{sets.gruppen_status_sql('i')} IN ({','.join(':n' + str(k) for k in range(len(nur)))})")
+        params.update({f"n{k}": s for k, s in enumerate(nur)})
     if zugeordnet is not None:
         bedingungen += ["i.assigned_user_id = :zugeordnet", rechte.artikel_filter("i", "grund")]
         params["zugeordnet"] = zugeordnet
@@ -1152,6 +1198,33 @@ def faellige_sets(ordner_id=None, nur=FAELLIG, zugeordnet=None):
     return sets.zahlen(f"FROM mat_item i {where}", params)
 
 
+def faellige_andere_set_status(ordner_id=None, nur=FAELLIG, zugeordnet=None):
+    """Unter der Liste der Fälligen: Teile mit einem dieser Status in Sets mit anderem Set-Status (andere_set_status)."""
+    where, params = _faellig_bedingung(ordner_id, nur, zugeordnet, mit_status=False)
+    return andere_set_status(where, params, nur)
+
+
+ANDERE_SETS_MAX = 50                    # so viele Sets nennt der Zusatz unter einer Statusliste höchstens
+
+
+def andere_set_status(where, params, stati):
+    """Zusatz unter einer Liste mit Statusfilter (Phase 4 · L2b, Entwurf C, Kritik U7): Die Liste zeigt ein Set mit seinem
+    Set-Status – ein Teil, das selbst einen der gefilterten Status hat, fehlt darin, wenn sein Set einen anderen hat
+    („einsatzbereit 2“ in der Übersicht, die Liste leer, weil das Set überfällig ist). {teile: k, sets: [{id,
+    inventory_no, teile}], sets_gesamt} – nur aus der gefilterten Menge: das Set erfüllt die Bedingung der Liste ohne den
+    Statusfilter (where über i, mit artikel_filter), das Teil artikel_filter. Höchstens ANDERE_SETS_MAX Sets, nach
+    Inventarnummer; k zählt alle."""
+    params = dict(params)
+    params.update({f"as{k}": s for k, s in enumerate(stati)})
+    marken = ",".join(f":as{k}" for k in range(len(stati)))
+    rows = db.query(f"SELECT i.id, i.inventory_no, COUNT(*) AS n FROM mat_item i JOIN mat_item t ON t.parent_item_id = i.id "
+                    f"{where} AND {rechte.artikel_filter('t')} AND {st.status_sql('t')} IN ({marken}) "
+                    f"AND {sets.gruppen_status_sql('i')} NOT IN ({marken}) GROUP BY i.id, i.inventory_no "
+                    f"ORDER BY i.inventory_no, i.id", params)
+    return {"teile": sum(r["n"] for r in rows), "sets_gesamt": len(rows),
+            "sets": [{"id": r["id"], "inventory_no": r["inventory_no"], "teile": r["n"]} for r in rows[:ANDERE_SETS_MAX]]}
+
+
 def zaehlung(ordner_ids=None):
     """Status über alle Artikel, die das Konto sieht (oder nur über die in diesen Ordnern)."""
     params = st.parameter()
@@ -1164,3 +1237,8 @@ def zaehlung(ordner_ids=None):
     for r in db.query(f"SELECT {st.status_sql('i')} AS s, COUNT(*) AS n FROM mat_item i {where} GROUP BY s", params):
         z[r["s"]] = r["n"]
     return z
+
+
+def zaehlung_sets():
+    """{anzahl, teile} über alle Artikel, die das Konto sieht – der Zählsatz zu „bestand“ der Übersicht (zaehlung)."""
+    return set_zahlen(f"WHERE {rechte.artikel_filter('i')}", {})

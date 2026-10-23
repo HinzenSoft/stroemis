@@ -80,6 +80,9 @@ h2 { break-after: avoid; }
     {%- endfor %}
     <tr><td class="zahl">{{ bestand.verloren }}</td><td class="lbl">davon verloren gemeldet</td></tr>
     <tr><td class="zahl">{{ bestand.bestand }}</td><td class="lbl">Bestand gesamt (ohne ausgesonderte)</td></tr>
+    {%- if bestand.sets_satz %}
+    <tr><td class="lbl" colspan="2">{{ bestand.sets_satz }}</td></tr>
+    {%- endif %}
   </table>
   </td><td>
   <table class="zahlen">

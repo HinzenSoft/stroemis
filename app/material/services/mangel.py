@@ -377,7 +377,8 @@ def melden(iid, d, dateien=()):
                  item["lock_state"], db.now()))
             gesperrt = item["lock_state"] == "frei"
             # Ein nur mit dem Set gesperrtes Teil bekommt seinen eigenen Grund (Sperr-Kaskade, Schritt 21).
-            if gesperrt or item.get("lock_cause") == "set":
+            nur_mit_set = not gesperrt and item.get("lock_cause") == "set"
+            if gesperrt or nur_mit_set:
                 pruefung._sperren(item, "gesperrt", f"Mangel gemeldet am {heute().strftime('%d.%m.%Y')}",
                                   aktion="mangel_gemeldet", zusatz={"mangel": mid})
             else:
@@ -388,7 +389,7 @@ def melden(iid, d, dateien=()):
         raise
     g.pop("mat_mangel_offen", None)
     g.pop("mat_psa_kopf", None)
-    return mid, gesperrt, _benachrichtigen(mid)
+    return mid, gesperrt, _benachrichtigen(mid, nur_mit_set)
 
 
 def erledigen(iid, pruefung_id):
@@ -465,8 +466,11 @@ def _set_satz(item):
     return s["inventory_no"], len(tz), s["id"] == item["id"]
 
 
-def _mailtext(r, item, produkt, warum):
-    """Betreff und Text an Materialwarte, Prüfer und Verwaltung – mit Namen und Text (empfaenger: darf_inhalt)."""
+def _mailtext(r, item, produkt, warum, nur_mit_set=False):
+    """Betreff und Text an Materialwarte, Prüfer und Verwaltung – mit Namen und Text (empfaenger: darf_inhalt).
+    nur_mit_set: Der Artikel war vor der Meldung nur mit seinem Hersteller-Set gesperrt (lock_cause „set“) – die
+    Meldung gibt ihm einen eigenen Grund; der Text sagt das, statt „war schon gesperrt (…)“ mit dem neuen Grund
+    (Phase 4 · L2b, Entwurf E)."""
     basis = (current_app.config.get("BASE_URL") or "").rstrip("/")
     site = current_app.config.get("SITE_NAME") or "strömis.de"
     zeit = _ortszeit(r["created_at"])
@@ -478,10 +482,16 @@ def _mailtext(r, item, produkt, warum):
         zeilen[0] += (f" Der Artikel ist damit gesperrt und liegt in „Gesperrt“ der Gliederung "
                       f"{gl['name'] if gl else '(ohne Gliederung)'}. Freigeben kann ihn nur ein Prüfer mit einer "
                       "Prüfung („einsatzbereit“).")
-    else:
+    satz = _set_satz(item)
+    if not gesperrt and nur_mit_set and satz:
+        zeilen[0] += ((f" Das Set {satz[0]} war schon gesperrt; der Set-Artikel selbst ist jetzt zusätzlich aus eigenem "
+                       "Grund gesperrt (diese Meldung).") if satz[2] else
+                      (f" Er war bisher nur mit dem Hersteller-Set {satz[0]} gesperrt; jetzt ist er zusätzlich aus "
+                       "eigenem Grund gesperrt (diese Meldung)."))
+        zeilen[0] += " Freigeben kann das Set nur ein Prüfer mit der Set-Prüfung."
+    elif not gesperrt:
         grund = f" ({item['lock_reason']})" if item["lock_reason"] else ""
         zeilen[0] += f" Er war schon gesperrt{grund}; die Sperre bleibt."
-    satz = _set_satz(item)
     if satz:
         zeilen.append((f"Er ist der Set-Artikel des Hersteller-Sets {satz[0]}" if satz[2] else
                        f"Er ist Teil des Hersteller-Sets {satz[0]}") +
@@ -533,8 +543,8 @@ def _mailtext_zugeordnet(item, produkt, r, u):
     return " ".join(betreff.split()), "\n".join(zeilen) + "\n"
 
 
-def _benachrichtigen(mid):
-    """Nach dem Commit: Mails vorbereiten und neben der Anfrage verschicken. Bei einem DEMO-Artikel, unter der
+def _benachrichtigen(mid, nur_mit_set=False):
+    """Nach dem Commit: Mails vorbereiten und neben der Anfrage verschicken (nur_mit_set: siehe _mailtext). Bei einem DEMO-Artikel, unter der
     Umgebungssperre oder ohne Mailserver geht nichts hinaus – Betreff und Text stehen dann im Log (mailprotokoll.senden).
     Liefert, ob mindestens eine Mail an Materialwart, Prüfer oder Verwaltung an den Versand ging (die an die
     zugeordnete Person zählt nicht: der Toast spricht vom Materialwart). Ob der Mailserver sie annimmt, zeigt erst das
@@ -548,7 +558,7 @@ def _benachrichtigen(mid):
         if warum == "zugeordnet":
             betreff, inhalt = _mailtext_zugeordnet(item, produkt, r, u)
         else:
-            betreff, inhalt = _mailtext(r, item, produkt, warum)
+            betreff, inhalt = _mailtext(r, item, produkt, warum, nur_mit_set)
         mails.append((u["email"].strip(), f"[DEMO] {betreff}" if demo else betreff, inhalt, u["id"], ROLLE[warum]))
     if not mails:
         return False

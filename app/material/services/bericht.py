@@ -142,12 +142,15 @@ def _ordnerzeilen(fid):
 
 def _bestand(fid, o, ordner, params):
     """Bestand zum Stichtag: Zeilen nach status.STATUS, verloren, DEMO, je Kategorie der obersten Ebene und je Unterordner
-    der ersten Ebene nach Heimat – aus EINER Gruppierung über die Zweigmenge."""
+    der ersten Ebene nach Heimat – aus EINER Gruppierung über die Zweigmenge. Dazu „sets“ {anzahl, teile} und
+    „sets_satz“ („N Artikel, darunter k Teile in m Sets“, None ohne Sets – Phase 4 · L2b, Entwurf C) aus derselben
+    Gruppierung: m = Bestand mit Set-Produkt, k = Bestand mit Set, ohne Blick auf die Set-Zeile."""
     rows = db.query(
         f"SELECT {bestand.heimat_sql('i')} AS heimat, {st.status_sql('i')} AS s, i.lock_state, p.category_id, "
-        f"{bestand.demo_sql('i', 'p')} AS demo, COUNT(*) AS n FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
-        f"WHERE {MENGE} GROUP BY heimat, s, i.lock_state, p.category_id, demo", params)
-    zaehlung, verloren, demo = st.leere_zaehlung(), 0, 0
+        f"{bestand.demo_sql('i', 'p')} AS demo, p.is_set AS ist_set, i.parent_item_id IS NOT NULL AS teil, COUNT(*) AS n "
+        f"FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
+        f"WHERE {MENGE} GROUP BY heimat, s, i.lock_state, p.category_id, demo, ist_set, teil", params)
+    zaehlung, verloren, demo, mit_sets = st.leere_zaehlung(), 0, 0, bestand.leere_sets()
     kategorien, ebene = {}, {}
     # Oberste Kategorieebene (parent_id leer) je Kategorie – eine Abfrage über alle Kategorien.
     alle_kat = {k["id"]: k for k in db.query("SELECT id, parent_id, name FROM mat_category")}
@@ -174,6 +177,9 @@ def _bestand(fid, o, ordner, params):
         if r["demo"]:
             demo += r["n"]
         if r["s"] != "ausgesondert":
+            # Zählsatz (Phase 4 · L2b): Set-Artikel und Teile aus derselben Gruppierung, ohne ausgesonderte.
+            mit_sets["anzahl"] += r["n"] if r["ist_set"] else 0
+            mit_sets["teile"] += r["n"] if r["teil"] else 0
             # Eine Kategorie nur mit Ausgesonderten bekommt keine Zeile (sie hätte nur Nullen).
             k = kategorien.setdefault(oberste(r["category_id"]), {"bestand": 0, "faellig": 0, "gesperrt": 0})
             k["bestand"] += r["n"]
@@ -204,8 +210,9 @@ def _bestand(fid, o, ordner, params):
                                        ebene[("ordner", k["id"])]))
     if ("ohne_herkunft", 0) in ebene:
         zeilen.append(_ebenenzeile(f"{o['name']} (ohne Herkunftsordner)", "", False, ebene[("ohne_herkunft", 0)]))
+    gesamt = sum(zaehlung[s] for s in st.BESTAND)
     return {"zaehlung": zaehlung, "zeilen": [{"status": s, "text": st.LABEL[s], "n": zaehlung[s]} for s in st.STATUS],
-            "bestand": sum(zaehlung[s] for s in st.BESTAND), "verloren": verloren,
+            "bestand": gesamt, "verloren": verloren, "sets": mit_sets, "sets_satz": bestand.zaehlsatz(gesamt, mit_sets),
             "kategorien": [dict(name=n, **k) for n, k in sorted(kategorien.items(), key=lambda x: x[0].casefold())],
             "unterordner": zeilen}, demo
 

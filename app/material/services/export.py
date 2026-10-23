@@ -48,10 +48,14 @@ SPERRZUSTAND = {"frei": "frei", "gesperrt": "gesperrt", "verloren": "verloren", 
 # „Länge (m)“ (Schritt 20): die Artikellänge als „57,5“ (deutsches Komma, eine Nachkommastelle, ohne Einheit – so
 # rechnet Excel damit); sie steht bei den Artikeldaten hinter „Lebensende“, in der Reihenfolge des Steckbriefs. Der
 # Bestandsimport liest Spalten am Titel, nicht an der Stelle.
+# „Set (Inventarnummer)“, „Set-Produkt“, „Set-Status“ (Phase 4 · L2b, Entwurf D): an einem Teil sein Hersteller-Set, an
+# der Set-Zeile ihre eigenen Werte, sonst leer – hinter „Herkunftsordner“. Alle drei beginnen mit „Set“, dazu kennt der
+# Bestandsimport kein Synonym: Er ignoriert sie (und liest „Set (Inventarnummer)“ nie als „Bisherige Inventarnummer“).
 ARTIKEL_SPALTEN = (
     "Inventarnummer", "Seriennummer", "Seriennummer vom System", "Hersteller", "Modell", "Bemerkung (Produkt)",
     "Artikelnummer", "Kategorie", "Norm", "Materialart", "Ordner", "Gliederung", "Status", "Sperrzustand",
-    "Sperr-/Aussonderungsgrund", "Herkunftsordner", "zuletzt geprüft", "nächste Prüfung",
+    "Sperr-/Aussonderungsgrund", "Herkunftsordner", "Set (Inventarnummer)", "Set-Produkt", "Set-Status",
+    "zuletzt geprüft", "nächste Prüfung",
     "Prüfintervall wirksam (Monate)", "hergestellt", "gekauft", "Erstgebrauch", "Lebensende", "Länge (m)", "Bemerkung",
     "in Prüfung bei", "Zugeordnet an", "DEMO")
 VERZEICHNIS_SPALTEN = (
@@ -63,7 +67,7 @@ VERZEICHNIS_SPALTEN = (
 # der aktuelle Stand); die Spalten des Produkts, die das wirksame Intervall braucht, unter eigenem Namen (i.* hat selbst
 # ein interval_months).
 ARTIKEL_SQL = ("SELECT i.*, p.manufacturer, p.model, p.description AS product_description, p.article_no, p.norm, "
-               "p.material_kind, p.category_id, "
+               "p.material_kind, p.category_id, p.is_set AS product_is_set, "
                f"p.interval_months AS p_int, {bestand.demo_sql('i', 'p')} AS artikel_demo, "
                "e.inspector_name AS entwurf_pruefer, "
                "zu.name AS zugeordnet_name FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
@@ -143,9 +147,39 @@ def _kategoriepfade():
 
 # --- CSV je Ordner ----------------------------------------------------------------------------------------------
 
+def _set_spalten(rows, stichtag, schwelle):
+    """{Kennung: (Set-Inventarnummer, Set-Produkt, Set-Status)} für Set-Artikel und Teile – NUR aus den geladenen Zeilen
+    (Kritik T12): Set und Teile haben dieselbe Heimat, liegen also immer zusammen in der Menge. Fehlt die Set-Zeile doch
+    (verletzte Invariante), bleiben die Spalten des Teils leer und das Protokoll der App nennt es – nachgeladen wird
+    nichts. Der Set-Status wie sets.werte (schlechtester aus Set-Artikel und Teilen), mit demselben Stichtag und
+    derselben Schwelle wie die Spalte „Status“."""
+    je_id = {r["id"]: r for r in rows}
+    teile = {}
+    for r in rows:
+        if r["parent_item_id"] is not None:
+            teile.setdefault(r["parent_item_id"], []).append(r)
+    out, fehlt = {}, set()
+    for r in rows:
+        sid = r["parent_item_id"] if r["parent_item_id"] is not None else (r["id"] if r["product_is_set"] else None)
+        if sid is None:
+            continue
+        s = je_id.get(sid)
+        if s is None:
+            fehlt.add(sid)
+            continue
+        if sid not in out:
+            status = st.schlechtester([st.status(x, stichtag, schwelle) for x in [s] + teile.get(sid, [])])
+            out[sid] = (s["inventory_no"], katalog.produktname(s, s["product_description"]), st.LABEL[status])
+        out[r["id"]] = out[sid]
+    if fehlt:
+        current_app.logger.warning("Artikel-Export: Set-Zeile %s fehlt in der Menge – Set-Spalten der Teile leer",
+                                   ", ".join(str(x) for x in sorted(fehlt)))
+    return out
+
+
 def artikel_csv(fid):
     """(CSV als bytes, Dateiname): die Artikel des Ordners fid samt Unterordnern, in Baumreihenfolge, je Ordner nach
-    Inventarnummer. Status wie überall aus status.status() – abgeleitet, nie gespeichert."""
+    Inventarnummer. Status wie überall aus status.status() – abgeleitet, nie gespeichert. Set-Spalten aus _set_spalten."""
     o = bestand.ordner(fid)
     bedingung, args = menge(fid)
     rows = db.query(ARTIKEL_SQL + f"WHERE {bedingung}", args)
@@ -153,6 +187,7 @@ def artikel_csv(fid):
     ohne = {"pfad": "", "gliederung": "", "reihe": []}
     rows.sort(key=lambda r: (baum.get(r["folder_id"], ohne)["reihe"], r["inventory_no"]))
     stichtag, schwelle = heute(), st.schwelle_tage()
+    set_werte = _set_spalten(rows, stichtag, schwelle)
     intervalle = {}
     zeilen = []
     for r in rows:
@@ -173,7 +208,7 @@ def artikel_csv(fid):
             MATERIALARTEN.get(r["material_kind"], r["material_kind"]), ordner["pfad"], ordner["gliederung"], st.LABEL[s],
             SPERRZUSTAND.get(r["lock_state"], r["lock_state"]), r["lock_reason"],
             baum.get(r["origin_folder_id"], ohne)["pfad"] if r["origin_folder_id"] else "",
-            datum_text(r["last_inspected_on"]), datum_text(r["next_due_on"]), intervall,
+            *set_werte.get(r["id"], ("", "", "")), datum_text(r["last_inspected_on"]), datum_text(r["next_due_on"]), intervall,
             datum_text(r["manufactured_on"]), datum_text(r["purchased_on"]), datum_text(r["first_use_on"]),
             datum_text(r["retire_by"]) if r["material_kind"] == "textil" else "",
             laenge_text(r["length_m"], einheit=False), r["notes"], r["entwurf_pruefer"],
