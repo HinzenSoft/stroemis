@@ -1254,8 +1254,10 @@ def test_oberflaeche_statisch():
     fs = js[js.index("async function festschreibDialog("):]
     assert 'data-mangel="${Number(m.id)}"' in fs and "Gemeldeten Mangel vom" in fs
     assert "daten.maengel_gesehen = haken.filter((h) => h.checked)" in fs and "knopf.disabled = !alleAbgehakt();" in fs
-    # Artikelseite: grauer Knopf, Hilfezeile, ausgegrautes Aussondern mit Erklärung.
-    assert "' data-act=\"mangel\"'}>Mangel melden …</button>" in js and "Sperren: ohne Meldung, mit Sperrgrund." in js
+    # Artikelseite: grauer Knopf, ausgegrautes Aussondern mit Erklärung. Die Erklärung zum Melden steht im Dialog, nicht
+    # mehr unter den Knöpfen (Wunsch des Nutzers 23.10.2026).
+    assert "' data-act=\"mangel\"'}>Mangel melden …</button>" in js and "Sperren: ohne Meldung, mit Sperrgrund." not in js
+    assert "Mit Beschreibung und Fotos – Materialwarte und Prüfer bekommen eine Mail." in js[js.index("function mangelDialog("):]
     # Prüfung vor Auslieferung: eigene offene Meldung → ausgegraut mit Hilfezeile (B1), Zeile zu den Erinnerungen nur
     # mit Profilabschnitt (B2), Quittung fokussiert (B5), vorsichtige Mail-Quittung (L1), wieder offen (L2).
     assert "const schonGemeldet = darfMelden && a.mangel_eigen_offen;" in js

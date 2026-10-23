@@ -314,7 +314,7 @@ def starten(iid, pruefer, art=None, durchgang_id=None):
         if offen:
             if _eigen(offen, pruefer):
                 return offen["id"], False
-            raise Abgelehnt(reserviert_text(offen) + " Eine liegen gebliebene Reservierung gibt der Materialwart frei.",
+            raise Abgelehnt(reserviert_text(offen) + " Eine liegen gebliebene Reservierung hebt der Materialwart auf.",
                             409)
         arten, vorschlag = arten_fuer(item)
         art = art or vorschlag
@@ -662,14 +662,14 @@ def anhang_entfernen(pid, aid, pruefer):
 
 
 def verwerfen(pid, akteur, darf_freigeben=False):
-    """Entwurf löschen: der eigene (verwerfen) oder – als Materialwart – eine fremde Reservierung freigeben."""
+    """Entwurf löschen: der eigene (verwerfen) oder – als Materialwart – eine fremde Reservierung aufheben."""
     with db.transaction(sofort=True):
         p = pruefung(pid)
         if p["completed_at"]:
             raise Abgelehnt(ABGESCHLOSSEN, 409)
         eigen = _eigen(p, akteur)
         if not eigen and not darf_freigeben:
-            raise Abgelehnt("Eine fremde Reservierung gibt nur der Materialwart frei.", 403)
+            raise Abgelehnt("Eine fremde Reservierung hebt nur der Materialwart auf.", 403)
         fotos = [r["photo"] for r in befunde(pid) if r["photo"]]
         dateien = [a["file_path"] for a in anhaenge(pid)]
         db.execute("DELETE FROM mat_inspection_result WHERE inspection_id = ?", (pid,))
@@ -893,7 +893,7 @@ def sperren(iid, d, pruefer):
         offen = offener_entwurf(iid)
         if offen:
             raise Abgelehnt(reserviert_text(offen) + " Über die Sperre entscheidet diese Prüfung (Ergebnis "
-                            "„instandsetzen“); eine liegen gebliebene Reservierung gibt der Materialwart frei.", 409)
+                            "„instandsetzen“); eine liegen gebliebene Reservierung hebt der Materialwart auf.", 409)
         grund = SPERRGRUENDE[art] + (f": {zusatz}" if zusatz else "")
         _sperren(item, "verloren" if art == "verlust" else "gesperrt", grund)
 
@@ -989,7 +989,7 @@ def aussondern(iid, d, akteur):
                             "ausgesondert wird, was gesperrt ist.", 409)
         offen = offener_entwurf(iid)
         if offen:
-            raise Abgelehnt(reserviert_text(offen) + " Erst die Reservierung freigeben.", 409)
+            raise Abgelehnt(reserviert_text(offen) + " Erst die Reservierung aufheben.", 409)
         from . import mangel
         if mangel.nur_gemeldet(iid):
             raise Abgelehnt(mangel.NUR_GEMELDET, 409)

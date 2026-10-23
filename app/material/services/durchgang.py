@@ -309,7 +309,7 @@ def ausnehmen(rid, iid, d, akteur):
         e = db.query("SELECT inspector_name, created_at FROM mat_inspection WHERE item_id = ? AND completed_at IS NULL",
                      (iid,), one=True)
         if e:
-            raise Abgelehnt(f"In Prüfung bei {e['inspector_name']} – erst abschließen oder die Reservierung freigeben.",
+            raise Abgelehnt(f"In Prüfung bei {e['inspector_name']} – erst abschließen oder die Reservierung aufheben.",
                             409)
         db.execute("UPDATE mat_round_item SET excluded_reason = ?, excluded_by = ?, excluded_by_name = ?, excluded_at = ? "
                    "WHERE round_id = ? AND item_id = ?", (grund, akteur.get("id"), akteur["name"], db.now(), rid, iid))

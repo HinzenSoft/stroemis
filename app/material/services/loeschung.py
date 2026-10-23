@@ -17,7 +17,7 @@ ab, bleibt das Konto samt allem stehen:
                      danach die Datenbank mit (ON DELETE CASCADE)
   Zuordnungen        je Artikel „zuordnung_geloest“ (grund „Konto gelöscht“), dann gelöst
   offene Entwürfe    Prüfername „(gelöschtes Konto)“ und Urkundennummer leer – ein Entwurf ist kein Nachweis; die
-                     Kennung setzt die Datenbank auf NULL, der Materialwart gibt die Reservierung frei
+                     Kennung setzt die Datenbank auf NULL, der Materialwart hebt die Reservierung auf
   Produktmeldungen   Name des Melders und des Bearbeiters „(gelöschtes Konto)“
   Bestandsimporte    Name dessen, der importiert hat (mat_import), und dessen, der eine Zeile der Nacharbeit erledigt
                      hat (mat_import_row), „(gelöschtes Konto)“ – Arbeitsdaten; der Nachweis steht im Journal

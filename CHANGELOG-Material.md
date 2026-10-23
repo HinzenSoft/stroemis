@@ -4204,6 +4204,19 @@ Dublettenschlüssel (Hersteller | Modell | Artikelnummer, UNIQUE) bleibt, kein S
   Herstellers mit derselben Nummer wird nicht angeboten (die Material-Verwaltung findet es über die Produktsuche).
 - Beim Ändern wird die Nummer jetzt auch geprüft, wenn nur der Hersteller wechselt (vorher nur bei neuer Nummer).
 
+## Texte: „Reservierung aufheben“, Hinweise in die Dialoge (Wunsch des Nutzers, 23.10.2026)
+
+- Eine liegen gebliebene Prüfung eines anderen Prüfers heißt beim Aufheben jetzt überall **„Reservierung aufheben“**
+  statt „Freigeben“ bzw. „Reservierung freigeben“: Liste der offenen Prüfungen, Artikelseite, Prüfansicht, Durchgang,
+  Rückfrage („… verwerfen und die Reservierung aufheben?“, Knopf „Reservierung aufheben“), Meldung „Reservierung
+  aufgehoben“, Fehlertexte der Dienste („… hebt der Materialwart auf“, „Erst die Reservierung aufheben“) und die
+  Journal-Beschriftung (Verlauf, Lebenslauf-PDF) „Reservierung aufgehoben“. Der Schlüssel im Journal bleibt
+  `reservierung_freigegeben` (gespeicherte Daten). „Freigeben“ im Sinne einer Freiprüfung (gesperrter Artikel) bleibt.
+- Artikelseite: Die Hilfezeile unter „Sperren“/„Mangel melden …“ entfällt; der Dialog „Mangel melden“ sagt jetzt
+  „Mit Beschreibung und Fotos – Materialwarte und Prüfer bekommen eine Mail.“ (der Dialog „Sperren“ erklärt sich schon
+  selbst). Unter „Zuordnen …“ entfällt der Erklärtext – er steht im Dialog.
+- Tests: statischer Oberflächentest in tests/test_material_mangel.py angepasst; Suite grün.
+
 ## Nachbesserung zu Schritt 18 nach der Sicherheitsprüfung (22.10.2026)
 
 Die unabhängige Prüfung von Commit 9f6522c (Bericht `pruefung-schritt18/bericht.md`, außerhalb des Repositories) fand
