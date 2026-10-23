@@ -17,6 +17,7 @@ für sich deploybar.
 | Phase 2 · 3 – Bestandsimport und Prüfanleitung | Bestandslisten aus Excel oder CSV in einen Ordner: Probelauf, Übernehmen in einer Transaktion (Artikel auf „neu“, Fälligkeit aus der Liste, STR-Nummern für Zeilen ohne Seriennummer, eine Liste ganz ohne Seriennummernspalte nur mit Häkchen) und Nacharbeit je Zielordner (Produkte zuordnen, melden oder im Katalog anlegen, erneut prüfen, CSV-Rundweg, Frist ein Monat); Prüfanleitung aus dem Wiki am Prüfformular, Abschnitt „Prüfung“ eingeblendet in offenen Prüfungen | geliefert 19.10.2026, vier Punkte am 20.10.2026 entschieden (einer geändert und eingearbeitet), wartet auf Freigabe |
 | Artikellänge (Schritt 20) | Häkchen „Artikel haben eine Länge“ je Kategorie (vererbt), Feld „Länge (m)“ am Artikel (Steckbrief, Listen, Lebenslauf, Meine PSA, CSV, Bestandsimport), Prüfpunkt-Typ „Länge“ – vorbelegt, ein abweichender Wert geht beim Festschreiben in den Artikel (Journal, Protokoll „alt → neu“) | gebaut 22.10.2026, wartet auf Freigabe |
 | Phase 4 · 2 – Sets mit Komponenten | Hersteller-Sets: Stückliste im Katalog (auch in der Katalogdatei), Set-Artikel mit Teil-Artikeln, Set-Status, -Fälligkeit und -Lebensende, Listen mit der Set-Zeile, Verschieben und Zuordnen mit allen Teilen, Meine PSA; Sperr-Kaskade, Set prüfen mit Set-Protokoll, Austausch, Aussondern mit Wahl je Teil, Oberfläche | Kern (K1, K2) und Oberfläche (O1, O2) gebaut 23.10.2026 (Schema 21), drei Prüfungen und Nachbesserung 23.10.2026 |
+| Phase 4 · 2b – Sets, Teil 2 | Vorhandenen Artikel als Teil einsetzen (mit Auswahl, auch über die bisherige Inventarnummer), Set auflösen, „Bestandteil ersetzt“, Prüfumfang eines nie geprüften Sets; dazu (KERN Z) Zahlen, CSV-Spalten, gebündelte Mails | KERN A gebaut 23.10.2026 (Schema bleibt 21), Oberfläche folgt |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4151,6 +4152,179 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Phase 4 · Lieferung 2b – Sets, Teil 2 (Stand: KERN A)
+
+Grundlage: `planung/material-phase4/entwurf_l2b.md` (Fassung 2 nach den Kritiken „Sicherheit“ T1–T16 und „Ablauf“
+U1–U16, mit den Entscheidungen des Nutzers vom 23.10.2026). Gebaut in Paketen: **KERN A** (vorhandenen Artikel einsetzen,
+Auswahl, Prüfumfang, Set löschen/auflösen, „Bestandteil ersetzt“ – Dienste, Routen, Rechte, Tests), **KERN Z** (Zahlen,
+CSV-Spalten, gebündelte Mails – eigener Abschnitt unten), danach **OBERFLÄCHE**. **Kein Schemaschritt** – Schemaversion
+bleibt 21, keine neuen Abhängigkeiten.
+
+### Neu (KERN A)
+
+- **Vorhandenen Artikel als Teil einsetzen** (Entwurf A): beim Set anlegen (`POST /artikel`, Teilblock
+  `{"bestandteil_id", "item_id"}` statt der Felder eines neuen Teils) und bei „Teil einsetzen“ an einer fehlenden
+  Position (`item_id`) – nicht beim Tauschen (400, „erst entnehmen, dann einsetzen“). Ein Dienst für beide Stellen
+  (`setaustausch.vorhandenen_einsetzen`); alles in der Transaktion (BEGIN IMMEDIATE) am frisch gelesenen Artikel, in
+  dieser Reihenfolge (T6):
+  1. **Sicht**: verwalten an der Heimat des Artikels (und an der des Sets) – sonst 404 „Artikel nicht gefunden.“, gleich
+     für fremd, unbekannt, nur lesbar und das Teil eines fremden Sets;
+  2. **Produkt** der Position – sonst 409 „<Nr> ist <Produkt>; an dieser Position steht <Produkt> – Produkt am Artikel
+     korrigieren.“ (auch für den Set-Artikel selbst);
+  3. **dieselbe Gliederung** wie das Set (sonst 409 „… erst in die Gliederung des Sets verschieben …“) und die
+     **DEMO-Grenze** (409 wie beim Verschieben);
+  4. **Zustände** (409): frei (nicht gesperrt, verloren, ausgesondert), kein Teil eines Sets („erst dort „Teil
+     entnehmen““), kein Set, kein offener Entwurf („In Prüfung bei …“), keine offene Mangelmeldung, kein offener Rückruf
+     (frisch und ungefiltert, `rueckruf.aktive_fuer_artikel`), nicht „Lebensdauer erreicht“, eine Lücke an der Position
+     (Stückzahl frisch je Produkt), keine Prüfung des Artikels im offenen Lauf dieses Sets (T2 – entnommen und wieder
+     eingesetzt: „erst die Set-Prüfung abschließen oder abbrechen“).
+  Wirkung: EIN bedingtes UPDATE `parent_item_id, folder_id, origin_folder_id, assigned_user_id` = wie das Set `WHERE id
+  AND parent_item_id IS NULL AND lock_state = 'frei' AND folder_id = <gelesen> AND assigned_user_id IS <gelesen>`
+  (Zeilenzahl 1, sonst 409 „… inzwischen geändert … – bitte neu laden.“, U9); dann – außer beim Anlegen –
+  `sets.sperren(Set, set_grund="tausch", neu=[Artikel])` („Teil … neu eingesetzt – Set prüfen“), **erst danach**
+  `durchgang.nach_verschieben` und `faelligkeit.kappen` nach der Heimat des Sets (T3; beim Anlegen nach allen Teilen).
+  Journal am Teil: „verschoben“ (wenn der Ordner wechselt, mit `set`), „zuordnung_geloest“/„zugeordnet“ (Zuordnung des
+  Sets, U10), „eingesetzt“ `{set, set_inventar, bestandteil}`; am Set „teil_eingesetzt“ `{teil, serial_no, bestandteil,
+  austausch, vorhanden: true}` ohne Herkunftspfad (T14), beim Anlegen zusätzlich `vorhanden: true` je Eintrag in
+  „set_angelegt“. „Austausch laut Hersteller“ gilt an „Teil einsetzen“ wie beim neuen Teil (nein → 409, nicht belegt →
+  Bestätigung). Der Artikel bringt seine Historie mit (wie Verschieben); alte Protokolle bleiben ohne „Teil von Set“.
+- **Auswahl „aus dem Bestand wählen“** (T10, U8): `GET /artikel/<Set>/kandidaten?slot_id=&q=` (verwalten am Set) und
+  `GET /ordner/<fid>/kandidaten?product_id=&q=` (verwalten am Ordner, für „Artikel anlegen“). Treffer: freie Artikel ohne
+  Set des Produkts der Position, verwaltbar (`artikel_filter(…, 'verwalten')`), in der Gliederung des Ziels, auf
+  derselben Seite der DEMO-Grenze; Suche in Inventar-, Seriennummer und der Zeile „Bisherige Inventarnummer: …“ der
+  Bemerkung (Bestandsimport), `LIKE … ESCAPE`, q 2–80 Zeichen, höchstens 20 Treffer (`weitere`). Kein Suchprotokoll,
+  kein Hinweis auf Treffer außerhalb.
+- **Prüfumfang** (U4): Ein Set, das selbst noch nie geprüft wurde, prüft in der Set-Prüfung **alle Teile**
+  (`setlauf.umfang`) – auch wenn vorher ein Teil es gesperrt hat (Probe P-B). Ein eingesetztes vorhandenes Teil ist über
+  `set_pruefen` im Umfang (Einbau prüfen, A26).
+- **„Set löschen“** (U2) löscht nur Teile, die mit dem Set angelegt wurden (Journal „angelegt“ mit `{"set": Set}` seit
+  der letzten Löschung der Kennung – `sets.beitritt`); enthält das Set eingesetzte vorhandene Artikel, 409 „Das Set enthält
+  vorhandene Artikel (…) – „Set löschen“ löscht nur Teile, die mit dem Set angelegt wurden. „Set auflösen“ gibt die
+  Teile frei in den Ordner zurück.“ (Probe P-A). Was auch ohne sie gegen das Löschen spricht (Prüfung, Meldung,
+  Durchgang), meldet weiter der bisherige Text. `darf_loeschen` am Artikel ist dann `false`.
+- **„Set auflösen“** (T1, T7, U1, U3): `POST /artikel/<Set>/aufloesen` (verwalten). Nur ein **freies** Set (weder das Set
+  noch ein Teil gesperrt, verloren oder ausgesondert); das Set selbst allein löschbar – keine Prüfung (auch kein
+  Entwurf), keine Mangelmeldung (auch keine erledigte), keine Durchgangszeile, kein Änderungsantrag, kein beendeter
+  Set-Lauf und kein offener mit Prüfung; an keinem Teil ein offener Entwurf und keine abgeschlossene Prüfung, seit es im
+  Set ist (deren Protokoll trägt „Teil von Set …“; gemessen am Journal: Eintritt ins Set gegen „abgeschlossen“ der
+  Prüfung). Sonst 409 mit Grund und Weg („einzelne Teile verlassen es über „Teil entnehmen““). Wirkung in einer
+  Transaktion: ein offener Lauf ohne Prüfung endet (`set_lauf_abgebrochen`, Grund „Set aufgelöst“); die Teile verlieren
+  ihr Set in EINER Anweisung und bleiben frei im Ordner des Sets mit ihrer Zuordnung (Journal „aus_set_geloest“); der
+  Set-Artikel wird gelöscht (Kopie der Stückliste per CASCADE), sein letzter Eintrag ist „geloescht“ `{grund: „Set
+  aufgelöst“, teile}` – eine wiedervergebene Kennung zeigt den alten Verlauf nicht (S15). Ungeprüfte neue Teile lassen
+  sich danach einzeln löschen. Ein Set, das je gesperrt war, ist nicht mehr auflösbar (frei wird es nur über eine
+  Set-Prüfung) – im Jahresbericht fällt keine Sperre weg.
+- **„Bestandteil ersetzt“** (Entwurf B; T4, T5, T15, U5, U13): `POST /artikel/<Set>/bestandteil-ersetzt` (verwalten) an
+  einer nicht einzeln geführten Position der Kopie dieses Sets (sonst 404 wie unbekannt): „Austausch laut Hersteller“
+  „ja“ ohne, „nicht belegt“ mit Pflichtbestätigung („laut Herstellerunterlagen zulässig“), „nein“ 409; Datum höchstens
+  heute (Vorgabe heute), Bemerkung einzeilig ≤ 200 Zeichen; ausgesondert 409; **offener Entwurf am Set selbst 409** („…
+  Erst festschreiben oder verwerfen – die begonnene Prüfung hat den ersetzten Bestandteil nicht gesehen.“). Wirkung:
+  Journal am Set „bestandteil_ersetzt“ `{slot, bestandteil, datum, bemerkung, austausch, bestaetigt}`, Sperre wie beim
+  Tausch (`set_grund` „bestandteil“, am freien Set Journal „gesperrt“ – im Jahresbericht Art „set“, am schon gesperrten
+  Set keine zweite Sperre), danach in derselben Transaktion `set_pruefen = 1` an der **Zeile des Set-Artikels**
+  (`sets.bestandteil_markieren`, nach der Kaskade, nie über `neu` – eine eigene Sperre des Set-Artikels bleibt mit ihrem
+  Grund; `_kaskade` weist die Set-Kennung in `neu` ab). `anlass_text` und `sperrgruende` kennen den Marker („Bestandteil
+  ersetzt – Set prüfen“, Art „bestandteil“); Freigabe und Aussondern setzen ihn zurück. Prüfumfang: das Set selbst mit
+  seinen „vorhanden/fehlt“-Zeilen. Das Lebensende des Sets bleibt.
+- **Bestandsimport**: Die Set-Zeile geht weiter in die Nacharbeit, jetzt mit dem Hinweis „Hersteller-Set – der Import
+  legt keine Sets an. Set über „Artikel anlegen“ mit vorhandenen Teilen anlegen („aus dem Bestand wählen“), Angaben der
+  Zeile übernehmen, dann „erneut prüfen“.“ (U11, U12).
+- **Beschriftungen** (gleichlautend `beschriftung.py` und `material.js`, nur die Tabellen): Aktionen „eingesetzt“ („in
+  ein Set eingesetzt“), „aus_set_geloest“ („aus dem Set gelöst (Set aufgelöst)“), „bestandteil_ersetzt“ („Bestandteil
+  ersetzt“); Felder `vorhanden`, `slot`, `bemerkung`; `set_grund` „bestandteil“ („Bestandteil ersetzt – Set prüfen“);
+  Jahresbericht Sperrart „set“: „Set unvollständig, Teil getauscht oder eingesetzt, Bestandteil ersetzt oder Set
+  ausgesondert“.
+
+### Schnittstelle (Stand KERN A – für die Oberfläche)
+
+Zusätzlich zu L2. Fremdes antwortet 404 wie Unbekanntes (auch `item_id` und `slot_id` als Zahl, „7“ oder 7.0).
+
+| Methode und Pfad | Recht | Anfrage → Antwort |
+| --- | --- | --- |
+| `POST /api/material/artikel` mit Set-Produkt | Materialwart (wie bisher) | Teilblock `{"bestandteil_id", "item_id"}` für einen vorhandenen Artikel (gefüllte Teilfelder dazu → 400 „… nicht beides.“, dieselbe Kennung zweimal → 400) → 201 wie bisher; 404/409 wie bei „Teil einsetzen“; alles oder nichts |
+| `POST /api/material/artikel/<Set>/teil-einsetzen` | Materialwart | neu `"item_id"` statt der Felder (mit gefüllten Feldern 400), `slot_id`, `bestaetigt` wie bisher → 201 `{artikel (Set voll), teil (eingesetzt, voll), hinweise: []}`; 404 „Artikel nicht gefunden.“; 409 anderes Produkt, andere Gliederung, DEMO-Grenze, nicht frei, Teil/Set, Entwurf, Meldung, Rückruf, Lebensdauer, keine Lücke, Prüfung im offenen Lauf, inzwischen geändert |
+| `POST /api/material/artikel/<Set>/teil-tauschen` | Materialwart | mit `item_id` → 400 „Tauschen geht nur mit einem neuen Teil …“ |
+| `GET /api/material/artikel/<Set>/kandidaten?slot_id=&q=` | verwalten | → `{treffer: [{id, inventory_no, serial_no, bisherige_inventarnummer \| null, produkt, ordner, status, status_text, zugeordnet ({id, name, gliederung, aktiv}) \| null}], weitere}`; Position fremd/unbekannt/nicht einzeln → 404; ohne Treffer 404 „Kein passender Artikel gefunden.“ (fremd und unbekannt gleich) bzw. 409 (Nummer genau eines verwalteten Artikels mit anderem Produkt, Text wie oben); q < 2 oder > 80 Zeichen → 400; kein Set → 409 |
+| `GET /api/material/ordner/<fid>/kandidaten?product_id=&q=` | verwalten | wie oben; `product_id` ein Set-Produkt → 400, unbekannt 404; Systemordner → 409 |
+| `POST /api/material/artikel/<Set>/aufloesen` | verwalten | `{}` → `{ok: true, teile: [{id, inventory_no}]}`; 409 mit Grund (Text wie `set.aufloesen_hindernis`); kein Set/ausgesondert 409 |
+| `POST /api/material/artikel/<Set>/bestandteil-ersetzt` | verwalten | `{"slot_id", "datum", "bemerkung", "bestaetigt"}` → `{artikel (Set voll)}`; 404 Position; 400 Datum/Bemerkung/fehlende Bestätigung; 409 „nein“, Entwurf am Set, ausgesondert |
+| `DELETE /api/material/artikel/<Set>` | Materialwart (wie bisher) | mit vorhandenen Teilen 409 (Text oben) |
+
+**Set-Block** (`artikel.set`) neu: `vorhandene_teile` (Inventarnummern eingesetzter vorhandener Artikel),
+`aufloesen_hindernis` (ein Satz | null = auflösbar), `sperrgruende` mit Art „bestandteil“; `darf_loeschen` am Set
+`false`, wenn es vorhandene Teile enthält. **Journal** neu: Aktionen „eingesetzt“, „aus_set_geloest“,
+„bestandteil_ersetzt“; Felder `vorhanden`, `slot`, `bemerkung`; `set_grund` „bestandteil“.
+
+Für den Dialog (Oberfläche): Zuordnung des gewählten Artikels ≠ Zuordnung des Sets → Rückfrage „Zuordnung an … endet“
+(U10); Gliederungswechsel gibt es nicht (409) – Hinweis „erst verschieben“; „Bestandteil ersetzt“ mit Hinweis „Ist der
+Ersatz älter als das Set, Lebensende am Set vorziehen“ und Knopf während der Anfrage gesperrt; „Set auflösen“ als
+Rückfrage mit `btn danger`; Wort „vorhandenen Artikel einsetzen“ / „aus dem Bestand wählen“ (nicht „übernehmen“, U15).
+
+### Abweichungen vom Entwurf und Entscheidungen des Baus (KERN A, mit Begründung)
+
+1. **Journal „bestandteil_ersetzt“ mit `bestandteil` statt `bezeichnung`** (Entwurf B nennt `bezeichnung`), dazu `datum`
+   und `austausch`: dasselbe Feld wie bei „teil_eingesetzt“, beschriftet als „Bestandteil“ – `bezeichnung` hätte im Verlauf
+   roh gestanden.
+2. **„Set auflösen“ zusätzlich nicht bei offenem Entwurf an einem Teil** (aus T7): Der Entwurf liefe sonst nach dem
+   Auflösen als Einzelprüfung eines Artikels weiter, den der Prüfer als Teil begonnen hat.
+3. **„Seit dem Einsetzen geprüft“ über das Journal** statt über Zeitstempel: Eintrag „angelegt“ mit dem Set bzw.
+   „eingesetzt“ gegen den Eintrag „abgeschlossen“ der Prüfung (Kennungen steigen); Zeitstempel sind nur sekundengenau.
+   Ohne Eintrittseintrag (Datenbank von Hand geändert) zählt jede Prüfung.
+4. **Beim Anlegen zusätzlich „teil_eingesetzt“ am Set** je vorhandenem Artikel (neben `vorhanden: true` in
+   „set_angelegt“): Der Lebenslauf des Sets zeigt nur Einträge am Set (S15) – so steht dort, welches Teil schon vorher
+   im Bestand war.
+5. **Auswahl ohne Treffer: 404, bei genauer Nummer mit anderem Produkt 409** – auch für einen verwalteten Artikel einer
+   anderen Gliederung (er ist für das Konto ohnehin sichtbar); fremd und unbekannt antworten gleich.
+6. **Set-Block um `vorhandene_teile` und `aufloesen_hindernis` ergänzt**, `darf_loeschen` beachtet vorhandene Teile –
+   damit die Oberfläche „Löschen“ und „Set auflösen“ ohne eigenen Versuch richtig anbietet.
+7. **Teilblock mit `item_id` und leeren Feldern** (`""`, `null`) gilt als vorhandener Artikel; nur gefüllte Felder
+   daneben sind 400 – ein Formular schickt leere Felder mit.
+
+### Rückweg (auf c5e1b06)
+
+Kein Schemaschritt – der Rückweg ist unkritisch (T16): `set_pruefen = 1` an einer Set-Zeile ignoriert der L2-Code
+(`anlass_text`/`sperrgruende` lesen es nur an Teilen), Freigabe und Aussondern setzen es zurück. Neue Journal-Aktionen
+(„eingesetzt“, „aus_set_geloest“, „bestandteil_ersetzt“) und `set_grund` „bestandteil“ erscheinen dort roh. Eingesetzte
+vorhandene Teile mit kleinerer Kennung als das Set deckt `test_stimmig_teil_vor_set` ab. **Achtung**: Auf c5e1b06 löscht
+„Set löschen“ wieder alle Teile eines ungeprüften Sets – auch eingesetzte vorhandene Artikel; nach einem Rückweg ein
+solches Set nicht löschen. Ein nie geprüftes Set prüft dort nach einer Teil-Sperre wieder nur den Umfang aus L2.
+
+### Tests (KERN A)
+
+`tests/test_material_sets_vorhanden.py` (neu, 6 Tests, Platzhalterdaten): Bestandsimport mit Set-Karabinern als eigenen
+Zeilen (Nacharbeit-Hinweis), Auswahl im Ordner (bisherige Inventarnummer, Grenzen 2/80 Zeichen und 20 Treffer, LIKE-Zeichen,
+fremd = unbekannt, anderes Produkt 409, DEMO und andere Gliederung ausgeschlossen), Set anlegen mit vorhandenen Teilen
+(Eingabeform, Sicht/Produkt/Gliederung/DEMO/Zustände einzeln, Journal an Teil und Set); Teil einsetzen in ein gesperrtes
+Set mit Durchgang und strengerem Ordnerintervall (T3: Durchgangszeile bleibt, Fälligkeit gekappt), freies Set beim
+Anlegen (Durchgang des alten Zweigs nimmt heraus), Wettlauf am bedingten UPDATE (U9), Zuordnung (U10), Prüfung im offenen
+Lauf (T2), `item_id` beim Tauschen; Prüfumfang P-B; Set löschen P-A und Set auflösen mit allen Bedingungen
+(Fremdschlüssel-Fälle, Lauf ohne Prüfung, Prüfung seit dem Einsetzen, Wiedervergabe der Kennung); „Bestandteil ersetzt“
+(Eingaben, P5/P6, Marker, Jahresbericht, Freigabe und Aussondern setzen zurück, Kaskade lehnt die Set-Kennung in `neu`
+ab); Beschriftungen gleichlautend in `beschriftung.py` und `material.js` (statisch). Ergänzt:
+`test_material_trennung.FELDER_IM_INHALT` um `teile[].item_id` und `item_id` (Formen B, „7“, 7.0, unbekannt),
+`test_material_sets_pruefung.test_bericht_und_trennung` um die neuen Routen (Set aus B → 404 für Materialwart und
+Prüfer), `test_material_ueberblick.NUR_VERWALTER_LESEN` um die beiden Auswahl-Routen (die Führungskraft liest sie nicht,
+403). Die Rundum-Tabelle `test_nichts_aus_b` nimmt die neuen Routen von selbst auf.
+
+### Bitte bestätigen (KERN A)
+
+Aus Entwurf I (vom Bau gesetzt):
+1. Vorhandenen Artikel nur beim Anlegen und Einsetzen, nicht beim Tauschen.
+2. Eingesetzte vorhandene Teile kommen in den Prüfumfang; ein nie geprüftes Set prüft alle Teile.
+3. Nicht einsetzbar: offener Rückruf, offene Meldung, offener Entwurf, „Lebensdauer erreicht“, Prüfung im offenen Lauf
+   desselben Sets.
+4. „Set löschen“ mit vorhandenen Teilen → Verweis auf „Set auflösen“.
+5. „Bestandteil ersetzt“ sperrt bis zur Set-Prüfung; nicht während einer offenen Prüfung des Sets; Lebensende bleibt.
+
+Aus dem Bau (Abweichungen oben):
+6. „Austausch laut Hersteller“ gilt auch beim Einsetzen eines vorhandenen Artikels („nein“ 409, „nicht belegt“ mit
+   Bestätigung) – wie beim neuen Teil.
+7. Die Auswahl zeigt die bisherige Inventarnummer mit; ohne Treffer 404, bei genauer Nummer mit anderem Produkt 409 (5).
+8. „Set auflösen“ auch nicht bei offenem Entwurf an einem Teil (2).
+9. Beim Anlegen steht am Set je vorhandenem Teil zusätzlich „Teil eingesetzt“ (4).
+
+<!-- Platz für KERN Z (Zahlen, CSV-Spalten, gebündelte Mails): Neu, Schnittstelle, Abweichungen, Tests, Bitte bestätigen -->
+
 ## Phase 4 · Lieferung 2 – Sets mit Komponenten (23.10.2026, Stand: geliefert, wartet auf Freigabe)
 
 Grundlage: `planung/material-phase4/entwurf_l2.md` (Fassung 2 nach den Kritiken „Sicherheit“ S1–S31 und „Ablauf“
@@ -5725,6 +5899,7 @@ oder Plattform-Verwaltung).
 | `PUT /api/material/produkte/<id>/bestandteile` (`bestandteile`: Liste der Positionen) | Katalog | Stückliste eines Hersteller-Sets als Ganzes ersetzen → `produkt`, `geaendert`; `is_set` an `POST/PUT /produkte`, `stueckliste` an der Variante, Lesefelder `is_set`, `bestandteile`, `bestandteil_von`, `set_umschaltbar` – Einzelheiten im Abschnitt „Phase 4 · Lieferung 2“ (Schritt 21) |
 | `POST /api/material/artikel` mit Set-Produkt (`teile`) | Materialwart | Set mit seinen Teilen anlegen → `artikel`, `hinweise`; Artikel tragen `ist_set`, `set`, `teil_von`, Listenzeilen dazu `set` und Set-Werte, Listen `sets` – Einzelheiten im Abschnitt „Phase 4 · Lieferung 2“ (Schritt 21) |
 | `GET/POST/DELETE /api/material/artikel/<id>/set-lauf`, `POST …/<id>/teil-entnehmen`, `…/teil-tauschen`, `…/teil-einsetzen` | lesen / Prüfer (abbrechen auch Materialwart) / Materialwart | Set prüfen (Lauf, Freigabe, Set-Protokoll) und Teile austauschen; Sperren, Mangel, Festschreiben, Aussondern und Löschen an Sets und Teilen wirken über das ganze Set – Einzelheiten im Abschnitt „Phase 4 · Lieferung 2“ (K2) |
+| `GET /api/material/artikel/<id>/kandidaten`, `GET /api/material/ordner/<id>/kandidaten`, `POST …/artikel/<id>/aufloesen`, `…/bestandteil-ersetzt`; `item_id` an `teil-einsetzen` und in `teile` | Materialwart (verwalten) | Vorhandenen Artikel als Teil einsetzen (mit Auswahl), Set auflösen, „Bestandteil ersetzt“ – Einzelheiten im Abschnitt „Phase 4 · Lieferung 2b“ (KERN A) |
 | `POST/DELETE /api/material/produkte/<id>/bild` | Katalog | Produktbild |
 | `POST /api/material/produkte/<id>/dokumente`, `POST /api/material/dokumente/<id>/version`, `…/zurueckziehen` | Katalog | Herstellerdokumente |
 | `GET/POST /api/material/formulare`, `GET/PUT/DELETE …/<id>`, `POST …/<id>/aktivieren`, `…/deaktivieren` | lesen / Katalog | Prüfformulare |
