@@ -14,6 +14,8 @@ Form der Tabelle:
     Datum hängt (einsatzbereit, bald fällig, überfällig). Neue warten auf die Eingangsprüfung (ihr Datum ist
     nur ein Vorschlag), gesperrte auf die Freiprüfung, Artikel am Lebensende auf die Aussonderung, und
     ausgesonderte werden nie mehr geprüft – sie alle stehen in ihren eigenen Spalten.
+  - „bestand_sets“ ({anzahl, teile}, aus baum) ist der Zählsatz zu „Bestand“: „N Artikel, darunter k Teile in m Sets“
+    (Phase 4 · L2b) – gezählt wird weiter je Artikel.
   - Seit Phase 2 zählt nur, was das Konto sieht (bestand.baum ist schon gefiltert). Über sichtbaren Ordnern stehen
     Pfad-Knoten als Zeile ohne Zahlen („nur_pfad“). Sieht das Konto seine Gliederung nicht, aber eigene gesperrte
     Artikel in deren „Gesperrt“, bekommt dieser Systemordner eine eigene Zeile „Gesperrt (deine Artikel)“ unter der
@@ -81,7 +83,8 @@ def ordner_uebersicht(alle=None):
             tag = frueh.get(o["id"])
             zeile = {"id": o["id"], "parent_id": o["parent_id"], "name": o["name"], "kind": o["kind"],
                      "demo": o["demo"], "tiefe": tiefe, "unterordner": len(kinder.get(o["id"], [])),
-                     "bestand": o["bestand"], "zaehlung": o["zaehlung"], "naechste": tag,
+                     "bestand": o["bestand"], "bestand_sets": o["bestand_sets"], "zaehlung": o["zaehlung"],
+                     "naechste": tag,
                      # Wie dringend das Datum ist – nach derselben Regel wie der Status eines Artikels.
                      "naechste_status": st.status({"lock_state": "frei", "retire_by": None, "last_inspected_on": tag,
                                                    "next_due_on": tag}) if tag else None}

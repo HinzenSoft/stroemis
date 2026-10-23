@@ -376,13 +376,15 @@ def start():
     „maengel“: gemeldete Mängel im eigenen Bereich, nach denen noch kein Prüfer geprüft hat (höchstens 50, dazu
     „maengel_gesamt“); „meine_psa“: {anzahl, dringend} der eigenen PSA oder null (Phase 3 · L1); „mailfehler“:
     gescheiterte Modul-Mails in der eigenen Sicht (mailprotokoll.uebersicht: offen, zeilen, kein_mailserver) oder null,
-    wenn es nichts zu zeigen gibt (Phase 4 · L1)."""
+    wenn es nichts zu zeigen gibt (Phase 4 · L1). „bestand_sets“: {anzahl, teile} zu „bestand“ – Zählsatz „N Artikel,
+    darunter k Teile in m Sets“ (Phase 4 · L2b; die Zeilen der Ordner-Übersicht tragen ihn ebenso)."""
     alle = bestand.baum()
     maengel, maengel_gesamt = mangel.offene_liste()
     gliederungen = [o for o in alle if o["kind"] == "gliederung" and not o["system_kind"] and not o.get("nur_pfad")]
     naechste, faellig = bestand.faellige(pro_seite=10)
     z = bestand.zaehlung()
     return jsonify(darf=darf_alles(), zaehlung=z, bestand=sum(z[s] for s in st.BESTAND),
+                   bestand_sets=bestand.zaehlung_sets(),
                    ordner_uebersicht=ueberblick.ordner_uebersicht(alle),
                    gliederungen=gliederungen, naechste=naechste, faellig_gesamt=faellig,
                    schwelle_tage=st.schwelle_tage(), status_text=st.LABEL,
@@ -436,9 +438,11 @@ def faellig():
             raise Abgelehnt(ORDNER_FEHLT, 404)
     zugeordnet = _zugeordnet_arg()
     liste, gesamt = bestand.faellige(ordner_id, stati, seite, pro_seite, *_sortier_args(), zugeordnet=zugeordnet)
-    # Mit Ordner (aus der Übersicht): sein Pfad für die Überschrift der Liste. „sets“: davon Sets mit Teilen (Schritt 21).
+    # Mit Ordner (aus der Übersicht): sein Pfad für die Überschrift der Liste. „sets“: davon Sets mit Teilen (Schritt 21);
+    # „andere_set_status“: Teile mit diesen Status in Sets mit anderem Set-Status (Phase 4 · L2b).
     return jsonify(artikel=liste, gesamt=gesamt, schwelle_tage=st.schwelle_tage(),
                    sets=bestand.faellige_sets(ordner_id, stati, zugeordnet),
+                   andere_set_status=bestand.faellige_andere_set_status(ordner_id, stati, zugeordnet),
                    ordner={"id": ordner_id, "pfad": bestand.pfad(ordner_id)} if ordner_id else None)
 
 

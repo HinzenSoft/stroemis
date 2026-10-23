@@ -17,7 +17,7 @@ für sich deploybar.
 | Phase 2 · 3 – Bestandsimport und Prüfanleitung | Bestandslisten aus Excel oder CSV in einen Ordner: Probelauf, Übernehmen in einer Transaktion (Artikel auf „neu“, Fälligkeit aus der Liste, STR-Nummern für Zeilen ohne Seriennummer, eine Liste ganz ohne Seriennummernspalte nur mit Häkchen) und Nacharbeit je Zielordner (Produkte zuordnen, melden oder im Katalog anlegen, erneut prüfen, CSV-Rundweg, Frist ein Monat); Prüfanleitung aus dem Wiki am Prüfformular, Abschnitt „Prüfung“ eingeblendet in offenen Prüfungen | geliefert 19.10.2026, vier Punkte am 20.10.2026 entschieden (einer geändert und eingearbeitet), wartet auf Freigabe |
 | Artikellänge (Schritt 20) | Häkchen „Artikel haben eine Länge“ je Kategorie (vererbt), Feld „Länge (m)“ am Artikel (Steckbrief, Listen, Lebenslauf, Meine PSA, CSV, Bestandsimport), Prüfpunkt-Typ „Länge“ – vorbelegt, ein abweichender Wert geht beim Festschreiben in den Artikel (Journal, Protokoll „alt → neu“) | gebaut 22.10.2026, wartet auf Freigabe |
 | Phase 4 · 2 – Sets mit Komponenten | Hersteller-Sets: Stückliste im Katalog (auch in der Katalogdatei), Set-Artikel mit Teil-Artikeln, Set-Status, -Fälligkeit und -Lebensende, Listen mit der Set-Zeile, Verschieben und Zuordnen mit allen Teilen, Meine PSA; Sperr-Kaskade, Set prüfen mit Set-Protokoll, Austausch, Aussondern mit Wahl je Teil, Oberfläche | Kern (K1, K2) und Oberfläche (O1, O2) gebaut 23.10.2026 (Schema 21), drei Prüfungen und Nachbesserung 23.10.2026 |
-| Phase 4 · 2b – Sets, Teil 2 | Vorhandenen Artikel als Teil einsetzen (mit Auswahl, auch über die bisherige Inventarnummer), Set auflösen, „Bestandteil ersetzt“, Prüfumfang eines nie geprüften Sets; dazu (KERN Z) Zahlen, CSV-Spalten, gebündelte Mails | KERN A gebaut 23.10.2026 (Schema bleibt 21), Oberfläche folgt |
+| Phase 4 · 2b – Sets, Teil 2 | Vorhandenen Artikel als Teil einsetzen (mit Auswahl, auch über die bisherige Inventarnummer), Set auflösen, „Bestandteil ersetzt“, Prüfumfang eines nie geprüften Sets; dazu (KERN Z) Zahlen, CSV-Spalten, gebündelte Mails | KERN A und KERN Z gebaut 23.10.2026 (Schema bleibt 21), Oberfläche folgt |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4152,7 +4152,7 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
-## Phase 4 · Lieferung 2b – Sets, Teil 2 (Stand: KERN A)
+## Phase 4 · Lieferung 2b – Sets, Teil 2 (Stand: KERN A und KERN Z)
 
 Grundlage: `planung/material-phase4/entwurf_l2b.md` (Fassung 2 nach den Kritiken „Sicherheit“ T1–T16 und „Ablauf“
 U1–U16, mit den Entscheidungen des Nutzers vom 23.10.2026). Gebaut in Paketen: **KERN A** (vorhandenen Artikel einsetzen,
@@ -4323,7 +4323,130 @@ Aus dem Bau (Abweichungen oben):
 8. „Set auflösen“ auch nicht bei offenem Entwurf an einem Teil (2).
 9. Beim Anlegen steht am Set je vorhandenem Teil zusätzlich „Teil eingesetzt“ (4).
 
-<!-- Platz für KERN Z (Zahlen, CSV-Spalten, gebündelte Mails): Neu, Schnittstelle, Abweichungen, Tests, Bitte bestätigen -->
+### Neu (KERN Z)
+
+- **Zählsatz „N Artikel, darunter k Teile in m Sets“** (Entwurf C). Gezählt wird weiter je Artikel. m (Zeilen mit
+  Set-Produkt) und k (Zeilen mit Set, also Teile) kommen aus derselben gefilterten Menge und Gruppierung wie N. Mit
+  ausgesonderte Teile und ausgesonderte Sets zählen nicht. Es gibt keinen JOIN und keine Unterabfrage auf die Set-Zeile
+  und kein `TEILE_ZAHL_SQL` (Kritik T11, U7).
+  - Baum (`GET /ordner`) und damit jede Ordnerantwort: `bestand_sets` = {anzahl, teile} im ganzen Zweig, neben
+    `bestand`. Wird wie `zaehlung` in sichtbare Oberordner hochgerechnet.
+  - Übersicht (`GET /start`): `bestand_sets` zu `bestand`; jede Zeile der `ordner_uebersicht` trägt `bestand_sets`.
+  - Jahresbericht (Web-Antwort): `bestand.sets` = {anzahl, teile} und `bestand.sets_satz` (fertiger Satz oder null).
+    PDF: der Satz als eigene Zeile unter „Bestand gesamt“, nur wenn es Sets gibt. Bericht zählt nach Heimat, Baum nach
+    Ordner; die Summe je Gliederung ist gleich, auch bei einem gesperrten Set in „Gesperrt“.
+- **Zusatz an Statuslisten** (Entwurf C, Kritik U7). Teile, die den gefilterten Status haben, deren Set aber einen
+  anderen Set-Status hat: `andere_set_status` = {teile: k, sets: [{id, inventory_no, teile}], sets_gesamt}.
+  - Gilt an `GET /ordner/<id>?status=…` und an `GET /faellig` (mit und ohne `?status=`).
+  - Kommt nur aus der gefilterten Menge. Das Set erfüllt die Bedingung der Liste ohne Statusfilter (Ordner bzw.
+    Unterbaum, Sicht, „Zugeordnet an“), das Teil die Sicht.
+  - Höchstens 50 Sets in der Liste (`ANDERE_SETS_MAX`); k zählt alle.
+  - Ohne Statusfilter ist es an der Ordnerliste null.
+  - An den Fälligen ohne Filter ist k praktisch immer 0. Der Set-Status ist der schlechteste, und eine Sperre sperrt
+    alle Teile mit. Der Zusatz greift also bei „einsatzbereit“, „bald fällig“ und Ähnlichem.
+- **CSV-Export: „Set (Inventarnummer)“, „Set-Produkt“, „Set-Status“** (Entwurf D, Kritik T12). Die drei Spalten stehen
+  hinter „Herkunftsordner“.
+  - An einem Teil stehen die Werte seines Sets, an der Set-Zeile ihre eigenen, sonst bleiben die Spalten leer.
+  - Die Werte kommen nur aus einem Wörterbuch der geladenen Zeilen (`export._set_spalten`). Fehlt die Set-Zeile in der
+    Menge (verletzte Invariante), bleiben die Spalten leer und das Protokoll der App nennt die Set-Kennung. Es wird
+    nichts nachgeladen.
+  - Der Set-Status wird wie `sets.werte` gebildet (schlechtester aus Set-Artikel und Teilen), mit demselben Stichtag
+    und derselben Schwelle wie die Spalte „Status“.
+  - Die Formelvorsilbe gilt für jede Zelle; getestet mit einem Hersteller „=…“.
+  - Der Bestandsimport ignoriert die drei Spalten: Alle beginnen mit „Set“, und dazu gibt es kein Synonym.
+    „Set (Inventarnummer)“ wird nie zur „Bisherigen Inventarnummer“.
+- **Gebündelte Erinnerungsmails** (Entwurf E, Kritiken U6, T13). Unter ARTIKEL und „Deine PSA“ stehen Set-Artikel und
+  Teile immer unter einer Kopfzeile ihres Sets: „Set <Inventarnummer>  <Produkt> – Set fällig am … (in n Tagen)“ bzw.
+  „Set überfällig (fällig war der …)“. Darunter stehen die anstehenden Artikel des Sets, der Set-Artikel zuerst, dann
+  ein Link aufs Set: unter ARTIKEL `/material/artikel/<Set>`, unter „Deine PSA“ `/material/meine-psa/<Set>`.
+  - Das gilt auch, wenn das Set selbst nicht im Plan steht (Probe P-C: Teil in 10 Tagen fällig, Set in 300 Tagen).
+  - Die Set-Fälligkeit ist die früheste nächste Prüfung aus Set-Artikel und Teilen, wie in den Listen.
+  - Set-Nummer, Set-Produkt und Set-Fälligkeit kommen aus derselben Kandidatenabfrage (LEFT JOIN auf das Set und sein
+    Produkt). Je Zeile wird nichts nachgeladen.
+  - Betreff und Zahlen (`erinnerung.zahlen`, Probelauf, `flask material remind --trocken`) zählen ein Set einmal, in
+    seiner dringendsten Stufe. Beispiele: „Material: 1 Set überfällig“, gemischt „2 überfällig (davon 1 Set)“,
+    „Deine PSA: 1 Set in 30 Tagen fällig“. Ein einzelner Artikel zählt wie bisher.
+  - Die Zahl am Ordner („Pfad (n)“) zählt ein Set als eine Zeile.
+  - Grenzen: An `MAIL_ARTIKEL_MAX` und `MAIL_PSA_MAX` ist ein Set eine Zeile. Darunter stehen höchstens
+    `MAIL_SET_TEILE_MAX` = 10 seiner Artikel, der Rest als „… und n weitere Teile“.
+  - Log je Artikel wie bisher (A27). Vermerkt wird alles, was die Mail nennt, auch gezählte weitere.
+- **Mangel-Mail an einem nur mitgesperrten Artikel** (lock_cause „set“). Bisher stand dort „Er war schon gesperrt
+  (Mangel gemeldet am …); die Sperre bleibt.“, also mit dem eben gesetzten Grund. Jetzt steht dort:
+  - an einem Teil: „Er war bisher nur mit dem Hersteller-Set S-… gesperrt; jetzt ist er zusätzlich aus eigenem Grund
+    gesperrt (diese Meldung). Freigeben kann das Set nur ein Prüfer mit der Set-Prüfung.“;
+  - am Set-Artikel: „Das Set S-… war schon gesperrt; der Set-Artikel selbst ist jetzt zusätzlich aus eigenem Grund
+    gesperrt (diese Meldung). …“.
+
+  Ein schon aus eigenem Grund gesperrter Artikel behält den bisherigen Satz. Die Mail an die zugeordnete Person war
+  schon set-bewusst und bleibt.
+
+### Schnittstelle (Stand KERN Z – für die Oberfläche)
+
+| Antwort | Feld | Inhalt |
+| --- | --- | --- |
+| `GET /api/material/ordner` (jeder Knoten mit Zahlen), `GET /ordner/<id>` (Kopf) | `bestand_sets` | {anzahl, teile} im Zweig |
+| `GET /api/material/start` | `bestand_sets` | {anzahl, teile} zu `bestand` |
+| `GET /api/material/start` → `ordner_uebersicht[]` | `bestand_sets` | {anzahl, teile} der Zeile |
+| `GET /api/material/ordner/<id>?status=…` | `ordner.andere_set_status` | {teile, sets: [{id, inventory_no, teile}], sets_gesamt} oder null ohne Status |
+| `GET /api/material/faellig` | `andere_set_status` | wie oben (immer da) |
+| `GET /api/material/ordner/<id>/bericht` | `bericht.bestand.sets`, `bericht.bestand.sets_satz` | {anzahl, teile}; Satz oder null |
+| CSV `/material/export/<id>.csv` | Spalten 17–19 | „Set (Inventarnummer)“, „Set-Produkt“, „Set-Status“ |
+
+Formulierungen für die Oberfläche (Vorschlag aus Entwurf C):
+- Satz: „N Artikel, darunter k Teile in m Sets“, nur wenn `anzahl` oder `teile` > 0. Singular „1 Teil“, „1 Set“, wie
+  `bestand.zaehlsatz`.
+- Unter einer Statusliste: „Dazu k Teile mit diesem Status in Sets mit anderem Set-Status: S-…“, mit Links auf
+  `/material/artikel/<id>`.
+
+### Abweichungen vom Entwurf (KERN Z, mit Begründung)
+
+- **`routes.py` geändert** (Datei von KERN A), nur zwei Zeilen und zwei Doku-Zeilen:
+  - `start()`: `bestand_sets=bestand.zaehlung_sets()`;
+  - `faellig()`: `andere_set_status=…`.
+
+  Die Felder in bestehende Wörterbücher zu legen (`sets` der Fälligen) hätte Tests in test_material_sets.py gebrochen,
+  die `sets == {anzahl, teile}` genau vergleichen. Beim Zusammenführen sind es zwei eindeutige Einfügungen.
+- **Set-Daten in den Mails per LEFT JOIN** in der Kandidatenabfrage. Kritik T13 schlug vor, nur `parent_item_id`
+  aufzunehmen und die Nummer aus der Set-Zeile derselben Mail zu nehmen. Das ginge nicht, wenn das Set nicht im Plan
+  steht (U6). Entwurf Fassung 2 verlangt „in derselben Kandidatenabfrage“, das ist so umgesetzt.
+- **Zahlen im Laufstand** (`verschicken`: `artikel`, `psa`) zählen weiter je Artikel. Das ist der Gegenwert zum Log
+  (A27). Nur Betreff, Mailtext und `zahlen()` zählen ein Set einmal.
+- **Fällige ohne Statusfilter**: `andere_set_status` steht immer in der Antwort, ist dort aber praktisch immer 0 (siehe
+  oben).
+
+### Tests (KERN Z)
+
+- Neu: `tests/test_material_sets_zahlen.py` mit 6 Tests, alle grün.
+  - `test_zaehlsatz`: Baum, /start, Ordner-Übersicht und Bericht (Web und PDF-Text); Summe Bericht = Baum, auch
+    gesperrt; fremde Gliederung und Ausgesondertes zählen nicht; ohne Sets kein Satz.
+  - `test_andere_set_status`: Ordnerliste und Fällige mit Status, Unterbaum, fremde Gliederung (404 bzw. nur eigenes
+    Set), gesperrtes Set.
+  - `test_csv_set_spalten`: Spalten und Werte an Set-Zeile, Teilen und freien Artikeln; Set-Status ≠ eigener Status;
+    Formelvorsilbe; fehlende Set-Zeile mit Log; Export → Bestandsimport-Probelauf (Spalten ignoriert,
+    `bisherige_nummer` je Zeile die eigene).
+  - `test_mails_probe_pc`: Probe P-C, Log nur fürs Teil, dringendste Stufe, gemischter Betreff, Deine PSA.
+  - `test_mails_grenze`: Set mit 30 Teilen, MAIL_ARTIKEL_MAX/MAIL_PSA_MAX = 1, „… und 21 weitere Teile“, Log
+    vollständig.
+  - `test_mangel_mail_mitgesperrt`: Teil, Set-Artikel, eigener Grund.
+- Bestehende Suite: siehe Bericht (volle Suite mit ST_REPO auf den Worktree).
+- Bericht-PDF mit Set-Satz: veraPDF PDF/A-3b PASS.
+
+### Bitte bestätigen (KERN Z)
+
+1. Zählsatz „N Artikel, darunter k Teile in m Sets“ an Baum, Übersicht (gesamt und je Zeile) und Jahresbericht (Web und
+   PDF), nur wenn es Sets gibt; ausgesonderte zählen nicht (Entwurf I Nr. 6).
+2. Zusatz an Statuslisten als eigenes Feld `andere_set_status`, an der Ordnerliste nur mit Statusfilter, an den Fälligen
+   immer; höchstens 50 Sets genannt (Entwurf I Nr. 6).
+3. CSV-Spalten hinter „Herkunftsordner“, an der Set-Zeile die eigenen Werte (Entwurf I Nr. 7).
+4. Mails: Teile immer unter ihrem Set mit Set-Fälligkeit und Link; die Gruppe zählt einmal in ihrer dringendsten Stufe,
+   gemischt „n überfällig (davon m Sets)“; Set-Artikel steht als eigene Zeile unter der Kopfzeile, wenn er selbst
+   ansteht (Entwurf I Nr. 8).
+5. `MAIL_SET_TEILE_MAX` = 10 Artikel je Set in einer Mail (Wert vom Bau gesetzt, keine Fachangabe).
+6. Link aufs Set unter „Deine PSA“ auf die Karte unter „Meine PSA“ (`/material/meine-psa/<Set>`), nicht auf die
+   Artikelseite (die Person hat oft keine Modulstufe).
+7. Mangel-Mail an nur mitgesperrten Artikeln: Wortlaut oben; „Freigeben kann das Set nur ein Prüfer mit der
+   Set-Prüfung.“
+8. `routes.py` zwei Zeilen (siehe Abweichungen) – beim Zusammenführen mit KERN A übernehmen.
 
 ## Phase 4 · Lieferung 2 – Sets mit Komponenten (23.10.2026, Stand: geliefert, wartet auf Freigabe)
 

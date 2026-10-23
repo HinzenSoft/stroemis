@@ -29,8 +29,10 @@ Freigabe allein ihr Inhaber dort verwaltet. Nur aktive Konten mit Namen, Modulzu
 DEMO-Konten (Adresse …@….invalid), jeder nur mit dem, was er sieht. Prüfer bekommen nichts. Die zugeordnete Person
 bekommt ihre eigenen Artikel im Abschnitt „Deine PSA“ (Phase 3 · L1) – auch ohne Modulstufe, abbestellbar im Profil
 (users.mat_psa_mails): 30 Tage vor der Prüfung, überfällig, Lebensende in 90 Tagen (kein 7-Tage-Schritt, PSA_STUFE),
-höchstens MAIL_PSA_MAX Zeilen, einziger Link „Meine PSA“. Wer den Artikel zugleich verwaltet, bekommt ihn wie bisher
+höchstens MAIL_PSA_MAX Zeilen, Links nur unter „Meine PSA“. Wer den Artikel zugleich verwaltet, bekommt ihn wie bisher
 unter ARTIKEL und nicht noch einmal unter „Deine PSA“.
+Hersteller-Sets (Phase 4 · L2b): Set-Artikel und Teile stehen in beiden Abschnitten unter einer Kopfzeile ihres Sets
+(mailtext); Betreff, Zahlen und Grenzen zählen ein Set einmal, in seiner dringendsten Stufe. Das Log bleibt je Artikel.
 Der Inhaber einer ablaufenden Freigabe bekommt sie zusätzlich selbst (Entscheidung vom 19.10.2026) – nach denselben
 Regeln und mit eigenem Vermerk im Log, aber nie als Verwalter, sondern im Abschnitt „Deine Freigaben“: Recht, Ende,
 Pfad des Ankers, seine offenen Prüfungen und wer verlängern kann, nicht mehr, als „Meine Freigaben“ ihm zeigt
@@ -73,6 +75,10 @@ STARTZEIT = time(6, 0)                              # deutsche Zeit
 WARNZEIT = time(7, 0)                               # danach gilt ein fehlender Lauf als „steht“ (stand)
 MAIL_ARTIKEL_MAX, MAIL_FREIGABEN_MAX = 100, 50     # Einzelzeilen je Mail; Ordnergruppen stehen immer da
 MAIL_PSA_MAX = 50                                   # Zeilen „Deine PSA“ je Mail; der Rest steht unter „Meine PSA“
+# Hersteller-Sets (Phase 4 · L2b, Entwurf E): Ein Set zählt an den Grenzen oben als EINE Zeile; darunter stehen höchstens
+# so viele seiner Artikel (Set-Artikel und Teile), der Rest als „… und n weitere Teile“ (Kritik T13 – ein Set kann 50
+# Teile haben, models.SET_TEILE_MAX).
+MAIL_SET_TEILE_MAX = 10
 # „Deine PSA“ kennt keinen 7-Tage-Schritt: Liegt eine Fälligkeit beim ersten Lauf schon in 7 Tagen, kommt sie als
 # 30_tage (einmal) – danach erst wieder bei „überfällig“ (Entscheidung 5).
 PSA_STUFE = {"30_tage": "30_tage", "7_tage": "30_tage", "faellig": "faellig", "lebensdauer": "lebensdauer"}
@@ -270,15 +276,25 @@ def artikel_kandidaten(stichtag, demo=False):
     """Auswahl der Artikel (frei, mit Fälligkeit in 30 Tagen oder Lebensende in 90 Tagen): je Artikel bis zu zwei
     Einträge – Fälligkeit und Lebensende. Dazu die Zahlen des Ausgelassenen: {"ordner_aus": {Ordner: Zahl}, "demo": n,
     "fehlerhaft": n}. Eine Zeile, die sich nicht lesen lässt, wird geloggt und übersprungen. demo (nur Probelauf): auch
-    DEMO-Artikel, als Eintrag mit demo=True – sie zählen dann nicht als ausgelassen."""
+    DEMO-Artikel, als Eintrag mit demo=True – sie zählen dann nicht als ausgelassen.
+    Hersteller-Sets (Phase 4 · L2b, Entwurf E): Set-Artikel und Teile tragen in daten["set"] {id, inventory_no, produkt,
+    faellig} ihres Sets – aus DIESER Abfrage (kein Nachladen je Zeile, Kritik T13). Set und Teile haben dieselbe Heimat,
+    Lage und Zuordnung (sets.set_stimmig), also dieselben Empfänger; die Mail stellt die Teile darum immer unter eine
+    Kopfzeile ihres Sets, auch wenn das Set selbst nicht im Plan steht (Kritik U6). „faellig“ ist die Set-Fälligkeit wie
+    sets.gruppen_faellig_sql (früheste nächste Prüfung aus Set-Artikel und Teilen)."""
     rows = db.query(
         "WITH RECURSIVE aus(id) AS (SELECT id FROM mat_folder WHERE reminders_off = 1 "
         "UNION SELECT f.id FROM mat_folder f JOIN aus a ON f.parent_id = a.id) "
         "SELECT i.id, i.inventory_no, i.serial_no, i.folder_id, i.next_due_on, i.retire_by, i.last_inspected_on, "
         "i.assigned_user_id, "
         "p.manufacturer, p.model, p.description AS product_description, p.article_no, "
+        "s.id AS set_id, s.inventory_no AS set_inventory_no, sp.manufacturer AS set_manufacturer, sp.model AS set_model, "
+        "sp.description AS set_product_description, "
+        "(SELECT MIN(gt.next_due_on) FROM mat_item gt WHERE gt.id = s.id OR gt.parent_item_id = s.id) AS set_faellig, "
         f"{bestand.demo_sql('i', 'p')} AS ist_demo, i.folder_id IN (SELECT id FROM aus) AS ist_aus "
         "FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
+        "LEFT JOIN mat_item s ON s.id = COALESCE(i.parent_item_id, CASE WHEN p.is_set = 1 THEN i.id END) "
+        "LEFT JOIN mat_product sp ON sp.id = s.product_id "
         "WHERE i.lock_state = 'frei' "
         "AND ((i.next_due_on IS NOT NULL AND i.next_due_on <= :bis_30) "
         "OR (i.retire_by IS NOT NULL AND i.retire_by <= :bis_90)) ORDER BY i.id",
@@ -296,7 +312,12 @@ def artikel_kandidaten(stichtag, demo=False):
         try:
             daten = {"inventory_no": r["inventory_no"], "serial_no": r["serial_no"],
                      "produkt": katalog.produktname(r, r["product_description"]),
-                     "neu": not r["last_inspected_on"], "zugeordnet": r["assigned_user_id"]}
+                     "neu": not r["last_inspected_on"], "zugeordnet": r["assigned_user_id"], "set": None}
+            if r["set_id"] is not None:
+                daten["set"] = {"id": r["set_id"], "inventory_no": r["set_inventory_no"],
+                                "produkt": katalog.produktname({"manufacturer": r["set_manufacturer"],
+                                                                "model": r["set_model"]}, r["set_product_description"]),
+                                "faellig": r["set_faellig"] if r["set_faellig"] and _tag(r["set_faellig"]) else None}
             neu = []
             if r["next_due_on"]:
                 s = stufe(r["next_due_on"], stichtag)
@@ -626,18 +647,36 @@ def _angabe_psa(e, stichtag):
             "geben.")
 
 
+def _set_von(e):
+    """Die Kennung des Hersteller-Sets, zu dem der Artikel eines Eintrags gehört (als Set-Artikel oder Teil), sonst None."""
+    s = e.daten.get("set") if e.art == "artikel" else None
+    return s["id"] if s else None
+
+
 def _zaehlgruppen(eintraege, stichtag, texte):
-    zahl = {}
+    """Die Zahlen des Betreffs je Zählgruppe (_klasse). Ein einzelner Artikel zählt je Angabe (Fälligkeit und Lebensende
+    getrennt); ein Hersteller-Set – Set-Artikel und Teile zusammen – zählt EINMAL, in der dringendsten Klasse seiner
+    Einträge (Phase 4 · L2b, Entwurf E): „1 Set überfällig“, gemischt „3 überfällig (davon 1 Set)“."""
+    zahl, sets_zahl, je_set = {}, {}, {}
     for e in eintraege:
-        k = _klasse(e, stichtag)[1]
+        k = _klasse(e, stichtag)
+        sid = _set_von(e)
+        if sid is None:
+            zahl[k[1]] = zahl.get(k[1], 0) + 1
+        elif sid not in je_set or k[0] < je_set[sid][0]:
+            je_set[sid] = k
+    for _, k in je_set.values():
         zahl[k] = zahl.get(k, 0) + 1
-    teile = []
-    for k, text in texte:
-        if zahl.get(k):
-            teile.append(text.format(zahl[k]))
+        sets_zahl[k] = sets_zahl.get(k, 0) + 1
+
+    def satz(k, eins, mehr):
+        n, s = zahl[k], sets_zahl.get(k, 0)
+        wer = (f"{n} Set" if n == 1 else f"{n} Sets") if s == n else str(n)
+        out = (eins if n == 1 else mehr).format(wer)
+        return out + (f" (davon {s} {'Set' if s == 1 else 'Sets'})" if 0 < s < n else "")
+    teile = [satz(k, text, text) for k, text in texte if zahl.get(k)]
     if zahl.get("lebensende_bald"):
-        n = zahl["lebensende_bald"]
-        teile.append("1 erreicht bald das Lebensende" if n == 1 else f"{n} erreichen bald das Lebensende")
+        teile.append(satz("lebensende_bald", "{} erreicht bald das Lebensende", "{} erreichen bald das Lebensende"))
     return teile, zahl
 
 
@@ -674,20 +713,59 @@ def _namen(liste):
     return liste[0] if len(liste) == 1 else f"{', '.join(liste[:-1])} oder {liste[-1]}"
 
 
+def _zeilen_zahl(eintraege):
+    """Wie viele Zeilen der Mail diese Artikel-Einträge sind: je Artikel eine, ein Hersteller-Set (Set-Artikel und Teile)
+    eine (Phase 4 · L2b)."""
+    return len({("set", _set_von(e)) if _set_von(e) else ("artikel", e.kennung) for e in eintraege})
+
+
 def zahlen(mail):
     """(Artikel, Freigaben als Verwalter, eigene Freigaben, PSA) einer Mail – für Probelauf und Kommandozeile. Eine
-    Freigabe im Abschnitt „Deine Freigaben“ zählt nur dort, ein Artikel unter „Deine PSA“ nur dort."""
+    Freigabe im Abschnitt „Deine Freigaben“ zählt nur dort, ein Artikel unter „Deine PSA“ nur dort. Ein Hersteller-Set
+    zählt mit allen seinen Artikeln einmal (wie im Betreff)."""
     deine = {e.kennung for e in mail.eintraege if e.inhaber}
-    psa = {e.kennung for e in mail.eintraege if e.psa}
-    return (len({e.kennung for e in mail.eintraege if e.art == "artikel" and not e.psa}),
-            len({e.kennung for e in mail.eintraege if e.art == "freigabe"} - deine), len(deine), len(psa))
+    return (_zeilen_zahl([e for e in mail.eintraege if e.art == "artikel" and not e.psa]),
+            len({e.kennung for e in mail.eintraege if e.art == "freigabe"} - deine), len(deine),
+            _zeilen_zahl([e for e in mail.eintraege if e.psa]))
+
+
+def _set_faellig(iso, stichtag):
+    """Die Set-Fälligkeit in der Kopfzeile eines Sets."""
+    tage = (_tag(iso) - stichtag).days
+    if tage < 0:
+        return f"Set überfällig (fällig war der {_datum(iso)})"
+    return f"Set fällig am {_datum(iso)} ({_in_tagen(tage)})"
+
+
+def _gruppieren(zeilen, mit_ordner=True):
+    """Artikelzeilen (Kennung → Zeile) zu Gruppen (Phase 4 · L2b, Entwurf E): ein Hersteller-Set mit seinen Zeilen
+    (Set-Artikel zuerst, dann die Teile nach Dringlichkeit) – auch wenn das Set selbst nicht in der Mail steht –, jeder
+    andere Artikel für sich. {Schlüssel: {set, zeilen [(Kennung, Zeile)], rang, ordner, rueckfall}}; der Rang einer
+    Gruppe ist der ihrer dringendsten Zeile. mit_ordner: Gruppen je Ordner (ARTIKEL) – ohne für „Deine PSA“."""
+    out = {}
+    for k, z in zeilen.items():
+        zu = z["daten"].get("set")
+        ordner = z.get("ordner") if mit_ordner else None
+        schluessel = (ordner, "set", zu["id"]) if zu else (ordner, "artikel", k)
+        gr = out.setdefault(schluessel, {"set": zu, "zeilen": [], "ordner": ordner, "rueckfall": ""})
+        gr["zeilen"].append((k, z))
+        gr["rueckfall"] = gr["rueckfall"] or z.get("rueckfall", "")
+    for gr in out.values():
+        sid = gr["set"]["id"] if gr["set"] else None
+        gr["zeilen"].sort(key=lambda x: (x[0] != sid, x[1]["rang"]))
+        gr["rang"] = min(z["rang"] for _, z in gr["zeilen"])
+    return out
 
 
 def mailtext(mail, stichtag, pfade=None):
     """Betreff und Text einer Mail: je Ordner (Heimat bzw. Anker) eine Gruppe mit Pfad, Zahl und Link – immer, auch wenn
     ihre Zeilen gekürzt sind. Über die ganze Mail höchstens MAIL_ARTIKEL_MAX Artikel- und MAIL_FREIGABEN_MAX
     Freigabezeilen, vergeben nach Dringlichkeit; der Rest einer Gruppe steht als „… und n weitere in diesem Ordner“.
-    Gemeldet (und vermerkt) ist alles, was die Mail nennt – auch die gezählten weiteren. Eigene Freigaben (Inhaber,
+    Gemeldet (und vermerkt) ist alles, was die Mail nennt – auch die gezählten weiteren.
+    Hersteller-Sets (Phase 4 · L2b, Entwurf E): Set-Artikel und Teile stehen unter ARTIKEL und „Deine PSA“ immer unter einer
+    Kopfzeile ihres Sets (Inventarnummer, Produkt, Set-Fälligkeit) mit Link aufs Set – auch wenn nur ein Teil ansteht.
+    Ein Set ist an den Grenzen und in der Zahl am Ordner EINE Zeile; darunter höchstens MAIL_SET_TEILE_MAX seiner
+    Artikel, der Rest als „… und n weitere Teile“ (vermerkt wird auch hier alles). Eigene Freigaben (Inhaber,
     Entscheidung vom 19.10.2026) stehen vorn im Abschnitt „Deine Freigaben“: je Anker Recht, Ende, offene Prüfungen und
     wer verlängern kann – ohne Obergrenze (es sind die eigenen) und ohne Link in den Ordner, dafür mit dem Link auf die
     Übersicht („Meine Freigaben“). Eine Freigabe, die dort steht, fehlt unter den Freigaben der Verwalter (zwei Konten
@@ -729,7 +807,8 @@ def mailtext(mail, stichtag, pfade=None):
     def gezeigt(zeilen, grenze):
         return {k for k, _ in sorted(zeilen.items(), key=lambda x: x[1]["rang"])[:grenze]}
 
-    zeigen_a, zeigen_f = gezeigt(zeilen_a, MAIL_ARTIKEL_MAX), gezeigt(zeilen_f, MAIL_FREIGABEN_MAX)
+    gruppen_a = _gruppieren(zeilen_a)
+    zeigen_a, zeigen_f = gezeigt(gruppen_a, MAIL_ARTIKEL_MAX), gezeigt(zeilen_f, MAIL_FREIGABEN_MAX)
 
     def gruppen(zeilen):
         out = {}
@@ -750,6 +829,37 @@ def mailtext(mail, stichtag, pfade=None):
             text += f" – {RUECKFALL_GRUND[grund]}, darum an die {RUECKFALL_TEXT[stelle]}"
         return text, rf
 
+    def artikel_zeile(z, einzug):
+        d = z["daten"]
+        angaben = " · ".join(_angabe(e, stichtag) for e in z["eintraege"])
+        if d.get("neu"):
+            angaben += " · Eingangsprüfung offen"
+        if any(e.demo for e in z["eintraege"]):
+            angaben += " · DEMO"
+        return f"{einzug}{d['inventory_no']}  {d['produkt']}, SN {d['serial_no']}   {angaben}"
+
+    def psa_zeilen(z, einzug):
+        d = z["daten"]
+        out = [f"{einzug}{d['inventory_no']}  {d['produkt']}, SN {d['serial_no']}"
+               + ("  · DEMO" if any(e.demo for e in z["eintraege"]) else "")]
+        out += [f"{einzug}  {_angabe_psa(e, stichtag)}" for e in z["eintraege"]]
+        if d.get("neu"):
+            out.append(f"{einzug}  Die Eingangsprüfung steht noch aus.")
+        return out
+
+    def set_block(gr, zeilen_von, link):
+        """Kopfzeile des Sets, darunter höchstens MAIL_SET_TEILE_MAX seiner Zeilen, der Rest gezählt, dann der Link."""
+        x = gr["set"]
+        out = [f"  Set {x['inventory_no']}  {x['produkt']}" + (f" – {_set_faellig(x['faellig'], stichtag)}"
+                                                              if x.get("faellig") else "")]
+        for _, z in gr["zeilen"][:MAIL_SET_TEILE_MAX]:
+            out += zeilen_von(z)
+        rest = len(gr["zeilen"]) - MAIL_SET_TEILE_MAX
+        if rest > 0:
+            out.append(f"    … und {rest} {'weiteres Teil' if rest == 1 else 'weitere Teile'}")
+        out.append(link)
+        return out
+
     demo = _mit_demo(mail)
     nur_deine = bool(deine) and not zeilen_a and not zeilen_f and not zeilen_p
     nur_psa = bool(zeilen_p) and not zeilen_a and not zeilen_f and not deine
@@ -768,14 +878,14 @@ def mailtext(mail, stichtag, pfade=None):
     if zeilen_p:
         # Keine Ordner, kein Ordnerlink: Die Person sieht ihre PSA unter „Meine PSA“ – auch ohne Modulstufe.
         teile += ["", "DEINE PSA", ""]
-        reihe = sorted(zeilen_p.values(), key=lambda z: z["rang"])
-        for z in reihe[:MAIL_PSA_MAX]:
-            d = z["daten"]
-            teile.append(f"  {d['inventory_no']}  {d['produkt']}, SN {d['serial_no']}"
-                         + ("  · DEMO" if any(e.demo for e in z["eintraege"]) else ""))
-            teile += [f"    {_angabe_psa(e, stichtag)}" for e in z["eintraege"]]
-            if d.get("neu"):
-                teile.append("    Die Eingangsprüfung steht noch aus.")
+        # Ein Set ist eine Zeile (Grenze MAIL_PSA_MAX); sein Link führt auf seine Karte unter „Meine PSA“.
+        reihe = sorted(_gruppieren(zeilen_p, mit_ordner=False).values(), key=lambda gr: gr["rang"])
+        for gr in reihe[:MAIL_PSA_MAX]:
+            if gr["set"]:
+                teile += set_block(gr, lambda z: psa_zeilen(z, "    "),
+                                   f"    Das Set in Meine PSA: {basis}/material/meine-psa/{gr['set']['id']}")
+            else:
+                teile += psa_zeilen(gr["zeilen"][0][1], "  ")
         if len(reihe) > MAIL_PSA_MAX:
             teile.append(f"  … und {len(reihe) - MAIL_PSA_MAX} weitere – alle unter Meine PSA")
         teile += ["", f"Deine PSA im Überblick: {basis}/material/meine-psa"]
@@ -803,20 +913,18 @@ def mailtext(mail, stichtag, pfade=None):
         teile.append(f"Deine Freigaben im Überblick („Meine Freigaben“): {basis}/material")
     if zeilen_a:
         teile += ["", "ARTIKEL"]
-        for fid, liste in gruppen(zeilen_a):
+        for fid, liste in gruppen(gruppen_a):
             text, rf = kopf(fid, liste)
             teile += ["", text]
             liste.sort(key=lambda x: x[1]["rang"])
-            for k, z in liste:
+            for k, gr in liste:
                 if k not in zeigen_a:
                     continue
-                d = z["daten"]
-                angaben = " · ".join(_angabe(e, stichtag) for e in z["eintraege"])
-                if d.get("neu"):
-                    angaben += " · Eingangsprüfung offen"
-                if any(e.demo for e in z["eintraege"]):
-                    angaben += " · DEMO"
-                teile.append(f"  {d['inventory_no']}  {d['produkt']}, SN {d['serial_no']}   {angaben}")
+                if gr["set"]:
+                    teile += set_block(gr, lambda z: [artikel_zeile(z, "    ")],
+                                       f"    Set: {basis}/material/artikel/{gr['set']['id']}")
+                else:
+                    teile.append(artikel_zeile(gr["zeilen"][0][1], "  "))
             rest = sum(1 for k, _ in liste if k not in zeigen_a)
             if rest:
                 teile.append(f"  … und {rest} weitere in diesem Ordner")
