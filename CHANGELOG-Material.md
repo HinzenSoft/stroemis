@@ -4158,7 +4158,8 @@ A1–A33, mit den Entscheidungen des Nutzers vom 23.10.2026: Hersteller-Sets, Se
 gesperrt → ganzes Set gesperrt, Austausch, Kern in L2). Gebaut in Paketen: **K1** (dieser Stand – Schema 21, Katalog,
 Bestand, Tests, Doku), **K2** (Sperr-Kaskade und Freigabe, Set prüfen mit Set-Protokoll, Teil tauschen und entnehmen,
 Aussondern-Dialog, Mails, Jahresbericht), danach **OBERFLÄCHE** (`material.js` nach der Schnittstelle unten), drei
-Prüfungen, Nachbesserung. Schemaversion 21, keine neuen Abhängigkeiten. In der Oberfläche ist noch nichts zu sehen.
+Prüfungen, Nachbesserung. Schemaversion 21, keine neuen Abhängigkeiten. Die Oberfläche für den Stand K1 steht unter
+„Oberfläche (O1)“ am Ende dieses Abschnitts.
 
 ### Neu (K1)
 
@@ -4365,6 +4366,79 @@ Dazu aus K1:
 9. Zwischen K1 und K2 lehnt der Dienst Sperren, Mangelmeldung und Aussonderung an Sets und Teilen ab (409) – nur bis K2.
 10. „Hersteller-Set“ ausschalten entfernt die Stückliste (mit Journal).
 11. Der Filter „Zugeordnet an“ und „Meine PSA“ zählen ein Set einmal.
+
+### Oberfläche (O1, 23.10.2026)
+
+`material.js`, `suche.js`, `global.js`, `material.css`, `global.css` für den Stand K1 – Dienste und Routen unverändert.
+
+- **Katalog**: Produkt-Dialog mit Häkchen „Hersteller-Set“ (ausgegraut mit `set_umschalt_grund`, wenn es nicht
+  umschaltbar ist); gesetzt erscheinen die Reiter „Produkt“ und „Bestandteile“ (Dialog dann breiter). Je Position
+  „einzeln geführt“ (dann Katalogprodukt suchen wie bei „Artikel anlegen“, ein Set-Produkt wird abgewiesen), Bezeichnung
+  (bei einzeln geführten leer = Produktname), Anzahl, „Austausch laut Hersteller“; ↑ ↓ ✕, „Bestandteil anlegen“, Zähler
+  „n von 30 Positionen · k von 50 einzeln geführten Stück“, Hilfetext zum Kriterium. „Speichern“ (die eine Hauptaktion)
+  speichert erst das Produkt samt `is_set`, dann `PUT …/bestandteile` (nur bei Änderung); „Position n: …“ vom Server
+  markiert die Position. Häkchen weg an einem Set mit Stückliste fragt vorher. Produktseite: Abschnitt „Stückliste“
+  (Knopf „Stückliste bearbeiten“ öffnet den Reiter), Stammdaten „Hersteller-Set“ und „Bestandteil von …“; Katalogliste
+  mit Marke „Set“. „Als Variante kopieren“ eines Sets: Häkchen „Stückliste übernehmen“ (vorbelegt). Importbericht mit
+  Zeile „Stücklisten“, Export-Vorschau mit `set_verstoesse`.
+- **Artikel anlegen** mit Set-Produkt: unter den Feldern des Sets „Teile des Sets“ – je einzeln geführter Position und
+  Anzahl ein Block mit den Feldern aus `set.teil_felder` (Länge nur bei `laenge_moeglich`), Kauf und Erstgebrauch des
+  Sets als Vorgabe, Bestandteile ohne eigenen Artikel als Zeile. Doppelte Seriennummern (je Produkt, ohne Groß/klein)
+  meldet die Seite am Feld (`aria-invalid`); Fehler des Servers stehen über dem Knopf und – wo sie eine Seriennummer
+  oder einen Bestandteil nennen – am Teil. `hinweise` der Antwort (STR-Nummer anbringen) zeigt ein Dialog mit „Zum Set“
+  bzw. „Nächsten anlegen“.
+- **Set-Seite**: Überschrift mit Set-Status, Marke „Set“; Banner „Set unvollständig“ (mit `fehlend`), Rückruf an einem
+  Teil (`rueckrufe_teile`, Link aufs Teil) und „Set überfällig/gesperrt/Lebensdauer erreicht – wegen eines Teils“, wenn ein
+  Teil den Set-Status schwerer macht als den des Set-Artikels. Kasten „Bestandteile“: Set-Status, nächste Prüfung und
+  Lebensende des Sets mit auslösendem Artikel; Tabelle Set-Artikel + Teile (Bestandteil, Produkt, Nummer, Status mit
+  Mangel/Rückruf/Sperrgrund, nächste Prüfung, Lebensende), je fehlendem Stück eine Zeile „fehlt“, darunter die
+  Bestandteile ohne eigenen Artikel. Verschieben und Löschen nennen die Teile. **Teil-Seite**: „Teil von Set
+  <Inventarnummer> <Produkt>“ mit Link, Set-Status und Bestandteil; Verschieben, Zuordnen/Ändern/Lösen und Aussondern
+  fehlen, dafür „Verschieben, Zuordnen und Aussondern gehen nur mit dem ganzen Set – zum Set …“. Sperren und
+  „Mangel melden …“ stehen an Set und Teil wie bisher (bis K2 antwortet der Dienst 409).
+- **Listen**: Ordner und „Fällige“ – Set-Zeile mit „Hersteller-Set · n Teile“, „unvollständig“, Mangel an Teilen, Rückruf
+  an einem Teil als Marke, „Teil M-…“ unter der Fälligkeit, wenn ein Teil sie bestimmt; über der Liste „n Einträge,
+  davon m Sets mit k Teilen“ (nur, wenn Sets darin sind). Suche (Liste und Vorschläge im Suchfeld): Teile mit „Teil von
+  Set …“. Steckbrief der globalen Suche: „Teil eines Hersteller-Sets“.
+- **Meine PSA**: Die Set-Karte trägt „Hersteller-Set mit n Teilen“ und darunter die Teile als kleine Karten (Banner nur,
+  wo es vom Set abweicht); `/material/meine-psa/<Teil>` zeigt die Karte seines Sets.
+- **Journal**: Listen aus Objekten (Teile beim Anlegen eines Sets, Positionen einer Stückliste) als lesbarer Text statt
+  „[object Object]“.
+
+Geprüft: `tests/test_material_sets_oberflaeche.py` (neu: Werte wie auf dem Server, statische Haken, Vertragstest der
+gelesenen Schlüssel gegen die Antworten), st-js, st-css, ganze Suite; Browser (Chromium, DEMO-Daten) bei 1280 und
+360 px: Katalog-Dialog (beide Reiter, Fehler an der Position, Stückliste speichern), Produktseite, Artikel anlegen
+(Set, doppelte Seriennummer, Hinweise-Dialog), Set-Seite, Teil-Seite, Ordnerliste, Fällige, Suche, Meine PSA – ohne
+Konsolenfehler, ohne waagerechtes Rollen.
+
+**Abweichungen und Entscheidungen der Oberfläche**
+1. Hilfetext „einzeln geführt“ und die Grenzen der Stückliste stehen zusätzlich in `material.js` (die Produktantwort
+   trägt den Hilfetext nicht, ein neues Produkt hat noch keine `stueckliste_grenzen`); der Test hält beide gleich.
+2. Aus einer Produktmeldung und für die Nacharbeit gibt es im Produkt-Dialog kein „Hersteller-Set“ (die Nacharbeit nimmt
+   keins) – die Stückliste pflegt man danach unter „Bearbeiten“.
+3. Scheitert die Stückliste nach dem Anlegen des Produkts, bleibt das Produkt (als Set ohne Stückliste) – wie beim
+   Produktbild: Ein zweiter Klick speichert erneut, statt doppelt anzulegen.
+4. Die Überschrift der Set-Seite zeigt den Set-Status; die Stammdaten darunter bleiben die des Set-Artikels.
+5. Teil-Karten in „Meine PSA“ haben kein eigenes „Mangel melden …“ – nach Entwurf C meldet man am Set oder an einem
+   gewählten Teil; den Dialog mit Teil-Wahl bringt O2.
+
+**Fehlt an der Schnittstelle (für K2/O2)**
+- Sichtbare Dublette eines Teils (409 „Diese Seriennummer gibt es bei diesem Produkt schon …“) nennt weder Teil noch
+  Seriennummer – die Seite kann sie nur über dem Knopf zeigen. Vorschlag: Präfix „Teil „Bezeichnung“: “ wie bei den
+  Regeln eines Teils.
+- `ordner.direkt` (Zahlen an den Statusfiltern der Ordnerliste) zählt Teile einzeln (DEMO-Lager: „neu (3)“, die Liste
+  zeigt eine Set-Zeile) – sollte je Set-Zeile mit Set-Status zählen.
+- Lebenslauf-PDF (`beschriftung.wert_text`): Listen aus Objekten (`teile`, `bestandteile` im Journal) erscheinen als
+  Python-Darstellung – K2 bzw. Lebenslauf.
+- `set.sperrgruende` (K2) zeigt die Seite noch nicht; Set prüfen, Teil tauschen/entnehmen und der Aussondern-Dialog je
+  Teil kommen mit O2.
+
+**Bitte bestätigen (O1)**
+1. Kopf „n Einträge, davon m Sets mit k Teilen“ nur, wenn die Liste Sets enthält.
+2. Am Teil statt Verschieben, Zuordnen und Aussondern ein Hinweis mit Link aufs Set.
+3. Hinweise beim Anlegen (STR-Nummer anbringen) als Dialog statt Toast.
+4. Kauf und Erstgebrauch des Sets als Vorgabe der Teile (überschreibbar), Herstellung je Teil leer.
+5. „Stückliste übernehmen“ bei einer Variante vorbelegt.
 
 ## Artikelnummern eindeutig je Hersteller (22.10.2026)
 
