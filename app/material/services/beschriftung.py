@@ -72,6 +72,8 @@ FELD = {
     # „position“: Nummer der Position in der Stückliste; „slot“ (die interne Kennung) schrieb nur der Stand vor der
     # Nachbesserung (Browser B1) – solche Einträge sagen ehrlich, was die Zahl ist.
     "position": "Position", "slot": "Kennung der Position",
+    # Produkt am Artikel ändern (Feintuning, L2b Nr. 29): der lesbare Name neben der Kennung
+    "produkt": "Produkt",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",
@@ -105,7 +107,7 @@ AKTION = {
     "set_lauf_abgebrochen": "Set-Prüfung abgebrochen", "set_geprueft": "Set geprüft",
     "set_lauf_geaendert": "Set-Prüfung aus dem Durchgang gelöst",
     "eingesetzt": "in ein Set eingesetzt", "aus_set_geloest": "aus dem Set gelöst (Set aufgelöst)",
-    "bestandteil_ersetzt": "Bestandteil ersetzt",
+    "bestandteil_ersetzt": "Bestandteil ersetzt", "produkt_geaendert": "Produkt geändert",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",
@@ -202,7 +204,7 @@ def wert_text(v, feld, verweise=None):
 def journal_zeilen(eintraege, verweise=None, mit_entitaet=False):
     """Journaleinträge (journal.lesen) als fertige Zeilen fürs PDF: {zeit, aktion, von, felder: [(Feld, vorher,
     nachher)]}. Wie journalHtml(): Bei „angelegt“ und „gelöscht“ keine Felder – nur die Ablage, wenn bekannt –, und
-    die technische Ordnerkennung fällt weg, wo der Pfad dabeisteht."""
+    die technische Ordner- bzw. Produktkennung fällt weg, wo der Pfad bzw. der Produktname dabeisteht."""
     out = []
     for j in eintraege:
         vorher, nachher = j.get("vorher") or {}, j.get("nachher") or {}
@@ -211,7 +213,8 @@ def journal_zeilen(eintraege, verweise=None, mit_entitaet=False):
             felder = ["ordner"] if alle.get("ordner") else []
         else:
             felder = [f for f in alle if not (f == "folder_id" and "ordner" in alle)
-                      and not (f == "origin_folder_id" and "herkunft" in alle) and not (f == "parent_id" and "pfad" in alle)]
+                      and not (f == "origin_folder_id" and "herkunft" in alle) and not (f == "parent_id" and "pfad" in alle)
+                      and not (f == "product_id" and "produkt" in alle)]
         aktion = AKTION.get(j["action"], j["action"])
         if mit_entitaet:
             aktion = f"{ENTITAET.get(j['entity'], j['entity'])} {aktion}"

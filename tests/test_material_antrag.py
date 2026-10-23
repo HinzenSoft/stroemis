@@ -805,7 +805,7 @@ def test_oberflaeche_statisch():
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
     css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
     admin = open(os.path.join(wurzel, "app/static/js/admin.js"), encoding="utf-8").read()
-    dlg = js[js.index("function artikelDialog(a)"):js.index("/* --- Änderungsanträge")]
+    dlg = js[js.index("function artikelDialog(a,"):js.index("/* --- Änderungsanträge")]
     assert "const nachtragen = fest && !!a.herstellung_nachtragbar;" in dlg
     assert 'datumFeld("ad-herst", null, "monat")' in dlg and "Nur Nachtragen möglich" in dlg
     assert ('<button class="btn secondary small" type="button" id="ad-antrag">Änderung beantragen …</button>' in dlg
@@ -816,7 +816,7 @@ def test_oberflaeche_statisch():
     assert antrag_dlg.count('class="btn"') == 1 and '<button class="btn" id="aa-ok" type="button">Antrag senden</button>' in antrag_dlg
     assert 'id="aa-grund"' in antrag_dlg and "Begründung (Pflicht)" in antrag_dlg and "/antrag`" in antrag_dlg
     assert "wartet auf die Material-Verwaltung" in block
-    seite = js[js.index("async function artikel()"):js.index("function artikelDialog(a)")]
+    seite = js[js.index("async function artikel()"):js.index("function artikelDialog(a,")]
     assert "antragMoeglich(a) && !darfPflegen" in seite and 'data-act="antrag">Änderung beantragen …</button>' in seite
     m = js[js.index("async function meldungen()"):js.index("function zuordnenDialog(m, danach)")]
     assert ">Änderungsanträge${zahl(nAntraege)}</button>" in m and "async function antraegeZeichnen()" in m
@@ -997,7 +997,8 @@ def test_trigger_16():
         r = t.w.put(f"/api/material/artikel/{t.k1}", headers=H, json={"notes": "Platzhalter Bemerkung"})
         assert r.status_code == 200, r.get_json()
         r = t.w.put(f"/api/material/artikel/{t.k1}", headers=H, json={"product_id": t.ids["gurt"]})
-        assert r.status_code == 409 and "nicht geprüft" in r.json["error"], r.get_json()
+        # Seit dem Feintuning (L2b Nr. 29): eigener Satz – das Produkt steht im Prüfprotokoll.
+        assert r.status_code == 409 and "steht seit der ersten Prüfung fest" in r.json["error"], r.get_json()
         neu = neuer_artikel(t.w, t.ids["hms"], t.lager, serial_no="AN-T16")["id"]
         r = t.w.put(f"/api/material/artikel/{neu}", headers=H, json={"product_id": t.sonst})
         assert r.status_code == 200 and item(t.app, neu)["product_id"] == t.sonst, r.get_json()
@@ -1497,7 +1498,7 @@ def test_oberflaeche_17():
     assert ('x.eigen ? `<div class="btn-row"><button class="btn secondary small" type="button" data-act="antrag-zurueck" '
             'data-id="${x.id}">Antrag zurückziehen …</button></div>`' in hinweis)
     assert "await confirm(" in hinweis and '"Zurückziehen"' in hinweis and "/zurueckziehen`" in hinweis
-    seite = js[js.index("async function artikel()"):js.index("function artikelDialog(a)")]
+    seite = js[js.index("async function artikel()"):js.index("function artikelDialog(a,")]
     assert '"antrag-zurueck": (b) => antragZurueckziehen(' in seite
     # Die offenen Anträge stehen als eigener Abschnitt am Anfang der rechten Spalte (Kasten .mat-spalte), vor „QR-Code und
     # NFC“, nicht mehr unter den Stammdaten; der Knopf „Änderung beantragen …“ bleibt links bei den Stammdaten (22.10.2026).
@@ -1509,7 +1510,7 @@ def test_oberflaeche_17():
     assert "(a.antraege || []).length ? " + abschnitt in rechts
     assert rechts.index("Offene Änderungsanträge") < rechts.index("<h2>QR-Code und NFC</h2>") < rechts.index("<h2>Herstellerdokumente</h2>")
     assert "order:" not in css[css.index(".mat-spalten {"):css.index(".mat-daten {")] and ".mat-spalte { min-width: 0; }" in css
-    dlg = js[js.index("function artikelDialog(a)"):js.index("/* --- Änderungsanträge")]
+    dlg = js[js.index("function artikelDialog(a,"):js.index("/* --- Änderungsanträge")]
     assert "querySelectorAll('[data-act=\"antrag-zurueck\"]')" in dlg and "dlg.close(); return zeigen(artikel);" in dlg
     m = js[js.index("async function meldungen()"):js.index("function zuordnenDialog(m, danach)")]
     karte = m[m.index("function antragKarte(x, bearbeiten)"):m.index("function antragBestaetigenDialog")]

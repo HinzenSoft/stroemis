@@ -18,6 +18,7 @@ für sich deploybar.
 | Artikellänge (Schritt 20) | Häkchen „Artikel haben eine Länge“ je Kategorie (vererbt), Feld „Länge (m)“ am Artikel (Steckbrief, Listen, Lebenslauf, Meine PSA, CSV, Bestandsimport), Prüfpunkt-Typ „Länge“ – vorbelegt, ein abweichender Wert geht beim Festschreiben in den Artikel (Journal, Protokoll „alt → neu“) | gebaut 22.10.2026, wartet auf Freigabe |
 | Phase 4 · 2 – Sets mit Komponenten | Hersteller-Sets: Stückliste im Katalog (auch in der Katalogdatei), Set-Artikel mit Teil-Artikeln, Set-Status, -Fälligkeit und -Lebensende, Listen mit der Set-Zeile, Verschieben und Zuordnen mit allen Teilen, Meine PSA; Sperr-Kaskade, Set prüfen mit Set-Protokoll, Austausch, Aussondern mit Wahl je Teil, Oberfläche | geliefert 23.10.2026 (c5e1b06), freigegeben 23.10.2026 |
 | Phase 4 · 2b – Sets, Teil 2 | Vorhandenen Artikel als Teil einsetzen (mit Auswahl, auch über die bisherige Inventarnummer), Set auflösen, „Bestandteil ersetzt“, Prüfumfang eines nie geprüften Sets; dazu (KERN Z) Zahlen, CSV-Spalten, gebündelte Mails | geliefert 23.10.2026 (Schema bleibt 21) – wartet auf Freigabe |
+| Feintuning nach dem Kommentar-Dokument | Produkt am Artikel ändern bis zur ersten Prüfung (Dialog „Bearbeiten“, Weg aus „aus dem Bestand wählen“), Jahresbericht: ausgesondertes Set als eine Zeile, weitergeführte Teile mit eigener Sperre | gebaut 23.10.2026 (Schema bleibt 21) – wartet auf Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4768,6 +4769,136 @@ Aus der Nachbesserung:
 35. Piktogramme: „📷“ und „📖“ entfernt; 🔒 an Systemordnern im Baum und die Bedienzeichen ☰, ✕, ↑ ↓, ▲ ▼ bleiben.
 36. Set-Banner „GESPERRT: <Grund>“ mit Doppelpunkt (am einzelnen Artikel bleibt „GESPERRT – <Grund>“).
 
+## Feintuning nach dem Kommentar-Dokument (23.10.2026)
+
+Der Nutzer hat das Kommentar-Dokument „Offene Annahmen und Fragen – Modul Material“ am 23.10.2026 freigegeben. Daraus
+folgen zwei Änderungen an der App (Produkt am Artikel ändern, Jahresbericht bei ausgesonderten Sets); alle übrigen
+offenen „Bitte bestätigen“ von Phase 4 · Lieferung 1, Artikellänge (Schritt 20), Lieferung 2 und Lieferung 2b gelten
+wie gebaut. Ohne Schemaänderung (Schema bleibt 21).
+
+### Antworten des Nutzers
+
+- **L2 Nr. 37** („Austausch laut Hersteller: nein“): bleibt, wie gebaut – bei „nein“ kein Tauschen und kein Entnehmen;
+  das Set sondert der Materialwart als eigenen Schritt aus.
+- **L2 Nr. 39** (Jahresbericht): „Das Set sollte als ein gesperrtes Teil aufgelistet werden, wenn es als ganzes entsorgt
+  wurde. Ansonsten sollten die Teile nach der Auflösung des Sets durch ihren eigenständigen Zustand gelistet werden.“ –
+  geändert, siehe 2.
+- **L2b Nr. 3**: Ein entnommenes, freies Teil ist wieder einsetzbar – so gebaut (jetzt mit Test).
+- **L2b Nr. 14** (`MAIL_SET_TEILE_MAX` = 10 Artikel je Set in einer Mail) und **Nr. 26** („Bestandteil ersetzt“
+  frühestens am Erfassungstag des Sets, Doppelklick-Schutz 60 s): bestätigt.
+- **L2b Nr. 29**: „Ja, bis ein Artikel eines Produkts erstellt und geprüft wurde, soll das Produkt änderbar sein
+  können.“ – geändert, siehe 1.
+- Alle übrigen offenen „Bitte bestätigen“ aus P4-L1, Artikellänge, L2 und L2b: gelten wie gebaut.
+
+### 1. Produkt am Artikel ändern (L2b Nr. 29)
+
+- **Dialog „Bearbeiten“** hat ganz oben das Feld „Produkt“ (Anzeige wie beim Anlegen: Modell, Bemerkung, Artikelnummer,
+  DEMO, Materialart) mit „anderes Produkt“ und der Produktsuche wie bei „Artikel anlegen“ (`produktTreffer`); nach der
+  Wahl „zurück zum bisherigen“. Das Feld gibt es nur, solange der Artikel **keine abgeschlossene Prüfung** hat, nicht
+  ausgesondert ist und weder Set noch Teil ist (`artikel.produkt_aenderbar`). Danach ist es weg – wie bei Seriennummer
+  und Herstellung, aber ohne Änderungsantrag. Mit **offenem Entwurf** steht das Produkt fest mit dem Satz „Das Produkt
+  lässt sich erst ändern, wenn die Prüfung festgeschrieben oder verworfen ist.“ (der Dienst antwortet sonst 409 mit
+  „In Prüfung bei … seit …“ davor).
+- **Vor dem Speichern** sagt ein Hinweiskasten, was der Wechsel nachzieht: Lebensende neu aus Herstellung und
+  Lebensdauer des neuen Produkts (textil; die Herstellung ist dann Pflicht) bzw. weg (nicht textil); die Länge fällt
+  weg, wenn die Kategorie des neuen Produkts keine vorsieht; ein kürzeres Prüfintervall rückt die nächste Prüfung vor;
+  laufende Rückrufe gelten nach dem neuen Produkt. Die Felder „Lebensende“ und „Länge“ folgen der Wahl (ausgeblendet bzw.
+  eingeblendet), „Herstellung (Monat, Pflicht)“ ebenso. Ein Set-Produkt lässt sich gar nicht erst wählen – der Satz
+  steht am Feld (`sets.ZU_SET_PRODUKT`).
+- **Dienst** (`bestand.artikel_aendern`, `produktwechsel_pruefen`, `produktwechsel_eintragen`): Rechte wie bisher
+  (`verwalten` an der Heimat – Führungskraft und Prüfer 403, fremde Gliederung 404); Sets und Teile 409 mit eigenem Satz
+  („… ist Teil des Sets … – sein Produkt legt die Stückliste fest …“, „Das Produkt eines Sets legt seine Stückliste
+  fest …“), kein Wechsel auf ein Set-Produkt (409); abgeschlossene Prüfung 409 `PRODUKT_FEST` (der Trigger
+  `mat_item_produkt_fest` fängt den Rest), offener Entwurf 409 – beides frisch unter der Schreibsperre noch einmal
+  geprüft; **DEMO-Grenze**: außerhalb der DEMO-Gliederungen kein Wechsel zwischen DEMO- und echtem Produkt (409
+  `PRODUKT_DEMO` – der Artikel würde sonst zu Demodaten bzw. echtem Bestand); Seriennummer je Produkt wie bisher (409 mit
+  Inventarnummer, fremde Dublette protokolliert); die Gliederung ändert sich nicht.
+- **Folgen**: Intervall und Herstellervorgabe aus dem neuen Produkt (ein Artikelintervall über der neuen Vorgabe → 400),
+  Fälligkeit nur vorziehen (`faelligkeit.kappen`, eigener Journaleintrag „Fälligkeit vorgezogen“), Lebensende aus der
+  Lebensdauer des neuen Produkts (ein von Hand vorgezogenes bleibt, wenn es früher liegt), Rückrufe produktbezogen (nichts
+  gespeichert – Banner, Liste, Bericht folgen von selbst), Meine PSA und Durchgang unverändert (der Artikel bleibt
+  zugeordnet und im Durchgang).
+- **Journal** „produkt_geaendert“ – ein Eintrag mit allen geänderten Feldern, dazu `produkt` als lesbarer Name mit
+  Artikelnummer („Testwerk HMS Beta (HB-7)“) vorher/nachher sowie `rueckruf_nicht_mehr`/`rueckruf_neu` (laufende
+  Rückrufe, die den Artikel jetzt nicht mehr bzw. neu treffen); Beschriftung „Produkt geändert“, Feld „Produkt“ in
+  `beschriftung.py` und `material.js`; die technische `product_id` fällt neben dem Namen weg (wie `folder_id` neben dem
+  Ordner). Lebenslauf (Seite und PDF) zeigen ihn.
+- **„aus dem Bestand wählen“**: Die Meldung „anderes Produkt“ nennt bei einem ungeprüften Artikel den Weg („Ist das
+  Produkt am Artikel falsch: Artikel öffnen → Bearbeiten → Produkt.“, `setaustausch.PRODUKT_WEG`) – im Hinweis der
+  Auswahl und im 409 beim Einsetzen; der Link heißt dann „Produkt von M-… ändern“ und öffnet die Artikelseite mit
+  `?bearbeiten=produkt` (der Dialog geht mit der Produktsuche auf, der Parameter fällt danach weg). Bei geprüften
+  Artikeln bleibt „M-… öffnen“.
+
+### 2. Jahresbericht bei ausgesonderten Sets (L2 Nr. 39)
+
+- **Aussonderungen**: Ein Set, das als Ganzes ausgesondert wurde, ist **eine Zeile** – die Aussonderung des Set-Artikels
+  mit dem Zusatz „Set, mit k Teilen“ (`set_text`, Web und PDF); die Aussonderungsprotokolle der mit ausgesonderten Teile
+  (sie hängen weiter am Set) zählen nicht eigens – weder in „Aussonderungen gesamt“, den Grundarten, „Bewegungen →
+  Aussonderungen“ noch in „Aussonderungen durch“.
+- **Sperren**: Teile, die beim Aussondern entnommen und gesperrt weitergeführt werden, zählen mit ihrer **eigenen
+  Sperre** in der neuen Sperrart „aus ausgesondertem Set entnommen“ (`set_entnommen`) – aus einem freien Set wie aus
+  einem gesperrten, in dem sie nur mitgesperrt waren (`lock_cause` „set“). War ein Teil schon aus eigenem Grund gesperrt
+  oder verloren, zählte diese Sperre schon und zählt nicht noch einmal. Die Sperrart „set“ heißt jetzt „Set
+  unvollständig, Teil getauscht oder eingesetzt oder Bestandteil ersetzt“. Die Zuordnung wird beim Abruf aus dem Journal
+  gebildet – ältere Einträge zählen ebenso neu.
+- Unverändert: die CSV-Prüfungsliste führt jedes Aussonderungsprotokoll (Set und Teile, je mit eigener Protokoll-ID);
+  der Bestand zum Stichtag zählt ausgesonderte Artikel je Artikel.
+
+### Schnittstelle
+
+| Route | Änderung |
+| --- | --- |
+| `GET /api/material/artikel/<id>` | neu `produkt_aenderbar` (ohne abgeschlossene Prüfung, nicht ausgesondert, weder Set noch Teil) |
+| `PUT /api/material/artikel/<id>` mit `product_id` | bis zur ersten abgeschlossenen Prüfung; 409 bei offenem Entwurf, Set/Teil, Set-Produkt, DEMO-Grenze; Journal „produkt_geaendert“ |
+| `GET …/kandidaten` (`hinweis.artikel`) | neu `produkt_aenderbar`; `hinweis.text` mit Weg, solange ungeprüft |
+| `GET /api/material/ordner/<fid>/bericht` | `sperren.arten` mit `set_entnommen`; `aussonderungen.liste[].set_text`; mit dem Set ausgesonderte Teile ohne eigene Zeile |
+| Seite `/material/artikel/<id>?bearbeiten=produkt` | öffnet „Bearbeiten“ mit der Produktsuche (nur mit Recht und `produkt_aenderbar`) |
+
+### Entscheidungen des Baus (mit Begründung)
+
+1. **Länge beim Wechsel auf eine Kategorie ohne Länge: leeren mit Hinweis, nicht 409** – nach dem Muster der
+   vorhandenen Regel (`bestand.artikel_werte`, seit der Prüfung zu Schritt 20, V4: „Wechselt ein Artikel auf ein Produkt
+   ohne vorgesehene Länge, fällt sie weg“) und wie das Lebensende beim Wechsel auf nicht textil. Ein 409 hielte gerade
+   die Korrektur eines falsch importierten Artikels auf, wegen eines Werts, den das richtige Produkt gar nicht kennt; der
+   Dialog sagt es vor dem Speichern, das Journal behält den alten Wert.
+2. **Ein Journaleintrag** „produkt_geaendert“ für das ganze Speichern (auch Bemerkung o. ä. im selben Schritt) statt
+   zweier Einträge – Änderung und Folgen bleiben zusammen lesbar.
+3. **DEMO-Grenze** als eigene Regel (die Gliederung ändert sich ja nicht): Ob ein Artikel DEMO ist, hängt auch am
+   Produkt (`demo_sql`).
+4. Fälligkeit nur vorziehen (wie bei jeder Intervalländerung) – ein längeres Intervall des neuen Produkts schiebt die
+   nächste Prüfung nicht nach hinten.
+
+### Tests
+
+- Neu `tests/test_material_produktwechsel.py`: Regeln (Rechte, Set/Teil, Set-Produkt, Entwurf, festgeschrieben,
+  DEMO-Grenze, Seriennummer je Produkt), Folgen (Lebensende, Länge, Fälligkeit, Rückrufe, Durchgang, Meine PSA,
+  Lebenslauf-PDF, Beschriftung), Hinweis „anderes Produkt“ mit Weg (dazu L2b Nr. 3: entnommenes freies Teil wieder
+  einsetzen), Oberfläche statisch.
+- `test_material_sets_nachbesserung.py` (`test_nicht_austauschbar_und_bericht`): Sperrart `set_entnommen` aus freiem
+  und gesperrtem Set, eine Zeile je ausgesondertem Set mit `set_text`, „Aussonderungen durch“, CSV mit jedem Protokoll,
+  PDF mit Sperrart und Zusatz.
+- Angepasst: `test_material_bericht.py` (Sperrarten), `test_material_antrag.py` (Text der 409, Signatur
+  `artikelDialog(a, …)`), `test_material_stammdaten.py` (Produktfeld vor der Stammzeile).
+
+### Im Browser geprüft
+
+Chromium über `cdp.py`, 1280 × 900 und 360 × 780 (Touch), eigener Datenordner mit `scripts/material_demo.py --demo
+--konten`: Dialog „Bearbeiten“ eines ungeprüften Artikels (Produktfeld, Suche, Wahl, Folgen-Hinweis, Lebensende
+ausgeblendet, Set-Produkt mit Satz am Feld, Speichern → Journal „Produkt geändert“), Artikel mit offenem Entwurf (Satz,
+kein „anderes Produkt“), geprüfter Artikel (kein Feld), Link `?bearbeiten=produkt`, Jahresbericht (Sperrart „aus
+ausgesondertem Set entnommen“, eine Zeile „Set, mit 1 Teil“). Keine Konsolenfehler, kein waagrechtes Scrollen;
+Jahresbericht- und Lebenslauf-PDF mit veraPDF: PDF/A-3b bestanden.
+
+### Bitte bestätigen
+
+1. Länge beim Wechsel auf eine Kategorie ohne Länge **leeren** (Hinweis vorher, Journal behält den Wert) statt 409.
+2. Kein Wechsel zwischen DEMO- und echtem Produkt außerhalb der DEMO-Gliederungen (409).
+3. Ein **ausgesondertes Set** steht nur bei den **Aussonderungen** als eine Zeile; bei den **Sperren** erscheint es nur,
+   wenn es vorher gesperrt wurde (wie bisher einmal). Die CSV-Prüfungsliste und die Bestandszahl „ausgesondert“ zählen
+   weiter je Artikel bzw. Protokoll.
+4. Ein Teil, das in einem gesperrten Set nur mitgesperrt war und beim Aussondern weitergeführt wird, zählt jetzt als
+   eigene Sperre (vorher gar nicht).
+
 ## Phase 4 · Lieferung 2 – Sets mit Komponenten (23.10.2026, Stand: geliefert und freigegeben)
 
 Grundlage: `planung/material-phase4/entwurf_l2.md` (Fassung 2 nach den Kritiken „Sicherheit“ S1–S31 und „Ablauf“
@@ -6438,6 +6569,7 @@ oder Plattform-Verwaltung).
 | `GET /api/material/artikel/<id>`, `PUT /api/material/artikel/<id>` | wie bisher | `stammdaten_fest` (true, sobald eine abgeschlossene Prüfung existiert; ein Entwurf zählt nicht); PUT danach 409, wenn sich `serial_no` oder `manufactured_on` ändern – auch eine STR-Nummer; weggelassen, leere Seriennummer, dieselben Werte (Seriennummer ohne Rücksicht auf Groß/klein) gehen durch (Nachbesserung vom 21.10.2026) |
 | `GET /api/admin/users/<id>/material-folgen`, `GET /api/material/erinnerungen/probelauf` | wie bisher | neu: `maengel` (Zahl der Meldungen, die den Namen behalten); `mails[].psa` (Phase 3 · 1) |
 | `PUT /api/material/artikel/<id>` | wie bisher | seit den Entscheidungen vom 21.10.2026: bei Metall ein fehlendes `manufactured_on` nachtragen auch nach der ersten Prüfung (200); `artikel.herstellung_nachtragbar`; Text der 409 nennt den Antrag |
+| `PUT /api/material/artikel/<id>` (`product_id`) | wie bisher | seit dem Feintuning (23.10.2026): Produkt ändern bis zur ersten abgeschlossenen Prüfung; 409 bei offenem Entwurf, Set/Teil, Set-Produkt und über die DEMO-Grenze; `artikel.produkt_aenderbar`; Journal „produkt_geaendert“ – siehe Abschnitt „Feintuning nach dem Kommentar-Dokument“ |
 | `POST /api/material/artikel/<id>/antrag` (`serial_no`, `manufactured_on`, `begruendung` Pflicht; `herstellung_entfernen` → 400 seit 21.10.2026) | Materialwart oder Prüfer am Artikel (fremd 404, nur lesen 403) | Änderung beantragen → 201 `antraege` (je Feld einer: `id`, `feld`, `feld_text`, `alt`, `neu`, `status`, `begruendung`, `antragsteller`, `eigen`, `passt`, …), `artikel`, `mail`; 400 Eingaben, 409 ungeprüft, ausgesondert, schon beantragt, Dublette, Metall-Nachtragen (21.10.2026) |
 | `GET /api/material/antraege?status=offen\|erledigt\|alle` | Modulzugang | Material-Verwaltung alle (Vorgabe offen), sonst die eigenen zu lesbaren Artikeln (Vorgabe alle); je Antrag `artikel` (`id`, `inventory_no`, `produkt`, `gliederung`, `pfad`, `lock_state`, `demo`) und `rueckruf` (`{nicht_mehr, neu}` – laufende Rückrufe, aus denen der Artikel mit der neuen Seriennummer fiele bzw. in die er käme; nur offen, sonst `null`); `alle`, `bearbeiten`, `offen`, `meldungen_offen` (21.10.2026) |
 | `POST /api/material/antraege/<id>/bestaetigen` (`antwort` freiwillig), `…/ablehnen` (`antwort` Pflicht) | Material-Verwaltung (Plattform-Verwaltung eingeschlossen) | entscheiden → `antrag`; 409 schon entschieden, Stand geändert, ausgesondert (nur ablehnen), Dublette, alter Antrag aufs Entfernen des Herstelldatums (nur ablehnen; `antrag.entfernen`) (21.10.2026) |

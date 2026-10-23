@@ -282,6 +282,8 @@
     vorhanden: "vorhandener Artikel", bemerkung: "Bemerkung",
     // „position“: Nummer der Position in der Stückliste; „slot“ schrieb nur der Stand vor der Nachbesserung (B1).
     position: "Position", slot: "Kennung der Position",
+    // Produkt am Artikel ändern (Feintuning, L2b Nr. 29): der lesbare Name neben der Kennung
+    produkt: "Produkt",
   };
   // Die Beschriftung eines Feldes in einem Journaleintrag – wie beschriftung.feld_name: „description“ ist am Produkt der
   // kurze Zusatz hinter dem Namen und heißt dort seit dem Wunsch vom 18.10.2026 „Bemerkung“; an Ordnern und in den
@@ -316,7 +318,7 @@
                    set_lauf_abgebrochen: "Set-Prüfung abgebrochen", set_geprueft: "Set geprüft",
                    set_lauf_geaendert: "Set-Prüfung aus dem Durchgang gelöst",
                    eingesetzt: "in ein Set eingesetzt", aus_set_geloest: "aus dem Set gelöst (Set aufgelöst)",
-                   bestandteil_ersetzt: "Bestandteil ersetzt" };
+                   bestandteil_ersetzt: "Bestandteil ersetzt", produkt_geaendert: "Produkt geändert" };
   const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };
@@ -821,7 +823,7 @@
       const alle = Object.assign({}, j.vorher || {}, j.nachher || {});
       const felder = j.action === "angelegt" || j.action === "geloescht"
         ? [] : Object.keys(alle).filter((f) => !(f === "folder_id" && "ordner" in alle) && !(f === "origin_folder_id" && "herkunft" in alle)
-                                       && !(f === "parent_id" && "pfad" in alle));
+                                       && !(f === "parent_id" && "pfad" in alle) && !(f === "product_id" && "produkt" in alle));
       const seite = (x, f) => wert((x || {})[f], f, Boolean(x) && f in x);
       const zeilen = felder.map((f) => `<tr><th>${esc(feldName(f, j))}</th><td>${seite(j.vorher, f)}</td><td>${seite(j.nachher, f)}</td></tr>`).join("");
       return `<li><div class="mat-j-kopf"><span class="mat-j-zeit">${esc(fmtZeit(j.created_at))}</span>
@@ -2370,7 +2372,7 @@
       const aussonderungen = `<section class="section" id="be-aussonderungen"><h2>Aussonderungen im Jahr ${esc(String(k.jahr))}</h2>
         ${zahlen([[au.gesamt, "<strong>Aussonderungen gesamt</strong>"], ...au.arten.map((a) => [a.n, esc(a.text)])])}
         ${au.liste.length ? `${liste([["Datum"], ["Inventarnummer"], ["Produkt"], ["Grund"]],
-          au.liste.map((x) => `<tr>${td("Datum", esc(x.datum))}${td("Inventarnummer", `${mono(x.inventarnummer)}${demoMarke(x.demo)}`)}${td("Produkt", esc(x.produkt))}${td("Grund", `${esc(x.grund)}${x.durch ? ` · durch ${esc(x.durch)}` : ""}${x.protokoll_id ? ` · ${mono(x.protokoll_id)}` : ""}`)}</tr>`))}${kappung(au.liste.length, "Aussonderungen")}` : ""}</section>`;
+          au.liste.map((x) => `<tr>${td("Datum", esc(x.datum))}${td("Inventarnummer", `${mono(x.inventarnummer)}${demoMarke(x.demo)}`)}${td("Produkt", `${esc(x.produkt)}${x.set_text ? ` <span class="muted">· ${esc(x.set_text)}</span>` : ""}`)}${td("Grund", `${esc(x.grund)}${x.durch ? ` · durch ${esc(x.durch)}` : ""}${x.protokoll_id ? ` · ${mono(x.protokoll_id)}` : ""}`)}</tr>`))}${kappung(au.liste.length, "Aussonderungen")}` : ""}</section>`;
       const maengel = `<section class="section" id="be-maengel"><h2>Mangelmeldungen</h2>
         ${zahlen([[ma.gemeldet, `<strong>gemeldet im Jahr ${esc(String(k.jahr))}</strong>`], [ma.offen, "davon heute offen"], [ma.freipruefung, "erledigt durch Freiprüfung"], [ma.aussonderung, "erledigt durch Aussonderung"], [ma.offen_stichtag, "offene Meldungen zum Stichtag (alle Jahre)"]])}
         ${ma.offen_liste.length ? `${liste([["Inventarnummer"], ["gemeldet am"]],
@@ -2652,6 +2654,14 @@
         catch (e) { toast(e.message, true); }
       },
     };
+    // Aus der Meldung „anderes Produkt“ bei „aus dem Bestand wählen“ (Feintuning, L2b Nr. 29): gleich „Bearbeiten“ mit
+    // der Produktsuche. Der Parameter fällt danach weg – ein Neuladen öffnet den Dialog nicht noch einmal.
+    const adresse = new URLSearchParams(location.search);
+    if (adresse.get("bearbeiten") === "produkt") {
+      adresse.delete("bearbeiten");
+      history.replaceState(null, "", `${location.pathname}${adresse.toString() ? `?${adresse}` : ""}${location.hash}`);
+      if (darfPflegen && a.produkt_aenderbar) artikelDialog(a, true);
+    }
     if (DATEN.suche) {
       const g = await baustein("MatGlobal");
       const el = $("#mat-global-angebot");
@@ -3213,7 +3223,28 @@
     });
   }
 
-  function artikelDialog(a) {
+  /* Produkt am Artikel ändern (Feintuning nach dem Kommentar-Dokument, L2b Nr. 29): „Bearbeiten“ hat ein Produktfeld,
+     solange der Artikel keine abgeschlossene Prüfung hat und weder Set noch Teil ist (produkt_aenderbar). Mit offenem
+     Entwurf steht es fest mit Satz (der Server antwortet sonst 409). Ein anderes Produkt wählt man wie beim Anlegen
+     (produktTreffer); was der Wechsel nachzieht, sagt ein Hinweis vor dem Speichern. Die Länge fällt weg, wenn die
+     Kategorie des neuen Produkts keine vorsieht – wie im Dienst (bestand.artikel_werte), das Journal nennt den alten
+     Wert. Lebensende und Länge gehen dann nicht mit; der Server rechnet sie aus dem neuen Produkt. */
+  const PRODUKT_ENTWURF = "Das Produkt lässt sich erst ändern, wenn die Prüfung festgeschrieben oder verworfen ist.";
+  const PRODUKT_SET = "Zu einem Hersteller-Set wechselt das Produkt nicht – ein Set legst du mit seinen Teilen neu an („Artikel anlegen“).";
+  const produktGewaehltHtml = (p) => `<strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrKurz(p.article_no)} ${demoMarke(p.demo)}
+    <span class="mat-art">${esc(MATERIALART[p.material_kind] || "")}</span>`;
+  // Was ein Wechsel von a.produkt auf p nachzieht – als Sätze für den Hinweis im Dialog.
+  function produktFolgen(a, p) {
+    const alt = a.produkt;
+    const out = [];
+    if (p.material_kind === "textil") out.push(`Das Lebensende rechnet neu aus Herstellung und Lebensdauer des neuen Produkts${p.lifetime_years ? ` (${p.lifetime_years} Jahre)` : ""}; die Herstellung ist Pflicht.`);
+    else if (alt.material_kind === "textil") out.push("Das Lebensende fällt weg – es gibt es nur bei textilem Material.");
+    if (a.length_m && !p.laenge_moeglich) out.push(`Die Länge (${laengeText(a.length_m)}) fällt weg – die Kategorie des neuen Produkts sieht keine vor.`);
+    out.push("Wird das Prüfintervall kürzer, rückt die nächste Prüfung vor. Laufende Rückrufe gelten nach dem neuen Produkt.");
+    return out;
+  }
+
+  function artikelDialog(a, produktSuche) {
     const textil = a.produkt.material_kind === "textil";
     // Seriennummer und Herstellung ganz oben nebeneinander: Seit der ersten abgeschlossenen Prüfung stehen beide fest
     // (stammdaten_fest) – schreibgeschützt mit sichtbarem Wert, und sie gehen nicht mehr mit (der Server behält sie).
@@ -3232,7 +3263,16 @@
         ? `<label for="ad-herst">Herstellung (Monat)</label><input type="text" id="ad-herst" class="mat-datum" readonly value="${esc(datumAnzeige(a.manufactured_on, "monat"))}" placeholder="–">`
         : `<label for="ad-herst">Herstellung (Monat${textil ? ", Pflicht" : ""})</label>${datumFeld("ad-herst", a.manufactured_on, "monat")}`;
     const offen = a.antraege || [];
+    const mitProdukt = !!a.produkt_aenderbar;
+    const produktFeldHtml = mitProdukt ? `<div class="mat-ad-produkt"><label for="ad-q">Produkt</label>
+        <div id="ad-produkt" class="mat-gewaehlt">${produktGewaehltHtml(a.produkt)}${a.entwurf ? "" : ' <button class="lnk" type="button" id="ad-anders">anderes Produkt</button>'}</div>
+        ${a.entwurf ? "" : `<div class="mat-produktwahl" id="ad-wahl" hidden><input type="search" id="ad-q" placeholder="Hersteller, Modell, Bemerkung, Artikelnummer …" autocomplete="off" ${TASTATUR_SUCHE}>
+          <div id="ad-treffer" class="mat-treffer"></div></div>`}
+        <div class="help" id="ad-produkt-hilfe">${a.entwurf ? esc(PRODUKT_ENTWURF) : "Bis zur ersten Prüfung änderbar – danach steht das Produkt fest."}</div>
+        <p class="error" id="ad-produkt-fehler" hidden></p>
+        <div class="notice small" id="ad-folgen" hidden></div></div>` : "";
     dialog(`<h2>Artikel ${esc(a.inventory_no)} bearbeiten</h2>
+      ${produktFeldHtml}
       <div class="field-row mat-stammzeile${fest ? " mat-fest" : ""}"><div>${sn}</div><div>${herst}</div></div>
       <div class="help">${fest ? `Seit der ersten Prüfung fest – Teil des Prüfnachweises.${nachtragen ? " Herstellung: Nur Nachtragen möglich – danach steht sie ebenfalls fest." : ""}`
         : "Seriennummer: Leer lassen behält die Nummer. Eine echte Herstellernummer ersetzt die vom System vergebene."}</div>
@@ -3243,12 +3283,61 @@
       <div class="field-row"><div><label for="ad-int">Prüfintervall am Artikel (Monate)</label><input type="number" id="ad-int" min="1" max="120" value="${a.interval_months || ""}" placeholder="vom Produkt/Ordner"></div>
         <div ${a.status === "neu" ? "hidden" : ""}><label for="ad-due">Nächste Prüfung</label>${datumFeld("ad-due", a.next_due_on, "tag")}
           <div class="help">Nur vorziehen – später setzt sie eine Prüfung.</div></div></div>
-      ${textil ? `<div class="field-row"><div><label for="ad-ende">Lebensende</label>${datumFeld("ad-ende", a.retire_by, "tag")}<div class="help">Nur vorziehen. Leer lassen behält das Lebensende.</div></div><div></div></div>` : ""}
-      ${mitLaenge ? `<div class="field-row"><div><label for="ad-laenge">Länge (m)</label><input type="text" id="ad-laenge" class="mat-laenge-feld" inputmode="decimal" autocomplete="off" maxlength="10" placeholder="z. B. 57,5" value="${esc(laengeText(a.length_m, false))}">
+      ${textil ? `<div class="field-row" id="ad-ende-zeile"><div><label for="ad-ende">Lebensende</label>${datumFeld("ad-ende", a.retire_by, "tag")}<div class="help">Nur vorziehen. Leer lassen behält das Lebensende.</div></div><div></div></div>` : ""}
+      ${mitLaenge || mitProdukt ? `<div class="field-row" id="ad-laenge-zeile"${mitLaenge ? "" : " hidden"}><div><label for="ad-laenge">Länge (m)</label><input type="text" id="ad-laenge" class="mat-laenge-feld" inputmode="decimal" autocomplete="off" maxlength="10" placeholder="z. B. 57,5" value="${esc(laengeText(a.length_m, false))}">
         <div class="help">Tatsächliche Länge in Metern, eine Nachkommastelle. Ein Prüfpunkt „Länge“ fragt sie bei jeder Prüfung ab.</div></div><div></div></div>` : ""}
       <label for="ad-notes">Bemerkung</label><textarea id="ad-notes" rows="3" maxlength="4000">${esc(a.notes || "")}</textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="ad-ok" type="button">Speichern</button></div>`,
     (dlg, body) => {
+      // Ein anderes Produkt (null: es bleibt). Der Dialog zeigt es mit seinen Folgen; Lebensende und Länge folgen ihm.
+      let neuesProdukt = null;
+      const anders = $("#ad-anders", body);
+      const produktFehler = (text) => {
+        const el = $("#ad-produkt-fehler", body);
+        el.textContent = text || "";
+        el.hidden = !text;
+      };
+      function produktSetzen(p) {
+        produktFehler("");
+        if (p && p.is_set) { produktFehler(PRODUKT_SET); return; }
+        neuesProdukt = p && p.id !== a.produkt.id ? p : null;
+        const zeige = neuesProdukt || a.produkt;
+        $("#ad-produkt", body).innerHTML = `${produktGewaehltHtml(zeige)} <button class="lnk" type="button" id="ad-anders">anderes Produkt</button>${neuesProdukt ? ' <button class="lnk" type="button" id="ad-zurueck">zurück zum bisherigen</button>' : ""}`;
+        $("#ad-wahl", body).hidden = true;
+        trefferLeeren($("#ad-treffer", body));
+        $("#ad-q", body).value = "";
+        $("#ad-anders", body).onclick = suchen;
+        const zurueck = $("#ad-zurueck", body);
+        if (zurueck) zurueck.onclick = () => { produktSetzen(null); fokus($("#ad-anders", body)); };
+        const folgen = $("#ad-folgen", body);
+        folgen.innerHTML = neuesProdukt ? `<p>Neues Produkt: ${esc(produktName(neuesProdukt))}. Beim Speichern:</p><ul>${produktFolgen(a, neuesProdukt).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "";
+        folgen.hidden = !neuesProdukt;
+        // Lebensende und Länge nach dem neuen Produkt: Das Lebensende rechnet der Server, die Länge nur, wo die Kategorie sie vorsieht.
+        const ende = $("#ad-ende-zeile", body);
+        if (ende) ende.hidden = Boolean(neuesProdukt);
+        const laenge = (neuesProdukt || a.produkt).laenge_moeglich || (!neuesProdukt && a.length_m);
+        $("#ad-laenge-zeile", body).hidden = !laenge;
+        const herstLabel = $('label[for="ad-herst"]', body);
+        if (herstLabel && !fest) herstLabel.textContent = `Herstellung (Monat${(neuesProdukt || a.produkt).material_kind === "textil" ? ", Pflicht" : ""})`;
+      }
+      function suchen() {
+        $("#ad-wahl", body).hidden = false;
+        produktFehler("");
+        fokus($("#ad-q", body));
+      }
+      if (anders) {
+        anders.onclick = suchen;
+        let los = null;
+        $("#ad-q", body).addEventListener("input", () => {
+          clearTimeout(los);
+          los = setTimeout(() => {
+            const q = $("#ad-q", body).value.trim();
+            if (!q) { trefferLeeren($("#ad-treffer", body)); return; }
+            produktTreffer($("#ad-treffer", body), q, (p) => { produktSetzen(p); fokus($("#ad-anders", body)); }, '<p class="help">Kein Produkt gefunden.</p>');
+          }, 200);
+        });
+        if (produktSuche) suchen();
+      }
       const zumAntrag = $("#ad-antrag", body);
       if (zumAntrag) zumAntrag.onclick = () => antragDialog(a);
       // Den eigenen offenen Antrag zurückziehen: Rückfrage darüber, danach schließt der Dialog und die Seite zeichnet neu.
@@ -3273,12 +3362,18 @@
             const nach = datumWert($("#ad-herst", body), "Herstellung");
             if (nach) daten.manufactured_on = nach;
           }
-          if (textil) daten.retire_by = datumWert($("#ad-ende", body), "Lebensende") || null;
-          if (mitLaenge) daten.length_m = $("#ad-laenge", body).value.trim() || null;
+          if (textil && !neuesProdukt) daten.retire_by = datumWert($("#ad-ende", body), "Lebensende") || null;
+          const laengeZeile = $("#ad-laenge-zeile", body);
+          if (laengeZeile && !laengeZeile.hidden) daten.length_m = $("#ad-laenge", body).value.trim() || null;
+          if (neuesProdukt) daten.product_id = neuesProdukt.id;
         } catch (e) { toast(e.message, true); return; }
         knopf.disabled = true;
-        try { await api(`${API}/artikel/${a.id}`, { method: "PUT", body: daten }); dlg.close(); toast("Gespeichert"); zeigen(artikel); }
-        catch (e) { toast(e.message, true); knopf.disabled = false; }
+        try {
+          await api(`${API}/artikel/${a.id}`, { method: "PUT", body: daten });
+          dlg.close();
+          toast(neuesProdukt ? `Gespeichert – Produkt jetzt ${produktName(neuesProdukt)}` : "Gespeichert");
+          zeigen(artikel);
+        } catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
     });
   }
@@ -3429,11 +3524,15 @@
     let liste = [];
     let los = null;
     let lauf = 0;
-    // artikel: bei „anderes Produkt“ der gefundene Artikel ({id, inventory_no}) – zum Nachsehen in einem neuen Reiter, das
-    // Formular bleibt stehen (V12).
+    // artikel: bei „anderes Produkt“ der gefundene Artikel ({id, inventory_no, produkt_aenderbar}) – zum Nachsehen in einem
+    // neuen Reiter, das Formular bleibt stehen (V12); ist er ungeprüft, führt der Link gleich zu „Bearbeiten → Produkt“.
     const fehlerZeigen = (text, artikel) => {
       fehler.textContent = text || "";
-      if (text && artikel) fehler.insertAdjacentHTML("beforeend", ` <a href="/material/artikel/${artikel.id}" target="_blank" rel="noopener">${esc(artikel.inventory_no)} öffnen</a>`);
+      if (text && artikel) {
+        fehler.insertAdjacentHTML("beforeend", artikel.produkt_aenderbar
+          ? ` <a href="/material/artikel/${artikel.id}?bearbeiten=produkt" target="_blank" rel="noopener">Produkt von ${esc(artikel.inventory_no)} ändern</a>`
+          : ` <a href="/material/artikel/${artikel.id}" target="_blank" rel="noopener">${esc(artikel.inventory_no)} öffnen</a>`);
+      }
       fehler.hidden = !text;
       if (text) feld.setAttribute("aria-invalid", "true"); else feld.removeAttribute("aria-invalid");
       f.classList.toggle("ungueltig", Boolean(text));

@@ -251,7 +251,7 @@ h2 { break-after: avoid; }
     <thead><tr><th>Datum</th><th>Inventarnummer</th><th>Produkt</th><th>Grund{% if kopf.pruefer_nennen %} · durch{% endif %}</th><th></th></tr></thead>
     <tbody>
     {%- for a in aussonderungen.liste %}
-      <tr><td class="datum">{{ a.datum }}</td><td class="mono">{{ a.inventarnummer }}</td><td>{{ a.produkt }}</td>
+      <tr><td class="datum">{{ a.datum }}</td><td class="mono">{{ a.inventarnummer }}</td><td>{{ a.produkt }}{% if a.set_text %} · {{ a.set_text }}{% endif %}</td>
         <td class="text">{{ a.grund }}{% if a.durch %} · durch {{ a.durch }}{% endif %}{% if a.protokoll_id %} · <span class="mono">{{ a.protokoll_id }}</span>{% endif %}</td><td>{{ demo_marke(a) }}</td></tr>
     {%- endfor %}
     </tbody>

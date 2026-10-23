@@ -78,9 +78,10 @@ SCHON_ENTNOMMEN = "Das Teil wurde inzwischen anderswo entnommen – bitte neu la
 NUR_NEU_TAUSCHEN = ("Tauschen geht nur mit einem neuen Teil – einen vorhandenen Artikel setzt du ein, nachdem das alte "
                     "Teil entnommen ist („Teil entnehmen“, dann „Teil einsetzen“).")
 NICHT_BEIDES = "Entweder einen vorhandenen Artikel („item_id“) oder die Angaben eines neuen Teils – nicht beides."
-# Ohne „Produkt am Artikel korrigieren“ (Browser V12): „Bearbeiten“ hat kein Produktfeld – der Satz zeigte auf einen Weg,
-# den es in der Oberfläche nicht gibt. Die Auswahl verlinkt den Artikel.
+# Die Auswahl verlinkt den Artikel (Browser V12). Seit dem Feintuning (L2b Nr. 29, 23.10.2026) hat „Bearbeiten“ ein
+# Produktfeld, solange der Artikel ungeprüft ist – dann nennt der Satz den Weg dorthin (PRODUKT_WEG, bestand.produkt_aenderbar).
 ANDERES_PRODUKT = "{inv} ist {ist}; an dieser Position steht {soll}. Einsetzen lässt sich nur ein Artikel dieses Produkts."
+PRODUKT_WEG = " Ist das Produkt am Artikel falsch: Artikel öffnen → Bearbeiten → Produkt."
 ANDERE_GLIEDERUNG = ("{inv} liegt in einer anderen Gliederung als das Set – erst in die Gliederung des Sets verschieben "
                      "(„Verschieben“), dann einsetzen.")
 INZWISCHEN_GEAENDERT = "{inv} wurde inzwischen geändert (Ordner, Sperre oder Zuordnung) – bitte neu laden."
@@ -456,7 +457,8 @@ def vorhandenen_einsetzen(s, pid, bez, item_id, ziel, sperren=True):
     # 2. Produkt der Position.
     if a["product_id"] != pid:
         raise Abgelehnt(ANDERES_PRODUKT.format(inv=inv, ist=katalog.produktname(katalog.produkt(a["product_id"])),
-                                               soll=katalog.produktname(katalog.produkt(pid))), 409)
+                                               soll=katalog.produktname(katalog.produkt(pid)))
+                        + (PRODUKT_WEG if bestand.produkt_aenderbar(a) else ""), 409)
     # 3. Dieselbe Gliederung (aus einer anderen erst verschieben – dort gelten dessen Regeln, T8) und die DEMO-Grenze.
     heim = bestand.heimat(a)
     gq, gz = bestand.gliederung_von(heim), bestand.gliederung_von(ziel)
@@ -597,11 +599,12 @@ def kandidaten(ziel, pid, q):
                       (pid, q, q, "%" + BISHERIGE + _muster(q)[1:])):
         if (i["inventory_no"].casefold() == nadel or i["serial_no"].casefold() == nadel
                 or nadel in (b.casefold() for b in _bisherige(i["notes"]))):
+            weg = bestand.produkt_aenderbar(i)
             return {"treffer": [], "weitere": False, "hinweis": {
                 "text": ANDERES_PRODUKT.format(inv=i["inventory_no"],
                                                ist=katalog.produktname(katalog.produkt(i["product_id"])),
-                                               soll=katalog.produktname(katalog.produkt(pid))),
-                "artikel": {"id": i["id"], "inventory_no": i["inventory_no"]}}}
+                                               soll=katalog.produktname(katalog.produkt(pid))) + (PRODUKT_WEG if weg else ""),
+                "artikel": {"id": i["id"], "inventory_no": i["inventory_no"], "produkt_aenderbar": weg}}}
     return {"treffer": [], "weitere": False, "hinweis": None}
 
 
