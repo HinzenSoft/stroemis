@@ -584,7 +584,7 @@ def test_set_anlegen():
         assert x["set"] is None and not x["ist_set"] and x["darf_loeschen"] is True
         assert x["teil_von"] == {"id": a["id"], "inventory_no": a["inventory_no"], "produkt": "Testwerk Testset Alpha",
                                  "status": "neu", "status_text": "neu", "bestandteil": "Verbindungselement",
-                                 "teile_anzahl": 3}, x["teil_von"]
+                                 "teile_anzahl": 3, "austausch": "nicht_belegt"}, x["teil_von"]
         assert a["darf_loeschen"] is True
         # Kopie der Stückliste: eine spätere Änderung färbt das Set nicht um.
         ok(t.k["katalog"].put(f"/api/material/produkte/{set_p}/bestandteile", json={"bestandteile": [
