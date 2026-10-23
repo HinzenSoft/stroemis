@@ -830,8 +830,8 @@ def artikel_loeschen(iid):
     wieder vergeben. Alles andere wird ausgesondert, nicht gelöscht."""
     with db.transaction(sofort=True):
         alt = artikel(iid)
-        # Schritt 21: ein Teil nicht einzeln (das kommt mit „Teil entnehmen“), ein Set nur ganz und ungeprüft.
-        sets.teil_weiche(alt, "Löschen")
+        # Schritt 21: ein Set nur ganz und ungeprüft; ein Teil einzeln nach denselben Regeln wie jeder Artikel – das Set
+        # ist danach unvollständig und gesperrt (setaustausch.teil_loeschen, K2).
         if sets.ist_set_artikel(alt):
             sets.set_loeschen(alt)
             journal.eintragen("item", iid, "geloescht", dict(alt, ordner=_pfad_text(alt["folder_id"])), None)
@@ -843,6 +843,10 @@ def artikel_loeschen(iid):
         if db.query("SELECT 1 FROM mat_defect_report WHERE item_id = ? LIMIT 1", (iid,), one=True):
             raise Abgelehnt("Am Artikel ist ein Mangel gemeldet – er bleibt mit seinem Lebenslauf; aussondern statt "
                             "löschen.", 409)
+        if sets.ist_teil(alt):
+            from . import setaustausch
+            setaustausch.teil_loeschen(alt)
+            return
         db.execute("DELETE FROM mat_item WHERE id = ?", (iid,))
         journal.eintragen("item", iid, "geloescht", dict(alt, ordner=_pfad_text(alt["folder_id"])), None)
 

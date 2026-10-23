@@ -216,6 +216,7 @@ def durchgang_json(r, voll=False, pruefer_id=None):
     """Ein Durchgang mit „darf“ an seinem Ordner. voll: alle Zeilen, nichts verdeckt – zu Artikeln, die das Konto nicht
     sieht (aus dem Bereich verschoben), nur Inventarnummer, Produkt, Zustand und Grund, ohne Kennung und Link
     („sichtbar“: false)."""
+    from . import setlauf
     zeilen = _zeilen(r["id"])
     geschlossen = r["closed_on"] is not None
     z = _zaehlung(zeilen, geschlossen)
@@ -261,6 +262,9 @@ def durchgang_json(r, voll=False, pruefer_id=None):
                          "eigen": bool(pruefer_id) and x["entwurf_pruefer_id"] == pruefer_id}
                         if x["entwurf_id"] else None)
         a["ausnahme"] = ausnahme
+        # Hersteller-Sets (Schritt 21): Die Oberfläche gruppiert Teile („teil_von“) unter der Set-Zeile; an der Set-Zeile
+        # die offene Set-Prüfung („Set prüfen“ von hier setzt den Durchgang) oder None.
+        a["set_lauf"] = setlauf.kurz(setlauf.offener(roh["id"])) if a["ist_set"] else None
         liste.append(a)
     reihe = {"in_pruefung": 0, "offen": 1, "nicht_geprueft": 1, "ausgenommen": 2, "erledigt": 3}
     liste.sort(key=lambda a: (reihe[a["zustand"]], a["pfad"], a["inventory_no"]))

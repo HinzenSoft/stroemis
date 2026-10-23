@@ -61,6 +61,12 @@ FELD = {
     # Hersteller-Sets (Schritt 21)
     "is_set": "Hersteller-Set", "bestandteile": "Bestandteile", "teile": "Teile", "set": "Set Nr.",
     "set_inventar": "Set", "stueckliste": "Stückliste übernommen",
+    # Sperren, Set prüfen und Austausch im Set (Schritt 21, Paket K2)
+    "lock_cause": "Sperrursache", "teil": "Teil", "verbleib": "Verbleib", "gesamtergebnis": "Gesamtergebnis",
+    "freigegeben": "freigegeben", "gruende": "Gründe", "lauf": "Set-Prüfung Nr.", "set_lauf_id": "Set-Prüfung Nr.",
+    "set_grund": "Anlass der Set-Sperre", "bestandteil": "Bestandteil", "bestaetigt": "Austausch bestätigt",
+    "ersetzt_teil": "ersetzt Teil", "austausch": "Austausch laut Hersteller", "hinweis": "Hinweis",
+    "geprueft": "abgeschlossene Prüfungen",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",
@@ -88,6 +94,10 @@ AKTION = {
     "antrag_abgelehnt": "Änderungsantrag abgelehnt", "antrag_zurueckgezogen": "Änderungsantrag zurückgezogen",
     "laenge_geaendert": "Länge geändert",
     "set_angelegt": "Set mit Teilen angelegt", "stueckliste": "Stückliste geändert",
+    "set_gesperrt": "mit dem Set gesperrt", "set_frei": "mit dem Set freigegeben", "teil_gesperrt": "Teil gesperrt",
+    "teil_entnommen": "Teil entnommen", "teil_eingesetzt": "Teil eingesetzt", "teil_geloescht": "Teil gelöscht",
+    "entnommen": "aus dem Set entnommen", "set_lauf_eroeffnet": "Set-Prüfung begonnen",
+    "set_lauf_abgebrochen": "Set-Prüfung abgebrochen", "set_geprueft": "Set geprüft",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",
@@ -99,7 +109,14 @@ RECHT = {"lesen": "lesen", "pruefen": "prüfen", "verwalten": "verwalten"}
 PERSON = "(Person)"
 # „mat_katalog“ bleibt für alte Einträge stehen (das Häkchen gibt es seit Schritt 10 nicht mehr).
 _JA_NEIN = ("serial_generated", "active", "mat_pruefer", "mat_katalog", "notiz_geaendert", "reminders_off", "items_have_length",
-            "aus_nacharbeit", "is_set")
+            "aus_nacharbeit", "is_set", "freigegeben")
+# Werte der Set-Felder (Schritt 21, K2) – wie wert() in material.js.
+SET_WERTE = {"lock_cause": {"eigen": "eigener Grund", "set": "mit dem Set"},
+             "verbleib": {"aussondern": "mit aussondern", "weiterfuehren": "entnommen und weitergeführt"},
+             "gesamtergebnis": {"einsatzbereit": "einsatzbereit", "gesperrt": "nicht einsatzbereit – Set gesperrt",
+                                "ausgesondert": "Set ausgesondert"},
+             "set_grund": {"unvollstaendig": "unvollständig", "tausch": "Teil getauscht oder eingesetzt"},
+             "austausch": {"ja": "ja", "nein": "nein", "nicht_belegt": "nicht belegt"}}
 # Stufe im Modul Material – mit der Zahl dahinter: Einträge vor „Migration Schritt 10“ meinten die Stufen aus Phase 1
 # (1 Führungskraft, 2 Materialwart), die Zahl hält das eindeutig.
 STUFE_MATERIAL = {0: "kein Zugriff", 1: "Mitglied", 2: "Verwaltung"}
@@ -141,6 +158,8 @@ def wert_text(v, feld, verweise=None):
         return (verweise or {}).get(v) or f"Nr. {v}"
     if feld == "lock_state":
         return SPERRZUSTAND.get(v, str(v))
+    if feld in SET_WERTE:
+        return SET_WERTE[feld].get(v, str(v))
     if feld == "recht_material" and isinstance(v, int) and not isinstance(v, bool):
         return f"{STUFE_MATERIAL.get(v, '?')} ({v})"
     if feld == "recht":

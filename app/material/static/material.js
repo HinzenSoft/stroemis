@@ -252,6 +252,12 @@
     // Hersteller-Sets (Schritt 21)
     is_set: "Hersteller-Set", bestandteile: "Bestandteile", teile: "Teile", set: "Set Nr.", set_inventar: "Set",
     stueckliste: "Stückliste übernommen",
+    // Sperren, Set prüfen und Austausch im Set (Schritt 21, Paket K2)
+    lock_cause: "Sperrursache", teil: "Teil", verbleib: "Verbleib", gesamtergebnis: "Gesamtergebnis",
+    freigegeben: "freigegeben", gruende: "Gründe", lauf: "Set-Prüfung Nr.", set_lauf_id: "Set-Prüfung Nr.",
+    set_grund: "Anlass der Set-Sperre", bestandteil: "Bestandteil", bestaetigt: "Austausch bestätigt",
+    ersetzt_teil: "ersetzt Teil", austausch: "Austausch laut Hersteller", hinweis: "Hinweis",
+    geprueft: "abgeschlossene Prüfungen",
   };
   // Die Beschriftung eines Feldes in einem Journaleintrag – wie beschriftung.feld_name: „description“ ist am Produkt der
   // kurze Zusatz hinter dem Namen und heißt dort seit dem Wunsch vom 18.10.2026 „Bemerkung“; an Ordnern und in den
@@ -279,7 +285,11 @@
                    mangel_gemeldet: "Mangel gemeldet", antrag_gestellt: "Änderung beantragt",
                    antrag_bestaetigt: "Änderung bestätigt (Antrag)", antrag_abgelehnt: "Änderungsantrag abgelehnt",
                    antrag_zurueckgezogen: "Änderungsantrag zurückgezogen", laenge_geaendert: "Länge geändert",
-                   set_angelegt: "Set mit Teilen angelegt", stueckliste: "Stückliste geändert" };
+                   set_angelegt: "Set mit Teilen angelegt", stueckliste: "Stückliste geändert",
+                   set_gesperrt: "mit dem Set gesperrt", set_frei: "mit dem Set freigegeben", teil_gesperrt: "Teil gesperrt",
+                   teil_entnommen: "Teil entnommen", teil_eingesetzt: "Teil eingesetzt", teil_geloescht: "Teil gelöscht",
+                   entnommen: "aus dem Set entnommen", set_lauf_eroeffnet: "Set-Prüfung begonnen",
+                   set_lauf_abgebrochen: "Set-Prüfung abgebrochen", set_geprueft: "Set geprüft" };
   const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };

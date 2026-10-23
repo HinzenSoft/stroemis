@@ -36,7 +36,12 @@ Prüfer, zugeordnete Person oder Verwaltung). Die Mails hängen nicht am Schalte
 Erinnerungsmails – sie sind die Nachricht zu einer Sperre.
 
 Meldungen sind unveränderlich (Trigger, models.TRIGGER_13), lassen sich nicht löschen und bleiben unbefristet mit dem
-Artikel; beim Löschen eines Kontos setzt die Datenbank nur die Kontokennung auf NULL, der Name bleibt (F3)."""
+Artikel; beim Löschen eines Kontos setzt die Datenbank nur die Kontokennung auf NULL, der Name bleibt (F3).
+
+Hersteller-Sets (Phase 4 · L2, K2): Eine Meldung an Set-Artikel oder Teil sperrt das ganze Set (pruefung._sperren →
+sets.sperren) – auch an einem Teil, das bisher nur mit dem Set gesperrt war (es bekommt den eigenen Grund). Den Eintrag
+„mangel_gemeldet“ mit {"mangel": Kennung} trägt nur der gemeldete Artikel; Set und übrige Teile bekommen Einträge des
+Handelnden „System“ (kein Meldername, S24). Die Mails sagen, dass das ganze Set mit allen Teilen gesperrt ist (S25)."""
 import json
 import os
 
@@ -371,7 +376,8 @@ def melden(iid, d, dateien=()):
                 (iid, beschreibung, json.dumps(fotos), u["id"], (u["name"] or "").strip() or OHNE_NAMEN,
                  item["lock_state"], db.now()))
             gesperrt = item["lock_state"] == "frei"
-            if gesperrt:
+            # Ein nur mit dem Set gesperrtes Teil bekommt seinen eigenen Grund (Sperr-Kaskade, Schritt 21).
+            if gesperrt or item.get("lock_cause") == "set":
                 pruefung._sperren(item, "gesperrt", f"Mangel gemeldet am {heute().strftime('%d.%m.%Y')}",
                                   aktion="mangel_gemeldet", zusatz={"mangel": mid})
             else:
@@ -449,6 +455,16 @@ def _produkt_kurz(p):
     return " ".join(t for t in (p["manufacturer"], p["model"]) if t)
 
 
+def _set_satz(item):
+    """Für die Mails (S25): Gehört der Artikel zu einem Hersteller-Set, ist das ganze Set gesperrt – (Inventarnummer des
+    Sets, Zahl der Teile, ist er selbst der Set-Artikel?) oder None."""
+    from . import sets
+    if not sets.im_set(item):
+        return None
+    s, tz = sets.zeilen(sets.set_kennung(item))
+    return s["inventory_no"], len(tz), s["id"] == item["id"]
+
+
 def _mailtext(r, item, produkt, warum):
     """Betreff und Text an Materialwarte, Prüfer und Verwaltung – mit Namen und Text (empfaenger: darf_inhalt)."""
     basis = (current_app.config.get("BASE_URL") or "").rstrip("/")
@@ -465,7 +481,15 @@ def _mailtext(r, item, produkt, warum):
     else:
         grund = f" ({item['lock_reason']})" if item["lock_reason"] else ""
         zeilen[0] += f" Er war schon gesperrt{grund}; die Sperre bleibt."
-    zeilen.append("Bitte sorg dafür, dass er aus Fahrzeug oder Lager genommen wird und zum Materialwart kommt.")
+    satz = _set_satz(item)
+    if satz:
+        zeilen.append((f"Er ist der Set-Artikel des Hersteller-Sets {satz[0]}" if satz[2] else
+                       f"Er ist Teil des Hersteller-Sets {satz[0]}") +
+                      f" – das ganze Set ist mit allen {satz[1]} Teilen gesperrt: nicht verwenden.")
+        zeilen.append("Bitte sorg dafür, dass das ganze Set aus Fahrzeug oder Lager genommen wird und zum Materialwart "
+                      "kommt.")
+    else:
+        zeilen.append("Bitte sorg dafür, dass er aus Fahrzeug oder Lager genommen wird und zum Materialwart kommt.")
     n = len(json.loads(r["photos_json"] or "[]"))
     zeilen += ["",
                f"Artikel:    {item['inventory_no']} – {katalog.produktname(produkt)}, SN {item['serial_no']}",
@@ -475,7 +499,7 @@ def _mailtext(r, item, produkt, warum):
                f"Artikel ansehen: {basis}/material/artikel/{item['id']}", "",
                f"Du bekommst diese Mail, {WARUM[warum]}"]
     betreff = (f"{site} – Mangel gemeldet: {item['inventory_no']} {_produkt_kurz(produkt)} – "
-               + ("gesperrt" if gesperrt else "war schon gesperrt"))
+               + (f"Set {satz[0]} mit allen Teilen gesperrt" if satz else "gesperrt" if gesperrt else "war schon gesperrt"))
     return " ".join(betreff.split()), "\n".join(zeilen) + "\n"
 
 
@@ -491,6 +515,11 @@ def _mailtext_zugeordnet(item, produkt, r, u):
         "verloren": ("Sie ist als verloren gemeldet.", "Taucht sie auf: nicht verwenden, gib sie deinem Materialwart."),
     }.get(vorher, ("Sie war schon gesperrt und bleibt es.", "Bitte nicht verwenden: leg sie beiseite und gib sie deinem "
                    "Materialwart."))
+    satz = _set_satz(item)
+    if satz:
+        # Hersteller-Set (S25): das ganze Set mit allen Teilen – nicht nur das gemeldete Stück.
+        zustand = f"Sie gehört zum Hersteller-Set {satz[0]} – das ganze Set ist mit allen {satz[1]} Teilen gesperrt."
+        tun = "Bitte das ganze Set nicht mehr verwenden: leg es sofort beiseite und gib es deinem Materialwart."
     zeilen = [f"Hallo {(u['name'] or '').strip()},", "",
               f"an deiner Ausrüstung {item['inventory_no']} – {katalog.produktname(produkt)}, SN {item['serial_no']} "
               f"wurde am {_datum(r['created_at'])} ein Mangel gemeldet. {zustand}", "",
@@ -499,7 +528,8 @@ def _mailtext_zugeordnet(item, produkt, r, u):
               "Du bekommst diese Mail, weil dir diese Ausrüstung im Modul Material zugeordnet ist. Sie kommt einmal je "
               "Meldung und lässt sich nicht abbestellen, weil sie deine Sicherheit betrifft."]
     betreff = (f"{site} – Deine PSA {item['inventory_no']} "
-               + ("ist als verloren gemeldet" if vorher == "verloren" else "ist gesperrt") + " – nicht verwenden")
+               + (f"(Set {satz[0]}) ist mit dem ganzen Set gesperrt" if satz else
+                  "ist als verloren gemeldet" if vorher == "verloren" else "ist gesperrt") + " – nicht verwenden")
     return " ".join(betreff.split()), "\n".join(zeilen) + "\n"
 
 

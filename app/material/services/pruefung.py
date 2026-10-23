@@ -29,6 +29,12 @@ Anhängen, demselben Prüftag und Verweis auf das Original, das unverändert ble
   - Gemeldete Mängel (Phase 3 · L1, mangel.py): „einsatzbereit“ geht bei offenen Meldungen nur, wenn der Prüfer jede
     einzeln als geprüft abgehakt hat (maengel_gesehen) – dann erledigt die Freiprüfung sie; eine Berichtigung gibt bei
     offener Meldung nie frei. Die Aussonderung erledigt sie ebenso, „instandsetzen“ nicht.
+  - Hersteller-Sets (Phase 4 · L2, Paket K2): An Set-Artikel und Teil wirkt jedes Ergebnis über das Set
+    (_wirkung_im_set): „instandsetzen“ sperrt das ganze Set (sets.sperren), „einsatzbereit“ im gesperrten Set nimmt nur den
+    eigenen Grund („eigen“ → „set“), „aussondern“ an einem Teil entnimmt und sondert es aus, am Set-Artikel ist es „Set
+    aussondern“. Den Set-Artikel prüft man nur in einer Set-Prüfung (setlauf.py) – erst ihr Festschreiben kann das Set
+    freigeben; jede Prüfung an Set oder Teil zählt, solange eine offen ist, in ihr (set_lauf_id). Eine nur geerbte Sperre
+    („set“) zählt für Prüfart und Berichtigung wie frei.
 
 Wer handelt, kommt als „pruefer“-dict herein ({id, name, urkunde, unterschrift, login}) – aus dem
 angemeldeten Konto (pruefer_aus) oder, für die Demodaten auf der Kommandozeile, von Hand."""
@@ -113,7 +119,8 @@ def arten_fuer(item):
     if not item.get("last_inspected_on"):
         return ["eingang"], "eingang"
     arten = ["periodisch", "ausserplanmaessig", "reparatur"]
-    if item["lock_state"] in ("gesperrt", "verloren"):
+    # Nur mit dem Set gesperrt (lock_cause „set“, Schritt 21): wie frei – das Teil selbst hat keinen Schaden (A23).
+    if item["lock_state"] in ("gesperrt", "verloren") and item.get("lock_cause") != "set":
         # Nach einer Mangelmeldung, die noch kein Prüfer angesehen hat, ist die Freiprüfung außerplanmäßig – erst nach
         # „instandsetzen“ wieder eine Prüfung nach Reparatur.
         from . import mangel
@@ -227,7 +234,7 @@ def pruefung_json(p, pruefer_id=None):
         if out["lebensdauer"] and out["lebensdauer"]["erreicht"]:
             gruende.append(f"Lebensende erreicht am {_fmt(out['lebensdauer']['ende'])}")
         out["einsatzbereit_gesperrt"] = gruende
-        out["freipruefung"] = item["lock_state"] in ("gesperrt", "verloren")
+        out["freipruefung"] = item["lock_state"] in ("gesperrt", "verloren") and item.get("lock_cause") != "set"
         out["arten"] = arten_fuer(item)[0]
         # Offene Mangelmeldungen – die Grundlage der Häkchen im Festschreib-Dialog; Text, Fotos und Melder nur für Prüfer
         # und Materialwart (mangel.darf_inhalt) und die eigene Meldung.
@@ -237,6 +244,10 @@ def pruefung_json(p, pruefer_id=None):
     # Fassung ist nicht die, nach der geprüft wurde). Festgehalten wird sie nirgends.
     from . import wikiverweis
     out["anleitung"] = wikiverweis.anleitung(p["form_id"]) if out["entwurf"] else None
+    # Hersteller-Sets (K2): Set-Prüfung, zu der die Prüfung gehört, am Entwurf des Set-Artikels der Stand des Laufs
+    # (Umfang, Fortschritt, Freigabe-Gründe, Vorbelegung „verbleib“), an der abgeschlossenen die Teiletabelle.
+    from . import setlauf
+    out.update(setlauf.pruefung_teil(p, item))
     return out
 
 
@@ -316,6 +327,13 @@ def starten(iid, pruefer, art=None, durchgang_id=None):
                 return offen["id"], False
             raise Abgelehnt(reserviert_text(offen) + " Eine liegen gebliebene Reservierung hebt der Materialwart auf.",
                             409)
+        # Hersteller-Sets (K2): Den Set-Artikel prüft man nur in einer Set-Prüfung; Prüfungen an Set und Teilen zählen,
+        # solange eine offen ist, in ihr.
+        from . import sets, setlauf
+        lauf = setlauf.offener(sets.set_kennung(item)) if sets.im_set(item) else None
+        set_artikel = sets.ist_set_artikel(item) and not item["parent_item_id"]
+        if set_artikel and not lauf:
+            raise Abgelehnt(setlauf.NUR_IM_LAUF, 409)
         arten, vorschlag = arten_fuer(item)
         art = art or vorschlag
         if art not in arten:
@@ -334,9 +352,9 @@ def starten(iid, pruefer, art=None, durchgang_id=None):
         ts = db.now()
         pid = db.execute(
             "INSERT INTO mat_inspection (item_id, round_id, inspector_user_id, inspector_name, inspector_certificate, "
-            "form_id, form_version, inspected_on, kind, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "form_id, form_version, inspected_on, kind, set_lauf_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (iid, runde, pruefer.get("id"), pruefer["name"], pruefer["urkunde"], formular["id"], formular["version"],
-             heute().isoformat(), art, ts, ts))
+             heute().isoformat(), art, lauf["id"] if lauf else None, ts, ts))
         laenge_moeglich = katalog.laenge_wirksam(katalog.produkt(item["product_id"])["category_id"])
         for p in punkte:
             befund, wert, soll = _vorbelegung(p, item, laenge_moeglich)
@@ -345,9 +363,11 @@ def starten(iid, pruefer, art=None, durchgang_id=None):
                        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                        (pid, p["id"], p["position"], p["group_name"], p["label"], p["editor"], p["mandatory"],
                         soll, p["is_critical"], befund, wert))
+        if set_artikel:
+            setlauf.bestandteil_zeilen(pid, iid)
         journal.eintragen("inspection", pid, "begonnen", None,
                           {"item_id": iid, "kind": art, "form_id": formular["id"], "form_version": formular["version"],
-                           "round_id": runde})
+                           "round_id": runde, "set_lauf_id": lauf["id"] if lauf else None})
     return pid, True
 
 
@@ -727,6 +747,14 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
         produkt = katalog.produkt(item["product_id"])
         tag = _tag(pruefdatum or (p["inspected_on"] if p["corrects_inspection_id"] else heute()))
         heimat = bestand.heimat(item)
+        # Set-Artikel (K2): nur im offenen Set-Lauf – sein Festschreiben schließt ihn (Prüfumfang geprüft, keine anderen
+        # Entwürfe, „verbleib“ bei „aussondern“; setlauf.vorbereiten). Eine Berichtigung gehört zu ihrem Original.
+        from . import sets, setlauf
+        satz = None
+        if sets.ist_set_artikel(item) and not item["parent_item_id"] and not p["corrects_inspection_id"]:
+            if not p["set_lauf_id"]:
+                raise Abgelehnt(setlauf.NUR_IM_LAUF, 409)
+            satz = setlauf.vorbereiten(p, item, ergebnis, d, tag)
         _laenge_ohne_vorgabe(item, befunde(pid))      # vor den Prüfungen unten: Längenpunkte „nicht zutreffend“ (B4)
         punkte = befunde(pid)
         offen = [r["checklist_text"] for r in punkte if r["mandatory"] and not _beantwortet(r)]
@@ -773,6 +801,8 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
         # Die gemessene Länge in den Artikel – vor dem Abschluss, solange die Ergebniszeile ihr Soll noch annimmt
         # (Trigger mat_result_aendern); das Protokoll liest „alt → neu“ aus ihr.
         _laenge_uebernehmen(p, item, punkte)
+        if satz:
+            setlauf.zeilen_schreiben(p, satz)        # die Teiletabelle als Kopie – nur am offenen Entwurf (Trigger)
         db.execute("UPDATE mat_inspection SET result = ?, inspected_on = ?, next_due_on = ?, reason = ?, remarks = ?, "
                    "inspector_name = ?, inspector_certificate = ?, documents_json = ?, completed_at = ?, updated_at = ? "
                    "WHERE id = ?",
@@ -781,7 +811,10 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
         journal.eintragen("inspection", pid, "abgeschlossen", None,
                           {"result": ergebnis, "inspected_on": tag, "next_due_on": naechste, "kind": p["kind"],
                            "maengel": len(maengel), "reason": grund})
-        _wirkung(item, p, ergebnis, tag, naechste, grund, pruefer, ts)
+        if satz:
+            setlauf.wirkung(item, p, ergebnis, tag, naechste, grund, pruefer, ts, satz)
+        else:
+            _wirkung(item, p, ergebnis, tag, naechste, grund, pruefer, ts, d)
         nr = protokoll.pruefung_festschreiben(pid, ts, pruefer["unterschrift"], pruefer.get("login"), heimat)
         if p["corrects_inspection_id"]:
             journal.eintragen("inspection", p["corrects_inspection_id"], "berichtigt", None,
@@ -801,8 +834,11 @@ def _maengel_gesehen(d):
     return {kennung(x, "Mangelmeldung") for x in werte}
 
 
-def _wirkung(item, p, ergebnis, tag, naechste, grund, pruefer, ts=None):
-    """Was das Ergebnis am Artikel bewirkt – in der Transaktion des Abschlusses."""
+def _wirkung(item, p, ergebnis, tag, naechste, grund, pruefer, ts=None, d=None):
+    """Was das Ergebnis am Artikel bewirkt – in der Transaktion des Abschlusses. Set-Artikel und Teile: _wirkung_im_set."""
+    from . import sets
+    if sets.im_set(item):
+        return _wirkung_im_set(item, p, ergebnis, tag, naechste, grund, pruefer, ts, d)
     iid = item["id"]
     gesperrt = item["lock_state"] in ("gesperrt", "verloren")
     vorher = {"lock_state": item["lock_state"], "next_due_on": item["next_due_on"],
@@ -838,6 +874,50 @@ def _wirkung(item, p, ergebnis, tag, naechste, grund, pruefer, ts=None):
                     tag, pruefer, basis_id=p["id"], ts=ts)
 
 
+def _wirkung_im_set(item, p, ergebnis, tag, naechste, grund, pruefer, ts=None, d=None):
+    """Das Ergebnis an einem Teil oder – als Berichtigung – am Set-Artikel (Entwurf D, S8, A12; die Prüfung, die eine
+    Set-Prüfung schließt, wirkt über setlauf.wirkung):
+      einsatzbereit   Fälligkeit und letzte Prüfung; im gesperrten Set nur „eigen“ → „set“ (verloren → gesperrt) – Lage und
+                      Sperre bleiben, frei wird nur das ganze Set in einer Set-Prüfung; erledigt gemeldete Mängel (keine
+                      Berichtigung).
+      instandsetzen   eigene Sperre – sperrt das ganze Set, auch an einem schon mitgesperrten Teil (sets.sperren).
+      aussondern      am Teil: entnehmen und aussondern, das Set ist unvollständig gesperrt; am Set-Artikel: Set aussondern
+                      mit „verbleib“ je Teil (Vorbelegung)."""
+    from . import mangel, sets, setaustausch, setlauf
+    iid = item["id"]
+    gesperrt = item["lock_state"] in ("gesperrt", "verloren")
+    zusatz = {"pruefung": p["id"], "ergebnis": ergebnis, "art": p["kind"]}
+    if ergebnis == "einsatzbereit":
+        vorher = {"next_due_on": item["next_due_on"], "last_inspected_on": item["last_inspected_on"],
+                  "lock_state": item["lock_state"], "lock_cause": item["lock_cause"], "lock_reason": item["lock_reason"]}
+        db.execute("UPDATE mat_item SET next_due_on = ?, last_inspected_on = ?, updated_at = ? WHERE id = ?",
+                   (naechste, tag, db.now(), iid))
+        nachher = dict(vorher, next_due_on=naechste, last_inspected_on=tag)
+        if gesperrt and (item["lock_cause"] == "eigen" or item["lock_state"] == "verloren"):
+            nachher.update(sets.eigen_aufheben(item)[1])
+        alt, neu = journal.unterschied(vorher, nachher)
+        journal.eintragen("item", iid, "geprueft", alt, dict(neu, **zusatz))
+        if not p["corrects_inspection_id"]:
+            mangel.erledigen(iid, p["id"])
+    elif ergebnis == "instandsetzen":
+        db.execute("UPDATE mat_item SET last_inspected_on = ?, updated_at = ? WHERE id = ?", (tag, db.now(), iid))
+        if gesperrt and item["lock_cause"] == "eigen":
+            journal.eintragen("item", iid, "geprueft", {"last_inspected_on": item["last_inspected_on"]},
+                              dict({"last_inspected_on": tag}, **zusatz))
+        else:
+            sperrgrund = f"Prüfung vom {_fmt(tag)}: instandsetzen" + (f" – {grund}" if grund else "")
+            sets.sperren(sets.set_kennung(item), eigen=iid, grund=sperrgrund, zusatz={"pruefung": p["id"]})
+    else:
+        db.execute("UPDATE mat_item SET last_inspected_on = ?, updated_at = ? WHERE id = ?", (tag, db.now(), iid))
+        text_ = "Prüfergebnis „aussondern“" + (f": {grund}" if grund else "")
+        if item["parent_item_id"]:
+            setaustausch.teil_aus_pruefung(bestand.artikel(iid), p, text_, tag, pruefer, ts)
+        else:
+            _, tz = sets.zeilen(iid)
+            setaustausch.set_aussondern(bestand.artikel(iid), text_, "", tag, pruefer,
+                                        setlauf._verbleib((d or {}).get("verbleib"), tz), basis_id=p["id"], ts=ts)
+
+
 def _rueckweg(item):
     """Wohin die Freiprüfung einen gesperrten Artikel bringt: in seinen Herkunftsordner – gibt es den nicht
     mehr oder ist er kein Ablageordner, in seine Gliederung."""
@@ -862,10 +942,15 @@ def _systemziel(item, art):
 
 def _sperren(item, zustand, grund, pruefung_id=None, aktion="gesperrt", zusatz=None):
     """Sperre wirken lassen: in „Gesperrt“ der Gliederung, Herkunft merken – ein Journaleintrag (aktion; die
-    Mangelmeldung schreibt „mangel_gemeldet“ mit zusatz {"mangel": Kennung}). Set-Artikel und Teile: Nahtstelle der
-    Sperr-Kaskade (sets.vor_einzelsperre, Schritt 21)."""
+    Mangelmeldung schreibt „mangel_gemeldet“ mit zusatz {"mangel": Kennung}). Set-Artikel und Teile: die Sperr-Kaskade
+    (sets.sperren) – eigene Sperre hier, das ganze Set mit (auch an einem schon mitgesperrten Teil)."""
     from . import sets
-    sets.vor_einzelsperre(item)
+    if sets.im_set(item):
+        z = dict(zusatz or {})
+        if pruefung_id:
+            z["pruefung"] = pruefung_id
+        sets.sperren(sets.set_kennung(item), eigen=item["id"], zustand=zustand, grund=grund, aktion=aktion, zusatz=z)
+        return
     ziel = _systemziel(item, "gesperrt")
     db.execute("UPDATE mat_item SET lock_state = ?, lock_reason = ?, origin_folder_id = ?, folder_id = ?, "
                "last_inspected_on = ?, updated_at = ? WHERE id = ?",
@@ -891,7 +976,8 @@ def sperren(iid, d, pruefer):
         item = bestand.artikel(iid)
         if item["lock_state"] == "ausgesondert":
             raise Abgelehnt("Der Artikel ist ausgesondert.", 409)
-        if item["lock_state"] != "frei":
+        # Ein nur mit dem Set gesperrtes Teil (oder ein so gesperrter Set-Artikel) nimmt eine eigene Sperre an (Entwurf D).
+        if item["lock_state"] != "frei" and item.get("lock_cause") != "set":
             raise Abgelehnt("Der Artikel ist schon gesperrt.", 409)
         offen = offener_entwurf(iid)
         if offen:
@@ -901,15 +987,15 @@ def sperren(iid, d, pruefer):
         _sperren(item, "verloren" if art == "verlust" else "gesperrt", grund)
 
 
-def _aussondern(item, grund, bemerkung, tag, akteur, basis_id=None, ts=None):
+def _aussondern(item, grund, bemerkung, tag, akteur, basis_id=None, ts=None, bewegen=True):
     """Aussonderung als eigener Vorgang (mat_inspection, Art „aussonderung“, ohne Formular) mit eigenem,
     festgeschriebenem Aussonderungsprotokoll; der Artikel wandert in „Ausgesondert“ und zählt nirgends mehr
     als Bestand. Seit Phase 2 behält er seine Heimat (origin_folder_id): Wer nur den Herkunftsordner verwaltet,
     sieht ihn und sein Protokoll weiter. Eine Zuordnung an eine Person löst sich (Journal mit Grund). Läuft in der
-    Transaktion des Aufrufers, innerhalb von protokoll.dateien_sichern(). Set-Artikel und Teile: Nahtstelle wie
-    _sperren (sets.vor_einzelsperre)."""
-    from . import durchgang, sets
-    sets.vor_einzelsperre(item)
+    Transaktion des Aufrufers, innerhalb von protokoll.dateien_sichern(). bewegen=False: Lage, Zustand und Zuordnung hat
+    der Aufrufer schon gesetzt – für ein ganzes Set in einer Anweisung (setaustausch.set_aussondern); item ist dann der
+    Stand davor (für Journal und Sperrvermerk)."""
+    from . import durchgang
     ziel = _systemziel(item, "ausgesondert")
     ts = ts or db.now()
     heimat = bestand.heimat(item)
@@ -923,8 +1009,10 @@ def _aussondern(item, grund, bemerkung, tag, akteur, basis_id=None, ts=None):
         "VALUES (?,?,?,?,?,'aussonderung','aussondern',?,?,?,?,?,?)",
         (item["id"], akteur.get("id"), akteur["name"], akteur.get("urkunde") or "", tag, grund, bemerkung, basis_id,
          ts, ts, ts))
-    db.execute("UPDATE mat_item SET lock_state = 'ausgesondert', lock_reason = ?, origin_folder_id = ?, folder_id = ?, "
-               "assigned_user_id = NULL, updated_at = ? WHERE id = ?", (grund, heimat, ziel, ts, item["id"]))
+    if bewegen:
+        db.execute("UPDATE mat_item SET lock_state = 'ausgesondert', lock_reason = ?, origin_folder_id = ?, folder_id = ?, "
+                   "assigned_user_id = NULL, lock_cause = NULL, updated_at = ? WHERE id = ?",
+                   (grund, heimat, ziel, ts, item["id"]))
     journal.eintragen("inspection", aid, "ausgesondert", None,
                       {"item_id": item["id"], "reason": grund, "inspected_on": tag, "basis": basis_id})
     journal.eintragen("item", item["id"], "ausgesondert",
@@ -953,11 +1041,35 @@ def sperrtag(item):
     return protokoll.ortszeit(r["ts"]).date().isoformat() if r and r["ts"] else None
 
 
+def aussondern_grenzen(item, tag, wer=""):
+    """Die Datumsgrenzen einer Aussonderung (wer: Vorsatz der Meldung, etwa die Inventarnummer eines Teils): nicht vor der
+    Erfassung, der letzten abgeschlossenen Prüfung, dem Herstelldatum und dem Tag der Sperre."""
+    if tag < item["created_at"][:10]:
+        raise Abgelehnt(f"{wer}Das Datum liegt vor der Erfassung des Artikels.")
+    # Nicht vor der letzten abgeschlossenen Prüfung und nicht vor dem Herstelldatum (C2 in P4-L1, S20): „01.03.2016“
+    # statt 2026 ging vorher durch – 409 mit Klartext, die Oberfläche nennt dieselben Grenzen als Hilfetext.
+    letzte = db.query("SELECT MAX(inspected_on) AS tag FROM mat_inspection WHERE item_id = ? AND completed_at IS NOT NULL",
+                      (item["id"],), one=True)["tag"]
+    if letzte and tag < letzte:
+        raise Abgelehnt(f"{wer}Das Datum der Aussonderung ({_fmt(tag)}) liegt vor der letzten Prüfung ({_fmt(letzte)}).", 409)
+    hergestellt = erster_tag(item["manufactured_on"])
+    if hergestellt and tag < hergestellt.isoformat():
+        raise Abgelehnt(f"{wer}Das Datum der Aussonderung ({_fmt(tag)}) liegt vor dem Herstelldatum "
+                        f"({_fmt(hergestellt.isoformat())}).", 409)
+    # Nicht vor dem Tag der Sperre (Ablaufprüfung V2): Ausgesondert wird, was gesperrt ist – sonst wäre ein Artikel
+    # laut Datum ausgesondert, bevor er verloren ging, und der Jahresbericht zählte beides in verschiedenen Jahren.
+    gesperrt = sperrtag(item)
+    if gesperrt and tag < gesperrt:
+        raise Abgelehnt(f"{wer}Das Datum der Aussonderung ({_fmt(tag)}) liegt vor der Sperre ({_fmt(gesperrt)}) – "
+                        "ausgesondert wird, was gesperrt ist.", 409)
+
+
 def aussondern(iid, d, akteur):
     """Aussonderung durch den Materialwart – nur für Artikel, die ein Prüfer vorher gesperrt hat. Eine Sperre aus einer
     Mangelmeldung zählt erst, wenn ein Prüfer den Artikel danach geprüft hat (mangel.nur_gemeldet) – so hat, was der
     Materialwart aussondert, vorher ein Sachkundiger gesehen. Auch sie wird festgeschrieben und braucht daher die
-    Unterschrift dessen, der aussondert."""
+    Unterschrift dessen, der aussondert. Am Set-Artikel ist es „Set aussondern“ mit „verbleib“ je Teil
+    (setaustausch.set_aussondern_wart); an einem Teil geht es nur über „Teil entnehmen“."""
     if not akteur.get("unterschrift"):
         raise Abgelehnt("Zum Aussondern fehlt deine Unterschrift – das Aussonderungsprotokoll wird damit "
                         "festgeschrieben. Bitte im Profil hinterlegen.", 403)
@@ -976,30 +1088,17 @@ def aussondern(iid, d, akteur):
             raise Abgelehnt("Aussondern lassen sich nur gesperrte Artikel – zuerst sperrt ein Prüfer (aus einer "
                             "Prüfung mit „instandsetzen“ oder direkt nach Sturz, Beschädigung oder Verlust). Eine Sperre "
                             "aus einer Mangelmeldung zählt erst, wenn ein Prüfer den Artikel danach geprüft hat.", 409)
-        if tag < item["created_at"][:10]:
-            raise Abgelehnt("Das Datum liegt vor der Erfassung des Artikels.")
-        # Nicht vor der letzten abgeschlossenen Prüfung und nicht vor dem Herstelldatum (C2 in P4-L1, S20): „01.03.2016“
-        # statt 2026 ging vorher durch – 409 mit Klartext, die Oberfläche nennt dieselben Grenzen als Hilfetext.
-        letzte = db.query("SELECT MAX(inspected_on) AS tag FROM mat_inspection WHERE item_id = ? AND completed_at IS NOT NULL",
-                          (iid,), one=True)["tag"]
-        if letzte and tag < letzte:
-            raise Abgelehnt(f"Das Datum der Aussonderung ({_fmt(tag)}) liegt vor der letzten Prüfung ({_fmt(letzte)}).", 409)
-        hergestellt = erster_tag(item["manufactured_on"])
-        if hergestellt and tag < hergestellt.isoformat():
-            raise Abgelehnt(f"Das Datum der Aussonderung ({_fmt(tag)}) liegt vor dem Herstelldatum "
-                            f"({_fmt(hergestellt.isoformat())}).", 409)
-        # Nicht vor dem Tag der Sperre (Ablaufprüfung V2): Ausgesondert wird, was gesperrt ist – sonst wäre ein Artikel
-        # laut Datum ausgesondert, bevor er verloren ging, und der Jahresbericht zählte beides in verschiedenen Jahren.
-        gesperrt = sperrtag(item)
-        if gesperrt and tag < gesperrt:
-            raise Abgelehnt(f"Das Datum der Aussonderung ({_fmt(tag)}) liegt vor der Sperre ({_fmt(gesperrt)}) – "
-                            "ausgesondert wird, was gesperrt ist.", 409)
+        aussondern_grenzen(item, tag)
         offen = offener_entwurf(iid)
         if offen:
             raise Abgelehnt(reserviert_text(offen) + " Erst die Reservierung aufheben.", 409)
         from . import mangel
         if mangel.nur_gemeldet(iid):
             raise Abgelehnt(mangel.NUR_GEMELDET, 409)
+        if sets.ist_set_artikel(item):
+            from . import setaustausch
+            return setaustausch.set_aussondern_wart(item, AUSSONDERUNGSGRUENDE[art], bemerkung, tag, akteur,
+                                                    d.get("verbleib"))
         return _aussondern(item, AUSSONDERUNGSGRUENDE[art], bemerkung, tag, akteur)
 
 
@@ -1020,8 +1119,9 @@ def berichtigbar(p, item=None):
     if mangel.offene_ids(item["id"]):
         return nein(mangel.NUR_NEUE_PRUEFUNG)
     # Gesperrt, ohne dass diese Prüfung gesperrt hat („instandsetzen“): Dann kam die Sperre danach (Sturz,
-    # Beschädigung, Verlust). Eine Berichtigung mit dem alten Prüftag gäbe den Artikel sonst als Freiprüfung frei.
-    if item["lock_state"] in ("gesperrt", "verloren") and p["result"] != "instandsetzen":
+    # Beschädigung, Verlust). Eine Berichtigung mit dem alten Prüftag gäbe den Artikel sonst als Freiprüfung frei. Nur mit
+    # dem Set gesperrt (lock_cause „set“) zählt wie frei (A23) – frei gibt ein Set ohnehin nur eine Set-Prüfung.
+    if item["lock_state"] in ("gesperrt", "verloren") and p["result"] != "instandsetzen" and item.get("lock_cause") != "set":
         return nein("Nach dieser Prüfung wurde der Artikel gesperrt – freigeben kann ihn nur eine neue Prüfung.")
     schon = _berichtigung_von(p["id"])
     if schon:
@@ -1089,13 +1189,21 @@ def berichtigen(pid, d, pruefer):
             runde = None
             if p["round_id"] and durchgang.runde(p["round_id"])["closed_on"] is None:
                 runde = p["round_id"]
+            # Wie der Durchgang: Läuft die Set-Prüfung des Originals noch, zählt die Berichtigung dort (K2).
+            lauf = None
+            if p["set_lauf_id"] and db.query("SELECT 1 FROM mat_set_lauf WHERE id = ? AND state = 'offen'",
+                                             (p["set_lauf_id"],), one=True):
+                lauf = p["set_lauf_id"]
             ts = db.now()
             neu = db.execute(
                 "INSERT INTO mat_inspection (item_id, round_id, inspector_user_id, inspector_name, inspector_certificate, "
                 "form_id, form_version, inspected_on, kind, reason, remarks, corrects_inspection_id, correction_reason, "
-                "created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "set_lauf_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (p["item_id"], runde, pruefer.get("id"), pruefer["name"], pruefer["urkunde"], p["form_id"],
-                 p["form_version"], p["inspected_on"], p["kind"], p["reason"], p["remarks"], pid, grund, ts, ts))
+                 p["form_version"], p["inspected_on"], p["kind"], p["reason"], p["remarks"], pid, grund, lauf, ts, ts))
+            # Berichtigung der Set-Prüfung (Prüfung des Set-Artikels mit Teiletabelle): die Tabelle des Originals.
+            from . import setlauf
+            setlauf.berichtigung_zeilen(neu, pid)
             for r in befunde(pid):
                 foto = _foto_kopieren(r["photo"])
                 if foto:

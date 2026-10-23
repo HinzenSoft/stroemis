@@ -1,7 +1,8 @@
 {% extends "material/pdf/basis.html" %}
 {# Sammelprotokoll eines Prüfdurchgangs: Ergebnisübersicht, Prüfer, alle Artikel des Durchgangs und das
    Verzeichnis der Einzelprotokolle mit der Prüfsumme jeder Datei. Daten laut services/pdf.py (dokument,
-   durchgang, zaehlung, pruefer, artikel, ohne_protokoll). Bis zu etwa 500 Artikelzeilen. #}
+   durchgang, zaehlung, pruefer, artikel, ohne_protokoll). Bis zu etwa 500 Artikelzeilen. Hersteller-Sets: Teile
+   (a.teil) eingerückt unter ihrem Set, an der Set-Zeile das Gesamtergebnis der Set-Prüfung (a.set_gesamt). #}
 {% block stil %}
 .uebersicht-tab { width: 100%; border-collapse: collapse; }
 .uebersicht-tab > tbody > tr > td { vertical-align: top; padding: 0; }
@@ -24,6 +25,8 @@ table.artikel-liste .klein { font-size: 7pt; color: var(--grau); }
 .zustand-ausgenommen { color: var(--schwarz); }
 tr.offen .nr-marke { background: var(--rot); color: #ffffff; font-weight: 700; }
 .berichtigung { font-size: 6.5pt; color: var(--grau); }
+tr.teil td.produkt { padding-left: 5mm; }
+.set-gesamt { font-size: 7pt; color: var(--schwarz); }
 table.verzeichnis td { padding: .9mm 1.3mm; }
 table.verzeichnis .hash { font-size: 7pt; }
 .abbruch { border: .5pt solid var(--linie); border-left: 2.5mm solid var(--rot); padding: 2.5mm 4mm; margin: 2mm 0 1mm;
@@ -93,10 +96,11 @@ table.verzeichnis .hash { font-size: 7pt; }
     <thead><tr><th class="zahl">Nr.</th><th>Inventar- / Seriennummer</th><th>Produkt und Ordner</th><th>Ergebnis</th><th>geprüft</th><th>Protokoll</th></tr></thead>
     <tbody>
     {%- for a in artikel %}
-      <tr class="{{ 'offen' if a.zustand == 'nicht_geprueft' }}">
+      <tr class="{{ 'offen' if a.zustand == 'nicht_geprueft' }}{{ ' teil' if a.teil }}">
         <td class="nr zahl"><span class="nr-marke">{{ a.nr }}</span></td>
         <td><div class="mono">{{ a.inventarnummer }}</div><div class="klein mono">{{ a.seriennummer }}</div>{% if a.seriennummer_vormals %}<div class="berichtigung">{{ a.seriennummer_vormals }}</div>{% endif %}</td>
-        <td><div class="wert">{{ produkt_mit_zusatz(a) }}</div><div class="klein">{{ a.ordner }}</div></td>
+        <td class="produkt"><div class="wert">{{ produkt_mit_zusatz(a) }}</div><div class="klein">{% if a.teil %}Teil von Set {{ a.gruppe }}{% else %}{{ a.ordner }}{% endif %}</div>
+          {%- if a.set_gesamt %}<div class="set-gesamt">Set-Prüfung: {{ a.set_gesamt }}</div>{% endif %}</td>
         <td>
           {%- if a.zustand == "erledigt" %}<span class="erg-{{ a.ergebnis }}">{{ a.ergebnis_text }}</span>
           {%- elif a.zustand == "ausgenommen" %}<span class="zustand-ausgenommen">ausgenommen</span>

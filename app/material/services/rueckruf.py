@@ -132,7 +132,8 @@ def _artikel_im_bestand(pid, iid=None, sichtbar=True):
     Konto der Anfrage sieht (über die Heimat, rechte.artikel_filter); False für die Mails, für die Auskunft an die
     Verwaltung und für einen einzelnen Artikel, dessen Recht der Aufrufer schon geprüft hat."""
     sql = ("SELECT i.id, i.inventory_no, i.serial_no, i.serial_generated, i.lock_state, i.lock_reason, i.folder_id, "
-           "i.origin_folder_id, (SELECT MAX(x.completed_at) FROM mat_inspection x WHERE x.item_id = i.id "
+           "i.origin_folder_id, (SELECT s.inventory_no FROM mat_item s WHERE s.id = i.parent_item_id) AS set_inventar, "
+           "(SELECT MAX(x.completed_at) FROM mat_inspection x WHERE x.item_id = i.id "
            "AND x.completed_at IS NOT NULL AND x.corrects_inspection_id IS NULL) AS geprueft_um "
            "FROM mat_item i WHERE i.product_id = ? AND i.lock_state <> 'ausgesondert'")
     if sichtbar:
@@ -201,7 +202,9 @@ def rueckruf_json(r, mit_artikel=False):
         out.update(_zahlen(liste))
         out["artikel"] = [{"id": a["id"], "inventory_no": a["inventory_no"], "serial_no": a["serial_no"],
                            "serial_generated": bool(a["serial_generated"]), "lock_state": a["lock_state"],
-                           "zustand": a["zustand"], "grund": a["grund"], "pfad": bestand._pfad_text(a["folder_id"])}
+                           "zustand": a["zustand"], "grund": a["grund"], "pfad": bestand._pfad_text(a["folder_id"]),
+                           # Teil eines Hersteller-Sets (A17): die Inventarnummer des Sets (gleiche Heimat, gleiche Sicht).
+                           "set_inventar": a["set_inventar"]}
                           for a in liste]
         if verwaltung:
             out["nicht_gefunden"] = nicht_gefunden(r, alle)          # alle: die Verwaltung sieht jeden Artikel
@@ -438,6 +441,7 @@ def _mailtext(r, p, liste):
     if liste:
         zeilen += ["", "Betroffene Artikel in deinem Bereich:"]
         zeilen += [f"  {a['inventory_no']}  SN {a['serial_no']}  {bestand._pfad_text(a['folder_id'])}"
+                   + (f"  (Teil von Set {a['set_inventar']})" if a.get("set_inventar") else "")
                    for a in liste[:MAIL_ARTIKEL_MAX]]
         if len(liste) > MAIL_ARTIKEL_MAX:
             zeilen.append(f"  … und {len(liste) - MAIL_ARTIKEL_MAX} weitere (siehe Produktseite)")

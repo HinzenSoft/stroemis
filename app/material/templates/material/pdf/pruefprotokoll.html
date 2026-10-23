@@ -2,7 +2,9 @@
 {# Prüfprotokoll einer abgeschlossenen Prüfung, angelehnt an die Prüfkarte nach EN 365: Artikel, Prüfung,
    Befunde je Gruppe, Ergebnis, Fotos zu den Prüfpunkten, Herstellerdokumente am Prüftag, Anhänge, Unterschrift.
    Daten laut services/pdf.py (dokument, artikel, pruefung, gruppen, maengel, fotos, dokumente, anhaenge,
-   anhaenge_angefuegt, unterschrift). #}
+   anhaenge_angefuegt, unterschrift). Hersteller-Sets (Schritt 21): pruefung.teil_von am Teil (Kopie „Teil von Set …“),
+   set_protokoll an der Prüfung des Set-Artikels (Set-Protokoll: Gesamtergebnis, Gründe, Hinweis, Teiletabelle –
+   services/setlauf.protokoll_daten). #}
 {% block stil %}
 /* Befunde */
 /* „kritisch“ steht wie in der Oberfläche (Befunde einer abgeschlossenen Prüfung) in einer eigenen schmalen Spalte
@@ -68,9 +70,20 @@ table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-ni
    zwischen ihre beiden Hälften. */
 .pruefsumme { margin-top: .6mm; line-height: 1.3; }
 .pruefsumme .lbl { display: inline; margin-right: 1mm; }
+
+/* Set-Protokoll: Gesamtergebnis wie das Ergebnis, darunter die Teiletabelle */
+.gesamt-einsatzbereit { border-left-color: var(--ok); }
+.gesamt-gesperrt { border-left-color: var(--gelb-dunkel); }
+.gesamt-ausgesondert { border-left-color: var(--rot); }
+.gesamt-einsatzbereit .ergebnis-text { color: var(--ok); }
+.gesamt-ausgesondert .ergebnis-text { color: var(--rot-dunkel); }
+table.teile { font-size: 8pt; }
+table.teile td { padding: 1mm 1.3mm; }
+table.teile .klein { font-size: 7pt; color: var(--grau); }
+.fehlt { font-weight: 700; color: var(--rot-dunkel); }
 {% endblock %}
 
-{% block unterzeile %}Prüftag {{ pruefung.datum }} · {{ pruefung.art }} · Ergebnis: <strong>{{ pruefung.ergebnis_text }}</strong>{% endblock %}
+{% block unterzeile %}Prüftag {{ pruefung.datum }} · {{ pruefung.art }} · Ergebnis: <strong>{{ pruefung.ergebnis_text }}</strong>{% if set_protokoll %} · Set: <strong>{{ set_protokoll.gesamt_text }}</strong>{% endif %}{% endblock %}
 
 {% block kopfzeile %}
 {%- if pruefung.berichtigt %}
@@ -92,6 +105,9 @@ table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-ni
       ("Prüfer", (pruefung.pruefer or "") ~ (", Urkunde " ~ pruefung.urkunde if pruefung.urkunde else "")),
       ("Anmeldung", pruefung.login), ("Prüfformular", pruefung.formular), ("Prüfdurchgang", pruefung.durchgang),
     ]) }}
+  {%- if pruefung.teil_von %}
+  {{ felder([("Teil von Set", pruefung.teil_von)], spalten=1) }}
+  {%- endif %}
   {%- if pruefung.grund %}
   {{ felder([("Anlass", pruefung.grund)], spalten=1) }}
   {%- endif %}
@@ -164,6 +180,42 @@ table.liste td.befund-mangel, table.liste td.befund-ok, table.liste td.befund-ni
   <div class="bemerkung"><div class="lbl">Bemerkung</div><div class="wert text">{{ pruefung.bemerkung }}</div></div>
   {%- endif %}
 </section>
+
+{%- if set_protokoll %}
+<section>
+  <h2>Set-Prüfung</h2>
+  <div class="ergebnis gesamt-{{ set_protokoll.gesamt }}">
+    <div class="lbl">Gesamtergebnis des Sets</div>
+    <div class="ergebnis-text">{{ set_protokoll.gesamt_text }}</div>
+    {%- if set_protokoll.freigegeben %}<div class="maengel">Das Set ist mit allen Teilen freigegeben.</div>{% endif %}
+    {%- if set_protokoll.gruende %}
+    <div class="bemerkung"><div class="lbl">Gründe</div>
+      {%- for g in set_protokoll.gruende %}<div class="wert text">{{ g }}</div>{% endfor %}</div>
+    {%- endif %}
+    {%- if set_protokoll.hinweis %}<div class="bemerkung"><div class="lbl">Hinweis</div><div class="wert text">{{ set_protokoll.hinweis }}</div></div>{% endif %}
+  </div>
+  <table class="liste teile">
+    <colgroup><col><col style="width: 30mm"><col style="width: 26mm"><col style="width: 34mm"></colgroup>
+    <thead><tr><th>Bestandteil</th><th>Inventar- / Seriennummer</th><th>Ergebnis</th><th>Protokoll</th></tr></thead>
+    <tbody>
+    {%- for z in set_protokoll.zeilen %}
+      <tr>
+        <td><span class="text">{{ z.bezeichnung }}</span>{% if z.art == "bestandteil" %}<div class="klein">nicht einzeln geführt</div>{% endif %}</td>
+        <td>{% if z.inventarnummer %}<div class="mono">{{ z.inventarnummer }}</div><div class="klein mono">{{ z.seriennummer }}</div>{% endif %}</td>
+        <td>
+          {%- if z.vorhanden_text %}<span class="{{ 'fehlt' if z.vorhanden == false }}">{{ z.vorhanden_text }}</span>
+          {%- elif z.ergebnis_text %}{{ z.ergebnis_text }}{% if z.uebernommen %}<div class="klein">übernommen</div>{% endif %}
+          {%- else %}<span class="klein">ohne Prüfung</span>{% endif -%}
+        </td>
+        <td>{% if z.protokoll_id %}<span class="mono">{{ z.protokoll_id }}</span>{% if z.pruefsumme %}<div class="hash">{{ z.pruefsumme }}</div>{% endif %}{% endif %}</td>
+      </tr>
+    {%- endfor %}
+    </tbody>
+  </table>
+  <p class="legende">Je Teil die Prüfung in dieser Set-Prüfung oder – „übernommen“ – seine letzte gültige Prüfung, mit
+    Protokoll-ID und SHA-256 der Protokolldatei. Nicht einzeln geführte Bestandteile: vorhanden oder fehlt laut Prüfpunkt.</p>
+</section>
+{%- endif %}
 
 {%- if fotos %}
 {#- Fotos gibt es zu Mängeln wie zu Prüfpunkten der Art „Foto“, die in Ordnung sind – die Bildunterschrift nennt

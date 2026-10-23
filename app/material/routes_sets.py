@@ -1,0 +1,81 @@
+"""Routen für Hersteller-Sets (Phase 4 · Lieferung 2, Paket K2): Set prüfen und Teile entnehmen, tauschen, einsetzen.
+
+Alle hängen am Set-Artikel (<iid>); die Rechte prüft requires_folder an seiner Heimat – Teile haben dieselbe. Ein Teil
+nennt die Anfrage mit „teil_id“: Gehört es nicht zu diesem Set (fremd oder unbekannt), antwortet der Dienst 404 wie für
+Unbekanntes (Entwurf H). Set prüfen eröffnet und bricht ab, wer prüfen darf (abbrechen auch der Materialwart – wie eine
+Reservierung aufheben); Teile entnimmt, tauscht und setzt ein, wer verwaltet. Festschreiben, Set aussondern und Teil
+löschen laufen über die vorhandenen Routen (pruefung_abschliessen, artikel_aussondern mit „verbleib“, artikel_loeschen).
+Die Regeln stehen in services/setlauf.py und services/setaustausch.py."""
+from flask import jsonify, request
+
+from ..auth import current_user, json_body
+from .routes import _pruefer, api
+from .services import Abgelehnt, bestand, kennung, setaustausch, setlauf, sets
+from .services.rechte import requires_folder
+
+
+def _set_antwort(iid, **mehr):
+    return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True), **mehr)
+
+
+@api.get("/artikel/<int:iid>/set-lauf")
+@requires_folder("lesen", "iid")
+def set_lauf_lesen(iid):
+    """Die offene Set-Prüfung voll (setlauf.lauf_json) oder null, dazu die Läufe des Sets (kurz, neueste zuerst). ?lauf=
+    eine andere Set-Prüfung dieses Sets voll (404, wenn sie nicht zu ihm gehört). Ein Artikel, der kein Set ist: null
+    und [] – wie ein Set ohne Prüfung."""
+    a = bestand.artikel(iid)
+    if a["parent_item_id"] or not sets.ist_set_artikel(a):
+        return jsonify(lauf=None, laeufe=[])
+    lid = kennung(request.args.get("lauf"), "Set-Prüfung", leer_erlaubt=True)
+    if lid is not None:
+        lf = setlauf.lauf(lid)
+        if lf["set_item_id"] != iid:
+            raise Abgelehnt("Set-Prüfung nicht gefunden.", 404)
+    else:
+        lf = setlauf.offener(iid)
+    return jsonify(lauf=setlauf.lauf_json(lf, current_user()["id"]) if lf else None, laeufe=setlauf.laeufe(iid))
+
+
+@api.post("/artikel/<int:iid>/set-lauf")
+@requires_folder("pruefen", "iid")
+def set_lauf_eroeffnen(iid):
+    """„Set prüfen“: {"durchgang_id": Kennung | null} – eröffnet die Set-Prüfung (201) oder liefert die offene (200)."""
+    rid = kennung(json_body().get("durchgang_id"), "Prüfdurchgang", leer_erlaubt=True)
+    lid, neu = setlauf.eroeffnen(iid, _pruefer(), rid)
+    return _set_antwort(iid, lauf=setlauf.lauf_json(setlauf.lauf(lid), current_user()["id"])), 201 if neu else 200
+
+
+@api.delete("/artikel/<int:iid>/set-lauf")
+@requires_folder(("pruefen", "verwalten"), "iid")
+def set_lauf_abbrechen(iid):
+    """Die offene Set-Prüfung abbrechen – „bleibt“: false, wenn sie mangels Prüfung ganz entfernt wurde."""
+    bleibt = setlauf.abbrechen(iid)
+    return _set_antwort(iid, bleibt=bleibt)
+
+
+@api.post("/artikel/<int:iid>/teil-entnehmen")
+@requires_folder("verwalten", "iid")
+def teil_entnehmen(iid):
+    """{"teil_id", "verbleib": "weiterfuehren" | "aussondern", bei „aussondern“ "grund", "bemerkung", "datum"} – liefert
+    das Set („artikel“) und das entnommene Teil („teil“)."""
+    tid = setaustausch.entnehmen(iid, json_body(), _pruefer())
+    return _set_antwort(iid, teil=bestand.artikel_json(bestand.artikel(tid), voll=True))
+
+
+@api.post("/artikel/<int:iid>/teil-tauschen")
+@requires_folder("verwalten", "iid")
+def teil_tauschen(iid):
+    """{"teil_id" (das alte), "verbleib" wie beim Entnehmen, Felder des neuen Teils ("serial_no", "manufactured_on",
+    "purchased_on", "first_use_on", "length_m"), "bestaetigt"} – 201 mit Set, neuem Teil und „hinweise“."""
+    neu, hinweise = setaustausch.einsetzen(iid, json_body(), _pruefer(), tausch=True)
+    return _set_antwort(iid, teil=bestand.artikel_json(bestand.artikel(neu), voll=True), hinweise=hinweise), 201
+
+
+@api.post("/artikel/<int:iid>/teil-einsetzen")
+@requires_folder("verwalten", "iid")
+def teil_einsetzen(iid):
+    """{"slot_id" (Position der Kopie, an der ein Teil fehlt – bei genau einer darf es fehlen), Felder des neuen Teils,
+    "bestaetigt"} – 201 mit Set, neuem Teil und „hinweise“."""
+    neu, hinweise = setaustausch.einsetzen(iid, json_body(), _pruefer(), tausch=False)
+    return _set_antwort(iid, teil=bestand.artikel_json(bestand.artikel(neu), voll=True), hinweise=hinweise), 201

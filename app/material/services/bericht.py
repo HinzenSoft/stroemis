@@ -19,7 +19,10 @@ Zählregeln (Kritiken S1–S24, A1–A19 zum Entwurf):
     und zählt nur im Aussonderungsblock); berichtigte Originale rundenunabhängig ausgeschlossen (OHNE_BERICHTIGTE);
     Entwürfe nur als Zahl.
   - Sperren aus dem Journal: nur der Übergang frei → gesperrt/verloren (before/after_json), unabhängig von der Aktion –
-    eine Meldung am schon gesperrten Artikel zählt nicht. Ausgegeben wird nur lock_reason, nie ein Pfadtext aus dem
+    eine Meldung am schon gesperrten Artikel zählt nicht. Hersteller-Sets (Schritt 21, Entscheidung A13/S13): Eine
+    Set-Sperre zählt einmal – an dem Artikel mit eigenem Grund bzw. am Set-Artikel, wenn das Set aus eigenem Anlass sperrt
+    (unvollständig, Teil getauscht – Art „set“); die mitgesperrten Zeilen („set_gesperrt“) zählen nicht, ebenso wenig das
+    Mitfreigeben („set_frei“) – frei gibt die Set-Prüfung am Set-Artikel („freigeprueft“). Ausgegeben wird nur lock_reason, nie ein Pfadtext aus dem
     Journal. Journalzeilen nur mit a.created_at >= i.created_at (Kennungen werden wiedervergeben).
   - Personen: ohne den Haken „Prüfer nennen“ enthält keine Ausgabe einen Personennamen oder eine Urkundennummer außer
     dem Ersteller – keine Melder, keine Durchgangs-Eröffner, keine Aussonderer, keine Zuordnungen.
@@ -46,7 +49,8 @@ KAPPUNG_GESAMT = 1500               # so viele Listenzeilen im ganzen PDF
 KAPPUNG_RUECKRUF = 50               # so viele betroffene Artikel je Rückruf im PDF
 # Die Sperrarten, wie sie aus dem Nachher eines Journaleintrags folgen (Reihenfolge der Ausgabe).
 SPERRARTEN = (("pruefung", "aus Prüfung (instandsetzen)"), ("mangel", "aus Mangelmeldung"), ("verlust", "Verlust"),
-              ("ohne_pruefung", "Sperre durch Prüfer ohne Prüfung"))
+              ("ohne_pruefung", "Sperre durch Prüfer ohne Prüfung"),
+              ("set", "Set unvollständig oder Teil getauscht"))
 # Die Grundarten einer Aussonderung aus dem Präfix des Grundtexts (pruefung._wirkung bzw. AUSSONDERUNGSGRUENDE).
 GRUNDARTEN = (("pruefung", "aus Prüfung (Ergebnis „aussondern“)"),) + tuple(AUSSONDERUNGSGRUENDE.items()) + (
     ("sonstiges", "sonstiger Grund"),)
@@ -324,14 +328,15 @@ def _sperren(params):
         "json_extract(a.after_json, '$.lock_reason') AS grund, "
         "json_extract(a.after_json, '$.pruefung') IS NOT NULL AS aus_pruefung, "
         "json_extract(a.after_json, '$.mangel') IS NOT NULL AS aus_mangel, "
+        "json_extract(a.after_json, '$.set_grund') IS NOT NULL AS aus_set, "
         f"{bestand.demo_sql('i', 'p')} AS demo FROM mat_audit a JOIN mat_item i ON i.id = a.entity_id "
-        f"JOIN mat_product p ON p.id = i.product_id WHERE {MENGE} AND {SPERRE} AND "
+        f"JOIN mat_product p ON p.id = i.product_id WHERE {MENGE} AND {SPERRE} AND a.action <> 'set_gesperrt' AND "
         + IM_JAHR_UTC.format(spalte="a.created_at") + " ORDER BY a.created_at, a.id", params)
     arten = {k: 0 for k, _ in SPERRARTEN}
     liste = []
     for r in rows:
         art = ("verlust" if r["zustand"] == "verloren" else "pruefung" if r["aus_pruefung"]
-               else "mangel" if r["aus_mangel"] else "ohne_pruefung")
+               else "mangel" if r["aus_mangel"] else "set" if r["aus_set"] else "ohne_pruefung")
         arten[art] += 1
         liste.append({"datum": datum_text(protokoll.ortszeit(r["created_at"]).date().isoformat()),
                       "inventarnummer": r["inventory_no"], "art": art, "art_text": dict(SPERRARTEN)[art],

@@ -579,9 +579,9 @@ def test_set_anlegen():
         tj = zeilen(app, "SELECT after_json FROM mat_audit WHERE entity = 'item' AND entity_id = ? AND action = 'angelegt'",
                     (teile[0]["id"],))[0]["after_json"]
         assert f'"set": {a["id"]}' in tj and f'"set_inventar": "{a["inventory_no"]}"' in tj, tj
-        # Am Teil: „teil_von“, kein Set-Block; löschen erst mit „Teil entnehmen“.
+        # Am Teil: „teil_von“, kein Set-Block; ein ungeprüftes Teil lässt sich einzeln löschen (K2 – sperrt das Set).
         x = ok(w.get(f"/api/material/artikel/{teile[0]['id']}"))["artikel"]
-        assert x["set"] is None and not x["ist_set"] and x["darf_loeschen"] is False
+        assert x["set"] is None and not x["ist_set"] and x["darf_loeschen"] is True
         assert x["teil_von"] == {"id": a["id"], "inventory_no": a["inventory_no"], "produkt": "Testwerk Testset Alpha",
                                  "status": "neu", "status_text": "neu", "bestandteil": "Verbindungselement"}, x["teil_von"]
         assert a["darf_loeschen"] is True
@@ -721,9 +721,9 @@ def test_listen_und_status():
 
 def test_routen_tabelle():
     """Route × {Set-Artikel, Teil, freier Artikel} mit dem erwarteten Status (Weichen im Dienst, S9). Set verschieben und
-    zuordnen nehmen die Teile mit (Journal je Teil mit dem Set); Sperren, Mangelmeldung und eine sperrende Prüfung
-    an Set-Artikel und Teil warten auf die Sperr-Kaskade (409); eine Prüfung mit „einsatzbereit“ am Teil geht. Nach jeder
-    Anfrage liegen alle Sets stimmig."""
+    zuordnen nehmen die Teile mit (Journal je Teil mit dem Set); Sperren und Mangelmeldung gehen an Set-Artikel und Teil
+    (Sperr-Kaskade, K2 – auch an einem schon mitgesperrten Teil); Aussondern am Teil nur über „Teil entnehmen“, am Set
+    nicht nach einer ungeprüften Meldung. Nach jeder Anfrage liegen alle Sets stimmig."""
     from app.material.services import mangel
     alt = mails_abfangen(mangel, lambda an, betreff, inhalt: True)
     try:
@@ -746,11 +746,13 @@ def test_routen_tabelle():
                 # Am Set ist es dasselbe Produkt – nichts ändert sich (200); Teil und freier Artikel: 409 (A7b).
                 ("zu Set-Produkt", lambda x: w.put(f"/api/material/artikel/{x}", json={"product_id": t.set_p}),
                  200, 409, 409),
+                # K2: Das Set sperrt ganz; das Teil ist danach mitgesperrt und nimmt trotzdem eine eigene Sperre an.
                 ("sperren", lambda x: p.post(f"/api/material/artikel/{x}/sperren", json={"grund": "sturz"}),
-                 409, 409, 200),
+                 200, 200, 200),
                 ("mangel", lambda x: w.post(f"/api/material/artikel/{x}/mangel", json={"beschreibung": "Testmangel"}),
-                 409, 409, 201),
-                # Der freie Artikel ist hier vom Prüfer gesperrt (Zeile „sperren“) – der Materialwart sondert aus.
+                 201, 201, 201),
+                # Der freie Artikel ist hier vom Prüfer gesperrt (Zeile „sperren“) – der Materialwart sondert aus. Am Set
+                # steht seit eben eine ungeprüfte Meldung (409), am Teil geht es nur über „Teil entnehmen“.
                 ("aussondern", lambda x: w.post(f"/api/material/artikel/{x}/aussondern", json={"grund": "irreparabel"}),
                  409, 409, 200),
             ]
@@ -759,7 +761,7 @@ def test_routen_tabelle():
                     r = anfrage(wer)
                     assert r.status_code == soll, (name, wer, r.status_code, r.get_json())
                     if wer == k1 and soll == 409:
-                        assert "Teil des Sets" in r.json["error"] or "Set-Sperre" in r.json["error"], (name, r.get_json())
+                        assert "Teil des Sets" in r.json["error"], (name, r.get_json())
                     assert stimmig(app), name
                     if name == "verschieben" and soll == 200:
                         ziel = zeilen(app, "SELECT folder_id FROM mat_item WHERE id = ? OR parent_item_id = ?", (wer, wer))
@@ -771,18 +773,24 @@ def test_routen_tabelle():
             # Journal am Teil: verschoben und zugeordnet mit dem Set.
             j = zeilen(app, "SELECT action, after_json FROM mat_audit WHERE entity = 'item' AND entity_id = ? ORDER BY id",
                        (k1,))
-            assert [x["action"] for x in j] == ["angelegt", "verschoben", "verschoben", "zugeordnet", "zuordnung_geloest"], j
-            assert all(f'"set": {s}' in x["after_json"] for x in j[1:]), j
-            # Prüfung am Teil: einsatzbereit geht, instandsetzen wartet auf die Kaskade.
-            pid = ok(starten(p, k1), 201)["pruefung"]["id"]
-            assert festschreiben(p, pid, ergebnis="einsatzbereit").status_code == 200
+            assert [x["action"] for x in j][:5] == ["angelegt", "verschoben", "verschoben", "zugeordnet",
+                                                    "zuordnung_geloest"], j
+            assert all(f'"set": {s}' in x["after_json"] for x in j[1:5]), j
+            # K2: mit dem Set gesperrt (System), dann eigene Sperre und Meldung am Teil.
+            assert [x["action"] for x in j][5:] == ["set_gesperrt", "gesperrt", "mangel_gemeldet"], j
+            # Prüfung am Teil im gesperrten Set: einsatzbereit nimmt nur den eigenen Grund, instandsetzen setzt ihn.
+            pr = ok(starten(p, k1), 201)["pruefung"]
+            assert festschreiben(p, pr["id"], ergebnis="einsatzbereit",
+                                 maengel_gesehen=[m["id"] for m in pr["maengel"]]).status_code == 200
+            assert zeilen(app, "SELECT lock_state, lock_cause FROM mat_item WHERE id = ?", (k1,)) == [
+                {"lock_state": "gesperrt", "lock_cause": "set"}]
             pid = ok(starten(p, t.teile[1]), 201)["pruefung"]["id"]
-            r = festschreiben(p, pid, ergebnis="instandsetzen", grund="Testgrund")
-            assert r.status_code == 409 and "Set-Sperre" in r.json["error"], r.get_json()
+            assert festschreiben(p, pid, ergebnis="instandsetzen", grund="Testgrund").status_code == 200
+            assert zeilen(app, "SELECT lock_cause FROM mat_item WHERE id = ?", (t.teile[1],))[0]["lock_cause"] == "eigen"
             assert stimmig(app)
-            # Löschen: Teil 409 (kommt mit „Teil entnehmen“), Set mit einer Prüfung an einem Teil 409 (nur ganz und ungeprüft).
+            # Löschen: ein geprüftes Teil 409 wie jeder geprüfte Artikel, Set mit einer Prüfung an einem Teil 409.
             r = w.delete(f"/api/material/artikel/{k1}", headers=H)
-            assert r.status_code == 409 and "Teil des Sets" in r.json["error"], r.get_json()
+            assert r.status_code == 409 and "Prüfungen" in r.json["error"], r.get_json()
             r = w.delete(f"/api/material/artikel/{s}", headers=H)
             assert r.status_code == 409 and "aussondern statt löschen" in r.json["error"], r.get_json()
             # Kontrolle: Aussondern und Löschen freier Artikel gehen wie bisher.
