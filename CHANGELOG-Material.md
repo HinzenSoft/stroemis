@@ -4151,7 +4151,7 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
-## Phase 4 · Lieferung 2 – Sets mit Komponenten (23.10.2026, Stand: KERN Teil 2, Oberfläche Teile 1 und 2, Nachbesserung nach den drei Prüfungen)
+## Phase 4 · Lieferung 2 – Sets mit Komponenten (23.10.2026, Stand: geliefert, wartet auf Freigabe)
 
 Grundlage: `planung/material-phase4/entwurf_l2.md` (Fassung 2 nach den Kritiken „Sicherheit“ S1–S31 und „Ablauf“
 A1–A33, mit den Entscheidungen des Nutzers vom 23.10.2026: Hersteller-Sets, Set-Artikel mit Teil-Artikeln, Teil
@@ -4862,6 +4862,20 @@ Regelprüfung, Frühere mit Gesamtergebnis) und offen aus dem Durchgang (Fortsch
 Gesamtergebnis im Kopf, Produkt-Dialog neu (kein Reiter) und bearbeiten (Entfernen, Hilfe, keine Bewegung), Meine PSA
 mit Set-Karte und Mangel-Dialog – ohne Konsolenfehler (außer der gewollten 409). `st-geraete` (Chromium, Firefox,
 WebKit, alle Geräte) für Set-Seite, Set prüfen, Prüfansicht und Meine PSA.
+
+### Katalog-Nachtrag „Sets“ (Katalogdaten, nicht im Repository)
+
+Mit dieser Lieferung kommt der Katalog-Nachtrag `katalog-sets.zip` (Format 2, 41,3 MB; zwei Teile ≤ 28 MB, je allein
+einspielbar): 14 neue Teilprodukte (MGO 60, Bm'D, Tango, Quick Link Asymmetric, CAMP Hercules/Oval/Hook/Express Ring,
+Edelrid DSG Triton, Climbing Technology K-ADVANCE (Skylotec H-314), Singing Rock Big/Giga Connector) und die Stückliste
+für 23 vorhandene Hersteller-Sets (Petzl ABSORBICA-Y MGO ×4, Kong Rescue TRIMMER, CAMP Dynatwo, Retexo Rewind Double,
+Rope Adjuster ×3, Temporary Lifeline ×2, Edelrid Ombilix Adjust ×3, Skylotec LORY X ×4, Singing Rock Reactor ×4) –
+nur aus Herstellerquellen, unabhängig geprüft (0 Fehler), Bericht mit Fundstellen, „Bitte bestätigen“ und Rückfragen an
+die Hersteller beim Nachtrag. Einspielen erst NACH dem Deploy dieser Lieferung (ein älterer Stand übergeht „set“ und
+„bestandteile“ ohne Meldung); vorher müssen die Lieferungen Selbstsicherungen und Karabiner eingespielt sein, und zu
+keinem der 23 Set-Produkte darf es schon Artikel geben (sonst speichert der Import nichts und nennt das Produkt). Die
+Ablaufprüfung hat Kong Rescue TRIMMER und Petzl ABSORBICA-Y MGO aus dem Nachtrag komplett durchgespielt (anlegen, Set
+prüfen mit Set-Protokoll, Teil tauschen, Freigabe).
 
 ### Bitte bestätigen (zusammengeführt)
 
