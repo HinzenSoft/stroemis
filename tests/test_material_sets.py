@@ -447,7 +447,7 @@ def test_format_2():
         # Das Set vor seinen Bestandteilen – der zweite Durchgang löst die Verweise erst nach allen Produkten auf.
         daten["produkte"].sort(key=lambda p: p["modell"] != "Testset Alpha")
         b = _importieren(app2, daten)
-        assert b["gespeichert"] and not b["fehler"] and b["stuecklisten"] == {"geaendert": 1, "unveraendert": 0}, b
+        assert b["gespeichert"] and not b["fehler"] and b["stuecklisten"] == {"neu": 1, "geaendert": 0, "unveraendert": 0}, b
         p2 = zeilen(app2, "SELECT * FROM mat_product WHERE model = 'Testset Alpha'")[0]
         assert p2["is_set"] == 1 and p2["uid"] == s["uid"]
         assert [(z["bezeichnung"], z["anzahl"], z["einzeln"], z["austausch"], z["model"]) for z in zeilen(
@@ -457,7 +457,7 @@ def test_format_2():
             ("Tasche", 1, 0, "nicht_belegt", None)]
         assert any("Stückliste ersetzt (3 Positionen)" in z for z in b["aenderungen"]), b["aenderungen"]
         b = _importieren(app2, daten)
-        assert b["gespeichert"] and b["stuecklisten"] == {"geaendert": 0, "unveraendert": 1}, b
+        assert b["gespeichert"] and b["stuecklisten"] == {"neu": 0, "geaendert": 0, "unveraendert": 1}, b
         # Ersetzen als Ganzes: eine Position weniger – ersetzt, mit Journal.
         kurz = dict(s, bestandteile=s["bestandteile"][:2])
         b = _importieren(app2, dict(daten, produkte=[p if p["modell"] != "Testset Alpha" else kurz for p in daten["produkte"]]))
@@ -476,7 +476,7 @@ def test_format_2():
         fehler([dict(s, set=False)], "nur ein Hersteller-Set hat Bestandteile")
         fehler([dict(hms, bestandteile=[{"bezeichnung": "Tasche"}])], "„set“: true fehlt")
         fehler([dict(s, bestandteile=[{"produkt": {"hersteller": "Nirgendwerk", "modell": "Phantom"}, "einzeln": True}])],
-               "weder im Katalog noch in der Datei")
+               "„Nirgendwerk | Phantom | –“ (Hersteller | Modell | Artikelnummer) gibt es weder im Katalog noch in der Datei")
         fehler([dict(s, bestandteile=[{"bezeichnung": "Tasche", "anzahl": 99}])], "zwischen 1 und 20")
         fehler([dict(s, bestandteile="Tasche")], "Liste")
         # Umschalten an einem Produkt mit Artikeln: Fehler dieses Produkts.
@@ -497,7 +497,7 @@ def test_format_2():
         with open(os.path.join(REPO, "docs", "material-katalog-set-vorlage.json"), encoding="utf-8") as fh:
             vorlage = json.load(fh)
         b = _importieren(app2, vorlage, trocken=True)
-        assert not b["fehler"] and b["stuecklisten"]["geaendert"] == 1 and b["produkte"]["neu"] == 2, b
+        assert not b["fehler"] and b["stuecklisten"]["neu"] == 1 and b["produkte"]["neu"] == 2, b
         # Probelauf schreibt nichts.
         b = _importieren(app2, dict(daten, produkte=[dict(s, bestandteile=[])]), trocken=True)
         assert not b["gespeichert"] and zeilen(app2, "SELECT COUNT(*) AS n FROM mat_product_component WHERE "
@@ -549,7 +549,7 @@ def test_set_anlegen():
         falsch({"teile": teile_fuer(liste) + [{"bestandteil_id": tasche["id"]}]}, "nicht als einzeln geführter")
         falsch({"teile": teile_fuer(liste, ("DOPPELT-1", "doppelt-1"))}, "zweimal")
         falsch({"teile": [dict(x, serial_no="STR-000123") if n == 0 else x for n, x in enumerate(teile_fuer(liste))]},
-               "Teil „Verbindungselement“: Seriennummern der Form")
+               "Teil „Verbindungselement“ 1 von 2 (Seriennummer „STR-000123“): Seriennummern der Form")
         r = w.post("/api/material/artikel", json={"product_id": t.ids["hms"], "folder_id": t.lager_a, "teile": []})
         assert r.status_code == 400 and "nur beim Anlegen eines Hersteller-Sets" in r.json["error"], r.get_json()
         leer = ok(t.k["katalog"].post("/api/material/produkte", json={

@@ -2,19 +2,20 @@
 
 Alle hängen am Set-Artikel (<iid>); die Rechte prüft requires_folder an seiner Heimat – Teile haben dieselbe. Ein Teil
 nennt die Anfrage mit „teil_id“: Gehört es nicht zu diesem Set (fremd oder unbekannt), antwortet der Dienst 404 wie für
-Unbekanntes (Entwurf H). Set prüfen eröffnet und bricht ab, wer prüfen darf (abbrechen auch der Materialwart – wie eine
-Reservierung aufheben); Teile entnimmt, tauscht und setzt ein, wer verwaltet. Festschreiben, Set aussondern und Teil
+Unbekanntes (Entwurf H). Set prüfen eröffnet, wer prüfen darf; abbrechen darf, wer die Set-Prüfung eröffnet hat, und der
+Materialwart (verwalten – wie eine Reservierung aufheben), andere bekommen 403. Teile entnimmt, tauscht und setzt ein,
+wer verwaltet. Festschreiben, Set aussondern und Teil
 löschen laufen über die vorhandenen Routen (pruefung_abschliessen, artikel_aussondern mit „verbleib“, artikel_loeschen).
 Die Regeln stehen in services/setlauf.py und services/setaustausch.py.
 
 Dazu die Seite „Set prüfen“ (Oberfläche O2): /material/artikel/<iid>/set-pruefung zeigt den Prüfumfang je Teil und führt
 von Prüfung zu Prüfung; sehen genügt (wie bei „Prüfung starten“), die Knöpfe richten sich nach „darf“."""
-from flask import jsonify, request
+from flask import g, jsonify, request
 
 from ..auth import current_user, json_body
 from .routes import _pruefer, _seite, api, seiten
 from .services import Abgelehnt, bestand, kennung, setaustausch, setlauf, sets
-from .services.rechte import requires_folder
+from .services.rechte import darf_artikel, requires_folder
 
 
 @seiten.get("/material/artikel/<int:iid>/set-pruefung")
@@ -60,8 +61,9 @@ def set_lauf_eroeffnen(iid):
 @api.delete("/artikel/<int:iid>/set-lauf")
 @requires_folder(("pruefen", "verwalten"), "iid")
 def set_lauf_abbrechen(iid):
-    """Die offene Set-Prüfung abbrechen – „bleibt“: false, wenn sie mangels Prüfung ganz entfernt wurde."""
-    bleibt = setlauf.abbrechen(iid)
+    """Die offene Set-Prüfung abbrechen (wer sie eröffnet hat oder der Materialwart, sonst 403) – „bleibt“: false, wenn sie
+    mangels Prüfung ganz entfernt wurde."""
+    bleibt = setlauf.abbrechen(iid, _pruefer(), darf_verwalten=darf_artikel("verwalten", g.mat_artikel))
     return _set_antwort(iid, bleibt=bleibt)
 
 

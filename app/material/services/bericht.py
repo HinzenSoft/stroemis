@@ -21,7 +21,8 @@ Zählregeln (Kritiken S1–S24, A1–A19 zum Entwurf):
   - Sperren aus dem Journal: nur der Übergang frei → gesperrt/verloren (before/after_json), unabhängig von der Aktion –
     eine Meldung am schon gesperrten Artikel zählt nicht. Hersteller-Sets (Schritt 21, Entscheidung A13/S13): Eine
     Set-Sperre zählt einmal – an dem Artikel mit eigenem Grund bzw. am Set-Artikel, wenn das Set aus eigenem Anlass sperrt
-    (unvollständig, Teil getauscht – Art „set“); die mitgesperrten Zeilen („set_gesperrt“) zählen nicht, ebenso wenig das
+    (unvollständig, Teil getauscht – Art „set“; ebenso ein Teil, das beim Aussondern des Sets entnommen und gesperrt
+    weitergeführt wird); die mitgesperrten Zeilen („set_gesperrt“) zählen nicht, ebenso wenig das
     Mitfreigeben („set_frei“) – frei gibt die Set-Prüfung am Set-Artikel („freigeprueft“). Ausgegeben wird nur lock_reason, nie ein Pfadtext aus dem
     Journal. Journalzeilen nur mit a.created_at >= i.created_at (Kennungen werden wiedervergeben).
   - Personen: ohne den Haken „Prüfer nennen“ enthält keine Ausgabe einen Personennamen oder eine Urkundennummer außer
@@ -50,7 +51,7 @@ KAPPUNG_RUECKRUF = 50               # so viele betroffene Artikel je Rückruf im
 # Die Sperrarten, wie sie aus dem Nachher eines Journaleintrags folgen (Reihenfolge der Ausgabe).
 SPERRARTEN = (("pruefung", "aus Prüfung (instandsetzen)"), ("mangel", "aus Mangelmeldung"), ("verlust", "Verlust"),
               ("ohne_pruefung", "Sperre durch Prüfer ohne Prüfung"),
-              ("set", "Set unvollständig oder Teil getauscht"))
+              ("set", "Set unvollständig, Teil getauscht oder Set ausgesondert"))
 # Die Grundarten einer Aussonderung aus dem Präfix des Grundtexts (pruefung._wirkung bzw. AUSSONDERUNGSGRUENDE).
 GRUNDARTEN = (("pruefung", "aus Prüfung (Ergebnis „aussondern“)"),) + tuple(AUSSONDERUNGSGRUENDE.items()) + (
     ("sonstiges", "sonstiger Grund"),)
@@ -335,8 +336,10 @@ def _sperren(params):
     arten = {k: 0 for k, _ in SPERRARTEN}
     liste = []
     for r in rows:
-        art = ("verlust" if r["zustand"] == "verloren" else "pruefung" if r["aus_pruefung"]
-               else "mangel" if r["aus_mangel"] else "set" if r["aus_set"] else "ohne_pruefung")
+        # Ein Set-Anlass geht der Prüfung vor: Ein Teil, das beim Aussondern des Sets aus einer Prüfung entnommen und
+        # gesperrt weitergeführt wird, trägt beides – gesperrt hat es das Aussondern, kein „instandsetzen“ (Ablauf N2).
+        art = ("verlust" if r["zustand"] == "verloren" else "set" if r["aus_set"] else "pruefung" if r["aus_pruefung"]
+               else "mangel" if r["aus_mangel"] else "ohne_pruefung")
         arten[art] += 1
         liste.append({"datum": datum_text(protokoll.ortszeit(r["created_at"]).date().isoformat()),
                       "inventarnummer": r["inventory_no"], "art": art, "art_text": dict(SPERRARTEN)[art],

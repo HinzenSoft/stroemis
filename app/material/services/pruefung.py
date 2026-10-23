@@ -881,7 +881,8 @@ def _wirkung_im_set(item, p, ergebnis, tag, naechste, grund, pruefer, ts=None, d
                       Sperre bleiben, frei wird nur das ganze Set in einer Set-Prüfung; erledigt gemeldete Mängel (keine
                       Berichtigung).
       instandsetzen   eigene Sperre – sperrt das ganze Set, auch an einem schon mitgesperrten Teil (sets.sperren).
-      aussondern      am Teil: entnehmen und aussondern, das Set ist unvollständig gesperrt; am Set-Artikel: Set aussondern
+      aussondern      am Teil: entnehmen und aussondern, das Set ist unvollständig gesperrt – bei „Austausch laut Hersteller:
+                      nein“ bleibt es mit eigener Sperre im Set (dann das Set aussondern); am Set-Artikel: Set aussondern
                       mit „verbleib“ je Teil (Vorbelegung)."""
     from . import mangel, sets, setaustausch, setlauf
     iid = item["id"]
@@ -910,7 +911,12 @@ def _wirkung_im_set(item, p, ergebnis, tag, naechste, grund, pruefer, ts=None, d
     else:
         db.execute("UPDATE mat_item SET last_inspected_on = ?, updated_at = ? WHERE id = ?", (tag, db.now(), iid))
         text_ = "Prüfergebnis „aussondern“" + (f": {grund}" if grund else "")
-        if item["parent_item_id"]:
+        if item["parent_item_id"] and setaustausch.nicht_austauschbar(item):
+            # „Austausch laut Hersteller: nein“ (Entwurf G, Nachbesserung Ablauf N3): Das Teil verlässt das Set nicht – es
+            # bleibt mit eigener Sperre darin, der Materialwart sondert das Set aus (das Teil ist dort mit aussondern
+            # vorbelegt).
+            setaustausch.teil_bleibt_gesperrt(bestand.artikel(iid), p, text_ + setaustausch.SET_AUSSONDERN_HINWEIS)
+        elif item["parent_item_id"]:
             setaustausch.teil_aus_pruefung(bestand.artikel(iid), p, text_, tag, pruefer, ts)
         else:
             _, tz = sets.zeilen(iid)
@@ -1189,11 +1195,16 @@ def berichtigen(pid, d, pruefer):
             runde = None
             if p["round_id"] and durchgang.runde(p["round_id"])["closed_on"] is None:
                 runde = p["round_id"]
-            # Wie der Durchgang: Läuft die Set-Prüfung des Originals noch, zählt die Berichtigung dort (K2).
+            # Wie der Durchgang: Läuft die Set-Prüfung des Originals noch, zählt die Berichtigung dort (K2) – nur, solange
+            # der Artikel noch zu diesem Set gehört; ein inzwischen entnommenes Teil berichtigt als Einzelprüfung
+            # (Nachbesserung, Sicherheit 3).
             lauf = None
-            if p["set_lauf_id"] and db.query("SELECT 1 FROM mat_set_lauf WHERE id = ? AND state = 'offen'",
-                                             (p["set_lauf_id"],), one=True):
-                lauf = p["set_lauf_id"]
+            lf = db.query("SELECT set_item_id FROM mat_set_lauf WHERE id = ? AND state = 'offen'", (p["set_lauf_id"],),
+                          one=True) if p["set_lauf_id"] else None
+            if lf:
+                a = db.query("SELECT id, parent_item_id FROM mat_item WHERE id = ?", (p["item_id"],), one=True)
+                if a and lf["set_item_id"] in (a["id"], a["parent_item_id"]):
+                    lauf = p["set_lauf_id"]
             ts = db.now()
             neu = db.execute(
                 "INSERT INTO mat_inspection (item_id, round_id, inspector_user_id, inspector_name, inspector_certificate, "

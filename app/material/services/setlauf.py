@@ -80,11 +80,25 @@ def _set_artikel(set_id):
     return s
 
 
-def umfang(s, teil_zeilen):
-    """Die Teile (Kennungen), die im Lauf geprüft sein müssen – siehe Kopf."""
+def uebernehmbar(t, lid=None, lp=None):
+    """Zählt das Teil mit seiner letzten gültigen Prüfung außerhalb dieses Laufs (lid), ohne im Lauf geprüft zu werden?
+    Nur mit einer solchen Prüfung „einsatzbereit“, die nicht überfällig ist – und, solange es im Lauf (lp) noch nicht
+    geprüft ist, nicht „neu“ oder „überfällig“ (Status ohne die Sperre). Sonst gehört es von selbst zum Prüfumfang
+    (Nachbesserung, Ablauf N1)."""
+    alt = letzte_gueltige(t["id"], ohne_lauf=lid)
+    if not alt or alt["result"] != "einsatzbereit" or not alt["next_due_on"] or alt["next_due_on"] < heute().isoformat():
+        return False
+    if lp is None or t["id"] not in lp:
+        return st.status(dict(t, lock_state="frei")) not in ("neu", "ueberfaellig")
+    return True
+
+
+def umfang(s, teil_zeilen, lid=None, lp=None):
+    """Die Teile (Kennungen), die im Lauf geprüft sein müssen – siehe Kopf; dazu jedes Teil ohne übernehmbare Prüfung
+    (uebernehmbar). lid/lp: der Lauf und seine Prüfungen (lauf_pruefungen) – ohne sie die Vorschau vor dem Eröffnen."""
     if s["lock_state"] == "frei" or s["set_lock_origin"] == "set":
         return [t["id"] for t in teil_zeilen]
-    return [t["id"] for t in teil_zeilen if t["set_pruefen"]]
+    return [t["id"] for t in teil_zeilen if t["set_pruefen"] or not uebernehmbar(t, lid, lp)]
 
 
 def lauf_pruefungen(lid):
@@ -100,52 +114,63 @@ def entwuerfe(lid):
     return db.query("SELECT * FROM mat_inspection WHERE set_lauf_id = ? AND completed_at IS NULL ORDER BY id", (lid,))
 
 
-def letzte_gueltige(iid):
+def letzte_gueltige(iid, ohne_lauf=None):
     """Die letzte gültige Prüfung eines Artikels: abgeschlossen, keine Aussonderung, nicht durch eine abgeschlossene
-    Berichtigung ersetzt – die „übernommene“ im Set-Protokoll."""
+    Berichtigung ersetzt – die „übernommene“ im Set-Protokoll. ohne_lauf: Prüfungen dieses Laufs zählen nicht."""
+    lauf_sql, args = ("AND (x.set_lauf_id IS NULL OR x.set_lauf_id <> ?) ", (iid, ohne_lauf)) if ohne_lauf else ("", (iid,))
     return db.query("SELECT x.* FROM mat_inspection x WHERE x.item_id = ? AND x.completed_at IS NOT NULL "
-                    "AND x.kind <> 'aussonderung' AND NOT EXISTS (SELECT 1 FROM mat_inspection b WHERE "
+                    "AND x.kind <> 'aussonderung' " + lauf_sql + "AND NOT EXISTS (SELECT 1 FROM mat_inspection b WHERE "
                     "b.corrects_inspection_id = x.id AND b.completed_at IS NOT NULL) "
-                    "ORDER BY x.completed_at DESC, x.id DESC LIMIT 1", (iid,), one=True)
+                    "ORDER BY x.completed_at DESC, x.id DESC LIMIT 1", args, one=True)
 
 
-def freigabe_gruende(s, teil_zeilen, lp, vorschau=False):
+# Warum das Set (noch) nicht frei wird – je Grund ein ganzer Satz (Nachbesserung, Browser V4).
+STATUS_SATZ = {"neu": "{nr} wurde noch nie geprüft – bitte jetzt prüfen.",
+               "ueberfaellig": "Die Prüfung von {nr} ist überfällig – bitte jetzt prüfen.",
+               "lebensdauer": "{nr} hat die Lebensdauer erreicht – das Teil tauschen oder das Set aussondern."}
+NOCH_NICHT = "{nr} ist in dieser Set-Prüfung noch nicht geprüft."
+
+
+def freigabe_gruende(s, teil_zeilen, lp, vorschau=False, lid=None):
     """Warum das Set (noch) nicht frei werden kann – leer heißt: Freigabe. Frisch gelesen in der Transaktion des Aufrufers
     (keine Zwischenspeicher der Anfrage wie mangel.offene_artikel). vorschau: vor dem Festschreiben des Set-Artikels –
-    seine eigene Sperre, sein Mangel und sein Entwurf zählen dann nicht (die Prüfung, um die es geht, räumt sie ab)."""
+    seine eigene Sperre, sein Mangel und sein Entwurf zählen dann nicht (die Prüfung, um die es geht, räumt sie ab).
+    lid: der Lauf (für den Prüfumfang). Je Grund ein ganzer Satz."""
     from . import mangel, pruefung
     gruende = []
-    umf = set(umfang(s, teil_zeilen))
+    umf = set(umfang(s, teil_zeilen, lid, lp))
     for x in [s] + list(teil_zeilen):
         nr, selbst = x["inventory_no"], x["id"] == s["id"]
         if not (vorschau and selbst):
             if x["lock_state"] == "verloren":
-                gruende.append(f"{nr}: verloren")
-            elif x["lock_cause"] == "eigen":
-                gruende.append(f"{nr}: eigene Sperre ({x['lock_reason'] or 'gesperrt'})")
+                gruende.append(f"{nr} ist verloren gemeldet.")
+            elif sets._eigen_gesperrt(x):
+                gruende.append(f"{nr} hat eine eigene Sperre ({x['lock_reason'] or 'ohne Angabe'}).")
             if mangel.offene_ids(x["id"]):
-                gruende.append(f"{nr}: gemeldeter Mangel offen")
+                gruende.append(f"An {nr} ist ein gemeldeter Mangel offen.")
             e = pruefung.offener_entwurf(x["id"])
             if e:
-                gruende.append(f"{nr}: Prüfung offen bei {e['inspector_name'] or 'unbekannt'}")
+                gruende.append(f"{nr} ist in Prüfung bei {e['inspector_name'] or 'unbekannt'}.")
             status = st.status(dict(x, lock_state="frei"))
             if status in ("neu", "ueberfaellig", "lebensdauer"):
-                gruende.append(f"{nr}: {st.LABEL[status]}")
+                gruende.append(STATUS_SATZ[status].format(nr=nr))
         elif x["retire_by"] and x["retire_by"] <= heute().isoformat():
-            gruende.append(f"{nr}: {st.LABEL['lebensdauer']}")
+            gruende.append(STATUS_SATZ["lebensdauer"].format(nr=nr))
     for t in teil_zeilen:
         x = lp.get(t["id"])
         if x and x["result"] != "einsatzbereit":
-            gruende.append(f"{t['inventory_no']}: in der Set-Prüfung „{ERGEBNISSE.get(x['result'], x['result'])}“")
+            gruende.append(f"{t['inventory_no']} wurde in der Set-Prüfung mit „{ERGEBNISSE.get(x['result'], x['result'])}“ "
+                           "geprüft.")
         elif not x and t["id"] in umf:
-            gruende.append(f"{t['inventory_no']}: in der Set-Prüfung noch nicht geprüft")
+            if st.status(dict(t, lock_state="frei")) not in ("neu", "ueberfaellig"):    # sonst sagt es der Satz oben
+                gruende.append(NOCH_NICHT.format(nr=t["inventory_no"]))
         elif not x:
             alt = letzte_gueltige(t["id"])
             if not alt or alt["result"] != "einsatzbereit":
-                gruende.append(f"{t['inventory_no']}: keine gültige Prüfung mit „einsatzbereit“ zum Übernehmen")
+                gruende.append(f"{t['inventory_no']} hat keine gültige Prüfung mit „einsatzbereit“ – bitte jetzt prüfen.")
     voll, fehlend = sets.vollstaendigkeit(sets.slots(s["id"]), teil_zeilen)
     if not voll:
-        gruende.append("unvollständig: " + ", ".join(f"„{f['bezeichnung']}“ fehlt" for f in fehlend))
+        gruende.append("Das Set ist unvollständig: " + ", ".join(f"„{f['bezeichnung']}“ fehlt" for f in fehlend) + ".")
     return gruende
 
 
@@ -167,7 +192,9 @@ def bestandteil_zeilen(pid, set_id):
 
 def eroeffnen(set_id, pruefer, durchgang_id=None):
     """„Set prüfen“: den Lauf eröffnen – oder den offenen liefern. durchgang_id: aus dem Ordner-Durchgang (der Set-Artikel
-    muss dort offen sein – sonst 404 bzw. 409 wie beim Prüfen im Durchgang). Liefert (Kennung, neu?)."""
+    muss dort offen sein – sonst 404 bzw. 409 wie beim Prüfen im Durchgang). Ohne durchgang_id übernimmt der Lauf den
+    offenen Durchgang, in dem der Set-Artikel noch zu prüfen ist – dieselbe Regel wie pruefung.starten (Nachbesserung,
+    Ablauf M2): Die Prüfungen ordnet der Dienst ihm ohnehin zu, der Lauf folgt ihnen. Liefert (Kennung, neu?)."""
     from . import durchgang, pruefung
     if not pruefer.get("urkunde"):
         raise Abgelehnt(pruefung.URKUNDE_FEHLT, 403)
@@ -175,11 +202,14 @@ def eroeffnen(set_id, pruefer, durchgang_id=None):
         s = _set_artikel(set_id)
         if s["lock_state"] == "ausgesondert":
             raise Abgelehnt("Ein ausgesondertes Set wird nicht mehr geprüft.", 409)
+        ausdruecklich = bool(durchgang_id)
         if durchgang_id:
             durchgang.runde_fuer_start(durchgang_id, set_id)
         offen = offener(set_id)
+        if not offen and not durchgang_id:
+            durchgang_id = durchgang.offene_runde_fuer(set_id)
         if offen:
-            if durchgang_id and offen["round_id"] != durchgang_id:
+            if ausdruecklich and offen["round_id"] != durchgang_id:
                 raise Abgelehnt("Für dieses Set läuft schon eine Set-Prüfung " + (
                     "in einem anderen Durchgang" if offen["round_id"] else "außerhalb dieses Durchgangs") +
                     " – erst abschließen oder abbrechen.", 409)
@@ -199,30 +229,46 @@ def eroeffnen(set_id, pruefer, durchgang_id=None):
     return lid, True
 
 
-def abbrechen(set_id):
-    """Den offenen Lauf beenden: Teil-Entwürfe darin laufen als Einzelprüfungen weiter; abgeschlossene Teilprüfungen
-    bleiben Einzelprüfungen mit ihrem Protokoll. Ohne abgeschlossene Prüfung verschwindet der Lauf. Liefert, ob er bleibt."""
+NUR_EROEFFNER = ("Eine Set-Prüfung bricht ab, wer sie begonnen hat ({name}), oder der Materialwart – sonst bitte dort "
+                 "nachfragen.")
+
+
+def abbrechen(set_id, akteur, darf_verwalten=False):
+    """Den offenen Lauf beenden – nur, wer ihn eröffnet hat, oder wer den Ordner verwaltet (wie „Reservierung aufheben“;
+    Nachbesserung, Sicherheit 1), sonst 403: Teil-Entwürfe darin laufen als Einzelprüfungen weiter; abgeschlossene
+    Teilprüfungen bleiben Einzelprüfungen mit ihrem Protokoll. Ohne abgeschlossene Prüfung verschwindet der Lauf.
+    Liefert, ob er bleibt."""
     with db.transaction(sofort=True):
         _set_artikel(set_id)
         lf = offener(set_id)
         if not lf:
             raise Abgelehnt(KEIN_LAUF, 409)
-        e_set = db.query("SELECT * FROM mat_inspection WHERE set_lauf_id = ? AND item_id = ? AND completed_at IS NULL",
-                         (lf["id"], set_id), one=True)
-        if e_set:
-            raise Abgelehnt(f"Die Prüfung des Set-Artikels ist offen (bei {e_set['inspector_name'] or 'unbekannt'}) – erst "
-                            "verwerfen bzw. die Reservierung aufheben, dann die Set-Prüfung abbrechen.", 409)
-        for e in entwuerfe(lf["id"]):
-            db.execute("UPDATE mat_inspection SET set_lauf_id = NULL WHERE id = ?", (e["id"],))
-            journal.eintragen("inspection", e["id"], "geaendert", {"set_lauf_id": lf["id"]}, {"set_lauf_id": None})
-        n = db.query("SELECT COUNT(*) AS n FROM mat_inspection WHERE set_lauf_id = ?", (lf["id"],), one=True)["n"]
-        if not n:
-            db.execute("DELETE FROM mat_set_lauf WHERE id = ?", (lf["id"],))
-            journal.eintragen("item", set_id, "set_lauf_abgebrochen", None, {"lauf": lf["id"], "geprueft": 0})
-            return False
-        db.execute("UPDATE mat_set_lauf SET state = 'abgebrochen', closed_at = ? WHERE id = ?", (db.now(), lf["id"]))
-        journal.eintragen("item", set_id, "set_lauf_abgebrochen", None, {"lauf": lf["id"], "geprueft": n})
-        return True
+        if not darf_verwalten and not (akteur.get("id") and lf["opened_by"] == akteur.get("id")):
+            raise Abgelehnt(NUR_EROEFFNER.format(name=lf["opened_by_name"] or "unbekannt"), 403)
+        return beenden(lf)
+
+
+def beenden(lf, grund=None):
+    """Einen offenen Lauf abbrechen (in der Transaktion des Aufrufers) – siehe abbrechen; grund fürs Journal (etwa „Set
+    ausgesondert“). Ein offener Entwurf am Set-Artikel muss vorher weg (409). Liefert, ob der Lauf bleibt."""
+    set_id = lf["set_item_id"]
+    e_set = db.query("SELECT * FROM mat_inspection WHERE set_lauf_id = ? AND item_id = ? AND completed_at IS NULL",
+                     (lf["id"], set_id), one=True)
+    if e_set:
+        raise Abgelehnt(f"Die Prüfung des Set-Artikels ist offen (bei {e_set['inspector_name'] or 'unbekannt'}) – erst "
+                        "verwerfen bzw. die Reservierung aufheben, dann die Set-Prüfung abbrechen.", 409)
+    for e in entwuerfe(lf["id"]):
+        db.execute("UPDATE mat_inspection SET set_lauf_id = NULL WHERE id = ?", (e["id"],))
+        journal.eintragen("inspection", e["id"], "geaendert", {"set_lauf_id": lf["id"]}, {"set_lauf_id": None})
+    n = db.query("SELECT COUNT(*) AS n FROM mat_inspection WHERE set_lauf_id = ?", (lf["id"],), one=True)["n"]
+    zusatz = {"grund": grund} if grund else {}
+    if not n:
+        db.execute("DELETE FROM mat_set_lauf WHERE id = ?", (lf["id"],))
+        journal.eintragen("item", set_id, "set_lauf_abgebrochen", None, dict({"lauf": lf["id"], "geprueft": 0}, **zusatz))
+        return False
+    db.execute("UPDATE mat_set_lauf SET state = 'abgebrochen', closed_at = ? WHERE id = ?", (db.now(), lf["id"]))
+    journal.eintragen("item", set_id, "set_lauf_abgebrochen", None, dict({"lauf": lf["id"], "geprueft": n}, **zusatz))
+    return True
 
 
 # --- Abschluss: Festschreiben der Prüfung des Set-Artikels -------------------------------------------------------------
@@ -261,7 +307,7 @@ def vorbereiten(p, item, ergebnis, d, tag):
             f"{nummern.get(e['item_id'], 'Teil')} ({e['inspector_name'] or 'unbekannt'})" for e in andere) +
             " – erst festschreiben oder verwerfen.", 409)
     lp = lauf_pruefungen(lf["id"])
-    umf = umfang(s, tz)
+    umf = umfang(s, tz, lf["id"], lp)
     fehlen = [t["inventory_no"] for t in tz if t["id"] in umf and t["id"] not in lp]
     if fehlen:
         raise Abgelehnt("In der Set-Prüfung noch nicht geprüft: " + ", ".join(fehlen) + " – erst prüfen (oder das Teil "
@@ -360,7 +406,7 @@ def wirkung(item, p, ergebnis, tag, naechste, grund, pruefer, ts, v):
             if s0["lock_cause"] == "eigen" or s0["lock_state"] == "verloren":
                 sets.eigen_aufheben(s0)
             s, tz = sets.zeilen(sid)
-            gruende = freigabe_gruende(s, tz, lauf_pruefungen(v["lauf"]["id"]))
+            gruende = freigabe_gruende(s, tz, lauf_pruefungen(v["lauf"]["id"]), lid=v["lauf"]["id"])
             if not gruende:
                 ziel = pruefung._rueckweg(s)
                 sets.freigeben(sid, ziel)
@@ -384,7 +430,7 @@ def wirkung(item, p, ergebnis, tag, naechste, grund, pruefer, ts, v):
     else:
         db.execute("UPDATE mat_item SET last_inspected_on = ?, updated_at = ? WHERE id = ?", (tag, db.now(), sid))
         setaustausch.set_aussondern(bestand.artikel(sid), "Prüfergebnis „aussondern“" + (f": {grund}" if grund else ""),
-                                    "", tag, pruefer, v["verbleib"], basis_id=p["id"], ts=ts)
+                                    "", tag, pruefer, v["verbleib"], basis_id=p["id"], ts=ts, ausser_lauf=v["lauf"]["id"])
     s, tz = sets.zeilen(sid)
     gesamt = gesamt_von(s)
     # Warum das Set gesperrt bleibt: nach „einsatzbereit“ die Gründe gegen die Freigabe, sonst die Sperrgründe.
@@ -413,14 +459,22 @@ def _abschluss(lid):
 
 def kurz(lf):
     """Ein Lauf für Listen und den Set-Block: {id, state, round_id, durchgang, opened_at, opened_by_name, closed_at,
-    set_inspection_id} – None ohne Lauf."""
+    set_inspection_id, gesamtergebnis, gesamt_text, protokoll_id} – die letzten drei nur beim abgeschlossenen Lauf (sonst
+    None; für „Frühere Set-Prüfungen“). None ohne Lauf."""
     if not lf:
         return None
     from . import durchgang
+    gesamt, protokoll_id = None, None
+    if lf["state"] == "abgeschlossen":
+        gesamt = _abschluss(lf["id"]).get("gesamtergebnis")
+        if lf["set_inspection_id"]:
+            x = db.query("SELECT protocol_id FROM mat_inspection WHERE id = ?", (lf["set_inspection_id"],), one=True)
+            protokoll_id = x["protocol_id"] if x else None
     return {"id": lf["id"], "state": lf["state"], "round_id": lf["round_id"],
             "durchgang": durchgang.verweis(lf["round_id"]) if lf["round_id"] else None, "opened_at": lf["opened_at"],
             "opened_by_name": lf["opened_by_name"], "closed_at": lf["closed_at"],
-            "set_inspection_id": lf["set_inspection_id"]}
+            "set_inspection_id": lf["set_inspection_id"], "gesamtergebnis": gesamt,
+            "gesamt_text": GESAMT.get(gesamt) if gesamt else None, "protokoll_id": protokoll_id}
 
 
 def _pruefung_kurz(x):
@@ -440,11 +494,12 @@ def lauf_json(lf, pruefer_id=None):
       hinweis_tage      Tage seit der ersten Teilprüfung im Lauf, wenn mehr als HINWEIS_TAGE – sonst 0
       abschluss         beim beendeten Lauf: {gesamtergebnis, gesamt_text, freigegeben, gruende, hinweis} | null"""
     out = kurz(lf)
+    out["eigen"] = bool(pruefer_id) and lf["opened_by"] == pruefer_id        # eröffnet von diesem Konto (abbrechen)
     s, tz_alle = sets.zeilen(lf["set_item_id"])
     sichtbar = {t["id"] for t in sets.teile(s["id"])}
     tz = [t for t in tz_alle if t["id"] in sichtbar]
     lp = lauf_pruefungen(lf["id"])
-    umf = set(umfang(s, tz_alle))
+    umf = set(umfang(s, tz_alle, lf["id"], lp))
     zu, _ = sets._zuteilen(sets.slots(s["id"]), tz_alle)
     offen = {e["item_id"]: e for e in entwuerfe(lf["id"])}
     liste = []
@@ -466,7 +521,7 @@ def lauf_json(lf, pruefer_id=None):
     geprueft = sum(1 for t in tz_alle if t["id"] in umf and t["id"] in lp)
     out["fortschritt"] = {"geprueft": geprueft, "zu_pruefen": len(umf), "teile": len(tz_alle)}
     out["bereit"] = lf["state"] == "offen" and geprueft == len(umf) and not [e for i, e in offen.items() if i != s["id"]]
-    out["freigabe_gruende"] = (freigabe_gruende(s, tz_alle, lp, vorschau=True)
+    out["freigabe_gruende"] = (freigabe_gruende(s, tz_alle, lp, vorschau=True, lid=lf["id"])
                                if lf["state"] == "offen" and s["lock_state"] != "frei" else [])
     teile_lp = [x["inspected_on"] for iid, x in lp.items() if iid != s["id"]]
     tage = (heute() - date.fromisoformat(min(teile_lp))).days if teile_lp else 0
@@ -564,9 +619,12 @@ def pruefung_teil(p, item):
 
 def sammel(rid):
     """Für das Sammelprotokoll eines Durchgangs: {Set-Artikel: Gesamtergebnis-Text} der in diesem Durchgang
-    abgeschlossenen Set-Prüfungen (die jüngste je Set)."""
+    abgeschlossenen Set-Prüfungen (die jüngste je Set) – auch einer, die außerhalb begonnen wurde, deren Prüfung des
+    Set-Artikels aber im Durchgang zählt (Nachbesserung, Ablauf M2)."""
     out = {}
-    for lf in db.query("SELECT * FROM mat_set_lauf WHERE round_id = ? AND state = 'abgeschlossen' ORDER BY id", (rid,)):
+    for lf in db.query("SELECT l.* FROM mat_set_lauf l WHERE l.state = 'abgeschlossen' AND (l.round_id = ? OR EXISTS "
+                       "(SELECT 1 FROM mat_inspection x WHERE x.id = l.set_inspection_id AND x.round_id = ?)) "
+                       "ORDER BY l.id", (rid, rid)):
         a = _abschluss(lf["id"])
         if a:
             out[lf["set_item_id"]] = GESAMT.get(a.get("gesamtergebnis"), "")

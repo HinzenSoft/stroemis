@@ -72,11 +72,15 @@ SET_PRUEFEN = "Set-Prüfung ausstehend"
 UNVOLLSTAENDIG = "unvollständig: {bez} {was}"
 GETAUSCHT = "Teil getauscht – Set prüfen"
 EINGESETZT = "Teil eingesetzt – Set prüfen"
+# Bausteine des abgeleiteten Grundes (anlass_text) – nur aus dem, was jetzt zum Set gehört (Nachbesserung, Ablauf M1).
+NEU_IM_SET = "Teil {inv} neu eingesetzt – Set prüfen"
+TEIL_PRUEFEN = "Teil {inv} in der Set-Prüfung zu prüfen"
 # Wohin ein Teil beim Aussondern des Sets geht (Entscheidung vom 23.10.2026: je Teil wählbar).
 VERBLEIB = {"aussondern": "mit aussondern", "weiterfuehren": "entnehmen und gesperrt weiterführen"}
 TEIL_FEHLT = "Teil nicht gefunden."
-# Anlass einer Set-Sperre ohne eigenen Grund eines Artikels (Journal „set_grund“; der Jahresbericht zählt sie eigens).
-SET_GRUENDE = ("unvollstaendig", "tausch")
+# Anlass einer Set-Sperre ohne eigenen Grund eines Artikels (Journal „set_grund“; der Jahresbericht zählt sie eigens) –
+# „ausgesondert“: ein Teil, das beim Aussondern des Sets entnommen und gesperrt weitergeführt wird (Ablauf N2).
+SET_GRUENDE = ("unvollstaendig", "tausch", "ausgesondert")
 
 
 class SetUnstimmig(Abgelehnt):
@@ -286,13 +290,23 @@ def mit_grund(s, x):
 
 def sperren(set_id, eigen=None, zustand="gesperrt", grund="", aktion="gesperrt", zusatz=None, set_grund=None, anlass="",
             neu=()):
+    """Die Sperr-Kaskade (_kaskade) – danach den abgeleiteten Grund an Set-Artikel und mitgesperrten Teilen neu setzen
+    (gruende_nachziehen). Liefert, ob das Set dabei gesperrt wurde."""
+    gesperrt = _kaskade(set_id, eigen, zustand, grund, aktion, zusatz, set_grund, anlass, neu)
+    gruende_nachziehen(set_id)
+    return gesperrt
+
+
+def _kaskade(set_id, eigen, zustand, grund, aktion, zusatz, set_grund, anlass, neu):
     """Die Sperr-Kaskade, in der Transaktion des Aufrufers. eigen: Kennung des Artikels (Set-Artikel oder Teil) mit eigener
     Sperre (zustand gesperrt oder verloren, grund, Journal aktion mit zusatz – „gesperrt“ oder „mangel_gemeldet“) – oder
     None, wenn das Set aus eigenem Anlass sperrt (set_grund „unvollstaendig“ | „tausch“, anlass als Text). neu: Teile,
     die neu im Set sind und im Freigabe-Lauf geprüft werden (set_pruefen), ohne eigenen Grund.
 
     Ist das Set frei: EIN UPDATE über Set und Teile (set_lage) nach „Gesperrt“ der Gliederung, Herkunft = Heimat des Sets;
-    eigen bekommt „eigen“, alle anderen „set“; Verlust am Set-Artikel heißt: alle verloren, an einem Teil nur dieses.
+    eigen bekommt „eigen“, alle anderen „set“; Verlust am Set-Artikel heißt: alle verloren, an einem Teil nur dieses. Ein
+    Teil, das schon gesperrt ist, ohne Ursache (nach einem Rückweg auf Code-Stand 20, der Teile einzeln sperrte), gilt als
+    „eigen“ mit seinem Grund und ist im Freigabe-Lauf zu prüfen – es wird nie mit „set“ überschrieben (Sicherheit 6).
     Journal: am Anlass die Aktion mit dem Handelnden (sie zählt im Jahresbericht als die eine Sperre), an allen anderen
     „set_gesperrt“ als „System“. Ist das Set schon gesperrt: eigen bekommt „eigen“ (auch ein nur mitgesperrtes Teil),
     ein Teil set_pruefen, der Set-Artikel den Ursprung „set“ (der Freigabe-Lauf prüft dann alle Teile); hatte eigen
@@ -317,12 +331,19 @@ def sperren(set_id, eigen=None, zustand="gesperrt", grund="", aktion="gesperrt",
         if eigen:
             gruende[eigen] = grund
         verlust_am_set = eigen == set_id and zustand == "verloren"
+        zustaende = {eigen: zustand} if eigen else {}
+        ursachen = {eigen: "eigen"} if eigen else {}
+        for r in tz:
+            if r["id"] != eigen and r["lock_state"] in ("gesperrt", "verloren") and not r["lock_cause"]:
+                zustaende[r["id"]], ursachen[r["id"]], gruende[r["id"]] = r["lock_state"], "eigen", r["lock_reason"]
+                pruefen.add(r["id"])
         set_lage(set_id, folder_id=ziel, origin_folder_id=heimat, je_zeile={
-            "lock_state": ({eigen: zustand} if eigen else {}, "verloren" if verlust_am_set else "gesperrt"),
-            "lock_cause": ({eigen: "eigen"} if eigen else {}, "set"),
+            "lock_state": (zustaende, "verloren" if verlust_am_set else "gesperrt"),
+            "lock_cause": (ursachen, "set"),
             "lock_reason": (gruende, MIT_SET_ANLASS.format(inv=s["inventory_no"], anlass=anlass)),
             "set_pruefen": ({t: 1 for t in pruefen}, 0),
             "set_lock_origin": ({set_id: "set" if eigen == set_id else "teil"}, None)})
+        gruende_nachziehen(set_id)
         s2, tz2 = zeilen(set_id)
         nach = {r["id"]: r for r in [s2] + tz2}
         ausloeser = eigen or set_id
@@ -342,6 +363,15 @@ def sperren(set_id, eigen=None, zustand="gesperrt", grund="", aktion="gesperrt",
                     nachher["teil"] = x["inventory_no"]
                 journal.eintragen("item", r["id"], "set_gesperrt", vorher, nachher, system=True)
         return True
+    alt = [r for r in [s] + tz if r["lock_state"] in ("gesperrt", "verloren") and not r["lock_cause"] and r["id"] != eigen]
+    if alt:
+        # Nach einem Rückweg auf Code-Stand 20 gesperrt, ohne Ursache: eigener Grund, im Freigabe-Lauf zu prüfen.
+        je = {"lock_cause": ({r["id"]: "eigen" for r in alt}, BLEIBT)}
+        if any(r["id"] != set_id for r in alt):
+            je["set_pruefen"] = ({r["id"]: 1 for r in alt if r["id"] != set_id}, BLEIBT)
+        if any(r["id"] == set_id for r in alt):
+            je["set_lock_origin"] = ({set_id: "set"}, BLEIBT)
+        set_lage(set_id, je_zeile=je)
     if eigen:
         if x["lock_cause"] == "eigen" and not (zustand == "verloren" and x["lock_state"] != "verloren"):
             # Schon aus eigenem Grund gesperrt: Die Sperre bleibt mit ihrem Grund – nur der Eintrag (wie bisher an einem
@@ -400,8 +430,65 @@ def eigen_aufheben(item):
     neu_grund = mit_grund(s, x)
     set_lage(sid, je_zeile={"lock_cause": ({x["id"]: "set"}, BLEIBT), "lock_reason": ({x["id"]: neu_grund}, BLEIBT),
                             "lock_state": ({x["id"]: "gesperrt"}, BLEIBT)})
+    gruende_nachziehen(sid)
+    neu_grund = db.query("SELECT lock_reason FROM mat_item WHERE id = ?", (x["id"],), one=True)["lock_reason"]
     return ({"lock_state": x["lock_state"], "lock_cause": x["lock_cause"], "lock_reason": x["lock_reason"]},
             {"lock_state": "gesperrt", "lock_cause": "set", "lock_reason": neu_grund})
+
+
+def _satz(text):
+    text = (text or "").strip()
+    return text if not text or text[-1] in ".!?…" else text + "."
+
+
+def _eigen_gesperrt(x):
+    """Gesperrt oder verloren aus eigenem Grund – auch eine Sperre ohne Ursache (Rückweg auf Code-Stand 20) zählt so."""
+    return x["lock_state"] in ("gesperrt", "verloren") and x["lock_cause"] != "set"
+
+
+def anlass_text(s, teil_zeilen, slot_zeilen=None):
+    """Warum das Set gesperrt ist, kurz für lock_reason – abgeleitet aus dem, was jetzt zum Set gehört (wie
+    sperrgruende): eigener Grund des Set-Artikels, „wegen Teil …: Grund“ je Teil mit eigenem Grund, „unvollständig: …
+    fehlt“, „Teil … neu eingesetzt – Set prüfen“. Leer, wenn nichts davon zutrifft. Ein entnommenes, gelöschtes oder
+    ausgesondertes Teil kommt darin nicht mehr vor (Nachbesserung, Ablauf M1)."""
+    teile = []
+    if _eigen_gesperrt(s):
+        teile.append(s["lock_reason"] or ("verloren" if s["lock_state"] == "verloren" else "gesperrt"))
+    for t in teil_zeilen:
+        if _eigen_gesperrt(t):
+            teile.append(WEGEN_TEIL.format(inv=t["inventory_no"], grund=t["lock_reason"] or (
+                "verloren" if t["lock_state"] == "verloren" else "gesperrt")))
+    voll, fehlend = vollstaendigkeit(slot_zeilen if slot_zeilen is not None else slots(s["id"]), teil_zeilen)
+    if not voll:
+        teile.append("unvollständig: " + ", ".join(f"„{f['bezeichnung']}“ fehlt" + (f" {f['fehlt']}×" if f["fehlt"] > 1
+                                                                                  else "") for f in fehlend))
+    for t in teil_zeilen:
+        if t["set_pruefen"] and not _eigen_gesperrt(t):
+            teile.append((TEIL_PRUEFEN if t["last_inspected_on"] else NEU_IM_SET).format(inv=t["inventory_no"]))
+    return "; ".join(teile)
+
+
+def gruende_nachziehen(set_id):
+    """Den Grund (lock_reason) am Set-Artikel und an den nur mitgesperrten Teilen (Ursache „set“) aus dem jetzigen Stand
+    neu setzen – nach jedem Anlass: Sperre, Teil entnehmen, tauschen, einsetzen, löschen, Ergebnis „aussondern“ am Teil,
+    Freiprüfung eines Teils, Verlust. So steht in Banner, Statusspalte, Teil-Seite, „Meine PSA“ und einem späteren
+    Aussonderungsprotokoll nie der Text eines Teils, das nicht mehr zum Set gehört (Nachbesserung, Ablauf M1). Ein eigener
+    Grund bleibt, wie er ist. In der Transaktion des Aufrufers; ein freies oder ausgesondertes Set bleibt unberührt."""
+    s, tz = zeilen(set_id)
+    if s["lock_state"] in ("frei", "ausgesondert"):
+        return
+    anlass = anlass_text(s, tz)
+    soll = {}
+    if s["lock_cause"] == "set":
+        soll[s["id"]] = anlass or SET_PRUEFEN
+    for t in tz:
+        if t["lock_cause"] == "set" and t["lock_state"] != "frei":
+            soll[t["id"]] = (MIT_SET_ANLASS.format(inv=s["inventory_no"], anlass=anlass) if anlass
+                             else MIT_SET.format(inv=s["inventory_no"]))
+    alle = {r["id"]: r for r in [s] + tz}
+    neu = {k: v for k, v in soll.items() if v != alle[k]["lock_reason"]}
+    if neu:
+        set_lage(set_id, je_zeile={"lock_reason": (neu, BLEIBT)})
 
 
 def freigeben(set_id, ziel):
@@ -431,24 +518,27 @@ def sperrgruende(s, teil_zeilen, voll=None, slot_zeilen=None):
         return []
     out = []
     for x in [s] + list(teil_zeilen):
-        if x["lock_state"] == "verloren" and (x["lock_cause"] == "eigen" or x["id"] == s["id"]):
+        if x["lock_state"] == "verloren" and (_eigen_gesperrt(x) or x["id"] == s["id"]):
             out.append({"art": "verloren", "artikel": _artikel_verweis(x, s["id"]),
-                        "text": f"{x['inventory_no']}: verloren" + (f" ({x['lock_reason']})" if x["lock_reason"] else "")})
-        elif x["lock_cause"] == "eigen":
+                        "text": f"{x['inventory_no']} ist verloren gemeldet" + (f" ({x['lock_reason']})." if x["lock_reason"]
+                                                                                else ".")})
+        elif _eigen_gesperrt(x):
             out.append({"art": "eigen", "artikel": _artikel_verweis(x, s["id"]),
-                        "text": f"{x['inventory_no']}: {x['lock_reason'] or 'gesperrt'}"})
+                        "text": f"{x['inventory_no']} ist gesperrt: " + _satz(x["lock_reason"] or "ohne Angabe")})
     if voll is None:
         voll, fehlend = vollstaendigkeit(slot_zeilen if slot_zeilen is not None else slots(s["id"]), teil_zeilen)
     else:
         fehlend = vollstaendigkeit(slot_zeilen if slot_zeilen is not None else slots(s["id"]), teil_zeilen)[1]
     if not voll:
         out.append({"art": "unvollstaendig", "artikel": None,
-                    "text": "unvollständig: " + ", ".join(f"„{f['bezeichnung']}“ fehlt" + (f" {f['fehlt']}×" if f["fehlt"] > 1
-                                                                                         else "") for f in fehlend)})
+                    "text": "Das Set ist unvollständig: " + ", ".join(
+                        f"„{f['bezeichnung']}“ fehlt" + (f" {f['fehlt']}×" if f["fehlt"] > 1 else "") for f in fehlend) + "."})
     for t in teil_zeilen:
-        if t["set_pruefen"] and t["lock_cause"] != "eigen":
+        if t["set_pruefen"] and not _eigen_gesperrt(t):
             out.append({"art": "pruefen", "artikel": _artikel_verweis(t, s["id"]),
-                        "text": f"{t['inventory_no']}: in der Set-Prüfung zur Freigabe zu prüfen"})
+                        "text": (f"{t['inventory_no']} ist neu im Set" if not t["last_inspected_on"]
+                                 else f"{t['inventory_no']} war selbst gesperrt") +
+                        " – in der Set-Prüfung zur Freigabe prüfen."})
     out.append({"art": "set_pruefung", "artikel": None,
                 "text": "Frei gibt das Set nur „Set prüfen“ mit dem Ergebnis „einsatzbereit“."})
     return out
@@ -472,15 +562,22 @@ def _hinweis_str(vorlage, inv, p, serie):
     return vorlage.format(inv=inv, name=katalog.produktname(p), serie=serie)
 
 
-def teil_schreiben(plan, bezeichnung, wer, **kw):
+def teil_wo(wer, bezeichnung, nr=None, serie=""):
+    """Wie eine Meldung ein Teil nennt: „Teil „Bezeichnung“ 2 von 2 (Seriennummer „X“)“ – Position, Stück und
+    Seriennummer, damit die Oberfläche genau das eine Feld markiert (Nachbesserung, Browser B2)."""
+    return (f"{wer} „{bezeichnung}“" + (f" {nr[0]} von {nr[1]}" if nr else "") +
+            (f" (Seriennummer „{serie}“)" if serie else ""))
+
+
+def teil_schreiben(plan, bezeichnung, wer, nr=None, **kw):
     """bestand.artikel_schreiben für ein Teil – eine Ablehnung dabei (Dublette der Seriennummer, sichtbar oder fremd)
-    nennt das Teil wie die Regeln davor („Teil „Bezeichnung“: …“), damit die Oberfläche sie am Teil zeigt. Die Klasse
-    bleibt (FremdeDublette wird weiter protokolliert)."""
+    nennt das Teil wie die Regeln davor (teil_wo: „Teil „Bezeichnung“ 1 von 2 (Seriennummer „X“): …“), damit die
+    Oberfläche sie am Teil zeigt. Die Klasse bleibt (FremdeDublette wird weiter protokolliert)."""
     from . import bestand
     try:
         return bestand.artikel_schreiben(plan, **kw)
     except Abgelehnt as exc:
-        exc.args = (f"{wer} „{bezeichnung}“: {exc}",)
+        exc.args = (f"{teil_wo(wer, bezeichnung, nr, plan['w'].get('serial_no') or '')}: {exc}",)
         raise
 
 
@@ -517,19 +614,21 @@ def set_anlegen(d, plan):
                             f"(hier {len(je[zid])}).")
     plaene, gesehen = [], {}
     for z in stueck:
-        for t in je.get(z["id"], []):
+        for k, t in enumerate(je.get(z["id"], []), start=1):
             felder = {f: t[f] for f in TEIL_FELDER if f in t}
+            nr = (k, z["anzahl"])
             try:
                 pt = bestand.artikel_plan(dict(felder, product_id=z["component_product_id"], folder_id=plan["fid"]))
             except Abgelehnt as exc:
-                raise Abgelehnt(f"Teil „{z['bezeichnung']}“: {exc}", exc.code)
+                serie = t.get("serial_no") if isinstance(t.get("serial_no"), str) else ""
+                raise Abgelehnt(f"{teil_wo('Teil', z['bezeichnung'], nr, serie.strip()[:80])}: {exc}", exc.code)
             serie = pt["w"]["serial_no"]
             if serie:
                 schluessel = (pt["p"]["id"], serie.casefold())
                 if schluessel in gesehen:
                     raise Abgelehnt(f"Die Seriennummer „{serie}“ steht zweimal in den Teilen ({z['bezeichnung']}).")
                 gesehen[schluessel] = True
-            plaene.append((z, pt))
+            plaene.append((z, pt, nr))
     hinweise = []
     with db.transaction(sofort=True):
         sid = bestand.artikel_schreiben(plan, als_set=True)
@@ -542,8 +641,8 @@ def set_anlegen(d, plan):
                        (sid, z["position"], z["component_product_id"], z["bezeichnung"], z["anzahl"], z["einzeln"],
                         z["austausch"]))
         liste = []
-        for z, pt in plaene:
-            tid = teil_schreiben(pt, z["bezeichnung"], "Teil", journal_zusatz={"set": sid, "set_inventar": s["inventory_no"]},
+        for z, pt, nr in plaene:
+            tid = teil_schreiben(pt, z["bezeichnung"], "Teil", nr, journal_zusatz={"set": sid, "set_inventar": s["inventory_no"]},
                                  parent_id=sid)
             t = bestand.artikel(tid)
             liste.append({"teil": tid, "inventory_no": t["inventory_no"], "serial_no": t["serial_no"],
@@ -736,7 +835,8 @@ def set_json(item):
       status, status_text, next_due_on, faellig_durch, retire_by, lebensende_durch   die Set-Werte (werte)
       eigen        {status, status_text, next_due_on, retire_by} des Set-Artikels allein
       teile        je aktuellem Teil Nummern, Produkt, Position („bestandteil“), Status, Fälligkeit, Lebensende, Sperre
-                   (lock_state, lock_cause, lock_reason), Länge, offener Mangel, Rückruf (Titel)
+                   (lock_state, lock_cause, lock_reason), Länge, offener Mangel, Rückruf (Titel), zu_pruefen (Vorschau
+                   des Prüfumfangs einer neuen Set-Prüfung)
       bestandteile die Kopie der Stückliste: je Position bezeichnung, anzahl, einzeln, austausch(_text), produkt und –
                    einzeln geführt – vorhanden/fehlt
       vollstaendig, fehlend   laut Kopie (nur einzeln geführte Positionen)
@@ -764,9 +864,13 @@ def set_json(item):
             b["vorhanden"] = vorhanden.get(z["id"], 0)
             b["fehlt"] = z["anzahl"] - b["vorhanden"]
         bestandteile.append(b)
+    # Vorschau des Prüfumfangs für „Set prüfen“ (vor dem Eröffnen): je Teil, ob es geprüft werden muss (setlauf.umfang –
+    # auch jedes Teil ohne übernehmbare Prüfung, Nachbesserung Ablauf N1).
+    umf = set(setlauf.umfang(item, tz)) if item["lock_state"] != "ausgesondert" else set()
     return dict(w, eigen={"status": eigen, "status_text": st.LABEL[eigen], "next_due_on": item["next_due_on"],
                           "retire_by": item["retire_by"]},
-                teile=[_teil_json(t, zu.get(t["id"]), offen, rr) for t in tz], teile_anzahl=len(tz),
+                teile=[dict(_teil_json(t, zu.get(t["id"]), offen, rr), zu_pruefen=t["id"] in umf) for t in tz],
+                teile_anzahl=len(tz),
                 bestandteile=bestandteile, vollstaendig=voll, fehlend=fehlend,
                 rueckrufe_teile=[{"teil": {"id": t["id"], "inventory_no": t["inventory_no"]}, "titel": rr[t["id"]]}
                                  for t in tz if t["id"] in rr],

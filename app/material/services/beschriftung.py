@@ -98,6 +98,7 @@ AKTION = {
     "teil_entnommen": "Teil entnommen", "teil_eingesetzt": "Teil eingesetzt", "teil_geloescht": "Teil gelöscht",
     "entnommen": "aus dem Set entnommen", "set_lauf_eroeffnet": "Set-Prüfung begonnen",
     "set_lauf_abgebrochen": "Set-Prüfung abgebrochen", "set_geprueft": "Set geprüft",
+    "set_lauf_geaendert": "Set-Prüfung aus dem Durchgang gelöst",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",
@@ -115,7 +116,8 @@ SET_WERTE = {"lock_cause": {"eigen": "eigener Grund", "set": "mit dem Set"},
              "verbleib": {"aussondern": "mit aussondern", "weiterfuehren": "entnommen und weitergeführt"},
              "gesamtergebnis": {"einsatzbereit": "einsatzbereit", "gesperrt": "nicht einsatzbereit – Set gesperrt",
                                 "ausgesondert": "Set ausgesondert"},
-             "set_grund": {"unvollstaendig": "unvollständig", "tausch": "Teil getauscht oder eingesetzt"},
+             "set_grund": {"unvollstaendig": "unvollständig", "tausch": "Teil getauscht oder eingesetzt",
+                           "ausgesondert": "Set ausgesondert"},
              "austausch": {"ja": "ja", "nein": "nein", "nicht_belegt": "nicht belegt"}}
 # Stufe im Modul Material – mit der Zahl dahinter: Einträge vor „Migration Schritt 10“ meinten die Stufen aus Phase 1
 # (1 Führungskraft, 2 Materialwart), die Zahl hält das eindeutig.

@@ -276,7 +276,7 @@ def durchgang_json(r, voll=False, pruefer_id=None):
         "WHERE round_id = ? AND completed_at IS NOT NULL " + OHNE_BERICHTIGTE +
         "GROUP BY inspector_user_id, inspector_name, inspector_certificate ORDER BY inspector_name", (r["id"],))
     out["loeschbar"] = out["offen"] and not db.query(
-        "SELECT 1 FROM mat_inspection WHERE round_id = ? LIMIT 1", (r["id"],), one=True)
+        "SELECT 1 FROM mat_inspection WHERE round_id = ? LIMIT 1", (r["id"],), one=True) and not _set_laeufe(r["id"])
     return out
 
 
@@ -368,15 +368,28 @@ def abschliessen(rid, akteur):
         protokoll.durchgang_festschreiben(rid, db.now())
 
 
+def _set_laeufe(rid):
+    """Die Set-Prüfungen (mat_set_lauf), die aus diesem Durchgang eröffnet wurden – offene zuerst."""
+    return db.query("SELECT l.*, i.inventory_no FROM mat_set_lauf l JOIN mat_item i ON i.id = l.set_item_id "
+                    "WHERE l.round_id = ? ORDER BY l.state <> 'offen', l.id", (rid,))
+
+
 def abbrechen(rid, akteur):
     """Den Durchgang vorzeitig beenden (siehe oben). Liefert, ob er bleibt – False: Er wurde entfernt, weil
-    darin noch nichts abgeschlossen war."""
+    darin noch nichts abgeschlossen war. Eine offene Set-Prüfung aus dem Durchgang läuft wie ein offener Entwurf
+    außerhalb weiter (round_id NULL; Nachbesserung, Sicherheit 2)."""
     with protokoll.dateien_sichern(), db.transaction(sofort=True):
         r = _runde_offen(rid)
         for e in _offene_entwuerfe(rid):
             db.execute("UPDATE mat_inspection SET round_id = NULL WHERE id = ?", (e["id"],))
             journal.eintragen("inspection", e["id"], "geaendert", {"round_id": rid}, {"round_id": None})
-        if not db.query("SELECT 1 FROM mat_inspection WHERE round_id = ? LIMIT 1", (rid,), one=True):
+        for lf in _set_laeufe(rid):
+            if lf["state"] == "offen":
+                db.execute("UPDATE mat_set_lauf SET round_id = NULL WHERE id = ?", (lf["id"],))
+                journal.eintragen("item", lf["set_item_id"], "set_lauf_geaendert", {"lauf": lf["id"], "round_id": rid},
+                                  {"lauf": lf["id"], "round_id": None, "grund": "Durchgang abgebrochen"})
+        if not db.query("SELECT 1 FROM mat_inspection WHERE round_id = ? LIMIT 1", (rid,), one=True) \
+                and not _set_laeufe(rid):
             db.execute("DELETE FROM mat_round_item WHERE round_id = ?", (rid,))
             db.execute("DELETE FROM mat_round WHERE id = ?", (rid,))
             journal.eintragen("round", rid, "geloescht", {"title": r["title"], "folder_id": r["folder_id"]}, None)
@@ -392,11 +405,16 @@ def abbrechen(rid, akteur):
 
 
 def loeschen(rid):
-    """Einen versehentlich eröffneten Durchgang entfernen – nur solange darin nichts geprüft wurde."""
+    """Einen versehentlich eröffneten Durchgang entfernen – nur solange darin nichts geprüft wurde. Wie ein offener
+    Entwurf hält auch eine Set-Prüfung aus diesem Durchgang ihn fest – 409 mit dem Set (Nachbesserung, Sicherheit 2)."""
     with db.transaction(sofort=True):
         r = _runde_offen(rid)
         if db.query("SELECT 1 FROM mat_inspection WHERE round_id = ? LIMIT 1", (rid,), one=True):
             raise Abgelehnt("Im Durchgang wurde schon geprüft – er bleibt und wird abgeschlossen.", 409)
+        laeufe = _set_laeufe(rid)
+        if laeufe:
+            raise Abgelehnt(f"Aus dem Durchgang läuft eine Set-Prüfung ({laeufe[0]['inventory_no']}) – erst dort abbrechen "
+                            "oder den Durchgang abbrechen; dann lässt er sich löschen.", 409)
         db.execute("DELETE FROM mat_round_item WHERE round_id = ?", (rid,))
         db.execute("DELETE FROM mat_round WHERE id = ?", (rid,))
         journal.eintragen("round", rid, "geloescht", {"title": r["title"], "folder_id": r["folder_id"]}, None)

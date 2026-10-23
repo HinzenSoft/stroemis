@@ -1947,8 +1947,14 @@ TRIGGER_21 = [
              "OR NEW.closed_at IS NOT NULL OR NEW.set_inspection_id IS NOT NULL "
              "OR NOT EXISTS (SELECT 1 FROM mat_item s JOIN mat_product sp ON sp.id = s.product_id "
              "WHERE s.id = NEW.set_item_id AND sp.is_set = 1)", LAUF_FEST),
+    # Ausnahmen nur am offenen Lauf (Nachbesserung): Der Durchgang wird abgebrochen – der Lauf läuft ohne ihn weiter
+    # (round_id → NULL, wie ein offener Entwurf); das Konto des Eröffners wird gelöscht – „(gelöschtes Konto)“ wie am
+    # Entwurf (loeschung.py). Am beendeten Lauf bleibt beides.
     _trigger("mat_set_lauf_kopf", "BEFORE UPDATE OF id, set_item_id, round_id, opened_at, opened_by_name ON mat_set_lauf",
-             "1", LAUF_FEST),
+             "NEW.id IS NOT OLD.id OR NEW.set_item_id IS NOT OLD.set_item_id OR NEW.opened_at IS NOT OLD.opened_at "
+             "OR (NEW.round_id IS NOT OLD.round_id AND NOT (OLD.state = 'offen' AND NEW.round_id IS NULL)) "
+             "OR (NEW.opened_by_name IS NOT OLD.opened_by_name AND NOT (OLD.state = 'offen' "
+             "AND NEW.opened_by_name = '(gelöschtes Konto)'))", LAUF_FEST),
     _trigger("mat_set_lauf_eroeffner", "BEFORE UPDATE OF opened_by ON mat_set_lauf",
              "NEW.opened_by IS NOT NULL AND NEW.opened_by IS NOT OLD.opened_by", LAUF_FEST),
     _trigger("mat_set_lauf_beendet", "BEFORE UPDATE OF state, closed_at, set_inspection_id ON mat_set_lauf",
@@ -1984,13 +1990,14 @@ def spalten_nachruesten(conn, spalten):
 def _schritt_21(conn):
     """Sets mit Komponenten (Phase 4 · Lieferung 2): neue Tabellen, die Spalten aus SPALTEN_21, wenn sie fehlen, Indizes und
     Trigger; die beiden Fest-Trigger aus Schritt 6 erst entfernen, dann mit set_lauf_id neu anlegen (CREATE TRIGGER IF NOT
-    EXISTS fände sonst die alte Fassung vor). Ein zweiter Lauf legt dieselben Trigger neu an und ändert keine Zeile."""
+    EXISTS fände sonst die alte Fassung vor) – ebenso mat_set_lauf_kopf, dessen Fassung die Nachbesserung vor der
+    Auslieferung geändert hat. Ein zweiter Lauf legt dieselben Trigger neu an und ändert keine Zeile."""
     for sql in TABELLEN_21:
         conn.execute(sql)
     spalten_nachruesten(conn, SPALTEN_21)
     for sql in INDIZES_21:
         conn.execute(sql)
-    for name in ("mat_inspection_festgeschrieben", "mat_inspection_abgeschlossen"):
+    for name in ("mat_inspection_festgeschrieben", "mat_inspection_abgeschlossen", "mat_set_lauf_kopf"):
         conn.execute(f"DROP TRIGGER IF EXISTS {name}")
     for sql in TRIGGER_21:
         conn.execute(sql)

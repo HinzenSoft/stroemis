@@ -219,7 +219,7 @@
     lock_cause: { eigen: "eigener Grund", set: "mit dem Set" },
     verbleib: { aussondern: "mit aussondern", weiterfuehren: "entnommen und weitergeführt" },
     gesamtergebnis: { einsatzbereit: "einsatzbereit", gesperrt: "nicht einsatzbereit – Set gesperrt", ausgesondert: "Set ausgesondert" },
-    set_grund: { unvollstaendig: "unvollständig", tausch: "Teil getauscht oder eingesetzt" },
+    set_grund: { unvollstaendig: "unvollständig", tausch: "Teil getauscht oder eingesetzt", ausgesondert: "Set ausgesondert" },
     austausch: { ja: "ja", nein: "nein", nicht_belegt: "nicht belegt" },
   };
   const SET_GRUPPE = "Bestandteile des Sets";
@@ -308,7 +308,8 @@
                    set_gesperrt: "mit dem Set gesperrt", set_frei: "mit dem Set freigegeben", teil_gesperrt: "Teil gesperrt",
                    teil_entnommen: "Teil entnommen", teil_eingesetzt: "Teil eingesetzt", teil_geloescht: "Teil gelöscht",
                    entnommen: "aus dem Set entnommen", set_lauf_eroeffnet: "Set-Prüfung begonnen",
-                   set_lauf_abgebrochen: "Set-Prüfung abgebrochen", set_geprueft: "Set geprüft" };
+                   set_lauf_abgebrochen: "Set-Prüfung abgebrochen", set_geprueft: "Set geprüft",
+                   set_lauf_geaendert: "Set-Prüfung aus dem Durchgang gelöst" };
   const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };
@@ -3600,10 +3601,9 @@
           : '<p class="mat-austausch-stand bad">Nicht gespeichert.</p>';
     const h = b.herkunft || {};
     const nichts = !b.fehler.length && !b.aenderungen.length && !b.hinweise.length;
-    // Stücklisten der Hersteller-Sets (Schritt 21): ersetzt oder gleich geblieben – „neu“ gibt es nicht, eine neue
-    // Stückliste zählt als geändert.
+    // Stücklisten der Hersteller-Sets (Schritt 21): neu (das Produkt hatte noch keine), ersetzt oder gleich geblieben.
     const sl = b.stuecklisten || {};
-    const stueck = sl.geaendert || sl.unveraendert ? `<tr><th scope="row">Stücklisten</th><td>–</td><td>${sl.geaendert || 0}</td><td>${sl.unveraendert || 0}</td></tr>` : "";
+    const stueck = sl.neu || sl.geaendert || sl.unveraendert ? `<tr><th scope="row">Stücklisten</th><td>${sl.neu || 0}</td><td>${sl.geaendert || 0}</td><td>${sl.unveraendert || 0}</td></tr>` : "";
     return `${stand}
       ${h.quelle || h.erstellt ? `<p class="help">Export von ${esc(h.quelle || "?")}${h.erstellt ? `, erstellt ${esc(fmtZeit(h.erstellt))}` : ""}.</p>` : ""}
       <table class="mat-austausch"><thead><tr><th></th><th>neu</th><th>geändert</th><th>unverändert</th></tr></thead>

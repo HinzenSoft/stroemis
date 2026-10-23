@@ -7,7 +7,8 @@ Regeln, wie sie hier umgesetzt sind:
     Sperre durch einen Prüfer oder verloren, keine ungeprüfte Mangelmeldung, Datumsgrenzen; Kritik A15, S11). Bedingtes
     UPDATE … WHERE id = ? AND parent_item_id = ? mit Zeilenzahl-Prüfung (Doppelklick, Wettlauf); offener Entwurf am Teil
     → 409; seine Zeile im Durchgang bleibt. Das entnommene Teil verliert seine Zuordnung (Journal, S16); das Set ist
-    danach unvollständig und gesperrt (Entwurf D, A25).
+    danach unvollständig und gesperrt (Entwurf D, A25). An einer Position mit „Austausch laut Hersteller: nein“ geht
+    Entnehmen nicht (409 – dann das Set aussondern, Entwurf G; Nachbesserung, Ablauf N3).
   - Teil tauschen bzw. einsetzen (einsetzen): altes Teil entnehmen wie oben (beim Tauschen) und ein neues Teil anlegen –
     Produkt laut Kopie der Stückliste, nie aus der Anfrage, Daten wie beim Set anlegen, Ordner die Heimat des Sets.
     „Austausch laut Hersteller“ der Position: „nein“ → 409 (dann nur Set aussondern), „nicht belegt“ → Pflichtbestätigung
@@ -24,7 +25,10 @@ Regeln, wie sie hier umgesetzt sind:
     jedes mit eigenem Aussonderungsprotokoll; weitergeführte sind gesperrt mit eigenem Grund „aus ausgesondertem Set
     entnommen“, Herkunft die Heimat des Sets, bis zur Freiprüfung durch einen Prüfer.
   - Ergebnis „aussondern“ an einem Teil (teil_aus_pruefung): Das Teil verlässt das Set und ist ausgesondert – wie
-    entnehmen mit Verbleib „aussondern“, der Sachkundige hat es eben gesehen; das Set ist unvollständig und gesperrt.
+    entnehmen mit Verbleib „aussondern“, der Sachkundige hat es eben gesehen; das Set ist unvollständig und gesperrt. Bei
+    „Austausch laut Hersteller: nein“ bleibt das Teil gesperrt im Set (eigene Sperre, pruefung._wirkung_im_set) – der
+    Materialwart sondert dann das Set aus.
+  - Set aussondern beendet eine offene Set-Prüfung (abgebrochen, Journal mit Grund „Set ausgesondert“; Sicherheit 4).
   - Eine Teil-Kennung, die nicht zu diesem Set gehört (fremd oder unbekannt): 404 wie unbekannt. Journal an Set und Teil;
     der Lebenslauf des Sets zeigt nur Einträge am Set selbst („teil_entnommen“, „teil_eingesetzt“, „teil_geloescht“,
     „teil_gesperrt“) – nie Teil-Journale per Kennung (S15)."""
@@ -44,6 +48,8 @@ BESTAETIGT = "laut Herstellerunterlagen zulässig"
 NUR_MIT_PRUEFERSPERRE = ("Aussondern lässt sich ein Teil nur mit eigener Sperre durch einen Prüfer oder wenn es verloren "
                          "ist – sonst „weiterführen“; danach sperrt ein Prüfer oder prüft mit „aussondern“.")
 SCHON_ENTNOMMEN = "Das Teil wurde inzwischen anderswo entnommen – bitte neu laden."
+NICHT_ENTNEHMBAR = ("Laut Hersteller nicht austauschbar – das Set aussondern. „{bez}“ lässt sich nicht einzeln entnehmen; "
+                    "beim Aussondern des Sets lassen sich die übrigen Teile entnehmen und weiterführen.")
 
 
 def _set(set_id):
@@ -136,7 +142,10 @@ def entnehmen(set_id, d, akteur):
     with protokoll.dateien_sichern(), db.transaction(sofort=True):
         s = _set(set_id)
         t = _teil(set_id, tid)
-        bez = _bezeichnung(set_id, t)
+        z = _position(set_id, t)
+        bez = z["bezeichnung"] if z else _bezeichnung(set_id, t)
+        if z and z["austausch"] == "nein":
+            raise Abgelehnt(NICHT_ENTNEHMBAR.format(bez=bez), 409)
         _entnehmen(s, t, verbleib, aus, akteur)
         journal.eintragen("item", set_id, "teil_entnommen", None,
                           {"teil": t["inventory_no"], "bestandteil": bez, "verbleib": verbleib})
@@ -248,12 +257,38 @@ def teil_aus_pruefung(t, p, grund, tag, pruefer, ts):
     sets.sperren(set_id, set_grund="unvollstaendig", anlass=sets.UNVOLLSTAENDIG.format(bez=f"„{bez}“", was="ausgesondert"))
 
 
-def set_aussondern(s, grund, bemerkung, tag, akteur, verbleib, basis_id=None, ts=None):
+SET_AUSSONDERN_HINWEIS = " – laut Hersteller nicht austauschbar: das Set aussondern"
+
+
+def nicht_austauschbar(t):
+    """Steht das Teil an einer Position mit „Austausch laut Hersteller: nein“?"""
+    z = _position(t["parent_item_id"], t)
+    return bool(z) and z["austausch"] == "nein"
+
+
+def teil_bleibt_gesperrt(t, p, grund):
+    """Ergebnis „aussondern“ an einem nicht austauschbaren Teil (pruefung._wirkung_im_set): Es bleibt im Set, gesperrt mit
+    eigenem Grund (grund nennt „das Set aussondern“) – auch eine schon vorhandene eigene Sperre bekommt diesen Grund, damit
+    der Materialwart ihn sieht. In der Transaktion des Festschreibens; das Set sperrt mit (Kaskade)."""
+    set_id = t["parent_item_id"]
+    if t["lock_cause"] == "eigen":
+        sets.set_lage(set_id, je_zeile={"lock_reason": ({t["id"]: grund}, sets.BLEIBT)})
+        journal.eintragen("item", t["id"], "geprueft", {"lock_reason": t["lock_reason"]},
+                          {"lock_reason": grund, "pruefung": p["id"], "ergebnis": "aussondern", "set": set_id})
+        sets.gruende_nachziehen(set_id)
+        return
+    sets.sperren(set_id, eigen=t["id"], grund=grund, zusatz={"pruefung": p["id"]})
+
+
+def set_aussondern(s, grund, bemerkung, tag, akteur, verbleib, basis_id=None, ts=None, ausser_lauf=None):
     """Set aussondern mit der Wahl je Teil (verbleib {Teil: „aussondern“ | „weiterfuehren“}, siehe Kopf) – in der
-    Transaktion des Aufrufers und innerhalb von protokoll.dateien_sichern(). Weitergeführte Teile verlassen das Set
+    Transaktion des Aufrufers und innerhalb von protokoll.dateien_sichern(). Eine offene Set-Prüfung endet „abgebrochen“
+    (außer ausser_lauf – der Lauf, den diese Aussonderung gerade abschließt). Weitergeführte Teile verlassen das Set
     zuerst; dann EIN UPDATE über Set und verbleibende Teile nach „Ausgesondert“ (sets.set_lage) und je Artikel das
-    Aussonderungsprotokoll (pruefung._aussondern ohne eigene Bewegung). Liefert die Kennung der Aussonderung des Sets."""
-    from . import pruefung
+    Aussonderungsprotokoll (pruefung._aussondern ohne eigene Bewegung) – mit dem jetzigen Sperrgrund
+    (sets.gruende_nachziehen, nie dem eines Teils, das nicht mehr dazugehört). Liefert die Kennung der Aussonderung des
+    Sets."""
+    from . import pruefung, setlauf
     set_id = s["id"]
     s, tz = sets.zeilen(set_id)
     for x in [s] + tz:
@@ -261,6 +296,11 @@ def set_aussondern(s, grund, bemerkung, tag, akteur, verbleib, basis_id=None, ts
         if offen:
             raise Abgelehnt(f"{x['inventory_no']}: " + pruefung.reserviert_text(offen) + " Erst abschließen oder die "
                             "Reservierung aufheben.", 409)
+    lf = setlauf.offener(set_id)
+    if lf and lf["id"] != ausser_lauf:
+        setlauf.beenden(lf, grund="Set ausgesondert")
+    sets.gruende_nachziehen(set_id)
+    s, tz = sets.zeilen(set_id)
     ts = ts or db.now()
     heimat = bestand.heimat(s)
     gl = bestand.gliederung_von(s["folder_id"])
@@ -281,7 +321,8 @@ def set_aussondern(s, grund, bemerkung, tag, akteur, verbleib, basis_id=None, ts
                           {"set": set_id, "set_inventar": s["inventory_no"], "lock_state": t["lock_state"],
                            "lock_cause": t["lock_cause"], "folder_id": t["folder_id"],
                            "ordner": bestand._pfad_text(t["folder_id"])},
-                          dict({"set": None, "verbleib": "weiterfuehren", "lock_state": zustand, "lock_cause": "eigen",
+                          dict({"set": None, "verbleib": "weiterfuehren", "set_grund": "ausgesondert",
+                                "lock_state": zustand, "lock_cause": "eigen",
                                 "lock_reason": grund_t, "folder_id": gesperrt["id"],
                                 "ordner": bestand._pfad_text(gesperrt["id"]), "origin_folder_id": heimat,
                                 "herkunft": bestand._pfad_text(heimat)}, **({"pruefung": basis_id} if basis_id else {})))

@@ -168,7 +168,7 @@ def _bericht():
             "formulare": {"neu": 0, "unveraendert": 0},
             "bilder": {"neu": 0, "geaendert": 0, "unveraendert": 0},
             "dokumente": {"neu": 0, "neue_version": 0, "unveraendert": 0},
-            "stuecklisten": {"geaendert": 0, "unveraendert": 0},
+            "stuecklisten": {"neu": 0, "geaendert": 0, "unveraendert": 0},
             "aenderungen": [], "hinweise": [], "warnungen": [], "fehler": [], "gespeichert": False}
 
 
@@ -204,6 +204,7 @@ class _Lauf:
         self.zurueckgestellt = []             # (nochmal, Fehlermeldung) – Einträge mit _Konflikt, siehe _nachholen
         self.intervall_offen = {}             # geänderte Kategorie → (Fundstelle, Name), siehe _intervalle_pruefen
         self.sets = []                        # (Fundstelle, Name, Eintrag, Produkt) mit „set“/„bestandteile“, _stuecklisten
+        self.unveraendert = set()             # Produkte, die als „unveraendert“ zählen – bis _stuecklisten etwas ändert
         self.bericht = _bericht()
 
     def notiz(self, zeile):
@@ -580,6 +581,7 @@ def _produkt(n, e, lauf):
                 _folgen_melden(lauf, ort, name, artikel, teile, seit)
             else:
                 bericht["produkte"]["unveraendert"] += 1
+                lauf.unveraendert.add(pid)
             lauf.uid_uebernehmen("mat_product", "product", vorhanden, uid)
             bild = vorhanden["image"]
         else:
@@ -632,6 +634,14 @@ def _stuecklisten(lauf):
     Vorher scheitert: 1. Sets ausschalten, 2. Stücklisten bleibender Sets, 3. Sets einschalten, 4. ihre Stücklisten."""
     bericht = lauf.bericht
     angaben = []
+
+    def geaendert(pid):
+        """Ändern sich am Produkt nur „Hersteller-Set“ oder die Stückliste, zählt es nicht mehr als „unveraendert“."""
+        if pid in lauf.unveraendert:
+            lauf.unveraendert.discard(pid)
+            bericht["produkte"]["unveraendert"] -= 1
+            bericht["produkte"]["geaendert"] += 1
+
     for ort, name, e, pid in lauf.sets:
         try:
             an, liste = _set_angaben(ort, name, e, lauf)
@@ -647,10 +657,11 @@ def _stuecklisten(lauf):
             return
         n = db.query("SELECT COUNT(*) AS n FROM mat_item WHERE product_id = ?", (pid,), one=True)["n"]
         if n:
-            raise Abgelehnt(f"„set“ wechselte auf {'true' if an else 'false'} – hier gibt es aber schon {n} Artikel dieses "
-                            "Produkts. Ob ein Artikel Teile hat, hängt daran; erst klären: in der Quelle zurückändern oder "
-                            "dort ein eigenes Produkt (Variante) für das Set anlegen.")
+            raise Abgelehnt(f"„set“ wechselte für „{_produkt_text(p)}“ auf {'true' if an else 'false'} – hier gibt es aber "
+                            f"schon {n} Artikel dieses Produkts. Ob ein Artikel Teile hat, hängt daran; erst klären: in der "
+                            "Quelle zurückändern oder dort ein eigenes Produkt (Variante) für das Set anlegen.")
         stueckliste.set_umschalten(pid, an, grund_journal="Katalogimport")
+        geaendert(pid)
         lauf.notiz(f"Produkt „{name}“: „Hersteller-Set“ {'gesetzt' if an else 'entfernt'}")
 
     def ersetzen(ort, name, pid, liste):
@@ -658,8 +669,10 @@ def _stuecklisten(lauf):
             raise Abgelehnt("Bestandteile hat nur ein Hersteller-Set – „set“: true fehlt.")
         def aufloesen(x):
             return _produkt_ziel(x["produkt"], lauf) if x.get("produkt") is not None else None
+        neu = not stueckliste.zeilen(pid)
         if stueckliste.ersetzen(pid, liste, aufloesen=aufloesen, grund="Katalogimport"):
-            bericht["stuecklisten"]["geaendert"] += 1
+            bericht["stuecklisten"]["neu" if neu else "geaendert"] += 1
+            geaendert(pid)
             lauf.notiz(f"Produkt „{name}“: Stückliste ersetzt ({len(liste)} Position{'en' if len(liste) != 1 else ''})")
         else:
             bericht["stuecklisten"]["unveraendert"] += 1
@@ -862,8 +875,16 @@ def _produkt_ziel(angabe, lauf):
     p = db.query("SELECT * FROM mat_product WHERE uid = ?", (uid,), one=True) if uid else None
     p = p or db.query("SELECT * FROM mat_product WHERE dedupe_key = ?", (_produkt_key(angabe),), one=True)
     if not p:
-        raise Abgelehnt("Das Produkt gibt es weder im Katalog noch in der Datei.")
+        teile = [angabe.get(k) if isinstance(angabe.get(k), str) and angabe.get(k).strip() else "–"
+                 for k in ("hersteller", "modell", "artikelnummer")]
+        raise Abgelehnt(f"Das Produkt „{' | '.join(teile)}“ (Hersteller | Modell | Artikelnummer) gibt es weder im Katalog "
+                        "noch in der Datei.")
     return p
+
+
+def _produkt_text(p):
+    """Ein Produkt hier für Meldungen: „Hersteller Modell (Artikelnummer)“."""
+    return katalog.produktname(p) + (f" ({p['article_no']})" if p.get("article_no") else "")
 
 
 _PUNKTFELDER = ("group_name", "label", "editor", "mandatory", "expected_value", "is_critical")

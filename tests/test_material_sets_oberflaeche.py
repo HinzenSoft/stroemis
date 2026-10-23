@@ -326,7 +326,9 @@ def test_server_ergaenzungen_o2():
             r = w.post("/api/material/artikel", json={"product_id": t.set_p, "folder_id": t.lager_a, "serial_no": "SET-A-9",
                                                       "manufactured_on": f"{_heute().year - 1}-03",
                                                       "teile": teile_fuer(t.liste, serien)})
-            assert r.status_code == 409 and r.json["error"].startswith("Teil „Verbindungselement“: Diese Seriennummer gibt es"), r.get_json()
+            # Position, Stück und Seriennummer – die Oberfläche markiert genau dieses Feld (Nachbesserung, Browser B2).
+            assert r.status_code == 409 and r.json["error"].startswith(
+                f"Teil „Verbindungselement“ 1 von 2 (Seriennummer „{serien[0]}“): Diese Seriennummer gibt es"), r.get_json()
             assert text in r.json["error"], r.get_json()
         assert zeilen(t.app, "SELECT art FROM mat_global_search ORDER BY id DESC LIMIT 1")[0]["art"] == "dublette"
         r = w.post(f"/api/material/artikel/{s}/teil-tauschen", json={"teil_id": t.teile[2], "serial_no": "SET-B-R1"})

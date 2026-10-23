@@ -263,23 +263,40 @@ def test_set_pruefung_freigabe():
             assert lage(app, s)[s][2] == "gesperrt" and lage(app, s)[k1][3] == "set"
             sql(app, *nachher) if nachher else None
             return pr
+        def ohne_uebernahme(vorher, nachher, erwartet):
+            """Nachbesserung (Ablauf N1, Browser B7): Ein Teil ohne übernehmbare Prüfung (überfällig, neu) gehört von selbst
+            zum Prüfumfang – die Vorschau und der Lauf sagen „zu prüfen“, der Set-Artikel lässt sich vorher nicht
+            festschreiben (409). Danach den Lauf abbrechen und den Grund wieder wegnehmen."""
+            sql(app, *vorher)
+            a = ok(w.get(f"/api/material/artikel/{s}"))["artikel"]
+            assert {x["id"]: x["zu_pruefen"] for x in a["set"]["teile"]} == {k1: True, k2: True, r1: False}, a["set"]["teile"]
+            lauf_auf(p, s)
+            pruefen(p, k1)
+            lf = ok(p.get(f"/api/material/artikel/{s}/set-lauf"))["lauf"]
+            assert [(u["teil"]["id"], u["zu_pruefen"]) for u in lf["umfang"]] == [(k1, True), (k2, True), (r1, False)], lf
+            assert lf["fortschritt"]["zu_pruefen"] == 2 and lf["bereit"] is False
+            assert any(erwartet in g and g.endswith("bitte jetzt prüfen.") for g in lf["freigabe_gruende"]), lf
+            e = ok(starten(p, s), 201)["pruefung"]
+            r = festschreiben(p, e["id"], ergebnis="einsatzbereit")
+            assert r.status_code == 409 and "noch nicht geprüft" in r.json["error"], r.get_json()
+            nr_k2 = zeilen(app, "SELECT inventory_no FROM mat_item WHERE id = ?", (k2,))[0]["inventory_no"]
+            assert nr_k2 in r.json["error"], r.get_json()
+            assert p.delete(f"/api/material/pruefungen/{e['id']}", headers=H).status_code == 200
+            assert ok(p.delete(f"/api/material/artikel/{s}/set-lauf", headers=H))["bleibt"] is True
+            sql(app, *nachher)
         gestern = (_heute() - timedelta(days=1)).isoformat()
-        # Den Lauf von oben schließen (k1 und Set-Artikel) – übernommen, aber nichts blockiert: Freigabe? Erst einzeln.
         k2_due = zeilen(app, "SELECT next_due_on FROM mat_item WHERE id = ?", (k2,))[0]["next_due_on"]
-        sql(app, "UPDATE mat_item SET next_due_on = ? WHERE id = ?", (gestern, k2))
-        pruefen(p, k1)
-        pr = pruefen(p, s)
-        assert pr["set_protokoll"]["gesamt"] == "gesperrt" and any(
-            "überfällig" in g for g in pr["set_protokoll"]["gruende"]), pr["set_protokoll"]
+        ohne_uebernahme(("UPDATE mat_item SET next_due_on = ? WHERE id = ?", (gestern, k2)),
+                        ("UPDATE mat_item SET next_due_on = ? WHERE id = ?", (k2_due, k2)), "überfällig")
+        alt_li = zeilen(app, "SELECT last_inspected_on FROM mat_item WHERE id = ?", (k2,))[0]["last_inspected_on"]
+        ohne_uebernahme(("UPDATE mat_item SET last_inspected_on = NULL WHERE id = ?", (k2,)),
+                        ("UPDATE mat_item SET last_inspected_on = ? WHERE id = ?", (alt_li, k2)), "noch nie geprüft")
+        # Übernommen, aber blockiert: Den Lauf schließen – das Set bleibt gesperrt, mit dem Grund als ganzem Satz.
+        pr = blockiert(("UPDATE mat_item SET retire_by = ? WHERE id = ?", (gestern, r1)),
+                       ("UPDATE mat_item SET retire_by = NULL WHERE id = ?", (r1,)), "Lebensdauer erreicht")
         assert [z["uebernommen"] for z in pr["set_protokoll"]["zeilen"][:3]] == [False, True, True]
-        sql(app, "UPDATE mat_item SET next_due_on = ? WHERE id = ?", (k2_due, k2))
-        blockiert(("UPDATE mat_item SET retire_by = ? WHERE id = ?", (gestern, r1)),
-                  ("UPDATE mat_item SET retire_by = NULL WHERE id = ?", (r1,)), "Lebensdauer erreicht")
         blockiert(("UPDATE mat_item SET lock_state = 'verloren' WHERE id = ?", (k2,)),
                   ("UPDATE mat_item SET lock_state = 'gesperrt' WHERE id = ?", (k2,)), "verloren")
-        alt_li = zeilen(app, "SELECT last_inspected_on FROM mat_item WHERE id = ?", (k2,))[0]["last_inspected_on"]
-        blockiert(("UPDATE mat_item SET last_inspected_on = NULL WHERE id = ?", (k2,)),
-                  ("UPDATE mat_item SET last_inspected_on = ? WHERE id = ?", (alt_li, k2)), "neu")
         # Berichtigung der Set-Prüfung gibt nie frei (der Grund ist weg, das Set bleibt gesperrt), übernimmt die Tabelle.
         letzte = zeilen(app, "SELECT id FROM mat_inspection WHERE item_id = ? AND completed_at IS NOT NULL "
                              "ORDER BY id DESC LIMIT 1", (s,))[0]["id"]
@@ -473,7 +490,10 @@ def test_tausch_entnahme_loeschen():
         assert z[r2]["parent_item_id"] == s and z[r2]["assigned_user_id"] == person_id and z[r2]["set_pruefen"] == 1
         assert lage(app, s)[s][2:4] == ("gesperrt", "set")
         assert [x["action"] for x in eintraege(app, r1)][-2:] == ["entnommen", "zuordnung_geloest"]
-        assert "Teil getauscht" in zeilen(app, "SELECT lock_reason FROM mat_item WHERE id = ?", (s,))[0]["lock_reason"]
+        # Der Grund am Set ist abgeleitet (gruende_nachziehen): das neue Teil, nicht das entnommene.
+        nr_r2 = zeilen(app, "SELECT inventory_no FROM mat_item WHERE id = ?", (r2,))[0]["inventory_no"]
+        assert zeilen(app, "SELECT lock_reason FROM mat_item WHERE id = ?", (s,))[0]["lock_reason"] == \
+            f"Teil {nr_r2} neu eingesetzt – Set prüfen"
         lf = lauf_auf(p, s)
         assert [(u["teil"]["id"], u["zu_pruefen"]) for u in lf["umfang"]] == [(k1, False), (k3, False), (r2, True)]
         # Austausch „nein“ → 409 (Katalog: Kopie der Stückliste ist fest – direkt in der Kopie eines neuen Sets setzen).
@@ -483,6 +503,12 @@ def test_tausch_entnahme_loeschen():
         r = w.post(f"/api/material/artikel/{s}/teil-tauschen", json={"teil_id": k1, "serial_no": "SET-A-K9",
                                                                       "bestaetigt": True})
         assert r.status_code == 409 and "nicht austauschbar" in r.json["error"], r.get_json()
+        # Ebenso „Teil entnehmen“ (Nachbesserung, Ablauf N3): dann nur das Set aussondern.
+        r = w.post(f"/api/material/artikel/{s}/teil-entnehmen", json={"teil_id": k1})
+        assert r.status_code == 409 and r.json["error"].startswith(
+            "Laut Hersteller nicht austauschbar – das Set aussondern"), r.get_json()
+        sql(app, "UPDATE mat_item_set_slot SET austausch = 'nicht_belegt' WHERE set_item_id = ? AND einzeln = 1 AND "
+                 "bezeichnung = 'Verbindungselement'", (s,))
         # Entnehmen aus dem gesperrten Set: offener Entwurf → 409; „aussondern“ ohne eigene Prüfer-Sperre → 409.
         e = ok(starten(p, k1), 201)["pruefung"]
         r = w.post(f"/api/material/artikel/{s}/teil-entnehmen", json={"teil_id": k1})

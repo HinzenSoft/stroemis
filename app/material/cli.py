@@ -39,10 +39,12 @@ def import_catalog(datei, trocken):
     except Abgelehnt as exc:
         click.echo(str(exc), err=True)
         sys.exit(2)
-    teile = ("kategorien", "produkte", "formulare") + (("bilder", "dokumente") if bericht.get("version") == 2 else ())
+    # Stücklisten der Hersteller-Sets (Schritt 21): neu, geändert, unverändert – wie der Bericht in der App.
+    teile = ("kategorien", "produkte", "formulare") + (("bilder", "dokumente") if bericht.get("version") == 2 else ()) + (
+        ("stuecklisten",) if any(bericht.get("stuecklisten", {}).values()) else ())
     for teil in teile:
         zahlen = ", ".join(f"{k} {v}" for k, v in bericht[teil].items())
-        click.echo(f"{teil.capitalize():<11} {zahlen}")
+        click.echo(f"{'Stücklisten' if teil == 'stuecklisten' else teil.capitalize():<11} {zahlen}")
     for h in bericht["hinweise"]:
         click.echo(f"HINWEIS {h}")
     for w in bericht["warnungen"]:
