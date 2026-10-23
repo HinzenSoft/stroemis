@@ -137,6 +137,21 @@ def _ist_datumsfeld(feld):
     return feld.endswith("_on") or feld in ("valid_from", "retire_by", "datum", "begonnen", "bis")
 
 
+def _listen_wert(x):
+    """Ein Listeneintrag im Journal als Text – wie listenWert() in material.js: Text bleibt Text; Hersteller-Sets
+    schreiben Objekte – die Teile beim Anlegen eines Sets ({inventory_no, serial_no, bestandteil}) und die Positionen
+    einer Stückliste ({bezeichnung, anzahl, einzeln, austausch}). Sie erscheinen als Satz statt als Python-Darstellung."""
+    if not isinstance(x, dict):
+        return str(x)
+    if x.get("inventory_no"):
+        return (x["inventory_no"] + (f" (SN {x['serial_no']})" if x.get("serial_no") else "")
+                + (f" – {x['bestandteil']}" if x.get("bestandteil") else ""))
+    if "bezeichnung" in x:
+        return (f"{x.get('anzahl') or 1} × {x['bezeichnung']}" + (", einzeln geführt" if x.get("einzeln") else "")
+                + (f", Austausch: {SET_WERTE['austausch'].get(x['austausch'], x['austausch'])}" if x.get("austausch") else ""))
+    return json.dumps(x, ensure_ascii=False)
+
+
 def wert_text(v, feld, verweise=None):
     """Ein Wert aus dem Journal als Text – wie wert() in material.js, nur ohne HTML. verweise: Kennung einer Prüfung →
     Protokoll-ID; im PDF gibt es keinen Link, die Protokoll-ID findet man dafür im Verzeichnis wieder."""
@@ -145,7 +160,7 @@ def wert_text(v, feld, verweise=None):
     if v is None or v == "":
         return "–" if feld != "bis" else "unbefristet"
     if isinstance(v, list):
-        return ", ".join(str(x) for x in v) if v else "–"
+        return ", ".join(_listen_wert(x) for x in v) if v else "–"
     if isinstance(v, bool) or (feld in _JA_NEIN and v in (0, 1)):
         return "ja" if v else "nein"
     if feld in ("material_kind", "default_material_kind"):

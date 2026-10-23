@@ -5,13 +5,24 @@ nennt die Anfrage mit „teil_id“: Gehört es nicht zu diesem Set (fremd oder 
 Unbekanntes (Entwurf H). Set prüfen eröffnet und bricht ab, wer prüfen darf (abbrechen auch der Materialwart – wie eine
 Reservierung aufheben); Teile entnimmt, tauscht und setzt ein, wer verwaltet. Festschreiben, Set aussondern und Teil
 löschen laufen über die vorhandenen Routen (pruefung_abschliessen, artikel_aussondern mit „verbleib“, artikel_loeschen).
-Die Regeln stehen in services/setlauf.py und services/setaustausch.py."""
+Die Regeln stehen in services/setlauf.py und services/setaustausch.py.
+
+Dazu die Seite „Set prüfen“ (Oberfläche O2): /material/artikel/<iid>/set-pruefung zeigt den Prüfumfang je Teil und führt
+von Prüfung zu Prüfung; sehen genügt (wie bei „Prüfung starten“), die Knöpfe richten sich nach „darf“."""
 from flask import jsonify, request
 
 from ..auth import current_user, json_body
-from .routes import _pruefer, api
+from .routes import _pruefer, _seite, api, seiten
 from .services import Abgelehnt, bestand, kennung, setaustausch, setlauf, sets
 from .services.rechte import requires_folder
+
+
+@seiten.get("/material/artikel/<int:iid>/set-pruefung")
+def set_lauf_seite(iid):
+    """Die Seite „Set prüfen“: ?durchgang= aus dem Ordner-Durchgang (der Lauf setzt dann round_id), ?lauf= eine frühere
+    Set-Prüfung dieses Sets ansehen. Ein fremder Artikel antwortet wie Unbekanntes mit 404."""
+    return _seite("set_lauf", bezug=("artikel", iid), id=iid, durchgang=request.args.get("durchgang", type=int),
+                  lauf=request.args.get("lauf", type=int))
 
 
 def _set_antwort(iid, **mehr):

@@ -927,6 +927,8 @@ def artikel_json(i, voll=False):
                              "lock_reason", "next_due_on", "interval_months", "notes", "created_at", "updated_at",
                              "last_inspected_on", "length_m")}
     out["serial_generated"] = bool(i["serial_generated"])
+    # Hersteller-Sets (K2): „set“ – nur mit dem Set gesperrt (dann nimmt der Artikel eine eigene Sperre an), „eigen“, None.
+    out["lock_cause"] = i["lock_cause"]
     out["demo"] = ist_demo(i["id"])
     # Länge (Schritt 20): als Text „57,5 m“ und ob die Kategorie des Produkts sie vorsieht (Feld im Dialog).
     out["laenge_text"] = laenge_text(i["length_m"])
@@ -1075,6 +1077,14 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     out["artikel"] = [sets.listenzeile(artikel_kurz(r), r) for r in rows]
     out["artikel_gesamt"] = gesamt
     out["sets"] = sets.zahlen(f"FROM mat_item i {bedingung}", params)
+    # Die Zahlen an den Statusfiltern zählen wie die Liste (Oberfläche O2): je Zeile, ein Set einmal mit seinem
+    # Set-Status – nicht jedes Teil einzeln (baum() zählt für Leiste und Übersicht weiter je Artikel).
+    zaehlung = st.leere_zaehlung()
+    for r in db.query(f"SELECT {sets.gruppen_status_sql('i')} AS s, COUNT(*) AS n FROM mat_item i WHERE i.folder_id = :fid "
+                      f"AND i.parent_item_id IS NULL AND {rechte.artikel_filter('i')} GROUP BY s",
+                      dict(st.parameter(), fid=fid)):
+        zaehlung[r["s"]] = r["n"]
+    out["direkt"] = zaehlung
     out["seite"], out["pro_seite"] = seite, pro_seite
     darf = out["darf"]
     out["journal"] = (journal.lesen([("folder", fid)], grenze=50,

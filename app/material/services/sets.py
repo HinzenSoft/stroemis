@@ -472,6 +472,18 @@ def _hinweis_str(vorlage, inv, p, serie):
     return vorlage.format(inv=inv, name=katalog.produktname(p), serie=serie)
 
 
+def teil_schreiben(plan, bezeichnung, wer, **kw):
+    """bestand.artikel_schreiben für ein Teil – eine Ablehnung dabei (Dublette der Seriennummer, sichtbar oder fremd)
+    nennt das Teil wie die Regeln davor („Teil „Bezeichnung“: …“), damit die Oberfläche sie am Teil zeigt. Die Klasse
+    bleibt (FremdeDublette wird weiter protokolliert)."""
+    from . import bestand
+    try:
+        return bestand.artikel_schreiben(plan, **kw)
+    except Abgelehnt as exc:
+        exc.args = (f"{wer} „{bezeichnung}“: {exc}",)
+        raise
+
+
 def set_anlegen(d, plan):
     """POST /artikel mit einem Set-Produkt (bestand.anlegen): der Set-Artikel nach plan (bestand.artikel_plan) und je
     einzeln geführter Position der Stückliste genau „anzahl“ Teile – „teile“: [{"bestandteil_id": Kennung der Position,
@@ -531,8 +543,8 @@ def set_anlegen(d, plan):
                         z["austausch"]))
         liste = []
         for z, pt in plaene:
-            tid = bestand.artikel_schreiben(pt, journal_zusatz={"set": sid, "set_inventar": s["inventory_no"]},
-                                            parent_id=sid)
+            tid = teil_schreiben(pt, z["bezeichnung"], "Teil", journal_zusatz={"set": sid, "set_inventar": s["inventory_no"]},
+                                 parent_id=sid)
             t = bestand.artikel(tid)
             liste.append({"teil": tid, "inventory_no": t["inventory_no"], "serial_no": t["serial_no"],
                           "bestandteil": z["bezeichnung"], "produkt": katalog.produktname(pt["p"])})
@@ -677,8 +689,9 @@ def listenzeile(k, r):
 
 
 def teil_von_json(item):
-    """Am Teil: {id, inventory_no, produkt, status, status_text, bestandteil} des Sets – nur, wenn das Konto das Set sieht
-    (artikel_filter auf der Set-Zeile), sonst None. Für Nicht-Teile None."""
+    """Am Teil: {id, inventory_no, produkt, status, status_text, bestandteil, teile_anzahl} des Sets – nur, wenn das Konto
+    das Set sieht (artikel_filter auf der Set-Zeile), sonst None. Für Nicht-Teile None. teile_anzahl: für die Rückfragen
+    der Teil-Seite („sperrt das Set mit allen n Teilen“)."""
     if not ist_teil(item):
         return None
     s = set_zeile(item["parent_item_id"])
@@ -689,7 +702,7 @@ def teil_von_json(item):
     zu, _ = _zuteilen(slots(s["id"]), tz)
     z = zu.get(item["id"])
     return {"id": s["id"], "inventory_no": s["inventory_no"], "produkt": _kurzname(s), "status": w["status"],
-            "status_text": w["status_text"], "bestandteil": z["bezeichnung"] if z else None}
+            "status_text": w["status_text"], "bestandteil": z["bezeichnung"] if z else None, "teile_anzahl": len(tz)}
 
 
 def teil_kurz(item):

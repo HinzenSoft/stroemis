@@ -474,8 +474,8 @@ def test_oberflaeche_statisch():
     # (21.10.2026): Karte und Rückfrage „Änderung bestätigen“; 27 seit den Hersteller-Sets (P4-L2 O1): Stückliste der
     # Produktseite, Produktwahl im Reiter „Bestandteile“, Teilblock beim Anlegen, Teil und fehlende Position im Kasten
     # „Bestandteile“, Teil-Karte in „Meine PSA“; 28 seit dem Produktnamen als Link in Artikellisten (23.10.2026): mit
-    # und ohne Link.
-    assert len(stellen) == js.count("${nameHtml(") == 28, (len(stellen), js.count("${nameHtml("))
+    # und ohne Link; 29 seit P4-L2 O2: Kopf der Seite „Set prüfen“.
+    assert len(stellen) == js.count("${nameHtml(") == 29, (len(stellen), js.count("${nameHtml("))
     assert all(name == zusatz for name, _, zusatz in stellen), stellen
     assert not re.search(r"\$\{zusatzHtml\([^)]*\)\}(</strong>|</a>)", js)      # nie im Link, nie in <strong>
     # Die Katalogliste wie im Bildschirmfoto: Name fett im roten Link, dann grau Zusatz und Artikelnummer.
@@ -513,8 +513,8 @@ def test_oberflaeche_statisch():
     for datei in (js, suche, glob):
         assert "· Art.-Nr. ${" not in datei
     # Seit Phase 3 · L1 auch in der Karte „Meine PSA“ (artNrHtml, Seriennummer der Karte k); seit P4-L2 O1 auch in der
-    # Teil-Karte eines Sets (artNrHtml(t.produkt.article_no)).
-    assert js.count("${artNrHtml(") == 5 and js.count('${nummerHtml("Seriennummer", a.serial_no)}') == 2
+    # Teil-Karte eines Sets (artNrHtml(t.produkt.article_no)); seit P4-L2 O2 im Kopf der Seite „Set prüfen“.
+    assert js.count("${artNrHtml(") == 6 and js.count('${nummerHtml("Seriennummer", a.serial_no)}') == 3
     assert js.count('${nummerHtml("Seriennummer", k.serial_no)}') == 1
     assert "window.MatProdukt.artNr(a.article_no, markiert(a.article_no, q))" in suche
     assert "window.MatProdukt.artNr(t.artikelnummer)" in glob

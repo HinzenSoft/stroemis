@@ -193,8 +193,8 @@ def einsetzen(set_id, d, akteur, tausch):
             raise Abgelehnt(f"Neues Teil „{z['bezeichnung']}“: {exc}", exc.code)
         if t:
             _entnehmen(s, t, verbleib, aus, akteur)
-        neu = bestand.artikel_schreiben(plan, journal_zusatz={"set": set_id, "set_inventar": s["inventory_no"]},
-                                        parent_id=set_id)
+        neu = sets.teil_schreiben(plan, z["bezeichnung"], "Neues Teil",
+                                  journal_zusatz={"set": set_id, "set_inventar": s["inventory_no"]}, parent_id=set_id)
         n = bestand.artikel(neu)
         if n["serial_generated"]:
             hinweise.append(sets._hinweis_str(sets.STR_HINWEIS, n["inventory_no"], plan["p"], n["serial_no"]))

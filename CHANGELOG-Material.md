@@ -4151,7 +4151,7 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
-## Phase 4 · Lieferung 2 – Sets mit Komponenten (23.10.2026, Stand: KERN Teil 2 und Oberfläche Teil 1)
+## Phase 4 · Lieferung 2 – Sets mit Komponenten (23.10.2026, Stand: KERN Teil 2 und Oberfläche Teile 1 und 2)
 
 Grundlage: `planung/material-phase4/entwurf_l2.md` (Fassung 2 nach den Kritiken „Sicherheit“ S1–S31 und „Ablauf“
 A1–A33, mit den Entscheidungen des Nutzers vom 23.10.2026: Hersteller-Sets, Set-Artikel mit Teil-Artikeln, Teil
@@ -4159,8 +4159,8 @@ gesperrt → ganzes Set gesperrt, Austausch, Kern in L2). Gebaut in Paketen: **K
 Tests, Doku), **K2** (Sperr-Kaskade und Freigabe, Set prüfen mit Set-Protokoll, Teil tauschen, entnehmen, einsetzen und
 löschen, Aussondern mit Wahl je Teil, Mails, Jahresbericht – ohne Schemaänderung), danach **OBERFLÄCHE** (`material.js`
 nach den Schnittstellen K1 und K2 unten), drei Prüfungen, Nachbesserung. Schemaversion 21, keine neuen Abhängigkeiten.
-Die Oberfläche für den Stand K1 steht unter „Oberfläche (O1)“ am Ende dieses Abschnitts; die Oberfläche für K2 (Set
-prüfen, Tauschen, Aussondern, Durchgang) folgt als O2.
+Die Oberfläche für den Stand K1 steht unter „Oberfläche (O1)“, die für K2 (Set prüfen, Tauschen, Aussondern, Durchgang,
+Meine PSA) unter „Oberfläche (O2)“ am Ende dieses Abschnitts; es folgen die drei Prüfungen.
 
 ### Neu (K1)
 
@@ -4644,7 +4644,7 @@ Konsolenfehler, ohne waagerechtes Rollen.
 5. Teil-Karten in „Meine PSA“ haben kein eigenes „Mangel melden …“ – nach Entwurf C meldet man am Set oder an einem
    gewählten Teil; den Dialog mit Teil-Wahl bringt O2.
 
-**Fehlt an der Schnittstelle (für K2/O2)**
+**Fehlt an der Schnittstelle (für K2/O2)** – mit O2 erledigt (siehe „Oberfläche (O2)“, Server-Ergänzungen und Abweichung 3)
 - Sichtbare Dublette eines Teils (409 „Diese Seriennummer gibt es bei diesem Produkt schon …“) nennt weder Teil noch
   Seriennummer – die Seite kann sie nur über dem Knopf zeigen. Vorschlag: Präfix „Teil „Bezeichnung“: “ wie bei den
   Regeln eines Teils.
@@ -4661,6 +4661,125 @@ Konsolenfehler, ohne waagerechtes Rollen.
 3. Hinweise beim Anlegen (STR-Nummer anbringen) als Dialog statt Toast.
 4. Kauf und Erstgebrauch des Sets als Vorgabe der Teile (überschreibbar), Herstellung je Teil leer.
 5. „Stückliste übernehmen“ bei einer Variante vorbelegt.
+
+### Oberfläche (O2, 23.10.2026)
+
+`material.js`, `material.css` für den Stand K2, dazu kleine Server-Ergänzungen (unten). Knopfsprache wie im Modul: je
+Ansicht und Dialog höchstens ein roter Knopf, `btn danger` nur zum Bestätigen endgültiger Aktionen, Seltenes im
+Untermenü, Touch-Regeln nur unter `@media (pointer: coarse)`, Listen per Container-Abfrage „mat-seite“.
+
+- **Set-Seite**: Am Set-Artikel ersetzt **„Set prüfen“** die Einzelprüfung (rot, wenn das Set fällig – überfällig,
+  bald fällig, neu, Lebensdauer erreicht – oder gesperrt ist; „Set-Prüfung fortsetzen“ rot bei laufender; sonst grau;
+  wer nur liest oder verwaltet, sieht „Set-Prüfung ansehen“). Kasten „Bestandteile“ neu mit „Gesperrt, weil“ (aus
+  `set.sperrgruende`, Teile verlinkt), der laufenden Set-Prüfung und der letzten (Datum, Gesamtergebnis, Protokoll,
+  „berichtigt durch …“ und berichtigte Teilprüfungen). „Sperren“ gibt es auch an einem nur mitgesperrten Artikel
+  (`lock_cause` „set“); Sperren und „Mangel melden …“ sagen, dass sie das ganze Set mit allen n Teilen sperren (Dialog,
+  Toast, Quittung). „Set aussondern“ ist ausgegraut mit Grund, solange im Set kein eigener Grund eines Prüfers und kein
+  Verlust steht (wie der Dienst, K2-Abweichung 6).
+- **Seite „Set prüfen“** (`/material/artikel/<Set>/set-pruefung`, neue Seitenroute): ohne offene Set-Prüfung der
+  Prüfumfang als Vorschau (periodisch alle Teile; nach einer Sperre der Set-Artikel und die betroffenen Teile, die
+  übrigen „wird übernommen“), die Sperrgründe und „Set-Prüfung beginnen“ (aus dem Durchgang mit `durchgang_id`). Mit
+  offener: Stand und Fortschritt („1 von 2 Teilen im Umfang geprüft“), Hinweis bei mehr als 7 Tagen, „Was die Freigabe
+  noch verhindert“ (`freigabe_gruende` ohne die Zeilen „noch nicht geprüft“ – das zeigen die Karten), je Teil eine Karte
+  „Teil n von m“ (zu prüfen → „Prüfen“, in Prüfung → „Weiter prüfen“ bzw. für den Materialwart „Reservierung
+  aufheben“, geprüft mit Ergebnis und Protokoll, übernommen mit Datum und Protokoll → „auch prüfen“), zum Schluss der
+  Set-Artikel. Rot ist genau ein Knopf: die nächste Prüfung, die jetzt dran ist (erst die Teile im Umfang, dann – sobald
+  `bereit` – der Set-Artikel). „Set-Prüfung abbrechen …“ steht unter „Mehr“, mit Rückfrage. Abgeschlossen: Ergebnis mit
+  Gesamtergebnis, Gründen, Hinweis und „Set-Protokoll ansehen“; frühere Set-Prüfungen sind verlinkt (`?lauf=`).
+- **Prüfung starten**: am Set-Artikel ohne offene Set-Prüfung statt „Prüfung beginnen“ der Weg zu „Set prüfen“ (der
+  Dienst antwortet sonst 409); an einem Teil „Teil von Set … · Teil n von m in der Set-Prüfung“, „Abbrechen“ führt dann
+  zurück in die Set-Prüfung. Der Sperr-Banner sagt im Set, dass „einsatzbereit“ nur den eigenen Grund aufhebt (bzw. eine
+  geerbte Sperre gar nicht) und frei erst „Set prüfen“ gibt.
+- **Prüfansicht im Lauf**: unter der Produktzeile „Teil von Set … · Teil n von m · Set-Prüfung“ bzw. „Set-Artikel der
+  Set-Prüfung“; nach dem Festschreiben (und an jeder abgeschlossenen Prüfung eines laufenden Laufs) ein Kasten mit dem
+  Fortschritt und dem roten Weg zur nächsten Prüfung („Weiter prüfen: Teil …“ bzw. „Set-Artikel prüfen“) und „Zur
+  Set-Prüfung“. Am Entwurf des Set-Artikels (`set_abschluss`) der Abschnitt „Set-Prüfung“ mit dem Umfang, ein Hinweis,
+  solange er nicht `bereit` ist, und das **Gesamtergebnis vorab** je gewähltem Ergebnis (auch in der Abschlussleiste und
+  im Festschreib-Dialog). Die Ja/Nein-Zeilen der Gruppe „Bestandteile des Sets“ heißen **„vorhanden“/„fehlt“** (gespeichert
+  bleibt ja/nein). Ergebnis „aussondern“ am Set-Artikel: im Festschreib-Dialog die Wahl je Teil, vorbelegt mit
+  `verbleib_vorschlag` (geht als `verbleib` mit). An Teilen sagen Leiste und Dialog, dass „instandsetzen“ das ganze Set
+  sperrt und „aussondern“ das Teil aus dem Set nimmt. Abgeschlossen zeigt die Set-Prüfung ihre Teiletabelle
+  (`set_protokoll`: Bestandteil, Nummern, Ergebnis bzw. „übernommen“, „vorhanden/fehlt“, Protokoll-ID mit Prüfsumme).
+- **Teil tauschen, entnehmen, einsetzen** (Materialwart): je Teil in der Tabelle „Bestandteile“ das Untermenü
+  „Austausch“ („Teil tauschen …“ – bei „Austausch laut Hersteller: nein“ grau mit Grund –, „Teil entnehmen …“), an einer
+  Zeile „fehlt“ „Teil einsetzen …“ (bei „nein“ ausgegraut). Ein Dialog für alle drei: was danach mit dem Set ist, der
+  Verbleib des alten Teils (weiterführen – mit dem Satz, was dann geschieht – oder aussondern mit Grund, Datum, Bemerkung
+  und Unterschrift; nur wählbar, wo der Server es zulässt, `verbleib_vorschlag` „aussondern“; der Knopf wird dann
+  `btn danger`), das neue Teil mit denselben Feldern wie beim Anlegen (`teilBlockHtml`, aus „Artikel anlegen“
+  herausgelöst) und bei „nicht belegt“ das Häkchen „Der Austausch ist laut Herstellerunterlagen zulässig“ (Knopf erst
+  danach frei). Fehler stehen im Dialog, ein abgelehntes neues Teil ist rot umrandet; `hinweise` (STR-Nummer anbringen)
+  zeigt ein Dialog wie beim Anlegen.
+- **Set aussondern**: der vorhandene Aussondern-Dialog am Set-Artikel („Set … aussondern“) mit der Wahl je Teil,
+  vorbelegt, mit dem Sperrgrund je Teil.
+- **Teil löschen** (ungeprüftes Teil, Teil-Seite): Die Rückfrage nennt, dass das Set danach unvollständig und gesperrt
+  ist; danach geht es zur Set-Seite.
+- **Durchgang**: Teile stehen eingerückt unter ihrer Set-Zeile (Tabelle und Karte), wenn die in der Auswahl steht – sonst
+  für sich mit „Teil von Set …“; Set-Zeile mit Marke „Set“, der offenen Set-Prüfung (`set_lauf`, „läuft außerhalb dieses
+  Durchgangs“, wenn sie nicht hierher gehört) und „Set prüfen“ bzw. „Set-Prüfung fortsetzen“ (mit `durchgang`) statt
+  „Prüfen“.
+- **Meine PSA**: „Mangel melden …“ an der Set-Karte fragt, was betroffen ist – Set-Artikel oder ein Teil (wo schon die
+  eigene Meldung offen ist, ausgegraut); gemeldet wird am gewählten Artikel, die Texte nennen das ganze Set. Ausgegraut
+  ist der Knopf erst, wenn an allen Artikeln des Sets die eigene Meldung offen ist.
+- **Werte und Journal**: `wert()` liest `SET_WERTE` (Sperrursache, Verbleib, Gesamtergebnis, Anlass der Set-Sperre,
+  Austausch) wie `beschriftung.SET_WERTE`; die neuen Aktionen standen schon in `AKTION`. Rückruf am Produkt: betroffene
+  Teile mit „Teil von Set …“ (`set_inventar`).
+
+**Server-Ergänzungen (mit Test)**
+- Seite `GET /material/artikel/<iid>/set-pruefung[?durchgang=&lauf=]` (lesen; fremd 404 wie Unbekanntes).
+- Abgelehnte Seriennummer eines Teils (sichtbare oder fremde Dublette) mit Präfix „Teil „Bezeichnung“: “ beim Anlegen
+  eines Sets bzw. „Neues Teil „Bezeichnung“: “ beim Tauschen und Einsetzen (`sets.teil_schreiben`); die fremde bleibt
+  `FremdeDublette` und wird weiter protokolliert.
+- `ordner.direkt` (Zahlen an den Statusfiltern) zählt je Zeile der Liste, ein Set einmal mit seinem Set-Status
+  (`baum()` für Leiste und Übersicht zählt weiter je Artikel).
+- Lebenslauf-PDF (`beschriftung.wert_text`): Listen aus Objekten (Teile, Positionen) als Satz wie `listenWert()`.
+- `artikel.lock_cause` (für „Sperren“ am mitgesperrten Artikel) und `teil_von.teile_anzahl` (Texte der Teil-Seite).
+
+Geprüft: `tests/test_material_sets_oberflaeche.py` (neu: `test_oberflaeche_o2_statisch`, `test_vertrag_k2` gegen die
+K2-Antworten, `test_server_ergaenzungen_o2`; Werte-Abgleich um `SET_WERTE`, `SET_GRUPPE`, `TEIL_FELDER`, `VERBLEIB`
+erweitert), `tests/test_material_sets.py` (`teil_von` mit `teile_anzahl`), statische Zählungen in
+`test_material_beschreibung.py` (Kopf von „Set prüfen“) und `test_material_mangel.py` (Aussondern ausgegraut auch am
+Set ohne eigenen Grund) nachgezogen; st-js, st-css, st-py, ganze Suite (32 Dateien). Browser
+(Chromium, DEMO-Daten, eigener Datenordner) bei 1280 und 360 px: Set-Seite (frei, gesperrt, nach Entnehmen und
+Einsetzen), Teil-Seite, Set prüfen vorher/offen/abgeschlossen, Prüfung starten am Teil, Prüfansicht im Lauf (Entwurf,
+festgeschrieben mit „weiter“, Set-Artikel mit Gesamtergebnis vorab, Festschreib-Dialog „aussondern“ mit Wahl je Teil,
+Set-Protokoll), Untermenü „Austausch“, Dialoge Tauschen/Entnehmen (aussondern)/Einsetzen samt Hinweis-Dialog, Set
+aussondern, Teil löschen, Durchgang mit Set, Meine PSA mit Teil-Wahl – ohne Konsolenfehler, ohne waagerechtes Rollen;
+`st-geraete` (Chromium, Firefox, WebKit, alle Geräte) für Set prüfen, Durchgang, Prüfung starten und Meine PSA: ohne
+Befund in den neuen Ansichten (die Tippflächen der Links in den Karten von „Set prüfen“ wurden dabei auf 44 px gebracht).
+
+**Abweichungen und Entscheidungen der Oberfläche (O2)**
+1. „Set prüfen“ ist eine **eigene Seite** statt eines Abschnitts der Set-Seite – wie „Prüfung starten“, am Telefon kurz
+   und von jeder Prüfansicht aus erreichbar; die Set-Seite bleibt Übersicht.
+2. „Set prüfen“ ist auch bei **laufender Set-Prüfung** rot („fortsetzen“) – sie ist dann die Hauptaktion des Sets.
+3. **`hilfe_einzeln` und `stueckliste_grenzen` bleiben in `material.js`** (O1-Abweichung 1): Ein neues Produkt hat vor dem
+   Speichern keine Antwort, die sie tragen könnte; eine eigene Anfrage nur dafür lohnt nicht. Der Test hält beide gleich.
+4. **Teil löschen** bleibt auf der Teil-Seite („Löschen“, nur bei `darf_loeschen`); der Set-Block kennt `darf_loeschen`
+   je Teil nicht, im Untermenü der Set-Seite stünde es sonst als Knopf, der 409 gäbe.
+5. **„Mangel melden …“ an der Set-Seite** meldet am Set-Artikel, an der Teil-Seite am Teil; die Wahl im Dialog gibt es an
+   der Set-Karte in „Meine PSA“ (wo die Teile keinen eigenen Knopf haben).
+6. **Prüfen des Set-Artikels vor dem Ende der Teile** bleibt möglich (grau); festschreiben lässt er sich erst, wenn der
+   Lauf `bereit` ist (Hinweis an Karte und Entwurf, der Server antwortet sonst 409).
+7. Die **Zahlen an den Statusfiltern** zählen wie bisher ohne den Filter „Zugeordnet an“.
+8. Im Durchgang behalten **Teil-Zeilen ihr „Prüfen“** (eine Einzelprüfung zählt in einem offenen Lauf mit, sonst wirkt
+   sie über die Kaskade); nur an der Set-Zeile steht „Set prüfen“.
+
+**Gefunden, nicht geändert (Dienst K2)**
+- Der **Sperrgrund am Set-Artikel bleibt stehen**, wenn das Teil, das die Sperre ausgelöst hat, entnommen wird
+  (Probe: „wegen Teil M-000012: Sturzbelastung …“ nach „Teil entnehmen“ von M-000012) – Banner und Statusspalte zeigen
+  den alten Grund, „Gesperrt, weil“ (abgeleitet) den richtigen („unvollständig …“). Vorschlag: `sets.sperren` zieht beim
+  Anlass „unvollständig“/„Tausch“ den Grund am Set-Artikel nach, wenn er nur von dem entnommenen Teil stammt.
+- Die Wahl „Art der Prüfung“ auf „Prüfung starten“ hat auf dem Telefon 43 px hohe Zeilen (`st-geraete` T, vorhanden seit
+  Phase 1, nicht O2).
+
+**Bitte bestätigen (O2)**
+1. „Set prüfen“ als eigene Seite; „Set-Prüfung abbrechen …“ unter „Mehr“ (mit Rückfrage).
+2. „Set prüfen“ rot bei fälligem, gesperrtem Set und bei laufender Set-Prüfung, sonst grau.
+3. Gesamtergebnis vorab am Entwurf des Set-Artikels (Abschnitt, Leiste, Festschreib-Dialog).
+4. „vorhanden“/„fehlt“ statt Ja/Nein für die Bestandteile ohne eigenen Artikel.
+5. Durchgang: Teile eingerückt unter der Set-Zeile; Teil-Zeilen behalten „Prüfen“.
+6. Meine PSA: Wahl des Artikels im Dialog; ausgegraut erst, wenn überall die eigene Meldung offen ist.
+7. Statusfilter der Ordnerliste zählen Sets einmal mit ihrem Set-Status.
+8. Aussondern beim Entnehmen und Tauschen nur dort wählbar, wo der Server es zulässt (sonst grau mit Satz).
 
 ## Artikelnummern eindeutig je Hersteller (22.10.2026)
 
