@@ -471,8 +471,10 @@ def test_oberflaeche_statisch():
     stellen = re.findall(r"\$\{nameHtml\(([^,)]+)(?:, true)?\)\}((?:</strong>|</a>)*)\$\{zusatzHtml\(([^)]+)\)\}", js)
     # 17 seit Phase 2 · L3: die Produktwahl der Nacharbeit (Bestandsimport) zeigt das gewählte Produkt ebenso; 19 seit
     # Phase 3 · L1: Kasten „Gemeldete Mängel“ der Übersicht und Karte in „Meine PSA“; 21 seit den Änderungsanträgen
-    # (21.10.2026): Karte und Rückfrage „Änderung bestätigen“.
-    assert len(stellen) == js.count("${nameHtml(") == 21, (len(stellen), js.count("${nameHtml("))
+    # (21.10.2026): Karte und Rückfrage „Änderung bestätigen“; 27 seit den Hersteller-Sets (P4-L2 O1): Stückliste der
+    # Produktseite, Produktwahl im Reiter „Bestandteile“, Teilblock beim Anlegen, Teil und fehlende Position im Kasten
+    # „Bestandteile“, Teil-Karte in „Meine PSA“.
+    assert len(stellen) == js.count("${nameHtml(") == 27, (len(stellen), js.count("${nameHtml("))
     assert all(name == zusatz for name, _, zusatz in stellen), stellen
     assert not re.search(r"\$\{zusatzHtml\([^)]*\)\}(</strong>|</a>)", js)      # nie im Link, nie in <strong>
     # Die Katalogliste wie im Bildschirmfoto: Name fett im roten Link, dann grau Zusatz und Artikelnummer.
@@ -506,8 +508,9 @@ def test_oberflaeche_statisch():
     # Verkettung mehr; was breiter ist als die Zeile, bricht darin um (inline-block mit max-width).
     for datei in (js, suche, glob):
         assert "· Art.-Nr. ${" not in datei
-    # Seit Phase 3 · L1 auch in der Karte „Meine PSA“ (artNrHtml, Seriennummer der Karte k).
-    assert js.count("${artNrHtml(") == 4 and js.count('${nummerHtml("Seriennummer", a.serial_no)}') == 2
+    # Seit Phase 3 · L1 auch in der Karte „Meine PSA“ (artNrHtml, Seriennummer der Karte k); seit P4-L2 O1 auch in der
+    # Teil-Karte eines Sets (artNrHtml(t.produkt.article_no)).
+    assert js.count("${artNrHtml(") == 5 and js.count('${nummerHtml("Seriennummer", a.serial_no)}') == 2
     assert js.count('${nummerHtml("Seriennummer", k.serial_no)}') == 1
     assert "window.MatProdukt.artNr(a.article_no, markiert(a.article_no, q))" in suche
     assert "window.MatProdukt.artNr(t.artikelnummer)" in glob
@@ -537,7 +540,8 @@ def test_bemerkung_heisst_so():
     js = _lesen("app/material/static/material.js")
     # Der Produktdialog: Feld „Bemerkung“, Hinweis und Meldung vor dem Senden mit demselben Wort, kein „Beschreibung“.
     a = js.index("async function produktDialog(p, opt)")
-    dialog = js[js.index("dialog(`", a):js.index("(dlg, body) =>", a)]
+    # Seit P4-L2 O1 stehen die Felder in „formular“ (für den Reiter „Produkt“), dialog(`…`) setzt sie ein.
+    dialog = js[js.index("const formular = `", a):js.index("(dlg, body) =>", a)]
     assert '<label for="pd-desc">Bemerkung</label><input type="text" id="pd-desc"' in dialog, dialog[:2000]
     assert "Die bisherige Bemerkung hat ${beschreibung.length} Zeichen" in dialog
     assert "Beschreibung" not in dialog, dialog

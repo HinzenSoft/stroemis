@@ -1696,3 +1696,71 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-abschluss-zeile .mat-due { flex-wrap: wrap; }
 .mat-abschluss-zeile .mat-due .mat-datum { width: 8.5em; flex: none; }
 .mat-due-hilfe { font-weight: 400; font-size: var(--fs-klein); color: var(--grau); flex: 1 1 100%; }
+
+/* Phase 4 – Lieferung 2: Hersteller-Sets (Oberfläche O1) */
+/* Marke „Set“ hinter dem Namen (Katalogliste, Artikelkopf) – wie die Ordnerart, leise. */
+.mat-set-marke { display: inline-block; font-size: var(--fs-marke); color: var(--anthrazit); border: 1px solid var(--anthrazit);
+  border-radius: var(--radius-pille); padding: 0 7px; margin-left: 6px; vertical-align: middle; font-weight: 400; white-space: nowrap; }
+/* Ein Teil macht den Set-Status „überfällig“: Banner wie in „Meine PSA“. */
+.mat-banner.s-ueberfaellig { background: var(--rot); }
+/* Listen: „Hersteller-Set · n Teile“ bzw. „Teil von Set …“ unter dem Produkt; über der Liste „n Einträge, davon …“. */
+.mat-set-info { margin-top: 2px; color: var(--anthrazit); overflow-wrap: anywhere; }
+.mat-set-kopf { margin: 0 0 6px; }
+/* Teil-Seite: „Teil von Set …“ unter der Produktzeile; Hinweis statt Verschieben, Zuordnen und Aussondern. */
+.mat-teil-von { margin: 0 0 6px; overflow-wrap: anywhere; max-width: var(--mat-lesemass); }
+.mat-teil-hinweis { margin: 6px 0 0; max-width: var(--mat-lesemass); }
+/* Set-Seite, Kasten „Bestandteile“: Set-Werte als kurze Liste, darunter die Teile als Modulliste (am Telefon Karten über
+   die Containerabfrage mat-seite); eine fehlende Position grau hinterlegt, gesperrte Teile mit Sperrgrund. */
+.mat-set-werte { margin: 0 0 10px; }
+.mat-set-teile tr.mat-fehlt-zeile td { background: var(--grau-hell); }
+.mat-set-ohne { margin: 8px 0 0; overflow-wrap: anywhere; }
+@container mat-seite (max-width: 600px) {
+  .mat-set-teile tr.mat-fehlt-zeile td { background: none; }
+  .mat-set-teile tr.mat-fehlt-zeile { background: var(--grau-hell); padding-left: 8px; padding-right: 8px; }
+}
+/* Produkt-Dialog, Reiter „Bestandteile“: je Position ein Kasten – oben „einzeln geführt“ und ↑ ↓ ✕, dann Produkt (bei
+   einzeln geführten), Bezeichnung, Anzahl und „Austausch laut Hersteller“ in einer Zeile (Bezeichnung breit), schmal
+   untereinander. Eine Position mit Fehler rot umrandet, der Text darunter. */
+.mat-pd-set { margin-top: 14px; }
+@media (min-width: 641px) { dialog:where(.mat-produkt-reiter) { width: min(820px, 96vw); } }
+.mat-bt { border: 1px solid var(--linie); padding: 6px 12px 10px; margin: 10px 0 0; min-width: 0; }
+.mat-bt legend { font-weight: 600; padding: 0 4px; }
+.mat-bt.ungueltig { border-color: var(--rot); box-shadow: inset 0 0 0 1px var(--rot); }
+.mat-bt-kopf { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
+.mat-bt-kopf label.inline { margin: 0; }
+.mat-bt-label { margin: 10px 0 0; font-weight: 600; }
+.mat-bt .mat-gewaehlt { margin-top: 4px; }
+.field-row.mat-bt-felder { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 2fr); }
+.mat-bt-fehler { margin: 6px 0 0; }
+.mat-bt-neu { margin-top: 12px; align-items: center; }
+.mat-bt-zaehler { margin: 0; }
+@media (max-width: 560px) { .field-row.mat-bt-felder { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .field-row.mat-bt-felder > div:first-child { grid-column: 1 / -1; } }
+/* Artikel anlegen mit einem Set-Produkt: je Teil ein Kasten; eine doppelte Seriennummer rot am Feld. */
+.mat-an-teile { margin: 18px 0 6px; }
+.mat-an-teil { border: 1px solid var(--linie); padding: 6px 12px 10px; margin: 10px 0 0; min-width: 0; }
+.mat-an-teil legend { font-weight: 600; padding: 0 4px; overflow-wrap: anywhere; }
+.mat-an-teil.ungueltig { border-color: var(--rot); }
+.mat-an-teil-produkt { margin: 0 0 4px; overflow-wrap: anywhere; }
+.mat-an-teil input.ungueltig { border-color: var(--rot); box-shadow: inset 0 0 0 1px var(--rot); }
+.mat-an-teil-fehler { margin: 4px 0 0; }
+.mat-an-hinweise { padding-left: 18px; overflow-wrap: anywhere; }
+.mat-an-hinweise li { margin-bottom: 6px; }
+/* Meine PSA: die Teile eines Sets als kleine Karten in der Set-Karte, links ein Statusstrich wie die große Karte. */
+.mat-psa-teile { margin: 8px 0 0; }
+.mat-psa-teile .mat-unter { margin-top: 10px; }
+.mat-psa-teil { border: 1px solid var(--linie); border-left: 4px solid var(--grau); padding: 8px 10px; margin: 8px 0 0; min-width: 0; }
+.mat-psa-teil.s-einsatzbereit { border-left-color: var(--ok); }
+.mat-psa-teil.s-bald_faellig { border-left-color: var(--gelb-dunkel); }
+.mat-psa-teil.s-ueberfaellig { border-left-color: var(--rot); }
+.mat-psa-teil.s-neu { border-left-color: var(--wasser); }
+.mat-psa-teil.s-lebensdauer { border-left-color: var(--mat-lebensdauer); }
+.mat-psa-teil.s-gesperrt { border-left-color: var(--mat-gesperrt); }
+.mat-psa-teil h4 { margin: 0 0 4px; font-size: 1.05rem; overflow-wrap: anywhere; }
+.mat-psa-teil p { margin: 0 0 4px; overflow-wrap: anywhere; }
+.mat-psa-teil .mat-psa-daten { margin: 6px 0 2px; }
+@media (pointer: coarse) {
+  .mat-bt .btn-row .btn.small { min-width: 44px; min-height: 44px; justify-content: center; }
+  .mat-bt-kopf label.inline { min-height: 44px; display: inline-flex; align-items: center; }
+  .mat-psa-teil a { display: inline-flex; align-items: center; min-height: 44px; }
+}
