@@ -16,7 +16,7 @@ für sich deploybar.
 | Phase 2 · 2 – Erinnerungen | Täglicher Erinnerungslauf ab 6 Uhr (eingebaut, abschaltbar, dazu `flask material remind`): Sammelmail an die Verwalter zu Fälligkeit (30/7 Tage, überfällig), Lebensende (90 Tage) und ablaufenden Freigaben (30 Tage); Erinnerungslog mit Kontoverweis; „Erinnerungsmails aus“ je Ordner; Laufstand und Probelauf auf der Übersicht | geliefert 19.10.2026, wartet auf Freigabe |
 | Phase 2 · 3 – Bestandsimport und Prüfanleitung | Bestandslisten aus Excel oder CSV in einen Ordner: Probelauf, Übernehmen in einer Transaktion (Artikel auf „neu“, Fälligkeit aus der Liste, STR-Nummern für Zeilen ohne Seriennummer, eine Liste ganz ohne Seriennummernspalte nur mit Häkchen) und Nacharbeit je Zielordner (Produkte zuordnen, melden oder im Katalog anlegen, erneut prüfen, CSV-Rundweg, Frist ein Monat); Prüfanleitung aus dem Wiki am Prüfformular, Abschnitt „Prüfung“ eingeblendet in offenen Prüfungen | geliefert 19.10.2026, vier Punkte am 20.10.2026 entschieden (einer geändert und eingearbeitet), wartet auf Freigabe |
 | Artikellänge (Schritt 20) | Häkchen „Artikel haben eine Länge“ je Kategorie (vererbt), Feld „Länge (m)“ am Artikel (Steckbrief, Listen, Lebenslauf, Meine PSA, CSV, Bestandsimport), Prüfpunkt-Typ „Länge“ – vorbelegt, ein abweichender Wert geht beim Festschreiben in den Artikel (Journal, Protokoll „alt → neu“) | gebaut 22.10.2026, wartet auf Freigabe |
-| Phase 4 · 2 – Sets mit Komponenten | Hersteller-Sets: Stückliste im Katalog (auch in der Katalogdatei), Set-Artikel mit Teil-Artikeln, Set-Status, -Fälligkeit und -Lebensende, Listen mit der Set-Zeile, Verschieben und Zuordnen mit allen Teilen, Meine PSA; Sperr-Kaskade, Set prüfen, Austausch (K2) und Oberfläche folgen | KERN K1 gebaut 23.10.2026 (Schema 21), Oberfläche folgt |
+| Phase 4 · 2 – Sets mit Komponenten | Hersteller-Sets: Stückliste im Katalog (auch in der Katalogdatei), Set-Artikel mit Teil-Artikeln, Set-Status, -Fälligkeit und -Lebensende, Listen mit der Set-Zeile, Verschieben und Zuordnen mit allen Teilen, Meine PSA; Sperr-Kaskade, Set prüfen mit Set-Protokoll, Austausch, Aussondern mit Wahl je Teil, Oberfläche | Kern (K1, K2) und Oberfläche (O1, O2) gebaut 23.10.2026 (Schema 21), drei Prüfungen und Nachbesserung 23.10.2026 |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4151,7 +4151,7 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
-## Phase 4 · Lieferung 2 – Sets mit Komponenten (23.10.2026, Stand: KERN Teil 2 und Oberfläche Teile 1 und 2)
+## Phase 4 · Lieferung 2 – Sets mit Komponenten (23.10.2026, Stand: KERN Teil 2, Oberfläche Teile 1 und 2, Nachbesserung nach den drei Prüfungen)
 
 Grundlage: `planung/material-phase4/entwurf_l2.md` (Fassung 2 nach den Kritiken „Sicherheit“ S1–S31 und „Ablauf“
 A1–A33, mit den Entscheidungen des Nutzers vom 23.10.2026: Hersteller-Sets, Set-Artikel mit Teil-Artikeln, Teil
@@ -4160,7 +4160,8 @@ Tests, Doku), **K2** (Sperr-Kaskade und Freigabe, Set prüfen mit Set-Protokoll,
 löschen, Aussondern mit Wahl je Teil, Mails, Jahresbericht – ohne Schemaänderung), danach **OBERFLÄCHE** (`material.js`
 nach den Schnittstellen K1 und K2 unten), drei Prüfungen, Nachbesserung. Schemaversion 21, keine neuen Abhängigkeiten.
 Die Oberfläche für den Stand K1 steht unter „Oberfläche (O1)“, die für K2 (Set prüfen, Tauschen, Aussondern, Durchgang,
-Meine PSA) unter „Oberfläche (O2)“ am Ende dieses Abschnitts; es folgen die drei Prüfungen.
+Meine PSA) unter „Oberfläche (O2)“; danach „Prüfung vor Auslieferung“ (die drei Prüfungen und die Nachbesserung) und
+„Bitte bestätigen (zusammengeführt)“ am Ende dieses Abschnitts.
 
 ### Neu (K1)
 
@@ -4259,6 +4260,17 @@ Spalten nicht. Solange es keine Sets gibt, läuft er unverändert. Mit Sets: Er 
 ordnet zu und sperrt sie einzeln (die Gleichheit von Set und Teilen geht verloren – die Startprüfung meldet es, sobald
 wieder Code 21 läuft); „Set löschen“ endet im Fremdschlüsselfehler (409 „anderswo geändert“), Produktwechsel an Teilen
 weisen die Trigger ab. Deshalb: zurück nur, solange keine Sets angelegt sind, oder die Sets vorher löschen.
+Kommt nach so einem Rückweg wieder Code 21, behandelt die nächste Set-Sperre ein Teil, das der alte Code einzeln gesperrt
+hat (gesperrt ohne `lock_cause`), als „eigen“ mit seinem Grund und nimmt es in den Prüfumfang der Freigabe – es wird nie
+mit „set“ überschrieben (Nachbesserung, Sicherheit 6; Test `test_konto_loeschen_und_rueckweg`). Trotzdem zuerst die im
+Startlog „Sets nicht stimmig“ genannten Sets ansehen.
+
+**Nachbesserung vor der Auslieferung**: Schritt 21 ist noch nicht ausgeliefert (weder dev noch Produktion); der Trigger
+`mat_set_lauf_kopf` wurde darin geändert statt in einem Schritt 22: Am **offenen** Lauf darf `round_id` auf NULL gehen
+(Durchgang abgebrochen) und `opened_by_name` „(gelöschtes Konto)“ werden (Kontolöschen); sonst bleibt der Kopf fest, am
+beendeten Lauf ganz. `_schritt_21` entfernt ihn vorher und legt ihn neu an (wie die beiden Fest-Trigger aus Schritt 6).
+Eine Probedatenbank, die schon mit der Fassung vor der Nachbesserung auf 21 steht, behält den alten Trigger – neu anlegen
+(betrifft nur Bau- und Prüfdaten). Geprüft: frisch, 20 → 21 und die Testhilfe `bis_schritt` (Suite).
 
 ### Abweichungen vom Entwurf und Entscheidungen des Baus (mit Begründung)
 
@@ -4563,31 +4575,7 @@ einzeln löschbar).
 
 ### Bitte bestätigen
 
-Aus Entwurf L (vom Bau gesetzt):
-1. Entnehmen ohne Ersatz, Teil löschen und Teil tauschen sperren das Set bis zum Set-Lauf (K2).
-2. Feld „Austausch laut Hersteller“ (ja/nein/nicht belegt) je Bestandteil; „nein“ verhindert den Tausch (K2).
-3. Teile ohne Herstellernummer bekommen eine STR-Nummer und ein eigenes Etikett (Hinweis beim Anlegen).
-4. Eine Set-Sperre zählt im Jahresbericht einmal (K2).
-5. „Hersteller-Set“ nur umschaltbar, solange das Produkt keine Artikel hat.
-6. Nicht einzeln geführte Bestandteile erscheinen nur als Zeile „vorhanden/fehlt“ in der Set-Prüfung (K2).
-7. Ordnerlisten und „Fällige“ zeigen nur die Set-Zeile; Teile auf der Set-Seite und in der Suche.
-8. Ein nur mitgesperrtes Teil darf mit dem Set ausgesondert werden (K2).
-
-Dazu aus K1:
-9. (erledigt mit K2) Zwischen K1 und K2 lehnte der Dienst Sperren, Mangelmeldung und Aussonderung an Sets und Teilen ab.
-10. „Hersteller-Set“ ausschalten entfernt die Stückliste (mit Journal).
-11. Der Filter „Zugeordnet an“ und „Meine PSA“ zählen ein Set einmal.
-
-Dazu aus K2 (Abweichungen oben, Nummern dort):
-12. Ergebnis „aussondern“ an einem Teil entnimmt und sondert es aus; das Set ist danach unvollständig gesperrt (1).
-13. „Teil einsetzen“ an einer fehlenden Position (2).
-14. Die Prüfung des Set-Artikels lässt sich erst festschreiben, wenn der Prüfumfang im Lauf geprüft ist (3).
-15. Ein fehlender, nicht einzeln geführter Bestandteil ist ein (nicht kritischer) Mangel mit Foto und Bemerkung (11).
-16. Set aussondern durch den Materialwart nur mit eigenem Grund (Prüfer) oder Verlust im Set und ohne ungeprüfte Meldung (6).
-17. Mit ausgesonderte Teile bleiben am Set; Grund „mit dem Set … ausgesondert: …“ (8).
-18. Betroffene Teile bleiben bis zur Freigabe im Prüfumfang – auch über einen Lauf ohne Freigabe hinweg (10).
-19. Neue Sperrart „Set unvollständig oder Teil getauscht“ im Jahresbericht (12).
-20. Freigabe-Bedingung „Lebensdauer erreicht“ gilt für jeden Artikel des Sets, auch Metall mit eingetragenem Lebensende.
+Zusammengeführt am Ende dieses Abschnitts („Bitte bestätigen (zusammengeführt)“, Nr. 1–20).
 
 ### Oberfläche (O1, 23.10.2026)
 
@@ -4655,12 +4643,7 @@ Konsolenfehler, ohne waagerechtes Rollen.
 - `set.sperrgruende` (K2) zeigt die Seite noch nicht; Set prüfen, Teil tauschen/entnehmen und der Aussondern-Dialog je
   Teil kommen mit O2.
 
-**Bitte bestätigen (O1)**
-1. Kopf „n Einträge, davon m Sets mit k Teilen“ nur, wenn die Liste Sets enthält.
-2. Am Teil statt Verschieben, Zuordnen und Aussondern ein Hinweis mit Link aufs Set.
-3. Hinweise beim Anlegen (STR-Nummer anbringen) als Dialog statt Toast.
-4. Kauf und Erstgebrauch des Sets als Vorgabe der Teile (überschreibbar), Herstellung je Teil leer.
-5. „Stückliste übernehmen“ bei einer Variante vorbelegt.
+**Bitte bestätigen (O1)** – zusammengeführt am Ende dieses Abschnitts, Nr. 21–25.
 
 ### Oberfläche (O2, 23.10.2026)
 
@@ -4763,7 +4746,7 @@ Befund in den neuen Ansichten (die Tippflächen der Links in den Karten von „S
 8. Im Durchgang behalten **Teil-Zeilen ihr „Prüfen“** (eine Einzelprüfung zählt in einem offenen Lauf mit, sonst wirkt
    sie über die Kaskade); nur an der Set-Zeile steht „Set prüfen“.
 
-**Gefunden, nicht geändert (Dienst K2)**
+**Gefunden, nicht geändert (Dienst K2)** – beide mit der Nachbesserung erledigt (siehe „Prüfung vor Auslieferung“)
 - Der **Sperrgrund am Set-Artikel bleibt stehen**, wenn das Teil, das die Sperre ausgelöst hat, entnommen wird
   (Probe: „wegen Teil M-000012: Sturzbelastung …“ nach „Teil entnehmen“ von M-000012) – Banner und Statusspalte zeigen
   den alten Grund, „Gesperrt, weil“ (abgeleitet) den richtigen („unvollständig …“). Vorschlag: `sets.sperren` zieht beim
@@ -4771,15 +4754,190 @@ Befund in den neuen Ansichten (die Tippflächen der Links in den Karten von „S
 - Die Wahl „Art der Prüfung“ auf „Prüfung starten“ hat auf dem Telefon 43 px hohe Zeilen (`st-geraete` T, vorhanden seit
   Phase 1, nicht O2).
 
-**Bitte bestätigen (O2)**
-1. „Set prüfen“ als eigene Seite; „Set-Prüfung abbrechen …“ unter „Mehr“ (mit Rückfrage).
-2. „Set prüfen“ rot bei fälligem, gesperrtem Set und bei laufender Set-Prüfung, sonst grau.
-3. Gesamtergebnis vorab am Entwurf des Set-Artikels (Abschnitt, Leiste, Festschreib-Dialog).
-4. „vorhanden“/„fehlt“ statt Ja/Nein für die Bestandteile ohne eigenen Artikel.
-5. Durchgang: Teile eingerückt unter der Set-Zeile; Teil-Zeilen behalten „Prüfen“.
-6. Meine PSA: Wahl des Artikels im Dialog; ausgegraut erst, wenn überall die eigene Meldung offen ist.
-7. Statusfilter der Ordnerliste zählen Sets einmal mit ihrem Set-Status.
-8. Aussondern beim Entnehmen und Tauschen nur dort wählbar, wo der Server es zulässt (sonst grau mit Satz).
+**Bitte bestätigen (O2)** – zusammengeführt am Ende dieses Abschnitts, Nr. 26–33.
+
+### Prüfung vor Auslieferung (23.10.2026)
+
+Drei Prüfungen am Stand 593a24b (K1, K2, O1, O2): **Sicherheit** (`planung/material-phase4/pruefung_l2_sicherheit.md`,
+kein Befund hoch/mittel, sechs niedrige und ein bekannter), **Ablauf** (`pruefung_l2_ablauf.md`, M1–M2 mittel, N1–N4
+niedrig) und **Browser** (`pruefung_l2_browser.md`, B1–B8, V1–V19; `st-geraete` in allen drei Engines ohne Befund).
+Danach die Nachbesserung (Kern und Oberfläche, Tests `tests/test_material_sets_nachbesserung.py` neu und der statische
+Test `test_oberflaeche_nachbesserung_statisch`). Kein neuer Schemaschritt (Trigger in Schritt 21 geändert, siehe
+„Migration“).
+
+**Ablauf**
+
+| Nr. | Befund | Stand |
+| --- | --- | --- |
+| M1 | Veralteter Sperrgrund am Set-Artikel und an mitgesperrten Teilen – bis ins festgeschriebene Aussonderungsprotokoll | Behoben: `sets.gruende_nachziehen` setzt `lock_reason` an Set-Artikel (Ursache „set“) und mitgesperrten Teilen nach **jedem** Anlass aus dem jetzigen Stand (`sets.anlass_text`: eigener Grund des Sets, „wegen Teil …: …“ je Teil mit eigenem Grund, „unvollständig: „…“ fehlt“, „Teil … neu eingesetzt – Set prüfen“) – nach jeder Sperre (`sets.sperren`, auch Teil entnehmen, tauschen, einsetzen, löschen, Ergebnis „aussondern“ am Teil, Verlust), nach der Freiprüfung eines Teils (`eigen_aufheben`) und vor „Set aussondern“. Test genau nach der Probe (A-Protokoll nennt K2, nicht K1), dazu Teil löschen, Freiprüfung, „aussondern“ am Teil, Meine PSA |
+| M2 | „Set prüfen“ an der Set-Seite bei offenem Durchgang: Lauf ohne Durchgang, Sammelprotokoll ohne Gesamtergebnis | Behoben: `setlauf.eroeffnen` ohne `durchgang_id` übernimmt `durchgang.offene_runde_fuer` (wie `pruefung.starten`); `sammel` findet einen Lauf auch über die Prüfung des Set-Artikels im Durchgang (deckt K2-Abweichung 16 mit ab). Test mit „Set-Prüfung: nicht einsatzbereit – Set gesperrt“ im Sammelprotokoll |
+| N1 | Prüfumfang ohne übernehmbare Prüfung – der Set-Artikel ließ sich festschreiben, die Set-Prüfung war vergeblich | Behoben: Ein Teil ohne gültige „einsatzbereit“-Prüfung außerhalb des Laufs (neu, überfällig, keine) gehört von selbst zum Umfang (`setlauf.uebernehmbar`); 409 wie beim übrigen Umfang; die Vorschau liest den Umfang vom Server (`set.teile[].zu_pruefen`) |
+| N2 | Jahresbericht: beim Aussondern eines freien Sets weitergeführte Teile zählten „aus Prüfung (instandsetzen)“ | Behoben: Journal „entnommen“ mit `set_grund` „ausgesondert“, Art „set“ geht im Bericht der Prüfung vor; Beschriftung „Set unvollständig, Teil getauscht oder Set ausgesondert“ |
+| N3 | „Teil entnehmen“ bei „Austausch laut Hersteller: nein“ – Sackgasse | Behoben: Entnehmen 409 „Laut Hersteller nicht austauschbar – das Set aussondern …“; Ergebnis „aussondern“ an so einem Teil lässt es gesperrt im Set (eigener Grund „… – laut Hersteller nicht austauschbar: das Set aussondern“, kein Aussonderungsprotokoll), danach „Set aussondern“ durch den Materialwart (Teil vorbelegt „mit aussondern“); Oberfläche: Menüeinträge ausgegraut, Festschreib-Dialog sagt es |
+| N4 | CLI `import-catalog` zählt geänderte Stücklisten als „unveraendert“ | Behoben: Zeile „Stücklisten neu, geaendert, unveraendert“; ein Set, an dem sich nur „set“ oder die Stückliste ändert, zählt bei den Produkten als geändert (auch im Bericht der App) |
+| Nebenbei (M1) | Mail einer Mangelmeldung am nur mitgesperrten Set-Artikel nennt den neuen Grund als „war schon gesperrt (…)“ | Nicht geändert: Die Mail ist eine bestehende Formulierung der Mangelmeldung; der gespeicherte Grund stimmt jetzt. Beim nächsten Mail-Durchgang mitnehmen |
+| Bitte bestätigen 15 | Fehlender Bestandteil ohne eigenen Artikel als nicht kritischer Mangel | Nicht geändert: Entscheidung des Nutzers (siehe Nr. 15 unten); „kritisch“ je Position wäre eine neue Spalte (später) |
+
+**Sicherheit**
+
+| Nr. | Befund | Stand |
+| --- | --- | --- |
+| 1 | Jeder Prüfer bricht eine fremde Set-Prüfung ab | Behoben: nur, wer sie eröffnet hat, oder wer den Ordner verwaltet; sonst 403 „Eine Set-Prüfung bricht ab, wer sie begonnen hat (…), oder der Materialwart …“; Lauf trägt `eigen`, „Mehr → abbrechen“ nur dann |
+| 2 | Durchgang löschen bzw. abbrechen scheitert am Fremdschlüssel des offenen Set-Laufs | Behoben wie ein offener Entwurf: Löschen 409 mit dem Set („erst dort abbrechen oder den Durchgang abbrechen“), `loeschbar` false; Abbrechen löst die Set-Prüfung vom Durchgang (`round_id` NULL, Journal „set_lauf_geaendert“), ohne Prüfung verschwindet der Durchgang |
+| 3 | Berichtigung einer Teilprüfung nach „Teil entnehmen“ bei offenem Lauf: 409 | Behoben: Die Berichtigung zählt nur dann im Lauf, wenn der Artikel noch zum Set gehört, sonst als Einzelprüfung |
+| 4 | „Set aussondern“ durch den Materialwart lässt die Set-Prüfung offen | Behoben: `set_aussondern` beendet eine offene Set-Prüfung (abgebrochen bzw. ohne Prüfung entfernt, Journal mit Grund „Set ausgesondert“) – außer der, die das Ergebnis „aussondern“ gerade abschließt |
+| 5 | Name des Eröffners einer offenen Set-Prüfung bleibt nach Kontolöschen, nicht dokumentiert | Behoben: an einem **offenen** Lauf „(gelöschtes Konto)“ wie am Entwurf; am abgeschlossenen oder abgebrochenen bleibt der Name (Prüfnachweis). `loeschung.py` (Kopf und Ablauf), Trigger, Abschnitt „Löschkonzept“ unten |
+| 6 | Rückweg: Nach Code-Stand 20 überschreibt die nächste Set-Sperre die eigene Sperre eines Teils | Behoben: Eine gesperrte Zeile ohne `lock_cause` gilt als „eigen“ (Grund bleibt, `set_pruefen` 1); Hinweis unter „Migration“ |
+| bekannt | Sperrgrund bleibt nach Entnehmen, Löschen, „aussondern“ – auch in „Meine PSA“ | Behoben mit Ablauf M1 |
+
+**Browser** (Befunde)
+
+| Nr. | Befund | Stand |
+| --- | --- | --- |
+| B1 | Reiter „Produkt \| Bestandteile“ auch ohne Häkchen | Behoben: `.c-tabs[hidden], .mat-reiter[hidden] { display: none; }` |
+| B2 | Doppelte Teil-Seriennummer markiert beide Teile, nicht das Feld | Behoben: Server nennt Stück und Seriennummer („Teil „…“ 2 von 2 (Seriennummer „…“): …“, `sets.teil_wo`), die Seite markiert genau dieses Feld (`aria-invalid`, Text darunter, Fokus) |
+| B3 | Ausgesondertes Set mit „unvollständig“, „fehlt“ und künftiger Fälligkeit | Behoben: kein Banner, keine „fehlt“-Zeilen, „Nächste Prüfung –“ |
+| B4 | Veralteter Sperrgrund an weiteren Stellen | Behoben mit Ablauf M1 (der gespeicherte Grund ist überall der abgeleitete) |
+| B5 | Fokus nach Esc/Abbrechen aus dem Untermenü „Austausch“ verloren | Behoben modulweit: Öffnet ein Eintrag eines Untermenüs einen Dialog, geht der Fokus beim Schließen auf den Menüknopf |
+| B6 | „Nächste Prüfung“ im Kasten für gesperrte Sets | Behoben: „setzt die Freiprüfung („Set prüfen“)“ wie die Stammdaten |
+| B7 | Vorschau „wird übernommen“ für Teil ohne Prüfung | Behoben mit Ablauf N1 |
+| B8 | Kontrast 4,40:1 Rot auf Grau | Behoben: `--rot-auf-flaeche` auf grauen Zeilen (fehlende Position, Teilzeile im Durchgang) |
+
+**Browser** (Verbesserungen)
+
+| Nr. | Vorschlag | Stand |
+| --- | --- | --- |
+| V1 | Erklärtexte unter den Knöpfen der Set-Seite | Behoben: „Set aussondern …“ öffnet, wenn es nicht geht, einen Dialog mit der Begründung; „Prüfen dürfen …“ am Set weg |
+| V2 | Zwei Banner bei „unvollständig“ | Behoben: ein GESPERRT-Banner nennt, was fehlt (und weitere Gründe); Rückruf- und Mangel-Banner bleiben |
+| V3 | Prüfansicht des Set-Artikels zeigt nur „einsatzbereit“ | Behoben: Gesamtergebnis des Sets im Kopf, bei Abweichung als `.notice` |
+| V4 | Kryptische Gründe, kein Trenner | Behoben: Sperr- und Freigabegründe als ganze Sätze vom Server, Gedankenstrich zwischen Marke und Satz |
+| V5 | Seite „Set prüfen“ nach Abschluss | Behoben: Knopf grau, wenn nicht fällig/gesperrt; „Regelprüfung (alle Teile)“; Status und Auftrag getrennt; frühere Set-Prüfungen mit Gesamtergebnis und Protokoll (`kurz()` trägt `gesamtergebnis`, `gesamt_text`, `protokoll_id`) |
+| V6 | Fällige: „Prüfen“ an der Set-Zeile | Behoben: „Set prüfen“ mit demselben Ziel wie im Durchgang |
+| V7 | Marke „Set“ fehlt in Ordnerliste und Fällige | Behoben |
+| V8 | ✕ im Reiter „Bestandteile“ | Behoben: „Entfernen“ als Text; ↑ ↓ bleiben wie im Formular-Editor |
+| V9 | Produkt-Dialog springt beim Reiterwechsel | Behoben: Dialog mit Reitern steht oben |
+| V10 | Meine PSA, „Mangel melden“ an der Set-Karte | Behoben: vom Set ist als „es“ die Rede (Dialog, Banner der Karte, Quittung), Hilfesatz unter dem Textfeld, Fokus auf die Wahl (Maus/Tastatur; am Touchgerät der Titel wie überall) |
+| V11 | Begriffe | Behoben: „entnehmen“ überall, Menü „Teil tauschen …“/„Teil entnehmen …“/„Teil einsetzen …“, „das Set selbst“ statt „Set-Artikel“ in der Oberfläche; Glossar im README („Begriffe bei Hersteller-Sets“) |
+| V12 | Zwei Absätze Hilfe im Reiter „Bestandteile“ | Behoben: eine Zeile, Rest aufklappbar |
+| V13 | Tippflächen | Behoben unter `@media (pointer: coarse)`: Radiozeilen „Art der Prüfung“ (seit Phase 1) und eigenständige Links (zur Set-Prüfung, zum Set, Teil-Nummern der Set-Seite) 44 px |
+| V14 | Ausgegrautes „Teil tauschen“ nicht fokussierbar | Behoben: `role="menuitem" aria-disabled="true" tabindex="0"` mit lesbarem Grund (bei „nein“ auch „Teil entnehmen“) |
+| V15 | Eigene Schriftgröße | Behoben: `var(--fs-mittel)` |
+| V16 | Fortschrittstext bricht einzeln um, Balken bei 0 % unsichtbar | Behoben |
+| V17 | Grund im Dialog „Set aussondern“ vorbelegt | Behoben: „– bitte wählen –“, ohne Wahl Hinweis und Fokus aufs Feld (am einzelnen Artikel unverändert) |
+| V18 | Journal-Einträge in der Breite | Nicht geändert: bestehendes Muster des Journals, nicht aus L2 |
+| V19 | „Sperren“ und „Melden und sperren“ als `btn danger`, obwohl rückgängig | Nicht geändert: bestehend seit Phase 1, nicht aus L2 – im Entwurf der Knopfregel zu klären (Bitte bestätigen 45) |
+| Abgleich 5 | README: Grund „Bestandteil von …“ beim ausgegrauten Häkchen | Nicht geändert: Der Grund kommt vom Server (`set_umschalt_grund`), am Bestandteil mit Artikeln nennt er die Artikel – beides trifft zu |
+
+**Schnittstelle (Nachbesserung)** – nur Ergänzungen, nichts entfernt:
+- `POST …/set-lauf` ohne `durchgang_id`: übernimmt den offenen Durchgang des Set-Artikels. `DELETE …/set-lauf`: 403 für
+  andere als Eröffner und Materialwart. Lauf (voll) neu `eigen`; Lauf (kurz) neu `gesamtergebnis`, `gesamt_text`,
+  `protokoll_id` (abgeschlossene, sonst null).
+- Set-Block: je Teil `zu_pruefen` (Vorschau des Prüfumfangs); `sperrgruende[].text` und `freigabe_gruende` als ganze
+  Sätze. Prüfung am Teil: `artikel.teil_von.austausch`; `GET …/artikel/<Teil>` `teil_von.austausch`.
+- `POST …/teil-entnehmen` an „Austausch: nein“ → 409. `DELETE /durchgaenge/<id>` mit Set-Prüfung → 409; `loeschbar`
+  entsprechend.
+- Katalogimport-Bericht: `stuecklisten` {neu, geaendert, unveraendert}; Meldungen „Das Produkt „Hersteller | Modell |
+  Artikelnummer“ … gibt es weder im Katalog noch in der Datei“ und „„set“ wechselte für „…“ auf …“.
+- Journal: Aktion „set_lauf_geaendert“ (Set-Prüfung aus dem Durchgang gelöst), `set_grund` „ausgesondert“,
+  `set_lauf_abgebrochen` mit `grund`.
+
+**Löschkonzept (Set-Prüfungen)**: Beim Löschen eines Kontos wird der Eröffner einer **offenen** Set-Prüfung
+„(gelöschtes Konto)“ – sie ist noch kein Nachweis (wie ein Entwurf); abbrechen kann sie danach der Materialwart. An einer
+abgeschlossenen oder abgebrochenen Set-Prüfung bleibt der Name (Prüfnachweis wie die Prüfernamen in Protokollen, per
+Trigger fest); die Kontokennung setzt die Datenbank auf NULL. Steht in `services/loeschung.py`.
+
+**Tests**: `tests/test_material_sets_nachbesserung.py` (neu, 7 Tests: Sperrgrund nach der Probe M1 samt Löschen,
+Freiprüfung und „aussondern“; Set-Prüfung im Durchgang mit Sammelprotokoll; Abbrechen-Recht, Durchgang löschen und
+abbrechen; Berichtigung nach Entnehmen, Aussondern beendet die Set-Prüfung; Kontolöschen mit Triggerprobe, Rückweg;
+„Austausch: nein“ und Jahresbericht; CLI). Angepasst: `test_material_sets_pruefung` (überfällig/neu jetzt im Umfang,
+abgeleiteter Grund nach Tausch, Entnehmen bei „nein“), `test_material_sets` (Stücklisten-Zahlen, Meldungen),
+`test_material_sets_oberflaeche` (Teil-Meldung mit Stück, ein roter Knopf, statischer Test der Nachbesserung).
+
+**Browser** (Chromium über `cdp.py`, DEMO-Daten im eigenen Datenordner, Materialwart, Prüfer, Material-Verwaltung,
+Mitglied) bei 1280 und 360 px: Set-Seite unvollständig (ein Banner, Grund ohne entnommenes Teil, „setzt die
+Freiprüfung“, Dialog „warum“), mit gesperrtem Teil (Set aussondern ohne vorbelegten Grund), ausgesondert, „Austausch:
+nein“ (Menü, Tastatur), Tauschen-Dialog mit Esc und Abbrechen (Fokus zurück auf „Austausch“), Ordnerliste und Fällige
+(Marke, „Set prüfen“), Artikel anlegen mit doppelter Teil-Seriennummer (nur das eine Feld), Set prüfen vorher (grau,
+Regelprüfung, Frühere mit Gesamtergebnis) und offen aus dem Durchgang (Fortschritt), Prüfansicht des Sets mit
+Gesamtergebnis im Kopf, Produkt-Dialog neu (kein Reiter) und bearbeiten (Entfernen, Hilfe, keine Bewegung), Meine PSA
+mit Set-Karte und Mangel-Dialog – ohne Konsolenfehler (außer der gewollten 409). `st-geraete` (Chromium, Firefox,
+WebKit, alle Geräte) für Set-Seite, Set prüfen, Prüfansicht und Meine PSA.
+
+### Bitte bestätigen (zusammengeführt)
+
+Aus Entwurf L (vom Bau gesetzt):
+1. Entnehmen ohne Ersatz, Teil löschen und Teil tauschen sperren das Set bis zum Set-Lauf (K2).
+2. Feld „Austausch laut Hersteller“ (ja/nein/nicht belegt) je Bestandteil; „nein“ verhindert den Tausch (K2) – seit der
+   Nachbesserung auch das Entnehmen (siehe 37).
+3. Teile ohne Herstellernummer bekommen eine STR-Nummer und ein eigenes Etikett (Hinweis beim Anlegen).
+4. Eine Set-Sperre zählt im Jahresbericht einmal (K2).
+5. „Hersteller-Set“ nur umschaltbar, solange das Produkt keine Artikel hat.
+6. Nicht einzeln geführte Bestandteile erscheinen nur als Zeile „vorhanden/fehlt“ in der Set-Prüfung (K2).
+7. Ordnerlisten und „Fällige“ zeigen nur die Set-Zeile; Teile auf der Set-Seite und in der Suche.
+8. Ein nur mitgesperrtes Teil darf mit dem Set ausgesondert werden (K2).
+
+Aus K1:
+9. (erledigt mit K2) Zwischen K1 und K2 lehnte der Dienst Sperren, Mangelmeldung und Aussonderung an Sets und Teilen ab.
+10. „Hersteller-Set“ ausschalten entfernt die Stückliste (mit Journal).
+11. Der Filter „Zugeordnet an“ und „Meine PSA“ zählen ein Set einmal.
+
+Aus K2 (Abweichungen oben, Nummern dort):
+12. Ergebnis „aussondern“ an einem Teil entnimmt und sondert es aus; das Set ist danach unvollständig gesperrt (1) –
+    außer bei „Austausch laut Hersteller: nein“ (37).
+13. „Teil einsetzen“ an einer fehlenden Position (2).
+14. Die Prüfung des Set-Artikels lässt sich erst festschreiben, wenn der Prüfumfang im Lauf geprüft ist (3).
+15. Ein fehlender, nicht einzeln geführter Bestandteil ist ein (nicht kritischer) Mangel mit Foto und Bemerkung (11) –
+    **bewusst entscheiden** (Ablaufprüfung): So kann ein Set mit „Falldämpfer fehlt“ freigegeben werden, wenn der Prüfer
+    „einsatzbereit“ wählt; „kritisch“ je Position wäre eine spätere Ergänzung der Stückliste.
+16. Set aussondern durch den Materialwart nur mit eigenem Grund (Prüfer) oder Verlust im Set und ohne ungeprüfte Meldung (6).
+17. Mit ausgesonderte Teile bleiben am Set; Grund „mit dem Set … ausgesondert: …“ (8).
+18. Betroffene Teile bleiben bis zur Freigabe im Prüfumfang – auch über einen Lauf ohne Freigabe hinweg (10).
+19. Neue Sperrart im Jahresbericht (12) – seit der Nachbesserung „Set unvollständig, Teil getauscht oder Set ausgesondert“ (39).
+20. Freigabe-Bedingung „Lebensdauer erreicht“ gilt für jeden Artikel des Sets, auch Metall mit eingetragenem Lebensende.
+
+Aus O1:
+21. Kopf „n Einträge, davon m Sets mit k Teilen“ nur, wenn die Liste Sets enthält.
+22. Am Teil statt Verschieben, Zuordnen und Aussondern ein Hinweis mit Link aufs Set.
+23. Hinweise beim Anlegen (STR-Nummer anbringen) als Dialog statt Toast.
+24. Kauf und Erstgebrauch des Sets als Vorgabe der Teile (überschreibbar), Herstellung je Teil leer.
+25. „Stückliste übernehmen“ bei einer Variante vorbelegt.
+
+Aus O2:
+26. „Set prüfen“ als eigene Seite; „Set-Prüfung abbrechen …“ unter „Mehr“ (mit Rückfrage).
+27. „Set prüfen“ rot bei fälligem, gesperrtem Set und bei laufender Set-Prüfung, sonst grau (auf der Seite „Set prüfen“
+    seit der Nachbesserung ebenso).
+28. Gesamtergebnis vorab am Entwurf des Set-Artikels (Abschnitt, Leiste, Festschreib-Dialog).
+29. „vorhanden“/„fehlt“ statt Ja/Nein für die Bestandteile ohne eigenen Artikel.
+30. Durchgang: Teile eingerückt unter der Set-Zeile; Teil-Zeilen behalten „Prüfen“.
+31. Meine PSA: Wahl des Artikels im Dialog; ausgegraut erst, wenn überall die eigene Meldung offen ist.
+32. Statusfilter der Ordnerliste zählen Sets einmal mit ihrem Set-Status.
+33. Aussondern beim Entnehmen und Tauschen nur dort wählbar, wo der Server es zulässt (sonst grau mit Satz).
+
+Aus der Nachbesserung:
+34. Der Sperrgrund an Set-Artikel und mitgesperrten Teilen ist **abgeleitet und wird bei jedem Anlass neu gesetzt** (ohne
+    eigenen Journaleintrag – das Journal behält, was beim Sperren galt). Kurzform „wegen Teil …: …; unvollständig: „…“
+    fehlt“; ein entnommenes Teil verschwindet daraus.
+35. **Teile ohne übernehmbare Prüfung** (neu, überfällig, keine gültige „einsatzbereit“-Prüfung) gehören immer zum
+    Prüfumfang – auch nach einer Sperre, die von einem anderen Teil ausging.
+36. **Set-Prüfung folgt dem Durchgang**: „Set prüfen“ an der Set-Seite zählt im offenen Durchgang des Sets. Durchgang
+    **abbrechen** löst eine offene Set-Prüfung (sie läuft ohne Durchgang weiter); **löschen** geht erst ohne Set-Prüfung.
+37. **„Austausch laut Hersteller: nein“**: Teil entnehmen gesperrt; Ergebnis „aussondern“ an so einem Teil lässt es
+    gesperrt im Set (die Prüfung trägt „aussondern“, ein Aussonderungsprotokoll entsteht erst mit dem Set); danach sondert
+    der Materialwart das Set aus. Alternative wäre, „aussondern“ an so einem Teil gleich als „Set aussondern“ zu werten.
+38. Abbrechen einer Set-Prüfung: wer sie begonnen hat, und der Materialwart.
+39. Jahresbericht: Teile, die beim Aussondern eines freien Sets entnommen und gesperrt weitergeführt werden, zählen **je
+    Teil** als Sperrart „set“ (drei Teile → drei Sperren). Alternative: sie nicht zählen, weil die Aussonderung des Sets
+    schon zählt.
+40. Kontolöschen: offene Set-Prüfung „(gelöschtes Konto)“, abgeschlossene behält den Namen.
+41. Trigger `mat_set_lauf_kopf` in Schritt 21 geändert (Schritt noch nicht ausgeliefert) statt eines Schritts 22.
+42. „Set aussondern“: Grund nicht vorbelegt; geht es noch nicht (nur unvollständig oder getauscht), öffnet der Knopf
+    einen Dialog mit der Begründung statt ausgegraut mit Text darunter.
+43. Fokus zurück auf den Menüknopf nach jedem Dialog aus einem Untermenü – modulweit, nicht nur „Austausch“.
+44. „Set-Artikel“ heißt in der Oberfläche „das Set selbst“ (Schaltflächen „Set selbst prüfen“); Glossar im README.
+45. (aus V19, nicht geändert) „Sperren“ und „Melden und sperren“ sind rot umrandet gefüllt (`btn danger`), obwohl eine
+    Freiprüfung sie aufhebt – bleibt das so (Bestätigung einer folgenreichen Aktion) oder werden sie grau?
+46. Katalogimport: „Stücklisten neu“ als eigene Zahl; ein Set mit nur geänderter Stückliste zählt bei den Produkten als
+    „geändert“.
 
 ## Artikelnummern eindeutig je Hersteller (22.10.2026)
 
