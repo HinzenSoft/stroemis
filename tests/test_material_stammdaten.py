@@ -268,12 +268,14 @@ def test_oberflaeche_statisch():
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
     css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
-    start = js.index("function artikelDialog(a)")
+    start = js.index("function artikelDialog(a,")
     dlg = js[start:js.index("/* --- Artikel anlegen", start)]
     assert "const fest = !!a.stammdaten_fest;" in dlg
-    # Ganz oben: die erste Feldzeile nach der Überschrift trägt Seriennummer und Herstellung.
+    # Ganz oben: die erste Feldzeile nach der Überschrift trägt Seriennummer und Herstellung – davor steht nur, solange
+    # der Artikel ungeprüft ist, das Produkt (Feintuning, L2b Nr. 29; produktFeldHtml ist sonst leer).
     kopf = dlg[dlg.index("bearbeiten</h2>"):]
-    assert re.match(r'bearbeiten</h2>\s*<div class="field-row mat-stammzeile\$\{fest \? " mat-fest" : ""\}"><div>\$\{sn\}'
+    assert 'const produktFeldHtml = mitProdukt ?' in dlg and "const mitProdukt = !!a.produkt_aenderbar;" in dlg
+    assert re.match(r'bearbeiten</h2>\s*\$\{produktFeldHtml\}\s*<div class="field-row mat-stammzeile\$\{fest \? " mat-fest" : ""\}"><div>\$\{sn\}'
                     r'</div><div>\$\{herst\}</div></div>', kopf), kopf[:300]
     # Seit den Entscheidungen vom 21.10.2026 steht vor „fest“ der Fall „nachtragen“ (Metall ohne Herstelldatum).
     zeilen = {z: dlg.index(z) for z in ("const sn = fest", "const herst = nachtragen")}

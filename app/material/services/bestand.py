@@ -50,6 +50,11 @@ GRUND_UMWANDLUNG = "Ordner zur Gliederung gemacht"
 NACHARBEIT_OFFEN = "Im Ordner wartet Nacharbeit aus einem Bestandsimport – erst übernehmen oder verwerfen."
 STAMMDATEN_FEST = ("Seriennummer und Herstelldatum stehen seit der ersten Prüfung fest – sie sind Teil des "
                    "Prüfnachweises. Eine Änderung beantragst du mit Begründung bei der Material-Verwaltung.")
+# Produkt am Artikel (Entscheidung zu L2b Nr. 29, 23.10.2026): änderbar bis zur ersten abgeschlossenen Prüfung.
+PRODUKT_FEST = "Das Produkt steht seit der ersten Prüfung fest – es steht im Prüfprotokoll."
+PRODUKT_ENTWURF = "Das Produkt lässt sich erst ändern, wenn die Prüfung festgeschrieben oder verworfen ist."
+PRODUKT_DEMO = ("Zwischen einem DEMO-Produkt und einem echten Produkt wechselt ein Artikel außerhalb der DEMO-Gliederungen "
+                "nicht – er würde sonst zu Demodaten oder zu echtem Bestand. Lege ihn mit dem richtigen Produkt neu an.")
 HERSTELLUNG_ENTFERNT = ("Das Herstelldatum dieses Artikels wurde per Antrag entfernt – ein neues trägst du nicht direkt "
                         "nach, sondern beantragst es mit Begründung bei der Material-Verwaltung („Änderung beantragen …“).")
 DEMO_GRENZE = ("Zwischen den Demodaten (DEMO-Gliederungen) und echtem Bestand lässt sich nichts verschieben – ob ein "
@@ -747,9 +752,9 @@ def artikel_aendern(iid, d):
     if d.get("product_id") not in (None, ""):
         sets.produktwechsel_weiche(alt, kennung(d.get("product_id"), "Produkt"))
     w, p = artikel_werte(d, alt)
-    if w["product_id"] != alt["product_id"] and db.query("SELECT 1 FROM mat_inspection WHERE item_id = ? LIMIT 1",
-                                                         (iid,), one=True):
-        raise Abgelehnt("Das Produkt lässt sich nur ändern, solange der Artikel nicht geprüft wurde.", 409)
+    wechsel = w["product_id"] != alt["product_id"]
+    if wechsel:
+        produktwechsel_pruefen(alt, p)
     # Seriennummer: leer heißt „bleibt“. Eine echte Herstellernummer ersetzt die vergebene.
     if not w["serial_no"]:
         w["serial_no"], generiert = alt["serial_no"], alt["serial_generated"]
@@ -794,6 +799,8 @@ def artikel_aendern(iid, d):
         # gelesen, eine eben abgeschlossene Prüfung zählt schon. Derselbe Wert in anderer Schreibweise (Groß und klein
         # wie beim Vergleich der Seriennummer, ein leeres Herstelldatum) ist keine Änderung: Es bleibt der gespeicherte.
         # Ausnahme (Entscheidung vom 21.10.2026): Bei Metall darf ein fehlendes Herstelldatum nachgetragen werden.
+        if wechsel:
+            produktwechsel_pruefen(alt, p)          # frisch unter der Sperre: eben festgeschrieben oder begonnen
         if stammdaten_fest(iid):
             if w["serial_no"].casefold() == alt["serial_no"].casefold():
                 w["serial_no"], generiert = alt["serial_no"], alt["serial_generated"]
@@ -813,9 +820,58 @@ def artikel_aendern(iid, d):
                    (w["product_id"], w["serial_no"], generiert, w["manufactured_on"], w["purchased_on"],
                     w["first_use_on"], w["retire_by"], manuell, w["next_due_on"], w["interval_months"], w["notes"],
                     w["length_m"], db.now(), iid))
-        journal.aenderung("item", iid, alt, neu)
+        if wechsel:
+            produktwechsel_eintragen(alt, neu, p)
+        else:
+            journal.aenderung("item", iid, alt, neu)
         # Ein anderes Produkt oder ein kürzeres Intervall am Artikel zieht die Fälligkeit nach.
         faelligkeit.kappen("i.id = ?", (iid,))
+
+
+def produkt_aenderbar(i):
+    """Zeigt „Bearbeiten“ das Produktfeld? Solange der Artikel keine abgeschlossene Prüfung hat, nicht ausgesondert ist und
+    weder Set noch Teil ist (Entscheidung zu L2b Nr. 29, 23.10.2026). Ein offener Entwurf sperrt erst beim Speichern
+    (produktwechsel_pruefen) – die Oberfläche sagt es am Feld."""
+    return i["lock_state"] != "ausgesondert" and not sets.im_set(i) and not stammdaten_fest(i["id"])
+
+
+def produktwechsel_pruefen(alt, neu_produkt):
+    """Darf der Artikel alt auf das Produkt neu_produkt wechseln (Entscheidung zu L2b Nr. 29, 23.10.2026)? Nur, solange
+    er keine abgeschlossene Prüfung hat – dann steht das Produkt im Protokoll (Trigger mat_item_produkt_fest) – und ohne
+    offenen Entwurf (der Entwurf hat das Formular des alten Produkts). Ob er DEMO ist, hängt auch am Produkt
+    (demo_sql): Ein Wechsel darf ihn nicht über die DEMO-Grenze tragen. Sets und Teile prüft vorher
+    sets.produktwechsel_weiche. Wirft Abgelehnt (409)."""
+    if stammdaten_fest(alt["id"]):
+        raise Abgelehnt(PRODUKT_FEST, 409)
+    from . import pruefung
+    offen = pruefung.offener_entwurf(alt["id"])
+    if offen:
+        raise Abgelehnt(pruefung.reserviert_text(offen) + " " + PRODUKT_ENTWURF, 409)
+    if not ordner_ist_demo(heimat(alt)) and bool(katalog.produkt(alt["product_id"])["demo"]) != bool(neu_produkt["demo"]):
+        raise Abgelehnt(PRODUKT_DEMO, 409)
+
+
+def _produkt_text(p):
+    """Das Produkt im Journal: Name wie im Protokoll, dazu die Artikelnummer (Varianten unterscheiden sich oft nur in ihr)."""
+    return katalog.produktname(p) + (f" ({p['article_no']})" if p["article_no"] else "")
+
+
+def produktwechsel_eintragen(alt, neu, p):
+    """Journal „produkt_geaendert“: alle geänderten Felder (mit Lebensende und Länge, die der Wechsel nachzieht) und das
+    Produkt als lesbarer Name; dazu laufende Rückrufe, die den Artikel mit dem alten Produkt trafen und jetzt nicht mehr
+    bzw. umgekehrt (wie beim bestätigten Antrag auf eine neue Seriennummer). Die Fälligkeit zieht faelligkeit.kappen mit
+    eigenem Eintrag nach."""
+    from . import rueckruf
+    vorher, nachher = journal.unterschied(alt, neu)
+    vorher["produkt"] = _produkt_text(katalog.produkt(alt["product_id"]))
+    nachher["produkt"] = _produkt_text(p)
+    alte = {r["id"]: r for r in rueckruf.betrifft(alt["product_id"], alt["serial_no"])}
+    neue = {r["id"]: r for r in rueckruf.betrifft(p["id"], neu["serial_no"])}
+    for schluessel, liste in (("rueckruf_nicht_mehr", [r for i, r in alte.items() if i not in neue]),
+                              ("rueckruf_neu", [r for i, r in neue.items() if i not in alte])):
+        if liste:
+            nachher[schluessel] = [f"{r['title']} (Nr. {r['id']})" for r in liste]
+    journal.eintragen("item", alt["id"], "produkt_geaendert", vorher, nachher)
 
 
 def artikel_verschieben(ids, ziel_id):
@@ -976,6 +1032,8 @@ def artikel_json(i, voll=False):
     out["laenge_moeglich"] = katalog.laenge_wirksam(p["category_id"])
     out["stand"] = stand_von(i)
     out["stammdaten_fest"] = stammdaten_fest(i["id"])
+    # Produkt ändern unter „Bearbeiten“ (Feintuning, L2b Nr. 29): bis zur ersten abgeschlossenen Prüfung, nicht an Sets.
+    out["produkt_aenderbar"] = produkt_aenderbar(i)
     # Bei Metall ein fehlendes Herstelldatum direkt nachtragen (nur mit fester Stammdaten von Bedeutung).
     out["herstellung_nachtragbar"] = herstellung_nachtragbar(i, p)
     out["status"], out["status_text"] = s, st.LABEL[s]

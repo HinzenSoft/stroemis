@@ -176,14 +176,24 @@ def teil_weiche(item, was):
                     "Set. Ein Teil verlässt das Set nur über „Teil entnehmen“.", 409)
 
 
+# Steht so auch in material.js (PRODUKT_SET): Der Dialog „Bearbeiten“ sagt es schon bei der Wahl.
+ZU_SET_PRODUKT = ("Zu einem Hersteller-Set wechselt das Produkt nicht – ein Set legst du mit seinen Teilen neu an "
+                  "(„Artikel anlegen“).")
+
+
 def produktwechsel_weiche(alt, neues_produkt):
     """bestand.artikel_aendern: kein Produktwechsel an Teilen, an Sets und von oder zu einem Set-Produkt (A7b)."""
     if neues_produkt == alt["product_id"]:
         return
-    teil_weiche(alt, "ein Produktwechsel")
-    if ist_set_artikel(alt) or neues_produkt in set_produkte():
-        raise Abgelehnt("Von einem Hersteller-Set oder zu einem wechselt das Produkt nicht – lege das Set neu an (es bringt "
-                        "seine Teile mit).", 409)
+    # Entscheidung zu L2b Nr. 29 (23.10.2026): Am Set und am Teil legt das Produkt die Stückliste fest.
+    if ist_teil(alt):
+        s = set_zeile(alt["parent_item_id"], gefiltert=False)
+        raise Abgelehnt(f"{alt['inventory_no']} ist Teil des Sets {_set_text(s) if s else ''} – sein Produkt legt die "
+                        "Stückliste fest und lässt sich nicht ändern.", 409)
+    if ist_set_artikel(alt):
+        raise Abgelehnt("Das Produkt eines Sets legt seine Stückliste fest und lässt sich nicht ändern.", 409)
+    if neues_produkt in set_produkte():
+        raise Abgelehnt(ZU_SET_PRODUKT, 409)
 
 
 # --- Lage, Sperre und Zuordnung: nur gemeinsam ------------------------------------------------------------------------

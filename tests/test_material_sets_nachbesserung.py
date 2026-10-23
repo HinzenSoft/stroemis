@@ -263,8 +263,10 @@ def test_konto_loeschen_und_rueckweg():
 def test_nicht_austauschbar_und_bericht():
     """„Austausch laut Hersteller: nein“: Ergebnis „aussondern“ an so einem Teil entnimmt es nicht – es bleibt gesperrt im
     Set (eigener Grund mit „das Set aussondern“), der Materialwart sondert danach das Set aus (Teil vorbelegt „mit
-    aussondern“). Jahresbericht: Teile, die beim Aussondern eines freien Sets aus der Prüfung entnommen und gesperrt
-    weitergeführt werden, zählen als Sperrart „set“."""
+    aussondern“). Jahresbericht (Entscheidung zu L2 Nr. 39, 23.10.2026): Teile, die beim Aussondern eines Sets entnommen
+    und gesperrt weitergeführt werden, zählen mit ihrer eigenen Sperre (Art „set_entnommen“) – aus einem freien Set wie
+    aus einem gesperrten, in dem sie nur mitgesperrt waren; das Set selbst ist bei den Aussonderungen eine Zeile, die
+    mit ihm ausgesonderten Teile zählen darin."""
     with ohne_post(), tempfile.TemporaryDirectory() as tmp:
         t = set_aufbau(tmp)
         app, w, p = t.app, t.wart_a, t.k["pruefer"]
@@ -282,9 +284,38 @@ def test_nicht_austauschbar_und_bericht():
         assert a["set"]["vollstaendig"] is True and a["status"] == "gesperrt"
         assert {x["id"]: x["verbleib_vorschlag"] for x in a["set"]["teile"]} == {k1: "aussondern", k2: "weiterfuehren",
                                                                                 r1: "weiterfuehren"}
+        jahr = _heute().year
+        vorher = ok(w.get(f"/api/material/ordner/{t.a}/bericht?jahr={jahr}"))["bericht"]
         ok(w.post(f"/api/material/artikel/{s}/aussondern", json={"grund": "irreparabel"}))
         z = {r["id"]: r for r in zeilen(app, "SELECT * FROM mat_item WHERE id IN (?, ?)", (s, k1))}
         assert (z[s]["lock_state"], z[k1]["lock_state"], z[k1]["parent_item_id"]) == ("ausgesondert", "ausgesondert", s)
+        # Bericht: K2 und R1 waren nur mit dem Set gesperrt – jetzt je eine eigene Sperre; K1 zählt in der Zeile des Sets.
+        b = ok(w.get(f"/api/material/ordner/{t.a}/bericht?jahr={jahr}"))["bericht"]
+        arten = {x["art"]: x["n"] for x in b["sperren"]["arten"]}
+        vor = {x["art"]: x["n"] for x in vorher["sperren"]["arten"]}
+        assert arten["set_entnommen"] - vor["set_entnommen"] == 2 and arten["set"] == vor["set"], (vorher, b)
+        neu_ = [x for x in b["sperren"]["liste"] if x["art"] == "set_entnommen"]
+        assert {x["inventarnummer"] for x in neu_} == {nummer(app, k2), nummer(app, r1)}, neu_
+        assert all(x["art_text"] == "aus ausgesondertem Set entnommen" and x["grund"] == "aus ausgesondertem Set entnommen"
+                   for x in neu_), neu_
+        au = b["aussonderungen"]
+        assert au["gesamt"] - vorher["aussonderungen"]["gesamt"] == 1 == b["bewegungen"]["aussonderungen"], au
+        zeile = next(x for x in au["liste"] if x["inventarnummer"] == nummer(app, s))
+        assert zeile["set_text"] == "Set, mit 1 Teil" and nummer(app, k1) not in {x["inventarnummer"] for x in au["liste"]}
+        # Mit Haken „Prüfer nennen“: „Aussonderungen durch“ zählt das Set ebenso einmal.
+        bh = ok(w.get(f"/api/material/ordner/{t.a}/bericht?jahr={jahr}&pruefer=1"))["bericht"]
+        assert sum(x["n"] for x in bh["pruefer"]["aussonderungen_durch"]) == au["gesamt"], bh["pruefer"]
+        # Die CSV-Prüfungsliste führt weiter jedes Aussonderungsprotokoll (Set und K1).
+        r = w.get(f"/material/export/{t.a}-pruefungen-{jahr}.csv")
+        assert r.status_code == 200 and r.data.decode("utf-8-sig").count("Aussonderungsprotokoll") == 2, r.data[:300]
+        # Das PDF nennt die neue Sperrart und den Zusatz am Set.
+        r = w.get(f"/material/ordner/{t.a}/bericht-{jahr}.pdf")
+        assert r.status_code == 200 and r.data.startswith(b"%PDF")
+        pfad = os.path.join(tmp, "bericht.pdf")
+        with open(pfad, "wb") as fh:
+            fh.write(r.data)
+        text = _pdf_text(pfad)
+        assert "aus ausgesondertem Set entnommen" in text and "Set, mit 1 Teil" in text, text[-2000:]
 
     with ohne_post(), tempfile.TemporaryDirectory() as tmp:
         t = set_aufbau(tmp)
@@ -297,10 +328,16 @@ def test_nicht_austauschbar_und_bericht():
         for x in t.teile:
             pruefen(p, x)
         pruefen(p, s, "aussondern")                      # Vorbelegung: alle Teile entnehmen und weiterführen
-        b = ok(w.get(f"/api/material/ordner/{t.a}/bericht?jahr={jahr}"))["bericht"]["sperren"]
+        bericht = ok(w.get(f"/api/material/ordner/{t.a}/bericht?jahr={jahr}"))["bericht"]
+        b = bericht["sperren"]
         arten = {x["art"]: x["n"] for x in b["arten"]}
         vor = {x["art"]: x["n"] for x in vorher["arten"]}
-        assert arten["set"] - vor["set"] == 3 and arten["pruefung"] == vor["pruefung"], (vorher, b)
+        assert arten["set_entnommen"] - vor["set_entnommen"] == 3 and arten["set"] == vor["set"], (vorher, b)
+        assert arten["pruefung"] == vor["pruefung"], (vorher, b)
+        # Alle Teile weitergeführt: Das Set ist eine Zeile ohne Teile („Set“), aus der Prüfung.
+        au = bericht["aussonderungen"]
+        assert [(x["inventarnummer"], x["set_text"], x["art"]) for x in au["liste"]] == [
+            (t.s["inventory_no"], "Set", "pruefung")], au
     print("Austausch „nein“ und Jahresbericht bestanden.")
 
 

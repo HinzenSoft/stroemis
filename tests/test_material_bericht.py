@@ -282,7 +282,7 @@ def test_zahlen():
         sp = b["sperren"]
         assert sp["gesamt"] == 7 and sp["freigegeben"] == 1, sp
         assert {x["art"]: x["n"] for x in sp["arten"]} == {"pruefung": 1, "mangel": 1, "verlust": 2, "ohne_pruefung": 3,
-                                                               "set": 0}
+                                                               "set": 0, "set_entnommen": 0}
         gruende = {(x["inventarnummer"], x["art"]): x["grund"] for x in sp["liste"]}
         assert gruende[(a["grenze"]["inventory_no"], "ohne_pruefung")] == "Platzhalter Grenze spät"
         assert gruende[(a["unter"]["inventory_no"], "ohne_pruefung")] == "Beschädigung: Platzhalter Riss"

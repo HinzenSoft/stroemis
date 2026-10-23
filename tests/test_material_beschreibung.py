@@ -474,8 +474,9 @@ def test_oberflaeche_statisch():
     # (21.10.2026): Karte und Rückfrage „Änderung bestätigen“; 27 seit den Hersteller-Sets (P4-L2 O1): Stückliste der
     # Produktseite, Produktwahl im Reiter „Bestandteile“, Teilblock beim Anlegen, Teil und fehlende Position im Kasten
     # „Bestandteile“, Teil-Karte in „Meine PSA“; 28 seit dem Produktnamen als Link in Artikellisten (23.10.2026): mit
-    # und ohne Link; 29 seit P4-L2 O2: Kopf der Seite „Set prüfen“.
-    assert len(stellen) == js.count("${nameHtml(") == 29, (len(stellen), js.count("${nameHtml("))
+    # und ohne Link; 29 seit P4-L2 O2: Kopf der Seite „Set prüfen“; 30 seit dem Feintuning (23.10.2026): Produkt im
+    # Dialog „Bearbeiten“.
+    assert len(stellen) == js.count("${nameHtml(") == 30, (len(stellen), js.count("${nameHtml("))
     assert all(name == zusatz for name, _, zusatz in stellen), stellen
     assert not re.search(r"\$\{zusatzHtml\([^)]*\)\}(</strong>|</a>)", js)      # nie im Link, nie in <strong>
     # Die Katalogliste wie im Bildschirmfoto: Name fett im roten Link, dann grau Zusatz und Artikelnummer.
