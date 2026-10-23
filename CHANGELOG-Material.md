@@ -16,8 +16,8 @@ für sich deploybar.
 | Phase 2 · 2 – Erinnerungen | Täglicher Erinnerungslauf ab 6 Uhr (eingebaut, abschaltbar, dazu `flask material remind`): Sammelmail an die Verwalter zu Fälligkeit (30/7 Tage, überfällig), Lebensende (90 Tage) und ablaufenden Freigaben (30 Tage); Erinnerungslog mit Kontoverweis; „Erinnerungsmails aus“ je Ordner; Laufstand und Probelauf auf der Übersicht | geliefert 19.10.2026, wartet auf Freigabe |
 | Phase 2 · 3 – Bestandsimport und Prüfanleitung | Bestandslisten aus Excel oder CSV in einen Ordner: Probelauf, Übernehmen in einer Transaktion (Artikel auf „neu“, Fälligkeit aus der Liste, STR-Nummern für Zeilen ohne Seriennummer, eine Liste ganz ohne Seriennummernspalte nur mit Häkchen) und Nacharbeit je Zielordner (Produkte zuordnen, melden oder im Katalog anlegen, erneut prüfen, CSV-Rundweg, Frist ein Monat); Prüfanleitung aus dem Wiki am Prüfformular, Abschnitt „Prüfung“ eingeblendet in offenen Prüfungen | geliefert 19.10.2026, vier Punkte am 20.10.2026 entschieden (einer geändert und eingearbeitet), wartet auf Freigabe |
 | Artikellänge (Schritt 20) | Häkchen „Artikel haben eine Länge“ je Kategorie (vererbt), Feld „Länge (m)“ am Artikel (Steckbrief, Listen, Lebenslauf, Meine PSA, CSV, Bestandsimport), Prüfpunkt-Typ „Länge“ – vorbelegt, ein abweichender Wert geht beim Festschreiben in den Artikel (Journal, Protokoll „alt → neu“) | gebaut 22.10.2026, wartet auf Freigabe |
-| Phase 4 · 2 – Sets mit Komponenten | Hersteller-Sets: Stückliste im Katalog (auch in der Katalogdatei), Set-Artikel mit Teil-Artikeln, Set-Status, -Fälligkeit und -Lebensende, Listen mit der Set-Zeile, Verschieben und Zuordnen mit allen Teilen, Meine PSA; Sperr-Kaskade, Set prüfen mit Set-Protokoll, Austausch, Aussondern mit Wahl je Teil, Oberfläche | Kern (K1, K2) und Oberfläche (O1, O2) gebaut 23.10.2026 (Schema 21), drei Prüfungen und Nachbesserung 23.10.2026 |
-| Phase 4 · 2b – Sets, Teil 2 | Vorhandenen Artikel als Teil einsetzen (mit Auswahl, auch über die bisherige Inventarnummer), Set auflösen, „Bestandteil ersetzt“, Prüfumfang eines nie geprüften Sets; dazu (KERN Z) Zahlen, CSV-Spalten, gebündelte Mails | KERN A, KERN Z, Oberfläche gebaut 23.10.2026 (Schema bleibt 21); drei Prüfungen und Nachbesserung 23.10.2026 |
+| Phase 4 · 2 – Sets mit Komponenten | Hersteller-Sets: Stückliste im Katalog (auch in der Katalogdatei), Set-Artikel mit Teil-Artikeln, Set-Status, -Fälligkeit und -Lebensende, Listen mit der Set-Zeile, Verschieben und Zuordnen mit allen Teilen, Meine PSA; Sperr-Kaskade, Set prüfen mit Set-Protokoll, Austausch, Aussondern mit Wahl je Teil, Oberfläche | geliefert 23.10.2026 (c5e1b06), freigegeben 23.10.2026 |
+| Phase 4 · 2b – Sets, Teil 2 | Vorhandenen Artikel als Teil einsetzen (mit Auswahl, auch über die bisherige Inventarnummer), Set auflösen, „Bestandteil ersetzt“, Prüfumfang eines nie geprüften Sets; dazu (KERN Z) Zahlen, CSV-Spalten, gebündelte Mails | geliefert 23.10.2026 (Schema bleibt 21) – wartet auf Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4152,7 +4152,7 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
-## Phase 4 · Lieferung 2b – Sets, Teil 2 (Stand: KERN A, KERN Z, Oberfläche, Nachbesserung nach den drei Prüfungen)
+## Phase 4 · Lieferung 2b – Sets, Teil 2 (23.10.2026, Stand: geliefert, wartet auf Freigabe)
 
 Grundlage: `planung/material-phase4/entwurf_l2b.md` (Fassung 2 nach den Kritiken „Sicherheit“ T1–T16 und „Ablauf“
 U1–U16, mit den Entscheidungen des Nutzers vom 23.10.2026). Gebaut in Paketen: **KERN A** (vorhandenen Artikel einsetzen,
@@ -4695,7 +4695,7 @@ Aus der Nachbesserung:
 35. Piktogramme: „📷“ und „📖“ entfernt; 🔒 an Systemordnern im Baum und die Bedienzeichen ☰, ✕, ↑ ↓, ▲ ▼ bleiben.
 36. Set-Banner „GESPERRT: <Grund>“ mit Doppelpunkt (am einzelnen Artikel bleibt „GESPERRT – <Grund>“).
 
-## Phase 4 · Lieferung 2 – Sets mit Komponenten (23.10.2026, Stand: geliefert, wartet auf Freigabe)
+## Phase 4 · Lieferung 2 – Sets mit Komponenten (23.10.2026, Stand: geliefert und freigegeben)
 
 Grundlage: `planung/material-phase4/entwurf_l2.md` (Fassung 2 nach den Kritiken „Sicherheit“ S1–S31 und „Ablauf“
 A1–A33, mit den Entscheidungen des Nutzers vom 23.10.2026: Hersteller-Sets, Set-Artikel mit Teil-Artikeln, Teil
