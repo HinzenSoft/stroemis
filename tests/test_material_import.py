@@ -1655,7 +1655,7 @@ def test_oberflaeche_statisch():
     block = js[anfang:js.index("\n  }\n", anfang)]
     # Einstieg und Hinweise
     assert '${importieren ? "Export / Import" : "Export"}' in js and "exportMenue(d, darfPflegen)" in js
-    assert "<strong>Bestandsliste importieren …</strong>" in js and "<strong>Nacharbeit (${d.nacharbeit} offen)</strong>" in js
+    assert "<strong>Bestandsliste importieren</strong>" in js and "<strong>Nacharbeit (${d.nacharbeit} offen)</strong>" in js
     assert "auf Nacharbeit." in js and "Nacharbeit öffnen</a>" in js and "${nacharbeitHinweis(d.nacharbeit)}" in js
     # Probelauf, Übernehmen, Fehler
     assert "new AbortController()" in block and "lauf.abort()" in block and "setTimeout(probelauf, 600)" in block

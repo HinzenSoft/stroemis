@@ -2156,9 +2156,9 @@
   // Export eines Ordners als Untermenü im Ordnerkopf: Knopf „Export“, darunter die beiden Downloads mit einem Satz,
   // was drinsteckt. <details> öffnet und schließt ohne eigenes Skript (auch per Tastatur und Touch). Wer den Ordner
   // pflegt (verwalten, kein Systemordner – importieren), findet hier seit Phase 2 · L3 auch den Bestandsimport: Das
-  // Menü heißt dann „Export / Import“ und hat unter einem Strich „Bestandsliste importieren …“ und, solange etwas
+  // Menü heißt dann „Export / Import“ und hat unter einem Strich „Bestandsliste importieren“ und, solange etwas
   // offen ist, „Nacharbeit (n offen)“ – seltene Funktionen gehören ins Untermenü, kein neuer Knopf in der Kopfzeile.
-  // Seit Phase 4 · L1 steht hier auch der „Jahresbericht“ (Ansicht bericht) – nicht an Systemordnern: Ein Bericht
+  // Seit Phase 4 · L1 steht hier auch „Jahresbericht exportieren“ (Ansicht bericht) – nicht an Systemordnern: Ein Bericht
   // über „Gesperrt“ oder „Ausgesondert“ wäre nach der Heimat-Logik leer, der Server antwortet dort 404.
   const exportMenue = (d, importieren) => `<details class="mat-menue">
       <summary class="btn secondary small" aria-haspopup="true">${importieren ? "Export / Import" : "Export"}</summary>
@@ -2167,10 +2167,10 @@
           <span>Alle Artikel hier und darunter, auch die von hier gesperrten (ausgesonderte bei ihrer Gliederung), mit Status, Fälligkeiten und Stammdaten – für Excel.</span></a>
         <a href="/material/export/${d.id}-protokolle.zip" data-export="Die Protokolle werden zusammengestellt – bei vielen dauert das einen Moment …"><strong>Protokolle exportieren (ZIP)</strong>
           <span>Die Protokolle dieser Artikel und die Sammelprotokolle der Durchgänge hier, mit Verzeichnis und Prüfsummen.</span></a>
-        ${d.system_kind ? "" : `<a href="/material/ordner/${d.id}/bericht"><strong>Jahresbericht</strong>
+        ${d.system_kind ? "" : `<a href="/material/ordner/${d.id}/bericht"><strong>Jahresbericht exportieren</strong>
           <span>Bestand, Prüfungen, Sperren, Aussonderungen, Mängel und Rückrufe dieses Zweigs für ein Kalenderjahr – als Seite, PDF und Prüfungsliste (CSV).</span></a>`}
         ${importieren ? `<hr class="mat-menue-trenner">
-        <a href="/material/ordner/${d.id}/import"><strong>Bestandsliste importieren …</strong>
+        <a href="/material/ordner/${d.id}/import"><strong>Bestandsliste importieren</strong>
           <span>Eine Liste aus Excel oder CSV in diesen Ordner übernehmen: erst ein Probelauf, dann übernehmen; was nicht passt, kommt in die Nacharbeit.</span></a>
         ${d.nacharbeit ? `<a href="/material/ordner/${d.id}/import#bi-nacharbeit"><strong>Nacharbeit (${d.nacharbeit} offen)</strong>
           <span>Zeilen aus Bestandsimporten, die noch ein Produkt, eine Angabe oder eine Entscheidung brauchen.</span></a>` : ""}` : ""}

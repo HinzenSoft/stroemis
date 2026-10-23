@@ -5326,6 +5326,9 @@ Dublettenschlüssel (Hersteller | Modell | Artikelnummer, UNIQUE) bleibt, kein S
   bzw. dahinter). Für die Tastatur bleibt die Inventar-Nr. der Link der Zeile (Name mit tabindex -1); eine fremde Zeile
   im Durchgang (nicht in deinem Bereich) zeigt den Namen weiter als Text. Statischer Test in
   tests/test_material_beschreibung.py; Browserprobe Chromium 1280/360 px ohne Konsolenfehler und ohne waagerechtes Rollen.
+- Untermenü „Export“ bzw. „Export / Import“ im Ordnerkopf: „Jahresbericht“ heißt jetzt **„Jahresbericht exportieren“**
+  (wie „Artikelliste exportieren“ und „Protokolle exportieren“), „Bestandsliste importieren …“ jetzt **„Bestandsliste
+  importieren“** – der Eintrag öffnet eine Seite, keinen Dialog. Statischer Test in tests/test_material_import.py.
 
 ## Nachbesserung zu Schritt 18 nach der Sicherheitsprüfung (22.10.2026)
 
