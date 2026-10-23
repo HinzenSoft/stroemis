@@ -4632,6 +4632,10 @@ Konsolenfehler, ohne waagerechten Bildlauf. `st-geraete` (Chromium, Firefox, Web
 (frei mit vorhandenen Teilen, gesperrt nach „Bestandteil ersetzt“), Anlegen, Übersicht und Ordner: alle 315 Aufrufe ohne
 Befund.
 
+**Nebenbei behoben (aus L2)**: Der Hinweiskasten im Lebenslauf-PDF eines gesperrten Sets und seiner Teile sagt jetzt
+„Nicht verwenden, bis „Set prüfen“ das Set freigibt.“ statt „… bis eine Freiprüfung ihn freigibt.“ (wie das Banner der
+Artikelansicht); Test `test_lebenslauf_hinweis_set`.
+
 ### Bitte bestätigen (zusammengeführt)
 
 Aus KERN A:

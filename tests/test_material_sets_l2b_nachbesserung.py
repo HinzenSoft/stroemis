@@ -212,7 +212,19 @@ def test_b2_spalten_bisherige_nummer():
     print("B2 (Spalte „Bisherige Inventarnummer“) bestanden.")
 
 
+def test_lebenslauf_hinweis_set():
+    """Lebenslauf-PDF: Ein gesperrtes Set und seine Teile gibt nur „Set prüfen“ frei – nicht eine Freiprüfung (gefunden
+    in der Nachbesserung, stammt aus L2)."""
+    from app.material.services import lebenslauf
+    item = {"lock_state": "gesperrt", "lock_reason": "Sturz", "parent_item_id": None}
+    assert lebenslauf._hinweis(item, "gesperrt", None, im_set=True)["text"] == (
+        "Sturz. Nicht verwenden, bis „Set prüfen“ das Set freigibt.")
+    assert lebenslauf._hinweis(item, "gesperrt", None)["text"] == "Sturz. Nicht verwenden, bis eine Freiprüfung ihn freigibt."
+    print("Lebenslauf-Hinweis am gesperrten Set bestanden.")
+
+
 if __name__ == "__main__":
+    test_lebenslauf_hinweis_set()
     test_h1_altwert_eigen()
     test_h1_absicherung_und_start()
     test_a1_sperrgrund_eingesetzt()

@@ -66,8 +66,9 @@ def _naechste_text(item, s):
     return datum_text(item["next_due_on"]) or "keine"
 
 
-def _hinweis(item, s, aussonderung):
-    """Der Kasten oben – wie das Banner der Artikelansicht."""
+def _hinweis(item, s, aussonderung, im_set=False):
+    """Der Kasten oben – wie das Banner der Artikelansicht. Ein gesperrtes Set und seine Teile gibt nur „Set prüfen“
+    frei, keine einzelne Freiprüfung (P4-L2)."""
     if s == "ausgesondert":
         text = "Dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden."
         if aussonderung:
@@ -78,7 +79,8 @@ def _hinweis(item, s, aussonderung):
     if s == "gesperrt":
         titel = "VERLOREN GEMELDET (GESPERRT)" if item["lock_state"] == "verloren" else "GESPERRT"
         return {"titel": titel, "text": (f"{item['lock_reason']}. " if item["lock_reason"] else "")
-                + "Nicht verwenden, bis eine Freiprüfung ihn freigibt."}
+                + ("Nicht verwenden, bis „Set prüfen“ das Set freigibt." if im_set
+                   else "Nicht verwenden, bis eine Freiprüfung ihn freigibt.")}
     if s == "lebensdauer":
         return {"titel": "LEBENSDAUER ERREICHT", "text": "Aussondern."}
     if s == "neu":
@@ -223,7 +225,7 @@ def daten(iid):
                      "demo": bestand.ist_demo(iid)},
         "artikel": protokoll._artikel(item, produkt, item["folder_id"]),
         "zustand": _zustand(item, produkt, s, tag, baum_pfad),
-        "hinweis": _hinweis(item, s, aussonderung),
+        "hinweis": _hinweis(item, s, aussonderung, im_set=bool(item["parent_item_id"] or produkt["is_set"])),
         "pruefungen": pruefungen,
         "durchgaenge": _durchgaenge(iid, baum_pfad),
         "rueckrufe": _rueckrufe(item),
