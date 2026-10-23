@@ -16,6 +16,7 @@ für sich deploybar.
 | Phase 2 · 2 – Erinnerungen | Täglicher Erinnerungslauf ab 6 Uhr (eingebaut, abschaltbar, dazu `flask material remind`): Sammelmail an die Verwalter zu Fälligkeit (30/7 Tage, überfällig), Lebensende (90 Tage) und ablaufenden Freigaben (30 Tage); Erinnerungslog mit Kontoverweis; „Erinnerungsmails aus“ je Ordner; Laufstand und Probelauf auf der Übersicht | geliefert 19.10.2026, wartet auf Freigabe |
 | Phase 2 · 3 – Bestandsimport und Prüfanleitung | Bestandslisten aus Excel oder CSV in einen Ordner: Probelauf, Übernehmen in einer Transaktion (Artikel auf „neu“, Fälligkeit aus der Liste, STR-Nummern für Zeilen ohne Seriennummer, eine Liste ganz ohne Seriennummernspalte nur mit Häkchen) und Nacharbeit je Zielordner (Produkte zuordnen, melden oder im Katalog anlegen, erneut prüfen, CSV-Rundweg, Frist ein Monat); Prüfanleitung aus dem Wiki am Prüfformular, Abschnitt „Prüfung“ eingeblendet in offenen Prüfungen | geliefert 19.10.2026, vier Punkte am 20.10.2026 entschieden (einer geändert und eingearbeitet), wartet auf Freigabe |
 | Artikellänge (Schritt 20) | Häkchen „Artikel haben eine Länge“ je Kategorie (vererbt), Feld „Länge (m)“ am Artikel (Steckbrief, Listen, Lebenslauf, Meine PSA, CSV, Bestandsimport), Prüfpunkt-Typ „Länge“ – vorbelegt, ein abweichender Wert geht beim Festschreiben in den Artikel (Journal, Protokoll „alt → neu“) | gebaut 22.10.2026, wartet auf Freigabe |
+| Phase 4 · 2 – Sets mit Komponenten | Hersteller-Sets: Stückliste im Katalog (auch in der Katalogdatei), Set-Artikel mit Teil-Artikeln, Set-Status, -Fälligkeit und -Lebensende, Listen mit der Set-Zeile, Verschieben und Zuordnen mit allen Teilen, Meine PSA; Sperr-Kaskade, Set prüfen, Austausch (K2) und Oberfläche folgen | KERN K1 gebaut 23.10.2026 (Schema 21), Oberfläche folgt |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4150,6 +4151,221 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Phase 4 · Lieferung 2 – Sets mit Komponenten (23.10.2026, Stand: KERN Teil 1)
+
+Grundlage: `planung/material-phase4/entwurf_l2.md` (Fassung 2 nach den Kritiken „Sicherheit“ S1–S31 und „Ablauf“
+A1–A33, mit den Entscheidungen des Nutzers vom 23.10.2026: Hersteller-Sets, Set-Artikel mit Teil-Artikeln, Teil
+gesperrt → ganzes Set gesperrt, Austausch, Kern in L2). Gebaut in Paketen: **K1** (dieser Stand – Schema 21, Katalog,
+Bestand, Tests, Doku), **K2** (Sperr-Kaskade und Freigabe, Set prüfen mit Set-Protokoll, Teil tauschen und entnehmen,
+Aussondern-Dialog, Mails, Jahresbericht), danach **OBERFLÄCHE** (`material.js` nach der Schnittstelle unten), drei
+Prüfungen, Nachbesserung. Schemaversion 21, keine neuen Abhängigkeiten. In der Oberfläche ist noch nichts zu sehen.
+
+### Neu (K1)
+
+- **Hersteller-Set im Katalog** (Entwurf A): Häkchen „Hersteller-Set“ am Produkt (`is_set`) und die **Stückliste**
+  (`mat_product_component`): je Position Bezeichnung (eine Zeile, höchstens 120 Zeichen), Anzahl 1–20, „einzeln geführt“
+  und „Austausch laut Hersteller“ (ja | nein | nicht belegt, Vorgabe „nicht belegt“). Einzeln geführt wird ein
+  Bestandteil nur mit eigener Kennzeichnung und eigenem Katalogprodukt – dann ist das Produkt Pflicht und jedes Stück
+  wird beim Anlegen eines Sets ein Teil-Artikel; nicht einzeln geführte Bestandteile (Tasche, Seilsatz, Prusiks) sind nur
+  Text, ohne Produkt (so trifft ein Rückruf keinen Bestandteil ins Leere, A17). Grenzen: 30 Positionen, zusammen
+  50 einzeln geführte Stück je Set. Kein Set im Set, kein Set-Produkt als Bestandteil, kein DEMO-Bestandteil in einem
+  echten Set. Die Stückliste wird als Ganzes ersetzt (Journal „stueckliste“ am Produkt mit vorher/nachher).
+  „Hersteller-Set“ umschalten nur, solange es keine Artikel gibt; ein Bestandteil wird kein Set; ausschalten nimmt die
+  Stückliste mit. Ein Bestandteil-Produkt lässt sich nicht löschen (409 „Das Produkt ist Bestandteil von „…“ – erst aus
+  der Stückliste nehmen.“, dahinter ON DELETE RESTRICT); ebenso ein Produkt, das in der Kopie eines angelegten Sets steht.
+  „Variante anlegen“ übernimmt die Stückliste auf Wunsch (`stueckliste`: ja – Häkchen wie bei den Dokumenten).
+- **Katalogdatei** (Format 1 und 2): `"set": true` und `"bestandteile"` (siehe „Katalogdatei (Format 2)“). Der Import löst
+  die Verweise in einem zweiten Durchgang nach allen Produkten der Datei auf (uid, dann Hersteller + Modell +
+  Artikelnummer – wie die Formulare an Produkten), ersetzt die Stückliste als Ganzes (Journal unter „Katalogimport (…)“)
+  und meldet im Bericht `stuecklisten` (geändert/unverändert). Fehler des Produkts: „set“ umschalten bei vorhandenen
+  Artikeln, ein Bestandteil, der Set werden soll, „set“: false mit Bestandteilen, Bestandteile ohne „set“, ein
+  unbekannter Bestandteil, Positionen außerhalb der Regeln. Eine Liste aus Texten (heutige Recherche-Manifeste) ist ein
+  Hinweis und wird übergangen. Der Export schreibt beides; steht ein DEMO-Bestandteil (oder einer aus einer
+  DEMO-Kategorie) in einem echten Set, lässt er „bestandteile“ dieses Sets ganz weg und nennt es im Bericht
+  (`set_verstoesse`, `bericht.txt`). Format-Vorlage: `docs/material-katalog-set-vorlage.json` (DEMO, nur Platzhalter).
+- **Set anlegen** (Entwurf C): `POST /api/material/artikel` mit einem Set-Produkt braucht `teile` – je einzeln geführter
+  Position genau „anzahl“ Teile mit Seriennummer (leer → STR-Nummer), Herstell-, Kauf- und Erstgebrauchsdatum und Länge
+  (falls die Kategorie des Teil-Produkts sie vorsieht). Das Produkt eines Teils kommt aus der Stückliste, nie aus der
+  Anfrage; der Ordner ist der des Sets; jedes Teil durchläuft die Regeln eines neuen Artikels (Herstelldatum bei textil,
+  STR-Form, Dubletten – auch fremde, dann wird alles zurückgerollt und protokolliert). Doppelte Seriennummern in der
+  Anfrage: 400 vor jedem Schreiben. Eine Transaktion: Set-Artikel, Kopie der Stückliste (`mat_item_set_slot`), Teile
+  (eigene Inventarnummer, QR, Etikett), Journal „set_angelegt“ am Set mit der Teileliste, „angelegt“ am Teil mit
+  `{"set", "set_inventar"}`. Hinweise „STR-Nummer am Teil anbringen (Etikett oder Gravur): …“ in der Antwort.
+- **Set-Werte** (Entwurf F): Set-Status = der schwerste aus Set-Artikel und aktuellen Teilen in der Rangfolge von
+  `status.status()` (`status.SET_RANG`, Test gegen `status()`); Set-Fälligkeit = früheste nächste Prüfung,
+  Set-Lebensende = frühestes Lebensende – je mit dem auslösenden Artikel (am Set-Artikel steht meist das Textil).
+  Vollständigkeit laut Kopie der Stückliste (einzeln geführte Positionen).
+- **Listen** (Entwurf C, A9, S30): Ordnerliste, „Fällige“ und Suche zeigen die **Set-Zeile** mit Set-Status,
+  Set-Fälligkeit, Set-Lebensende und dem Block `set`; Teile stehen nicht einzeln in Ordnerliste und „Fällige“ (sie
+  stehen auf der Set-Seite und in der Suche, dort mit `teil_von`). Filter (`status`) und Sortierung (`status`,
+  `faellig`, Vorgabe der Fälligen) gehen nach den Set-Werten (`sets.gruppen_status_sql` – SQL und Python im Test
+  gegeneinander); Seiten zählen die Set-Zeile einmal. Kopf: `sets` = {anzahl, teile} („n Einträge, davon m Sets mit k
+  Teilen“). Zählungen in Baum, Übersicht, Bericht und Export bleiben je Artikel (Teile zählen mit, „davon n Sets“
+  später, Entwurf K).
+- **Weichen im Dienst** (Entwurf C, S9): Verschieben, Zuordnen, Sammelzuordnung, Produktwechsel, Aussondern und Löschen
+  an einem Teil → 409 „… ist Teil des Sets … – … geht nur mit dem ganzen Set. Ein Teil verlässt das Set nur über „Teil
+  entnehmen“.“ Ein Set verschieben oder zuordnen nimmt alle Teile mit (`sets.set_lage`, eine Anweisung; Journal je Teil
+  mit `{"set": …}`); die Sammelzuordnung zählt die Teile gegen die Grenze von 500. Produktwechsel an einem Set und zu
+  einem Set-Produkt: 409 (A7b). Ein Set löschen geht nur ganz und nur, solange weder Set-Artikel noch Teile Prüfungen,
+  Mangelmeldungen, Durchgangszeilen oder einen Set-Prüflauf haben (Teile mit Journal „mit dem Set gelöscht“).
+- **Lage, Sperre und Zuordnung nur gemeinsam** (S1): `sets.set_lage` ändert Set und Teile in EINER Anweisung;
+  `sets.set_stimmig` prüft am Ende jeder Set-Transaktion (Set anlegen, verschieben, zuordnen, Systemordner nachziehen,
+  Ordner löschen), dass Teile wie ihr Set liegen (folder_id, origin_folder_id, frei oder nicht, assigned_user_id) – sonst
+  500 „Set und Teile liegen nicht mehr gleich … nichts gespeichert“ und Rollback. Beim Start prüft `sets.beim_start` alle
+  Sets (nur Log „Sets nicht stimmig …“). Getestet mit Teil-Kennung kleiner als Set-Kennung (eingesetzter Altartikel)
+  bei Ordner über die Gliederungsgrenze verschieben, Artikel verschieben, Ordner löschen und Konto löschen (Probe P-D).
+- **Artikelansicht**: am Set-Artikel `ist_set` und der Block `set` (Teile mit Status, Fälligkeit, Lebensende, Sperre,
+  offenem Mangel, Rückruf; Kopie der Stückliste mit vorhanden/fehlt; Vollständigkeit; Rückrufe an Teilen als Banner-Daten),
+  am Teil `teil_von` (Set mit Set-Status und Position) – nur, soweit das Konto beide Zeilen sieht (artikel_filter auf
+  Set und Teil, H/S17). „Löschen“ am Teil aus (K2), am Set nach der Regel oben.
+- **Meine PSA** (Entwurf C, A11): Ein zugeordnetes Set ist eine Karte mit Set-Status und Set-Fälligkeit, seine Teile
+  stehen darunter als Karten (`teile`, dieselben Schlüssel, `teil_eines_sets`: true); die Zahl in der Kopfleiste, „Meine
+  PSA“ auf der Übersicht und der Filter „Zugeordnet an“ zählen je Set.
+- **Steckbrief** der globalen Suche: nur der Schlüssel `teil_eines_sets` – ohne Inventarnummer und Produkt des Sets (H).
+- **Bestandsimport** (Entwurf I): Eine Zeile mit Set-Produkt geht in die Nacharbeit („Hersteller-Set – bitte über
+  „Artikel anlegen“ mit seinen Teilen anlegen; der Import legt keine Sets an.“); die Produktwahl der Nacharbeit nimmt kein
+  Set-Produkt (400). `bestand.artikel_schreiben` legt ein Set-Produkt nur über `sets.set_anlegen` an (sonst 409).
+- **DEMO** (`scripts/material_demo.py --demo`): Kategorie „DEMO Verbindungsmittel-Sets“ mit Formular, Set-Produkt
+  „DEMO Verbindungsmittel-Set“ (Stückliste: zwei einzeln geführte DEMO HMS-Karabiner, DEMO-Tasche als Text) und im
+  DEMO-Lager der Set-Artikel DEMO-SET-1 mit den Teilen DEMO-SET-K1 und DEMO-SET-K2 – auch zu einem vorhandenen
+  Demo-Bestand, einmal. Alles Platzhalter, alles DEMO.
+
+### Migration (Schritt 21, Schemaversion 21)
+
+Rein additiv: `mat_product.is_set`; `mat_product_component`; am Artikel `parent_item_id` (Index), `lock_cause` (NULL |
+eigen | set), `set_lock_origin` (an der Set-Zeile: set | teil), `set_pruefen` (am Teil 0/1); `mat_item_set_slot`;
+`mat_set_lauf` (AUTOINCREMENT, höchstens ein offener je Set); `mat_inspection.set_lauf_id` (Index);
+`mat_set_protokoll_zeile`. Trigger nur für Übergänge einer Zeile: Teil nur über NULL und nur nach den Regeln (Set-Artikel
+ohne eigenes Set, Teil-Produkt kein Set und einzeln geführt in der Kopie der Stückliste, beide nicht ausgesondert);
+Produkt fest an Teilen, an Sets mit Teilen und von/zu Set-Produkten; „Hersteller-Set“ umschalten; Stückliste nur an
+Sets und ohne Sets; Kopie der Stückliste unveränderlich (auch gegen REPLACE), weg nur mit dem Set; Set-Prüflauf (offen
+anlegen, Kopf fest, beendet fest, nicht löschbar mit Prüfungen); Prüfungen nur in einen offenen Lauf ihres Sets;
+Teiletabelle wie `mat_inspection_result`. **Keine** Kreuzzeilen-Trigger auf folder_id, origin_folder_id, lock_state,
+assigned_user_id (S1, A8 – der Test sucht danach). `mat_inspection_festgeschrieben` und `mat_inspection_abgeschlossen`
+(Schritt 6) werden mit `set_lauf_id` in der Spaltenliste neu angelegt (erst entfernen, dann anlegen, S4). Kein Umbau,
+keine neuen Werte in vorhandenen CHECK-Listen (S6). `models.SPALTEN_21`/`TABELLEN_21`; die Testhilfe `bis_schritt`
+rüstet sie für Stände unter 21 nach (S26).
+
+Geprüft: frisch; 20 → 21 mit Bestand (Spalten mit Vorgaben, keine Zeile anders, Fremdschlüssel und integrity_check
+sauber, Schema gleich dem frischen, zweiter Lauf und Schritt 21 für sich ändern nichts); an **Kopien** vorhandener
+Probedatenbanken (Stand 19 mit 12 und 533 Artikeln, Stand 17, Stand 13 – Quellen nur lesend über die Backup-Schnittstelle
+kopiert): je → 21, Fremdschlüssel 0, integrity ok, Zahlen und übrige Tabellen gleich, keine neuen Felder gesetzt,
+Set-Objekte im Schema wie frisch, zweiter Start ändert nichts.
+
+**Rückweg auf Code-Stand 20 mit Schema 21** (S27): Der alte Code migriert nicht zurück (Stand 21 ≥ 20) und kennt die
+Spalten nicht. Solange es keine Sets gibt, läuft er unverändert. Mit Sets: Er zeigt Teile als eigene Artikel, verschiebt,
+ordnet zu und sperrt sie einzeln (die Gleichheit von Set und Teilen geht verloren – die Startprüfung meldet es, sobald
+wieder Code 21 läuft); „Set löschen“ endet im Fremdschlüsselfehler (409 „anderswo geändert“), Produktwechsel an Teilen
+weisen die Trigger ab. Deshalb: zurück nur, solange keine Sets angelegt sind, oder die Sets vorher löschen.
+
+### Abweichungen vom Entwurf und Entscheidungen des Baus (mit Begründung)
+
+1. **Ursprung der Set-Sperre als zwei Spalten**: `set_lock_origin` an der Set-Zeile (set | teil) und `set_pruefen` am
+   Teil. Der Prüfumfang der Freigabe („Set-Artikel + jedes Teil, das seit Beginn der Sperre neu eingesetzt wurde oder eine
+   eigene Sperre hatte; vom Set-Artikel aus: alle“) ist eine Angabe je Teil – ein Teil hat nach seiner Freiprüfung wieder
+   `lock_cause` „set“ und muss trotzdem in den Lauf. Gespeichert statt aus dem Journal erraten (wie im Entwurf erwogen).
+2. **Sperren an Set-Artikel und Teil bis K2: 409.** Prüfer-Sperre, Ergebnis „instandsetzen“/„aussondern“, Mangelmeldung
+   und Aussonderung an einem Set-Artikel oder Teil antworten bis zur Sperr-Kaskade 409 („Sperren und Aussondern im Set
+   kommen mit der Set-Sperre …“) – die vorhandenen Einzelwege sperrten nur eine Zeile und rissen das Set auseinander.
+   Eine Prüfung mit „einsatzbereit“ geht (sie ändert nur die Zeile selbst). Das gilt nur zwischen K1 und K2; ausgeliefert
+   wird L2 erst mit K2.
+3. **Teil einzeln löschen erst mit K2** (Entwurf C erlaubt es ohne Prüfung, Mangel und Durchgangszeile – dann sperrt es das
+   Set „unvollständig“, also Kaskade). Ein ungeprüftes Set ganz löschen geht schon.
+4. **Set anlegen über `POST /artikel`** (kein eigener Endpunkt): Recht, `FELDER_IM_INHALT` und das Protokoll fremder
+   Dubletten bleiben, wie sie sind. Die neuen Kennungen im Inhalt (`teile[].bestandteil_id`, `bestandteile[].produkt_id`)
+   sind Katalogkennungen (global) – keine Bestandsangabe, daher keine neue Zeile in `FELDER_IM_INHALT`; eine fremde
+   Position antwortet 400.
+5. **Felder eines Teils beim Anlegen**: genau die aus Entwurf C (Seriennummer, Herstell-, Kauf-, Erstgebrauchsdatum,
+   Länge). Intervall, nächste Prüfung und Lebensende bekommt ein Teil wie jeder neue Artikel aus Produkt und Ordner;
+   Bemerkung keine.
+6. **Zwei Positionen mit demselben Produkt** (Kong: zwei Verbindungselemente an verschiedenen Stellen): Teile kennen ihre
+   Position nicht – sie werden den Positionen in deren Reihenfolge zugeteilt (Anzeige „bestandteil“, vorhanden/fehlt).
+7. **„Hersteller-Set“ ausschalten nimmt die Stückliste mit** (Journal) statt 409 – es gibt dann ohnehin keine Artikel.
+8. **Katalogdatei**: `set`/`bestandteile` auch in Format 1 gelesen (wie `artikel_laenge`). DEMO-Bestandteil in einem
+   echten Set: Der Export lässt `bestandteile` dieses Sets ganz weg (nicht nur die Position) – die Produktion behält
+   ihre Stückliste, statt eine verkürzte zu übernehmen.
+9. **Meine PSA**: Die Set-Karte trägt ihre Teile als Karten (`teile`) – Entwurf C „Set-Karte mit Teilen“; der Schlüssel
+   `teil_eines_sets` wie in Entwurf H. Der Filter „Zugeordnet an“ zählt je Set (die Listen zeigen nur die Set-Zeile).
+10. **Fehler „Set nicht stimmig“ als 500**: Es ist ein Fehler im Dienst, kein Eingabefehler; Log mit dem Set.
+11. **Vorlage**: eine eigene Datei `docs/material-katalog-set-vorlage.json` (DEMO-Kennzeichen, Platzhalter) statt eines
+    Beispielprodukts in `docs/material-katalog-vorlage.json` – die trägt echte Normen und kann importiert werden.
+
+### Schnittstelle (Stand K1 – für die Oberfläche)
+
+Alle Antworten wie bisher (`error` mit Klartext, 404 für Fremdes wie für Unbekanntes). Neu bzw. geändert:
+
+| Methode und Pfad | Recht | Anfrage → Antwort |
+| --- | --- | --- |
+| `POST /api/material/produkte`, `PUT …/<pid>` | Katalog | neu `is_set` (ja/nein). PUT mit `is_set`: umschalten (409 mit Artikeln oder wenn das Produkt Bestandteil ist; aus nimmt die Stückliste mit) |
+| `PUT /api/material/produkte/<pid>/bestandteile` | Katalog | `{"bestandteile": [{"produkt_id": Kennung \| null, "bezeichnung": Text, "anzahl": 1–20, "einzeln": ja/nein, "austausch": "ja" \| "nein" \| "nicht_belegt"}]}` – Reihenfolge = Position, ersetzt als Ganzes, leer entfernt alle → `{"produkt": (voll), "geaendert": bool}`. 409 kein Set; 400 Regeln/Grenzen (Text „Position n: …“); 404 unbekanntes Produkt. `bezeichnung` darf bei einzeln geführten fehlen (dann der Produktname) |
+| `POST /api/material/produkte/<pid>/variante` | Katalog | neu `stueckliste` (ja: Stückliste übernehmen, die Variante wird Set; 400, wenn die Quelle keins ist) |
+| `DELETE /api/material/produkte/<pid>` | Katalog | 409, wenn Bestandteil einer Stückliste oder in der Kopie eines angelegten Sets |
+| `GET /api/material/produkte`, `…/<pid>` | lesen | je Produkt `is_set`; voll dazu `bestandteile` (Liste wie unten), `bestandteil_von` [{id, name}], `set_umschaltbar`, `set_umschalt_grund` (Text oder null), `stueckliste_grenzen` {positionen 30, anzahl 20, teile 50, bezeichnung 120}; `loeschbar` false auch für Bestandteile |
+| Position der Stückliste | – | `{id, position, bezeichnung, anzahl, einzeln, austausch, austausch_text, produkt: {id, name, manufacturer, model, description, article_no, material_kind, lifetime_years, laenge_moeglich, demo} \| null}` |
+| `GET /api/material/artikel/vorschlag?product_id=` | wie bisher | neu `set`: null oder `{bestandteile: [Position …], teil_felder: ["serial_no", "manufactured_on", "purchased_on", "first_use_on", "length_m"], hilfe_einzeln}` |
+| `POST /api/material/artikel` | Materialwart | mit Set-Produkt: dazu `teile: [{"bestandteil_id": Position.id, "serial_no", "manufactured_on", "purchased_on", "first_use_on", "length_m"}]` – je einzeln geführter Position genau `anzahl`. 400: ohne `teile`, falsche Zahl, fremde Position, doppelte Seriennummer, Regel eines Teils („Teil „…“: …“); 409 ohne Stückliste, sichtbare Dublette; fremde Dublette wie bisher. `teile` an einem anderen Produkt: 400. Antwort neu `hinweise: [Text]` (STR-Nummer anbringen; sonst leer) |
+| `GET /api/material/artikel/<iid>` (und jede Antwort mit `artikel`) | lesen | neu `ist_set`, `set` (null oder Set-Block, unten), `teil_von` (null oder `{id, inventory_no, produkt, status, status_text, bestandteil}`); `darf_loeschen` an Teilen false, an Sets nach der Löschregel |
+| Set-Block `set` | – | `status`, `status_text`, `next_due_on`, `faellig_durch` {id, inventory_no, set_artikel}, `retire_by`, `lebensende_durch`, `eigen` {status, status_text, next_due_on, retire_by}, `teile` [{id, inventory_no, serial_no, serial_generated, produkt {id, name, manufacturer, model, description, article_no, material_kind, vorschau}, bestandteil, status, status_text, next_due_on, retire_by, last_inspected_on, lock_state, lock_cause, lock_reason, length_m, laenge_text, mangel, rueckruf}], `teile_anzahl`, `bestandteile` [Position der Kopie: position, bezeichnung, anzahl, einzeln, austausch, austausch_text, produkt; einzeln dazu `vorhanden`, `fehlt`], `vollstaendig`, `fehlend` [{bezeichnung, fehlt}], `rueckrufe_teile` [{teil {id, inventory_no}, titel}], `ursprung` (set_lock_origin), `sperrgruende` (K2; bis dahin []) |
+| `GET /api/material/ordner/<fid>`, `GET /api/material/faellig`, `GET /api/material/suche` | wie bisher | Listenzeilen neu `ist_set`, `set` (null oder `{teile, eigen, faellig_durch, lebensende_durch, mangel_teile [Inventarnummern], rueckruf_teile [{inventory_no, titel}], vollstaendig}`), `teil_von` (null oder `{id, inventory_no, produkt}`); an Set-Zeilen `status`, `status_text`, `next_due_on`, `retire_by` = Set-Werte. Ordner und Fällige ohne Teile; `ordner.sets` bzw. `sets` = {anzahl, teile}. Filter `status` und Sortierung `status`/`faellig` nach Set-Werten |
+| `POST /api/material/artikel/verschieben`, `PUT …/<iid>/zuordnung`, `POST /api/material/artikel/zuordnen` | wie bisher | Teil → 409; Set nimmt die Teile mit; `geaendert` der Sammelzuordnung zählt die geänderten Zeilen (Set mit Teilen) |
+| `PUT /api/material/artikel/<iid>` | Materialwart | Produktwechsel an Teil, Set oder zu einem Set-Produkt: 409 |
+| `DELETE /api/material/artikel/<iid>` | Materialwart | Teil 409; Set ganz (Regel oben), sonst 409 |
+| `POST …/sperren`, `…/aussondern`, `POST /api/material/artikel/<iid>/mangel`, `POST /api/material/pruefungen/<pid>/festschreiben` mit sperrendem Ergebnis | wie bisher | an Set-Artikel und Teil bis K2: 409 |
+| `GET /api/material/meine-psa` | PSA-Konto | Karten neu `teile` (Set: Teil-Karten mit denselben Schlüsseln; sonst []) und `teil_eines_sets`; Set-Karte mit Set-Status und Set-Fälligkeit; `gesamt` zählt je Set |
+| `POST /api/material/globalsuche`, `…/qr` | Modulzugang | Steckbrief neu `teil_eines_sets` (17 Schlüssel) |
+| `POST /api/material/katalog/import` | Katalog | Bericht neu `stuecklisten` {geaendert, unveraendert}; `GET …/katalog/export/vorschau` neu `export.set_verstoesse` |
+
+Journal neu: Aktion „stueckliste“ (Produkt), „set_angelegt“ (Artikel), Felder `is_set`, `bestandteile`, `teile`, `set`,
+`set_inventar`, `stueckliste` – Beschriftungen in `services/beschriftung.py` und gleichlautend in `material.js` (FELD,
+AKTION – der statische Abgleich in `test_material_l5` verlangt beide gleich; die einzige Änderung an `material.js` in K1).
+
+### Nahtstellen für K2
+
+- `sets.vor_einzelsperre(item)` – heute 409; K2 hängt hier die Kaskade ein (aufgerufen aus `pruefung._sperren` und
+  `pruefung._aussondern`, damit auch aus Mangelmeldung, Prüfer-Sperre und Ergebnis „instandsetzen“/„aussondern“): eigene
+  Sperre am Artikel (`lock_cause` „eigen“), alle anderen per `sets.set_lage(…, je_zeile={"lock_cause": …, "lock_reason":
+  …, "lock_state": …, "set_pruefen": …, "set_lock_origin": …})` mitgesperrt, `set_stimmig`.
+- `sets.set_lage` (EINE Anweisung über Set und Teile, `je_zeile` für Sperrursache, Grund, Zustand, Prüfpflicht und
+  Ursprung) und `sets.set_stimmig`/`sets_stimmig`/`betroffene_sets` am Ende jeder Set-Transaktion.
+- Freigabe: `mat_set_lauf` (offen/abgeschlossen/abgebrochen, `round_id`, `set_inspection_id`), `mat_inspection.set_lauf_id`,
+  `mat_set_protokoll_zeile` (Kopie beim Festschreiben, Trigger stehen), Prüfumfang aus `set_lock_origin` + `set_pruefen`.
+- `sets.werte`, `sets.vollstaendigkeit`, `sets.slots`, `sets._zuteilen` (Positionen der Teile) für Freigabe-Bedingungen
+  und Set-Protokoll; `set_json["sperrgruende"]` ist für die abgeleiteten Sperrgründe vorgesehen.
+- `sets.teil_weiche` (Aussondern/Löschen am Teil) – K2 ersetzt die Wege durch „Teil entnehmen“ (bedingtes UPDATE
+  `… WHERE id = ? AND parent_item_id = ?`, Trigger erlauben nur Set → NULL) und „Teil tauschen“ (entnehmen + neues Teil:
+  `bestand.artikel_schreiben(plan, parent_id=…)`; der Trigger verlangt Produkt laut Kopie der Stückliste).
+- `sets.darf_loeschen`/`set_loeschen` (Set ganz) – K2 ergänzt „Teil löschen“ (sperrt „unvollständig“).
+- Lebenslauf, Protokoll-PDF, Sammelprotokoll, Mails und Jahresbericht sind in K1 unverändert.
+
+### Tests
+
+`tests/test_material_sets.py` (neu, 12 Tests): Migration 20 → 21, Trigger aus Schritt 21, Stückliste im Katalog,
+Katalogdatei Format 2 hin und zurück (mit Vorlage), Set anlegen, Rangfolge SET_RANG gegen `status()`, Listen und
+Set-Status (SQL gegen Python), Routentabelle Set/Teil/frei, set_stimmig mit Teil vor Set (Ordner verschieben, Artikel
+verschieben, Ordner löschen, Konto löschen, Rollback, Startlog), Trennung je Gliederung, Meine PSA und Bestandsimport,
+DEMO-Set. Angepasst: `test_material_trennung.bis_schritt` (Nachrüsten für Stände unter 21), die Schlüsselmengen von
+PSA-Karte und Steckbrief (`test_material_meine_psa`, `test_material_globalsuche`, `test_material_trennung`), feste
+Endversionen und Triggerlisten in den Migrationstests (`test_material_laenge` – dort vergleicht der Rückbau auf Stand 19
+die Spalten von `mat_item` statt ihres Textes, weil `length_m` danach hinter den Spalten aus Schritt 21 steht –,
+`test_material_mailprotokoll`, `test_material_antrag`), die Zahl der DEMO-Produkte in `test_material_beschreibung`.
+
+### Bitte bestätigen
+
+Aus Entwurf L (vom Bau gesetzt):
+1. Entnehmen ohne Ersatz, Teil löschen und Teil tauschen sperren das Set bis zum Set-Lauf (K2).
+2. Feld „Austausch laut Hersteller“ (ja/nein/nicht belegt) je Bestandteil; „nein“ verhindert den Tausch (K2).
+3. Teile ohne Herstellernummer bekommen eine STR-Nummer und ein eigenes Etikett (Hinweis beim Anlegen).
+4. Eine Set-Sperre zählt im Jahresbericht einmal (K2).
+5. „Hersteller-Set“ nur umschaltbar, solange das Produkt keine Artikel hat.
+6. Nicht einzeln geführte Bestandteile erscheinen nur als Zeile „vorhanden/fehlt“ in der Set-Prüfung (K2).
+7. Ordnerlisten und „Fällige“ zeigen nur die Set-Zeile; Teile auf der Set-Seite und in der Suche.
+8. Ein nur mitgesperrtes Teil darf mit dem Set ausgesondert werden (K2).
+
+Dazu aus K1:
+9. Zwischen K1 und K2 lehnt der Dienst Sperren, Mangelmeldung und Aussonderung an Sets und Teilen ab (409) – nur bis K2.
+10. „Hersteller-Set“ ausschalten entfernt die Stückliste (mit Journal).
+11. Der Filter „Zugeordnet an“ und „Meine PSA“ zählen ein Set einmal.
+
 ## Artikelnummern eindeutig je Hersteller (22.10.2026)
 
 Entscheidung des Nutzers vom 22.10.2026, die die Regel vom 18.10.2026 („Artikelnummern eindeutig“, Lieferung 5) einengt:
@@ -4853,6 +5069,8 @@ ist ein Verweis auf eine Datei (`bild`, `datei`) ein Fehler.
 | `titel` (Formular) | Leer heißt: kein Titel vorgegeben – verglichen werden dann nur die Prüfpunkte; eine neue Version erbt den Titel der letzten hier |
 | `aktivieren` (Formular) | Der Export schreibt `true` für das aktive Formular eines Ziels, `false` für die neueste Version, wenn keins aktiv ist |
 | `quelle`, `erstellt` | woher und wann (nur zur Anzeige) |
+| `set` (Produkt) | `true`/`false` (auch ja/nein, 1/0): das Häkchen „Hersteller-Set“ (Schritt 21). Umschalten nur ohne Artikel des Produkts hier, ein Bestandteil einer Stückliste wird kein Set – sonst ein Fehler dieses Produkts; fehlt der Schlüssel, bleibt es, wie es ist (neu: kein Set). Der Export schreibt es nur an Sets. Auch in Format 1 gelesen. Optional |
+| `bestandteile` (Produkt) | Die Stückliste eines Sets, ersetzt als Ganzes (Journal am Produkt; fehlt der Schlüssel, bleibt sie): je Position `bezeichnung` (eine Zeile, höchstens 120 Zeichen; bei einzeln geführten darf sie fehlen – dann der Produktname), `anzahl` (1–20, Vorgabe 1), `einzeln` (`true`: eigene Kennzeichnung und eigenes Katalogprodukt, jedes Stück wird beim Anlegen ein Teil-Artikel), `austausch` (`ja`, `nein`, `nicht_belegt` – Vorgabe; „laut Hersteller“, mit Beleg in der Recherche) und – nur bei `einzeln` – `produkt` als Verweis `{uid, hersteller, modell, artikelnummer}` (aufgelöst wie ein spezifisches Formular: uid, sonst Hersteller + Modell + Artikelnummer; in einem zweiten Durchgang nach allen Produkten der Datei, der Bestandteil darf hinter dem Set stehen). Höchstens 30 Positionen und 50 einzeln geführte Stück; kein Set als Bestandteil; kein DEMO-Bestandteil in einem echten Set (der Export lässt `bestandteile` eines solchen Sets weg und nennt es im Bericht). Eine Liste aus Texten (Recherche-Manifeste) ist ein Hinweis und wird übergangen. Vorlage: `docs/material-katalog-set-vorlage.json`. Auch in Format 1 gelesen. Optional |
 
 Was hier mehr ist als in der Datei, bleibt: Der Import löscht, deaktiviert und zieht nie etwas zurück. Ein Fehler
 irgendwo: nichts gespeichert, auch keine Datei abgelegt. Der Probelauf (`--trocken`, in der Oberfläche immer zuerst)
@@ -4876,7 +5094,7 @@ benannte Einträge werden abgewiesen. Hochladen und Export: bis 2 GB. Eine Datei
 Formulars nicht mit, der Import setzt nie eine – eine neue Formularversion aus dem Import erbt aber die Verknüpfung
 der letzten Version. Verknüpft wird in der Instanz, in der die Anleitungen im Wiki stehen.
 
-## Schnittstelle (Phase 1 mit den Nachbesserungen, Phase 2 · Lieferung 1 bis 3, Phase 3 · Lieferung 1 mit den Nachbesserungen vom 21.10.2026, Phase 4 · Lieferung 1)
+## Schnittstelle (Phase 1 mit den Nachbesserungen, Phase 2 · Lieferung 1 bis 3, Phase 3 · Lieferung 1 mit den Nachbesserungen vom 21.10.2026, Phase 4 · Lieferung 1 und 2)
 
 Seit Phase 2 gilt jedes Recht an einem Ordner (Freigaben je Ordner, vererbt nach unten): „lesen“ heißt Leserecht am
 Gegenstand (Artikel und Prüfungen: an der Heimat des Artikels), „Grundrecht“ lesen oder verwalten, „Materialwart“
@@ -4894,6 +5112,8 @@ oder Plattform-Verwaltung).
 | `GET/POST /api/material/produkte`, `GET/PUT/DELETE …/<id>` | lesen / Katalog | Produkte mit Suche (Hersteller, Modell, Bemerkung, Artikelnummer, Norm) und Seiten (`q`, `kategorie`, `seite`, `pro_seite`); `description` (in der Oberfläche „Bemerkung“) beim Speichern höchstens 80 Zeichen, eine Zeile (Nachbesserung vom 18.10.2026) |
 | `GET /api/material/produkte/artikelnummer?nr=&ausser=` | lesen | Wem gehört diese Artikelnummer schon? (`produkt` oder `null`) |
 | `POST /api/material/produkte/<id>/variante` (Felder wie `POST /produkte`, `dokumente`: Kennungen) | Katalog | Kopie als neue Variante; Bild nie, Dokumente nach Wahl |
+| `PUT /api/material/produkte/<id>/bestandteile` (`bestandteile`: Liste der Positionen) | Katalog | Stückliste eines Hersteller-Sets als Ganzes ersetzen → `produkt`, `geaendert`; `is_set` an `POST/PUT /produkte`, `stueckliste` an der Variante, Lesefelder `is_set`, `bestandteile`, `bestandteil_von`, `set_umschaltbar` – Einzelheiten im Abschnitt „Phase 4 · Lieferung 2“ (Schritt 21) |
+| `POST /api/material/artikel` mit Set-Produkt (`teile`) | Materialwart | Set mit seinen Teilen anlegen → `artikel`, `hinweise`; Artikel tragen `ist_set`, `set`, `teil_von`, Listenzeilen dazu `set` und Set-Werte, Listen `sets` – Einzelheiten im Abschnitt „Phase 4 · Lieferung 2“ (Schritt 21) |
 | `POST/DELETE /api/material/produkte/<id>/bild` | Katalog | Produktbild |
 | `POST /api/material/produkte/<id>/dokumente`, `POST /api/material/dokumente/<id>/version`, `…/zurueckziehen` | Katalog | Herstellerdokumente |
 | `GET/POST /api/material/formulare`, `GET/PUT/DELETE …/<id>`, `POST …/<id>/aktivieren`, `…/deaktivieren` | lesen / Katalog | Prüfformulare |
