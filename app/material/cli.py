@@ -9,6 +9,8 @@ Im Container:
         flask --app "app:create_app()" material remind --trocken
     docker compose exec -e VIDEOPFLEGE=0 stroemis \
         flask --app "app:create_app()" material dok-zusammenfuehren --probe
+    docker compose exec -e VIDEOPFLEGE=0 stroemis \
+        flask --app "app:create_app()" material dev-zuruecksetzen --trocken      (nur dev, README)
 (Die Datei muss im Datenordner liegen, nur der ist im Container sichtbar. VIDEOPFLEGE=0 hält den
 Hintergrundlauf für Videos aus diesem kurzen Prozess heraus.)"""
 import os
@@ -20,7 +22,8 @@ import click
 from flask import current_app, g
 from flask.cli import with_appcontext
 
-from .services import ZONE, Abgelehnt, datum, dokablage, erinnerung, heute, importer, katalog, katalog_export
+from .services import (ZONE, Abgelehnt, datum, dokablage, erinnerung, heute, importer, katalog, katalog_export,
+                       zuruecksetzen)
 
 
 @click.command("import-catalog")
@@ -242,8 +245,44 @@ def dok_zusammenfuehren(probe):
         sys.exit(1)
 
 
+@click.command("dev-zuruecksetzen")
+@click.option("--trocken", is_flag=True, help="Nur zeigen, was gesichert, verschoben und gelöscht würde – nichts ändern.")
+@click.option(zuruecksetzen.SCHALTER, "ja", is_flag=True, help="Wirklich zurücksetzen (nur auf dev).")
+@with_appcontext
+def dev_zuruecksetzen(trocken, ja):
+    """Das Modul Material auf dev leeren, um von null an zu testen: erst die ganze Datenbank sichern und media/material
+    und pdf/ in die Sicherung verschieben (<DATA_DIR>/sicherung-material-<Zeitstempel>), dann alle mat_-Tabellen samt
+    Triggern und Volltextindizes entfernen und das Schema frisch anlegen. Konten, Wiki, Spots, Prüfungen und
+    Einstellungen bleiben. Nur auf dev (STROEMIS_NAME endet auf -dev, BASE_URL nicht die Produktion) und nur mit
+    --ja-alles-loeschen; sonst Exit 2. Exit 1, wenn die Sicherung oder ein späterer Schritt scheiterte – dann ist
+    nichts geändert (die Meldung sagt es). Danach: docker compose restart. Siehe services/zuruecksetzen.py."""
+    from .. import einstellungen
+    einstellungen.anwenden()
+    grund = zuruecksetzen.sperrgrund()
+    if grund:
+        click.echo(f"Abgelehnt: {grund} Dieser Befehl wirkt nur auf dev – nichts geändert.", err=True)
+        sys.exit(2)
+    if trocken:
+        conn = sqlite3.connect(current_app.config["DB_PATH"], timeout=zuruecksetzen.WARTEN)
+        try:
+            click.echo(zuruecksetzen.trocken_text(zuruecksetzen.bestand(conn), zuruecksetzen.sicherungsziel()))
+        finally:
+            conn.close()
+        return
+    if not ja:
+        click.echo(f"Abgelehnt: Ohne {zuruecksetzen.SCHALTER} setzt der Befehl nichts zurück – nichts geändert. "
+                   "Erst ansehen, was geschähe: dev-zuruecksetzen --trocken", err=True)
+        sys.exit(2)
+    try:
+        ergebnis = zuruecksetzen.zuruecksetzen()
+    except zuruecksetzen.Gescheitert as exc:
+        click.echo(f"FEHLER  {exc}", err=True)
+        sys.exit(1)
+    click.echo(zuruecksetzen.bericht_text(ergebnis))
+
+
 def anmelden(blueprint):
     """Die Befehle an der Kommandozeilengruppe des Blueprints eintragen („flask material …“)."""
-    for befehl in (import_catalog, export_catalog, remind, dok_zusammenfuehren):
+    for befehl in (import_catalog, export_catalog, remind, dok_zusammenfuehren, dev_zuruecksetzen):
         if befehl.name not in blueprint.cli.commands:
             blueprint.cli.add_command(befehl)

@@ -12,7 +12,7 @@ Aufbau:
   routes_import.py, routes_wiki.py
                  Routen der Phase 2 · Lieferung 3: Bestandsimport und Nacharbeit, Prüfanleitung aus dem Wiki
   routes_psa.py  Routen der Phase 3 · Lieferung 1: „Meine PSA“ (auch ohne Modulstufe) und Mangelmeldung
-  cli.py         flask material import-catalog, export-catalog, remind, dok-zusammenfuehren
+  cli.py         flask material import-catalog, export-catalog, remind, dok-zusammenfuehren, dev-zuruecksetzen
   tageslauf.py   Thread je Arbeitsprozess: einmal am Tag ab 6 Uhr Pflege und Erinnerungsmails (seit Phase 2 · L2)
   services/      Fachregeln: rechte, katalog, bestand, status, interval, search, nummern, qr, journal,
                  importer, katalog_export, pruefung, durchgang, anhang, meldung, protokoll (Festschreiben,
@@ -25,7 +25,7 @@ Aufbau:
                  (Herstellerdokumente einmal je Inhalt – Zusammenführen des Altbestands beim Start und von Hand); seit
                  Phase 4 · L2 stueckliste (Stückliste der Hersteller-Sets im Katalog), sets (Set-Artikel mit Teilen,
                  Sperr-Kaskade), setlauf (Set prüfen, Freigabe) und setaustausch (Teile tauschen, entnehmen;
-                 Set aussondern)
+                 Set aussondern); seit 23.10.2026 zuruecksetzen (das Modul auf dev sichern und frisch anlegen)
   templates/, static/   Seite und Oberfläche (material.js, material.css)
 """
 from .. import db
@@ -74,6 +74,13 @@ def _dokumente_zusammenfuehren(conn):
     beim_start(conn)
 
 
+# Was beim Start nach dem Kernschema läuft, in dieser Reihenfolge (schema_anmelden) – auch nach „flask material
+# dev-zuruecksetzen“ (services/zuruecksetzen.py), damit das frisch angelegte Modul so dasteht wie nach einem Start.
+START_SCHRITTE = (models.migrieren, _dokumente_zusammenfuehren, _suchprotokoll_aufraeumen, _erinnerungslog_aufraeumen,
+                  _mailfehler_aufraeumen, _nacharbeit_aufraeumen, _verwaiste_protokolle, _bilder_reparieren,
+                  _sets_pruefen)
+
+
 def schema_anmelden():
     """Die Migration dieses Moduls beim Start mitlaufen lassen (db.init_db ruft sie auf) – gleich danach den Altbestand
     der Herstellerdokumente einmal je Inhalt zusammenführen (Schritt 18, Kennzeichen in mat_meta), dann das Protokoll der
@@ -81,9 +88,7 @@ def schema_anmelden():
     Frist kürzen (auch wenn der Tageslauf steht), die Protokolldateien mit der Datenbank abgleichen und durchsichtige
     Bilder einmalig reparieren. Zuletzt die Startprüfung „Sets stimmig“ (Schritt 21, nur Log) mit
     der Bereinigung freier Artikel mit Sperrursache davor (Nachbesserung P4-L2b)."""
-    for schritt in (models.migrieren, _dokumente_zusammenfuehren, _suchprotokoll_aufraeumen, _erinnerungslog_aufraeumen,
-                    _mailfehler_aufraeumen, _nacharbeit_aufraeumen, _verwaiste_protokolle, _bilder_reparieren,
-                    _sets_pruefen):
+    for schritt in START_SCHRITTE:
         if schritt not in db.SCHEMA_MODULE:
             db.SCHEMA_MODULE.append(schritt)
 

@@ -4152,6 +4152,47 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Modul Material auf dev zurücksetzen (Wunsch des Nutzers, 23.10.2026)
+
+Wunsch: „Bereinige den Katalog und die Testdaten auf dev, ich möchte vor Lieferung 3 alles ausgiebig von null an
+testen.“ Entschieden: nur das Modul Material, vorher alles sichern (umkehrbar); der Nutzer ruft den Befehl auf dem VPS
+selbst auf (README, „Modul Material auf dev zurücksetzen (nur dev)“).
+
+- **`flask material dev-zuruecksetzen [--trocken | --ja-alles-loeschen]`** (app/material/cli.py,
+  services/zuruecksetzen.py). Wirkt nur auf dev: `STROEMIS_NAME` endet auf „-dev“ (`erinnerung.dev_umgebung`, aus
+  `gesperrt()` herausgelöst – dieselbe Regel wie die harte Sperre der Erinnerungsmails), `BASE_URL` zeigt weder in der
+  Umgebung noch unter Verwaltung → Einstellungen auf die Produktion (wie `scripts/material_beispielbestand.py`), und
+  der Schalter `--ja-alles-loeschen` ist gesetzt. Sonst Klartext und Rückgabewert 2, nichts geändert; `--trocken` (auch
+  nur auf dev) zeigt Tabellen mit Zeilen, Volltextindizes, Trigger, Indizes, Medienordner mit Dateien und MB, den
+  Sicherungsordner mit Datenbankgröße und freiem Platz, was bleibt, und die DEMO-Konten.
+- **Sicherung zuerst**, unter einer exklusiven Transaktion (busy_timeout 30 s): die ganze Datenbank über die Backup-API
+  nach `<DATA_DIR>/sicherung-material-<JJJJ-MM-TT_hhmmss>/stroemis.db` (gewöhnliches Journal, quick_check, dieselben
+  Zeilen je `mat_`-Tabelle), dann `media/material` und `pdf/` dorthin **verschoben** (umbenannt, nie kopiert). Scheitert
+  die Sicherung, zu wenig Platz oder das Verschieben (etwa anderes Dateisystem): nichts gelöscht, Medien zurück, die
+  eigene Teilsicherung wieder weg; Rückgabewert 1. Dazu `LIESMICH.txt` mit dem Rückweg.
+- **Leeren und frisch anlegen** in derselben Transaktion: alle Tabellen, Trigger, Views und Volltextindizes des Moduls
+  per DROP (keine Zeile wird einzeln gelöscht – die Trigger der unveränderlichen Nachweise werden nicht umgangen, das
+  Modul wird als Ganzes neu angelegt). Das neue Schema stammt aus `models.migrieren` auf einer leeren Vorlage im
+  Speicher, die nur die Form der übrigen Tabellen kennt – so entsteht es wie bei einer neuen Installation
+  (Schemaversion 21), ohne dass Schritt 8 bis 10 die echten Konten anfassen (Schritt 10 rechnete die Modulstufen sonst
+  aus Freigaben neu, die es danach nicht mehr gibt: eine Material-Verwaltung ohne Plattform-Verwaltung fiele auf
+  „Mitglied“). Danach die Startschritte des Moduls (`START_SCHRITTE`, aus `schema_anmelden` herausgelöst) wie bei einem
+  Start. Ausgabe: Sicherungsordner, geleerte Tabellen und Zeilen, verschobene Medien, DEMO-Konten, „docker compose
+  restart“.
+- **Bleibt**: Konten, Wiki, Spots, Prüfungen-Modul, Tabelle `einstellungen` (also auch „Bald fällig“ und der Schalter
+  Erinnerungsmails). Die Spalten des Moduls an `users` (`recht_material`, `mat_pruefer`, `mat_katalog`,
+  `urkundennummer`, `signature_png`, `mat_ref`, `mat_psa_mails`) bleiben unverändert: Keine verweist auf eine Zeile des
+  Moduls (`mat_ref` ist der Verweis, auf den Journal und Erinnerungslog zeigen), es zeigt also nichts ins Leere. Die
+  DEMO-Konten (`@example.invalid`) löscht der Befehl nicht, er nennt sie („über die Nutzerverwaltung löschen, falls nicht
+  mehr gebraucht“) – sie haben danach keine Freigaben mehr, und `material_demo.py --konten` legt nur fehlende Konten an.
+- **Tests**: tests/test_material_dev_zuruecksetzen.py – Sperren (ohne, mit falscher und mit Produktions-Kennung, BASE_URL
+  der Produktion in Umgebung und Einstellungen, ohne Schalter; `--trocken` auch zusammen mit dem Schalter) ändern nichts;
+  voller Lauf auf Katalog mit Bild und Dokument, Gliederung, Artikeln, Durchgang, Bestandsimport und dem DEMO-Bestand
+  (festgeschriebene Prüfungen mit Protokollen, Set, DEMO-Konten): alle `mat_`-Tabellen leer, Schema und `mat_meta` gleich
+  einer neuen Installation, Sicherung mit allen alten Zeilen und allen Mediendateien, außerhalb des Moduls jede Zeile,
+  jedes Schema-Objekt und jede Datei byteidentisch; zweiter Lauf auf leerem Modul, App startet, `material_demo.py
+  --demo --konten` läuft wieder; Sicherung, Verschieben und Anlegen scheitern jeweils ohne Änderung.
+
 ## Phase 4 · Lieferung 2b – Sets, Teil 2 (23.10.2026, Stand: geliefert, wartet auf Freigabe)
 
 Grundlage: `planung/material-phase4/entwurf_l2b.md` (Fassung 2 nach den Kritiken „Sicherheit“ T1–T16 und „Ablauf“
@@ -6339,6 +6380,7 @@ oder Plattform-Verwaltung).
 | `PUT /api/material/ordner/<id>` mit `reminders_off` (ja/nein) | Materialwart am Ordner | „Erinnerungsmails aus“ für Ordner und Unterordner; fehlt das Feld, bleibt der Wert; anderes als ja/nein → 400; mit Journal (Phase 2 · 2) |
 | `flask --app "app:create_app()" material remind [--trocken [--demo]] [--stichtag JJJJ-MM-TT] [--erneut]` | Kommandozeile im Container | Erinnerungslauf: `--trocken` zeigt die Mails des nächsten Laufs mit Adressen und schreibt nichts (auch bei „aus“ oder gesperrt), `--stichtag` und `--demo` (DEMO-Bestand einbeziehen, nur Ansicht) nur mit `--trocken`; ohne `--trocken` ein echter Lauf für heute (nie DEMO), `--erneut` noch einmal am selben Tag (nur, was nicht im Log steht). Exit 0, 1 (Mail gescheitert, Fehler), 2 (aus, gesperrt, kein Mailserver, `--stichtag` oder `--demo` ohne `--trocken`, unlesbares Datum) (Phase 2 · 2) |
 | `flask --app "app:create_app()" material dok-zusammenfuehren [--probe]` | Kommandozeile im Container | Herstellerdokumente einmal je Inhalt (Schritt 18): Altbestand unter `media/material/dok` auf Inhaltsnamen bringen, Dubletten zusammenführen, Prüfsummen aus den Dateien nachtragen – läuft beim ersten Start nach dem Update von selbst; hier mit Bericht (Dateien und MB vorher/nachher, frei, fehlende Dateien, Dateien ohne Zeile und davon entfernte Dubletten, entfernte Zwischendateien älter als ein Tag), `--probe` rechnet nur. Exit 0, 1 (Dateien fehlen), 2 (Ordner nicht erreichbar) (22.10.2026) |
+| `flask --app "app:create_app()" material dev-zuruecksetzen [--trocken] [--ja-alles-loeschen]` | Kommandozeile im Container, nur dev | Modul Material leeren: erst die ganze Datenbank nach `sicherung-material-<Zeitstempel>/` sichern und `media/material`, `pdf/` dorthin verschieben, dann alle `mat_`-Objekte entfernen und das Schema frisch anlegen (Version 21); Konten, Wiki, Spots, Prüfungen, Einstellungen bleiben, DEMO-Konten werden nur genannt. `--trocken` zeigt nur. Nur mit `STROEMIS_NAME` auf `-dev`, `BASE_URL` nicht die Produktion und `--ja-alles-loeschen`. Exit 0, 1 (Sicherung oder späterer Schritt gescheitert – nichts geändert), 2 (nicht dev, ohne Schalter) (23.10.2026) |
 | `GET /material/ordner/<id>/import` | Materialwart am Ordner (sonst 403-Seite, fremd 404, Systemordner 409) | Seite „Bestandsliste importieren“ mit der Nacharbeit dieses Zielordners (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/import/probelauf` (Formular: `file`, `zuordnung` JSON `{"<Spalte>": feld}`) | Materialwart am Ordner | Probelauf, schreibt nichts (außer einer Protokollzeile, wenn er fremde Dubletten nennt) → Bericht: `datei`, `nacharbeit_csv`, `spalten`, `felder`, `fehlt`, `warnungen`, `schon_importiert`, `sperre_bis` (dieselbe Datei bis dahin gesperrt, ISO in UTC, sonst `null`), `keine_seriennummer` (keine Spalte als Seriennummer zugeordnet), `ohne_seriennummern_bestaetigen` (Übernehmen braucht `ohne_seriennummern`, Entscheidung vom 20.10.2026), `zahlen` (mit `ohne_serie`), `faelligkeit`, `produkte_offen`, `ordner_unbekannt`, `zeilen`, `frist`; 400 unlesbar, 409 Systemordner, 413 zu groß, 429 anderer Import läuft (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/import` (wie der Probelauf, dazu `ohne_seriennummern` ja/nein) | Materialwart am Ordner | Übernehmen in einer Transaktion → 201, Bericht mit Zeilen `angelegt` (`artikel` {id, inventory_no}, vergebene STR-Nummer) und `import` {id, angelegt, im_bestand, nacharbeit, ersetzt}; 409 nichts zu tun, ohne Seriennummernspalte ohne `ohne_seriennummern` = ja („Keine Spalte ist als Seriennummer zugeordnet – bitte bestätigen …“, nichts geschrieben), dieselbe Datei vor weniger als 10 Minuten, Ordnerbaum geändert; anderes als ja/nein → 400 (Phase 2 · 3) |

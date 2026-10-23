@@ -255,10 +255,10 @@ Vorher:
 2. Wissen, was danach gilt: Jede benutzte **Formularversion ist „benutzt“** und lässt sich nur noch über eine neue
    Version ändern. Jedes Produkt, von dem der Beispielbestand Artikel anlegt (bei 200 Artikeln meist alle echten mit
    Prüfintervall), lässt sich **nicht mehr löschen und seine Materialart nicht mehr ändern**; seine Kategorie lässt sich
-   nicht mehr löschen. Katalogpflege, die das braucht, vorher erledigen – oder später den Katalog exportieren, die
-   dev-Datenbank zurücksetzen und den Export importieren. Der Bestand lässt sich **nicht entfernen** – Prüfnachweise
-   werden nie gelöscht, Artikel mit Prüfungen auch nicht. Zurück geht es nur mit einer zurückgesetzten dev-Datenbank
-   (danach den Katalog-Export importieren).
+   nicht mehr löschen. Katalogpflege, die das braucht, vorher erledigen – oder später den Katalog exportieren, das
+   Modul auf dev zurücksetzen (siehe „Modul Material auf dev zurücksetzen“) und den Export importieren. Der Bestand
+   lässt sich **nicht entfernen** – Prüfnachweise werden nie gelöscht, Artikel mit Prüfungen auch nicht. Zurück geht es
+   nur, indem man das Modul auf dev zurücksetzt (danach den Katalog-Export importieren).
 
 Auf dem VPS im Klon der Entwicklung (das Abbild enthält `scripts/` nicht – das Skript geht per stdin in das flüchtige
 `/tmp` des Containers, die App liegt dort unter `/srv`, die Daten unter `/data`):
@@ -275,8 +275,72 @@ läuft nur einmal – gibt es die Gliederungen schon, legt er nichts an. **Nie i
 
 **Den Befehl in `tmux` oder `screen` starten.** Reißt die Verbindung mitten im Lauf ab (oder Strg-C), bleibt ein
 Teilbestand – Artikel ohne Durchgänge und Zuordnungen –, und kein weiterer Lauf vervollständigt ihn: Er meldet
-„unvollständig“ mit Rückgabewert 1 und legt nichts an. Neu geht es dann nur mit einer zurückgesetzten dev-Datenbank und
-anschließendem Import des Katalog-Exports.
+„unvollständig“ mit Rückgabewert 1 und legt nichts an. Neu geht es dann nur, indem man das Modul auf dev zurücksetzt
+(„Modul Material auf dev zurücksetzen“) und danach den Katalog-Export importiert.
+
+### Modul Material auf dev zurücksetzen (nur dev)
+
+`flask material dev-zuruecksetzen` leert das Modul Material auf dev, um es von null an zu testen: Katalog, Ordner und
+Gliederungen, Bestand, Prüfungen samt Protokollen, Durchgänge, Importe, Rückrufe, Anträge, Meldungen, Journal,
+Erinnerungslog und Mailfehler-Protokoll (alle Tabellen `mat_*` samt Triggern und Volltextindizes) und die Dateien unter
+`media/material` und `pdf/`. **Es bleiben** die Konten (samt Modulstufe, Häkchen „Prüfer“, Urkundennummer, Unterschrift
+und PSA-Mails), Wiki, Spots, das Prüfungen-Modul und die Einstellungen (Verwaltung → Einstellungen). Vorher sichert der
+Befehl die ganze Datenbank (Online-Backup, wie die stündliche Sicherung) und **verschiebt** die Medien des Moduls in
+einen Sicherungsordner – scheitert die Sicherung, löscht er nichts. Danach legt er das Schema des Moduls frisch an, wie
+eine neue Installation (Schemaversion 21). Wer den Katalog behalten will: vorher Katalog → „Katalog exportieren“, danach
+importieren.
+
+Er wirkt nur, wenn `STROEMIS_NAME` auf `-dev` endet (setzt `dev-einrichten.sh`, dieselbe Regel wie die Sperre der
+Erinnerungsmails), `BASE_URL` weder in der `.env` noch unter Verwaltung → Einstellungen auf `strömis.de` zeigt und
+`--ja-alles-loeschen` dabeisteht – sonst Rückgabewert 2, nichts geändert. In der Produktion (Container `stroemis`) lehnt
+er also auch mit Schalter ab.
+
+Auf dem VPS im Klon der Entwicklung (`dev-einrichten.sh` legt ihn neben die Produktion, Ordnername mit `-dev`; Container
+`stroemis-dev` laut `.env` – `docker compose` erreicht ihn dort über den Dienst `stroemis`):
+
+```bash
+cd /pfad/zur/produktion-dev
+# 1. Ansehen, was geschähe: Tabellen mit Zeilen, Medien mit Größe, Sicherungsordner, DEMO-Konten – ändert nichts
+docker compose exec -e VIDEOPFLEGE=0 stroemis flask --app "app:create_app()" material dev-zuruecksetzen --trocken
+# 2. Sichern und zurücksetzen
+docker compose exec -e VIDEOPFLEGE=0 stroemis flask --app "app:create_app()" material dev-zuruecksetzen --ja-alles-loeschen
+# 3. Neu starten
+docker compose restart
+```
+
+Die Ausgabe nennt den Sicherungsordner (`/data/sicherung-material-JJJJ-MM-TT_hhmmss` im Container, also
+`data/sicherung-material-…` im Klon), die Zahl der geleerten Tabellen und Zeilen, die verschobenen Medien und die
+DEMO-Konten. Rückgabewert 0 = zurückgesetzt; 1 = die Sicherung oder ein späterer Schritt ist gescheitert – dann ist
+nichts geändert (Datenbank unverändert, Medien zurück an ihrem Platz; die Meldung sagt es); 2 = nicht dev oder ohne
+Schalter. Der Server darf dabei laufen: Der Befehl hält während Sicherung und Umbau die Schreibsperre der Datenbank
+(Schreibzugriffe warten so lange); der Neustart danach räumt auf, was die Arbeitsprozesse noch im Speicher halten.
+
+- **Platz**: Die Kopie der Datenbank braucht einmal deren Größe (der Probelauf nennt Größe und freien Platz); die Medien
+  werden nur umbenannt, nicht kopiert. Sicherungsordner bleiben liegen, bis du sie löschst
+  (`rm -rf data/sicherung-material-…`).
+- **DEMO-Konten** (`@example.invalid`) löscht der Befehl nicht, er listet sie. Sie haben danach keine Freigaben mehr;
+  über die Nutzerverwaltung löschen, falls nicht mehr gebraucht. `material_demo.py --demo --konten` legt danach den
+  DEMO-Bestand neu an, aber nur fehlende Konten – wer die DEMO-Konten mit ihren Freigaben wieder haben will, löscht sie
+  vorher.
+- **Rückweg** (der ganze Stand vor dem Zurücksetzen; was seither auf dev entstand – auch an Konten, Wiki, Spots und
+  Prüfungen –, geht verloren). Dieselben Zeilen mit dem richtigen Ordnernamen stehen in `LIESMICH.txt` im
+  Sicherungsordner. Gehört `data/` nicht deinem Nutzer, `rm`, `cp` und `mv` mit `sudo`:
+
+  ```bash
+  cd /pfad/zur/produktion-dev
+  S=data/sicherung-material-2026-10-23_174512      # der Ordner aus der Ausgabe
+  docker compose stop
+  rm -f data/stroemis.db-wal data/stroemis.db-shm
+  cp "$S/stroemis.db" data/stroemis.db
+  rm -rf data/media/material data/pdf
+  mv "$S/media/material" data/media/material
+  mv "$S/pdf" data/pdf
+  sudo chown -R 1000:1000 data
+  docker compose up -d
+  ```
+
+  (Lag vor dem Zurücksetzen unter `data/pdf` oder `data/media/material` nichts, fehlt der Ordner auch in der Sicherung –
+  dann diese `mv`-Zeile weglassen.)
 
 ### Erinnerungsmails (Modul Material)
 
@@ -452,7 +516,7 @@ verzichten. Bei transaktionalen Mails entscheidet fast ausschließlich die Absen
 
 ## Daten und Sicherung
 
-Alles liegt im Volume `/data`: `stroemis.db` (SQLite), `media/orig` (Originale), `media/web` und `media/thumb` (erzeugte Varianten), `media/wiki` (Wiki-Bilder), `media/avatar` (Profilbilder), `media/pruefungen` (Medien zu Prüfungen), `media/material` (Fotos, Herstellerdokumente und Prüfanhänge des Moduls Material; Herstellerdokumente unter `media/material/dok/<SHA-256>.<Endung>`, eine Datei je Inhalt), `pdf/` (festgeschriebene Protokolle des Moduls Material, schreibgeschützt – unbedingt mitsichern: die Datenbank verweist auf sie, und ihre Prüfsummen lassen sich nicht neu erzeugen), `secret_key` und `tmp/` (Zwischendateien laufender Uploads und Exporte – muss nicht gesichert werden). Verwaiste Dateien unter `media/wiki` räumt der Hintergrundlauf nach einer Woche weg (siehe „Wie die Anwendung abgesichert ist“).
+Alles liegt im Volume `/data`: `stroemis.db` (SQLite), `media/orig` (Originale), `media/web` und `media/thumb` (erzeugte Varianten), `media/wiki` (Wiki-Bilder), `media/avatar` (Profilbilder), `media/pruefungen` (Medien zu Prüfungen), `media/material` (Fotos, Herstellerdokumente und Prüfanhänge des Moduls Material; Herstellerdokumente unter `media/material/dok/<SHA-256>.<Endung>`, eine Datei je Inhalt), `pdf/` (festgeschriebene Protokolle des Moduls Material, schreibgeschützt – unbedingt mitsichern: die Datenbank verweist auf sie, und ihre Prüfsummen lassen sich nicht neu erzeugen), `secret_key`, nur auf dev `sicherung-material-…` (Sicherungen von `material dev-zuruecksetzen`, siehe dort) und `tmp/` (Zwischendateien laufender Uploads und Exporte – muss nicht gesichert werden). Verwaiste Dateien unter `media/wiki` räumt der Hintergrundlauf nach einer Woche weg (siehe „Wie die Anwendung abgesichert ist“).
 
 **Stündliche Sicherung nach `~/data.bak`** – ein einzelner Cron-Eintrag auf dem VPS. Er gehört in den Cron des
 Nutzers, dem `data/` gehört (uid 1000), oder in den von root: Nur die dürfen `secret_key` lesen. Mit `crontab -e`
@@ -564,6 +628,8 @@ python tests/test_material_stufen.py     # Phase 2: Modulstufe (Migration 9 → 
                                         # Personensuche je Zweck, Mails, Profil, Vorgabe neuer Konten)
 python tests/test_material_beispielbestand.py  # Beispielbestand: Katalog unverändert (Tabellen, Export, Dateien), alle Zustände, Protokolle, DEMO-Kennzeichnung,
                                                # abgebrochener Lauf (meldet „unvollständig“)
+python tests/test_material_dev_zuruecksetzen.py  # material dev-zuruecksetzen: Sperren (dev-Kennung, BASE_URL, Schalter), --trocken, Sicherung
+                                                 # vollständig, Schema wie neu, übrige Module byteidentisch, Scheitern ändert nichts
 python scripts/beispieldaten.py         # füllt ./data mit zwei erfundenen Prüfungs-Lehrgängen zum Ausprobieren
 python scripts/material_demo.py --demo  # füllt ./data mit DEMO-Katalog, DEMO-Bestand in zwei Gliederungen und DEMO-Prüfungen (nie für echte Prüfungen)
 python scripts/material_demo.py --demo --konten  # dazu einmalig fünf DEMO-Konten (vier Mitglieder mit Freigaben, die DEMO-Material-Verwaltung);
