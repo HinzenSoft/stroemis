@@ -194,7 +194,7 @@ def test_oberflaeche_o2_statisch():
                   "r.hinweise", 't.verbleib_vorschlag === "aussondern"'):
         assert haken in td, haken
     assert td.count('class="btn"') == 2 and "btn ghost" not in td      # Hauptknopf und „OK“ im Hinweis-Dialog
-    assert "teilBlockHtml(z, k, `at-${n}`, felder)" in js
+    assert "teilBlockHtml(z, k, `at-${n}`, felder, null, true)" in js      # seit L2b mit „aus dem Bestand wählen“
     kasten = funktion(js, "setKasten")
     for haken in ('data-act="teil-tauschen"', 'data-act="teil-entnehmen"', 'data-act="teil-einsetzen"', "mat-menue",
                   't.austausch === "nein"', 'z.austausch === "nein"', "sb.sperrgruende", "sb.letzte_pruefung",
@@ -422,6 +422,159 @@ def test_oberflaeche_nachbesserung_statisch():
     print("Oberfläche Nachbesserung (statisch) bestanden.")
 
 
+def test_oberflaeche_l2b_statisch():
+    """P4-L2b (Sets, Teil 2): „aus dem Bestand wählen“ beim Anlegen und bei „Teil einsetzen“ (nicht beim Tauschen), Set
+    auflösen und Löschen mit vorhandenen Teilen, „Bestandteil ersetzt“, Zählsätze und Zusatz an Statuslisten, „Sperren“
+    und „Melden und sperren“ als btn, Journal. Knopfsprache: höchstens ein roter Knopf je Dialog, „btn danger“ nur für
+    „Set auflösen“ (S.confirm), kein „btn ghost“, keine Erklärtexte unter Knöpfen."""
+    from app.material.services import bestand, beschriftung, setaustausch
+    js = lies("app/material/static/material.js")
+    css = lies("app/material/static/material.css")
+    # Teilblock: die Wahl und die Auswahl; das Wort ist „aus dem Bestand wählen“, nicht „übernehmen“ (U15).
+    block = funktion(js, "teilBlockHtml")
+    for haken in ('value="neu" checked> neu erfassen', 'value="bestand"> aus dem Bestand wählen', "mitBestand ?",
+                  "at-bestand-fehler", "esc(BESTAND_HILFE)"):
+        assert haken in block, haken
+    assert re.search(r'const BESTAND_HILFE = "Lebenslauf und Protokolle gehen mit', js)
+    wahl = funktion(js, "bestandWahl")
+    for haken in ("q.length < 2", "await api(adresse(q))", "fehlerZeigen(e.message)", "r.weitere", "Weitere Treffer",
+                  "belegt(x.id, f)", "WAHL.set(f, x)", "anderen wählen", 'setAttribute("aria-invalid", "true")'):
+        assert haken in wahl, haken
+    kandidat = funktion(js, "kandidatHtml")
+    for feld in ("x.inventory_no", "x.serial_no", "x.bisherige_inventarnummer", "x.produkt", "x.ordner", "x.status",
+                 "x.zugeordnet.name"):
+        assert f"esc({feld})" in kandidat or f"statusMarke({feld})" in kandidat, feld
+    for teil in (block, wahl, kandidat, funktion(js, "zuordnungEndet")):
+        assert "übernehm" not in teil.lower()
+    assert "{ item_id: x.id }" in funktion(js, "teilBlockDaten")
+    # Anlegen: gesucht im Ablageordner, ein Artikel nur für ein Teil, Fehler des Servers am Block, Rückfrage Zuordnung.
+    for haken in ("teilBlockHtml(z, k, `at-${n}`, felder, null, true)",
+                  '`${API}/ordner/${$("#an-ordner").value}/kandidaten?${new URLSearchParams({ product_id: f.dataset.produkt, q })}`',
+                  "ist für zwei Teile gewählt.", "text.includes(f.dataset.inv)", 'rueckfrage("Zuordnung endet", endet, "Anlegen")',
+                  "f.bestandZuruecksetzen()"):
+        assert haken in js, haken
+    # Teil einsetzen mit Auswahl, Tauschen ohne (T9); Rückfrage, wenn die Zuordnung endet (U10).
+    td = funktion(js, "teilDialog")
+    for haken in ('art === "einsetzen" ? "Teil" : "Neues Teil", art === "einsetzen")',
+                  "`${API}/artikel/${a.id}/kandidaten?${new URLSearchParams({ slot_id: z.id, q })}`",
+                  "zuordnungEndet([WAHL.get(block)], a.zugeordnet || null)", 'rueckfrage("Zuordnung endet", endet, TEIL_KNOPF[art])',
+                  "block.bestandFehler(e.message)"):
+        assert haken in td, haken
+    rf = funktion(js, "rueckfrage")
+    assert '<button class="btn" id="rf-ja" type="button">' in rf and "danger" not in rf and "ghost" not in rf
+    # Set auflösen und Löschen mit vorhandenen Teilen.
+    for haken in ('data-act="set-aufloesen"><strong>Set auflösen …</strong>', '<details class="mat-menue mat-set-menue">',
+                  '"set-aufloesen": () => (sb.aufloesen_hindernis ? dialog(', "esc(sb.aufloesen_hindernis)",
+                  'data-act="loeschen-verweis">Löschen …</button>', "(sb.vorhandene_teile || []).length > 0 && !sb.aufloesen_hindernis",
+                  '<button class="btn" id="lv-aufloesen" type="button">Set auflösen …</button>'):
+        assert haken in js, haken
+    auf = funktion(js, "setAufloesen")
+    assert 'confirm(frage, "Set auflösen")' in auf and "/aufloesen`, { method: \"POST\", body: {} }" in auf
+    # „Bestandteil ersetzt“: Untermenü „Austausch“ an der Position ohne eigenen Artikel, Dialog mit Grenze, Bestätigung,
+    # Lebensende-Hinweis und gesperrtem Knopf während der Anfrage.
+    kasten = funktion(js, "setKasten")
+    for haken in ('data-act="bestandteil-ersetzt"', 'ausEintrag("Bestandteil ersetzt")', "mat-ohne-zeile", "ohneMenue(z)"):
+        assert haken in kasten, haken
+    be = funktion(js, "bestandteilDialog")
+    assert re.search(r"const ERSETZT_BEMERKUNG_MAX = (\d+);", js).group(1) == str(setaustausch.BEMERKUNG_MAX)
+    for haken in ("/bestandteil-ersetzt`", 'maxlength="${ERSETZT_BEMERKUNG_MAX}"', "keine Personennamen",
+                  "Ist der Ersatz älter als das Set, Lebensende am Set vorziehen", 'z.austausch === "nicht_belegt"',
+                  "ok.disabled = true;", "daten.bestaetigt = best.checked", "artikelDialog(a)"):
+        assert haken in be, haken
+    assert be.count('class="btn"') == 1 and "btn danger" not in be and "btn ghost" not in be
+    # Zahlen: Zählsatz wie bestand.zaehlsatz, Zusatz unter Statuslisten (Ordner und Fällige).
+    assert bestand.zaehlsatz(5, {"anzahl": 1, "teile": 1}) == "5 Artikel, darunter 1 Teil in 1 Set"
+    assert bestand.zaehlsatz(7, {"anzahl": 2, "teile": 4}) == "7 Artikel, darunter 4 Teile in 2 Sets"
+    assert 'const SETS_SATZ = (s) => `${plural(s.teile, "Teil", "Teile")} in ${plural(s.anzahl, "Set", "Sets")}`;' in js
+    assert '`${plural(n, "Artikel", "Artikel")}, darunter ${SETS_SATZ(s)}`' in js
+    for haken in ("zaehlSatz(d.bestand, d.bestand_sets)", "zaehlSatz(o.bestand, o.bestand_sets)", "SETS_SATZ(o.bestand_sets)",
+                  "SETS_SATZ(d.bestand_sets)", "esc(bst.sets_satz)", 'andereSetsHtml(d.andere_set_status, filter.includes(","))',
+                  "andereSetsHtml(d.andere_set_status, false)"):
+        assert haken in js, haken
+    andere = funktion(js, "andereSetsHtml")
+    assert "x.sets_gesamt" in andere and "/material/artikel/${s.id}" in andere and "esc(s.inventory_no)" in andere
+    # Knöpfe (F): „Sperren“ und „Melden und sperren“ rot gefüllt, nicht btn danger.
+    assert '<button class="btn" id="sd-ok" type="button">Sperren</button>' in js and 'danger" id="sd-ok"' not in js
+    assert '<button class="btn" id="mg-ok" type="button">Melden und sperren</button>' in js and 'danger" id="mg-ok"' not in js
+    # Journal: vorhandene Teile in Listen lesbar, gleich wie im Lebenslauf-PDF.
+    assert '${x.vorhanden ? ", vorhandener Artikel" : ""}' in funktion(js, "listenWert")
+    assert beschriftung.wert_text([{"inventory_no": "M-1", "serial_no": "SN-1", "bestandteil": "Rolle", "vorhanden": True}],
+                                  "teile") == "M-1 (SN SN-1) – Rolle, vorhandener Artikel"
+    assert "btn ghost" not in js
+    teil = css[css.index("/* Phase 4 – Lieferung 2b: Sets, Teil 2 (Oberfläche) */"):]
+    assert "@container mat-seite" in teil and "@media (pointer: coarse)" in teil
+    assert "min-height: 44px" in teil[teil.index("@media (pointer: coarse)"):]
+    assert ".mat-journal > li { max-width: 90ch; }" in teil
+    assert "mat-set-ohne" not in js and "mat-set-ohne" not in css
+    print("Oberfläche L2b (statisch) bestanden.")
+
+
+def test_vertrag_l2b():
+    """Was die Oberfläche von L2b liest, liefert der Server (KERN A und KERN Z): Auswahl (Treffer, weitere, Fehlertext),
+    Set-Block (vorhandene_teile, aufloesen_hindernis, Bestandteile ohne eigenen Artikel mit Austausch), Antworten von
+    „Teil einsetzen“ mit item_id, „Bestandteil ersetzt“ (Sperrgrund „bestandteil“) und „Set auflösen“; bestand_sets an
+    Übersicht, Ordner-Übersicht, Baum und Ordnerkopf; andere_set_status an Ordnerliste mit Status und Fälligen;
+    sets_satz im Jahresbericht."""
+    from test_material_sets import set_neu
+    from test_material_sets_pruefung import eingangsgeprueft
+    with ohne_post(), tempfile.TemporaryDirectory() as tmp:
+        t = set_aufbau(tmp)
+        w, s, fid = t.wart_a, t.s["id"], t.lager_a
+        hms = t.ids["hms"]
+        # Auswahl im Ordner (Anlegen) und am Set (Teil einsetzen).
+        r = ok(w.get(f"/api/material/ordner/{fid}/kandidaten", query_string={"product_id": hms, "q": "FREI-A"}))
+        assert set(r) == {"treffer", "weitere"} and r["treffer"][0]["id"] == t.f["id"]
+        assert {"id", "inventory_no", "serial_no", "bisherige_inventarnummer", "produkt", "ordner", "status",
+                "zugeordnet"} <= set(r["treffer"][0])
+        r = w.get(f"/api/material/ordner/{fid}/kandidaten", query_string={"product_id": hms, "q": "GIBTESNICHT"})
+        assert r.status_code == 404 and r.json["error"], r.get_json()
+        sb = ok(w.get(f"/api/material/artikel/{s}"))["artikel"]["set"]
+        assert sb["vorhandene_teile"] == [] and sb["aufloesen_hindernis"] is None
+        ohne = next(b for b in sb["bestandteile"] if not b["einzeln"])
+        assert {"id", "bezeichnung", "anzahl", "austausch"} <= set(ohne)
+        # Teil entnehmen, dann den freien Artikel F dort einsetzen (vorhandener Artikel) – Antwort wie bisher.
+        eingangsgeprueft(t)
+        k2 = t.teile[1]
+        ok(w.post(f"/api/material/artikel/{s}/teil-entnehmen", headers=H, json={"teil_id": k2}))
+        slot = next(b for b in ok(w.get(f"/api/material/artikel/{s}"))["artikel"]["set"]["bestandteile"] if b["einzeln"] and b["fehlt"])
+        r = ok(w.get(f"/api/material/artikel/{s}/kandidaten", query_string={"slot_id": slot["id"], "q": "FREI-A"}))
+        assert r["treffer"][0]["id"] == t.f["id"]
+        r = ok(w.post(f"/api/material/artikel/{s}/teil-einsetzen", headers=H,
+                      json={"slot_id": slot["id"], "item_id": t.f["id"], "bestaetigt": True}), 201)
+        assert {"artikel", "teil", "hinweise"} <= set(r) and r["teil"]["inventory_no"] == t.f["inventory_no"]
+        sb = r["artikel"]["set"]
+        assert sb["vorhandene_teile"] == [t.f["inventory_no"]] and isinstance(sb["aufloesen_hindernis"], str)
+        assert r["artikel"]["darf_loeschen"] is False
+        # „Bestandteil ersetzt“ an einem neuen, freien Set: Sperrgrund „bestandteil“.
+        s2 = set_neu(w, t.set_p, fid, t.liste, "SET-A-L2B", ("SET-A-L2B-K1", "SET-A-L2B-K2", "SET-A-L2B-R1"))["artikel"]
+        tasche = next(b for b in s2["set"]["bestandteile"] if not b["einzeln"])
+        r = ok(w.post(f"/api/material/artikel/{s2['id']}/bestandteil-ersetzt", headers=H,
+                      json={"slot_id": tasche["id"], "datum": None, "bemerkung": "Platzhalter", "bestaetigt": True}))
+        assert set(r) == {"artikel"} and any(g["art"] == "bestandteil" for g in r["artikel"]["set"]["sperrgruende"])
+        assert "Bestandteil ersetzt" in r["artikel"]["lock_reason"]
+        # Set auflösen.
+        s3 = set_neu(w, t.set_p, fid, t.liste, "SET-A-AUF", ("SET-A-AUF-K1", "SET-A-AUF-K2", "SET-A-AUF-R1"))["artikel"]
+        r = ok(w.post(f"/api/material/artikel/{s3['id']}/aufloesen", headers=H, json={}))
+        assert r["ok"] is True and len(r["teile"]) == 3 and set(r["teile"][0]) == {"id", "inventory_no"}
+        # Zahlen.
+        st = ok(w.get("/api/material/start"))
+        assert set(st["bestand_sets"]) == {"anzahl", "teile"}
+        assert all(set(o["bestand_sets"]) == {"anzahl", "teile"} for o in st["ordner_uebersicht"] if not o.get("nur_pfad"))
+        knoten = ok(w.get("/api/material/ordner"))
+        knoten = knoten.get("ordner", knoten)
+        assert any((o.get("bestand_sets") or {}).get("anzahl") for o in knoten)
+        o = ok(w.get(f"/api/material/ordner/{fid}"))["ordner"]
+        assert set(o["bestand_sets"]) == {"anzahl", "teile"} and o["andere_set_status"] is None   # Sets jetzt in „Gesperrt“
+        o = ok(w.get(f"/api/material/ordner/{fid}", query_string={"status": "einsatzbereit"}))["ordner"]
+        assert set(o["andere_set_status"]) == {"teile", "sets", "sets_gesamt"}
+        f = ok(w.get("/api/material/faellig", query_string={"status": "einsatzbereit"}))
+        a = f["andere_set_status"]
+        assert set(a) == {"teile", "sets", "sets_gesamt"} and all(set(x) == {"id", "inventory_no", "teile"} for x in a["sets"])
+        b = ok(w.get(f"/api/material/ordner/{fid}/bericht"))["bericht"]
+        assert "sets_satz" in b["bestand"] and "sets" in b["bestand"]
+    print("Vertrag mit dem Server (L2b) bestanden.")
+
+
 if __name__ == "__main__":
     test_werte_wie_server()
     test_oberflaeche_statisch()
@@ -430,3 +583,5 @@ if __name__ == "__main__":
     test_vertrag_k2()
     test_server_ergaenzungen_o2()
     test_oberflaeche_nachbesserung_statisch()
+    test_oberflaeche_l2b_statisch()
+    test_vertrag_l2b()

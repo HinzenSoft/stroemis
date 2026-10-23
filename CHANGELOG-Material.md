@@ -17,7 +17,7 @@ für sich deploybar.
 | Phase 2 · 3 – Bestandsimport und Prüfanleitung | Bestandslisten aus Excel oder CSV in einen Ordner: Probelauf, Übernehmen in einer Transaktion (Artikel auf „neu“, Fälligkeit aus der Liste, STR-Nummern für Zeilen ohne Seriennummer, eine Liste ganz ohne Seriennummernspalte nur mit Häkchen) und Nacharbeit je Zielordner (Produkte zuordnen, melden oder im Katalog anlegen, erneut prüfen, CSV-Rundweg, Frist ein Monat); Prüfanleitung aus dem Wiki am Prüfformular, Abschnitt „Prüfung“ eingeblendet in offenen Prüfungen | geliefert 19.10.2026, vier Punkte am 20.10.2026 entschieden (einer geändert und eingearbeitet), wartet auf Freigabe |
 | Artikellänge (Schritt 20) | Häkchen „Artikel haben eine Länge“ je Kategorie (vererbt), Feld „Länge (m)“ am Artikel (Steckbrief, Listen, Lebenslauf, Meine PSA, CSV, Bestandsimport), Prüfpunkt-Typ „Länge“ – vorbelegt, ein abweichender Wert geht beim Festschreiben in den Artikel (Journal, Protokoll „alt → neu“) | gebaut 22.10.2026, wartet auf Freigabe |
 | Phase 4 · 2 – Sets mit Komponenten | Hersteller-Sets: Stückliste im Katalog (auch in der Katalogdatei), Set-Artikel mit Teil-Artikeln, Set-Status, -Fälligkeit und -Lebensende, Listen mit der Set-Zeile, Verschieben und Zuordnen mit allen Teilen, Meine PSA; Sperr-Kaskade, Set prüfen mit Set-Protokoll, Austausch, Aussondern mit Wahl je Teil, Oberfläche | Kern (K1, K2) und Oberfläche (O1, O2) gebaut 23.10.2026 (Schema 21), drei Prüfungen und Nachbesserung 23.10.2026 |
-| Phase 4 · 2b – Sets, Teil 2 | Vorhandenen Artikel als Teil einsetzen (mit Auswahl, auch über die bisherige Inventarnummer), Set auflösen, „Bestandteil ersetzt“, Prüfumfang eines nie geprüften Sets; dazu (KERN Z) Zahlen, CSV-Spalten, gebündelte Mails | KERN A und KERN Z gebaut 23.10.2026 (Schema bleibt 21), Oberfläche folgt |
+| Phase 4 · 2b – Sets, Teil 2 | Vorhandenen Artikel als Teil einsetzen (mit Auswahl, auch über die bisherige Inventarnummer), Set auflösen, „Bestandteil ersetzt“, Prüfumfang eines nie geprüften Sets; dazu (KERN Z) Zahlen, CSV-Spalten, gebündelte Mails | KERN A, KERN Z, Oberfläche gebaut 23.10.2026 (Schema bleibt 21); Prüfungen folgen |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4152,12 +4152,12 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
-## Phase 4 · Lieferung 2b – Sets, Teil 2 (Stand: KERN A und KERN Z)
+## Phase 4 · Lieferung 2b – Sets, Teil 2 (Stand: KERN A, KERN Z, Oberfläche)
 
 Grundlage: `planung/material-phase4/entwurf_l2b.md` (Fassung 2 nach den Kritiken „Sicherheit“ T1–T16 und „Ablauf“
 U1–U16, mit den Entscheidungen des Nutzers vom 23.10.2026). Gebaut in Paketen: **KERN A** (vorhandenen Artikel einsetzen,
 Auswahl, Prüfumfang, Set löschen/auflösen, „Bestandteil ersetzt“ – Dienste, Routen, Rechte, Tests), **KERN Z** (Zahlen,
-CSV-Spalten, gebündelte Mails – eigener Abschnitt unten), danach **OBERFLÄCHE**. **Kein Schemaschritt** – Schemaversion
+CSV-Spalten, gebündelte Mails – eigener Abschnitt unten), danach **OBERFLÄCHE** (Abschnitt „Oberfläche (23.10.2026)“). **Kein Schemaschritt** – Schemaversion
 bleibt 21, keine neuen Abhängigkeiten.
 
 ### Neu (KERN A)
@@ -4447,6 +4447,96 @@ Formulierungen für die Oberfläche (Vorschlag aus Entwurf C):
 7. Mangel-Mail an nur mitgesperrten Artikeln: Wortlaut oben; „Freigeben kann das Set nur ein Prüfer mit der
    Set-Prüfung.“
 8. `routes.py` zwei Zeilen (siehe Abweichungen) – beim Zusammenführen mit KERN A übernehmen.
+
+### Oberfläche (23.10.2026)
+
+`material.js` und `material.css` nach den Schnittstellen KERN A und KERN Z; dazu eine kleine Server-Ergänzung
+(`beschriftung._listen_wert`). Kein Schemaschritt, keine neuen Abhängigkeiten.
+
+- **„Aus dem Bestand wählen“** (Entwurf A): Jeder Teilblock beim Anlegen eines Sets und der Dialog „Teil einsetzen“
+  haben oben die Wahl „neu erfassen“ | „aus dem Bestand wählen“ (`teilBlockHtml(…, mitBestand)`, `bestandWahl`). Beim
+  Tauschen gibt es sie nicht (T9). Die Suche läuft ab 2 Zeichen über `GET /ordner/<Ablageordner>/kandidaten` bzw.
+  `GET /artikel/<Set>/kandidaten`; ein Treffer zeigt Inventar- und Seriennummer, Status, bisherige Inventarnummer,
+  Produkt, Ordner und „zugeordnet an …“, `weitere` als „Weitere Treffer – bitte genauer tippen.“. Fehlertexte des
+  Servers (404 „Kein passender Artikel gefunden.“, 409 anderes Produkt) stehen rot am Feld (`aria-invalid`). Der
+  gewählte Artikel steht mit „anderen wählen“ darunter; Hinweis „Lebenslauf und Protokolle gehen mit …“. Beim Anlegen
+  ist ein schon für ein anderes Teil gewählter Artikel ausgegraut, ein Fehler des Servers mit seiner Inventarnummer
+  steht am Block. Ist ein gewählter Artikel jemand anderem zugeordnet als das Set, fragt eine Rückfrage „Zuordnung
+  endet“ (U10). „Anlegen und nächsten“ setzt die Blöcke auf „neu erfassen“ zurück.
+- **Set auflösen / Set löschen**: „Set auflösen …“ im neuen Untermenü „Mehr“ der Set-Seite (Materialwart, nicht am
+  ausgesonderten Set). Ist `aufloesen_hindernis` gesetzt, öffnet der Eintrag einen Dialog mit dem Grund – kein
+  ausgegrauter Eintrag mit Text darunter. Sonst Rückfrage mit `btn danger` („Set auflösen“), danach zum Ordner.
+  Enthält das Set vorhandene Teile (`vorhandene_teile`) und wäre es auflösbar, steht statt „Löschen“ der Knopf „Löschen …“:
+  Der Dialog erklärt, dass „Löschen“ nur mit dem Set angelegte Teile löscht, und führt mit „Set auflösen …“ weiter.
+- **„Bestandteil ersetzt“** (Entwurf B): Die Positionen ohne eigenen Artikel stehen jetzt als eigene Zeilen in der
+  Tabelle „Bestandteile“ („1 × ohne eigenen Artikel“), für den Materialwart mit dem Untermenü „Austausch“ →
+  „Bestandteil ersetzt …“. Bei „Austausch laut Hersteller: nein“ ist der Eintrag ausgegraut mit Grund (wie „Teil
+  tauschen“, V14). Der Dialog: „Ersetzt am“ (Vorgabe heute, spätestens heute), Bemerkung (eine Zeile, höchstens
+  200 Zeichen = `setaustausch.BEMERKUNG_MAX`, „keine Personennamen“), bei „nicht belegt“ die Pflichtbestätigung (Knopf
+  bis dahin aus), Hinweis „Ist der Ersatz älter als das Set, Lebensende am Set vorziehen“ mit Link „Lebensende am Set
+  ändern“ (öffnet „Bearbeiten“; nur bei textilem Material, wo es das Feld gibt). Der Knopf ist während der Anfrage
+  gesperrt („Wird eingetragen …“). Der Sperrgrund „Bestandteil ersetzt – Set prüfen“ steht im GESPERRT-Banner, unter
+  „Gesperrt, weil“ der Set-Seite, an jedem mitgesperrten Teil und in „Meine PSA“ (Sperrgrund der Set-Karte).
+- **Zahlen** (Entwurf C): Zählsatz „N Artikel, darunter k Teile in m Sets“ (`zaehlSatz`, gleich `bestand.zaehlsatz`)
+  unter den Kacheln der Übersicht, im Ordnerkopf („Bestand im ganzen Zweig: N, darunter k Teile in m Sets“), im
+  Jahresbericht (`sets_satz`) und als Tooltip an der Bestandszahl im Baum der Seite „Bestand“; in der Tabelle
+  „Fälligkeiten je Ordner“ kurz „k Teile in m Sets“ unter der Bestandszahl (Vorlesehilfen hören den ganzen Satz). Nur
+  wenn es Sets gibt. Unter Statuslisten (Ordner mit Statusfilter, Fällige): „Dazu k Teile mit diesem Status in Sets
+  mit anderem Set-Status: M-… “ mit Links, „und n weitere“ über 50 Sets; bei „alles Fällige“ „mit einem dieser Status“.
+- **Knöpfe** (F): „Sperren“ und „Melden und sperren“ sind `btn` (rot gefüllt, die Hauptaktion) statt `btn danger` –
+  Kommentare und `test_material_mangel` nachgezogen. Journalzeilen höchstens 90 Zeichen breit (V18,
+  `.mat-journal > li { max-width: 90ch; }`).
+- **Journal und Werte**: „in ein Set eingesetzt“, „aus dem Set gelöst (Set aufgelöst)“, „Bestandteil ersetzt“,
+  „vorhandener Artikel“, „Position Nr.“, „Bemerkung“, `set_grund` „Bestandteil ersetzt – Set prüfen“ standen schon in
+  den Tabellen (KERN A); neu: In Teilelisten (etwa „Set mit Teilen angelegt“) steht an einem vorhandenen Teil
+  „, vorhandener Artikel“ – gleich in `listenWert` (material.js) und `beschriftung._listen_wert` (Lebenslauf-PDF).
+  Der Nacharbeit-Hinweis an Set-Zeilen eines Bestandsimports („… „aus dem Bestand wählen“ …“) steht in der Spalte
+  „Gründe“ der Nacharbeit (geprüft im Browser).
+
+#### Abweichungen (Oberfläche, mit Begründung)
+
+1. **„Set auflösen …“ im Untermenü „Mehr“ der Kopfzeile**, nicht in „Austausch“: „Austausch“ hängt je Position, das
+   Auflösen betrifft das ganze Set.
+2. **Positionen ohne eigenen Artikel als Tabellenzeilen** statt der Zeile „Ohne eigenen Artikel: …“ – sonst gäbe es
+   keinen Ort für das Untermenü je Position.
+3. **„Bestandteil ersetzt“ bei „nein“ ausgegraut mit Grund** statt gar nicht angeboten – wie „Teil tauschen“ (V14); der
+   Server antwortet ohnehin 409.
+4. **„Löschen …“ mit Verweis nur, wenn das Set auflösbar wäre**; sonst bleibt der Löschknopf weg wie bisher bei
+   `darf_loeschen` = false (der Grund steht dann unter „Mehr → Set auflösen …“).
+5. **Rückfrage „Zuordnung endet“ mit `btn`, nicht `btn danger`** (eigene `rueckfrage` statt `S.confirm`): Sie ist nicht
+   endgültig, die Zuordnung lässt sich am Set neu setzen.
+6. **Zählsatz in der Ordner-Übersicht gekürzt** („k Teile in m Sets“ unter der Zahl, ganzer Satz für Vorlesehilfen) und
+   im Baum nur als Tooltip – ein ganzer Satz sprengt die Zahlenspalte; die Ordnerleiste links bleibt ohne Satz.
+7. **Lebensende-Weg nur bei textilem Material als Link**: Nur dort hat „Bearbeiten“ das Feld „Lebensende“.
+8. **Server-Ergänzung `beschriftung._listen_wert`** (vorhandene Teile in Listen) – damit Journal und Lebenslauf-PDF gleich
+   lauten; Test in `test_material_sets_oberflaeche`.
+
+#### Tests (Oberfläche)
+
+- `tests/test_material_sets_oberflaeche.py`: neu `test_oberflaeche_l2b_statisch` (Haken aller Wege, Wortwahl ohne
+  „übernehmen“, Grenze der Bemerkung gleich dem Dienst, Zählsatz gleich `bestand.zaehlsatz`, Knopfsprache je Dialog,
+  CSS mit Container-Abfrage und 44 px unter `pointer: coarse`, V18) und `test_vertrag_l2b` (Auswahl, Set-Block,
+  Teil einsetzen mit `item_id`, „Bestandteil ersetzt“, Set auflösen, `bestand_sets`, `andere_set_status`, `sets_satz`);
+  der O2-Haken auf den Teilblock beim Anlegen angepasst.
+- `tests/test_material_mangel.py`: „Melden und sperren“ als `btn`.
+- Browserprobe (Chromium 1280 und 360 px, DEMO-Daten in eigenem Datenordner): Anlegen mit „aus dem Bestand wählen“
+  (Treffer, 404/409 am Feld, belegt, Anlegen), Teil einsetzen mit Rückfrage „Zuordnung endet“, Set auflösen (Grund und
+  Rückfrage), Löschen mit Verweis, Bestandteil ersetzt (mit Bestätigung, danach Banner, Sperrgründe, Meine PSA),
+  Zählsätze (Übersicht, Ordner, Baum, Bericht), Statuslisten-Hinweis (Ordner, Fällige), Sperren und Mangel melden als
+  `btn`, Nacharbeit-Hinweis; keine Konsolenfehler, kein waagerechter Bildlauf bei 360 px. `st-geraete` (Chromium,
+  Firefox, WebKit × 21 Geräte) für zwei Set-Seiten, Anlegen mit Set-Produkt und Übersicht: alle 252 Aufrufe ohne Befund.
+
+#### Bitte bestätigen (Oberfläche)
+
+1. „Set auflösen …“ im Untermenü „Mehr“ der Set-Seite; geht es nicht, ein Dialog mit dem Grund (1).
+2. Positionen ohne eigenen Artikel als Zeilen der Tabelle „Bestandteile“ mit „Austausch → Bestandteil ersetzt …“;
+   bei „nein“ ausgegraut mit Grund (2, 3).
+3. Rückfrage „Zuordnung endet“ als rote Hauptaktion (`btn`), nicht als `btn danger` (5).
+4. Zählsatz kurz in der Tabelle „Fälligkeiten je Ordner“, als Tooltip im Baum, ganz unter den Kacheln, im Ordnerkopf und
+   im Jahresbericht (6).
+5. „Sperren“ und „Melden und sperren“ rot gefüllt (`btn`) – umgesetzt wie entschieden; damit ist V19 erledigt.
+6. Bemerkung bei „Bestandteil ersetzt“ als einzeiliges Feld mit Hinweis „keine Personennamen“; Datum „Ersetzt am“ mit
+   Vorgabe heute.
 
 ## Phase 4 · Lieferung 2 – Sets mit Komponenten (23.10.2026, Stand: geliefert, wartet auf Freigabe)
 

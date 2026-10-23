@@ -146,12 +146,14 @@ def _ist_datumsfeld(feld):
 def _listen_wert(x):
     """Ein Listeneintrag im Journal als Text – wie listenWert() in material.js: Text bleibt Text; Hersteller-Sets
     schreiben Objekte – die Teile beim Anlegen eines Sets ({inventory_no, serial_no, bestandteil}) und die Positionen
-    einer Stückliste ({bezeichnung, anzahl, einzeln, austausch}). Sie erscheinen als Satz statt als Python-Darstellung."""
+    einer Stückliste ({bezeichnung, anzahl, einzeln, austausch}). Sie erscheinen als Satz statt als Python-Darstellung.
+    Ein eingesetzter vorhandener Artikel (L2b, „vorhanden“) sagt es dazu."""
     if not isinstance(x, dict):
         return str(x)
     if x.get("inventory_no"):
         return (x["inventory_no"] + (f" (SN {x['serial_no']})" if x.get("serial_no") else "")
-                + (f" – {x['bestandteil']}" if x.get("bestandteil") else ""))
+                + (f" – {x['bestandteil']}" if x.get("bestandteil") else "")
+                + (", vorhandener Artikel" if x.get("vorhanden") else ""))
     if "bezeichnung" in x:
         return (f"{x.get('anzahl') or 1} × {x['bezeichnung']}" + (", einzeln geführt" if x.get("einzeln") else "")
                 + (f", Austausch: {SET_WERTE['austausch'].get(x['austausch'], x['austausch'])}" if x.get("austausch") else ""))

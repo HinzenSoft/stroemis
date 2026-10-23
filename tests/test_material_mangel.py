@@ -1233,11 +1233,13 @@ def test_oberflaeche_statisch():
     anfang = re.search(r'const MANGEL_NEU_ANFANG = "([^"]+)";', js).group(1)
     assert mangel.MANGEL_NEU.startswith(anfang) and len(anfang) > 40, anfang
     assert f"const MANGEL_MAX_FOTOS = {mangel.MAX_FOTOS};" in js and f"const MANGEL_TEXT_MAX = {mangel.TEXT_MAX};" in js
-    # Dialog: ohne capture, multiple, gesammelt (Eingabe danach geleert), Beschreibung Pflicht, ein Danger-Knopf.
+    # Dialog: ohne capture, multiple, gesammelt (Eingabe danach geleert), Beschreibung Pflicht, ein roter Knopf – seit
+    # P4-L2b „btn“ statt „btn danger“ (die Sperre ist nicht endgültig, Entscheidung vom 23.10.2026).
     dlg = js[js.index("function mangelDialog("):js.index("function mangelBanner(")]
     assert "capture" not in dlg and 'accept="image/*" multiple' in dlg and 'eingabe.value = "";' in dlg
     assert "fotos.push(f)" in dlg and 'fd.append("fotos", f)' in dlg and 'fd.append("beschreibung", text.value)' in dlg
-    assert dlg.count("btn danger") == 1 and '<button class="btn danger" id="mg-ok" type="button">Melden und sperren</button>' in dlg
+    assert "btn danger" not in dlg and dlg.count('class="btn"') == 1
+    assert '<button class="btn" id="mg-ok" type="button">Melden und sperren</button>' in dlg
     assert "${BEISEITE}" in dlg and 'const BEISEITE = "Leg ihn sofort beiseite (aus Fahrzeug oder Lager) und gib ihn deinem Materialwart.";' in js
     assert "Höchstens ${MANGEL_MAX_FOTOS} Fotos." in dlg
     assert "Es ging keine Mail hinaus – sag deinem Materialwart Bescheid" in js and "r.mail ?" in js

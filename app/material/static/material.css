@@ -1713,7 +1713,6 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
    die Containerabfrage mat-seite); eine fehlende Position grau hinterlegt, gesperrte Teile mit Sperrgrund. */
 .mat-set-werte { margin: 0 0 10px; }
 .mat-set-teile tr.mat-fehlt-zeile td { background: var(--grau-hell); }
-.mat-set-ohne { margin: 8px 0 0; overflow-wrap: anywhere; }
 @container mat-seite (max-width: 600px) {
   .mat-set-teile tr.mat-fehlt-zeile td { background: none; }
   .mat-set-teile tr.mat-fehlt-zeile { background: var(--grau-hell); padding-left: 8px; padding-right: 8px; }
@@ -1864,4 +1863,33 @@ dialog.mat-produkt-reiter { margin-top: min(6vh, 48px); margin-bottom: auto; }
   .mat-arten .mat-art-wahl { min-height: 44px; padding: 0; }
   a.mat-ziel, .mat-set-teile a.mat-inv { display: inline-flex; align-items: center; min-height: 44px; }
   .mat-bt-hilfe > summary { min-height: 44px; display: flex; align-items: center; }
+}
+/* Phase 4 – Lieferung 2b: Sets, Teil 2 (Oberfläche) */
+/* Teilblock mit der Wahl „neu erfassen | aus dem Bestand wählen“; ein Treffer der Auswahl bricht in Zeilen um (Nummern,
+   bisherige Inventarnummer, Produkt und Ordner, Zuordnung). */
+.mat-an-teil-quelle { display: flex; flex-wrap: wrap; gap: 2px 18px; margin: 2px 0 6px; }
+.mat-an-teil-quelle label.inline { margin: 0; }
+.mat-an-teil-neu[hidden], .mat-an-teil-bestand[hidden], .mat-an-teil-bestand label[hidden], .mat-an-teil .mat-produktwahl[hidden] { display: none; }
+.mat-treffer-zeile.mat-kandidat { flex-wrap: wrap; gap: 2px 8px; }
+.mat-treffer-zeile.mat-kandidat:disabled { cursor: default; color: var(--grau); background: var(--grau-hell); }
+.mat-kandidat .small, .mat-kandidat-wahl .small { flex-basis: 100%; overflow-wrap: anywhere; }
+.mat-kandidat-wahl { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; flex: 1 1 16em; }
+.mat-an-teil .at-bestand-fehler { margin: 4px 0 0; }
+/* Bestandteile ohne eigenen Artikel als Zeilen der Tabelle „Bestandteile“ (mit „Bestandteil ersetzt“). */
+.mat-set-teile tr.mat-ohne-zeile td { color: var(--anthrazit); }
+/* Zählsatz unter den Kacheln, im Jahresbericht und kurz in der Ordner-Übersicht; Zusatz unter Statuslisten. */
+.mat-set-satz { margin: 6px 0 0; overflow-wrap: anywhere; }
+.mat-ue-sets { display: block; font-size: var(--fs-klein); font-weight: 400; color: var(--grau); white-space: normal; line-height: 1.25; }
+.mat-andere-sets { margin: 8px 0 0; overflow-wrap: anywhere; }
+.mat-ersetzt-lebensende { margin-top: 8px; }
+/* V18: Journalzeilen höchstens lesbar breit. */
+.mat-journal > li { max-width: 90ch; }
+@container mat-seite (max-width: 600px) {
+  .mat-ue-sets { display: inline; }
+  .mat-ue-sets::before { content: " · "; }
+}
+@media (pointer: coarse) {
+  .mat-an-teil-quelle label.inline { min-height: 44px; align-items: center; }
+  .mat-treffer-zeile.mat-kandidat, .mat-andere-sets a.mat-inv { min-height: 44px; }
+  .mat-andere-sets a.mat-inv { display: inline-flex; align-items: center; }
 }
