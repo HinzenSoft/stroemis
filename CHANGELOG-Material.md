@@ -4151,14 +4151,15 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
-## Phase 4 · Lieferung 2 – Sets mit Komponenten (23.10.2026, Stand: KERN Teil 1)
+## Phase 4 · Lieferung 2 – Sets mit Komponenten (23.10.2026, Stand: KERN Teil 2)
 
 Grundlage: `planung/material-phase4/entwurf_l2.md` (Fassung 2 nach den Kritiken „Sicherheit“ S1–S31 und „Ablauf“
 A1–A33, mit den Entscheidungen des Nutzers vom 23.10.2026: Hersteller-Sets, Set-Artikel mit Teil-Artikeln, Teil
-gesperrt → ganzes Set gesperrt, Austausch, Kern in L2). Gebaut in Paketen: **K1** (dieser Stand – Schema 21, Katalog,
-Bestand, Tests, Doku), **K2** (Sperr-Kaskade und Freigabe, Set prüfen mit Set-Protokoll, Teil tauschen und entnehmen,
-Aussondern-Dialog, Mails, Jahresbericht), danach **OBERFLÄCHE** (`material.js` nach der Schnittstelle unten), drei
-Prüfungen, Nachbesserung. Schemaversion 21, keine neuen Abhängigkeiten. In der Oberfläche ist noch nichts zu sehen.
+gesperrt → ganzes Set gesperrt, Austausch, Kern in L2). Gebaut in Paketen: **K1** (Schema 21, Katalog, Bestand,
+Tests, Doku), **K2** (Sperr-Kaskade und Freigabe, Set prüfen mit Set-Protokoll, Teil tauschen, entnehmen, einsetzen und
+löschen, Aussondern mit Wahl je Teil, Mails, Jahresbericht – ohne Schemaänderung), danach **OBERFLÄCHE** (`material.js`
+nach den Schnittstellen K1 und K2 unten), drei Prüfungen, Nachbesserung. Schemaversion 21, keine neuen Abhängigkeiten.
+In der Oberfläche ist noch nichts zu sehen.
 
 ### Neu (K1)
 
@@ -4304,13 +4305,13 @@ Alle Antworten wie bisher (`error` mit Klartext, 404 für Fremdes wie für Unbek
 | Position der Stückliste | – | `{id, position, bezeichnung, anzahl, einzeln, austausch, austausch_text, produkt: {id, name, manufacturer, model, description, article_no, material_kind, lifetime_years, laenge_moeglich, demo} \| null}` |
 | `GET /api/material/artikel/vorschlag?product_id=` | wie bisher | neu `set`: null oder `{bestandteile: [Position …], teil_felder: ["serial_no", "manufactured_on", "purchased_on", "first_use_on", "length_m"], hilfe_einzeln}` |
 | `POST /api/material/artikel` | Materialwart | mit Set-Produkt: dazu `teile: [{"bestandteil_id": Position.id, "serial_no", "manufactured_on", "purchased_on", "first_use_on", "length_m"}]` – je einzeln geführter Position genau `anzahl`. 400: ohne `teile`, falsche Zahl, fremde Position, doppelte Seriennummer, Regel eines Teils („Teil „…“: …“); 409 ohne Stückliste, sichtbare Dublette; fremde Dublette wie bisher. `teile` an einem anderen Produkt: 400. Antwort neu `hinweise: [Text]` (STR-Nummer anbringen; sonst leer) |
-| `GET /api/material/artikel/<iid>` (und jede Antwort mit `artikel`) | lesen | neu `ist_set`, `set` (null oder Set-Block, unten), `teil_von` (null oder `{id, inventory_no, produkt, status, status_text, bestandteil}`); `darf_loeschen` an Teilen false, an Sets nach der Löschregel |
+| `GET /api/material/artikel/<iid>` (und jede Antwort mit `artikel`) | lesen | neu `ist_set`, `set` (null oder Set-Block, unten), `teil_von` (null oder `{id, inventory_no, produkt, status, status_text, bestandteil}`); `darf_loeschen` an Teilen false (seit K2: ungeprüftes Teil true), an Sets nach der Löschregel |
 | Set-Block `set` | – | `status`, `status_text`, `next_due_on`, `faellig_durch` {id, inventory_no, set_artikel}, `retire_by`, `lebensende_durch`, `eigen` {status, status_text, next_due_on, retire_by}, `teile` [{id, inventory_no, serial_no, serial_generated, produkt {id, name, manufacturer, model, description, article_no, material_kind, vorschau}, bestandteil, status, status_text, next_due_on, retire_by, last_inspected_on, lock_state, lock_cause, lock_reason, length_m, laenge_text, mangel, rueckruf}], `teile_anzahl`, `bestandteile` [Position der Kopie: position, bezeichnung, anzahl, einzeln, austausch, austausch_text, produkt; einzeln dazu `vorhanden`, `fehlt`], `vollstaendig`, `fehlend` [{bezeichnung, fehlt}], `rueckrufe_teile` [{teil {id, inventory_no}, titel}], `ursprung` (set_lock_origin), `sperrgruende` (K2; bis dahin []) |
 | `GET /api/material/ordner/<fid>`, `GET /api/material/faellig`, `GET /api/material/suche` | wie bisher | Listenzeilen neu `ist_set`, `set` (null oder `{teile, eigen, faellig_durch, lebensende_durch, mangel_teile [Inventarnummern], rueckruf_teile [{inventory_no, titel}], vollstaendig}`), `teil_von` (null oder `{id, inventory_no, produkt}`); an Set-Zeilen `status`, `status_text`, `next_due_on`, `retire_by` = Set-Werte. Ordner und Fällige ohne Teile; `ordner.sets` bzw. `sets` = {anzahl, teile}. Filter `status` und Sortierung `status`/`faellig` nach Set-Werten |
 | `POST /api/material/artikel/verschieben`, `PUT …/<iid>/zuordnung`, `POST /api/material/artikel/zuordnen` | wie bisher | Teil → 409; Set nimmt die Teile mit; `geaendert` der Sammelzuordnung zählt die geänderten Zeilen (Set mit Teilen) |
 | `PUT /api/material/artikel/<iid>` | Materialwart | Produktwechsel an Teil, Set oder zu einem Set-Produkt: 409 |
-| `DELETE /api/material/artikel/<iid>` | Materialwart | Teil 409; Set ganz (Regel oben), sonst 409 |
-| `POST …/sperren`, `…/aussondern`, `POST /api/material/artikel/<iid>/mangel`, `POST /api/material/pruefungen/<pid>/festschreiben` mit sperrendem Ergebnis | wie bisher | an Set-Artikel und Teil bis K2: 409 |
+| `DELETE /api/material/artikel/<iid>` | Materialwart | Teil 409 (seit K2: ungeprüftes Teil gelöscht, Set gesperrt); Set ganz (Regel oben), sonst 409 |
+| `POST …/sperren`, `…/aussondern`, `POST /api/material/artikel/<iid>/mangel`, `POST /api/material/pruefungen/<pid>/festschreiben` mit sperrendem Ergebnis | wie bisher | an Set-Artikel und Teil bis K2: 409 – seit K2 über das ganze Set (Schnittstelle K2) |
 | `GET /api/material/meine-psa` | PSA-Konto | Karten neu `teile` (Set: Teil-Karten mit denselben Schlüsseln; sonst []) und `teil_eines_sets`; Set-Karte mit Set-Status und Set-Fälligkeit; `gesamt` zählt je Set |
 | `POST /api/material/globalsuche`, `…/qr` | Modulzugang | Steckbrief neu `teil_eines_sets` (17 Schlüssel) |
 | `POST /api/material/katalog/import` | Katalog | Bericht neu `stuecklisten` {geaendert, unveraendert}; `GET …/katalog/export/vorschau` neu `export.set_verstoesse` |
@@ -4319,7 +4320,7 @@ Journal neu: Aktion „stueckliste“ (Produkt), „set_angelegt“ (Artikel), F
 `set_inventar`, `stueckliste` – Beschriftungen in `services/beschriftung.py` und gleichlautend in `material.js` (FELD,
 AKTION – der statische Abgleich in `test_material_l5` verlangt beide gleich; die einzige Änderung an `material.js` in K1).
 
-### Nahtstellen für K2
+### Nahtstellen für K2 (mit K2 erledigt – siehe „Neu (K2)“; `sets.vor_einzelsperre` gibt es nicht mehr)
 
 - `sets.vor_einzelsperre(item)` – heute 409; K2 hängt hier die Kaskade ein (aufgerufen aus `pruefung._sperren` und
   `pruefung._aussondern`, damit auch aus Mangelmeldung, Prüfer-Sperre und Ergebnis „instandsetzen“/„aussondern“): eigene
@@ -4349,6 +4350,216 @@ Endversionen und Triggerlisten in den Migrationstests (`test_material_laenge` �
 die Spalten von `mat_item` statt ihres Textes, weil `length_m` danach hinter den Spalten aus Schritt 21 steht –,
 `test_material_mailprotokoll`, `test_material_antrag`), die Zahl der DEMO-Produkte in `test_material_beschreibung`.
 
+### Neu (K2 – Sperren, Set prüfen, Austausch)
+
+- **Sperr-Kaskade** (Entwurf D, `sets.sperren`): Jede eigene Sperre an Set-Artikel oder Teil – Prüfer-Sperre (Sturz,
+  Beschädigung, Verlust, Rückruf), Ergebnis „instandsetzen“, Mangelmeldung – setzt dort `lock_cause` „eigen“ und sperrt
+  das ganze Set in EINER Anweisung (`sets.set_lage`): alle nach „Gesperrt“ der Gliederung, Herkunft = Heimat des Sets,
+  alle anderen „set“. Am Set-Artikel steht der Ursprung (`set_lock_origin`: „set“, wenn er selbst den Grund hat, sonst
+  „teil“), am Teil mit eigenem Grund `set_pruefen`. Verlust am Set-Artikel: alle verloren; an einem Teil: nur dieses.
+  Eine eigene Sperre geht auch an einem schon mitgesperrten Teil (Prüfer-Sperre 200, Mangelmeldung, „instandsetzen“);
+  eine zweite eigene nicht („schon gesperrt“, 409). Journal: am Anlass die Aktion mit dem Handelnden („gesperrt“,
+  „mangel_gemeldet“ mit `{"mangel": …}`), an allen anderen „set_gesperrt“ mit dem Handelnden **„System“**, am
+  Set-Artikel dazu „teil_gesperrt“ – so steht an Set und übrigen Teilen nie ein Meldername (S24).
+- **Unvollständig und getauscht sperrt** (A25/A26): Teil entnehmen, Teil löschen und Ergebnis „aussondern“ an einem
+  Teil sperren das Set („unvollständig: „…“ entnommen/gelöscht/ausgesondert“), Teil tauschen und einsetzen sperren es
+  („Teil getauscht – Set prüfen“ bzw. „Teil eingesetzt – Set prüfen“); Ursache am Set-Artikel „set“, Journal mit
+  `set_grund` („unvollstaendig“ | „tausch“).
+- **Freiprüfung im gesperrten Set** (S8, A12): „einsatzbereit“ an einem Teil setzt nur „eigen“ → „set“ (verloren →
+  gesperrt), erledigt Mängel und setzt die Fälligkeit; Lage und Sperre bleiben (Journal „geprueft“, nicht
+  „freigeprueft“). „instandsetzen“ an einem Teil eines freien Sets sperrt das ganze Set. Eine nur geerbte Sperre zählt in
+  Prüfart-Vorschlag und Berichtigung wie frei (A23).
+- **Set prüfen** (Entwurf E, `services/setlauf.py`): „Set prüfen“ eröffnet einen Lauf (`mat_set_lauf`, höchstens einer je
+  Set – ein zweiter Aufruf liefert den offenen); offene Entwürfe an Set und Teilen (keine Berichtigungen) zählen ab dann
+  darin, jede neue Prüfung an ihnen ebenso (`set_lauf_id`). Den Set-Artikel prüft man **nur** im Lauf (sonst 409) – mit
+  dem Formular seines Produkts, ergänzt um je eine Pflicht-Zeile „… vorhanden“ (Ja/Nein, Gruppe „Bestandteile des Sets“)
+  je nicht einzeln geführtem Bestandteil. Jedes Teil hat seine eigene Prüfung mit eigenem P-Protokoll; das Protokoll eines
+  Teils nennt „Teil von Set <Inventarnummer> – <Produkt>, SN …“ als Kopie (A24). Teilprüfungen außerhalb eines Laufs
+  bleiben möglich (sie wirken über die Kaskade).
+- **Prüfumfang** (Entscheidung „Set-Artikel + betroffene Teile“): freies Set (periodisch) – alle Teile; gesperrtes Set –
+  ging die Sperre vom Set-Artikel aus, alle Teile, sonst die Teile mit `set_pruefen` (seit Beginn der Sperre neu
+  eingesetzt oder mit eigenem Grund). Die übrigen stehen im Set-Protokoll als „übernommen“ mit Protokoll-ID und Prüfsumme
+  ihrer letzten gültigen Prüfung (abgeschlossen, keine Aussonderung, nicht berichtigt). Weitere Teile darf man im Lauf
+  prüfen („auch prüfen“) – dann zählt diese Prüfung. Die Prüfung des Set-Artikels lässt sich erst festschreiben, wenn
+  jedes Teil im Umfang im Lauf geprüft und kein anderer Entwurf im Lauf offen ist (409 mit den Inventarnummern).
+- **Freigabe – genau ein Übergang** (S10, A20): beim Festschreiben der Set-Artikel-Prüfung eines Laufs mit
+  „einsatzbereit“, in derselben BEGIN-IMMEDIATE-Transaktion frisch gelesen (`setlauf.freigabe_gruende`): kein Artikel des
+  Sets mit eigener Sperre, verloren, mit offener oder wieder offener Meldung, offenem Entwurf, Status „neu“, „überfällig“
+  oder „Lebensdauer erreicht“ (Status ohne die Sperre gerechnet); vollständig laut Kopie der Stückliste; jedes Teil im
+  Umfang im Lauf „einsatzbereit“, jedes übrige mit gültiger Prüfung „einsatzbereit“; eine Ausnahme zählt nie als geprüft.
+  Dann EIN UPDATE über Set und Teile auf frei (`sets.freigeben`), zurück in die Heimat des Sets (Rückweg wie die
+  Freiprüfung); Journal am Set-Artikel „freigeprueft“, an den Teilen „set_frei“ (System). Sonst bleibt das Set gesperrt
+  und das Protokoll nennt die Gründe. **Eine Berichtigung gibt nie frei** (auch nicht die der Set-Prüfung).
+- **Gesamtergebnis und Set-Protokoll** (S7, S19): Das Set-Protokoll ist das P-Protokoll der Set-Artikel-Prüfung – keine
+  neue Protokollart, keine neue Ablage. Es trägt den Abschnitt „Set-Prüfung“ mit dem Gesamtergebnis („einsatzbereit“ |
+  „nicht einsatzbereit – Set gesperrt“ | „Set ausgesondert“ – wie das Set danach steht), den Gründen, einem Hinweis bei
+  mehr als 7 Tagen zwischen erster Teilprüfung und Abschluss (Prüftag = Tag des Abschlusses) und der Teiletabelle
+  (`mat_set_protokoll_zeile`, Kopie vor dem Abschluss, durch die Trigger aus Schritt 21 unveränderlich): je Teil
+  Bezeichnung der Position, Nummern, Ergebnis, Protokoll-ID und SHA-256 der Protokolldatei (oder „übernommen“), je
+  fehlender Position „fehlt“, je Bestandteil „vorhanden“/„fehlt“, je im Lauf entnommenem Teil seine Prüfung. Das Journal
+  am Set-Artikel bekommt „set_geprueft“ (`lauf`, `pruefung`, `gesamtergebnis`, `freigegeben`, `gruende`, `hinweis`). Die
+  Berichtigung der Set-Prüfung übernimmt die Teiletabelle des Originals; Berichtigungen von Teilprüfungen danach nennt
+  der Set-Block (`letzte_pruefung.berichtigte_teile`), das Protokoll bleibt.
+- **Lauf abbrechen**: offene Teil-Entwürfe laufen als Einzelprüfungen weiter, festgeschriebene bleiben Einzelprüfungen mit
+  Protokoll; ein Lauf ohne Prüfung verschwindet; ein offener Entwurf am Set-Artikel muss vorher weg (409). Abbrechen darf,
+  wer prüft oder verwaltet.
+- **Im Ordner-Durchgang** (A19, S18): Set und Teile bleiben eigene Durchgangszeilen; „Set prüfen“ von dort
+  (`durchgang_id`) setzt `round_id` am Lauf (der Set-Artikel muss im Durchgang offen sein), die Prüfungen zählen in Lauf
+  und Durchgang. Ein offener Lauf hält die Eröffnung eines Durchgangs nicht auf. Durchgangszeilen tragen `set_lauf` (Set)
+  bzw. `teil_von` (Teil) zum Gruppieren. Das **Sammelprotokoll** stellt die Teile eingerückt unter ihr Set („Teil von Set
+  …“), an der Set-Zeile „Set-Prüfung: <Gesamtergebnis>“ einer im Durchgang abgeschlossenen Set-Prüfung.
+- **Aussondern** (Entscheidung „je Teil wählbar“, `services/setaustausch.py`): „Set aussondern“ über die vorhandene Route
+  am Set-Artikel (Materialwart, Vorbedingungen von `pruefung.aussondern` am Set-Artikel; dazu mindestens ein eigener
+  Grund im Set oder verloren und keine ungeprüfte Meldung an Set oder Teil) und Ergebnis „aussondern“ am Set-Artikel:
+  je Teil `verbleib` „aussondern“ (mit aussondern) oder „weiterfuehren“ (entnehmen und gesperrt weiterführen). Vorbelegung:
+  eigene Sperre durch einen Prüfer oder verloren → mit aussondern, sonst weiterführen (`set.teile[].verbleib_vorschlag`).
+  Ein nur mitgesperrtes Teil darf mit ausgesondert werden. Mit ausgesonderte Teile bleiben am Set (Lebenslauf), jedes mit
+  eigenem Aussonderungsprotokoll („mit dem Set … ausgesondert: …“; aus einer Prüfung mit ihr als Grundlage);
+  weitergeführte verlassen das Set gesperrt mit eigenem Grund „aus ausgesondertem Set entnommen“, Herkunft die Heimat des
+  Sets, ohne Zuordnung, bis zur Freiprüfung. Ergebnis „aussondern“ an einem Teil: das Teil verlässt das Set und ist
+  ausgesondert, das Set unvollständig gesperrt. Aussondern am Teil durch den Materialwart nur über „Teil entnehmen“.
+- **Teil entnehmen** (Entwurf G): Verbleib „weiterfuehren“ – aus einem gesperrten Set mit eigener Sperre „aus gesperrtem
+  Set entnommen“ (eine eigene Sperre behält ihren Grund), aus einem freien frei im Ordner des Sets – oder „aussondern“ nur
+  mit eigener Sperre durch einen Prüfer oder verloren, ohne ungeprüfte Meldung und mit den Datumsgrenzen von
+  `pruefung.aussondern` (neu als `pruefung.aussondern_grenzen`). Bedingtes UPDATE `… WHERE id = ? AND parent_item_id = ?`
+  mit Zeilenzahl-Prüfung; offener Entwurf am Teil → 409; seine Durchgangszeile bleibt; das Teil verliert die Zuordnung
+  (Journal „zuordnung_geloest“, Grund „aus dem Set entnommen“).
+- **Teil tauschen / Teil einsetzen**: tauschen = altes Teil entnehmen (Verbleib wie oben) + neues Teil anlegen; einsetzen =
+  neues Teil an einer Position, an der eines fehlt. Produkt laut Kopie der Stückliste, Daten wie beim Set anlegen,
+  angelegt in der Heimat des Sets und dann mit Lage, Sperre und Zuordnung des Sets (Journal „zugeordnet“, Grund
+  „Zuordnung des Sets“); es ist im Freigabe-Lauf zu prüfen. „Austausch laut Hersteller“ der Position: „nein“ → 409 (nur
+  Set aussondern), „nicht belegt“ → Pflichtbestätigung `bestaetigt` („laut Herstellerunterlagen zulässig“, Journal am
+  Set), „ja“ ohne. STR-Hinweis wie beim Anlegen.
+- **Teil löschen**: ein Teil ohne Prüfung, Mangelmeldung und Durchgangszeile über die vorhandene Lösch-Route; das Set ist
+  danach unvollständig und gesperrt (Journal am Teil „geloescht“ mit Set, am Set „teil_geloescht“). `darf_loeschen` am
+  Teil folgt dieser Regel.
+- **Lebenslauf des Sets** (S15): nur Einträge am Set selbst – die Dienste schreiben dort „teil_gesperrt“,
+  „teil_entnommen“, „teil_eingesetzt“, „teil_geloescht“, „set_lauf_eroeffnet“, „set_lauf_abgebrochen“, „set_geprueft“,
+  „set_gesperrt“; Teil-Journale werden nie per Kennung nachgeladen. Beschriftungen in `beschriftung.py` (FELD, AKTION,
+  Werte `SET_WERTE`) und gleichlautend in `material.js` (FELD, AKTION).
+- **Jahresbericht** (A13, S13): Eine Set-Sperre zählt einmal – am Anlass; „set_gesperrt“ zählt nicht. Neue Sperrart
+  „set“ („Set unvollständig oder Teil getauscht“) für Sperren aus Unvollständigkeit oder Tausch. Wieder freigegeben zählt
+  die Set-Freigabe einmal („freigeprueft“ am Set-Artikel; „set_frei“ und Freiprüfungen im gesperrten Set zählen nicht).
+  `pruefung.sperrtag` sieht „set_gesperrt“ (Übergang frei → gesperrt) – ein mitgesperrtes Teil hat seinen Sperrtag.
+- **Mails** (S25, keine neue Mailart, nur über `mailprotokoll.senden`): Die Mangel-Mails an Materialwarte und Prüfer und
+  an die zugeordnete Person sagen bei Set-Artikel und Teil, dass das ganze Set mit allen n Teilen gesperrt ist („nicht
+  verwenden“, Betreff „… – Set M-… mit allen Teilen gesperrt“ bzw. „Deine PSA … (Set M-…) ist mit dem ganzen Set
+  gesperrt – nicht verwenden“). Die Rückruf-Mail und die Liste der betroffenen Artikel nennen bei Teilen „Teil von Set
+  M-…“ (`set_inventar`, A17).
+- **Set-Block** am Set-Artikel (`artikel.set`) neu: `sperrgruende` (abgeleitet), `lauf` (offene Set-Prüfung kurz),
+  `letzte_pruefung`, je Teil `slot_id`, `austausch`, `set_pruefen`, `verbleib_vorschlag`, je Position der Kopie `id`.
+
+### Schnittstelle (Stand K2 – für die Oberfläche)
+
+Zusätzlich zu K1. Alle Antworten wie bisher (`error` mit Klartext; Fremdes antwortet 404 wie Unbekanntes – auch eine
+`teil_id`, die nicht zu diesem Set gehört, als Zahl, „7“ oder 7.0).
+
+| Methode und Pfad | Recht | Anfrage → Antwort |
+| --- | --- | --- |
+| `GET /api/material/artikel/<iid>/set-lauf[?lauf=<id>]` | lesen | → `{lauf: Lauf (voll) \| null, laeufe: [Lauf (kurz)], neueste zuerst}`; ohne `lauf` die offene Set-Prüfung; `lauf` eines anderen Sets → 404; ein Artikel, der kein Set ist → `{lauf: null, laeufe: []}` |
+| `POST /api/material/artikel/<iid>/set-lauf` | Prüfer (prüfen + Urkunde) | `{"durchgang_id": Kennung \| null}` → 201 neu bzw. 200 der offene: `{artikel (Set voll), lauf (voll)}`. 409: kein Set-Artikel, ausgesondert, offener Lauf in einem anderen/ohne Durchgang; Durchgang fremd/unbekannt/Set nicht darin → 404, Set dort schon geprüft/ausgenommen → 409; ohne Urkunde 403 |
+| `DELETE /api/material/artikel/<iid>/set-lauf` | prüfen oder verwalten | → `{artikel, bleibt}` (`false`: der Lauf hatte keine Prüfung und ist weg); 409 ohne offenen Lauf und bei offenem Entwurf am Set-Artikel |
+| `POST /api/material/artikel/<iid>/pruefungen` | Prüfer (wie bisher) | am Set-Artikel nur mit offenem Lauf (409 „über „Set prüfen““); an Set und Teil mit offenem Lauf → die Prüfung zählt darin |
+| `GET /api/material/pruefungen/<pid>` und jede Antwort mit `pruefung` | lesen | neu `set_lauf` (Lauf kurz + `rolle` „set“ \| „teil“ + `set` {id, inventory_no}) \| null; am offenen Entwurf des Set-Artikels `set_abschluss` (Lauf voll + `verbleib_vorschlag` [{teil_id, inventory_no, verbleib}]) \| null; an der abgeschlossenen Set-Prüfung `set_protokoll` {zeilen, gesamt, gesamt_text, freigegeben, gruende, hinweis, berichtigung} \| null; `freipruefung` false bei nur geerbter Sperre. Punkte der Gruppe „Bestandteile des Sets“ (yesno, Soll „ja“, Pflicht, nicht kritisch) am Set-Artikel |
+| `POST /api/material/pruefungen/<pid>/festschreiben` | Prüfer (wie bisher) | am Set-Artikel (Lauf): 409 „In der Set-Prüfung noch nicht geprüft: …“, „… noch eine Prüfung offen: …“; neu `verbleib: [{"teil_id", "verbleib": "aussondern" \| "weiterfuehren"}]` bei `ergebnis: "aussondern"` (fehlende Teile: Vorbelegung; fremdes Teil 404). An Teilen: Wirkung über das Set (siehe oben) |
+| `POST /api/material/pruefungen/<pid>/berichtigen` | Prüfer (wie bisher) | an einem Teil mit nur geerbter Sperre möglich; zählt im noch offenen Lauf des Originals; an der Set-Prüfung mit deren Teiletabelle |
+| `POST /api/material/artikel/<iid>/sperren` | Prüfer (wie bisher) | an Set-Artikel und Teil: Kaskade (200); an einem mitgesperrten Teil 200; mit eigenem Grund 409 |
+| `POST /api/material/artikel/<iid>/mangel` | wie bisher | an Set-Artikel und Teil: Kaskade (201) |
+| `POST /api/material/artikel/<iid>/aussondern` | Materialwart (wie bisher) | am Set-Artikel „Set aussondern“, neu `verbleib` wie oben → `{artikel, aussonderung}` (Aussonderung des Set-Artikels); 409 nur unvollständig/getauscht gesperrt, ungeprüfte Meldung an Set oder Teil („<Inventarnummer>: …“), offener Entwurf an Set oder Teil, Datum vor den Grenzen eines mit ausgesonderten Teils; am Teil 409 („Teil entnehmen“) |
+| `DELETE /api/material/artikel/<iid>` | Materialwart (wie bisher) | Teil ohne Prüfung, Meldung und Durchgangszeile → gelöscht, Set gesperrt; sonst 409 wie jeder Artikel |
+| `POST /api/material/artikel/<iid>/teil-entnehmen` | Materialwart | `{"teil_id", "verbleib": "weiterfuehren" (Vorgabe) \| "aussondern", bei „aussondern“ "grund" (lebensdauer \| verlust \| irreparabel), "bemerkung", "datum"}` → `{artikel (Set voll), teil (das entnommene, voll)}`; 404 Teil nicht im Set; 409 offener Entwurf, „aussondern“ ohne eigene Prüfer-Sperre, ungeprüfte Meldung, Datumsgrenzen; 403 ohne Unterschrift (nur „aussondern“) |
+| `POST /api/material/artikel/<iid>/teil-tauschen` | Materialwart | `{"teil_id" (alt), "verbleib" … wie beim Entnehmen, "serial_no", "manufactured_on", "purchased_on", "first_use_on", "length_m", "bestaetigt"}` → 201 `{artikel, teil (neu, voll), hinweise}`; 409 Austausch „nein“, Teil ohne Position; 400 „nicht belegt“ ohne `bestaetigt`, Regeln des neuen Teils („Neues Teil „…“: …“); Dubletten wie beim Anlegen |
+| `POST /api/material/artikel/<iid>/teil-einsetzen` | Materialwart | `{"slot_id" (Position der Kopie mit fehlendem Teil; bei genau einer darf es fehlen), Felder wie beim Tauschen, "bestaetigt"}` → 201 wie tauschen; 409 vollständig/Position voll, 404 Position unbekannt, 400 mehrere fehlen ohne `slot_id` |
+| `GET /api/material/durchgaenge/<rid>` | lesen | Zeilen neu `set_lauf` (offene Set-Prüfung des Sets, kurz) \| null |
+| `GET/POST /api/material/produkte/<pid>/rueckrufe`, `GET /api/material/rueckrufe/<ruid>` | wie bisher | betroffene Artikel neu `set_inventar` (Inventarnummer des Sets) \| null |
+| `GET /api/material/ordner/<fid>/bericht` | wie bisher | `sperren.arten` neu Art „set“ |
+
+**Lauf (kurz)**: `{id, state (offen | abgeschlossen | abgebrochen), round_id, durchgang ({id, titel, ordner, sichtbar}
+| null), opened_at, opened_by_name, closed_at, set_inspection_id}`. **Lauf (voll)** dazu: `umfang` je Teil `{teil {id,
+inventory_no, serial_no, bestandteil}, zu_pruefen, pruefung ({id, ergebnis, ergebnis_text, datum, pruefer,
+protokoll_id} – im Lauf) | null, entwurf ({id, pruefer, eigen}) | null, uebernommen (wie pruefung – letzte gültige) |
+null}`, `set_pruefung` ({id, entwurf, pruefer, eigen}) | null, `fortschritt` {geprueft, zu_pruefen, teile}, `bereit`
+(der Set-Artikel lässt sich jetzt festschreiben), `freigabe_gruende` (Vorschau am gesperrten Set: was die Freigabe jetzt
+noch verhindert, ohne den Set-Artikel selbst), `hinweis_tage` (> 7, sonst 0), `abschluss` ({gesamtergebnis, gesamt_text,
+freigegeben, gruende, hinweis} am abgeschlossenen) | null.
+
+**Set-Block** (`artikel.set`) neu: `sperrgruende` [{art „eigen“ | „verloren“ | „unvollstaendig“ | „pruefen“ |
+„set_pruefung“, artikel ({id, inventory_no, set_artikel}) | null, text}] (leer bei freiem Set), `lauf` (kurz) | null,
+`letzte_pruefung` {lauf, pruefung_id, protokoll_id, datum, gesamtergebnis, gesamt_text, freigegeben, berichtigt_durch,
+berichtigte_teile [{inventarnummer, protokoll_id, durch}]} | null; je Teil `slot_id`, `austausch`, `set_pruefen`,
+`verbleib_vorschlag`; je Position `id` (für `slot_id`).
+
+**Teiletabelle** (`set_protokoll.zeilen`): `{art „teil“ | „bestandteil“, bezeichnung, inventarnummer, seriennummer,
+ergebnis, ergebnis_text, protokoll_id, pruefsumme, vorhanden (true | false | null), vorhanden_text („vorhanden“ | „fehlt“
+| „nicht zutreffend“ bei Bestandteilen, „fehlt“ bei einer fehlenden Position), uebernommen}`.
+
+Journal neu: Aktionen „set_gesperrt“, „set_frei“, „teil_gesperrt“, „teil_entnommen“, „teil_eingesetzt“,
+„teil_geloescht“, „entnommen“, „set_lauf_eroeffnet“, „set_lauf_abgebrochen“, „set_geprueft“; Felder `lock_cause`,
+`teil`, `verbleib`, `gesamtergebnis`, `freigegeben`, `gruende`, `lauf`, `set_lauf_id`, `set_grund`, `bestandteil`,
+`bestaetigt`, `ersetzt_teil`, `austausch`, `hinweis`, `geprueft` – Beschriftungen gleichlautend in `beschriftung.py` und
+`material.js`; die Wörter für die Werte (`lock_cause`, `verbleib`, `gesamtergebnis`, `set_grund`, `austausch`) stehen in
+`beschriftung.SET_WERTE` – `wert()` in `material.js` braucht sie noch (Oberfläche).
+
+### Abweichungen vom Entwurf und Entscheidungen des Baus (K2, mit Begründung)
+
+1. **Ergebnis „aussondern“ an einem Teil** = entnehmen und aussondern in einem Zug (Entwurf D nennt am Teil nur „Teil
+   entnehmen“ – das gilt für den Materialwart). Ein Prüfergebnis „aussondern“ ist überall die Aussonderung; der
+   Sachkundige hat das Teil gesehen. Das Set ist danach unvollständig gesperrt.
+2. **„Teil einsetzen“ an einer fehlenden Position** zusätzlich zu „Teil tauschen“ (Entwurf G nennt nur tauschen): Nach
+   Entnehmen, Löschen oder „aussondern“ am Teil bliebe ein Set sonst für immer unvollständig. Gleiche Regeln (Austausch
+   laut Hersteller, Bestätigung, Produkt laut Kopie).
+3. **Festschreiben der Set-Artikel-Prüfung erst mit vollständig geprüftem Umfang** (409) – wie „Durchgang abschließen“.
+   Ein Gesamtergebnis „nicht vollständig geprüft“ hätte ein freies Set im Protokoll „nicht einsatzbereit“ genannt, ohne
+   es zu sperren. Ein Teil, das sich nicht prüfen lässt (verloren), nimmt man über „Teil entnehmen“ heraus.
+4. **Gesamtergebnis als Zustand des Sets danach** (einsatzbereit | gesperrt | ausgesondert) statt „schlechtestes aus den
+   Ergebnissen“: dasselbe in allen Fällen (ein „instandsetzen“ eines Teils sperrt das Set), dazu bei „einsatzbereit“ am
+   gesperrten Set die Gründe gegen die Freigabe. Gespeichert im Journal („set_geprueft“) und im PDF – keine neue Spalte,
+   Schema bleibt 21.
+5. **Mitsperr- und Mitfrei-Einträge mit dem Handelnden „System“** (`journal.eintragen(…, system=True)`, neuer
+   Schlüsselwortparameter) statt Maskierung in Verlauf und Lebenslauf-PDF (S24 lässt beides zu) – so taucht der Name an
+   keiner Stelle auf, auch nicht in künftigen Ausgaben.
+6. **Set aussondern durch den Materialwart nur mit eigenem Grund im Set oder verloren und ohne ungeprüfte Meldung an Set
+   oder Teil** (A15): Eine Sperre nur aus Unvollständigkeit oder Tausch hat kein Sachkundiger gesehen; eine Sperre aus
+   einer Meldung an einem Teil hätte sonst über den Set-Artikel (dessen eigene Meldungen `nur_gemeldet` prüft) ein
+   ungesehenes Set aussondern lassen.
+7. **Aussondern beim Entnehmen**: statt `mangel.nur_gemeldet` (prüft `lock_before = frei`) `mangel.ungeprueft` – an einem
+   mitgesperrten Teil steht in der Meldung `lock_before` „gesperrt“, obwohl der eigene Grund allein aus ihr kommt.
+8. **Mit ausgesonderte Teile bleiben am Set** (`parent_item_id`), jedes mit eigenem Aussonderungsprotokoll: Lebenslauf und
+   Set-Seite des ausgesonderten Sets zeigen sie weiter. Grund „mit dem Set … ausgesondert: …“; aus einer Prüfung trägt
+   ihre Aussonderung die Set-Prüfung als Grundlage (Jahresbericht: „aus Prüfung“), beim Materialwart „sonstiger Grund“.
+   `protokoll._folge` sucht die Aussonderung jetzt am selben Artikel (sonst fände es die eines Teils).
+9. **Ursprung „set“ auch nachträglich**: Bekommt der Set-Artikel während einer Teil-Sperre einen eigenen Grund, wird
+   `set_lock_origin` „set“ – der Prüfumfang wächst auf alle Teile (sicherer als ihn beim ersten Anlass festzuhalten).
+10. **`set_pruefen` bleibt bis zur Freigabe**: Eine Set-Prüfung ohne Freigabe zählt für den nächsten Lauf nicht – die
+    betroffenen Teile werden in dem Lauf geprüft, der freigibt (die Prüfung des Set-Artikels ohnehin).
+11. **Bestandteil-Zeilen als Prüfpunkte ohne Formularpunkt** (`checklist_item_id` NULL, Gruppe „Bestandteile des Sets“):
+    „fehlt“ ist ein Mangel und braucht wie jeder ein Foto und eine Bemerkung; nicht kritisch – ob das Set ohne den
+    Bestandteil taugt, entscheidet der Prüfer im Ergebnis (keine fachliche Vorgabe erfunden).
+12. **Neue Sperrart „set“ im Jahresbericht** (Set unvollständig oder Teil getauscht) – sonst stünde eine solche Sperre als
+    „Sperre durch Prüfer ohne Prüfung“ da, obwohl sie der Materialwart auslöst.
+13. **Routen am Set-Artikel, Teil-Kennung im Inhalt** (`teil_id`) statt eigener Pfad-Platzhalter: Bezug und Recht kommen
+    über `<iid>` (requires_folder), die Teil-Kennung prüft der Dienst (404 wie unbekannt). Darum keine Zeile in
+    `FELDER_IM_INHALT` nötig; die Formen B, „7“, 7.0 und unbekannt prüft `test_material_sets_pruefung` eigens.
+14. **Lesen der Set-Prüfung an einem Artikel, der kein Set ist**: 200 mit `null` (wie ein Set ohne Prüfung) – die
+    Rundum-Tests der Rollen lesen jede Route mit einem gewöhnlichen Artikel.
+15. **Hinweis nach mehr als 7 Tagen** zwischen dem Prüftag der ersten Teilprüfung im Lauf und dem Abschluss; er steht im
+    Protokoll, im Journal und am Lauf (`hinweis_tage`), verhindert nichts.
+16. **Ein offener Lauf außerhalb eines Durchgangs** lässt sich nicht nachträglich einem Durchgang zuordnen
+    (`round_id` steht fest, Trigger): „Set prüfen“ aus dem Durchgang antwortet dann 409 – abschließen oder abbrechen.
+
+### Tests (K2)
+
+`tests/test_material_sets_pruefung.py` (neu, 7 Tests): Kaskade je Sperrweg mit Journal und Datenschutz (Leser sieht am
+Set und an den übrigen Teilen keinen Meldernamen) und Mails; Set prüfen (nur im Lauf, Umfang, Fortschritt, Teiletabelle,
+PDF/A per veraPDF, „Teil von Set“ im Teil-Protokoll, Unveränderlichkeit der Teiletabelle gegen UPDATE, DELETE, INSERT,
+REPLACE), Freigabe-Bedingungen einzeln (überfällig, Lebensdauer erreicht, verloren, neu, Wettlauf Meldung während
+Entwurf), Berichtigungen geben nie frei („instandsetzen → einsatzbereit“ am Teil, Set-Prüfung), Abbrechen; Hinweis
+nach mehr als 7 Tagen; Aussondern mit Wahl je Teil und Vorbedingungen, Ergebnis „aussondern“ an Teil und Set-Artikel;
+Tauschen, Entnehmen, Einsetzen, Löschen mit Austausch-Regeln, Zuordnung und fremder Teil-Kennung; Durchgang mit Set
+(Sammelprotokoll gruppiert); Jahresbericht (eine Set-Sperre zählt einmal, Art „set“, Freigabe einmal), Trennung der neuen
+Routen, Rückruf nennt das Set. Angepasst: `tests/test_material_sets.py` (Routentabelle mit K2-Erwartungen, Teil
+einzeln löschbar).
+
 ### Bitte bestätigen
 
 Aus Entwurf L (vom Bau gesetzt):
@@ -4362,9 +4573,20 @@ Aus Entwurf L (vom Bau gesetzt):
 8. Ein nur mitgesperrtes Teil darf mit dem Set ausgesondert werden (K2).
 
 Dazu aus K1:
-9. Zwischen K1 und K2 lehnt der Dienst Sperren, Mangelmeldung und Aussonderung an Sets und Teilen ab (409) – nur bis K2.
+9. (erledigt mit K2) Zwischen K1 und K2 lehnte der Dienst Sperren, Mangelmeldung und Aussonderung an Sets und Teilen ab.
 10. „Hersteller-Set“ ausschalten entfernt die Stückliste (mit Journal).
 11. Der Filter „Zugeordnet an“ und „Meine PSA“ zählen ein Set einmal.
+
+Dazu aus K2 (Abweichungen oben, Nummern dort):
+12. Ergebnis „aussondern“ an einem Teil entnimmt und sondert es aus; das Set ist danach unvollständig gesperrt (1).
+13. „Teil einsetzen“ an einer fehlenden Position (2).
+14. Die Prüfung des Set-Artikels lässt sich erst festschreiben, wenn der Prüfumfang im Lauf geprüft ist (3).
+15. Ein fehlender, nicht einzeln geführter Bestandteil ist ein (nicht kritischer) Mangel mit Foto und Bemerkung (11).
+16. Set aussondern durch den Materialwart nur mit eigenem Grund (Prüfer) oder Verlust im Set und ohne ungeprüfte Meldung (6).
+17. Mit ausgesonderte Teile bleiben am Set; Grund „mit dem Set … ausgesondert: …“ (8).
+18. Betroffene Teile bleiben bis zur Freigabe im Prüfumfang – auch über einen Lauf ohne Freigabe hinweg (10).
+19. Neue Sperrart „Set unvollständig oder Teil getauscht“ im Jahresbericht (12).
+20. Freigabe-Bedingung „Lebensdauer erreicht“ gilt für jeden Artikel des Sets, auch Metall mit eingetragenem Lebensende.
 
 ## Artikelnummern eindeutig je Hersteller (22.10.2026)
 
@@ -5127,6 +5349,7 @@ oder Plattform-Verwaltung).
 | `POST /api/material/produkte/<id>/variante` (Felder wie `POST /produkte`, `dokumente`: Kennungen) | Katalog | Kopie als neue Variante; Bild nie, Dokumente nach Wahl |
 | `PUT /api/material/produkte/<id>/bestandteile` (`bestandteile`: Liste der Positionen) | Katalog | Stückliste eines Hersteller-Sets als Ganzes ersetzen → `produkt`, `geaendert`; `is_set` an `POST/PUT /produkte`, `stueckliste` an der Variante, Lesefelder `is_set`, `bestandteile`, `bestandteil_von`, `set_umschaltbar` – Einzelheiten im Abschnitt „Phase 4 · Lieferung 2“ (Schritt 21) |
 | `POST /api/material/artikel` mit Set-Produkt (`teile`) | Materialwart | Set mit seinen Teilen anlegen → `artikel`, `hinweise`; Artikel tragen `ist_set`, `set`, `teil_von`, Listenzeilen dazu `set` und Set-Werte, Listen `sets` – Einzelheiten im Abschnitt „Phase 4 · Lieferung 2“ (Schritt 21) |
+| `GET/POST/DELETE /api/material/artikel/<id>/set-lauf`, `POST …/<id>/teil-entnehmen`, `…/teil-tauschen`, `…/teil-einsetzen` | lesen / Prüfer (abbrechen auch Materialwart) / Materialwart | Set prüfen (Lauf, Freigabe, Set-Protokoll) und Teile austauschen; Sperren, Mangel, Festschreiben, Aussondern und Löschen an Sets und Teilen wirken über das ganze Set – Einzelheiten im Abschnitt „Phase 4 · Lieferung 2“ (K2) |
 | `POST/DELETE /api/material/produkte/<id>/bild` | Katalog | Produktbild |
 | `POST /api/material/produkte/<id>/dokumente`, `POST /api/material/dokumente/<id>/version`, `…/zurueckziehen` | Katalog | Herstellerdokumente |
 | `GET/POST /api/material/formulare`, `GET/PUT/DELETE …/<id>`, `POST …/<id>/aktivieren`, `…/deaktivieren` | lesen / Katalog | Prüfformulare |
