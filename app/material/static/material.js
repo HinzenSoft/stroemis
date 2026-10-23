@@ -1351,8 +1351,11 @@
   const sortWeiter = (sort, feld) => (sort.feld === feld ? { feld, richtung: sort.richtung === "auf" ? "ab" : "auf" } : { feld, richtung: "auf" });
   const sortParameter = (q, sort) => { if (sort && sort.feld) { q.set("sort", sort.feld); q.set("richtung", sort.richtung); } return q; };
   // Ein Produkt in Listen: Hersteller in eigener Spalte, hier Bild, Modell mit Beschreibung und Artikelnummer.
-  // Die Länge eines Artikels (Schritt 20) steht grau hinter dem Produkt – nur, wo eine hinterlegt ist.
-  const produktZelle = (a) => `${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${nameHtml(a, true)}${zusatzHtml(a)}${artNrKurz(a.article_no)}${a.length_m ? ` <span class="muted small mat-laenge">${esc(laengeText(a.length_m))}</span>` : ""}${demoMarke(a.demo)}`;
+  // Die Länge eines Artikels (Schritt 20) steht grau hinter dem Produkt – nur, wo eine hinterlegt ist. Der Name ist ein
+  // roter Link auf den Artikel und hebt sich so von Bemerkung, Artikelnummer und Länge ab (Wunsch des Nutzers,
+  // 23.10.2026); für die Tastatur reicht der Link der Inventar-Nr. – daher tabindex -1. Ohne Sicht (fremde Zeile im
+  // Durchgang) bleibt der Name Text.
+  const produktZelle = (a, link = true) => `${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${link ? `<a class="mat-produktname" href="/material/artikel/${a.id}" tabindex="-1">${nameHtml(a, true)}</a>${zusatzHtml(a)}${artNrKurz(a.article_no)}` : `${nameHtml(a, true)}${zusatzHtml(a)}${artNrKurz(a.article_no)}`}${a.length_m ? ` <span class="muted small mat-laenge">${esc(laengeText(a.length_m))}</span>` : ""}${demoMarke(a.demo)}`;
 
   /* Drei Gestalten je nach Breite des Inhalts (material.css, „Lieferung 5 – Geräte: listen“): ab 821 px alle Spalten;
      601–820 px eine engere Tabelle – Seriennummer unter der Inventar-Nr., Hersteller über dem Produkt, nächste Prüfung
@@ -5134,7 +5137,7 @@
       // Enge Tabelle: Hersteller und Ablage stehen klein beim Produkt; Karte: Inventar-Nr. und Status oben (Lieferung 5).
       return `<tr class="z-${a.zustand}${sichtbar ? "" : " mat-fremd"}"><td data-l="Inventar-Nr." class="mat-k-titel">${nummer}</td>
         <td data-l="Hersteller" class="mat-schmal-weg">${esc(a.manufacturer || "")}</td>
-        <td data-l="Produkt" class="mat-k-ohne">${a.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(a.manufacturer)}</div>` : ""}${produktZelle(a)}${a.serial_no ? `<div class="small muted">SN ${esc(a.serial_no)}</div>` : ""}
+        <td data-l="Produkt" class="mat-k-ohne">${a.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(a.manufacturer)}</div>` : ""}${produktZelle(a, sichtbar)}${a.serial_no ? `<div class="small muted">SN ${esc(a.serial_no)}</div>` : ""}
           <div class="mat-eng-zusatz small muted">${esc(a.pfad)}</div></td>
         <td data-l="Ablage" class="mat-eng-weg">${esc(a.pfad)}</td><td data-l="Stand">${zustand}</td><td data-l="Status" class="mat-k-marke">${a.status ? statusMarke(a.status) : '<span class="muted">–</span>'}</td>
         <td class="tabelle-aktionen">${knopf}</td></tr>`;
