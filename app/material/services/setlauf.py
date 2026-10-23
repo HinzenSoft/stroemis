@@ -8,9 +8,9 @@ eigenem P-Protokoll (dort „Teil von Set …“ als Kopie). Den Set-Artikel pr�
 Produkts, ergänzt um je eine Ja/Nein-Zeile „… vorhanden“ je nicht einzeln geführtem Bestandteil (Gruppe SET_GRUPPE,
 ohne Formularpunkt). Sein Festschreiben schließt den Lauf:
   - vorher (vorbereiten, 409): kein anderer Entwurf im Lauf; jedes Teil im Prüfumfang hat eine im Lauf abgeschlossene
-    Prüfung. Prüfumfang (umfang): ein freies Set – alle Teile (periodisch); ein gesperrtes – ging die Sperre vom
-    Set-Artikel aus (set_lock_origin „set“), alle Teile, sonst die Teile mit set_pruefen (neu eingesetzt oder seit der
-    Sperre mit eigenem Grund; Entscheidung vom 23.10.2026). Die übrigen zählen mit ihrer letzten gültigen Prüfung
+    Prüfung. Prüfumfang (umfang): ein freies Set – alle Teile (periodisch); ein Set, das selbst noch nie geprüft wurde –
+    alle Teile (L2b); ein gesperrtes – ging die Sperre vom Set-Artikel aus (set_lock_origin „set“), alle Teile, sonst die
+    Teile mit set_pruefen (neu eingesetzt oder seit der Sperre mit eigenem Grund; Entscheidung vom 23.10.2026). Die übrigen zählen mit ihrer letzten gültigen Prüfung
     („übernommen“). Weitere Teile darf man im Lauf trotzdem prüfen („auch prüfen“) – dann zählt diese Prüfung.
   - die Teiletabelle (zeilen_schreiben, mat_set_protokoll_zeile) als Kopie vor dem Abschluss – je Teil die jüngste
     Prüfung im Lauf einschließlich Berichtigung oder die übernommene, je fehlender Position „fehlt“, je Bestandteil
@@ -95,8 +95,10 @@ def uebernehmbar(t, lid=None, lp=None):
 
 def umfang(s, teil_zeilen, lid=None, lp=None):
     """Die Teile (Kennungen), die im Lauf geprüft sein müssen – siehe Kopf; dazu jedes Teil ohne übernehmbare Prüfung
-    (uebernehmbar). lid/lp: der Lauf und seine Prüfungen (lauf_pruefungen) – ohne sie die Vorschau vor dem Eröffnen."""
-    if s["lock_state"] == "frei" or s["set_lock_origin"] == "set":
+    (uebernehmbar). Ein Set, das selbst noch nie geprüft wurde, prüft alle Teile – auch wenn ein Teil es vorher gesperrt
+    hat (L2b, Kritik U4): Sein erster Lauf sieht jeden Einbau, auch eingesetzte vorhandene Artikel mit gültiger Prüfung.
+    lid/lp: der Lauf und seine Prüfungen (lauf_pruefungen) – ohne sie die Vorschau vor dem Eröffnen."""
+    if s["lock_state"] == "frei" or s["set_lock_origin"] == "set" or not s["last_inspected_on"]:
         return [t["id"] for t in teil_zeilen]
     return [t["id"] for t in teil_zeilen if t["set_pruefen"] or not uebernehmbar(t, lid, lp)]
 

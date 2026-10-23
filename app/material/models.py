@@ -1859,8 +1859,9 @@ SPALTEN_21 = (
     # set_pruefen). NULL, solange das Set frei ist.
     ("mat_item", "set_lock_origin", "TEXT CHECK (set_lock_origin IS NULL OR set_lock_origin IN "
      + _in(SET_SPERRE_URSPRUNG) + ")"),
-    # Nur an einem Teil: im nächsten Freigabe-Lauf zu prüfen – neu eingesetzt oder seit Beginn der Set-Sperre aus eigenem
-    # Grund gesperrt (Entscheidung vom 23.10.2026). Die Freigabe setzt es zurück.
+    # An einem Teil: im nächsten Freigabe-Lauf zu prüfen – neu eingesetzt oder seit Beginn der Set-Sperre aus eigenem
+    # Grund gesperrt (Entscheidung vom 23.10.2026). Seit L2b auch an der Zeile des Set-Artikels: ein Bestandteil wurde
+    # ersetzt (sets.bestandteil_markieren; ohne Schemaschritt). Freigabe und Aussondern setzen es zurück.
     ("mat_item", "set_pruefen", "INTEGER NOT NULL DEFAULT 0 CHECK (set_pruefen IN (0, 1))"),
     # Prüfungen eines Set-Prüflaufs (Teile und Set-Artikel).
     ("mat_inspection", "set_lauf_id", "INTEGER REFERENCES mat_set_lauf(id)"),

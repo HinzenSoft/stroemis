@@ -989,7 +989,7 @@ def artikel_json(i, voll=False):
         out["mangel_eigen_offen"] = eigen["created_at"] if eigen else None
         out["darf_loeschen"] = not out["pruefungen"] and not out["maengel"]
         if sets.im_set(i):
-            out["darf_loeschen"] = sets.darf_loeschen(i)
+            out["darf_loeschen"] = sets.loeschbar(i)
         # Änderungsanträge (Entscheidungen vom 21.10.2026): offene am Artikel – Begründung und Namen nur für die, die
         # beantragen dürfen (Materialwart, Prüfer); beantragen nur nach der ersten Prüfung und nicht ausgesondert. Im
         # Verlauf ebenso: Wer nur liest, sieht bei den Anträgen weder Begründung noch Namen (Prüfung vom 21.10.2026).

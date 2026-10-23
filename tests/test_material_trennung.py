@@ -1273,6 +1273,9 @@ FELDER_IM_INHALT = (
     ("POST", "/api/material/ordner/<int:fid>/nacharbeit/produkt", "zeilen", "json"),
     ("POST", "/api/material/ordner/<int:fid>/nacharbeit/pruefen", "zeilen", "json"),
     ("POST", "/api/material/ordner/<int:fid>/nacharbeit/verwerfen", "zeilen", "json"),
+    # P4-L2b: vorhandenen Artikel als Teil einsetzen – beim Set anlegen und an einer fehlenden Position (Kritik T9).
+    ("POST", "/api/material/artikel", "teile[].item_id", "json"),
+    ("POST", "/api/material/artikel/<int:iid>/teil-einsetzen", "item_id", "json"),
     ("PUT", "/api/material/artikel/<int:iid>/zuordnung", "user_id", "json"),
     ("POST", "/api/material/artikel/zuordnen", "user_id", "json"),
     ("POST", "/api/material/ordner/<int:fid>/freigaben", "user_id", "json"),
@@ -1308,6 +1311,23 @@ def test_felder_im_inhalt():
                                                               (ordner,))]
         na, nb = nacharbeit[t.lager_a], nacharbeit[t.lager_b]
         na_url = f"/api/material/ordner/{t.lager_a}/nacharbeit"
+        # P4-L2b: ein Set-Produkt (Platzhalter) – ein Set in A mit einer Lücke und zwei freie HMS für die Kontrollen.
+        from test_material_sets import set_katalog, set_neu
+        set_p, _, liste = set_katalog(t.k["katalog"], ids)
+        luecke_set = set_neu(w, set_p, t.lager_a, liste, "SET-FI-1", ("SET-FI-K1", "SET-FI-K2", "SET-FI-R1"))["artikel"]
+        luecke = luecke_set["id"]
+        r = w.post(f"/api/material/artikel/{luecke}/teil-entnehmen", json={"teil_id": luecke_set["set"]["teile"][0]["id"]})
+        assert r.status_code == 200, r.get_json()
+        frei_1, frei_2 = (neuer_artikel(w, ids["hms"], t.lager_a, serial_no=f"FI-FREI-{n}")["id"] for n in (1, 2))
+        hms_pos = next(b["id"] for b in liste if b["einzeln"] and b["anzahl"] == 2)
+        rolle_pos = next(b["id"] for b in liste if b["einzeln"] and b["anzahl"] == 1)
+
+        def set_mit(v):
+            return w.post("/api/material/artikel", json={
+                "product_id": set_p, "folder_id": t.lager_a, "serial_no": "SET-FI-2",
+                "manufactured_on": f"{_heute().year - 1}-03",
+                "teile": [{"bestandteil_id": hms_pos, "item_id": v}, {"bestandteil_id": hms_pos, "serial_no": "SET-FI-2-K2"},
+                          {"bestandteil_id": rolle_pos, "serial_no": "SET-FI-2-R1"}]})
 
         def melden(fid, multipart):
             felder = {"manufacturer": "Meldewerk", "model": f"Testmodell {next(nummer)}", "folder_id": fid}
@@ -1346,6 +1366,9 @@ def test_felder_im_inhalt():
              na[0], 200, nb[0]),
             (FELDER_IM_INHALT[13], lambda v: w.post(f"{na_url}/pruefen", json={"zeilen": [v]}), na[0], 200, nb[0]),
             (FELDER_IM_INHALT[14], lambda v: w.post(f"{na_url}/verwerfen", json={"zeilen": [v]}), na[1], 200, nb[1]),
+            (FELDER_IM_INHALT[15], set_mit, frei_1, 201, t.art_b["id"]),
+            (FELDER_IM_INHALT[16], lambda v: w.post(f"/api/material/artikel/{luecke}/teil-einsetzen",
+                                                    json={"item_id": v, "bestaetigt": True}), frei_2, 201, t.art_b["id"]),
         ]
         # user_id: an der Stelle von B ein deaktiviertes Konto und eines ohne Namen; die Kontrolle ist ein Konto aus B.
         _, inaktiv_id = neues_konto(app, "inaktiv_a@example.org", name="Inaktiv Musterstadt")
@@ -1353,11 +1376,11 @@ def test_felder_im_inhalt():
         sql(app, "UPDATE users SET active = 0 WHERE id = ?", (inaktiv_id,))
         sql(app, "UPDATE users SET name = '' WHERE id = ?", (namenlos_id,))
         faelle_konto = [
-            (FELDER_IM_INHALT[15], lambda v: w.put(f"/api/material/artikel/{a2}/zuordnung", json={"user_id": v}),
+            (FELDER_IM_INHALT[17], lambda v: w.put(f"/api/material/artikel/{a2}/zuordnung", json={"user_id": v}),
              t.pruefer_b_id, 200),
-            (FELDER_IM_INHALT[16], lambda v: w.post("/api/material/artikel/zuordnen", json={"ids": [a2], "user_id": v}),
+            (FELDER_IM_INHALT[18], lambda v: w.post("/api/material/artikel/zuordnen", json={"ids": [a2], "user_id": v}),
              t.wart_b_id, 200),
-            (FELDER_IM_INHALT[17], lambda v: w.post(f"/api/material/ordner/{t.lager_a}/freigaben",
+            (FELDER_IM_INHALT[19], lambda v: w.post(f"/api/material/ordner/{t.lager_a}/freigaben",
                                                     json={"user_id": v, "grundrecht": "lesen"}), t.pruefer_b_id, 201),
         ]
         assert [f[0] for f in faelle] + [f[0] for f in faelle_konto] == list(FELDER_IM_INHALT)

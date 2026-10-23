@@ -17,7 +17,9 @@ Regeln, wie sie hier umgesetzt sind:
   - Weichen im Dienst (Entwurf C, S9): Verschieben, Zuordnen, Sammelzuordnung, Produktwechsel und Aussondern am Teil
     → 409 mit Hinweis auf das Set (teil_weiche). Ein Set verschieben oder zuordnen nimmt die Teile mit (set_lage). Ein
     Set löschen geht nur ganz und nur ungeprüft (bestand.artikel_loeschen); ein Teil ohne Prüfung, Mangel und
-    Durchgangszeile einzeln (setaustausch.teil_loeschen – das Set ist danach unvollständig und gesperrt).
+    Durchgangszeile einzeln (setaustausch.teil_loeschen – das Set ist danach unvollständig und gesperrt). Seit L2b löscht
+    „Set löschen“ nur Teile, die mit dem Set angelegt wurden (Journal „angelegt“ mit dem Set); ein eingesetzter
+    vorhandener Artikel geht über „Set auflösen“ frei in den Ordner zurück (setaustausch.aufloesen).
   - Sperr-Kaskade (Entwurf D, Paket K2): Jede eigene Sperre an Set-Artikel oder Teil (Prüfer-Sperre, Ergebnis
     „instandsetzen“, Mangelmeldung, Verlust) setzt dort lock_cause „eigen“ und sperrt alle anderen mit „set“ – alle nach
     „Gesperrt“ der Gliederung, Herkunft = Heimat des Sets (sperren, eine Anweisung über set_lage). Eine eigene Sperre
@@ -28,7 +30,11 @@ Regeln, wie sie hier umgesetzt sind:
     Festschreiben der Set-Artikel-Prüfung eines Set-Laufs (setlauf.py, freigeben). Mitsperren und Mitfreigeben schreiben
     eigene Journal-Aktionen („set_gesperrt“, „set_frei“) mit dem Handelnden „System“ – so zählt der Jahresbericht eine
     Set-Sperre einmal, und an Set und übrigen Teilen steht kein Meldername.
-  - Teil entnehmen, tauschen, einsetzen und löschen, Set aussondern: setaustausch.py; Set prüfen: setlauf.py.
+  - Teil entnehmen, tauschen, einsetzen und löschen, Set aussondern, vorhandenen Artikel einsetzen, Set auflösen und
+    „Bestandteil ersetzt“: setaustausch.py; Set prüfen: setlauf.py.
+  - „Bestandteil ersetzt“ (L2b, Entwurf B): Das Set sperrt wie beim Tausch (set_grund „bestandteil“), danach trägt die
+    Zeile des Set-Artikels selbst set_pruefen = 1 – gesetzt NACH der Kaskade (bestandteil_markieren), nie über „neu“.
+    anlass_text und sperrgruende nennen es; Freigabe und Aussondern setzen es zurück.
   - Set-Status = schlechtester aus Set-Artikel und aktuellen Teilen (status.SET_RANG, Rangfolge wie status.status()),
     Set-Fälligkeit = früheste nächste Prüfung, Set-Lebensende = frühestes Lebensende – je mit dem auslösenden Artikel.
     Listen (Ordner, Fällige, Suche) zeigen die Set-Zeile mit diesen Werten und filtern und sortieren nach ihnen
@@ -42,7 +48,7 @@ import logging
 from flask import g, has_request_context
 
 from ... import db
-from . import Abgelehnt, kennung, laenge_text
+from . import Abgelehnt, heute, kennung, laenge_text
 from . import journal, katalog, rechte, stueckliste
 from . import status as st
 
@@ -75,12 +81,18 @@ EINGESETZT = "Teil eingesetzt – Set prüfen"
 # Bausteine des abgeleiteten Grundes (anlass_text) – nur aus dem, was jetzt zum Set gehört (Nachbesserung, Ablauf M1).
 NEU_IM_SET = "Teil {inv} neu eingesetzt – Set prüfen"
 TEIL_PRUEFEN = "Teil {inv} in der Set-Prüfung zu prüfen"
+BESTANDTEIL_ERSETZT = "Bestandteil ersetzt – Set prüfen"
 # Wohin ein Teil beim Aussondern des Sets geht (Entscheidung vom 23.10.2026: je Teil wählbar).
 VERBLEIB = {"aussondern": "mit aussondern", "weiterfuehren": "entnehmen und gesperrt weiterführen"}
 TEIL_FEHLT = "Teil nicht gefunden."
+NUR_AUSGESONDERT = "Das Set ist ausgesondert."
 # Anlass einer Set-Sperre ohne eigenen Grund eines Artikels (Journal „set_grund“; der Jahresbericht zählt sie eigens) –
-# „ausgesondert“: ein Teil, das beim Aussondern des Sets entnommen und gesperrt weitergeführt wird (Ablauf N2).
-SET_GRUENDE = ("unvollstaendig", "tausch", "ausgesondert")
+# „ausgesondert“: ein Teil, das beim Aussondern des Sets entnommen und gesperrt weitergeführt wird (Ablauf N2);
+# „bestandteil“: ein nicht einzeln geführter Bestandteil wurde ersetzt (L2b, Entwurf B).
+SET_GRUENDE = ("unvollstaendig", "tausch", "ausgesondert", "bestandteil")
+# „Set löschen“ mit eingesetzten vorhandenen Artikeln (L2b, Entwurf A; Kritik U2).
+VORHANDENE_TEILE = ("Das Set enthält vorhandene Artikel ({nummern}) – „Set löschen“ löscht nur Teile, die mit dem Set "
+                    "angelegt wurden. „Set auflösen“ gibt die Teile frei in den Ordner zurück.")
 
 
 class SetUnstimmig(Abgelehnt):
@@ -312,6 +324,9 @@ def _kaskade(set_id, eigen, zustand, grund, aktion, zusatz, set_grund, anlass, n
     ein Teil set_pruefen, der Set-Artikel den Ursprung „set“ (der Freigabe-Lauf prüft dann alle Teile); hatte eigen
     schon einen eigenen Grund, bleibt die Sperre mit ihm (nur der Eintrag). Liefert, ob das Set dabei gesperrt wurde."""
     from . import bestand
+    if set_id in {int(t) for t in neu}:
+        # Der Set-Artikel ist nie „neu im Set“ – sonst überschriebe die Kaskade seine eigene Sperre (Kritik T4).
+        raise ValueError(f"neu enthält das Set {set_id}")
     s, tz = zeilen(set_id)
     alle = {r["id"]: r for r in [s] + tz}
     x = alle[eigen] if eigen else None
@@ -449,8 +464,9 @@ def _eigen_gesperrt(x):
 def anlass_text(s, teil_zeilen, slot_zeilen=None):
     """Warum das Set gesperrt ist, kurz für lock_reason – abgeleitet aus dem, was jetzt zum Set gehört (wie
     sperrgruende): eigener Grund des Set-Artikels, „wegen Teil …: Grund“ je Teil mit eigenem Grund, „unvollständig: …
-    fehlt“, „Teil … neu eingesetzt – Set prüfen“. Leer, wenn nichts davon zutrifft. Ein entnommenes, gelöschtes oder
-    ausgesondertes Teil kommt darin nicht mehr vor (Nachbesserung, Ablauf M1)."""
+    fehlt“, „Bestandteil ersetzt – Set prüfen“ (set_pruefen an der Zeile des Set-Artikels, L2b), „Teil … neu eingesetzt –
+    Set prüfen“. Leer, wenn nichts davon zutrifft. Ein entnommenes, gelöschtes oder ausgesondertes Teil kommt darin nicht
+    mehr vor (Nachbesserung, Ablauf M1)."""
     teile = []
     if _eigen_gesperrt(s):
         teile.append(s["lock_reason"] or ("verloren" if s["lock_state"] == "verloren" else "gesperrt"))
@@ -462,6 +478,8 @@ def anlass_text(s, teil_zeilen, slot_zeilen=None):
     if not voll:
         teile.append("unvollständig: " + ", ".join(f"„{f['bezeichnung']}“ fehlt" + (f" {f['fehlt']}×" if f["fehlt"] > 1
                                                                                   else "") for f in fehlend))
+    if s.get("set_pruefen"):
+        teile.append(BESTANDTEIL_ERSETZT)
     for t in teil_zeilen:
         if t["set_pruefen"] and not _eigen_gesperrt(t):
             teile.append((TEIL_PRUEFEN if t["last_inspected_on"] else NEU_IM_SET).format(inv=t["inventory_no"]))
@@ -491,6 +509,14 @@ def gruende_nachziehen(set_id):
         set_lage(set_id, je_zeile={"lock_reason": (neu, BLEIBT)})
 
 
+def bestandteil_markieren(set_id):
+    """„Bestandteil ersetzt“ (L2b, Entwurf B; Kritik T4): set_pruefen = 1 an der Zeile des Set-Artikels selbst – NACH der
+    Kaskade (sperren setzt die Marke an einem freien Set sonst wieder auf 0) und nie über „neu“ (das überschriebe eine
+    eigene Sperre des Set-Artikels). Danach den abgeleiteten Grund nachziehen. In der Transaktion des Aufrufers."""
+    set_lage(set_id, je_zeile={"set_pruefen": ({set_id: 1}, BLEIBT)})
+    gruende_nachziehen(set_id)
+
+
 def freigeben(set_id, ziel):
     """Der eine Freigabe-Übergang (Entwurf D, S10) – nur aus setlauf.wirkung: EIN UPDATE über Set und Teile auf frei, in
     den Rückweg ziel; Ursache, Grund, Prüfpflicht und Ursprung zurückgesetzt. Journal an den Teilen „set_frei“ als
@@ -512,8 +538,9 @@ def _artikel_verweis(x, set_id):
 def sperrgruende(s, teil_zeilen, voll=None, slot_zeilen=None):
     """Warum ein Set gesperrt ist – abgeleitet, nie gespeichert (Entwurf C, A12-5): je Artikel mit eigenem Grund (oder
     verloren) {art „eigen“ | „verloren“, artikel, text}, „unvollstaendig“ mit den fehlenden Positionen, je Teil, das im
-    Freigabe-Lauf zu prüfen ist, „pruefen“ – und immer zuletzt „set_pruefung“ (frei gibt nur „Set prüfen“). Leer, wenn das
-    Set frei oder ausgesondert ist."""
+    Freigabe-Lauf zu prüfen ist, „pruefen“, „bestandteil“, wenn ein Bestandteil ersetzt wurde (set_pruefen an der Zeile
+    des Set-Artikels, L2b) – und immer zuletzt „set_pruefung“ (frei gibt nur „Set prüfen“). Leer, wenn das Set frei oder
+    ausgesondert ist."""
     if s["lock_state"] in ("frei", "ausgesondert"):
         return []
     out = []
@@ -533,6 +560,9 @@ def sperrgruende(s, teil_zeilen, voll=None, slot_zeilen=None):
         out.append({"art": "unvollstaendig", "artikel": None,
                     "text": "Das Set ist unvollständig: " + ", ".join(
                         f"„{f['bezeichnung']}“ fehlt" + (f" {f['fehlt']}×" if f["fehlt"] > 1 else "") for f in fehlend) + "."})
+    if s.get("set_pruefen"):
+        out.append({"art": "bestandteil", "artikel": None,
+                    "text": "Ein Bestandteil wurde ersetzt – in der Set-Prüfung die Bestandteile ansehen."})
     for t in teil_zeilen:
         if t["set_pruefen"] and not _eigen_gesperrt(t):
             out.append({"art": "pruefen", "artikel": _artikel_verweis(t, s["id"]),
@@ -581,14 +611,21 @@ def teil_schreiben(plan, bezeichnung, wer, nr=None, **kw):
         raise
 
 
+def _gesetzt(t, feld):
+    return t.get(feld) not in (None, "")
+
+
 def set_anlegen(d, plan):
     """POST /artikel mit einem Set-Produkt (bestand.anlegen): der Set-Artikel nach plan (bestand.artikel_plan) und je
     einzeln geführter Position der Stückliste genau „anzahl“ Teile – „teile“: [{"bestandteil_id": Kennung der Position,
-    "serial_no", "manufactured_on", "purchased_on", "first_use_on", "length_m"}]. Das Produkt eines Teils kommt aus der
-    Stückliste, nie aus der Anfrage; der Ordner ist der des Sets. Doppelte Seriennummern in der Anfrage → 400 vor jedem
-    Schreiben. Eine Transaktion: Set, Kopie der Stückliste, Teile, Journal „set_angelegt“ mit der Teileliste am Set,
+    "serial_no", "manufactured_on", "purchased_on", "first_use_on", "length_m"}] für ein neues Teil oder
+    [{"bestandteil_id", "item_id"}] für einen vorhandenen Artikel (L2b, Entwurf A – nie beides in einem Block, 400; eine
+    Kennung höchstens einmal, 400). Das Produkt eines neuen Teils kommt aus der Stückliste, nie aus der Anfrage; der
+    Ordner ist der des Sets. Doppelte Seriennummern in der Anfrage → 400 vor jedem Schreiben. Eine Transaktion: Set,
+    Kopie der Stückliste, Teile (vorhandene über setaustausch.vorhandenen_einsetzen – alle Bedingungen dort, am frisch
+    gelesenen Artikel), Journal „set_angelegt“ mit der Teileliste am Set und „teil_eingesetzt“ je vorhandenem Artikel,
     set_stimmig. Liefert (Kennung des Sets, Hinweise – etwa „STR-Nummer am Teil anbringen“)."""
-    from . import bestand
+    from . import bestand, durchgang, faelligkeit, setaustausch
     p = plan["p"]
     roh = d.get("teile")
     if roh is None:
@@ -607,16 +644,27 @@ def set_anlegen(d, plan):
         if zid not in einzeln:
             raise Abgelehnt(f"Teil {n}: Diese Position steht nicht als einzeln geführter Bestandteil in der Stückliste "
                             "des Sets.")
+        if _gesetzt(t, "item_id"):
+            if any(_gesetzt(t, f) for f in TEIL_FELDER):
+                raise Abgelehnt(f"Teil {n}: entweder einen vorhandenen Artikel („item_id“) oder die Angaben eines neuen "
+                                "Teils – nicht beides.")
+            t = {"item_id": kennung(t.get("item_id"), f"Teil {n}: Artikel")}
         je[zid].append(t)
     for zid, z in einzeln.items():
         if len(je[zid]) != z["anzahl"]:
             raise Abgelehnt(f"„{z['bezeichnung']}“: genau {z['anzahl']} Teil{'e' if z['anzahl'] != 1 else ''} angeben "
                             f"(hier {len(je[zid])}).")
+    vorhandene = [t["item_id"] for z in stueck for t in je.get(z["id"], []) if "item_id" in t]
+    if len(vorhandene) != len(set(vorhandene)):
+        raise Abgelehnt("Derselbe vorhandene Artikel steht zweimal in den Teilen.")
     plaene, gesehen = [], {}
     for z in stueck:
         for k, t in enumerate(je.get(z["id"], []), start=1):
-            felder = {f: t[f] for f in TEIL_FELDER if f in t}
             nr = (k, z["anzahl"])
+            if "item_id" in t:
+                plaene.append((z, t["item_id"], nr))
+                continue
+            felder = {f: t[f] for f in TEIL_FELDER if f in t}
             try:
                 pt = bestand.artikel_plan(dict(felder, product_id=z["component_product_id"], folder_id=plan["fid"]))
             except Abgelehnt as exc:
@@ -640,8 +688,18 @@ def set_anlegen(d, plan):
                        "austausch) VALUES (?,?,?,?,?,?,?)",
                        (sid, z["position"], z["component_product_id"], z["bezeichnung"], z["anzahl"], z["einzeln"],
                         z["austausch"]))
-        liste = []
+        liste, eingesetzt = [], []
         for z, pt, nr in plaene:
+            if not isinstance(pt, dict):
+                # Vorhandener Artikel: Bedingungen und Wirkung in der Transaktion (das Set ist neu und frei – keine
+                # Sperre; Durchgang und Fälligkeit folgen unten, wenn alle Teile da sind).
+                t = setaustausch.vorhandenen_einsetzen(bestand.artikel(sid), z["component_product_id"], z["bezeichnung"],
+                                                       pt, plan["fid"], sperren=False)
+                eingesetzt.append(t)
+                liste.append({"teil": t["id"], "inventory_no": t["inventory_no"], "serial_no": t["serial_no"],
+                              "bestandteil": z["bezeichnung"],
+                              "produkt": katalog.produktname(katalog.produkt(t["product_id"])), "vorhanden": True})
+                continue
             tid = teil_schreiben(pt, z["bezeichnung"], "Teil", nr, journal_zusatz={"set": sid, "set_inventar": s["inventory_no"]},
                                  parent_id=sid)
             t = bestand.artikel(tid)
@@ -651,6 +709,15 @@ def set_anlegen(d, plan):
                 hinweise.append(_hinweis_str(STR_HINWEIS, t["inventory_no"], pt["p"], t["serial_no"]))
         journal.eintragen("item", sid, "set_angelegt", None,
                           {"teile": liste, "bestandteile": [z["bezeichnung"] for z in stueck if not z["einzeln"]]})
+        for x in liste:
+            if x.get("vorhanden"):
+                journal.eintragen("item", sid, "teil_eingesetzt", None,
+                                  {"teil": x["inventory_no"], "serial_no": x["serial_no"], "bestandteil": x["bestandteil"],
+                                   "vorhanden": True})
+        if eingesetzt:
+            ids = [t["id"] for t in eingesetzt]
+            durchgang.nach_verschieben(ids, heute())
+            faelligkeit.kappen(f"i.id IN ({','.join('?' * len(ids))})", ids)
         set_stimmig(sid)
     return sid, hinweise
 
@@ -846,8 +913,10 @@ def set_json(item):
       teile_anzahl, ursprung (set_lock_origin), sperrgruende (abgeleitet, sperrgruende)
       lauf         die offene Set-Prüfung (setlauf.kurz) oder None; letzte_pruefung: die zuletzt abgeschlossene mit
                    Gesamtergebnis und berichtigten Teilprüfungen (setlauf.letzte) oder None
+      vorhandene_teile   Inventarnummern eingesetzter vorhandener Artikel (L2b – „Set löschen“ löscht sie nicht)
+      aufloesen_hindernis  warum „Set auflösen“ nicht geht (ein Satz) oder None (setaustausch.aufloesen_hindernis)
     Teile nur, soweit das Konto sie sieht (artikel_filter auf beiden Zeilen)."""
-    from . import mangel, rueckruf, setlauf
+    from . import mangel, rueckruf, setaustausch, setlauf
     if not ist_set_artikel(item):
         return None
     tz = teile(item["id"])
@@ -877,16 +946,21 @@ def set_json(item):
                 rueckrufe_teile=[{"teil": {"id": t["id"], "inventory_no": t["inventory_no"]}, "titel": rr[t["id"]]}
                                  for t in tz if t["id"] in rr],
                 ursprung=item.get("set_lock_origin"), sperrgruende=sperrgruende(item, tz, voll, sz),
-                lauf=setlauf.kurz(setlauf.offener(item["id"])), letzte_pruefung=setlauf.letzte(item["id"]))
+                lauf=setlauf.kurz(setlauf.offener(item["id"])), letzte_pruefung=setlauf.letzte(item["id"]),
+                vorhandene_teile=[t["inventory_no"] for t in vorhandene(item) if t["id"] in {x["id"] for x in tz}],
+                aufloesen_hindernis=(setaustausch.aufloesen_hindernis(item["id"])
+                                     if item["lock_state"] != "ausgesondert" else NUR_AUSGESONDERT))
 
 
-def darf_loeschen(item):
+def darf_loeschen(item, ohne=()):
     """Ein Set löschen: nur ganz und nur, solange weder der Set-Artikel noch ein Teil eine Prüfung, eine Mangelmeldung
     oder eine Zeile in einem Prüfdurchgang hat und kein Set-Prüflauf daran hängt. Ein Teil einzeln (Entwurf C, A10): unter
-    denselben Bedingungen für das Teil allein – das Set ist danach unvollständig und gesperrt (setaustausch.teil_loeschen)."""
+    denselben Bedingungen für das Teil allein – das Set ist danach unvollständig und gesperrt (setaustausch.teil_loeschen).
+    ohne: Teile, die nicht mitzählen (eingesetzte vorhandene Artikel – sie löscht „Set löschen“ nie, L2b)."""
     ids = [item["id"]]
     if not ist_teil(item):
-        ids += [r["id"] for r in db.query("SELECT id FROM mat_item WHERE parent_item_id = ?", (item["id"],))]
+        ids += [r["id"] for r in db.query("SELECT id FROM mat_item WHERE parent_item_id = ?", (item["id"],))
+                if r["id"] not in ohne]
     marken = ",".join("?" * len(ids))
     for tabelle in ("mat_inspection", "mat_defect_report", "mat_round_item"):
         if db.query(f"SELECT 1 FROM {tabelle} WHERE item_id IN ({marken}) LIMIT 1", ids, one=True):
@@ -895,15 +969,49 @@ def darf_loeschen(item):
                                           one=True)
 
 
+def beitritt(tid, set_id):
+    """Wie das Teil zu diesem Set kam – (Journal-Kennung, „neu“ | „vorhanden“) aus seinem letzten Eintrag dafür seit
+    seiner letzten Löschung (Kennungen werden wiedervergeben, journal.LOESCHUNG): „angelegt“ mit dem Set (mit dem Set
+    angelegt oder per „Teil tauschen/einsetzen“ neu) bzw. „eingesetzt“ (vorhandener Artikel, L2b). Ohne solchen Eintrag
+    (None, „vorhanden“) – etwa ein Teil aus einer Datenbank, die jemand von Hand geändert hat: Es zählt wie ein
+    vorhandener Artikel, „Set löschen“ löscht es nicht."""
+    ab = db.query("SELECT MAX(id) AS m FROM mat_audit WHERE entity = 'item' AND entity_id = ? AND action = 'geloescht'",
+                  (tid,), one=True)["m"] or 0
+    r = db.query("SELECT id, action FROM mat_audit WHERE entity = 'item' AND entity_id = ? AND id > ? "
+                 "AND action IN ('angelegt', 'eingesetzt') AND json_extract(after_json, '$.set') = ? "
+                 "ORDER BY id DESC LIMIT 1", (tid, ab, set_id), one=True)
+    if not r:
+        return None, "vorhanden"
+    return r["id"], "neu" if r["action"] == "angelegt" else "vorhanden"
+
+
+def vorhandene(item):
+    """Die eingesetzten vorhandenen Artikel eines Sets (beitritt „vorhanden“) – Zeilen, ungefiltert."""
+    return [t for t in db.query("SELECT * FROM mat_item WHERE parent_item_id = ? ORDER BY id", (item["id"],))
+            if beitritt(t["id"], item["id"])[1] == "vorhanden"]
+
+
+def loeschbar(item):
+    """„darf_loeschen“ an Set-Artikel und Teil (bestand.artikel_json): darf_loeschen – am Set-Artikel dazu ohne
+    eingesetzte vorhandene Artikel (die gibt „Set auflösen“ frei, L2b)."""
+    return darf_loeschen(item) and (ist_teil(item) or not vorhandene(item))
+
+
 def set_loeschen(item):
     """Ein ungeprüftes Set ganz löschen (bestand.artikel_loeschen, in dessen Transaktion): erst die Teile (Journal
     „geloescht“ mit Grund „mit dem Set gelöscht“), dann der Set-Artikel – die Kopie der Stückliste geht mit (ON DELETE
-    CASCADE). Inventarnummern werden nie wieder vergeben."""
+    CASCADE). Inventarnummern werden nie wieder vergeben. Nur Teile, die mit dem Set angelegt wurden (beitritt „neu“) –
+    mit einem eingesetzten vorhandenen Artikel 409 mit Verweis auf „Set auflösen“ (L2b, Kritik U2)."""
     from . import bestand
-    if not darf_loeschen(item):
+    tz = db.query("SELECT * FROM mat_item WHERE parent_item_id = ? ORDER BY id", (item["id"],))
+    vorhanden = vorhandene(item)
+    # Erst, was auch ohne die vorhandenen Artikel gegen das Löschen spricht – dann hilft „Set auflösen“ nicht.
+    if not darf_loeschen(item, ohne={t["id"] for t in vorhanden}):
         raise Abgelehnt("Das Set oder eines seiner Teile hat Prüfungen, eine Mangelmeldung oder steht in einem "
                         "Prüfdurchgang – es bleibt mit seinem Lebenslauf; aussondern statt löschen.", 409)
-    for t in db.query("SELECT * FROM mat_item WHERE parent_item_id = ? ORDER BY id", (item["id"],)):
+    if vorhanden:
+        raise Abgelehnt(VORHANDENE_TEILE.format(nummern=", ".join(t["inventory_no"] for t in vorhanden)), 409)
+    for t in tz:
         db.execute("DELETE FROM mat_item WHERE id = ?", (t["id"],))
         journal.eintragen("item", t["id"], "geloescht", dict(t, ordner=bestand._pfad_text(t["folder_id"])),
                           {"grund": "mit dem Set gelöscht", "set": item["id"]})

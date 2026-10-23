@@ -610,10 +610,20 @@ def test_bericht_und_trennung():
                                  ("DELETE", f"/api/material/artikel/{sb}/set-lauf", None),
                                  ("POST", f"/api/material/artikel/{sb}/teil-entnehmen", {"teil_id": t.teile_b[0]}),
                                  ("POST", f"/api/material/artikel/{sb}/teil-tauschen", {"teil_id": t.teile_b[0]}),
-                                 ("POST", f"/api/material/artikel/{sb}/teil-einsetzen", {})):
+                                 ("POST", f"/api/material/artikel/{sb}/teil-einsetzen", {}),
+                                 # P4-L2b: Auswahl, Set auflösen, „Bestandteil ersetzt“, vorhandenen Artikel einsetzen.
+                                 ("GET", f"/api/material/artikel/{sb}/kandidaten?slot_id=1&q=SET", None),
+                                 ("GET", f"/api/material/ordner/{t.lager_b}/kandidaten?product_id={t.ids['hms']}&q=SET",
+                                  None),
+                                 ("POST", f"/api/material/artikel/{sb}/aufloesen", {}),
+                                 ("POST", f"/api/material/artikel/{sb}/bestandteil-ersetzt", {"slot_id": 1})):
             for c in (w, p):
                 r = c.open(pfad, method=methode, headers=H, json=d)
                 assert r.status_code == 404, (methode, pfad, r.status_code, r.get_json())
+        # Ein Teil aus B als vorhandener Artikel an der Lücke des eigenen Sets: wie unbekannt.
+        einsetzen = lambda v: w.post(f"/api/material/artikel/{s}/teil-einsetzen", json={"item_id": v})  # noqa: E731
+        assert (einsetzen(t.teile_b[0]).status_code, einsetzen(t.teile_b[0]).get_json()) == (
+            404, einsetzen(999999).get_json())
         # Rückruf am Produkt der Verbindungselemente: Die Liste nennt bei Teilen das Set (A17).
         r = ok(t.k["katalog"].post(f"/api/material/produkte/{t.ids['hms']}/rueckrufe",
                                    json={"title": "Testrückruf", "mail": False}), 201)

@@ -219,7 +219,8 @@
     lock_cause: { eigen: "eigener Grund", set: "mit dem Set" },
     verbleib: { aussondern: "mit aussondern", weiterfuehren: "entnommen und weitergeführt" },
     gesamtergebnis: { einsatzbereit: "einsatzbereit", gesperrt: "nicht einsatzbereit – Set gesperrt", ausgesondert: "Set ausgesondert" },
-    set_grund: { unvollstaendig: "unvollständig", tausch: "Teil getauscht oder eingesetzt", ausgesondert: "Set ausgesondert" },
+    set_grund: { unvollstaendig: "unvollständig", tausch: "Teil getauscht oder eingesetzt", ausgesondert: "Set ausgesondert",
+                 bestandteil: "Bestandteil ersetzt – Set prüfen" },
     austausch: { ja: "ja", nein: "nein", nicht_belegt: "nicht belegt" },
   };
   const SET_GRUPPE = "Bestandteile des Sets";
@@ -277,6 +278,8 @@
     set_grund: "Anlass der Set-Sperre", bestandteil: "Bestandteil", bestaetigt: "Austausch bestätigt",
     ersetzt_teil: "ersetzt Teil", austausch: "Austausch laut Hersteller", hinweis: "Hinweis",
     geprueft: "abgeschlossene Prüfungen",
+    // Sets, Teil 2 (L2b): vorhandenen Artikel einsetzen, „Bestandteil ersetzt“
+    vorhanden: "vorhandener Artikel", slot: "Position Nr.", bemerkung: "Bemerkung",
   };
   // Die Beschriftung eines Feldes in einem Journaleintrag – wie beschriftung.feld_name: „description“ ist am Produkt der
   // kurze Zusatz hinter dem Namen und heißt dort seit dem Wunsch vom 18.10.2026 „Bemerkung“; an Ordnern und in den
@@ -309,7 +312,9 @@
                    teil_entnommen: "Teil entnommen", teil_eingesetzt: "Teil eingesetzt", teil_geloescht: "Teil gelöscht",
                    entnommen: "aus dem Set entnommen", set_lauf_eroeffnet: "Set-Prüfung begonnen",
                    set_lauf_abgebrochen: "Set-Prüfung abgebrochen", set_geprueft: "Set geprüft",
-                   set_lauf_geaendert: "Set-Prüfung aus dem Durchgang gelöst" };
+                   set_lauf_geaendert: "Set-Prüfung aus dem Durchgang gelöst",
+                   eingesetzt: "in ein Set eingesetzt", aus_set_geloest: "aus dem Set gelöst (Set aufgelöst)",
+                   bestandteil_ersetzt: "Bestandteil ersetzt" };
   const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };

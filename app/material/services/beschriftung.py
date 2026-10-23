@@ -67,6 +67,8 @@ FELD = {
     "set_grund": "Anlass der Set-Sperre", "bestandteil": "Bestandteil", "bestaetigt": "Austausch bestätigt",
     "ersetzt_teil": "ersetzt Teil", "austausch": "Austausch laut Hersteller", "hinweis": "Hinweis",
     "geprueft": "abgeschlossene Prüfungen",
+    # Sets, Teil 2 (L2b): vorhandenen Artikel einsetzen, „Bestandteil ersetzt“
+    "vorhanden": "vorhandener Artikel", "slot": "Position Nr.", "bemerkung": "Bemerkung",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",
@@ -99,6 +101,8 @@ AKTION = {
     "entnommen": "aus dem Set entnommen", "set_lauf_eroeffnet": "Set-Prüfung begonnen",
     "set_lauf_abgebrochen": "Set-Prüfung abgebrochen", "set_geprueft": "Set geprüft",
     "set_lauf_geaendert": "Set-Prüfung aus dem Durchgang gelöst",
+    "eingesetzt": "in ein Set eingesetzt", "aus_set_geloest": "aus dem Set gelöst (Set aufgelöst)",
+    "bestandteil_ersetzt": "Bestandteil ersetzt",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",
@@ -117,7 +121,7 @@ SET_WERTE = {"lock_cause": {"eigen": "eigener Grund", "set": "mit dem Set"},
              "gesamtergebnis": {"einsatzbereit": "einsatzbereit", "gesperrt": "nicht einsatzbereit – Set gesperrt",
                                 "ausgesondert": "Set ausgesondert"},
              "set_grund": {"unvollstaendig": "unvollständig", "tausch": "Teil getauscht oder eingesetzt",
-                           "ausgesondert": "Set ausgesondert"},
+                           "ausgesondert": "Set ausgesondert", "bestandteil": "Bestandteil ersetzt – Set prüfen"},
              "austausch": {"ja": "ja", "nein": "nein", "nicht_belegt": "nicht belegt"}}
 # Stufe im Modul Material – mit der Zahl dahinter: Einträge vor „Migration Schritt 10“ meinten die Stufen aus Phase 1
 # (1 Führungskraft, 2 Materialwart), die Zahl hält das eindeutig.

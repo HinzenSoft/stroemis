@@ -81,8 +81,10 @@ OHNE_SERIENNUMMERN = ("Keine Spalte ist als Seriennummer zugeordnet – bitte be
                       "mit den Seriennummern zuordnen.")
 FEHLT_ZUORDNUNG = "Ordne mindestens Hersteller und Modell (oder Artikelnummer) zu."
 DEMO_PRODUKT = "Ein DEMO-Produkt passt nur in einen DEMO-Ordner."
-# Schritt 21: Der Import legt keine Hersteller-Sets an – ihre Teile kennt die Liste nicht (Entwurf I).
-SET_PRODUKT = "Hersteller-Set – bitte über „Artikel anlegen“ mit seinen Teilen anlegen; der Import legt keine Sets an."
+# Schritt 21: Der Import legt keine Hersteller-Sets an – ihre Teile kennt die Liste nicht (Entwurf I). Seit L2b (Entwurf A,
+# U11/U12): Teile, die die Liste als eigene Zeilen führt, sind nach dem Import vorhandene Artikel – das Set setzt sie ein.
+SET_PRODUKT = ("Hersteller-Set – der Import legt keine Sets an. Set über „Artikel anlegen“ mit vorhandenen Teilen anlegen "
+               "(„aus dem Bestand wählen“), Angaben der Zeile übernehmen, dann „erneut prüfen“.")
 NEUBESCHRIFTEN = ("Alte Inventarnummern stehen in der Bemerkung und sind nicht suchbar – die Artikel bitte neu "
                   "beschriften (Liste: „Export“ im Ordner).")
 

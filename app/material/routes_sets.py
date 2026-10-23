@@ -9,7 +9,12 @@ löschen laufen über die vorhandenen Routen (pruefung_abschliessen, artikel_aus
 Die Regeln stehen in services/setlauf.py und services/setaustausch.py.
 
 Dazu die Seite „Set prüfen“ (Oberfläche O2): /material/artikel/<iid>/set-pruefung zeigt den Prüfumfang je Teil und führt
-von Prüfung zu Prüfung; sehen genügt (wie bei „Prüfung starten“), die Knöpfe richten sich nach „darf“."""
+von Prüfung zu Prüfung; sehen genügt (wie bei „Prüfung starten“), die Knöpfe richten sich nach „darf“.
+
+Seit P4-L2b (KERN A): vorhandenen Artikel einsetzen („item_id“ an teil-einsetzen; beim Anlegen „teile[].item_id“ an
+POST /artikel), die Auswahl dafür (kandidaten am Set bzw. am Ablageordner des neuen Sets – verwalten), Set auflösen und
+„Bestandteil ersetzt“ – beide verwalten am Set. Eine Kennung im Inhalt („item_id“), die das Konto nicht verwaltet, und
+eine Position, die nicht zu diesem Set gehört, antworten wie Unbekanntes mit 404."""
 from flask import g, jsonify, request
 
 from ..auth import current_user, json_body
@@ -88,7 +93,42 @@ def teil_tauschen(iid):
 @api.post("/artikel/<int:iid>/teil-einsetzen")
 @requires_folder("verwalten", "iid")
 def teil_einsetzen(iid):
-    """{"slot_id" (Position der Kopie, an der ein Teil fehlt – bei genau einer darf es fehlen), Felder des neuen Teils,
-    "bestaetigt"} – 201 mit Set, neuem Teil und „hinweise“."""
+    """{"slot_id" (Position der Kopie, an der ein Teil fehlt – bei genau einer darf es fehlen), Felder des neuen Teils
+    oder "item_id" (vorhandenen Artikel einsetzen, L2b), "bestaetigt"} – 201 mit Set, neuem bzw. eingesetztem Teil und
+    „hinweise“."""
     neu, hinweise = setaustausch.einsetzen(iid, json_body(), _pruefer(), tausch=False)
     return _set_antwort(iid, teil=bestand.artikel_json(bestand.artikel(neu), voll=True), hinweise=hinweise), 201
+
+
+@api.get("/artikel/<int:iid>/kandidaten")
+@requires_folder("verwalten", "iid")
+def set_kandidaten(iid):
+    """Auswahl „aus dem Bestand wählen“ für „Teil einsetzen“: ?slot_id= (einzeln geführte Position dieses Sets), ?q=
+    (mindestens 2 Zeichen) – {treffer, weitere}; ohne Treffer 404, bei genau passender Nummer mit anderem Produkt 409
+    (setaustausch.kandidaten)."""
+    return jsonify(setaustausch.kandidaten_am_set(iid, request.args.get("slot_id"), request.args.get("q")))
+
+
+@api.get("/ordner/<int:fid>/kandidaten")
+@requires_folder("verwalten", "fid")
+def ordner_kandidaten(fid):
+    """Dieselbe Auswahl für „Artikel anlegen“ mit Set-Produkt: ?product_id= (Produkt der Position), ?q= – im Ordner, in
+    dem das Set entsteht."""
+    return jsonify(setaustausch.kandidaten_im_ordner(fid, request.args.get("product_id"), request.args.get("q")))
+
+
+@api.post("/artikel/<int:iid>/aufloesen")
+@requires_folder("verwalten", "iid")
+def set_aufloesen(iid):
+    """„Set auflösen“ (nur ein freies Set, das allein löschbar ist – sonst 409 mit Grund): die Teile bleiben frei im Ordner,
+    der Set-Artikel wird gelöscht. {} – liefert {ok, teile: [{id, inventory_no}]}."""
+    return jsonify(ok=True, teile=setaustausch.aufloesen(iid))
+
+
+@api.post("/artikel/<int:iid>/bestandteil-ersetzt")
+@requires_folder("verwalten", "iid")
+def bestandteil_ersetzt(iid):
+    """{"slot_id" (nicht einzeln geführte Position), "datum", "bemerkung", "bestaetigt"} – sperrt das Set bis zur
+    Set-Prüfung; liefert das Set („artikel“)."""
+    setaustausch.bestandteil_ersetzt(iid, json_body())
+    return _set_antwort(iid)
