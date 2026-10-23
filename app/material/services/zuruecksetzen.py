@@ -11,9 +11,14 @@ Leeren zeigt also nichts ins Leere und nichts muss zurückgesetzt werden. Die DE
 der Befehl nennt sie nur.
 
 Sperren gegen die Produktion, alle drei nötig: STROEMIS_NAME endet auf „-dev“ (erinnerung.dev_umgebung, dieselbe Regel
-wie die harte Sperre der Erinnerungsmails), BASE_URL zeigt weder in der Umgebung noch in der Anwendung (Verwaltung →
-Einstellungen) auf die Produktion (wie scripts/material_beispielbestand.py), und der ausdrückliche Schalter
---ja-alles-loeschen. --trocken zeigt nur, was geschähe (auch er nur auf dev).
+wie die harte Sperre der Erinnerungsmails), BASE_URL zeigt in der Umgebung UND in der Anwendung (Verwaltung →
+Einstellungen) auf eine Adresse der Entwicklung, und der ausdrückliche Schalter --ja-alles-loeschen. --trocken zeigt nur,
+was geschähe (auch er nur auf dev). Die Adresse prüft eine Positivliste (adresse_frei, Nachbesserung nach der
+Sicherheitsprüfung vom 23.10.2026): Der Host wird bereinigt (Leerraum, fehlendes Schema, Unicode NFKC, Punktvarianten wie
+der ideographische Punkt, IDNA, klein) und ist nur frei, wenn er mit „dev.“ beginnt oder localhost bzw. 127.0.0.1 ist
+(run.py setzt http://localhost:8080). Leer, unlesbar oder sonst etwas – auch jede Schreibweise von strömis.de – sperrt.
+Eine leere BASE_URL braucht kein Test und kein Probelauf: Die Tests setzen https://dev.strömis.de, ohne Eintrag gilt in
+der Anwendung ohnehin die Vorgabe https://strömis.de.
 
 Ablauf (zuruecksetzen):
   1. Das frische Schema entsteht zuerst in einer Vorlage im Speicher: models.migrieren auf einer leeren Datenbank, die
@@ -25,11 +30,18 @@ Ablauf (zuruecksetzen):
   3. Sicherung: die ganze Datenbank über die Backup-API (eine zweite, lesende Verbindung; WAL lässt sie neben der
      Sperre lesen) nach <DATA_DIR>/sicherung-material-<Zeitstempel>/stroemis.db, umgestellt auf das gewöhnliche
      Journal, mit quick_check und denselben Zeilenzahlen je mat_-Tabelle. Scheitert sie: Abbruch, nichts gelöscht.
-  4. media/material und pdf/ werden in die Sicherung VERSCHOBEN (umbenannt, nie kopiert – kein doppelter Platz; auf
-     einem anderen Dateisystem scheitert das, und es bleibt alles, wie es war).
+     Ordner 0700, Kopie 0600: Sie enthält alle Konten (Passwort-Hash, Urkundennummer, Unterschrift), Wiki und Prüfungen
+     – README und LIESMICH.txt fordern auf, sie nach dem ersten erfolgreichen Test zu löschen; der Bericht nennt ältere.
+  4. LIESMICH.txt mit dem Rückweg für einen abgebrochenen Lauf, dann media/material und pdf/ in die Sicherung
+     VERSCHIEBEN (umbenannt, nie kopiert – kein doppelter Platz; auf einem anderen Dateisystem scheitert das, und es
+     bleibt alles, wie es war). Ab der exklusiven Transaktion bis nach dem Rückweg werden SIGTERM und SIGHUP (docker
+     compose stop/restart, Deploy, abgerissene Verbindung) zu einer Ausnahme (_signale_abfangen) – der Rückweg greift.
+     Nur gegen SIGKILL hilft das nicht: Dann rollt SQLite die Datenbank zurück, und LIESMICH.txt sagt, wie die Medien
+     zurückkommen.
   5. Alle Objekte des Moduls entfernen (DROP – keine Zeile wird einzeln gelöscht, die Trigger der unveränderlichen
      Nachweise bleiben unberührt, bis ihre Tabelle als Ganzes geht) und das Schema aus der Vorlage anlegen, samt ihrer
-     Zeilen (mat_meta). Erst dann COMMIT. Scheitert etwas vor dem COMMIT: ROLLBACK, die Medien zurück an ihren Platz.
+     Zeilen (mat_meta). Erst dann COMMIT (danach LIESMICH.txt mit dem vollen Rückweg). Scheitert etwas vor dem
+     COMMIT: ROLLBACK, die Medien zurück an ihren Platz, die eigene Sicherung wieder weg.
   6. Danach die Startschritte des Moduls (START_SCHRITTE) wie bei einem Start – das Modul steht dann da wie nach einer
      neuen Installation. Laufende Arbeitsprozesse sehen das neue Schema sofort; „docker compose restart“ danach räumt
      auf, was sie im Speicher halten.
@@ -37,8 +49,11 @@ Ablauf (zuruecksetzen):
 import contextlib
 import logging
 import os
+import re
 import shutil
+import signal
 import sqlite3
+import unicodedata
 from datetime import datetime
 from urllib.parse import urlsplit
 
@@ -47,8 +62,12 @@ from flask import current_app
 from .. import models
 from . import ZONE, erinnerung
 
-# Die Adresse der Produktion (BASE_URL) – wie in scripts/material_beispielbestand.py, auch in Punycode.
-PRODUKTION = {"strömis.de", "www.strömis.de", "xn--strmis-yxa.de", "www.xn--strmis-yxa.de"}
+# Positivliste für BASE_URL (adresse_frei): Hosts der Entwicklung beginnen mit „dev.“, lokal läuft run.py.
+DEV_VORSATZ = "dev."
+LOKAL = {"localhost", "127.0.0.1"}
+# Was IDNA außer dem Punkt als Trenner liest: ideographischer, vollbreiter und halbbreiter ideographischer Punkt.
+PUNKTE = re.compile("[\u3002\uff0e\uff61]")
+SICHERUNG_VORSATZ = "sicherung-material-"
 SCHALTER = "--ja-alles-loeschen"
 WARTEN = 30                                   # Sekunden auf die Schreibsperre (busy_timeout)
 RESERVE = 64 * 1024 * 1024                    # so viel Platz bleibt nach der Sicherung mindestens frei
@@ -62,12 +81,33 @@ class Gescheitert(Exception):
     """Abbruch mit Klartext für die Kommandozeile – die Meldung sagt, was geändert ist (meist: nichts)."""
 
 
+class Signal(Exception):
+    """SIGTERM oder SIGHUP im kritischen Abschnitt (_signale_abfangen) – führt in den Rückweg."""
+
+
 # --- Sperren ---------------------------------------------------------------------------------------------------
 
-def produktion(adresse):
-    """Zeigt die Adresse auf die Produktion?"""
-    host = (urlsplit(adresse or "").hostname or "").lower().rstrip(".")
-    return host in PRODUKTION
+def host(adresse):
+    """Der Host einer BASE_URL, bereinigt: Leerraum weg, fehlendes Schema ergänzt, Unicode NFKC, Punktvarianten als Punkt,
+    IDNA (Punycode), klein, ohne Punkt am Ende. None, wenn nichts Lesbares darin steht."""
+    roh = PUNKTE.sub(".", unicodedata.normalize("NFKC", (adresse or "").strip()))
+    if not roh:
+        return None
+    if "://" not in roh:
+        roh = "//" + roh.lstrip("/")
+    try:
+        name = urlsplit(roh).hostname
+        if not name:
+            return None
+        return name.encode("idna").decode("ascii").lower().rstrip(".") or None
+    except (ValueError, UnicodeError):
+        return None
+
+
+def adresse_frei(adresse):
+    """Positivliste: frei nur eine Adresse der Entwicklung (Host mit „dev.“ davor) oder localhost/127.0.0.1."""
+    h = host(adresse)
+    return bool(h) and (h.startswith(DEV_VORSATZ) or h in LOKAL)
 
 
 def sperrgrund():
@@ -78,8 +118,10 @@ def sperrgrund():
                 "„-dev“ (scripts/dev-einrichten.sh).")
     for herkunft, adresse in (("BASE_URL in der Umgebung", os.environ.get("BASE_URL")),
                               ("BASE_URL der Anwendung (Verwaltung → Einstellungen)", current_app.config.get("BASE_URL"))):
-        if produktion(adresse):
-            return f"{herkunft} zeigt auf die Produktion ({adresse})."
+        if not adresse_frei(adresse):
+            zeigt = f"ist „{adresse.strip()}“" if (adresse or "").strip() else "fehlt"
+            return (f"{herkunft} {zeigt} – frei ist nur eine Adresse der Entwicklung (Host mit „dev.“ davor) oder "
+                    "localhost/127.0.0.1.")
     return None
 
 
@@ -160,9 +202,10 @@ def trocken_text(b, ziel):
                for rel, n, g in b["medien"]]
     frei = shutil.disk_usage(current_app.config["DATA_DIR"]).free
     zeilen += ["", f"Sicherung nach: {ziel} (Datenbank {_mb(b['db_bytes'])}, frei {_mb(frei)})"]
-    zeilen += _bleibt(b) + _demo_text(b)
+    zeilen += _bleibt(b) + _demo_text(b) + _aeltere_text(aeltere_sicherungen())
     zeilen += ["", f"Wirklich zurücksetzen: derselbe Befehl mit {SCHALTER} statt --trocken, danach "
-                   "„docker compose restart“."]
+                   "„docker compose restart“. Während des Laufs nicht auf dev pushen und den Container nicht neu "
+                   "starten."]
     return "\n".join(zeilen)
 
 
@@ -179,7 +222,11 @@ def bericht_text(e):
                       "sie nach.")
     zeilen += _bleibt(b) + _demo_text(b)
     zeilen += ["", "Jetzt den Container neu starten: docker compose restart",
-               f"Rückweg: {os.path.join(e['sicherung'], 'LIESMICH.txt')}"]
+               f"Rückweg: {os.path.join(e['sicherung'], 'LIESMICH.txt')}",
+               "", "Die Sicherung enthält alle Konten mit Passwort-Hash, Urkundennummern, Wiki und Prüfungen – löschen, "
+               "sobald der Neustart und ein erster Test geklappt haben:",
+               f"  rm -rf data/{os.path.basename(e['sicherung'])}"]
+    zeilen += _aeltere_text(e.get("aeltere"))
     return "\n".join(zeilen)
 
 
@@ -188,7 +235,35 @@ def bericht_text(e):
 def sicherungsziel(jetzt=None):
     """<DATA_DIR>/sicherung-material-<JJJJ-MM-TT_hhmmss> (deutsche Zeit) – noch nicht angelegt."""
     stempel = (jetzt or datetime.now(ZONE)).strftime("%Y-%m-%d_%H%M%S")
-    return os.path.join(current_app.config["DATA_DIR"], f"sicherung-material-{stempel}")
+    return os.path.join(current_app.config["DATA_DIR"], f"{SICHERUNG_VORSATZ}{stempel}")
+
+
+def aeltere_sicherungen(ausser=None):
+    """[(Name, Zeitpunkt, Bytes)] der Sicherungsordner unter DATA_DIR, ältester zuerst – ohne ausser (die eben
+    angelegte). Sie enthalten alle Konten und sollen nach dem ersten erfolgreichen Test weg."""
+    daten = current_app.config["DATA_DIR"]
+    out = []
+    for name in sorted(os.listdir(daten)):
+        pfad = os.path.join(daten, name)
+        if name.startswith(SICHERUNG_VORSATZ) and os.path.isdir(pfad) and pfad != ausser:
+            out.append((name, datetime.fromtimestamp(os.stat(pfad).st_mtime, ZONE), _groesse(pfad)[1]))
+    return sorted(out, key=lambda x: x[1])
+
+
+def _aeltere_text(liste):
+    if not liste:
+        return []
+    return (["", "Ältere Sicherungen – sie enthalten alle Konten mit Passwort-Hash, Urkundennummern, Wiki und Prüfungen;",
+             "löschen, sobald sie nicht mehr gebraucht werden (im Klon: rm -rf data/<Ordner>):"]
+            + [f"  {name}  {zeit:%d.%m.%Y %H:%M}  {_mb(groesse)}" for name, zeit, groesse in liste])
+
+
+def _schreiben(pfad, text):
+    """Eine Textdatei nur für den Besitzer (0600) – wie die Kopie der Datenbank daneben."""
+    fd = os.open(pfad, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    os.chmod(pfad, 0o600)
 
 
 def _ordner_anlegen(ziel):
@@ -196,10 +271,11 @@ def _ordner_anlegen(ziel):
     for n in range(1, 100):
         pfad = ziel if n == 1 else f"{ziel}-{n}"
         try:
-            os.mkdir(pfad)
-            return pfad
+            os.mkdir(pfad, 0o700)
         except FileExistsError:
             continue
+        os.chmod(pfad, 0o700)                           # mkdir rechnet die umask ab – nie weiter als 0700
+        return pfad
     raise Gescheitert(f"Kein freier Name für den Sicherungsordner neben {ziel} – nichts geändert.")
 
 
@@ -222,6 +298,7 @@ def _sichern(db_pfad, ordner, erwartet):
     dieselben Zeilen je mat_-Tabelle wie unter der Sperre gezählt. Scheitert etwas, geht die Teilkopie weg."""
     ziel = os.path.join(ordner, "stroemis.db")
     try:
+        os.close(os.open(ziel, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))   # leer anlegen: SQLite übernimmt die Rechte
         with contextlib.closing(sqlite3.connect(db_pfad, timeout=WARTEN)) as quelle, \
                 contextlib.closing(sqlite3.connect(ziel)) as kopie:
             quelle.backup(kopie)
@@ -230,6 +307,7 @@ def _sichern(db_pfad, ordner, erwartet):
             gezaehlt = {t: kopie.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0] for t in erwartet}
         if pruefung != "ok" or gezaehlt != erwartet:
             raise sqlite3.DatabaseError(f"die Kopie stimmt nicht (quick_check: {pruefung})")
+        os.chmod(ziel, 0o600)
         with open(ziel, "rb") as fh:
             os.fsync(fh.fileno())
     except (sqlite3.Error, OSError) as exc:
@@ -284,27 +362,70 @@ def _anlegen(conn, vorlage):
             conn.execute("INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)", (name, seq))
 
 
-def _liesmich(ordner, e):
-    """Was in der Sicherung liegt und wie es zurückgeht – auf dem VPS im Klon der Entwicklung."""
+LOESCHEN = ["BITTE LÖSCHEN, sobald der Neustart und ein erster Test auf dev geklappt haben (spätestens vor Lieferung 3):",
+            "Die Kopie enthält ALLE Konten mit E-Mail, Passwort-Hash, Urkundennummer und Unterschrift, dazu Wiki und",
+            "Prüfungen – das Löschen eines Kontos auf dev erreicht sie nicht. Im Klon der Entwicklung:"]
+
+
+def _liesmich(ordner, zeit, medien, fertig):
+    """Was in der Sicherung liegt und wie es zurückgeht – auf dem VPS im Klon der Entwicklung. medien: die relativen
+    Pfade, die (noch) hierher verschoben werden. fertig=False: vor dem ersten Verschieben – der Rückweg für einen Lauf,
+    der danach abbricht (Datenbank unverändert, nur die Medien zurück); nach dem COMMIT überschreibt fertig=True ihn
+    mit dem vollen Rückweg."""
     name = os.path.basename(ordner)
-    medien = [rel for rel, *_ in e["vorher"]["medien"] if os.path.exists(os.path.join(ordner, rel))]
-    text = [f"Sicherung vor „flask material dev-zuruecksetzen“ am {e['zeit']:%d.%m.%Y um %H:%M:%S}.",
-            "",
-            f"{'stroemis.db':<15}die ganze Datenbank vorher (alle Module, Backup-API)"]
-    text += [f"{rel:<15}vorher unter data/{rel}, hierher verschoben" for rel in medien]
-    text += ["",
-             "Rückweg im Klon der Entwicklung (data/ gehört dem Nutzer 1000 – ist das nicht dein Nutzer, rm, cp und mv",
-             "mit sudo). Was seit dem Zurücksetzen auf dev entstand – auch an Konten, Wiki, Spots und Prüfungen –,",
-             "geht dabei verloren:",
-             "",
-             "  docker compose stop",
-             "  rm -f data/stroemis.db-wal data/stroemis.db-shm",
-             f"  cp data/{name}/stroemis.db data/stroemis.db"]
-    for rel in medien:
-        text += [f"  rm -rf data/{rel}", f"  mv data/{name}/{rel} data/{rel}"]
-    text += ["  sudo chown -R 1000:1000 data", "  docker compose up -d"]
-    with open(os.path.join(ordner, "LIESMICH.txt"), "w", encoding="utf-8") as fh:
-        fh.write("\n".join(text) + "\n")
+    kopf = [f"Sicherung vor „flask material dev-zuruecksetzen“ am {zeit:%d.%m.%Y um %H:%M:%S}.", ""]
+    inhalt = ([f"{'stroemis.db':<15}die ganze Datenbank vorher (alle Module, Backup-API)"]
+              + [f"{rel:<15}vorher unter data/{rel}, hierher verschoben" for rel in medien])
+    loeschen = ["", *LOESCHEN, "", f"  rm -rf data/{name}"]
+    sudo = ["(data/ gehört dem Nutzer 1000 – ist das nicht dein Nutzer, rm, cp und mv mit sudo.)"]
+    if not fertig:
+        text = kopf + [
+            "LAUF UNVOLLSTÄNDIG, solange dieser Absatz hier steht: Der Lauf wurde nach dem Sichern abgebrochen (etwa",
+            "Container neu gestartet oder Verbindung weg). Die Datenbank ist dann unverändert – SQLite verwirft den",
+            "offenen Umbau –, nur die Medien des Moduls liegen hier. Zurück im Klon der Entwicklung (legte ein Start",
+            "die Ordner unter data/ inzwischen leer neu an, sie vorher mit rmdir entfernen):", *sudo, "",
+            "  docker compose stop"]
+        text += [f"  mv data/{name}/{rel} data/{rel}        (nur, falls data/{name}/{rel} da ist)" for rel in medien]
+        text += ["  docker compose up -d", "", *inhalt, *loeschen]
+    else:
+        text = kopf + inhalt + [
+            "", "Rückweg im Klon der Entwicklung – was seit dem Zurücksetzen auf dev entstand, auch an Konten, Wiki,",
+            "Spots und Prüfungen, geht dabei verloren:", *sudo, "",
+            "  docker compose stop",
+            "  rm -f data/stroemis.db-wal data/stroemis.db-shm",
+            f"  cp data/{name}/stroemis.db data/stroemis.db"]
+        for rel in medien:
+            text += [f"  rm -rf data/{rel}", f"  mv data/{name}/{rel} data/{rel}"]
+        text += ["  sudo chown -R 1000:1000 data", "  docker compose up -d", *loeschen]
+    _schreiben(os.path.join(ordner, "LIESMICH.txt"), "\n".join(text) + "\n")
+
+
+@contextlib.contextmanager
+def _signale_abfangen():
+    """SIGTERM und SIGHUP (docker compose stop/restart, Deploy, abgerissene Verbindung) werden im kritischen Abschnitt zu
+    einer Ausnahme (Signal) – der Rückweg greift: ROLLBACK, Medien zurück. Nur das erste Signal bricht ab; weitere,
+    während der Rückweg läuft, und jedes nach zustand["fertig"] (unmittelbar vor dem COMMIT gesetzt) gehen ins Leere,
+    damit weder der Rückweg noch ein gelungener Lauf halb endet. Danach gelten die alten Handler wieder. Außerhalb des
+    Hauptthreads (signal.signal geht dort nicht) bleibt alles, wie es ist."""
+    zustand = {"fertig": False, "abbruch": False}
+
+    def abbrechen(signum, _frame):
+        if zustand["fertig"] or zustand["abbruch"]:
+            return
+        zustand["abbruch"] = True
+        raise Signal(f"Signal {signal.Signals(signum).name}")
+
+    alt = {}
+    try:
+        for s in (signal.SIGTERM, signal.SIGHUP):
+            alt[s] = signal.signal(s, abbrechen)
+    except ValueError:
+        pass
+    try:
+        yield zustand
+    finally:
+        for s, h in alt.items():
+            signal.signal(s, h)
 
 
 def zuruecksetzen(jetzt=None):
@@ -338,32 +459,37 @@ def zuruecksetzen(jetzt=None):
             raise Gescheitert(f"Die Datenbank ist belegt ({exc}) – nichts geändert. Später erneut, oder den Container "
                               "vorher neu starten.") from exc
         verschoben = []
-        try:
-            vorher = bestand(conn)
-            _sichern(db_pfad, ordner, vorher["zeilen"])
-            for rel, quelle in _medien():
-                if os.path.lexists(quelle):
+        with _signale_abfangen() as zustand:
+            try:
+                vorher = bestand(conn)
+                _sichern(db_pfad, ordner, vorher["zeilen"])
+                medien = [(rel, quelle) for rel, quelle in _medien() if os.path.lexists(quelle)]
+                _liesmich(ordner, jetzt, [rel for rel, _ in medien], fertig=False)
+                for rel, quelle in medien:
                     ziel = os.path.join(ordner, rel)
-                    os.makedirs(os.path.dirname(ziel), exist_ok=True)
+                    os.makedirs(os.path.dirname(ziel), mode=0o700, exist_ok=True)
                     os.rename(quelle, ziel)                 # nie kopieren; ein anderes Dateisystem scheitert hier
                     verschoben.append((quelle, ziel))
-            _leeren(conn)
-            _anlegen(conn, vorlage)
-            version = int(conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0])
-            if version != models.SCHEMA_VERSION:
-                raise sqlite3.DatabaseError(f"Schemaversion {version} statt {models.SCHEMA_VERSION}")
-            conn.execute("COMMIT")
-        except BaseException as exc:
-            if conn.in_transaction:
-                conn.execute("ROLLBACK")
-            _zurueck(ordner, verschoben, exc)
-            raise
+                _leeren(conn)
+                _anlegen(conn, vorlage)
+                version = int(conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0])
+                if version != models.SCHEMA_VERSION:
+                    raise sqlite3.DatabaseError(f"Schemaversion {version} statt {models.SCHEMA_VERSION}")
+                zustand["fertig"] = True                    # ein Signal ab hier bricht nicht mehr ab
+                conn.execute("COMMIT")
+            except BaseException as exc:
+                zustand["abbruch"] = True                   # ein Signal unterbricht den Rückweg nicht
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                _zurueck(ordner, verschoben, exc)
+                raise
     finally:
         conn.close()
         if vorlage is not None:
             vorlage.close()
-    e = {"sicherung": ordner, "vorher": vorher, "version": version, "zeit": jetzt, "start_fehler": None}
-    _liesmich(ordner, e)
+    e = {"sicherung": ordner, "vorher": vorher, "version": version, "zeit": jetzt, "start_fehler": None,
+         "aeltere": aeltere_sicherungen(ausser=ordner)}
+    _liesmich(ordner, jetzt, [os.path.relpath(q, current_app.config["DATA_DIR"]) for q, _ in verschoben], fertig=True)
     # Wie beim Start (db.init_db): eine eigene Verbindung, jeder Schritt mit seiner eigenen Transaktion.
     start = sqlite3.connect(db_pfad, timeout=WARTEN)
     try:
@@ -391,10 +517,11 @@ def _zurueck(ordner, verschoben, exc):
     if liegen:
         raise Gescheitert(f"Abgebrochen ({exc}); die Datenbank ist unverändert, aber nicht alle Medien ließen sich "
                           f"zurückschieben – sie liegen noch in der Sicherung: {'; '.join(liegen)}") from exc
-    try:
-        os.remove(os.path.join(ordner, "stroemis.db"))
-    except OSError:
-        pass
+    for rest in ("stroemis.db", "LIESMICH.txt"):
+        try:
+            os.remove(os.path.join(ordner, rest))
+        except OSError:
+            pass
     for leer in sorted({os.path.dirname(z) for _, z in verschoben} | {ordner}, key=len, reverse=True):
         try:
             os.rmdir(leer)

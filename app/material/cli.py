@@ -253,7 +253,7 @@ def dev_zuruecksetzen(trocken, ja):
     """Das Modul Material auf dev leeren, um von null an zu testen: erst die ganze Datenbank sichern und media/material
     und pdf/ in die Sicherung verschieben (<DATA_DIR>/sicherung-material-<Zeitstempel>), dann alle mat_-Tabellen samt
     Triggern und Volltextindizes entfernen und das Schema frisch anlegen. Konten, Wiki, Spots, Prüfungen und
-    Einstellungen bleiben. Nur auf dev (STROEMIS_NAME endet auf -dev, BASE_URL nicht die Produktion) und nur mit
+    Einstellungen bleiben. Nur auf dev (STROEMIS_NAME endet auf -dev, BASE_URL mit Host dev.… oder localhost) und nur mit
     --ja-alles-loeschen; sonst Exit 2. Exit 1, wenn die Sicherung oder ein späterer Schritt scheiterte – dann ist
     nichts geändert (die Meldung sagt es). Danach: docker compose restart. Siehe services/zuruecksetzen.py."""
     from .. import einstellungen

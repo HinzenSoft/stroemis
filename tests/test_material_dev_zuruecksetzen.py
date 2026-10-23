@@ -118,6 +118,10 @@ def stand(app):
             "dateien": dateien(app.config["DATA_DIR"], ohne=("stroemis.db",))}
 
 
+def rechte(pfad):
+    return os.stat(pfad).st_mode & 0o777
+
+
 def sicherungen(app):
     return sorted(n for n in os.listdir(app.config["DATA_DIR"]) if n.startswith("sicherung-material-"))
 
@@ -182,8 +186,8 @@ def test_sperren():
             ({"STROEMIS_NAME": None, "BASE_URL": DEV["BASE_URL"]}, "STROEMIS_NAME ist „nicht gesetzt“"),
             ({"STROEMIS_NAME": "stroemis", "BASE_URL": DEV["BASE_URL"]}, "STROEMIS_NAME ist „stroemis“"),
             ({"STROEMIS_NAME": "stroemis-dev-alt", "BASE_URL": DEV["BASE_URL"]}, "nicht die Entwicklung"),
-            ({"STROEMIS_NAME": "stroemis-dev", "BASE_URL": "https://strömis.de"}, "BASE_URL in der Umgebung"),
-            ({"STROEMIS_NAME": "stroemis-dev", "BASE_URL": "https://www.xn--strmis-yxa.de/"}, "zeigt auf die Produktion"),
+            ({"STROEMIS_NAME": "stroemis-dev", "BASE_URL": "https://strömis.de"}, "BASE_URL in der Umgebung ist"),
+            ({"STROEMIS_NAME": "stroemis-dev", "BASE_URL": "https://www.xn--strmis-yxa.de/"}, "frei ist nur"),
         ]
         for werte, text in faelle:
             for schalter in (("--ja-alles-loeschen",), ("--trocken",), ("--trocken", "--ja-alles-loeschen"), ()):
@@ -265,12 +269,24 @@ def test_zuruecksetzen():
             liesmich = fh.read()
         assert f"cp data/{ordner}/stroemis.db data/stroemis.db" in liesmich and f"mv data/{ordner}/pdf data/pdf" in liesmich
         assert f"mv data/{ordner}/media/material data/media/material" in liesmich and "docker compose up -d" in liesmich
+        assert "LAUF UNVOLLSTÄNDIG" not in liesmich and "BITTE LÖSCHEN" in liesmich and "Passwort-Hash" in liesmich
+        assert f"rm -rf data/{ordner}" in liesmich and f"rm -rf data/{ordner}" in aus and "Passwort-Hash" in aus
+        # Personendaten: Ordner 0700, Kopie und LIESMICH 0600 (Befund 3 der Sicherheitsprüfung).
+        assert rechte(sicherung) == 0o700 and rechte(kopie) == 0o600, (oct(rechte(sicherung)), oct(rechte(kopie)))
+        assert rechte(os.path.join(sicherung, "LIESMICH.txt")) == 0o600 and rechte(os.path.join(sicherung, "media")) == 0o700
+        assert "Ältere Sicherungen" not in aus
 
         # Zweiter Lauf auf dem leeren Modul: geht, eigene Sicherung.
         with umwelt(app, **DEV):
             aus, code = aufrufen(app, "--ja-alles-loeschen")
         assert code == 0 and "Geleert:" in aus, (code, aus)
         assert len(sicherungen(app)) == 2 and stand(app)["aussen"] == vorher["aussen"]
+        # Der Bericht nennt die ältere Sicherung zum Löschen, der Probelauf beide.
+        alt = aus.split("Ältere Sicherungen", 1)[1]
+        assert ordner in alt and sicherungen(app)[1] not in alt, aus
+        with umwelt(app, **DEV):
+            aus, code = aufrufen(app, "--trocken")
+        assert code == 0 and all(n in aus.split("Ältere Sicherungen", 1)[1] for n in sicherungen(app)), aus
         # Die App startet danach, das Modul ist leer und benutzbar, und die Demodaten laufen wieder.
         app2 = make_app(tmp)
         c = app2.test_client()
@@ -334,7 +350,156 @@ def test_scheitern():
     print("Scheitern bestanden.")
 
 
+# --- Nachbesserung nach der Sicherheitsprüfung (23.10.2026) ------------------------------------------------------
+
+def test_sperre_schreibweisen():
+    """Befund 1: BASE_URL als Positivliste – bereinigt (Leerraum, Schema, NFKC/NFD, ideographischer Punkt, IDNA, groß/
+    klein), frei nur „dev.…“, localhost und 127.0.0.1. Die Fälle aus der Probe sperre.py der Prüfung, je einmal in der
+    Umgebung (Anwendung auf dev) und in der Anwendung (Umgebung auf dev); dazu sperrgrund() und der Probelauf."""
+    import unicodedata
+    from app.material.services import zuruecksetzen as z
+    nfd = unicodedata.normalize("NFD", "https://strömis.de")
+    gesperrt = ["https://strömis.de", "HTTPS://STRÖMIS.DE/", "https://strömis.de:443/x", "https://xn--strmis-yxa.de",
+                "https://XN--STRMIS-YXA.DE", "https://strömis.de.", "https://www.strömis.de", "https://user:pw@strömis.de",
+                "strömis.de", "//strömis.de", " https://strömis.de", "https://strömis.de ", nfd, "https://strömis。de",
+                "https://STRÖMIS.de", "https://strömis.de\t", "https://wiki.strömis.de", "", None, "https://[::1]",
+                "http://strömis.de:abc", "https://[", "https://dev", "https://devströmis.de", "https://ｓｔｒöｍｉｓ．ｄｅ",
+                "   "]
+    frei = ["https://dev.strömis.de", "dev.strömis.de", " https://dev.strömis.de\n", unicodedata.normalize(
+        "NFD", "https://dev.strömis.de"), "https://dev.strömis。de", "HTTPS://DEV.XN--STRMIS-YXA.DE/", "https://ｄｅｖ．strömis.de",
+        "http://localhost:8080", "http://127.0.0.1:8080", "https://dev.strömis.de."]
+    for a in gesperrt:
+        assert not z.adresse_frei(a), (a, z.host(a))
+    for a in frei:
+        assert z.adresse_frei(a), (a, z.host(a))
+    assert z.host(nfd) == z.host("https://strömis。de") == z.host("strömis.de ") == "xn--strmis-yxa.de"
+    with tempfile.TemporaryDirectory() as tmp:
+        app = make_app(tmp)
+        vorher = stand(app)
+        for a in gesperrt + frei:
+            for wo in ("umgebung", "anwendung"):
+                env = dict(DEV) if wo == "anwendung" else {"STROEMIS_NAME": DEV["STROEMIS_NAME"], "BASE_URL": a}
+                alt_env = {k: os.environ.get(k) for k in env}
+                os.environ.update({k: v for k, v in env.items() if v is not None})
+                if env["BASE_URL"] is None:
+                    os.environ.pop("BASE_URL", None)
+                app.config["BASE_URL"] = a if wo == "anwendung" else DEV["BASE_URL"]
+                try:
+                    with app.app_context():
+                        grund = z.sperrgrund()
+                    aus, code = aufrufen(app, "--trocken")
+                finally:
+                    for k, v in alt_env.items():
+                        if v is None:
+                            os.environ.pop(k, None)
+                        else:
+                            os.environ[k] = v
+                ist_frei = a in frei
+                assert (grund is None) == ist_frei and code == (0 if ist_frei else 2), (a, wo, grund, code, aus)
+                if not ist_frei:
+                    teil = "BASE_URL in der Umgebung" if wo == "umgebung" else "BASE_URL der Anwendung"
+                    assert teil in grund and ("fehlt" in grund or "ist „" in grund), (a, wo, grund)
+        assert stand(app) == vorher and not sicherungen(app)
+    print("Sperre Schreibweisen bestanden.")
+
+
+KIND = r"""
+import os, sys, time
+from app import create_app
+app = create_app()
+from app.material.services import zuruecksetzen as z
+echt = z._leeren
+def halt(conn):
+    os.write(1, b"BEREIT\n")
+    time.sleep(120)
+    return echt(conn)
+z._leeren = halt
+r = app.test_cli_runner().invoke(args=["material", "dev-zuruecksetzen", "--ja-alles-loeschen"])
+sys.stdout.write(r.output)
+sys.stdout.flush()
+sys.exit(r.exit_code)
+"""
+
+
+def _kind_abbrechen(tmp, signum):
+    """Den Befehl in einem eigenen Prozess starten, ihn nach dem Verschieben der Medien (in _leeren) anhalten und ihm
+    signum schicken – wie docker compose restart/stop oder ein Deploy während des Laufs (Probe kill.py der Prüfung).
+    Liefert (Rückgabewert, Ausgabe)."""
+    import select
+    import subprocess
+    env = dict(os.environ, DATA_DIR=tmp, **DEV)
+    kind = subprocess.Popen([sys.executable, "-S", "-c", KIND], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                            env=env, cwd=REPO)
+    try:
+        bereit, _, _ = select.select([kind.stdout], [], [], 120)
+        assert bereit and kind.stdout.readline().strip() == b"BEREIT", "Kind meldet sich nicht"
+        kind.send_signal(signum)
+        aus, _ = kind.communicate(timeout=60)
+    finally:
+        if kind.poll() is None:
+            kind.kill()
+            kind.wait(timeout=30)
+    return kind.returncode, aus.decode("utf-8", "replace")
+
+
+def test_abbruch_per_signal():
+    """Befund 2: SIGTERM und SIGHUP mitten im Lauf (Medien schon verschoben) führen in den Rückweg – Exit 1, Datenbank und
+    Medien wie vorher, keine Sicherung bleibt liegen, die Signal-Handler sind danach die alten. SIGKILL lässt sich nicht
+    abfangen: Die Datenbank bleibt unverändert (SQLite verwirft den offenen Umbau), die Medien liegen in der Sicherung,
+    und deren LIESMICH.txt (vor dem ersten Verschieben geschrieben) bringt sie mit ihren mv-Zeilen zurück."""
+    import signal
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        ok(k["katalog"].post(f"/api/material/produkte/{ids['gurt']}/bild", data={"file": (jpeg(), "gurt.jpg")},
+                             headers=H, content_type="multipart/form-data"))
+        gid, _ = gliederung(k["adm"])
+        neuer_artikel(k["wart"], ids["hms"], ordner_neu(k["wart"], gid, "Lager Platzhalter"), serial_no="PH-1")
+        os.makedirs(os.path.join(tmp, "pdf", "2026"))
+        with open(os.path.join(tmp, "pdf", "2026", "P-platzhalter.pdf"), "wb") as fh:
+            fh.write(PDF)
+        make_app(tmp)                    # die Startschritte legen die Datei ohne Zeile nach pdf/verwaist – wie im Kind
+        vorher = stand(app)
+        for signum in (signal.SIGTERM, signal.SIGHUP):
+            code, aus = _kind_abbrechen(tmp, signum)
+            name = signal.Signals(signum).name
+            assert code == 1 and f"Signal {name}" in aus and "nichts geändert" in aus, (name, code, aus)
+            jetzt = stand(app)
+            assert jetzt == vorher and not sicherungen(app), (name, sicherungen(app), {
+                (t, x): (vorher[t].get(x), jetzt[t].get(x))
+                for t in vorher for x in set(vorher[t]) | set(jetzt[t]) if vorher[t].get(x) != jetzt[t].get(x)})
+        # Die Handler sind nach einem Lauf wieder die alten (hier im Testprozess, ohne Signal).
+        alt = (signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGHUP))
+        from app.material.services import zuruecksetzen as z
+        with z._signale_abfangen():
+            assert signal.getsignal(signal.SIGTERM) not in alt
+        assert (signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGHUP)) == alt
+        # SIGKILL: halber Zustand, aber mit Anleitung.
+        code, _ = _kind_abbrechen(tmp, signal.SIGKILL)
+        assert code == -signal.SIGKILL, code
+        (ordner,) = sicherungen(app)
+        sicherung = os.path.join(tmp, ordner)
+        nachher = stand(app)
+        assert nachher["modul"] == vorher["modul"] and nachher["aussen"] == vorher["aussen"]
+        assert all(not os.path.exists(os.path.join(tmp, rel)) for rel in MEDIEN)
+        with open(os.path.join(sicherung, "LIESMICH.txt"), encoding="utf-8") as fh:
+            liesmich = fh.read()
+        assert "LAUF UNVOLLSTÄNDIG" in liesmich and "BITTE LÖSCHEN" in liesmich, liesmich
+        zeilen = [z_.split()[:3] for z_ in liesmich.splitlines() if z_.strip().startswith("mv ")]
+        assert len(zeilen) == 2 and "cp data/" not in liesmich, liesmich
+        for _, quelle, ziel in zeilen:                   # der Rückweg aus LIESMICH.txt, data/ = tmp
+            os.rename(os.path.join(tmp, quelle[len("data/"):]), os.path.join(tmp, ziel[len("data/"):]))
+        for rest in ("stroemis.db", "LIESMICH.txt"):
+            os.remove(os.path.join(sicherung, rest))
+        os.rmdir(os.path.join(sicherung, "media"))
+        os.rmdir(sicherung)
+        assert stand(app) == vorher
+    print("Abbruch per Signal bestanden.")
+
+
 if __name__ == "__main__":
     test_sperren()
+    test_sperre_schreibweisen()
     test_scheitern()
+    test_abbruch_per_signal()
     test_zuruecksetzen()

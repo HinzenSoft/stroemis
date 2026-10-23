@@ -291,9 +291,11 @@ eine neue Installation (Schemaversion 21). Wer den Katalog behalten will: vorher
 importieren.
 
 Er wirkt nur, wenn `STROEMIS_NAME` auf `-dev` endet (setzt `dev-einrichten.sh`, dieselbe Regel wie die Sperre der
-Erinnerungsmails), `BASE_URL` weder in der `.env` noch unter Verwaltung → Einstellungen auf `strömis.de` zeigt und
-`--ja-alles-loeschen` dabeisteht – sonst Rückgabewert 2, nichts geändert. In der Produktion (Container `stroemis`) lehnt
-er also auch mit Schalter ab.
+Erinnerungsmails), `BASE_URL` in der `.env` **und** unter Verwaltung → Einstellungen auf eine Adresse der Entwicklung
+zeigt – der Host beginnt mit `dev.` (etwa `https://dev.strömis.de`) oder ist `localhost`/`127.0.0.1` – und
+`--ja-alles-loeschen` dabeisteht. Jede andere, leere oder unlesbare `BASE_URL` sperrt, auch jede Schreibweise von
+`strömis.de` (ohne Schema, mit Leerzeichen, in Punycode, mit zerlegtem „ö“ oder ideographischem Punkt). Sonst
+Rückgabewert 2, nichts geändert. In der Produktion (Container `stroemis`) lehnt er also auch mit Schalter ab.
 
 Auf dem VPS im Klon der Entwicklung (`dev-einrichten.sh` legt ihn neben die Produktion, Ordnername mit `-dev`; Container
 `stroemis-dev` laut `.env` – `docker compose` erreicht ihn dort über den Dienst `stroemis`):
@@ -314,10 +316,19 @@ DEMO-Konten. Rückgabewert 0 = zurückgesetzt; 1 = die Sicherung oder ein späte
 nichts geändert (Datenbank unverändert, Medien zurück an ihrem Platz; die Meldung sagt es); 2 = nicht dev oder ohne
 Schalter. Der Server darf dabei laufen: Der Befehl hält während Sicherung und Umbau die Schreibsperre der Datenbank
 (Schreibzugriffe warten so lange); der Neustart danach räumt auf, was die Arbeitsprozesse noch im Speicher halten.
+**Während des Laufs (wenige Sekunden) nicht auf `dev` pushen und den Container nicht neu starten.** Ein `docker compose
+stop/restart` oder Deploy (SIGTERM) bricht sauber ab – Datenbank unverändert, Medien zurück, Rückgabewert 1. Nur wenn der
+Prozess hart beendet wird (SIGKILL), bleiben die Medien im Sicherungsordner liegen; dessen `LIESMICH.txt` steht dann mit
+„LAUF UNVOLLSTÄNDIG“ da und nennt die `mv`-Zeilen, die sie zurückbringen (die Datenbank ist auch dann unverändert).
 
+- **Sicherung löschen**: Die Sicherung ist eine Kopie der **ganzen** Datenbank – alle Konten mit E-Mail,
+  Passwort-Hash, Urkundennummer und Unterschrift, dazu Wiki und Prüfungen. Ein Konto, das danach auf dev gelöscht wird,
+  bleibt in ihr stehen. Deshalb **löschen, sobald der Neustart und ein erster Test geklappt haben, spätestens vor
+  Lieferung 3**: `rm -rf data/sicherung-material-…` (Befehl und Ordnername stehen in der Ausgabe und in `LIESMICH.txt`;
+  ggf. mit `sudo`). Der Ordner ist nur für seinen Besitzer lesbar (0700, Kopie 0600). Jeder Lauf und jeder Probelauf
+  nennt die älteren Sicherungen mit Datum und Größe.
 - **Platz**: Die Kopie der Datenbank braucht einmal deren Größe (der Probelauf nennt Größe und freien Platz); die Medien
-  werden nur umbenannt, nicht kopiert. Sicherungsordner bleiben liegen, bis du sie löschst
-  (`rm -rf data/sicherung-material-…`).
+  werden nur umbenannt, nicht kopiert.
 - **DEMO-Konten** (`@example.invalid`) löscht der Befehl nicht, er listet sie. Sie haben danach keine Freigaben mehr;
   über die Nutzerverwaltung löschen, falls nicht mehr gebraucht. `material_demo.py --demo --konten` legt danach den
   DEMO-Bestand neu an, aber nur fehlende Konten – wer die DEMO-Konten mit ihren Freigaben wieder haben will, löscht sie
@@ -628,8 +639,8 @@ python tests/test_material_stufen.py     # Phase 2: Modulstufe (Migration 9 → 
                                         # Personensuche je Zweck, Mails, Profil, Vorgabe neuer Konten)
 python tests/test_material_beispielbestand.py  # Beispielbestand: Katalog unverändert (Tabellen, Export, Dateien), alle Zustände, Protokolle, DEMO-Kennzeichnung,
                                                # abgebrochener Lauf (meldet „unvollständig“)
-python tests/test_material_dev_zuruecksetzen.py  # material dev-zuruecksetzen: Sperren (dev-Kennung, BASE_URL, Schalter), --trocken, Sicherung
-                                                 # vollständig, Schema wie neu, übrige Module byteidentisch, Scheitern ändert nichts
+python tests/test_material_dev_zuruecksetzen.py  # material dev-zuruecksetzen: Sperren (dev-Kennung, BASE_URL als Positivliste, Schalter), --trocken, Sicherung (0700/0600)
+                                                 # vollständig, Schema wie neu, übrige Module byteidentisch, Scheitern und SIGTERM/SIGHUP ändern nichts
 python scripts/beispieldaten.py         # füllt ./data mit zwei erfundenen Prüfungs-Lehrgängen zum Ausprobieren
 python scripts/material_demo.py --demo  # füllt ./data mit DEMO-Katalog, DEMO-Bestand in zwei Gliederungen und DEMO-Prüfungen (nie für echte Prüfungen)
 python scripts/material_demo.py --demo --konten  # dazu einmalig fünf DEMO-Konten (vier Mitglieder mit Freigaben, die DEMO-Material-Verwaltung);

@@ -4162,7 +4162,7 @@ selbst auf (README, „Modul Material auf dev zurücksetzen (nur dev)“).
   services/zuruecksetzen.py). Wirkt nur auf dev: `STROEMIS_NAME` endet auf „-dev“ (`erinnerung.dev_umgebung`, aus
   `gesperrt()` herausgelöst – dieselbe Regel wie die harte Sperre der Erinnerungsmails), `BASE_URL` zeigt weder in der
   Umgebung noch unter Verwaltung → Einstellungen auf die Produktion (wie `scripts/material_beispielbestand.py`), und
-  der Schalter `--ja-alles-loeschen` ist gesetzt. Sonst Klartext und Rückgabewert 2, nichts geändert; `--trocken` (auch
+  der Schalter `--ja-alles-loeschen` ist gesetzt (seit der Nachbesserung: `BASE_URL` als Positivliste, siehe unten). Sonst Klartext und Rückgabewert 2, nichts geändert; `--trocken` (auch
   nur auf dev) zeigt Tabellen mit Zeilen, Volltextindizes, Trigger, Indizes, Medienordner mit Dateien und MB, den
   Sicherungsordner mit Datenbankgröße und freiem Platz, was bleibt, und die DEMO-Konten.
 - **Sicherung zuerst**, unter einer exklusiven Transaktion (busy_timeout 30 s): die ganze Datenbank über die Backup-API
@@ -4192,6 +4192,38 @@ selbst auf (README, „Modul Material auf dev zurücksetzen (nur dev)“).
   einer neuen Installation, Sicherung mit allen alten Zeilen und allen Mediendateien, außerhalb des Moduls jede Zeile,
   jedes Schema-Objekt und jede Datei byteidentisch; zweiter Lauf auf leerem Modul, App startet, `material_demo.py
   --demo --konten` läuft wieder; Sicherung, Verschieben und Anlegen scheitern jeweils ohne Änderung.
+
+- **Nachbesserung nach der Sicherheitsprüfung** (pruefung_dev_zuruecksetzen.md, drei Befunde „niedrig“, alle behoben):
+  1. *BASE_URL als Positivliste* (`zuruecksetzen.host`, `adresse_frei`): Der Host wird bereinigt – Leerraum weg,
+     fehlendes Schema ergänzt, Unicode NFKC, ideographischer und vollbreiter Punkt als Punkt, IDNA, klein, ohne Punkt am
+     Ende – und ist nur frei, wenn er mit „dev.“ beginnt oder localhost/127.0.0.1 ist; das gilt für die Umgebung und
+     für die Anwendung (Verwaltung → Einstellungen). Leer, unlesbar oder sonst etwas sperrt (Exit 2), also auch
+     `strömis.de` ohne Schema, mit Leerzeichen am Ende, mit zerlegtem „ö“ (NFD) oder mit „。“. Eine Test-Kennung für
+     eine leere BASE_URL ist nicht nötig: Die Tests setzen `https://dev.strömis.de`, run.py `http://localhost:8080`, und
+     ohne Eintrag gilt in der Anwendung die Vorgabe `https://strömis.de` (sperrt). Die bisherige Sperrliste
+     `PRODUKTION` entfällt.
+  2. *Abbruch per Signal*: LIESMICH.txt entsteht schon vor dem ersten Verschieben – mit „LAUF UNVOLLSTÄNDIG“ und den
+     `mv`-Zeilen, die die Medien zurückbringen (die Datenbank verwirft SQLite dann selbst) – und wird nach dem COMMIT
+     mit dem vollen Rückweg überschrieben. Von der exklusiven Transaktion bis nach dem Rückweg werden SIGTERM und
+     SIGHUP zu einer Ausnahme (`_signale_abfangen`): `docker compose stop/restart` oder ein Deploy mitten im Lauf
+     führen in den vorhandenen Rückweg (ROLLBACK, Medien zurück, eigene Sicherung weg, Exit 1). Ein zweites Signal
+     unterbricht den Rückweg nicht, eines unmittelbar vor oder nach dem COMMIT lässt den Lauf zu Ende gehen; danach
+     gelten die alten Handler. README: während des Laufs nicht pushen und nicht neu starten.
+  3. *Sicherung mit Personendaten*: Sicherungsordner 0700, Kopie und LIESMICH.txt 0600. Bericht und Probelauf nennen
+     die älteren `sicherung-material-*` mit Datum und Größe; Bericht, LIESMICH.txt und README fordern auf, die Sicherung
+     zu löschen, sobald Neustart und ein erster Test geklappt haben (spätestens vor Lieferung 3), mit dem fertigen
+     `rm -rf`-Befehl.
+- **Löschkonzept**: Eine Sicherung von `dev-zuruecksetzen` ist eine Vollkopie der Datenbank – alle Konten mit E-Mail,
+  Passwort-Hash, Urkundennummer und Unterschrift, Wiki und Prüfungen. Das Löschen eines Kontos auf dev erreicht sie
+  nicht; sie ist deshalb nur für den Test gedacht und wird von Hand gelöscht, sobald Neustart und erster Test geklappt
+  haben (spätestens vor Lieferung 3). Nur auf dev, nur für den Besitzer lesbar; der Befehl erinnert bei jedem Lauf an
+  ältere Sicherungen.
+- **Tests dazu** (tests/test_material_dev_zuruecksetzen.py): `test_sperre_schreibweisen` (die Fälle der Probe sperre.py
+  und freie Schreibweisen, je in Umgebung und Anwendung, über `sperrgrund()` und `--trocken`), `test_abbruch_per_signal`
+  (Probe kill.py nachgestellt: Kind hält in `_leeren`; SIGTERM und SIGHUP → Exit 1, alles wie vorher; SIGKILL →
+  Datenbank unverändert, LIESMICH.txt „LAUF UNVOLLSTÄNDIG“, ihre `mv`-Zeilen stellen den Stand wieder her; Handler danach
+  die alten), in `test_zuruecksetzen` Rechte 0700/0600, Löschaufforderung und ältere Sicherungen in Bericht und
+  Probelauf.
 
 ## Phase 4 · Lieferung 2b – Sets, Teil 2 (23.10.2026, Stand: geliefert, wartet auf Freigabe)
 
@@ -6380,7 +6412,7 @@ oder Plattform-Verwaltung).
 | `PUT /api/material/ordner/<id>` mit `reminders_off` (ja/nein) | Materialwart am Ordner | „Erinnerungsmails aus“ für Ordner und Unterordner; fehlt das Feld, bleibt der Wert; anderes als ja/nein → 400; mit Journal (Phase 2 · 2) |
 | `flask --app "app:create_app()" material remind [--trocken [--demo]] [--stichtag JJJJ-MM-TT] [--erneut]` | Kommandozeile im Container | Erinnerungslauf: `--trocken` zeigt die Mails des nächsten Laufs mit Adressen und schreibt nichts (auch bei „aus“ oder gesperrt), `--stichtag` und `--demo` (DEMO-Bestand einbeziehen, nur Ansicht) nur mit `--trocken`; ohne `--trocken` ein echter Lauf für heute (nie DEMO), `--erneut` noch einmal am selben Tag (nur, was nicht im Log steht). Exit 0, 1 (Mail gescheitert, Fehler), 2 (aus, gesperrt, kein Mailserver, `--stichtag` oder `--demo` ohne `--trocken`, unlesbares Datum) (Phase 2 · 2) |
 | `flask --app "app:create_app()" material dok-zusammenfuehren [--probe]` | Kommandozeile im Container | Herstellerdokumente einmal je Inhalt (Schritt 18): Altbestand unter `media/material/dok` auf Inhaltsnamen bringen, Dubletten zusammenführen, Prüfsummen aus den Dateien nachtragen – läuft beim ersten Start nach dem Update von selbst; hier mit Bericht (Dateien und MB vorher/nachher, frei, fehlende Dateien, Dateien ohne Zeile und davon entfernte Dubletten, entfernte Zwischendateien älter als ein Tag), `--probe` rechnet nur. Exit 0, 1 (Dateien fehlen), 2 (Ordner nicht erreichbar) (22.10.2026) |
-| `flask --app "app:create_app()" material dev-zuruecksetzen [--trocken] [--ja-alles-loeschen]` | Kommandozeile im Container, nur dev | Modul Material leeren: erst die ganze Datenbank nach `sicherung-material-<Zeitstempel>/` sichern und `media/material`, `pdf/` dorthin verschieben, dann alle `mat_`-Objekte entfernen und das Schema frisch anlegen (Version 21); Konten, Wiki, Spots, Prüfungen, Einstellungen bleiben, DEMO-Konten werden nur genannt. `--trocken` zeigt nur. Nur mit `STROEMIS_NAME` auf `-dev`, `BASE_URL` nicht die Produktion und `--ja-alles-loeschen`. Exit 0, 1 (Sicherung oder späterer Schritt gescheitert – nichts geändert), 2 (nicht dev, ohne Schalter) (23.10.2026) |
+| `flask --app "app:create_app()" material dev-zuruecksetzen [--trocken] [--ja-alles-loeschen]` | Kommandozeile im Container, nur dev | Modul Material leeren: erst die ganze Datenbank nach `sicherung-material-<Zeitstempel>/` sichern und `media/material`, `pdf/` dorthin verschieben, dann alle `mat_`-Objekte entfernen und das Schema frisch anlegen (Version 21); Konten, Wiki, Spots, Prüfungen, Einstellungen bleiben, DEMO-Konten werden nur genannt. `--trocken` zeigt nur. Nur mit `STROEMIS_NAME` auf `-dev`, `BASE_URL` (Umgebung und Einstellungen) mit Host `dev.…`, `localhost` oder `127.0.0.1` und `--ja-alles-loeschen`; SIGTERM/SIGHUP brechen sauber ab (Exit 1), Sicherung 0700/0600, ältere Sicherungen werden genannt. Exit 0, 1 (Sicherung oder späterer Schritt gescheitert – nichts geändert), 2 (nicht dev, ohne Schalter) (23.10.2026) |
 | `GET /material/ordner/<id>/import` | Materialwart am Ordner (sonst 403-Seite, fremd 404, Systemordner 409) | Seite „Bestandsliste importieren“ mit der Nacharbeit dieses Zielordners (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/import/probelauf` (Formular: `file`, `zuordnung` JSON `{"<Spalte>": feld}`) | Materialwart am Ordner | Probelauf, schreibt nichts (außer einer Protokollzeile, wenn er fremde Dubletten nennt) → Bericht: `datei`, `nacharbeit_csv`, `spalten`, `felder`, `fehlt`, `warnungen`, `schon_importiert`, `sperre_bis` (dieselbe Datei bis dahin gesperrt, ISO in UTC, sonst `null`), `keine_seriennummer` (keine Spalte als Seriennummer zugeordnet), `ohne_seriennummern_bestaetigen` (Übernehmen braucht `ohne_seriennummern`, Entscheidung vom 20.10.2026), `zahlen` (mit `ohne_serie`), `faelligkeit`, `produkte_offen`, `ordner_unbekannt`, `zeilen`, `frist`; 400 unlesbar, 409 Systemordner, 413 zu groß, 429 anderer Import läuft (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/import` (wie der Probelauf, dazu `ohne_seriennummern` ja/nein) | Materialwart am Ordner | Übernehmen in einer Transaktion → 201, Bericht mit Zeilen `angelegt` (`artikel` {id, inventory_no}, vergebene STR-Nummer) und `import` {id, angelegt, im_bestand, nacharbeit, ersetzt}; 409 nichts zu tun, ohne Seriennummernspalte ohne `ohne_seriennummern` = ja („Keine Spalte ist als Seriennummer zugeordnet – bitte bestätigen …“, nichts geschrieben), dieselbe Datei vor weniger als 10 Minuten, Ordnerbaum geändert; anderes als ja/nein → 400 (Phase 2 · 3) |
