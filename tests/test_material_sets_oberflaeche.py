@@ -171,7 +171,9 @@ def test_oberflaeche_o2_statisch():
                   "lf.freigabe_gruende", "lf.bereit", "lf.abschluss", "laufWeiter(lf, a.id)", "?lauf=${x.id}",
                   "details class=\"mat-menue\"", "reservierungFreigeben("):
         assert haken in lauf, haken
-    assert lauf.count('class="btn"') == 1 and "btn danger" not in lauf and "btn ghost" not in lauf
+    # Ein roter Knopf: „Set-Prüfung beginnen“ ist seit der Nachbesserung (V5) nur rot, wenn das Set fällig oder gesperrt ist.
+    assert lauf.count('class="btn"') + lauf.count('class="btn${rot ? "" : " secondary"}"') == 1
+    assert "btn danger" not in lauf and "btn ghost" not in lauf
     assert "set_lauf: setLaufAnsicht" in js and 'set_lauf: "pruefungen"' in js
     # Prüfung starten: Set-Artikel nur über „Set prüfen“, Teil n von m, zurück in die Set-Prüfung.
     neu = funktion(js, "pruefungNeu")
@@ -355,6 +357,71 @@ def test_server_ergaenzungen_o2():
     print("Server-Ergänzungen O2 bestanden.")
 
 
+def test_oberflaeche_nachbesserung_statisch():
+    """Nachbesserung nach der Browser-Prüfung (B1–B8, V1–V17): je Befund der Haken im Quelltext."""
+    js = lies("app/material/static/material.js")
+    css = lies("app/material/static/material.css")
+    teil = css[css.index("/* Phase 4 – Lieferung 2: Nachbesserung nach den drei Prüfungen */"):]
+    # B1: Reiter nur mit Häkchen – hidden gegen .c-tabs { display: flex } abgesichert.
+    assert ".c-tabs[hidden], .mat-reiter[hidden] { display: none; }" in teil
+    assert '<div class="c-tabs mat-reiter" role="tablist" aria-labelledby="pd-titel" ${istSet ? "" : "hidden"}>' in js
+    # B2: Server-Fehler am einen Feld (Stück und Seriennummer aus sets.teil_wo), aria-invalid über teilFehler, Fokus.
+    tsf = js[js.index("function teileServerFehler("):js.index('$("#an-ende").addEventListener')]
+    assert "(\\d+) von \\d+" in tsf and "teilFehler(sn, text); sn.focus();" in tsf
+    assert 'feld.setAttribute("aria-invalid", "true")' in js
+    # B3/V2: ausgesondert ohne Unvollständig-Banner und „fehlt“-Zeilen; unvollständig im einen GESPERRT-Banner.
+    banner = funktion(js, "setBanner")
+    assert 'if (a.lock_state === "ausgesondert") return "";' in banner and "UNVOLLSTÄNDIG" not in banner
+    assert "GESPERRT – Set unvollständig, es fehlt:" in funktion(js, "setGesperrtBanner")
+    kasten = funktion(js, "setKasten")
+    assert "(aus ? [] : fehlt).map(" in kasten
+    # B5: Fokus zurück auf den Menüknopf, wenn ein Untermenü-Eintrag einen Dialog öffnete.
+    assert 'const menue = b.closest("details.mat-menue");' in js and 'if (knopf.isConnected) knopf.focus();' in js
+    # B6: keine „Nächste Prüfung“ am gesperrten Set.
+    assert "setzt die Freiprüfung („Set prüfen“)" in kasten
+    # B8: Rot auf Grau dunkel.
+    assert "table.list.mat-runde tr.mat-teilzeile strong { color: var(--rot-auf-flaeche); }" in teil
+    # V1: Begründung für „Set aussondern“ im Dialog, kein „Prüfen dürfen …“ am Set.
+    assert '"aussondern-warum": () => dialog(' in js and "aus || darf.pruefen || sb ?" in js
+    assert '${aussonderKnopf && aussonderAus && !sb ?' in js
+    # V3: Gesamtergebnis im Kopf der Prüfansicht.
+    assert "<strong>Gesamtergebnis des Sets:</strong>" in js
+    # V4: Trenner zwischen Marke und Satz; Gründe als ganze Sätze vom Server.
+    assert ' – ${esc(v.text.slice(i + 3))}' in js
+    # V5: Seite „Set prüfen“.
+    lauf = funktion(js, "setLaufAnsicht")
+    for haken in ("Regelprüfung (alle Teile)", "x.gesamtergebnis", "x.protokoll_id", 'class="mat-lauf-auftrag', "t.zu_pruefen",
+                  "lf.eigen || darf.verwalten"):
+        assert haken in lauf, haken
+    assert "Periodisch" not in lauf
+    # V6/V7: Fällige mit „Set prüfen“ und Marke „Set“.
+    assert '/set-pruefung${q}">Set prüfen</a>' in funktion(js, "pruefKnopf")
+    assert "return `${setMarke(true)}<div class=\"small mat-set-info\">Hersteller-Set" in js
+    # V8/V12: „Entfernen“ als Text, Hilfe aufklappbar.
+    st = funktion(js, "stuecklisteEditor")
+    assert ">Entfernen</button>" in st and "✕" not in st and 'class="mat-auf mat-bt-hilfe"' in st
+    # V9: Produkt-Dialog oben.
+    assert "dialog.mat-produkt-reiter { margin-top:" in teil
+    # V10: Meine PSA – Genus, Hilfe unter dem Textfeld, Fokus auf die Wahl.
+    md = funktion(js, "mangelDialog")
+    assert md.index('id="mg-text"') < md.index('id="mg-text-hilfe"') and "fokus($('input[name=\"mg-wahl\"]:checked', body) || text);" in md
+    assert "BEISEITE_SET" in md and "Leg das Set beiseite und gib es" in funktion(js, "mangelQuittung")
+    # V11: „entnehmen“, nicht „herausnehmen“; „das Set selbst“ statt „Set-Artikel“ in Oberflächentexten.
+    assert "erausnehmen" not in js
+    for satz in ('"Set-Artikel prüfen"', '>Set-Artikel</span>', '"Set-Artikel (das Set selbst)"'):
+        assert satz not in js, satz
+    # V13: 44 px am Finger nur unter (pointer: coarse).
+    grob = teil[teil.index("@media (pointer: coarse)"):]
+    assert ".mat-arten .mat-art-wahl { min-height: 44px" in grob and "a.mat-ziel" in grob
+    # V14: ausgegrauter Eintrag fokussierbar.
+    assert 'role="menuitem" aria-disabled="true" tabindex="0"' in kasten
+    # V15/V16/V17.
+    assert ".mat-psa-teil h4 { margin: 0 0 4px; font-size: var(--fs-mittel);" in css
+    assert '<span class="mat-nowrap">im Umfang geprüft</span>' in lauf and ".mat-lauf-fortschritt .mat-fortschritt" in teil
+    assert "– bitte wählen –" in funktion(js, "aussonderDialog")
+    print("Oberfläche Nachbesserung (statisch) bestanden.")
+
+
 if __name__ == "__main__":
     test_werte_wie_server()
     test_oberflaeche_statisch()
@@ -362,3 +429,4 @@ if __name__ == "__main__":
     test_oberflaeche_o2_statisch()
     test_vertrag_k2()
     test_server_ergaenzungen_o2()
+    test_oberflaeche_nachbesserung_statisch()

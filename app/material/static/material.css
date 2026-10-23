@@ -1756,7 +1756,7 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-psa-teil.s-neu { border-left-color: var(--wasser); }
 .mat-psa-teil.s-lebensdauer { border-left-color: var(--mat-lebensdauer); }
 .mat-psa-teil.s-gesperrt { border-left-color: var(--mat-gesperrt); }
-.mat-psa-teil h4 { margin: 0 0 4px; font-size: 1.05rem; overflow-wrap: anywhere; }
+.mat-psa-teil h4 { margin: 0 0 4px; font-size: var(--fs-mittel); overflow-wrap: anywhere; }
 .mat-psa-teil p { margin: 0 0 4px; overflow-wrap: anywhere; }
 .mat-psa-teil .mat-psa-daten { margin: 6px 0 2px; }
 @media (pointer: coarse) {
@@ -1833,4 +1833,35 @@ table.list.mat-runde tr.mat-teilzeile td { background: var(--grau-hell); }
   .mat-lauf-teil .btn-row .btn, .mat-lauf-weiter .btn, .mat-set-teile .mat-teil-menue > summary { min-height: 44px; }
   .mat-menue-aus { min-height: 44px; }
   .mat-lauf-kopf a.mat-inv, .mat-lauf-frueher li > a { display: inline-flex; align-items: center; min-height: 44px; }
+}
+/* Phase 4 – Lieferung 2: Nachbesserung nach den drei Prüfungen */
+/* B1: Der Reiter „Produkt | Bestandteile“ steht nur mit dem Häkchen „Hersteller-Set“ da – .c-tabs (display: flex) überstimmte
+   sonst das Attribut hidden. */
+.c-tabs[hidden], .mat-reiter[hidden] { display: none; }
+/* B8: Rot auf grauer Zeile (fehlende Position, Teilzeile im Durchgang) in der dunklen Fassung – 4,5:1. */
+.mat-set-teile tr.mat-fehlt-zeile .mat-warn, table.list.mat-runde tr.mat-teilzeile a,
+table.list.mat-runde tr.mat-teilzeile strong { color: var(--rot-auf-flaeche); }
+/* V9: Der Produkt-Dialog mit Reitern steht oben – beim Wechsel zum (kürzeren) Reiter „Bestandteile“ springt er nicht. */
+dialog.mat-produkt-reiter { margin-top: min(6vh, 48px); margin-bottom: auto; }
+/* V12: Hilfe im Reiter „Bestandteile“ als eine Zeile, der Rest aufklappbar. */
+.mat-bt-hilfe { margin: 4px 0 6px; }
+.mat-bt-hilfe > summary { font-weight: 400; font-size: var(--fs-klein); color: var(--grau); }
+.mat-bt-hilfe .help { margin: 2px 0 6px; }
+/* V5: In der Vorschau „Set prüfen“ stehen Status und Auftrag getrennt. */
+.mat-lauf-auftrag { font-size: var(--fs-klein); color: var(--grau); margin-left: 6px; white-space: nowrap; }
+.mat-lauf-auftrag.zu { color: var(--anthrazit); font-weight: 700; }
+/* V3: Gesamtergebnis des Sets im Kopf der Prüfansicht (ohne Abweichung leise, mit Abweichung als .notice). */
+.mat-set-gesamt-kopf { margin: 0 0 6px; overflow-wrap: anywhere; }
+/* V16: Fortschritt der Set-Prüfung – der Balken ist auch bei 0 % zu sehen, der Text bricht nicht wortweise um. */
+.mat-lauf-fortschritt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.mat-lauf-fortschritt .mat-fortschritt { border-color: var(--grau); flex: none; }
+/* V14: Ein ausgegrauter Eintrag im Untermenü „Austausch“ ist fokussierbar – mit sichtbarem Fokusring. */
+.mat-menue-aus:focus-visible { outline: 2px solid var(--anthrazit); outline-offset: -2px; }
+.mat-menue-aus + .mat-menue-aus { border-top: 1px solid var(--linie); }
+/* V13: am Finger 44 px – „Art der Prüfung“ (seit Phase 1) und eigenständige Links (zur Set-Prüfung, zum Set, Teil-Nummern
+   in den Karten der Set-Seite). */
+@media (pointer: coarse) {
+  .mat-arten .mat-art-wahl { min-height: 44px; padding: 0; }
+  a.mat-ziel, .mat-set-teile a.mat-inv { display: inline-flex; align-items: center; min-height: 44px; }
+  .mat-bt-hilfe > summary { min-height: 44px; display: flex; align-items: center; }
 }

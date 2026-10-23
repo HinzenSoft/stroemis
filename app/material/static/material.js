@@ -556,6 +556,14 @@
     if (b.closest(".mat-anleitung")) return;
     if (b.tagName === "A" || b.tagName === "BUTTON") e.preventDefault();
     aktionen[b.dataset.act](b, e);
+    // Öffnet ein Eintrag eines Untermenüs (details.mat-menue) einen Dialog, geht der Fokus nach Esc oder „Abbrechen“
+    // zurück auf den Menüknopf – sonst fiele er an den Seitenanfang (Browser-Prüfung P4-L2, B5).
+    const menue = b.closest("details.mat-menue");
+    const dlg = document.getElementById("dlg");
+    if (menue && dlg && dlg.open) {
+      const knopf = $("summary", menue);
+      dlg.addEventListener("close", () => { if (knopf.isConnected) knopf.focus(); }, { once: true });
+    }
   });
   // „Sortieren nach“ über den Karten (kartenKopf): dieselbe Aktion wie ein Klick auf den Spaltenkopf.
   inhalt.addEventListener("change", (e) => {
@@ -1411,7 +1419,7 @@
   const setListenText = (a) => {
     if (a.set) {
       const x = a.set;
-      return `<div class="small mat-set-info">Hersteller-Set · ${plural(x.teile, "Teil", "Teile")}${x.vollstaendig ? "" : ' · <span class="mat-warn">unvollständig</span>'}${x.mangel_teile.length ? ` · Mangel an ${x.mangel_teile.map(esc).join(", ")}` : ""}</div>`;
+      return `${setMarke(true)}<div class="small mat-set-info">Hersteller-Set · ${plural(x.teile, "Teil", "Teile")}${x.vollstaendig ? "" : ' · <span class="mat-warn">unvollständig</span>'}${x.mangel_teile.length ? ` · Mangel an ${x.mangel_teile.map(esc).join(", ")}` : ""}</div>`;
     }
     return a.teil_von ? `<div class="small mat-set-info">Teil von Set <a class="mat-inv" href="/material/artikel/${a.teil_von.id}">${esc(a.teil_von.inventory_no)}</a> ${esc(a.teil_von.produkt)}</div>` : "";
   };
@@ -1460,11 +1468,13 @@
     return `<label class="mat-wahl-feld"><input type="checkbox" class="mat-wahl-art" value="${a.id}"${a.zugeordnet_name ? ' data-person="1"' : ""} ${frei ? "" : 'disabled title="Gesperrte und ausgesonderte Artikel bleiben in ihrem Systemordner."'} aria-label="${esc(a.inventory_no)} auswählen">
       <span class="mat-wahl-text">${frei ? "auswählen" : `${grund} – bleibt im Systemordner`}</span></label>`;
   }
-  // „Prüfen“ in Listen: mit Prüffreigabe für den Artikel, solange niemand anderes ihn reserviert hat.
+  // „Prüfen“ in Listen: mit Prüffreigabe für den Artikel, solange niemand anderes ihn reserviert hat. Eine Set-Zeile
+  // (a.set) führt wie im Durchgang auf „Set prüfen“ – den Set-Artikel prüft man nur dort (V6).
   function pruefKnopf(a, durchgangId) {
     if (!(a.darf && a.darf.pruefen) || a.lock_state === "ausgesondert") return "";
-    if (a.entwurf && a.entwurf.pruefer_id !== DARF.uid) return "";
     const q = durchgangId ? `?durchgang=${durchgangId}` : "";
+    if (a.set) return `<a class="btn secondary small" href="/material/artikel/${a.id}/set-pruefung${q}">Set prüfen</a>`;
+    if (a.entwurf && a.entwurf.pruefer_id !== DARF.uid) return "";
     return a.entwurf ? `<a class="btn secondary small" href="/material/pruefung/${a.entwurf.id}">Weiter prüfen</a>`
       : `<a class="btn secondary small" href="/material/artikel/${a.id}/pruefung/neu${q}">Prüfen</a>`;
   }
@@ -2460,7 +2470,7 @@
       : '<span class="muted">–</span>'}${tv ? "" : zuKnoepfe}`) : "";
     inhalt.innerHTML = `${quittungHtml()}${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${a.status === "ausgesondert" ? `<p class="mat-banner s-ausgesondert">AUSGESONDERT – dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden.</p>` : ""}
-      ${a.status === "gesperrt" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
+      ${a.status === "gesperrt" ? `<p class="mat-banner s-gesperrt">${sb ? setGesperrtBanner(sb, a) : `GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.`}</p>` : ""}
       ${maengel.filter((m) => m.offen).map(mangelBanner).join("")}
       ${a.status === "lebensdauer" ? `<p class="mat-banner s-lebensdauer">LEBENSDAUER ERREICHT – aussondern.</p>` : ""}
       ${a.status === "neu" ? '<p class="mat-banner s-neu">NEU – die Eingangsprüfung steht aus. Bis dahin nicht einsetzen.</p>' : ""}
@@ -2477,13 +2487,14 @@
           <div class="btn-row mat-pruefknoepfe">${sb ? setPruefKnopf(a, sb) : !aus && darf.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
             ${sperrKnopf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
             ${darfMelden ? `<button class="btn secondary small" type="button"${schonGemeldet ? ' disabled aria-describedby="mat-schon-gemeldet"' : ' data-act="mangel"'}>Mangel melden …</button>` : ""}
-            ${aussonderKnopf ? `<button class="btn secondary small" type="button"${aussonderAus ? ' disabled aria-describedby="mat-aussondern-hilfe"' : ' data-act="aussondern"'}>${sb ? "Set aussondern" : "Aussondern"}</button>` : ""}</div>
+            ${aussonderKnopf ? (sb ? `<button class="btn secondary small" type="button" data-act="${aussonderAus ? "aussondern-warum" : "aussondern"}">Set aussondern …</button>`
+              : `<button class="btn secondary small" type="button"${aussonderAus ? ' disabled aria-describedby="mat-aussondern-hilfe"' : ' data-act="aussondern"'}>Aussondern</button>`) : ""}</div>
           ${schonGemeldet ? `<p class="help mat-schon-gemeldet" id="mat-schon-gemeldet">Du hast am ${esc(S.fmtDate(a.mangel_eigen_offen))} schon gemeldet – ein Prüfer sieht es sich an.${darf.verwalten ? "" : " Ergänzungen bitte direkt an den Materialwart."}</p>` : ""}
-          ${aussonderKnopf && aussonderAus ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(a.mangel_nur_gemeldet ? NUR_GEMELDET : SET_OHNE_GRUND)}</p>` : ""}
+          ${aussonderKnopf && aussonderAus && !sb ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(NUR_GEMELDET)}</p>` : ""}
           ${a.entwurf ? `<p class="small">In Prüfung bei <strong>${esc(a.entwurf.pruefer)}</strong> seit ${esc(fmtZeit(a.entwurf.seit))}
             ${fremderEntwurf ? ` <span class="mat-nowrap">· <a href="/material/pruefung/${a.entwurf.id}">ansehen</a></span>` : ""}
             ${fremderEntwurf && darf.verwalten ? ' <span class="mat-nowrap">· <button class="lnk" type="button" data-act="freigeben">Reservierung aufheben</button></span>' : ""}</p>` : ""}
-          ${aus || darf.pruefen ? "" : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice small">${pruefHinweis(a)}</p>`
+          ${aus || darf.pruefen || sb ? "" : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice small">${pruefHinweis(a)}</p>`
             : '<p class="small muted">Prüfen dürfen Prüfer mit Urkundennummer und Prüffreigabe (Häkchen „Prüfer“ in der Nutzerverwaltung, Urkundennummer im eigenen Profil, Prüffreigabe vom Materialwart).</p>'}
           ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang ${a.durchgang.sichtbar ? `<a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>` : `„${esc(a.durchgang.titel)}“`}.</p>` : ""}
           <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${frei && !tv ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}${darf.grund ? lebenslaufKnopf(a) : ""}</div>
@@ -2540,6 +2551,10 @@
       mangel: () => mangelDialog(a, (r, q) => { quittung = q; return zeigen(artikel); }, { set: setVerbund(a) }),
       "rr-sperren": (b) => sperrDialog(a, { grund: "rueckruf", text: ((a.rueckrufe || []).find((r) => r.id === +b.dataset.id) || {}).title }),
       aussondern: () => aussonderDialog(a),
+      // V1 (Browser-Prüfung): Warum „Set aussondern“ hier nicht geht, steht im Dialog – nicht als Text unter den Knöpfen.
+      "aussondern-warum": () => dialog(`<h2>Set ${esc(a.inventory_no)} aussondern</h2>
+        <p>${esc(a.mangel_nur_gemeldet ? NUR_GEMELDET : SET_OHNE_GRUND)}</p>
+        <div class="dlg-actions"><button class="btn" data-close type="button">Schließen</button></div>`),
       "teil-tauschen": (b) => teilDialog(a, "tauschen", sb.teile.find((t) => t.id === +b.dataset.id)),
       "teil-entnehmen": (b) => teilDialog(a, "entnehmen", sb.teile.find((t) => t.id === +b.dataset.id)),
       "teil-einsetzen": (b) => teilDialog(a, "einsetzen", null, sb.bestandteile.find((z) => z.id === +b.dataset.id)),
@@ -2581,20 +2596,27 @@
   }
 
   /* --- Set-Seite (Schritt 21, Entwurf C und F) -------------------------------------------------------------------
-     Banner: fehlende Teile („unvollständig“), Rückrufe an Teilen (rueckrufe_teile) und ein Set-Status, den ein Teil
-     schlechter macht als den des Set-Artikels allein. Der Kasten „Bestandteile“ zeigt Set-Status, Set-Fälligkeit und
+     Banner: Rückrufe an Teilen (rueckrufe_teile) und ein Set-Status, den ein Teil schlechter macht als den des Sets
+     selbst; fehlende Teile („unvollständig“) stehen im einen GESPERRT-Banner (setGesperrtBanner – Nachbesserung V2), am
+     ausgesonderten Set gar nicht (B3). Der Kasten „Bestandteile“ zeigt Set-Status, Set-Fälligkeit und
      Set-Lebensende mit dem auslösenden Artikel, darunter je Zeile den Set-Artikel und seine Teile (Bestandteil, Nummer,
      Status mit Mangel, Rückruf und Sperrgrund, nächste Prüfung, Lebensende) und je fehlendem Stück eine Zeile „fehlt“;
      dann die Bestandteile ohne eigenen Artikel (Tasche, Seilsatz). Teile, die das Konto nicht sieht, fehlen in der
      Antwort – die Zählung „fehlt“ rechnet der Server. */
   const naechsteKurz = (x) => (x.status === "neu" ? "Eingangsprüfung" : x.lock_state && x.lock_state !== "frei" ? "" : x.next_due_on ? fmtTag(x.next_due_on) : "");
-  const durchText = (d, a) => (!d ? "" : d.set_artikel ? "Set-Artikel" : d.id === a.id ? "dieser Artikel"
+  const durchText = (d, a) => (!d ? "" : d.set_artikel ? "das Set selbst" : d.id === a.id ? "dieser Artikel"
     : `Teil <a class="mat-inv" href="/material/artikel/${d.id}">${esc(d.inventory_no)}</a>`);
+  const fehltText = (sb) => sb.fehlend.map((f) => `${f.fehlt} × ${esc(f.bezeichnung)}`).join(", ");
+  // Der eine GESPERRT-Banner am Set (V2): der Grund, bei Unvollständigkeit dazu, was fehlt.
+  function setGesperrtBanner(sb, a) {
+    if (sb.vollstaendig) return `GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Nicht verwenden, bis „Set prüfen“ das Set freigibt.`;
+    // Der abgeleitete Grund (sets.anlass_text) nennt die Unvollständigkeit selbst – hier steht sie einmal, mit Stückzahl.
+    const sonst = (a.lock_reason || "").split("; ").filter((x) => x && !x.startsWith("unvollständig: ")).join("; ");
+    return `GESPERRT – Set unvollständig, es fehlt: ${fehltText(sb)}${sonst ? `; ${esc(sonst)}` : ""}. Nicht verwenden, bis das Set wieder vollständig und geprüft ist.`;
+  }
   function setBanner(sb, a) {
     const out = [];
-    if (!sb.vollstaendig) {
-      out.push(`<p class="mat-banner s-gesperrt">SET UNVOLLSTÄNDIG – es fehlt: ${sb.fehlend.map((f) => `${f.fehlt} × ${esc(f.bezeichnung)}`).join(", ")}. Nicht verwenden, bis das Set wieder vollständig und geprüft ist.</p>`);
-    }
+    if (a.lock_state === "ausgesondert") return "";
     sb.rueckrufe_teile.forEach((r) => out.push(`<div class="mat-banner mat-rr-banner" role="note"><p class="mat-rr-titel">RÜCKRUF AN EINEM TEIL: ${esc(r.titel)}</p>
       <p class="mat-rr-zeile">betrifft Teil <a href="/material/artikel/${r.teil.id}">${esc(r.teil.inventory_no)}</a> – dort sperren oder prüfen.</p></div>`));
     // Ein Teil macht den Set-Status schlechter als den des Set-Artikels allein: sagen, dass es am Teil liegt.
@@ -2641,27 +2663,32 @@
     const ohne = sb.bestandteile.filter((z) => !z.einzeln);
     const teilProdukt = (t) => `<div class="small">${nameHtml(t.produkt)}${zusatzHtml(t.produkt)}${artNrKurz(t.produkt.article_no)}</div>`;
     const NICHT_TAUSCHBAR = "Laut Hersteller nicht austauschbar – fällt es aus, wird das ganze Set ausgesondert.";
+    // „Austausch laut Hersteller: nein“: Tauschen und Entnehmen ausgegraut, aber fokussierbar mit lesbarem Grund (V14).
+    const ausEintrag = (titel) => `<span class="mat-menue-aus" role="menuitem" aria-disabled="true" tabindex="0"><strong>${titel}</strong><span>${NICHT_TAUSCHBAR}</span></span>`;
     const teilMenue = (t) => `<details class="mat-menue mat-teil-menue"><summary class="btn secondary small" aria-haspopup="true">Austausch</summary>
       <div class="mat-menue-liste">
-        ${t.austausch === "nein" ? `<span class="mat-menue-aus" aria-disabled="true"><strong>Teil tauschen</strong><span>${NICHT_TAUSCHBAR}</span></span>`
+        ${t.austausch === "nein" ? ausEintrag("Teil tauschen") + ausEintrag("Teil entnehmen")
           : `<a href="#" role="button" data-act="teil-tauschen" data-id="${t.id}"><strong>Teil tauschen …</strong>
-            <span>Herausnehmen und ein neues Teil desselben Produkts einsetzen${t.austausch === "nicht_belegt" ? " – der Austausch ist laut Hersteller nicht belegt, du bestätigst ihn" : ""}.</span></a>`}
+            <span>Entnehmen und ein neues Teil desselben Produkts einsetzen${t.austausch === "nicht_belegt" ? " – der Austausch ist laut Hersteller nicht belegt, du bestätigst ihn" : ""}.</span></a>
         <a href="#" role="button" data-act="teil-entnehmen" data-id="${t.id}"><strong>Teil entnehmen …</strong>
-          <span>Ohne Ersatz herausnehmen und weiterführen oder aussondern – das Set ist danach unvollständig.</span></a>
+          <span>Ohne Ersatz entnehmen und weiterführen oder aussondern – das Set ist danach unvollständig.</span></a>`}
       </div></details>`;
     const einsetzen = (z) => (z.austausch === "nein"
       ? `<button class="btn secondary small" type="button" disabled title="${esc(NICHT_TAUSCHBAR)}">Teil einsetzen …</button>`
       : `<button class="btn secondary small" type="button" data-act="teil-einsetzen" data-id="${z.id}">Teil einsetzen …</button>`);
     const lp = sb.letzte_pruefung;
+    const aus = a.lock_state === "ausgesondert";
+    const gesperrt = a.lock_state === "gesperrt" || a.lock_state === "verloren";
     const gruende = (sb.sperrgruende || []).filter((g) => g.art !== "set_pruefung");
     const grundZeile = (g) => (g.artikel && !g.artikel.set_artikel ? `<a href="/material/artikel/${g.artikel.id}">${esc(g.text)}</a>` : esc(g.text));
     return `<section class="section mat-set-kasten"><h2>Bestandteile</h2>
       <dl class="mat-daten mat-set-werte">
-        <dt>Set-Status</dt><dd>${statusMarke(sb.status)} <span class="muted small">der schwerste aus Set-Artikel und Teilen</span></dd>
+        <dt>Set-Status</dt><dd>${statusMarke(sb.status)} <span class="muted small">der schwerste aus dem Set selbst und seinen Teilen</span></dd>
         ${gruende.length ? `<dt>Gesperrt, weil</dt><dd><ul class="mat-set-gruende">${gruende.map((g) => `<li>${grundZeile(g)}</li>`).join("")}</ul>
           <span class="small muted">Frei gibt das Set nur „Set prüfen“ mit dem Ergebnis „einsatzbereit“.</span></dd>` : ""}
-        <dt>Nächste Prüfung</dt><dd>${sb.status === "neu" ? "<strong>Eingangsprüfung ausstehend</strong>"
-          : sb.next_due_on ? `<strong>${esc(fmtTag(sb.next_due_on))}</strong> <span class="muted">(${durchText(sb.faellig_durch, a)})</span>` : '<span class="muted">–</span>'}</dd>
+        <dt>Nächste Prüfung</dt><dd>${aus ? '<span class="muted">–</span>' : gesperrt ? '<span class="muted">setzt die Freiprüfung („Set prüfen“)</span>'
+          : sb.status === "neu" ? "<strong>Eingangsprüfung ausstehend</strong>"
+            : sb.next_due_on ? `<strong>${esc(fmtTag(sb.next_due_on))}</strong> <span class="muted">(${durchText(sb.faellig_durch, a)})</span>` : '<span class="muted">–</span>'}</dd>
         <dt>Lebensende</dt><dd>${sb.retire_by ? `${esc(fmtTag(sb.retire_by))} <span class="muted">(${durchText(sb.lebensende_durch, a)})</span>` : '<span class="muted">keins festgeschrieben</span>'}</dd>
         ${sb.lauf ? `<dt>Set-Prüfung</dt><dd><a href="/material/artikel/${a.id}/set-pruefung">${esc(laufKurzText(sb.lauf))}</a>${sb.lauf.durchgang ? ` <span class="muted small">· im Durchgang „${esc(sb.lauf.durchgang.titel)}“</span>` : ""}</dd>` : ""}
         ${lp ? `<dt>Letzte Set-Prüfung</dt><dd>${esc(fmtTag(lp.datum))} · ${esc(lp.gesamt_text || "")}
@@ -2670,10 +2697,10 @@
           ${(lp.berichtigte_teile || []).map((b) => `<div class="small">Teil ${esc(b.inventarnummer)}: <span class="mat-hash">${esc(b.protokoll_id)}</span> berichtigt durch <span class="mat-hash">${esc(b.durch)}</span></div>`).join("")}</dd>` : ""}
       </dl>
       <table class="list mat-tabelle mat-karten mat-set-teile"><thead><tr><th>Teil</th><th>Nummer</th><th>Status</th><th>Nächste Prüfung</th><th>Lebensende</th>${pflege ? '<th><span class="mat-vorlesen">Austausch</span></th>' : ""}</tr></thead><tbody>
-        ${zeile(eigen, "Set-Artikel", `<strong>${esc(a.inventory_no)}</strong><div class="small muted">SN ${esc(a.serial_no)}</div>`, "")}
+        ${zeile(eigen, "Das Set selbst", `<strong>${esc(a.inventory_no)}</strong><div class="small muted">SN ${esc(a.serial_no)}</div>`, "")}
         ${sb.teile.map((t) => zeile(t, t.bestandteil || "Teil", `<a class="mat-inv" href="/material/artikel/${t.id}"><strong>${esc(t.inventory_no)}</strong></a>
           <div class="small muted">SN ${esc(t.serial_no)}${t.serial_generated ? " (System)" : ""}</div>`, teilProdukt(t), teilMenue(t))).join("")}
-        ${fehlt.map((z) => `<tr class="mat-fehlt-zeile"><td data-l="Teil" class="mat-k-titel"><strong>${esc(z.bezeichnung)}</strong>${z.produkt ? `<div class="small">${nameHtml(z.produkt)}${zusatzHtml(z.produkt)}</div>` : ""}</td>
+        ${(aus ? [] : fehlt).map((z) => `<tr class="mat-fehlt-zeile"><td data-l="Teil" class="mat-k-titel"><strong>${esc(z.bezeichnung)}</strong>${z.produkt ? `<div class="small">${nameHtml(z.produkt)}${zusatzHtml(z.produkt)}</div>` : ""}</td>
           <td data-l="Nummer" class="mat-k-halb" colspan="4"><span class="mat-warn">fehlt – ${z.fehlt} von ${z.anzahl}</span></td>
           ${pflege ? `<td class="tabelle-aktionen mat-k-ohne">${einsetzen(z)}</td>` : ""}</tr>`).join("")}
       </tbody></table>
@@ -2801,9 +2828,9 @@
     const fruehestens = grenzen.length ? grenzen.reduce((x, y) => (y[0] > x[0] ? y : x)) : null;
     const HINWEIS = "Die Aussonderung wird mit deiner Unterschrift festgeschrieben. Sie wird in deinem Profil gespeichert und als Kopie ins Aussonderungsprotokoll übernommen.";
     dialog(`<h2>${sb ? "Set " : ""}${esc(a.inventory_no)} aussondern</h2>
-      <p class="help">${sb ? "Die Aussonderung ist endgültig: Der Set-Artikel und die Teile „mit aussondern“ wandern nach „Ausgesondert“, bleiben dort mit ihrem Lebenslauf sichtbar und zählen nirgends mehr als Bestand."
+      <p class="help">${sb ? "Die Aussonderung ist endgültig: Das Set selbst und die Teile „mit aussondern“ wandern nach „Ausgesondert“, bleiben dort mit ihrem Lebenslauf sichtbar und zählen nirgends mehr als Bestand."
         : "Die Aussonderung ist endgültig: Der Artikel wandert nach „Ausgesondert“, bleibt dort mit seinem Lebenslauf sichtbar und zählt nirgends mehr als Bestand."}</p>
-      <div class="field-row"><div><label for="au-grund">Grund</label><select id="au-grund">${Object.entries(AUSSONDERUNGSGRUND).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
+      <div class="field-row"><div><label for="au-grund">Grund</label><select id="au-grund"${sb ? ' required aria-required="true"' : ""}>${sb ? '<option value="" selected>– bitte wählen –</option>' : ""}${Object.entries(AUSSONDERUNGSGRUND).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
         <div><label for="au-datum">Datum</label>${datumFeld("au-datum", tag, "tag")}
           <div class="help">${fruehestens ? `Frühestens ${esc(fmtTag(fruehestens[0]))} (${esc(fruehestens[1])}), spätestens` : "Spätestens"} heute (${esc(fmtTag(tag))}).</div></div></div>
       <label for="au-bem">Bemerkung</label><textarea id="au-bem" rows="3" maxlength="2000"></textarea>
@@ -2829,6 +2856,8 @@
       usZeigen();
       $("#au-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
+        // Am Set ist der Grund nicht vorbelegt (V17): Er muss zum Anlass passen, etwa einem Sturz an einem Teil.
+        if (!$("#au-grund", body).value) { toast("Bitte den Grund der Aussonderung wählen.", true); $("#au-grund", body).focus(); return; }
         // Erst das Datum (ein Tippfehler bricht ab), dann die Unterschrift.
         let datum;
         try { datum = datumWert($("#au-datum", body), "Datum"); }
@@ -2869,9 +2898,9 @@
      Bestätigung, dass die Herstellerunterlagen den Austausch zulassen (Journal am Set); „nein“ bietet die Tabelle gar
      nicht erst an. Hinweise der Antwort (STR-Nummer am Teil anbringen) zeigt ein Dialog wie beim Anlegen. */
   const TEIL_FOLGE = {
-    tauschen: "Das Set ist danach gesperrt („Teil getauscht – Set prüfen“), bis „Set prüfen“ es freigibt – dort wird das neue Teil geprüft.",
+    tauschen: "Das Set ist danach gesperrt, bis „Set prüfen“ es freigibt – dort wird das neue Teil geprüft.",
     entnehmen: "Das Set ist danach unvollständig und gesperrt – bis ein Teil eingesetzt ist und „Set prüfen“ es freigibt.",
-    einsetzen: "Das Set bleibt gesperrt („Teil eingesetzt – Set prüfen“), bis „Set prüfen“ es freigibt – dort wird das neue Teil geprüft.",
+    einsetzen: "Das Set bleibt gesperrt, bis „Set prüfen“ es freigibt – dort wird das neue Teil geprüft.",
   };
   const TEIL_KNOPF = { tauschen: "Teil tauschen", entnehmen: "Teil entnehmen", einsetzen: "Teil einsetzen" };
   function teilDialog(a, art, t, z) {
@@ -3279,13 +3308,29 @@
         return Object.assign({ bestandteil_id: +f.dataset.bestandteil }, teilBlockDaten(f, `Teil ${i + 1} (${f.dataset.bez})`));
       });
     }
-    // Ein Fehler des Servers beim Anlegen eines Sets: über dem Knopf, und am Teil, wenn er eine Seriennummer der Teile
-    // („…“) oder einen Bestandteil nennt („Teil „Bezeichnung“: …“, „„Bezeichnung“: genau …“).
+    // Ein Fehler des Servers beim Anlegen eines Sets: über dem Knopf und am Teil. Nennt er das Stück („Teil
+    // „Bezeichnung“ 2 von 2 (Seriennummer „X“): …“, sets.teil_wo), ist genau dieses Feld rot (aria-invalid, der Text
+    // darunter, Fokus dorthin – Nachbesserung B2); sonst die Felder mit einer genannten Seriennummer („…“) oder die
+    // Blöcke des genannten Bestandteils („„Bezeichnung“: genau …“).
     function teileServerFehler(text) {
       const allg = $("#an-teile-fehler");
       if (!allg) return;
       allg.textContent = text;
       allg.hidden = false;
+      const stueck = text.match(/^Teil „([^“]+)“ (\d+) von \d+(?: \(Seriennummer „[^“]*“\))?: (.*)$/s);
+      if (stueck) {
+        const bloecke = $$(".mat-an-teil").filter((f) => f.dataset.bez === stueck[1]);
+        const block = bloecke[+stueck[2] - 1];
+        if (block) {
+          const sn = $(".at-sn", block);
+          if (/Seriennummer/.test(stueck[3])) { teilFehler(sn, text); sn.focus(); return; }
+          block.classList.add("ungueltig");
+          const el = $(".mat-an-teil-fehler", block);
+          if (el) { el.textContent = text; el.hidden = false; }
+          block.scrollIntoView({ block: "center" });
+          return;
+        }
+      }
       let getroffen = false;
       $$(".mat-an-teil .at-sn").forEach((f) => {
         const w = f.value.trim();
@@ -3946,7 +3991,8 @@
   /* Der Reiter „Bestandteile“ (Schritt 21, Entwurf A): die Stückliste eines Hersteller-Sets, Position für Position –
      „einzeln geführt“ (dann ein Katalogprodukt, gesucht wie beim Artikel anlegen; die Bezeichnung darf fehlen, dann
      nimmt der Server den Produktnamen) oder ein Bestandteil nur mit Bezeichnung (Tasche, Seilsatz), dazu Anzahl und
-     „Austausch laut Hersteller“ (ja | nein | nicht belegt). Reihenfolge = Position (↑ ↓), ✕ entfernt. Grenzen aus
+     „Austausch laut Hersteller“ (ja | nein | nicht belegt). Reihenfolge = Position (↑ ↓), „Entfernen“ nimmt sie heraus
+     (Text statt ✕, das wie „Dialog schließen“ aussah – V8). Die Hilfe ist eine Zeile, der Rest aufklappbar (V12). Grenzen aus
      stueckliste_grenzen (an einem neuen Produkt gibt es die Antwort noch nicht – dann dieselben Zahlen wie in models.py).
      Fehler des Servers („Position n: …“) markieren die Position. Liefert liste(), pruefen() (Text oder ""),
      geaendert(), gespeichert(), fehlerZeigen(text). */
@@ -3979,11 +4025,13 @@
       : `<div class="mat-produktwahl"><input type="search" id="bt-${i}-q" class="bt-q" data-i="${i}" placeholder="Hersteller, Modell, Artikelnummer …" autocomplete="off" ${TASTATUR_SUCHE}>
           <div id="bt-${i}-treffer" class="mat-treffer"></div></div>`);
     function zeichnen(fokusSel) {
-      teil.innerHTML = `<p class="help">${esc(HILFE_EINZELN)}</p>
-        <p class="help">Angelegte Sets behalten die Stückliste, mit der sie angelegt wurden – eine Änderung gilt für neue Sets.</p>
+      const hilfeOffen = Boolean($(".mat-bt-hilfe", teil) && $(".mat-bt-hilfe", teil).open);
+      teil.innerHTML = `<details class="mat-auf mat-bt-hilfe"${hilfeOffen ? " open" : ""}><summary>Einzeln geführt nur mit eigener Kennzeichnung und eigenem Katalogprodukt</summary>
+          <p class="help">${esc(HILFE_EINZELN)}</p>
+          <p class="help">Angelegte Sets behalten die Stückliste, mit der sie angelegt wurden – eine Änderung gilt für neue Sets.</p></details>
         <div class="mat-bt-liste">${pos.map((x, i) => `<fieldset class="mat-bt" data-i="${i}"><legend>Position ${i + 1}</legend>
           <div class="mat-bt-kopf"><label class="inline"><input type="checkbox" class="bt-einzeln" data-i="${i}" ${x.einzeln ? "checked" : ""}> einzeln geführt</label>
-            <div class="btn-row"><button class="btn secondary small" type="button" data-bt="hoch" data-i="${i}" aria-label="Position ${i + 1} nach oben" ${i ? "" : "disabled"}>↑</button><button class="btn secondary small" type="button" data-bt="runter" data-i="${i}" aria-label="Position ${i + 1} nach unten" ${i < pos.length - 1 ? "" : "disabled"}>↓</button><button class="btn secondary small" type="button" data-bt="weg" data-i="${i}" aria-label="Position ${i + 1} entfernen">✕</button></div></div>
+            <div class="btn-row"><button class="btn secondary small" type="button" data-bt="hoch" data-i="${i}" aria-label="Position ${i + 1} nach oben" ${i ? "" : "disabled"}>↑</button><button class="btn secondary small" type="button" data-bt="runter" data-i="${i}" aria-label="Position ${i + 1} nach unten" ${i < pos.length - 1 ? "" : "disabled"}>↓</button><button class="btn secondary small" type="button" data-bt="weg" data-i="${i}" aria-label="Position ${i + 1} entfernen">Entfernen</button></div></div>
           ${x.einzeln ? `${x.produkt ? '<p class="mat-bt-label">Katalogprodukt</p>' : `<label for="bt-${i}-q">Katalogprodukt</label>`}${produktWahl(x, i)}` : ""}
           <div class="field-row mat-bt-felder"><div><label for="bt-${i}-bez">Bezeichnung${x.einzeln ? " (leer: Produktname)" : ""}</label><input type="text" id="bt-${i}-bez" class="bt-bez" maxlength="${g.bezeichnung}" value="${esc(x.bezeichnung || "")}" ${TASTATUR_NAME}></div>
             <div><label for="bt-${i}-anzahl">Anzahl</label><input type="number" id="bt-${i}-anzahl" class="bt-anzahl" min="1" max="${g.anzahl}" value="${esc(String(x.anzahl || 1))}"></div>
@@ -4621,18 +4669,18 @@
     else if (sb && sb.lauf) lf = sb.lauf;
     const setSeite = tv || sb ? `/material/artikel/${(tv || a).id}/set-pruefung` : null;
     const nr = tv ? teilNr(lf, a.id) : null;
-    if (sb && !sb.lauf && !hinweis) hinweis = "Den Set-Artikel prüfst du über „Set prüfen“ – zusammen mit den Teilen in einer Set-Prüfung.";
+    if (sb && !sb.lauf && !hinweis) hinweis = "Das Set selbst prüfst du über „Set prüfen“ – zusammen mit den Teilen in einer Set-Prüfung.";
     const zurueck = lf && setSeite ? setSeite : `/material/artikel/${a.id}`;
     const gesperrtText = a.lock_cause === "set" ? `GESPERRT mit dem Set${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. „einsatzbereit“ hebt diese Sperre nicht auf – frei gibt das Set nur „Set prüfen“.`
-      : tv || sb ? `GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Mit „einsatzbereit“ ist diese Prüfung die Freiprüfung für ${tv ? "das Teil" : "den Set-Artikel"}; frei gibt das ganze Set erst „Set prüfen“.`
+      : tv || sb ? `GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Mit „einsatzbereit“ ist diese Prüfung die Freiprüfung für ${tv ? "das Teil" : "das Set selbst"}; frei gibt das ganze Set erst „Set prüfen“.`
         : `GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.`;
     inhalt.innerHTML = `${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${artikelPfad(a)}
       <div class="page-head"><h1>Prüfung ${esc(a.inventory_no)} ${statusMarke(a.status, true)}</h1></div>
       <div class="mat-formular">
         <p class="mat-produktzeile"><strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrHtml(p.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)}</p>
-        ${tv ? `<p class="mat-set-lauf-zeile">Teil von Set <a href="/material/artikel/${tv.id}"><strong>${esc(tv.inventory_no)}</strong></a>${nr ? ` · Teil ${nr.n} von ${nr.m} in der <a href="${setSeite}">Set-Prüfung</a>` : " – die Prüfung wirkt über das ganze Set: „instandsetzen“ sperrt es mit allen Teilen."}</p>` : ""}
-        ${sb && sb.lauf ? `<p class="mat-set-lauf-zeile">Set-Artikel – zum Schluss der <a href="${setSeite}">Set-Prüfung</a>, ergänzt um je eine Zeile „vorhanden/fehlt“ für die Bestandteile ohne eigenen Artikel.</p>` : ""}
+        ${tv ? `<p class="mat-set-lauf-zeile">Teil von Set <a href="/material/artikel/${tv.id}"><strong>${esc(tv.inventory_no)}</strong></a>${nr ? ` · Teil ${nr.n} von ${nr.m} in der <a class="mat-ziel" href="${setSeite}">Set-Prüfung</a>` : " – die Prüfung wirkt über das ganze Set: „instandsetzen“ sperrt es mit allen Teilen."}</p>` : ""}
+        ${sb && sb.lauf ? `<p class="mat-set-lauf-zeile">Das Set selbst – zum Schluss der <a class="mat-ziel" href="${setSeite}">Set-Prüfung</a>, ergänzt um je eine Zeile „vorhanden/fehlt“ für die Bestandteile ohne eigenen Artikel.</p>` : ""}
         ${a.lock_state !== "frei" && a.lock_state !== "ausgesondert" ? `<p class="mat-banner s-gesperrt">${gesperrtText}</p>` : ""}
         ${mangelHinweis((a.maengel || []).filter((m) => m.offen))}
         ${rueckrufHinweis((a.rueckrufe || []).filter((r) => r.zustand !== "erledigt").map((r) => r.title), a.id)}
@@ -4679,7 +4727,7 @@
     const u = lf.umfang.find((x) => x.zu_pruefen && !x.pruefung && (!x.entwurf || x.entwurf.eigen));
     if (u) return { art: "teil", id: u.teil.id, ziel: u.entwurf ? `/material/pruefung/${u.entwurf.id}` : pruefNeuLink(u.teil.id), text: `${u.entwurf ? "Weiter prüfen" : "Prüfen"}: Teil ${u.teil.inventory_no}` };
     const sp = lf.set_pruefung;
-    if (lf.bereit && (!sp || (sp.entwurf && sp.eigen))) return { art: "set", id: setId, ziel: sp ? `/material/pruefung/${sp.id}` : pruefNeuLink(setId), text: sp ? "Set-Artikel weiter prüfen" : "Set-Artikel prüfen" };
+    if (lf.bereit && (!sp || (sp.entwurf && sp.eigen))) return { art: "set", id: setId, ziel: sp ? `/material/pruefung/${sp.id}` : pruefNeuLink(setId), text: sp ? "Set selbst weiter prüfen" : "Set selbst prüfen" };
     return null;
   }
   // Teil n von m im Lauf (Reihenfolge des Umfangs) – oder null.
@@ -4695,23 +4743,26 @@
     const lf = l.lauf;
     const kopf = `${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}${artikelPfad(a)}
       <div class="page-head"><h1>Set-Prüfung <span class="mat-h1-zusatz">${esc(a.inventory_no)}</span> ${sb ? statusMarke(sb.status, true) : ""}</h1>
-        ${lf && lf.state === "offen" && (darf.pruefen || darf.verwalten) ? `<details class="mat-menue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary>
+        ${lf && lf.state === "offen" && (lf.eigen || darf.verwalten) ? `<details class="mat-menue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary>
           <div class="mat-menue-liste"><a href="#" role="button" data-act="lauf-abbrechen"><strong>Set-Prüfung abbrechen …</strong>
             <span>Festgeschriebene Teilprüfungen bleiben Einzelprüfungen mit Protokoll, offene laufen einzeln weiter.</span></a></div></details>` : ""}</div>
       <p class="mat-produktzeile"><strong>${nameHtml(a.produkt)}</strong>${zusatzHtml(a.produkt)}${artNrHtml(a.produkt.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)}</p>`;
     if (!sb) {
-      inhalt.innerHTML = `${kopf}<p class="notice">„Set prüfen“ gibt es nur am Set-Artikel eines Hersteller-Sets.</p><p><a class="btn secondary" href="/material/artikel/${a.id}">Zum Artikel</a></p>`;
+      inhalt.innerHTML = `${kopf}<p class="notice">„Set prüfen“ gibt es nur an einem Hersteller-Set.</p><p><a class="btn secondary" href="/material/artikel/${a.id}">Zum Artikel</a></p>`;
       aktionen = {};
       return;
     }
     const frueher = (l.laeufe || []).filter((x) => x.state !== "offen" && (!lf || x.id !== lf.id));
     const frueherHtml = frueher.length ? `<section class="section mat-lauf-frueher"><h2>Frühere Set-Prüfungen</h2><ul class="mat-rr-liste">
-      ${frueher.map((x) => `<li><a href="/material/artikel/${a.id}/set-pruefung?lauf=${x.id}">${esc(fmtTag(x.opened_at))}</a>
-        <span class="small">${esc(LAUF_ZUSTAND[x.state] || x.state)}${x.closed_at ? ` am ${esc(fmtTag(x.closed_at))}` : ""}${x.opened_by_name ? ` · ${esc(x.opened_by_name)}` : ""}${x.durchgang ? ` · Durchgang „${esc(x.durchgang.titel)}“` : ""}</span></li>`).join("")}</ul></section>` : "";
+      ${frueher.map((x) => `<li><a class="mat-ziel" href="/material/artikel/${a.id}/set-pruefung?lauf=${x.id}">${esc(fmtTag(x.closed_at || x.opened_at))}</a>
+        ${x.gesamtergebnis ? `<span class="mat-gesamt g-${esc(x.gesamtergebnis)}">${esc(x.gesamt_text)}</span>` : `<span class="badge grey">${esc(LAUF_ZUSTAND[x.state] || x.state)}</span>`}
+        <span class="small">${x.protokoll_id ? `Protokoll <a href="/material/pruefung/${x.set_inspection_id}"><span class="mat-hash">${esc(x.protokoll_id)}</span></a>` : ""}${x.opened_by_name ? ` · ${esc(x.opened_by_name)}` : ""}${x.durchgang ? ` · Durchgang „${esc(x.durchgang.titel)}“` : ""}</span></li>`).join("")}</ul></section>` : "";
     const gruende = (sb.sperrgruende || []).filter((g) => g.art !== "set_pruefung");
     if (!lf) {
+      // Der Prüfumfang kommt vom Server (set.teile[].zu_pruefen): auch jedes Teil ohne übernehmbare Prüfung (N1, B7).
       const alle = a.lock_state === "frei" || sb.ursprung === "set";
-      const umfang = alle ? sb.teile : sb.teile.filter((t) => t.set_pruefen);
+      const umfang = sb.teile.filter((t) => t.zu_pruefen);
+      const rot = SET_ROT.includes(sb.status);
       let hinweis = "";
       if (a.lock_state === "ausgesondert") hinweis = "Ein ausgesondertes Set wird nicht mehr geprüft.";
       else if (!darf.pruefen) hinweis = pruefHinweis(a);
@@ -4720,13 +4771,14 @@
         ${gruende.length ? `<div class="mat-banner s-gesperrt"><p>SET GESPERRT – ${gruende.map((g) => esc(g.text)).join(" · ")}</p></div>` : ""}
         ${durchgang ? `<p>Aus dem Prüfdurchgang ${durchgang.sichtbar ? `<a href="/material/durchgang/${durchgang.id}">${esc(durchgang.titel)}</a>` : `„${esc(durchgang.titel)}“`} – die Prüfungen zählen dort.</p>` : ""}
         <section class="section"><h2>Prüfumfang</h2>
-          <p>${alle ? `${a.lock_state === "frei" ? "Periodisch" : "Die Sperre ging vom Set-Artikel aus"}: ${umfang.length === 1 ? "das Teil" : `alle ${umfang.length} Teile`}, jedes mit eigener Prüfung und eigenem Protokoll – zum Schluss der Set-Artikel mit den Bestandteilen ohne eigenen Artikel.`
-            : `Zur Freigabe: der Set-Artikel und ${umfang.length ? `die betroffenen Teile (${umfang.map((t) => esc(t.inventory_no)).join(", ")})` : "kein Teil"}. Die übrigen zählen mit ihrer letzten gültigen Prüfung – du kannst sie auch prüfen.`}</p>
-          <ul class="mat-lauf-vorschau">${sb.teile.map((t) => `<li><strong>${esc(t.inventory_no)}</strong> <span class="muted small">${esc(t.bestandteil || "")}</span> ${statusMarke(t.status)} <span class="small">${umfang.includes(t) ? "zu prüfen" : "wird übernommen"}</span></li>`).join("")}
-            <li><strong>${esc(a.inventory_no)}</strong> <span class="muted small">Set-Artikel</span> <span class="small">zum Schluss</span></li></ul>
+          <p>${alle ? `${a.lock_state === "frei" ? "Regelprüfung (alle Teile)" : "Die Sperre ging vom Set selbst aus"}: ${umfang.length === 1 ? "das Teil" : `alle ${umfang.length} Teile`}, jedes mit eigener Prüfung und eigenem Protokoll – zum Schluss das Set selbst mit den Bestandteilen ohne eigenen Artikel.`
+            : `Zur Freigabe: das Set selbst und ${umfang.length ? `die betroffenen Teile (${umfang.map((t) => esc(t.inventory_no)).join(", ")})` : "kein Teil"}. Die übrigen zählen mit ihrer letzten gültigen Prüfung – du kannst sie auch prüfen.`}</p>
+          <ul class="mat-lauf-vorschau">${sb.teile.map((t) => `<li><strong>${esc(t.inventory_no)}</strong> <span class="muted small">${esc(t.bestandteil || "")}</span> ${statusMarke(t.status)}
+            <span class="mat-lauf-auftrag${t.zu_pruefen ? " zu" : ""}">${t.zu_pruefen ? "zu prüfen" : "wird übernommen"}</span></li>`).join("")}
+            <li><strong>${esc(a.inventory_no)}</strong> <span class="muted small">das Set selbst</span> <span class="mat-lauf-auftrag">zum Schluss</span></li></ul>
         </section>
         ${hinweis ? `<p class="notice">${hinweis}</p><p><a class="btn secondary" href="/material/artikel/${a.id}">Zum Set</a></p>` : `
-          <div class="btn-row mat-knoepfe"><button class="btn" type="button" data-act="lauf-beginnen">Set-Prüfung beginnen</button><a class="btn secondary" href="/material/artikel/${a.id}">Abbrechen</a></div>
+          <div class="btn-row mat-knoepfe"><button class="btn${rot ? "" : " secondary"}" type="button" data-act="lauf-beginnen">Set-Prüfung beginnen</button><a class="btn secondary" href="/material/artikel/${a.id}">Abbrechen</a></div>
           <p class="help">Die Set-Prüfung führt von Teil zu Teil; jede Prüfung reserviert nur ihren Artikel und lässt sich unterbrechen. Mehrere Prüfer können die Teile parallel prüfen.</p>`}
         ${frueherHtml}`;
       aktionen = {
@@ -4775,22 +4827,22 @@
     if (sp && !sp.entwurf) spZustand = `<span class="small">festgeschrieben · <a href="/material/pruefung/${sp.id}">Set-Protokoll ansehen</a></span>`;
     else if (sp) {
       spZustand = `<span class="badge">in Prüfung</span> <span class="small">bei ${esc(sp.pruefer || "–")}</span>`;
-      if (offen && sp.eigen && darf.pruefen) spKnopf = `<a class="${knopfKlasse("set", a.id)} small" href="/material/pruefung/${sp.id}">Set-Artikel weiter prüfen</a>`;
+      if (offen && sp.eigen && darf.pruefen) spKnopf = `<a class="${knopfKlasse("set", a.id)} small" href="/material/pruefung/${sp.id}">Set selbst weiter prüfen</a>`;
       else if (offen && darf.verwalten) spKnopf = `<button type="button" class="btn secondary small" data-act="freigeben" data-id="${sp.id}" data-wer="${esc(sp.pruefer || "")}">Reservierung aufheben</button>`;
     } else {
       spZustand = `<span class="mat-lauf-marke">${lf.bereit ? "jetzt dran" : "zum Schluss"}</span>`;
-      if (offen && darf.pruefen) spKnopf = `<a class="${knopfKlasse("set", a.id)} small" href="${pruefNeuLink(a.id)}">Set-Artikel prüfen</a>`;
+      if (offen && darf.pruefen) spKnopf = `<a class="${knopfKlasse("set", a.id)} small" href="${pruefNeuLink(a.id)}">Set selbst prüfen</a>`;
     }
     const ab = lf.abschluss;
-    const fgr = (lf.freigabe_gruende || []).filter((g) => !/noch nicht geprüft$/.test(g));
+    const fgr = (lf.freigabe_gruende || []).filter((g) => !/noch nicht geprüft\.?$/.test(g));
     inhalt.innerHTML = `${kopf}
       <p class="mat-lauf-stand"><span class="badge${offen ? "" : " grey"}">${esc(LAUF_ZUSTAND[lf.state] || lf.state)}</span>
         <span class="small">begonnen ${esc(fmtZeit(lf.opened_at))}${lf.opened_by_name ? ` von ${esc(lf.opened_by_name)}` : ""}${lf.closed_at ? ` · beendet ${esc(fmtZeit(lf.closed_at))}` : ""}
         ${lf.durchgang ? ` · Durchgang ${lf.durchgang.sichtbar ? `<a href="/material/durchgang/${lf.durchgang.id}">${esc(lf.durchgang.titel)}</a>` : `„${esc(lf.durchgang.titel)}“`}` : ""}</span></p>
       ${offen ? `<p class="mat-lauf-fortschritt"><span class="mat-fortschritt" aria-hidden="true"><span style="width:${fs.zu_pruefen ? Math.round((100 * fs.geprueft) / fs.zu_pruefen) : 100}%"></span></span>
-        <strong>${fs.geprueft} von ${fs.zu_pruefen}</strong> ${fs.zu_pruefen === 1 ? "Teil" : "Teilen"} im Umfang geprüft${lf.bereit ? " – jetzt der Set-Artikel" : ""}</p>` : ""}
+        <span><strong>${fs.geprueft} von ${fs.zu_pruefen}</strong> ${fs.zu_pruefen === 1 ? "Teil" : "Teilen"} <span class="mat-nowrap">im Umfang geprüft</span>${lf.bereit ? " – jetzt das Set selbst" : ""}</span></p>` : ""}
       ${lf.hinweis_tage ? `<p class="notice small">Seit der ersten Teilprüfung sind ${lf.hinweis_tage} Tage vergangen – das Set-Protokoll vermerkt es. Prüftag des Set-Protokolls ist der Tag des Abschlusses.</p>` : ""}
-      ${offen && fgr.length ? `<div class="mat-lauf-gruende"><p class="small"><strong>Was die Freigabe noch verhindert</strong> (außer dem Set-Artikel selbst):</p><ul class="small">${fgr.map((g) => `<li>${esc(g)}</li>`).join("")}</ul></div>` : ""}
+      ${offen && fgr.length ? `<div class="mat-lauf-gruende"><p class="small"><strong>Was die Freigabe noch verhindert</strong> (außer dem Set selbst):</p><ul class="small">${fgr.map((g) => `<li>${esc(g)}</li>`).join("")}</ul></div>` : ""}
       ${ab ? `<section class="section mat-lauf-abschluss"><h2>Ergebnis</h2><p><span class="mat-gesamt g-${esc(ab.gesamtergebnis || "")}">${esc(ab.gesamt_text)}</span>${ab.freigegeben ? ' <span class="small">– mit dieser Prüfung freigegeben</span>' : ""}</p>
         ${(ab.gruende || []).length ? `<ul class="small">${ab.gruende.map((g) => `<li>${esc(g)}</li>`).join("")}</ul>` : ""}${ab.hinweis ? `<p class="small">${esc(ab.hinweis)}</p>` : ""}
         ${lf.set_inspection_id ? `<p><a class="btn secondary small" href="/material/pruefung/${lf.set_inspection_id}">Set-Protokoll ansehen</a></p>` : ""}</section>` : ""}
@@ -4798,11 +4850,11 @@
       ${offen && !darf.pruefen ? `<p class="notice small">${pruefHinweis(a)}</p>` : ""}
       <ol class="mat-lauf-liste">${lf.umfang.map(karte).join("")}
         <li class="mat-lauf-teil mat-lauf-set${sp && !sp.entwurf ? " geprueft" : ""}">
-          <div class="mat-lauf-kopf"><span class="mat-lauf-nr">Zum Schluss</span> <strong>${esc(a.inventory_no)}</strong> <span class="muted small">Set-Artikel</span></div>
+          <div class="mat-lauf-kopf"><span class="mat-lauf-nr">Zum Schluss</span> <strong>${esc(a.inventory_no)}</strong> <span class="muted small">das Set selbst</span></div>
           <div class="mat-lauf-zustand">${spZustand}</div>
           ${spKnopf ? `<div class="btn-row">${spKnopf}</div>` : ""}
-          ${offen && !lf.bereit ? '<p class="help">Festschreiben lässt sich der Set-Artikel, sobald jedes Teil im Umfang geprüft und keine Teilprüfung mehr offen ist.</p>' : ""}</li></ol>
-      <p><a href="/material/artikel/${a.id}">Zum Set ${esc(a.inventory_no)}</a></p>
+          ${offen && !lf.bereit ? '<p class="help">Festschreiben lässt sich das Set selbst, sobald jedes Teil im Umfang geprüft und keine Teilprüfung mehr offen ist.</p>' : ""}</li></ol>
+      <p><a class="mat-ziel" href="/material/artikel/${a.id}">Zum Set ${esc(a.inventory_no)}</a></p>
       ${frueherHtml}`;
     aktionen = {
       freigeben: (b) => reservierungFreigeben(+b.dataset.id, b.dataset.wer, () => zeigen(setLaufAnsicht)),
@@ -4999,6 +5051,8 @@
        nach dem Verbleib. Abgeschlossen zeigt die Set-Prüfung ihre Teiletabelle (pr.set_protokoll). */
     let setLf = null;                // die offene Set-Prüfung, zu der diese Prüfung gehört (voll) – oder null
     const rolleSet = () => Boolean(pr.set_lauf && pr.set_lauf.rolle === "set");
+    // Ein Teil an einer Position mit „Austausch laut Hersteller: nein“: „aussondern“ lässt es gesperrt im Set (N3).
+    const teilNichtTauschbar = () => Boolean(pr.artikel.teil_von && pr.artikel.teil_von.austausch === "nein");
     const setVon = () => (pr.set_lauf ? pr.set_lauf.set : pr.artikel.teil_von ? { id: pr.artikel.teil_von.id, inventory_no: pr.artikel.teil_von.inventory_no } : null);
     async function setLaufLaden() {
       setLf = null;
@@ -5015,18 +5069,26 @@
       if (e === "instandsetzen") return { g: "gesperrt", text: "nicht einsatzbereit – das ganze Set ist gesperrt." };
       if (pr.artikel.lock_state === "frei") return { g: "einsatzbereit", text: "einsatzbereit – das Set ist danach mit allen Teilen geprüft." };
       const g = sa.freigabe_gruende || [];
-      return g.length ? { g: "gesperrt", text: `nicht einsatzbereit – das Set bleibt gesperrt: ${g.join("; ")}` }
+      return g.length ? { g: "gesperrt", text: `nicht einsatzbereit – das Set bleibt gesperrt. ${g.join(" ")}` }
         : { g: "einsatzbereit", text: "einsatzbereit – das Set wird freigegeben und kehrt in seinen Ordner zurück." };
     }
-    // Das Gesamtergebnis als Marke, die Erklärung dahinter als Text („einsatzbereit – das Set wird freigegeben …“).
-    const vorabHtml = (v) => { const i = v.text.indexOf(" – "); return `<span class="mat-gesamt g-${esc(v.g)}">${esc(i < 0 ? v.text : v.text.slice(0, i))}</span>${i < 0 ? "" : ` ${esc(v.text.slice(i + 3))}`}`; };
+    // Das Gesamtergebnis als Marke, die Erklärung dahinter als Text („einsatzbereit – das Set wird freigegeben …“) – mit
+    // dem Gedankenstrich als Trenner, sonst liest sich Marke und Satz als einer (V4).
+    const vorabHtml = (v) => { const i = v.text.indexOf(" – "); return `<span class="mat-gesamt g-${esc(v.g)}">${esc(i < 0 ? v.text : v.text.slice(0, i))}</span>${i < 0 ? "" : ` – ${esc(v.text.slice(i + 3))}`}`; };
     function setKopfHtml() {
       const sv = setVon();
       if (!sv) return "";
       const seite = `/material/artikel/${sv.id}/set-pruefung`;
-      if (rolleSet()) return `<p class="mat-set-lauf-zeile">Set-Artikel der <a href="${seite}${pr.set_lauf.state === "offen" ? "" : `?lauf=${pr.set_lauf.id}`}">Set-Prüfung</a> · Set <a href="/material/artikel/${sv.id}"><strong>${esc(sv.inventory_no)}</strong></a></p>`;
+      if (rolleSet()) {
+        // V3: Das Gesamtergebnis des Sets steht im Kopf – weicht es vom Ergebnis dieser Prüfung ab, als Hinweis.
+        const sp = pr.set_protokoll;
+        const gleich = { einsatzbereit: "einsatzbereit", instandsetzen: "gesperrt", aussondern: "ausgesondert" };
+        const abweichend = Boolean(sp) && gleich[pr.ergebnis] !== sp.gesamt;
+        const gesamt = sp ? `<p class="${abweichend ? "notice" : "mat-set-gesamt-kopf"}"><strong>Gesamtergebnis des Sets:</strong> <span class="mat-gesamt g-${esc(sp.gesamt)}">${esc(sp.gesamt_text)}</span>${abweichend ? " – das Ergebnis oben gilt nur für das Set selbst." : ""}</p>` : "";
+        return `<p class="mat-set-lauf-zeile">Das Set selbst – zum Schluss der <a class="mat-ziel" href="${seite}${pr.set_lauf.state === "offen" ? "" : `?lauf=${pr.set_lauf.id}`}">Set-Prüfung</a> · Set <a href="/material/artikel/${sv.id}"><strong>${esc(sv.inventory_no)}</strong></a></p>${gesamt}`;
+      }
       const nr = teilNr(setLf, pr.item_id);
-      return `<p class="mat-set-lauf-zeile">Teil von Set <a href="/material/artikel/${sv.id}"><strong>${esc(sv.inventory_no)}</strong></a>${nr ? ` · Teil ${nr.n} von ${nr.m}` : ""}${pr.set_lauf ? ` · <a href="${seite}${pr.set_lauf.state === "offen" ? "" : `?lauf=${pr.set_lauf.id}`}">Set-Prüfung</a>` : ""}</p>`;
+      return `<p class="mat-set-lauf-zeile">Teil von Set <a href="/material/artikel/${sv.id}"><strong>${esc(sv.inventory_no)}</strong></a>${nr ? ` · Teil ${nr.n} von ${nr.m}` : ""}${pr.set_lauf ? ` · <a class="mat-ziel" href="${seite}${pr.set_lauf.state === "offen" ? "" : `?lauf=${pr.set_lauf.id}`}">Set-Prüfung</a>` : ""}</p>`;
     }
     // Nach dem Festschreiben (und an jeder abgeschlossenen Prüfung eines laufenden Laufs): weiter zur nächsten Prüfung.
     function setWeiterHtml() {
@@ -5034,7 +5096,7 @@
       const sv = pr.set_lauf.set;
       const w = darfHier("pruefen") ? laufWeiter(setLf, sv.id) : null;
       const fs = setLf.fortschritt;
-      return `<div class="mat-lauf-weiter" role="status"><p><strong>Set-Prüfung ${esc(sv.inventory_no)}:</strong> ${fs.geprueft} von ${fs.zu_pruefen} ${fs.zu_pruefen === 1 ? "Teil" : "Teilen"} im Umfang geprüft${setLf.bereit ? " – jetzt der Set-Artikel." : "."}</p>
+      return `<div class="mat-lauf-weiter" role="status"><p><strong>Set-Prüfung ${esc(sv.inventory_no)}:</strong> ${fs.geprueft} von ${fs.zu_pruefen} ${fs.zu_pruefen === 1 ? "Teil" : "Teilen"} im Umfang geprüft${setLf.bereit ? " – jetzt das Set selbst." : "."}</p>
         <div class="btn-row">${w ? `<a class="btn" href="${w.ziel}">${esc(w.text)}</a>` : ""}<a class="btn secondary" href="/material/artikel/${sv.id}/set-pruefung">Zur Set-Prüfung</a></div></div>`;
     }
     function setAbschlussHtml() {
@@ -5539,7 +5601,7 @@
       else if (pr.lebensdauer && pr.lebensdauer.erreicht) teile.push("Lebensende erreicht – nicht einsatzbereit");
       const vorab = setVorab(ergebnis);
       const vorabEl = imAbschluss("#pr-set-vorab") || $("#pr-set-vorab", inhalt);
-      if (vorabEl) vorabEl.innerHTML = vorab ? `Gesamtergebnis vorab: ${vorabHtml(vorab)}` : "Wähle unten das Ergebnis des Set-Artikels – hier steht dann, wie das Set danach steht.";
+      if (vorabEl) vorabEl.innerHTML = vorab ? `Gesamtergebnis vorab: ${vorabHtml(vorab)}` : "Wähle unten das Ergebnis für das Set selbst – hier steht dann, wie das ganze Set danach steht.";
       if (vorab) teile.push(`Gesamtergebnis: ${SET_WERTE.gesamtergebnis[vorab.g]}`);
       else if (setVon()) {
         if (pr.freipruefung && ergebnis === "einsatzbereit") teile.push("Freiprüfung im Set: hebt den eigenen Grund auf – frei gibt das Set erst „Set prüfen“");
@@ -5816,7 +5878,8 @@
             Gemeldeten Mangel vom ${esc(S.fmtDate(m.created_at))} geprüft</label>
             ${m.description ? `<p class="small mat-text">${esc(m.description.length > 300 ? `${m.description.slice(0, 299)}…` : m.description)}</p>` : ""}</div>`).join("")}
           <p class="help" id="fs-maengel-hilfe">Freigeben kannst du erst, wenn du jeden gemeldeten Mangel geprüft hast.</p></fieldset>` : ""}
-        ${daten.ergebnis === "aussondern" ? `<p class="mat-fs-warnung"><strong>„aussondern“ ist endgültig.</strong> ${rolleSet() ? "Das Set wandert nach „Ausgesondert“ und zählt nicht mehr als Bestand; der Set-Artikel und jedes mit ausgesonderte Teil bekommen ein Aussonderungsprotokoll."
+        ${daten.ergebnis === "aussondern" && teilNichtTauschbar() ? `<p class="mat-fs-warnung"><strong>Laut Hersteller nicht austauschbar – das Set aussondern.</strong> Das Teil bleibt gesperrt im Set ${esc(setVon().inventory_no)}; der Materialwart sondert danach das ganze Set aus (dieses Teil ist dort mit „mit aussondern“ vorbelegt).</p>`
+          : daten.ergebnis === "aussondern" ? `<p class="mat-fs-warnung"><strong>„aussondern“ ist endgültig.</strong> ${rolleSet() ? "Das Set wandert nach „Ausgesondert“ und zählt nicht mehr als Bestand; das Set selbst und jedes mit ausgesonderte Teil bekommen ein Aussonderungsprotokoll."
           : setVon() ? "Das Teil verlässt das Set, wandert nach „Ausgesondert“ und bekommt ein Aussonderungsprotokoll; das Set ist danach unvollständig gesperrt."
             : "Der Artikel wandert nach „Ausgesondert“ und zählt nicht mehr als Bestand; dazu entsteht ein Aussonderungsprotokoll."}</p>
           ${rolleSet() && (pr.set_abschluss.verbleib_vorschlag || []).length ? `<div class="mat-verbleib"><h3 class="mat-unter">Teile des Sets</h3><p class="help">${esc(VERBLEIB_HILFE)}</p>
@@ -7391,6 +7454,7 @@
   const MANGEL_NEU_ANFANG = "Am Artikel ist ein gemeldeter Mangel offen, den du nicht als geprüft abgehakt hast";
   const LAENGE_GEAENDERT_ANFANG = "Die Länge am Artikel wurde während der Prüfung";
   const BEISEITE = "Leg ihn sofort beiseite (aus Fahrzeug oder Lager) und gib ihn deinem Materialwart.";
+  const BEISEITE_SET = "Leg das Set sofort beiseite (aus Fahrzeug oder Lager) und gib es deinem Materialwart. Freigeben kann es nur ein Prüfer mit „Set prüfen“.";
   const mangelMarke = (x) => (x ? ' <span class="mat-mangel-marke" title="Mangel gemeldet">Mangel</span>' : "");
   const tagZeit = (iso) => fmtZeit(iso).replace(",", "");         // „20.10.2026 13:05“ in der Zeit des Browsers
   // Fotos einer Meldung: Vorschau, groß die Webfassung – ein Original gibt es nicht (F4), „Original“ zeigt dieselbe.
@@ -7402,11 +7466,12 @@
   let quittung = "";
   const quittungHtml = () => { const q = quittung; quittung = ""; return q ? `<p class="notice mat-mangel-quittung" role="status" tabindex="-1">${esc(q)}</p>` : ""; };
   function mangelQuittung(r, v) {
-    // v: das Set, über das die Meldung sperrt (Hersteller-Sets, K2) – dann sagt die Quittung es fürs ganze Set.
+    // v: das Set, über das die Meldung sperrt (Hersteller-Sets, K2) – dann sagt die Quittung es fürs ganze Set (und
+    // spricht vom Set, nicht vom Artikel – V10).
     const was = v ? `${setSperrSatz(v)} ist gesperrt` : r.gesperrt ? "der Artikel ist gesperrt" : "der Artikel war schon gesperrt";
     // „unterwegs“: Die Mail geht im Hintergrund hinaus – ob der Mailserver sie annimmt, steht erst im Log.
-    return r.mail ? `Gemeldet – ${was}. Die Mail an Materialwart und Prüfer ist unterwegs. Leg ihn beiseite und gib ihn deinem Materialwart.`
-      : `Gemeldet – ${was}. Es ging keine Mail hinaus – sag deinem Materialwart Bescheid und gib ihm den Artikel.`;
+    return r.mail ? `Gemeldet – ${was}. Die Mail an Materialwart und Prüfer ist unterwegs. ${v ? "Leg das Set beiseite und gib es" : "Leg ihn beiseite und gib ihn"} deinem Materialwart.`
+      : `Gemeldet – ${was}. Es ging keine Mail hinaus – sag deinem Materialwart Bescheid und gib ihm ${v ? "das Set" : "den Artikel"}.`;
   }
 
   /* Dialog „Mangel melden“ (Meine PSA und Artikelseite). a: {id, inventory_no}; danach(antwort, text) zeichnet neu.
@@ -7422,14 +7487,14 @@
     const wahl = (opt && opt.wahl) || [];
     const ersteFrei = wahl.find((x) => !x.schon);
     dialog(`<h2>Mangel melden – ${esc(v ? `Set ${v.inventory_no}` : a.inventory_no)}</h2>
-      <p class="mat-mangel-warnung"><strong>${v ? `Mit dem Melden wird ${esc(setSperrSatz(v))} sofort gesperrt.` : "Mit dem Melden wird der Artikel sofort gesperrt."}</strong> ${BEISEITE} Freigeben kann ihn nur ein Prüfer nach einer Prüfung.</p>
+      <p class="mat-mangel-warnung"><strong>${v ? `Mit dem Melden wird ${esc(setSperrSatz(v))} sofort gesperrt.` : "Mit dem Melden wird der Artikel sofort gesperrt."}</strong> ${v ? BEISEITE_SET : `${BEISEITE} Freigeben kann ihn nur ein Prüfer nach einer Prüfung.`}</p>
       ${wahl.length ? `<fieldset class="mat-mangel-wahl"><legend>Was ist betroffen?</legend>
         ${wahl.map((x) => `<label class="inline"><input type="radio" name="mg-wahl" value="${Number(x.id)}"${x === ersteFrei ? " checked" : ""}${x.schon ? " disabled" : ""}>
           <span><strong>${esc(x.inventory_no)}</strong> ${esc(x.text)}${x.schon ? ' <span class="muted small">(schon von dir gemeldet)</span>' : ""}</span></label>`).join("")}</fieldset>` : ""}
-      <p class="help">Mit Beschreibung und Fotos – Materialwarte und Prüfer bekommen eine Mail.</p>
       <label for="mg-text">Was ist dir aufgefallen? <span class="mat-pflicht" aria-hidden="true">*</span></label>
-      <textarea id="mg-text" rows="5" maxlength="${MANGEL_TEXT_MAX}" required aria-required="true" aria-describedby="mg-text-fehler"
-        placeholder="Was ist passiert, was siehst du – und wo liegt er jetzt?"></textarea>
+      <textarea id="mg-text" rows="5" maxlength="${MANGEL_TEXT_MAX}" required aria-required="true" aria-describedby="mg-text-fehler mg-text-hilfe"
+        placeholder="Was ist passiert, was siehst du – und wo liegt ${v ? "es" : "er"} jetzt?"></textarea>
+      <p class="help" id="mg-text-hilfe">Mit Beschreibung und Fotos – Materialwarte und Prüfer bekommen eine Mail.</p>
       <p class="error mat-feld-fehler" id="mg-text-fehler" hidden></p>
       <div class="mat-feldkopf" id="mg-fotos-kopf">Fotos (bis zu ${MANGEL_MAX_FOTOS})</div>
       <div class="mat-mangel-fotowahl" role="group" aria-labelledby="mg-fotos-kopf">
@@ -7446,7 +7511,8 @@
       const fehler = $("#mg-text-fehler", body);
       const eingabe = $("#mg-fotos", body);
       const weg = $("#mg-fotos-weg", body);
-      fokus(text);
+      // An der Set-Karte zuerst die Wahl, was betroffen ist (V10) – sonst das Textfeld.
+      fokus($('input[name="mg-wahl"]:checked', body) || text);
       function zeichnen() {
         const ol = $("#mg-fotos-liste", body);
         ol.innerHTML = fotos.map((f) => `<li><span class="mat-fotoliste-name">${esc(f.name)}</span> <span class="muted small">${esc(groesse(f.size))}</span></li>`).join("");
@@ -7566,6 +7632,11 @@
      Person tun soll; dann Bild, Nummern, Daten, Dokumente, Rückruf, die eigenen Meldungen und „Mangel melden …“. */
   // Das Banner einer Karte – höchstens eins, das dringendste (auch für die Teile eines Sets).
   function psaBanner(k) {
+    // An der Set-Karte (k.teile) ist vom Set die Rede (V10), sonst von der PSA („sie“).
+    if ((k.teile || []).length && (k.mangel || k.gesperrt)) {
+      return [k.mangel ? "mat-mangel-banner" : "s-gesperrt", k.mangel ? `Mangel gemeldet am ${S.fmtDate(k.mangel.seit)} – das Set nicht verwenden. Bring es deinem Materialwart; ein Prüfer muss es ansehen.`
+        : "GESPERRT – das Set nicht verwenden. Leg es beiseite und gib es deinem Materialwart."];
+    }
     if (k.mangel) return ["mat-mangel-banner", `Mangel gemeldet am ${S.fmtDate(k.mangel.seit)} – nicht verwenden. Bring sie deinem Materialwart; ein Prüfer muss sie ansehen.`];
     if (k.verloren) return ["s-gesperrt", "Als verloren gemeldet – taucht sie wieder auf: nicht verwenden, gib sie deinem Materialwart."];
     if (k.gesperrt) return ["s-gesperrt", "GESPERRT – nicht verwenden. Leg sie beiseite und gib sie deinem Materialwart."];
@@ -7665,7 +7736,7 @@
         const teile = k.teile || [];
         const schon = (x) => x.eigene_maengel.some((m) => m.offen);
         const opt = teile.length ? { set: { inventory_no: k.inventory_no, teile: teile.length },
-                                     wahl: [{ id: k.id, inventory_no: k.inventory_no, text: "Set-Artikel (das Set selbst)", schon: schon(k) }]
+                                     wahl: [{ id: k.id, inventory_no: k.inventory_no, text: "das Set selbst", schon: schon(k) }]
                                        .concat(teile.map((t) => ({ id: t.id, inventory_no: t.inventory_no, text: produktName(t.produkt), schon: schon(t) }))) } : null;
         mangelDialog(k, (r, q) => { quittung = q; return zeigen(meinePsa); }, opt);
       },

@@ -788,9 +788,10 @@ def listenzeile(k, r):
 
 
 def teil_von_json(item):
-    """Am Teil: {id, inventory_no, produkt, status, status_text, bestandteil, teile_anzahl} des Sets – nur, wenn das Konto
-    das Set sieht (artikel_filter auf der Set-Zeile), sonst None. Für Nicht-Teile None. teile_anzahl: für die Rückfragen
-    der Teil-Seite („sperrt das Set mit allen n Teilen“)."""
+    """Am Teil: {id, inventory_no, produkt, status, status_text, bestandteil, teile_anzahl, austausch} des Sets – nur,
+    wenn das Konto das Set sieht (artikel_filter auf der Set-Zeile), sonst None. Für Nicht-Teile None. teile_anzahl: für
+    die Rückfragen der Teil-Seite („sperrt das Set mit allen n Teilen“); austausch: „Austausch laut Hersteller“ der
+    Position (bei „nein“ lässt Ergebnis „aussondern“ das Teil gesperrt im Set)."""
     if not ist_teil(item):
         return None
     s = set_zeile(item["parent_item_id"])
@@ -801,7 +802,8 @@ def teil_von_json(item):
     zu, _ = _zuteilen(slots(s["id"]), tz)
     z = zu.get(item["id"])
     return {"id": s["id"], "inventory_no": s["inventory_no"], "produkt": _kurzname(s), "status": w["status"],
-            "status_text": w["status_text"], "bestandteil": z["bezeichnung"] if z else None, "teile_anzahl": len(tz)}
+            "status_text": w["status_text"], "bestandteil": z["bezeichnung"] if z else None, "teile_anzahl": len(tz),
+            "austausch": z["austausch"] if z else None}
 
 
 def teil_kurz(item):

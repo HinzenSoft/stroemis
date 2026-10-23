@@ -196,6 +196,11 @@ def pruefung_json(p, pruefer_id=None):
     out["artikel"] = bestand.artikel_kurz(item)
     out["artikel"]["pfad"] = bestand.pfad(item["folder_id"])
     out["artikel"]["origin_folder_id"] = item["origin_folder_id"]
+    if out["artikel"].get("teil_von"):
+        # „Austausch laut Hersteller“ der Position – bei „nein“ lässt „aussondern“ das Teil gesperrt im Set (Ablauf N3).
+        from . import setaustausch
+        z = setaustausch._position(item["parent_item_id"], item)
+        out["artikel"]["teil_von"]["austausch"] = z["austausch"] if z else None
     out["produkt"] = {"id": produkt["id"], "name": katalog.produktname(produkt), "manufacturer": produkt["manufacturer"],
                       "model": produkt["model"], "description": produkt["description"],
                       "article_no": produkt["article_no"], "norm": produkt["norm"],
