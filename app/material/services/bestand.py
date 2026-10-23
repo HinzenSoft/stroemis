@@ -32,7 +32,7 @@ from ...images import delete_photo_files
 from ..models import ORDNERARTEN, SYSTEMORDNER
 from . import (Abgelehnt, akteur, auswahl, datum, erster_tag, ganzzahl, heute, kennung, laenge, laenge_text,
                monat_oder_datum, text, wahr)
-from . import faelligkeit, journal, katalog, nummern, qr, rechte
+from . import faelligkeit, journal, katalog, nummern, qr, rechte, sets
 from . import status as st
 from .interval import faelligkeit_vorschlag, herstellerseite, lebensende, spaetestens, wirksam
 
@@ -286,6 +286,7 @@ def _systemordner_nachziehen(fid, grund=GRUND_GLIEDERUNG):
     Systemordner. Eine verschachtelte Gliederung, die selbst verschoben wird, behält ihre eigenen Systemordner. In der
     Transaktion des Aufrufers."""
     bedingung, args = heimat_im_zweig(fid)
+    bewegt = []
     for z in db.query(f"SELECT i.* FROM mat_item i WHERE i.lock_state <> 'frei' AND {bedingung} ORDER BY i.id", args):
         gl = gliederung_von(heimat(z))
         jetzt = gliederung_von(z["folder_id"])
@@ -300,6 +301,9 @@ def _systemordner_nachziehen(fid, grund=GRUND_GLIEDERUNG):
         journal.eintragen("item", z["id"], "verschoben",
                           {"folder_id": z["folder_id"], "ordner": _pfad_text(z["folder_id"])},
                           {"folder_id": ziel["id"], "ordner": _pfad_text(ziel["id"]), "grund": grund})
+        bewegt.append(z["id"])
+    # Set und Teile haben dieselbe Heimat und wandern hier einzeln, aber gleich – stimmt es danach (S1)?
+    sets.sets_stimmig(sets.betroffene_sets(bewegt))
 
 
 def _pfad_text(fid):
@@ -329,6 +333,10 @@ def ordner_loeschen(fid):
     if db.query(f"SELECT 1 FROM mat_item WHERE origin_folder_id IN ({marken}) AND lock_state IN ('gesperrt', 'verloren') "
                 f"LIMIT 1", betroffen, one=True):
         raise Abgelehnt("Gesperrte Artikel kehren nach ihrer Freiprüfung hierher zurück – der Ordner bleibt.", 409)
+    # Sets, deren Ausgesonderte hier ihre Herkunft haben: Die Datenbank setzt sie an Set und Teilen gleich auf NULL
+    # (ON DELETE SET NULL) – geprüft wird danach trotzdem (S1).
+    set_ids = sets.betroffene_sets(r["id"] for r in db.query(
+        f"SELECT id FROM mat_item WHERE origin_folder_id IN ({marken})", betroffen))
     with db.transaction():
         # Die Freigaben gehen mit dem Ordner (Fremdschlüssel) – vorher je Zeile ein Eintrag, wer welches Recht hatte
         # (Kontoverweis statt Name, 2.5).
@@ -340,6 +348,7 @@ def ordner_loeschen(fid):
             journal.eintragen("folder", k["id"], "geloescht", k, None)
         db.execute("DELETE FROM mat_folder WHERE id = ?", (fid,))
         journal.eintragen("folder", fid, "geloescht", alt, None)
+        sets.sets_stimmig(set_ids)
     rechte.sicht_verwerfen()
     if alt["photo"]:
         delete_photo_files(katalog.medien_dir(), alt["photo"])
@@ -596,7 +605,9 @@ def vorschlag(d):
             "spaetestens": grenze,
             "retire_by": lebensende(herst, p["lifetime_years"]) if p["material_kind"] == "textil" else None,
             "material_kind": p["material_kind"], "lifetime_years": p["lifetime_years"],
-            "lifetime_source": p["lifetime_source"]}
+            "lifetime_source": p["lifetime_source"],
+            # Hersteller-Set (Schritt 21): die Stückliste für den Dialog „Set anlegen“ – sonst None.
+            "set": sets.anlegen_vorschlag(p)}
 
 
 def artikel_plan(d):
@@ -628,11 +639,14 @@ def artikel_plan(d):
     return {"w": w, "p": p, "fid": fid, "manuell": manuell}
 
 
-def artikel_schreiben(plan, journal_zusatz=None):
+def artikel_schreiben(plan, journal_zusatz=None, parent_id=None, als_set=False):
     """Unter BEGIN IMMEDIATE (in einer äußeren Transaktion läuft sie flach mit): Inventarnummer, ggf. STR-Nummer,
     _serie_frei, INSERT, Journal „angelegt“ – journal_zusatz wird ins Nachher gemischt (Bestandsimport: Import und
-    Zeile). Liefert die Kennung des Artikels."""
+    Zeile; Set: das Set des Teils). parent_id: Teil dieses Sets (sets.set_anlegen). Ein Set-Produkt nur mit als_set –
+    Sets legt allein sets.set_anlegen an (mit Teilen und Kopie der Stückliste). Liefert die Kennung des Artikels."""
     w, p, fid, manuell = plan["w"], plan["p"], plan["fid"], plan["manuell"]
+    if p["is_set"] and not als_set:
+        raise Abgelehnt(sets.SET_NUR_DIALOG, 409)
     uid, _ = akteur()
     ts = db.now()
     with db.transaction(sofort=True):
@@ -642,10 +656,11 @@ def artikel_schreiben(plan, journal_zusatz=None):
         iid = db.execute(
             "INSERT INTO mat_item (product_id, folder_id, serial_no, serial_generated, inventory_no, manufactured_on, "
             "purchased_on, first_use_on, retire_by, retire_by_manual, lock_state, next_due_on, interval_months, qr_token, "
-            "notes, length_m, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,'frei',?,?,?,?,?,?,?,?)",
+            "notes, length_m, parent_item_id, created_by, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,'frei',?,?,?,?,?,?,?,?,?)",
             (p["id"], fid, serie, generiert, inventar, w["manufactured_on"], w["purchased_on"], w["first_use_on"],
              w["retire_by"], manuell, w["next_due_on"], w["interval_months"], qr.neues_token(), w["notes"], w["length_m"],
-             uid, ts, ts))
+             parent_id, uid, ts, ts))
         journal.eintragen("item", iid, "angelegt", None,
                           dict(w, folder_id=fid, serial_no=serie, serial_generated=generiert, inventory_no=inventar,
                                retire_by_manual=manuell, ordner=_pfad_text(fid), **(journal_zusatz or {})))
@@ -653,7 +668,18 @@ def artikel_schreiben(plan, journal_zusatz=None):
 
 
 def artikel_anlegen(d):
-    return artikel_schreiben(artikel_plan(d))
+    return anlegen(d)[0]
+
+
+def anlegen(d):
+    """POST /artikel: ein Artikel – oder, mit einem Set-Produkt, ein Hersteller-Set mit seinen Teilen (sets.set_anlegen;
+    ohne „teile“ 400). Liefert (Kennung, Hinweise)."""
+    plan = artikel_plan(d)
+    if plan["p"]["is_set"]:
+        return sets.set_anlegen(d, plan)
+    if d.get("teile") is not None:
+        raise Abgelehnt(sets.NUR_FUER_SETS)
+    return artikel_schreiben(plan), []
 
 
 def stand_von(i):
@@ -675,6 +701,10 @@ def artikel_aendern(iid, d):
     for fest in ("inventory_no", "qr_token", "lock_state"):
         if fest in d and d.get(fest) != alt[fest]:
             raise Abgelehnt("Inventarnummer, QR-Kennung und Sperrzustand lassen sich nicht bearbeiten.")
+    # Hersteller-Sets (Schritt 21): kein Produktwechsel an Teilen, an Sets und von oder zu einem Set-Produkt – vor den
+    # übrigen Regeln, die sonst am falschen Produkt prüften.
+    if d.get("product_id") not in (None, ""):
+        sets.produktwechsel_weiche(alt, kennung(d.get("product_id"), "Produkt"))
     w, p = artikel_werte(d, alt)
     if w["product_id"] != alt["product_id"] and db.query("SELECT 1 FROM mat_inspection WHERE item_id = ? LIMIT 1",
                                                          (iid,), one=True):
@@ -748,7 +778,8 @@ def artikel_aendern(iid, d):
 
 
 def artikel_verschieben(ids, ziel_id):
-    """Mehrere Artikel auf einmal in einen Ordner – ganz oder gar nicht."""
+    """Mehrere Artikel auf einmal in einen Ordner – ganz oder gar nicht. Ein Teil eines Sets nicht einzeln (409, Schritt
+    21); ein Set nimmt seine Teile mit (sets.set_lage – eine Anweisung, Journal je Teil)."""
     if not isinstance(ids, list) or not ids or len(ids) > 500:
         raise Abgelehnt("Bitte 1 bis 500 Artikel auswählen.")
     ids = [kennung(x, "Artikel") for x in ids]
@@ -759,6 +790,8 @@ def artikel_verschieben(ids, ziel_id):
         zeilen = db.query(f"SELECT * FROM mat_item WHERE id IN ({','.join('?' * len(ids))})", ids)
         if len(zeilen) != len(set(ids)):
             raise Abgelehnt("Mindestens ein Artikel wurde nicht gefunden.", 404)
+        for z in zeilen:
+            sets.teil_weiche(z, "Verschieben")
         if any(z["lock_state"] != "frei" for z in zeilen):
             raise Abgelehnt(GESPERRT_BLEIBT, 409)
         # Die Grenze der Demodaten (demo_sql) – frei heißt: Heimat ist der Ordner, in dem der Artikel liegt.
@@ -766,18 +799,29 @@ def artikel_verschieben(ids, ziel_id):
         if any(ordner_ist_demo(f) != ziel_demo for f in {z["folder_id"] for z in zeilen if z["folder_id"] != ziel_id}):
             raise Abgelehnt(DEMO_GRENZE, 409)
         ziel_text = _pfad_text(ziel_id)
+        alle = list(ids)
         for z in zeilen:
             if z["folder_id"] == ziel_id:
                 continue
-            if not db.execute_zeilen("UPDATE mat_item SET folder_id = ?, updated_at = ? WHERE id = ? AND lock_state = 'frei'",
-                                     (ziel_id, db.now(), z["id"])):
+            teile = db.query("SELECT * FROM mat_item WHERE parent_item_id = ? ORDER BY id", (z["id"],))
+            if teile:
+                # Ein Set mit seinen Teilen: eine Anweisung (sets.set_lage), danach je Zeile der Eintrag.
+                if sets.set_lage(z["id"], folder_id=ziel_id) != len(teile) + 1:
+                    raise Abgelehnt(GESPERRT_BLEIBT, 409)
+            elif not db.execute_zeilen("UPDATE mat_item SET folder_id = ?, updated_at = ? WHERE id = ? "
+                                       "AND lock_state = 'frei'", (ziel_id, db.now(), z["id"])):
                 raise Abgelehnt(GESPERRT_BLEIBT, 409)
-            journal.eintragen("item", z["id"], "verschoben",
-                              {"folder_id": z["folder_id"], "ordner": _pfad_text(z["folder_id"])},
-                              {"folder_id": ziel_id, "ordner": ziel_text})
+            for x in [z] + teile:
+                nachher = {"folder_id": ziel_id, "ordner": ziel_text}
+                if x is not z:
+                    nachher["set"] = z["id"]
+                journal.eintragen("item", x["id"], "verschoben",
+                                  {"folder_id": x["folder_id"], "ordner": _pfad_text(x["folder_id"])}, nachher)
+            alle += [t["id"] for t in teile]
         from . import durchgang
-        durchgang.nach_verschieben(ids, heute())
-        faelligkeit.kappen(f"i.id IN ({','.join('?' * len(ids))})", ids)
+        durchgang.nach_verschieben(alle, heute())
+        faelligkeit.kappen(f"i.id IN ({','.join('?' * len(alle))})", alle)
+        sets.sets_stimmig(sets.betroffene_sets(alle))
     return len(zeilen)
 
 
@@ -786,6 +830,12 @@ def artikel_loeschen(iid):
     wieder vergeben. Alles andere wird ausgesondert, nicht gelöscht."""
     with db.transaction(sofort=True):
         alt = artikel(iid)
+        # Schritt 21: ein Teil nicht einzeln (das kommt mit „Teil entnehmen“), ein Set nur ganz und ungeprüft.
+        sets.teil_weiche(alt, "Löschen")
+        if sets.ist_set_artikel(alt):
+            sets.set_loeschen(alt)
+            journal.eintragen("item", iid, "geloescht", dict(alt, ordner=_pfad_text(alt["folder_id"])), None)
+            return
         if db.query("SELECT 1 FROM mat_inspection WHERE item_id = ? LIMIT 1", (iid,), one=True):
             raise Abgelehnt("Der Artikel hat Prüfungen und bleibt mit seinem Lebenslauf – aussondern statt löschen.", 409)
         if db.query("SELECT 1 FROM mat_round_item WHERE item_id = ? LIMIT 1", (iid,), one=True):
@@ -801,7 +851,7 @@ def artikel_loeschen(iid):
 # Dazu der Name der zugeordneten Person (artikel_kurz gibt ihn nur mit Grundrecht heraus) und die Beschreibung des
 # Produkts – der Zusatz hinter dem Modell (grau hinter dem Namen, katalog.BESCHREIBUNG_MAX).
 ARTIKEL_LISTE_SQL = ("SELECT i.*, p.manufacturer, p.model, p.article_no, p.material_kind, p.image AS product_image, "
-                     "p.description AS product_description, "
+                     "p.description AS product_description, p.is_set AS product_is_set, "
                      f"{demo_sql('i', 'p')} AS artikel_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "
                      "e.inspector_user_id AS entwurf_pruefer_id, zu.name AS zugeordnet_name FROM mat_item i "
                      "JOIN mat_product p ON p.id = i.product_id "
@@ -853,7 +903,10 @@ def artikel_kurz(i, stichtag=None):
                          "pruefer_id": i.get("entwurf_pruefer_id")} if i.get("entwurf_id") else None),
             "rueckruf": rueckruf.offene_artikel().get(i["id"]),
             "mangel": i["id"] in mangel.offene_artikel(),
-            "darf": darf, "zugeordnet_name": _zugeordnet_name(i) if darf["grund"] else None}
+            "darf": darf, "zugeordnet_name": _zugeordnet_name(i) if darf["grund"] else None,
+            # Schritt 21: Set-Artikel („set“ füllt sets.listenzeile in Ordnerlisten, Fälligen und Suche) und Teil eines
+            # Sets („teil_von“ – nur, wenn das Konto das Set sieht).
+            "ist_set": sets.ist_set_artikel(i), "set": None, "teil_von": sets.teil_kurz(i)}
 
 
 def artikel_json(i, voll=False):
@@ -886,6 +939,10 @@ def artikel_json(i, voll=False):
     out["qr_adresse"] = qr.adresse(i["qr_token"])
     out["darf"] = darf
     out["zugeordnet"] = zugeordnet_json(i) if darf["grund"] else None
+    # Hersteller-Sets (Schritt 21): am Set-Artikel der Block „set“ (sets.set_json), am Teil „teil_von“.
+    out["ist_set"] = sets.ist_set_artikel(i)
+    out["set"] = sets.set_json(i)
+    out["teil_von"] = sets.teil_von_json(i)
     if p["material_kind"] == "textil" and i["retire_by"]:
         out["lebensdauer"] = {"ende": i["retire_by"], "festgeschrieben": True,
                               "rest_tage": (date.fromisoformat(i["retire_by"]) - heute()).days,
@@ -925,6 +982,8 @@ def artikel_json(i, voll=False):
         eigen = mangel.eigene_offene(i["id"])
         out["mangel_eigen_offen"] = eigen["created_at"] if eigen else None
         out["darf_loeschen"] = not out["pruefungen"] and not out["maengel"]
+        if sets.im_set(i):
+            out["darf_loeschen"] = sets.darf_loeschen(i)
         # Änderungsanträge (Entscheidungen vom 21.10.2026): offene am Artikel – Begründung und Namen nur für die, die
         # beantragen dürfen (Materialwart, Prüfer); beantragen nur nach der ersten Prüfung und nicht ausgesondert. Im
         # Verlauf ebenso: Wer nur liest, sieht bei den Anträgen weder Begründung noch Namen (Prüfung vom 21.10.2026).
@@ -949,19 +1008,25 @@ def _melder_verbergen(eintraege, iid):
             e["user_name"] = PERSON
 
 
-def artikel_sortierung():
+def _literale(ausdruck):
+    par = st.parameter()
+    return ausdruck.replace(":st_heute", f"'{par['st_heute']}'").replace(":st_bald", f"'{par['st_bald']}'")
+
+
+def artikel_sortierung(gruppe=False):
     """Sortierbare Spalten der Artikellisten: Name in der Anfrage → SQL über i = mat_item, p = mat_product.
     „faellig“ stellt neue Artikel (Eingangsprüfung) nach vorn und gesperrte und ausgesonderte nach hinten,
     „status“ sortiert nach Dringlichkeit. Die Stichtage stehen als Literale im Ausdruck (vom Server
-    berechnete ISO-Daten), damit er auch in Abfragen mit ?-Parametern taugt (Suche)."""
-    par = st.parameter()
-    status = st.status_sql("i").replace(":st_heute", f"'{par['st_heute']}'").replace(":st_bald", f"'{par['st_bald']}'")
+    berechnete ISO-Daten), damit er auch in Abfragen mit ?-Parametern taugt (Suche). gruppe: Listen mit Set-Zeilen
+    (Schritt 21) – „faellig“ und „status“ über die Set-Werte (sets.gruppen_status_sql)."""
+    status = _literale(sets.gruppen_status_sql("i") if gruppe else st.status_sql("i"))
     return {
         "inventar": "i.inventory_no",
         "hersteller": "p.manufacturer COLLATE NOCASE",
         "produkt": "p.model COLLATE NOCASE",
         "serie": "i.serial_no COLLATE NOCASE",
-        "faellig": ("CASE WHEN i.lock_state <> 'frei' THEN NULL WHEN i.last_inspected_on IS NULL THEN '' "
+        "faellig": (sets.gruppen_sortier_faellig_sql("i") if gruppe else
+                    "CASE WHEN i.lock_state <> 'frei' THEN NULL WHEN i.last_inspected_on IS NULL THEN '' "
                     "ELSE i.next_due_on END"),
         "status": (f"CASE {status} WHEN 'ueberfaellig' THEN 0 WHEN 'lebensdauer' THEN 1 WHEN 'neu' THEN 2 "
                    f"WHEN 'gesperrt' THEN 3 WHEN 'bald_faellig' THEN 4 WHEN 'einsatzbereit' THEN 5 ELSE 6 END"),
@@ -972,9 +1037,12 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     """Ein Ordner mit Pfad, Unterordnern (mit Zählung) und den Artikeln direkt darin, die das Konto sieht – in einem
     teilweise sichtbaren Systemordner also nur die eigenen. Das Journal nur mit Grundrecht, die Einträge zu Freigaben
     darin nur für Verwalter des Ordners. zugeordnet: nur Artikel dieser Person (und nur, wo das Grundrecht gilt).
-    „nacharbeit“: offene Zeilen aus Bestandsimporten in diesen Ordner – nur für Verwalter, sonst null."""
+    „nacharbeit“: offene Zeilen aus Bestandsimporten in diesen Ordner – nur für Verwalter, sonst null.
+    Hersteller-Sets (Schritt 21): nur die Set-Zeile mit Set-Status, Set-Fälligkeit und „set“ (sets.listenzeile) –
+    gefiltert und sortiert nach den Set-Werten; Teile stehen auf der Set-Seite. „sets“: {anzahl, teile} unter allen
+    Zeilen der Liste (Kopf „n Einträge, davon m Sets mit k Teilen“)."""
     from .search import sortierung
-    ordnung = sortierung(artikel_sortierung(), sort, richtung, "i.inventory_no")
+    ordnung = sortierung(artikel_sortierung(gruppe=True), sort, richtung, "i.inventory_no")
     o = ordner(fid)
     alle = {x["id"]: x for x in baum()}
     if fid not in alle or alle[fid].get("nur_pfad"):
@@ -982,14 +1050,14 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     kinder = [x for x in alle.values() if x["parent_id"] == fid]
     kinder.sort(key=lambda x: (x["system_kind"] is not None, x["position"], x["name"].casefold()))
     params = dict(st.parameter(), fid=fid)
-    bedingung = f"WHERE i.folder_id = :fid AND {rechte.artikel_filter('i')}"
+    bedingung = f"WHERE i.folder_id = :fid AND i.parent_item_id IS NULL AND {rechte.artikel_filter('i')}"
     if zugeordnet is not None:
         bedingung += f" AND i.assigned_user_id = :zugeordnet AND {rechte.artikel_filter('i', 'grund')}"
         params["zugeordnet"] = zugeordnet
     if status_filter:
         if status_filter not in st.STATUS:
             raise Abgelehnt("Unbekannter Status.")
-        bedingung += f" AND {st.status_sql('i')} = :sf"
+        bedingung += f" AND {sets.gruppen_status_sql('i')} = :sf"
         params["sf"] = status_filter
     gesamt = db.query(f"SELECT COUNT(*) AS n FROM mat_item i {bedingung}", params, one=True)["n"]
     seite = max(1, int(seite or 1))
@@ -1000,8 +1068,9 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     gl = gliederung_von(fid)
     out["gliederung"] = gl
     out["unterordner"] = kinder
-    out["artikel"] = [artikel_kurz(r) for r in rows]
+    out["artikel"] = [sets.listenzeile(artikel_kurz(r), r) for r in rows]
     out["artikel_gesamt"] = gesamt
+    out["sets"] = sets.zahlen(f"FROM mat_item i {bedingung}", params)
     out["seite"], out["pro_seite"] = seite, pro_seite
     darf = out["darf"]
     out["journal"] = (journal.lesen([("folder", fid)], grenze=50,
@@ -1022,13 +1091,11 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
 FAELLIG = ("ueberfaellig", "lebensdauer", "neu", "bald_faellig")
 
 
-def faellige(ordner_id=None, nur=FAELLIG, seite=1, pro_seite=100, sort=None, richtung="auf", zugeordnet=None):
-    """Artikel, die geprüft werden müssen – überfällige zuerst, dann die am Lebensende, dann neue
-    (Eingangsprüfung), dann nach Datum; oder nach einer gewählten Spalte. Nur, was das Konto sieht; zugeordnet: nur
-    Artikel dieser Person, soweit das Grundrecht gilt."""
-    from .search import sortierung
+def _faellig_bedingung(ordner_id, nur, zugeordnet):
+    """(WHERE …, Parameter) der Fälligen – Set-Zeilen mit ihrem Set-Status, keine Teile (Schritt 21)."""
     params = st.parameter()
-    bedingungen = [f"{st.status_sql('i')} IN ({','.join(':n' + str(k) for k in range(len(nur)))})",
+    bedingungen = ["i.parent_item_id IS NULL",
+                   f"{sets.gruppen_status_sql('i')} IN ({','.join(':n' + str(k) for k in range(len(nur)))})",
                    rechte.artikel_filter("i")]
     params.update({f"n{k}": s for k, s in enumerate(nur)})
     if zugeordnet is not None:
@@ -1039,20 +1106,36 @@ def faellige(ordner_id=None, nur=FAELLIG, seite=1, pro_seite=100, sort=None, ric
         bedingungen.append("i.folder_id IN (WITH RECURSIVE baum(id) AS (SELECT :ordner UNION SELECT f.id FROM mat_folder f "
                            "JOIN baum b ON f.parent_id = b.id) SELECT id FROM baum)")
         params["ordner"] = ordner_id
-    where = "WHERE " + " AND ".join(bedingungen)
+    return "WHERE " + " AND ".join(bedingungen), params
+
+
+def faellige(ordner_id=None, nur=FAELLIG, seite=1, pro_seite=100, sort=None, richtung="auf", zugeordnet=None):
+    """Artikel, die geprüft werden müssen – überfällige zuerst, dann die am Lebensende, dann neue
+    (Eingangsprüfung), dann nach Datum; oder nach einer gewählten Spalte. Nur, was das Konto sieht; zugeordnet: nur
+    Artikel dieser Person, soweit das Grundrecht gilt. Hersteller-Sets (Schritt 21) als Set-Zeile mit Set-Status und
+    Set-Fälligkeit – gefiltert und sortiert danach; Teile stehen nicht einzeln da (faellige_sets zählt sie)."""
+    from .search import sortierung
+    where, params = _faellig_bedingung(ordner_id, nur, zugeordnet)
     gesamt = db.query(f"SELECT COUNT(*) AS n FROM mat_item i {where}", params, one=True)["n"]
-    reihe = (f"CASE {st.status_sql('i')} WHEN 'ueberfaellig' THEN 0 WHEN 'lebensdauer' THEN 1 WHEN 'neu' THEN 2 "
-             f"WHEN 'bald_faellig' THEN 3 ELSE 4 END")
-    ordnung = sortierung(artikel_sortierung(), sort, richtung,
-                         f"{reihe}, i.next_due_on IS NOT NULL, i.next_due_on, i.inventory_no")
+    reihe = (f"CASE {sets.gruppen_status_sql('i')} WHEN 'ueberfaellig' THEN 0 WHEN 'lebensdauer' THEN 1 WHEN 'neu' "
+             f"THEN 2 WHEN 'bald_faellig' THEN 3 ELSE 4 END")
+    faellig = sets.gruppen_faellig_sql("i")
+    ordnung = sortierung(artikel_sortierung(gruppe=True), sort, richtung,
+                         f"{reihe}, {faellig} IS NOT NULL, {faellig}, i.inventory_no")
     rows = db.query(ARTIKEL_LISTE_SQL + where + f" ORDER BY {ordnung} LIMIT :lim OFFSET :off",
                     dict(params, lim=pro_seite, off=(max(1, seite) - 1) * pro_seite))
     liste = []
     for r in rows:
-        k = artikel_kurz(r)
+        k = sets.listenzeile(artikel_kurz(r), r)
         k["pfad"] = _pfad_text(r["folder_id"])
         liste.append(k)
     return liste, gesamt
+
+
+def faellige_sets(ordner_id=None, nur=FAELLIG, zugeordnet=None):
+    """Kopf der Fälligen: {anzahl, teile} – Sets unter allen Zeilen der Liste und ihre Teile (Schritt 21)."""
+    where, params = _faellig_bedingung(ordner_id, nur, zugeordnet)
+    return sets.zahlen(f"FROM mat_item i {where}", params)
 
 
 def zaehlung(ordner_ids=None):

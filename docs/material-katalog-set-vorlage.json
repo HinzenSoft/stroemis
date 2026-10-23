@@ -1,0 +1,29 @@
+{
+  "format": "stroemis-material-katalog",
+  "version": 2,
+  "demo": true,
+  "quelle": "Vorlage Hersteller-Set (Schritt 21) – nur das Format, alle Angaben Platzhalter",
+  "kategorien": [
+    {"name": "BEISPIEL Sets", "materialart": "textil", "intervall_monate": 12, "unterkategorien": [
+      {"name": "BEISPIEL Verbindungselemente", "materialart": "metall_hardware", "intervall_monate": 12}
+    ]}
+  ],
+  "produkte": [
+    {"kategorie": ["BEISPIEL Sets"], "hersteller": "BEISPIEL-Hersteller", "modell": "BEISPIEL Set",
+     "artikelnummer": "BSP-SET-1", "materialart": "textil", "lebensdauer_jahre": 10,
+     "lebensdauer_quelle": "Platzhalter – Fundstelle der Herstellerangabe", "beschreibung": "",
+     "set": true,
+     "bestandteile": [
+       {"produkt": {"hersteller": "BEISPIEL-Hersteller", "modell": "BEISPIEL Verbindungselement",
+                    "artikelnummer": "BSP-VE-1"},
+        "bezeichnung": "Verbindungselement (einzeln geführt: eigene Seriennummer und eigenes Katalogprodukt)",
+        "anzahl": 2, "einzeln": true, "austausch": "nicht_belegt"},
+       {"bezeichnung": "Tasche (Bestandteil ohne eigenen Artikel – nur Text, ohne Produkt)",
+        "anzahl": 1, "einzeln": false, "austausch": "nicht_belegt"}
+     ]},
+    {"kategorie": ["BEISPIEL Sets", "BEISPIEL Verbindungselemente"], "hersteller": "BEISPIEL-Hersteller",
+     "modell": "BEISPIEL Verbindungselement", "artikelnummer": "BSP-VE-1", "materialart": "metall_hardware",
+     "beschreibung": ""}
+  ],
+  "formulare": []
+}

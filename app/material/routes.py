@@ -28,7 +28,7 @@ from . import models
 from .services import (Abgelehnt, anhang, bestand, bestandsimport, durchgang, eingabe, globalprotokoll, globalsuche,
                        journal, katalog, kennung, medien as medien_dienst, meldung, protokoll, pruefung, search,
                        unterschrift)
-from .services import antrag, erinnerung, mailprotokoll, mangel, psa, rueckruf
+from .services import antrag, erinnerung, mailprotokoll, mangel, psa, rueckruf, sets, stueckliste
 from .services import status as st
 from .services import ueberblick
 from .services.bestand import FremdeDublette
@@ -407,7 +407,8 @@ def suche():
     rows, gesamt = search.artikel(q, seite, pro_seite, *_sortier_args())
     treffer = []
     for r in rows:
-        k = bestand.artikel_kurz(r)
+        # Hersteller-Sets (Schritt 21): ein Set-Artikel als Set-Zeile, ein Teil mit „teil_von“.
+        k = sets.listenzeile(bestand.artikel_kurz(r), r)
         k["pfad"] = " / ".join(o["name"] for o in bestand.pfad(r["folder_id"]))
         treffer.append(k)
     exakt = search.exakt_lokal(q)
@@ -433,9 +434,11 @@ def faellig():
         bestand.ordner(ordner_id)
         if not sicht().sichtbar(ordner_id):
             raise Abgelehnt(ORDNER_FEHLT, 404)
-    liste, gesamt = bestand.faellige(ordner_id, stati, seite, pro_seite, *_sortier_args(), zugeordnet=_zugeordnet_arg())
-    # Mit Ordner (aus der Übersicht): sein Pfad für die Überschrift der Liste.
+    zugeordnet = _zugeordnet_arg()
+    liste, gesamt = bestand.faellige(ordner_id, stati, seite, pro_seite, *_sortier_args(), zugeordnet=zugeordnet)
+    # Mit Ordner (aus der Übersicht): sein Pfad für die Überschrift der Liste. „sets“: davon Sets mit Teilen (Schritt 21).
     return jsonify(artikel=liste, gesamt=gesamt, schwelle_tage=st.schwelle_tage(),
+                   sets=bestand.faellige_sets(ordner_id, stati, zugeordnet),
                    ordner={"id": ordner_id, "pfad": bestand.pfad(ordner_id)} if ordner_id else None)
 
 
@@ -532,6 +535,19 @@ def produkt_lesen(pid):
     p["formulare"] = katalog.formulare_fuer(produkt_id=pid)
     p["rueckrufe"] = rueckruf.fuer_produkt(pid)
     return jsonify(produkt=p)
+
+
+@api.put("/produkte/<int:pid>/bestandteile")
+@katalog_required
+def produkt_bestandteile(pid):
+    """Stückliste eines Hersteller-Sets als Ganzes ersetzen (Schritt 21): {"bestandteile": [{"produkt_id" | null,
+    "bezeichnung", "anzahl", "einzeln", "austausch"}]} – Reihenfolge = Position. Liefert das Produkt (voll) und
+    „geaendert“."""
+    d = json_body()
+    if not isinstance(d, dict) or "bestandteile" not in d:
+        raise Abgelehnt("Bitte „bestandteile“ angeben (eine Liste, leer entfernt alle).")
+    geaendert = stueckliste.ersetzen(pid, d["bestandteile"])
+    return jsonify(produkt=katalog.produkt_json(katalog.produkt(pid), voll=True), geaendert=geaendert)
 
 
 @api.put("/produkte/<int:pid>")
@@ -885,9 +901,10 @@ def artikel_vorschlag():
 @requires_folder("verwalten", "json:folder_id", leer="global")
 def artikel_anlegen():
     """Anlegen im Ordner, den das Konto verwaltet. Gibt es die Seriennummer bei diesem Produkt schon in einem fremden
-    Bereich, antwortet _fremde_dublette (protokolliert, ohne Inventarnummer)."""
-    iid = bestand.artikel_anlegen(json_body())
-    return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True)), 201
+    Bereich, antwortet _fremde_dublette (protokolliert, ohne Inventarnummer). Ein Hersteller-Set kommt mit seinen
+    Teilen („teile“, sets.set_anlegen) – „hinweise“: etwa „STR-Nummer am Teil anbringen“."""
+    iid, hinweise = bestand.anlegen(json_body())
+    return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True), hinweise=hinweise), 201
 
 
 @api.get("/artikel/<int:iid>")

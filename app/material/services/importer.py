@@ -24,6 +24,12 @@ Format 2 (ZIP mit katalog.json und den Dateien; als reine JSON-Datei nur ohne Da
     Produkten, je Dokument mit den Kennungen seiner früheren Versionen („vorgaenger“) – daran findet eine neue Version
     ihre Kette hier, auch wenn mehrere Dokumente gleich heißen.
   Gelöscht, zurückgezogen oder deaktiviert wird nie etwas: Was hier mehr ist als in der Datei, bleibt.
+  Ausnahme seit Schritt 21 (Sets mit Komponenten): Die Stückliste eines Hersteller-Sets („set“: true, „bestandteile“)
+  wird als Ganzes ersetzt (Journal am Produkt) – in einem zweiten Durchgang nach allen Produkten der Datei, denn ein
+  Bestandteil kann hinter dem Set stehen. Verweise auf Bestandteile werden aufgelöst wie Formulare an Produkten
+  (_produkt_ziel: uid, dann Hersteller + Modell + Artikelnummer). „set“ an einem Produkt mit Artikeln umschalten, ein
+  DEMO-Bestandteil in einem echten Set und Positionen außerhalb der Regeln (stueckliste.py) sind Fehler dieses
+  Produkts; eine Liste aus Texten (Recherche-Manifeste) ist ein Hinweis und wird übergangen. Auch in Format 1 gelesen.
 
 Dateien sind nicht Teil der Datenbanktransaktion. Ein Probelauf schreibt deshalb keine einzige. Der echte Lauf
 ermittelt erst in einem Probedurchgang, welche Dateien er braucht, legt nur diese ab – außerhalb der Schreibsperre,
@@ -45,7 +51,7 @@ from werkzeug.datastructures import FileStorage
 from ... import db
 from ...images import ALLOWED_EXT, MAX_PIXEL, delete_photo_files
 from ..models import MATERIALARTEN
-from . import Abgelehnt, akteur, heute, journal, katalog, text
+from . import Abgelehnt, akteur, heute, journal, katalog, stueckliste, text, wahr
 from .faelligkeit import in_kategorie
 from .interval import herstellerseite
 
@@ -162,6 +168,7 @@ def _bericht():
             "formulare": {"neu": 0, "unveraendert": 0},
             "bilder": {"neu": 0, "geaendert": 0, "unveraendert": 0},
             "dokumente": {"neu": 0, "neue_version": 0, "unveraendert": 0},
+            "stuecklisten": {"geaendert": 0, "unveraendert": 0},
             "aenderungen": [], "hinweise": [], "warnungen": [], "fehler": [], "gespeichert": False}
 
 
@@ -196,6 +203,7 @@ class _Lauf:
         self.zugeordnet = {"category": 0, "product": 0}
         self.zurueckgestellt = []             # (nochmal, Fehlermeldung) – Einträge mit _Konflikt, siehe _nachholen
         self.intervall_offen = {}             # geänderte Kategorie → (Fundstelle, Name), siehe _intervalle_pruefen
+        self.sets = []                        # (Fundstelle, Name, Eintrag, Produkt) mit „set“/„bestandteile“, _stuecklisten
         self.bericht = _bericht()
 
     def notiz(self, zeile):
@@ -593,7 +601,87 @@ def _produkt(n, e, lauf):
             _dokumente(e.get("dokumente"), "product_id", pid, ort, name, lauf)
         except Abgelehnt as exc:
             bericht["fehler"].append(f"{ort} ({name}): {exc}")
+    if "set" in e or "bestandteile" in e:
+        lauf.sets.append((ort, name, e, pid))
     return True
+
+
+# --- Stücklisten der Hersteller-Sets (Schritt 21) -----------------------------------------------------------------------
+
+def _set_angaben(ort, name, e, lauf):
+    """(„set“ als ja/nein oder None, Stückliste als Liste von Objekten oder None) aus einem Produkteintrag – eine Liste
+    aus Texten (heutige Recherche-Manifeste) ist ein Hinweis und zählt wie „fehlt“."""
+    an = wahr(e, "set", "set") if e.get("set") is not None else None
+    liste = e.get("bestandteile")
+    if liste is None:
+        return an, None
+    if not isinstance(liste, list):
+        raise Abgelehnt("„bestandteile“ muss eine Liste sein.")
+    if liste and all(isinstance(x, str) for x in liste):
+        lauf.bericht["hinweise"].append(f"{ort} ({name}): „bestandteile“ ist eine Liste aus Texten – übergangen. Eine "
+                                        "Stückliste braucht je Position ein Objekt (Katalogdatei, Hersteller-Sets).")
+        return an, None
+    if any(not isinstance(x, dict) for x in liste):
+        raise Abgelehnt("„bestandteile“: jede Position ist ein Objekt (produkt, bezeichnung, anzahl, einzeln, austausch).")
+    return an, liste
+
+
+def _stuecklisten(lauf):
+    """Zweiter Durchgang nach allen Produkten der Datei: „set“ umschalten und Stücklisten ersetzen – in vier Schritten,
+    damit ein Produkt, das in derselben Datei aus einer Stückliste fällt und selbst ein Set wird, nicht am eigenen
+    Vorher scheitert: 1. Sets ausschalten, 2. Stücklisten bleibender Sets, 3. Sets einschalten, 4. ihre Stücklisten."""
+    bericht = lauf.bericht
+    angaben = []
+    for ort, name, e, pid in lauf.sets:
+        try:
+            an, liste = _set_angaben(ort, name, e, lauf)
+            if an is False and liste:
+                raise Abgelehnt("„set“: false und dazu eine Stückliste – nur ein Hersteller-Set hat Bestandteile.")
+            angaben.append((ort, name, pid, an, liste))
+        except Abgelehnt as exc:
+            bericht["fehler"].append(f"{ort} ({name}): {exc}")
+
+    def umschalten(ort, name, pid, an):
+        p = katalog.produkt(pid)
+        if bool(p["is_set"]) == an:
+            return
+        n = db.query("SELECT COUNT(*) AS n FROM mat_item WHERE product_id = ?", (pid,), one=True)["n"]
+        if n:
+            raise Abgelehnt(f"„set“ wechselte auf {'true' if an else 'false'} – hier gibt es aber schon {n} Artikel dieses "
+                            "Produkts. Ob ein Artikel Teile hat, hängt daran; erst klären: in der Quelle zurückändern oder "
+                            "dort ein eigenes Produkt (Variante) für das Set anlegen.")
+        stueckliste.set_umschalten(pid, an, grund_journal="Katalogimport")
+        lauf.notiz(f"Produkt „{name}“: „Hersteller-Set“ {'gesetzt' if an else 'entfernt'}")
+
+    def ersetzen(ort, name, pid, liste):
+        if not katalog.produkt(pid)["is_set"]:
+            raise Abgelehnt("Bestandteile hat nur ein Hersteller-Set – „set“: true fehlt.")
+        def aufloesen(x):
+            return _produkt_ziel(x["produkt"], lauf) if x.get("produkt") is not None else None
+        if stueckliste.ersetzen(pid, liste, aufloesen=aufloesen, grund="Katalogimport"):
+            bericht["stuecklisten"]["geaendert"] += 1
+            lauf.notiz(f"Produkt „{name}“: Stückliste ersetzt ({len(liste)} Position{'en' if len(liste) != 1 else ''})")
+        else:
+            bericht["stuecklisten"]["unveraendert"] += 1
+
+    fehlerhaft, ersetzt = set(), set()
+    for schritt in ("aus", "bleibend", "ein", "neu"):
+        for ort, name, pid, an, liste in angaben:
+            if ort in fehlerhaft:
+                continue
+            try:
+                if schritt == "aus" and an is False:
+                    umschalten(ort, name, pid, False)
+                elif schritt == "bleibend" and liste is not None and an is not False and katalog.produkt(pid)["is_set"]:
+                    ersetzen(ort, name, pid, liste)
+                    ersetzt.add(ort)
+                elif schritt == "ein" and an is True:
+                    umschalten(ort, name, pid, True)
+                elif schritt == "neu" and liste is not None and ort not in ersetzt:
+                    ersetzen(ort, name, pid, liste)
+            except Abgelehnt as exc:
+                fehlerhaft.add(ort)
+                bericht["fehler"].append(f"{ort} ({name}): {exc}")
 
 
 def _bild(e, pid, alt, ort, name, lauf):
@@ -1122,6 +1210,7 @@ def _durchgang(daten, lauf, speichern):
                 _nachholen(lauf)
                 _produkte(daten.get("produkte") or [], lauf)
                 _nachholen(lauf)
+                _stuecklisten(lauf)
                 _intervalle_pruefen(lauf)
                 _formulare(daten.get("formulare") or [], lauf)
             except Abgelehnt as exc:

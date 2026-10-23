@@ -22,7 +22,8 @@ Aufbau:
                  erinnerung (Erinnerungsmails, Pflege, Laufstand und Probelauf), seit Lieferung 3 tabelle und
                  bestandsimport (Bestandsimport mit Nacharbeit) und wikiverweis (Prüfanleitung aus dem Wiki); seit
                  Phase 3 psa („Meine PSA“) und mangel (Mangelmeldung mit sofortiger Sperre); seit Schritt 18 dokablage
-                 (Herstellerdokumente einmal je Inhalt – Zusammenführen des Altbestands beim Start und von Hand)
+                 (Herstellerdokumente einmal je Inhalt – Zusammenführen des Altbestands beim Start und von Hand); seit
+                 Phase 4 · L2 stueckliste (Stückliste der Hersteller-Sets im Katalog) und sets (Set-Artikel mit Teilen)
   templates/, static/   Seite und Oberfläche (material.js, material.css)
 """
 from .. import db
@@ -61,6 +62,11 @@ def _mailfehler_aufraeumen(conn):
     aufraeumen(conn)
 
 
+def _sets_pruefen(conn):
+    from .services.sets import beim_start
+    beim_start(conn)
+
+
 def _dokumente_zusammenfuehren(conn):
     from .services.dokablage import beim_start
     beim_start(conn)
@@ -71,9 +77,10 @@ def schema_anmelden():
     der Herstellerdokumente einmal je Inhalt zusammenführen (Schritt 18, Kennzeichen in mat_meta), dann das Protokoll der
     globalen Suche, das Erinnerungslog, das Mailfehler-Protokoll und die offene Nacharbeit aus Bestandsimporten auf ihre
     Frist kürzen (auch wenn der Tageslauf steht), die Protokolldateien mit der Datenbank abgleichen und durchsichtige
-    Bilder einmalig reparieren."""
+    Bilder einmalig reparieren. Zuletzt die Startprüfung „Sets stimmig“ (Schritt 21, nur Log)."""
     for schritt in (models.migrieren, _dokumente_zusammenfuehren, _suchprotokoll_aufraeumen, _erinnerungslog_aufraeumen,
-                    _mailfehler_aufraeumen, _nacharbeit_aufraeumen, _verwaiste_protokolle, _bilder_reparieren):
+                    _mailfehler_aufraeumen, _nacharbeit_aufraeumen, _verwaiste_protokolle, _bilder_reparieren,
+                    _sets_pruefen):
         if schritt not in db.SCHEMA_MODULE:
             db.SCHEMA_MODULE.append(schritt)
 

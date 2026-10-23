@@ -23,7 +23,7 @@ from .nummern import INVENTAR_VORSATZ, sieht_generiert_aus
 # Zusatz hinter dem Modell).
 FELDER = frozenset({"inventory_no", "serial_no", "hersteller", "modell", "beschreibung", "artikelnummer", "norm",
                     "materialart", "kategorie", "vorschau", "hergestellt", "lebensende", "gliederung", "ordner", "sperre",
-                    "demo"})
+                    "demo", "teil_eines_sets"})
 MIN_ZEICHEN, MAX_ZEICHEN = 4, 80
 
 
@@ -73,6 +73,7 @@ SPERRE = {"gesperrt": "gesperrt", "ausgesondert": "ausgesondert", "verloren": "v
 
 # Was ein Steckbrief braucht – Artikel mit Heimat (lock_state, folder_id, origin_folder_id) und Produkt; nichts sonst.
 _STECKBRIEF_SQL = ("SELECT i.id, i.inventory_no, i.serial_no, i.manufactured_on, i.retire_by, i.lock_state, i.folder_id, "
+                   "i.parent_item_id, "
                    "i.origin_folder_id, p.manufacturer, p.model, p.description, p.article_no, p.norm, p.material_kind, "
                    "p.image, "
                    f"{bestand.demo_sql('i', 'p')} AS demo, p.category_id FROM mat_item i JOIN mat_product p "
@@ -130,7 +131,9 @@ def steckbrief(i, kategorien=None):
            # Das Lebensende folgt aus Herstelldatum und Katalog – nur bei textilem Material.
            "lebensende": (i["retire_by"] or None) if i["material_kind"] == "textil" else None,
            "gliederung": gliederung, "ordner": ordner, "sperre": SPERRE.get(i["lock_state"]),
-           "demo": bool(i["demo"])}
+           "demo": bool(i["demo"]),
+           # Schritt 21: nur ob – ohne Inventarnummer und Produkt des Sets (Entwurf H).
+           "teil_eines_sets": i.get("parent_item_id") is not None}
     return out
 
 

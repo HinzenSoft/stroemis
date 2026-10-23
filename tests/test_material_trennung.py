@@ -272,8 +272,10 @@ def bis_schritt(version, nachruesten=True):
     keine Kategorie und kein Artikel mehr anlegen. Deshalb bekommt die Datenbank während des Laufs direkt nach jeder
     Migration nur diese beiden Spalten, wenn sie fehlen (auch wenn f die App selbst baut und gleich benutzt);
     Schemaversion und der CHECK der Prüfpunktarten bleiben auf dem alten Stand, Schritt 20 findet die Spalten vor und
-    lässt sie (Spalten nur, wenn sie fehlen). nachruesten=False lässt den Stand ganz, wie er war (für Tests, die genau
-    das prüfen)."""
+    lässt sie (Spalten nur, wenn sie fehlen). Seit Schritt 21 ebenso dessen Spalten (models.SPALTEN_21: is_set,
+    parent_item_id, lock_cause, set_lock_origin, set_pruefen, set_lauf_id) und Tabellen (models.TABELLEN_21, ohne
+    Trigger) – die Dienste lesen und schreiben sie (Kritik S26). nachruesten=False lässt den Stand ganz, wie er war (für
+    Tests, die genau das prüfen)."""
     def lauf(f, *a):
         from app import db
         from app.material import models
@@ -281,7 +283,7 @@ def bis_schritt(version, nachruesten=True):
         models.SCHEMA_VERSION = version
         # Die Startschritte der Module stehen in db.SCHEMA_MODULE (init_db ruft sie der Reihe nach mit der Verbindung):
         # hinten angehängt, läuft das Nachrüsten nach der Modulmigration jedes Starts in f.
-        mit = nachruesten and version < 20
+        mit = nachruesten and version < 21
         if mit:
             from app.material import schema_anmelden
             schema_anmelden()                    # die Schritte des Moduls zuerst – auch vor der ersten App im Prozess
@@ -296,12 +298,16 @@ def bis_schritt(version, nachruesten=True):
 
 
 def spalten_20_nachruesten(conn):
-    """Nur die beiden Spalten aus Schritt 20 an eine Datenbank älteren Stands (siehe bis_schritt) – mit Commit."""
+    """Nur die Spalten aus Schritt 20 und 21 und die Tabellen aus Schritt 21 (ohne Trigger) an eine Datenbank älteren
+    Stands (siehe bis_schritt) – mit Commit."""
     from app.material import models
-    for tabelle, spalte, art in models.SPALTEN_20:
-        if conn.execute(f"SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '{tabelle}'").fetchone() \
-                and spalte not in [r[1] for r in conn.execute(f"PRAGMA table_info({tabelle})")]:
-            conn.execute(f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {art}")
+    version = int((conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone() or [0])[0])
+    if version < 20:
+        models.spalten_nachruesten(conn, models.SPALTEN_20)
+    if version < 21:
+        for befehl in models.TABELLEN_21:
+            conn.execute(befehl)
+        models.spalten_nachruesten(conn, models.SPALTEN_21)
     conn.commit()
 
 
@@ -1014,7 +1020,8 @@ def test_unterbau():
                 assert not globalsuche.angebot(q), q
             g.user = db.query("SELECT * FROM users WHERE email = 'admin@example.org'", one=True)
             assert globalsuche.sieht_alles() and not globalsuche.angebot("AB-1234")
-        assert len(globalsuche.FELDER) == 16 and {"inventory_no", "sperre", "beschreibung"} <= globalsuche.FELDER
+        assert len(globalsuche.FELDER) == 17 and {"inventory_no", "sperre", "beschreibung", "teil_eines_sets"} <= \
+            globalsuche.FELDER
         assert "id" not in globalsuche.FELDER
     print("Unterbau bestanden.")
 

@@ -81,6 +81,8 @@ OHNE_SERIENNUMMERN = ("Keine Spalte ist als Seriennummer zugeordnet – bitte be
                       "mit den Seriennummern zuordnen.")
 FEHLT_ZUORDNUNG = "Ordne mindestens Hersteller und Modell (oder Artikelnummer) zu."
 DEMO_PRODUKT = "Ein DEMO-Produkt passt nur in einen DEMO-Ordner."
+# Schritt 21: Der Import legt keine Hersteller-Sets an – ihre Teile kennt die Liste nicht (Entwurf I).
+SET_PRODUKT = "Hersteller-Set – bitte über „Artikel anlegen“ mit seinen Teilen anlegen; der Import legt keine Sets an."
 NEUBESCHRIFTEN = ("Alte Inventarnummern stehen in der Bemerkung und sind nicht suchbar – die Artikel bitte neu "
                   "beschriften (Liste: „Export“ im Ordner).")
 
@@ -911,6 +913,8 @@ def _vorpruefen(z, lauf):
                 e.grund("produkt_unbekannt", "Produkt nicht im Katalog – bitte in der Nacharbeit zuordnen oder melden.")
             return e
     e.produkt = p
+    if p["is_set"]:
+        e.grund("regel", SET_PRODUKT)
     # 3. Schon im Bestand (sichtbar): übersprungen, keine Aktualisierung.
     if e.serie_ok:
         k = bestand.serie_konflikt(p["id"], e.serie)
@@ -1596,6 +1600,8 @@ def produkt_setzen(fid, product_id, angabe=None, zeilen=None):
         p = katalog.produkt(pid)
         if p["demo"] and not bestand.ordner_ist_demo(fid):
             raise Abgelehnt(DEMO_PRODUKT)
+        if p["is_set"]:
+            raise Abgelehnt(SET_PRODUKT)
     with db.transaction(sofort=True):
         n = db.execute_zeilen("UPDATE mat_import_row SET product_id = ? WHERE status = 'offen' "
                               "AND id IN (SELECT value FROM json_each(?))", (pid, _liste(ids)))

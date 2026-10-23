@@ -15,6 +15,11 @@ Mitglied – sowie die DEMO-Material-Verwaltung (Stufe Verwaltung, keine Plattfo
 pflegen, alle Bestände, Gliederungen anlegen). Sonst haben die Konten die Vorgabe neuer Konten. Nur für dev. Stammt
 der DEMO-Prüfer noch aus der Zeit, als auch er befristet prüfte, stellt --konten seine DEMO-Prüffreigabe auf dauerhaft
 (siehe demo_konten).
+Seit Phase 4 · Lieferung 2 (Hersteller-Sets) gibt es dazu ein DEMO-Set-Produkt („DEMO Verbindungsmittel-Set“) mit
+Stückliste aus DEMO-Bestandteilen (zwei einzeln geführte DEMO HMS-Karabiner, eine DEMO-Tasche als Bestandteil ohne
+eigenen Artikel) und im DEMO-Lager einen DEMO-Set-Artikel mit seinen beiden Teilen (DEMO-SET-1 mit DEMO-SET-K1 und
+DEMO-SET-K2) – auch zu einem vorhandenen Demo-Bestand, einmal (demo_set). Keine echten Herstellerdaten: Hersteller,
+Lebensdauer, Intervall und Stückliste sind Platzhalter.
 Alles, was das Skript anlegt, trägt das Kennzeichen demo und „DEMO“ im Namen – die Oberfläche zeigt
 es überall als „DEMO – nicht für echte Prüfungen“. Prüfpunkte, Intervalle, Lebensdauern und Hersteller
 sind Platzhalter: Der echte Katalog entsteht in Phase 0 mit den Sachkundigen und kommt über
@@ -69,7 +74,10 @@ KATALOG = {
             {"name": "DEMO Bandschlingen", "norm": "EN 354 (22 kN)", "materialart": "textil", "intervall_monate": 12},
             {"name": "DEMO HMS-Karabiner", "norm": "EN 362 oder EN 12275", "materialart": "metall_hardware",
              "intervall_monate": 12},
-            {"name": "DEMO Kletterhelme", "norm": "EN 12492", "materialart": "sonstiges", "intervall_monate": 12}]},
+            {"name": "DEMO Kletterhelme", "norm": "EN 12492", "materialart": "sonstiges", "intervall_monate": 12},
+            # Phase 4 · L2: Hersteller-Sets – Kategorie, Norm und Intervall sind Platzhalter.
+            {"name": "DEMO Verbindungsmittel-Sets", "norm": "DEMO-Norm (Platzhalter)", "materialart": "textil",
+             "intervall_monate": 12}]},
         {"name": "DEMO Wasserrettung", "unterkategorien": [
             {"name": "DEMO Schwimmhilfen", "norm": "EN 12402-5, Panikverschluss, mindestens 50 N",
              "materialart": "sonstiges", "intervall_monate": 12},
@@ -94,6 +102,16 @@ KATALOG = {
          "lebensdauer_quelle": "Platzhalter", "beschreibung": ""},
         {"kategorie": ["DEMO Wasserrettung", "DEMO Schwimmhilfen"], "hersteller": "DEMO-Hersteller",
          "modell": "DEMO Rettungsweste", "artikelnummer": "DEMO-W-1", "materialart": "sonstiges", "beschreibung": ""},
+        # Hersteller-Set (Phase 4 · L2): Stückliste aus DEMO-Bestandteilen – zwei einzeln geführte DEMO HMS-Karabiner
+        # (je ein Teil-Artikel) und eine Tasche ohne eigenen Artikel. Alles Platzhalter.
+        {"kategorie": ["DEMO PSA gegen Absturz und Seiltechnik", "DEMO Verbindungsmittel-Sets"],
+         "hersteller": "DEMO-Hersteller", "modell": "DEMO Verbindungsmittel-Set", "artikelnummer": "DEMO-VS-1",
+         "materialart": "textil", "lebensdauer_jahre": 10, "lebensdauer_quelle": "Platzhalter", "beschreibung": "",
+         "set": True, "bestandteile": [
+             {"produkt": {"hersteller": "DEMO-Hersteller", "modell": "DEMO HMS-Karabiner", "artikelnummer": "DEMO-K-1"},
+              "bezeichnung": "DEMO-Verbindungselement (Platzhalter)", "anzahl": 2, "einzeln": True,
+              "austausch": "nicht_belegt"},
+             {"bezeichnung": "DEMO-Tasche (Platzhalter)", "anzahl": 1, "einzeln": False, "austausch": "nicht_belegt"}]},
     ],
     "formulare": [
         {"kategorie": ["DEMO PSA gegen Absturz und Seiltechnik", "DEMO Gurte"], "titel": "DEMO-Formular Gurte",
@@ -104,6 +122,8 @@ KATALOG = {
          "punkte": _punkte(3)},
         {"produkt": {"hersteller": "DEMO-Hersteller", "modell": "DEMO Statikseil 11 mm", "artikelnummer": "DEMO-S-11"},
          "titel": "DEMO-Formular Statikseil (spezifisch)", "punkte": _punkte(2)},
+        {"kategorie": ["DEMO PSA gegen Absturz und Seiltechnik", "DEMO Verbindungsmittel-Sets"],
+         "titel": "DEMO-Formular Verbindungsmittel-Sets", "punkte": _punkte(3)},
     ],
 }
 
@@ -138,6 +158,7 @@ def main():
         else:
             demo_bestand(produkt)
             demo_pruefungen()
+        demo_set(produkt)
         demo_nachbarstadt(produkt)
         if konten:
             demo_konten()
@@ -169,6 +190,27 @@ def demo_bestand(produkt):
         bestand.artikel_anlegen(dict(felder, product_id=produkt[modell], folder_id=ordner_id,
                                      notes=HINWEIS))
     print(f"Bestand: {len(artikel)} Artikel in DEMO-Gliederung angelegt.")
+
+
+def demo_set(produkt):
+    """Phase 4 · L2: ein DEMO-Set-Artikel mit seinen Teilen im DEMO-Lager – über denselben Weg wie „Artikel anlegen“
+    (bestand.anlegen, Teile aus der Stückliste). Gibt es schon einen Artikel des DEMO-Set-Produkts oder fehlt das Lager,
+    bleibt alles, wie es ist."""
+    from app import db
+    from app.material.services import bestand, heute, stueckliste
+    pid = produkt.get("DEMO Verbindungsmittel-Set")
+    lager = _demo_ordner(LAGER, _demo_ordner(GLIEDERUNG))
+    if not pid or not lager or db.query("SELECT 1 FROM mat_item WHERE product_id = ? LIMIT 1", (pid,), one=True):
+        print("DEMO-Set ist schon da (oder das DEMO-Lager fehlt) – nichts weiter angelegt.")
+        return
+    serien = iter(("DEMO-SET-K1", "DEMO-SET-K2"))
+    teile = [{"bestandteil_id": z["id"], "serial_no": next(serien, "")}
+             for z in stueckliste.zeilen(pid) if z["einzeln"] for _ in range(z["anzahl"])]
+    h = heute()
+    sid, _ = bestand.anlegen({"product_id": pid, "folder_id": lager, "serial_no": "DEMO-SET-1",
+                              "manufactured_on": f"{h.year - 1}-02", "notes": HINWEIS, "teile": teile})
+    n = db.query("SELECT COUNT(*) AS n FROM mat_item WHERE parent_item_id = ?", (sid,), one=True)["n"]
+    print(f"Bestand: DEMO-Set mit {n} Teilen im {LAGER} angelegt.")
 
 
 def _demo_ordner(name, parent=None):

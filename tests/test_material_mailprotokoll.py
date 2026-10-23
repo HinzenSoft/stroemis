@@ -662,7 +662,7 @@ def test_migration_19():
         conn.commit()
         conn.close()
         assert schema() == soll
-        assert models.SCHEMA_VERSION == 20 and models.SCHRITTE[19] is models.SCHRITT_19   # seit Schritt 20: 20
+        assert models.SCHEMA_VERSION >= 20 and models.SCHRITTE[19] is models.SCHRITT_19   # seit Schritt 21: 21
     print("Migration 18 → 19 bestanden.")
 
 

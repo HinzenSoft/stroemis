@@ -22,6 +22,12 @@ Je Ziel kommt ein Formular mit: das aktive („aktivieren“: true), ohne aktive
 
 Eine Datei, die der Import nicht annähme (größer als seine Grenze, importer.BILD_MAX_IMPORT bzw. DOK_MAX_BYTES), bleibt
 draußen und steht im Bericht unter „zu_gross“ – sonst stünde der ganze Import.
+
+Hersteller-Sets (Schritt 21): „set“: true und die Stückliste („bestandteile“, Bestandteile als Verweis {uid, hersteller,
+modell, artikelnummer}). Steht in der Stückliste eines echten Sets ein DEMO-Bestandteil (oder einer aus einer
+DEMO-Kategorie), fehlt der Verweis im Export – dann bleibt „bestandteile“ ganz weg (der Import ließe sonst in der
+Produktion eine verkürzte Stückliste entstehen; ohne den Schlüssel bleibt sie dort, wie sie ist), und der Bericht nennt
+das Set unter „set_verstoesse“.
 """
 import hashlib
 import json
@@ -33,7 +39,7 @@ from flask import current_app
 
 from ... import db
 from ...images import ALLOWED_EXT
-from . import ZONE, Abgelehnt, importer, katalog
+from . import ZONE, Abgelehnt, importer, katalog, stueckliste
 
 EXPORT_MAX_BYTES = importer.ZIP_MAX_BYTES
 # Bilder und Dokumente gehen ungepackt ins Archiv: Sie packen sich kaum, und so bleibt jeder Eintrag weit unter der
@@ -83,7 +89,8 @@ def sammeln(mit_dateien=True):
                "enthalten": {"kategorien": 0, "produkte": 0, "bilder": 0, "formulare": 0, "dokumente": 0},
                "ausgelassen": {"kategorien": 0, "produkte": 0, "formulare": 0, "dokumente": 0, "ohne_kennzeichen": 0,
                                "namen": []},
-               "ohne_punkte": 0, "fehlende_dateien": [], "zu_gross": [], "groesse": 0, "grenze": EXPORT_MAX_BYTES}
+               "ohne_punkte": 0, "fehlende_dateien": [], "zu_gross": [], "groesse": 0, "grenze": EXPORT_MAX_BYTES,
+               "set_verstoesse": []}
     raus_n = bericht["ausgelassen"]
     dateien = {}
     # Alle Dokumente für die Versionsketten („vorgaenger“): je Version, welche sie ersetzt, und woran sie zu erkennen ist.
@@ -230,6 +237,23 @@ def sammeln(mit_dateien=True):
         docs = dokumente("product_id", p["id"], name)
         if docs:
             e["dokumente"] = docs
+        if p["is_set"]:
+            e["set"] = True
+            liste, raus_teile = [], []
+            for z in stueckliste.zeilen(p["id"]):
+                x = {"bezeichnung": z["bezeichnung"], "anzahl": z["anzahl"], "einzeln": bool(z["einzeln"]),
+                     "austausch": z["austausch"]}
+                if z["component_product_id"]:
+                    if z["demo"] or z["category_id"] in raus:
+                        raus_teile.append(katalog.produktname(z))
+                    x["produkt"] = {"uid": z["uid"], "hersteller": z["manufacturer"], "modell": z["model"],
+                                    "artikelnummer": z["article_no"]}
+                liste.append(x)
+            if raus_teile:
+                bericht["set_verstoesse"].append(f"„{name}“: Bestandteil {', '.join('„' + t + '“' for t in raus_teile)} "
+                                                 "ist DEMO – Stückliste nicht im Export")
+            else:
+                e["bestandteile"] = liste
         produkte.append(e)
     bericht["enthalten"]["produkte"] = len(produkte)
 
@@ -295,6 +319,9 @@ def bericht_text(b):
         zeilen += ["", "Nicht im Export, weil die Datei hier fehlt:"] + [f"  {x}" for x in b["fehlende_dateien"]]
     if b["zu_gross"]:
         zeilen += ["", "Nicht im Export, weil der Import die Datei nicht annähme:"] + [f"  {x}" for x in b["zu_gross"]]
+    if b.get("set_verstoesse"):
+        zeilen += ["", "Hersteller-Sets mit DEMO-Bestandteil (Stückliste nicht im Export – bitte im Katalog klären):"] + [
+            f"  {x}" for x in b["set_verstoesse"]]
     zeilen += ["", "Bestand, Artikel, Prüfungen, Meldungen und Rückrufe sind nie Teil des Katalog-Exports.",
                "Importieren: Katalog → „Katalog importieren“ oder flask material import-catalog <datei.zip>.", ""]
     return "\n".join(zeilen)

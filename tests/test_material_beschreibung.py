@@ -243,7 +243,8 @@ def test_demo_ohne_beschreibung():
         assert {z["description"] for z in _db(app, sql, one=False)} == {modul.HINWEIS}
         laufen()
         zeilen = _db(app, sql, one=False)
-        assert len(zeilen) == 5 and all(z["description"] == "" for z in zeilen), zeilen
+        # Sechs seit Phase 4 · L2: dazu das DEMO-Set-Produkt „DEMO Verbindungsmittel-Set“.
+        assert len(zeilen) == 6 and all(z["description"] == "" for z in zeilen), zeilen
         assert all(katalog.produktname(z) == f"{z['manufacturer']} {z['model']}" for z in zeilen), zeilen
         assert _db(app, "SELECT description FROM mat_folder WHERE name = ?", (modul.GLIEDERUNG,))["description"] \
             == modul.HINWEIS

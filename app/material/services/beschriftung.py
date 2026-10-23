@@ -58,6 +58,9 @@ FELD = {
     "rueckruf_nicht_mehr": "Rückruf trifft ihn nicht mehr", "rueckruf_neu": "Rückruf trifft ihn jetzt",
     # Artikellänge (Schritt 20)
     "length_m": "Länge (m)", "items_have_length": "Artikel haben eine Länge",
+    # Hersteller-Sets (Schritt 21)
+    "is_set": "Hersteller-Set", "bestandteile": "Bestandteile", "teile": "Teile", "set": "Set Nr.",
+    "set_inventar": "Set", "stueckliste": "Stückliste übernommen",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",
@@ -84,6 +87,7 @@ AKTION = {
     "antrag_gestellt": "Änderung beantragt", "antrag_bestaetigt": "Änderung bestätigt (Antrag)",
     "antrag_abgelehnt": "Änderungsantrag abgelehnt", "antrag_zurueckgezogen": "Änderungsantrag zurückgezogen",
     "laenge_geaendert": "Länge geändert",
+    "set_angelegt": "Set mit Teilen angelegt", "stueckliste": "Stückliste geändert",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",
@@ -95,7 +99,7 @@ RECHT = {"lesen": "lesen", "pruefen": "prüfen", "verwalten": "verwalten"}
 PERSON = "(Person)"
 # „mat_katalog“ bleibt für alte Einträge stehen (das Häkchen gibt es seit Schritt 10 nicht mehr).
 _JA_NEIN = ("serial_generated", "active", "mat_pruefer", "mat_katalog", "notiz_geaendert", "reminders_off", "items_have_length",
-            "aus_nacharbeit")
+            "aus_nacharbeit", "is_set")
 # Stufe im Modul Material – mit der Zahl dahinter: Einträge vor „Migration Schritt 10“ meinten die Stufen aus Phase 1
 # (1 Führungskraft, 2 Materialwart), die Zahl hält das eindeutig.
 STUFE_MATERIAL = {0: "kein Zugriff", 1: "Mitglied", 2: "Verwaltung"}

@@ -155,13 +155,26 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     ohne sqlite_sequence). Schritt 1 bleibt mit EDITOREN_1, wie er ausgeliefert wurde. Wiederholbar: Spalten nur, wenn
     sie fehlen, umgebaut nur, wenn der CHECK „laenge“ noch nicht kennt. Wer mat_checklist_item künftig neu aufbaut,
     muss den Index neu anlegen.
+  - Schritt 21 (Phase 4 · Lieferung 2, Sets mit Komponenten, Entwurf B): mat_product.is_set (Hersteller-Set) mit der
+    Stückliste mat_product_component (Bestandteil-Produkt ON DELETE RESTRICT, nicht einzeln geführte Bestandteile nur
+    als Text, „Austausch laut Hersteller“); am Artikel parent_item_id (Teil eines Sets, eine Ebene), lock_cause (NULL
+    frei, „eigen“ eigener Grund, „set“ nur im Set-Verbund gesperrt), set_lock_origin (an der Set-Zeile: Ursprung der
+    laufenden Set-Sperre) und set_pruefen (an einem Teil: im Freigabe-Lauf zu prüfen); mat_item_set_slot – die
+    Stückliste als Kopie je Set, unveränderlich; mat_set_lauf (Set-Prüfung als kleiner Ablauf, KEIN mat_round) mit
+    mat_inspection.set_lauf_id; mat_set_protokoll_zeile (Teiletabelle des Set-Protokolls, geschützt wie
+    mat_inspection_result). Rein additiv (ADD COLUMN, neue Tabellen, Trigger), kein Umbau von mat_item, mat_round oder
+    mat_inspection, keine neuen Werte in vorhandenen CHECK-Listen. Trigger nur für Übergänge einer Zeile – keine
+    Kreuzzeilen-Trigger auf folder_id, origin_folder_id, lock_state oder assigned_user_id: dass Teile liegen, sperren
+    und gehören wie ihr Set, hält der Dienst (services/sets.set_lage, set_stimmig). mat_inspection_festgeschrieben und
+    mat_inspection_abgeschlossen aus Schritt 6 werden mit set_lauf_id in der Spaltenliste neu angelegt (erst entfernen,
+    dann anlegen). Wiederholbar: Spalten nur, wenn sie fehlen, Tabellen und Indizes IF NOT EXISTS, Trigger neu.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -206,6 +219,13 @@ ERINNERUNGEN = ERINNERUNGEN_1 + ("freigabe_ablauf",)
 # Zustand einer Zeile der Nacharbeit (Bestandsimport, Schritt 12) – „ersetzt“: über die Nacharbeits-CSV neu eingelesen.
 IMPORT_STATUS = {"offen": "offen", "uebernommen": "übernommen", "im_bestand": "schon im Bestand",
                  "verworfen": "verworfen", "ersetzt": "neu eingelesen"}
+# Sets (Schritt 21): „Austausch laut Hersteller“ je Bestandteil, Sperrursache am Artikel, Ursprung einer Set-Sperre,
+# Stand eines Set-Prüflaufs, Art einer Zeile im Set-Protokoll.
+AUSTAUSCH = {"ja": "ja", "nein": "nein", "nicht_belegt": "nicht belegt"}
+SPERRURSACHEN = ("eigen", "set")
+SET_SPERRE_URSPRUNG = ("set", "teil")
+SET_LAUF_STAND = ("offen", "abgeschlossen", "abgebrochen")
+SET_ZEILENARTEN = ("teil", "bestandteil")
 
 
 def _in(werte):
@@ -1751,13 +1771,238 @@ def _schritt_20(conn):
         _umbauen_checklist(conn)
 
 
+# --- Schritt 21 (Phase 4 · Lieferung 2): Sets mit Komponenten ----------------------------------------------------------
+# Grenzen der Stückliste (Entwurf A) – der Dienst prüft sie vor dem Schreiben (services/stueckliste.py), die CHECKs sind
+# das Netz dahinter.
+STUECKLISTE_POSITIONEN_MAX, BESTANDTEIL_ANZAHL_MAX, SET_TEILE_MAX, BEZEICHNUNG_MAX = 30, 20, 50, 120
+TABELLEN_21 = [
+    # Die Stückliste eines Set-Produkts. Ein Bestandteil-Produkt lässt sich nicht löschen, solange es hier steht (RESTRICT;
+    # der Dienst antwortet vorher 409 mit dem Set); mit dem Set-Produkt geht seine Stückliste (es lässt sich ohnehin nur
+    # ohne Artikel löschen). Nicht einzeln geführte Bestandteile (Tasche, Seilsatz) sind nur Text – so trifft ein Rückruf
+    # keinen Bestandteil ins Leere.
+    """CREATE TABLE IF NOT EXISTS mat_product_component (
+      id                   INTEGER PRIMARY KEY,
+      set_product_id       INTEGER NOT NULL REFERENCES mat_product(id) ON DELETE CASCADE,
+      component_product_id INTEGER REFERENCES mat_product(id) ON DELETE RESTRICT,
+      bezeichnung          TEXT NOT NULL CHECK (trim(bezeichnung) <> '' AND length(bezeichnung) <= """
+    + str(BEZEICHNUNG_MAX) + """),
+      anzahl               INTEGER NOT NULL DEFAULT 1 CHECK (anzahl BETWEEN 1 AND """ + str(BESTANDTEIL_ANZAHL_MAX) + """),
+      einzeln              INTEGER NOT NULL DEFAULT 0 CHECK (einzeln IN (0, 1)),
+      austausch            TEXT NOT NULL DEFAULT 'nicht_belegt' CHECK (austausch IN """ + _in(AUSTAUSCH) + """),
+      position             INTEGER NOT NULL DEFAULT 0,
+      CHECK ((einzeln = 1) = (component_product_id IS NOT NULL)),
+      CHECK (component_product_id IS NOT set_product_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_mat_component_set ON mat_product_component(set_product_id, position)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_component_teil ON mat_product_component(component_product_id) "
+    "WHERE component_product_id IS NOT NULL",
+    # Die Stückliste als Kopie je Set, beim Anlegen geschrieben (services/sets.set_anlegen): Vollständigkeit, Tausch und
+    # die Bestandteil-Zeilen im Set-Protokoll lesen daraus – eine spätere Änderung der Stückliste färbt kein angelegtes
+    # Set um. Unveränderlich; weg nur mit dem (ungeprüften) Set.
+    """CREATE TABLE IF NOT EXISTS mat_item_set_slot (
+      id          INTEGER PRIMARY KEY,
+      set_item_id INTEGER NOT NULL REFERENCES mat_item(id) ON DELETE CASCADE,
+      position    INTEGER NOT NULL DEFAULT 0,
+      product_id  INTEGER REFERENCES mat_product(id),
+      bezeichnung TEXT NOT NULL,
+      anzahl      INTEGER NOT NULL CHECK (anzahl BETWEEN 1 AND """ + str(BESTANDTEIL_ANZAHL_MAX) + """),
+      einzeln     INTEGER NOT NULL CHECK (einzeln IN (0, 1)),
+      austausch   TEXT NOT NULL CHECK (austausch IN """ + _in(AUSTAUSCH) + """),
+      CHECK ((einzeln = 1) = (product_id IS NOT NULL))
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_mat_slot_set ON mat_item_set_slot(set_item_id, position)",
+    "CREATE INDEX IF NOT EXISTS idx_mat_slot_produkt ON mat_item_set_slot(product_id) WHERE product_id IS NOT NULL",
+    # Set prüfen als kleiner Ablauf (Entwurf E) – kein mat_round: folder_id, Sammelprotokoll und Durchgangsregeln bleiben,
+    # wie sie sind. round_id: im Ordner-Durchgang eröffnet. Höchstens ein offener Lauf je Set (Index).
+    """CREATE TABLE IF NOT EXISTS mat_set_lauf (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      set_item_id       INTEGER NOT NULL REFERENCES mat_item(id),
+      round_id          INTEGER REFERENCES mat_round(id),
+      opened_at         TEXT NOT NULL,
+      opened_by         INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      opened_by_name    TEXT NOT NULL DEFAULT '',
+      closed_at         TEXT,
+      state             TEXT NOT NULL DEFAULT 'offen' CHECK (state IN """ + _in(SET_LAUF_STAND) + """),
+      set_inspection_id INTEGER REFERENCES mat_inspection(id),   -- die Prüfung des Set-Artikels, die den Lauf schließt
+      CHECK ((state = 'offen') = (closed_at IS NULL))
+    )""",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_mat_set_lauf_offen ON mat_set_lauf(set_item_id) WHERE state = 'offen'",
+    "CREATE INDEX IF NOT EXISTS idx_mat_set_lauf_set ON mat_set_lauf(set_item_id, opened_at)",
+    # Die Teiletabelle des Set-Protokolls (= P-Protokoll der Prüfung des Set-Artikels): Kopie zum Festschreibezeitpunkt –
+    # je Teil Nummern, Ergebnis, Protokoll-ID und Prüfsumme seiner Prüfung (oder „übernommen“), je nicht einzeln
+    # geführtem Bestandteil „vorhanden“. Geschützt wie mat_inspection_result (TRIGGER_21).
+    """CREATE TABLE IF NOT EXISTS mat_set_protokoll_zeile (
+      id             INTEGER PRIMARY KEY,
+      inspection_id  INTEGER NOT NULL REFERENCES mat_inspection(id) ON DELETE CASCADE,
+      position       INTEGER NOT NULL DEFAULT 0,
+      art            TEXT NOT NULL CHECK (art IN """ + _in(SET_ZEILENARTEN) + """),
+      bezeichnung    TEXT NOT NULL DEFAULT '',
+      seriennummer   TEXT NOT NULL DEFAULT '',
+      inventarnummer TEXT NOT NULL DEFAULT '',
+      ergebnis       TEXT CHECK (ergebnis IS NULL OR ergebnis IN """ + _in(ERGEBNISSE) + """),
+      protokoll_id   TEXT,
+      pruefsumme     TEXT,
+      vorhanden      INTEGER CHECK (vorhanden IS NULL OR vorhanden IN (0, 1)),
+      uebernommen    INTEGER NOT NULL DEFAULT 0 CHECK (uebernommen IN (0, 1))
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_mat_set_zeile ON mat_set_protokoll_zeile(inspection_id, position)",
+]
+SPALTEN_21 = (
+    ("mat_product", "is_set", "INTEGER NOT NULL DEFAULT 0 CHECK (is_set IN (0, 1))"),
+    # Teil eines Hersteller-Sets: die Kennung des Set-Artikels (eine Ebene – TRIGGER_21).
+    ("mat_item", "parent_item_id", "INTEGER REFERENCES mat_item(id)"),
+    # Sperrursache: NULL frei; „eigen“ eigener Grund dieses Artikels; „set“ nur im Set-Verbund gesperrt (am Teil: das Set
+    # ist gesperrt; am Set-Artikel: wegen eines Teils oder der Unvollständigkeit).
+    ("mat_item", "lock_cause", "TEXT CHECK (lock_cause IS NULL OR lock_cause IN " + _in(SPERRURSACHEN) + ")"),
+    # Nur an der Set-Zeile: Ursprung der laufenden Set-Sperre – „set“ (eigener Grund des Set-Artikels: der Freigabe-Lauf
+    # prüft alle Teile) oder „teil“ (ein Teil oder die Vollständigkeit: geprüft werden der Set-Artikel und die Teile mit
+    # set_pruefen). NULL, solange das Set frei ist.
+    ("mat_item", "set_lock_origin", "TEXT CHECK (set_lock_origin IS NULL OR set_lock_origin IN "
+     + _in(SET_SPERRE_URSPRUNG) + ")"),
+    # Nur an einem Teil: im nächsten Freigabe-Lauf zu prüfen – neu eingesetzt oder seit Beginn der Set-Sperre aus eigenem
+    # Grund gesperrt (Entscheidung vom 23.10.2026). Die Freigabe setzt es zurück.
+    ("mat_item", "set_pruefen", "INTEGER NOT NULL DEFAULT 0 CHECK (set_pruefen IN (0, 1))"),
+    # Prüfungen eines Set-Prüflaufs (Teile und Set-Artikel).
+    ("mat_inspection", "set_lauf_id", "INTEGER REFERENCES mat_set_lauf(id)"),
+)
+INDIZES_21 = [
+    "CREATE INDEX IF NOT EXISTS idx_mat_item_parent ON mat_item(parent_item_id) WHERE parent_item_id IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS idx_mat_inspection_set_lauf ON mat_inspection(set_lauf_id) WHERE set_lauf_id IS NOT NULL",
+]
+TEIL_REGEL = ("'Ein Teil gehört zu genau einem Hersteller-Set: Produkt laut dessen Stückliste, eine Ebene, beide nicht "
+              "ausgesondert – und ein Teil wechselt das Set nur über „entnehmen“.'")
+SET_PRODUKT_FEST = "'Das Produkt eines Sets und seiner Teile steht fest – ebenso, ob ein Artikel ein Set ist.'"
+SET_UMSCHALTEN = ("'„Hersteller-Set“ lässt sich nur umschalten, solange es keine Artikel des Produkts gibt, das Produkt in "
+                  "keiner Stückliste steht und (ausschalten) keine eigene hat.'")
+STUECKLISTE_REGEL = "'In der Stückliste eines Hersteller-Sets stehen nur Produkte, die selbst kein Set sind.'"
+SLOT_FEST = "'Die Stückliste eines angelegten Sets ist unveränderlich.'"
+LAUF_FEST = "'Ein beendeter Set-Prüflauf ist unveränderlich.'"
+LAUF_ZU = "'In einen beendeten Set-Prüflauf kommt keine Prüfung mehr – und nur Prüfungen des Sets und seiner Teile.'"
+# Was ein Artikel als Teil eines Sets erfüllen muss (N ist NEW): kein Set-Produkt; das Set ein Set-Artikel ohne eigenes
+# Set, nicht ausgesondert; das Teil nicht ausgesondert; sein Produkt steht einzeln geführt in der Kopie der Stückliste.
+_TEIL_FALSCH = (
+    "((SELECT p.is_set FROM mat_product p WHERE p.id = {n}.product_id) IS NOT 0 "
+    "OR NOT EXISTS (SELECT 1 FROM mat_item s JOIN mat_product sp ON sp.id = s.product_id WHERE s.id = {n}.parent_item_id "
+    "AND sp.is_set = 1 AND s.parent_item_id IS NULL AND s.lock_state <> 'ausgesondert') "
+    "OR {n}.lock_state = 'ausgesondert' "
+    "OR NOT EXISTS (SELECT 1 FROM mat_item_set_slot z WHERE z.set_item_id = {n}.parent_item_id AND z.einzeln = 1 "
+    "AND z.product_id = {n}.product_id))")
+_IST_SET = "(SELECT p.is_set FROM mat_product p WHERE p.id = {}) = 1"
+_LAUF_UNPASSEND = (
+    "(EXISTS (SELECT 1 FROM mat_set_lauf l WHERE l.id = NEW.set_lauf_id AND l.state <> 'offen') "
+    "OR NOT EXISTS (SELECT 1 FROM mat_set_lauf l JOIN mat_item i ON i.id = NEW.item_id WHERE l.id = NEW.set_lauf_id "
+    "AND (i.id = l.set_item_id OR i.parent_item_id = l.set_item_id)))")
+# Schritt 6 mit der neuen Spalte: eine festgeschriebene bzw. abgeschlossene Prüfung wechselt auch den Set-Prüflauf nicht.
+_PRUEFUNG_FEST_21 = _PRUEFUNG_FEST + ", set_lauf_id"
+_PRUEFUNG_INHALT_21 = _PRUEFUNG_INHALT + ", set_lauf_id"
+TRIGGER_21 = [
+    # Ersetzen die Fassungen aus Schritt 6 (gleiche Namen) – vorher entfernt (_schritt_21).
+    _trigger("mat_inspection_festgeschrieben", f"BEFORE UPDATE OF {_PRUEFUNG_FEST_21} ON mat_inspection",
+             "OLD.locked_at IS NOT NULL", _FEST),
+    _trigger("mat_inspection_abgeschlossen", f"BEFORE UPDATE OF {_PRUEFUNG_INHALT_21} ON mat_inspection",
+             "OLD.completed_at IS NOT NULL", _ABGESCHLOSSEN),
+    # Teil eines Sets: nur über NULL (einsetzen bzw. anlegen; entnehmen setzt NULL) und nur nach _TEIL_FALSCH.
+    _trigger("mat_item_teil_neu", "BEFORE INSERT ON mat_item",
+             "NEW.parent_item_id IS NOT NULL AND " + _TEIL_FALSCH.format(n="NEW"), TEIL_REGEL),
+    _trigger("mat_item_teil_setzen", "BEFORE UPDATE OF parent_item_id ON mat_item",
+             "NEW.parent_item_id IS NOT NULL AND NEW.parent_item_id IS NOT OLD.parent_item_id AND "
+             "(OLD.parent_item_id IS NOT NULL OR " + _TEIL_FALSCH.format(n="NEW") + ")", TEIL_REGEL),
+    # Produkt fest an Teilen, an Sets mit Teilen und von/zu einem Set-Produkt (wie der Dienst, bestand.artikel_aendern).
+    _trigger("mat_item_set_produkt", "BEFORE UPDATE OF product_id ON mat_item",
+             "NEW.product_id IS NOT OLD.product_id AND (OLD.parent_item_id IS NOT NULL "
+             "OR EXISTS (SELECT 1 FROM mat_item t WHERE t.parent_item_id = OLD.id) "
+             "OR " + _IST_SET.format("OLD.product_id") + " OR " + _IST_SET.format("NEW.product_id") + ")",
+             SET_PRODUKT_FEST),
+    # „Hersteller-Set“ umschalten: nur ohne Artikel; ein Bestandteil wird kein Set, ein Set mit Stückliste kein Nicht-Set.
+    _trigger("mat_product_set_umschalten", "BEFORE UPDATE OF is_set ON mat_product",
+             "NEW.is_set IS NOT OLD.is_set AND (EXISTS (SELECT 1 FROM mat_item i WHERE i.product_id = OLD.id) "
+             "OR (NEW.is_set = 1 AND EXISTS (SELECT 1 FROM mat_product_component c WHERE c.component_product_id = OLD.id)) "
+             "OR (NEW.is_set = 0 AND EXISTS (SELECT 1 FROM mat_product_component c WHERE c.set_product_id = OLD.id)))",
+             SET_UMSCHALTEN),
+    _trigger("mat_component_neu", "BEFORE INSERT ON mat_product_component",
+             "(SELECT p.is_set FROM mat_product p WHERE p.id = NEW.set_product_id) IS NOT 1 OR "
+             "(NEW.component_product_id IS NOT NULL AND "
+             "(SELECT p.is_set FROM mat_product p WHERE p.id = NEW.component_product_id) IS NOT 0)", STUECKLISTE_REGEL),
+    _trigger("mat_component_aendern", "BEFORE UPDATE OF set_product_id, component_product_id ON mat_product_component",
+             "(SELECT p.is_set FROM mat_product p WHERE p.id = NEW.set_product_id) IS NOT 1 OR "
+             "(NEW.component_product_id IS NOT NULL AND "
+             "(SELECT p.is_set FROM mat_product p WHERE p.id = NEW.component_product_id) IS NOT 0)", STUECKLISTE_REGEL),
+    # Kopie der Stückliste: nur beim Anlegen (Set-Artikel, noch ohne Teile und ohne Prüfung), nie ändern, weg nur mit
+    # dem Set (ON DELETE CASCADE – dann gibt es die Set-Zeile schon nicht mehr; einen geprüften Artikel löscht ohnehin
+    # mat_item_geprueft_loeschen nicht). INSERT OR REPLACE löscht ohne Lösch-Trigger – deshalb die Kennung beim Einfügen.
+    _trigger("mat_slot_neu", "BEFORE INSERT ON mat_item_set_slot",
+             "EXISTS (SELECT 1 FROM mat_item_set_slot z WHERE z.id = NEW.id) "
+             "OR NOT EXISTS (SELECT 1 FROM mat_item s JOIN mat_product sp ON sp.id = s.product_id "
+             "WHERE s.id = NEW.set_item_id AND sp.is_set = 1 AND s.parent_item_id IS NULL) "
+             "OR EXISTS (SELECT 1 FROM mat_item t WHERE t.parent_item_id = NEW.set_item_id) "
+             "OR EXISTS (SELECT 1 FROM mat_inspection x WHERE x.item_id = NEW.set_item_id AND x.completed_at IS NOT NULL)",
+             SLOT_FEST),
+    _trigger("mat_slot_aendern", "BEFORE UPDATE ON mat_item_set_slot", "1", SLOT_FEST),
+    _trigger("mat_slot_loeschen", "BEFORE DELETE ON mat_item_set_slot",
+             "EXISTS (SELECT 1 FROM mat_item s WHERE s.id = OLD.set_item_id)", SLOT_FEST),
+    # Set-Prüflauf: entsteht offen an einem Set-Artikel; Set, Durchgang und Eröffnung stehen fest; beendet ist er fest;
+    # gelöscht wird kein abgeschlossener und keiner, an dem eine Prüfung hängt.
+    _trigger("mat_set_lauf_neu", "BEFORE INSERT ON mat_set_lauf",
+             "EXISTS (SELECT 1 FROM mat_set_lauf l WHERE l.id = NEW.id) OR NEW.state <> 'offen' "
+             "OR NEW.closed_at IS NOT NULL OR NEW.set_inspection_id IS NOT NULL "
+             "OR NOT EXISTS (SELECT 1 FROM mat_item s JOIN mat_product sp ON sp.id = s.product_id "
+             "WHERE s.id = NEW.set_item_id AND sp.is_set = 1)", LAUF_FEST),
+    _trigger("mat_set_lauf_kopf", "BEFORE UPDATE OF id, set_item_id, round_id, opened_at, opened_by_name ON mat_set_lauf",
+             "1", LAUF_FEST),
+    _trigger("mat_set_lauf_eroeffner", "BEFORE UPDATE OF opened_by ON mat_set_lauf",
+             "NEW.opened_by IS NOT NULL AND NEW.opened_by IS NOT OLD.opened_by", LAUF_FEST),
+    _trigger("mat_set_lauf_beendet", "BEFORE UPDATE OF state, closed_at, set_inspection_id ON mat_set_lauf",
+             "OLD.state <> 'offen'", LAUF_FEST),
+    _trigger("mat_set_lauf_loeschen", "BEFORE DELETE ON mat_set_lauf",
+             "OLD.state = 'abgeschlossen' OR EXISTS (SELECT 1 FROM mat_inspection x WHERE x.set_lauf_id = OLD.id)",
+             LAUF_FEST),
+    # Prüfungen im Lauf: nur in einen offenen und nur an Set-Artikel und Teilen dieses Sets.
+    _trigger("mat_inspection_in_set_lauf", "BEFORE INSERT ON mat_inspection",
+             "NEW.set_lauf_id IS NOT NULL AND " + _LAUF_UNPASSEND, LAUF_ZU),
+    _trigger("mat_inspection_set_lauf_wechsel", "BEFORE UPDATE OF set_lauf_id ON mat_inspection",
+             "NEW.set_lauf_id IS NOT NULL AND NEW.set_lauf_id IS NOT OLD.set_lauf_id AND " + _LAUF_UNPASSEND, LAUF_ZU),
+    # Teiletabelle des Set-Protokolls: wie mat_inspection_result – einfügen nur am offenen Entwurf, danach nie ändern
+    # oder löschen, auch nicht per INSERT OR REPLACE.
+    _trigger("mat_set_zeile_neu", "BEFORE INSERT ON mat_set_protokoll_zeile",
+             _ELTERN_ZU.format("NEW") + " OR " + _ERSETZT_ZU.format("mat_set_protokoll_zeile"), _ABGESCHLOSSEN),
+    _trigger("mat_set_zeile_aendern", "BEFORE UPDATE ON mat_set_protokoll_zeile",
+             _ELTERN_ZU.format("OLD") + " OR " + _ELTERN_ZU.format("NEW"), _ABGESCHLOSSEN),
+    _trigger("mat_set_zeile_loeschen", "BEFORE DELETE ON mat_set_protokoll_zeile", _ELTERN_ZU.format("OLD"),
+             _ABGESCHLOSSEN),
+]
+
+
+def spalten_nachruesten(conn, spalten):
+    """Fehlende Spalten anlegen (ADD COLUMN) – nur an vorhandenen Tabellen. Für _schritt_21 und für Tests, die einen
+    älteren Stand nachstellen und dabei Dienste rufen, die die neuen Spalten schreiben (test_material_trennung.bis_schritt)."""
+    for tabelle, spalte, art in spalten:
+        if conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (tabelle,)).fetchone() \
+                and spalte not in _spalten(conn, tabelle):
+            conn.execute(f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {art}")
+
+
+def _schritt_21(conn):
+    """Sets mit Komponenten (Phase 4 · Lieferung 2): neue Tabellen, die Spalten aus SPALTEN_21, wenn sie fehlen, Indizes und
+    Trigger; die beiden Fest-Trigger aus Schritt 6 erst entfernen, dann mit set_lauf_id neu anlegen (CREATE TRIGGER IF NOT
+    EXISTS fände sonst die alte Fassung vor). Ein zweiter Lauf legt dieselben Trigger neu an und ändert keine Zeile."""
+    for sql in TABELLEN_21:
+        conn.execute(sql)
+    spalten_nachruesten(conn, SPALTEN_21)
+    for sql in INDIZES_21:
+        conn.execute(sql)
+    for name in ("mat_inspection_festgeschrieben", "mat_inspection_abgeschlossen"):
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+    for sql in TRIGGER_21:
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
             14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
-            20: _schritt_20}
+            20: _schritt_20, 21: _schritt_21}
 
 
 def _meta(conn, schluessel, vorgabe=None):

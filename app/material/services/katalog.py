@@ -478,7 +478,10 @@ def _artikelnummer_pruefen(article_no, hersteller, ausser=None):
 
 
 def produkt_anlegen(d, demo=False, importiert=False):
+    """Ein neues Produkt; „is_set“ (ja/nein) setzt das Häkchen „Hersteller-Set“ (Schritt 21) – die Stückliste kommt
+    danach (stueckliste.ersetzen)."""
     w = produkt_werte(d, importiert=importiert)
+    ist_set = wahr(d, "is_set", "Hersteller-Set")
     key = dedupe_key(w["manufacturer"], w["model"], w["article_no"])
     uid, _ = akteur()
     ts = db.now()
@@ -488,14 +491,17 @@ def produkt_anlegen(d, demo=False, importiert=False):
         try:
             pid = db.execute(
                 "INSERT INTO mat_product (category_id, manufacturer, model, article_no, dedupe_key, norm, material_kind, "
-                "interval_months, lifetime_years, lifetime_source, description, demo, created_by, created_at, updated_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "interval_months, lifetime_years, lifetime_source, description, is_set, demo, created_by, created_at, "
+                "updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (w["category_id"], w["manufacturer"], w["model"], w["article_no"], key, w["norm"], w["material_kind"],
-                 w["interval_months"], w["lifetime_years"], w["lifetime_source"], w["description"], int(bool(demo)),
-                 uid, ts, ts))
+                 w["interval_months"], w["lifetime_years"], w["lifetime_source"], w["description"], int(ist_set),
+                 int(bool(demo)), uid, ts, ts))
         except sqlite3.IntegrityError:
             raise Abgelehnt("Dieses Produkt steht schon im Katalog.", 409)
-        journal.eintragen("product", pid, "angelegt", None, w)
+        journal.eintragen("product", pid, "angelegt", None, dict(w, is_set=True) if ist_set else w)
+    if ist_set:
+        from .sets import set_produkte_vergessen
+        set_produkte_vergessen()
     return pid
 
 
@@ -504,10 +510,18 @@ def produkt_variante(pid, d):
     eine eigene Artikelnummer ist Pflicht. Auf Wunsch die aktuellen Dokumente des Produkts dazu – je Dokument die
     neueste, nicht zurückgezogene Version; die neue Zeile nennt dieselbe Datei (seit Schritt 18 heißt sie nach ihrem
     Inhalt und bleibt, bis keine Zeile sie mehr nennt – bis dahin wurde sie kopiert, damit das Löschen des einen
-    Produkts die Dokumente des anderen nicht mitnimmt). Das Produktbild nie, spezifische Formulare auch nicht."""
+    Produkts die Dokumente des anderen nicht mitnimmt). Das Produktbild nie, spezifische Formulare auch nicht. Seit
+    Schritt 21 auf Wunsch die Stückliste eines Hersteller-Sets („stueckliste“: ja – Häkchen wie bei den Dokumenten; die
+    Variante ist dann selbst ein Set, „is_set“ muss nicht mitkommen)."""
+    from . import stueckliste
     quelle = produkt(pid)
     if not artikelnummer(text(d, "article_no", "Artikelnummer", 80)):
         raise Abgelehnt("Eine Variante braucht eine eigene Artikelnummer.")
+    mit_stueckliste = wahr(d, "stueckliste", "Stückliste übernehmen")
+    if mit_stueckliste:
+        if not quelle["is_set"]:
+            raise Abgelehnt("Übernehmen lässt sich nur die Stückliste eines Hersteller-Sets.")
+        d = dict(d, is_set=True)
     wahl = d.get("dokumente") or []
     if not isinstance(wahl, list) or any(isinstance(x, bool) or not isinstance(x, int) for x in wahl):
         raise Abgelehnt("„dokumente“ muss eine Liste von Dokumentkennungen sein.")
@@ -530,14 +544,21 @@ def produkt_variante(pid, d):
             journal.eintragen("document", did, "angelegt", None,
                               {"product_id": neu, "kind": doc["kind"], "title": doc["title"], "version": doc["version"],
                                "valid_from": doc["valid_from"], "kopie_von": doc["id"]})
+        if mit_stueckliste:
+            stueckliste.kopieren(pid, neu)
         # Der Name der Quelle mit ihrem Zusatz: Varianten unterscheiden sich oft nur in der Beschreibung.
-        journal.eintragen("product", neu, "variante", None, {"von": pid, "name": produktname(quelle),
-                                                             "dokumente": len(kopien)})
+        journal.eintragen("product", neu, "variante", None, dict({"von": pid, "name": produktname(quelle),
+                                                                  "dokumente": len(kopien)},
+                                                                 **({"stueckliste": True} if mit_stueckliste else {})))
     return neu
 
 
 def produkt_aendern(pid, d, importiert=False):
+    """Stammdaten ändern; „is_set“ in d schaltet das Häkchen „Hersteller-Set“ um (stueckliste.set_umschalten – nur ohne
+    Artikel; ausschalten nimmt die Stückliste mit)."""
+    from . import stueckliste
     alt = produkt(pid)
+    ist_set = wahr(d, "is_set", "Hersteller-Set") if "is_set" in d else None
     w = produkt_werte(d, alt, importiert=importiert)
     key = dedupe_key(w["manufacturer"], w["model"], w["article_no"])
     artikel = db.query("SELECT COUNT(*) AS n FROM mat_item WHERE product_id = ?", (pid,), one=True)["n"]
@@ -562,6 +583,8 @@ def produkt_aendern(pid, d, importiert=False):
         # Ein festgeschriebenes Lebensende (retire_by) gibt es nur bei textilem Material.
         if w["lifetime_years"] != alt["lifetime_years"] and w["material_kind"] == "textil":
             lebensende_nachziehen(pid, alt["lifetime_years"], w["lifetime_years"])
+        if ist_set is not None:
+            stueckliste.set_umschalten(pid, ist_set)
     return pid
 
 
@@ -580,10 +603,18 @@ def lebensende_nachziehen(pid, alt_jahre, neu_jahre):
 
 
 def produkt_loeschen(pid):
+    """Nur ein Produkt ohne Artikel, das in keiner Stückliste steht (Schritt 21: Bestandteil → 409 mit dem Set); eine
+    eigene Stückliste geht mit (ON DELETE CASCADE, im Journal „geloescht“ als Zahl der Bestandteile)."""
+    from . import stueckliste
     with db.transaction(sofort=True):
         alt = produkt(pid)
         if db.query("SELECT 1 FROM mat_item WHERE product_id = ? LIMIT 1", (pid,), one=True):
             raise Abgelehnt("Von diesem Produkt gibt es Artikel – es bleibt im Katalog.", 409)
+        stueckliste.loeschen_pruefen(pid)
+        bestandteile = db.query("SELECT COUNT(*) AS n FROM mat_product_component WHERE set_product_id = ?", (pid,),
+                                one=True)["n"]
+        if bestandteile:
+            alt = dict(alt, bestandteile=bestandteile)
         dateien = [r["file_path"] for r in db.query(
             "SELECT file_path FROM mat_product_document WHERE product_id = ? AND file_path IS NOT NULL", (pid,))]
         for f in db.query("SELECT id FROM mat_form WHERE product_id = ?", (pid,)):
@@ -673,6 +704,9 @@ def produkt_json(p, voll=False):
         out["category_name"] = p["category_name"]
     if "bestand" in p:
         out["bestand"] = p["bestand"]
+    # Hersteller-Set (Schritt 21): is_set immer, voll dazu Stückliste, „Bestandteil von“ und ob umschaltbar.
+    from .stueckliste import produkt_json_ergaenzen
+    produkt_json_ergaenzen(out, p, voll)
     if voll:
         # Der Katalog ist global, der Bestand nicht: Die Zahlen zählen nur, was das Konto sieht. Ob sich das Produkt
         # löschen lässt, hängt dagegen an allen Artikeln – „loeschbar“ verrät nur ja oder nein (produkt_loeschen).
@@ -682,7 +716,9 @@ def produkt_json(p, voll=False):
                                   f"'ausgesondert' AND {artikel_filter('i')}", (p["id"],), one=True)["n"]
         out["artikel_gesamt"] = db.query(f"SELECT COUNT(*) AS n FROM mat_item i WHERE i.product_id = ? "
                                          f"AND {artikel_filter('i')}", (p["id"],), one=True)["n"]
-        out["loeschbar"] = not db.query("SELECT 1 FROM mat_item WHERE product_id = ? LIMIT 1", (p["id"],), one=True)
+        out["loeschbar"] = not db.query("SELECT 1 FROM mat_item WHERE product_id = ? LIMIT 1", (p["id"],), one=True) \
+            and not out["bestandteil_von"] and not db.query("SELECT 1 FROM mat_item_set_slot WHERE product_id = ? LIMIT 1",
+                                                            (p["id"],), one=True)
         out["dokumente"] = dokumente(p["id"])
         out["kategorie_dokumente"] = geerbte_dokumente(p["id"])
         f = formular_fuer_produkt(p["id"])

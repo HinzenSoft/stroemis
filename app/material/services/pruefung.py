@@ -862,7 +862,10 @@ def _systemziel(item, art):
 
 def _sperren(item, zustand, grund, pruefung_id=None, aktion="gesperrt", zusatz=None):
     """Sperre wirken lassen: in „Gesperrt“ der Gliederung, Herkunft merken – ein Journaleintrag (aktion; die
-    Mangelmeldung schreibt „mangel_gemeldet“ mit zusatz {"mangel": Kennung})."""
+    Mangelmeldung schreibt „mangel_gemeldet“ mit zusatz {"mangel": Kennung}). Set-Artikel und Teile: Nahtstelle der
+    Sperr-Kaskade (sets.vor_einzelsperre, Schritt 21)."""
+    from . import sets
+    sets.vor_einzelsperre(item)
     ziel = _systemziel(item, "gesperrt")
     db.execute("UPDATE mat_item SET lock_state = ?, lock_reason = ?, origin_folder_id = ?, folder_id = ?, "
                "last_inspected_on = ?, updated_at = ? WHERE id = ?",
@@ -903,8 +906,10 @@ def _aussondern(item, grund, bemerkung, tag, akteur, basis_id=None, ts=None):
     festgeschriebenem Aussonderungsprotokoll; der Artikel wandert in „Ausgesondert“ und zählt nirgends mehr
     als Bestand. Seit Phase 2 behält er seine Heimat (origin_folder_id): Wer nur den Herkunftsordner verwaltet,
     sieht ihn und sein Protokoll weiter. Eine Zuordnung an eine Person löst sich (Journal mit Grund). Läuft in der
-    Transaktion des Aufrufers, innerhalb von protokoll.dateien_sichern()."""
-    from . import durchgang
+    Transaktion des Aufrufers, innerhalb von protokoll.dateien_sichern(). Set-Artikel und Teile: Nahtstelle wie
+    _sperren (sets.vor_einzelsperre)."""
+    from . import durchgang, sets
+    sets.vor_einzelsperre(item)
     ziel = _systemziel(item, "ausgesondert")
     ts = ts or db.now()
     heimat = bestand.heimat(item)
@@ -963,6 +968,8 @@ def aussondern(iid, d, akteur):
         raise Abgelehnt("Das Datum der Aussonderung liegt in der Zukunft.")
     with protokoll.dateien_sichern(), db.transaction(sofort=True):
         item = bestand.artikel(iid)
+        from . import sets
+        sets.teil_weiche(item, "Aussondern")              # am Teil nur über „Teil entnehmen“ (Schritt 21, K2)
         if item["lock_state"] == "ausgesondert":
             raise Abgelehnt("Der Artikel ist schon ausgesondert.", 409)
         if item["lock_state"] not in ("gesperrt", "verloren"):

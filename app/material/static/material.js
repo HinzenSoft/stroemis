@@ -249,6 +249,9 @@
     rueckruf_nicht_mehr: "Rückruf trifft ihn nicht mehr", rueckruf_neu: "Rückruf trifft ihn jetzt",
     // Artikellänge (Schritt 20)
     length_m: "Länge (m)", items_have_length: "Artikel haben eine Länge",
+    // Hersteller-Sets (Schritt 21)
+    is_set: "Hersteller-Set", bestandteile: "Bestandteile", teile: "Teile", set: "Set Nr.", set_inventar: "Set",
+    stueckliste: "Stückliste übernommen",
   };
   // Die Beschriftung eines Feldes in einem Journaleintrag – wie beschriftung.feld_name: „description“ ist am Produkt der
   // kurze Zusatz hinter dem Namen und heißt dort seit dem Wunsch vom 18.10.2026 „Bemerkung“; an Ordnern und in den
@@ -275,7 +278,8 @@
                    nacharbeit_verworfen: "Nacharbeit verworfen", wiki: "Prüfanleitung (Wiki) geändert",
                    mangel_gemeldet: "Mangel gemeldet", antrag_gestellt: "Änderung beantragt",
                    antrag_bestaetigt: "Änderung bestätigt (Antrag)", antrag_abgelehnt: "Änderungsantrag abgelehnt",
-                   antrag_zurueckgezogen: "Änderungsantrag zurückgezogen", laenge_geaendert: "Länge geändert" };
+                   antrag_zurueckgezogen: "Änderungsantrag zurückgezogen", laenge_geaendert: "Länge geändert",
+                   set_angelegt: "Set mit Teilen angelegt", stueckliste: "Stückliste geändert" };
   const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };

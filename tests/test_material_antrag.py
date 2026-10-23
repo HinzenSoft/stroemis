@@ -44,6 +44,12 @@ TRIGGER_16 = {"mat_item_ersetzen", "mat_item_kennung", "mat_item_geprueft_loesch
               "mat_product_materialart_fest", "mat_product_ersetzen", "mat_product_kennung"}
 TRIGGER_17 = {"mat_item_change_herstellung_leer", "mat_item_change_entfernen_bestaetigen", "mat_item_change_zurueckziehen"}
 TRIGGER_19 = {"mat_mail_fehler_fest", "mat_mail_fehler_ordner"}
+
+
+def trigger_21():
+    """Die Trigger aus Schritt 21 (Sets) – zwei davon ersetzen gleichnamige aus Schritt 6."""
+    from app.material import models
+    return {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.TRIGGER_21}
 HERST_BLEIBT = "nicht entfernen"
 
 
@@ -1396,8 +1402,9 @@ def test_migration_17():
         vorher = _zahlen(pfad)
         make_app(tmp)
         v17, t17, _ = _schema(pfad)
-        # Schritt 18: keine Trigger; Schritt 19: die zwei des Mailfehler-Protokolls.
-        assert v17 == endversion() and set(t17) == set(t16) | TRIGGER_17 | TRIGGER_19, (set(t17) ^ set(t16))
+        # Schritt 18: keine Trigger; Schritt 19: die zwei des Mailfehler-Protokolls; Schritt 21: die der Sets.
+        assert v17 == endversion() and set(t17) == set(t16) | TRIGGER_17 | TRIGGER_19 | trigger_21(), \
+            (set(t17) ^ set(t16))
         assert t17["mat_item_stammdaten_fest"] != t16["mat_item_stammdaten_fest"]
         assert t17["mat_item_antrag_angewendet"] == t16["mat_item_antrag_angewendet"]
         assert "'zurueckgezogen'" in _tabelle_sql(pfad)

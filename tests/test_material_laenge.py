@@ -179,6 +179,7 @@ def test_migration_20():
         punkte_vorher = zeilen(app, "SELECT * FROM mat_checklist_item ORDER BY id")
         ergebnisse_vorher = zeilen(app, "SELECT id, checklist_item_id FROM mat_inspection_result ORDER BY id")
         schema_20 = _schema(pfad)
+        spalten_item_20 = _spalten(pfad, "mat_item")
         tabellen = ("mat_checklist_item", "mat_inspection_result", "mat_item", "mat_category", "mat_form", "mat_audit")
         zahlen_vorher = {t: zeilen(app, f"SELECT COUNT(*) AS n FROM {t}")[0]["n"] for t in tabellen}
         assert len(punkte_vorher) >= 7 and any(r["checklist_item_id"] for r in ergebnisse_vorher)
@@ -187,15 +188,21 @@ def test_migration_20():
         assert "'laenge'" not in _tabelle_sql(pfad, "mat_checklist_item")
 
         app = make_app(tmp)
-        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion() == "20"
+        # Seit Schritt 21 (Sets) läuft die Migration weiter – 19 → 20 → 21; Schritt 20 prüft dieser Test.
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
+        assert int(endversion()) >= 20
         assert "items_have_length" in _spalten(pfad, "mat_category") and "length_m" in _spalten(pfad, "mat_item")
         sql = _tabelle_sql(pfad, "mat_checklist_item")
         assert "'laenge'" in sql and "_neu" not in sql and "_alt" not in sql, sql
         assert zeilen(app, "SELECT * FROM mat_checklist_item ORDER BY id") == punkte_vorher
         assert zeilen(app, "SELECT id, checklist_item_id FROM mat_inspection_result ORDER BY id") == ergebnisse_vorher
         assert {t: zeilen(app, f"SELECT COUNT(*) AS n FROM {t}")[0]["n"] for t in tabellen} == zahlen_vorher
-        # Tabellen, Indizes und Trigger genau wie auf der frisch angelegten Datenbank (vor dem Rückbau).
+        # Tabellen, Indizes und Trigger genau wie auf der frisch angelegten Datenbank (vor dem Rückbau). Seit Schritt 21
+        # steht length_m nach dem Rückbau hinter dessen Spalten (ADD COLUMN hängt an) – bei mat_item zählen die Spalten.
         schema = _schema(pfad)
+        assert sorted(_spalten(pfad, "mat_item")) == sorted(spalten_item_20)
+        schema.pop(("table", "mat_item"))
+        schema_20.pop(("table", "mat_item"))
         assert schema == schema_20, {k: (schema.get(k), schema_20.get(k)) for k in set(schema) | set(schema_20)
                                      if schema.get(k) != schema_20.get(k)}
         assert ("index", "idx_mat_checklist_form") in schema
@@ -216,7 +223,7 @@ def test_migration_20():
             conn.execute("UPDATE mat_item SET length_m = 9999.9")
             conn.rollback()
             # Zweiter Lauf und Schritt 20 für sich: keine Änderung.
-            assert models.migrieren(conn) == models.SCHEMA_VERSION == 20
+            assert models.migrieren(conn) == models.SCHEMA_VERSION >= 20
             conn.execute("BEGIN")
             n = conn.total_changes
             models._schritt_20(conn)
@@ -225,7 +232,9 @@ def test_migration_20():
         finally:
             conn.close()
         make_app(tmp)
-        assert _schema(pfad) == schema_20
+        schema = _schema(pfad)
+        schema.pop(("table", "mat_item"))                 # Spaltenreihenfolge seit Schritt 21, siehe oben
+        assert schema == schema_20
         # Der Bestand arbeitet weiter: eine Länge am Artikel, eine neue Prüfung mit den alten Prüfpunkten.
         assert k["wart"].put(f"{ART}/{a['id']}", json={"notes": "nach der Migration"}).status_code == 200
         pid2 = starten(k["pruefer"], a["id"]).json["pruefung"]["id"]

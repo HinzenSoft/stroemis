@@ -9,6 +9,10 @@ und die Titel laufender Rückrufe (Sperrgrund, Bemerkung, letzte Prüfung und Gl
 Kein Ordnerpfad, keine Protokolle, keine Prüfhistorie, kein Journal. requires_folder und
 die 404-Regel bleiben unberührt; die Zuordnung ist keine Freigabe (rechte.sicht kennt sie nicht).
 
+Hersteller-Sets (Phase 4 · L2, Schritt 21): Ein Set ist eine Karte – mit Set-Status und Set-Fälligkeit – und trägt
+seine Teile als Karten in „teile“ (dieselben Schlüssel, „teil_eines_sets“: true); die Zahl in der Kopfleiste und
+„Meine PSA“ auf der Übersicht zählen je Set. Teile gehören derselben Person wie ihr Set (sets.set_lage).
+
 Wer zuordnen darf und an wen, regelt zuordnung.py (rechte.waehlbares_konto: dieselben Bedingungen wie konto())."""
 import json
 
@@ -42,9 +46,9 @@ def konto(user=None):
 
 
 def anzahl(uid):
-    """Zugeordnete, nicht ausgesonderte Artikel (eine Abfrage über idx_mat_item_assigned)."""
-    return db.query("SELECT COUNT(*) AS n FROM mat_item WHERE assigned_user_id = ? AND lock_state <> 'ausgesondert'",
-                    (uid,), one=True)["n"]
+    """Zugeordnete, nicht ausgesonderte Artikel – ein Set zählt einmal (eine Abfrage über idx_mat_item_assigned)."""
+    return db.query("SELECT COUNT(*) AS n FROM mat_item WHERE assigned_user_id = ? AND lock_state <> 'ausgesondert' "
+                    "AND parent_item_id IS NULL", (uid,), one=True)["n"]
 
 
 def kopfleiste(user=None):
@@ -68,9 +72,9 @@ def kurz(user):
     überfällig, Lebensdauer erreicht, neu."""
     if not konto(user):
         return None
-    r = db.query(f"SELECT COUNT(*) AS n, COALESCE(SUM({st.status_sql('i')} IN ({','.join(repr(s) for s in DRINGEND)})), 0) "
-                 "AS d FROM mat_item i WHERE i.assigned_user_id = :uid AND i.lock_state <> 'ausgesondert'",
-                 dict(st.parameter(), uid=user["id"]), one=True)
+    r = db.query(f"SELECT COUNT(*) AS n, COALESCE(SUM({_status_psa()} IN ({','.join(repr(s) for s in DRINGEND)})), 0) "
+                 "AS d FROM mat_item i WHERE i.assigned_user_id = :uid AND i.lock_state <> 'ausgesondert' "
+                 "AND i.parent_item_id IS NULL", dict(st.parameter(), uid=user["id"]), one=True)
     return {"anzahl": r["n"], "dringend": r["d"]} if r["n"] else None
 
 
@@ -87,18 +91,31 @@ def _ids(rows):
     return json.dumps(sorted({r["id"] for r in rows}))
 
 
+def _status_psa():
+    """Der Status einer Karte als SQL über i: bei einem Set der Set-Status über Set-Artikel und Teile – ohne den
+    Freigabefilter der Listen (sets.gruppen_status_sql): Die Karte zeigt die eigene PSA, auch ohne Leserecht am Ordner;
+    Teile gehören derselben Person wie ihr Set."""
+    rang = st.rang_sql(st.status_sql("gt"))
+    return (f"(CASE WHEN EXISTS (SELECT 1 FROM mat_item gk WHERE gk.parent_item_id = i.id) THEN "
+            f"(SELECT {st.aus_rang_sql(f'MIN({rang})')} FROM mat_item gt WHERE gt.id = i.id OR gt.parent_item_id = i.id) "
+            f"ELSE {st.status_sql('i')} END)")
+
+
 def liste(user):
     """(Karten, gesamt): die eigenen Artikel, dringende zuerst, höchstens MAX_ARTIKEL. Eine Abfrage für die Artikel, eine
     für offene Meldungen, eine für die eigenen Meldungen, eine für Rückrufe, je Produkt einmal die Dokumente – die Zahl
     der Abfragen hängt nicht an der Zahl der Artikel."""
-    from . import mangel, rueckruf
-    rows = db.query(
-        "SELECT i.*, p.manufacturer, p.model, p.description AS product_description, p.article_no, p.material_kind, "
-        f"p.image AS product_image, {bestand.demo_sql('i', 'p')} AS artikel_demo, {_GEPRUEFT_UM} AS geprueft_um "
-        "FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
-        "WHERE i.assigned_user_id = :uid AND i.lock_state <> 'ausgesondert' "
-        f"ORDER BY {_REIHE.format(s=st.status_sql('i'))}, i.inventory_no LIMIT :lim",
-        dict(st.parameter(), uid=user["id"], lim=MAX_ARTIKEL))
+    from . import mangel, rueckruf, sets
+    auswahl = ("SELECT i.*, p.manufacturer, p.model, p.description AS product_description, p.article_no, p.material_kind, "
+               f"p.image AS product_image, {bestand.demo_sql('i', 'p')} AS artikel_demo, {_GEPRUEFT_UM} AS geprueft_um "
+               "FROM mat_item i JOIN mat_product p ON p.id = i.product_id ")
+    oben = db.query(auswahl + "WHERE i.assigned_user_id = :uid AND i.lock_state <> 'ausgesondert' "
+                    f"AND i.parent_item_id IS NULL ORDER BY {_REIHE.format(s=_status_psa())}, i.inventory_no LIMIT :lim",
+                    dict(st.parameter(), uid=user["id"], lim=MAX_ARTIKEL))
+    # Die Teile der Sets unter den Karten (derselben Person zugeordnet wie ihr Set) – eine Abfrage.
+    teile = db.query(auswahl + "WHERE i.assigned_user_id = ? AND i.parent_item_id IN (SELECT value FROM json_each(?)) "
+                     "ORDER BY i.id", (user["id"], _ids(oben))) if oben else []
+    rows = oben + teile
     gesamt = anzahl(user["id"])
     ids = _ids(rows)
     # Offen heißt auch: wieder offen nach einer Berichtigung der erledigenden Freiprüfung (mangel.stand) – eine
@@ -133,15 +150,28 @@ def liste(user):
     dokumente = {pid: [{"title": d["title"], "kind": d["kind"], "datei": d["datei"], "url": d["url"] or ""}
                        for d in katalog.gueltige_dokumente(pid, tag) if d["kind"] in PSA_DOKUMENTARTEN]
                  for pid in produkte}
-    karten = []
-    for r in rows:
+    def karte(r):
         titel = []
         for rr in rueckrufe.get(r["product_id"], ()):
             if rueckruf._passt({rueckruf._norm(s) for s in rueckruf.serien(rr)}, r) \
                     and rueckruf.zustand(rr, r)[0] == "offen":
                 titel.append(rr["title"])
-        karten.append(artikel_json(r, user, offen.get(r["id"]), eigene.get(r["id"], []),
-                                   dokumente.get(r["product_id"], []), titel, _gliederung(bestand.heimat(r), baum)))
+        return artikel_json(r, user, offen.get(r["id"]), eigene.get(r["id"], []), dokumente.get(r["product_id"], []),
+                            titel, _gliederung(bestand.heimat(r), baum))
+
+    je_set = {}
+    for t in teile:
+        je_set.setdefault(t["parent_item_id"], []).append(t)
+    karten = []
+    for r in oben:
+        k = karte(r)
+        if r["id"] in je_set:
+            # Set-Karte: Set-Status und Set-Fälligkeit (sets.werte) und die Teile als Karten darunter.
+            w = sets.werte(r, je_set[r["id"]])
+            k.update({"status": w["status"], "status_text": w["status_text"], "next_due_on": w["next_due_on"],
+                      "retire_by": w["retire_by"]})
+            k["teile"] = [dict(karte(t), teil_eines_sets=True) for t in je_set[r["id"]]]
+        karten.append(k)
     return karten, gesamt
 
 
@@ -181,6 +211,9 @@ def artikel_json(r, user, offen, eigene, dokumente=(), rueckruf=(), gliederung=N
         "artikel_link": bool(rechte.zugang(user) and rechte.darf_artikel("lesen", r, user)),
         "dokumente": list(dokumente),
         "rueckruf": list(rueckruf),
+        # Hersteller-Sets (Schritt 21): an einer Set-Karte die Teile als Karten (liste), an einer Teil-Karte true.
+        "teile": [],
+        "teil_eines_sets": r.get("parent_item_id") is not None,
     }
 
 
