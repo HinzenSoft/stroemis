@@ -1043,7 +1043,7 @@ def pruefung_berichtigen(pid):
 @api.delete("/pruefungen/<int:pid>")
 @requires_folder(("pruefen", "verwalten"), "pid")
 def pruefung_verwerfen(pid):
-    """Den eigenen Entwurf verwerfen (prüfen) – oder als Materialwart eine liegen gebliebene Reservierung freigeben
+    """Den eigenen Entwurf verwerfen (prüfen) – oder als Materialwart eine liegen gebliebene Reservierung aufheben
     (verwalten am Artikel)."""
     pruefung.verwerfen(pid, _pruefer(), darf_freigeben=darf_artikel("verwalten", g.mat_artikel))
     return jsonify(ok=True)

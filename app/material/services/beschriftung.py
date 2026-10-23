@@ -67,7 +67,7 @@ AKTION = {
     "bild": "Bild geändert", "foto": "Foto geändert", "neue_version": "neue Version", "zurueckgezogen": "zurückgezogen",
     "aktiviert": "aktiviert", "deaktiviert": "deaktiviert", "lebensende": "Lebensende nachgezogen", "rollen": "Rollen",
     "begonnen": "Prüfung begonnen", "abgeschlossen": "Prüfung abgeschlossen", "verworfen": "Prüfung verworfen",
-    "reservierung_freigegeben": "Reservierung freigegeben", "geprueft": "geprüft", "freigeprueft": "freigeprüft",
+    "reservierung_freigegeben": "Reservierung aufgehoben", "geprueft": "geprüft", "freigeprueft": "freigeprüft",
     "gesperrt": "gesperrt", "ausgesondert": "ausgesondert", "anhang": "Anhang", "anhang_entfernt": "Anhang entfernt",
     "eroeffnet": "Durchgang eröffnet", "ausgenommen": "ausgenommen", "einbezogen": "wieder einbezogen",
     "geschlossen": "Durchgang abgeschlossen", "faelligkeit": "Fälligkeit vorgezogen", "umbenannt": "umbenannt",

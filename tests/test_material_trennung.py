@@ -798,7 +798,7 @@ def test_ablauf():
         r = ext.put(f"/api/material/pruefungen/{pid}", json={})
         assert r.status_code == 403 and "Prüffreigabe" in r.json["error"], r.get_json()
         assert ext.get(f"/api/material/pruefungen/{pid}").status_code == 200
-        # Der Entwurf bleibt – der Materialwart gibt die Reservierung frei.
+        # Der Entwurf bleibt – der Materialwart hebt die Reservierung auf.
         assert zeilen(app, "SELECT 1 FROM mat_inspection WHERE id = ? AND completed_at IS NULL", (pid,))
         assert w.delete(f"/api/material/pruefungen/{pid}", headers=H).status_code == 200
 

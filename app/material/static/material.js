@@ -262,7 +262,7 @@
                    bild: "Bild geändert", foto: "Foto geändert", neue_version: "neue Version", zurueckgezogen: "zurückgezogen",
                    aktiviert: "aktiviert", deaktiviert: "deaktiviert", lebensende: "Lebensende nachgezogen", rollen: "Rollen",
                    begonnen: "Prüfung begonnen", abgeschlossen: "Prüfung abgeschlossen", verworfen: "Prüfung verworfen",
-                   reservierung_freigegeben: "Reservierung freigegeben", geprueft: "geprüft", freigeprueft: "freigeprüft",
+                   reservierung_freigegeben: "Reservierung aufgehoben", geprueft: "geprüft", freigeprueft: "freigeprüft",
                    gesperrt: "gesperrt", ausgesondert: "ausgesondert", anhang: "Anhang", anhang_entfernt: "Anhang entfernt",
                    eroeffnet: "Durchgang eröffnet", ausgenommen: "ausgenommen", einbezogen: "wieder einbezogen",
                    geschlossen: "Durchgang abgeschlossen", faelligkeit: "Fälligkeit vorgezogen", umbenannt: "umbenannt",
@@ -1444,7 +1444,7 @@
           <td data-l="Prüfung" class="mat-k-halb">${esc(PRUEFART_KURZ[x.art] || x.art)}</td><td data-l="Prüfer" class="mat-k-halb">${esc(x.pruefer)}${x.eigen ? ' <span class="badge">du</span>' : ""}</td>
           <td data-l="begonnen">${esc(fmtZeit(x.begonnen_am))}</td>
           <td class="tabelle-aktionen">${x.eigen && x.artikel.darf && x.artikel.darf.pruefen ? `<a class="btn secondary small" href="/material/pruefung/${x.id}">Weiter prüfen</a>` : `<a class="btn secondary small" href="/material/pruefung/${x.id}">Ansehen</a>`}
-            ${!x.eigen && x.artikel.darf && x.artikel.darf.verwalten ? `<button class="btn secondary small" data-act="freigeben" data-id="${x.id}" data-wer="${esc(x.pruefer)}">Freigeben</button>` : ""}</td></tr>`).join("")}
+            ${!x.eigen && x.artikel.darf && x.artikel.darf.verwalten ? `<button class="btn secondary small" data-act="freigeben" data-id="${x.id}" data-wer="${esc(x.pruefer)}">Reservierung aufheben</button>` : ""}</td></tr>`).join("")}
         </tbody></table></section>` : "";
     }
     async function zeichnen() {
@@ -1479,8 +1479,8 @@
   }
 
   async function reservierungFreigeben(pid, wer, danach) {
-    if (!(await confirm(`Die offene Prüfung von ${wer} verwerfen und den Artikel freigeben? Ihre Befunde, Fotos und Anhänge gehen dabei verloren.`, "Freigeben"))) return;
-    try { await api(`${API}/pruefungen/${pid}`, { method: "DELETE" }); toast("Reservierung freigegeben"); await danach(); }
+    if (!(await confirm(`Die offene Prüfung von ${wer} verwerfen und die Reservierung aufheben? Ihre Befunde, Fotos und Anhänge gehen dabei verloren.`, "Reservierung aufheben"))) return;
+    try { await api(`${API}/pruefungen/${pid}`, { method: "DELETE" }); toast("Reservierung aufgehoben"); await danach(); }
     catch (e) { toast(e.message, true); }
   }
 
@@ -2369,8 +2369,7 @@
     // Personenzuordnung (Bauentwurf 6.4): sehen nur mit Grundrecht, zuordnen, ändern und lösen, wer den Artikel verwaltet.
     // Einem ausgesonderten Artikel ordnet niemand mehr jemanden zu; eine alte Zuordnung lässt sich noch lösen.
     const zu = a.zugeordnet;
-    const zuKnoepfe = darf.verwalten && (!aus || zu) ? `<div class="btn-row mat-zuordnung">${aus ? "" : `<button class="btn secondary small" type="button" data-act="zuordnen">${zu ? "Ändern" : "Zuordnen …"}</button>`}${zu ? '<button class="btn secondary small" type="button" data-act="zuordnung-loesen">Lösen</button>' : ""}</div>
-      <div class="help">${esc(ZUORDNUNG_HILFE)}</div>` : "";
+    const zuKnoepfe = darf.verwalten && (!aus || zu) ? `<div class="btn-row mat-zuordnung">${aus ? "" : `<button class="btn secondary small" type="button" data-act="zuordnen">${zu ? "Ändern" : "Zuordnen …"}</button>`}${zu ? '<button class="btn secondary small" type="button" data-act="zuordnung-loesen">Lösen</button>' : ""}</div>` : "";
     // Gemeldete Mängel (Phase 3 · L1): offene als Banner oben, erledigte eingeklappt unter „Prüfungen“. Melden darf jeder
     // mit Leserecht, außer am ausgesonderten Artikel; „Aussondern“ des Materialwarts ist nach einer reinen Mangelsperre
     // ausgegraut, bis ein Prüfer den Artikel geprüft hat (NUR_GEMELDET).
@@ -2402,11 +2401,10 @@
             ${darfMelden ? `<button class="btn secondary small" type="button"${schonGemeldet ? ' disabled aria-describedby="mat-schon-gemeldet"' : ' data-act="mangel"'}>Mangel melden …</button>` : ""}
             ${aussonderKnopf ? `<button class="btn secondary small" type="button"${a.mangel_nur_gemeldet ? ' disabled aria-describedby="mat-aussondern-hilfe"' : ' data-act="aussondern"'}>Aussondern</button>` : ""}</div>
           ${schonGemeldet ? `<p class="help mat-schon-gemeldet" id="mat-schon-gemeldet">Du hast am ${esc(S.fmtDate(a.mangel_eigen_offen))} schon gemeldet – ein Prüfer sieht es sich an.${darf.verwalten ? "" : " Ergänzungen bitte direkt an den Materialwart."}</p>` : ""}
-          ${sperrKnopf && darfMelden ? '<p class="help mat-melden-hilfe">Mangel melden: mit Beschreibung und Fotos, Materialwarte und Prüfer bekommen eine Mail. Sperren: ohne Meldung, mit Sperrgrund.</p>' : ""}
           ${aussonderKnopf && a.mangel_nur_gemeldet ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(NUR_GEMELDET)}</p>` : ""}
           ${a.entwurf ? `<p class="small">In Prüfung bei <strong>${esc(a.entwurf.pruefer)}</strong> seit ${esc(fmtZeit(a.entwurf.seit))}
             ${fremderEntwurf ? ` · <a href="/material/pruefung/${a.entwurf.id}">ansehen</a>` : ""}
-            ${fremderEntwurf && darf.verwalten ? ' · <button class="lnk" type="button" data-act="freigeben">Reservierung freigeben</button>' : ""}</p>` : ""}
+            ${fremderEntwurf && darf.verwalten ? ' · <button class="lnk" type="button" data-act="freigeben">Reservierung aufheben</button>' : ""}</p>` : ""}
           ${aus || darf.pruefen ? "" : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice small">${pruefHinweis(a)}</p>`
             : '<p class="small muted">Prüfen dürfen Prüfer mit Urkundennummer und Prüffreigabe (Häkchen „Prüfer“ in der Nutzerverwaltung, Urkundennummer im eigenen Profil, Prüffreigabe vom Materialwart).</p>'}
           ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang ${a.durchgang.sichtbar ? `<a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>` : `„${esc(a.durchgang.titel)}“`}.</p>` : ""}
@@ -3919,7 +3917,7 @@
     let hinweis = "";                     // HTML – nur der Hinweis zum Prüferwerden enthält einen Link
     if (a.lock_state === "ausgesondert") hinweis = "Ein ausgesonderter Artikel wird nicht mehr geprüft.";
     else if (!darf.pruefen) hinweis = pruefHinweis(a);
-    else if (a.entwurf) hinweis = esc(`In Prüfung bei ${a.entwurf.pruefer} seit ${fmtZeit(a.entwurf.seit)}.${darf.verwalten ? " Eine liegen gebliebene Reservierung gibst du in der Artikelansicht frei." : " Eine liegen gebliebene Reservierung gibt der Materialwart frei."}`);
+    else if (a.entwurf) hinweis = esc(`In Prüfung bei ${a.entwurf.pruefer} seit ${fmtZeit(a.entwurf.seit)}.${darf.verwalten ? " Eine liegen gebliebene Reservierung hebst du in der Artikelansicht auf." : " Eine liegen gebliebene Reservierung hebt der Materialwart auf."}`);
     else if (!a.formular) hinweis = "Für dieses Produkt gibt es kein aktives Prüfformular – weder am Produkt noch in seiner Kategorie. Die Material-Verwaltung legt es im Katalog an.";
     const ld = a.lebensdauer && a.lebensdauer.festgeschrieben ? { ende: a.lebensdauer.ende, rest_tage: a.lebensdauer.rest_tage, erreicht: a.lebensdauer.rest_tage <= 0 } : null;
     inhalt.innerHTML = `${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
@@ -4393,7 +4391,7 @@
     function kopf() {
       const a = pr.artikel;
       const knoepfe = [];
-      if (pr.entwurf && !pr.eigen && darfHier("verwalten")) knoepfe.push('<button class="btn secondary small" data-act="freigeben">Reservierung freigeben</button>');
+      if (pr.entwurf && !pr.eigen && darfHier("verwalten")) knoepfe.push('<button class="btn secondary small" data-act="freigeben">Reservierung aufheben</button>');
       if (darfBerichtigen()) {
         knoepfe.push(pr.berichtigbar.ok ? '<button class="btn secondary small" data-act="berichtigen">Berichtigen</button>'
           : `<button class="btn secondary small" type="button" disabled title="${esc(pr.berichtigbar.grund)}">Berichtigen</button>`);
@@ -5129,7 +5127,7 @@
       } else if (a.zustand === "in_pruefung") {
         zustand = `<span class="badge">in Prüfung</span>${a.entwurf ? ` <span class="small">bei ${esc(a.entwurf.pruefer)} seit ${esc(fmtZeit(a.entwurf.seit))}</span>` : ""}`;
         if (a.entwurf && a.entwurf.eigen && ad.pruefen) knopf = `<a class="btn secondary small" href="/material/pruefung/${a.entwurf.id}">Weiter prüfen</a>`;
-        else if (a.entwurf && ad.verwalten && d.offen) knopf = `<button type="button" class="btn secondary small" data-act="freigeben" data-id="${a.entwurf.id}" data-wer="${esc(a.entwurf.pruefer)}">Freigeben</button>`;
+        else if (a.entwurf && ad.verwalten && d.offen) knopf = `<button type="button" class="btn secondary small" data-act="freigeben" data-id="${a.entwurf.id}" data-wer="${esc(a.entwurf.pruefer)}">Reservierung aufheben</button>`;
       } else {
         zustand = '<span class="muted">offen</span>';
         if (sichtbar && d.offen && ad.pruefen && a.lock_state !== "ausgesondert") knopf = `<a class="btn secondary small" href="/material/artikel/${a.id}/pruefung/neu?durchgang=${d.id}">Prüfen</a>`;
@@ -6424,6 +6422,7 @@
     const fotos = [];
     dialog(`<h2>Mangel melden – ${esc(a.inventory_no)}</h2>
       <p class="mat-mangel-warnung"><strong>Mit dem Melden wird der Artikel sofort gesperrt.</strong> ${BEISEITE} Freigeben kann ihn nur ein Prüfer nach einer Prüfung.</p>
+      <p class="help">Mit Beschreibung und Fotos – Materialwarte und Prüfer bekommen eine Mail.</p>
       <label for="mg-text">Was ist dir aufgefallen? <span class="mat-pflicht" aria-hidden="true">*</span></label>
       <textarea id="mg-text" rows="5" maxlength="${MANGEL_TEXT_MAX}" required aria-required="true" aria-describedby="mg-text-fehler"
         placeholder="Was ist passiert, was siehst du – und wo liegt er jetzt?"></textarea>

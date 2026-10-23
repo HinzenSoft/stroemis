@@ -1413,7 +1413,7 @@ def test_durchgang():
         # Abschließen geht erst, wenn alles geprüft oder ausgenommen ist.
         r = w.post(f"/api/material/durchgaenge/{rid}/abschliessen", json={})
         assert r.status_code == 409 and "offen" in r.json["error"], r.get_json()
-        # Eine liegen gebliebene Reservierung gibt der Materialwart frei – nicht die andere Prüferin,
+        # Eine liegen gebliebene Reservierung hebt der Materialwart auf – nicht die andere Prüferin,
         # nicht die Führungskraft.
         assert p2.delete(f"/api/material/pruefungen/{pid_a}", headers=H).status_code == 403
         assert k["fuehrung"].delete(f"/api/material/pruefungen/{pid_a}", headers=H).status_code == 403
