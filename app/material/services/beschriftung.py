@@ -65,7 +65,7 @@ FELD = {
     "lock_cause": "Sperrursache", "teil": "Teil", "verbleib": "Verbleib", "gesamtergebnis": "Gesamtergebnis",
     "freigegeben": "freigegeben", "gruende": "Gründe", "lauf": "Set-Prüfung Nr.", "set_lauf_id": "Set-Prüfung Nr.",
     "set_grund": "Anlass der Set-Sperre", "bestandteil": "Bestandteil", "bestaetigt": "Austausch bestätigt",
-    "ersetzt_teil": "ersetzt Teil", "austausch": "Austausch laut Hersteller", "hinweis": "Hinweis",
+    "ersetzt_teil": "ersetzt Teil", "austausch": "Austausch laut Hersteller möglich", "hinweis": "Hinweis",
     "geprueft": "abgeschlossene Prüfungen",
     # Sets, Teil 2 (L2b): vorhandenen Artikel einsetzen, „Bestandteil ersetzt“
     "vorhanden": "vorhandener Artikel", "bemerkung": "Bemerkung",

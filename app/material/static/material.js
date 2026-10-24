@@ -276,7 +276,7 @@
     lock_cause: "Sperrursache", teil: "Teil", verbleib: "Verbleib", gesamtergebnis: "Gesamtergebnis",
     freigegeben: "freigegeben", gruende: "Gründe", lauf: "Set-Prüfung Nr.", set_lauf_id: "Set-Prüfung Nr.",
     set_grund: "Anlass der Set-Sperre", bestandteil: "Bestandteil", bestaetigt: "Austausch bestätigt",
-    ersetzt_teil: "ersetzt Teil", austausch: "Austausch laut Hersteller", hinweis: "Hinweis",
+    ersetzt_teil: "ersetzt Teil", austausch: "Austausch laut Hersteller möglich", hinweis: "Hinweis",
     geprueft: "abgeschlossene Prüfungen",
     // Sets, Teil 2 (L2b): vorhandenen Artikel einsetzen, „Bestandteil ersetzt“
     vorhanden: "vorhandener Artikel", bemerkung: "Bemerkung",
@@ -4495,12 +4495,12 @@
           <p class="help">${esc(HILFE_EINZELN)}</p>
           <p class="help">Angelegte Sets behalten die Stückliste, mit der sie angelegt wurden – eine Änderung gilt für neue Sets.</p></details>
         <div class="mat-bt-liste">${pos.map((x, i) => `<fieldset class="mat-bt" data-i="${i}"><legend>Position ${i + 1}</legend>
-          <div class="mat-bt-kopf"><label class="inline"><input type="checkbox" class="bt-einzeln" data-i="${i}" ${x.einzeln ? "checked" : ""}> einzeln geführt</label>
+          <div class="mat-bt-kopf"><label class="inline"><input type="checkbox" class="bt-einzeln" data-i="${i}" ${x.einzeln ? "checked" : ""}> Einzeln geführt</label>
             <div class="btn-row"><button class="btn secondary small" type="button" data-bt="hoch" data-i="${i}" aria-label="Position ${i + 1} nach oben" ${i ? "" : "disabled"}>↑</button><button class="btn secondary small" type="button" data-bt="runter" data-i="${i}" aria-label="Position ${i + 1} nach unten" ${i < pos.length - 1 ? "" : "disabled"}>↓</button><button class="btn secondary small" type="button" data-bt="weg" data-i="${i}" aria-label="Position ${i + 1} entfernen">Entfernen</button></div></div>
           ${x.einzeln ? `${x.produkt ? '<p class="mat-bt-label">Katalogprodukt</p>' : `<label for="bt-${i}-q">Katalogprodukt</label>`}${produktWahl(x, i)}` : ""}
           <div class="field-row mat-bt-felder"><div><label for="bt-${i}-bez">Bezeichnung${x.einzeln ? " (leer: Produktname)" : ""}</label><input type="text" id="bt-${i}-bez" class="bt-bez" maxlength="${g.bezeichnung}" value="${esc(x.bezeichnung || "")}" ${TASTATUR_NAME}></div>
             <div><label for="bt-${i}-anzahl">Anzahl</label><input type="number" id="bt-${i}-anzahl" class="bt-anzahl" min="1" max="${g.anzahl}" value="${esc(String(x.anzahl || 1))}"></div>
-            <div><label for="bt-${i}-austausch">Austausch laut Hersteller</label><select id="bt-${i}-austausch" class="bt-austausch">${Object.entries(AUSTAUSCH).map(([w, t]) => `<option value="${w}" ${(x.austausch || "nicht_belegt") === w ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div></div>
+            <div><label for="bt-${i}-austausch">Austausch laut Hersteller möglich</label><select id="bt-${i}-austausch" class="bt-austausch">${Object.entries(AUSTAUSCH).map(([w, t]) => `<option value="${w}" ${(x.austausch || "nicht_belegt") === w ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div></div>
           <p class="error mat-bt-fehler" hidden></p></fieldset>`).join("")}</div>
         ${pos.length ? "" : '<p class="mat-leer">Noch keine Bestandteile.</p>'}
         <div class="btn-row mat-bt-neu"><button class="btn secondary small" type="button" data-bt="neu" ${pos.length >= g.positionen ? "disabled" : ""}><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Bestandteil<span class="k-anlegen"> anlegen</span></span></button>
@@ -4660,11 +4660,11 @@
   function stuecklisteHtml(p, k) {
     const liste = p.bestandteile || [];
     return `<section class="section mat-stueckliste"><h2>Stückliste</h2>
-      ${liste.length ? `<table class="list mat-tabelle mat-karten"><thead><tr><th>Bestandteil</th><th>Anzahl</th><th>einzeln geführt</th><th>Austausch laut Hersteller</th></tr></thead><tbody>
+      ${liste.length ? `<table class="list mat-tabelle mat-karten"><thead><tr><th>Bestandteil</th><th>Anzahl</th><th>Einzeln geführt</th><th>Austausch laut Hersteller möglich</th></tr></thead><tbody>
         ${liste.map((z) => `<tr><td data-l="Bestandteil" class="mat-k-titel"><strong>${esc(z.bezeichnung)}</strong>
             ${z.produkt ? `<div class="small"><a href="/material/katalog/produkt/${z.produkt.id}">${nameHtml(z.produkt)}</a>${zusatzHtml(z.produkt)}${artNrKurz(z.produkt.article_no)} ${demoMarke(z.produkt.demo)}</div>` : ""}</td>
-          <td data-l="Anzahl" class="mat-k-halb">${z.anzahl}</td><td data-l="einzeln geführt" class="mat-k-halb">${z.einzeln ? "ja – eigener Artikel je Stück" : '<span class="muted">nein</span>'}</td>
-          <td data-l="Austausch laut Hersteller">${esc(z.austausch_text || AUSTAUSCH[z.austausch] || z.austausch)}</td></tr>`).join("")}</tbody></table>`
+          <td data-l="Anzahl" class="mat-k-halb">${z.anzahl}</td><td data-l="Einzeln geführt" class="mat-k-halb">${z.einzeln ? "ja – eigener Artikel je Stück" : '<span class="muted">nein</span>'}</td>
+          <td data-l="Austausch laut Hersteller möglich">${esc(z.austausch_text || AUSTAUSCH[z.austausch] || z.austausch)}</td></tr>`).join("")}</tbody></table>`
         : `<p class="mat-warn">Noch keine Stückliste – ohne sie lässt sich kein Set dieses Produkts anlegen.</p>`}
       <p class="help">Beim Anlegen eines Sets wird jedes einzeln geführte Stück ein eigener Artikel (Teil) mit Inventarnummer und Etikett. Angelegte Sets behalten ihre Stückliste.</p>
       ${k ? '<button class="btn secondary small" data-act="stueckliste">Stückliste bearbeiten</button>' : ""}</section>`;

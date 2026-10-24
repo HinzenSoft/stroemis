@@ -5780,6 +5780,9 @@ Dublettenschlüssel (Hersteller | Modell | Artikelnummer, UNIQUE) bleibt, kein S
 - Untermenü „Export“ bzw. „Export / Import“ im Ordnerkopf: „Jahresbericht“ heißt jetzt **„Jahresbericht exportieren“**
   (wie „Artikelliste exportieren“ und „Protokolle exportieren“), „Bestandsliste importieren …“ jetzt **„Bestandsliste
   importieren“** – der Eintrag öffnet eine Seite, keinen Dialog. Statischer Test in tests/test_material_import.py.
+- Stückliste (Produktseite, Reiter „Bestandteile“ im Produkt-Dialog, Journal/Lebenslauf): Spalte bzw. Feld **„Einzeln
+  geführt“** (vorher „einzeln geführt“) und **„Austausch laut Hersteller möglich“** (vorher „Austausch laut Hersteller“),
+  gleichlautend in material.js und beschriftung.py (Wunsch des Nutzers, 24.10.2026).
 
 ## Nachbesserung zu Schritt 18 nach der Sicherheitsprüfung (22.10.2026)
 
