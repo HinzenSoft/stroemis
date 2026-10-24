@@ -490,7 +490,8 @@ def test_oberflaeche_statisch():
                    "<strong>${nameHtml(pr.produkt)}</strong>${zusatzHtml(pr.produkt)}${artNrHtml(",
                    '<a href="/material/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}'
                    '${artNrHtml(p.article_no)}',
-                   '<strong>${nameHtml(p)}</strong>${zusatzHtml(p)} <span class="muted">${p.article_no ? `<span class="mat-ganz">${esc(p.article_no)}</span> · ` : ""}',
+                   # Produktsuche (24.10.2026): Kategorie als Trennkopf statt in jeder Zeile.
+                   '<strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${p.article_no ? ` <span class="muted"><span class="mat-ganz">${esc(p.article_no)}</span></span>` : ""}',
                    # Hinweis „Schon vergeben“ (Produkt- und Meldedialog) – bis zur Prüfung vom 18.10.2026 der ganze
                    # Name samt Zusatz im roten Link (esc(p.name)).
                    'target="_blank" rel="noopener">${nameHtml(p)}</a>${zusatzHtml(p)}${p.article_no ? ` <span class="mat-ganz">('):

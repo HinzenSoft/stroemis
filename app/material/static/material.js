@@ -2147,7 +2147,9 @@
      Alle Treffer in einer scrollbaren Liste unter dem Suchfeld, je 50 vom Server; rückt das Ende der Liste ins Bild,
      kommen die nächsten. Eine Antwort zu einer älteren Eingabe zählt nicht mehr (Zähler je Liste).
      Je Treffer zwei getrennte Flächen nebeneinander: das Foto (öffnet es groß, wählt nichts) und der Knopf mit dem
-     Namen (wählt das Produkt) – ein Link in einem Knopf wäre kein gültiges HTML, und der Tipp gehörte beiden. */
+     Namen (wählt das Produkt) – ein Link in einem Knopf wäre kein gültiges HTML, und der Tipp gehörte beiden.
+     Die Treffer kommen nach Kategorie sortiert; vor jeder neuen Kategorie steht eine Trennlinie mit ihrem Namen
+     (auch über die Seitengrenze hinweg), der Name steht deshalb nicht mehr in jeder Zeile (Wunsch vom 24.10.2026). */
   function trefferLeeren(ziel) {
     ziel._lauf = (ziel._lauf || 0) + 1;
     ziel.innerHTML = "";
@@ -2160,14 +2162,21 @@
     let gesamt = 0;
     let seite = 0;
     let laedt = false;
+    let kategorie = null;
     ziel.scrollTop = 0;
     const zeile = (p, i) => `<div class="mat-treffer-produkt">${produktFoto(p)}<button type="button" class="mat-treffer-wahl" data-i="${i}">
-      <strong>${nameHtml(p)}</strong>${zusatzHtml(p)} <span class="muted">${p.article_no ? `<span class="mat-ganz">${esc(p.article_no)}</span> · ` : ""}${esc(p.category_name || "")}</span>${demoMarke(p.demo)}</button></div>`;
+      <strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${p.article_no ? ` <span class="muted"><span class="mat-ganz">${esc(p.article_no)}</span></span>` : ""}${demoMarke(p.demo)}${setMarke(p.is_set)}</button></div>`;
+    const mitKopf = (p, i) => {
+      const k = p.category_name || "";
+      const kopf = k !== kategorie ? `<div class="mat-treffer-kat">${esc(k || "ohne Kategorie")}</div>` : "";
+      kategorie = k;
+      return kopf + zeile(p, i);
+    };
     async function mehr() {
       if (laedt || (seite && liste.length >= gesamt)) return;
       laedt = true;
       try {
-        const d = await api(`${API}/produkte?q=${encodeURIComponent(q)}&pro_seite=50&seite=${seite + 1}`);
+        const d = await api(`${API}/produkte?q=${encodeURIComponent(q)}&sort=kategorie&pro_seite=50&seite=${seite + 1}`);
         if (lauf !== ziel._lauf) return;
         seite += 1;
         gesamt = d.gesamt;
@@ -2176,7 +2185,7 @@
         if (!liste.length) { ziel.innerHTML = leerHtml; return; }
         const fuss = $(".mat-treffer-fuss", ziel);
         if (fuss) fuss.remove();
-        ziel.insertAdjacentHTML("beforeend", d.produkte.map((p, i) => zeile(p, start + i)).join("")
+        ziel.insertAdjacentHTML("beforeend", d.produkte.map((p, i) => mitKopf(p, start + i)).join("")
           + `<p class="help mat-treffer-fuss">${liste.length < gesamt ? `${liste.length} von ${gesamt} Treffern – weiter scrollen …` : plural(gesamt, "Treffer", "Treffer")}</p>`);
       } catch (e) {
         if (lauf === ziel._lauf) ziel.innerHTML = `<p class="error">${esc(e.message)}</p>`;
@@ -3805,7 +3814,7 @@
     function waehlen(p) {
       produkt = p;
       $("#an-produkt").hidden = false;
-      $("#an-produkt").innerHTML = `${produktFoto(p)}<strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrKurz(p.article_no)} ${demoMarke(p.demo)}
+      $("#an-produkt").innerHTML = `${produktFoto(p)}<strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrKurz(p.article_no)} ${demoMarke(p.demo)}${setMarke(p.is_set)}
         <span class="mat-art">${esc(MATERIALART[p.material_kind])}</span> <button class="lnk" type="button" id="an-anders">anderes Produkt</button>`;
       trefferLeeren($("#an-treffer"));
       $("#an-q").value = "";

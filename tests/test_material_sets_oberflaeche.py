@@ -631,6 +631,19 @@ def test_oberflaeche_l2b_nachbesserung_statisch():
     print("Oberfläche L2b, Nachbesserung (statisch) bestanden.")
 
 
+def test_produktsuche_set_und_kategorie_statisch():
+    """Produktsuche beim Anlegen (24.10.2026): Set-Marke wie im Katalog, Treffer nach Kategorie mit leisem Trennkopf."""
+    js = lies("app/material/static/material.js")
+    css = lies("app/material/static/material.css")
+    such = funktion(js, "produktTreffer")
+    assert "&sort=kategorie&" in such
+    assert "${demoMarke(p.demo)}${setMarke(p.is_set)}</button>" in such
+    assert 'k !== kategorie ? `<div class="mat-treffer-kat">${esc(k || "ohne Kategorie")}</div>` : ""' in such
+    # Der Kopf trägt die Kategorie – die Zeile nicht mehr.
+    assert "esc(p.category_name)" not in such
+    assert ".mat-treffer-kat { flex: 0 0 auto;" in css and ".mat-treffer-kat:first-child { border-top: 0; }" in css
+    print("Produktsuche mit Set-Marke und Kategorie-Köpfen (statisch) bestanden.")
+
 if __name__ == "__main__":
     test_werte_wie_server()
     test_oberflaeche_statisch()
@@ -642,3 +655,4 @@ if __name__ == "__main__":
     test_oberflaeche_l2b_statisch()
     test_vertrag_l2b()
     test_oberflaeche_l2b_nachbesserung_statisch()
+    test_produktsuche_set_und_kategorie_statisch()

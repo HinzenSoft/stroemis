@@ -5783,6 +5783,11 @@ Dublettenschlüssel (Hersteller | Modell | Artikelnummer, UNIQUE) bleibt, kein S
 - Stückliste (Produktseite, Reiter „Bestandteile“ im Produkt-Dialog, Journal/Lebenslauf): Spalte bzw. Feld **„Einzeln
   geführt“** (vorher „einzeln geführt“) und **„Austausch laut Hersteller möglich“** (vorher „Austausch laut Hersteller“),
   gleichlautend in material.js und beschriftung.py (Wunsch des Nutzers, 24.10.2026).
+- Produktsuche (Artikel anlegen, Produkt am Artikel ändern, Stückliste, Meldung zuordnen, Nacharbeit des
+  Bestandsimports): Hersteller-Sets tragen die Marke „Set“ wie in der Katalogliste – in jedem Treffer und beim Anlegen
+  am gewählten Produkt (Wunsch des Nutzers, 24.10.2026).
+- Dieselbe Produktsuche sortiert die Treffer nach Kategorie; vor jeder Kategorie steht eine Trennlinie mit ihrem Namen in
+  kleiner grauer Schrift, die Kategorie steht nicht mehr in jeder Zeile (Wunsch des Nutzers, 24.10.2026).
 
 ## Nachbesserung zu Schritt 18 nach der Sicherheitsprüfung (22.10.2026)
 

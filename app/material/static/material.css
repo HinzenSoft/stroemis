@@ -248,6 +248,10 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 /* Der Fokusrahmen nach innen: Die Liste rollt (overflow) und schnitte ihn links und rechts ab. */
 .mat-treffer :is(.mat-treffer-wahl, .mat-bildlink):focus-visible { outline-offset: -3px; box-shadow: none; }
 .mat-treffer .help { padding: 6px 10px; margin: 0; }
+/* Kategorie-Kopf in der Produktsuche: Trennlinie mit dem Namen, leise (Wunsch vom 24.10.2026). */
+.mat-treffer-kat { flex: 0 0 auto; padding: 8px 10px 3px; border-top: 2px solid var(--linie); background: var(--weiss);
+  color: var(--grau); font-size: var(--fs-klein); font-weight: 600; }
+.mat-treffer-kat:first-child { border-top: 0; }
 .mat-gewaehlt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px; margin-top: 6px;
   border: 1px solid var(--linie); border-left: 4px solid var(--ok); }
 /* Produktfoto der Produktwahl (material.js, produktFoto): antippbar wie jedes Foto im Modul (Großansicht, Zeiger mit
