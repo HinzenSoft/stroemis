@@ -19,6 +19,7 @@ für sich deploybar.
 | Phase 4 · 2 – Sets mit Komponenten | Hersteller-Sets: Stückliste im Katalog (auch in der Katalogdatei), Set-Artikel mit Teil-Artikeln, Set-Status, -Fälligkeit und -Lebensende, Listen mit der Set-Zeile, Verschieben und Zuordnen mit allen Teilen, Meine PSA; Sperr-Kaskade, Set prüfen mit Set-Protokoll, Austausch, Aussondern mit Wahl je Teil, Oberfläche | geliefert 23.10.2026 (c5e1b06), freigegeben 23.10.2026 |
 | Phase 4 · 2b – Sets, Teil 2 | Vorhandenen Artikel als Teil einsetzen (mit Auswahl, auch über die bisherige Inventarnummer), Set auflösen, „Bestandteil ersetzt“, Prüfumfang eines nie geprüften Sets; dazu (KERN Z) Zahlen, CSV-Spalten, gebündelte Mails | geliefert 23.10.2026 (Schema bleibt 21) – wartet auf Freigabe |
 | Feintuning nach dem Kommentar-Dokument | Produkt am Artikel ändern bis zur ersten Prüfung (Dialog „Bearbeiten“, Weg aus „aus dem Bestand wählen“), Jahresbericht: ausgesondertes Set als eine Zeile, weitergeführte Teile mit eigener Sperre | gebaut 23.10.2026 (Schema bleibt 21) – wartet auf Freigabe |
+| Katalogimport im Hintergrund | Probelauf und Übernehmen laufen als Auftrag im Hintergrund (202, Stand per Abfrage, Bericht wie bisher), „Übernehmen“ ohne neuen Upload, höchstens ein Import gleichzeitig, Abbruch bei Neustart erkannt, Hinweis auf der Katalogseite | gebaut 24.10.2026 (kein Schemaschritt, Schema bleibt 21) – wartet auf Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4153,6 +4154,161 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Katalogimport im Hintergrund (Wunsch des Nutzers, 24.10.2026)
+
+Anlass: Die kombinierte Katalogdatei (1,13 GB, 1 428 Produkte, 1 905 Dateien) bekam beim „Übernehmen“ über die
+Oberfläche einen 504 vom Reverse-Proxy – der Import lief länger, als der Proxy auf die Antwort wartet. Wunsch: „Baue den
+Hintergrundimport und deploye ihn“ (auf dev). Entschieden: Probelauf **und** Übernehmen laufen im Hintergrund; die
+Anfrage speichert nur die Datei und antwortet sofort; der Dialog zeigt den Fortschritt und am Ende den Bericht wie
+bisher. Kein Schemaschritt (Schema bleibt 21): Der Zustand eines Auftrags liegt als JSON-Datei unter `DATA_DIR`.
+
+### Ablauf
+
+- **Start**: `POST /api/material/katalog/import` (dieselbe Route, dieselben Rechte – Material-Verwaltung –, dieselbe
+  Größengrenze `UPLOAD_GRENZEN` von 2 GB + 1 MB, ohne Datei weiter 400) legt die Datei unter
+  `DATA_DIR/katalog-import/<kennung>.datei` ab (Ordner 0700, Dateien 0600), schreibt den Auftrag
+  `<kennung>.json` („wartet“) und antwortet **202** mit dem Auftrag. Die Kennung ist zufällig (32 Hex-Zeichen,
+  `secrets.token_hex(16)`) und wird gegen dieses Muster geprüft, bevor sie in einen Pfad kommt; kein Pfad stammt aus
+  einer Eingabe (der Dateiname dient nur als Anzeige „quelle“, wie bisher auf 80 Zeichen gekürzt).
+- **Lauf**: ein Thread im Arbeitsprozess, der die Anfrage angenommen hat, ruft `importer.datei_importieren(…,
+  trocken=…)` auf – in einem Anfragekontext mit dem Konto, das gestartet hat: Journal (`mat_audit`: Kennung und Name)
+  und Bearbeiter stehen da wie beim synchronen Import. Phasen über den neuen optionalen Rückruf des Importers
+  (`fortschritt`): **Datei prüfen** (n von m Dateien), **Probedurchgang**, **Dateien ablegen** (n von m), **Datenbank
+  schreiben**. Der Probelauf endet nach dem Probedurchgang. Der Zustand wird höchstens einmal je Sekunde und bei jedem
+  Phasenwechsel geschrieben, das **Lebenszeichen** alle 5 s; jede Datei atomar (Zwischendatei, dann `os.replace`).
+- **Ende**: Bericht nach `<kennung>.bericht.json` (das bisherige Format, unverändert), Zustand **fertig** (Bericht ohne
+  Fehler) oder **fehlgeschlagen** (Bericht mit Fehlern – auch eine Datei, die sich nicht lesen lässt: synchron war
+  das ein 400, jetzt ein Bericht mit diesem einen Fehler; ein unerwarteter Fehler ergibt „Der Import brach mit einem
+  unerwarteten Fehler ab. Gespeichert wurde nichts; Einzelheiten stehen im Protokoll des Servers.“ – ohne Pfad), dann
+  ist die hochgeladene Datei weg und die Sperre frei.
+- **Übernehmen ohne neuen Upload**: Nach einem Probelauf ohne Fehler, der etwas zu übernehmen fand (Änderungen oder
+  Hinweise – dieselbe Regel, nach der der Dialog den Knopf zeigt), bleibt die Datei **eine Stunde** liegen.
+  `POST …/katalog/import/<kennung>/uebernehmen` startet damit den echten Lauf als neuen Auftrag (die Datei wandert zu
+  ihm, der Probelauf vermerkt `uebernommen_in`). Nur wer den Probelauf gestartet hat; danach oder nach der Stunde 409
+  („Die Datei des Probelaufs liegt nicht mehr bereit … Bitte die Datei noch einmal wählen.“).
+- **Höchstens ein Katalogimport gleichzeitig, app-weit**: Dateisperre `DATA_DIR/katalog-import/sperre` (`fcntl.flock`,
+  wie die Videopflege). Sie gehört dem Thread des Laufs und endet mit ihm – auch mit seinem Prozess. Ein zweiter Start
+  (Probelauf oder Übernehmen, auch aus dem anderen Arbeitsprozess) bekommt **409** mit dem laufenden Auftrag
+  („Es läuft schon ein Katalogimport von …“). Der Inhalt der Sperrdatei (Kennung, PID, Zeit) ist nur ein Hinweis;
+  kaputte Sperr- und Zustandsdateien stören nicht (ein unlesbarer Zustand gilt als nicht da und ist nach einer Stunde
+  weg). Die Kommandozeile (`material import-catalog`) bleibt synchron, unverändert und ohne Sperre.
+- **Neustart, Deploy, Absturz**: Endet der Prozess eines Laufs, steht im Zustand noch „wartet“ oder „laeuft“. Als
+  **abgebrochen** gilt er, wenn niemand die Sperre hält **und** sein Lebenszeichen älter als 30 s ist (beides – damit
+  weder ein Dateisystem, auf dem flock nicht hält, noch ein langer Schritt einen lebenden Lauf für tot erklärt). Das
+  stellt die nächste Abfrage fest (Dialog, Katalogseite), der nächste Start oder der Tageslauf – jeweils mit der Sperre
+  in der Hand: Zustand „abgebrochen“ mit Grund, hochgeladene Datei weg, Sperre frei. In den 30 s nach dem Ende eines
+  Prozesses bekommt ein neuer Start noch 409. Die **Datenbank** schreibt der Import in einer Transaktion – nach einem
+  Abbruch ist dort nichts halb geschrieben (getestet mit SIGKILL mitten in der Schreibtransaktion). **Dateien**: Jede
+  Datei, die ein echter Lauf unter `media/material` ablegt, steht sofort in `<kennung>.abgelegt`; nach einem Abbruch
+  gehen Produktbilder weg, die keine Zeile nennt (`mat_product.image`), und Dokumentdateien über
+  `katalog._datei_freigeben` (entfernt nur, was kein Dokument nennt). Hatte der Lauf noch committet, bleiben seine
+  Dateien. Grenze: Die eine Datei, die beim Ende des Prozesses gerade abgelegt wurde, steht noch nicht im Protokoll –
+  ein Produktbild mit Zufallsnamen bleibt dann als harmlose Waise liegen (nie verwendet), bei einem Dokument nur die
+  Zwischendatei `.neu-…`, die der Start der App nach einem Tag aufräumt (Schritt 18); die fertig abgelegte
+  Dokumentdatei heißt nach ihrem Inhalt und wird beim nächsten Lauf wiederverwendet. Ersetzte Produktbilder, die erst
+  nach dem Commit gelöscht werden, bleiben bei einem Abbruch genau dazwischen liegen.
+- **Aufräumen**: hochgeladene Datei sofort nach dem Ende (außer für „Übernehmen“, dann nach einer Stunde); Zustände und
+  Berichte nach **7 Tagen**; Dateien ohne Zustand und liegengebliebene Zwischendateien, sobald niemand importiert. Das
+  geschieht bei jedem Start eines Imports, bei der Abfrage der Katalogseite (`…/import/aktuell`) und im Tageslauf –
+  nicht beim Start der App (die Startschritte laufen in der Migration; ein toter Auftrag fällt dort ohnehin bei der
+  ersten Abfrage auf).
+- **Personendaten**: Der Bericht nennt wie bisher keine Person. Der Zustand nennt den Namen dessen, der gestartet hat
+  (wie das Journal, nie die E-Mail), und seine Kontokennung (für „Übernehmen“; die Schnittstelle gibt sie nicht aus) –
+  7 Tage lang.
+
+### Oberfläche
+
+- **Dialog „Katalog importieren …“** (material.js, `katalogImportDialog`): Datei wählen oder hineinziehen → Hochladen
+  mit Fortschrittsbalken („45 % · 12,0 MB von 26,1 MB“, XMLHttpRequest wegen des Upload-Fortschritts) → Stand des
+  Auftrags alle 2,5 s („Probelauf: Datei prüfen – 120 von 1 905 …“ mit Balken, darunter „gestartet … von … · Datei“)
+  → am Ende der Bericht wie bisher. „Übernehmen“ (rot, die eine Hauptaktion) erscheint, wenn der Probelauf
+  übernehmbar ist, und startet den echten Lauf ohne neuen Upload; danach derselbe Fortschritt und der Bericht,
+  „Katalog übernommen“, Neuladen beim Schließen wie bisher. „Schließen“ (grau) jederzeit: Der Import läuft auf dem
+  Server weiter – nur während des Hochladens bricht Schließen das Hochladen ab („Hochladen abgebrochen – es wurde
+  nichts importiert.“). Ohne Verbindung (Neustart, Deploy) fragt der Dialog weiter nach, mit wachsender Pause bis 15 s.
+  409 beim Start: die Meldung und „Stand des laufenden Imports ansehen“.
+- **Hinweis auf der Katalogseite** (nur Material-Verwaltung) über der Suchzeile: ein laufender Import („Katalogimport
+  läuft – Probelauf: Dateien ablegen – 12 von 40 …“, alle 5 s neu) oder einer, der vor höchstens einem Tag endete
+  („Probelauf fertig – noch nicht übernommen.“, „Katalogimport übernommen.“, „… abgebrochen.“, „… mit Fehlern beendet
+  – nichts gespeichert.“), mit Name, Datei und Zeit. „Stand ansehen“ bzw. „Bericht ansehen“ öffnet den Dialog mit
+  diesem Auftrag (dort auch „Übernehmen“, wenn man selbst den Probelauf gestartet hat), „Ausblenden“ blendet einen
+  beendeten in diesem Browser aus. Textverweise wie bei „Erinnerungsmails“ auf der Übersicht, keine Piktogramme.
+
+### Schnittstelle
+
+| Aufruf | Recht | Antwort |
+| --- | --- | --- |
+| `POST /api/material/katalog/import` (`file`, `trocken`: Vorgabe `1`) | Katalog | **202** `auftrag`; 409 `error` + `auftrag` (der laufende); 400 ohne Datei; 500 ohne Platz zum Zwischenspeichern (ohne Pfad) |
+| `GET /api/material/katalog/import/<kennung>` | Katalog (jedes Konto der Material-Verwaltung sieht jeden Auftrag) | `auftrag` mit `bericht` (null, solange er läuft, und bei „abgebrochen“); unbekannte oder unpassende Kennung 404 |
+| `POST /api/material/katalog/import/<kennung>/uebernehmen` | Katalog, nur wer den Probelauf gestartet hat (sonst 403) | **202** `auftrag` (der echte Lauf, `aus` = Probelauf); 409 belegt, schon übernommen, nicht übernehmbar oder Datei nicht mehr da; 404 unbekannt |
+| `GET /api/material/katalog/import/aktuell` | Katalog | `auftrag` (ohne Bericht): der neueste, wenn er läuft oder vor höchstens 24 h endete, sonst null |
+
+`auftrag`: `id`, `zustand` (`wartet`, `laeuft`, `fertig`, `fehlgeschlagen`, `abgebrochen`), `trocken`, `quelle`,
+`groesse` (Bytes), `von` (Name), `eigener`, `gestartet`, `beendet`, `lebenszeichen` (ISO-Zeit, UTC), `phase`
+(`pruefen`, `probe`, `ablegen`, `schreiben` oder null), `n`, `m` (Fortschritt der Phase oder null), `fehler` (Grund bei
+„abgebrochen“ und bei einem unerwarteten Fehler), `aus`, `uebernommen_in`, `uebernehmbar`, `datei_bis` (nur wenn
+übernehmbar), `bericht` (nur bei `GET …/<kennung>`). Grenzen: Datei bis 2 GB (wie bisher), ein Import gleichzeitig,
+Datei für „Übernehmen“ 1 h, Zustände 7 Tage, Hinweis 24 h, abgebrochen nach 30 s ohne Sperre und Lebenszeichen.
+
+### Für Entwickler
+
+- `services/importauftrag.py` (neu): Start, Übernehmen, Lauf, Sperre, Aufräumen; `warten(kennung)` für Tests.
+- `services/importer.py`: optionaler Rückruf `fortschritt(phase, n=None, m=None, abgelegt=None)` an
+  `datei_importieren`, `importieren`, `_dateien_pruefen` und `_Lauf` – ohne Rückruf (Kommandozeile, bisherige Aufrufer)
+  ändert sich nichts, mit Rückruf ist der Bericht derselbe (getestet).
+- `routes_katalog.py`: die Route antwortet 202; drei neue Routen. `tageslauf.py`: `importauftrag.aufraeumen()`.
+- Proxy: Die Zeitgrenze des Reverse-Proxys gilt für den Katalogimport nicht mehr (die Antwort kommt nach dem Upload
+  sofort). Für das Hochladen selbst bleiben `client_max_body_size` bzw. die Upload-Zeitgrenze des Proxys nötig.
+
+### Tests
+
+- `tests/test_material_importauftrag.py` (neu): Route 202 → „fertig“ (Thread abgewartet), Bericht des Probelaufs und
+  des echten Laufs identisch mit dem synchronen Lauf derselben Datei (zwei Instanzen), Journal mit demselben Konto,
+  Rechte 0700/0600; Probelauf → Übernehmen ohne neuen Upload (Datei wandert und ist danach weg, zweites Übernehmen
+  409); Probelauf ohne Änderung behält keine Datei, abgelaufene Frist → 409 und aufgeräumt; zweiter Import während eines
+  laufenden → 409 mit dem laufenden (auch von einem anderen Konto), die Datei des Versuchs bleibt nicht liegen;
+  **Prozess weg**: ein eigener Prozess startet den Import über die Schnittstelle und wird mit SIGKILL beendet – einmal
+  zwischen dem Ablegen zweier Dateien, einmal mitten in der Schreibtransaktion: erst noch „laeuft“ und 409 (frisches
+  Lebenszeichen), dann „abgebrochen“, keine Zeile geschrieben, keine abgelegte Datei übrig, Sperre frei, derselbe Import
+  geht danach durch; Aufräumen nach einem Abbruch behält, was die Datenbank nennt, und lässt Verweise mit Pfad aus dem
+  Protokoll liegen; Rechte (403 für Führungskraft, Materialwart, Prüfer, Nutzer; 401 anonym; CSRF; 404 für fremde und
+  unpassende Kennungen; Übernehmen nur der Starter; keine E-Mail im Zustand); Fehlerfälle (kaputtes ZIP und JSON,
+  Prüfregel, unerwarteter Fehler ohne Pfad im Text – alle „fehlgeschlagen“ mit Bericht, Sperre frei; kaputte Sperr- und
+  Zustandsdatei); Aufräumen (7 Tage, Hinweis 24 h, Waisen, Zwischendateien, Tageslauf); Rückruf des Importers (Phasen,
+  Zahlen, abgelegte Dateien; Bericht mit und ohne Rückruf gleich); Kommandozeile unverändert synchron, ohne Auftrag.
+- Angepasst (202 statt 200, Fehler im Bericht statt 400): `test_material_katalog.py`, `test_material_dokumente.py`,
+  `test_material_wiki.py` über den neuen Helfer `import_abwarten` (test_material.py). Die Rechteprüfungen über alle
+  Routen (`test_material_ueberblick.py`, `test_material_trennung.py`, `test_material_stufen.py`) kennen die neuen
+  Routen mit einer Kennung, die es nicht gibt: Führungskraft, Materialwart aus A und ein Konto ohne Stufe bekommen 403.
+
+### Im Browser geprüft (Chromium, 1280 und 360 px, zwei Serverprozesse auf denselben Daten)
+
+- **Ganze Lieferung** `katalog-gesamt.zip` (1,13 GB, lokal): Hochladen 7 s mit Fortschritt, Probelauf 21 s („Datei
+  prüfen – 836 von 1 905“ im Dialog und im Hinweis), Bericht wie bisher (1 395 Produkte, 1 369 Bilder, 3 959 Dokumente,
+  24 Stücklisten neu), „Übernehmen“ ohne neuen Upload 218 s („Dateien ablegen – n von 5 315“), danach „Katalogimport
+  übernommen.“ auf der Katalogseite. Ein zweiter Start über den anderen Prozess bekam 409 mit dem Namen; der andere
+  Prozess sah Phase und Zahlen. Dialog während des Laufs geschlossen → Hinweis „Katalogimport läuft – …“, alle 5 s
+  neu, dann „Probelauf fertig – noch nicht übernommen.“, „Bericht ansehen“ öffnet den Dialog mit „Übernehmen“.
+- **Teil 1 der Gesamtserie** (26 MB): Hochladen gedrosselt mit Prozentanzeige, Probelauf, Übernehmen, Hinweis,
+  „Ausblenden“; Schließen während des Hochladens → „Hochladen abgebrochen – es wurde nichts importiert.“, kein Auftrag.
+- **DEMO-Datei** (zwei DEMO-Kategorien) bei 360 px: Dialog, Bericht, „Schließen“ und „Übernehmen“ nebeneinander, Hinweis
+  ohne waagerechten Bildlauf, keine Konsolenfehler.
+- **Neustart mitten im Übernehmen**: Server beim Ablegen (402 von 5 468) mit SIGKILL beendet und neu gestartet →
+  Hinweis erst „läuft“, nach 14 s „Katalogimport abgebrochen.“, im Dialog der Grund; Datenbank ohne Produkt, Dokument und
+  Journalzeile, von 325 abgelegten Dateien blieb genau die eine, die gerade in Arbeit war (ein Original unter
+  `media/material/orig`, siehe Grenze oben).
+
+### Bitte bestätigen
+
+1. **Übernehmen nur durch den, der den Probelauf gestartet hat** – andere Konten der Material-Verwaltung sehen Stand und
+   Bericht, starten aber selbst einen neuen Probelauf. Alternative: jedes Konto der Material-Verwaltung darf übernehmen.
+2. **Datei des Probelaufs eine Stunde** für „Übernehmen“; danach die Datei neu wählen.
+3. **Hinweis auf der Katalogseite 24 Stunden** nach dem Ende (ausblendbar je Browser); Zustände und Berichte 7 Tage.
+4. **Eine unlesbare Datei** (kaputtes ZIP, kein JSON) ist jetzt ein „fehlgeschlagener“ Auftrag mit Bericht statt einer
+   sofortigen Fehlermeldung (400) – die Prüfung braucht bei 1 GB selbst ihre Zeit.
+5. **Abbruch erkannt nach 30 s** ohne Sperre und Lebenszeichen; bis dahin bekommt ein neuer Start nach einem Neustart
+   noch 409.
+
 ## Modul Material auf dev zurücksetzen (Wunsch des Nutzers, 23.10.2026)
 
 Wunsch: „Bereinige den Katalog und die Testdaten auf dev, ich möchte vor Lieferung 3 alles ausgiebig von null an
@@ -6523,7 +6679,8 @@ oder Plattform-Verwaltung).
 | `GET /material/export/<ordner>-protokolle.zip` | Grundrecht am Ordner (Phase 2) | alle Protokolle dieser Artikel und die Sammelprotokolle der Durchgänge im Zweig, mit `Verzeichnis.csv` |
 | `GET /material/artikel/<id>/lebenslauf.pdf` | Grundrecht an der Heimat (Phase 2) | Lebenslauf als PDF/A-3b, auf Abruf, nicht festgeschrieben |
 | `GET /api/material/katalog/export`, `GET …/export/vorschau` | Katalog | Katalog ohne DEMO als ZIP (Format 2) bzw. seine Zahlen vorab |
-| `POST /api/material/katalog/import` (`file`: ZIP oder JSON, `trocken`: Vorgabe `1`) | Katalog | Katalogimport; Antwort `bericht` (neu/geändert/unverändert je Art, Bilder, Dokumente, Änderungen, Hinweise, Warnungen, Fehler) |
+| `POST /api/material/katalog/import` (`file`: ZIP oder JSON, `trocken`: Vorgabe `1`) | Katalog | Katalogimport im Hintergrund (seit 24.10.2026): **202** `auftrag`, 409 mit dem laufenden; der Bericht (neu/geändert/unverändert je Art, Bilder, Dokumente, Änderungen, Hinweise, Warnungen, Fehler) kommt über `GET …/katalog/import/<kennung>` |
+| `GET /api/material/katalog/import/<kennung>`, `POST …/<kennung>/uebernehmen`, `GET …/katalog/import/aktuell` | Katalog (Übernehmen: wer den Probelauf gestartet hat) | Stand und Bericht eines Auftrags; echter Lauf mit der Datei des Probelaufs (202); laufender oder zuletzt beendeter Auftrag für die Katalogseite – Einzelheiten unter „Katalogimport im Hintergrund“ |
 | `GET /api/material/produkte/<id>/rueckrufe` | Modulzugang | Rückrufe des Produkts: laufende mit den betroffenen Artikeln, die das Konto sieht, und ihren Zahlen (nicht gefundene Seriennummern nur für die Material-Verwaltung, Phase 2), beendete mit Vermerk |
 | `POST /api/material/produkte/<id>/rueckrufe` (`title`, `description`, `url`, `serials`, `mail`) | Katalog | Rückruf anlegen; Antwort mit betroffenen Artikeln, Empfängerzahl, nicht gefundenen Seriennummern (Phase 2: nur, wer alle Bestände sieht – die Material-Verwaltung; ein Konto mit Teilsicht bekäme `betroffen` und `offen` des eigenen Bereichs und `benachrichtigt`) |
 | `POST /api/material/rueckrufe/<id>/beenden` (`vermerk` Pflicht) | Katalog | Rückruf beenden |

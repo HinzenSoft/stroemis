@@ -744,6 +744,16 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mat-austausch-liste li, .mat-austausch-aenderungen li { overflow-wrap: anywhere; margin: 2px 0; }
 .mat-austausch-aenderungen { max-height: 280px; overflow-y: auto; font-size: var(--fs-klein); }
 .mat-austausch-bericht:empty { display: none; }
+/* Katalogimport im Hintergrund (24.10.2026): Stand im Dialog und Hinweis oben auf der Katalogseite. */
+.mat-import-stand:empty { display: none; }
+.mat-import-stand { margin: 10px 0 4px; }
+.mat-import-stand p { margin: 4px 0; overflow-wrap: anywhere; }
+.mat-import-balken { display: block; width: 100%; max-width: 480px; height: 10px; margin: 6px 0; accent-color: var(--wasser); }
+.mat-import-herkunft { overflow-wrap: anywhere; }
+.mat-importhinweis { margin: 0 0 12px; padding: 8px 12px; border-left: 4px solid var(--ok); background: var(--grau-hell); }
+.mat-importhinweis.laeuft { border-left-color: var(--wasser); background: var(--co-info-fl); }
+.mat-importhinweis.bad { border-left-color: var(--rot); background: var(--rot-hell); }
+.mat-importhinweis p { margin: 2px 0; overflow-wrap: anywhere; }
 
 /* Lieferung 4 – Review */
 /* .btn setzt display (app.css) und schlüge sonst das hidden-Attribut – etwa „Übernehmen“ im Katalogimport. */
