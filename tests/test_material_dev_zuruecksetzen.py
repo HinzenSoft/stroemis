@@ -9,7 +9,9 @@ leer, Schema und mat_meta gleichen einer neuen Installation (Version 21), die Si
 für Zeile und die verschobenen Medien Datei für Datei, und Konten, Wiki, Spots, Prüfungen-Modul und Einstellungen sind
 byteidentisch – auch die Modulstufe 2 ohne Plattform-Verwaltung, die Migration Schritt 10 neu rechnen würde. Ein
 zweiter Lauf auf dem leeren Modul geht, die App startet danach, und material_demo.py --demo läuft wieder. Scheitert
-die Sicherung, das Verschieben oder das Anlegen, bleibt alles, wie es war.
+die Sicherung, das Verschieben oder das Anlegen, bleibt alles, wie es war. Läuft ein Katalogimport im Hintergrund,
+bricht der Befehl ab, ohne etwas zu ändern; danach sind dessen Aufträge unter DATA_DIR/katalog-import weg
+(Nachbesserung nach der Sicherheitsprüfung vom 24.10.2026).
 Alle Namen und Nummern hier sind Platzhalter."""
 import contextlib
 import errno
@@ -112,10 +114,11 @@ def schema_modul(db_pfad):
 
 
 def stand(app):
-    """Alles: jede Zeile der ganzen Datenbank und jede Datei im Datenordner außer der Datenbank selbst."""
+    """Alles: jede Zeile der ganzen Datenbank und jede Datei im Datenordner außer der Datenbank selbst und der (leeren)
+    Sperrdatei des Katalogimports – die legt der Befehl an, um während des Laufs jeden Import fernzuhalten."""
     db = app.config["DB_PATH"]
     return {"modul": inhalt(db, True), "aussen": inhalt(db, False),
-            "dateien": dateien(app.config["DATA_DIR"], ohne=("stroemis.db",))}
+            "dateien": dateien(app.config["DATA_DIR"], ohne=("stroemis.db", os.path.join("katalog-import", "sperre")))}
 
 
 def rechte(pfad):
@@ -497,9 +500,59 @@ def test_abbruch_per_signal():
     print("Abbruch per Signal bestanden.")
 
 
+def test_katalogimport():
+    """Läuft ein Katalogimport (Sperre gehalten oder frisches Lebenszeichen), bricht der Befehl ab und ändert nichts;
+    --trocken warnt. Danach leert er DATA_DIR/katalog-import bis auf die Sperrdatei."""
+    import json
+    import shutil
+
+    from test_material_importauftrag import hoch, katalog_zip
+
+    from test_material import import_abwarten
+    from app.material.services import importauftrag
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        probe = import_abwarten(k["katalog"], hoch(k["katalog"], katalog_zip(1, mit_dateien=False)))
+        assert probe["uebernehmbar"], probe
+        ordner = os.path.join(tmp, "katalog-import")
+        vorher = stand(app)
+        with app.app_context():
+            sperre = importauftrag._sperre_nehmen()
+        try:
+            with umwelt(app, **DEV):
+                aus, code = aufrufen(app, "--trocken")
+                assert code == 0 and "ACHTUNG Gerade läuft ein Katalogimport" in aus and "katalog-import" in aus, aus
+                aus, code = aufrufen(app, "--ja-alles-loeschen")
+            assert code == 1 and "Gerade läuft ein Katalogimport" in aus and "nichts geändert" in aus, (code, aus)
+        finally:
+            sperre.close()
+        # Ohne Sperre, aber mit frischem Lebenszeichen (Prozess eben erst weg): ebenso.
+        frisch = "c" * 32
+        with app.app_context():
+            jetzt = importauftrag.db.now()
+        with open(os.path.join(ordner, frisch + ".json"), "w", encoding="utf-8") as fh:
+            json.dump({"id": frisch, "zustand": "laeuft", "trocken": True, "quelle": "k.zip", "gestartet": jetzt,
+                       "lebenszeichen": jetzt}, fh)
+        with umwelt(app, **DEV):
+            aus, code = aufrufen(app, "--ja-alles-loeschen")
+        assert code == 1 and "Gerade läuft ein Katalogimport" in aus, (code, aus)
+        os.remove(os.path.join(ordner, frisch + ".json"))
+        assert stand(app) == vorher and not sicherungen(app)
+        # Kein Import: Zurücksetzen geht und leert die Aufträge.
+        with umwelt(app, **DEV):
+            aus, code = aufrufen(app, "--ja-alles-loeschen")
+        assert code == 0 and "Dateien geleert (Aufträge des Katalogimports)" in aus, (code, aus)
+        assert os.listdir(ordner) == ["sperre"], os.listdir(ordner)
+        assert k["katalog"].get(f"/api/material/katalog/import/{probe['id']}").status_code == 404
+        for name in sicherungen(app):
+            shutil.rmtree(os.path.join(tmp, name))
+    print("Katalogimport bestanden.")
+
+
 if __name__ == "__main__":
     test_sperren()
     test_sperre_schreibweisen()
     test_scheitern()
     test_abbruch_per_signal()
     test_zuruecksetzen()
+    test_katalogimport()

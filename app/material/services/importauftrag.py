@@ -24,12 +24,30 @@ Endet der Prozess eines Laufs, steht im Zustand noch „wartet“ oder „laeuft
 wenn niemand die Sperre hält UND sein Lebenszeichen (alle LEBENSZEICHEN_SEK) älter als TOT_NACH ist – beides zusammen,
 damit weder eine Sperre, die ein Dateisystem nicht hält, noch ein langsamer Schritt einen lebenden Lauf für tot erklärt.
 Wer das feststellt (die nächste Abfrage, der nächste Start, der Tageslauf), hält dabei selbst die Sperre: Er setzt den
-Zustand auf „abgebrochen“, entfernt die hochgeladene Datei und räumt die abgelegten Dateien weg, die keine Zeile nennt
-(Produktbilder ohne mat_product.image; Dokumentdateien über katalog._datei_freigeben, das nur entfernt, was kein
-Dokument nennt). Die Datenbank schreibt der Import in einer Transaktion – halb geschrieben ist dort nie etwas.
+Zustand auf „abgebrochen“, entfernt die hochgeladene Datei und räumt die abgelegten Dateien weg, die das Protokoll nennt
+und keine Zeile (Produktbilder ohne mat_product.image; Dokumentdateien über katalog._datei_freigeben, das nur entfernt,
+was kein Dokument nennt). Eine Datei, die der Lauf im Moment des Abbruchs gerade schrieb, steht noch in keinem Protokoll
+und kann liegen bleiben – sie ist mit nichts verknüpft und wird nie angezeigt (Dokumente heißen nach ihrem Inhalt und
+werden beim nächsten Lauf wiederverwendet). Bilder ohne Besitzer aus dem Zeitfenster des Laufs wegzuräumen wäre nicht
+sicher: Ein Bild, das jemand anderes gerade hochlädt, hat bis zu seinem Commit auch noch keine Zeile.
+Die Datenbank schreibt der Import in einer Transaktion – halb geschrieben ist dort nie etwas. Unmittelbar nach dem Commit
+vermerkt der Zustand „gespeichert“ (Rückruf des Importers); daran entscheiden Abbruch und unerwarteter Fehler, was sie
+melden. Bricht ein „Übernehmen“ ab, bevor es gespeichert hat, bekommt der Probelauf seine Datei zurück und lässt sich
+noch einmal DATEI_FRIST lang übernehmen (Nachbesserung nach der Sicherheitsprüfung vom 24.10.2026). Das ist ohne
+Risiko: Die Transaktion hat nichts geschrieben – und fiele der Abbruch genau zwischen Commit und Vermerk, fände der
+zweite Lauf nichts mehr zu ändern, denn der Import gleicht ab und legt nichts doppelt an.
 
-Aufgehoben werden Zustände und Berichte AUFHEBEN lang (7 Tage). Der Bericht nennt keine Personen; der Zustand den Namen
-dessen, der den Import gestartet hat (wie das Journal, nie die E-Mail), und seine Kontokennung für „Übernehmen“."""
+Plattenplatz: Ein neuer Auftrag löscht die Dateien älterer Probeläufe (es läuft ohnehin nur einer, und ihr „Übernehmen“
+wäre damit überholt); vor dem Kopieren der hochgeladenen Datei und vor „Übernehmen“ muss so viel frei sein, wie die Datei
+groß ist, plus RESERVE – sonst 507 mit einer Meldung ohne Pfad.
+
+Aufgehoben werden Zustände und Berichte AUFHEBEN lang (7 Tage). Der Bericht nennt keine Personen. Der Zustand nennt das
+Konto, das den Import gestartet hat, nur über seinen pseudonymen Kontoverweis users.mat_ref (von_ref, wie das Journal) –
+nie Name, E-Mail oder users.id: Die Kontokennung vergibt SQLite nach dem Löschen eines Kontos neu, mat_ref verschwindet
+mit der Kontozeile. Den Namen löst jede Anzeige frisch auf (journal.konto_name); nach dem Löschen steht dort
+„(gelöschtes Konto)“, und ein neues Konto mit derselben Kennung kann einen fremden Probelauf nicht übernehmen
+(Nachbesserung nach der Sicherheitsprüfung vom 24.10.2026). Zustände aus der ersten Fassung mit von_id und Namen verlieren
+beide Felder beim nächsten Aufräumen; übernehmen lässt sich ein solcher Probelauf nicht mehr."""
 import fcntl
 import json
 import logging
@@ -45,7 +63,7 @@ from flask import current_app, g
 
 from ... import db
 from ...images import delete_photo_files
-from . import Abgelehnt, importer, katalog
+from . import Abgelehnt, importer, journal, katalog
 
 log = logging.getLogger(__name__)
 
@@ -61,6 +79,7 @@ LEBENSZEICHEN_SEK = 5
 TOT_NACH = 30                      # ohne Sperre und ohne Lebenszeichen seit so vielen Sekunden: abgebrochen
 SCHREIB_ABSTAND = 1.0              # Fortschritt höchstens einmal je Sekunde auf die Platte
 SPERRE_WARTEN = 3.0                # so lange wartet ein Start, falls gerade jemand nur aufräumt
+RESERVE = 64 * 1024 * 1024         # so viel bleibt nach der Datei mindestens frei (wie zuruecksetzen.RESERVE)
 # Abgelegte Dateien im Protokoll: Produktbilder heißen <16 Hex>.<Endung> (store_upload), Dokumente <SHA-256>.<Endung>.
 _ABGELEGT = re.compile(r"[0-9a-f]{16,64}\.[a-z0-9]{1,5}")
 
@@ -220,15 +239,47 @@ def _uebernehmbar(z):
             and _sekunden_seit(z["datei_bis"]) < 0 and os.path.isfile(_pfad(z["id"], ".datei")))
 
 
+def _ref(uid, setzen=False):
+    """Der Kontoverweis (users.mat_ref) des Kontos uid – mit setzen wird er angelegt, falls er fehlt (journal.konto_ref,
+    beim Start); die Abfragen alle paar Sekunden lesen nur. None ohne Konto."""
+    if uid is None:
+        return None
+    if setzen:
+        return journal.konto_ref(uid)["ref"]
+    r = db.query("SELECT mat_ref FROM users WHERE id = ?", (uid,), one=True)
+    return r["mat_ref"] if r and r["mat_ref"] else None
+
+
+def _von(z):
+    """Der Name dessen, der den Auftrag gestartet hat – frisch aufgelöst, „(gelöschtes Konto)“ nach dem Löschen."""
+    ref = z.get("von_ref")
+    return journal.konto_name(ref) if isinstance(ref, str) and ref else None
+
+
+def _erneut(z):
+    """Für ein abgebrochenes „Übernehmen“, dessen Probelauf seine Datei zurückbekam (_abbrechen): dieser Probelauf,
+    solange er sich übernehmen lässt – sonst None."""
+    if z["trocken"] or z["zustand"] != "abgebrochen" or not isinstance(z.get("aus"), str):
+        return None
+    alt = _lesen(z["aus"]) if KENNUNG.fullmatch(z["aus"]) else None
+    if alt and alt.get("von_ref") == z.get("von_ref") and _uebernehmbar(alt):
+        return alt
+    return None
+
+
 def oeffentlich(z, nutzer_id=None, mit_bericht=False):
-    """Was die Schnittstelle von einem Auftrag zeigt. Ohne Kontokennung und ohne Pfade; bericht nur auf Wunsch (die
-    Abfrage während des Laufs braucht ihn nicht)."""
-    eigener = nutzer_id is not None and z.get("von_id") == nutzer_id
-    out = {k: z.get(k) for k in ("id", "zustand", "trocken", "quelle", "groesse", "von", "gestartet", "beendet",
+    """Was die Schnittstelle von einem Auftrag zeigt. Ohne Kontoverweis und ohne Pfade; bericht nur auf Wunsch (die
+    Abfrage während des Laufs braucht ihn nicht). Ein abgebrochenes „Übernehmen“, das sich wiederholen lässt, zeigt
+    uebernehmbar und datei_bis seines Probelaufs."""
+    ref = _ref(nutzer_id)
+    eigener = ref is not None and z.get("von_ref") == ref
+    out = {k: z.get(k) for k in ("id", "zustand", "trocken", "quelle", "groesse", "gestartet", "beendet",
                                  "lebenszeichen", "phase", "n", "m", "fehler", "aus", "uebernommen_in")}
+    out["von"] = _von(z)
     out["eigener"] = eigener
-    out["uebernehmbar"] = eigener and _uebernehmbar(z)
-    out["datei_bis"] = z.get("datei_bis") if _uebernehmbar(z) else None
+    bereit = z if _uebernehmbar(z) else _erneut(z)
+    out["uebernehmbar"] = eigener and bereit is not None
+    out["datei_bis"] = bereit.get("datei_bis") if bereit else None
     if mit_bericht:
         out["bericht"] = None
         if z["zustand"] not in OFFEN:
@@ -271,7 +322,7 @@ def _belegt_meldung():
         z = _lesen(k)
     if not z or z["zustand"] not in OFFEN:
         z = next((x for x in _alle() if x["zustand"] in OFFEN), None)
-    wer = f" von {z['von']}" if z and z.get("von") else ""
+    wer = f" von {_von(z)}" if z and _von(z) else ""
     text = ("Es läuft schon ein Katalogimport" + wer + ". Es kann immer nur einer laufen – bitte warten, bis er fertig "
             "ist; sein Stand steht auf der Katalogseite.")
     return Belegt(text, oeffentlich(z) if z else None)
@@ -282,15 +333,52 @@ def _belegt_meldung():
 def _neuer_zustand(kennung, trocken, quelle, groesse, nutzer, aus=None):
     jetzt = db.now()
     return {"id": kennung, "zustand": "wartet", "trocken": bool(trocken), "quelle": quelle, "groesse": groesse,
-            "von_id": nutzer[0], "von": nutzer[1], "gestartet": jetzt, "lebenszeichen": jetzt, "beendet": None,
+            "von_ref": _ref(nutzer[0], setzen=True), "gestartet": jetzt, "lebenszeichen": jetzt, "beendet": None,
             "phase": None, "n": None, "m": None, "fehler": None, "aus": aus, "uebernommen_in": None,
-            "datei_bis": None, "beginn": time.time()}
+            "gespeichert": False, "datei_bis": None, "beginn": time.time()}
+
+
+def _gb(n):
+    return f"{n / 1024 ** 3:.1f} GB".replace(".", ",")
+
+
+def _platz_pruefen(groesse, wofuer):
+    """507, wenn auf dem Dateisystem von DATA_DIR weniger frei ist als groesse + RESERVE. Die Meldung nennt Zahlen,
+    keinen Pfad."""
+    try:
+        frei = shutil.disk_usage(_ordner()).free
+    except OSError as exc:
+        log.warning("Katalogimport: freier Platz nicht feststellbar: %s", exc)
+        return
+    if frei < (groesse or 0) + RESERVE:
+        log.warning("Katalogimport: zu wenig Platz (%s frei, %s gebraucht)", frei, (groesse or 0) + RESERVE)
+        raise Abgelehnt(f"Auf dem Server ist zu wenig Platz für {wofuer}: frei {_gb(frei)}, gebraucht etwa "
+                        f"{_gb((groesse or 0) + RESERVE)}. Bitte die Betreuung des Servers bitten, Platz zu schaffen, "
+                        "dann erneut versuchen.", 507)
+
+
+def _alte_probelaeufe_freigeben():
+    """Die Dateien aller älteren Probeläufe entfernen (nur unter der Sperre, vor einem neuen Auftrag): Ihr „Übernehmen“
+    ist mit dem neuen Auftrag überholt, und jede liegt sonst eine Stunde mit voller Größe auf der Platte."""
+    for z in _alle():
+        if z["trocken"] and z["zustand"] not in OFFEN:
+            _entfernen(_pfad(z["id"], ".datei"))
+
+
+def _hochgeladen_groesse(datei):
+    """Wie groß die hochgeladene Datei ist (Werkzeug hält sie in einem Zwischenspeicher) – 0, wenn sich das nicht
+    feststellen lässt; dann prüft _platz_pruefen nur die Reserve."""
+    try:
+        datei.stream.seek(0, os.SEEK_END)
+        return datei.stream.tell()
+    except (AttributeError, OSError, ValueError):
+        return 0
 
 
 def starten(datei, trocken, quelle, nutzer):
     """Die hochgeladene Datei (FileStorage) unter DATA_DIR/katalog-import ablegen und den Lauf im Hintergrund starten.
     nutzer: (Kontokennung, Name) – akteur(). Liefert die öffentliche Sicht des neuen Auftrags; Belegt (409), wenn schon
-    einer läuft."""
+    einer läuft; 507, wenn der Platz für die Datei nicht reicht."""
     aufraeumen()
     sperre = _sperre_nehmen(SPERRE_WARTEN)
     if sperre is None:
@@ -299,6 +387,8 @@ def starten(datei, trocken, quelle, nutzer):
     try:
         if _aufraeumen_unter_sperre():
             raise _belegt_meldung()
+        _alte_probelaeufe_freigeben()
+        _platz_pruefen(_hochgeladen_groesse(datei), "die Katalogdatei")
         kennung = secrets.token_hex(16)
         _sperre_beschriften(sperre, kennung)
         ziel = _pfad(kennung, ".datei")
@@ -332,7 +422,8 @@ def _hochgeladen_ablegen(datei, ziel):
 
 def uebernehmen(kennung, nutzer):
     """„Übernehmen“ nach einem Probelauf: derselbe Import echt, mit der Datei des Probelaufs – ohne neuen Upload. Nur
-    wer den Probelauf gestartet hat, solange seine Datei liegt (DATEI_FRIST). Liefert den neuen Auftrag."""
+    wer den Probelauf gestartet hat, solange seine Datei liegt (DATEI_FRIST). kennung darf auch ein abgebrochenes
+    „Übernehmen“ sein, dessen Probelauf seine Datei zurückbekam – dann gilt dieser. Liefert den neuen Auftrag."""
     if not isinstance(kennung, str) or not KENNUNG.fullmatch(kennung) or not _lesen(kennung):
         raise Abgelehnt("Diesen Importauftrag gibt es nicht (mehr).", 404)
     sperre = _sperre_nehmen(SPERRE_WARTEN)
@@ -342,17 +433,24 @@ def uebernehmen(kennung, nutzer):
         if _aufraeumen_unter_sperre():
             raise _belegt_meldung()
         alt = _lesen(kennung)
+        if alt and not alt["trocken"] and alt["zustand"] == "abgebrochen" and isinstance(alt.get("aus"), str) \
+                and KENNUNG.fullmatch(alt["aus"]):
+            kennung = alt["aus"]
+            alt = _lesen(kennung)
         if not alt:
             raise Abgelehnt("Diesen Importauftrag gibt es nicht (mehr).", 404)
-        if alt.get("von_id") != nutzer[0]:
+        ref = _ref(nutzer[0])
+        if ref is None or alt.get("von_ref") != ref:
             raise Abgelehnt("Übernehmen kann nur, wer den Probelauf gestartet hat.", 403)
         if not alt["trocken"] or alt["zustand"] != "fertig":
             raise Abgelehnt("Übernehmen geht nur nach einem Probelauf ohne Fehler.", 409)
         if alt.get("uebernommen_in"):
             raise Abgelehnt("Dieser Probelauf ist schon übernommen worden.", 409)
         if not _uebernehmbar(alt):
-            raise Abgelehnt("Die Datei des Probelaufs liegt nicht mehr bereit (sie bleibt eine Stunde). Bitte die Datei "
-                            "noch einmal wählen.", 409)
+            raise Abgelehnt("Die Datei des Probelaufs liegt nicht mehr bereit (sie bleibt eine Stunde, bis zum nächsten "
+                            "Import). Bitte die Datei noch einmal wählen.", 409)
+        # Der Import legt Bilder und Dokumente ab – ungefähr so viel, wie die Datei groß ist.
+        _platz_pruefen(alt.get("groesse") if isinstance(alt.get("groesse"), int) else 0, "die Dateien des Katalogs")
         neu = secrets.token_hex(16)
         _sperre_beschriften(sperre, neu)
         os.replace(_pfad(kennung, ".datei"), _pfad(neu, ".datei"))
@@ -364,6 +462,7 @@ def uebernehmen(kennung, nutzer):
         except BaseException:
             _entfernen(_pfad(neu, ".datei"))
             raise
+        _alte_probelaeufe_freigeben()
         _thread_starten(z, sperre)
     except BaseException:
         sperre.close()
@@ -416,11 +515,14 @@ class _Lauf:
                 log.warning("Katalogimport: Zustand ließ sich nicht schreiben: %s", exc)
 
     def fortschritt(self, phase, n=None, m=None, abgelegt=None):
-        """Der Rückruf für importer.datei_importieren. Wirft nie – der Import soll an der Anzeige nicht scheitern."""
+        """Der Rückruf für importer.datei_importieren. Wirft nie – der Import soll an der Anzeige nicht scheitern.
+        „gespeichert“ (gleich nach dem Commit) geht sofort auf die Platte."""
         try:
             if abgelegt:
                 self._vermerken(abgelegt)
-            if phase in PHASEN:
+            if phase == "gespeichert":
+                self.sichern(erzwingen=True, gespeichert=True)
+            elif phase in PHASEN:
                 self.sichern(phase=phase, n=n, m=m)
         except Exception as exc:              # noqa: BLE001 – siehe oben
             log.warning("Katalogimport: Fortschritt nicht vermerkt: %s", exc)
@@ -442,6 +544,15 @@ class _Lauf:
             except OSError:
                 pass
             self.protokoll = None
+
+
+def _gespeichert_text(z):
+    """Was ein Abbruch über die Datenbank sagen kann: Ein Probelauf und ein Lauf vor seinem Commit haben nichts
+    gespeichert; nach dem Vermerk „gespeichert“ (gleich nach dem Commit) ist die Datenbank geschrieben."""
+    if z["trocken"] or not z.get("gespeichert"):
+        return "Gespeichert wurde nichts."
+    return ("Die Datenbank war da schon geschrieben; ob alles übernommen ist, zeigt ein neuer Probelauf mit derselben "
+            "Datei.")
 
 
 def _lebenszeichen(lauf, stopp):
@@ -484,7 +595,8 @@ def _lauf_im_kontext(z):
     ticker.start()
     zustand, bericht, fehler = "fehlgeschlagen", None, None
     try:
-        g.user = db.query("SELECT * FROM users WHERE id = ? AND active = 1", (z.get("von_id"),), one=True)
+        g.user = (db.query("SELECT * FROM users WHERE mat_ref = ? AND active = 1", (z["von_ref"],), one=True)
+                  if isinstance(z.get("von_ref"), str) and z["von_ref"] else None)
         lauf.sichern(erzwingen=True, zustand="laeuft")
         try:
             with open(_pfad(z["id"], ".datei"), "rb") as fh:
@@ -495,8 +607,8 @@ def _lauf_im_kontext(z):
             bericht = _fehlerbericht(z["trocken"], str(exc))
         except Exception:                         # noqa: BLE001 – jeder andere Fehler beendet den Auftrag
             log.exception("Katalogimport %s abgebrochen", z["id"][:8])
-            fehler = ("Der Import brach mit einem unerwarteten Fehler ab. Gespeichert wurde nichts; Einzelheiten stehen "
-                      "im Protokoll des Servers.")
+            fehler = "Der Import brach mit einem unerwarteten Fehler ab. " + _gespeichert_text(lauf.z) + \
+                " Einzelheiten stehen im Protokoll des Servers."
             bericht = _fehlerbericht(z["trocken"], fehler)
     finally:
         stopp.set()
@@ -515,6 +627,66 @@ def _lauf_im_kontext(z):
             zustand, fehler = "fehlgeschlagen", "Der Bericht ließ sich nicht speichern."
         lauf.sichern(erzwingen=True, zustand=zustand, fehler=fehler, beendet=db.now(),
                      datei_bis=_spaeter(DATEI_FRIST) if behalten else None)
+
+
+# --- dev-zuruecksetzen ------------------------------------------------------------------------------
+
+def anhalten():
+    """Für dev-zuruecksetzen: die Sperre nehmen und behalten, damit währenddessen kein Katalogimport startet (ein Start
+    bekommt 409). Liefert die offene Sperrdatei – schließen gibt sie frei – oder None, wenn gerade ein Import läuft oder
+    eben erst endete (frisches Lebenszeichen)."""
+    sperre = _sperre_nehmen()
+    if sperre is None:
+        return None
+    try:
+        if _aufraeumen_unter_sperre():
+            sperre.close()
+            return None
+        _sperre_beschriften(sperre, None)
+    except BaseException:
+        sperre.close()
+        raise
+    return sperre
+
+
+def laeuft():
+    """Ob gerade ein Katalogimport läuft (Sperre gehalten oder offener Auftrag mit frischem Lebenszeichen) – nur
+    nachsehen, ohne aufzuräumen und ohne etwas anzulegen (dev-zuruecksetzen --trocken). Ohne Sperrdatei lief nie einer."""
+    if not os.path.exists(os.path.join(current_app.config["DATA_DIR"], ORDNER, "sperre")):
+        return False
+    sperre = _sperre_nehmen()
+    if sperre is None:
+        return True
+    sperre.close()
+    return any(z["zustand"] in OFFEN and _lebt(z) for z in _alle())
+
+
+def zwischendaten():
+    """(Dateien, Bytes) unter DATA_DIR/katalog-import ohne die Sperrdatei – für den Bericht von dev-zuruecksetzen."""
+    pfad = os.path.join(current_app.config["DATA_DIR"], ORDNER)
+    dateien = groesse = 0
+    try:
+        namen = os.listdir(pfad)
+    except OSError:
+        return 0, 0
+    for name in namen:
+        if KENNUNG.fullmatch(name.partition(".")[0]):
+            try:
+                groesse += os.lstat(os.path.join(pfad, name)).st_size
+                dateien += 1
+            except OSError:
+                pass
+    return dateien, groesse
+
+
+def leeren_unter_sperre():
+    """Alle Aufträge mit Zustand, Bericht, Datei und Protokoll entfernen – nur mit der Sperre aus anhalten() in der Hand
+    (dev-zuruecksetzen nach dem COMMIT: Sie beziehen sich auf den geleerten Katalog). Die Sperrdatei bleibt, andere
+    Dateien auch; entfernt wird jede Datei einzeln mit genauem Namen."""
+    ordner = _ordner()
+    for name in os.listdir(ordner):
+        if KENNUNG.fullmatch(name.partition(".")[0]):
+            _entfernen(os.path.join(ordner, name))
 
 
 # --- Aufräumen --------------------------------------------------------------------------------------
@@ -544,18 +716,48 @@ def _abgelegte_wegraeumen(kennung):
     _entfernen(pfad)
 
 
+def _zurueck_zum_probelauf(z):
+    """Ein abgebrochenes „Übernehmen“ ohne Vermerk „gespeichert“: Die Datei geht an seinen Probelauf zurück, der sich
+    dann wieder DATEI_FRIST lang übernehmen lässt (siehe oben). Nur, wenn dieser Probelauf noch auf genau diesen Auftrag
+    zeigt und die Datei da ist. Liefert, ob es geklappt hat."""
+    aus = z.get("aus")
+    if (z["trocken"] or z.get("gespeichert") or not isinstance(aus, str) or not KENNUNG.fullmatch(aus)
+            or not isinstance(z.get("von_ref"), str)):
+        return False
+    alt = _lesen(aus)
+    datei = _pfad(z["id"], ".datei")
+    if not (alt and alt["trocken"] and alt["zustand"] == "fertig" and alt.get("uebernommen_in") == z["id"]
+            and alt.get("von_ref") == z.get("von_ref") and os.path.isfile(datei)):
+        return False
+    os.replace(datei, _pfad(aus, ".datei"))
+    alt.update(uebernommen_in=None, datei_bis=_spaeter(DATEI_FRIST))
+    try:
+        _atomar(_pfad(aus, ".json"), alt)
+    except BaseException:
+        _entfernen(_pfad(aus, ".datei"))
+        raise
+    return True
+
+
 def _abbrechen(z):
     """Einen offenen Auftrag, dessen Prozess weg ist, beenden (nur unter der Sperre)."""
     if not z["trocken"]:
         _abgelegte_wegraeumen(z["id"])
     _entfernen(_pfad(z["id"], ".abgelegt"))
+    erneut = _zurueck_zum_probelauf(z)
     _entfernen(_pfad(z["id"], ".datei"))
+    # Was er schon unter media/material abgelegt hatte, ist weggeräumt (bis auf höchstens die eine Datei, die er gerade
+    # schrieb – siehe oben); das sagt die Meldung nicht mehr, es steht im README.
+    unterbrochen = f"Der {'Probelauf' if z['trocken'] else 'Import'} wurde unterbrochen (etwa durch einen Neustart des " \
+        "Servers)"
     if z["trocken"]:
-        text = "Der Probelauf wurde unterbrochen (etwa durch einen Neustart des Servers). Gespeichert wurde nichts."
+        text = f"{unterbrochen}. Gespeichert wurde nichts."
+    elif z.get("gespeichert"):
+        text = f"{unterbrochen}. {_gespeichert_text(z)}"
     else:
-        text = ("Der Import wurde unterbrochen (etwa durch einen Neustart des Servers). Die Datenbank schreibt er ganz "
-                "oder gar nicht, schon abgelegte Dateien sind wieder entfernt; ob noch etwas zu übernehmen ist, zeigt ein "
-                "neuer Probelauf mit derselben Datei.")
+        text = f"{unterbrochen}, bevor er gespeichert hatte – die Datenbank schreibt er ganz oder gar nicht. "
+        text += ("„Übernehmen“ geht noch einmal, solange die Datei des Probelaufs bereitliegt (eine Stunde)." if erneut
+                 else "Ob noch etwas zu übernehmen ist, zeigt ein neuer Probelauf mit derselben Datei.")
     z.update(zustand="abgebrochen", beendet=db.now(), fehler=text, datei_bis=None)
     _atomar(_pfad(z["id"], ".json"), z)
     log.warning("Katalogimport %s: als abgebrochen erkannt (Prozess weg)", z["id"][:8])
@@ -619,6 +821,10 @@ def aufraeumen():
                 continue
             if z["zustand"] in OFFEN:
                 continue
+            if "von_id" in z or "von" in z:            # erste Fassung (30cf668): Name und users.id raus
+                z.pop("von_id", None)
+                z.pop("von", None)
+                _atomar(os.path.join(ordner, name), z)
             if _sekunden_seit(z.get("beendet") or z["gestartet"]) > AUFHEBEN:
                 for e in (".datei", ".abgelegt", ".bericht.json", ".json"):
                     _entfernen(_pfad(kennung, e))

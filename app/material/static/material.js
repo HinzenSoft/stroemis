@@ -4150,7 +4150,9 @@
      „Übernehmen“ startet den echten Lauf mit der Datei des Probelaufs – ohne neuen Upload (sie liegt eine Stunde
      bereit). Der Dialog darf zu: Der Import läuft weiter, die Katalogseite zeigt ihn als Hinweis (importHinweis). Wird
      der Dialog während des Hochladens geschlossen, bricht nur das Hochladen ab – auf dem Server ist dann nichts
-     angekommen. */
+     angekommen. Nachbesserung nach der Sicherheitsprüfung (24.10.2026): Vor dem Hochladen fragt der Dialog, ob schon ein
+     Import läuft, und lädt dann gar nicht erst hoch. Ist die Datei ganz oben, legt der Server sie ab („Datei wird
+     abgelegt …“) – wer jetzt schließt, bricht nichts mehr ab, der Probelauf startet trotzdem. */
   const IMPORT_OFFEN = new Set(["wartet", "laeuft"]);
   const IMPORT_PHASE = { pruefen: "Datei prüfen", probe: "Probedurchgang", ablegen: "Dateien ablegen",
                          schreiben: "Datenbank schreiben" };
@@ -4160,8 +4162,11 @@
     if (a.zustand === "wartet" || !a.phase) return `${was}: startet …`;
     return `${was}: ${IMPORT_PHASE[a.phase] || "läuft"}${a.m ? ` – ${tausend(a.n)} von ${tausend(a.m)}` : ""} …`;
   }
-  const importBalken = (n, m) => (m ? `<progress class="mat-import-balken" max="${m}" value="${Math.min(n || 0, m)}"></progress>`
-    : '<progress class="mat-import-balken"></progress>');
+  function importBalken(n, m) {
+    const max = Number(m) || 0;
+    return max > 0 ? `<progress class="mat-import-balken" max="${max}" value="${Math.min(Number(n) || 0, max)}"></progress>`
+      : '<progress class="mat-import-balken"></progress>';
+  }
   function importHerkunft(a) {
     const teile = [`gestartet ${esc(fmtZeit(a.gestartet))}${a.von ? ` von ${esc(a.von)}` : ""}`, esc(a.quelle || "")];
     if (a.beendet && !IMPORT_OFFEN.has(a.zustand)) teile.push(`beendet ${esc(fmtZeit(a.beendet))}`);
@@ -4170,8 +4175,9 @@
   }
 
   // Hochladen mit Fortschritt: fetch kennt keinen Upload-Fortschritt, deshalb XMLHttpRequest. Antwort 202 → Auftrag;
-  // sonst ein Fehler mit status (0 = keine Verbindung, -1 = abgebrochen) und – bei 409 – dem laufenden Auftrag.
-  function importHochladen(datei, beiFortschritt, merken) {
+  // sonst ein Fehler mit status (0 = keine Verbindung, -1 = abgebrochen) und – bei 409 – dem laufenden Auftrag
+  // (507: zu wenig Platz auf dem Server, die Meldung sagt es).
+  function importHochladen(datei, beiFortschritt, merken, beiOben) {
     return new Promise((resolve, reject) => {
       const fd = new FormData();
       fd.append("file", datei);
@@ -4181,7 +4187,14 @@
       xhr.open("POST", `${API}/katalog/import`);
       xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
       xhr.responseType = "json";
-      xhr.upload.onprogress = (e) => { if (e.lengthComputable) beiFortschritt(e.loaded, e.total); };
+      // Ganz oben (alle Bytes gesendet) meldet beiOben – je nach Browser schon mit dem letzten Fortschritt oder erst mit
+      // upload.onload; beiOben verträgt beides.
+      xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable) return;
+        beiFortschritt(e.loaded, e.total);
+        if (e.loaded >= e.total) beiOben();
+      };
+      xhr.upload.onload = () => beiOben();
       const fehler = (text, status, auftrag) => { const e = new Error(text); e.status = status; e.auftrag = auftrag; return e; };
       xhr.onload = () => {
         const d = xhr.response || {};
@@ -4214,6 +4227,7 @@
       const ok = $("#ki-ok", body);
       const ablage = $("#ki-ablage", body);
       let xhr = null;            // das laufende Hochladen
+      let oben = false;          // die Datei ist ganz oben – der Server legt sie ab, Schließen bricht nichts mehr ab
       let aktuell = null;        // die Kennung, deren Stand der Dialog gerade zeigt
       let uhr = null;
       let gemeldet = false;      // „Katalog übernommen“ nur einmal
@@ -4223,7 +4237,8 @@
         weg.abort();
         clearTimeout(uhr);
         aktuell = null;
-        if (xhr) { xhr.abort(); toast("Hochladen abgebrochen – es wurde nichts importiert.", true); }
+        if (xhr && oben) toast("Die Datei ist hochgeladen – der Probelauf startet auf dem Server. Sein Stand steht oben auf der Katalogseite.");
+        else if (xhr) { xhr.abort(); toast("Hochladen abgebrochen – es wurde nichts importiert.", true); }
         importHinweis();
       }, { once: true });
 
@@ -4282,26 +4297,49 @@
         ablage.hidden = true;
         bericht.innerHTML = "";
         $("#ki-name", body).textContent = `${f.name} · ${groesse(f.size)}`;
-        stand.innerHTML = `<p><strong>Hochladen …</strong></p>${importBalken(0, 100)}<p class="help" id="ki-hoch">${esc(f.name)} · ${esc(groesse(f.size))}</p>`;
+        const belegt = (text, laufend) => {
+          ablage.hidden = false;
+          stand.innerHTML = `<p class="error">${esc(text)}</p>${laufend ? '<p><button type="button" class="lnk" id="ki-laufend">Stand des laufenden Imports ansehen</button></p>' : ""}`;
+          const lnk = $("#ki-laufend", stand);
+          if (lnk) lnk.onclick = () => verfolgen(laufend.id);
+        };
+        // Läuft schon einer, gar nicht erst hochladen – bei über 1 GB wären das sonst Minuten für eine 409.
+        stand.innerHTML = "<p><strong>Prüfen, ob gerade ein Import läuft …</strong></p>";
+        let laufend = null;
+        try { laufend = (await api(`${API}/katalog/import/aktuell`)).auftrag; } catch (e) { /* dann entscheidet der Server (409) */ }
+        if (!offen()) return;
+        if (laufend && IMPORT_OFFEN.has(laufend.zustand)) {
+          belegt(`Es läuft schon ein Katalogimport${laufend.von ? ` von ${laufend.von}` : ""}. Es kann immer nur einer laufen – bitte warten, bis er fertig ist.`, laufend);
+          return;
+        }
+        stand.innerHTML = `<p><strong id="ki-was">Hochladen …</strong></p>${importBalken(0, 100)}<p class="help" id="ki-hoch">${esc(f.name)} · ${esc(groesse(f.size))}</p>`;
         let a;
+        oben = false;
         try {
           a = await importHochladen(f, (n, m) => {
             const balken = $(".mat-import-balken", stand);
-            if (balken) { balken.max = m; balken.value = n; }
+            if (balken && !oben) { balken.max = m; balken.value = n; }
             const t = $("#ki-hoch", stand);
-            if (t) t.textContent = `${Math.floor((n / m) * 100)} % · ${groesse(n)} von ${groesse(m)}`;
-          }, (x) => { xhr = x; });
+            if (t && !oben) t.textContent = `${Math.floor((n / m) * 100)} % · ${groesse(n)} von ${groesse(m)}`;
+          }, (x) => { xhr = x; }, () => {
+            // Ganz oben: Bis zur Antwort kopiert der Server die Datei an ihren Platz – bei 1 GB einige Sekunden.
+            if (oben) return;
+            oben = true;
+            const was = $("#ki-was", stand);
+            if (was) was.textContent = "Datei wird abgelegt …";
+            const balken = $(".mat-import-balken", stand);
+            if (balken) balken.removeAttribute("value");
+            const t = $("#ki-hoch", stand);
+            if (t) t.textContent = `${f.name} · ${groesse(f.size)} hochgeladen`;
+          });
         } catch (e) {
           xhr = null;
-          if (!offen()) return;
-          ablage.hidden = false;
-          stand.innerHTML = `<p class="error">${esc(e.message)}</p>${e.auftrag ? '<p><button type="button" class="lnk" id="ki-laufend">Stand des laufenden Imports ansehen</button></p>' : ""}`;
-          const lnk = $("#ki-laufend", stand);
-          if (lnk) lnk.onclick = () => verfolgen(e.auftrag.id);
+          if (!offen()) { if (oben) toast(e.message, true); return; }
+          belegt(e.message, e.auftrag);
           return;
         }
         xhr = null;
-        if (!offen()) return;
+        if (!offen()) { importHinweis(); return; }
         zeigen(a);
         verfolgen(a.id);
       }
@@ -4354,7 +4392,9 @@
     else if (a.zustand === "fertig") {
       text = a.trocken ? (a.uebernehmbar ? "Probelauf fertig – noch nicht übernommen." : "Probelauf fertig.")
         : "Katalogimport übernommen.";
-    } else if (a.zustand === "abgebrochen") text = `${a.trocken ? "Probelauf" : "Katalogimport"} abgebrochen.`;
+    } else if (a.zustand === "abgebrochen") {
+      text = `${a.trocken ? "Probelauf" : "Katalogimport"} abgebrochen${a.uebernehmbar ? " – Übernehmen geht noch einmal." : "."}`;
+    } else if (a.fehler) text = `${a.trocken ? "Probelauf" : "Katalogimport"} mit Fehler beendet.`;
     else text = `${a.trocken ? "Probelauf" : "Katalogimport"} mit Fehlern beendet – nichts gespeichert.`;
     const laeuft = IMPORT_OFFEN.has(a.zustand);
     ziel.innerHTML = `<div class="mat-importhinweis${laeuft ? " laeuft" : a.zustand === "fertig" ? "" : " bad"}" role="status">

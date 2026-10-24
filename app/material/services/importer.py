@@ -42,6 +42,8 @@ Ablauf, ohne ihn (Kommandozeile) ist alles wie vorher. Phasen: „pruefen“ (Da
 „probe“ (Probedurchgang bzw. der ganze Probelauf), „ablegen“ (n von m Dateien abgelegt; abgelegt nennt jede eben
 abgelegte Datei als (Art, abgelegt) – damit räumt der Auftrag auf, wenn sein Prozess mitten im Lauf endet) und
 „schreiben“ (der Durchgang, der die Datenbank schreibt; legt er selbst eine Datei nach, kommt sie ebenso mit abgelegt).
+Gleich nach dem Commit kommt „gespeichert“ (ohne Zahlen) – daran erkennt der Auftrag nach einem Abbruch, ob die Datenbank
+schon geschrieben war (Nachbesserung nach der Sicherheitsprüfung vom 24.10.2026).
 """
 import hashlib
 import json
@@ -1308,6 +1310,8 @@ def importieren(daten, trocken=False, quelle="Datei", archiv=None, fortschritt=N
         # Braucht der Lauf keine neue Datei (Format 1, nur Links, nichts geändert), speichert gleich der erste
         # Durchgang. Sonst plant er nur.
         gespeichert = _durchgang(daten, erster, lambda lauf: not (lauf.bericht["fehler"] or trocken or lauf.bedarf))
+        if gespeichert and fortschritt:
+            fortschritt("gespeichert")
         if gespeichert or trocken or erster.bericht["fehler"]:
             erster.bericht["gespeichert"] = gespeichert
             return _abschluss(erster, basis)
@@ -1336,6 +1340,8 @@ def importieren(daten, trocken=False, quelle="Datei", archiv=None, fortschritt=N
         except BaseException:
             _wegraeumen(list(ablage.values()) + zweiter.abgelegt)
             raise
+        if gespeichert and fortschritt:
+            fortschritt("gespeichert")
         if gespeichert:
             _wegraeumen([w for ort, w in ablage.items() if ort not in zweiter.benutzt])
             for name in zweiter.alte_bilder:

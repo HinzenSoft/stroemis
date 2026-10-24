@@ -5,8 +5,12 @@ Zustand, Phase und am Ende den Bericht; „Übernehmen“ startet den echten Lau
 Ablauf bis „fertig“, Bericht wie beim synchronen Lauf (Probelauf und echter Lauf, Journal mit demselben Konto),
 Übernehmen ohne neuen Upload, höchstens ein Import gleichzeitig (409), Auftrag eines beendeten Prozesses (echt per
 SIGKILL beim Ablegen und mitten in der Schreibtransaktion) → „abgebrochen“, Sperre frei, nichts halb geschrieben und
-keine abgelegte Datei übrig; Rechte, Aufräumen, Fehlerfälle, Fortschritt, Kommandozeile unverändert. Alle Namen,
-Hersteller und Angaben hier sind Platzhalter nur für den Test."""
+keine abgelegte Datei übrig; Rechte, Aufräumen, Fehlerfälle, Fortschritt, Kommandozeile unverändert.
+Nachbesserung nach der Sicherheitsprüfung (24.10.2026): Konto gelöscht → Name weg, ein neues Konto mit derselben
+Kennung kann nicht übernehmen; zu wenig Platz → 507; ein neuer Auftrag löscht die Dateien älterer Probeläufe; ein
+abgebrochenes Übernehmen (echt per SIGKILL) lässt sich wiederholen, eines nach dem Commit nicht; die Meldung nach einem
+unerwarteten Fehler sagt, ob schon gespeichert war. Alle Namen, Hersteller und Angaben hier sind Platzhalter nur für den
+Test."""
 import io
 import json
 import os
@@ -258,9 +262,15 @@ else:
     importer._formulare = haken
 with open({zip!r}, "rb") as fh:
     roh = fh.read()
-r = c.post("/api/material/katalog/import", data={{"file": (io.BytesIO(roh), "katalog.zip"), "trocken": "0"}},
-           headers=H, content_type="multipart/form-data")
+r = c.post("/api/material/katalog/import", data={{"file": (io.BytesIO(roh), "katalog.zip"),
+           "trocken": "1" if wo == "uebernehmen" else "0"}}, headers=H, content_type="multipart/form-data")
 assert r.status_code == 202, r.get_json()
+if wo == "uebernehmen":
+    from app.material.services import importauftrag
+    assert importauftrag.warten(r.json["auftrag"]["id"], 120)
+    print(r.json["auftrag"]["id"], flush=True)
+    r = c.post("/api/material/katalog/import/" + r.json["auftrag"]["id"] + "/uebernehmen", headers=H)
+    assert r.status_code == 202, r.get_json()
 print(r.json["auftrag"]["id"], flush=True)
 time.sleep(600)
 """
@@ -270,7 +280,9 @@ def _kind_toeten(tmp, wo):
     """Einen Arbeitsprozess nachstellen, der mitten im Import endet (Neustart, Deploy): ein eigener Prozess startet den
     Import über die Schnittstelle, hält an der Stelle wo an und wird mit SIGKILL beendet – ohne jedes Aufräumen.
     „ablegen“: vor der dritten von vier Dateien (zwei liegen und stehen im Protokoll); „schreiben“: mitten in der
-    Transaktion des zweiten Durchgangs, nach Kategorien und Produkten (alle vier Dateien liegen)."""
+    Transaktion des zweiten Durchgangs, nach Kategorien und Produkten (alle vier Dateien liegen); „uebernehmen“ wie
+    „schreiben“, aber als „Übernehmen“ nach einem Probelauf. Liefert die Kennung des Laufs – bei „uebernehmen“
+    (Probelauf, Lauf)."""
     zip_pfad, marke = os.path.join(tmp, "probe.zip"), os.path.join(tmp, "marke")
     with open(zip_pfad, "wb") as fh:
         fh.write(katalog_zip(2))
@@ -279,6 +291,10 @@ def _kind_toeten(tmp, wo):
     kind = subprocess.Popen([sys.executable, "-S", "-c", skript], stdout=subprocess.PIPE, stderr=protokoll,
                             env=dict(os.environ))
     try:
+        probe = ""
+        if wo == "uebernehmen":
+            bereit = select.select([kind.stdout], [], [], 120)[0]
+            probe = kind.stdout.readline().decode().strip() if bereit else ""
         bereit = select.select([kind.stdout], [], [], 90)[0]
         kennung = kind.stdout.readline().decode().strip() if bereit else ""
         ende = time.monotonic() + 60
@@ -294,7 +310,7 @@ def _kind_toeten(tmp, wo):
         protokoll.close()
     os.remove(zip_pfad)
     os.remove(os.path.join(tmp, "kind.log"))
-    return kennung
+    return (probe, kennung) if wo == "uebernehmen" else kennung
 
 
 def test_prozess_weg():
@@ -322,6 +338,8 @@ def test_prozess_weg():
             finally:
                 importauftrag.TOT_NACH, importauftrag.SPERRE_WARTEN = alt
             assert a["zustand"] == "abgebrochen" and "unterbrochen" in a["fehler"] and a["beendet"], a
+            assert "bevor er gespeichert hatte" in a["fehler"] and "neuer Probelauf" in a["fehler"], a
+            assert not a["uebernehmbar"], a
             assert "/" not in a["fehler"] and a["bericht"] is None, a
             # Nichts halb geschrieben, keine abgelegte Datei übrig, die hochgeladene Datei weg, Sperre frei.
             assert (zahl(app, "SELECT COUNT(*) AS n FROM mat_product"),
@@ -403,10 +421,13 @@ def test_rechte():
         r = k["adm"].post(f"{URL}/{kennung}/uebernehmen", headers=H)
         assert r.status_code == 403 and "gestartet" in r.json["error"], r.get_json()
         assert lesen(k["katalog"], kennung)["uebernehmbar"] is True
-        # Im Zustand steht vom Konto nur Name und Kennung, im Bericht keine Person.
+        # Im Zustand steht vom Konto nur der pseudonyme Kontoverweis (users.mat_ref) – kein Name, keine users.id –,
+        # im Bericht keine Person.
         with open(os.path.join(ordner(tmp), kennung + ".json"), encoding="utf-8") as fh:
             roh = fh.read()
-        assert "@" not in roh and "katalog@example.org" not in roh
+        z = json.loads(roh)
+        assert "@" not in roh and "von" not in z and "von_id" not in z, z
+        assert z["von_ref"] == zahl(app, "SELECT mat_ref AS n FROM users WHERE id = ?", (k["katalog_id"],)), z
         with open(os.path.join(ordner(tmp), kennung + ".bericht.json"), encoding="utf-8") as fh:
             roh = fh.read()
         assert "@" not in roh and '"von' not in roh
@@ -444,7 +465,24 @@ def test_fehlerfaelle():
         assert a["zustand"] == "fehlgeschlagen" and "unerwarteten Fehler" in a["fehler"], a
         assert tmp not in json.dumps(a) and "Testfehler" not in json.dumps(a), a
         assert a["bericht"]["fehler"] == [a["fehler"]] and not a["bericht"]["gespeichert"], a
+        assert "Gespeichert wurde nichts" in a["fehler"], a
         assert zahl(app, "SELECT COUNT(*) AS n FROM mat_product") == 0
+        # Unerwarteter Fehler NACH dem Commit: Die Meldung sagt nicht „nichts gespeichert“.
+        echt_abschluss = importer._abschluss
+
+        def nach_commit(lauf, basis):
+            if lauf.bericht.get("gespeichert"):
+                raise RuntimeError("Testfehler nach dem Commit")
+            return echt_abschluss(lauf, basis)
+
+        importer._abschluss = nach_commit
+        try:
+            a = import_abwarten(c, hoch(c, katalog_zip(1, farbe=90), trocken=False))
+        finally:
+            importer._abschluss = echt_abschluss
+        assert a["zustand"] == "fehlgeschlagen" and "schon geschrieben" in a["fehler"], a
+        assert "Gespeichert wurde nichts" not in a["fehler"], a
+        assert zahl(app, "SELECT COUNT(*) AS n FROM mat_product") == 1
         assert not [n for n in dateien_im_auftragsordner(tmp) if n.endswith((".datei", ".abgelegt"))]
         assert import_abwarten(c, hoch(c, katalog_zip(1), trocken=False))["zustand"] == "fertig"
         # Ohne Datei weiter 400 (vor dem Speichern); kaputte Sperr- und Zustandsdateien stören nicht.
@@ -531,7 +569,7 @@ def test_fortschritt_und_kommandozeile():
                                               fortschritt=lambda *a, **kw: meldungen.append((a, kw)))
             assert echt["gespeichert"], echt
             phasen = [m[0][0] for m in meldungen]
-            assert phasen == ["pruefen"] * 5 + ["probe"] + ["ablegen"] * 8 + ["schreiben"], phasen
+            assert phasen == ["pruefen"] * 5 + ["probe"] + ["ablegen"] * 8 + ["schreiben", "gespeichert"], phasen
             abgelegt = [m[1]["abgelegt"] for m in meldungen if m[1].get("abgelegt")]
             assert sorted(a[0] for a in abgelegt) == ["bild", "bild", "dokument", "dokument"], abgelegt
             assert db.query("SELECT COUNT(*) AS n FROM mat_product", one=True)["n"] == 2
@@ -547,7 +585,135 @@ def test_fortschritt_und_kommandozeile():
     print("Fortschritt und Kommandozeile bestanden.")
 
 
-# --- 8. Oberfläche (statisch) -------------------------------------------------------------------------------------
+# --- 8. Nachbesserung nach der Sicherheitsprüfung (24.10.2026) ----------------------------------------------------
+
+def test_konto_geloescht():
+    """Befund 1: Der Zustand nennt das Konto nur über users.mat_ref. Nach dem Löschen steht „(gelöschtes Konto)“ da, und
+    ein neues Konto, dem SQLite dieselbe Kennung gibt, kann den Probelauf nicht übernehmen."""
+    from test_material import neues_konto
+
+    from app.material.services import importauftrag
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        c1, uid = neues_konto(app, "starter@example.org", rechte={"material": 2})
+        a = import_abwarten(c1, hoch(c1, katalog_zip(1, mit_dateien=False)))
+        assert a["uebernehmbar"] and a["eigener"] and a["von"] == "starter", a
+        assert lesen(k["adm"], a["id"])["von"] == "starter"
+        assert k["adm"].delete(f"/api/admin/users/{uid}", headers=H).status_code == 200
+        c2, uid2 = neues_konto(app, "nachfolger@example.org", rechte={"material": 2})
+        assert uid2 == uid, (uid, uid2)               # ohne AUTOINCREMENT vergibt SQLite die Kennung neu
+        b = lesen(c2, a["id"])
+        assert b["von"] == "(gelöschtes Konto)" and not b["eigener"] and not b["uebernehmbar"], b
+        assert c2.get(f"{URL}/aktuell").json["auftrag"]["von"] == "(gelöschtes Konto)"
+        r = c2.post(f"{URL}/{a['id']}/uebernehmen", headers=H)
+        assert r.status_code == 403 and "gestartet" in r.json["error"], r.get_json()
+        assert zahl(app, "SELECT COUNT(*) AS n FROM mat_product") == 0
+        with open(os.path.join(ordner(tmp), a["id"] + ".json"), encoding="utf-8") as fh:
+            assert "starter" not in fh.read()
+        # Ein Zustand der ersten Fassung (Name und users.id): Beim Aufräumen verschwinden beide Felder, übernehmen
+        # lässt er sich nicht.
+        alt_id = "a" * 32
+        zustand_schreiben(tmp, {"id": alt_id, "zustand": "fertig", "trocken": True, "quelle": "k.zip",
+                                "gestartet": "2026-10-24T06:00:00+00:00", "beendet": "2099-01-01T00:00:00+00:00",
+                                "von_id": uid2, "von": "Platzhalter Alt", "datei_bis": "2099-01-01T00:00:00+00:00"})
+        with open(os.path.join(ordner(tmp), alt_id + ".datei"), "wb") as fh:
+            fh.write(b"PK")
+        assert c2.post(f"{URL}/{alt_id}/uebernehmen", headers=H).status_code == 403
+        with app.app_context():
+            importauftrag.aufraeumen()
+        with open(os.path.join(ordner(tmp), alt_id + ".json"), encoding="utf-8") as fh:
+            z = json.load(fh)
+        assert "von" not in z and "von_id" not in z and z["zustand"] == "fertig", z
+        assert lesen(c2, alt_id)["von"] is None
+    print("Konto gelöscht bestanden.")
+
+
+def test_plattenplatz():
+    """Befund 2: zu wenig Platz → 507 ohne Pfad, nichts liegen geblieben; ein neuer Auftrag löscht die Dateien
+    älterer Probeläufe."""
+    import shutil
+    with tempfile.TemporaryDirectory() as tmp:
+        app = make_app(tmp)
+        c = anmelden(app, "admin@example.org", "geheim123")
+        p1 = import_abwarten(c, hoch(c, katalog_zip(1, mit_dateien=False)))
+        p2 = import_abwarten(c, hoch(c, katalog_zip(2, mit_dateien=False)))
+        # Der zweite Probelauf hat die Datei des ersten gelöscht – dessen „Übernehmen“ ist überholt.
+        assert f"{p1['id']}.datei" not in dateien_im_auftragsordner(tmp) and p2["uebernehmbar"], p2
+        assert not lesen(c, p1["id"])["uebernehmbar"]
+        r = c.post(f"{URL}/{p1['id']}/uebernehmen", headers=H)
+        assert r.status_code == 409 and "nächsten Import" in r.json["error"], r.get_json()
+
+        from app.material.services import importauftrag
+        echt = shutil.disk_usage
+        shutil.disk_usage = lambda pfad: echt(pfad)._replace(free=importauftrag.RESERVE + 10)
+        try:
+            # Übernehmen: 507, der Probelauf bleibt übernehmbar.
+            r = c.post(f"{URL}/{p2['id']}/uebernehmen", headers=H)
+            assert r.status_code == 507 and "zu wenig Platz" in r.json["error"], r.get_json()
+            assert tmp not in r.json["error"] and "/" not in r.json["error"], r.get_json()
+            assert lesen(c, p2["id"])["uebernehmbar"]
+            # Neuer Upload: 507, keine Datei liegen geblieben (die des älteren Probelaufs ist weg).
+            r = hoch(c, katalog_zip(3, mit_dateien=False))
+            assert r.status_code == 507 and "Katalogdatei" in r.json["error"] and tmp not in r.json["error"], r.get_json()
+            assert not [n for n in dateien_im_auftragsordner(tmp) if n.endswith(".datei")], dateien_im_auftragsordner(tmp)
+        finally:
+            shutil.disk_usage = echt
+        assert zahl(app, "SELECT COUNT(*) AS n FROM mat_product") == 0
+        # Mit Platz geht es wieder; die Sperre ist frei.
+        assert import_abwarten(c, hoch(c, katalog_zip(1, mit_dateien=False)))["zustand"] == "fertig"
+    print("Plattenplatz bestanden.")
+
+
+def test_uebernehmen_abgebrochen():
+    """Ein „Übernehmen“, dessen Prozess mitten in der Schreibtransaktion endet (SIGKILL): Der Probelauf bekommt seine
+    Datei zurück, „Übernehmen“ geht noch einmal (auch über die Kennung des abgebrochenen Laufs). Endet er erst nach dem
+    Commit (Vermerk „gespeichert“), nicht – und die Meldung sagt, dass die Datenbank geschrieben war."""
+    from app.material.services import importauftrag
+    with tempfile.TemporaryDirectory() as tmp:
+        app = make_app(tmp)
+        c = anmelden(app, "admin@example.org", "geheim123")
+        probe, kennung = _kind_toeten(tmp, "uebernehmen")
+        alt, importauftrag.TOT_NACH = importauftrag.TOT_NACH, 0
+        try:
+            a = lesen(c, kennung)
+        finally:
+            importauftrag.TOT_NACH = alt
+        assert a["zustand"] == "abgebrochen" and a["aus"] == probe and a["uebernehmbar"] and a["datei_bis"], a
+        assert "noch einmal" in a["fehler"] and "bevor er gespeichert hatte" in a["fehler"], a
+        p = lesen(c, probe)
+        assert p["uebernehmbar"] and p["uebernommen_in"] is None, p
+        assert zahl(app, "SELECT COUNT(*) AS n FROM mat_product") == 0
+        assert not [m for m in mediendateien(tmp) if "/" in m], mediendateien(tmp)
+        assert sorted(n for n in dateien_im_auftragsordner(tmp) if n.endswith(".datei")) == [f"{probe}.datei"]
+        r = c.post(f"{URL}/{kennung}/uebernehmen", headers=H)
+        assert r.status_code == 202, r.get_json()
+        echt = import_abwarten(c, r)
+        assert echt["zustand"] == "fertig" and echt["aus"] == probe and echt["bericht"]["gespeichert"], echt
+        assert zahl(app, "SELECT COUNT(*) AS n FROM mat_product") == 2
+        assert lesen(c, probe)["uebernommen_in"] == echt["id"] and not lesen(c, kennung)["uebernehmbar"]
+
+        # Nach dem Commit abgebrochen (nachgestellt): keine zweite Runde, die Meldung nennt es.
+        p2 = import_abwarten(c, hoch(c, katalog_zip(3)))
+        assert p2["uebernehmbar"], p2
+        with open(os.path.join(ordner(tmp), p2["id"] + ".json"), encoding="utf-8") as fh:
+            z2 = json.load(fh)
+        neu = "b" * 32
+        os.replace(os.path.join(ordner(tmp), p2["id"] + ".datei"), os.path.join(ordner(tmp), neu + ".datei"))
+        z2.update(uebernommen_in=neu, datei_bis=None)
+        zustand_schreiben(tmp, z2)
+        zustand_schreiben(tmp, {"id": neu, "zustand": "laeuft", "trocken": False, "quelle": "katalog.zip",
+                                "gestartet": "2026-01-01T00:00:00+00:00", "lebenszeichen": "2026-01-01T00:00:00+00:00",
+                                "von_ref": z2["von_ref"], "aus": p2["id"], "phase": "schreiben", "gespeichert": True})
+        a = lesen(c, neu)
+        assert a["zustand"] == "abgebrochen" and not a["uebernehmbar"] and "schon geschrieben" in a["fehler"], a
+        assert not lesen(c, p2["id"])["uebernehmbar"]
+        assert not [n for n in dateien_im_auftragsordner(tmp) if n.endswith(".datei")], dateien_im_auftragsordner(tmp)
+        r = c.post(f"{URL}/{neu}/uebernehmen", headers=H)
+        assert r.status_code == 409 and "schon übernommen" in r.json["error"], r.get_json()
+    print("Abgebrochenes Übernehmen bestanden.")
+
+
+# --- 9. Oberfläche (statisch) -------------------------------------------------------------------------------------
 
 def test_oberflaeche_statisch():
     pfad = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "material", "static",
@@ -556,6 +722,8 @@ def test_oberflaeche_statisch():
         js = fh.read()
     assert "katalog/import/aktuell" in js and "/uebernehmen`" in js and "upload.onprogress" in js
     assert "btn ghost" not in js
+    # Nachbesserung: vor dem Hochladen nachfragen, nach 100 % „Datei wird abgelegt …“, Zahlen im Balken als Zahl.
+    assert "xhr.upload.onload" in js and "Datei wird abgelegt …" in js and "Number(m)" in js
     print("Oberfläche (statisch) bestanden.")
 
 
@@ -569,5 +737,8 @@ if __name__ == "__main__":
     test_fehlerfaelle()
     test_aufraeumen()
     test_fortschritt_und_kommandozeile()
+    test_konto_geloescht()
+    test_plattenplatz()
+    test_uebernehmen_abgebrochen()
     test_oberflaeche_statisch()
     print("Alle Tests zum Katalogimport im Hintergrund bestanden.")

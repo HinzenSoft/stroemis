@@ -49,7 +49,8 @@ def katalog_export_vorschau():
 def katalog_importieren():
     """Katalogdatei (ZIP oder JSON) im Feld „file“. „trocken“ (Standard: ja) prüft nur und berichtet; gespeichert
     wird nur mit trocken=0. Die Datei wird abgelegt und der Import im Hintergrund gestartet: 202 mit „auftrag“, 409 mit
-    dem laufenden, wenn schon einer läuft. Größengrenze: UPLOAD_GRENZEN (routes.py) wie bisher."""
+    dem laufenden, wenn schon einer läuft, 507, wenn auf dem Server der Platz für die Datei nicht reicht.
+    Größengrenze: UPLOAD_GRENZEN (routes.py) wie bisher."""
     datei = request.files.get("file")
     if not datei or not datei.filename:
         raise Abgelehnt("Es wurde keine Datei mitgeschickt.")
@@ -82,7 +83,8 @@ def katalog_import_stand(kennung):
 @katalog_required
 def katalog_import_uebernehmen(kennung):
     """Nach einem Probelauf ohne Fehler: derselbe Import echt, mit der Datei des Probelaufs (sie bleibt eine Stunde) –
-    ohne neuen Upload. Nur wer den Probelauf gestartet hat. 202 mit dem neuen Auftrag."""
+    ohne neuen Upload. Nur wer den Probelauf gestartet hat. Auch mit der Kennung eines abgebrochenen „Übernehmen“,
+    dessen Probelauf seine Datei zurückbekam. 202 mit dem neuen Auftrag, 507, wenn der Platz nicht reicht."""
     try:
         auftrag = importauftrag.uebernehmen(kennung, akteur())
     except importauftrag.Belegt as exc:

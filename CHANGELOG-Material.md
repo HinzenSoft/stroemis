@@ -19,7 +19,7 @@ für sich deploybar.
 | Phase 4 · 2 – Sets mit Komponenten | Hersteller-Sets: Stückliste im Katalog (auch in der Katalogdatei), Set-Artikel mit Teil-Artikeln, Set-Status, -Fälligkeit und -Lebensende, Listen mit der Set-Zeile, Verschieben und Zuordnen mit allen Teilen, Meine PSA; Sperr-Kaskade, Set prüfen mit Set-Protokoll, Austausch, Aussondern mit Wahl je Teil, Oberfläche | geliefert 23.10.2026 (c5e1b06), freigegeben 23.10.2026 |
 | Phase 4 · 2b – Sets, Teil 2 | Vorhandenen Artikel als Teil einsetzen (mit Auswahl, auch über die bisherige Inventarnummer), Set auflösen, „Bestandteil ersetzt“, Prüfumfang eines nie geprüften Sets; dazu (KERN Z) Zahlen, CSV-Spalten, gebündelte Mails | geliefert 23.10.2026 (Schema bleibt 21) – wartet auf Freigabe |
 | Feintuning nach dem Kommentar-Dokument | Produkt am Artikel ändern bis zur ersten Prüfung (Dialog „Bearbeiten“, Weg aus „aus dem Bestand wählen“), Jahresbericht: ausgesondertes Set als eine Zeile, weitergeführte Teile mit eigener Sperre | gebaut 23.10.2026 (Schema bleibt 21) – wartet auf Freigabe |
-| Katalogimport im Hintergrund | Probelauf und Übernehmen laufen als Auftrag im Hintergrund (202, Stand per Abfrage, Bericht wie bisher), „Übernehmen“ ohne neuen Upload, höchstens ein Import gleichzeitig, Abbruch bei Neustart erkannt, Hinweis auf der Katalogseite | gebaut 24.10.2026 (kein Schemaschritt, Schema bleibt 21) – wartet auf Freigabe |
+| Katalogimport im Hintergrund | Probelauf und Übernehmen laufen als Auftrag im Hintergrund (202, Stand per Abfrage, Bericht wie bisher), „Übernehmen“ ohne neuen Upload, höchstens ein Import gleichzeitig, Abbruch bei Neustart erkannt, Hinweis auf der Katalogseite; Nachbesserung nach der Sicherheitsprüfung (Kontoverweis statt Kontokennung und Name, Plattenplatz, Übernehmen nach Abbruch wiederholbar, dev-zuruecksetzen wartet) | gebaut 24.10.2026 (kein Schemaschritt, Schema bleibt 21) – wartet auf Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4214,7 +4214,7 @@ bisher. Kein Schemaschritt (Schema bleibt 21): Der Zustand eines Auftrags liegt 
   ersten Abfrage auf).
 - **Personendaten**: Der Bericht nennt wie bisher keine Person. Der Zustand nennt den Namen dessen, der gestartet hat
   (wie das Journal, nie die E-Mail), und seine Kontokennung (für „Übernehmen“; die Schnittstelle gibt sie nicht aus) –
-  7 Tage lang.
+  7 Tage lang. **Seit der Nachbesserung (unten) nur noch den pseudonymen Kontoverweis.**
 
 ### Oberfläche
 
@@ -4308,6 +4308,107 @@ Datei für „Übernehmen“ 1 h, Zustände 7 Tage, Hinweis 24 h, abgebrochen na
    sofortigen Fehlermeldung (400) – die Prüfung braucht bei 1 GB selbst ihre Zeit.
 5. **Abbruch erkannt nach 30 s** ohne Sperre und Lebenszeichen; bis dahin bekommt ein neuer Start nach einem Neustart
    noch 409.
+
+## Nachbesserung Katalogimport im Hintergrund nach der Sicherheitsprüfung (24.10.2026)
+
+Grundlage: Prüfbericht des Sicherheitsprüfers zu 30cf668 (zwei Befunde, mehrere Verbesserungen), Auftrag
+`auftrag_nachbesserung_hintergrundimport.md`. Kein Schemaschritt, Schema bleibt 21. Gebaut im Worktree
+`import-nachbesserung` (von dev e4fddcc).
+
+### Befunde
+
+- **Löschkonzept** (Befund 1): Der Zustand speicherte `von_id` (users.id – SQLite vergibt sie ohne AUTOINCREMENT nach
+  dem Löschen neu) und den Namen. Ein neues Konto mit derselben Kennung hätte einen fremden Probelauf übernehmen können,
+  und der Name stand bis zu 7 Tage auf der Platte. Jetzt steht im Zustand nur noch `von_ref` = `users.mat_ref`, der
+  pseudonyme Kontoverweis, den auch das Journal benutzt (beim Start mit `journal.konto_ref` angelegt, falls er fehlt).
+  Er verschwindet mit der Kontozeile; den Namen löst jede Anzeige frisch auf (`journal.konto_name`) – nach dem Löschen
+  „(gelöschtes Konto)“, und „Übernehmen“ vergleicht den Verweis des angemeldeten Kontos, sodass ein Nachfolger mit
+  derselben Kennung nur 403 bekommt. Der Lauf findet sein Konto (Journal, Bearbeiter) über `mat_ref`. So braucht das
+  Löschen eines Kontos (`services/loeschung.py`) keinen eigenen Schritt für die Aufträge: Die Datei eines übernehmbaren
+  Probelaufs enthält nur den Katalog und verschwindet spätestens mit ihrer Frist bzw. dem nächsten Import. Zustände der
+  ersten Fassung verlieren `von_id` und `von` beim nächsten Aufräumen (Abfrage der Katalogseite, Start, Tageslauf);
+  übernehmen lässt sich ein solcher Probelauf nicht mehr (nur auf dev entstanden).
+- **Plattenplatz** (Befund 2): Ein neuer Auftrag (Probelauf wie „Übernehmen“) löscht unter der Sperre die Dateien
+  älterer Probeläufe – es läuft ohnehin nur einer, und ihr „Übernehmen“ ist damit überholt (409 „liegt nicht mehr bereit
+  (sie bleibt eine Stunde, bis zum nächsten Import)“). Vor dem Kopieren der hochgeladenen Datei prüft der Start
+  `shutil.disk_usage` gegen Dateigröße + `RESERVE` (64 MB, wie `zuruecksetzen.RESERVE`), „Übernehmen“ ebenso gegen die
+  Größe der Datei (der Import legt ungefähr so viel unter `media/material` ab). Zu wenig: **507** „Auf dem Server ist zu
+  wenig Platz für die Katalogdatei: frei 0,4 GB, gebraucht etwa 1,2 GB …“ – Zahlen, kein Pfad; der Probelauf bleibt dann
+  übernehmbar. Die alte Datei geht schon vor der Prüfung weg, damit ihr Platz mitzählt.
+
+### Verbesserungen
+
+- **Meldung nach einem Abbruch**: „schon abgelegte Dateien sind wieder entfernt“ steht nicht mehr da. README und Modul
+  sagen genauer: Weggeräumt wird alles, was im Protokoll steht; die eine Datei, die im Moment des Abbruchs gerade
+  geschrieben wurde, kann liegen bleiben (mit nichts verknüpft, nie angezeigt; ein Dokument heißt nach seinem Inhalt
+  und wird wiederverwendet). Bilder ohne Besitzer aus dem Zeitfenster des Laufs wegzuräumen wäre **nicht sicher** – ein
+  Bild, das jemand anderes gerade hochlädt, hat bis zu seinem Commit auch noch keine Zeile; deshalb nicht umgesetzt.
+- **„Gespeichert wurde nichts“ nur vor dem Commit**: Der Importer meldet gleich nach dem Commit `fortschritt("gespeichert")`
+  (ohne Rückruf – Kommandozeile – unverändert); der Auftrag vermerkt `gespeichert: true` sofort auf der Platte. Ein
+  unerwarteter Fehler danach meldet „Die Datenbank war da schon geschrieben; ob alles übernommen ist, zeigt ein neuer
+  Probelauf mit derselben Datei.“, ebenso ein Abbruch danach. Der Hinweis auf der Katalogseite sagt bei einem solchen
+  Fehler nur „mit Fehler beendet.“ statt „– nichts gespeichert.“
+- **Abgebrochenes „Übernehmen“ wiederholen**: Endet der Prozess eines „Übernehmen“, bevor es gespeichert hatte
+  (Neustart, Deploy), bekommt der Probelauf seine Datei zurück und lässt sich wieder eine Stunde übernehmen – im Dialog
+  des abgebrochenen Laufs steht „Übernehmen“ (die Route nimmt auch dessen Kennung und nimmt dann den Probelauf), der
+  Hinweis sagt „Katalogimport abgebrochen – Übernehmen geht noch einmal.“ Ohne Risiko: Die Transaktion hat nichts
+  geschrieben; und fiele der Abbruch genau zwischen Commit und Vermerk (Mikrosekunden), fände der zweite Lauf nichts mehr
+  zu ändern – der Import gleicht ab und legt nichts doppelt an. Nach dem Vermerk „gespeichert“ gibt es keine zweite
+  Runde.
+- **Dialog**: Vor dem Hochladen fragt er `…/import/aktuell`; läuft schon einer, lädt er gar nicht erst hoch („Es läuft
+  schon ein Katalogimport [von …]. Es kann immer nur einer laufen – bitte warten, bis er fertig ist.“ mit „Stand des
+  laufenden Imports ansehen“). Nach 100 % steht „Datei wird abgelegt …“ (Balken ohne Wert) bis zur Antwort. Wer in
+  diesem Fenster schließt, bricht nichts mehr ab: kein „es wurde nichts importiert“, sondern „Die Datei ist
+  hochgeladen – der Probelauf startet auf dem Server. Sein Stand steht oben auf der Katalogseite.“; scheitert der Start
+  dann doch (409, 507), kommt seine Meldung als Einblendung. `importBalken` wandelt n und m mit `Number()`.
+- **dev-zuruecksetzen**: nimmt zuerst die Sperre des Katalogimports und hält sie bis zum Schluss – läuft gerade einer
+  (Sperre gehalten oder frisches Lebenszeichen), bricht es mit „Gerade läuft ein Katalogimport … – nichts geändert.“
+  ab (Rückgabewert 1), ein Start während des Laufs bekommt 409. Nach dem COMMIT leert es `DATA_DIR/katalog-import/` (jede
+  Datei einzeln mit genauem Namen; die Sperrdatei bleibt). `--trocken` nennt den Ordner und warnt, wenn gerade einer läuft.
+- **Nicht übernommen**: eigene `stream_factory` (der Upload landet weiter in Werkzeugs Zwischenspeicher und wird einmal
+  kopiert) – nicht trivial genug für den Nutzen.
+
+### Für Entwickler
+
+- `importauftrag.py`: `von_ref` statt `von_id`/`von`, `_ref`, `_von`, `_erneut`, `_platz_pruefen` (507),
+  `_alte_probelaeufe_freigeben`, `_zurueck_zum_probelauf`, `_gespeichert_text`; für dev-zuruecksetzen `anhalten`,
+  `laeuft`, `zwischendaten`, `leeren_unter_sperre`. `importer.py`: Phase „gespeichert“ nach dem Commit (beide Wege).
+  `zuruecksetzen.py`: Sperre, Leeren, Zeilen in Probelauf und Bericht. `material.js`: Vorabfrage, „Datei wird abgelegt
+  …“, Schließen, Hinweistexte, `importBalken`.
+
+### Tests
+
+`tests/test_material_importauftrag.py` (13 Tests): neu `test_konto_geloescht` (Konto löschen → neues Konto mit derselben
+Kennung bekommt 403, Name „(gelöschtes Konto)“ in Stand und Hinweis, kein Name in der Datei; Zustand der ersten Fassung
+verliert Name und Kennung beim Aufräumen), `test_plattenplatz` (zweiter Probelauf löscht die Datei des ersten; 507 ohne
+Pfad bei Übernehmen und Upload, nichts liegen geblieben), `test_uebernehmen_abgebrochen` (echt per SIGKILL mitten in der
+Schreibtransaktion eines „Übernehmen“ → Probelauf wieder übernehmbar, Übernehmen über die Kennung des abgebrochenen
+Laufs speichert; nachgestellter Abbruch nach dem Commit → keine zweite Runde, 409); `test_fehlerfaelle` mit einem Fehler
+nach dem Commit; Rechte- und Fortschrittstest angepasst. `tests/test_material_dev_zuruecksetzen.py`: neu
+`test_katalogimport` (Sperre gehalten bzw. frisches Lebenszeichen → Rückgabewert 1, nichts geändert, `--trocken` warnt;
+danach geleert bis auf die Sperrdatei); `stand()` lässt die leere Sperrdatei aus.
+
+### Im Browser geprüft (Chromium, 1280 und 360 px, DEMO-Katalogdatei mit Platzhaltern)
+
+- Probelauf: Antwort des Servers per DevTools angehalten → „Datei wird abgelegt …“ mit laufendem Balken, danach der
+  Bericht mit „Übernehmen bis …“.
+- Schließen, während die Antwort angehalten war → Hinweis „Die Datei ist hochgeladen – der Probelauf startet …“, nach
+  dem Freigeben steht der Probelauf oben auf der Katalogseite.
+- Nachgestellter laufender Import (Zustand mit frischem Lebenszeichen, darin n/m mit HTML) → „Es läuft schon ein
+  Katalogimport …“, **keine** POST-Anfrage; „Stand des laufenden Imports ansehen“ zeigt einen Balken ohne Wert (kein
+  eingeschleustes Markup).
+- Nachgestelltes abgebrochenes „Übernehmen“ → Hinweis „Katalogimport abgebrochen – Übernehmen geht noch einmal.“, im
+  Dialog Grund und „Übernehmen“ (rot, die eine Hauptaktion) neben „Schließen“; „Übernehmen“ speichert.
+- Keine Konsolenfehler, keine waagrechte Rollleiste bei 360 px.
+
+### Bitte bestätigen
+
+1. **Kontoverweis statt Löschschritt**: Statt beim Löschen des Kontos alle Zustände umzuschreiben, speichern die Aufträge
+   nur noch `users.mat_ref`. Die Datei eines Probelaufs des gelöschten Kontos bleibt bis zum Ablauf ihrer Stunde bzw.
+   bis zum nächsten Import liegen (sie enthält nur den Katalog) – übernehmen kann sie niemand mehr.
+2. **Platz**: Grenze Dateigröße + 64 MB, bei „Übernehmen“ ebenso (grobe Schätzung dessen, was unter `media/material`
+   landet). Ein neuer Import löscht die Datei eines älteren Probelaufs auch dann, wenn er selbst mit 507 abgelehnt wird.
+3. **Übernehmen nach Abbruch** wiederholbar, solange kein „gespeichert“ vermerkt ist (Begründung oben).
 
 ## Modul Material auf dev zurücksetzen (Wunsch des Nutzers, 23.10.2026)
 
@@ -6679,8 +6780,8 @@ oder Plattform-Verwaltung).
 | `GET /material/export/<ordner>-protokolle.zip` | Grundrecht am Ordner (Phase 2) | alle Protokolle dieser Artikel und die Sammelprotokolle der Durchgänge im Zweig, mit `Verzeichnis.csv` |
 | `GET /material/artikel/<id>/lebenslauf.pdf` | Grundrecht an der Heimat (Phase 2) | Lebenslauf als PDF/A-3b, auf Abruf, nicht festgeschrieben |
 | `GET /api/material/katalog/export`, `GET …/export/vorschau` | Katalog | Katalog ohne DEMO als ZIP (Format 2) bzw. seine Zahlen vorab |
-| `POST /api/material/katalog/import` (`file`: ZIP oder JSON, `trocken`: Vorgabe `1`) | Katalog | Katalogimport im Hintergrund (seit 24.10.2026): **202** `auftrag`, 409 mit dem laufenden; der Bericht (neu/geändert/unverändert je Art, Bilder, Dokumente, Änderungen, Hinweise, Warnungen, Fehler) kommt über `GET …/katalog/import/<kennung>` |
-| `GET /api/material/katalog/import/<kennung>`, `POST …/<kennung>/uebernehmen`, `GET …/katalog/import/aktuell` | Katalog (Übernehmen: wer den Probelauf gestartet hat) | Stand und Bericht eines Auftrags; echter Lauf mit der Datei des Probelaufs (202); laufender oder zuletzt beendeter Auftrag für die Katalogseite – Einzelheiten unter „Katalogimport im Hintergrund“ |
+| `POST /api/material/katalog/import` (`file`: ZIP oder JSON, `trocken`: Vorgabe `1`) | Katalog | Katalogimport im Hintergrund (seit 24.10.2026): **202** `auftrag`, 409 mit dem laufenden, 507 bei zu wenig Platz (Datei + 64 MB); der Bericht (neu/geändert/unverändert je Art, Bilder, Dokumente, Änderungen, Hinweise, Warnungen, Fehler) kommt über `GET …/katalog/import/<kennung>` |
+| `GET /api/material/katalog/import/<kennung>`, `POST …/<kennung>/uebernehmen`, `GET …/katalog/import/aktuell` | Katalog (Übernehmen: wer den Probelauf gestartet hat) | Stand und Bericht eines Auftrags (`von`: Name, frisch aus dem Kontoverweis aufgelöst, „(gelöschtes Konto)“ nach dem Löschen); echter Lauf mit der Datei des Probelaufs (202, 507 bei zu wenig Platz; auch mit der Kennung eines abgebrochenen „Übernehmen“, dessen Probelauf seine Datei zurückbekam); laufender oder zuletzt beendeter Auftrag für die Katalogseite – Einzelheiten unter „Katalogimport im Hintergrund“ und seiner Nachbesserung |
 | `GET /api/material/produkte/<id>/rueckrufe` | Modulzugang | Rückrufe des Produkts: laufende mit den betroffenen Artikeln, die das Konto sieht, und ihren Zahlen (nicht gefundene Seriennummern nur für die Material-Verwaltung, Phase 2), beendete mit Vermerk |
 | `POST /api/material/produkte/<id>/rueckrufe` (`title`, `description`, `url`, `serials`, `mail`) | Katalog | Rückruf anlegen; Antwort mit betroffenen Artikeln, Empfängerzahl, nicht gefundenen Seriennummern (Phase 2: nur, wer alle Bestände sieht – die Material-Verwaltung; ein Konto mit Teilsicht bekäme `betroffen` und `offen` des eigenen Bereichs und `benachrichtigt`) |
 | `POST /api/material/rueckrufe/<id>/beenden` (`vermerk` Pflicht) | Katalog | Rückruf beenden |

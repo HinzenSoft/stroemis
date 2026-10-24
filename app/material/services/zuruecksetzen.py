@@ -20,6 +20,11 @@ der ideographische Punkt, IDNA, klein) und ist nur frei, wenn er mit „dev.“ 
 Eine leere BASE_URL braucht kein Test und kein Probelauf: Die Tests setzen https://dev.strömis.de, ohne Eintrag gilt in
 der Anwendung ohnehin die Vorgabe https://strömis.de.
 
+Katalogimport im Hintergrund (importauftrag.py, Nachbesserung nach der Sicherheitsprüfung vom 24.10.2026): Läuft gerade
+einer, bricht der Befehl ab, bevor er etwas ändert; sonst hält er dessen Sperre bis zum Schluss – ein Start in der Zeit
+bekommt 409. Nach dem COMMIT leert er DATA_DIR/katalog-import (Aufträge, Berichte, Dateien von Probeläufen beziehen sich
+auf den geleerten Katalog); die Sperrdatei bleibt.
+
 Ablauf (zuruecksetzen):
   1. Das frische Schema entsteht zuerst in einer Vorlage im Speicher: models.migrieren auf einer leeren Datenbank, die
      nur die übrigen Tabellen dieser Datenbank kennt (ohne Zeilen). So läuft dieselbe Migration wie bei einer neuen
@@ -60,7 +65,7 @@ from urllib.parse import urlsplit
 from flask import current_app
 
 from .. import models
-from . import ZONE, erinnerung
+from . import ZONE, erinnerung, importauftrag
 
 # Positivliste für BASE_URL (adresse_frei): Hosts der Entwicklung beginnen mit „dev.“, lokal läuft run.py.
 DEV_VORSATZ = "dev."
@@ -166,6 +171,7 @@ def bestand(conn):
     return {"zeilen": zeilen, "volltext": sorted(t for t, a in tabellen.items() if a == "virtual"),
             "trigger": arten.get("trigger", 0), "indizes": arten.get("index", 0), "views": arten.get("view", 0),
             "medien": [(rel, *_groesse(p)) for rel, p in _medien()], "db_bytes": seiten * seite,
+            "katalogimport": importauftrag.zwischendaten(),
             "konten": conn.execute("SELECT COUNT(*) FROM users").fetchone()[0],
             "demo_konten": conn.execute("SELECT email, name FROM users WHERE lower(email) LIKE ? ORDER BY email",
                                         ("%" + DEMO_POSTFACH,)).fetchall()}
@@ -200,6 +206,11 @@ def trocken_text(b, ziel):
     zeilen += ["", "Würde in die Sicherung verschoben:"]
     zeilen += [f"  {rel:<15} {n} Dateien, {_mb(g)}" if n else f"  {rel:<15} leer oder nicht da"
                for rel, n, g in b["medien"]]
+    n, g = b["katalogimport"]
+    zeilen += ["", f"Würde danach geleert: {importauftrag.ORDNER} (Aufträge des Katalogimports) – "
+                   + (f"{n} Dateien, {_mb(g)}" if n else "leer")]
+    if importauftrag.laeuft():
+        zeilen.append("ACHTUNG Gerade läuft ein Katalogimport – der echte Lauf bräche jetzt ab, ohne etwas zu ändern.")
     frei = shutil.disk_usage(current_app.config["DATA_DIR"]).free
     zeilen += ["", f"Sicherung nach: {ziel} (Datenbank {_mb(b['db_bytes'])}, frei {_mb(frei)})"]
     zeilen += _bleibt(b) + _demo_text(b) + _aeltere_text(aeltere_sicherungen())
@@ -215,6 +226,8 @@ def bericht_text(e):
     zeilen = [f"Modul Material zurückgesetzt. Sicherung: {e['sicherung']}",
               f"  Datenbank (vorher, ganz): stroemis.db, {_mb(b['db_bytes'])}"]
     zeilen += [f"  {rel:<15} {n} Dateien, {_mb(g)} verschoben" for rel, n, g in b["medien"] if n]
+    if b["katalogimport"][0]:
+        zeilen.append(f"  {importauftrag.ORDNER:<15} {b['katalogimport'][0]} Dateien geleert (Aufträge des Katalogimports)")
     zeilen += [f"Geleert: {len(b['zeilen'])} Tabellen mit {sum(b['zeilen'].values())} Zeilen, "
                f"{len(b['volltext'])} Volltextindizes; Schema frisch angelegt (Version {e['version']})."]
     if e.get("start_fehler"):
@@ -435,6 +448,13 @@ def zuruecksetzen(jetzt=None):
     from .. import START_SCHRITTE
     db_pfad = current_app.config["DB_PATH"]
     jetzt = jetzt or datetime.now(ZONE)
+    try:
+        sperre = importauftrag.anhalten()
+    except OSError as exc:
+        raise Gescheitert(f"Die Sperre des Katalogimports ließ sich nicht nehmen ({exc}) – nichts geändert.") from exc
+    if sperre is None:
+        raise Gescheitert("Gerade läuft ein Katalogimport (Hinweis oben auf der Katalogseite) – nichts geändert. Warten, "
+                          "bis er zu Ende ist, dann erneut.")
     conn = sqlite3.connect(db_pfad, timeout=WARTEN, isolation_level=None)
     vorlage = None
     try:
@@ -483,10 +503,15 @@ def zuruecksetzen(jetzt=None):
                     conn.execute("ROLLBACK")
                 _zurueck(ordner, verschoben, exc)
                 raise
+        try:
+            importauftrag.leeren_unter_sperre()
+        except OSError as exc:                          # das Zurücksetzen selbst ist geschehen
+            log.warning("Aufträge des Katalogimports nicht geleert: %s", exc)
     finally:
         conn.close()
         if vorlage is not None:
             vorlage.close()
+        sperre.close()
     e = {"sicherung": ordner, "vorher": vorher, "version": version, "zeit": jetzt, "start_fehler": None,
          "aeltere": aeltere_sicherungen(ausser=ordner)}
     _liesmich(ordner, jetzt, [os.path.relpath(q, current_app.config["DATA_DIR"]) for q, _ in verschoben], fertig=True)
