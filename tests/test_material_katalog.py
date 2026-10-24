@@ -18,7 +18,8 @@ import zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from test_material import H, KATALOG, PDF, anmelden, gliederung, jpeg, katalog_grund, make_app, umgebung  # noqa: E402
+from test_material import (H, KATALOG, PDF, anmelden, gliederung, import_abwarten, jpeg, katalog_grund,  # noqa: E402
+                           make_app, umgebung)
 
 
 def png(farbe=(20, 120, 200)):
@@ -37,9 +38,9 @@ def hoch(c, url, inhalt, name, **felder):
 
 
 def importieren(c, inhalt, trocken, name="katalog.zip"):
+    """Über die Oberfläche: Auftrag im Hintergrund, abgewartet (import_abwarten); liefert den Bericht."""
     r = hoch(c, "/api/material/katalog/import", inhalt, name, trocken="1" if trocken else "0")
-    assert r.status_code == 200, r.get_json()
-    return r.json["bericht"]
+    return import_abwarten(c, r)["bericht"]
 
 
 def exportieren(c):
@@ -396,8 +397,10 @@ def test_zip_sicherheit():
             assert zahlen(app, *TABELLEN) == vorher and dateien_zaehlen(tmp) == dateien_vorher
 
         def abgewiesen(roh, teil):
-            r = hoch(c, "/api/material/katalog/import", roh, "katalog.zip", trocken="0")
-            assert r.status_code == 400 and teil in r.json["error"], r.get_json()
+            # Seit dem Hintergrundimport (24.10.2026) kein 400 mehr: Der Auftrag endet „fehlgeschlagen“, der Bericht
+            # nennt den Grund.
+            a = import_abwarten(c, hoch(c, "/api/material/katalog/import", roh, "katalog.zip", trocken="0"))
+            assert a["zustand"] == "fehlgeschlagen" and teil in a["bericht"]["fehler"][0], a
             assert zahlen(app, *TABELLEN) == vorher and dateien_zaehlen(tmp) == dateien_vorher
 
         # Zip-Slip: Verweise nach oben, absolut oder mit Rückstrich – auch wenn der Eintrag so im Archiv steht.
@@ -451,8 +454,8 @@ def test_zip_sicherheit():
             abgewiesen(_zip({"f": b"x" * 4096}, _katalog()), "entpackt")
         finally:
             importer.MAX_EINTRAEGE, importer.MAX_ENTPACKT = grenzen
-        r = hoch(c, "/api/material/katalog/import", b"{kein json", "katalog.json", trocken="1")
-        assert r.status_code == 400 and "JSON" in r.json["error"], r.get_json()
+        a = import_abwarten(c, hoch(c, "/api/material/katalog/import", b"{kein json", "katalog.json", trocken="1"))
+        assert a["zustand"] == "fehlgeschlagen" and "JSON" in a["bericht"]["fehler"][0], a
         assert c.post("/api/material/katalog/import", data={"trocken": "1"}, headers=H,
                       content_type="multipart/form-data").status_code == 400
 
@@ -461,8 +464,8 @@ def test_zip_sicherheit():
                                   _katalog(bild="dateien/bilder/ok.jpg", dokument="dateien/dokumente/ok.pdf")), False)
         assert ber["gespeichert"] and ber["bilder"]["neu"] == 1 and ber["dokumente"]["neu"] == 1, ber
         # Ohne „trocken“ ist es ein Probelauf.
-        r = hoch(c, "/api/material/katalog/import", _zip({}, _katalog()), "katalog.zip")
-        assert r.status_code == 200 and r.json["bericht"]["trocken"] and not r.json["bericht"]["gespeichert"]
+        b = import_abwarten(c, hoch(c, "/api/material/katalog/import", _zip({}, _katalog()), "katalog.zip"))["bericht"]
+        assert b["trocken"] and not b["gespeichert"], b
     print("ZIP-Sicherheitstest bestanden.")
 
 
@@ -530,8 +533,8 @@ def test_rechte():
                               content_type="multipart/form-data")
         assert r.status_code == 403
         assert k["katalog"].get("/api/material/katalog/export").status_code == 200
-        assert hoch(k["katalog"], "/api/material/katalog/import", roh, "k.json", trocken="1").status_code == 200
-        assert hoch(k["adm"], "/api/material/katalog/import", roh, "k.json", trocken="1").status_code == 200
+        import_abwarten(k["katalog"], hoch(k["katalog"], "/api/material/katalog/import", roh, "k.json", trocken="1"))
+        import_abwarten(k["adm"], hoch(k["adm"], "/api/material/katalog/import", roh, "k.json", trocken="1"))
         # Die Grenze der Route steht in UPLOAD_GRENZEN (sonst gälte 1 MB).
         from app.material.routes import UPLOAD_GRENZEN
         assert UPLOAD_GRENZEN["material_api.katalog_importieren"] > 1024 ** 3

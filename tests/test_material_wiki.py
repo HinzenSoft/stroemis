@@ -13,8 +13,8 @@ from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import (H, festschreiben, freigeben, gliederung, katalog_grund, neuer_artikel,  # noqa: E402
-                           neues_konto, pdf_seiten, pruef_formulare, protokoll_zeile, starten, umgebung,
+from test_material import (H, festschreiben, freigeben, gliederung, import_abwarten, katalog_grund,  # noqa: E402
+                           neuer_artikel, neues_konto, pdf_seiten, pruef_formulare, protokoll_zeile, starten, umgebung,
                            unterschreiben)
 from test_material_trennung import zeilen  # noqa: E402
 from test_material_ueberblick import ordner_neu  # noqa: E402
@@ -192,7 +192,7 @@ def test_vererbung_und_katalog():
         vorher = {f["id"] for f in zeilen(t.app, "SELECT id FROM mat_form")}
         r = t.mv.post("/api/material/katalog/import", headers=H, content_type="multipart/form-data",
                       data={"file": (io.BytesIO(aus.getvalue()), "katalog.zip"), "trocken": "0"})
-        assert r.status_code == 200 and r.json["bericht"]["gespeichert"], r.get_json()
+        assert import_abwarten(t.mv, r)["bericht"]["gespeichert"]
         neue = zeilen(t.app, "SELECT * FROM mat_form WHERE id NOT IN (SELECT value FROM json_each(?)) ORDER BY id",
                       (json.dumps(sorted(vorher)),))
         karabiner = [f for f in neue if f["category_id"] == t.ids["karabiner"]]

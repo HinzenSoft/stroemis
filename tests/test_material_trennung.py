@@ -1156,7 +1156,8 @@ def test_nichts_aus_b():
                      ("produkte", "pid"): ids["hms"], ("produkt", "pid"): ids["hms"],
                      ("pruefungen", "pid"): t.entwurf_b, ("pruefung", "pid"): t.entwurf_b, ("punkte", "rid"): b.punkt,
                      ("ordner", "fid"): t.lager_b, ("export", "fid"): t.lager_b, ("formulare", "fid"): form,
-                     ("formular", "fid"): form, ("durchgaenge", "rid"): t.durchgang_b, ("durchgang", "rid"): t.durchgang_b}
+                     ("formular", "fid"): form, ("durchgaenge", "rid"): t.durchgang_b, ("durchgang", "rid"): t.durchgang_b,
+                     ("import", "kennung"): "0" * 32}       # Katalogimport im Hintergrund (24.10.2026)
         regeln = [r for r in app.url_map.iter_rules() if r.endpoint.split(".")[0] in ("material", "material_api")
                   and r.endpoint != "material.medien"]
         vorher = _stand(app)

@@ -346,6 +346,7 @@ def test_fuehrungskraft_nur_lesen():
             ("ordner", "fid"): gid, ("formulare", "fid"): formulare["spezifisch"], ("formular", "fid"): formulare["spezifisch"],
             ("durchgaenge", "rid"): rid, ("durchgang", "rid"): rid,
             ("export", "fid"): gid,                         # CSV und Protokoll-ZIP je Ordner
+            ("import", "kennung"): "0" * 32,                # Katalogimport im Hintergrund (24.10.2026)
         }
 
         darf = f.get("/api/material/start").json["darf"]

@@ -4020,6 +4020,7 @@
               <div id="kat-doks"><p class="help">Wird geladen …</p></div>
               ${DARF.katalog ? '<button class="btn secondary small" data-act="dok-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Dokument<span class="k-anlegen"> anlegen</span></span></button>' : ""}</div></div>`
           : (kats.length ? "" : leer(DARF.katalog ? "Noch keine Kategorien – mit „Kategorie anlegen“." : "Noch keine Kategorien."))}
+        ${DARF.katalog ? '<div id="kat-import-hinweis"></div>' : ""}
         <div class="mat-suchzeile"><input type="search" id="kat-q" placeholder="${katPlatzhalter()}"
           aria-label="${KAT_SUCHE}" title="${KAT_SUCHE}" value="${esc(q)}" autocomplete="off" ${TASTATUR_SUCHE}></div>
         <div id="kat-liste"></div>`;
@@ -4027,7 +4028,7 @@
       $("#kat-q").addEventListener("input", (e) => { clearTimeout(los); los = setTimeout(() => { q = e.target.value.trim(); zeigen(liste); }, 250); });
       zeigen(liste);
       if (k) zeigenIn(katDoks, "#kat-doks");
-      if (DARF.katalog) meldungenZaehlen($("#kat-meldungen"));
+      if (DARF.katalog) { meldungenZaehlen($("#kat-meldungen")); importHinweis(); }
     }
     let katDocs = [];
     async function katDoks() {
@@ -4050,6 +4051,12 @@
       "produkt-neu": () => produktDialog({ category_id: kategorie }),
       "kat-export": () => katalogExportDialog(),
       "kat-import": () => katalogImportDialog(),
+      "kat-import-stand": (b) => katalogImportDialog(b.dataset.id),
+      "kat-import-aus": (b) => {
+        try { localStorage.setItem(IMPORT_AUSGEBLENDET, b.dataset.id); } catch (e) { /* privat: dann eben nicht */ }
+        const ziel = $("#kat-import-hinweis");
+        if (ziel) ziel.innerHTML = "";
+      },
       ...dokAktionen(() => katDocs, () => `${API}/kategorien/${kategorie}/dokumente`, () => zeigenIn(katDoks, "#kat-doks")),
     };
     katalogWahl = (id) => {
@@ -4062,8 +4069,9 @@
 
   /* --- Katalogaustausch (Lieferung 4): Export als ZIP, Import mit Probelauf ----------------------------------
      Export: Der Dialog zeigt erst, was mitkommt und was nicht (DEMO, fehlende Dateien), dann lädt der Knopf das ZIP.
-     Import: Datei wählen → Probelauf (der Server schreibt nichts, auch keine Datei) → Bericht → „Übernehmen“ führt
-     denselben Import echt aus und zeigt dessen Bericht. Gelöscht wird beim Import nie etwas. */
+     Import: Datei wählen → Probelauf (der Server schreibt nichts in den Katalog) → Bericht → „Übernehmen“ führt
+     denselben Import echt aus und zeigt dessen Bericht – seit dem 24.10.2026 im Hintergrund (katalogImportDialog).
+     Gelöscht wird beim Import nie etwas. */
   const AUSTAUSCH_ARTEN = [["kategorien", "Kategorien"], ["produkte", "Produkte"], ["formulare", "Formulare"],
                            ["bilder", "Bilder"], ["dokumente", "Dokumente"]];
   const austauschListe = (titel, zeilen, art) => (zeilen && zeilen.length ? `<div class="mat-austausch-liste ${art || ""}">
@@ -4127,76 +4135,223 @@
       ${nichts && !b.gespeichert ? '<p class="mat-leer">Nichts zu übernehmen – der Katalog hier entspricht schon der Datei.</p>' : ""}`;
   }
 
-  function katalogImportDialog() {
-    let datei = null;
+  /* Katalogimport im Hintergrund (Wunsch des Nutzers, 24.10.2026): Die große Lieferung (über 1 GB) lief länger, als der
+     Reverse-Proxy auf eine Antwort wartet (504). Jetzt lädt der Dialog die Datei hoch (mit Fortschritt), der Server
+     antwortet sofort mit einem Auftrag, und der Dialog fragt alle 2,5 s nach Phase und Zahlen, am Ende nach dem Bericht.
+     „Übernehmen“ startet den echten Lauf mit der Datei des Probelaufs – ohne neuen Upload (sie liegt eine Stunde
+     bereit). Der Dialog darf zu: Der Import läuft weiter, die Katalogseite zeigt ihn als Hinweis (importHinweis). Wird
+     der Dialog während des Hochladens geschlossen, bricht nur das Hochladen ab – auf dem Server ist dann nichts
+     angekommen. */
+  const IMPORT_OFFEN = new Set(["wartet", "laeuft"]);
+  const IMPORT_PHASE = { pruefen: "Datei prüfen", probe: "Probedurchgang", ablegen: "Dateien ablegen",
+                         schreiben: "Datenbank schreiben" };
+  const tausend = (n) => Number(n || 0).toLocaleString("de-DE");
+  function importStandText(a) {
+    const was = a.trocken ? "Probelauf" : "Übernehmen";
+    if (a.zustand === "wartet" || !a.phase) return `${was}: startet …`;
+    return `${was}: ${IMPORT_PHASE[a.phase] || "läuft"}${a.m ? ` – ${tausend(a.n)} von ${tausend(a.m)}` : ""} …`;
+  }
+  const importBalken = (n, m) => (m ? `<progress class="mat-import-balken" max="${m}" value="${Math.min(n || 0, m)}"></progress>`
+    : '<progress class="mat-import-balken"></progress>');
+  function importHerkunft(a) {
+    const teile = [`gestartet ${esc(fmtZeit(a.gestartet))}${a.von ? ` von ${esc(a.von)}` : ""}`, esc(a.quelle || "")];
+    if (a.beendet && !IMPORT_OFFEN.has(a.zustand)) teile.push(`beendet ${esc(fmtZeit(a.beendet))}`);
+    if (a.uebernehmbar && a.datei_bis) teile.push(`Übernehmen bis ${esc(fmtZeit(a.datei_bis))}`);
+    return `<p class="help mat-import-herkunft">${teile.filter(Boolean).join(" · ")}</p>`;
+  }
+
+  // Hochladen mit Fortschritt: fetch kennt keinen Upload-Fortschritt, deshalb XMLHttpRequest. Antwort 202 → Auftrag;
+  // sonst ein Fehler mit status (0 = keine Verbindung, -1 = abgebrochen) und – bei 409 – dem laufenden Auftrag.
+  function importHochladen(datei, beiFortschritt, merken) {
+    return new Promise((resolve, reject) => {
+      const fd = new FormData();
+      fd.append("file", datei);
+      fd.append("trocken", "1");
+      const xhr = new XMLHttpRequest();
+      merken(xhr);
+      xhr.open("POST", `${API}/katalog/import`);
+      xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+      xhr.responseType = "json";
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) beiFortschritt(e.loaded, e.total); };
+      const fehler = (text, status, auftrag) => { const e = new Error(text); e.status = status; e.auftrag = auftrag; return e; };
+      xhr.onload = () => {
+        const d = xhr.response || {};
+        if (xhr.status === 202) { resolve(d.auftrag); return; }
+        if (xhr.status === 401) { location.href = "/login?next=" + encodeURIComponent(location.pathname); }
+        reject(fehler(d.error || `Fehler ${xhr.status}`, xhr.status, d.auftrag));
+      };
+      xhr.onerror = () => reject(fehler("Keine Verbindung zum Server.", 0));
+      xhr.onabort = () => reject(fehler("Hochladen abgebrochen – auf dem Server ist nichts angekommen.", -1));
+      xhr.send(fd);
+    });
+  }
+
+  function katalogImportDialog(kennung) {
     dialog(`<h2>Katalog importieren</h2>
       <p>Ein Katalog-Export (ZIP) oder eine Katalogdatei (JSON). Zuerst läuft ein Probelauf: Er zeigt, was neu ist und was
-        sich ändert, und speichert nichts. Übernommen wird erst mit „Übernehmen“. Gelöscht wird beim Import nie etwas.</p>
+        sich ändert, und speichert nichts. Übernommen wird erst mit „Übernehmen“. Gelöscht wird beim Import nie etwas.
+        Der Import läuft auf dem Server weiter, auch wenn du diesen Dialog schließt.</p>
       <div class="mat-ablage" id="ki-ablage">
         <p><strong>Datei hierher ziehen</strong> oder <label class="btn secondary small">Datei wählen<input type="file" id="ki-datei" class="mat-datei" accept=".zip,.json,application/zip,application/json"></label></p>
         <p class="help" id="ki-name">ZIP oder JSON, bis 2 GB.</p>
       </div>
+      <div id="ki-stand" class="mat-import-stand" aria-live="polite"></div>
       <div id="ki-bericht" class="mat-austausch-bericht" aria-live="polite"></div>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button>
         <button class="btn" id="ki-ok" type="button" hidden>Übernehmen</button></div>`,
     (dlg, body) => {
       const bericht = $("#ki-bericht", body);
+      const stand = $("#ki-stand", body);
       const ok = $("#ki-ok", body);
-      let laeuft = false;
-      async function senden(trocken) {
-        const fd = new FormData();
-        fd.append("file", datei);
-        fd.append("trocken", trocken ? "1" : "0");
-        return (await api(`${API}/katalog/import`, { method: "POST", body: fd })).bericht;
+      const ablage = $("#ki-ablage", body);
+      let xhr = null;            // das laufende Hochladen
+      let aktuell = null;        // die Kennung, deren Stand der Dialog gerade zeigt
+      let uhr = null;
+      let gemeldet = false;      // „Katalog übernommen“ nur einmal
+      const offen = () => dlg.open && body.contains(stand);
+      const weg = new AbortController();
+      dlg.addEventListener("close", () => {
+        weg.abort();
+        clearTimeout(uhr);
+        aktuell = null;
+        if (xhr) { xhr.abort(); toast("Hochladen abgebrochen – es wurde nichts importiert.", true); }
+        importHinweis();
+      }, { once: true });
+
+      function zeigen(a) {
+        if (IMPORT_OFFEN.has(a.zustand)) {
+          ablage.hidden = true;
+          ok.hidden = true;
+          stand.innerHTML = `<p><strong>${esc(importStandText(a))}</strong></p>${importBalken(a.n, a.m)}${importHerkunft(a)}`;
+          bericht.innerHTML = "";
+          return;
+        }
+        ablage.hidden = false;
+        // Abgebrochen (Prozess weg) hat keinen Bericht, nur den Grund; sonst steht jeder Fehler im Bericht wie bisher.
+        stand.innerHTML = `${a.bericht ? "" : `<p class="error">${esc(a.fehler || "Der Import ist ohne Bericht zu Ende gegangen.")}</p>`}${importHerkunft(a)}`;
+        bericht.innerHTML = a.bericht ? importBerichtHtml(a.bericht) : "";
+        ok.hidden = !a.uebernehmbar;
+        ok.disabled = false;
+        ok.textContent = "Übernehmen";
+        if (!a.trocken && a.bericht && a.bericht.gespeichert && !gemeldet) {
+          gemeldet = true;
+          toast("Katalog übernommen");
+          // Leiste und Liste zeigen den neuen Stand, sobald der Bericht gelesen und der Dialog zu ist.
+          dlg.addEventListener("close", () => location.reload(), { once: true });
+        }
       }
+
+      // Den Stand eines Auftrags holen, bis er zu Ende ist. Ohne Verbindung (Neustart, Deploy) weiter versuchen.
+      async function verfolgen(id, pause = 2500) {
+        clearTimeout(uhr);
+        aktuell = id;
+        let a;
+        try { a = (await api(`${API}/katalog/import/${encodeURIComponent(id)}`)).auftrag; } catch (e) {
+          if (!offen() || aktuell !== id) return;
+          if (e.status === 0 || e.status >= 500) {
+            let p = $(".mat-import-netz", stand);
+            if (!p) { p = document.createElement("p"); p.className = "help mat-import-netz"; stand.appendChild(p); }
+            p.textContent = "Keine Verbindung zum Server – es wird weiter nachgefragt …";
+            uhr = setTimeout(() => verfolgen(id, Math.min(pause * 2, 15000)), pause);
+            return;
+          }
+          stand.innerHTML = `<p class="error">${esc(e.message)}</p>`;
+          ablage.hidden = false;
+          return;
+        }
+        if (!offen() || aktuell !== id) return;
+        zeigen(a);
+        if (IMPORT_OFFEN.has(a.zustand)) uhr = setTimeout(() => verfolgen(id), 2500);
+      }
+
       async function probelauf(f) {
-        if (!f || laeuft) return;
+        if (!f || xhr || ablage.hidden) return;          // während des Hochladens oder eines Laufs nicht
         if (!/\.(zip|json)$/i.test(f.name)) { toast(`„${f.name}“: bitte ein Katalog-Export (ZIP) oder eine JSON-Datei.`, true); return; }
-        datei = f;
-        laeuft = true;
+        clearTimeout(uhr);
+        aktuell = null;
         ok.hidden = true;
+        ablage.hidden = true;
+        bericht.innerHTML = "";
         $("#ki-name", body).textContent = `${f.name} · ${groesse(f.size)}`;
-        bericht.innerHTML = '<p class="help">Probelauf läuft …</p>';
+        stand.innerHTML = `<p><strong>Hochladen …</strong></p>${importBalken(0, 100)}<p class="help" id="ki-hoch">${esc(f.name)} · ${esc(groesse(f.size))}</p>`;
+        let a;
         try {
-          const b = await senden(true);
-          bericht.innerHTML = importBerichtHtml(b);
-          ok.hidden = Boolean(b.fehler.length) || !(b.aenderungen.length || b.hinweise.length);
-        } catch (e) { bericht.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
-        laeuft = false;
+          a = await importHochladen(f, (n, m) => {
+            const balken = $(".mat-import-balken", stand);
+            if (balken) { balken.max = m; balken.value = n; }
+            const t = $("#ki-hoch", stand);
+            if (t) t.textContent = `${Math.floor((n / m) * 100)} % · ${groesse(n)} von ${groesse(m)}`;
+          }, (x) => { xhr = x; });
+        } catch (e) {
+          xhr = null;
+          if (!offen()) return;
+          ablage.hidden = false;
+          stand.innerHTML = `<p class="error">${esc(e.message)}</p>${e.auftrag ? '<p><button type="button" class="lnk" id="ki-laufend">Stand des laufenden Imports ansehen</button></p>' : ""}`;
+          const lnk = $("#ki-laufend", stand);
+          if (lnk) lnk.onclick = () => verfolgen(e.auftrag.id);
+          return;
+        }
+        xhr = null;
+        if (!offen()) return;
+        zeigen(a);
+        verfolgen(a.id);
       }
       $("#ki-datei", body).addEventListener("change", (ev) => { probelauf(ev.target.files[0]); ev.target.value = ""; });
-      const ablage = $("#ki-ablage", body);
       // Abgelegt wird überall im Dialog – nie soll der Browser die Datei stattdessen selbst öffnen. #dlg-body bleibt
       // über alle Dialoge bestehen: Die Handler gelten nur, solange dieser Dialog offen ist.
-      const weg = new AbortController();
-      dlg.addEventListener("close", () => weg.abort(), { once: true });
-      body.addEventListener("dragover", (ev) => { ev.preventDefault(); ablage.classList.add("ueber"); }, { signal: weg.signal });
+      body.addEventListener("dragover", (ev) => { ev.preventDefault(); if (!ablage.hidden) ablage.classList.add("ueber"); }, { signal: weg.signal });
       body.addEventListener("dragleave", (ev) => { if (!body.contains(ev.relatedTarget)) ablage.classList.remove("ueber"); }, { signal: weg.signal });
       body.addEventListener("drop", (ev) => {
         ev.preventDefault();
         ablage.classList.remove("ueber");
-        if (ev.dataTransfer && ev.dataTransfer.files.length) probelauf(ev.dataTransfer.files[0]);
+        if (!ablage.hidden && ev.dataTransfer && ev.dataTransfer.files.length) probelauf(ev.dataTransfer.files[0]);
       }, { signal: weg.signal });
       ok.onclick = async () => {
-        if (!datei || laeuft) return;
-        laeuft = true;
+        if (!aktuell || ok.disabled) return;
         ok.disabled = true;
-        ok.textContent = "Wird übernommen …";
+        ok.textContent = "Wird gestartet …";
         try {
-          const b = await senden(false);
-          bericht.innerHTML = importBerichtHtml(b);
-          ok.hidden = true;
-          if (b.gespeichert) {
-            toast("Katalog übernommen");
-            // Leiste und Liste zeigen den neuen Stand, sobald der Bericht gelesen und der Dialog zu ist.
-            dlg.addEventListener("close", () => location.reload(), { once: true });
-          }
-        } catch (e) { toast(e.message, true); }
-        ok.disabled = false;
-        ok.textContent = "Übernehmen";
-        laeuft = false;
+          const a = (await api(`${API}/katalog/import/${encodeURIComponent(aktuell)}/uebernehmen`, { method: "POST" })).auftrag;
+          if (!offen()) return;
+          zeigen(a);
+          verfolgen(a.id);
+        } catch (e) {
+          toast(e.message, true);
+          ok.disabled = false;
+          ok.textContent = "Übernehmen";
+        }
       };
+      if (kennung) verfolgen(kennung);
     });
+  }
+
+  /* Hinweis oben auf der Katalogseite: ein laufender Import (mit Phase und Zahlen, alle 5 s neu) oder einer, der vor
+     höchstens einem Tag zu Ende ging – mit „Stand ansehen“ bzw. „Bericht ansehen“ (öffnet den Dialog mit diesem
+     Auftrag). Einen beendeten blendet „Ausblenden“ in diesem Browser aus. */
+  const IMPORT_AUSGEBLENDET = "mat-katalogimport-ausgeblendet";
+  let importHinweisUhr = null;
+  async function importHinweis() {
+    clearTimeout(importHinweisUhr);
+    if (!$("#kat-import-hinweis")) return;
+    let a;
+    try { a = (await api(`${API}/katalog/import/aktuell`)).auftrag; } catch (e) { return; }
+    const ziel = $("#kat-import-hinweis");      // die Seite kann inzwischen neu gezeichnet sein
+    if (!ziel) return;
+    let aus = "";
+    try { aus = localStorage.getItem(IMPORT_AUSGEBLENDET) || ""; } catch (e) { /* privat: dann eben nicht */ }
+    if (!a || (!IMPORT_OFFEN.has(a.zustand) && aus === a.id)) { ziel.innerHTML = ""; return; }
+    let text;
+    if (IMPORT_OFFEN.has(a.zustand)) text = `Katalogimport läuft – ${importStandText(a)}`;
+    else if (a.zustand === "fertig") {
+      text = a.trocken ? (a.uebernehmbar ? "Probelauf fertig – noch nicht übernommen." : "Probelauf fertig.")
+        : "Katalogimport übernommen.";
+    } else if (a.zustand === "abgebrochen") text = `${a.trocken ? "Probelauf" : "Katalogimport"} abgebrochen.`;
+    else text = `${a.trocken ? "Probelauf" : "Katalogimport"} mit Fehlern beendet – nichts gespeichert.`;
+    const laeuft = IMPORT_OFFEN.has(a.zustand);
+    ziel.innerHTML = `<div class="mat-importhinweis${laeuft ? " laeuft" : a.zustand === "fertig" ? "" : " bad"}" role="status">
+      <p><strong>${esc(text)}</strong> <span class="help">${a.von ? `${esc(a.von)} · ` : ""}${esc(a.quelle || "")} · ${esc(fmtZeit(laeuft ? a.gestartet : a.beendet))}</span></p>
+      <p><button type="button" class="lnk" data-act="kat-import-stand" data-id="${esc(a.id)}">${laeuft || a.zustand === "abgebrochen" ? "Stand ansehen" : "Bericht ansehen"}</button>${laeuft ? "" : ` · <button type="button" class="lnk" data-act="kat-import-aus" data-id="${esc(a.id)}">Ausblenden</button>`}</p></div>`;
+    if (laeuft) importHinweisUhr = setTimeout(importHinweis, 5000);
   }
 
   async function formularFuer(ziel) {

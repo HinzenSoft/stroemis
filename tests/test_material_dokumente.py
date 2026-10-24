@@ -24,8 +24,8 @@ import zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import (H, PDF, abschluss, anmelden, gliederung, katalog_grund, make_app,  # noqa: E402
-                           neuer_artikel, pruef_formulare, starten, umgebung)
+from test_material import (H, PDF, abschluss, anmelden, gliederung, import_abwarten, katalog_grund,  # noqa: E402
+                           make_app, neuer_artikel, pruef_formulare, starten, umgebung)
 from test_material_trennung import bis_schritt, endversion  # noqa: E402
 
 # Eine KOPIE einer Datenbank auf Stand 7 für den Pfad 7 → 18 – nur, wenn angegeben; die Quelle bleibt unberührt.
@@ -236,8 +236,7 @@ def test_import():
 
         def importieren(roh, trocken):
             r = hoch(kp, "/api/material/katalog/import", roh, "katalog.zip", trocken="1" if trocken else "0")
-            assert r.status_code == 200, r.get_json()
-            return r.json["bericht"]
+            return import_abwarten(kp, r)["bericht"]
 
         ber = importieren(roh, True)
         assert ber["trocken"] and not ber["fehler"] and ber["dokumente"]["neu"] == 4, ber
@@ -509,10 +508,10 @@ def test_wettlauf_loeschen_ablegen():
         importer._ablegen = haken_import
         try:
             r = hoch(kp, "/api/material/katalog/import", _import_zip(name_y, pdf_y), "katalog.zip", trocken="0")
+            b = import_abwarten(kp, r)["bericht"]          # der Lauf (im Hintergrund) braucht den Haken noch
         finally:
             importer._ablegen = echt
-        b = r.json["bericht"]
-        assert r.status_code == 200 and b["gespeichert"] and not b["fehler"], b
+        assert b["gespeichert"] and not b["fehler"], b
         assert b["dokumente"] == {"neu": 2, "neue_version": 0, "unveraendert": 0}, b
         z = zeilen(app, "SELECT id FROM mat_product_document WHERE file_path = ?", (name_y,))
         # Mit HMS ging auch sein Dokument X (das letzte mit dieser Datei) – richtig so; Y hat der Import nachgelegt.

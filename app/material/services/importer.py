@@ -35,6 +35,13 @@ Dateien sind nicht Teil der Datenbanktransaktion. Ein Probelauf schreibt deshalb
 ermittelt erst in einem Probedurchgang, welche Dateien er braucht, legt nur diese ab – außerhalb der Schreibsperre,
 denn die Bildverarbeitung dauert – und schreibt dann die Datenbank. Scheitert das, verschwinden die neu abgelegten
 Dateien wieder; ersetzte Produktbilder werden erst nach dem Commit gelöscht.
+
+Seit dem 24.10.2026 läuft der Import der Oberfläche im Hintergrund (importauftrag.py). Dafür nehmen datei_importieren
+und importieren einen optionalen Rückruf fortschritt(phase, n=None, m=None, abgelegt=None) an; er ändert nichts am
+Ablauf, ohne ihn (Kommandozeile) ist alles wie vorher. Phasen: „pruefen“ (Datei lesen, dann n von m Dateien geprüft),
+„probe“ (Probedurchgang bzw. der ganze Probelauf), „ablegen“ (n von m Dateien abgelegt; abgelegt nennt jede eben
+abgelegte Datei als (Art, abgelegt) – damit räumt der Auftrag auf, wenn sein Prozess mitten im Lauf endet) und
+„schreiben“ (der Durchgang, der die Datenbank schreibt; legt er selbst eine Datei nach, kommt sie ebenso mit abgelegt).
 """
 import hashlib
 import json
@@ -189,8 +196,9 @@ class _Lauf:
     verschwindet. Mit ablage nimmt er die vorher abgelegten Dateien – und legt nur selbst ab, wenn sich die
     Datenbank seit dem Probedurchgang geändert hat und er eine Datei mehr braucht."""
 
-    def __init__(self, version, demo, dateien, archiv, uids=({}, {}), ablage=None):
+    def __init__(self, version, demo, dateien, archiv, uids=({}, {}), ablage=None, fortschritt=None):
         self.version, self.demo, self.dateien, self.archiv = version, demo, dateien, archiv
+        self.fortschritt = fortschritt        # Rückruf des Hintergrundauftrags, siehe oben
         self.kategorie_uids, self.produkt_uids = set(uids[0]), set(uids[1])
         self.planen = ablage is None
         self.ablage = ablage or {}            # Fundstelle → (Art, abgelegt)
@@ -274,6 +282,8 @@ class _Lauf:
                 return wert
         neu = _ablegen(self.archiv, eintrag)
         self.abgelegt.append((eintrag["art"], neu))
+        if self.fortschritt:
+            self.fortschritt("schreiben", abgelegt=(eintrag["art"], neu))
         return neu
 
     def bild_summe(self, name):
@@ -1059,12 +1069,14 @@ def _datei_pruefen(archiv, eintraege, pfad, art):
     return {"info": info, "name": name, "art": art, "sha256": summe.hexdigest()}
 
 
-def _dateien_pruefen(archiv, verweise):
+def _dateien_pruefen(archiv, verweise, fortschritt=None):
     """Jede Datei, auf die katalog.json verweist – und nur diese –, prüfen. Ein Fehler steht danach am Eintrag
     und erscheint im Durchgang mit der Fundstelle des Verweises."""
     eintraege = {i.filename: i for i in archiv.infolist()}
     out = {}
-    for pfad, art in sorted(verweise):
+    for i, (pfad, art) in enumerate(sorted(verweise)):
+        if fortschritt:
+            fortschritt("pruefen", i, len(verweise))
         try:
             out[(pfad, art)] = _datei_pruefen(archiv, eintraege, pfad, art)
         except Abgelehnt as exc:
@@ -1209,11 +1221,13 @@ def datei_lesen(fh):
     return _json_laden(roh), None
 
 
-def datei_importieren(fh, trocken=False, quelle="Datei"):
-    """Eine Katalogdatei (ZIP oder JSON, siehe datei_lesen) importieren. Liefert den Bericht."""
+def datei_importieren(fh, trocken=False, quelle="Datei", fortschritt=None):
+    """Eine Katalogdatei (ZIP oder JSON, siehe datei_lesen) importieren. Liefert den Bericht. fortschritt: siehe oben."""
+    if fortschritt:
+        fortschritt("pruefen")
     daten, archiv = datei_lesen(fh)
     try:
-        return importieren(daten, trocken=trocken, quelle=quelle, archiv=archiv)
+        return importieren(daten, trocken=trocken, quelle=quelle, archiv=archiv, fortschritt=fortschritt)
     finally:
         if archiv is not None:
             archiv.close()
@@ -1256,10 +1270,10 @@ def _abschluss(lauf, bericht_basis):
     return b
 
 
-def importieren(daten, trocken=False, quelle="Datei", archiv=None):
+def importieren(daten, trocken=False, quelle="Datei", archiv=None, fortschritt=None):
     """Den Katalog aus einem geladenen JSON-Objekt übernehmen; archiv (zipfile.ZipFile) liefert die Dateien, auf die
     es verweist. Liefert einen Bericht; bei Fehlern oder im Probelauf ist danach nichts gespeichert – auch keine
-    Datei abgelegt."""
+    Datei abgelegt. fortschritt: siehe oben."""
     bericht = _bericht()
     if not isinstance(daten, dict) or daten.get("format") != FORMAT:
         bericht["fehler"].append(f"Das ist keine Katalogdatei (\"format\": \"{FORMAT}\" fehlt).")
@@ -1285,9 +1299,11 @@ def importieren(daten, trocken=False, quelle="Datei", archiv=None):
         if bericht["fehler"]:
             return bericht
         if archiv is not None:
-            dateien = _dateien_pruefen(archiv, _verweise(daten))
+            dateien = _dateien_pruefen(archiv, _verweise(daten), fortschritt)
     g.mat_akteur = f"Katalogimport ({quelle})"
     try:
+        if fortschritt:
+            fortschritt("probe")
         erster = _Lauf(version, demo, dateien, archiv, uids)
         # Braucht der Lauf keine neue Datei (Format 1, nur Links, nichts geändert), speichert gleich der erste
         # Durchgang. Sonst plant er nur.
@@ -1299,8 +1315,12 @@ def importieren(daten, trocken=False, quelle="Datei", archiv=None):
         # Zeile wieder (inzwischen freigegeben), legt _Lauf.ablegen sie unter der Sperre aus dem Archiv nach.
         ablage = {}
         try:
-            for ort, eintrag in erster.bedarf.items():
+            for i, (ort, eintrag) in enumerate(erster.bedarf.items()):
+                if fortschritt:
+                    fortschritt("ablegen", i, len(erster.bedarf))
                 ablage[ort] = (eintrag["art"], _ablegen(archiv, eintrag))
+                if fortschritt:
+                    fortschritt("ablegen", i + 1, len(erster.bedarf), abgelegt=ablage[ort])
         except Abgelehnt as exc:
             _wegraeumen(ablage.values())
             erster.bericht["fehler"].append(f"{ort}: {exc}")
@@ -1308,7 +1328,9 @@ def importieren(daten, trocken=False, quelle="Datei", archiv=None):
         except BaseException:
             _wegraeumen(ablage.values())
             raise
-        zweiter = _Lauf(version, demo, dateien, archiv, uids, ablage)
+        if fortschritt:
+            fortschritt("schreiben")
+        zweiter = _Lauf(version, demo, dateien, archiv, uids, ablage, fortschritt)
         try:
             gespeichert = _durchgang(daten, zweiter, lambda lauf: not lauf.bericht["fehler"])
         except BaseException:

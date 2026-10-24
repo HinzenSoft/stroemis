@@ -38,6 +38,19 @@ def make_app(tmp):
     return app
 
 
+def import_abwarten(c, r, sekunden=120):
+    """Katalogimport im Hintergrund (seit 24.10.2026): r ist die Antwort auf POST …/katalog/import (202 mit dem
+    Auftrag). Wartet auf den Thread des Laufs und liefert den Auftrag samt Bericht."""
+    from app.material.services import importauftrag
+    assert r.status_code == 202, (r.status_code, r.get_json())
+    kennung = r.json["auftrag"]["id"]
+    assert importauftrag.warten(kennung, sekunden), "Der Import ist nicht fertig geworden."
+    s = c.get(f"/api/material/katalog/import/{kennung}")
+    assert s.status_code == 200, s.get_json()
+    assert s.json["auftrag"]["zustand"] in ("fertig", "fehlgeschlagen"), s.json
+    return s.json["auftrag"]
+
+
 def jpeg(breite=320, hoehe=240):
     buf = io.BytesIO()
     Image.new("RGB", (breite, hoehe), (200, 30, 30)).save(buf, "JPEG")
