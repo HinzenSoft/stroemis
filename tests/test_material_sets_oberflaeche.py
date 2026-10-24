@@ -1,6 +1,6 @@
-"""Hersteller-Sets, Oberfläche (Phase 4 · Lieferung 2, Pakete O1 und O2):  python tests/test_material_sets_oberflaeche.py
+"""Sets, Oberfläche (Phase 4 · Lieferung 2, Pakete O1 und O2):  python tests/test_material_sets_oberflaeche.py
 
-Statisch: material.js, suche.js, global.js und material.css – O1 für den Stand K1: Produkt-Dialog mit „Hersteller-Set“
+Statisch: material.js, suche.js, global.js und material.css – O1 für den Stand K1: Produkt-Dialog mit „Set“
 und Reiter „Bestandteile“ (Werte und Grenzen gleich wie auf dem Server), Produktseite mit Stückliste, Artikel anlegen mit
 Teilblöcken, Set-Seite und Teil-Seite (keine Knöpfe, die am Teil 409 gäben), Listen mit Set-Zeile und Kopf, Meine PSA
 mit Teilen, Steckbrief, Importbericht und Export-Vorschau. O2 für den Stand K2: Seite „Set prüfen“, Prüfansicht im Lauf
@@ -64,6 +64,10 @@ def test_werte_wie_server():
     assert tuple(re.findall(r'"([a-z_]+)"', felder)) == sets.TEIL_FELDER
     block = js[js.index("const VERBLEIB = {"):]
     assert dict(re.findall(r'([a-z_]+): "([^"]*)"', block[:block.index("}")])) == sets.VERBLEIB
+    # Sets anlegen (24.10.2026): Pflichttext und Ordnerart „Set-Ordner“ wie auf dem Server.
+    assert re.search(r'const EINZELN_PFLICHT = "([^"]*)";', js).group(1) == stueckliste.EINZELN_PFLICHT
+    block = js[js.index("const ORDNERART = {"):]
+    assert dict(re.findall(r'([a-z_]+): "([^"]*)"', block[:block.index("}")])) == models.ORDNERARTEN
     print("Werte wie auf dem Server bestanden.")
 
 
@@ -71,13 +75,41 @@ def test_oberflaeche_statisch():
     js = lies("app/material/static/material.js")
     css = lies("app/material/static/material.css")
     such, glob = lies("app/material/static/suche.js"), lies("app/material/static/global.js")
-    # Katalog: Häkchen, Reiter, Speichern der Stückliste als Ganzes, Variante mit „Stückliste übernehmen“.
+    # Katalog (seit „Set anlegen“, 24.10.2026): Set-Modus ohne Häkchen – Reiter immer, neu in EINER Anfrage mit
+    # „bestandteile“, Bearbeiten mit PUT …/bestandteile; kein Umschalten, keine „Stückliste übernehmen“.
     dlg = funktion(js, "produktDialog")
-    for haken in ('id="pd-set"', "set_umschalt_grund", 'role="tablist"', 'data-reiter="bestandteile"',
-                  "/bestandteile`, { method: \"PUT\"", "stueckliste: !!(", "daten.is_set = alsSet", "confirm("):
+    for haken in ('role="tablist"', 'data-reiter="bestandteile"', "/bestandteile`, { method: \"PUT\"",
+                  "{ bestandteile: stueck.liste() }", "is_set: true", '"Set anlegen"', '"Set bearbeiten"',
+                  '"Set aus Meldung anlegen"', "SET_ERKLAERUNG", "stueck.fehlerZeigen(e.message)", "sets_aelter"):
         assert haken in dlg, haken
-    # Häkchen nur senden, wenn es sich umschalten lässt; keine Set-Steuerung aus Meldung oder Nacharbeit.
-    assert "if (setFeld && !setFeld.disabled)" in dlg and "const mitSet = !p.variante_von && !p.meldung && !opt.danach;" in dlg
+    for weg in ('id="pd-set"', "set_umschalt", "pd-stueckliste", "stueckliste: !!(", "daten.is_set = alsSet"):
+        assert weg not in dlg, weg
+    assert "const istSet = !opt.danach && !!(p.is_set || (p.variante_von && p.variante_von.is_set));" in dlg
+    # Knopf „Set anlegen“ im Katalogkopf: grau umrandet, Anlegen-Markup, Set-Modus.
+    assert ('<button class="btn secondary" data-act="set-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ '
+            '</span>Set<span class="k-anlegen"> anlegen</span></span></button>') in js
+    assert '"set-neu": () => produktDialog({ category_id: kategorie, is_set: true })' in js
+    # „Stückliste übertragen“: Hinweis und Knopf auf der Produktseite, Dialog mit einer Hauptaktion.
+    sl = funktion(js, "stuecklisteHtml")
+    assert "p.sets_aelter" in sl and 'data-act="uebertragen">Auf vorhandene Sets übertragen …</button>' in sl
+    assert '<button class="btn secondary small" data-act="uebertragen">' in sl
+    ue = funktion(js, "uebertragenDialog")
+    for haken in ("/stueckliste-uebertragen`", "set_ids:", "stand: v.stand", "esc(x.grund)", "esc(x.wirkung)",
+                  "esc(z.bisher)" if "esc(z.bisher)" in ue else "zelle(z.bisher)", "e.status === 409", "aria-live"):
+        assert haken in ue, haken
+    assert ue.count('class="btn"') == 1 and "btn danger" not in ue and "btn ghost" not in ue
+    # Set-Kasten: ein Teil ohne Position nur entnehmen.
+    kasten0 = funktion(js, "setKasten")
+    assert "!t.slot_id ?" in kasten0 and "steht nicht mehr in der Stückliste" in kasten0
+    # Melden (S8): Wahl Produkt | Set, Teile Pflicht, Titel und Auslöser nennen beides; Karte mit Marke und „Set anlegen“.
+    md = funktion(js, "meldungDialog")
+    for haken in ('name="me-art" value="set"', 'id="me-teile"', 'is_set: "1"', "Fehlendes Produkt oder Set melden",
+                  "Sitz- und Brustgurt", "sobald du Artikel davon anlegen kannst"):
+        assert haken in md, haken
+    assert "Fehlendes Produkt oder Set melden</button>" in js and "Als fehlendes Produkt oder Set melden" in js
+    karte = funktion(js, "meldeKarte")
+    assert 'm.is_set ? "Set anlegen" : "Produkt anlegen"' in karte and "setMarke(m.is_set)" in karte
+    assert "is_set: m.is_set" in js and "Teile des Sets" in funktion(js, "meldeDetails")
     ed = funktion(js, "stuecklisteEditor")
     for haken in ("HILFE_EINZELN", "produktTreffer(", "prod.is_set", "AUSTAUSCH", "Position (\\d+)", 'data-bt="hoch"',
                   '<span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Bestandteil<span class="k-anlegen"> anlegen</span></span>'):
@@ -108,7 +140,7 @@ def test_oberflaeche_statisch():
     assert "listenWert(x)" in js
     # Knopfsprache: kein btn ghost; CSS mit Container-Abfrage und Touch-Regeln unter pointer: coarse.
     assert "btn ghost" not in js
-    teil = css[css.index("/* Phase 4 – Lieferung 2: Hersteller-Sets (Oberfläche O1) */"):]
+    teil = css[css.index("/* Phase 4 – Lieferung 2: Sets (Oberfläche O1) */"):]
     assert "@container mat-seite" in teil and "@media (pointer: coarse)" in teil
     assert "min-height: 44px" in teil[teil.index("@media (pointer: coarse)"):]
     print("Oberfläche (statisch) bestanden.")
@@ -121,8 +153,8 @@ def test_vertrag_mit_dem_server():
         t = set_aufbau(tmp)
         w, mv = t.wart_a, t.k["katalog"]
         p = ok(mv.get(f"/api/material/produkte/{t.set_p}"))["produkt"]
-        assert {"is_set", "bestandteile", "bestandteil_von", "set_umschaltbar", "set_umschalt_grund",
-                "stueckliste_grenzen"} <= set(p)
+        assert {"is_set", "bestandteile", "bestandteil_von", "sets_aelter", "stueckliste_grenzen"} <= set(p)
+        assert "set_umschaltbar" not in p and "set_umschalt_grund" not in p
         assert set(p["stueckliste_grenzen"]) == {"positionen", "anzahl", "teile", "bezeichnung"}
         assert {"id", "bezeichnung", "anzahl", "einzeln", "austausch", "austausch_text", "produkt"} <= set(p["bestandteile"][0])
         h = ok(mv.get(f"/api/material/produkte/{t.ids['hms']}"))["produkt"]
@@ -219,7 +251,7 @@ def test_oberflaeche_o2_statisch():
     # Werte und Journal, Rückruf mit Set.
     assert "SET_WERTE[feld][v]" in funktion(js, "wert") and "x.set_inventar" in funktion(js, "rueckrufKarte")
     assert "btn ghost" not in js
-    teil = css[css.index("/* Phase 4 – Lieferung 2: Hersteller-Sets (Oberfläche O2) */"):]
+    teil = css[css.index("/* Phase 4 – Lieferung 2: Sets (Oberfläche O2) */"):]
     assert "@container mat-seite" in teil and "@media (pointer: coarse)" in teil
     assert "min-height: 44px" in teil[teil.index("@media (pointer: coarse)"):]
     print("Oberfläche O2 (statisch) bestanden.")
@@ -362,9 +394,9 @@ def test_oberflaeche_nachbesserung_statisch():
     js = lies("app/material/static/material.js")
     css = lies("app/material/static/material.css")
     teil = css[css.index("/* Phase 4 – Lieferung 2: Nachbesserung nach den drei Prüfungen */"):]
-    # B1: Reiter nur mit Häkchen – hidden gegen .c-tabs { display: flex } abgesichert.
+    # B1: hidden gegen .c-tabs { display: flex } abgesichert; seit „Set anlegen“ stehen die Reiter im Set-Modus immer da.
     assert ".c-tabs[hidden], .mat-reiter[hidden] { display: none; }" in teil
-    assert '<div class="c-tabs mat-reiter" role="tablist" aria-labelledby="pd-titel" ${istSet ? "" : "hidden"}>' in js
+    assert '<div class="c-tabs mat-reiter" role="tablist" aria-labelledby="pd-titel">' in js
     # B2: Server-Fehler am einen Feld (Stück und Seriennummer aus sets.teil_wo), aria-invalid über teilFehler, Fokus.
     tsf = js[js.index("function teileServerFehler("):js.index('$("#an-ende").addEventListener')]
     assert "(\\d+) von \\d+" in tsf and "teilFehler(sn, text); amBlock(block, sn);" in tsf      # seit L2b-Nachbesserung V5
@@ -396,7 +428,7 @@ def test_oberflaeche_nachbesserung_statisch():
     assert "Periodisch" not in lauf
     # V6/V7: Fällige mit „Set prüfen“ und Marke „Set“.
     assert '/set-pruefung${q}">Set prüfen</a>' in funktion(js, "pruefKnopf")
-    assert "return `${setMarke(true)}<div class=\"small mat-set-info\">Hersteller-Set" in js
+    assert "return `${setMarke(true)}<div class=\"small mat-set-info\">Set" in js
     # V8/V12: „Entfernen“ als Text, Hilfe aufklappbar.
     st = funktion(js, "stuecklisteEditor")
     assert ">Entfernen</button>" in st and "✕" not in st and 'class="mat-auf mat-bt-hilfe"' in st

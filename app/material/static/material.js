@@ -198,7 +198,8 @@
   const SPERRGRUND = { sturz: "Sturzbelastung", beschaedigung: "Beschädigung", verlust: "Verlust", rueckruf: "Rückruf" };
   const AUSSONDERUNGSGRUND = { lebensdauer: "Lebensdauer erreicht", verlust: "Verlust", irreparabel: "irreparabel" };
   const MATERIALART = { textil: "textil", metall_hardware: "Metall", sonstiges: "sonstiges" };
-  const ORDNERART = { gliederung: "Gliederung", standort: "Standort", fahrzeug: "Fahrzeug", set: "Set",
+  // „Set-Ordner“ seit dem 24.10.2026 (S1) – ein Set ist ein Katalogprodukt mit Stückliste, wie models.ORDNERARTEN.
+  const ORDNERART = { gliederung: "Gliederung", standort: "Standort", fahrzeug: "Fahrzeug", set: "Set-Ordner",
                       persoenlich: "persönlich", sonstiges: "sonstiges" };
   const DOKART = { produktbild: "Produktbild", konformitaetserklaerung: "Konformitätserklärung",
                    gebrauchsanleitung: "Gebrauchsanleitung", pruefanweisung: "Prüfanweisung", pflegehinweis: "Pflegehinweis",
@@ -206,10 +207,13 @@
   const EDITOR = { yesno: "Ja/Nein", text: "Text", date: "Datum", number: "Zahl", photo: "Foto", signature: "Unterschrift", laenge: "Länge (m)" };
   // Artikellänge (Schritt 20): 57.5 → „57,5 m“ (eine Nachkommastelle, deutsches Komma); ohne Einheit fürs Eingabefeld.
   const laengeText = (m, einheit = true) => (m === null || m === undefined || m === "" ? "" : `${Number(m).toFixed(1).replace(".", ",")}${einheit ? " m" : ""}`);
-  // Hersteller-Sets (Schritt 21): „Austausch laut Hersteller“ je Bestandteil wie models.AUSTAUSCH, das Kriterium für
+  // Sets (Schritt 21): „Austausch laut Hersteller“ je Bestandteil wie models.AUSTAUSCH, das Kriterium für
   // „einzeln geführt“ wie stueckliste.HILFE_EINZELN (der statische Abgleich in test_material_sets_oberflaeche verlangt
   // beide gleich – die Produktantwort trägt den Hilfetext nicht, nur der Vorschlag beim Anlegen).
   const AUSTAUSCH = { ja: "ja", nein: "nein", nicht_belegt: "nicht belegt" };
+  // Was ein Set ist (Entscheidung S1): im Dialog „Set anlegen“ über den Feldern – wie stueckliste.py, Kopf.
+  const EINZELN_PFLICHT = "Ein Set braucht mindestens ein einzeln geführtes Teil.";
+  const SET_ERKLAERUNG = "Ein Set ist vom Hersteller als Einheit festgelegt – ab Werk zusammengestellt oder als Kombination zugelassen (etwa Sitz- und Brustgurt). Artikelnummer: die des Herstellers oder aus den Nummern der Teile abgeleitet. Die Teile stehen im Reiter „Bestandteile“.";
   const HILFE_EINZELN = "Einzeln geführt nur bei eigener individueller Kennzeichnung (Serien- oder Einzelnummer) und eigenem Katalogprodukt – jedes Stück wird beim Anlegen ein eigener Artikel mit Inventarnummer und Etikett. Alles andere (Tasche, Seilsatz, Prusiks) ist ein Bestandteil ohne eigenen Artikel.";
   /* Sperren, Set prüfen und Austausch (Paket K2, Oberfläche O2): die Wörter für Werte im Journal wie
      beschriftung.SET_WERTE, die Gruppe der Ja/Nein-Zeilen „… vorhanden“ an der Prüfung des Set-Artikels wie
@@ -220,7 +224,7 @@
     verbleib: { aussondern: "mit aussondern", weiterfuehren: "entnommen und weitergeführt" },
     gesamtergebnis: { einsatzbereit: "einsatzbereit", gesperrt: "nicht einsatzbereit – Set gesperrt", ausgesondert: "Set ausgesondert" },
     set_grund: { unvollstaendig: "unvollständig", tausch: "Teil getauscht oder eingesetzt", ausgesondert: "Set ausgesondert",
-                 bestandteil: "Bestandteil ersetzt – Set prüfen" },
+                 bestandteil: "Bestandteil ersetzt – Set prüfen", stueckliste: "Stückliste übertragen" },
     austausch: { ja: "ja", nein: "nein", nicht_belegt: "nicht belegt" },
   };
   const SET_GRUPPE = "Bestandteile des Sets";
@@ -269,8 +273,10 @@
     rueckruf_nicht_mehr: "Rückruf trifft ihn nicht mehr", rueckruf_neu: "Rückruf trifft ihn jetzt",
     // Artikellänge (Schritt 20)
     length_m: "Länge (m)", items_have_length: "Artikel haben eine Länge",
-    // Hersteller-Sets (Schritt 21)
-    is_set: "Hersteller-Set", bestandteile: "Bestandteile", teile: "Teile", set: "Set Nr.", set_inventar: "Set",
+    // Sets (Schritt 21)
+    is_set: "Set", bestandteile: "Bestandteile", teile: "Teile", set: "Set Nr.", set_inventar: "Set",
+    // Sets anlegen und Stückliste übertragen (Schritt 22, Wunsch vom 24.10.2026); Set-Meldung (S8)
+    fehlt: "fehlt", nicht_in_stueckliste: "nicht mehr in der Stückliste", set_teile: "Teile des Sets",
     stueckliste: "Stückliste übernommen",
     // Sperren, Set prüfen und Austausch im Set (Schritt 21, Paket K2)
     lock_cause: "Sperrursache", teil: "Teil", verbleib: "Verbleib", gesamtergebnis: "Gesamtergebnis",
@@ -318,7 +324,8 @@
                    set_lauf_abgebrochen: "Set-Prüfung abgebrochen", set_geprueft: "Set geprüft",
                    set_lauf_geaendert: "Set-Prüfung aus dem Durchgang gelöst",
                    eingesetzt: "in ein Set eingesetzt", aus_set_geloest: "aus dem Set gelöst (Set aufgelöst)",
-                   bestandteil_ersetzt: "Bestandteil ersetzt", produkt_geaendert: "Produkt geändert" };
+                   bestandteil_ersetzt: "Bestandteil ersetzt", produkt_geaendert: "Produkt geändert",
+                   stueckliste_uebertragen: "Stückliste übertragen", nicht_in_stueckliste: "steht nicht mehr in der Stückliste des Sets" };
   const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
                      category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };
@@ -406,7 +413,7 @@
   const plural = (n, eins, viele) => `${n} ${n === 1 ? eins : viele}`;
   const statusMarke = (s, gross) => `<span class="mat-status s-${esc(s)}${gross ? " gross" : ""}">${esc(STATUS[s] || s)}</span>`;
   const demoMarke = (x) => (x ? '<span class="mat-demo" title="DEMO – nicht für echte Prüfungen">DEMO</span>' : "");
-  // Hersteller-Set (Schritt 21) in Katalog- und Artikellisten: eine leise Marke hinter dem Namen.
+  // Set (Schritt 21) in Katalog- und Artikellisten: eine leise Marke hinter dem Namen.
   const setMarke = (x) => (x ? ' <span class="mat-set-marke">Set</span>' : "");
   // Das Schloss vor „Gesperrt“ und „Ausgesondert“: grau wie die Klapp-Dreiecke daneben und ohne Leerzeichen, das im
   // Link mit unterstrichen würde – den Abstand hält der Rand (mat-schloss, material.css).
@@ -784,7 +791,7 @@
 
   /* --- Journal (Vorher/Nachher je Feld) ----------------------------------------------------- */
   // da: der Eintrag hat dieses Feld auf dieser Seite (vorher/nachher) – ein leeres „bis“ heißt dann „unbefristet“.
-  /* Ein Listeneintrag im Journal: Text bleibt Text. Hersteller-Sets (Schritt 21) schreiben Objekte – die Teile beim
+  /* Ein Listeneintrag im Journal: Text bleibt Text. Sets (Schritt 21) schreiben Objekte – die Teile beim
      Anlegen eines Sets ({inventory_no, serial_no, bestandteil}) und die Positionen einer Stückliste ({bezeichnung,
      anzahl, einzeln, austausch}); sie erscheinen als Satz statt als „[object Object]“. Ein eingesetzter vorhandener
      Artikel (L2b, „vorhanden“) sagt es dazu. */
@@ -1436,13 +1443,13 @@
   // 23.10.2026); für die Tastatur reicht der Link der Inventar-Nr. – daher tabindex -1. Ohne Sicht (fremde Zeile im
   // Durchgang) bleibt der Name Text.
   const produktZelle = (a, link = true) => `${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${link ? `<a class="mat-produktname" href="/material/artikel/${a.id}" tabindex="-1">${nameHtml(a, true)}</a>${zusatzHtml(a)}${artNrKurz(a.article_no)}` : `${nameHtml(a, true)}${zusatzHtml(a)}${artNrKurz(a.article_no)}`}${a.length_m ? ` <span class="muted small mat-laenge">${esc(laengeText(a.length_m))}</span>` : ""}${demoMarke(a.demo)}${setListenText(a)}`;
-  /* Hersteller-Sets in Listen (Schritt 21): Ordnerlisten und „Fällige“ zeigen nur die Set-Zeile – Status, Fälligkeit
-     und Lebensende sind dort die des Sets (Server); darunter „Hersteller-Set · n Teile“, fehlende Teile und Mängel an
+  /* Sets in Listen (Schritt 21): Ordnerlisten und „Fällige“ zeigen nur die Set-Zeile – Status, Fälligkeit
+     und Lebensende sind dort die des Sets (Server); darunter „Set · n Teile“, fehlende Teile und Mängel an
      Teilen. Ein Teil (nur in der Suche) nennt sein Set mit Link. */
   const setListenText = (a) => {
     if (a.set) {
       const x = a.set;
-      return `${setMarke(true)}<div class="small mat-set-info">Hersteller-Set · ${plural(x.teile, "Teil", "Teile")}${x.vollstaendig ? "" : ' · <span class="mat-warn">unvollständig</span>'}${x.mangel_teile.length ? ` · Mangel an ${x.mangel_teile.map(esc).join(", ")}` : ""}</div>`;
+      return `${setMarke(true)}<div class="small mat-set-info">Set · ${plural(x.teile, "Teil", "Teile")}${x.vollstaendig ? "" : ' · <span class="mat-warn">unvollständig</span>'}${x.mangel_teile.length ? ` · Mangel an ${x.mangel_teile.map(esc).join(", ")}` : ""}</div>`;
     }
     return a.teil_von ? `<div class="small mat-set-info">Teil von Set <a class="mat-inv" href="/material/artikel/${a.teil_von.id}">${esc(a.teil_von.inventory_no)}</a> ${esc(a.teil_von.produkt)}</div>` : "";
   };
@@ -2509,7 +2516,7 @@
     // Eigene offene Meldung: Knopf ausgegraut mit Hilfezeile wie in „Meine PSA“ – kein Dialog, der erst 409 bringt.
     // Wer den Artikel selbst verwaltet, bekommt den Satz „an den Materialwart“ nicht.
     const schonGemeldet = darfMelden && a.mangel_eigen_offen;
-    /* Hersteller-Sets (Schritt 21): Am Set-Artikel steht der Block „set“ (Set-Status, Teile, Kopie der Stückliste), am
+    /* Sets (Schritt 21): Am Set-Artikel steht der Block „set“ (Set-Status, Teile, Kopie der Stückliste), am
        Teil „teil_von“. Ein Teil liegt, sperrt und gehört wie sein Set – Verschieben, Zuordnen und Aussondern gehen nur
        mit dem ganzen Set (der Dienst antwortet am Teil 409); statt der Knöpfe steht dort ein Hinweis aufs Set. Löschen
        sagt darf_loeschen. Seit K2 wirken Sperren und „Mangel melden“ über das ganze Set (Kaskade); eine eigene Sperre
@@ -2752,9 +2759,13 @@
     const NICHT_TAUSCHBAR = "Laut Hersteller nicht austauschbar – fällt es aus, wird das ganze Set ausgesondert.";
     // „Austausch laut Hersteller: nein“: Tauschen und Entnehmen ausgegraut, aber fokussierbar mit lesbarem Grund (V14).
     const ausEintrag = (titel) => `<span class="mat-menue-aus" role="menuitem" aria-disabled="true" tabindex="0"><strong>${titel}</strong><span>${NICHT_TAUSCHBAR}</span></span>`;
+    // Ein Teil ohne Position (nach „Stückliste übertragen“, Entscheidung S5) lässt sich nur entnehmen – tauschen hieße,
+    // ein Teil einer Position einzusetzen, die es nicht mehr gibt.
     const teilMenue = (t) => `<details class="mat-menue mat-teil-menue"><summary class="btn secondary small" aria-haspopup="true">Austausch</summary>
       <div class="mat-menue-liste">
-        ${t.austausch === "nein" ? ausEintrag("Teil tauschen") + ausEintrag("Teil entnehmen")
+        ${!t.slot_id ? `<a href="#" role="button" data-act="teil-entnehmen" data-id="${t.id}"><strong>Teil entnehmen …</strong>
+          <span>Steht nicht mehr in der Stückliste des Sets – entnehmen und weiterführen oder aussondern.</span></a>`
+          : t.austausch === "nein" ? ausEintrag("Teil tauschen") + ausEintrag("Teil entnehmen")
           : `<a href="#" role="button" data-act="teil-tauschen" data-id="${t.id}"><strong>Teil tauschen …</strong>
             <span>Entnehmen und ein neues Teil desselben Produkts einsetzen${t.austausch === "nicht_belegt" ? " – der Austausch ist laut Hersteller nicht belegt, du bestätigst ihn" : ""}.</span></a>
         <a href="#" role="button" data-act="teil-entnehmen" data-id="${t.id}"><strong>Teil entnehmen …</strong>
@@ -2792,7 +2803,8 @@
       <table class="list mat-tabelle mat-karten mat-set-teile"><thead><tr><th>Teil</th><th>Nummer</th><th>Status</th><th>Nächste Prüfung</th><th>Lebensende</th>${pflege ? '<th><span class="mat-vorlesen">Austausch</span></th>' : ""}</tr></thead><tbody>
         ${zeile(eigen, "Das Set selbst", `<strong>${esc(a.inventory_no)}</strong><div class="small muted">SN ${esc(a.serial_no)}</div>`, "")}
         ${sb.teile.map((t) => zeile(t, t.bestandteil || "Teil", `<a class="mat-inv" href="/material/artikel/${t.id}"><strong>${esc(t.inventory_no)}</strong></a>
-          <div class="small muted">SN ${esc(t.serial_no)}${t.serial_generated ? " (System)" : ""}</div>`, teilProdukt(t), teilMenue(t))).join("")}
+          <div class="small muted">SN ${esc(t.serial_no)}${t.serial_generated ? " (System)" : ""}</div>`,
+          teilProdukt(t) + (t.slot_id || aus ? "" : '<div class="small mat-warn">steht nicht mehr in der Stückliste</div>'), teilMenue(t))).join("")}
         ${(aus ? [] : fehlt).map((z) => `<tr class="mat-fehlt-zeile"><td data-l="Teil" class="mat-k-titel"><strong>${esc(z.bezeichnung)}</strong>${z.produkt ? `<div class="small">${nameHtml(z.produkt)}${zusatzHtml(z.produkt)}</div>` : ""}</td>
           <td data-l="Nummer" class="mat-k-halb" colspan="4"><span class="mat-warn">fehlt – ${z.fehlt} von ${z.anzahl}</span></td>
           ${pflege ? `<td class="tabelle-aktionen mat-k-ohne">${einsetzen(z)}</td>` : ""}</tr>`).join("")}
@@ -2878,7 +2890,7 @@
   const ergebnisMarke = (e) => (e ? `<span class="mat-ergebnis-marke e-${esc(e)}">${esc(ERGEBNIS[e] || e)}</span>` : "");
 
   // vorgabe: { grund, text } – etwa aus dem Rückruf-Banner (Grund „Rückruf“, Titel des Rückrufs).
-  // Hersteller-Sets (K2): Die Sperre wirkt über das ganze Set; an einem nur mitgesperrten Artikel hält sie fest, dass er
+  // Sets (K2): Die Sperre wirkt über das ganze Set; an einem nur mitgesperrten Artikel hält sie fest, dass er
   // selbst betroffen ist (eigener Grund). „Sperren“ ist die Hauptaktion des Dialogs (btn) – nicht btn danger: Eine
   // Freiprüfung hebt die Sperre wieder auf (Entscheidung vom 23.10.2026, L2b).
   function sperrDialog(a, vorgabe) {
@@ -3118,7 +3130,8 @@
           const neu = r.teil && neuesTeil ? r.teil.inventory_no : "";
           toast(art === "tauschen" ? `Teil getauscht – neu ${neu}, das Set ist gesperrt bis „Set prüfen“`
             : daten.item_id ? `${neu} eingesetzt – Lebenslauf und Protokolle gehen mit; das Set ist gesperrt bis „Set prüfen“`
-            : art === "einsetzen" ? `Teil ${neu} eingesetzt – das Set ist gesperrt bis „Set prüfen“` : `Teil ${t.inventory_no} entnommen – das Set ist unvollständig`);
+            : art === "einsetzen" ? `Teil ${neu} eingesetzt – das Set ist gesperrt bis „Set prüfen“` : t.slot_id ? `Teil ${t.inventory_no} entnommen – das Set ist unvollständig`
+              : `Teil ${t.inventory_no} entnommen – das Set ist gesperrt bis „Set prüfen“`);
           if ((r.hinweise || []).length) {
             dialog(`<h2>Teil ${esc(neu)} ${art === "tauschen" ? "eingetauscht" : "eingesetzt"}</h2>
               <ul class="mat-an-hinweise">${r.hinweise.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>
@@ -3239,7 +3252,7 @@
      Kategorie des neuen Produkts keine vorsieht – wie im Dienst (bestand.artikel_werte), das Journal nennt den alten
      Wert. Lebensende und Länge gehen dann nicht mit; der Server rechnet sie aus dem neuen Produkt. */
   const PRODUKT_ENTWURF = "Das Produkt lässt sich erst ändern, wenn die Prüfung festgeschrieben oder verworfen ist.";
-  const PRODUKT_SET = "Zu einem Hersteller-Set wechselt das Produkt nicht – ein Set legst du mit seinen Teilen neu an („Artikel anlegen“).";
+  const PRODUKT_SET = "Zu einem Set wechselt das Produkt nicht – ein Set legst du mit seinen Teilen neu an („Artikel anlegen“).";
   const produktGewaehltHtml = (p) => `<strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrKurz(p.article_no)} ${demoMarke(p.demo)}
     <span class="mat-art">${esc(MATERIALART[p.material_kind] || "")}</span>`;
   // Was ein Wechsel von a.produkt auf p nachzieht – als Sätze für den Hinweis im Dialog.
@@ -3478,7 +3491,7 @@
     });
   }
 
-  /* Ein Teil eines Hersteller-Sets als Block mit seinen Feldern (Schritt 21): beim Anlegen eines Sets je Stück, beim
+  /* Ein Teil eines Sets als Block mit seinen Feldern (Schritt 21): beim Anlegen eines Sets je Stück, beim
      Tauschen und Einsetzen eines Teils (Oberfläche O2) einmal. z: Position der Stückliste bzw. ihrer Kopie am Set ({id,
      bezeichnung, anzahl, produkt}); k: das wievielte Stück; id: Vorsilbe der Feldkennungen; felder: die Felder
      (set.teil_felder bzw. TEIL_FELDER); legende: statt der Bezeichnung (etwa „Neues Teil“). Das Produkt steht fest.
@@ -3635,7 +3648,7 @@
         <div class="mat-produktwahl"><input type="search" id="an-q" placeholder="Hersteller, Modell, Bemerkung, Artikelnummer …" autocomplete="off" ${TASTATUR_SUCHE}>
           <div id="an-treffer" class="mat-treffer"></div></div>
         <div id="an-produkt" class="mat-gewaehlt" hidden></div>
-        <p class="help">Fehlt das Produkt im Katalog? <button type="button" class="lnk" data-act="melden">Fehlendes Produkt melden</button>
+        <p class="help">Fehlt das Produkt oder Set im Katalog? <button type="button" class="lnk" data-act="melden">Fehlendes Produkt oder Set melden</button>
           – die Material-Verwaltung nimmt es auf, du bekommst Bescheid.</p>
         <label for="an-ordner">Ordner</label><select id="an-ordner">${wahl.html}</select>
         <label for="an-sn">Seriennummer des Herstellers</label><input type="text" id="an-sn" maxlength="80" placeholder="leer lassen, wenn der Hersteller keine vergibt" ${TASTATUR_NUMMER}>
@@ -3679,7 +3692,7 @@
     }
     const spaeter = () => { clearTimeout(vorschlagLos); vorschlagLos = setTimeout(vorschlag, 250); };
     ["#an-ordner", "#an-herst", "#an-kauf", "#an-erst", "#an-int"].forEach((s) => $(s).addEventListener("change", spaeter));
-    /* Hersteller-Set (Schritt 21, Entwurf C): Mit einem Set-Produkt bringt der Vorschlag die Stückliste (set) – je
+    /* Set (Schritt 21, Entwurf C): Mit einem Set-Produkt bringt der Vorschlag die Stückliste (set) – je
        einzeln geführter Position genau „anzahl“ Teilblöcke mit den Feldern aus set.teil_felder (Seriennummer, Herstellung,
        Kauf, Erstgebrauch und – wo die Kategorie des Teil-Produkts eine vorsieht – Länge). Das Produkt eines Teils steht
        fest (aus der Stückliste; der Server nimmt es nie aus der Anfrage). Kauf und Erstgebrauch des Sets wandern in die
@@ -3833,7 +3846,7 @@
         const q = $("#an-q").value.trim();
         if (!q) { trefferLeeren($("#an-treffer")); return; }
         produktTreffer($("#an-treffer"), q, waehlen,
-          '<p class="help">Kein Produkt gefunden. <button type="button" class="lnk" data-act="melden">Als fehlendes Produkt melden</button></p>');
+          '<p class="help">Kein Produkt gefunden. <button type="button" class="lnk" data-act="melden">Als fehlendes Produkt oder Set melden</button></p>');
       }, 200);
     });
     if (DATEN.produkt) {
@@ -4014,7 +4027,7 @@
         plural(summe(k.id), "Produkt", "Produkte")].filter(Boolean).join(" · ") : "";
       // Zum aktiven generischen Formular führt bei der Material-Verwaltung der Knopf „Generisches Formular“, sonst der Verweis in der Angabenzeile.
       inhalt.innerHTML = `<div class="page-head"><h1>Katalog</h1>
-          <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kategorie<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary" data-act="produkt-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Produkt<span class="k-anlegen"> anlegen</span></span></button>' : ""}
+          <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kategorie<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary" data-act="produkt-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Produkt<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary" data-act="set-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Set<span class="k-anlegen"> anlegen</span></span></button>' : ""}
             ${DARF.lesen || DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/material/katalog/meldungen">Meldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>` : ""}
             ${DARF.katalog ? katalogMenue : ""}</div></div>
         ${k ? `<div class="mat-katkopf">
@@ -4058,6 +4071,8 @@
       },
       "kat-formular": () => formularFuer({ kategorie_id: kategorie }),
       "produkt-neu": () => produktDialog({ category_id: kategorie }),
+      // Set anlegen (Wunsch vom 24.10.2026): derselbe Dialog im Set-Modus – Reiter „Produkt“ und „Bestandteile“.
+      "set-neu": () => produktDialog({ category_id: kategorie, is_set: true }),
       "kat-export": () => katalogExportDialog(),
       "kat-import": () => katalogImportDialog(),
       "kat-import-stand": (b) => katalogImportDialog(b.dataset.id),
@@ -4128,7 +4143,7 @@
           : '<p class="mat-austausch-stand bad">Nicht gespeichert.</p>';
     const h = b.herkunft || {};
     const nichts = !b.fehler.length && !b.aenderungen.length && !b.hinweise.length;
-    // Stücklisten der Hersteller-Sets (Schritt 21): neu (das Produkt hatte noch keine), ersetzt oder gleich geblieben.
+    // Stücklisten der Sets (Schritt 21): neu (das Produkt hatte noch keine), ersetzt oder gleich geblieben.
     const sl = b.stuecklisten || {};
     const stueck = sl.neu || sl.geaendert || sl.unveraendert ? `<tr><th scope="row">Stücklisten</th><td>${sl.neu || 0}</td><td>${sl.geaendert || 0}</td><td>${sl.unveraendert || 0}</td></tr>` : "";
     return `${stand}
@@ -4488,20 +4503,18 @@
        ohne Leerzeichen), darunter der Hinweis mit dem bisherigen Text; gespeichert wird erst, wenn sie kürzer ist. */
     const beschreibung = String(p.description || "").replace(/\s+/g, " ").trim();
     const zuLang = beschreibung.length > BESCHREIBUNG_MAX;
-    /* Hersteller-Set (Phase 4 · L2, Schritt 21): Häkchen „Hersteller-Set“ und – solange es gesetzt ist – zwei Reiter,
-       „Produkt“ (die Felder wie bisher) und „Bestandteile“ (die Stückliste, stuecklisteEditor). Beide stehen die ganze
-       Zeit im Dialog, beim Wechsel geht nichts verloren; „Speichern“ (die eine Hauptaktion) speichert erst das Produkt
-       samt Häkchen, dann die Stückliste als Ganzes (PUT …/bestandteile). Lässt sich das Häkchen nicht umschalten (es gibt
-       schon Artikel, oder das Produkt ist Bestandteil eines Sets), steht es ausgegraut mit dem Grund des Servers da. Aus
-       einer Meldung und für die Nacharbeit (opt.danach) gibt es kein Set – die Nacharbeit nimmt keins, die Stückliste
-       pflegt man danach unter „Bearbeiten“. Eine Variante eines Sets übernimmt die Stückliste auf Wunsch (Häkchen wie bei
-       den Dokumenten). */
-    const mitSet = !p.variante_von && !p.meldung && !opt.danach;
-    const istSet = !!p.is_set;
-    const umschaltbar = neu || p.set_umschaltbar !== false;
-    const vorbildSet = !!(p.variante_von && p.variante_von.is_set);
-    const vorbildStueck = vorbildSet ? (p.variante_von.bestandteile || []).length : 0;
-    const formular = `${p.variante_von ? '<p class="help">Die Stammdaten sind übernommen – bitte die neue Artikelnummer eintragen und anpassen, was sich unterscheidet.</p>' : ""}
+    /* Set (Wunsch vom 24.10.2026, „Set anlegen“): Ob ein Produkt ein Set ist, legt der Weg fest – „Produkt anlegen“
+       oder „Set anlegen“ (Entscheidung S2; ein Häkchen gibt es nicht mehr, umstellen nur über die Katalogdatei). Im
+       Set-Modus (p.is_set, die Variante eines Sets, ein Set aus einer Meldung) stehen immer zwei Reiter da: „Produkt“
+       (die Felder wie bisher, darüber eine Zeile, was ein Set ist) und „Bestandteile“ (die Stückliste,
+       stuecklisteEditor). Beim Wechsel geht nichts verloren. Neu angelegt (auch als Variante und aus einer Meldung) gehen
+       Produkt und Stückliste in EINER Anfrage an den Server – scheitert eine Position, entsteht nichts und die Position
+       ist markiert; beim Bearbeiten erst das Produkt, dann die Stückliste als Ganzes (PUT …/bestandteile), wenn sie sich
+       geändert hat. Pflicht ist mindestens ein einzeln geführtes Teil (S3). Für die Nacharbeit (opt.danach) gibt es kein
+       Set – sie nimmt keins. */
+    const istSet = !opt.danach && !!(p.is_set || (p.variante_von && p.variante_von.is_set));
+    const formular = `${istSet ? `<p class="help mat-set-erklaerung">${esc(SET_ERKLAERUNG)}</p>` : ""}
+      ${p.variante_von ? `<p class="help">Die Stammdaten sind übernommen – bitte die neue Artikelnummer eintragen und anpassen, was sich unterscheidet.${istSet ? " Die Stückliste steht im Reiter „Bestandteile“." : ""}</p>` : ""}
       ${p.meldung ? meldeKasten(p.meldung) : ""}
       <label for="pd-kat">Kategorie</label><select id="pd-kat"><option value="">– bitte wählen –</option>${kategorieOptionen(kats, p.category_id)}</select>
       <div class="field-row"><div><label for="pd-her">Hersteller</label><input type="text" id="pd-her" value="${esc(p.manufacturer || "")}" maxlength="120" ${TASTATUR_NAME}></div>
@@ -4516,20 +4529,17 @@
         <div><label for="pd-int">Prüfintervall (Monate)</label><input type="number" id="pd-int" min="1" max="120" value="${p.interval_months || ""}"><div class="help" id="pd-int-hilfe"></div></div></div>
       <div class="field-row"><div><label for="pd-ld">Lebensdauer (Jahre)</label><input type="number" id="pd-ld" min="1" max="50" value="${p.lifetime_years || ""}"><div class="help" id="pd-ld-hilfe"></div></div>
         <div><label for="pd-lq">Fundstelle der Lebensdauer</label><input type="text" id="pd-lq" value="${esc(p.lifetime_source || "")}" maxlength="300" placeholder="z. B. Gebrauchsanleitung, Kap. 9"></div></div>
-      ${mitSet ? `<label class="inline mat-pd-set"><input type="checkbox" id="pd-set" ${istSet ? "checked" : ""} ${umschaltbar ? "" : 'disabled aria-describedby="pd-set-hilfe"'}> Hersteller-Set</label>
-        <div class="help" id="pd-set-hilfe">${umschaltbar ? "Ab Werk zusammengestelltes Kit mit eigener Herstellernummer; seine Teile stehen im Reiter „Bestandteile“."
-          : esc(p.set_umschalt_grund || "")}</div>` : ""}
       ${fotoFeld("pd-bild", "Produktbild", "Bild", p.bild ? p.vorschau || p.bild : "", "JPEG, PNG, WebP oder HEIC vom Telefon.")}
       ${p.variante_von ? `<fieldset class="mat-variante-doks"><legend>Dokumente übernehmen</legend>
         ${vorbildDoks.length ? vorbildDoks.map((d) => `<label class="inline"><input type="checkbox" class="pd-dok" value="${d.id}" checked> ${esc(d.title)}
           <span class="muted small">${esc(DOKART[d.kind] || d.kind)}${d.version ? `, ${esc(d.version)}` : ""}${d.datei ? "" : " · Link"}</span></label>`).join("") : '<p class="help">Das Produkt hat keine aktuellen Dokumente.</p>'}
         <p class="help">Das Produktbild wird nie übernommen. Dokumente der Kategorie gelten ohnehin für alle Produkte darin.</p></fieldset>` : ""}
-      ${vorbildSet ? `<label class="inline"><input type="checkbox" id="pd-stueckliste" checked> Stückliste übernehmen <span class="muted small">(${plural(vorbildStueck, "Position", "Positionen")})</span></label>
-        <div class="help">Die Variante wird dann selbst ein Hersteller-Set; ohne Häkchen ein gewöhnliches Produkt.</div>` : ""}
       ${p.meldung ? '<label for="pd-antwort">Anmerkung für den Melder (optional, steht in seiner Mail)</label><textarea id="pd-antwort" rows="2" maxlength="1000"></textarea>' : ""}`;
-    const titel = p.variante_von ? `Variante von „${esc(produktName(p.variante_von))}“` : p.meldung ? "Produkt aus Meldung anlegen" : neu ? "Produkt anlegen" : "Produkt bearbeiten";
-    dialog(mitSet ? `<h2 id="pd-titel">${titel}</h2>
-      <div class="c-tabs mat-reiter" role="tablist" aria-labelledby="pd-titel" ${istSet ? "" : "hidden"}>
+    const titel = p.variante_von ? `Variante von „${esc(produktName(p.variante_von))}“`
+      : p.meldung ? (istSet ? "Set aus Meldung anlegen" : "Produkt aus Meldung anlegen")
+        : istSet ? (neu ? "Set anlegen" : "Set bearbeiten") : neu ? "Produkt anlegen" : "Produkt bearbeiten";
+    dialog(istSet ? `<h2 id="pd-titel">${titel}</h2>
+      <div class="c-tabs mat-reiter" role="tablist" aria-labelledby="pd-titel">
         <button type="button" role="tab" id="pd-reiter-produkt" aria-controls="pd-teil-produkt" data-reiter="produkt">Produkt</button>
         <button type="button" role="tab" id="pd-reiter-bestandteile" aria-controls="pd-teil-bestandteile" data-reiter="bestandteile">Bestandteile</button></div>
       <div class="mat-reiter-teil" role="tabpanel" id="pd-teil-produkt" aria-labelledby="pd-reiter-produkt">${formular}</div>
@@ -4560,26 +4570,19 @@
       hilfen();
       artikelnummerPruefen($("#pd-art", body), $("#pd-her", body), $("#pd-art-hilfe", body), p.id);
       const bildWahl = fotoFeldVerdrahten(dlg, body, "pd-bild");
-      // Reiter und Stückliste nur mit dem Häkchen; ohne es zeigt der Dialog nur „Produkt“.
-      const setFeld = $("#pd-set", body);
-      const stueck = mitSet ? stuecklisteEditor($("#pd-teil-bestandteile", body), p) : null;
-      const reiterZeigen = mitSet ? reiterSchalten(body, opt.reiter === "bestandteile" && istSet ? "bestandteile" : "produkt") : null;
-      // Mit Stückliste breiter (Bezeichnung, Anzahl und Austausch in einer Zeile) – #dlg dient allen Dialogen der Seite,
-      // die Klasse gilt nur, solange dieser offen ist.
-      const breit = () => dlg.classList.toggle("mat-produkt-reiter", !!(setFeld && setFeld.checked));
-      if (setFeld) {
-        breit();
+      // Im Set-Modus die Stückliste und die Reiter (Start „Produkt“, „Stückliste bearbeiten“ öffnet „Bestandteile“); die
+      // Variante übernimmt die Stückliste des Vorbilds zum Bearbeiten. Breiter (Bezeichnung, Anzahl und Austausch in einer
+      // Zeile) – #dlg dient allen Dialogen der Seite, die Klasse gilt nur, solange dieser offen ist.
+      const stueck = istSet ? stuecklisteEditor($("#pd-teil-bestandteile", body), p) : null;
+      const reiterZeigen = istSet ? reiterSchalten(body, opt.reiter === "bestandteile" ? "bestandteile" : "produkt") : null;
+      if (istSet) {
+        dlg.classList.add("mat-produkt-reiter");
         dlg.addEventListener("close", () => dlg.classList.remove("mat-produkt-reiter"), { once: true });
-        setFeld.addEventListener("change", () => {
-          breit();
-          $('[role="tablist"]', body).hidden = !setFeld.checked;
-          if (setFeld.checked) reiterZeigen("bestandteile", true);
-          else reiterZeigen("produkt");
-        });
       }
-      // Erst die Angaben, dann das Bild. Scheitert nur das Bild, kennt der Dialog das Produkt schon: Ein zweiter
-      // Klick speichert die Angaben erneut und lädt das Bild nach, statt das Produkt doppelt anzulegen. Ebenso die
-      // Stückliste: Sie geht nach dem Produkt an den Server; scheitert sie, bleibt der Dialog im Reiter „Bestandteile“.
+      // Erst die Angaben (ein neues Set samt Stückliste), dann das Bild. Scheitert nur das Bild, kennt der Dialog das
+      // Produkt schon: Ein zweiter Klick speichert die Angaben erneut und lädt das Bild nach, statt das Produkt doppelt
+      // anzulegen. Beim Bearbeiten geht die Stückliste nach dem Produkt an den Server; scheitert sie, bleibt der Dialog im
+      // Reiter „Bestandteile“.
       let pid = p.id || null;
       $("#pd-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
@@ -4591,28 +4594,34 @@
         if (p.variante_von && !pid && !daten.article_no.trim()) { toast("Eine Variante braucht eine eigene Artikelnummer.", true); fokus($("#pd-art", body)); return; }
         const laenge = daten.description.replace(/\s+/g, " ").trim().length;
         if (laenge > BESCHREIBUNG_MAX) { toast(`Die Bemerkung ist ein kurzer Zusatz hinter dem Namen – höchstens ${BESCHREIBUNG_MAX} Zeichen, hier sind es ${laenge}. Bitte kürzen.`, true); fokus($("#pd-desc", body)); return; }
-        const alsSet = !!(setFeld && setFeld.checked);
-        if (setFeld && !setFeld.disabled) daten.is_set = alsSet;
-        if (alsSet) {
+        if (istSet) {
           const fehler = stueck.pruefen();
           if (fehler) { reiterZeigen("bestandteile"); toast(fehler, true); return; }
+          // Neu (auch Variante und aus Meldung): Produkt und Stückliste in einer Anfrage.
+          if (!pid) Object.assign(daten, p.variante_von ? {} : { is_set: true }, { bestandteile: stueck.liste() });
         }
-        // Häkchen weg an einem Set mit Stückliste: Der Server nimmt die Stückliste mit – vorher fragen.
-        if (setFeld && istSet && !alsSet && (p.bestandteile || []).length
-            && !(await confirm(`„Hersteller-Set“ entfernen? Die Stückliste (${plural(p.bestandteile.length, "Position", "Positionen")}) wird dabei gelöscht.`, "Entfernen"))) return;
         knopf.disabled = true;
+        let aelter = 0;
         try {
-          // Aus einer Meldung: Produkt anlegen und Meldung erledigen in einem Zug (der Melder bekommt Bescheid).
-          const r = pid ? await api(`${API}/produkte/${pid}`, { method: "PUT", body: daten })
-            : p.meldung ? await api(`${API}/meldungen/${p.meldung.id}/produkt`, { method: "POST", body: Object.assign(daten, { antwort: $("#pd-antwort", body).value }) })
-            : p.variante_von ? await api(`${API}/produkte/${p.variante_von.id}/variante`, { method: "POST", body: Object.assign(daten, { dokumente: $$(".pd-dok:checked", body).map((c) => +c.value), stueckliste: !!($("#pd-stueckliste", body) && $("#pd-stueckliste", body).checked) }) })
-            : await api(`${API}/produkte`, { method: "POST", body: daten });
-          pid = r.produkt.id;
-          if (alsSet && stueck.geaendert()) {
-            try { await api(`${API}/produkte/${pid}/bestandteile`, { method: "PUT", body: { bestandteile: stueck.liste() } }); }
-            catch (e) { stueck.fehlerZeigen(e.message); reiterZeigen("bestandteile"); throw e; }
-            stueck.gespeichert();
+          // Aus einer Meldung: Produkt bzw. Set anlegen und Meldung erledigen in einem Zug (der Melder bekommt Bescheid).
+          let r;
+          try {
+            r = pid ? await api(`${API}/produkte/${pid}`, { method: "PUT", body: daten })
+              : p.meldung ? await api(`${API}/meldungen/${p.meldung.id}/produkt`, { method: "POST", body: Object.assign(daten, { antwort: $("#pd-antwort", body).value }) })
+              : p.variante_von ? await api(`${API}/produkte/${p.variante_von.id}/variante`, { method: "POST", body: Object.assign(daten, { dokumente: $$(".pd-dok:checked", body).map((c) => +c.value) }) })
+              : await api(`${API}/produkte`, { method: "POST", body: daten });
+          } catch (e) {
+            // „Position n: …“ beim Anlegen eines Sets: an die Position, in den Reiter „Bestandteile“.
+            if (istSet && !pid && /^Position \d+: |einzeln geführtes Teil/.test(e.message)) { stueck.fehlerZeigen(e.message); reiterZeigen("bestandteile"); }
+            throw e;
           }
+          pid = r.produkt.id;
+          if (istSet && p.id && stueck.geaendert()) {
+            try { r = await api(`${API}/produkte/${pid}/bestandteile`, { method: "PUT", body: { bestandteile: stueck.liste() } }); }
+            catch (e) { stueck.fehlerZeigen(e.message); reiterZeigen("bestandteile"); throw e; }
+            aelter = r.produkt.sets_aelter || 0;
+          }
+          if (istSet) stueck.gespeichert();
           if (bild) {
             const fd = new FormData();
             fd.append("file", bild);
@@ -4622,7 +4631,11 @@
           }
           dlg.close();
           if (opt.danach) await opt.danach(r.produkt);
-          else location.href = `/material/katalog/produkt/${pid}`;
+          else if (aelter && opt.gespeichert) {
+            // Die Produktseite zeigt danach den Hinweis und „Auf vorhandene Sets übertragen …“ (Entwurf B).
+            toast(`Gespeichert – ${plural(aelter, "angelegtes Set hat", "angelegte Sets haben")} noch die bisherige Stückliste.`);
+            await opt.gespeichert();
+          } else location.href = `/material/katalog/produkt/${pid}`;
         } catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
     });
@@ -4657,7 +4670,7 @@
     return zeigen;
   }
 
-  /* Der Reiter „Bestandteile“ (Schritt 21, Entwurf A): die Stückliste eines Hersteller-Sets, Position für Position –
+  /* Der Reiter „Bestandteile“ (Schritt 21, Entwurf A): die Stückliste eines Sets, Position für Position –
      „einzeln geführt“ (dann ein Katalogprodukt, gesucht wie beim Artikel anlegen; die Bezeichnung darf fehlen, dann
      nimmt der Server den Produktnamen) oder ein Bestandteil nur mit Bezeichnung (Tasche, Seilsatz), dazu Anzahl und
      „Austausch laut Hersteller“ (ja | nein | nicht belegt). Reihenfolge = Position (↑ ↓), „Entfernen“ nimmt sie heraus
@@ -4674,6 +4687,8 @@
                            anzahl: +x.anzahl || 1, einzeln: !!x.einzeln, austausch: x.austausch || "nicht_belegt" });
     let anfang = JSON.stringify(pos.map(form));
     let suchLos = null;
+    // Set aus einer Meldung (S8): die gemeldeten Teile als Vorlage über den Positionen.
+    const vorlage = p.meldung && p.meldung.set_teile ? `<div class="mat-meldekasten"><p class="small">Gemeldete Teile (Vorlage):</p><p class="mat-text small">${esc(p.meldung.set_teile)}</p></div>` : "";
     // Die Felder in pos übernehmen – vor jedem Neuzeichnen, damit Getipptes bleibt.
     function lesen() {
       $$(".mat-bt", teil).forEach((f) => {
@@ -4695,9 +4710,9 @@
           <div id="bt-${i}-treffer" class="mat-treffer"></div></div>`);
     function zeichnen(fokusSel) {
       const hilfeOffen = Boolean($(".mat-bt-hilfe", teil) && $(".mat-bt-hilfe", teil).open);
-      teil.innerHTML = `<details class="mat-auf mat-bt-hilfe"${hilfeOffen ? " open" : ""}><summary>Einzeln geführt nur mit eigener Kennzeichnung und eigenem Katalogprodukt</summary>
+      teil.innerHTML = `${vorlage}<details class="mat-auf mat-bt-hilfe"${hilfeOffen ? " open" : ""}><summary>Einzeln geführt nur mit eigener Kennzeichnung und eigenem Katalogprodukt</summary>
           <p class="help">${esc(HILFE_EINZELN)}</p>
-          <p class="help">Angelegte Sets behalten die Stückliste, mit der sie angelegt wurden – eine Änderung gilt für neue Sets.</p></details>
+          <p class="help">Angelegte Sets behalten die Stückliste, mit der sie angelegt wurden. Eine Änderung überträgst du danach auf der Produktseite („Auf vorhandene Sets übertragen …“).</p></details>
         <div class="mat-bt-liste">${pos.map((x, i) => `<fieldset class="mat-bt" data-i="${i}"><legend>Position ${i + 1}</legend>
           <div class="mat-bt-kopf"><label class="inline"><input type="checkbox" class="bt-einzeln" data-i="${i}" ${x.einzeln ? "checked" : ""}> Einzeln geführt</label>
             <div class="btn-row"><button class="btn secondary small" type="button" data-bt="hoch" data-i="${i}" aria-label="Position ${i + 1} nach oben" ${i ? "" : "disabled"}>↑</button><button class="btn secondary small" type="button" data-bt="runter" data-i="${i}" aria-label="Position ${i + 1} nach unten" ${i < pos.length - 1 ? "" : "disabled"}>↓</button><button class="btn secondary small" type="button" data-bt="weg" data-i="${i}" aria-label="Position ${i + 1} entfernen">Entfernen</button></div></div>
@@ -4713,7 +4728,7 @@
       if (fokusSel) fokus($(fokusSel, teil));
     }
     function waehlen(i, prod) {
-      if (prod.is_set || prod.id === p.id) { toast(`Ein Hersteller-Set enthält kein Set – „${produktName(prod)}“ ist selbst eins.`, true); return; }
+      if (prod.is_set || prod.id === p.id) { toast(`Ein Set enthält kein Set – „${produktName(prod)}“ ist selbst eins.`, true); return; }
       lesen();
       pos[i].produkt = prod;
       zeichnen(`#bt-${i}-bez`);
@@ -4778,6 +4793,8 @@
           if (text) { markieren(i, text); return `Position ${i + 1}: ${text}`; }
         }
         if (stueckZahl() > g.teile) return `Zusammen höchstens ${g.teile} einzeln geführte Stück je Set (hier ${stueckZahl()}).`;
+        // Entscheidung S3: ohne einzeln geführtes Teil kein Set (wie stueckliste.EINZELN_PFLICHT).
+        if (!pos.some((x) => x.einzeln)) return EINZELN_PFLICHT;
         return "";
       },
       // „Position n: …“ vom Server an die Position, sonst nur die Meldung (der Aufrufer zeigt sie als Toast).
@@ -4858,9 +4875,11 @@
   }
 
   /* --- Produkt ------------------------------------------------------------------------------------- */
-  /* Die Stückliste eines Hersteller-Sets auf der Produktseite (Schritt 21): je Position Bestandteil (Bezeichnung, bei
+  /* Die Stückliste eines Sets auf der Produktseite (Schritt 21): je Position Bestandteil (Bezeichnung, bei
      einzeln geführten das Katalogprodukt als Link), Anzahl, „einzeln geführt“ und „Austausch laut Hersteller“. Pflegen
-     im Dialog „Bearbeiten“, Reiter „Bestandteile“ (k: Katalogrecht). */
+     im Dialog „Bearbeiten“, Reiter „Bestandteile“ (k: Katalogrecht). Haben angelegte Sets eine ältere Stückliste
+     (sets_aelter, nur für die Material-Verwaltung), stehen darunter der Hinweis und „Auf vorhandene Sets übertragen …“ –
+     der Hinweis bleibt, bis alle übertragen sind (man kann es später nachholen). */
   function stuecklisteHtml(p, k) {
     const liste = p.bestandteile || [];
     return `<section class="section mat-stueckliste"><h2>Stückliste</h2>
@@ -4871,7 +4890,67 @@
           <td data-l="Austausch laut Hersteller möglich">${esc(z.austausch_text || AUSTAUSCH[z.austausch] || z.austausch)}</td></tr>`).join("")}</tbody></table>`
         : `<p class="mat-warn">Noch keine Stückliste – ohne sie lässt sich kein Set dieses Produkts anlegen.</p>`}
       <p class="help">Beim Anlegen eines Sets wird jedes einzeln geführte Stück ein eigener Artikel (Teil) mit Inventarnummer und Etikett. Angelegte Sets behalten ihre Stückliste.</p>
-      ${k ? '<button class="btn secondary small" data-act="stueckliste">Stückliste bearbeiten</button>' : ""}</section>`;
+      ${k && p.sets_aelter ? `<p class="notice">${plural(p.sets_aelter, "angelegtes Set hat", "angelegte Sets haben")} eine ältere Stückliste.</p>` : ""}
+      ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="stueckliste">Stückliste bearbeiten</button>${p.sets_aelter ? '<button class="btn secondary small" data-act="uebertragen">Auf vorhandene Sets übertragen …</button>' : ""}</div>` : ""}</section>`;
+  }
+
+  /* „Stückliste übertragen“ (Wunsch vom 24.10.2026, Entwurf B; Entscheidungen S4–S7, nur die Material-Verwaltung):
+     Vorschau vom Server (setkopie.vorschau) – je Gruppe gleicher bisheriger Stückliste der Vergleich Position | bisher |
+     jetzt | Wirkung, darunter die Sets der Gruppe mit Inventarnummer (Link), Ordner, Status, Herstellung und Wirkung;
+     übertragbare sind gewählt (S4), die anderen stehen mit ihrem Grund ohne Auswahl da. Die Schlusszeile zählt mit,
+     „Übertragen“ (die eine Hauptaktion) schickt „stand“ und die Wahl. Ist inzwischen etwas anders (409), lädt der Dialog
+     die Vorschau neu. danach: die Produktseite neu zeichnen. */
+  async function uebertragenDialog(p, danach) {
+    let v;
+    try { v = await api(`${API}/produkte/${p.id}/stueckliste-uebertragen`); } catch (e) { toast(e.message, true); return; }
+    const zelle = (t) => (t ? esc(t) : '<span class="muted">–</span>');
+    const setZeile = (x) => `<li class="mat-su-set${x.uebertragbar ? "" : " aus"}">
+        ${x.uebertragbar ? `<input type="checkbox" class="su-set" id="su-${x.id}" value="${x.id}" data-sperrt="${x.sperrt ? 1 : 0}" checked aria-labelledby="su-${x.id}-nr su-${x.id}-wirkung">` : ""}
+        <div class="mat-su-angaben"><a class="mat-inv" id="su-${x.id}-nr" href="/material/artikel/${x.id}" target="_blank" rel="noopener"><strong>${esc(x.inventory_no)}</strong></a> ${demoMarke(x.demo)}
+          <span class="small muted">${esc(x.ordner)} · ${esc(x.status_text)}${x.manufactured_on ? ` · Herstellung ${esc(fmtTag(x.manufactured_on))}` : ""}</span>
+          <div class="small${x.uebertragbar ? (x.sperrt ? " mat-warn" : "") : " mat-warn"}" id="su-${x.id}-wirkung">${x.uebertragbar ? esc(x.wirkung) : `nicht übertragbar: ${esc(x.grund)}`}</div></div></li>`;
+    const gruppe = (g, n) => `<section class="mat-su-gruppe">
+        <h3>${v.gruppen.length > 1 ? `Gruppe ${n + 1} – ` : ""}${plural(g.sets.length, "Set", "Sets")} mit dieser bisherigen Stückliste</h3>
+        <table class="list mat-tabelle mat-karten mat-su-vergleich"><thead><tr><th>Position</th><th>bisher</th><th>jetzt</th><th>Wirkung</th></tr></thead><tbody>
+          ${g.vergleich.map((z) => `<tr${z.wirkung === "unverändert" ? ' class="mat-su-gleich"' : ""}><td data-l="Position" class="mat-k-halb">${z.position || "–"}</td>
+            <td data-l="bisher">${zelle(z.bisher)}</td><td data-l="jetzt">${zelle(z.jetzt)}</td><td data-l="Wirkung" class="mat-k-marke">${esc(z.wirkung)}</td></tr>`).join("")}</tbody></table>
+        <ul class="mat-su-sets">${g.sets.map(setZeile).join("")}</ul></section>`;
+    const kopf = `Die angelegten Sets bekommen die aktuelle Stückliste${v.ausgesondert ? `; ausgesonderte (${v.ausgesondert}) behalten ihre` : ""}.${v.gleich ? ` ${plural(v.gleich, "Set hat", "Sets haben")} sie schon.` : ""}`;
+    dialog(`<h2>Stückliste übertragen</h2>
+      <p>${esc(produktName(v.produkt))}</p>
+      <p class="help">${kopf} Teile bleiben, wo sie sind: Fehlt danach ein einzeln geführtes Teil oder ist eines übrig, ist das Set gesperrt, bis „Set prüfen“ es freigibt – einsetzen bzw. entnehmen macht der Materialwart. Andere Änderungen sperren nicht.</p>
+      ${v.gruppen.length ? v.gruppen.map(gruppe).join("") : leer("Kein angelegtes Set hat eine ältere Stückliste.")}
+      <p class="mat-su-summe" id="su-summe" aria-live="polite"></p>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">${v.uebertragbar ? "Abbrechen" : "Schließen"}</button>${v.uebertragbar ? '<button class="btn" id="su-ok" type="button">Übertragen</button>' : ""}</div>`,
+    (dlg, body) => {
+      dlg.classList.add("mat-produkt-reiter");
+      dlg.addEventListener("close", () => dlg.classList.remove("mat-produkt-reiter"), { once: true });
+      const gewaehlt = () => $$(".su-set:checked", body);
+      const summe = () => {
+        const n = gewaehlt().length, k = gewaehlt().filter((c) => c.dataset.sperrt === "1").length;
+        $("#su-summe", body).textContent = !v.uebertragbar ? "" : n
+          ? `Übertragen auf ${plural(n, "Set", "Sets")}${k ? ` – ${k === n && n === 1 ? "es ist" : `${k} davon`} danach gesperrt bis zur Set-Prüfung` : ""}.`
+          : "Kein Set gewählt.";
+        if ($("#su-ok", body)) $("#su-ok", body).disabled = !n;
+      };
+      body.addEventListener("change", (e) => { if (e.target.classList.contains("su-set")) summe(); });
+      summe();
+      if (!$("#su-ok", body)) return;
+      $("#su-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        knopf.disabled = true;
+        try {
+          const r = await api(`${API}/produkte/${p.id}/stueckliste-uebertragen`, { method: "POST", body: { stand: v.stand, set_ids: gewaehlt().map((c) => +c.value) } });
+          dlg.close();
+          toast(`Übertragen auf ${plural(r.uebertragen, "Set", "Sets")}${r.gesperrt ? ` – ${r.gesperrt} gesperrt bis zur Set-Prüfung` : ""}.`);
+          await danach();
+        } catch (e) {
+          toast(e.message, true);
+          // Inzwischen geändert (anderer Stand, neues Hindernis): die Vorschau neu – nichts wurde übertragen.
+          if (e.status === 409) { dlg.close(); await uebertragenDialog(p, danach); } else knopf.disabled = false;
+        }
+      };
+    });
   }
 
   async function produkt() {
@@ -4903,7 +4982,7 @@
           ${zeile("Bestand", `${plural(p.bestand, "Artikel", "Artikel")}${p.artikel_gesamt > p.bestand ? ` <span class="muted">(+${p.artikel_gesamt - p.bestand} ausgesondert)</span>` : ""}${DARF.alles ? "" : ' <span class="muted">in deinem Bereich</span>'}`)}
           ${zusatz && zusatz.voll ? zeile("Bemerkung", `<span class="mat-text">${esc(p.description)}</span>
             <div class="help">Länger als ${BESCHREIBUNG_MAX} Zeichen, in der Überschrift gekürzt – gedacht ist ein kurzer Zusatz hinter dem Namen.${k ? " Bitte unter „Bearbeiten“ kürzen." : ""}</div>`) : ""}
-          ${p.is_set ? zeile("Hersteller-Set", `ja – ${plural(stueckTeile, "Teil", "Teile")} je Set einzeln geführt <span class="muted">(Stückliste unten)</span>`) : ""}
+          ${p.is_set ? zeile("Set", `ja – ${plural(stueckTeile, "Teil", "Teile")} je Set einzeln geführt <span class="muted">(Stückliste unten)</span>`) : ""}
           ${(p.bestandteil_von || []).length ? zeile("Bestandteil von", p.bestandteil_von.map((x) => `<a href="/material/katalog/produkt/${x.id}">${esc(x.name)}</a>`).join(", ")) : ""}
         </dl></section>
         <section class="section"><h2>Prüfformular</h2>
@@ -4925,8 +5004,9 @@
       </section>
       <section class="section"><h2>Journal</h2>${journalHtml(p.journal, true)}</section>`;
     aktionen = {
-      bearbeiten: () => produktDialog(p),
-      stueckliste: () => produktDialog(p, { reiter: "bestandteile" }),
+      bearbeiten: () => produktDialog(p, { gespeichert: () => zeigen(produkt) }),
+      stueckliste: () => produktDialog(p, { reiter: "bestandteile", gespeichert: () => zeigen(produkt) }),
+      uebertragen: () => uebertragenDialog(p, () => zeigen(produkt)),
       // Stammdaten vorbelegt, Artikelnummer leer (eine neue ist Pflicht), kein Bild.
       variante: () => produktDialog(Object.assign({}, p, { id: null, article_no: "", bild: null, vorschau: null, original: null, variante_von: p })),
       loeschen: async () => {
@@ -5328,7 +5408,7 @@
     else if (a.entwurf) hinweis = esc(`In Prüfung bei ${a.entwurf.pruefer} seit ${fmtZeit(a.entwurf.seit)}.${darf.verwalten ? " Eine liegen gebliebene Reservierung hebst du in der Artikelansicht auf." : " Eine liegen gebliebene Reservierung hebt der Materialwart auf."}`);
     else if (!a.formular) hinweis = "Für dieses Produkt gibt es kein aktives Prüfformular – weder am Produkt noch in seiner Kategorie. Die Material-Verwaltung legt es im Katalog an.";
     const ld = a.lebensdauer && a.lebensdauer.festgeschrieben ? { ende: a.lebensdauer.ende, rest_tage: a.lebensdauer.rest_tage, erreicht: a.lebensdauer.rest_tage <= 0 } : null;
-    /* Hersteller-Sets (O2): Den Set-Artikel prüft man nur in einer Set-Prüfung (sonst 409) – ohne offene führt die Seite
+    /* Sets (O2): Den Set-Artikel prüft man nur in einer Set-Prüfung (sonst 409) – ohne offene führt die Seite
        dorthin. Ein Teil zeigt sein Set und, in einer offenen Set-Prüfung, „Teil n von m“; „Abbrechen“ führt dann zurück
        in die Set-Prüfung. Eine Sperre im Set hebt „einsatzbereit“ nie allein auf – frei gibt nur „Set prüfen“. */
     const tv = a.teil_von;
@@ -5376,7 +5456,7 @@
     };
   }
 
-  /* --- Set prüfen (Hersteller-Sets, K2 – Oberfläche O2) ---------------------------------------------------------
+  /* --- Set prüfen (Sets, K2 – Oberfläche O2) ---------------------------------------------------------
      Eigene Seite /material/artikel/<Set>/set-pruefung, gebaut wie „Prüfung starten“: ohne offene Set-Prüfung der
      Prüfumfang als Vorschau und „Set-Prüfung beginnen“ (POST …/set-lauf, aus dem Durchgang mit durchgang_id); mit
      offener je Teil eine Karte – zu prüfen, in Prüfung, geprüft (mit Protokoll) oder übernommen (letzte gültige Prüfung,
@@ -5417,7 +5497,7 @@
             <span>Festgeschriebene Teilprüfungen bleiben Einzelprüfungen mit Protokoll, offene laufen einzeln weiter.</span></a></div></details>` : ""}</div>
       <p class="mat-produktzeile"><strong>${nameHtml(a.produkt)}</strong>${zusatzHtml(a.produkt)}${artNrHtml(a.produkt.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)}</p>`;
     if (!sb) {
-      inhalt.innerHTML = `${kopf}<p class="notice">„Set prüfen“ gibt es nur an einem Hersteller-Set.</p><p><a class="btn secondary" href="/material/artikel/${a.id}">Zum Artikel</a></p>`;
+      inhalt.innerHTML = `${kopf}<p class="notice">„Set prüfen“ gibt es nur an einem Set.</p><p><a class="btn secondary" href="/material/artikel/${a.id}">Zum Artikel</a></p>`;
       aktionen = {};
       return;
     }
@@ -5713,7 +5793,7 @@
     const bemFeld = () => echt("#pr-bem");
     let anleitungEl = null;          // die Prüfanleitung: einmal gebaut, bei jedem Zeichnen wieder eingesetzt (bleibt offen)
 
-    /* Hersteller-Sets (K2, Oberfläche O2): Gehört die Prüfung zu einer Set-Prüfung (pr.set_lauf), steht im Kopf „Teil von
+    /* Sets (K2, Oberfläche O2): Gehört die Prüfung zu einer Set-Prüfung (pr.set_lauf), steht im Kopf „Teil von
        Set … · Teil n von m“ bzw. „Set-Artikel“, und nach dem Festschreiben führt ein Kasten zur nächsten Prüfung des
        Laufs (laufWeiter) oder zurück. Am Entwurf des Set-Artikels (pr.set_abschluss) der Stand des Laufs und das
        Gesamtergebnis vorab; die Ja/Nein-Zeilen der Bestandteile heißen „vorhanden“/„fehlt“; „aussondern“ fragt je Teil
@@ -6799,7 +6879,7 @@
       });
     }
     async function laden() { d = (await Promise.all([api(`${API}/durchgaenge/${DATEN.id}`), ordnerBaum().catch(() => null)]))[0].durchgang; }
-    /* Hersteller-Sets (K2, Oberfläche O2): Set-Artikel und Teile bleiben eigene Zeilen des Durchgangs. Die Teile stehen
+    /* Sets (K2, Oberfläche O2): Set-Artikel und Teile bleiben eigene Zeilen des Durchgangs. Die Teile stehen
        eingerückt unter ihrer Set-Zeile, wenn die in der Auswahl steht (in der Reihenfolge der Sortierung); sonst für sich
        mit „Teil von Set …“. An der Set-Zeile führt „Set prüfen“ in die Set-Prüfung mit diesem Durchgang (durchgang_id);
        eine offene Set-Prüfung steht dort (set_lauf) – lief sie außerhalb des Durchgangs, geht es von hier nicht weiter
@@ -6961,10 +7041,12 @@
 
   // notizTitel: Im Produktdialog („Produkt aus Meldung anlegen“) heißt die Bemerkung der Meldung „Bemerkung des
   // Melders“ – darunter steht das Feld „Bemerkung“ des Produkts (Wunsch vom 18.10.2026), zwei gleiche Wörter wären dort
-  // nicht zu unterscheiden. In der Liste der Meldungen bleibt es „Bemerkung“ wie im Dialog „Fehlendes Produkt melden“.
+  // nicht zu unterscheiden. In der Liste der Meldungen bleibt es „Bemerkung“ wie im Dialog „Fehlendes Produkt oder Set
+  // melden“. Eine Set-Meldung (S8) nennt dazu die Teile, wie der Melder sie kennt.
   function meldeDetails(m, notizTitel = "Bemerkung") {
     const zeile = (t, w) => `<dt>${esc(t)}</dt><dd>${w}</dd>`;
-    const daten = [m.article_no ? zeile("Artikelnummer", `<span class="mat-ganz">${esc(m.article_no)}</span>`) : "", m.norm ? zeile("Norm", esc(m.norm)) : "",
+    const daten = [m.is_set && m.set_teile ? zeile("Teile des Sets", `<span class="mat-text">${esc(m.set_teile)}</span>`) : "",
+      m.article_no ? zeile("Artikelnummer", `<span class="mat-ganz">${esc(m.article_no)}</span>`) : "", m.norm ? zeile("Norm", esc(m.norm)) : "",
       m.kategorie ? zeile("Kategorie (Vorschlag)", esc(m.kategorie.pfad)) : "",
       m.links.length ? zeile("Links", m.links.map((l) => `<a href="${esc(l)}" target="_blank" rel="noopener noreferrer">${esc(kurzLink(l))}</a>`).join("<br>")) : "",
       m.note ? zeile(notizTitel, `<span class="mat-text">${esc(m.note)}</span>`) : ""].join("");
@@ -6981,7 +7063,8 @@
     const wer = (name) => (name ? ` von ${esc(name)}` : "");
     const knoepfe = [];
     if (bearbeiten && m.status === "offen") {
-      knoepfe.push(`<button type="button" class="btn secondary small" data-act="anlegen" data-id="${m.id}">Produkt anlegen</button>`,
+      // Eine Set-Meldung legt ein Set an (Set-Dialog mit Stückliste, S8) – „Vorhandenes zuordnen“ nimmt auch ein Set.
+      knoepfe.push(`<button type="button" class="btn secondary small" data-act="anlegen" data-id="${m.id}">${m.is_set ? "Set anlegen" : "Produkt anlegen"}</button>`,
                    `<button type="button" class="btn secondary small" data-act="zuordnen" data-id="${m.id}">Vorhandenes zuordnen</button>`,
                    `<button type="button" class="btn secondary small" data-act="ablehnen" data-id="${m.id}">Ablehnen</button>`);
     }
@@ -6991,7 +7074,7 @@
     // Eigene Meldungen löscht der Melder selbst – offen oder erledigt.
     if (m.eigen) knoepfe.push(`<button type="button" class="btn secondary small" data-act="loeschen" data-id="${m.id}">Löschen</button>`);
     return `<article class="mat-meldung m-${esc(m.status)}">
-      <div class="mat-meldung-kopf"><h2>${esc(meldungName(m))}</h2>${meldestatusMarke(m.status)}</div>
+      <div class="mat-meldung-kopf"><h2>${esc(meldungName(m))}${setMarke(m.is_set)}</h2>${meldestatusMarke(m.status)}</div>
       <p class="muted small">gemeldet${wer(m.created_by_name)} am ${esc(fmtTag(m.created_at))}${meldeOrdner(m) ? ` · für ${esc(meldeOrdner(m))}` : ""}</p>
       ${meldeDetails(m)}
       ${m.treffer ? `<p class="notice">Steht inzwischen im Katalog: <a href="/material/katalog/produkt/${m.treffer.id}">${nameHtml(m.treffer)}</a>${zusatzHtml(m.treffer)}${artNrKurz(m.treffer.article_no)}
@@ -7033,9 +7116,9 @@
       const liste = d.meldungen;
       const meldung = (b) => liste.find((m) => m.id === +b.dataset.id);
       // Lesende (Führungskraft, Materialwart in „alle“) sehen dieselben Karten ohne Knöpfe zum Abarbeiten.
-      const hilfe = d.bearbeiten ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen. „Produkt anlegen“ übernimmt ihre Angaben in den Produktdialog. Der Melder bekommt eine Mail, sobald das Produkt im Katalog ist – oder deine Begründung, wenn du ablehnst."
-        : d.alle ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen; die Material-Verwaltung nimmt sie auf oder lehnt sie mit Begründung ab."
-          : "Produkte, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald die Material-Verwaltung sie bearbeitet hat.";
+      const hilfe = d.bearbeiten ? "Materialwarte melden hier Produkte und Sets, die ihnen beim Anlegen von Artikeln im Katalog fehlen. „Produkt anlegen“ bzw. „Set anlegen“ übernimmt ihre Angaben in den Dialog. Der Melder bekommt eine Mail, sobald es im Katalog ist – oder deine Begründung, wenn du ablehnst."
+        : d.alle ? "Materialwarte melden hier Produkte und Sets, die ihnen beim Anlegen von Artikeln im Katalog fehlen; die Material-Verwaltung nimmt sie auf oder lehnt sie mit Begründung ab."
+          : "Produkte und Sets, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald die Material-Verwaltung sie bearbeitet hat.";
       inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Produktmeldungen" : "Deine Produktmeldungen"}</h1>
           <div class="btn-row"><a class="btn secondary" href="/material/katalog">Katalog</a>${DARF.verwalten ? '<a class="btn secondary" href="/material/artikel/neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span></a>' : ""}</div></div>
         ${bereiche(d.offen, d.antraege_offen)}
@@ -7053,7 +7136,7 @@
         anlegen: (b) => {
           const m = meldung(b);
           produktDialog({ meldung: m, manufacturer: m.manufacturer, model: m.model, article_no: m.article_no, norm: m.norm,
-                          category_id: m.kategorie ? m.kategorie.id : null });
+                          category_id: m.kategorie ? m.kategorie.id : null, is_set: m.is_set });
         },
         zuordnen: (b) => zuordnenDialog(meldung(b), zeichnen),
         ablehnen: (b) => ablehnenDialog(meldung(b), zeichnen),
@@ -7247,14 +7330,22 @@
     } catch (e) { /* der Zähler ist Beiwerk */ }
   }
 
-  /* Ein Produkt melden, das beim Anlegen eines Artikels im Katalog fehlt. v: Vorbelegung (aus der Suche) und Ordner.
-     Aus der Nacharbeit eines Bestandsimports (Phase 2 · L3) kommen dazu v.url (…/nacharbeit/melden – der Zielordner
-     steht in der Adresse, kein folder_id) und v.angabe (die Produktangabe der Liste); vorbelegt sind dann Hersteller,
-     Modell und Artikelnummer aus der Liste. */
+  /* Ein Produkt oder Set melden, das beim Anlegen eines Artikels im Katalog fehlt. v: Vorbelegung (aus der Suche) und
+     Ordner. Seit dem 24.10.2026 (Entscheidung S8) oben die Wahl „Produkt | Set“ (Vorgabe Produkt); bei „Set“ das
+     Pflichtfeld „Teile des Sets“ (je Zeile ein Teil, Grenze wie die Bemerkung), Hersteller und Modell dürfen dann die
+     Kombination meinen. Aus der Nacharbeit eines Bestandsimports (Phase 2 · L3) kommen dazu v.url (…/nacharbeit/melden –
+     der Zielordner steht in der Adresse, kein folder_id) und v.angabe (die Produktangabe der Liste); vorbelegt sind dann
+     Hersteller, Modell und Artikelnummer aus der Liste – dort gibt es nur Produkte (die Nacharbeit nimmt kein Set). */
   async function meldungDialog(v, danach) {
     const kats = await kategorienLaden();
-    dialog(`<h2>Fehlendes Produkt melden</h2>
-      <p class="help">Die Material-Verwaltung nimmt es in den Katalog auf. Du bekommst eine Mail, sobald du Artikel davon anlegen kannst.</p>
+    const mitSet = !v.url;
+    dialog(`<h2>${mitSet ? "Fehlendes Produkt oder Set melden" : "Fehlendes Produkt melden"}</h2>
+      <p class="help">Die Material-Verwaltung nimmt es in den Katalog auf.${mitSet ? " Ein Set sind mehrere Teile, die zusammen geführt werden, z. B. Sitz- und Brustgurt oder ein Kit." : ""} Du bekommst eine Mail, sobald du Artikel davon anlegen kannst.</p>
+      ${mitSet ? `<fieldset class="mat-me-art"><legend>Was fehlt?</legend>
+        <label class="inline"><input type="radio" name="me-art" value="produkt" checked> Produkt</label>
+        <label class="inline"><input type="radio" name="me-art" value="set"> Set</label></fieldset>
+      <div id="me-set" hidden><label for="me-teile">Teile des Sets</label>
+        <textarea id="me-teile" rows="4" maxlength="2000" placeholder="je Zeile ein Teil: Hersteller, Modell, Anzahl"></textarea></div>` : ""}
       <div class="field-row"><div><label for="me-her">Hersteller</label><input type="text" id="me-her" maxlength="120" value="${esc(v.manufacturer || "")}" ${TASTATUR_NAME}></div>
         <div><label for="me-mod">Modell</label><input type="text" id="me-mod" maxlength="160" value="${esc(v.model || "")}" ${TASTATUR_NAME}></div></div>
       <div class="field-row"><div><label for="me-art">Artikelnummer des Herstellers</label><input type="text" id="me-art" maxlength="80" value="${esc(v.article_no || "")}" ${TASTATUR_NUMMER}><div class="help" id="me-art-hilfe"></div></div>
@@ -7266,6 +7357,14 @@
       <label for="me-note">Bemerkung</label><textarea id="me-note" rows="3" maxlength="2000" placeholder="Was hilft beim Einpflegen? z. B. Größe, Farbe, wo gekauft"></textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="me-ok" type="button">Melden</button></div>`,
     (dlg, body) => {
+      const istSet = () => mitSet && $('input[name="me-art"]:checked', body).value === "set";
+      if (mitSet) {
+        body.addEventListener("change", (e) => {
+          if (e.target.name !== "me-art") return;
+          $("#me-set", body).hidden = !istSet();
+          if (istSet()) fokus($("#me-teile", body));
+        });
+      }
       fokus($("#me-her", body));
       artikelnummerPruefen($("#me-art", body), $("#me-her", body), $("#me-art-hilfe", body), null);
       dateiKnopfVerdrahten(body, "me-fotos");
@@ -7273,10 +7372,12 @@
         const knopf = ev.currentTarget;
         const fotos = Array.from($("#me-fotos", body).files);
         if (fotos.length > 3) { toast("Höchstens 3 Fotos.", true); return; }
+        if (istSet() && !$("#me-teile", body).value.trim()) { toast("Bitte die Teile des Sets angeben – je Zeile ein Teil.", true); fokus($("#me-teile", body)); return; }
         const fd = new FormData();
         const felder = { manufacturer: $("#me-her", body).value, model: $("#me-mod", body).value, article_no: $("#me-art", body).value,
                          norm: $("#me-norm", body).value, category_id: $("#me-kat", body).value,
                          links: $("#me-links", body).value, note: $("#me-note", body).value };
+        if (istSet()) Object.assign(felder, { is_set: "1", set_teile: $("#me-teile", body).value });
         if (v.url) felder.angabe = v.angabe || "";
         else felder.folder_id = v.folder_id || "";
         Object.entries(felder).forEach(([k, w]) => fd.append(k, w));
@@ -7285,7 +7386,7 @@
         try {
           await api(v.url || `${API}/meldungen`, { method: "POST", body: fd });
           dlg.close();
-          toast("Gemeldet – du bekommst eine Mail, sobald das Produkt im Katalog ist.");
+          toast("Gemeldet – du bekommst eine Mail, sobald du Artikel davon anlegen kannst.");
           if (danach) await danach();
         } catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
@@ -8143,7 +8244,7 @@
   };
   const quittungHtml = () => { const q = quittung; quittung = ""; return q ? `<p class="notice mat-mangel-quittung" role="status" tabindex="-1">${esc(q)}</p>` : ""; };
   function mangelQuittung(r, v) {
-    // v: das Set, über das die Meldung sperrt (Hersteller-Sets, K2) – dann sagt die Quittung es fürs ganze Set (und
+    // v: das Set, über das die Meldung sperrt (Sets, K2) – dann sagt die Quittung es fürs ganze Set (und
     // spricht vom Set, nicht vom Artikel – V10).
     const was = v ? `${setSperrSatz(v)} ist gesperrt` : r.gesperrt ? "der Artikel ist gesperrt" : "der Artikel war schon gesperrt";
     // „unterwegs“: Die Mail geht im Hintergrund hinaus – ob der Mailserver sie annimmt, steht erst im Log.
@@ -8156,7 +8257,7 @@
      hängt an die Liste an, die Eingabe wird danach geleert – so lassen sich drei Fotos nacheinander aufnehmen; mehr als
      drei nimmt die Liste nicht. „Auswahl entfernen“ leert sie. Rot gefüllt ist nur „Melden und sperren“ – die eine
      Hauptaktion (btn, nicht btn danger: Die Sperre hebt eine Freiprüfung wieder auf; Entscheidung vom 23.10.2026, L2b).
-     Hersteller-Sets (K2, O2): opt.set {inventory_no, teile} – die Meldung sperrt das ganze Set; opt.wahl [{id,
+     Sets (K2, O2): opt.set {inventory_no, teile} – die Meldung sperrt das ganze Set; opt.wahl [{id,
      inventory_no, text, schon}] – an der Set-Karte in „Meine PSA“ wählt man, welcher Artikel betroffen ist (Set-Artikel
      oder ein Teil; „schon“: dort ist die eigene Meldung noch offen). Gemeldet wird am gewählten Artikel. */
   function mangelDialog(a, danach, opt) {
@@ -8326,7 +8427,7 @@
   const psaNaechste = (k) => (k.gesperrt ? '<span class="muted">nach Freigabe durch einen Prüfer</span>'
     : k.status === "neu" ? "<strong>Eingangsprüfung ausstehend</strong>"
       : k.next_due_on ? `<strong${k.status === "ueberfaellig" ? ' class="mat-warn"' : ""}>${esc(fmtTag(k.next_due_on))}</strong>` : '<span class="muted">–</span>');
-  /* Ein Teil eines Hersteller-Sets in „Meine PSA“ (Schritt 21): kleiner als die Karte des Sets, darin unter „Teile des
+  /* Ein Teil eines Sets in „Meine PSA“ (Schritt 21): kleiner als die Karte des Sets, darin unter „Teile des
      Sets“ – Nummern, Status, Fälligkeit, Lebensende, Rückruf und der Weg zum Artikel. Die Set-Karte trägt Set-Status
      und Set-Fälligkeit; „Mangel melden …“ steht an der Set-Karte (den Teil wählt der Dialog mit der Sperr-Kaskade). */
   function psaTeil(t, setBanner) {
@@ -8365,7 +8466,7 @@
           <h2 id="psa-${Number(k.id)}">${inv} ${statusMarke(k.status)}</h2>
           <p class="mat-produktzeile"><strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrHtml(p.article_no)}</p>
           <p class="small">${nummerHtml("Seriennummer", k.serial_no)}${k.serial_generated ? ' <span class="muted">(vom System)</span>' : ""}</p>
-          ${teile.length ? `<p class="small mat-set-info">Hersteller-Set mit ${plural(teile.length, "Teil", "Teilen")} – Status und Prüfung gelten fürs ganze Set.</p>` : ""}
+          ${teile.length ? `<p class="small mat-set-info">Set mit ${plural(teile.length, "Teil", "Teilen")} – Status und Prüfung gelten fürs ganze Set.</p>` : ""}
         </div>
       </div>
       <dl class="mat-daten mat-psa-daten">

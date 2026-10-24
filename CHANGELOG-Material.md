@@ -20,6 +20,7 @@ für sich deploybar.
 | Phase 4 · 2b – Sets, Teil 2 | Vorhandenen Artikel als Teil einsetzen (mit Auswahl, auch über die bisherige Inventarnummer), Set auflösen, „Bestandteil ersetzt“, Prüfumfang eines nie geprüften Sets; dazu (KERN Z) Zahlen, CSV-Spalten, gebündelte Mails | geliefert 23.10.2026 (Schema bleibt 21) – wartet auf Freigabe |
 | Feintuning nach dem Kommentar-Dokument | Produkt am Artikel ändern bis zur ersten Prüfung (Dialog „Bearbeiten“, Weg aus „aus dem Bestand wählen“), Jahresbericht: ausgesondertes Set als eine Zeile, weitergeführte Teile mit eigener Sperre | gebaut 23.10.2026 (Schema bleibt 21) – wartet auf Freigabe |
 | Katalogimport im Hintergrund | Probelauf und Übernehmen laufen als Auftrag im Hintergrund (202, Stand per Abfrage, Bericht wie bisher), „Übernehmen“ ohne neuen Upload, höchstens ein Import gleichzeitig, Abbruch bei Neustart erkannt, Hinweis auf der Katalogseite; Nachbesserung nach der Sicherheitsprüfung (Kontoverweis statt Kontokennung und Name, Plattenplatz, Übernehmen nach Abbruch wiederholbar, dev-zuruecksetzen wartet) | gebaut 24.10.2026 (kein Schemaschritt, Schema bleibt 21) – wartet auf Freigabe |
+| Sets anlegen und Stückliste übertragen (Schritt 22) | Knopf „Set anlegen“ (Produkt und Stückliste in einem Zug, mindestens ein einzeln geführtes Teil), Umstellen Produkt ↔ Set nur per Katalogdatei, „Stückliste übertragen“ auf angelegte Sets mit Vorschau, Fehlendes Produkt oder Set melden, Begriff „Set“, Ordnerart „Set-Ordner“ | gebaut 24.10.2026, wartet auf Prüfung und Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4154,6 +4155,145 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Sets anlegen und Stückliste übertragen (Wunsch des Nutzers, 24.10.2026)
+
+Wünsche: „Sets sollen durch Verwalter mit einem neuen Button eigenständig erstellbar sein und bestehende Sets mit seinen
+Bestandteilen bearbeitbar“ und – nachgereicht mit einem Bildschirmfoto des Dialogs „Fehlendes Produkt melden“ –
+„Fehlendes Produkt anfrage funktion und im Text beschreiben soll auch anfragen für individuelle Sets umfassen“.
+Grundlage: Bauentwurf `entwurf_sets_anlegen_uebertragen.md` mit den Entscheidungen S1–S8 (unten). **Schema 22.**
+
+### Was neu ist
+
+- **„Set anlegen“** (Material-Verwaltung): im Katalogkopf neben „Produkt anlegen“ ein grau umrandeter Knopf „Set anlegen“
+  (am Telefon „+ Set“). Er öffnet den Produktdialog im Set-Modus: Titel „Set anlegen“, Reiter „Produkt“ (die Felder wie
+  bisher, darüber ein Satz, was ein Set ist) und „Bestandteile“ (die Stückliste wie bisher). „Anlegen“ schickt Produkt
+  **und** Stückliste in **einer** Anfrage (`POST /produkte` mit `is_set` und `bestandteile`) – scheitert eine Position,
+  entsteht nichts, die Position ist markiert, der Dialog steht im Reiter „Bestandteile“. Bearbeiten heißt „Set
+  bearbeiten“ (erst die Stammdaten, dann – falls geändert – die Stückliste mit `PUT …/bestandteile`). Das Häkchen
+  „Hersteller-Set“ gibt es nicht mehr.
+- **Pflicht** (S3): Ein Set braucht mindestens **ein einzeln geführtes Teil** – beim Anlegen, als Variante, beim Ersetzen
+  der Stückliste (auch leer geht nicht mehr) und im Katalogimport (dort ein Fehler dieses Produkts, auch bei
+  `"set": true` ohne `bestandteile` an einem Produkt ohne Stückliste). Text: „Ein Set braucht mindestens ein einzeln
+  geführtes Teil.“ Geprüft wurde die Gesamtserie (`katalog-import/gesamt/lieferung/katalog.json`, Stand 24.10.2026):
+  1 250 Produkte, 74 Sets, alle mit mindestens einer einzeln geführten Position.
+- **Umstellen Produkt ↔ Set** (S2) nur noch über die Katalogdatei, solange es keine Artikel gibt: `PUT /produkte/<pid>`
+  mit einem abweichenden `is_set` → 409 („Ob ein Produkt ein Set ist, legt das Anlegen fest …“), mit gleichem 200.
+  `set_umschalten` ruft nur noch der Katalogimport.
+- **Variante folgt dem Vorbild**: Die Variante eines Sets ist ein Set (der Dialog öffnet im Set-Modus mit der Stückliste
+  des Vorbilds zum Bearbeiten; ohne `bestandteile` übernimmt der Server die des Vorbilds), die eines Produkts ein Produkt
+  (`bestandteile` dann 400). Das Feld `stueckliste` und das Häkchen „Stückliste übernehmen“ entfallen.
+- **Stückliste übertragen** (Entwurf B, S4–S7): Angelegte Sets behalten ihre Kopie der Stückliste. Nach dem Speichern
+  sagt die Quittung „Gespeichert – n angelegte Sets haben noch die bisherige Stückliste.“; die Produktseite zeigt im
+  Abschnitt „Stückliste“ den Hinweis „n angelegte Sets haben eine ältere Stückliste.“ und den Knopf „Auf vorhandene Sets
+  übertragen …“ (beides nur für die Material-Verwaltung; der Hinweis bleibt, bis alles übertragen ist). Der Dialog
+  „Stückliste übertragen“ zeigt je Gruppe gleicher bisheriger Stückliste einen Vergleich Position | bisher | jetzt |
+  Wirkung (neu, entfällt, Anzahl a → b, jetzt einzeln geführt / ohne eigenen Artikel, anderes Produkt, Bezeichnung,
+  Austausch, Reihenfolge – zugeordnet nur zur Anzeige) und darunter die Sets der Gruppe mit Inventarnummer (Link),
+  Ordner, Status, Herstellung und Wirkung („bleibt frei – nur Angaben“, „gesperrt bis zur Set-Prüfung: „X“ fehlt 1×;
+  M-… steht nicht mehr in der Stückliste“); alle übertragbaren sind gewählt (S4), die übrigen stehen mit Grund ohne
+  Auswahl da. Die Schlusszeile zählt mit („Übertragen auf n Sets – k davon danach gesperrt bis zur Set-Prüfung.“).
+- **Wirkung** (S5, S6): Die Kopie wird als Ganzes ersetzt; Teil-Artikel bewegen sich nicht. Fehlt danach ein einzeln
+  geführtes Teil oder ist eines übrig (keiner Position mehr zugeteilt), ist das Set gesperrt (Sperr-Kaskade wie beim
+  Entnehmen, Anlass „Stückliste übertragen“): Der Materialwart setzt das fehlende Teil mit „Teil einsetzen“ ein bzw.
+  nimmt das übrige mit „Teil entnehmen“ heraus (weiterführen oder aussondern, er wählt das Stück) – frei wird es nur
+  über „Set prüfen“. Ein übriges Teil steht im Set-Kasten mit „steht nicht mehr in der Stückliste“, sein Untermenü
+  „Austausch“ bietet nur „Teil entnehmen …“; „Gesperrt, weil“ nennt es mit Link („… – erst „Teil entnehmen““), und die
+  Set-Prüfung gibt nicht frei, solange es im Set ist. Bezeichnung, Austausch, Reihenfolge und Bestandteile ohne eigenen
+  Artikel sperren nicht; die nächste Set-Prüfung fragt die Bestandteile nach der neuen Kopie ab.
+- **Nicht übertragbar** (mit Grund): laufende Set-Prüfung, offene Prüfung am Set selbst, danach fehlte ein Teil an einer
+  Position mit „Austausch laut Hersteller: nein“, der Systemordner „Gesperrt“ fehlt (nur wenn das Set sperren müsste).
+  Nur gezählt: ausgesonderte Sets und Sets, die die Stückliste schon haben. Kein Ausschluss: Sperre, Mangel, Rückruf,
+  DEMO. Der ganze Vorgang 409, wenn das Produkt kein Set ist oder seine Stückliste leer ist bzw. (Altbestand) kein
+  einzeln geführtes Teil hat.
+- **Set melden** (S8): Der Dialog heißt „Fehlendes Produkt oder Set melden“ und erklärt in einem Satz, was ein Set ist;
+  oben die Wahl „Was fehlt? Produkt | Set“ (Vorgabe Produkt), bei „Set“ das Pflichtfeld „Teile des Sets“ (je Zeile ein
+  Teil: Hersteller, Modell, Anzahl; höchstens 2 000 Zeichen wie die Bemerkung). Die Auslöser heißen „Fehlt das Produkt
+  oder Set im Katalog? Fehlendes Produkt oder Set melden“ bzw. „Als fehlendes Produkt oder Set melden“. Aus der
+  Nacharbeit eines Bestandsimports bleibt es „Fehlendes Produkt melden“ (die Nacharbeit nimmt kein Set). In „Katalog →
+  Meldungen“ trägt eine Set-Meldung die Marke „Set“ und ihre Teile; der Knopf heißt „Set anlegen“ und öffnet den
+  Set-Dialog vorbelegt („Set aus Meldung anlegen“, im Reiter „Bestandteile“ die gemeldeten Teile als Vorlage); Anlegen
+  und Erledigen geschehen in einem Zug, der Melder bekommt die Mail wie bisher („das von dir gemeldete Set ist jetzt im
+  Katalog“). „Vorhandenes zuordnen“ nimmt auch ein Set. Die Mail an die Material-Verwaltung heißt „Set-Meldung: …“ und
+  nennt die Teile.
+- **Begriff** (S1): überall „Set“ statt „Hersteller-Set“ (Oberfläche, Meldungen, Mails, Journal- und Berichtstexte, PDF,
+  README, Docstrings). Die Ordnerart „Set“ heißt jetzt **„Set-Ordner“** (Schlüssel `set` bleibt): Sie stand in
+  Ordnerlisten, im Ordnerkopf, in der Ordnerwahl und im Dialog „Ordner anlegen/bearbeiten“ neben der Marke „Set“ der
+  Set-Artikel (etwa „DEMO-Seilrucksack“ mit einem Set darin). Unverändert bleiben die Texte der Datenbank-Trigger aus
+  Schritt 21 („Hersteller-Set“ in drei RAISE-Meldungen – Schritt 21 bleibt, wie er ausgeliefert wurde; die Oberfläche
+  zeigt sie nie, der Dienst weist vorher mit eigenem Text ab) und die älteren Abschnitte dieses CHANGELOG.
+
+### Schritt 22 (in sich abgeschlossen, wiederholbar)
+
+- `mat_slot_neu` und `mat_slot_loeschen` werden entfernt und neu angelegt: Einfügen in die Kopie nur an einem
+  Set-Artikel (Produkt mit `is_set`, selbst kein Teil), Einfügen und Löschen **nie** an einem ausgesonderten Set und
+  **nie** während einer offenen Set-Prüfung; INSERT OR REPLACE über eine vorhandene Kennung bleibt verboten,
+  `mat_slot_aendern` (nie ein UPDATE) bleibt. Das Löschen mit dem Set (ON DELETE CASCADE) geht weiter.
+- `mat_product_request.is_set` (INTEGER NOT NULL DEFAULT 0, CHECK 0/1) und `set_teile` (TEXT NOT NULL DEFAULT '') per
+  ADD COLUMN, nur wenn sie fehlen.
+- Keine Zeile ändert sich. Geprüft: frisch, 21 → 22 mit Altbestand (Set mit Teilen, Produktmeldung) und zweiter Lauf
+  (`tests/test_material_sets_uebertragen.py`), 20 → 22 (`test_material_sets.test_migration_21`), ältere Stände über die
+  vorhandenen Migrationstests.
+- **Rückweg** auf 078fb4b (Schema 21): unkritisch. Code 21 findet Schema 22 vor und lässt es (Version höher); die neuen
+  Spalten liest er nicht, die neuen Trigger stören ihn nicht (er schreibt Kopien nur beim Anlegen eines Sets). Neue
+  Journal-Aktionen („stueckliste_uebertragen“, „nicht_in_stueckliste“) zeigt er roh. Ein übriges Teil aus einem
+  Übertragen behandelt Code 21 wie Altbestand („mehr Stücke als die Kopie“): Es hält eine Freigabe nicht auf – vor einem
+  Rückweg übrige Teile entnehmen. Set-Meldungen erscheinen dort als Produktmeldungen ohne Teile.
+
+### Journal, Jahresbericht, Mails
+
+- Am Set „Stückliste übertragen“ (vorher die alte Kopie; nachher die neue, was fehlt, welche Teile nicht mehr in der
+  Stückliste stehen; Handelnder mit Namen), bei neuer Sperre „gesperrt“ mit Anlass „Stückliste übertragen“ und an den
+  Teilen „mit dem Set gesperrt“ als „System“, an jedem übrigen Teil „steht nicht mehr in der Stückliste des Sets“. Kein
+  Eintrag am Produkt (dessen Journal sieht jeder mit Modulzugang – es nennt keine Inventarnummern).
+- Jahresbericht: Die Sperre aus dem Übertragen zählt einmal als Art „set“ („Set unvollständig, Teil getauscht oder
+  eingesetzt, Bestandteil ersetzt oder Stückliste übertragen“).
+- Katalogimport: Ersetzt er die Stückliste eines Sets, sagt der Bericht als Hinweis „k angelegte Sets haben die
+  bisherige Stückliste – übertragen auf der Produktseite“; der Import überträgt nie selbst.
+- Keine neue Mailart (eine neue Art hieße Tabellenumbau); sichtbar wird eine Sperre wie jede andere (Listen, „Fällige“,
+  Übersicht, Banner, „Meine PSA“, Lebenslauf).
+
+### Schnittstelle
+
+| Route | Wer | Was |
+| --- | --- | --- |
+| `POST /api/material/produkte` (dazu `is_set: true`, `bestandteile`: Positionen wie `PUT …/bestandteile`) | Katalog | Set anlegen: Produkt und Stückliste in einer Transaktion → 201 `produkt`. `is_set` ohne Liste oder leer 400, `bestandteile` ohne `is_set` 400, ohne einzeln geführtes Teil 400, Fehler „Position n: …“ 400 – dann entsteht nichts |
+| `PUT /api/material/produkte/<pid>` | Katalog | `is_set` abweichend 409, gleich ohne Wirkung |
+| `POST /api/material/produkte/<pid>/variante` | Katalog | Variante eines Sets ist ein Set (`bestandteile` oder die des Vorbilds); eines Produkts ein Produkt (`bestandteile` 400); `stueckliste` und `is_set` zählen nicht mehr |
+| `PUT /api/material/produkte/<pid>/bestandteile` | Katalog | wie bisher, aber nie leer und mindestens ein einzeln geführtes Teil (400) |
+| `GET /api/material/produkte/<pid>` | lesen | neu `sets_aelter` (nur Material-Verwaltung, nur an Sets); `set_umschaltbar` und `set_umschalt_grund` entfallen |
+| `GET /api/material/produkte/<pid>/stueckliste-uebertragen` | Katalog | Vorschau `{produkt {id, name}, stand, gruppen [{vergleich [{position, bisher, jetzt, wirkung}], sets [{id, inventory_no, ordner, status, status_text, lock_state, manufactured_on, demo, uebertragbar, grund, sperrt, wirkung}]}], ausgesondert, gleich, uebertragbar, sperrt}`; 409 kein Set / Stückliste leer oder ohne einzeln geführtes Teil |
+| `POST /api/material/produkte/<pid>/stueckliste-uebertragen` (`stand`, `set_ids`) | Katalog | übertragen in einer Transaktion → `{uebertragen, gesperrt, produkt}`; leere Wahl 400; anderer `stand` („Inzwischen geändert“) oder ein nicht übertragbares Set 409 – nichts geschrieben |
+| `POST /api/material/meldungen` (dazu `is_set`, `set_teile`) | Materialwart | Set melden; bei `is_set` sind `set_teile` Pflicht (400), sonst werden sie nicht gespeichert; Antwort `meldung` mit `is_set`, `set_teile` |
+| `POST /api/material/meldungen/<mid>/produkt` (Felder wie `POST /produkte`) | Katalog | mit `is_set` und `bestandteile` ein Set aus der Meldung – atomar mit dem Erledigen |
+
+Rechte unverändert: Stückliste pflegen und übertragen nur die Material-Verwaltung (`katalog_required`, S7);
+Materialwarte setzen physische Teile ein, entnehmen und tauschen wie bisher.
+
+### Entscheidungen des Nutzers (24.10.2026)
+
+- **S1** Begriff überall „Set“; Ordnerart „Set-Ordner“, wo beides zusammentrifft (umgesetzt: die Beschriftung der
+  Ordnerart überall).
+- **S2** Umwandeln Produkt ↔ Set nur per Katalogdatei; `PUT` mit abweichendem `is_set` 409.
+- **S3** Pflicht mindestens ein einzeln geführtes Teil – Oberfläche, Server, Variante, Ersetzen, Katalogimport.
+- **S4** Übertragen je Set wählbar, alle vorbelegt, Herstellung zur Orientierung.
+- **S5** Ein Teil, das nicht mehr in der Stückliste steht, bleibt im Set; das Set ist gesperrt; der Verwalter entnimmt es.
+- **S6** Sperre nur, wenn danach ein einzeln geführtes Teil fehlt oder eines übrig ist.
+- **S7** Stückliste pflegen und übertragen nur die Material-Verwaltung.
+- **S8** Fehlendes Produkt **oder Set** melden; Set aus der Meldung über den Set-Dialog, atomar; Zuordnen auch mit Set.
+
+### Bitte bestätigen
+
+1. Die Variante folgt dem Vorbild (die eines Sets ist immer ein Set).
+2. Der Katalogimport überträgt nie selbst (nur der Hinweis im Bericht).
+3. Keine Mail beim Übertragen; kein Produktjournal-Eintrag mit Inventarnummern.
+4. Eine Lücke an einer Position mit „Austausch: nein“ macht das Set nicht übertragbar; ausgesonderte Sets und Sets mit
+   laufender Set-Prüfung bleiben, wie sie sind.
+5. Ordnerart heißt überall „Set-Ordner“ (nicht nur an einzelnen Stellen).
+6. S8: Die Wahl „Produkt | Set“ steht als Auswahlknöpfe unter „Was fehlt?“; „Teile des Sets“ hat die Grenze der
+   Bemerkung (2 000 Zeichen); aus der Nacharbeit eines Bestandsimports gibt es nur Produktmeldungen; eine Set-Meldung
+   darf die Material-Verwaltung auch einem einfachen Produkt zuordnen.
+7. Die Texte der Datenbank-Trigger aus Schritt 21 behalten „Hersteller-Set“ (Schritt 21 bleibt, wie ausgeliefert).
+
 ## Katalogimport im Hintergrund (Wunsch des Nutzers, 24.10.2026)
 
 Anlass: Die kombinierte Katalogdatei (1,13 GB, 1 428 Produkte, 1 905 Dateien) bekam beim „Übernehmen“ über die
@@ -6739,6 +6879,7 @@ oder Plattform-Verwaltung).
 | `GET /api/material/produkte/artikelnummer?nr=&ausser=` | lesen | Wem gehört diese Artikelnummer schon? (`produkt` oder `null`) |
 | `POST /api/material/produkte/<id>/variante` (Felder wie `POST /produkte`, `dokumente`: Kennungen) | Katalog | Kopie als neue Variante; Bild nie, Dokumente nach Wahl |
 | `PUT /api/material/produkte/<id>/bestandteile` (`bestandteile`: Liste der Positionen) | Katalog | Stückliste eines Hersteller-Sets als Ganzes ersetzen → `produkt`, `geaendert`; `is_set` an `POST/PUT /produkte`, `stueckliste` an der Variante, Lesefelder `is_set`, `bestandteile`, `bestandteil_von`, `set_umschaltbar` – Einzelheiten im Abschnitt „Phase 4 · Lieferung 2“ (Schritt 21) |
+| `GET/POST /api/material/produkte/<id>/stueckliste-uebertragen` | Katalog | Vorschau bzw. Übertragen der Stückliste auf angelegte Sets; dazu `is_set` + `bestandteile` an `POST /produkte` (Set anlegen), `sets_aelter` – Einzelheiten im Abschnitt „Sets anlegen und Stückliste übertragen“ (Schritt 22) |
 | `POST /api/material/artikel` mit Set-Produkt (`teile`) | Materialwart | Set mit seinen Teilen anlegen → `artikel`, `hinweise`; Artikel tragen `ist_set`, `set`, `teil_von`, Listenzeilen dazu `set` und Set-Werte, Listen `sets` – Einzelheiten im Abschnitt „Phase 4 · Lieferung 2“ (Schritt 21) |
 | `GET/POST/DELETE /api/material/artikel/<id>/set-lauf`, `POST …/<id>/teil-entnehmen`, `…/teil-tauschen`, `…/teil-einsetzen` | lesen / Prüfer (abbrechen auch Materialwart) / Materialwart | Set prüfen (Lauf, Freigabe, Set-Protokoll) und Teile austauschen; Sperren, Mangel, Festschreiben, Aussondern und Löschen an Sets und Teilen wirken über das ganze Set – Einzelheiten im Abschnitt „Phase 4 · Lieferung 2“ (K2) |
 | `GET /api/material/artikel/<id>/kandidaten`, `GET /api/material/ordner/<id>/kandidaten`, `POST …/artikel/<id>/aufloesen`, `…/bestandteil-ersetzt`; `item_id` an `teil-einsetzen` und in `teile` | Materialwart (verwalten) | Vorhandenen Artikel als Teil einsetzen (mit Auswahl), Set auflösen, „Bestandteil ersetzt“ – Einzelheiten im Abschnitt „Phase 4 · Lieferung 2b“ (KERN A) |

@@ -56,7 +56,7 @@ window.MatGlobal = (function () {
 
   /* Der Steckbrief eines fremden Artikels: gestrichelt umrandet, ganz oben die Gliederung als Marke, dann
      Inventarnummer mit Sperrwort, Produkt, Seriennummer, Kategorie, Norm, Herstellung, Lebensende und „Gehört zu …“
-     mit dem Ordner; ein Teil eines Hersteller-Sets sagt das (teil_eines_sets – ohne Angaben zum Set, Entwurf H). Alles aus der Antwort wird maskiert – auch Ordnernamen fremder Gliederungen sind fremde Eingaben. */
+     mit dem Ordner; ein Teil eines Sets sagt das (teil_eines_sets – ohne Angaben zum Set, Entwurf H). Alles aus der Antwort wird maskiert – auch Ordnernamen fremder Gliederungen sind fremde Eingaben. */
   function karte(t) {
     // „Hersteller Modell“ und dahinter grau die Beschreibung wie überall im Modul (window.MatProdukt aus material.js),
     // maskiert.
@@ -74,7 +74,7 @@ window.MatGlobal = (function () {
         <p class="mg-produkt">${name || "–"}${window.MatProdukt.zusatzHtml(p)}${window.MatProdukt.artNr(t.artikelnummer)}</p>
         <dl class="mg-daten">${angaben.map(([k, w]) => `<div><dt>${esc(k)}</dt><dd>${esc(w)}</dd></div>`).join("")}</dl>
         <p class="mg-gehoert">Gehört zu <strong>${esc(t.gliederung || "–")}</strong>${t.ordner ? ` · ${esc(t.ordner)}` : ""}</p>
-        ${t.teil_eines_sets ? '<p class="mg-set">Teil eines Hersteller-Sets</p>' : ""}
+        ${t.teil_eines_sets ? '<p class="mg-set">Teil eines Sets</p>' : ""}
       </div></article>`;
   }
 

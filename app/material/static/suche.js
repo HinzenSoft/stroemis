@@ -58,10 +58,10 @@
   // Die Artikelnummer des Herstellers nur, wenn sie der Treffer ist – sonst kürzte sie die Produktzeile unnötig.
   const trifft = (wert, q) => Boolean(wert) && String(wert).toLowerCase().includes(q.toLowerCase());
 
-  // Hersteller-Sets (Schritt 21): Ein Teil nennt sein Set (Inventarnummer und Produkt), ein Set seine Teile – als Text,
+  // Sets (Schritt 21): Ein Teil nennt sein Set (Inventarnummer und Produkt), ein Set seine Teile – als Text,
   // der ganze Steckbrief ist schon der Link.
   const setZeile = (a) => (a.teil_von ? `<span class="mv-zeile">Teil von Set ${esc(a.teil_von.inventory_no)} ${esc(a.teil_von.produkt)}</span>`
-    : a.set ? `<span class="mv-zeile">Hersteller-Set · ${a.set.teile === 1 ? "1 Teil" : `${a.set.teile} Teile`}</span>` : "");
+    : a.set ? `<span class="mv-zeile">Set · ${a.set.teile === 1 ? "1 Teil" : `${a.set.teile} Teile`}</span>` : "");
 
   // Das Produkt wie überall im Modul: „Hersteller Modell“ und dahinter grau die Beschreibung (window.MatProdukt aus
   // material.js).

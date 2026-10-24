@@ -1711,13 +1711,13 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-abschluss-zeile .mat-due .mat-datum { width: 8.5em; flex: none; }
 .mat-due-hilfe { font-weight: 400; font-size: var(--fs-klein); color: var(--grau); flex: 1 1 100%; }
 
-/* Phase 4 – Lieferung 2: Hersteller-Sets (Oberfläche O1) */
+/* Phase 4 – Lieferung 2: Sets (Oberfläche O1) */
 /* Marke „Set“ hinter dem Namen (Katalogliste, Artikelkopf) – wie die Ordnerart, leise. */
 .mat-set-marke { display: inline-block; font-size: var(--fs-marke); color: var(--anthrazit); border: 1px solid var(--anthrazit);
   border-radius: var(--radius-pille); padding: 0 7px; margin-left: 6px; vertical-align: middle; font-weight: 400; white-space: nowrap; }
 /* Ein Teil macht den Set-Status „überfällig“: Banner wie in „Meine PSA“. */
 .mat-banner.s-ueberfaellig { background: var(--rot); }
-/* Listen: „Hersteller-Set · n Teile“ bzw. „Teil von Set …“ unter dem Produkt; über der Liste „n Einträge, davon …“. */
+/* Listen: „Set · n Teile“ bzw. „Teil von Set …“ unter dem Produkt; über der Liste „n Einträge, davon …“. */
 .mat-set-info { margin-top: 2px; color: var(--anthrazit); overflow-wrap: anywhere; }
 .mat-set-kopf { margin: 0 0 6px; }
 /* Teil-Seite: „Teil von Set …“ unter der Produktzeile; Hinweis statt Verschieben, Zuordnen und Aussondern. */
@@ -1734,7 +1734,6 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 /* Produkt-Dialog, Reiter „Bestandteile“: je Position ein Kasten – oben „einzeln geführt“ und ↑ ↓ ✕, dann Produkt (bei
    einzeln geführten), Bezeichnung, Anzahl und „Austausch laut Hersteller“ in einer Zeile (Bezeichnung breit), schmal
    untereinander. Eine Position mit Fehler rot umrandet, der Text darunter. */
-.mat-pd-set { margin-top: 14px; }
 @media (min-width: 641px) { dialog:where(.mat-produkt-reiter) { width: min(820px, 96vw); } }
 .mat-bt { border: 1px solid var(--linie); padding: 6px 12px 10px; margin: 10px 0 0; min-width: 0; }
 .mat-bt legend { font-weight: 600; padding: 0 4px; }
@@ -1777,7 +1776,7 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
   .mat-bt-kopf label.inline { min-height: 44px; display: inline-flex; align-items: center; }
   .mat-psa-teil a { display: inline-flex; align-items: center; min-height: 44px; }
 }
-/* Phase 4 – Lieferung 2: Hersteller-Sets (Oberfläche O2) */
+/* Phase 4 – Lieferung 2: Sets (Oberfläche O2) */
 /* Set-Seite: „Gesperrt, weil“ als kurze Liste; in der Tabelle „Bestandteile“ je Teil das Untermenü „Austausch“. Ein
    Eintrag, der nicht geht (Austausch laut Hersteller „nein“), steht grau ohne Link. */
 .mat-set-gruende { margin: 0 0 2px; padding-left: 18px; }
@@ -1848,8 +1847,8 @@ table.list.mat-runde tr.mat-teilzeile td { background: var(--grau-hell); }
   .mat-lauf-kopf a.mat-inv, .mat-lauf-frueher li > a { display: inline-flex; align-items: center; min-height: 44px; }
 }
 /* Phase 4 – Lieferung 2: Nachbesserung nach den drei Prüfungen */
-/* B1: Der Reiter „Produkt | Bestandteile“ steht nur mit dem Häkchen „Hersteller-Set“ da – .c-tabs (display: flex) überstimmte
-   sonst das Attribut hidden. */
+/* B1: Ein Reiter mit hidden bleibt verborgen – .c-tabs (display: flex) überstimmte sonst das Attribut hidden (seit „Set
+   anlegen“ stehen die Reiter im Set-Modus immer da). */
 .c-tabs[hidden], .mat-reiter[hidden] { display: none; }
 /* B8: Rot auf grauer Zeile (fehlende Position, Teilzeile im Durchgang) in der dunklen Fassung – 4,5:1. */
 .mat-set-teile tr.mat-fehlt-zeile .mat-warn, table.list.mat-runde tr.mat-teilzeile a,
@@ -1924,3 +1923,33 @@ dialog.mat-produkt-reiter { margin-top: min(6vh, 48px); margin-bottom: auto; }
 .mat-ad-produkt .error { margin: 4px 0 0; }
 /* Lebensende und Länge folgen dem gewählten Produkt (field-row ist sonst flex und überginge hidden). */
 #ad-ende-zeile[hidden], #ad-laenge-zeile[hidden] { display: none; }
+
+/* Sets anlegen und Stückliste übertragen (Wunsch vom 24.10.2026) – Dialog „Set anlegen“, „Stückliste übertragen“ und
+   „Fehlendes Produkt oder Set melden“. Dialoge stehen außerhalb von #mat (Container mat-seite), schmal gilt deshalb die
+   Fensterbreite wie bei den übrigen Dialogen. */
+.mat-set-erklaerung { margin: 0 0 6px; }
+.mat-me-art { border: 0; padding: 0; margin: 4px 0 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; min-width: 0; }
+.mat-me-art legend { font-weight: 600; padding: 0; margin-bottom: 2px; flex: 0 0 100%; }
+#me-set[hidden] { display: none; }
+.mat-su-gruppe { margin: 14px 0 0; padding-top: 10px; border-top: 1px solid var(--linie); }
+.mat-su-gruppe h3 { margin: 0 0 6px; font-size: 1rem; }
+.mat-su-vergleich td { overflow-wrap: break-word; }
+.mat-su-vergleich tr.mat-su-gleich td { color: var(--grau); }
+.mat-su-sets { list-style: none; margin: 10px 0 0; padding: 0; }
+.mat-su-set { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--linie); }
+.mat-su-set > input { margin-top: 3px; flex: none; }
+.mat-su-set.aus .mat-su-angaben { padding-left: 28px; }
+.mat-su-angaben { min-width: 0; overflow-wrap: anywhere; }
+.mat-su-summe { margin: 12px 0 0; font-weight: 600; }
+@media (max-width: 640px) {
+  #dlg table.mat-su-vergleich thead { display: none; }
+  #dlg table.mat-su-vergleich, #dlg table.mat-su-vergleich tbody, #dlg table.mat-su-vergleich tr,
+  #dlg table.mat-su-vergleich td { display: block; width: auto; }
+  #dlg table.mat-su-vergleich tr { padding: 8px 0; border-bottom: 1px solid var(--linie); }
+  #dlg table.mat-su-vergleich td { padding: 1px 0; border: 0; }
+  #dlg table.mat-su-vergleich td::before { content: attr(data-l) ": "; color: var(--grau); }
+}
+@media (pointer: coarse) {
+  .mat-su-set > input { margin-top: 10px; }
+  .mat-su-angaben a.mat-inv { display: inline-flex; align-items: center; min-height: 44px; }
+}
