@@ -18,7 +18,7 @@ ab, bleibt das Konto samt allem stehen:
   Zuordnungen        je Artikel „zuordnung_geloest“ (grund „Konto gelöscht“), dann gelöst
   offene Entwürfe    Prüfername „(gelöschtes Konto)“ und Urkundennummer leer – ein Entwurf ist kein Nachweis; die
                      Kennung setzt die Datenbank auf NULL, der Materialwart hebt die Reservierung auf
-  Set-Prüfungen      eine offene (mat_set_lauf, Hersteller-Sets, Schritt 21): Name des Eröffners „(gelöschtes Konto)“ wie
+  Set-Prüfungen      eine offene (mat_set_lauf, Sets, Schritt 21): Name des Eröffners „(gelöschtes Konto)“ wie
                      beim Entwurf – sie ist noch kein Nachweis; abbrechen kann sie danach der Materialwart. An einer
                      abgeschlossenen oder abgebrochenen bleibt der Name (Prüfnachweis wie die Prüfernamen in Protokollen,
                      per Trigger unveränderlich); die Kennung setzt die Datenbank auf NULL
@@ -38,7 +38,7 @@ ab, bleibt das Konto samt allem stehen:
                      Mangelmeldungen (anders als Produktmeldungen, die Arbeitsdaten des Katalogs sind und
                      „(gelöschtes Konto)“ bekommen; Entscheidung vom 21.10.2026, Bitte bestätigen)
 Abgeschlossene Prüfungen, Durchgänge, Ausnahmen, Anhänge, Rückrufe und das Journal bleiben, wie sie sind – auch die
-Freitext-Bemerkung von „Bestandteil ersetzt“ (Hersteller-Sets, P4-L2b: höchstens 200 Zeichen, einzeilig, unveränderlich
+Freitext-Bemerkung von „Bestandteil ersetzt“ (Sets, P4-L2b: höchstens 200 Zeichen, einzeilig, unveränderlich
 im Journal des Sets; der Dialog sagt „keine Personennamen“). Deaktivieren
 ändert im Modul nichts: Freigaben wirken nicht mehr (current_user verlangt ein aktives Konto), Zuordnungen bleiben und
 erscheinen mit „(deaktiviert)“. Ablauf beim Austritt: PSA zurücknehmen (Zuordnung lösen), Konto deaktivieren, nach

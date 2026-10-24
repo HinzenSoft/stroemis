@@ -1,4 +1,4 @@
-"""Hersteller-Sets, Teil 2 – KERN A (Phase 4 · Lieferung 2b):  python tests/test_material_sets_vorhanden.py  oder  pytest
+"""Sets, Teil 2 – KERN A (Phase 4 · Lieferung 2b):  python tests/test_material_sets_vorhanden.py  oder  pytest
 
 Vorhandenen Artikel einsetzen (beim Set anlegen und bei „Teil einsetzen“) mit Sicht, Produkt, Gliederung, DEMO-Grenze und
 Zuständen in dieser Reihenfolge, Reihenfolge der Wirkung (sperren vor Durchgang und Fälligkeit, freies UND gesperrtes Set),

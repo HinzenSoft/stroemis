@@ -9,7 +9,7 @@ und die Titel laufender Rückrufe (Sperrgrund, Bemerkung, letzte Prüfung und Gl
 Kein Ordnerpfad, keine Protokolle, keine Prüfhistorie, kein Journal. requires_folder und
 die 404-Regel bleiben unberührt; die Zuordnung ist keine Freigabe (rechte.sicht kennt sie nicht).
 
-Hersteller-Sets (Phase 4 · L2, Schritt 21): Ein Set ist eine Karte – mit Set-Status und Set-Fälligkeit – und trägt
+Sets (Phase 4 · L2, Schritt 21): Ein Set ist eine Karte – mit Set-Status und Set-Fälligkeit – und trägt
 seine Teile als Karten in „teile“ (dieselben Schlüssel, „teil_eines_sets“: true); die Zahl in der Kopfleiste und
 „Meine PSA“ auf der Übersicht zählen je Set. Teile gehören derselben Person wie ihr Set (sets.set_lage).
 
@@ -211,7 +211,7 @@ def artikel_json(r, user, offen, eigene, dokumente=(), rueckruf=(), gliederung=N
         "artikel_link": bool(rechte.zugang(user) and rechte.darf_artikel("lesen", r, user)),
         "dokumente": list(dokumente),
         "rueckruf": list(rueckruf),
-        # Hersteller-Sets (Schritt 21): an einer Set-Karte die Teile als Karten (liste), an einer Teil-Karte true.
+        # Sets (Schritt 21): an einer Set-Karte die Teile als Karten (liste), an einer Teil-Karte true.
         "teile": [],
         "teil_eines_sets": r.get("parent_item_id") is not None,
     }

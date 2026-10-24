@@ -23,7 +23,7 @@ Aufbau:
                  bestandsimport (Bestandsimport mit Nacharbeit) und wikiverweis (Prüfanleitung aus dem Wiki); seit
                  Phase 3 psa („Meine PSA“) und mangel (Mangelmeldung mit sofortiger Sperre); seit Schritt 18 dokablage
                  (Herstellerdokumente einmal je Inhalt – Zusammenführen des Altbestands beim Start und von Hand); seit
-                 Phase 4 · L2 stueckliste (Stückliste der Hersteller-Sets im Katalog), sets (Set-Artikel mit Teilen,
+                 Phase 4 · L2 stueckliste (Stückliste der Sets im Katalog), sets (Set-Artikel mit Teilen,
                  Sperr-Kaskade), setlauf (Set prüfen, Freigabe) und setaustausch (Teile tauschen, entnehmen;
                  Set aussondern); seit 23.10.2026 zuruecksetzen (das Modul auf dev sichern und frisch anlegen), seit
                  24.10.2026 importauftrag (Katalogimport im Hintergrund)

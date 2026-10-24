@@ -366,9 +366,9 @@ def _folge(p, item):
         nr = f" – siehe Aussonderungsprotokoll {a['protocol_id']}" if a and a["protocol_id"] else ""
         return f"Der Artikel ist ausgesondert und zählt nicht mehr zum Bestand{nr}."
     if p["result"] == "einsatzbereit" and item["lock_state"] in ("gesperrt", "verloren"):
-        # Prüfung im gesperrten Hersteller-Set (Schritt 21): Der eigene Grund ist weg, das Set bleibt gesperrt.
+        # Prüfung im gesperrten Set (Schritt 21): Der eigene Grund ist weg, das Set bleibt gesperrt.
         if item.get("parent_item_id"):
-            return ("Das Teil gehört zu einem gesperrten Hersteller-Set und bleibt mit ihm gesperrt, bis eine Set-Prüfung "
+            return ("Das Teil gehört zu einem gesperrten Set und bleibt mit ihm gesperrt, bis eine Set-Prüfung "
                     "das Set freigibt.")
         return "Das Set bleibt gesperrt – siehe Gesamtergebnis und Gründe unten."
     return ""
@@ -413,7 +413,7 @@ def _pruefprotokoll(p, pid, ts, png, login, ordner_id):
                        (p["corrects_inspection_id"],), one=True)
         berichtigt = {"protokoll_id": alt["protocol_id"] or "(ohne Protokoll)", "datum": datum_text(alt["inspected_on"]),
                       "grund": p["correction_reason"]}
-    # Hersteller-Sets (Schritt 21): am Teil „Teil von Set …“ als Kopie (A24), an der Prüfung des Set-Artikels die
+    # Sets (Schritt 21): am Teil „Teil von Set …“ als Kopie (A24), an der Prüfung des Set-Artikels die
     # Teiletabelle mit Gesamtergebnis (Set-Protokoll, setlauf.protokoll_daten).
     from . import setlauf
     teil_von = ""
@@ -523,7 +523,7 @@ def _sammelprotokoll(r, pid, ts):
     Durchgangs liegt – sonst „aus dem Bereich verschoben“, nie einen Pfad aus einem fremden Bereich (1.7 Nr. 7). Die
     Seriennummer ist die heutige; hat ein Änderungsantrag sie nach dem Einzelprotokoll ersetzt, steht die alte als
     „vormals … (Änderungsantrag Nr. …)“ dabei – sonst widersprächen sich beide Dokumente ohne Verweis (Prüfung vom
-    21.10.2026). Hersteller-Sets (Schritt 21, Entwurf E): Set-Artikel und Teile bleiben eigene Zeilen; die Teile stehen
+    21.10.2026). Sets (Schritt 21, Entwurf E): Set-Artikel und Teile bleiben eigene Zeilen; die Teile stehen
     eingerückt unter ihrem Set, an der Set-Zeile das Gesamtergebnis einer in diesem Durchgang abgeschlossenen
     Set-Prüfung (setlauf.sammel)."""
     from . import durchgang, setlauf

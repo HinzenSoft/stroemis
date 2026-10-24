@@ -477,11 +477,15 @@ def _artikelnummer_pruefen(article_no, hersteller, ausser=None):
                         f"({da['article_no']}).", 409)
 
 
-def produkt_anlegen(d, demo=False, importiert=False):
-    """Ein neues Produkt; „is_set“ (ja/nein) setzt das Häkchen „Hersteller-Set“ (Schritt 21) – die Stückliste kommt
-    danach (stueckliste.ersetzen)."""
+def produkt_anlegen(d, demo=False, importiert=False, bestandteile=None):
+    """Ein neues Produkt – oder mit bestandteile (rohe Liste, stueckliste.eintraege_lesen) ein Set samt Stückliste in
+    EINER Transaktion: Scheitert eine Position („Position n: …“), entsteht kein Produkt (Set anlegen, Wunsch vom
+    24.10.2026). „is_set“ aus d liest der Dienst nicht mehr (Entscheidung S2: ob ein Produkt ein Set ist, legt der Weg
+    fest – „Produkt anlegen“, „Set anlegen“; die Routen prüfen die Anfrage mit stueckliste.anfrage_lesen). Der
+    Katalogimport legt Produkte ohne bestandteile an und schaltet „set“ danach um (stueckliste.set_umschalten)."""
+    from . import stueckliste
     w = produkt_werte(d, importiert=importiert)
-    ist_set = wahr(d, "is_set", "Hersteller-Set")
+    ist_set = bestandteile is not None
     key = dedupe_key(w["manufacturer"], w["model"], w["article_no"])
     uid, _ = akteur()
     ts = db.now()
@@ -499,9 +503,11 @@ def produkt_anlegen(d, demo=False, importiert=False):
         except sqlite3.IntegrityError:
             raise Abgelehnt("Dieses Produkt steht schon im Katalog.", 409)
         journal.eintragen("product", pid, "angelegt", None, dict(w, is_set=True) if ist_set else w)
-    if ist_set:
-        from .sets import set_produkte_vergessen
-        set_produkte_vergessen()
+        if ist_set:
+            from .sets import set_produkte_vergessen
+            set_produkte_vergessen()
+            p = produkt(pid)
+            stueckliste._ersetzen(p, stueckliste.eintraege_lesen(p, bestandteile))
     return pid
 
 
@@ -510,18 +516,19 @@ def produkt_variante(pid, d):
     eine eigene Artikelnummer ist Pflicht. Auf Wunsch die aktuellen Dokumente des Produkts dazu – je Dokument die
     neueste, nicht zurückgezogene Version; die neue Zeile nennt dieselbe Datei (seit Schritt 18 heißt sie nach ihrem
     Inhalt und bleibt, bis keine Zeile sie mehr nennt – bis dahin wurde sie kopiert, damit das Löschen des einen
-    Produkts die Dokumente des anderen nicht mitnimmt). Das Produktbild nie, spezifische Formulare auch nicht. Seit
-    Schritt 21 auf Wunsch die Stückliste eines Hersteller-Sets („stueckliste“: ja – Häkchen wie bei den Dokumenten; die
-    Variante ist dann selbst ein Set, „is_set“ muss nicht mitkommen)."""
+    Produkts die Dokumente des anderen nicht mitnimmt). Das Produktbild nie, spezifische Formulare auch nicht. Die
+    Variante folgt dem Vorbild (Wunsch vom 24.10.2026): Die Variante eines Sets ist ein Set – mit „bestandteile“ (die im
+    Dialog bearbeitete Stückliste, Regeln wie beim Anlegen) oder ohne mit der Stückliste des Vorbilds; die Variante
+    eines Produkts ist ein Produkt („bestandteile“ dann 400). „is_set“ und „stueckliste“ aus d zählen nicht mehr."""
     from . import stueckliste
     quelle = produkt(pid)
     if not artikelnummer(text(d, "article_no", "Artikelnummer", 80)):
         raise Abgelehnt("Eine Variante braucht eine eigene Artikelnummer.")
-    mit_stueckliste = wahr(d, "stueckliste", "Stückliste übernehmen")
-    if mit_stueckliste:
-        if not quelle["is_set"]:
-            raise Abgelehnt("Übernehmen lässt sich nur die Stückliste eines Hersteller-Sets.")
-        d = dict(d, is_set=True)
+    liste = d.get("bestandteile")
+    if not quelle["is_set"] and liste is not None:
+        raise Abgelehnt("Eine Stückliste hat nur die Variante eines Sets.")
+    if quelle["is_set"] and liste is not None and (not isinstance(liste, list) or not liste):
+        raise Abgelehnt(stueckliste.SET_OHNE_LISTE)
     wahl = d.get("dokumente") or []
     if not isinstance(wahl, list) or any(isinstance(x, bool) or not isinstance(x, int) for x in wahl):
         raise Abgelehnt("„dokumente“ muss eine Liste von Dokumentkennungen sein.")
@@ -533,7 +540,14 @@ def produkt_variante(pid, d):
     kopien = [aktuelle[x] for x in dict.fromkeys(wahl)]
     uid, uname = akteur()
     with db.transaction(sofort=True):
-        neu = produkt_anlegen(d, demo=bool(quelle["demo"]))
+        if quelle["is_set"] and liste is None:
+            # Die Stückliste des Vorbilds – in der Form einer Anfrage, damit dieselben Regeln gelten (S3, DEMO).
+            liste = [{"produkt_id": r["component_product_id"], "bezeichnung": r["bezeichnung"], "anzahl": r["anzahl"],
+                      "einzeln": bool(r["einzeln"]), "austausch": r["austausch"]} for r in stueckliste.zeilen(pid)]
+            kopiert = True
+        else:
+            kopiert = False
+        neu = produkt_anlegen(d, demo=bool(quelle["demo"]), bestandteile=liste if quelle["is_set"] else None)
         for doc in kopien:
             _datei_sichern(doc["file_path"], doc["title"])      # unter der Sperre: seit dem Lesen oben nicht freigegeben
             did = db.execute(
@@ -544,21 +558,20 @@ def produkt_variante(pid, d):
             journal.eintragen("document", did, "angelegt", None,
                               {"product_id": neu, "kind": doc["kind"], "title": doc["title"], "version": doc["version"],
                                "valid_from": doc["valid_from"], "kopie_von": doc["id"]})
-        if mit_stueckliste:
-            stueckliste.kopieren(pid, neu)
         # Der Name der Quelle mit ihrem Zusatz: Varianten unterscheiden sich oft nur in der Beschreibung.
         journal.eintragen("product", neu, "variante", None, dict({"von": pid, "name": produktname(quelle),
                                                                   "dokumente": len(kopien)},
-                                                                 **({"stueckliste": True} if mit_stueckliste else {})))
+                                                                 **({"stueckliste": True} if kopiert else {})))
     return neu
 
 
 def produkt_aendern(pid, d, importiert=False):
-    """Stammdaten ändern; „is_set“ in d schaltet das Häkchen „Hersteller-Set“ um (stueckliste.set_umschalten – nur ohne
-    Artikel; ausschalten nimmt die Stückliste mit)."""
+    """Stammdaten ändern. Ob das Produkt ein Set ist, ändert sich hier nicht (Entscheidung S2): „is_set“ wie bisher
+    geht durch, ein anderes 409 (UMSTELLEN) – umstellen geht nur über die Katalogdatei (stueckliste.set_umschalten)."""
     from . import stueckliste
     alt = produkt(pid)
-    ist_set = wahr(d, "is_set", "Hersteller-Set") if "is_set" in d else None
+    if "is_set" in d and wahr(d, "is_set", "Set") != bool(alt["is_set"]):
+        raise Abgelehnt(stueckliste.UMSTELLEN, 409)
     w = produkt_werte(d, alt, importiert=importiert)
     key = dedupe_key(w["manufacturer"], w["model"], w["article_no"])
     artikel = db.query("SELECT COUNT(*) AS n FROM mat_item WHERE product_id = ?", (pid,), one=True)["n"]
@@ -583,8 +596,6 @@ def produkt_aendern(pid, d, importiert=False):
         # Ein festgeschriebenes Lebensende (retire_by) gibt es nur bei textilem Material.
         if w["lifetime_years"] != alt["lifetime_years"] and w["material_kind"] == "textil":
             lebensende_nachziehen(pid, alt["lifetime_years"], w["lifetime_years"])
-        if ist_set is not None:
-            stueckliste.set_umschalten(pid, ist_set)
     return pid
 
 
@@ -704,7 +715,7 @@ def produkt_json(p, voll=False):
         out["category_name"] = p["category_name"]
     if "bestand" in p:
         out["bestand"] = p["bestand"]
-    # Hersteller-Set (Schritt 21): is_set immer, voll dazu Stückliste, „Bestandteil von“ und ob umschaltbar.
+    # Set (Schritt 21): is_set immer, voll dazu Stückliste, „Bestandteil von“ und für die Material-Verwaltung sets_aelter.
     from .stueckliste import produkt_json_ergaenzen
     produkt_json_ergaenzen(out, p, voll)
     if voll:

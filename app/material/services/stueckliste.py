@@ -1,21 +1,27 @@
-"""Stückliste der Hersteller-Sets (Phase 4 · Lieferung 2, Entwurf A): Ein Produkt mit dem Häkchen „Hersteller-Set“
-(mat_product.is_set) – ein ab Werk zusammengestelltes Kit mit eigener Herstellernummer – führt eine Stückliste
-(mat_product_component). Der Set-Artikel ist das tragende PSA-Produkt und wird nach seinem Produkt- bzw.
-Kategorieformular geprüft wie jedes Produkt (kein eigener Formulartyp).
+"""Stückliste der Sets (Phase 4 · Lieferung 2, Entwurf A; seit dem 24.10.2026 „Set anlegen“): Ein Set (mat_product.is_set)
+ist vom Hersteller als Einheit festgelegt – ab Werk zusammengestellt oder als Kombination zugelassen (etwa Sitz- und
+Brustgurt); seine Artikelnummer ist die des Herstellers oder aus den Nummern der Teile abgeleitet. Es führt eine
+Stückliste (mat_product_component). Der Set-Artikel ist das tragende PSA-Produkt und wird nach seinem Produkt- bzw.
+Kategorieformular geprüft wie jedes Produkt (kein eigener Formulartyp). Nicht zu verwechseln mit der Ordnerart
+„Set-Ordner“ (ein Ordner, in dem Material zusammen liegt).
 
 Regeln, wie sie hier umgesetzt sind (die Trigger aus Schritt 21 fangen, was an ihnen vorbeiginge):
-  - „Hersteller-Set“ umschalten nur, solange es keine Artikel des Produkts gibt. Ein Produkt, das in einer Stückliste
-    steht, wird kein Set; ein Set enthält kein Set. Ausschalten nimmt die Stückliste mit (Journal am Produkt).
+  - Ob ein Produkt ein Set ist, legt das Anlegen fest („Produkt anlegen“ / „Set anlegen“, katalog.produkt_anlegen mit
+    der Stückliste in derselben Transaktion; Entscheidung S2). Umschalten nur noch über die Katalogdatei
+    (set_umschalten, Katalogimport) und nur, solange es keine Artikel des Produkts gibt. Ein Produkt, das in einer
+    Stückliste steht, wird kein Set; ein Set enthält kein Set. Ausschalten nimmt die Stückliste mit (Journal am Produkt).
   - Je Position: Bezeichnung (eine Zeile, höchstens 120 Zeichen), Anzahl 1–20, „einzeln geführt“ und „Austausch laut
     Hersteller“ (ja | nein | nicht belegt; Vorgabe nicht belegt). Einzeln geführt wird ein Bestandteil nur mit eigener
     individueller Kennzeichnung und eigenem Katalogprodukt – dann ist das Produkt Pflicht und jedes Stück wird beim
     Anlegen eines Sets ein eigener Artikel (ein Teil). Nicht einzeln geführte Bestandteile (Tasche, Seilsatz, Prusiks)
     sind nur Text, ohne Produkt – so trifft ein Rückruf keinen Bestandteil ins Leere.
+  - Mindestens EINE einzeln geführte Position (Entscheidung S3) – beim Anlegen, als Variante, beim Ersetzen und im
+    Katalogimport; ohne sie wäre es kein Set, sondern ein Produkt mit Zubehör.
   - Grenzen: höchstens 30 Positionen, zusammen höchstens 50 einzeln geführte Stück (Teile je Set).
   - Kein DEMO-Bestandteil in einem echten Set (der Katalog-Export nennt Altfälle im Bericht, „set_verstoesse“).
   - Die Stückliste wird als Ganzes ersetzt (Oberfläche wie Katalogimport) – mit einem Eintrag „stueckliste“ im Journal
-    des Produkts (vorher, nachher). Angelegte Sets behalten ihre Kopie (mat_item_set_slot); eine Änderung wirkt nur
-    auf neue.
+    des Produkts (vorher, nachher). Angelegte Sets behalten ihre Kopie (mat_item_set_slot); „Stückliste übertragen“
+    (setkopie.py) bringt die geänderte auf vorhandene Sets – nur die Material-Verwaltung (Entscheidung S7).
   - Ein Produkt, das Bestandteil ist (oder in der Kopie eines angelegten Sets steht), lässt sich nicht löschen: 409 mit
     dem Set statt eines Fremdschlüsselfehlers.
 
@@ -25,10 +31,17 @@ from ..models import AUSTAUSCH, BESTANDTEIL_ANZAHL_MAX, BEZEICHNUNG_MAX, SET_TEI
 from . import Abgelehnt, auswahl, ganzzahl, kennung, text, wahr
 from . import journal, katalog
 
-SET_MIT_ARTIKELN = ("„Hersteller-Set“ lässt sich nur umschalten, solange es keine Artikel dieses Produkts gibt – an ihm "
-                    "hängt, ob ein Artikel Teile hat.")
-NUR_SET = "Eine Stückliste hat nur ein Produkt mit dem Häkchen „Hersteller-Set“."
-KEIN_SET_IM_SET = "Ein Hersteller-Set enthält kein Set – „{name}“ ist selbst eins."
+SET_MIT_ARTIKELN = ("Ob ein Produkt ein Set ist, lässt sich nur ändern, solange es keine Artikel dieses Produkts gibt – "
+                    "daran hängt, ob ein Artikel Teile hat.")
+NUR_SET = "Eine Stückliste hat nur ein Set."
+KEIN_SET_IM_SET = "Ein Set enthält kein Set – „{name}“ ist selbst eins."
+# Entscheidung S3 (24.10.2026): ohne einzeln geführtes Teil kein Set.
+EINZELN_PFLICHT = "Ein Set braucht mindestens ein einzeln geführtes Teil."
+# Entscheidung S2: Produkt ↔ Set nur über die Katalogdatei.
+UMSTELLEN = ("Ob ein Produkt ein Set ist, legt das Anlegen fest („Produkt anlegen“ / „Set anlegen“). Umstellen geht nur "
+             "über die Katalogdatei, solange es keine Artikel gibt.")
+NUR_MIT_SET = "„bestandteile“ gibt es nur mit „is_set“: true (Set anlegen)."
+SET_OHNE_LISTE = "Ein Set legst du mit seiner Stückliste an („bestandteile“: eine Liste mit mindestens einer Position)."
 DEMO_IM_SET = ("„{name}“ ist ein DEMO-Produkt – in der Stückliste eines echten Sets stünde sonst nach dem Katalog-Export ein "
                "Verweis ins Leere.")
 NUR_TEXT = ("Ein nicht einzeln geführter Bestandteil ist nur Text (Bezeichnung) – ein Produkt gehört nur zu einem "
@@ -88,23 +101,24 @@ def in_angelegten_sets(pid):
 
 
 def produkt_json_ergaenzen(out, p, voll=False):
-    """Set-Angaben an katalog.produkt_json: is_set immer; voll dazu die Stückliste, wo das Produkt Bestandteil ist und ob
-    sich das Häkchen umschalten lässt (mit Grund)."""
+    """Set-Angaben an katalog.produkt_json: is_set immer; voll dazu die Stückliste und wo das Produkt Bestandteil ist –
+    an einem Set für die Material-Verwaltung auch sets_aelter (angelegte Sets mit einer älteren Stückliste,
+    setkopie.aelter; Materialwarte und Führungskräfte sehen die Zahl nicht – sie ändern die Zusammensetzung nie, S7)."""
+    from . import rechte, setkopie
     out["is_set"] = bool(p.get("is_set"))
     if not voll:
         return out
     out["bestandteile"] = stueckliste_json(p["id"]) if out["is_set"] else []
     out["bestandteil_von"] = bestandteil_von(p["id"])
-    grund = umschalt_grund(p)
-    out["set_umschaltbar"] = grund is None
-    out["set_umschalt_grund"] = grund
+    if out["is_set"] and rechte.ist_material_verwaltung():
+        out["sets_aelter"] = setkopie.aelter(p["id"])
     out["stueckliste_grenzen"] = {"positionen": STUECKLISTE_POSITIONEN_MAX, "anzahl": BESTANDTEIL_ANZAHL_MAX,
                                   "teile": SET_TEILE_MAX, "bezeichnung": BEZEICHNUNG_MAX}
     return out
 
 
 def umschalt_grund(p, an=None):
-    """Warum sich „Hersteller-Set“ an diesem Produkt nicht umschalten lässt – oder None. an: Zielzustand (None: der
+    """Warum sich „Set“ an diesem Produkt nicht umschalten lässt (Katalogimport) – oder None. an: Zielzustand (None: der
     jeweils andere)."""
     an = (not p.get("is_set")) if an is None else an
     if bool(p.get("is_set")) == bool(an):
@@ -120,8 +134,9 @@ def umschalt_grund(p, an=None):
 
 
 def set_umschalten(pid, an, grund_journal=None):
-    """„Hersteller-Set“ setzen (an) oder wegnehmen – in der Transaktion des Aufrufers. Wegnehmen entfernt eine
-    vorhandene Stückliste (Journal „stueckliste“ vorher → leer). Liefert, ob sich etwas geändert hat."""
+    """„Set“ setzen (an) oder wegnehmen – nur noch für den Katalogimport (Entscheidung S2; die Oberfläche legt es beim
+    Anlegen fest), in der Transaktion des Aufrufers. Wegnehmen entfernt eine vorhandene Stückliste (Journal
+    „stueckliste“ vorher → leer). Liefert, ob sich etwas geändert hat."""
     p = katalog.produkt(pid)
     an = bool(an)
     if bool(p["is_set"]) == an:
@@ -182,7 +197,24 @@ def eintraege_lesen(set_produkt, liste, aufloesen=None):
                     "anzahl": anzahl, "einzeln": int(einzeln), "austausch": austausch, "position": n})
     if stueck > SET_TEILE_MAX:
         raise Abgelehnt(f"Zusammen höchstens {SET_TEILE_MAX} einzeln geführte Stück je Set (hier {stueck}).")
+    if not stueck:
+        raise Abgelehnt(EINZELN_PFLICHT)
     return out
+
+
+def anfrage_lesen(d):
+    """POST /produkte und „Set aus Meldung anlegen“: Ein Set kommt mit seiner Stückliste – {"is_set": true,
+    "bestandteile": [...]} (nicht leer); ohne is_set ist es ein Produkt, „bestandteile“ dann 400. Liefert die rohe Liste
+    oder None (kein Set) – geprüft wird sie in katalog.produkt_anlegen (eintraege_lesen)."""
+    ist = wahr(d, "is_set", "Set")
+    liste = d.get("bestandteile")
+    if not ist:
+        if liste is not None:
+            raise Abgelehnt(NUR_MIT_SET)
+        return None
+    if not isinstance(liste, list) or not liste:
+        raise Abgelehnt(SET_OHNE_LISTE)
+    return liste
 
 
 def _vergleich(r):
@@ -216,22 +248,13 @@ def _ersetzen(p, neu, grund=None):
 
 def ersetzen(pid, liste, aufloesen=None, grund=None):
     """PUT /produkte/<pid>/bestandteile bzw. Katalogimport: die Stückliste als Ganzes ersetzen (unter der Schreibsperre;
-    in einer äußeren Transaktion läuft es flach mit). Liefert, ob sie sich geändert hat."""
+    in einer äußeren Transaktion läuft es flach mit) – nie leer, mindestens ein einzeln geführtes Teil (S3). Angelegte
+    Sets behalten ihre Kopie (setkopie.aelter zählt sie). Liefert, ob sie sich geändert hat."""
     with db.transaction(sofort=True):
         p = katalog.produkt(pid)
         if not p["is_set"]:
             raise Abgelehnt(NUR_SET, 409)
         return _ersetzen(p, eintraege_lesen(p, liste, aufloesen), grund)
-
-
-def kopieren(von, nach):
-    """Produktvariante mit dem Häkchen „Stückliste übernehmen“: die Stückliste von von an das neue Set-Produkt nach – in
-    der Transaktion des Aufrufers. Die Regeln gelten wie beim Ersetzen (etwa kein DEMO-Bestandteil in einem echten
-    Set)."""
-    p = katalog.produkt(nach)
-    liste = [{"produkt_id": r["component_product_id"], "bezeichnung": r["bezeichnung"], "anzahl": r["anzahl"],
-              "einzeln": bool(r["einzeln"]), "austausch": r["austausch"]} for r in zeilen(von)]
-    return _ersetzen(p, eintraege_lesen(p, liste), grund=f"übernommen von Produkt Nr. {von}")
 
 
 def loeschen_pruefen(pid):

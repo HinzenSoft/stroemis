@@ -15,7 +15,7 @@ Mitglied – sowie die DEMO-Material-Verwaltung (Stufe Verwaltung, keine Plattfo
 pflegen, alle Bestände, Gliederungen anlegen). Sonst haben die Konten die Vorgabe neuer Konten. Nur für dev. Stammt
 der DEMO-Prüfer noch aus der Zeit, als auch er befristet prüfte, stellt --konten seine DEMO-Prüffreigabe auf dauerhaft
 (siehe demo_konten).
-Seit Phase 4 · Lieferung 2 (Hersteller-Sets) gibt es dazu ein DEMO-Set-Produkt („DEMO Verbindungsmittel-Set“) mit
+Seit Phase 4 · Lieferung 2 (Sets) gibt es dazu ein DEMO-Set-Produkt („DEMO Verbindungsmittel-Set“) mit
 Stückliste aus DEMO-Bestandteilen (zwei einzeln geführte DEMO HMS-Karabiner, eine DEMO-Tasche als Bestandteil ohne
 eigenen Artikel) und im DEMO-Lager einen DEMO-Set-Artikel mit seinen beiden Teilen (DEMO-SET-1 mit DEMO-SET-K1 und
 DEMO-SET-K2) – auch zu einem vorhandenen Demo-Bestand, einmal (demo_set). Keine echten Herstellerdaten: Hersteller,
@@ -75,7 +75,7 @@ KATALOG = {
             {"name": "DEMO HMS-Karabiner", "norm": "EN 362 oder EN 12275", "materialart": "metall_hardware",
              "intervall_monate": 12},
             {"name": "DEMO Kletterhelme", "norm": "EN 12492", "materialart": "sonstiges", "intervall_monate": 12},
-            # Phase 4 · L2: Hersteller-Sets – Kategorie, Norm und Intervall sind Platzhalter.
+            # Phase 4 · L2: Sets – Kategorie, Norm und Intervall sind Platzhalter.
             {"name": "DEMO Verbindungsmittel-Sets", "norm": "DEMO-Norm (Platzhalter)", "materialart": "textil",
              "intervall_monate": 12}]},
         {"name": "DEMO Wasserrettung", "unterkategorien": [
@@ -102,7 +102,7 @@ KATALOG = {
          "lebensdauer_quelle": "Platzhalter", "beschreibung": ""},
         {"kategorie": ["DEMO Wasserrettung", "DEMO Schwimmhilfen"], "hersteller": "DEMO-Hersteller",
          "modell": "DEMO Rettungsweste", "artikelnummer": "DEMO-W-1", "materialart": "sonstiges", "beschreibung": ""},
-        # Hersteller-Set (Phase 4 · L2): Stückliste aus DEMO-Bestandteilen – zwei einzeln geführte DEMO HMS-Karabiner
+        # Set (Phase 4 · L2): Stückliste aus DEMO-Bestandteilen – zwei einzeln geführte DEMO HMS-Karabiner
         # (je ein Teil-Artikel) und eine Tasche ohne eigenen Artikel. Alles Platzhalter.
         {"kategorie": ["DEMO PSA gegen Absturz und Seiltechnik", "DEMO Verbindungsmittel-Sets"],
          "hersteller": "DEMO-Hersteller", "modell": "DEMO Verbindungsmittel-Set", "artikelnummer": "DEMO-VS-1",

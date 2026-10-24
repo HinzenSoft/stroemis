@@ -652,7 +652,7 @@ def vorschlag(d):
             "retire_by": lebensende(herst, p["lifetime_years"]) if p["material_kind"] == "textil" else None,
             "material_kind": p["material_kind"], "lifetime_years": p["lifetime_years"],
             "lifetime_source": p["lifetime_source"],
-            # Hersteller-Set (Schritt 21): die Stückliste für den Dialog „Set anlegen“ – sonst None.
+            # Set (Schritt 21): die Stückliste für den Dialog „Set anlegen“ – sonst None.
             "set": sets.anlegen_vorschlag(p)}
 
 
@@ -718,7 +718,7 @@ def artikel_anlegen(d):
 
 
 def anlegen(d):
-    """POST /artikel: ein Artikel – oder, mit einem Set-Produkt, ein Hersteller-Set mit seinen Teilen (sets.set_anlegen;
+    """POST /artikel: ein Artikel – oder, mit einem Set-Produkt, ein Set mit seinen Teilen (sets.set_anlegen;
     ohne „teile“ 400). Liefert (Kennung, Hinweise)."""
     plan = artikel_plan(d)
     if plan["p"]["is_set"]:
@@ -747,7 +747,7 @@ def artikel_aendern(iid, d):
     for fest in ("inventory_no", "qr_token", "lock_state"):
         if fest in d and d.get(fest) != alt[fest]:
             raise Abgelehnt("Inventarnummer, QR-Kennung und Sperrzustand lassen sich nicht bearbeiten.")
-    # Hersteller-Sets (Schritt 21): kein Produktwechsel an Teilen, an Sets und von oder zu einem Set-Produkt – vor den
+    # Sets (Schritt 21): kein Produktwechsel an Teilen, an Sets und von oder zu einem Set-Produkt – vor den
     # übrigen Regeln, die sonst am falschen Produkt prüften.
     if d.get("product_id") not in (None, ""):
         sets.produktwechsel_weiche(alt, kennung(d.get("product_id"), "Produkt"))
@@ -1024,7 +1024,7 @@ def artikel_json(i, voll=False):
                              "lock_reason", "next_due_on", "interval_months", "notes", "created_at", "updated_at",
                              "last_inspected_on", "length_m")}
     out["serial_generated"] = bool(i["serial_generated"])
-    # Hersteller-Sets (K2): „set“ – nur mit dem Set gesperrt (dann nimmt der Artikel eine eigene Sperre an), „eigen“, None.
+    # Sets (K2): „set“ – nur mit dem Set gesperrt (dann nimmt der Artikel eine eigene Sperre an), „eigen“, None.
     out["lock_cause"] = i["lock_cause"]
     out["demo"] = ist_demo(i["id"])
     # Länge (Schritt 20): als Text „57,5 m“ und ob die Kategorie des Produkts sie vorsieht (Feld im Dialog).
@@ -1044,7 +1044,7 @@ def artikel_json(i, voll=False):
     out["qr_adresse"] = qr.adresse(i["qr_token"])
     out["darf"] = darf
     out["zugeordnet"] = zugeordnet_json(i) if darf["grund"] else None
-    # Hersteller-Sets (Schritt 21): am Set-Artikel der Block „set“ (sets.set_json), am Teil „teil_von“.
+    # Sets (Schritt 21): am Set-Artikel der Block „set“ (sets.set_json), am Teil „teil_von“.
     out["ist_set"] = sets.ist_set_artikel(i)
     out["set"] = sets.set_json(i)
     out["teil_von"] = sets.teil_von_json(i)
@@ -1143,7 +1143,7 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     teilweise sichtbaren Systemordner also nur die eigenen. Das Journal nur mit Grundrecht, die Einträge zu Freigaben
     darin nur für Verwalter des Ordners. zugeordnet: nur Artikel dieser Person (und nur, wo das Grundrecht gilt).
     „nacharbeit“: offene Zeilen aus Bestandsimporten in diesen Ordner – nur für Verwalter, sonst null.
-    Hersteller-Sets (Schritt 21): nur die Set-Zeile mit Set-Status, Set-Fälligkeit und „set“ (sets.listenzeile) –
+    Sets (Schritt 21): nur die Set-Zeile mit Set-Status, Set-Fälligkeit und „set“ (sets.listenzeile) –
     gefiltert und sortiert nach den Set-Werten; Teile stehen auf der Set-Seite. „sets“: {anzahl, teile} unter allen
     Zeilen der Liste (Kopf „n Einträge, davon m Sets mit k Teilen“). „andere_set_status“ (nur mit Statusfilter, sonst
     None): Teile mit diesem Status in Sets mit anderem Set-Status (andere_set_status)."""
@@ -1230,7 +1230,7 @@ def _faellig_bedingung(ordner_id, nur, zugeordnet, mit_status=True):
 def faellige(ordner_id=None, nur=FAELLIG, seite=1, pro_seite=100, sort=None, richtung="auf", zugeordnet=None):
     """Artikel, die geprüft werden müssen – überfällige zuerst, dann die am Lebensende, dann neue
     (Eingangsprüfung), dann nach Datum; oder nach einer gewählten Spalte. Nur, was das Konto sieht; zugeordnet: nur
-    Artikel dieser Person, soweit das Grundrecht gilt. Hersteller-Sets (Schritt 21) als Set-Zeile mit Set-Status und
+    Artikel dieser Person, soweit das Grundrecht gilt. Sets (Schritt 21) als Set-Zeile mit Set-Status und
     Set-Fälligkeit – gefiltert und sortiert danach; Teile stehen nicht einzeln da (faellige_sets zählt sie)."""
     from .search import sortierung
     where, params = _faellig_bedingung(ordner_id, nur, zugeordnet)

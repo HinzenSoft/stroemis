@@ -28,7 +28,7 @@ from . import models
 from .services import (Abgelehnt, anhang, bestand, bestandsimport, durchgang, eingabe, globalprotokoll, globalsuche,
                        journal, katalog, kennung, medien as medien_dienst, meldung, protokoll, pruefung, search,
                        unterschrift)
-from .services import antrag, erinnerung, mailprotokoll, mangel, psa, rueckruf, sets, stueckliste
+from .services import antrag, erinnerung, mailprotokoll, mangel, psa, rueckruf, setkopie, sets, stueckliste
 from .services import status as st
 from .services import ueberblick
 from .services.bestand import FremdeDublette
@@ -409,7 +409,7 @@ def suche():
     rows, gesamt = search.artikel(q, seite, pro_seite, *_sortier_args())
     treffer = []
     for r in rows:
-        # Hersteller-Sets (Schritt 21): ein Set-Artikel als Set-Zeile, ein Teil mit „teil_von“.
+        # Sets (Schritt 21): ein Set-Artikel als Set-Zeile, ein Teil mit „teil_von“.
         k = sets.listenzeile(bestand.artikel_kurz(r), r)
         k["pfad"] = " / ".join(o["name"] for o in bestand.pfad(r["folder_id"]))
         treffer.append(k)
@@ -515,7 +515,11 @@ def artikelnummer_pruefen():
 @api.post("/produkte")
 @katalog_required
 def produkt_anlegen():
-    pid = katalog.produkt_anlegen(json_body())
+    """Produkt anlegen – oder ein Set: {"is_set": true, "bestandteile": [Positionen wie PUT …/bestandteile]} legt
+    Produkt und Stückliste in einem Zug an (mindestens ein einzeln geführtes Teil; „Position n: …“ bei einem Fehler,
+    dann entsteht nichts). is_set ohne Liste oder eine Liste ohne is_set: 400."""
+    d = json_body()
+    pid = katalog.produkt_anlegen(d, bestandteile=stueckliste.anfrage_lesen(d))
     return jsonify(produkt=katalog.produkt_json(katalog.produkt(pid), voll=True)), 201
 
 
@@ -523,7 +527,8 @@ def produkt_anlegen():
 @katalog_required
 def produkt_variante(pid):
     """Kopie als neue Variante: Felder wie POST /produkte (eigene Artikelnummer Pflicht), dazu „dokumente“ –
-    die Kennungen der aktuellen Dokumente, die mitkommen sollen. Das Produktbild kommt nie mit."""
+    die Kennungen der aktuellen Dokumente, die mitkommen sollen. Das Produktbild kommt nie mit. Die Variante eines Sets
+    ist ein Set: „bestandteile“ (bearbeitet) oder ohne sie die Stückliste des Vorbilds."""
     neu = katalog.produkt_variante(pid, json_body())
     return jsonify(produkt=katalog.produkt_json(katalog.produkt(neu), voll=True)), 201
 
@@ -544,14 +549,33 @@ def produkt_lesen(pid):
 @api.put("/produkte/<int:pid>/bestandteile")
 @katalog_required
 def produkt_bestandteile(pid):
-    """Stückliste eines Hersteller-Sets als Ganzes ersetzen (Schritt 21): {"bestandteile": [{"produkt_id" | null,
-    "bezeichnung", "anzahl", "einzeln", "austausch"}]} – Reihenfolge = Position. Liefert das Produkt (voll) und
-    „geaendert“."""
+    """Stückliste eines Sets als Ganzes ersetzen (Schritt 21): {"bestandteile": [{"produkt_id" | null,
+    "bezeichnung", "anzahl", "einzeln", "austausch"}]} – Reihenfolge = Position, mindestens ein einzeln geführtes Teil
+    (S3). Angelegte Sets behalten ihre Kopie – „sets_aelter“ im Produkt zählt sie (Stückliste übertragen). Liefert das
+    Produkt (voll) und „geaendert“."""
     d = json_body()
     if not isinstance(d, dict) or "bestandteile" not in d:
-        raise Abgelehnt("Bitte „bestandteile“ angeben (eine Liste, leer entfernt alle).")
+        raise Abgelehnt("Bitte „bestandteile“ angeben (eine Liste mit mindestens einem einzeln geführten Teil).")
     geaendert = stueckliste.ersetzen(pid, d["bestandteile"])
     return jsonify(produkt=katalog.produkt_json(katalog.produkt(pid), voll=True), geaendert=geaendert)
+
+
+@api.get("/produkte/<int:pid>/stueckliste-uebertragen")
+@katalog_required
+def stueckliste_uebertragen_vorschau(pid):
+    """Vorschau „Stückliste übertragen“ (setkopie.vorschau): je Gruppe gleicher bisheriger Kopie der Vergleich und die
+    Sets mit Wirkung oder Grund, dazu „stand“ für den POST. Nur die Material-Verwaltung (S7)."""
+    return jsonify(setkopie.vorschau(pid))
+
+
+@api.post("/produkte/<int:pid>/stueckliste-uebertragen")
+@katalog_required
+def stueckliste_uebertragen(pid):
+    """{"stand", "set_ids"}: die aktuelle Stückliste auf die gewählten Sets übertragen (setkopie.uebertragen) – eine
+    Transaktion; anderer Stand oder ein nicht übertragbares Set 409, nichts geschrieben. Liefert {uebertragen,
+    gesperrt} und das Produkt (voll)."""
+    r = setkopie.uebertragen(pid, json_body())
+    return jsonify(dict(r, produkt=katalog.produkt_json(katalog.produkt(pid), voll=True)))
 
 
 @api.put("/produkte/<int:pid>")
@@ -655,7 +679,8 @@ def meldungen():
 @api.post("/meldungen")
 @requires_folder("verwalten", "eingabe:folder_id", leer="irgendwo")
 def meldung_anlegen():
-    """Ein fehlendes Produkt melden – Felder als JSON oder, mit Fotos, als Formular (Feld „fotos“, mehrfach)."""
+    """Ein fehlendes Produkt oder Set melden („is_set“, dann „set_teile“ Pflicht) – Felder als JSON oder, mit Fotos, als
+    Formular (Feld „fotos“, mehrfach)."""
     mid = meldung.anlegen(_eingabe(), request.files.getlist("fotos"))
     return jsonify(meldung=meldung.meldung_json(meldung.meldung(mid))), 201
 
@@ -682,7 +707,8 @@ def meldung_loeschen(mid):
 @api.post("/meldungen/<int:mid>/produkt")
 @katalog_required
 def meldung_produkt(mid):
-    """Produkt aus der Meldung anlegen (Felder wie POST /produkte, dazu „antwort“) – erledigt sie zugleich."""
+    """Produkt oder Set aus der Meldung anlegen (Felder wie POST /produkte – ein Set mit „is_set“ und „bestandteile“ –,
+    dazu „antwort“) – erledigt sie zugleich, in einer Transaktion."""
     pid = meldung.produkt_anlegen(mid, json_body())
     return jsonify(produkt=katalog.produkt_json(katalog.produkt(pid), voll=True),
                    meldung=meldung.meldung_json(meldung.meldung(mid))), 201
@@ -905,7 +931,7 @@ def artikel_vorschlag():
 @requires_folder("verwalten", "json:folder_id", leer="global")
 def artikel_anlegen():
     """Anlegen im Ordner, den das Konto verwaltet. Gibt es die Seriennummer bei diesem Produkt schon in einem fremden
-    Bereich, antwortet _fremde_dublette (protokolliert, ohne Inventarnummer). Ein Hersteller-Set kommt mit seinen
+    Bereich, antwortet _fremde_dublette (protokolliert, ohne Inventarnummer). Ein Set kommt mit seinen
     Teilen („teile“, sets.set_anlegen) – „hinweise“: etwa „STR-Nummer am Teil anbringen“."""
     iid, hinweise = bestand.anlegen(json_body())
     return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True), hinweise=hinweise), 201

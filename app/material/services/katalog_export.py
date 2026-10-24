@@ -23,7 +23,7 @@ Je Ziel kommt ein Formular mit: das aktive („aktivieren“: true), ohne aktive
 Eine Datei, die der Import nicht annähme (größer als seine Grenze, importer.BILD_MAX_IMPORT bzw. DOK_MAX_BYTES), bleibt
 draußen und steht im Bericht unter „zu_gross“ – sonst stünde der ganze Import.
 
-Hersteller-Sets (Schritt 21): „set“: true und die Stückliste („bestandteile“, Bestandteile als Verweis {uid, hersteller,
+Sets (Schritt 21): „set“: true und die Stückliste („bestandteile“, Bestandteile als Verweis {uid, hersteller,
 modell, artikelnummer}). Steht in der Stückliste eines echten Sets ein DEMO-Bestandteil (oder einer aus einer
 DEMO-Kategorie), fehlt der Verweis im Export – dann bleibt „bestandteile“ ganz weg (der Import ließe sonst in der
 Produktion eine verkürzte Stückliste entstehen; ohne den Schlüssel bleibt sie dort, wie sie ist), und der Bericht nennt
@@ -320,7 +320,7 @@ def bericht_text(b):
     if b["zu_gross"]:
         zeilen += ["", "Nicht im Export, weil der Import die Datei nicht annähme:"] + [f"  {x}" for x in b["zu_gross"]]
     if b.get("set_verstoesse"):
-        zeilen += ["", "Hersteller-Sets mit DEMO-Bestandteil (Stückliste nicht im Export – bitte im Katalog klären):"] + [
+        zeilen += ["", "Sets mit DEMO-Bestandteil (Stückliste nicht im Export – bitte im Katalog klären):"] + [
             f"  {x}" for x in b["set_verstoesse"]]
     zeilen += ["", "Bestand, Artikel, Prüfungen, Meldungen und Rückrufe sind nie Teil des Katalog-Exports.",
                "Importieren: Katalog → „Katalog importieren“ oder flask material import-catalog <datei.zip>.", ""]

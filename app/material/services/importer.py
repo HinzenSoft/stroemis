@@ -24,7 +24,7 @@ Format 2 (ZIP mit katalog.json und den Dateien; als reine JSON-Datei nur ohne Da
     Produkten, je Dokument mit den Kennungen seiner früheren Versionen („vorgaenger“) – daran findet eine neue Version
     ihre Kette hier, auch wenn mehrere Dokumente gleich heißen.
   Gelöscht, zurückgezogen oder deaktiviert wird nie etwas: Was hier mehr ist als in der Datei, bleibt.
-  Ausnahme seit Schritt 21 (Sets mit Komponenten): Die Stückliste eines Hersteller-Sets („set“: true, „bestandteile“)
+  Ausnahme seit Schritt 21 (Sets mit Komponenten): Die Stückliste eines Sets („set“: true, „bestandteile“)
   wird als Ganzes ersetzt (Journal am Produkt) – in einem zweiten Durchgang nach allen Produkten der Datei, denn ein
   Bestandteil kann hinter dem Set stehen. Verweise auf Bestandteile werden aufgelöst wie Formulare an Produkten
   (_produkt_ziel: uid, dann Hersteller + Modell + Artikelnummer). „set“ an einem Produkt mit Artikeln umschalten, ein
@@ -60,7 +60,7 @@ from werkzeug.datastructures import FileStorage
 from ... import db
 from ...images import ALLOWED_EXT, MAX_PIXEL, delete_photo_files
 from ..models import MATERIALARTEN
-from . import Abgelehnt, akteur, heute, journal, katalog, stueckliste, text, wahr
+from . import Abgelehnt, akteur, heute, journal, katalog, setkopie, stueckliste, text, wahr
 from .faelligkeit import in_kategorie
 from .interval import herstellerseite
 
@@ -620,7 +620,7 @@ def _produkt(n, e, lauf):
     return True
 
 
-# --- Stücklisten der Hersteller-Sets (Schritt 21) -----------------------------------------------------------------------
+# --- Stücklisten der Sets (Schritt 21) -----------------------------------------------------------------------
 
 def _set_angaben(ort, name, e, lauf):
     """(„set“ als ja/nein oder None, Stückliste als Liste von Objekten oder None) aus einem Produkteintrag – eine Liste
@@ -633,7 +633,7 @@ def _set_angaben(ort, name, e, lauf):
         raise Abgelehnt("„bestandteile“ muss eine Liste sein.")
     if liste and all(isinstance(x, str) for x in liste):
         lauf.bericht["hinweise"].append(f"{ort} ({name}): „bestandteile“ ist eine Liste aus Texten – übergangen. Eine "
-                                        "Stückliste braucht je Position ein Objekt (Katalogdatei, Hersteller-Sets).")
+                                        "Stückliste braucht je Position ein Objekt (Katalogdatei, Sets).")
         return an, None
     if any(not isinstance(x, dict) for x in liste):
         raise Abgelehnt("„bestandteile“: jede Position ist ein Objekt (produkt, bezeichnung, anzahl, einzeln, austausch).")
@@ -648,7 +648,7 @@ def _stuecklisten(lauf):
     angaben = []
 
     def geaendert(pid):
-        """Ändern sich am Produkt nur „Hersteller-Set“ oder die Stückliste, zählt es nicht mehr als „unveraendert“."""
+        """Ändern sich am Produkt nur „Set“ oder die Stückliste, zählt es nicht mehr als „unveraendert“."""
         if pid in lauf.unveraendert:
             lauf.unveraendert.discard(pid)
             bericht["produkte"]["unveraendert"] -= 1
@@ -658,7 +658,7 @@ def _stuecklisten(lauf):
         try:
             an, liste = _set_angaben(ort, name, e, lauf)
             if an is False and liste:
-                raise Abgelehnt("„set“: false und dazu eine Stückliste – nur ein Hersteller-Set hat Bestandteile.")
+                raise Abgelehnt("„set“: false und dazu eine Stückliste – nur ein Set hat Bestandteile.")
             angaben.append((ort, name, pid, an, liste))
         except Abgelehnt as exc:
             bericht["fehler"].append(f"{ort} ({name}): {exc}")
@@ -674,11 +674,11 @@ def _stuecklisten(lauf):
                             "Quelle zurückändern oder dort ein eigenes Produkt (Variante) für das Set anlegen.")
         stueckliste.set_umschalten(pid, an, grund_journal="Katalogimport")
         geaendert(pid)
-        lauf.notiz(f"Produkt „{name}“: „Hersteller-Set“ {'gesetzt' if an else 'entfernt'}")
+        lauf.notiz(f"Produkt „{name}“: „Set“ {'gesetzt' if an else 'entfernt'}")
 
     def ersetzen(ort, name, pid, liste):
         if not katalog.produkt(pid)["is_set"]:
-            raise Abgelehnt("Bestandteile hat nur ein Hersteller-Set – „set“: true fehlt.")
+            raise Abgelehnt("Bestandteile hat nur ein Set – „set“: true fehlt.")
         def aufloesen(x):
             return _produkt_ziel(x["produkt"], lauf) if x.get("produkt") is not None else None
         neu = not stueckliste.zeilen(pid)
@@ -686,6 +686,12 @@ def _stuecklisten(lauf):
             bericht["stuecklisten"]["neu" if neu else "geaendert"] += 1
             geaendert(pid)
             lauf.notiz(f"Produkt „{name}“: Stückliste ersetzt ({len(liste)} Position{'en' if len(liste) != 1 else ''})")
+            # Der Import überträgt nie selbst (Wunsch vom 24.10.2026): angelegte Sets behalten ihre Kopie.
+            k = setkopie.aelter(pid)
+            if k:
+                bericht["hinweise"].append(f"{ort} ({name}): {k} angelegte{'s' if k == 1 else ''} Set{'' if k == 1 else 's'} "
+                                           f"{'hat' if k == 1 else 'haben'} die bisherige Stückliste – übertragen auf der "
+                                           "Produktseite („Auf vorhandene Sets übertragen …“).")
         else:
             bericht["stuecklisten"]["unveraendert"] += 1
 
@@ -707,6 +713,13 @@ def _stuecklisten(lauf):
             except Abgelehnt as exc:
                 fehlerhaft.add(ort)
                 bericht["fehler"].append(f"{ort} ({name}): {exc}")
+    # Entscheidung S3: Ein Set ohne einzeln geführtes Teil ist ein Fehler dieses Produkts – auch „set“: true ohne
+    # „bestandteile“ an einem Produkt, das noch keine Stückliste hat (ersetzen prüft nur eine mitgeschickte Liste).
+    for ort, name, pid, _, _ in angaben:
+        if ort not in fehlerhaft and katalog.produkt(pid)["is_set"] and \
+                not any(z["einzeln"] for z in stueckliste.zeilen(pid)):
+            bericht["fehler"].append(f"{ort} ({name}): {stueckliste.EINZELN_PFLICHT} – „bestandteile“ mit mindestens einer "
+                                     "einzeln geführten Position fehlt.")
 
 
 def _bild(e, pid, alt, ort, name, lauf):

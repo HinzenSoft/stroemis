@@ -58,9 +58,11 @@ FELD = {
     "rueckruf_nicht_mehr": "Rückruf trifft ihn nicht mehr", "rueckruf_neu": "Rückruf trifft ihn jetzt",
     # Artikellänge (Schritt 20)
     "length_m": "Länge (m)", "items_have_length": "Artikel haben eine Länge",
-    # Hersteller-Sets (Schritt 21)
-    "is_set": "Hersteller-Set", "bestandteile": "Bestandteile", "teile": "Teile", "set": "Set Nr.",
+    # Sets (Schritt 21)
+    "is_set": "Set", "bestandteile": "Bestandteile", "teile": "Teile", "set": "Set Nr.",
     "set_inventar": "Set", "stueckliste": "Stückliste übernommen",
+    # Sets anlegen und Stückliste übertragen (Schritt 22, Wunsch vom 24.10.2026); Set-Meldung (S8)
+    "fehlt": "fehlt", "nicht_in_stueckliste": "nicht mehr in der Stückliste", "set_teile": "Teile des Sets",
     # Sperren, Set prüfen und Austausch im Set (Schritt 21, Paket K2)
     "lock_cause": "Sperrursache", "teil": "Teil", "verbleib": "Verbleib", "gesamtergebnis": "Gesamtergebnis",
     "freigegeben": "freigegeben", "gruende": "Gründe", "lauf": "Set-Prüfung Nr.", "set_lauf_id": "Set-Prüfung Nr.",
@@ -108,6 +110,8 @@ AKTION = {
     "set_lauf_geaendert": "Set-Prüfung aus dem Durchgang gelöst",
     "eingesetzt": "in ein Set eingesetzt", "aus_set_geloest": "aus dem Set gelöst (Set aufgelöst)",
     "bestandteil_ersetzt": "Bestandteil ersetzt", "produkt_geaendert": "Produkt geändert",
+    "stueckliste_uebertragen": "Stückliste übertragen",
+    "nicht_in_stueckliste": "steht nicht mehr in der Stückliste des Sets",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",
@@ -126,7 +130,8 @@ SET_WERTE = {"lock_cause": {"eigen": "eigener Grund", "set": "mit dem Set"},
              "gesamtergebnis": {"einsatzbereit": "einsatzbereit", "gesperrt": "nicht einsatzbereit – Set gesperrt",
                                 "ausgesondert": "Set ausgesondert"},
              "set_grund": {"unvollstaendig": "unvollständig", "tausch": "Teil getauscht oder eingesetzt",
-                           "ausgesondert": "Set ausgesondert", "bestandteil": "Bestandteil ersetzt – Set prüfen"},
+                           "ausgesondert": "Set ausgesondert", "bestandteil": "Bestandteil ersetzt – Set prüfen",
+                           "stueckliste": "Stückliste übertragen"},
              "austausch": {"ja": "ja", "nein": "nein", "nicht_belegt": "nicht belegt"}}
 # Stufe im Modul Material – mit der Zahl dahinter: Einträge vor „Migration Schritt 10“ meinten die Stufen aus Phase 1
 # (1 Führungskraft, 2 Materialwart), die Zahl hält das eindeutig.
@@ -149,7 +154,7 @@ def _ist_datumsfeld(feld):
 
 
 def _listen_wert(x):
-    """Ein Listeneintrag im Journal als Text – wie listenWert() in material.js: Text bleibt Text; Hersteller-Sets
+    """Ein Listeneintrag im Journal als Text – wie listenWert() in material.js: Text bleibt Text; Sets
     schreiben Objekte – die Teile beim Anlegen eines Sets ({inventory_no, serial_no, bestandteil}) und die Positionen
     einer Stückliste ({bezeichnung, anzahl, einzeln, austausch}). Sie erscheinen als Satz statt als Python-Darstellung.
     Ein eingesetzter vorhandener Artikel (L2b, „vorhanden“) sagt es dazu."""

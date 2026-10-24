@@ -203,7 +203,7 @@ def rueckruf_json(r, mit_artikel=False):
         out["artikel"] = [{"id": a["id"], "inventory_no": a["inventory_no"], "serial_no": a["serial_no"],
                            "serial_generated": bool(a["serial_generated"]), "lock_state": a["lock_state"],
                            "zustand": a["zustand"], "grund": a["grund"], "pfad": bestand._pfad_text(a["folder_id"]),
-                           # Teil eines Hersteller-Sets (A17): die Inventarnummer des Sets (gleiche Heimat, gleiche Sicht).
+                           # Teil eines Sets (A17): die Inventarnummer des Sets (gleiche Heimat, gleiche Sicht).
                            "set_inventar": a["set_inventar"]}
                           for a in liste]
         if verwaltung:

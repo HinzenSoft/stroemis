@@ -155,7 +155,7 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     ohne sqlite_sequence). Schritt 1 bleibt mit EDITOREN_1, wie er ausgeliefert wurde. Wiederholbar: Spalten nur, wenn
     sie fehlen, umgebaut nur, wenn der CHECK „laenge“ noch nicht kennt. Wer mat_checklist_item künftig neu aufbaut,
     muss den Index neu anlegen.
-  - Schritt 21 (Phase 4 · Lieferung 2, Sets mit Komponenten, Entwurf B): mat_product.is_set (Hersteller-Set) mit der
+  - Schritt 21 (Phase 4 · Lieferung 2, Sets mit Komponenten, Entwurf B): mat_product.is_set (Set) mit der
     Stückliste mat_product_component (Bestandteil-Produkt ON DELETE RESTRICT, nicht einzeln geführte Bestandteile nur
     als Text, „Austausch laut Hersteller“); am Artikel parent_item_id (Teil eines Sets, eine Ebene), lock_cause (NULL
     frei, „eigen“ eigener Grund, „set“ nur im Set-Verbund gesperrt), set_lock_origin (an der Set-Zeile: Ursprung der
@@ -168,20 +168,31 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     und gehören wie ihr Set, hält der Dienst (services/sets.set_lage, set_stimmig). mat_inspection_festgeschrieben und
     mat_inspection_abgeschlossen aus Schritt 6 werden mit set_lauf_id in der Spaltenliste neu angelegt (erst entfernen,
     dann anlegen). Wiederholbar: Spalten nur, wenn sie fehlen, Tabellen und Indizes IF NOT EXISTS, Trigger neu.
+  - Schritt 22 (Sets anlegen und Stückliste übertragen, Wunsch vom 24.10.2026): Die Kopie der Stückliste eines
+    angelegten Sets (mat_item_set_slot) ändert sich jetzt als Ganzes – „Stückliste übertragen“ (services/setkopie.py)
+    löscht sie und schreibt sie neu. mat_slot_neu und mat_slot_loeschen werden dafür neu angelegt: Einfügen nur an
+    einem Set-Artikel (Produkt mit is_set, selbst kein Teil), Einfügen und Löschen nie an einem ausgesonderten Set und
+    nie während einer offenen Set-Prüfung (deren Ja/Nein-Zeilen kamen aus der Kopie); REPLACE bleibt verboten,
+    mat_slot_aendern (nie ein UPDATE) bleibt. Das Löschen mit dem Set (ON DELETE CASCADE) geht weiter – dann gibt es die
+    Set-Zeile nicht mehr. Dazu an mat_product_request is_set (gemeldet ist ein Set) und set_teile (die Teile, wie der
+    Melder sie kennt – Text). Rein additiv (DROP/CREATE der beiden Trigger, ADD COLUMN, wenn die Spalten fehlen),
+    wiederholbar; keine Zeile ändert sich.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
 # Oberfläche zeigt. Die Reihenfolge ist die der Auswahllisten.
 # Der Schlüssel „metall_hardware“ bleibt (Datenbank, Katalogimport); angezeigt wird kurz „Metall“.
 MATERIALARTEN = {"textil": "textil", "metall_hardware": "Metall", "sonstiges": "sonstiges"}
-ORDNERARTEN = {"gliederung": "Gliederung", "standort": "Standort", "fahrzeug": "Fahrzeug", "set": "Set",
+# „set“ heißt seit dem 24.10.2026 „Set-Ordner“ (Entscheidung S1): Ein Set ist ein Katalogprodukt mit Stückliste – die
+# Ordnerart meint einen Ordner (Rucksack, Kiste), in dem Material zusammen liegt. Der Schlüssel bleibt.
+ORDNERARTEN = {"gliederung": "Gliederung", "standort": "Standort", "fahrzeug": "Fahrzeug", "set": "Set-Ordner",
                "persoenlich": "persönlich", "sonstiges": "sonstiges"}
 SYSTEMORDNER = {"gesperrt": "Gesperrt", "ausgesondert": "Ausgesondert"}
 DOKUMENTARTEN = {"produktbild": "Produktbild", "konformitaetserklaerung": "Konformitätserklärung",
@@ -1798,7 +1809,8 @@ TABELLEN_21 = [
     "WHERE component_product_id IS NOT NULL",
     # Die Stückliste als Kopie je Set, beim Anlegen geschrieben (services/sets.set_anlegen): Vollständigkeit, Tausch und
     # die Bestandteil-Zeilen im Set-Protokoll lesen daraus – eine spätere Änderung der Stückliste färbt kein angelegtes
-    # Set um. Unveränderlich; weg nur mit dem (ungeprüften) Set.
+    # Set um. Unveränderlich; weg nur mit dem (ungeprüften) Set. Seit Schritt 22 als Ganzes ersetzbar („Stückliste
+    # übertragen“, TRIGGER_22).
     """CREATE TABLE IF NOT EXISTS mat_item_set_slot (
       id          INTEGER PRIMARY KEY,
       set_item_id INTEGER NOT NULL REFERENCES mat_item(id) ON DELETE CASCADE,
@@ -1849,7 +1861,7 @@ TABELLEN_21 = [
 ]
 SPALTEN_21 = (
     ("mat_product", "is_set", "INTEGER NOT NULL DEFAULT 0 CHECK (is_set IN (0, 1))"),
-    # Teil eines Hersteller-Sets: die Kennung des Set-Artikels (eine Ebene – TRIGGER_21).
+    # Teil eines Sets: die Kennung des Set-Artikels (eine Ebene – TRIGGER_21).
     ("mat_item", "parent_item_id", "INTEGER REFERENCES mat_item(id)"),
     # Sperrursache: NULL frei; „eigen“ eigener Grund dieses Artikels; „set“ nur im Set-Verbund gesperrt (am Teil: das Set
     # ist gesperrt; am Set-Artikel: wegen eines Teils oder der Unvollständigkeit).
@@ -1870,6 +1882,9 @@ INDIZES_21 = [
     "CREATE INDEX IF NOT EXISTS idx_mat_item_parent ON mat_item(parent_item_id) WHERE parent_item_id IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS idx_mat_inspection_set_lauf ON mat_inspection(set_lauf_id) WHERE set_lauf_id IS NOT NULL",
 ]
+# Die Meldungstexte der Trigger aus Schritt 21 bleiben, wie sie ausgeliefert wurden – auch mit dem alten Begriff
+# „Hersteller-Set“ (seit dem 24.10.2026 heißt es „Set“, S1): Ein geänderter Text wiche zwischen frischer und migrierter
+# Datenbank ab. Die Dienste weisen vorher mit eigenem Text ab.
 TEIL_REGEL = ("'Ein Teil gehört zu genau einem Hersteller-Set: Produkt laut dessen Stückliste, eine Ebene, beide nicht "
               "ausgesondert – und ein Teil wechselt das Set nur über „entnehmen“.'")
 SET_PRODUKT_FEST = "'Das Produkt eines Sets und seiner Teile steht fest – ebenso, ob ein Artikel ein Set ist.'"
@@ -1914,7 +1929,8 @@ TRIGGER_21 = [
              "OR EXISTS (SELECT 1 FROM mat_item t WHERE t.parent_item_id = OLD.id) "
              "OR " + _IST_SET.format("OLD.product_id") + " OR " + _IST_SET.format("NEW.product_id") + ")",
              SET_PRODUKT_FEST),
-    # „Hersteller-Set“ umschalten: nur ohne Artikel; ein Bestandteil wird kein Set, ein Set mit Stückliste kein Nicht-Set.
+    # „Set“ umschalten (seit Schritt 22 nur der Katalogimport): nur ohne Artikel; ein Bestandteil wird kein Set, ein Set
+    # mit Stückliste kein Nicht-Set.
     _trigger("mat_product_set_umschalten", "BEFORE UPDATE OF is_set ON mat_product",
              "NEW.is_set IS NOT OLD.is_set AND (EXISTS (SELECT 1 FROM mat_item i WHERE i.product_id = OLD.id) "
              "OR (NEW.is_set = 1 AND EXISTS (SELECT 1 FROM mat_product_component c WHERE c.component_product_id = OLD.id)) "
@@ -1928,7 +1944,8 @@ TRIGGER_21 = [
              "(SELECT p.is_set FROM mat_product p WHERE p.id = NEW.set_product_id) IS NOT 1 OR "
              "(NEW.component_product_id IS NOT NULL AND "
              "(SELECT p.is_set FROM mat_product p WHERE p.id = NEW.component_product_id) IS NOT 0)", STUECKLISTE_REGEL),
-    # Kopie der Stückliste: nur beim Anlegen (Set-Artikel, noch ohne Teile und ohne Prüfung), nie ändern, weg nur mit
+    # Kopie der Stückliste (bis Schritt 22 – mat_slot_neu und mat_slot_loeschen ersetzt TRIGGER_22): nur beim Anlegen
+    # (Set-Artikel, noch ohne Teile und ohne Prüfung), nie ändern, weg nur mit
     # dem Set (ON DELETE CASCADE – dann gibt es die Set-Zeile schon nicht mehr; einen geprüften Artikel löscht ohnehin
     # mat_item_geprueft_loeschen nicht). INSERT OR REPLACE löscht ohne Lösch-Trigger – deshalb die Kennung beim Einfügen.
     _trigger("mat_slot_neu", "BEFORE INSERT ON mat_item_set_slot",
@@ -2004,13 +2021,48 @@ def _schritt_21(conn):
         conn.execute(sql)
 
 
+# Schritt 22 (Sets anlegen und Stückliste übertragen): Die Kopie der Stückliste ändert sich nur als Ganzes – nie an einem
+# ausgesonderten Set und nie während einer offenen Set-Prüfung (setkopie.uebertragen löscht und schreibt neu). Die Texte
+# der übrigen Trigger aus Schritt 21 bleiben, wie sie ausgeliefert wurden.
+SLOT_FEST_22 = ("'Die Stückliste eines angelegten Sets ändert sich nur als Ganzes (Stückliste übertragen) – nicht an einem "
+                "ausgesonderten Set und nicht während einer Set-Prüfung.'")
+_SET_HAELT_KOPIE = ("EXISTS (SELECT 1 FROM mat_item s WHERE s.id = {}.set_item_id AND (s.lock_state = 'ausgesondert' "
+                    "OR EXISTS (SELECT 1 FROM mat_set_lauf l WHERE l.set_item_id = s.id AND l.state = 'offen')))")
+TRIGGER_22 = [
+    # REPLACE über die Kennung bleibt verboten (es löschte ohne Lösch-Trigger); eingefügt wird nur an einem Set-Artikel.
+    _trigger("mat_slot_neu", "BEFORE INSERT ON mat_item_set_slot",
+             "EXISTS (SELECT 1 FROM mat_item_set_slot z WHERE z.id = NEW.id) "
+             "OR NOT EXISTS (SELECT 1 FROM mat_item s JOIN mat_product sp ON sp.id = s.product_id "
+             "WHERE s.id = NEW.set_item_id AND sp.is_set = 1 AND s.parent_item_id IS NULL) "
+             "OR " + _SET_HAELT_KOPIE.format("NEW"), SLOT_FEST_22),
+    # Löschen mit dem Set (ON DELETE CASCADE) geht: dann gibt es die Set-Zeile schon nicht mehr.
+    _trigger("mat_slot_loeschen", "BEFORE DELETE ON mat_item_set_slot", _SET_HAELT_KOPIE.format("OLD"), SLOT_FEST_22),
+]
+SPALTEN_22 = (
+    # Produktmeldung (Schritt 4): gemeldet ist ein Set – mit seinen Teilen als Text, wie der Melder sie kennt (S8).
+    ("mat_product_request", "is_set", "INTEGER NOT NULL DEFAULT 0 CHECK (is_set IN (0, 1))"),
+    ("mat_product_request", "set_teile", "TEXT NOT NULL DEFAULT ''"),
+)
+
+
+def _schritt_22(conn):
+    """Sets anlegen und Stückliste übertragen: mat_slot_neu und mat_slot_loeschen erst entfernen, dann in der Fassung von
+    TRIGGER_22 anlegen (mat_slot_aendern bleibt); die Spalten aus SPALTEN_22, wenn sie fehlen. Ein zweiter Lauf legt
+    dieselben Trigger neu an und ändert keine Zeile."""
+    for name in ("mat_slot_neu", "mat_slot_loeschen"):
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+    for sql in TRIGGER_22:
+        conn.execute(sql)
+    spalten_nachruesten(conn, SPALTEN_22)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
             14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
-            20: _schritt_20, 21: _schritt_21}
+            20: _schritt_20, 21: _schritt_21, 22: _schritt_22}
 
 
 def _meta(conn, schluessel, vorgabe=None):

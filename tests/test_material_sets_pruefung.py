@@ -1,4 +1,4 @@
-"""Hersteller-Sets, Paket K2 (Phase 4 · Lieferung 2):  python tests/test_material_sets_pruefung.py  oder  pytest
+"""Sets, Paket K2 (Phase 4 · Lieferung 2):  python tests/test_material_sets_pruefung.py  oder  pytest
 
 Sperr-Kaskade je Sperrweg (Prüfer-Sperre, Ergebnis „instandsetzen“, Mangelmeldung, Verlust, Unvollständigkeit), eigene
 Sperre an einem mitgesperrten Teil, Freiprüfung im gesperrten Set, „Set prüfen“ mit Prüfumfang und Teiletabelle, die

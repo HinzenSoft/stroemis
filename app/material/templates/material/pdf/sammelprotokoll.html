@@ -1,7 +1,7 @@
 {% extends "material/pdf/basis.html" %}
 {# Sammelprotokoll eines Prüfdurchgangs: Ergebnisübersicht, Prüfer, alle Artikel des Durchgangs und das
    Verzeichnis der Einzelprotokolle mit der Prüfsumme jeder Datei. Daten laut services/pdf.py (dokument,
-   durchgang, zaehlung, pruefer, artikel, ohne_protokoll). Bis zu etwa 500 Artikelzeilen. Hersteller-Sets: Teile
+   durchgang, zaehlung, pruefer, artikel, ohne_protokoll). Bis zu etwa 500 Artikelzeilen. Sets: Teile
    (a.teil) eingerückt unter ihrem Set, an der Set-Zeile das Gesamtergebnis der Set-Prüfung (a.set_gesamt). #}
 {% block stil %}
 .uebersicht-tab { width: 100%; border-collapse: collapse; }

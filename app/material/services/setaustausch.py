@@ -65,7 +65,7 @@ from . import status as st
 
 AUS_GESPERRTEM_SET = "aus gesperrtem Set entnommen"
 AUS_AUSGESONDERTEM_SET = "aus ausgesondertem Set entnommen"
-NUR_SET = "Teile gibt es nur an einem Set-Artikel eines Hersteller-Sets."
+NUR_SET = "Teile gibt es nur an einem Set."
 NICHT_AUSTAUSCHBAR = ("„{bez}“ ist laut Hersteller nicht austauschbar – fällt ein solches Teil aus, wird das ganze Set "
                       "ausgesondert (die übrigen Teile lassen sich dabei entnehmen und weiterführen).")
 BESTAETIGEN = ("Für „{bez}“ ist nicht belegt, ob der Hersteller den Austausch zulässt – bitte bestätigen, dass er laut "
@@ -472,7 +472,7 @@ def vorhandenen_einsetzen(s, pid, bez, item_id, ziel, sperren=True):
         raise Abgelehnt(f"{inv} ist Teil des Sets {sets._set_text(alt_set) if alt_set else ''} – erst dort „Teil "
                         "entnehmen“, dann einsetzen.", 409)
     if sets.ist_set_artikel(a):
-        raise Abgelehnt(f"{inv} ist selbst ein Hersteller-Set – ein Set wird kein Teil.", 409)
+        raise Abgelehnt(f"{inv} ist selbst ein Set – ein Set wird kein Teil.", 409)
     if a["lock_state"] != "frei":
         raise Abgelehnt(f"{inv} ist {_zustand_text(a)} – einsetzen lassen sich nur freie Artikel.", 409)
     offen = pruefung.offener_entwurf(a["id"])
@@ -626,7 +626,7 @@ def kandidaten_im_ordner(fid, produkt_roh, q_roh):
     q = suchtext(q_roh)
     p = katalog.produkt(pid)
     if p["is_set"]:
-        raise Abgelehnt("Ein Hersteller-Set ist kein Teil eines Sets.")
+        raise Abgelehnt("Ein Set ist kein Teil eines Sets.")
     bestand.ablageordner_pruefen(fid)
     return kandidaten(fid, pid, q)
 

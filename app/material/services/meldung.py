@@ -1,4 +1,4 @@
-"""Meldungen fehlender Produkte.
+"""Meldungen fehlender Produkte und Sets.
 
 Wer Artikel anlegt (Materialwart), findet nicht jedes Produkt im Katalog. Anlegen darf es nur die
 Material-Verwaltung – der Katalog gilt plattformweit und soll einheitlich bleiben. Der Materialwart meldet
@@ -8,6 +8,13 @@ Plattform-Verwaltung) und arbeitet die Meldungen ab:
 
   - einpflegen: ein neues Produkt aus der Meldung anlegen oder ein vorhandenes zuordnen,
   - ablehnen: nur mit Begründung.
+
+Seit dem 24.10.2026 (Entscheidung S8) meldet man auch ein Set – mehrere Teile, die zusammen geführt werden (Sitz- und
+Brustgurt, ein Kit): „is_set“ und die Teile, wie der Melder sie kennt, als Text („set_teile“, Pflicht bei einem Set,
+höchstens SET_TEILE_MAX Zeichen wie die Bemerkung). Hersteller und Modell dürfen dann die Kombination meinen. Die
+Material-Verwaltung legt daraus ein Set an (Set-Dialog mit Stückliste; Produkt und Stückliste entstehen wie bei „Set
+anlegen“ atomar mit dem Erledigen der Meldung) oder ordnet ein vorhandenes Produkt oder Set zu. Aus der Nacharbeit eines
+Bestandsimports gibt es nur Produktmeldungen – die Nacharbeit nimmt kein Set (bestandsimport.melden).
 
 Der Melder bekommt in beiden Fällen eine Mail, nach dem Einpflegen mit einem Link, der „Artikel
 anlegen“ mit Produkt und Ordner öffnet – kam die Meldung aus der Nacharbeit eines Bestandsimports, mit dem Link dorthin. Löschen kann eine Meldung nur, wer sie gemacht hat – offen oder
@@ -32,13 +39,15 @@ from ... import db
 from ...auth import _im_hintergrund, current_user
 from ...images import delete_photo_files
 from ..models import MELDUNGSSTATUS
-from . import Abgelehnt, akteur, kennung, text
+from . import Abgelehnt, akteur, kennung, text, wahr
 from . import bestand, journal, katalog, mailprotokoll, rechte
 
 MAX_LINKS = 5
 LINK_MAX = 500
 MAX_FOTOS = 3
 NOTIZ_MAX = 2000
+SET_TEILE_MAX = NOTIZ_MAX                 # „Teile des Sets“: Grenze wie die Bemerkung (ein Teil je Zeile)
+SET_TEILE_PFLICHT = "Bitte die Teile des Sets angeben – je Zeile ein Teil (Hersteller, Modell, Anzahl)."
 ANTWORT_MAX = 1000
 MAX_EMPFAENGER = 10
 FILTER = {"offen": ("offen",), "erledigt": ("eingepflegt", "abgelehnt"), "alle": tuple(MELDUNGSSTATUS)}
@@ -136,7 +145,12 @@ def _sichtbar(user=None):
 
 def anlegen(d, dateien=()):
     """Eine Meldung anlegen und die Material-Verwaltung benachrichtigen. Steht das Produkt schon im Katalog
-    (gleiche Dublette wie dort: Hersteller + Modell + Artikelnummer), gibt es nichts zu melden."""
+    (gleiche Dublette wie dort: Hersteller + Modell + Artikelnummer), gibt es nichts zu melden. „is_set“: gemeldet ist
+    ein Set – dann sind „set_teile“ Pflicht (mehrzeilig); an einer Produktmeldung bleiben sie leer."""
+    ist_set = wahr(d, "is_set", "Set")
+    set_teile = text(d, "set_teile", "Teile des Sets", SET_TEILE_MAX, einzeilig=False) if ist_set else ""
+    if ist_set and not set_teile:
+        raise Abgelehnt(SET_TEILE_PFLICHT)
     w = {
         "manufacturer": text(d, "manufacturer", "Hersteller", 120, pflicht=True),
         "model": text(d, "model", "Modell", 160, pflicht=True),
@@ -146,6 +160,8 @@ def anlegen(d, dateien=()):
         "folder_id": kennung(d.get("folder_id"), "Ordner", leer_erlaubt=True),
         "links": links_lesen(d.get("links")),
         "note": text(d, "note", "Bemerkung", NOTIZ_MAX, einzeilig=False),
+        "is_set": ist_set,
+        "set_teile": set_teile,
     }
     if w["category_id"]:
         katalog.kategorie(w["category_id"])
@@ -168,10 +184,15 @@ def anlegen(d, dateien=()):
         with db.transaction():
             mid = db.execute(
                 "INSERT INTO mat_product_request (manufacturer, model, article_no, dedupe_key, norm, category_id, folder_id, "
-                "links_json, photos_json, note, created_by, created_by_name, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "links_json, photos_json, note, is_set, set_teile, created_by, created_by_name, created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (w["manufacturer"], w["model"], w["article_no"], key, w["norm"], w["category_id"], w["folder_id"],
-                 json.dumps(w["links"], ensure_ascii=False), json.dumps(fotos), w["note"], uid, name, db.now()))
-            journal.eintragen("request", mid, "angelegt", None, dict(w, fotos=len(fotos)))
+                 json.dumps(w["links"], ensure_ascii=False), json.dumps(fotos), w["note"], int(ist_set), set_teile, uid,
+                 name, db.now()))
+            # Art und Teile nur an einer Set-Meldung – eine Produktmeldung steht wie bisher im Journal.
+            journal.eintragen("request", mid, "angelegt", None,
+                              dict({k: v for k, v in w.items() if ist_set or k not in ("is_set", "set_teile")},
+                                   fotos=len(fotos)))
     except BaseException:
         for f in fotos:
             delete_photo_files(katalog.medien_dir(), f)
@@ -210,7 +231,8 @@ def _gliederung(fid):
 def meldung_json(r):
     uid, _ = akteur()
     out = {f: r[f] for f in ("id", "manufacturer", "model", "article_no", "norm", "note", "status", "answer",
-                             "created_by_name", "created_at", "resolved_by_name", "resolved_at")}
+                             "created_by_name", "created_at", "resolved_by_name", "resolved_at", "set_teile")}
+    out["is_set"] = bool(r["is_set"])
     out["eigen"] = bool(uid and r["created_by"] == uid)
     k = db.query("SELECT id FROM mat_category WHERE id = ?", (r["category_id"],), one=True) if r["category_id"] else None
     out["kategorie"] = ({"id": k["id"], "pfad": " / ".join(x["name"] for x in katalog.kategorie_pfad(k["id"]))}
@@ -262,23 +284,27 @@ def _antwort(d, pflicht=False):
 
 
 def produkt_anlegen(mid, d):
-    """Ein neues Produkt aus der Meldung. Anlegen und Erledigen in einer Transaktion: Ist die Meldung
-    inzwischen erledigt, entsteht auch kein Produkt."""
+    """Ein neues Produkt oder Set aus der Meldung. Anlegen (beim Set mit Stückliste, stueckliste.anfrage_lesen – „is_set“
+    und „bestandteile“ wie POST /produkte) und Erledigen in einer Transaktion: Ist die Meldung inzwischen erledigt oder
+    scheitert eine Position, entsteht nichts."""
+    from . import stueckliste
     meldung(mid)
     antwort = _antwort(d)
+    bestandteile = stueckliste.anfrage_lesen(d)
     with db.transaction(sofort=True):
         # Erst die Meldung, dann das Produkt: Wer eine erledigte nachbearbeitet, soll das erfahren – nicht, dass
         # die Artikelnummer inzwischen vergeben ist.
         if meldung(mid)["status"] != "offen":
             raise Abgelehnt("Diese Meldung ist schon erledigt. Bitte neu laden.", 409)
-        pid = katalog.produkt_anlegen(d)
+        pid = katalog.produkt_anlegen(d, bestandteile=bestandteile)
         _abschliessen(mid, "eingepflegt", pid, antwort)
     _melder_benachrichtigen(meldung(mid))
     return pid
 
 
 def zuordnen(mid, d):
-    """Das Produkt steht schon im Katalog (anders geschrieben, mit anderer Artikelnummer …)."""
+    """Das Produkt oder Set steht schon im Katalog (anders geschrieben, mit anderer Artikelnummer …) – jedes
+    Katalogprodukt, auch ein Set."""
     meldung(mid)
     pid = kennung(d.get("product_id"), "Produkt")
     katalog.produkt(pid)
@@ -338,8 +364,8 @@ def _verwaltung_benachrichtigen(r):
     if not an:
         return
     m = meldung_json(r)
-    zeilen = [f"{r['created_by_name'] or 'Jemand'} hat ein Produkt gemeldet, das im Katalog fehlt:", "",
-              f"Hersteller:     {r['manufacturer']}", f"Modell:         {r['model']}"]
+    zeilen = [f"{r['created_by_name'] or 'Jemand'} hat ein {'Set' if r['is_set'] else 'Produkt'} gemeldet, das im Katalog "
+              "fehlt:", "", f"Hersteller:     {r['manufacturer']}", f"Modell:         {r['model']}"]
     if r["article_no"]:
         zeilen.append(f"Artikelnummer:  {r['article_no']}")
     if r["norm"]:
@@ -353,10 +379,12 @@ def _verwaltung_benachrichtigen(r):
         zeilen.append(f"Fotos:          {len(m['fotos'])} (in der Meldung)")
     if m["links"]:
         zeilen += ["", "Links:"] + [f"  {x}" for x in m["links"]]
+    if r["is_set"]:
+        zeilen += ["", "Teile des Sets:", r["set_teile"]]
     if r["note"]:
         zeilen += ["", "Bemerkung:", r["note"]]
     zeilen += ["", f"Einpflegen oder ablehnen: {cfg['BASE_URL'].rstrip('/')}/material/katalog/meldungen"]
-    betreff = f"{cfg['SITE_NAME']} – Produktmeldung: {r['manufacturer']} {r['model']}"
+    betreff = f"{cfg['SITE_NAME']} – {'Set-Meldung' if r['is_set'] else 'Produktmeldung'}: {r['manufacturer']} {r['model']}"
     HINTERGRUND(_senden, [(a, betreff, "\n".join(zeilen) + "\n", uid, "verwaltung") for a, uid in an], r["id"],
                 r["folder_id"])
 
@@ -376,7 +404,8 @@ def _melder_benachrichtigen(r):
         p = katalog.produkt(r["product_id"])
         name = katalog.produktname(p) + (f" ({p['article_no']})" if p["article_no"] else "")
         betreff = f"{cfg['SITE_NAME']} – „{gemeldet}“ ist im Katalog"
-        zeilen.append(f"das von dir gemeldete Produkt ist jetzt im Katalog: {name}.")
+        zeilen.append(f"das von dir gemeldete {'Set' if r['is_set'] else 'Produkt'} ist jetzt im Katalog: {name}"
+                      f"{' (Set)' if p['is_set'] and not r['is_set'] else ''}.")
         if r["answer"]:
             zeilen += ["", f"Anmerkung von {r['resolved_by_name']}:", r["answer"]]
         # Kam die Meldung aus der Nacharbeit eines Bestandsimports, führt der Link dorthin (Phase 2 · L3).
@@ -388,7 +417,7 @@ def _melder_benachrichtigen(r):
             ziel = f"{basis}/material/artikel/neu?produkt={r['product_id']}" + (f"&ordner={r['folder_id']}" if r["folder_id"] else "")
             zeilen += ["", f"Artikel anlegen: {ziel}"]
     else:
-        betreff = f"{cfg['SITE_NAME']} – Produktmeldung „{gemeldet}“ nicht aufgenommen"
+        betreff = f"{cfg['SITE_NAME']} – {'Set-Meldung' if r['is_set'] else 'Produktmeldung'} „{gemeldet}“ nicht aufgenommen"
         zeilen += [f"{r['resolved_by_name']} hat deine Meldung „{gemeldet}“ nicht in den Katalog aufgenommen.", "",
                    "Begründung:", r["answer"], "", f"Deine Meldungen: {basis}/material/katalog/meldungen"]
     HINTERGRUND(_senden, [(u["email"], betreff, "\n".join(zeilen) + "\n", u["id"], "melder")], r["id"],

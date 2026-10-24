@@ -274,7 +274,8 @@ def bis_schritt(version, nachruesten=True):
     Schemaversion und der CHECK der Prüfpunktarten bleiben auf dem alten Stand, Schritt 20 findet die Spalten vor und
     lässt sie (Spalten nur, wenn sie fehlen). Seit Schritt 21 ebenso dessen Spalten (models.SPALTEN_21: is_set,
     parent_item_id, lock_cause, set_lock_origin, set_pruefen, set_lauf_id) und Tabellen (models.TABELLEN_21, ohne
-    Trigger) – die Dienste lesen und schreiben sie (Kritik S26). nachruesten=False lässt den Stand ganz, wie er war (für
+    Trigger) – die Dienste lesen und schreiben sie (Kritik S26); seit Schritt 22 dessen Spalten (models.SPALTEN_22).
+    nachruesten=False lässt den Stand ganz, wie er war (für
     Tests, die genau das prüfen)."""
     def lauf(f, *a):
         from app import db
@@ -283,7 +284,7 @@ def bis_schritt(version, nachruesten=True):
         models.SCHEMA_VERSION = version
         # Die Startschritte der Module stehen in db.SCHEMA_MODULE (init_db ruft sie der Reihe nach mit der Verbindung):
         # hinten angehängt, läuft das Nachrüsten nach der Modulmigration jedes Starts in f.
-        mit = nachruesten and version < 21
+        mit = nachruesten and version < 22
         if mit:
             from app.material import schema_anmelden
             schema_anmelden()                    # die Schritte des Moduls zuerst – auch vor der ersten App im Prozess
@@ -298,8 +299,9 @@ def bis_schritt(version, nachruesten=True):
 
 
 def spalten_20_nachruesten(conn):
-    """Nur die Spalten aus Schritt 20 und 21 und die Tabellen aus Schritt 21 (ohne Trigger) an eine Datenbank älteren
-    Stands (siehe bis_schritt) – mit Commit."""
+    """Nur die Spalten aus Schritt 20, 21 und 22 und die Tabellen aus Schritt 21 (ohne Trigger) an eine Datenbank älteren
+    Stands (siehe bis_schritt) – mit Commit. Schritt 22: is_set und set_teile an mat_product_request (die Meldung schreibt
+    sie)."""
     from app.material import models
     version = int((conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone() or [0])[0])
     if version < 20:
@@ -308,6 +310,8 @@ def spalten_20_nachruesten(conn):
         for befehl in models.TABELLEN_21:
             conn.execute(befehl)
         models.spalten_nachruesten(conn, models.SPALTEN_21)
+    if version < 22:
+        models.spalten_nachruesten(conn, models.SPALTEN_22)
     conn.commit()
 
 

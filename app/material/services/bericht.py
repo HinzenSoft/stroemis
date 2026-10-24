@@ -19,7 +19,7 @@ Zählregeln (Kritiken S1–S24, A1–A19 zum Entwurf):
     und zählt nur im Aussonderungsblock); berichtigte Originale rundenunabhängig ausgeschlossen (OHNE_BERICHTIGTE);
     Entwürfe nur als Zahl.
   - Sperren aus dem Journal: nur der Übergang frei → gesperrt/verloren (before/after_json), unabhängig von der Aktion –
-    eine Meldung am schon gesperrten Artikel zählt nicht. Hersteller-Sets (Schritt 21, Entscheidung A13/S13): Eine
+    eine Meldung am schon gesperrten Artikel zählt nicht. Sets (Schritt 21, Entscheidung A13/S13): Eine
     Set-Sperre zählt einmal – an dem Artikel mit eigenem Grund bzw. am Set-Artikel, wenn das Set aus eigenem Anlass sperrt
     (unvollständig, Teil getauscht – Art „set“); die mitgesperrten Zeilen („set_gesperrt“) zählen nicht, ebenso wenig das
     Mitfreigeben („set_frei“) – frei gibt die Set-Prüfung am Set-Artikel („freigeprueft“). Ein Teil, das beim Aussondern
@@ -56,7 +56,7 @@ KAPPUNG_RUECKRUF = 50               # so viele betroffene Artikel je Rückruf im
 # Die Sperrarten, wie sie aus dem Nachher eines Journaleintrags folgen (Reihenfolge der Ausgabe).
 SPERRARTEN = (("pruefung", "aus Prüfung (instandsetzen)"), ("mangel", "aus Mangelmeldung"), ("verlust", "Verlust"),
               ("ohne_pruefung", "Sperre durch Prüfer ohne Prüfung"),
-              ("set", "Set unvollständig, Teil getauscht oder eingesetzt oder Bestandteil ersetzt"),
+              ("set", "Set unvollständig, Teil getauscht oder eingesetzt, Bestandteil ersetzt oder Stückliste übertragen"),
               ("set_entnommen", "aus ausgesondertem Set entnommen"))
 # Die Grundarten einer Aussonderung aus dem Präfix des Grundtexts (pruefung._wirkung bzw. AUSSONDERUNGSGRUENDE).
 GRUNDARTEN = (("pruefung", "aus Prüfung (Ergebnis „aussondern“)"),) + tuple(AUSSONDERUNGSGRUENDE.items()) + (

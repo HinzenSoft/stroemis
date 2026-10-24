@@ -262,7 +262,7 @@ def durchgang_json(r, voll=False, pruefer_id=None):
                          "eigen": bool(pruefer_id) and x["entwurf_pruefer_id"] == pruefer_id}
                         if x["entwurf_id"] else None)
         a["ausnahme"] = ausnahme
-        # Hersteller-Sets (Schritt 21): Die Oberfläche gruppiert Teile („teil_von“) unter der Set-Zeile; an der Set-Zeile
+        # Sets (Schritt 21): Die Oberfläche gruppiert Teile („teil_von“) unter der Set-Zeile; an der Set-Zeile
         # die offene Set-Prüfung („Set prüfen“ von hier setzt den Durchgang) oder None.
         a["set_lauf"] = setlauf.kurz(setlauf.offener(roh["id"])) if a["ist_set"] else None
         liste.append(a)

@@ -29,7 +29,7 @@ Anhängen, demselben Prüftag und Verweis auf das Original, das unverändert ble
   - Gemeldete Mängel (Phase 3 · L1, mangel.py): „einsatzbereit“ geht bei offenen Meldungen nur, wenn der Prüfer jede
     einzeln als geprüft abgehakt hat (maengel_gesehen) – dann erledigt die Freiprüfung sie; eine Berichtigung gibt bei
     offener Meldung nie frei. Die Aussonderung erledigt sie ebenso, „instandsetzen“ nicht.
-  - Hersteller-Sets (Phase 4 · L2, Paket K2): An Set-Artikel und Teil wirkt jedes Ergebnis über das Set
+  - Sets (Phase 4 · L2, Paket K2): An Set-Artikel und Teil wirkt jedes Ergebnis über das Set
     (_wirkung_im_set): „instandsetzen“ sperrt das ganze Set (sets.sperren), „einsatzbereit“ im gesperrten Set nimmt nur den
     eigenen Grund („eigen“ → „set“), „aussondern“ an einem Teil entnimmt und sondert es aus, am Set-Artikel ist es „Set
     aussondern“. Den Set-Artikel prüft man nur in einer Set-Prüfung (setlauf.py) – erst ihr Festschreiben kann das Set
@@ -249,7 +249,7 @@ def pruefung_json(p, pruefer_id=None):
     # Fassung ist nicht die, nach der geprüft wurde). Festgehalten wird sie nirgends.
     from . import wikiverweis
     out["anleitung"] = wikiverweis.anleitung(p["form_id"]) if out["entwurf"] else None
-    # Hersteller-Sets (K2): Set-Prüfung, zu der die Prüfung gehört, am Entwurf des Set-Artikels der Stand des Laufs
+    # Sets (K2): Set-Prüfung, zu der die Prüfung gehört, am Entwurf des Set-Artikels der Stand des Laufs
     # (Umfang, Fortschritt, Freigabe-Gründe, Vorbelegung „verbleib“), an der abgeschlossenen die Teiletabelle.
     from . import setlauf
     out.update(setlauf.pruefung_teil(p, item))
@@ -332,7 +332,7 @@ def starten(iid, pruefer, art=None, durchgang_id=None):
                 return offen["id"], False
             raise Abgelehnt(reserviert_text(offen) + " Eine liegen gebliebene Reservierung hebt der Materialwart auf.",
                             409)
-        # Hersteller-Sets (K2): Den Set-Artikel prüft man nur in einer Set-Prüfung; Prüfungen an Set und Teilen zählen,
+        # Sets (K2): Den Set-Artikel prüft man nur in einer Set-Prüfung; Prüfungen an Set und Teilen zählen,
         # solange eine offen ist, in ihr.
         from . import sets, setlauf
         lauf = setlauf.offener(sets.set_kennung(item)) if sets.im_set(item) else None

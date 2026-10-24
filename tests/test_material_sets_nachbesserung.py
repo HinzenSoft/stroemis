@@ -1,4 +1,4 @@
-"""Hersteller-Sets, Nachbesserung nach den drei Prüfungen (Phase 4 · Lieferung 2):  python tests/test_material_sets_nachbesserung.py
+"""Sets, Nachbesserung nach den drei Prüfungen (Phase 4 · Lieferung 2):  python tests/test_material_sets_nachbesserung.py
 oder  pytest
 
 Der Sperrgrund folgt dem Set (Ablauf M1: kein Text eines entnommenen Teils im Aussonderungsprotokoll, in „Meine PSA“

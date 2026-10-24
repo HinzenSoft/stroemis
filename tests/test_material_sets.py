@@ -1,6 +1,6 @@
-"""Hersteller-Sets mit Komponenten (Phase 4 · Lieferung 2, Paket K1):  python tests/test_material_sets.py  oder  pytest
+"""Sets mit Komponenten (Phase 4 · Lieferung 2, Paket K1):  python tests/test_material_sets.py  oder  pytest
 
-Schema-Schritt 21 (frisch, 20 → 21, zweiter Lauf, Fremdschlüssel, Trigger), Katalog (Stückliste, „Hersteller-Set“,
+Schema-Schritt 21 (frisch, 20 → 21, zweiter Lauf, Fremdschlüssel, Trigger), Katalog (Stückliste, „Set“,
 Grenzen, Löschen, Variante, Katalogdatei Format 2 hin und zurück), Bestand (Set anlegen, Set-Block, Listen nur mit der
 Set-Zeile, Set-Status gegen status.status(), Weichen der Einzelwege als Tabelle „Route × {Set-Artikel, Teil, freier
 Artikel}“, set_stimmig mit Teil-Kennung < Set-Kennung bei Ordner verschieben, Artikel verschieben, Ordner löschen und
@@ -37,16 +37,15 @@ def set_katalog(mv, ids):
     rolle = ok(mv.post("/api/material/produkte", json={
         "category_id": ids["karabiner"], "manufacturer": "Testwerk", "model": "Rolle Gamma", "article_no": "RG-1",
         "material_kind": "metall_hardware", "interval_months": 12}), 201)["produkt"]["id"]
-    r = ok(mv.post("/api/material/produkte", json={
+    # Set anlegen (Wunsch vom 24.10.2026): Produkt und Stückliste in einer Anfrage.
+    p = ok(mv.post("/api/material/produkte", json={
         "category_id": ids["gurte"], "manufacturer": "Testwerk", "model": "Testset Alpha", "article_no": "TS-1",
-        "material_kind": "textil", "lifetime_years": 10, "is_set": True}), 201)
-    set_p = r["produkt"]["id"]
-    assert r["produkt"]["is_set"] is True and r["produkt"]["bestandteile"] == [], r["produkt"]
-    p = ok(mv.put(f"/api/material/produkte/{set_p}/bestandteile", json={"bestandteile": [
-        {"produkt_id": ids["hms"], "bezeichnung": "Verbindungselement", "anzahl": 2, "einzeln": True},
-        {"produkt_id": rolle, "anzahl": 1, "einzeln": True, "austausch": "ja"},
-        {"bezeichnung": "Tasche", "anzahl": 1, "einzeln": False}]}))["produkt"]
-    return set_p, rolle, p["bestandteile"]
+        "material_kind": "textil", "lifetime_years": 10, "is_set": True, "bestandteile": [
+            {"produkt_id": ids["hms"], "bezeichnung": "Verbindungselement", "anzahl": 2, "einzeln": True},
+            {"produkt_id": rolle, "anzahl": 1, "einzeln": True, "austausch": "ja"},
+            {"bezeichnung": "Tasche", "anzahl": 1, "einzeln": False}]}), 201)["produkt"]
+    assert p["is_set"] is True and len(p["bestandteile"]) == 3, p
+    return p["id"], rolle, p["bestandteile"]
 
 
 def teile_fuer(stueckliste, serien=()):
@@ -171,8 +170,7 @@ def test_migration_21():
         conn.close()
 
         app = make_app(tmp)
-        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion() \
-            == "21"
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
         conn = roh(app)
         try:
             # Die alten Spalten unverändert, die neuen mit ihren Vorgaben.
@@ -211,7 +209,7 @@ def test_migration_21():
 def test_trigger_21():
     """Die Einzeilen-Trigger aus Schritt 21, direkt in SQLite (mit den Pragmas der App): Teil nur über NULL, nur an einem
     Set-Artikel, nur mit Produkt laut Kopie der Stückliste, kein Set als Teil, nicht ausgesondert; Produkt fest an Teil und
-    Set und von/zu einem Set-Produkt; „Hersteller-Set“ nur ohne Artikel und nicht für Bestandteile; Stückliste nur an Sets
+    Set und von/zu einem Set-Produkt; „Set“ nur ohne Artikel und nicht für Bestandteile; Stückliste nur an Sets
     und ohne Sets; Kopie unveränderlich (auch gegen REPLACE); Set-Prüflauf; Prüfungen im Lauf; Teiletabelle des
     Set-Protokolls wie mat_inspection_result."""
     with ohne_post(), tempfile.TemporaryDirectory() as tmp:
@@ -246,13 +244,13 @@ def test_trigger_21():
             abgewiesen(conn, "UPDATE mat_item SET product_id = ? WHERE id = ?", (t.rolle, k1), "Produkt")
             abgewiesen(conn, "UPDATE mat_item SET product_id = ? WHERE id = ?", (t.ids["gurt"], s), "Produkt")
             abgewiesen(conn, "UPDATE mat_item SET product_id = ? WHERE id = ?", (t.set_p, f), "Produkt")
-            # „Hersteller-Set“: nicht mit Artikeln, nicht für einen Bestandteil, nicht aus bei vorhandener Stückliste.
-            abgewiesen(conn, "UPDATE mat_product SET is_set = 0 WHERE id = ?", (t.set_p,), "Hersteller-Set")
+            # „Set“: nicht mit Artikeln, nicht für einen Bestandteil, nicht aus bei vorhandener Stückliste.
+            abgewiesen(conn, "UPDATE mat_product SET is_set = 0 WHERE id = ?", (t.set_p,), "Set")
             leer = conn.execute("INSERT INTO mat_product (category_id, manufacturer, model, dedupe_key, material_kind, "
                                 "interval_months, created_at, updated_at) VALUES (?, 'Testwerk', 'Leer', 'testwerk|leer|', "
                                 "'metall_hardware', 12, 'x', 'x')", (t.ids["karabiner"],)).lastrowid
             conn.commit()
-            abgewiesen(conn, "UPDATE mat_product SET is_set = 1 WHERE id = ?", (t.ids["hms"],), "Hersteller-Set")
+            abgewiesen(conn, "UPDATE mat_product SET is_set = 1 WHERE id = ?", (t.ids["hms"],), "Set")
             conn.execute("UPDATE mat_product SET is_set = 1 WHERE id = ?", (leer,))
             abgewiesen(conn, "INSERT INTO mat_product_component (set_product_id, component_product_id, bezeichnung, anzahl, "
                        "einzeln) VALUES (?, ?, 'Set im Set', 1, 1)", (t.set_p, leer), "kein Set")
@@ -269,14 +267,12 @@ def test_trigger_21():
                        "VALUES (?, 'Austausch', 1, 0, 'vielleicht')", (t.set_p,))
             # Bestandteil-Produkt löschen: RESTRICT (der Dienst antwortet vorher 409).
             abgewiesen(conn, "DELETE FROM mat_product WHERE id = ?", (t.rolle,))
-            # Kopie der Stückliste: nie ändern, nie löschen, nicht nachschieben, nicht per REPLACE.
+            # Kopie der Stückliste: nie ändern, nicht per REPLACE (als Ganzes ersetzen seit Schritt 22 – siehe
+            # test_material_sets_uebertragen.test_schritt_22).
             slot = conn.execute("SELECT * FROM mat_item_set_slot WHERE set_item_id = ? ORDER BY id LIMIT 1", (s,)).fetchone()
             abgewiesen(conn, "UPDATE mat_item_set_slot SET anzahl = 3 WHERE id = ?", (slot[0],), "unveränderlich")
-            abgewiesen(conn, "DELETE FROM mat_item_set_slot WHERE id = ?", (slot[0],), "unveränderlich")
-            abgewiesen(conn, "INSERT INTO mat_item_set_slot (set_item_id, position, bezeichnung, anzahl, einzeln, austausch) "
-                       "VALUES (?, 9, 'Nachschub', 1, 0, 'ja')", (s,), "unveränderlich")
             abgewiesen(conn, "INSERT OR REPLACE INTO mat_item_set_slot (id, set_item_id, position, bezeichnung, anzahl, "
-                       "einzeln, austausch) VALUES (?, ?, 0, 'Ersatz', 1, 0, 'ja')", (slot[0], s), "unveränderlich")
+                       "einzeln, austausch) VALUES (?, ?, 0, 'Ersatz', 1, 0, 'ja')", (slot[0], s), "als Ganzes")
             # Set-Prüflauf: nur an einem Set-Artikel, nur offen, höchstens einer offen je Set.
             abgewiesen(conn, "INSERT INTO mat_set_lauf (set_item_id, opened_at) VALUES (?, 'x')", (f,), "Set-Prüflauf")
             abgewiesen(conn, "INSERT INTO mat_set_lauf (set_item_id, opened_at, state, closed_at) VALUES (?, 'x', "
@@ -320,7 +316,7 @@ def test_trigger_21():
 
 def test_katalog_stueckliste():
     """Stückliste über die Schnittstelle: nur Katalog (403 sonst), nur an Sets (409), Regeln und Grenzen (400), DEMO-
-    Bestandteil in echtem Set, Journal „stueckliste“, „Bestandteil von“, Löschen eines Bestandteils 409, „Hersteller-Set“
+    Bestandteil in echtem Set, Journal „stueckliste“, „Bestandteil von“, Löschen eines Bestandteils 409, „Set“
     umschalten (mit Artikeln 409, Bestandteil 409, ausschalten nimmt die Stückliste mit), Variante mit Stückliste."""
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
@@ -334,7 +330,7 @@ def test_katalog_stueckliste():
         assert k["wart"].put(url, json={"bestandteile": []}).status_code == 403
         assert k["fuehrung"].put(url, json={"bestandteile": []}).status_code == 403
         r = mv.put(f"/api/material/produkte/{ids['hms']}/bestandteile", json={"bestandteile": []})
-        assert r.status_code == 409 and "Hersteller-Set" in r.json["error"], r.get_json()
+        assert r.status_code == 409 and "Set" in r.json["error"], r.get_json()
 
         def falsch(eintraege, text, code=400):
             r = mv.put(url, json={"bestandteile": eintraege})
@@ -371,43 +367,63 @@ def test_katalog_stueckliste():
         assert len(journal) == 1 and '"bezeichnung": "Tasche"' in journal[0]["after_json"], journal
         # Lesen: is_set in Listen, voll mit Stückliste, „Bestandteil von“, Grenzen; löschbar nur, wer nirgends Bestandteil ist.
         p = ok(k["fuehrung"].get(f"/api/material/produkte/{set_p}"))["produkt"]
-        assert p["is_set"] and len(p["bestandteile"]) == 3 and p["set_umschaltbar"] is True, p
+        assert p["is_set"] and len(p["bestandteile"]) == 3 and "set_umschaltbar" not in p, p
+        # sets_aelter nur für die Material-Verwaltung (S7).
+        assert "sets_aelter" not in p and ok(mv.get(f"/api/material/produkte/{set_p}"))["produkt"]["sets_aelter"] == 0
         assert p["stueckliste_grenzen"] == {"positionen": 30, "anzahl": 20, "teile": 50, "bezeichnung": 120}
         h = ok(k["fuehrung"].get(f"/api/material/produkte/{ids['hms']}"))["produkt"]
         assert h["bestandteil_von"] == [{"id": set_p, "name": "Testwerk Testset Alpha"}] and h["loeschbar"] is False, h
-        assert h["set_umschaltbar"] is False and "Stückliste von" in h["set_umschalt_grund"], h
+        assert "sets_aelter" not in ok(mv.get(f"/api/material/produkte/{ids['hms']}"))["produkt"]
         assert {x["id"]: x["is_set"] for x in ok(mv.get("/api/material/produkte?q=Testwerk"))["produkte"]}[set_p] is True
         r = mv.delete(f"/api/material/produkte/{rolle}", headers=H)
         assert r.status_code == 409 and "Bestandteil von „Testwerk Testset Alpha“" in r.json["error"], r.get_json()
-        # Umschalten: ein Bestandteil wird kein Set; ausschalten nimmt die Stückliste mit (Journal).
+        # Umstellen Produkt ↔ Set nur über die Katalogdatei (Entscheidung S2): ein abweichendes is_set 409, gleiches 200.
         r = mv.put(f"/api/material/produkte/{rolle}", json={"is_set": True})
-        assert r.status_code == 409 and "Bestandteil ist selbst kein Set" in r.json["error"], r.get_json()
-        # Variante mit Stückliste (Häkchen wie bei Dokumenten): die Stückliste kommt mit, die Variante ist ein Set.
+        assert r.status_code == 409 and "legt das Anlegen fest" in r.json["error"], r.get_json()
+        r = mv.put(f"/api/material/produkte/{set_p}", json={"is_set": False})
+        assert r.status_code == 409 and "Katalogdatei" in r.json["error"], r.get_json()
+        assert ok(mv.put(f"/api/material/produkte/{set_p}", json={"is_set": True}))["produkt"]["is_set"]
+        assert ok(mv.put(f"/api/material/produkte/{rolle}", json={"is_set": False}))["produkt"]["is_set"] is False
+        # Variante folgt dem Vorbild: die eines Sets ist ein Set – ohne „bestandteile“ mit der Stückliste des Vorbilds
+        # („stueckliste“ zählt nicht mehr) …
         r = ok(mv.post(f"/api/material/produkte/{set_p}/variante", json={
             "category_id": ids["gurte"], "manufacturer": "Testwerk", "model": "Testset Alpha | Pro", "article_no": "TS-2",
-            "material_kind": "textil", "lifetime_years": 10, "stueckliste": True}), 201)["produkt"]
+            "material_kind": "textil", "lifetime_years": 10, "stueckliste": False}), 201)["produkt"]
         assert r["is_set"] and [(b["bezeichnung"], b["anzahl"]) for b in r["bestandteile"]] == [
             ("Verbindungselement", 2), ("Testwerk Rolle Gamma", 1), ("Tasche", 1)], r
-        r = mv.post(f"/api/material/produkte/{ids['hms']}/variante", json={
-            "category_id": ids["karabiner"], "manufacturer": "Testwerk", "model": "HMS Beta | X", "article_no": "HB-8",
-            "material_kind": "metall_hardware", "interval_months": 12, "stueckliste": True})
-        assert r.status_code == 400 and "Hersteller-Set" in r.json["error"], r.get_json()
+        # … mit „bestandteile“ mit dieser Liste (Regeln wie beim Anlegen, S3) …
+        r = mv.post(f"/api/material/produkte/{set_p}/variante", json={
+            "category_id": ids["gurte"], "manufacturer": "Testwerk", "model": "Testset Alpha | Ohne", "article_no": "TS-3",
+            "material_kind": "textil", "lifetime_years": 10, "bestandteile": [{"bezeichnung": "Tasche"}]})
+        assert r.status_code == 400 and "einzeln geführtes Teil" in r.json["error"], r.get_json()
+        assert not zeilen(app, "SELECT 1 FROM mat_product WHERE article_no = 'TS-3'")
         variante = ok(mv.post(f"/api/material/produkte/{set_p}/variante", json={
             "category_id": ids["gurte"], "manufacturer": "Testwerk", "model": "Testset Alpha | Ohne", "article_no": "TS-3",
-            "material_kind": "textil", "lifetime_years": 10}), 201)["produkt"]
-        assert not variante["is_set"] and variante["bestandteile"] == []
-        p = ok(mv.put(f"/api/material/produkte/{set_p}", json={"is_set": False}))["produkt"]
-        assert not p["is_set"] and p["bestandteile"] == [] and \
-            not zeilen(app, "SELECT 1 FROM mat_product_component WHERE set_product_id = ?", (set_p,))
-        assert ok(mv.put(f"/api/material/produkte/{set_p}", json={"is_set": True}))["produkt"]["is_set"]
-        # Mit Artikeln lässt sich nichts mehr umschalten (409) – an einem Set-Artikel nicht und an einem einfachen auch nicht.
+            "material_kind": "textil", "lifetime_years": 10, "is_set": False,
+            "bestandteile": [{"produkt_id": rolle, "einzeln": True, "anzahl": 2}]}), 201)["produkt"]
+        assert variante["is_set"] and [(b["bezeichnung"], b["anzahl"]) for b in variante["bestandteile"]] == [
+            ("Testwerk Rolle Gamma", 2)], variante
+        # … die eines Produkts ein Produkt (eine Stückliste dazu 400).
+        r = mv.post(f"/api/material/produkte/{ids['hms']}/variante", json={
+            "category_id": ids["karabiner"], "manufacturer": "Testwerk", "model": "HMS Beta | X", "article_no": "HB-8",
+            "material_kind": "metall_hardware", "interval_months": 12, "bestandteile": [{"produkt_id": rolle, "einzeln": True}]})
+        assert r.status_code == 400 and "Variante eines Sets" in r.json["error"], r.get_json()
+        assert not ok(mv.post(f"/api/material/produkte/{ids['hms']}/variante", json={
+            "category_id": ids["karabiner"], "manufacturer": "Testwerk", "model": "HMS Beta | X", "article_no": "HB-8",
+            "material_kind": "metall_hardware", "interval_months": 12, "is_set": True}), 201)["produkt"]["is_set"]
+        # Mit Artikeln lässt sich nichts umstellen (409) – an einem einfachen Produkt nicht.
         gid, _ = gliederung(k["adm"])
         lager = ordner_neu(k["wart"], gid, "Lager")
         neuer_artikel(k["wart"], rolle, lager, serial_no="RG-ART-1")
         r = mv.put(f"/api/material/produkte/{rolle}", json={"is_set": True})
         assert r.status_code == 409 and "Artikel" in r.json["error"], r.get_json()
+        # Die Stückliste eines Sets ersetzen: nie ohne einzeln geführtes Teil (S3), auch nicht leer.
+        falsch([{"bezeichnung": "Tasche"}], "mindestens ein einzeln geführtes Teil")
+        falsch([], "mindestens ein einzeln geführtes Teil")
         # Produkt löschen: ein Set ohne Artikel geht samt Stückliste (Journal nennt die Zahl).
-        ok(mv.put(url, json={"bestandteile": [{"bezeichnung": "Tasche"}]}))
+        ok(mv.put(url, json={"bestandteile": [{"produkt_id": ids["hms"], "einzeln": True}]}))
+        for v in zeilen(app, "SELECT id FROM mat_product WHERE article_no IN ('TS-2', 'TS-3')"):
+            ok(mv.delete(f"/api/material/produkte/{v['id']}", headers=H))
         ok(mv.delete(f"/api/material/produkte/{set_p}", headers=H))
         assert not zeilen(app, "SELECT 1 FROM mat_product_component WHERE set_product_id = ?", (set_p,))
         assert '"bestandteile": 1' in zeilen(app, "SELECT before_json FROM mat_audit WHERE entity = 'product' "
@@ -473,7 +489,7 @@ def test_format_2():
 
         hms = produkte["HMS Beta"]
         fehler([dict(hms, set=True)], "Stückliste von")             # Bestandteil wird kein Set
-        fehler([dict(s, set=False)], "nur ein Hersteller-Set hat Bestandteile")
+        fehler([dict(s, set=False)], "nur ein Set hat Bestandteile")
         fehler([dict(hms, bestandteile=[{"bezeichnung": "Tasche"}])], "„set“: true fehlt")
         fehler([dict(s, bestandteile=[{"produkt": {"hersteller": "Nirgendwerk", "modell": "Phantom"}, "einzeln": True}])],
                "„Nirgendwerk | Phantom | –“ (Hersteller | Modell | Artikelnummer) gibt es weder im Katalog noch in der Datei")
@@ -551,10 +567,15 @@ def test_set_anlegen():
         falsch({"teile": [dict(x, serial_no="STR-000123") if n == 0 else x for n, x in enumerate(teile_fuer(liste))]},
                "Teil „Verbindungselement“ 1 von 2 (Seriennummer „STR-000123“): Seriennummern der Form")
         r = w.post("/api/material/artikel", json={"product_id": t.ids["hms"], "folder_id": t.lager_a, "teile": []})
-        assert r.status_code == 400 and "nur beim Anlegen eines Hersteller-Sets" in r.json["error"], r.get_json()
+        assert r.status_code == 400 and "nur beim Anlegen eines Sets" in r.json["error"], r.get_json()
+        # Ein Set ohne Stückliste gibt es nur noch aus der Zeit vor „Set anlegen“ (Altbestand – direkt in SQLite).
         leer = ok(t.k["katalog"].post("/api/material/produkte", json={
             "category_id": t.ids["gurte"], "manufacturer": "Testwerk", "model": "Leerset", "article_no": "LS-1",
-            "material_kind": "textil", "lifetime_years": 10, "is_set": True}), 201)["produkt"]["id"]
+            "material_kind": "textil", "lifetime_years": 10}), 201)["produkt"]["id"]
+        conn = roh(app)
+        conn.execute("UPDATE mat_product SET is_set = 1 WHERE id = ?", (leer,))
+        conn.commit()
+        conn.close()
         falsch({"product_id": leer, "teile": []}, "keine Stückliste", 409)
         # Ein „product_id“ im Teil zählt nicht: Das Produkt kommt aus der Stückliste.
         teile = [dict(x, product_id=t.ids["gurt"]) for x in teile_fuer(liste, ("SET-N-K1", "", "SET-N-R1"))]
@@ -586,9 +607,10 @@ def test_set_anlegen():
                                  "status": "neu", "status_text": "neu", "bestandteil": "Verbindungselement",
                                  "teile_anzahl": 3, "austausch": "nicht_belegt"}, x["teil_von"]
         assert a["darf_loeschen"] is True
-        # Kopie der Stückliste: eine spätere Änderung färbt das Set nicht um.
-        ok(t.k["katalog"].put(f"/api/material/produkte/{set_p}/bestandteile", json={"bestandteile": [
-            {"bezeichnung": "Tasche"}]}))
+        # Kopie der Stückliste: eine spätere Änderung färbt das Set nicht um (erst „Stückliste übertragen“).
+        r = ok(t.k["katalog"].put(f"/api/material/produkte/{set_p}/bestandteile", json={"bestandteile": [
+            {"produkt_id": rolle, "einzeln": True}, {"bezeichnung": "Tasche"}]}))
+        assert r["produkt"]["sets_aelter"] == 1, r["produkt"]["sets_aelter"]
         a2 = ok(w.get(f"/api/material/artikel/{a['id']}"))["artikel"]
         assert len(a2["set"]["bestandteile"]) == 3 and a2["set"]["vollstaendig"]
         assert zeilen(app, "SELECT COUNT(*) AS n FROM mat_item_set_slot WHERE set_item_id = ?", (a["id"],))[0]["n"] == 3

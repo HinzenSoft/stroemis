@@ -233,6 +233,8 @@ AUSNAHMEN_LESEN = {
     "material.bestandsimport": 403,                # Bestandsimport nur, wer den Zielordner verwaltet (Phase 2 · L3)
     "material.nacharbeit_csv": 403,                # ebenso die Nacharbeit als CSV
     "material.meine_psa_artikel": 404,             # „Meine PSA“: der Führungskraft ist nichts zugeordnet (Phase 3 · L1)
+    # Vorschau „Stückliste übertragen“ nur für die Material-Verwaltung (24.10.2026, S7).
+    "material_api.stueckliste_uebertragen_vorschau": 403,
 }
 # Werkzeuge der Katalogpflege (Katalogaustausch, Lieferung 4) sind nur für die Material-Verwaltung; den Katalog selbst
 # liest die Führungskraft über /kategorien und /produkte. Ebenso der Probelauf der Erinnerungsmails (Phase 2 · L2) und

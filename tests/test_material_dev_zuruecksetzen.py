@@ -5,7 +5,7 @@ Sperren: ohne dev-Kennung (STROEMIS_NAME auf „-dev“), mit BASE_URL der Produ
 --ja-alles-loeschen lehnt der Befehl mit 2 ab und ändert nichts; --trocken zeigt nur. Der volle Lauf auf einem Bestand
 mit Katalog samt Bild und Dokument, Gliederung, Artikeln, Durchgang, Bestandsimport und dem DEMO-Bestand aus
 scripts/material_demo.py (festgeschriebene Prüfungen mit Protokollen, Set, DEMO-Konten): danach sind alle mat_-Tabellen
-leer, Schema und mat_meta gleichen einer neuen Installation (Version 21), die Sicherung enthält die alte Datenbank Zeile
+leer, Schema und mat_meta gleichen einer neuen Installation (Version wie models.SCHEMA_VERSION), die Sicherung enthält die alte Datenbank Zeile
 für Zeile und die verschobenen Medien Datei für Datei, und Konten, Wiki, Spots, Prüfungen-Modul und Einstellungen sind
 byteidentisch – auch die Modulstufe 2 ohne Plattform-Verwaltung, die Migration Schritt 10 neu rechnen würde. Ein
 zweiter Lauf auf dem leeren Modul geht, die App startet danach, und material_demo.py --demo läuft wieder. Scheitert
@@ -28,6 +28,7 @@ from test_material import (H, PDF, gliederung, jpeg, katalog_grund, make_app, ne
                            pruef_formulare, umgebung)
 from test_material_import import csv_bytes, ok, uebernehmen  # noqa: E402
 from test_material_ueberblick import ordner_neu  # noqa: E402
+from test_material_trennung import endversion  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEV = {"STROEMIS_NAME": "stroemis-dev", "BASE_URL": "https://dev.strömis.de"}
@@ -207,7 +208,7 @@ def test_sperren():
                 aus, code = aufrufen(app, *schalter)
             assert code == 0 and aus.startswith("Probelauf – nichts geändert."), (code, aus)
             assert "mat_item " in aus and "Sicherung nach:" in aus and "sicherung-material-" in aus, aus
-            assert "media/material" in aus and "pdf" in aus and "Version 21" in aus and "Bleibt: Konten" in aus, aus
+            assert "media/material" in aus and "pdf" in aus and f"Version {endversion()}" in aus and "Bleibt: Konten" in aus, aus
         # BASE_URL der Anwendung (Verwaltung → Einstellungen) zeigt auf die Produktion, die Umgebung auf dev.
         with app.app_context():
             from app import db
@@ -249,7 +250,7 @@ def test_zuruecksetzen():
         with tempfile.TemporaryDirectory() as frisch:
             neu = make_app(frisch)
             assert schema_modul(db_pfad) == schema_modul(neu.config["DB_PATH"])
-        assert dict(nachher["modul"]["mat_meta"])["schema_version"] == "21"
+        assert dict(nachher["modul"]["mat_meta"])["schema_version"] == endversion()
         # Außerhalb des Moduls byteidentisch: jede Zeile, jedes Schema-Objekt, jede Datei (Konten, Wiki, Spots,
         # Prüfungen, Einstellungen – auch die Modulstufe 2 der Material-Verwaltung ohne Plattform-Verwaltung).
         assert nachher["aussen"] == vorher["aussen"]

@@ -1,4 +1,4 @@
-"""Hersteller-Sets, Teil 2 – Zahlen, CSV-Spalten und gebündelte Mails (Phase 4 · L2b, KERN Z):
+"""Sets, Teil 2 – Zahlen, CSV-Spalten und gebündelte Mails (Phase 4 · L2b, KERN Z):
 python tests/test_material_sets_zahlen.py  oder  pytest
 
 Zählsatz „N Artikel, darunter k Teile in m Sets“ in Baum, Übersicht und Jahresbericht (Web und PDF) aus derselben
@@ -275,12 +275,12 @@ def test_mails_grenze():
         t = set_aufbau(tmp)
         app, w = t.app, t.wart_a
         mv = t.k["katalog"]
-        gross = ok(mv.post("/api/material/produkte", json={
+        liste = ok(mv.post("/api/material/produkte", json={
             "category_id": t.ids["gurte"], "manufacturer": "Testwerk", "model": "Testset Gross", "article_no": "TS-G",
-            "material_kind": "textil", "lifetime_years": 10, "is_set": True}), 201)["produkt"]["id"]
-        liste = ok(mv.put(f"/api/material/produkte/{gross}/bestandteile", json={"bestandteile": [
-            {"produkt_id": t.ids["hms"], "bezeichnung": "Verbindungselement", "anzahl": 15, "einzeln": True},
-            {"produkt_id": t.rolle, "anzahl": 15, "einzeln": True, "austausch": "ja"}]}))
+            "material_kind": "textil", "lifetime_years": 10, "is_set": True, "bestandteile": [
+                {"produkt_id": t.ids["hms"], "bezeichnung": "Verbindungselement", "anzahl": 15, "einzeln": True},
+                {"produkt_id": t.rolle, "anzahl": 15, "einzeln": True, "austausch": "ja"}]}), 201)
+        gross = liste["produkt"]["id"]
         g = set_neu(w, gross, t.lager_a, liste["produkt"]["bestandteile"], "SET-G-1",
                     [f"SET-G-K{n}" for n in range(30)])["artikel"]
         gid = g["id"]
@@ -340,7 +340,7 @@ def test_mangel_mail_mitgesperrt():
             wart = [x for x in liste if x[0] == "wart@example.org"]
             assert len(wart) == 1, liste
             _, betreff, text = wart[0]
-            assert (f"Er war bisher nur mit dem Hersteller-Set {s_inv} gesperrt; jetzt ist er zusätzlich aus eigenem "
+            assert (f"Er war bisher nur mit dem Set {s_inv} gesperrt; jetzt ist er zusätzlich aus eigenem "
                     "Grund gesperrt (diese Meldung). Freigeben kann das Set nur ein Prüfer mit der Set-Prüfung.") in text, text
             assert "war schon gesperrt" not in text and f"Set {s_inv} mit allen Teilen gesperrt" in betreff, betreff
             assert zeilen(app, "SELECT lock_cause FROM mat_item WHERE id = ?", (k2,))[0]["lock_cause"] == "eigen"

@@ -1,4 +1,4 @@
-"""Routen für Hersteller-Sets (Phase 4 · Lieferung 2, Paket K2): Set prüfen und Teile entnehmen, tauschen, einsetzen.
+"""Routen für Sets (Phase 4 · Lieferung 2, Paket K2): Set prüfen und Teile entnehmen, tauschen, einsetzen.
 
 Alle hängen am Set-Artikel (<iid>); die Rechte prüft requires_folder an seiner Heimat – Teile haben dieselbe. Ein Teil
 nennt die Anfrage mit „teil_id“: Gehört es nicht zu diesem Set (fremd oder unbekannt), antwortet der Dienst 404 wie für

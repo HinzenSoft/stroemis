@@ -48,7 +48,7 @@ SPERRZUSTAND = {"frei": "frei", "gesperrt": "gesperrt", "verloren": "verloren", 
 # „Länge (m)“ (Schritt 20): die Artikellänge als „57,5“ (deutsches Komma, eine Nachkommastelle, ohne Einheit – so
 # rechnet Excel damit); sie steht bei den Artikeldaten hinter „Lebensende“, in der Reihenfolge des Steckbriefs. Der
 # Bestandsimport liest Spalten am Titel, nicht an der Stelle.
-# „Set (Inventarnummer)“, „Set-Produkt“, „Set-Status“ (Phase 4 · L2b, Entwurf D): an einem Teil sein Hersteller-Set, an
+# „Set (Inventarnummer)“, „Set-Produkt“, „Set-Status“ (Phase 4 · L2b, Entwurf D): an einem Teil sein Set, an
 # der Set-Zeile ihre eigenen Werte, sonst leer – hinter „Herkunftsordner“. Alle drei beginnen mit „Set“, dazu kennt der
 # Bestandsimport kein Synonym: Er ignoriert sie (und liest „Set (Inventarnummer)“ nie als „Bisherige Inventarnummer“).
 ARTIKEL_SPALTEN = (

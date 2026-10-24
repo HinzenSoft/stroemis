@@ -18,7 +18,8 @@ ohne Formularpunkt). Sein Festschreiben schließt den Lauf:
   - Wirkung (wirkung): „einsatzbereit“ an einem gesperrten Set gibt frei – in derselben BEGIN-IMMEDIATE-Transaktion
     frisch gelesen (freigabe_gruende): kein Artikel mit eigener Sperre, verloren, mit offener (oder wieder offener)
     Meldung, offenem Entwurf, Status „neu“, „überfällig“ oder „Lebensdauer erreicht“ (Status ohne die Sperre gerechnet);
-    das Set vollständig laut Kopie der Stückliste; jedes Teil im Prüfumfang im Lauf „einsatzbereit“, jedes übrige mit
+    das Set vollständig laut Kopie der Stückliste und kein Teil, das nicht mehr in ihr steht (nach „Stückliste
+    übertragen“); jedes Teil im Prüfumfang im Lauf „einsatzbereit“, jedes übrige mit
     einer gültigen Prüfung „einsatzbereit“; keine Ausnahme zählt als geprüft. Dann EIN UPDATE über Set und Teile
     (sets.freigeben), zurück in die Heimat des Sets. Sonst bleibt es gesperrt, mit Gründen. „instandsetzen“ sperrt das
     Set (Kaskade), „aussondern“ ist „Set aussondern“ mit der Wahl je Teil (setaustausch.set_aussondern).
@@ -49,7 +50,7 @@ GESAMT = {"einsatzbereit": "einsatzbereit", "gesperrt": "nicht einsatzbereit –
 NUR_IM_LAUF = ("Den Set-Artikel prüfst du über „Set prüfen“ – zusammen mit den Teilen in einer Set-Prüfung. Sie "
                "eröffnet, wer prüfen darf, an der Set-Seite.")
 KEIN_LAUF = "Für dieses Set läuft keine Set-Prüfung."
-NUR_SET = "„Set prüfen“ gibt es nur am Set-Artikel eines Hersteller-Sets."
+NUR_SET = "„Set prüfen“ gibt es nur an einem Set."
 VORHANDEN = {1: "vorhanden", 0: "fehlt", None: "nicht zutreffend"}
 FREI_TROTZ_ERGEBNIS = ("In dieser Set-Prüfung wurde {nummern} nicht mit „einsatzbereit“ geprüft, das Set ist aber frei – "
                        "„einsatzbereit“ lässt sich so nicht festschreiben. Erst {nummern} sperren („Sperren“ am Teil), "
@@ -173,9 +174,14 @@ def freigabe_gruende(s, teil_zeilen, lp, vorschau=False, lid=None):
             alt = letzte_gueltige(t["id"])
             if not alt or alt["result"] != "einsatzbereit":
                 gruende.append(f"{t['inventory_no']} hat keine gültige Prüfung mit „einsatzbereit“ – bitte jetzt prüfen.")
-    voll, fehlend = sets.vollstaendigkeit(sets.slots(s["id"]), teil_zeilen)
+    sz = sets.slots(s["id"])
+    voll, fehlend = sets.vollstaendigkeit(sz, teil_zeilen)
     if not voll:
         gruende.append("Das Set ist unvollständig: " + ", ".join(f"„{f['bezeichnung']}“ fehlt" for f in fehlend) + ".")
+    # Nach „Stückliste übertragen“ (Entscheidung S5): Was keiner Position mehr zugeteilt ist, nimmt erst der Verwalter
+    # heraus – vorher gibt keine Set-Prüfung frei.
+    for t in sets.ueberzaehlig(sz, teil_zeilen):
+        gruende.append(sets.NICHT_IN_STUECKLISTE_SATZ.format(inv=t["inventory_no"]))
     return gruende
 
 

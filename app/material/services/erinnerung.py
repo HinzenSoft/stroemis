@@ -31,7 +31,7 @@ bekommt ihre eigenen Artikel im Abschnitt „Deine PSA“ (Phase 3 · L1) – au
 (users.mat_psa_mails): 30 Tage vor der Prüfung, überfällig, Lebensende in 90 Tagen (kein 7-Tage-Schritt, PSA_STUFE),
 höchstens MAIL_PSA_MAX Zeilen, Links nur unter „Meine PSA“. Wer den Artikel zugleich verwaltet, bekommt ihn wie bisher
 unter ARTIKEL und nicht noch einmal unter „Deine PSA“.
-Hersteller-Sets (Phase 4 · L2b): Set-Artikel und Teile stehen in beiden Abschnitten unter einer Kopfzeile ihres Sets
+Sets (Phase 4 · L2b): Set-Artikel und Teile stehen in beiden Abschnitten unter einer Kopfzeile ihres Sets
 (mailtext); Betreff, Zahlen und Grenzen zählen ein Set einmal, in seiner dringendsten Stufe. Das Log bleibt je Artikel.
 Der Inhaber einer ablaufenden Freigabe bekommt sie zusätzlich selbst (Entscheidung vom 19.10.2026) – nach denselben
 Regeln und mit eigenem Vermerk im Log, aber nie als Verwalter, sondern im Abschnitt „Deine Freigaben“: Recht, Ende,
@@ -75,7 +75,7 @@ STARTZEIT = time(6, 0)                              # deutsche Zeit
 WARNZEIT = time(7, 0)                               # danach gilt ein fehlender Lauf als „steht“ (stand)
 MAIL_ARTIKEL_MAX, MAIL_FREIGABEN_MAX = 100, 50     # Einzelzeilen je Mail; Ordnergruppen stehen immer da
 MAIL_PSA_MAX = 50                                   # Zeilen „Deine PSA“ je Mail; der Rest steht unter „Meine PSA“
-# Hersteller-Sets (Phase 4 · L2b, Entwurf E): Ein Set zählt an den Grenzen oben als EINE Zeile; darunter stehen höchstens
+# Sets (Phase 4 · L2b, Entwurf E): Ein Set zählt an den Grenzen oben als EINE Zeile; darunter stehen höchstens
 # so viele seiner Artikel (Set-Artikel und Teile), der Rest als „… und n weitere Teile“ (Kritik T13 – ein Set kann 50
 # Teile haben, models.SET_TEILE_MAX).
 MAIL_SET_TEILE_MAX = 10
@@ -284,7 +284,7 @@ def artikel_kandidaten(stichtag, demo=False):
     Einträge – Fälligkeit und Lebensende. Dazu die Zahlen des Ausgelassenen: {"ordner_aus": {Ordner: Zahl}, "demo": n,
     "fehlerhaft": n}. Eine Zeile, die sich nicht lesen lässt, wird geloggt und übersprungen. demo (nur Probelauf): auch
     DEMO-Artikel, als Eintrag mit demo=True – sie zählen dann nicht als ausgelassen.
-    Hersteller-Sets (Phase 4 · L2b, Entwurf E): Set-Artikel und Teile tragen in daten["set"] {id, inventory_no, produkt,
+    Sets (Phase 4 · L2b, Entwurf E): Set-Artikel und Teile tragen in daten["set"] {id, inventory_no, produkt,
     faellig} ihres Sets – aus DIESER Abfrage (kein Nachladen je Zeile, Kritik T13). Set und Teile haben dieselbe Heimat,
     Lage und Zuordnung (sets.set_stimmig), also dieselben Empfänger; die Mail stellt die Teile darum immer unter eine
     Kopfzeile ihres Sets, auch wenn das Set selbst nicht im Plan steht (Kritik U6). „faellig“ ist die Set-Fälligkeit wie
@@ -655,14 +655,14 @@ def _angabe_psa(e, stichtag):
 
 
 def _set_von(e):
-    """Die Kennung des Hersteller-Sets, zu dem der Artikel eines Eintrags gehört (als Set-Artikel oder Teil), sonst None."""
+    """Die Kennung des Sets, zu dem der Artikel eines Eintrags gehört (als Set-Artikel oder Teil), sonst None."""
     s = e.daten.get("set") if e.art == "artikel" else None
     return s["id"] if s else None
 
 
 def _zaehlgruppen(eintraege, stichtag, texte):
     """Die Zahlen des Betreffs je Zählgruppe (_klasse). Ein einzelner Artikel zählt je Angabe (Fälligkeit und Lebensende
-    getrennt); ein Hersteller-Set – Set-Artikel und Teile zusammen – zählt EINMAL, in der dringendsten Klasse seiner
+    getrennt); ein Set – Set-Artikel und Teile zusammen – zählt EINMAL, in der dringendsten Klasse seiner
     Einträge (Phase 4 · L2b, Entwurf E): „1 Set überfällig“, gemischt „3 überfällig (davon 1 Set)“."""
     zahl, sets_zahl, je_set = {}, {}, {}
     for e in eintraege:
@@ -721,14 +721,14 @@ def _namen(liste):
 
 
 def _zeilen_zahl(eintraege):
-    """Wie viele Zeilen der Mail diese Artikel-Einträge sind: je Artikel eine, ein Hersteller-Set (Set-Artikel und Teile)
+    """Wie viele Zeilen der Mail diese Artikel-Einträge sind: je Artikel eine, ein Set (Set-Artikel und Teile)
     eine (Phase 4 · L2b)."""
     return len({("set", _set_von(e)) if _set_von(e) else ("artikel", e.kennung) for e in eintraege})
 
 
 def zahlen(mail):
     """(Artikel, Freigaben als Verwalter, eigene Freigaben, PSA) einer Mail – für Probelauf und Kommandozeile. Eine
-    Freigabe im Abschnitt „Deine Freigaben“ zählt nur dort, ein Artikel unter „Deine PSA“ nur dort. Ein Hersteller-Set
+    Freigabe im Abschnitt „Deine Freigaben“ zählt nur dort, ein Artikel unter „Deine PSA“ nur dort. Ein Set
     zählt mit allen seinen Artikeln einmal (wie im Betreff)."""
     deine = {e.kennung for e in mail.eintraege if e.inhaber}
     return (_zeilen_zahl([e for e in mail.eintraege if e.art == "artikel" and not e.psa]),
@@ -745,7 +745,7 @@ def _set_faellig(iso, stichtag):
 
 
 def _gruppieren(zeilen, mit_ordner=True):
-    """Artikelzeilen (Kennung → Zeile) zu Gruppen (Phase 4 · L2b, Entwurf E): ein Hersteller-Set mit seinen Zeilen
+    """Artikelzeilen (Kennung → Zeile) zu Gruppen (Phase 4 · L2b, Entwurf E): ein Set mit seinen Zeilen
     (Set-Artikel zuerst, dann die Teile nach Dringlichkeit) – auch wenn das Set selbst nicht in der Mail steht –, jeder
     andere Artikel für sich. {Schlüssel: {set, zeilen [(Kennung, Zeile)], rang, ordner, rueckfall}}; der Rang einer
     Gruppe ist der ihrer dringendsten Zeile. mit_ordner: Gruppen je Ordner (ARTIKEL) – ohne für „Deine PSA“."""
@@ -769,7 +769,7 @@ def mailtext(mail, stichtag, pfade=None):
     ihre Zeilen gekürzt sind. Über die ganze Mail höchstens MAIL_ARTIKEL_MAX Artikel- und MAIL_FREIGABEN_MAX
     Freigabezeilen, vergeben nach Dringlichkeit; der Rest einer Gruppe steht als „… und n weitere in diesem Ordner“.
     Gemeldet (und vermerkt) ist alles, was die Mail nennt – auch die gezählten weiteren.
-    Hersteller-Sets (Phase 4 · L2b, Entwurf E): Set-Artikel und Teile stehen unter ARTIKEL und „Deine PSA“ immer unter einer
+    Sets (Phase 4 · L2b, Entwurf E): Set-Artikel und Teile stehen unter ARTIKEL und „Deine PSA“ immer unter einer
     Kopfzeile ihres Sets (Inventarnummer, Produkt, Set-Fälligkeit) mit Link aufs Set – auch wenn nur ein Teil ansteht.
     Ein Set ist an den Grenzen und in der Zahl am Ordner EINE Zeile; darunter höchstens MAIL_SET_TEILE_MAX seiner
     Artikel, der Rest als „… und n weitere Teile“ (vermerkt wird auch hier alles). Eigene Freigaben (Inhaber,

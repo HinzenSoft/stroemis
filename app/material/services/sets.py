@@ -1,10 +1,15 @@
-"""Hersteller-Sets im Bestand (Phase 4 · Lieferung 2, Entwurf C, F, H, I): Set-Artikel mit Teil-Artikeln.
+"""Sets im Bestand (Phase 4 · Lieferung 2, Entwurf C, F, H, I): Set-Artikel mit Teil-Artikeln.
 
-Ein Set-Artikel ist ein Artikel eines Produkts mit dem Häkchen „Hersteller-Set“ (stueckliste.py) – das tragende
+Ein Set-Artikel ist ein Artikel eines Sets (Produkt mit is_set, vom Hersteller als Einheit festgelegt – stueckliste.py;
+nicht die Ordnerart „Set-Ordner“) – das tragende
 PSA-Produkt (Kong-Etikett, Petzl-Einzelnummer; ein Kit ohne eigene Kennzeichnung bekommt eine STR-Nummer). Jedes Stück
 eines einzeln geführten Bestandteils ist ein eigener Artikel darunter, ein Teil (mat_item.parent_item_id, eine Ebene) –
 mit Inventarnummer, QR und Etikett wie jeder Artikel. Beim Anlegen kommt die Stückliste als Kopie an das Set
-(mat_item_set_slot): Vollständigkeit und Bestandteile lesen daraus, eine spätere Katalogänderung färbt kein Set um.
+(mat_item_set_slot): Vollständigkeit und Bestandteile lesen daraus, eine spätere Katalogänderung färbt kein Set um –
+erst „Stückliste übertragen“ (setkopie.py) ersetzt die Kopie als Ganzes (kopie_schreiben). Ein Teil, das danach keiner
+Position mehr zugeteilt ist (_zuteilen), „steht nicht mehr in der Stückliste“: Es bleibt im Set, das Set ist gesperrt
+(set_grund „stueckliste“), anlass_text, sperrgruende (Art „ueberzaehlig“) und setlauf.freigabe_gruende nennen es, bis
+der Verwalter es mit „Teil entnehmen“ herausnimmt (Entscheidungen S5, S6).
 
 Regeln, wie sie hier umgesetzt sind:
   - Teile liegen, sperren und gehören wie ihr Set: folder_id, origin_folder_id, „frei oder nicht“ und assigned_user_id
@@ -54,12 +59,12 @@ from . import status as st
 
 log = logging.getLogger(__name__)
 
-SET_OHNE_TEILE = ("Ein Hersteller-Set legst du mit seinen Teilen an („teile“: je einzeln geführtem Bestandteil so viele, "
+SET_OHNE_TEILE = ("Ein Set legst du mit seinen Teilen an („teile“: je einzeln geführtem Bestandteil so viele, "
                   "wie die Stückliste nennt).")
-OHNE_STUECKLISTE = ("Für dieses Hersteller-Set ist noch keine Stückliste gepflegt – das macht die Material-Verwaltung im "
+OHNE_STUECKLISTE = ("Für dieses Set ist noch keine Stückliste gepflegt – das macht die Material-Verwaltung im "
                     "Katalog (Reiter „Bestandteile“).")
-NUR_FUER_SETS = "„teile“ gibt es nur beim Anlegen eines Hersteller-Sets."
-SET_NUR_DIALOG = "Ein Hersteller-Set legst du mit seinen Teilen über „Artikel anlegen“ an – nicht über diesen Weg."
+NUR_FUER_SETS = "„teile“ gibt es nur beim Anlegen eines Sets."
+SET_NUR_DIALOG = "Ein Set legst du mit seinen Teilen über „Artikel anlegen“ an – nicht über diesen Weg."
 STR_HINWEIS = "STR-Nummer am Teil anbringen (Etikett oder Gravur): {inv} – {name}, {serie}"
 STR_HINWEIS_SET = "STR-Nummer am Set anbringen (Etikett oder Gravur): {inv} – {name}, {serie}"
 UNSTIMMIG = ("Set und Teile liegen nicht mehr gleich (Ordner, Sperre oder Zuordnung) – nichts gespeichert. Bitte der "
@@ -82,14 +87,18 @@ EINGESETZT = "Teil eingesetzt – Set prüfen"
 NEU_IM_SET = "Teil {inv} neu eingesetzt – Set prüfen"
 TEIL_PRUEFEN = "Teil {inv} in der Set-Prüfung zu prüfen"
 BESTANDTEIL_ERSETZT = "Bestandteil ersetzt – Set prüfen"
+# „Stückliste übertragen“ (Entscheidung S5): ein Teil, das keiner Position der Kopie mehr zugeteilt ist.
+NICHT_IN_STUECKLISTE = "nicht mehr in der Stückliste: {nummern}"
+NICHT_IN_STUECKLISTE_SATZ = "{inv} steht nicht mehr in der Stückliste des Sets – erst „Teil entnehmen“."
 # Wohin ein Teil beim Aussondern des Sets geht (Entscheidung vom 23.10.2026: je Teil wählbar).
 VERBLEIB = {"aussondern": "mit aussondern", "weiterfuehren": "entnehmen und gesperrt weiterführen"}
 TEIL_FEHLT = "Teil nicht gefunden."
 NUR_AUSGESONDERT = "Das Set ist ausgesondert."
 # Anlass einer Set-Sperre ohne eigenen Grund eines Artikels (Journal „set_grund“; der Jahresbericht zählt sie eigens) –
 # „ausgesondert“: ein Teil, das beim Aussondern des Sets entnommen und gesperrt weitergeführt wird (Ablauf N2);
-# „bestandteil“: ein nicht einzeln geführter Bestandteil wurde ersetzt (L2b, Entwurf B).
-SET_GRUENDE = ("unvollstaendig", "tausch", "ausgesondert", "bestandteil")
+# „bestandteil“: ein nicht einzeln geführter Bestandteil wurde ersetzt (L2b, Entwurf B); „stueckliste“: die Stückliste
+# wurde übertragen, danach fehlt ein Teil oder eines ist übrig (setkopie.py, Entscheidung S6).
+SET_GRUENDE = ("unvollstaendig", "tausch", "ausgesondert", "bestandteil", "stueckliste")
 # „Set löschen“ mit eingesetzten vorhandenen Artikeln (L2b, Entwurf A; Kritik U2).
 VORHANDENE_TEILE = ("Das Set enthält vorhandene Artikel ({nummern}) – „Set löschen“ löscht nur Teile, die mit dem Set "
                     "angelegt wurden.")
@@ -108,7 +117,7 @@ class SetUnstimmig(Abgelehnt):
 # --- Was ist ein Set, was ein Teil --------------------------------------------------------------------------------
 
 def set_produkte():
-    """Die Kennungen aller Produkte mit dem Häkchen „Hersteller-Set“ – einmal je Anfrage (Listen fragen je Zeile)."""
+    """Die Kennungen aller Sets (mat_product.is_set) – einmal je Anfrage (Listen fragen je Zeile)."""
     speicher = g if has_request_context() else None
     if speicher is not None and "mat_set_produkte" in speicher:
         return speicher.mat_set_produkte
@@ -119,13 +128,13 @@ def set_produkte():
 
 
 def set_produkte_vergessen():
-    """Nach dem Umschalten von „Hersteller-Set“: den Zwischenspeicher der Anfrage leeren."""
+    """Nach dem Anlegen eines Sets oder dem Umschalten (Katalogimport): den Zwischenspeicher der Anfrage leeren."""
     if has_request_context():
         g.pop("mat_set_produkte", None)
 
 
 def ist_set_artikel(item):
-    """Ist der Artikel ein Set-Artikel (Produkt mit „Hersteller-Set“)?"""
+    """Ist der Artikel ein Set-Artikel (Produkt ist ein Set)?"""
     if "product_is_set" in item:
         return bool(item["product_is_set"])
     return item["product_id"] in set_produkte()
@@ -177,7 +186,7 @@ def teil_weiche(item, was):
 
 
 # Steht so auch in material.js (PRODUKT_SET): Der Dialog „Bearbeiten“ sagt es schon bei der Wahl.
-ZU_SET_PRODUKT = ("Zu einem Hersteller-Set wechselt das Produkt nicht – ein Set legst du mit seinen Teilen neu an "
+ZU_SET_PRODUKT = ("Zu einem Set wechselt das Produkt nicht – ein Set legst du mit seinen Teilen neu an "
                   "(„Artikel anlegen“).")
 
 
@@ -490,8 +499,8 @@ def _eigen_gesperrt(x):
 def anlass_text(s, teil_zeilen, slot_zeilen=None):
     """Warum das Set gesperrt ist, kurz für lock_reason – abgeleitet aus dem, was jetzt zum Set gehört (wie
     sperrgruende): eigener Grund des Set-Artikels, „wegen Teil …: Grund“ je Teil mit eigenem Grund, „unvollständig: …
-    fehlt“, „Bestandteil ersetzt – Set prüfen“ (set_pruefen an der Zeile des Set-Artikels, L2b), „Teil … neu eingesetzt –
-    Set prüfen“. Leer, wenn nichts davon zutrifft. Ein entnommenes, gelöschtes oder ausgesondertes Teil kommt darin nicht
+    fehlt“, „nicht mehr in der Stückliste: …“ (Teile ohne Position nach „Stückliste übertragen“), „Bestandteil ersetzt –
+    Set prüfen“ (set_pruefen an der Zeile des Set-Artikels, L2b), „Teil … neu eingesetzt – Set prüfen“. Leer, wenn nichts davon zutrifft. Ein entnommenes, gelöschtes oder ausgesondertes Teil kommt darin nicht
     mehr vor (Nachbesserung, Ablauf M1)."""
     teile = []
     if _eigen_gesperrt(s):
@@ -500,10 +509,14 @@ def anlass_text(s, teil_zeilen, slot_zeilen=None):
         if _eigen_gesperrt(t):
             teile.append(WEGEN_TEIL.format(inv=t["inventory_no"], grund=t["lock_reason"] or (
                 "verloren" if t["lock_state"] == "verloren" else "gesperrt")))
-    voll, fehlend = vollstaendigkeit(slot_zeilen if slot_zeilen is not None else slots(s["id"]), teil_zeilen)
+    sz = slot_zeilen if slot_zeilen is not None else slots(s["id"])
+    voll, fehlend = vollstaendigkeit(sz, teil_zeilen)
     if not voll:
         teile.append("unvollständig: " + ", ".join(f"„{f['bezeichnung']}“ fehlt" + (f" {f['fehlt']}×" if f["fehlt"] > 1
                                                                                   else "") for f in fehlend))
+    uebrig = ueberzaehlig(sz, teil_zeilen)
+    if uebrig:
+        teile.append(NICHT_IN_STUECKLISTE.format(nummern=", ".join(t["inventory_no"] for t in uebrig)))
     if s.get("set_pruefen"):
         teile.append(BESTANDTEIL_ERSETZT)
     for t in teil_zeilen:
@@ -564,7 +577,8 @@ def _artikel_verweis(x, set_id):
 
 def sperrgruende(s, teil_zeilen, voll=None, slot_zeilen=None):
     """Warum ein Set gesperrt ist – abgeleitet, nie gespeichert (Entwurf C, A12-5): je Artikel mit eigenem Grund (oder
-    verloren) {art „eigen“ | „verloren“, artikel, text}, „unvollstaendig“ mit den fehlenden Positionen, je Teil, das im
+    verloren) {art „eigen“ | „verloren“, artikel, text}, „unvollstaendig“ mit den fehlenden Positionen, „ueberzaehlig“ je
+    Teil, das nicht mehr in der Stückliste steht (mit Verweis – „Teil entnehmen“), je Teil, das im
     Freigabe-Lauf zu prüfen ist, „pruefen“, „bestandteil“, wenn ein Bestandteil ersetzt wurde (set_pruefen an der Zeile
     des Set-Artikels, L2b) – und immer zuletzt „set_pruefung“ (frei gibt nur „Set prüfen“). Leer, wenn das Set frei oder
     ausgesondert ist."""
@@ -579,14 +593,18 @@ def sperrgruende(s, teil_zeilen, voll=None, slot_zeilen=None):
         elif _eigen_gesperrt(x):
             out.append({"art": "eigen", "artikel": _artikel_verweis(x, s["id"]),
                         "text": f"{x['inventory_no']} ist gesperrt: " + _satz(x["lock_reason"] or "ohne Angabe")})
+    sz = slot_zeilen if slot_zeilen is not None else slots(s["id"])
     if voll is None:
-        voll, fehlend = vollstaendigkeit(slot_zeilen if slot_zeilen is not None else slots(s["id"]), teil_zeilen)
+        voll, fehlend = vollstaendigkeit(sz, teil_zeilen)
     else:
-        fehlend = vollstaendigkeit(slot_zeilen if slot_zeilen is not None else slots(s["id"]), teil_zeilen)[1]
+        fehlend = vollstaendigkeit(sz, teil_zeilen)[1]
     if not voll:
         out.append({"art": "unvollstaendig", "artikel": None,
                     "text": "Das Set ist unvollständig: " + ", ".join(
                         f"„{f['bezeichnung']}“ fehlt" + (f" {f['fehlt']}×" if f["fehlt"] > 1 else "") for f in fehlend) + "."})
+    for t in ueberzaehlig(sz, teil_zeilen):
+        out.append({"art": "ueberzaehlig", "artikel": _artikel_verweis(t, s["id"]),
+                    "text": NICHT_IN_STUECKLISTE_SATZ.format(inv=t["inventory_no"])})
     if s.get("set_pruefen"):
         # Eine Fassung überall (Banner, Status, Meine PSA, Journal – Nachbesserung, Browser V7).
         out.append({"art": "bestandteil", "artikel": None,
@@ -730,11 +748,7 @@ def set_anlegen(d, plan):
         s = bestand.artikel(sid)
         if s["serial_generated"]:
             hinweise.append(_hinweis_str(STR_HINWEIS_SET, s["inventory_no"], p, s["serial_no"]))
-        for z in stueck:
-            db.execute("INSERT INTO mat_item_set_slot (set_item_id, position, product_id, bezeichnung, anzahl, einzeln, "
-                       "austausch) VALUES (?,?,?,?,?,?,?)",
-                       (sid, z["position"], z["component_product_id"], z["bezeichnung"], z["anzahl"], z["einzeln"],
-                        z["austausch"]))
+        kopie_schreiben(sid, stueck)
         liste, eingesetzt = [], []
         for z, pt, nr in plaene:
             if not isinstance(pt, dict):
@@ -811,6 +825,24 @@ def vollstaendigkeit(slot_zeilen, teil_zeilen):
     fehlend = [{"bezeichnung": z["bezeichnung"], "fehlt": z["anzahl"] - vorhanden.get(z["id"], 0)}
                for z in slot_zeilen if z["einzeln"] and vorhanden.get(z["id"], 0) < z["anzahl"]]
     return not fehlend, fehlend
+
+
+def ueberzaehlig(slot_zeilen, teil_zeilen):
+    """Die Teile, die _zuteilen keiner Position der Kopie zuteilt – nach „Stückliste übertragen“ (Position entfernt,
+    Anzahl verringert, nicht mehr einzeln geführt, anderes Produkt) oder in einem Altbestand. In Teil-Reihenfolge."""
+    zu, _ = _zuteilen(slot_zeilen, teil_zeilen)
+    return [t for t in teil_zeilen if t["id"] not in zu]
+
+
+def kopie_schreiben(set_id, stueck):
+    """Die Kopie der Stückliste an ein Set schreiben – je Position der Stückliste (stueckliste.zeilen) eine Zeile, in der
+    Transaktion des Aufrufers: beim Anlegen (set_anlegen) und nach dem Löschen der alten Kopie beim Übertragen
+    (setkopie.uebertragen; die Trigger aus Schritt 22 lassen das nur außerhalb einer Set-Prüfung zu)."""
+    for z in stueck:
+        db.execute("INSERT INTO mat_item_set_slot (set_item_id, position, product_id, bezeichnung, anzahl, einzeln, "
+                   "austausch) VALUES (?,?,?,?,?,?,?)",
+                   (set_id, z["position"], z["component_product_id"], z["bezeichnung"], z["anzahl"], z["einzeln"],
+                    z["austausch"]))
 
 
 def _verweis(x):

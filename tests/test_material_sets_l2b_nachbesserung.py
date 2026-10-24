@@ -1,4 +1,4 @@
-"""Hersteller-Sets, Teil 2 – Nachbesserung nach den drei Prüfungen (Phase 4 · Lieferung 2b, 23.10.2026):
+"""Sets, Teil 2 – Nachbesserung nach den drei Prüfungen (Phase 4 · Lieferung 2b, 23.10.2026):
 python tests/test_material_sets_l2b_nachbesserung.py  oder  pytest
 
 Sicherheit H1 (genau der Ablauf der Probe p9/p9b: Teil aus einem gesperrten Set entnehmen, einzeln freiprüfen, als
@@ -35,11 +35,11 @@ def set_nein(t):
     kat = t.k["katalog"]
     r = ok(kat.post("/api/material/produkte", json={
         "category_id": t.ids["gurte"], "manufacturer": "Testwerk", "model": "Testset Beta", "article_no": "TB-1",
-        "material_kind": "textil", "lifetime_years": 10, "is_set": True}), 201)
+        "material_kind": "textil", "lifetime_years": 10, "is_set": True, "bestandteile": [
+            {"produkt_id": t.ids["hms"], "bezeichnung": "Fester Karabiner", "anzahl": 1, "einzeln": True,
+             "austausch": "nein"},
+            {"bezeichnung": "Beutel", "anzahl": 1, "einzeln": False}]}), 201)
     pb = r["produkt"]["id"]
-    r = ok(kat.put(f"/api/material/produkte/{pb}/bestandteile", json={"bestandteile": [
-        {"produkt_id": t.ids["hms"], "bezeichnung": "Fester Karabiner", "anzahl": 1, "einzeln": True, "austausch": "nein"},
-        {"bezeichnung": "Beutel", "anzahl": 1, "einzeln": False}]}))
     return pb, next(b["id"] for b in r["produkt"]["bestandteile"] if b["einzeln"])
 
 

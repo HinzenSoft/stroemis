@@ -81,7 +81,7 @@ OHNE_SERIENNUMMERN = ("Keine Spalte ist als Seriennummer zugeordnet – bitte be
                       "mit den Seriennummern zuordnen.")
 FEHLT_ZUORDNUNG = "Ordne mindestens Hersteller und Modell (oder Artikelnummer) zu."
 DEMO_PRODUKT = "Ein DEMO-Produkt passt nur in einen DEMO-Ordner."
-# Schritt 21: Der Import legt keine Hersteller-Sets an – ihre Teile kennt die Liste nicht (Entwurf I). Seit L2b (Entwurf A,
+# Schritt 21: Der Import legt keine Sets an – ihre Teile kennt die Liste nicht (Entwurf I). Seit L2b (Entwurf A,
 # U11/U12): Teile, die die Liste als eigene Zeilen führt, sind nach dem Import vorhandene Artikel – das Set setzt sie ein.
 # Kurz (Nachbesserung, Browser V16): steht als roter Satz in der Spalte „Gründe“ der Nacharbeit.
 SET_PRODUKT = ("Sets legt der Import nicht an – über „Artikel anlegen“ mit „aus dem Bestand wählen“ erfassen, dann "
@@ -1638,7 +1638,8 @@ def melden(fid, angabe, d, fotos):
     daten = {"manufacturer": w.get("hersteller", ""), "model": w.get("modell", ""),
              "article_no": w.get("artikelnummer", "")}
     for k in d.keys():
-        if k not in ("folder_id", "angabe", "fotos") and d.get(k) not in (None, ""):
+        # Ein Set meldet man nicht aus der Nacharbeit – sie nimmt keins (SET_PRODUKT).
+        if k not in ("folder_id", "angabe", "fotos", "is_set", "set_teile") and d.get(k) not in (None, ""):
             daten[k] = d.get(k)
     if not (daten.get("note") or "").strip():
         daten["note"] = (f"Aus dem Bestandsimport Nr. {rows[0]['import_id']}: {len(rows)} Artikel warten in der "
