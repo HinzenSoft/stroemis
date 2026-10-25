@@ -491,7 +491,7 @@ def test_oberflaeche_l2b_statisch():
     # Teil einsetzen mit Auswahl, Tauschen ohne (T9); Rückfrage, wenn die Zuordnung endet (U10).
     td = funktion(js, "teilDialog")
     for haken in ('art === "einsetzen" ? "Teil" : "Neues Teil", art === "einsetzen")',
-                  "`${API}/artikel/${a.id}/kandidaten?${new URLSearchParams({ slot_id: z.id, q })}`",
+                  '`${API}/artikel/${a.id}/kandidaten?${new URLSearchParams({ slot_id: z.id, produkt_id: z.produkt ? z.produkt.id : "", q })}`',
                   "zuordnungEndet([WAHL.get(block)], a.zugeordnet || null)", 'rueckfrage("Zuordnung endet", endet, TEIL_KNOPF[art])',
                   "block.bestandFehler(e.message)"):
         assert haken in td, haken
