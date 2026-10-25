@@ -20,6 +20,11 @@ Stückliste aus DEMO-Bestandteilen (zwei einzeln geführte DEMO HMS-Karabiner, e
 eigenen Artikel) und im DEMO-Lager einen DEMO-Set-Artikel mit seinen beiden Teilen (DEMO-SET-1 mit DEMO-SET-K1 und
 DEMO-SET-K2) – auch zu einem vorhandenen Demo-Bestand, einmal (demo_set). Keine echten Herstellerdaten: Hersteller,
 Lebensdauer, Intervall und Stückliste sind Platzhalter.
+Seit dem 25.10.2026 (Wunsch des Nutzers) bekommt zum Schluss jede ECHTE Kategorie (ohne Kennzeichen demo) ohne wirksames
+aktives Prüfformular ein DEMO-Platzhalter-Formular (demo_formulare) – damit sich auf dev nach dem Einspielen des echten
+Katalogs Prüfungen testen lassen. Die DEMO-Kategorien behalten ihre DEMO-Formulare (die DEMO-Kletterhelme bleiben
+absichtlich ohne). Nur wenn BASE_URL in der Umgebung UND in der Anwendung auf dev oder localhost zeigt (dieselbe
+Positivliste wie flask material dev-zuruecksetzen); der Katalog-Export lässt die Formulare wegen ihres Kennzeichens aus.
 Alles, was das Skript anlegt, trägt das Kennzeichen demo und „DEMO“ im Namen – die Oberfläche zeigt
 es überall als „DEMO – nicht für echte Prüfungen“. Prüfpunkte, Intervalle, Lebensdauern und Hersteller
 sind Platzhalter: Der echte Katalog entsteht in Phase 0 mit den Sachkundigen und kommt über
@@ -162,6 +167,90 @@ def main():
         demo_nachbarstadt(produkt)
         if konten:
             demo_konten()
+        # Zuletzt, damit der DEMO-Bestand davor genau wie bisher entsteht (Präzisierung vom 25.10.2026).
+        demo_formulare()
+
+
+FORMULAR_TITEL = "DEMO-Prüfformular (Platzhalter) – "
+
+
+def _platzhalter_punkte(mit_laenge):
+    """Die Prüfpunkte eines Platzhalter-Formulars: je ein Punkt der Arten Ja/Nein, Text und Zahl, bei Artikellänge dazu
+    „Länge (m)“ – ohne Inhalt, nur zum Durchklicken. Pflicht ist nur der Ja/Nein-Punkt (Soll „ja“, nicht kritisch)."""
+    punkte = [{"gruppe": "DEMO-Gruppe", "text": "DEMO Ja/Nein-Punkt (Platzhalter)", "art": "yesno", "soll": "ja"},
+              {"gruppe": "DEMO-Gruppe", "text": "DEMO Text-Punkt (Platzhalter)", "art": "text", "pflicht": False},
+              {"gruppe": "DEMO-Gruppe", "text": "DEMO Zahl-Punkt (Platzhalter)", "art": "number", "pflicht": False}]
+    if mit_laenge:
+        punkte.append({"gruppe": "DEMO-Gruppe", "text": "DEMO Länge (Platzhalter)", "art": "laenge", "pflicht": False})
+    return punkte
+
+
+def demo_formulare():
+    """Platzhalter-Formulare für echte Kategorien (Wunsch des Nutzers vom 25.10.2026): Auf dev gibt es nach dem
+    Einspielen des echten Katalogs keine Prüfformulare, Prüfungen ließen sich so nicht testen.
+
+    Von oben nach unten durch den Kategoriebaum: Eine echte Kategorie (ohne Kennzeichen demo), die weder selbst noch über
+    eine Oberkategorie ein aktives Formular hat, bekommt eins – mit DEMO-Kennzeichen, aktiviert. Es sitzt so hoch wie
+    möglich: Ein Formular an der Oberkategorie reicht über die Vererbung (katalog.formular_fuer_produkt) für ihren ganzen
+    Teilbaum, und ein echtes Formular, das später an einer Unterkategorie dazukommt, geht ihm dort vor. Einen Punkt
+    „Länge (m)“ bekommt es, wenn eine Kategorie seines Teilbaums eine Artikellänge vorsieht; in den übrigen ist der
+    Punkt bei der Prüfung von selbst „nicht zutreffend“ (pruefung._vorbelegung).
+    Nie angefasst: DEMO-Kategorien samt Teilbaum (sie behalten ihre DEMO-Formulare, die Kletterhelme keins) und
+    Kategorien mit einem echten, aber inaktiven Formular – aktiv würde das DEMO-Formular dort im Katalog-Export das
+    echte verdrängen; ihre Unterkategorien bekommen dann eigene. Hat eine Kategorie schon ein DEMO-Formular (auch
+    ein deaktiviertes), gilt ihr Teilbaum als erledigt – ein zweiter Lauf legt nichts doppelt an.
+    Nur auf dev oder lokal: BASE_URL in der Umgebung und in der Anwendung (Verwaltung → Einstellungen) muss die
+    Positivliste von flask material dev-zuruecksetzen erfüllen (zuruecksetzen.adresse_frei)."""
+    from flask import current_app
+
+    from app import db, einstellungen
+    from app.material.services import katalog, zuruecksetzen
+    einstellungen.anwenden()
+    for herkunft, adresse in (("BASE_URL in der Umgebung", os.environ.get("BASE_URL")),
+                              ("BASE_URL der Anwendung", current_app.config.get("BASE_URL"))):
+        if not zuruecksetzen.adresse_frei(adresse):
+            print(f"Platzhalter-Formulare: keine angelegt – {herkunft} ist „{(adresse or '').strip() or 'leer'}“, "
+                  "frei ist nur dev.… oder localhost/127.0.0.1.")
+            return
+    kats = db.query("SELECT id, parent_id, name, demo FROM mat_category ORDER BY position, name, id")
+    kinder = {}
+    for k in kats:
+        kinder.setdefault(k["parent_id"], []).append(k)
+    formulare = {}
+    for f in db.query("SELECT category_id, active, demo FROM mat_form WHERE category_id IS NOT NULL"):
+        formulare.setdefault(f["category_id"], []).append(f)
+    laenge = katalog.laenge_kategorien()
+    angelegt, inaktiv, gesehen = [], [], set()
+
+    def teilbaum_mit_laenge(kid):
+        return bool(katalog._unterkategorien(kid) & laenge)
+
+    def abdecken(k, geerbt):
+        if k["id"] in gesehen or k["demo"]:
+            return
+        gesehen.add(k["id"])
+        eigene = formulare.get(k["id"], [])
+        if not geerbt and not eigene:
+            fid = katalog.formular_anlegen({"kategorie_id": k["id"], "titel": FORMULAR_TITEL + k["name"],
+                                            "punkte": _platzhalter_punkte(teilbaum_mit_laenge(k["id"]))}, demo=True)
+            katalog.formular_aktivieren(fid)
+            angelegt.append(k["name"])
+        abgedeckt = geerbt or not eigene or any(f["active"] or f["demo"] for f in eigene)
+        if not abgedeckt:
+            inaktiv.append(k["name"])
+        for kind in kinder.get(k["id"], []):
+            abdecken(kind, abgedeckt)
+
+    for k in kinder.get(None, []):
+        abdecken(k, False)
+    if angelegt:
+        print(f"Platzhalter-Formulare: {len(angelegt)} DEMO-Formulare an echten Kategorien angelegt und aktiviert "
+              f"({', '.join(angelegt[:10])}{' …' if len(angelegt) > 10 else ''}).")
+    else:
+        print("Platzhalter-Formulare: Jede echte Kategorie hat schon ein wirksames Formular – nichts angelegt.")
+    if inaktiv:
+        print(f"Platzhalter-Formulare: Ohne wirksames Formular bleiben {', '.join(inaktiv)} (nur ein inaktives echtes "
+              "Formular – bitte im Katalog aktivieren; ihre Unterkategorien haben eins).")
 
 
 def demo_bestand(produkt):
