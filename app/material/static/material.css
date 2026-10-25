@@ -3,12 +3,9 @@
    das Blau der Hinweiskästen), dunkelrot Lebensdauer erreicht, anthrazit gesperrt, grau ausgesondert –
    überall dieselben, in Marken, Kacheln und Zählern. */
 .mat { --mat-gesperrt: var(--schwarz); --mat-lebensdauer: var(--rot-dunkel);
-  /* Lesbare Zeilenlänge für Fließtext (Hilfe, Hinweise, Beschreibungen): 38 Geviert sind rund 75 Zeichen – in em,
-     damit kleine Hilfetexte und große Hinweise gleich viele Zeichen je Zeile haben. */
-  --mat-lesemass: 38em;
-  /* Hinweiskästen (p und div, klein und groß) alle gleich breit – in rem, damit die kleine Schrift den Kasten nicht
-     schmaler macht (zweite Nachbesserung: vorher 608, 517 px und voll breit nebeneinander). */
-  --mat-kastenmass: 38rem; }
+  /* Lesbare Breite der Stammdatenwerte (dd): 38 Geviert sind rund 75 Zeichen. Hilfe- und Erklärtexte und
+     Hinweiskästen haben seit dem 25.10.2026 keine eigene Höchstbreite mehr (siehe unten). */
+  --mat-lesemass: 38em; }
 
 /* Unternavigation des Moduls mit der Suchmaske für Nummern */
 .mat-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 4px; margin: -8px 0 18px;
@@ -1169,10 +1166,10 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
   .mat-kachelrahmen > .mat-rundenzahlen > .mat-kachel:first-child { grid-column: auto; }
 }
 
-/* Hilfeabsätze in lesbarer Zeilenlänge – Tabellen, Kacheln und Banner bleiben so breit wie die Seite. */
-#mat-inhalt :is(p.help, p.mat-text, p.small) { max-width: var(--mat-lesemass); }
-#mat-inhalt .mat-daten dd { max-width: var(--mat-lesemass); }          /* Stammdaten: am breiten Bildschirm nicht endlos */
-#mat-inhalt p.help.mat-endlos { max-width: none; }
+/* Hilfe- und Erklärtexte (.help, .muted, p.small, p.mat-text) und Hinweiskästen (.notice) laufen über die volle Breite
+   ihres Abschnitts – so breit wie Felder und Tabellen darunter (Wunsch des Nutzers vom 25.10.2026: „Die Texte gehen
+   nicht über die vorgesehene Breite“). Nur die Stammdatenwerte bleiben am breiten Bildschirm lesbar schmal. */
+#mat-inhalt .mat-daten dd { max-width: var(--mat-lesemass); }
 
 /* Ordnerwahl (Dialog „verschieben nach …“): Ein langer Name bricht um, die Art-Marke daneben bleibt ganz. */
 .mat-wahl label .mat-art { flex: none; }
@@ -1652,8 +1649,6 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-ue th.mat-ue-zahl { white-space: normal; }
 /* Stammdaten: Lange Werte ohne Leerzeichen („von pruefer3@example.org“) brechen notfalls im Wort um. */
 #mat-inhalt .mat-daten dd { overflow-wrap: anywhere; }
-/* Hinweiskästen einheitlich breit (Token oben). */
-#mat-inhalt .notice { max-width: var(--mat-kastenmass); }
 /* Rot auf grauem Grund (Formular-Editor: „Ändern …“ in der Wiki-Zeile, Knopf-Links in Hinweisen) im dunklen Rot wie
    die Links in Hinweisen – das Hausrot kam dort nur auf 4,4:1. */
 #mat-inhalt :is(.notice, .mat-wikizeile) :is(a:not(.btn), .lnk) { color: var(--rot-auf-flaeche); }
@@ -1690,7 +1685,7 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-bericht-wahl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: -8px 0 16px; }
 .mat-bericht-wahl > label { margin: 0; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
 .mat-bericht-wahl select { width: auto; }
-.mat-bericht-wahl .help { flex: 1 1 100%; margin: 0; max-width: var(--mat-lesemass); }
+.mat-bericht-wahl .help { flex: 1 1 100%; margin: 0; }
 .mat-bericht-daten { margin-bottom: 12px; }
 .mat-zahlen { border-collapse: collapse; width: 100%; max-width: 34rem; margin: 6px 0 10px; }
 .mat-zahlen td { padding: 4px 8px; border-bottom: 1px solid var(--linie); vertical-align: top; }
@@ -1700,7 +1695,7 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-paar h3 { margin-top: 6px; }
 @container mat-seite (min-width: 700px) { .mat-paar { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 #mat-inhalt table.list.mat-tabelle th.mat-be-zahl, #mat-inhalt table.list.mat-tabelle td.mat-be-zahl { text-align: center; white-space: nowrap; width: 1%; }
-.mat-bericht-fuss { margin: 20px 0 0; padding-left: 18px; max-width: var(--mat-lesemass); }
+.mat-bericht-fuss { margin: 20px 0 0; padding-left: 18px; }
 .mat-bericht-fuss li { margin-bottom: 4px; }
 /* Sprungmarken zu den Blöcken (Browserprüfung P4-L1, V5) – eine umbrechende Zeile Textlinks; die Blöcke halten beim
    Springen Abstand zum oberen Rand. Betroffene Artikel eines Rückrufs aufklappbar (V3), mehrspaltig. */

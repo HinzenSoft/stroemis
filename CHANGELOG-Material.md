@@ -4160,6 +4160,15 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Texte über die volle Breite (Wunsch des Nutzers, 25.10.2026)
+
+Wunsch des Nutzers (mit Bildschirmfoto der Seite „Prüfformular“): „Die Texte gehen nicht über die vorgesehene Breite“.
+Hinweiskästen (`.notice`) und Hilfe- bzw. Erklärtexte (`.help`, `.muted`, `p.small`, `p.mat-text`) im Modul Material
+haben keine eigene Höchstbreite mehr (bisher 38em bzw. 38rem, `--mat-kastenmass` entfällt) – auf allen Seiten des
+Moduls laufen sie so breit wie die Felder und Tabellen ihres Abschnitts; nur die Stammdatenwerte (`.mat-daten dd`)
+bleiben lesbar schmal. Der Fließtext im Wiki behält seine Lesebreite. Browserprobe 1280/1920/360 auf Prüfformular,
+Produktseite, Ordnerseite und Übersicht ohne waagerechten Bildlauf; statischer Test `tests/test_material_textbreite.py`.
+
 ## Set-Protokolle im Prüfdurchgang (Wunsch des Nutzers, 25.10.2026)
 
 Teil des Wunsches zum Rückbau der Set-Funktion: „Implementiere dafür, dass wenn ein Prüfdurchgang einer Gliederung oder

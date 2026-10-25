@@ -356,9 +356,10 @@ def test_geraete_nachbesserung():
     assert ".mat-sort)::after" not in css and ".mat-sort, .mat-summe)::after" not in css
     assert ".mat-ue-klapp::after" not in css
     assert ".mat-tree .tg { width: 44px;" in css and ".mat-tree a { padding-top: 11px; padding-bottom: 11px; min-height: 44px; }" in css
-    # Lesemaß als Token für Hilfe, Hinweise und Beschreibungen.
+    # Lesemaß als Token – seit dem 25.10.2026 nur noch für Stammdatenwerte; Hilfe und Hinweise laufen über die volle
+    # Breite (test_material_textbreite).
     assert "--mat-lesemass: 38em;" in css
-    assert "#mat-inhalt :is(p.help, p.mat-text, p.small) { max-width: var(--mat-lesemass); }" in css
+    assert "#mat-inhalt :is(p.help, p.mat-text, p.small) { max-width" not in css
     # Übersicht: weiche Trennstelle, Nullkacheln, nebeneinander auf breiten Bildschirmen.
     assert '["neu", "neu (Eingangs\\u00adprüfung)"]' in js
     assert '${z[s] ? "" : " null"}' in js and ".mat-statuskacheln .mat-kachel.null { flex-direction: row;" in css
@@ -421,7 +422,7 @@ def test_geraete_nachbesserung_zwei():
     assert "max-width: 2200px" not in css and "max-width: 1800px;" in css
     for ansicht in ("pruefung", "pruefung_neu", "artikel_neu", "formular"):
         assert f'[data-ansicht="{ansicht}"]' in css
-    assert "--mat-kastenmass: 38rem;" in css and "#mat-inhalt .notice { max-width: var(--mat-kastenmass); }" in css
+    assert "--mat-kastenmass" not in css and "#mat-inhalt .notice { max-width" not in css      # seit dem 25.10.2026
     assert "#mat-inhalt :is(.notice, .mat-wikizeile) :is(a:not(.btn), .lnk) { color: var(--rot-auf-flaeche); }" in css
     # V7: Artikelnummern als ein Stück – keine nackte, leise Artikelnummer mehr.
     assert 'const artNrKurz = (nr) => (nr ? ` <span class="muted mat-ganz">${esc(nr)}</span>` : "");' in js
