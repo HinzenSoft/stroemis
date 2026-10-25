@@ -4154,6 +4154,19 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## DEMO-Skript: Platzhalter-Formulare (Wunsch des Nutzers, 25.10.2026)
+
+`scripts/material_demo.py --demo` legt zum Schluss – nach dem unveränderten DEMO-Bestand – an jeder **echten** Kategorie
+(ohne Kennzeichen demo) ohne wirksames aktives Prüfformular ein Platzhalter-Formular an: Titel „DEMO-Prüfformular
+(Platzhalter) – <Kategorie>“, je ein Punkt Ja/Nein (Pflicht, Soll „ja“), Text und Zahl, bei einer Artikellänge im
+Teilbaum dazu „Länge (m)“; mit DEMO-Kennzeichen und aktiviert. Es sitzt an der obersten Kategorie ohne Formular und
+reicht über die Vererbung für ihren Teilbaum. Kein App-Code geändert, kein Schemaschritt. Damit lassen sich auf dev nach
+dem Einspielen des echten Katalogs Prüfungen testen; der Katalog-Export lässt die Formulare wegen des Kennzeichens aus.
+DEMO-Kategorien behalten ihre DEMO-Formulare (die DEMO-Kletterhelme bleiben ohne), echte Formulare bleiben unberührt –
+eine Kategorie mit nur einem inaktiven echten Formular bekommt keins (aktiv verdrängte es das echte im Export), das
+Skript nennt sie. Wiederholbar; nur wenn `BASE_URL` in der Umgebung und in der Anwendung auf dev oder localhost zeigt
+(Positivliste wie `flask material dev-zuruecksetzen`). Test: `tests/test_material_demo_formulare.py`.
+
 ## Katalogimport im Hintergrund (Wunsch des Nutzers, 24.10.2026)
 
 Anlass: Die kombinierte Katalogdatei (1,13 GB, 1 428 Produkte, 1 905 Dateien) bekam beim „Übernehmen“ über die

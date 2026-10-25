@@ -228,7 +228,14 @@ docker exec -i stroemis-dev sh -c 'cat > /tmp/material_demo.py && VIDEOPFLEGE=0 
 ```
 
 **Nach dem Deploy von Phase 2 · Lieferung 1 einmal ausführen** (CHANGELOG-Material.md). **Nie in der Produktion**
-(Container `stroemis`) – dieses Skript prüft die Adresse nicht.
+(Container `stroemis`) – dieses Skript prüft die Adresse nur für die Platzhalter-Formulare.
+
+Platzhalter-Formulare (seit 25.10.2026): Zum Schluss bekommt jede echte Kategorie ohne wirksames aktives Prüfformular
+ein „DEMO-Prüfformular (Platzhalter) – <Kategorie>“ (Ja/Nein, Text, Zahl, bei Artikellänge „Länge (m)“; DEMO-Kennzeichen,
+aktiv) – an der obersten Kategorie ohne Formular, die Unterkategorien erben es. So lassen sich nach dem Einspielen des
+echten Katalogs Prüfungen testen; der Katalog-Export lässt diese Formulare aus. Echte Formulare bleiben unberührt, die
+DEMO-Kategorien behalten ihre. Nur wenn `BASE_URL` in der Umgebung und in der Anwendung auf dev oder localhost zeigt
+(Positivliste wie bei `dev-zuruecksetzen`); lokal also `BASE_URL=http://localhost:8080 python scripts/material_demo.py --demo`.
 
 ### Beispielbestand (nur dev)
 
@@ -646,6 +653,7 @@ python tests/test_material_dev_zuruecksetzen.py  # material dev-zuruecksetzen: S
                                                  # vollständig, Schema wie neu, übrige Module byteidentisch, Scheitern und SIGTERM/SIGHUP ändern nichts
 python scripts/beispieldaten.py         # füllt ./data mit zwei erfundenen Prüfungs-Lehrgängen zum Ausprobieren
 python scripts/material_demo.py --demo  # füllt ./data mit DEMO-Katalog, DEMO-Bestand in zwei Gliederungen und DEMO-Prüfungen (nie für echte Prüfungen)
+                                        # dazu Platzhalter-Formulare für echte Kategorien ohne Formular (nur mit BASE_URL dev/localhost)
 python scripts/material_demo.py --demo --konten  # dazu einmalig fünf DEMO-Konten (vier Mitglieder mit Freigaben, die DEMO-Material-Verwaltung);
                                                  # die Passwörter stehen nur in dieser Ausgabe (nur für dev);
                                                  # ein DEMO-Prüfer von früher (befristet) prüft danach dauerhaft
@@ -739,6 +747,8 @@ tests/
   test_material_sets.py
                    Modul Material, Phase 4 · Lieferung 2: Hersteller-Sets – Schritt 21, Stückliste, Katalogdatei,
                    Set anlegen, Set-Werte, Listen, Weichen je Route, Gleichheit von Set und Teilen, Trennung, DEMO
+  test_material_demo_formulare.py
+                   DEMO-Skript: Platzhalter-Formulare für echte Kategorien (Bestand unverändert, Vererbung, Export, Sperre)
   test_material_sets_pruefung.py
                    Modul Material, Phase 4 · Lieferung 2 (K2): Sperr-Kaskade je Sperrweg, Set prüfen und Freigabe,
                    Berichtigungen, Aussondern mit Wahl je Teil, Teil tauschen/entnehmen/einsetzen/löschen, Durchgang
