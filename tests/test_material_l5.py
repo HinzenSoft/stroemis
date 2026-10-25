@@ -368,7 +368,8 @@ def test_geraete_nachbesserung():
     folge = [leg.index(f'class="mat-zahl s-{s}"') for s in ("ueberfaellig", "neu", "lebensdauer", "gesperrt", "bald_faellig")]
     assert folge == sorted(folge) and "${ZAEHLER_LEGENDE}" in js
     # Ordner: Filter nur mit Artikeln (oder gesetztem Filter), leerer Ordner nennt die Unterordner.
-    assert "${direktAlle || filter || person ? `<div class=\"mat-filterzeile\">" in js
+    # Seit dem 25.10.2026 steht der Filter in der Seitenleiste (Filtermenü) – mit Kategorie.
+    assert "const zeigeFilter = Boolean(direktAlle || filter || person || kategorie);" in js
     assert "Hier liegen keine Artikel direkt – ${unten} liegen in Unterordnern." in js
     # Die Bereichswahl der Meldungen gibt es seit dem 24.10.2026 nicht mehr (Änderungsanträge im Bestand).
     assert ".mat-filter button { flex: 0 0 auto; white-space: nowrap; }" in css

@@ -966,9 +966,12 @@ def artikel_loeschen(iid):
 
 # Mit dem offenen Entwurf (höchstens einer je Artikel): Listen zeigen „in Prüfung bei …“.
 # Dazu der Name der zugeordneten Person (artikel_kurz gibt ihn nur mit Grundrecht heraus) und die Beschreibung des
-# Produkts – der Zusatz hinter dem Modell (grau hinter dem Namen, katalog.BESCHREIBUNG_MAX).
+# Produkts – der Zusatz hinter dem Modell (grau hinter dem Namen, katalog.BESCHREIBUNG_MAX). Die Kategorie des Produkts
+# als Unterabfrage (kein weiterer JOIN – die Abfrage steht auch in Durchgang, Protokoll und Prüfung; Wunsch vom 25.10.2026).
 ARTIKEL_LISTE_SQL = ("SELECT i.*, p.manufacturer, p.model, p.article_no, p.material_kind, p.image AS product_image, "
                      "p.description AS product_description, p.is_set AS product_is_set, "
+                     "p.category_id AS product_category_id, "
+                     "(SELECT c.name FROM mat_category c WHERE c.id = p.category_id) AS kategorie_name, "
                      f"{demo_sql('i', 'p')} AS artikel_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "
                      "e.inspector_user_id AS entwurf_pruefer_id, zu.name AS zugeordnet_name FROM mat_item i "
                      "JOIN mat_product p ON p.id = i.product_id "
@@ -1016,6 +1019,8 @@ def artikel_kurz(i, stichtag=None):
             "next_due_on": i["next_due_on"], "retire_by": i["retire_by"], "lock_state": i["lock_state"],
             "last_inspected_on": i.get("last_inspected_on"), "status": s, "status_text": st.LABEL[s],
             "length_m": i.get("length_m"), "laenge_text": laenge_text(i.get("length_m")),
+            "kategorie": ({"id": i["product_category_id"], "name": i.get("kategorie_name") or ""}
+                          if i.get("product_category_id") else None),
             "entwurf": ({"id": i["entwurf_id"], "pruefer": i.get("entwurf_pruefer"),
                          "pruefer_id": i.get("entwurf_pruefer_id")} if i.get("entwurf_id") else None),
             "rueckruf": rueckruf.offene_artikel().get(i["id"]),
@@ -1152,6 +1157,7 @@ def artikel_sortierung(gruppe=False):
         "hersteller": "p.manufacturer COLLATE NOCASE",
         "produkt": "p.model COLLATE NOCASE",
         "serie": "i.serial_no COLLATE NOCASE",
+        "kategorie": "(SELECT c.name FROM mat_category c WHERE c.id = p.category_id) COLLATE NOCASE",
         "faellig": (sets.gruppen_sortier_faellig_sql("i") if gruppe else
                     "CASE WHEN i.lock_state <> 'frei' THEN NULL WHEN i.last_inspected_on IS NULL THEN '' "
                     "ELSE i.next_due_on END"),
@@ -1160,7 +1166,8 @@ def artikel_sortierung(gruppe=False):
     }
 
 
-def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, richtung="auf", zugeordnet=None):
+def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, richtung="auf", zugeordnet=None,
+                  kategorie=None):
     """Ein Ordner mit Pfad, Unterordnern (mit Zählung) und den Artikeln direkt darin, die das Konto sieht – in einem
     teilweise sichtbaren Systemordner also nur die eigenen. Das Journal nur mit Grundrecht, die Einträge zu Freigaben
     darin nur für Verwalter des Ordners. zugeordnet: nur Artikel dieser Person (und nur, wo das Grundrecht gilt).
@@ -1168,7 +1175,12 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     Sets (Schritt 21): nur die Set-Zeile mit Set-Status, Set-Fälligkeit und „set“ (sets.listenzeile) –
     gefiltert und sortiert nach den Set-Werten; Teile stehen auf der Set-Seite. „sets“: {anzahl, teile} unter allen
     Zeilen der Liste (Kopf „n Einträge, davon m Sets mit k Teilen“). „andere_set_status“ (nur mit Statusfilter, sonst
-    None): Teile mit diesem Status in Sets mit anderem Set-Status (andere_set_status)."""
+    None): Teile mit diesem Status in Sets mit anderem Set-Status (andere_set_status).
+    kategorie (Wunsch vom 25.10.2026): nur Zeilen, deren Produkt in dieser Kategorie steht (eine Set-Zeile nach dem
+    Set-Produkt); eine unbekannte Kennung ergibt eine leere Liste. „kategorien“: die Kategorien der Zeilen direkt hier
+    mit Zahl, nach Name. Die Zahlen zählen wie Filter in einer Leiste: „direkt“ (je Status) mit dem Kategoriefilter,
+    „kategorien“ mit dem Statusfilter – je Gruppe alle übrigen Filter außer dem eigenen; der Personenfilter zählt bei
+    beiden nicht mit (wie bisher bei „direkt“)."""
     from .search import sortierung
     ordnung = sortierung(artikel_sortierung(gruppe=True), sort, richtung, "i.inventory_no")
     o = ordner(fid)
@@ -1182,6 +1194,9 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     if zugeordnet is not None:
         bedingung += f" AND i.assigned_user_id = :zugeordnet AND {rechte.artikel_filter('i', 'grund')}"
         params["zugeordnet"] = zugeordnet
+    if kategorie is not None:
+        bedingung += " AND i.product_id IN (SELECT id FROM mat_product WHERE category_id = :kat)"
+        params["kat"] = kategorie
     ohne_status = bedingung
     if status_filter:
         if status_filter not in st.STATUS:
@@ -1205,11 +1220,19 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     # Die Zahlen an den Statusfiltern zählen wie die Liste (Oberfläche O2): je Zeile, ein Set einmal mit seinem
     # Set-Status – nicht jedes Teil einzeln (baum() zählt für Leiste und Übersicht weiter je Artikel).
     zaehlung = st.leere_zaehlung()
-    for r in db.query(f"SELECT {sets.gruppen_status_sql('i')} AS s, COUNT(*) AS n FROM mat_item i WHERE i.folder_id = :fid "
-                      f"AND i.parent_item_id IS NULL AND {rechte.artikel_filter('i')} GROUP BY s",
-                      dict(st.parameter(), fid=fid)):
+    sicht = f"i.folder_id = :fid AND i.parent_item_id IS NULL AND {rechte.artikel_filter('i')}"
+    nach_kat = " AND i.product_id IN (SELECT id FROM mat_product WHERE category_id = :kat)" if kategorie is not None else ""
+    for r in db.query(f"SELECT {sets.gruppen_status_sql('i')} AS s, COUNT(*) AS n FROM mat_item i WHERE {sicht}{nach_kat} "
+                      f"GROUP BY s", dict(st.parameter(), fid=fid, kat=kategorie)):
         zaehlung[r["s"]] = r["n"]
     out["direkt"] = zaehlung
+    nach_status = f" AND {sets.gruppen_status_sql('i')} = :sf" if status_filter else ""
+    kats = db.query(f"SELECT p.category_id AS id, COUNT(*) AS n FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
+                    f"WHERE {sicht}{nach_status} GROUP BY p.category_id", dict(st.parameter(), fid=fid, sf=status_filter))
+    out["kategorien"] = sorted(({"id": k["id"], "n": k["n"], "name": pf[-1]["name"] if pf else "",
+                                 "pfad": " / ".join(x["name"] for x in pf)}
+                                for k in kats for pf in (katalog.kategorie_pfad(k["id"]),)),
+                               key=lambda x: (x["name"].casefold(), x["pfad"].casefold()))
     out["seite"], out["pro_seite"] = seite, pro_seite
     darf = out["darf"]
     out["journal"] = (journal.lesen([("folder", fid)], grenze=50,

@@ -828,8 +828,9 @@ def ordner_lesen(fid):
     # Lager durchgesehen werden.
     seite = search.seiten(request.args.get("seite", 1), 1)[0]
     pro_seite = max(1, min(500, request.args.get("pro_seite", 200, type=int) or 200))
+    kategorie = kennung(request.args.get("kategorie"), "Kategorie", leer_erlaubt=True)
     return jsonify(ordner=bestand.ordner_inhalt(fid, request.args.get("status") or None, seite, pro_seite,
-                                                *_sortier_args(), zugeordnet=_zugeordnet_arg()))
+                                                *_sortier_args(), zugeordnet=_zugeordnet_arg(), kategorie=kategorie))
 
 
 ZWISCHEN_GLIEDERUNGEN = ("Zwischen Gliederungen verschiebt nur, wer beide Gliederungen verwaltet – oder die "

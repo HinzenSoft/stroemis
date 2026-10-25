@@ -19,6 +19,11 @@
   <div class="mat-side-kopf"><a href="/material/bestand">Ordner</a>
     <button class="lnk mat-side-zu" type="button" id="mat-side-zu" aria-label="Ordnerleiste schließen">✕</button></div>
   <div id="mat-baumnav"><p class="help">Wird geladen …</p></div>
+  {# Filtermenü unter dem Baum (Wunsch vom 25.10.2026): nur die Artikelliste eines Ordners füllt und zeigt es. #}
+  <section class="mat-side-filter" id="mat-side-filter" aria-labelledby="mat-filter-titel" hidden>
+    <div class="mat-side-kopf"><h2 id="mat-filter-titel" tabindex="-1">Filter</h2></div>
+    <div id="mat-filter-inhalt"></div>
+  </section>
 </aside>{% endif %}
 <main class="page breit mat" id="mat" data-ansicht="{{ ansicht }}" data-daten="{{ daten }}" data-darf="{{ darf }}">
   {# Passt die Zeile nicht (Telefon, Fold, Tablet hochkant), ordnet material.js sie um (navAnordnen): Die Reiter rollen

@@ -822,6 +822,36 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 /* Weniger Luft über der Navigation, wo die Höhe knapp ist. */
 @media (max-width: 640px), (max-height: 500px) { .page.mat { padding-top: 18px; } }
 
+/* Filtermenü unter dem Ordnerbaum (Wunsch vom 25.10.2026, nur die Artikelliste eines Ordners füllt es): Zeilen wie
+   der Baum, die gewählte markiert wie der aktive Ordner (weiß mit roter Kante, aria-pressed), die Zahl grau rechts.
+   Über der Liste ein Satz „Gefiltert: …“; „Filter (n)“ davor nur, solange die Leiste eine Schublade ist. */
+.mat-side-filter { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--linie); }
+.mat-side-filter .mat-side-kopf h2 { margin: 0; font-weight: 700; color: var(--anthrazit); font-size: var(--fs-marke);
+  text-transform: uppercase; letter-spacing: .05em; }
+.mat-filtergruppe { margin: 0 0 12px; }
+.mat-filtergruppe h3, .mat-filter-person label { margin: 6px 6px 4px; font-size: var(--fs-klein); font-weight: 600; color: var(--grau); }
+.mat-filterliste { list-style: none; margin: 0; padding: 0; }
+.mat-filterliste li { margin: 1px 0; }
+.mat-filterwahl { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 6px; padding: 4px 6px;
+  border: 0; border-left: 3px solid transparent; border-radius: var(--radius); background: none; color: var(--anthrazit);
+  font: inherit; font-size: var(--fs-mittel); text-align: left; cursor: pointer; }
+.mat-filterwahl:hover { background: var(--weiss); }
+.mat-filterwahl.active { background: var(--weiss); border-left-color: var(--rot); font-weight: 600; }
+.mat-filterwahl > span:first-child { min-width: 0; overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; }
+.mat-filter-person select { width: calc(100% - 12px); margin: 0 6px; }
+.mat-filterkopf { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 4px 0 10px; }
+.mat-filterkopf:not(:has(.mat-gefiltert)) { margin: 0; }
+.mat-gefiltert { margin: 0; }
+.mat-filter-auf { display: none; }
+@media (max-width: 1023px) {
+  .mat-filter-auf { display: inline-flex; }
+  .mat-filterkopf:not(:has(.mat-gefiltert)) { margin: 4px 0 10px; }
+}
+@media (horizontal-viewport-segments: 2) { .mat-filter-auf { display: none; } }
+@media (pointer: coarse) { .mat-filterwahl, .mat-filter-person select { min-height: 44px; } }
+/* Spalte „Kategorie“ der Ordnerliste: lange Namen brechen um, statt die Tabelle zu verbreitern. */
+table.list.mat-tabelle td.mat-kategorie { overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; }
+
 /* Ordnerleiste: ab 1024 px fest neben dem Inhalt, bis 1199 px schmaler (Tablet quer – der Inhalt behält gut 740 px,
    so passen die Tabellen der Prüfungen). Kerbe und Wischleiste bleiben frei. */
 @media (min-width: 1024px) and (max-width: 1199px) {

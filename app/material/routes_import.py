@@ -140,11 +140,11 @@ def nacharbeit_melden(fid):
 @api.post("/ordner/<int:fid>/nacharbeit/pruefen")
 @requires_folder("verwalten", "fid")
 def nacharbeit_pruefen(fid):
-    """Erneut prüfen ({"zeilen": [Nacharbeit-Nr.] | "alle", "uebernehmen": bool}) – ohne uebernehmen nur der Bericht,
-    mit uebernehmen werden übernehmbare Zeilen Artikel."""
+    """Erneut prüfen ({"zeilen": [Nacharbeit-Nr.] | "alle"} oder {"angabe": …} – alle offenen Zeilen der Produktangabe,
+    dazu "uebernehmen": bool) – ohne uebernehmen nur der Bericht, mit uebernehmen werden übernehmbare Zeilen Artikel."""
     d = json_body()
-    ergebnis = bestandsimport.nachpruefen(fid, d.get("zeilen"),
-                                          uebernehmen=wahr(d, "uebernehmen", "Übernehmen"))
+    ergebnis = bestandsimport.nachpruefen(fid, d.get("zeilen") if "zeilen" in d else None,
+                                          uebernehmen=wahr(d, "uebernehmen", "Übernehmen"), angabe=d.get("angabe"))
     return _privat(jsonify(ergebnis))
 
 

@@ -1543,6 +1543,37 @@ def _meldung_json(mid):
     return {"id": m["id"], "status": m["status"], "antwort": m["answer"], "produkt": produkt_kurz(p)}
 
 
+# Vorbelegung der Bemerkung in „Fehlendes Produkt melden“ (Wunsch vom 25.10.2026, F2): der Satz zum Import und die
+# verschiedenen Bemerkungen der Zeilen – höchstens so viele, je so lang; keine Serien- und Inventarnummern, keine Dateinamen.
+MELDUNG_BEMERKUNGEN = 5
+MELDUNG_BEMERKUNG_MAX = 200
+
+
+def _meldung_satz(rows):
+    """„Aus dem Bestandsimport Nr. …: n Artikel warten in der Nacharbeit.“ (mehrere Importe: „Nr. 3, 5“)."""
+    nummern = ", ".join(str(n) for n in sorted({r["import_id"] for r in rows}))
+    return f"Aus dem Bestandsimport Nr. {nummern}: {len(rows)} Artikel warten in der Nacharbeit."
+
+
+def meldung_bemerkung(rows):
+    """Die Vorbelegung der Bemerkung für eine Produktangabe: der Import-Satz und – falls die Liste welche hatte – die
+    verschiedenen Bemerkungen ihrer Zeilen (in der Reihenfolge der Zeilen, gekürzt). Unter meldung.NOTIZ_MAX."""
+    satz = _meldung_satz(rows)
+    bemerkungen = []
+    for r in rows:
+        b = " ".join(str(json.loads(r["values_json"] or "{}").get("bemerkung") or "").split())
+        if not b:
+            continue
+        b = b if len(b) <= MELDUNG_BEMERKUNG_MAX else b[:MELDUNG_BEMERKUNG_MAX - 1].rstrip() + "…"
+        if b not in bemerkungen:
+            bemerkungen.append(b)
+        if len(bemerkungen) == MELDUNG_BEMERKUNGEN:
+            break
+    if bemerkungen:
+        satz += "\nAngaben aus der Liste:\n" + "\n".join(f"– {b}" for b in bemerkungen)
+    return satz[:meldung.NOTIZ_MAX]
+
+
 def nacharbeit_json(fid, gruppe=None, seite=1):
     """Die Nacharbeit eines Zielordners: Zahlen je Gruppe, Produktangaben (Karten), offene Zeilen seitenweise
     (Filter gruppe), die zuletzt erledigten."""
@@ -1578,6 +1609,7 @@ def nacharbeit_json(fid, gruppe=None, seite=1):
                         "produkt": kurz(wahl.pop()) if len(wahl) == 1 and None not in wahl else None,
                         "zugeordnet": sum(1 for r in rows if r["product_id"]),
                         "meldung": _meldung_json(next((r["request_id"] for r in rows if r["request_id"]), None)),
+                        "meldung_bemerkung": meldung_bemerkung(rows),
                         "vorschlaege": [produkt_kurz(p) for p in vorschlaege[:5]]})
     gefiltert = [r for r in offen if gruppe is None or _gruppe(r) == gruppe]
     seiten = max(1, -(-len(gefiltert) // SEITE))
@@ -1642,8 +1674,7 @@ def melden(fid, angabe, d, fotos):
         if k not in ("folder_id", "angabe", "fotos", "is_set", "set_teile") and d.get(k) not in (None, ""):
             daten[k] = d.get(k)
     if not (daten.get("note") or "").strip():
-        daten["note"] = (f"Aus dem Bestandsimport Nr. {rows[0]['import_id']}: {len(rows)} Artikel warten in der "
-                         "Nacharbeit.")
+        daten["note"] = _meldung_satz(rows)
     daten["folder_id"] = fid
     mid = meldung.anlegen(daten, fotos)
     db.execute("UPDATE mat_import_row SET request_id = ? WHERE status = 'offen' AND offer_key = ? "
@@ -1651,12 +1682,22 @@ def melden(fid, angabe, d, fotos):
     return mid
 
 
-def nachpruefen(fid, zeilen, uebernehmen=False):
+def nachpruefen(fid, zeilen=None, uebernehmen=False, angabe=None):
     """Erneut prüfen (Bericht wie der Probelauf; schreibt nichts außer der einen Protokollzeile) – mit uebernehmen in
     EINER Transaktion: übernehmbare Zeilen werden Artikel, gefundene „schon im Bestand“, weiter offene bekommen ihre
     neuen Gründe. Geprüft wird auf den gespeicherten Werten; doppelt nur unter den gewählten Zeilen und gegen den
-    Bestand."""
-    rows = zeilen_laden(fid, zeilen)
+    Bestand. Die Zeilen: gewählte (zeilen) oder alle offenen einer Produktangabe (angabe, die Karte – „Übernehmen …“,
+    Wunsch vom 25.10.2026), genau eins von beiden."""
+    if (angabe is None) == (zeilen is None):
+        raise Abgelehnt("Bitte eine Produktangabe oder Zeilen wählen.")
+    if angabe is not None:
+        if not isinstance(angabe, str) or not angabe:
+            raise Abgelehnt("Bitte eine Produktangabe wählen.")
+        rows = [r for r in db.query(_offene_sql(), (fid,)) if r["offer_key"] == angabe]
+        if not rows:
+            raise Abgelehnt(ZEILE_FEHLT, 404)
+    else:
+        rows = zeilen_laden(fid, zeilen)
     if len(rows) > AUSWAHL_MAX:
         raise Abgelehnt(f"Höchstens {AUSWAHL_MAX} Zeilen auf einmal – bitte filtern oder auswählen.")
     with _laeuft():

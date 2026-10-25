@@ -693,13 +693,27 @@
   // Als Schublade ist die geschlossene Leiste nur aus dem Bild geschoben – „inert“ nimmt sie auch aus der
   // Tab-Reihenfolge und dem Vorlesen. Neben dem Inhalt (breiter Bildschirm) ist sie immer bedienbar.
   function leisteInert() { if (leiste) leiste.inert = alsSchublade() && !leiste.classList.contains("open"); }
+  let leisteAufVon = null;             // der Knopf, der die Schublade geöffnet hat: „☰ Ordner“ oder „Filter (n)“
   function leisteZu(fokusZurueck) {
     if (!leiste) return;
     const war = leiste.classList.contains("open");
     leiste.classList.remove("open");
     if (leisteAuf) leisteAuf.setAttribute("aria-expanded", "false");
     leisteInert();
-    if (war && fokusZurueck && leisteAuf) leisteAuf.focus();
+    const zurueck = leisteAufVon && leisteAufVon.isConnected ? leisteAufVon : leisteAuf;
+    leisteAufVon = null;
+    if (war && fokusZurueck && zurueck) zurueck.focus();
+  }
+  // Die Schublade öffnen – von „☰ Ordner“ (Fokus auf den markierten Ordner) oder von „Filter (n)“ über der Liste
+  // (Wunsch vom 25.10.2026, F4: dieselbe Schublade, gerollt zu den Filtern, Fokus auf deren Titel).
+  function leisteOeffnen(von, ziel) {
+    leiste.classList.add("open");
+    if (leisteAuf) leisteAuf.setAttribute("aria-expanded", "true");
+    leisteInert();
+    leisteAufVon = von || leisteAuf;
+    if (ziel) { ziel.scrollIntoView({ block: "start" }); ziel.focus({ preventScroll: true }); return; }
+    const a = $("a.active", leiste) || $("a", leiste);
+    if (a) a.focus({ preventScroll: true });
   }
   /* Wischen nach links schließt die Schublade – auf der Leiste wie auf der Abdunklung daneben. Die Leiste folgt dabei
      dem Finger; reicht der Weg nicht (ein Viertel ihrer Breite, höchstens 80 px), springt sie zurück. Wer senkrecht
@@ -733,6 +747,14 @@
   }
   if (leiste) {
     leiste.addEventListener("click", (e) => {
+      // Das Filtermenü unter dem Baum (nur die Ordneransicht füllt es) wirkt wie Knöpfe im Inhalt: an die Aktionen der
+      // Ansicht.
+      const fb = e.target.closest("#mat-side-filter [data-act]");
+      if (fb && aktionen[fb.dataset.act]) {
+        e.preventDefault();
+        aktionen[fb.dataset.act](fb, e);
+        return;
+      }
       // Im Katalog wechselt eine Kategorie ohne Neuladen – Suche und Sortierung bleiben stehen.
       const kat = e.target.closest("a[data-kat]");
       if (kat && katalogWahl && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
@@ -752,17 +774,19 @@
       klapp[b.dataset.klapp] = auf;
       klappMerken(klapp);
     });
+    leiste.addEventListener("change", (e) => {
+      const p = e.target.closest("#mat-side-filter select[data-personwahl]");
+      if (p && aktionen.person) aktionen.person(p, e);
+    });
     $("#mat-side-zu").addEventListener("click", () => leisteZu(true));
     if (leisteAuf) leisteAuf.addEventListener("click", () => {
-      const auf = !leiste.classList.contains("open");
-      leiste.classList.toggle("open", auf);
-      leisteAuf.setAttribute("aria-expanded", String(auf));
-      leisteInert();
-      if (auf) { const a = $("a.active", leiste) || $("a", leiste); if (a) a.focus({ preventScroll: true }); }
+      if (leiste.classList.contains("open")) leisteZu();
+      else leisteOeffnen(leisteAuf);
     });
-    // Tippen neben die offene Schublade oder Escape schließt sie.
+    // Tippen neben die offene Schublade oder Escape schließt sie (nicht der Knopf, der sie eben geöffnet hat).
     document.addEventListener("click", (e) => {
-      if (leiste.classList.contains("open") && !leiste.contains(e.target) && !(leisteAuf && leisteAuf.contains(e.target))) leisteZu();
+      if (leiste.classList.contains("open") && !leiste.contains(e.target) && !(leisteAuf && leisteAuf.contains(e.target))
+          && !e.target.closest("[data-leiste-auf]")) leisteZu();
     });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") leisteZu(true); });
     // Wechselt die Darstellung (Tablet gedreht, Fold auf- oder zugeklappt), schließt eine offene Schublade – sonst
@@ -1438,6 +1462,8 @@
   }
   const ARTIKEL_SORT = [["Inventar-Nr.", "inventar"], ["Hersteller", "hersteller"], ["Produkt", "produkt"], ["Seriennummer", "serie"],
                         ["Nächste Prüfung", "faellig"], ["Status", "status"]];
+  // Mit Spalte „Kategorie“ (nur die Artikelliste des Ordners, Wunsch vom 25.10.2026, F3) steht sie vorn.
+  const ARTIKEL_SORT_KAT = [["Kategorie", "kategorie"]].concat(ARTIKEL_SORT);
   const sortWeiter = (sort, feld) => (sort.feld === feld ? { feld, richtung: sort.richtung === "auf" ? "ab" : "auf" } : { feld, richtung: "auf" });
   const sortParameter = (q, sort) => { if (sort && sort.feld) { q.set("sort", sort.feld); q.set("richtung", sort.richtung); } return q; };
   // Ein Produkt in Listen: Hersteller in eigener Spalte, hier Bild, Modell mit Beschreibung und Artikelnummer.
@@ -1479,7 +1505,9 @@
 
   /* Drei Gestalten je nach Breite des Inhalts (material.css, „Lieferung 5 – Geräte: listen“): ab 821 px alle Spalten;
      601–820 px eine engere Tabelle – Seriennummer unter der Inventar-Nr., Hersteller über dem Produkt, nächste Prüfung
-     unter dem Status; bis 600 px je Artikel eine Karte, ebenso zusammengefasst, unten Häkchen und „Prüfen“. */
+     unter dem Status; bis 600 px je Artikel eine Karte, ebenso zusammengefasst, unten Häkchen und „Prüfen“.
+     opts.kategorie (Ordnerliste, Wunsch vom 25.10.2026): erste Spalte „Kategorie“ – eng und als Karte klein grau über
+     Hersteller und Produkt. */
   function artikelTabelle(liste, opts) {
     opts = opts || {};
     const s = opts.sort || null;
@@ -1492,16 +1520,18 @@
       ? `<div class="small muted">Teil ${esc(a.set.faellig_durch.inventory_no)}</div>` : "");
     const rrTeile = (a) => (a.set && a.set.rueckruf_teile.length
       ? ` <span class="mat-rr-marke" title="Rückruf an Teil ${esc(a.set.rueckruf_teile.map((r) => `${r.inventory_no}: ${r.titel}`).join("; "))}">Rückruf</span>` : "");
-    return `${kartenKopf(ARTIKEL_SORT, s, opts.auswahl)}<table class="list mat-tabelle mat-karten mat-artikel">
+    const kat = Boolean(opts.kategorie);
+    return `${kartenKopf(kat ? ARTIKEL_SORT_KAT : ARTIKEL_SORT, s, opts.auswahl)}<table class="list mat-tabelle mat-karten mat-artikel${kat ? " mat-mit-kategorie" : ""}">
       <thead><tr>${opts.auswahl ? '<th class="mat-wahlspalte"><label class="mat-wahl-feld"><input type="checkbox" id="mat-alle" class="mat-alle" aria-label="alle auswählen"></label></th>' : ""}
-        ${sortKopf("Inventar-Nr.", "inventar", s, { nach: kopfZusatz("Seriennummer", "serie", s, "schmal") })}${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: kopfZusatz("Hersteller", "hersteller", s, "schmal"), nach: opts.person ? kopfZusatz("Person", "", null, "eng") : "" })}${sortKopf("Serien\u00adnummer", "serie", s, { klasse: "mat-schmal-weg" })}
+        ${kat ? sortKopf("Kategorie", "kategorie", s, { klasse: "mat-schmal-weg" }) : ""}${sortKopf("Inventar-Nr.", "inventar", s, { nach: kopfZusatz("Seriennummer", "serie", s, "schmal") })}${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: `${kat ? kopfZusatz("Kategorie", "kategorie", s, "schmal") : ""}${kopfZusatz("Hersteller", "hersteller", s, "schmal")}`, nach: opts.person ? kopfZusatz("Person", "", null, "eng") : "" })}${sortKopf("Serien\u00adnummer", "serie", s, { klasse: "mat-schmal-weg" })}
         ${opts.person ? '<th class="mat-eng-weg">Person</th>' : ""}${opts.pfad ? "<th>Ablage</th>" : ""}${sortKopf("Nächste Prüfung", "faellig", s, { klasse: "mat-schmal-weg" })}${sortKopf("Status", "status", s, { nach: kopfZusatz("Nächste Prüfung", "faellig", s, "schmal") })}${opts.pruefen ? "<th></th>" : ""}</tr></thead>
       <tbody>${liste.map((a) => `<tr data-id="${a.id}">
         ${opts.auswahl ? `<td class="mat-wahlspalte mat-k-wahl">${wahlFeld(a)}</td>` : ""}
+        ${kat ? `<td data-l="Kategorie" class="mat-schmal-weg mat-kategorie">${a.kategorie ? esc(a.kategorie.name) : ""}</td>` : ""}
         <td data-l="Inventar-Nr." class="mat-k-titel"><a class="mat-inv" href="/material/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a>
           <div class="mat-schmal-zusatz small muted">SN ${esc(a.serial_no)}${a.serial_generated ? " (System)" : ""}</div></td>
         <td data-l="Hersteller" class="mat-schmal-weg">${esc(a.manufacturer || "")}</td>
-        <td data-l="Produkt" class="mat-k-ohne">${a.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(a.manufacturer)}</div>` : ""}${produktZelle(a)}${opts.person && a.zugeordnet_name ? `<div class="mat-eng-zusatz small muted">${esc(a.zugeordnet_name)}</div>` : ""}</td>
+        <td data-l="Produkt" class="mat-k-ohne">${kat && a.kategorie ? `<div class="mat-schmal-zusatz small muted">${esc(a.kategorie.name)}</div>` : ""}${a.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(a.manufacturer)}</div>` : ""}${produktZelle(a)}${opts.person && a.zugeordnet_name ? `<div class="mat-eng-zusatz small muted">${esc(a.zugeordnet_name)}</div>` : ""}</td>
         <td data-l="Seriennummer" class="mat-schmal-weg">${esc(a.serial_no)}${a.serial_generated ? ' <span class="muted" title="vom System vergeben">(System)</span>' : ""}</td>
         ${opts.person ? `<td data-l="Person" class="mat-eng-weg mat-k-halb">${esc(a.zugeordnet_name || "")}</td>` : ""}
         ${opts.pfad ? `<td data-l="Ablage">${esc(a.pfad || "")}</td>` : ""}
@@ -1969,6 +1999,9 @@
     let sort = { feld: null, richtung: "auf" };
     let person = "";                 // Filter „Zugeordnet an“: Kennung des Kontos
     let personen = null;             // Konten mit Zuordnungen im Zweig – nur mit Grundrecht geholt
+    let kategorie = "";              // Filter „Kategorie“ (Wunsch vom 25.10.2026): Kennung der Kategorie
+    let kategorieName = "";          //   … und ihr Name, falls sie nach einer Änderung nicht mehr in der Liste steht
+    let nachFilter = null;           // nach einer Wahl im Filtermenü: wohin der Fokus geht (Selektor) bzw. "liste"
     let grund = false;               // Grundrecht am Ordner – bekannt nach dem ersten Zeichnen
     let kopfEl = null;               // Ablaufhinweis der Freigaben: einmal geholt, bei jedem Zeichnen wieder eingesetzt
     // Die Personen für den Filter (nur mit Grundrecht). Hat die gewählte inzwischen keine Zuordnung mehr, gilt er nicht.
@@ -1996,6 +2029,7 @@
       const q = sortParameter(new URLSearchParams({ seite, pro_seite: 200 }), sort);
       if (filter) q.set("status", filter);
       if (person) q.set("zugeordnet", person);
+      if (kategorie) q.set("kategorie", kategorie);
       const [antwort] = await Promise.all([api(`${API}/ordner/${id}?${q}`), ordnerBaum().catch(() => null)]);
       const d = antwort.ordner;
       const darf = d.darf || {};
@@ -2011,8 +2045,8 @@
       const bc = d.pfad.map((p, i) => (i === d.pfad.length - 1 ? `<span>${esc(p.name)}</span>` : pfadGlied(p))).join(" / ");
       const pruefbar = d.system_kind !== "ausgesondert" && d.artikel.some((a) => a.darf && a.darf.pruefen);
       // Filter „Zugeordnet an …“ (Bauentwurf 6.4) – nur mit Grundrecht und nur, wenn im Zweig jemandem etwas zugeordnet ist.
-      const personWahl = grund && personen && personen.length ? `<select class="mat-personwahl" data-personwahl
-          aria-label="Nur Artikel, die dieser Person zugeordnet sind"><option value="">Zugeordnet an …</option>${personen.map((p) => `<option value="${p.id}" ${String(p.id) === person ? "selected" : ""}>${esc(p.name)}${p.aktiv ? "" : " (deaktiviert)"}</option>`).join("")}</select>` : "";
+      // Seit dem 25.10.2026 im Filtermenü der Seitenleiste.
+      const personWahl = grund && personen && personen.length ? `<label for="mat-personwahl">Zugeordnet an</label><select class="mat-personwahl" id="mat-personwahl" data-personwahl><option value="">alle</option>${personen.map((p) => `<option value="${p.id}" ${String(p.id) === person ? "selected" : ""}>${esc(p.name)}${p.aktiv ? "" : " (deaktiviert)"}</option>`).join("")}</select>` : "";
       // „Erinnerungsmails aus“ (selbst oder von einem Oberordner geerbt) sieht, wer den Ordner pflegt – dort schaltet man es.
       const erinnerungAus = darfPflegen && d.erinnerungen && d.erinnerungen.aus;
       const geerbtVon = erinnerungAus && !d.erinnerungen.eigen ? d.erinnerungen.geerbt_von : null;
@@ -2023,12 +2057,39 @@
       const direktAlle = summe(d.direkt);
       const unten = Math.max(0, summe(z) - direktAlle);
       const faelligZweig = (z.ueberfaellig || 0) + (z.neu || 0) + (z.bald_faellig || 0) + (z.lebensdauer || 0);
-      const leerHtml = person ? leer("Hier liegen keine Artikel, die dieser Person zugeordnet sind.")
-        : filter ? leer("Keine Artikel mit diesem Status.")
+      const leerHtml = filter || kategorie || person ? leer("Keine Artikel mit diesen Filtern.")
           : !unten ? leer("Hier liegen keine Artikel.")
             : `<p class="mat-leer">${unten === 1 ? "Hier liegen keine Artikel direkt – 1 liegt in einem Unterordner."
               : `Hier liegen keine Artikel direkt – ${unten} liegen in Unterordnern.`}${faelligZweig
               ? ` <a href="/material/pruefungen?ordner=${d.id}">Fällige Artikel im ganzen Zweig →</a>` : ""}</p>`;
+      /* Filtermenü in der Seitenleiste unter dem Baum (Wunsch vom 25.10.2026): Status, Kategorie und „Zugeordnet an“,
+         untereinander verknüpft (alle zugleich). Die Zahlen je Gruppe zählen mit den übrigen Filtern (Server). Über
+         der Liste steht nur ein Satz, was gefiltert ist, mit „Filter zurücksetzen“; unter 1024 px davor „Filter (n)“,
+         der die Schublade bei den Filtern öffnet (F4). Liegt hier gar nichts und ist nichts gefiltert, entfällt es. */
+      const zeigeFilter = Boolean(direktAlle || filter || person || kategorie);
+      const kats = (d.kategorien || []).slice();
+      if (kategorie && !kats.some((k) => String(k.id) === kategorie)) kats.push({ id: +kategorie, name: kategorieName || "gewählte Kategorie", pfad: kategorieName, n: 0 });
+      const doppelt = new Set(kats.filter((k, i) => kats.findIndex((x) => x.name.toLowerCase() === k.name.toLowerCase()) !== i).map((k) => k.name.toLowerCase()));
+      const katText = (k) => (doppelt.has(k.name.toLowerCase()) ? k.pfad : k.name);
+      const wahlKnopf = (act, attr, wert, an, text, n, title) => `<li><button type="button" class="mat-filterwahl${an ? " active" : ""}" data-act="${act}" ${attr}="${esc(wert)}" aria-pressed="${an}"${title ? ` title="${esc(title)}"` : ""}><span>${text}</span><span class="mat-side-anzahl">${n}</span></button></li>`;
+      const statusZahl = (st) => (st ? (d.direkt && d.direkt[st]) || 0 : summe(d.direkt));
+      const filterMenue = `<div class="mat-filtergruppe" role="group" aria-labelledby="mat-fg-status"><h3 id="mat-fg-status">Status</h3>
+          <ul class="mat-filterliste">${["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"].map((st) => wahlKnopf("filter", "data-f", st, st === filter, st ? esc(STATUS[st]) : "alle", statusZahl(st))).join("")}</ul></div>
+        ${kats.length ? `<div class="mat-filtergruppe" role="group" aria-labelledby="mat-fg-kat"><h3 id="mat-fg-kat">Kategorie</h3>
+          <ul class="mat-filterliste">${wahlKnopf("kategorie", "data-k", "", !kategorie, "alle", kats.reduce((n, k) => n + k.n, 0))}${kats.map((k) => wahlKnopf("kategorie", "data-k", String(k.id), String(k.id) === kategorie, esc(katText(k)), k.n, k.pfad)).join("")}</ul></div>` : ""}
+        ${personWahl ? `<div class="mat-filtergruppe mat-filter-person">${personWahl}</div>` : ""}`;
+      const personName = person && personen ? ((personen.find((p) => String(p.id) === person) || {}).name || "") : "";
+      const katAktiv = kategorie ? kats.find((k) => String(k.id) === kategorie) : null;
+      const gefiltert = [filter ? `Status „${esc(STATUS[filter])}“` : "", katAktiv ? `Kategorie „${esc(katText(katAktiv))}“` : "",
+        person ? `zugeordnet an „${esc(personName)}“` : ""].filter(Boolean);
+      const filterKopf = `<div class="mat-filterkopf"><button type="button" class="btn secondary small mat-filter-auf" data-act="filter-auf" data-leiste-auf
+          aria-controls="mat-side">${gefiltert.length ? `Filter (${gefiltert.length})` : "Filter"}</button>
+        ${gefiltert.length ? `<p class="small mat-gefiltert" tabindex="-1">Gefiltert: ${gefiltert.join(" · ")} – <button type="button" class="lnk" data-act="filter-weg">Filter zurücksetzen</button></p>` : ""}</div>`;
+      const filterBox = $("#mat-side-filter");
+      if (filterBox) {
+        filterBox.hidden = !zeigeFilter;
+        $("#mat-filter-inhalt", filterBox).innerHTML = zeigeFilter ? filterMenue : "";
+      }
       const systemText = d.system_kind === "gesperrt"
         ? "Hierher verschiebt eine Sperre die Artikel der Gliederung. Zurück in ihren Herkunftsordner bringt sie nur eine Freiprüfung."
         : "Ausgesonderte Artikel bleiben hier mit ihrem vollen Lebenslauf sichtbar, zählen aber nirgends mehr als Bestand und lassen sich nicht zurückholen.";
@@ -2047,10 +2108,9 @@
           ${d.interval_months ? `<p class="small">Prüfintervall hier: höchstens ${d.interval_months} Monate.</p>` : ""}
           ${erinnerungAus ? `<p class="small">Erinnerungsmails aus${geerbtVon ? ` – geerbt von ${geerbtVon.sichtbar ? `<a href="/material/ordner/${geerbtVon.id}">${esc(geerbtVon.pfad)}</a>` : esc(geerbtVon.pfad)}` : ""}</p>` : ""}</div></div>` : ""}
         ${d.unterordner.length ? `<section class="section"><h2>Unterordner</h2>${unterordnerHtml(d.unterordner)}</section>` : ""}
-        <section class="section"><h2>Artikel in diesem Ordner</h2>
-          ${direktAlle || filter || person ? `<div class="mat-filterzeile"><div class="c-tabs mat-filter">${["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"].map((s) => `<button type="button" data-act="filter" data-f="${s}" class="${s === filter ? "sel" : ""}">${s ? esc(STATUS[s]) : "alle"}${s && d.direkt && d.direkt[s] ? ` (${d.direkt[s]})` : ""}</button>`).join("")}</div>
-            ${personWahl}</div>` : ""}
-          ${setKopf(d.artikel_gesamt, d.sets)}${d.artikel.length ? artikelTabelle(d.artikel, { auswahl: darfPflegen, pruefen: pruefbar, person: darf.grund, sort }) : leerHtml}
+        <section class="section"><h2 id="mat-artikel-titel" tabindex="-1">Artikel in diesem Ordner</h2>
+          ${zeigeFilter ? filterKopf : ""}
+          ${setKopf(d.artikel_gesamt, d.sets)}${d.artikel.length ? artikelTabelle(d.artikel, { auswahl: darfPflegen, pruefen: pruefbar, person: darf.grund, sort, kategorie: true }) : leerHtml}
           ${andereSetsHtml(d.andere_set_status, filter)}
           ${person ? `<p class="small"><a href="/material/pruefungen?ordner=${d.id}&zugeordnet=${encodeURIComponent(person)}">Fällige Artikel dieser Person im ganzen Zweig →</a></p>` : ""}
           ${seitenleiste(d.artikel_gesamt, seite, d.pro_seite)}
@@ -2091,15 +2151,34 @@
         // „Zuordnung lösen“ nur, wenn unter den gewählten einer jemandem zugeordnet ist.
         $('[data-act="sammel-loesen"]', leiste).hidden = !gewaehlt.some((c) => c.dataset.person);
       };
+      if (nachFilter) {
+        // Nach einer Wahl: in der Schublade zum Satz „Gefiltert …“ bzw. zur Liste, in der festen Leiste zurück auf die Wahl.
+        const ziel = nachFilter === "liste" ? $(".mat-gefiltert", inhalt) || $("#mat-artikel-titel", inhalt) : $(nachFilter);
+        nachFilter = null;
+        if (ziel) ziel.focus();
+      }
       $$(".mat-wahl-art", inhalt).forEach((c) => c.addEventListener("change", sammel));
       alleK.forEach((alle) => alle.addEventListener("change", () => { waehlbar.forEach((c) => { c.checked = alle.checked; }); sammel(); }));
       const gewaehlteIds = () => $$(".mat-wahl-art:checked", inhalt).map((c) => +c.value);
 
+      // Eine Wahl im Filtermenü: erste Seite, Schublade zu (der Fokus geht danach auf den Satz über der Liste).
+      const gewaehlt = (sel) => {
+        seite = 1;
+        if (alsSchublade() && leiste && leiste.classList.contains("open")) { leisteZu(); nachFilter = "liste"; } else nachFilter = sel;
+        zeigen(zeichnen);
+      };
       aktionen = {
-        filter: (b) => { filter = b.dataset.f; seite = 1; zeigen(zeichnen); },
+        filter: (b) => { filter = b.dataset.f; gewaehlt(`[data-act="filter"][data-f="${filter}"]`); },
+        kategorie: (b) => {
+          kategorie = b.dataset.k;
+          kategorieName = kategorie ? b.title || $("span", b).textContent : "";
+          gewaehlt(`[data-act="kategorie"][data-k="${kategorie}"]`);
+        },
+        "filter-weg": () => { filter = ""; kategorie = ""; person = ""; seite = 1; nachFilter = "#mat-artikel-titel"; zeigen(zeichnen); },
+        "filter-auf": (b) => { if (leiste && filterBox) leisteOeffnen(b, $("#mat-filter-titel", filterBox)); },
         seite: (b) => { seite = +b.dataset.seite; zeigen(zeichnen); },
         sortieren: (b) => { sort = sortWeiter(sort, b.dataset.feld); seite = 1; zeigen(zeichnen); },
-        person: (s) => { person = s.value; seite = 1; zeigen(zeichnen); },
+        person: (s) => { person = s.value; gewaehlt("#mat-personwahl"); },
         unterordner: () => ordnerDialog({ kind: "standort" }, d.id),
         runde: () => rundeDialog(d.id),
         bearbeiten: () => bearbeiten(),
@@ -2589,7 +2668,8 @@
       ${sb ? setKasten(sb, a) : ""}
       <div class="mat-spalten">
         <section class="section"><h2>Stammdaten</h2><dl class="mat-daten">
-          ${zeile("Produkt", `${nameHtml(p)}${zusatzHtml(p)}${p.norm ? ` · ${esc(p.norm)}` : ""}`)}
+          ${zeile("Produkt", `${nameHtml(p)}${zusatzHtml(p)}`)}
+          ${zeile("Norm", p.norm ? esc(p.norm) : '<span class="muted">–</span>')}
           ${zeile("Materialart", esc(MATERIALART[p.material_kind] || p.material_kind))}
           ${zeile("Gliederung", a.gliederung ? pfadGlied(a.gliederung) : "–")}
           ${zuordnung}
@@ -7379,7 +7459,9 @@
      Pflichtfeld „Teile des Sets“ (je Zeile ein Teil, Grenze wie die Bemerkung), Hersteller und Modell dürfen dann die
      Kombination meinen. Aus der Nacharbeit eines Bestandsimports (Phase 2 · L3) kommen dazu v.url (…/nacharbeit/melden –
      der Zielordner steht in der Adresse, kein folder_id) und v.angabe (die Produktangabe der Liste); vorbelegt sind dann
-     Hersteller, Modell und Artikelnummer aus der Liste – dort gibt es nur Produkte (die Nacharbeit nimmt kein Set). */
+     Hersteller, Modell und Artikelnummer aus der Liste – dort gibt es nur Produkte (die Nacharbeit nimmt kein Set) – und
+     seit dem 25.10.2026 die Bemerkung (v.note: Satz zum Import und die Bemerkungen der Zeilen). v.norm und v.category_id
+     belegen Norm und Kategorie vor, wenn ein Aufrufer sie kennt (die Nacharbeit kennt sie nicht, Entscheidung F2). */
   async function meldungDialog(v, danach) {
     const kats = await kategorienLaden();
     const mitSet = !v.url;
@@ -7393,12 +7475,12 @@
       <div class="field-row"><div><label for="me-her">Hersteller</label><input type="text" id="me-her" maxlength="120" value="${esc(v.manufacturer || "")}" ${TASTATUR_NAME}></div>
         <div><label for="me-mod">Modell</label><input type="text" id="me-mod" maxlength="160" value="${esc(v.model || "")}" ${TASTATUR_NAME}></div></div>
       <div class="field-row"><div><label for="me-art">Artikelnummer des Herstellers</label><input type="text" id="me-art" maxlength="80" value="${esc(v.article_no || "")}" ${TASTATUR_NUMMER}><div class="help" id="me-art-hilfe"></div></div>
-        <div><label for="me-norm">Norm</label><input type="text" id="me-norm" maxlength="200" placeholder="z. B. EN 362" ${TASTATUR_NUMMER}></div></div>
-      <label for="me-kat">Kategorie</label><select id="me-kat"><option value="">– weiß ich nicht –</option>${kategorieOptionen(kats, null)}</select>
+        <div><label for="me-norm">Norm</label><input type="text" id="me-norm" maxlength="200" placeholder="z. B. EN 362" value="${esc(v.norm || "")}" ${TASTATUR_NUMMER}></div></div>
+      <label for="me-kat">Kategorie</label><select id="me-kat"><option value="">– weiß ich nicht –</option>${kategorieOptionen(kats, v.category_id || null)}</select>
       <label for="me-links">Links</label><textarea id="me-links" rows="3" ${TASTATUR_ADRESSE} placeholder="https://… – je Zeile eine Adresse: Herstellerseite, Gebrauchsanleitung, Händler"></textarea>
       <div class="mat-feldkopf">Fotos (bis zu 3)</div>${dateiKnopf("me-fotos", 'Fotos wählen …', "image/*", true)}
       <div class="help">Etikett oder Typenschild – darauf stehen meist Hersteller, Modell, Norm und Herstelldatum.</div>
-      <label for="me-note">Bemerkung</label><textarea id="me-note" rows="3" maxlength="2000" placeholder="Was hilft beim Einpflegen? z. B. Größe, Farbe, wo gekauft"></textarea>
+      <label for="me-note">Bemerkung</label><textarea id="me-note" rows="3" maxlength="2000" placeholder="Was hilft beim Einpflegen? z. B. Größe, Farbe, wo gekauft">${esc(v.note || "")}</textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="me-ok" type="button">Melden</button></div>`,
     (dlg, body) => {
       const istSet = () => mitSet && $('input[name="me-art"]:checked', body).value === "set";
@@ -7998,13 +8080,16 @@
       return `<h3 class="mat-unter">Produkte zuordnen</h3><div class="mat-na-karten">${na.gruppen.map((g, i) => {
         const m = g.meldung;
         const meldung = !m ? "" : m.status === "offen" ? "Gemeldet – die Material-Verwaltung nimmt das Produkt auf."
-          : m.status === "eingepflegt" ? `Eingepflegt: ${m.produkt ? produktKurz(m.produkt) : "–"} – „Erneut prüfen“ übernimmt die Zeilen.`
+          : m.status === "eingepflegt" ? `Eingepflegt: ${m.produkt ? produktKurz(m.produkt) : "–"} – „Übernehmen …“ legt die Artikel an.`
             : `Abgelehnt${m.antwort ? `: ${esc(m.antwort)}` : ""}`;
         const knoepfe = [`<button type="button" class="btn secondary small" data-act="na-gruppe-zuordnen" data-i="${i}">Produkt zuordnen …</button>`];
         // Ist schon ein Produkt zugeordnet (auch gerade erst im Katalog angelegt), braucht es kein Anlegen und Melden mehr –
         // „Produkt zuordnen …“ ändert die Wahl.
+        // Konten ohne Katalogrecht melden das fehlende Produkt (vorbelegt aus der Nacharbeit, Wunsch vom 25.10.2026).
         if (!g.produkt && DARF.katalog) knoepfe.push(`<button type="button" class="btn secondary small" data-act="na-anlegen" data-i="${i}">Im Katalog anlegen …</button>`);
-        else if (!g.produkt && (!m || m.status === "abgelehnt")) knoepfe.push(`<button type="button" class="btn secondary small" data-act="na-melden" data-i="${i}">Produkt melden …</button>`);
+        else if (!g.produkt && (!m || m.status === "abgelehnt")) knoepfe.push(`<button type="button" class="btn secondary small" data-act="na-melden" data-i="${i}">Fehlendes Produkt melden …</button>`);
+        // Zugeordnet (ganz oder zeilenweise) oder die Meldung eingepflegt: direkt übernehmen, ohne Anhaken und ohne CSV.
+        if (g.produkt || g.zugeordnet || (m && m.status === "eingepflegt")) knoepfe.push(`<button type="button" class="btn secondary small" data-act="na-uebernehmen" data-i="${i}">Übernehmen …</button>`);
         const zeilenweise = !g.produkt && g.zugeordnet ? ` · zeilenweise zugeordnet: ${g.zugeordnet} von ${g.offen}` : "";
         return `<div class="mat-na-karte"><p class="mat-na-angabe"><strong>${esc(angabeAus(g) || "ohne Angabe")}</strong> <span class="mat-na-art">${esc(g.produkt ? "zugeordnet" : PRODUKT_ART[g.art] || g.art)}</span></p>
           <p class="small">${plural(g.offen, "Zeile", "Zeilen")}${g.produkt ? ` · zugeordnet: <strong>${produktKurz(g.produkt)}</strong>` : ""}${zeilenweise}</p>
@@ -8130,8 +8215,10 @@
           try {
             const r = await api(`${API}/ordner/${fid}/nacharbeit/produkt`, { method: "POST", body: Object.assign({ product_id: pid }, ziel) });
             dlg.close();
-            toast(pid ? `Zugeordnet – ${plural(r.gesetzt, "Zeile", "Zeilen")}. „Erneut prüfen“ übernimmt sie.` : `Zuordnung entfernt – ${plural(r.gesetzt, "Zeile", "Zeilen")}`);
-            nacharbeitLaden();
+            await nacharbeitLaden();
+            // Nach dem Zuordnen gleich die Prüfung dieser Zeilen mit „k Artikel übernehmen“ (Wunsch vom 25.10.2026, F1).
+            if (pid) nachpruefen(ziel, r.gesetzt);
+            else toast(`Zuordnung entfernt – ${plural(r.gesetzt, "Zeile", "Zeilen")}`);
           } catch (e) { toast(e.message, true); knopf.disabled = false; }
         }
         $("#nz-ok", body).onclick = (ev) => { if (gewaehlt) setzen(gewaehlt, ev.currentTarget); };
@@ -8139,18 +8226,25 @@
         if (weg) weg.onclick = () => setzen(null, weg);
       });
     }
-    // Erneut prüfen: erst das Ergebnis (schreibt nichts), dann auf Wunsch übernehmen.
-    async function nachpruefen() {
-      const zeilen = naAuswahl();
-      if (zeilen !== "alle" && !zeilen.length) return;
+    // Erneut prüfen: erst das Ergebnis (schreibt nichts), dann auf Wunsch übernehmen. ziel: {zeilen} (Vorgabe: die
+    // Auswahl) oder {angabe} (die Karte – „Übernehmen …“). zugeordnet: Zahl der eben zugeordneten Zeilen – dann kommt der
+    // Dialog direkt aus „Zuordnen“ und sagt das im Titel.
+    async function nachpruefen(ziel, zugeordnet) {
+      if (!ziel) {
+        const zeilen = naAuswahl();
+        if (zeilen !== "alle" && !zeilen.length) return;
+        ziel = { zeilen };
+      }
       let r;
-      try { r = await api(`${API}/ordner/${fid}/nacharbeit/pruefen`, { method: "POST", body: { zeilen, uebernehmen: false } }); }
+      try { r = await api(`${API}/ordner/${fid}/nacharbeit/pruefen`, { method: "POST", body: Object.assign({ uebernehmen: false }, ziel) }); }
       catch (e) { toast(e.message, true); return; }
       const z = r.zahlen;
       const offen = r.zeilen.filter((x) => x.status === "nacharbeit");
       const n = z.uebernehmbar, m = z.im_bestand;
       const label = n ? `${plural(n, "Artikel", "Artikel")} übernehmen` : m ? `${plural(m, "Zeile", "Zeilen")} als „schon im Bestand“ erledigen` : "";
-      dialog(`<h2>Erneut prüfen</h2>
+      const titel = zugeordnet ? (label ? "Zugeordnet – übernehmen?" : "Zugeordnet") : ziel.angabe ? "Übernehmen" : "Erneut prüfen";
+      dialog(`<h2>${titel}</h2>
+        ${zugeordnet ? `<p>${plural(zugeordnet, "Zeile", "Zeilen")} zugeordnet.</p>` : ""}
         <p>${plural(z.zeilen, "Zeile", "Zeilen")} geprüft: <strong>${n} übernehmbar</strong>${m ? `, ${m} schon im Bestand` : ""}, ${z.nacharbeit} weiter offen.</p>
         ${austauschListe("Bitte beachten", r.hinweise.concat(faelligSaetze(r.faelligkeit)), "warnung")}
         ${offen.length ? `<details class="mat-auf" ${offen.length <= 10 ? "open" : ""}><summary>Weiter offen (${offen.length})</summary>
@@ -8164,7 +8258,7 @@
           ok.disabled = true;
           ok.textContent = "Wird übernommen …";
           let e;
-          try { e = await api(`${API}/ordner/${fid}/nacharbeit/pruefen`, { method: "POST", body: { zeilen, uebernehmen: true } }); }
+          try { e = await api(`${API}/ordner/${fid}/nacharbeit/pruefen`, { method: "POST", body: Object.assign({}, ziel, { uebernehmen: true }) }); }
           catch (err) { toast(err.message, true); ok.disabled = false; ok.textContent = label; return; }
           const angelegt = e.zeilen.filter((x) => x.status === "angelegt");
           toast(angelegt.length ? `${plural(angelegt.length, "Artikel", "Artikel")} angelegt` : "Erledigt");
@@ -8224,31 +8318,32 @@
         const g = na.gruppen[+b.dataset.i];
         const ueber = !g.produkt && g.zugeordnet ? ` Das ersetzt die zeilenweise Zuordnung (${plural(g.zugeordnet, "Zeile", "Zeilen")}) – für verschiedene Größen oder Varianten die Zeilen unten einzeln zuordnen.` : "";
         zuordnenDialogNa(`Produkt zuordnen: ${angabeAus(g) || "ohne Angabe"}`,
-          `Gilt für ${g.offen === 1 ? "die Zeile" : `alle ${g.offen} offenen Zeilen`} dieser Angabe.${ueber} Danach übernimmt „Erneut prüfen“ die Zeilen.`,
+          `Gilt für ${g.offen === 1 ? "die Zeile" : `alle ${g.offen} offenen Zeilen`} dieser Angabe.${ueber} Danach kannst du sie gleich übernehmen.`,
           g.vorschlaege || [], { angabe: g.angabe }, g.produkt || g.zugeordnet);
       },
       "na-zeilen-zuordnen": () => {
         const n = naAnzahl();
         if (!n) return;
         zuordnenDialogNa(`Produkt zuordnen: ${plural(n, "Zeile", "Zeilen")}`,
-          "Etwa für eine Größe oder Variante. Danach übernimmt „Erneut prüfen“ die Zeilen.", [], { zeilen: naAuswahl() },
+          "Etwa für eine Größe oder Variante. Danach kannst du sie gleich übernehmen.", [], { zeilen: naAuswahl() },
           naZeilen.some((x) => x.produkt && (naAlle || naWahl.has(x.id))));
       },
       "na-melden": (b) => {
         const g = na.gruppen[+b.dataset.i];
-        meldungDialog({ manufacturer: g.hersteller, model: g.modell, article_no: g.artikelnummer, angabe: g.angabe,
-                        url: `${API}/ordner/${fid}/nacharbeit/melden` }, () => nacharbeitLaden());
+        meldungDialog({ manufacturer: g.hersteller, model: g.modell, article_no: g.artikelnummer, note: g.meldung_bemerkung,
+                        angabe: g.angabe, url: `${API}/ordner/${fid}/nacharbeit/melden` }, () => nacharbeitLaden());
       },
       "na-anlegen": (b) => {
         const g = na.gruppen[+b.dataset.i];
         produktDialog({ manufacturer: g.hersteller, model: g.modell, article_no: g.artikelnummer }, {
           danach: async (p) => {
             const r = await api(`${API}/ordner/${fid}/nacharbeit/produkt`, { method: "POST", body: { angabe: g.angabe, product_id: p.id } });
-            toast(`Angelegt und zugeordnet – ${plural(r.gesetzt, "Zeile", "Zeilen")}. „Erneut prüfen“ übernimmt sie.`);
-            nacharbeitLaden();
+            await nacharbeitLaden();
+            nachpruefen({ angabe: g.angabe }, r.gesetzt);
           } });
       },
       "na-pruefen": () => nachpruefen(),
+      "na-uebernehmen": (b) => nachpruefen({ angabe: na.gruppen[+b.dataset.i].angabe }),
       "na-verwerfen": () => naVerwerfen(),
     };
     await nacharbeitLaden();
