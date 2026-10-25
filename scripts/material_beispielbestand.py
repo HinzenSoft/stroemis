@@ -14,9 +14,11 @@ nicht. Es läuft nur mit ausdrücklichem Schalter:
 
 --artikel N: so viele Artikel zu Beginn und als geplante Nachkäufe (Vorgabe 800; Ersatz für Ausgesondertes kommt dazu).
 Ohne Angabe landen die Daten wie bei run.py in ./data; für eine andere Datenbank vorher DATA_DIR setzen. Auf dem
-dev-Server: README, Abschnitt „Beispielbestand (nur dev)“. Nur auf dev oder lokal: BASE_URL in der Umgebung UND in der
-Anwendung (Verwaltung → Einstellungen) muss die Positivliste von flask material dev-zuruecksetzen erfüllen (Host mit
-„dev.“ davor oder localhost/127.0.0.1, zuruecksetzen.adresse_frei); sonst legt das Skript nichts an.
+dev-Server: README, Abschnitt „Beispielbestand (nur dev)“. Nur auf dev oder lokal: BASE_URL muss gesetzt sein (das
+Skript belegt sie nicht vor) und in der Umgebung UND in der Anwendung (Verwaltung → Einstellungen) die Positivliste von
+flask material dev-zuruecksetzen erfüllen (Host mit „dev.“ davor oder localhost/127.0.0.1, zuruecksetzen.adresse_frei);
+dazu die dev-Kennung (STROEMIS_NAME endet auf „-dev“) – nur lokal (beide Adressen localhost/127.0.0.1) geht es ohne.
+Sonst legt das Skript nichts an.
 
 Der Katalog: Kategorien, Produkte, Dokumente, Bilder, Rückrufe und Meldungen werden nur gelesen. Einzige Ausnahme sind
 DEMO-Formulare für echte Kategorien ohne wirksames aktives Prüfformular (formulare) – mit DEMO-Kennzeichen, aktiv; der
@@ -31,13 +33,16 @@ Wert, den nur eine echte Prüfung liefern könnte (Messwert, Datum, Foto), wird 
 zutreffend“ mit der DEMO-Bemerkung; ein Mangel trägt die DEMO-Bemerkung und ein DEMO-Platzhalterfoto.
 
 Die Geschichte („volles Leben“): Die Uhr dieses Prozesses wird für den Lauf zurückgestellt (Uhr – services.datetime,
-db.datetime, models.datetime; nur hier, nie in der App) und läuft Tag für Tag nach vorn, so dass Journal, Prüftage,
-Protokolle und Durchgänge ihr damaliges Datum tragen. Ab gut zwei Jahren vor heute: Ersterfassung je Bereich kurz vor
-seiner ersten Jahresprüfung (die Eingangsprüfung geschieht im Durchgang), jährliche Prüfdurchgänge je Bereich
-(abgeschlossen, mit Sammelprotokoll), dazwischen Prüfungen bei kürzerem Intervall und außerplanmäßige, Mängel mit
-Sperre und späterer Prüfung nach Reparatur, Aussonderungen (Mangel, Lebensdauer, Verlust) mit Nachkauf, Nachkäufe über
-die Jahre, verloren gemeldete Artikel, Verschiebungen, Zuordnungen zu Personen (auch beendete: Einsatzkräfte scheiden aus,
-ihre Ausrüstung geht über die Reserve an neue), Änderungsanträge (bestätigt, abgelehnt, zurückgezogen, offen). Heute:
+db.datetime, models.datetime; nur hier, nie in der App) und läuft Tag für Tag nach vorn, nie über gestern hinaus, so
+dass Journal, Prüftage, Protokolle und Durchgänge ihr damaliges Datum tragen. Bekannte Grenze: Zeitstempel, die SQLite
+selbst setzt (applied_at bestätigter Anträge, Trigger mit 'now'), tragen den Lauftag – sie werden nicht umgangen. Ab
+gut zwei Jahren vor heute: Ersterfassung je Bereich kurz vor seiner ersten Jahresprüfung (die Eingangsprüfung geschieht
+im Durchgang), jährliche Prüfdurchgänge je Bereich (abgeschlossen, mit Sammelprotokoll), dazwischen Prüfungen bei
+kürzerem Intervall und außerplanmäßige, Mängel mit Sperre und späterer Prüfung nach Reparatur (nur an nicht kritischen
+Punkten; ein kritischer führt zur Aussonderung), Aussonderungen (Mangel, Lebensdauer, Verlust) mit Nachkauf, Nachkäufe
+über die Jahre, verloren gemeldete Artikel, Verschiebungen, Zuordnungen zu Personen (auch beendete: Einsatzkräfte
+scheiden aus, ihre Ausrüstung geht über die Reserve an neue, sie selbst bekommen danach nichts mehr), Änderungsanträge
+(bestätigt, abgelehnt, zurückgezogen, offen – jeder Zustand kommt vor). Heute:
 ein offener Durchgang im Zentrallager (teils erledigt, einer in Prüfung beim externen Prüfer, einer ausgenommen); im
 MTW 2 ist die Jahresprüfung ausgefallen (überfällig), die persönliche Ausrüstung ist bald fällig.
 
@@ -47,16 +52,18 @@ Was danach gilt (deshalb vorher den Katalog exportieren – README):
   - Der Bestand lässt sich nicht wieder entfernen (Prüfnachweise bleiben). Zurück geht es nur über
     flask material dev-zuruecksetzen und den Katalog-Export.
   - Einmalig: Gibt es eine der Gliederungen schon, legt ein weiterer Lauf nichts an. Erst am Ende steht der Merker
-    „beispielbestand“ in mat_meta; ein abgebrochener Lauf hinterlässt einen Teilbestand, den ein weiterer Lauf als
+    „beispielbestand_gross“ in mat_meta; ein abgebrochener Lauf hinterlässt einen Teilbestand, den ein weiterer Lauf als
     unvollständig meldet (Rückgabewert 1).
 
 Alles läuft über die Dienste der App (bestand, pruefung, durchgang, zuordnung, antrag, unterschrift, freigaben) in
 Transaktionen – je Vorgang eine; scheitert einer, steht er unter „Hinweise“ im Bericht. Im Journal steht als Akteur
 „Beispielbestand“ bzw. das handelnde DEMO-Konto. Mails gehen keine hinaus (auch nicht ins Mailprotokoll): Die
 Hintergrund-Versender der Dienste sind in diesem Prozess abgeschaltet. Die Konten legt das Skript direkt an (ohne Anmeldung
-gibt es dafür keinen Dienst), mit Journaleintrag „rollen“ und nur mit Zugang zum Modul Material; gibt es ein DEMO-Konto
-mit derselben Adresse schon, nimmt es dieses (Passwort und Name bleiben). Laufzeit: Jede Prüfung bekommt ihr Protokoll
-(gut eine halbe Sekunde je PDF) – bei 800 Artikeln rund 15 bis 20 Minuten.
+gibt es dafür keinen Dienst), mit Journaleintrag „rollen“ und nur mit Zugang zum Modul Material; gibt es ein passendes
+DEMO-Konto mit derselben Adresse schon (aktiv, freigeschaltet, mit der Stufe der Rolle), nimmt es dieses unverändert
+(Passwort, Name und Rollen bleiben) – sonst bricht es vor jedem Schreiben ab. Laufzeit: Jede Prüfung bekommt ihr
+Protokoll (gut eine halbe Sekunde je PDF), nach jedem Vorgang eine kurze Pause für andere Schreiber – bei 800 Artikeln
+rund eine halbe Stunde, unter Last länger.
 """
 import heapq
 import io
@@ -74,7 +81,8 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if os.path.isfile(os.path.join(REPO_ROOT, "app", "__init__.py")):
     sys.path.insert(0, REPO_ROOT)
     os.environ.setdefault("DATA_DIR", os.path.join(REPO_ROOT, "data"))
-    os.environ.setdefault("BASE_URL", "http://localhost:8080")          # wie run.py
+# BASE_URL belegt das Skript nicht vor (anders als run.py): Fehlt sie, bricht es ab (sperrgrund) – im Klon der
+# Produktion zeigte <Klon>/data sonst auf die echte Datenbank (Sicherheitsprüfung vom 25.10.2026, Befund 3).
 os.environ.setdefault("COOKIE_SECURE", "false")
 os.environ.setdefault("VIDEOPFLEGE", "0")
 
@@ -84,10 +92,16 @@ VORGABE_ARTIKEL = 800
 HOECHSTENS_ARTIKEL = 5000
 SAAT = 20261025                      # gleicher Katalog, gleicher Stichtag, gleicher Bestand – nachvollziehbar
 POSTFACH = "example.invalid"
-MERKER = "beispielbestand"           # Schlüssel in mat_meta – erst am Ende eines vollständigen Laufs gesetzt
+# Schlüssel in mat_meta – erst am Ende eines vollständigen Laufs gesetzt; eigener Name, damit der Merker des früheren
+# kleinen Beispielbestands einen abgebrochenen Lauf nicht als „schon da“ erscheinen lässt.
+MERKER = "beispielbestand_gross"
+PAUSE = 0.05                         # Sekunden nach jedem Vorgang – andere Schreiber (dev, Anmeldung) kommen dazwischen
 TAGE = 2 * 365 + 60                  # Beginn der Geschichte: gut zwei Jahre vor heute
 FORMULAR_TITEL = "DEMO-Prüfformular (Platzhalter) – "
 PETZL_DATEI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "beispielbestand_petzl_punkte.json")
+# Frühere Namen einer Kategorie mit Petzl-Vorlage: Der Katalog bis 24.10.2026 (lieferung-20261024) heißt „Bandmaterial“,
+# was seither „Textilmaterial“ heißt.
+PETZL_ALIAS = {"Bandmaterial": "Textilmaterial"}
 
 # Die Gliederungen: Kürzel (Seriennummern), Name, Anteil am Bestand, Ordnerbaum.
 GROSS, KLEIN = "FL", "NS"
@@ -137,15 +151,18 @@ EINSATZKRAEFTE = 40                               # höchstens; bei kleinem --ar
 # zugeordnet ist (services/zuordnung.py) – keinen Modulzugang und sehen nach der Anmeldung nur „Meine PSA“.
 OHNE_ZUGANG = "ohne Modulzugang – sieht „Meine PSA“"
 
-# Artikeltypen nach Stichwörtern im Kategoriepfad (in dieser Reihenfolge – „Seilrollen“ sind Rollen, keine Seile) mit
-# ihrem Gewicht im allgemeinen Bestand und den Ordnern, in die sie kommen (Gewichte). Was zu keinem Typ passt, ist
+# Artikeltypen nach Stichwörtern im Kategorienamen (typ_fuer: die unterste Kategorie zuerst, erst ohne Treffer ihre
+# Oberkategorien) – in dieser Reihenfolge, denn „Seilrollen“ sind Rollen, „Abseilgeräte“ und „Abseilachten“ Abseilgeräte
+# und „Seilklemmen“ Seilklemmen, keine Seile; Bandmaterial (Katalog bis 24.10.2026) und Textilmaterial sind Schlingen.
+# Dazu ihr Gewicht im allgemeinen Bestand und die Ordner, in die sie kommen (Gewichte). Was zu keinem Typ passt, ist
 # „sonstiges“. Typen ohne Produkt im Katalog fallen weg.
 TYPEN = [
-    ("rolle", ("rolle", "flaschenzug"), 3),
+    ("rolle", ("rolle", "flaschenz"), 3),
+    ("abseil", ("abseil", "achter", "sicherungsger"), 6),
+    ("seilklemme", ("seilklemm",), 3),
     ("seil", ("seil",), 10),
     ("karabiner", ("karabiner", "verbindungsmittel"), 30),
-    ("abseil", ("abseil", "achter", "sicherungsger"), 6),
-    ("schlinge", ("schling", "bandschl"), 14),
+    ("schlinge", ("schling", "band", "textil"), 14),
     ("platte", ("platte", "rigging"), 3),
     ("gurt", ("gurt",), 8),
     ("helm", ("helm",), 4),
@@ -157,6 +174,7 @@ ZIELE = {
     "seil": dict(regal_seile=4, sr1=1, sr2=1, sr3=1, gw1=1, gw2=1, boot=1, **_GRUPPEN),
     "karabiner": dict(regal_hardware=4, sr1=2, sr2=2, sr3=2, fzt=2, rt=1, mtw1=1, **_GRUPPEN),
     "rolle": dict(fzt=3, regal_hardware=2, gw1=1, gw2=1),
+    "seilklemme": dict(regal_hardware=2, sr1=1, sr2=1, sr3=1, fzt=1),
     "abseil": dict(regal_hardware=2, sr1=1, sr2=1, sr3=1, **_GRUPPEN),
     "schlinge": dict(regal_hardware=2, sr1=2, sr2=2, sr3=2, fzt=1, boot=1, **_GRUPPEN),
     "platte": dict(regal_hardware=2, sr1=1, sr2=1, sr3=1),
@@ -168,7 +186,8 @@ ZIELE = {
 ZIELE_KLEIN = {"lager": 3, "mtw": 2}
 # So viel passt in einen Rucksack oder eine Tasche – ist sie voll, kommt der Artikel in einen anderen passenden Ordner.
 FASSUNG = {"sr1": 18, "sr2": 18, "sr3": 18, "fzt": 10, "rt": 12}
-# Persönliche Ausrüstung je Einsatzkraft (nur Typen, die der Katalog hat).
+# Persönliche Ausrüstung je Einsatzkraft (nur Typen, die der Katalog hat) – sie ist von Anfang an da (kein Nachkauf ohne
+# Vorgänger; Ersatz kommt nach einer Aussonderung).
 KIT = [("gurt", 1), ("helm", 1), ("weste", 1), ("karabiner", 2), ("schlinge", 1), ("abseil", 1)]
 LAENGEN = (20, 30, 40, 50, 60, 100)          # Bestandsangabe „Länge (m)“ für Seile – erfunden wie die Seriennummer
 # Wahrscheinlichkeiten der Geschichte
@@ -207,19 +226,38 @@ def schalter(argv):
     return n
 
 
+def typ_fuer(pfad):
+    """Der Artikeltyp zu einem Kategoriepfad (Namen von oben nach unten): nach dem Namen der untersten Kategorie, passt
+    der zu keinem Typ, nach der nächsthöheren – nie per Teilstring über den ganzen Pfad (Ablaufprüfung vom 25.10.2026)."""
+    for name in reversed([(n or "").lower() for n in pfad]):
+        typ = next((t for t, worte, _ in TYPEN if any(w in name for w in worte)), None)
+        if typ:
+            return typ
+    return "sonstiges"
+
+
 def sperrgrund():
-    """None, wenn BASE_URL in der Umgebung und in der Anwendung frei ist (Positivliste wie flask material
-    dev-zuruecksetzen) – sonst der Grund."""
+    """None, wenn dies die Entwicklung oder ein lokaler Lauf ist – sonst der Grund. Nötig ist beides: BASE_URL in der
+    Umgebung (gesetzt, das Skript belegt sie nicht vor) und in der Anwendung erfüllt die Positivliste von flask material
+    dev-zuruecksetzen, und dazu die dev-Kennung (STROEMIS_NAME endet auf „-dev“, wie bei dev-zuruecksetzen) – oder beide
+    Adressen sind localhost/127.0.0.1."""
     from flask import current_app
 
     from app import einstellungen
-    from app.material.services import zuruecksetzen
+    from app.material.services import erinnerung, zuruecksetzen
     einstellungen.anwenden()
-    for herkunft, adresse in (("BASE_URL in der Umgebung", os.environ.get("BASE_URL")),
-                              ("BASE_URL der Anwendung", current_app.config.get("BASE_URL"))):
+    adressen = (("BASE_URL in der Umgebung", os.environ.get("BASE_URL")),
+                ("BASE_URL der Anwendung", current_app.config.get("BASE_URL")))
+    for herkunft, adresse in adressen:
         if not zuruecksetzen.adresse_frei(adresse):
-            return (f"{herkunft} ist „{(adresse or '').strip() or 'leer'}“ – der Beispielbestand gehört nur auf dev "
-                    "(Host mit „dev.“ davor) oder localhost/127.0.0.1.")
+            zeigt = f"ist „{adresse.strip()}“" if (adresse or "").strip() else "fehlt"
+            return (f"{herkunft} {zeigt} – der Beispielbestand gehört nur auf dev (Host mit „dev.“ davor) oder "
+                    "localhost/127.0.0.1.")
+    lokal = all(zuruecksetzen.host(adresse) in zuruecksetzen.LOKAL for _, adresse in adressen)
+    if not lokal and not erinnerung.dev_umgebung():
+        name = (os.environ.get("STROEMIS_NAME") or "").strip()
+        return (f"STROEMIS_NAME ist „{name or 'nicht gesetzt'}“ – der Beispielbestand gehört nur auf dev (dort endet er "
+                "auf „-dev“, scripts/dev-einrichten.sh) oder mit BASE_URL localhost/127.0.0.1.")
     return None
 
 
@@ -273,8 +311,9 @@ def main(argv=None):
 class Uhr:
     """Stellt für die Dauer des Laufs die Uhr dieses Prozesses um versatz zurück: datetime in services (heute, jetzt),
     in app.db (db.now – Zeitstempel im Journal und an den Zeilen) und in app.material.models. stellen(tag) setzt den
-    Kalendertag (nie rückwärts, damit Zeitstempel und Prüftage in ihrer Reihenfolge bleiben); die Uhrzeit läuft weiter.
-    Beim Verlassen gilt wieder die echte Uhr."""
+    Kalendertag (nie rückwärts, damit Zeitstempel und Prüftage in ihrer Reihenfolge bleiben, und nie über gestern hinaus –
+    was heute geschieht, läuft mit der echten Uhr, echt()); die Uhrzeit läuft weiter. Beim Verlassen gilt wieder die echte
+    Uhr."""
 
     def __init__(self):
         self.versatz = timedelta(0)
@@ -307,7 +346,8 @@ class Uhr:
         return heute()
 
     def stellen(self, tag):
-        neu = timedelta(days=(tag - datetime.now(self._zone()).date()).days)
+        echt = datetime.now(self._zone()).date()
+        neu = timedelta(days=(min(tag, echt - timedelta(days=1)) - echt).days)
         if not self.gestellt or neu > self.versatz:
             self.versatz, self.gestellt = neu, True
 
@@ -363,6 +403,11 @@ def petzl_vorlagen(pfad=None):
     return {k: v for k, v in daten.items() if isinstance(v, dict) and v.get("punkte")}, None
 
 
+def petzl_vorlage(vorlagen, name):
+    """Die Petzl-Vorlage zu einem Kategorienamen – auch unter einem früheren Namen (PETZL_ALIAS) – oder None."""
+    return vorlagen.get(name) or vorlagen.get(PETZL_ALIAS.get(name, ""))
+
+
 def petzl_titel(kategorie, v):
     """„DEMO – Prüfformular nach Petzl-Prüfbericht (<Bezugsprodukt>) – <Kategorie>“, bei einer nächstliegenden Vorlage mit
     Zusatz; passt das nicht in die 160 Zeichen des Titels, ohne das Bezugsprodukt."""
@@ -396,7 +441,7 @@ def petzl_punkte(v):
 def formulare(vorlagen):
     """Prüfformulare für echte Kategorien ohne wirksames aktives Formular – DEMO-gekennzeichnet und aktiv, der
     Katalog-Export lässt sie aus. Echte Formulare (aktiv wie inaktiv) und DEMO-Kategorien samt Teilbaum bleiben unberührt.
-      1. Petzl: Eine echte Kategorie, deren Name in vorlagen steht, die selbst kein Formular hat und über keine
+      1. Petzl: Eine echte Kategorie, deren Name (oder früherer Name, PETZL_ALIAS) in vorlagen steht, die selbst kein Formular hat und über keine
          Oberkategorie ein aktives echtes, bekommt das Formular nach dem Petzl-Prüfbericht.
       2. Platzhalter: von oben nach unten – eine echte Kategorie, die weder
          selbst noch über eine Oberkategorie ein aktives Formular hat, bekommt eins, so hoch wie möglich (die
@@ -427,12 +472,13 @@ def formulare(vorlagen):
 
     petzl = []
     for k in kats.values():
-        if k["id"] in raus or k["name"] not in vorlagen or formulare_an.get(k["id"]):
+        v = petzl_vorlage(vorlagen, k["name"])
+        if k["id"] in raus or not v or formulare_an.get(k["id"]):
             continue
         oben = [x["id"] for x in katalog.kategorie_pfad(k["id"])][:-1]
         if any(f["active"] and not f["demo"] for o in oben for f in formulare_an.get(o, [])):
             continue
-        anlegen(k["id"], petzl_titel(k["name"], vorlagen[k["name"]]), petzl_punkte(vorlagen[k["name"]]))
+        anlegen(k["id"], petzl_titel(k["name"], v), petzl_punkte(v))
         petzl.append(k["name"])
     laenge = katalog.laenge_kategorien()
     platzhalter, ohne = [], []
@@ -508,12 +554,14 @@ class Beispielbestand:
         self.konto = {}                     # Rolle → {id, mail, name}
         self.passwoerter = []               # (Mail, Name, Passwort oder None, Hinweis)
         self.hinweise = []
+        self.abweichend = []                # vorhandene DEMO-Konten, die anders eingestellt sind als ihre Rolle
         self.zahl = {k: 0 for k in ("pruefungen", "runden", "nachkauf", "verschoben", "zugeordnet", "geloest",
                                     "ausgeschieden", "eintritt", "antraege", "aussonderungen", "verloren")}
         self.antraege = {}
         self.fertig_gesetzt = False
         self.artikel = []                   # Pläne aller Artikel (auch Nachkäufe)
         self.personen = []                  # Rollen der Einsatzkräfte, die zu Beginn da sind
+        self.ausgeschieden = {}             # Rolle → Austrittstag
         self.neue_personen = []             # die später eintreten
         self._ereignisse, self._nr = [], 0
         self._foto = self._signatur = None
@@ -572,8 +620,7 @@ class Beispielbestand:
             if not monate:
                 ausgelassen.append(f"{name} (kein Prüfintervall im Katalog)")
                 continue
-            pfad = " / ".join(k["name"] for k in katalog.kategorie_pfad(p["category_id"])).lower()
-            typ = next((t for t, worte, _ in TYPEN if any(w in pfad for w in worte)), "sonstiges")
+            typ = typ_fuer([k["name"] for k in katalog.kategorie_pfad(p["category_id"])])
             f = katalog.formular_fuer_produkt(p["id"])
             gut.append({"id": p["id"], "name": name, "monate": monate, "typ": typ,
                         "lebensdauer": p["lifetime_years"] if p["material_kind"] == "textil" else None,
@@ -606,12 +653,12 @@ class Beispielbestand:
                           "den Katalog importieren." + (f" Nicht verwendbar: {'; '.join(ausgelassen)}." if ausgelassen
                                                         else ""))
         konten = self._konten_roh()
-        fremd = [r["email"] for r in db.query(
-            f"SELECT email, name FROM users WHERE email IN ({','.join('?' * len(konten))})", [k["mail"] for k in konten])
-            if not (r["name"] or "").startswith("DEMO")]
-        if fremd:
-            raise Abbruch("Abgebrochen: Diese Adressen gehören Konten, die nicht „DEMO-…“ heißen – " + ", ".join(fremd)
-                          + ". Nichts angelegt.")
+        unpassend = self.konten_pruefen(konten)
+        if unpassend:
+            raise Abbruch("Abgebrochen: Diese Adressen gehören schon Konten, die der Beispielbestand nicht übernehmen kann "
+                          "(er ändert vorhandene Konten nicht) – " + "; ".join(unpassend) + ". Nichts angelegt. Eine offene "
+                          "Kontoanfrage unter Verwaltung → Konten ablehnen; ein vorhandenes DEMO-Konto dort selbst "
+                          "freischalten oder passend einstellen.")
         self.uhr.stellen(self.beginn)
         for kurz, name, _ in GLIEDERUNGEN:
             self.gliederung_anlegen(kurz, name)
@@ -689,12 +736,43 @@ class Beispielbestand:
         self.neue_personen = [f"person{k}" for k in range(p + 1, p + neu + 1)]
         return konten
 
+    @staticmethod
+    def konten_pruefen(konten):
+        """Vor jedem Schreiben: Gibt es zu einer Adresse schon ein Konto, übernimmt der Lauf es nur, wenn es „DEMO-…“
+        heißt, aktiv und freigeschaltet ist (keine offene Kontoanfrage – die kann jeder über die Registrierung stellen) und
+        schon hat, was die Rolle braucht (Stufe im Modul Material, bei Prüfern Häkchen und gültige Urkundennummer). Der
+        Lauf stuft kein Konto hoch und ändert keine Rolle (Sicherheitsprüfung vom 25.10.2026, Befund 2). Liefert je
+        unpassendem Konto „Adresse (Grund)“."""
+        from app import db
+        from app.material.services import rechte
+        vorhanden = {r["email"]: r for r in db.query(
+            f"SELECT * FROM users WHERE email IN ({','.join('?' * len(konten))})", [k["mail"] for k in konten])}
+        unpassend = []
+        for k in konten:
+            u = vorhanden.get(k["mail"])
+            if not u:
+                continue
+            if not (u["name"] or "").startswith("DEMO"):
+                grund = "heißt nicht „DEMO-…“"
+            elif (u.get("status") or "active") == "pending":
+                grund = "offene Kontoanfrage"
+            elif not u["active"] or (u.get("status") or "active") != "active":
+                grund = "deaktiviert"
+            elif (u["recht_material"] or 0) < k["stufe"]:
+                grund = f"Stufe im Modul Material {u['recht_material'] or 0}, gebraucht {k['stufe']}"
+            elif k.get("urkunde") and not rechte.ist_pruefer(u):
+                grund = "kein Prüfer mit gültiger Urkundennummer"
+            else:
+                continue
+            unpassend.append(f"{k['mail']} ({grund})")
+        return unpassend
+
     def konto_anlegen(self, k):
         """Ein DEMO-Konto nur für das Modul Material (Karte, Wiki, Prüfungen und Verwaltung aus) – mit zufälligem Passwort,
         die Einsatzkräfte mit einem gemeinsamen –, mit dem Journaleintrag „rollen“ wie in der Nutzerverwaltung. Prüfer und
-        Materialwarte hinterlegen ihre DEMO-Unterschrift über den Dienst des Profils. Gibt es ein DEMO-Konto mit der
-        Adresse schon (etwa aus einem früheren DEMO-Skript), bleibt es mit Name und Passwort; fehlen ihm Stufe, Prüfer-Häkchen
-        oder Unterschrift, kommen sie dazu."""
+        Materialwarte hinterlegen ihre DEMO-Unterschrift über den Dienst des Profils. Gibt es ein passendes DEMO-Konto mit
+        der Adresse schon (konten_pruefen, etwa aus einem früheren Lauf), bleibt es mit Name, Passwort und Rollen; der
+        Bericht nennt, worin es von der Rolle abweicht. Fehlt ihm nur die Unterschrift, kommt die DEMO-Unterschrift dazu."""
         import secrets
 
         from werkzeug.security import generate_password_hash
@@ -706,15 +784,16 @@ class Beispielbestand:
         with db.transaction(sofort=True):
             if alt:
                 uid = alt["id"]
-                rollen = {}
-                if (alt["recht_material"] or 0) < k["stufe"]:
-                    rollen["recht_material"] = k["stufe"]
-                if urkunde and not (alt["mat_pruefer"] and alt["urkundennummer"]):
-                    rollen.update(mat_pruefer=1, urkundennummer=alt["urkundennummer"] or urkunde)
-                if rollen:
-                    db.execute(f"UPDATE users SET {', '.join(f'{s} = ?' for s in rollen)} WHERE id = ?",
-                               (*rollen.values(), uid))
-                    journal.eintragen("user", uid, "rollen", None, rollen)
+                anders = [f"Stufe im Modul Material {alt['recht_material']} statt {k['stufe']}"
+                          if (alt["recht_material"] or 0) != k["stufe"] else ""]
+                anders += [f"{name} an" for spalte, name in (("recht_verwaltung", "Verwaltung"), ("recht_karte", "Karte"),
+                                                             ("recht_wiki", "Wiki"), ("recht_pruefungen", "Prüfungen"),
+                                                             ("mat_katalog", "Katalogpflege"))
+                           if alt[spalte]]
+                if alt["mat_pruefer"] and not urkunde:
+                    anders.append("Häkchen Prüfer")
+                if any(anders):
+                    self.abweichend.append(f"{k['mail']}: {', '.join(a for a in anders if a)}")
                 self.passwoerter.append((k["mail"], alt["name"], None, k.get("sicht")))
                 name = alt["name"]
             else:
@@ -836,7 +915,8 @@ class Beispielbestand:
     def planen(self, produkte):
         """Welche Artikel wohin: zuerst die persönliche Ausrüstung je Einsatzkraft (Kit), dann der übrige Bestand nach den
         Gewichten der Typen und Ordner, ein kleiner Teil in die Nachbarstadt. Ein Teil kommt erst im Lauf der Jahre
-        (Nachkauf), der Rest wird je Bereich kurz vor seiner ersten Jahresprüfung erfasst."""
+        (Nachkauf, nie die persönliche Ausrüstung – sonst stünde eine Einsatzkraft lange ohne Gurt da), der Rest wird je
+        Bereich kurz vor seiner ersten Jahresprüfung erfasst."""
         rnd = self.rnd
         je_typ = {}
         for p in produkte:
@@ -889,7 +969,7 @@ class Beispielbestand:
             erstes[(kurz, bereich)] = runden[0] if runden else self.beginn + timedelta(days=30)
         for a in plaene:
             a["bereich"] = self._bereich(a["gl"], a["ordner"])
-            if rnd.random() < NACHKAUF:
+            if rnd.random() < NACHKAUF and not a["ordner"].startswith("person"):
                 a["erfasst"] = self._tag(self.beginn + timedelta(days=40), self.h - timedelta(days=1))
                 a["nachkauf"] = True
             else:
@@ -993,7 +1073,9 @@ class Beispielbestand:
             getattr(self, f"_e_{art}")(daten)
 
     def _versuch(self, was, aufgabe, fotos=None):
-        """Ein Vorgang in seiner Transaktion; scheitert er an einer Regel der App, steht er unter „Hinweise“."""
+        """Ein Vorgang in seiner Transaktion; scheitert er an einer Regel der App, steht er unter „Hinweise“. Danach eine
+        kurze Pause (PAUSE): Ohne sie hielte der Lauf die Schreibsperre fast ununterbrochen, und auf dev scheiterten
+        Schreibzugriffe und Anmeldungen nach 15 s (Sicherheitsprüfung vom 25.10.2026, Befund 1)."""
         from app import db
         from app.material.services import Abgelehnt, protokoll
         fotos = [] if fotos is None else fotos
@@ -1006,6 +1088,8 @@ class Beispielbestand:
         except BaseException:
             self._fotos_weg(fotos)
             raise
+        finally:
+            time.sleep(PAUSE)
         return None
 
     @staticmethod
@@ -1017,6 +1101,8 @@ class Beispielbestand:
             delete_photo_files(katalog.medien_dir(), name)
 
     def _ordner_id(self, a):
+        if a["ordner"] in self.ausgeschieden:          # nach dem Austritt kommt nichts mehr in ihren Ordner
+            a["ordner"] = a["ordner_jetzt"] = "reserve"
         if a["ordner"].startswith("person"):
             return self._personenordner(a["ordner"])
         return self.gl[a["gl"]]["ordner"][a["ordner"]]
@@ -1025,6 +1111,8 @@ class Beispielbestand:
         from app.material.services import bestand, zuordnung, rechte
 
         def anlegen(_):
+            if a["person"] in self.ausgeschieden:       # Ausgeschiedene bekommen nichts mehr zugeordnet
+                a["person"] = None
             werte = {k: a[k] for k in ("purchased_on", "manufactured_on", "first_use_on", "length_m") if a.get(k)}
             iid = bestand.artikel_anlegen(dict(werte, product_id=a["produkt"]["id"], folder_id=self._ordner_id(a),
                                                serial_no=a["serie"], notes=HINWEIS))
@@ -1082,11 +1170,11 @@ class Beispielbestand:
         self.pruefen(a, art, *self._ergebnis(i, mangel))
 
     def _ergebnis(self, i, mangel="zufall"):
-        """(Ergebnis, Mangel) einer Prüfung am Tag der Uhr: Lebensdauer erreicht → aussondern; sonst nach mangel
-        („mangel“, „kritisch“, None) bzw. dem Zufall einer gewöhnlichen Prüfung."""
+        """(Ergebnis, Mangel) einer Prüfung am Tag der Uhr: Lebensdauer erreicht → aussondern („lebensdauer“); sonst nach
+        mangel („mangel“, „kritisch“, None) bzw. dem Zufall einer gewöhnlichen Prüfung."""
         tag = self.uhr.tag().isoformat()
         if i["retire_by"] and i["retire_by"] <= tag:
-            return "aussondern", None
+            return "aussondern", "lebensdauer"
         if mangel == "zufall":
             x = self.rnd.random()
             mangel = "kritisch" if x < AUSSONDERN else ("mangel" if x < AUSSONDERN + MANGEL else None)
@@ -1109,7 +1197,7 @@ class Beispielbestand:
             if not abschliessen:
                 return pid
             d = {"ergebnis": ergebnis, "bemerkung": HINWEIS}
-            if ergebnis == "aussondern" and not mangel:
+            if ergebnis == "aussondern" and mangel in (None, "lebensdauer"):
                 d["grund"] = f"Lebensdauer erreicht ({HINWEIS})"
             elif ergebnis != "einsatzbereit":
                 d["grund"] = HINWEIS
@@ -1136,14 +1224,14 @@ class Beispielbestand:
         """Die Prüfpunkte aus dem Katalog: Ja/Nein und Zahlen mit Sollwert stehen schon auf ihrem Soll. Ein Pflichtpunkt,
         dessen Wert nur eine echte Prüfung liefert (Messwert, Datum, Foto), steht auf „nicht zutreffend“ mit der
         DEMO-Bemerkung; ein Pflicht-Textfeld bekommt die DEMO-Bemerkung als Wert, ein Pflicht-Unterschriftsfeld die
-        DEMO-Unterschrift. mangel („mangel“ oder „kritisch“): ein Punkt weicht vom Soll ab – mit DEMO-Bemerkung und
-        DEMO-Platzhalterfoto, wie es jeder Mangel braucht."""
+        DEMO-Unterschrift. mangel („mangel“, „kritisch“ oder „lebensdauer“): ein Punkt weicht vom Soll ab (_mangelpunkt) –
+        mit DEMO-Bemerkung und DEMO-Platzhalterfoto, wie es jeder Mangel braucht."""
         from werkzeug.datastructures import FileStorage
 
         from app import db
         from app.material.services import pruefung
         punkte = pruefung.befunde(pid)
-        ziel = self._mangelpunkt(punkte, mangel == "kritisch") if mangel else None
+        ziel = self._mangelpunkt(punkte, mangel) if mangel else None
         for r in punkte:
             if ziel and r["id"] == ziel["id"]:
                 if r["editor"] == "yesno":
@@ -1170,16 +1258,24 @@ class Beispielbestand:
                 if r["mandatory"] and not beantwortet and r["finding"] != "nicht_zutreffend":
                     pruefung.punkt_setzen(pid, r["id"], {"befund": "nicht_zutreffend", "notiz": HINWEIS}, pruefer)
 
-    @staticmethod
-    def _mangelpunkt(punkte, kritisch):
-        """Der Punkt, an dem ein Mangel steht: ein kritischer Ja/Nein-Punkt (wenn verlangt), sonst irgendein
-        Ja/Nein-Punkt, sonst der erste Punkt, der einen Befund kennt (kein Unterschriftsfeld)."""
+    def _mangelpunkt(self, punkte, mangel):
+        """Der Punkt, an dem ein Befund vom Soll abweicht (Ablaufprüfung vom 25.10.2026, Befunde 3 und 4):
+          - „lebensdauer“: der Ja/Nein-Punkt zur Lebensdauer (Text mit „Lebensdauer“), ohne einen solchen keiner;
+          - „kritisch“ (aussondern): ein kritischer Ja/Nein-Punkt, ohne einen solchen ein gewöhnlicher;
+          - „mangel“ (instandsetzen): nur ein nicht kritischer Punkt – ein kritischer führte zur Aussonderung.
+        Der Punkt zur Lebensdauer steht nur für das Lebensende. Gestreut über die Punkte, die „vorangehenden Kontrollen“
+        (Seriennummer lesbar …) nur, wenn sonst keiner bleibt; ohne Ja/Nein-Punkt der erste nicht kritische Punkt, der
+        einen Befund kennt (kein Unterschriftsfeld)."""
         janein = [r for r in punkte if r["editor"] == "yesno"]
-        for liste in ([r for r in janein if r["is_critical"]] if kritisch else [], janein,
-                      [r for r in punkte if r["editor"] != "signature"]):
-            if liste:
-                return liste[0]
-        return None
+        if mangel == "lebensdauer":
+            return next((r for r in janein if "lebensdauer" in r["checklist_text"].lower()), None)
+        janein = [r for r in janein if "lebensdauer" not in r["checklist_text"].lower()]
+        gewoehnlich = [r for r in janein if not r["is_critical"]]
+        liste = ([r for r in janein if r["is_critical"]] or gewoehnlich) if mangel == "kritisch" else gewoehnlich
+        if liste:
+            weiter = [r for r in liste if not r["group_name"].startswith("Vorangehende")]
+            return self.rnd.choice(weiter or liste)
+        return next((r for r in punkte if r["editor"] not in ("signature", "yesno") and not r["is_critical"]), None)
 
     def _e_nachkauf(self, alt):
         """Ersatz für einen ausgesonderten Artikel: dasselbe Produkt in denselben Ordner, derselben Person zugeordnet –
@@ -1236,7 +1332,10 @@ class Beispielbestand:
 
     def _e_austritt(self, daten):
         """Eine Einsatzkraft scheidet aus: Zuordnungen lösen, ihre persönliche Ausrüstung in die Reserve; 20 bis 60 Tage
-        später tritt eine neue ein – ihr persönlicher Ordner entsteht, und die Ausrüstung kommt dorthin, ihr zugeordnet."""
+        später tritt eine neue ein – ihr persönlicher Ordner entsteht, und die Ausrüstung kommt dorthin, ihr zugeordnet.
+        Danach bekommt die Ausgeschiedene nichts mehr – weder eine Zuordnung noch etwas in ihren Ordner, auch nicht, was
+        erst geplant ist (Nachkauf, Ersatz für Ausgesondertes): Das kommt in die Reserve, ohne Person (_e_erfassen,
+        _ordner_id)."""
         from app.material.services import bestand, zuordnung
         alt, neu = daten
         fl = self.gl[GROSS]
@@ -1258,8 +1357,12 @@ class Beispielbestand:
 
         if self._versuch(f"Austritt {self.konto[alt]['name']}", raus):
             self.zahl["ausgeschieden"] += 1
-            for a in eigene:
-                a["person"] = None
+            self.ausgeschieden[alt] = self.uhr.tag()
+            for a in self.artikel:
+                if a["person"] == alt:
+                    a["person"] = None
+                if a.get("ordner_jetzt", a["ordner"]) == alt:
+                    a["ordner_jetzt"] = "reserve"
             for a in mit:
                 a["ordner_jetzt"] = "reserve"
             self._ereignis(self.uhr.tag() + timedelta(days=self.rnd.randint(20, 60)), 5, "eintritt", (neu, mit))
@@ -1303,9 +1406,10 @@ class Beispielbestand:
                 g.pop("user", None)
                 rechte.sicht_verwerfen()
 
-    def _e_antrag(self, a):
+    def _e_antrag(self, a, folge=None):
         """Der Prüfer beantragt eine korrigierte Seriennummer; die Material-Verwaltung bestätigt oder lehnt ab, oder der
-        Antragsteller zieht zurück – ein junger Antrag bleibt offen."""
+        Antragsteller zieht zurück – ein junger Antrag bleibt offen. Mit folge (sicherstellen) geschieht das gleich: Wahr,
+        wenn der Antrag diesen Zustand hat."""
         from app.material.services import antrag, bestand
         i = self._artikel(a)
         if not i or i["lock_state"] == "ausgesondert" or not bestand.stammdaten_fest(i["id"]):
@@ -1316,6 +1420,9 @@ class Beispielbestand:
         if not ids:
             return
         self.zahl["antraege"] += 1
+        if folge:
+            self.antraege[ids[0]] = "offen"
+            return folge == "offen" or self._e_entscheiden((ids[0], folge, rolle))
         tag = self.uhr.tag()
         x = self.rnd.random()
         if (self.h - tag).days < 30 and x < 0.5:
@@ -1336,6 +1443,7 @@ class Beispielbestand:
             ok = self._als(rolle, lambda: antrag.zurueckziehen(aid) or True)
         if ok:
             self.antraege[aid] = folge
+        return bool(ok)
 
     # --- Prüfdurchgänge ---
 
@@ -1419,7 +1527,8 @@ class Beispielbestand:
     def sicherstellen(self):
         """Was in der Geschichte zufällig nicht vorkam, geschieht heute an Artikeln außerhalb der persönlichen Ordner:
         eine Aussonderung aus einer Prüfung (kritischer Mangel), eine durch den Materialwart (nach Verlust), ein Mangel
-        (gesperrt), ein Verlust (verloren gemeldet) und ein Nachkauf ohne Eingangsprüfung (neu)."""
+        (gesperrt), ein Verlust (verloren gemeldet), ein Nachkauf ohne Eingangsprüfung (neu) und je fehlendem
+        Antragszustand (bestätigt, abgelehnt, zurückgezogen, offen) ein Änderungsantrag."""
         from app import db
         from app.material.services import bestand, pruefung
         ids = json.dumps([a["iid"] for a in self.artikel if a.get("iid")])
@@ -1461,6 +1570,14 @@ class Beispielbestand:
             self.artikel.append(a)
             self.zahl["nachkauf"] += 1
             self._e_erfassen(a)
+        da = {r["status"] for r in db.query("SELECT status FROM mat_item_change WHERE item_id IN (SELECT value FROM "
+                                            "json_each(?))", (ids,))}
+        for folge in ANTRAG_TEXT:
+            while folge not in da and frei:
+                a = frei.pop()
+                if not db.query("SELECT 1 FROM mat_item_change WHERE item_id = ? AND status = 'offen'", (a["iid"],)) \
+                        and self._e_antrag(a, folge):
+                    da.add(folge)
 
     # --- Bericht ---
 
@@ -1525,7 +1642,7 @@ class Beispielbestand:
             print("Formulare nach Petzl-Prüfbericht (DEMO, nicht im Katalog-Export; Fundstelle je Punkt in "
                   "scripts/beispielbestand_petzl_punkte.json):")
             for name in petzl:
-                for q in self._vorlagen[name]["quelle"].values():
+                for q in petzl_vorlage(self._vorlagen, name)["quelle"].values():
                     print(f"  {name}: {q['hersteller']} „{q['titel']}“ ({q.get('version_gedruckt') or 'ohne Versionsangabe'}"
                           f"), {q['dateiname']}")
         if platzhalter:
@@ -1543,6 +1660,9 @@ class Beispielbestand:
                   "nicht mehr ändern und ihre Kategorien nicht mehr löschen; benutzte Formularversionen nur noch über eine "
                   "neue Version ändern. Katalogpflege, die das braucht: Katalog exportieren, dev-Datenbank zurücksetzen, "
                   "Export importieren.")
+        if self.abweichend:
+            print("Vorhandene DEMO-Konten übernommen, Rollen unverändert – sie weichen ab: " + "; ".join(self.abweichend)
+                  + ".")
         if self.hinweise:
             print(f"Hinweise ({len(self.hinweise)}):")
             for zeile in self.hinweise[:40]:

@@ -24,12 +24,12 @@ import sys
 import tempfile
 import time
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import (H, PDF, _flach, gliederung, jpeg, katalog_grund, make_app, neuer_artikel,  # noqa: E402
-                           pdf_seiten, pruef_formulare, starten, umgebung)
+from test_material import (H, PDF, _flach, anmelden, gliederung, jpeg, katalog_grund, make_app,  # noqa: E402
+                           neuer_artikel, pdf_seiten, pruef_formulare, starten, umgebung)
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HINWEIS = "DEMO – nicht für echte Prüfungen"
@@ -42,19 +42,26 @@ ARTIKEL = 50
 PETZL = os.path.join(REPO, "scripts", "beispielbestand_petzl_punkte.json")
 
 
-def laufen(*schalter, adresse="https://dev.strömis.de", anpassen=None):
+def laufen(*schalter, adresse="https://dev.strömis.de", name="stroemis-dev", anpassen=None):
     """Das Skript wie von der Kommandozeile – (Ausgabe, Rückgabewert). adresse: BASE_URL für den Lauf (make_app setzt die
-    der Produktion, dort legt das Skript nichts an). anpassen(modul) darf das frisch geladene Skript vorher ändern; ein
-    Lauf, der mit KeyboardInterrupt endet, liefert den Rückgabewert „unterbrochen“."""
-    spec = importlib.util.spec_from_file_location("material_beispielbestand_test",
-                                                  os.path.join(REPO, "scripts", "material_beispielbestand.py"))
-    modul = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(modul)
-    if anpassen:
-        anpassen(modul)
-    puffer, code, alt = io.StringIO(), 0, os.environ.get("BASE_URL")
-    os.environ["BASE_URL"] = adresse
+    der Produktion, dort legt das Skript nichts an; None: nicht gesetzt), name: STROEMIS_NAME (die dev-Kennung; None:
+    nicht gesetzt). anpassen(modul) darf das Skript vorher ändern – vor dem Laden der Umgebung (es belegt dabei nur
+    DATA_DIR vor, das make_app schon gesetzt hat); ein Lauf, der mit KeyboardInterrupt endet, liefert den Rückgabewert
+    „unterbrochen“."""
+    alt = {v: os.environ.get(v) for v in ("BASE_URL", "STROEMIS_NAME")}
+    for v, wert in (("BASE_URL", adresse), ("STROEMIS_NAME", name)):
+        if wert is None:
+            os.environ.pop(v, None)
+        else:
+            os.environ[v] = wert
+    puffer, code = io.StringIO(), 0
     try:
+        spec = importlib.util.spec_from_file_location("material_beispielbestand_test",
+                                                      os.path.join(REPO, "scripts", "material_beispielbestand.py"))
+        modul = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(modul)
+        if anpassen:
+            anpassen(modul)
         with contextlib.redirect_stdout(puffer):
             modul.main(list(schalter))
     except SystemExit as exc:
@@ -62,11 +69,33 @@ def laufen(*schalter, adresse="https://dev.strömis.de", anpassen=None):
     except KeyboardInterrupt:
         code = "unterbrochen"
     finally:
-        if alt is None:
-            os.environ.pop("BASE_URL", None)
-        else:
-            os.environ["BASE_URL"] = alt
+        for v, wert in alt.items():
+            if wert is None:
+                os.environ.pop(v, None)
+            else:
+                os.environ[v] = wert
     return puffer.getvalue(), code
+
+
+def lauf_merken(ablage):
+    """Für laufen(anpassen=…): legt die Instanz des Laufs (Beispielbestand) unter ablage["lauf"] ab – für Prüfungen, die
+    den Plan brauchen (wer wann ausschied)."""
+    def anpassen(modul):
+        init = modul.Beispielbestand.__init__
+
+        def merken(self, *a, **kw):
+            init(self, *a, **kw)
+            ablage["lauf"] = self
+        modul.Beispielbestand.__init__ = merken
+    return anpassen
+
+
+def skript():
+    spec = importlib.util.spec_from_file_location("material_beispielbestand_einzeln",
+                                                  os.path.join(REPO, "scripts", "material_beispielbestand.py"))
+    modul = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modul)
+    return modul
 
 
 def sha(pfad):
@@ -176,6 +205,17 @@ def test_ohne_schalter():
         for adresse in ("https://strömis.de", "https://www.xn--strmis-yxa.de/", "https://beispiel.example", ""):
             aus, code = laufen("--beispielbestand", adresse=adresse)
             assert code == 1 and "gehört nur auf dev" in aus, (adresse, aus[-300:])
+        # Ohne BASE_URL (im Klon belegt das Skript sie nicht mehr vor – <Klon>/data wäre dort die echte Datenbank) und
+        # mit einer dev-Adresse ohne dev-Kennung (STROEMIS_NAME): nichts.
+        aus, code = laufen("--beispielbestand", adresse=None)
+        assert code == 1 and "BASE_URL in der Umgebung fehlt" in aus, aus[-300:]
+        for name in (None, "stroemis", "stroemis-dev-alt"):
+            aus, code = laufen("--beispielbestand", name=name)
+            assert code == 1 and "STROEMIS_NAME ist" in aus and "gehört nur auf dev" in aus, (name, aus[-300:])
+        assert bestand_stand(app) == vorher
+        # Lokal (localhost) geht es ohne dev-Kennung – hier bis zum leeren Katalog.
+        aus, code = laufen("--beispielbestand", adresse="http://localhost:8080", name=None)
+        assert code == 1 and "keine echten Produkte" in aus, aus[-300:]
         assert bestand_stand(app) == vorher
     print("Ohne Schalter bestanden.")
 
@@ -279,7 +319,9 @@ def test_beispielbestand():
             journal_vor = db.query("SELECT MAX(id) AS n FROM mat_audit", one=True)["n"]
 
         t0 = time.time()
-        aus, code = laufen("--beispielbestand", "--artikel", str(ARTIKEL))
+        ablage = {}
+        aus, code = laufen("--beispielbestand", "--artikel", str(ARTIKEL), anpassen=lauf_merken(ablage))
+        lauf = ablage["lauf"]
         dauer = time.time() - t0
         assert code == 0, aus[-3000:]
         assert "Beispielbestand angelegt" in aus and "Kommt nicht vor" not in aus, aus[-3000:]
@@ -338,9 +380,15 @@ def test_beispielbestand():
             assert any(i["lock_state"] == "verloren" for i in artikel)
             assert any(i["lock_state"] == "gesperrt" for i in artikel)
             # Überfällig ist, was in diesem Jahr noch aussteht (MTW 2 seit gut einem Monat, das Zentrallager seit ein paar
-            # Tagen) – nichts, dessen Prüfung über ein Jahr ausgeblieben wäre.
-            spaet = [i["next_due_on"] for i in artikel if st.status(i) == "ueberfaellig"]
-            assert spaet and min(spaet) >= (bestand.heute() - timedelta(days=60)).isoformat(), sorted(spaet)[:5]
+            # Tagen) – nichts, dessen Prüfung über ein Jahr ausgeblieben wäre. Länger als 60 Tage nur ein verschobener
+            # Artikel, der zwischen die Runden zweier Bereiche fiel (das kommt mit dem echten Katalog vor).
+            spaet = [i for i in artikel if st.status(i) == "ueberfaellig"]
+            assert spaet
+            grenze = (bestand.heute() - timedelta(days=60)).isoformat()
+            for i in spaet:
+                if i["next_due_on"] < grenze:
+                    assert db.query("SELECT 1 FROM mat_audit WHERE entity = 'item' AND entity_id = ? AND action = "
+                                    "'verschoben'", (i["id"],)), (i["serial_no"], i["next_due_on"])
             for i in artikel:
                 if st.status(i) == "lebensdauer":
                     assert i["product_id"] == ids["gurt"] and i["retire_by"] <= bestand.heute().isoformat()
@@ -374,7 +422,10 @@ def test_beispielbestand():
             assert eintraege[0]["created_at"][:10] < (heute - timedelta(days=500)).isoformat()
             antraege = Counter(r["status"] for r in db.query(
                 f"SELECT status FROM mat_item_change WHERE item_id IN ({','.join(map(str, iids))})"))
-            assert antraege and set(antraege) <= {"offen", "bestaetigt", "abgelehnt", "zurueckgezogen"}, antraege
+            assert set(antraege) == {"offen", "bestaetigt", "abgelehnt", "zurueckgezogen"}, antraege
+            # Die Uhr lief nie über heute hinaus.
+            assert max(x["inspected_on"] for x in pruefungen) <= heute.isoformat()
+            assert max(e["created_at"] for e in eintraege) <= datetime.now(timezone.utc).isoformat()
 
             # 5. Prüfungen: festgeschrieben mit Protokoll; Prüfer sind DEMO-Konten mit DEMO-Urkunde.
             konten = {u["id"]: u for u in db.query("SELECT * FROM users WHERE email LIKE '%@example.invalid'")}
@@ -406,9 +457,11 @@ def test_beispielbestand():
             assert von_extern and all(x["inspected_on"] == heute.isoformat() for x in von_extern), von_extern
             entwuerfe = [x for x in pruefungen if not x["completed_at"]]
             assert entwuerfe and all(x["round_id"] for x in entwuerfe)
-            befunde = db.query("SELECT r.* FROM mat_inspection_result r JOIN mat_inspection x ON x.id = r.inspection_id "
-                               f"WHERE x.item_id IN ({','.join(str(i) for i in iids)})")
+            befunde = db.query("SELECT r.*, x.result FROM mat_inspection_result r JOIN mat_inspection x ON x.id = "
+                               f"r.inspection_id WHERE x.item_id IN ({','.join(str(i) for i in iids)})")
             maengel = [b for b in befunde if b["finding"] == "mangel"]
+            # Ein kritischer Mangel führt zur Aussonderung, nie zu „instandsetzen“.
+            assert not [b for b in maengel if b["is_critical"] and b["result"] == "instandsetzen"]
             assert maengel and all(b["photo"] and b["note"] == HINWEIS for b in maengel)
             assert all(b["note"] == HINWEIS for b in befunde if b["finding"] == "nicht_zutreffend")
             # Soll beachtet: Ja/Nein ohne Mangel steht auf dem Soll; Textpunkte tragen den DEMO-Platzhalter.
@@ -471,7 +524,6 @@ def test_beispielbestand():
         gemeinsam = re.search(r"demo-einsatzkraft-02 bis -\d+@example\.invalid: \d+ Einsatzkräfte .*Passwort wie oben: "
                               r"(\S+)", aus)
         assert gemeinsam and gemeinsam.group(1) == passwoerter["demo-einsatzkraft-01@example.invalid"], aus[-2000:]
-        from test_material import anmelden
         wart = anmelden(app, "demo-wart-a@example.invalid", passwoerter["demo-wart-a@example.invalid"])
         assert wart.get(f"/api/material/ordner/{fl['id']}").status_code == 200
         assert wart.get(f"/api/material/ordner/{ns['id']}").status_code == 404
@@ -508,6 +560,28 @@ def test_beispielbestand():
         r = zwei.get("/material/bestand")
         assert r.status_code == 403 and "nicht freigeschaltet" in r.get_data(as_text=True)
         assert re.search(r"demo-einsatzkraft-01@example\.invalid .*\(liest ihren persönlichen Ordner\)", aus)
+        # Ausgeschiedene bekommen nach dem Austritt nichts mehr: keine Zuordnung, nichts in ihrem persönlichen Ordner,
+        # „Meine PSA“ ist leer.
+        assert lauf.ausgeschieden, lauf.zahl
+        with app.app_context():
+            from app import db
+            from app.material.services import journal
+            for rolle, tag in lauf.ausgeschieden.items():
+                uid, name = lauf.konto[rolle]["id"], lauf.konto[rolle]["name"]
+                ref = journal.konto_ref(uid)["ref"]
+                nach = [e for e in db.query("SELECT * FROM mat_audit WHERE entity = 'item' AND action = 'zugeordnet' AND "
+                                            "substr(created_at, 1, 10) > ?", (tag.isoformat(),))
+                        if ref in (e["after_json"] or "")]
+                assert not nach, (rolle, tag, nach)
+                assert not db.query("SELECT 1 FROM mat_item WHERE assigned_user_id = ?", (uid,)), rolle
+                ordner = db.query("SELECT * FROM mat_folder WHERE name = ? AND kind = 'persoenlich'", (name,), one=True)
+                if ordner:
+                    assert ordner["created_at"][:10] <= tag.isoformat(), ordner
+                    assert not db.query("SELECT 1 FROM mat_item WHERE folder_id = ? AND substr(created_at, 1, 10) > ?",
+                                        (ordner["id"], tag.isoformat())), rolle
+                weg = anmelden(app, lauf.konto[rolle]["mail"], gemeinsam.group(1))
+                r = weg.get("/api/material/meine-psa")
+                assert r.status_code == 200 and r.json["artikel"] == [], (r.status_code, r.get_json())
 
         # 9. Ein zweiter Lauf legt nichts an.
         vorher, katalog_jetzt = bestand_stand(app), katalog_stand(app)
@@ -634,6 +708,10 @@ def test_abgebrochener_lauf():
         assert code == "unterbrochen" and "Unterbrochen. Nichts angelegt" in aus, (code, aus[-2000:])
         assert bestand_stand(app) == vorher
 
+        # Der Merker des früheren kleinen Beispielbestands zählt nicht als „fertig“ (eigener Schlüssel).
+        with app.app_context():
+            from app import db
+            db.execute("INSERT INTO mat_meta (schluessel, wert) VALUES ('beispielbestand', 'fertig 2026-10-18')")
         stand = {"n": 0}
         from app.material.services import pruefung as pruefdienst
         abschliessen = pruefdienst.abschliessen
@@ -658,7 +736,7 @@ def test_abgebrochener_lauf():
             from app import db
             from app.material.services import ZONE, heute
             assert heute() == datetime.now(ZONE).date()                       # die echte Uhr gilt wieder
-            assert not db.query("SELECT 1 FROM mat_meta WHERE schluessel = 'beispielbestand'")
+            assert not db.query("SELECT 1 FROM mat_meta WHERE schluessel = 'beispielbestand_gross'")
             # Zwei Prüfungen sind fertig, die dritte rollte samt Protokoll zurück.
             assert db.query("SELECT COUNT(*) AS n FROM mat_inspection WHERE completed_at IS NOT NULL",
                             one=True)["n"] == 2
@@ -674,8 +752,210 @@ def test_abgebrochener_lauf():
     print("Abgebrochener Lauf bestanden.")
 
 
+# Die echten Kategorienamen beider Katalogstände (lieferung-20261024 auf dev und die aktuelle Lieferung) – nur die
+# Namen, keine Produktdaten – mit dem Typ, den der Beispielbestand ihnen gibt.
+OBEN = "Persöhnliche Schutzausrüstung gegen Absturz"
+KATEGORIE_TYPEN = {
+    "Gurte": "gurt", "Karabiner": "karabiner", "Anschlageinrichtungen": "sonstiges", "Abseilgeräte": "abseil",
+    "Abseilachten": "abseil", "Seilrollen": "rolle", "Bandmaterial": "schlinge", "Textilmaterial": "schlinge",
+    "Seile": "seil", "Seilklemmen": "seilklemme", "Kantenschutz": "sonstiges", "Flaschenzüge": "rolle",
+    "Selbstsicherungen": "sonstiges", "Verbindungselemente": "sonstiges",
+}
+
+
+def test_typen():
+    """Der Artikeltyp hängt am Kategorienamen (unterste Ebene zuerst), nicht an einem Teilstring des Pfads: Abseilgeräte,
+    Abseilachten und Seilklemmen sind keine Seile, Band- und Textilmaterial Schlingen, Flaschenzüge (mit ü) Rollen. Die
+    Petzl-Vorlage „Textilmaterial“ gilt auch für „Bandmaterial“ (älterer Katalogstand)."""
+    modul = skript()
+    for name, typ in KATEGORIE_TYPEN.items():
+        assert modul.typ_fuer([OBEN, name]) == typ, (name, modul.typ_fuer([OBEN, name]))
+    assert modul.typ_fuer([OBEN]) == "sonstiges"
+    assert modul.typ_fuer(["Seile", "Unterart ohne Stichwort (Test)"]) == "seil"     # erst dann die Oberkategorie
+    assert modul.typ_fuer(["Gurte", "Seilklemmen"]) == "seilklemme"                # die unterste zuerst
+    vorlagen, _ = modul.petzl_vorlagen()
+    assert modul.petzl_vorlage(vorlagen, "Bandmaterial") is vorlagen["Textilmaterial"]
+    assert modul.petzl_vorlage(vorlagen, "Sonderbau (Test)") is None
+    with tempfile.TemporaryDirectory() as tmp:
+        app = make_app(tmp)
+        with app.app_context():
+            from flask import g
+
+            from app import db
+            from app.material.services import importer, katalog
+            g.mat_akteur = "Test"
+            assert not importer.importieren({"format": "stroemis-material-katalog", "version": 1, "kategorien": [
+                {"name": OBEN, "unterkategorien": [
+                    {"name": "Bandmaterial", "materialart": "textil", "intervall_monate": 12}]}]},
+                quelle="Test")["fehler"]
+            petzl, platzhalter, _ = modul.formulare(vorlagen)
+            assert petzl == ["Bandmaterial"] and platzhalter == [OBEN], (petzl, platzhalter)
+            f = db.query("SELECT f.* FROM mat_form f JOIN mat_category k ON k.id = f.category_id WHERE k.name = "
+                         "'Bandmaterial'", one=True)
+            assert f["demo"] and f["title"].endswith("– Bandmaterial"), f
+            assert [p["label"] for p in katalog.punkte(f["id"])] == [p["text"] for p in vorlagen["Textilmaterial"]["punkte"]]
+    print("Typen nach Kategorienamen bestanden.")
+
+
+def test_mangelpunkt():
+    """Wo ein Befund abweicht: Ein gewöhnlicher Mangel (instandsetzen) nur an einem nicht kritischen Punkt, gestreut und
+    nicht an den vorangehenden Kontrollen (Seriennummer lesbar …); ein kritischer an einem kritischen Punkt; das
+    Lebensende am Punkt zur Lebensdauer – nie umgekehrt. Mit den Punkten der Petzl-Vorlagen."""
+    modul = skript()
+    vorlagen, _ = modul.petzl_vorlagen()
+
+    class Lauf:
+        rnd = __import__("random").Random(1)
+        _mangelpunkt = modul.Beispielbestand._mangelpunkt
+
+    lauf = Lauf()
+    for name in ("Abseilachten", "Gurte", "Abseilgeräte", "Seile"):
+        punkte = [{"id": k, "editor": p["art_app"], "checklist_text": p["text"], "group_name": p["gruppe"] or "",
+                   "is_critical": int(bool(p.get("kritisch")))} for k, p in enumerate(vorlagen[name]["punkte"])]
+        lebensdauer = lauf._mangelpunkt(punkte, "lebensdauer")
+        assert lebensdauer and "Lebensdauer" in lebensdauer["checklist_text"], name
+        gewaehlt = Counter()
+        for _ in range(200):
+            m = lauf._mangelpunkt(punkte, "mangel")
+            assert m["editor"] == "yesno" and not m["is_critical"], (name, m)
+            assert "Lebensdauer" not in m["checklist_text"] and m["group_name"] != "Vorangehende Kontrollen", (name, m)
+            gewaehlt[m["id"]] += 1
+            k = lauf._mangelpunkt(punkte, "kritisch")
+            assert "Lebensdauer" not in k["checklist_text"], (name, k)
+            if any(p["is_critical"] and "Lebensdauer" not in p["checklist_text"] for p in punkte):
+                assert k["is_critical"], (name, k)
+        assert len(gewaehlt) > 2, (name, gewaehlt)                                  # gestreut
+    # Platzhalter: der eine Ja/Nein-Punkt für Mangel und Kritisch, für das Lebensende keiner.
+    platz = [{"id": 1, "editor": "yesno", "checklist_text": "DEMO Ja/Nein-Punkt (Platzhalter)", "group_name": "DEMO-Gruppe",
+              "is_critical": 0}, {"id": 2, "editor": "text", "checklist_text": "DEMO Text-Punkt (Platzhalter)",
+                                  "group_name": "DEMO-Gruppe", "is_critical": 0}]
+    assert lauf._mangelpunkt(platz, "mangel")["id"] == 1 and lauf._mangelpunkt(platz, "kritisch")["id"] == 1
+    assert lauf._mangelpunkt(platz, "lebensdauer") is None
+    print("Mangelpunkte bestanden.")
+
+
+def test_uhr():
+    """Die Uhr des Laufs stellt nie über gestern hinaus (was heute geschieht, läuft mit der echten Uhr) und nie zurück."""
+    modul = skript()
+    with tempfile.TemporaryDirectory() as tmp:
+        app = make_app(tmp)
+        with app.app_context():
+            from app.material.services import ZONE, heute
+            echt = datetime.now(ZONE).date()
+            uhr = modul.Uhr()
+            with uhr:
+                uhr.stellen(echt - timedelta(days=400))
+                assert uhr.tag() == echt - timedelta(days=400)
+                uhr.stellen(echt - timedelta(days=500))                     # nie rückwärts
+                assert uhr.tag() == echt - timedelta(days=400)
+                uhr.stellen(echt + timedelta(days=30))                      # nie über gestern hinaus
+                assert uhr.tag() == echt - timedelta(days=1) and heute() == echt - timedelta(days=1)
+                uhr.echt()
+                assert uhr.tag() == echt
+            assert heute() == echt
+    print("Uhr bestanden.")
+
+
+def test_konten():
+    """Vorhandene Konten mit den DEMO-Adressen: Eine offene Kontoanfrage „DEMO-…“ (jeder kann sie stellen), ein
+    deaktiviertes DEMO-Konto und eines ohne die Stufe seiner Rolle übernimmt der Lauf nicht und stuft nichts hoch – er
+    bricht vor jedem Schreiben ab und nennt die Adressen. Ein passendes übernimmt er unverändert (Passwort, Name, Rollen)
+    und nennt im Bericht, worin es abweicht."""
+    from werkzeug.security import generate_password_hash
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        platzhalterkatalog(k)
+        with app.app_context():
+            from app import db
+            jetzt = db.now()
+
+            def konto(mail, name, **spalten):
+                werte = dict(email=mail, password_hash=generate_password_hash("eigenes-passwort-1"), name=name,
+                             created_at=jetzt, **spalten)
+                db.execute(f"INSERT INTO users ({', '.join(werte)}) VALUES ({', '.join('?' * len(werte))})",
+                           tuple(werte.values()))
+
+            konto("demo-mv@example.invalid", "DEMO-Material-Verwaltung", status="pending", recht_material=1)
+            konto("demo-pruefer@example.invalid", "DEMO-Prüfer", active=0, recht_material=1, mat_pruefer=1,
+                  urkundennummer="DEMO-1012")
+            konto("demo-wart-a@example.invalid", "DEMO-Materialwart", recht_material=0)
+            konto("demo-pruefer-2@example.invalid", "DEMO-Prüferin 2", recht_material=1)
+        vorher = bestand_stand(app)
+        aus, code = laufen("--beispielbestand", "--artikel", "6")
+        assert code == 1 and "Nichts angelegt" in aus, (code, aus[-2000:])
+        for teil in ("demo-mv@example.invalid (offene Kontoanfrage)", "demo-pruefer@example.invalid (deaktiviert)",
+                     "demo-wart-a@example.invalid (Stufe im Modul Material 0, gebraucht 1)",
+                     "demo-pruefer-2@example.invalid (kein Prüfer mit gültiger Urkundennummer)"):
+            assert teil in aus, (teil, aus[-2000:])
+        assert bestand_stand(app) == vorher                                   # nichts angelegt, nichts hochgestuft
+        # Aufgeräumt bis auf ein passendes Konto mit mehr Rechten als seine Rolle: Es bleibt, wie es ist.
+        with app.app_context():
+            from app import db
+            db.execute("DELETE FROM users WHERE email IN ('demo-mv@example.invalid', 'demo-pruefer@example.invalid', "
+                       "'demo-wart-a@example.invalid', 'demo-pruefer-2@example.invalid')")
+            konto("demo-mitglied@example.invalid", "DEMO-Mitglied (alt)", recht_material=2, recht_karte=1)
+            alt = db.query("SELECT * FROM users WHERE email = 'demo-mitglied@example.invalid'", one=True)
+        aus, code = laufen("--beispielbestand", "--artikel", "6")
+        assert code == 0, aus[-3000:]
+        assert re.search(r"demo-mitglied@example\.invalid .*schon da – Passwort unverändert", aus), aus[-3000:]
+        assert ("demo-mitglied@example.invalid: Stufe im Modul Material 2 statt 1, Karte an") in aus, aus[-3000:]
+        with app.app_context():
+            from app import db
+            jetzt = db.query("SELECT * FROM users WHERE email = 'demo-mitglied@example.invalid'", one=True)
+            # Nur der Kontoverweis fürs Journal ist neu (journal.konto_ref setzt ihn beim ersten Eintrag).
+            assert {s: v for s, v in jetzt.items() if s != "mat_ref"} == {s: v for s, v in alt.items() if s != "mat_ref"}
+        anmelden(app, "demo-mitglied@example.invalid", "eigenes-passwort-1")
+    print("Vorhandene Konten bestanden.")
+
+
+def test_neue_version_demo():
+    """„Neue Version“ eines DEMO-Formulars (ohne eigene Punkte, wie die Oberfläche) bleibt DEMO und damit aus dem
+    Katalog-Export – auch aus einer gewählten DEMO-Vorlage; mit eigenen Punkten (Katalogimport) zählt nur der Parameter."""
+    modul = skript()
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        kp = k["katalog"]
+        r = kp.post("/api/material/kategorien", json={"name": "Gurte", "default_material_kind": "textil",
+                                                      "default_interval_months": 12})
+        assert r.status_code == 201, r.get_json()
+        kid = r.json["kategorie"]["id"]
+        vorlagen, _ = modul.petzl_vorlagen()
+        with app.app_context():
+            from flask import g
+
+            from app.material.services import katalog, katalog_export
+            g.mat_akteur = "Test"
+            assert modul.formulare(vorlagen)[0] == ["Gurte"]
+        # „Neue Version“ ohne Vorlage nimmt die letzte (DEMO) – auch die Punkte; mit gewählter DEMO-Vorlage ebenso.
+        r = kp.post("/api/material/formulare", json={"kategorie_id": kid})
+        assert r.status_code == 201 and r.json["formular"]["demo"] is True, r.get_json()
+        assert r.json["formular"]["titel"].startswith("DEMO – Prüfformular nach Petzl-Prüfbericht"), r.get_json()
+        with app.app_context():
+            from app import db
+            erste = db.query("SELECT id FROM mat_form WHERE category_id = ? ORDER BY version LIMIT 1", (kid,),
+                             one=True)["id"]
+        r = kp.post("/api/material/formulare", json={"kategorie_id": kid, "vorlage_id": erste})
+        assert r.status_code == 201 and r.json["formular"]["demo"] is True, r.get_json()
+        neu = r.json["formular"]["id"]
+        assert kp.post(f"/api/material/formulare/{neu}/aktivieren", headers=H).status_code == 200
+        with app.app_context():
+            from app import db
+            daten, _, _ = katalog_export.sammeln(mit_dateien=False)
+            assert not daten["formulare"], daten["formulare"]
+            # Mit eigenen Punkten (wie der Katalogimport) wird die neue Version echt – der Parameter entscheidet.
+            fid = katalog.formular_anlegen({"kategorie_id": kid, "titel": "Gurte (Test)", "punkte": [
+                {"text": "Testpunkt", "art": "yesno", "soll": "ja"}]})
+            assert not db.query("SELECT demo FROM mat_form WHERE id = ?", (fid,), one=True)["demo"]
+    print("Neue Version eines DEMO-Formulars bestanden.")
+
+
 if __name__ == "__main__":
     test_ohne_schalter()
+    test_typen()
+    test_mangelpunkt()
+    test_uhr()
+    test_konten()
+    test_neue_version_demo()
     test_ohne_echte_produkte()
     test_demo_grenze_beim_verschieben()
     test_formulare()

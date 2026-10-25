@@ -4154,6 +4154,35 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Beispielbestand: Nachbesserung nach der Sicherheits- und der Ablaufprüfung (25.10.2026)
+
+Beide Prüfungen sahen den Stand befaf58 als deploybar an, den **Lauf** auf dev aber erst nach Nachbesserung. Behoben:
+
+| Nr. | Befund | Stufe | Behebung |
+| --- | --- | --- | --- |
+| S1 | Der Lauf hielt die Schreibsperre fast ununterbrochen; auf dev scheiterten Schreibzugriffe und Anmeldungen (500) | mittel | Nach jedem Vorgang 0,05 s Pause (`PAUSE` in `_versuch`, auch nach einem abgelehnten). README: dev ist während des Laufs nur eingeschränkt benutzbar, Laufzeit mit Pause und unter Last |
+| S2 | Vorhandene „DEMO-…“-Konten wurden nur am Namen erkannt: eine offene Kontoanfrage auf `demo-mv@…` wurde zur Material-Verwaltung hochgestuft, eine auf `demo-pruefer@…` ließ den Lauf mittendrin scheitern | mittel | `konten_pruefen` vor jedem Schreiben: übernommen wird nur ein Konto „DEMO-…“ mit `active = 1` und `status = 'active'`, das die Stufe seiner Rolle schon hat (Prüfer mit gültiger Urkundennummer); sonst Abbruch mit Adresse und Grund, nichts angelegt. Kein Konto wird hochgestuft oder in seinen Rollen geändert – der Bericht nennt Abweichungen (höhere Stufe, weitere Module). Test `test_konten` (offene Kontoanfrage, deaktiviertes Konto, fehlende Stufe, Prüfer ohne Urkunde; passendes Konto bleibt unverändert) |
+| S3 | Ohne `BASE_URL` belegte das Skript im Klon selbst `http://localhost:8080` vor; die dev-Kennung fehlte | niedrig | Keine Vorbelegung mehr – fehlt `BASE_URL`, Abbruch. Dazu wie bei `dev-zuruecksetzen` `STROEMIS_NAME` auf `-dev` – ohne sie nur, wenn beide Adressen localhost/127.0.0.1 sind. Test in `test_ohne_schalter` |
+| S4 | README: Strg-C und SSH-Abriss beenden den Lauf im Container nicht | niedrig | README: in `tmux`/`screen` starten, Ausgabe mit den Passwörtern sichern; der Befehl legt die PID in `/tmp/bb/pid` ab (`exec python …`), Abbruch mit `docker exec stroemis-dev sh -c 'kill -TERM "$(cat /tmp/bb/pid)"'` |
+| S5 | „Neue Version“ eines DEMO-Formulars verlor das DEMO-Kennzeichen; die Petzl-Punkte kamen so in den Katalog-Export | niedrig | **App** (`katalog.formular_anlegen`): Übernimmt die neue Version die Punkte einer DEMO-Vorlage (ohne eigene Punkte, wie „Neue Version“ und „Formular anlegen“ der Oberfläche), bleibt sie DEMO. Mit eigenen Punkten (Katalogimport) zählt wie bisher nur der Parameter. Test `test_neue_version_demo` (Export ohne die neue Version) |
+| S6 | Der Merker hieß wie beim alten kleinen Beispielbestand – ein abgebrochener Lauf galt dann als „schon da“ | niedrig | Eigener Schlüssel `beispielbestand_gross`. Test in `test_abgebrochener_lauf` (mit altem Merker) |
+| S– | Bei sehr großem `--artikel` lief die Uhr über heute hinaus | Verbesserung | `Uhr.stellen` kappt bei gestern (heute läuft mit der echten Uhr). Test `test_uhr`, in `test_beispielbestand` keine Prüfung nach heute |
+| A1 | Typ per Teilstring über den Kategoriepfad: Abseilgeräte, Abseilachten und Seilklemmen galten als Seile, Bandmaterial und Flaschenzüge als „sonstiges“ | mittel | `typ_fuer`: am Kategorienamen, die unterste Ebene zuerst; „abseil“ vor „seil“, Seilklemmen eigener Typ, Band- und Textilmaterial Schlingen, „flaschenz“ Rollen. Test `test_typen` mit den echten Kategorienamen beider Katalogstände |
+| A2 | Ausgeschiedene Einsatzkräfte bekamen nach dem Austritt noch Ausrüstung (auch in ihren persönlichen Ordner) | mittel | Nach dem Austritt gehen alle Pläne der Person (auch noch nicht angelegte, Ersatz für Ausgesondertes) ohne Person in die Reserve; beim Anlegen wird das noch einmal geprüft. Test: keine Zuordnung nach dem Austrittstag, nichts Neues im Ordner, „Meine PSA“ leer |
+| A3 | Gewöhnlicher Mangel („instandsetzen“) auf einem kritischen Punkt; fast alle Mängel auf „Seriennummer/CE lesbar“ | mittel | Gewöhnliche Mängel nur auf nicht kritischen Punkten, kritische nur bei Aussonderung; gestreut, die vorangehenden Kontrollen nur ohne Alternative. Test `test_mangelpunkt` mit den Petzl-Punkten, in `test_beispielbestand` kein „instandsetzen“ mit kritischem Mangel |
+| A4 | Aussonderung wegen Lebensdauer mit „Lebensdauer nicht überschritten: ja“ | niedrig | Beim Lebensende weicht der Punkt zur Lebensdauer vom Soll ab (mit DEMO-Notiz und Platzhalterfoto); ein Formular ohne solchen Punkt bleibt ohne Abweichung |
+| A5 | Petzl-Vorlage „Textilmaterial“ griff beim Katalogstand von dev („Bandmaterial“) nicht | niedrig | Alias `PETZL_ALIAS` „Bandmaterial“ → „Textilmaterial“. Test in `test_typen` |
+| A6 | Antragszustand „abgelehnt“ fehlte im Standardlauf | niedrig | `sicherstellen` stellt je fehlendem Zustand (bestätigt, abgelehnt, zurückgezogen, offen) heute einen Antrag. Test: alle vier kommen vor |
+| A7 | `applied_at` bestätigter Anträge trägt den Lauftag (Trigger mit SQLite-Zeit) | niedrig | Nicht umgangen (der Trigger bleibt), als bekannte Grenze in README und Docstring |
+
+Dazu: Die persönliche Ausrüstung ist von Anfang an da (kein Nachkauf ohne Vorgänger – keine Einsatzkraft lange ohne
+Gurt; Ersatz nach Aussonderungen bleibt). Die Testaussage „nichts länger als 60 Tage überfällig“ gilt jetzt mit
+Ausnahme verschobener Artikel (die zwischen die Runden zweier Bereiche fallen können). Nicht geändert: Die erste Prüfung
+des Erstbestands im Durchgang bleibt „Eingangsprüfung“ – ohne abgeschlossene Prüfung lässt die App keine andere Art zu
+(`pruefung.arten_fuer`). Läufe mit 60 Artikeln gegen Teile der Lieferung 20261024 (Stand von dev, „Bandmaterial“) und der
+aktuellen Lieferung („Textilmaterial“): Regal Seile nur mit Seilen, persönliche Ausrüstung Gurt, zwei Karabiner,
+Schlinge, Abseilgerät. Laufzeit bei 800 Artikeln 27:34 min neben der laufenden Testsuite (830 Artikel, 1 822 Protokolle, 33 Aussonderungen – davon 7 wegen Lebensdauer, Lebensdauer-Punkt „nein“ –, kein „instandsetzen“ mit kritischem Mangel, 56 Mängel auf 27 Punkten, Anträge 8/4/4/1). Kein Schemaschritt.
+
 ## DEMO-Skript entfernt (Wunsch des Nutzers, 25.10.2026)
 
 `scripts/material_demo.py` ist entfernt („Entferne das Demo-Skript material_demo.py, es wird dann nicht mehr
