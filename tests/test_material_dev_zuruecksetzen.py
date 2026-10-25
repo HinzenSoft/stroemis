@@ -3,12 +3,14 @@ python tests/test_material_dev_zuruecksetzen.py  oder  pytest …
 
 Sperren: ohne dev-Kennung (STROEMIS_NAME auf „-dev“), mit BASE_URL der Produktion (Umgebung oder Anwendung) oder ohne
 --ja-alles-loeschen lehnt der Befehl mit 2 ab und ändert nichts; --trocken zeigt nur. Der volle Lauf auf einem Bestand
-mit Katalog samt Bild und Dokument, Gliederung, Artikeln, Durchgang, Bestandsimport und dem DEMO-Bestand aus
-scripts/material_demo.py (festgeschriebene Prüfungen mit Protokollen, DEMO-Konten): danach sind alle mat_-Tabellen
+mit Katalog samt Bild und Dokument, Gliederung, Artikeln, Durchgang, Bestandsimport und einem kleinen
+Beispielbestand aus scripts/material_beispielbestand.py (festgeschriebene Prüfungen mit Protokollen, Durchgänge,
+DEMO-Konten, DEMO-Formular): danach sind alle mat_-Tabellen
 leer, Schema und mat_meta gleichen einer neuen Installation (Version wie models.SCHEMA_VERSION), die Sicherung enthält die alte Datenbank Zeile
 für Zeile und die verschobenen Medien Datei für Datei, und Konten, Wiki, Spots, Prüfungen-Modul und Einstellungen sind
 byteidentisch – auch die Modulstufe 2 ohne Plattform-Verwaltung, die Migration Schritt 10 neu rechnen würde. Ein
-zweiter Lauf auf dem leeren Modul geht, die App startet danach, und material_demo.py --demo läuft wieder. Scheitert
+zweiter Lauf auf dem leeren Modul geht, die App startet danach, und nach einem neuen Katalog läuft der Beispielbestand
+wieder (die DEMO-Konten sind geblieben und werden übernommen). Scheitert
 die Sicherung, das Verschieben oder das Anlegen, bleibt alles, wie es war. Läuft ein Katalogimport im Hintergrund,
 bricht der Befehl ab, ohne etwas zu ändern; danach sind dessen Aufträge unter DATA_DIR/katalog-import weg
 (Nachbesserung nach der Sicherheitsprüfung vom 24.10.2026).
@@ -18,6 +20,7 @@ import errno
 import hashlib
 import io
 import os
+import re
 import sqlite3
 import sys
 import tempfile
@@ -27,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_material import (H, PDF, gliederung, jpeg, katalog_grund, make_app, neuer_artikel,  # noqa: E402
                            pruef_formulare, umgebung)
 from test_material_import import csv_bytes, ok, uebernehmen  # noqa: E402
+from test_material_beispielbestand import laufen as beispiel_laufen  # noqa: E402
 from test_material_ueberblick import ordner_neu  # noqa: E402
 from test_material_trennung import endversion  # noqa: E402
 
@@ -130,24 +134,6 @@ def sicherungen(app):
     return sorted(n for n in os.listdir(app.config["DATA_DIR"]) if n.startswith("sicherung-material-"))
 
 
-def demo_laufen(*schalter):
-    """scripts/material_demo.py wie von der Kommandozeile (DATA_DIR hat make_app gesetzt) – (Ausgabe, Rückgabewert)."""
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("material_demo_test", os.path.join(REPO, "scripts", "material_demo.py"))
-    modul = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(modul)
-    puffer, code, argv = io.StringIO(), 0, sys.argv
-    sys.argv = ["material_demo.py", *schalter]
-    try:
-        with contextlib.redirect_stdout(puffer):
-            modul.main()
-    except SystemExit as exc:
-        code = exc.code
-    finally:
-        sys.argv = argv
-    return puffer.getvalue(), code
-
-
 def bestand_aufbauen(tmp):
     """Ein Bestand, der jede Art Modulinhalt hat, und daneben Konten, Wiki, Spots und Prüfungen-Modul."""
     app, k = umgebung(tmp)
@@ -167,8 +153,8 @@ def bestand_aufbauen(tmp):
     kopf = ["Hersteller", "Modell", "Seriennummer"]
     ok(uebernehmen(w, lager, csv_bytes([kopf, ["Testwerk", "HMS Beta", "PH-IMP-1"], ["Testwerk", "Unbekannt", "PH-IMP-2"]])),
        201)
-    aus, code = demo_laufen("--demo", "--konten")
-    assert code == 0 and "festgeschrieben" in aus, (code, aus)
+    aus, code = beispiel_laufen("--beispielbestand", "--artikel", "8")
+    assert code == 0 and "festgeschrieben mit Protokoll" in aus, (code, aus)
     # Daneben: Wiki-Seite (mit Datei), Spot mit Bild, Lehrgang im Prüfungen-Modul.
     ok(adm.post("/api/wiki/pages", json={"title": "Platzhalter-Seite", "content": "Platzhaltertext"}), 201)
     ok(adm.post("/api/wiki/files", data={"file": (jpeg(), "wiki.jpg")}, headers=H, content_type="multipart/form-data"))
@@ -241,7 +227,7 @@ def test_zuruecksetzen():
             aus, code = aufrufen(app, "--ja-alles-loeschen")
         assert code == 0, (code, aus)
         assert "Modul Material zurückgesetzt. Sicherung:" in aus and "docker compose restart" in aus, aus
-        assert "demo-wart-a@example.invalid (DEMO-Materialwart A)" in aus and "Nutzerverwaltung" in aus, aus
+        assert "demo-wart-a@example.invalid (DEMO-Materialwart Flussland)" in aus and "Nutzerverwaltung" in aus, aus
         (ordner,) = sicherungen(app)
         sicherung = os.path.join(tmp, ordner)
         nachher = stand(app)
@@ -291,14 +277,16 @@ def test_zuruecksetzen():
         with umwelt(app, **DEV):
             aus, code = aufrufen(app, "--trocken")
         assert code == 0 and all(n in aus.split("Ältere Sicherungen", 1)[1] for n in sicherungen(app)), aus
-        # Die App startet danach, das Modul ist leer und benutzbar, und die Demodaten laufen wieder.
+        # Die App startet danach, das Modul ist leer und benutzbar, und nach einem neuen Katalog läuft der
+        # Beispielbestand wieder – die DEMO-Konten sind geblieben und werden übernommen.
         app2 = make_app(tmp)
         c = app2.test_client()
         ok(c.post("/api/auth/login", json={"email": "admin@example.org", "password": "geheim123"}))
         assert ok(c.get("/api/material/start"))
-        aus, code = demo_laufen("--demo", "--konten")
-        assert code == 0 and "festgeschrieben" in aus, (code, aus)
-        assert "Konto demo-wart-a@example.invalid ist schon da" in aus, aus
+        katalog_grund(c)
+        aus, code = beispiel_laufen("--beispielbestand", "--artikel", "8")
+        assert code == 0 and "festgeschrieben mit Protokoll" in aus, (code, aus)
+        assert re.search(r"demo-wart-a@example\.invalid .*schon da – Passwort unverändert", aus), aus
         with app2.app_context():
             from app import db
             assert db.query("SELECT COUNT(*) AS n FROM mat_inspection WHERE pdf_path IS NOT NULL", one=True)["n"] > 0

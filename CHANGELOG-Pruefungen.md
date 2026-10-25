@@ -4,6 +4,11 @@ Erweiterung von strömis.de um Lehrgänge, Teilnehmende, Voraussetzungen, Prüfu
 Stoppuhr, Nachprüfungen, Medien und eine Mängelübersicht für Feedbackrunden – nur für Nutzer mit dem neuen
 Zusatzrecht „Prüfer“.
 
+## Nachtrag (25.10.2026): Beispieldaten-Skript entfernt
+
+- `scripts/beispieldaten.py` entfernt (Wunsch des Nutzers, 25.10.2026) – Testdaten für den Prüfungsbereich gibt es nur
+  noch über die Tests.
+
 ## Nachtrag (20.10.2026): Knöpfe „… anlegen“ statt „+ …“
 
 App-weit einheitlich: „Lehrgang anlegen“, „Katalog anlegen“, „Prüfungsleistung anlegen“, „Teilnehmende:n anlegen“,

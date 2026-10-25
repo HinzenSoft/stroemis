@@ -4,27 +4,24 @@ Paket B):  python tests/test_material_freigaben.py  oder  pytest tests/test_mate
 Nach dem Bauentwurf 8.3: Journal ohne Notiz, Vorlagen in einer Transaktion, die Grenzen aus 1.6 einzeln, der
 Übernahme-Schutz (Kritik 4), die Listen direkt/geerbt/unten, „Meine Freigaben“, der Verlängern-Knopf, die Nutzersuche
 ohne E-Mail, die Nutzerverwaltung (Material nur Anzeige, gruppierte Abfrage, Journal ohne E-Mail, Häkchen nur mit
-Namen) und das DEMO-Skript, zweimal hintereinander.
+Namen). Die DEMO-Konten prüft seit dem 25.10.2026 tests/test_material_beispielbestand.py (das DEMO-Skript ist
+entfernt).
 
 Tests, die erst mit einem anderen Paket laufen können, tragen @braucht("<Paket>", <Prüfung>): Fehlt das Paket noch,
 werden sie übersprungen (mit Meldung); ist es da, laufen sie voll. Alle Namen und Nummern hier sind erfunden und nur
 für den Test da."""
-import contextlib
 import functools
-import importlib.util
 import inspect
-import io
 import json
 import os
-import re
 import sys
 import tempfile
 from datetime import timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import (H, _heute, anmelden, freigeben, gliederung, katalog_grund, make_app, neuer_artikel,  # noqa: E402
-                           neues_konto, pruef_formulare, starten, umgebung)
+from test_material import (H, _heute, freigeben, gliederung, katalog_grund, neuer_artikel, neues_konto,  # noqa: E402
+                           pruef_formulare, starten, umgebung)
 from test_material_ueberblick import ordner_neu  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -1080,131 +1077,6 @@ def test_braucht_a1_ordner_loeschen_journal():
     print("Ordner löschen schreibt freigabe_entfernt bestanden.")
 
 
-# --- DEMO-Skript (5.5) ------------------------------------------------------------------------------------------------
-
-def _demo_laufen(*schalter, konten=None):
-    """Das DEMO-Skript mit diesen Schaltern; konten: (DEMO_KONTEN) -> andere DEMO_KONTEN, etwa die eines früheren Stands."""
-    spec = importlib.util.spec_from_file_location("material_demo_test", os.path.join(REPO, "scripts", "material_demo.py"))
-    modul = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(modul)
-    if konten:
-        modul.DEMO_KONTEN = konten(modul.DEMO_KONTEN)
-    alt = sys.argv
-    sys.argv = ["material_demo.py", *schalter]
-    puffer = io.StringIO()
-    try:
-        with contextlib.redirect_stdout(puffer):
-            modul.main()
-    finally:
-        sys.argv = alt
-    return puffer.getvalue()
-
-
-def test_demo_zweimal():
-    """Zweimal hintereinander mit --konten: Beim ersten Mal entstehen die zweite Gliederung und die fünf Konten (das
-    Passwort steht genau einmal da), beim zweiten Mal nichts. Die Konten sehen, was ihre Freigaben zeigen; die
-    DEMO-Material-Verwaltung sieht alles, ohne Plattform-Verwaltung zu sein."""
-    with tempfile.TemporaryDirectory() as tmp:
-        make_app(tmp)
-        erst = _demo_laufen("--demo", "--konten")
-        passwoerter = dict(re.findall(r"Konto (\S+@example\.invalid) .*?Passwort: (\S+)", erst))
-        assert set(passwoerter) == {"demo-wart-a@example.invalid", "demo-wart-b@example.invalid",
-                                    "demo-pruefer@example.invalid", "demo-extern@example.invalid",
-                                    "demo-mv@example.invalid"}, erst
-        app = make_app(tmp)
-
-        def stand():
-            return {t: zeilen(app, f"SELECT * FROM {t} ORDER BY id") for t in ("mat_folder", "mat_item", "mat_folder_grant",
-                                                                               "mat_inspection", "mat_audit", "users")}
-        vorher = stand()
-        zweit = _demo_laufen("--demo", "--konten")
-        assert "Passwort" not in zweit and zweit.count("ist schon da – unverändert") == 5, zweit
-        assert stand() == vorher
-        # Ohne --konten keine Konten – der Lauf ändert nichts mehr.
-        assert "Konto" not in _demo_laufen("--demo") and stand() == vorher
-
-        ordner = {o["name"]: o for o in vorher["mat_folder"]}
-        ns, lager_ns = ordner["DEMO-Gliederung Nachbarstadt"], ordner["DEMO-Lager NS"]
-        assert ns["parent_id"] is None and ns["kind"] == "gliederung" and ns["demo"] and lager_ns["parent_id"] == ns["id"]
-        artikel_ns = [i for i in vorher["mat_item"] if i["folder_id"] == lager_ns["id"]]
-        assert len(artikel_ns) == 3 and "DEMO-NS-4711" in {i["serial_no"] for i in artikel_ns}
-        assert all(o["name"].startswith(("DEMO", "Gesperrt", "Ausgesondert")) for o in vorher["mat_folder"])
-        konten = {u["email"]: u for u in vorher["users"] if u["email"].endswith("@example.invalid")}
-        assert all(u["name"].startswith("DEMO-") for u in konten.values())
-        assert (konten["demo-pruefer@example.invalid"]["urkundennummer"], konten["demo-extern@example.invalid"]["urkundennummer"]) == (
-            "DEMO-1012", "DEMO-2024")
-        # Stufen: alle Mitglied, die DEMO-Material-Verwaltung Verwaltung – keine Plattform-Verwaltung, keine Spots/Wiki.
-        assert {m: (u["recht_material"], u["recht_verwaltung"], u["recht_karte"], u["recht_wiki"])
-                for m, u in konten.items()} == {m: (2 if m == "demo-mv@example.invalid" else 1, 0, 0, 0) for m in konten}
-        rollen = [x for x in vorher["mat_audit"] if x["entity"] == "user" and x["action"] == "rollen"]
-        assert len(rollen) == 5 and not any("@" in x["after_json"] or "mat_katalog" in x["after_json"] for x in rollen)
-        freigaben = {(u_mail, g["permission"], next(o["name"] for o in vorher["mat_folder"] if o["id"] == g["folder_id"]),
-                      g["valid_until"])
-                     for g in vorher["mat_folder_grant"] for u_mail, u in konten.items() if g["user_id"] == u["id"]}
-        assert freigaben == {("demo-wart-a@example.invalid", "verwalten", "DEMO-Gliederung", None),
-                             ("demo-wart-b@example.invalid", "verwalten", "DEMO-Gliederung Nachbarstadt", None),
-                             ("demo-pruefer@example.invalid", "lesen", "DEMO-Gliederung", None),
-                             ("demo-pruefer@example.invalid", "pruefen", "DEMO-Gliederung", None),
-                             ("demo-extern@example.invalid", "pruefen", "DEMO-Lager", tag(30))}, freigaben
-        # Je Freigabe ein Journaleintrag unter „Demodaten“, die Liste nennt sie so.
-        e = [x for x in vorher["mat_audit"] if x["action"] == "freigabe_erteilt"]
-        assert len(e) == 5 and {x["user_name"] for x in e} == {"Demodaten"} and not any("@" in x["after_json"] for x in e)
-        # Die Konten arbeiten getrennt: Materialwart A sieht die Nachbarstadt nicht, B die DEMO-Gliederung nicht.
-        a = anmelden(app, "demo-wart-a@example.invalid", passwoerter["demo-wart-a@example.invalid"])
-        b = anmelden(app, "demo-wart-b@example.invalid", passwoerter["demo-wart-b@example.invalid"])
-        gl = ordner["DEMO-Gliederung"]["id"]
-        assert a.get(f"/api/material/ordner/{gl}").status_code == 200 and a.get(f"/api/material/ordner/{ns['id']}").status_code == 404
-        assert b.get(f"/api/material/ordner/{ns['id']}").status_code == 200 and b.get(f"/api/material/ordner/{gl}").status_code == 404
-        assert {x["vergeben_von"] for x in liste(a, gl)["direkt"]} == {"Demodaten"}
-        mv = anmelden(app, "demo-mv@example.invalid", passwoerter["demo-mv@example.invalid"])
-        d = mv.get("/api/material/start").json["darf"]
-        assert d["alles"] and d["katalog"] and d["gliederung_anlegen"] and not d["pruefen"], d
-        assert mv.get(f"/api/material/ordner/{ns['id']}").status_code == 200 and mv.get("/api/admin/users").status_code == 403
-    print("DEMO-Skript zweimal bestanden.")
-
-
-def test_demo_pruefer_von_frueher():
-    """Eine Datenbank, auf der ein früherer Lauf den DEMO-Prüfer noch befristet prüfen ließ (dev): --konten stellt
-    dessen DEMO-Prüffreigabe auf dauerhaft – mit Journaleintrag unter „Demodaten“, einmal; der externe DEMO-Prüfer
-    bleibt befristet. Eine Zeile, die seitdem jemand geändert hat, oder eine ohne Grundrecht dort bleibt, wie sie ist."""
-    def frueher(konten):
-        return [(m, n, gl, st, u, [(o, r, 30 if r == "pruefen" else t) for o, r, t in f]) for m, n, gl, st, u, f in konten]
-
-    def pruefen(app):
-        return {x["email"]: x["valid_until"] for x in zeilen(
-            app, "SELECT u.email, g.valid_until FROM mat_folder_grant g JOIN users u ON u.id = g.user_id "
-                 "WHERE g.permission = 'pruefen' AND u.email LIKE 'demo-%'")}
-
-    with tempfile.TemporaryDirectory() as tmp:
-        make_app(tmp)
-        assert "pruefen DEMO-Gliederung bis" in _demo_laufen("--demo", "--konten", konten=frueher)
-        app = make_app(tmp)
-        assert pruefen(app) == {"demo-pruefer@example.invalid": tag(30), "demo-extern@example.invalid": tag(30)}
-        aus = _demo_laufen("--demo", "--konten")
-        assert aus.count("ist schon da – unverändert") == 4 and "Passwort" not in aus, aus
-        assert "demo-pruefer@example.invalid ist schon da – Prüffreigabe DEMO-Gliederung jetzt dauerhaft" in aus, aus
-        assert pruefen(app) == {"demo-pruefer@example.invalid": None, "demo-extern@example.invalid": tag(30)}
-        e = [x for x in zeilen(app, "SELECT * FROM mat_audit WHERE action = 'freigabe_geaendert'")]
-        assert len(e) == 1 and e[0]["user_name"] == "Demodaten" and e[0]["user_id"] is None, e
-        assert (json.loads(e[0]["before_json"])["bis"], json.loads(e[0]["after_json"])["bis"]) == (tag(30), None)
-        assert "@" not in e[0]["before_json"] + e[0]["after_json"]
-        vorher = zeilen(app, "SELECT * FROM mat_folder_grant ORDER BY id")
-        assert _demo_laufen("--demo", "--konten").count("ist schon da – unverändert") == 5
-        assert zeilen(app, "SELECT * FROM mat_folder_grant ORDER BY id") == vorher
-
-    # Geändert seitdem (updated_at) oder das Grundrecht weg: bleibt befristet.
-    for eingriff in ("UPDATE mat_folder_grant SET updated_at = '2026-10-01T00:00:00+00:00' WHERE permission = 'pruefen'",
-                     "DELETE FROM mat_folder_grant WHERE permission = 'lesen'"):
-        with tempfile.TemporaryDirectory() as tmp:
-            make_app(tmp)
-            _demo_laufen("--demo", "--konten", konten=frueher)
-            app = make_app(tmp)
-            sql(app, eingriff)
-            aus = _demo_laufen("--demo", "--konten")
-            assert aus.count("ist schon da – unverändert") == 5 and pruefen(app)["demo-pruefer@example.invalid"] == tag(30), aus
-    print("DEMO-Prüfer von früher bestanden.")
-
-
 if __name__ == "__main__":
     test_erteilen_aendern_entziehen()
     test_vorlagen_eine_transaktion()
@@ -1221,5 +1093,3 @@ if __name__ == "__main__":
     test_list_users_abfragen()
     test_liste_abfragen()
     test_braucht_a1_ordner_loeschen_journal()
-    test_demo_zweimal()
-    test_demo_pruefer_von_frueher()

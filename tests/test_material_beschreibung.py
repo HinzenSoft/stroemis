@@ -209,53 +209,6 @@ def test_bericht_und_journal_mit_zusatz():
     print("Bericht und Journal mit Zusatz bestanden.")
 
 
-def test_demo_ohne_beschreibung():
-    """Prüfung der Nachbesserung: Die DEMO-Produkte haben keine Beschreibung – den Hinweis „DEMO – nicht für echte
-    Prüfungen“ trägt die DEMO-Marke, als Zusatz hinter dem Namen stand er doppelt („DEMO Gurt A | DEMO – nicht für echte
-    Prüfungen“). Ein neuer Lauf des DEMO-Skripts leert ihn auch in einem älteren DEMO-Katalog; die DEMO-Gliederung
-    behält ihn als Beschreibung."""
-    import contextlib
-    import importlib.util
-    import io
-    from app.material.services import katalog
-    wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-    def laufen(frueher=False):
-        spec = importlib.util.spec_from_file_location("material_demo_beschreibung",
-                                                      os.path.join(wurzel, "scripts", "material_demo.py"))
-        modul = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(modul)
-        if frueher:                                    # der Stand vor der Nachbesserung
-            for p in modul.KATALOG["produkte"]:
-                p["beschreibung"] = modul.HINWEIS
-        argv, sys.argv = sys.argv, ["material_demo.py", "--demo"]
-        try:
-            with contextlib.redirect_stdout(io.StringIO()):
-                modul.main()
-        finally:
-            sys.argv = argv
-        return modul
-
-    with tempfile.TemporaryDirectory() as tmp:
-        app = make_app(tmp)
-        modul = laufen(frueher=True)
-        sql = "SELECT manufacturer, model, description FROM mat_product WHERE demo = 1"
-        assert {z["description"] for z in _db(app, sql, one=False)} == {modul.HINWEIS}
-        laufen()
-        zeilen = _db(app, sql, one=False)
-        # Fünf: das DEMO-Set-Produkt aus Phase 4 · L2 gibt es seit dem Rückbau (Schritt 26) nicht mehr.
-        assert len(zeilen) == 5 and all(z["description"] == "" for z in zeilen), zeilen
-        assert all(katalog.produktname(z) == f"{z['manufacturer']} {z['model']}" for z in zeilen), zeilen
-        assert _db(app, "SELECT description FROM mat_folder WHERE name = ?", (modul.GLIEDERUNG,))["description"] \
-            == modul.HINWEIS
-    with tempfile.TemporaryDirectory() as tmp:                # ein frischer DEMO-Katalog ebenso
-        app = make_app(tmp)
-        laufen()
-        assert {z["description"] for z in _db(app, "SELECT description FROM mat_product WHERE demo = 1", one=False)} \
-            == {""}
-    print("DEMO-Produkte ohne Beschreibung bestanden.")
-
-
 def test_regel_produktname():
     """Die Regel für den Namen (katalog.modell_teile, zusatz, produkt_teile, produktname – dieselbe wie modellTeile und
     produktZusatz in material.js): ohne Beschreibung nur der Name; als Text „Modell Beschreibung“ ohne Strich, getrennt
@@ -717,7 +670,6 @@ if __name__ == "__main__":
     test_laenge_beim_speichern()
     test_import_lange_beschreibung()
     test_bericht_und_journal_mit_zusatz()
-    test_demo_ohne_beschreibung()
     test_regel_produktname()
     test_darstellung()
     test_suche_ueber_beschreibung()

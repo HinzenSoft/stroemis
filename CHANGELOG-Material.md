@@ -4160,6 +4160,43 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Zusammenführung: Beispielbestand (demo-formulare, 581aa38) in l2c-rest (25.10.2026)
+
+Merge des Zweigs demo-formulare (großer Beispielbestand 4031ad2, Entfernen von `scripts/material_demo.py` und
+`scripts/beispieldaten.py` 7da1bec, befaf58, „Neue Version“ eines DEMO-Formulars bleibt DEMO 7406f75, Nachbesserung
+581aa38 – Abschnitte weiter unten) in den Stand mit Rückbau der Set-Funktion, Set-Protokollen (Schritt 26/27) und
+„Aussondern nur durch den Materialwart“ (Schritt 28).
+
+- `material_demo.py` und `beispieldaten.py` bleiben gelöscht. Was der Rückbau dort ergänzt hatte, deckt der
+  Beispielbestand ab: Set-Ordner mit einem Set im Set (DEMO-Flaschenzugtasche im DEMO-Seilrucksack 1) – die
+  Jahresprüfungen der Fahrzeuge bekommen so Set-Protokolle, auch verschachtelt. Die DEMO-Rettungsweste mit
+  Bestandteil-Liste entfällt mit dem kleinen DEMO-Katalog.
+- **Beispielbestand auf Schema 28 und die neuen Regeln:** keine Set-Funktion (nur Ordner der Art „Set“). Aussonderungen
+  laufen nach einem kritischen Mangel oder dem Lebensende über „aussondern empfohlen“ (sperrt) und danach durch den
+  Materialwart (`pruefung.aussondern`, Grund irreparabel bzw. Lebensdauer, am selben Tag der Uhr); nach Verlust sondert
+  der Materialwart direkt aus. `sicherstellen` erkennt die beiden Wege daran statt an `basis_inspection_id`.
+  Änderungsanträge sind Sammelanträge (Schritt 23): `stellen` liefert die Antrag-Nr., bestätigen und ablehnen der
+  Materialwart des Ordners (bisher die Material-Verwaltung, die ohne Freigabe seit Schritt 23 nicht mehr entscheidet).
+- **Produkte mit Bestandteil-Liste** (Schritt 25) bleiben ausgelassen – wie bisher die Set-Produkte; der Bericht nennt
+  sie („mit Bestandteil-Liste“). Sie mit ihren „… vorhanden“-Zeilen zu prüfen, ginge, ist aber nicht gebaut (Mängel
+  würden dann auch auf Bestandteil-Zeilen fallen).
+- **Restrisiko 1 der Sicherheits-Nachprüfung zu 581aa38:** Die Ausnahme für localhost ohne dev-Kennung gilt nur
+  außerhalb des Containers (`DATA_DIR` nicht `/data`) – im Produktionscontainer ließe sie sich sonst mit
+  `BASE_URL=http://localhost:8080` erzwingen. Test in `test_ohne_schalter`; README.
+- Alle Befunde der Prüfungen des Beispielbestands (S1–S6, A1–A7) bleiben behoben – die Nachbesserung 581aa38 ist
+  unverändert übernommen, nur die Stellen oben sind angepasst.
+- Tests: `test_material_beispielbestand` (Aussonderungen nur durch den Materialwart, kein Prüfergebnis „aussondern“,
+  keine `basis_inspection_id`; Containersperre), `test_material_dev_zuruecksetzen` ohne das Set aus der alten
+  Set-Funktion, `test_material_beschreibung` ohne den Test des DEMO-Skripts (Stand von l2c-rest, sonst unverändert),
+  `test_material_sets.py` bleibt gelöscht.
+- **Probe:** `--artikel 60` gegen die Teile 01, 21, 32, 46, 54, 55 der aktuellen Serie (Gurte, Karabiner, Seile,
+  Seilklemmen, Seilrollen, Textilmaterial, Flaschenzüge; 13 Produkte mit Bestandteil-Liste – alle ausgelassen):
+  rc 0, 1:57 min, keine Hinweise; 63 Artikel aus 32 Produkten (3 Nachkäufe), 139 Prüfungen mit Protokoll, davon 2
+  „aussondern empfohlen“, 3 Aussonderungen durch den Materialwart (2 irreparabel, 1 Verlust), 18 Durchgänge mit
+  Sammelprotokoll und 10 Set-Protokolle (PDF/A-3b), 1 Durchgang offen; Anträge 2 bestätigt, 2 abgelehnt, 1
+  zurückgezogen, 1 offen. Laufzeit bei 800 Artikeln geschätzt rund 30–35 min (bisher 27:34 min, dazu jetzt die
+  Set-Protokolle der Fahrzeug- und Bereichsdurchgänge).
+
 ## Aussondern nur durch den Materialwart (Wunsch des Nutzers, 25.10.2026)
 
 Wunsch des Nutzers (wörtlich): „Prüfer sollen nicht aussondern können, sondern nur sperren. Materialwart kann aussondern,
@@ -5385,6 +5422,86 @@ Materialwarte setzen physische Teile ein, entnehmen und tauschen wie bisher.
    Bemerkung (2 000 Zeichen); aus der Nacharbeit eines Bestandsimports gibt es nur Produktmeldungen; eine Set-Meldung
    darf die Material-Verwaltung auch einem einfachen Produkt zuordnen.
 7. Die Texte der Datenbank-Trigger aus Schritt 21 behalten „Hersteller-Set“ (Schritt 21 bleibt, wie ausgeliefert).
+
+## Beispielbestand: Nachbesserung nach der Sicherheits- und der Ablaufprüfung (25.10.2026)
+
+Beide Prüfungen sahen den Stand befaf58 als deploybar an, den **Lauf** auf dev aber erst nach Nachbesserung. Behoben:
+
+| Nr. | Befund | Stufe | Behebung |
+| --- | --- | --- | --- |
+| S1 | Der Lauf hielt die Schreibsperre fast ununterbrochen; auf dev scheiterten Schreibzugriffe und Anmeldungen (500) | mittel | Nach jedem Vorgang 0,05 s Pause (`PAUSE` in `_versuch`, auch nach einem abgelehnten). README: dev ist während des Laufs nur eingeschränkt benutzbar, Laufzeit mit Pause und unter Last |
+| S2 | Vorhandene „DEMO-…“-Konten wurden nur am Namen erkannt: eine offene Kontoanfrage auf `demo-mv@…` wurde zur Material-Verwaltung hochgestuft, eine auf `demo-pruefer@…` ließ den Lauf mittendrin scheitern | mittel | `konten_pruefen` vor jedem Schreiben: übernommen wird nur ein Konto „DEMO-…“ mit `active = 1` und `status = 'active'`, das die Stufe seiner Rolle schon hat (Prüfer mit gültiger Urkundennummer); sonst Abbruch mit Adresse und Grund, nichts angelegt. Kein Konto wird hochgestuft oder in seinen Rollen geändert – der Bericht nennt Abweichungen (höhere Stufe, weitere Module). Test `test_konten` (offene Kontoanfrage, deaktiviertes Konto, fehlende Stufe, Prüfer ohne Urkunde; passendes Konto bleibt unverändert) |
+| S3 | Ohne `BASE_URL` belegte das Skript im Klon selbst `http://localhost:8080` vor; die dev-Kennung fehlte | niedrig | Keine Vorbelegung mehr – fehlt `BASE_URL`, Abbruch. Dazu wie bei `dev-zuruecksetzen` `STROEMIS_NAME` auf `-dev` – ohne sie nur, wenn beide Adressen localhost/127.0.0.1 sind. Test in `test_ohne_schalter` |
+| S4 | README: Strg-C und SSH-Abriss beenden den Lauf im Container nicht | niedrig | README: in `tmux`/`screen` starten, Ausgabe mit den Passwörtern sichern; der Befehl legt die PID in `/tmp/bb/pid` ab (`exec python …`), Abbruch mit `docker exec stroemis-dev sh -c 'kill -TERM "$(cat /tmp/bb/pid)"'` |
+| S5 | „Neue Version“ eines DEMO-Formulars verlor das DEMO-Kennzeichen; die Petzl-Punkte kamen so in den Katalog-Export | niedrig | **App** (`katalog.formular_anlegen`): Übernimmt die neue Version die Punkte einer DEMO-Vorlage (ohne eigene Punkte, wie „Neue Version“ und „Formular anlegen“ der Oberfläche), bleibt sie DEMO. Mit eigenen Punkten (Katalogimport) zählt wie bisher nur der Parameter. Test `test_neue_version_demo` (Export ohne die neue Version) |
+| S6 | Der Merker hieß wie beim alten kleinen Beispielbestand – ein abgebrochener Lauf galt dann als „schon da“ | niedrig | Eigener Schlüssel `beispielbestand_gross`. Test in `test_abgebrochener_lauf` (mit altem Merker) |
+| S– | Bei sehr großem `--artikel` lief die Uhr über heute hinaus | Verbesserung | `Uhr.stellen` kappt bei gestern (heute läuft mit der echten Uhr). Test `test_uhr`, in `test_beispielbestand` keine Prüfung nach heute |
+| A1 | Typ per Teilstring über den Kategoriepfad: Abseilgeräte, Abseilachten und Seilklemmen galten als Seile, Bandmaterial und Flaschenzüge als „sonstiges“ | mittel | `typ_fuer`: am Kategorienamen, die unterste Ebene zuerst; „abseil“ vor „seil“, Seilklemmen eigener Typ, Band- und Textilmaterial Schlingen, „flaschenz“ Rollen. Test `test_typen` mit den echten Kategorienamen beider Katalogstände |
+| A2 | Ausgeschiedene Einsatzkräfte bekamen nach dem Austritt noch Ausrüstung (auch in ihren persönlichen Ordner) | mittel | Nach dem Austritt gehen alle Pläne der Person (auch noch nicht angelegte, Ersatz für Ausgesondertes) ohne Person in die Reserve; beim Anlegen wird das noch einmal geprüft. Test: keine Zuordnung nach dem Austrittstag, nichts Neues im Ordner, „Meine PSA“ leer |
+| A3 | Gewöhnlicher Mangel („instandsetzen“) auf einem kritischen Punkt; fast alle Mängel auf „Seriennummer/CE lesbar“ | mittel | Gewöhnliche Mängel nur auf nicht kritischen Punkten, kritische nur bei Aussonderung; gestreut, die vorangehenden Kontrollen nur ohne Alternative. Test `test_mangelpunkt` mit den Petzl-Punkten, in `test_beispielbestand` kein „instandsetzen“ mit kritischem Mangel |
+| A4 | Aussonderung wegen Lebensdauer mit „Lebensdauer nicht überschritten: ja“ | niedrig | Beim Lebensende weicht der Punkt zur Lebensdauer vom Soll ab (mit DEMO-Notiz und Platzhalterfoto); ein Formular ohne solchen Punkt bleibt ohne Abweichung |
+| A5 | Petzl-Vorlage „Textilmaterial“ griff beim Katalogstand von dev („Bandmaterial“) nicht | niedrig | Alias `PETZL_ALIAS` „Bandmaterial“ → „Textilmaterial“. Test in `test_typen` |
+| A6 | Antragszustand „abgelehnt“ fehlte im Standardlauf | niedrig | `sicherstellen` stellt je fehlendem Zustand (bestätigt, abgelehnt, zurückgezogen, offen) heute einen Antrag. Test: alle vier kommen vor |
+| A7 | `applied_at` bestätigter Anträge trägt den Lauftag (Trigger mit SQLite-Zeit) | niedrig | Nicht umgangen (der Trigger bleibt), als bekannte Grenze in README und Docstring |
+
+Dazu: Die persönliche Ausrüstung ist von Anfang an da (kein Nachkauf ohne Vorgänger – keine Einsatzkraft lange ohne
+Gurt; Ersatz nach Aussonderungen bleibt). Die Testaussage „nichts länger als 60 Tage überfällig“ gilt jetzt mit
+Ausnahme verschobener Artikel (die zwischen die Runden zweier Bereiche fallen können). Nicht geändert: Die erste Prüfung
+des Erstbestands im Durchgang bleibt „Eingangsprüfung“ – ohne abgeschlossene Prüfung lässt die App keine andere Art zu
+(`pruefung.arten_fuer`). Läufe mit 60 Artikeln gegen Teile der Lieferung 20261024 (Stand von dev, „Bandmaterial“) und der
+aktuellen Lieferung („Textilmaterial“): Regal Seile nur mit Seilen, persönliche Ausrüstung Gurt, zwei Karabiner,
+Schlinge, Abseilgerät. Laufzeit bei 800 Artikeln 27:34 min neben der laufenden Testsuite (830 Artikel, 1 822 Protokolle, 33 Aussonderungen – davon 7 wegen Lebensdauer, Lebensdauer-Punkt „nein“ –, kein „instandsetzen“ mit kritischem Mangel, 56 Mängel auf 27 Punkten, Anträge 8/4/4/1). Kein Schemaschritt.
+
+## DEMO-Skript entfernt (Wunsch des Nutzers, 25.10.2026)
+
+`scripts/material_demo.py` ist entfernt („Entferne das Demo-Skript material_demo.py, es wird dann nicht mehr
+gebraucht.“), ebenso `scripts/beispieldaten.py` (Prüfungsbereich, CHANGELOG-Pruefungen.md). Was es leistete und weiter
+gebraucht wird, macht `scripts/material_beispielbestand.py`: DEMO-Konten mit den bekannten Postfächern (vorhandene werden
+übernommen, der Prüfer prüft dauerhaft, der externe befristet), DEMO-Unterschriften im Profil der Prüfer und
+Materialwarte (für die Protokolle), Platzhalter- bzw. Petzl-Formulare, die dev-Sperre. Der kleine DEMO-Katalog
+(DEMO-Kategorien, -Produkte, -Set) entfällt – der Beispielbestand braucht den echten Katalog. Entfallen sind auch die
+Übergänge für alte dev-Stände (befristete DEMO-Prüffreigabe auf dauerhaft, Protokolle nachreichen). Tests: die
+Prüfungen des DEMO-Skripts selbst sind gestrichen (test_material_freigaben: zweimal hintereinander, Prüfer von früher;
+test_material_beschreibung: DEMO-Produkte ohne Beschreibung; test_material_sets: DEMO-Set;
+test_material_demo_formulare.py) – die Konten, die Material-Verwaltung und die Formulare prüft jetzt
+test_material_beispielbestand; test_material_dev_zuruecksetzen baut seinen Bestand mit einem eigenen Set und einem
+kleinen Beispielbestand und lässt ihn nach dem Zurücksetzen (mit neuem Katalog) wieder laufen. Hinweistexte in
+`services/zuruecksetzen.py` angepasst; README: Anleitung, wie Browserproben an DEMO-Daten kommen. Kein App-Verhalten
+geändert, kein Schemaschritt.
+
+## Beispielbestand: große Gliederung mit zwei Jahren Geschichte (Wunsch des Nutzers, 25.10.2026)
+
+`scripts/material_beispielbestand.py` baut statt der drei kleinen DEMO-OGs den Bestand einer großen Gliederung aus dem
+echten Katalog: „DEMO-Kreisverband Flussland“ (Zentrallager mit Regalen und Reserve, fünf Fahrzeuge mit Seilrucksäcken
+und Taschen als Set-Ordner, auch ein Set im Set, drei Einsatzgruppen, persönliche Ordner für bis zu 40 Einsatzkräfte)
+und die kleine „DEMO-OG Nachbarstadt“ für die Trennung; Vorgabe 800 Artikel, Produktmix nach Kategorien, keine Produkte
+mit Stückliste. Die Geschichte reicht gut zwei Jahre zurück: Das Skript stellt die Uhr seines eigenen Prozesses zurück
+(services.datetime, db.datetime, models.datetime – nie in der App) und spielt Ersterfassung, jährliche Prüfdurchgänge je
+Bereich mit Sammelprotokoll, Einzel- und außerplanmäßige Prüfungen, Mängel mit Reparatur, Aussonderungen mit Nachkauf,
+Verluste, Verschiebungen, Zuordnungen (auch beendete) und Änderungsanträge Tag für Tag über die Dienste der App ab;
+heute ein offener Durchgang im Zentrallager, ein überfälliger und ein bald fälliger Bereich. Fehlt einer echten
+Kategorie ein wirksames Formular, legt es DEMO-Formulare an (nicht im Katalog-Export): nach den Petzl-Prüfberichten aus
+`scripts/beispielbestand_petzl_punkte.json` (Kopie der Recherche vom 25.10.2026, 13 Kategorien, 147 Punkte wörtlich mit
+Fundstelle; drei zu lange Gruppenüberschriften ohne ihren Klammerzusatz, zwei zu lange Titel ohne Bezugsprodukt), sonst
+Platzhalter wie `material_demo.py` seit 2edb9eb. Sperre wie `dev-zuruecksetzen` (Positivliste BASE_URL in Umgebung und
+Anwendung, vorher nur „nicht die Produktion“). Konten mit den bekannten Postfächern (`demo-wart-a@…`, `demo-pruefer@…`,
+`demo-extern@…`, `demo-mv@…` u. a.; vorhandene DEMO-Konten werden übernommen), Einsatzkräfte mit gemeinsamem Passwort.
+Keine Mails (Hintergrund-Versender im Skriptprozess aus). Laufzeit bei 800 Artikeln rund 20 Minuten (gut eine halbe
+Sekunde je Protokoll). Kein App-Code, kein Schemaschritt. Test: `tests/test_material_beispielbestand.py` (neu
+`test_formulare`).
+
+## DEMO-Skript: Platzhalter-Formulare (Wunsch des Nutzers, 25.10.2026)
+
+`scripts/material_demo.py --demo` legt zum Schluss – nach dem unveränderten DEMO-Bestand – an jeder **echten** Kategorie
+(ohne Kennzeichen demo) ohne wirksames aktives Prüfformular ein Platzhalter-Formular an: Titel „DEMO-Prüfformular
+(Platzhalter) – <Kategorie>“, je ein Punkt Ja/Nein (Pflicht, Soll „ja“), Text und Zahl, bei einer Artikellänge im
+Teilbaum dazu „Länge (m)“; mit DEMO-Kennzeichen und aktiviert. Es sitzt an der obersten Kategorie ohne Formular und
+reicht über die Vererbung für ihren Teilbaum. Kein App-Code geändert, kein Schemaschritt. Damit lassen sich auf dev nach
+dem Einspielen des echten Katalogs Prüfungen testen; der Katalog-Export lässt die Formulare wegen des Kennzeichens aus.
+DEMO-Kategorien behalten ihre DEMO-Formulare (die DEMO-Kletterhelme bleiben ohne), echte Formulare bleiben unberührt –
+eine Kategorie mit nur einem inaktiven echten Formular bekommt keins (aktiv verdrängte es das echte im Export), das
+Skript nennt sie. Wiederholbar; nur wenn `BASE_URL` in der Umgebung und in der Anwendung auf dev oder localhost zeigt
+(Positivliste wie `flask material dev-zuruecksetzen`). Test: `tests/test_material_demo_formulare.py`.
 
 ## Katalogimport im Hintergrund (Wunsch des Nutzers, 24.10.2026)
 

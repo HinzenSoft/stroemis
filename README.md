@@ -215,68 +215,121 @@ noch, dann nur über ihre `.env`; `docker-compose.yml` und das Dockerfile sind f
 
 ### DEMO-Daten und DEMO-Konten (nur dev)
 
-`scripts/material_demo.py --demo --konten` legt den kleinen DEMO-Katalog mit DEMO-Bestand in zwei Gliederungen an und
-fünf DEMO-Konten (zwei Materialwarte, Prüfer, externer Prüfer, DEMO-Material-Verwaltung). Der Lauf ist wiederholbar:
-Vorhandenes bleibt, Fehlendes kommt dazu. So bringt er eine ältere dev-Datenbank auf den Stand – etwa die
-Prüffreigabe des DEMO-Prüfers auf dauerhaft und das Konto `demo-mv@example.invalid`. Die Passwörter neuer Konten
-stehen nur in der Ausgabe. Auf dem VPS im Klon der Entwicklung, wie beim Beispielbestand per stdin (das Abbild enthält
-`scripts/` nicht):
+DEMO-Daten und DEMO-Konten entstehen seit dem 25.10.2026 nur noch über den Beispielbestand (nächster Abschnitt) – das
+frühere `scripts/material_demo.py` mit seinem kleinen DEMO-Katalog ist entfernt; der Beispielbestand braucht den
+echten Katalog. **So kommen Browserproben an DEMO-Daten** (lokal, eigener Datenordner, nie im Repository):
 
 ```bash
-docker exec -i stroemis-dev sh -c 'cat > /tmp/material_demo.py && VIDEOPFLEGE=0 PYTHONPATH=/srv python /tmp/material_demo.py --demo --konten' < scripts/material_demo.py
+export DATA_DIR=/home/…/probe-daten BASE_URL=http://localhost:8080 COOKIE_SECURE=false VIDEOPFLEGE=0
+flask --app "app:create_app()" material import-catalog katalog-gesamt-teil01.zip   # ein Teil der Katalogserie
+python scripts/material_beispielbestand.py --beispielbestand --artikel 60          # knapp zwei Minuten; 800: rund 30 min
+python run.py                                                                      # dann mit den Konten aus der Ausgabe anmelden
 ```
 
-**Nach dem Deploy von Phase 2 · Lieferung 1 einmal ausführen** (CHANGELOG-Material.md). **Nie in der Produktion**
-(Container `stroemis`) – dieses Skript prüft die Adresse nicht.
+Die Ausgabe nennt die Konten mit Passwort (`demo-wart-a@example.invalid` Materialwart, `demo-pruefer@…` Prüfer,
+`demo-extern@…` externer Prüfer, `demo-mv@…` Material-Verwaltung, `demo-mitglied@…`, `demo-einsatzkraft-01@…` …).
+Mails gehen keine hinaus. Für einen zweiten Stand einen neuen Datenordner nehmen – der Beispielbestand läuft je
+Datenbank nur einmal.
 
 ### Beispielbestand (nur dev)
 
-`scripts/material_beispielbestand.py` legt aus dem **vorhandenen Katalog** einen größeren Bestand zum Ausprobieren an:
-drei Gliederungen „DEMO-OG Auental“, „DEMO-OG Bachheim“ und „DEMO-OG Flussstadt“ mit Lager, Fahrzeugen, Einsatzgruppen
-und persönlichen Ordnern, 200 Artikel über alle echten Produkte (Seriennummern `DEMO-AU-0001` …), eine Prüfhistorie
-über die aktiven Prüfformulare (zurückdatiert und festgeschrieben, jede Prüfung mit Protokoll), je Gliederung sechs
-DEMO-Konten (Materialwart, Prüferin, Mitglied, externer Prüfer, zwei Einsatzkräfte – nur Modul Material, Passwörter
-stehen nur in der Ausgabe; die Prüferin prüft dauerhaft, der externe Prüfer 30 Tage – befristet sind Prüffreigaben nur
-für Externe), einen abgeschlossenen und einen offenen Prüfdurchgang und Zuordnungen. Den Einsatzkräften
-ist Ausrüstung zugeordnet: Die erste liest ihren persönlichen Ordner, die zweite hat – wie die meisten, denen PSA
-zugeordnet ist – keinen Modulzugang und sieht nach der Anmeldung „nicht freigeschaltet“. Jeder Zustand kommt vor: neu,
-einsatzbereit, bald fällig, überfällig, gesperrt, verloren gemeldet, ausgesondert und – wo der Katalog eine Lebensdauer
-nennt – Lebensdauer erreicht. Am Katalog ändert das Skript nichts (keine Kategorie, kein Produkt, kein Formular, kein
-Dokument, kein Bild, kein Rückruf, keine Meldung); erfunden sind nur Bestandsangaben, alle mit „DEMO“.
-Ein Artikel in einer DEMO-Gliederung gilt überall als DEMO – Oberfläche, Protokolle, Lebenslauf, CSV und Steckbrief –,
-auch wenn sein Produkt aus dem echten Katalog stammt. Deshalb lässt sich zwischen DEMO-Gliederungen und echtem Bestand
-nichts verschieben, weder Artikel noch Ordner (409) – sonst wechselte das Kennzeichen, während die festgeschriebenen
-Protokolle bleiben, wie sie sind.
+`scripts/material_beispielbestand.py` legt aus dem **vorhandenen Katalog** den Bestand einer großen Gliederung mit gut
+zwei Jahren Geschichte an (Wunsch des Nutzers vom 25.10.2026):
+
+- **Struktur:** „DEMO-Kreisverband Flussland“ mit Zentrallager (Regale Seile, Hardware, PSA, Reserve), fünf Fahrzeugen
+  (zwei GW-Wasserrettung, zwei MTW, Mehrzweckboot) mit Seilrucksäcken und Taschen als Ordner der Art „Set“ (die
+  Flaschenzugtasche liegt im Seilrucksack 1 – ein Set im Set), drei Strömungsrettungsgruppen und persönlichen Ordnern für
+  bis zu 40 DEMO-Einsatzkräfte (je 20 Artikel eine); dazu die kleine „DEMO-OG Nachbarstadt“ (Lager, MTW) für die
+  Trennung je Gliederung und die globale Suche (Seriennummer `DEMO-NS-4711`).
+- **Artikel:** Vorgabe 800 (`--artikel N`), nur echte Produkte ohne Bestandteil-Liste. Mix nach Kategorien: viele Karabiner und
+  Textilmaterial, je Einsatzkraft Gurt, Helm, Karabiner, Schlinge, Abseilgerät (soweit der Katalog sie hat; von Anfang
+  an, Ersatz nach einer Aussonderung), Seile mit einer Länge, wenige Rollen, Flaschenzüge und Seilklemmen; je Typ wenige
+  Standardprodukte. Den Typ gibt der Name der Kategorie (die unterste zuerst): Abseilgeräte und Abseilachten sind
+  Abseilgeräte, Band- und Textilmaterial Schlingen, Seilrollen und Flaschenzüge Rollen – keine Seile. Seriennummern
+  `DEMO-FL-0001` …, Ersatz `…-E`.
+- **Geschichte („volles Leben“):** Ersterfassung je Bereich kurz vor seiner ersten Jahresprüfung, jährliche
+  Prüfdurchgänge je Bereich (abgeschlossen, mit Sammelprotokoll), dazwischen Prüfungen bei kürzerem Intervall und
+  außerplanmäßige nach Einsätzen, Mängel mit Sperre und Prüfung nach Reparatur, Aussonderungen (Mangel, Lebensdauer,
+  Verlust) mit Nachkauf, Nachkäufe über die Jahre, verloren gemeldete Artikel, Verschiebungen, Zuordnungen (Einsatzkräfte
+  scheiden aus, ihre Ausrüstung geht über die Reserve an neue; Ausgeschiedene bekommen danach nichts mehr), Änderungsanträge
+  (bestätigt, abgelehnt, zurückgezogen, offen – jeder Zustand kommt vor). Ein gewöhnlicher Mangel (instandsetzen) liegt nur
+  auf einem nicht kritischen Prüfpunkt, ein kritischer führt zur Aussonderung – seit Schema 28 empfiehlt der Prüfer
+  sie („aussondern empfohlen“, sperrt), der Materialwart sondert danach aus (nach Verlust direkt); beim Lebensende steht
+  der Punkt zur Lebensdauer auf „nicht in Ordnung“. Änderungsanträge entscheidet der Materialwart des Ordners. Dafür stellt das Skript die Uhr **seines eigenen Prozesses** zurück und lässt sie
+  Tag für Tag laufen, nie über gestern hinaus – Journal, Prüftage, Protokolle und Durchgänge tragen ihr damaliges Datum.
+  Bekannte Grenze: Was SQLite selbst stempelt (`applied_at` bestätigter Anträge, Trigger mit `'now'`), trägt den Lauftag.
+  Die erste Prüfung im Durchgang heißt auch beim Erstbestand „Eingangsprüfung“ – ohne abgeschlossene Prüfung lässt die
+  App keine andere Art zu. Heute: ein offener Durchgang im Zentrallager (teils erledigt, einer in Prüfung beim externen
+  Prüfer, einer ausgenommen), im MTW 2 ist die Jahresprüfung ausgefallen (überfällig), die persönliche Ausrüstung ist
+  bald fällig. Jeder Zustand kommt vor. Alle Texte (Befunde, Gründe,
+  Bemerkungen) sind „DEMO – nicht für echte Prüfungen“, Mängel haben ein DEMO-Platzhalterfoto.
+- **Formulare:** Hat eine echte Kategorie kein wirksames aktives Prüfformular, legt das Skript eins an –
+  DEMO-gekennzeichnet, aktiv, nicht im Katalog-Export: nach den **Petzl-Prüfberichten**, wo
+  `scripts/beispielbestand_petzl_punkte.json` die Kategorie nach ihrem Namen kennt (13 Kategorien – „Textilmaterial“
+  auch unter dem älteren Namen „Bandmaterial“ –, Punkte wörtlich mit Gruppe, Soll und „kritisch“; Fundstelle je Punkt
+  in der Datei, Quellen mit Version im Bericht – Petzl, „Überprüfung von PSA – Prüfbericht/Vorgehensweise bei der
+  Überprüfung“ je Produktgruppe, z. B. Gurte 110526, Karabiner 260625, Seile 071215; Abseilachten und Kantenschutz mit
+  der nächstliegenden Vorlage), sonst ein Platzhalter (Ja/Nein, Text, Zahl, bei Artikellänge „Länge (m)“) an der
+  obersten Kategorie ohne Formular. Echte Formulare bleiben unberührt.
+- **Konten** (nur Modul Material, Passwörter nur in der Ausgabe; gibt es ein DEMO-Konto mit der Adresse schon, übernimmt
+  der Lauf es nur, wenn es aktiv und freigeschaltet ist und die Stufe seiner Rolle hat – unverändert samt Passwort und
+  Rollen, Abweichungen nennt der Bericht; eine offene Kontoanfrage oder ein deaktiviertes Konto mit einer dieser Adressen
+  lässt ihn vor jedem Schreiben abbrechen – dann unter Verwaltung → Konten ablehnen bzw. selbst einstellen):
+  `demo-wart-a@example.invalid` (Materialwart Kreisverband), `demo-wart-b@…` (Nachbarstadt), `demo-pruefer@…` und
+  `demo-pruefer-2@…` (dauerhaft lesen und prüfen), `demo-pruefer-ns@…`, `demo-extern@…` (prüfen im Zentrallager, 30
+  Tage – befristet sind Prüffreigaben nur für Externe), `demo-mitglied@…` (lesen), `demo-mv@…`
+  (DEMO-Material-Verwaltung, Stufe Verwaltung) und `demo-einsatzkraft-01@…` … – die erste liest ihren persönlichen
+  Ordner, die übrigen haben keinen Modulzugang und sehen „Meine PSA“ (ein gemeinsames Passwort).
+
+Am Katalog ändert das Skript sonst nichts; erfunden sind nur Bestandsangaben, alle mit „DEMO“. Ein Artikel in einer
+DEMO-Gliederung gilt überall als DEMO – Oberfläche, Protokolle, Lebenslauf, CSV und Steckbrief –, auch wenn sein
+Produkt aus dem echten Katalog stammt; zwischen DEMO-Gliederungen und echtem Bestand lässt sich nichts verschieben (409).
+Mails gehen keine hinaus (auch nicht ins Mailprotokoll). Nur auf dev oder lokal: `BASE_URL` muss gesetzt sein (das
+Skript belegt sie nicht vor) und in der Umgebung **und** in der Anwendung die Positivliste von `dev-zuruecksetzen`
+erfüllen (Host mit „dev.“ davor oder localhost), dazu die dev-Kennung `STROEMIS_NAME` auf `-dev` (wie bei
+`dev-zuruecksetzen`) – ohne sie nur, wenn beide Adressen localhost/127.0.0.1 sind und der Lauf außerhalb des
+Containers ist (`DATA_DIR` nicht `/data` – im Produktionscontainer ließe sich die Ausnahme sonst mit
+`BASE_URL=http://localhost:8080` erzwingen). Sonst legt das Skript nichts an.
 
 Vorher:
 
 1. **Katalog exportieren** (Katalog → „Katalog exportieren“ oder `material export-catalog`) und das ZIP aufheben – er
-   ist es, der später in die Produktion geht. Der Beispielbestand kommt mit keinem Export mit.
+   ist es, der später in die Produktion geht. Der Beispielbestand und seine DEMO-Formulare kommen mit keinem Export mit.
 2. Wissen, was danach gilt: Jede benutzte **Formularversion ist „benutzt“** und lässt sich nur noch über eine neue
-   Version ändern. Jedes Produkt, von dem der Beispielbestand Artikel anlegt (bei 200 Artikeln meist alle echten mit
-   Prüfintervall), lässt sich **nicht mehr löschen und seine Materialart nicht mehr ändern**; seine Kategorie lässt sich
-   nicht mehr löschen. Katalogpflege, die das braucht, vorher erledigen – oder später den Katalog exportieren, das
-   Modul auf dev zurücksetzen (siehe „Modul Material auf dev zurücksetzen“) und den Export importieren. Der Bestand
-   lässt sich **nicht entfernen** – Prüfnachweise werden nie gelöscht, Artikel mit Prüfungen auch nicht. Zurück geht es
-   nur, indem man das Modul auf dev zurücksetzt (danach den Katalog-Export importieren).
+   Version ändern. Jedes Produkt mit Artikeln lässt sich **nicht mehr löschen und seine Materialart nicht mehr
+   ändern**; seine Kategorie lässt sich nicht mehr löschen. Der Bestand lässt sich **nicht entfernen** – zurück geht es
+   nur, indem man das Modul auf dev zurücksetzt („Modul Material auf dev zurücksetzen“) und den Export importiert.
 
-Auf dem VPS im Klon der Entwicklung (das Abbild enthält `scripts/` nicht – das Skript geht per stdin in das flüchtige
-`/tmp` des Containers, die App liegt dort unter `/srv`, die Daten unter `/data`):
+Auf dem VPS im Klon der Entwicklung (das Abbild enthält `scripts/` nicht – Skript und Petzl-Datei gehen per tar in das
+flüchtige `/tmp` des Containers, die App liegt dort unter `/srv`, die Daten unter `/data`):
 
 ```bash
-docker exec -i stroemis-dev sh -c 'cat > /tmp/material_beispielbestand.py && VIDEOPFLEGE=0 PYTHONPATH=/srv python /tmp/material_beispielbestand.py --beispielbestand' < scripts/material_beispielbestand.py
+tmux new -s beispielbestand          # oder screen – siehe unten
+tar c scripts/material_beispielbestand.py scripts/beispielbestand_petzl_punkte.json | docker exec -i stroemis-dev sh -c 'rm -rf /tmp/bb && mkdir /tmp/bb && tar x -C /tmp/bb && echo $$ > /tmp/bb/pid && export VIDEOPFLEGE=0 PYTHONPATH=/srv && exec python /tmp/bb/scripts/material_beispielbestand.py --beispielbestand'
 ```
 
-Der Lauf dauert ein paar Minuten (zählt mit; `--artikel N` für mehr oder weniger Artikel) und endet mit einem Bericht:
-Konten mit Passwörtern, Mengen, Zustände, Produkte ohne aktives Formular (deren Artikel bleiben „neu“), die jetzt
-benutzten Formularversionen und wie viele Produkte jetzt Artikel haben (nicht mehr löschbar, Materialart fest). Er
-läuft nur einmal – gibt es die Gliederungen schon, legt er nichts an. **Nie in der Produktion** (Container `stroemis`)
-– dort gehört kein DEMO-Bestand hin; zeigt `BASE_URL` auf `strömis.de`, bricht das Skript ohnehin ab.
+Der Lauf dauert bei 800 Artikeln rund **eine halbe Stunde** (gemessen 28 Minuten neben der laufenden Testsuite, unter
+Last länger) – jede Prüfung bekommt ihr Protokoll (gut eine halbe Sekunde je PDF), und nach jedem Vorgang lässt er eine
+kurze Pause (0,05 s), damit andere Schreiber dazwischenkommen; er zählt je Monat und Durchgang mit, `--artikel N` für
+weniger (60 Artikel: knapp zwei Minuten). **dev ist während des Laufs nur
+eingeschränkt benutzbar**: Anmelden und Speichern gehen, können aber einige Sekunden warten – am besten laufen lassen,
+wenn niemand auf dev arbeitet. Er endet mit einem Bericht: Konten mit Passwörtern, Mengen, Zustände, angelegte Formulare
+mit ihren Quellen, Hinweise auf Gescheitertes. Er läuft nur einmal – gibt es die Gliederungen schon, legt er nichts an.
+**Nie in der Produktion** (Container `stroemis`).
 
-**Den Befehl in `tmux` oder `screen` starten.** Reißt die Verbindung mitten im Lauf ab (oder Strg-C), bleibt ein
-Teilbestand – Artikel ohne Durchgänge und Zuordnungen –, und kein weiterer Lauf vervollständigt ihn: Er meldet
-„unvollständig“ mit Rückgabewert 1 und legt nichts an. Neu geht es dann nur, indem man das Modul auf dev zurücksetzt
-(„Modul Material auf dev zurücksetzen“) und danach den Katalog-Export importiert.
+**Den Befehl in `tmux` oder `screen` starten** und die **Ausgabe mit den Passwörtern sichern** (aus dem Fenster in den
+Passwortmanager – sie werden nirgends gespeichert und nicht erneut angezeigt). Strg-C oder eine abgerissene Verbindung
+beenden den Lauf **nicht**: `docker exec -i` hat kein Terminal, das Skript im Container läuft weiter bis zum Ende, nur
+seine Ausgabe – mit den Passwörtern – ist dann verloren (Passwörter dann unter Verwaltung → Konten neu setzen).
+Abbrechen geht nur so (der laufende Vorgang rollt samt Protokolldateien zurück):
+
+```bash
+docker exec stroemis-dev sh -c 'kill -TERM "$(cat /tmp/bb/pid)"'
+```
+
+Nach einem Abbruch bleibt ein Teilbestand, und kein weiterer Lauf vervollständigt ihn: Er meldet „unvollständig“ mit
+Rückgabewert 1 und legt nichts an. Neu geht es dann nur, indem man das Modul auf dev zurücksetzt und danach den
+Katalog-Export importiert.
 
 ### Modul Material auf dev zurücksetzen (nur dev)
 
@@ -332,9 +385,8 @@ Prozess hart beendet wird (SIGKILL), bleiben die Medien im Sicherungsordner lieg
 - **Platz**: Die Kopie der Datenbank braucht einmal deren Größe (der Probelauf nennt Größe und freien Platz); die Medien
   werden nur umbenannt, nicht kopiert.
 - **DEMO-Konten** (`@example.invalid`) löscht der Befehl nicht, er listet sie. Sie haben danach keine Freigaben mehr;
-  über die Nutzerverwaltung löschen, falls nicht mehr gebraucht. `material_demo.py --demo --konten` legt danach den
-  DEMO-Bestand neu an, aber nur fehlende Konten – wer die DEMO-Konten mit ihren Freigaben wieder haben will, löscht sie
-  vorher.
+  über die Nutzerverwaltung löschen, falls nicht mehr gebraucht. Der Beispielbestand (nach dem Katalog-Import) übernimmt
+  vorhandene DEMO-Konten samt Passwort, gibt ihnen ihre Freigaben neu und legt nur fehlende an.
 - **Rückweg** (der ganze Stand vor dem Zurücksetzen; was seither auf dev entstand – auch an Konten, Wiki, Spots und
   Prüfungen –, geht verloren). Dieselben Zeilen mit dem richtigen Ordnernamen stehen in `LIESMICH.txt` im
   Sicherungsordner. Gehört `data/` nicht deinem Nutzer, `rm`, `cp` und `mv` mit `sudo`:
@@ -627,7 +679,7 @@ python tests/test_material_l5.py         # Lieferung 5: Mangel mit Bemerkung, Ur
 python tests/test_material_profil.py     # Lieferung 5: Urkundennummer im Profil
 python tests/test_material_trennung.py   # Phase 2: Trennung je Gliederung (Migration 7 → 8, nichts aus einer fremden Gliederung in irgendeiner Antwort,
                                         # Kennungen im Inhalt, Heimat, Verschieben und Durchgänge, Prüfsicht, Ablauf)
-python tests/test_material_freigaben.py  # Phase 2: Freigaben vergeben, ändern, entziehen, verlängern; Übernahme-Schutz; Nutzerverwaltung; DEMO-Skript
+python tests/test_material_freigaben.py  # Phase 2: Freigaben vergeben, ändern, entziehen, verlängern; Übernahme-Schutz; Nutzerverwaltung
 python tests/test_material_globalsuche.py  # Phase 2: globale Seriennummernsuche, QR-Steckbrief, Protokoll (keine Bremse), Sperrwort, nur Fremdes
 python tests/test_material_zuordnung.py  # Phase 2: Personenzuordnung, Meldungen je Bereich, Löschkonzept, Prüfnachweise bleiben
 python tests/test_material_meine_psa.py  # Phase 3: Meine PSA (auch ohne Modulstufe), Kopfleiste, QR, Medien, Karte, Profil
@@ -647,16 +699,13 @@ python tests/test_material_bestandteile.py  # Bestandteil-Liste an Produkten und
                                             # Lebenslauf), Katalogdatei (F2), Oberfläche statisch
 python tests/test_material_stufen.py     # Phase 2: Modulstufe (Migration 9 → 10, ohne Stufe wirkt nichts – alle Routen, Material-Verwaltung,
                                         # Personensuche je Zweck, Mails, Profil, Vorgabe neuer Konten)
-python tests/test_material_beispielbestand.py  # Beispielbestand: Katalog unverändert (Tabellen, Export, Dateien), alle Zustände, Protokolle, DEMO-Kennzeichnung,
-                                               # abgebrochener Lauf (meldet „unvollständig“)
+python tests/test_material_beispielbestand.py  # Beispielbestand: Katalog unverändert bis auf DEMO-Formulare (nicht im Export), Struktur, Geschichte über zwei Jahre,
+                                               # alle Zustände, Protokolle, DEMO-Kennzeichnung, Konten, Petzl- und Platzhalter-Formulare, abgebrochener Lauf,
+                                               # Sperre (BASE_URL, dev-Kennung), Typ nach Kategorienamen, Mangelpunkte, Uhr, vorhandene Konten, „Neue Version“ bleibt DEMO
 python tests/test_material_dev_zuruecksetzen.py  # material dev-zuruecksetzen: Sperren (dev-Kennung, BASE_URL als Positivliste, Schalter), --trocken, Sicherung (0700/0600), Abbruch bei laufendem Katalogimport
                                                  # vollständig, Schema wie neu, übrige Module byteidentisch, Scheitern und SIGTERM/SIGHUP ändern nichts
-python scripts/beispieldaten.py         # füllt ./data mit zwei erfundenen Prüfungs-Lehrgängen zum Ausprobieren
-python scripts/material_demo.py --demo  # füllt ./data mit DEMO-Katalog, DEMO-Bestand in zwei Gliederungen und DEMO-Prüfungen (nie für echte Prüfungen)
-python scripts/material_demo.py --demo --konten  # dazu einmalig fünf DEMO-Konten (vier Mitglieder mit Freigaben, die DEMO-Material-Verwaltung);
-                                                 # die Passwörter stehen nur in dieser Ausgabe (nur für dev);
-                                                 # ein DEMO-Prüfer von früher (befristet) prüft danach dauerhaft
-python scripts/material_beispielbestand.py --beispielbestand  # Beispielbestand aus dem vorhandenen Katalog (nur dev, siehe „Beispielbestand (nur dev)“)
+python scripts/material_beispielbestand.py --beispielbestand  # DEMO-Bestand und DEMO-Konten aus dem vorhandenen Katalog (nur dev/localhost,
+                                                              # siehe „Beispielbestand (nur dev)“; die Passwörter stehen nur in der Ausgabe)
 flask --app "app:create_app()" material import-catalog katalog.json --trocken   # Katalogdatei prüfen (JSON oder ZIP)
 flask --app "app:create_app()" material export-catalog katalog.zip              # Katalog ohne DEMO als ZIP (Format 2)
 ```
@@ -664,8 +713,6 @@ flask --app "app:create_app()" material export-catalog katalog.zip              
 Die JavaScript-Bibliotheken liegen im Arbeitsbaum unter `app/static/vendor/` und werden im Docker-Build noch einmal frisch geladen und gegen `vendor.sha256` geprüft.
 
 WeasyPrint (Protokolle des Moduls Material) braucht außerhalb von Docker die Systembibliotheken Pango und HarfBuzz – unter Debian/Ubuntu `sudo apt install libpango-1.0-0 libpangoft2-1.0-0 fonts-dejavu-core` (dazu `libharfbuzz-subset0` ab Debian 12 bzw. Ubuntu 24.04 – älteren Systemen fehlt das Paket, WeasyPrint läuft dann ohne), unter macOS `brew install pango`.
-
-`scripts/beispieldaten.py` ist ein eigenständiges Entwicklungswerkzeug außerhalb von `app/` – ohne Route, ohne Knopf in der Oberfläche, nur von der Kommandozeile aufrufbar. Es legt unter dem ersten Administrator-Konto einen laufenden SR1- und einen abgeschlossenen SR2-Lehrgang mit erfundenen Personen, Voraussetzungen, Prüfungsleistungen (zwei davon mit Kriterienliste), Bewertungen und einer Nachprüfung an. Ein früherer, gleichnamiger Weg direkt in der Anwendung (Knopf, API-Route) wurde bewusst entfernt (siehe `CHANGELOG-Pruefungen.md`); dieses Skript berührt weder Route noch Oberfläche und läuft nie im Docker-Image mit (`Dockerfile` kopiert nur `app/`).
 
 `tests/rundlauf.html` prüft die zentrale Invariante des Editors – Markdown öffnen und speichern darf kein Byte ändern – über einen Korpus aus 66 Fällen. Ein zweiter Abschnitt prüft den Rückgängig-Verlauf (ein Strg+Z direkt nach dem Laden darf am Dokument nichts ändern, eigene Änderungen müssen weiterhin rückgängig zu machen sein), gesetzte Leerzeilen, das Auflösen unvollständiger Abschnitte und die Grenzen des Renderers: Aufgabenlisten behalten ihr Kästchen, Formulare und Stilblöcke aus dem Seitentext kommen nicht durch. Ein dritter Abschnitt prüft die zusammengefassten Zellen: dass ein Zug über mehrere Zellen überhaupt eine Zellauswahl ergibt (das Bündel von Toast UI ist an dieser Stelle fehlerhaft übersetzt und wird geflickt), dass Verbinden und Teilen die erwartete Schreibweise ergeben und dass die Leseansicht daraus `colspan` und `rowspan` macht – mit Gegenproben, die ohne die Reparatur beziehungsweise ohne die Nachbearbeitung fehlschlagen müssen. Die Datei lädt die Projektskripte über relative Pfade; ein Doppelklick genügt, ein Server ist nicht nötig.
 
