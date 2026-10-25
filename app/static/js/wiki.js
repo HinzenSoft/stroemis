@@ -977,6 +977,7 @@
       <button type="button" data-a="watch">${p.watch ? "Nicht mehr beobachten" : "Bei Änderungen benachrichtigen"}</button>
       <button type="button" data-a="export">Als Markdown herunterladen</button>
       <button type="button" data-a="exportzip">Abschnitt als ZIP herunterladen</button>
+      ${p.can_publish ? '<button type="button" data-a="import">Seiten aus ZIP importieren …</button>' : ""}
       <button type="button" data-a="print">Drucken / als PDF sichern</button>
       ${p.can_edit ? `<button type="button" data-a="template">${p.is_template ? "Nicht mehr als Vorlage" : "Als Vorlage anbieten"}</button>` : ""}
       <button type="button" data-a="dup">Duplizieren</button>
@@ -1008,6 +1009,7 @@
       }
       if (a === "export") { window.location.href = `/api/wiki/pages/${p.id}/export`; return; }
       if (a === "exportzip") { window.location.href = `/api/wiki/pages/${p.id}/export?children=1`; return; }
+      if (a === "import") return importDialog(p);
       if (a === "print") { window.print(); return; }
       if (a === "del") return trashPage(p);
       try {
@@ -1025,6 +1027,78 @@
       } catch (err) { toast(err.message, true); }
     });
   }
+
+  /* Seiten aus einem ZIP importieren (Wunsch vom 25.10.2026, nur die Wiki-Verwaltung): ein Export dieses Wikis oder ein
+     Archiv mit Markdown-Dateien. Ziel ist diese Seite oder eine andere aus dem Baum; die neuen Seiten erben Freigabe und
+     Lesebeschränkung des Ziels – der Satz unter der Auswahl sagt das vorher. Das Ergebnis steht im selben Dialog. */
+  function importDialog(p) {
+    const zeilen = [];
+    const ablaufen = (pid, tiefe) => children(pid).forEach((k) => {
+      zeilen.push(`<option value="${k.id}"${k.id === p.id ? " selected" : ""}>${"\u00a0\u00a0".repeat(tiefe)}${esc(k.title)}</option>`);
+      if (tiefe < 30) ablaufen(k.id, tiefe + 1);
+    });
+    ablaufen(null, 0);
+    // Wie api_wiki.inherits_public: das Ziel oder ein Vorfahre ist samt Unterseiten freigegeben.
+    const oeffentlich = (ziel) => [ziel, ...ancestors(ziel)].some((x) => x.is_public && x.public_children);
+    const beschraenkt = (ziel) => [ziel, ...ancestors(ziel)].some((x) => x.read_restricted);
+    dialog(`<h2>Seiten importieren</h2>
+      <p class="help">Ein ZIP mit Markdown-Dateien, etwa aus „Abschnitt als ZIP herunterladen“. Unterordner werden Unterseiten,
+        Bilder und Dokumente, auf die eine Seite verweist, kommen mit; Videos bitte einzeln hochladen. Vorhandene Seiten
+        bleiben unverändert.</p>
+      <label for="im-datei">ZIP-Datei</label>
+      <input type="file" id="im-datei" accept=".zip,application/zip">
+      <label for="im-ziel">Einsortieren unter</label>
+      <select id="im-ziel"><option value="">– oberste Ebene –</option>${zeilen.join("")}</select>
+      <p class="small" id="im-freigabe" aria-live="polite"></p>
+      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="im-ok" type="button">Importieren</button></div>`,
+    (dlg, body) => {
+      const wahl = $("#im-ziel", body);
+      const satz = () => {
+        const ziel = state.byId.get(+wahl.value);
+        $("#im-freigabe", body).textContent = !ziel ? ""
+          : oeffentlich(ziel) ? "Dieser Abschnitt ist ohne Anmeldung sichtbar – die importierten Seiten sind es sofort auch."
+            : beschraenkt(ziel) ? "Dieser Abschnitt ist lesebeschränkt – die importierten Seiten sind dann ebenso beschränkt." : "";
+      };
+      wahl.addEventListener("change", satz);
+      satz();
+      $("#im-ok", body).onclick = async (ev) => {
+        const knopf = ev.currentTarget;
+        const datei = $("#im-datei", body).files[0];
+        if (!datei) { toast("Bitte eine ZIP-Datei wählen.", true); $("#im-datei", body).focus(); return; }
+        const fd = new FormData();
+        fd.append("file", datei);
+        if (wahl.value) fd.append("parent_id", wahl.value);
+        knopf.disabled = true;
+        knopf.textContent = "Wird importiert …";
+        let r;
+        try {
+          r = await api("/api/wiki/import", { method: "POST", body: fd });
+        } catch (e) {
+          toast(e.message, true);
+          knopf.disabled = false;
+          knopf.textContent = "Importieren";
+          return;
+        }
+        const erste = r.seiten[0];
+        const n = r.seiten.length;
+        body.innerHTML = `<h2 id="dlg-titel" tabindex="-1">Seiten importiert</h2>
+          <p>${n === 1 ? "1 Seite" : `${n} Seiten`} und ${r.dateien === 1 ? "1 Datei" : `${r.dateien} Dateien`} importiert.</p>
+          <ul class="im-seiten">${r.seiten.map((x) => `<li><a href="/wiki/${esc(x.slug)}">${esc(x.title)}</a></li>`).join("")}</ul>
+          ${r.hinweise.length ? `<h3>Hinweise</h3><ul class="im-hinweise">${r.hinweise.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>` : ""}
+          <div class="dlg-actions"><button class="btn secondary" id="im-zu" type="button">Schließen</button></div>`;
+        $("#dlg-titel", body).focus();
+        // Auch mit Esc geschlossen: Der Baum zeigt die neuen Seiten.
+        let weiter = null;
+        dlg.addEventListener("close", async () => { await loadTree(); if (weiter) navigate(weiter); }, { once: true });
+        const fertig = (slug) => { weiter = slug; dlg.close(); };
+        body.querySelectorAll(".im-seiten a").forEach((a) => a.addEventListener("click", (e) => {
+          e.preventDefault(); fertig(a.getAttribute("href").slice(6));
+        }));
+        $("#im-zu", body).onclick = () => fertig(erste.slug);
+      };
+    });
+  }
+  /* --- Ende Import */
 
   async function loadBacklinks(p) {
     const box = $("#pg-backlinks");

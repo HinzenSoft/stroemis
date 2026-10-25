@@ -431,6 +431,8 @@ def create_app():
         MAX_CONTENT_LENGTH=int(os.environ.get("MAX_UPLOAD_MB", "5120")) * 1024 * 1024,
         MAX_REQUEST_LENGTH=int(os.environ.get("MAX_REQUEST_MB", "1")) * 1024 * 1024,
         MAX_REVISIONS=int(os.environ.get("WIKI_MAX_REVISIONS", "100")),
+        # Wiki-Import (ZIP): eine eigene Grenze – der Import läuft in einer Anfrage, Videos nimmt er nicht mit.
+        WIKI_IMPORT_MAX_BYTES=int(os.environ.get("WIKI_IMPORT_MB", "200")) * 1024 * 1024,
         SITE_NAME=os.environ.get("SITE_NAME", "strömis.de"),
         # Absender des Umschlags (Return-Path). Leer = die Adresse aus MAIL_FROM; dann liegen
         # Umschlag und From auf derselben Domain, wie DMARC es verlangt.
@@ -567,6 +569,8 @@ def create_app():
             limit = MATERIAL_UPLOADS[request.endpoint]
         elif request.endpoint in IMPORT_ROUTEN:
             limit = IMPORT_MAX_BYTES
+        elif request.endpoint == "wiki.import_pages":
+            limit = app.config["WIKI_IMPORT_MAX_BYTES"]
         elif request.endpoint in GROSSE_UPLOADS:
             limit = app.config["MAX_CONTENT_LENGTH"]
         else:

@@ -492,7 +492,7 @@ def tree():
     uid = current_user()["id"]
     rows = db.query(
         "SELECT p.id, p.title, p.slug, p.parent_id, p.position, p.updated_at, p.created_by, p.is_public, "
-        "       p.public_children, p.icon, p.is_template, "
+        "       p.public_children, p.icon, p.is_template, p.read_restricted, "
         "       (f.page_id IS NOT NULL) AS favorite "
         "FROM wiki_pages p LEFT JOIN wiki_favorites f ON f.page_id = p.id AND f.user_id = ? "
         "WHERE p.deleted_at IS NULL ORDER BY p.position, p.title COLLATE NOCASE", (uid,))
@@ -1528,6 +1528,34 @@ def export_page(pid):
     buf.seek(0)
     return send_file(buf, mimetype="application/zip", as_attachment=True,
                      download_name=f"{_export_name(p['title'])}.zip")
+
+
+# --- Import (Wunsch vom 25.10.2026) -------------------------------------------------------
+
+@bp.post("/import")
+@wiki_required
+def import_pages():
+    """Seiten aus einem ZIP (etwa einem Export dieses Wikis) unter eine Seite oder auf die oberste Ebene einlesen – nur
+    die Wiki-Verwaltung (wiki_import.py). Geprüft wird VOR dem Lesen des Archivs: Ein Mitglied bekommt 403, ohne dass
+    der Server die Datei überhaupt annimmt."""
+    from . import wiki_import
+
+    if not verwaltet("wiki"):
+        return jsonify(error="Seiten importieren dürfen nur Redakteure und Administratoren."), 403
+    parent_id = request.form.get("parent_id") or None
+    if parent_id is not None:
+        ziel = _elternseite(parent_id)
+        if not ziel:
+            return jsonify(error="Die Seite, unter die importiert werden soll, gibt es nicht."), 400
+        parent_id = ziel["id"]
+    f = request.files.get("file")
+    if not f:
+        return jsonify(error="Keine Datei empfangen."), 400
+    try:
+        ergebnis = wiki_import.importieren(f.stream, parent_id, current_user()["id"])
+    except wiki_import.ImportFehler as exc:
+        return jsonify(error=str(exc)), exc.status
+    return jsonify(**ergebnis), 201
 
 
 # --- Bearbeitungsfreigabe und Veröffentlichung -----------------------------------------
