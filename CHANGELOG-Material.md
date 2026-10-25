@@ -21,6 +21,7 @@ für sich deploybar.
 | Feintuning nach dem Kommentar-Dokument | Produkt am Artikel ändern bis zur ersten Prüfung (Dialog „Bearbeiten“, Weg aus „aus dem Bestand wählen“), Jahresbericht: ausgesondertes Set als eine Zeile, weitergeführte Teile mit eigener Sperre | gebaut 23.10.2026 (Schema bleibt 21) – wartet auf Freigabe |
 | Katalogimport im Hintergrund | Probelauf und Übernehmen laufen als Auftrag im Hintergrund (202, Stand per Abfrage, Bericht wie bisher), „Übernehmen“ ohne neuen Upload, höchstens ein Import gleichzeitig, Abbruch bei Neustart erkannt, Hinweis auf der Katalogseite; Nachbesserung nach der Sicherheitsprüfung (Kontoverweis statt Kontokennung und Name, Plattenplatz, Übernehmen nach Abbruch wiederholbar, dev-zuruecksetzen wartet) | gebaut 24.10.2026 (kein Schemaschritt, Schema bleibt 21) – wartet auf Freigabe |
 | Sets anlegen und Stückliste übertragen (Schritt 22) | Knopf „Set anlegen“ (Produkt und Stückliste in einem Zug, mindestens ein einzeln geführtes Teil), Umstellen Produkt ↔ Set nur per Katalogdatei, „Stückliste übertragen“ auf angelegte Sets mit Vorschau, Fehlendes Produkt oder Set melden, Begriff „Set“, Ordnerart „Set-Ordner“ | gebaut 24.10.2026, wartet auf Prüfung und Freigabe |
+| Änderungsanträge an alle Stammdaten (Schritt 23) | Freigabepflichtig nach der ersten Prüfung: Produkt, Seriennummer, Herstellung, Kauf, Erstgebrauch, Lebensende, Prüfintervall – als ein Sammelantrag; entscheiden die Materialwarte des Ordners (auch den eigenen Antrag, die Material-Verwaltung nur mit eigener Verwalterfreigabe); Liste „Änderungsanträge“ im Bestand, Katalog → Meldungen nur Produkt- und Set-Meldungen; Prüfer bearbeiten Bemerkung, Länge, nächste Prüfung; Produktänderungen im Lebenslauf | gebaut 24.10.2026, wartet auf Prüfung und Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4154,6 +4155,179 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
 14. **Kasten „Mailversand“ am Telefon**: Eine Karte hat vier Inhaltszeilen (Mail mit Betreff, Empfänger, Fehler mit
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
+
+## Änderungsanträge an alle Stammdaten, Freigabe durch die zuständigen Materialwarte (Wunsch des Nutzers, 24.10.2026)
+
+Wunsch: „Änderungen an allen Stammdaten eines Artikels sind nach der ersten Prüfung immer freizugeben, bisher war es nur
+die Seriennummer. Die Freigabe soll durch die Materialwarte erfolgen können, die für den Artikel zuständig sind. Die
+Meldungen sollen analog zum Meldungen-Knopf für fehlende Produkte auf die Bestandsseite verschoben werden. Verwalter des
+Katalogs können nicht automatisch jeden Stammdatenänderungsantrag bearbeiten, auch sie brauchen die Rechte, um den
+Antrag zu sehen und zu bearbeiten. Die Meldungen bzgl. fehlender Produkte bleiben unberührt bei den Katalogverwaltenden
+und in dem Tab.“ Grundlage: Bauentwurf `entwurf_stammdaten_antraege.md` mit den Entscheidungen E1–E8 (unten), gebaut
+auf dem Zweig `sets-l2c` (Schema 22). **Schema 23.**
+
+### Was neu ist
+
+- **Freigabepflichtig nach der ersten abgeschlossenen Prüfung** (E1): Produkt, Seriennummer, Herstellung, Kauf,
+  Erstgebrauch, **Lebensende (auch vorziehen)** und **Prüfintervall am Artikel** – vorher nur Seriennummer und
+  Herstellung. `PUT /artikel/<id>` weist jede Abweichung mit 409 ab („Seit der ersten Prüfung stehen die Stammdaten fest
+  – sie sind Teil des Prüfnachweises. Eine Änderung beantragst du mit Begründung; entscheiden die Materialwarte des
+  Ordners.“; beim Produkt der eigene Satz mit dem Hinweis auf „Änderung beantragen …“); dieselben Werte gehen durch.
+- **Direkt bleiben** (E2) Bemerkung, Länge und „Nächste Prüfung vorziehen“ – für Materialwart **und Prüfer**: Prüfer mit
+  wirksamem Prüfrecht bekommen auf der Artikelseite „Bearbeiten“ mit genau diesen drei Feldern (vor und nach der ersten
+  Prüfung; jedes andere Feld 403 „Als Prüfer änderst du hier Bemerkung, Länge und die nächste Prüfung …“). Die Länge
+  schreibt weiter auch der Prüfpunkt „Länge“ fest.
+- **Leere Felder nachtragen** (E3) geht nach der ersten Prüfung nur noch per Antrag – der Sonderweg „Herstelldatum bei
+  Metall direkt nachtragen“ entfällt (auch für die Altfälle aus Stand 16). Ein Herstelldatum lässt sich weiter nie
+  entfernen; Kauf, Erstgebrauch und Intervall lassen sich per Antrag leeren, Seriennummer, Produkt und Lebensende nicht.
+- **Produkt per Antrag** (E4): im Antragsdialog „anderes Produkt“ mit Produktsuche und den Folgen wie im Dialog
+  „Bearbeiten“ (Lebensende nach dem neuen Produkt bzw. weg, Länge fällt weg, wenn seine Kategorie keine vorsieht, ein
+  kürzeres Intervall rückt die nächste Prüfung vor, Rückrufe nach dem neuen Produkt; die nächste Prüfung nimmt sein
+  Formular). Nicht an Sets und Teilen, nicht auf ein Set-Produkt, nicht mit offenem Prüfentwurf, nicht über die
+  DEMO-Grenze; die Seriennummer muss beim neuen Produkt frei sein.
+- **Sammelantrag**: Der Antragsdialog zeigt alle freigabepflichtigen Felder mit den heutigen Werten; geschickt wird nur,
+  was sich ändert, als **ein** Antrag (Antrag-Nr. = Kopfzeile, weitere Felder als Folgezeilen); Begründung Pflicht;
+  höchstens ein offener Antrag je Artikel („… läuft schon ein Änderungsantrag … – zurückziehen und neu stellen“).
+  Geprüft wird der **ganze neue Stand** wie beim Anlegen (Herstellung nicht nach Kauf und Erstgebrauch, nicht in der
+  Zukunft, textil mit Herstellung, keine STR-Nummer, Seriennummer je Produkt frei, Intervall nicht über der
+  Herstellervorgabe, Lebensende nur textil und nur vorziehen) – beim Antrag und beim Bestätigen. Bestätigt, abgelehnt
+  und zurückgezogen wird der ganze Antrag in einer Transaktion; trägt der Artikel einen alten Wert nicht mehr, lässt er
+  sich nur noch ablehnen (die Karte markiert das Feld „am Artikel inzwischen anders“). Je Vorgang **ein**
+  Journaleintrag mit allen Feldern (beim Produkt mit Namen), **eine** Mail.
+- **Zuständig** (E5, E6): Entscheiden dürfen die Materialwarte des Ordners – Konten mit Modulzugang und **eigener**
+  gültiger Freigabe „verwalten“ an der Heimat des Artikels oder darüber, gleich aus welcher Gliederung. **Kein
+  Vier-Augen**: Wer zuständig ist, bestätigt auch den eigenen Antrag. Die **Material-Verwaltung** (und die
+  Plattform-Verwaltung) nur mit so einer Freigabe – sie darf sie sich im Reiter „Freigaben“ selbst geben (Journal am
+  Ordner wie jede Freigabe). Nicht lesbar 404 wie unbekannt, lesbar ohne Zuständigkeit 403 „Entscheiden dürfen die
+  Materialwarte dieses Ordners (eigene Freigabe „verwalten“ hier oder darüber).“
+- **Sichtbarkeit** (E7): Liste, Blase, Übersicht und Mail hängen am Ordnerrecht – jeder sieht seine eigenen Anträge
+  (solange er den Artikel liest) und die, die er entscheiden darf. Artikelseite und Journal zeigen offene Anträge wie
+  bisher jedem, der den Artikel liest (ohne Begründung und Namen für Leser).
+- **Bestand → „Änderungsanträge“**: neben „Gliederung anlegen“ der graue Knopf „Änderungsanträge“ mit roter Blase (offene,
+  die man entscheiden darf – eigene eingeschlossen; ab 100 „99+“; Titel „n offene Änderungsanträge zu entscheiden“; bei 0
+  verborgen) für Materialwarte und Prüfer. Seite `/material/bestand/antraege`: Kopf mit grauem „Bestand“, ein Satz Hilfe,
+  Filter offen | erledigt | alle, je Antrag eine Karte (Inventarnummer als Link, Produkt, Stand, Antrag-Nr., wer, wann,
+  Gliederung und Ordner, „Feld: alt → neu“ je Feld, Begründung, Rückrufhinweis, „nur noch ablehnen“, Hinweis, wenn der
+  Ordner gar keinen Materialwart hat) mit grauen Knöpfen „Bestätigen …“/„Ablehnen …“ (nur, wer entscheiden darf) und
+  „Zurückziehen …“ (eigener); in der Rückfrage „Bestätigen“ der einzige rote Knopf, „Ablehnen“ endgültig rot umrandet.
+- **Katalog → Meldungen** zeigt nur noch Produkt- und Set-Meldungen; die Bereichswahl entfällt, die Blase zählt nur sie.
+  Die alte Adresse `/material/katalog/meldungen?bereich=antraege` (Mails, Lesezeichen) leitet mit 302 auf die neue Seite.
+- **Übersicht**: Hinweis „n offene Änderungsanträge – Stammdaten nach der ersten Prüfung in Ordnern, die du
+  verwaltest“ für jedes Konto, das etwas zu entscheiden hat.
+- **Dialog „Bearbeiten“**: Nach der ersten Prüfung (und für Prüfer immer) stehen Produkt, Seriennummer | Herstellung,
+  Kauf | Erstgebrauch, Lebensende | Prüfintervall schreibgeschützt oben als Block („Seit der ersten Prüfung fest – Teil
+  des Prüfnachweises.“ bzw. für Prüfer „Diese Stammdaten ändert der Materialwart.“), darunter ein offener Antrag als
+  Hinweis (der eigene mit „Antrag zurückziehen …“, Zuständige mit „Entscheiden …“) oder grau „Änderung beantragen …“;
+  bearbeitbar bleiben Nächste Prüfung, Länge und Bemerkung; „Speichern“ rot.
+- **Artikelseite**: „Änderung beantragen …“ in den Stammdaten für alle, die beantragen dürfen – ohne den bisherigen
+  Hilfetext darunter (Regel „keine Erklärtexte unter Knöpfen“); der Hinweis zum offenen Antrag sagt „wartet auf einen
+  Materialwart des Ordners“, wer entscheiden darf, kommt mit „Entscheiden …“ in die Liste.
+- **Mails**: Ein neuer Antrag geht an die zuständigen Materialwarte (ohne den Antragsteller, höchstens zehn, Rolle
+  „verwalter“, Fuß „… weil du den Ordner „…“ verwaltest“, Link auf die neue Seite). Nur wenn es **gar kein** zuständiges
+  Konto gibt, an die Material-Verwaltung (ohne sie die Plattform-Verwaltung; Rolle „verwaltung“, mit dem Hinweis, sich
+  die Freigabe zu geben); ist der Antragsteller selbst der einzige zuständige oder fehlen nur Adressen, an niemanden.
+  Der Bescheid an den Antragsteller nennt alle Felder. Mailprotokoll: der Bezug „Änderungsantrag“ führt auf die neue
+  Seite; Fehler mit Rolle „verwalter“ sehen die Verwalter des Zweigs.
+- **Produktänderungen am Artikel** (E8): Katalogprodukte bleiben für die Material-Verwaltung bearbeitbar; das Journal
+  am Artikel zeigt Produktänderungen schon bisher („Produkt geändert“, Feld alt → neu – journal.fuer_artikel liest das
+  Produktjournal mit). Neu im **Lebenslauf** (PDF): die Einträge „geändert“, „Bild“ und „Stückliste“ aus dem
+  Produktjournal seit dem Anlegen des Artikels, als „Produkt …“; Rückrufe stehen dort weiter in ihrem eigenen Abschnitt
+  (ihre Seriennummernlisten nennen Artikel aller Gliederungen), Meldungen gehören zum Katalog. Löschen eines Produkts mit
+  Artikeln bleibt gesperrt, die Materialart mit Artikeln 409 – unverändert.
+- **Sammelprotokoll**: „vormals …“ kennt den Sammelantrag (Antrag-Nr. des Kopfes) und nennt auch ein per Antrag
+  gewechseltes Produkt („vormals <Produkt> (Änderungsantrag Nr. …)“).
+
+### Schritt 23 (wiederholbar)
+
+- Die drei Artikeltrigger, die `mat_item_change` lesen, werden entfernt; `mat_item_change` wird mit `_umbauen` neu
+  aufgebaut (nur, wenn ihr CHECK „purchased_on“ noch nicht kennt): CHECK auf alle Felder (`ANTRAGSFELDER`; Schritt 15
+  bleibt mit `ANTRAGSFELDER_15`, wie er ausgeliefert wurde), Produkt und Lebensende nie leer, neue Spalte `group_id`
+  (`REFERENCES mat_item_change(id)`, NULL = Kopf, `CHECK (group_id IS NULL OR group_id < id)`), Index
+  `idx_mat_item_change_gruppe`. Alle Zeilen und Kennungen bleiben, der AUTOINCREMENT-Stand ebenso; Altanträge sind
+  Einzelanträge (`group_id` NULL – ein gemeinsam gestellter Antrag aus Seriennummer und Herstellung bleibt zwei Karten).
+- Trigger an `mat_item_change` (`TRIGGER_23_ANTRAG`): die aus Schritt 15 und 17, `mat_item_change_inhalt` schützt dazu
+  `group_id`, neu `mat_item_change_gruppe` (Kopf nur ohne offenen Antrag am Artikel; Folgezeile nur zu einem offenen
+  Kopf desselben Artikels mit gleichem Antragsteller, Zeitpunkt und gleicher Begründung). **Kein** Vier-Augen-Trigger
+  (E5).
+- Am Artikel (`TRIGGER_23_ARTIKEL`, gleiche Namen ersetzt): `mat_item_stammdaten_fest` deckt nach der ersten Prüfung
+  Seriennummer, Herstellung (nie leer, kein Nachtragen mehr), Kauf, Erstgebrauch, Prüfintervall und das von Hand gesetzte
+  Lebensende (`retire_by_manual`; beim Produktwechsel folgt es dem neuen Produkt) – jede Änderung nur mit bestätigtem,
+  noch nicht angewendetem Antrag mit genau diesem alten und neuen Wert (Zahlen als Text, `CAST`); `mat_item_produkt_fest`
+  ebenso für das Produkt (vorher: nie); `mat_item_antrag_angewendet` setzt `applied_at` je gedeckter Zeile. Das
+  wirksame Lebensende (`retire_by`) bleibt frei – es folgt Herstellung, Lebensdauer und Katalogkorrekturen. Länge,
+  Bemerkung und nächste Prüfung sind nicht freigabepflichtig.
+- Geprüft: frisch; 22 → 23 mit Altbestand (zwei offene Anträge am selben Artikel, ein erledigter, Kennungsfolge über
+  einer Lücke) und zweiter Lauf (`test_material_antrag_zustaendig.test_migration_23`); 14/15/16 → 23 über die
+  vorhandenen Migrationstests; an **Kopien** vorhandener Sandbox-Datenbanken Stand 8 (12 Artikel), 15 (fünf
+  Altanträge), 17 und 19 (533 Artikel) → 23 mit zweitem Lauf: Zahlen aller Tabellen gleich (außer Journal und Meta der
+  Schritte 8–10), Anträge gleich, Trigger greifen an einem geprüften Artikel. Eine echte Stand-7-Datenbank gibt es in
+  der Sandbox nicht (`MATERIAL_KOPIE_STAND_7` bleibt ungesetzt; ein frisch erzeugter Stand 7 startet mit dem heutigen
+  Code nicht).
+- **Rückweg** auf `sets-l2c` (Schema 22): Code 22 findet Schema 23 vor und lässt es (Version höher). Er liest die neuen
+  Felder aber nicht – ein Antrag auf Kauf, Erstgebrauch, Lebensende, Intervall oder Produkt in der Tabelle bricht seine
+  Antragsliste (unbekanntes Feld), und die Trigger aus 23 sperren sein Nachtragen bei Metall und das direkte Ändern von
+  Kauf, Erstgebrauch und Intervall. Darum: Rückweg nur über die Datensicherung von vor dem Deploy – oder, solange es noch
+  keinen Antrag auf ein neues Feld gibt, per SQL die Trigger der Fassung 22 zurück (`DROP TRIGGER
+  mat_item_change_gruppe`; `mat_item_stammdaten_fest` = `TRIGGER_17_ARTIKEL[0]`, `mat_item_antrag_angewendet` =
+  `TRIGGER_15_ARTIKEL[1]`, `mat_item_produkt_fest` aus `TRIGGER_16`, `mat_item_change_inhalt` = `TRIGGER_15_ANTRAG[0]`)
+  und `schema_version` auf 22 – die umgebaute Tabelle (Spalte `group_id`, breiterer CHECK) stört Code 22 nicht.
+
+### Schnittstelle
+
+| Route | Wer | Was |
+| --- | --- | --- |
+| `POST /api/material/artikel/<id>/antrag` (`product_id`, `serial_no`, `manufactured_on`, `purchased_on`, `first_use_on`, `retire_by`, `interval_months` – nur Abweichungen zählen; `begruendung` Pflicht) | Materialwart oder Prüfer am Artikel (fremd 404, nur lesen 403) | Sammelantrag → 201 `antrag` (`id` = Antrag-Nr., `aenderungen` [{`feld`, `feld_text`, `alt`, `neu`, `alt_text`, `neu_text`, `passt`}], `felder_text`, `status`, `begruendung`, `antragsteller`, `eigen`, `passt`, `entfernen`, `entscheiden`, `ohne_zustaendige`, `rueckruf`), `artikel`, `mail`; 400 Eingaben (auch „nichts geändert“), 409 ungeprüft, ausgesondert, schon ein offener Antrag, Dublette, Set/Teil, Set-Produkt, offener Entwurf, DEMO-Grenze. Statt `antraege` (Liste je Feld) jetzt `antrag` |
+| `GET /api/material/antraege?status=offen\|erledigt\|alle` (Vorgabe offen) | Modulzugang | Sammelanträge: eigene zu lesbaren Artikeln und die, die das Konto entscheiden darf; je Antrag `artikel` und `entscheiden`; `zu_entscheiden` (die Zahl der Blase). `alle`, `bearbeiten`, `offen`, `meldungen_offen` entfallen |
+| `POST /api/material/antraege/<id>/bestaetigen`, `…/ablehnen`, `…/zurueckziehen` | Modulzugang; entscheiden die Materialwarte des Ordners (rechte „freigeben“, eigener Antrag eingeschlossen) – nicht lesbar 404, lesbar 403; zurückziehen nur der Antragsteller | wirkt auf den ganzen Sammelantrag (auch mit der Kennung einer Folgezeile); bestätigen zieht Lebensende, Länge und Fälligkeit nach (`faelligkeit.kappen`) |
+| `PUT /api/material/artikel/<id>` | Materialwart **oder Prüfer** am Artikel | Prüfer nur `notes`, `length_m`, `next_due_on` (sonst 403); nach der ersten Prüfung 409 bei jeder Abweichung in den freigabepflichtigen Feldern |
+| `GET /api/material/artikel/<id>` | wie bisher | neu `antrag_offen`, `darf_entscheiden`, `produkt_beantragbar`; `darf_antrag` nur ohne offenen Antrag; `herstellung_nachtragbar` entfällt |
+| `GET /api/material/start` | wie bisher | `antraege_offen` = offene Anträge, die das Konto entscheiden darf (für jedes Konto, nicht mehr nur die Material-Verwaltung) |
+| `GET /api/material/meldungen` | wie bisher | `antraege_offen` entfällt |
+| `GET /material/bestand/antraege?status=` | Modulzugang (Seite) | neue Seite (Ansicht `antraege`) |
+| `GET /material/katalog/meldungen?bereich=antraege[&status=]` | – | 302 auf `/material/bestand/antraege[?status=]` |
+
+### Entscheidungen des Nutzers (24.10.2026)
+
+- **E1** Freigabepflichtig nach der ersten Prüfung: Produkt, Seriennummer, Herstellung, Kauf, Erstgebrauch, Lebensende
+  (auch vorziehen), Prüfintervall am Artikel; Länge nicht.
+- **E2** Bemerkung, Länge und „Nächste Prüfung vorziehen“ direkt – durch Prüfer und Materialwart.
+- **E3** Leere Felder nachtragen immer per Antrag.
+- **E4** Produkt am Artikel nach der ersten Prüfung per Antrag (Grenzen und Folgen wie vor der Prüfung).
+- **E5** Kein Vier-Augen; Rückfall-Mail an die Material-Verwaltung nur ohne jedes zuständige Konto.
+- **E6** Die Material-Verwaltung entscheidet nur mit eigener Freigabe „verwalten“ und darf sie sich selbst geben.
+- **E7** Nur Arbeitsliste, Blase, Übersicht und Mail hängen am Ordnerrecht; Artikelseite und Journal wie bisher.
+- **E8** Katalogprodukte bleiben bearbeitbar; jede Produktänderung im Produktjournal und im Journal/Lebenslauf der
+  Artikel; Löschen eines Produkts mit Artikeln bleibt gesperrt.
+
+### Abweichungen vom Entwurf
+
+- **Schemaschritt 23** statt 22 (Auftrag: Schritt 22 gehört „Sets anlegen“); Länge ist nicht freigabepflichtig (E1),
+  deshalb kein Längen-Sonderfall im Trigger; kein Vier-Augen-Trigger (E5).
+- **Lebensende im Antrag**: der Trigger schützt das von Hand gesetzte Lebensende (`retire_by_manual`), nicht das
+  wirksame `retire_by` – sonst sperrte er jede Folge einer Herstellungs- oder Katalogänderung. Beantragt wird nur
+  vorziehen (vor dem heutigen Lebensende und vor der Rechnung).
+- **Zahl der Blase** zählt eigene Anträge mit, wenn der Antragsteller zuständig ist (E5 – er entscheidet sie selbst);
+  der Entwurf hatte sie wegen Vier-Augen ausgenommen.
+- **Artikeljournal und Produktänderung** (E8): Das Journal am Artikel las das Produktjournal schon (journal.fuer_artikel);
+  es kommt kein zusätzlicher Eintrag je Artikel dazu (bei 500 Artikeln eines Produkts wären das 500 Zeilen je
+  Katalogkorrektur, und das Artikeljournal zeigte jede Änderung doppelt). Neu ist nur der Lebenslauf.
+- Das neue Recht `freigeben` steht weder in `darf_alles` noch im Feld `darf` an Ordnern und Artikeln (die Oberfläche
+  fragt es am Antrag und an `artikel.darf_entscheiden` ab).
+- „Änderung beantragen …“ bleibt auf der Artikelseite in den Stammdaten für alle, die beantragen dürfen (auch den
+  Materialwart) – zusätzlich zum Knopf im Dialog „Bearbeiten“; nur der Hilfetext darunter ist weg.
+
+### Bitte bestätigen
+
+1. Ein Lebensende lässt sich per Antrag nur **vorziehen** (nicht zurück auf die Rechnung oder später) – wie bisher
+   direkt. Soll ein Antrag ein irrtümlich vorgezogenes Lebensende auch wieder nach hinten (höchstens bis zur Rechnung aus
+   Herstellung und Lebensdauer) setzen dürfen?
+2. Prüfer bearbeiten Bemerkung, Länge und nächste Prüfung auch **vor** der ersten Prüfung (Entscheidung E2 nennt keinen
+   Zeitpunkt); die übrigen Felder bleiben dann dem Materialwart.
+3. Die Zahl an „Änderungsanträge“ und auf der Übersicht zählt die eigenen offenen Anträge mit, wenn man zuständig ist.
+4. Altanträge (vor Schritt 23 gestellt) bleiben Einzelanträge – ein damals gemeinsam gestellter Antrag auf Seriennummer
+   und Herstellung erscheint als zwei Karten; Mails dazu gehen beim Umstieg keine.
+5. Der Lebenslauf zeigt Produktänderungen ab dem Anlegen des Artikels (nicht die davor) und ohne Rückrufzeilen.
+6. Rückweg nur über die Datensicherung, sobald ein Antrag auf ein neues Feld gestellt ist (siehe Schritt 23).
 
 ## Sets anlegen und Stückliste übertragen (Wunsch des Nutzers, 24.10.2026)
 

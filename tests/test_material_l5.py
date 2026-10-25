@@ -370,7 +370,8 @@ def test_geraete_nachbesserung():
     # Ordner: Filter nur mit Artikeln (oder gesetztem Filter), leerer Ordner nennt die Unterordner.
     assert "${direktAlle || filter || person ? `<div class=\"mat-filterzeile\">" in js
     assert "Hier liegen keine Artikel direkt – ${unten} liegen in Unterordnern." in js
-    assert ".mat-filter button, .mat-bereiche button { flex: 0 0 auto; white-space: nowrap; }" in css
+    # Die Bereichswahl der Meldungen gibt es seit dem 24.10.2026 nicht mehr (Änderungsanträge im Bestand).
+    assert ".mat-filter button { flex: 0 0 auto; white-space: nowrap; }" in css
     # Produktname, Schloss, Katalogsuche.
     assert '`<span class="mat-wort">${esc(w)}</span>`' in js and ".mat-wort { white-space: nowrap; }" in css
     assert "🔒 " not in js and '<span class="mat-schloss" aria-hidden="true">🔒</span>' in js
@@ -414,7 +415,8 @@ def test_geraete_nachbesserung_zwei():
     assert not re.search(r"mat-kachel\.null \{[^}]*order:", css)
     assert '[...kacheln.filter(([s]) => z[s]), ...kacheln.filter(([s]) => !z[s])].map(kachel)' in js
     # V2, V3, V5, V6.
-    assert ".mat-filter button, .mat-bereiche button { flex: 0 0 auto;" in css and "flex: 1 1 auto; white-space: nowrap" not in css
+    # Die Bereichswahl der Meldungen gibt es seit dem 24.10.2026 nicht mehr (Änderungsanträge im Bestand).
+    assert ".mat-filter button { flex: 0 0 auto;" in css and "flex: 1 1 auto; white-space: nowrap" not in css
     assert "max-width: 2200px" not in css and "max-width: 1800px;" in css
     for ansicht in ("pruefung", "pruefung_neu", "artikel_neu", "formular"):
         assert f'[data-ansicht="{ansicht}"]' in css

@@ -22,8 +22,10 @@ from test_material_trennung import bis_schritt, endversion  # noqa: E402
 
 # Eine KOPIE einer Datenbank auf Stand 7 für den Pfad 7 → 14 – nur, wenn angegeben; die Quelle bleibt unberührt.
 KOPIE_STAND_7 = os.environ.get("MATERIAL_KOPIE_STAND_7") or ""
-FEST = ("Seriennummer und Herstelldatum stehen seit der ersten Prüfung fest – sie sind Teil des Prüfnachweises. Eine "
-        "Änderung beantragst du mit Begründung bei der Material-Verwaltung.")
+# Seit dem 24.10.2026 alle freigabepflichtigen Stammdaten (Kauf, Erstgebrauch, Lebensende, Intervall, Produkt dazu –
+# test_material_antrag_zustaendig.py); der Text sagt, wer entscheidet.
+FEST = ("Seit der ersten Prüfung stehen die Stammdaten fest – sie sind Teil des Prüfnachweises. Eine Änderung beantragst "
+        "du mit Begründung; entscheiden die Materialwarte des Ordners.")
 TRIGGER = "mat_item_stammdaten_fest"
 # Seit Schritt 15 (Änderungsanträge, Entscheidungen vom 21.10.2026) dazu am Artikel: der Antrag wirkt genau einmal.
 TRIGGER_15 = "mat_item_antrag_angewendet"
@@ -104,10 +106,12 @@ def test_dienst():
             assert r.status_code == 200, (d, r.get_json())
             z = db_zeile(tmp, eigen)
             assert (z["serial_no"], z["manufactured_on"], z["notes"]) == ("SD-101", "2024-01", d["notes"]), z
-        # Mit dem Stand aus dem Dialog (stand) wie in der Oberfläche.
+        # Mit dem Stand aus dem Dialog (stand) wie in der Oberfläche; der Kauf ist seit dem 24.10.2026 ebenfalls fest.
         a = lesen(w, eigen)
-        r = aendern(w, eigen, stand=a["stand"], purchased_on="2024-04", notes="")
-        assert r.status_code == 200 and r.json["artikel"]["purchased_on"] == "2024-04", r.get_json()
+        r = aendern(w, eigen, stand=a["stand"], notes="")
+        assert r.status_code == 200 and r.json["artikel"]["notes"] == "", r.get_json()
+        r = aendern(w, eigen, purchased_on="2024-04")
+        assert r.status_code == 409 and r.json["error"] == FEST, r.get_json()
 
         # Vom System vergebene STR-Nummer: vor der Prüfung ersetzt eine Herstellernummer sie …
         r = aendern(w, system, serial_no="SD-200")
@@ -157,7 +161,7 @@ def test_trigger():
                     conn.execute(befehl, (eigen,))
                     raise AssertionError(befehl)
                 except sqlite3.IntegrityError as e:
-                    assert "seit der ersten Prüfung fest" in str(e), e
+                    assert "ersten Prüfung fest" in str(e), e
             # Derselbe Wert und andere Spalten gehen durch; der ungeprüfte Artikel bleibt frei.
             conn.execute("UPDATE mat_item SET serial_no = serial_no, manufactured_on = manufactured_on, notes = 'x' "
                          "WHERE id = ?", (eigen,))
@@ -274,29 +278,28 @@ def test_oberflaeche_statisch():
     # Ganz oben: die erste Feldzeile nach der Überschrift trägt Seriennummer und Herstellung – davor steht nur, solange
     # der Artikel ungeprüft ist, das Produkt (Feintuning, L2b Nr. 29; produktFeldHtml ist sonst leer).
     kopf = dlg[dlg.index("bearbeiten</h2>"):]
-    assert 'const produktFeldHtml = mitProdukt ?' in dlg and "const mitProdukt = !!a.produkt_aenderbar;" in dlg
-    assert re.match(r'bearbeiten</h2>\s*\$\{produktFeldHtml\}\s*<div class="field-row mat-stammzeile\$\{fest \? " mat-fest" : ""\}"><div>\$\{sn\}'
-                    r'</div><div>\$\{herst\}</div></div>', kopf), kopf[:300]
-    # Seit den Entscheidungen vom 21.10.2026 steht vor „fest“ der Fall „nachtragen“ (Metall ohne Herstelldatum).
-    zeilen = {z: dlg.index(z) for z in ("const sn = fest", "const herst = nachtragen")}
-    sn = dlg[zeilen["const sn = fest"]:zeilen["const herst = nachtragen"]]
-    herst = dlg[zeilen["const herst = nachtragen"]:dlg.index("dialog(`")]
-    # Fest: schreibgeschützt mit sichtbarem Wert; offen: wie bisher mit dem Hinweis zur STR-Nummer.
-    assert re.search(r'\? `<label for="ad-sn">Seriennummer[^`]*</label><input type="text" id="ad-sn" readonly '
-                     r'value="\$\{esc\(a\.serial_no\)\}">`', sn), sn
-    assert re.search(r'\? `<label for="ad-herst">Herstellung \(Monat\)</label><input type="text" id="ad-herst" '
-                     r'class="mat-datum" readonly value="\$\{esc\(datumAnzeige\(a\.manufactured_on, "monat"\)\)\}"', herst), herst
-    assert 'datumFeld("ad-herst", a.manufactured_on, "monat")' in herst and "TASTATUR_NUMMER" in sn
+    # Seit dem 24.10.2026: Nach der ersten Prüfung (und für Prüfer immer) stehen alle freigabepflichtigen Felder oben
+    # schreibgeschützt als Block; sonst wie bisher das Produkt (solange änderbar) und darunter Seriennummer | Herstellung.
+    assert "const mitProdukt = !gesperrt && !!a.produkt_aenderbar;" in dlg and "const gesperrt = fest || nurDirekt;" in dlg
+    assert re.match(r'bearbeiten</h2>\s*\$\{festBlock\}\s*\$\{produktFeldHtml\}\s*\$\{gesperrt \? "" : `<div class="field-row '
+                    r'mat-stammzeile"><div>\$\{sn\}</div><div>\$\{herst\}</div></div>', kopf), kopf[:300]
+    block = dlg[dlg.index("const festBlock"):dlg.index("const sn = ")]
+    for feld in ('"ad-sn"', '"ad-herst"', '"ad-kauf"', '"ad-erst"', '"ad-ende"', '"ad-int"', 'id="ad-produkt-fest" readonly'):
+        assert feld in block, feld
+    assert "readonly" in block and "mat-fest mat-festblock" in block and "TASTATUR_NUMMER" in dlg
+    assert 'datumFeld("ad-herst", a.manufactured_on, "monat")' in dlg
     assert "Seit der ersten Prüfung fest – Teil des Prüfnachweises." in dlg
     assert "Leer lassen behält die Nummer. Eine echte Herstellernummer ersetzt die vom System vergebene." in dlg
-    # Der PUT schickt Seriennummer und Herstellung nur, solange sie nicht fest sind.
+    # Der PUT schickt die freigabepflichtigen Felder nur, solange sie nicht fest sind (und nie vom Prüfer).
     daten = dlg[dlg.index("daten = { stand: a.stand"):dlg.index("} catch (e) { toast(e.message, true); return; }")]
-    assert "serial_no" not in daten.split("if (!fest) {")[0] and "manufactured_on" not in daten.split("if (!fest) {")[0]
-    assert re.search(r"if \(!fest\) \{\s*daten\.serial_no = \$\(\"#ad-sn\", body\)\.value;\s*"
-                     r"daten\.manufactured_on = behalten\(", daten), daten
-    # Reihenfolge im Dialog: Seriennummer/Herstellung, dann Kauf, Erstgebrauch, Intervall, Fälligkeit, Lebensende, Bemerkung.
-    folge = [kopf.index(x) for x in ("mat-stammzeile", '"ad-kauf"', '"ad-erst"', 'id="ad-int"', '"ad-due"', '"ad-ende"',
-                                     'id="ad-notes"')]
+    vorne = daten.split("if (!gesperrt) {")[0]
+    assert not any(f in vorne for f in ("serial_no", "manufactured_on", "purchased_on", "interval_months", "retire_by"))
+    assert "next_due_on" in vorne and "notes" in vorne
+    # Reihenfolge im offenen Dialog: Seriennummer/Herstellung, dann Kauf, Erstgebrauch, Intervall, Fälligkeit, Lebensende,
+    # Bemerkung.
+    offen = kopf[kopf.index("${gesperrt ? \"\" : `"):]
+    folge = [offen.index(x) for x in ("mat-stammzeile", '"ad-kauf"', '"ad-erst"', 'id="ad-int"', "${faellig}", '"ad-ende"',
+                                      'id="ad-notes"')]
     assert folge == sorted(folge), folge
     # Anlegen unverändert: eigenes Formular, Seriennummer über die volle Breite, Herstellung neben Kauf.
     neu = js[js.index("async function artikelNeu()"):]

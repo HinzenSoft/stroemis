@@ -1,20 +1,20 @@
-"""Änderungsanträge an festen Stammdaten (Modul Material, Entscheidungen des Nutzers vom 21.10.2026):
-python tests/test_material_antrag.py
+"""Änderungsanträge an Stammdaten (Modul Material, Entscheidungen des Nutzers vom 21.10.2026; seit dem 24.10.2026 an allen
+Stammdaten, Freigabe durch die zuständigen Materialwarte – Entscheidungen E1–E8): python tests/test_material_antrag.py
 
-Seit der ersten abgeschlossenen Prüfung stehen Seriennummer und Herstelldatum fest (test_material_stammdaten.py). Neu:
-  1. Bei Metall lässt sich ein fehlendes Herstelldatum direkt nachtragen (PUT, ohne Antrag) – bei textil und „sonstiges“
-     nicht; ändern und entfernen bleibt gesperrt.
-  2.+3. Jede andere Änderung – auch STR-Nummer → Herstellernummer – beantragen Materialwart oder Prüfer mit Begründung;
-     die Material-Verwaltung (Plattform-Verwaltung eingeschlossen) bestätigt oder lehnt ab (Katalog → Meldungen →
-     Änderungsanträge). Bestätigt steht die Änderung sofort am Artikel (Journal mit alt/neu, Antragsteller, Bestätiger,
-     Begründung); der Trigger lässt genau diese Änderung einmal zu. Mails an die Material-Verwaltung (Rückfall PV) und
-     an den Antragsteller; DEMO, dev-Sperre und ohne Mailserver ins Log.
-Dazu Schritt 15 der Migration, Rückrufabgleich mit der neuen Nummer, Löschkonzept und die Oberfläche (statisch).
+Seit der ersten abgeschlossenen Prüfung stehen die Stammdaten fest (test_material_stammdaten.py). Jede Änderung –
+auch STR-Nummer → Herstellernummer, auch ein leeres Herstelldatum nachtragen (E3) – beantragen Materialwart oder Prüfer
+mit Begründung; die Materialwarte des Ordners (eigene Freigabe „verwalten“ an der Heimat oder darüber) bestätigen oder
+lehnen ab, den eigenen Antrag eingeschlossen (E5); die Material-Verwaltung nur mit eigener Verwalterfreigabe (E6).
+Bestätigt steht die Änderung sofort am Artikel (Journal mit alt/neu, Antragsteller, Bestätiger, Begründung); der Trigger
+lässt genau diese Änderung einmal zu. Mails an die zuständigen Materialwarte (Rückfall Material-Verwaltung, dann
+Plattform-Verwaltung) und an den Antragsteller; DEMO, dev-Sperre und ohne Mailserver ins Log.
+Dazu die Schritte 15–17 der Migration, Rückrufabgleich mit der neuen Nummer, Löschkonzept und die Oberfläche (statisch).
 Prüfung vom 21.10.2026 (Abschnitt 10): Leser sehen im Verlauf und im Lebenslauf weder Begründung noch Namen, Bescheid nur
 an einen Antragsteller, der den Artikel noch liest, Schritt 16 (Trigger gegen Umwege an der Sperre vorbei), Hinweis auf
 laufende Rückrufe, „vormals …“ im Sammelprotokoll.
 Entscheidungen vom 21.10.2026 zur Prüfung (Abschnitt 11): Der Antragsteller zieht seinen offenen Antrag selbst zurück;
 das Herstelldatum lässt sich nur noch ändern, nicht entfernen (auch nicht per Antrag); Schritt 17 mit Altbestand.
+Sammelanträge, die neuen Felder, Zuständigkeit je Rolle und Schritt 23: test_material_antrag_zustaendig.py.
 Echte Mails gehen nie hinaus (die Nahtstelle mailprotokoll.versand ist ersetzt). Alle Namen, Nummern und Texte sind Platzhalter."""
 import logging
 import os
@@ -33,9 +33,9 @@ from test_material_trennung import bis_schritt, endversion  # noqa: E402
 
 # Eine KOPIE einer Datenbank auf Stand 7 für den Pfad 7 → 15 – nur, wenn angegeben; die Quelle bleibt unberührt.
 KOPIE_STAND_7 = os.environ.get("MATERIAL_KOPIE_STAND_7") or ""
-FEST = ("Seriennummer und Herstelldatum stehen seit der ersten Prüfung fest – sie sind Teil des Prüfnachweises. Eine "
-        "Änderung beantragst du mit Begründung bei der Material-Verwaltung.")
-NUR_MV = "Das macht die Material-Verwaltung (Stufe „Verwaltung“ im Modul Material)."
+FEST = ("Seit der ersten Prüfung stehen die Stammdaten fest – sie sind Teil des Prüfnachweises. Eine Änderung beantragst "
+        "du mit Begründung; entscheiden die Materialwarte des Ordners.")
+NUR_ZUSTAENDIG = "Entscheiden dürfen die Materialwarte dieses Ordners"
 ANTRAG_FEST = "Ein Änderungsantrag lässt sich nur einmal entscheiden"
 TRIGGER_NEU = {"mat_item_stammdaten_fest", "mat_item_antrag_angewendet", "mat_item_change_inhalt",
                "mat_item_change_antragsteller", "mat_item_change_entscheider", "mat_item_change_entschieden",
@@ -44,6 +44,7 @@ TRIGGER_16 = {"mat_item_ersetzen", "mat_item_kennung", "mat_item_geprueft_loesch
               "mat_product_materialart_fest", "mat_product_ersetzen", "mat_product_kennung"}
 TRIGGER_17 = {"mat_item_change_herstellung_leer", "mat_item_change_entfernen_bestaetigen", "mat_item_change_zurueckziehen"}
 TRIGGER_19 = {"mat_mail_fehler_fest", "mat_mail_fehler_ordner"}
+TRIGGER_23 = {"mat_item_change_gruppe"}
 
 
 def trigger_21():
@@ -184,44 +185,36 @@ def aufbau(tmp):
 # --- 1. Herstelldatum nachtragen (Metall direkt) ---------------------------------------------------------------------
 
 def test_nachtragen():
-    """Metall, fest, ohne Herstelldatum: PUT trägt es nach (200, Journal „geändert“); danach ändern oder entfernen 409.
-    „sonstiges“ ohne Herstelldatum und textil (leer gemacht vor der Prüfung): 409. Seriennummer bleibt fest, auch im
-    selben PUT. Ein Antrag fürs Nachtragen bei Metall: 409 mit Hinweis."""
+    """GEÄNDERT am 24.10.2026 (Entscheidung E3): Ein leeres Herstelldatum trägt nach der ersten Prüfung niemand mehr
+    direkt nach – auch bei Metall nicht (PUT 409); per Antrag geht es bei jeder Materialart. Seriennummer bleibt fest,
+    auch im selben PUT. Bemerkung ändern Materialwart UND Prüfer direkt (E2), die Führungskraft nicht."""
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
         a = lesen(t.w, t.k2)
-        assert a["stammdaten_fest"] and a["herstellung_nachtragbar"] and a["darf_antrag"], a
-        assert lesen(t.w, t.k1)["herstellung_nachtragbar"] is False and lesen(t.w, t.s1)["herstellung_nachtragbar"] is False
-        r = beantragen(t.w, t.k2, manufactured_on="2023-11")
-        assert r.status_code == 409 and "direkt" in r.json["error"], r.get_json()
-        # Zusammen mit einer anderen Seriennummer: 409, nichts geändert.
-        r = t.w.put(f"/api/material/artikel/{t.k2}", json={"serial_no": "AN-200", "manufactured_on": "2023-11"})
-        assert r.status_code == 409 and r.json["error"] == FEST, r.get_json()
+        assert a["stammdaten_fest"] and a["darf_antrag"] and "herstellung_nachtragbar" not in a, a
+        for d in ({"serial_no": "AN-200", "manufactured_on": "2023-11"}, {"stand": a["stand"], "manufactured_on": "2023-11"}):
+            r = t.w.put(f"/api/material/artikel/{t.k2}", json=d)
+            assert r.status_code == 409 and r.json["error"] == FEST, (d, r.get_json())
         assert item(t.app, t.k2)["manufactured_on"] is None
-        # Nachtragen mit dem Stand aus dem Dialog (der schickt keine Seriennummer).
-        r = t.w.put(f"/api/material/artikel/{t.k2}", json={"stand": a["stand"], "manufactured_on": "2023-11",
-                                                           "notes": "nachgetragen"})
-        assert r.status_code == 200 and r.json["artikel"]["manufactured_on"] == "2023-11", r.get_json()
-        assert r.json["artikel"]["herstellung_nachtragbar"] is False
-        j = journal(t.app, t.k2, "geaendert")[-1]
-        assert j["vorher"]["manufactured_on"] is None and j["nachher"]["manufactured_on"] == "2023-11", j
+        r = beantragen(t.w, t.k2, manufactured_on="2023-11")
+        assert r.status_code == 201, r.get_json()
+        assert bestaetigen(t.w, r.json["antrag"]["id"]).status_code == 200
+        assert item(t.app, t.k2)["manufactured_on"] == "2023-11"
         for wert in ("2023-10", "2023-11-05", "", None):
             r = t.w.put(f"/api/material/artikel/{t.k2}", json={"manufactured_on": wert})
             assert r.status_code == 409 and r.json["error"] == FEST, (wert, r.get_json())
-        assert item(t.app, t.k2)["manufactured_on"] == "2023-11"
-        # „sonstiges“: kein direktes Nachtragen – aber per Antrag.
+        # „sonstiges“ und textil: ebenso nur per Antrag.
         r = t.w.put(f"/api/material/artikel/{t.s1}", json={"manufactured_on": "2023-11"})
         assert r.status_code == 409 and r.json["error"] == FEST, r.get_json()
         assert beantragen(t.w, t.s1, manufactured_on="2023-11").status_code == 201
-        # textil: vor der Prüfung ohne Herstelldatum (Altbestand), danach kein direktes Nachtragen.
         g2 = neuer_artikel(t.w, t.ids["gurt"], t.lager, serial_no="AN-G2", manufactured_on="2024-02")["id"]
         sql(t.app, "UPDATE mat_item SET manufactured_on = NULL, retire_by = NULL WHERE id = ?", (g2,))
         pruefen(t.p, g2, gurt=True)
         r = t.w.put(f"/api/material/artikel/{g2}", json={"manufactured_on": "2024-02"})
         assert r.status_code == 409, r.get_json()
-        assert lesen(t.w, g2)["herstellung_nachtragbar"] is False
-        # Nachtragen ist Sache des Materialwarts: Prüfer und Führungskraft dürfen nicht bearbeiten.
-        assert t.p.put(f"/api/material/artikel/{t.k1}", json={"notes": "x"}).status_code == 403
+        # Bemerkung: Prüfer direkt (E2), Führungskraft nicht.
+        assert t.p.put(f"/api/material/artikel/{t.k1}", json={"notes": "x"}).status_code == 200
+        assert t.f.put(f"/api/material/artikel/{t.k1}", json={"notes": "y"}).status_code == 403
     print("Nachtragen bestanden.")
 
 
@@ -229,19 +222,21 @@ def test_nachtragen():
 
 def test_rechte():
     """Beantragen: Materialwart und Prüfer (201), Führungskraft (nur lesen) 403, ohne Stufe 403, fremde Gliederung 404 wie
-    unbekannt, ungeprüft und ausgesondert 409. Liste: Material-Verwaltung alle, Materialwart/Prüfer die eigenen,
-    Führungskraft leer, ohne Stufe 403. Entscheiden nur Material- und Plattform-Verwaltung (sonst 403), unbekannt 404."""
+    unbekannt, ungeprüft und ausgesondert 409. Liste: der Materialwart die eigenen und die, die er entscheidet, der Prüfer
+    die eigenen, Führungskraft und Material-Verwaltung (ohne eigene Verwalterfreigabe) keine, ohne Stufe 403. Entscheiden
+    nur die Materialwarte des Ordners – auch den eigenen Antrag (E5); sonst 403, unbekannt 404."""
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
         r = beantragen(t.w, t.k1, serial_no="AN-101")
-        assert r.status_code == 201 and len(r.json["antraege"]) == 1, r.get_json()
-        a_w = r.json["antraege"][0]
-        assert (a_w["feld"], a_w["alt"], a_w["neu"], a_w["status"], a_w["eigen"]) == ("serial_no", "AN-100", "AN-101",
-                                                                                      "offen", True), a_w
+        assert r.status_code == 201 and len(r.json["antrag"]["aenderungen"]) == 1, r.get_json()
+        a_w = r.json["antrag"]
+        x = a_w["aenderungen"][0]
+        assert (x["feld"], x["alt"], x["neu"], a_w["status"], a_w["eigen"]) == ("serial_no", "AN-100", "AN-101", "offen",
+                                                                              True), a_w
         assert r.json["artikel"]["antraege"][0]["id"] == a_w["id"]
         r = beantragen(t.p, t.g1, manufactured_on="2023-12")
         assert r.status_code == 201, r.get_json()
-        a_p = r.json["antraege"][0]["id"]
+        a_p = r.json["antrag"]["id"]
         r = beantragen(t.f, t.k1, manufactured_on="2024-02")
         assert r.status_code == 403, r.get_json()
         r = beantragen(t.k["nutzer"], t.k1, manufactured_on="2024-02")
@@ -258,59 +253,60 @@ def test_rechte():
         assert r.status_code == 409 and "ausgesondert" in r.json["error"], r.get_json()
         assert lesen(t.w, t.s1)["darf_antrag"] is False
         # Liste und Zahlen.
-        d = t.mv.get("/api/material/antraege").json
-        assert d["alle"] and d["bearbeiten"] and d["filter"] == "offen" and d["offen"] == 2, d
-        assert {x["id"] for x in d["antraege"]} == {a_w["id"], a_p}
-        assert d["antraege"][0]["artikel"]["inventory_no"] and d["antraege"][0]["artikel"]["gliederung"] == "OG Musterstadt"
         d = t.w.get("/api/material/antraege").json
-        assert not d["alle"] and not d["bearbeiten"] and [x["id"] for x in d["antraege"]] == [a_w["id"]], d
-        assert d["filter"] == "alle" and d["meldungen_offen"] is None
-        assert [x["id"] for x in t.p.get("/api/material/antraege").json["antraege"]] == [a_p]
-        assert t.f.get("/api/material/antraege").json["antraege"] == []
+        assert d["filter"] == "offen" and d["zu_entscheiden"] == 2 and {x["id"] for x in d["antraege"]} == {a_w["id"], a_p}
+        assert d["antraege"][0]["artikel"]["inventory_no"] and d["antraege"][0]["artikel"]["gliederung"] == "OG Musterstadt"
+        assert all(x["entscheiden"] for x in d["antraege"])
+        d = t.p.get("/api/material/antraege").json
+        assert [x["id"] for x in d["antraege"]] == [a_p] and d["zu_entscheiden"] == 0 and not d["antraege"][0]["entscheiden"]
+        for c in (t.f, t.mv, t.adm):
+            d = c.get("/api/material/antraege").json
+            assert d["antraege"] == [] and d["zu_entscheiden"] == 0, d
         assert t.k["nutzer"].get("/api/material/antraege").status_code == 403
-        assert t.adm.get("/api/material/antraege").json["offen"] == 2
-        # Entscheiden: nur Material- und Plattform-Verwaltung.
-        for c in (t.w, t.p, t.f):
+        # Entscheiden: nur der Materialwart des Ordners.
+        for c in (t.p, t.f, t.mv, t.adm):
             for f in (bestaetigen, ablehnen):
                 r = f(c, a_w["id"], antwort="x")
-                assert r.status_code == 403 and r.json["error"] == NUR_MV, r.get_json()
+                assert r.status_code == 403 and NUR_ZUSTAENDIG in r.json["error"], r.get_json()
         assert bestaetigen(t.k["nutzer"], a_w["id"]).status_code == 403
-        assert bestaetigen(t.mv, 999999).status_code == 404 and ablehnen(t.mv, 999999, antwort="x").status_code == 404
-        assert bestaetigen(t.mv, a_w["id"]).status_code == 200
-        assert ablehnen(t.adm, a_p, antwort="Platzhalter: Datum stimmt").status_code == 200
+        assert bestaetigen(t.w, 999999).status_code == 404 and ablehnen(t.w, 999999, antwort="x").status_code == 404
+        assert bestaetigen(t.w, a_w["id"]).status_code == 200
+        assert ablehnen(t.w, a_p, antwort="Platzhalter: Datum stimmt").status_code == 200
         assert item(t.app, t.k1)["serial_no"] == "AN-101" and item(t.app, t.g1)["manufactured_on"] == "2024-01"
         # Erledigte: „erledigt“ zeigt beide, „offen“ keinen mehr.
-        d = t.mv.get("/api/material/antraege?status=erledigt").json
-        assert {x["status"] for x in d["antraege"]} == {"bestaetigt", "abgelehnt"} and d["offen"] == 0, d
-        assert t.mv.get("/api/material/antraege").json["antraege"] == []
+        d = t.w.get("/api/material/antraege?status=erledigt").json
+        assert {x["status"] for x in d["antraege"]} == {"bestaetigt", "abgelehnt"} and d["zu_entscheiden"] == 0, d
+        assert t.w.get("/api/material/antraege").json["antraege"] == []
+        assert [x["status"] for x in t.p.get("/api/material/antraege?status=alle").json["antraege"]] == ["abgelehnt"]
     print("Rechte bestanden.")
 
 
 # --- 3. Prüfen beim Antrag ---------------------------------------------------------------------------------------------
 
 def test_eingaben():
-    """Begründung Pflicht, etwas muss beantragt sein; Seriennummer nicht dieselbe, nicht STR-…, je Produkt eindeutig
-    (sichtbar: 409 mit Inventarnummer; fremd: 409 ohne, protokolliert); Herstelldatum Format, nicht in der Zukunft,
-    nicht nach dem Kauf, bei textil nicht entfernen; ein offener Antrag je Feld (409), das andere Feld geht; beide Felder
-    in einem Antrag: zwei Zeilen, zwei Journaleinträge."""
+    """Begründung Pflicht, etwas muss sich ändern; Seriennummer nicht STR-…, je Produkt eindeutig (sichtbar: 409 mit
+    Inventarnummer; fremd: 409 ohne, protokolliert); Herstelldatum Format, nicht in der Zukunft, nicht nach dem Kauf,
+    nicht entfernen; ein offener Antrag je Artikel (409, auch für ein anderes Feld); beide Felder in einem Antrag: ein
+    Sammelantrag (Kopf und Folgezeile), ein Journaleintrag."""
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
         k1 = item(t.app, t.k1)
         faelle = [
             ({"serial_no": "AN-101", "begruendung": ""}, 400, "Begründung"),
             ({"serial_no": "AN-101", "begruendung": "   "}, 400, "Begründung"),
-            ({}, 400, "Bitte eine neue Seriennummer"),
-            ({"serial_no": "  "}, 400, "Bitte eine neue Seriennummer"),
-            ({"serial_no": "AN-100"}, 400, "dieselbe"),
+            ({}, 400, "mindestens ein Feld"),
+            ({"serial_no": "  "}, 400, "mindestens ein Feld"),
+            ({"serial_no": "AN-100"}, 400, "mindestens ein Feld"),
             ({"serial_no": "STR-000123"}, 400, "STR-"),
             ({"serial_no": "x" * 81}, 400, "zu lang"),
             ({"serial_no": "AN-NEU"}, 409, k1["inventory_no"][:2]),               # gibt es bei neu1 (sichtbar)
-            ({"manufactured_on": "2024-03"}, 400, "dasselbe"),
+            ({"manufactured_on": "2024-03"}, 400, "mindestens ein Feld"),
             ({"manufactured_on": "03/2024"}, 400, "Monat (JJJJ-MM)"),
             ({"manufactured_on": "2099-01"}, 400, "Zukunft"),
             ({"manufactured_on": "2024-06"}, 400, "Kaufdatum"),
             ({"manufactured_on": "2024-02", "herstellung_entfernen": True}, 400, HERST_BLEIBT),
             ({"herstellung_entfernen": True}, 400, HERST_BLEIBT),
+            ({"manufactured_on": ""}, 400, HERST_BLEIBT),
             ({"serial_no": "AN-101", "begruendung": "x" * 1001}, 400, "zu lang"),
         ]
         for d, code, text in faelle:
@@ -325,26 +321,25 @@ def test_eingaben():
         r = beantragen(t.w, t.g1, herstellung_entfernen=True)
         assert r.status_code == 400 and HERST_BLEIBT in r.json["error"], r.get_json()
         assert antraege(t.app, t.k1) == [] and antraege(t.app, t.g1) == []
-        # Beide Felder auf einmal: zwei Zeilen mit derselben Begründung, zwei Journaleinträge.
+        # Beide Felder auf einmal: ein Sammelantrag – Kopf und Folgezeile mit derselben Begründung, ein Journaleintrag.
         r = beantragen(t.w, t.k1, serial_no="AN-101", manufactured_on="2024-02", begruendung="Platzhalter beide")
-        assert r.status_code == 201 and [x["feld"] for x in r.json["antraege"]] == ["serial_no", "manufactured_on"]
+        assert r.status_code == 201 and [x["feld"] for x in r.json["antrag"]["aenderungen"]] == ["serial_no",
+                                                                                                "manufactured_on"]
         z = antraege(t.app, t.k1)
-        assert [(x["field"], x["old_value"], x["new_value"], x["reason"], x["created_by_name"]) for x in z] == [
-            ("serial_no", "AN-100", "AN-101", "Platzhalter beide", "wart"),
-            ("manufactured_on", "2024-03", "2024-02", "Platzhalter beide", "wart")], z
+        assert [(x["field"], x["old_value"], x["new_value"], x["reason"], x["created_by_name"], x["group_id"]) for x in z] == [
+            ("serial_no", "AN-100", "AN-101", "Platzhalter beide", "wart", None),
+            ("manufactured_on", "2024-03", "2024-02", "Platzhalter beide", "wart", z[0]["id"])], z
         j = journal(t.app, t.k1, "antrag_gestellt")
-        assert [(x["vorher"], x["nachher"]["antrag"]) for x in j] == [({"serial_no": "AN-100"}, z[0]["id"]),
-                                                                       ({"manufactured_on": "2024-03"}, z[1]["id"])], j
-        assert j[0]["user_name"] == "wart" and j[0]["nachher"]["begruendung"] == "Platzhalter beide"
-        # Je Feld ein offener Antrag – auch für einen anderen Antragsteller.
-        r = beantragen(t.p, t.k1, serial_no="AN-102")
-        assert r.status_code == 409 and "läuft schon ein Antrag" in r.json["error"], r.get_json()
-        r = beantragen(t.p, t.k1, manufactured_on="2024-01")
-        assert r.status_code == 409, r.get_json()
-        # Entfernen: auch bei Metall und „sonstiges“ nicht mehr (Entscheidung vom 21.10.2026 zur Prüfung).
+        assert len(j) == 1 and j[0]["vorher"] == {"serial_no": "AN-100", "manufactured_on": "2024-03"}, j
+        assert j[0]["nachher"]["antrag"] == z[0]["id"] and j[0]["user_name"] == "wart"
+        assert j[0]["nachher"]["begruendung"] == "Platzhalter beide"
+        # Ein offener Antrag je Artikel – auch für ein anderes Feld und einen anderen Antragsteller.
+        for d in ({"serial_no": "AN-102"}, {"purchased_on": "2024-06"}):
+            r = beantragen(t.p, t.k1, **d)
+            assert r.status_code == 409 and "läuft schon ein Änderungsantrag" in r.json["error"], r.get_json()
         r = beantragen(t.w, t.fb, herstellung_entfernen=True)
         assert r.status_code == 404
-        r = beantragen(t.adm, t.fb, herstellung_entfernen=True)
+        r = beantragen(t.adm, t.fb, serial_no="AN-B9")
         assert r.status_code == 409 and "noch nicht geprüft" in r.json["error"], r.get_json()
         assert item(t.app, t.k1)["serial_no"] == "AN-100"
     print("Eingaben bestanden.")
@@ -353,29 +348,30 @@ def test_eingaben():
 # --- 4. Bestätigen und ablehnen ----------------------------------------------------------------------------------------
 
 def test_entscheiden():
-    """STR → Herstellernummer bestätigt: Nummer am Artikel, serial_generated 0, applied_at, Journal mit alt/neu,
-    Antragsteller, Bestätiger, Begründung; zweites Entscheiden 409. Textil: Lebensende rechnet neu. Eindeutigkeit beim
-    Bestätigen (anderer Antrag hat die Nummer inzwischen bekommen) 409; Stand geändert 409; ausgesondert nur ablehnen.
-    Ablehnen nur mit Begründung, Artikel unverändert, Journal. Danach ist ein neuer Antrag fürs Feld möglich. Die
-    Material-Verwaltung bestätigt ihren eigenen Antrag."""
+    """STR → Herstellernummer bestätigt (vom Materialwart des Ordners): Nummer am Artikel, serial_generated 0, applied_at,
+    Journal mit alt/neu, Antragsteller, Bestätiger, Begründung; zweites Entscheiden 409. Textil: Lebensende rechnet neu.
+    Eindeutigkeit beim Bestätigen (anderer Antrag hat die Nummer inzwischen bekommen) 409; Stand geändert 409;
+    ausgesondert nur ablehnen. Ablehnen nur mit Begründung, Artikel unverändert, Journal. Danach ist ein neuer Antrag
+    möglich. Die Material-Verwaltung beantragt (sie verwaltet alles) – entscheiden darf sie ohne eigene
+    Verwalterfreigabe nicht, der Materialwart schon."""
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
-        r = beantragen(t.w, t.k2, serial_no="HN-777", begruendung="Platzhalter: Herstellernummer gefunden")
-        aid = r.json["antraege"][0]["id"]
-        r = bestaetigen(t.mv, aid, antwort="Platzhalter Anmerkung")
+        r = beantragen(t.p, t.k2, serial_no="HN-777", begruendung="Platzhalter: Herstellernummer gefunden")
+        aid = r.json["antrag"]["id"]
+        r = bestaetigen(t.w, aid, antwort="Platzhalter Anmerkung")
         assert r.status_code == 200 and r.json["antrag"]["status"] == "bestaetigt", r.get_json()
         z = item(t.app, t.k2)
         assert (z["serial_no"], z["serial_generated"]) == ("HN-777", 0), z
         a = antraege(t.app, t.k2)[0]
-        assert a["applied_at"] and a["resolved_by_name"] == "katalog" and a["answer"] == "Platzhalter Anmerkung", a
+        assert a["applied_at"] and a["resolved_by_name"] == "wart" and a["answer"] == "Platzhalter Anmerkung", a
         j = journal(t.app, t.k2, "antrag_bestaetigt")
-        assert len(j) == 1 and j[0]["user_name"] == "katalog", j
+        assert len(j) == 1 and j[0]["user_name"] == "wart", j
         assert j[0]["vorher"] == {"serial_no": t.str_nr, "serial_generated": True}, j
-        assert j[0]["nachher"] == {"serial_no": "HN-777", "serial_generated": False, "antrag": aid, "beantragt_von": "wart",
+        assert j[0]["nachher"] == {"serial_no": "HN-777", "serial_generated": False, "antrag": aid, "beantragt_von": "pruefer",
                                    "begruendung": "Platzhalter: Herstellernummer gefunden",
                                    "anmerkung": "Platzhalter Anmerkung"}, j
         for f in (bestaetigen, ablehnen):
-            r = f(t.mv, aid, antwort="noch einmal")
+            r = f(t.w, aid, antwort="noch einmal")
             assert r.status_code == 409 and "schon entschieden" in r.json["error"], r.get_json()
         a = lesen(t.w, t.k2)
         assert a["antraege"] == [] and a["serial_no"] == "HN-777"
@@ -385,9 +381,9 @@ def test_entscheiden():
         assert t.w.get(f"/material/pruefung/{x['id']}/pdf").status_code == 200
 
         # Textil: neues Herstelldatum → Lebensende neu (10 Jahre).
-        aid = beantragen(t.p, t.g1, manufactured_on="2023-07").json["antraege"][0]["id"]
+        aid = beantragen(t.p, t.g1, manufactured_on="2023-07").json["antrag"]["id"]
         assert item(t.app, t.g1)["retire_by"] == "2034-01-01"
-        assert bestaetigen(t.mv, aid).status_code == 200
+        assert bestaetigen(t.w, aid).status_code == 200
         z = item(t.app, t.g1)
         assert (z["manufactured_on"], z["retire_by"]) == ("2023-07", "2033-07-01"), z
         j = journal(t.app, t.g1, "antrag_bestaetigt")[0]
@@ -395,49 +391,49 @@ def test_entscheiden():
         assert "anmerkung" not in j["nachher"] and j["nachher"]["beantragt_von"] == "pruefer"
 
         # Eindeutigkeit beim Bestätigen: zwei Anträge auf dieselbe neue Nummer – der zweite scheitert erst jetzt.
-        a1 = beantragen(t.w, t.k1, serial_no="HN-900").json["antraege"][0]["id"]
+        a1 = beantragen(t.p, t.k1, serial_no="HN-900").json["antrag"]["id"]
         k3 = neuer_artikel(t.w, t.ids["hms"], t.lager, serial_no="AN-300")["id"]
         pruefen(t.p, k3)
-        a2 = beantragen(t.w, k3, serial_no="hn-900").json["antraege"][0]["id"]
-        assert bestaetigen(t.mv, a1).status_code == 200
-        r = bestaetigen(t.mv, a2)
+        a2 = beantragen(t.p, k3, serial_no="hn-900").json["antrag"]["id"]
+        assert bestaetigen(t.w, a1).status_code == 200
+        r = bestaetigen(t.w, a2)
         assert r.status_code == 409 and "gibt es bei diesem Produkt schon" in r.json["error"], r.get_json()
         assert antraege(t.app, k3)[0]["status"] == "offen" and item(t.app, k3)["serial_no"] == "AN-300"
-        d = {x["id"]: x for x in t.mv.get("/api/material/antraege").json["antraege"]}
+        d = {x["id"]: x for x in t.w.get("/api/material/antraege").json["antraege"]}
         assert d[a2]["passt"] is True
         # Ablehnen: Begründung Pflicht, Artikel unverändert, Journal.
-        assert ablehnen(t.mv, a2).status_code == 400 and ablehnen(t.mv, a2, antwort=" ").status_code == 400
-        r = ablehnen(t.mv, a2, antwort="Platzhalter: Nummer vergeben")
+        assert ablehnen(t.w, a2).status_code == 400 and ablehnen(t.w, a2, antwort=" ").status_code == 400
+        r = ablehnen(t.w, a2, antwort="Platzhalter: Nummer vergeben")
         assert r.status_code == 200 and r.json["antrag"]["status"] == "abgelehnt", r.get_json()
         assert item(t.app, k3)["serial_no"] == "AN-300" and antraege(t.app, k3)[0]["applied_at"] is None
         j = journal(t.app, k3, "antrag_abgelehnt")
         assert j[0]["nachher"] == {"antrag": a2, "feld": "Seriennummer", "ablehnung": "Platzhalter: Nummer vergeben"}, j
-        # Danach ist ein neuer Antrag fürs selbe Feld möglich.
+        # Danach ist ein neuer Antrag möglich.
         assert beantragen(t.w, k3, serial_no="HN-901").status_code == 201
 
         # Stand geändert (an Dienst und Trigger vorbei nachgestellt): bestätigen 409, ablehnen geht.
-        a3 = beantragen(t.w, t.s1, serial_no="AN-S9").json["antraege"][0]["id"]
+        a3 = beantragen(t.p, t.s1, serial_no="AN-S9").json["antrag"]["id"]
         _ohne_trigger(t.app, "UPDATE mat_item SET serial_no = 'AN-S8' WHERE id = ?", (t.s1,))
-        assert t.mv.get("/api/material/antraege").json["antraege"][-1]["passt"] is False
-        r = bestaetigen(t.mv, a3)
+        assert [x["passt"] for x in t.w.get("/api/material/antraege").json["antraege"] if x["id"] == a3] == [False]
+        r = bestaetigen(t.w, a3)
         assert r.status_code == 409 and "nicht mehr den Wert" in r.json["error"], r.get_json()
-        assert ablehnen(t.mv, a3, antwort="Platzhalter: Stand geändert").status_code == 200
+        assert ablehnen(t.w, a3, antwort="Platzhalter: Stand geändert").status_code == 200
         # Ausgesondert nach dem Antrag: nur noch ablehnen.
-        a4 = beantragen(t.w, t.s1, manufactured_on="2022-05").json["antraege"][0]["id"]
+        a4 = beantragen(t.p, t.s1, manufactured_on="2022-05").json["antrag"]["id"]
         sql(t.app, "UPDATE mat_item SET lock_state = 'ausgesondert' WHERE id = ?", (t.s1,))
-        r = bestaetigen(t.mv, a4)
+        r = bestaetigen(t.w, a4)
         assert r.status_code == 409 and "nur noch ablehnen" in r.json["error"], r.get_json()
-        assert ablehnen(t.mv, a4, antwort="Platzhalter: ausgesondert").status_code == 200
+        assert ablehnen(t.w, a4, antwort="Platzhalter: ausgesondert").status_code == 200
 
-        # Die Material-Verwaltung beantragt (sie verwaltet alles) und bestätigt selbst – mit Journal.
+        # Die Material-Verwaltung beantragt (sie verwaltet alles), entscheiden darf sie ohne eigene Verwalterfreigabe nicht.
         r = beantragen(t.mv, t.fb, serial_no="AN-B9")
         assert r.status_code == 409 and "noch nicht geprüft" in r.json["error"]
-        aid = beantragen(t.mv, t.k1, manufactured_on="2024-01").json["antraege"][0]["id"]
-        lst = t.mv.get("/api/material/antraege").json["antraege"]
-        assert [x["eigen"] for x in lst if x["id"] == aid] == [True]
-        assert bestaetigen(t.mv, aid).status_code == 200
+        aid = beantragen(t.mv, t.k1, manufactured_on="2024-01").json["antrag"]["id"]
+        assert t.mv.get("/api/material/antraege").json["antraege"][0]["eigen"] is True
+        assert bestaetigen(t.mv, aid).status_code == 403
+        assert bestaetigen(t.w, aid).status_code == 200
         j = journal(t.app, t.k1, "antrag_bestaetigt")[-1]
-        assert j["user_name"] == "katalog" and j["nachher"]["beantragt_von"] == "katalog", j
+        assert j["user_name"] == "wart" and j["nachher"]["beantragt_von"] == "katalog", j
         assert item(t.app, t.k1)["manufactured_on"] == "2024-01"
     print("Entscheiden bestanden.")
 
@@ -450,7 +446,7 @@ def _ohne_trigger(app, befehl, args):
     try:
         conn.execute("DROP TRIGGER mat_item_stammdaten_fest")
         conn.execute(befehl, args)
-        conn.execute(models.TRIGGER_17_ARTIKEL[0])
+        conn.execute(models.TRIGGER_23_ARTIKEL[0])
         conn.commit()
     finally:
         conn.close()
@@ -460,15 +456,15 @@ def _ohne_trigger(app, befehl, args):
 
 def test_trigger():
     """An der Schnittstelle vorbei: Eine Änderung nach der ersten Prüfung geht nur mit einem bestätigten, nicht
-    angewendeten Antrag mit genau diesem alten und neuen Wert – und nur einmal; Nachtragen bei Metall geht, bei
-    „sonstiges“ nicht. Anträge: nur offen einfügen, Inhalt fest, einmal entscheiden, nicht löschen, nicht ersetzen,
-    applied_at einmal und nur nach der Bestätigung, Kontokennung nur auf NULL; höchstens ein offener je Feld."""
+    angewendeten Antrag mit genau diesem alten und neuen Wert – und nur einmal; seit Schritt 23 auch kein Nachtragen bei
+    Metall mehr. Anträge: nur offen einfügen, Inhalt fest, einmal entscheiden, nicht löschen, nicht ersetzen, applied_at
+    einmal und nur nach der Bestätigung, Kontokennung nur auf NULL; höchstens ein offener je Artikel."""
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
         conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
         wart = t.k["wart_id"]
 
-        def geht_nicht(befehl, args=(), text="seit der ersten Prüfung fest"):
+        def geht_nicht(befehl, args=(), text="seit seiner ersten Prüfung fest"):
             try:
                 conn.execute(befehl, args)
             except sqlite3.IntegrityError as e:
@@ -483,23 +479,23 @@ def test_trigger():
             return cur.lastrowid
 
         def entscheiden(aid, status="bestaetigt", antwort=""):
-            conn.execute("UPDATE mat_item_change SET status = ?, answer = ?, resolved_by = ?, resolved_by_name = 'katalog', "
-                         "resolved_at = '2026-10-21T09:00:00+00:00' WHERE id = ?", (status, antwort, t.k["katalog_id"], aid))
+            conn.execute("UPDATE mat_item_change SET status = ?, answer = ?, resolved_by = ?, resolved_by_name = 'wart', "
+                         "resolved_at = '2026-10-21T09:00:00+00:00' WHERE id = ?", (status, antwort, wart, aid))
 
         try:
             geht_nicht("UPDATE mat_item SET serial_no = 'AN-T1' WHERE id = ?", (t.k1,))
             # Offener Antrag reicht nicht.
             aid = neu(t.k1, "serial_no", "AN-100", "AN-T1")
             geht_nicht("UPDATE mat_item SET serial_no = 'AN-T1' WHERE id = ?", (t.k1,))
-            # Nur offen einfügbar, nur einer je Feld.
+            # Nur offen einfügbar; je Artikel nur ein offener.
             geht_nicht("INSERT INTO mat_item_change (item_id, field, old_value, new_value, reason, status, created_by_name, "
-                       "created_at, resolved_at, resolved_by_name) VALUES (?, 'manufactured_on', NULL, '2024-01', 'x', "
-                       "'bestaetigt', 'x', 'x', 'x', 'x')", (t.k1,), ANTRAG_FEST)
+                       "created_at, resolved_at, resolved_by_name) VALUES (?, 'manufactured_on', '2024-01', '2023-01', 'x', "
+                       "'bestaetigt', 'x', 'x', 'x', 'x')", (t.g1,), ANTRAG_FEST)
             try:
                 neu(t.k1, "serial_no", "AN-100", "AN-T2")
                 raise AssertionError("zweiter offener Antrag")
             except sqlite3.IntegrityError as e:
-                assert "UNIQUE" in str(e), e
+                assert "höchstens ein offener" in str(e) or "UNIQUE" in str(e), e
             entscheiden(aid)
             # Bestätigt: nur genau dieser Wert …
             geht_nicht("UPDATE mat_item SET serial_no = 'AN-T9' WHERE id = ?", (t.k1,))
@@ -525,12 +521,13 @@ def test_trigger():
             for befehl in ("UPDATE mat_item_change SET reason = 'anders' WHERE id = ?",
                            "UPDATE mat_item_change SET new_value = 'AN-S6' WHERE id = ?",
                            "UPDATE mat_item_change SET created_by_name = 'jemand' WHERE id = ?",
+                           "UPDATE mat_item_change SET group_id = 1 WHERE id = ?",
                            "DELETE FROM mat_item_change WHERE id = ?"):
                 geht_nicht(befehl, (aid3,), ANTRAG_FEST)
             for befehl in ("UPDATE mat_item_change SET status = 'abgelehnt', answer = 'x' WHERE id = ?",
                            "UPDATE mat_item_change SET answer = 'anders' WHERE id = ?",
                            "UPDATE mat_item_change SET resolved_by_name = 'jemand' WHERE id = ?",
-                           f"UPDATE mat_item_change SET resolved_by = {wart} WHERE id = ?",
+                           f"UPDATE mat_item_change SET resolved_by = {t.k['pruefer_id']} WHERE id = ?",
                            "DELETE FROM mat_item_change WHERE id = ?"):
                 geht_nicht(befehl, (aid,), ANTRAG_FEST)
             geht_nicht("INSERT OR REPLACE INTO mat_item_change (id, item_id, field, old_value, new_value, reason, "
@@ -545,66 +542,87 @@ def test_trigger():
                 raise AssertionError("abgelehnt ohne Begründung")
             except sqlite3.IntegrityError as e:
                 assert "CHECK" in str(e), e
-            # Nachtragen: Metall ja (einmal), „sonstiges“ nein; Entfernen gar nicht – auch kein Antrag darauf (Schritt 17).
-            conn.execute("UPDATE mat_item SET manufactured_on = '2023-10' WHERE id = ?", (t.k2,))
-            geht_nicht("UPDATE mat_item SET manufactured_on = '2023-09' WHERE id = ?", (t.k2,))
-            geht_nicht("UPDATE mat_item SET manufactured_on = NULL WHERE id = ?", (t.k2,))
+            # Nachtragen: seit Schritt 23 bei keiner Materialart ohne Antrag (E3); entfernen gar nicht – auch kein Antrag
+            # darauf (Schritt 17).
+            geht_nicht("UPDATE mat_item SET manufactured_on = '2023-10' WHERE id = ?", (t.k2,))
             geht_nicht("UPDATE mat_item SET manufactured_on = '2023-10' WHERE id = ?", (t.s1,))
             for leer in (None, "", "  "):
                 geht_nicht("INSERT INTO mat_item_change (item_id, field, old_value, new_value, reason, created_by, "
                            "created_by_name, created_at) VALUES (?, 'manufactured_on', '2023-10', ?, 'x', ?, 'wart', 'x')",
                            (t.k2, leer, wart), HERST_BLEIBT)
-            aid4 = neu(t.k2, "manufactured_on", "2023-10", "2023-08")
+            aid4 = neu(t.k2, "manufactured_on", None, "2023-10")
             entscheiden(aid4)
-            conn.execute("UPDATE mat_item SET manufactured_on = '2023-08' WHERE id = ?", (t.k2,))
+            conn.execute("UPDATE mat_item SET manufactured_on = '2023-10' WHERE id = ?", (t.k2,))
             geht_nicht("UPDATE mat_item SET manufactured_on = NULL WHERE id = ?", (t.k2,))
             # Ungeprüft: frei wie bisher.
-            conn.execute("UPDATE mat_item SET serial_no = 'AN-NEU9', manufactured_on = NULL WHERE id = ?", (t.neu1,))
+            conn.execute("UPDATE mat_item SET serial_no = 'AN-NEU9', manufactured_on = NULL, purchased_on = '2024-01', "
+                         "interval_months = 6 WHERE id = ?", (t.neu1,))
             conn.commit()
         finally:
             conn.close()
-        assert (item(t.app, t.k1)["serial_no"], item(t.app, t.k2)["manufactured_on"]) == ("AN-T1", "2023-08")
+        assert (item(t.app, t.k1)["serial_no"], item(t.app, t.k2)["manufactured_on"]) == ("AN-T1", "2023-10")
     print("Trigger bestanden.")
 
 
 # --- 6. Mails ------------------------------------------------------------------------------------------------------------
 
 def test_mails():
-    """Neuer Antrag: an die Material-Verwaltung (nicht an den Antragsteller), mit Inventarnummer, alt → neu,
-    Begründung, Link; ohne Material-Verwaltung an die Plattform-Verwaltung. Entscheidung: an den Antragsteller (bestätigt
-    mit Anmerkung, abgelehnt mit Begründung), nicht bei eigener Entscheidung. Umgebungssperre, ohne Mailserver, DEMO:
-    nichts verschickt, je Mail ein Logeintrag, mail false."""
+    """Neuer Antrag: an die zuständigen Materialwarte (nicht an den Antragsteller), mit Inventarnummer, alt → neu,
+    Begründung, Link auf die Liste im Bestand; ohne jedes zuständige Konto an die Material-Verwaltung, ohne sie an die
+    Plattform-Verwaltung. Entscheidung: an den Antragsteller (bestätigt mit Anmerkung, abgelehnt mit Begründung), nicht
+    bei eigener Entscheidung. Umgebungssperre, ohne Mailserver, DEMO: nichts verschickt, je Mail ein Logeintrag, mail
+    false."""
     with post() as liste, tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
-        r = beantragen(t.w, t.s1, serial_no="HN-1", manufactured_on="2023-01", begruendung="Platzhalter Mailtext")
+        r = beantragen(t.p, t.s1, serial_no="HN-1", manufactured_on="2023-01", begruendung="Platzhalter Mailtext")
         assert r.status_code == 201 and r.json["mail"] is True, r.get_json()
-        assert [m[0] for m in liste] == ["katalog@example.org"], liste
+        assert [m[0] for m in liste] == ["wart@example.org"], liste
         an, betreff, text = liste[0]
         inv = item(t.app, t.s1)["inventory_no"]
         assert betreff == f"strömis.de – Änderungsantrag: {inv} (Seriennummer, Herstellung)", betreff
-        for teil in (f"{inv} – Testwerk Sonderteil Gamma", "Gliederung:   OG Musterstadt", "Seriennummer: AN-S1 → HN-1",
-                     "Herstellung:  (leer) → 01/2023", "Platzhalter Mailtext", "wart beantragt",
-                     "https://strömis.de/material/katalog/meldungen?bereich=antraege"):
+        for teil in (f"{inv} – Testwerk Sonderteil Gamma", "Gliederung:    OG Musterstadt", "Seriennummer:  AN-S1 → HN-1",
+                     "Herstellung:   (leer) → 01/2023", "Platzhalter Mailtext", "pruefer beantragt",
+                     "https://strömis.de/material/bestand/antraege", "weil du den Ordner „OG Musterstadt / Lager“ verwaltest"):
             assert teil in text, (teil, text)
-        a_sn, a_hd = [x["id"] for x in r.json["antraege"]]
+        kid = r.json["antrag"]["id"]
         liste.clear()
-        assert bestaetigen(t.mv, a_sn, antwort="Platzhalter Anmerkung").status_code == 200
-        assert ablehnen(t.mv, a_hd, antwort="Platzhalter Ablehnung").status_code == 200
-        assert [m[0] for m in liste] == ["wart@example.org"] * 2, liste
+        assert bestaetigen(t.w, kid, antwort="Platzhalter Anmerkung").status_code == 200
+        assert [m[0] for m in liste] == ["pruefer@example.org"], liste
         assert "Änderungsantrag bestätigt" in liste[0][1] and "Platzhalter Anmerkung" in liste[0][2]
-        assert "Seriennummer: AN-S1 → HN-1" in liste[0][2] and "Protokolle nennen weiter den alten Wert" in liste[0][2]
-        assert "Änderungsantrag abgelehnt" in liste[1][1] and "Platzhalter Ablehnung" in liste[1][2]
-        assert f"https://strömis.de/material/artikel/{t.s1}" in liste[1][2]
-        # Die Material-Verwaltung beantragt selbst: keine Mail an sich; entscheidet selbst: keine Mail.
+        assert "Seriennummer:  AN-S1 → HN-1" in liste[0][2] and "Protokolle nennen weiter den alten Wert" in liste[0][2]
+        kid2 = beantragen(t.p, t.s1, first_use_on="2024-01").json["antrag"]["id"]
         liste.clear()
-        r = beantragen(t.mv, t.k1, serial_no="AN-111")
+        assert ablehnen(t.w, kid2, antwort="Platzhalter Ablehnung").status_code == 200
+        assert [m[0] for m in liste] == ["pruefer@example.org"], liste
+        assert "Änderungsantrag abgelehnt" in liste[0][1] and "Platzhalter Ablehnung" in liste[0][2]
+        assert f"https://strömis.de/material/artikel/{t.s1}" in liste[0][2]
+        # Der Materialwart beantragt selbst: keine Mail an sich (er ist der einzige zuständige) und entscheidet selbst.
+        liste.clear()
+        r = beantragen(t.w, t.k1, serial_no="AN-111")
         assert r.json["mail"] is False and liste == [], (r.get_json(), liste)
-        assert bestaetigen(t.mv, r.json["antraege"][0]["id"]).status_code == 200 and liste == []
-        # Ohne Material-Verwaltung: an die Plattform-Verwaltung.
+        assert bestaetigen(t.w, r.json["antrag"]["id"]).status_code == 200 and liste == []
+        # Die Material-Verwaltung beantragt: Mail an den Materialwart, Bescheid an sie.
+        r = beantragen(t.mv, t.k1, serial_no="AN-112")
+        assert [m[0] for m in liste] == ["wart@example.org"], liste
+        liste.clear()
+        assert bestaetigen(t.w, r.json["antrag"]["id"]).status_code == 200
+        assert [m[0] for m in liste] == ["katalog@example.org"] and "Änderungsantrag bestätigt" in liste[0][1], liste
+        # Ohne zuständiges Konto (die Verwalterfreigabe ist weg): an die Material-Verwaltung, ohne sie an die
+        # Plattform-Verwaltung.
+        sql(t.app, "UPDATE mat_folder_grant SET permission = 'lesen' WHERE user_id = ? AND permission = 'verwalten'",
+            (t.k["wart_id"],))
+        liste.clear()
+        r = beantragen(t.p, t.s1, purchased_on="2024-02")
+        assert [m[0] for m in liste] == ["katalog@example.org"] and "Freigabe „verwalten“ gibst" in liste[0][2], liste
+        assert zurueckziehen(t.p, r.json["antrag"]["id"]).status_code == 200
         sql(t.app, "UPDATE users SET recht_material = 1 WHERE id = ?", (t.k["katalog_id"],))
-        r = beantragen(t.w, t.s1, serial_no="AN-S2")
+        liste.clear()
+        r = beantragen(t.p, t.s1, purchased_on="2024-02")
         assert [m[0] for m in liste] == ["admin@example.org"], liste
+        assert zurueckziehen(t.p, r.json["antrag"]["id"]).status_code == 200
         sql(t.app, "UPDATE users SET recht_material = 2 WHERE id = ?", (t.k["katalog_id"],))
+        sql(t.app, "UPDATE mat_folder_grant SET permission = 'verwalten' WHERE user_id = ? AND permission = 'lesen'",
+            (t.k["wart_id"],))
         # Still: Umgebungssperre und ohne Mailserver.
         from app.material.services import mailprotokoll
         for umg, grund in (({"MATERIAL_ERINNERUNGEN_SPERRE": "1"}, "Umgebungssperre"),
@@ -615,16 +633,15 @@ def test_mails():
                 mailprotokoll.MAILSERVER = lambda: False
             try:
                 with umwelt(**umg), logzeilen(t.app) as log:
-                    r = beantragen(t.w, t.g1, manufactured_on="2023-06", begruendung="Platzhalter still")
+                    r = beantragen(t.p, t.g1, manufactured_on="2023-06", begruendung="Platzhalter still")
                     assert r.status_code == 201 and r.json["mail"] is False, r.get_json()
-                    aid = r.json["antraege"][0]["id"]
-                    assert ablehnen(t.mv, aid, antwort="Platzhalter still zurück").status_code == 200
+                    assert ablehnen(t.w, r.json["antrag"]["id"], antwort="Platzhalter still zurück").status_code == 200
             finally:
                 mailprotokoll.MAILSERVER = alt
             assert liste == [], liste
             still = [z for z in log if f"Mail nicht verschickt ({grund})" in z]
-            assert len(still) == 2 and "katalog@example.org" in still[0] and "Platzhalter still" in still[0], log
-            assert "wart@example.org" in still[1] and "Platzhalter still zurück" in still[1], log
+            assert len(still) == 2 and "wart@example.org" in still[0] and "Platzhalter still" in still[0], log
+            assert "pruefer@example.org" in still[1] and "Platzhalter still zurück" in still[1], log
         # DEMO-Artikel: nur ins Log, mit [DEMO].
         g2, _ = gliederung(t.adm, "DEMO-OG Platzhalter", standard=False)
         sql(t.app, "UPDATE mat_folder SET demo = 1 WHERE id = ?", (g2,))
@@ -643,29 +660,32 @@ def test_mails():
 # --- 7. Artikel, Zahlen, Rückruf, Löschkonzept -------------------------------------------------------------------------
 
 def test_artikel_und_zahlen():
-    """Artikel: offene Anträge mit Inhalt für Materialwart und Prüfer, für die Führungskraft nur Feld und Zeitpunkt;
-    darf_antrag. Zahlen für die Blase (/meldungen) und die Übersicht (/start) nur für die Material-Verwaltung. Seite
-    „Meldungen“ mit bereich=antraege. Rückruf trifft die neue Seriennummer, nicht mehr die alte."""
+    """Artikel: offene Anträge mit Inhalt für Materialwart, Prüfer und Material-Verwaltung, für die Führungskraft nur
+    Felder und Zeitpunkt; darf_antrag nur ohne offenen Antrag. Zahlen für die Blase (/antraege) und die Übersicht (/start)
+    für jeden, der entscheiden darf; die Produktmeldungen zählen sie nicht mehr. Alte Adresse leitet weiter. Rückruf trifft
+    die neue Seriennummer, nicht mehr die alte."""
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
-        aid = beantragen(t.w, t.k2, serial_no="HN-555", begruendung="Platzhalter sichtbar").json["antraege"][0]["id"]
+        aid = beantragen(t.p, t.k2, serial_no="HN-555", begruendung="Platzhalter sichtbar").json["antrag"]["id"]
         for c, inhalt in ((t.w, True), (t.p, True), (t.mv, True), (t.f, False)):
             a = lesen(c, t.k2)
             x = a["antraege"][0]
-            assert (x["id"], x["feld"], x["inhalt"]) == (aid, "serial_no", inhalt), x
-            assert (x["begruendung"], x["antragsteller"]) == (("Platzhalter sichtbar", "wart") if inhalt else (None, None))
-            assert a["darf_antrag"] is inhalt, (c, a["darf_antrag"])
-        assert t.mv.get("/api/material/meldungen?status=offen").json["antraege_offen"] == 1
-        assert t.w.get("/api/material/meldungen?status=offen").json["antraege_offen"] is None
-        assert t.mv.get("/api/material/start").json["antraege_offen"] == 1
-        assert t.w.get("/api/material/start").json["antraege_offen"] is None
-        assert t.mv.get("/api/material/antraege").json["meldungen_offen"] == 0
+            assert (x["id"], x["aenderungen"][0]["feld"], x["inhalt"]) == (aid, "serial_no", inhalt), x
+            assert (x["begruendung"], x["antragsteller"]) == (("Platzhalter sichtbar", "pruefer") if inhalt else (None, None))
+            assert a["darf_antrag"] is False and a["antrag_offen"] is True, (c, a["darf_antrag"])
+        assert lesen(t.w, t.k1)["darf_antrag"] is True and lesen(t.f, t.k1)["darf_antrag"] is False
+        assert "antraege_offen" not in t.mv.get("/api/material/meldungen?status=offen").json
+        assert t.w.get("/api/material/start").json["antraege_offen"] == 1
+        for c in (t.mv, t.p, t.f):
+            assert c.get("/api/material/start").json["antraege_offen"] == 0
+        assert t.w.get("/api/material/antraege").json["zu_entscheiden"] == 1
+        r = t.w.get("/material/katalog/meldungen?bereich=antraege")
+        assert r.status_code == 302 and r.headers["Location"].endswith("/material/bestand/antraege")
         import html as html_mod
-        for adresse, soll in (("?bereich=antraege", "antraege"), ("?bereich=x", "produkte"), ("", "produkte")):
-            seite = html_mod.unescape(t.w.get(f"/material/katalog/meldungen{adresse}").get_data(as_text=True))
-            assert f'"bereich": "{soll}"' in seite, (adresse, seite[:1500])
+        seite = html_mod.unescape(t.w.get("/material/katalog/meldungen").get_data(as_text=True))
+        assert '"bereich"' not in seite and "meldungen" in seite
         # Rückruf mit der neuen Nummer – vor der Bestätigung trifft er nicht, danach schon; die alte trifft nicht mehr.
-        assert bestaetigen(t.mv, aid).status_code == 200
+        assert bestaetigen(t.w, aid).status_code == 200
         r = t.mv.post(f"/api/material/produkte/{t.ids['hms']}/rueckrufe", headers=H,
                       json={"title": "Platzhalter-Rückruf", "serials": f"HN-555\n{t.str_nr}", "mail": False})
         assert r.status_code == 201, r.get_json()
@@ -679,20 +699,19 @@ def test_loeschkonzept():
     Kennungen sind NULL, Journal mit Namen und Inhalten unverändert."""
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
-        a1 = beantragen(t.p, t.k1, serial_no="AN-150").json["antraege"][0]["id"]
+        a1 = beantragen(t.p, t.k1, serial_no="AN-150").json["antrag"]["id"]
         beantragen(t.p, t.g1, manufactured_on="2023-08")
-        assert bestaetigen(t.mv, a1).status_code == 200
+        assert bestaetigen(t.w, a1).status_code == 200
         f = t.adm.get(f"/api/admin/users/{t.k['pruefer_id']}/material-folgen").json
         assert f["antraege"] == 2, f
-        assert t.adm.get(f"/api/admin/users/{t.k['katalog_id']}/material-folgen").json["antraege"] == 1
+        assert t.adm.get(f"/api/admin/users/{t.k['wart_id']}/material-folgen").json["antraege"] == 1
         assert t.adm.get(f"/api/admin/users/{t.k['fuehrung_id']}/material-folgen").json["antraege"] == 0
         journal_sql = "SELECT id, entity, entity_id, user_name, action, before_json, after_json FROM mat_audit ORDER BY id"
         vorher = zeilen(t.app, journal_sql)
         assert t.adm.delete(f"/api/admin/users/{t.k['pruefer_id']}", headers=H).status_code == 200
-        assert t.adm.delete(f"/api/admin/users/{t.k['katalog_id']}", headers=H).status_code == 200
         z = zeilen(t.app, "SELECT * FROM mat_item_change ORDER BY id")
         assert [(x["created_by"], x["created_by_name"], x["resolved_by"], x["resolved_by_name"]) for x in z] == [
-            (None, "pruefer", None, "katalog"), (None, "pruefer", None, "")], z
+            (None, "pruefer", t.k["wart_id"], "wart"), (None, "pruefer", None, "")], z
         nachher = zeilen(t.app, journal_sql)
         assert nachher[:len(vorher)] == vorher             # Namen und Inhalte bleiben (die Kontokennung geht auf NULL)
     print("Löschkonzept bestanden.")
@@ -721,9 +740,9 @@ def _zahlen(pfad):
 
 
 def test_migration_15():
-    """Frisch: Version 15, Tabelle, alle Trigger, der Artikeltrigger in der neuen Fassung. 14 → 15 (Tabelle und Trigger
-    entfernt, Trigger aus Schritt 14 wieder angelegt): Daten unverändert, Trigger ersetzt, wirkt; zweiter Lauf ohne
-    Änderung. 7 → 15 an einer Kopie (wenn angegeben): Zahlen wie 7 → 14, die Tabelle leer."""
+    """Frisch: Version 15 (heute die Endversion), Tabelle, alle Trigger, der Artikeltrigger in der neuen Fassung. 14 →
+    Ende (Tabelle und Trigger entfernt, Trigger aus Schritt 14 wieder angelegt): Daten unverändert, Trigger ersetzt,
+    wirkt; zweiter Lauf ohne Änderung. 7 → 15 an einer Kopie (wenn angegeben): Zahlen wie 7 → 14, die Tabelle leer."""
     from app.material import models
     with tempfile.TemporaryDirectory() as tmp:
         make_app(tmp)
@@ -731,10 +750,10 @@ def test_migration_15():
         version, trigger, tabellen = _schema(pfad)
         assert version == endversion() and "mat_item_change" in tabellen, (version, tabellen)
         assert TRIGGER_NEU <= set(trigger) and "mat_item_change" in trigger["mat_item_stammdaten_fest"], trigger
-        # Stand 14 nachstellen.
+        # Stand 14 nachstellen – samt den Triggern späterer Schritte, die mat_item_change lesen (Schritt 23).
         conn = sqlite3.connect(pfad)
         conn.execute("DROP TABLE mat_item_change")
-        for n in TRIGGER_NEU:
+        for n in TRIGGER_NEU | TRIGGER_23 | {"mat_item_produkt_fest"}:
             conn.execute(f"DROP TRIGGER IF EXISTS {n}")
         for befehl in models.TRIGGER_14:
             conn.execute(befehl)
@@ -755,7 +774,8 @@ def test_migration_15():
         n = conn.total_changes
         models._schritt_15(conn)
         models._schritt_16(conn)
-        models._schritt_17(conn)                   # ersetzt mat_item_stammdaten_fest wieder durch die Fassung aus 17
+        models._schritt_17(conn)
+        models._schritt_23(conn)                   # ersetzt die Artikeltrigger wieder durch die Fassung aus 23
         assert conn.total_changes == n and _schema_in(conn) == trigger
         conn.rollback()
         conn.close()
@@ -767,10 +787,9 @@ def test_migration_15():
             make_app(tmp15)
             v14, t14, _ = _schema(os.path.join(tmp14, "stroemis.db"))
             v15, t15, tab15 = _schema(os.path.join(tmp15, "stroemis.db"))
-            assert (v14, v15) == ("14", endversion()) and set(t15) == set(t14) | TRIGGER_NEU | TRIGGER_16 | TRIGGER_17, (
-                v14, v15)
+            assert v14 == "14" and v15 == endversion() and TRIGGER_NEU | TRIGGER_16 | TRIGGER_17 | TRIGGER_23 <= set(t15)
             z14, z15 = _zahlen(os.path.join(tmp14, "stroemis.db")), _zahlen(os.path.join(tmp15, "stroemis.db"))
-            assert z15.pop("mat_item_change") == 0 and z15 == z14, (z14, z15)
+            assert z15.pop("mat_item_change") == 0, (z14, z15)
             # Auf den echten Daten: ein geprüfter Artikel bleibt fest.
             conn = sqlite3.connect(os.path.join(tmp15, "stroemis.db"))
             try:
@@ -783,7 +802,7 @@ def test_migration_15():
                         pass
             finally:
                 conn.close()
-        print("Migration 7 → 15 aus der Kopie bestanden.")
+        print("Migration 7 → Ende aus der Kopie bestanden.")
     else:
         print("Migration 7 → 15 übersprungen (MATERIAL_KOPIE_STAND_7 nicht gesetzt).")
     print("Migration 15 bestanden.")
@@ -796,45 +815,43 @@ def _schema_in(conn):
 # --- 9. Oberfläche (statisch) ----------------------------------------------------------------------------------------
 
 def test_oberflaeche_statisch():
-    """material.js: Dialog „Bearbeiten“ mit Nachtragen (Metall) und grauem „Änderung beantragen …“, offener Antrag als
-    Hinweis; Antragsdialog mit Begründung und EINEM roten Knopf „Antrag senden“; Artikelseite für Prüfer ohne
-    Verwalterrecht; Meldungen mit dem Bereich „Änderungsanträge“, Karten nur mit grauen Knöpfen, Rückfrage „Bestätigen“
-    als roter Hauptknopf, „Ablehnen“ endgültig (rot umrandet); Blase zählt beides. Keine btn ghost. admin.js nennt die
-    Anträge beim Löschen; CSS für Marke und Bereichswahl."""
+    """material.js: Dialog „Bearbeiten“ mit schreibgeschütztem Block und grauem „Änderung beantragen …“, offener Antrag als
+    Hinweis; Antragsdialog mit Begründung und EINEM roten Knopf „Antrag senden“; Artikelseite: „Bearbeiten“ auch für
+    Prüfer, „Änderung beantragen …“ ohne Hilfetext darunter; Liste „Änderungsanträge“ mit Karten nur mit grauen
+    Knöpfen, Rückfrage „Bestätigen“ als roter Hauptknopf, „Ablehnen“ endgültig (rot umrandet); Blase am Knopf im
+    Bestand. Keine btn ghost. admin.js nennt die Anträge beim Löschen; CSS für Marke und Liste."""
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
     css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
     admin = open(os.path.join(wurzel, "app/static/js/admin.js"), encoding="utf-8").read()
     dlg = js[js.index("function artikelDialog(a,"):js.index("/* --- Änderungsanträge")]
-    assert "const nachtragen = fest && !!a.herstellung_nachtragbar;" in dlg
-    assert 'datumFeld("ad-herst", null, "monat")' in dlg and "Nur Nachtragen möglich" in dlg
+    assert "const gesperrt = fest || nurDirekt;" in dlg and "const nurDirekt = !(a.darf || {}).verwalten;" in dlg
     assert ('<button class="btn secondary small" type="button" id="ad-antrag">Änderung beantragen …</button>' in dlg
             and "antragMoeglich(a)" in dlg and "offen.map(antragOffenHtml)" in dlg)
-    assert "} else if (nachtragen) {" in dlg and "if (nach) daten.manufactured_on = nach;" in dlg
-    block = js[js.index("/* --- Änderungsanträge"):js.index("/* --- Artikel anlegen")]
+    assert dlg.count('class="btn"') == 1 and '<button class="btn" id="ad-ok" type="button">Speichern</button>' in dlg
+    block = js[js.index("/* --- Änderungsanträge"):js.index("/* Ein Teil eines Sets als Block")]
     antrag_dlg = block[block.index("function antragDialog(a)"):]
     assert antrag_dlg.count('class="btn"') == 1 and '<button class="btn" id="aa-ok" type="button">Antrag senden</button>' in antrag_dlg
     assert 'id="aa-grund"' in antrag_dlg and "Begründung (Pflicht)" in antrag_dlg and "/antrag`" in antrag_dlg
-    assert "wartet auf die Material-Verwaltung" in block
+    assert "wartet auf einen Materialwart des Ordners" in block and "Material-Verwaltung bestätigt" not in block
     seite = js[js.index("async function artikel()"):js.index("function artikelDialog(a,")]
-    assert "antragMoeglich(a) && !darfPflegen" in seite and 'data-act="antrag">Änderung beantragen …</button>' in seite
-    m = js[js.index("async function meldungen()"):js.index("function zuordnenDialog(m, danach)")]
-    assert ">Änderungsanträge${zahl(nAntraege)}</button>" in m and "async function antraegeZeichnen()" in m
-    karte = m[m.index("function antragKarte(x, bearbeiten)"):m.index("function antragBestaetigenDialog")]
+    assert "const darfDirekt = Boolean(darf.verwalten || darf.pruefen)" in seite
+    assert "${antragMoeglich(a) ? '<div class=\"btn-row\"><button class=\"btn secondary small\" type=\"button\" data-act=\"antrag\">Änderung beantragen …</button></div>' : \"\"}</section>" in seite
+    karte = js[js.index("function antragKarte(x)"):js.index("function antragBestaetigenDialog")]
     assert 'class="btn secondary small" data-act="bestaetigen"' in karte and 'data-act="antrag-ablehnen"' in karte
-    assert 'class="btn"' not in karte and "btn danger" not in karte
-    best = m[m.index("function antragBestaetigenDialog"):m.index("function antragAblehnenDialog")]
+    assert 'class="btn"' not in karte and "btn danger" not in karte and "x.entscheiden && geht" in karte
+    best = js[js.index("function antragBestaetigenDialog"):js.index("function antragAblehnenDialog")]
     assert best.count('class="btn"') == 1 and '<button class="btn" id="ba-ok" type="button">Bestätigen</button>' in best
-    abl = m[m.index("function antragAblehnenDialog"):]
+    abl = js[js.index("function antragAblehnenDialog"):js.index("function zuordnenDialog")]
     assert '<button class="btn danger" id="aa-ablehnen" type="button">Ablehnen</button>' in abl and 'class="btn"' not in abl
     assert "btn ghost" not in js
-    zaehlen = js[js.index("async function meldungenZaehlen(el)"):]
-    assert "(d.offen || 0) + (d.antraege_offen || 0)" in zaehlen[:800]
-    assert "d.antraege_offen ? `<p class=\"notice\"><a href=\"/material/katalog/meldungen?bereich=antraege\">" in js
+    zaehlen = js[js.index("async function antraegeZaehlen(el)"):]
+    assert "zu_entscheiden" in zaehlen[:600] and '"99+"' in zaehlen[:600]
+    assert "d.antraege_offen ? `<p class=\"notice\"><a href=\"/material/bestand/antraege\">" in js
     for x in ("antrag_gestellt:", "antrag_bestaetigt:", "antrag_abgelehnt:", "beantragt_von:", "ablehnung:"):
         assert x in js, x
     assert '"Änderungsantrag behält", "Änderungsanträge behalten"' in admin
-    for x in (".mat-mstatus.m-bestaetigt", ".mat-meldung.m-bestaetigt", ".mat-bereiche {", ".mat-antrag-offen"):
+    for x in (".mat-mstatus.m-bestaetigt", ".mat-meldung.m-bestaetigt", ".mat-antrag-aenderungen", ".mat-antrag-offen"):
         assert x in css, x
     from app.material.services import beschriftung
     assert beschriftung.AKTION["antrag_bestaetigt"] == "Änderung bestätigt (Antrag)" and beschriftung.FELD["antrag"]
@@ -856,10 +873,10 @@ def test_leser_ohne_inhalt():
     alles."""
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
-        aid = beantragen(t.p, t.k1, serial_no="AN-L1", begruendung="Platzhalter Begründung L").json["antraege"][0]["id"]
-        assert bestaetigen(t.mv, aid, antwort="Platzhalter Anmerkung L").status_code == 200
-        aid = beantragen(t.w, t.s1, serial_no="AN-L2", begruendung="Platzhalter Begründung M").json["antraege"][0]["id"]
-        assert ablehnen(t.mv, aid, antwort="Platzhalter Ablehnung M").status_code == 200
+        aid = beantragen(t.p, t.k1, serial_no="AN-L1", begruendung="Platzhalter Begründung L").json["antrag"]["id"]
+        assert bestaetigen(t.w, aid, antwort="Platzhalter Anmerkung L").status_code == 200
+        aid = beantragen(t.p, t.s1, serial_no="AN-L2", begruendung="Platzhalter Begründung M").json["antrag"]["id"]
+        assert ablehnen(t.w, aid, antwort="Platzhalter Ablehnung M").status_code == 200
         geheim = ("Platzhalter Begründung", "Platzhalter Anmerkung", "Platzhalter Ablehnung")
         for iid in (t.k1, t.s1):
             f = lesen(t.f, iid)
@@ -873,7 +890,7 @@ def test_leser_ohne_inhalt():
             # Wer beantragen darf, sieht alles.
             for c in (t.w, t.p):
                 voll = [e for e in lesen(c, iid)["journal"] if e["action"].startswith("antrag_")]
-                assert {e["user_name"] for e in voll} == {"pruefer" if iid == t.k1 else "wart", "katalog"}, voll
+                assert {e["user_name"] for e in voll} == {"pruefer", "wart"}, voll
                 assert any("begruendung" in e["nachher"] for e in voll)
         f = [e for e in lesen(t.f, t.k1)["journal"] if e["action"] == "antrag_bestaetigt"][0]
         assert (f["vorher"], f["nachher"]) == ({"serial_no": "AN-100"}, {"serial_no": "AN-L1", "antrag": f["nachher"]["antrag"]}), f
@@ -895,7 +912,7 @@ def test_leser_ohne_inhalt():
 def test_bescheid_nur_mit_recht():
     """Befund 2: Den Bescheid bekommt der Antragsteller nur, solange er den Artikel liest (Grund- oder Prüfrecht) – nach
     abgelaufener befristeter Prüffreigabe oder nach dem Verschieben in eine fremde Gliederung gar keinen; liest er ihn
-    noch, wie bisher."""
+    noch, wie bisher. Entscheiden die Materialwarte des Ordners, in dem der Artikel gerade liegt."""
     from datetime import date, timedelta
     from test_material import freigeben, neues_konto
     with post() as liste, tempfile.TemporaryDirectory() as tmp:
@@ -904,35 +921,38 @@ def test_bescheid_nur_mit_recht():
         freigeben(t.adm, t.lager, ext_id, "pruefen", bis=(date.today() + timedelta(days=30)).isoformat())
         r = beantragen(ext, t.k1, serial_no="AN-EXT1")
         assert r.status_code == 201, r.get_json()
-        aid = r.json["antraege"][0]["id"]
+        aid = r.json["antrag"]["id"]
         # Mit Recht: Bescheid wie bisher.
         liste.clear()
-        assert ablehnen(t.mv, aid, antwort="Platzhalter Grund 1").status_code == 200
+        assert ablehnen(t.w, aid, antwort="Platzhalter Grund 1").status_code == 200
         assert [m[0] for m in liste] == ["extern@example.org"], liste
-        aid = beantragen(ext, t.k1, serial_no="AN-EXT2").json["antraege"][0]["id"]
+        aid = beantragen(ext, t.k1, serial_no="AN-EXT2").json["antrag"]["id"]
         sql(t.app, "UPDATE mat_folder_grant SET valid_until = ? WHERE user_id = ?",
             ((date.today() - timedelta(days=1)).isoformat(), ext_id))
         assert ext.get(f"/api/material/artikel/{t.k1}").status_code == 404
         liste.clear()
         with logzeilen(t.app):
-            assert ablehnen(t.mv, aid, antwort="Platzhalter Grund 2").status_code == 200
+            assert ablehnen(t.w, aid, antwort="Platzhalter Grund 2").status_code == 200
         assert liste == [], liste
-        # Materialwart beantragt, der Artikel wandert in eine fremde Gliederung: keine Mail mit deren Namen.
-        aid = beantragen(t.w, t.s1, serial_no="AN-S1B").json["antraege"][0]["id"]
+        # Materialwart beantragt, der Artikel wandert in eine fremde Gliederung: Dort entscheidet deren Materialwart (hier
+        # die Material-Verwaltung mit eigener Verwalterfreigabe an B); keine Mail mit deren Namen an den Antragsteller.
+        freigeben(t.adm, t.gid_b, t.k["katalog_id"], "verwalten")
+        aid = beantragen(t.w, t.s1, serial_no="AN-S1B").json["antrag"]["id"]
         lager_b = zeilen(t.app, "SELECT id FROM mat_folder WHERE name = 'Lager B'")[0]["id"]
         r = t.adm.post("/api/material/artikel/verschieben", headers=H, json={"ids": [t.s1], "folder_id": lager_b})
         assert r.status_code == 200, r.get_json()
         assert t.w.get(f"/api/material/artikel/{t.s1}").status_code == 404
+        assert bestaetigen(t.w, aid).status_code == 404                     # liest ihn nicht mehr
         liste.clear()
         assert bestaetigen(t.mv, aid).status_code == 200
         assert liste == [] and item(t.app, t.s1)["serial_no"] == "AN-S1B", liste
         # Zurück im eigenen Bereich: wieder mit Bescheid.
         r = t.adm.post("/api/material/artikel/verschieben", headers=H, json={"ids": [t.s1], "folder_id": t.lager})
         assert r.status_code == 200, r.get_json()
-        aid = beantragen(t.w, t.s1, serial_no="AN-S1C").json["antraege"][0]["id"]
+        aid = beantragen(t.mv, t.s1, serial_no="AN-S1C").json["antrag"]["id"]
         liste.clear()
-        assert bestaetigen(t.mv, aid).status_code == 200
-        assert [m[0] for m in liste] == ["wart@example.org"] and "OG Musterstadt" in liste[0][2], liste
+        assert bestaetigen(t.w, aid).status_code == 200
+        assert [m[0] for m in liste] == ["katalog@example.org"] and "OG Musterstadt" in liste[0][2], liste
     print("Bescheid nur mit Recht bestanden.")
 
 
@@ -1086,26 +1106,26 @@ def test_rueckruf_hinweis():
             rueckrufe[titel] = r.json["rueckruf"]["id"]
         vorher = {x["title"]: x["alle"] for x in lesen(t.w, t.k1)["rueckrufe"]}
         assert vorher == {"Platzhalter-Rückruf alt": False, "Platzhalter-Rückruf alle": True}, vorher
-        aid = beantragen(t.w, t.k1, serial_no="AN-100-K").json["antraege"][0]["id"]
+        aid = beantragen(t.p, t.k1, serial_no="AN-100-K").json["antrag"]["id"]
         erwartet = {"nicht_mehr": [{"id": rueckrufe["Platzhalter-Rückruf alt"], "title": "Platzhalter-Rückruf alt"}],
                     "neu": [{"id": rueckrufe["Platzhalter-Rückruf neu"], "title": "Platzhalter-Rückruf neu"}]}
-        karte = [x for x in t.mv.get("/api/material/antraege").json["antraege"] if x["id"] == aid][0]
+        karte = [x for x in t.w.get("/api/material/antraege").json["antraege"] if x["id"] == aid][0]
         assert karte["rueckruf"] == erwartet, karte["rueckruf"]
         assert lesen(t.w, t.k1)["antraege"][0]["rueckruf"] == erwartet
         # Herstelldatum und ein Artikel ohne passende Rückrufe: leer.
-        a2 = beantragen(t.w, t.s1, serial_no="AN-S1X").json["antraege"][0]["id"]
-        x = [y for y in t.mv.get("/api/material/antraege").json["antraege"] if y["id"] == a2][0]
+        a2 = beantragen(t.p, t.s1, serial_no="AN-S1X").json["antrag"]["id"]
+        x = [y for y in t.w.get("/api/material/antraege").json["antraege"] if y["id"] == a2][0]
         assert x["rueckruf"] == {"nicht_mehr": [], "neu": []}, x
-        assert bestaetigen(t.mv, aid).status_code == 200
+        assert bestaetigen(t.w, aid).status_code == 200
         j = journal(t.app, t.k1, "antrag_bestaetigt")[-1]["nachher"]
         assert j["rueckruf_nicht_mehr"] == [f"Platzhalter-Rückruf alt (Nr. {rueckrufe['Platzhalter-Rückruf alt']})"], j
         assert j["rueckruf_neu"] == [f"Platzhalter-Rückruf neu (Nr. {rueckrufe['Platzhalter-Rückruf neu']})"], j
         nachher = sorted(x["title"] for x in lesen(t.w, t.k1)["rueckrufe"])
         assert nachher == ["Platzhalter-Rückruf alle", "Platzhalter-Rückruf neu"], nachher
-        erledigt = [y for y in t.mv.get("/api/material/antraege?status=alle").json["antraege"] if y["id"] == aid][0]
+        erledigt = [y for y in t.w.get("/api/material/antraege?status=alle").json["antraege"] if y["id"] == aid][0]
         assert erledigt["rueckruf"] is None
         # Ohne Rückruf an der Nummer: kein Vermerk.
-        assert bestaetigen(t.mv, a2).status_code == 200
+        assert bestaetigen(t.w, a2).status_code == 200
         j = journal(t.app, t.s1, "antrag_bestaetigt")[-1]["nachher"]
         assert "rueckruf_nicht_mehr" not in j and "rueckruf_neu" not in j, j
         from app.material.services import beschriftung
@@ -1116,38 +1136,42 @@ def test_rueckruf_hinweis():
 def test_sammelprotokoll_vormals():
     """Befund 6: Hat ein bestätigter Antrag die Seriennummer nach dem Einzelprotokoll ersetzt, nennt die Zeile des
     Sammelprotokolls „vormals <alte Nummer> (Änderungsantrag Nr. …)“ – nicht bei einer Änderung vor der Prüfung im
-    Durchgang und nicht bei unverändertem Artikel. Einzelprotokoll und ein schon festgeschriebenes Sammelprotokoll
-    bleiben Byte für Byte, wie sie sind."""
+    Durchgang und nicht bei unverändertem Artikel; beim Produkt ebenso „vormals <Produkt> …“ (seit dem 24.10.2026).
+    Einzelprotokoll und ein schon festgeschriebenes Sammelprotokoll bleiben Byte für Byte, wie sie sind."""
     import hashlib
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
+        hms2 = t.mv.post("/api/material/produkte", json={"category_id": t.ids["karabiner"], "manufacturer": "Testwerk",
+                                                         "model": "HMS Epsilon", "article_no": "HE-1",
+                                                         "material_kind": "metall_hardware", "interval_months": 12}).json["produkt"]["id"]
         kiste = t.w.post("/api/material/ordner", json={"name": "Kiste", "kind": "standort", "parent_id": t.gid}).json["ordner"]["id"]
         a = neuer_artikel(t.w, t.ids["hms"], kiste, serial_no="AN-ALT-1", manufactured_on="2024-01")["id"]
         b = neuer_artikel(t.w, t.ids["hms"], kiste, serial_no="AN-ALT-2", manufactured_on="2024-01")["id"]
         c = neuer_artikel(t.w, t.ids["hms"], kiste, serial_no="AN-ALT-3", manufactured_on="2024-01")["id"]
         # b: vor dem Durchgang geprüft und umbenannt – sein Protokoll im Durchgang nennt schon die neue Nummer.
         pruefen(t.p, b)
-        ab = beantragen(t.w, b, serial_no="AN-NEU-2").json["antraege"][0]["id"]
-        assert bestaetigen(t.mv, ab).status_code == 200
+        ab = beantragen(t.p, b, serial_no="AN-NEU-2").json["antrag"]["id"]
+        assert bestaetigen(t.w, ab).status_code == 200
         rid = t.p.post("/api/material/durchgaenge", json={"folder_id": kiste, "titel": "Platzhalter-Durchgang"}).json["durchgang"]["id"]
         for iid in (a, b, c):
             pruefen(t.p, iid)
         pa = zeilen(t.app, "SELECT id FROM mat_inspection WHERE item_id = ? AND round_id = ?", (a, rid))[0]["id"]
         pdf1 = t.w.get(f"/material/pruefung/{pa}/pdf").data
-        aa = beantragen(t.w, a, serial_no="AN-NEU-1").json["antraege"][0]["id"]
-        assert bestaetigen(t.mv, aa).status_code == 200
+        aa = beantragen(t.p, a, serial_no="AN-NEU-1", product_id=hms2).json["antrag"]["id"]
+        assert bestaetigen(t.w, aa).status_code == 200
         assert t.w.get(f"/material/pruefung/{pa}/pdf").data == pdf1 and "AN-ALT-1" in _pdf_text(pdf1)
         assert t.p.post(f"/api/material/durchgaenge/{rid}/abschliessen", json={}).status_code == 200
         r = t.w.get(f"/material/durchgang/{rid}/sammelprotokoll")
         assert r.status_code == 200 and r.mimetype == "application/pdf"
         text = " ".join(_pdf_text(r.data).split())
         assert "AN-NEU-1" in text and f"vormals AN-ALT-1 (Änderungsantrag Nr. {aa})" in text, text
+        assert f"vormals Testwerk HMS Beta (Änderungsantrag Nr. {aa})" in text and "HMS Epsilon" in text, text
         assert "AN-NEU-2" in text and "vormals AN-ALT-2" not in text and "AN-ALT-3" in text
-        assert text.count("vormals") == 1, text
+        assert text.count("vormals") == 2, text
         # Festgeschrieben: Ein späterer Antrag ändert das Sammelprotokoll nicht mehr.
         summe = hashlib.sha256(r.data).hexdigest()
-        a3 = beantragen(t.w, c, serial_no="AN-NEU-3").json["antraege"][0]["id"]
-        assert bestaetigen(t.mv, a3).status_code == 200
+        a3 = beantragen(t.p, c, serial_no="AN-NEU-3").json["antrag"]["id"]
+        assert bestaetigen(t.w, a3).status_code == 200
         r = t.w.get(f"/material/durchgang/{rid}/sammelprotokoll")
         assert hashlib.sha256(r.data).hexdigest() == summe and "vormals AN-ALT-3" not in _pdf_text(r.data)
         from app.material.services import protokoll
@@ -1162,41 +1186,37 @@ def test_sammelprotokoll_vormals():
 
 
 def test_nachtragen_nach_entfernen():
-    """Befund 5, entschieden am 21.10.2026: Bei Metall direkt nachtragen nur, solange der Artikel noch nie ein
-    Herstelldatum hatte. Entfernen per Antrag geht seit Schritt 17 nicht mehr – die Regel gilt für Altfälle (Stand 16,
-    _altbestand_16): PUT weist ein neues mit 409 und dem Hinweis auf den Antrag ab, der Artikel ist nicht „nachtragbar“,
+    """Befund 5, entschieden am 21.10.2026; seit dem 24.10.2026 (E3) für alle: Ein leeres Herstelldatum trägt nach der
+    ersten Prüfung niemand direkt nach – auch die Altfälle (Stand 16, _altbestand_16: per Antrag entfernt) nicht; PUT 409,
     ein Antrag auf einen neuen Wert geht und wird bestätigt. Der Trigger hält dasselbe an der Schnittstelle vorbei; ein
-    Artikel ohne je ein Herstelldatum bleibt nachtragbar."""
-    from app.material.services.bestand import HERSTELLUNG_ENTFERNT
+    Artikel ohne je ein Herstelldatum ebenso."""
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = _altbestand_16(tmp)
-        make_app(tmp)                                                  # 16 → 17
+        make_app(tmp)                                                  # 16 → Ende
         assert item(t.app, t.k1)["manufactured_on"] is None
         a = lesen(t.w, t.k1)
-        assert a["stammdaten_fest"] and not a["herstellung_nachtragbar"], a["herstellung_nachtragbar"]
-        r = t.w.put(f"/api/material/artikel/{t.k1}", headers=H, json={"manufactured_on": "2010-01"})
-        assert r.status_code == 409 and r.json["error"] == HERSTELLUNG_ENTFERNT, r.get_json()
-        assert "beantragst" in HERSTELLUNG_ENTFERNT and item(t.app, t.k1)["manufactured_on"] is None
+        assert a["stammdaten_fest"] and "herstellung_nachtragbar" not in a
+        for iid in (t.k1, t.k2):
+            r = t.w.put(f"/api/material/artikel/{iid}", headers=H, json={"manufactured_on": "2010-01"})
+            assert r.status_code == 409 and r.json["error"] == FEST, r.get_json()
+            assert item(t.app, iid)["manufactured_on"] is None
         # An der Schnittstelle vorbei: ebenso abgewiesen.
         conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
         try:
-            conn.execute("UPDATE mat_item SET manufactured_on = '2010-01' WHERE id = ?", (t.k1,))
-            raise AssertionError("Trigger lässt Nachtragen nach Entfernen zu")
-        except sqlite3.IntegrityError as e:
-            assert "seit der ersten Prüfung fest" in str(e), e
+            for iid in (t.k1, t.k2):
+                try:
+                    conn.execute("UPDATE mat_item SET manufactured_on = '2010-01' WHERE id = ?", (iid,))
+                    raise AssertionError("Trigger lässt Nachtragen zu")
+                except sqlite3.IntegrityError as e:
+                    assert "seit seiner ersten Prüfung fest" in str(e), e
         finally:
             conn.rollback()
             conn.close()
         # Per Antrag geht es.
         r = beantragen(t.w, t.k1, manufactured_on="2023-06", begruendung="Platzhalter Etikett gefunden")
         assert r.status_code == 201, r.get_json()
-        assert bestaetigen(t.mv, r.json["antraege"][0]["id"]).status_code == 200
+        assert bestaetigen(t.w, r.json["antrag"]["id"]).status_code == 200
         assert item(t.app, t.k1)["manufactured_on"] == "2023-06"
-        # k2 (Metall, nie ein Herstelldatum): weiter direkt nachtragbar, ein Antrag dafür weiter 409.
-        assert lesen(t.w, t.k2)["herstellung_nachtragbar"]
-        assert beantragen(t.w, t.k2, manufactured_on="2023-01").status_code == 409
-        r = t.w.put(f"/api/material/artikel/{t.k2}", headers=H, json={"manufactured_on": "2023-01"})
-        assert r.status_code == 200 and item(t.app, t.k2)["manufactured_on"] == "2023-01", r.get_json()
     print("Nachtragen nach Entfernen bestanden.")
 
 
@@ -1205,21 +1225,19 @@ def test_oberflaeche_pruefung():
     „Bestätigen“ nennen x.rueckruf; Journal-Beschriftungen für die beiden neuen Felder. Knopfregel unverändert."""
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
-    block = js[js.index("/* --- Änderungsanträge"):js.index("/* --- Artikel anlegen")]
+    block = js[js.index("/* --- Änderungsanträge"):js.index("/* Ein Teil eines Sets als Block")]
     assert "const antragRueckruf = (x) =>" in block and "nach der Änderung ${raus.length > 1" in block
     antrag_dlg = block[block.index("function antragDialog(a)"):]
     assert "(a.rueckrufe || []).filter((r) => !r.alle)" in antrag_dlg and "betroffen – nach einer Änderung der Seriennummer" in antrag_dlg
     assert antrag_dlg.count('class="btn"') == 1
-    m = js[js.index("async function meldungen()"):js.index("function zuordnenDialog(m, danach)")]
-    karte = m[m.index("function antragKarte(x, bearbeiten)"):m.index("function antragBestaetigenDialog")]
+    karte = js[js.index("function antragKarte(x)"):js.index("function antragBestaetigenDialog")]
     assert "${offen ? antragRueckruf(x) : \"\"}" in karte and 'class="btn"' not in karte
-    best = m[m.index("function antragBestaetigenDialog"):m.index("function antragAblehnenDialog")]
+    best = js[js.index("function antragBestaetigenDialog"):js.index("function antragAblehnenDialog")]
     assert "${antragRueckruf(x)}" in best and best.count('class="btn"') == 1
     assert 'rueckruf_nicht_mehr: "Rückruf trifft ihn nicht mehr", rueckruf_neu: "Rückruf trifft ihn jetzt"' in js
     tpl = open(os.path.join(wurzel, "app/material/templates/material/pdf/sammelprotokoll.html"), encoding="utf-8").read()
-    assert "{% if a.seriennummer_vormals %}" in tpl
+    assert "{% if a.seriennummer_vormals %}" in tpl and "{% if a.produkt_vormals %}" in tpl
     print("Oberfläche (Prüfung) bestanden.")
-
 
 
 # --- 11. Entscheidungen vom 21.10.2026 zur Prüfung: zurückziehen, Herstelldatum nicht entfernen, Schritt 17 ------------
@@ -1263,15 +1281,15 @@ def _altbestand_16(tmp):
 
 def test_zurueckziehen():
     """GEÄNDERT am 21.10.2026: Den offenen Antrag zieht der Antragsteller selbst zurück – nur seinen eigenen (sonst 404,
-    auch für die Material-Verwaltung), nur offen (sonst 409), nur solange er den Artikel liest (sonst 404). Stand
-    „zurückgezogen“ mit ihm als Handelndem, keine Antwort, keine Mail; Journal „Änderungsantrag zurückgezogen“ (für Leser
-    ohne Namen), auch im Lebenslauf; danach weder bestätigen noch ablehnen; der Zähler der Material-Verwaltung sinkt, unter
-    „erledigt“ steht er; neu beantragen geht. Der Trigger lässt das Zurückziehen nur dem Antragsteller."""
+    auch für Materialwart und Material-Verwaltung), nur offen (sonst 409), nur solange er den Artikel liest (sonst 404).
+    Stand „zurückgezogen“ mit ihm als Handelndem, keine Antwort, keine Mail; Journal „Änderungsantrag zurückgezogen“ (für
+    Leser ohne Namen), auch im Lebenslauf; danach weder bestätigen noch ablehnen; die Zahl der zu entscheidenden sinkt,
+    unter „erledigt“ steht er; neu beantragen geht. Der Trigger lässt das Zurückziehen nur dem Antragsteller."""
     with post() as liste, tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
-        aid = beantragen(t.p, t.k1, serial_no="AN-150").json["antraege"][0]["id"]
-        aid2 = beantragen(t.w, t.k1, manufactured_on="2024-02").json["antraege"][0]["id"]
-        assert t.mv.get("/api/material/antraege").json["offen"] == 2
+        aid = beantragen(t.p, t.k1, serial_no="AN-150").json["antrag"]["id"]
+        aid2 = beantragen(t.w, t.g1, manufactured_on="2023-12").json["antrag"]["id"]
+        assert t.w.get("/api/material/antraege").json["zu_entscheiden"] == 2
         mails = len(liste)
         for c in (t.w, t.mv, t.adm, t.f):
             r = zurueckziehen(c, aid)
@@ -1293,17 +1311,17 @@ def test_zurueckziehen():
         r = zurueckziehen(t.p, aid)
         assert r.status_code == 409 and "schon entschieden" in r.json["error"], r.get_json()
         for f in (bestaetigen, ablehnen):
-            assert f(t.mv, aid, antwort="Platzhalter").status_code == 409
+            assert f(t.w, aid, antwort="Platzhalter").status_code == 409
         # Zähler, Listen, Artikel.
-        d = t.mv.get("/api/material/antraege").json
-        assert d["offen"] == 1 and [x["id"] for x in d["antraege"]] == [aid2]
-        erl = t.mv.get("/api/material/antraege?status=erledigt").json["antraege"]
+        d = t.w.get("/api/material/antraege").json
+        assert d["zu_entscheiden"] == 1 and [x["id"] for x in d["antraege"]] == [aid2]
+        erl = t.w.get("/api/material/antraege?status=erledigt").json["antraege"]
         assert [(x["id"], x["status"]) for x in erl] == [(aid, "zurueckgezogen")], erl
-        assert [(x["id"], x["status"]) for x in t.p.get("/api/material/antraege").json["antraege"]] == [
+        assert [(x["id"], x["status"]) for x in t.p.get("/api/material/antraege?status=alle").json["antraege"]] == [
             (aid, "zurueckgezogen")]
-        a = lesen(t.p, t.k1)
-        assert [(x["id"], x["eigen"]) for x in a["antraege"]] == [(aid2, False)], a["antraege"]
-        assert [(x["id"], x["eigen"]) for x in lesen(t.w, t.k1)["antraege"]] == [(aid2, True)]
+        assert lesen(t.p, t.k1)["antraege"] == [] and [(x["id"], x["eigen"]) for x in lesen(t.p, t.g1)["antraege"]] == [
+            (aid2, False)]
+        assert [(x["id"], x["eigen"]) for x in lesen(t.w, t.g1)["antraege"]] == [(aid2, True)]
         assert beantragen(t.p, t.k1, serial_no="AN-151").status_code == 201
         # Leser: ohne Namen; Lebenslauf nennt den Eintrag.
         e = [x for x in lesen(t.f, t.k1)["journal"] if x["action"] == "antrag_zurueckgezogen"]
@@ -1312,17 +1330,17 @@ def test_zurueckziehen():
         assert "Änderungsantrag zurückgezogen" in " ".join(text.split()), text
         # Materialwart und Material-Verwaltung ziehen ihre eigenen zurück.
         assert zurueckziehen(t.w, aid2).status_code == 200
-        aid3 = beantragen(t.mv, t.g1, manufactured_on="2023-12").json["antraege"][0]["id"]
+        aid3 = beantragen(t.mv, t.g1, manufactured_on="2023-12").json["antrag"]["id"]
         assert zurueckziehen(t.mv, aid3).status_code == 200 and item(t.app, t.g1)["manufactured_on"] == "2024-01"
         # Wer den Artikel nicht mehr liest (in eine fremde Gliederung verschoben): 404 – wie in seiner Liste.
-        aid4 = beantragen(t.p, t.s1, serial_no="AN-S7").json["antraege"][0]["id"]
+        aid4 = beantragen(t.p, t.s1, serial_no="AN-S7").json["antrag"]["id"]
         heimat = item(t.app, t.s1)["folder_id"]
         sql(t.app, "UPDATE mat_item SET folder_id = ? WHERE id = ?", (item(t.app, t.fb)["folder_id"], t.s1))
         assert zurueckziehen(t.p, aid4).status_code == 404
         sql(t.app, "UPDATE mat_item SET folder_id = ? WHERE id = ?", (heimat, t.s1))
         assert zurueckziehen(t.p, aid4).status_code == 200
         # Trigger: zurückziehen nur mit der Kennung des Antragstellers, ohne Antwort; Kontolöschen danach geht.
-        aid5 = beantragen(t.p, t.s1, serial_no="AN-S8").json["antraege"][0]["id"]
+        aid5 = beantragen(t.p, t.s1, serial_no="AN-S8").json["antrag"]["id"]
         conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
         try:
             for wer, antwort in ((t.k["wart_id"], ""), (None, ""), (t.k["pruefer_id"], "Platzhalter")):
@@ -1347,8 +1365,8 @@ def test_zurueckziehen():
 def test_herstellung_nicht_entfernen():
     """GEÄNDERT am 21.10.2026: Das Herstelldatum lässt sich nach der ersten Prüfung nicht entfernen, auch nicht per Antrag
     – bei jeder Materialart; ändern per Antrag geht weiter. Der Dienst weist herstellung_entfernen und ein leeres Datum
-    beim Bearbeiten ab, die Datenbank einen Antrag mit leerem neuem Herstelldatum und das Leeren des Feldes. Vor der
-    ersten Prüfung bleibt das Feld frei (entfernen und später nachtragen gehen – bestätigt am 21.10.2026)."""
+    ab (beim Bearbeiten und im Antrag), die Datenbank einen Antrag mit leerem neuem Herstelldatum und das Leeren des
+    Feldes. Vor der ersten Prüfung bleibt das Feld frei (entfernen geht); danach nachtragen nur per Antrag (E3)."""
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
         for iid in (t.k1, t.g1):
@@ -1359,40 +1377,41 @@ def test_herstellung_nicht_entfernen():
             assert r.status_code in (400, 409), r.get_json()
             assert item(t.app, iid)["manufactured_on"] is not None
         assert antraege(t.app, t.k1) == [] and antraege(t.app, t.g1) == []
-        # Ein leeres Feld im Antrag heißt „keine Änderung beantragt“.
         r = beantragen(t.w, t.k1, manufactured_on="")
-        assert r.status_code == 400 and "Bitte eine neue Seriennummer" in r.json["error"], r.get_json()
+        assert r.status_code == 400 and HERST_BLEIBT in r.json["error"], r.get_json()
         # Ändern geht.
-        r = beantragen(t.w, t.k1, manufactured_on="2024-01")
-        assert r.status_code == 201 and bestaetigen(t.mv, r.json["antraege"][0]["id"]).status_code == 200
+        r = beantragen(t.p, t.k1, manufactured_on="2024-01")
+        assert r.status_code == 201 and bestaetigen(t.w, r.json["antrag"]["id"]).status_code == 200
         assert item(t.app, t.k1)["manufactured_on"] == "2024-01"
-        # Vor der ersten Prüfung frei: entfernen, später nachtragen.
+        # Vor der ersten Prüfung frei: entfernen; danach nachtragen nur per Antrag.
         r = t.w.put(f"/api/material/artikel/{t.neu1}", headers=H, json={"manufactured_on": "2024-04"})
         assert r.status_code == 200, r.get_json()
         r = t.w.put(f"/api/material/artikel/{t.neu1}", headers=H, json={"manufactured_on": None})
         assert r.status_code == 200 and item(t.app, t.neu1)["manufactured_on"] is None, r.get_json()
         pruefen(t.p, t.neu1)
-        a = lesen(t.w, t.neu1)
-        assert a["herstellung_nachtragbar"], a
         r = t.w.put(f"/api/material/artikel/{t.neu1}", headers=H, json={"manufactured_on": "2024-04"})
-        assert r.status_code == 200 and item(t.app, t.neu1)["manufactured_on"] == "2024-04", r.get_json()
+        assert r.status_code == 409 and item(t.app, t.neu1)["manufactured_on"] is None, r.get_json()
+        r = beantragen(t.w, t.neu1, manufactured_on="2024-04")
+        assert r.status_code == 201 and bestaetigen(t.w, r.json["antrag"]["id"]).status_code == 200
+        assert item(t.app, t.neu1)["manufactured_on"] == "2024-04"
     print("Herstelldatum nicht entfernen bestanden.")
 
 
 def test_migration_17():
-    """Schritt 17: frisch Version 17, CHECK mit „zurückgezogen“, alle Trigger. 16 → 17 an einem Stand 16 mit Anträgen
-    (_altbestand_16): alle Zeilen und Kennungen gleich, AUTOINCREMENT-Stand gleich (die nächste Kennung liegt darüber),
-    Zahlen aller Tabellen gleich, Trigger = Stand 16 + TRIGGER_17, mat_item_stammdaten_fest ersetzt; zweiter Lauf ohne
-    Änderung. Danach: der alte offene Antrag aufs Entfernen lässt sich nicht bestätigen (Dienst 409, Trigger), nur
-    ablehnen oder zurückziehen; der offene auf die Herstellernummer wird bestätigt. 7 → 17 an einer Kopie (wenn
-    angegeben): Zahlen wie 7 → 16, Tabelle leer und umgebaut, Trigger greifen."""
+    """Schritt 17: frisch (heute die Endversion), CHECK mit „zurückgezogen“, alle Trigger. 16 → Ende an einem Stand 16 mit
+    Anträgen (_altbestand_16): alle Zeilen und Kennungen gleich, AUTOINCREMENT-Stand gleich (die nächste Kennung liegt
+    darüber), Zahlen aller Tabellen gleich, Trigger = Stand 16 + die der späteren Schritte, mat_item_stammdaten_fest
+    ersetzt; zweiter Lauf ohne Änderung. Danach: der alte offene Antrag aufs Entfernen lässt sich nicht bestätigen
+    (Dienst 409, Trigger), nur ablehnen oder zurückziehen; der offene auf die Herstellernummer wird bestätigt. 7 → Ende an
+    einer Kopie (wenn angegeben): Tabelle leer und umgebaut, Trigger greifen."""
     from app.material import models
     with tempfile.TemporaryDirectory() as tmp:
         make_app(tmp)
         pfad = os.path.join(tmp, "stroemis.db")
         version, trigger, _ = _schema(pfad)
-        assert version == endversion() and TRIGGER_17 | TRIGGER_NEU | TRIGGER_16 <= set(trigger), trigger   # seit Schritt 18: 18
-        assert "'zurueckgezogen'" in _tabelle_sql(pfad) and "NEW.manufactured_on IS NULL OR" in trigger["mat_item_stammdaten_fest"]
+        assert version == endversion() and TRIGGER_17 | TRIGGER_NEU | TRIGGER_16 | TRIGGER_23 <= set(trigger), trigger
+        assert "'zurueckgezogen'" in _tabelle_sql(pfad)
+        assert "NEW.manufactured_on IS NOT OLD.manufactured_on AND NEW.manufactured_on IS NULL" in trigger["mat_item_stammdaten_fest"]
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = _altbestand_16(tmp)
         pfad = os.path.join(tmp, "stroemis.db")
@@ -1403,12 +1422,12 @@ def test_migration_17():
         vorher = _zahlen(pfad)
         make_app(tmp)
         v17, t17, _ = _schema(pfad)
-        # Schritt 18: keine Trigger; Schritt 19: die zwei des Mailfehler-Protokolls; Schritt 21: die der Sets.
-        assert v17 == endversion() and set(t17) == set(t16) | TRIGGER_17 | TRIGGER_19 | trigger_21(), \
+        # Schritt 18: keine Trigger; 19: die zwei des Mailfehler-Protokolls; 21: die der Sets; 23: die Gruppe.
+        assert v17 == endversion() and set(t17) == set(t16) | TRIGGER_17 | TRIGGER_19 | trigger_21() | TRIGGER_23, \
             (set(t17) ^ set(t16))
         assert t17["mat_item_stammdaten_fest"] != t16["mat_item_stammdaten_fest"]
-        assert t17["mat_item_antrag_angewendet"] == t16["mat_item_antrag_angewendet"]
-        assert "'zurueckgezogen'" in _tabelle_sql(pfad)
+        assert t17["mat_item_antrag_angewendet"] != t16["mat_item_antrag_angewendet"]          # seit Schritt 23 alle Felder
+        assert "'zurueckgezogen'" in _tabelle_sql(pfad) and "'purchased_on'" in _tabelle_sql(pfad)
         assert zeilen(t.app, "SELECT * FROM mat_item_change ORDER BY id") == alt and len(alt) == 3
         assert zeilen(t.app, "SELECT seq FROM sqlite_sequence WHERE name = 'mat_item_change'") == seq
         # Schritt 19 legt mat_mail_fehler (leer) an – sonst keine Zeile anders.
@@ -1416,12 +1435,14 @@ def test_migration_17():
         indizes = {r["name"] for r in zeilen(t.app, "SELECT name FROM sqlite_master WHERE type = 'index' "
                                                     "AND tbl_name = 'mat_item_change' AND sql IS NOT NULL")}
         assert indizes == {"ux_mat_item_change_offen", "idx_mat_item_change_item", "idx_mat_item_change_status",
-                           "idx_mat_item_change_antragsteller", "idx_mat_item_change_entscheider"}, indizes
+                           "idx_mat_item_change_antragsteller", "idx_mat_item_change_entscheider",
+                           "idx_mat_item_change_gruppe"}, indizes
         conn = sqlite3.connect(pfad)
         assert models.migrieren(conn) == models.SCHEMA_VERSION
         conn.execute("BEGIN")
         n = conn.total_changes
         models._schritt_17(conn)
+        models._schritt_23(conn)
         assert conn.total_changes == n and _schema_in(conn) == t17
         conn.rollback()
         # Der alte offene Antrag aufs Entfernen: auch an der Schnittstelle vorbei nicht zu bestätigen.
@@ -1434,26 +1455,23 @@ def test_migration_17():
         finally:
             conn.rollback()
             conn.close()
-        lst = {x["id"]: x for x in t.mv.get("/api/material/antraege").json["antraege"]}
-        assert (lst[t.a_offen]["entfernen"], lst[t.a_offen]["neu"], lst[t.a_sn]["entfernen"]) == (True, None, False)
-        r = bestaetigen(t.mv, t.a_offen)
+        lst = {x["id"]: x for x in t.w.get("/api/material/antraege").json["antraege"]}
+        assert (lst[t.a_offen]["entfernen"], lst[t.a_offen]["aenderungen"][0]["neu"], lst[t.a_sn]["entfernen"]) == (
+            True, None, False)
+        r = bestaetigen(t.w, t.a_offen)
         assert r.status_code == 409 and "nur noch ablehnen" in r.json["error"], r.get_json()
         assert item(t.app, t.k3)["manufactured_on"] == "2023-05"
         assert zurueckziehen(t.w, t.a_offen).status_code == 200
-        assert bestaetigen(t.mv, t.a_sn).status_code == 200 and item(t.app, t.k2)["serial_no"] == "HN-ALT"
-        neu = beantragen(t.p, t.k3, serial_no="AN-301").json["antraege"][0]["id"]
+        assert bestaetigen(t.w, t.a_sn).status_code == 200 and item(t.app, t.k2)["serial_no"] == "HN-ALT"
+        neu = beantragen(t.p, t.k3, serial_no="AN-301").json["antrag"]["id"]
         assert neu > max(x["id"] for x in alt)
     if KOPIE_STAND_7 and os.path.exists(KOPIE_STAND_7):
-        with tempfile.TemporaryDirectory() as tmp16, tempfile.TemporaryDirectory() as tmp17:
-            for d in (tmp16, tmp17):
-                shutil.copyfile(KOPIE_STAND_7, os.path.join(d, "stroemis.db"))
-            bis_schritt(16)(make_app, tmp16)
+        with tempfile.TemporaryDirectory() as tmp17:
+            shutil.copyfile(KOPIE_STAND_7, os.path.join(tmp17, "stroemis.db"))
             make_app(tmp17)
-            v16, t16, _ = _schema(os.path.join(tmp16, "stroemis.db"))
             v17, t17, _ = _schema(os.path.join(tmp17, "stroemis.db"))
-            assert (v16, v17) == ("16", endversion()) and set(t17) == set(t16) | TRIGGER_17, (v16, v17)
-            z16, z17 = _zahlen(os.path.join(tmp16, "stroemis.db")), _zahlen(os.path.join(tmp17, "stroemis.db"))
-            assert z16 == z17 and z17["mat_item_change"] == 0, (z16, z17)
+            assert v17 == endversion() and TRIGGER_17 | TRIGGER_23 <= set(t17), v17
+            assert _zahlen(os.path.join(tmp17, "stroemis.db"))["mat_item_change"] == 0
             assert "'zurueckgezogen'" in _tabelle_sql(os.path.join(tmp17, "stroemis.db"))
             conn = sqlite3.connect(os.path.join(tmp17, "stroemis.db"))
             try:
@@ -1468,7 +1486,7 @@ def test_migration_17():
             finally:
                 conn.rollback()
                 conn.close()
-        print("Migration 7 → 17 aus der Kopie bestanden.")
+        print("Migration 7 → Ende aus der Kopie bestanden.")
     else:
         print("Migration 7 → 17 übersprungen (MATERIAL_KOPIE_STAND_7 nicht gesetzt).")
     print("Migration 17 bestanden.")
@@ -1484,24 +1502,24 @@ def _tabelle_sql(pfad):
 
 def test_oberflaeche_17():
     """Oberfläche zu den Entscheidungen vom 21.10.2026 zur Prüfung: Antragsdialog ohne „Herstelldatum entfernen“; offener
-    eigener Antrag mit grauem „Antrag zurückziehen …“ (Artikelseite und Dialog „Bearbeiten“) und Rückfrage; in den
-    Meldungen „Zurückziehen …“ grau auf der eigenen offenen Karte, „zurückgezogen“ als Marke und Ergebnis; ein alter
-    Antrag aufs Entfernen nur noch ablehnen. Knopfregel unverändert; Journal-Beschriftung; CSS für die Marke."""
+    eigener Antrag mit grauem „Antrag zurückziehen …“ (Artikelseite und Dialog „Bearbeiten“) und Rückfrage; in der Liste
+    „Zurückziehen …“ grau auf der eigenen offenen Karte, „zurückgezogen“ als Marke und Ergebnis; ein alter Antrag aufs
+    Entfernen nur noch ablehnen. Knopfregel unverändert; Journal-Beschriftung; CSS für die Marke."""
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
     css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
-    block = js[js.index("/* --- Änderungsanträge"):js.index("/* --- Artikel anlegen")]
+    block = js[js.index("/* --- Änderungsanträge"):js.index("/* Ein Teil eines Sets als Block")]
     antrag_dlg = block[block.index("function antragDialog(a)"):]
     assert "aa-entfernen" not in js and "herstellung_entfernen" not in js and "Herstelldatum entfernen" not in js
-    assert "nur ändern, nicht entfernen" in antrag_dlg and antrag_dlg.count('class="btn"') == 1
+    assert antrag_dlg.count('class="btn"') == 1
     hinweis = block[block.index("const antragOffenHtml"):block.index("function antragDialog(a)")]
-    assert ('x.eigen ? `<div class="btn-row"><button class="btn secondary small" type="button" data-act="antrag-zurueck" '
-            'data-id="${x.id}">Antrag zurückziehen …</button></div>`' in hinweis)
+    assert ('${x.eigen ? `<button class="btn secondary small" type="button" data-act="antrag-zurueck" '
+            'data-id="${x.id}">Antrag zurückziehen …</button>` : ""}' in hinweis)
     assert "await confirm(" in hinweis and '"Zurückziehen"' in hinweis and "/zurueckziehen`" in hinweis
     seite = js[js.index("async function artikel()"):js.index("function artikelDialog(a,")]
     assert '"antrag-zurueck": (b) => antragZurueckziehen(' in seite
     # Die offenen Anträge stehen als eigener Abschnitt am Anfang der rechten Spalte (Kasten .mat-spalte), vor „QR-Code und
-    # NFC“, nicht mehr unter den Stammdaten; der Knopf „Änderung beantragen …“ bleibt links bei den Stammdaten (22.10.2026).
+    # NFC“, nicht unter den Stammdaten; der Knopf „Änderung beantragen …“ bleibt links bei den Stammdaten (22.10.2026).
     spalten = seite[seite.index('<div class="mat-spalten">'):seite.index('<section class="section"><h2>Prüfungen</h2>')]
     links, rechts = spalten.split('<div class="mat-spalte">')
     assert "antragOffenHtml" not in links and 'data-act="antrag">Änderung beantragen …' in links
@@ -1512,18 +1530,19 @@ def test_oberflaeche_17():
     assert "order:" not in css[css.index(".mat-spalten {"):css.index(".mat-daten {")] and ".mat-spalte { min-width: 0; }" in css
     dlg = js[js.index("function artikelDialog(a,"):js.index("/* --- Änderungsanträge")]
     assert "querySelectorAll('[data-act=\"antrag-zurueck\"]')" in dlg and "dlg.close(); return zeigen(artikel);" in dlg
-    m = js[js.index("async function meldungen()"):js.index("function zuordnenDialog(m, danach)")]
-    karte = m[m.index("function antragKarte(x, bearbeiten)"):m.index("function antragBestaetigenDialog")]
+    karte = js[js.index("function antragKarte(x)"):js.index("function antragBestaetigenDialog")]
     assert 'x.eigen ? `<button type="button" class="btn secondary small" data-act="antrag-zurueck"' in karte
     assert "!x.entfernen" in karte and "Vom Antragsteller zurückgezogen am" in karte
     assert 'class="btn"' not in karte and "btn danger" not in karte
-    assert '"antrag-zurueck": (b) => antragZurueckziehen(antrag(b), zeichnen)' in m
+    seite_a = js[js.index("async function antraegeSeite()"):js.index("function antragKarte(x)")]
+    assert '"antrag-zurueck": (b) => antragZurueckziehen(antrag(b), zeichnen)' in seite_a
     assert 'zurueckgezogen: "zurückgezogen" }' in js and 'antrag_zurueckgezogen: "Änderungsantrag zurückgezogen"' in js
     for x in (".mat-mstatus.m-zurueckgezogen", ".mat-meldung.m-zurueckgezogen", ".mat-antrag-offen .btn-row"):
         assert x in css, x
     from app.material.services import beschriftung
     assert beschriftung.AKTION["antrag_zurueckgezogen"] == "Änderungsantrag zurückgezogen"
     print("Oberfläche (17) bestanden.")
+
 
 if __name__ == "__main__":
     test_nachtragen()

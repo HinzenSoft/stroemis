@@ -273,6 +273,8 @@
     rueckruf_nicht_mehr: "Rückruf trifft ihn nicht mehr", rueckruf_neu: "Rückruf trifft ihn jetzt",
     // Artikellänge (Schritt 20)
     length_m: "Länge (m)", items_have_length: "Artikel haben eine Länge",
+    // Änderungsanträge an alle Stammdaten (Schritt 23): das von Hand vorgezogene Lebensende
+    retire_by_manual: "Lebensende (von Hand vorgezogen)",
     // Sets (Schritt 21)
     is_set: "Set", bestandteile: "Bestandteile", teile: "Teile", set: "Set Nr.", set_inventar: "Set",
     // Sets anlegen und Stückliste übertragen (Schritt 22, Wunsch vom 24.10.2026); Set-Meldung (S8)
@@ -492,7 +494,7 @@
   const NAV = { dashboard: "dashboard", pruefungen: "pruefungen", bestand: "bestand", ordner: "bestand", artikel: "bestand",
                 artikel_neu: "bestand", katalog: "katalog", produkt: "katalog", formular: "katalog", meldungen: "katalog", suche: "",
                 pruefung: "pruefungen", pruefung_neu: "pruefungen", set_lauf: "pruefungen", durchgang: "pruefungen",
-                bestandsimport: "bestand", bericht: "bestand" };
+                bestandsimport: "bestand", bericht: "bestand", antraege: "bestand" };
   $$(".mat-nav a").forEach((a) => a.classList.toggle("aktiv", a.dataset.nav === NAV[ANSICHT]));
   if (ANSICHT === "suche" && DATEN.q) $(".mat-suche input").value = DATEN.q;
   // Ohne Freigabe im Bestand (Mitglied ohne Freigabe, Prüfer ohne Prüffreigabe) fallen nur „Prüfungen“ und „Bestand“ weg. Die
@@ -613,7 +615,8 @@
      der Seite „Bestand“: dort ist der Ordnerbaum selbst der Inhalt. Auf- und Zuklappen merkt sich der Browser, je Baum getrennt. */
   const KATALOG_ANSICHTEN = new Set(["katalog", "produkt", "formular", "meldungen"]);
   const MIT_LEISTE = new Set(["dashboard", "pruefungen", "ordner", "artikel", "artikel_neu", "suche", "pruefung",
-                              "pruefung_neu", "set_lauf", "durchgang", "katalog", "produkt", "formular", "meldungen", "bestandsimport", "bericht"]);
+                              "pruefung_neu", "set_lauf", "durchgang", "katalog", "produkt", "formular", "meldungen", "bestandsimport", "bericht",
+                              "antraege"]);
   const LEISTE_KATALOG = KATALOG_ANSICHTEN.has(ANSICHT);
   const leiste = document.getElementById("mat-side");
   const leisteAuf = document.getElementById("mat-side-auf");
@@ -820,7 +823,7 @@
     if (SET_WERTE[feld] && typeof v === "string") return esc(SET_WERTE[feld][v] || v);
     // Stufe im Modul Material mit Zahl – Einträge vor Schritt 10 meinten die Stufen aus Phase 1 (wie beschriftung.py).
     if (feld === "recht_material" && Number.isInteger(v)) return esc(`${["kein Zugriff", "Mitglied", "Verwaltung"][v] || "?"} (${v})`);
-    if (/_on$|^valid_from$|^retire_by$|^datum$|^begonnen$|^bis$/.test(feld)) return esc(fmtTag(v));
+    if (/_on$|^valid_from$|^retire_by(_manual)?$|^datum$|^begonnen$|^bis$/.test(feld)) return esc(fmtTag(v));
     if (typeof v === "object") return esc(JSON.stringify(v));
     return esc(v);
   }
@@ -1047,8 +1050,8 @@
       ${rueckrufKasten(d.rueckrufe)}
       ${d.meldungen_offen ? `<p class="notice"><a href="/material/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produktmeldung", "offene Produktmeldungen")}</strong></a>
         – Materialwarte warten darauf, Artikel davon anzulegen.</p>` : ""}
-      ${d.antraege_offen ? `<p class="notice"><a href="/material/katalog/meldungen?bereich=antraege"><strong>${plural(d.antraege_offen, "offener Änderungsantrag", "offene Änderungsanträge")}</strong></a>
-        – Seriennummer oder Herstellung nach der ersten Prüfung; bestätigen oder ablehnen.</p>` : ""}
+      ${d.antraege_offen ? `<p class="notice"><a href="/material/bestand/antraege"><strong>${plural(d.antraege_offen, "offener Änderungsantrag", "offene Änderungsanträge")}</strong></a>
+        – Stammdaten nach der ersten Prüfung in Ordnern, die du verwaltest; bestätigen oder ablehnen.</p>` : ""}
       ${nacharbeitHinweis(d.nacharbeit)}
       ${erinnerungHinweise(d.erinnerungen)}
       <div id="mat-freigaben-hinweis"></div>
@@ -1639,13 +1642,15 @@
   async function bestand() {
     const liste = await ordnerBaum();
     inhalt.innerHTML = `<div class="page-head"><h1>Bestand</h1>
-        <div class="btn-row">${DARF.gliederung_anlegen ? '<button class="btn secondary" data-act="gliederung"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Gliederung<span class="k-anlegen"> anlegen</span></span></button>' : ""}</div></div>
+        <div class="btn-row">${DARF.gliederung_anlegen ? '<button class="btn secondary" data-act="gliederung"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Gliederung<span class="k-anlegen"> anlegen</span></span></button>' : ""}
+          ${DARF.verwalten || DARF.pruefen ? '<a class="btn secondary mat-mit-zahl" href="/material/bestand/antraege">Änderungsanträge<span class="mat-meldezahl" id="bst-antraege" hidden></span></a>' : ""}</div></div>
       <p class="help">Oben stehen die Gliederungen, darunter frei verschachtelt Standorte, Fahrzeuge, Sets. Jede Gliederung hat die
         Systemordner „Gesperrt“ und „Ausgesondert“ – dorthin kommen Artikel nur durch eine Sperre oder Aussonderung.
         ${liste.some((o) => o.nur_pfad) ? "Grau: übergeordnete Ordner, in denen du keine Freigabe hast – nur der Weg zu deinen." : ""}</p>
       ${ZAEHLER_LEGENDE}
       ${liste.length ? baumHtml(liste) : leer(DARF.lesen ? "Noch kein Ordner angelegt." : "Du hast noch keine Freigabe im Bestand – der Materialwart deiner Gliederung vergibt sie.")}`;
     aktionen = { gliederung: () => ordnerDialog({ kind: "gliederung" }, null) };
+    antraegeZaehlen($("#bst-antraege"));
   }
 
   /* --- Foto im Dialog (Ordnerfoto, Produktbild – Lieferung 5) ------------------------------------------------
@@ -2488,6 +2493,8 @@
     const p = a.produkt;
     const frei = a.lock_state === "frei";
     const darfPflegen = Boolean(darf.verwalten) && a.lock_state !== "ausgesondert";
+    // „Bearbeiten“ auch für Prüfer (Wunsch vom 24.10.2026, E2): Bemerkung, Länge und nächste Prüfung direkt.
+    const darfDirekt = Boolean(darf.verwalten || darf.pruefen) && a.lock_state !== "ausgesondert";
     const aus = a.lock_state === "ausgesondert";
     const gesperrt = a.lock_state === "gesperrt" || a.lock_state === "verloren";
     const eigenerEntwurf = a.entwurf && a.entwurf.pruefer_id === DARF.uid;
@@ -2573,7 +2580,7 @@
           ${aus || darf.pruefen || sb ? "" : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice small">${pruefHinweis(a)}</p>`
             : '<p class="small muted">Prüfen dürfen Prüfer mit Urkundennummer und Prüffreigabe (Häkchen „Prüfer“ in der Nutzerverwaltung, Urkundennummer im eigenen Profil, Prüffreigabe vom Materialwart).</p>'}
           ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang ${a.durchgang.sichtbar ? `<a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>` : `„${esc(a.durchgang.titel)}“`}.</p>` : ""}
-          <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${frei && !tv ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen && !sb ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}${darf.grund ? lebenslaufKnopf(a) : ""}${setMenue}</div>
+          <div class="btn-row">${darfDirekt ? '<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>' : ""}${darfPflegen ? `${frei && !tv ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen && !sb ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}${darf.grund ? lebenslaufKnopf(a) : ""}${setMenue}</div>
           ${tv && darf.verwalten ? `<p class="help mat-teil-hinweis">Verschieben, Zuordnen und Aussondern gehen nur mit dem ganzen Set – <a href="/material/artikel/${tv.id}">zum Set <span class="mat-inv">${esc(tv.inventory_no)}</span></a>.</p>` : ""}
           ${darf.grund ? `<p class="help mat-nur-touch">Lebenslauf (PDF): ${LEBENSLAUF_TEXT}</p>` : ""}
         </div>
@@ -2597,8 +2604,7 @@
           ${zeile("Prüfformular", a.formular ? `${esc(a.formular.title || "ohne Titel")} · Version ${a.formular.version} <span class="muted">(${esc(a.formular.quelle)}, ${plural(a.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span>` : '<span class="mat-warn">kein aktives Prüfformular – im Katalog anlegen</span>')}
           ${a.notes ? zeile("Bemerkung", `<span class="mat-text">${esc(a.notes)}</span>`) : ""}
         </dl>
-        ${antragMoeglich(a) && !darfPflegen ? `<div class="btn-row"><button class="btn secondary small" type="button" data-act="antrag">Änderung beantragen …</button></div>
-          <p class="help">Seriennummer und Herstellung stehen seit der ersten Prüfung fest – eine Abweichung beantragst du mit Begründung bei der Material-Verwaltung.</p>` : ""}</section>
+        ${antragMoeglich(a) ? '<div class="btn-row"><button class="btn secondary small" type="button" data-act="antrag">Änderung beantragen …</button></div>' : ""}</section>
         <div class="mat-spalte">
         ${(a.antraege || []).length ? `<section class="section mat-antraege-offen"><h2>Offene Änderungsanträge</h2>${a.antraege.map(antragOffenHtml).join("")}</section>` : ""}
         <section class="section"><h2>QR-Code und NFC</h2>
@@ -3266,46 +3272,49 @@
     return out;
   }
 
+  // Seit der ersten Prüfung (stammdaten_fest) stehen die freigabepflichtigen Stammdaten fest (Wunsch vom 24.10.2026,
+  // Entscheidung E1): Produkt, Seriennummer, Herstellung, Kauf, Erstgebrauch, Lebensende und Prüfintervall – oben
+  // schreibgeschützt als Block, geändert wird über „Änderung beantragen …“ (antragDialog). Direkt bleiben die nächste
+  // Prüfung (vorziehen), die Länge und die Bemerkung – auch für Prüfer (E2), die sonst nichts bearbeiten (nurDirekt).
   function artikelDialog(a, produktSuche) {
     const textil = a.produkt.material_kind === "textil";
-    // Seriennummer und Herstellung ganz oben nebeneinander: Seit der ersten abgeschlossenen Prüfung stehen beide fest
-    // (stammdaten_fest) – schreibgeschützt mit sichtbarem Wert, und sie gehen nicht mehr mit (der Server behält sie).
     const fest = !!a.stammdaten_fest;
-    // Ausnahme (Entscheidung vom 21.10.2026): Bei Metall lässt sich ein fehlendes Herstelldatum direkt nachtragen. Jede
-    // andere Änderung geht über „Änderung beantragen …“ an die Material-Verwaltung (antragDialog).
-    const nachtragen = fest && !!a.herstellung_nachtragbar;
+    const nurDirekt = !(a.darf || {}).verwalten;
+    const gesperrt = fest || nurDirekt;        // die freigabepflichtigen Felder nur lesen
     // Länge (Schritt 20): nur, wenn die Kategorie des Produkts eine vorsieht – oder der Artikel noch eine trägt.
     const mitLaenge = !!(a.laenge_moeglich || a.length_m);
-    const sn = fest
-      ? `<label for="ad-sn">Seriennummer${a.serial_generated ? " (vom System)" : ""}</label><input type="text" id="ad-sn" readonly value="${esc(a.serial_no)}">`
-      : `<label for="ad-sn">Seriennummer des Herstellers</label><input type="text" id="ad-sn" ${TASTATUR_NUMMER} value="${a.serial_generated ? "" : esc(a.serial_no)}" placeholder="${a.serial_generated ? esc(a.serial_no) + " (vom System)" : ""}" maxlength="80">`;
-    const herst = nachtragen
-      ? `<label for="ad-herst">Herstellung (Monat)</label>${datumFeld("ad-herst", null, "monat")}`
-      : fest
-        ? `<label for="ad-herst">Herstellung (Monat)</label><input type="text" id="ad-herst" class="mat-datum" readonly value="${esc(datumAnzeige(a.manufactured_on, "monat"))}" placeholder="–">`
-        : `<label for="ad-herst">Herstellung (Monat${textil ? ", Pflicht" : ""})</label>${datumFeld("ad-herst", a.manufactured_on, "monat")}`;
     const offen = a.antraege || [];
-    const mitProdukt = !!a.produkt_aenderbar;
+    const lesefeld = (id, label, wert) => `<div><label for="${id}">${esc(label)}</label><input type="text" id="${id}" readonly value="${esc(wert)}" placeholder="–"></div>`;
+    const festBlock = gesperrt ? `<div class="mat-fest mat-festblock">
+        <div class="field-row"><div class="mat-festprodukt"><label for="ad-produkt-fest">Produkt</label><input type="text" id="ad-produkt-fest" readonly value="${esc(produktName(a.produkt))}"></div></div>
+        <div class="field-row mat-stammzeile">${lesefeld("ad-sn", `Seriennummer${a.serial_generated ? " (vom System)" : ""}`, a.serial_no)}${lesefeld("ad-herst", "Herstellung (Monat)", datumAnzeige(a.manufactured_on, "monat"))}</div>
+        <div class="field-row">${lesefeld("ad-kauf", "Kauf (Monat)", datumAnzeige(a.purchased_on, "monat"))}${lesefeld("ad-erst", "Erstgebrauch (Monat)", datumAnzeige(a.first_use_on, "monat"))}</div>
+        <div class="field-row">${textil ? lesefeld("ad-ende", "Lebensende", datumAnzeige(a.retire_by, "tag")) : ""}${lesefeld("ad-int", "Prüfintervall am Artikel (Monate)", a.interval_months || "")}</div></div>
+      <div class="help">${fest ? "Seit der ersten Prüfung fest – Teil des Prüfnachweises." : "Diese Stammdaten ändert der Materialwart."}</div>
+      ${fest ? `${offen.map(antragOffenHtml).join("")}
+        ${antragMoeglich(a) ? '<div class="btn-row mat-antrag-knopf"><button class="btn secondary small" type="button" id="ad-antrag">Änderung beantragen …</button></div>' : ""}` : ""}` : "";
+    const sn = `<label for="ad-sn">Seriennummer des Herstellers</label><input type="text" id="ad-sn" ${TASTATUR_NUMMER} value="${a.serial_generated ? "" : esc(a.serial_no)}" placeholder="${a.serial_generated ? esc(a.serial_no) + " (vom System)" : ""}" maxlength="80">`;
+    const herst = `<label for="ad-herst">Herstellung (Monat${textil ? ", Pflicht" : ""})</label>${datumFeld("ad-herst", a.manufactured_on, "monat")}`;
+    const mitProdukt = !gesperrt && !!a.produkt_aenderbar;
     const produktFeldHtml = mitProdukt ? `<div class="mat-ad-produkt"><label for="ad-q">Produkt</label>
         <div id="ad-produkt" class="mat-gewaehlt">${produktGewaehltHtml(a.produkt)}${a.entwurf ? "" : ' <button class="lnk" type="button" id="ad-anders">anderes Produkt</button>'}</div>
         ${a.entwurf ? "" : `<div class="mat-produktwahl" id="ad-wahl" hidden><input type="search" id="ad-q" placeholder="Hersteller, Modell, Bemerkung, Artikelnummer …" autocomplete="off" ${TASTATUR_SUCHE}>
           <div id="ad-treffer" class="mat-treffer"></div></div>`}
-        <div class="help" id="ad-produkt-hilfe">${a.entwurf ? esc(PRODUKT_ENTWURF) : "Bis zur ersten Prüfung änderbar – danach steht das Produkt fest."}</div>
+        <div class="help" id="ad-produkt-hilfe">${a.entwurf ? esc(PRODUKT_ENTWURF) : "Bis zur ersten Prüfung änderbar – danach per Änderungsantrag."}</div>
         <p class="error" id="ad-produkt-fehler" hidden></p>
         <div class="notice small" id="ad-folgen" hidden></div></div>` : "";
+    const faellig = `<div ${a.status === "neu" ? "hidden" : ""}><label for="ad-due">Nächste Prüfung</label>${datumFeld("ad-due", a.next_due_on, "tag")}
+          <div class="help">Nur vorziehen – später setzt sie eine Prüfung.</div></div>`;
     dialog(`<h2>Artikel ${esc(a.inventory_no)} bearbeiten</h2>
+      ${festBlock}
       ${produktFeldHtml}
-      <div class="field-row mat-stammzeile${fest ? " mat-fest" : ""}"><div>${sn}</div><div>${herst}</div></div>
-      <div class="help">${fest ? `Seit der ersten Prüfung fest – Teil des Prüfnachweises.${nachtragen ? " Herstellung: Nur Nachtragen möglich – danach steht sie ebenfalls fest." : ""}`
-        : "Seriennummer: Leer lassen behält die Nummer. Eine echte Herstellernummer ersetzt die vom System vergebene."}</div>
-      ${fest ? `${offen.map(antragOffenHtml).join("")}
-        ${antragMoeglich(a) ? '<div class="btn-row mat-antrag-knopf"><button class="btn secondary small" type="button" id="ad-antrag">Änderung beantragen …</button></div>' : ""}` : ""}
+      ${gesperrt ? "" : `<div class="field-row mat-stammzeile"><div>${sn}</div><div>${herst}</div></div>
+      <div class="help">Seriennummer: Leer lassen behält die Nummer. Eine echte Herstellernummer ersetzt die vom System vergebene.</div>
       <div class="field-row"><div><label for="ad-kauf">Kauf (Monat)</label>${datumFeld("ad-kauf", a.purchased_on, "monat")}</div>
-        <div><label for="ad-erst">Erstgebrauch (Monat)</label>${datumFeld("ad-erst", a.first_use_on, "monat")}</div></div>
-      <div class="field-row"><div><label for="ad-int">Prüfintervall am Artikel (Monate)</label><input type="number" id="ad-int" min="1" max="120" value="${a.interval_months || ""}" placeholder="vom Produkt/Ordner"></div>
-        <div ${a.status === "neu" ? "hidden" : ""}><label for="ad-due">Nächste Prüfung</label>${datumFeld("ad-due", a.next_due_on, "tag")}
-          <div class="help">Nur vorziehen – später setzt sie eine Prüfung.</div></div></div>
-      ${textil ? `<div class="field-row" id="ad-ende-zeile"><div><label for="ad-ende">Lebensende</label>${datumFeld("ad-ende", a.retire_by, "tag")}<div class="help">Nur vorziehen. Leer lassen behält das Lebensende.</div></div><div></div></div>` : ""}
+        <div><label for="ad-erst">Erstgebrauch (Monat)</label>${datumFeld("ad-erst", a.first_use_on, "monat")}</div></div>`}
+      <div class="field-row">${gesperrt ? faellig + "<div></div>" : `<div><label for="ad-int">Prüfintervall am Artikel (Monate)</label><input type="number" id="ad-int" min="1" max="120" value="${a.interval_months || ""}" placeholder="vom Produkt/Ordner"></div>
+        ${faellig}`}</div>
+      ${textil && !gesperrt ? `<div class="field-row" id="ad-ende-zeile"><div><label for="ad-ende">Lebensende</label>${datumFeld("ad-ende", a.retire_by, "tag")}<div class="help">Nur vorziehen. Leer lassen behält das Lebensende.</div></div><div></div></div>` : ""}
       ${mitLaenge || mitProdukt ? `<div class="field-row" id="ad-laenge-zeile"${mitLaenge ? "" : " hidden"}><div><label for="ad-laenge">Länge (m)</label><input type="text" id="ad-laenge" class="mat-laenge-feld" inputmode="decimal" autocomplete="off" maxlength="10" placeholder="z. B. 57,5" value="${esc(laengeText(a.length_m, false))}">
         <div class="help">Tatsächliche Länge in Metern, eine Nachkommastelle. Ein Prüfpunkt „Länge“ fragt sie bei jeder Prüfung ab.</div></div><div></div></div>` : ""}
       <label for="ad-notes">Bemerkung</label><textarea id="ad-notes" rows="3" maxlength="4000">${esc(a.notes || "")}</textarea>
@@ -3340,7 +3349,7 @@
         const laenge = (neuesProdukt || a.produkt).laenge_moeglich || (!neuesProdukt && a.length_m);
         $("#ad-laenge-zeile", body).hidden = !laenge;
         const herstLabel = $('label[for="ad-herst"]', body);
-        if (herstLabel && !fest) herstLabel.textContent = `Herstellung (Monat${(neuesProdukt || a.produkt).material_kind === "textil" ? ", Pflicht" : ""})`;
+        if (herstLabel) herstLabel.textContent = `Herstellung (Monat${(neuesProdukt || a.produkt).material_kind === "textil" ? ", Pflicht" : ""})`;
       }
       function suchen() {
         $("#ad-wahl", body).hidden = false;
@@ -3368,26 +3377,21 @@
       });
       $("#ad-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
-        // Ein Tagesdatum (aus der Zeit vor den Monatsfeldern) bleibt erhalten, wenn der Monat derselbe ist.
-        const behalten = (neu, alt) => (neu && alt && alt.slice(0, 7) === neu ? alt : neu || null);
         let daten;
         try {
-          daten = { stand: a.stand,
-                    purchased_on: behalten(datumWert($("#ad-kauf", body), "Kauf"), a.purchased_on),
-                    first_use_on: behalten(datumWert($("#ad-erst", body), "Erstgebrauch"), a.first_use_on),
-                    interval_months: $("#ad-int", body).value || null,
-                    next_due_on: datumWert($("#ad-due", body), "Nächste Prüfung") || null, notes: $("#ad-notes", body).value };
-          if (!fest) {
-            daten.serial_no = $("#ad-sn", body).value;
-            daten.manufactured_on = behalten(datumWert($("#ad-herst", body), "Herstellung"), a.manufactured_on);
-          } else if (nachtragen) {
-            const nach = datumWert($("#ad-herst", body), "Herstellung");
-            if (nach) daten.manufactured_on = nach;
+          // Fest oder Prüfer: nur die direkten Felder – die übrigen schickt der Dialog gar nicht erst.
+          daten = { stand: a.stand, next_due_on: datumWert($("#ad-due", body), "Nächste Prüfung") || null, notes: $("#ad-notes", body).value };
+          if (!gesperrt) {
+            Object.assign(daten, {
+              purchased_on: datumBehalten(datumWert($("#ad-kauf", body), "Kauf"), a.purchased_on),
+              first_use_on: datumBehalten(datumWert($("#ad-erst", body), "Erstgebrauch"), a.first_use_on),
+              interval_months: $("#ad-int", body).value || null, serial_no: $("#ad-sn", body).value,
+              manufactured_on: datumBehalten(datumWert($("#ad-herst", body), "Herstellung"), a.manufactured_on) });
+            if (textil && !neuesProdukt) daten.retire_by = datumWert($("#ad-ende", body), "Lebensende") || null;
+            if (neuesProdukt) daten.product_id = neuesProdukt.id;
           }
-          if (textil && !neuesProdukt) daten.retire_by = datumWert($("#ad-ende", body), "Lebensende") || null;
           const laengeZeile = $("#ad-laenge-zeile", body);
           if (laengeZeile && !laengeZeile.hidden) daten.length_m = $("#ad-laenge", body).value.trim() || null;
-          if (neuesProdukt) daten.product_id = neuesProdukt.id;
         } catch (e) { toast(e.message, true); return; }
         knopf.disabled = true;
         try {
@@ -3399,43 +3403,39 @@
       };
     });
   }
+  // Ein Tagesdatum (aus der Zeit vor den Monatsfeldern) bleibt erhalten, wenn der Monat derselbe ist.
+  const datumBehalten = (neu, alt) => (neu && alt && alt.slice(0, 7) === neu ? alt : neu || null);
 
-  /* --- Änderungsanträge (Entscheidungen vom 21.10.2026) ------------------------------------------------------------
-     Seit der ersten Prüfung stehen Seriennummer und Herstellung fest. Materialwart und Prüfer beantragen eine Änderung
-     mit Begründung; die Material-Verwaltung bestätigt oder lehnt ab (Katalog → Meldungen → Änderungsanträge). Ein
-     offener Antrag je Feld; festgeschriebene Protokolle behalten den alten Wert, Journal und Lebenslauf zeigen die
-     Änderung. Den eigenen offenen Antrag zieht der Antragsteller selbst zurück; das Herstelldatum lässt sich nur ändern,
-     nicht entfernen (Entscheidungen vom 21.10.2026 zur Prüfung). */
+  /* --- Änderungsanträge (Entscheidungen vom 21.10.2026; seit dem 24.10.2026 an allen Stammdaten) --------------------
+     Seit der ersten Prüfung stehen die Stammdaten fest. Materialwart und Prüfer beantragen eine Änderung mit
+     Begründung – alle Felder, die sich ändern sollen, in EINEM Antrag; die Materialwarte des Ordners bestätigen oder
+     lehnen ab (Bestand → Änderungsanträge), den eigenen Antrag eingeschlossen. Ein offener Antrag je Artikel;
+     festgeschriebene Protokolle behalten die alten Werte, Journal und Lebenslauf zeigen die Änderung. Den eigenen
+     offenen Antrag zieht der Antragsteller selbst zurück. Die Werte kommen als Text vom Server (alt_text, neu_text). */
   const ANTRAG_STATUS = { offen: "offen", bestaetigt: "bestätigt", abgelehnt: "abgelehnt", zurueckgezogen: "zurückgezogen" };
-  const antragWert = (x, w) => (w === null || w === undefined || w === "" ? "(leer)" : x.feld === "manufactured_on" ? fmtTag(w) : w);
-  const antragAenderung = (x) => `${esc(x.feld_text)}: ${esc(antragWert(x, x.alt))} → <strong>${esc(antragWert(x, x.neu))}</strong>`;
-  // Bleibt ein Feld zum Beantragen? (Je Feld ein offener Antrag; ein fehlendes Herstelldatum bei Metall trägt man direkt nach.)
-  const antragMoeglich = (a) => {
-    if (!a.darf_antrag) return false;
-    const felder = new Set((a.antraege || []).map((x) => x.feld));
-    return !felder.has("serial_no") || !(felder.has("manufactured_on") || a.herstellung_nachtragbar);
-  };
-  // Laufende Rückrufe, aus denen der Artikel mit der beantragten Seriennummer fiele oder in die er käme (x.rueckruf,
-  // nur bei offenen Anträgen) – auf der Karte und in der Rückfrage „Bestätigen“; das Journal vermerkt es beim Bestätigen.
+  const antragAenderungen = (x, mitPasst) => `<ul class="mat-antrag-aenderungen">${(x.aenderungen || []).map((y) => `<li>${esc(y.feld_text)}: ${esc(y.alt_text)} → <strong>${esc(y.neu_text)}</strong>${mitPasst && !y.passt ? ' <span class="mat-warn">(am Artikel inzwischen anders)</span>' : ""}</li>`).join("")}</ul>`;
+  // Kein offener Antrag, nach der ersten Prüfung, nicht ausgesondert, Materialwart oder Prüfer (darf_antrag vom Server).
+  const antragMoeglich = (a) => Boolean(a.darf_antrag);
+  // Laufende Rückrufe, aus denen der Artikel nach der Änderung fiele oder in die er käme (x.rueckruf, nur bei offenen
+  // Anträgen – neue Seriennummer oder anderes Produkt) – auf der Karte und in der Rückfrage „Bestätigen“; das Journal
+  // vermerkt es beim Bestätigen.
   const antragRueckruf = (x) => {
     const f = x.rueckruf || {};
     const titel = (l) => l.map((r) => `„${esc(r.title)}“`).join(", ");
     const raus = f.nicht_mehr || [];
     const rein = f.neu || [];
     return (raus.length ? `<p class="notice small">Artikel ist von ${raus.length > 1 ? "den Rückrufen" : "Rückruf"} ${titel(raus)} betroffen – nach der Änderung ${raus.length > 1 ? "treffen sie" : "trifft der Rückruf"} ihn nicht mehr.</p>` : "")
-      + (rein.length ? `<p class="notice small">Mit der neuen Seriennummer trifft ihn ${rein.length > 1 ? "die laufenden Rückrufe" : "der laufende Rückruf"} ${titel(rein)}.</p>` : "");
+      + (rein.length ? `<p class="notice small">Nach der Änderung trifft ihn ${rein.length > 1 ? "die laufenden Rückrufe" : "der laufende Rückruf"} ${titel(rein)}.</p>` : "");
   };
-  const antragOffenText = (x) => `${x.inhalt ? antragAenderung(x) : esc(x.feld_text)} – Änderung beantragt am ${esc(S.fmtDate(x.created_at))}${x.antragsteller ? ` von ${esc(x.antragsteller)}` : ""} – wartet auf die Material-Verwaltung.`;
-  // Ein offener Antrag als Hinweis an Artikel und Dialog „Bearbeiten“ – der eigene mit grauem „Antrag zurückziehen …“.
-  // Auf der Artikelseite stehen die Anträge als Abschnitt „Offene Änderungsanträge“ am Anfang der rechten Spalte, am
-  // Rechner neben dem Steckbrief im sonst leeren Raum (Wunsch vom 22.10.2026); in einer Spalte (unter 900 px) folgen sie
-  // so direkt auf die Stammdaten und vor QR-Code und Dokumenten – Lesefolge = DOM-Folge, ohne CSS order.
-  const antragOffenHtml = (x) => `<div class="notice small mat-antrag-offen"><p>${antragOffenText(x)}</p>${x.eigen ? `<div class="btn-row"><button class="btn secondary small" type="button" data-act="antrag-zurueck" data-id="${x.id}">Antrag zurückziehen …</button></div>` : ""}</div>`;
+  // Ein offener Antrag als Hinweis an Artikel und Dialog „Bearbeiten“: wer entscheiden darf, kommt mit „Entscheiden …“ in
+  // die Liste; der eigene trägt das graue „Antrag zurückziehen …“. Auf der Artikelseite stehen die Anträge als Abschnitt
+  // „Offene Änderungsanträge“ am Anfang der rechten Spalte (Wunsch vom 22.10.2026) – Lesefolge = DOM-Folge.
+  const antragOffenHtml = (x) => `<div class="notice small mat-antrag-offen"><p>Änderung beantragt am ${esc(S.fmtDate(x.created_at))}${x.antragsteller ? ` von ${esc(x.antragsteller)}` : ""} – wartet auf einen Materialwart des Ordners.</p>
+    ${antragAenderungen(x)}${x.entscheiden || x.eigen ? `<div class="btn-row">${x.entscheiden ? '<a class="btn secondary small" href="/material/bestand/antraege">Entscheiden …</a>' : ""}${x.eigen ? `<button class="btn secondary small" type="button" data-act="antrag-zurueck" data-id="${x.id}">Antrag zurückziehen …</button>` : ""}</div>` : ""}</div>`;
   // Rückfrage, dann zurückziehen (nur der Antragsteller, nur offen – der Server prüft es). Keine Mail.
   async function antragZurueckziehen(x, danach) {
     if (!x) return;
-    const was = `${x.feld_text}${x.inhalt ? `: ${antragWert(x, x.alt)} → ${antragWert(x, x.neu)}` : ""}`;
-    if (!(await confirm(`Deinen Antrag „${was}“ zurückziehen? Die Material-Verwaltung entscheidet dann nicht mehr darüber; neu beantragen kannst du jederzeit.`, "Zurückziehen"))) return;
+    if (!(await confirm(`Deinen Antrag (${x.felder_text}) zurückziehen? Niemand entscheidet dann mehr darüber; neu beantragen kannst du jederzeit.`, "Zurückziehen"))) return;
     try {
       await api(`${API}/antraege/${x.id}/zurueckziehen`, { method: "POST", body: {} });
       toast("Antrag zurückgezogen");
@@ -3443,48 +3443,92 @@
     } catch (e) { toast(e.message, true); }
   }
 
-  // Der kleine Dialog: neue Seriennummer und/oder neues Herstelldatum, Begründung Pflicht. Ein Feld mit offenem Antrag
-  // ist gesperrt; bei Metall ohne Herstelldatum trägt man es direkt nach (Dialog „Bearbeiten“), nicht per Antrag.
+  // Der Antragsdialog: alle freigabepflichtigen Felder mit den heutigen Werten; geschickt wird nur, was sich ändert.
+  // Produkt mit „anderes Produkt“ und seinen Folgen (nicht an Set und Teil). Begründung Pflicht.
   function antragDialog(a) {
     const textil = a.produkt.material_kind === "textil";
-    const offen = Object.fromEntries((a.antraege || []).map((x) => [x.feld, x]));
-    const snOffen = offen.serial_no;
-    const hdOffen = offen.manufactured_on;
-    const hdDirekt = !!a.herstellung_nachtragbar;
-    const hdGesperrt = hdOffen || hdDirekt;
+    const mitProdukt = !!a.produkt_beantragbar;
     // Ein laufender Rückruf mit Seriennummernliste trifft den Artikel über seine Nummer – mit einer neuen nicht mehr.
-    const rueckrufe = snOffen ? [] : (a.rueckrufe || []).filter((r) => !r.alle);
+    const rueckrufe = (a.rueckrufe || []).filter((r) => !r.alle);
     dialog(`<h2>Änderung beantragen – ${esc(a.inventory_no)}</h2>
-      <p class="help">Seriennummer und Herstellung stehen seit der ersten Prüfung fest. Die Material-Verwaltung bestätigt oder lehnt deinen Antrag ab; du bekommst Bescheid. Festgeschriebene Protokolle behalten die alte Angabe, Journal und Lebenslauf zeigen die Änderung.</p>
-      <div class="field-row mat-antragzeile"><div><label for="aa-sn">Neue Seriennummer</label><input type="text" id="aa-sn" ${TASTATUR_NUMMER} maxlength="80" ${snOffen ? "disabled" : ""} placeholder="bisher ${esc(a.serial_no)}">
-          <div class="help">${snOffen ? "Ein Antrag läuft schon." : a.serial_generated ? "Ersetzt die vom System vergebene Nummer." : "Leer lassen, wenn sie bleibt."}</div></div>
-        <div><label for="aa-herst">Neue Herstellung (Monat)</label>${datumFeld("aa-herst", null, "monat")}
-          <div class="help">${hdOffen ? "Ein Antrag läuft schon." : hdDirekt ? "Fehlt bei Metall – trägt der Materialwart direkt nach." : a.manufactured_on ? `bisher ${esc(fmtTag(a.manufactured_on))} – nur ändern, nicht entfernen` : "bisher leer"}</div></div></div>
-      ${textil ? '<p class="help">Bei textilem Material rechnet das Lebensende mit dem neuen Herstelldatum neu.</p>' : ""}
+      <p class="help">Seit der ersten Prüfung stehen die Stammdaten fest. Ändere, was nicht stimmt – ein Materialwart des Ordners bestätigt oder lehnt ab, du bekommst Bescheid. Festgeschriebene Protokolle behalten die alten Angaben.</p>
+      ${mitProdukt ? `<div class="mat-ad-produkt"><label for="aa-q">Produkt</label>
+        <div id="aa-produkt" class="mat-gewaehlt">${produktGewaehltHtml(a.produkt)} <button class="lnk" type="button" id="aa-anders">anderes Produkt</button></div>
+        <div class="mat-produktwahl" id="aa-wahl" hidden><input type="search" id="aa-q" placeholder="Hersteller, Modell, Bemerkung, Artikelnummer …" autocomplete="off" ${TASTATUR_SUCHE}>
+          <div id="aa-treffer" class="mat-treffer"></div></div>
+        <p class="error" id="aa-produkt-fehler" hidden></p>
+        <div class="notice small" id="aa-folgen" hidden></div></div>`
+        : `<p class="small">Produkt: <strong>${nameHtml(a.produkt)}</strong>${zusatzHtml(a.produkt)} – am Set und an seinen Teilen fest.</p>`}
+      <div class="field-row mat-antragzeile"><div><label for="aa-sn">Seriennummer</label><input type="text" id="aa-sn" ${TASTATUR_NUMMER} maxlength="80" value="${esc(a.serial_no)}"></div>
+        <div><label for="aa-herst">Herstellung (Monat)</label>${datumFeld("aa-herst", a.manufactured_on, "monat")}</div></div>
+      <div class="field-row"><div><label for="aa-kauf">Kauf (Monat)</label>${datumFeld("aa-kauf", a.purchased_on, "monat")}</div>
+        <div><label for="aa-erst">Erstgebrauch (Monat)</label>${datumFeld("aa-erst", a.first_use_on, "monat")}</div></div>
+      <div class="field-row"><div id="aa-ende-feld"${textil ? "" : " hidden"}><label for="aa-ende">Lebensende (nur vorziehen)</label>${datumFeld("aa-ende", a.retire_by, "tag")}</div>
+        <div><label for="aa-int">Prüfintervall am Artikel (Monate)</label><input type="number" id="aa-int" min="1" max="120" value="${a.interval_months || ""}" placeholder="vom Produkt/Ordner"></div></div>
       ${rueckrufe.length ? `<p class="notice small">Artikel ist von ${rueckrufe.length > 1 ? "den Rückrufen" : "Rückruf"} ${rueckrufe.map((r) => `„${esc(r.title)}“`).join(", ")} betroffen – nach einer Änderung der Seriennummer ${rueckrufe.length > 1 ? "treffen sie" : "trifft der Rückruf"} ihn nicht mehr (außer die neue Nummer steht ebenfalls in seiner Liste).</p>` : ""}
       <label for="aa-grund">Begründung (Pflicht)</label>
       <textarea id="aa-grund" rows="3" maxlength="1000" placeholder="z. B. Etikett beim Prüfen falsch abgelesen, Herstellernummer nachträglich gefunden"></textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="aa-ok" type="button">Antrag senden</button></div>`,
     (dlg, body) => {
-      if (hdGesperrt) $("#aa-herst", body).disabled = true;
+      let neuesProdukt = null;
+      const fehler = (text) => { const el = $("#aa-produkt-fehler", body); el.textContent = text || ""; el.hidden = !text; };
+      function produktSetzen(p) {
+        fehler("");
+        if (p && p.is_set) { fehler(PRODUKT_SET); return; }
+        neuesProdukt = p && p.id !== a.produkt.id ? p : null;
+        $("#aa-produkt", body).innerHTML = `${produktGewaehltHtml(neuesProdukt || a.produkt)} <button class="lnk" type="button" id="aa-anders">anderes Produkt</button>${neuesProdukt ? ' <button class="lnk" type="button" id="aa-zurueck">zurück zum bisherigen</button>' : ""}`;
+        $("#aa-wahl", body).hidden = true;
+        trefferLeeren($("#aa-treffer", body));
+        $("#aa-q", body).value = "";
+        $("#aa-anders", body).onclick = suchen;
+        const zurueck = $("#aa-zurueck", body);
+        if (zurueck) zurueck.onclick = () => { produktSetzen(null); fokus($("#aa-anders", body)); };
+        const folgen = $("#aa-folgen", body);
+        folgen.innerHTML = neuesProdukt ? `<p>Neues Produkt: ${esc(produktName(neuesProdukt))}. Nach der Bestätigung:</p><ul>${produktFolgen(a, neuesProdukt).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "";
+        folgen.hidden = !neuesProdukt;
+        // Das Lebensende rechnet nach dem neuen Produkt – vorziehen lässt es sich dann mit einem späteren Antrag.
+        $("#aa-ende-feld", body).hidden = !textil || Boolean(neuesProdukt);
+      }
+      function suchen() { $("#aa-wahl", body).hidden = false; fehler(""); fokus($("#aa-q", body)); }
+      if (mitProdukt) {
+        $("#aa-anders", body).onclick = suchen;
+        let los = null;
+        $("#aa-q", body).addEventListener("input", () => {
+          clearTimeout(los);
+          los = setTimeout(() => {
+            const q = $("#aa-q", body).value.trim();
+            if (!q) { trefferLeeren($("#aa-treffer", body)); return; }
+            produktTreffer($("#aa-treffer", body), q, (p) => { produktSetzen(p); fokus($("#aa-anders", body)); }, '<p class="help">Kein Produkt gefunden.</p>');
+          }, 200);
+        });
+      }
       $("#aa-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
         const daten = { begruendung: $("#aa-grund", body).value };
+        const anders = (neu, alt) => (neu || null) !== (alt || null);
         try {
           const sn = $("#aa-sn", body).value.trim();
-          if (sn) daten.serial_no = sn;
-          if (!hdGesperrt) {
-            const herst = datumWert($("#aa-herst", body), "Neue Herstellung");
-            if (herst) daten.manufactured_on = herst;
+          if (sn !== a.serial_no) daten.serial_no = sn;
+          for (const [id, feld, name] of [["aa-herst", "manufactured_on", "Herstellung"], ["aa-kauf", "purchased_on", "Kauf"],
+            ["aa-erst", "first_use_on", "Erstgebrauch"]]) {
+            const wert = datumBehalten(datumWert($(`#${id}`, body), name), a[feld]);
+            if (anders(wert, a[feld])) daten[feld] = wert;
           }
+          if (textil && !neuesProdukt) {
+            const ende = datumWert($("#aa-ende", body), "Lebensende") || null;
+            if (anders(ende, a.retire_by)) daten.retire_by = ende;
+          }
+          const iv = $("#aa-int", body).value;
+          if ((iv ? +iv : null) !== (a.interval_months || null)) daten.interval_months = iv || null;
+          if (neuesProdukt) daten.product_id = neuesProdukt.id;
         } catch (e) { toast(e.message, true); return; }
-        if (!daten.serial_no && !daten.manufactured_on) { toast("Bitte eine neue Seriennummer oder ein neues Herstelldatum angeben.", true); return; }
+        if (Object.keys(daten).length === 1) { toast("Bitte mindestens ein Feld ändern.", true); return; }
         if (!daten.begruendung.trim()) { toast("Bitte begründe die Änderung.", true); fokus($("#aa-grund", body)); return; }
         knopf.disabled = true;
         try {
           const r = await api(`${API}/artikel/${a.id}/antrag`, { method: "POST", body: daten });
           dlg.close();
-          toast(r.mail ? "Antrag gesendet – die Material-Verwaltung bekommt eine Mail." : "Antrag gesendet – er wartet auf die Material-Verwaltung.");
+          toast(r.mail ? "Antrag gesendet – die Materialwarte des Ordners bekommen eine Mail." : "Antrag gesendet – er wartet auf einen Materialwart des Ordners.");
           zeigen(artikel);
         } catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
@@ -7090,24 +7134,9 @@
   async function meldungen() {
     let filter = DATEN.status || null;
     let eigene = null;            // null: was der Server für die Rolle vorsieht; Materialwarte schalten zwischen „1“ und „0“
-    // Zwei Bereiche (Entscheidungen vom 21.10.2026): Produktmeldungen und Änderungsanträge an festen Stammdaten. Die
-    // Anträge sieht, wer sie entscheidet (Material-Verwaltung), stellen kann (Materialwart, Prüfer) – andere nicht.
-    let bereich = DATEN.bereich === "antraege" ? "antraege" : "produkte";
-    const mitAntraegen = Boolean(DARF.katalog || DARF.verwalten || DARF.pruefen);
-    if (!mitAntraegen) bereich = "produkte";
+    // Nur noch Produktmeldungen (Wunsch vom 24.10.2026): Die Änderungsanträge haben ihre Seite im Bestand.
     leisteMarkieren(null);
-    const zahl = (n) => (n ? ` <span class="mat-reiterzahl">(${n})</span>` : "");
-    const bereiche = (nProdukte, nAntraege) => (mitAntraegen ? `<div class="c-tabs mat-bereiche" role="group" aria-label="Bereich">
-        <button type="button" class="${bereich === "produkte" ? "sel" : ""}" data-act="bereich" data-b="produkte" aria-pressed="${bereich === "produkte"}">Produktmeldungen${zahl(nProdukte)}</button>
-        <button type="button" class="${bereich === "antraege" ? "sel" : ""}" data-act="bereich" data-b="antraege" aria-pressed="${bereich === "antraege"}">Änderungsanträge${zahl(nAntraege)}</button></div>` : "");
-    const bereichWechseln = (b) => {
-      bereich = b.dataset.b;
-      filter = null;
-      try { history.replaceState(null, "", `/material/katalog/meldungen${bereich === "antraege" ? "?bereich=antraege" : ""}`); } catch (e) { /* nur die Adresszeile */ }
-      zeigen(zeichnen);
-    };
     async function zeichnen() {
-      if (bereich === "antraege") { await antraegeZeichnen(); return; }
       const q = new URLSearchParams();
       if (filter) q.set("status", filter);
       if (eigene) q.set("eigene", eigene);
@@ -7121,12 +7150,10 @@
           : "Produkte und Sets, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald die Material-Verwaltung sie bearbeitet hat.";
       inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Produktmeldungen" : "Deine Produktmeldungen"}</h1>
           <div class="btn-row"><a class="btn secondary" href="/material/katalog">Katalog</a>${DARF.verwalten ? '<a class="btn secondary" href="/material/artikel/neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span></a>' : ""}</div></div>
-        ${bereiche(d.offen, d.antraege_offen)}
         <p class="help">${hilfe}${DARF.verwalten && !DARF.katalog ? ` <button type="button" class="lnk" data-act="eigene">${d.alle ? "Nur deine zeigen" : "Alle Meldungen zeigen"}</button>` : ""}</p>
         <div class="c-tabs mat-filter" role="group" aria-label="Status">${[["offen", "offen"], ["erledigt", "erledigt"], ["alle", "alle"]].map(([w, t]) => `<button type="button" class="${w === filter ? "sel" : ""}" data-act="filter" data-f="${w}" aria-pressed="${w === filter}">${t}${w === "offen" && d.offen ? ` (${d.offen})` : ""}</button>`).join("")}</div>
         ${liste.length ? liste.map((m) => meldeKarte(m, d.bearbeiten)).join("") : leer(filter === "offen" ? "Keine offenen Meldungen." : "Keine Meldungen.")}`;
       aktionen = {
-        bereich: bereichWechseln,
         filter: (b) => {
           filter = b.dataset.f;
           try { history.replaceState(null, "", `/material/katalog/meldungen?status=${filter}`); } catch (e) { /* nur die Adresszeile */ }
@@ -7158,30 +7185,31 @@
         },
       };
     }
+    await zeichnen();
+  }
 
-    // Änderungsanträge: je Karte Artikel (Link), Feld alt → neu, Begründung, Antragsteller, Datum. Die Material-Verwaltung
-    // entscheidet mit grauen Knöpfen „Bestätigen …“ und „Ablehnen …“ – der rote Hauptknopf steht erst im Rückfragedialog
-    // (Knopfregel: höchstens ein roter je Ansicht).
-    async function antraegeZeichnen() {
-      const q = new URLSearchParams();
-      if (filter) q.set("status", filter);
-      const d = await api(`${API}/antraege${String(q) ? `?${q}` : ""}`);
+  /* --- Änderungsanträge im Bestand (Wunsch vom 24.10.2026) ---------------------------------------------------------
+     Die eigenen Anträge und die, die das Konto als Materialwart des Ordners entscheidet (eigene Freigabe „verwalten“
+     dort oder darüber – die Material-Verwaltung nur mit so einer Freigabe). Je Sammelantrag eine Karte; graue Knöpfe
+     „Bestätigen …“ und „Ablehnen …“ nur, wenn das Konto entscheiden darf, „Zurückziehen …“ am eigenen offenen – der rote
+     Hauptknopf steht erst in der Rückfrage (Knopfregel). */
+  async function antraegeSeite() {
+    let filter = DATEN.status || null;
+    leisteMarkieren(null);
+    async function zeichnen() {
+      const d = await api(`${API}/antraege${filter ? `?status=${filter}` : ""}`);
       filter = d.filter;
       const liste = d.antraege;
       const antrag = (b) => liste.find((x) => x.id === +b.dataset.id);
-      const hilfe = d.bearbeiten ? "Seriennummer und Herstellung eines Artikels stehen seit seiner ersten Prüfung fest. Materialwarte und Prüfer beantragen hier eine Änderung mit Begründung. Bestätigst du, steht die Änderung sofort am Artikel (Journal und Lebenslauf zeigen sie, festgeschriebene Protokolle behalten den alten Wert); lehnst du ab, braucht es eine Begründung. Der Antragsteller bekommt eine Mail; einen offenen Antrag kann er selbst zurückziehen."
-        : "Deine Anträge auf Änderung von Seriennummer oder Herstellung. Die Material-Verwaltung bestätigt oder lehnt ab; du bekommst eine Mail. Einen offenen Antrag kannst du zurückziehen.";
-      inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Änderungsanträge" : "Deine Änderungsanträge"}</h1>
-          <div class="btn-row"><a class="btn secondary" href="/material/katalog">Katalog</a></div></div>
-        ${bereiche(d.meldungen_offen, d.alle ? d.offen : null)}
-        <p class="help">${hilfe}</p>
-        <div class="c-tabs mat-filter" role="group" aria-label="Status">${[["offen", "offen"], ["erledigt", "erledigt"], ["alle", "alle"]].map(([w, t]) => `<button type="button" class="${w === filter ? "sel" : ""}" data-act="filter" data-f="${w}" aria-pressed="${w === filter}">${t}${w === "offen" && d.offen ? ` (${d.offen})` : ""}</button>`).join("")}</div>
-        ${liste.length ? liste.map((x) => antragKarte(x, d.bearbeiten)).join("") : leer(filter === "offen" ? "Keine offenen Änderungsanträge." : "Keine Änderungsanträge.")}`;
+      inhalt.innerHTML = `<div class="page-head"><h1>Änderungsanträge</h1>
+          <div class="btn-row"><a class="btn secondary" href="/material/bestand">Bestand</a></div></div>
+        <p class="help">Seit der ersten Prüfung stehen die Stammdaten eines Artikels fest – Materialwarte und Prüfer beantragen hier Änderungen mit Begründung, die Materialwarte des Ordners bestätigen oder lehnen ab.</p>
+        <div class="c-tabs mat-filter" role="group" aria-label="Status">${[["offen", "offen"], ["erledigt", "erledigt"], ["alle", "alle"]].map(([w, t]) => `<button type="button" class="${w === filter ? "sel" : ""}" data-act="filter" data-f="${w}" aria-pressed="${w === filter}">${t}${w === "offen" && d.zu_entscheiden ? ` (${d.zu_entscheiden} zu entscheiden)` : ""}</button>`).join("")}</div>
+        ${liste.length ? liste.map(antragKarte).join("") : leer(filter === "offen" ? "Keine offenen Änderungsanträge." : "Keine Änderungsanträge.")}`;
       aktionen = {
-        bereich: bereichWechseln,
         filter: (b) => {
           filter = b.dataset.f;
-          try { history.replaceState(null, "", `/material/katalog/meldungen?bereich=antraege&status=${filter}`); } catch (e) { /* nur die Adresszeile */ }
+          try { history.replaceState(null, "", `/material/bestand/antraege?status=${filter}`); } catch (e) { /* nur die Adresszeile */ }
           zeigen(zeichnen);
         },
         bestaetigen: (b) => antragBestaetigenDialog(antrag(b), zeichnen),
@@ -7193,26 +7221,27 @@
   }
 
   const antragMarke = (st) => `<span class="mat-mstatus m-${esc(st)}">${esc(ANTRAG_STATUS[st] || st)}</span>`;
-  function antragKarte(x, bearbeiten) {
+  function antragKarte(x) {
     const art = x.artikel;
     const wer = (name) => (name ? ` von ${esc(name)}` : "");
     const offen = x.status === "offen";
-    // Bestätigen geht nur, solange der Artikel den alten Wert trägt, nicht ausgesondert ist und der Antrag nicht das
+    // Bestätigen geht nur, solange der Artikel alle alten Werte trägt, nicht ausgesondert ist und der Antrag nicht das
     // Herstelldatum leeren will (gibt es seit dem 21.10.2026 nicht mehr – ältere offene nur noch ablehnen).
     const geht = x.passt && !x.entfernen && art.lock_state !== "ausgesondert";
     const nurAblehnen = art.lock_state === "ausgesondert" ? "Der Artikel ist inzwischen ausgesondert – der Antrag lässt sich nur noch ablehnen."
       : x.entfernen ? "Ein Herstelldatum lässt sich nicht mehr entfernen – der Antrag lässt sich nur noch ablehnen."
-        : "Der Artikel trägt inzwischen nicht mehr den alten Wert – der Antrag lässt sich nur noch ablehnen.";
-    const knoepfe = [bearbeiten && geht ? `<button type="button" class="btn secondary small" data-act="bestaetigen" data-id="${x.id}">Bestätigen …</button>` : "",
-      bearbeiten ? `<button type="button" class="btn secondary small" data-act="antrag-ablehnen" data-id="${x.id}">Ablehnen …</button>` : "",
+        : "Der Artikel trägt inzwischen nicht mehr alle alten Werte – der Antrag lässt sich nur noch ablehnen.";
+    const knoepfe = [x.entscheiden && geht ? `<button type="button" class="btn secondary small" data-act="bestaetigen" data-id="${x.id}">Bestätigen …</button>` : "",
+      x.entscheiden ? `<button type="button" class="btn secondary small" data-act="antrag-ablehnen" data-id="${x.id}">Ablehnen …</button>` : "",
       x.eigen ? `<button type="button" class="btn secondary small" data-act="antrag-zurueck" data-id="${x.id}">Zurückziehen …</button>` : ""].join("");
     return `<article class="mat-meldung mat-antrag m-${esc(x.status)}">
       <div class="mat-meldung-kopf"><h2><a href="/material/artikel/${art.id}">${esc(art.inventory_no)}</a> <span class="mat-antrag-produkt">${nameHtml(art.produkt)}${zusatzHtml(art.produkt)}</span></h2>${antragMarke(x.status)}${art.demo ? ' <span class="badge grey">DEMO</span>' : ""}</div>
-      <p class="muted small">beantragt${wer(x.antragsteller)} am ${esc(S.fmtDate(x.created_at))}${art.gliederung ? ` · ${esc(art.gliederung)}` : ""}${x.eigen && bearbeiten ? " · dein eigener Antrag" : ""}</p>
-      <p class="mat-antrag-aenderung">${antragAenderung(x)}</p>
+      <p class="muted small">Antrag Nr. ${x.id} · beantragt${wer(x.antragsteller)} am ${esc(S.fmtDate(x.created_at))}${art.pfad || art.gliederung ? ` · ${esc(art.pfad || art.gliederung)}` : ""}${x.eigen && x.entscheiden ? " · dein eigener Antrag" : ""}</p>
+      ${antragAenderungen(x, offen)}
       <dl class="mat-daten mat-meldung-daten"><dt>Begründung</dt><dd><span class="mat-text">${esc(x.begruendung || "")}</span></dd></dl>
       ${offen ? antragRueckruf(x) : ""}
       ${offen && !geht ? `<p class="notice small">${nurAblehnen}</p>` : ""}
+      ${offen && x.ohne_zustaendige ? '<p class="notice small">Dieser Ordner hat keinen Materialwart mit Freigabe „verwalten“ – die Material-Verwaltung ist benachrichtigt. Entscheiden kann sie, sobald sie sich die Freigabe dort gibt.</p>' : ""}
       ${x.status === "bestaetigt" ? `<p class="mat-meldung-ergebnis">Bestätigt${wer(x.entschieden_von)} am ${esc(S.fmtDate(x.resolved_at))}${x.antwort ? `: <span class="mat-text">${esc(x.antwort)}</span>` : ""}</p>` : ""}
       ${x.status === "abgelehnt" ? `<p class="mat-meldung-ergebnis">Abgelehnt${wer(x.entschieden_von)} am ${esc(S.fmtDate(x.resolved_at))}: <span class="mat-text">${esc(x.antwort || "")}</span></p>` : ""}
       ${x.status === "zurueckgezogen" ? `<p class="mat-meldung-ergebnis">Vom Antragsteller zurückgezogen am ${esc(S.fmtDate(x.resolved_at))}.</p>` : ""}
@@ -7222,12 +7251,13 @@
 
   function antragBestaetigenDialog(x, danach) {
     const art = x.artikel;
+    const folgen = (x.aenderungen || []).some((y) => ["product_id", "manufactured_on", "interval_months"].includes(y.feld));
     dialog(`<h2>Änderung bestätigen</h2>
       <p>${esc(art.inventory_no)} – ${nameHtml(art.produkt)}${zusatzHtml(art.produkt)}</p>
-      <p class="mat-antrag-aenderung">${antragAenderung(x)}</p>
+      ${antragAenderungen(x)}
       <p class="small">Beantragt von ${esc(x.antragsteller || "–")} am ${esc(S.fmtDate(x.created_at))}: <span class="mat-text">${esc(x.begruendung || "")}</span></p>
       ${antragRueckruf(x)}
-      <p class="help">Die Änderung steht danach sofort am Artikel; Journal und Lebenslauf zeigen sie mit beiden Namen. Festgeschriebene Protokolle behalten den alten Wert.${x.feld === "manufactured_on" && art.produkt.material_kind === "textil" ? " Das Lebensende rechnet neu." : ""}</p>
+      <p class="help">Alle Änderungen stehen danach sofort am Artikel; Journal und Lebenslauf zeigen sie mit beiden Namen. Festgeschriebene Protokolle behalten die alten Werte.${folgen ? " Lebensende, Länge und nächste Prüfung ziehen nach." : ""}</p>
       <label for="ba-antwort">Anmerkung für den Antragsteller (optional, steht in seiner Mail)</label><textarea id="ba-antwort" rows="2" maxlength="1000"></textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="ba-ok" type="button">Bestätigen</button></div>`,
     (dlg, body) => {
@@ -7245,7 +7275,8 @@
   function antragAblehnenDialog(x, danach) {
     const art = x.artikel;
     dialog(`<h2>Antrag ablehnen</h2>
-      <p>${esc(art.inventory_no)}: ${antragAenderung(x)}, beantragt von ${esc(x.antragsteller || "–")}</p>
+      <p>${esc(art.inventory_no)}, beantragt von ${esc(x.antragsteller || "–")}:</p>
+      ${antragAenderungen(x)}
       <label for="aa-antwort">Begründung (Pflicht, bekommt der Antragsteller per Mail)</label>
       <textarea id="aa-antwort" rows="3" maxlength="1000" placeholder="z. B. Nummer auf dem Etikett stimmt mit der gespeicherten überein"></textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn danger" id="aa-ablehnen" type="button">Ablehnen</button></div>`,
@@ -7320,12 +7351,21 @@
   async function meldungenZaehlen(el) {
     if (!el) return;
     try {
-      const d = await api(`${API}/meldungen?status=offen`);
-      // Produktmeldungen und – für die Material-Verwaltung – Änderungsanträge zusammen (Entscheidungen vom 21.10.2026).
-      const n = (d.offen || 0) + (d.antraege_offen || 0);
+      // Nur Produktmeldungen – die Änderungsanträge zählt ihr Knopf im Bestand (antraegeZaehlen, Wunsch vom 24.10.2026).
+      const n = (await api(`${API}/meldungen?status=offen`)).offen || 0;
       el.textContent = n > 99 ? "99+" : n;
-      el.title = [d.offen ? plural(d.offen, "offene Produktmeldung", "offene Produktmeldungen") : "",
-                  d.antraege_offen ? plural(d.antraege_offen, "offener Änderungsantrag", "offene Änderungsanträge") : ""].filter(Boolean).join(", ");
+      el.title = n ? plural(n, "offene Produktmeldung", "offene Produktmeldungen") : "";
+      el.hidden = !n;
+    } catch (e) { /* der Zähler ist Beiwerk */ }
+  }
+
+  // Die Blase am Knopf „Änderungsanträge“ im Bestand: offene, die das Konto als Materialwart des Ordners entscheidet.
+  async function antraegeZaehlen(el) {
+    if (!el) return;
+    try {
+      const n = (await api(`${API}/antraege?status=offen`)).zu_entscheiden || 0;
+      el.textContent = n > 99 ? "99+" : n;
+      el.title = n ? `${plural(n, "offener Änderungsantrag", "offene Änderungsanträge")} zu entscheiden` : "";
       el.hidden = !n;
     } catch (e) { /* der Zähler ist Beiwerk */ }
   }
@@ -8532,7 +8572,7 @@
 
   const ANSICHTEN = { dashboard, pruefungen, bestand, ordner, artikel, artikel_neu: artikelNeu, katalog, produkt, formular, suche,
                       meldungen, pruefung_neu: pruefungNeu, pruefung: pruefungAnsicht, durchgang: durchgangAnsicht, fremd,
-                      meine_psa: meinePsa, bestandsimport, bericht, set_lauf: setLaufAnsicht };
+                      meine_psa: meinePsa, bestandsimport, bericht, set_lauf: setLaufAnsicht, antraege: antraegeSeite };
   leisteLaden();
   quittungAbholen();
   zeigen(ANSICHTEN[ANSICHT] || dashboard);

@@ -236,7 +236,8 @@ def test_oberflaeche_statisch():
     js = _lies("app/material/static/material.js")
     css = _lies("app/material/static/material.css")
     d = _funktion(js, "artikelDialog")
-    for haken in ("const mitProdukt = !!a.produkt_aenderbar;", 'id="ad-anders">anderes Produkt</button>',
+    # Seit dem 24.10.2026 nur ohne festen Block (Materialwart vor der ersten Prüfung); danach per Antrag (antragDialog).
+    for haken in ("const mitProdukt = !gesperrt && !!a.produkt_aenderbar;", 'id="ad-anders">anderes Produkt</button>',
                   "a.entwurf ? \"\" : ' <button class=\"lnk\" type=\"button\" id=\"ad-anders\">", "esc(PRODUKT_ENTWURF)",
                   "produktTreffer($(\"#ad-treffer\", body), q,", "if (p && p.is_set) { produktFehler(PRODUKT_SET); return; }",
                   "produktFolgen(a, neuesProdukt)", "if (neuesProdukt) daten.product_id = neuesProdukt.id;",

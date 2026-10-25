@@ -367,7 +367,11 @@ def _darstellung(export, gesetzt):
         assert r.status_code == 200, r.status_code
         html = zuletzt()
         assert '<div class="produkt">Testwerk Gurt Alpha <span class="zusatz">Platzhalter</span></div>' in html
-        assert '<div class="lbl">Modell</div><div class="wert">Gurt Alpha</div>' in html and "Alpha |" not in html
+        # Die Änderung selbst nennt das Journal des Produkts im Lebenslauf (Entscheidung E8 vom 24.10.2026) – mit dem
+        # Modellnamen, wie er im Katalog steht; Kopf und Stammdaten davor nennen ihn ohne Strich.
+        kopf = html.split('<table class="liste ereignisse"')[0]
+        assert '<div class="lbl">Modell</div><div class="wert">Gurt Alpha</div>' in html and "Alpha |" not in kopf
+        assert "Produkt geändert" in html and "Gurt Alpha | Platzhalter" in html
         with open(pfad, "wb") as fh:
             fh.write(r.data)
         assert "Testwerk Gurt Alpha Platzhalter" in _flach(" ".join(pdf_seiten(pfad)))
@@ -475,8 +479,9 @@ def test_oberflaeche_statisch():
     # Produktseite, Produktwahl im Reiter „Bestandteile“, Teilblock beim Anlegen, Teil und fehlende Position im Kasten
     # „Bestandteile“, Teil-Karte in „Meine PSA“; 28 seit dem Produktnamen als Link in Artikellisten (23.10.2026): mit
     # und ohne Link; 29 seit P4-L2 O2: Kopf der Seite „Set prüfen“; 30 seit dem Feintuning (23.10.2026): Produkt im
-    # Dialog „Bearbeiten“.
-    assert len(stellen) == js.count("${nameHtml(") == 30, (len(stellen), js.count("${nameHtml("))
+    # Dialog „Bearbeiten“; 31 seit den Anträgen an alle Stammdaten (24.10.2026): das feste Produkt im Antragsdialog
+    # an Set und Teil.
+    assert len(stellen) == js.count("${nameHtml(") == 31, (len(stellen), js.count("${nameHtml("))
     assert all(name == zusatz for name, _, zusatz in stellen), stellen
     assert not re.search(r"\$\{zusatzHtml\([^)]*\)\}(</strong>|</a>)", js)      # nie im Link, nie in <strong>
     # Die Katalogliste wie im Bildschirmfoto: Name fett im roten Link, dann grau Zusatz und Artikelnummer.
