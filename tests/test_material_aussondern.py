@@ -293,6 +293,14 @@ def test_oberflaeche_statisch():
     assert f'empfehlung: "{beschriftung.FELD["empfehlung"]}"' in js
     css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
     assert ".mat-empfohlen-marke {" in css and ".e-aussondern_empfohlen" in css
+    # Designsprache (Nutzer, 25.10.2026): keine Erklärzeile unter Knöpfen – der Satz steht über der Knopfzeile.
+    for satz, knoepfe in (('id="mat-aussondern-hilfe"', '<div class="btn-row mat-pruefknoepfe">'),
+                          ('id="mat-schon-gemeldet"', '<div class="btn-row mat-pruefknoepfe">'),
+                          ('<p class="help mat-nur-touch">Lebenslauf (PDF)', "lebenslaufKnopf(a) : \"\"}</div>"),
+                          ('<p class="help mat-nur-touch">„Anlegen und nächsten“', '<div class="btn-row mat-knoepfe">'),
+                          ('id="psa-schon-${Number(k.id)}"', '<div class="btn-row mat-psa-knoepfe">'),
+                          ('<p class="help">${esc(b.frist)}</p>', 'data-act="bi-neu">Neu wählen</button>')):
+        assert js.index(satz) < js.index(knoepfe), satz
     print("Oberfläche (statisch) bestanden.")
 
 

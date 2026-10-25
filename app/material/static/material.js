@@ -2594,6 +2594,8 @@
     const schonGemeldet = darfMelden && a.mangel_eigen_offen;
     const sperrKnopf = frei && darf.pruefen && !a.entwurf;
     const aussonderKnopf = gesperrt && darf.verwalten && !a.entwurf;
+    // Designsprache: keine Erklärzeilen unter Knöpfen – was ein Knopf gerade nicht kann (ausgegraut, mit
+    // aria-describedby) oder warum er fehlt, steht als Satz über seiner Knopfzeile (Nutzer, 25.10.2026).
     const aussondernNein = aussonderKnopf && a.aussondern && !a.aussondern.ok ? a.aussondern.grund : "";
     const empf = a.aussonderung_empfohlen;
     const zuordnung = darf.grund ? zeile("Zugeordnet an", `${zu ? `${esc(zu.name)}${zu.gliederung ? ` <span class="muted">· ${esc(zu.gliederung)}</span>` : ""}${zu.aktiv ? "" : ' <span class="muted">(deaktiviert)</span>'}`
@@ -2603,7 +2605,7 @@
       ${a.status === "gesperrt" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
       ${empf ? `<p class="notice mat-empfehlung"><strong>Aussonderung empfohlen</strong> – ${esc(empf.pruefer || "Prüfer")} am ${esc(fmtTag(empf.datum))} (<a href="/material/pruefung/${Number(empf.pruefung)}">${empf.protokoll_id ? `Protokoll ${esc(empf.protokoll_id)}` : "Prüfung ansehen"}</a>)${empf.grund ? `: ${esc(empf.grund)}` : ""}. Aussondern kann der Materialwart.</p>` : ""}
       ${maengel.filter((m) => m.offen).map(mangelBanner).join("")}
-      ${a.status === "lebensdauer" ? `<p class="mat-banner s-lebensdauer">LEBENSDAUER ERREICHT – aussondern.</p>` : ""}
+      ${a.status === "lebensdauer" ? `<p class="mat-banner s-lebensdauer">LEBENSDAUER ERREICHT – nicht mehr verwenden, prüfen lassen und aussondern.</p>` : ""}
       ${a.status === "neu" ? '<p class="mat-banner s-neu">NEU – die Eingangsprüfung steht aus. Bis dahin nicht einsetzen.</p>' : ""}
       ${rueckrufBanner(a)}
       <div class="mat-pfad">${bc}</div>
@@ -2613,20 +2615,20 @@
           <h1>${esc(a.inventory_no)} ${statusMarke(a.status, true)}${empfohlenMarke(empf)}</h1>
           <p class="mat-produktzeile"><a href="/material/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}${artNrHtml(p.article_no)}</p>
           <p>Seriennummer <strong>${esc(a.serial_no)}</strong>${a.serial_generated ? ' <span class="badge grey">vom System vergeben</span><span class="help mat-sn-hinweis">Der Hersteller vergibt keine Seriennummer – diese Nummer bitte dauerhaft am Artikel anbringen.</span>' : ""}</p>
+          ${schonGemeldet ? `<p class="help mat-schon-gemeldet" id="mat-schon-gemeldet">Du hast am ${esc(S.fmtDate(a.mangel_eigen_offen))} schon gemeldet – ein Prüfer sieht es sich an.${darf.verwalten ? "" : " Ergänzungen bitte direkt an den Materialwart."}</p>` : ""}
+          ${aussondernNein ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(aussondernNein)}</p>` : ""}
+          ${aus || darf.pruefen ? "" : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice small">${pruefHinweis(a)}</p>`
+            : '<p class="small muted">Prüfen dürfen Prüfer mit Urkundennummer und Prüffreigabe (Häkchen „Prüfer“ in der Nutzerverwaltung, Urkundennummer im eigenen Profil, Prüffreigabe vom Materialwart).</p>'}
           <div class="btn-row mat-pruefknoepfe">${!aus && darf.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
             ${sperrKnopf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
             ${darfMelden ? `<button class="btn secondary small" type="button"${schonGemeldet ? ' disabled aria-describedby="mat-schon-gemeldet"' : ' data-act="mangel"'}>Mangel melden …</button>` : ""}
             ${aussonderKnopf ? `<button class="btn secondary small" type="button"${aussondernNein ? ' disabled aria-describedby="mat-aussondern-hilfe"' : ' data-act="aussondern"'}>Aussondern</button>` : ""}</div>
-          ${schonGemeldet ? `<p class="help mat-schon-gemeldet" id="mat-schon-gemeldet">Du hast am ${esc(S.fmtDate(a.mangel_eigen_offen))} schon gemeldet – ein Prüfer sieht es sich an.${darf.verwalten ? "" : " Ergänzungen bitte direkt an den Materialwart."}</p>` : ""}
-          ${aussondernNein ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(aussondernNein)}</p>` : ""}
           ${a.entwurf ? `<p class="small">In Prüfung bei <strong>${esc(a.entwurf.pruefer)}</strong> seit ${esc(fmtZeit(a.entwurf.seit))}
             ${fremderEntwurf ? ` <span class="mat-nowrap">· <a href="/material/pruefung/${a.entwurf.id}">ansehen</a></span>` : ""}
             ${fremderEntwurf && darf.verwalten ? ' <span class="mat-nowrap">· <button class="lnk" type="button" data-act="freigeben">Reservierung aufheben</button></span>' : ""}</p>` : ""}
-          ${aus || darf.pruefen ? "" : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice small">${pruefHinweis(a)}</p>`
-            : '<p class="small muted">Prüfen dürfen Prüfer mit Urkundennummer und Prüffreigabe (Häkchen „Prüfer“ in der Nutzerverwaltung, Urkundennummer im eigenen Profil, Prüffreigabe vom Materialwart).</p>'}
           ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang ${a.durchgang.sichtbar ? `<a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>` : `„${esc(a.durchgang.titel)}“`}.</p>` : ""}
-          <div class="btn-row">${darfDirekt ? '<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>' : ""}${darfPflegen ? `${frei ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}${darf.grund ? lebenslaufKnopf(a) : ""}</div>
           ${darf.grund ? `<p class="help mat-nur-touch">Lebenslauf (PDF): ${LEBENSLAUF_TEXT}</p>` : ""}
+          <div class="btn-row">${darfDirekt ? '<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>' : ""}${darfPflegen ? `${frei ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}${darf.grund ? lebenslaufKnopf(a) : ""}</div>
         </div>
       </div>
       ${DATEN.suche ? '<div id="mat-global-angebot"></div>' : ""}
@@ -3261,9 +3263,9 @@
         <div id="an-bestandteile" hidden></div>
         <p class="notice">Neu angelegte Artikel stehen auf <strong>neu</strong>, bis ein Prüfer die Eingangsprüfung gemacht hat – erst sie gibt sie frei und setzt die erste Fälligkeit.</p>
         <label for="an-notes">Bemerkung</label><textarea id="an-notes" rows="2" maxlength="4000"></textarea>
+        <p class="help mat-nur-touch">„Anlegen und nächsten“: Produkt und Ordner bleiben für den nächsten Artikel stehen.</p>
         <div class="btn-row mat-knoepfe"><button class="btn" data-act="anlegen">Anlegen</button>
           <button class="btn secondary" data-act="anlegen-weiter" title="Produkt und Ordner bleiben für den nächsten Artikel stehen">Anlegen und nächsten</button></div>
-        <p class="help mat-nur-touch">„Anlegen und nächsten“: Produkt und Ordner bleiben für den nächsten Artikel stehen.</p>
       </div>
       <div id="an-meldungen"></div>`;
     let vorschlagLos = null;
@@ -6667,8 +6669,8 @@
     if (n) out.push(n === 1 ? "1 Artikel ist laut Liste überfällig – er steht in der nächsten Erinnerung."
       : `${n} Artikel sind laut Liste überfällig – sie stehen in der nächsten Erinnerung.`);
     if (m) out.push(`${m} Artikel ohne Prüfdatum in der Liste – Eingangsprüfung sofort fällig.`);
-    if (k) out.push(k === 1 ? "1 Artikel hat seine Lebensdauer erreicht – nach dem Import aussondern."
-      : `${k} Artikel haben ihre Lebensdauer erreicht – nach dem Import aussondern.`);
+    if (k) out.push(k === 1 ? "1 Artikel hat seine Lebensdauer erreicht – nach dem Import prüfen lassen („aussondern empfohlen“), danach sondert der Materialwart aus."
+      : `${k} Artikel haben ihre Lebensdauer erreicht – nach dem Import prüfen lassen („aussondern empfohlen“), danach sondert der Materialwart aus.`);
     return out;
   }
   // Die angelegten Artikel zum Beschriften: Zeile, bisherige Nummer, Seriennummer (STR-… vom System), neue Inventarnummer.
@@ -6882,8 +6884,8 @@
           ${!fehlt && !sperre && !text && z.zeilen ? `<p class="mat-leer">${esc(IMPORT_NICHTS)}</p>` : ""}
           ${text && b.ohne_seriennummern_bestaetigen ? `<div class="notice mat-import-ohne-serie"><label class="inline"><input type="checkbox" id="bi-ohne-serie" aria-describedby="bi-ohne-serie-hilfe" ${ohneSerie ? "checked" : ""}><span>${esc(ohneSerieSatz(z))}</span></label>
             <p class="help" id="bi-ohne-serie-hilfe">${esc(IMPORT_OHNE_SERIENSPALTE)}</p></div>` : ""}
-          <div class="btn-row mat-import-knoepfe"><button type="button" class="btn secondary" data-act="bi-neu">Neu wählen</button>${text ? `<button type="button" class="btn" data-act="bi-uebernehmen" ${uebernehmenGesperrt() ? "disabled" : ""}>${esc(uebernimmt ? "Wird übernommen …" : text)}</button>` : ""}</div>
-          ${!fehlt && z.nacharbeit ? `<p class="help">${esc(b.frist)}</p>` : ""}`;
+          ${!fehlt && z.nacharbeit ? `<p class="help">${esc(b.frist)}</p>` : ""}
+          <div class="btn-row mat-import-knoepfe"><button type="button" class="btn secondary" data-act="bi-neu">Neu wählen</button>${text ? `<button type="button" class="btn" data-act="bi-uebernehmen" ${uebernehmenGesperrt() ? "disabled" : ""}>${esc(uebernimmt ? "Wird übernommen …" : text)}</button>` : ""}</div>`;
       return `${stand}${austauschListe("Bitte beachten", warn, "warnung")}${offen}
         ${fehlt ? "" : `${austauschListe("Fälligkeit", faelligSaetze(b.faelligkeit), "")}
         <div class="c-tabs mat-filter mat-import-reiter" role="group" aria-label="Zeilen nach Ergebnis">${reiterListe.map(([s, t]) => `<button type="button" data-act="bi-reiter" data-r="${s}" class="${s === reiter ? "sel" : ""}" aria-pressed="${s === reiter}">${esc(t)} ${z[s] || 0}</button>`).join("")}</div>
@@ -7501,10 +7503,10 @@
         <ul class="mat-mangel-liste">${k.eigene_maengel.map((m) => `<li><p class="small"><strong>${esc(tagZeit(m.created_at))}</strong>
             <span class="mat-rr-zustand ${m.offen ? "offen" : "erledigt"}">${m.offen ? "offen" : "erledigt"}</span></p>
           <p class="mat-text">${esc(m.description)}</p>${mangelFotos(m, `Deine Meldung vom ${S.fmtDate(m.created_at)}`)}</li>`).join("")}</ul></details>` : ""}
+      ${offen ? `<p class="help" id="psa-schon-${Number(k.id)}">Du hast schon gemeldet – ein Prüfer sieht es sich an. Ergänzungen bitte direkt an den Materialwart.</p>` : ""}
       <div class="btn-row mat-psa-knoepfe">
         <button class="btn secondary" type="button" data-act="mangel" data-id="${Number(k.id)}"${offen ? ' disabled aria-describedby="psa-schon-' + Number(k.id) + '"' : ""}>Mangel melden …</button>
         ${k.artikel_link ? `<a href="/material/artikel/${Number(k.id)}">Zum Artikel</a>` : ""}</div>
-      ${offen ? `<p class="help" id="psa-schon-${Number(k.id)}">Du hast schon gemeldet – ein Prüfer sieht es sich an. Ergänzungen bitte direkt an den Materialwart.</p>` : ""}
     </article>`;
   }
 

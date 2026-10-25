@@ -1495,8 +1495,9 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-psa-kasten.dringend { background: var(--co-warning-fl); border-left-color: var(--gelb-dunkel); }
 /* Nach dem Melden: was geschah (Sperre, Mail) – bleibt stehen, bis neu gezeichnet wird. */
 .mat-mangel-quittung { font-weight: 600; }
-/* Artikelseite: Hilfezeilen unter den Knöpfen (Unterschied Mangel melden/Sperren; warum „Aussondern“ ausgegraut ist). */
-.mat-artikeltitel .mat-aussondern-hilfe { margin: 6px 0 0; }
+/* Artikelseite: warum „Mangel melden …“ bzw. „Aussondern“ ausgegraut ist – seit dem 25.10.2026 als Satz über der
+   Knopfzeile (Designsprache: keine Erklärzeilen unter Knöpfen). */
+.mat-artikeltitel :is(.mat-aussondern-hilfe, .mat-schon-gemeldet) { margin: 6px 0; }
 .mat-mangel-alt > summary { cursor: pointer; color: var(--grau); margin: 4px 0 10px; }
 .mat-mangel-liste { list-style: none; margin: 0; padding: 0; }
 .mat-mangel-liste > li { padding: 8px 0; border-bottom: 1px solid var(--linie); }
