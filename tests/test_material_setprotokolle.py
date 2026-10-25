@@ -22,8 +22,8 @@ from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import (H, festschreiben, freigeben, gliederung, katalog_grund, make_app, neuer_artikel,  # noqa: E402
-                           neues_konto, pruef_formulare, starten, umgebung)
+from test_material import (H, anmelden, festschreiben, freigeben, gliederung, katalog_grund, make_app,  # noqa: E402
+                           neuer_artikel, neues_konto, pruef_formulare, starten, umgebung)
 from test_material_antrag import _pdf_text  # noqa: E402
 from test_material_set_rueckbau import _schema, _unterschied, abgewiesen, roh  # noqa: E402
 from test_material_trennung import bis_schritt, endversion, zeilen  # noqa: E402
@@ -479,7 +479,8 @@ def test_zwischenzeilen():
 def test_abschluss_zweistufig():
     """Ablauf B2 = Sicherheit 1 (Entscheidung „PDFs vorher erzeugen“): Die PDFs entstehen ohne Schreibsperre – während
     des Renderns schreibt eine andere Verbindung ohne zu warten. Ändert sich zwischen Rendern und Festschreiben etwas, das
-    in den Protokollen stünde, wird verworfen und neu gerendert (keine Zwischendatei bleibt, keine Nummer verbraucht);
+    in den Protokollen stünde, wird verworfen und neu gerendert (keine Zwischendatei bleibt; die vorab reservierten
+    Nummern des verworfenen Versuchs bleiben eine Lücke – N1);
     ändert es sich jedes Mal, 409 mit verständlicher Meldung und nichts festgeschrieben. verwaiste_beiseite löscht nur alte
     Zwischendateien."""
     from app.material.services import durchgang as durchgang_dienst
@@ -525,7 +526,7 @@ def test_abschluss_zweistufig():
         assert len(aufrufe) == 2 and schreiber.count("setprotokoll") == 6 and schreiber.count("sammelprotokoll") == 2
         s = _set_zeilen(t, rid)
         jahr = s[t.a]["protocol_id"].split("-")[1]
-        assert sorted(z["protocol_id"] for z in s.values()) == [f"T-{jahr}-{n:06d}" for n in (1, 2, 3)]
+        assert sorted(z["protocol_id"] for z in s.values()) == [f"T-{jahr}-{n:06d}" for n in (4, 5, 6)]
         assert s[t.c]["ordner"] == "OG Setstadt › Kiste C neu"
         haupt = " ".join(_pdf_text(t.w.get(f"/material/durchgang/{rid}/sammelprotokoll").data).split())
         assert "Kiste C neu" in haupt
@@ -578,7 +579,7 @@ def test_abschluss_zweistufig():
             protokoll.verwaiste_beiseite(db.get_db())
         assert not os.path.exists(alt) and os.path.exists(jung)
         # Zwischennamen sind keine Protokolldateien: Sie heben den Zähler nicht (Durchgang auf Set C: kein weiteres T).
-        assert zeilen(t.app, "SELECT seq FROM sqlite_sequence WHERE name = 'mat_round_setprotokoll'")[0]["seq"] == 3
+        assert zeilen(t.app, "SELECT seq FROM sqlite_sequence WHERE name = 'mat_round_setprotokoll'")[0]["seq"] == 6
         assert not os.path.isdir(os.path.join(tmp, "pdf", "verwaist"))
     print("Zweistufiger Abschluss bestanden.")
 
@@ -593,6 +594,58 @@ def test_dateiname_ascii():
     print("Dateiname bestanden.")
 
 
+def test_gleichzeitige_abschluesse():
+    """Nachprüfung vom 25.10.2026, N1: Vier Durchgänge in vier Gliederungen, gleichzeitig abgeschlossen (je zwei Sets):
+    alle 200, jeder rendert genau einmal (die T-Nummern sind vorab reserviert – ein fremder Abschluss verdrängt keinen),
+    acht verschiedene Nummern ohne Lücke. Die 409-Meldung nennt auch den gleichzeitigen Abschluss."""
+    import threading
+    from app.material.services import durchgang as durchgang_dienst
+    from app.material.services import protokoll
+    assert "gleichzeitig ein anderer Durchgang abgeschlossen" in durchgang_dienst.GEAENDERT
+    with ohne_post(), tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w, p = k["wart"], k["pruefer"]
+        runden = []
+        for n in range(4):
+            g, _ = gliederung(k["adm"], f"OG Parallel {n}")
+            for m in range(2):
+                fid = ordner_neu(w, g, f"Rucksack {n}-{m}", "set")
+                neuer_artikel(w, ids["hms"], fid, serial_no=f"PAR-{n}-{m}")
+            rid = w.post(f"{API}/durchgaenge", json={"folder_id": g, "titel": f"Platzhalter {n}"}).json["durchgang"]["id"]
+            for x in zeilen(app, "SELECT item_id FROM mat_round_item WHERE round_id = ?", (rid,)):
+                pruefen(p, x["item_id"], rid)
+            runden.append(rid)
+        echt, gerendert = protokoll.durchgang_rendern, []
+
+        def zaehlen(v):
+            gerendert.append(v["r"]["id"])
+            echt(v)
+        protokoll.durchgang_rendern = zaehlen
+        ergebnis, start = {}, threading.Barrier(4)
+
+        def abschliessen(rid):
+            c = anmelden(app, "wart@example.org", "passwort1")
+            start.wait()
+            r = c.post(f"{API}/durchgaenge/{rid}/abschliessen", json={})
+            ergebnis[rid] = (r.status_code, r.get_json())
+        try:
+            faeden = [threading.Thread(target=abschliessen, args=(rid,)) for rid in runden]
+            for f in faeden:
+                f.start()
+            for f in faeden:
+                f.join(timeout=600)
+        finally:
+            protokoll.durchgang_rendern = echt
+        assert all(ergebnis[rid][0] == 200 for rid in runden), ergebnis
+        assert sorted(gerendert) == sorted(runden), gerendert          # keiner verworfen
+        nummern = sorted(z["protocol_id"] for z in zeilen(app, "SELECT protocol_id FROM mat_round_setprotokoll"))
+        jahr = nummern[0].split("-")[1]
+        assert nummern == [f"T-{jahr}-{n:06d}" for n in range(1, 9)], nummern
+    print("Gleichzeitige Abschlüsse bestanden.")
+
+
 if __name__ == "__main__":
     test_abschluss()
     test_set_als_durchgang_abbruch_und_fehler()
@@ -603,4 +656,5 @@ if __name__ == "__main__":
     test_zwischenzeilen()
     test_abschluss_zweistufig()
     test_dateiname_ascii()
+    test_gleichzeitige_abschluesse()
     print("Alle Tests der Set-Protokolle bestanden.")

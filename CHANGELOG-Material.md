@@ -4252,8 +4252,8 @@ bericht_pruefung_set_rueckbau_l2c_*.md`) und die Entscheidungen des Nutzers vom 
   üblichen Prüfungen (offen, Entwürfe), schließen, **alle Protokolldaten noch einmal ausrechnen** und mit den gerenderten
   vergleichen (Nummern, Artikel, Ordnerpfade, Prüfer, Ausnahmen, Seriennummern …). Gleich → die Dateien kommen per hartem
   Link unter ihren endgültigen Namen (nie überschreibend), Zeilen und Journal wie bisher. Anders → verwerfen
-  (Zwischendateien weg, keine Nummer verbraucht) und neu, höchstens 3 Versuche; danach 409 „Während des Festschreibens
-  wurde am Durchgang weitergearbeitet … Bitte noch einmal versuchen.“ – nie 500. Kann die Datenbank trotzdem nicht
+  (Zwischendateien weg) und neu, höchstens 3 Versuche; danach 409 „Während des Festschreibens wurde am Durchgang
+  weitergearbeitet … oder gleichzeitig ein anderer Durchgang abgeschlossen … Bitte noch einmal versuchen.“ – nie 500. Kann die Datenbank trotzdem nicht
   gesperrt werden, 503 mit Meldung. Für Prüfer und Materialwart ändert sich nichts: Der Abschluss wartet wie bisher.
   Der Abbruch geht denselben Weg (nur das Sammelprotokoll).
 - Nummernvergabe, Festschreiben, `verwaiste_beiseite` und Unveränderlichkeit bleiben, wie sie waren: Endgültige Namen
@@ -4270,9 +4270,17 @@ bericht_pruefung_set_rueckbau_l2c_*.md`) und die Entscheidungen des Nutzers vom 
   | Last ≈ 12 (10 Rechenschleifen) | 111,3 s | **0,56 s** | 109, alle 200, keine über 2 s |
 
   Vorher hielt derselbe Abschluss die Sperre 32,3 s bzw. 64,4 s (Bericht Sicherheit). Zwei gleichzeitige Abschlüsse in
-  zwei Gliederungen (p07, je 12 Sets): beide 200, der zweite verwarf einmal (die T-Nummern hatte der erste vergeben),
-  T-…001–012 und 013–024, keine Dopplung. Abbruch mitten im Rendern (SIGKILL nach 12 s): 17 Zwischendateien, kein `.pdf`,
-  nichts in `pdf/verwaist/`; der erneute Abschluss vergibt T-…000001 (keine Lücke).
+  zwei Gliederungen (p07, je 12 Sets): beide 200, der zweite verwarf einmal (die T-Nummern hatte der erste vergeben –
+  behoben mit N1, siehe unten), T-…001–012 und 013–024, keine Dopplung. Abbruch mitten im Rendern (SIGKILL nach 12 s): 17 Zwischendateien, kein `.pdf`,
+  nichts in `pdf/verwaist/`; der erneute Abschluss vergibt T-…000001 (keine Lücke – Stand vor N1, siehe unten).
+- **Nachtrag N1 (Nachprüfung der Sicherheit zu cf52a49)**: Gleichzeitige Abschlüsse *verschiedener* Durchgänge
+  verwarfen sich gegenseitig, weil der gemeinsame Zähler der T-Nummern zum Vergleich gehörte (vier Gliederungen
+  gleichzeitig → der vierte 409 mit der unpassenden Meldung). Jetzt reserviert jeder Abschluss seine T-Nummern **vor dem
+  Rendern** in einer eigenen kurzen Schreibtransaktion (`protokoll.t_nummern_reservieren`, hebt `sqlite_sequence`);
+  unter der Sperre wird mit denselben Nummern verglichen. Ein verworfener Versuch und ein Abbruch des Prozesses lassen
+  seine reservierten Nummern als Lücke zurück – wie verworfene Entwürfe (Kopf von protokoll.py). Die 409-Meldung nennt
+  auch den gleichzeitigen Abschluss. Probe p07 mit vier Gliederungen à 6 Sets (`p05_aufbau … 6 0 5 4`): alle vier 200 im
+  ersten Versuch, T-…001–024 ohne Dopplung, Sperre je 0,01–0,07 s; Test `test_gleichzeitige_abschluesse` (vier Threads).
 
 ### Zwischenzeilen im Sammel- und Set-Protokoll (Ablauf B1 = Browser 1)
 
@@ -4325,10 +4333,11 @@ bericht_pruefung_set_rueckbau_l2c_*.md`) und die Entscheidungen des Nutzers vom 
 
 - `tests/test_material_setprotokolle.py`: neu `test_zwischenzeilen` (b3/b4, S-2, Set-Protokoll des äußeren Sets, Durchgang
   direkt auf einem Set, PDF-Text), `test_abschluss_zweistufig` (eine andere Verbindung schreibt während des Renderns ohne
-  zu warten; Änderung zwischen Rendern und Festschreiben → neu gerendert, Nummern ohne Lücke, keine Zwischendatei, Rechte
-  0444; jedes Mal geändert → 409 nach 3 Versuchen, nichts festgeschrieben; Abbruch; `verwaiste_beiseite` löscht nur alte
-  Zwischendateien und hebt den Zähler nicht), `test_dateiname_ascii`; angepasst: Prüfseite „Set-Protokoll“,
-  Verzeichnis mit Spalte „Set“, ZIP-Ordner `Set-Protokolle/`, Oberfläche statisch.
+  zu warten; Änderung zwischen Rendern und Festschreiben → neu gerendert, seit N1 mit neuen Nummern; keine
+  Zwischendatei, Rechte 0444; jedes Mal geändert → 409 nach 3 Versuchen, nichts festgeschrieben; Abbruch;
+  `verwaiste_beiseite` löscht nur alte Zwischendateien und hebt den Zähler nicht), `test_dateiname_ascii`,
+  `test_gleichzeitige_abschluesse` (N1); angepasst: Prüfseite „Set-Protokoll“, Verzeichnis mit Spalte „Set“, ZIP-Ordner
+  `Set-Protokolle/`, Oberfläche statisch.
 
 ## Texte über die volle Breite (Wunsch des Nutzers, 25.10.2026)
 

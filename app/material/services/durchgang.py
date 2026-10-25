@@ -379,7 +379,8 @@ def einbeziehen(rid, iid):
 # Wie oft Abschließen bzw. Abbrechen neu rendert, wenn sich zwischen dem Rendern und dem Festschreiben etwas geändert hat.
 VERSUCHE = 3
 GEAENDERT = ("Während des Festschreibens wurde am Durchgang weitergearbeitet (etwa geprüft, ausgenommen oder ein Ordner "
-             "geändert) – es wurde nichts festgeschrieben. Bitte noch einmal versuchen.")
+             "geändert) oder gleichzeitig ein anderer Durchgang abgeschlossen – es wurde nichts festgeschrieben. Bitte "
+             "noch einmal versuchen.")
 
 
 @contextmanager
@@ -453,19 +454,26 @@ def _beenden(rid, akteur, abbruch):
         tag, ts = heute().isoformat(), db.now()
         beginn = time.monotonic()
         with protokoll.zwischendateien():
-            with _lesestand():
-                r = _runde_offen(rid)
-                if not abbruch:
-                    _abschliessbar(rid)
-                v = None
-                if not abbruch or db.query("SELECT 1 FROM mat_inspection WHERE round_id = ? LIMIT 1", (rid,), one=True):
-                    v = protokoll.durchgang_vorbereiten(
-                        dict(r, closed_on=tag, closed_by=akteur.get("id"), closed_by_name=akteur["name"],
-                             aborted=1 if abbruch else r["aborted"]), ts)
-            if v:
-                protokoll.durchgang_rendern(v)
-            gerendert = time.monotonic()
             try:
+                with _lesestand():
+                    r = _runde_offen(rid)
+                    if not abbruch:
+                        _abschliessbar(rid)
+                    geschlossen = dict(r, closed_on=tag, closed_by=akteur.get("id"), closed_by_name=akteur["name"],
+                                       aborted=1 if abbruch else r["aborted"])
+                    auswahl = None
+                    if not abbruch or db.query("SELECT 1 FROM mat_inspection WHERE round_id = ? LIMIT 1", (rid,),
+                                               one=True):
+                        auswahl = protokoll.durchgang_auswahl(geschlossen)
+                v = None
+                if auswahl:
+                    # Die T-Nummern vorab in einer eigenen kurzen Transaktion (N1): Ein gleichzeitiger Abschluss eines
+                    # anderen Durchgangs verdrängt diesen Versuch dann nicht.
+                    kennungen = protokoll.t_nummern_reservieren(len(auswahl["sets"]))
+                    with _lesestand():
+                        v = protokoll.durchgang_vorbereiten(geschlossen, ts, kennungen, auswahl["eintraege"])
+                    protokoll.durchgang_rendern(v)
+                gerendert = time.monotonic()
                 with protokoll.dateien_sichern():
                     with db.transaction(sofort=True):
                         gesperrt = time.monotonic()

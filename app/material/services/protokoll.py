@@ -16,8 +16,8 @@ Festschreibens. Die Lücken zwischen den Nummern sind verworfene Entwürfe, kein
 Scheitert die Transaktion nach dem Schreiben einer Datei, löscht dateien_sichern() sie wieder – sonst
 lägen PDFs ohne Datenbankzeile herum.
 
-Ein Durchgang schreibt seit der Prüfung vom 25.10.2026 zweistufig fest (durchgang_vorbereiten, durchgang_rendern,
-durchgang_festschreiben): Sammel- und Set-Protokolle entstehen OHNE Schreibsperre unter Zwischennamen; unter der kurzen
+Ein Durchgang schreibt seit der Prüfung vom 25.10.2026 zweistufig fest (durchgang_auswahl, t_nummern_reservieren,
+durchgang_vorbereiten, durchgang_rendern, durchgang_festschreiben): Sammel- und Set-Protokolle entstehen OHNE Schreibsperre unter Zwischennamen; unter der kurzen
 Schreibsperre rechnet durchgang_festschreiben ihre Daten noch einmal aus und übernimmt die Dateien nur, wenn sie genau
 gleich sind – sonst verwirft der Aufrufer sie und beginnt neu. Mit vielen Sets hielt das Rendern unter der Sperre die
 ganze Plattform länger fest, als andere Anfragen warten (15 s, app/db.py)."""
@@ -848,27 +848,53 @@ class Veraendert(Exception):
     der Aufrufer verwirft die vorab gerenderten Dateien und beginnt neu (durchgang._beenden)."""
 
 
-def durchgang_vorbereiten(r, ts):
-    """Stufe 1 des Festschreibens eines Durchgangs, ohne Schreibsperre: was entstünde, als Daten. r ist der Durchgang, wie
-    er nach dem Abschluss bzw. Abbruch dasteht (closed_on, closed_by_name, aborted). Beim regulären Abschluss je Set-Ordner
-    unterhalb des Durchgangsordners, in dem mindestens ein Artikel geprüft wurde, ein Set-Protokoll (F2 b: nicht beim
-    Abbruch, nicht bei „alles ausgenommen“) mit eigener Nummer T-<jahr>-<nr> (F3 a: die nächsten Kennungen der Tabelle –
-    erst alle Nummern, ein inneres Set nennt sein Protokoll im äußeren) und seinen Daten; dazu die Protokoll-ID des
-    Sammelprotokolls. Unter der Sperre rechnet durchgang_festschreiben dasselbe noch einmal."""
-    pid = protokoll_id("sammelprotokoll", r["id"], ts)
+def durchgang_auswahl(r):
+    """Stufe 1a, ohne Schreibsperre: die Zeilen des Durchgangs und die Set-Ordner, die ein Set-Protokoll bekommen – je
+    Set-Ordner unterhalb des Durchgangsordners, in dem mindestens ein Artikel geprüft wurde (F2 b: nicht beim Abbruch,
+    nicht bei „alles ausgenommen“). r ist der Durchgang, wie er nach dem Abschluss bzw. Abbruch dasteht."""
     eintraege = _eintraege(r)
+    sets = [] if r["aborted"] else [fid for fid, s in set_ordner_von(eintraege, r["folder_id"]).items() if s["geprueft"]]
+    return {"eintraege": eintraege, "sets": sets}
+
+
+def t_nummern_reservieren(anzahl):
+    """Die Kennungen (= Nummern T-<jahr>-<nr>, F3 a) für anzahl Set-Protokolle vorab vergeben – in einer eigenen, kurzen
+    Schreibtransaktion, die den Zähler der Tabelle (AUTOINCREMENT, sqlite_sequence) um anzahl hebt. So verdrängen sich
+    gleichzeitige Abschlüsse verschiedener Durchgänge nicht mehr (Nachprüfung vom 25.10.2026, N1): Jeder rendert mit
+    seinen eigenen Nummern. Verworfene Versuche hinterlassen Lücken – wie verworfene Entwürfe (siehe Kopf)."""
+    if not anzahl:
+        return []
+    with db.transaction(sofort=True):
+        zeile = db.query("SELECT seq FROM sqlite_sequence WHERE name = 'mat_round_setprotokoll'", one=True)
+        basis = max(zeile["seq"] if zeile else 0,
+                    db.query("SELECT COALESCE(MAX(id), 0) AS n FROM mat_round_setprotokoll", one=True)["n"])
+        if zeile:
+            db.execute("UPDATE sqlite_sequence SET seq = ? WHERE name = 'mat_round_setprotokoll'", (basis + anzahl,))
+        else:
+            db.execute("INSERT INTO sqlite_sequence (name, seq) VALUES ('mat_round_setprotokoll', ?)", (basis + anzahl,))
+    return list(range(basis + 1, basis + anzahl + 1))
+
+
+def durchgang_vorbereiten(r, ts, kennungen, eintraege=None):
+    """Stufe 1b des Festschreibens eines Durchgangs, ohne Schreibsperre: was entstünde, als Daten. r ist der Durchgang,
+    wie er nach dem Abschluss bzw. Abbruch dasteht (closed_on, closed_by_name, aborted). Je Set-Ordner aus
+    durchgang_auswahl ein Set-Protokoll mit der nächsten der vorab reservierten Kennungen (t_nummern_reservieren; erst
+    alle Nummern, ein inneres Set nennt sein Protokoll im äußeren) und seinen Daten; dazu die Protokoll-ID des
+    Sammelprotokolls. Passt die Zahl der Sets nicht mehr zu den Kennungen, hat sich etwas geändert (Veraendert). Unter
+    der Sperre rechnet durchgang_festschreiben dasselbe mit denselben Kennungen noch einmal."""
+    pid = protokoll_id("sammelprotokoll", r["id"], ts)
+    if eintraege is None:
+        eintraege = _eintraege(r)
     haupt = {"protokoll_id": pid, "ordner": _pfad_text(r["folder_id"])}
     je_set, set_daten = {}, {}
-    if not r["aborted"]:
-        naechste = max(db.query("SELECT COALESCE(MAX(seq), 0) AS n FROM sqlite_sequence WHERE name = "
-                                "'mat_round_setprotokoll'", one=True)["n"],
-                       db.query("SELECT COALESCE(MAX(id), 0) AS n FROM mat_round_setprotokoll", one=True)["n"])
-        for fid, s in set_ordner_von(eintraege, r["folder_id"]).items():
-            if s["geprueft"]:
-                naechste += 1
-                je_set[fid] = dict(s, kennung=naechste, protokoll_id=protokoll_id("setprotokoll", naechste, ts))
-        for fid, s in je_set.items():
-            set_daten[fid] = _sammelprotokoll(r, s["protokoll_id"], ts, eintraege, wurzel=fid, haupt=haupt, je_set=je_set)
+    auswahl = [] if r["aborted"] else [(fid, s) for fid, s in set_ordner_von(eintraege, r["folder_id"]).items()
+                                       if s["geprueft"]]
+    if len(auswahl) != len(kennungen):
+        raise Veraendert()
+    for (fid, s), kennung in zip(auswahl, kennungen):
+        je_set[fid] = dict(s, kennung=kennung, protokoll_id=protokoll_id("setprotokoll", kennung, ts))
+    for fid, s in je_set.items():
+        set_daten[fid] = _sammelprotokoll(r, s["protokoll_id"], ts, eintraege, wurzel=fid, haupt=haupt, je_set=je_set)
     return {"r": r, "ts": ts, "pid": pid, "eintraege": eintraege, "je_set": je_set, "set_daten": set_daten}
 
 
@@ -896,7 +922,7 @@ def durchgang_festschreiben(rid, v):
     if not r or not r["closed_on"] or r["locked_at"]:
         raise RuntimeError("Sammelprotokoll nur einmal und erst nach dem Abschluss.")
     ts, pid, je_set = v["ts"], v["pid"], v["je_set"]
-    jetzt = durchgang_vorbereiten(r, ts)
+    jetzt = durchgang_vorbereiten(r, ts, [s["kennung"] for s in je_set.values()])
     if (jetzt["pid"] != pid or list(jetzt["je_set"]) != list(je_set)
             or any({k: je_set[fid][k] for k in s} != s for fid, s in jetzt["je_set"].items())
             or jetzt["set_daten"] != v["set_daten"]
