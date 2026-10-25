@@ -337,6 +337,10 @@ def test_beispielbestand():
             assert set(zaehlung) == set(st.STATUS), zaehlung
             assert any(i["lock_state"] == "verloren" for i in artikel)
             assert any(i["lock_state"] == "gesperrt" for i in artikel)
+            # Überfällig ist, was in diesem Jahr noch aussteht (MTW 2 seit gut einem Monat, das Zentrallager seit ein paar
+            # Tagen) – nichts, dessen Prüfung über ein Jahr ausgeblieben wäre.
+            spaet = [i["next_due_on"] for i in artikel if st.status(i) == "ueberfaellig"]
+            assert spaet and min(spaet) >= (bestand.heute() - timedelta(days=60)).isoformat(), sorted(spaet)[:5]
             for i in artikel:
                 if st.status(i) == "lebensdauer":
                     assert i["product_id"] == ids["gurt"] and i["retire_by"] <= bestand.heute().isoformat()

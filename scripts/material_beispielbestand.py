@@ -123,14 +123,14 @@ ORDNER = {
     ],
 }
 # Bereiche mit eigener Jahresprüfung: (Gliederung, Ordner, Tage seit der letzten Runde). Die Runden davor liegen je ein
-# Jahr früher, solange sie nach dem Beginn liegen. „aktuell_aus“: Die Runde dieses Jahres ist ausgefallen – der Bereich ist
-# überfällig. Das Zentrallager prüft heute in einem offenen Durchgang (OFFENER_DURCHGANG).
+# Jahr früher, solange sie nach dem Beginn liegen. Im MTW 2 liegt die letzte gut ein Jahr zurück – die Runde dieses Jahres
+# ist ausgefallen, der Bereich seit gut einem Monat überfällig; die persönliche Ausrüstung ist bald fällig. Das
+# Zentrallager prüft heute in einem offenen Durchgang (OFFENER_DURCHGANG).
 BEREICHE = [
     (GROSS, "lager", 368), (GROSS, "gw1", 200), (GROSS, "gw2", 150), (GROSS, "mtw1", 110), (GROSS, "boot", 80),
     (GROSS, "mtw2", 400), (GROSS, "gruppen", 45), (GROSS, "persoenlich", 345), (KLEIN, "lager", 170),
     (KLEIN, "mtw", 230),
 ]
-AUSGEFALLEN = {(GROSS, "mtw2")}
 OFFENER_DURCHGANG = (GROSS, "lager", 12)          # eröffnet vor 12 Tagen, ein Drittel erledigt
 EINSATZKRAEFTE = 40                               # höchstens; bei kleinem --artikel weniger (je 20 Artikel eine)
 # Was die Einsatzkräfte sehen: die erste liest ihren persönlichen Ordner, die übrigen haben – wie die meisten, denen PSA
@@ -829,8 +829,7 @@ class Beispielbestand:
             tag = self.h - timedelta(days=tage + 365 * k)
             if tag <= self.beginn + timedelta(days=20):
                 break
-            if not (k == 0 and (kurz, bereich) in AUSGEFALLEN):
-                out.insert(0, tag)
+            out.insert(0, tag)
             k += 1
         return out
 
