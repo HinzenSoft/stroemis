@@ -193,7 +193,9 @@
                      reparatur: "Prüfung nach Reparatur", aussonderung: "Aussonderung" };
   const PRUEFART_KURZ = { eingang: "Eingangsprüfung", periodisch: "periodisch", ausserplanmaessig: "außerplanmäßig",
                           reparatur: "Reparatur", aussonderung: "Aussonderung" };
-  const ERGEBNIS = { einsatzbereit: "einsatzbereit", instandsetzen: "instandsetzen", aussondern: "aussondern" };
+  // Wie models.ERGEBNISSE: „aussondern“ nur an Aussonderungen und Prüfungen vor Schritt 28; wählbar sind die drei ersten.
+  const ERGEBNIS = { einsatzbereit: "einsatzbereit", instandsetzen: "instandsetzen", aussondern_empfohlen: "aussondern empfohlen", aussondern: "aussondern (ausgesondert)" };
+  const WAEHLBAR = ["einsatzbereit", "instandsetzen", "aussondern_empfohlen"];
   const BEFUND = { ok: "in Ordnung", mangel: "Mangel", nicht_zutreffend: "nicht zutreffend" };
   const ANHANGART = { externes_pruefformular: "externes Prüfformular", pruefbericht: "Prüfbericht", foto: "Foto", sonstiges: "Sonstiges" };
   const SPERRGRUND = { sturz: "Sturzbelastung", beschaedigung: "Beschädigung", verlust: "Verlust", rueckruf: "Rückruf" };
@@ -244,7 +246,7 @@
     aussonderung: "Aussonderung",
     pruefer: "Prüfer", result: "Ergebnis", inspected_on: "Prüftag", reason: "Grund", maengel: "Mängel", item_id: "Artikel Nr.",
     round_id: "Durchgang Nr.", form_id: "Formular Nr.", form_version: "Formularversion", inspector_name: "Prüfer",
-    begonnen: "begonnen", seiten: "Seiten", dateien: "Dateien", basis: "aus Prüfung", erledigt: "erledigt", ausgenommen: "ausgenommen",
+    begonnen: "begonnen", seiten: "Seiten", dateien: "Dateien", basis: "aus Prüfung", empfehlung: "empfohlen in Prüfung", erledigt: "erledigt", ausgenommen: "ausgenommen",
     links: "Links", fotos: "Fotos", note: "Bemerkung", answer: "Antwort", status: "Status",
     von: "Kopie von Produkt Nr.", kopie_von: "Kopie von Dokument Nr.", dokumente: "Dokumente übernommen",
     protocol_id: "Protokoll-ID", pdf_sha256: "Prüfsumme", pdf_hashed_bytes: "Bytes", file_sha256: "Prüfsumme der Datei",
@@ -847,7 +849,7 @@
     if (feld === "material_kind" || feld === "default_material_kind") return esc(MATERIALART[v] || v);
     if (feld === "kind" || feld === "art") return esc(PRUEFART_KURZ[v] || ORDNERART[v] || ANHANGART[v] || v);
     if (feld === "result" || feld === "ergebnis") return esc(ERGEBNIS[v] || v);
-    if (["pruefung", "aussonderung", "basis", "berichtigung", "berichtigt"].includes(feld) && Number.isInteger(v)) return `<a href="/material/pruefung/${v}">Nr. ${v}</a>`;
+    if (["pruefung", "aussonderung", "basis", "empfehlung", "berichtigung", "berichtigt"].includes(feld) && Number.isInteger(v)) return `<a href="/material/pruefung/${v}">Nr. ${v}</a>`;
     if (/sha256$/.test(feld)) return `<span class="mat-hash">${esc(v)}</span>`;
     if (feld === "lock_state") return esc({ frei: "frei", gesperrt: "gesperrt", verloren: "verloren (gesperrt)", ausgesondert: "ausgesondert" }[v] || v);
     if (SET_WERTE[feld] && typeof v === "string") return esc(SET_WERTE[feld][v] || v);
@@ -1520,7 +1522,7 @@
         ${opts.person ? `<td data-l="Person" class="mat-eng-weg mat-k-halb">${esc(a.zugeordnet_name || "")}</td>` : ""}
         ${opts.pfad ? `<td data-l="Ablage">${esc(a.pfad || "")}</td>` : ""}
         <td data-l="Nächste Prüfung" class="mat-schmal-weg">${naechste(a) && a.status !== "neu" ? esc(naechste(a)) : `<span class="muted">${esc(naechste(a) || "–")}</span>`}</td>
-        <td data-l="Status" class="mat-k-marke">${statusMarke(a.status)}${a.rueckruf ? ` <span class="mat-rr-marke" title="Rückruf: ${esc(a.rueckruf)}">Rückruf</span>` : ""}${mangelMarke(a.mangel)}${a.entwurf ? `<div class="small muted">in Prüfung bei ${esc(a.entwurf.pruefer || "?")}</div>` : ""}${naechste(a) ? `<div class="mat-schmal-zusatz small${a.status === "neu" ? " muted" : ""}">${a.status === "neu" ? "" : "fällig "}${esc(naechste(a))}</div>` : ""}</td>
+        <td data-l="Status" class="mat-k-marke">${statusMarke(a.status)}${empfohlenMarke(a.aussonderung_empfohlen)}${a.rueckruf ? ` <span class="mat-rr-marke" title="Rückruf: ${esc(a.rueckruf)}">Rückruf</span>` : ""}${mangelMarke(a.mangel)}${a.entwurf ? `<div class="small muted">in Prüfung bei ${esc(a.entwurf.pruefer || "?")}</div>` : ""}${naechste(a) ? `<div class="mat-schmal-zusatz small${a.status === "neu" ? " muted" : ""}">${a.status === "neu" ? "" : "fällig "}${esc(naechste(a))}</div>` : ""}</td>
         ${opts.pruefen ? `<td class="tabelle-aktionen">${pruefKnopf(a)}</td>` : ""}</tr>`).join("")}</tbody></table>
       ${gesperrte ? '<p class="help mat-wahl-hinweis">Graue Kästchen: Gesperrte und ausgesonderte Artikel bleiben in ihrem Systemordner und lassen sich nicht verschieben.</p>' : ""}`;
   }
@@ -1568,7 +1570,7 @@
       const name = (d.artikel.find((a) => a.zugeordnet_name) || {}).zugeordnet_name;
       const personZeile = zugeordnet ? `<p class="mat-pr-ordner">Nur Artikel, die ${name ? esc(name) : "einer Person"} zugeordnet sind
         · <a href="${adresse({ zugeordnet: null })}">alle Personen</a></p>` : "";
-      $("#pr-liste").innerHTML = `${ordnerZeile}${personZeile}<p class="help">Überfällig, Lebensdauer erreicht (die Prüfung endet mit „aussondern“), neu (die Eingangsprüfung steht aus) oder in den nächsten ${d.schwelle_tage} Tagen fällig. Prüfen lässt sich jeder Artikel aber jederzeit – auch aus seiner Ansicht.</p>
+      $("#pr-liste").innerHTML = `${ordnerZeile}${personZeile}<p class="help">Überfällig, Lebensdauer erreicht (die Prüfung endet mit „aussondern empfohlen“ oder „instandsetzen“), neu (die Eingangsprüfung steht aus) oder in den nächsten ${d.schwelle_tage} Tagen fällig. Prüfen lässt sich jeder Artikel aber jederzeit – auch aus seiner Ansicht.</p>
         <div class="c-tabs mat-filter">${FILTER.map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}</button>`).join("")}</div>
         ${d.artikel.length ? artikelTabelle(d.artikel, { pfad: true, pruefen: d.artikel.some((a) => a.darf && a.darf.pruefen), sort }) : leer("Keine Artikel in dieser Auswahl.")}
         ${seitenleiste(d.gesamt, seite, 50)}`;
@@ -2582,8 +2584,9 @@
     const zu = a.zugeordnet;
     const zuKnoepfe = darf.verwalten && (!aus || zu) ? `<div class="btn-row mat-zuordnung">${aus ? "" : `<button class="btn secondary small" type="button" data-act="zuordnen">${zu ? "Ändern" : "Zuordnen …"}</button>`}${zu ? '<button class="btn secondary small" type="button" data-act="zuordnung-loesen">Lösen</button>' : ""}</div>` : "";
     // Gemeldete Mängel (Phase 3 · L1): offene als Banner oben, erledigte eingeklappt unter „Prüfungen“. Melden darf jeder
-    // mit Leserecht, außer am ausgesonderten Artikel; „Aussondern“ des Materialwarts ist nach einer reinen Mangelsperre
-    // ausgegraut, bis ein Prüfer den Artikel geprüft hat (NUR_GEMELDET).
+    // mit Leserecht, außer am ausgesonderten Artikel. „Aussondern“ des Materialwarts ist ausgegraut, solange es der Server
+    // nicht erlaubt (a.aussondern, Schritt 28: erst nach einer Prüfung mit „instandsetzen“ oder „aussondern empfohlen“,
+    // ohne Prüfung nur bei Verlust) – der Grund steht darunter.
     const maengel = a.maengel || [];
     const darfMelden = !aus && Boolean(darf.lesen);
     // Eigene offene Meldung: Knopf ausgegraut mit Hilfezeile wie in „Meine PSA“ – kein Dialog, der erst 409 bringt.
@@ -2591,11 +2594,14 @@
     const schonGemeldet = darfMelden && a.mangel_eigen_offen;
     const sperrKnopf = frei && darf.pruefen && !a.entwurf;
     const aussonderKnopf = gesperrt && darf.verwalten && !a.entwurf;
+    const aussondernNein = aussonderKnopf && a.aussondern && !a.aussondern.ok ? a.aussondern.grund : "";
+    const empf = a.aussonderung_empfohlen;
     const zuordnung = darf.grund ? zeile("Zugeordnet an", `${zu ? `${esc(zu.name)}${zu.gliederung ? ` <span class="muted">· ${esc(zu.gliederung)}</span>` : ""}${zu.aktiv ? "" : ' <span class="muted">(deaktiviert)</span>'}`
       : '<span class="muted">–</span>'}${zuKnoepfe}`) : "";
     inhalt.innerHTML = `${quittungHtml()}${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${a.status === "ausgesondert" ? `<p class="mat-banner s-ausgesondert">AUSGESONDERT – dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden.</p>` : ""}
       ${a.status === "gesperrt" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
+      ${empf ? `<p class="notice mat-empfehlung"><strong>Aussonderung empfohlen</strong> – ${esc(empf.pruefer || "Prüfer")} am ${esc(fmtTag(empf.datum))} (<a href="/material/pruefung/${Number(empf.pruefung)}">${empf.protokoll_id ? `Protokoll ${esc(empf.protokoll_id)}` : "Prüfung ansehen"}</a>)${empf.grund ? `: ${esc(empf.grund)}` : ""}. Aussondern kann der Materialwart.</p>` : ""}
       ${maengel.filter((m) => m.offen).map(mangelBanner).join("")}
       ${a.status === "lebensdauer" ? `<p class="mat-banner s-lebensdauer">LEBENSDAUER ERREICHT – aussondern.</p>` : ""}
       ${a.status === "neu" ? '<p class="mat-banner s-neu">NEU – die Eingangsprüfung steht aus. Bis dahin nicht einsetzen.</p>' : ""}
@@ -2604,15 +2610,15 @@
       <div class="mat-artikelkopf">
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="Produktbild ${esc(produktName(p))}">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel">
-          <h1>${esc(a.inventory_no)} ${statusMarke(a.status, true)}</h1>
+          <h1>${esc(a.inventory_no)} ${statusMarke(a.status, true)}${empfohlenMarke(empf)}</h1>
           <p class="mat-produktzeile"><a href="/material/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}${artNrHtml(p.article_no)}</p>
           <p>Seriennummer <strong>${esc(a.serial_no)}</strong>${a.serial_generated ? ' <span class="badge grey">vom System vergeben</span><span class="help mat-sn-hinweis">Der Hersteller vergibt keine Seriennummer – diese Nummer bitte dauerhaft am Artikel anbringen.</span>' : ""}</p>
           <div class="btn-row mat-pruefknoepfe">${!aus && darf.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
             ${sperrKnopf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
             ${darfMelden ? `<button class="btn secondary small" type="button"${schonGemeldet ? ' disabled aria-describedby="mat-schon-gemeldet"' : ' data-act="mangel"'}>Mangel melden …</button>` : ""}
-            ${aussonderKnopf ? `<button class="btn secondary small" type="button"${a.mangel_nur_gemeldet ? ' disabled aria-describedby="mat-aussondern-hilfe"' : ' data-act="aussondern"'}>Aussondern</button>` : ""}</div>
+            ${aussonderKnopf ? `<button class="btn secondary small" type="button"${aussondernNein ? ' disabled aria-describedby="mat-aussondern-hilfe"' : ' data-act="aussondern"'}>Aussondern</button>` : ""}</div>
           ${schonGemeldet ? `<p class="help mat-schon-gemeldet" id="mat-schon-gemeldet">Du hast am ${esc(S.fmtDate(a.mangel_eigen_offen))} schon gemeldet – ein Prüfer sieht es sich an.${darf.verwalten ? "" : " Ergänzungen bitte direkt an den Materialwart."}</p>` : ""}
-          ${aussonderKnopf && a.mangel_nur_gemeldet ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(NUR_GEMELDET)}</p>` : ""}
+          ${aussondernNein ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(aussondernNein)}</p>` : ""}
           ${a.entwurf ? `<p class="small">In Prüfung bei <strong>${esc(a.entwurf.pruefer)}</strong> seit ${esc(fmtZeit(a.entwurf.seit))}
             ${fremderEntwurf ? ` <span class="mat-nowrap">· <a href="/material/pruefung/${a.entwurf.id}">ansehen</a></span>` : ""}
             ${fremderEntwurf && darf.verwalten ? ' <span class="mat-nowrap">· <button class="lnk" type="button" data-act="freigeben">Reservierung aufheben</button></span>' : ""}</p>` : ""}
@@ -2810,9 +2816,14 @@
     const grenzen = [[a.last_inspected_on, "letzte Prüfung"], [herst, "Herstellung"], [(a.created_at || "").slice(0, 10), "Erfassung"]].filter(([d]) => d);
     const fruehestens = grenzen.length ? grenzen.reduce((x, y) => (y[0] > x[0] ? y : x)) : null;
     const HINWEIS = "Die Aussonderung wird mit deiner Unterschrift festgeschrieben. Sie wird in deinem Profil gespeichert und als Kopie ins Aussonderungsprotokoll übernommen.";
+    // Die Empfehlung des Prüfers (Schritt 28) steht im Dialog; der Grund ist vorbelegt: verloren → Verlust, Lebensende
+    // erreicht → Lebensdauer, sonst irreparabel.
+    const empf = a.aussonderung_empfohlen;
+    const vorbelegt = a.lock_state === "verloren" ? "verlust" : a.retire_by && a.retire_by <= tag ? "lebensdauer" : "irreparabel";
     dialog(`<h2>${esc(a.inventory_no)} aussondern</h2>
       <p class="help">Die Aussonderung ist endgültig: Der Artikel wandert nach „Ausgesondert“, bleibt dort mit seinem Lebenslauf sichtbar und zählt nirgends mehr als Bestand.</p>
-      <div class="field-row"><div><label for="au-grund">Grund</label><select id="au-grund">${Object.entries(AUSSONDERUNGSGRUND).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
+      ${empf ? `<p class="notice mat-empfehlung"><strong>Aussonderung empfohlen</strong> von ${esc(empf.pruefer || "–")} am ${esc(fmtTag(empf.datum))}${empf.protokoll_id ? ` (Protokoll ${esc(empf.protokoll_id)})` : ""}${empf.grund ? `: ${esc(empf.grund)}` : ""}</p>` : ""}
+      <div class="field-row"><div><label for="au-grund">Grund</label><select id="au-grund">${Object.entries(AUSSONDERUNGSGRUND).map(([k, v]) => `<option value="${k}"${k === vorbelegt ? " selected" : ""}>${esc(v)}</option>`).join("")}</select></div>
         <div><label for="au-datum">Datum</label>${datumFeld("au-datum", tag, "tag")}
           <div class="help">${fruehestens ? `Frühestens ${esc(fmtTag(fruehestens[0]))} (${esc(fruehestens[1])}), spätestens` : "Spätestens"} heute (${esc(fmtTag(tag))}).</div></div></div>
       <label for="au-bem">Bemerkung</label><textarea id="au-bem" rows="3" maxlength="2000"></textarea>
@@ -5136,7 +5147,7 @@
       let alt;
       try { alt = JSON.parse(sessionStorage.getItem(ABSCHLUSS) || "null"); } catch (err) { alt = null; }
       if (alt && typeof alt === "object") {
-        if (Object.prototype.hasOwnProperty.call(ERGEBNIS, alt.ergebnis)) ergebnis = alt.ergebnis;
+        if (WAEHLBAR.includes(alt.ergebnis)) ergebnis = alt.ergebnis;
         const grund = imAbschluss("#pr-grund"), due = imAbschluss("#pr-due");
         if (grund && typeof alt.grund === "string") grund.value = alt.grund.slice(0, 300);
         if (due && typeof alt.faellig === "string" && /^\d{4}-\d{2}-\d{2}$/.test(alt.faellig)
@@ -5391,7 +5402,7 @@
     function abschlussHtml() {
       return `<div class="mat-abschluss" id="pr-abschluss" role="region" aria-label="Ergebnis und Abschluss">
         <div class="mat-ergebnis" role="group" aria-label="Ergebnis">
-          ${Object.keys(ERGEBNIS).map((e) => `<button type="button" data-act="ergebnis" data-e="${e}" class="e-${e}" aria-pressed="false">${esc(ERGEBNIS[e])}</button>`).join("")}</div>
+          ${WAEHLBAR.map((e) => `<button type="button" data-act="ergebnis" data-e="${e}" class="e-${e}" aria-pressed="false">${esc(ERGEBNIS[e])}</button>`).join("")}</div>
         <div class="mat-abschluss-zeile">
           <label class="mat-due" id="pr-due-feld" hidden>Nächste Prüfung ${datumFeld("pr-due", pr.vorschlag_naechste || "", "tag")}
             <span class="mat-due-hilfe">frühestens ${esc(fmtTag(isoHeute(1)))}${pr.vorschlag_naechste ? `, spätestens ${esc(fmtTag(pr.vorschlag_naechste))}` : ""}</span></label>
@@ -5440,7 +5451,7 @@
       else if (pr.lebensdauer && pr.lebensdauer.erreicht) teile.push("Lebensende erreicht – nicht einsatzbereit");
       if (pr.freipruefung && ergebnis === "einsatzbereit") teile.push("Freiprüfung: Der Artikel kehrt in seinen Herkunftsordner zurück");
       if (ergebnis === "instandsetzen" && !pr.freipruefung) teile.push("„instandsetzen“ sperrt den Artikel");
-      if (ergebnis === "aussondern") teile.push("„aussondern“ ist endgültig");
+      if (ergebnis === "aussondern_empfohlen") teile.push(pr.freipruefung ? "Der Artikel bleibt gesperrt – aussondern kann der Materialwart" : "„aussondern empfohlen“ sperrt den Artikel – aussondern kann der Materialwart");
       if (!DARF.unterschrift) teile.push("Deine Unterschrift fehlt noch – „Festschreiben“ fragt danach");
       $("#pr-hinweis", box).textContent = teile.join(" · ");
       $("#pr-hinweis", box).classList.toggle("warn", !!(h.offen.length || h.ohneFoto.length || h.ohneNotiz.length || h.kritisch.length));
@@ -5693,7 +5704,7 @@
       const maengel = offeneHinweise().maengel.length;
       /* Gemeldete Mängel (Phase 3 · L1): Mit „einsatzbereit“ hakt der Prüfer jede offene Meldung einzeln ab – erst dann ist
          „Festschreiben“ frei, und nur die abgehakten gehen als maengel_gesehen mit. Eine Berichtigung gibt bei offener
-         Meldung ohnehin nicht frei (der Server sagt es); „instandsetzen“ und „aussondern“ brauchen kein Häkchen. */
+         Meldung ohnehin nicht frei (der Server sagt es); „instandsetzen“ und „aussondern empfohlen“ brauchen kein Häkchen. */
       const zuHaken = daten.ergebnis === "einsatzbereit" && !pr.berichtigt ? (pr.maengel || []) : [];
       delete daten.maengel_gesehen;
       dialog(`<h2>Prüfung festschreiben</h2>
@@ -5711,10 +5722,10 @@
             Gemeldeten Mangel vom ${esc(S.fmtDate(m.created_at))} geprüft</label>
             ${m.description ? `<p class="small mat-text">${esc(m.description.length > 300 ? `${m.description.slice(0, 299)}…` : m.description)}</p>` : ""}</div>`).join("")}
           <p class="help" id="fs-maengel-hilfe">Freigeben kannst du erst, wenn du jeden gemeldeten Mangel geprüft hast.</p></fieldset>` : ""}
-        ${daten.ergebnis === "aussondern" ? '<p class="mat-fs-warnung"><strong>„aussondern“ ist endgültig.</strong> Der Artikel wandert nach „Ausgesondert“ und zählt nicht mehr als Bestand; dazu entsteht ein Aussonderungsprotokoll.</p>' : ""}
+        ${daten.ergebnis === "aussondern_empfohlen" ? "<p>Der Artikel wird gesperrt und wandert nach „Gesperrt“. Deine Empfehlung steht im Protokoll und am Artikel – aussondern kann danach der Materialwart.</p>" : ""}
         ${pr.berichtigt ? `<p>Diese Berichtigung ersetzt ${pr.berichtigt.protokoll_id ? `Protokoll ${esc(pr.berichtigt.protokoll_id)}` : "die ursprüngliche Prüfung"}; das Original bleibt unverändert erhalten.</p>` : ""}
         <p class="help">Danach ist die Prüfung unveränderlich; eine Korrektur geht nur als Berichtigung. Das Protokoll entsteht mit Prüfsumme.</p>
-        <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn${daten.ergebnis === "aussondern" ? " danger" : ""}" id="fs-ok" type="button">Festschreiben</button></div>`,
+        <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="fs-ok" type="button">Festschreiben</button></div>`,
       (dlg, body) => {
         const knopf = $("#fs-ok", body);
         const haken = $$("input[data-mangel]", body);
@@ -7271,13 +7282,13 @@
      Jede Meldung sperrt sofort; die Texte sagen überall dasselbe: beiseitelegen und dem Materialwart geben. */
   const MANGEL_MAX_FOTOS = 3;                       // mangel.MAX_FOTOS
   const MANGEL_TEXT_MAX = 2000;                     // mangel.TEXT_MAX
-  // mangel.NUR_GEMELDET – Hilfezeile am ausgegrauten „Aussondern“ des Materialwarts (kein Knopf, der nur 409 bringt).
-  const NUR_GEMELDET = "Der Artikel ist durch eine Mangelmeldung gesperrt und seitdem nicht geprüft – aussondern kann ihn jetzt nur ein Prüfer (Prüfung mit Ergebnis „aussondern“). Nach einer Prüfung mit „instandsetzen“ geht es auch hier.";
   // Anfang von mangel.MANGEL_NEU: Eine Meldung kam während der Prüfung – die Prüfung wird neu geladen.
   const MANGEL_NEU_ANFANG = "Am Artikel ist ein gemeldeter Mangel offen, den du nicht als geprüft abgehakt hast";
   const LAENGE_GEAENDERT_ANFANG = "Die Länge am Artikel wurde während der Prüfung";
   const BEISEITE = "Leg ihn sofort beiseite (aus Fahrzeug oder Lager) und gib ihn deinem Materialwart.";
   const mangelMarke = (x) => (x ? ' <span class="mat-mangel-marke" title="Mangel gemeldet">Mangel</span>' : "");
+  // Ein Prüfer hat die Aussonderung des gesperrten Artikels empfohlen (Schritt 28) – aussondern kann der Materialwart.
+  const empfohlenMarke = (x) => (x ? ' <span class="mat-empfohlen-marke">Aussonderung empfohlen</span>' : "");
   const tagZeit = (iso) => fmtZeit(iso).replace(",", "");         // „20.10.2026 13:05“ in der Zeit des Browsers
   // Fotos einer Meldung: Vorschau, groß die Webfassung – ein Original gibt es nicht (F4), „Original“ zeigt dieselbe.
   const mangelFotos = (m, titel) => ((m.fotos || []).length ? `<div class="mat-mangel-fotos">${m.fotos.map((f, i) => bildLink(f.web, f.web,

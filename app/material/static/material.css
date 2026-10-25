@@ -382,7 +382,7 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
   border-radius: var(--radius-pille); white-space: nowrap; }
 .mat-ergebnis-marke.e-einsatzbereit, .mat-befund.b-ok { background: var(--co-success-fl); color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
 .mat-ergebnis-marke.e-instandsetzen { background: var(--gelb); color: var(--anthrazit); }
-.mat-ergebnis-marke.e-aussondern, .mat-befund.b-mangel { background: var(--rot); color: var(--weiss); }
+.mat-ergebnis-marke.e-aussondern, .mat-ergebnis-marke.e-aussondern_empfohlen, .mat-befund.b-mangel { background: var(--rot); color: var(--weiss); }
 .mat-befund.b-nicht_zutreffend { background: var(--grau-hell); color: var(--grau); }
 .mat-pliste tr.mat-entwurf td, .mat-pruefliste tr.mat-entwurf td { background: var(--co-info-fl); }
 /* Links auf hellblauem Grund im dunklen Rot (Kontrast wie in Hinweisen, app.css --rot-auf-flaeche). */
@@ -499,7 +499,7 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
 .mat-ergebnis button:disabled { opacity: .4; cursor: not-allowed; text-decoration: line-through; }
 .mat-ergebnis button.e-einsatzbereit[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); color: var(--weiss); }
 .mat-ergebnis button.e-instandsetzen[aria-pressed="true"] { background: var(--gelb); border-color: var(--gelb-dunkel); color: var(--anthrazit); }
-.mat-ergebnis button.e-aussondern[aria-pressed="true"] { background: var(--mat-lebensdauer); border-color: var(--mat-lebensdauer); color: var(--weiss); }
+.mat-ergebnis button:is(.e-aussondern, .e-aussondern_empfohlen)[aria-pressed="true"] { background: var(--mat-lebensdauer); border-color: var(--mat-lebensdauer); color: var(--weiss); }
 .mat-abschluss-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 8px; }
 .mat-abschluss-zeile input[type=text] { flex: 1 1 220px; min-width: 0; }
 .mat-abschluss-zeile .mat-due { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 600; }
@@ -1112,7 +1112,7 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
   .mat-ue th.mat-ue-zahl { white-space: normal; }
   /* Marken dürfen hier umbrechen („Lebensdauer erreicht“): Mit dem kleineren Radius sieht eine einzeilige Marke weiter
      wie eine Pille aus, eine zweizeilige wie ein Kästchen. */
-  table.list.mat-tabelle :is(.mat-status, .mat-rr-marke, .mat-ergebnis-marke) { white-space: normal; border-radius: 9px; }
+  table.list.mat-tabelle :is(.mat-status, .mat-rr-marke, .mat-ergebnis-marke, .mat-empfohlen-marke) { white-space: normal; border-radius: 9px; }
 }
 
 @container mat-seite (max-width: 600px) {
@@ -1456,6 +1456,10 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 /* Phase 3 · Lieferung 1 – Meine PSA und Mangelmeldung (material.js: meinePsa, psaKarte, mangelDialog, mangelBanner,
    mangelKasten, Festschreib-Dialog). Rot heißt hier wie überall: nicht verwenden. */
 /* Marke „Mangel“ in Listen, Suchtreffern und im Kasten der Übersicht – dieselbe Form wie „Rückruf“, dunkelrot. */
+/* „Aussonderung empfohlen“ (Schritt 28): umrandet in Dunkelrot – kein Status, ein Hinweis an den Materialwart. */
+.mat-empfohlen-marke { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 0 6px;
+  border: 1px solid var(--rot-dunkel); border-radius: var(--radius-pille); background: var(--weiss); color: var(--rot-dunkel);
+  text-transform: uppercase; letter-spacing: .03em; vertical-align: middle; white-space: nowrap; }
 .mat-mangel-marke { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 7px;
   border-radius: var(--radius-pille); background: var(--rot-dunkel); color: var(--weiss); text-transform: uppercase;
   letter-spacing: .03em; vertical-align: middle; white-space: nowrap; }
