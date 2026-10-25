@@ -1094,7 +1094,7 @@ def trennung_aufbau(tmp):
     b.gesperrt = neuer_artikel(t.wart_b, ids["hms"], t.lager_b, serial_no="TEST-B-0002")
     sperren(t.pruefer_b, b.gesperrt["id"])
     b.weg = neuer_artikel(t.wart_b, ids["hms"], t.lager_b, serial_no="TEST-B-0003")
-    sperren(t.pruefer_b, b.weg["id"])
+    sperren(t.pruefer_b, b.weg["id"], "verlust")  # seit Schritt 28: ohne Prüfung nur nach Verlust aussondern
     unterschrift_hinterlegen(app, t.wart_b_id)
     r = t.wart_b.post(f"/api/material/artikel/{b.weg['id']}/aussondern", json={"grund": "irreparabel"})
     assert r.status_code == 200, r.get_json()
@@ -1469,7 +1469,7 @@ def test_vererbung_und_heimat():
         x = neuer_artikel(fahrer, ids["hms"], satz, serial_no="TEST-HEIMAT-1")["id"]
         neuer_artikel(adm, ids["hms"], fahrzeug, serial_no="TEST-HEIMAT-2")
         h = neuer_artikel(adm, ids["hms"], halle, serial_no="TEST-HEIMAT-3")["id"]
-        sperren(k["pruefer"], x)
+        sperren(k["pruefer"], x, "verlust")  # seit Schritt 28: ohne Prüfung nur nach Verlust aussondern
         sperren(k["pruefer"], h)
 
         knoten = {o["id"]: o for o in fahrer.get("/api/material/ordner").json["ordner"]}
@@ -1614,7 +1614,7 @@ def test_eine_heimat():
         y = neuer_artikel(w, ids["hms"], t.lager_a, serial_no="TEST-A-0010")["id"]
         sperren(k["pruefer"], y)
         z = neuer_artikel(w, ids["hms"], t.lager_a, serial_no="TEST-A-0011")["id"]
-        sperren(k["pruefer"], z)
+        sperren(k["pruefer"], z, "verlust")  # seit Schritt 28: ohne Prüfung nur nach Verlust aussondern
         assert w.post(f"/api/material/artikel/{z}/aussondern", json={"grund": "irreparabel"}).status_code == 200
         bleibt = neuer_artikel(w, ids["hms"], t.a, serial_no="TEST-A-0012")["id"]
         inventar = {r["id"]: r["inventory_no"] for r in zeilen(app, "SELECT id, inventory_no FROM mat_item")}
@@ -1883,7 +1883,7 @@ def test_journal_und_seiten():
         bis = (_heute() + timedelta(days=30)).isoformat()
         grant = freigeben(adm, fach, gast_id, "lesen", bis=bis)
         x = neuer_artikel(w, ids["hms"], fach, serial_no="TEST-A-0020")["id"]
-        sperren(k["pruefer"], x)
+        sperren(k["pruefer"], x, "verlust")  # seit Schritt 28: ohne Prüfung nur nach Verlust aussondern
         r = w.delete(f"/api/material/ordner/{fach}", headers=H)
         assert r.status_code == 409 and "kehren" in r.json["error"], r.get_json()
         assert w.post(f"/api/material/artikel/{x}/aussondern", json={"grund": "irreparabel"}).status_code == 200
@@ -1902,7 +1902,7 @@ def test_journal_und_seiten():
         y = neuer_artikel(w, ids["hms"], t.lager_a, serial_no="TEST-A-0021")["id"]
         _, person_id = neues_konto(app, "person_a@example.org", name="Person Musterstadt")
         sql(app, "UPDATE mat_item SET assigned_user_id = ? WHERE id = ?", (person_id, y))
-        sperren(k["pruefer"], y)
+        sperren(k["pruefer"], y, "verlust")  # seit Schritt 28: ohne Prüfung nur nach Verlust aussondern
         assert w.post(f"/api/material/artikel/{y}/aussondern", json={"grund": "irreparabel"}).status_code == 200
         assert zeilen(app, "SELECT assigned_user_id FROM mat_item WHERE id = ?", (y,))[0]["assigned_user_id"] is None
         e = zeilen(app, "SELECT * FROM mat_audit WHERE entity = 'item' AND entity_id = ? AND action = 'zuordnung_geloest'",

@@ -641,7 +641,8 @@ class Beispielbestand:
 
     def _termine_lebensende(self, plan):
         """Textil mit Lebensdauer: Herstellung so lange her, dass das Lebensende zwischen 5 und 300 Tagen zurückliegt.
-        Geprüft wurde vorher; „aus_lebensdauer“ endet mit einer Prüfung danach, Ergebnis „aussondern“."""
+        Geprüft wurde vorher; „aus_lebensdauer“ endet mit einer Prüfung danach – seit Schritt 28 „aussondern empfohlen“,
+        ausgesondert vom Materialwart am selben Tag."""
         from app.material.services.interval import plus_jahre
         rnd, h, p = self.rnd, self.h, plan["produkt"]
         m, jahre = p["monate"], p["lebensdauer"]
@@ -749,6 +750,20 @@ class Beispielbestand:
         elif art == "aussondern":
             wart = self.pruefer(self.gl[plan["gl"]]["konto"]["wart"]["id"])
             pruefung.aussondern(iid, {"grund": "verlust", "bemerkung": HINWEIS}, wart)
+        elif ergebnis == "aussondern":
+            # Seit Schritt 28 sondern Prüfer nicht aus: Die Prüfung empfiehlt es (sperrt), der Materialwart sondert am
+            # selben Tag aus – über den inneren Weg mit dem zurückliegenden Prüftag (pruefung.aussondern nähme nur Tage ab
+            # dem Journaleintrag der Sperre, und der ist von heute).
+            from app import db
+            from app.material.models import AUSSONDERUNGSGRUENDE
+            from app.material.services import bestand, protokoll
+            self.pruefen(iid, self._pruefer_fuer(plan, tag), art, "aussondern_empfohlen", mangel, tag, fotos)
+            wart = self.pruefer(self.gl[plan["gl"]]["konto"]["wart"]["id"])
+            with protokoll.dateien_sichern(), db.transaction(sofort=True):
+                item = bestand.artikel(iid)
+                assert pruefung.aussondern_moeglich(item)["ok"], iid
+                pruefung._aussondern(item, AUSSONDERUNGSGRUENDE["irreparabel" if mangel else "lebensdauer"], HINWEIS,
+                                     (tag or self.h).isoformat(), wart, empfehlung=pruefung.aussonderung_empfohlen(item))
         else:
             self.pruefen(iid, self._pruefer_fuer(plan, tag), art, ergebnis, mangel, tag, fotos)
 
@@ -761,7 +776,7 @@ class Beispielbestand:
         if not abschliessen:
             return pid
         d = {"ergebnis": ergebnis, "bemerkung": HINWEIS}
-        if ergebnis == "aussondern" and not mangel:
+        if ergebnis == "aussondern_empfohlen" and not mangel:
             d["grund"] = f"Lebensdauer erreicht ({HINWEIS})"
         elif ergebnis != "einsatzbereit":
             d["grund"] = HINWEIS

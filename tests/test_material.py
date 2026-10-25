@@ -1276,16 +1276,20 @@ def test_sperre_und_aussonderung():
         p1.put(f"/api/material/pruefungen/{pr['id']}/punkte/{punkte_von(pr)['Testpunkt Messwert']}", json={"wert": "1"})
         r = abschluss(p1, pr["id"], ergebnis="einsatzbereit")
         assert r.status_code == 400 and "Lebensende" in r.json["error"], r.get_json()
-        # Ohne Mangel braucht „aussondern“ einen Grund.
-        r = abschluss(p1, pr["id"], ergebnis="aussondern")
-        assert r.status_code == 400 and "Grund" in r.json["error"], r.get_json()
+        # Prüfer sondern seit Schritt 28 nicht aus; „aussondern empfohlen“ braucht ohne Mangel einen Grund und sperrt.
         r = abschluss(p1, pr["id"], ergebnis="aussondern", grund="Lebensdauer überschritten")
+        assert r.status_code == 400 and "aussondern empfohlen" in r.json["error"], r.get_json()
+        r = abschluss(p1, pr["id"], ergebnis="aussondern_empfohlen")
+        assert r.status_code == 400 and "Grund" in r.json["error"], r.get_json()
+        r = abschluss(p1, pr["id"], ergebnis="aussondern_empfohlen", grund="Lebensdauer überschritten")
         assert r.status_code == 200, r.get_json()
+        assert w.get(f"/api/material/artikel/{alt['id']}").json["artikel"]["lock_state"] == "gesperrt"
+        assert w.post(f"/api/material/artikel/{alt['id']}/aussondern", json={"grund": "lebensdauer"}).status_code == 200
         a = w.get(f"/api/material/artikel/{alt['id']}").json["artikel"]
         assert a["status"] == "ausgesondert" and a["folder_id"] == system["ausgesondert"], a
-        # Die Aussonderung ist ein eigener Vorgang mit Verweis auf die Prüfung.
+        # Die Aussonderung ist ein eigener Vorgang (durch den Materialwart, ohne „Grundlage“).
         assert [x["art"] for x in a["pruefungen"]] == ["aussonderung", "eingang"], a["pruefungen"]
-        assert a["pruefungen"][0]["basis_id"] == pr["id"] and a["pruefungen"][0]["ergebnis"] == "aussondern"
+        assert a["pruefungen"][0]["basis_id"] is None and a["pruefungen"][0]["ergebnis"] == "aussondern"
         # Ausgesondert: zählt nicht mehr als Bestand, wird nicht mehr geprüft, gesperrt oder bearbeitet.
         assert w.get("/api/material/start").json["bestand"] == bestand_vorher
         assert starten(p1, alt["id"]).status_code == 409
@@ -1306,6 +1310,10 @@ def test_sperre_und_aussonderung():
         assert p1.post(f"/api/material/artikel/{b['id']}/aussondern", json={"grund": "irreparabel"}).status_code == 403
         morgen = (h + timedelta(days=1)).isoformat()
         assert w.post(f"/api/material/artikel/{b['id']}/aussondern", json={"grund": "irreparabel", "datum": morgen}).status_code == 400
+        # Nach einer direkten Sperre erst nach einer Prüfung (Schritt 28).
+        assert w.post(f"/api/material/artikel/{b['id']}/aussondern", json={"grund": "irreparabel"}).status_code == 409
+        pr = starten(p1, b["id"]).json["pruefung"]
+        assert abschluss(p1, pr["id"], ergebnis="instandsetzen", grund="Riss").status_code == 200
         r = w.post(f"/api/material/artikel/{b['id']}/aussondern", json={"grund": "irreparabel", "bemerkung": "Bruch"})
         assert r.status_code == 200, r.get_json()
         a = r.json["artikel"]
@@ -1518,7 +1526,7 @@ def test_review_lieferung2():
         # 3. Ein Durchgang für einen Unterordner erfasst auch, was aus ihm nach „Gesperrt“ gewandert ist.
         c = neuer_artikel(w, ids["hms"], lager, serial_no="C")
         d = neuer_artikel(w, ids["hms"], lager, serial_no="D")
-        assert p1.post(f"/api/material/artikel/{c['id']}/sperren", json={"grund": "beschaedigung"}).status_code == 200
+        assert p1.post(f"/api/material/artikel/{c['id']}/sperren", json={"grund": "verlust"}).status_code == 200
         r = w.post("/api/material/durchgaenge", json={"folder_id": lager, "titel": "Lager"})
         assert r.status_code == 201 and r.json["durchgang"]["zaehlung"]["gesamt"] == 2, r.get_json()
         rid2 = r.json["durchgang"]["id"]
@@ -2661,8 +2669,10 @@ def test_aussonderungsprotokoll():
         alt = neuer_artikel(w, ids["gurt"], gid, manufactured_on=f"{h.year - 11}-01")
         pr = starten(p1, alt["id"]).json["pruefung"]
         p1.put(f"/api/material/pruefungen/{pr['id']}/punkte/{punkte_von(pr)['Testpunkt Messwert']}", json={"wert": "1"})
-        r = festschreiben(p1, pr["id"], ergebnis="aussondern", grund="Lebensdauer überschritten")
+        r = festschreiben(p1, pr["id"], ergebnis="aussondern_empfohlen", grund="Lebensdauer überschritten")
         assert r.status_code == 200, r.get_json()
+        # Seit Schritt 28 sondert der Materialwart nach der Empfehlung aus.
+        assert w.post(f"/api/material/artikel/{alt['id']}/aussondern", json={"grund": "lebensdauer"}).status_code == 200
         lauf = w.get(f"/api/material/artikel/{alt['id']}").json["artikel"]["pruefungen"]
         aus, pruef = lauf[0], lauf[1]
         jahr = h.year
@@ -2671,8 +2681,8 @@ def test_aussonderungsprotokoll():
         text = _flach(" ".join(pdf_seiten(os.path.join(tmp, protokoll_zeile(app, aus["id"])["pdf_path"]))))
         assert "Aussonderungsprotokoll" in text and pruef["protokoll"]["id"] in text and "Lebensdauer überschritten" in text
         text = _flach(" ".join(pdf_seiten(os.path.join(tmp, protokoll_zeile(app, pr["id"])["pdf_path"]))))
-        assert aus["protokoll"]["id"] in text, text[:800]
-        # Eine Aussonderung lässt sich nicht berichtigen.
+        assert "aussondern empfohlen" in text and "Der Prüfer empfiehlt" in text, text[:800]
+        # Ein ausgesonderter Artikel lässt sich nicht berichtigen.
         assert p1.post(f"/api/material/pruefungen/{pr['id']}/berichtigen", json={"grund": "x"}).status_code == 409
         # Durch den Materialwart: nur mit hinterlegter Unterschrift.
         b = neuer_artikel(w, ids["hms"], gid)

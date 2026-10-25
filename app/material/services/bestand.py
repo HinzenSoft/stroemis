@@ -912,7 +912,11 @@ ARTIKEL_LISTE_SQL = ("SELECT i.*, p.manufacturer, p.model, p.article_no, p.mater
                      "p.category_id AS product_category_id, "
                      "(SELECT c.name FROM mat_category c WHERE c.id = p.category_id) AS kategorie_name, "
                      f"{demo_sql('i', 'p')} AS artikel_demo, e.id AS entwurf_id, e.inspector_name AS entwurf_pruefer, "
-                     "e.inspector_user_id AS entwurf_pruefer_id, zu.name AS zugeordnet_name FROM mat_item i "
+                     "e.inspector_user_id AS entwurf_pruefer_id, zu.name AS zugeordnet_name, "
+                     # Das Ergebnis der letzten Prüfung – für die Marke „Aussonderung empfohlen“ (Schritt 28).
+                     "(SELECT x.result FROM mat_inspection x WHERE x.item_id = i.id AND x.completed_at IS NOT NULL "
+                     "AND x.kind <> 'aussonderung' ORDER BY x.completed_at DESC, x.id DESC LIMIT 1) AS letztes_ergebnis "
+                     "FROM mat_item i "
                      "JOIN mat_product p ON p.id = i.product_id "
                      "LEFT JOIN mat_inspection e ON e.item_id = i.id AND e.completed_at IS NULL "
                      "LEFT JOIN users zu ON zu.id = i.assigned_user_id ")
@@ -964,7 +968,18 @@ def artikel_kurz(i, stichtag=None):
                          "pruefer_id": i.get("entwurf_pruefer_id")} if i.get("entwurf_id") else None),
             "rueckruf": rueckruf.offene_artikel().get(i["id"]),
             "mangel": i["id"] in mangel.offene_artikel(),
+            "aussonderung_empfohlen": _empfohlen(i),
             "darf": darf, "zugeordnet_name": _zugeordnet_name(i) if darf["grund"] else None}
+
+
+def _empfohlen(i):
+    """Hat ein Prüfer die Aussonderung des gesperrten Artikels empfohlen (letzte Prüfung „aussondern empfohlen“)?"""
+    if i["lock_state"] not in ("gesperrt", "verloren"):
+        return False
+    if "letztes_ergebnis" in i:
+        return i["letztes_ergebnis"] == "aussondern_empfohlen"
+    from . import pruefung
+    return pruefung.aussonderung_empfohlen(i) is not None
 
 
 def artikel_json(i, voll=False):
@@ -1042,6 +1057,10 @@ def artikel_json(i, voll=False):
         if out["journal"] and not inhalt:
             _melder_verbergen(out["journal"], i["id"])
         out["mangel_nur_gemeldet"] = mangel.nur_gemeldet(i["id"])
+        # Aussondern nur durch den Materialwart nach einer Prüfung (Schritt 28): die Empfehlung des Prüfers (für alle, die
+        # den Artikel sehen) und – für den Materialwart – ob er jetzt aussondern darf und sonst warum nicht.
+        out["aussonderung_empfohlen"] = pruefung.aussonderung_empfohlen(i)
+        out["aussondern"] = pruefung.aussondern_moeglich(i) if darf["verwalten"] else None
         # Die eigene offene Meldung (Tag) – dann ist „Mangel melden …“ ausgegraut statt erst nach dem Absenden 409.
         eigen = mangel.eigene_offene(i["id"])
         out["mangel_eigen_offen"] = eigen["created_at"] if eigen else None
@@ -1198,8 +1217,8 @@ def sammelprotokolle_set(fid):
 
 
 # Fällig ist, was vor dem nächsten Einsatz ein Prüfer in die Hand nehmen muss: überfällig, Lebensdauer erreicht
-# (die Prüfung endet mit „aussondern“), neu (Eingangsprüfung) und bald fällig. Dieselbe Regel wie das rote
-# Abzeichen der Ordnerleiste, das überfällig und Lebensdauer erreicht zusammen zählt.
+# (die Prüfung endet mit „aussondern empfohlen“ oder „instandsetzen“), neu (Eingangsprüfung) und bald fällig. Dieselbe
+# Regel wie das rote Abzeichen der Ordnerleiste, das überfällig und Lebensdauer erreicht zusammen zählt.
 FAELLIG = ("ueberfaellig", "lebensdauer", "neu", "bald_faellig")
 
 

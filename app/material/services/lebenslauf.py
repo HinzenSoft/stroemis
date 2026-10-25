@@ -132,7 +132,7 @@ def _pruefungen(iid):
             "ergebnis": r["result"] or "",
             "ergebnis_text": "ausgesondert" if aus else ERGEBNISSE.get(r["result"], r["result"] or ""),
             "maengel": None if aus else maengel.get(r["id"], 0),
-            "naechste": datum_text(r["next_due_on"]) or ("entfällt" if r["result"] in ("instandsetzen", "aussondern") else "–"),
+            "naechste": datum_text(r["next_due_on"]) or ("entfällt" if r["result"] in ("instandsetzen", "aussondern_empfohlen", "aussondern") else "–"),
             "grund": r["reason"] or "", "bemerkung": r["remarks"] or "", "durchgang": runden.get(r["round_id"], ""),
             "protokoll_id": r["protocol_id"] if protokoll_da else "", "datei_sha256": r["file_sha256"] if protokoll_da else "",
             "ohne_protokoll": OHNE_PROTOKOLL if not protokoll_da else "",

@@ -231,13 +231,16 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     abgeschlossenen Durchgangs, danach unveränderlich (TRIGGER_27). folder_id ohne ON DELETE (ein Set-Ordner mit
     Set-Protokoll bleibt). Rein additiv, wiederholbar. Rückweg: ältere Stände ignorieren die Tabelle, ihre
     verwaiste_beiseite legte die Dateien beiseite – zurück nur über die Sicherung.
+  - Schritt 28 (Aussondern nur durch den Materialwart, Wunsch vom 25.10.2026): neues Prüfergebnis „aussondern_empfohlen“
+    (sperrt nur). mat_inspection wird dafür einmal neu aufgebaut (CHECK); Trigger und Indizes kommen in ihrer genauen
+    gespeicherten Fassung zurück. Wiederholbar; Rückweg über die Sicherung (siehe _schritt_28).
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 27
+SCHEMA_VERSION = 28
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -267,7 +270,14 @@ PRUEFARTEN_1 = ("periodisch", "ausserplanmaessig", "reparatur", "aussonderung")
 # Sperre ohne Prüfung (nur Prüfer) und Aussonderung durch den Materialwart: die Gründe zur Auswahl.
 SPERRGRUENDE = {"sturz": "Sturzbelastung", "beschaedigung": "Beschädigung", "verlust": "Verlust", "rueckruf": "Rückruf"}
 AUSSONDERUNGSGRUENDE = {"lebensdauer": "Lebensdauer erreicht", "verlust": "Verlust", "irreparabel": "irreparabel"}
-ERGEBNISSE = {"einsatzbereit": "einsatzbereit", "instandsetzen": "instandsetzen", "aussondern": "aussondern"}
+# Prüfergebnisse. Seit Schritt 28 (Wunsch vom 25.10.2026) sondern Prüfer nicht mehr aus: „aussondern empfohlen“ sperrt
+# nur, ausgesondert wird durch den Materialwart. „aussondern“ steht nur noch an Aussonderungen (Art „aussonderung“) und an
+# Prüfungen vor Schritt 28, die zugleich aussonderten (Altbestand) – wählbar sind WAEHLBARE_ERGEBNISSE.
+ERGEBNISSE = {"einsatzbereit": "einsatzbereit", "instandsetzen": "instandsetzen",
+              "aussondern_empfohlen": "aussondern empfohlen", "aussondern": "aussondern (ausgesondert)"}
+WAEHLBARE_ERGEBNISSE = ("einsatzbereit", "instandsetzen", "aussondern_empfohlen")
+# Die Ergebnisse, mit denen Schritt 1 (und 2, 21) die Tabellen angelegt hat – Schritt 28 nahm „aussondern_empfohlen“ dazu.
+ERGEBNISSE_1 = ("einsatzbereit", "instandsetzen", "aussondern")
 BEFUNDE = ("ok", "mangel", "nicht_zutreffend")
 ANHANGARTEN = {"externes_pruefformular": "externes Prüfformular", "pruefbericht": "Prüfbericht", "foto": "Foto",
                "sonstiges": "Sonstiges"}
@@ -499,7 +509,7 @@ SCHRITT_1 = [
       form_version           INTEGER,
       inspected_on           TEXT NOT NULL,
       kind                   TEXT NOT NULL CHECK (kind IN """ + _in(PRUEFARTEN_1) + """),
-      result                 TEXT CHECK (result IN """ + _in(ERGEBNISSE) + """),
+      result                 TEXT CHECK (result IN """ + _in(ERGEBNISSE_1) + """),
       reason                 TEXT NOT NULL DEFAULT '',   -- Grund einer Sperre oder Aussonderung
       remarks                TEXT NOT NULL DEFAULT '',
       next_due_on            TEXT,
@@ -649,7 +659,7 @@ INSPECTION_2 = """CREATE TABLE {name} (
       form_version           INTEGER,
       inspected_on           TEXT NOT NULL,
       kind                   TEXT NOT NULL CHECK (kind IN """ + _in(PRUEFARTEN) + """),
-      result                 TEXT CHECK (result IN """ + _in(ERGEBNISSE) + """),
+      result                 TEXT CHECK (result IN """ + _in(ERGEBNISSE_1) + """),
       reason                 TEXT NOT NULL DEFAULT '',   -- Grund einer Sperre oder Aussonderung
       remarks                TEXT NOT NULL DEFAULT '',
       next_due_on            TEXT,
@@ -1914,7 +1924,7 @@ TABELLEN_21 = [
       bezeichnung    TEXT NOT NULL DEFAULT '',
       seriennummer   TEXT NOT NULL DEFAULT '',
       inventarnummer TEXT NOT NULL DEFAULT '',
-      ergebnis       TEXT CHECK (ergebnis IS NULL OR ergebnis IN """ + _in(ERGEBNISSE) + """),
+      ergebnis       TEXT CHECK (ergebnis IS NULL OR ergebnis IN """ + _in(ERGEBNISSE_1) + """),
       protokoll_id   TEXT,
       pruefsumme     TEXT,
       vorhanden      INTEGER CHECK (vorhanden IS NULL OR vorhanden IN (0, 1)),
@@ -2615,6 +2625,54 @@ def _schritt_27(conn):
         conn.execute(sql)
 
 
+# --- Schritt 28: Aussondern nur durch den Materialwart (Wunsch vom 25.10.2026) -------------------------------------------
+def _schritt_28(conn):
+    """Prüfergebnis „aussondern_empfohlen“: mat_inspection mit dem erweiterten CHECK neu aufbauen – SQLite ändert einen
+    CHECK nur mit einer neuen Tabelle. Alle Zeilen, Kennungen und der Zähler bleiben. Die Trigger an mat_inspection (sie
+    gingen mit DROP TABLE verloren) und die Trigger anderer Tabellen, die mat_inspection nennen (sonst scheiterte das
+    Umbenennen an ihnen), werden vorher in ihrer GENAUEN Fassung aus sqlite_master gelesen und danach unverändert neu
+    angelegt – so bleibt jeder Schutz festgeschriebener Prüfungen, wie er war; ebenso die Indizes. Die neue Tabelle
+    entsteht aus der gespeicherten Fassung der alten (mit allen später angefügten Spalten), nur der CHECK ändert sich.
+    Wiederholbar: umgebaut nur, wenn der CHECK „aussondern_empfohlen“ noch nicht kennt. Rückweg: ein älterer Stand liest
+    die Tabelle weiter (er kennt den Wert nur nicht – Prüfungen mit „aussondern empfohlen“ zeigt er ohne Ergebnistext);
+    sauber zurück nur über die Sicherung vor dem Deploy."""
+    tabelle = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'mat_inspection'").fetchone()[0]
+    if "'aussondern_empfohlen'" in tabelle:
+        return
+    alt_check = "result IN " + _in(ERGEBNISSE_1)
+    if tabelle.count(alt_check) != 1:
+        raise sqlite3.IntegrityError("Schritt 28: CHECK der Ergebnisse in mat_inspection nicht gefunden.")
+    vorher = _fk_verletzungen(conn)
+    wort = re.compile(r"\bmat_inspection\b")
+    trigger = [(n, sql) for n, t, sql in conn.execute("SELECT name, tbl_name, sql FROM sqlite_master WHERE type = 'trigger' "
+                                                      "ORDER BY rowid")
+               if t == "mat_inspection" or wort.search(sql)]
+    indizes = [sql for (sql,) in conn.execute("SELECT sql FROM sqlite_master WHERE type = 'index' AND "
+                                              "tbl_name = 'mat_inspection' AND sql IS NOT NULL ORDER BY rowid")]
+    seq = conn.execute("SELECT seq FROM sqlite_sequence WHERE name = 'mat_inspection'").fetchone()
+    for name, _ in trigger:
+        conn.execute(f'DROP TRIGGER "{name}"')
+    neu = re.sub(r'^CREATE TABLE\s+"?mat_inspection"?', "CREATE TABLE mat_inspection_neu", tabelle, count=1)
+    conn.execute("DROP TABLE IF EXISTS mat_inspection_neu")
+    conn.execute(neu.replace(alt_check, "result IN " + _in(ERGEBNISSE)))
+    spalten = ", ".join(_spalten(conn, "mat_inspection"))
+    if _spalten(conn, "mat_inspection") != _spalten(conn, "mat_inspection_neu"):
+        raise sqlite3.IntegrityError("Schritt 28: Spalten von mat_inspection weichen ab.")
+    conn.execute(f"INSERT INTO mat_inspection_neu ({spalten}) SELECT {spalten} FROM mat_inspection")
+    conn.execute("DROP TABLE mat_inspection")
+    conn.execute("ALTER TABLE mat_inspection_neu RENAME TO mat_inspection")
+    for sql in indizes:
+        conn.execute(sql)
+    for _, sql in trigger:
+        conn.execute(sql)
+    conn.execute("DELETE FROM sqlite_sequence WHERE name IN ('mat_inspection', 'mat_inspection_neu')")
+    if seq is not None:
+        conn.execute("INSERT INTO sqlite_sequence (name, seq) VALUES ('mat_inspection', ?)", (seq[0],))
+    neu_verletzt = _fk_verletzungen(conn) - vorher
+    if neu_verletzt:
+        raise sqlite3.IntegrityError(f"Fremdschlüssel nach dem Umbau verletzt: {sorted(neu_verletzt)[:5]}")
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
@@ -2622,7 +2680,7 @@ SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schrit
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
             14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
             20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24,
-            25: _schritt_25, 26: _schritt_26, 27: _schritt_27}
+            25: _schritt_25, 26: _schritt_26, 27: _schritt_27, 28: _schritt_28}
 
 
 def _meta(conn, schluessel, vorgabe=None):

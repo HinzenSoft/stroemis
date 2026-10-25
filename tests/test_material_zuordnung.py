@@ -164,7 +164,7 @@ def test_zuordnen():
         assert zugeordnet(app, a2) == p["person1"]
 
         # Gesperrt: zuordnen geht (die PSA gehört weiter der Person). Ausgesondert: 409, lösen geht.
-        sperren(k["pruefer"], a3)
+        sperren(k["pruefer"], a3, "verlust")  # seit Schritt 28: ohne Prüfung nur nach Verlust aussondern
         assert w.put(ZU.format(a3), json={"user_id": p["person1"]}).status_code == 200
         assert w.post(f"/api/material/artikel/{a3}/aussondern", json={"grund": "irreparabel"}).status_code == 200
         sql(app, "UPDATE mat_item SET assigned_user_id = NULL WHERE id = ?", (a3,))   # löst ab Paket A1R das Aussondern
@@ -188,7 +188,7 @@ def test_sammelaktion():
         _, person = neues_konto(app, "person@example.org", name="Person Sammel")
         a = [t.art_a["id"]] + [neuer_artikel(w, ids["hms"], t.lager_a, serial_no=f"SA-{n}")["id"] for n in (1, 2)]
         weg = neuer_artikel(w, ids["hms"], t.lager_a, serial_no="SA-9")["id"]
-        sperren(t.k["pruefer"], weg)
+        sperren(t.k["pruefer"], weg, "verlust")  # seit Schritt 28: ohne Prüfung nur nach Verlust aussondern
         assert w.post(f"/api/material/artikel/{weg}/aussondern", json={"grund": "irreparabel"}).status_code == 200
         journal = zeilen(app, "SELECT COUNT(*) AS n FROM mat_audit")[0]["n"]
 
@@ -769,7 +769,7 @@ def test_loesen_beim_aussondern_a1r():
         app, k, ids, gid, system, lager, art, p = aufbau(tmp)
         w = k["wart"]
         assert w.put(ZU.format(art[0]), json={"user_id": p["person1"]}).status_code == 200
-        sperren(k["pruefer"], art[0])
+        sperren(k["pruefer"], art[0], "verlust")  # seit Schritt 28: ohne Prüfung nur nach Verlust aussondern
         # Phase 3 · L1: Die zugeordnete Person meldet einen Mangel (die Sperre des Prüfers bleibt) – das Aussondern
         # erledigt die Meldung mit.
         from test_material_meine_psa import post_mangel

@@ -4,8 +4,8 @@ Fotos. Jede Meldung sperrt sofort in derselben Transaktion (Systemordner „Gesp
 gemeldet am TT.MM.JJJJ“), auch bei offenem Prüfentwurf; war der Artikel schon gesperrt oder verloren, bleibt die Sperre
 mit ihrem Grund. Zurück bringt ihn nur eine Freiprüfung (Prüfung mit „einsatzbereit“, je Meldung abgehakt „Gemeldeten
 Mangel geprüft“) – sie oder eine Aussonderung erledigt die Meldung (gespeichert, nicht abgeleitet). „instandsetzen“
-erledigt nicht. Aussondern durch den Materialwart geht nach einer reinen Mangelsperre erst, wenn ein Prüfer den
-Artikel seitdem geprüft hat (nur_gemeldet, pruefung.aussondern).
+erledigt nicht, „aussondern empfohlen“ (Schritt 28) ebenso wenig. Aussondern durch den Materialwart geht nach einer
+reinen Mangelsperre erst, wenn ein Prüfer den Artikel seitdem geprüft hat (nur_gemeldet, pruefung.aussondern_moeglich).
 
 Recht, Zustand und eigene offene Meldung werden vor dem Verarbeiten der Fotos geprüft und in der Transaktion am frisch
 gelesenen Artikel wiederholt – ein Konto ohne Recht oder mit offener Meldung bringt den Server nicht dazu, Bilder zu
@@ -58,9 +58,8 @@ SCHON_GEMELDET = ("Du hast für diesen Artikel schon einen Mangel gemeldet (am {
                   "Ergänzungen bitte direkt an den Materialwart.")
 MANGEL_NEU = ("Am Artikel ist ein gemeldeter Mangel offen, den du nicht als geprüft abgehakt hast – lade die Prüfung "
               "neu, sieh ihn dir an und hake ihn ab, bevor du freigibst.")
-NUR_GEMELDET = ("Der Artikel ist durch eine Mangelmeldung gesperrt und seitdem nicht geprüft – aussondern kann ihn jetzt "
-                "nur ein Prüfer (Prüfung mit Ergebnis „aussondern“). Nach einer Prüfung mit „instandsetzen“ geht es "
-                "auch hier.")
+NUR_GEMELDET = ("Der Artikel ist durch eine Mangelmeldung gesperrt und seitdem nicht geprüft – aussondern geht erst, "
+                "wenn ein Prüfer ihn geprüft hat (Ergebnis „instandsetzen“ oder „aussondern empfohlen“).")
 NUR_NEUE_PRUEFUNG = "Am Artikel ist ein Mangel gemeldet – freigeben kann ihn nur eine neue Prüfung."
 
 # Mails gehen neben der Anfrage hinaus (wie beim Rückruf); Tests setzen hier einen direkten Aufruf ein. Ob ein Mailserver

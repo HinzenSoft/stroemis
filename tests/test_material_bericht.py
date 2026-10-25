@@ -113,7 +113,8 @@ def aufbau(tmp):
                 22:30 UTC (zählt J-1) und 23:30 UTC (zählt J, Ortszeit 1.1.), mit fremdem Pfadtext im Journal
       fach_a    Fach 1; im Durchgang ausgenommen („nicht auffindbar“), nie geprüft
       krit      Fahrzeug; Eingangsprüfung mit kritischem Mangel → instandsetzen → gesperrt (aus Prüfung)
-      aus       Fahrzeug; Eingangsprüfung mit „aussondern“ → ausgesondert (aus Prüfung) – zählt nicht als zweite Prüfung
+      aus       Fahrzeug; Eingangsprüfung mit „aussondern empfohlen“ → gesperrt (aus Prüfung), nach dem Durchgang vom
+                Materialwart ausgesondert („irreparabel“; seit Schritt 28 – vorher sonderte die Prüfung selbst aus)
       unter     Fach 1; vom Prüfer gesperrt (Beschädigung), im Durchgang ausgenommen – Heimat bleibt das Fach
       verlust   Lager; Verlust gemeldet, vom Materialwart ausgesondert
       verloren  Lager; Verlust gemeldet (bleibt gesperrt/verloren)
@@ -178,7 +179,7 @@ def aufbau(tmp):
                 content_type="multipart/form-data")
     assert r.status_code == 200, r.get_json()
     assert festschreiben(p1, pr["id"], ergebnis="instandsetzen").status_code == 200
-    pid_aus = pruefung(p1, a["aus"]["id"], "aussondern", durchgang_id=rid, grund="Platzhalter kaputt")
+    pid_aus = pruefung(p1, a["aus"]["id"], "aussondern_empfohlen", durchgang_id=rid, grund="Platzhalter kaputt")
     r = w.post(f"/api/material/durchgaenge/{rid}/ausnehmen", json={"item_id": a["fach_a"]["id"], "grund": "nicht auffindbar"})
     assert r.status_code == 200, r.get_json()
     sperren(p1, a["unter"]["id"], "beschaedigung", "Platzhalter Riss")
@@ -192,6 +193,8 @@ def aufbau(tmp):
     assert festschreiben(p1, ber, ergebnis="einsatzbereit", bemerkung="Platzhalter nachgetragen").status_code == 200
     a["verlust"] = neuer_artikel(w, ids["hms"], lager, serial_no="VERLUST-1")
     sperren(p1, a["verlust"]["id"], "verlust")
+    r = w.post(f"/api/material/artikel/{a['aus']['id']}/aussondern", json={"grund": "irreparabel"})
+    assert r.status_code == 200, r.get_json()
     r = w.post(f"/api/material/artikel/{a['verlust']['id']}/aussondern", json={"grund": "verlust", "bemerkung": "Platzhalter weg"})
     assert r.status_code == 200, r.get_json()
     a["verloren"] = neuer_artikel(w, ids["hms"], lager, serial_no="VERLOREN-1")
@@ -260,7 +263,8 @@ def test_zahlen():
         p = b["pruefungen"]
         assert p["gesamt"] == 5 and p["entwuerfe"] == 1 and p["mit_mangel"] == 1 and p["kritisch"] == 1, p
         assert {x["art"]: x["n"] for x in p["arten"]} == {"eingang": 3, "periodisch": 1, "ausserplanmaessig": 1, "reparatur": 0}
-        assert {x["ergebnis"]: x["n"] for x in p["ergebnisse"]} == {"einsatzbereit": 3, "instandsetzen": 1, "aussondern": 1}
+        assert {x["ergebnis"]: x["n"] for x in p["ergebnisse"]} == {"einsatzbereit": 3, "instandsetzen": 1, "aussondern_empfohlen": 1,
+                                                                        "aussondern": 0}
         assert p["abdeckung"] == {"bestand": 11, "geprueft": 3, "nicht_geprueft": 8}, p["abdeckung"]
         nicht = {x["inventarnummer"]: x for x in p["nicht_geprueft"]}
         assert set(nicht) == {a[n]["inventory_no"] for n in ("grenze", "fach_a", "unter", "verloren", "mangel_a", "ug_a", "demo_a", "gurt_a")}
@@ -280,8 +284,8 @@ def test_zahlen():
         # Sperren aus dem Journal: die zweite Meldung am gesperrten Artikel zählt nicht; Verlust ist eine eigene Art; der
         # Eintrag vom 31.12. 23:30 UTC gehört zu diesem Jahr; Grund nur aus lock_reason, nie ein Pfadtext.
         sp = b["sperren"]
-        assert sp["gesamt"] == 7 and sp["freigegeben"] == 1, sp
-        assert {x["art"]: x["n"] for x in sp["arten"]} == {"pruefung": 1, "mangel": 1, "verlust": 2, "ohne_pruefung": 3}
+        assert sp["gesamt"] == 8 and sp["freigegeben"] == 1, sp
+        assert {x["art"]: x["n"] for x in sp["arten"]} == {"pruefung": 2, "mangel": 1, "verlust": 2, "ohne_pruefung": 3}
         gruende = {(x["inventarnummer"], x["art"]): x["grund"] for x in sp["liste"]}
         assert gruende[(a["grenze"]["inventory_no"], "ohne_pruefung")] == "Platzhalter Grenze spät"
         assert gruende[(a["unter"]["inventory_no"], "ohne_pruefung")] == "Beschädigung: Platzhalter Riss"
@@ -291,10 +295,10 @@ def test_zahlen():
         assert "FREMDPFAD" not in json.dumps(b, ensure_ascii=False)
         # Aussonderungen mit Grundart aus dem Präfix; ohne Haken niemand „durch“.
         au = b["aussonderungen"]
-        assert au["gesamt"] == 2 and {x["art"]: x["n"] for x in au["arten"]} == {"pruefung": 1, "lebensdauer": 0, "verlust": 1, "irreparabel": 0, "sonstiges": 0}
+        assert au["gesamt"] == 2 and {x["art"]: x["n"] for x in au["arten"]} == {"pruefung": 0, "lebensdauer": 0, "verlust": 1, "irreparabel": 1, "sonstiges": 0}
         assert all(x["durch"] == "" for x in au["liste"]) and {x["inventarnummer"] for x in au["liste"]} == {a["aus"]["inventory_no"], a["verlust"]["inventory_no"]}
         aus = protokoll_zeile(app, o["pid_aus"])
-        assert any(x["protokoll_id"] and x["grund"].startswith("Prüfergebnis") for x in au["liste"]), au["liste"]
+        assert any(x["protokoll_id"] and x["grund"] == "irreparabel" for x in au["liste"]), au["liste"]
         assert aus["kind"] == "eingang"                 # die Prüfung selbst; die Aussonderung ist die zweite Zeile
         # Mangelmeldungen über mangel.stand – zwei gemeldet, beide offen; keine Meldernamen.
         m = b["maengel"]
@@ -327,8 +331,8 @@ def test_zahlen():
         bh = bericht(f, o["gid"], pruefer=1)
         assert bh["kopf"]["pruefer_nennen"] is True
         assert bh["pruefer"]["pruefer"] == [{"name": "pruefer", "urkunde": "1012-4711", "n": 5}], bh["pruefer"]
-        assert bh["pruefer"]["aussonderungen_durch"] == [{"name": "pruefer", "n": 1}, {"name": "wart", "n": 1}]
-        assert {x["durch"] for x in bh["aussonderungen"]["liste"]} == {"pruefer", "wart"}
+        assert bh["pruefer"]["aussonderungen_durch"] == [{"name": "wart", "n": 2}]
+        assert {x["durch"] for x in bh["aussonderungen"]["liste"]} == {"wart"}
         # Die Zweigmenge gilt nach Heimat: Der Bericht über das Fahrzeug nimmt den gesperrten „unter“ und die
         # Aussonderung „aus“ mit, nicht das Lager.
         bf = bericht(f, o["fz"])

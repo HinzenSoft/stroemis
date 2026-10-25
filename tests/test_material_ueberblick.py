@@ -93,7 +93,7 @@ def test_zaehlung_je_ordner():
         alt = neuer_artikel(w, ids["gurt"], halle, manufactured_on=f"{h.year - 11}-01")
         assert alt["status"] == "lebensdauer", alt                                        # textil, Lebensende vorbei
         weg = neuer_artikel(w, ids["hms"], lager)
-        sperren(p1, weg["id"])
+        sperren(p1, weg["id"], "verlust")  # seit Schritt 28: ohne Prüfung nur nach Verlust aussondern
         r = w.post(f"/api/material/artikel/{weg['id']}/aussondern", json={"grund": "irreparabel"})
         assert r.status_code == 200 and r.json["artikel"]["folder_id"] == system["ausgesondert"], r.get_json()
 
@@ -447,6 +447,10 @@ def test_qr_ausgesondert():
         assert 'class="mat-banner s-lebensdauer"' in seite_ueber_qr(alt)
         # Ausgesondert: Weiterleitung zum richtigen Artikel, der Hinweis prominent in #mat-inhalt (material.js ersetzt
         # ihn beim Zeichnen durch die Ansicht mit eigenem Banner), die Schnittstelle meldet „ausgesondert“.
+        # Seit Schritt 28 sondert der Materialwart erst nach einer Prüfung aus („instandsetzen“ am gesperrten Artikel).
+        pruef_formulare(k["katalog"], ids)
+        pr = starten(p1, a["id"]).json["pruefung"]
+        assert festschreiben(p1, pr["id"], ergebnis="instandsetzen", grund="Platzhalter").status_code == 200
         r = w.post(f"/api/material/artikel/{a['id']}/aussondern", json={"grund": "irreparabel"})
         assert r.status_code == 200, r.get_json()
         html = seite_ueber_qr(a)

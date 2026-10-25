@@ -45,7 +45,7 @@ KAPPUNG = 500                       # so viele Zeilen je Liste im PDF
 KAPPUNG_GESAMT = 1500               # so viele Listenzeilen im ganzen PDF
 KAPPUNG_RUECKRUF = 50               # so viele betroffene Artikel je Rückruf im PDF
 # Die Sperrarten, wie sie aus dem Nachher eines Journaleintrags folgen (Reihenfolge der Ausgabe).
-SPERRARTEN = (("pruefung", "aus Prüfung (instandsetzen)"), ("mangel", "aus Mangelmeldung"), ("verlust", "Verlust"),
+SPERRARTEN = (("pruefung", "aus Prüfung (instandsetzen, aussondern empfohlen)"), ("mangel", "aus Mangelmeldung"), ("verlust", "Verlust"),
               ("ohne_pruefung", "Sperre durch Prüfer ohne Prüfung"))
 # Die Grundarten einer Aussonderung aus dem Präfix des Grundtexts (pruefung._wirkung bzw. AUSSONDERUNGSGRUENDE).
 GRUNDARTEN = (("pruefung", "aus Prüfung (Ergebnis „aussondern“)"),) + tuple(AUSSONDERUNGSGRUENDE.items()) + (

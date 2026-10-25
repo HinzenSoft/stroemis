@@ -358,7 +358,8 @@ def test_offener_entwurf():
 
 
 def test_erledigung():
-    """„instandsetzen“ lässt offen, danach erledigt die Freiprüfung; Prüfergebnis „aussondern“ erledigt; nicht
+    """„instandsetzen“ lässt offen, danach erledigt die Freiprüfung; „aussondern empfohlen“ lässt offen, die
+    Aussonderung des Materialwarts danach erledigt (seit Schritt 28; vorher das Prüfergebnis „aussondern“); nicht
     berichtigbar bei offener Meldung; Berichtigung, dann Meldung, dann „einsatzbereit“ → 409."""
     from app.material.services import mangel
     with post_mangel(), tempfile.TemporaryDirectory() as tmp:
@@ -382,10 +383,13 @@ def test_erledigung():
         assert d["closed_inspection_id"] == pr2["id"]
         m = f.get(f"/api/material/artikel/{a1}").json["artikel"]["maengel"][0]
         assert m["erledigt"] == {"am": d["closed_at"], "pruefung": pr2["id"], "art": "freipruefung"} and not m["offen"]
-        # Prüfergebnis „aussondern“.
+        # Prüfergebnis „aussondern empfohlen“ (Schritt 28): offen, bis der Materialwart aussondert.
         assert melden(f, a2).status_code == 201
+        neue_sekunde()
         pr = pruefung(p, a2)
-        assert festschreiben(p, pr["id"], ergebnis="aussondern", grund="Platzhaltergrund").status_code == 200
+        assert festschreiben(p, pr["id"], ergebnis="aussondern_empfohlen", grund="Platzhaltergrund").status_code == 200
+        assert meldungen(t.app, a2)[0]["closed_at"] is None
+        assert t.w.post(f"/api/material/artikel/{a2}/aussondern", json={"grund": "irreparabel"}).status_code == 200
         m = t.w.get(f"/api/material/artikel/{a2}").json["artikel"]["maengel"][0]
         assert m["erledigt"]["art"] == "aussonderung" and m["erledigt"]["pruefung"] != pr["id"], m
         # Berichtigung begonnen, dann Meldung, dann „einsatzbereit“: nie frei durch eine Berichtigung.
@@ -427,10 +431,15 @@ def test_aussondern_materialwart():
         assert r.status_code == 200, r.get_json()
         d = meldungen(t.app, a1)[0]
         assert d["closed_inspection_id"] == r.json["aussonderung"] and d["closed_at"]
-        # Vorher vom Prüfer gesperrt, dann gemeldet: Aussondern sofort.
+        # Vorher vom Prüfer gesperrt, dann gemeldet: keine reine Mangelsperre – seit Schritt 28 braucht die direkte Sperre
+        # aber eine Prüfung (verloren gemeldet: sofort).
         sperren(p, a2, "sturz")
         assert melden(w, a2).status_code == 201
         assert w.get(f"/api/material/artikel/{a2}").json["artikel"]["mangel_nur_gemeldet"] is False
+        assert w.post(f"/api/material/artikel/{a2}/aussondern", json={"grund": "irreparabel"}).status_code == 409
+        neue_sekunde()
+        pr = pruefung(p, a2)
+        assert festschreiben(p, pr["id"], ergebnis="instandsetzen", grund="Platzhaltergrund").status_code == 200
         assert w.post(f"/api/material/artikel/{a2}/aussondern", json={"grund": "irreparabel"}).status_code == 200
         # Eine Berichtigung nach der Meldung zählt nicht (direkt in der Tabelle – über die Schnittstelle gibt es sie
         # bei offener Meldung gar nicht).
@@ -1229,7 +1238,8 @@ def test_oberflaeche_statisch():
         return open(os.path.join(wurzel, pfad), encoding="utf-8").read()
     js, css = lesen("app/material/static/material.js"), lesen("app/material/static/material.css")
     # Texte und Grenzen wie im Dienst.
-    assert f'const NUR_GEMELDET = "{mangel.NUR_GEMELDET}";' in js
+    # Seit Schritt 28 kommt der Grund am ausgegrauten „Aussondern“ vom Server (artikel.aussondern) – keine Kopie mehr.
+    assert "const NUR_GEMELDET" not in js
     anfang = re.search(r'const MANGEL_NEU_ANFANG = "([^"]+)";', js).group(1)
     assert mangel.MANGEL_NEU.startswith(anfang) and len(anfang) > 40, anfang
     assert f"const MANGEL_MAX_FOTOS = {mangel.MAX_FOTOS};" in js and f"const MANGEL_TEXT_MAX = {mangel.TEXT_MAX};" in js
@@ -1274,7 +1284,7 @@ def test_oberflaeche_statisch():
     assert ">Freiprüfung später berichtigt</a> (jetzt: ${esc(ERGEBNIS[m.wieder_offen.ergebnis]" in js
     assert js.count("${wiederOffen(m)}") == 2
     assert ".mat-mangel-banner a { color: var(--weiss); text-decoration: underline; }" in css
-    assert "a.mangel_nur_gemeldet ? ' disabled aria-describedby=\"mat-aussondern-hilfe\"'" in js
+    assert "aussondernNein ? ' disabled aria-describedby=\"mat-aussondern-hilfe\"'" in js
     # Meine PSA: eigene Ansicht ohne Reiter, kommt ohne Modulnavigation und Ordnerleiste aus.
     assert "meine_psa: meinePsa" in js and "meine_psa" not in js[js.index("const NAV = {"):js.index("};", js.index("const NAV = {"))]
     assert "meine_psa" not in js[js.index("const MIT_LEISTE"):js.index("]);", js.index("const MIT_LEISTE"))]

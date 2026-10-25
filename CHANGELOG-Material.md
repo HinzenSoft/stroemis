@@ -4160,6 +4160,82 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Aussondern nur durch den Materialwart (Wunsch des Nutzers, 25.10.2026)
+
+Wunsch des Nutzers (wörtlich): „Prüfer sollen nicht aussondern können, sondern nur sperren. Materialwart kann aussondern,
+nachdem eine Prüfung eine Sperre hervorgebracht hat (Mangelmeldungen oder Verlust bleiben wie gehabt)“. Entscheidungen
+vom 25.10.2026: E1 „aussondern empfohlen“ sperrt nur, E2 Bedingungen des Materialwarts, E3 in L2c. **Schemaschritt 28.**
+
+### Verhalten
+
+- **Prüfergebnis „aussondern empfohlen“** (statt „aussondern“): sperrt wie „instandsetzen“ (Ordner „Gesperrt“, Herkunft
+  gemerkt, Sperrgrund „Prüfung vom …: aussondern empfohlen – <Grund>“); ohne Mangel braucht es einen Grund. Am schon
+  gesperrten Artikel bleibt die Sperre mit ihrem Grund. Das Prüfprotokoll nennt das Ergebnis rot, „nächste Prüfung:
+  entfällt – Artikel gesperrt, Aussonderung empfohlen“ und „Der Prüfer empfiehlt, den Artikel auszusondern … aussondern
+  kann der Materialwart“. Eine gemeldete Mangelmeldung bleibt offen (wie bei „instandsetzen“); die Aussonderung des
+  Materialwarts erledigt sie. Kritischer Mangel und erreichtes Lebensende schließen weiter „einsatzbereit“ aus – wählbar
+  sind „instandsetzen“ und „aussondern empfohlen“.
+- **„aussondern“ ist kein Prüfergebnis mehr**: Die Schnittstelle antwortet 400 „Prüfer sondern nicht mehr aus – bitte
+  „aussondern empfohlen“ wählen …“. Die Route `POST …/artikel/<id>/aussondern` bleibt dem Recht „verwalten“ vorbehalten
+  (Prüfer ohne es: 403, wie bisher); ein Konto mit beiden Rechten geht denselben Weg wie jeder Materialwart.
+- **Materialwart (E2)**: aussondern nur einen gesperrten Artikel, dessen **letzte Prüfung „instandsetzen“ oder
+  „aussondern empfohlen“** ergab – die sperrende Prüfung zählt; weil nur eine Freiprüfung einen Artikel freigibt, liegt
+  diese Prüfung immer seit der Sperre (`pruefung.aussondern_moeglich`). Nach einer direkten Sperre (Sturz,
+  Beschädigung, Rückruf) also erst nach einer Prüfung; **verloren gemeldet: sofort**; nach einer Mangelmeldung wie bisher
+  erst nach einer Prüfung seit der Meldung (`mangel.nur_gemeldet`, neuer Text). Meldungen: „Aussondern lassen sich nur
+  gesperrte Artikel …“, „Aussondern geht erst, wenn ein Prüfer den Artikel seit der Sperre geprüft hat …“ (409).
+  Die Aussonderung trägt keine `basis_inspection_id` (die bleibt Aussonderungen aus einer Prüfung vor Schritt 28 – der
+  Jahresbericht zählt sie weiter als „aus Prüfung“); das Journal „ausgesondert“ nennt die Empfehlung (`empfehlung`:
+  Kennung der Prüfung, Beschriftung „empfohlen in Prüfung“), das Aussonderungsprotokoll wie bisher die letzte Prüfung mit
+  ihrem Ergebnis und die Sperre mit Grund.
+- **Oberfläche**: Prüfdialog mit den Knöpfen „einsatzbereit“ | „instandsetzen“ | „aussondern empfohlen“; die Warnung
+  „„aussondern“ ist endgültig“ und der rote Bestätigen-Knopf entfallen, stattdessen ein Satz (sperrt, aussondern kann der
+  Materialwart). Artikelseite: Hinweis „Aussonderung empfohlen – <Prüfer> am <Tag> (Protokoll …): <Grund>. Aussondern
+  kann der Materialwart.“ und die Marke „Aussonderung empfohlen“ neben dem Status; dieselbe Marke in allen Artikellisten
+  (Ordner, „Gesperrt“, Durchgang …). „Aussondern“ ist ausgegraut, solange der Server es nicht erlaubt – darunter steht
+  der Grund (`artikel.aussondern` {ok, grund}; bisher nur bei einer reinen Mangelsperre). Dialog „Aussondern“ mit der
+  Empfehlung und vorbelegtem Grund (verloren → Verlust, Lebensende erreicht → Lebensdauer, sonst irreparabel).
+- **Überall, wo Ergebnisse stehen**: Sammel- und Set-Protokolle („davon aussondern empfohlen“; „davon ausgesondert“ nur
+  noch, wenn ein Altbestand-Ergebnis darin steht), Lebenslauf, Jahresbericht (Ergebnisse und Sperrart „aus Prüfung
+  (instandsetzen, aussondern empfohlen)“), CSV-Exporte, Journal-Beschriftungen (beschriftung.py und material.js).
+- **Altbestand**: Prüfungen mit „aussondern“ (vor Schritt 28 zugleich die Aussonderung) bleiben unverändert und heißen
+  „aussondern (ausgesondert)“; sie lassen sich wie bisher nicht berichtigen. Keine Mail ändert sich (eine Sperre aus einer
+  Prüfung verschickt keine).
+
+### Schemaschritt 28
+
+- `mat_inspection.result` kennt „aussondern_empfohlen“. SQLite ändert einen CHECK nur mit einer neuen Tabelle:
+  mat_inspection wird einmal aus ihrer gespeicherten Fassung neu aufgebaut (nur der CHECK ändert sich), alle Zeilen,
+  Kennungen und der Zähler bleiben. Alle Trigger an mat_inspection und alle Trigger anderer Tabellen, die sie nennen,
+  sowie ihre Indizes werden vorher in ihrer **genauen gespeicherten Fassung** gelesen und danach unverändert neu angelegt –
+  der Schutz festgeschriebener Prüfungen bleibt Wort für Wort. Schritt 1, 2 und 21 behalten ihre Werteliste
+  (`ERGEBNISSE_1`), frisch = migriert. Wiederholbar (umgebaut nur, wenn der CHECK den Wert noch nicht kennt).
+- **Rückweg**: Ein älterer Stand liest die Tabelle weiter, kennt den Wert aber nicht (Prüfungen mit „aussondern empfohlen“
+  ohne Ergebnistext, die alte Regel des Materialwarts gälte wieder) – zurück nur über die Sicherung vor dem Deploy.
+
+### Tests
+
+- Neu `tests/test_material_aussondern.py`: Ergebnis sperrt nur (Sperre, Protokolltext, Marke in „Gesperrt“, kein
+  Aussondern durch Prüfer per Ergebnis 400 und Route 403, Journal mit Empfehlung); Bedingungen je Sperrart (frei,
+  Sturz/Beschädigung/Rückruf, Verlust, Mangelmeldung, Freiprüfung mit neuer Sperre, Empfehlung am gesperrten Artikel);
+  kritischer Mangel, Lebensende, Berichtigung einer Empfehlung; Durchgang mit Sammelprotokoll; Altbestand „aussondern“;
+  Schritt 28 (frisch = migriert, Trigger und Indizes gleich, Schutz wirkt, unbekannter Wert abgewiesen, zweiter Lauf);
+  Oberfläche statisch. Bestehende Tests auf die neue Regel umgestellt (siehe Commit).
+
+### Bitte bestätigen
+
+1. Die Prüfung, die den Materialwart freischaltet, ist die **letzte** Prüfung des Artikels: Eine spätere Prüfung mit
+   „instandsetzen“ ersetzt eine frühere Empfehlung (Marke und Hinweis verschwinden), das Aussondern bleibt erlaubt.
+2. Altbestand auf der Produktion: Wer heute **direkt** (Sturz, Beschädigung, Rückruf) gesperrt ist und noch keine
+   Prüfung danach hat, lässt sich erst nach einer Prüfung aussondern – auch wenn die Sperre vor dem Deploy entstand.
+3. Grund im Dialog vorbelegt (verloren → Verlust, Lebensende → Lebensdauer, sonst irreparabel) – oder lieber ohne
+   Vorbelegung?
+4. Filter „Aussonderung empfohlen“ für Materialwarte: nicht gebaut – die Marke steht in der Liste „Gesperrt“ jeder
+   Gliederung, die ohnehin der Arbeitsvorrat des Materialwarts ist. Ein eigener Eintrag im Filtermenü (Status) oder eine
+   Zahl auf der Übersicht wäre der nächste Schritt – gewünscht?
+5. Der ausgegraute Knopf „Aussondern“ behält seine Hilfezeile darunter (wie bisher bei der Mangelsperre), obwohl die
+   Designsprache Erklärtexte unter Knöpfen meidet – sonst stünde ein toter Knopf ohne Grund da.
+
 ## Nachbesserung Set-Rückbau und Set-Protokolle nach den Prüfungen (25.10.2026)
 
 Grundlage: Berichte der Prüfer Ablauf, Sicherheit und Browser zu e951633 (`planung/material-phase4/
@@ -8001,3 +8077,4 @@ oder Plattform-Verwaltung).
 | `POST /api/material/mailfehler/<mfid>/erledigt` | Modulzugang; Zeile in der eigenen Sicht (sonst 404 „Mailfehler nicht gefunden.“) | abhaken → `zeile`; schon erledigt 200 ohne Änderung (idempotent) (Phase 4 · 1) |
 | `POST /api/material/mailfehler/alle-erledigt` | Modulzugang mit Sicht (sonst 403) | alle offenen Zeilen der eigenen Sicht abhaken → `anzahl` (Phase 4 · 1) |
 | `POST /api/material/artikel/<id>/aussondern` | wie bisher | neu: `datum` vor der letzten abgeschlossenen Prüfung, vor dem Herstelldatum (Monat → erster Tag) oder vor dem Tag der Sperre (jüngster Journaleintrag frei → gesperrt/verloren, Ortszeit) → 409 mit Klartext; Zukunft und vor der Erfassung weiter 400 (C2, Phase 4 · 1 mit Nachbesserung) |
+| `POST /api/material/artikel/<id>/aussondern`, `POST …/pruefungen/<id>/festschreiben`, `GET …/artikel/<id>` | wie bisher | seit Schritt 28: Ergebnis `aussondern` → 400, neu `aussondern_empfohlen` (sperrt); Aussondern nur nach einer letzten Prüfung `instandsetzen`/`aussondern_empfohlen` oder bei `verloren`, sonst 409 mit Grund; Artikel trägt `aussonderung_empfohlen` ({pruefung, protokoll_id, datum, pruefer, grund} bzw. in Listen true/false) und für Materialwarte `aussondern` {ok, grund} |

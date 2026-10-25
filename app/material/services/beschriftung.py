@@ -32,7 +32,7 @@ FELD = {
     "aussonderung": "Aussonderung", "pruefer": "Prüfer", "result": "Ergebnis", "inspected_on": "Prüftag",
     "reason": "Grund", "maengel": "Mängel", "item_id": "Artikel Nr.", "round_id": "Durchgang Nr.",
     "form_id": "Formular Nr.", "form_version": "Formularversion", "inspector_name": "Prüfer", "begonnen": "begonnen",
-    "seiten": "Seiten", "dateien": "Dateien", "basis": "aus Prüfung", "erledigt": "erledigt",
+    "seiten": "Seiten", "dateien": "Dateien", "basis": "aus Prüfung", "empfehlung": "empfohlen in Prüfung", "erledigt": "erledigt",
     "ausgenommen": "ausgenommen", "links": "Links", "fotos": "Fotos", "note": "Bemerkung", "answer": "Antwort",
     "status": "Status", "von": "Kopie von Produkt Nr.", "kopie_von": "Kopie von Dokument Nr.",
     "dokumente": "Dokumente übernommen", "protocol_id": "Protokoll-ID", "pdf_sha256": "Prüfsumme",
@@ -149,7 +149,7 @@ SET_WERTE = {"lock_cause": {"eigen": "eigener Grund", "set": "mit dem Set"},
 # Stufe im Modul Material – mit der Zahl dahinter: Einträge vor „Migration Schritt 10“ meinten die Stufen aus Phase 1
 # (1 Führungskraft, 2 Materialwart), die Zahl hält das eindeutig.
 STUFE_MATERIAL = {0: "kein Zugriff", 1: "Mitglied", 2: "Verwaltung"}
-_VERWEISE = ("pruefung", "aussonderung", "basis", "berichtigung", "berichtigt")
+_VERWEISE = ("pruefung", "aussonderung", "basis", "empfehlung", "berichtigung", "berichtigt")
 
 
 def feld_name(feld, eintrag):

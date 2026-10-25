@@ -473,6 +473,9 @@ def _folge(p, item):
     if p["result"] == "instandsetzen":
         return ("Der Artikel ist gesperrt und liegt im Ordner „Gesperrt“ seiner Gliederung, bis eine Prüfung mit "
                 "dem Ergebnis „einsatzbereit“ (Freiprüfung) ihn freigibt.")
+    if p["result"] == "aussondern_empfohlen":
+        return ("Der Prüfer empfiehlt, den Artikel auszusondern. Er ist gesperrt und liegt im Ordner „Gesperrt“ seiner "
+                "Gliederung; aussondern kann der Materialwart (eigener Vorgang mit Aussonderungsprotokoll).")
     if p["result"] == "aussondern":
         # Nur die Aussonderung dieses Artikels (bis Schritt 26 trugen mit ausgesonderte Teile eines Sets dieselbe Grundlage).
         a = db.query("SELECT protocol_id FROM mat_inspection WHERE basis_inspection_id = ? AND kind = 'aussonderung' "
@@ -531,6 +534,7 @@ def _pruefprotokoll(p, pid, ts, png, login, ordner_id):
                      # Die EN-365-Karte nennt immer die nächste Prüfung – ohne Fälligkeit steht da, warum.
                      "naechste": datum_text(p["next_due_on"]) or {
                          "instandsetzen": "entfällt – Artikel gesperrt; vor dem nächsten Einsatz Freiprüfung nötig",
+                         "aussondern_empfohlen": "entfällt – Artikel gesperrt, Aussonderung empfohlen",
                          "aussondern": "entfällt – Artikel ausgesondert"}.get(p["result"], ""),
                      "lebensdauer": _lebensdauer_text(item, produkt, p["inspected_on"]),
                      "bemerkung": p["remarks"] or "", "folge": _folge(p, item), "berichtigt": berichtigt},
@@ -787,7 +791,7 @@ def _sammelprotokoll(r, pid, ts, eintraege=None, wurzel=None, haupt=None, je_set
     liste = [dict(e) for e in eintraege if wurzel is None or _unter(e, wurzel) is not None]
     liste.sort(key=lambda e: _ordnung(e, unten))
     zaehler = {"erledigt": 0, "ausgenommen": 0, "nicht_geprueft": 0, "einsatzbereit": 0, "instandsetzen": 0,
-               "aussondern": 0}
+               "aussondern_empfohlen": 0, "aussondern": 0}
     ohne = 0
     for nr, e in enumerate(liste, start=1):
         e["nr"] = nr
@@ -802,8 +806,10 @@ def _sammelprotokoll(r, pid, ts, eintraege=None, wurzel=None, haupt=None, je_set
                 {"text": "geprüft", "anzahl": zaehler["erledigt"]},
                 {"text": "davon einsatzbereit", "anzahl": zaehler["einsatzbereit"], "einzug": True},
                 {"text": "davon instandsetzen", "anzahl": zaehler["instandsetzen"], "einzug": True},
-                {"text": "davon aussondern", "anzahl": zaehler["aussondern"], "einzug": True},
-                {"text": "ausgenommen", "anzahl": zaehler["ausgenommen"]}]
+                {"text": "davon aussondern empfohlen", "anzahl": zaehler["aussondern_empfohlen"], "einzug": True}]
+    if zaehler["aussondern"]:                  # Prüfungen vor Schritt 28, die zugleich aussonderten
+        zaehlung.append({"text": "davon ausgesondert", "anzahl": zaehler["aussondern"], "einzug": True})
+    zaehlung.append({"text": "ausgenommen", "anzahl": zaehler["ausgenommen"]})
     if r["aborted"] or zaehler["nicht_geprueft"]:
         zaehlung.append({"text": "nicht geprüft", "anzahl": zaehler["nicht_geprueft"]})
     # Prüfer: wer im Durchgang geprüft hat – im Set-Protokoll nur an Artikeln dieses Sets; die Unterschrift ist die

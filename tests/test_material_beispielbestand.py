@@ -313,9 +313,13 @@ def test_beispielbestand():
                     assert i["product_id"] == ids["gurt"] and i["retire_by"] <= bestand.heute().isoformat()
             iids = {i["id"] for i in artikel}
             pruefungen = [x for x in db.query("SELECT * FROM mat_inspection") if x["item_id"] in iids]
-            aus_pruefung = [x for x in pruefungen if x["kind"] == "aussonderung" and x["basis_inspection_id"]]
-            aus_wart = [x for x in pruefungen if x["kind"] == "aussonderung" and not x["basis_inspection_id"]]
-            assert aus_pruefung and aus_wart, (aus_pruefung, aus_wart)
+            # Seit Schritt 28: nach einer Prüfung mit „aussondern empfohlen“ (Grund Lebensdauer/irreparabel) bzw. nach Verlust.
+            aussonderungen = [x for x in pruefungen if x["kind"] == "aussonderung"]
+            assert not any(x["basis_inspection_id"] for x in aussonderungen)
+            assert {x["reason"] for x in aussonderungen} & {"Lebensdauer erreicht", "irreparabel"} and \
+                "Verlust" in {x["reason"] for x in aussonderungen}, aussonderungen
+            assert any(x["result"] == "aussondern_empfohlen" for x in pruefungen)
+            assert not any(x["result"] == "aussondern" and x["kind"] != "aussonderung" for x in pruefungen)
             # Ohne aktives Formular keine Prüfung: Helm Gamma bleibt „neu“.
             helme = [i for i in artikel if i["product_id"] == ids["helm"]]
             assert helme and all(st.status(i) == "neu" for i in helme)

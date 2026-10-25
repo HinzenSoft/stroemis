@@ -17,13 +17,18 @@ Anhängen, demselben Prüftag und Verweis auf das Original, das unverändert ble
   - Jeder Pflichtpunkt hat einen Wert oder ist „nicht zutreffend“; jeder Mangel hat ein Foto und eine Bemerkung.
   - Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus, ebenso ein erreichtes Lebensende
     (nur textil – bei Metall entscheidet allein der Befund).
-  - „instandsetzen“ und „aussondern“ ohne Mangel brauchen einen Grund.
+  - „instandsetzen“ und „aussondern empfohlen“ ohne Mangel brauchen einen Grund.
   - Die nächste Fälligkeit (nur bei „einsatzbereit“) ist Prüftag + wirksames Intervall und lässt sich
     nur vorziehen.
   - „instandsetzen“ sperrt: Der Artikel wandert in „Gesperrt“ seiner Gliederung, der Herkunftsordner
     bleibt gemerkt. „einsatzbereit“ an einem gesperrten Artikel ist die Freiprüfung – sie bringt ihn
-    zurück in den Herkunftsordner. „aussondern“ ist zugleich die Aussonderung (eigener Vorgang mit
-    eigenem Aussonderungsprotokoll).
+    zurück in den Herkunftsordner.
+  - Prüfer sondern nicht aus (Wunsch vom 25.10.2026, Schritt 28): „aussondern empfohlen“ sperrt wie „instandsetzen“;
+    die Empfehlung steht im Prüfprotokoll und am Artikel (aussonderung_empfohlen). Aussondern (eigener Vorgang mit
+    eigenem Aussonderungsprotokoll) darf nur der Materialwart (Recht „verwalten“) – und nur, wenn die letzte Prüfung
+    „instandsetzen“ oder „aussondern empfohlen“ ergab (aussondern_moeglich; Bedingung E2). Allein ein verloren
+    gemeldeter Artikel lässt sich ohne Prüfung aussondern. Bis Schritt 28 war „aussondern“ ein Prüfergebnis, das
+    zugleich aussonderte – solche Prüfungen bleiben, wie sie sind („aussondern (ausgesondert)“).
   - Festschreiben verlangt eine Urkundennummer und eine im Profil hinterlegte Unterschrift; Unterschrifts-
     felder des Formulars sind wie andere Pflichtpunkte zu füllen.
   - Gemeldete Mängel (Phase 3 · L1, mangel.py): „einsatzbereit“ geht bei offenen Meldungen nur, wenn der Prüfer jede
@@ -41,7 +46,8 @@ from flask import has_request_context
 
 from ... import db
 from ...images import delete_photo_files
-from ..models import ANHANGARTEN, AUSSONDERUNGSGRUENDE, BEFUNDE, ERGEBNISSE, PRUEFARTEN, SERIE_MAX, SPERRGRUENDE
+from ..models import (ANHANGARTEN, AUSSONDERUNGSGRUENDE, BEFUNDE, ERGEBNISSE, PRUEFARTEN, SERIE_MAX, SPERRGRUENDE,
+                      WAEHLBARE_ERGEBNISSE)
 from . import OHNE_NAMEN, Abgelehnt, auswahl, datum, erster_tag, heute, laenge, laenge_text, text, wahr
 from . import anhang as anh
 from . import bestand, journal, katalog, protokoll, rechte
@@ -54,6 +60,14 @@ ABGESCHLOSSEN = ("Die Prüfung ist festgeschrieben und lässt sich nicht mehr ä
                  "Berichtigung.")
 URKUNDE_FEHLT = ("Prüfen dürfen nur Prüfer mit Urkundennummer – das Häkchen „Prüfer“ setzt die Verwaltung in der "
                  "Nutzerverwaltung, die Urkundennummer trägt der Prüfer selbst im Profil ein.")
+# Aussondern nur durch den Materialwart (Schritt 28, Wunsch vom 25.10.2026).
+NICHT_AUSSONDERN = ("Prüfer sondern nicht mehr aus – bitte „aussondern empfohlen“ wählen: Das sperrt den Artikel, "
+                    "aussondern kann danach der Materialwart.")
+AUSSONDERN_OHNE_PRUEFUNG = ("Aussondern geht erst, wenn ein Prüfer den Artikel seit der Sperre geprüft hat – mit "
+                            "„instandsetzen“ oder „aussondern empfohlen“. Ohne Prüfung lässt sich nur ein verloren "
+                            "gemeldeter Artikel aussondern.")
+AUSSONDERN_NUR_GESPERRT = ("Aussondern lassen sich nur gesperrte Artikel – zuerst prüft ein Prüfer (Ergebnis "
+                           "„instandsetzen“ oder „aussondern empfohlen“) oder meldet ihn verloren.")
 # Artikellänge (Schritt 20, nach der Prüfung vom 22.10.2026): Längenpunkt ohne vorgesehene Länge; Länge während der
 # Prüfung geändert.
 KEINE_LAENGE_PUNKT = ("Für Artikel dieser Kategorie ist keine Länge vorgesehen – der Prüfpunkt ist „nicht zutreffend“ "
@@ -906,7 +920,9 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
         raise Abgelehnt(URKUNDE_FEHLT, 403)
     if not pruefer.get("unterschrift"):
         raise Abgelehnt(UNTERSCHRIFT_FEHLT, 403)
-    ergebnis = auswahl(d.get("ergebnis"), ERGEBNISSE, "Ergebnis")
+    if d.get("ergebnis") == "aussondern":
+        raise Abgelehnt(NICHT_AUSSONDERN)
+    ergebnis = auswahl(d.get("ergebnis"), {k: ERGEBNISSE[k] for k in WAEHLBARE_ERGEBNISSE}, "Ergebnis")
     gesehen = _maengel_gesehen(d)
     geaendert = _laenge_vormerken(pid, pruefer)
     if geaendert:
@@ -953,7 +969,7 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
             grund = ""                          # ein Grund gehört zu Sperre und Aussonderung, nicht zur Freigabe
             if kritisch:
                 raise Abgelehnt("Kritischer Mangel (" + "; ".join(kritisch[:3]) + ") – „einsatzbereit“ ist ausgeschlossen. "
-                                "Bitte „instandsetzen“ oder „aussondern“ wählen.")
+                                "Bitte „instandsetzen“ oder „aussondern empfohlen“ wählen.")
             if lebensdauer and lebensdauer["erreicht"]:
                 raise Abgelehnt(f"Das Lebensende ist erreicht ({_fmt(lebensdauer['ende'])}) – „einsatzbereit“ ist "
                                 "nicht mehr wählbar.")
@@ -1029,18 +1045,14 @@ def _wirkung(item, p, ergebnis, tag, naechste, grund, pruefer, ts=None):
             # Die Freiprüfung erledigt gemeldete Mängel (abgehakt hat sie der Prüfer, abschliessen prüft das).
             from . import mangel
             mangel.erledigen(iid, p["id"])
-    elif ergebnis == "instandsetzen":
+    else:                                     # instandsetzen, aussondern empfohlen: sperren (Schritt 28)
         db.execute("UPDATE mat_item SET last_inspected_on = ?, updated_at = ? WHERE id = ?", (tag, db.now(), iid))
         if gesperrt:
             journal.eintragen("item", iid, "geprueft", {"last_inspected_on": item["last_inspected_on"]},
                               {"last_inspected_on": tag, "pruefung": p["id"], "ergebnis": ergebnis, "art": p["kind"]})
         else:
-            sperrgrund = f"Prüfung vom {_fmt(tag)}: instandsetzen" + (f" – {grund}" if grund else "")
+            sperrgrund = f"Prüfung vom {_fmt(tag)}: {ERGEBNISSE[ergebnis]}" + (f" – {grund}" if grund else "")
             _sperren(dict(item, last_inspected_on=tag), "gesperrt", sperrgrund, pruefung_id=p["id"])
-    else:                                                  # aussondern
-        db.execute("UPDATE mat_item SET last_inspected_on = ?, updated_at = ? WHERE id = ?", (tag, db.now(), iid))
-        _aussondern(bestand.artikel(iid), "Prüfergebnis „aussondern“" + (f": {grund}" if grund else ""), "",
-                    tag, pruefer, basis_id=p["id"], ts=ts)
 
 
 def _rueckweg(item):
@@ -1103,7 +1115,7 @@ def sperren(iid, d, pruefer):
         _sperren(item, "verloren" if art == "verlust" else "gesperrt", grund)
 
 
-def _aussondern(item, grund, bemerkung, tag, akteur, basis_id=None, ts=None):
+def _aussondern(item, grund, bemerkung, tag, akteur, basis_id=None, ts=None, empfehlung=None):
     """Aussonderung als eigener Vorgang (mat_inspection, Art „aussonderung“, ohne Formular) mit eigenem,
     festgeschriebenem Aussonderungsprotokoll; der Artikel wandert in „Ausgesondert“ und zählt nirgends mehr
     als Bestand. Seit Phase 2 behält er seine Heimat (origin_folder_id): Wer nur den Herkunftsordner verwaltet,
@@ -1126,7 +1138,8 @@ def _aussondern(item, grund, bemerkung, tag, akteur, basis_id=None, ts=None):
     db.execute("UPDATE mat_item SET lock_state = 'ausgesondert', lock_reason = ?, origin_folder_id = ?, folder_id = ?, "
                "assigned_user_id = NULL, updated_at = ? WHERE id = ?", (grund, heimat, ziel, ts, item["id"]))
     journal.eintragen("inspection", aid, "ausgesondert", None,
-                      {"item_id": item["id"], "reason": grund, "inspected_on": tag, "basis": basis_id})
+                      dict({"item_id": item["id"], "reason": grund, "inspected_on": tag, "basis": basis_id},
+                           **({"empfehlung": empfehlung["pruefung"]} if empfehlung else {})))
     journal.eintragen("item", item["id"], "ausgesondert",
                       {"lock_state": item["lock_state"], "folder_id": item["folder_id"],
                        "ordner": bestand._pfad_text(item["folder_id"])},
@@ -1176,11 +1189,55 @@ def aussondern_grenzen(item, tag, wer=""):
                         "ausgesondert wird, was gesperrt ist.", 409)
 
 
+def letzte_pruefung(iid):
+    """Die letzte abgeschlossene Prüfung des Artikels (ohne Aussonderungen; eine abgeschlossene Berichtigung ist jünger als
+    ihr Original) – oder None."""
+    return db.query("SELECT * FROM mat_inspection WHERE item_id = ? AND completed_at IS NOT NULL AND kind <> 'aussonderung' "
+                    "ORDER BY completed_at DESC, id DESC LIMIT 1", (iid,), one=True)
+
+
+def aussonderung_empfohlen(item, letzte=None):
+    """Die Empfehlung eines Prüfers am gesperrten Artikel (Schritt 28): die letzte Prüfung mit „aussondern empfohlen“ –
+    {pruefung, protokoll_id, datum, pruefer, grund} oder None. Freigeben kann nur eine Freiprüfung; ist die letzte Prüfung
+    eine Empfehlung, gilt sie also seit der Sperre."""
+    if item["lock_state"] not in ("gesperrt", "verloren"):
+        return None
+    letzte = letzte or letzte_pruefung(item["id"])
+    if not letzte or letzte["result"] != "aussondern_empfohlen":
+        return None
+    return {"pruefung": letzte["id"], "protokoll_id": letzte["protocol_id"] or "", "datum": letzte["inspected_on"],
+            "pruefer": letzte["inspector_name"], "grund": letzte["reason"] or ""}
+
+
+def aussondern_moeglich(item):
+    """Darf der Materialwart jetzt aussondern (Bedingung E2 vom 25.10.2026)? {ok, grund}: nur einen gesperrten Artikel,
+    dessen letzte Prüfung „instandsetzen“ oder „aussondern empfohlen“ ergab – sie liegt dann seit der Sperre, denn
+    zurück in den Bestand bringt nur eine Freiprüfung; die sperrende Prüfung selbst zählt. Eine direkte Sperre nach
+    Sturz, Beschädigung oder Rückruf und eine Mangelmeldung brauchen so erst eine Prüfung; allein ein verloren
+    gemeldeter Artikel geht ohne. So hat, was der Materialwart aussondert, vorher ein Sachkundiger gesehen."""
+    from . import mangel
+
+    def nein(grund):
+        return {"ok": False, "grund": grund}
+    if item["lock_state"] == "ausgesondert":
+        return nein("Der Artikel ist schon ausgesondert.")
+    if item["lock_state"] not in ("gesperrt", "verloren"):
+        return nein(AUSSONDERN_NUR_GESPERRT)
+    if mangel.nur_gemeldet(item["id"]):
+        return nein(mangel.NUR_GEMELDET)
+    if item["lock_state"] == "verloren":
+        return {"ok": True, "grund": ""}
+    letzte = letzte_pruefung(item["id"])
+    if not letzte or letzte["result"] not in ("instandsetzen", "aussondern_empfohlen"):
+        return nein(AUSSONDERN_OHNE_PRUEFUNG)
+    return {"ok": True, "grund": ""}
+
+
 def aussondern(iid, d, akteur):
-    """Aussonderung durch den Materialwart – nur für Artikel, die ein Prüfer vorher gesperrt hat. Eine Sperre aus einer
-    Mangelmeldung zählt erst, wenn ein Prüfer den Artikel danach geprüft hat (mangel.nur_gemeldet) – so hat, was der
-    Materialwart aussondert, vorher ein Sachkundiger gesehen. Auch sie wird festgeschrieben und braucht daher die
-    Unterschrift dessen, der aussondert."""
+    """Aussonderung durch den Materialwart (Recht „verwalten“, die Route prüft es) – nur, wenn aussondern_moeglich. Sie
+    wird festgeschrieben und braucht daher die Unterschrift dessen, der aussondert. Gibt es eine Empfehlung des Prüfers,
+    nennt das Journal sie; der Grund kommt aus der Auswahl (die Prüfung ist keine „Grundlage“ im Sinne von
+    basis_inspection_id – die tragen nur Aussonderungen aus einer Prüfung vor Schritt 28)."""
     if not akteur.get("unterschrift"):
         raise Abgelehnt("Zum Aussondern fehlt deine Unterschrift – das Aussonderungsprotokoll wird damit "
                         "festgeschrieben. Bitte im Profil hinterlegen.", 403)
@@ -1193,18 +1250,15 @@ def aussondern(iid, d, akteur):
         item = bestand.artikel(iid)
         if item["lock_state"] == "ausgesondert":
             raise Abgelehnt("Der Artikel ist schon ausgesondert.", 409)
-        if item["lock_state"] not in ("gesperrt", "verloren"):
-            raise Abgelehnt("Aussondern lassen sich nur gesperrte Artikel – zuerst sperrt ein Prüfer (aus einer "
-                            "Prüfung mit „instandsetzen“ oder direkt nach Sturz, Beschädigung oder Verlust). Eine Sperre "
-                            "aus einer Mangelmeldung zählt erst, wenn ein Prüfer den Artikel danach geprüft hat.", 409)
+        moeglich = aussondern_moeglich(item)
+        if not moeglich["ok"]:
+            raise Abgelehnt(moeglich["grund"], 409)
         aussondern_grenzen(item, tag)
         offen = offener_entwurf(iid)
         if offen:
             raise Abgelehnt(reserviert_text(offen) + " Erst die Reservierung aufheben.", 409)
-        from . import mangel
-        if mangel.nur_gemeldet(iid):
-            raise Abgelehnt(mangel.NUR_GEMELDET, 409)
-        return _aussondern(item, AUSSONDERUNGSGRUENDE[art], bemerkung, tag, akteur)
+        return _aussondern(item, AUSSONDERUNGSGRUENDE[art], bemerkung, tag, akteur,
+                           empfehlung=aussonderung_empfohlen(item))
 
 
 # --- Berichtigung ---------------------------------------------------------------------------------------
@@ -1223,9 +1277,10 @@ def berichtigbar(p, item=None):
     from . import mangel
     if mangel.offene_ids(item["id"]):
         return nein(mangel.NUR_NEUE_PRUEFUNG)
-    # Gesperrt, ohne dass diese Prüfung gesperrt hat („instandsetzen“): Dann kam die Sperre danach (Sturz,
-    # Beschädigung, Verlust). Eine Berichtigung mit dem alten Prüftag gäbe den Artikel sonst als Freiprüfung frei.
-    if item["lock_state"] in ("gesperrt", "verloren") and p["result"] != "instandsetzen":
+    # Gesperrt, ohne dass diese Prüfung gesperrt hat („instandsetzen“ bzw. seit Schritt 28 „aussondern empfohlen“): Dann
+    # kam die Sperre danach (Sturz, Beschädigung, Verlust). Eine Berichtigung mit dem alten Prüftag gäbe den Artikel
+    # sonst als Freiprüfung frei.
+    if item["lock_state"] in ("gesperrt", "verloren") and p["result"] not in ("instandsetzen", "aussondern_empfohlen"):
         return nein("Nach dieser Prüfung wurde der Artikel gesperrt – freigeben kann ihn nur eine neue Prüfung.")
     schon = _berichtigung_von(p["id"])
     if schon:

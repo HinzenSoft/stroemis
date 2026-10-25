@@ -181,7 +181,7 @@ def test_betroffene_und_hinweise():
             hms = ids["hms"]
             # Ein ausgesonderter Artikel ist außer Dienst und nie betroffen.
             weg = neuer_artikel(w, hms, lager, serial_no="RR-4")["id"]
-            assert p1.post(f"/api/material/artikel/{weg}/sperren", json={"grund": "beschaedigung"}).status_code == 200
+            assert p1.post(f"/api/material/artikel/{weg}/sperren", json={"grund": "verlust"}).status_code == 200
             assert w.post(f"/api/material/artikel/{weg}/aussondern", json={"grund": "irreparabel"}).status_code == 200
             # Ein Artikel eines anderen Produkts ist nie betroffen.
             gurt = neuer_artikel(w, ids["gurt"], lager, serial_no="RR-1", manufactured_on="2024-01")["id"]
