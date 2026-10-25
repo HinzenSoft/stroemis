@@ -33,7 +33,7 @@ from ...images import delete_photo_files
 from ..models import ORDNERARTEN, SYSTEMORDNER
 from . import (Abgelehnt, akteur, auswahl, datum, erster_tag, ganzzahl, heute, kennung, laenge, laenge_text,
                monat_oder_datum, text, wahr)
-from . import faelligkeit, journal, katalog, nummern, qr, rechte, sets
+from . import faelligkeit, journal, katalog, nummern, qr, rechte, sets, stueckliste
 from . import status as st
 from .interval import faelligkeit_vorschlag, herstellerseite, lebensende, spaetestens, wirksam
 
@@ -662,7 +662,9 @@ def vorschlag(d):
             "material_kind": p["material_kind"], "lifetime_years": p["lifetime_years"],
             "lifetime_source": p["lifetime_source"],
             # Set (Schritt 21): die Stückliste für den Dialog „Set anlegen“ – sonst None.
-            "set": sets.anlegen_vorschlag(p)}
+            "set": sets.anlegen_vorschlag(p),
+            # Bestandteil-Liste (Schritt 25): je Position und Stück ein freiwilliges Feld „Seriennummer“ im Dialog.
+            "bestandteile": stueckliste.kurzliste(p["id"])}
 
 
 def artikel_plan(d):
@@ -694,11 +696,12 @@ def artikel_plan(d):
     return {"w": w, "p": p, "fid": fid, "manuell": manuell}
 
 
-def artikel_schreiben(plan, journal_zusatz=None, parent_id=None, als_set=False):
+def artikel_schreiben(plan, journal_zusatz=None, parent_id=None, als_set=False, teilnr=None):
     """Unter BEGIN IMMEDIATE (in einer äußeren Transaktion läuft sie flach mit): Inventarnummer, ggf. STR-Nummer,
     _serie_frei, INSERT, Journal „angelegt“ – journal_zusatz wird ins Nachher gemischt (Bestandsimport: Import und
     Zeile; Set: das Set des Teils). parent_id: Teil dieses Sets (sets.set_anlegen). Ein Set-Produkt nur mit als_set –
-    Sets legt allein sets.set_anlegen an (mit Teilen und Kopie der Stückliste). Liefert die Kennung des Artikels."""
+    Sets legt allein sets.set_anlegen an (mit Teilen und Kopie der Stückliste). teilnr: Seriennummern der Bestandteile
+    (teilnummern.lesen, Schritt 25) – stehen im selben Journaleintrag. Liefert die Kennung des Artikels."""
     w, p, fid, manuell = plan["w"], plan["p"], plan["fid"], plan["manuell"]
     if p["is_set"] and not als_set:
         raise Abgelehnt(sets.SET_NUR_DIALOG, 409)
@@ -716,9 +719,16 @@ def artikel_schreiben(plan, journal_zusatz=None, parent_id=None, als_set=False):
             (p["id"], fid, serie, generiert, inventar, w["manufactured_on"], w["purchased_on"], w["first_use_on"],
              w["retire_by"], manuell, w["next_due_on"], w["interval_months"], qr.neues_token(), w["notes"], w["length_m"],
              parent_id, uid, ts, ts))
+        zusatz = dict(journal_zusatz or {})
+        if teilnr:
+            from . import teilnummern
+            _, eingetragen = teilnummern.schreiben({"id": iid, "product_id": p["id"]},
+                                                   teilnummern.aenderungen(iid, teilnr), journal_an=False)
+            if eingetragen:
+                zusatz["bestandteil_nummern"] = eingetragen
         journal.eintragen("item", iid, "angelegt", None,
                           dict(w, folder_id=fid, serial_no=serie, serial_generated=generiert, inventory_no=inventar,
-                               retire_by_manual=manuell, ordner=_pfad_text(fid), **(journal_zusatz or {})))
+                               retire_by_manual=manuell, ordner=_pfad_text(fid), **zusatz))
     return iid
 
 
@@ -729,12 +739,13 @@ def artikel_anlegen(d):
 def anlegen(d):
     """POST /artikel: ein Artikel – oder, mit einem Set-Produkt, ein Set mit seinen Teilen (sets.set_anlegen;
     ohne „teile“ 400). Liefert (Kennung, Hinweise)."""
+    from . import teilnummern
     plan = artikel_plan(d)
     if plan["p"]["is_set"]:
         return sets.set_anlegen(d, plan)
     if d.get("teile") is not None:
         raise Abgelehnt(sets.NUR_FUER_SETS)
-    return artikel_schreiben(plan), []
+    return artikel_schreiben(plan, teilnr=teilnummern.lesen(d.get("bestandteil_nummern"), plan["p"]["id"])), []
 
 
 def stand_von(i):
@@ -761,6 +772,16 @@ def artikel_aendern(iid, d):
     if d.get("product_id") not in (None, ""):
         sets.produktwechsel_weiche(alt, kennung(d.get("product_id"), "Produkt"))
     w, p = artikel_werte(d, alt)
+    # Seriennummern der Bestandteile (Schritt 25): wie die freigabepflichtigen Stammdaten – direkt nur der Materialwart und
+    # nur bis zur ersten Prüfung; danach in der Prüfung oder per Antrag. Gelesen gegen die Liste des (neuen) Produkts.
+    from . import teilnummern
+    teilnr = teilnummern.lesen(d.get("bestandteil_nummern"), w["product_id"]) if "bestandteil_nummern" in d else {}
+    if w["product_id"] == alt["product_id"] and not teilnummern.aenderungen(iid, teilnr):
+        teilnr = {}
+    if teilnr and not rechte.darf_artikel("verwalten", alt):
+        raise Abgelehnt(NUR_DIREKT, 403)
+    if teilnr and stammdaten_fest(iid):
+        raise Abgelehnt(teilnummern.FEST, 409)
     # Prüfer (E2): Bemerkung, Länge und nächste Prüfung – sonst nichts. Materialwart nach der ersten Prüfung: alles außer
     # den freigabepflichtigen Feldern (die gehen per Antrag); vorab gefragt, damit die Meldung nicht von einer Regel weiter
     # unten (Lebensende nur vorziehen …) kommt – unter der Sperre noch einmal.
@@ -820,6 +841,8 @@ def artikel_aendern(iid, d):
         if stammdaten_fest(iid):
             if abweichungen(alt, w, d):
                 raise Abgelehnt(STAMMDATEN_FEST, 409)
+            if teilnr:
+                raise Abgelehnt(teilnummern.FEST, 409)
             if w["serial_no"].casefold() == alt["serial_no"].casefold():
                 w["serial_no"], generiert = alt["serial_no"], alt["serial_generated"]
             for f in ("manufactured_on", "purchased_on", "first_use_on"):
@@ -834,8 +857,11 @@ def artikel_aendern(iid, d):
                     w["length_m"], db.now(), iid))
         if wechsel:
             produktwechsel_eintragen(alt, neu, p)
+            teilnummern.aufraeumen(dict(alt, product_id=w["product_id"]), alt["product_id"])
         else:
             journal.aenderung("item", iid, alt, neu)
+        if teilnr:
+            teilnummern.schreiben(dict(alt, product_id=w["product_id"]), teilnummern.aenderungen(iid, teilnr))
         # Ein anderes Produkt oder ein kürzeres Intervall am Artikel zieht die Fälligkeit nach.
         faelligkeit.kappen("i.id = ?", (iid,))
 
@@ -1057,11 +1083,18 @@ def artikel_json(i, voll=False):
     out["laenge_moeglich"] = katalog.laenge_wirksam(p["category_id"])
     out["stand"] = stand_von(i)
     out["stammdaten_fest"] = stammdaten_fest(i["id"])
+    out["bestandteile_direkt"] = (not out["stammdaten_fest"] and i["lock_state"] != "ausgesondert"
+                                  and darf["verwalten"])
     # Produkt ändern unter „Bearbeiten“ (Feintuning, L2b Nr. 29): bis zur ersten abgeschlossenen Prüfung, nicht an Sets.
     out["produkt_aenderbar"] = produkt_aenderbar(i)
     out["produkt_beantragbar"] = produkt_beantragbar(i)
     out["status"], out["status_text"] = s, st.LABEL[s]
     out["produkt"] = katalog.produkt_json(p)
+    # Bestandteil-Liste des Produkts (Schritt 25): am Produkt nur Bezeichnung und Anzahl, am Artikel mit seinen
+    # Seriennummern je Stück – direkt änderbar bis zur ersten Prüfung durch den Materialwart (bestandteile_direkt).
+    out["produkt"]["bestandteile"] = [stueckliste.kurz_form(z) for z in stueckliste.kurzliste(p["id"])]
+    from . import teilnummern
+    out["bestandteile"] = teilnummern.liste_json(i)
     out["pfad"] = pfad(i["folder_id"])
     out["gliederung"] = gl
     out["intervall"] = iv

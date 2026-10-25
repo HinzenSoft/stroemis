@@ -30,6 +30,10 @@ Format 2 (ZIP mit katalog.json und den Dateien; als reine JSON-Datei nur ohne Da
   (_produkt_ziel: uid, dann Hersteller + Modell + Artikelnummer). „set“ an einem Produkt mit Artikeln umschalten, ein
   DEMO-Bestandteil in einem echten Set und Positionen außerhalb der Regeln (stueckliste.py) sind Fehler dieses
   Produkts; eine Liste aus Texten (Recherche-Manifeste) ist ein Hinweis und wird übergangen. Auch in Format 1 gelesen.
+  Seit Schritt 25 trägt ein Produkt ohne „set“: true (fehlt oder false) mit „bestandteile“ seine Bestandteil-Liste – je
+  Position {bezeichnung, anzahl}, nur Text; [] entfernt sie, ohne den Schlüssel bleibt sie, wie sie ist. Abgeglichen wie
+  die Stückliste (als Ganzes ersetzt, gleich heißt unverändert), gezählt unter „bestandteillisten“. Ist das Produkt hier
+  ein Set, ist eine Bestandteil-Liste ohne „set“: true ein Fehler dieses Produkts (Entscheidung F2: kein Umstellen).
 
 Dateien sind nicht Teil der Datenbanktransaktion. Ein Probelauf schreibt deshalb keine einzige. Der echte Lauf
 ermittelt erst in einem Probedurchgang, welche Dateien er braucht, legt nur diese ab – außerhalb der Schreibsperre,
@@ -178,6 +182,7 @@ def _bericht():
             "bilder": {"neu": 0, "geaendert": 0, "unveraendert": 0},
             "dokumente": {"neu": 0, "neue_version": 0, "unveraendert": 0},
             "stuecklisten": {"neu": 0, "geaendert": 0, "unveraendert": 0},
+            "bestandteillisten": {"neu": 0, "geaendert": 0, "unveraendert": 0},
             "aenderungen": [], "hinweise": [], "warnungen": [], "fehler": [], "gespeichert": False}
 
 
@@ -657,8 +662,9 @@ def _stuecklisten(lauf):
     for ort, name, e, pid in lauf.sets:
         try:
             an, liste = _set_angaben(ort, name, e, lauf)
-            if an is False and liste:
-                raise Abgelehnt("„set“: false und dazu eine Stückliste – nur ein Set hat Bestandteile.")
+            # Bestandteil-Liste (Schritt 25) an einem Produkt, das hier ein Set ist: Fehler statt Umstellen (F2).
+            if liste is not None and an is not True and katalog.produkt(pid)["is_set"]:
+                raise Abgelehnt(SET_HIER)
             angaben.append((ort, name, pid, an, liste))
         except Abgelehnt as exc:
             bericht["fehler"].append(f"{ort} ({name}): {exc}")
@@ -695,14 +701,28 @@ def _stuecklisten(lauf):
         else:
             bericht["stuecklisten"]["unveraendert"] += 1
 
+    def flach(ort, name, pid, liste):
+        """Bestandteil-Liste eines Produkts, das kein Set ist (Schritt 25) – als Ganzes ersetzt wie eine Stückliste."""
+        neu = not stueckliste.zeilen(pid)
+        if stueckliste.ersetzen(pid, liste, grund="Katalogimport"):
+            bericht["bestandteillisten"]["neu" if neu and liste else "geaendert"] += 1
+            geaendert(pid)
+            lauf.notiz(f"Produkt „{name}“: Bestandteil-Liste ersetzt ({len(liste)} Position"
+                       f"{'en' if len(liste) != 1 else ''})")
+        else:
+            bericht["bestandteillisten"]["unveraendert"] += 1
+
     fehlerhaft, ersetzt = set(), set()
-    for schritt in ("aus", "bleibend", "ein", "neu"):
+    for schritt in ("aus", "flach", "bleibend", "ein", "neu"):
         for ort, name, pid, an, liste in angaben:
             if ort in fehlerhaft:
                 continue
             try:
                 if schritt == "aus" and an is False:
                     umschalten(ort, name, pid, False)
+                elif schritt == "flach" and liste is not None and an is not True:
+                    flach(ort, name, pid, liste)
+                    ersetzt.add(ort)
                 elif schritt == "bleibend" and liste is not None and an is not False and katalog.produkt(pid)["is_set"]:
                     ersetzen(ort, name, pid, liste)
                     ersetzt.add(ort)
@@ -721,6 +741,12 @@ def _stuecklisten(lauf):
                 not any(z["einzeln"] for z in stueckliste.zeilen(pid)):
             bericht["fehler"].append(f"{ort} ({name}): {stueckliste.EINZELN_PFLICHT} – „bestandteile“ mit mindestens einer "
                                      "einzeln geführten Position fehlt. " + EINZELN_BEHEBEN)
+
+
+# Entscheidung F2 (25.10.2026): Eine Bestandteil-Liste ohne „set“: true an einem Produkt, das hier ein Set ist, wird nicht
+# umgestellt – der Import lehnt sie ab, nichts wird gespeichert.
+SET_HIER = ("Das Produkt ist hier ein Set – eine Bestandteil-Liste (nur Text) gibt es nur an einem Produkt, das kein Set ist. "
+            "Entweder „set“: true mit einer Stückliste angeben oder das Set hier erst klären (Variante oder neues Produkt).")
 
 
 # Wie sich ein Set ohne einzeln geführte Position beheben lässt – auch ein Altbestand aus der Zeit vor der Regel (S3),

@@ -284,19 +284,19 @@ def _antwort(d, pflicht=False):
 
 
 def produkt_anlegen(mid, d):
-    """Ein neues Produkt oder Set aus der Meldung. Anlegen (beim Set mit Stückliste, stueckliste.anfrage_lesen – „is_set“
-    und „bestandteile“ wie POST /produkte) und Erledigen in einer Transaktion: Ist die Meldung inzwischen erledigt oder
+    """Ein neues Produkt oder Set aus der Meldung. Anlegen (beim Set mit Stückliste, beim Produkt mit Bestandteil-Liste,
+    stueckliste.anfrage_lesen – „is_set“ und „bestandteile“ wie POST /produkte) und Erledigen in einer Transaktion: Ist die Meldung inzwischen erledigt oder
     scheitert eine Position, entsteht nichts."""
     from . import stueckliste
     meldung(mid)
     antwort = _antwort(d)
-    bestandteile = stueckliste.anfrage_lesen(d)
+    ist_set, bestandteile = stueckliste.anfrage_lesen(d)
     with db.transaction(sofort=True):
         # Erst die Meldung, dann das Produkt: Wer eine erledigte nachbearbeitet, soll das erfahren – nicht, dass
         # die Artikelnummer inzwischen vergeben ist.
         if meldung(mid)["status"] != "offen":
             raise Abgelehnt("Diese Meldung ist schon erledigt. Bitte neu laden.", 409)
-        pid = katalog.produkt_anlegen(d, bestandteile=bestandteile)
+        pid = katalog.produkt_anlegen(d, bestandteile=bestandteile, ist_set=ist_set)
         _abschliessen(mid, "eingepflegt", pid, antwort)
     _melder_benachrichtigen(meldung(mid))
     return pid

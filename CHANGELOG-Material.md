@@ -23,6 +23,7 @@ für sich deploybar.
 | Sets anlegen und Stückliste übertragen (Schritt 22) | Knopf „Set anlegen“ (Produkt und Stückliste in einem Zug, mindestens ein einzeln geführtes Teil), Umstellen Produkt ↔ Set nur per Katalogdatei, „Stückliste übertragen“ auf angelegte Sets mit Vorschau, Fehlendes Produkt oder Set melden, Begriff „Set“, Ordnerart „Set-Ordner“ | gebaut 24.10.2026, wartet auf Prüfung und Freigabe |
 | Änderungsanträge an alle Stammdaten (Schritt 23) | Freigabepflichtig nach der ersten Prüfung: Produkt, Seriennummer, Herstellung, Kauf, Erstgebrauch, Lebensende, Prüfintervall – als ein Sammelantrag; entscheiden die Materialwarte des Ordners (auch den eigenen Antrag, die Material-Verwaltung nur mit eigener Verwalterfreigabe); Liste „Änderungsanträge“ im Bestand, Katalog → Meldungen nur Produkt- und Set-Meldungen; Prüfer bearbeiten Bemerkung, Länge, nächste Prüfung; Produktänderungen im Lebenslauf; Nachtrag 25.10.2026 (Schritt 24): Lebensende per Antrag auch wieder nach hinten bis zur Rechnung | gebaut 24.10.2026, Nachtrag 25.10.2026, wartet auf Prüfung und Freigabe |
 | Wünsche vom 25.10.2026 (W1–W4) | Norm in eigener Zeile auf der Artikelseite; Nacharbeit: „Übernehmen …“ und nach dem Zuordnen direkt übernehmen, „Fehlendes Produkt melden“ vorbelegt; Bestand: Spalte „Kategorie“, Filtermenü in der Seitenleiste mit „Filter (n)“; Wiki: Seiten aus ZIP importieren | gebaut 25.10.2026 (kein Schemaschritt), wartet auf Prüfung und Freigabe |
+| Bestandteil-Liste an normalen Produkten (Schritt 25) | Herstellersets als flache Produkte mit Liste „Bestandteile“ (Bezeichnung und Anzahl): Produktdialog, Produkt- und Artikelseite, Meine PSA, Lebenslauf; jede Prüfung fragt je Position „vorhanden“ ab („fehlt“ = Mangel); Katalogdatei; Set-Meldung → „Produkt anlegen“; dazu Seriennummern der Bestandteile je Stück am Artikel (direkt bis zur ersten Prüfung, dann in der Prüfung oder per Antrag, suchbar) | gebaut 25.10.2026, wartet auf Prüfung und Freigabe |
 | Nachbesserung Sets und Anträge nach den Prüfungen | Sets: Kennungen der Kopie, „Anzahl verringert“, Texte; Anträge: Produktgeschichte nach Wechsel, Intervall-Obergrenze nur bei Änderung, Fälligkeit ohne Namen, 409 statt 500, Texte, Zähl-Aufruf | gebaut 25.10.2026, wartet auf Prüfung und Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
@@ -4158,6 +4159,146 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Bestandteil-Liste an normalen Produkten (Wunsch des Nutzers, 25.10.2026)
+
+Wunsch des Nutzers (25.10.2026): „Alle Herstellersets sollen zu flachen Artikeln geändert werden mit einer Liste an
+Bestandteilen darin. Sets im alten Sinne werden nur noch über die Oberfläche von Hand gestaltet.“ Dazu der Zusatz „In der
+Bestandteilliste sollen Seriennummern der Teile eintragbar sein“. Grundlage: Bauentwurf
+`planung/material-phase4/entwurf_bestandteile_flach.md` mit den Entscheidungen F1 (a), F2 (Fehler statt Umstellen),
+F3 (a), F4 (a) und S1–S3. Gebaut auf Zweig `l2c-rest` (nach Schritt 24). **Schemaschritt 25.** Sets von Hand (Stückliste mit
+einzeln geführten Teilen) bleiben unverändert.
+
+### Bestandteil-Liste (Katalog)
+
+- Ein Produkt, das **kein Set** ist, kann eine Liste **„Bestandteile“** haben: je Position Bezeichnung (eine Zeile,
+  höchstens 120 Zeichen, je Liste eindeutig ohne Groß/klein) und Anzahl (1–20), höchstens 30 Positionen, leer heißt keine
+  Liste. Nur Text – kein „einzeln geführt“, kein Produkt, kein „Austausch laut Hersteller“. Gespeichert in derselben
+  Tabelle wie die Stückliste eines Sets (`mat_product_component`, `einzeln` 0, ohne Produkt).
+- **Produktdialog**: Reiter „Produkt“ | „Bestandteile“ jetzt bei jedem Produkt (anlegen, bearbeiten, Variante, aus
+  Meldung; nicht in der Nacharbeit). Im Reiter je Position Bezeichnung und Anzahl, ↑ ↓ „Entfernen“, „+ Bestandteil
+  anlegen“ und „n von 30 Positionen“; doppelte Bezeichnung und Grenzen am Feld. Neu geht die Liste in derselben Anfrage
+  mit (scheitert eine Position, entsteht nichts), beim Bearbeiten als `PUT …/bestandteile`, wenn sie sich geändert hat.
+- **Produktseite**: Abschnitt „Bestandteile“ („2 × Bezeichnung“), nur mit Liste; mit Katalogrecht „Bestandteile
+  bearbeiten“ (öffnet den Dialog im Reiter). **Artikelseite**: Zeile „Bestandteile“ unter „Norm“ mit den Seriennummern
+  des Artikels. **Meine PSA** (F3 a): Zeile „Bestandteile“ in der Karte. **Lebenslauf-PDF**: Abschnitt „Bestandteile
+  (laut Katalog)“ mit den Seriennummern (der heutige Stand; was am Prüftag galt, steht im Protokoll).
+- Ändern darf die Material-Verwaltung jederzeit (kein Antrag): unveränderte Positionen (gleiche Bezeichnung) bleiben
+  dieselbe Zeile, Bezeichnung, Anzahl und Reihenfolge werden nachgezogen. Journal am Produkt **„Bestandteile geändert“**
+  (vorher/nachher), im Lebenslauf jedes Artikels ab seinem Anlegen. Festgeschriebene Protokolle und offene Entwürfe
+  behalten ihre Zeilen; die nächste Prüfung nimmt die neue Liste.
+- **Variante**: übernimmt die Liste des Vorbilds zum Bearbeiten (`bestandteile` oder die des Vorbilds; `[]` ohne Liste);
+  die Variante eines Sets bleibt ein Set. Löschen nimmt die Liste mit (ON DELETE CASCADE).
+- Ein Produkt mit Bestandteil-Liste ist kein Set: keine Set-Marke, keine Teile, keine Set-Prüfung; es kann selbst einzeln
+  geführter Bestandteil eines Sets von Hand sein.
+
+### Prüfung
+
+- Jede Prüfung eines Artikels mit Bestandteil-Liste (jede Prüfart, einzeln und im Durchgang, auch ein Teil eines Sets von
+  Hand) bekommt hinter den Formularpunkten je Position eine Ja/Nein-Zeile **„… vorhanden“** (Gruppe „Bestandteile“,
+  „Tasche (2×) vorhanden“; Pflicht, Soll „ja“, nicht kritisch, vorbelegt „vorhanden“). Die Oberfläche zeigt
+  „vorhanden“/„fehlt“ wie in der Set-Prüfung (Befund `bestandteil`).
+- **„fehlt“ ist ein Mangel wie jeder andere (F1 a)**: Foto und Bemerkung Pflicht, nicht kritisch – das Ergebnis wählt der
+  Prüfer. Protokoll-PDF: die Zeilen in der Befundtabelle unter „Bestandteile“ (keine Teiletabelle). Eine Berichtigung
+  kopiert die Zeilen.
+
+### Seriennummern der Bestandteile (Zusatz S1–S3)
+
+- Am **Artikel** je Position und Stück ein freiwilliges Feld „Seriennummer“ (höchstens 80 Zeichen; leer erlaubt – ein
+  Beutel hat keine). Neue Tabelle `mat_item_component_serial`.
+- **Beim Anlegen und bis zur ersten abgeschlossenen Prüfung direkt** (Materialwart; Dialog „Bearbeiten“, Fieldset
+  „Seriennummern der Bestandteile“; ein Prüfer 403). **Danach** trägt der **Prüfer** eine neue oder fehlende Nummer in der
+  Prüfung ein (Felder an der Zeile „… vorhanden“, gespeichert beim Verlassen des Feldes, übernommen beim Festschreiben;
+  das Protokoll hält „alt → neu“ fest, Journal „Seriennummern der Bestandteile geändert“ mit der Prüfung) – außerhalb
+  einer Prüfung nur per **Änderungsantrag** (Feld „Seriennummer Bestandteil „…““, je Stück eine Zeile im Sammelantrag,
+  Freigabe wie die übrigen Stammdaten; leer = Nummer entfernen; zusammen mit einem Produktwechsel nicht). Direkt nach der
+  ersten Prüfung: 409.
+- **Suche**: die lokale Suche findet den Artikel auch über die Nummer eines Bestandteils (Teiltreffer; Rechte wie beim
+  Artikel). **Rückrufe treffen Bestandteile nicht** (kein Katalogprodukt). Die globale Seriennummernsuche (fremde
+  Bereiche) kennt sie nicht.
+- Ändert die Material-Verwaltung die Liste: Nummern an unveränderten Positionen bleiben; entfallene Positionen und Stück
+  über einer gesunkenen Anzahl verlieren ihre Nummer (Journal je Artikel „Seriennummern der Bestandteile geändert“ mit
+  Grund „Bestandteil-Liste des Produkts geändert“; Protokolle behalten sie). Wechselt der Artikel das Produkt (vor der
+  ersten Prüfung oder per Antrag), ebenso (Grund „Produkt gewechselt“).
+
+### Katalogdatei (Format 1 und 2)
+
+- `"bestandteile"` **ohne** `"set": true` (fehlt oder `false`) ist die Bestandteil-Liste: je Position
+  `{"bezeichnung", "anzahl"}`; `einzeln: true` oder `produkt` → Fehler „Position n: „einzeln“: true gibt es nur an einem
+  Set …“, `austausch` außer `nicht_belegt` → Fehler; doppelte Bezeichnung, Anzahl, mehr als 30 Positionen → Fehler. `[]`
+  entfernt die Liste, ohne den Schlüssel bleibt sie. Als Ganzes ersetzt (gleich = unverändert), Bericht
+  **`bestandteillisten`** {neu, geaendert, unveraendert} und „Produkt „…“: Bestandteil-Liste ersetzt (n Positionen)“;
+  ändert sich am Produkt nur die Liste, zählt es als „geändert“. Eine Liste aus Texten bleibt ein Hinweis.
+- **F2**: Ist das Produkt hier ein **Set**, ist eine Bestandteil-Liste ohne `"set": true` ein **Fehler** dieses Produkts
+  („Das Produkt ist hier ein Set – …“), nichts wird gespeichert; kein automatisches Umstellen.
+- Export: an Nicht-Sets mit Liste `"bestandteile": [{"bezeichnung", "anzahl"}]`, kein `"set"`. DEMO-Vorlage
+  `docs/material-katalog-set-vorlage.json` mit dem Beispiel „BEISPIEL Produkt mit Lieferumfang“.
+- Die Katalogserie braucht wie bisher vorher `flask material dev-zuruecksetzen` (ehemalige Sets mit Artikeln scheitern
+  sonst mit klarem Fehler).
+
+### Meldungen (F4 a)
+
+- An einer **Set-Meldung** stehen „Produkt anlegen“ (Produktdialog ohne Set-Modus, die gemeldeten Teile als Vorlage über
+  dem Reiter „Bestandteile“) und „Set anlegen“. Der Meldedialog bleibt.
+
+### Schritt 25 (Schema)
+
+- Trigger `mat_component_neu`/`mat_component_aendern` ersetzt (gleiche Namen): am Nicht-Set nur Text-Positionen, am Set
+  wie bisher.
+- `mat_item_component_serial` (Artikel CASCADE, Position CASCADE, Stück 1–20, Nummer nicht leer, eindeutig je Artikel,
+  Position, Stück) mit Triggern: nur an einer Position des Produkts des Artikels (Text-Bestandteil, kein Set, Stück ≤
+  Anzahl); nach der ersten abgeschlossenen Prüfung einfügen, ändern, löschen nur gedeckt – durch einen bestätigten, noch
+  nicht angewendeten Antrag (alt und neu passen, danach `applied_at`) oder durch den offenen Entwurf einer Prüfung dieses
+  Artikels, dessen Zeile genau diese Nummer trägt; eine nicht mehr gültige Nummer (Position weg, Stück über der Anzahl,
+  anderes Produkt) darf weg; Schlüssel nie ändern, INSERT OR REPLACE über die Kennung nie.
+- `mat_inspection_result.component_id` und `component_serials` (je Stück `{alt, neu}`), geschützt wie die übrigen Spalten
+  (`mat_result_bestandteil`).
+- `mat_item_change` neu aufgebaut wie in Schritt 23 (alle Zeilen, Kennungen und der AUTOINCREMENT-Stand bleiben): Feld
+  `component_serial`, Spalten `component_id`, `stueck`, `component_label`; der eindeutige Index „ein offener Antrag je
+  Artikel und Feld“ zählt Position und Stück mit; die Antrags- und Artikeltrigger werden neu angelegt. Wiederholbar:
+  umgebaut nur, wenn der CHECK `component_serial` nicht kennt; ein zweiter Lauf ändert nichts. Wer `mat_item_change`
+  künftig neu aufbaut, muss die Trigger `mat_teilnummer_*` vorher entfernen und danach neu anlegen.
+- **Rückweg**: Älterer Code sieht Version 25 ≥ seiner und tut nichts; Listen an Nicht-Sets zeigt er nicht, Prüfzeilen
+  schreibt er nicht, Seriennummern der Bestandteile liest er nicht – kein Datenverlust. Vollständig zurück (an einer
+  Kopie, nach Sicherung): `DELETE FROM mat_item_component_serial;`, `DELETE FROM mat_product_component WHERE
+  set_product_id IN (SELECT id FROM mat_product WHERE is_set = 0);`, Trigger aus `TRIGGER_21` für die beiden
+  Stücklisten-Trigger neu anlegen; Anträge mit `component_serial` bleiben als Nachweis stehen.
+
+### Schnittstelle
+
+| Route | Änderung |
+| --- | --- |
+| `POST /api/material/produkte` | `bestandteile` ohne `is_set`: Produkt mit Bestandteil-Liste (nur Text) → 201; `einzeln`/`produkt_id`/`austausch` darin 400 „Position n: …“; mit `is_set` wie bisher |
+| `PUT /api/material/produkte/<pid>/bestandteile` | an Nicht-Sets: Liste nur Text, `[]` entfernt sie → `{produkt, geaendert}`; kein 409 mehr |
+| `POST …/produkte/<pid>/variante` | Nicht-Set: `bestandteile` oder die Liste des Vorbilds |
+| `POST …/meldungen/<mid>/produkt` | wie `POST /produkte` |
+| `GET …/produkte/<pid>` | `bestandteile` an jedem Produkt (voll) |
+| `GET …/artikel/<iid>` | `produkt.bestandteile` [{bezeichnung, anzahl}], `bestandteile` [{id, bezeichnung, anzahl, nummern}], `bestandteile_direkt` |
+| `GET …/artikel/vorschlag` | `bestandteile` [{id, bezeichnung, anzahl}] für die Felder beim Anlegen |
+| `POST …/artikel`, `PUT …/artikel/<iid>` | `bestandteil_nummern`: [{bestandteil_id, stueck, seriennummer}] – nach der ersten Prüfung 409, Prüfer 403 |
+| `POST …/artikel/<iid>/antrag` | `bestandteil_nummern` wie oben (nur Geändertes zählt; nicht zusammen mit `product_id`) |
+| `GET …/meine-psa` | Karte `bestandteile` [{id, bezeichnung, anzahl, nummern}] |
+| `GET …/pruefungen/<id>` | Befund `bestandteil` (bool), `nummern` [{stueck, alt, neu, wert}] |
+| `PUT …/pruefungen/<pid>/punkte/<rid>` | `seriennummern`: je Stück ein Text (nur an Zeilen „… vorhanden“ einer Bestandteil-Liste) |
+| `GET …/suche` | findet auch über die Seriennummer eines Bestandteils; `exakt_lokal` ebenso |
+| Katalogimport-Bericht | `bestandteillisten` {neu, geaendert, unveraendert} |
+
+### Tests
+
+- Neu `tests/test_material_bestandteile.py`: Migration 24 → 25 mit Altbestand (Set, Prüfung, offener Antrag), zweiter
+  Lauf; Trigger 25; Katalog (Fehler, atomar, ersetzen, leeren, Journal, Variante, Löschen, Rechte); Prüfzeilen (Mangel,
+  Entwurf behält, Berichtigung, Durchgang, PDF); Seriennummern (anlegen, bearbeiten, Prüfung, Antrag, Suche, PSA,
+  Lebenslauf, Liste ändern); Katalogdatei (Format, Bericht, Fehler, F2, Export → Import, Vorlage); Oberfläche statisch.
+- Angepasst: Migrationstests 15/17/23/24 (Trigger von Schritt 25, `_schritt_25` im zweiten Lauf, 23 → 24 nur bis 24),
+  `bis_schritt` rüstet Tabelle und Spalten aus Schritt 25 nach.
+
+### Bitte bestätigen
+
+- Seriennummern in der Prüfung werden beim Verlassen des Feldes gespeichert (nicht schon beim Tippen wie Werte und
+  Bemerkungen).
+- Ein Antrag auf Seriennummern der Bestandteile darf eine Nummer auch entfernen (leer); ein Produktwechsel und neue
+  Nummern gehen nicht in einen Antrag.
+- Die globale Seriennummernsuche (fremde Bereiche) und der Bestandsimport kennen die Nummern der Bestandteile nicht.
+
 ## Wünsche vom 25.10.2026 (Norm-Zeile, Nacharbeit, Filter im Bestand, Wiki-Import)
 
 Wünsche des Nutzers vom 25.10.2026 (W1–W4; W5 Wiki-Artikel folgt getrennt). Grundlage: Bauentwurf
@@ -4687,9 +4828,9 @@ Grundlage: Bauentwurf `entwurf_sets_anlegen_uebertragen.md` mit den Entscheidung
 
 | Route | Wer | Was |
 | --- | --- | --- |
-| `POST /api/material/produkte` (dazu `is_set: true`, `bestandteile`: Positionen wie `PUT …/bestandteile`) | Katalog | Set anlegen: Produkt und Stückliste in einer Transaktion → 201 `produkt`. `is_set` ohne Liste oder leer 400, `bestandteile` ohne `is_set` 400, ohne einzeln geführtes Teil 400, Fehler „Position n: …“ 400 – dann entsteht nichts |
+| `POST /api/material/produkte` (dazu `is_set: true`, `bestandteile`: Positionen wie `PUT …/bestandteile`) | Katalog | Set anlegen: Produkt und Stückliste in einer Transaktion → 201 `produkt`. `is_set` ohne Liste oder leer 400, `bestandteile` ohne `is_set` 400 (seit Schritt 25: Bestandteil-Liste eines Produkts, 201), ohne einzeln geführtes Teil 400, Fehler „Position n: …“ 400 – dann entsteht nichts |
 | `PUT /api/material/produkte/<pid>` | Katalog | `is_set` abweichend 409, gleich ohne Wirkung |
-| `POST /api/material/produkte/<pid>/variante` | Katalog | Variante eines Sets ist ein Set (`bestandteile` oder die des Vorbilds); eines Produkts ein Produkt (`bestandteile` 400); `stueckliste` und `is_set` zählen nicht mehr |
+| `POST /api/material/produkte/<pid>/variante` | Katalog | Variante eines Sets ist ein Set (`bestandteile` oder die des Vorbilds); eines Produkts ein Produkt (`bestandteile` 400; seit Schritt 25 seine Bestandteil-Liste); `stueckliste` und `is_set` zählen nicht mehr |
 | `PUT /api/material/produkte/<pid>/bestandteile` | Katalog | wie bisher, aber nie leer und mindestens ein einzeln geführtes Teil (400) |
 | `GET /api/material/produkte/<pid>` | lesen | neu `sets_aelter` (nur Material-Verwaltung, nur an Sets); `set_umschaltbar` und `set_umschalt_grund` entfallen |
 | `GET /api/material/produkte/<pid>/stueckliste-uebertragen` | Katalog | Vorschau `{produkt {id, name}, stand, gruppen [{vergleich [{position, bisher, jetzt, wirkung}], sets [{id, inventory_no, ordner, status, status_text, lock_state, manufactured_on, demo, uebertragbar, grund, sperrt, wirkung}]}], ausgesondert, gleich, uebertragbar, sperrt}`; 409 kein Set / Stückliste leer oder ohne einzeln geführtes Teil |
@@ -5757,7 +5898,8 @@ Meine PSA) unter „Oberfläche (O2)“; danach „Prüfung vor Auslieferung“ 
   die Verweise in einem zweiten Durchgang nach allen Produkten der Datei auf (uid, dann Hersteller + Modell +
   Artikelnummer – wie die Formulare an Produkten), ersetzt die Stückliste als Ganzes (Journal unter „Katalogimport (…)“)
   und meldet im Bericht `stuecklisten` (geändert/unverändert). Fehler des Produkts: „set“ umschalten bei vorhandenen
-  Artikeln, ein Bestandteil, der Set werden soll, „set“: false mit Bestandteilen, Bestandteile ohne „set“, ein
+  Artikeln, ein Bestandteil, der Set werden soll, „set“: false mit Bestandteilen, Bestandteile ohne „set“ (seit Schritt 25
+  die Bestandteil-Liste eines Produkts – Fehler nur noch an einem Produkt, das hier ein Set ist), ein
   unbekannter Bestandteil, Positionen außerhalb der Regeln. Eine Liste aus Texten (heutige Recherche-Manifeste) ist ein
   Hinweis und wird übergangen. Der Export schreibt beides; steht ein DEMO-Bestandteil (oder einer aus einer
   DEMO-Kategorie) in einem echten Set, lässt er „bestandteile“ dieses Sets ganz weg und nennt es im Bericht
@@ -7267,6 +7409,7 @@ ist ein Verweis auf eine Datei (`bild`, `datei`) ein Fehler.
 | `aktivieren` (Formular) | Der Export schreibt `true` für das aktive Formular eines Ziels, `false` für die neueste Version, wenn keins aktiv ist |
 | `quelle`, `erstellt` | woher und wann (nur zur Anzeige) |
 | `set` (Produkt) | `true`/`false` (auch ja/nein, 1/0): das Häkchen „Hersteller-Set“ (Schritt 21). Umschalten nur ohne Artikel des Produkts hier, ein Bestandteil einer Stückliste wird kein Set – sonst ein Fehler dieses Produkts; fehlt der Schlüssel, bleibt es, wie es ist (neu: kein Set). Der Export schreibt es nur an Sets. Auch in Format 1 gelesen. Optional |
+| `bestandteile` (Produkt, kein Set) | Seit Schritt 25: ohne `"set": true` die Bestandteil-Liste eines Produkts – je Position `{bezeichnung, anzahl}` (Bezeichnung eine Zeile, höchstens 120 Zeichen, je Liste eindeutig; Anzahl 1–20, Vorgabe 1), höchstens 30 Positionen; `einzeln: true`, `produkt` und `austausch` außer `nicht_belegt` sind Fehler; `[]` entfernt die Liste, fehlt der Schlüssel, bleibt sie. Ist das Produkt hier ein Set: Fehler (kein Umstellen). Bericht `bestandteillisten`. Der Export schreibt sie ohne `"set"`. Optional |
 | `bestandteile` (Produkt) | Die Stückliste eines Sets, ersetzt als Ganzes (Journal am Produkt; fehlt der Schlüssel, bleibt sie): je Position `bezeichnung` (eine Zeile, höchstens 120 Zeichen; bei einzeln geführten darf sie fehlen – dann der Produktname), `anzahl` (1–20, Vorgabe 1), `einzeln` (`true`: eigene Kennzeichnung und eigenes Katalogprodukt, jedes Stück wird beim Anlegen ein Teil-Artikel), `austausch` (`ja`, `nein`, `nicht_belegt` – Vorgabe; „laut Hersteller“, mit Beleg in der Recherche) und – nur bei `einzeln` – `produkt` als Verweis `{uid, hersteller, modell, artikelnummer}` (aufgelöst wie ein spezifisches Formular: uid, sonst Hersteller + Modell + Artikelnummer; in einem zweiten Durchgang nach allen Produkten der Datei, der Bestandteil darf hinter dem Set stehen). Höchstens 30 Positionen und 50 einzeln geführte Stück; kein Set als Bestandteil; kein DEMO-Bestandteil in einem echten Set (der Export lässt `bestandteile` eines solchen Sets weg und nennt es im Bericht). Eine Liste aus Texten (Recherche-Manifeste) ist ein Hinweis und wird übergangen. Vorlage: `docs/material-katalog-set-vorlage.json`. Auch in Format 1 gelesen. Optional |
 
 Was hier mehr ist als in der Datei, bleibt: Der Import löscht, deaktiviert und zieht nie etwas zurück. Ein Fehler

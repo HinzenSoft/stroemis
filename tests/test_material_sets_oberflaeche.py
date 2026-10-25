@@ -218,7 +218,7 @@ def test_oberflaeche_o2_statisch():
     # Prüfansicht im Lauf: Kopf, Weg zur nächsten Prüfung, Stand und Gesamtergebnis vorab, „vorhanden/fehlt“,
     # Wahl je Teil bei „aussondern“, Teiletabelle.
     for haken in ("${setKopfHtml()}${setWeiterHtml()}", "${setAbschlussHtml()}", "${setProtokollHtml()}",
-                  "x.gruppe === SET_GRUPPE ? { ja: \"vorhanden\", nein: \"fehlt\" }", "setVorab(daten.ergebnis)",
+                  "istBestandteil(x) ? { ja: \"vorhanden\", nein: \"fehlt\" }", "setVorab(daten.ergebnis)",
                   "pr.set_abschluss.verbleib_vorschlag.map(", "daten.verbleib = verbleibLesen(body)",
                   "await setLaufLaden();", "pr.set_protokoll ? ` – Set: ${pr.set_protokoll.gesamt_text}`"):
         assert haken in js, haken

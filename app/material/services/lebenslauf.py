@@ -18,7 +18,7 @@ from datetime import date
 
 from ... import db
 from ..models import ERGEBNISSE, MATERIALARTEN
-from . import bestand, heute, journal, katalog, protokoll, qr
+from . import bestand, heute, journal, katalog, protokoll, qr, teilnummern
 from . import status as st
 from .beschriftung import SPERRZUSTAND, journal_zeilen
 from .interval import wirksam
@@ -26,9 +26,9 @@ from .protokoll import PRUEFART_TEXT, datum_text, ortszeit, zeit_text
 
 # So viele Journaleinträge nimmt der Lebenslauf höchstens auf (journal.lesen liest die neuesten zuerst).
 JOURNAL_MAX = 2000
-# Einträge im Journal des Produkts, die der Lebenslauf zeigt: Stammdaten, Bild und Stückliste – keine Rückrufe (eigener
-# Abschnitt; ihre Seriennummernlisten nennen Artikel aller Gliederungen).
-PRODUKT_AKTIONEN = ("geaendert", "bild", "stueckliste")
+# Einträge im Journal des Produkts, die der Lebenslauf zeigt: Stammdaten, Bild, Stückliste und Bestandteil-Liste (Schritt
+# 25) – keine Rückrufe (eigener Abschnitt; ihre Seriennummernlisten nennen Artikel aller Gliederungen).
+PRODUKT_AKTIONEN = ("geaendert", "bild", "stueckliste", "bestandteile")
 OHNE_PROTOKOLL = "kein Protokoll – abgeschlossen vor Einführung der PDF-Protokolle"
 
 
@@ -239,6 +239,9 @@ def daten(iid):
                      "plattform": qr.anzeige(qr.basis()).split("://", 1)[-1], "pruefseite": protokoll.pruefseite(),
                      "demo": bestand.ist_demo(iid)},
         "artikel": protokoll._artikel(item, produkt, item["folder_id"]),
+        # Bestandteil-Liste des Produkts (Schritt 25, F3 a) mit den Seriennummern dieses Artikels – der heutige Stand; was
+        # am Prüftag galt, steht im jeweiligen Protokoll. Nicht in protokoll._artikel: sonst stünde es im Prüfprotokoll.
+        "bestandteile": teilnummern.pdf_zeilen(item),
         "zustand": _zustand(item, produkt, s, tag, baum_pfad),
         "hinweis": _hinweis(item, s, aussonderung, im_set=bool(item["parent_item_id"] or produkt["is_set"])),
         "pruefungen": pruefungen,

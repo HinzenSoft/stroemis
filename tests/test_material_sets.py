@@ -329,8 +329,12 @@ def test_katalog_stueckliste():
         url = f"/api/material/produkte/{set_p}/bestandteile"
         assert k["wart"].put(url, json={"bestandteile": []}).status_code == 403
         assert k["fuehrung"].put(url, json={"bestandteile": []}).status_code == 403
+        # Seit Schritt 25 hat ein Produkt, das kein Set ist, eine Bestandteil-Liste (nur Text) – kein 409 mehr.
         r = mv.put(f"/api/material/produkte/{ids['hms']}/bestandteile", json={"bestandteile": []})
-        assert r.status_code == 409 and "Set" in r.json["error"], r.get_json()
+        assert r.status_code == 200 and r.json["geaendert"] is False, r.get_json()
+        r = mv.put(f"/api/material/produkte/{ids['hms']}/bestandteile", json={"bestandteile": [{"bezeichnung": "X",
+                                                                                                "einzeln": True}]})
+        assert r.status_code == 400 and "nur an einem Set" in r.json["error"], r.get_json()
 
         def falsch(eintraege, text, code=400):
             r = mv.put(url, json={"bestandteile": eintraege})
@@ -403,11 +407,12 @@ def test_katalog_stueckliste():
             "bestandteile": [{"produkt_id": rolle, "einzeln": True, "anzahl": 2}]}), 201)["produkt"]
         assert variante["is_set"] and [(b["bezeichnung"], b["anzahl"]) for b in variante["bestandteile"]] == [
             ("Testwerk Rolle Gamma", 2)], variante
-        # … die eines Produkts ein Produkt (eine Stückliste dazu 400).
+        # … die eines Produkts ein Produkt (eine Stückliste dazu 400; seit Schritt 25 ist „bestandteile“ dort die
+        # Bestandteil-Liste – einzeln geführte Positionen gibt es nur an einem Set).
         r = mv.post(f"/api/material/produkte/{ids['hms']}/variante", json={
             "category_id": ids["karabiner"], "manufacturer": "Testwerk", "model": "HMS Beta | X", "article_no": "HB-8",
             "material_kind": "metall_hardware", "interval_months": 12, "bestandteile": [{"produkt_id": rolle, "einzeln": True}]})
-        assert r.status_code == 400 and "Variante eines Sets" in r.json["error"], r.get_json()
+        assert r.status_code == 400 and "nur an einem Set" in r.json["error"], r.get_json()
         assert not ok(mv.post(f"/api/material/produkte/{ids['hms']}/variante", json={
             "category_id": ids["karabiner"], "manufacturer": "Testwerk", "model": "HMS Beta | X", "article_no": "HB-8",
             "material_kind": "metall_hardware", "interval_months": 12, "is_set": True}), 201)["produkt"]["is_set"]
@@ -489,8 +494,12 @@ def test_format_2():
 
         hms = produkte["HMS Beta"]
         fehler([dict(hms, set=True)], "Stückliste von")             # Bestandteil wird kein Set
-        fehler([dict(s, set=False)], "nur ein Set hat Bestandteile")
-        fehler([dict(hms, bestandteile=[{"bezeichnung": "Tasche"}])], "„set“: true fehlt")
+        # Seit Schritt 25 (F2): Stückliste ohne „set“: true an einem Produkt, das hier ein Set ist – Fehler, kein Umstellen;
+        # an einem Produkt, das kein Set ist, ist „bestandteile“ dessen Bestandteil-Liste (nur Text).
+        fehler([dict(s, set=False)], "Das Produkt ist hier ein Set")
+        b = _importieren(app2, dict(daten, produkte=[dict(hms, bestandteile=[{"bezeichnung": "Tasche"}])]), trocken=True)
+        assert not b["fehler"] and b["bestandteillisten"]["neu"] == 1, b
+        fehler([dict(hms, bestandteile=[{"bezeichnung": "Tasche", "einzeln": True}])], "„einzeln“: true gibt es nur an einem Set")
         fehler([dict(s, bestandteile=[{"produkt": {"hersteller": "Nirgendwerk", "modell": "Phantom"}, "einzeln": True}])],
                "„Nirgendwerk | Phantom | –“ (Hersteller | Modell | Artikelnummer) gibt es weder im Katalog noch in der Datei")
         fehler([dict(s, bestandteile=[{"bezeichnung": "Tasche", "anzahl": 99}])], "zwischen 1 und 20")
@@ -513,7 +522,9 @@ def test_format_2():
         with open(os.path.join(REPO, "docs", "material-katalog-set-vorlage.json"), encoding="utf-8") as fh:
             vorlage = json.load(fh)
         b = _importieren(app2, vorlage, trocken=True)
-        assert not b["fehler"] and b["stuecklisten"]["neu"] == 1 and b["produkte"]["neu"] == 2, b
+        # Seit Schritt 25 steht darin auch ein Produkt mit Bestandteil-Liste.
+        assert not b["fehler"] and b["stuecklisten"]["neu"] == 1 and b["bestandteillisten"]["neu"] == 1 \
+            and b["produkte"]["neu"] == 3, b
         # Probelauf schreibt nichts.
         b = _importieren(app2, dict(daten, produkte=[dict(s, bestandteile=[])]), trocken=True)
         assert not b["gespeichert"] and zeilen(app2, "SELECT COUNT(*) AS n FROM mat_product_component WHERE "

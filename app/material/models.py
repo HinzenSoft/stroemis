@@ -201,13 +201,25 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     Trigger aus 23 kannten nur „neuer Wert = retire_by_manual“; mat_item_stammdaten_fest und mat_item_antrag_angewendet
     (gleiche Namen ersetzt) decken zusätzlich „retire_by_manual wird leer und das wirksame retire_by ist der beantragte
     Wert“. Sonst gleich (TRIGGER_24_ARTIKEL); keine Tabelle, keine Zeile. Wiederholbar: entfernen und neu anlegen.
+  - Schritt 25 (Bestandteil-Liste an normalen Produkten und Seriennummern der Bestandteile, Wunsch vom 25.10.2026): Ein
+    Produkt, das kein Set ist, trägt in mat_product_component eine Bestandteil-Liste nur als Text (einzeln 0, ohne
+    Produkt) – mat_component_neu und mat_component_aendern werden ersetzt (STUECKLISTE_REGEL_25; set_product_id nennt
+    seitdem das Produkt, dem die Liste gehört). Neu mat_item_component_serial: je Artikel, Position und Stück eine
+    freiwillige Seriennummer, nach der ersten abgeschlossenen Prüfung nur gedeckt durch einen bestätigten Antrag (Feld
+    component_serial) oder den offenen Prüfentwurf, dessen Zeile „… vorhanden“ genau diese Nummer trägt
+    (mat_inspection_result.component_id und component_serials, geschützt durch mat_result_bestandteil). mat_item_change
+    wird dafür wie in Schritt 23 umgebaut (Feld component_serial, Spalten component_id, stueck, component_label; der
+    eindeutige Index zählt Position und Stück mit; ANTRAGSFELDER_23 bleibt für Schritt 23). Wiederholbar: umgebaut nur,
+    wenn der CHECK component_serial nicht kennt; Tabellen IF NOT EXISTS, Spalten nur, wenn sie fehlen, Trigger entfernt
+    und neu. Wer mat_item_change künftig neu aufbaut, muss vorher die Trigger mat_teilnummer_* entfernen (sie lesen die
+    Tabelle) und danach neu anlegen.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 24
+SCHEMA_VERSION = 25
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -247,9 +259,12 @@ MELDUNGSSTATUS = {"offen": "offen", "eingepflegt": "eingepflegt", "abgelehnt": "
 # retire_by_manual; retire_by rechnet daraus und aus Herstellung und Lebensdauer).
 ANTRAGSFELDER = {"product_id": "Produkt", "serial_no": "Seriennummer", "manufactured_on": "Herstellung",
                  "purchased_on": "Kauf", "first_use_on": "Erstgebrauch", "retire_by": "Lebensende",
-                 "interval_months": "Prüfintervall"}
-# Die Felder, mit denen Schritt 15 die Tabelle angelegt hat – Schritt 23 nahm die übrigen dazu.
+                 "interval_months": "Prüfintervall", "component_serial": "Seriennummer Bestandteil"}
+# Die Felder, mit denen Schritt 15 die Tabelle angelegt hat – Schritt 23 nahm die übrigen dazu, Schritt 25 die
+# Seriennummer eines Bestandteils (je Position und Stück eine Zeile).
 ANTRAGSFELDER_15 = ("serial_no", "manufactured_on")
+ANTRAGSFELDER_23 = ("product_id", "serial_no", "manufactured_on", "purchased_on", "first_use_on", "retire_by",
+                    "interval_months")
 ANTRAGSSTATUS = {"offen": "offen", "bestaetigt": "bestätigt", "abgelehnt": "abgelehnt", "zurueckgezogen": "zurückgezogen"}
 # Die Stände, mit denen Schritt 15 die Tabelle angelegt hat – Schritt 17 nahm „zurückgezogen“ dazu.
 ANTRAGSSTATUS_15 = ("offen", "bestaetigt", "abgelehnt")
@@ -2103,7 +2118,7 @@ GRUPPE_23 = ("'Je Artikel höchstens ein offener Änderungsantrag – weitere Fe
              "Antragsteller, Zeitpunkt und Begründung).'")
 # Die Tabelle aus Schritt 17 mit allen Feldern im CHECK und der Spalte group_id (Kopf des Sammelantrags).
 ANTRAG_TABELLE_23 = (ANTRAG_TABELLE_17
-                     .replace("CHECK (field IN " + _in(ANTRAGSFELDER_15) + ")", "CHECK (field IN " + _in(ANTRAGSFELDER) + ")", 1)
+                     .replace("CHECK (field IN " + _in(ANTRAGSFELDER_15) + ")", "CHECK (field IN " + _in(ANTRAGSFELDER_23) + ")", 1)
                      .replace("      applied_at       TEXT,",
                               "      group_id         INTEGER REFERENCES mat_item_change(id),   -- NULL: Kopf, sonst sein Kopf\n"
                               "      applied_at       TEXT,", 1)
@@ -2264,13 +2279,168 @@ def _schritt_24(conn):
         conn.execute(sql)
 
 
+# --- Schritt 25: Bestandteil-Liste an normalen Produkten und Seriennummern der Bestandteile (Wunsch vom 25.10.2026) ----
+# Ein Produkt, das kein Set ist, kann eine Bestandteil-Liste haben – nur Text (Bezeichnung und Anzahl), in derselben
+# Tabelle wie die Stückliste eines Sets (mat_product_component: einzeln 0, ohne Produkt, Austausch „nicht belegt“). Der
+# Spaltenname set_product_id passt dann nicht mehr wörtlich: Er nennt das Produkt, dem die Liste gehört. Die Trigger aus
+# Schritt 21 ließen Positionen nur an einem Set zu; die Fassung von Schritt 25 lässt am Nicht-Set Text-Positionen zu.
+STUECKLISTE_REGEL_25 = ("'Die Stückliste eines Sets nennt nur Produkte, die selbst kein Set sind; ein Produkt, das kein Set "
+                        "ist, hat nur Bestandteile als Text.'")
+_POSITION_FALSCH_25 = (
+    "(SELECT p.is_set FROM mat_product p WHERE p.id = NEW.set_product_id) IS NULL "
+    "OR ((SELECT p.is_set FROM mat_product p WHERE p.id = NEW.set_product_id) = 0 AND NEW.einzeln <> 0) "
+    "OR ((SELECT p.is_set FROM mat_product p WHERE p.id = NEW.set_product_id) = 1 AND NEW.component_product_id IS NOT NULL "
+    "AND (SELECT p.is_set FROM mat_product p WHERE p.id = NEW.component_product_id) IS NOT 0)")
+# Seriennummern der Bestandteile (Zusatz S1–S3): am Artikel je Position und Stück freiwillig eine Nummer – nur an
+# Positionen einer Bestandteil-Liste (nicht einzeln geführt, Produkt kein Set). Bis zur ersten abgeschlossenen Prüfung
+# direkt; danach nur in einer Prüfung (der Prüfer trägt sie an der Zeile „… vorhanden“ ein, das Protokoll hält alt → neu
+# fest) oder über einen bestätigten Änderungsantrag (Feld component_serial). Eine leere Nummer ist keine Zeile. Fällt eine
+# Position weg (oder ihr Stück, weil die Anzahl sinkt) oder wechselt der Artikel das Produkt, gilt die Nummer nicht mehr
+# und darf weg – Journal und Protokolle behalten sie.
+SERIE_MAX = 80
+TEILNUMMER_FEST = ("'Die Seriennummern der Bestandteile stehen seit der ersten Prüfung fest – ändern nur in einer Prüfung "
+                   "oder über einen bestätigten Änderungsantrag.'")
+TEILNUMMER_POSITION = ("'Eine Seriennummer gehört zu einem Stück einer Bestandteil-Position des Produkts dieses Artikels "
+                       "(nur Text-Bestandteile, kein Set).'")
+TABELLEN_25 = [
+    """CREATE TABLE IF NOT EXISTS mat_item_component_serial (
+      id           INTEGER PRIMARY KEY,
+      item_id      INTEGER NOT NULL REFERENCES mat_item(id) ON DELETE CASCADE,
+      component_id INTEGER NOT NULL REFERENCES mat_product_component(id) ON DELETE CASCADE,
+      stueck       INTEGER NOT NULL CHECK (stueck BETWEEN 1 AND """ + str(BESTANDTEIL_ANZAHL_MAX) + """),
+      serial_no    TEXT NOT NULL CHECK (trim(serial_no) <> '' AND length(serial_no) <= """ + str(SERIE_MAX) + """),
+      updated_at   TEXT NOT NULL,
+      UNIQUE (item_id, component_id, stueck)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_mat_teilnummer_position ON mat_item_component_serial(component_id)",
+    # Die Suche nach einer Nummer (Treffer ist der Artikel, in dem das Teil steckt).
+    "CREATE INDEX IF NOT EXISTS idx_mat_teilnummer_serie ON mat_item_component_serial(serial_no COLLATE NOCASE)",
+]
+SPALTEN_25 = (
+    # An einer Prüfzeile „… vorhanden“ einer Bestandteil-Liste: die Position (ohne Fremdschlüssel – die Zeile bleibt, wenn
+    # die Position später wegfällt) und je Stück {"alt", "neu"} als JSON: alt die Nummer beim Festschreiben, neu die vom
+    # Prüfer eingetragene (null: nicht angefasst). Geschützt wie die übrigen Spalten der Zeile (mat_result_bestandteil).
+    ("mat_inspection_result", "component_id", "INTEGER"),
+    ("mat_inspection_result", "component_serials", "TEXT"),
+)
+_TEIL_GEPRUEFT = "EXISTS (SELECT 1 FROM mat_inspection x WHERE x.item_id = {n}.item_id AND x.completed_at IS NOT NULL)"
+_TEIL_POSITION = ("EXISTS (SELECT 1 FROM mat_product_component k JOIN mat_item i ON i.id = {n}.item_id "
+                  "JOIN mat_product p ON p.id = k.set_product_id WHERE k.id = {n}.component_id "
+                  "AND k.set_product_id = i.product_id AND p.is_set = 0 AND k.einzeln = 0 AND k.anzahl >= {n}.stueck)")
+_TEIL_ANTRAG = ("EXISTS (SELECT 1 FROM mat_item_change c WHERE c.item_id = {n}.item_id AND c.field = 'component_serial' "
+                "AND c.component_id = {n}.component_id AND c.stueck = {n}.stueck AND c.status = 'bestaetigt' "
+                "AND c.applied_at IS NULL AND c.old_value IS {alt} AND c.new_value IS {neu})")
+_TEIL_PRUEFUNG = ("EXISTS (SELECT 1 FROM mat_inspection x JOIN mat_inspection_result r ON r.inspection_id = x.id "
+                  "WHERE x.item_id = {n}.item_id AND x.completed_at IS NULL AND r.component_id = {n}.component_id "
+                  "AND json_extract(r.component_serials, '$[' || ({n}.stueck - 1) || '].neu') IS {neu})")
+_TEIL_BISHER = ("(SELECT s.serial_no FROM mat_item_component_serial s WHERE s.item_id = NEW.item_id "
+                "AND s.component_id = NEW.component_id AND s.stueck = NEW.stueck)")
+_TEIL_ANGEWENDET = ("UPDATE mat_item_change SET applied_at = strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now') "
+                    "WHERE item_id = {n}.item_id AND field = 'component_serial' AND component_id = {n}.component_id "
+                    "AND stueck = {n}.stueck AND status = 'bestaetigt' AND applied_at IS NULL "
+                    "AND old_value IS {alt} AND new_value IS {neu};")
+TRIGGER_25 = [
+    # Ersetzen die Fassungen aus Schritt 21 (gleiche Namen).
+    _trigger("mat_component_neu", "BEFORE INSERT ON mat_product_component", _POSITION_FALSCH_25, STUECKLISTE_REGEL_25),
+    _trigger("mat_component_aendern", "BEFORE UPDATE OF set_product_id, component_product_id, einzeln "
+             "ON mat_product_component", _POSITION_FALSCH_25, STUECKLISTE_REGEL_25),
+    # Eine abgeschlossene Prüfung behält ihre Bestandteil-Spalten wie alle anderen (mat_result_aendern aus Schritt 6).
+    _trigger("mat_result_bestandteil", "BEFORE UPDATE OF component_id, component_serials ON mat_inspection_result",
+             _ELTERN_ZU.format("OLD") + " OR " + _ELTERN_ZU.format("NEW"), _ABGESCHLOSSEN),
+    # Seriennummern der Bestandteile: nur an einer gültigen Position; INSERT OR REPLACE über die Kennung nie (es löschte
+    # ohne Lösch-Trigger) – über (Artikel, Position, Stück) ersetzt deckt der Einfüge-Trigger mit dem bisherigen Wert.
+    _trigger("mat_teilnummer_position", "BEFORE INSERT ON mat_item_component_serial",
+             "NOT " + _TEIL_POSITION.format(n="NEW"), TEILNUMMER_POSITION),
+    _trigger("mat_teilnummer_neu", "BEFORE INSERT ON mat_item_component_serial",
+             "EXISTS (SELECT 1 FROM mat_item_component_serial s WHERE s.id = NEW.id) OR (" + _TEIL_GEPRUEFT.format(n="NEW")
+             + " AND NOT (" + _TEIL_ANTRAG.format(n="NEW", alt=_TEIL_BISHER, neu="NEW.serial_no") + " OR "
+             + _TEIL_PRUEFUNG.format(n="NEW", neu="NEW.serial_no") + "))", TEILNUMMER_FEST),
+    _trigger("mat_teilnummer_schluessel", "BEFORE UPDATE OF id, item_id, component_id, stueck ON mat_item_component_serial",
+             "NEW.id IS NOT OLD.id OR NEW.item_id IS NOT OLD.item_id OR NEW.component_id IS NOT OLD.component_id "
+             "OR NEW.stueck IS NOT OLD.stueck", TEILNUMMER_POSITION),
+    _trigger("mat_teilnummer_aendern", "BEFORE UPDATE OF serial_no ON mat_item_component_serial",
+             "NEW.serial_no IS NOT OLD.serial_no AND " + _TEIL_GEPRUEFT.format(n="OLD") + " AND NOT ("
+             + _TEIL_ANTRAG.format(n="OLD", alt="OLD.serial_no", neu="NEW.serial_no") + " OR "
+             + _TEIL_PRUEFUNG.format(n="OLD", neu="NEW.serial_no") + ")", TEILNUMMER_FEST),
+    # Löschen: eine Nummer, die noch gilt (Position des Produkts, Stück vorhanden), nach der ersten Prüfung nur gedeckt.
+    # Mit der Position (ON DELETE CASCADE), dem Artikel oder nach einem Produktwechsel gilt sie nicht mehr.
+    _trigger("mat_teilnummer_loeschen", "BEFORE DELETE ON mat_item_component_serial",
+             _TEIL_GEPRUEFT.format(n="OLD") + " AND " + _TEIL_POSITION.format(n="OLD") + " AND NOT ("
+             + _TEIL_ANTRAG.format(n="OLD", alt="OLD.serial_no", neu="NULL") + " OR "
+             + _TEIL_PRUEFUNG.format(n="OLD", neu="''") + ")", TEILNUMMER_FEST),
+    # Ein bestätigter Antrag wirkt genau einmal – wie mat_item_antrag_angewendet.
+    "CREATE TRIGGER IF NOT EXISTS mat_teilnummer_antrag_neu AFTER INSERT ON mat_item_component_serial BEGIN "
+    + _TEIL_ANGEWENDET.format(n="NEW", alt="NULL", neu="NEW.serial_no") + " END",
+    "CREATE TRIGGER IF NOT EXISTS mat_teilnummer_antrag_aendern AFTER UPDATE OF serial_no ON mat_item_component_serial "
+    "WHEN NEW.serial_no IS NOT OLD.serial_no BEGIN "
+    + _TEIL_ANGEWENDET.format(n="NEW", alt="OLD.serial_no", neu="NEW.serial_no") + " END",
+    "CREATE TRIGGER IF NOT EXISTS mat_teilnummer_antrag_loeschen AFTER DELETE ON mat_item_component_serial BEGIN "
+    + _TEIL_ANGEWENDET.format(n="OLD", alt="OLD.serial_no", neu="NULL") + " END",
+]
+# Änderungsanträge (Schritt 23) bekommen das Feld component_serial: je Position und Stück eine Zeile mit der Position
+# (component_id, ohne Fremdschlüssel – fällt sie weg, lässt sich der Antrag nur noch ablehnen), dem Stück und der
+# Bezeichnung zum Zeitpunkt des Antrags (component_label, für Liste, Mail und Journal). Leer (NULL) heißt „Nummer
+# entfernen“ – die Nummer ist freiwillig. Dafür wird mat_item_change wie in Schritt 23 neu aufgebaut; der eindeutige Index
+# „ein offener Antrag je Artikel und Feld“ zählt die Position und das Stück mit (mehrere Nummern in einem Sammelantrag).
+ANTRAG_TABELLE_25 = (ANTRAG_TABELLE_23
+                     .replace("CHECK (field IN " + _in(ANTRAGSFELDER_23) + ")", "CHECK (field IN " + _in(ANTRAGSFELDER) + ")", 1)
+                     .replace("      applied_at       TEXT,",
+                              "      component_id     INTEGER,                                    -- nur component_serial\n"
+                              "      stueck           INTEGER,\n"
+                              "      component_label  TEXT NOT NULL DEFAULT '',\n"
+                              "      applied_at       TEXT,", 1)
+                     .replace("      CHECK (group_id IS NULL OR group_id < id),",
+                              "      CHECK (group_id IS NULL OR group_id < id),\n"
+                              "      CHECK ((field = 'component_serial') = (component_id IS NOT NULL AND stueck IS NOT NULL)),\n"
+                              "      CHECK (stueck IS NULL OR stueck BETWEEN 1 AND " + str(BESTANDTEIL_ANZAHL_MAX) + "),", 1))
+ANTRAG_INDIZES_25 = [
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_mat_item_change_offen ON mat_item_change(item_id, field, "
+    "COALESCE(component_id, 0), COALESCE(stueck, 0)) WHERE status = 'offen'",
+] + [x for x in ANTRAG_INDIZES_23 if "ux_mat_item_change_offen" not in x]
+TRIGGER_25_ANTRAG = [
+    # Wie Schritt 23, mit den neuen Spalten: Inhalt eines Antrags nie ändern.
+    _trigger("mat_item_change_inhalt", "BEFORE UPDATE OF id, item_id, field, old_value, new_value, reason, "
+             "created_by_name, created_at, group_id, component_id, stueck, component_label ON mat_item_change", "1",
+             ANTRAG_FEST),
+] + TRIGGER_23_ANTRAG[1:]
+
+
+def _schritt_25(conn):
+    """Bestandteil-Liste an normalen Produkten und Seriennummern der Bestandteile (Wunsch vom 25.10.2026): die beiden
+    Stücklisten-Trigger in der Fassung von Schritt 25; mat_item_change mit dem Feld component_serial neu aufbauen – nur,
+    wenn ihr CHECK es noch nicht kennt (alle Zeilen, Kennungen und der AUTOINCREMENT-Stand bleiben; vorher die drei
+    Artikeltrigger entfernen, die die Tabelle lesen, und danach in der Fassung von Schritt 23/24 neu anlegen); die Tabelle
+    der Teilnummern, die Spalten an mat_inspection_result und alle Trigger. Ein zweiter Lauf baut nichts um, legt dieselben
+    Trigger neu an und ändert keine Zeile."""
+    for name in ("mat_component_neu", "mat_component_aendern", "mat_item_stammdaten_fest", "mat_item_antrag_angewendet",
+                 "mat_item_produkt_fest"):
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+    tabelle = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'mat_item_change'").fetchone()
+    if "'component_serial'" not in tabelle[0]:
+        stand = conn.execute("SELECT seq FROM sqlite_sequence WHERE name = 'mat_item_change'").fetchone()
+        _umbauen(conn, "mat_item_change", ANTRAG_TABELLE_25, ANTRAG_INDIZES_25, "item_change")
+        if stand:
+            conn.execute("UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 'mat_item_change'", (stand[0],))
+    for name in ANTRAG_TRIGGER_23:
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+    for sql in TABELLEN_25:
+        conn.execute(sql)
+    spalten_nachruesten(conn, SPALTEN_25)
+    for sql in TRIGGER_25:
+        name = sql.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0]
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+    for sql in TRIGGER_25_ANTRAG + TRIGGER_24_ARTIKEL + [TRIGGER_23_ARTIKEL[1]] + TRIGGER_25:
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
             14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
-            20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24}
+            20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24,
+            25: _schritt_25}
 
 
 def _meta(conn, schluessel, vorgabe=None):

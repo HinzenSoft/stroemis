@@ -78,6 +78,8 @@ FELD = {
     "position": "Position", "slot": "Kennung der Position",
     # Produkt am Artikel ändern (Feintuning, L2b Nr. 29): der lesbare Name neben der Kennung
     "produkt": "Produkt",
+    # Bestandteil-Liste an normalen Produkten und Seriennummern der Bestandteile (Schritt 25)
+    "bestandteil_nummern": "Seriennummern der Bestandteile",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",
@@ -116,6 +118,8 @@ AKTION = {
     "nicht_in_stueckliste": "steht nicht mehr in der Stückliste des Sets",
     # Nachbesserung Sets (25.10.2026): Position gibt es noch, nur weniger Stück – welches herauskommt, wählt der Wart.
     "anzahl_verringert": "Anzahl in der Stückliste des Sets verringert – ein Stück zu entnehmen",
+    # Schritt 25: Bestandteil-Liste eines Produkts und Seriennummern der Bestandteile am Artikel
+    "bestandteile": "Bestandteile geändert", "bestandteil_nummern": "Seriennummern der Bestandteile geändert",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",
@@ -160,7 +164,8 @@ def _ist_datumsfeld(feld):
 def _listen_wert(x):
     """Ein Listeneintrag im Journal als Text – wie listenWert() in material.js: Text bleibt Text; Sets
     schreiben Objekte – die Teile beim Anlegen eines Sets ({inventory_no, serial_no, bestandteil}) und die Positionen
-    einer Stückliste ({bezeichnung, anzahl, einzeln, austausch}). Sie erscheinen als Satz statt als Python-Darstellung.
+    einer Stückliste ({bezeichnung, anzahl, einzeln, austausch}); seit Schritt 25 die Seriennummern der Bestandteile
+    ({bestandteil, seriennummer}). Sie erscheinen als Satz statt als Python-Darstellung.
     Ein eingesetzter vorhandener Artikel (L2b, „vorhanden“) sagt es dazu."""
     if not isinstance(x, dict):
         return str(x)
@@ -168,6 +173,9 @@ def _listen_wert(x):
         return (x["inventory_no"] + (f" (SN {x['serial_no']})" if x.get("serial_no") else "")
                 + (f" – {x['bestandteil']}" if x.get("bestandteil") else "")
                 + (", vorhandener Artikel" if x.get("vorhanden") else ""))
+    if "seriennummer" in x and "bestandteil" in x:
+        # Seriennummer eines Bestandteils (Schritt 25): „Tasche (Stück 1 von 2): A1“ – ohne Nummer „–“.
+        return f"{x['bestandteil']}: {x['seriennummer'] or '–'}"
     if "bezeichnung" in x:
         return (f"{x.get('anzahl') or 1} × {x['bezeichnung']}" + (", einzeln geführt" if x.get("einzeln") else "")
                 + (f", Austausch: {SET_WERTE['austausch'].get(x['austausch'], x['austausch'])}" if x.get("austausch") else ""))

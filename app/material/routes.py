@@ -529,9 +529,11 @@ def artikelnummer_pruefen():
 def produkt_anlegen():
     """Produkt anlegen – oder ein Set: {"is_set": true, "bestandteile": [Positionen wie PUT …/bestandteile]} legt
     Produkt und Stückliste in einem Zug an (mindestens ein einzeln geführtes Teil; „Position n: …“ bei einem Fehler,
-    dann entsteht nichts). is_set ohne Liste oder eine Liste ohne is_set: 400."""
+    dann entsteht nichts); is_set ohne Liste: 400. Ohne is_set ist „bestandteile“ die Bestandteil-Liste des Produkts
+    (nur Bezeichnung und Anzahl, Schritt 25) – ebenso in einem Zug."""
     d = json_body()
-    pid = katalog.produkt_anlegen(d, bestandteile=stueckliste.anfrage_lesen(d))
+    ist_set, liste = stueckliste.anfrage_lesen(d)
+    pid = katalog.produkt_anlegen(d, bestandteile=liste, ist_set=ist_set)
     return jsonify(produkt=katalog.produkt_json(katalog.produkt(pid), voll=True)), 201
 
 
@@ -540,7 +542,8 @@ def produkt_anlegen():
 def produkt_variante(pid):
     """Kopie als neue Variante: Felder wie POST /produkte (eigene Artikelnummer Pflicht), dazu „dokumente“ –
     die Kennungen der aktuellen Dokumente, die mitkommen sollen. Das Produktbild kommt nie mit. Die Variante eines Sets
-    ist ein Set: „bestandteile“ (bearbeitet) oder ohne sie die Stückliste des Vorbilds."""
+    ist ein Set: „bestandteile“ (bearbeitet) oder ohne sie die Stückliste des Vorbilds; die eines Produkts übernimmt
+    ebenso dessen Bestandteil-Liste (oder „bestandteile“, [] ohne Liste)."""
     neu = katalog.produkt_variante(pid, json_body())
     return jsonify(produkt=katalog.produkt_json(katalog.produkt(neu), voll=True)), 201
 
@@ -563,11 +566,12 @@ def produkt_lesen(pid):
 def produkt_bestandteile(pid):
     """Stückliste eines Sets als Ganzes ersetzen (Schritt 21): {"bestandteile": [{"produkt_id" | null,
     "bezeichnung", "anzahl", "einzeln", "austausch"}]} – Reihenfolge = Position, mindestens ein einzeln geführtes Teil
-    (S3). Angelegte Sets behalten ihre Kopie – „sets_aelter“ im Produkt zählt sie (Stückliste übertragen). Liefert das
-    Produkt (voll) und „geaendert“."""
+    (S3). Angelegte Sets behalten ihre Kopie – „sets_aelter“ im Produkt zählt sie (Stückliste übertragen). An einem
+    Produkt, das kein Set ist, die Bestandteil-Liste: [{"bezeichnung", "anzahl"}], [] entfernt sie (Schritt 25).
+    Liefert das Produkt (voll) und „geaendert“."""
     d = json_body()
     if not isinstance(d, dict) or "bestandteile" not in d:
-        raise Abgelehnt("Bitte „bestandteile“ angeben (eine Liste mit mindestens einem einzeln geführten Teil).")
+        raise Abgelehnt("Bitte „bestandteile“ angeben (eine Liste).")
     geaendert = stueckliste.ersetzen(pid, d["bestandteile"])
     return jsonify(produkt=katalog.produkt_json(katalog.produkt(pid), voll=True), geaendert=geaendert)
 

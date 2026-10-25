@@ -25,7 +25,18 @@ Regeln, wie sie hier umgesetzt sind (die Trigger aus Schritt 21 fangen, was an i
   - Ein Produkt, das Bestandteil ist (oder in der Kopie eines angelegten Sets steht), lässt sich nicht löschen: 409 mit
     dem Set statt eines Fremdschlüsselfehlers.
 
+Bestandteil-Liste an normalen Produkten (Schritt 25, Wunsch vom 25.10.2026 – Herstellersets kommen als flache Produkte):
+Ein Produkt, das kein Set ist, kann eine Liste „Bestandteile“ haben – nur Text, je Position Bezeichnung und Anzahl, ohne
+einzeln geführte Teile, ohne Produkt, ohne „Austausch laut Hersteller“; leer heißt keine Liste. Sie steht in derselben
+Tabelle (einzeln 0, ohne Produkt, Austausch „nicht belegt“), wird als Ganzes ersetzt (Oberfläche wie Katalogimport) –
+unveränderte Positionen (gleiche Bezeichnung) behalten dabei ihre Kennung, denn an ihr hängen die Seriennummern der
+Bestandteile am Artikel (teilnummern.py) – und steht mit einem Eintrag „bestandteile“ im Journal des Produkts. Jede
+Prüfung eines Artikels dieses Produkts fragt je Position „vorhanden“ ab (pruefzeilen) – was fehlt, ist ein Mangel wie in
+der Set-Prüfung (Entscheidung F1 a). Ein Set ist es dadurch nicht: keine Set-Marke, keine Teile, keine Set-Prüfung.
+
 Pflegen darf die Material-Verwaltung (Routen an katalog_required); lesen jeder mit Modulzugang (produkt_json)."""
+import json
+
 from ... import db
 from ..models import AUSTAUSCH, BESTANDTEIL_ANZAHL_MAX, BEZEICHNUNG_MAX, SET_TEILE_MAX, STUECKLISTE_POSITIONEN_MAX
 from . import Abgelehnt, auswahl, ganzzahl, kennung, text, wahr
@@ -40,7 +51,16 @@ EINZELN_PFLICHT = "Ein Set braucht mindestens ein einzeln geführtes Teil."
 # Entscheidung S2: Produkt ↔ Set nur über die Katalogdatei.
 UMSTELLEN = ("Ob ein Produkt ein Set ist, legt das Anlegen fest („Produkt anlegen“ / „Set anlegen“). Umstellen geht nur "
              "über die Katalogdatei, solange es keine Artikel gibt.")
-NUR_MIT_SET = "„bestandteile“ gibt es nur mit „is_set“: true (Set anlegen)."
+# Bestandteil-Liste an einem Produkt, das kein Set ist (Schritt 25).
+NUR_SET_EINZELN = ("„einzeln“: true gibt es nur an einem Set – am Produkt stehen Bestandteile nur als Text (Bezeichnung "
+                   "und Anzahl).")
+NUR_SET_AUSTAUSCH = "„austausch“ gibt es nur an einem Set."
+DOPPELT = "„{name}“ steht schon in Position {n} – die Anzahl anpassen."
+LISTE_MAX = f"Höchstens {STUECKLISTE_POSITIONEN_MAX} Positionen je Liste."
+# Gruppe der Prüfzeilen „… vorhanden“ (wie setlauf.SET_GRUPPE, BESTANDTEIL_GRUPPE in material.js) und ihre Position
+# hinter den Formularpunkten.
+BESTANDTEIL_GRUPPE = "Bestandteile"
+BESTANDTEIL_POS = 9000
 SET_OHNE_LISTE = "Ein Set legst du mit seiner Stückliste an („bestandteile“: eine Liste mit mindestens einer Position)."
 DEMO_IM_SET = ("„{name}“ ist ein DEMO-Produkt – in der Stückliste eines echten Sets stünde sonst nach dem Katalog-Export ein "
                "Verweis ins Leere.")
@@ -101,14 +121,15 @@ def in_angelegten_sets(pid):
 
 
 def produkt_json_ergaenzen(out, p, voll=False):
-    """Set-Angaben an katalog.produkt_json: is_set immer; voll dazu die Stückliste und wo das Produkt Bestandteil ist –
-    an einem Set für die Material-Verwaltung auch sets_aelter (angelegte Sets mit einer älteren Stückliste,
-    setkopie.aelter; Materialwarte und Führungskräfte sehen die Zahl nicht – sie ändern die Zusammensetzung nie, S7)."""
+    """Set-Angaben an katalog.produkt_json: is_set immer; voll dazu die Stückliste – seit Schritt 25 an jedem Produkt
+    (an einem Nicht-Set die Bestandteil-Liste, nur Text) – und wo das Produkt Bestandteil ist; an einem Set für die
+    Material-Verwaltung auch sets_aelter (angelegte Sets mit einer älteren Stückliste, setkopie.aelter; Materialwarte
+    und Führungskräfte sehen die Zahl nicht – sie ändern die Zusammensetzung nie, S7)."""
     from . import rechte, setkopie
     out["is_set"] = bool(p.get("is_set"))
     if not voll:
         return out
-    out["bestandteile"] = stueckliste_json(p["id"]) if out["is_set"] else []
+    out["bestandteile"] = stueckliste_json(p["id"])
     out["bestandteil_von"] = bestandteil_von(p["id"])
     if out["is_set"] and rechte.ist_material_verwaltung():
         out["sets_aelter"] = setkopie.aelter(p["id"])
@@ -160,7 +181,10 @@ def eintraege_lesen(set_produkt, liste, aufloesen=None):
     """Die Positionen aus einer Anfrage (oder einer Katalogdatei) nach den Regeln oben – noch ohne zu schreiben. Jede
     Position: {"produkt_id" | über aufloesen(eintrag) bestimmt, "bezeichnung", "anzahl", "einzeln", "austausch"}.
     aufloesen: für den Katalogimport (Verweis {uid, hersteller, modell, artikelnummer} → Produktzeile). Liefert die
-    Liste in der Form der Tabelle (ohne Kennung), Reihenfolge = Position."""
+    Liste in der Form der Tabelle (ohne Kennung), Reihenfolge = Position. An einem Produkt, das kein Set ist, die
+    Bestandteil-Liste nach ihren Regeln (_flach_lesen)."""
+    if not set_produkt["is_set"]:
+        return _flach_lesen(liste)
     if not isinstance(liste, list):
         raise Abgelehnt("„bestandteile“ muss eine Liste sein.")
     if len(liste) > STUECKLISTE_POSITIONEN_MAX:
@@ -202,19 +226,58 @@ def eintraege_lesen(set_produkt, liste, aufloesen=None):
     return out
 
 
+def _schluessel(bezeichnung):
+    """Bezeichnung zum Vergleich: ohne Groß und klein, Leerraum zusammengefasst."""
+    return " ".join(str(bezeichnung or "").split()).casefold()
+
+
+def _flach_lesen(liste):
+    """Die Bestandteil-Liste eines Produkts, das kein Set ist (Schritt 25): je Position ein Objekt mit Bezeichnung
+    (Pflicht, eine Zeile, je Liste eindeutig) und Anzahl (1–20, Vorgabe 1) – „einzeln“ (wahr), ein Produkt und ein
+    „austausch“ außer „nicht belegt“ gibt es nur an einem Set. Leer heißt keine Liste. Liefert die Form der Tabelle."""
+    if not isinstance(liste, list):
+        raise Abgelehnt("„bestandteile“ muss eine Liste sein.")
+    if len(liste) > STUECKLISTE_POSITIONEN_MAX:
+        raise Abgelehnt(LISTE_MAX)
+    out, gesehen = [], {}
+    for n, e in enumerate(liste, start=1):
+        if not isinstance(e, dict):
+            raise Abgelehnt(f"Position {n}: kein Objekt.")
+        try:
+            if wahr(e, "einzeln", "einzeln geführt") or e.get("produkt") is not None \
+                    or e.get("produkt_id") not in (None, ""):
+                raise Abgelehnt(NUR_SET_EINZELN)
+            if (e.get("austausch") or "nicht_belegt") != "nicht_belegt":
+                raise Abgelehnt(NUR_SET_AUSTAUSCH)
+            bezeichnung = text(e, "bezeichnung", "Bezeichnung", BEZEICHNUNG_MAX)
+            if not bezeichnung:
+                raise Abgelehnt("Bitte eine Bezeichnung angeben.")
+            schluessel = _schluessel(bezeichnung)
+            if schluessel in gesehen:
+                raise Abgelehnt(DOPPELT.format(name=bezeichnung, n=gesehen[schluessel]))
+            gesehen[schluessel] = n
+            anzahl = ganzzahl(e.get("anzahl", 1), "Anzahl", 1, BESTANDTEIL_ANZAHL_MAX, leer_erlaubt=False)
+        except Abgelehnt as exc:
+            raise Abgelehnt(f"Position {n}: {exc}", exc.code)
+        out.append({"component_product_id": None, "bezeichnung": bezeichnung, "anzahl": anzahl, "einzeln": 0,
+                    "austausch": "nicht_belegt", "position": n})
+    return out
+
+
 def anfrage_lesen(d):
-    """POST /produkte und „Set aus Meldung anlegen“: Ein Set kommt mit seiner Stückliste – {"is_set": true,
-    "bestandteile": [...]} (nicht leer); ohne is_set ist es ein Produkt, „bestandteile“ dann 400. Liefert die rohe Liste
-    oder None (kein Set) – geprüft wird sie in katalog.produkt_anlegen (eintraege_lesen)."""
+    """POST /produkte und „aus Meldung anlegen“: Ein Set kommt mit seiner Stückliste – {"is_set": true,
+    "bestandteile": [...]} (nicht leer); ohne is_set ist es ein Produkt, „bestandteile“ dann seine Bestandteil-Liste (nur
+    Text, darf fehlen oder leer sein; Schritt 25). Liefert (Set?, rohe Liste oder None) – geprüft wird die Liste in
+    katalog.produkt_anlegen (eintraege_lesen) am frischen Produkt."""
     ist = wahr(d, "is_set", "Set")
     liste = d.get("bestandteile")
     if not ist:
-        if liste is not None:
-            raise Abgelehnt(NUR_MIT_SET)
-        return None
+        if liste is not None and not isinstance(liste, list):
+            raise Abgelehnt("„bestandteile“ muss eine Liste sein.")
+        return False, liste
     if not isinstance(liste, list) or not liste:
         raise Abgelehnt(SET_OHNE_LISTE)
-    return liste
+    return True, liste
 
 
 def _vergleich(r):
@@ -226,12 +289,60 @@ def _journal_form(r):
             "austausch": r["austausch"], "produkt": r["component_product_id"]}
 
 
+def kurz_form(r):
+    """Eine Position der Bestandteil-Liste in Journal und Antworten: {bezeichnung, anzahl}."""
+    return {"bezeichnung": r["bezeichnung"], "anzahl": r["anzahl"]}
+
+
+def _flach_ersetzen(p, alt, neu, grund=None):
+    """Die Bestandteil-Liste eines Nicht-Sets ersetzen (in der Transaktion des Aufrufers): Positionen mit gleicher
+    Bezeichnung (_schluessel) bleiben dieselbe Zeile – Bezeichnung, Anzahl und Reihenfolge werden nachgezogen –, damit die
+    Seriennummern der Bestandteile an den Artikeln bleiben (teilnummern.py); wegfallende Positionen gehen samt ihren
+    Nummern (ON DELETE CASCADE), Stück über einer gesunkenen Anzahl ebenso – je betroffenem Artikel vorher ein Eintrag im
+    Journal (teilnummern.entfallen). Journal „bestandteile“ am Produkt (vorher, nachher)."""
+    from . import teilnummern
+    bleibt = {_schluessel(r["bezeichnung"]): r for r in alt}
+    behalten = set()
+    for r in neu:
+        z = bleibt.get(_schluessel(r["bezeichnung"]))
+        if z:
+            behalten.add(z["id"])
+    teilnummern.entfallen(p["id"], [r for r in alt if r["id"] not in behalten],
+                          {bleibt[_schluessel(r["bezeichnung"])]["id"]: r["anzahl"] for r in neu
+                           if _schluessel(r["bezeichnung"]) in bleibt})
+    for r in alt:
+        if r["id"] not in behalten:
+            db.execute("DELETE FROM mat_product_component WHERE id = ?", (r["id"],))
+    for r in neu:
+        z = bleibt.get(_schluessel(r["bezeichnung"]))
+        if z:
+            db.execute("UPDATE mat_product_component SET bezeichnung = ?, anzahl = ?, position = ? WHERE id = ?",
+                       (r["bezeichnung"], r["anzahl"], r["position"], z["id"]))
+        else:
+            db.execute("INSERT INTO mat_product_component (set_product_id, component_product_id, bezeichnung, anzahl, "
+                       "einzeln, austausch, position) VALUES (?, NULL, ?, ?, 0, 'nicht_belegt', ?)",
+                       (p["id"], r["bezeichnung"], r["anzahl"], r["position"]))
+    # Erst die Anzahl, dann die Stück darüber: Solange das Stück zur Position gehört, schützt der Trigger seine Nummer.
+    for r in neu:
+        z = bleibt.get(_schluessel(r["bezeichnung"]))
+        if z and r["anzahl"] < z["anzahl"]:
+            db.execute("DELETE FROM mat_item_component_serial WHERE component_id = ? AND stueck > ?", (z["id"], r["anzahl"]))
+    nachher = {"bestandteile": [kurz_form(r) for r in neu]}
+    if grund:
+        nachher["grund"] = grund
+    journal.eintragen("product", p["id"], "bestandteile", {"bestandteile": [kurz_form(r) for r in alt]}, nachher)
+    db.execute("UPDATE mat_product SET updated_at = ? WHERE id = ?", (db.now(), p["id"]))
+    return True
+
+
 def _ersetzen(p, neu, grund=None):
     """In der Transaktion des Aufrufers: die Stückliste von p durch neu (eintraege_lesen) ersetzen – nur, wenn sie sich
-    ändert; Journal „stueckliste“ am Produkt. Liefert, ob."""
+    ändert; Journal „stueckliste“ am Produkt (an einem Nicht-Set „bestandteile“, _flach_ersetzen). Liefert, ob."""
     alt = db.query("SELECT * FROM mat_product_component WHERE set_product_id = ? ORDER BY position, id", (p["id"],))
     if [_vergleich(r) for r in alt] == [_vergleich(r) for r in neu]:
         return False
+    if not p["is_set"]:
+        return _flach_ersetzen(p, alt, neu, grund)
     db.execute("DELETE FROM mat_product_component WHERE set_product_id = ?", (p["id"],))
     for r in neu:
         db.execute("INSERT INTO mat_product_component (set_product_id, component_product_id, bezeichnung, anzahl, einzeln, "
@@ -248,13 +359,58 @@ def _ersetzen(p, neu, grund=None):
 
 def ersetzen(pid, liste, aufloesen=None, grund=None):
     """PUT /produkte/<pid>/bestandteile bzw. Katalogimport: die Stückliste als Ganzes ersetzen (unter der Schreibsperre;
-    in einer äußeren Transaktion läuft es flach mit) – nie leer, mindestens ein einzeln geführtes Teil (S3). Angelegte
-    Sets behalten ihre Kopie (setkopie.aelter zählt sie). Liefert, ob sie sich geändert hat."""
+    in einer äußeren Transaktion läuft es flach mit) – an einem Set nie leer, mindestens ein einzeln geführtes Teil (S3);
+    angelegte Sets behalten ihre Kopie (setkopie.aelter zählt sie). An einem Produkt, das kein Set ist, die
+    Bestandteil-Liste (nur Text; [] entfernt sie – Schritt 25). Liefert, ob sie sich geändert hat."""
     with db.transaction(sofort=True):
         p = katalog.produkt(pid)
-        if not p["is_set"]:
-            raise Abgelehnt(NUR_SET, 409)
         return _ersetzen(p, eintraege_lesen(p, liste, aufloesen), grund)
+
+
+# --- Bestandteil-Liste an Artikel, Meine PSA, Lebenslauf und Prüfung (Schritt 25) ---------------------------------------
+
+def kurzlisten(pids):
+    """{Produkt: [{id, bezeichnung, anzahl}]} – die Bestandteil-Listen der Produkte, die kein Set sind, in einer Abfrage
+    (Meine PSA). Sets und Produkte ohne Liste fehlen."""
+    pids = list(dict.fromkeys(p for p in pids if p))
+    if not pids:
+        return {}
+    out = {}
+    for r in db.query(f"SELECT c.* FROM mat_product_component c JOIN mat_product p ON p.id = c.set_product_id "
+                      f"WHERE p.is_set = 0 AND c.set_product_id IN ({','.join('?' * len(pids))}) "
+                      f"ORDER BY c.set_product_id, c.position, c.id", pids):
+        out.setdefault(r["set_product_id"], []).append({"id": r["id"], **kurz_form(r)})
+    return out
+
+
+def kurzliste(pid):
+    """Die Bestandteil-Liste eines Produkts als [{id, bezeichnung, anzahl}] – leer an Sets und ohne Liste."""
+    return kurzlisten([pid]).get(pid, [])
+
+
+def zeile_text(bezeichnung, anzahl):
+    """Der Text der Prüfzeile: „Tasche vorhanden“, bei mehr als einem Stück „Tasche (2×) vorhanden“."""
+    return bezeichnung + (f" ({anzahl}×)" if anzahl > 1 else "") + " vorhanden"
+
+
+def pruefzeilen(pruefung_id, item):
+    """Beim Start einer Prüfung (jede Prüfart, einzeln oder im Durchgang): je Position der Bestandteil-Liste des Produkts
+    eine Ja/Nein-Zeile „… vorhanden“ – Pflicht, Soll „ja“, nicht kritisch, vorbelegt „ja“, ohne Formularpunkt, Gruppe
+    BESTANDTEIL_GRUPPE hinter den Formularpunkten; einmal je Prüfung. Was fehlt, ist ein Mangel wie jeder andere (F1 a).
+    Dazu je Zeile die Position und die Seriennummern ihrer Stück am Artikel (teilnummern) – „alt“ wie heute, „neu“
+    trägt der Prüfer ein. Ein Set hat keine Bestandteil-Liste (seine Prüfung fragt die Kopie ab, setlauf)."""
+    from . import teilnummern
+    if db.query("SELECT 1 FROM mat_inspection_result WHERE inspection_id = ? AND checklist_item_id IS NULL "
+                "AND group_name = ? LIMIT 1", (pruefung_id, BESTANDTEIL_GRUPPE), one=True):
+        return
+    nummern = teilnummern.nummern(item["id"])
+    for n, z in enumerate(kurzliste(item["product_id"])):
+        serien = [{"alt": nummern.get((z["id"], st), ""), "neu": None} for st in range(1, z["anzahl"] + 1)]
+        db.execute("INSERT INTO mat_inspection_result (inspection_id, checklist_item_id, position, group_name, "
+                   "checklist_text, editor, mandatory, expected_value, is_critical, finding, value, component_id, "
+                   "component_serials) VALUES (?, NULL, ?, ?, ?, 'yesno', 1, 'ja', 0, 'ok', 'ja', ?, ?)",
+                   (pruefung_id, BESTANDTEIL_POS + n, BESTANDTEIL_GRUPPE, zeile_text(z["bezeichnung"], z["anzahl"]),
+                    z["id"], json.dumps(serien, ensure_ascii=False)))
 
 
 def loeschen_pruefen(pid):

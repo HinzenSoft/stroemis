@@ -138,6 +138,7 @@ table.teile .klein { font-size: 7pt; color: var(--grau); }
         <td>
           {%- if p.unterschrift %}<div class="punkt-unterschrift"><img src="{{ p.unterschrift }}" alt="Unterschrift"></div>
           {%- elif p.wert %}<div class="text wert">{{ p.wert }}</div>{% endif %}
+          {%- for n in p.nummern %}<div class="text klein">{{ n }}</div>{% endfor %}
           {%- if p.foto_nr %}<div class="fotoverweis">siehe Foto {{ p.foto_nr }}</div>{% endif %}
           {%- if p.notiz %}<div class="notiz text">{{ p.notiz }}</div>{% endif -%}
         </td>

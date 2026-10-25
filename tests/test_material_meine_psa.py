@@ -33,7 +33,8 @@ LISTE = "/api/material/meine-psa"
 KARTE = {"id", "inventory_no", "serial_no", "serial_generated", "produkt", "status", "status_text", "next_due_on",
          "retire_by", "last_inspected_on", "gesperrt", "verloren", "lock_reason", "notes", "gliederung", "demo", "mangel",
          "eigene_maengel", "artikel_link", "dokumente", "rueckruf", "length_m", "laenge_text",   # Länge: Schritt 20
-         "teile", "teil_eines_sets"}                                                          # Sets: Schritt 21
+         "teile", "teil_eines_sets",                                                          # Sets: Schritt 21
+         "bestandteile"}                                                # Bestandteil-Liste mit Seriennummern: Schritt 25
 PRODUKT = {"manufacturer", "model", "description", "article_no", "material_kind", "bild", "vorschau"}
 
 

@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_material import H, _heute, freigeben, make_app, neuer_artikel, neues_konto  # noqa: E402
 from test_material_antrag import (_ohne_trigger, _pdf_text, _schema, _schema_in, _tabelle_sql, _zahlen,  # noqa: E402
                                   ablehnen, antraege, aufbau, beantragen, bestaetigen, item, journal, lesen, post,
-                                  pruefen, sql, zeilen, zurueckziehen)
+                                  pruefen, sql, trigger_25, zeilen, zurueckziehen)
 from test_material_trennung import bis_schritt, endversion  # noqa: E402
 
 FEST = ("Seit der ersten Prüfung stehen die Stammdaten fest – sie sind Teil des Prüfnachweises. Eine Änderung beantragst "
@@ -514,7 +514,7 @@ def test_migration_23():
         make_app(tmp)
         pfad = os.path.join(tmp, "stroemis.db")
         version, trigger, _ = _schema(pfad)
-        assert version == endversion() == "24", version
+        assert version == endversion() == "25", version
         assert set(models.ANTRAG_TRIGGER_23) <= set(trigger) and "mat_item_change_gruppe" in trigger
         assert "'purchased_on'" in _tabelle_sql(pfad) and "group_id" in _tabelle_sql(pfad)
         assert "retire_by_manual" in trigger["mat_item_stammdaten_fest"]
@@ -532,11 +532,14 @@ def test_migration_23():
         assert v22 == "22" and "'purchased_on'" not in _tabelle_sql(pfad)
         make_app(tmp)
         v23, t23, _ = _schema(pfad)
-        assert v23 == endversion() and set(t23) == set(t22) | {"mat_item_change_gruppe"}, set(t23) ^ set(t22)
+        # Seit Schritt 25 dazu dessen Trigger (Seriennummern der Bestandteile).
+        assert v23 == endversion() and set(t23) == set(t22) | {"mat_item_change_gruppe"} | trigger_25(), set(t23) ^ set(t22)
         for n in ("mat_item_stammdaten_fest", "mat_item_produkt_fest", "mat_item_antrag_angewendet",
                   "mat_item_change_inhalt"):
             assert t23[n] != t22[n], n
-        assert zeilen(t.app, "SELECT * FROM mat_item_change ORDER BY id") == alt and len(alt) == 3
+        # Seit Schritt 25 dazu component_id, stueck und component_label (leer) – die alten Spalten unverändert.
+        assert [{k: r[k] for k in alt[0]} for r in zeilen(t.app, "SELECT * FROM mat_item_change ORDER BY id")] == alt \
+            and len(alt) == 3
         assert all(x["group_id"] is None for x in alt)
         assert zeilen(t.app, "SELECT seq FROM sqlite_sequence WHERE name = 'mat_item_change'")[0]["seq"] == 40
         assert _zahlen(pfad) == vorher
@@ -549,6 +552,7 @@ def test_migration_23():
         n = conn.total_changes
         models._schritt_23(conn)
         models._schritt_24(conn)                   # seit Schritt 24 die Artikeltrigger in seiner Fassung
+        models._schritt_25(conn)                   # seit Schritt 25 die Antragstrigger in seiner Fassung
         assert conn.total_changes == n and _schema_in(conn) == t23
         conn.rollback()
         conn.close()
@@ -671,12 +675,13 @@ def test_trigger_24():
 
 def test_migration_24():
     """23 → 24: nur die zwei Artikeltrigger ändern sich (gleiche Namen), keine Tabelle, keine Zeile; zweiter Lauf
-    nichts; ein frischer Stand 24 hat dieselben Trigger."""
+    nichts; ein frischer Stand 24 hat dieselben Trigger. Seit Schritt 25 läuft die Migration dafür nur bis 24
+    (bis_schritt); 24 → 25 prüft test_material_bestandteile.test_migration_25."""
     from app.material import models
     with tempfile.TemporaryDirectory() as frisch:
-        make_app(frisch)
+        bis_schritt(24)(make_app, frisch)
         v, t_frisch, _ = _schema(os.path.join(frisch, "stroemis.db"))
-        assert v == endversion() == "24", v
+        assert v == "24" and endversion() == "25", v
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = bis_schritt(23)(aufbau, tmp)
         kid = beantragen(t.w, t.g1, retire_by="2030-05-01").json["antrag"]["id"]
@@ -685,7 +690,7 @@ def test_migration_24():
         vorher = _zahlen(pfad)
         v23, t23, _ = _schema(pfad)
         assert v23 == "23", v23
-        make_app(tmp)
+        bis_schritt(24)(make_app, tmp)
         v24, t24, _ = _schema(pfad)
         assert v24 == "24" and set(t24) == set(t23), set(t24) ^ set(t23)
         assert {n for n in t24 if t24[n] != t23[n]} == {"mat_item_stammdaten_fest", "mat_item_antrag_angewendet"}

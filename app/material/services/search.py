@@ -139,10 +139,16 @@ def produkte(q="", kategorie_id=None, seite=1, pro_seite=25, sort=None, richtung
     return rows, gesamt
 
 
+# Seriennummer eines Bestandteils am Artikel (Schritt 25) – Teiltreffer wie bei der Seriennummer.
+_TEILNUMMER = ("EXISTS (SELECT 1 FROM mat_item_component_serial s WHERE s.item_id = i.id "
+               "AND s.serial_no LIKE ? ESCAPE '\\')")
+
+
 def artikel(q, seite=1, pro_seite=25, sort=None, richtung="auf"):
     """Suche nach Serien-, Inventar- und Herstellernummer (Artikelnummer des Produkts), mit
     Teiltreffern. Liefert (Zeilen, Gesamtzahl); Zeilen tragen Produkt- und Ordnerangaben. Ohne gewählte
-    Sortierung steht ein genauer Treffer oben."""
+    Sortierung steht ein genauer Treffer oben. Seit Schritt 25 auch nach der Seriennummer eines Bestandteils (Treffer ist
+    der Artikel, in dem das Teil steckt – sichtbar wie jeder Artikel; nicht im Volltextindex, die Tabelle ist klein)."""
     from .bestand import artikel_sortierung, demo_sql
     seite, pro_seite = seiten(seite, pro_seite)
     eigene = sortierung(artikel_sortierung(), sort, richtung, "i.inventory_no") if sort else None
@@ -154,12 +160,13 @@ def artikel(q, seite=1, pro_seite=25, sort=None, richtung="auf"):
     for w in ws:
         if fts and len(w) >= 3:
             teile.append("(i.id IN (SELECT rowid FROM mat_item_fts WHERE mat_item_fts MATCH ?) "
-                         "OR i.product_id IN (SELECT rowid FROM mat_product_fts WHERE mat_product_fts MATCH ?))")
-            args += [_phrase(w), "article_no : " + _phrase(w)]
+                         "OR i.product_id IN (SELECT rowid FROM mat_product_fts WHERE mat_product_fts MATCH ?) "
+                         f"OR {_TEILNUMMER})")
+            args += [_phrase(w), "article_no : " + _phrase(w), _like(w)]
         else:
             teile.append("(i.serial_no LIKE ? ESCAPE '\\' OR i.inventory_no LIKE ? ESCAPE '\\' "
-                         "OR p.article_no LIKE ? ESCAPE '\\')")
-            args += [_like(w)] * 3
+                         f"OR p.article_no LIKE ? ESCAPE '\\' OR {_TEILNUMMER})")
+            args += [_like(w)] * 4
     where = " AND ".join(teile)
     # „m-12“ oder „12“ meint oft genau die Inventarnummer M-000012 – die gehört auch dann in die
     # Treffer, wenn die Ziffern zu kurz für den Index sind, und steht ganz oben.
@@ -190,5 +197,6 @@ def exakt_lokal(q):
     n = normalform(q)
     if not n:
         return False
-    return db.query(f"SELECT 1 FROM mat_item i WHERE i.serial_no = ? COLLATE NOCASE AND {artikel_filter('i')} LIMIT 1",
-                    (n,), one=True) is not None
+    return db.query(f"SELECT 1 FROM mat_item i WHERE (i.serial_no = ? COLLATE NOCASE OR EXISTS (SELECT 1 FROM "
+                    f"mat_item_component_serial s WHERE s.item_id = i.id AND s.serial_no = ? COLLATE NOCASE)) "
+                    f"AND {artikel_filter('i')} LIMIT 1", (n, n), one=True) is not None

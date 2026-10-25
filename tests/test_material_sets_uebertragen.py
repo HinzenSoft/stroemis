@@ -85,7 +85,8 @@ def test_set_anlegen_atomar():
                                                  {"bezeichnung": "", "einzeln": False}]}, "Position 2: ")
         falsch({"is_set": True}, "mit seiner Stückliste")
         falsch({"is_set": True, "bestandteile": []}, "mit seiner Stückliste")
-        falsch({"bestandteile": [{"produkt_id": t.ids["hms"], "einzeln": True}]}, "nur mit „is_set“")
+        # Ohne is_set ist „bestandteile“ seit Schritt 25 die Bestandteil-Liste eines Produkts – nur Text.
+        falsch({"bestandteile": [{"produkt_id": t.ids["hms"], "einzeln": True}]}, "„einzeln“: true gibt es nur an einem Set")
         falsch({"is_set": True, "bestandteile": [{"bezeichnung": "Tasche"}]}, "mindestens ein einzeln geführtes Teil")
         assert t.wart_a.post("/api/material/produkte", json=dict(basis, is_set=True, bestandteile=_liste(t))).status_code \
             == 403
@@ -246,7 +247,8 @@ def test_migration_22():
     assert "ausgesondert" in schema_frisch[("trigger", "mat_slot_neu")]
     assert "mat_set_lauf" in schema_frisch[("trigger", "mat_slot_loeschen")]
     with ohne_post(), tempfile.TemporaryDirectory() as tmp:
-        t = bis_schritt(21, nachruesten=False)(set_aufbau, tmp)
+        # Seit Schritt 25 liest die Artikelansicht die Seriennummern der Bestandteile – nur diese Tabelle vorab.
+        t = bis_schritt(21, nachruesten="schritt_25")(set_aufbau, tmp)
         pfad = os.path.join(tmp, "stroemis.db")
         conn = sqlite3.connect(pfad)
         assert conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone()[0] == "21"

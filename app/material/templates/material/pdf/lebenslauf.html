@@ -85,6 +85,20 @@ table.ereignisse .aenderung .feld { color: var(--grau); }
 
 {% block inhalt %}
 {{ artikel_block(artikel) }}
+{%- if bestandteile %}
+
+<section>
+  <h2>Bestandteile (laut Katalog)</h2>
+  <table class="liste">
+    <thead><tr><th>Bestandteil</th><th>Seriennummern</th></tr></thead>
+    <tbody>
+    {%- for b in bestandteile %}
+      <tr><td><span class="text">{{ b.text }}</span></td><td><span class="text">{{ b.nummern or "–" }}</span></td></tr>
+    {%- endfor %}
+    </tbody>
+  </table>
+</section>
+{%- endif %}
 
 <section>
   <h2>Zustand</h2>

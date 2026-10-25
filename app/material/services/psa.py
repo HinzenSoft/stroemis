@@ -4,7 +4,7 @@ zugeordnet sind – auch ohne Stufe im Modul Material.
 Ein eigener, enger Zugangsweg neben rechte.zugang: Er öffnet nur die eigenen, nicht ausgesonderten Artikel und von ihnen
 nur die Karte (artikel_json – eine feste Liste von Schlüsseln): Status, Fälligkeit, Lebensende, Länge (Schritt 20),
 Tag der letzten Prüfung, Produkt (Bild nur als Web- und Vorschaufassung), Nummern, Sperre mit Sperrgrund, Bemerkung, Name der
-Gliederung, offener Mangel, Herstellerdokumente (Gebrauchsanleitung, Pflegehinweis, Konformitätserklärung, Datenblatt)
+Gliederung, offener Mangel, Bestandteil-Liste mit den Seriennummern der Bestandteile (Schritt 25), Herstellerdokumente (Gebrauchsanleitung, Pflegehinweis, Konformitätserklärung, Datenblatt)
 und die Titel laufender Rückrufe (Sperrgrund, Bemerkung, letzte Prüfung und Gliederung: Entscheidung A vom 20.10.2026).
 Kein Ordnerpfad, keine Protokolle, keine Prüfhistorie, kein Journal. requires_folder und
 die 404-Regel bleiben unberührt; die Zuordnung ist keine Freigabe (rechte.sicht kennt sie nicht).
@@ -21,7 +21,7 @@ from flask import g, has_request_context
 from ... import db
 from ...auth import current_user
 from . import Abgelehnt, heute, laenge_text
-from . import bestand, katalog, rechte
+from . import bestand, katalog, rechte, teilnummern
 from . import status as st
 
 MAX_ARTIKEL = 200            # Karten auf der Seite; mehr kommen nur nach einer Sammelzuordnung vor
@@ -150,6 +150,9 @@ def liste(user):
     dokumente = {pid: [{"title": d["title"], "kind": d["kind"], "datei": d["datei"], "url": d["url"] or ""}
                        for d in katalog.gueltige_dokumente(pid, tag) if d["kind"] in PSA_DOKUMENTARTEN]
                  for pid in produkte}
+    # Bestandteil-Liste des Produkts mit den Seriennummern des Artikels (Schritt 25, F3 a) – was zurückzugeben ist.
+    bestandteile = teilnummern.listen_json(rows)
+
     def karte(r):
         titel = []
         for rr in rueckrufe.get(r["product_id"], ()):
@@ -157,7 +160,7 @@ def liste(user):
                     and rueckruf.zustand(rr, r)[0] == "offen":
                 titel.append(rr["title"])
         return artikel_json(r, user, offen.get(r["id"]), eigene.get(r["id"], []), dokumente.get(r["product_id"], []),
-                            titel, _gliederung(bestand.heimat(r), baum))
+                            titel, _gliederung(bestand.heimat(r), baum), bestandteile.get(r["id"], []))
 
     je_set = {}
     for t in teile:
@@ -187,7 +190,7 @@ def _gliederung(fid, baum):
     return None
 
 
-def artikel_json(r, user, offen, eigene, dokumente=(), rueckruf=(), gliederung=None):
+def artikel_json(r, user, offen, eigene, dokumente=(), rueckruf=(), gliederung=None, bestandteile=()):
     """Die Karte eines Artikels – genau diese Schlüssel (Bauentwurf 2.3, Schnittstelle 9.3). offen: Zeitpunkt der
     frühesten offenen Meldung (irgendeines Melders, ohne Text und Namen) oder None; eigene: die eigenen Meldungen."""
     s = st.status(r)
@@ -214,6 +217,8 @@ def artikel_json(r, user, offen, eigene, dokumente=(), rueckruf=(), gliederung=N
         # Sets (Schritt 21): an einer Set-Karte die Teile als Karten (liste), an einer Teil-Karte true.
         "teile": [],
         "teil_eines_sets": r.get("parent_item_id") is not None,
+        # Bestandteil-Liste des Produkts (Schritt 25): [{id, bezeichnung, anzahl, nummern}] – leer ohne Liste.
+        "bestandteile": [dict(b) for b in bestandteile],
     }
 
 

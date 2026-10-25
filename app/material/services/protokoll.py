@@ -311,6 +311,26 @@ def _soll_text(r):
     return r["expected_value"] or ""
 
 
+def _nummern_text(r):
+    """Seriennummern der Bestandteile an einer Zeile „… vorhanden“ (Schritt 25): je Stück mit Nummer „Seriennummer A1“
+    bzw. „Seriennummer A1 → A2“ (vom Prüfer geändert; „–“ für keine) – bei mehr als einem Stück mit „Stück n:“ davor."""
+    roh = r.get("component_serials")
+    if not r.get("component_id") or not roh:
+        return []
+    serien = json.loads(roh)
+    out = []
+    for n, x in enumerate(serien, start=1):
+        alt, neu = x.get("alt") or "", x.get("neu")
+        if neu is not None and neu != alt:
+            t = f"{alt or '–'} → {neu or '–'}"
+        elif alt:
+            t = alt
+        else:
+            continue
+        out.append((f"Stück {n}: " if len(serien) > 1 else "") + "Seriennummer " + t)
+    return out
+
+
 def _befunde(pid):
     gruppen, fotos, maengel = [], [], 0
     for nr, r in enumerate(db.query("SELECT * FROM mat_inspection_result WHERE inspection_id = ? ORDER BY position, id",
@@ -329,7 +349,7 @@ def _befunde(pid):
                  "befund_text": ("nicht unterschrieben" if r["editor"] == "signature" and r["finding"] == "ok"
                                  and not r["signature_png"] else BEFUND_TEXT.get(r["finding"], "")),
                  "wert": _wert_text(r), "notiz": r["note"] or "",
-                 "foto_nr": foto_nr, "unterschrift": _png(r["signature_png"])}
+                 "foto_nr": foto_nr, "unterschrift": _png(r["signature_png"]), "nummern": _nummern_text(r)}
         if not gruppen or gruppen[-1]["name"] != (r["group_name"] or ""):
             gruppen.append({"name": r["group_name"] or "", "punkte": []})
         gruppen[-1]["punkte"].append(punkt)

@@ -276,8 +276,11 @@ def bis_schritt(version, nachruesten=True):
     parent_item_id, lock_cause, set_lock_origin, set_pruefen, set_lauf_id) und Tabellen (models.TABELLEN_21, ohne
     Trigger) – die Dienste lesen und schreiben sie (Kritik S26); seit Schritt 22 dessen Spalten (models.SPALTEN_22);
     seit Schritt 23 mat_item_change.group_id (SPALTEN_23 – Schritt 23 baut die Tabelle danach trotzdem um, der CHECK
-    kennt die neuen Felder erst dann). nachruesten=False lässt den Stand ganz, wie er war (für
-    Tests, die genau das prüfen)."""
+    kennt die neuen Felder erst dann); seit Schritt 25 die Tabelle der Seriennummern der Bestandteile (models.TABELLEN_25,
+    ohne Trigger) und die beiden Spalten an mat_inspection_result (models.SPALTEN_25) – Artikelansicht und Prüfung lesen
+    sie. nachruesten=False lässt den Stand ganz, wie er war (für Tests, die genau das prüfen); nachruesten="schritt_25" rüstet
+    nur Tabelle und Spalten aus Schritt 25 nach (für Tests, die einen älteren Stand ohne die übrigen Nachrüstungen prüfen,
+    aber Artikel anlegen)."""
     def lauf(f, *a):
         from app import db
         from app.material import models
@@ -285,17 +288,18 @@ def bis_schritt(version, nachruesten=True):
         models.SCHEMA_VERSION = version
         # Die Startschritte der Module stehen in db.SCHEMA_MODULE (init_db ruft sie der Reihe nach mit der Verbindung):
         # hinten angehängt, läuft das Nachrüsten nach der Modulmigration jedes Starts in f.
-        mit = nachruesten and version < 23
+        mit = nachruesten and version < 25
+        schritt = schritt_25_nachruesten if nachruesten == "schritt_25" else spalten_20_nachruesten
         if mit:
             from app.material import schema_anmelden
             schema_anmelden()                    # die Schritte des Moduls zuerst – auch vor der ersten App im Prozess
-            db.SCHEMA_MODULE.append(spalten_20_nachruesten)
+            db.SCHEMA_MODULE.append(schritt)
         try:
             return f(*a)
         finally:
             models.SCHEMA_VERSION = alt
             if mit:
-                db.SCHEMA_MODULE.remove(spalten_20_nachruesten)
+                db.SCHEMA_MODULE.remove(schritt)
     return lauf
 
 
@@ -303,10 +307,20 @@ def bis_schritt(version, nachruesten=True):
 SPALTEN_23 = (("mat_item_change", "group_id", "INTEGER REFERENCES mat_item_change(id)"),)
 
 
+def schritt_25_nachruesten(conn):
+    """Nur Tabelle und Spalten aus Schritt 25 (ohne Trigger) – siehe bis_schritt(…, nachruesten="schritt_25")."""
+    from app.material import models
+    for befehl in models.TABELLEN_25:
+        conn.execute(befehl)
+    models.spalten_nachruesten(conn, models.SPALTEN_25)
+    conn.commit()
+
+
 def spalten_20_nachruesten(conn):
-    """Nur die Spalten aus Schritt 20 bis 23 und die Tabellen aus Schritt 21 (ohne Trigger) an eine Datenbank älteren
-    Stands (siehe bis_schritt) – mit Commit. Schritt 22: is_set und set_teile an mat_product_request (die Meldung schreibt
-    sie); Schritt 23: group_id an mat_item_change."""
+    """Nur die Spalten aus Schritt 20 bis 25 und die Tabellen aus Schritt 21 und 25 (ohne Trigger) an eine Datenbank
+    älteren Stands (siehe bis_schritt) – mit Commit. Schritt 22: is_set und set_teile an mat_product_request (die Meldung
+    schreibt sie); Schritt 23: group_id an mat_item_change; Schritt 25: mat_item_component_serial und component_id,
+    component_serials an mat_inspection_result."""
     from app.material import models
     version = int((conn.execute("SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'").fetchone() or [0])[0])
     if version < 20:
@@ -319,6 +333,10 @@ def spalten_20_nachruesten(conn):
         models.spalten_nachruesten(conn, models.SPALTEN_22)
     if version < 23:
         models.spalten_nachruesten(conn, SPALTEN_23)
+    if version < 25:
+        for befehl in models.TABELLEN_25:
+            conn.execute(befehl)
+        models.spalten_nachruesten(conn, models.SPALTEN_25)
     conn.commit()
 
 

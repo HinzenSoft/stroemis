@@ -45,7 +45,7 @@ from flask import has_request_context
 
 from ... import db
 from ...images import delete_photo_files
-from ..models import ANHANGARTEN, AUSSONDERUNGSGRUENDE, BEFUNDE, ERGEBNISSE, PRUEFARTEN, SPERRGRUENDE
+from ..models import ANHANGARTEN, AUSSONDERUNGSGRUENDE, BEFUNDE, ERGEBNISSE, PRUEFARTEN, SERIE_MAX, SPERRGRUENDE
 from . import OHNE_NAMEN, Abgelehnt, auswahl, datum, erster_tag, heute, laenge, laenge_text, text, wahr
 from . import anhang as anh
 from . import bestand, journal, katalog, protokoll, rechte
@@ -138,7 +138,16 @@ def _lebensdauer(item, produkt, tag):
     return {"ende": item["retire_by"], "rest_tage": rest, "erreicht": rest <= 0}
 
 
+def _serien(r):
+    """Die Seriennummern einer Prüfzeile „… vorhanden“ einer Bestandteil-Liste (Schritt 25): je Stück {alt, neu} – leer
+    an allen anderen Zeilen (auch an Datenbanken vor Schritt 25, deren Zeilen die Spalte nicht haben)."""
+    roh = r.get("component_serials")
+    return json.loads(roh) if r.get("component_id") and roh else []
+
+
 def befund_json(r):
+    from .setlauf import SET_GRUPPE
+    from .stueckliste import BESTANDTEIL_GRUPPE
     foto = None
     if r["photo"]:
         foto = {"web": katalog.bild_url(r["photo"]), "vorschau": katalog.bild_url(r["photo"], "thumb"),
@@ -146,7 +155,13 @@ def befund_json(r):
     return {"id": r["id"], "position": r["position"], "gruppe": r["group_name"], "text": r["checklist_text"],
             "art": r["editor"], "pflicht": bool(r["mandatory"]), "soll": r["expected_value"],
             "kritisch": bool(r["is_critical"]), "befund": r["finding"], "wert": r["value"], "notiz": r["note"],
-            "foto": foto, "unterschrift": us.daten_uri(r.get("signature_png"))}
+            "foto": foto, "unterschrift": us.daten_uri(r.get("signature_png")),
+            # Zeile „… vorhanden“ eines Bestandteils (Set-Prüfung oder Bestandteil-Liste) – die Oberfläche zeigt
+            # „vorhanden/fehlt“; ein Formular darf selbst eine Gruppe „Bestandteile“ haben, deshalb ohne Formularpunkt.
+            "bestandteil": r["checklist_item_id"] is None and r["group_name"] in (SET_GRUPPE, BESTANDTEIL_GRUPPE),
+            "nummern": [{"stueck": n, "alt": x.get("alt") or "", "neu": x.get("neu"),
+                         "wert": x["neu"] if x.get("neu") is not None else (x.get("alt") or "")}
+                        for n, x in enumerate(_serien(r), start=1)]}
 
 
 def anhang_json(a):
@@ -211,6 +226,15 @@ def pruefung_json(p, pruefer_id=None):
         out["formular"] = {"id": p["form_id"], "version": p["form_version"], "titel": f["title"] if f else ""}
     punkte = befunde(p["id"])
     out["punkte"] = [befund_json(r) for r in punkte]
+    if out["entwurf"] and not p["corrects_inspection_id"]:
+        # Seriennummern der Bestandteile: im Entwurf „alt“ wie am Artikel heute (ein Antrag kann sie inzwischen geändert
+        # haben) – beim Festschreiben gilt ohnehin der Stand dann (_teilnummern_uebernehmen).
+        from . import teilnummern
+        jetzt = teilnummern.nummern(item["id"])
+        for x, r in zip(out["punkte"], punkte):
+            for n in x["nummern"]:
+                n["alt"] = jetzt.get((r["component_id"], n["stueck"]), "")
+                n["wert"] = n["neu"] if n["neu"] is not None else n["alt"]
     out["anhaenge"] = [anhang_json(a) for a in anhaenge(p["id"])]
     from . import durchgang
     out["durchgang"] = durchgang.verweis(p["round_id"]) if p["round_id"] else None
@@ -370,6 +394,11 @@ def starten(iid, pruefer, art=None, durchgang_id=None):
                         soll, p["is_critical"], befund, wert))
         if set_artikel:
             setlauf.bestandteil_zeilen(pid, iid)
+        else:
+            # Bestandteil-Liste des Produkts (Schritt 25): je Position „… vorhanden“ – auch im Durchgang, auch am Teil
+            # eines Sets von Hand, dessen Produkt eine hat.
+            from . import stueckliste
+            stueckliste.pruefzeilen(pid, item)
         journal.eintragen("inspection", pid, "begonnen", None,
                           {"item_id": iid, "kind": art, "form_id": formular["id"], "form_version": formular["version"],
                            "round_id": runde, "set_lauf_id": lauf["id"] if lauf else None})
@@ -484,8 +513,71 @@ def punkt_setzen(pid, rid, d, pruefer):
                 raise Abgelehnt("Dieser Prüfpunkt nimmt ein Foto auf, keinen Wert.")
         db.execute("UPDATE mat_inspection_result SET finding = ?, value = ?, note = ? WHERE id = ?",
                    (befund, wert, notiz, rid))
+        if "seriennummern" in d:
+            _serien_setzen(p, r, d["seriennummern"])
         _beruehrt(pid)
     return befund_json(_befund(pid, rid))
+
+
+def _serien_setzen(p, r, roh):
+    """Seriennummern der Bestandteile an einer Zeile „… vorhanden“ (Schritt 25): je Stück der Text („“ heißt keine
+    Nummer). Was der Prüfer nicht ändert (gleich dem Stand am Artikel – bei einer Berichtigung dem des Originals), bleibt
+    unberührt (neu null). Übernommen wird beim Festschreiben (_teilnummern_uebernehmen)."""
+    serien = _serien(r)
+    if not serien:
+        raise Abgelehnt("Dieser Prüfpunkt nimmt keine Seriennummern auf.")
+    if not isinstance(roh, list) or len(roh) != len(serien):
+        raise Abgelehnt(f"„seriennummern“: je Stück ein Text ({len(serien)}).")
+    jetzt = {}
+    if not p["corrects_inspection_id"]:
+        from . import teilnummern
+        jetzt = teilnummern.nummern(p["item_id"])
+    for n, (x, wert) in enumerate(zip(serien, roh), start=1):
+        wert = text({"w": wert}, "w", "Seriennummer" + (f" (Stück {n})" if len(serien) > 1 else ""), SERIE_MAX)
+        bisher = (x.get("alt") or "") if p["corrects_inspection_id"] else jetzt.get((r["component_id"], n), "")
+        x["neu"] = None if wert == bisher else wert
+    db.execute("UPDATE mat_inspection_result SET component_serials = ? WHERE id = ?",
+               (json.dumps(serien, ensure_ascii=False), r["id"]))
+
+
+def _teilnummern_uebernehmen(p, item, punkte):
+    """Beim Festschreiben, vor dem Abschluss (Schritt 25): An jeder Zeile „… vorhanden“ wird „alt“ der Stand am Artikel –
+    bei einer Berichtigung bleibt er der des Originals, wie bei der Länge –, und was der Prüfer eingetragen hat („neu“),
+    geht in den Artikel, wenn es sich vom Stand unterscheidet (bei einer Berichtigung nur, was sie gegenüber dem Original
+    ändert). Nicht für „nicht zutreffend“ und nicht für eine Position, die es inzwischen nicht mehr gibt. Der Trigger
+    lässt die Änderung zu, weil der offene Entwurf genau diese Nummer trägt; Journal „bestandteil_nummern“ mit der
+    Prüfung."""
+    from . import stueckliste, teilnummern
+    zeilen = [r for r in punkte if _serien(r)]
+    if not zeilen:
+        return
+    jetzt = teilnummern.nummern(item["id"])
+    positionen = {z["id"]: z for z in stueckliste.kurzliste(item["product_id"])}
+    original = {}
+    if p["corrects_inspection_id"]:
+        original = {o["component_id"]: _serien(o) for o in db.query(
+            "SELECT component_id, component_serials FROM mat_inspection_result WHERE inspection_id = ? "
+            "AND component_id IS NOT NULL", (p["corrects_inspection_id"],))}
+    aenderungen = []
+    for r in zeilen:
+        serien = _serien(r)
+        z = positionen.get(r["component_id"])
+        for nr, x in enumerate(serien, start=1):
+            aktuell = jetzt.get((r["component_id"], nr), "")
+            if not p["corrects_inspection_id"]:
+                x["alt"] = aktuell
+            neu = x.get("neu")
+            if neu is None or r["finding"] == "nicht_zutreffend" or not z or nr > z["anzahl"] or neu == aktuell:
+                continue
+            o = original.get(r["component_id"]) or []
+            if p["corrects_inspection_id"] and nr <= len(o):
+                vorher = o[nr - 1].get("neu") if o[nr - 1].get("neu") is not None else o[nr - 1].get("alt")
+                if (vorher or "") == neu:
+                    continue                   # die Berichtigung lässt die Nummer des Originals stehen
+            aenderungen.append((r["component_id"], nr, aktuell, neu))
+        db.execute("UPDATE mat_inspection_result SET component_serials = ? WHERE id = ?",
+                   (json.dumps(serien, ensure_ascii=False), r["id"]))
+    teilnummern.schreiben(item, aenderungen, zusatz={"pruefung": p["id"], "art": p["kind"]})
 
 
 def _laenge_moeglich(p):
@@ -806,6 +898,7 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
         # Die gemessene Länge in den Artikel – vor dem Abschluss, solange die Ergebniszeile ihr Soll noch annimmt
         # (Trigger mat_result_aendern); das Protokoll liest „alt → neu“ aus ihr.
         _laenge_uebernehmen(p, item, punkte)
+        _teilnummern_uebernehmen(p, item, punkte)
         if satz:
             setlauf.zeilen_schreiben(p, satz)        # die Teiletabelle als Kopie – nur am offenen Entwurf (Trigger)
         db.execute("UPDATE mat_inspection SET result = ?, inspected_on = ?, next_due_on = ?, reason = ?, remarks = ?, "
@@ -1227,10 +1320,10 @@ def berichtigen(pid, d, pruefer):
                     fotos.append(foto)
                 db.execute("INSERT INTO mat_inspection_result (inspection_id, checklist_item_id, position, group_name, "
                            "checklist_text, editor, mandatory, expected_value, is_critical, finding, value, note, photo, "
-                           "signature_png) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                           "signature_png, component_id, component_serials) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                            (neu, r["checklist_item_id"], r["position"], r["group_name"], r["checklist_text"], r["editor"],
                             r["mandatory"], r["expected_value"], r["is_critical"], r["finding"], r["value"], r["note"],
-                            foto, r["signature_png"]))
+                            foto, r["signature_png"], r.get("component_id"), r.get("component_serials")))
             for a in anhaenge(pid):
                 try:
                     with open(f"{anh.anhang_dir(katalog.medien_dir())}/{a['file_path']}", "rb") as fh:

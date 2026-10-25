@@ -28,6 +28,9 @@ modell, artikelnummer}). Steht in der Stückliste eines echten Sets ein DEMO-Bes
 DEMO-Kategorie), fehlt der Verweis im Export – dann bleibt „bestandteile“ ganz weg (der Import ließe sonst in der
 Produktion eine verkürzte Stückliste entstehen; ohne den Schlüssel bleibt sie dort, wie sie ist), und der Bericht nennt
 das Set unter „set_verstoesse“.
+
+Bestandteil-Liste (Schritt 25): An einem Produkt, das kein Set ist, steht sie als „bestandteile“: [{bezeichnung, anzahl}]
+– ohne „set“ (das schreibt der Export nur an Sets); ohne Liste fehlt der Schlüssel.
 """
 import hashlib
 import json
@@ -254,6 +257,10 @@ def sammeln(mit_dateien=True):
                                                  "ist DEMO – Stückliste nicht im Export")
             else:
                 e["bestandteile"] = liste
+        else:
+            flach = stueckliste.kurzliste(p["id"])
+            if flach:
+                e["bestandteile"] = [{"bezeichnung": z["bezeichnung"], "anzahl": z["anzahl"]} for z in flach]
         produkte.append(e)
     bericht["enthalten"]["produkte"] = len(produkte)
 

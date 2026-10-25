@@ -93,6 +93,11 @@ NUR_TEXTIL = "Ein Lebensende gibt es nur bei textilem Material."
 ENTFERNEN_ALT = ("Ein Herstelldatum lässt sich nicht mehr entfernen (Entscheidung vom 21.10.2026) – diesen älteren Antrag "
                  "kannst du nur noch ablehnen.")
 BEANTRAGEN_NICHT = "Beantragen dürfen Materialwarte und Prüfer dieses Artikels."
+# Seriennummern der Bestandteile (Schritt 25).
+TEILE_UND_PRODUKT = ("Seriennummern der Bestandteile gehören zum heutigen Produkt – ein anderes Produkt und neue Nummern "
+                     "bitte in getrennten Anträgen.")
+TEIL_WEG = ("Die Bestandteil-Liste des Produkts hat sich seit dem Antrag geändert – diese Position gibt es so nicht mehr. "
+            "Bitte ablehnen; der Antragsteller kann neu beantragen.")
 
 # Journal der Anträge: Was darin nur sieht, wer beantragen darf (wie antrag_json mit inhalt) – Begründung, Namen,
 # Anmerkung und Ablehnungsgrund. Felder, alte und neue Werte und der Zeitpunkt bleiben: Die Stammdaten sieht der Leser
@@ -115,6 +120,23 @@ def _als_text(wert):
 def wert_am_artikel(item, feld):
     """Der heutige Wert des Feldes am Artikel als Text – beim Lebensende das wirksame (retire_by)."""
     return _als_text(item[feld])
+
+
+def alt_am_artikel(item, r):
+    """Der heutige Wert, den die Antragszeile r ändern will – bei der Seriennummer eines Bestandteils (Schritt 25) die
+    Nummer dieses Stücks (None ohne)."""
+    if r["field"] == "component_serial":
+        from . import teilnummern
+        return teilnummern.nummern(item["id"]).get((r["component_id"], r["stueck"])) or None
+    return wert_am_artikel(item, r["field"])
+
+
+def feld_text(r):
+    """Das Feld einer Antragszeile, wie Liste, Mail und Journal es nennen – bei einem Bestandteil mit seiner Bezeichnung
+    zum Zeitpunkt des Antrags („Seriennummer Bestandteil „Tasche (Stück 2 von 3)““)."""
+    if r["field"] == "component_serial":
+        return f"{ANTRAGSFELDER['component_serial']} „{r.get('component_label') or 'Nr. ' + str(r.get('component_id'))}“"
+    return ANTRAGSFELDER[r["field"]]
 
 
 def _wert_lesen(feld, wert):
@@ -203,8 +225,15 @@ def _datum(iso):
 
 
 def _wuensche_der(rows):
-    """{feld: neuer Wert im Typ der Spalte} aus den Zeilen eines Sammelantrags."""
-    return {r["field"]: _wert_lesen(r["field"], r["new_value"]) for r in rows}
+    """{feld: neuer Wert im Typ der Spalte} aus den Zeilen eines Sammelantrags – Seriennummern der Bestandteile unter
+    „component_serial“ als {(Position, Stück): neu}."""
+    out = {}
+    for r in rows:
+        if r["field"] == "component_serial":
+            out.setdefault("component_serial", {})[(r["component_id"], r["stueck"])] = r["new_value"]
+        else:
+            out[r["field"]] = _wert_lesen(r["field"], r["new_value"])
+    return out
 
 
 def antrag_json(k, item=None, inhalt=True, rows=None):
@@ -216,11 +245,11 @@ def antrag_json(k, item=None, inhalt=True, rows=None):
     item = item or bestand.artikel(k["item_id"])
     rows = rows or gruppe(k["id"])
     offen = k["status"] == "offen"
-    aenderungen = [{"feld": r["field"], "feld_text": ANTRAGSFELDER[r["field"]], "alt": r["old_value"],
+    aenderungen = [{"feld": r["field"], "feld_text": feld_text(r), "alt": r["old_value"],
                     "neu": r["new_value"], "alt_text": wert_text(r["field"], r["old_value"]),
                     "neu_text": wert_text(r["field"], r["new_value"]),
                     # Trägt der Artikel noch den alten Wert? Sonst lässt sich der offene Antrag nur noch ablehnen.
-                    "passt": wert_am_artikel(item, r["field"]) == r["old_value"]} for r in rows]
+                    "passt": alt_am_artikel(item, r) == r["old_value"]} for r in rows]
     out = {f: k[f] for f in ("id", "item_id", "status", "created_at", "resolved_at", "applied_at")}
     out.update({"aenderungen": aenderungen, "felder_text": ", ".join(a["feld_text"] for a in aenderungen),
                 "status_text": ANTRAGSSTATUS[k["status"]], "inhalt": inhalt,
@@ -370,9 +399,27 @@ def _wuensche(d, item):
         wert = ganzzahl(d.get("interval_months"), "Prüfintervall (Monate)", 1, 120)
         if wert != item["interval_months"]:
             out["interval_months"] = wert
+    if "bestandteil_nummern" in d:
+        # Seriennummern der Bestandteile (Schritt 25): je geändertem Stück eine Zeile; leer heißt „Nummer entfernen“.
+        from . import teilnummern
+        werte = teilnummern.lesen(d.get("bestandteil_nummern"), item["product_id"])
+        teile = {(cid, st): (neu or None) for cid, st, _, neu in teilnummern.aenderungen(item["id"], werte)}
+        if teile:
+            if "product_id" in out:
+                raise Abgelehnt(TEILE_UND_PRODUKT)
+            out["component_serial"] = teile
     if not out:
         raise Abgelehnt(NICHTS)
     return out
+
+
+def _teile_journal(item, teile, neu=True):
+    """Seriennummern der Bestandteile im Journal eines Antrags: [{bestandteil, seriennummer}] – alt (neu=False) oder neu."""
+    from . import teilnummern
+    positionen = teilnummern._beschriftungen(item["product_id"])
+    jetzt = teilnummern.nummern(item["id"])
+    return [teilnummern.journal_form(positionen, cid, st, wert if neu else jetzt.get((cid, st), ""))
+            for (cid, st), wert in sorted(teile.items())]
 
 
 def _plan(item, wuensche):
@@ -381,8 +428,14 @@ def _plan(item, wuensche):
     Abgelehnt."""
     if "product_id" in wuensche:
         sets.produktwechsel_weiche(item, wuensche["product_id"])
+    if "component_serial" in wuensche:
+        # Die Positionen müssen noch zum Produkt gehören (die Liste kann sich seit dem Antrag geändert haben).
+        from . import stueckliste
+        positionen = {z["id"]: z for z in stueckliste.kurzliste(item["product_id"])}
+        if any(cid not in positionen or st > positionen[cid]["anzahl"] for cid, st in wuensche["component_serial"]):
+            raise Abgelehnt(TEIL_WEG, 409)
     d = {f: item[f] for f in bestand.ARTIKEL_FELDER}
-    d.update({f: v for f, v in wuensche.items() if f != "retire_by"})
+    d.update({f: v for f, v in wuensche.items() if f not in ("retire_by", "component_serial")})
     d["retire_by"] = None                         # das Lebensende rechnet unten – artikel_werte prüft nur sein Format
     w, p = bestand.artikel_werte(d, alt=item)
     if "product_id" in wuensche:
@@ -393,7 +446,7 @@ def _plan(item, wuensche):
         bestand._serie_frei(p["id"], w["serial_no"], ausser=item["id"])
     if not wirksam(p, bestand.heimat(item), w["interval_months"])["monate"]:
         raise Abgelehnt(katalog.KEIN_INTERVALL, 409)
-    setzen = {f: w[f] for f in wuensche if f != "retire_by"}
+    setzen = {f: w[f] for f in wuensche if f not in ("retire_by", "component_serial")}
     if "serial_no" in wuensche and item["serial_generated"]:
         setzen["serial_generated"] = 0            # eine echte Herstellernummer ersetzt die vergebene
     # Lebensende (nur textil): Rechnung aus Herstellung und Lebensdauer; ein von Hand gesetztes gilt, solange es früher
@@ -471,12 +524,31 @@ def stellen(iid, d):
         ts, kid = db.now(), None
         # In der Reihenfolge der Oberfläche (ANTRAGSFELDER): Der Kopf ist das erste Feld.
         for feld in [f for f in ANTRAGSFELDER if f in wuensche]:
+            if feld == "component_serial":
+                # Je Stück eine Zeile mit der Position und ihrer Bezeichnung von heute (Schritt 25).
+                from . import teilnummern
+                positionen = teilnummern._beschriftungen(item["product_id"])
+                jetzt = teilnummern.nummern(iid)
+                for (cid, st), neu in sorted(wuensche[feld].items()):
+                    z = positionen[cid]
+                    aid = db.execute(
+                        "INSERT INTO mat_item_change (item_id, field, old_value, new_value, reason, created_by, "
+                        "created_by_name, created_at, group_id, component_id, stueck, component_label) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (iid, feld, jetzt.get((cid, st)) or None, neu, begruendung, uid, name, ts, kid, cid, st,
+                         teilnummern.stueck_text(z["bezeichnung"], st, z["anzahl"])))
+                    kid = kid or aid
+                continue
             aid = db.execute(
                 "INSERT INTO mat_item_change (item_id, field, old_value, new_value, reason, created_by, created_by_name, "
                 "created_at, group_id) VALUES (?,?,?,?,?,?,?,?,?)",
                 (iid, feld, wert_am_artikel(item, feld), _als_text(wuensche[feld]), begruendung, uid, name, ts, kid))
             kid = kid or aid
-        vorher, nachher = {f: item[f] for f in wuensche}, dict(wuensche, antrag=kid, begruendung=begruendung)
+        einfach = {f: v for f, v in wuensche.items() if f != "component_serial"}
+        vorher, nachher = {f: item[f] for f in einfach}, dict(einfach, antrag=kid, begruendung=begruendung)
+        if "component_serial" in wuensche:
+            vorher["bestandteil_nummern"] = _teile_journal(item, wuensche["component_serial"], neu=False)
+            nachher["bestandteil_nummern"] = _teile_journal(item, wuensche["component_serial"])
         _produktnamen(vorher, nachher, item, wuensche)
         journal.eintragen("item", iid, "antrag_gestellt", vorher, nachher)
     return kid, _zustaendige_benachrichtigen(kid)
@@ -520,14 +592,26 @@ def bestaetigen(aid, d):
         rows = gruppe(kid)
         if any(r["field"] == "manufactured_on" and not r["new_value"] for r in rows):
             raise Abgelehnt(ENTFERNEN_ALT, 409)
-        if any(wert_am_artikel(item, r["field"]) != r["old_value"] for r in rows):
+        if any(alt_am_artikel(item, r) != r["old_value"] for r in rows):
             raise Abgelehnt(STAND_ANDERS, 409)
         wuensche = _wuensche_der(rows)
         setzen = _plan(item, wuensche)
         folgen = rueckruf_folgen(item, wuensche)
         _entscheiden(kid, len(rows), "bestaetigt", antwort)
-        db.execute(f"UPDATE mat_item SET {', '.join(f'{s} = ?' for s in setzen)}, updated_at = ? WHERE id = ?",
+        db.execute(f"UPDATE mat_item SET {''.join(f'{s} = ?, ' for s in setzen)}updated_at = ? WHERE id = ?",
                    (*setzen.values(), db.now(), item["id"]))
+        if "product_id" in setzen:
+            # Nummern an Positionen des bisherigen Produkts gelten nicht mehr (Schritt 25).
+            from . import teilnummern
+            teilnummern.aufraeumen(dict(item, product_id=setzen["product_id"]), item["product_id"])
+        teile = wuensche.get("component_serial") or {}
+        if teile:
+            # Seriennummern der Bestandteile (Schritt 25): der Trigger deckt jede genau so beantragte Änderung und setzt
+            # applied_at; das Journal steht unten im Eintrag „antrag_bestaetigt“.
+            from . import teilnummern
+            jetzt = teilnummern.nummern(item["id"])
+            teilnummern.schreiben(item, [(cid, st, jetzt.get((cid, st), ""), neu or "")
+                                         for (cid, st), neu in sorted(teile.items())], journal_an=False)
         # Der Trigger hat jede Änderung gedeckt und ihre Zeile verbraucht – fehlt eine, rollt alles zurück (409 mit Satz
         # statt 500; Prüfung Sicherheit, Befund 3 – _plan weist die bekannten Fälle schon beim Stellen ab).
         if any(not r["applied_at"] for r in gruppe(kid)):
@@ -535,6 +619,11 @@ def bestaetigen(aid, d):
             raise Abgelehnt(NICHT_ANGEWENDET, 409)
         vorher = {s: item[s] for s in setzen}
         nachher = dict(setzen, antrag=kid, beantragt_von=k["created_by_name"], begruendung=k["reason"])
+        if teile:
+            vorher["bestandteil_nummern"] = [{"bestandteil": r["component_label"], "seriennummer": r["old_value"] or ""}
+                                             for r in rows if r["field"] == "component_serial"]
+            nachher["bestandteil_nummern"] = [{"bestandteil": r["component_label"], "seriennummer": r["new_value"] or ""}
+                                              for r in rows if r["field"] == "component_serial"]
         if "serial_generated" in setzen:                 # im Journal als ja/nein wie beim Anlegen und Bearbeiten
             vorher["serial_generated"], nachher["serial_generated"] = True, False
         _produktnamen(vorher, nachher, item, wuensche)
@@ -563,8 +652,7 @@ def ablehnen(aid, d):
         rows = gruppe(kid)
         _entscheiden(kid, len(rows), "abgelehnt", antwort)
         journal.eintragen("item", k["item_id"], "antrag_abgelehnt", None,
-                          {"antrag": kid, "feld": ", ".join(ANTRAGSFELDER[r["field"]] for r in rows),
-                           "ablehnung": antwort})
+                          {"antrag": kid, "feld": ", ".join(feld_text(r) for r in rows), "ablehnung": antwort})
     _antragsteller_benachrichtigen(kid)
     return kid
 
@@ -585,7 +673,7 @@ def zurueckziehen(aid):
         rows = gruppe(kid)
         _entscheiden(kid, len(rows), "zurueckgezogen", "")
         journal.eintragen("item", k["item_id"], "antrag_zurueckgezogen", None,
-                          {"antrag": kid, "feld": ", ".join(ANTRAGSFELDER[r["field"]] for r in rows)})
+                          {"antrag": kid, "feld": ", ".join(feld_text(r) for r in rows)})
     return kid
 
 
@@ -621,7 +709,7 @@ def _kopfzeilen(item):
 
 
 def _aenderungen_text(rows):
-    return [f"{ANTRAGSFELDER[r['field']] + ':':<15}{wert_text(r['field'], r['old_value'])} → "
+    return [f"{feld_text(r) + ':':<15}{wert_text(r['field'], r['old_value'])} → "
             f"{wert_text(r['field'], r['new_value'])}" for r in rows]
 
 
@@ -662,7 +750,7 @@ def _zustaendige_benachrichtigen(kid):
               "Prüfnachweises):", ""] + _kopfzeilen(item) + [""] + _aenderungen_text(rows)
     zeilen += ["", "Begründung:", k["reason"], "", f"Bestätigen oder ablehnen: {basis}{SEITE}", "", fuss]
     betreff = (f"{cfg.get('SITE_NAME') or 'strömis.de'} – Änderungsantrag: {item['inventory_no']} "
-               f"({', '.join(ANTRAGSFELDER[r['field']] for r in rows)})")
+               f"({', '.join(feld_text(r) for r in rows)})")
     if demo:
         betreff = f"[DEMO] {betreff}"
     return _verschicken(kid, [(a, betreff, "\n".join(zeilen) + "\n", uid, rolle) for a, uid in an], item, demo)
@@ -688,7 +776,7 @@ def _antragsteller_benachrichtigen(kid):
         return False
     cfg = current_app.config
     basis = (cfg.get("BASE_URL") or "").rstrip("/")
-    felder = ", ".join(ANTRAGSFELDER[r["field"]] for r in rows)
+    felder = ", ".join(feld_text(r) for r in rows)
     zeilen = [f"Hallo {(u['name'] or '').strip()},", ""]
     if k["status"] == "bestaetigt":
         betreff = f"Änderungsantrag bestätigt: {item['inventory_no']} ({felder})"

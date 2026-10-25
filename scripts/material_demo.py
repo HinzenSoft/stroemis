@@ -100,8 +100,12 @@ KATALOG = {
         {"kategorie": ["DEMO PSA gegen Absturz und Seiltechnik", "DEMO Kletterhelme"], "hersteller": "DEMO-Hersteller",
          "modell": "DEMO Helm", "artikelnummer": "DEMO-H-1", "materialart": "sonstiges", "lebensdauer_jahre": 10,
          "lebensdauer_quelle": "Platzhalter", "beschreibung": ""},
+        # Produkt mit Bestandteil-Liste (Schritt 25): nur Text, kein Set – jede Prüfung fragt „… vorhanden“ ab, am Artikel
+        # je Stück eine freiwillige Seriennummer. Platzhalter.
         {"kategorie": ["DEMO Wasserrettung", "DEMO Schwimmhilfen"], "hersteller": "DEMO-Hersteller",
-         "modell": "DEMO Rettungsweste", "artikelnummer": "DEMO-W-1", "materialart": "sonstiges", "beschreibung": ""},
+         "modell": "DEMO Rettungsweste", "artikelnummer": "DEMO-W-1", "materialart": "sonstiges", "beschreibung": "",
+         "set": False, "bestandteile": [{"bezeichnung": "DEMO-Bestandteil A (Platzhalter)", "anzahl": 2},
+                                        {"bezeichnung": "DEMO-Beutel (Platzhalter)", "anzahl": 1}]},
         # Set (Phase 4 · L2): Stückliste aus DEMO-Bestandteilen – zwei einzeln geführte DEMO HMS-Karabiner
         # (je ein Teil-Artikel) und eine Tasche ohne eigenen Artikel. Alles Platzhalter.
         {"kategorie": ["DEMO PSA gegen Absturz und Seiltechnik", "DEMO Verbindungsmittel-Sets"],

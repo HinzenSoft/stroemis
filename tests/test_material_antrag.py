@@ -51,6 +51,14 @@ def trigger_21():
     """Die Trigger aus Schritt 21 (Sets) – zwei davon ersetzen gleichnamige aus Schritt 6."""
     from app.material import models
     return {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.TRIGGER_21}
+
+
+def trigger_25(nur_antrag=False):
+    """Die Trigger aus Schritt 25 (Bestandteil-Liste, Seriennummern der Bestandteile) – zwei ersetzen gleichnamige aus
+    Schritt 21. nur_antrag: nur die, die mat_item_change lesen (wer die Tabelle entfernt, entfernt sie mit)."""
+    from app.material import models
+    return {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.TRIGGER_25
+            if not nur_antrag or "mat_item_change" in x}
 HERST_BLEIBT = "nicht entfernen"
 
 
@@ -753,7 +761,7 @@ def test_migration_15():
         # Stand 14 nachstellen – samt den Triggern späterer Schritte, die mat_item_change lesen (Schritt 23).
         conn = sqlite3.connect(pfad)
         conn.execute("DROP TABLE mat_item_change")
-        for n in TRIGGER_NEU | TRIGGER_23 | {"mat_item_produkt_fest"}:
+        for n in TRIGGER_NEU | TRIGGER_23 | {"mat_item_produkt_fest"} | trigger_25(nur_antrag=True):
             conn.execute(f"DROP TRIGGER IF EXISTS {n}")
         for befehl in models.TRIGGER_14:
             conn.execute(befehl)
@@ -777,6 +785,7 @@ def test_migration_15():
         models._schritt_17(conn)
         models._schritt_23(conn)                   # ersetzt die Artikeltrigger wieder durch die Fassung aus 23
         models._schritt_24(conn)                   # und die zwei des Lebensendes durch die aus 24
+        models._schritt_25(conn)                   # und die Antragstrigger durch die aus 25 (Seriennummern der Bestandteile)
         assert conn.total_changes == n and _schema_in(conn) == trigger
         conn.rollback()
         conn.close()
@@ -1423,13 +1432,17 @@ def test_migration_17():
         vorher = _zahlen(pfad)
         make_app(tmp)
         v17, t17, _ = _schema(pfad)
-        # Schritt 18: keine Trigger; 19: die zwei des Mailfehler-Protokolls; 21: die der Sets; 23: die Gruppe.
-        assert v17 == endversion() and set(t17) == set(t16) | TRIGGER_17 | TRIGGER_19 | trigger_21() | TRIGGER_23, \
+        # Schritt 18: keine Trigger; 19: die zwei des Mailfehler-Protokolls; 21: die der Sets; 23: die Gruppe; 25: die der
+        # Seriennummern der Bestandteile.
+        assert v17 == endversion() and set(t17) == set(t16) | TRIGGER_17 | TRIGGER_19 | trigger_21() | TRIGGER_23 | \
+            trigger_25(), \
             (set(t17) ^ set(t16))
         assert t17["mat_item_stammdaten_fest"] != t16["mat_item_stammdaten_fest"]
         assert t17["mat_item_antrag_angewendet"] != t16["mat_item_antrag_angewendet"]          # seit Schritt 23 alle Felder
         assert "'zurueckgezogen'" in _tabelle_sql(pfad) and "'purchased_on'" in _tabelle_sql(pfad)
-        assert zeilen(t.app, "SELECT * FROM mat_item_change ORDER BY id") == alt and len(alt) == 3
+        # Seit Schritt 25 dazu component_id, stueck und component_label (leer) – die alten Spalten unverändert.
+        assert [{k: r[k] for k in alt[0]} for r in zeilen(t.app, "SELECT * FROM mat_item_change ORDER BY id")] == alt \
+            and len(alt) == 3
         assert zeilen(t.app, "SELECT seq FROM sqlite_sequence WHERE name = 'mat_item_change'") == seq
         # Schritt 19 legt mat_mail_fehler (leer) an – sonst keine Zeile anders.
         assert _zahlen(pfad) == dict(vorher, mat_mail_fehler=0)
@@ -1445,6 +1458,7 @@ def test_migration_17():
         models._schritt_17(conn)
         models._schritt_23(conn)
         models._schritt_24(conn)
+        models._schritt_25(conn)
         assert conn.total_changes == n and _schema_in(conn) == t17
         conn.rollback()
         # Der alte offene Antrag aufs Entfernen: auch an der Schnittstelle vorbei nicht zu bestätigen.
