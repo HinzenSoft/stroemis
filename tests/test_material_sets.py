@@ -4,11 +4,9 @@ Schema-Schritt 21 (frisch, 20 → 21, zweiter Lauf, Fremdschlüssel, Trigger), K
 Grenzen, Löschen, Variante, Katalogdatei Format 2 hin und zurück), Bestand (Set anlegen, Set-Block, Listen nur mit der
 Set-Zeile, Set-Status gegen status.status(), Weichen der Einzelwege als Tabelle „Route × {Set-Artikel, Teil, freier
 Artikel}“, set_stimmig mit Teil-Kennung < Set-Kennung bei Ordner verschieben, Artikel verschieben, Ordner löschen und
-Konto löschen), Trennung je Gliederung, Meine PSA, Steckbrief, Bestandsimport und das DEMO-Skript.
+Konto löschen), Trennung je Gliederung, Meine PSA, Steckbrief und Bestandsimport.
 
 Alle Hersteller, Modelle, Nummern und Stücklisten hier sind erfunden und nur für den Test da."""
-import contextlib
-import importlib.util
 import io
 import logging
 import os
@@ -951,44 +949,6 @@ def test_meine_psa_und_import():
     print("Meine PSA und Bestandsimport bei Sets bestanden.")
 
 
-def test_demo_set():
-    """scripts/material_demo.py --demo legt ein DEMO-Set-Produkt mit Stückliste aus DEMO-Bestandteilen und einen
-    DEMO-Set-Artikel mit seinen Teilen an – alles DEMO; ein zweiter Lauf legt nichts dazu."""
-    def laufen():
-        spec = importlib.util.spec_from_file_location("material_demo_sets", os.path.join(REPO, "scripts", "material_demo.py"))
-        modul = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(modul)
-        alt, sys.argv = sys.argv, ["material_demo.py", "--demo"]
-        puffer = io.StringIO()
-        try:
-            with contextlib.redirect_stdout(puffer):
-                modul.main()
-        finally:
-            sys.argv = alt
-        return puffer.getvalue()
-    with tempfile.TemporaryDirectory() as tmp:
-        make_app(tmp)
-        aus = laufen()
-        assert "DEMO-Set mit 2 Teilen" in aus, aus
-        app = make_app(tmp)
-        p = zeilen(app, "SELECT * FROM mat_product WHERE model = 'DEMO Verbindungsmittel-Set'")[0]
-        assert p["is_set"] == 1 and p["demo"] == 1
-        komp = zeilen(app, "SELECT c.*, p.demo FROM mat_product_component c LEFT JOIN mat_product p "
-                           "ON p.id = c.component_product_id WHERE c.set_product_id = ? ORDER BY c.position", (p["id"],))
-        assert [(c["anzahl"], c["einzeln"], c["demo"]) for c in komp] == [(2, 1, 1), (1, 0, None)]
-        s = zeilen(app, "SELECT * FROM mat_item WHERE product_id = ?", (p["id"],))
-        assert len(s) == 1 and s[0]["serial_no"] == "DEMO-SET-1"
-        teile = zeilen(app, "SELECT serial_no FROM mat_item WHERE parent_item_id = ? ORDER BY id", (s[0]["id"],))
-        assert [x["serial_no"] for x in teile] == ["DEMO-SET-K1", "DEMO-SET-K2"]
-        with app.app_context():
-            from app.material.services import bestand
-            assert bestand.ist_demo(s[0]["id"])
-        vorher = zeilen(app, "SELECT COUNT(*) AS n FROM mat_item")[0]["n"]
-        assert "DEMO-Set ist schon da" in laufen()
-        assert zeilen(make_app(tmp), "SELECT COUNT(*) AS n FROM mat_item")[0]["n"] == vorher
-    print("DEMO-Set bestanden.")
-
-
 if __name__ == "__main__":
     test_migration_21()
     test_trigger_21()
@@ -1001,4 +961,3 @@ if __name__ == "__main__":
     test_stimmig_teil_vor_set()
     test_trennung()
     test_meine_psa_und_import()
-    test_demo_set()

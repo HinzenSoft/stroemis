@@ -398,7 +398,7 @@ def formulare(vorlagen):
     Katalog-Export lässt sie aus. Echte Formulare (aktiv wie inaktiv) und DEMO-Kategorien samt Teilbaum bleiben unberührt.
       1. Petzl: Eine echte Kategorie, deren Name in vorlagen steht, die selbst kein Formular hat und über keine
          Oberkategorie ein aktives echtes, bekommt das Formular nach dem Petzl-Prüfbericht.
-      2. Platzhalter (wie scripts/material_demo.py seit 2edb9eb): von oben nach unten – eine echte Kategorie, die weder
+      2. Platzhalter: von oben nach unten – eine echte Kategorie, die weder
          selbst noch über eine Oberkategorie ein aktives Formular hat, bekommt eins, so hoch wie möglich (die
          Unterkategorien erben es; ein Formular an einer Unterkategorie geht ihm vor). „Länge (m)“ kommt dazu, wenn eine
          Kategorie des Teilbaums eine Artikellänge vorsieht. Eine Kategorie mit nur einem inaktiven echten Formular
@@ -693,7 +693,7 @@ class Beispielbestand:
         """Ein DEMO-Konto nur für das Modul Material (Karte, Wiki, Prüfungen und Verwaltung aus) – mit zufälligem Passwort,
         die Einsatzkräfte mit einem gemeinsamen –, mit dem Journaleintrag „rollen“ wie in der Nutzerverwaltung. Prüfer und
         Materialwarte hinterlegen ihre DEMO-Unterschrift über den Dienst des Profils. Gibt es ein DEMO-Konto mit der
-        Adresse schon (etwa von scripts/material_demo.py), bleibt es mit Name und Passwort; fehlen ihm Stufe, Prüfer-Häkchen
+        Adresse schon (etwa aus einem früheren DEMO-Skript), bleibt es mit Name und Passwort; fehlen ihm Stufe, Prüfer-Häkchen
         oder Unterschrift, kommen sie dazu."""
         import secrets
 

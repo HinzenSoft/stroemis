@@ -216,26 +216,21 @@ noch, dann nur über ihre `.env`; `docker-compose.yml` und das Dockerfile sind f
 
 ### DEMO-Daten und DEMO-Konten (nur dev)
 
-`scripts/material_demo.py --demo --konten` legt den kleinen DEMO-Katalog mit DEMO-Bestand in zwei Gliederungen an und
-fünf DEMO-Konten (zwei Materialwarte, Prüfer, externer Prüfer, DEMO-Material-Verwaltung). Der Lauf ist wiederholbar:
-Vorhandenes bleibt, Fehlendes kommt dazu. So bringt er eine ältere dev-Datenbank auf den Stand – etwa die
-Prüffreigabe des DEMO-Prüfers auf dauerhaft und das Konto `demo-mv@example.invalid`. Die Passwörter neuer Konten
-stehen nur in der Ausgabe. Auf dem VPS im Klon der Entwicklung, wie beim Beispielbestand per stdin (das Abbild enthält
-`scripts/` nicht):
+DEMO-Daten und DEMO-Konten entstehen seit dem 25.10.2026 nur noch über den Beispielbestand (nächster Abschnitt) – das
+frühere `scripts/material_demo.py` mit seinem kleinen DEMO-Katalog ist entfernt; der Beispielbestand braucht den
+echten Katalog. **So kommen Browserproben an DEMO-Daten** (lokal, eigener Datenordner, nie im Repository):
 
 ```bash
-docker exec -i stroemis-dev sh -c 'cat > /tmp/material_demo.py && VIDEOPFLEGE=0 PYTHONPATH=/srv python /tmp/material_demo.py --demo --konten' < scripts/material_demo.py
+export DATA_DIR=/home/…/probe-daten BASE_URL=http://localhost:8080 COOKIE_SECURE=false VIDEOPFLEGE=0
+flask --app "app:create_app()" material import-catalog katalog-gesamt-teil01.zip   # ein Teil der Katalogserie
+python scripts/material_beispielbestand.py --beispielbestand --artikel 60          # gut eine Minute; 800: rund 20 min
+python run.py                                                                      # dann mit den Konten aus der Ausgabe anmelden
 ```
 
-**Nach dem Deploy von Phase 2 · Lieferung 1 einmal ausführen** (CHANGELOG-Material.md). **Nie in der Produktion**
-(Container `stroemis`) – dieses Skript prüft die Adresse nur für die Platzhalter-Formulare.
-
-Platzhalter-Formulare (seit 25.10.2026): Zum Schluss bekommt jede echte Kategorie ohne wirksames aktives Prüfformular
-ein „DEMO-Prüfformular (Platzhalter) – <Kategorie>“ (Ja/Nein, Text, Zahl, bei Artikellänge „Länge (m)“; DEMO-Kennzeichen,
-aktiv) – an der obersten Kategorie ohne Formular, die Unterkategorien erben es. So lassen sich nach dem Einspielen des
-echten Katalogs Prüfungen testen; der Katalog-Export lässt diese Formulare aus. Echte Formulare bleiben unberührt, die
-DEMO-Kategorien behalten ihre. Nur wenn `BASE_URL` in der Umgebung und in der Anwendung auf dev oder localhost zeigt
-(Positivliste wie bei `dev-zuruecksetzen`); lokal also `BASE_URL=http://localhost:8080 python scripts/material_demo.py --demo`.
+Die Ausgabe nennt die Konten mit Passwort (`demo-wart-a@example.invalid` Materialwart, `demo-pruefer@…` Prüfer,
+`demo-extern@…` externer Prüfer, `demo-mv@…` Material-Verwaltung, `demo-mitglied@…`, `demo-einsatzkraft-01@…` …).
+Mails gehen keine hinaus. Für einen zweiten Stand einen neuen Datenordner nehmen – der Beispielbestand läuft je
+Datenbank nur einmal.
 
 ### Beispielbestand (nur dev)
 
@@ -361,9 +356,8 @@ Prozess hart beendet wird (SIGKILL), bleiben die Medien im Sicherungsordner lieg
 - **Platz**: Die Kopie der Datenbank braucht einmal deren Größe (der Probelauf nennt Größe und freien Platz); die Medien
   werden nur umbenannt, nicht kopiert.
 - **DEMO-Konten** (`@example.invalid`) löscht der Befehl nicht, er listet sie. Sie haben danach keine Freigaben mehr;
-  über die Nutzerverwaltung löschen, falls nicht mehr gebraucht. `material_demo.py --demo --konten` legt danach den
-  DEMO-Bestand neu an, aber nur fehlende Konten – wer die DEMO-Konten mit ihren Freigaben wieder haben will, löscht sie
-  vorher.
+  über die Nutzerverwaltung löschen, falls nicht mehr gebraucht. Der Beispielbestand (nach dem Katalog-Import) übernimmt
+  vorhandene DEMO-Konten samt Passwort, gibt ihnen ihre Freigaben neu und legt nur fehlende an.
 - **Rückweg** (der ganze Stand vor dem Zurücksetzen; was seither auf dev entstand – auch an Konten, Wiki, Spots und
   Prüfungen –, geht verloren). Dieselben Zeilen mit dem richtigen Ordnernamen stehen in `LIESMICH.txt` im
   Sicherungsordner. Gehört `data/` nicht deinem Nutzer, `rm`, `cp` und `mv` mit `sudo`:
@@ -654,7 +648,7 @@ python tests/test_material_l5.py         # Lieferung 5: Mangel mit Bemerkung, Ur
 python tests/test_material_profil.py     # Lieferung 5: Urkundennummer im Profil
 python tests/test_material_trennung.py   # Phase 2: Trennung je Gliederung (Migration 7 → 8, nichts aus einer fremden Gliederung in irgendeiner Antwort,
                                         # Kennungen im Inhalt, Heimat, Verschieben und Durchgänge, Prüfsicht, Ablauf)
-python tests/test_material_freigaben.py  # Phase 2: Freigaben vergeben, ändern, entziehen, verlängern; Übernahme-Schutz; Nutzerverwaltung; DEMO-Skript
+python tests/test_material_freigaben.py  # Phase 2: Freigaben vergeben, ändern, entziehen, verlängern; Übernahme-Schutz; Nutzerverwaltung
 python tests/test_material_globalsuche.py  # Phase 2: globale Seriennummernsuche, QR-Steckbrief, Protokoll (keine Bremse), Sperrwort, nur Fremdes
 python tests/test_material_zuordnung.py  # Phase 2: Personenzuordnung, Meldungen je Bereich, Löschkonzept, Prüfnachweise bleiben
 python tests/test_material_meine_psa.py  # Phase 3: Meine PSA (auch ohne Modulstufe), Kopfleiste, QR, Medien, Karte, Profil
@@ -672,13 +666,8 @@ python tests/test_material_beispielbestand.py  # Beispielbestand: Katalog unver�
                                                # alle Zustände, Protokolle, DEMO-Kennzeichnung, Konten, Petzl- und Platzhalter-Formulare, abgebrochener Lauf
 python tests/test_material_dev_zuruecksetzen.py  # material dev-zuruecksetzen: Sperren (dev-Kennung, BASE_URL als Positivliste, Schalter), --trocken, Sicherung (0700/0600), Abbruch bei laufendem Katalogimport
                                                  # vollständig, Schema wie neu, übrige Module byteidentisch, Scheitern und SIGTERM/SIGHUP ändern nichts
-python scripts/beispieldaten.py         # füllt ./data mit zwei erfundenen Prüfungs-Lehrgängen zum Ausprobieren
-python scripts/material_demo.py --demo  # füllt ./data mit DEMO-Katalog, DEMO-Bestand in zwei Gliederungen und DEMO-Prüfungen (nie für echte Prüfungen)
-                                        # dazu Platzhalter-Formulare für echte Kategorien ohne Formular (nur mit BASE_URL dev/localhost)
-python scripts/material_demo.py --demo --konten  # dazu einmalig fünf DEMO-Konten (vier Mitglieder mit Freigaben, die DEMO-Material-Verwaltung);
-                                                 # die Passwörter stehen nur in dieser Ausgabe (nur für dev);
-                                                 # ein DEMO-Prüfer von früher (befristet) prüft danach dauerhaft
-python scripts/material_beispielbestand.py --beispielbestand  # Beispielbestand aus dem vorhandenen Katalog (nur dev, siehe „Beispielbestand (nur dev)“)
+python scripts/material_beispielbestand.py --beispielbestand  # DEMO-Bestand und DEMO-Konten aus dem vorhandenen Katalog (nur dev/localhost,
+                                                              # siehe „Beispielbestand (nur dev)“; die Passwörter stehen nur in der Ausgabe)
 flask --app "app:create_app()" material import-catalog katalog.json --trocken   # Katalogdatei prüfen (JSON oder ZIP)
 flask --app "app:create_app()" material export-catalog katalog.zip              # Katalog ohne DEMO als ZIP (Format 2)
 ```
@@ -686,8 +675,6 @@ flask --app "app:create_app()" material export-catalog katalog.zip              
 Die JavaScript-Bibliotheken liegen im Arbeitsbaum unter `app/static/vendor/` und werden im Docker-Build noch einmal frisch geladen und gegen `vendor.sha256` geprüft.
 
 WeasyPrint (Protokolle des Moduls Material) braucht außerhalb von Docker die Systembibliotheken Pango und HarfBuzz – unter Debian/Ubuntu `sudo apt install libpango-1.0-0 libpangoft2-1.0-0 fonts-dejavu-core` (dazu `libharfbuzz-subset0` ab Debian 12 bzw. Ubuntu 24.04 – älteren Systemen fehlt das Paket, WeasyPrint läuft dann ohne), unter macOS `brew install pango`.
-
-`scripts/beispieldaten.py` ist ein eigenständiges Entwicklungswerkzeug außerhalb von `app/` – ohne Route, ohne Knopf in der Oberfläche, nur von der Kommandozeile aufrufbar. Es legt unter dem ersten Administrator-Konto einen laufenden SR1- und einen abgeschlossenen SR2-Lehrgang mit erfundenen Personen, Voraussetzungen, Prüfungsleistungen (zwei davon mit Kriterienliste), Bewertungen und einer Nachprüfung an. Ein früherer, gleichnamiger Weg direkt in der Anwendung (Knopf, API-Route) wurde bewusst entfernt (siehe `CHANGELOG-Pruefungen.md`); dieses Skript berührt weder Route noch Oberfläche und läuft nie im Docker-Image mit (`Dockerfile` kopiert nur `app/`).
 
 `tests/rundlauf.html` prüft die zentrale Invariante des Editors – Markdown öffnen und speichern darf kein Byte ändern – über einen Korpus aus 66 Fällen. Ein zweiter Abschnitt prüft den Rückgängig-Verlauf (ein Strg+Z direkt nach dem Laden darf am Dokument nichts ändern, eigene Änderungen müssen weiterhin rückgängig zu machen sein), gesetzte Leerzeilen, das Auflösen unvollständiger Abschnitte und die Grenzen des Renderers: Aufgabenlisten behalten ihr Kästchen, Formulare und Stilblöcke aus dem Seitentext kommen nicht durch. Ein dritter Abschnitt prüft die zusammengefassten Zellen: dass ein Zug über mehrere Zellen überhaupt eine Zellauswahl ergibt (das Bündel von Toast UI ist an dieser Stelle fehlerhaft übersetzt und wird geflickt), dass Verbinden und Teilen die erwartete Schreibweise ergeben und dass die Leseansicht daraus `colspan` und `rowspan` macht – mit Gegenproben, die ohne die Reparatur beziehungsweise ohne die Nachbearbeitung fehlschlagen müssen. Die Datei lädt die Projektskripte über relative Pfade; ein Doppelklick genügt, ein Server ist nicht nötig.
 
@@ -768,8 +755,6 @@ tests/
   test_material_sets.py
                    Modul Material, Phase 4 · Lieferung 2: Hersteller-Sets – Schritt 21, Stückliste, Katalogdatei,
                    Set anlegen, Set-Werte, Listen, Weichen je Route, Gleichheit von Set und Teilen, Trennung, DEMO
-  test_material_demo_formulare.py
-                   DEMO-Skript: Platzhalter-Formulare für echte Kategorien (Bestand unverändert, Vererbung, Export, Sperre)
   test_material_sets_pruefung.py
                    Modul Material, Phase 4 · Lieferung 2 (K2): Sperr-Kaskade je Sperrweg, Set prüfen und Freigabe,
                    Berichtigungen, Aussondern mit Wahl je Teil, Teil tauschen/entnehmen/einsetzen/löschen, Durchgang

@@ -76,7 +76,7 @@ SICHERUNG_VORSATZ = "sicherung-material-"
 SCHALTER = "--ja-alles-loeschen"
 WARTEN = 30                                   # Sekunden auf die Schreibsperre (busy_timeout)
 RESERVE = 64 * 1024 * 1024                    # so viel Platz bleibt nach der Sicherung mindestens frei
-DEMO_POSTFACH = "@example.invalid"           # scripts/material_demo.py --konten und material_beispielbestand.py
+DEMO_POSTFACH = "@example.invalid"           # die DEMO-Konten aus scripts/material_beispielbestand.py
 # Objekte des Moduls in sqlite_master: an einer Tabelle mat_* oder selbst mit dem Vorsatz (Trigger, Views).
 MODUL = "(tbl_name LIKE 'mat\\_%' ESCAPE '\\' OR name LIKE 'mat\\_%' ESCAPE '\\')"
 log = logging.getLogger(__name__)
@@ -190,7 +190,7 @@ def _demo_text(b):
     if not b["demo_konten"]:
         return []
     return (["DEMO-Konten (bleiben, jetzt ohne Freigaben – über die Nutzerverwaltung löschen, falls nicht mehr "
-             "gebraucht; material_demo.py --konten legt nur fehlende Konten an):"]
+             "gebraucht; material_beispielbestand.py übernimmt vorhandene und legt nur fehlende an):"]
             + [f"  {mail} ({name})" for mail, name in b["demo_konten"]])
 
 

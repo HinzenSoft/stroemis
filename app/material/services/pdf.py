@@ -12,7 +12,7 @@ der Datenbank nie dazu führen, dass der Server beim Setzen eine fremde Adresse 
 Servers ins Protokoll zieht.
 
 Gesetzt wird mit der Jinja-Umgebung der App, aber ohne deren Kontextprozessoren: Die brauchen eine
-Anfrage (angemeldeter Nutzer), ein Protokoll entsteht aber auch ohne – im Demo-Skript, beim Abschluss eines
+Anfrage (angemeldeter Nutzer), ein Protokoll entsteht aber auch ohne – im Beispielbestand-Skript, beim Abschluss eines
 Durchgangs. Vor dem Setzen läuft jeder Text durch _sauber(): Zeichen, die keine der beiden Schriften hat,
 würden als leeres Kästchen (.notdef) gesetzt und machten die Datei zu einem ungültigen PDF/A.
 

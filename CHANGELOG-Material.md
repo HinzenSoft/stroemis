@@ -4154,6 +4154,23 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## DEMO-Skript entfernt (Wunsch des Nutzers, 25.10.2026)
+
+`scripts/material_demo.py` ist entfernt („Entferne das Demo-Skript material_demo.py, es wird dann nicht mehr
+gebraucht.“), ebenso `scripts/beispieldaten.py` (Prüfungsbereich, CHANGELOG-Pruefungen.md). Was es leistete und weiter
+gebraucht wird, macht `scripts/material_beispielbestand.py`: DEMO-Konten mit den bekannten Postfächern (vorhandene werden
+übernommen, der Prüfer prüft dauerhaft, der externe befristet), DEMO-Unterschriften im Profil der Prüfer und
+Materialwarte (für die Protokolle), Platzhalter- bzw. Petzl-Formulare, die dev-Sperre. Der kleine DEMO-Katalog
+(DEMO-Kategorien, -Produkte, -Set) entfällt – der Beispielbestand braucht den echten Katalog. Entfallen sind auch die
+Übergänge für alte dev-Stände (befristete DEMO-Prüffreigabe auf dauerhaft, Protokolle nachreichen). Tests: die
+Prüfungen des DEMO-Skripts selbst sind gestrichen (test_material_freigaben: zweimal hintereinander, Prüfer von früher;
+test_material_beschreibung: DEMO-Produkte ohne Beschreibung; test_material_sets: DEMO-Set;
+test_material_demo_formulare.py) – die Konten, die Material-Verwaltung und die Formulare prüft jetzt
+test_material_beispielbestand; test_material_dev_zuruecksetzen baut seinen Bestand mit einem eigenen Set und einem
+kleinen Beispielbestand und lässt ihn nach dem Zurücksetzen (mit neuem Katalog) wieder laufen. Hinweistexte in
+`services/zuruecksetzen.py` angepasst; README: Anleitung, wie Browserproben an DEMO-Daten kommen. Kein App-Verhalten
+geändert, kein Schemaschritt.
+
 ## Beispielbestand: große Gliederung mit zwei Jahren Geschichte (Wunsch des Nutzers, 25.10.2026)
 
 `scripts/material_beispielbestand.py` baut statt der drei kleinen DEMO-OGs den Bestand einer großen Gliederung aus dem

@@ -471,6 +471,10 @@ def test_beispielbestand():
         wart = anmelden(app, "demo-wart-a@example.invalid", passwoerter["demo-wart-a@example.invalid"])
         assert wart.get(f"/api/material/ordner/{fl['id']}").status_code == 200
         assert wart.get(f"/api/material/ordner/{ns['id']}").status_code == 404
+        # Die DEMO-Material-Verwaltung sieht beide Gliederungen, ohne Plattform-Verwaltung zu sein.
+        mv = anmelden(app, "demo-mv@example.invalid", passwoerter["demo-mv@example.invalid"])
+        assert mv.get(f"/api/material/ordner/{fl['id']}").status_code == 200
+        assert mv.get(f"/api/material/ordner/{ns['id']}").status_code == 200
         direkt = adm.get(f"/api/material/ordner/{fl['id']}/freigaben").json["direkt"]
         assert {x["recht"] for x in direkt} == {"verwalten", "lesen", "pruefen"}, direkt
         assert {x["vergeben_von"] for x in direkt} == {"Beispielbestand"}, direkt
