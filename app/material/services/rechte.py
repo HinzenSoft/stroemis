@@ -28,7 +28,10 @@ Rechte in einem Ordner F (RECHTE): grund – Grundrecht, Verwaltung oder gültig
 pruefen – qualifiziert und gültiges pruefen an F oder darüber (auch für Verwalter und die Verwaltung), ein dauerhaftes
 nur, wo grund an seinem Anker gilt (ein Grundrecht nur weiter unten trägt es nicht); lesen – grund oder pruefen (mit
 pruefen allein: die Prüfsicht – also nur mit einer befristeten Prüffreigabe, der des externen Prüfers); verwalten –
-Verwaltung oder gültiges verwalten. Läuft das Grundrecht ab oder wird es entzogen, wirkt eine dauerhafte Prüffreigabe
+Verwaltung oder gültiges verwalten; freigeben – Änderungsanträge an Stammdaten entscheiden (Wunsch vom 24.10.2026): ein
+EIGENES gültiges verwalten an F oder darüber, gleich aus welcher Gliederung – auch die Material- und
+Plattform-Verwaltung nur mit so einer Freigabe (die Abkürzung über alles gilt hier wie bei pruefen nicht; Entscheidung
+E6: sie darf sie sich selbst geben). Läuft das Grundrecht ab oder wird es entzogen, wirkt eine dauerhafte Prüffreigabe
 nicht mehr: So entsteht nie ein unbefristetes Prüfrecht ohne Grundrecht. Ein Artikel zählt über seine Heimat
 (bestand.heimat). sicht() rechnet das einmal je Anfrage und Konto; Listen filtern in SQL mit artikel_filter und
 ordner_filter, nie mit darf() je Zeile.
@@ -51,14 +54,17 @@ from .. import services as dienste
 from . import Abgelehnt, eingabe, journal, kennung, text, wahr
 
 # Rechte, nach denen darf() fragt. Die Arten einer Freigabe (lesen, pruefen, verwalten) stehen in models.FREIGABEN.
-RECHTE = ("lesen", "grund", "pruefen", "verwalten")
+RECHTE = ("lesen", "grund", "pruefen", "verwalten", "freigeben")
+# Rechte, die auch die Verwaltung (alles) nur über eigene Freigaben hat: prüfen (Sachkunde) und freigeben (Anträge
+# entscheiden nur die Materialwarte des Ordners – Entscheidung E6).
+NUR_EIGENE = ("pruefen", "freigeben")
 # Journaleinträge zu Freigaben – nur für Verwalter des Ordners. „freigabe_abgelaufen“ schreibt der Tageslauf (Phase 2 · L2).
 FREIGABE_AKTIONEN = ("freigabe_erteilt", "freigabe_geaendert", "freigabe_entzogen", "freigabe_entfernt",
                      "freigabe_abgelaufen")
 GRUNDRECHTE = ("lesen", "verwalten")
 # Welche Arten einer Freigabe ein Recht tragen (pruefen nur bei Qualifikation, siehe Sicht.ende).
 _ARTEN = {"lesen": ("lesen", "verwalten", "pruefen"), "grund": GRUNDRECHTE, "pruefen": ("pruefen",),
-          "verwalten": ("verwalten",)}
+          "verwalten": ("verwalten",), "freigeben": ("verwalten",)}
 # Woher requires_folder den Bezug einer Anfrage nimmt: aus dem Pfad (Ordner, Artikel, Prüfung, Durchgang) oder einem Feld
 # der Anfrage – JSON, Formular, Adresse oder wie routes._eingabe (Formular bei Dateien, sonst JSON).
 QUELLEN = ("fid", "iid", "pid", "rid")
@@ -81,6 +87,8 @@ NUR_GRUNDRECHT = ("Dafür braucht es eine Lese- oder Verwalterfreigabe für dies
                   "reicht nicht.")
 NUR_VERWALTUNG_GLOBAL = "Ohne Ordner nur für die Material-Verwaltung."
 NUR_MATERIAL_VERWALTUNG = "Das macht die Material-Verwaltung (Stufe „Verwaltung“ im Modul Material)."
+ENTSCHEIDEN_NUR_ZUSTAENDIG = ("Entscheiden dürfen die Materialwarte dieses Ordners (eigene Freigabe „verwalten“ hier "
+                              "oder darüber).")
 KONTO_OHNE_ZUGANG = ("Dieses Konto hat keinen Zugang zum Modul Material – den gibt die Verwaltung in der "
                      "Nutzerverwaltung.")
 
@@ -184,7 +192,8 @@ class Sicht:
     """Was ein Konto im Bestand darf, ausgerechnet für alle Ordner (Unterbäume inklusive, Systemordner sichtbarer
     Gliederungen gehören dazu). Bei der Verwaltung (alles) bleiben grund, lesbar und verwaltbar leer – sie darf überall;
     gefragt wird deshalb über darf(), menge() und die Filter, nicht über die Mengen selbst. pruefbar ist ohne
-    Qualifikation immer leer, auch bei der Verwaltung nur, was ihre eigenen Prüffreigaben decken."""
+    Qualifikation immer leer, auch bei der Verwaltung nur, was ihre eigenen Prüffreigaben decken; freigebbar (Anträge
+    entscheiden) ebenso nur, was ihre eigenen Verwalterfreigaben decken – sonst gleich verwaltbar."""
     uid: object
     alles: bool
     qualifiziert: bool
@@ -192,6 +201,7 @@ class Sicht:
     pruefbar: frozenset = frozenset()
     lesbar: frozenset = frozenset()
     verwaltbar: frozenset = frozenset()
+    freigebbar: frozenset = frozenset()
     # Systemordner („Gesperrt“, „Ausgesondert“) einer Gliederung, die selbst nicht sichtbar ist, zu der aber ein sichtbarer
     # Ordner gehört: Darin zählt nur, was im eigenen Bereich zu Hause ist.
     teil_system: frozenset = frozenset()
@@ -203,23 +213,23 @@ class Sicht:
     eltern: dict = field(default_factory=dict, compare=False, hash=False, repr=False)
 
     def menge(self, recht):
-        """Die Ordner mit diesem Recht (bei der Verwaltung leer, außer pruefen – siehe oben)."""
+        """Die Ordner mit diesem Recht (bei der Verwaltung leer, außer pruefen und freigeben – siehe oben)."""
         if recht not in RECHTE:
             raise ValueError(f"Unbekanntes Recht {recht}")
         return {"lesen": self.lesbar, "grund": self.grund, "pruefen": self.pruefbar,
-                "verwalten": self.verwaltbar}[recht]
+                "verwalten": self.verwaltbar, "freigeben": self.freigebbar}[recht]
 
     def darf(self, recht, fid):
         """Recht im Ordner fid (und damit darunter). fid None heißt global: lesen, grund und verwalten nur die
-        Verwaltung, prüfen niemand – eine Prüffreigabe hängt immer an einem Ordner."""
+        Verwaltung, prüfen und freigeben niemand – beide hängen immer an einem Ordner."""
         menge = self.menge(recht)
-        if self.alles and recht != "pruefen":
+        if self.alles and recht not in NUR_EIGENE:
             return True
         return fid is not None and fid in menge
 
     def irgendwo(self, recht):
         menge = self.menge(recht)
-        if self.alles and recht != "pruefen":
+        if self.alles and recht not in NUR_EIGENE:
             return True
         return bool(menge)
 
@@ -242,7 +252,7 @@ class Sicht:
         trägt sie nicht. Ohne das Recht: Abgelehnt."""
         if not self.darf(recht, fid):
             raise Abgelehnt("Dieses Recht hast du in diesem Ordner nicht.", 403)
-        if self.alles and recht != "pruefen":
+        if self.alles and recht not in NUR_EIGENE:
             return None
         arten = tuple(a for a in _ARTEN[recht] if a != "pruefen" or self.qualifiziert)
         kette = set(self.kette(fid))
@@ -304,9 +314,11 @@ def _sicht_rechnen(user):
         anker["pruefen"] -= dauerhaft               # je Konto und Ordner gibt es nur eine Prüffreigabe
     if not qualifiziert:
         anker["pruefen"], dauerhaft = set(), set()  # eine Prüffreigabe ohne Qualifikation wirkt gar nicht
+    # Anträge entscheiden (freigeben): die eigenen Verwalterfreigaben – auch bei der Verwaltung (Entscheidung E6).
+    eigene_verwalter = set(anker["verwalten"])
     if alles:
         anker["lesen"], anker["verwalten"] = set(), set()
-    alle_anker = anker["lesen"] | anker["verwalten"] | anker["pruefen"]
+    alle_anker = anker["lesen"] | anker["verwalten"] | anker["pruefen"] | eigene_verwalter
     if not alle_anker:
         return Sicht(uid=user["id"], alles=alles, qualifiziert=qualifiziert, freigaben=freigaben)
 
@@ -328,8 +340,8 @@ def _sicht_rechnen(user):
 
     pruefbar = unter(anker["pruefen"])
     if alles:
-        return Sicht(uid=user["id"], alles=True, qualifiziert=qualifiziert, pruefbar=pruefbar, freigaben=freigaben,
-                     eltern=eltern)
+        return Sicht(uid=user["id"], alles=True, qualifiziert=qualifiziert, pruefbar=pruefbar,
+                     freigebbar=unter(eigene_verwalter), freigaben=freigaben, eltern=eltern)
     grund = unter(anker["lesen"] | anker["verwalten"])
     pruefbar |= unter(dauerhaft & grund)          # grund ist nach unten geschlossen: Anker darin = Grundrecht dort
     lesbar = grund | pruefbar
@@ -354,8 +366,9 @@ def _sicht_rechnen(user):
         if gliederung is not None and gliederung not in lesbar:
             teil.update(k for k in kinder.get(gliederung, ()) if ordner[k]["system_kind"])
     teil = frozenset(teil) - lesbar
+    verwaltbar = unter(anker["verwalten"])
     return Sicht(uid=user["id"], alles=False, qualifiziert=qualifiziert, grund=grund, pruefbar=pruefbar,
-                 lesbar=lesbar, verwaltbar=unter(anker["verwalten"]), teil_system=teil,
+                 lesbar=lesbar, verwaltbar=verwaltbar, freigebbar=verwaltbar, teil_system=teil,
                  pfad_knoten=frozenset(pfad) - lesbar - teil, freigaben=freigaben, eltern=eltern)
 
 
@@ -414,7 +427,7 @@ def artikel_filter(alias="i", recht="lesen", user=None, s=None):
     Sicht (Jahresbericht: eine je Anfrage), sonst die des Kontos."""
     a = _bezeichner(alias)
     s = s or sicht(user)
-    if s.alles and recht != "pruefen":
+    if s.alles and recht not in NUR_EIGENE:
         return "1"
     menge = s.menge(recht)
     if not menge:
@@ -428,7 +441,7 @@ def ordner_filter(spalte, recht="lesen", user=None):
     """SQL-Bedingung: die Ordnerspalte (z. B. „r.folder_id“) liegt im Bereich mit diesem Recht; „1“ bzw. „0“ wie oben."""
     sp = _bezeichner(spalte, punkt=True)
     s = sicht(user)
-    if s.alles and recht != "pruefen":
+    if s.alles and recht not in NUR_EIGENE:
         return "1"
     menge = s.menge(recht)
     return f"{sp} IN {_liste(menge)}" if menge else "0"
@@ -700,6 +713,8 @@ def _meldung(erlaubt, fid, s, user, leer="global"):
                 "Profil)." + (" " + hinweis if hinweis else ""))
     if "verwalten" in erlaubt:
         return "Nur für Materialwarte dieses Ordners."
+    if "freigeben" in erlaubt:
+        return ENTSCHEIDEN_NUR_ZUSTAENDIG
     if "grund" in erlaubt:
         return NUR_GRUNDRECHT
     return "Für diesen Ordner hast du keine Freigabe."

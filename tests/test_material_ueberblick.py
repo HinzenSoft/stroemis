@@ -217,6 +217,10 @@ AUSNAHMEN_SCHREIBEN = {
     # Den eigenen offenen Änderungsantrag zieht jeder mit Modulzugang zurück (Entscheidung vom 21.10.2026) – ein fremder
     # oder unbekannter ist 404, nichts geändert.
     ("POST", "material_api.antrag_zurueckziehen"): 404,
+    # Seit dem 24.10.2026 entscheiden die Materialwarte des Ordners (Prüfung im Dienst): ein unbekannter Antrag ist für
+    # jedes Konto mit Modulzugang 404 wie unbekannt, nichts geändert.
+    ("POST", "material_api.antrag_bestaetigen"): 404,
+    ("POST", "material_api.antrag_ablehnen"): 404,
     # Phase 4 · L1: Eine Mailfehler-Zeile außerhalb der eigenen Sicht (hier: keine Sicht) ist 404 wie unbekannt.
     ("POST", "material_api.mailfehler_erledigt"): 404,
 }

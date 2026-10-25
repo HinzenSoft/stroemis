@@ -333,7 +333,7 @@ def test_sicht_und_erledigt():
         # Der Bezug als Weg ins Modul (Oberfläche, P4-L1): Mangelmeldung 1 gibt es nicht → Text ohne Weg; Antrag →
         # Meldungen-Seite; Rückruf 2 gibt es nicht → nur Text; Erinnerung ohne Gliederung → nichts.
         assert z[z1]["bezug"] == {"text": "Mangelmeldung", "pfad": None}, z[z1]["bezug"]
-        assert z[z2]["bezug"] == {"text": "Änderungsantrag", "pfad": "/material/katalog/meldungen?bereich=antraege"}
+        assert z[z2]["bezug"] == {"text": "Änderungsantrag", "pfad": "/material/bestand/antraege"}
         assert z[z3]["bezug"] == {"text": "Rückruf", "pfad": None} and z[z4]["bezug"] == {"text": "", "pfad": None}
         wa = mailfehler(t.wart_a)
         assert wa["offen"] == 1 and [x["id"] for x in wa["zeilen"]] == [z1] and wa["alle"] is False, wa

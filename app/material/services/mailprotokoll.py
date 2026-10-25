@@ -220,7 +220,7 @@ def sichtfilter(alias="m", user=None):
 # Der Bezug einer Zeile als Weg ins Modul (nur Modul-Routen, aus Kennungen gebaut – nie aus Datenbanktexten).
 BEZUG_TEXT = {"item": "Artikel", "folder": "Ordner", "report": "Mangelmeldung", "change": "Änderungsantrag",
               "request": "Produktmeldung", "recall": "Rückruf", "none": ""}
-BEZUG_PFAD = {"change": "/material/katalog/meldungen?bereich=antraege", "request": "/material/katalog/meldungen"}
+BEZUG_PFAD = {"change": "/material/bestand/antraege", "request": "/material/katalog/meldungen"}
 
 
 def _nach_id(sql, ids):
@@ -233,7 +233,8 @@ def _nach_id(sql, ids):
 
 def _bezuege(rows):
     """Je Zeile {text, pfad}: Artikel und Mangelmeldung führen zum Artikel (mit Inventarnummer), Ordner und Erinnerung
-    zum Ordner bzw. zur Gliederung (mit Namen), der Rückruf zum Produkt, Antrag und Produktmeldung zur Meldungen-Seite.
+    zum Ordner bzw. zur Gliederung (mit Namen), der Rückruf zum Produkt, der Antrag zur Liste „Änderungsanträge“ im
+    Bestand, die Produktmeldung zur Meldungen-Seite.
     Was es nicht mehr gibt (gelöschter Artikel, Ordner, Rückruf), bleibt Text ohne Weg. Höchstens vier Abfragen für
     alle Zeilen – der Kasten zeigt LISTE_MAX davon."""
     meldung_artikel = {z["id"]: z["item_id"] for z in _nach_id(

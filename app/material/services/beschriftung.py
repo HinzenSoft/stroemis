@@ -58,6 +58,8 @@ FELD = {
     "rueckruf_nicht_mehr": "Rückruf trifft ihn nicht mehr", "rueckruf_neu": "Rückruf trifft ihn jetzt",
     # Artikellänge (Schritt 20)
     "length_m": "Länge (m)", "items_have_length": "Artikel haben eine Länge",
+    # Änderungsanträge an alle Stammdaten (Schritt 23): das von Hand vorgezogene Lebensende
+    "retire_by_manual": "Lebensende (von Hand vorgezogen)",
     # Sets (Schritt 21)
     "is_set": "Set", "bestandteile": "Bestandteile", "teile": "Teile", "set": "Set Nr.",
     "set_inventar": "Set", "stueckliste": "Stückliste übernommen",
@@ -150,7 +152,7 @@ def feld_name(feld, eintrag):
 
 
 def _ist_datumsfeld(feld):
-    return feld.endswith("_on") or feld in ("valid_from", "retire_by", "datum", "begonnen", "bis")
+    return feld.endswith("_on") or feld in ("valid_from", "retire_by", "retire_by_manual", "datum", "begonnen", "bis")
 
 
 def _listen_wert(x):
@@ -209,7 +211,9 @@ def wert_text(v, feld, verweise=None):
 def journal_zeilen(eintraege, verweise=None, mit_entitaet=False):
     """Journaleinträge (journal.lesen) als fertige Zeilen fürs PDF: {zeit, aktion, von, felder: [(Feld, vorher,
     nachher)]}. Wie journalHtml(): Bei „angelegt“ und „gelöscht“ keine Felder – nur die Ablage, wenn bekannt –, und
-    die technische Ordner- bzw. Produktkennung fällt weg, wo der Pfad bzw. der Produktname dabeisteht."""
+    die technische Ordner- bzw. Produktkennung fällt weg, wo der Pfad bzw. der Produktname dabeisteht. mit_entitaet:
+    True – vor jeder Aktion steht, woran sie geschah („Produkt geändert“); eine Menge von Entitäten – nur bei diesen
+    (der Lebenslauf: nur bei den Einträgen des Produkts)."""
     out = []
     for j in eintraege:
         vorher, nachher = j.get("vorher") or {}, j.get("nachher") or {}
@@ -221,7 +225,7 @@ def journal_zeilen(eintraege, verweise=None, mit_entitaet=False):
                       and not (f == "origin_folder_id" and "herkunft" in alle) and not (f == "parent_id" and "pfad" in alle)
                       and not (f == "product_id" and "produkt" in alle)]
         aktion = AKTION.get(j["action"], j["action"])
-        if mit_entitaet:
+        if mit_entitaet is True or (mit_entitaet and j["entity"] in mit_entitaet):
             aktion = f"{ENTITAET.get(j['entity'], j['entity'])} {aktion}"
         # Wer einen Mangel meldet, kann die zugeordnete Person sein – im Lebenslauf ohne Namen.
         von = PERSON if j["action"] == "mangel_gemeldet" else (j.get("user_name") or "–")

@@ -504,18 +504,20 @@ def pruefung_festschreiben(pruefung_id, ts, unterschrift, login, ordner_id, sper
     return pid
 
 
-def _vormals(item_id, pruefung_id, aktuell):
-    """Die Seriennummer, die das Einzelprotokoll der Prüfung nennt, wenn ein bestätigter Änderungsantrag sie danach
-    ersetzt hat: (alte Nummer, Antrag Nr.) oder None. „Danach“ heißt: Der Journaleintrag der Bestätigung steht nach dem
-    Festschreiben der Prüfung (Journal-Kennungen sind streng steigend – genauer als Zeitstempel in Sekunden). Ohne
-    Festschreiben (Prüfungen vor den PDF-Protokollen) zählt jeder Antrag, Anträge gibt es erst seit Schritt 15."""
+def _vormals(item_id, pruefung_id, aktuell, feld="serial_no"):
+    """Der Wert (Seriennummer bzw. Produktkennung), den das Einzelprotokoll der Prüfung nennt, wenn ein bestätigter
+    Änderungsantrag ihn danach ersetzt hat: (alter Wert, Antrag Nr.) oder None. „Danach“ heißt: Der Journaleintrag der
+    Bestätigung steht nach dem Festschreiben der Prüfung (Journal-Kennungen sind streng steigend – genauer als
+    Zeitstempel in Sekunden). Ohne Festschreiben (Prüfungen vor den PDF-Protokollen) zählt jeder Antrag, Anträge gibt es
+    erst seit Schritt 15. Die Antrag-Nr. ist die des Sammelantrags (Kopf, Schritt 23)."""
     ab = db.query("SELECT MAX(id) AS m FROM mat_audit WHERE entity = 'inspection' AND entity_id = ? "
                   "AND action = 'festgeschrieben'", (pruefung_id,), one=True)["m"] or 0
-    c = db.query("SELECT c.id, c.old_value FROM mat_item_change c JOIN mat_audit a ON a.entity = 'item' "
-                 "AND a.entity_id = c.item_id AND a.action = 'antrag_bestaetigt' AND json_extract(a.after_json, '$.antrag') = c.id "
-                 "WHERE c.item_id = ? AND c.field = 'serial_no' AND c.applied_at IS NOT NULL AND a.id > ? "
-                 "ORDER BY a.id LIMIT 1", (item_id, ab), one=True)
-    return (c["old_value"], c["id"]) if c and c["old_value"] != aktuell else None
+    c = db.query("SELECT COALESCE(c.group_id, c.id) AS nr, c.old_value FROM mat_item_change c JOIN mat_audit a "
+                 "ON a.entity = 'item' AND a.entity_id = c.item_id AND a.action = 'antrag_bestaetigt' "
+                 "AND json_extract(a.after_json, '$.antrag') = COALESCE(c.group_id, c.id) "
+                 "WHERE c.item_id = ? AND c.field = ? AND c.applied_at IS NOT NULL AND a.id > ? "
+                 "ORDER BY a.id LIMIT 1", (item_id, feld, ab), one=True)
+    return (c["old_value"], c["nr"]) if c and c["old_value"] != str(aktuell) else None
 
 
 def _sammelprotokoll(r, pid, ts):
@@ -557,9 +559,16 @@ def _sammelprotokoll(r, pid, ts):
             ausnahme = f"{z['excluded_reason']} ({z['excluded_by_name']}, {ortszeit(z['excluded_at']).strftime('%d.%m.%Y') if z['excluded_at'] else ''})"
         name, zusatz = katalog.produkt_teile(a, a["product_description"])
         vormals = _vormals(a["id"], x["id"], a["serial_no"]) if x else None
+        produkt_vormals = _vormals(a["id"], x["id"], a["product_id"], "product_id") if x else None
+        if produkt_vormals:
+            p_alt = db.query("SELECT * FROM mat_product WHERE id = ?", (int(produkt_vormals[0]),), one=True)
+            produkt_vormals = (katalog.produktname(p_alt) if p_alt else f"Produkt Nr. {produkt_vormals[0]}",
+                               produkt_vormals[1])
         liste.append({"inventarnummer": a["inventory_no"], "seriennummer": a["serial_no"],
                       "seriennummer_vormals": (f"vormals {vormals[0]} (Änderungsantrag Nr. {vormals[1]})"
                                                if vormals else ""),
+                      "produkt_vormals": (f"vormals {produkt_vormals[0]} (Änderungsantrag Nr. {produkt_vormals[1]})"
+                                          if produkt_vormals else ""),
                       "produkt_name": name, "produkt_zusatz": zusatz,
                       "ordner": durchgang.ordnerspalte(zweig, a, pfade, _pfad_text),
                       "zustand": zustand, "ergebnis": (z["ergebnis"] or "") if x else "",

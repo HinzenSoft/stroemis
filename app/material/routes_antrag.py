@@ -1,58 +1,58 @@
-"""Routen zu den Änderungsanträgen an festen Stammdaten (Entscheidungen vom 21.10.2026, services/antrag.py).
+"""Routen zu den Änderungsanträgen an Stammdaten (Entscheidungen vom 21.10.2026; seit dem 24.10.2026 an allen
+Stammdaten, Freigabe durch die zuständigen Materialwarte – services/antrag.py).
 
 Beantragen dürfen Materialwart und Prüfer des Artikels (requires_folder mit verwalten oder pruefen – fremd 404 wie
-unbekannt); der Dienst prüft in der Transaktion noch einmal. Die Liste liest jeder mit Modulzugang – die
-Material-Verwaltung alle Anträge, jedes andere Konto seine eigenen; bestätigen und ablehnen nur die Material-Verwaltung
-(die Plattform-Verwaltung eingeschlossen), zurückziehen nur der Antragsteller seinen eigenen offenen."""
+unbekannt); der Dienst prüft in der Transaktion noch einmal. Die Liste liest jeder mit Modulzugang – jeder seine eigenen
+Anträge (solange er den Artikel liest) und die, die er entscheiden darf. Bestätigen und ablehnen die Materialwarte des
+Ordners (eigene Freigabe „verwalten“ an der Heimat oder darüber; die Material-Verwaltung nur mit so einer Freigabe – E6),
+den eigenen Antrag eingeschlossen (E5); der Dienst prüft das in der Transaktion: Wer den Artikel nicht liest, bekommt
+404, wer ihn liest, aber nicht zuständig ist, 403. Zurückziehen nur der Antragsteller seinen eigenen offenen."""
 from flask import jsonify, request
 
 from ..auth import json_body
 from .routes import api
-from .services import antrag, bestand, meldung
-from .services.rechte import ist_material_verwaltung, material_verwaltung_required, requires_folder, requires_zugang
+from .services import antrag, bestand
+from .services.rechte import requires_folder, requires_zugang
 
 
 @api.post("/artikel/<int:iid>/antrag")
 @requires_folder(("verwalten", "pruefen"), "iid")
 def antrag_stellen(iid):
-    """Änderung von Seriennummer und/oder Herstelldatum beantragen (`serial_no`, `manufactured_on`, `begruendung`
-    Pflicht; entfernen lässt sich das Herstelldatum nicht – `herstellung_entfernen` → 400) → 201 `antraege` (je Feld
-    einer), `artikel`, `mail` (an die Material-Verwaltung unterwegs; false bei DEMO, dev-Sperre, ohne Mailserver oder
-    ohne Empfänger)."""
-    ids, mail = antrag.stellen(iid, json_body())
+    """Einen Sammelantrag stellen: die Felder, die sich ändern sollen (`product_id`, `serial_no`, `manufactured_on`,
+    `purchased_on`, `first_use_on`, `retire_by`, `interval_months` – nur Abweichungen zählen; leer entfernt Kauf,
+    Erstgebrauch und Intervall), `begruendung` Pflicht → 201 `antrag` (mit `aenderungen`), `artikel`, `mail` (an die
+    zuständigen Materialwarte unterwegs – ohne sie an die Material-Verwaltung; false bei DEMO, dev-Sperre, ohne
+    Mailserver oder ohne Empfänger). 409, wenn am Artikel schon ein Antrag offen ist."""
+    kid, mail = antrag.stellen(iid, json_body())
     item = bestand.artikel(iid)
-    return jsonify(antraege=[antrag.antrag_json(antrag.antrag(a), item) for a in ids],
+    return jsonify(antrag=antrag.antrag_json(antrag.antrag(kid), item),
                    artikel=bestand.artikel_json(item, voll=True), mail=mail), 201
 
 
 @api.get("/antraege")
 @requires_zugang
 def antraege():
-    """Anträge nach Stand (`status` offen | erledigt | alle; Vorgabe offen für die Material-Verwaltung, sonst alle):
-    die Material-Verwaltung alle, sonst die eigenen zu Artikeln, die das Konto liest. `bearbeiten`: darf entscheiden;
-    `offen`: Zahl der offenen, die das Konto sieht; `meldungen_offen` (nur Material-Verwaltung): offene Produktmeldungen
-    für den Reiter daneben."""
-    mv = ist_material_verwaltung()
-    filter_ = request.args.get("status") if request.args.get("status") in antrag.FILTER else ("offen" if mv else "alle")
-    return jsonify(antraege=antrag.liste(filter_), filter=filter_, alle=mv, bearbeiten=mv, offen=antrag.anzahl_offen(),
-                   meldungen_offen=meldung.anzahl_offen() if mv else None)
+    """Sammelanträge nach Stand (`status` offen | erledigt | alle; Vorgabe offen): die eigenen zu Artikeln, die das Konto
+    liest, und die, die es entscheiden darf; je Antrag `entscheiden`. `zu_entscheiden`: offene, die das Konto
+    entscheiden darf (die Zahl am Knopf „Änderungsanträge“)."""
+    filter_ = request.args.get("status") if request.args.get("status") in antrag.FILTER else "offen"
+    return jsonify(antraege=antrag.liste(filter_), filter=filter_, zu_entscheiden=antrag.zu_entscheiden())
 
 
 @api.post("/antraege/<int:anid>/bestaetigen")
-@material_verwaltung_required
+@requires_zugang
 def antrag_bestaetigen(anid):
-    """Bestätigen (`antwort` freiwillig) – die Änderung steht danach am Artikel."""
-    antrag.bestaetigen(anid, json_body())
-    r = antrag.antrag(anid)
-    return jsonify(antrag=antrag.antrag_json(r))
+    """Bestätigen (`antwort` freiwillig) – alle Änderungen stehen danach am Artikel. Nur die Materialwarte des Ordners."""
+    kid = antrag.bestaetigen(anid, json_body())
+    return jsonify(antrag=antrag.antrag_json(antrag.antrag(kid)))
 
 
 @api.post("/antraege/<int:anid>/ablehnen")
-@material_verwaltung_required
+@requires_zugang
 def antrag_ablehnen(anid):
-    """Ablehnen (`antwort` Pflicht) – am Artikel ändert sich nichts."""
-    antrag.ablehnen(anid, json_body())
-    return jsonify(antrag=antrag.antrag_json(antrag.antrag(anid)))
+    """Ablehnen (`antwort` Pflicht) – am Artikel ändert sich nichts. Nur die Materialwarte des Ordners."""
+    kid = antrag.ablehnen(anid, json_body())
+    return jsonify(antrag=antrag.antrag_json(antrag.antrag(kid)))
 
 
 @api.post("/antraege/<int:anid>/zurueckziehen")
@@ -60,5 +60,5 @@ def antrag_ablehnen(anid):
 def antrag_zurueckziehen(anid):
     """Den eigenen offenen Antrag zurückziehen – nur der Antragsteller, solange er den Artikel liest (sonst 404); 409,
     wenn er schon entschieden oder zurückgezogen ist. Keine Mail."""
-    antrag.zurueckziehen(anid)
-    return jsonify(antrag=antrag.antrag_json(antrag.antrag(anid)))
+    kid = antrag.zurueckziehen(anid)
+    return jsonify(antrag=antrag.antrag_json(antrag.antrag(kid)))

@@ -175,6 +175,14 @@ def bestand_seite():
     return _seite("bestand")
 
 
+@seiten.get("/material/bestand/antraege")
+def antraege_seite():
+    """Änderungsanträge an Stammdaten (Wunsch vom 24.10.2026): die eigenen und die, die das Konto als Materialwart des
+    Ordners entscheidet – Liste und Rechte prüft die Schnittstelle (GET /antraege)."""
+    status = request.args.get("status")
+    return _seite("antraege", status=status if status in antrag.FILTER else None)
+
+
 @seiten.get("/material/ordner/<int:fid>")
 def ordner_seite(fid):
     return _seite("ordner", bezug=("ordner", fid), id=fid)
@@ -290,10 +298,12 @@ def formular_seite(fid):
 @seiten.get("/material/katalog/meldungen")
 def meldungen_seite():
     """Die Material-Verwaltung arbeitet hier die Meldungen fehlender Produkte ab; Materialwarte sehen ihre eigenen
-    (oder alle), wer sonst Zugang zum Modul hat, liest alle. ?bereich=antraege: die Änderungsanträge an festen
-    Stammdaten (Entscheidungen vom 21.10.2026) – die Material-Verwaltung entscheidet, andere sehen ihre eigenen."""
-    return _seite("meldungen", katalog_seite=True, status=request.args.get("status"),
-                  bereich="antraege" if request.args.get("bereich") == "antraege" else "produkte")
+    (oder alle), wer sonst Zugang zum Modul hat, liest alle. Die Änderungsanträge standen bis zum 24.10.2026 hier unter
+    ?bereich=antraege – alte Links (Mails, Lesezeichen) führen jetzt auf ihre Seite im Bestand."""
+    if request.args.get("bereich") == "antraege":
+        status = request.args.get("status")
+        return redirect("/material/bestand/antraege" + (f"?status={status}" if status in antrag.FILTER else ""))
+    return _seite("meldungen", katalog_seite=True, status=request.args.get("status"))
 
 
 @seiten.get("/material/suche")
@@ -377,7 +387,9 @@ def start():
     „maengel_gesamt“); „meine_psa“: {anzahl, dringend} der eigenen PSA oder null (Phase 3 · L1); „mailfehler“:
     gescheiterte Modul-Mails in der eigenen Sicht (mailprotokoll.uebersicht: offen, zeilen, kein_mailserver) oder null,
     wenn es nichts zu zeigen gibt (Phase 4 · L1). „bestand_sets“: {anzahl, teile} zu „bestand“ – Zählsatz „N Artikel,
-    darunter k Teile in m Sets“ (Phase 4 · L2b; die Zeilen der Ordner-Übersicht tragen ihn ebenso)."""
+    darunter k Teile in m Sets“ (Phase 4 · L2b; die Zeilen der Ordner-Übersicht tragen ihn ebenso). „antraege_offen“:
+    offene Änderungsanträge, die das Konto als Materialwart des Ordners entscheiden darf (antrag.zu_entscheiden – für
+    jedes Konto, seit dem 24.10.2026 nicht mehr nur für die Material-Verwaltung)."""
     alle = bestand.baum()
     maengel, maengel_gesamt = mangel.offene_liste()
     gliederungen = [o for o in alle if o["kind"] == "gliederung" and not o["system_kind"] and not o.get("nur_pfad")]
@@ -389,7 +401,7 @@ def start():
                    gliederungen=gliederungen, naechste=naechste, faellig_gesamt=faellig,
                    schwelle_tage=st.schwelle_tage(), status_text=st.LABEL,
                    meldungen_offen=meldung.anzahl_offen() if ist_material_verwaltung() else None,
-                   antraege_offen=antrag.anzahl_offen() if ist_material_verwaltung() else None,
+                   antraege_offen=antrag.zu_entscheiden(),
                    rueckrufe=rueckruf.uebersicht(),
                    erinnerungen=erinnerung.stand() if ist_material_verwaltung() else None,
                    nacharbeit=bestandsimport.offen_uebersicht(),
@@ -672,8 +684,7 @@ def meldungen():
     filter_ = request.args.get("status") if request.args.get("status") in meldung.FILTER else ("offen" if alle else "alle")
     rows = meldung.liste(filter_, None if alle else u["id"])
     return jsonify(meldungen=[meldung.meldung_json(r) for r in rows], alle=alle, filter=filter_,
-                   bearbeiten=alle and ist_material_verwaltung(), offen=meldung.anzahl_offen() if alle else None,
-                   antraege_offen=antrag.anzahl_offen() if ist_material_verwaltung() else None)
+                   bearbeiten=alle and ist_material_verwaltung(), offen=meldung.anzahl_offen() if alle else None)
 
 
 @api.post("/meldungen")
@@ -944,8 +955,10 @@ def artikel_lesen(iid):
 
 
 @api.put("/artikel/<int:iid>")
-@requires_folder("verwalten", "iid")
+@requires_folder(("verwalten", "pruefen"), "iid")
 def artikel_aendern(iid):
+    """Bearbeiten: der Materialwart alles, nach der ersten Prüfung ohne die freigabepflichtigen Felder (die gehen per
+    Antrag, 409); ein Prüfer nur Bemerkung, Länge und nächste Prüfung (sonst 403 – Entscheidung E2)."""
     bestand.artikel_aendern(iid, json_body())
     return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True))
 

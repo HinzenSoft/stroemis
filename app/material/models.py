@@ -177,13 +177,27 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     Set-Zeile nicht mehr. Dazu an mat_product_request is_set (gemeldet ist ein Set) und set_teile (die Teile, wie der
     Melder sie kennt – Text). Rein additiv (DROP/CREATE der beiden Trigger, ADD COLUMN, wenn die Spalten fehlen),
     wiederholbar; keine Zeile ändert sich.
+  - Schritt 23 (Änderungsanträge an alle Stammdaten, Freigabe durch die zuständigen Materialwarte, Wunsch vom
+    24.10.2026): mat_item_change wird umgebaut (alle Zeilen und Kennungen bleiben, AUTOINCREMENT-Stand ebenso) – der
+    CHECK kennt alle freigabepflichtigen Felder (ANTRAGSFELDER: Produkt, Seriennummer, Herstellung, Kauf, Erstgebrauch,
+    Lebensende, Prüfintervall; Schritt 15 bleibt mit ANTRAGSFELDER_15), Produkt und Lebensende nie leer, dazu group_id:
+    Ein Sammelantrag ist ein Kopf (group_id NULL – seine Kennung ist die Antrag-Nr.) mit Folgezeilen, die auf ihn
+    zeigen; Altanträge bleiben Einzelanträge. Trigger (TRIGGER_23_ANTRAG): die aus Schritt 15 und 17, der Inhaltsschutz
+    mit group_id, mat_item_change_gruppe (je Artikel höchstens ein offener Antrag; Folgezeilen nur zu einem offenen
+    Kopf mit gleichem Antragsteller, Zeitpunkt und gleicher Begründung). Am Artikel (TRIGGER_23_ARTIKEL, gleiche Namen
+    ersetzt): mat_item_stammdaten_fest deckt nach der ersten Prüfung Seriennummer, Herstellung (nie leer, kein
+    Nachtragen bei Metall mehr), Kauf, Erstgebrauch, Prüfintervall und das von Hand gesetzte Lebensende
+    (retire_by_manual) – jede Änderung nur mit bestätigtem, noch nicht angewendetem Antrag; mat_item_produkt_fest
+    ebenso für das Produkt; mat_item_antrag_angewendet setzt applied_at je gedeckter Zeile. Länge, Bemerkung und
+    nächste Prüfung sind nicht freigabepflichtig. Kein Vier-Augen-Trigger (Entscheidung E5). Wiederholbar: Umgebaut
+    wird nur, wenn der CHECK „purchased_on“ noch nicht kennt; die Trigger werden entfernt und neu angelegt.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 23
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -218,8 +232,14 @@ BEFUNDE = ("ok", "mangel", "nicht_zutreffend")
 ANHANGARTEN = {"externes_pruefformular": "externes Prüfformular", "pruefbericht": "Prüfbericht", "foto": "Foto",
                "sonstiges": "Sonstiges"}
 MELDUNGSSTATUS = {"offen": "offen", "eingepflegt": "eingepflegt", "abgelehnt": "abgelehnt"}
-# Änderungsanträge zu den festen Stammdaten (Schritt 15): welche Felder, welche Stände.
-ANTRAGSFELDER = {"serial_no": "Seriennummer", "manufactured_on": "Herstellung"}
+# Änderungsanträge zu den festen Stammdaten (Schritt 15, seit Schritt 23 alle freigabepflichtigen): welche Felder, welche
+# Stände. Die Reihenfolge ist die der Oberfläche. „retire_by“ ist das von Hand gesetzte Lebensende (am Artikel
+# retire_by_manual; retire_by rechnet daraus und aus Herstellung und Lebensdauer).
+ANTRAGSFELDER = {"product_id": "Produkt", "serial_no": "Seriennummer", "manufactured_on": "Herstellung",
+                 "purchased_on": "Kauf", "first_use_on": "Erstgebrauch", "retire_by": "Lebensende",
+                 "interval_months": "Prüfintervall"}
+# Die Felder, mit denen Schritt 15 die Tabelle angelegt hat – Schritt 23 nahm die übrigen dazu.
+ANTRAGSFELDER_15 = ("serial_no", "manufactured_on")
 ANTRAGSSTATUS = {"offen": "offen", "bestaetigt": "bestätigt", "abgelehnt": "abgelehnt", "zurueckgezogen": "zurückgezogen"}
 # Die Stände, mit denen Schritt 15 die Tabelle angelegt hat – Schritt 17 nahm „zurückgezogen“ dazu.
 ANTRAGSSTATUS_15 = ("offen", "bestaetigt", "abgelehnt")
@@ -1472,7 +1492,7 @@ SCHRITT_15 = [
     """CREATE TABLE IF NOT EXISTS mat_item_change (
       id               INTEGER PRIMARY KEY AUTOINCREMENT,          -- das Journal nennt Anträge: nie wiederverwendet
       item_id          INTEGER NOT NULL REFERENCES mat_item(id),   -- kein CASCADE: ein Artikel mit Antrag bleibt
-      field            TEXT NOT NULL CHECK (field IN """ + _in(ANTRAGSFELDER) + """),
+      field            TEXT NOT NULL CHECK (field IN """ + _in(ANTRAGSFELDER_15) + """),
       old_value        TEXT,                                       -- Wert beim Antrag (NULL: Herstelldatum leer)
       new_value        TEXT,                                       -- beantragter Wert (NULL: Herstelldatum entfernen)
       reason           TEXT NOT NULL CHECK (trim(reason) <> '' AND length(reason) <= 1000),
@@ -2056,13 +2076,134 @@ def _schritt_22(conn):
     spalten_nachruesten(conn, SPALTEN_22)
 
 
+# --- Schritt 23 (24.10.2026): Änderungsanträge an alle Stammdaten, Freigabe durch die zuständigen Materialwarte ---------
+# Freigabepflichtig nach der ersten abgeschlossenen Prüfung sind seitdem Produkt, Seriennummer, Herstellung, Kauf,
+# Erstgebrauch, Lebensende (auch vorziehen) und das Prüfintervall am Artikel (Entscheidungen E1–E4); Bemerkung, Länge und
+# das Vorziehen der nächsten Prüfung bleiben direkt (E2). Mehrere Felder eines Antrags sind EIN Sammelantrag: Die erste
+# Zeile ist der Kopf (group_id NULL, ihre Kennung ist die Antrag-Nr.), jede weitere zeigt mit group_id auf ihn. Werte
+# stehen als Text da (Produkt und Intervall als Zahl in Textform, CAST in den Triggern).
+STAMMDATEN_FEST_23 = ("'Die Stammdaten eines Artikels stehen seit seiner ersten Prüfung fest – ändern nur über einen "
+                      "bestätigten Änderungsantrag.'")
+PRODUKT_FEST_23 = ("'Das Produkt eines Artikels steht seit seiner ersten Prüfung fest – wechseln nur über einen bestätigten "
+                   "Änderungsantrag.'")
+GRUPPE_23 = ("'Je Artikel höchstens ein offener Änderungsantrag – weitere Felder gehören in denselben Antrag (gleicher "
+             "Antragsteller, Zeitpunkt und Begründung).'")
+# Die Tabelle aus Schritt 17 mit allen Feldern im CHECK und der Spalte group_id (Kopf des Sammelantrags).
+ANTRAG_TABELLE_23 = (ANTRAG_TABELLE_17
+                     .replace("CHECK (field IN " + _in(ANTRAGSFELDER_15) + ")", "CHECK (field IN " + _in(ANTRAGSFELDER) + ")", 1)
+                     .replace("      applied_at       TEXT,",
+                              "      group_id         INTEGER REFERENCES mat_item_change(id),   -- NULL: Kopf, sonst sein Kopf\n"
+                              "      applied_at       TEXT,", 1)
+                     .replace("      CHECK (new_value IS NOT old_value),",
+                              "      CHECK (new_value IS NOT old_value),\n"
+                              "      CHECK (field NOT IN ('product_id', 'retire_by') OR new_value IS NOT NULL),\n"
+                              "      CHECK (group_id IS NULL OR group_id < id),", 1))
+ANTRAG_INDIZES_23 = ANTRAG_INDIZES + [
+    "CREATE INDEX IF NOT EXISTS idx_mat_item_change_gruppe ON mat_item_change(group_id)",
+]
+# Feld des Antrags → Spalte am Artikel. Lebensende: der von Hand gesetzte Teil (retire_by_manual); das wirksame retire_by
+# rechnet der Dienst daraus und aus Herstellung und Lebensdauer (es folgt auch einer Korrektur im Katalog).
+_ANTRAG_SPALTEN_23 = {"product_id": "product_id", "serial_no": "serial_no", "manufactured_on": "manufactured_on",
+                      "purchased_on": "purchased_on", "first_use_on": "first_use_on",
+                      "interval_months": "interval_months", "retire_by": "retire_by_manual"}
+
+
+def _deckt_23(feld, praefix="c."):
+    """Bedingung über eine Antragszeile: Sie meint genau diese Änderung der Spalte (alter und neuer Wert). Beim Lebensende
+    ist der alte Wert das wirksame Lebensende (retire_by), der neue das von Hand gesetzte."""
+    spalte = _ANTRAG_SPALTEN_23[feld]
+    alt = "OLD.retire_by" if feld == "retire_by" else f"CAST(OLD.{spalte} AS TEXT)"
+    return (f"{praefix}field = '{feld}' AND {praefix}old_value IS {alt} "
+            f"AND {praefix}new_value IS CAST(NEW.{spalte} AS TEXT)")
+
+
+def _ungedeckt_23(feld):
+    """Die Spalte ändert sich, und kein bestätigter, noch nicht angewendeter Antrag deckt das."""
+    spalte = _ANTRAG_SPALTEN_23[feld]
+    return (f"NEW.{spalte} IS NOT OLD.{spalte} AND NOT EXISTS (SELECT 1 FROM mat_item_change c WHERE c.item_id = OLD.id "
+            f"AND c.status = 'bestaetigt' AND c.applied_at IS NULL AND {_deckt_23(feld)})")
+
+
+_FEST_23 = [
+    "(" + _ungedeckt_23("serial_no") + ")",
+    # Das Herstelldatum wird nach der ersten Prüfung nie leer (Schritt 17) – auch nicht per Antrag.
+    "(NEW.manufactured_on IS NOT OLD.manufactured_on AND NEW.manufactured_on IS NULL)",
+    "(" + _ungedeckt_23("manufactured_on") + ")",
+    "(" + _ungedeckt_23("purchased_on") + ")",
+    "(" + _ungedeckt_23("first_use_on") + ")",
+    "(" + _ungedeckt_23("interval_months") + ")",
+    # Beim Produktwechsel folgt das von Hand gesetzte Lebensende dem neuen Produkt – den Wechsel deckt
+    # mat_item_produkt_fest.
+    "(NEW.product_id IS OLD.product_id AND " + _ungedeckt_23("retire_by") + ")",
+]
+TRIGGER_23_ARTIKEL = [
+    # Ersetzt die Fassung aus Schritt 17 (gleicher Name): nach der ersten Prüfung jede Änderung einer freigabepflichtigen
+    # Spalte nur, wenn ein bestätigter Antrag sie deckt – kein Nachtragen bei Metall mehr (E3). Länge, Bemerkung und
+    # nächste Prüfung gehören nicht dazu (E2).
+    _trigger("mat_item_stammdaten_fest", "BEFORE UPDATE OF serial_no, manufactured_on, purchased_on, first_use_on, "
+             "interval_months, retire_by_manual ON mat_item",
+             "(" + " OR ".join(_FEST_23) + ") AND " + _GEPRUEFT, STAMMDATEN_FEST_23),
+    # Ersetzt die Fassung aus Schritt 16 (gleicher Name): das Produkt nach der ersten Prüfung nur per Antrag (E4).
+    _trigger("mat_item_produkt_fest", "BEFORE UPDATE OF product_id ON mat_item",
+             _ungedeckt_23("product_id") + " AND " + _GEPRUEFT, PRODUKT_FEST_23),
+    # Ersetzt die Fassung aus Schritt 15: Ein bestätigter Antrag wirkt genau einmal – jede Zeile, deren Änderung diese
+    # Anweisung ausführt, ist danach angewendet.
+    "CREATE TRIGGER IF NOT EXISTS mat_item_antrag_angewendet AFTER UPDATE OF "
+    + ", ".join(_ANTRAG_SPALTEN_23.values()) + " ON mat_item WHEN "
+    + " OR ".join(f"NEW.{s} IS NOT OLD.{s}" for s in _ANTRAG_SPALTEN_23.values())
+    + " BEGIN UPDATE mat_item_change SET applied_at = strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now') "
+    "WHERE item_id = NEW.id AND status = 'bestaetigt' AND applied_at IS NULL AND ("
+    + " OR ".join(f"(NEW.{_ANTRAG_SPALTEN_23[f]} IS NOT OLD.{_ANTRAG_SPALTEN_23[f]} AND {_deckt_23(f, '')})"
+                  for f in _ANTRAG_SPALTEN_23)
+    + "); END",
+]
+TRIGGER_23_ANTRAG = [
+    # Wie Schritt 15, mit group_id: Inhalt eines Antrags nie ändern (die übrigen aus Schritt 15 und 17 unverändert).
+    _trigger("mat_item_change_inhalt", "BEFORE UPDATE OF id, item_id, field, old_value, new_value, reason, "
+             "created_by_name, created_at, group_id ON mat_item_change", "1", ANTRAG_FEST),
+] + TRIGGER_15_ANTRAG[1:] + TRIGGER_17 + [
+    # Ein Sammelantrag je Artikel: ein Kopf nur, wenn am Artikel nichts offen ist; eine weitere Zeile nur zu einem offenen
+    # Kopf desselben Artikels mit demselben Antragsteller, Zeitpunkt und derselben Begründung (antrag.stellen schreibt
+    # alle Zeilen in einer Transaktion). Ein Vier-Augen-Trigger fehlt bewusst: Wer zuständig ist, entscheidet auch den
+    # eigenen Antrag (Entscheidung E5).
+    _trigger("mat_item_change_gruppe", "BEFORE INSERT ON mat_item_change",
+             "(NEW.group_id IS NULL AND EXISTS (SELECT 1 FROM mat_item_change c WHERE c.item_id = NEW.item_id "
+             "AND c.status = 'offen')) OR (NEW.group_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM mat_item_change k "
+             "WHERE k.id = NEW.group_id AND k.group_id IS NULL AND k.item_id = NEW.item_id AND k.status = 'offen' "
+             "AND k.created_by IS NEW.created_by AND k.created_by_name = NEW.created_by_name "
+             "AND k.created_at = NEW.created_at AND k.reason = NEW.reason))", GRUPPE_23),
+]
+# Alle Trigger an mat_item_change (Schritte 15, 17, 23) – ein zweiter Lauf entfernt sie und legt sie neu an.
+ANTRAG_TRIGGER_23 = tuple(x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in TRIGGER_23_ANTRAG)
+
+
+def _schritt_23(conn):
+    """Änderungsanträge an alle Stammdaten (Wunsch vom 24.10.2026): die drei Artikeltrigger, die mat_item_change lesen,
+    entfernen (beim Umbau fehlt die Tabelle kurz); mat_item_change mit allen Feldern im CHECK und group_id neu aufbauen –
+    nur, wenn ihr CHECK „purchased_on“ noch nicht kennt (alle Zeilen, Kennungen und der AUTOINCREMENT-Stand bleiben;
+    Altanträge sind Einzelanträge, group_id NULL); ihre Trigger entfernen und in der Fassung von Schritt 23 anlegen, dann
+    die Artikeltrigger. Ein zweiter Lauf baut nichts um und ändert keine Zeile."""
+    for name in ("mat_item_stammdaten_fest", "mat_item_antrag_angewendet", "mat_item_produkt_fest"):
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+    tabelle = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'mat_item_change'").fetchone()
+    if "'purchased_on'" not in tabelle[0]:
+        stand = conn.execute("SELECT seq FROM sqlite_sequence WHERE name = 'mat_item_change'").fetchone()
+        _umbauen(conn, "mat_item_change", ANTRAG_TABELLE_23, ANTRAG_INDIZES_23, "item_change")
+        if stand:
+            conn.execute("UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 'mat_item_change'", (stand[0],))
+    for name in ANTRAG_TRIGGER_23:
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+    for sql in TRIGGER_23_ANTRAG + TRIGGER_23_ARTIKEL:
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
             14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
-            20: _schritt_20, 21: _schritt_21, 22: _schritt_22}
+            20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23}
 
 
 def _meta(conn, schluessel, vorgabe=None):

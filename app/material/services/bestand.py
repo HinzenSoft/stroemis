@@ -8,13 +8,14 @@ Regeln aus dem Konzept, wie sie hier umgesetzt sind:
     weder umbenennen noch verschieben noch löschen, und niemand legt etwas von Hand hinein.
   - Inventarnummer und – falls der Hersteller keine vergibt – Seriennummer kommen vom System
     (nummern.py), beide eineindeutig. Das Bild kommt vom Produkt, nie vom Artikel.
-  - Seriennummer und Herstelldatum stehen fest, sobald der Artikel eine abgeschlossene Prüfung hat (Entwürfe zählen
-    nicht): Beide stehen im Prüfprotokoll und sind Teil des Prüfnachweises (Wunsch vom 21.10.2026). Das gilt auch
-    für eine vom System vergebene STR-Nummer. Der Dienst lehnt mit Klartext ab (STAMMDATEN_FEST), der Trigger
-    mat_item_stammdaten_fest (models.TRIGGER_17_ARTIKEL) fängt, was an ihm vorbeiginge. Seit den Entscheidungen vom
-    21.10.2026 zwei Ausnahmen: Bei Metall lässt sich ein fehlendes Herstelldatum hier direkt nachtragen (leer → Wert);
-    jede andere Änderung geht über einen Antrag an die Material-Verwaltung (antrag.py). Entfernen lässt sich ein
-    Herstelldatum nach der ersten Prüfung nicht mehr (auch nicht per Antrag).
+  - Die Stammdaten stehen fest, sobald der Artikel eine abgeschlossene Prüfung hat (Entwürfe zählen nicht): Produkt,
+    Seriennummer, Herstellung, Kauf, Erstgebrauch, Lebensende und Prüfintervall am Artikel (FREIGABEPFLICHTIG,
+    Wunsch vom 24.10.2026, Entscheidungen E1–E4 – vorher nur Seriennummer und Herstellung). Das gilt auch für eine vom
+    System vergebene STR-Nummer und für leere Felder (nachtragen nur per Antrag, E3). Der Dienst lehnt mit Klartext ab
+    (STAMMDATEN_FEST, PRODUKT_FEST), die Trigger mat_item_stammdaten_fest und mat_item_produkt_fest
+    (models.TRIGGER_23_ARTIKEL) fangen, was an ihm vorbeiginge. Jede Änderung geht über einen Antrag, den die
+    Materialwarte des Ordners entscheiden (antrag.py). Direkt bleiben Bemerkung, Länge und das Vorziehen der nächsten
+    Prüfung – durch Materialwart UND Prüfer (DIREKT, E2); ein Prüfer ändert hier nichts anderes.
   - retire_by (Lebensende) gibt es nur bei textilem Material: Herstelldatum + Lebensdauer. Es lässt
     sich vorziehen, nicht verschieben. Ebenso die nächste Fälligkeit: Ein neuer Artikel bekommt einen
     Vorschlag aus dem Intervall (interval.py); höher als „heute + ein Intervall“ geht es ohne Prüfung
@@ -48,15 +49,21 @@ VORZIEHEN = ("Die nächste Prüfung lässt sich nur vorziehen, nicht verschieben
 GRUND_GLIEDERUNG = "Ordner in andere Gliederung verschoben"
 GRUND_UMWANDLUNG = "Ordner zur Gliederung gemacht"
 NACHARBEIT_OFFEN = "Im Ordner wartet Nacharbeit aus einem Bestandsimport – erst übernehmen oder verwerfen."
-STAMMDATEN_FEST = ("Seriennummer und Herstelldatum stehen seit der ersten Prüfung fest – sie sind Teil des "
-                   "Prüfnachweises. Eine Änderung beantragst du mit Begründung bei der Material-Verwaltung.")
-# Produkt am Artikel (Entscheidung zu L2b Nr. 29, 23.10.2026): änderbar bis zur ersten abgeschlossenen Prüfung.
-PRODUKT_FEST = "Das Produkt steht seit der ersten Prüfung fest – es steht im Prüfprotokoll."
+STAMMDATEN_FEST = ("Seit der ersten Prüfung stehen die Stammdaten fest – sie sind Teil des Prüfnachweises. Eine "
+                   "Änderung beantragst du mit Begründung; entscheiden die Materialwarte des Ordners.")
+# Produkt am Artikel (Entscheidung zu L2b Nr. 29, 23.10.2026): direkt änderbar bis zur ersten abgeschlossenen Prüfung,
+# danach per Antrag (E4).
+PRODUKT_FEST = ("Das Produkt steht seit der ersten Prüfung fest – es steht im Prüfprotokoll. Einen Wechsel beantragst du "
+                "mit Begründung („Änderung beantragen …“).")
+# Freigabepflichtig nach der ersten Prüfung (E1) und direkt änderbar – auch durch Prüfer (E2). Zusammen ARTIKEL_FELDER.
+FREIGABEPFLICHTIG = ("product_id", "serial_no", "manufactured_on", "purchased_on", "first_use_on", "retire_by",
+                     "interval_months")
+DIREKT = ("notes", "length_m", "next_due_on")
+NUR_DIREKT = ("Als Prüfer änderst du hier Bemerkung, Länge und die nächste Prüfung (vorziehen) – alles andere ändert der "
+              "Materialwart, nach der ersten Prüfung per Änderungsantrag.")
 PRODUKT_ENTWURF = "Das Produkt lässt sich erst ändern, wenn die Prüfung festgeschrieben oder verworfen ist."
 PRODUKT_DEMO = ("Zwischen einem DEMO-Produkt und einem echten Produkt wechselt ein Artikel außerhalb der DEMO-Gliederungen "
                 "nicht – er würde sonst zu Demodaten oder zu echtem Bestand. Lege ihn mit dem richtigen Produkt neu an.")
-HERSTELLUNG_ENTFERNT = ("Das Herstelldatum dieses Artikels wurde per Antrag entfernt – ein neues trägst du nicht direkt "
-                        "nach, sondern beantragst es mit Begründung bei der Material-Verwaltung („Änderung beantragen …“).")
 DEMO_GRENZE = ("Zwischen den Demodaten (DEMO-Gliederungen) und echtem Bestand lässt sich nichts verschieben – ob ein "
                "Artikel DEMO ist, hängt an seinem Ordner, und Lebenslauf, CSV und Verzeichnis passten sonst nicht mehr "
                "zu seinen Protokollen.")
@@ -530,28 +537,26 @@ def _vor(a, b):
 
 def stammdaten_fest(iid):
     """Hat der Artikel eine abgeschlossene Prüfung (auch Aussonderung, auch Berichtigung; kein Entwurf)? Dann stehen
-    Seriennummer und Herstelldatum fest – sie stehen im Protokoll."""
+    seine Stammdaten fest (FREIGABEPFLICHTIG) – sie stehen im Protokoll."""
     return bool(db.query("SELECT 1 FROM mat_inspection WHERE item_id = ? AND completed_at IS NOT NULL LIMIT 1",
                          (iid,), one=True))
 
 
-def herstellung_entfernt(iid):
-    """Hatte der Artikel seit der ersten Prüfung schon ein Herstelldatum, das ein bestätigter Antrag entfernt hat? Das
-    ging nur bis Schritt 16 – seit den Entscheidungen vom 21.10.2026 zur Prüfung lässt sich ein Herstelldatum nach der
-    ersten Prüfung gar nicht mehr entfernen, auch nicht per Antrag (Trigger aus Schritt 17). Für solche Altfälle bleibt
-    die Regel „neues Herstelldatum nur per Antrag“, damit nichts aufweicht; neue Fälle entstehen nicht."""
-    return bool(db.query("SELECT 1 FROM mat_item_change WHERE item_id = ? AND field = 'manufactured_on' "
-                         "AND applied_at IS NOT NULL AND old_value IS NOT NULL LIMIT 1", (iid,), one=True))
-
-
-def herstellung_nachtragbar(item, produkt):
-    """Darf das Herstelldatum trotz fester Stammdaten direkt nachgetragen werden? Nur bei Metall und nur, solange es leer
-    ist (Entscheidung vom 21.10.2026) – textil hat es ohnehin als Pflicht, „sonstiges“ geht über einen Antrag. Und nur,
-    solange der Artikel noch nie eins hatte (Entscheidung zu Befund 5 der Prüfung vom 21.10.2026): Hat ein Antrag es
-    entfernt, geht ein neues nur wieder per Antrag – sonst ergäben „entfernen per Antrag“ und „direkt nachtragen“ eine
-    Änderung, deren Zielwert niemand bestätigt hat. Der Trigger prüft dasselbe (models._NACHTRAGEN_16)."""
-    return (item["manufactured_on"] is None and produkt["material_kind"] == "metall_hardware"
-            and not herstellung_entfernt(item["id"]))
+def abweichungen(alt, w, d, felder=FREIGABEPFLICHTIG):
+    """Die Felder unter felder, in denen die gelesenen Werte w (artikel_werte) vom Artikel alt abweichen: Seriennummer ohne
+    Groß und klein und leer heißt „bleibt“, leer gleich NULL, das Lebensende nur, wenn ein Wert geschickt wurde (leer
+    heißt „bleibt“ – wie im Dialog)."""
+    out = []
+    for f in felder:
+        if f == "serial_no":
+            if w[f] and w[f].casefold() != (alt[f] or "").casefold():
+                out.append(f)
+        elif f == "retire_by":
+            if d.get("retire_by") not in (None, "") and w[f] != alt[f]:
+                out.append(f)
+        elif (w[f] if w[f] != "" else None) != (alt[f] if alt[f] != "" else None):
+            out.append(f)
+    return out
 
 
 def artikel_werte(d, alt=None):
@@ -752,6 +757,14 @@ def artikel_aendern(iid, d):
     if d.get("product_id") not in (None, ""):
         sets.produktwechsel_weiche(alt, kennung(d.get("product_id"), "Produkt"))
     w, p = artikel_werte(d, alt)
+    # Prüfer (E2): Bemerkung, Länge und nächste Prüfung – sonst nichts. Materialwart nach der ersten Prüfung: alles außer
+    # den freigabepflichtigen Feldern (die gehen per Antrag); vorab gefragt, damit die Meldung nicht von einer Regel weiter
+    # unten (Lebensende nur vorziehen …) kommt – unter der Sperre noch einmal.
+    if not rechte.darf_artikel("verwalten", alt) and abweichungen(alt, w, d):
+        raise Abgelehnt(NUR_DIREKT, 403)
+    fest = stammdaten_fest(iid)
+    if fest and abweichungen(alt, w, d):
+        raise Abgelehnt(PRODUKT_FEST if w["product_id"] != alt["product_id"] else STAMMDATEN_FEST, 409)
     wechsel = w["product_id"] != alt["product_id"]
     if wechsel:
         produktwechsel_pruefen(alt, p)
@@ -795,23 +808,18 @@ def artikel_aendern(iid, d):
             raise Abgelehnt(f"Ohne Prüfung liegt die nächste Fälligkeit höchstens ein Intervall in der Zukunft "
                             f"(spätestens {grenze}).")
     with db.transaction(sofort=True):
-        # Seit der ersten abgeschlossenen Prüfung stehen Seriennummer und Herstelldatum fest – frisch unter der Sperre
-        # gelesen, eine eben abgeschlossene Prüfung zählt schon. Derselbe Wert in anderer Schreibweise (Groß und klein
-        # wie beim Vergleich der Seriennummer, ein leeres Herstelldatum) ist keine Änderung: Es bleibt der gespeicherte.
-        # Ausnahme (Entscheidung vom 21.10.2026): Bei Metall darf ein fehlendes Herstelldatum nachgetragen werden.
+        # Seit der ersten abgeschlossenen Prüfung stehen die Stammdaten fest – frisch unter der Sperre gelesen, eine eben
+        # abgeschlossene Prüfung zählt schon. Derselbe Wert in anderer Schreibweise (Groß und klein wie beim Vergleich
+        # der Seriennummer, ein leeres Feld) ist keine Änderung: Es bleibt der gespeicherte.
         if wechsel:
             produktwechsel_pruefen(alt, p)          # frisch unter der Sperre: eben festgeschrieben oder begonnen
         if stammdaten_fest(iid):
+            if abweichungen(alt, w, d):
+                raise Abgelehnt(STAMMDATEN_FEST, 409)
             if w["serial_no"].casefold() == alt["serial_no"].casefold():
                 w["serial_no"], generiert = alt["serial_no"], alt["serial_generated"]
-            if (w["manufactured_on"] or None) == (alt["manufactured_on"] or None):
-                w["manufactured_on"] = alt["manufactured_on"]
-            nachtragen = herstellung_nachtragbar(alt, p) and bool(w["manufactured_on"])
-            if w["serial_no"] != alt["serial_no"] or (w["manufactured_on"] != alt["manufactured_on"] and not nachtragen):
-                if (w["serial_no"] == alt["serial_no"] and alt["manufactured_on"] is None
-                        and p["material_kind"] == "metall_hardware" and herstellung_entfernt(iid)):
-                    raise Abgelehnt(HERSTELLUNG_ENTFERNT, 409)
-                raise Abgelehnt(STAMMDATEN_FEST, 409)
+            for f in ("manufactured_on", "purchased_on", "first_use_on"):
+                w[f] = alt[f]
         neu = dict(w, serial_generated=generiert, retire_by_manual=manuell)
         _serie_frei(w["product_id"], w["serial_no"], ausser=iid)
         db.execute("UPDATE mat_item SET product_id = ?, serial_no = ?, serial_generated = ?, manufactured_on = ?, "
@@ -830,18 +838,26 @@ def artikel_aendern(iid, d):
 
 def produkt_aenderbar(i):
     """Zeigt „Bearbeiten“ das Produktfeld? Solange der Artikel keine abgeschlossene Prüfung hat, nicht ausgesondert ist und
-    weder Set noch Teil ist (Entscheidung zu L2b Nr. 29, 23.10.2026). Ein offener Entwurf sperrt erst beim Speichern
-    (produktwechsel_pruefen) – die Oberfläche sagt es am Feld."""
+    weder Set noch Teil ist (Entscheidung zu L2b Nr. 29, 23.10.2026) – danach zeigt der Antragsdialog es
+    (produkt_beantragbar). Ein offener Entwurf sperrt erst beim Speichern (produktwechsel_pruefen) – die Oberfläche
+    sagt es am Feld."""
     return i["lock_state"] != "ausgesondert" and not sets.im_set(i) and not stammdaten_fest(i["id"])
 
 
-def produktwechsel_pruefen(alt, neu_produkt):
-    """Darf der Artikel alt auf das Produkt neu_produkt wechseln (Entscheidung zu L2b Nr. 29, 23.10.2026)? Nur, solange
-    er keine abgeschlossene Prüfung hat – dann steht das Produkt im Protokoll (Trigger mat_item_produkt_fest) – und ohne
-    offenen Entwurf (der Entwurf hat das Formular des alten Produkts). Ob er DEMO ist, hängt auch am Produkt
-    (demo_sql): Ein Wechsel darf ihn nicht über die DEMO-Grenze tragen. Sets und Teile prüft vorher
-    sets.produktwechsel_weiche. Wirft Abgelehnt (409)."""
-    if stammdaten_fest(alt["id"]):
+def produkt_beantragbar(i):
+    """Bietet der Antragsdialog „anderes Produkt“ an (E4)? Nicht an Sets und Teilen (dort legt das Produkt die Stückliste
+    fest) und nicht an ausgesonderten Artikeln."""
+    return i["lock_state"] != "ausgesondert" and not sets.im_set(i)
+
+
+def produktwechsel_pruefen(alt, neu_produkt, antrag=False):
+    """Darf der Artikel alt auf das Produkt neu_produkt wechseln (Entscheidung zu L2b Nr. 29, 23.10.2026)? Direkt nur,
+    solange er keine abgeschlossene Prüfung hat – dann steht das Produkt im Protokoll (Trigger mat_item_produkt_fest) und
+    wechselt nur per Antrag (antrag=True: beim Beantragen und Bestätigen, E4) – und immer ohne offenen Entwurf (der
+    Entwurf hat das Formular des alten Produkts). Ob er DEMO ist, hängt auch am Produkt (demo_sql): Ein Wechsel darf
+    ihn nicht über die DEMO-Grenze tragen. Sets und Teile prüft vorher sets.produktwechsel_weiche. Wirft Abgelehnt
+    (409)."""
+    if not antrag and stammdaten_fest(alt["id"]):
         raise Abgelehnt(PRODUKT_FEST, 409)
     from . import pruefung
     offen = pruefung.offener_entwurf(alt["id"])
@@ -1034,8 +1050,7 @@ def artikel_json(i, voll=False):
     out["stammdaten_fest"] = stammdaten_fest(i["id"])
     # Produkt ändern unter „Bearbeiten“ (Feintuning, L2b Nr. 29): bis zur ersten abgeschlossenen Prüfung, nicht an Sets.
     out["produkt_aenderbar"] = produkt_aenderbar(i)
-    # Bei Metall ein fehlendes Herstelldatum direkt nachtragen (nur mit fester Stammdaten von Bedeutung).
-    out["herstellung_nachtragbar"] = herstellung_nachtragbar(i, p)
+    out["produkt_beantragbar"] = produkt_beantragbar(i)
     out["status"], out["status_text"] = s, st.LABEL[s]
     out["produkt"] = katalog.produkt_json(p)
     out["pfad"] = pfad(i["folder_id"])
@@ -1089,14 +1104,19 @@ def artikel_json(i, voll=False):
         out["darf_loeschen"] = not out["pruefungen"] and not out["maengel"]
         if sets.im_set(i):
             out["darf_loeschen"] = sets.loeschbar(i)
-        # Änderungsanträge (Entscheidungen vom 21.10.2026): offene am Artikel – Begründung und Namen nur für die, die
-        # beantragen dürfen (Materialwart, Prüfer); beantragen nur nach der ersten Prüfung und nicht ausgesondert. Im
-        # Verlauf ebenso: Wer nur liest, sieht bei den Anträgen weder Begründung noch Namen (Prüfung vom 21.10.2026).
+        # Änderungsanträge (seit dem 24.10.2026 an allen Stammdaten): offene am Artikel – Begründung und Namen nur für
+        # die, die beantragen dürfen (Materialwart, Prüfer); beantragen nur nach der ersten Prüfung, nicht ausgesondert
+        # und nur, solange kein Antrag offen ist (einer je Artikel). Im Verlauf ebenso: Wer nur liest, sieht bei den
+        # Anträgen weder Begründung noch Namen (Prüfung vom 21.10.2026). darf_entscheiden: die Materialwarte des Ordners
+        # (rechte „freigeben“) – die Artikelseite verweist sie auf die Liste „Änderungsanträge“.
         from . import antrag
         if out["journal"] and not inhalt:
             antrag.journal_verbergen(out["journal"])
         out["antraege"] = antrag.fuer_artikel(i, inhalt)
-        out["darf_antrag"] = inhalt and out["stammdaten_fest"] and i["lock_state"] != "ausgesondert"
+        out["antrag_offen"] = bool(out["antraege"])
+        out["darf_antrag"] = (inhalt and out["stammdaten_fest"] and i["lock_state"] != "ausgesondert"
+                              and not out["antrag_offen"])
+        out["darf_entscheiden"] = antrag.darf_entscheiden(i)
     return out
 
 

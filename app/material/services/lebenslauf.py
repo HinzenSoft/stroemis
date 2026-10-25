@@ -9,8 +9,11 @@ templates/material/pdf/lebenslauf.html). Gelesen wird ohne Transaktion – das S
 
 Inhalt: Stammdaten (wie im Protokoll), Zustand (Status, Sperre, Fälligkeit, wirksames Intervall, Lebensdauer,
 Bemerkung), alle abgeschlossenen Prüfungen und die Aussonderung in zeitlicher Reihenfolge, die Prüfdurchgänge, in
-denen der Artikel stand, und die Ereignisse aus seinem Journal (ohne die des Produkts) mit lesbaren Beschriftungen – bei
-Änderungsanträgen für Konten, die nur lesen, ohne Begründung und Namen (antrag.journal_verbergen)."""
+denen der Artikel stand, und die Ereignisse aus seinem Journal mit lesbaren Beschriftungen – bei Änderungsanträgen für
+Konten, die nur lesen, ohne Begründung und Namen (antrag.journal_verbergen). Dazu die Änderungen an den Daten seines
+Produkts seit dem Anlegen des Artikels (PRODUKT_AKTIONEN, als „Produkt …“ – Entscheidung E8 vom 24.10.2026: Die
+Material-Verwaltung pflegt Katalogprodukte weiter, jede Änderung steht im Produktjournal und im Lebenslauf der Artikel);
+Rückrufe stehen in ihrem eigenen Abschnitt, Meldungen gehören zum Katalog."""
 from datetime import date
 
 from ... import db
@@ -23,6 +26,9 @@ from .protokoll import PRUEFART_TEXT, datum_text, ortszeit, zeit_text
 
 # So viele Journaleinträge nimmt der Lebenslauf höchstens auf (journal.lesen liest die neuesten zuerst).
 JOURNAL_MAX = 2000
+# Einträge im Journal des Produkts, die der Lebenslauf zeigt: Stammdaten, Bild und Stückliste – keine Rückrufe (eigener
+# Abschnitt; ihre Seriennummernlisten nennen Artikel aller Gliederungen).
+PRODUKT_AKTIONEN = ("geaendert", "bild", "stueckliste")
 OHNE_PROTOKOLL = "kein Protokoll – abgeschlossen vor Einführung der PDF-Protokolle"
 
 
@@ -212,6 +218,9 @@ def daten(iid):
     verweise = {r["id"]: r["protocol_id"] for r in db.query(
         "SELECT id, protocol_id FROM mat_inspection WHERE item_id = ? AND protocol_id IS NOT NULL", (iid,))}
     eintraege = journal.lesen([("item", iid)], grenze=JOURNAL_MAX + 1)     # einer mehr: Wurde gekürzt?
+    eintraege += [e for e in journal.lesen([("product", item["product_id"])], grenze=JOURNAL_MAX + 1)
+                  if e["action"] in PRODUKT_AKTIONEN and e["created_at"] >= item["created_at"]]
+    eintraege.sort(key=lambda e: e["id"], reverse=True)
     gekuerzt = len(eintraege) > JOURNAL_MAX
     eintraege = eintraege[:JOURNAL_MAX]                                      # die neuesten zuerst – der älteste fällt weg
     # Änderungsanträge: Begründung, Namen, Anmerkung und Ablehnungsgrund nur für Materialwart und Prüfer – wie die
@@ -229,7 +238,7 @@ def daten(iid):
         "pruefungen": pruefungen,
         "durchgaenge": _durchgaenge(iid, baum_pfad),
         "rueckrufe": _rueckrufe(item),
-        "ereignisse": journal_zeilen(list(reversed(eintraege)), verweise),
+        "ereignisse": journal_zeilen(list(reversed(eintraege)), verweise, mit_entitaet={"product"}),
         "ereignisse_gekuerzt": gekuerzt,
     }
 

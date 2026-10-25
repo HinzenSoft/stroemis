@@ -99,7 +99,7 @@ table.verzeichnis .hash { font-size: 7pt; }
       <tr class="{{ 'offen' if a.zustand == 'nicht_geprueft' }}{{ ' teil' if a.teil }}">
         <td class="nr zahl"><span class="nr-marke">{{ a.nr }}</span></td>
         <td><div class="mono">{{ a.inventarnummer }}</div><div class="klein mono">{{ a.seriennummer }}</div>{% if a.seriennummer_vormals %}<div class="berichtigung">{{ a.seriennummer_vormals }}</div>{% endif %}</td>
-        <td class="produkt"><div class="wert">{{ produkt_mit_zusatz(a) }}</div><div class="klein">{% if a.teil %}Teil von Set {{ a.gruppe }}{% else %}{{ a.ordner }}{% endif %}</div>
+        <td class="produkt"><div class="wert">{{ produkt_mit_zusatz(a) }}</div>{% if a.produkt_vormals %}<div class="berichtigung">{{ a.produkt_vormals }}</div>{% endif %}<div class="klein">{% if a.teil %}Teil von Set {{ a.gruppe }}{% else %}{{ a.ordner }}{% endif %}</div>
           {%- if a.set_gesamt %}<div class="set-gesamt">Set-Prüfung: {{ a.set_gesamt }}</div>{% endif %}</td>
         <td>
           {%- if a.zustand == "erledigt" %}<span class="erg-{{ a.ergebnis }}">{{ a.ergebnis_text }}</span>
