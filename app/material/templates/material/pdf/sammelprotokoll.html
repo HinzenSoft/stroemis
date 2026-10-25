@@ -31,6 +31,8 @@ tr.offen .nr-marke { background: var(--rot); color: #ffffff; font-weight: 700; }
 tr.set-kopf td { padding: 2.5mm 1.3mm .8mm; border-bottom: .8pt solid var(--linie); font-weight: 700;
   color: var(--schwarz); }
 tr.set-kopf { break-after: avoid; }
+/* Der Pfad bricht an › und Leerzeichen um, nicht mitten im Ordnernamen („Flaschenzugta-sche“). */
+tr.set-kopf td { hyphens: manual; overflow-wrap: normal; }
 tr.im-set td.nr { border-left: 1.2mm solid var(--linie); }
 table.verzeichnis td { padding: .9mm 1.3mm; }
 table.verzeichnis .hash { font-size: 7pt; }

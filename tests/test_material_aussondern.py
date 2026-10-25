@@ -299,8 +299,19 @@ def test_oberflaeche_statisch():
                           ('<p class="help mat-nur-touch">Lebenslauf (PDF)', "lebenslaufKnopf(a) : \"\"}</div>"),
                           ('<p class="help mat-nur-touch">„Anlegen und nächsten“', '<div class="btn-row mat-knoepfe">'),
                           ('id="psa-schon-${Number(k.id)}"', '<div class="btn-row mat-psa-knoepfe">'),
-                          ('<p class="help">${esc(b.frist)}</p>', 'data-act="bi-neu">Neu wählen</button>')):
+                          ('<p class="help">${esc(b.frist)}</p>', 'data-act="bi-neu">Neu wählen</button>'),
+                          ('id="pr-hinweis" aria-live="polite"', '<div class="mat-ergebnis" role="group"'),
+                          ("${pruefHinweis(a)}</p>`", 'id="mat-schon-gemeldet">Du hast am'),
+                          ('id="mat-schon-gemeldet">Du hast am', 'id="mat-aussondern-hilfe">')):
         assert js.index(satz) < js.index(knoepfe), satz
+    # Browserprüfung des Endstands (25.10.2026): Marke auch in der Durchgangsliste, in der Karte umbrechend; Grund der
+    # Empfehlung im Banner nicht doppelt; Statuszeile der Prüfung beschreibt Ergebnis und „Festschreiben“.
+    assert js.count("${empfohlenMarke(a.aussonderung_empfohlen)}") == 2
+    assert 'const sperrText = empf && /aussondern empfohlen/.test(a.lock_reason || "") ? "Aussonderung empfohlen"' in js
+    assert 'aria-label="Ergebnis" aria-describedby="pr-hinweis"' in js and 'id="pr-ok" aria-describedby="pr-hinweis"' in js
+    assert "table.list.mat-karten td.mat-k-marke .mat-empfohlen-marke { white-space: normal; max-width: 100%;" in css
+    vorlage = open(os.path.join(wurzel, "app/material/templates/material/pdf/sammelprotokoll.html"), encoding="utf-8").read()
+    assert "tr.set-kopf td { hyphens: manual; overflow-wrap: normal; }" in vorlage
     print("Oberfläche (statisch) bestanden.")
 
 

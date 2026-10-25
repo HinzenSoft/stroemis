@@ -2598,11 +2598,14 @@
     // aria-describedby) oder warum er fehlt, steht als Satz über seiner Knopfzeile (Nutzer, 25.10.2026).
     const aussondernNein = aussonderKnopf && a.aussondern && !a.aussondern.ok ? a.aussondern.grund : "";
     const empf = a.aussonderung_empfohlen;
+    // Hat die Empfehlung selbst gesperrt, steht ihr Grund nur im Hinweis darunter – der Banner sagt nur „Aussonderung
+    // empfohlen“ (Browserprüfung vom 25.10.2026: dreimal derselbe Grund).
+    const sperrText = empf && /aussondern empfohlen/.test(a.lock_reason || "") ? "Aussonderung empfohlen" : a.lock_reason;
     const zuordnung = darf.grund ? zeile("Zugeordnet an", `${zu ? `${esc(zu.name)}${zu.gliederung ? ` <span class="muted">· ${esc(zu.gliederung)}</span>` : ""}${zu.aktiv ? "" : ' <span class="muted">(deaktiviert)</span>'}`
       : '<span class="muted">–</span>'}${zuKnoepfe}`) : "";
     inhalt.innerHTML = `${quittungHtml()}${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${a.status === "ausgesondert" ? `<p class="mat-banner s-ausgesondert">AUSGESONDERT – dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden.</p>` : ""}
-      ${a.status === "gesperrt" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
+      ${a.status === "gesperrt" ? `<p class="mat-banner s-gesperrt">GESPERRT${sperrText ? ` – ${esc(sperrText)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
       ${empf ? `<p class="notice mat-empfehlung"><strong>Aussonderung empfohlen</strong> – ${esc(empf.pruefer || "Prüfer")} am ${esc(fmtTag(empf.datum))} (<a href="/material/pruefung/${Number(empf.pruefung)}">${empf.protokoll_id ? `Protokoll ${esc(empf.protokoll_id)}` : "Prüfung ansehen"}</a>)${empf.grund ? `: ${esc(empf.grund)}` : ""}. Aussondern kann der Materialwart.</p>` : ""}
       ${maengel.filter((m) => m.offen).map(mangelBanner).join("")}
       ${a.status === "lebensdauer" ? `<p class="mat-banner s-lebensdauer">LEBENSDAUER ERREICHT – nicht mehr verwenden, prüfen lassen und aussondern.</p>` : ""}
@@ -2615,10 +2618,10 @@
           <h1>${esc(a.inventory_no)} ${statusMarke(a.status, true)}${empfohlenMarke(empf)}</h1>
           <p class="mat-produktzeile"><a href="/material/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}${artNrHtml(p.article_no)}</p>
           <p>Seriennummer <strong>${esc(a.serial_no)}</strong>${a.serial_generated ? ' <span class="badge grey">vom System vergeben</span><span class="help mat-sn-hinweis">Der Hersteller vergibt keine Seriennummer – diese Nummer bitte dauerhaft am Artikel anbringen.</span>' : ""}</p>
-          ${schonGemeldet ? `<p class="help mat-schon-gemeldet" id="mat-schon-gemeldet">Du hast am ${esc(S.fmtDate(a.mangel_eigen_offen))} schon gemeldet – ein Prüfer sieht es sich an.${darf.verwalten ? "" : " Ergänzungen bitte direkt an den Materialwart."}</p>` : ""}
-          ${aussondernNein ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(aussondernNein)}</p>` : ""}
           ${aus || darf.pruefen ? "" : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice small">${pruefHinweis(a)}</p>`
             : '<p class="small muted">Prüfen dürfen Prüfer mit Urkundennummer und Prüffreigabe (Häkchen „Prüfer“ in der Nutzerverwaltung, Urkundennummer im eigenen Profil, Prüffreigabe vom Materialwart).</p>'}
+          ${schonGemeldet ? `<p class="help mat-schon-gemeldet" id="mat-schon-gemeldet">Du hast am ${esc(S.fmtDate(a.mangel_eigen_offen))} schon gemeldet – ein Prüfer sieht es sich an.${darf.verwalten ? "" : " Ergänzungen bitte direkt an den Materialwart."}</p>` : ""}
+          ${aussondernNein ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(aussondernNein)}</p>` : ""}
           <div class="btn-row mat-pruefknoepfe">${!aus && darf.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
             ${sperrKnopf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
             ${darfMelden ? `<button class="btn secondary small" type="button"${schonGemeldet ? ' disabled aria-describedby="mat-schon-gemeldet"' : ' data-act="mangel"'}>Mangel melden …</button>` : ""}
@@ -5402,15 +5405,16 @@
     }
 
     function abschlussHtml() {
+      // Die Statuszeile steht über Ergebnis und „Festschreiben“, nicht darunter (Designsprache, Nutzer 25.10.2026).
       return `<div class="mat-abschluss" id="pr-abschluss" role="region" aria-label="Ergebnis und Abschluss">
-        <div class="mat-ergebnis" role="group" aria-label="Ergebnis">
+        <div class="mat-abschluss-hinweis" id="pr-hinweis" aria-live="polite" data-act="hinweis-ganz"></div>
+        <div class="mat-ergebnis" role="group" aria-label="Ergebnis" aria-describedby="pr-hinweis">
           ${WAEHLBAR.map((e) => `<button type="button" data-act="ergebnis" data-e="${e}" class="e-${e}" aria-pressed="false">${esc(ERGEBNIS[e])}</button>`).join("")}</div>
         <div class="mat-abschluss-zeile">
           <label class="mat-due" id="pr-due-feld" hidden>Nächste Prüfung ${datumFeld("pr-due", pr.vorschlag_naechste || "", "tag")}
             <span class="mat-due-hilfe">frühestens ${esc(fmtTag(isoHeute(1)))}${pr.vorschlag_naechste ? `, spätestens ${esc(fmtTag(pr.vorschlag_naechste))}` : ""}</span></label>
           <input type="text" id="pr-grund" maxlength="300" placeholder="Grund" aria-label="Grund" value="${esc(pr.grund || "")}" hidden>
-          <button type="button" class="btn" data-act="festschreiben" id="pr-ok" disabled>Festschreiben</button></div>
-        <div class="mat-abschluss-hinweis" id="pr-hinweis" aria-live="polite" data-act="hinweis-ganz"></div></div>`;
+          <button type="button" class="btn" data-act="festschreiben" id="pr-ok" aria-describedby="pr-hinweis" disabled>Festschreiben</button></div></div>`;
     }
 
     // In der einzeiligen Leiste (wenig Höhe, breite Touch-Geräte – material.css) ist das Feld für den Grund oft schmal: Passt
@@ -6013,7 +6017,7 @@
         <td data-l="Hersteller" class="mat-schmal-weg">${esc(a.manufacturer || "")}</td>
         <td data-l="Produkt" class="mat-k-ohne">${a.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(a.manufacturer)}</div>` : ""}${produktZelle(a, sichtbar)}${a.serial_no ? `<div class="small muted">SN ${esc(a.serial_no)}</div>` : ""}
           <div class="mat-eng-zusatz small muted">${esc(a.pfad)}</div></td>
-        <td data-l="Ablage" class="mat-eng-weg">${esc(a.pfad)}</td><td data-l="Stand">${zustand}</td><td data-l="Status" class="mat-k-marke">${a.status ? statusMarke(a.status) : '<span class="muted">–</span>'}</td>
+        <td data-l="Ablage" class="mat-eng-weg">${esc(a.pfad)}</td><td data-l="Stand">${zustand}</td><td data-l="Status" class="mat-k-marke">${a.status ? statusMarke(a.status) : '<span class="muted">–</span>'}${empfohlenMarke(a.aussonderung_empfohlen)}</td>
         <td class="tabelle-aktionen">${knopf}</td></tr>`;
     }
     function zeichnen() {

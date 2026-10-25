@@ -4160,6 +4160,29 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Nachbesserung nach der Browserprüfung des Endstands 5de5e56 (25.10.2026)
+
+- **B1:** Die Marke „Aussonderung empfohlen“ bricht in der Kartenansicht um (`white-space: normal`, höchstens so breit
+  wie die Zelle) – bei 344 px ragte sie 3 px über die Karte.
+- **B2:** Die Marke steht jetzt auch in der Artikelliste eines Durchgangs. Übrige Artikellisten (Ordner, „Gesperrt“,
+  „Zu prüfen“, Übersicht „Als Nächstes“, Suchtreffer) nutzen dieselbe Tabelle und zeigen sie, sobald ein Artikel mit
+  Empfehlung darin steht.
+- **Artikelseite:** Der Grund einer Empfehlung steht nur noch im Hinweis „Aussonderung empfohlen – …“; hat die
+  Empfehlung selbst gesperrt, sagt der Banner nur „GESPERRT – Aussonderung empfohlen. Nicht verwenden, …“ (eine Sperre
+  aus anderem Grund nennt ihn weiter). Die Marke bleibt. Der Satz, warum „Aussondern“ ausgegraut ist, steht direkt
+  über der Knopfzeile (der Prüfhinweis davor).
+- **Designsprache in der Prüfung:** Die Statuszeile der Abschlussleiste (`#pr-hinweis`: fehlende Befunde, Fotos, was
+  das Ergebnis bewirkt) steht über den Ergebnisknöpfen statt unter „Festschreiben“; Inhalt, `aria-live` unverändert,
+  Ergebnisgruppe und „Festschreiben“ verweisen mit `aria-describedby` darauf. Damit ist das „Bitte bestätigen“ dazu
+  aus der Designsprache-Nachbesserung erledigt.
+- **PDF:** Zwischenzeilen der Sammel- und Set-Protokolle trennen keine Wörter mehr (`hyphens: manual`) – der Pfad bricht
+  an Leerzeichen, › oder einem Bindestrich im Namen („DEMO-|Flaschenzugtasche“), nicht mehr als „Flaschenzugta-sche“.
+- Unverändert (Wunsch bzw. Entscheidung offen): Umschalter der Ergebnisknöpfe, volle Breite der Hilfetexte, Bemerkung im
+  Aussondern-Dialog, kein neuer Filter und keine Kachel.
+- Browserprobe 1280/360/344 (Beispielbestand 40 Artikel, zwei Empfehlungen im offenen Durchgang): Marken ohne Überhang
+  in „Gesperrt“ und im Durchgang, Banner/Hinweis wie oben, Statuszeile über den Knöpfen, kein waagerechter Bildlauf,
+  keine Konsolenfehler; Sammelprotokoll PDF/A-3b. Statischer Test in `test_material_aussondern`.
+
 ## Designsprache: keine Erklärzeilen unter Knöpfen; Texte zur Lebensdauer (25.10.2026)
 
 Entscheidung des Nutzers zu „Bitte bestätigen“ 5 von „Aussondern nur durch den Materialwart“: „an die Designsprache
@@ -4176,7 +4199,8 @@ Abschnitt). Dazu A1 und zwei Verbesserungen der Ablaufprüfung zu b7abddf.
   Geprüft und nicht geändert (stehen über oder neben dem, was sie erklären): Hilfetexte an Feldern, Einleitungssätze
   von Abschnitten (Formularseite, Katalog, Prüfungen), Hinweise in Dialogen über den Knöpfen. Offen gelassen: die
   Statuszeile der Abschlussleiste in der Prüfung (`#pr-hinweis`, unter Ergebnis und „Festschreiben“) – sie meldet den
-  Stand der Prüfung (fehlende Befunde, Fotos, was das Ergebnis bewirkt), keine Bedienhilfe; bitte bestätigen.
+  Stand der Prüfung (fehlende Befunde, Fotos, was das Ergebnis bewirkt), keine Bedienhilfe – seit der Nachbesserung
+  nach der Browserprüfung des Endstands steht auch sie über den Knöpfen.
 - **Texte bei erreichter Lebensdauer (A1):** Erinnerungsmail „Lebensdauer erreicht seit … – prüfen lassen („aussondern
   empfohlen“), danach sondert der Materialwart aus“; Banner nach QR-Scan und auf der Artikelseite „LEBENSDAUER
   ERREICHT – … nicht mehr verwenden, prüfen lassen und aussondern.“; Bestandsimport (Hinweis je Zeile und Satz im

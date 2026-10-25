@@ -505,7 +505,7 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
 .mat-abschluss-zeile .mat-due { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 600; }
 .mat-abschluss-zeile .mat-due[hidden], .mat-abschluss-zeile input[hidden] { display: none; }
 .mat-abschluss-zeile .btn { margin-left: auto; min-height: 44px; padding-left: 22px; padding-right: 22px; }
-.mat-abschluss-hinweis { font-size: var(--fs-klein); color: var(--grau); margin-top: 6px; }
+.mat-abschluss-hinweis { font-size: var(--fs-klein); color: var(--grau); margin-bottom: 6px; }   /* über den Knöpfen */
 .mat-abschluss-hinweis:empty { display: none; }
 .mat-abschluss-hinweis.warn { color: var(--rot); font-weight: 600; }
 /* Am Rechner auch die Leiste niedriger – nach den Grundregeln, damit sie gilt (siehe Prüfpunkte oben). */
@@ -976,7 +976,7 @@ html:has(.mat-pruefung.tippt) { scroll-padding-top: 8px; scroll-padding-bottom: 
   .mat-abschluss-zeile { flex: 1 1 auto; margin-top: 0; }
   .mat-abschluss-zeile input[type=text] { flex-basis: 140px; width: 140px; }
   .mat-abschluss-zeile .mat-due { white-space: nowrap; }
-  .mat-abschluss-hinweis { flex: 1 1 100%; margin-top: 0; }
+  .mat-abschluss-hinweis { flex: 1 1 100%; margin-bottom: 0; }
 }
 
 /* Prüfpunkte dichter auf breiten Touch-Geräten (Faltgerät offen, Tablet, Telefon quer) – wie am Rechner, nur mit
@@ -1133,6 +1133,9 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
   table.list.mat-karten tr::before { content: ""; order: -1; flex: 0 0 100%; height: 0; margin-top: -4px; }
   table.list.mat-karten td.mat-k-titel { flex: 1 1 0; min-width: auto; font-size: 1rem; }
   table.list.mat-karten td.mat-k-marke { flex: 0 1 auto; max-width: 65%; margin-left: auto; text-align: right; }
+  /* Die lange Marke „Aussonderung empfohlen“ bricht in der Karte um, statt über den Rand zu ragen (344 px, Browserprüfung
+     vom 25.10.2026). */
+  table.list.mat-karten td.mat-k-marke .mat-empfohlen-marke { white-space: normal; max-width: 100%; border-radius: 9px; }
   table.list.mat-karten td.mat-k-halb { flex: 0 0 calc(50% - 6px); }
   table.list.mat-karten td.mat-k-kurz { flex: 0 1 auto; }
   /* Unten: links das Häkchen mit „auswählen“, rechts „Prüfen“ – oder nur der Knopf. */
