@@ -369,8 +369,8 @@ def test_beispielbestand():
             assert all(not o["interval_months"] for o in ordner)
             arten = Counter(o["kind"] for o in ordner)
             assert arten["fahrzeug"] == 6 and arten["set"] == 5 and arten["persoenlich"] >= 2, arten
-            sets = {o["id"]: o for o in ordner if o["kind"] == "set"}
-            assert any(o["parent_id"] in sets for o in sets.values())                      # ein Set im Set
+            set_ordner = {o["id"]: o for o in ordner if o["kind"] == "set"}
+            assert any(o["parent_id"] in set_ordner for o in set_ordner.values())          # ein Set im Set
             artikel = [i for i in db.query("SELECT * FROM mat_item") if bestand.heimat(i) in zweige]
             nachkauf = [i for i in artikel if re.search(r"-[EN]$", i["serial_no"])]
             assert len(artikel) - len(nachkauf) == ARTIKEL, (len(artikel), len(nachkauf))

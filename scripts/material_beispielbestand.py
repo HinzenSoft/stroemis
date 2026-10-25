@@ -622,9 +622,8 @@ class Beispielbestand:
             if p["category_id"] in raus:
                 ausgelassen.append(f"{name} (in einer DEMO-Kategorie)")
                 continue
-            # Produkte mit Bestandteil-Liste (Schritt 25) und alte Set-Produkte (vor Schritt 26) bleiben draußen.
-            if p["is_set"] or db.query("SELECT 1 FROM mat_product_component WHERE set_product_id = ? LIMIT 1", (p["id"],),
-                                       one=True):
+            # Produkte mit Bestandteil-Liste (Schritt 25; frühere Set-Produkte haben seit Schritt 26 eine) bleiben draußen.
+            if db.query("SELECT 1 FROM mat_product_component WHERE set_product_id = ? LIMIT 1", (p["id"],), one=True):
                 ausgelassen.append(f"{name} (mit Bestandteil-Liste)")
                 continue
             monate = herstellerseite(p)[0]
