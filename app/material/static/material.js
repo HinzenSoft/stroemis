@@ -199,8 +199,8 @@
   const SPERRGRUND = { sturz: "Sturzbelastung", beschaedigung: "Beschädigung", verlust: "Verlust", rueckruf: "Rückruf" };
   const AUSSONDERUNGSGRUND = { lebensdauer: "Lebensdauer erreicht", verlust: "Verlust", irreparabel: "irreparabel" };
   const MATERIALART = { textil: "textil", metall_hardware: "Metall", sonstiges: "sonstiges" };
-  // „Set-Ordner“ seit dem 24.10.2026 (S1) – ein Set ist ein Katalogprodukt mit Stückliste, wie models.ORDNERARTEN.
-  const ORDNERART = { gliederung: "Gliederung", standort: "Standort", fahrzeug: "Fahrzeug", set: "Set-Ordner",
+  // „Set“: ein Ordner, in dem ein Satz Material zusammen liegt (seit Schritt 26 wieder so benannt) – wie models.ORDNERARTEN.
+  const ORDNERART = { gliederung: "Gliederung", standort: "Standort", fahrzeug: "Fahrzeug", set: "Set",
                       persoenlich: "persönlich", sonstiges: "sonstiges" };
   const DOKART = { produktbild: "Produktbild", konformitaetserklaerung: "Konformitätserklärung",
                    gebrauchsanleitung: "Gebrauchsanleitung", pruefanweisung: "Prüfanweisung", pflegehinweis: "Pflegehinweis",
@@ -208,18 +208,9 @@
   const EDITOR = { yesno: "Ja/Nein", text: "Text", date: "Datum", number: "Zahl", photo: "Foto", signature: "Unterschrift", laenge: "Länge (m)" };
   // Artikellänge (Schritt 20): 57.5 → „57,5 m“ (eine Nachkommastelle, deutsches Komma); ohne Einheit fürs Eingabefeld.
   const laengeText = (m, einheit = true) => (m === null || m === undefined || m === "" ? "" : `${Number(m).toFixed(1).replace(".", ",")}${einheit ? " m" : ""}`);
-  // Sets (Schritt 21): „Austausch laut Hersteller“ je Bestandteil wie models.AUSTAUSCH, das Kriterium für
-  // „einzeln geführt“ wie stueckliste.HILFE_EINZELN (der statische Abgleich in test_material_sets_oberflaeche verlangt
-  // beide gleich – die Produktantwort trägt den Hilfetext nicht, nur der Vorschlag beim Anlegen).
-  const AUSTAUSCH = { ja: "ja", nein: "nein", nicht_belegt: "nicht belegt" };
-  // Was ein Set ist (Entscheidung S1): im Dialog „Set anlegen“ über den Feldern – wie stueckliste.py, Kopf.
-  const EINZELN_PFLICHT = "Ein Set braucht mindestens ein einzeln geführtes Teil.";
-  const SET_ERKLAERUNG = "Ein Set ist vom Hersteller als Einheit festgelegt – ab Werk zusammengestellt oder als Kombination zugelassen (etwa Sitz- und Brustgurt). Artikelnummer: die des Herstellers oder aus den Nummern der Teile abgeleitet. Die Teile stehen im Reiter „Bestandteile“.";
-  const HILFE_EINZELN = "Einzeln geführt nur bei eigener individueller Kennzeichnung (Serien- oder Einzelnummer) und eigenem Katalogprodukt – jedes Stück wird beim Anlegen ein eigener Artikel mit Inventarnummer und Etikett. Alles andere (Tasche, Seilsatz, Prusiks) ist ein Bestandteil ohne eigenen Artikel.";
-  /* Sperren, Set prüfen und Austausch (Paket K2, Oberfläche O2): die Wörter für Werte im Journal wie
-     beschriftung.SET_WERTE, die Gruppe der Ja/Nein-Zeilen „… vorhanden“ an der Prüfung des Set-Artikels wie
-     setlauf.SET_GRUPPE, die Felder eines neuen Teils wie sets.TEIL_FELDER und die Wahl je Teil beim Aussondern wie
-     sets.VERBLEIB (test_material_sets_oberflaeche hält alle gleich). */
+  /* Altbestand vor Schritt 26 (Rückbau der Set-Funktion): die Wörter für Werte der früheren Set-Felder im Journal wie
+     beschriftung.SET_WERTE und die Gruppe der Ja/Nein-Zeilen „… vorhanden“ an Prüfungen früherer Set-Artikel wie
+     stueckliste.SET_GRUPPE – nur zum Lesen alter Einträge und Prüfungen. */
   const SET_WERTE = {
     lock_cause: { eigen: "eigener Grund", set: "mit dem Set" },
     verbleib: { aussondern: "mit aussondern", weiterfuehren: "entnommen und weitergeführt" },
@@ -231,12 +222,10 @@
   const SET_GRUPPE = "Bestandteile des Sets";
   // Die Gruppe der Zeilen „… vorhanden“ einer Bestandteil-Liste (Schritt 25) – wie stueckliste.BESTANDTEIL_GRUPPE.
   const BESTANDTEIL_GRUPPE = "Bestandteile";
-  // Eine Zeile „… vorhanden“ (Set-Prüfung oder Bestandteil-Liste): der Server sagt es (bestandteil) – ein Formular darf
-  // selbst eine Gruppe „Bestandteile“ haben.
+  // Eine Zeile „… vorhanden“ (Bestandteil-Liste, bei alten Prüfungen auch eines früheren Set-Artikels): der Server sagt
+  // es (bestandteil) – ein Formular darf selbst eine Gruppe „Bestandteile“ haben.
   const istBestandteil = (x) => (x.bestandteil !== undefined ? Boolean(x.bestandteil)
     : x.gruppe === SET_GRUPPE || x.gruppe === BESTANDTEIL_GRUPPE);
-  const TEIL_FELDER = ["serial_no", "manufactured_on", "purchased_on", "first_use_on", "length_m"];
-  const VERBLEIB = { aussondern: "mit aussondern", weiterfuehren: "entnehmen und gesperrt weiterführen" };
   // Feldnamen für das Journal – was nicht hier steht, erscheint mit seinem technischen Namen.
   const FELD = {
     manufacturer: "Hersteller", model: "Modell", article_no: "Artikelnummer", norm: "Norm", material_kind: "Materialart",
@@ -282,6 +271,7 @@
     length_m: "Länge (m)", items_have_length: "Artikel haben eine Länge",
     // Änderungsanträge an alle Stammdaten (Schritt 23): das von Hand vorgezogene Lebensende
     retire_by_manual: "Lebensende (von Hand vorgezogen)",
+    // Altbestand vor Schritt 26 (Rückbau der Set-Funktion): Felder der früheren Sets, nur zum Lesen alter Einträge.
     // Sets (Schritt 21)
     is_set: "Set", bestandteile: "Bestandteile", teile: "Teile", set: "Set Nr.", set_inventar: "Set",
     // Sets anlegen und Stückliste übertragen (Schritt 22, Wunsch vom 24.10.2026); Set-Meldung (S8)
@@ -301,6 +291,8 @@
     produkt: "Produkt",
     // Bestandteil-Liste an normalen Produkten und Seriennummern der Bestandteile (Schritt 25)
     bestandteil_nummern: "Seriennummern der Bestandteile",
+    // Set-Protokolle im Prüfdurchgang (Schritt 27)
+    set_protokolle: "Set-Protokolle",
   };
   // Die Beschriftung eines Feldes in einem Journaleintrag – wie beschriftung.feld_name: „description“ ist am Produkt der
   // kurze Zusatz hinter dem Namen und heißt dort seit dem Wunsch vom 18.10.2026 „Bemerkung“; an Ordnern und in den
@@ -328,6 +320,7 @@
                    mangel_gemeldet: "Mangel gemeldet", antrag_gestellt: "Änderung beantragt",
                    antrag_bestaetigt: "Änderung bestätigt (Antrag)", antrag_abgelehnt: "Änderungsantrag abgelehnt",
                    antrag_zurueckgezogen: "Änderungsantrag zurückgezogen", laenge_geaendert: "Länge geändert",
+                   // Altbestand vor Schritt 26 (Rückbau der Set-Funktion): Aktionen der früheren Sets, nur zum Lesen.
                    set_angelegt: "Set mit Teilen angelegt", stueckliste: "Stückliste geändert",
                    set_gesperrt: "mit dem Set gesperrt", set_frei: "mit dem Set freigegeben", teil_gesperrt: "Teil gesperrt",
                    teil_entnommen: "Teil entnommen", teil_eingesetzt: "Teil eingesetzt", teil_geloescht: "Teil gelöscht",
@@ -338,11 +331,12 @@
                    bestandteil_ersetzt: "Bestandteil ersetzt", produkt_geaendert: "Produkt geändert",
                    stueckliste_uebertragen: "Stückliste übertragen", nicht_in_stueckliste: "steht nicht mehr in der Stückliste des Sets",
                    anzahl_verringert: "Anzahl in der Stückliste des Sets verringert – ein Stück zu entnehmen",
+                   set_rueckbau: "Set aufgelöst – die Teile sind eigene Artikel (Schritt 26)",
                    // Schritt 25: Bestandteil-Liste eines Produkts und Seriennummern der Bestandteile am Artikel
                    bestandteile: "Bestandteile geändert", bestandteil_nummern: "Seriennummern der Bestandteile geändert" };
   const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
-                     category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produkt- oder Set-Meldung" };
+                     category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };
 
   /* Warum hier nicht geprüft werden kann – als HTML. obj: der Ordner, Artikel oder die Prüfung (mit „darf“); ohne obj
      gilt die Frage für das ganze Konto (Seite „Prüfungen“). Prüfen braucht seit Phase 2 dreierlei: das Häkchen
@@ -427,8 +421,6 @@
   const plural = (n, eins, viele) => `${n} ${n === 1 ? eins : viele}`;
   const statusMarke = (s, gross) => `<span class="mat-status s-${esc(s)}${gross ? " gross" : ""}">${esc(STATUS[s] || s)}</span>`;
   const demoMarke = (x) => (x ? '<span class="mat-demo" title="DEMO – nicht für echte Prüfungen">DEMO</span>' : "");
-  // Set (Schritt 21) in Katalog- und Artikellisten: eine leise Marke hinter dem Namen.
-  const setMarke = (x) => (x ? ' <span class="mat-set-marke">Set</span>' : "");
   // Das Schloss vor „Gesperrt“ und „Ausgesondert“: grau wie die Klapp-Dreiecke daneben und ohne Leerzeichen, das im
   // Link mit unterstrichen würde – den Abstand hält der Rand (mat-schloss, material.css).
   const schloss = (o) => (o.system_kind ? '<span class="mat-schloss" aria-hidden="true">🔒</span>' : "");
@@ -505,7 +497,7 @@
   /* --- Gerüst -------------------------------------------------------------------------------- */
   const NAV = { dashboard: "dashboard", pruefungen: "pruefungen", bestand: "bestand", ordner: "bestand", artikel: "bestand",
                 artikel_neu: "bestand", katalog: "katalog", produkt: "katalog", formular: "katalog", meldungen: "katalog", suche: "",
-                pruefung: "pruefungen", pruefung_neu: "pruefungen", set_lauf: "pruefungen", durchgang: "pruefungen",
+                pruefung: "pruefungen", pruefung_neu: "pruefungen", durchgang: "pruefungen",
                 bestandsimport: "bestand", bericht: "bestand", antraege: "bestand" };
   $$(".mat-nav a").forEach((a) => a.classList.toggle("aktiv", a.dataset.nav === NAV[ANSICHT]));
   if (ANSICHT === "suche" && DATEN.q) $(".mat-suche input").value = DATEN.q;
@@ -627,7 +619,7 @@
      der Seite „Bestand“: dort ist der Ordnerbaum selbst der Inhalt. Auf- und Zuklappen merkt sich der Browser, je Baum getrennt. */
   const KATALOG_ANSICHTEN = new Set(["katalog", "produkt", "formular", "meldungen"]);
   const MIT_LEISTE = new Set(["dashboard", "pruefungen", "ordner", "artikel", "artikel_neu", "suche", "pruefung",
-                              "pruefung_neu", "set_lauf", "durchgang", "katalog", "produkt", "formular", "meldungen", "bestandsimport", "bericht",
+                              "pruefung_neu", "durchgang", "katalog", "produkt", "formular", "meldungen", "bestandsimport", "bericht",
                               "antraege"]);
   const LEISTE_KATALOG = KATALOG_ANSICHTEN.has(ANSICHT);
   const leiste = document.getElementById("mat-side");
@@ -830,17 +822,17 @@
 
   /* --- Journal (Vorher/Nachher je Feld) ----------------------------------------------------- */
   // da: der Eintrag hat dieses Feld auf dieser Seite (vorher/nachher) – ein leeres „bis“ heißt dann „unbefristet“.
-  /* Ein Listeneintrag im Journal: Text bleibt Text. Sets (Schritt 21) schreiben Objekte – die Teile beim
-     Anlegen eines Sets ({inventory_no, serial_no, bestandteil}) und die Positionen einer Stückliste ({bezeichnung,
-     anzahl, einzeln, austausch}); sie erscheinen als Satz statt als „[object Object]“. Ein eingesetzter vorhandener
-     Artikel (L2b, „vorhanden“) sagt es dazu. */
+  /* Ein Listeneintrag im Journal: Text bleibt Text. Objekte erscheinen als Satz statt als „[object Object]“: die
+     Positionen einer Bestandteil-Liste ({bezeichnung, anzahl}), die Seriennummern der Bestandteile ({bestandteil,
+     seriennummer}) und – Altbestand vor Schritt 26 – die Teile früherer Sets ({inventory_no, serial_no, bestandteil},
+     „vorhanden“: eingesetzter vorhandener Artikel) und Stücklisten-Positionen mit „einzeln“ und „austausch“. */
   function listenWert(x) {
     if (!x || typeof x !== "object") return x;
     if (x.inventory_no) return `${x.inventory_no}${x.serial_no ? ` (SN ${x.serial_no})` : ""}${x.bestandteil ? ` – ${x.bestandteil}` : ""}${x.vorhanden ? ", vorhandener Artikel" : ""}`;
     // Seriennummer eines Bestandteils (Schritt 25) – wie beschriftung._listen_wert.
     if (x.seriennummer !== undefined && x.bestandteil !== undefined) return `${x.bestandteil}: ${x.seriennummer || "–"}`;
     if (x.bezeichnung !== undefined) {
-      return `${x.anzahl || 1} × ${x.bezeichnung}${x.einzeln ? ", einzeln geführt" : ""}${x.austausch ? `, Austausch: ${AUSTAUSCH[x.austausch] || x.austausch}` : ""}`;
+      return `${x.anzahl || 1} × ${x.bezeichnung}${x.einzeln ? ", einzeln geführt" : ""}${x.austausch ? `, Austausch: ${SET_WERTE.austausch[x.austausch] || x.austausch}` : ""}`;
     }
     return JSON.stringify(x);
   }
@@ -947,20 +939,13 @@
   }
   // Ein Knoten in Baum und Unterordnerliste: Pfad-Knoten grau ohne Zahl und Link; ein teilweise sichtbarer Systemordner
   // („Gesperrt“ einer Gliederung, die das Konto nicht sieht) sagt, dass er nur die eigenen Artikel zeigt.
-  /* Zählsatz (P4-L2b, Entwurf C): „N Artikel, darunter k Teile in m Sets“ – wie bestand.zaehlsatz, aus bestand_sets
-     ({anzahl, teile}) derselben Menge; ohne Sets leer (dann bleibt es bei „N“). Kurz für enge Zellen: „k Teile in m Sets“. */
-  const SETS_SATZ = (s) => `${plural(s.teile, "Teil", "Teile")} in ${plural(s.anzahl, "Set", "Sets")}`;
-  const zaehlSatz = (n, s) => (s && (s.anzahl || s.teile) ? `${plural(n, "Artikel", "Artikel")}, darunter ${SETS_SATZ(s)}` : "");
   function knotenHtml(o) {
     if (o.nur_pfad) {
       return `${pfadKnoten(o.name)} ${o.system_kind ? "" : `<span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}`;
     }
-    // Zählsatz: als Tooltip und – für Vorlesehilfen, Touch und Tastatur bleibt ein title stumm – als versteckter Text
-    // (Nachbesserung, Browser V8).
-    const satz = !o.system_kind && zaehlSatz(o.bestand, o.bestand_sets);
     return `<a href="/material/ordner/${o.id}">${schloss(o)}${esc(o.name)}</a>
         ${o.system_kind ? "" : `<span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}${o.teilweise ? ' <span class="small muted">nur deine Artikel</span>' : ""}${demoMarke(o.demo)}
-        <span class="mat-baum-zahl"${satz ? ` title="${esc(satz)}"` : ""}>${o.system_kind ? Object.values(o.zaehlung || {}).reduce((a, b) => a + b, 0) : o.bestand}${satz ? `<span class="mat-vorlesen"> Artikel, darunter ${esc(SETS_SATZ(o.bestand_sets))}</span>` : ""}</span>${o.system_kind ? "" : zahlen(o.zaehlung)}`;
+        <span class="mat-baum-zahl">${o.system_kind ? Object.values(o.zaehlung || {}).reduce((a, b) => a + b, 0) : o.bestand}</span>${o.system_kind ? "" : zahlen(o.zaehlung)}`;
   }
   const knotenKlasse = (o) => (o.nur_pfad ? "pfad" : o.system_kind ? "system" : "");
   function baumHtml(liste, start) {
@@ -1070,7 +1055,6 @@
         <div class="mat-kachel gesamt"><strong>${d.bestand}</strong><span>Artikel im Bestand</span></div>
         ${[...kacheln.filter(([s]) => z[s]), ...kacheln.filter(([s]) => !z[s])].map(kachel).join("")}
       </div></div>
-      ${zaehlSatz(d.bestand, d.bestand_sets) ? `<p class="small muted mat-set-satz">${esc(zaehlSatz(d.bestand, d.bestand_sets))}</p>` : ""}
       <div id="mat-runden"></div>
       <div class="mat-nebeneinander"><section class="section"><h2>Fälligkeiten je Ordner</h2>
         ${d.ordner_uebersicht.length ? ordnerUebersichtHtml(d.ordner_uebersicht)
@@ -1086,7 +1070,7 @@
     inhalt.innerHTML = `<div class="page-head"><h1>Material</h1></div>
       ${mangelKasten(d.maengel, d.maengel_gesamt)}
       ${rueckrufKasten(d.rueckrufe)}
-      ${d.meldungen_offen ? `<p class="notice"><a href="/material/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produkt- oder Set-Meldung", "offene Produkt- oder Set-Meldungen")}</strong></a>
+      ${d.meldungen_offen ? `<p class="notice"><a href="/material/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produktmeldung", "offene Produktmeldungen")}</strong></a>
         – Materialwarte warten darauf, Artikel davon anzulegen.</p>` : ""}
       ${d.antraege_offen ? `<p class="notice"><a href="/material/bestand/antraege"><strong>${plural(d.antraege_offen, "offener Änderungsantrag", "offene Änderungsanträge")}</strong></a>
         – Stammdaten nach der ersten Prüfung in Ordnern, die du verwaltest; bestätigen oder ablehnen.</p>` : ""}
@@ -1268,7 +1252,7 @@
     return `<section class="section mat-mail-kasten" id="mat-mail" aria-labelledby="mat-mail-titel" data-offen="${Number(m.offen)}"><div class="mat-kastenkopf"><h2 id="mat-mail-titel" tabindex="-1">Mailversand</h2>
         ${m.zeilen.length ? `<details class="mat-menue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary><div class="mat-menue-liste">
           <a href="#mat-mail" role="button" data-act="mail-alle"><strong>Alle erledigt</strong><span>Alle offenen Zeilen abhaken – auch die nicht angezeigten (mit Rückfrage).</span></a></div></details>` : ""}</div>
-      ${m.kein_mailserver ? '<p class="notice">Kein Mailserver eingerichtet – keine Modul-Mail geht hinaus (Erinnerungen, Mängel, Anträge, Produkt- und Set-Meldungen, Rückrufe).</p>' : ""}
+      ${m.kein_mailserver ? '<p class="notice">Kein Mailserver eingerichtet – keine Modul-Mail geht hinaus (Erinnerungen, Mängel, Anträge, Produktmeldungen, Rückrufe).</p>' : ""}
       ${m.zeilen.length ? `<p class="help mat-mail-hilfe">Diese Mails hat der Mailserver nicht angenommen. Erinnerungen holt der nächste Lauf nach; alles andere sagst du den Betroffenen selbst – ein erneuter Versand ist nicht möglich.</p>${tabelle}` : ""}
     </section>`;
   }
@@ -1394,7 +1378,7 @@
       }).join("");
       return `<tr data-weg="${weg.join(" ")}" class="${o.tiefe ? "" : "mat-ue-oben"}" style="--tiefe:${Math.min(o.tiefe, 8)}" ${weg.some((x) => zu.has(x)) ? "hidden" : ""}>
         <td data-l="Ordner" class="mat-ue-name">${knopf}<a href="/material/ordner/${o.id}">${schloss(o)}${esc(o.name)}</a>${o.system_kind || (o.tiefe && o.kind !== "gliederung") ? "" : ` <span class="mat-art">${esc(ORDNERART[o.kind] || o.kind)}</span>`}${demoMarke(o.demo)}</td>
-        <td data-l="Bestand" class="mat-ue-zahl">${o.bestand}${zaehlSatz(o.bestand, o.bestand_sets) ? `<span class="mat-ue-sets"><span class="mat-vorlesen"> Artikel, darunter </span>${esc(SETS_SATZ(o.bestand_sets))}</span>` : ""}</td>${zahlen}
+        <td data-l="Bestand" class="mat-ue-zahl">${o.bestand}</td>${zahlen}
         <td data-l="nächste Fälligkeit" class="mat-ue-tag${o.naechste ? "" : " mat-ue-null"}">${o.naechste ? `<a class="t-${esc(o.naechste_status)}" href="/material/pruefungen?ordner=${o.id}" title="Alles Fällige in ${esc(o.name)}">${esc(fmtTag(o.naechste))}</a>` : '<span class="muted">–</span>'}</td></tr>`;
     };
     const pfadZeilen = zeilen.some((o) => o.nur_pfad);
@@ -1485,37 +1469,7 @@
   // roter Link auf den Artikel und hebt sich so von Bemerkung, Artikelnummer und Länge ab (Wunsch des Nutzers,
   // 23.10.2026); für die Tastatur reicht der Link der Inventar-Nr. – daher tabindex -1. Ohne Sicht (fremde Zeile im
   // Durchgang) bleibt der Name Text.
-  const produktZelle = (a, link = true) => `${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${link ? `<a class="mat-produktname" href="/material/artikel/${a.id}" tabindex="-1">${nameHtml(a, true)}</a>${zusatzHtml(a)}${artNrKurz(a.article_no)}` : `${nameHtml(a, true)}${zusatzHtml(a)}${artNrKurz(a.article_no)}`}${a.length_m ? ` <span class="muted small mat-laenge">${esc(laengeText(a.length_m))}</span>` : ""}${demoMarke(a.demo)}${setListenText(a)}`;
-  /* Sets in Listen (Schritt 21): Ordnerlisten und „Fällige“ zeigen nur die Set-Zeile – Status, Fälligkeit
-     und Lebensende sind dort die des Sets (Server); darunter „Set · n Teile“, fehlende Teile und Mängel an
-     Teilen. Ein Teil (nur in der Suche) nennt sein Set mit Link. */
-  const setListenText = (a) => {
-    if (a.set) {
-      const x = a.set;
-      return `${setMarke(true)}<div class="small mat-set-info">Set · ${plural(x.teile, "Teil", "Teile")}${x.vollstaendig ? "" : ' · <span class="mat-warn">unvollständig</span>'}${x.mangel_teile.length ? ` · Mangel an ${x.mangel_teile.map(esc).join(", ")}` : ""}</div>`;
-    }
-    return a.teil_von ? `<div class="small mat-set-info">Teil von Set <a class="mat-inv" href="/material/artikel/${a.teil_von.id}">${esc(a.teil_von.inventory_no)}</a> ${esc(a.teil_von.produkt)}</div>` : "";
-  };
-  /* Unter einer Statusliste (P4-L2b, Entwurf C, U7): Teile mit dem gefilterten Status, deren Set einen anderen Set-Status
-     hat (andere_set_status: {teile, sets: [{id, inventory_no, teile, status, status_text}], sets_gesamt}) – die Liste
-     zeigt nur die Set-Zeile. filter: der Statusfilter der Liste (mit Komma: mehrere, „alles Fällige“). Seit der
-     Nachbesserung (Browser V1) als Hinweiskasten mit dem Set-Status und der Liste, in der das Set steht. */
-  const istStatus = (k, s) => (s === "lebensdauer" ? `${k === 1 ? "hat" : "haben"} die Lebensdauer erreicht` : `${k === 1 ? "ist" : "sind"} ${STATUS[s] || s}`);
-  function andereSetsHtml(x, filter) {
-    if (!x || !x.teile) return "";
-    const rest = (x.sets_gesamt || 0) - x.sets.length;
-    const mehrere = String(filter || "").includes(",");
-    const teile = `${plural(x.teile, "Teil", "Teile")} ${mehrere ? `${x.teile === 1 ? "hat" : "haben"} einen dieser Status` : istStatus(x.teile, filter)}`;
-    const setLink = (z) => `<a class="mat-inv" href="/material/artikel/${z.id}">${esc(z.inventory_no)}</a>`;
-    if (x.sets_gesamt === 1 && x.sets.length === 1) {
-      const z = x.sets[0];
-      return `<p class="notice small mat-andere-sets">${teile}, ${x.teile === 1 ? "sein" : "ihr"} Set ${setLink(z)} ist insgesamt ${statusMarke(z.status)} und steht in der Liste „${esc(z.status_text)}“.</p>`;
-    }
-    return `<p class="notice small mat-andere-sets">${teile}; ihre Sets haben insgesamt einen anderen Status und stehen in dessen Liste:
-      ${x.sets.map((z) => `<span class="mat-nowrap">${setLink(z)} ${statusMarke(z.status)}</span>`).join(", ")}${rest > 0 ? ` und ${rest} weitere` : ""}.</p>`;
-  }
-  // Kopf einer Liste mit Sets: „n Einträge, davon m Sets mit k Teilen“ – ohne Set bleibt die Liste, wie sie war.
-  const setKopf = (gesamt, sets) => (sets && sets.anzahl ? `<p class="small muted mat-set-kopf">${plural(gesamt, "Eintrag", "Einträge")}, davon ${plural(sets.anzahl, "Set", "Sets")} mit ${plural(sets.teile, "Teil", "Teilen")}</p>` : "");
+  const produktZelle = (a, link = true) => `${a.vorschau ? `<img class="mat-mini" src="${esc(a.vorschau)}" alt="" loading="lazy">` : ""}${link ? `<a class="mat-produktname" href="/material/artikel/${a.id}" tabindex="-1">${nameHtml(a, true)}</a>${zusatzHtml(a)}${artNrKurz(a.article_no)}` : `${nameHtml(a, true)}${zusatzHtml(a)}${artNrKurz(a.article_no)}`}${a.length_m ? ` <span class="muted small mat-laenge">${esc(laengeText(a.length_m))}</span>` : ""}${demoMarke(a.demo)}`;
 
   /* Drei Gestalten je nach Breite des Inhalts (material.css, „Lieferung 5 – Geräte: listen“): ab 821 px alle Spalten;
      601–820 px eine engere Tabelle – Seriennummer unter der Inventar-Nr., Hersteller über dem Produkt, nächste Prüfung
@@ -1530,11 +1484,6 @@
     // Tablet neben der Leiste) ragte die volle Tabelle sonst um wenige Pixel über den Rand (zweite Nachbesserung).
     const naechste = (a) => (a.status === "neu" ? "Eingangs\u00adprüfung" : a.lock_state !== "frei" || !a.next_due_on ? "" : fmtTag(a.next_due_on));
     const gesperrte = opts.auswahl && liste.some((a) => a.lock_state !== "frei");
-    // Set-Zeile: Wer die Set-Fälligkeit bestimmt, wenn es ein Teil ist; Rückruf an einem Teil als Marke.
-    const durchTeil = (a) => (a.set && a.set.faellig_durch && !a.set.faellig_durch.set_artikel && naechste(a) && a.status !== "neu"
-      ? `<div class="small muted">Teil ${esc(a.set.faellig_durch.inventory_no)}</div>` : "");
-    const rrTeile = (a) => (a.set && a.set.rueckruf_teile.length
-      ? ` <span class="mat-rr-marke" title="Rückruf an Teil ${esc(a.set.rueckruf_teile.map((r) => `${r.inventory_no}: ${r.titel}`).join("; "))}">Rückruf</span>` : "");
     const kat = Boolean(opts.kategorie);
     return `${kartenKopf(kat ? ARTIKEL_SORT_KAT : ARTIKEL_SORT, s, opts.auswahl)}<table class="list mat-tabelle mat-karten mat-artikel${kat ? " mat-mit-kategorie" : ""}">
       <thead><tr>${opts.auswahl ? '<th class="mat-wahlspalte"><label class="mat-wahl-feld"><input type="checkbox" id="mat-alle" class="mat-alle" aria-label="alle auswählen"></label></th>' : ""}
@@ -1550,8 +1499,8 @@
         <td data-l="Seriennummer" class="mat-schmal-weg">${esc(a.serial_no)}${a.serial_generated ? ' <span class="muted" title="vom System vergeben">(System)</span>' : ""}</td>
         ${opts.person ? `<td data-l="Person" class="mat-eng-weg mat-k-halb">${esc(a.zugeordnet_name || "")}</td>` : ""}
         ${opts.pfad ? `<td data-l="Ablage">${esc(a.pfad || "")}</td>` : ""}
-        <td data-l="Nächste Prüfung" class="mat-schmal-weg">${naechste(a) && a.status !== "neu" ? esc(naechste(a)) : `<span class="muted">${esc(naechste(a) || "–")}</span>`}${durchTeil(a)}</td>
-        <td data-l="Status" class="mat-k-marke">${statusMarke(a.status)}${a.rueckruf ? ` <span class="mat-rr-marke" title="Rückruf: ${esc(a.rueckruf)}">Rückruf</span>` : rrTeile(a)}${mangelMarke(a.mangel)}${!a.mangel && a.set && a.set.mangel_teile.length ? mangelMarke(true) : ""}${a.entwurf ? `<div class="small muted">in Prüfung bei ${esc(a.entwurf.pruefer || "?")}</div>` : ""}${naechste(a) ? `<div class="mat-schmal-zusatz small${a.status === "neu" ? " muted" : ""}">${a.status === "neu" ? "" : "fällig "}${esc(naechste(a))}</div>` : ""}</td>
+        <td data-l="Nächste Prüfung" class="mat-schmal-weg">${naechste(a) && a.status !== "neu" ? esc(naechste(a)) : `<span class="muted">${esc(naechste(a) || "–")}</span>`}</td>
+        <td data-l="Status" class="mat-k-marke">${statusMarke(a.status)}${a.rueckruf ? ` <span class="mat-rr-marke" title="Rückruf: ${esc(a.rueckruf)}">Rückruf</span>` : ""}${mangelMarke(a.mangel)}${a.entwurf ? `<div class="small muted">in Prüfung bei ${esc(a.entwurf.pruefer || "?")}</div>` : ""}${naechste(a) ? `<div class="mat-schmal-zusatz small${a.status === "neu" ? " muted" : ""}">${a.status === "neu" ? "" : "fällig "}${esc(naechste(a))}</div>` : ""}</td>
         ${opts.pruefen ? `<td class="tabelle-aktionen">${pruefKnopf(a)}</td>` : ""}</tr>`).join("")}</tbody></table>
       ${gesperrte ? '<p class="help mat-wahl-hinweis">Graue Kästchen: Gesperrte und ausgesonderte Artikel bleiben in ihrem Systemordner und lassen sich nicht verschieben.</p>' : ""}`;
   }
@@ -1564,12 +1513,10 @@
     return `<label class="mat-wahl-feld"><input type="checkbox" class="mat-wahl-art" value="${a.id}"${a.zugeordnet_name ? ' data-person="1"' : ""} ${frei ? "" : 'disabled title="Gesperrte und ausgesonderte Artikel bleiben in ihrem Systemordner."'} aria-label="${esc(a.inventory_no)} auswählen">
       <span class="mat-wahl-text">${frei ? "auswählen" : `${grund} – bleibt im Systemordner`}</span></label>`;
   }
-  // „Prüfen“ in Listen: mit Prüffreigabe für den Artikel, solange niemand anderes ihn reserviert hat. Eine Set-Zeile
-  // (a.set) führt wie im Durchgang auf „Set prüfen“ – den Set-Artikel prüft man nur dort (V6).
+  // „Prüfen“ in Listen: mit Prüffreigabe für den Artikel, solange niemand anderes ihn reserviert hat.
   function pruefKnopf(a, durchgangId) {
     if (!(a.darf && a.darf.pruefen) || a.lock_state === "ausgesondert") return "";
     const q = durchgangId ? `?durchgang=${durchgangId}` : "";
-    if (a.set) return `<a class="btn secondary small" href="/material/artikel/${a.id}/set-pruefung${q}">Set prüfen</a>`;
     if (a.entwurf && a.entwurf.pruefer_id !== DARF.uid) return "";
     return a.entwurf ? `<a class="btn secondary small" href="/material/pruefung/${a.entwurf.id}">Weiter prüfen</a>`
       : `<a class="btn secondary small" href="/material/artikel/${a.id}/pruefung/neu${q}">Prüfen</a>`;
@@ -1603,8 +1550,7 @@
         · <a href="${adresse({ zugeordnet: null })}">alle Personen</a></p>` : "";
       $("#pr-liste").innerHTML = `${ordnerZeile}${personZeile}<p class="help">Überfällig, Lebensdauer erreicht (die Prüfung endet mit „aussondern“), neu (die Eingangsprüfung steht aus) oder in den nächsten ${d.schwelle_tage} Tagen fällig. Prüfen lässt sich jeder Artikel aber jederzeit – auch aus seiner Ansicht.</p>
         <div class="c-tabs mat-filter">${FILTER.map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}</button>`).join("")}</div>
-        ${setKopf(d.gesamt, d.sets)}${d.artikel.length ? artikelTabelle(d.artikel, { pfad: true, pruefen: d.artikel.some((a) => a.darf && a.darf.pruefen), sort }) : leer("Keine Artikel in dieser Auswahl.")}
-        ${andereSetsHtml(d.andere_set_status, filter)}
+        ${d.artikel.length ? artikelTabelle(d.artikel, { pfad: true, pruefen: d.artikel.some((a) => a.darf && a.darf.pruefen), sort }) : leer("Keine Artikel in dieser Auswahl.")}
         ${seitenleiste(d.gesamt, seite, 50)}`;
     }
     async function offene() {
@@ -2118,7 +2064,7 @@
       const systemText = d.system_kind === "gesperrt"
         ? "Hierher verschiebt eine Sperre die Artikel der Gliederung. Zurück in ihren Herkunftsordner bringt sie nur eine Freiprüfung."
         : "Ausgesonderte Artikel bleiben hier mit ihrem vollen Lebenslauf sichtbar, zählen aber nirgends mehr als Bestand und lassen sich nicht zurückholen.";
-      inhalt.innerHTML = `${quittungHtml()}<div class="mat-pfad"><a href="/material/bestand">Bestand</a> / ${bc}</div>
+      inhalt.innerHTML = `<div class="mat-pfad"><a href="/material/bestand">Bestand</a> / ${bc}</div>
         <div class="page-head"><h1>${schloss(d)}${esc(d.name)} ${system ? "" : `<span class="mat-art">${esc(ORDNERART[d.kind])}</span>`}${demoMarke(d.demo)}</h1>
           <div class="btn-row">${darfPflegen ? `<button class="btn secondary small" data-act="unterordner"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Unterordner<span class="k-anlegen"> anlegen</span></span></button>
             <a class="btn secondary small" href="/material/artikel/neu?ordner=${d.id}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span></a>
@@ -2135,8 +2081,7 @@
         ${d.unterordner.length ? `<section class="section"><h2>Unterordner</h2>${unterordnerHtml(d.unterordner)}</section>` : ""}
         <section class="section"><h2 id="mat-artikel-titel" tabindex="-1">Artikel in diesem Ordner</h2>
           ${zeigeFilter ? filterKopf : ""}
-          ${setKopf(d.artikel_gesamt, d.sets)}${d.artikel.length ? artikelTabelle(d.artikel, { auswahl: darfPflegen, pruefen: pruefbar, person: darf.grund, sort, kategorie: true }) : leerHtml}
-          ${andereSetsHtml(d.andere_set_status, filter)}
+          ${d.artikel.length ? artikelTabelle(d.artikel, { auswahl: darfPflegen, pruefen: pruefbar, person: darf.grund, sort, kategorie: true }) : leerHtml}
           ${person ? `<p class="small"><a href="/material/pruefungen?ordner=${d.id}&zugeordnet=${encodeURIComponent(person)}">Fällige Artikel dieser Person im ganzen Zweig →</a></p>` : ""}
           ${seitenleiste(d.artikel_gesamt, seite, d.pro_seite)}
           ${darfPflegen ? `<div class="mat-sammel" id="mat-sammel" hidden><span id="mat-sammel-n"></span><div class="btn-row">
@@ -2144,7 +2089,7 @@
             <button class="btn secondary small" data-act="sammel-zuordnen">Zuordnen an …</button>
             <button class="btn secondary small" data-act="sammel-loesen" hidden>Zuordnung lösen</button></div></div>` : ""}
         </section>
-        <p class="small mat-zweigbestand">${system ? plural(Object.values(z).reduce((a, b) => a + b, 0), "Artikel", "Artikel") : `Bestand im ganzen Zweig: <strong>${d.bestand}</strong>${zaehlSatz(d.bestand, d.bestand_sets) ? `, darunter ${esc(SETS_SATZ(d.bestand_sets))}` : ""} ${zahlen(z)}`}</p>
+        <p class="small mat-zweigbestand">${system ? plural(Object.values(z).reduce((a, b) => a + b, 0), "Artikel", "Artikel") : `Bestand im ganzen Zweig: <strong>${d.bestand}</strong> ${zahlen(z)}`}</p>
         ${darf.grund ? `<details class="section mat-auf"><summary>Journal des Ordners</summary>${journalHtml(d.journal)}</details>` : ""}`;
       if (darfPflegen) {
         // Der Ablaufhinweis bleibt im Ordnerkopf – ein Hinweis, kein Menü; „Verlängern …“ führt in den Reiter.
@@ -2254,9 +2199,6 @@
       };
     }
     await zeichnen();
-    // Quittung von der Seite davor (nach „Set auflösen“, V3) – Fokus darauf wie nach „Mangel melden“.
-    const qEl = $(".mat-mangel-quittung");
-    if (qEl) qEl.focus();
   }
 
   /* --- Produktsuche mit allen Treffern (Artikel anlegen, Meldung zuordnen) ------------------------------
@@ -2281,7 +2223,7 @@
     let kategorie = null;
     ziel.scrollTop = 0;
     const zeile = (p, i) => `<div class="mat-treffer-produkt">${produktFoto(p)}<button type="button" class="mat-treffer-wahl" data-i="${i}">
-      <strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${p.article_no ? ` <span class="muted"><span class="mat-ganz">${esc(p.article_no)}</span></span>` : ""}${demoMarke(p.demo)}${setMarke(p.is_set)}</button></div>`;
+      <strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${p.article_no ? ` <span class="muted"><span class="mat-ganz">${esc(p.article_no)}</span></span>` : ""}${demoMarke(p.demo)}</button></div>`;
     const mitKopf = (p, i) => {
       const k = p.category_name || "";
       const kopf = k !== kategorie ? `<div class="mat-treffer-kat">${esc(k || "ohne Kategorie")}</div>` : "";
@@ -2463,8 +2405,7 @@
         ${k.demo ? `<p class="notice small">Enthält ${k.demo} DEMO-Artikel – gekennzeichnet mit der Marke DEMO; nicht für echte Nachweise.</p>` : ""}`;
       const bestand = `<section class="section" id="be-bestand"><h2>Bestand zum Stichtag ${esc(k.stichtag)}</h2>
         ${paar(zahlen([...bst.zeilen.map((z) => [z.n, `${statusMarke(z.status)}${z.status === "ausgesondert" ? ' <span class="muted">(gesamt, seit je)</span>' : ""}`]),
-          [bst.verloren, "davon verloren gemeldet"], [bst.bestand, "<strong>Bestand gesamt</strong> (ohne ausgesonderte)"]])
-          + (bst.sets_satz ? `<p class="small mat-set-satz">${esc(bst.sets_satz)}</p>` : ""),
+          [bst.verloren, "davon verloren gemeldet"], [bst.bestand, "<strong>Bestand gesamt</strong> (ohne ausgesonderte)"]]),
         `<h3>Je Kategorie (oberste Ebene)</h3>${bst.kategorien.length ? zahlen(bst.kategorien.map((x) => [x.bestand, `${esc(x.name)} <span class="muted">– fällig ${x.faellig}, gesperrt ${x.gesperrt}</span>`])) : leer("Keine Artikel.")}`)}
         ${bst.unterordner.length ? `<h3>Je Unterordner (nach Heimat)</h3>${liste([["Ordner"], ["Bestand", "mat-be-zahl"], ["einsatzbereit", "mat-be-zahl"], ["bald fällig", "mat-be-zahl"], ["überfällig", "mat-be-zahl"], ["neu", "mat-be-zahl"], ["gesperrt", "mat-be-zahl"], ["Lebensdauer", "mat-be-zahl"], ["ausgesondert", "mat-be-zahl"]],
           bst.unterordner.map((u) => `<tr>${td("Ordner", `${esc(u.name)}${u.kennzeichen ? ` <span class="mat-art">${esc(u.kennzeichen)}</span>` : ""}${demoMarke(u.demo)}`, "mat-k-titel")}${td("Bestand", String(u.bestand), "mat-be-zahl")}${["einsatzbereit", "bald_faellig", "ueberfaellig", "neu", "gesperrt", "lebensdauer", "ausgesondert"].map((st) => td(STATUS[st] || st, String(u.zaehlung[st] || 0), `mat-be-zahl${u.zaehlung[st] ? "" : " mat-be-null"}`)).join("")}</tr>`), "mat-bericht-ordner")}` : ""}
@@ -2497,7 +2438,7 @@
       const aussonderungen = `<section class="section" id="be-aussonderungen"><h2>Aussonderungen im Jahr ${esc(String(k.jahr))}</h2>
         ${zahlen([[au.gesamt, "<strong>Aussonderungen gesamt</strong>"], ...au.arten.map((a) => [a.n, esc(a.text)])])}
         ${au.liste.length ? `${liste([["Datum"], ["Inventarnummer"], ["Produkt"], ["Grund"]],
-          au.liste.map((x) => `<tr>${td("Datum", esc(x.datum))}${td("Inventarnummer", `${mono(x.inventarnummer)}${demoMarke(x.demo)}`)}${td("Produkt", `${esc(x.produkt)}${x.set_text ? ` <span class="muted">· ${esc(x.set_text)}</span>` : ""}`)}${td("Grund", `${esc(x.grund)}${x.durch ? ` · durch ${esc(x.durch)}` : ""}${x.protokoll_id ? ` · ${mono(x.protokoll_id)}` : ""}`)}</tr>`))}${kappung(au.liste.length, "Aussonderungen")}` : ""}</section>`;
+          au.liste.map((x) => `<tr>${td("Datum", esc(x.datum))}${td("Inventarnummer", `${mono(x.inventarnummer)}${demoMarke(x.demo)}`)}${td("Produkt", `${esc(x.produkt)}`)}${td("Grund", `${esc(x.grund)}${x.durch ? ` · durch ${esc(x.durch)}` : ""}${x.protokoll_id ? ` · ${mono(x.protokoll_id)}` : ""}`)}</tr>`))}${kappung(au.liste.length, "Aussonderungen")}` : ""}</section>`;
       const maengel = `<section class="section" id="be-maengel"><h2>Mangelmeldungen</h2>
         ${zahlen([[ma.gemeldet, `<strong>gemeldet im Jahr ${esc(String(k.jahr))}</strong>`], [ma.offen, "davon heute offen"], [ma.freipruefung, "erledigt durch Freiprüfung"], [ma.aussonderung, "erledigt durch Aussonderung"], [ma.offen_stichtag, "offene Meldungen zum Stichtag (alle Jahre)"]])}
         ${ma.offen_liste.length ? `${liste([["Inventarnummer"], ["gemeldet am"]],
@@ -2627,70 +2568,41 @@
     // Eigene offene Meldung: Knopf ausgegraut mit Hilfezeile wie in „Meine PSA“ – kein Dialog, der erst 409 bringt.
     // Wer den Artikel selbst verwaltet, bekommt den Satz „an den Materialwart“ nicht.
     const schonGemeldet = darfMelden && a.mangel_eigen_offen;
-    /* Sets (Schritt 21): Am Set-Artikel steht der Block „set“ (Set-Status, Teile, Kopie der Stückliste), am
-       Teil „teil_von“. Ein Teil liegt, sperrt und gehört wie sein Set – Verschieben, Zuordnen und Aussondern gehen nur
-       mit dem ganzen Set (der Dienst antwortet am Teil 409); statt der Knöpfe steht dort ein Hinweis aufs Set. Löschen
-       sagt darf_loeschen. Seit K2 wirken Sperren und „Mangel melden“ über das ganze Set (Kaskade); eine eigene Sperre
-       nimmt auch ein nur mitgesperrter Artikel an (lock_cause „set“). Am Set-Artikel ersetzt „Set prüfen“ die
-       Einzelprüfung (O2): Der Dienst prüft ihn nur in einer Set-Prüfung. */
-    const sb = a.set || null;
-    const tv = a.teil_von || null;
-    const sperrKnopf = (frei || a.lock_cause === "set") && darf.pruefen && !a.entwurf;
-    const aussonderKnopf = gesperrt && darf.verwalten && !a.entwurf && !tv;
-    // Set aussondern durch den Materialwart nur mit eigenem Grund (Prüfer) oder Verlust im Set (K2, Abweichung 6).
-    const setOhneGrund = Boolean(sb) && !(sb.sperrgruende || []).some((g) => g.art === "eigen" || g.art === "verloren");
-    const aussonderAus = a.mangel_nur_gemeldet || setOhneGrund;
-    /* Sets, Teil 2 (P4-L2b): „Set löschen“ löscht nur Teile, die mit dem Set angelegt wurden – mit eingesetzten
-       vorhandenen Artikeln (sb.vorhandene_teile) führt „Löschen …“ zu „Set auflösen“, wenn das ginge. „Set auflösen …“
-       steht im Untermenü „Auflösen“; geht es nicht (sb.aufloesen_hindernis), sagt ein Dialog warum (keine Erklärtexte unter
-       Knöpfen). Seit der Nachbesserung (Browser V4) steht „Set löschen …“ dort mit – beide selten, beide mit Punkten; das
-       Menü heißt nach seinem Inhalt („Auflösen / Löschen“). Am einzelnen Artikel und am Teil bleibt „Löschen“ ein Knopf. */
-    const setPflege = Boolean(sb) && darfPflegen;
-    const loeschenVerweis = setPflege && !a.darf_loeschen && (sb.vorhandene_teile || []).length > 0 && !sb.aufloesen_hindernis;
-    const setLoeschen = setPflege && (a.darf_loeschen || loeschenVerweis);
-    const setMenue = setPflege ? `<details class="mat-menue mat-set-menue"><summary class="btn secondary small" aria-haspopup="true">${setLoeschen ? "Auflösen / Löschen" : "Auflösen"}</summary>
-      <div class="mat-menue-liste"><a href="#" role="button" data-act="set-aufloesen"><strong>Set auflösen …</strong>
-        <span>Die Teile bleiben frei im Ordner des Sets, mit ihrer Zuordnung; das Set selbst wird gelöscht.</span></a>
-      ${setLoeschen ? `<a href="#" role="button" data-act="${a.darf_loeschen ? "loeschen" : "loeschen-verweis"}"><strong>Set löschen …</strong>
-        <span>${a.darf_loeschen ? "Nur für ein falsch angelegtes Set ohne Prüfung – das Set und seine Teile werden gelöscht." : "Das Set enthält vorhandene Artikel – sie löscht „Set löschen“ nie."}</span></a>` : ""}</div></details>` : "";
+    const sperrKnopf = frei && darf.pruefen && !a.entwurf;
+    const aussonderKnopf = gesperrt && darf.verwalten && !a.entwurf;
     const zuordnung = darf.grund ? zeile("Zugeordnet an", `${zu ? `${esc(zu.name)}${zu.gliederung ? ` <span class="muted">· ${esc(zu.gliederung)}</span>` : ""}${zu.aktiv ? "" : ' <span class="muted">(deaktiviert)</span>'}`
-      : '<span class="muted">–</span>'}${tv ? "" : zuKnoepfe}`) : "";
+      : '<span class="muted">–</span>'}${zuKnoepfe}`) : "";
     inhalt.innerHTML = `${quittungHtml()}${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${a.status === "ausgesondert" ? `<p class="mat-banner s-ausgesondert">AUSGESONDERT – dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden.</p>` : ""}
-      ${a.status === "gesperrt" ? `<p class="mat-banner s-gesperrt">${sb ? setGesperrtBanner(sb, a) : `GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.`}</p>` : ""}
+      ${a.status === "gesperrt" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Nicht verwenden, bis eine Freiprüfung ihn freigibt.</p>` : ""}
       ${maengel.filter((m) => m.offen).map(mangelBanner).join("")}
       ${a.status === "lebensdauer" ? `<p class="mat-banner s-lebensdauer">LEBENSDAUER ERREICHT – aussondern.</p>` : ""}
       ${a.status === "neu" ? '<p class="mat-banner s-neu">NEU – die Eingangsprüfung steht aus. Bis dahin nicht einsetzen.</p>' : ""}
       ${rueckrufBanner(a)}
-      ${sb ? setBanner(sb, a) : ""}
       <div class="mat-pfad">${bc}</div>
       <div class="mat-artikelkopf">
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="Produktbild ${esc(produktName(p))}">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel">
-          <h1>${esc(a.inventory_no)} ${statusMarke(sb ? sb.status : a.status, true)}</h1>
-          <p class="mat-produktzeile"><a href="/material/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}${artNrHtml(p.article_no)}${sb ? setMarke(true) : ""}</p>
-          ${tv ? `<p class="mat-teil-von">Teil von Set <a href="/material/artikel/${tv.id}"><strong>${esc(tv.inventory_no)}</strong></a> ${esc(tv.produkt)} ${statusMarke(tv.status)}${tv.bestandteil ? ` <span class="muted">· Bestandteil „${esc(tv.bestandteil)}“</span>` : ""}</p>` : ""}
+          <h1>${esc(a.inventory_no)} ${statusMarke(a.status, true)}</h1>
+          <p class="mat-produktzeile"><a href="/material/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}${artNrHtml(p.article_no)}</p>
           <p>Seriennummer <strong>${esc(a.serial_no)}</strong>${a.serial_generated ? ' <span class="badge grey">vom System vergeben</span><span class="help mat-sn-hinweis">Der Hersteller vergibt keine Seriennummer – diese Nummer bitte dauerhaft am Artikel anbringen.</span>' : ""}</p>
-          <div class="btn-row mat-pruefknoepfe">${sb ? setPruefKnopf(a, sb) : !aus && darf.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
+          <div class="btn-row mat-pruefknoepfe">${!aus && darf.pruefen && !fremderEntwurf ? `<button class="btn" data-act="pruefen">${eigenerEntwurf ? "Prüfung fortsetzen" : a.status === "neu" ? "Eingangsprüfung starten" : "Prüfung starten"}</button>` : ""}
             ${sperrKnopf ? '<button class="btn secondary small" data-act="sperren">Sperren</button>' : ""}
             ${darfMelden ? `<button class="btn secondary small" type="button"${schonGemeldet ? ' disabled aria-describedby="mat-schon-gemeldet"' : ' data-act="mangel"'}>Mangel melden …</button>` : ""}
-            ${aussonderKnopf ? (sb ? `<button class="btn secondary small" type="button" data-act="${aussonderAus ? "aussondern-warum" : "aussondern"}">Set aussondern …</button>`
-              : `<button class="btn secondary small" type="button"${aussonderAus ? ' disabled aria-describedby="mat-aussondern-hilfe"' : ' data-act="aussondern"'}>Aussondern</button>`) : ""}</div>
+            ${aussonderKnopf ? `<button class="btn secondary small" type="button"${a.mangel_nur_gemeldet ? ' disabled aria-describedby="mat-aussondern-hilfe"' : ' data-act="aussondern"'}>Aussondern</button>` : ""}</div>
           ${schonGemeldet ? `<p class="help mat-schon-gemeldet" id="mat-schon-gemeldet">Du hast am ${esc(S.fmtDate(a.mangel_eigen_offen))} schon gemeldet – ein Prüfer sieht es sich an.${darf.verwalten ? "" : " Ergänzungen bitte direkt an den Materialwart."}</p>` : ""}
-          ${aussonderKnopf && aussonderAus && !sb ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(NUR_GEMELDET)}</p>` : ""}
+          ${aussonderKnopf && a.mangel_nur_gemeldet ? `<p class="help mat-aussondern-hilfe" id="mat-aussondern-hilfe">${esc(NUR_GEMELDET)}</p>` : ""}
           ${a.entwurf ? `<p class="small">In Prüfung bei <strong>${esc(a.entwurf.pruefer)}</strong> seit ${esc(fmtZeit(a.entwurf.seit))}
             ${fremderEntwurf ? ` <span class="mat-nowrap">· <a href="/material/pruefung/${a.entwurf.id}">ansehen</a></span>` : ""}
             ${fremderEntwurf && darf.verwalten ? ' <span class="mat-nowrap">· <button class="lnk" type="button" data-act="freigeben">Reservierung aufheben</button></span>' : ""}</p>` : ""}
-          ${aus || darf.pruefen || sb ? "" : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice small">${pruefHinweis(a)}</p>`
+          ${aus || darf.pruefen ? "" : DARF.qualifiziert || DARF.pruefer_haekchen ? `<p class="notice small">${pruefHinweis(a)}</p>`
             : '<p class="small muted">Prüfen dürfen Prüfer mit Urkundennummer und Prüffreigabe (Häkchen „Prüfer“ in der Nutzerverwaltung, Urkundennummer im eigenen Profil, Prüffreigabe vom Materialwart).</p>'}
           ${a.durchgang ? `<p class="small">Steht im Prüfdurchgang ${a.durchgang.sichtbar ? `<a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>` : `„${esc(a.durchgang.titel)}“`}.</p>` : ""}
-          <div class="btn-row">${darfDirekt ? '<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>' : ""}${darfPflegen ? `${frei && !tv ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen && !sb ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}${darf.grund ? lebenslaufKnopf(a) : ""}${setMenue}</div>
-          ${tv && darf.verwalten ? `<p class="help mat-teil-hinweis">Verschieben, Zuordnen und Aussondern gehen nur mit dem ganzen Set – <a href="/material/artikel/${tv.id}">zum Set <span class="mat-inv">${esc(tv.inventory_no)}</span></a>.</p>` : ""}
+          <div class="btn-row">${darfDirekt ? '<button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>' : ""}${darfPflegen ? `${frei ? '<button class="btn secondary small" data-act="verschieben">Verschieben</button>' : ""}${a.darf_loeschen ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}` : ""}${darf.grund ? lebenslaufKnopf(a) : ""}</div>
           ${darf.grund ? `<p class="help mat-nur-touch">Lebenslauf (PDF): ${LEBENSLAUF_TEXT}</p>` : ""}
         </div>
       </div>
       ${DATEN.suche ? '<div id="mat-global-angebot"></div>' : ""}
-      ${sb ? setKasten(sb, a) : ""}
       <div class="mat-spalten">
         <section class="section"><h2>Stammdaten</h2><dl class="mat-daten">
           ${zeile("Produkt", `${nameHtml(p)}${zusatzHtml(p)}`)}
@@ -2736,29 +2648,12 @@
       "antrag-zurueck": (b) => antragZurueckziehen((a.antraege || []).find((x) => x.id === +b.dataset.id), () => zeigen(artikel)),
       pruefen: () => { location.href = eigenerEntwurf ? `/material/pruefung/${a.entwurf.id}` : `/material/artikel/${a.id}/pruefung/neu`; },
       sperren: () => sperrDialog(a),
-      mangel: () => mangelDialog(a, (r, q) => { quittung = q; return zeigen(artikel); }, { set: setVerbund(a) }),
+      mangel: () => mangelDialog(a, (r, q) => { quittung = q; return zeigen(artikel); }),
       "rr-sperren": (b) => sperrDialog(a, { grund: "rueckruf", text: ((a.rueckrufe || []).find((r) => r.id === +b.dataset.id) || {}).title }),
       aussondern: () => aussonderDialog(a),
-      // V1 (Browser-Prüfung): Warum „Set aussondern“ hier nicht geht, steht im Dialog – nicht als Text unter den Knöpfen.
-      "aussondern-warum": () => dialog(`<h2>Set ${esc(a.inventory_no)} aussondern</h2>
-        <p>${esc(a.mangel_nur_gemeldet ? NUR_GEMELDET : SET_OHNE_GRUND)}</p>
-        <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`),
-      "teil-tauschen": (b) => teilDialog(a, "tauschen", sb.teile.find((t) => t.id === +b.dataset.id)),
-      "teil-entnehmen": (b) => teilDialog(a, "entnehmen", sb.teile.find((t) => t.id === +b.dataset.id)),
-      "teil-einsetzen": (b) => teilDialog(a, "einsetzen", null, sb.bestandteile.find((z) => z.id === +b.dataset.id)),
-      "bestandteil-ersetzt": (b) => bestandteilDialog(a, sb.bestandteile.find((z) => z.id === +b.dataset.id)),
-      "set-aufloesen": () => (sb.aufloesen_hindernis ? dialog(`<h2>Set ${esc(a.inventory_no)} auflösen</h2>
-        <p>${esc(sb.aufloesen_hindernis)}</p>
-        <div class="dlg-actions"><button class="btn secondary" data-close type="button">Schließen</button></div>`) : setAufloesen(a)),
-      "loeschen-verweis": () => dialog(`<h2>Set ${esc(a.inventory_no)} löschen</h2>
-        <p>Das Set enthält vorhandene Artikel (${esc(sb.vorhandene_teile.join(", "))}). „Löschen“ löscht nur Teile, die mit dem Set angelegt wurden – vorhandene Artikel nie.</p>
-        <p>„Set auflösen“ gibt alle Teile frei in den Ordner des Sets zurück und löscht das Set selbst; ungeprüfte neue Teile lassen sich danach einzeln löschen.</p>
-        <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="lv-aufloesen" type="button">Set auflösen …</button></div>`,
-      (d, body) => { $("#lv-aufloesen", body).onclick = () => { d.close(); setAufloesen(a); }; }),
       freigeben: () => reservierungFreigeben(a.entwurf.id, a.entwurf.pruefer, () => zeigen(artikel)),
       verschieben: async () => {
-        const hinweis = sb && sb.teile_anzahl ? `${ARTIKEL_VERSCHIEBEN} Die ${plural(sb.teile_anzahl, "Teil", "Teile")} des Sets wandern mit.` : ARTIKEL_VERSCHIEBEN;
-        const ziel = await ordnerWaehlen(sb ? "Set verschieben nach …" : "Artikel verschieben nach …", { quelle: a.folder_id, hinweis, wechselHinweis: ARTIKEL_WECHSEL });
+        const ziel = await ordnerWaehlen("Artikel verschieben nach …", { quelle: a.folder_id, hinweis: ARTIKEL_VERSCHIEBEN, wechselHinweis: ARTIKEL_WECHSEL });
         if (!ziel) return;
         try { await api(`${API}/artikel/verschieben`, { method: "POST", body: { ids: [a.id], folder_id: ziel } }); toast("Verschoben"); leisteNeu(); zeigen(artikel); }
         catch (e) { toast(e.message, true); }
@@ -2774,22 +2669,12 @@
         catch (e) { toast(e.message, true); }
       },
       loeschen: async () => {
-        const frage = sb ? `Set ${a.inventory_no} mit ${plural(sb.teile_anzahl, "Teil", "Teilen")} löschen? Das ist nur für falsch angelegte Sets ohne Prüfung gedacht; die Inventarnummern werden nicht wieder vergeben.`
-          : tv ? `Teil ${a.inventory_no} löschen? Das ist nur für ein falsch angelegtes Teil ohne Prüfung gedacht; die Inventarnummer wird nicht wieder vergeben. Das Set ${tv.inventory_no} ist danach unvollständig und gesperrt – bis ein Teil eingesetzt ist und „Set prüfen“ es freigibt.`
-          : `Artikel ${a.inventory_no} löschen? Das ist nur für falsch angelegte Artikel ohne Prüfung gedacht; die Inventarnummer wird nicht wieder vergeben.`;
+        const frage = `Artikel ${a.inventory_no} löschen? Das ist nur für falsch angelegte Artikel ohne Prüfung gedacht; die Inventarnummer wird nicht wieder vergeben.`;
         if (!(await confirm(frage, "Löschen"))) return;
-        try { await api(`${API}/artikel/${a.id}`, { method: "DELETE" }); location.href = tv ? `/material/artikel/${tv.id}` : `/material/ordner/${a.folder_id}`; }
+        try { await api(`${API}/artikel/${a.id}`, { method: "DELETE" }); location.href = `/material/ordner/${a.folder_id}`; }
         catch (e) { toast(e.message, true); }
       },
     };
-    // Aus der Meldung „anderes Produkt“ bei „aus dem Bestand wählen“ (Feintuning, L2b Nr. 29): gleich „Bearbeiten“ mit
-    // der Produktsuche. Der Parameter fällt danach weg – ein Neuladen öffnet den Dialog nicht noch einmal.
-    const adresse = new URLSearchParams(location.search);
-    if (adresse.get("bearbeiten") === "produkt") {
-      adresse.delete("bearbeiten");
-      history.replaceState(null, "", `${location.pathname}${adresse.toString() ? `?${adresse}` : ""}${location.hash}`);
-      if (darfPflegen && a.produkt_aenderbar) artikelDialog(a, true);
-    }
     if (DATEN.suche) {
       const g = await baustein("MatGlobal");
       const el = $("#mat-global-angebot");
@@ -2798,140 +2683,6 @@
                                       gefunden: (x) => { artikelFremde = x; } });
       }
     }
-  }
-
-  /* --- Set-Seite (Schritt 21, Entwurf C und F) -------------------------------------------------------------------
-     Banner: Rückrufe an Teilen (rueckrufe_teile) und ein Set-Status, den ein Teil schlechter macht als den des Sets
-     selbst; fehlende Teile („unvollständig“) stehen im einen GESPERRT-Banner (setGesperrtBanner – Nachbesserung V2), am
-     ausgesonderten Set gar nicht (B3). Der Kasten „Bestandteile“ zeigt Set-Status, Set-Fälligkeit und
-     Set-Lebensende mit dem auslösenden Artikel, darunter je Zeile den Set-Artikel und seine Teile (Bestandteil, Nummer,
-     Status mit Mangel, Rückruf und Sperrgrund, nächste Prüfung, Lebensende) und je fehlendem Stück eine Zeile „fehlt“;
-     dann die Bestandteile ohne eigenen Artikel (Tasche, Seilsatz). Teile, die das Konto nicht sieht, fehlen in der
-     Antwort – die Zählung „fehlt“ rechnet der Server. */
-  const naechsteKurz = (x) => (x.status === "neu" ? "Eingangsprüfung" : x.lock_state && x.lock_state !== "frei" ? "" : x.next_due_on ? fmtTag(x.next_due_on) : "");
-  const durchText = (d, a) => (!d ? "" : d.set_artikel ? "das Set selbst" : d.id === a.id ? "dieser Artikel"
-    : `Teil <a class="mat-inv" href="/material/artikel/${d.id}">${esc(d.inventory_no)}</a>`);
-  const fehltText = (sb) => sb.fehlend.map((f) => `${f.fehlt} × ${esc(f.bezeichnung)}`).join(", ");
-  // Der eine GESPERRT-Banner am Set (V2): der Grund, bei Unvollständigkeit dazu, was fehlt.
-  // Der Grund nach einem Doppelpunkt – er trägt oft selbst einen Gedankenstrich („Bestandteil ersetzt – Set prüfen“; V7).
-  function setGesperrtBanner(sb, a) {
-    if (sb.vollstaendig) return `GESPERRT${a.lock_reason ? `: ${esc(a.lock_reason)}` : ""}. Nicht verwenden, bis „Set prüfen“ das Set freigibt.`;
-    // Der abgeleitete Grund (sets.anlass_text) nennt die Unvollständigkeit selbst – hier steht sie einmal, mit Stückzahl.
-    const sonst = (a.lock_reason || "").split("; ").filter((x) => x && !x.startsWith("unvollständig: ")).join("; ");
-    return `GESPERRT – Set unvollständig, es fehlt: ${fehltText(sb)}${sonst ? `; ${esc(sonst)}` : ""}. Nicht verwenden, bis das Set wieder vollständig und geprüft ist.`;
-  }
-  function setBanner(sb, a) {
-    const out = [];
-    if (a.lock_state === "ausgesondert") return "";
-    sb.rueckrufe_teile.forEach((r) => out.push(`<div class="mat-banner mat-rr-banner" role="note"><p class="mat-rr-titel">RÜCKRUF AN EINEM TEIL: ${esc(r.titel)}</p>
-      <p class="mat-rr-zeile">betrifft Teil <a href="/material/artikel/${r.teil.id}">${esc(r.teil.inventory_no)}</a> – dort sperren oder prüfen.</p></div>`));
-    // Ein Teil macht den Set-Status schlechter als den des Set-Artikels allein: sagen, dass es am Teil liegt.
-    const SCHWER = { ueberfaellig: "s-ueberfaellig", lebensdauer: "s-lebensdauer", gesperrt: "s-gesperrt" };
-    if (sb.status !== sb.eigen.status && SCHWER[sb.status]) {
-      out.push(`<p class="mat-banner ${SCHWER[sb.status]}">SET ${esc(String(STATUS[sb.status] || sb.status).toUpperCase())} – wegen eines Teils, siehe „Bestandteile“. Nicht verwenden.</p>`);
-    }
-    return out.join("");
-  }
-  /* O2: „Set prüfen“ ist rot, wenn das Set fällig ist (wie bestand.FAELLIG), gesperrt ist oder eine Set-Prüfung läuft –
-     sonst grau. Die Set-Prüfung lebt auf einer eigenen Seite (setLaufAnsicht); wer dort nicht prüft, sieht eine laufende
-     über „Set-Prüfung ansehen“. */
-  const SET_ROT = ["ueberfaellig", "lebensdauer", "neu", "bald_faellig", "gesperrt"];
-  const SET_OHNE_GRUND = "Set aussondern geht hier nur, wenn ein Prüfer das Set oder eines seiner Teile gesperrt hat oder etwas verloren ist. Ist das Set nur unvollständig oder nach einem Tausch gesperrt, sondert es ein Prüfer über „Set prüfen“ mit dem Ergebnis „aussondern“ aus.";
-  function setPruefKnopf(a, sb) {
-    if (a.lock_state === "ausgesondert") return "";
-    const ziel = `/material/artikel/${a.id}/set-pruefung`;
-    if (a.darf && a.darf.pruefen) {
-      return `<a class="btn${sb.lauf || SET_ROT.includes(sb.status) ? "" : " secondary"}" href="${ziel}">${sb.lauf ? "Set-Prüfung fortsetzen" : "Set prüfen"}</a>`;
-    }
-    return sb.lauf ? `<a class="btn secondary" href="${ziel}">Set-Prüfung ansehen</a>` : "";
-  }
-  // Das Set, über das eine Sperre oder Mangelmeldung wirkt (K2): {inventory_no, teile} – am Set-Artikel und am Teil.
-  const setVerbund = (a) => (a.set ? { inventory_no: a.inventory_no, teile: a.set.teile_anzahl }
-    : a.teil_von ? { inventory_no: a.teil_von.inventory_no, teile: a.teil_von.teile_anzahl } : null);
-  const setSperrSatz = (v) => `das ganze Set ${v.inventory_no} mit ${v.teile === 1 ? "seinem Teil" : `allen ${v.teile} Teilen`}`;
-  const laufKurzText = (l) => `läuft seit ${fmtZeit(l.opened_at)}${l.opened_by_name ? ` (begonnen von ${l.opened_by_name})` : ""}`;
-
-  /* Kasten „Bestandteile“. Seit O2 dazu: warum das Set gesperrt ist (sperrgruende, abgeleitet), die laufende und die
-     letzte Set-Prüfung (mit Berichtigungen von Teilprüfungen danach), und für den Materialwart je Teil das Untermenü
-     „Austausch“ (Teil tauschen, Teil entnehmen) und an einer fehlenden Position „Teil einsetzen …“. Tauschen und
-     Einsetzen sind bei „Austausch laut Hersteller: nein“ ausgegraut – dann bleibt nur, das Set auszusondern. */
-  // Ein Teil ohne zugeteilte Position (nach „Stückliste übertragen“): Gibt es seine Position noch, nur mit weniger Stück,
-  // ist nicht dieses eine Stück „übrig“ – der Materialwart wählt, welches er entnimmt (Nachbesserung Sets, 25.10.2026).
-  function uebrigHinweis(t, sb) {
-    const noch = (sb.bestandteile || []).some((b) => b.einzeln && b.produkt && t.produkt && b.produkt.id === t.produkt.id);
-    return noch ? '<div class="small mat-warn">Anzahl in der Stückliste verringert – dieses oder ein anderes Stück entnehmen</div>'
-      : '<div class="small mat-warn">steht nicht mehr in der Stückliste</div>';
-  }
-  function setKasten(sb, a) {
-    const pflege = Boolean(a.darf && a.darf.verwalten) && a.lock_state !== "ausgesondert";
-    const zeile = (x, titel, nummer, produkt, aktion) => `<tr${x.lock_state && x.lock_state !== "frei" ? ' class="mat-gesperrt-zeile"' : ""}>
-      <td data-l="Teil" class="mat-k-titel"><strong>${esc(titel)}</strong>${produkt}</td>
-      <td data-l="Nummer" class="mat-k-halb">${nummer}</td>
-      <td data-l="Status" class="mat-k-marke">${statusMarke(x.status)}${x.rueckruf ? ` <span class="mat-rr-marke" title="Rückruf: ${esc(x.rueckruf)}">Rückruf</span>` : ""}${mangelMarke(x.mangel)}${x.lock_reason ? `<div class="small muted">${esc(x.lock_reason)}</div>` : ""}</td>
-      <td data-l="Nächste Prüfung" class="mat-k-halb">${naechsteKurz(x) ? esc(naechsteKurz(x)) : '<span class="muted">–</span>'}</td>
-      <td data-l="Lebensende" class="mat-k-halb">${x.retire_by ? esc(fmtTag(x.retire_by)) : '<span class="muted">–</span>'}</td>
-      ${pflege ? `<td class="tabelle-aktionen mat-k-ohne">${aktion || ""}</td>` : ""}</tr>`;
-    const eigen = Object.assign({}, sb.eigen, { lock_state: a.lock_state, lock_reason: a.lock_state !== "frei" ? a.lock_reason : "", mangel: (a.maengel || []).some((m) => m.offen) });
-    const fehlt = sb.bestandteile.filter((z) => z.einzeln && z.fehlt > 0);
-    const ohne = sb.bestandteile.filter((z) => !z.einzeln);
-    const teilProdukt = (t) => `<div class="small">${nameHtml(t.produkt)}${zusatzHtml(t.produkt)}${artNrKurz(t.produkt.article_no)}</div>`;
-    const NICHT_TAUSCHBAR = "Laut Hersteller nicht austauschbar – fällt es aus, wird das ganze Set ausgesondert.";
-    // „Austausch laut Hersteller: nein“: Tauschen und Entnehmen ausgegraut, aber fokussierbar mit lesbarem Grund (V14).
-    const ausEintrag = (titel) => `<span class="mat-menue-aus" role="menuitem" aria-disabled="true" tabindex="0"><strong>${titel}</strong><span>${NICHT_TAUSCHBAR}</span></span>`;
-    // Ein Teil ohne Position (nach „Stückliste übertragen“, Entscheidung S5) lässt sich nur entnehmen – tauschen hieße,
-    // ein Teil einer Position einzusetzen, die es nicht mehr gibt.
-    const teilMenue = (t) => `<details class="mat-menue mat-teil-menue"><summary class="btn secondary small" aria-haspopup="true">Austausch</summary>
-      <div class="mat-menue-liste">
-        ${!t.slot_id ? `<a href="#" role="button" data-act="teil-entnehmen" data-id="${t.id}"><strong>Teil entnehmen …</strong>
-          <span>Steht nicht mehr in der Stückliste des Sets – entnehmen und weiterführen oder aussondern.</span></a>`
-          : t.austausch === "nein" ? ausEintrag("Teil tauschen") + ausEintrag("Teil entnehmen")
-          : `<a href="#" role="button" data-act="teil-tauschen" data-id="${t.id}"><strong>Teil tauschen …</strong>
-            <span>Entnehmen und ein neues Teil desselben Produkts einsetzen${t.austausch === "nicht_belegt" ? " – der Austausch ist laut Hersteller nicht belegt, du bestätigst ihn" : ""}.</span></a>
-        <a href="#" role="button" data-act="teil-entnehmen" data-id="${t.id}"><strong>Teil entnehmen …</strong>
-          <span>Ohne Ersatz entnehmen und weiterführen oder aussondern – das Set ist danach unvollständig.</span></a>`}
-      </div></details>`;
-    // „Bestandteil ersetzt“ (P4-L2b, Entwurf B) an einer Position ohne eigenen Artikel – bei „nein“ ausgegraut mit Grund.
-    const ohneMenue = (z) => `<details class="mat-menue mat-teil-menue"><summary class="btn secondary small" aria-haspopup="true">Austausch</summary>
-      <div class="mat-menue-liste">${z.austausch === "nein" ? ausEintrag("Bestandteil ersetzt")
-        : `<a href="#" role="button" data-act="bestandteil-ersetzt" data-id="${z.id}"><strong>Bestandteil ersetzt …</strong>
-          <span>Eintragen, dass ${esc(z.bezeichnung)} ersetzt wurde – das Set ist danach gesperrt, bis „Set prüfen“ es freigibt${z.austausch === "nicht_belegt" ? "; der Austausch ist laut Hersteller nicht belegt, du bestätigst ihn" : ""}.</span></a>`}
-      </div></details>`;
-    const einsetzen = (z) => (z.austausch === "nein"
-      ? `<button class="btn secondary small" type="button" disabled title="${esc(NICHT_TAUSCHBAR)}">Teil einsetzen …</button>`
-      : `<button class="btn secondary small" type="button" data-act="teil-einsetzen" data-id="${z.id}">Teil einsetzen …</button>`);
-    const lp = sb.letzte_pruefung;
-    const aus = a.lock_state === "ausgesondert";
-    const gesperrt = a.lock_state === "gesperrt" || a.lock_state === "verloren";
-    const gruende = (sb.sperrgruende || []).filter((g) => g.art !== "set_pruefung");
-    const grundZeile = (g) => (g.artikel && !g.artikel.set_artikel ? `<a href="/material/artikel/${g.artikel.id}">${esc(g.text)}</a>` : esc(g.text));
-    return `<section class="section mat-set-kasten"><h2>Bestandteile</h2>
-      <dl class="mat-daten mat-set-werte">
-        <dt>Set-Status</dt><dd>${statusMarke(sb.status)} <span class="muted small">der schwerste aus dem Set selbst und seinen Teilen</span></dd>
-        ${gruende.length ? `<dt>Gesperrt, weil</dt><dd><ul class="mat-set-gruende">${gruende.map((g) => `<li>${grundZeile(g)}</li>`).join("")}</ul>
-          <span class="small muted">Frei gibt das Set nur „Set prüfen“ mit dem Ergebnis „einsatzbereit“.</span></dd>` : ""}
-        <dt>Nächste Prüfung</dt><dd>${aus ? '<span class="muted">–</span>' : gesperrt ? '<span class="muted">setzt die Freiprüfung („Set prüfen“)</span>'
-          : sb.status === "neu" ? "<strong>Eingangsprüfung ausstehend</strong>"
-            : sb.next_due_on ? `<strong>${esc(fmtTag(sb.next_due_on))}</strong> <span class="muted">(${durchText(sb.faellig_durch, a)})</span>` : '<span class="muted">–</span>'}</dd>
-        <dt>Lebensende</dt><dd>${sb.retire_by ? `${esc(fmtTag(sb.retire_by))} <span class="muted">(${durchText(sb.lebensende_durch, a)})</span>` : '<span class="muted">keins festgeschrieben</span>'}</dd>
-        ${sb.lauf ? `<dt>Set-Prüfung</dt><dd><a href="/material/artikel/${a.id}/set-pruefung">${esc(laufKurzText(sb.lauf))}</a>${sb.lauf.durchgang ? ` <span class="muted small">· im Durchgang „${esc(sb.lauf.durchgang.titel)}“</span>` : ""}</dd>` : ""}
-        ${lp ? `<dt>Letzte Set-Prüfung</dt><dd>${esc(fmtTag(lp.datum))} · ${esc(lp.gesamt_text || "")}
-          · <a href="/material/pruefung/${lp.pruefung_id}">${lp.protokoll_id ? `Protokoll <span class="mat-hash">${esc(lp.protokoll_id)}</span>` : "ansehen"}</a>
-          ${lp.berichtigt_durch ? `<div class="small">berichtigt durch <span class="mat-hash">${esc(lp.berichtigt_durch)}</span></div>` : ""}
-          ${(lp.berichtigte_teile || []).map((b) => `<div class="small">Teil ${esc(b.inventarnummer)}: <span class="mat-hash">${esc(b.protokoll_id)}</span> berichtigt durch <span class="mat-hash">${esc(b.durch)}</span></div>`).join("")}</dd>` : ""}
-      </dl>
-      <table class="list mat-tabelle mat-karten mat-set-teile"><thead><tr><th>Teil</th><th>Nummer</th><th>Status</th><th>Nächste Prüfung</th><th>Lebensende</th>${pflege ? '<th><span class="mat-vorlesen">Austausch</span></th>' : ""}</tr></thead><tbody>
-        ${zeile(eigen, "Das Set selbst", `<strong>${esc(a.inventory_no)}</strong><div class="small muted">SN ${esc(a.serial_no)}</div>`, "")}
-        ${sb.teile.map((t) => zeile(t, t.bestandteil || "Teil", `<a class="mat-inv" href="/material/artikel/${t.id}"><strong>${esc(t.inventory_no)}</strong></a>
-          <div class="small muted">SN ${esc(t.serial_no)}${t.serial_generated ? " (System)" : ""}</div>`,
-          teilProdukt(t) + (t.slot_id || aus ? "" : uebrigHinweis(t, sb)), teilMenue(t))).join("")}
-        ${(aus ? [] : fehlt).map((z) => `<tr class="mat-fehlt-zeile"><td data-l="Teil" class="mat-k-titel"><strong>${esc(z.bezeichnung)}</strong>${z.produkt ? `<div class="small">${nameHtml(z.produkt)}${zusatzHtml(z.produkt)}</div>` : ""}</td>
-          <td data-l="Nummer" class="mat-k-halb" colspan="4"><span class="mat-warn">fehlt – ${z.fehlt} von ${z.anzahl}</span></td>
-          ${pflege ? `<td class="tabelle-aktionen mat-k-ohne">${einsetzen(z)}</td>` : ""}</tr>`).join("")}
-        ${ohne.map((z) => `<tr class="mat-ohne-zeile"><td data-l="Teil" class="mat-k-titel"><strong>${esc(z.bezeichnung)}</strong></td>
-          <td data-l="Anzahl" class="mat-k-halb" colspan="4"><span class="muted">${z.anzahl} × ohne eigenen Artikel</span></td>
-          ${pflege ? `<td class="tabelle-aktionen mat-k-ohne">${ohneMenue(z)}</td>` : ""}</tr>`).join("")}
-      </tbody></table>
-    </section>`;
   }
 
   /* Personenzuordnung (Bauentwurf 6.4): Ein Artikel – meist PSA, die eine Person dauerhaft nutzt – wird einem Konto
@@ -3009,17 +2760,12 @@
   const ergebnisMarke = (e) => (e ? `<span class="mat-ergebnis-marke e-${esc(e)}">${esc(ERGEBNIS[e] || e)}</span>` : "");
 
   // vorgabe: { grund, text } – etwa aus dem Rückruf-Banner (Grund „Rückruf“, Titel des Rückrufs).
-  // Sets (K2): Die Sperre wirkt über das ganze Set; an einem nur mitgesperrten Artikel hält sie fest, dass er
-  // selbst betroffen ist (eigener Grund). „Sperren“ ist die Hauptaktion des Dialogs (btn) – nicht btn danger: Eine
+  // „Sperren“ ist die Hauptaktion des Dialogs (btn) – nicht btn danger: Eine
   // Freiprüfung hebt die Sperre wieder auf (Entscheidung vom 23.10.2026, L2b).
   function sperrDialog(a, vorgabe) {
     vorgabe = vorgabe || {};
-    const v = setVerbund(a);
-    const satz = !v ? "Der Artikel wandert nach „Gesperrt“ seiner Gliederung; zurück bringt ihn nur eine Freiprüfung mit „einsatzbereit“."
-      : a.lock_cause === "set" ? `${a.inventory_no} ist schon mit dem Set gesperrt – die eigene Sperre hält fest, dass er selbst betroffen ist. Frei gibt ${setSperrSatz(v)} erst „Set prüfen“, nachdem ein Prüfer ihn geprüft hat.`
-        : `Das sperrt ${setSperrSatz(v)}: Alle wandern nach „Gesperrt“ der Gliederung. Frei gibt das Set nur „Set prüfen“ mit dem Ergebnis „einsatzbereit“.`;
     dialog(`<h2>${esc(a.inventory_no)} sperren</h2>
-      <p class="help">Sperren ohne Prüfung – nach Sturzbelastung, Beschädigung, bei Verlust oder bei einem Rückruf des Herstellers. ${esc(satz)}</p>
+      <p class="help">Sperren ohne Prüfung – nach Sturzbelastung, Beschädigung, bei Verlust oder bei einem Rückruf des Herstellers. Der Artikel wandert nach „Gesperrt“ seiner Gliederung; zurück bringt ihn nur eine Freiprüfung mit „einsatzbereit“.</p>
       <label for="sd-grund">Grund</label><select id="sd-grund">${Object.entries(SPERRGRUND).map(([k, v]) => `<option value="${k}"${k === vorgabe.grund ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>
       <label for="sd-text">Was ist passiert?</label><input type="text" id="sd-text" maxlength="300" placeholder="z. B. Sturz in die Rettungskette, Schnitt am Band" value="${esc(vorgabe.text || "")}">
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="sd-ok" type="button">Sperren</button></div>`,
@@ -3027,26 +2773,15 @@
       $("#sd-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
         knopf.disabled = true;
-        try { await api(`${API}/artikel/${a.id}/sperren`, { method: "POST", body: { grund: $("#sd-grund", body).value, text: $("#sd-text", body).value } }); dlg.close(); toast(v ? `Gesperrt – ${setSperrSatz(v)}` : "Gesperrt"); zeigen(artikel); }
+        try { await api(`${API}/artikel/${a.id}/sperren`, { method: "POST", body: { grund: $("#sd-grund", body).value, text: $("#sd-text", body).value } }); dlg.close(); toast("Gesperrt"); zeigen(artikel); }
         catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
     });
   }
 
-  /* „Set aussondern“ und Ergebnis „aussondern“ am Set-Artikel (K2, Entscheidung „je Teil wählbar“): je Teil „mit
-     aussondern“ oder „entnehmen und gesperrt weiterführen“, vorbelegt mit dem Vorschlag des Servers (eigene Sperre durch
-     einen Prüfer oder verloren → mit aussondern). x: {id, inventory_no, bestandteil, lock_reason, vorschlag}. */
-  const verbleibWahl = (x, name) => `<fieldset class="mat-verbleib-teil"><legend><strong>${esc(x.inventory_no)}</strong>${x.bestandteil ? ` <span class="muted small">${esc(x.bestandteil)}</span>` : ""}</legend>
-      ${x.lock_reason ? `<p class="small muted mat-verbleib-grund">${esc(x.lock_reason)}</p>` : ""}
-      ${Object.entries(VERBLEIB).map(([k, t]) => `<label class="inline"><input type="radio" name="${name}-${x.id}" value="${k}" data-teil="${x.id}"${x.vorschlag === k ? " checked" : ""}> ${esc(t)}</label>`).join("")}</fieldset>`;
-  const verbleibLesen = (body) => $$("input[data-teil]:checked", body).map((x) => ({ teil_id: +x.dataset.teil, verbleib: x.value }));
-  const VERBLEIB_HILFE = "Mit ausgesonderte Teile bleiben mit ihrem Lebenslauf am Set, jedes mit eigenem Aussonderungsprotokoll. Weitergeführte verlassen das Set gesperrt (Grund „aus ausgesondertem Set entnommen“), bis ein Prüfer sie freiprüft.";
-
   /* Aussonderung durch den Materialwart: wird mit seiner Unterschrift festgeschrieben (Aussonderungsprotokoll).
-     Fehlt sie, unterschreibt er im Dialog – vorab mit „Unterschreiben“ oder spätestens beim Aussondern. Am Set-Artikel
-     „Set aussondern“ mit der Wahl je Teil (verbleib). */
+     Fehlt sie, unterschreibt er im Dialog – vorab mit „Unterschreiben“ oder spätestens beim Aussondern. */
   function aussonderDialog(a) {
-    const sb = a.set || null;
     const tag = isoHeute(0);
     // Das Datum als deutsches Textfeld (TT.MM.JJJJ, C2 in P4-L1): spätestens heute, nicht vor der letzten Prüfung, dem
     // Herstelldatum und der Erfassung – der Server prüft dieselben Grenzen (409 mit Klartext).
@@ -3054,15 +2789,12 @@
     const grenzen = [[a.last_inspected_on, "letzte Prüfung"], [herst, "Herstellung"], [(a.created_at || "").slice(0, 10), "Erfassung"]].filter(([d]) => d);
     const fruehestens = grenzen.length ? grenzen.reduce((x, y) => (y[0] > x[0] ? y : x)) : null;
     const HINWEIS = "Die Aussonderung wird mit deiner Unterschrift festgeschrieben. Sie wird in deinem Profil gespeichert und als Kopie ins Aussonderungsprotokoll übernommen.";
-    dialog(`<h2>${sb ? "Set " : ""}${esc(a.inventory_no)} aussondern</h2>
-      <p class="help">${sb ? "Die Aussonderung ist endgültig: Das Set selbst und die Teile „mit aussondern“ wandern nach „Ausgesondert“, bleiben dort mit ihrem Lebenslauf sichtbar und zählen nirgends mehr als Bestand."
-        : "Die Aussonderung ist endgültig: Der Artikel wandert nach „Ausgesondert“, bleibt dort mit seinem Lebenslauf sichtbar und zählt nirgends mehr als Bestand."}</p>
-      <div class="field-row"><div><label for="au-grund">Grund</label><select id="au-grund"${sb ? ' required aria-required="true"' : ""}>${sb ? '<option value="" selected>– bitte wählen –</option>' : ""}${Object.entries(AUSSONDERUNGSGRUND).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
+    dialog(`<h2>${esc(a.inventory_no)} aussondern</h2>
+      <p class="help">Die Aussonderung ist endgültig: Der Artikel wandert nach „Ausgesondert“, bleibt dort mit seinem Lebenslauf sichtbar und zählt nirgends mehr als Bestand.</p>
+      <div class="field-row"><div><label for="au-grund">Grund</label><select id="au-grund">${Object.entries(AUSSONDERUNGSGRUND).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
         <div><label for="au-datum">Datum</label>${datumFeld("au-datum", tag, "tag")}
           <div class="help">${fruehestens ? `Frühestens ${esc(fmtTag(fruehestens[0]))} (${esc(fruehestens[1])}), spätestens` : "Spätestens"} heute (${esc(fmtTag(tag))}).</div></div></div>
       <label for="au-bem">Bemerkung</label><textarea id="au-bem" rows="3" maxlength="2000"></textarea>
-      ${sb && sb.teile.length ? `<div class="mat-verbleib"><h3 class="mat-unter">Teile des Sets</h3><p class="help">${esc(VERBLEIB_HILFE)}</p>
-        ${sb.teile.map((t) => verbleibWahl({ id: t.id, inventory_no: t.inventory_no, bestandteil: t.bestandteil, lock_reason: t.lock_reason, vorschlag: t.verbleib_vorschlag }, "au-vb")).join("")}</div>` : ""}
       <p class="help">Die Aussonderung wird mit deiner Unterschrift festgeschrieben (Aussonderungsprotokoll).</p>
       <div id="au-us"></div>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn danger" id="au-ok" type="button">Aussondern</button></div>`,
@@ -3083,8 +2815,6 @@
       usZeigen();
       $("#au-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
-        // Am Set ist der Grund nicht vorbelegt (V17): Er muss zum Anlass passen, etwa einem Sturz an einem Teil.
-        if (!$("#au-grund", body).value) { toast("Bitte den Grund der Aussonderung wählen.", true); $("#au-grund", body).focus(); return; }
         // Erst das Datum (ein Tippfehler bricht ab), dann die Unterschrift.
         let datum;
         try { datum = datumWert($("#au-datum", body), "Datum"); }
@@ -3096,11 +2826,10 @@
         knopf.textContent = "Wird festgeschrieben …";
         try {
           const daten = { grund: $("#au-grund", body).value, datum, bemerkung: $("#au-bem", body).value };
-          if (sb) daten.verbleib = verbleibLesen(body);
           const r = await api(`${API}/artikel/${a.id}/aussondern`, { method: "POST", body: daten });
           let prot = null;
           try { prot = (await api(`${API}/pruefungen/${r.aussonderung}`)).pruefung.protokoll; } catch (e) { /* Link genügt */ }
-          toast(`${sb ? "Set ausgesondert" : "Ausgesondert"}${prot ? ` – Protokoll ${prot.id}` : ""}`);
+          toast(`Ausgesondert${prot ? ` – Protokoll ${prot.id}` : ""}`);
           // Im selben Dialog weiter: zur Aussonderung mit ihrem Protokoll; darunter steht der Artikel schon neu.
           dialog(`<h2>${esc(a.inventory_no)} ausgesondert</h2>
             <p>Das Aussonderungsprotokoll ${prot ? `<strong class="mat-hash">${esc(prot.id)}</strong> ` : ""}ist mit deiner Unterschrift festgeschrieben.</p>
@@ -3115,265 +2844,13 @@
     });
   }
 
-  // Rückfrage über einem offenen Dialog (wie S.confirm), aber ohne „btn danger“: Der Schritt ist nicht endgültig.
-  function rueckfrage(titel, saetze, ja) {
-    return new Promise((resolve) => {
-      const dlg = document.createElement("dialog");
-      dlg.innerHTML = `<div class="dlg-body"><h2 id="rf-titel">${esc(titel)}</h2>${saetze.map((s) => `<p>${esc(s)}</p>`).join("")}
-        <div class="dlg-actions"><button class="btn secondary" id="rf-nein" type="button">Abbrechen</button>
-        <button class="btn" id="rf-ja" type="button">${esc(ja)}</button></div></div>`;
-      dlg.setAttribute("aria-labelledby", "rf-titel");
-      document.body.appendChild(dlg);
-      let wert = false;
-      dlg.querySelector("#rf-ja").onclick = () => { wert = true; dlg.close(); };
-      dlg.querySelector("#rf-nein").onclick = () => dlg.close();
-      dlg.addEventListener("close", () => { resolve(wert); dlg.remove(); });
-      dlg.showModal();
-    });
-  }
-
-  /* Teil tauschen, entnehmen und einsetzen (Materialwart, K2 – Oberfläche O2) aus der Tabelle „Bestandteile“.
-     art: „tauschen“ und „entnehmen“ (t: das Teil aus set.teile) oder „einsetzen“ (z: die Position der Kopie, an der eines
-     fehlt). Beim Tauschen und Entnehmen wählt der Materialwart, was aus dem Teil wird: weiterführen (aus einem gesperrten
-     Set gesperrt mit eigenem Grund, aus einem freien frei im Ordner des Sets) oder aussondern – das geht nur nach einer
-     Sperre durch einen Prüfer oder bei Verlust (wie verbleib_vorschlag), mit Grund, Datum, Bemerkung und Unterschrift; der
-     Knopf wird dann zur endgültigen Aktion (btn danger). Das neue Teil hat die Felder wie beim Anlegen des Sets
-     (teilBlockHtml), sein Produkt steht laut Stückliste fest. „Austausch laut Hersteller: nicht belegt“ braucht die
-     Bestätigung, dass die Herstellerunterlagen den Austausch zulassen (Journal am Set); „nein“ bietet die Tabelle gar
-     nicht erst an. Hinweise der Antwort (STR-Nummer am Teil anbringen) zeigt ein Dialog wie beim Anlegen.
-     Seit P4-L2b setzt „Teil einsetzen“ auch einen vorhandenen Artikel ein („aus dem Bestand wählen“, bestandWahl – nicht
-     beim Tauschen: dort erst entnehmen, dann einsetzen); ist er jemand anderem zugeordnet als das Set, fragt der Dialog
-     nach. */
-  const TEIL_FOLGE = {
-    tauschen: "Das Set ist danach gesperrt, bis „Set prüfen“ es freigibt – dort wird das neue Teil geprüft.",
-    entnehmen: "Das Set ist danach unvollständig und gesperrt – bis ein Teil eingesetzt ist und „Set prüfen“ es freigibt.",
-    einsetzen: "Das Set bleibt gesperrt, bis „Set prüfen“ es freigibt – dort wird das eingesetzte Teil geprüft.",
-  };
-  const TEIL_KNOPF = { tauschen: "Teil tauschen", entnehmen: "Teil entnehmen", einsetzen: "Teil einsetzen" };
-  /* Knopf mit Pflichtbestätigung („Austausch laut Hersteller: nicht belegt“): Bis zum Häkchen sieht er aus wie
-     ausgeschaltet (aria-disabled, Klasse „mat-aus“), bleibt aber antippbar – ein Tipp holt die Bestätigung ins Bild, setzt
-     den Fokus darauf und sagt, was fehlt (Nachbesserung, Browser V2: am Telefon lag sie hinter der Knopfleiste, der
-     Knopf war grau ohne sichtbaren Grund). Liefert {stand, fehlt}; fehlt() true heißt: nicht absenden. */
-  const BESTAETIGUNG_FEHLT = "Bitte erst bestätigen, dass der Austausch laut Herstellerunterlagen zulässig ist.";
-  function pflichtBestaetigung(ok, best, hinweis) {
-    const stand = () => {
-      const aus = Boolean(best) && !best.checked;
-      if (aus) ok.setAttribute("aria-disabled", "true"); else ok.removeAttribute("aria-disabled");
-      ok.classList.toggle("mat-aus", aus);
-      if (!aus && hinweis) hinweis.hidden = true;
-    };
-    const fehlt = () => {
-      if (!best || best.checked) return false;
-      if (hinweis) hinweis.hidden = false;
-      best.closest("label").scrollIntoView({ block: "center" });
-      best.focus();
-      return true;
-    };
-    if (best) best.addEventListener("change", stand);
-    stand();
-    return { stand, fehlt };
-  }
-  function teilDialog(a, art, t, z) {
-    const sb = a.set;
-    if (art === "einsetzen" ? !z : !t) return;
-    const pos = z || sb.bestandteile.find((b) => b.id === t.slot_id) || { id: null, bezeichnung: t.bestandteil || "Teil", produkt: t.produkt, austausch: t.austausch };
-    const neuesTeil = art !== "entnehmen";
-    const darfAus = Boolean(t) && t.verbleib_vorschlag === "aussondern";
-    const tag = isoHeute(0);
-    const HINWEIS = "Die Aussonderung des Teils wird mit deiner Unterschrift festgeschrieben. Sie wird in deinem Profil gespeichert und als Kopie ins Aussonderungsprotokoll übernommen.";
-    const weiterText = a.lock_state === "frei" ? "Es bleibt frei im Ordner des Sets, ohne Zuordnung."
-      : `Es verlässt das Set gesperrt (${t && t.lock_cause === "eigen" ? "mit seinem eigenen Grund" : "Grund „aus gesperrtem Set entnommen“"}), bis ein Prüfer es freiprüft.`;
-    const titel = art === "einsetzen" ? `Teil einsetzen – ${pos.bezeichnung}` : `Teil ${t.inventory_no} ${art === "tauschen" ? "tauschen" : "entnehmen"}`;
-    dialog(`<h2>${esc(titel)}</h2>
-      <p class="notice small">${esc(TEIL_FOLGE[art])}</p>
-      ${t ? `<fieldset class="mat-teil-verbleib"><legend>${art === "tauschen" ? "Das alte Teil" : "Das Teil"} ${esc(t.inventory_no)}${t.bestandteil ? ` <span class="muted">· ${esc(t.bestandteil)}</span>` : ""}</legend>
-        <label class="inline"><input type="radio" name="td-vb" value="weiterfuehren" checked> weiterführen</label>
-        <label class="inline"><input type="radio" name="td-vb" value="aussondern"${darfAus ? "" : ' disabled aria-describedby="td-aus-nein"'}> aussondern</label>
-        <p class="help" id="td-vb-hilfe">${esc(weiterText)}</p>
-        ${darfAus ? "" : `<p class="help" id="td-aus-nein">Aussondern geht hier nur nach einer Sperre des Teils durch einen Prüfer oder wenn es verloren ist.</p>`}
-        <div id="td-aus" hidden>
-          <div class="field-row"><div><label for="td-grund">Grund der Aussonderung</label><select id="td-grund">${Object.entries(AUSSONDERUNGSGRUND).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
-            <div><label for="td-datum">Datum</label>${datumFeld("td-datum", tag, "tag", { max: tag })}<div class="help">Spätestens heute (${esc(fmtTag(tag))}).</div></div></div>
-          <label for="td-bem">Bemerkung</label><textarea id="td-bem" rows="2" maxlength="2000"></textarea>
-          <p class="help">Die Aussonderung wird mit deiner Unterschrift festgeschrieben (Aussonderungsprotokoll).</p></div></fieldset>` : ""}
-      ${neuesTeil ? `${teilBlockHtml(pos, 0, "td", new Set(TEIL_FELDER), art === "einsetzen" ? "Teil" : "Neues Teil", art === "einsetzen")}
-        ${pos.austausch === "nicht_belegt" ? `<label class="inline mat-bestaetigen"><input type="checkbox" id="td-best"> Der Austausch ist laut Herstellerunterlagen zulässig.</label>
-          <p class="help">Für „${esc(pos.bezeichnung)}“ ist im Katalog nicht belegt, ob der Hersteller den Austausch zulässt. Deine Bestätigung steht im Journal des Sets.</p>
-          <p class="error" id="td-best-fehlt" role="alert" hidden>${esc(BESTAETIGUNG_FEHLT)}</p>` : ""}` : ""}
-      <p class="error" id="td-fehler" role="alert" hidden></p>
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="td-ok" type="button">${TEIL_KNOPF[art]}</button></div>`,
-    (dlg, body) => {
-      const ok = $("#td-ok", body);
-      const best = $("#td-best", body);
-      const verbleib = () => { const x = $('input[name="td-vb"]:checked', body); return x ? x.value : null; };
-      const pflicht = pflichtBestaetigung(ok, best, $("#td-best-fehlt", body));
-      function stand() {
-        const aus = verbleib() === "aussondern";
-        if ($("#td-aus", body)) $("#td-aus", body).hidden = !aus;
-        if ($("#td-vb-hilfe", body)) $("#td-vb-hilfe", body).textContent = aus ? "Es verlässt das Set und wird ausgesondert – endgültig." : weiterText;
-        ok.classList.toggle("danger", aus);
-        pflicht.stand();
-      }
-      body.addEventListener("change", stand);
-      stand();
-      const block = $(".mat-an-teil", body);
-      if (art === "einsetzen") bestandWahl(block, (q) => `${API}/artikel/${a.id}/kandidaten?${new URLSearchParams({ slot_id: z.id, produkt_id: z.produkt ? z.produkt.id : "", q })}`);
-      fokus($(".at-sn", body) || ok);
-      ok.onclick = async () => {
-        if (pflicht.fehlt()) return;
-        const fehler = $("#td-fehler", body);
-        fehler.hidden = true;
-        const daten = {};
-        if (t) daten.teil_id = t.id;
-        // Mit dem Produkt der Position: Wurde die Stückliste inzwischen übertragen, antwortet der Server 409 statt eine
-        // andere Position zu treffen (Nachbesserung Sets, 25.10.2026).
-        if (z) { daten.slot_id = z.id; if (z.produkt) daten.produkt_id = z.produkt.id; }
-        try {
-          if (t) {
-            daten.verbleib = verbleib();
-            if (daten.verbleib === "aussondern") {
-              daten.grund = $("#td-grund", body).value;
-              daten.datum = datumWert($("#td-datum", body), "Datum");
-              daten.bemerkung = $("#td-bem", body).value;
-            }
-          }
-          if (neuesTeil) Object.assign(daten, teilBlockDaten(block, art === "einsetzen" ? "Teil" : "Neues Teil"));
-        } catch (e) { toast(e.message, true); return; }
-        if (best) daten.bestaetigt = best.checked;
-        // Ein vorhandener Artikel, der jemand anderem zugeordnet ist als das Set (U10).
-        const endet = daten.item_id ? zuordnungEndet([WAHL.get(block)], a.zugeordnet || null) : [];
-        if (endet.length && !(await rueckfrage("Zuordnung endet", endet, TEIL_KNOPF[art]))) return;
-        if (daten.verbleib === "aussondern" && !(await eigeneUnterschrift(HINWEIS))) return;
-        ok.disabled = true;
-        try {
-          const r = await api(`${API}/artikel/${a.id}/teil-${art}`, { method: "POST", body: daten });
-          dlg.close();
-          const neu = r.teil && neuesTeil ? r.teil.inventory_no : "";
-          toast(art === "tauschen" ? `Teil getauscht – neu ${neu}, das Set ist gesperrt bis „Set prüfen“`
-            : daten.item_id ? `${neu} eingesetzt – Lebenslauf und Protokolle gehen mit; das Set ist gesperrt bis „Set prüfen“`
-            : art === "einsetzen" ? `Teil ${neu} eingesetzt – das Set ist gesperrt bis „Set prüfen“` : t.slot_id ? `Teil ${t.inventory_no} entnommen – das Set ist unvollständig`
-              : `Teil ${t.inventory_no} entnommen – das Set ist gesperrt bis „Set prüfen“`);
-          if ((r.hinweise || []).length) {
-            dialog(`<h2>Teil ${esc(neu)} ${art === "tauschen" ? "eingetauscht" : "eingesetzt"}</h2>
-              <ul class="mat-an-hinweise">${r.hinweise.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>
-              <div class="dlg-actions"><button class="btn" type="button" data-close id="td-hinweis-ok">OK</button></div>`,
-            (d2, b2) => $("#td-hinweis-ok", b2).focus());
-          }
-          zeigen(artikel);
-        } catch (e) {
-          unterschriftWeg(e);
-          fehler.textContent = e.message;
-          fehler.hidden = false;
-          toast(e.message, true);
-          if (block && /^Neues Teil/.test(e.message)) block.classList.add("ungueltig");
-          // Ein vorhandener Artikel: der Text des Servers (404/409) am Feld der Auswahl.
-          if (block && daten.item_id && block.bestandFehler) { fehler.hidden = true; block.bestandFehler(e.message); }
-          ok.disabled = false;
-          stand();
-        }
-      };
-    });
-  }
-
-  /* „Set auflösen“ (P4-L2b, Entwurf A; Kritiken T1, U1): Rückfrage mit „btn danger“ – das Set selbst wird gelöscht. Die
-     Teile bleiben frei im Ordner des Sets mit ihrer Zuordnung; danach zum Ordner. Was dagegen spricht, sagt der Server
-     (409) – die Oberfläche fragt nur, wenn aufloesen_hindernis leer war. */
-  async function setAufloesen(a) {
-    const sb = a.set;
-    const teile = sb.teile.map((t) => t.inventory_no);
-    const frage = `Set ${a.inventory_no} auflösen? ${teile.length ? `${teile.length === 1 ? "Das Teil" : `Die ${teile.length} Teile`} (${teile.join(", ")}) ${teile.length === 1 ? "bleibt" : "bleiben"} frei im Ordner des Sets, mit ${teile.length === 1 ? "seiner" : "ihrer"} Zuordnung und ${teile.length === 1 ? "seinem" : "ihrem"} Lebenslauf. ` : ""}Das Set selbst wird gelöscht; seine Inventarnummer wird nicht wieder vergeben.`;
-    if (!(await confirm(frage, "Set auflösen"))) return;
-    try {
-      const r = await api(`${API}/artikel/${a.id}/aufloesen`, { method: "POST", body: {} });
-      // Quittung auf der Zielseite (V3) – der Toast allein verschwindet mit dem Seitenwechsel.
-      const ort = a.pfad.length ? a.pfad[a.pfad.length - 1].name : "dem Ordner des Sets";
-      const nummern = r.teile.map((t) => t.inventory_no);
-      const liste = nummern.length > 1 ? `${nummern.slice(0, -1).join(", ")} und ${nummern[nummern.length - 1]}` : nummern.join("");
-      const satz = `Set ${a.inventory_no} aufgelöst – ${nummern.length ? `${liste} ${nummern.length === 1 ? "liegt" : "liegen"} jetzt frei in ${ort}.` : "es hatte keine Teile."}`;
-      quittungMitnehmen(satz);
-      toast(satz);
-      leisteNeu();
-      location.href = `/material/ordner/${a.folder_id}`;
-    } catch (e) { toast(e.message, true); zeigen(artikel); }
-  }
-
-  /* „Bestandteil ersetzt“ (P4-L2b, Entwurf B; Kritiken T4, T5, T15, U5, U13, U14) an einer Position ohne eigenen Artikel
-     (Tasche, Seilsatz): Datum (frühestens am Tag der Erfassung des Sets, höchstens heute – der Server prüft dasselbe),
-     Bemerkung (eine Zeile, höchstens 200 Zeichen, keine Personennamen – das Journal ist unveränderlich), bei „Austausch
-     laut Hersteller: nicht belegt“ die Pflichtbestätigung. Das Set ist danach gesperrt, bis „Set prüfen“ es freigibt;
-     das Lebensende des Sets bleibt – ist der Ersatz älter als das Set, zieht man es am Set vor (nur bei textilem
-     Material, dort hat „Bearbeiten“ das Feld). Der Knopf ist während der Anfrage gesperrt. Nachbesserung (Browser V6,
-     V17): ein Hinweiskasten statt vier Erklärblöcken, der Lebensende-Satz nur bei textilem Material (als Weg, ohne Link –
-     der schloss den Dialog und verwarf Datum und Bemerkung), ein falsches Datum steht am Feld. */
-  const ERSETZT_BEMERKUNG_MAX = 200;
-  function bestandteilDialog(a, z) {
-    if (!z) return;
-    const tag = isoHeute(0);
-    const ab = String(a.created_at || "").slice(0, 10);
-    const textil = a.produkt.material_kind === "textil";
-    const nichtBelegt = z.austausch === "nicht_belegt";
-    dialog(`<h2>Bestandteil ersetzt – ${esc(z.bezeichnung)}</h2>
-      <p class="notice small">Das Set ${esc(a.inventory_no)} ist danach gesperrt, bis „Set prüfen“ es mit dem ersetzten Bestandteil freigibt.${nichtBelegt ? ` Für „${esc(z.bezeichnung)}“ ist im Katalog nicht belegt, ob der Hersteller den Austausch zulässt – deine Bestätigung steht im Journal des Sets.` : ""}${textil ? " Ist der Ersatz älter als das Set, das Lebensende am Set vorziehen („Bearbeiten“ → „Lebensende“)." : ""}</p>
-      <div class="field-row"><div><label for="be-datum">Ersetzt am</label>${datumFeld("be-datum", tag, "tag", { min: ab, max: tag })}
-        <div class="help">${ab ? `Vom ${esc(fmtTag(ab))} (Erfassung des Sets) bis heute.` : `Spätestens heute (${esc(fmtTag(tag))}).`}</div>
-        <p class="error" id="be-datum-fehler" hidden></p></div><div></div></div>
-      <label for="be-bem">Bemerkung</label><input type="text" id="be-bem" maxlength="${ERSETZT_BEMERKUNG_MAX}" aria-describedby="be-bem-hilfe">
-      <div class="help" id="be-bem-hilfe">Eine Zeile, höchstens ${ERSETZT_BEMERKUNG_MAX} Zeichen – keine Personennamen (das Journal lässt sich nicht ändern).</div>
-      ${nichtBelegt ? `<label class="inline mat-bestaetigen"><input type="checkbox" id="be-best"> Der Austausch ist laut Herstellerunterlagen zulässig.</label>
-        <p class="error" id="be-best-fehlt" role="alert" hidden>${esc(BESTAETIGUNG_FEHLT)}</p>` : ""}
-      <p class="error" id="be-fehler" role="alert" hidden></p>
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="be-ok" type="button">Ersatz eintragen</button></div>`,
-    (dlg, body) => {
-      const ok = $("#be-ok", body);
-      const feld = $("#be-datum", body);
-      const datumFehler = $("#be-datum-fehler", body);
-      const pflicht = pflichtBestaetigung(ok, $("#be-best", body), $("#be-best-fehlt", body));
-      // Ein falsches Datum steht am Feld (V17) – aria-invalid setzt datumWert, der Text steht darunter.
-      const amDatum = (text) => {
-        datumFehler.textContent = text || "";
-        datumFehler.hidden = !text;
-        if (text) { feld.setAttribute("aria-invalid", "true"); feld.setAttribute("aria-describedby", "be-datum-fehler"); feld.focus(); }
-        else feld.removeAttribute("aria-describedby");
-      };
-      fokus($("#be-bem", body));
-      ok.onclick = async () => {
-        const fehler = $("#be-fehler", body);
-        fehler.hidden = true;
-        amDatum("");
-        if (pflicht.fehlt()) return;
-        let datum;
-        try { datum = datumWert(feld, "Ersetzt am") || null; }
-        catch (e) { amDatum(e.message); return; }
-        const daten = { slot_id: z.id, bezeichnung: z.bezeichnung, datum, bemerkung: $("#be-bem", body).value.trim() };
-        if (nichtBelegt) daten.bestaetigt = $("#be-best", body).checked;
-        ok.disabled = true;
-        ok.textContent = "Wird eingetragen …";
-        try {
-          await api(`${API}/artikel/${a.id}/bestandteil-ersetzt`, { method: "POST", body: daten });
-          dlg.close();
-          toast(`${z.bezeichnung}: Ersatz eingetragen – das Set ist gesperrt bis „Set prüfen“`);
-          zeigen(artikel);
-        } catch (e) {
-          // Ein Datum, das der Server ablehnt (vor der Erfassung, in der Zukunft), ebenfalls am Feld.
-          if (/^„Ersetzt am“|^Das Datum/.test(e.message)) amDatum(e.message);
-          else { fehler.textContent = e.message; fehler.hidden = false; }
-          toast(e.message, true);
-          ok.textContent = "Ersatz eintragen";
-          ok.disabled = false;
-          pflicht.stand();
-        }
-      };
-    });
-  }
-
   /* Produkt am Artikel ändern (Feintuning nach dem Kommentar-Dokument, L2b Nr. 29): „Bearbeiten“ hat ein Produktfeld,
-     solange der Artikel keine abgeschlossene Prüfung hat und weder Set noch Teil ist (produkt_aenderbar). Mit offenem
+     solange der Artikel keine abgeschlossene Prüfung hat (produkt_aenderbar). Mit offenem
      Entwurf steht es fest mit Satz (der Server antwortet sonst 409). Ein anderes Produkt wählt man wie beim Anlegen
      (produktTreffer); was der Wechsel nachzieht, sagt ein Hinweis vor dem Speichern. Die Länge fällt weg, wenn die
      Kategorie des neuen Produkts keine vorsieht – wie im Dienst (bestand.artikel_werte), das Journal nennt den alten
      Wert. Lebensende und Länge gehen dann nicht mit; der Server rechnet sie aus dem neuen Produkt. */
   const PRODUKT_ENTWURF = "Das Produkt lässt sich erst ändern, wenn die Prüfung festgeschrieben oder verworfen ist.";
-  const PRODUKT_SET = "Zu einem Set wechselt das Produkt nicht – ein Set legst du mit seinen Teilen neu an („Artikel anlegen“).";
   const produktGewaehltHtml = (p) => `<strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrKurz(p.article_no)} ${demoMarke(p.demo)}
     <span class="mat-art">${esc(MATERIALART[p.material_kind] || "")}</span>`;
   // Was ein Wechsel von a.produkt auf p nachzieht – als Sätze für den Hinweis im Dialog.
@@ -3441,7 +2918,7 @@
     if (gruppe) doppeltePruefen(gruppe);
   });
 
-  function artikelDialog(a, produktSuche) {
+  function artikelDialog(a) {
     const textil = a.produkt.material_kind === "textil";
     const fest = !!a.stammdaten_fest;
     const nurDirekt = !(a.darf || {}).verwalten;
@@ -3498,7 +2975,6 @@
       };
       function produktSetzen(p) {
         produktFehler("");
-        if (p && p.is_set) { produktFehler(PRODUKT_SET); return; }
         neuesProdukt = p && p.id !== a.produkt.id ? p : null;
         const zeige = neuesProdukt || a.produkt;
         $("#ad-produkt", body).innerHTML = `${produktGewaehltHtml(zeige)} <button class="lnk" type="button" id="ad-anders">anderes Produkt</button>${neuesProdukt ? ' <button class="lnk" type="button" id="ad-zurueck">zurück zum bisherigen</button>' : ""}`;
@@ -3538,7 +3014,6 @@
             produktTreffer($("#ad-treffer", body), q, (p) => { produktSetzen(p); fokus($("#ad-anders", body)); }, '<p class="help">Kein Produkt gefunden.</p>');
           }, 200);
         });
-        if (produktSuche) suchen();
       }
       const zumAntrag = $("#ad-antrag", body);
       if (zumAntrag) zumAntrag.onclick = () => antragDialog(a);
@@ -3616,7 +3091,7 @@
   }
 
   // Der Antragsdialog: alle freigabepflichtigen Felder mit den heutigen Werten; geschickt wird nur, was sich ändert.
-  // Produkt mit „anderes Produkt“ und seinen Folgen (nicht an Set und Teil). Begründung Pflicht.
+  // Produkt mit „anderes Produkt“ und seinen Folgen. Begründung Pflicht.
   function antragDialog(a) {
     const textil = a.produkt.material_kind === "textil";
     // Lebensende (Wunsch vom 25.10.2026): vorziehen oder ein vorgezogenes wieder nach hinten – höchstens bis zur
@@ -3634,7 +3109,7 @@
           <div id="aa-treffer" class="mat-treffer"></div></div>
         <p class="error" id="aa-produkt-fehler" hidden></p>
         <div class="notice small" id="aa-folgen" hidden></div></div>`
-        : `<p class="small">Produkt: <strong>${nameHtml(a.produkt)}</strong>${zusatzHtml(a.produkt)} – am Set und an seinen Teilen fest.</p>`}
+        : `<p class="small">Produkt: <strong>${nameHtml(a.produkt)}</strong>${zusatzHtml(a.produkt)}</p>`}
       <div class="field-row mat-antragzeile"><div><label for="aa-sn">Seriennummer</label><input type="text" id="aa-sn" ${TASTATUR_NUMMER} maxlength="80" value="${esc(a.serial_no)}"></div>
         <div><label for="aa-herst">Herstellung (Monat)</label>${datumFeld("aa-herst", a.manufactured_on, "monat")}</div></div>
       <div class="field-row"><div><label for="aa-kauf">Kauf (Monat)</label>${datumFeld("aa-kauf", a.purchased_on, "monat")}</div>
@@ -3652,7 +3127,6 @@
       const fehler = (text) => { const el = $("#aa-produkt-fehler", body); el.textContent = text || ""; el.hidden = !text; };
       function produktSetzen(p) {
         fehler("");
-        if (p && p.is_set) { fehler(PRODUKT_SET); return; }
         neuesProdukt = p && p.id !== a.produkt.id ? p : null;
         $("#aa-produkt", body).innerHTML = `${produktGewaehltHtml(neuesProdukt || a.produkt)} <button class="lnk" type="button" id="aa-anders">anderes Produkt</button>${neuesProdukt ? ' <button class="lnk" type="button" id="aa-zurueck">zurück zum bisherigen</button>' : ""}`;
         $("#aa-wahl", body).hidden = true;
@@ -3725,149 +3199,6 @@
     });
   }
 
-  /* Ein Teil eines Sets als Block mit seinen Feldern (Schritt 21): beim Anlegen eines Sets je Stück, beim
-     Tauschen und Einsetzen eines Teils (Oberfläche O2) einmal. z: Position der Stückliste bzw. ihrer Kopie am Set ({id,
-     bezeichnung, anzahl, produkt}); k: das wievielte Stück; id: Vorsilbe der Feldkennungen; felder: die Felder
-     (set.teil_felder bzw. TEIL_FELDER); legende: statt der Bezeichnung (etwa „Neues Teil“). Das Produkt steht fest.
-     mitBestand (P4-L2b, Entwurf A – beim Anlegen eines Sets und bei „Teil einsetzen“, nie beim Tauschen): oben die Wahl
-     „neu erfassen“ | „aus dem Bestand wählen“; die Auswahl selbst verdrahtet bestandWahl. */
-  function teilBlockHtml(z, k, id, felder, legende, mitBestand) {
-    const tp = z.produkt || {};
-    return `<fieldset class="mat-an-teil" data-bestandteil="${z.id}" data-produkt="${tp.id}" data-bez="${esc(z.bezeichnung)}">
-      <legend>${esc(legende || z.bezeichnung)}${!legende && z.anzahl > 1 ? ` <span class="muted">· ${k + 1} von ${z.anzahl}</span>` : ""}</legend>
-      <p class="small mat-an-teil-produkt">${nameHtml(tp)}${zusatzHtml(tp)}${artNrKurz(tp.article_no)} ${demoMarke(tp.demo)} <span class="mat-art">${esc(MATERIALART[tp.material_kind] || "")}</span></p>
-      ${mitBestand ? `<div class="mat-an-teil-quelle" role="radiogroup" aria-label="${esc(`${legende || z.bezeichnung}: woher kommt das Teil?`)}">
-        <label class="inline"><input type="radio" class="at-quelle" name="${id}-quelle" value="neu" checked> neu erfassen</label>
-        <label class="inline"><input type="radio" class="at-quelle" name="${id}-quelle" value="bestand"> aus dem Bestand wählen</label></div>` : ""}
-      <div class="mat-an-teil-neu">
-      <div class="field-row"><div><label for="${id}-sn">Seriennummer des Herstellers</label><input type="text" id="${id}-sn" class="at-sn" maxlength="80" placeholder="leer: STR-Nummer vom System" ${TASTATUR_NUMMER}>
-          <p class="error mat-an-teil-fehler" id="${id}-fehler" hidden></p></div>
-        ${felder.has("manufactured_on") ? `<div><label for="${id}-herst">Herstellung (Monat${tp.material_kind === "textil" ? ", Pflicht" : ""})</label>${datumFeld(`${id}-herst`, "", "monat")}</div>` : ""}</div>
-      <div class="field-row">${felder.has("purchased_on") ? `<div><label for="${id}-kauf">Kauf (Monat)</label>${datumFeld(`${id}-kauf`, "", "monat")}</div>` : ""}
-        ${felder.has("first_use_on") ? `<div><label for="${id}-erst">Erstgebrauch (Monat)</label>${datumFeld(`${id}-erst`, "", "monat")}</div>` : ""}</div>
-      ${felder.has("length_m") && tp.laenge_moeglich ? `<div class="field-row"><div><label for="${id}-laenge">Länge (m)</label><input type="text" id="${id}-laenge" class="mat-laenge-feld at-laenge" inputmode="decimal" autocomplete="off" maxlength="10" placeholder="z. B. 57,5"></div><div></div></div>` : ""}
-      </div>
-      ${mitBestand ? `<div class="mat-an-teil-bestand" hidden>
-        <label for="${id}-q">Inventar- oder Seriennummer</label>
-        <div class="mat-produktwahl"><input type="search" id="${id}-q" class="at-q" maxlength="80" placeholder="mindestens 2 Zeichen, auch die bisherige Inventarnummer" ${TASTATUR_NUMMER} aria-describedby="${id}-bestand-fehler">
-          <div class="mat-treffer at-treffer" aria-live="polite"></div></div>
-        <div class="mat-gewaehlt at-gewaehlt" hidden></div>
-        <p class="error at-bestand-fehler" id="${id}-bestand-fehler" hidden></p>
-        <p class="help">${esc(BESTAND_HILFE)}</p></div>` : ""}
-    </fieldset>`;
-  }
-
-  /* „Aus dem Bestand wählen“ (P4-L2b, Entwurf A, Kritiken T10/U8/U10): Ein vorhandener Artikel wird Teil des Sets –
-     beim Anlegen (GET /ordner/<Ablageordner>/kandidaten?product_id=) und bei „Teil einsetzen“ (GET
-     /artikel/<Set>/kandidaten?slot_id=). Gesucht wird ab 2 Zeichen in Inventar-, Seriennummer und „Bisherige
-     Inventarnummer“ (Bestandsimport); ein Treffer zeigt Nummern, Produkt, Ordner, Status und die Zuordnung. „weitere“
-     heißt: genauer tippen. Fehlertexte des Servers (404 kein Treffer, 409 anderes Produkt) stehen am Feld. f: der
-     Teilblock; adresse(q): die Such-URL; belegt(id): schon in einem anderen Block gewählt (nur beim Anlegen). Der
-     gewählte Treffer liegt in WAHL (teilBlockDaten schickt seine Kennung als „item_id“). */
-  const KEIN_KANDIDAT = "Kein passender Artikel gefunden.";
-  const BESTAND_HILFE = "Lebenslauf und Protokolle gehen mit – der Artikel behält Inventar- und Seriennummer. Wählbar sind freie Artikel dieses Produkts aus deiner Gliederung, die zu keinem Set gehören.";
-  const WAHL = new WeakMap();
-  function kandidatHtml(x) {
-    return `<strong>${esc(x.inventory_no)}</strong> <span class="muted">SN ${esc(x.serial_no)}</span> ${statusMarke(x.status)}
-      ${x.bisherige_inventarnummer ? `<span class="small">bisherige Inventarnummer ${esc(x.bisherige_inventarnummer)}</span>` : ""}
-      <span class="small muted mat-kandidat-ort">${esc(x.produkt)} · ${esc(x.ordner)}</span>${x.zugeordnet ? `<span class="small">zugeordnet an ${esc(x.zugeordnet.name)}</span>` : ""}`;
-  }
-  function bestandWahl(f, adresse, belegt) {
-    const feld = $(".at-q", f);
-    const treffer = $(".at-treffer", f);
-    const anzeige = $(".at-gewaehlt", f);
-    const fehler = $(".at-bestand-fehler", f);
-    let liste = [];
-    let los = null;
-    let lauf = 0;
-    // artikel: bei „anderes Produkt“ der gefundene Artikel ({id, inventory_no, produkt_aenderbar}) – zum Nachsehen in einem
-    // neuen Reiter, das Formular bleibt stehen (V12); ist er ungeprüft, führt der Link gleich zu „Bearbeiten → Produkt“.
-    const fehlerZeigen = (text, artikel) => {
-      fehler.textContent = text || "";
-      if (text && artikel) {
-        fehler.insertAdjacentHTML("beforeend", artikel.produkt_aenderbar
-          ? ` <a href="/material/artikel/${artikel.id}?bearbeiten=produkt" target="_blank" rel="noopener">Produkt von ${esc(artikel.inventory_no)} ändern</a>`
-          : ` <a href="/material/artikel/${artikel.id}" target="_blank" rel="noopener">${esc(artikel.inventory_no)} öffnen</a>`);
-      }
-      fehler.hidden = !text;
-      if (text) feld.setAttribute("aria-invalid", "true"); else feld.removeAttribute("aria-invalid");
-      f.classList.toggle("ungueltig", Boolean(text));
-    };
-    function quelle() {
-      const bestand = ($(".at-quelle:checked", f) || {}).value === "bestand";
-      $(".mat-an-teil-neu", f).hidden = bestand;
-      $(".mat-an-teil-bestand", f).hidden = !bestand;
-      fehlerZeigen("");
-      return bestand;
-    }
-    $$(".at-quelle", f).forEach((r) => r.addEventListener("change", () => { if (quelle()) fokus(WAHL.get(f) ? $("button", anzeige) : feld); }));
-    async function suchen() {
-      const q = feld.value.trim();
-      const meinLauf = ++lauf;
-      fehlerZeigen("");
-      if (q.length < 2) { treffer.innerHTML = q ? '<p class="help">Mindestens 2 Zeichen der Inventar- oder Seriennummer.</p>' : ""; return; }
-      let r;
-      try { r = await api(adresse(q)); }
-      catch (e) { if (meinLauf === lauf) { treffer.innerHTML = ""; fehlerZeigen(e.message); } return; }
-      if (meinLauf !== lauf) return;
-      liste = r.treffer;
-      // Kein Treffer ist eine normale Antwort (200, Browser B3); „hinweis“: die Nummer gehört zu einem Artikel mit anderem
-      // Produkt (U8).
-      if (!liste.length) { treffer.innerHTML = ""; fehlerZeigen(r.hinweis ? r.hinweis.text : KEIN_KANDIDAT, r.hinweis && r.hinweis.artikel); return; }
-      treffer.innerHTML = liste.map((x, i) => {
-        const schon = belegt && belegt(x.id, f);
-        return `<button type="button" class="mat-treffer-zeile mat-kandidat" data-i="${i}"${schon ? " disabled" : ""}>${kandidatHtml(x)}${schon ? '<span class="small">schon für ein anderes Teil gewählt</span>' : ""}</button>`;
-      }).join("") + (r.weitere ? '<p class="help">Weitere Treffer – bitte genauer tippen.</p>' : "");
-    }
-    feld.addEventListener("input", () => { clearTimeout(los); los = setTimeout(suchen, 250); });
-    feld.addEventListener("search", () => { clearTimeout(los); suchen(); });
-    function setzen(x) {
-      if (x) WAHL.set(f, x); else WAHL.delete(f);
-      f.dataset.inv = x ? x.inventory_no : "";
-      anzeige.hidden = !x;
-      anzeige.innerHTML = x ? `<span class="mat-kandidat-wahl">${kandidatHtml(x)}</span> <button class="lnk" type="button">anderen wählen</button>` : "";
-      $(".mat-an-teil-bestand label", f).hidden = Boolean(x);
-      $(".mat-produktwahl", f).hidden = Boolean(x);
-      fehlerZeigen("");
-      if (x) $("button", anzeige).onclick = () => { setzen(null); fokus(feld); };
-    }
-    treffer.addEventListener("click", (e) => {
-      const b = e.target.closest(".mat-kandidat");
-      if (!b || b.disabled) return;
-      setzen(liste[+b.dataset.i]);
-      treffer.innerHTML = "";
-      feld.value = "";
-      fokus($("button", anzeige));
-    });
-    // Zurück auf „neu erfassen“ und ohne Wahl (nach „Anlegen und nächsten“).
-    f.bestandZuruecksetzen = () => { setzen(null); treffer.innerHTML = ""; feld.value = ""; const neu = $('.at-quelle[value="neu"]', f); neu.checked = true; quelle(); };
-    f.bestandFehler = fehlerZeigen;
-  }
-  // Ist der gewählte Artikel jemand anderem zugeordnet als das Set, fragt der Dialog nach (U10). setZu: die Zuordnung des
-  // Sets ({id, name}) oder null (ein neues Set gehört niemandem). Liefert die Sätze für die Rückfrage.
-  function zuordnungEndet(gewaehlt, setZu) {
-    return gewaehlt.filter((x) => x.zugeordnet && (!setZu || setZu.id !== x.zugeordnet.id))
-      .map((x) => `Die Zuordnung von ${x.inventory_no} an ${x.zugeordnet.name} endet – das Teil gehört dann wie das Set ${setZu ? `zu ${setZu.name}` : "niemandem"}.`);
-  }
-  // Die Felder eines Teilblocks für den Server; ein Datum im falschen Format wirft (name steht vor dem Feldnamen).
-  // „aus dem Bestand wählen“: nur {item_id} – ohne Wahl ein Fehler am Feld.
-  function teilBlockDaten(f, name) {
-    if (($(".at-quelle:checked", f) || {}).value === "bestand") {
-      const x = WAHL.get(f);
-      if (x) return { item_id: x.id };
-      const text = `${name}: bitte einen Artikel aus dem Bestand wählen – oder „neu erfassen“.`;
-      if (f.bestandFehler) f.bestandFehler(text);
-      $(".at-q", f).focus();
-      throw new Error(text);
-    }
-    const wert = (endung, titel) => { const x = $(`input[id$="-${endung}"]`, f); return x ? datumWert(x, `${name}: ${titel}`) || null : null; };
-    const t = { serial_no: $(".at-sn", f).value.trim(), manufactured_on: wert("herst", "Herstellung"),
-                purchased_on: wert("kauf", "Kauf"), first_use_on: wert("erst", "Erstgebrauch") };
-    const laenge = $(".at-laenge", f);
-    if (laenge) t.length_m = laenge.value.trim() || null;
-    return t;
-  }
-
   /* --- Artikel anlegen ---------------------------------------------------------------------------- */
   async function artikelNeu() {
     if (!DARF.verwalten) { inhalt.innerHTML = '<p class="error">Artikel legen nur Materialwarte an.</p>'; return; }
@@ -3882,7 +3213,7 @@
         <div class="mat-produktwahl"><input type="search" id="an-q" placeholder="Hersteller, Modell, Bemerkung, Artikelnummer …" autocomplete="off" ${TASTATUR_SUCHE}>
           <div id="an-treffer" class="mat-treffer"></div></div>
         <div id="an-produkt" class="mat-gewaehlt" hidden></div>
-        <p class="help">Fehlt das Produkt oder Set im Katalog? <button type="button" class="lnk" data-act="melden">Fehlendes Produkt oder Set melden</button>
+        <p class="help">Fehlt das Produkt im Katalog? <button type="button" class="lnk" data-act="melden">Fehlendes Produkt melden</button>
           – die Material-Verwaltung nimmt es auf, du bekommst Bescheid.</p>
         <label for="an-ordner">Ordner</label><select id="an-ordner">${wahl.html}</select>
         <label for="an-sn">Seriennummer des Herstellers</label><input type="text" id="an-sn" maxlength="80" placeholder="leer lassen, wenn der Hersteller keine vergibt" ${TASTATUR_NUMMER}>
@@ -3895,7 +3226,6 @@
           <div><p class="help" id="an-due-hilfe"></p></div></div>
         <div class="field-row"><div id="an-laenge-feld" hidden><label for="an-laenge">Länge (m)</label><input type="text" id="an-laenge" class="mat-laenge-feld" inputmode="decimal" autocomplete="off" maxlength="10" placeholder="z. B. 57,5">
           <div class="help">Tatsächliche Länge in Metern, eine Nachkommastelle – ein Prüfpunkt „Länge“ fragt sie bei jeder Prüfung ab.</div></div><div></div></div>
-        <section id="an-teile" class="mat-an-teile" hidden></section>
         <div id="an-bestandteile" hidden></div>
         <p class="notice">Neu angelegte Artikel stehen auf <strong>neu</strong>, bis ein Prüfer die Eingangsprüfung gemacht hat – erst sie gibt sie frei und setzt die erste Fälligkeit.</p>
         <label for="an-notes">Bemerkung</label><textarea id="an-notes" rows="2" maxlength="4000"></textarea>
@@ -3914,7 +3244,6 @@
       if ($("#an-int").value) q.set("interval_months", $("#an-int").value);
       try {
         const v = (await api(`${API}/artikel/vorschlag?${q}`)).vorschlag;
-        if (v.set && teileFuer !== produkt.id) teileZeichnen(v.set);
         // Bestandteil-Liste des Produkts (Schritt 25): je Stück ein freiwilliges Feld „Seriennummer“.
         if (teilnrFuer !== produkt.id) {
           teilnrFuer = produkt.id;
@@ -3935,152 +3264,23 @@
     }
     const spaeter = () => { clearTimeout(vorschlagLos); vorschlagLos = setTimeout(vorschlag, 250); };
     ["#an-ordner", "#an-herst", "#an-kauf", "#an-erst", "#an-int"].forEach((s) => $(s).addEventListener("change", spaeter));
-    /* Set (Schritt 21, Entwurf C): Mit einem Set-Produkt bringt der Vorschlag die Stückliste (set) – je
-       einzeln geführter Position genau „anzahl“ Teilblöcke mit den Feldern aus set.teil_felder (Seriennummer, Herstellung,
-       Kauf, Erstgebrauch und – wo die Kategorie des Teil-Produkts eine vorsieht – Länge). Das Produkt eines Teils steht
-       fest (aus der Stückliste; der Server nimmt es nie aus der Anfrage). Kauf und Erstgebrauch des Sets wandern in die
-       Teile, solange dort niemand selbst etwas eingetragen hat. Doppelte Seriennummern meldet schon die Seite am Feld;
-       Fehler des Servers stehen über dem Knopf und – wo sie eine Nummer oder einen Bestandteil nennen – am Teil. */
-    let teileFuer = null;
-    function teileZeichnen(set) {
-      const el = $("#an-teile");
-      teileFuer = produkt.id;
-      const felder = new Set(set.teil_felder || []);
-      const einzeln = set.bestandteile.filter((z) => z.einzeln);
-      const ohne = set.bestandteile.filter((z) => !z.einzeln);
-      let n = 0;
-      const block = (z, k) => { n += 1; return teilBlockHtml(z, k, `at-${n}`, felder, null, true); };
-      el.hidden = false;
-      el.innerHTML = `<h2>Teile des Sets</h2>
-        <p class="help">Jedes Stück eines einzeln geführten Bestandteils wird ein eigener Artikel mit Inventarnummer, QR und Etikett. Ohne Herstellernummer vergibt das System eine STR-Nummer – die dann am Teil anbringen (Etikett oder Gravur). Führst du ein Teil schon im Bestand, wähle es aus dem Bestand.</p>
-        ${einzeln.map((z) => Array.from({ length: z.anzahl }, (x, k) => block(z, k)).join("")).join("")}
-        ${einzeln.length ? "" : '<p class="mat-leer">Laut Stückliste wird kein Bestandteil einzeln geführt – das Set hat keine Teil-Artikel.</p>'}
-        ${ohne.length ? `<p class="small">Dazu ohne eigenen Artikel: ${ohne.map((z) => `${z.anzahl} × ${esc(z.bezeichnung)}`).join(", ")}</p>` : ""}
-        <p class="error" id="an-teile-fehler" role="alert" hidden></p>`;
-      // Kauf und Erstgebrauch des Sets als Vorgabe der Teile; ein selbst getipptes Teilfeld bleibt.
-      $$(".mat-an-teil .mat-datum", el).forEach((f) => f.addEventListener("input", () => { f.dataset.selbst = "1"; }));
-      // „aus dem Bestand wählen“ (L2b): gesucht wird im gewählten Ablageordner; ein Artikel nur für ein Teil.
-      const belegt = (id, selbst) => $$(".mat-an-teil", el).some((f) => f !== selbst && (WAHL.get(f) || {}).id === id
-        && ($(".at-quelle:checked", f) || {}).value === "bestand");
-      $$(".mat-an-teil", el).forEach((f) => bestandWahl(f, (q) => `${API}/ordner/${$("#an-ordner").value}/kandidaten?${new URLSearchParams({ product_id: f.dataset.produkt, q })}`, belegt));
-    }
-    function teileVorgabe(quelle, endung) {
-      const w = $(quelle).value;
-      $$(`.mat-an-teil input[id$="-${endung}"]`).forEach((f) => { if (!f.dataset.selbst) f.value = w; });
-    }
-    $("#an-kauf").addEventListener("change", () => teileVorgabe("#an-kauf", "kauf"));
-    $("#an-erst").addEventListener("change", () => teileVorgabe("#an-erst", "erst"));
     let teilnrFuer = null;
-    function teileLeeren() {
-      teileFuer = null;
-      $("#an-teile").hidden = true;
-      $("#an-teile").innerHTML = "";
+    function bestandteileLeeren() {
       teilnrFuer = null;
       $("#an-bestandteile").hidden = true;
       $("#an-bestandteile").innerHTML = "";
-    }
-    // Markierungen am Feld zurücksetzen bzw. setzen (aria-invalid wie bei den Datumsfeldern).
-    function teilFehler(feld, text) {
-      feld.setAttribute("aria-invalid", "true");
-      feld.classList.add("ungueltig");
-      const el = $(".mat-an-teil-fehler", feld.closest(".mat-an-teil"));
-      if (el && text) { el.textContent = text; el.hidden = false; feld.setAttribute("aria-describedby", el.id); }
-    }
-    function teileFehlerWeg() {
-      $$(".mat-an-teil").forEach((f) => f.classList.remove("ungueltig"));
-      $$(".mat-an-teil .at-sn").forEach((f) => { f.removeAttribute("aria-invalid"); f.classList.remove("ungueltig"); f.removeAttribute("aria-describedby"); });
-      $$(".mat-an-teil-fehler").forEach((el) => { el.hidden = true; });
-      $$(".mat-an-teil").forEach((f) => { if (f.bestandFehler) f.bestandFehler(""); });
-      const allg = $("#an-teile-fehler");
-      if (allg) allg.hidden = true;
-    }
-    const ausBestand = (f) => ($(".at-quelle:checked", f) || {}).value === "bestand";
-    // Die Teile für POST /artikel – oder ein Fehler (Datum im falschen Format, doppelte Seriennummer, derselbe Artikel
-    // aus dem Bestand zweimal, ein Block „aus dem Bestand wählen“ ohne Wahl).
-    function teileDaten() {
-      teileFehlerWeg();
-      const gesehen = {};
-      const vorhanden = {};
-      return $$(".mat-an-teil").map((f, i) => {
-        if (ausBestand(f)) {
-          const t = teilBlockDaten(f, `Teil ${i + 1} (${f.dataset.bez})`);
-          if (vorhanden[t.item_id]) {
-            const text = `${f.dataset.inv} ist für zwei Teile gewählt.`;
-            vorhanden[t.item_id].bestandFehler(text);
-            f.bestandFehler(text);
-            throw new Error(text);
-          }
-          vorhanden[t.item_id] = f;
-          return Object.assign({ bestandteil_id: +f.dataset.bestandteil }, t);
-        }
-        const sn = $(".at-sn", f);
-        const serie = sn.value.trim();
-        if (serie) {
-          const schluessel = `${f.dataset.produkt}|${serie.toLowerCase()}`;
-          if (gesehen[schluessel]) {
-            const text = `Die Seriennummer „${serie}“ steht zweimal in den Teilen.`;
-            teilFehler(gesehen[schluessel], text);
-            teilFehler(sn, text);
-            fokus(sn);
-            throw new Error(text);
-          }
-          gesehen[schluessel] = sn;
-        }
-        return Object.assign({ bestandteil_id: +f.dataset.bestandteil }, teilBlockDaten(f, `Teil ${i + 1} (${f.dataset.bez})`));
-      });
-    }
-    // Ein Fehler des Servers beim Anlegen eines Sets: am Teil, wo er eines nennt – sonst über dem Knopf (dazu immer der
-    // Toast). Nennt er das Stück („Teil „Bezeichnung“ 2 von 2 (Seriennummer „X“): …“, sets.teil_wo), ist genau dieses
-    // Feld rot (aria-invalid, der Text darunter, Fokus dorthin – Nachbesserung B2); sonst die Felder mit einer genannten
-    // Seriennummer („…“) oder die Blöcke des genannten Bestandteils („„Bezeichnung“: genau …“). Steht der Text am Block,
-    // entfällt der Absatz über dem Knopf (Nachbesserung L2b, Browser V5 – vorher stand er dreifach da).
-    function teileServerFehler(text) {
-      const allg = $("#an-teile-fehler");
-      if (!allg) return;
-      allg.textContent = text;
-      allg.hidden = false;
-      const amBlock = (block, ziel) => { allg.hidden = true; block.scrollIntoView({ block: "center" }); if (ziel) fokus(ziel); };
-      const stueck = text.match(/^Teil „([^“]+)“ (\d+) von \d+(?: \(Seriennummer „[^“]*“\))?: (.*)$/s);
-      if (stueck) {
-        const bloecke = $$(".mat-an-teil").filter((f) => f.dataset.bez === stueck[1]);
-        const block = bloecke[+stueck[2] - 1];
-        if (block) {
-          const sn = $(".at-sn", block);
-          if (/Seriennummer/.test(stueck[3])) { teilFehler(sn, text); amBlock(block, sn); return; }
-          block.classList.add("ungueltig");
-          const el = $(".mat-an-teil-fehler", block);
-          if (el) { el.textContent = text; el.hidden = false; }
-          amBlock(block, ausBestand(block) ? null : sn);
-          return;
-        }
-      }
-      // Ein vorhandener Artikel (L2b): Der Server nennt seine Inventarnummer („S-… ist gesperrt – …“).
-      const vorhanden = $$(".mat-an-teil").filter((f) => ausBestand(f) && f.dataset.inv && text.includes(f.dataset.inv));
-      if (vorhanden.length) {
-        vorhanden.forEach((f) => f.bestandFehler(text));
-        amBlock(vorhanden[0], $(".at-gewaehlt button", vorhanden[0]));
-        return;
-      }
-      const getroffen = $$(".mat-an-teil .at-sn").filter((f) => f.value.trim() && text.includes(`„${f.value.trim()}“`));
-      if (getroffen.length) {
-        getroffen.forEach((f) => teilFehler(f, text));
-        amBlock(getroffen[0].closest(".mat-an-teil"), getroffen[0]);
-        return;
-      }
-      const m = text.match(/^(?:Teil )?„([^“]+)“/);
-      if (m) $$(".mat-an-teil").filter((f) => f.dataset.bez === m[1]).forEach((f) => f.classList.add("ungueltig"));
     }
     $("#an-ende").addEventListener("input", (e) => { e.target.dataset.selbst = "1"; });
     function waehlen(p) {
       produkt = p;
       $("#an-produkt").hidden = false;
-      $("#an-produkt").innerHTML = `${produktFoto(p)}<strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrKurz(p.article_no)} ${demoMarke(p.demo)}${setMarke(p.is_set)}
+      $("#an-produkt").innerHTML = `${produktFoto(p)}<strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrKurz(p.article_no)} ${demoMarke(p.demo)}
         <span class="mat-art">${esc(MATERIALART[p.material_kind])}</span> <button class="lnk" type="button" id="an-anders">anderes Produkt</button>`;
       trefferLeeren($("#an-treffer"));
       $("#an-q").value = "";
-      $("#an-anders").onclick = () => { produkt = null; $("#an-produkt").hidden = true; teileLeeren(); fokus($("#an-q")); };
+      $("#an-anders").onclick = () => { produkt = null; $("#an-produkt").hidden = true; bestandteileLeeren(); fokus($("#an-q")); };
       $("#an-ende").dataset.selbst = "";
-      teileLeeren();
+      bestandteileLeeren();
       // Das Längenfeld nur bei Produkten, deren Kategorie eine Länge vorsieht (laenge_moeglich aus produkt_json).
       $("#an-laenge-feld").hidden = !p.laenge_moeglich;
       if (!p.laenge_moeglich) $("#an-laenge").value = "";
@@ -4093,7 +3293,7 @@
         const q = $("#an-q").value.trim();
         if (!q) { trefferLeeren($("#an-treffer")); return; }
         produktTreffer($("#an-treffer"), q, waehlen,
-          '<p class="help">Kein Produkt gefunden. <button type="button" class="lnk" data-act="melden">Als fehlendes Produkt oder Set melden</button></p>');
+          '<p class="help">Kein Produkt gefunden. <button type="button" class="lnk" data-act="melden">Als fehlendes Produkt melden</button></p>');
       }, 200);
     });
     if (DATEN.produkt) {
@@ -4110,46 +3310,35 @@
         if (!$("#an-ende-feld").hidden) daten.retire_by = datumWert($("#an-ende"), "Lebensende") || null;
         if (!$("#an-laenge-feld").hidden) daten.length_m = $("#an-laenge").value.trim() || null;
         if (teilnrFuer === produkt.id && !$("#an-bestandteile").hidden) daten.bestandteil_nummern = teilnummernLesen($("#an-bestandteile"));
-        if (produkt.is_set) {
-          if (teileFuer !== produkt.id) { toast("Die Stückliste des Sets wird noch geladen – bitte gleich noch einmal.", true); vorschlag(); return; }
-          daten.teile = teileDaten();
-        }
       } catch (e) { toast(e.message, true); return; }
-      // Vorhandene Teile, die jemandem zugeordnet sind: Das neue Set gehört niemandem – die Zuordnung endet (U10).
-      const endet = produkt.is_set ? zuordnungEndet($$(".mat-an-teil").filter(ausBestand).map((f) => WAHL.get(f)), null) : [];
-      if (endet.length && !(await rueckfrage("Zuordnung endet", endet, "Anlegen"))) return;
       try {
         const r = await api(`${API}/artikel`, { method: "POST", body: daten });
-        // Hinweise des Servers (beim Set: „STR-Nummer am Teil anbringen …“ je Teil ohne Herstellernummer) gehen nicht
-        // in einem Toast unter – ein Dialog, der mit „Zum Set“ bzw. „Nächsten anlegen“ weiterführt.
+        // Hinweise des Servers gehen nicht in einem Toast unter – ein Dialog, der mit „Zum Artikel“ bzw. „Nächsten
+        // anlegen“ weiterführt.
         const weiterHier = () => {
           $("#an-sn").value = ""; $("#an-notes").value = "";
-          $$(".mat-an-teil .at-sn, #an-bestandteile .mat-teilnr").forEach((f) => { f.value = ""; });
-          $$(".mat-an-teil").forEach((f) => { if (f.bestandZuruecksetzen) f.bestandZuruecksetzen(); });
+          $$("#an-bestandteile .mat-teilnr").forEach((f) => { f.value = ""; });
           fokus($("#an-sn"));
         };
         if ((r.hinweise || []).length) {
           dialog(`<h2>${esc(r.artikel.inventory_no)} angelegt</h2>
             <ul class="mat-an-hinweise">${r.hinweise.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>
             <div class="dlg-actions">${weiter ? '<button class="btn" type="button" data-close>Nächsten anlegen</button>'
-              : `<a class="btn" href="/material/artikel/${r.artikel.id}">Zum ${produkt.is_set ? "Set" : "Artikel"}</a>`}</div>`,
+              : `<a class="btn" href="/material/artikel/${r.artikel.id}">Zum Artikel</a>`}</div>`,
           (dlg) => { if (weiter) dlg.addEventListener("close", weiterHier, { once: true }); else dlg.addEventListener("close", () => { location.href = `/material/artikel/${r.artikel.id}`; }, { once: true }); });
           return;
         }
         if (!weiter) { location.href = `/material/artikel/${r.artikel.id}`; return; }
         toast(`${r.artikel.inventory_no} angelegt (Seriennummer ${r.artikel.serial_no})`);
         weiterHier();
-      } catch (e) {
-        toast(e.message, true);
-        if (produkt.is_set) teileServerFehler(e.message);
-      }
+      } catch (e) { toast(e.message, true); }
     }
     // Die eigenen Meldungen unter dem Formular: Ist eine eingepflegt, wählt ein Klick ihr Produkt.
     async function meldungenZeigen() {
       const ziel = $("#an-meldungen");
       try {
         const liste = (await api(`${API}/meldungen?eigene=1&status=alle`)).meldungen.slice(0, 10);
-        ziel.innerHTML = liste.length ? `<section class="section"><h2>Deine Produkt- und Set-Meldungen</h2><ul class="mat-meldeliste">
+        ziel.innerHTML = liste.length ? `<section class="section"><h2>Deine Produktmeldungen</h2><ul class="mat-meldeliste">
           ${liste.map((m) => `<li>${meldestatusMarke(m.status)} <strong>${esc(meldungName(m))}</strong>${artNrKurz(m.article_no)}
             <span class="muted small">gemeldet am ${esc(fmtTag(m.created_at))}</span>
             ${m.status === "eingepflegt" && m.produkt ? `<button type="button" class="btn secondary small" data-act="meldung-waehlen" data-pid="${m.produkt.id}">Artikel davon anlegen</button>` : ""}
@@ -4203,7 +3392,7 @@
     let nachladen = null;
     // Enge Tabelle und Karte (Lieferung 5): der Hersteller klein über dem Produkt, die kurzen Angaben zu zweit.
     const produktZeile = (x) => `<tr><td data-l="Hersteller" class="mat-schmal-weg">${esc(x.manufacturer || "")}</td>
-          <td data-l="Produkt" class="mat-k-titel">${x.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(x.manufacturer)}</div>` : ""}${x.vorschau ? `<img class="mat-mini" src="${esc(x.vorschau)}" alt="" loading="lazy">` : ""}<a href="/material/katalog/produkt/${x.id}"><strong>${nameHtml(x, true)}</strong></a>${zusatzHtml(x)}${artNrKurz(x.article_no)}${demoMarke(x.demo)}${setMarke(x.is_set)}</td>
+          <td data-l="Produkt" class="mat-k-titel">${x.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(x.manufacturer)}</div>` : ""}${x.vorschau ? `<img class="mat-mini" src="${esc(x.vorschau)}" alt="" loading="lazy">` : ""}<a href="/material/katalog/produkt/${x.id}"><strong>${nameHtml(x, true)}</strong></a>${zusatzHtml(x)}${artNrKurz(x.article_no)}${demoMarke(x.demo)}</td>
           <td data-l="Kategorie">${esc(x.category_name || "")}</td><td data-l="Materialart" class="mat-k-halb">${esc(MATERIALART[x.material_kind])}</td>
           <td data-l="Intervall" class="mat-k-halb">${x.intervall.monate ? `${x.intervall.monate} Mon.` : "–"}</td>
           <td data-l="Lebensdauer" class="mat-k-halb">${x.lifetime_years ? `${x.lifetime_years} J.` : "–"}</td><td data-l="Bestand" class="mat-k-halb">${x.bestand}</td></tr>`;
@@ -4275,7 +3464,7 @@
         plural(summe(k.id), "Produkt", "Produkte")].filter(Boolean).join(" · ") : "";
       // Zum aktiven generischen Formular führt bei der Material-Verwaltung der Knopf „Generisches Formular“, sonst der Verweis in der Angabenzeile.
       inhalt.innerHTML = `<div class="page-head"><h1>Katalog</h1>
-          <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kategorie<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary" data-act="produkt-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Produkt<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary" data-act="set-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Set<span class="k-anlegen"> anlegen</span></span></button>' : ""}
+          <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kategorie<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary" data-act="produkt-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Produkt<span class="k-anlegen"> anlegen</span></span></button>' : ""}
             ${DARF.lesen || DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/material/katalog/meldungen">Meldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>` : ""}
             ${DARF.katalog ? katalogMenue : ""}</div></div>
         ${k ? `<div class="mat-katkopf">
@@ -4319,8 +3508,6 @@
       },
       "kat-formular": () => formularFuer({ kategorie_id: kategorie }),
       "produkt-neu": () => produktDialog({ category_id: kategorie }),
-      // Set anlegen (Wunsch vom 24.10.2026): derselbe Dialog im Set-Modus – Reiter „Produkt“ und „Bestandteile“.
-      "set-neu": () => produktDialog({ category_id: kategorie, is_set: true }),
       "kat-export": () => katalogExportDialog(),
       "kat-import": () => katalogImportDialog(),
       "kat-import-stand": (b) => katalogImportDialog(b.dataset.id),
@@ -4365,7 +3552,6 @@
       ${a.namen.length ? `<details class="mat-auf"><summary>DEMO-Einträge (oberste Ebene)</summary><ul class="mat-austausch-aenderungen">${a.namen.map((n) => `<li>${esc(n)}</li>`).join("")}</ul></details>` : ""}
       ${austauschListe("Nicht im Export, weil die Datei hier fehlt", v.fehlende_dateien, "warnung")}
       ${austauschListe("Nicht im Export, weil der Import die Datei nicht annähme (zu groß)", v.zu_gross, "warnung")}
-      ${austauschListe("Stückliste nicht im Export (DEMO-Bestandteil in einem echten Set)", v.set_verstoesse, "warnung")}
       ${v.ohne_punkte ? `<p class="help">${plural(v.ohne_punkte, "Formularentwurf", "Formularentwürfe")} ohne Prüfpunkte (und ohne aktives Formular) bleibt draußen.</p>` : ""}
       ${v.groesse ? `<p class="help">Dateien zusammen etwa ${esc(groesse(v.groesse))}.${e.bilder ? " Die Produktbilder gehen als Original mit – samt ihren Metadaten." : ""}</p>` : ""}
       ${v.groesse > v.grenze ? `<p class="error">Der Export wäre größer als ${esc(groesse(v.grenze))} – so groß wird er nicht gebaut.</p>` : ""}
@@ -4391,16 +3577,13 @@
           : '<p class="mat-austausch-stand bad">Nicht gespeichert.</p>';
     const h = b.herkunft || {};
     const nichts = !b.fehler.length && !b.aenderungen.length && !b.hinweise.length;
-    // Stücklisten der Sets (Schritt 21): neu (das Produkt hatte noch keine), ersetzt oder gleich geblieben.
-    const sl = b.stuecklisten || {};
-    const stueck = sl.neu || sl.geaendert || sl.unveraendert ? `<tr><th scope="row">Stücklisten</th><td>${sl.neu || 0}</td><td>${sl.geaendert || 0}</td><td>${sl.unveraendert || 0}</td></tr>` : "";
-    // Bestandteil-Listen an Produkten, die kein Set sind (Schritt 25) – ebenso.
+    // Bestandteil-Listen an Produkten (Schritt 25): neu (das Produkt hatte noch keine), ersetzt oder gleich geblieben.
     const bl = b.bestandteillisten || {};
     const flach = bl.neu || bl.geaendert || bl.unveraendert ? `<tr><th scope="row">Bestandteil-Listen</th><td>${bl.neu || 0}</td><td>${bl.geaendert || 0}</td><td>${bl.unveraendert || 0}</td></tr>` : "";
     return `${stand}
       ${h.quelle || h.erstellt ? `<p class="help">Export von ${esc(h.quelle || "?")}${h.erstellt ? `, erstellt ${esc(fmtZeit(h.erstellt))}` : ""}.</p>` : ""}
       <table class="mat-austausch"><thead><tr><th></th><th>neu</th><th>geändert</th><th>unverändert</th></tr></thead>
-        <tbody>${arten.map(zeile).join("")}${stueck}${flach}</tbody></table>
+        <tbody>${arten.map(zeile).join("")}${flach}</tbody></table>
       ${b.version === 2 ? '<p class="help">Eine geänderte Prüfliste wird eine neue Formularversion (zählt als neu); eine neue Dokumentversion zählt als geändert.</p>' : ""}
       ${austauschListe("Fehler", b.fehler, "fehler")}
       ${austauschListe("Achtung – betrifft vorhandene Artikel", b.warnungen, "warnung")}
@@ -4754,22 +3937,13 @@
        ohne Leerzeichen), darunter der Hinweis mit dem bisherigen Text; gespeichert wird erst, wenn sie kürzer ist. */
     const beschreibung = String(p.description || "").replace(/\s+/g, " ").trim();
     const zuLang = beschreibung.length > BESCHREIBUNG_MAX;
-    /* Set (Wunsch vom 24.10.2026, „Set anlegen“): Ob ein Produkt ein Set ist, legt der Weg fest – „Produkt anlegen“
-       oder „Set anlegen“ (Entscheidung S2; ein Häkchen gibt es nicht mehr, umstellen nur über die Katalogdatei). Im
-       Set-Modus (p.is_set, die Variante eines Sets, ein Set aus einer Meldung) stehen immer zwei Reiter da: „Produkt“
-       (die Felder wie bisher, darüber eine Zeile, was ein Set ist) und „Bestandteile“ (die Stückliste,
-       stuecklisteEditor). Beim Wechsel geht nichts verloren. Neu angelegt (auch als Variante und aus einer Meldung) gehen
-       Produkt und Stückliste in EINER Anfrage an den Server – scheitert eine Position, entsteht nichts und die Position
-       ist markiert; beim Bearbeiten erst das Produkt, dann die Stückliste als Ganzes (PUT …/bestandteile), wenn sie sich
-       geändert hat. Pflicht ist mindestens ein einzeln geführtes Teil (S3). Für die Nacharbeit (opt.danach) gibt es kein
-       Set – sie nimmt keins.
-       Bestandteil-Liste (Schritt 25): Auch ein Produkt, das kein Set ist, hat die beiden Reiter – „Bestandteile“ ist dort
-       die Liste nur mit Bezeichnung und Anzahl (stuecklisteEditor mit nurText), leer erlaubt; neu geht sie in derselben
-       Anfrage mit, beim Bearbeiten als PUT …/bestandteile, wenn sie sich geändert hat. Nicht in der Nacharbeit. */
-    const istSet = !opt.danach && !!(p.is_set || (p.variante_von && p.variante_von.is_set));
+    /* Zwei Reiter: „Produkt“ (die Felder) und „Bestandteile“ (die Bestandteil-Liste, Schritt 25 – nur Bezeichnung und
+       Anzahl, stuecklisteEditor; leer erlaubt). Beim Wechsel geht nichts verloren. Neu angelegt (auch als Variante und
+       aus einer Meldung) geht die Liste in derselben Anfrage mit – scheitert eine Position, entsteht nichts und die
+       Position ist markiert; beim Bearbeiten erst das Produkt, dann die Liste als Ganzes (PUT …/bestandteile), wenn sie
+       sich geändert hat. Nicht in der Nacharbeit (opt.danach). */
     const mitReiter = !opt.danach;
-    const formular = `${istSet ? `<p class="help mat-set-erklaerung">${esc(SET_ERKLAERUNG)}</p>` : ""}
-      ${p.variante_von ? `<p class="help">Die Stammdaten sind übernommen – bitte die neue Artikelnummer eintragen und anpassen, was sich unterscheidet.${istSet ? " Die Stückliste steht im Reiter „Bestandteile“." : (p.bestandteile || []).length ? " Die Bestandteile stehen im Reiter „Bestandteile“." : ""}</p>` : ""}
+    const formular = `${p.variante_von ? `<p class="help">Die Stammdaten sind übernommen – bitte die neue Artikelnummer eintragen und anpassen, was sich unterscheidet.${(p.bestandteile || []).length ? " Die Bestandteile stehen im Reiter „Bestandteile“." : ""}</p>` : ""}
       ${p.meldung ? meldeKasten(p.meldung) : ""}
       <label for="pd-kat">Kategorie</label><select id="pd-kat"><option value="">– bitte wählen –</option>${kategorieOptionen(kats, p.category_id)}</select>
       <div class="field-row"><div><label for="pd-her">Hersteller</label><input type="text" id="pd-her" value="${esc(p.manufacturer || "")}" maxlength="120" ${TASTATUR_NAME}></div>
@@ -4791,8 +3965,7 @@
         <p class="help">Das Produktbild wird nie übernommen. Dokumente der Kategorie gelten ohnehin für alle Produkte darin.</p></fieldset>` : ""}
       ${p.meldung ? '<label for="pd-antwort">Anmerkung für den Melder (optional, steht in seiner Mail)</label><textarea id="pd-antwort" rows="2" maxlength="1000"></textarea>' : ""}`;
     const titel = p.variante_von ? `Variante von „${esc(produktName(p.variante_von))}“`
-      : p.meldung ? (istSet ? "Set aus Meldung anlegen" : "Produkt aus Meldung anlegen")
-        : istSet ? (neu ? "Set anlegen" : "Set bearbeiten") : neu ? "Produkt anlegen" : "Produkt bearbeiten";
+      : p.meldung ? "Produkt aus Meldung anlegen" : neu ? "Produkt anlegen" : "Produkt bearbeiten";
     dialog(mitReiter ? `<h2 id="pd-titel">${titel}</h2>
       <div class="c-tabs mat-reiter" role="tablist" aria-labelledby="pd-titel">
         <button type="button" role="tab" id="pd-reiter-produkt" aria-controls="pd-teil-produkt" data-reiter="produkt">Produkt</button>
@@ -4825,19 +3998,14 @@
       hilfen();
       artikelnummerPruefen($("#pd-art", body), $("#pd-her", body), $("#pd-art-hilfe", body), p.id);
       const bildWahl = fotoFeldVerdrahten(dlg, body, "pd-bild");
-      // Im Set-Modus die Stückliste und die Reiter (Start „Produkt“, „Stückliste bearbeiten“ öffnet „Bestandteile“); die
-      // Variante übernimmt die Stückliste des Vorbilds zum Bearbeiten. Breiter (Bezeichnung, Anzahl und Austausch in einer
-      // Zeile) – #dlg dient allen Dialogen der Seite, die Klasse gilt nur, solange dieser offen ist.
-      const stueck = mitReiter ? stuecklisteEditor($("#pd-teil-bestandteile", body), p, { nurText: !istSet }) : null;
+      // Die Bestandteil-Liste und die Reiter (Start „Produkt“, „Bestandteile bearbeiten“ öffnet „Bestandteile“); die
+      // Variante übernimmt die Liste des Vorbilds zum Bearbeiten.
+      const stueck = mitReiter ? stuecklisteEditor($("#pd-teil-bestandteile", body), p) : null;
       const reiterZeigen = mitReiter ? reiterSchalten(body, opt.reiter === "bestandteile" ? "bestandteile" : "produkt") : null;
-      if (istSet) {
-        dlg.classList.add("mat-produkt-reiter");
-        dlg.addEventListener("close", () => dlg.classList.remove("mat-produkt-reiter"), { once: true });
-      }
-      // Erst die Angaben (ein neues Set samt Stückliste), dann das Bild. Scheitert nur das Bild, kennt der Dialog das
-      // Produkt schon: Ein zweiter Klick speichert die Angaben erneut und lädt das Bild nach, statt das Produkt doppelt
-      // anzulegen. Beim Bearbeiten geht die Stückliste nach dem Produkt an den Server; scheitert sie, bleibt der Dialog im
-      // Reiter „Bestandteile“.
+      // Erst die Angaben (ein neues Produkt samt Bestandteil-Liste), dann das Bild. Scheitert nur das Bild, kennt der
+      // Dialog das Produkt schon: Ein zweiter Klick speichert die Angaben erneut und lädt das Bild nach, statt das Produkt
+      // doppelt anzulegen. Beim Bearbeiten geht die Liste nach dem Produkt an den Server; scheitert sie, bleibt der Dialog
+      // im Reiter „Bestandteile“.
       let pid = p.id || null;
       $("#pd-ok", body).onclick = async (ev) => {
         const knopf = ev.currentTarget;
@@ -4852,15 +4020,13 @@
         if (mitReiter) {
           const fehler = stueck.pruefen();
           if (fehler) { reiterZeigen("bestandteile"); toast(fehler, true); return; }
-          // Neu (auch Variante und aus Meldung): Produkt und Stückliste bzw. Bestandteil-Liste in einer Anfrage – die Liste
-          // eines Produkts nur, wenn sie nicht leer ist (eine Variante schickt sie immer: leer heißt dort „ohne Liste“).
-          if (!pid && istSet) Object.assign(daten, p.variante_von ? {} : { is_set: true }, { bestandteile: stueck.liste() });
-          else if (!pid && (stueck.liste().length || p.variante_von)) daten.bestandteile = stueck.liste();
+          // Neu (auch Variante und aus Meldung): Produkt und Bestandteil-Liste in einer Anfrage – die Liste nur, wenn sie
+          // nicht leer ist (eine Variante schickt sie immer: leer heißt dort „ohne Liste“).
+          if (!pid && (stueck.liste().length || p.variante_von)) daten.bestandteile = stueck.liste();
         }
         knopf.disabled = true;
-        let aelter = 0;
         try {
-          // Aus einer Meldung: Produkt bzw. Set anlegen und Meldung erledigen in einem Zug (der Melder bekommt Bescheid).
+          // Aus einer Meldung: Produkt anlegen und Meldung erledigen in einem Zug (der Melder bekommt Bescheid).
           let r;
           try {
             r = pid ? await api(`${API}/produkte/${pid}`, { method: "PUT", body: daten })
@@ -4868,15 +4034,14 @@
               : p.variante_von ? await api(`${API}/produkte/${p.variante_von.id}/variante`, { method: "POST", body: Object.assign(daten, { dokumente: $$(".pd-dok:checked", body).map((c) => +c.value) }) })
               : await api(`${API}/produkte`, { method: "POST", body: daten });
           } catch (e) {
-            // „Position n: …“ beim Anlegen eines Sets: an die Position, in den Reiter „Bestandteile“.
-            if (mitReiter && !pid && /^Position \d+: |einzeln geführtes Teil|Positionen je Liste/.test(e.message)) { stueck.fehlerZeigen(e.message); reiterZeigen("bestandteile"); }
+            // „Position n: …“ beim Anlegen: an die Position, in den Reiter „Bestandteile“.
+            if (mitReiter && !pid && /^Position \d+: |Positionen je Liste/.test(e.message)) { stueck.fehlerZeigen(e.message); reiterZeigen("bestandteile"); }
             throw e;
           }
           pid = r.produkt.id;
           if (mitReiter && p.id && stueck.geaendert()) {
             try { r = await api(`${API}/produkte/${pid}/bestandteile`, { method: "PUT", body: { bestandteile: stueck.liste() } }); }
             catch (e) { stueck.fehlerZeigen(e.message); reiterZeigen("bestandteile"); throw e; }
-            aelter = r.produkt.sets_aelter || 0;
           }
           if (mitReiter) stueck.gespeichert();
           if (bild) {
@@ -4888,11 +4053,7 @@
           }
           dlg.close();
           if (opt.danach) await opt.danach(r.produkt);
-          else if (aelter && opt.gespeichert) {
-            // Die Produktseite zeigt danach den Hinweis und „Auf vorhandene Sets übertragen …“ (Entwurf B).
-            toast(`Gespeichert – ${plural(aelter, "angelegtes Set hat", "angelegte Sets haben")} noch die bisherige Stückliste.`);
-            await opt.gespeichert();
-          } else location.href = `/material/katalog/produkt/${pid}`;
+          else location.href = `/material/katalog/produkt/${pid}`;
         } catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
     });
@@ -4927,63 +4088,36 @@
     return zeigen;
   }
 
-  /* Der Reiter „Bestandteile“ (Schritt 21, Entwurf A): die Stückliste eines Sets, Position für Position –
-     „einzeln geführt“ (dann ein Katalogprodukt, gesucht wie beim Artikel anlegen; die Bezeichnung darf fehlen, dann
-     nimmt der Server den Produktnamen) oder ein Bestandteil nur mit Bezeichnung (Tasche, Seilsatz), dazu Anzahl und
-     „Austausch laut Hersteller“ (ja | nein | nicht belegt). Reihenfolge = Position (↑ ↓), „Entfernen“ nimmt sie heraus
-     (Text statt ✕, das wie „Dialog schließen“ aussah – V8). Die Hilfe ist eine Zeile, der Rest aufklappbar (V12). Grenzen aus
-     stueckliste_grenzen (an einem neuen Produkt gibt es die Antwort noch nicht – dann dieselben Zahlen wie in models.py).
-     Fehler des Servers („Position n: …“) markieren die Position. Liefert liste(), pruefen() (Text oder ""),
-     geaendert(), gespeichert(), fehlerZeigen(text).
-     opt.nurText (Schritt 25): die Bestandteil-Liste eines Produkts, das kein Set ist – je Position nur Bezeichnung und
-     Anzahl, ohne „Einzeln geführt“, Produktsuche, „Austausch“ und Hilfetext; leer erlaubt, gleiche Bezeichnung nur einmal. */
-  const STUECK_GRENZEN = { positionen: 30, anzahl: 20, teile: 50, bezeichnung: 120 };
-  function stuecklisteEditor(teil, p, opt) {
-    const nurText = Boolean(opt && opt.nurText);
+  /* Der Reiter „Bestandteile“ (Schritt 25): die Bestandteil-Liste eines Produkts, Position für Position – nur
+     Bezeichnung und Anzahl; leer erlaubt, gleiche Bezeichnung nur einmal. Reihenfolge = Position (↑ ↓), „Entfernen“
+     nimmt sie heraus. Grenzen aus stueckliste_grenzen (an einem neuen Produkt gibt es die Antwort noch nicht – dann
+     dieselben Zahlen wie in models.py). Fehler des Servers („Position n: …“) markieren die Position. Liefert liste(),
+     pruefen() (Text oder ""), geaendert(), gespeichert(), fehlerZeigen(text). */
+  const STUECK_GRENZEN = { positionen: 30, anzahl: 20, bezeichnung: 120 };
+  function stuecklisteEditor(teil, p) {
     const g = Object.assign({}, STUECK_GRENZEN, p.stueckliste_grenzen || {});
-    let pos = (p.bestandteile || []).map((z) => ({ produkt: z.produkt, bezeichnung: z.bezeichnung, anzahl: z.anzahl,
-                                                     einzeln: z.einzeln, austausch: z.austausch }));
-    const form = (x) => (nurText ? { bezeichnung: x.bezeichnung.trim(), anzahl: +x.anzahl || 1 }
-      : { produkt_id: x.einzeln && x.produkt ? x.produkt.id : null, bezeichnung: x.bezeichnung.trim(),
-          anzahl: +x.anzahl || 1, einzeln: !!x.einzeln, austausch: x.austausch || "nicht_belegt" });
+    const pos = (p.bestandteile || []).map((z) => ({ bezeichnung: z.bezeichnung, anzahl: z.anzahl }));
+    const form = (x) => ({ bezeichnung: x.bezeichnung.trim(), anzahl: +x.anzahl || 1 });
     let anfang = JSON.stringify(pos.map(form));
-    let suchLos = null;
-    // Set aus einer Meldung (S8): die gemeldeten Teile als Vorlage über den Positionen – ebenso beim Produkt aus einer
-    // Set-Meldung (Entscheidung F4 a).
-    const vorlage = p.meldung && p.meldung.set_teile ? `<div class="mat-meldekasten"><p class="small">Gemeldete Teile (Vorlage):</p><p class="mat-text small">${esc(p.meldung.set_teile)}</p></div>` : "";
     // Die Felder in pos übernehmen – vor jedem Neuzeichnen, damit Getipptes bleibt.
     function lesen() {
       $$(".mat-bt", teil).forEach((f) => {
         const x = pos[+f.dataset.i];
         x.bezeichnung = $(".bt-bez", f).value;
         x.anzahl = $(".bt-anzahl", f).value;
-        if (!nurText) x.austausch = $(".bt-austausch", f).value;
       });
     }
-    const stueckZahl = () => pos.reduce((n, x) => n + (x.einzeln ? (+x.anzahl || 0) : 0), 0);
     function zaehler() {
       const z = $(".mat-bt-zaehler", teil);
-      if (z) z.textContent = nurText ? `${pos.length} von ${g.positionen} Positionen`
-        : `${pos.length} von ${g.positionen} Positionen · ${stueckZahl()} von ${g.teile} einzeln geführten Stück je Set`;
+      if (z) z.textContent = `${pos.length} von ${g.positionen} Positionen`;
     }
-    const produktWahl = (x, i) => (x.produkt
-      ? `<div class="mat-gewaehlt"><strong>${nameHtml(x.produkt)}</strong>${zusatzHtml(x.produkt)}${artNrKurz(x.produkt.article_no)} ${demoMarke(x.produkt.demo)}
-          <button class="lnk" type="button" data-bt="anders" data-i="${i}">anderes Produkt</button></div>`
-      : `<div class="mat-produktwahl"><input type="search" id="bt-${i}-q" class="bt-q" data-i="${i}" placeholder="Hersteller, Modell, Artikelnummer …" autocomplete="off" ${TASTATUR_SUCHE}>
-          <div id="bt-${i}-treffer" class="mat-treffer"></div></div>`);
     function zeichnen(fokusSel) {
-      const hilfeOffen = Boolean($(".mat-bt-hilfe", teil) && $(".mat-bt-hilfe", teil).open);
-      teil.innerHTML = `${vorlage}${nurText ? '<p class="help mat-bt-flach">Jede Prüfung fragt je Position ab, ob sie vorhanden ist; Seriennummern einzelner Stück stehen am Artikel.</p>'
-        : `<details class="mat-auf mat-bt-hilfe"${hilfeOffen ? " open" : ""}><summary>Einzeln geführt nur mit eigener Kennzeichnung und eigenem Katalogprodukt</summary>
-          <p class="help">${esc(HILFE_EINZELN)}</p>
-          <p class="help">Angelegte Sets behalten die Stückliste, mit der sie angelegt wurden. Eine Änderung überträgst du danach auf der Produktseite („Auf vorhandene Sets übertragen …“).</p></details>`}
+      teil.innerHTML = `<p class="help mat-bt-flach">Jede Prüfung fragt je Position ab, ob sie vorhanden ist; Seriennummern einzelner Stück stehen am Artikel.</p>
         <div class="mat-bt-liste">${pos.map((x, i) => `<fieldset class="mat-bt" data-i="${i}"><legend>Position ${i + 1}</legend>
-          <div class="mat-bt-kopf">${nurText ? "<span></span>" : `<label class="inline"><input type="checkbox" class="bt-einzeln" data-i="${i}" ${x.einzeln ? "checked" : ""}> Einzeln geführt</label>`}
+          <div class="mat-bt-kopf"><span></span>
             <div class="btn-row"><button class="btn secondary small" type="button" data-bt="hoch" data-i="${i}" aria-label="Position ${i + 1} nach oben" ${i ? "" : "disabled"}>↑</button><button class="btn secondary small" type="button" data-bt="runter" data-i="${i}" aria-label="Position ${i + 1} nach unten" ${i < pos.length - 1 ? "" : "disabled"}>↓</button><button class="btn secondary small" type="button" data-bt="weg" data-i="${i}" aria-label="Position ${i + 1} entfernen">Entfernen</button></div></div>
-          ${x.einzeln ? `${x.produkt ? '<p class="mat-bt-label">Katalogprodukt</p>' : `<label for="bt-${i}-q">Katalogprodukt</label>`}${produktWahl(x, i)}` : ""}
-          <div class="field-row mat-bt-felder${nurText ? " nur-text" : ""}"><div><label for="bt-${i}-bez">Bezeichnung${x.einzeln ? " (leer: Produktname)" : ""}</label><input type="text" id="bt-${i}-bez" class="bt-bez" maxlength="${g.bezeichnung}" value="${esc(x.bezeichnung || "")}" ${TASTATUR_NAME}></div>
-            <div><label for="bt-${i}-anzahl">Anzahl</label><input type="number" id="bt-${i}-anzahl" class="bt-anzahl" min="1" max="${g.anzahl}" value="${esc(String(x.anzahl || 1))}"></div>
-            ${nurText ? "" : `<div><label for="bt-${i}-austausch">Austausch laut Hersteller möglich</label><select id="bt-${i}-austausch" class="bt-austausch">${Object.entries(AUSTAUSCH).map(([w, t]) => `<option value="${w}" ${(x.austausch || "nicht_belegt") === w ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></div>`}</div>
+          <div class="field-row mat-bt-felder nur-text"><div><label for="bt-${i}-bez">Bezeichnung</label><input type="text" id="bt-${i}-bez" class="bt-bez" maxlength="${g.bezeichnung}" value="${esc(x.bezeichnung || "")}" ${TASTATUR_NAME}></div>
+            <div><label for="bt-${i}-anzahl">Anzahl</label><input type="number" id="bt-${i}-anzahl" class="bt-anzahl" min="1" max="${g.anzahl}" value="${esc(String(x.anzahl || 1))}"></div></div>
           <p class="error mat-bt-fehler" hidden></p></fieldset>`).join("")}</div>
         ${pos.length ? "" : '<p class="mat-leer">Noch keine Bestandteile.</p>'}
         <div class="btn-row mat-bt-neu"><button class="btn secondary small" type="button" data-bt="neu" ${pos.length >= g.positionen ? "disabled" : ""}><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Bestandteil<span class="k-anlegen"> anlegen</span></span></button>
@@ -4991,44 +4125,20 @@
       zaehler();
       if (fokusSel) fokus($(fokusSel, teil));
     }
-    function waehlen(i, prod) {
-      if (prod.is_set || prod.id === p.id) { toast(`Ein Set enthält kein Set – „${produktName(prod)}“ ist selbst eins.`, true); return; }
-      lesen();
-      pos[i].produkt = prod;
-      zeichnen(`#bt-${i}-bez`);
-    }
     teil.addEventListener("click", (e) => {
       const b = e.target.closest("[data-bt]");
       if (!b || b.disabled) return;
       const i = +b.dataset.i;
       lesen();
       const art = b.dataset.bt;
-      if (art === "neu") { pos.push({ produkt: null, bezeichnung: "", anzahl: 1, einzeln: false, austausch: "nicht_belegt" }); zeichnen(`#bt-${pos.length - 1}-bez`); }
+      if (art === "neu") { pos.push({ bezeichnung: "", anzahl: 1 }); zeichnen(`#bt-${pos.length - 1}-bez`); }
       else if (art === "weg") { pos.splice(i, 1); zeichnen(); }
       else if (art === "hoch" && i > 0) { [pos[i - 1], pos[i]] = [pos[i], pos[i - 1]]; zeichnen(`[data-bt="hoch"][data-i="${i - 1}"]`); }
       else if (art === "runter" && i < pos.length - 1) { [pos[i + 1], pos[i]] = [pos[i], pos[i + 1]]; zeichnen(`[data-bt="runter"][data-i="${i + 1}"]`); }
-      else if (art === "anders") { pos[i].produkt = null; zeichnen(`#bt-${i}-q`); }
-    });
-    teil.addEventListener("change", (e) => {
-      if (e.target.classList.contains("bt-einzeln")) {
-        lesen();
-        const i = +e.target.dataset.i;
-        pos[i].einzeln = e.target.checked;
-        zeichnen(pos[i].einzeln ? `#bt-${i}-q` : `#bt-${i}-bez`);
-      } else if (e.target.classList.contains("bt-anzahl")) { lesen(); zaehler(); }
     });
     teil.addEventListener("input", (e) => {
       const f = e.target;
-      if (f.classList.contains("bt-anzahl")) { pos[+f.closest(".mat-bt").dataset.i].anzahl = f.value; zaehler(); return; }
-      if (!f.classList.contains("bt-q")) return;
-      clearTimeout(suchLos);
-      suchLos = setTimeout(() => {
-        const ziel = $(`#bt-${f.dataset.i}-treffer`, teil);
-        const q = f.value.trim();
-        if (!ziel) return;
-        if (!q) { trefferLeeren(ziel); return; }
-        produktTreffer(ziel, q, (prod) => waehlen(+f.dataset.i, prod), '<p class="help">Kein Produkt gefunden – fehlt es im Katalog, erst anlegen.</p>');
-      }, 200);
+      if (f.classList.contains("bt-anzahl")) { pos[+f.closest(".mat-bt").dataset.i].anzahl = f.value; zaehler(); }
     });
     zeichnen();
     function markieren(i, text) {
@@ -5044,25 +4154,20 @@
       liste: () => { lesen(); return pos.map(form); },
       geaendert: () => { lesen(); return JSON.stringify(pos.map(form)) !== anfang; },
       gespeichert: () => { anfang = JSON.stringify(pos.map(form)); },
-      // Was der Server sicher abwiese, gleich hier am Feld: einzeln ohne Produkt, Text ohne Bezeichnung, Anzahl, Grenzen.
+      // Was der Server sicher abwiese, gleich hier am Feld: ohne Bezeichnung, Anzahl, doppelte Bezeichnung.
       pruefen: () => {
         lesen();
         $$(".mat-bt", teil).forEach((f) => { f.classList.remove("ungueltig"); $(".mat-bt-fehler", f).hidden = true; });
+        const schluessel = (b) => b.trim().replace(/\s+/g, " ").toLowerCase();
         for (let i = 0; i < pos.length; i += 1) {
           const x = pos[i];
           const n = +x.anzahl;
-          const schluessel = (b) => b.trim().replace(/\s+/g, " ").toLowerCase();
-          const doppelt = nurText && x.bezeichnung.trim() ? pos.findIndex((y) => schluessel(y.bezeichnung) === schluessel(x.bezeichnung)) : i;
-          const text = x.einzeln && !x.produkt ? "Einzeln geführt braucht ein Katalogprodukt – oder das Häkchen weg, dann ist es ein Bestandteil ohne eigenen Artikel."
-            : !x.einzeln && !x.bezeichnung.trim() ? "Bitte eine Bezeichnung angeben."
-              : !Number.isInteger(n) || n < 1 || n > g.anzahl ? `Anzahl zwischen 1 und ${g.anzahl}.`
-                : doppelt < i ? `„${x.bezeichnung.trim()}“ steht schon in Position ${doppelt + 1} – die Anzahl anpassen.` : "";
+          const doppelt = x.bezeichnung.trim() ? pos.findIndex((y) => schluessel(y.bezeichnung) === schluessel(x.bezeichnung)) : i;
+          const text = !x.bezeichnung.trim() ? "Bitte eine Bezeichnung angeben."
+            : !Number.isInteger(n) || n < 1 || n > g.anzahl ? `Anzahl zwischen 1 und ${g.anzahl}.`
+              : doppelt < i ? `„${x.bezeichnung.trim()}“ steht schon in Position ${doppelt + 1} – die Anzahl anpassen.` : "";
           if (text) { markieren(i, text); return `Position ${i + 1}: ${text}`; }
         }
-        if (nurText) return "";
-        if (stueckZahl() > g.teile) return `Zusammen höchstens ${g.teile} einzeln geführte Stück je Set (hier ${stueckZahl()}).`;
-        // Entscheidung S3: ohne einzeln geführtes Teil kein Set (wie stueckliste.EINZELN_PFLICHT).
-        if (!pos.some((x) => x.einzeln)) return EINZELN_PFLICHT;
         return "";
       },
       // „Position n: …“ vom Server an die Position, sonst nur die Meldung (der Aufrufer zeigt sie als Toast).
@@ -5143,26 +4248,7 @@
   }
 
   /* --- Produkt ------------------------------------------------------------------------------------- */
-  /* Die Stückliste eines Sets auf der Produktseite (Schritt 21): je Position Bestandteil (Bezeichnung, bei
-     einzeln geführten das Katalogprodukt als Link), Anzahl, „einzeln geführt“ und „Austausch laut Hersteller“. Pflegen
-     im Dialog „Bearbeiten“, Reiter „Bestandteile“ (k: Katalogrecht). Haben angelegte Sets eine ältere Stückliste
-     (sets_aelter, nur für die Material-Verwaltung), stehen darunter der Hinweis und „Auf vorhandene Sets übertragen …“ –
-     der Hinweis bleibt, bis alle übertragen sind (man kann es später nachholen). */
-  function stuecklisteHtml(p, k) {
-    const liste = p.bestandteile || [];
-    return `<section class="section mat-stueckliste"><h2>Stückliste</h2>
-      ${liste.length ? `<table class="list mat-tabelle mat-karten"><thead><tr><th>Bestandteil</th><th>Anzahl</th><th>Einzeln geführt</th><th>Austausch laut Hersteller möglich</th></tr></thead><tbody>
-        ${liste.map((z) => `<tr><td data-l="Bestandteil" class="mat-k-titel"><strong>${esc(z.bezeichnung)}</strong>
-            ${z.produkt ? `<div class="small"><a href="/material/katalog/produkt/${z.produkt.id}">${nameHtml(z.produkt)}</a>${zusatzHtml(z.produkt)}${artNrKurz(z.produkt.article_no)} ${demoMarke(z.produkt.demo)}</div>` : ""}</td>
-          <td data-l="Anzahl" class="mat-k-halb">${z.anzahl}</td><td data-l="Einzeln geführt" class="mat-k-halb">${z.einzeln ? "ja – eigener Artikel je Stück" : '<span class="muted">nein</span>'}</td>
-          <td data-l="Austausch laut Hersteller möglich">${esc(z.austausch_text || AUSTAUSCH[z.austausch] || z.austausch)}</td></tr>`).join("")}</tbody></table>`
-        : `<p class="mat-warn">Noch keine Stückliste – ohne sie lässt sich kein Set dieses Produkts anlegen.</p>`}
-      <p class="help">Beim Anlegen eines Sets wird jedes einzeln geführte Stück ein eigener Artikel (Teil) mit Inventarnummer und Etikett. Angelegte Sets behalten ihre Stückliste.</p>
-      ${k && p.sets_aelter ? `<p class="notice">${plural(p.sets_aelter, "angelegtes Set hat", "angelegte Sets haben")} eine ältere Stückliste.</p>` : ""}
-      ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="stueckliste">Stückliste bearbeiten</button>${p.sets_aelter ? '<button class="btn secondary small" data-act="uebertragen">Auf vorhandene Sets übertragen …</button>' : ""}</div>` : ""}</section>`;
-  }
-
-  /* Die Bestandteil-Liste eines Produkts, das kein Set ist (Schritt 25), auf der Produktseite: „2 × Bezeichnung“ –
+  /* Die Bestandteil-Liste eines Produkts (Schritt 25) auf der Produktseite: „2 × Bezeichnung“ –
      nur, wenn es eine gibt (angelegt wird sie über „Bearbeiten“ → Reiter „Bestandteile“); mit Katalogrecht dazu
      „Bestandteile bearbeiten“. Auch Artikelseite und Meine PSA zeigen sie so (bestandteilZeilen). */
   // ohneText: was dasteht, wenn eine Position keine Nummer trägt (schreibgeschützter Block im Dialog „Bearbeiten“).
@@ -5180,65 +4266,6 @@
       ${k ? '<div class="btn-row"><button class="btn secondary small" data-act="stueckliste">Bestandteile bearbeiten</button></div>' : ""}</section>`;
   }
 
-  /* „Stückliste übertragen“ (Wunsch vom 24.10.2026, Entwurf B; Entscheidungen S4–S7, nur die Material-Verwaltung):
-     Vorschau vom Server (setkopie.vorschau) – je Gruppe gleicher bisheriger Stückliste der Vergleich Position | bisher |
-     jetzt | Wirkung, darunter die Sets der Gruppe mit Inventarnummer (Link), Ordner, Status, Herstellung und Wirkung;
-     übertragbare sind gewählt (S4), die anderen stehen mit ihrem Grund ohne Auswahl da. Die Schlusszeile zählt mit,
-     „Übertragen“ (die eine Hauptaktion) schickt „stand“ und die Wahl. Ist inzwischen etwas anders (409), lädt der Dialog
-     die Vorschau neu. danach: die Produktseite neu zeichnen. */
-  async function uebertragenDialog(p, danach) {
-    let v;
-    try { v = await api(`${API}/produkte/${p.id}/stueckliste-uebertragen`); } catch (e) { toast(e.message, true); return; }
-    const zelle = (t) => (t ? esc(t) : '<span class="muted">–</span>');
-    const setZeile = (x) => `<li class="mat-su-set${x.uebertragbar ? "" : " aus"}">
-        ${x.uebertragbar ? `<input type="checkbox" class="su-set" id="su-${x.id}" value="${x.id}" data-sperrt="${x.sperrt ? 1 : 0}" checked aria-labelledby="su-${x.id}-nr su-${x.id}-wirkung">` : ""}
-        <div class="mat-su-angaben"><a class="mat-inv" id="su-${x.id}-nr" href="/material/artikel/${x.id}" target="_blank" rel="noopener"><strong>${esc(x.inventory_no)}</strong></a> ${demoMarke(x.demo)}
-          <span class="small muted">${esc(x.ordner)} · ${esc(x.status_text)}${x.manufactured_on ? ` · Herstellung ${esc(fmtTag(x.manufactured_on))}` : ""}</span>
-          <div class="small${x.uebertragbar ? (x.sperrt ? " mat-warn" : "") : " mat-warn"}" id="su-${x.id}-wirkung">${x.uebertragbar ? esc(x.wirkung) : `nicht übertragbar: ${esc(x.grund)}`}</div></div></li>`;
-    const gruppe = (g, n) => `<section class="mat-su-gruppe">
-        <h3>${v.gruppen.length > 1 ? `Gruppe ${n + 1} – ` : ""}${plural(g.sets.length, "Set", "Sets")} mit dieser bisherigen Stückliste</h3>
-        <table class="list mat-tabelle mat-karten mat-su-vergleich"><thead><tr><th>Position</th><th>bisher</th><th>jetzt</th><th>Wirkung</th></tr></thead><tbody>
-          ${g.vergleich.map((z) => `<tr${z.wirkung === "unverändert" ? ' class="mat-su-gleich"' : ""}><td data-l="Position" class="mat-k-halb">${z.position || "–"}</td>
-            <td data-l="bisher">${zelle(z.bisher)}</td><td data-l="jetzt">${zelle(z.jetzt)}</td><td data-l="Wirkung" class="mat-k-marke">${esc(z.wirkung)}</td></tr>`).join("")}</tbody></table>
-        <ul class="mat-su-sets">${g.sets.map(setZeile).join("")}</ul></section>`;
-    const kopf = `Die angelegten Sets bekommen die aktuelle Stückliste${v.ausgesondert ? `; ausgesonderte (${v.ausgesondert}) behalten ihre` : ""}.${v.gleich ? ` ${plural(v.gleich, "Set hat", "Sets haben")} sie schon.` : ""}`;
-    dialog(`<h2>Stückliste übertragen</h2>
-      <p>${esc(produktName(v.produkt))}</p>
-      <p class="help">${kopf} Teile bleiben, wo sie sind: Fehlt danach ein einzeln geführtes Teil oder ist eines übrig, ist das Set gesperrt, bis „Set prüfen“ es freigibt – einsetzen bzw. entnehmen macht der Materialwart. Andere Änderungen sperren nicht.</p>
-      ${v.gruppen.length ? v.gruppen.map(gruppe).join("") : leer("Kein angelegtes Set hat eine ältere Stückliste.")}
-      <p class="mat-su-summe" id="su-summe" aria-live="polite"></p>
-      <div class="dlg-actions"><button class="btn secondary" data-close type="button">${v.uebertragbar ? "Abbrechen" : "Schließen"}</button>${v.uebertragbar ? '<button class="btn" id="su-ok" type="button">Übertragen</button>' : ""}</div>`,
-    (dlg, body) => {
-      dlg.classList.add("mat-produkt-reiter");
-      dlg.addEventListener("close", () => dlg.classList.remove("mat-produkt-reiter"), { once: true });
-      const gewaehlt = () => $$(".su-set:checked", body);
-      const summe = () => {
-        const n = gewaehlt().length, k = gewaehlt().filter((c) => c.dataset.sperrt === "1").length;
-        $("#su-summe", body).textContent = !v.uebertragbar ? "" : n
-          ? `Übertragen auf ${plural(n, "Set", "Sets")}${k ? ` – ${k === n && n === 1 ? "es ist" : `${k} davon`} danach gesperrt bis zur Set-Prüfung` : ""}.`
-          : "Kein Set gewählt.";
-        if ($("#su-ok", body)) $("#su-ok", body).disabled = !n;
-      };
-      body.addEventListener("change", (e) => { if (e.target.classList.contains("su-set")) summe(); });
-      summe();
-      if (!$("#su-ok", body)) return;
-      $("#su-ok", body).onclick = async (ev) => {
-        const knopf = ev.currentTarget;
-        knopf.disabled = true;
-        try {
-          const r = await api(`${API}/produkte/${p.id}/stueckliste-uebertragen`, { method: "POST", body: { stand: v.stand, set_ids: gewaehlt().map((c) => +c.value) } });
-          dlg.close();
-          toast(`Übertragen auf ${plural(r.uebertragen, "Set", "Sets")}${r.gesperrt ? ` – ${r.gesperrt} gesperrt bis zur Set-Prüfung` : ""}.`);
-          await danach();
-        } catch (e) {
-          toast(e.message, true);
-          // Inzwischen geändert (anderer Stand, neues Hindernis): die Vorschau neu – nichts wurde übertragen.
-          if (e.status === 409) { dlg.close(); await uebertragenDialog(p, danach); } else knopf.disabled = false;
-        }
-      };
-    });
-  }
-
   async function produkt() {
     const p = (await api(`${API}/produkte/${DATEN.id}`)).produkt;
     leisteMarkieren(p.category_id);
@@ -5247,7 +4274,6 @@
     const formulare = p.formulare || [];
     // Die Bemerkung steht als Zusatz in der Überschrift; nur eine ältere, dort gekürzte zusätzlich ganz hier.
     const zusatz = produktZusatz(p);
-    const stueckTeile = (p.bestandteile || []).reduce((n, z) => n + (z.einzeln ? z.anzahl : 0), 0);
     // Seltene Funktionen im Untermenü statt als weitere Knöpfe neben „Bearbeiten“ (Knopfregel; Prüfung Browser,
     // Verbesserung 4).
     const produktMenue = `<details class="mat-menue">
@@ -5277,8 +4303,6 @@
           ${zeile("Bestand", `${plural(p.bestand, "Artikel", "Artikel")}${p.artikel_gesamt > p.bestand ? ` <span class="muted">(+${p.artikel_gesamt - p.bestand} ausgesondert)</span>` : ""}${DARF.alles ? "" : ' <span class="muted">in deinem Bereich</span>'}`)}
           ${zusatz && zusatz.voll ? zeile("Bemerkung", `<span class="mat-text">${esc(p.description)}</span>
             <div class="help">Länger als ${BESCHREIBUNG_MAX} Zeichen, in der Überschrift gekürzt – gedacht ist ein kurzer Zusatz hinter dem Namen.${k ? " Bitte unter „Bearbeiten“ kürzen." : ""}</div>`) : ""}
-          ${p.is_set ? zeile("Set", `ja – ${plural(stueckTeile, "Teil", "Teile")} je Set einzeln geführt <span class="muted">(Stückliste unten)</span>`) : ""}
-          ${(p.bestandteil_von || []).length ? zeile("Bestandteil von", p.bestandteil_von.map((x) => `<a href="/material/katalog/produkt/${x.id}">${esc(x.name)}</a>`).join(", ")) : ""}
         </dl></section>
         <section class="section"><h2>Prüfformular</h2>
           ${p.formular ? `<p>Geprüft wird nach <a href="/material/katalog/formular/${p.formular.id}"><strong>${esc(p.formular.title || "Formular")}</strong> · Version ${p.formular.version}</a> <span class="muted">(${esc(p.formular.quelle)}, ${plural(p.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span>.</p>` : '<p class="mat-warn">Für dieses Produkt gilt kein aktives Prüfformular – weder ein spezifisches noch ein generisches der Kategorie.</p>'}
@@ -5287,7 +4311,7 @@
           <p class="help">Ein aktives spezifisches Formular ersetzt das generische der Kategorie.</p>
         </section>
       </div>
-      ${p.is_set ? stuecklisteHtml(p, k) : bestandteilListeHtml(p, k)}
+      ${bestandteilListeHtml(p, k)}
       <section class="section"><h2>Herstellerdokumente</h2>
         <p class="help">Gelten für alle Artikel dieses Produkts. Ein Protokoll verweist auf die Version, die am Prüftag galt.</p>
         ${p.dokumente.length ? dokTabelle(p.dokumente, k) : leer("Noch keine Dokumente am Produkt.")}
@@ -5299,9 +4323,8 @@
       </section>
       <section class="section"><h2>Journal</h2>${journalHtml(p.journal, true)}</section>`;
     aktionen = {
-      bearbeiten: () => produktDialog(p, { gespeichert: () => zeigen(produkt) }),
-      stueckliste: () => produktDialog(p, { reiter: "bestandteile", gespeichert: () => zeigen(produkt) }),
-      uebertragen: () => uebertragenDialog(p, () => zeigen(produkt)),
+      bearbeiten: () => produktDialog(p),
+      stueckliste: () => produktDialog(p, { reiter: "bestandteile" }),
       // Stammdaten vorbelegt, Artikelnummer leer (eine neue ist Pflicht), kein Bild.
       variante: () => produktDialog(Object.assign({}, p, { id: null, article_no: "", bild: null, vorschau: null, original: null, variante_von: p })),
       loeschen: async () => {
@@ -5703,40 +4726,23 @@
     else if (a.entwurf) hinweis = esc(`In Prüfung bei ${a.entwurf.pruefer} seit ${fmtZeit(a.entwurf.seit)}.${darf.verwalten ? " Eine liegen gebliebene Reservierung hebst du in der Artikelansicht auf." : " Eine liegen gebliebene Reservierung hebt der Materialwart auf."}`);
     else if (!a.formular) hinweis = "Für dieses Produkt gibt es kein aktives Prüfformular – weder am Produkt noch in seiner Kategorie. Die Material-Verwaltung legt es im Katalog an.";
     const ld = a.lebensdauer && a.lebensdauer.festgeschrieben ? { ende: a.lebensdauer.ende, rest_tage: a.lebensdauer.rest_tage, erreicht: a.lebensdauer.rest_tage <= 0 } : null;
-    /* Sets (O2): Den Set-Artikel prüft man nur in einer Set-Prüfung (sonst 409) – ohne offene führt die Seite
-       dorthin. Ein Teil zeigt sein Set und, in einer offenen Set-Prüfung, „Teil n von m“; „Abbrechen“ führt dann zurück
-       in die Set-Prüfung. Eine Sperre im Set hebt „einsatzbereit“ nie allein auf – frei gibt nur „Set prüfen“. */
-    const tv = a.teil_von;
-    const sb = a.set;
-    let lf = null;
-    if (tv) { try { lf = (await api(`${API}/artikel/${tv.id}/set-lauf`)).lauf; } catch (e) { /* dann ohne Set-Prüfung */ } }
-    else if (sb && sb.lauf) lf = sb.lauf;
-    const setSeite = tv || sb ? `/material/artikel/${(tv || a).id}/set-pruefung` : null;
-    const nr = tv ? teilNr(lf, a.id) : null;
-    if (sb && !sb.lauf && !hinweis) hinweis = "Das Set selbst prüfst du über „Set prüfen“ – zusammen mit den Teilen in einer Set-Prüfung.";
-    const zurueck = lf && setSeite ? setSeite : `/material/artikel/${a.id}`;
-    const gesperrtText = a.lock_cause === "set" ? `GESPERRT mit dem Set${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. „einsatzbereit“ hebt diese Sperre nicht auf – frei gibt das Set nur „Set prüfen“.`
-      : tv || sb ? `GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Mit „einsatzbereit“ ist diese Prüfung die Freiprüfung für ${tv ? "das Teil" : "das Set selbst"}; frei gibt das ganze Set erst „Set prüfen“.`
-        : `GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.`;
     inhalt.innerHTML = `${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
       ${artikelPfad(a)}
       <div class="page-head"><h1>Prüfung ${esc(a.inventory_no)} ${statusMarke(a.status, true)}</h1></div>
       <div class="mat-formular">
         <p class="mat-produktzeile"><strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrHtml(p.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)}</p>
-        ${tv ? `<p class="mat-set-lauf-zeile">Teil von Set <a href="/material/artikel/${tv.id}"><strong>${esc(tv.inventory_no)}</strong></a>${nr ? ` · Teil ${nr.n} von ${nr.m} in der <a class="mat-ziel" href="${setSeite}">Set-Prüfung</a>` : " – die Prüfung wirkt über das ganze Set: „instandsetzen“ sperrt es mit allen Teilen."}</p>` : ""}
-        ${sb && sb.lauf ? `<p class="mat-set-lauf-zeile">Das Set selbst – zum Schluss der <a class="mat-ziel" href="${setSeite}">Set-Prüfung</a>, ergänzt um je eine Zeile „vorhanden/fehlt“ für die Bestandteile ohne eigenen Artikel.</p>` : ""}
-        ${a.lock_state !== "frei" && a.lock_state !== "ausgesondert" ? `<p class="mat-banner s-gesperrt">${gesperrtText}</p>` : ""}
+        ${a.lock_state !== "frei" && a.lock_state !== "ausgesondert" ? `<p class="mat-banner s-gesperrt">GESPERRT${a.lock_reason ? ` – ${esc(a.lock_reason)}` : ""}. Mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.</p>` : ""}
         ${mangelHinweis((a.maengel || []).filter((m) => m.offen))}
         ${rueckrufHinweis((a.rueckrufe || []).filter((r) => r.zustand !== "erledigt").map((r) => r.title), a.id)}
         ${lebensdauerHinweis(ld)}
         ${a.formular ? `<p>Formular: ${esc(a.formular.title || "ohne Titel")} · Version ${a.formular.version} <span class="muted">(${esc(a.formular.quelle)}, ${plural(a.formular.punkte, "Prüfpunkt", "Prüfpunkte")})</span></p>` : ""}
         ${a.durchgang ? `<p>Im Prüfdurchgang ${a.durchgang.sichtbar ? `<a href="/material/durchgang/${a.durchgang.id}">${esc(a.durchgang.titel)}</a>` : `„${esc(a.durchgang.titel)}“`} – die Prüfung zählt dort.</p>` : ""}
-        ${hinweis ? `<p class="notice">${hinweis}</p><p>${sb && !sb.lauf && darf.pruefen && a.lock_state !== "ausgesondert" ? `<a class="btn" href="${setSeite}">Set prüfen</a> ` : ""}<a class="btn secondary" href="/material/artikel/${a.id}">Zum ${sb ? "Set" : "Artikel"}</a></p>` : `
+        ${hinweis ? `<p class="notice">${hinweis}</p><p><a class="btn secondary" href="/material/artikel/${a.id}">Zum Artikel</a></p>` : `
           <fieldset class="mat-arten"><legend>Art der Prüfung</legend>
             ${pa.arten.map((x) => `<label class="mat-art-wahl"><input type="radio" name="art" value="${x}" ${x === pa.vorschlag ? "checked" : ""}> ${esc(PRUEFART[x] || x)}</label>`).join("")}
             ${pa.arten.length === 1 && pa.arten[0] === "eingang" ? '<p class="help">Die erste Prüfung eines Artikels ist die Eingangsprüfung. Erst sie gibt ihn frei; bis dahin steht er auf „neu“.</p>' : ""}
           </fieldset>
-          <div class="btn-row mat-knoepfe"><button class="btn" data-act="beginnen">Prüfung beginnen</button><a class="btn secondary" href="${zurueck}">Abbrechen</a></div>
+          <div class="btn-row mat-knoepfe"><button class="btn" data-act="beginnen">Prüfung beginnen</button><a class="btn secondary" href="/material/artikel/${a.id}">Abbrechen</a></div>
           <p class="help">Mit dem Beginn reservierst du den Artikel: Andere sehen „in Prüfung bei dir“, bis du abschließt oder verwirfst. Jede Eingabe wird sofort gespeichert – du kannst jederzeit unterbrechen.</p>`}
       </div>`;
     aktionen = {
@@ -5747,171 +4753,6 @@
         if (DATEN.durchgang) body.durchgang_id = DATEN.durchgang;
         try { const r = await api(`${API}/artikel/${a.id}/pruefungen`, { method: "POST", body }); location.href = `/material/pruefung/${r.pruefung.id}`; }
         catch (e) { toast(e.message, true); b.disabled = false; }
-      },
-    };
-  }
-
-  /* --- Set prüfen (Sets, K2 – Oberfläche O2) ---------------------------------------------------------
-     Eigene Seite /material/artikel/<Set>/set-pruefung, gebaut wie „Prüfung starten“: ohne offene Set-Prüfung der
-     Prüfumfang als Vorschau und „Set-Prüfung beginnen“ (POST …/set-lauf, aus dem Durchgang mit durchgang_id); mit
-     offener je Teil eine Karte – zu prüfen, in Prüfung, geprüft (mit Protokoll) oder übernommen (letzte gültige Prüfung,
-     „auch prüfen“) –, zum Schluss der Set-Artikel. Jede Prüfung ist eine gewöhnliche Prüfung mit eigenem Formular und
-     Protokoll (Prüfansicht); sie zählt im Lauf, weil der Server sie ihm zuordnet. Rot ist genau ein Knopf: die nächste
-     Prüfung, die jetzt dran ist (das erste Teil im Umfang ohne Prüfung, danach der Set-Artikel, sobald „bereit“). Fürs
-     Telefon eine Liste von Karten, keine Tabelle. Abbrechen steht im Untermenü „Mehr“ (selten, mit Rückfrage).
-     ?lauf=<id> zeigt eine frühere Set-Prüfung mit ihrem Ergebnis. */
-  const LAUF_ZUSTAND = { offen: "läuft", abgeschlossen: "abgeschlossen", abgebrochen: "abgebrochen" };
-  const pruefNeuLink = (iid) => `/material/artikel/${iid}/pruefung/neu`;
-  const protokollVerweis = (x) => (x.protokoll_id ? `<a href="/material/pruefung/${x.id}">Protokoll <span class="mat-hash">${esc(x.protokoll_id)}</span></a>`
-    : `<a href="/material/pruefung/${x.id}">ansehen</a>`);
-  // Die nächste Prüfung im Lauf: {art: „teil“ | „set“, ziel, text} oder null – für den einen roten Knopf und den Weg
-  // „weiter“ nach dem Festschreiben (Prüfansicht).
-  function laufWeiter(lf, setId) {
-    if (!lf || lf.state !== "offen") return null;
-    const u = lf.umfang.find((x) => x.zu_pruefen && !x.pruefung && (!x.entwurf || x.entwurf.eigen));
-    if (u) return { art: "teil", id: u.teil.id, ziel: u.entwurf ? `/material/pruefung/${u.entwurf.id}` : pruefNeuLink(u.teil.id), text: `${u.entwurf ? "Weiter prüfen" : "Prüfen"}: Teil ${u.teil.inventory_no}` };
-    const sp = lf.set_pruefung;
-    if (lf.bereit && (!sp || (sp.entwurf && sp.eigen))) return { art: "set", id: setId, ziel: sp ? `/material/pruefung/${sp.id}` : pruefNeuLink(setId), text: sp ? "Set selbst weiter prüfen" : "Set selbst prüfen" };
-    return null;
-  }
-  // Teil n von m im Lauf (Reihenfolge des Umfangs) – oder null.
-  const teilNr = (lf, tid) => { const i = lf ? lf.umfang.findIndex((u) => u.teil.id === tid) : -1; return i < 0 ? null : { n: i + 1, m: lf.umfang.length }; };
-
-  async function setLaufAnsicht() {
-    const q = DATEN.lauf ? `?lauf=${encodeURIComponent(DATEN.lauf)}` : "";
-    const [antwort, l] = await Promise.all([api(`${API}/artikel/${DATEN.id}`), api(`${API}/artikel/${DATEN.id}/set-lauf${q}`), ordnerBaum().catch(() => null)]);
-    const a = antwort.artikel;
-    const darf = a.darf || {};
-    const sb = a.set;
-    leisteMarkieren(a.folder_id);
-    const lf = l.lauf;
-    const kopf = `${a.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}${artikelPfad(a)}
-      <div class="page-head"><h1>Set-Prüfung <span class="mat-h1-zusatz">${esc(a.inventory_no)}</span> ${sb ? statusMarke(sb.status, true) : ""}</h1>
-        ${lf && lf.state === "offen" && (lf.eigen || darf.verwalten) ? `<details class="mat-menue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary>
-          <div class="mat-menue-liste"><a href="#" role="button" data-act="lauf-abbrechen"><strong>Set-Prüfung abbrechen …</strong>
-            <span>Festgeschriebene Teilprüfungen bleiben Einzelprüfungen mit Protokoll, offene laufen einzeln weiter.</span></a></div></details>` : ""}</div>
-      <p class="mat-produktzeile"><strong>${nameHtml(a.produkt)}</strong>${zusatzHtml(a.produkt)}${artNrHtml(a.produkt.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)}</p>`;
-    if (!sb) {
-      inhalt.innerHTML = `${kopf}<p class="notice">„Set prüfen“ gibt es nur an einem Set.</p><p><a class="btn secondary" href="/material/artikel/${a.id}">Zum Artikel</a></p>`;
-      aktionen = {};
-      return;
-    }
-    const frueher = (l.laeufe || []).filter((x) => x.state !== "offen" && (!lf || x.id !== lf.id));
-    const frueherHtml = frueher.length ? `<section class="section mat-lauf-frueher"><h2>Frühere Set-Prüfungen</h2><ul class="mat-rr-liste">
-      ${frueher.map((x) => `<li><a class="mat-ziel" href="/material/artikel/${a.id}/set-pruefung?lauf=${x.id}">${esc(fmtTag(x.closed_at || x.opened_at))}</a>
-        ${x.gesamtergebnis ? `<span class="mat-gesamt g-${esc(x.gesamtergebnis)}">${esc(x.gesamt_text)}</span>` : `<span class="badge grey">${esc(LAUF_ZUSTAND[x.state] || x.state)}</span>`}
-        <span class="small">${x.protokoll_id ? `Protokoll <a href="/material/pruefung/${x.set_inspection_id}"><span class="mat-hash">${esc(x.protokoll_id)}</span></a>` : ""}${x.opened_by_name ? ` · ${esc(x.opened_by_name)}` : ""}${x.durchgang ? ` · Durchgang „${esc(x.durchgang.titel)}“` : ""}</span></li>`).join("")}</ul></section>` : "";
-    const gruende = (sb.sperrgruende || []).filter((g) => g.art !== "set_pruefung");
-    if (!lf) {
-      // Der Prüfumfang kommt vom Server (set.teile[].zu_pruefen): auch jedes Teil ohne übernehmbare Prüfung (N1, B7).
-      const alle = a.lock_state === "frei" || sb.ursprung === "set";
-      const umfang = sb.teile.filter((t) => t.zu_pruefen);
-      const rot = SET_ROT.includes(sb.status);
-      let hinweis = "";
-      if (a.lock_state === "ausgesondert") hinweis = "Ein ausgesondertes Set wird nicht mehr geprüft.";
-      else if (!darf.pruefen) hinweis = pruefHinweis(a);
-      const durchgang = DATEN.durchgang && a.durchgang && a.durchgang.id === DATEN.durchgang ? a.durchgang : null;
-      inhalt.innerHTML = `${kopf}
-        ${gruende.length ? `<div class="mat-banner s-gesperrt"><p>SET GESPERRT – ${gruende.map((g) => esc(g.text)).join(" · ")}</p></div>` : ""}
-        ${durchgang ? `<p>Aus dem Prüfdurchgang ${durchgang.sichtbar ? `<a href="/material/durchgang/${durchgang.id}">${esc(durchgang.titel)}</a>` : `„${esc(durchgang.titel)}“`} – die Prüfungen zählen dort.</p>` : ""}
-        <section class="section"><h2>Prüfumfang</h2>
-          <p>${alle ? `${a.lock_state === "frei" ? "Regelprüfung (alle Teile)" : "Die Sperre ging vom Set selbst aus"}: ${umfang.length === 1 ? "das Teil" : `alle ${umfang.length} Teile`}, jedes mit eigener Prüfung und eigenem Protokoll – zum Schluss das Set selbst mit den Bestandteilen ohne eigenen Artikel.`
-            : `Zur Freigabe: das Set selbst und ${umfang.length ? `die betroffenen Teile (${umfang.map((t) => esc(t.inventory_no)).join(", ")})` : "kein Teil"}. Die übrigen zählen mit ihrer letzten gültigen Prüfung – du kannst sie auch prüfen.`}</p>
-          <ul class="mat-lauf-vorschau">${sb.teile.map((t) => `<li><strong>${esc(t.inventory_no)}</strong> <span class="muted small">${esc(t.bestandteil || "")}</span> ${statusMarke(t.status)}
-            <span class="mat-lauf-auftrag${t.zu_pruefen ? " zu" : ""}">${t.zu_pruefen ? "zu prüfen" : "wird übernommen"}</span></li>`).join("")}
-            <li><strong>${esc(a.inventory_no)}</strong> <span class="muted small">das Set selbst</span> <span class="mat-lauf-auftrag">zum Schluss</span></li></ul>
-        </section>
-        ${hinweis ? `<p class="notice">${hinweis}</p><p><a class="btn secondary" href="/material/artikel/${a.id}">Zum Set</a></p>` : `
-          <div class="btn-row mat-knoepfe"><button class="btn${rot ? "" : " secondary"}" type="button" data-act="lauf-beginnen">Set-Prüfung beginnen</button><a class="btn secondary" href="/material/artikel/${a.id}">Abbrechen</a></div>
-          <p class="help">Die Set-Prüfung führt von Teil zu Teil; jede Prüfung reserviert nur ihren Artikel und lässt sich unterbrechen. Mehrere Prüfer können die Teile parallel prüfen.</p>`}
-        ${frueherHtml}`;
-      aktionen = {
-        "lauf-beginnen": async (b) => {
-          b.disabled = true;
-          try {
-            await api(`${API}/artikel/${a.id}/set-lauf`, { method: "POST", body: { durchgang_id: DATEN.durchgang || null } });
-            zeigen(setLaufAnsicht);
-          } catch (e) { toast(e.message, true); b.disabled = false; }
-        },
-      };
-      return;
-    }
-    const offen = lf.state === "offen";
-    const weiter = darf.pruefen ? laufWeiter(lf, a.id) : null;
-    const knopfKlasse = (art, id) => (weiter && weiter.art === art && weiter.id === id ? "btn" : "btn secondary");
-    const fs = lf.fortschritt;
-    const karte = (u, i) => {
-      const t = u.teil;
-      let zustand;
-      let knopf = "";
-      if (u.pruefung) {
-        zustand = `${ergebnisMarke(u.pruefung.ergebnis)} <span class="small">geprüft am ${esc(fmtTag(u.pruefung.datum))}${u.pruefung.pruefer ? ` von ${esc(u.pruefung.pruefer)}` : ""} · ${protokollVerweis(u.pruefung)}</span>`;
-      } else if (u.entwurf) {
-        zustand = `<span class="badge">in Prüfung</span> <span class="small">bei ${esc(u.entwurf.pruefer || "–")}</span>`;
-        if (offen && u.entwurf.eigen && darf.pruefen) knopf = `<a class="${knopfKlasse("teil", t.id)} small" href="/material/pruefung/${u.entwurf.id}">Weiter prüfen</a>`;
-        else if (offen && darf.verwalten) knopf = `<button type="button" class="btn secondary small" data-act="freigeben" data-id="${u.entwurf.id}" data-wer="${esc(u.entwurf.pruefer || "")}">Reservierung aufheben</button>`;
-      } else if (u.zu_pruefen) {
-        zustand = '<span class="mat-lauf-marke">zu prüfen</span>';
-        if (offen && darf.pruefen) knopf = `<a class="${knopfKlasse("teil", t.id)} small" href="${pruefNeuLink(t.id)}">Prüfen</a>`;
-      } else {
-        zustand = u.uebernommen ? `<span class="small">übernommen: ${ergebnisMarke(u.uebernommen.ergebnis)} vom ${esc(fmtTag(u.uebernommen.datum))} · ${protokollVerweis(u.uebernommen)}</span>`
-          : '<span class="small mat-warn">keine gültige Prüfung zum Übernehmen – bitte prüfen</span>';
-        if (offen && darf.pruefen) knopf = `<a class="btn secondary small" href="${pruefNeuLink(t.id)}">auch prüfen</a>`;
-      }
-      return `<li class="mat-lauf-teil${u.pruefung ? " geprueft" : u.zu_pruefen ? " zu" : ""}">
-        <div class="mat-lauf-kopf"><span class="mat-lauf-nr">Teil ${i + 1} von ${lf.umfang.length}</span>
-          <a class="mat-inv" href="/material/artikel/${t.id}"><strong>${esc(t.inventory_no)}</strong></a> <span class="muted small">${esc(t.bestandteil || "")}</span></div>
-        <div class="small muted">SN ${esc(t.serial_no || "–")}</div>
-        <div class="mat-lauf-zustand">${zustand}</div>
-        ${knopf ? `<div class="btn-row">${knopf}</div>` : ""}</li>`;
-    };
-    const sp = lf.set_pruefung;
-    let spZustand;
-    let spKnopf = "";
-    if (sp && !sp.entwurf) spZustand = `<span class="small">festgeschrieben · <a href="/material/pruefung/${sp.id}">Set-Protokoll ansehen</a></span>`;
-    else if (sp) {
-      spZustand = `<span class="badge">in Prüfung</span> <span class="small">bei ${esc(sp.pruefer || "–")}</span>`;
-      if (offen && sp.eigen && darf.pruefen) spKnopf = `<a class="${knopfKlasse("set", a.id)} small" href="/material/pruefung/${sp.id}">Set selbst weiter prüfen</a>`;
-      else if (offen && darf.verwalten) spKnopf = `<button type="button" class="btn secondary small" data-act="freigeben" data-id="${sp.id}" data-wer="${esc(sp.pruefer || "")}">Reservierung aufheben</button>`;
-    } else {
-      spZustand = `<span class="mat-lauf-marke">${lf.bereit ? "jetzt dran" : "zum Schluss"}</span>`;
-      if (offen && darf.pruefen) spKnopf = `<a class="${knopfKlasse("set", a.id)} small" href="${pruefNeuLink(a.id)}">Set selbst prüfen</a>`;
-    }
-    const ab = lf.abschluss;
-    const fgr = (lf.freigabe_gruende || []).filter((g) => !/noch nicht geprüft\.?$/.test(g));
-    inhalt.innerHTML = `${kopf}
-      <p class="mat-lauf-stand"><span class="badge${offen ? "" : " grey"}">${esc(LAUF_ZUSTAND[lf.state] || lf.state)}</span>
-        <span class="small">begonnen ${esc(fmtZeit(lf.opened_at))}${lf.opened_by_name ? ` von ${esc(lf.opened_by_name)}` : ""}${lf.closed_at ? ` · beendet ${esc(fmtZeit(lf.closed_at))}` : ""}
-        ${lf.durchgang ? ` · Durchgang ${lf.durchgang.sichtbar ? `<a href="/material/durchgang/${lf.durchgang.id}">${esc(lf.durchgang.titel)}</a>` : `„${esc(lf.durchgang.titel)}“`}` : ""}</span></p>
-      ${offen ? `<p class="mat-lauf-fortschritt"><span class="mat-fortschritt" aria-hidden="true"><span style="width:${fs.zu_pruefen ? Math.round((100 * fs.geprueft) / fs.zu_pruefen) : 100}%"></span></span>
-        <span><strong>${fs.geprueft} von ${fs.zu_pruefen}</strong> ${fs.zu_pruefen === 1 ? "Teil" : "Teilen"} <span class="mat-nowrap">im Umfang geprüft</span>${lf.bereit ? " – jetzt das Set selbst" : ""}</span></p>` : ""}
-      ${lf.hinweis_tage ? `<p class="notice small">Seit der ersten Teilprüfung sind ${lf.hinweis_tage} Tage vergangen – das Set-Protokoll vermerkt es. Prüftag des Set-Protokolls ist der Tag des Abschlusses.</p>` : ""}
-      ${offen && fgr.length ? `<div class="mat-lauf-gruende"><p class="small"><strong>Was die Freigabe noch verhindert</strong> (außer dem Set selbst):</p><ul class="small">${fgr.map((g) => `<li>${esc(g)}</li>`).join("")}</ul></div>` : ""}
-      ${ab ? `<section class="section mat-lauf-abschluss"><h2>Ergebnis</h2><p><span class="mat-gesamt g-${esc(ab.gesamtergebnis || "")}">${esc(ab.gesamt_text)}</span>${ab.freigegeben ? ' <span class="small">– mit dieser Prüfung freigegeben</span>' : ""}</p>
-        ${(ab.gruende || []).length ? `<ul class="small">${ab.gruende.map((g) => `<li>${esc(g)}</li>`).join("")}</ul>` : ""}${ab.hinweis ? `<p class="small">${esc(ab.hinweis)}</p>` : ""}
-        ${lf.set_inspection_id ? `<p><a class="btn secondary small" href="/material/pruefung/${lf.set_inspection_id}">Set-Protokoll ansehen</a></p>` : ""}</section>` : ""}
-      ${lf.state === "abgebrochen" ? '<p class="notice">Diese Set-Prüfung wurde abgebrochen – festgeschriebene Teilprüfungen bleiben Einzelprüfungen mit ihrem Protokoll.</p>' : ""}
-      ${offen && !darf.pruefen ? `<p class="notice small">${pruefHinweis(a)}</p>` : ""}
-      <ol class="mat-lauf-liste">${lf.umfang.map(karte).join("")}
-        <li class="mat-lauf-teil mat-lauf-set${sp && !sp.entwurf ? " geprueft" : ""}">
-          <div class="mat-lauf-kopf"><span class="mat-lauf-nr">Zum Schluss</span> <strong>${esc(a.inventory_no)}</strong> <span class="muted small">das Set selbst</span></div>
-          <div class="mat-lauf-zustand">${spZustand}</div>
-          ${spKnopf ? `<div class="btn-row">${spKnopf}</div>` : ""}
-          ${offen && !lf.bereit ? '<p class="help">Festschreiben lässt sich das Set selbst, sobald jedes Teil im Umfang geprüft und keine Teilprüfung mehr offen ist.</p>' : ""}</li></ol>
-      <p><a class="mat-ziel" href="/material/artikel/${a.id}">Zum Set ${esc(a.inventory_no)}</a></p>
-      ${frueherHtml}`;
-    aktionen = {
-      freigeben: (b) => reservierungFreigeben(+b.dataset.id, b.dataset.wer, () => zeigen(setLaufAnsicht)),
-      summe: summeKopieren,
-      "lauf-abbrechen": async () => {
-        const n = lf.umfang.filter((u) => u.pruefung).length;
-        const text = `Die Set-Prüfung von ${a.inventory_no} abbrechen? ${n ? `${plural(n, "festgeschriebene Teilprüfung bleibt", "festgeschriebene Teilprüfungen bleiben")} als Einzelprüfung mit Protokoll erhalten` : "Darin ist noch nichts festgeschrieben – sie wird ganz entfernt"}; offene Prüfungen laufen einzeln weiter. Frei gibt das Set erst eine neue Set-Prüfung.`;
-        if (!(await confirm(text, "Set-Prüfung abbrechen"))) return;
-        try {
-          const r = await api(`${API}/artikel/${a.id}/set-lauf`, { method: "DELETE" });
-          toast(r.bleibt ? "Set-Prüfung abgebrochen" : "Set-Prüfung entfernt – darin war nichts geprüft");
-          location.href = `/material/artikel/${a.id}`;
-        } catch (e) { toast(e.message, true); }
       },
     };
   }
@@ -6087,91 +4928,6 @@
     const imAbschluss = (sel) => { const a = abschlussBox(); return a ? $(sel, a) : null; };
     const bemFeld = () => echt("#pr-bem");
     let anleitungEl = null;          // die Prüfanleitung: einmal gebaut, bei jedem Zeichnen wieder eingesetzt (bleibt offen)
-
-    /* Sets (K2, Oberfläche O2): Gehört die Prüfung zu einer Set-Prüfung (pr.set_lauf), steht im Kopf „Teil von
-       Set … · Teil n von m“ bzw. „Set-Artikel“, und nach dem Festschreiben führt ein Kasten zur nächsten Prüfung des
-       Laufs (laufWeiter) oder zurück. Am Entwurf des Set-Artikels (pr.set_abschluss) der Stand des Laufs und das
-       Gesamtergebnis vorab; die Ja/Nein-Zeilen der Bestandteile heißen „vorhanden“/„fehlt“; „aussondern“ fragt je Teil
-       nach dem Verbleib. Abgeschlossen zeigt die Set-Prüfung ihre Teiletabelle (pr.set_protokoll). */
-    let setLf = null;                // die offene Set-Prüfung, zu der diese Prüfung gehört (voll) – oder null
-    const rolleSet = () => Boolean(pr.set_lauf && pr.set_lauf.rolle === "set");
-    // Ein Teil an einer Position mit „Austausch laut Hersteller: nein“: „aussondern“ lässt es gesperrt im Set (N3).
-    const teilNichtTauschbar = () => Boolean(pr.artikel.teil_von && pr.artikel.teil_von.austausch === "nein");
-    const setVon = () => (pr.set_lauf ? pr.set_lauf.set : pr.artikel.teil_von ? { id: pr.artikel.teil_von.id, inventory_no: pr.artikel.teil_von.inventory_no } : null);
-    async function setLaufLaden() {
-      setLf = null;
-      if (!pr.set_lauf || pr.set_lauf.state !== "offen") return;
-      try {
-        const l = (await api(`${API}/artikel/${pr.set_lauf.set.id}/set-lauf`)).lauf;
-        setLf = l && l.id === pr.set_lauf.id ? l : null;
-      } catch (e) { /* dann ohne Weg in die Set-Prüfung */ }
-    }
-    function setVorab(e) {
-      const sa = pr.set_abschluss;
-      if (!sa || !e) return null;
-      if (e === "aussondern") return { g: "ausgesondert", text: "Set ausgesondert – je Teil wählst du beim Festschreiben: mit aussondern oder entnehmen und gesperrt weiterführen." };
-      if (e === "instandsetzen") return { g: "gesperrt", text: "nicht einsatzbereit – das ganze Set ist gesperrt." };
-      if (pr.artikel.lock_state === "frei") return { g: "einsatzbereit", text: "einsatzbereit – das Set ist danach mit allen Teilen geprüft." };
-      const g = sa.freigabe_gruende || [];
-      return g.length ? { g: "gesperrt", text: `nicht einsatzbereit – das Set bleibt gesperrt. ${g.join(" ")}` }
-        : { g: "einsatzbereit", text: "einsatzbereit – das Set wird freigegeben und kehrt in seinen Ordner zurück." };
-    }
-    // Das Gesamtergebnis als Marke, die Erklärung dahinter als Text („einsatzbereit – das Set wird freigegeben …“) – mit
-    // dem Gedankenstrich als Trenner, sonst liest sich Marke und Satz als einer (V4).
-    const vorabHtml = (v) => { const i = v.text.indexOf(" – "); return `<span class="mat-gesamt g-${esc(v.g)}">${esc(i < 0 ? v.text : v.text.slice(0, i))}</span>${i < 0 ? "" : ` – ${esc(v.text.slice(i + 3))}`}`; };
-    function setKopfHtml() {
-      const sv = setVon();
-      if (!sv) return "";
-      const seite = `/material/artikel/${sv.id}/set-pruefung`;
-      if (rolleSet()) {
-        // V3: Das Gesamtergebnis des Sets steht im Kopf – weicht es vom Ergebnis dieser Prüfung ab, als Hinweis.
-        const sp = pr.set_protokoll;
-        const gleich = { einsatzbereit: "einsatzbereit", instandsetzen: "gesperrt", aussondern: "ausgesondert" };
-        const abweichend = Boolean(sp) && gleich[pr.ergebnis] !== sp.gesamt;
-        const gesamt = sp ? `<p class="${abweichend ? "notice" : "mat-set-gesamt-kopf"}"><strong>Gesamtergebnis des Sets:</strong> <span class="mat-gesamt g-${esc(sp.gesamt)}">${esc(sp.gesamt_text)}</span>${abweichend ? " – das Ergebnis oben gilt nur für das Set selbst." : ""}</p>` : "";
-        return `<p class="mat-set-lauf-zeile">Das Set selbst – zum Schluss der <a class="mat-ziel" href="${seite}${pr.set_lauf.state === "offen" ? "" : `?lauf=${pr.set_lauf.id}`}">Set-Prüfung</a> · Set <a href="/material/artikel/${sv.id}"><strong>${esc(sv.inventory_no)}</strong></a></p>${gesamt}`;
-      }
-      const nr = teilNr(setLf, pr.item_id);
-      return `<p class="mat-set-lauf-zeile">Teil von Set <a href="/material/artikel/${sv.id}"><strong>${esc(sv.inventory_no)}</strong></a>${nr ? ` · Teil ${nr.n} von ${nr.m}` : ""}${pr.set_lauf ? ` · <a class="mat-ziel" href="${seite}${pr.set_lauf.state === "offen" ? "" : `?lauf=${pr.set_lauf.id}`}">Set-Prüfung</a>` : ""}</p>`;
-    }
-    // Nach dem Festschreiben (und an jeder abgeschlossenen Prüfung eines laufenden Laufs): weiter zur nächsten Prüfung.
-    function setWeiterHtml() {
-      if (pr.entwurf || !setLf || setLf.state !== "offen" || !pr.set_lauf) return "";
-      const sv = pr.set_lauf.set;
-      const w = darfHier("pruefen") ? laufWeiter(setLf, sv.id) : null;
-      const fs = setLf.fortschritt;
-      return `<div class="mat-lauf-weiter" role="status"><p><strong>Set-Prüfung ${esc(sv.inventory_no)}:</strong> ${fs.geprueft} von ${fs.zu_pruefen} ${fs.zu_pruefen === 1 ? "Teil" : "Teilen"} im Umfang geprüft${setLf.bereit ? " – jetzt das Set selbst." : "."}</p>
-        <div class="btn-row">${w ? `<a class="btn" href="${w.ziel}">${esc(w.text)}</a>` : ""}<a class="btn secondary" href="/material/artikel/${sv.id}/set-pruefung">Zur Set-Prüfung</a></div></div>`;
-    }
-    function setAbschlussHtml() {
-      const sa = pr.set_abschluss;
-      if (!sa) return "";
-      const fs = sa.fortschritt;
-      const zeile = (u) => `<li><strong>${esc(u.teil.inventory_no)}</strong> <span class="muted small">${esc(u.teil.bestandteil || "")}</span>
-        ${u.pruefung ? ergebnisMarke(u.pruefung.ergebnis) : u.entwurf ? `<span class="badge">in Prüfung</span> <span class="small">bei ${esc(u.entwurf.pruefer || "–")}</span>`
-          : u.zu_pruefen ? '<span class="mat-lauf-marke">noch nicht geprüft</span>' : u.uebernommen ? `<span class="small">übernommen (${esc(ERGEBNIS[u.uebernommen.ergebnis] || u.uebernommen.ergebnis)} vom ${esc(fmtTag(u.uebernommen.datum))})</span>` : '<span class="small mat-warn">keine gültige Prüfung</span>'}</li>`;
-      return `<section class="section mat-set-abschluss"><h2>Set-Prüfung</h2>
-        <p>${fs.geprueft} von ${fs.zu_pruefen} ${fs.zu_pruefen === 1 ? "Teil" : "Teilen"} im Umfang geprüft.</p>
-        <ul class="mat-lauf-vorschau">${sa.umfang.map(zeile).join("")}</ul>
-        ${sa.bereit ? "" : `<p class="notice small">Festschreiben geht erst, wenn jedes Teil im Umfang geprüft und keine Teilprüfung mehr offen ist – <a href="/material/artikel/${pr.set_lauf.set.id}/set-pruefung">zur Set-Prüfung</a>.</p>`}
-        <p class="mat-set-vorab" id="pr-set-vorab" aria-live="polite"></p></section>`;
-    }
-    function setProtokollHtml() {
-      const sp = pr.set_protokoll;
-      if (!sp) return "";
-      const ergebnisZelle = (z) => (z.art === "bestandteil" || z.vorhanden === false
-        ? `<span class="${z.vorhanden === false ? "mat-warn" : ""}">${esc(z.vorhanden_text)}</span>`
-        : z.ergebnis ? `${ergebnisMarke(z.ergebnis)}${z.uebernommen ? ' <span class="small muted">übernommen</span>' : ""}` : '<span class="muted">–</span>');
-      return `<section class="section mat-set-protokoll"><h2>Set-Prüfung</h2>
-        <p><span class="mat-gesamt g-${esc(sp.gesamt)}">${esc(sp.gesamt_text)}</span>${sp.freigegeben ? ' <span class="small">– mit dieser Prüfung freigegeben</span>' : ""}</p>
-        ${sp.gruende.length ? `<ul class="small">${sp.gruende.map((g) => `<li>${esc(g)}</li>`).join("")}</ul>` : ""}
-        ${sp.hinweis ? `<p class="small">${esc(sp.hinweis)}</p>` : ""}
-        <table class="list mat-tabelle mat-karten mat-set-zeilen"><thead><tr><th>Bestandteil</th><th>Nummer</th><th>Ergebnis</th><th>Protokoll</th></tr></thead><tbody>
-          ${sp.zeilen.map((z) => `<tr><td data-l="Bestandteil" class="mat-k-titel">${esc(z.bezeichnung)}</td>
-            <td data-l="Nummer" class="mat-k-halb">${z.inventarnummer ? `${esc(z.inventarnummer)}${z.seriennummer ? `<div class="small muted">SN ${esc(z.seriennummer)}</div>` : ""}` : '<span class="muted">–</span>'}</td>
-            <td data-l="Ergebnis" class="mat-k-marke">${ergebnisZelle(z)}</td>
-            <td data-l="Protokoll" class="mat-k-ohne">${z.protokoll_id ? `<span class="mat-hash">${esc(z.protokoll_id)}</span>${z.pruefsumme ? ` ${summeKnopf(z.pruefsumme)}` : ""}` : '<span class="muted">–</span>'}</td></tr>`).join("")}</tbody></table></section>`;
-    }
 
     /* Getipptes speichern, während getippt wird: Wert und Bemerkung eines Prüfpunkts und die Bemerkung zur Prüfung
        gehen kurz nach dem letzten Tastendruck an den Server, nicht erst beim Verlassen des Feldes. Am Telefon
@@ -6452,7 +5208,6 @@
           ${knoepfe.length ? `<div class="btn-row">${knoepfe.join("")}</div>` : ""}</div>
         ${berichtigungHinweis()}
         <p class="mat-produktzeile"><strong>${nameHtml(pr.produkt)}</strong>${zusatzHtml(pr.produkt)}${artNrHtml(pr.produkt.article_no)} · ${nummerHtml("Seriennummer", a.serial_no)} ${statusMarke(a.status)}</p>
-        ${setKopfHtml()}${setWeiterHtml()}
         <p class="small muted">${pr.formular ? `Formular ${esc(pr.formular.titel || "ohne Titel")}, Version ${pr.formular.version} · ` : ""}${pr.art === "aussonderung" ? "Ausgeführt von" : "Prüfer"} ${esc(pr.pruefer || "–")}${pr.urkunde ? ` (Urkundennummer ${esc(pr.urkunde)})` : ""}
           · ${pr.entwurf && !pr.berichtigt ? `begonnen ${esc(fmtZeit(pr.begonnen_am))}` : `Prüftag ${esc(fmtTag(pr.datum))}`}
           ${pr.durchgang ? ` · Durchgang ${pr.durchgang.sichtbar ? `<a href="/material/durchgang/${pr.durchgang.id}">${esc(pr.durchgang.titel)}</a>` : `„${esc(pr.durchgang.titel)}“`}` : ""}</p>
@@ -6503,7 +5258,7 @@
       const laengeMoeglich = !!(pr.laenge && pr.laenge.moeglich);
       let steuer;
       if (x.art === "yesno") {
-        // Bestandteile des Sets (K2) und der Bestandteil-Liste (Schritt 25): „vorhanden“/„fehlt“ statt Ja/Nein –
+        // Bestandteil-Liste (Schritt 25; alte Prüfungen früherer Set-Artikel ebenso): „vorhanden“/„fehlt“ statt Ja/Nein –
         // gespeichert bleibt ja/nein.
         const wort = istBestandteil(x) ? { ja: "vorhanden", nein: "fehlt" } : { ja: "Ja", nein: "Nein" };
         steuer = `<div class="mat-wahl3" role="group" aria-label="Befund zu ${esc(x.text)}">
@@ -6662,19 +5417,9 @@
       if (h.ohneNotiz.length) teile.push(`${plural(h.ohneNotiz.length, "Mangel", "Mängel")} ohne Bemerkung`);
       if (h.kritisch.length) teile.push("kritischer Mangel – nicht einsatzbereit");
       else if (pr.lebensdauer && pr.lebensdauer.erreicht) teile.push("Lebensende erreicht – nicht einsatzbereit");
-      const vorab = setVorab(ergebnis);
-      const vorabEl = imAbschluss("#pr-set-vorab") || $("#pr-set-vorab", inhalt);
-      if (vorabEl) vorabEl.innerHTML = vorab ? `Gesamtergebnis vorab: ${vorabHtml(vorab)}` : "Wähle unten das Ergebnis für das Set selbst – hier steht dann, wie das ganze Set danach steht.";
-      if (vorab) teile.push(`Gesamtergebnis: ${SET_WERTE.gesamtergebnis[vorab.g]}`);
-      else if (setVon()) {
-        if (pr.freipruefung && ergebnis === "einsatzbereit") teile.push("Freiprüfung im Set: hebt den eigenen Grund auf – frei gibt das Set erst „Set prüfen“");
-        if (ergebnis === "instandsetzen") teile.push("„instandsetzen“ sperrt das ganze Set");
-        if (ergebnis === "aussondern") teile.push("„aussondern“ nimmt das Teil aus dem Set und ist endgültig – das Set ist danach unvollständig");
-      } else {
-        if (pr.freipruefung && ergebnis === "einsatzbereit") teile.push("Freiprüfung: Der Artikel kehrt in seinen Herkunftsordner zurück");
-        if (ergebnis === "instandsetzen" && !pr.freipruefung) teile.push("„instandsetzen“ sperrt den Artikel");
-        if (ergebnis === "aussondern") teile.push("„aussondern“ ist endgültig");
-      }
+      if (pr.freipruefung && ergebnis === "einsatzbereit") teile.push("Freiprüfung: Der Artikel kehrt in seinen Herkunftsordner zurück");
+      if (ergebnis === "instandsetzen" && !pr.freipruefung) teile.push("„instandsetzen“ sperrt den Artikel");
+      if (ergebnis === "aussondern") teile.push("„aussondern“ ist endgültig");
       if (!DARF.unterschrift) teile.push("Deine Unterschrift fehlt noch – „Festschreiben“ fragt danach");
       $("#pr-hinweis", box).textContent = teile.join(" · ");
       $("#pr-hinweis", box).classList.toggle("warn", !!(h.offen.length || h.ohneFoto.length || h.ohneNotiz.length || h.kritisch.length));
@@ -6701,7 +5446,6 @@
           ${pr.basis_id ? `<dt>Grundlage</dt><dd><a href="/material/pruefung/${pr.basis_id}">Prüfung vom Tag der Aussonderung</a></dd>` : ""}
           <dt>Abgeschlossen</dt><dd>${esc(fmtZeit(pr.abgeschlossen_am))}</dd></dl></section>${protokollHtml()}</div>`;
       return `${ergebnisBox}
-        ${setProtokollHtml()}
         ${pr.punkte.length ? `<section class="section"><h2>Befunde</h2><table class="list mat-tabelle mat-karten mat-befunde"><thead><tr><th>Prüfpunkt</th><th class="mat-krit-spalte"><span class="mat-vorlesen">kritisch</span></th><th>Befund</th><th>Wert</th><th>Bemerkung</th><th>Foto</th></tr></thead><tbody>${zeilen}</tbody></table></section>` : ""}
         ${pr.art !== "aussonderung" ? anhaengeHtml() : ""}
         ${pr.dokumente.length ? `<section class="section"><h2>Herstellerdokumente am Prüftag</h2>${dokListe(pr.dokumente, false)}</section>` : ""}`;
@@ -6744,8 +5488,7 @@
     }
 
     function bearbeitenHtml() {
-      return `${pr.freipruefung ? `<p class="mat-banner s-gesperrt">GESPERRT – mit „einsatzbereit“ ist diese Prüfung die Freiprüfung${setVon() ? `${rolleSet() ? "" : " für das Teil; frei gibt das ganze Set erst „Set prüfen“"}` : ""}.</p>` : ""}
-        ${setAbschlussHtml()}
+      return `${pr.freipruefung ? `<p class="mat-banner s-gesperrt">GESPERRT – mit „einsatzbereit“ ist diese Prüfung die Freiprüfung.</p>` : ""}
         ${mangelHinweis(pr.maengel, Boolean(pr.berichtigt))}
         ${rueckrufHinweis(pr.artikel.rueckruf ? [pr.artikel.rueckruf] : [], pr.artikel.id, Boolean(pr.berichtigt))}
         ${lebensdauerHinweis(pr.lebensdauer)}
@@ -6932,14 +5675,11 @@
          Meldung ohnehin nicht frei (der Server sagt es); „instandsetzen“ und „aussondern“ brauchen kein Häkchen. */
       const zuHaken = daten.ergebnis === "einsatzbereit" && !pr.berichtigt ? (pr.maengel || []) : [];
       delete daten.maengel_gesehen;
-      delete daten.verbleib;
-      const vorab = setVorab(daten.ergebnis);
       dialog(`<h2>Prüfung festschreiben</h2>
         <dl class="mat-daten mat-fs-daten">
           <dt>Artikel</dt><dd><strong>${esc(a.inventory_no)}</strong> · ${nameHtml(pr.produkt)}${zusatzHtml(pr.produkt)}</dd>
           <dt>Prüfung</dt><dd>${esc(PRUEFART[pr.art] || pr.art)} am ${esc(fmtTag(pr.prueftag || isoHeute()))}</dd>
           <dt>Ergebnis</dt><dd>${ergebnisMarke(daten.ergebnis)}${maengel ? ` <span class="small">mit ${plural(maengel, "Mangel", "Mängeln")}</span>` : ""}</dd>
-          ${vorab ? `<dt>Set</dt><dd>${vorabHtml(vorab)}</dd>` : ""}
           ${daten.ergebnis === "einsatzbereit" ? `<dt>Nächste Prüfung</dt><dd><strong>${esc(fmtTag(daten.next_due_on || pr.vorschlag_naechste))}</strong></dd>` : ""}
           ${daten.grund ? `<dt>Grund</dt><dd>${esc(daten.grund)}</dd>` : ""}
           <dt>Prüfer</dt><dd>${esc(pr.pruefer || "–")}${pr.urkunde ? ` · Urkundennummer ${esc(pr.urkunde)}` : ""}</dd>
@@ -6950,13 +5690,7 @@
             Gemeldeten Mangel vom ${esc(S.fmtDate(m.created_at))} geprüft</label>
             ${m.description ? `<p class="small mat-text">${esc(m.description.length > 300 ? `${m.description.slice(0, 299)}…` : m.description)}</p>` : ""}</div>`).join("")}
           <p class="help" id="fs-maengel-hilfe">Freigeben kannst du erst, wenn du jeden gemeldeten Mangel geprüft hast.</p></fieldset>` : ""}
-        ${daten.ergebnis === "aussondern" && teilNichtTauschbar() ? `<p class="mat-fs-warnung"><strong>Laut Hersteller nicht austauschbar – das Set aussondern.</strong> Das Teil bleibt gesperrt im Set ${esc(setVon().inventory_no)}; der Materialwart sondert danach das ganze Set aus (dieses Teil ist dort mit „mit aussondern“ vorbelegt).</p>`
-          : daten.ergebnis === "aussondern" ? `<p class="mat-fs-warnung"><strong>„aussondern“ ist endgültig.</strong> ${rolleSet() ? "Das Set wandert nach „Ausgesondert“ und zählt nicht mehr als Bestand; das Set selbst und jedes mit ausgesonderte Teil bekommen ein Aussonderungsprotokoll."
-          : setVon() ? "Das Teil verlässt das Set, wandert nach „Ausgesondert“ und bekommt ein Aussonderungsprotokoll; das Set ist danach unvollständig gesperrt."
-            : "Der Artikel wandert nach „Ausgesondert“ und zählt nicht mehr als Bestand; dazu entsteht ein Aussonderungsprotokoll."}</p>
-          ${rolleSet() && (pr.set_abschluss.verbleib_vorschlag || []).length ? `<div class="mat-verbleib"><h3 class="mat-unter">Teile des Sets</h3><p class="help">${esc(VERBLEIB_HILFE)}</p>
-            ${pr.set_abschluss.verbleib_vorschlag.map((v) => { const u = pr.set_abschluss.umfang.find((x) => x.teil.id === v.teil_id); return verbleibWahl({ id: v.teil_id, inventory_no: v.inventory_no, bestandteil: u ? u.teil.bestandteil : "", vorschlag: v.verbleib }, "fs-vb"); }).join("")}</div>` : ""}` : ""}
-        ${daten.ergebnis === "instandsetzen" && setVon() ? `<p class="mat-fs-warnung">„instandsetzen“ sperrt das ganze Set ${esc(setVon().inventory_no)} mit allen Teilen.</p>` : ""}
+        ${daten.ergebnis === "aussondern" ? '<p class="mat-fs-warnung"><strong>„aussondern“ ist endgültig.</strong> Der Artikel wandert nach „Ausgesondert“ und zählt nicht mehr als Bestand; dazu entsteht ein Aussonderungsprotokoll.</p>' : ""}
         ${pr.berichtigt ? `<p>Diese Berichtigung ersetzt ${pr.berichtigt.protokoll_id ? `Protokoll ${esc(pr.berichtigt.protokoll_id)}` : "die ursprüngliche Prüfung"}; das Original bleibt unverändert erhalten.</p>` : ""}
         <p class="help">Danach ist die Prüfung unveränderlich; eine Korrektur geht nur als Berichtigung. Das Protokoll entsteht mit Prüfsumme.</p>
         <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn${daten.ergebnis === "aussondern" ? " danger" : ""}" id="fs-ok" type="button">Festschreiben</button></div>`,
@@ -6977,17 +5711,14 @@
           }
           if (!alleAbgehakt()) { toast("Freigeben kannst du erst, wenn du jeden gemeldeten Mangel geprüft hast.", true); return; }
           if (haken.length) daten.maengel_gesehen = haken.filter((h) => h.checked).map((h) => +h.dataset.mangel);
-          if (rolleSet() && daten.ergebnis === "aussondern") daten.verbleib = verbleibLesen(body);
           knopf.disabled = true;
           knopf.textContent = "Wird festgeschrieben …";
           try {
             pr = (await api(`${API}/pruefungen/${pr.id}/festschreiben`, { method: "POST", body: daten })).pruefung;
             await aussonderungLaden();
-            await setLaufLaden();
             dlg.close();
             toast((pr.protokoll ? `Festgeschrieben – Protokoll ${pr.protokoll.id}` : "Festgeschrieben")
-              + (aussonderung && aussonderung.protokoll ? `, Aussonderungsprotokoll ${aussonderung.protokoll.id}` : "")
-              + (pr.set_protokoll ? ` – Set: ${pr.set_protokoll.gesamt_text}` : ""));
+              + (aussonderung && aussonderung.protokoll ? `, Aussonderungsprotokoll ${aussonderung.protokoll.id}` : ""));
             window.scrollTo(0, 0);
             zeichnen();
           } catch (e) {
@@ -7173,7 +5904,7 @@
       },
       freigeben: () => reservierungFreigeben(pr.id, pr.pruefer, async () => { location.href = `/material/artikel/${pr.item_id}`; }),
     };
-    await Promise.all([aussonderungLaden(), setLaufLaden()]);
+    await aussonderungLaden();
     zeichnen();
     if (bearbeitbar()) nachtragen();
   }
@@ -7202,24 +5933,6 @@
       });
     }
     async function laden() { d = (await Promise.all([api(`${API}/durchgaenge/${DATEN.id}`), ordnerBaum().catch(() => null)]))[0].durchgang; }
-    /* Sets (K2, Oberfläche O2): Set-Artikel und Teile bleiben eigene Zeilen des Durchgangs. Die Teile stehen
-       eingerückt unter ihrer Set-Zeile, wenn die in der Auswahl steht (in der Reihenfolge der Sortierung); sonst für sich
-       mit „Teil von Set …“. An der Set-Zeile führt „Set prüfen“ in die Set-Prüfung mit diesem Durchgang (durchgang_id);
-       eine offene Set-Prüfung steht dort (set_lauf) – lief sie außerhalb des Durchgangs, geht es von hier nicht weiter
-       (der Dienst antwortet 409: erst abschließen oder abbrechen). */
-    function gruppiert(liste) {
-      const setIds = new Set(liste.filter((a) => a.ist_set).map((a) => a.id));
-      const unter = {};
-      const darunter = (a) => a.teil_von && setIds.has(a.teil_von.id);
-      liste.forEach((a) => { if (darunter(a)) (unter[a.teil_von.id] = unter[a.teil_von.id] || []).push(a); });
-      const out = [];
-      liste.forEach((a) => {
-        if (darunter(a)) return;
-        out.push(a);
-        (unter[a.id] || []).forEach((t) => out.push(Object.assign({}, t, { eingerueckt: true })));
-      });
-      return out;
-    }
     // Liegt ein freier Artikel noch im Zweig des Durchgangs? Wer ihn hinausverschoben hat, kann ihn nicht wieder
     // einbeziehen (Bauentwurf 1.7 Nr. 6) – der Knopf entfällt. Ohne geladenen Baum (oder bei gesperrten): ja.
     function imZweig(a) {
@@ -7255,28 +5968,25 @@
       } else {
         zustand = '<span class="muted">offen</span>';
         if (sichtbar && d.offen && ad.pruefen && a.lock_state !== "ausgesondert") {
-          knopf = !a.ist_set ? `<a class="btn secondary small" href="/material/artikel/${a.id}/pruefung/neu?durchgang=${d.id}">Prüfen</a>`
-            : !a.set_lauf ? `<a class="btn secondary small" href="/material/artikel/${a.id}/set-pruefung?durchgang=${d.id}">Set prüfen</a>`
-              : a.set_lauf.round_id === d.id ? `<a class="btn secondary small" href="/material/artikel/${a.id}/set-pruefung">Set-Prüfung fortsetzen</a>` : "";
+          knopf = `<a class="btn secondary small" href="/material/artikel/${a.id}/pruefung/neu?durchgang=${d.id}">Prüfen</a>`;
         }
         if (sichtbar && darf) knopf += `<button type="button" class="btn secondary small" data-act="ausnehmen" data-id="${a.id}" data-nr="${esc(a.inventory_no)}">Ausnehmen</button>`;
       }
       const nummer = sichtbar ? `<a class="mat-inv" href="/material/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a>`
         : `<strong class="mat-inv">${esc(a.inventory_no)}</strong><div class="small muted">nicht in deinem Bereich</div>`;
-      const laufZeile = a.set_lauf ? `<div class="small mat-lauf-zeile">Set-Prüfung ${a.set_lauf.round_id === d.id ? "läuft" : "läuft außerhalb dieses Durchgangs"} seit ${esc(fmtTag(a.set_lauf.opened_at))}</div>` : "";
       // Enge Tabelle: Hersteller und Ablage stehen klein beim Produkt; Karte: Inventar-Nr. und Status oben (Lieferung 5).
-      return `<tr class="z-${a.zustand}${sichtbar ? "" : " mat-fremd"}${a.eingerueckt ? " mat-teilzeile" : ""}${a.ist_set ? " mat-setzeile" : ""}"><td data-l="Inventar-Nr." class="mat-k-titel">${nummer}</td>
+      return `<tr class="z-${a.zustand}${sichtbar ? "" : " mat-fremd"}"><td data-l="Inventar-Nr." class="mat-k-titel">${nummer}</td>
         <td data-l="Hersteller" class="mat-schmal-weg">${esc(a.manufacturer || "")}</td>
-        <td data-l="Produkt" class="mat-k-ohne">${a.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(a.manufacturer)}</div>` : ""}${produktZelle(a, sichtbar)}${setMarke(a.ist_set)}${a.serial_no ? `<div class="small muted">SN ${esc(a.serial_no)}</div>` : ""}
+        <td data-l="Produkt" class="mat-k-ohne">${a.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(a.manufacturer)}</div>` : ""}${produktZelle(a, sichtbar)}${a.serial_no ? `<div class="small muted">SN ${esc(a.serial_no)}</div>` : ""}
           <div class="mat-eng-zusatz small muted">${esc(a.pfad)}</div></td>
-        <td data-l="Ablage" class="mat-eng-weg">${esc(a.pfad)}</td><td data-l="Stand">${zustand}${laufZeile}</td><td data-l="Status" class="mat-k-marke">${a.status ? statusMarke(a.status) : '<span class="muted">–</span>'}</td>
+        <td data-l="Ablage" class="mat-eng-weg">${esc(a.pfad)}</td><td data-l="Stand">${zustand}</td><td data-l="Status" class="mat-k-marke">${a.status ? statusMarke(a.status) : '<span class="muted">–</span>'}</td>
         <td class="tabelle-aktionen">${knopf}</td></tr>`;
     }
     function zeichnen() {
       leisteMarkieren(d.folder_id);
       const z = d.zaehlung;
       const darf = Boolean(d.darf && (d.darf.verwalten || d.darf.pruefen));
-      const liste = gruppiert(sortiert(d.artikel.filter((a) => !filter || a.zustand === filter)));
+      const liste = sortiert(d.artikel.filter((a) => !filter || a.zustand === filter));
       const s = sort;
       // Laufend: offen, in Prüfung, erledigt, ausgenommen. Vorbei: erledigt, ausgenommen – nach einem Abbruch
       // dazu „nicht geprüft“.
@@ -7364,11 +6074,11 @@
 
   // notizTitel: Im Produktdialog („Produkt aus Meldung anlegen“) heißt die Bemerkung der Meldung „Bemerkung des
   // Melders“ – darunter steht das Feld „Bemerkung“ des Produkts (Wunsch vom 18.10.2026), zwei gleiche Wörter wären dort
-  // nicht zu unterscheiden. In der Liste der Meldungen bleibt es „Bemerkung“ wie im Dialog „Fehlendes Produkt oder Set
-  // melden“. Eine Set-Meldung (S8) nennt dazu die Teile, wie der Melder sie kennt.
+  // nicht zu unterscheiden. In der Liste der Meldungen bleibt es „Bemerkung“ wie im Dialog „Fehlendes Produkt melden“.
+  // Eine alte Set-Meldung (vor Schritt 26) nennt dazu schreibgeschützt die Teile, wie der Melder sie kannte.
   function meldeDetails(m, notizTitel = "Bemerkung") {
     const zeile = (t, w) => `<dt>${esc(t)}</dt><dd>${w}</dd>`;
-    const daten = [m.is_set && m.set_teile ? zeile("Teile des Sets", `<span class="mat-text">${esc(m.set_teile)}</span>`) : "",
+    const daten = [m.set_teile ? zeile("Teile laut Meldung", `<span class="mat-text">${esc(m.set_teile)}</span>`) : "",
       m.article_no ? zeile("Artikelnummer", `<span class="mat-ganz">${esc(m.article_no)}</span>`) : "", m.norm ? zeile("Norm", esc(m.norm)) : "",
       m.kategorie ? zeile("Kategorie (Vorschlag)", esc(m.kategorie.pfad)) : "",
       m.links.length ? zeile("Links", m.links.map((l) => `<a href="${esc(l)}" target="_blank" rel="noopener noreferrer">${esc(kurzLink(l))}</a>`).join("<br>")) : "",
@@ -7386,11 +6096,7 @@
     const wer = (name) => (name ? ` von ${esc(name)}` : "");
     const knoepfe = [];
     if (bearbeiten && m.status === "offen") {
-      // Eine Set-Meldung legt ein Set an (Set-Dialog mit Stückliste, S8) – oder, seit Herstellersets als Produkte mit
-      // Bestandteil-Liste kommen, ein Produkt (gemeldete Teile als Vorlage im Reiter „Bestandteile“, Entscheidung F4 a).
-      // „Vorhandenes zuordnen“ nimmt auch ein Set.
-      if (m.is_set) knoepfe.push(`<button type="button" class="btn secondary small" data-act="anlegen-produkt" data-id="${m.id}">Produkt anlegen</button>`);
-      knoepfe.push(`<button type="button" class="btn secondary small" data-act="anlegen" data-id="${m.id}">${m.is_set ? "Set anlegen" : "Produkt anlegen"}</button>`,
+      knoepfe.push(`<button type="button" class="btn secondary small" data-act="anlegen" data-id="${m.id}">Produkt anlegen</button>`,
                    `<button type="button" class="btn secondary small" data-act="zuordnen" data-id="${m.id}">Vorhandenes zuordnen</button>`,
                    `<button type="button" class="btn secondary small" data-act="ablehnen" data-id="${m.id}">Ablehnen</button>`);
     }
@@ -7400,7 +6106,7 @@
     // Eigene Meldungen löscht der Melder selbst – offen oder erledigt.
     if (m.eigen) knoepfe.push(`<button type="button" class="btn secondary small" data-act="loeschen" data-id="${m.id}">Löschen</button>`);
     return `<article class="mat-meldung m-${esc(m.status)}">
-      <div class="mat-meldung-kopf"><h2>${esc(meldungName(m))}${setMarke(m.is_set)}</h2>${meldestatusMarke(m.status)}</div>
+      <div class="mat-meldung-kopf"><h2>${esc(meldungName(m))}</h2>${meldestatusMarke(m.status)}</div>
       <p class="muted small">gemeldet${wer(m.created_by_name)} am ${esc(fmtTag(m.created_at))}${meldeOrdner(m) ? ` · für ${esc(meldeOrdner(m))}` : ""}</p>
       ${meldeDetails(m)}
       ${m.treffer ? `<p class="notice">Steht inzwischen im Katalog: <a href="/material/katalog/produkt/${m.treffer.id}">${nameHtml(m.treffer)}</a>${zusatzHtml(m.treffer)}${artNrKurz(m.treffer.article_no)}
@@ -7427,10 +6133,10 @@
       const liste = d.meldungen;
       const meldung = (b) => liste.find((m) => m.id === +b.dataset.id);
       // Lesende (Führungskraft, Materialwart in „alle“) sehen dieselben Karten ohne Knöpfe zum Abarbeiten.
-      const hilfe = d.bearbeiten ? "Materialwarte melden hier Produkte und Sets, die ihnen beim Anlegen von Artikeln im Katalog fehlen. „Produkt anlegen“ bzw. „Set anlegen“ übernimmt ihre Angaben in den Dialog – ein gemeldetes Set kann auch ein Produkt mit Bestandteil-Liste werden. Der Melder bekommt eine Mail, sobald es im Katalog ist – oder deine Begründung, wenn du ablehnst."
-        : d.alle ? "Materialwarte melden hier Produkte und Sets, die ihnen beim Anlegen von Artikeln im Katalog fehlen; die Material-Verwaltung nimmt sie auf oder lehnt sie mit Begründung ab."
-          : "Produkte und Sets, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald die Material-Verwaltung sie bearbeitet hat.";
-      inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Produkt- und Set-Meldungen" : "Deine Produkt- und Set-Meldungen"}</h1>
+      const hilfe = d.bearbeiten ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen. „Produkt anlegen“ übernimmt ihre Angaben in den Produktdialog. Der Melder bekommt eine Mail, sobald das Produkt im Katalog ist – oder deine Begründung, wenn du ablehnst."
+        : d.alle ? "Materialwarte melden hier Produkte, die ihnen beim Anlegen von Artikeln im Katalog fehlen; die Material-Verwaltung nimmt sie auf oder lehnt sie mit Begründung ab."
+          : "Produkte, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald die Material-Verwaltung sie bearbeitet hat.";
+      inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Produktmeldungen" : "Deine Produktmeldungen"}</h1>
           <div class="btn-row"><a class="btn secondary" href="/material/katalog">Katalog</a>${DARF.verwalten ? '<a class="btn secondary" href="/material/artikel/neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span></a>' : ""}</div></div>
         <p class="help">${hilfe}${DARF.verwalten && !DARF.katalog ? ` <button type="button" class="lnk" data-act="eigene">${d.alle ? "Nur deine zeigen" : "Alle Meldungen zeigen"}</button>` : ""}</p>
         <div class="c-tabs mat-filter" role="group" aria-label="Status">${[["offen", "offen"], ["erledigt", "erledigt"], ["alle", "alle"]].map(([w, t]) => `<button type="button" class="${w === filter ? "sel" : ""}" data-act="filter" data-f="${w}" aria-pressed="${w === filter}">${t}${w === "offen" && d.offen ? ` (${d.offen})` : ""}</button>`).join("")}</div>
@@ -7445,13 +6151,7 @@
         anlegen: (b) => {
           const m = meldung(b);
           produktDialog({ meldung: m, manufacturer: m.manufacturer, model: m.model, article_no: m.article_no, norm: m.norm,
-                          category_id: m.kategorie ? m.kategorie.id : null, is_set: m.is_set });
-        },
-        // Set-Meldung als Produkt mit Bestandteil-Liste (F4 a): derselbe Dialog ohne Set-Modus, die Teile als Vorlage.
-        "anlegen-produkt": (b) => {
-          const m = meldung(b);
-          produktDialog({ meldung: m, manufacturer: m.manufacturer, model: m.model, article_no: m.article_no, norm: m.norm,
-                          category_id: m.kategorie ? m.kategorie.id : null, is_set: false });
+                          category_id: m.kategorie ? m.kategorie.id : null });
         },
         zuordnen: (b) => zuordnenDialog(meldung(b), zeichnen),
         ablehnen: (b) => ablehnenDialog(meldung(b), zeichnen),
@@ -7583,7 +6283,7 @@
   }
 
   function zuordnenDialog(m, danach) {
-    dialog(`<h2>Vorhandenem Produkt oder Set zuordnen</h2>
+    dialog(`<h2>Vorhandenem Produkt zuordnen</h2>
       <p class="help">Für „${esc(meldungName(m))}“ – wenn das Produkt schon im Katalog steht, etwa anders geschrieben oder mit anderer Artikelnummer.</p>
       <label for="zu-q">Produkt suchen</label>
       <div class="mat-produktwahl"><input type="search" id="zu-q" autocomplete="off" ${TASTATUR_SUCHE} value="${esc(m.manufacturer)}"><div id="zu-treffer" class="mat-treffer"></div></div>
@@ -7642,7 +6342,7 @@
       // Nur Produktmeldungen – die Änderungsanträge zählt ihr Knopf im Bestand (antraegeZaehlen, Wunsch vom 24.10.2026).
       const n = (await api(`${API}/meldungen?status=offen`)).offen || 0;
       el.textContent = n > 99 ? "99+" : n;
-      el.title = n ? plural(n, "offene Produkt- oder Set-Meldung", "offene Produkt- oder Set-Meldungen") : "";
+      el.title = n ? plural(n, "offene Produktmeldung", "offene Produktmeldungen") : "";
       el.hidden = !n;
     } catch (e) { /* der Zähler ist Beiwerk */ }
   }
@@ -7658,24 +6358,16 @@
     } catch (e) { /* der Zähler ist Beiwerk */ }
   }
 
-  /* Ein Produkt oder Set melden, das beim Anlegen eines Artikels im Katalog fehlt. v: Vorbelegung (aus der Suche) und
-     Ordner. Seit dem 24.10.2026 (Entscheidung S8) oben die Wahl „Produkt | Set“ (Vorgabe Produkt); bei „Set“ das
-     Pflichtfeld „Teile des Sets“ (je Zeile ein Teil, Grenze wie die Bemerkung), Hersteller und Modell dürfen dann die
-     Kombination meinen. Aus der Nacharbeit eines Bestandsimports (Phase 2 · L3) kommen dazu v.url (…/nacharbeit/melden –
-     der Zielordner steht in der Adresse, kein folder_id) und v.angabe (die Produktangabe der Liste); vorbelegt sind dann
-     Hersteller, Modell und Artikelnummer aus der Liste – dort gibt es nur Produkte (die Nacharbeit nimmt kein Set) – und
+  /* Ein Produkt melden, das beim Anlegen eines Artikels im Katalog fehlt (seit dem Rückbau der Set-Funktion, Schritt 26,
+     wieder nur ein Produkt). v: Vorbelegung (aus der Suche) und Ordner. Aus der Nacharbeit eines Bestandsimports
+     (Phase 2 · L3) kommen dazu v.url (…/nacharbeit/melden – der Zielordner steht in der Adresse, kein folder_id) und
+     v.angabe (die Produktangabe der Liste); vorbelegt sind dann Hersteller, Modell und Artikelnummer aus der Liste und
      seit dem 25.10.2026 die Bemerkung (v.note: Satz zum Import und die Bemerkungen der Zeilen). v.norm und v.category_id
      belegen Norm und Kategorie vor, wenn ein Aufrufer sie kennt (die Nacharbeit kennt sie nicht, Entscheidung F2). */
   async function meldungDialog(v, danach) {
     const kats = await kategorienLaden();
-    const mitSet = !v.url;
-    dialog(`<h2>${mitSet ? "Fehlendes Produkt oder Set melden" : "Fehlendes Produkt melden"}</h2>
-      <p class="help">Die Material-Verwaltung nimmt es in den Katalog auf.${mitSet ? " Ein Set sind mehrere Teile, die zusammen geführt werden, z. B. Sitz- und Brustgurt oder ein Kit." : ""} Du bekommst eine Mail, sobald du Artikel davon anlegen kannst.</p>
-      ${mitSet ? `<fieldset class="mat-me-art"><legend>Was fehlt?</legend>
-        <label class="inline"><input type="radio" name="me-art" value="produkt" checked> Produkt</label>
-        <label class="inline"><input type="radio" name="me-art" value="set"> Set</label></fieldset>
-      <div id="me-set" hidden><label for="me-teile">Teile des Sets</label>
-        <textarea id="me-teile" rows="4" maxlength="2000" placeholder="je Zeile ein Teil: Hersteller, Modell, Anzahl"></textarea></div>` : ""}
+    dialog(`<h2>Fehlendes Produkt melden</h2>
+      <p class="help">Die Material-Verwaltung nimmt es in den Katalog auf. Du bekommst eine Mail, sobald du Artikel davon anlegen kannst.</p>
       <div class="field-row"><div><label for="me-her">Hersteller</label><input type="text" id="me-her" maxlength="120" value="${esc(v.manufacturer || "")}" ${TASTATUR_NAME}></div>
         <div><label for="me-mod">Modell</label><input type="text" id="me-mod" maxlength="160" value="${esc(v.model || "")}" ${TASTATUR_NAME}></div></div>
       <div class="field-row"><div><label for="me-art">Artikelnummer des Herstellers</label><input type="text" id="me-art" maxlength="80" value="${esc(v.article_no || "")}" ${TASTATUR_NUMMER}><div class="help" id="me-art-hilfe"></div></div>
@@ -7687,14 +6379,6 @@
       <label for="me-note">Bemerkung</label><textarea id="me-note" rows="3" maxlength="2000" placeholder="Was hilft beim Einpflegen? z. B. Größe, Farbe, wo gekauft">${esc(v.note || "")}</textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="me-ok" type="button">Melden</button></div>`,
     (dlg, body) => {
-      const istSet = () => mitSet && $('input[name="me-art"]:checked', body).value === "set";
-      if (mitSet) {
-        body.addEventListener("change", (e) => {
-          if (e.target.name !== "me-art") return;
-          $("#me-set", body).hidden = !istSet();
-          if (istSet()) fokus($("#me-teile", body));
-        });
-      }
       fokus($("#me-her", body));
       artikelnummerPruefen($("#me-art", body), $("#me-her", body), $("#me-art-hilfe", body), null);
       dateiKnopfVerdrahten(body, "me-fotos");
@@ -7702,12 +6386,10 @@
         const knopf = ev.currentTarget;
         const fotos = Array.from($("#me-fotos", body).files);
         if (fotos.length > 3) { toast("Höchstens 3 Fotos.", true); return; }
-        if (istSet() && !$("#me-teile", body).value.trim()) { toast("Bitte die Teile des Sets angeben – je Zeile ein Teil.", true); fokus($("#me-teile", body)); return; }
         const fd = new FormData();
         const felder = { manufacturer: $("#me-her", body).value, model: $("#me-mod", body).value, article_no: $("#me-art", body).value,
                          norm: $("#me-norm", body).value, category_id: $("#me-kat", body).value,
                          links: $("#me-links", body).value, note: $("#me-note", body).value };
-        if (istSet()) Object.assign(felder, { is_set: "1", set_teile: $("#me-teile", body).value });
         if (v.url) felder.angabe = v.angabe || "";
         else felder.folder_id = v.folder_id || "";
         Object.entries(felder).forEach(([k, w]) => fd.append(k, w));
@@ -7801,7 +6483,7 @@
       <p><strong>Betroffen:</strong> ${r.alle ? "alle Artikel dieses Produkts" : `${serien.length === 1 ? "Seriennummer" : "Seriennummern"} ${serienText}`}</p>
       ${r.aktiv ? `<p>${OHNE_BESTAND() ? RR_OHNE_BESTAND : `${plural(r.betroffen, "Artikel", "Artikel")} ${DARF.alles ? "im Bestand" : "in deinem Bereich"} betroffen${r.betroffen ? ` · ${r.offen ? `<strong class="mat-warn">${r.offen} offen</strong>` : "alle erledigt"}` : ""}`}</p>
         ${artikel.length ? `<table class="list mat-tabelle mat-karten mat-rr-artikel"><thead><tr><th>Inventar-Nr.</th><th>Seriennummer</th><th>Ablage</th><th>Zustand</th></tr></thead><tbody>
-          ${artikel.map((x) => `<tr><td data-l="Inventar-Nr." class="mat-k-titel"><a class="mat-inv" href="/material/artikel/${x.id}"><strong>${esc(x.inventory_no)}</strong></a>${x.set_inventar ? `<div class="small muted">Teil von Set ${esc(x.set_inventar)}</div>` : ""}</td>
+          ${artikel.map((x) => `<tr><td data-l="Inventar-Nr." class="mat-k-titel"><a class="mat-inv" href="/material/artikel/${x.id}"><strong>${esc(x.inventory_no)}</strong></a></td>
             <td data-l="Seriennummer">${esc(x.serial_no)}${x.serial_generated ? ' <span class="muted">(System)</span>' : ""}</td>
             <td data-l="Ablage">${esc(x.pfad || "")}</td><td data-l="Zustand" class="mat-k-marke">${rrZustand(x.zustand, x.grund)}</td></tr>`).join("")}</tbody></table>` : ""}
         ${(r.nicht_gefunden || []).length ? `<p class="small">Ohne Artikel im Bestand: ${r.nicht_gefunden.map(esc).join(", ")}</p>` : ""}` : ""}
@@ -8567,7 +7249,6 @@
   const MANGEL_NEU_ANFANG = "Am Artikel ist ein gemeldeter Mangel offen, den du nicht als geprüft abgehakt hast";
   const LAENGE_GEAENDERT_ANFANG = "Die Länge am Artikel wurde während der Prüfung";
   const BEISEITE = "Leg ihn sofort beiseite (aus Fahrzeug oder Lager) und gib ihn deinem Materialwart.";
-  const BEISEITE_SET = "Leg das Set sofort beiseite (aus Fahrzeug oder Lager) und gib es deinem Materialwart. Freigeben kann es nur ein Prüfer mit „Set prüfen“.";
   const mangelMarke = (x) => (x ? ' <span class="mat-mangel-marke" title="Mangel gemeldet">Mangel</span>' : "");
   const tagZeit = (iso) => fmtZeit(iso).replace(",", "");         // „20.10.2026 13:05“ in der Zeit des Browsers
   // Fotos einer Meldung: Vorschau, groß die Webfassung – ein Original gibt es nicht (F4), „Original“ zeigt dieselbe.
@@ -8575,47 +7256,28 @@
     `${titel} – Foto ${i + 1}`, `mangel-${m.id}`, `<img class="mat-mini" src="${esc(f.vorschau)}" alt="">`,
     `Foto ${i + 1} zur Mangelmeldung groß zeigen`)).join("")}</div>` : "");
 
-  // Nach dem Melden steht oben, was geschah – der Toast allein ist am Telefon schnell weg. Führt die Aktion auf eine andere
-  // Seite (nach „Set auflösen“ zum Ordner – Nachbesserung, Browser V3), nimmt dieses Fenster die Quittung einmal mit
-  // (sessionStorage; ohne Speicher bleibt es beim Toast).
+  // Nach dem Melden steht oben, was geschah – der Toast allein ist am Telefon schnell weg.
   let quittung = "";
-  const QUITTUNG_ABLAGE = "mat-quittung";
-  const quittungMitnehmen = (text) => { try { sessionStorage.setItem(QUITTUNG_ABLAGE, text); } catch (e) { /* dann nur der Toast */ } };
-  const quittungAbholen = () => {
-    try { quittung = sessionStorage.getItem(QUITTUNG_ABLAGE) || ""; sessionStorage.removeItem(QUITTUNG_ABLAGE); }
-    catch (e) { quittung = ""; }
-  };
   const quittungHtml = () => { const q = quittung; quittung = ""; return q ? `<p class="notice mat-mangel-quittung" role="status" tabindex="-1">${esc(q)}</p>` : ""; };
-  function mangelQuittung(r, v) {
-    // v: das Set, über das die Meldung sperrt (Sets, K2) – dann sagt die Quittung es fürs ganze Set (und
-    // spricht vom Set, nicht vom Artikel – V10).
-    const was = v ? `${setSperrSatz(v)} ist gesperrt` : r.gesperrt ? "der Artikel ist gesperrt" : "der Artikel war schon gesperrt";
+  function mangelQuittung(r) {
+    const was = r.gesperrt ? "der Artikel ist gesperrt" : "der Artikel war schon gesperrt";
     // „unterwegs“: Die Mail geht im Hintergrund hinaus – ob der Mailserver sie annimmt, steht erst im Log.
-    return r.mail ? `Gemeldet – ${was}. Die Mail an Materialwart und Prüfer ist unterwegs. ${v ? "Leg das Set beiseite und gib es" : "Leg ihn beiseite und gib ihn"} deinem Materialwart.`
-      : `Gemeldet – ${was}. Es ging keine Mail hinaus – sag deinem Materialwart Bescheid und gib ihm ${v ? "das Set" : "den Artikel"}.`;
+    return r.mail ? `Gemeldet – ${was}. Die Mail an Materialwart und Prüfer ist unterwegs. Leg ihn beiseite und gib ihn deinem Materialwart.`
+      : `Gemeldet – ${was}. Es ging keine Mail hinaus – sag deinem Materialwart Bescheid und gib ihm den Artikel.`;
   }
 
   /* Dialog „Mangel melden“ (Meine PSA und Artikelseite). a: {id, inventory_no}; danach(antwort, text) zeichnet neu.
      Fotos ohne capture: Das Telefon bietet Kamera oder Galerie an, am Rechner öffnet sich die Dateiauswahl. Jede Wahl
      hängt an die Liste an, die Eingabe wird danach geleert – so lassen sich drei Fotos nacheinander aufnehmen; mehr als
      drei nimmt die Liste nicht. „Auswahl entfernen“ leert sie. Rot gefüllt ist nur „Melden und sperren“ – die eine
-     Hauptaktion (btn, nicht btn danger: Die Sperre hebt eine Freiprüfung wieder auf; Entscheidung vom 23.10.2026, L2b).
-     Sets (K2, O2): opt.set {inventory_no, teile} – die Meldung sperrt das ganze Set; opt.wahl [{id,
-     inventory_no, text, schon}] – an der Set-Karte in „Meine PSA“ wählt man, welcher Artikel betroffen ist (Set-Artikel
-     oder ein Teil; „schon“: dort ist die eigene Meldung noch offen). Gemeldet wird am gewählten Artikel. */
-  function mangelDialog(a, danach, opt) {
+     Hauptaktion (btn, nicht btn danger: Die Sperre hebt eine Freiprüfung wieder auf; Entscheidung vom 23.10.2026, L2b). */
+  function mangelDialog(a, danach) {
     const fotos = [];
-    const v = (opt && opt.set) || null;
-    const wahl = (opt && opt.wahl) || [];
-    const ersteFrei = wahl.find((x) => !x.schon);
-    dialog(`<h2>Mangel melden – ${esc(v ? `Set ${v.inventory_no}` : a.inventory_no)}</h2>
-      <p class="mat-mangel-warnung"><strong>${v ? `Mit dem Melden wird ${esc(setSperrSatz(v))} sofort gesperrt.` : "Mit dem Melden wird der Artikel sofort gesperrt."}</strong> ${v ? BEISEITE_SET : `${BEISEITE} Freigeben kann ihn nur ein Prüfer nach einer Prüfung.`}</p>
-      ${wahl.length ? `<fieldset class="mat-mangel-wahl"><legend>Was ist betroffen?</legend>
-        ${wahl.map((x) => `<label class="inline"><input type="radio" name="mg-wahl" value="${Number(x.id)}"${x === ersteFrei ? " checked" : ""}${x.schon ? " disabled" : ""}>
-          <span><strong>${esc(x.inventory_no)}</strong> ${esc(x.text)}${x.schon ? ' <span class="muted small">(schon von dir gemeldet)</span>' : ""}</span></label>`).join("")}</fieldset>` : ""}
+    dialog(`<h2>Mangel melden – ${esc(a.inventory_no)}</h2>
+      <p class="mat-mangel-warnung"><strong>Mit dem Melden wird der Artikel sofort gesperrt.</strong> ${BEISEITE} Freigeben kann ihn nur ein Prüfer nach einer Prüfung.</p>
       <label for="mg-text">Was ist dir aufgefallen? <span class="mat-pflicht" aria-hidden="true">*</span></label>
       <textarea id="mg-text" rows="5" maxlength="${MANGEL_TEXT_MAX}" required aria-required="true" aria-describedby="mg-text-fehler mg-text-hilfe"
-        placeholder="Was ist passiert, was siehst du – und wo liegt ${v ? "es" : "er"} jetzt?"></textarea>
+        placeholder="Was ist passiert, was siehst du – und wo liegt er jetzt?"></textarea>
       <p class="help" id="mg-text-hilfe">Mit Beschreibung und Fotos – Materialwarte und Prüfer bekommen eine Mail.</p>
       <p class="error mat-feld-fehler" id="mg-text-fehler" hidden></p>
       <div class="mat-feldkopf" id="mg-fotos-kopf">Fotos (bis zu ${MANGEL_MAX_FOTOS})</div>
@@ -8633,8 +7295,7 @@
       const fehler = $("#mg-text-fehler", body);
       const eingabe = $("#mg-fotos", body);
       const weg = $("#mg-fotos-weg", body);
-      // An der Set-Karte zuerst die Wahl, was betroffen ist (V10) – sonst das Textfeld.
-      fokus($('input[name="mg-wahl"]:checked', body) || text);
+      fokus(text);
       function zeichnen() {
         const ol = $("#mg-fotos-liste", body);
         ol.innerHTML = fotos.map((f) => `<li><span class="mat-fotoliste-name">${esc(f.name)}</span> <span class="muted small">${esc(groesse(f.size))}</span></li>`).join("");
@@ -8677,10 +7338,9 @@
         knopf.disabled = true;
         knopf.textContent = "Wird gemeldet …";
         try {
-          const gewaehlt = $('input[name="mg-wahl"]:checked', body);
-          const r = await api(`${API}/artikel/${gewaehlt ? gewaehlt.value : a.id}/mangel`, { method: "POST", body: fd });
+          const r = await api(`${API}/artikel/${a.id}/mangel`, { method: "POST", body: fd });
           dlg.close();
-          const q = mangelQuittung(r, v);
+          const q = mangelQuittung(r);
           toast(q);
           if (danach) await danach(r, q);
           // Nach dem Neuzeichnen stünde der Fokus auf body – die Quittung oben bekommt ihn (Tastatur, Vorlesehilfe).
@@ -8752,13 +7412,8 @@
 
   /* Eine Karte in „Meine PSA“. Banner oben (Mangel, Sperre, überfällig, Lebensdauer, neu, DEMO) – mit dem, was die
      Person tun soll; dann Bild, Nummern, Daten, Dokumente, Rückruf, die eigenen Meldungen und „Mangel melden …“. */
-  // Das Banner einer Karte – höchstens eins, das dringendste (auch für die Teile eines Sets).
+  // Das Banner einer Karte – höchstens eins, das dringendste.
   function psaBanner(k) {
-    // An der Set-Karte (k.teile) ist vom Set die Rede (V10), sonst von der PSA („sie“).
-    if ((k.teile || []).length && (k.mangel || k.gesperrt)) {
-      return [k.mangel ? "mat-mangel-banner" : "s-gesperrt", k.mangel ? `Mangel gemeldet am ${S.fmtDate(k.mangel.seit)} – das Set nicht verwenden. Bring es deinem Materialwart; ein Prüfer muss es ansehen.`
-        : "GESPERRT – das Set nicht verwenden. Leg es beiseite und gib es deinem Materialwart."];
-    }
     if (k.mangel) return ["mat-mangel-banner", `Mangel gemeldet am ${S.fmtDate(k.mangel.seit)} – nicht verwenden. Bring sie deinem Materialwart; ein Prüfer muss sie ansehen.`];
     if (k.verloren) return ["s-gesperrt", "Als verloren gemeldet – taucht sie wieder auf: nicht verwenden, gib sie deinem Materialwart."];
     if (k.gesperrt) return ["s-gesperrt", "GESPERRT – nicht verwenden. Leg sie beiseite und gib sie deinem Materialwart."];
@@ -8770,34 +7425,13 @@
   const psaNaechste = (k) => (k.gesperrt ? '<span class="muted">nach Freigabe durch einen Prüfer</span>'
     : k.status === "neu" ? "<strong>Eingangsprüfung ausstehend</strong>"
       : k.next_due_on ? `<strong${k.status === "ueberfaellig" ? ' class="mat-warn"' : ""}>${esc(fmtTag(k.next_due_on))}</strong>` : '<span class="muted">–</span>');
-  /* Ein Teil eines Sets in „Meine PSA“ (Schritt 21): kleiner als die Karte des Sets, darin unter „Teile des
-     Sets“ – Nummern, Status, Fälligkeit, Lebensende, Rückruf und der Weg zum Artikel. Die Set-Karte trägt Set-Status
-     und Set-Fälligkeit; „Mangel melden …“ steht an der Set-Karte (den Teil wählt der Dialog mit der Sperr-Kaskade). */
-  function psaTeil(t, setBanner) {
-    // Dasselbe Banner wie am Set (etwa „NEU“ an allen) steht nur einmal – an der Set-Karte.
-    const b = psaBanner(t) && !(setBanner && psaBanner(t)[0] === setBanner[0]) ? psaBanner(t) : null;
-    const zeile = (x, w) => `<dt>${esc(x)}</dt><dd>${w}</dd>`;
-    return `<article class="mat-psa-teil s-${esc(t.status)}" aria-labelledby="psa-${Number(t.id)}">
-      ${b ? `<p class="mat-banner ${b[0]}" role="note">${esc(b[1])}</p>` : ""}
-      <h4 id="psa-${Number(t.id)}">${esc(t.inventory_no)} ${statusMarke(t.status)}</h4>
-      <p class="mat-produktzeile small"><strong>${nameHtml(t.produkt)}</strong>${zusatzHtml(t.produkt)}${artNrHtml(t.produkt.article_no)}</p>
-      <p class="small">${nummerHtml("Seriennummer", t.serial_no)}${t.serial_generated ? ' <span class="muted">(vom System)</span>' : ""}</p>
-      <dl class="mat-daten mat-psa-daten">${zeile("Nächste Prüfung", psaNaechste(t))}
-        ${t.retire_by ? zeile("Lebensende", esc(fmtTag(t.retire_by))) : ""}${t.length_m ? zeile("Länge", esc(laengeText(t.length_m))) : ""}</dl>
-      ${t.rueckruf.map((x) => `<p class="mat-psa-rueckruf"><span class="mat-rr-marke">Rückruf</span> Rückruf des Herstellers: ${esc(x)} – bitte deinem Materialwart zeigen.</p>`).join("")}
-      ${t.artikel_link ? `<p class="small"><a href="/material/artikel/${Number(t.id)}">Zum Artikel</a></p>` : ""}
-    </article>`;
-  }
-
   function psaKarte(k, einzeln) {
     const p = k.produkt;
     const name = produktName(p);
     const banner = [psaBanner(k)].filter(Boolean);
-    const teile = k.teile || [];
     const zeile = (t, w) => `<dt>${esc(t)}</dt><dd>${w}</dd>`;
     const naechste = psaNaechste(k);
-    // Set-Karte: ausgegraut erst, wenn an Set-Artikel und allen Teilen die eigene Meldung offen ist (der Dialog wählt).
-    const offen = [k].concat(teile).every((x) => x.eigene_maengel.some((m) => m.offen));
+    const offen = k.eigene_maengel.some((m) => m.offen);
     const inv = einzeln ? esc(k.inventory_no) : `<a href="/material/meine-psa/${Number(k.id)}">${esc(k.inventory_no)}</a>`;
     return `<article class="mat-psa-karte s-${esc(k.status)}${k.mangel ? " mit-mangel" : ""}" aria-labelledby="psa-${Number(k.id)}">
       ${k.demo ? `<p class="mat-demo-banner">${DEMO_ARTIKEL}</p>` : ""}
@@ -8809,7 +7443,6 @@
           <h2 id="psa-${Number(k.id)}">${inv} ${statusMarke(k.status)}</h2>
           <p class="mat-produktzeile"><strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${artNrHtml(p.article_no)}</p>
           <p class="small">${nummerHtml("Seriennummer", k.serial_no)}${k.serial_generated ? ' <span class="muted">(vom System)</span>' : ""}</p>
-          ${teile.length ? `<p class="small mat-set-info">Set mit ${plural(teile.length, "Teil", "Teilen")} – Status und Prüfung gelten fürs ganze Set.</p>` : ""}
         </div>
       </div>
       <dl class="mat-daten mat-psa-daten">
@@ -8823,7 +7456,6 @@
         ${k.notes ? zeile("Bemerkung", `<span class="mat-text">${esc(k.notes)}</span>`) : ""}
       </dl>
       ${k.rueckruf.map((t) => `<p class="mat-psa-rueckruf"><span class="mat-rr-marke">Rückruf</span> Rückruf des Herstellers: ${esc(t)} – bitte deinem Materialwart zeigen.</p>`).join("")}
-      ${teile.length ? `<div class="mat-psa-teile"><h3 class="mat-unter">Teile des Sets (${teile.length})</h3>${teile.map((t) => psaTeil(t, banner[0])).join("")}</div>` : ""}
       ${k.dokumente.length ? `<div class="mat-psa-doks"><h3 class="mat-unter">Dokumente</h3><ul class="mat-doks">${k.dokumente.map((d) => `<li>${d.datei || d.url
         ? `<a href="${esc(d.datei || d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>` : esc(d.title)} <span class="muted">${esc(DOKART[d.kind] || d.kind)}</span></li>`).join("")}</ul></div>` : ""}
       ${k.eigene_maengel.length ? `<details class="mat-psa-meldungen"><summary>Deine Meldungen (${k.eigene_maengel.length})</summary>
@@ -8840,8 +7472,7 @@
   async function meinePsa() {
     const d = await api(`${API}/meine-psa`);
     const einzeln = Boolean(DATEN.id);
-    // /meine-psa/<id> eines Teils zeigt die Karte seines Sets (das Teil steht darin).
-    const karten = einzeln ? d.artikel.filter((k) => k.id === DATEN.id || (k.teile || []).some((t) => t.id === DATEN.id)) : d.artikel;
+    const karten = einzeln ? d.artikel.filter((k) => k.id === DATEN.id) : d.artikel;
     const kopf = `${einzeln ? '<p class="mat-psa-zurueck"><a href="/material/meine-psa">← Alle meine PSA</a></p>' : ""}
       <div class="page-head"><h1>Meine PSA</h1></div>
       <p class="help">Ausrüstung, die dir persönlich zugeordnet ist. Vor jedem Gebrauch ansehen; was dir auffällt, meldest du hier – und gibst sie deinem Materialwart.</p>`;
@@ -8855,13 +7486,7 @@
       mangel: (b) => {
         const k = d.artikel.find((x) => x.id === +b.dataset.id);
         if (!k || b.disabled) return;
-        // Set-Karte (K2): welcher Artikel betroffen ist – Set-Artikel oder ein Teil; die Meldung sperrt das ganze Set.
-        const teile = k.teile || [];
-        const schon = (x) => x.eigene_maengel.some((m) => m.offen);
-        const opt = teile.length ? { set: { inventory_no: k.inventory_no, teile: teile.length },
-                                     wahl: [{ id: k.id, inventory_no: k.inventory_no, text: "das Set selbst", schon: schon(k) }]
-                                       .concat(teile.map((t) => ({ id: t.id, inventory_no: t.inventory_no, text: produktName(t.produkt), schon: schon(t) }))) } : null;
-        mangelDialog(k, (r, q) => { quittung = q; return zeigen(meinePsa); }, opt);
+        mangelDialog(k, (r, q) => { quittung = q; return zeigen(meinePsa); });
       },
     };
   }
@@ -8876,8 +7501,7 @@
 
   const ANSICHTEN = { dashboard, pruefungen, bestand, ordner, artikel, artikel_neu: artikelNeu, katalog, produkt, formular, suche,
                       meldungen, pruefung_neu: pruefungNeu, pruefung: pruefungAnsicht, durchgang: durchgangAnsicht, fremd,
-                      meine_psa: meinePsa, bestandsimport, bericht, set_lauf: setLaufAnsicht, antraege: antraegeSeite };
+                      meine_psa: meinePsa, bestandsimport, bericht, antraege: antraegeSeite };
   leisteLaden();
-  quittungAbholen();
   zeigen(ANSICHTEN[ANSICHT] || dashboard);
 })();

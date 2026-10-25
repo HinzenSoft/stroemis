@@ -1763,39 +1763,14 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-abschluss-zeile .mat-due .mat-datum { width: 8.5em; flex: none; }
 .mat-due-hilfe { font-weight: 400; font-size: var(--fs-klein); color: var(--grau); flex: 1 1 100%; }
 
-/* Phase 4 – Lieferung 2: Sets (Oberfläche O1) */
-/* Marke „Set“ hinter dem Namen (Katalogliste, Artikelkopf) – wie die Ordnerart, leise. */
-.mat-set-marke { display: inline-block; font-size: var(--fs-marke); color: var(--anthrazit); border: 1px solid var(--anthrazit);
-  border-radius: var(--radius-pille); padding: 0 7px; margin-left: 6px; vertical-align: middle; font-weight: 400; white-space: nowrap; }
-/* Ein Teil macht den Set-Status „überfällig“: Banner wie in „Meine PSA“. */
-.mat-banner.s-ueberfaellig { background: var(--rot); }
-/* Listen: „Set · n Teile“ bzw. „Teil von Set …“ unter dem Produkt; über der Liste „n Einträge, davon …“. */
-.mat-set-info { margin-top: 2px; color: var(--anthrazit); overflow-wrap: anywhere; }
-.mat-set-kopf { margin: 0 0 6px; }
-/* Teil-Seite: „Teil von Set …“ unter der Produktzeile; Hinweis statt Verschieben, Zuordnen und Aussondern. */
-.mat-teil-von { margin: 0 0 6px; overflow-wrap: anywhere; max-width: var(--mat-lesemass); }
-.mat-teil-hinweis { margin: 6px 0 0; max-width: var(--mat-lesemass); }
-/* Set-Seite, Kasten „Bestandteile“: Set-Werte als kurze Liste, darunter die Teile als Modulliste (am Telefon Karten über
-   die Containerabfrage mat-seite); eine fehlende Position grau hinterlegt, gesperrte Teile mit Sperrgrund. */
-.mat-set-werte { margin: 0 0 10px; }
-.mat-set-teile tr.mat-fehlt-zeile td { background: var(--grau-hell); }
-@container mat-seite (max-width: 600px) {
-  .mat-set-teile tr.mat-fehlt-zeile td { background: none; }
-  .mat-set-teile tr.mat-fehlt-zeile { background: var(--grau-hell); padding-left: 8px; padding-right: 8px; }
-}
-/* Produkt-Dialog, Reiter „Bestandteile“: je Position ein Kasten – oben „einzeln geführt“ und ↑ ↓ ✕, dann Produkt (bei
-   einzeln geführten), Bezeichnung, Anzahl und „Austausch laut Hersteller“ in einer Zeile (Bezeichnung breit), schmal
-   untereinander. Eine Position mit Fehler rot umrandet, der Text darunter. */
-@media (min-width: 641px) { dialog:where(.mat-produkt-reiter) { width: min(820px, 96vw); } }
+/* Bestandteil-Liste eines Produkts (Schritt 25) – Produkt-Dialog, Reiter „Bestandteile“: je Position ein Kasten – oben
+   ↑ ↓ und „Entfernen“, darunter Bezeichnung und Anzahl in einer Zeile (Bezeichnung breit), schmal untereinander. Eine
+   Position mit Fehler rot umrandet, der Text darunter. */
 .mat-bt { border: 1px solid var(--linie); padding: 6px 12px 10px; margin: 10px 0 0; min-width: 0; }
 .mat-bt legend { font-weight: 600; padding: 0 4px; }
 .mat-bt.ungueltig { border-color: var(--rot); box-shadow: inset 0 0 0 1px var(--rot); }
 .mat-bt-kopf { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
-.mat-bt-kopf label.inline { margin: 0; }
 .mat-bt-label { margin: 10px 0 0; font-weight: 600; }
-.mat-bt .mat-gewaehlt { margin-top: 4px; }
-.field-row.mat-bt-felder { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 2fr); }
-/* Bestandteil-Liste eines Produkts, das kein Set ist (Schritt 25): nur Bezeichnung und Anzahl. */
 .field-row.mat-bt-felder.nur-text { grid-template-columns: minmax(0, 4fr) minmax(0, 1fr); }
 .mat-bt-flach { margin: 0 0 4px; }
 .mat-bestandteile { margin: 0; padding-left: 18px; }
@@ -1824,169 +1799,20 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-bt-zaehler { margin: 0; }
 @media (max-width: 560px) { .field-row.mat-bt-felder { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .field-row.mat-bt-felder > div:first-child { grid-column: 1 / -1; } }
-/* Artikel anlegen mit einem Set-Produkt: je Teil ein Kasten; eine doppelte Seriennummer rot am Feld. */
-.mat-an-teile { margin: 18px 0 6px; }
-.mat-an-teil { border: 1px solid var(--linie); padding: 6px 12px 10px; margin: 10px 0 0; min-width: 0; }
-.mat-an-teil legend { font-weight: 600; padding: 0 4px; overflow-wrap: anywhere; }
-.mat-an-teil.ungueltig { border-color: var(--rot); }
-.mat-an-teil-produkt { margin: 0 0 4px; overflow-wrap: anywhere; }
-.mat-an-teil input.ungueltig { border-color: var(--rot); box-shadow: inset 0 0 0 1px var(--rot); }
-.mat-an-teil-fehler { margin: 4px 0 0; }
+/* Hinweise des Servers nach dem Anlegen eines Artikels (Dialog). */
 .mat-an-hinweise { padding-left: 18px; overflow-wrap: anywhere; }
 .mat-an-hinweise li { margin-bottom: 6px; }
-/* Meine PSA: die Teile eines Sets als kleine Karten in der Set-Karte, links ein Statusstrich wie die große Karte. */
-.mat-psa-teile { margin: 8px 0 0; }
-.mat-psa-teile .mat-unter { margin-top: 10px; }
-.mat-psa-teil { border: 1px solid var(--linie); border-left: 4px solid var(--grau); padding: 8px 10px; margin: 8px 0 0; min-width: 0; }
-.mat-psa-teil.s-einsatzbereit { border-left-color: var(--ok); }
-.mat-psa-teil.s-bald_faellig { border-left-color: var(--gelb-dunkel); }
-.mat-psa-teil.s-ueberfaellig { border-left-color: var(--rot); }
-.mat-psa-teil.s-neu { border-left-color: var(--wasser); }
-.mat-psa-teil.s-lebensdauer { border-left-color: var(--mat-lebensdauer); }
-.mat-psa-teil.s-gesperrt { border-left-color: var(--mat-gesperrt); }
-.mat-psa-teil h4 { margin: 0 0 4px; font-size: var(--fs-mittel); overflow-wrap: anywhere; }
-.mat-psa-teil p { margin: 0 0 4px; overflow-wrap: anywhere; }
-.mat-psa-teil .mat-psa-daten { margin: 6px 0 2px; }
 @media (pointer: coarse) {
   .mat-bt .btn-row .btn.small { min-width: 44px; min-height: 44px; justify-content: center; }
-  .mat-bt-kopf label.inline { min-height: 44px; display: inline-flex; align-items: center; }
-  .mat-psa-teil a { display: inline-flex; align-items: center; min-height: 44px; }
 }
-/* Phase 4 – Lieferung 2: Sets (Oberfläche O2) */
-/* Set-Seite: „Gesperrt, weil“ als kurze Liste; in der Tabelle „Bestandteile“ je Teil das Untermenü „Austausch“. Ein
-   Eintrag, der nicht geht (Austausch laut Hersteller „nein“), steht grau ohne Link. */
-.mat-set-gruende { margin: 0 0 2px; padding-left: 18px; }
-.mat-set-gruende li { overflow-wrap: anywhere; }
-.mat-set-teile td.tabelle-aktionen { white-space: nowrap; text-align: right; }
-.mat-menue-aus { display: block; padding: 10px 14px; color: var(--grau); cursor: not-allowed; }
-.mat-menue-liste .mat-menue-aus strong { color: var(--grau); }
-.mat-menue-aus + a, a + .mat-menue-aus { border-top: 1px solid var(--linie); }
-@container mat-seite (max-width: 600px) { .mat-set-teile td.tabelle-aktionen { text-align: left; } }
-/* Dialoge: Verbleib je Teil (Set aussondern, „aussondern“ am Set-Artikel), Verbleib des alten Teils beim Tauschen und
-   Entnehmen, Bestätigung „laut Herstellerunterlagen zulässig“, Wahl des Artikels bei „Mangel melden“ an einer Set-Karte. */
-.mat-verbleib { margin: 12px 0 4px; }
-.mat-verbleib-teil, .mat-teil-verbleib, .mat-mangel-wahl { border: 1px solid var(--linie); padding: 6px 12px 8px; margin: 8px 0 0; min-width: 0; }
-.mat-verbleib-teil legend, .mat-teil-verbleib legend, .mat-mangel-wahl legend { font-weight: 600; padding: 0 4px; overflow-wrap: anywhere; }
-.mat-verbleib-teil label.inline, .mat-teil-verbleib label.inline, .mat-mangel-wahl label.inline { display: flex; align-items: flex-start; gap: 8px; margin: 4px 16px 4px 0; }
-.mat-mangel-wahl label.inline span { overflow-wrap: anywhere; }
-.mat-verbleib-grund { margin: 0 0 2px; overflow-wrap: anywhere; }
-.mat-teil-verbleib #td-aus { margin-top: 6px; }
-.mat-bestaetigen { margin: 12px 0 0; font-weight: 600; }
-/* Seite „Set prüfen“: Stand, Fortschritt, je Teil eine Karte (Telefon zuerst; ab 700 px Inhalt zwei Spalten), zum
-   Schluss der Set-Artikel abgesetzt. Geprüfte Karten mit grünem, zu prüfende mit grauem Strich links. */
-.mat-lauf-stand { margin: 4px 0 8px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
-.mat-lauf-fortschritt { margin: 6px 0 10px; }
-.mat-lauf-gruende { border-left: 4px solid var(--mat-gesperrt); background: var(--grau-hell); padding: 6px 12px; margin: 8px 0 12px; }
-.mat-lauf-gruende p, .mat-lauf-gruende ul { margin: 2px 0; }
-.mat-lauf-gruende ul { padding-left: 18px; overflow-wrap: anywhere; }
-.mat-lauf-liste { list-style: none; margin: 12px 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
-@container mat-seite (min-width: 700px) { .mat-lauf-liste { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.mat-lauf-teil { border: 1px solid var(--linie); border-left: 4px solid var(--grau); padding: 8px 12px 10px; min-width: 0; background: var(--weiss); }
-.mat-lauf-teil.geprueft { border-left-color: var(--ok); }
-.mat-lauf-teil.mat-lauf-set { grid-column: 1 / -1; border-left-color: var(--anthrazit); background: var(--grau-hell); }
-.mat-lauf-teil.mat-lauf-set.geprueft { border-left-color: var(--ok); }
-.mat-lauf-kopf { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; overflow-wrap: anywhere; }
-.mat-lauf-nr { font-size: var(--fs-klein); color: var(--grau); font-weight: 700; text-transform: uppercase; letter-spacing: .02em; width: 100%; }
-.mat-lauf-zustand { margin: 6px 0 0; overflow-wrap: anywhere; }
-.mat-lauf-teil .btn-row { margin: 8px 0 0; }
-.mat-lauf-teil .help { margin: 6px 0 0; }
-.mat-lauf-marke { display: inline-block; font-size: var(--fs-marke); font-weight: 700; padding: 1px 8px; border-radius: var(--radius-pille);
-  border: 1px solid var(--grau); color: var(--anthrazit); white-space: nowrap; }
-.mat-lauf-vorschau { margin: 6px 0; padding-left: 18px; }
-.mat-lauf-vorschau li { margin: 4px 0; overflow-wrap: anywhere; }
-.mat-lauf-abschluss p { margin: 4px 0; }
-/* Gesamtergebnis einer Set-Prüfung (Lauf, Protokoll, vorab im Entwurf): wie die Ergebnis-Marken. */
-.mat-gesamt { display: inline; font-weight: 700; padding: 1px 8px; border-radius: var(--radius-pille); line-height: 1.7;
-  -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-.mat-gesamt.g-einsatzbereit { background: var(--co-success-fl); color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
-.mat-gesamt.g-gesperrt { background: var(--gelb); color: var(--anthrazit); }
-.mat-gesamt.g-ausgesondert { background: var(--rot); color: var(--weiss); }
-/* Prüfansicht im Lauf: „Teil von Set … · Teil n von m“ unter der Produktzeile, nach dem Festschreiben der Weg zur
-   nächsten Prüfung; am Entwurf des Set-Artikels der Stand des Laufs mit dem Gesamtergebnis vorab. */
-.mat-set-lauf-zeile { margin: 0 0 6px; overflow-wrap: anywhere; }
-.mat-lauf-weiter { border-left: 4px solid var(--ok); background: var(--co-success-fl); padding: 8px 12px; margin: 8px 0 12px; }
-.mat-lauf-weiter p { margin: 0 0 6px; overflow-wrap: anywhere; }
-.mat-set-vorab { margin: 8px 0 0; overflow-wrap: anywhere; }
-.mat-set-zeilen td { overflow-wrap: anywhere; }
-/* Durchgang: Teile eingerückt unter ihrer Set-Zeile (Tabelle und Karte). */
-table.list.mat-runde tr.mat-teilzeile td:first-child { padding-left: 28px; }
-table.list.mat-runde tr.mat-teilzeile td { background: var(--grau-hell); }
-.mat-lauf-zeile { margin-top: 2px; }
-@container mat-seite (max-width: 600px) {
-  table.list.mat-runde tr.mat-teilzeile { margin-left: 16px; padding-left: 10px; border-left: 3px solid var(--linie); }
-  table.list.mat-runde tr.mat-teilzeile td, table.list.mat-runde tr.mat-teilzeile td:first-child { padding-left: 0; background: none; }
-}
-@media (pointer: coarse) {
-  .mat-verbleib-teil label.inline, .mat-teil-verbleib label.inline, .mat-mangel-wahl label.inline, .mat-bestaetigen { min-height: 44px; align-items: center; }
-  .mat-lauf-teil .btn-row .btn, .mat-lauf-weiter .btn, .mat-set-teile .mat-teil-menue > summary { min-height: 44px; }
-  .mat-menue-aus { min-height: 44px; }
-  .mat-lauf-kopf a.mat-inv, .mat-lauf-frueher li > a { display: inline-flex; align-items: center; min-height: 44px; }
-}
-/* Phase 4 – Lieferung 2: Nachbesserung nach den drei Prüfungen */
-/* B1: Ein Reiter mit hidden bleibt verborgen – .c-tabs (display: flex) überstimmte sonst das Attribut hidden (seit „Set
-   anlegen“ stehen die Reiter im Set-Modus immer da). */
+/* Ein Reiter mit hidden bleibt verborgen – .c-tabs (display: flex) überstimmte sonst das Attribut hidden. */
 .c-tabs[hidden], .mat-reiter[hidden] { display: none; }
-/* B8: Rot auf grauer Zeile (fehlende Position, Teilzeile im Durchgang) in der dunklen Fassung – 4,5:1. */
-.mat-set-teile tr.mat-fehlt-zeile .mat-warn, table.list.mat-runde tr.mat-teilzeile a,
-table.list.mat-runde tr.mat-teilzeile strong { color: var(--rot-auf-flaeche); }
-/* V9: Der Produkt-Dialog mit Reitern steht oben – beim Wechsel zum (kürzeren) Reiter „Bestandteile“ springt er nicht. */
-dialog.mat-produkt-reiter { margin-top: min(6vh, 48px); margin-bottom: auto; }
-/* V12: Hilfe im Reiter „Bestandteile“ als eine Zeile, der Rest aufklappbar. */
-.mat-bt-hilfe { margin: 4px 0 6px; }
-.mat-bt-hilfe > summary { font-weight: 400; font-size: var(--fs-klein); color: var(--grau); }
-.mat-bt-hilfe .help { margin: 2px 0 6px; }
-/* V5: In der Vorschau „Set prüfen“ stehen Status und Auftrag getrennt. */
-.mat-lauf-auftrag { font-size: var(--fs-klein); color: var(--grau); margin-left: 6px; white-space: nowrap; }
-.mat-lauf-auftrag.zu { color: var(--anthrazit); font-weight: 700; }
-/* V3: Gesamtergebnis des Sets im Kopf der Prüfansicht (ohne Abweichung leise, mit Abweichung als .notice). */
-.mat-set-gesamt-kopf { margin: 0 0 6px; overflow-wrap: anywhere; }
-/* V16: Fortschritt der Set-Prüfung – der Balken ist auch bei 0 % zu sehen, der Text bricht nicht wortweise um. */
-.mat-lauf-fortschritt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
-.mat-lauf-fortschritt .mat-fortschritt { border-color: var(--grau); flex: none; }
-/* V14: Ein ausgegrauter Eintrag im Untermenü „Austausch“ ist fokussierbar – mit sichtbarem Fokusring. */
-.mat-menue-aus:focus-visible { outline: 2px solid var(--anthrazit); outline-offset: -2px; }
-.mat-menue-aus + .mat-menue-aus { border-top: 1px solid var(--linie); }
-/* V13: am Finger 44 px – „Art der Prüfung“ (seit Phase 1) und eigenständige Links (zur Set-Prüfung, zum Set, Teil-Nummern
-   in den Karten der Set-Seite). */
+/* „Art der Prüfung“ am Finger 44 px (seit Phase 1). */
 @media (pointer: coarse) {
   .mat-arten .mat-art-wahl { min-height: 44px; padding: 0; }
-  a.mat-ziel, .mat-set-teile a.mat-inv { display: inline-flex; align-items: center; min-height: 44px; }
-  .mat-bt-hilfe > summary { min-height: 44px; display: flex; align-items: center; }
 }
-/* Phase 4 – Lieferung 2b: Sets, Teil 2 (Oberfläche) */
-/* Teilblock mit der Wahl „neu erfassen | aus dem Bestand wählen“; ein Treffer der Auswahl bricht in Zeilen um (Nummern,
-   bisherige Inventarnummer, Produkt und Ordner, Zuordnung). */
-.mat-an-teil-quelle { display: flex; flex-wrap: wrap; gap: 2px 18px; margin: 2px 0 6px; }
-.mat-an-teil-quelle label.inline { margin: 0; }
-.mat-an-teil-neu[hidden], .mat-an-teil-bestand[hidden], .mat-an-teil-bestand label[hidden], .mat-an-teil .mat-produktwahl[hidden] { display: none; }
-.mat-treffer-zeile.mat-kandidat { flex-wrap: wrap; gap: 2px 8px; }
-.mat-treffer-zeile.mat-kandidat:disabled { cursor: default; color: var(--grau); background: var(--grau-hell); }
-.mat-kandidat .small, .mat-kandidat-wahl .small { flex-basis: 100%; overflow-wrap: anywhere; }
-.mat-kandidat-wahl { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; flex: 1 1 16em; }
-.mat-an-teil .at-bestand-fehler { margin: 4px 0 0; }
-/* Bestandteile ohne eigenen Artikel als Zeilen der Tabelle „Bestandteile“ (mit „Bestandteil ersetzt“). */
-.mat-set-teile tr.mat-ohne-zeile td { color: var(--anthrazit); }
-/* Zählsatz unter den Kacheln, im Jahresbericht und kurz in der Ordner-Übersicht; Zusatz unter Statuslisten. */
-.mat-set-satz { margin: 6px 0 0; overflow-wrap: anywhere; }
-/* „k Teile in m Sets“ in einer Zeile – sonst wurden Zeilen mit Sets dreizeilig (Nachbesserung, Browser V9). */
-.mat-ue-sets { display: block; font-size: var(--fs-klein); font-weight: 400; color: var(--grau); white-space: nowrap; line-height: 1.25; }
-.mat-andere-sets { margin: 12px 0 0; overflow-wrap: anywhere; }
-.mat-andere-sets .mat-status { vertical-align: baseline; }
-/* Knopf mit Pflichtbestätigung (pflichtBestaetigung, V2): sieht aus wie ausgeschaltet, bleibt aber antippbar. */
-.btn.mat-aus, .btn.mat-aus:hover { opacity: .55; background: var(--rot); border-color: var(--rot); color: var(--weiss); }
-/* V18: Journalzeilen höchstens lesbar breit. */
+/* Journalzeilen höchstens lesbar breit. */
 .mat-journal > li { max-width: 90ch; }
-@container mat-seite (max-width: 600px) {
-  .mat-ue-sets { display: inline; }
-  .mat-ue-sets::before { content: " · "; }
-}
-@media (pointer: coarse) {
-  /* Beide Wahlen in einer Zeile (V15) – der Text bricht in seinem Feld um, das Feld bleibt 44 px hoch. */
-  .mat-an-teil-quelle { flex-wrap: nowrap; gap: 0 14px; }
-  .mat-an-teil-quelle label.inline { min-height: 44px; align-items: center; flex: 0 1 auto; min-width: 0; line-height: 1.25; }
-  .mat-treffer-zeile.mat-kandidat, .mat-andere-sets a.mat-inv { min-height: 44px; }
-  .mat-andere-sets a.mat-inv { display: inline-flex; align-items: center; }
-}
 /* Feintuning nach dem Kommentar-Dokument (23.10.2026): Produkt im Dialog „Bearbeiten“ (bis zur ersten Prüfung) und der
    Hinweis, was ein Wechsel nachzieht. */
 .mat-ad-produkt { margin-bottom: 12px; }
@@ -1999,33 +1825,3 @@ dialog.mat-produkt-reiter { margin-top: min(6vh, 48px); margin-bottom: auto; }
 .mat-ad-produkt .error { margin: 4px 0 0; }
 /* Lebensende und Länge folgen dem gewählten Produkt (field-row ist sonst flex und überginge hidden). */
 #ad-ende-zeile[hidden], #ad-laenge-zeile[hidden] { display: none; }
-
-/* Sets anlegen und Stückliste übertragen (Wunsch vom 24.10.2026) – Dialog „Set anlegen“, „Stückliste übertragen“ und
-   „Fehlendes Produkt oder Set melden“. Dialoge stehen außerhalb von #mat (Container mat-seite), schmal gilt deshalb die
-   Fensterbreite wie bei den übrigen Dialogen. */
-.mat-set-erklaerung { margin: 0 0 6px; }
-.mat-me-art { border: 0; padding: 0; margin: 4px 0 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; min-width: 0; }
-.mat-me-art legend { font-weight: 600; padding: 0; margin-bottom: 2px; flex: 0 0 100%; }
-#me-set[hidden] { display: none; }
-.mat-su-gruppe { margin: 14px 0 0; padding-top: 10px; border-top: 1px solid var(--linie); }
-.mat-su-gruppe h3 { margin: 0 0 6px; font-size: 1rem; }
-.mat-su-vergleich td { overflow-wrap: break-word; }
-.mat-su-vergleich tr.mat-su-gleich td { color: var(--grau); }
-.mat-su-sets { list-style: none; margin: 10px 0 0; padding: 0; }
-.mat-su-set { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--linie); }
-.mat-su-set > input { margin-top: 3px; flex: none; }
-.mat-su-set.aus .mat-su-angaben { padding-left: 28px; }
-.mat-su-angaben { min-width: 0; overflow-wrap: anywhere; }
-.mat-su-summe { margin: 12px 0 0; font-weight: 600; }
-@media (max-width: 640px) {
-  #dlg table.mat-su-vergleich thead { display: none; }
-  #dlg table.mat-su-vergleich, #dlg table.mat-su-vergleich tbody, #dlg table.mat-su-vergleich tr,
-  #dlg table.mat-su-vergleich td { display: block; width: auto; }
-  #dlg table.mat-su-vergleich tr { padding: 8px 0; border-bottom: 1px solid var(--linie); }
-  #dlg table.mat-su-vergleich td { padding: 1px 0; border: 0; }
-  #dlg table.mat-su-vergleich td::before { content: attr(data-l) ": "; color: var(--grau); }
-}
-@media (pointer: coarse) {
-  .mat-su-set > input { margin-top: 10px; }
-  .mat-su-angaben a.mat-inv { display: inline-flex; align-items: center; min-height: 44px; }
-}

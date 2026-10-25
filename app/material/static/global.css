@@ -47,8 +47,6 @@
 .mg-daten dt { color: var(--grau); }
 .mg-daten dd { margin: 0; }
 .mg-text .mg-gehoert { margin: 6px 0 0; padding-top: 6px; border-top: 1px solid var(--linie); }
-/* Teil eines Sets (Schritt 21): eine leise Zeile unter „Gehört zu“ – ohne Angaben zum Set. */
-.mg-text .mg-set { margin: 4px 0 0; font-size: var(--fs-klein); color: var(--grau); }
 .mg-hinweis { margin-top: 4px; }
 
 /* Schmaler Inhalt (Telefon, Fold zugeklappt): kleineres Bild, Angaben untereinander */

@@ -58,11 +58,6 @@
   // Die Artikelnummer des Herstellers nur, wenn sie der Treffer ist – sonst kürzte sie die Produktzeile unnötig.
   const trifft = (wert, q) => Boolean(wert) && String(wert).toLowerCase().includes(q.toLowerCase());
 
-  // Sets (Schritt 21): Ein Teil nennt sein Set (Inventarnummer und Produkt), ein Set seine Teile – als Text,
-  // der ganze Steckbrief ist schon der Link.
-  const setZeile = (a) => (a.teil_von ? `<span class="mv-zeile">Teil von Set ${esc(a.teil_von.inventory_no)} ${esc(a.teil_von.produkt)}</span>`
-    : a.set ? `<span class="mv-zeile">Set · ${a.set.teile === 1 ? "1 Teil" : `${a.set.teile} Teile`}</span>` : "");
-
   // Das Produkt wie überall im Modul: „Hersteller Modell“ und dahinter grau die Beschreibung (window.MatProdukt aus
   // material.js).
   function karte(a, q, i) {
@@ -75,7 +70,6 @@
             <span class="mat-status s-${esc(a.status)}">${esc(STATUS[a.status] || a.status)}</span>${a.rueckruf ? ' <span class="mat-rr-marke">Rückruf</span>' : ""}${a.mangel ? ' <span class="mat-mangel-marke" title="Mangel gemeldet">Mangel</span>' : ""}${a.demo ? ' <span class="mat-demo">DEMO</span>' : ""}</span>
           <span class="mv-produkt">${name || "–"}${window.MatProdukt.zusatzHtml(a)}${trifft(a.article_no, q) ? window.MatProdukt.artNr(a.article_no, markiert(a.article_no, q)) : ""}</span>
           <span class="mv-zeile">Seriennummer ${markiert(a.serial_no, q)}${a.pfad ? ` · ${esc(a.pfad)}` : ""}</span>
-          ${setZeile(a)}
         </span></a></li>`;
   }
 
