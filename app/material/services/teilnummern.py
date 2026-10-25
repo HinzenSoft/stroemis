@@ -1,6 +1,6 @@
 """Seriennummern der Bestandteile am Artikel (Schritt 25, Zusatz zum Wunsch vom 25.10.2026 – S1 bis S3).
 
-Hat das Produkt eines Artikels eine Bestandteil-Liste (stueckliste.py, nur an Produkten, die kein Set sind), trägt der
+Hat das Produkt eines Artikels eine Bestandteil-Liste (stueckliste.py), trägt der
 Artikel je Position und Stück FREIWILLIG eine Seriennummer (mat_item_component_serial; leer heißt keine Zeile – ein
 Beutel hat keine). Regeln, wie sie hier umgesetzt sind (die Trigger aus Schritt 25 fangen, was an ihnen vorbeiginge):
   - Bis zur ersten abgeschlossenen Prüfung direkt: beim Anlegen und im Dialog „Bearbeiten“ (Materialwart, wie die
@@ -65,7 +65,7 @@ def _liste(positionen, werte):
 
 def liste_json(item):
     """Die Bestandteil-Liste des Produkts mit den Nummern dieses Artikels: [{id, bezeichnung, anzahl, nummern: [Text je
-    Stück, leer ohne]}] – leer an Sets und ohne Liste."""
+    Stück, leer ohne]}] – leer ohne Liste."""
     from . import stueckliste
     return _liste(stueckliste.kurzliste(item["product_id"]), nummern(item["id"]))
 
@@ -157,9 +157,9 @@ def schreiben(item, liste, zusatz=None, journal_an=True):
 
 
 def entfallen(product_id, weg, neue_anzahl):
-    """Vor dem Ersetzen einer Bestandteil-Liste (stueckliste._flach_ersetzen): Je Artikel, dessen Nummern dabei wegfallen
+    """Vor dem Ersetzen einer Bestandteil-Liste (stueckliste._ersetzen): Je Artikel, dessen Nummern dabei wegfallen
     – an den Positionen weg (Zeilen) und an Stück über neue_anzahl {Position: Anzahl} –, ein Journaleintrag mit den
-    Nummern vorher. Gelöscht wird danach in _flach_ersetzen (mit der Position bzw. nach dem Kürzen der Anzahl)."""
+    Nummern vorher. Gelöscht wird danach in stueckliste._ersetzen (mit der Position bzw. nach dem Kürzen der Anzahl)."""
     positionen = _beschriftungen(product_id)
     bedingungen, args = [], []
     if weg:

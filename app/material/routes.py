@@ -28,7 +28,7 @@ from . import models
 from .services import (Abgelehnt, anhang, bestand, bestandsimport, durchgang, eingabe, globalprotokoll, globalsuche,
                        journal, katalog, kennung, medien as medien_dienst, meldung, protokoll, pruefung, search,
                        unterschrift)
-from .services import antrag, erinnerung, mailprotokoll, mangel, psa, rueckruf, setkopie, sets, stueckliste
+from .services import antrag, erinnerung, mailprotokoll, mangel, psa, rueckruf, stueckliste
 from .services import status as st
 from .services import ueberblick
 from .services.bestand import FremdeDublette
@@ -386,8 +386,7 @@ def start():
     „maengel“: gemeldete Mängel im eigenen Bereich, nach denen noch kein Prüfer geprüft hat (höchstens 50, dazu
     „maengel_gesamt“); „meine_psa“: {anzahl, dringend} der eigenen PSA oder null (Phase 3 · L1); „mailfehler“:
     gescheiterte Modul-Mails in der eigenen Sicht (mailprotokoll.uebersicht: offen, zeilen, kein_mailserver) oder null,
-    wenn es nichts zu zeigen gibt (Phase 4 · L1). „bestand_sets“: {anzahl, teile} zu „bestand“ – Zählsatz „N Artikel,
-    darunter k Teile in m Sets“ (Phase 4 · L2b; die Zeilen der Ordner-Übersicht tragen ihn ebenso). „antraege_offen“:
+    wenn es nichts zu zeigen gibt (Phase 4 · L1). „antraege_offen“:
     offene Änderungsanträge, die das Konto als Materialwart des Ordners entscheiden darf (antrag.zu_entscheiden – für
     jedes Konto, seit dem 24.10.2026 nicht mehr nur für die Material-Verwaltung)."""
     alle = bestand.baum()
@@ -396,7 +395,6 @@ def start():
     naechste, faellig = bestand.faellige(pro_seite=10)
     z = bestand.zaehlung()
     return jsonify(darf=darf_alles(), zaehlung=z, bestand=sum(z[s] for s in st.BESTAND),
-                   bestand_sets=bestand.zaehlung_sets(),
                    ordner_uebersicht=ueberblick.ordner_uebersicht(alle),
                    gliederungen=gliederungen, naechste=naechste, faellig_gesamt=faellig,
                    schwelle_tage=st.schwelle_tage(), status_text=st.LABEL,
@@ -421,8 +419,7 @@ def suche():
     rows, gesamt = search.artikel(q, seite, pro_seite, *_sortier_args())
     treffer = []
     for r in rows:
-        # Sets (Schritt 21): ein Set-Artikel als Set-Zeile, ein Teil mit „teil_von“.
-        k = sets.listenzeile(bestand.artikel_kurz(r), r)
+        k = bestand.artikel_kurz(r)
         k["pfad"] = " / ".join(o["name"] for o in bestand.pfad(r["folder_id"]))
         treffer.append(k)
     exakt = search.exakt_lokal(q)
@@ -450,11 +447,8 @@ def faellig():
             raise Abgelehnt(ORDNER_FEHLT, 404)
     zugeordnet = _zugeordnet_arg()
     liste, gesamt = bestand.faellige(ordner_id, stati, seite, pro_seite, *_sortier_args(), zugeordnet=zugeordnet)
-    # Mit Ordner (aus der Übersicht): sein Pfad für die Überschrift der Liste. „sets“: davon Sets mit Teilen (Schritt 21);
-    # „andere_set_status“: Teile mit diesen Status in Sets mit anderem Set-Status (Phase 4 · L2b).
+    # Mit Ordner (aus der Übersicht): sein Pfad für die Überschrift der Liste.
     return jsonify(artikel=liste, gesamt=gesamt, schwelle_tage=st.schwelle_tage(),
-                   sets=bestand.faellige_sets(ordner_id, stati, zugeordnet),
-                   andere_set_status=bestand.faellige_andere_set_status(ordner_id, stati, zugeordnet),
                    ordner={"id": ordner_id, "pfad": bestand.pfad(ordner_id)} if ordner_id else None)
 
 
@@ -527,13 +521,11 @@ def artikelnummer_pruefen():
 @api.post("/produkte")
 @katalog_required
 def produkt_anlegen():
-    """Produkt anlegen – oder ein Set: {"is_set": true, "bestandteile": [Positionen wie PUT …/bestandteile]} legt
-    Produkt und Stückliste in einem Zug an (mindestens ein einzeln geführtes Teil; „Position n: …“ bei einem Fehler,
-    dann entsteht nichts); is_set ohne Liste: 400. Ohne is_set ist „bestandteile“ die Bestandteil-Liste des Produkts
-    (nur Bezeichnung und Anzahl, Schritt 25) – ebenso in einem Zug."""
+    """Produkt anlegen – „bestandteile“ ist die Bestandteil-Liste des Produkts (nur Bezeichnung und Anzahl, Schritt 25),
+    in einem Zug mit dem Produkt („Position n: …“ bei einem Fehler, dann entsteht nichts). „is_set“ (Set-Funktion bis
+    Schritt 26) wird übergangen."""
     d = json_body()
-    ist_set, liste = stueckliste.anfrage_lesen(d)
-    pid = katalog.produkt_anlegen(d, bestandteile=liste, ist_set=ist_set)
+    pid = katalog.produkt_anlegen(d, bestandteile=stueckliste.anfrage_lesen(d))
     return jsonify(produkt=katalog.produkt_json(katalog.produkt(pid), voll=True)), 201
 
 
@@ -541,9 +533,8 @@ def produkt_anlegen():
 @katalog_required
 def produkt_variante(pid):
     """Kopie als neue Variante: Felder wie POST /produkte (eigene Artikelnummer Pflicht), dazu „dokumente“ –
-    die Kennungen der aktuellen Dokumente, die mitkommen sollen. Das Produktbild kommt nie mit. Die Variante eines Sets
-    ist ein Set: „bestandteile“ (bearbeitet) oder ohne sie die Stückliste des Vorbilds; die eines Produkts übernimmt
-    ebenso dessen Bestandteil-Liste (oder „bestandteile“, [] ohne Liste)."""
+    die Kennungen der aktuellen Dokumente, die mitkommen sollen. Das Produktbild kommt nie mit. Die Variante übernimmt die
+    Bestandteil-Liste des Vorbilds (oder „bestandteile“, [] ohne Liste)."""
     neu = katalog.produkt_variante(pid, json_body())
     return jsonify(produkt=katalog.produkt_json(katalog.produkt(neu), voll=True)), 201
 
@@ -564,34 +555,13 @@ def produkt_lesen(pid):
 @api.put("/produkte/<int:pid>/bestandteile")
 @katalog_required
 def produkt_bestandteile(pid):
-    """Stückliste eines Sets als Ganzes ersetzen (Schritt 21): {"bestandteile": [{"produkt_id" | null,
-    "bezeichnung", "anzahl", "einzeln", "austausch"}]} – Reihenfolge = Position, mindestens ein einzeln geführtes Teil
-    (S3). Angelegte Sets behalten ihre Kopie – „sets_aelter“ im Produkt zählt sie (Stückliste übertragen). An einem
-    Produkt, das kein Set ist, die Bestandteil-Liste: [{"bezeichnung", "anzahl"}], [] entfernt sie (Schritt 25).
-    Liefert das Produkt (voll) und „geaendert“."""
+    """Die Bestandteil-Liste als Ganzes ersetzen (Schritt 25): {"bestandteile": [{"bezeichnung", "anzahl"}]} –
+    Reihenfolge = Position, [] entfernt sie. Liefert das Produkt (voll) und „geaendert“."""
     d = json_body()
     if not isinstance(d, dict) or "bestandteile" not in d:
         raise Abgelehnt("Bitte „bestandteile“ angeben (eine Liste).")
     geaendert = stueckliste.ersetzen(pid, d["bestandteile"])
     return jsonify(produkt=katalog.produkt_json(katalog.produkt(pid), voll=True), geaendert=geaendert)
-
-
-@api.get("/produkte/<int:pid>/stueckliste-uebertragen")
-@katalog_required
-def stueckliste_uebertragen_vorschau(pid):
-    """Vorschau „Stückliste übertragen“ (setkopie.vorschau): je Gruppe gleicher bisheriger Kopie der Vergleich und die
-    Sets mit Wirkung oder Grund, dazu „stand“ für den POST. Nur die Material-Verwaltung (S7)."""
-    return jsonify(setkopie.vorschau(pid))
-
-
-@api.post("/produkte/<int:pid>/stueckliste-uebertragen")
-@katalog_required
-def stueckliste_uebertragen(pid):
-    """{"stand", "set_ids"}: die aktuelle Stückliste auf die gewählten Sets übertragen (setkopie.uebertragen) – eine
-    Transaktion; anderer Stand oder ein nicht übertragbares Set 409, nichts geschrieben. Liefert {uebertragen,
-    gesperrt} und das Produkt (voll)."""
-    r = setkopie.uebertragen(pid, json_body())
-    return jsonify(dict(r, produkt=katalog.produkt_json(katalog.produkt(pid), voll=True)))
 
 
 @api.put("/produkte/<int:pid>")
@@ -694,8 +664,7 @@ def meldungen():
 @api.post("/meldungen")
 @requires_folder("verwalten", "eingabe:folder_id", leer="irgendwo")
 def meldung_anlegen():
-    """Ein fehlendes Produkt oder Set melden („is_set“, dann „set_teile“ Pflicht) – Felder als JSON oder, mit Fotos, als
-    Formular (Feld „fotos“, mehrfach)."""
+    """Ein fehlendes Produkt melden – Felder als JSON oder, mit Fotos, als Formular (Feld „fotos“, mehrfach)."""
     mid = meldung.anlegen(_eingabe(), request.files.getlist("fotos"))
     return jsonify(meldung=meldung.meldung_json(meldung.meldung(mid))), 201
 
@@ -722,8 +691,8 @@ def meldung_loeschen(mid):
 @api.post("/meldungen/<int:mid>/produkt")
 @katalog_required
 def meldung_produkt(mid):
-    """Produkt oder Set aus der Meldung anlegen (Felder wie POST /produkte – ein Set mit „is_set“ und „bestandteile“ –,
-    dazu „antwort“) – erledigt sie zugleich, in einer Transaktion."""
+    """Produkt aus der Meldung anlegen (Felder wie POST /produkte, dazu „antwort“) – erledigt sie zugleich, in einer
+    Transaktion."""
     pid = meldung.produkt_anlegen(mid, json_body())
     return jsonify(produkt=katalog.produkt_json(katalog.produkt(pid), voll=True),
                    meldung=meldung.meldung_json(meldung.meldung(mid))), 201
@@ -947,10 +916,9 @@ def artikel_vorschlag():
 @requires_folder("verwalten", "json:folder_id", leer="global")
 def artikel_anlegen():
     """Anlegen im Ordner, den das Konto verwaltet. Gibt es die Seriennummer bei diesem Produkt schon in einem fremden
-    Bereich, antwortet _fremde_dublette (protokolliert, ohne Inventarnummer). Ein Set kommt mit seinen
-    Teilen („teile“, sets.set_anlegen) – „hinweise“: etwa „STR-Nummer am Teil anbringen“."""
-    iid, hinweise = bestand.anlegen(json_body())
-    return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True), hinweise=hinweise), 201
+    Bereich, antwortet _fremde_dublette (protokolliert, ohne Inventarnummer)."""
+    iid = bestand.artikel_anlegen(json_body())
+    return jsonify(artikel=bestand.artikel_json(bestand.artikel(iid), voll=True)), 201
 
 
 @api.get("/artikel/<int:iid>")
@@ -1262,4 +1230,3 @@ from . import routes_psa  # noqa: E402,F401
 from . import routes_antrag  # noqa: E402,F401
 from . import routes_mailfehler  # noqa: E402,F401
 from . import routes_bericht  # noqa: E402,F401
-from . import routes_sets  # noqa: E402,F401

@@ -272,7 +272,7 @@ def test_oberflaeche_statisch():
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
     css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
-    start = js.index("function artikelDialog(a,")
+    start = js.index("function artikelDialog(a)")
     dlg = js[start:js.index("/* --- Artikel anlegen", start)]
     assert "const fest = !!a.stammdaten_fest;" in dlg
     # Ganz oben: die erste Feldzeile nach der Überschrift trägt Seriennummer und Herstellung – davor steht nur, solange

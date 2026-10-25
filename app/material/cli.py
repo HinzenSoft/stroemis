@@ -42,11 +42,10 @@ def import_catalog(datei, trocken):
     except Abgelehnt as exc:
         click.echo(str(exc), err=True)
         sys.exit(2)
-    # Stücklisten der Sets (Schritt 21) und Bestandteil-Listen (Schritt 25): neu, geändert, unverändert – wie der Bericht in
-    # der App.
-    namen = {"stuecklisten": "Stücklisten", "bestandteillisten": "Bestandteil-Listen"}
+    # Bestandteil-Listen (Schritt 25): neu, geändert, unverändert – wie der Bericht in der App.
+    namen = {"bestandteillisten": "Bestandteil-Listen"}
     teile = ("kategorien", "produkte", "formulare") + (("bilder", "dokumente") if bericht.get("version") == 2 else ()) + tuple(
-        t for t in ("stuecklisten", "bestandteillisten") if any(bericht.get(t, {}).values()))
+        t for t in ("bestandteillisten",) if any(bericht.get(t, {}).values()))
     for teil in teile:
         zahlen = ", ".join(f"{k} {v}" for k, v in bericht[teil].items())
         click.echo(f"{namen.get(teil, teil.capitalize()):<11} {zahlen}")

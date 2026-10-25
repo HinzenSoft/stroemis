@@ -81,11 +81,6 @@ OHNE_SERIENNUMMERN = ("Keine Spalte ist als Seriennummer zugeordnet – bitte be
                       "mit den Seriennummern zuordnen.")
 FEHLT_ZUORDNUNG = "Ordne mindestens Hersteller und Modell (oder Artikelnummer) zu."
 DEMO_PRODUKT = "Ein DEMO-Produkt passt nur in einen DEMO-Ordner."
-# Schritt 21: Der Import legt keine Sets an – ihre Teile kennt die Liste nicht (Entwurf I). Seit L2b (Entwurf A,
-# U11/U12): Teile, die die Liste als eigene Zeilen führt, sind nach dem Import vorhandene Artikel – das Set setzt sie ein.
-# Kurz (Nachbesserung, Browser V16): steht als roter Satz in der Spalte „Gründe“ der Nacharbeit.
-SET_PRODUKT = ("Sets legt der Import nicht an – über „Artikel anlegen“ mit „aus dem Bestand wählen“ erfassen, dann "
-               "„erneut prüfen“.")
 NEUBESCHRIFTEN = ("Alte Inventarnummern stehen in der Bemerkung und sind nicht suchbar – die Artikel bitte neu "
                   "beschriften (Liste: „Export“ im Ordner).")
 
@@ -125,7 +120,8 @@ BEMERKUNG_WERT = ("bemerkung", "bemerkungen", "notiz", "hinweis", "anmerkung", "
 BEMERKUNG_TITEL = ("größe", "groesse", "farbe", "standort", "lagerort")
 UEBRIGE = (
     # „Bisherige …“/„Alte …“ (Browser B2): so heißt das Zielfeld selbst – eine Liste mit genau dieser Überschrift fiel
-    # sonst auf „ignorieren“. „Set (Inventarnummer)“ aus dem eigenen CSV-Export beginnt mit „Set“ und bleibt ignoriert.
+    # sonst auf „ignorieren“. „Set (Inventarnummer)“ aus älteren eigenen CSV-Exporten (bis Schritt 26) beginnt mit „Set“
+    # und bleibt ignoriert.
     ("inventarnummer", ("inventarnummer", "inventar-nr", "inventarnr", "inv.-nr", "inv-nr", "inv. nr", "inv nr",
                         "inventar", "bisherige inventarnummer", "alte inventarnummer", "bisherige nummer",
                         "alte nummer")),
@@ -409,7 +405,7 @@ def spalten(tab, zuordnung=None):
                                  "ignoriert.")
             s["zuordnung"], s["_doppelt"] = "ignorieren", True
     # Eine Spalte mit „Inventar“ im Titel, die die Erkennung ignoriert, sagt der Probelauf (Browser B2) – außer den
-    # Set-Spalten des eigenen CSV-Exports und einer ausdrücklichen Wahl.
+    # Set-Spalten älterer eigener CSV-Exporte (bis Schritt 26) und einer ausdrücklichen Wahl.
     for s in out:
         t = _titel(s["titel"])
         if (s["zuordnung"] == "ignorieren" and not s["gesperrt"] and not s["_explizit"] and not s.get("_doppelt")
@@ -928,8 +924,6 @@ def _vorpruefen(z, lauf):
                 e.grund("produkt_unbekannt", "Produkt nicht im Katalog – bitte in der Nacharbeit zuordnen oder melden.")
             return e
     e.produkt = p
-    if p["is_set"]:
-        e.grund("regel", SET_PRODUKT)
     # 3. Schon im Bestand (sichtbar): übersprungen, keine Aktualisierung.
     if e.serie_ok:
         k = bestand.serie_konflikt(p["id"], e.serie)
@@ -1648,8 +1642,6 @@ def produkt_setzen(fid, product_id, angabe=None, zeilen=None):
         p = katalog.produkt(pid)
         if p["demo"] and not bestand.ordner_ist_demo(fid):
             raise Abgelehnt(DEMO_PRODUKT)
-        if p["is_set"]:
-            raise Abgelehnt(SET_PRODUKT)
     with db.transaction(sofort=True):
         n = db.execute_zeilen("UPDATE mat_import_row SET product_id = ? WHERE status = 'offen' "
                               "AND id IN (SELECT value FROM json_each(?))", (pid, _liste(ids)))
@@ -1671,8 +1663,7 @@ def melden(fid, angabe, d, fotos):
     daten = {"manufacturer": w.get("hersteller", ""), "model": w.get("modell", ""),
              "article_no": w.get("artikelnummer", "")}
     for k in d.keys():
-        # Ein Set meldet man nicht aus der Nacharbeit – sie nimmt keins (SET_PRODUKT).
-        if k not in ("folder_id", "angabe", "fotos", "is_set", "set_teile") and d.get(k) not in (None, ""):
+        if k not in ("folder_id", "angabe", "fotos") and d.get(k) not in (None, ""):
             daten[k] = d.get(k)
     if not (daten.get("note") or "").strip():
         daten["note"] = _meldung_satz(rows)

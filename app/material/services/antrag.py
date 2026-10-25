@@ -27,8 +27,7 @@ Geprüft wird beim Antrag UND beim Bestätigen (der Stand kann sich geändert ha
 Regeln des Anlegens (bestand.artikel_werte): Herstellung nicht in der Zukunft, nicht nach Kauf und Erstgebrauch, bei
 textil Pflicht, nie leer; Seriennummer nicht leer, keine STR-Nummer, je Produkt frei; Intervall nicht über der
 Herstellervorgabe; Lebensende nur textil und höchstens bis zur Rechnung aus Herstellung und Lebensdauer (Wunsch vom
-25.10.2026: auch wieder nach hinten); Produkt nicht an Sets und Teilen, nicht auf ein Set-Produkt,
-nicht mit offenem Prüfentwurf, nicht über die DEMO-Grenze. Beim Bestätigen muss der Artikel jeden alten Wert noch tragen,
+25.10.2026: auch wieder nach hinten); Produkt nicht mit offenem Prüfentwurf, nicht über die DEMO-Grenze. Beim Bestätigen muss der Artikel jeden alten Wert noch tragen,
 sonst 409 – der Antrag lässt sich dann nur noch ablehnen. Bestätigt oder abgelehnt wird der ganze Sammelantrag, in einer
 Transaktion; der Trigger lässt genau die beantragten Änderungen zu und markiert jede Zeile als angewendet (applied_at).
 Folgen eines Produktwechsels: Lebensende nach dem neuen Produkt, die Länge fällt weg, wenn seine Kategorie keine
@@ -60,7 +59,7 @@ from ... import db
 from ...auth import _im_hintergrund
 from ..models import ANTRAGSFELDER, ANTRAGSSTATUS
 from . import Abgelehnt, akteur, datum, ganzzahl, kennung, monat_oder_datum, text
-from . import bestand, erinnerung, faelligkeit, journal, katalog, mailprotokoll, nummern, rechte, rueckruf, sets
+from . import bestand, erinnerung, faelligkeit, journal, katalog, mailprotokoll, nummern, rechte, rueckruf
 from .interval import lebensende, wirksam
 
 BEGRUENDUNG_MAX = 1000
@@ -439,8 +438,6 @@ def _plan(item, wuensche):
     """Der neue Stand des Artikels nach allen Wünschen – geprüft wie beim Anlegen (beim Antrag und beim Bestätigen).
     Liefert die Spalten, die sich ändern ({spalte: wert}, mit den Folgen – Lebensende, Länge, STR-Kennzeichen). Wirft
     Abgelehnt."""
-    if "product_id" in wuensche:
-        sets.produktwechsel_weiche(item, wuensche["product_id"])
     if "component_serial" in wuensche:
         # Die Positionen müssen noch zum Produkt gehören (die Liste kann sich seit dem Antrag geändert haben).
         from . import stueckliste

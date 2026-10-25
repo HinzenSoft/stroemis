@@ -2,10 +2,10 @@
   python tests/test_material_produktwechsel.py  oder  pytest tests/test_material_produktwechsel.py
 
 „Bearbeiten“ ändert das Produkt eines Artikels, solange er keine abgeschlossene Prüfung hat: Rechte (verwalten an der
-Heimat), ungeprüft/geprüft, offener Entwurf (409 „erst festschreiben oder verwerfen“), Set und Teil, Wechsel auf ein
-Set-Produkt, DEMO-Grenze, Seriennummer je Produkt; Folgen (Fälligkeit, Lebensende, Länge, Rückrufe, Durchgang, Meine
-PSA), Journal „produkt_geaendert“ mit lesbarer Beschriftung (Oberfläche, Lebenslauf-PDF); die Meldung „anderes Produkt“
-bei „aus dem Bestand wählen“ nennt den Weg; dazu der statische Oberflächentest des Dialogs.
+Heimat), ungeprüft/geprüft, offener Entwurf (409 „erst festschreiben oder verwerfen“), DEMO-Grenze, Seriennummer je
+Produkt; Folgen (Fälligkeit, Lebensende, Länge, Rückrufe, Durchgang, Meine PSA), Journal „produkt_geaendert“ mit
+lesbarer Beschriftung (Oberfläche, Lebenslauf-PDF); dazu der statische Oberflächentest des Dialogs. (Die Fälle mit Sets
+und „aus dem Bestand wählen“ sind mit dem Rückbau der Set-Funktion, Schritt 26, entfallen.)
 
 Alle Hersteller, Modelle, Nummern, Intervalle und Lebensdauern hier sind Platzhalter und nur für den Test da."""
 import json
@@ -16,12 +16,10 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import H, _heute, neuer_artikel, neues_konto, pdf_seiten, starten  # noqa: E402
+from test_material import H, _heute, festschreiben, neuer_artikel, neues_konto, pdf_seiten, starten  # noqa: E402
 from test_material_import import ok  # noqa: E402
 from test_material_laenge import aufbau as laenge_aufbau  # noqa: E402
-from test_material_sets import set_aufbau, stimmig  # noqa: E402
-from test_material_sets_pruefung import pruefen  # noqa: E402
-from test_material_trennung import sql, zeilen  # noqa: E402
+from test_material_trennung import sql, zeilen, zwei_gliederungen  # noqa: E402
 from test_material_ueberblick import ohne_post  # noqa: E402
 
 ART = "/api/material/artikel"
@@ -42,6 +40,30 @@ def artikel(c, iid):
     return ok(c.get(f"{ART}/{iid}"))["artikel"]
 
 
+def pruefen(c, iid, ergebnis="einsatzbereit", **d):
+    """Eine Prüfung beginnen und festschreiben (gemeldete Mängel abgehakt) – liefert die Prüfung."""
+    r = starten(c, iid)
+    assert r.status_code in (200, 201), r.get_json()
+    pr = r.json["pruefung"]
+    if ergebnis == "einsatzbereit":
+        d.setdefault("maengel_gesehen", [m["id"] for m in pr["maengel"]])
+    else:
+        d.setdefault("grund", "Testgrund")
+    r = festschreiben(c, pr["id"], ergebnis=ergebnis, **d)
+    assert r.status_code == 200, r.get_json()
+    return r.json["pruefung"]
+
+
+def aufbau(tmp):
+    """zwei_gliederungen, dazu das Metallprodukt „Rolle Gamma“ (Karabiner) und in lager_a ein freier HMS F."""
+    t = zwei_gliederungen(tmp)
+    rolle = produkt_neu(t.k["katalog"], category_id=t.ids["karabiner"], model="Rolle Gamma", article_no="RG-1",
+                        material_kind="metall_hardware", interval_months=12)
+    t.rolle = rolle
+    t.f = neuer_artikel(t.wart_a, t.ids["hms"], t.lager_a, serial_no="FREI-A-1")
+    return t
+
+
 def journal(app, iid, aktion):
     return [(json.loads(r["before_json"] or "null"), json.loads(r["after_json"] or "null")) for r in zeilen(
         app, "SELECT before_json, after_json FROM mat_audit WHERE entity = 'item' AND entity_id = ? AND action = ? "
@@ -51,28 +73,18 @@ def journal(app, iid, aktion):
 # --- Regeln ---------------------------------------------------------------------------------------------------------
 
 def test_regeln():
-    """Rechte, Set und Teil, Set-Produkt, offener Entwurf, festgeschriebene Prüfung, DEMO-Grenze, Seriennummer je
-    Produkt; produkt_aenderbar in der Artikelantwort."""
-    from app.material.services import bestand, sets
+    """Rechte, offener Entwurf, festgeschriebene Prüfung, DEMO-Grenze, Seriennummer je Produkt; produkt_aenderbar in der
+    Artikelantwort."""
+    from app.material.services import bestand
     with ohne_post(), tempfile.TemporaryDirectory() as tmp:
-        t = set_aufbau(tmp)
+        t = aufbau(tmp)
         app, w, p = t.app, t.wart_a, t.k["pruefer"]
-        s, k1 = t.s["id"], t.teile[0]
         f = t.f["id"]
         assert artikel(w, f)["produkt_aenderbar"] is True
-        assert artikel(w, s)["produkt_aenderbar"] is False and artikel(w, k1)["produkt_aenderbar"] is False
         # Rechte: verwalten an der Heimat – Führungskraft und Prüfer lesen bzw. prüfen nur (403), B sieht A nicht (404).
         assert wechsel(t.k["fuehrung"], f, t.rolle).status_code == 403
         assert wechsel(p, f, t.rolle).status_code == 403
         assert wechsel(t.wart_b, f, t.rolle).status_code == 404
-        # Set und Teil: das Produkt legt die Stückliste fest; kein Wechsel auf ein Set-Produkt.
-        r = wechsel(w, s, t.rolle)
-        assert r.status_code == 409 and "Das Produkt eines Sets" in r.json["error"], r.get_json()
-        r = wechsel(w, k1, t.rolle)
-        assert r.status_code == 409 and "Teil des Sets" in r.json["error"] and "Stückliste" in r.json["error"], r.get_json()
-        r = wechsel(w, f, t.set_p)
-        assert r.status_code == 409 and r.json["error"] == sets.ZU_SET_PRODUKT, r.get_json()
-        assert stimmig(app)
         # Offener Entwurf: erst festschreiben oder verwerfen.
         pr = ok(starten(p, f), 201)["pruefung"]
         r = wechsel(w, f, t.rolle)
@@ -186,36 +198,6 @@ def test_folgen():
     print("Folgen des Produktwechsels bestanden.")
 
 
-# --- „aus dem Bestand wählen“: Weg zum Produktfeld ------------------------------------------------------------------
-
-def test_anderes_produkt_nennt_den_weg():
-    """Die Auswahl mit genauer Nummer eines Artikels mit anderem Produkt: Hinweis mit Weg „Artikel öffnen → Bearbeiten →
-    Produkt“ und produkt_aenderbar, solange er ungeprüft ist; danach ohne Weg. Ebenso der 409 beim Einsetzen. Dazu L2b
-    Nr. 3: Ein entnommenes freies Teil lässt sich wieder einsetzen."""
-    from app.material.services import setaustausch
-    with ohne_post(), tempfile.TemporaryDirectory() as tmp:
-        t = set_aufbau(tmp)
-        w, p = t.wart_a, t.k["pruefer"]
-        s = t.s["id"]
-        g = neuer_artikel(w, t.ids["hms"], t.lager_a, serial_no="HMS-PW-9")
-        url = f"/api/material/ordner/{t.lager_a}/kandidaten?product_id={t.rolle}&q={g['inventory_no']}"
-        h = ok(w.get(url))["hinweis"]
-        assert h["artikel"] == {"id": g["id"], "inventory_no": g["inventory_no"], "produkt_aenderbar": True}, h
-        assert h["text"].endswith(setaustausch.PRODUKT_WEG), h
-        # Am Set: an der Rolle eine Lücke schaffen und den Karabiner einsetzen – 409 mit demselben Weg.
-        ok(w.post(f"{ART}/{s}/teil-entnehmen", json={"teil_id": t.teile[2]}))          # die Rolle (Austausch „ja“)
-        r = w.post(f"{ART}/{s}/teil-einsetzen", json={"item_id": g["id"]})
-        assert r.status_code == 409 and r.json["error"].endswith(setaustausch.PRODUKT_WEG), r.get_json()
-        # L2b Nr. 3 (bestätigt am 23.10.2026): Ein entnommenes, freies Teil lässt sich wieder einsetzen.
-        assert artikel(w, t.teile[2])["lock_state"] == "frei"
-        ok(w.post(f"{ART}/{s}/teil-einsetzen", json={"item_id": t.teile[2]}), 201)
-        assert artikel(w, t.teile[2])["teil_von"]["id"] == s
-        pruefen(p, g["id"])
-        h = ok(w.get(url))["hinweis"]
-        assert h["artikel"]["produkt_aenderbar"] is False and not h["text"].endswith(setaustausch.PRODUKT_WEG), h
-    print("Hinweis „anderes Produkt“ mit Weg bestanden.")
-
-
 # --- Oberfläche (statisch) ------------------------------------------------------------------------------------------
 
 def _lies(rel):
@@ -229,38 +211,28 @@ def _funktion(js, name):
 
 def test_oberflaeche_statisch():
     """Dialog „Bearbeiten“ mit Produktfeld (nur mit produkt_aenderbar; mit Entwurf ohne „anderes Produkt“), Suche wie
-    beim Anlegen, Folgen-Hinweis, Lebensende und Länge nach dem neuen Produkt, product_id im PUT; Link aus der Auswahl
-    („?bearbeiten=produkt“) öffnet den Dialog; Texte gleich dem Dienst; Journal-Beschriftung gleich beschriftung.py;
-    Knopfsprache (ein roter Knopf im Dialog, kein btn ghost, kein btn danger); CSS-Block; Jahresbericht mit set_text."""
-    from app.material.services import beschriftung, bestand, sets
+    beim Anlegen, Folgen-Hinweis, Lebensende und Länge nach dem neuen Produkt, product_id im PUT; Texte gleich dem Dienst; Journal-Beschriftung gleich beschriftung.py;
+    Knopfsprache (ein roter Knopf im Dialog, kein btn ghost, kein btn danger); CSS-Block."""
+    from app.material.services import beschriftung, bestand
     js = _lies("app/material/static/material.js")
     css = _lies("app/material/static/material.css")
     d = _funktion(js, "artikelDialog")
     # Seit dem 24.10.2026 nur ohne festen Block (Materialwart vor der ersten Prüfung); danach per Antrag (antragDialog).
     for haken in ("const mitProdukt = !gesperrt && !!a.produkt_aenderbar;", 'id="ad-anders">anderes Produkt</button>',
                   "a.entwurf ? \"\" : ' <button class=\"lnk\" type=\"button\" id=\"ad-anders\">", "esc(PRODUKT_ENTWURF)",
-                  "produktTreffer($(\"#ad-treffer\", body), q,", "if (p && p.is_set) { produktFehler(PRODUKT_SET); return; }",
+                  "produktTreffer($(\"#ad-treffer\", body), q,",
                   "produktFolgen(a, neuesProdukt)", "if (neuesProdukt) daten.product_id = neuesProdukt.id;",
                   "if (textil && !neuesProdukt) daten.retire_by", "if (laengeZeile && !laengeZeile.hidden) daten.length_m",
-                  "if (produktSuche) suchen();", 'id="ad-zurueck">zurück zum bisherigen</button>'):
+                  'id="ad-zurueck">zurück zum bisherigen</button>'):
         assert haken in d, haken
     assert d.count('class="btn"') == 1 and "btn danger" not in d and "btn ghost" not in d
     assert re.search(r'const PRODUKT_ENTWURF = "([^"]*)";', js).group(1) == bestand.PRODUKT_ENTWURF
-    assert re.search(r'const PRODUKT_SET = "([^"]*)";', js).group(1) == sets.ZU_SET_PRODUKT
     folgen = _funktion(js, "produktFolgen")
     assert "p.laenge_moeglich" in folgen and 'p.material_kind === "textil"' in folgen
-    # Link aus „aus dem Bestand wählen“ und Öffnen auf der Artikelseite.
-    wahl = _funktion(js, "bestandWahl")
-    assert "?bearbeiten=produkt\" target=\"_blank\" rel=\"noopener\">Produkt von ${esc(artikel.inventory_no)} ändern</a>" in wahl
-    assert 'if (adresse.get("bearbeiten") === "produkt")' in js and "if (darfPflegen && a.produkt_aenderbar) artikelDialog(a, true);" in js
-    assert 'adresse.delete("bearbeiten");' in js
     # Journal: Aktion und Feld wie im PDF; die Kennung fällt neben dem Namen weg.
     assert 'produkt_geaendert: "Produkt geändert"' in js and beschriftung.AKTION["produkt_geaendert"] == "Produkt geändert"
     assert 'produkt: "Produkt",' in js and beschriftung.FELD["produkt"] == "Produkt"
     assert '!(f === "product_id" && "produkt" in alle)' in _funktion(js, "journalHtml")
-    # Jahresbericht: Zusatz am Set in der Liste der Aussonderungen (Web wie PDF).
-    assert '${x.set_text ? ` <span class="muted">· ${esc(x.set_text)}</span>` : ""}' in js
-    assert "{% if a.set_text %} · {{ a.set_text }}{% endif %}" in _lies("app/material/templates/material/pdf/bericht.html")
     block = css[css.index("/* Feintuning nach dem Kommentar-Dokument (23.10.2026)"):]
     assert ".mat-ad-produkt" in block and "!important" not in block
     print("Oberfläche (statisch) bestanden.")
@@ -269,5 +241,4 @@ def test_oberflaeche_statisch():
 if __name__ == "__main__":
     test_regeln()
     test_folgen()
-    test_anderes_produkt_nennt_den_weg()
     test_oberflaeche_statisch()

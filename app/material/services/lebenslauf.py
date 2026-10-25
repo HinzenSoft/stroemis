@@ -26,8 +26,8 @@ from .protokoll import PRUEFART_TEXT, datum_text, ortszeit, zeit_text
 
 # So viele Journaleinträge nimmt der Lebenslauf höchstens auf (journal.lesen liest die neuesten zuerst).
 JOURNAL_MAX = 2000
-# Einträge im Journal des Produkts, die der Lebenslauf zeigt: Stammdaten, Bild, Stückliste und Bestandteil-Liste (Schritt
-# 25) – keine Rückrufe (eigener Abschnitt; ihre Seriennummernlisten nennen Artikel aller Gliederungen).
+# Einträge im Journal des Produkts, die der Lebenslauf zeigt: Stammdaten, Bild, Bestandteil-Liste (Schritt 25; „stueckliste“
+# aus der Set-Funktion bis Schritt 26) – keine Rückrufe (eigener Abschnitt; ihre Seriennummernlisten nennen Artikel aller Gliederungen).
 PRODUKT_AKTIONEN = ("geaendert", "bild", "stueckliste", "bestandteile")
 OHNE_PROTOKOLL = "kein Protokoll – abgeschlossen vor Einführung der PDF-Protokolle"
 
@@ -72,9 +72,8 @@ def _naechste_text(item, s):
     return datum_text(item["next_due_on"]) or "keine"
 
 
-def _hinweis(item, s, aussonderung, im_set=False):
-    """Der Kasten oben – wie das Banner der Artikelansicht. Ein gesperrtes Set und seine Teile gibt nur „Set prüfen“
-    frei, keine einzelne Freiprüfung (P4-L2)."""
+def _hinweis(item, s, aussonderung):
+    """Der Kasten oben – wie das Banner der Artikelansicht."""
     if s == "ausgesondert":
         text = "Dieser Artikel ist außer Dienst und darf nicht mehr verwendet werden."
         if aussonderung:
@@ -85,8 +84,7 @@ def _hinweis(item, s, aussonderung, im_set=False):
     if s == "gesperrt":
         titel = "VERLOREN GEMELDET (GESPERRT)" if item["lock_state"] == "verloren" else "GESPERRT"
         return {"titel": titel, "text": (f"{item['lock_reason']}. " if item["lock_reason"] else "")
-                + ("Nicht verwenden, bis „Set prüfen“ das Set freigibt." if im_set
-                   else "Nicht verwenden, bis eine Freiprüfung ihn freigibt.")}
+                + "Nicht verwenden, bis eine Freiprüfung ihn freigibt."}
     if s == "lebensdauer":
         return {"titel": "LEBENSDAUER ERREICHT", "text": "Aussondern."}
     if s == "neu":
@@ -243,7 +241,7 @@ def daten(iid):
         # am Prüftag galt, steht im jeweiligen Protokoll. Nicht in protokoll._artikel: sonst stünde es im Prüfprotokoll.
         "bestandteile": teilnummern.pdf_zeilen(item),
         "zustand": _zustand(item, produkt, s, tag, baum_pfad),
-        "hinweis": _hinweis(item, s, aussonderung, im_set=bool(item["parent_item_id"] or produkt["is_set"])),
+        "hinweis": _hinweis(item, s, aussonderung),
         "pruefungen": pruefungen,
         "durchgaenge": _durchgaenge(iid, baum_pfad),
         "rueckrufe": _rueckrufe(item),

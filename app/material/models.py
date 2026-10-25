@@ -213,22 +213,34 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     wenn der CHECK component_serial nicht kennt; Tabellen IF NOT EXISTS, Spalten nur, wenn sie fehlen, Trigger entfernt
     und neu. Wer mat_item_change künftig neu aufbaut, muss vorher die Trigger mat_teilnummer_* entfernen (sie lesen die
     Tabelle) und danach neu anlegen.
+  - Schritt 26 (Rückbau der Set-Funktion, Wunsch vom 25.10.2026): Ein Set ist wieder ein Ordner der Art „Set“, ein
+    Herstellerset ein Produkt mit Bestandteil-Liste. Stilllegen statt Umbauen (Entscheidung F6 a): Offene Set-Prüfläufe
+    werden abgebrochen (offene Entwürfe darin normale Entwürfe), Teile normale Artikel im selben Ordner (Journal
+    „aus_set_geloest“ am Teil, „set_rueckbau“ am früheren Set-Artikel), Sperrursachen leer (Gesperrte bleiben gesperrt),
+    Set-Produkte normale Produkte – einzeln geführte Positionen fallen weg, Text-Positionen bleiben die Bestandteil-Liste
+    (Journal „bestandteile“ und „geaendert“ am Produkt); mat_item_set_slot und die Indizes idx_mat_item_parent und
+    idx_mat_component_teil entfallen. mat_set_lauf und mat_set_protokoll_zeile bleiben eingefroren als Nachweis, die
+    Set-Spalten bleiben leer stehen (ein Entfernen hieße mat_item, mat_inspection, mat_product und mat_product_component
+    neu aufbauen). Trigger (TRIGGER_26) weisen neue Set-Daten ab: is_set, parent_item_id, Bestandteile außer Text
+    (mat_component_neu/aendern ersetzt), neue Set-Prüfläufe und set_lauf_id. Akteur im Journal „Migration Schritt 26“.
+    Wiederholbar: jede Änderung nur am Altzustand, Trigger entfernt und neu, DROP … IF EXISTS. Rückweg nur über die
+    Sicherung vor dem Deploy (älterer Code fände mat_item_set_slot nicht mehr).
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 25
+SCHEMA_VERSION = 26
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
 # Oberfläche zeigt. Die Reihenfolge ist die der Auswahllisten.
 # Der Schlüssel „metall_hardware“ bleibt (Datenbank, Katalogimport); angezeigt wird kurz „Metall“.
 MATERIALARTEN = {"textil": "textil", "metall_hardware": "Metall", "sonstiges": "sonstiges"}
-# „set“ heißt seit dem 24.10.2026 „Set-Ordner“ (Entscheidung S1): Ein Set ist ein Katalogprodukt mit Stückliste – die
-# Ordnerart meint einen Ordner (Rucksack, Kiste), in dem Material zusammen liegt. Der Schlüssel bleibt.
-ORDNERARTEN = {"gliederung": "Gliederung", "standort": "Standort", "fahrzeug": "Fahrzeug", "set": "Set-Ordner",
+# „set“: ein Ordner (Rucksack, Kiste), in dem ein Satz Material zusammen liegt – seit dem Rückbau der Set-Funktion
+# (Schritt 26) wieder „Set“ (vom 24.10.2026 bis dahin „Set-Ordner“). Im Prüfdurchgang bekommt er ein Set-Protokoll.
+ORDNERARTEN = {"gliederung": "Gliederung", "standort": "Standort", "fahrzeug": "Fahrzeug", "set": "Set",
                "persoenlich": "persönlich", "sonstiges": "sonstiges"}
 SYSTEMORDNER = {"gesperrt": "Gesperrt", "ausgesondert": "Ausgesondert"}
 DOKUMENTARTEN = {"produktbild": "Produktbild", "konformitaetserklaerung": "Konformitätserklärung",
@@ -2433,6 +2445,121 @@ def _schritt_25(conn):
         conn.execute(sql)
 
 
+# --- Schritt 26: Rückbau der Set-Funktion (Wunsch vom 25.10.2026) ---------------------------------------------------------
+# Ein Set ist wieder ein Ordner der Art „Set“; ein Herstellerset ist ein Produkt mit Bestandteil-Liste (nur Text). Die
+# Schritte 21 und 22 bleiben, wie sie ausgeliefert wurden (eine frische Datenbank durchläuft sie weiter – 25 braucht
+# mat_product_component). Schritt 26 legt still statt umzubauen (Entscheidung F6 a): mat_item_set_slot (reine Kopie ohne
+# Nachweiswert) fällt weg; mat_set_lauf und mat_set_protokoll_zeile bleiben eingefroren als Nachweis; die Set-Spalten
+# (is_set, parent_item_id, lock_cause, set_lock_origin, set_pruefen, set_lauf_id, mat_product_request.is_set/set_teile)
+# bleiben leer stehen; Trigger verhindern neue Set-Daten (gegen Programmfehler, nicht gegen direktes SQL).
+MIGRATION_26 = "Migration Schritt 26"
+RUECKBAU_26 = "Set-Funktion entfernt (Schritt 26)"
+KEIN_SET_26 = "'Sets gibt es nicht mehr – ein Set ist ein Ordner der Art „Set“.'"
+STUECKLISTE_REGEL_26 = "'Eine Bestandteil-Liste ist nur Text (Bezeichnung und Anzahl).'"
+KEIN_SET_LAUF_26 = "'Set-Prüfungen gibt es nicht mehr – ein Set ist ein Ordner der Art „Set“.'"
+_NICHT_NUR_TEXT_26 = "(NEW.einzeln <> 0 OR NEW.component_product_id IS NOT NULL OR NEW.austausch <> 'nicht_belegt')"
+TRIGGER_26 = [
+    _trigger("mat_product_kein_set", "BEFORE INSERT ON mat_product", "NEW.is_set <> 0", KEIN_SET_26),
+    _trigger("mat_product_kein_set_aendern", "BEFORE UPDATE OF is_set ON mat_product", "NEW.is_set <> 0", KEIN_SET_26),
+    _trigger("mat_item_kein_teil", "BEFORE INSERT ON mat_item", "NEW.parent_item_id IS NOT NULL", KEIN_SET_26),
+    _trigger("mat_item_kein_teil_aendern", "BEFORE UPDATE OF parent_item_id ON mat_item", "NEW.parent_item_id IS NOT NULL",
+             KEIN_SET_26),
+    # Ersetzen die Fassungen aus Schritt 25 (gleiche Namen): an jedem Produkt nur noch Text-Positionen.
+    _trigger("mat_component_neu", "BEFORE INSERT ON mat_product_component", _NICHT_NUR_TEXT_26, STUECKLISTE_REGEL_26),
+    _trigger("mat_component_aendern", "BEFORE UPDATE OF set_product_id, component_product_id, einzeln, austausch "
+             "ON mat_product_component", _NICHT_NUR_TEXT_26, STUECKLISTE_REGEL_26),
+    # Ersetzen die Fassungen aus Schritt 21: kein neuer Set-Prüflauf, keine Prüfung in einem.
+    _trigger("mat_set_lauf_neu", "BEFORE INSERT ON mat_set_lauf", "1", KEIN_SET_LAUF_26),
+    _trigger("mat_inspection_in_set_lauf", "BEFORE INSERT ON mat_inspection", "NEW.set_lauf_id IS NOT NULL",
+             KEIN_SET_LAUF_26),
+    _trigger("mat_inspection_set_lauf_wechsel", "BEFORE UPDATE OF set_lauf_id ON mat_inspection",
+             "NEW.set_lauf_id IS NOT NULL", KEIN_SET_LAUF_26),
+]
+# Trigger aus 21/22/25, die den Rückbau blockieren oder Set-Regeln prüfen, die es nicht mehr gibt (die von
+# mat_item_set_slot gehen mit der Tabelle). Es bleiben: mat_set_lauf_kopf/eroeffner/beendet/loeschen,
+# mat_set_zeile_neu/aendern/loeschen, mat_inspection_festgeschrieben/abgeschlossen (mit set_lauf_id), alle aus 25.
+TRIGGER_WEG_26 = ("mat_product_set_umschalten", "mat_item_set_produkt", "mat_item_teil_neu", "mat_item_teil_setzen",
+                  "mat_slot_neu", "mat_slot_aendern", "mat_slot_loeschen")
+
+
+def _tabelle_da(conn, name):
+    return bool(conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)).fetchone())
+
+
+def _schritt_26(conn):
+    """Rückbau der Set-Funktion (Wunsch vom 25.10.2026), mit Altbestand (nur dev und Testdaten – die Produktion hatte nie
+    Sets). Reihenfolge: blockierende Trigger entfernen; offene Set-Prüfläufe abbrechen (offene Entwürfe darin werden
+    normale Entwürfe); Teile werden normale Artikel im selben Ordner (Ordner, Herkunft, Zuordnung und Sperre bleiben);
+    Sperrursachen leeren (Gesperrte bleiben gesperrt – frei gibt eine Freiprüfung); Set-Produkte werden normale Produkte
+    (einzeln geführte Positionen fallen weg – ihre Teile sind eigene Artikel –, Text-Positionen bleiben die
+    Bestandteil-Liste); mat_item_set_slot und die Set-Indizes entfernen; Trigger aus TRIGGER_26. Journal (Akteur
+    „Migration Schritt 26“) nur für Zeilen, die sich wirklich ändern; ein zweiter Lauf ändert keine Zeile."""
+    for name in TRIGGER_WEG_26 + tuple(x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in TRIGGER_26):
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+    jetzt = _jetzt()
+    # 1. Offene Set-Prüfläufe abbrechen.
+    for lauf_id, set_id in conn.execute("SELECT id, set_item_id FROM mat_set_lauf WHERE state = 'offen' "
+                                        "ORDER BY id").fetchall():
+        conn.execute("UPDATE mat_inspection SET set_lauf_id = NULL WHERE set_lauf_id = ? AND completed_at IS NULL",
+                     (lauf_id,))
+        geprueft = conn.execute("SELECT COUNT(*) FROM mat_inspection WHERE set_lauf_id = ?", (lauf_id,)).fetchone()[0]
+        # Vom Durchgang lösen (geht nur am offenen Lauf, mat_set_lauf_kopf) – sonst hielte der Lauf einen leeren
+        # Durchgang fest, der sich löschen lassen soll.
+        conn.execute("UPDATE mat_set_lauf SET round_id = NULL WHERE id = ? AND state = 'offen'", (lauf_id,))
+        conn.execute("UPDATE mat_set_lauf SET state = 'abgebrochen', closed_at = ? WHERE id = ? AND state = 'offen'",
+                     (jetzt, lauf_id))
+        _journal_8(conn, "item", set_id, "set_lauf_abgebrochen", None,
+                   {"lauf": lauf_id, "geprueft": geprueft, "grund": RUECKBAU_26}, wer=MIGRATION_26)
+    # Entwürfe in einem schon beendeten Lauf (gab es nicht – nur zur Sicherheit, damit kein Entwurf an einem Lauf hängt).
+    conn.execute("UPDATE mat_inspection SET set_lauf_id = NULL WHERE set_lauf_id IS NOT NULL AND completed_at IS NULL")
+    # 2. Teile werden normale Artikel im selben Ordner.
+    teile = {}
+    for tid, set_id, inventar in conn.execute("SELECT id, parent_item_id, inventory_no FROM mat_item "
+                                              "WHERE parent_item_id IS NOT NULL ORDER BY parent_item_id, id").fetchall():
+        teile.setdefault(set_id, []).append(inventar)
+        set_inventar = conn.execute("SELECT inventory_no FROM mat_item WHERE id = ?", (set_id,)).fetchone()
+        conn.execute("UPDATE mat_item SET parent_item_id = NULL, set_pruefen = 0 WHERE id = ?", (tid,))
+        _journal_8(conn, "item", tid, "aus_set_geloest",
+                   {"set": set_id, "set_inventar": set_inventar[0] if set_inventar else None},
+                   {"set": None, "grund": RUECKBAU_26}, wer=MIGRATION_26)
+    for set_id, inventare in teile.items():
+        _journal_8(conn, "item", set_id, "set_rueckbau", None, {"teile": inventare, "grund": RUECKBAU_26},
+                   wer=MIGRATION_26)
+    # 3. Sperrursachen und Set-Kennzeichen leeren – lock_state und lock_reason bleiben (kein Journal: nichts Sichtbares
+    #    ändert sich, die Felder liest kein Code mehr).
+    conn.execute("UPDATE mat_item SET lock_cause = NULL, set_lock_origin = NULL, set_pruefen = 0 "
+                 "WHERE lock_cause IS NOT NULL OR set_lock_origin IS NOT NULL OR set_pruefen <> 0")
+    # 4. Set-Produkte werden normale Produkte; an jedem Produkt bleiben nur Text-Positionen.
+    for (pid,) in conn.execute("SELECT DISTINCT set_product_id FROM mat_product_component WHERE einzeln <> 0 "
+                               "OR component_product_id IS NOT NULL OR austausch <> 'nicht_belegt' "
+                               "ORDER BY set_product_id").fetchall():
+        alt = conn.execute("SELECT bezeichnung, anzahl, einzeln FROM mat_product_component WHERE set_product_id = ? "
+                           "ORDER BY position, id", (pid,)).fetchall()
+        conn.execute("DELETE FROM mat_product_component WHERE set_product_id = ? AND (einzeln <> 0 "
+                     "OR component_product_id IS NOT NULL)", (pid,))
+        conn.execute("UPDATE mat_product_component SET austausch = 'nicht_belegt' WHERE set_product_id = ? "
+                     "AND austausch <> 'nicht_belegt'", (pid,))
+        neu = conn.execute("SELECT bezeichnung, anzahl FROM mat_product_component WHERE set_product_id = ? "
+                           "ORDER BY position, id", (pid,)).fetchall()
+        vorher = [dict({"bezeichnung": b, "anzahl": a}, **({"einzeln": True} if e else {})) for b, a, e in alt]
+        nachher = [{"bezeichnung": b, "anzahl": a} for b, a in neu]
+        if vorher != nachher:
+            _journal_8(conn, "product", pid, "bestandteile", {"bestandteile": vorher},
+                       {"bestandteile": nachher, "grund": RUECKBAU_26}, wer=MIGRATION_26)
+    for (pid,) in conn.execute("SELECT id FROM mat_product WHERE is_set <> 0 ORDER BY id").fetchall():
+        conn.execute("UPDATE mat_product SET is_set = 0, updated_at = ? WHERE id = ?", (jetzt, pid))
+        _journal_8(conn, "product", pid, "geaendert", {"is_set": True}, {"is_set": False, "grund": RUECKBAU_26},
+                   wer=MIGRATION_26)
+    # 5. Die Kopie der Stückliste je Set (Trigger und Indizes gehen mit) und die Set-Indizes.
+    if _tabelle_da(conn, "mat_item_set_slot"):
+        conn.execute("DROP TABLE mat_item_set_slot")
+    for name in ("idx_mat_item_parent", "idx_mat_component_teil"):
+        conn.execute(f"DROP INDEX IF EXISTS {name}")
+    # 6. Wächter gegen neue Set-Daten.
+    for sql in TRIGGER_26:
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
@@ -2440,7 +2567,7 @@ SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schrit
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
             14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
             20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24,
-            25: _schritt_25}
+            25: _schritt_25, 26: _schritt_26}
 
 
 def _meta(conn, schluessel, vorgabe=None):

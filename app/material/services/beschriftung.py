@@ -60,7 +60,7 @@ FELD = {
     "length_m": "Länge (m)", "items_have_length": "Artikel haben eine Länge",
     # Änderungsanträge an alle Stammdaten (Schritt 23): das von Hand vorgezogene Lebensende
     "retire_by_manual": "Lebensende (von Hand vorgezogen)",
-    # Sets (Schritt 21)
+    # Sets (Schritt 21 bis zum Rückbau in Schritt 26) – nur noch zum Lesen alter Einträge (Altbestand vor Schritt 26)
     "is_set": "Set", "bestandteile": "Bestandteile", "teile": "Teile", "set": "Set Nr.",
     "set_inventar": "Set", "stueckliste": "Stückliste übernommen",
     # Sets anlegen und Stückliste übertragen (Schritt 22, Wunsch vom 24.10.2026); Set-Meldung (S8)
@@ -80,6 +80,8 @@ FELD = {
     "produkt": "Produkt",
     # Bestandteil-Liste an normalen Produkten und Seriennummern der Bestandteile (Schritt 25)
     "bestandteil_nummern": "Seriennummern der Bestandteile",
+    # Set-Protokolle im Prüfdurchgang (Schritt 27): am Durchgang beim Festschreiben
+    "set_protokolle": "Set-Protokolle",
 }
 AKTION = {
     "angelegt": "angelegt", "geaendert": "geändert", "geloescht": "gelöscht", "verschoben": "verschoben",
@@ -106,6 +108,7 @@ AKTION = {
     "antrag_gestellt": "Änderung beantragt", "antrag_bestaetigt": "Änderung bestätigt (Antrag)",
     "antrag_abgelehnt": "Änderungsantrag abgelehnt", "antrag_zurueckgezogen": "Änderungsantrag zurückgezogen",
     "laenge_geaendert": "Länge geändert",
+    # Sets (Schritt 21 bis 26) – nur noch zum Lesen alter Einträge (Altbestand vor Schritt 26)
     "set_angelegt": "Set mit Teilen angelegt", "stueckliste": "Stückliste geändert",
     "set_gesperrt": "mit dem Set gesperrt", "set_frei": "mit dem Set freigegeben", "teil_gesperrt": "Teil gesperrt",
     "teil_entnommen": "Teil entnommen", "teil_eingesetzt": "Teil eingesetzt", "teil_geloescht": "Teil gelöscht",
@@ -120,10 +123,12 @@ AKTION = {
     "anzahl_verringert": "Anzahl in der Stückliste des Sets verringert – ein Stück zu entnehmen",
     # Schritt 25: Bestandteil-Liste eines Produkts und Seriennummern der Bestandteile am Artikel
     "bestandteile": "Bestandteile geändert", "bestandteil_nummern": "Seriennummern der Bestandteile geändert",
+    # Schritt 26: Rückbau der Set-Funktion (Migration) – am früheren Set-Artikel
+    "set_rueckbau": "Set aufgelöst – die Teile sind eigene Artikel (Schritt 26)",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",
-            "request": "Produkt- oder Set-Meldung"}
+            "request": "Produktmeldung"}
 # Wie PRUEFART_KURZ in material.js: im Journal kurz („periodisch“ statt „periodische Prüfung“).
 PRUEFART_KURZ = PRUEFARTEN
 SPERRZUSTAND = {"frei": "frei", "gesperrt": "gesperrt", "verloren": "verloren (gesperrt)", "ausgesondert": "ausgesondert"}
@@ -132,7 +137,7 @@ PERSON = "(Person)"
 # „mat_katalog“ bleibt für alte Einträge stehen (das Häkchen gibt es seit Schritt 10 nicht mehr).
 _JA_NEIN = ("serial_generated", "active", "mat_pruefer", "mat_katalog", "notiz_geaendert", "reminders_off", "items_have_length",
             "aus_nacharbeit", "is_set", "freigegeben")
-# Werte der Set-Felder (Schritt 21, K2) – wie wert() in material.js.
+# Werte der Set-Felder (Schritt 21, K2; Altbestand vor Schritt 26) – wie wert() in material.js.
 SET_WERTE = {"lock_cause": {"eigen": "eigener Grund", "set": "mit dem Set"},
              "verbleib": {"aussondern": "mit aussondern", "weiterfuehren": "entnommen und weitergeführt"},
              "gesamtergebnis": {"einsatzbereit": "einsatzbereit", "gesperrt": "nicht einsatzbereit – Set gesperrt",

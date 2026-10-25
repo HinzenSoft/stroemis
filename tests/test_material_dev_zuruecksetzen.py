@@ -4,7 +4,7 @@ python tests/test_material_dev_zuruecksetzen.py  oder  pytest …
 Sperren: ohne dev-Kennung (STROEMIS_NAME auf „-dev“), mit BASE_URL der Produktion (Umgebung oder Anwendung) oder ohne
 --ja-alles-loeschen lehnt der Befehl mit 2 ab und ändert nichts; --trocken zeigt nur. Der volle Lauf auf einem Bestand
 mit Katalog samt Bild und Dokument, Gliederung, Artikeln, Durchgang, Bestandsimport und dem DEMO-Bestand aus
-scripts/material_demo.py (festgeschriebene Prüfungen mit Protokollen, Set, DEMO-Konten): danach sind alle mat_-Tabellen
+scripts/material_demo.py (festgeschriebene Prüfungen mit Protokollen, DEMO-Konten): danach sind alle mat_-Tabellen
 leer, Schema und mat_meta gleichen einer neuen Installation (Version wie models.SCHEMA_VERSION), die Sicherung enthält die alte Datenbank Zeile
 für Zeile und die verschobenen Medien Datei für Datei, und Konten, Wiki, Spots, Prüfungen-Modul und Einstellungen sind
 byteidentisch – auch die Modulstufe 2 ohne Plattform-Verwaltung, die Migration Schritt 10 neu rechnen würde. Ein
@@ -168,7 +168,7 @@ def bestand_aufbauen(tmp):
     ok(uebernehmen(w, lager, csv_bytes([kopf, ["Testwerk", "HMS Beta", "PH-IMP-1"], ["Testwerk", "Unbekannt", "PH-IMP-2"]])),
        201)
     aus, code = demo_laufen("--demo", "--konten")
-    assert code == 0 and "festgeschrieben" in aus and "DEMO-Set mit 2 Teilen" in aus, (code, aus)
+    assert code == 0 and "festgeschrieben" in aus, (code, aus)
     # Daneben: Wiki-Seite (mit Datei), Spot mit Bild, Lehrgang im Prüfungen-Modul.
     ok(adm.post("/api/wiki/pages", json={"title": "Platzhalter-Seite", "content": "Platzhaltertext"}), 201)
     ok(adm.post("/api/wiki/files", data={"file": (jpeg(), "wiki.jpg")}, headers=H, content_type="multipart/form-data"))
@@ -234,7 +234,7 @@ def test_zuruecksetzen():
         medien_vorher = {rel: dateien(os.path.join(tmp, rel)) for rel in MEDIEN}
         modul = vorher["modul"]
         for t in ("mat_item", "mat_inspection", "mat_round", "mat_import", "mat_import_row", "mat_audit",
-                  "mat_item_set_slot", "mat_product_document", "mat_folder_grant"):
+                  "mat_product_document", "mat_folder_grant"):
             assert modul[t], t
         assert any(r for r in modul["mat_inspection"]) and medien_vorher["pdf"] and medien_vorher[MEDIEN[0]]
         with umwelt(app, **DEV):
@@ -297,7 +297,7 @@ def test_zuruecksetzen():
         ok(c.post("/api/auth/login", json={"email": "admin@example.org", "password": "geheim123"}))
         assert ok(c.get("/api/material/start"))
         aus, code = demo_laufen("--demo", "--konten")
-        assert code == 0 and "festgeschrieben" in aus and "DEMO-Set mit 2 Teilen" in aus, (code, aus)
+        assert code == 0 and "festgeschrieben" in aus, (code, aus)
         assert "Konto demo-wart-a@example.invalid ist schon da" in aus, aus
         with app2.app_context():
             from app import db

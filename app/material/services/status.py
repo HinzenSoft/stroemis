@@ -27,25 +27,6 @@ LABEL = {"einsatzbereit": "einsatzbereit", "bald_faellig": "bald fällig", "uebe
 # seinem Lebenslauf sichtbar, taucht aber in keiner Bestandszahl mehr auf.
 BESTAND = tuple(s for s in STATUS if s != "ausgesondert")
 SCHWELLE_VORGABE = 30
-# Der Set-Status (Phase 4 · L2, Entwurf F) ist der schlechteste aus Set-Artikel und aktuellen Teilen – „schlechter“ in
-# der Rangfolge von status() (oben das Schwerste). Nicht die Reihenfolge von STATUS: Dort steht „lebensdauer“ hinter
-# „gesperrt“, status() prüft aber „gesperrt“ zuerst. Ein Test hält SET_RANG gegen status() (test_material_sets).
-SET_RANG = ("ausgesondert", "gesperrt", "lebensdauer", "neu", "ueberfaellig", "bald_faellig", "einsatzbereit")
-
-
-def schlechtester(stati):
-    """Der schwerste Status nach SET_RANG – für ein Set aus den Status von Set-Artikel und Teilen."""
-    return min(stati, key=SET_RANG.index)
-
-
-def rang_sql(ausdruck):
-    """SQL: der Platz eines Status (ausdruck, etwa status_sql) in SET_RANG – 0 ist das Schwerste."""
-    return "(CASE " + ausdruck + " " + " ".join(f"WHEN '{s}' THEN {n}" for n, s in enumerate(SET_RANG)) + " END)"
-
-
-def aus_rang_sql(ausdruck):
-    """SQL: der Status zu einem Platz in SET_RANG (Umkehrung von rang_sql)."""
-    return "(CASE " + ausdruck + " " + " ".join(f"WHEN {n} THEN '{s}'" for n, s in enumerate(SET_RANG)) + " END)"
 
 
 def schwelle_tage():

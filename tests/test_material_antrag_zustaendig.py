@@ -8,7 +8,7 @@ Entscheidungen E1–E8): python tests/test_material_antrag_zustaendig.py
   2. Sammelantrag: mehrere Felder in einem Antrag (ein Journaleintrag, eine Mail, ganz oder gar nicht), höchstens einer
      je Artikel, Bestätigen und Ablehnen des Ganzen, Wert inzwischen anders → nur ablehnen, Zurückziehen der Gruppe.
   3. Die neuen Felder: Kauf, Erstgebrauch, Prüfintervall (rückt die Fälligkeit vor), Lebensende (nur textil; seit dem
-     25.10.2026 auch wieder nach hinten bis zur Rechnung, Schritt 24), Herstellung nachtragen (E3), Produkt (Lebensende, Länge, Rückruf, DEMO-Grenze, Set und Teil 409).
+     25.10.2026 auch wieder nach hinten bis zur Rechnung, Schritt 24), Herstellung nachtragen (E3), Produkt (Lebensende, Länge, Rückruf, DEMO-Grenze).
   4. PUT nach der ersten Prüfung: jedes freigabepflichtige Feld 409, Bemerkung, Länge und nächste Prüfung direkt – für
      Materialwart UND Prüfer (E2); der Prüfer sonst 403.
   5. Mails: an die zuständigen Materialwarte (ohne Antragsteller), Rückfall an die Material-Verwaltung nur ohne jedes
@@ -237,7 +237,6 @@ def test_sammelantrag():
 
 def test_felder():
     from test_material_laenge import kategorie_neu
-    from test_material_sets import set_katalog, set_neu
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
         # Lebensende: nur textil, höchstens bis zur Rechnung (Wunsch vom 25.10.2026), nicht entfernen.
@@ -305,18 +304,6 @@ def test_felder():
         assert bestaetigen(t.w, r.json["antrag"]["id"]).status_code == 200
         assert journal(t.app, g3, "antrag_bestaetigt")[-1]["nachher"]["rueckruf_neu"] == [
             f"Platzhalter-Rückruf Gurt Beta (Nr. {rr})"]
-        # Set und Teil: Produkt fest (409); zu einem Set-Produkt auch nicht.
-        set_p, _, stueckliste = set_katalog(t.mv, t.ids)
-        s = set_neu(t.w, set_p, t.lager, stueckliste, "SET-1", ("SET-K1", "SET-K2", "SET-R1"))["artikel"]
-        teil = s["set"]["teile"][0]["id"]
-        sql(t.app, "INSERT INTO mat_inspection (item_id, kind, inspector_name, inspected_on, result, created_at, "
-                   "updated_at, completed_at) VALUES (?, 'eingang', 'Prüfer', '2026-10-01', 'einsatzbereit', "
-                   "'2026-10-01T08:00:00+00:00', '2026-10-01T08:00:00+00:00', '2026-10-01T08:00:00+00:00')", (teil,))
-        r = beantragen(t.w, teil, product_id=hms_anders(t))
-        assert r.status_code == 409 and "Teil des Sets" in r.json["error"], r.get_json()
-        assert lesen(t.w, teil)["produkt_beantragbar"] is False
-        r = beantragen(t.w, t.k1, product_id=set_p)
-        assert r.status_code == 409, r.get_json()
         # Serie beim neuen Produkt muss frei sein.
         k4 = neuer_artikel(t.w, gurt2, t.lager, serial_no="AN-100", manufactured_on="2024-01")["id"]
         assert k4
@@ -514,7 +501,7 @@ def test_migration_23():
         make_app(tmp)
         pfad = os.path.join(tmp, "stroemis.db")
         version, trigger, _ = _schema(pfad)
-        assert version == endversion() == "25", version
+        assert version == endversion(), version
         assert set(models.ANTRAG_TRIGGER_23) <= set(trigger) and "mat_item_change_gruppe" in trigger
         assert "'purchased_on'" in _tabelle_sql(pfad) and "group_id" in _tabelle_sql(pfad)
         assert "retire_by_manual" in trigger["mat_item_stammdaten_fest"]
@@ -532,8 +519,11 @@ def test_migration_23():
         assert v22 == "22" and "'purchased_on'" not in _tabelle_sql(pfad)
         make_app(tmp)
         v23, t23, _ = _schema(pfad)
-        # Seit Schritt 25 dazu dessen Trigger (Seriennummern der Bestandteile).
-        assert v23 == endversion() and set(t23) == set(t22) | {"mat_item_change_gruppe"} | trigger_25(), set(t23) ^ set(t22)
+        # Seit Schritt 25 dazu dessen Trigger (Seriennummern der Bestandteile), seit Schritt 26 die Wächter des Rückbaus
+        # der Set-Funktion statt der entfallenen Set-Trigger.
+        neu_26 = {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.TRIGGER_26}
+        erwartet = (set(t22) | {"mat_item_change_gruppe"} | trigger_25() | neu_26) - set(models.TRIGGER_WEG_26)
+        assert v23 == endversion() and set(t23) == erwartet, set(t23) ^ erwartet
         for n in ("mat_item_stammdaten_fest", "mat_item_produkt_fest", "mat_item_antrag_angewendet",
                   "mat_item_change_inhalt"):
             assert t23[n] != t22[n], n
@@ -553,6 +543,7 @@ def test_migration_23():
         models._schritt_23(conn)
         models._schritt_24(conn)                   # seit Schritt 24 die Artikeltrigger in seiner Fassung
         models._schritt_25(conn)                   # seit Schritt 25 die Antragstrigger in seiner Fassung
+        models._schritt_26(conn)                   # seit Schritt 26 die Stücklisten-Trigger in seiner Fassung
         assert conn.total_changes == n and _schema_in(conn) == t23
         conn.rollback()
         conn.close()
@@ -681,7 +672,7 @@ def test_migration_24():
     with tempfile.TemporaryDirectory() as frisch:
         bis_schritt(24)(make_app, frisch)
         v, t_frisch, _ = _schema(os.path.join(frisch, "stroemis.db"))
-        assert v == "24" and endversion() == "25", v
+        assert v == "24" and int(endversion()) >= 25, v
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = bis_schritt(23)(aufbau, tmp)
         kid = beantragen(t.w, t.g1, retire_by="2030-05-01").json["antrag"]["id"]
@@ -770,10 +761,10 @@ def test_oberflaeche_statisch():
     assert "mat-bereiche" not in js and "bereich=antraege" not in js and "antraegeZeichnen" not in m
     zaehlen = js[js.index("async function meldungenZaehlen(el)"):js.index("async function meldungenZaehlen(el)") + 600]
     assert "antraege_offen" not in zaehlen
-    dlg = js[js.index("function artikelDialog(a,"):js.index("/* --- Änderungsanträge")]
+    dlg = js[js.index("function artikelDialog(a)"):js.index("/* --- Änderungsanträge")]
     assert "Seit der ersten Prüfung fest – Teil des Prüfnachweises." in dlg and 'id="ad-antrag">Änderung beantragen …' in dlg
     assert "herstellung_nachtragbar" not in js and "nachtragen" not in dlg
-    antrag_dlg = js[js.index("function antragDialog(a)"):js.index("/* Ein Teil eines Sets als Block")]
+    antrag_dlg = js[js.index("function antragDialog(a)"):js.index("/* --- Artikel anlegen")]
     assert antrag_dlg.count('class="btn"') == 1 and '<button class="btn" id="aa-ok" type="button">Antrag senden</button>' in antrag_dlg
     for feld in ("aa-sn", "aa-herst", "aa-kauf", "aa-erst", "aa-ende", "aa-int", "aa-grund", "aa-anders"):
         assert f'id="{feld}"' in antrag_dlg or f'datumFeld("{feld}"' in antrag_dlg, feld
@@ -781,7 +772,7 @@ def test_oberflaeche_statisch():
     # Lebensende auch wieder nach hinten (25.10.2026): Hilfe am Feld mit der Rechnung, kein „nur vorziehen“ mehr.
     assert "Lebensende (nur vorziehen)" not in antrag_dlg and 'id="aa-ende-hilfe"' in antrag_dlg
     assert "a.lebensdauer.berechnet" in antrag_dlg and "höchstens bis" in antrag_dlg
-    artikel = js[js.index("async function artikel()"):js.index("function artikelDialog(a,")]
+    artikel = js[js.index("async function artikel()"):js.index("function artikelDialog(a)")]
     assert "Seriennummer und Herstellung stehen seit der ersten Prüfung fest – eine Abweichung beantragst du" not in js
     assert "darf.pruefen" in artikel and 'data-act="entscheiden"' not in artikel
     assert '/material/bestand/antraege">Entscheiden …</a>' in js

@@ -243,8 +243,8 @@ def test_demo_ohne_beschreibung():
         assert {z["description"] for z in _db(app, sql, one=False)} == {modul.HINWEIS}
         laufen()
         zeilen = _db(app, sql, one=False)
-        # Sechs seit Phase 4 · L2: dazu das DEMO-Set-Produkt „DEMO Verbindungsmittel-Set“.
-        assert len(zeilen) == 6 and all(z["description"] == "" for z in zeilen), zeilen
+        # Fünf: das DEMO-Set-Produkt aus Phase 4 · L2 gibt es seit dem Rückbau (Schritt 26) nicht mehr.
+        assert len(zeilen) == 5 and all(z["description"] == "" for z in zeilen), zeilen
         assert all(katalog.produktname(z) == f"{z['manufacturer']} {z['model']}" for z in zeilen), zeilen
         assert _db(app, "SELECT description FROM mat_folder WHERE name = ?", (modul.GLIEDERUNG,))["description"] \
             == modul.HINWEIS
@@ -480,8 +480,8 @@ def test_oberflaeche_statisch():
     # „Bestandteile“, Teil-Karte in „Meine PSA“; 28 seit dem Produktnamen als Link in Artikellisten (23.10.2026): mit
     # und ohne Link; 29 seit P4-L2 O2: Kopf der Seite „Set prüfen“; 30 seit dem Feintuning (23.10.2026): Produkt im
     # Dialog „Bearbeiten“; 31 seit den Anträgen an alle Stammdaten (24.10.2026): das feste Produkt im Antragsdialog
-    # an Set und Teil.
-    assert len(stellen) == js.count("${nameHtml(") == 31, (len(stellen), js.count("${nameHtml("))
+    # an Set und Teil; 24 seit dem Rückbau der Set-Funktion (Schritt 26): die sieben Stellen der Sets sind weg.
+    assert len(stellen) == js.count("${nameHtml(") == 24, (len(stellen), js.count("${nameHtml("))
     assert all(name == zusatz for name, _, zusatz in stellen), stellen
     assert not re.search(r"\$\{zusatzHtml\([^)]*\)\}(</strong>|</a>)", js)      # nie im Link, nie in <strong>
     # Die Katalogliste wie im Bildschirmfoto: Name fett im roten Link, dann grau Zusatz und Artikelnummer.
@@ -520,8 +520,8 @@ def test_oberflaeche_statisch():
     for datei in (js, suche, glob):
         assert "· Art.-Nr. ${" not in datei
     # Seit Phase 3 · L1 auch in der Karte „Meine PSA“ (artNrHtml, Seriennummer der Karte k); seit P4-L2 O1 auch in der
-    # Teil-Karte eines Sets (artNrHtml(t.produkt.article_no)); seit P4-L2 O2 im Kopf der Seite „Set prüfen“.
-    assert js.count("${artNrHtml(") == 6 and js.count('${nummerHtml("Seriennummer", a.serial_no)}') == 3
+    # Teil-Karte eines Sets und im Kopf der Seite „Set prüfen“ (beide seit dem Rückbau, Schritt 26, weg).
+    assert js.count("${artNrHtml(") == 4 and js.count('${nummerHtml("Seriennummer", a.serial_no)}') == 2
     assert js.count('${nummerHtml("Seriennummer", k.serial_no)}') == 1
     assert "window.MatProdukt.artNr(a.article_no, markiert(a.article_no, q))" in suche
     assert "window.MatProdukt.artNr(t.artikelnummer)" in glob

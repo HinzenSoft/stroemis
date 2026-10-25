@@ -380,17 +380,11 @@ def _folge(p, item):
         return ("Der Artikel ist gesperrt und liegt im Ordner „Gesperrt“ seiner Gliederung, bis eine Prüfung mit "
                 "dem Ergebnis „einsatzbereit“ (Freiprüfung) ihn freigibt.")
     if p["result"] == "aussondern":
-        # Nur die Aussonderung dieses Artikels – beim Set-Artikel tragen die mit ausgesonderten Teile dieselbe Grundlage.
+        # Nur die Aussonderung dieses Artikels (bis Schritt 26 trugen mit ausgesonderte Teile eines Sets dieselbe Grundlage).
         a = db.query("SELECT protocol_id FROM mat_inspection WHERE basis_inspection_id = ? AND kind = 'aussonderung' "
                      "AND item_id = ?", (p["id"], p["item_id"]), one=True)
         nr = f" – siehe Aussonderungsprotokoll {a['protocol_id']}" if a and a["protocol_id"] else ""
         return f"Der Artikel ist ausgesondert und zählt nicht mehr zum Bestand{nr}."
-    if p["result"] == "einsatzbereit" and item["lock_state"] in ("gesperrt", "verloren"):
-        # Prüfung im gesperrten Set (Schritt 21): Der eigene Grund ist weg, das Set bleibt gesperrt.
-        if item.get("parent_item_id"):
-            return ("Das Teil gehört zu einem gesperrten Set und bleibt mit ihm gesperrt, bis eine Set-Prüfung "
-                    "das Set freigibt.")
-        return "Das Set bleibt gesperrt – siehe Gesamtergebnis und Gründe unten."
     return ""
 
 
@@ -433,21 +427,10 @@ def _pruefprotokoll(p, pid, ts, png, login, ordner_id):
                        (p["corrects_inspection_id"],), one=True)
         berichtigt = {"protokoll_id": alt["protocol_id"] or "(ohne Protokoll)", "datum": datum_text(alt["inspected_on"]),
                       "grund": p["correction_reason"]}
-    # Sets (Schritt 21): am Teil „Teil von Set …“ als Kopie (A24), an der Prüfung des Set-Artikels die
-    # Teiletabelle mit Gesamtergebnis (Set-Protokoll, setlauf.protokoll_daten).
-    from . import setlauf
-    teil_von = ""
-    if item.get("parent_item_id"):
-        s = db.query("SELECT i.inventory_no, i.serial_no, p.manufacturer, p.model, p.description FROM mat_item i "
-                     "JOIN mat_product p ON p.id = i.product_id WHERE i.id = ?", (item["parent_item_id"],), one=True)
-        if s:
-            teil_von = f"{s['inventory_no']} – {katalog.produktname(s)}, SN {s['serial_no']}"
     daten = {
         "dokument": _dokument("pruefprotokoll", pid, ts, bestand.ist_demo(item["id"])),
         "artikel": _artikel(item, produkt, ordner_id),
-        "set_protokoll": setlauf.protokoll_daten(p),
         "pruefung": {"art": PRUEFART_TEXT.get(p["kind"], p["kind"]), "datum": datum_text(p["inspected_on"]),
-                     "teil_von": teil_von,
                      "pruefer": p["inspector_name"], "urkunde": p["inspector_certificate"], "login": login,
                      "formular": _formular_text(p), "durchgang": durchgang["title"] if durchgang else "",
                      "grund": p["reason"] or "", "ergebnis": p["result"], "ergebnis_text": ERGEBNISSE.get(p["result"], ""),
@@ -545,10 +528,8 @@ def _sammelprotokoll(r, pid, ts):
     Durchgangs liegt – sonst „aus dem Bereich verschoben“, nie einen Pfad aus einem fremden Bereich (1.7 Nr. 7). Die
     Seriennummer ist die heutige; hat ein Änderungsantrag sie nach dem Einzelprotokoll ersetzt, steht die alte als
     „vormals … (Änderungsantrag Nr. …)“ dabei – sonst widersprächen sich beide Dokumente ohne Verweis (Prüfung vom
-    21.10.2026). Sets (Schritt 21, Entwurf E): Set-Artikel und Teile bleiben eigene Zeilen; die Teile stehen
-    eingerückt unter ihrem Set, an der Set-Zeile das Gesamtergebnis einer in diesem Durchgang abgeschlossenen
-    Set-Prüfung (setlauf.sammel)."""
-    from . import durchgang, setlauf
+    21.10.2026)."""
+    from . import durchgang
     zeilen = durchgang._zeilen(r["id"])
     zweig, pfade = bestand.unterbaum(r["folder_id"]), {}
     artikel = {a["id"]: a for a in db.query(bestand.ARTIKEL_LISTE_SQL + "WHERE i.id IN (SELECT item_id FROM mat_round_item "
@@ -556,10 +537,6 @@ def _sammelprotokoll(r, pid, ts):
     pruefungen = {x["id"]: x for x in db.query(
         "SELECT id, protocol_id, file_sha256, corrects_inspection_id, inspected_on, inspector_name, inspector_certificate "
         "FROM mat_inspection WHERE round_id = ? AND completed_at IS NOT NULL", (r["id"],))}
-    eltern = {x["id"]: x["inventory_no"] for x in db.query(
-        "SELECT id, inventory_no FROM mat_item WHERE id IN (SELECT value FROM json_each(?))",
-        (json.dumps(sorted({a["parent_item_id"] for a in artikel.values() if a.get("parent_item_id")})),))}
-    gesamt_je_set = setlauf.sammel(r["id"])
     liste, ohne = [], 0
     zaehler = {"erledigt": 0, "ausgenommen": 0, "nicht_geprueft": 0, "einsatzbereit": 0, "instandsetzen": 0,
                "aussondern": 0}
@@ -596,10 +573,8 @@ def _sammelprotokoll(r, pid, ts):
                       "datum": datum_text(x["inspected_on"]) if x else "", "pruefer": x["inspector_name"] if x else "",
                       "urkunde": x["inspector_certificate"] if x else "", "protokoll_id": (x["protocol_id"] or "") if x else "",
                       "datei_sha256": (x["file_sha256"] or "") if x else "",
-                      "berichtigung": bool(x and x["corrects_inspection_id"]), "ausnahme": ausnahme,
-                      "teil": bool(a.get("parent_item_id")), "set_gesamt": gesamt_je_set.get(a["id"], ""),
-                      "gruppe": eltern.get(a.get("parent_item_id"), a["inventory_no"])})
-    liste.sort(key=lambda e: (e["ordner"], e["gruppe"], e["teil"], e["inventarnummer"]))
+                      "berichtigung": bool(x and x["corrects_inspection_id"]), "ausnahme": ausnahme})
+    liste.sort(key=lambda e: (e["ordner"], e["inventarnummer"]))
     for nr, e in enumerate(liste, start=1):
         e["nr"] = nr
     zaehlung = [{"text": "Artikel im Durchgang", "anzahl": len(liste)},

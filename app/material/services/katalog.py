@@ -477,17 +477,13 @@ def _artikelnummer_pruefen(article_no, hersteller, ausser=None):
                         f"({da['article_no']}).", 409)
 
 
-def produkt_anlegen(d, demo=False, importiert=False, bestandteile=None, ist_set=None):
-    """Ein neues Produkt – mit bestandteile (rohe Liste, stueckliste.eintraege_lesen) samt seiner Liste in EINER
-    Transaktion: Scheitert eine Position („Position n: …“), entsteht kein Produkt. ist_set: ein Set mit Stückliste (Set
-    anlegen, Wunsch vom 24.10.2026); sonst ist bestandteile die Bestandteil-Liste eines Produkts (nur Text, Schritt 25).
-    Ohne ist_set gilt wie bis Schritt 24: mit bestandteile ein Set. „is_set“ aus d liest der Dienst nicht mehr
-    (Entscheidung S2: ob ein Produkt ein Set ist, legt der Weg fest – „Produkt anlegen“, „Set anlegen“; die Routen prüfen
-    die Anfrage mit stueckliste.anfrage_lesen). Der Katalogimport legt Produkte ohne bestandteile an und schaltet „set“
-    danach um (stueckliste.set_umschalten)."""
+def produkt_anlegen(d, demo=False, importiert=False, bestandteile=None):
+    """Ein neues Produkt – mit bestandteile (rohe Liste, stueckliste.eintraege_lesen) samt seiner Bestandteil-Liste (nur
+    Text, Schritt 25) in EINER Transaktion: Scheitert eine Position („Position n: …“), entsteht kein Produkt. „is_set“
+    aus d (Set-Funktion bis Schritt 26) liest der Dienst nicht. Der Katalogimport legt Produkte ohne bestandteile an und
+    ersetzt die Liste danach (stueckliste.ersetzen)."""
     from . import stueckliste
     w = produkt_werte(d, importiert=importiert)
-    ist_set = bestandteile is not None if ist_set is None else bool(ist_set)
     key = dedupe_key(w["manufacturer"], w["model"], w["article_no"])
     uid, _ = akteur()
     ts = db.now()
@@ -497,20 +493,16 @@ def produkt_anlegen(d, demo=False, importiert=False, bestandteile=None, ist_set=
         try:
             pid = db.execute(
                 "INSERT INTO mat_product (category_id, manufacturer, model, article_no, dedupe_key, norm, material_kind, "
-                "interval_months, lifetime_years, lifetime_source, description, is_set, demo, created_by, created_at, "
-                "updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "interval_months, lifetime_years, lifetime_source, description, demo, created_by, created_at, "
+                "updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (w["category_id"], w["manufacturer"], w["model"], w["article_no"], key, w["norm"], w["material_kind"],
-                 w["interval_months"], w["lifetime_years"], w["lifetime_source"], w["description"], int(ist_set),
+                 w["interval_months"], w["lifetime_years"], w["lifetime_source"], w["description"],
                  int(bool(demo)), uid, ts, ts))
         except sqlite3.IntegrityError:
             raise Abgelehnt("Dieses Produkt steht schon im Katalog.", 409)
-        journal.eintragen("product", pid, "angelegt", None, dict(w, is_set=True) if ist_set else w)
-        if ist_set:
-            from .sets import set_produkte_vergessen
-            set_produkte_vergessen()
-        if ist_set or bestandteile:
-            p = produkt(pid)
-            stueckliste._ersetzen(p, stueckliste.eintraege_lesen(p, bestandteile or []))
+        journal.eintragen("product", pid, "angelegt", None, w)
+        if bestandteile:
+            stueckliste._ersetzen(produkt(pid), stueckliste.eintraege_lesen(bestandteile))
     return pid
 
 
@@ -520,10 +512,8 @@ def produkt_variante(pid, d):
     neueste, nicht zurückgezogene Version; die neue Zeile nennt dieselbe Datei (seit Schritt 18 heißt sie nach ihrem
     Inhalt und bleibt, bis keine Zeile sie mehr nennt – bis dahin wurde sie kopiert, damit das Löschen des einen
     Produkts die Dokumente des anderen nicht mitnimmt). Das Produktbild nie, spezifische Formulare auch nicht. Die
-    Variante folgt dem Vorbild (Wunsch vom 24.10.2026): Die Variante eines Sets ist ein Set – mit „bestandteile“ (die im
-    Dialog bearbeitete Stückliste, Regeln wie beim Anlegen) oder ohne mit der Stückliste des Vorbilds; die Variante
-    eines Produkts ist ein Produkt – mit „bestandteile“ (die bearbeitete Bestandteil-Liste, nur Text; [] ohne Liste) oder
-    ohne mit der Liste des Vorbilds (Schritt 25). „is_set“ und „stueckliste“ aus d zählen nicht mehr."""
+    Bestandteil-Liste: „bestandteile“ (die im Dialog bearbeitete Liste, nur Text; [] ohne Liste) oder ohne sie die Liste
+    des Vorbilds (Schritt 25)."""
     from . import stueckliste
     quelle = produkt(pid)
     if not artikelnummer(text(d, "article_no", "Artikelnummer", 80)):
@@ -531,8 +521,6 @@ def produkt_variante(pid, d):
     liste = d.get("bestandteile")
     if liste is not None and not isinstance(liste, list):
         raise Abgelehnt("„bestandteile“ muss eine Liste sein.")
-    if quelle["is_set"] and liste is not None and not liste:
-        raise Abgelehnt(stueckliste.SET_OHNE_LISTE)
     wahl = d.get("dokumente") or []
     if not isinstance(wahl, list) or any(isinstance(x, bool) or not isinstance(x, int) for x in wahl):
         raise Abgelehnt("„dokumente“ muss eine Liste von Dokumentkennungen sein.")
@@ -544,18 +532,13 @@ def produkt_variante(pid, d):
     kopien = [aktuelle[x] for x in dict.fromkeys(wahl)]
     uid, uname = akteur()
     with db.transaction(sofort=True):
-        if quelle["is_set"] and liste is None:
-            # Die Stückliste des Vorbilds – in der Form einer Anfrage, damit dieselben Regeln gelten (S3, DEMO).
-            liste = [{"produkt_id": r["component_product_id"], "bezeichnung": r["bezeichnung"], "anzahl": r["anzahl"],
-                      "einzeln": bool(r["einzeln"]), "austausch": r["austausch"]} for r in stueckliste.zeilen(pid)]
-            kopiert = True
-        elif liste is None:
+        if liste is None:
             # Die Bestandteil-Liste des Vorbilds (Schritt 25) – nur Text.
             liste = [{"bezeichnung": r["bezeichnung"], "anzahl": r["anzahl"]} for r in stueckliste.kurzliste(pid)]
             kopiert = bool(liste)
         else:
             kopiert = False
-        neu = produkt_anlegen(d, demo=bool(quelle["demo"]), bestandteile=liste, ist_set=bool(quelle["is_set"]))
+        neu = produkt_anlegen(d, demo=bool(quelle["demo"]), bestandteile=liste)
         for doc in kopien:
             _datei_sichern(doc["file_path"], doc["title"])      # unter der Sperre: seit dem Lesen oben nicht freigegeben
             did = db.execute(
@@ -567,20 +550,15 @@ def produkt_variante(pid, d):
                               {"product_id": neu, "kind": doc["kind"], "title": doc["title"], "version": doc["version"],
                                "valid_from": doc["valid_from"], "kopie_von": doc["id"]})
         # Der Name der Quelle mit ihrem Zusatz: Varianten unterscheiden sich oft nur in der Beschreibung.
-        mitgenommen = "stueckliste" if quelle["is_set"] else "bestandteile"
         journal.eintragen("product", neu, "variante", None, dict({"von": pid, "name": produktname(quelle),
                                                                   "dokumente": len(kopien)},
-                                                                 **({mitgenommen: True} if kopiert else {})))
+                                                                 **({"bestandteile": True} if kopiert else {})))
     return neu
 
 
 def produkt_aendern(pid, d, importiert=False):
-    """Stammdaten ändern. Ob das Produkt ein Set ist, ändert sich hier nicht (Entscheidung S2): „is_set“ wie bisher
-    geht durch, ein anderes 409 (UMSTELLEN) – umstellen geht nur über die Katalogdatei (stueckliste.set_umschalten)."""
-    from . import stueckliste
+    """Stammdaten ändern. „is_set“ (Set-Funktion bis Schritt 26) wird übergangen."""
     alt = produkt(pid)
-    if "is_set" in d and wahr(d, "is_set", "Set") != bool(alt["is_set"]):
-        raise Abgelehnt(stueckliste.UMSTELLEN, 409)
     w = produkt_werte(d, alt, importiert=importiert)
     key = dedupe_key(w["manufacturer"], w["model"], w["article_no"])
     artikel = db.query("SELECT COUNT(*) AS n FROM mat_item WHERE product_id = ?", (pid,), one=True)["n"]
@@ -623,14 +601,12 @@ def lebensende_nachziehen(pid, alt_jahre, neu_jahre):
 
 
 def produkt_loeschen(pid):
-    """Nur ein Produkt ohne Artikel, das in keiner Stückliste steht (Schritt 21: Bestandteil → 409 mit dem Set); eine
-    eigene Stückliste geht mit (ON DELETE CASCADE, im Journal „geloescht“ als Zahl der Bestandteile)."""
-    from . import stueckliste
+    """Nur ein Produkt ohne Artikel; seine Bestandteil-Liste geht mit (ON DELETE CASCADE, im Journal „geloescht“ als Zahl
+    der Bestandteile)."""
     with db.transaction(sofort=True):
         alt = produkt(pid)
         if db.query("SELECT 1 FROM mat_item WHERE product_id = ? LIMIT 1", (pid,), one=True):
             raise Abgelehnt("Von diesem Produkt gibt es Artikel – es bleibt im Katalog.", 409)
-        stueckliste.loeschen_pruefen(pid)
         bestandteile = db.query("SELECT COUNT(*) AS n FROM mat_product_component WHERE set_product_id = ?", (pid,),
                                 one=True)["n"]
         if bestandteile:
@@ -724,7 +700,7 @@ def produkt_json(p, voll=False):
         out["category_name"] = p["category_name"]
     if "bestand" in p:
         out["bestand"] = p["bestand"]
-    # Set (Schritt 21): is_set immer, voll dazu Stückliste, „Bestandteil von“ und für die Material-Verwaltung sets_aelter.
+    # Bestandteil-Liste (Schritt 25), nur voll.
     from .stueckliste import produkt_json_ergaenzen
     produkt_json_ergaenzen(out, p, voll)
     if voll:
@@ -736,9 +712,7 @@ def produkt_json(p, voll=False):
                                   f"'ausgesondert' AND {artikel_filter('i')}", (p["id"],), one=True)["n"]
         out["artikel_gesamt"] = db.query(f"SELECT COUNT(*) AS n FROM mat_item i WHERE i.product_id = ? "
                                          f"AND {artikel_filter('i')}", (p["id"],), one=True)["n"]
-        out["loeschbar"] = not db.query("SELECT 1 FROM mat_item WHERE product_id = ? LIMIT 1", (p["id"],), one=True) \
-            and not out["bestandteil_von"] and not db.query("SELECT 1 FROM mat_item_set_slot WHERE product_id = ? LIMIT 1",
-                                                            (p["id"],), one=True)
+        out["loeschbar"] = not db.query("SELECT 1 FROM mat_item WHERE product_id = ? LIMIT 1", (p["id"],), one=True)
         out["dokumente"] = dokumente(p["id"])
         out["kategorie_dokumente"] = geerbte_dokumente(p["id"])
         f = formular_fuer_produkt(p["id"])

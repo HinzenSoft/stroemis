@@ -53,6 +53,13 @@ def trigger_21():
     return {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.TRIGGER_21}
 
 
+def trigger_26():
+    """Die Trigger seit Schritt 26 (Rückbau der Set-Funktion): (neu bzw. ersetzt, entfernt)."""
+    from app.material import models
+    neu = {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.TRIGGER_26}
+    return neu, set(models.TRIGGER_WEG_26)
+
+
 def trigger_25(nur_antrag=False):
     """Die Trigger aus Schritt 25 (Bestandteil-Liste, Seriennummern der Bestandteile) – zwei ersetzen gleichnamige aus
     Schritt 21. nur_antrag: nur die, die mat_item_change lesen (wer die Tabelle entfernt, entfernt sie mit)."""
@@ -739,10 +746,12 @@ def _schema(pfad):
 
 
 def _zahlen(pfad):
+    """Zeilen je mat_-Tabelle – ohne mat_item_set_slot (entfällt mit Schritt 26; in den Altständen hier leer)."""
     conn = sqlite3.connect(pfad)
     try:
         return {n: conn.execute(f"SELECT COUNT(*) FROM {n}").fetchone()[0] for (n,) in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'mat%' AND name NOT LIKE '%fts%'")}
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'mat%' AND name NOT LIKE '%fts%' "
+            "AND name <> 'mat_item_set_slot'")}
     finally:
         conn.close()
 
@@ -786,6 +795,7 @@ def test_migration_15():
         models._schritt_23(conn)                   # ersetzt die Artikeltrigger wieder durch die Fassung aus 23
         models._schritt_24(conn)                   # und die zwei des Lebensendes durch die aus 24
         models._schritt_25(conn)                   # und die Antragstrigger durch die aus 25 (Seriennummern der Bestandteile)
+        models._schritt_26(conn)                   # und die Stücklisten-Trigger durch die aus 26 (nur Text)
         assert conn.total_changes == n and _schema_in(conn) == trigger
         conn.rollback()
         conn.close()
@@ -834,17 +844,17 @@ def test_oberflaeche_statisch():
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
     css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
     admin = open(os.path.join(wurzel, "app/static/js/admin.js"), encoding="utf-8").read()
-    dlg = js[js.index("function artikelDialog(a,"):js.index("/* --- Änderungsanträge")]
+    dlg = js[js.index("function artikelDialog(a)"):js.index("/* --- Änderungsanträge")]
     assert "const gesperrt = fest || nurDirekt;" in dlg and "const nurDirekt = !(a.darf || {}).verwalten;" in dlg
     assert ('<button class="btn secondary small" type="button" id="ad-antrag">Änderung beantragen …</button>' in dlg
             and "antragMoeglich(a)" in dlg and "offen.map(antragOffenHtml)" in dlg)
     assert dlg.count('class="btn"') == 1 and '<button class="btn" id="ad-ok" type="button">Speichern</button>' in dlg
-    block = js[js.index("/* --- Änderungsanträge"):js.index("/* Ein Teil eines Sets als Block")]
+    block = js[js.index("/* --- Änderungsanträge"):js.index("/* --- Artikel anlegen")]
     antrag_dlg = block[block.index("function antragDialog(a)"):]
     assert antrag_dlg.count('class="btn"') == 1 and '<button class="btn" id="aa-ok" type="button">Antrag senden</button>' in antrag_dlg
     assert 'id="aa-grund"' in antrag_dlg and "Begründung (Pflicht)" in antrag_dlg and "/antrag`" in antrag_dlg
     assert "wartet auf einen Materialwart des Ordners" in block and "Material-Verwaltung bestätigt" not in block
-    seite = js[js.index("async function artikel()"):js.index("function artikelDialog(a,")]
+    seite = js[js.index("async function artikel()"):js.index("function artikelDialog(a)")]
     assert "const darfDirekt = Boolean(darf.verwalten || darf.pruefen)" in seite
     assert "${antragMoeglich(a) ? '<div class=\"btn-row\"><button class=\"btn secondary small\" type=\"button\" data-act=\"antrag\">Änderung beantragen …</button></div>' : \"\"}</section>" in seite
     karte = js[js.index("function antragKarte(x)"):js.index("function antragBestaetigenDialog")]
@@ -1235,7 +1245,7 @@ def test_oberflaeche_pruefung():
     „Bestätigen“ nennen x.rueckruf; Journal-Beschriftungen für die beiden neuen Felder. Knopfregel unverändert."""
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
-    block = js[js.index("/* --- Änderungsanträge"):js.index("/* Ein Teil eines Sets als Block")]
+    block = js[js.index("/* --- Änderungsanträge"):js.index("/* --- Artikel anlegen")]
     assert "const antragRueckruf = (x) =>" in block and "nach der Änderung ${raus.length > 1" in block
     antrag_dlg = block[block.index("function antragDialog(a)"):]
     assert "(a.rueckrufe || []).filter((r) => !r.alle)" in antrag_dlg and "betroffen – nach einer Änderung der Seriennummer" in antrag_dlg
@@ -1434,9 +1444,10 @@ def test_migration_17():
         v17, t17, _ = _schema(pfad)
         # Schritt 18: keine Trigger; 19: die zwei des Mailfehler-Protokolls; 21: die der Sets; 23: die Gruppe; 25: die der
         # Seriennummern der Bestandteile.
-        assert v17 == endversion() and set(t17) == set(t16) | TRIGGER_17 | TRIGGER_19 | trigger_21() | TRIGGER_23 | \
-            trigger_25(), \
-            (set(t17) ^ set(t16))
+        # 26: die Wächter des Rückbaus statt der entfallenen Set-Trigger.
+        neu_26, weg_26 = trigger_26()
+        erwartet = (set(t16) | TRIGGER_17 | TRIGGER_19 | trigger_21() | TRIGGER_23 | trigger_25() | neu_26) - weg_26
+        assert v17 == endversion() and set(t17) == erwartet, set(t17) ^ erwartet
         assert t17["mat_item_stammdaten_fest"] != t16["mat_item_stammdaten_fest"]
         assert t17["mat_item_antrag_angewendet"] != t16["mat_item_antrag_angewendet"]          # seit Schritt 23 alle Felder
         assert "'zurueckgezogen'" in _tabelle_sql(pfad) and "'purchased_on'" in _tabelle_sql(pfad)
@@ -1459,6 +1470,7 @@ def test_migration_17():
         models._schritt_23(conn)
         models._schritt_24(conn)
         models._schritt_25(conn)
+        models._schritt_26(conn)
         assert conn.total_changes == n and _schema_in(conn) == t17
         conn.rollback()
         # Der alte offene Antrag aufs Entfernen: auch an der Schnittstelle vorbei nicht zu bestätigen.
@@ -1524,7 +1536,7 @@ def test_oberflaeche_17():
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
     css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
-    block = js[js.index("/* --- Änderungsanträge"):js.index("/* Ein Teil eines Sets als Block")]
+    block = js[js.index("/* --- Änderungsanträge"):js.index("/* --- Artikel anlegen")]
     antrag_dlg = block[block.index("function antragDialog(a)"):]
     assert "aa-entfernen" not in js and "herstellung_entfernen" not in js and "Herstelldatum entfernen" not in js
     assert antrag_dlg.count('class="btn"') == 1
@@ -1532,7 +1544,7 @@ def test_oberflaeche_17():
     assert ('${x.eigen ? `<button class="btn secondary small" type="button" data-act="antrag-zurueck" '
             'data-id="${x.id}">Antrag zurückziehen …</button>` : ""}' in hinweis)
     assert "await confirm(" in hinweis and '"Zurückziehen"' in hinweis and "/zurueckziehen`" in hinweis
-    seite = js[js.index("async function artikel()"):js.index("function artikelDialog(a,")]
+    seite = js[js.index("async function artikel()"):js.index("function artikelDialog(a)")]
     assert '"antrag-zurueck": (b) => antragZurueckziehen(' in seite
     # Die offenen Anträge stehen als eigener Abschnitt am Anfang der rechten Spalte (Kasten .mat-spalte), vor „QR-Code und
     # NFC“, nicht unter den Stammdaten; der Knopf „Änderung beantragen …“ bleibt links bei den Stammdaten (22.10.2026).
@@ -1544,7 +1556,7 @@ def test_oberflaeche_17():
     assert "(a.antraege || []).length ? " + abschnitt in rechts
     assert rechts.index("Offene Änderungsanträge") < rechts.index("<h2>QR-Code und NFC</h2>") < rechts.index("<h2>Herstellerdokumente</h2>")
     assert "order:" not in css[css.index(".mat-spalten {"):css.index(".mat-daten {")] and ".mat-spalte { min-width: 0; }" in css
-    dlg = js[js.index("function artikelDialog(a,"):js.index("/* --- Änderungsanträge")]
+    dlg = js[js.index("function artikelDialog(a)"):js.index("/* --- Änderungsanträge")]
     assert "querySelectorAll('[data-act=\"antrag-zurueck\"]')" in dlg and "dlg.close(); return zeigen(artikel);" in dlg
     karte = js[js.index("function antragKarte(x)"):js.index("function antragBestaetigenDialog")]
     assert 'x.eigen ? `<button type="button" class="btn secondary small" data-act="antrag-zurueck"' in karte

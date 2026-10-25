@@ -29,7 +29,7 @@ def _js():
 
 def test_norm_eigene_zeile():
     js = _js()
-    artikel = js[js.index("async function artikel()"):js.index("function artikelDialog(a,")]
+    artikel = js[js.index("async function artikel()"):js.index("function artikelDialog(a)")]
     assert '${zeile("Produkt", `${nameHtml(p)}${zusatzHtml(p)}`)}' in artikel
     assert '${zeile("Norm", p.norm ? esc(p.norm) : \'<span class="muted">–</span>\')}' in artikel
     assert "· ${esc(p.norm)}" not in artikel
@@ -80,7 +80,7 @@ def test_nacharbeit_uebernehmen_je_angabe():
 def test_meldung_vorbelegt():
     """Die Karte trägt meldung_bemerkung: Satz zum Import und die verschiedenen Bemerkungen der Zeilen (höchstens fünf,
     je höchstens 200 Zeichen) – keine Serien- und Inventarnummern, kein Dateiname. Eine Meldung aus der Nacharbeit
-    bleibt eine Produktmeldung, auch mit is_set (S8)."""
+    bleibt eine Produktmeldung („is_set“ und „set_teile“ werden übergangen – Set-Funktion bis Schritt 26)."""
     with tempfile.TemporaryDirectory() as tmp, ohne_post():
         t = aufbau(tmp)
         app, w = t.app, t.w
@@ -98,11 +98,11 @@ def test_meldung_vorbelegt():
         assert all(len(x) <= 200 for x in punkte)
         for verboten in ("MV-0", "INV-", "Vorname", "Nachname", ".csv"):
             assert verboten not in text, verboten
-        # Melden mit der Vorbelegung (die Oberfläche schickt sie als note) und mit is_set: bleibt ein Produkt.
+        # Melden mit der Vorbelegung (die Oberfläche schickt sie als note) und mit „is_set“: bleibt ein Produkt.
         r = w.post(f"/api/material/ordner/{t.lager}/nacharbeit/melden",
                    json={"angabe": karte["angabe"], "note": text, "is_set": "1", "set_teile": "Teil A"})
         m = ok(r, 201)["meldung"]
-        assert m["note"] == text and m["is_set"] is False and not m.get("set_teile"), m
+        assert m["note"] == text and "is_set" not in m and not m.get("set_teile"), m
     print("W2 Meldung vorbelegt bestanden.")
 
 
@@ -140,12 +140,14 @@ def _ordner(c, fid, **q):
 
 
 def test_bestand_kategorie():
-    """lager_a: Set S (Set-Produkt in „Gurte“), F und art_a (HMS Beta in „Karabiner“), dazu ein Artikel in einer
+    """lager_a: Gurt S (Gurt Alpha in „Gurte“), F und art_a (HMS Beta in „Karabiner“), dazu ein Artikel in einer
     zweiten Kategorie „Karabiner“ unter „Wasserrettung“ (gleicher Name, anderer Pfad)."""
-    from test_material_sets import set_aufbau
+    from test_material_trennung import zwei_gliederungen
     with tempfile.TemporaryDirectory() as tmp, ohne_post():
-        t = set_aufbau(tmp)
+        t = zwei_gliederungen(tmp)
         w, mv = t.wart_a, t.k["katalog"]
+        t.s = neuer_artikel(w, t.ids["gurt"], t.lager_a, serial_no="KAT-S-1", manufactured_on="2024-01")
+        t.f = neuer_artikel(w, t.ids["hms"], t.lager_a, serial_no="KAT-F-1")
         wr = ok(mv.post("/api/material/kategorien", json={"name": "Wasserrettung"}), 201)["kategorie"]["id"]
         kar2 = ok(mv.post("/api/material/kategorien", json={"name": "Karabiner", "parent_id": wr,
                                                             "default_material_kind": "metall_hardware"}), 201)["kategorie"]["id"]
@@ -161,11 +163,11 @@ def test_bestand_kategorie():
                         (t.ids["karabiner"], "Karabiner", "PSA gegen Absturz / Karabiner", 2),
                         (kar2, "Karabiner", "Wasserrettung / Karabiner", 1)}, kats
         assert [k["name"] for k in d["kategorien"]] == ["Gurte", "Karabiner", "Karabiner"]
-        # Filter: die Set-Zeile nach dem Set-Produkt, Teile nie.
+        # Filter nach der Kategorie des Produkts.
         d = ok(_ordner(w, t.lager_a, kategorie=t.ids["gurte"]))["ordner"]
-        assert [a["id"] for a in d["artikel"]] == [t.s["id"]] and d["artikel_gesamt"] == 1 and d["artikel"][0]["set"]
+        assert [a["id"] for a in d["artikel"]] == [t.s["id"]] and d["artikel_gesamt"] == 1
         d = ok(_ordner(w, t.lager_a, kategorie=t.ids["karabiner"]))["ordner"]
-        assert {a["id"] for a in d["artikel"]} == {t.f["id"], t.art_a["id"]} and not set(t.teile) & {a["id"] for a in d["artikel"]}
+        assert {a["id"] for a in d["artikel"]} == {t.f["id"], t.art_a["id"]}
         # Zahlen je Gruppe mit den übrigen Filtern: Status mit Kategorie, Kategorien mit Status.
         assert sum(d["direkt"].values()) == 2, d["direkt"]
         assert {k["id"]: k["n"] for k in d["kategorien"]}[t.ids["gurte"]] == 1      # Kategorien ohne Kategoriefilter

@@ -80,9 +80,6 @@ h2 { break-after: avoid; }
     {%- endfor %}
     <tr><td class="zahl">{{ bestand.verloren }}</td><td class="lbl">davon verloren gemeldet</td></tr>
     <tr><td class="zahl">{{ bestand.bestand }}</td><td class="lbl">Bestand gesamt (ohne ausgesonderte)</td></tr>
-    {%- if bestand.sets_satz %}
-    <tr><td class="lbl" colspan="2">{{ bestand.sets_satz }}</td></tr>
-    {%- endif %}
   </table>
   </td><td>
   <table class="zahlen">
@@ -251,7 +248,7 @@ h2 { break-after: avoid; }
     <thead><tr><th>Datum</th><th>Inventarnummer</th><th>Produkt</th><th>Grund{% if kopf.pruefer_nennen %} · durch{% endif %}</th><th></th></tr></thead>
     <tbody>
     {%- for a in aussonderungen.liste %}
-      <tr><td class="datum">{{ a.datum }}</td><td class="mono">{{ a.inventarnummer }}</td><td>{{ a.produkt }}{% if a.set_text %} · {{ a.set_text }}{% endif %}</td>
+      <tr><td class="datum">{{ a.datum }}</td><td class="mono">{{ a.inventarnummer }}</td><td>{{ a.produkt }}</td>
         <td class="text">{{ a.grund }}{% if a.durch %} · durch {{ a.durch }}{% endif %}{% if a.protokoll_id %} · <span class="mono">{{ a.protokoll_id }}</span>{% endif %}</td><td>{{ demo_marke(a) }}</td></tr>
     {%- endfor %}
     </tbody>

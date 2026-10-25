@@ -1,0 +1,19 @@
+{
+  "format": "stroemis-material-katalog",
+  "version": 2,
+  "demo": true,
+  "quelle": "Vorlage Produkt mit Bestandteil-Liste (Schritt 25) – nur das Format, alle Angaben Platzhalter",
+  "kategorien": [
+    {"name": "BEISPIEL Kategorie", "materialart": "textil", "intervall_monate": 12}
+  ],
+  "produkte": [
+    {"kategorie": ["BEISPIEL Kategorie"], "hersteller": "BEISPIEL-Hersteller", "modell": "BEISPIEL Produkt mit Lieferumfang",
+     "artikelnummer": "BSP-LU-1", "materialart": "textil", "lebensdauer_jahre": 10,
+     "lebensdauer_quelle": "Platzhalter – Fundstelle der Herstellerangabe", "beschreibung": "",
+     "bestandteile": [
+       {"bezeichnung": "Platzhalter Bestandteil A", "anzahl": 2},
+       {"bezeichnung": "Platzhalter Tasche", "anzahl": 1}
+     ]}
+  ],
+  "formulare": []
+}

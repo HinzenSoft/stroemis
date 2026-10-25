@@ -15,7 +15,7 @@ Regeln, wie sie hier umgesetzt sind:
     immer mit Namen da."""
 from ... import db
 from . import Abgelehnt, kennung
-from . import bestand, journal, rechte, sets
+from . import bestand, journal, rechte
 
 MAX_ARTIKEL = 500
 AUSGESONDERT = "Ausgesonderte Artikel lassen sich niemandem mehr zuordnen."
@@ -42,34 +42,21 @@ def _recht(i):
         raise Abgelehnt(NUR_VERWALTER, 403)
 
 
-def _eintrag(i, alt, uid, zusatz=None):
-    if uid is None:
-        journal.eintragen("item", i["id"], "zuordnung_geloest", None, dict({"konto": journal.konto_ref(alt)}, **(zusatz or {})))
-    else:
-        journal.eintragen("item", i["id"], "zugeordnet", {"konto": journal.konto_ref(alt)} if alt else None,
-                          dict({"konto": journal.konto_ref(uid)}, **(zusatz or {})))
-
-
 def _schreiben(i, uid):
     """Innerhalb der Transaktion: die Zuordnung eines Artikels setzen (uid) oder lösen (None) – mit Eintrag im Journal
     am Artikel, nur wenn sich etwas ändert. Lösen geht auch an einem ausgesonderten Artikel (Altbestand), zuordnen
-    nicht. Ein Teil eines Sets nicht einzeln (409, Schritt 21); ein Set nimmt seine Teile mit (sets.set_lage, je Teil
-    ein Eintrag mit {"set": Kennung}). Liefert, ob sich etwas geändert hat."""
-    sets.teil_weiche(i, "eine Zuordnung")
+    nicht. Liefert, ob sich etwas geändert hat."""
     alt = i["assigned_user_id"]
     if alt == uid:
         return False
     if uid is not None and i["lock_state"] == "ausgesondert":
         raise Abgelehnt(AUSGESONDERT, 409)
-    teile = db.query("SELECT * FROM mat_item WHERE parent_item_id = ? ORDER BY id", (i["id"],))
-    if teile:
-        sets.set_lage(i["id"], assigned_user_id=uid)
+    db.execute("UPDATE mat_item SET assigned_user_id = ?, updated_at = ? WHERE id = ?", (uid, db.now(), i["id"]))
+    if uid is None:
+        journal.eintragen("item", i["id"], "zuordnung_geloest", None, {"konto": journal.konto_ref(alt)})
     else:
-        db.execute("UPDATE mat_item SET assigned_user_id = ?, updated_at = ? WHERE id = ?", (uid, db.now(), i["id"]))
-    _eintrag(i, alt, uid)
-    for t in teile:
-        if t["assigned_user_id"] != uid:
-            _eintrag(t, t["assigned_user_id"], uid, {"set": i["id"]})
+        journal.eintragen("item", i["id"], "zugeordnet", {"konto": journal.konto_ref(alt)} if alt else None,
+                          {"konto": journal.konto_ref(uid)})
     return True
 
 
@@ -87,8 +74,7 @@ def setzen(iid, d):
 def sammeln(d):
     """POST /artikel/zuordnen: {"ids": [...] (1 bis MAX_ARTIKEL), "user_id": 17 | null} – ganz oder gar nicht. Je
     Artikel: Kennung wie im Dienst („7“ und 7.0 gelten), nicht sichtbar → 404 wie für einen, den es nicht gibt, ohne
-    Verwalten → 403; erst danach zählt die Person. Ein Teil eines Sets → 409; ein Set zählt mit seinen Teilen gegen
-    MAX_ARTIKEL (Schritt 21). Liefert die Zahl der geänderten Artikel (ein Set mit Teilen zählt wie seine Zeilen)."""
+    Verwalten → 403; erst danach zählt die Person. Liefert die Zahl der geänderten Artikel."""
     ids = d.get("ids") if isinstance(d, dict) else None
     if not isinstance(ids, list) or not 1 <= len(ids) <= MAX_ARTIKEL:
         raise Abgelehnt(f"Bitte 1 bis {MAX_ARTIKEL} Artikel auswählen.")
@@ -101,33 +87,19 @@ def sammeln(d):
                 raise Abgelehnt(rechte.ARTIKEL_FEHLT, 404)
         for iid in ids:
             _recht(zeilen[iid])
-        for iid in ids:
-            sets.teil_weiche(zeilen[iid], "eine Zuordnung")
-        mit_teilen = len(ids) + db.query(f"SELECT COUNT(*) AS n FROM mat_item WHERE parent_item_id IN "
-                                         f"({','.join('?' * len(ids))})", ids, one=True)["n"]
-        if mit_teilen > MAX_ARTIKEL:
-            raise Abgelehnt(f"Bitte 1 bis {MAX_ARTIKEL} Artikel auswählen – mit den Teilen der Sets sind es {mit_teilen}.")
         uid = _konto(d)
-        n = 0
-        for iid in ids:
-            vorher = db.query("SELECT COUNT(*) AS n FROM mat_item WHERE (id = ? OR parent_item_id = ?) "
-                              "AND assigned_user_id IS NOT ?", (iid, iid, uid), one=True)["n"]
-            if _schreiben(zeilen[iid], uid):
-                n += vorher
-        return n
+        return sum(_schreiben(zeilen[iid], uid) for iid in ids)
 
 
 def zugeordnete(fid):
     """GET /ordner/<fid>/zugeordnete: die Personen, denen Artikel zugeordnet sind, die im Zweig des Ordners zu Hause
     sind (Heimat), je mit der Zahl – für den Filter „Zugeordnet an …“. Das Grundrecht am Ordner prüft die Route; der
-    Filter in der Abfrage hält zusätzlich alles heraus, was das Konto nicht mit Grundrecht sieht. Ein Set zählt einmal
-    (seine Teile nicht – die Listen zeigen nur die Set-Zeile, Schritt 21)."""
+    Filter in der Abfrage hält zusätzlich alles heraus, was das Konto nicht mit Grundrecht sieht."""
     rows = db.query(
         "WITH RECURSIVE zweig(id) AS (SELECT ? UNION SELECT f.id FROM mat_folder f JOIN zweig z ON f.parent_id = z.id) "
         "SELECT u.id, u.name, u.active, u.status, COUNT(*) AS anzahl FROM mat_item i "
         "JOIN users u ON u.id = i.assigned_user_id "
-        f"WHERE {bestand.heimat_sql('i')} IN (SELECT id FROM zweig) AND i.parent_item_id IS NULL "
-        f"AND {rechte.artikel_filter('i', 'grund')} "
+        f"WHERE {bestand.heimat_sql('i')} IN (SELECT id FROM zweig) AND {rechte.artikel_filter('i', 'grund')} "
         "GROUP BY u.id ORDER BY u.name COLLATE NOCASE, u.id", (fid,))
     return [{"id": r["id"], "name": (r["name"] or "").strip() or OHNE_NAMEN, "anzahl": r["anzahl"],
              "aktiv": bool(r["active"]) and r["status"] == "active"} for r in rows]

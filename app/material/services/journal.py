@@ -39,16 +39,12 @@ def _als_text(werte):
     return json.dumps(_sauber(werte), ensure_ascii=False, sort_keys=True, default=str, allow_nan=False)
 
 
-def eintragen(entity, entity_id, action, vorher=None, nachher=None, name=None, system=False):
+def eintragen(entity, entity_id, action, vorher=None, nachher=None, name=None):
     """Einen Eintrag schreiben. name: Anzeigename, wenn niemand angemeldet ist (Import, Startlauf);
     ein Kommandozeilenlauf setzt ihn für alle Einträge über g.mat_akteur. Wer angemeldet handelt, steht mit Namen da –
     nie mit der E-Mail. NaN und Unendlich nimmt json.dumps hier nicht an (allow_nan=False – ValueError statt eines
-    ungültigen JSON im unveränderlichen Journal, das sonst jede Antwort mit diesem Eintrag unlesbar machte).
-    system: Handelnder „System“ auch mitten in einer Anfrage – für Folgeeinträge, die nicht verraten sollen, wer den
-    Anlass gab (Sperre mit dem ganzen Set nach einer Mangelmeldung: kein Meldername am Set und an den übrigen Teilen)."""
-    u = current_user() if has_request_context() and not system else None
-    if system:
-        name = "System"
+    ungültigen JSON im unveränderlichen Journal, das sonst jede Antwort mit diesem Eintrag unlesbar machte)."""
+    u = current_user() if has_request_context() else None
     if not u and not name:
         name = g.get("mat_akteur")
     db.execute(

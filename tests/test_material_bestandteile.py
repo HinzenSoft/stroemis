@@ -1,16 +1,16 @@
 """Bestandteil-Liste an normalen Produkten und Seriennummern der Bestandteile (Schritt 25, Wunsch vom 25.10.2026):
 python tests/test_material_bestandteile.py  oder  pytest tests/test_material_bestandteile.py
 
-  - Schema-Schritt 25: frisch, 24 → 25 mit Altbestand (auch Änderungsanträge), zweiter Lauf; Trigger der Stückliste
-    (Text-Positionen am Nicht-Set) und der Seriennummern der Bestandteile.
+  - Schema-Schritt 25: frisch, 24 → Ende mit Altbestand (auch Änderungsanträge), zweiter Lauf; Trigger der Liste (nur
+    Text, seit Schritt 26 in dessen Fassung) und der Seriennummern der Bestandteile.
   - Katalog: Produkt mit Liste anlegen (in einem Zug, atomar), ersetzen und leeren, Fehler je Position, Journal,
-    Variante, Löschen, Rechte; Set-Wege unverändert.
+    Variante, Löschen, Rechte.
   - Prüfung: Zeilen „… vorhanden“ in Einzelprüfung und Durchgang, „fehlt“ ist ein Mangel (Foto und Bemerkung), offener
     Entwurf behält seine Zeilen, Berichtigung kopiert, Protokoll-PDF.
   - Seriennummern der Bestandteile: beim Anlegen und bis zur ersten Prüfung direkt, danach in der Prüfung (alt → neu im
     Protokoll) oder per Änderungsantrag; Suche; Meine PSA; Lebenslauf; Liste ändern behält Nummern unveränderter
     Positionen.
-  - Katalogdatei: Format-Beispiel, Bericht „bestandteillisten“, zweiter Lauf, Fehler, Set hier (F2), Export → Import.
+  - Katalogdatei: Format-Beispiel, Bericht „bestandteillisten“, zweiter Lauf, Fehler, Export → Import, Vorlage.
 Alle Namen, Nummern und Listen hier sind Platzhalter."""
 import json
 import os
@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_material import (H, abschluss, festschreiben, gliederung, jpeg, katalog_grund, make_app,  # noqa: E402
                            neuer_artikel, pruef_formulare, punkte_von, starten, umgebung)
 from test_material_antrag import ablehnen, beantragen, bestaetigen, journal, post  # noqa: E402
-from test_material_sets import _importieren, _schema, abgewiesen, roh, set_katalog  # noqa: E402
+from test_material_set_rueckbau import _importieren, _schema, abgewiesen, roh  # noqa: E402
 from test_material_trennung import bis_schritt, endversion, zeilen  # noqa: E402
 
 WURZEL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -78,7 +78,7 @@ def zeile(pr, text):
 # --- Schema-Schritt 25 --------------------------------------------------------------------------------------------------
 
 def test_migration_25():
-    """Frisch: Tabelle, Spalten, Trigger. 24 → 25 an einer Datenbank mit Bestand (Set mit Stückliste, Artikel, Prüfung,
+    """Frisch: Tabelle, Spalten, Trigger. 24 → Ende an einer Datenbank mit Bestand (Artikel, Prüfung,
     Änderungsanträge): keine Zeile ändert sich, die Kennungen und der AUTOINCREMENT-Stand der Anträge bleiben, das Schema
     gleicht dem frischen; zweiter Lauf und Schritt 25 für sich ändern nichts."""
     from app.material import models
@@ -98,7 +98,6 @@ def test_migration_25():
         def bestand(tmp):
             from test_material_antrag import aufbau as antrag_aufbau
             t = antrag_aufbau(tmp)
-            set_katalog(t.mv, t.ids)
             kid = ok(beantragen(t.w, t.k1, serial_no="AN-101"), 201)["antrag"]["id"]
             return t, kid
         t, kid = bis_schritt(24)(bestand, tmp)
@@ -114,11 +113,13 @@ def test_migration_25():
         assert not conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'mat_item_component_serial'").fetchone()
         tabellen = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'mat_%' "
                                                "AND name NOT LIKE '%fts%' AND name <> 'mat_meta' ORDER BY name")]
-        vorher = {n: conn.execute(f"SELECT * FROM {n} ORDER BY rowid").fetchall() for n in tabellen}
+        # Die Kopie der Stückliste je Set entfällt mit Schritt 26 (hier leer).
+        vorher = {n: conn.execute(f"SELECT * FROM {n} ORDER BY rowid").fetchall() for n in tabellen
+                  if n != "mat_item_set_slot"}
         seq = conn.execute("SELECT seq FROM sqlite_sequence WHERE name = 'mat_item_change'").fetchone()[0]
         conn.close()
         app = make_app(tmp)
-        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion() == "25"
+        assert zeilen(app, "SELECT wert FROM mat_meta WHERE schluessel = 'schema_version'")[0]["wert"] == endversion()
         conn = roh(app)
         try:
             for n, alt in vorher.items():
@@ -147,7 +148,7 @@ def test_migration_25():
 
 
 def test_trigger_25():
-    """Direkt in SQLite: Text-Position am Nicht-Set erlaubt, einzeln geführt dort nicht; am Set wie bisher. Seriennummern
+    """Direkt in SQLite: Text-Position erlaubt, einzeln geführt nicht (Fassung von Schritt 26). Seriennummern
     nur an einer Position des Produkts des Artikels; nach der ersten Prüfung nur gedeckt (Antrag oder offene Prüfung),
     ein bestätigter Antrag wirkt einmal; mit der Position, nach einem Produktwechsel und beim Kürzen der Anzahl gehen
     sie; INSERT OR REPLACE über die Kennung nie."""
@@ -161,9 +162,9 @@ def test_trigger_25():
                          (t.ids["gurt"],))
             conn.rollback()
             abgewiesen(conn, "INSERT INTO mat_product_component (set_product_id, component_product_id, bezeichnung, anzahl, "
-                             "einzeln) VALUES (?, ?, 'X', 1, 1)", (t.pid, t.ids["hms"]), "nur Bestandteile als Text")
+                             "einzeln) VALUES (?, ?, 'X', 1, 1)", (t.pid, t.ids["hms"]), "ist nur Text")
             abgewiesen(conn, "UPDATE mat_product_component SET einzeln = 1, component_product_id = ? WHERE id = ?",
-                       (t.ids["hms"], a), "nur Bestandteile als Text")
+                       (t.ids["hms"], a), "ist nur Text")
             ts = "2026-10-25T08:00:00+00:00"
             ein = "INSERT INTO mat_item_component_serial (item_id, component_id, stueck, serial_no, updated_at) VALUES (?,?,?,?,?)"
             abgewiesen(conn, ein, (art["id"], a, 3, "X", ts), "gehört zu einem Stück")          # Stück über der Anzahl
@@ -223,19 +224,18 @@ def test_trigger_25():
 def test_katalog_liste():
     """Anlegen mit Liste in einem Zug; Fehler je Position (kein Produkt entsteht); ersetzen, leeren, Journal nur bei
     Änderung; Variante übernimmt bzw. ersetzt; Produktseite lesen alle mit Modulzugang; pflegen nur die
-    Material-Verwaltung; Löschen nimmt die Liste mit; Set-Wege unverändert."""
+    Material-Verwaltung; Löschen nimmt die Liste mit."""
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
         p = t.produkt
-        assert p["is_set"] is False and [(z["bezeichnung"], z["anzahl"], z["einzeln"], z["produkt"])
-                                          for z in p["bestandteile"]] == [("Platzhalter Bestandteil A", 2, False, None),
-                                                                          ("Platzhalter Tasche", 1, False, None)]
+        assert "is_set" not in p and [(z["bezeichnung"], z["anzahl"]) for z in p["bestandteile"]] == \
+            [("Platzhalter Bestandteil A", 2), ("Platzhalter Tasche", 1)]
         neu = {"category_id": t.ids["karabiner"], "manufacturer": "Testwerk", "material_kind": "metall_hardware",
                "interval_months": 12}
         vor = zeilen(t.app, "SELECT COUNT(*) AS n FROM mat_product")[0]["n"]
-        for liste, text in (([{"bezeichnung": "X", "einzeln": True}], "„einzeln“: true gibt es nur an einem Set"),
-                            ([{"bezeichnung": "X", "produkt_id": t.ids["hms"]}], "„einzeln“: true gibt es nur an einem Set"),
-                            ([{"bezeichnung": "X", "austausch": "ja"}], "„austausch“ gibt es nur an einem Set"),
+        for liste, text in (([{"bezeichnung": "X", "einzeln": True}], "Bestandteil-Liste ist nur Text"),
+                            ([{"bezeichnung": "X", "produkt_id": t.ids["hms"]}], "Bestandteil-Liste ist nur Text"),
+                            ([{"bezeichnung": "X", "austausch": "ja"}], "Bestandteil-Liste ist nur Text"),
                             ([{"bezeichnung": " "}], "Bitte eine Bezeichnung angeben."),
                             ([{"bezeichnung": "X"}, {"bezeichnung": " x "}], "„x“ steht schon in Position 1"),
                             ([{"bezeichnung": "X", "anzahl": 21}], "Anzahl"),
@@ -275,7 +275,7 @@ def test_katalog_liste():
         assert t.k["nutzer"].get(f"/api/material/produkte/{t.pid}").status_code in (403, 404)
         # Variante: ohne „bestandteile“ die Liste des Vorbilds, mit – die bearbeitete.
         v1 = ok(t.mv.post(f"/api/material/produkte/{t.pid}/variante", json=dict(p, article_no="LA-2")), 201)["produkt"]
-        assert v1["is_set"] is False and [z["bezeichnung"] for z in v1["bestandteile"]] == [x["bezeichnung"] for x in LISTE]
+        assert "is_set" not in v1 and [z["bezeichnung"] for z in v1["bestandteile"]] == [x["bezeichnung"] for x in LISTE]
         v2 = ok(t.mv.post(f"/api/material/produkte/{t.pid}/variante",
                           json=dict(p, article_no="LA-3", bestandteile=[{"bezeichnung": "Nur eins"}])), 201)["produkt"]
         assert [z["bezeichnung"] for z in v2["bestandteile"]] == ["Nur eins"]
@@ -285,14 +285,10 @@ def test_katalog_liste():
         # Löschen nimmt die Liste mit.
         ok(t.mv.delete(f"/api/material/produkte/{v1['id']}", headers=H))
         assert not zeilen(t.app, "SELECT 1 FROM mat_product_component WHERE set_product_id = ?", (v1["id"],))
-        # Set-Wege: is_set ohne Liste 400, Set ohne einzeln geführtes Teil 400 (S3), Set-Stückliste wie bisher.
-        assert t.mv.post("/api/material/produkte", json=dict(neu, model="S", article_no="S-1",
-                                                             is_set=True)).status_code == 400
-        r = t.mv.post("/api/material/produkte", json=dict(neu, model="S", article_no="S-1", is_set=True,
-                                                          bestandteile=[{"bezeichnung": "Tasche"}]))
-        assert r.status_code == 400 and "einzeln geführtes Teil" in r.json["error"]
-        set_p, _, stueck = set_katalog(t.mv, t.ids)
-        assert len(stueck) == 3
+        # „is_set“ (Set-Funktion bis Schritt 26) wird übergangen: ein Produkt mit Liste.
+        r = ok(t.mv.post("/api/material/produkte", json=dict(neu, model="S", article_no="S-1", is_set=True,
+                                                             bestandteile=[{"bezeichnung": "Tasche"}])), 201)
+        assert "is_set" not in r["produkt"] and len(r["produkt"]["bestandteile"]) == 1
     print("Katalog Bestandteil-Liste bestanden.")
 
 
@@ -475,8 +471,7 @@ def _p(**kw):
 
 def test_katalogdatei():
     """Format-Beispiel im Probelauf ohne Fehler, echter Lauf neu, zweiter Lauf unverändert, Änderung „geändert“;
-    Fehlertexte; Bestandteil-Liste an einem Produkt, das hier ein Set ist (F2: Fehler, nichts gespeichert); Liste aus
-    Texten ist ein Hinweis; [] entfernt; Export → Import rund; die DEMO-Vorlage geht durch."""
+    Fehlertexte; Liste aus Texten ist ein Hinweis; [] entfernt; Export → Import rund; die DEMO-Vorlage geht durch."""
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
         app = t.app
@@ -498,10 +493,10 @@ def test_katalogdatei():
         assert b["bestandteillisten"]["geaendert"] == 1 and b["produkte"]["geaendert"] == 1, b
         assert any("Bestandteil-Liste ersetzt (1 Position)" in x for x in b["aenderungen"]), b["aenderungen"]
         # Fehler je Position.
-        for liste, text in (([{"bezeichnung": "X", "einzeln": True}], "Position 1: „einzeln“: true gibt es nur an einem Set"),
+        for liste, text in (([{"bezeichnung": "X", "einzeln": True}], "Position 1: Eine Bestandteil-Liste ist nur Text"),
                             ([{"bezeichnung": "X", "produkt": {"hersteller": "Testwerk", "modell": "HMS Beta",
-                                                               "artikelnummer": "HB-7"}}], "gibt es nur an einem Set"),
-                            ([{"bezeichnung": "X", "austausch": "nein"}], "„austausch“ gibt es nur an einem Set"),
+                                                               "artikelnummer": "HB-7"}}], "Bestandteil-Liste ist nur Text"),
+                            ([{"bezeichnung": "X", "austausch": "nein"}], "Bestandteil-Liste ist nur Text"),
                             ([{"bezeichnung": "X"}, {"bezeichnung": "X"}], "Position 2: „X“ steht schon in Position 1"),
                             ([{"anzahl": 1}], "Position 1: Bitte eine Bezeichnung angeben.")):
             b = _importieren(app, _datei([_p(set=False, bestandteile=liste)]), trocken=True)
@@ -509,20 +504,6 @@ def test_katalogdatei():
         # Liste aus Texten: Hinweis, übergangen.
         b = _importieren(app, _datei([_p(bestandteile=["Tasche"])]), trocken=True)
         assert not b["fehler"] and any("Liste aus Texten" in h for h in b["hinweise"]), b
-        # Ein Set hier, die Datei bringt eine Bestandteil-Liste ohne „set“: true – Fehler, nichts gespeichert (F2).
-        set_p, _, _ = set_katalog(t.mv, t.ids)
-        sp = zeilen(app, "SELECT * FROM mat_product WHERE id = ?", (set_p,))[0]
-        vorher = zeilen(app, "SELECT * FROM mat_product_component WHERE set_product_id = ?", (set_p,))
-        for set_wert in (None, False):
-            e = {"kategorie": ["PSA gegen Absturz", "Gurte"], "hersteller": sp["manufacturer"], "modell": sp["model"],
-                 "artikelnummer": sp["article_no"], "materialart": "textil", "lebensdauer_jahre": 10, "beschreibung": "",
-                 "bestandteile": LISTE}
-            if set_wert is not None:
-                e["set"] = set_wert
-            b = _importieren(app, _datei([e]))
-            assert not b["gespeichert"] and any("ist hier ein Set" in f for f in b["fehler"]), b["fehler"]
-        assert zeilen(app, "SELECT * FROM mat_product_component WHERE set_product_id = ?", (set_p,)) == vorher
-        assert zeilen(app, "SELECT is_set FROM mat_product WHERE id = ?", (set_p,))[0]["is_set"] == 1
         # [] entfernt die Liste.
         b = _importieren(app, _datei([_p(bestandteile=[])]))
         assert b["bestandteillisten"]["geaendert"] == 1 and \
@@ -541,12 +522,12 @@ def test_katalogdatei():
             b = _importieren(app2, daten)
             assert not b["fehler"] and b["bestandteillisten"]["neu"] >= 1, b
         # Die DEMO-Vorlage geht im Probelauf ohne Fehler durch.
-        with open(os.path.join(WURZEL, "docs", "material-katalog-set-vorlage.json"), encoding="utf-8") as fh:
+        with open(os.path.join(WURZEL, "docs", "material-katalog-bestandteile-vorlage.json"), encoding="utf-8") as fh:
             vorlage = json.load(fh)
         with tempfile.TemporaryDirectory() as tmp3:
             app3 = make_app(tmp3)
             b = _importieren(app3, vorlage, trocken=True)
-            assert not b["fehler"] and b["bestandteillisten"]["neu"] == 1 and b["stuecklisten"]["neu"] == 1, b
+            assert not b["fehler"] and b["bestandteillisten"]["neu"] == 1 and "stuecklisten" not in b, b
     print("Katalogdatei bestanden.")
 
 

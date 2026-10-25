@@ -190,8 +190,7 @@ def test_steckbrief():
                      "materialart": "textil", "kategorie": "PSA gegen Absturz / Gurte", "vorschau": None,
                      "hergestellt": "2020-03",
                      "lebensende": gurt["retire_by"], "gliederung": "OG Nachbarstadt",
-                     "ordner": "Lager Nachbarstadt / Fahrzeug NS", "sperre": None, "demo": False,
-                     "teil_eines_sets": False}, x
+                     "ordner": "Lager Nachbarstadt / Fahrzeug NS", "sperre": None, "demo": False}, x
         x, r = einer("TEST-B-0001")
         assert x["inventory_no"] == t.art_b["inventory_no"] and x["ordner"] == "Lager Nachbarstadt", x
         assert x["materialart"] == "Metall" and x["lebensende"] is None and x["hergestellt"] is None, x
@@ -445,7 +444,7 @@ def test_sperrwort():
     der einen Rückruf nennt, geht nicht hinaus."""
     from app.material.services import globalsuche
     assert not hasattr(globalsuche, "STECKBRIEF_MIT_SPERRE")
-    assert "sperre" in globalsuche.FELDER and len(globalsuche.FELDER) == 17       # seit Schritt 21 „teil_eines_sets“
+    assert "sperre" in globalsuche.FELDER and len(globalsuche.FELDER) == 16
     assert set(globalsuche.SPERRE.values()) == {"gesperrt", "verloren gemeldet", "ausgesondert"}
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)

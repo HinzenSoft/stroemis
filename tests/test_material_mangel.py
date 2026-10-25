@@ -1274,9 +1274,7 @@ def test_oberflaeche_statisch():
     assert ">Freiprüfung später berichtigt</a> (jetzt: ${esc(ERGEBNIS[m.wieder_offen.ergebnis]" in js
     assert js.count("${wiederOffen(m)}") == 2
     assert ".mat-mangel-banner a { color: var(--weiss); text-decoration: underline; }" in css
-    # Seit P4-L2 O2 (Sets): ausgegraut auch am Set ohne eigenen Grund – aussonderAus schließt die Meldung ein.
-    assert "const aussonderAus = a.mangel_nur_gemeldet || setOhneGrund;" in js
-    assert "aussonderAus ? ' disabled aria-describedby=\"mat-aussondern-hilfe\"'" in js
+    assert "a.mangel_nur_gemeldet ? ' disabled aria-describedby=\"mat-aussondern-hilfe\"'" in js
     # Meine PSA: eigene Ansicht ohne Reiter, kommt ohne Modulnavigation und Ordnerleiste aus.
     assert "meine_psa: meinePsa" in js and "meine_psa" not in js[js.index("const NAV = {"):js.index("};", js.index("const NAV = {"))]
     assert "meine_psa" not in js[js.index("const MIT_LEISTE"):js.index("]);", js.index("const MIT_LEISTE"))]

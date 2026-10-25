@@ -19,17 +19,8 @@ Zählregeln (Kritiken S1–S24, A1–A19 zum Entwurf):
     und zählt nur im Aussonderungsblock); berichtigte Originale rundenunabhängig ausgeschlossen (OHNE_BERICHTIGTE);
     Entwürfe nur als Zahl.
   - Sperren aus dem Journal: nur der Übergang frei → gesperrt/verloren (before/after_json), unabhängig von der Aktion –
-    eine Meldung am schon gesperrten Artikel zählt nicht. Sets (Schritt 21, Entscheidung A13/S13): Eine
-    Set-Sperre zählt einmal – an dem Artikel mit eigenem Grund bzw. am Set-Artikel, wenn das Set aus eigenem Anlass sperrt
-    (unvollständig, Teil getauscht – Art „set“); die mitgesperrten Zeilen („set_gesperrt“) zählen nicht, ebenso wenig das
-    Mitfreigeben („set_frei“) – frei gibt die Set-Prüfung am Set-Artikel („freigeprueft“). Ein Teil, das beim Aussondern
-    des Sets entnommen und gesperrt weitergeführt wird, zählt mit seiner eigenen Sperre (Art „set_entnommen“) – auch,
-    wenn es vorher nur mit dem Set gesperrt war; war es schon aus eigenem Grund gesperrt, zählte diese Sperre schon
-    (Entscheidung zu L2 Nr. 39, 23.10.2026). Ausgegeben wird nur lock_reason, nie ein Pfadtext aus dem
+    eine Meldung am schon gesperrten Artikel zählt nicht. Ausgegeben wird nur lock_reason, nie ein Pfadtext aus dem
     Journal. Journalzeilen nur mit a.created_at >= i.created_at (Kennungen werden wiedervergeben).
-  - Aussonderungen: Ein Set, das als Ganzes ausgesondert wurde, ist EINE Zeile (die Aussonderung des Set-Artikels, mit
-    der Zahl der Teile, die mit ihm ausgesondert wurden); die Aussonderungsprotokolle dieser Teile zählen nicht eigens
-    (sie hängen weiter am Set, parent_item_id). Die CSV-Prüfungsliste führt weiter jedes Protokoll.
   - Personen: ohne den Haken „Prüfer nennen“ enthält keine Ausgabe einen Personennamen oder eine Urkundennummer außer
     dem Ersteller – keine Melder, keine Durchgangs-Eröffner, keine Aussonderer, keine Zuordnungen.
   - DEMO-Artikel zählen mit und sind gekennzeichnet (Zahl im Kopf, Marke je Zeile, Spalte DEMO, Präfix „DEMO-“ im
@@ -55,9 +46,7 @@ KAPPUNG_GESAMT = 1500               # so viele Listenzeilen im ganzen PDF
 KAPPUNG_RUECKRUF = 50               # so viele betroffene Artikel je Rückruf im PDF
 # Die Sperrarten, wie sie aus dem Nachher eines Journaleintrags folgen (Reihenfolge der Ausgabe).
 SPERRARTEN = (("pruefung", "aus Prüfung (instandsetzen)"), ("mangel", "aus Mangelmeldung"), ("verlust", "Verlust"),
-              ("ohne_pruefung", "Sperre durch Prüfer ohne Prüfung"),
-              ("set", "Set unvollständig, Teil getauscht oder eingesetzt, Bestandteil ersetzt oder Stückliste übertragen"),
-              ("set_entnommen", "aus ausgesondertem Set entnommen"))
+              ("ohne_pruefung", "Sperre durch Prüfer ohne Prüfung"))
 # Die Grundarten einer Aussonderung aus dem Präfix des Grundtexts (pruefung._wirkung bzw. AUSSONDERUNGSGRUENDE).
 GRUNDARTEN = (("pruefung", "aus Prüfung (Ergebnis „aussondern“)"),) + tuple(AUSSONDERUNGSGRUENDE.items()) + (
     ("sonstiges", "sonstiger Grund"),)
@@ -87,15 +76,6 @@ AUSSONDERUNG_IM_JAHR = "x.completed_at IS NOT NULL AND x.kind = 'aussonderung' A
 SPERRE = ("a.entity = 'item' AND a.entity_id = i.id AND a.created_at >= i.created_at "
           "AND json_extract(a.before_json, '$.lock_state') = 'frei' "
           "AND json_extract(a.after_json, '$.lock_state') IN ('gesperrt', 'verloren')")
-# Ein Teil, beim Aussondern seines Sets entnommen und gesperrt weitergeführt (Journal „entnommen“ mit set_grund
-# „ausgesondert“): seine eigene Sperre, wenn es vorher frei oder nur mit dem Set gesperrt war (lock_cause „set“).
-AUS_SET_ENTNOMMEN = ("a.entity = 'item' AND a.entity_id = i.id AND a.created_at >= i.created_at AND a.action = 'entnommen' "
-                     "AND json_extract(a.after_json, '$.set_grund') = 'ausgesondert' "
-                     "AND json_extract(a.after_json, '$.lock_state') IN ('gesperrt', 'verloren') "
-                     "AND (json_extract(a.before_json, '$.lock_state') = 'frei' "
-                     "OR json_extract(a.before_json, '$.lock_cause') = 'set')")
-# Mit dem Set ausgesondert: Das Teil hängt nach der Aussonderung weiter am Set – es zählt in der Zeile des Sets.
-NICHT_MIT_DEM_SET = "i.parent_item_id IS NULL"
 IM_JAHR_UTC = "{spalte} >= :von AND {spalte} < :bis"
 
 
@@ -157,15 +137,12 @@ def _ordnerzeilen(fid):
 
 def _bestand(fid, o, ordner, params):
     """Bestand zum Stichtag: Zeilen nach status.STATUS, verloren, DEMO, je Kategorie der obersten Ebene und je Unterordner
-    der ersten Ebene nach Heimat – aus EINER Gruppierung über die Zweigmenge. Dazu „sets“ {anzahl, teile} und
-    „sets_satz“ („N Artikel, darunter k Teile in m Sets“, None ohne Sets – Phase 4 · L2b, Entwurf C) aus derselben
-    Gruppierung: m = Bestand mit Set-Produkt, k = Bestand mit Set, ohne Blick auf die Set-Zeile."""
+    der ersten Ebene nach Heimat – aus EINER Gruppierung über die Zweigmenge."""
     rows = db.query(
         f"SELECT {bestand.heimat_sql('i')} AS heimat, {st.status_sql('i')} AS s, i.lock_state, p.category_id, "
-        f"{bestand.demo_sql('i', 'p')} AS demo, p.is_set AS ist_set, i.parent_item_id IS NOT NULL AS teil, COUNT(*) AS n "
-        f"FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
-        f"WHERE {MENGE} GROUP BY heimat, s, i.lock_state, p.category_id, demo, ist_set, teil", params)
-    zaehlung, verloren, demo, mit_sets = st.leere_zaehlung(), 0, 0, bestand.leere_sets()
+        f"{bestand.demo_sql('i', 'p')} AS demo, COUNT(*) AS n FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
+        f"WHERE {MENGE} GROUP BY heimat, s, i.lock_state, p.category_id, demo", params)
+    zaehlung, verloren, demo = st.leere_zaehlung(), 0, 0
     kategorien, ebene = {}, {}
     # Oberste Kategorieebene (parent_id leer) je Kategorie – eine Abfrage über alle Kategorien.
     alle_kat = {k["id"]: k for k in db.query("SELECT id, parent_id, name FROM mat_category")}
@@ -192,9 +169,6 @@ def _bestand(fid, o, ordner, params):
         if r["demo"]:
             demo += r["n"]
         if r["s"] != "ausgesondert":
-            # Zählsatz (Phase 4 · L2b): Set-Artikel und Teile aus derselben Gruppierung, ohne ausgesonderte.
-            mit_sets["anzahl"] += r["n"] if r["ist_set"] else 0
-            mit_sets["teile"] += r["n"] if r["teil"] else 0
             # Eine Kategorie nur mit Ausgesonderten bekommt keine Zeile (sie hätte nur Nullen).
             k = kategorien.setdefault(oberste(r["category_id"]), {"bestand": 0, "faellig": 0, "gesperrt": 0})
             k["bestand"] += r["n"]
@@ -225,9 +199,8 @@ def _bestand(fid, o, ordner, params):
                                        ebene[("ordner", k["id"])]))
     if ("ohne_herkunft", 0) in ebene:
         zeilen.append(_ebenenzeile(f"{o['name']} (ohne Herkunftsordner)", "", False, ebene[("ohne_herkunft", 0)]))
-    gesamt = sum(zaehlung[s] for s in st.BESTAND)
     return {"zaehlung": zaehlung, "zeilen": [{"status": s, "text": st.LABEL[s], "n": zaehlung[s]} for s in st.STATUS],
-            "bestand": gesamt, "verloren": verloren, "sets": mit_sets, "sets_satz": bestand.zaehlsatz(gesamt, mit_sets),
+            "bestand": sum(zaehlung[s] for s in st.BESTAND), "verloren": verloren,
             "kategorien": [dict(name=n, **k) for n, k in sorted(kategorien.items(), key=lambda x: x[0].casefold())],
             "unterordner": zeilen}, demo
 
@@ -339,8 +312,7 @@ def _pruefer(params):
         "ORDER BY name COLLATE NOCASE, urkunde", params)
     aussonderer = db.query(
         "SELECT x.inspector_name AS name, COUNT(*) AS n FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id "
-        f"WHERE {MENGE} AND {AUSSONDERUNG_IM_JAHR} AND {NICHT_MIT_DEM_SET} GROUP BY name ORDER BY name COLLATE NOCASE",
-        params)
+        f"WHERE {MENGE} AND {AUSSONDERUNG_IM_JAHR} GROUP BY name ORDER BY name COLLATE NOCASE", params)
     return {"pruefer": pruefer, "aussonderungen_durch": aussonderer}
 
 
@@ -352,20 +324,14 @@ def _sperren(params):
         "json_extract(a.after_json, '$.lock_reason') AS grund, "
         "json_extract(a.after_json, '$.pruefung') IS NOT NULL AS aus_pruefung, "
         "json_extract(a.after_json, '$.mangel') IS NOT NULL AS aus_mangel, "
-        "json_extract(a.after_json, '$.set_grund') IS NOT NULL AS aus_set, "
-        "(a.action = 'entnommen' AND json_extract(a.after_json, '$.set_grund') = 'ausgesondert') AS entnommen, "
         f"{bestand.demo_sql('i', 'p')} AS demo FROM mat_audit a JOIN mat_item i ON i.id = a.entity_id "
-        f"JOIN mat_product p ON p.id = i.product_id WHERE {MENGE} "
-        f"AND (({SPERRE} AND a.action <> 'set_gesperrt') OR ({AUS_SET_ENTNOMMEN})) AND "
+        f"JOIN mat_product p ON p.id = i.product_id WHERE {MENGE} AND {SPERRE} AND "
         + IM_JAHR_UTC.format(spalte="a.created_at") + " ORDER BY a.created_at, a.id", params)
     arten = {k: 0 for k, _ in SPERRARTEN}
     liste = []
     for r in rows:
-        # Ein Set-Anlass geht der Prüfung vor: Ein Teil, das beim Aussondern des Sets aus einer Prüfung entnommen und
-        # gesperrt weitergeführt wird, trägt beides – gesperrt hat es das Aussondern, kein „instandsetzen“ (Ablauf N2).
-        # Seit dem Feintuning (L2 Nr. 39) mit eigener Art: Es zählt mit seinem eigenen Zustand, nicht als Set-Sperre.
-        art = ("verlust" if r["zustand"] == "verloren" else "set_entnommen" if r["entnommen"] else "set" if r["aus_set"]
-               else "pruefung" if r["aus_pruefung"] else "mangel" if r["aus_mangel"] else "ohne_pruefung")
+        art = ("verlust" if r["zustand"] == "verloren" else "pruefung" if r["aus_pruefung"]
+               else "mangel" if r["aus_mangel"] else "ohne_pruefung")
         arten[art] += 1
         liste.append({"datum": datum_text(protokoll.ortszeit(r["created_at"]).date().isoformat()),
                       "inventarnummer": r["inventory_no"], "art": art, "art_text": dict(SPERRARTEN)[art],
@@ -387,33 +353,21 @@ def _grundart(r):
     return "sonstiges"
 
 
-def _set_text(r):
-    """Zusatz an der Zeile eines als Ganzes ausgesonderten Sets: „Set, mit 2 Teilen“ – die Teile, die mit ihm
-    ausgesondert wurden (entnommene und weitergeführte zählen mit ihrem eigenen Zustand); leer an anderen Artikeln."""
-    if not r["ist_set"]:
-        return ""
-    n = r["set_teile"]
-    return "Set" + (f", mit {n} {'Teil' if n == 1 else 'Teilen'}" if n else "")
-
-
 def _aussonderungen(params, pruefer_nennen):
     """Aussonderungen im Jahr (kind = 'aussonderung'): Liste mit Grund und Grundart aus dem Präfix; „durch“ nur mit
-    Haken. Ein als Ganzes ausgesondertes Set ist eine Zeile (NICHT_MIT_DEM_SET, „set_text“ – Entscheidung zu L2 Nr. 39)."""
+    Haken."""
     rows = db.query(
         "SELECT x.inspected_on, x.reason, x.inspector_name, x.basis_inspection_id, x.protocol_id, i.inventory_no, "
-        f"p.manufacturer, p.model, p.description AS product_description, {bestand.demo_sql('i', 'p')} AS demo, "
-        "p.is_set AS ist_set, (SELECT COUNT(*) FROM mat_inspection y JOIN mat_item t ON t.id = y.item_id "
-        "WHERE t.parent_item_id = i.id AND y.kind = 'aussonderung' AND y.completed_at IS NOT NULL) AS set_teile "
+        f"p.manufacturer, p.model, p.description AS product_description, {bestand.demo_sql('i', 'p')} AS demo "
         "FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id JOIN mat_product p ON p.id = i.product_id "
-        f"WHERE {MENGE} AND {AUSSONDERUNG_IM_JAHR} AND {NICHT_MIT_DEM_SET} ORDER BY x.inspected_on, x.id", params)
+        f"WHERE {MENGE} AND {AUSSONDERUNG_IM_JAHR} ORDER BY x.inspected_on, x.id", params)
     arten = {k: 0 for k, _ in GRUNDARTEN}
     liste = []
     for r in rows:
         art = _grundart(r)
         arten[art] += 1
         liste.append({"datum": datum_text(r["inspected_on"]), "inventarnummer": r["inventory_no"],
-                      "produkt": _produkt(r), "set_text": _set_text(r), "grund": r["reason"] or "", "art": art,
-                      "art_text": dict(GRUNDARTEN)[art],
+                      "produkt": _produkt(r), "grund": r["reason"] or "", "art": art, "art_text": dict(GRUNDARTEN)[art],
                       "protokoll_id": r["protocol_id"] or "", "durch": r["inspector_name"] if pruefer_nennen else "",
                       "demo": bool(r["demo"])})
     return {"gesamt": len(rows), "arten": [{"art": k, "text": t, "n": arten[k]} for k, t in GRUNDARTEN], "liste": liste}

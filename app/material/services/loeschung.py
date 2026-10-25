@@ -18,10 +18,8 @@ ab, bleibt das Konto samt allem stehen:
   Zuordnungen        je Artikel „zuordnung_geloest“ (grund „Konto gelöscht“), dann gelöst
   offene Entwürfe    Prüfername „(gelöschtes Konto)“ und Urkundennummer leer – ein Entwurf ist kein Nachweis; die
                      Kennung setzt die Datenbank auf NULL, der Materialwart hebt die Reservierung auf
-  Set-Prüfungen      eine offene (mat_set_lauf, Sets, Schritt 21): Name des Eröffners „(gelöschtes Konto)“ wie
-                     beim Entwurf – sie ist noch kein Nachweis; abbrechen kann sie danach der Materialwart. An einer
-                     abgeschlossenen oder abgebrochenen bleibt der Name (Prüfnachweis wie die Prüfernamen in Protokollen,
-                     per Trigger unveränderlich); die Kennung setzt die Datenbank auf NULL
+  Set-Prüfungen      (bis Schritt 26, nur noch beendete): Name des Eröffners bleibt (Prüfnachweis, per Trigger
+                     unveränderlich); die Kennung setzt die Datenbank auf NULL
   Produktmeldungen   Name des Melders und des Bearbeiters „(gelöschtes Konto)“
   Bestandsimporte    Name dessen, der importiert hat (mat_import), und dessen, der eine Zeile der Nacharbeit erledigt
                      hat (mat_import_row), „(gelöschtes Konto)“ – Arbeitsdaten; der Nachweis steht im Journal
@@ -37,9 +35,8 @@ ab, bleibt das Konto samt allem stehen:
                      Kennungen setzt die Datenbank auf NULL, die Namen bleiben – unbefristet mit dem Artikel, wie die
                      Mangelmeldungen (anders als Produktmeldungen, die Arbeitsdaten des Katalogs sind und
                      „(gelöschtes Konto)“ bekommen; Entscheidung vom 21.10.2026, Bitte bestätigen)
-Abgeschlossene Prüfungen, Durchgänge, Ausnahmen, Anhänge, Rückrufe und das Journal bleiben, wie sie sind – auch die
-Freitext-Bemerkung von „Bestandteil ersetzt“ (Sets, P4-L2b: höchstens 200 Zeichen, einzeilig, unveränderlich
-im Journal des Sets; der Dialog sagt „keine Personennamen“). Deaktivieren
+Abgeschlossene Prüfungen, Durchgänge, Ausnahmen, Anhänge, Rückrufe und das Journal bleiben, wie sie sind (auch die
+Freitext-Bemerkungen früherer Set-Einträge, bis Schritt 26). Deaktivieren
 ändert im Modul nichts: Freigaben wirken nicht mehr (current_user verlangt ein aktives Konto), Zuordnungen bleiben und
 erscheinen mit „(deaktiviert)“. Ablauf beim Austritt: PSA zurücknehmen (Zuordnung lösen), Konto deaktivieren, nach
 Klärung offener Prüfungen löschen. Die Stufe im Modul Material steht am Konto und geht mit ihm; die Einträge „rollen“
@@ -92,7 +89,6 @@ def konto_loeschen_vorbereiten(uid):
     db.execute("UPDATE mat_item SET assigned_user_id = NULL, updated_at = ? WHERE assigned_user_id = ?", (db.now(), uid))
     db.execute("UPDATE mat_inspection SET inspector_name = ?, inspector_certificate = '' WHERE inspector_user_id = ? "
                "AND completed_at IS NULL", (GELOESCHT, uid))
-    db.execute("UPDATE mat_set_lauf SET opened_by_name = ? WHERE opened_by = ? AND state = 'offen'", (GELOESCHT, uid))
     db.execute("UPDATE mat_product_request SET created_by_name = ? WHERE created_by = ?", (GELOESCHT, uid))
     db.execute("UPDATE mat_product_request SET resolved_by_name = ? WHERE resolved_by = ?", (GELOESCHT, uid))
     db.execute("UPDATE mat_global_search SET user_name = ? WHERE user_id = ?", (GELOESCHT, uid))
