@@ -1775,6 +1775,23 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-bt-label { margin: 10px 0 0; font-weight: 600; }
 .mat-bt .mat-gewaehlt { margin-top: 4px; }
 .field-row.mat-bt-felder { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 2fr); }
+/* Bestandteil-Liste eines Produkts, das kein Set ist (Schritt 25): nur Bezeichnung und Anzahl. */
+.field-row.mat-bt-felder.nur-text { grid-template-columns: minmax(0, 4fr) minmax(0, 1fr); }
+.mat-bt-flach { margin: 0 0 4px; }
+.mat-bestandteile { margin: 0; padding-left: 18px; }
+.mat-bestandteile li + li { margin-top: 2px; }
+.mat-bestandteil-liste .mat-bestandteile { margin-bottom: 8px; }
+.mat-teilnummern { display: block; overflow-wrap: anywhere; }
+.mat-teilnr-satz { border: 1px solid var(--linie); padding: 6px 12px 8px; margin: 14px 0 0; min-width: 0; }
+.mat-teilnr-satz legend { font-weight: 600; padding: 0 4px; }
+.mat-teilnr-satz .field-row:first-of-type label { margin-top: 4px; }
+.mat-fest-teile { margin-top: 10px; }
+.mat-fest-teile .mat-bt-label { margin-top: 0; }
+.mat-punkt-nummern { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 4px 14px;
+  margin-top: 8px; }
+.mat-punkt-nummern label { margin-top: 0; font-weight: 400; }
+.mat-punkt-nummern input { margin: 0; }
+.mat-punkt-nummern .help { margin: 2px 0 0; }
 .mat-bt-fehler { margin: 6px 0 0; }
 .mat-bt-neu { margin-top: 12px; align-items: center; }
 .mat-bt-zaehler { margin: 0; }
