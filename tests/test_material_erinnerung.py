@@ -1324,7 +1324,8 @@ def test_mailtext():
             assert t.startswith("Hallo wart,\n\nhier steht nur, was seit der letzten Erinnerung neu fällig ist"), t
             assert f"Alles Fällige: {BASIS}/material/pruefungen" in t
             assert t.index("OG Musterstadt / Fahrzeug 1 (1)") < t.index("OG Musterstadt / Lager (5)"), t
-            assert "MT-5" in t and "Lebensdauer erreicht seit 30.10.2026 – aussondern" in t, t
+            assert "MT-5" in t and ("Lebensdauer erreicht seit 30.10.2026 – prüfen lassen („aussondern empfohlen“), "
+                                    "danach sondert der Materialwart aus") in t, t
             assert "Lebensende am 30.01.2027 (in 89 Tagen)" not in t and "Lebensende am 29.01.2027 (in 88 Tagen)" in t
             assert "fällig am 08.11.2026 (in 6 Tagen) · Lebensende am 01.01.2027 (in 60 Tagen)" in t, t
             assert "überfällig – fällig war der 23.10.2026" in t

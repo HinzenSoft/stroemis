@@ -318,7 +318,9 @@ def protokolle_zip(fid):
             x["protocol_id"], "Aussonderungsprotokoll" if x["kind"] == "aussonderung" else "Prüfprotokoll",
             PRUEFART_TEXT.get(x["kind"], x["kind"]), datum_text(x["inspected_on"]), zeit_text(x["locked_at"]),
             x["inventory_no"], x["serial_no"], katalog.produktname(x, x["product_description"]), x["durchgang"], "",
-            x["inspector_name"], x["inspector_certificate"], ERGEBNISSE.get(x["result"], x["result"]), x["reason"], name,
+            x["inspector_name"], x["inspector_certificate"],
+            # Eine Aussonderung heißt „ausgesondert“ – „aussondern (ausgesondert)“ ist das Etikett alter Prüfungen.
+            "ausgesondert" if x["kind"] == "aussonderung" else ERGEBNISSE.get(x["result"], x["result"]), x["reason"], name,
             x["file_sha256"], x["pdf_sha256"], x["pdf_hashed_bytes"], zustand, berichtigt_durch.get(x["id"], ""),
             protokoll_von.get(x["corrects_inspection_id"], "(ohne Protokoll)") if x["corrects_inspection_id"] else "",
             "ja" if x["artikel_demo"] else "nein"])

@@ -223,6 +223,7 @@ def test_zip():
         assert set(verz) == set(erwartet), set(verz)
         v = verz[aus["protocol_id"]]
         assert v["Art"] == "Aussonderungsprotokoll" and v["Grund"] == "Verlust" and v["Prüfer"] == "wart", v
+        assert v["Ergebnis"] == "ausgesondert", v              # nicht das Etikett alter Prüfungen (Ablaufprüfung A1)
         assert hashlib.sha256(z.read(v["Datei im ZIP"])).hexdigest() == aus["file_sha256"]
         # Ein leerer Ordner: ein ZIP, in dem nur das Verzeichnis liegt.
         z, _, verz = zip_lesen(f.get(f"/material/export/{o['lager']}-protokolle.zip").data)

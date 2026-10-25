@@ -614,7 +614,9 @@ def _angabe(e, stichtag):
         return f"überfällig – fällig war der {_datum(e.faellig_am)}"
     if e.stufe == "lebensdauer":
         if tage <= 0:
-            return f"Lebensdauer erreicht seit {_datum(e.faellig_am)} – aussondern"
+            # Seit Schritt 28 sondert niemand direkt aus: Ein Prüfer empfiehlt es, der Materialwart sondert aus.
+            return (f"Lebensdauer erreicht seit {_datum(e.faellig_am)} – prüfen lassen („aussondern empfohlen“), danach "
+                    "sondert der Materialwart aus")
         return f"Lebensende am {_datum(e.faellig_am)} ({_in_tagen(tage)})"
     return f"fällig am {_datum(e.faellig_am)} ({_in_tagen(tage)})"
 

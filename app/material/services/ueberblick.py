@@ -97,7 +97,7 @@ def ordner_uebersicht(alle=None):
 WARNUNG = {
     "ausgesondert": "AUSGESONDERT – {nr} ist außer Dienst und darf nicht mehr verwendet werden.",
     "gesperrt": "GESPERRT{grund} – {nr} nicht verwenden, bis eine Freiprüfung ihn freigibt.",
-    "lebensdauer": "LEBENSDAUER ERREICHT – {nr} nicht mehr verwenden, aussondern.",
+    "lebensdauer": "LEBENSDAUER ERREICHT – {nr} nicht mehr verwenden, prüfen lassen und aussondern.",
 }
 
 

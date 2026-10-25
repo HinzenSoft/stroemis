@@ -4160,6 +4160,40 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Designsprache: keine Erklärzeilen unter Knöpfen; Texte zur Lebensdauer (25.10.2026)
+
+Entscheidung des Nutzers zu „Bitte bestätigen“ 5 von „Aussondern nur durch den Materialwart“: „an die Designsprache
+anpassen“ (designsprache.md: keine Erklärtexte unter Knöpfen – Hilfe gehört an Felder oder in einen Satz über dem
+Abschnitt). Dazu A1 und zwei Verbesserungen der Ablaufprüfung zu b7abddf.
+
+- **Sätze über der Knopfzeile statt darunter** (die Knöpfe bleiben ausgegraut, `aria-describedby` zeigt auf den Satz):
+  - Artikelseite: warum „Aussondern“ gerade nicht geht (Text vom Server, `artikel.aussondern.grund`) und „Du hast am …
+    schon gemeldet …“ am ausgegrauten „Mangel melden …“; ebenso der Satz, warum „Prüfen“ fehlt („Prüfen dürfen Prüfer
+    …“ bzw. der Hinweis zur Prüffreigabe) und – nur am Finger – die Erklärung zu „Lebenslauf (PDF)“.
+  - „Meine PSA“: „Du hast schon gemeldet …“ am ausgegrauten „Mangel melden …“ der Karte.
+  - Artikel anlegen: die Erklärung zu „Anlegen und nächsten“ (nur am Finger).
+  - Bestandsimport: der Satz zur Frist der Nacharbeit über „Neu wählen“ | „Übernehmen“.
+  Geprüft und nicht geändert (stehen über oder neben dem, was sie erklären): Hilfetexte an Feldern, Einleitungssätze
+  von Abschnitten (Formularseite, Katalog, Prüfungen), Hinweise in Dialogen über den Knöpfen. Offen gelassen: die
+  Statuszeile der Abschlussleiste in der Prüfung (`#pr-hinweis`, unter Ergebnis und „Festschreiben“) – sie meldet den
+  Stand der Prüfung (fehlende Befunde, Fotos, was das Ergebnis bewirkt), keine Bedienhilfe; bitte bestätigen.
+- **Texte bei erreichter Lebensdauer (A1):** Erinnerungsmail „Lebensdauer erreicht seit … – prüfen lassen („aussondern
+  empfohlen“), danach sondert der Materialwart aus“; Banner nach QR-Scan und auf der Artikelseite „LEBENSDAUER
+  ERREICHT – … nicht mehr verwenden, prüfen lassen und aussondern.“; Bestandsimport (Hinweis je Zeile und Satz im
+  Bericht) entsprechend. Kein Verhalten geändert.
+- **Etiketten:** Aussonderungen heißen in `Verzeichnis.csv` und in der Prüfungsliste des Jahresberichts (CSV)
+  „ausgesondert“ – „aussondern (ausgesondert)“ bleibt das Etikett alter Prüfungen. Die Ergebnisübersicht des
+  Jahresberichts zeigt die Zeile „aussondern (ausgesondert)“ nur, wenn es solche Prüfungen im Jahr gibt.
+- Die Lücken in den T-Nummern bei verworfenen Abschlüssen bleiben (N1, dokumentiert).
+- **Browserprobe 1280/360** (60er-Beispielbestand auf Schema 28): Satz über „Mangel melden …“ | „Aussondern“ (ausgegraut,
+  `aria-describedby` passt), kein waagerechter Bildlauf, keine Konsolenfehler. Die offene Beobachtung aus der vorigen
+  Probe („aussondern empfohlen“ bei 360 px nach dem Skript-Klick nicht gedrückt) war kein Fehler: Das Ergebnis schaltet
+  bei einem zweiten Klick wieder ab, und die Probe hatte den Zustand aus dem 1280-Durchgang (sessionStorage) übernommen
+  – mit frischem Zustand stellen Skript-Klick und echter Tipp (Touch-Ereignis) es bei 1280 und 360 ein, der Hinweis
+  der Abschlussleiste erscheint.
+- Tests: statischer Test der Reihenfolge (Satz vor Knopfzeile) in `test_material_aussondern`; Texte in
+  `test_material_erinnerung`; Etiketten in `test_material_export` und `test_material_bericht`.
+
 ## Zusammenführung: Beispielbestand (demo-formulare, 581aa38) in l2c-rest (25.10.2026)
 
 Merge des Zweigs demo-formulare (großer Beispielbestand 4031ad2, Entfernen von `scripts/material_demo.py` und

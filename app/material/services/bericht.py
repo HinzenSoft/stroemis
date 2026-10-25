@@ -257,7 +257,9 @@ def _pruefungen(params):
                          params, one=True)["n"]
     return {"gesamt": len(rows),
             "arten": [{"art": k, "text": PRUEFART_TEXT.get(k, k), "n": n} for k, n in arten.items()],
-            "ergebnisse": [{"ergebnis": e, "text": ERGEBNISSE.get(e, e), "n": n} for e, n in ergebnisse.items()],
+            # „aussondern (ausgesondert)“ gibt es nur an Prüfungen vor Schritt 28 – die Zeile nur, wenn welche da sind.
+            "ergebnisse": [{"ergebnis": e, "text": ERGEBNISSE.get(e, e), "n": n} for e, n in ergebnisse.items()
+                           if n or e != "aussondern"],
             "mit_mangel": mit_mangel, "kritisch": kritisch, "entwuerfe": entwuerfe,
             "abdeckung": {"bestand": bestand_n, "geprueft": len(geprueft), "nicht_geprueft": len(nicht)},
             "nicht_geprueft": [{"inventarnummer": r["inventory_no"], "produkt": _produkt(r),
@@ -576,7 +578,8 @@ def csv(fid, jahr, sicht=None, pruefer_nennen=False):
         ordner = baum.get(x["heimat"], ohne)
         zeilen.append([
             datum_text(x["inspected_on"]), "Aussonderungsprotokoll" if aus else "Prüfprotokoll",
-            PRUEFART_TEXT.get(x["kind"], x["kind"]), ERGEBNISSE.get(x["result"], x["result"] or ""), x["reason"] or "",
+            PRUEFART_TEXT.get(x["kind"], x["kind"]), "ausgesondert" if aus else ERGEBNISSE.get(x["result"], x["result"] or ""),
+            x["reason"] or "",
             x["inventory_no"], x["serial_no"], x["manufacturer"], x["model"], x["article_no"] or "",
             kategorien.get(x["category_id"], ""), ordner["pfad"], ordner["gliederung"], x["durchgang"] or "",
             x["protocol_id"] or "", (x["original_protokoll"] or "(ohne Protokoll)") if x["corrects_inspection_id"] else "",

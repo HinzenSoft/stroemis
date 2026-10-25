@@ -263,8 +263,7 @@ def test_zahlen():
         p = b["pruefungen"]
         assert p["gesamt"] == 5 and p["entwuerfe"] == 1 and p["mit_mangel"] == 1 and p["kritisch"] == 1, p
         assert {x["art"]: x["n"] for x in p["arten"]} == {"eingang": 3, "periodisch": 1, "ausserplanmaessig": 1, "reparatur": 0}
-        assert {x["ergebnis"]: x["n"] for x in p["ergebnisse"]} == {"einsatzbereit": 3, "instandsetzen": 1, "aussondern_empfohlen": 1,
-                                                                        "aussondern": 0}
+        assert {x["ergebnis"]: x["n"] for x in p["ergebnisse"]} == {"einsatzbereit": 3, "instandsetzen": 1, "aussondern_empfohlen": 1}
         assert p["abdeckung"] == {"bestand": 11, "geprueft": 3, "nicht_geprueft": 8}, p["abdeckung"]
         nicht = {x["inventarnummer"]: x for x in p["nicht_geprueft"]}
         assert set(nicht) == {a[n]["inventory_no"] for n in ("grenze", "fach_a", "unter", "verloren", "mangel_a", "ug_a", "demo_a", "gurt_a")}
@@ -504,6 +503,7 @@ def test_pdf_und_csv():
         assert z_krit["Ordner"] == "OG Berichtstadt / Fahrzeug GW" and z_krit["Gliederung"] == "OG Berichtstadt"
         assert z_krit["Kategorie"] == "PSA gegen Absturz / Karabiner" and z_krit["DEMO"] == "nein"
         z_aus = [z for z in zeilen if z["Art"] == "Aussonderungsprotokoll" and z["Inventarnummer"] == a["verlust"]["inventory_no"]][0]
+        assert z_aus["Ergebnis"] == "ausgesondert", z_aus
         assert z_aus["Grund"] == "Verlust" and z_aus["Mängel"] == "" and z_aus["kritischer Mangel"] == "" and z_aus["Bemerkung"] == "Platzhalter weg"
         roh = r.data.decode("utf-8-sig")
         assert "1012-4711" not in roh and "pruefer" not in roh and ";wart;" not in roh

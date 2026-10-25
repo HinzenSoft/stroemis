@@ -1125,7 +1125,8 @@ def _mit_produkt(e, lauf, doppelt, varianten):
     rb = e.plan["w"]["retire_by"]
     if rb and rb <= T.isoformat():
         e.lebensdauer = True
-        e.hinweise.append("Lebensdauer erreicht – nach dem Import aussondern")
+        e.hinweise.append("Lebensdauer erreicht – nach dem Import prüfen lassen („aussondern empfohlen“), danach "
+                          "sondert der Materialwart aus")
     # Journal des Artikels: woher er kommt (ohne Dateinamen) und was die Liste sagte.
     if w.get("inventarnummer"):
         e.journal["liste_inventarnummer"] = w["inventarnummer"]
