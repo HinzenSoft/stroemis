@@ -109,12 +109,13 @@ window.S = (function () {
   }
 
   /* Rückfrage in einem eigenen Dialog – so bleibt ein bereits offener Dialog
-     (z. B. der Versionsverlauf) darunter stehen, statt mit geschlossen zu werden. */
-  function confirm(text, okLabel) {
+     (z. B. der Versionsverlauf) darunter stehen, statt mit geschlossen zu werden. neinLabel: wenn „Abbrechen“
+     missverständlich wäre (die Hauptaktion heißt selbst „… abbrechen“). */
+  function confirm(text, okLabel, neinLabel) {
     return new Promise((resolve) => {
       const dlg = document.createElement("dialog");
       dlg.innerHTML = `<div class="dlg-body"><h2>Bist du sicher?</h2><p>${esc(text)}</p>
-        <div class="dlg-actions"><button class="btn secondary" id="c-no" type="button">Abbrechen</button>
+        <div class="dlg-actions"><button class="btn secondary" id="c-no" type="button">${esc(neinLabel || "Abbrechen")}</button>
         <button class="btn danger" id="c-ok" type="button">${esc(okLabel || "Löschen")}</button></div></div>`;
       document.body.appendChild(dlg);
       const done = (v) => { resolve(v); dlg.close(); };

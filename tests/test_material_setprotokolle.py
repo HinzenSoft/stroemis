@@ -282,7 +282,7 @@ def test_pruefseite_und_ablage():
             assert r.status_code == 200, r.get_json()
             return r.json
         e = pruefen_(original)
-        assert e == {"ergebnis": "unveraendert", "protokoll_id": z["protocol_id"], "art": "Sammelprotokoll (Set)",
+        assert e == {"ergebnis": "unveraendert", "protokoll_id": z["protocol_id"], "art": "Set-Protokoll",
                      "hinweis": e["hinweis"]}, e
         kopie = bytearray(original)
         kopie[len(kopie) // 3] ^= 1
@@ -338,13 +338,24 @@ def test_rechte_ordnerseite_und_zip():
         namen = z.namelist()
         assert "Verzeichnis.csv" in namen and len([n for n in namen if n.endswith(".pdf")]) == 4, namen
         verzeichnis = z.read("Verzeichnis.csv").decode("utf-8-sig")
-        assert verzeichnis.count("Sammelprotokoll (Set)") == 3 and "unverändert" in verzeichnis
+        assert verzeichnis.count(";Set-Protokoll;") == 3 and "unverändert" in verzeichnis
+        # Das Set steht in der eigenen Spalte „Set“, nicht unter „Grund“ (Browserprüfung vom 25.10.2026).
+        import csv
+        reihen = list(csv.DictReader(io.StringIO(verzeichnis), delimiter=";"))
+        t_a = next(x for x in reihen if x["Protokoll-ID"] == s[t.a]["protocol_id"])
+        assert t_a["Set"] == "OG Setstadt › Fahrzeug › Rucksack A" and t_a["Grund"] == "" and t_a["Art"] == "Set-Protokoll"
+        assert all(x["Set"] == "" for x in reihen if x["Art"] == "Sammelprotokoll")
+        assert sorted(n for n in namen if n.endswith(".pdf"))[0].startswith("Sammelprotokolle/")
+        assert all(n.startswith("Set-Protokolle/") for n in namen if "/T-" in n)
+        kopf = r.headers["Content-Disposition"]
+        assert kopf.startswith('attachment; filename="Protokolle_Platzhalter-Durchgang_S-') and "filename*=UTF-8''" in kopf
         # Ordner-Export von A: T(A) und T(B).
         r = t.w.get(f"/material/export/{t.a}-protokolle.zip")
         z = zipfile.ZipFile(io.BytesIO(r.data))
         texte = " ".join(z.namelist())
         assert s[t.a]["protocol_id"] in texte and s[t.b]["protocol_id"] in texte and s[t.c]["protocol_id"] not in texte
-        assert z.read("Verzeichnis.csv").decode("utf-8-sig").count("Sammelprotokoll (Set)") == 2
+        assert f"Set-Protokolle/{s[t.a]['protocol_id'].split('-')[1]}/{s[t.a]['protocol_id']}.pdf" in z.namelist()
+        assert z.read("Verzeichnis.csv").decode("utf-8-sig").count(";Set-Protokoll;") == 2
         ziel = os.environ.get("SETPROTOKOLL_ABLAGE")              # für bin/st-vera (PDF/A) – nur, wenn angegeben
         if ziel:
             with open(ziel + "-T.pdf", "wb") as fh:
@@ -356,16 +367,230 @@ def test_rechte_ordnerseite_und_zip():
 
 def test_oberflaeche_statisch():
     """Durchgangsseite: „Alle Protokolle (ZIP)“ als grauer Knopf, Liste der Set-Protokolle, Satz und Rückfrage mit der
-    Zahl der Sets; Ordnerseite mit „Sammelprotokolle“; Beschriftung des Journalfelds in beiden Sprachen."""
+    Zahl der Sets; Ordnerseite mit „Set-Protokolle“ bzw. „Sammelprotokolle“; Beschriftung des Journalfelds in beiden
+    Sprachen. Nachbesserung (25.10.2026): „bis zu n“, Abbruch-Rückfrage mit „Zurück“ und dem Satz zu den
+    Set-Protokollen, PDF-Links mit eigenem Namen, Prüfsummen-Linie am Text."""
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
     assert '<a class="btn secondary" href="/material/durchgang/${d.id}/protokolle.zip">Alle Protokolle (ZIP)</a>' in js
     assert "function setProtokolleHtml(liste)" in js and "function sammelprotokolleHtml(liste)" in js
-    assert "<h2>Set-Protokolle</h2>" in js and "<h2>Sammelprotokolle</h2>" in js
+    assert "<h2>Set-Protokolle</h2>" in js and "<h2>${sammelprotokolleTitel(d.sammelprotokolle)}</h2>" in js
+    assert '"Set- und Sammelprotokolle" : arten.has("Set-Protokoll") ? "Set-Protokolle" : "Sammelprotokolle"' in js
     assert 'plural(sets, "Set-Protokoll", "Set-Protokolle")' in js
+    assert "hier bis zu ${d.set_ordner.anzahl}" in js and "(hier ${plural(" not in js
+    assert 'confirm(text + weiter, "Durchgang abbrechen", "Zurück")' in js
+    assert "Set-Protokolle entstehen dabei keine – nur beim Abschließen." in js
+    assert 'aria-label="Set-Protokoll ${esc(t.protokoll.id)} (PDF)"' in js
+    assert "einzelner Stücke" in js and "einzelner Stück " not in js
+    assert '<span class="mat-summe-text">' in js
+    css = open(os.path.join(wurzel, "app/material/static/material.css"), encoding="utf-8").read()
+    assert ".mat-summe-text { border-bottom: 1px dashed var(--grau); }" in css
+    common = open(os.path.join(wurzel, "app/static/js/common.js"), encoding="utf-8").read()
+    assert "function confirm(text, okLabel, neinLabel)" in common and '${esc(neinLabel || "Abbrechen")}' in common
     from app.material.services import beschriftung
     assert f'set_protokolle: "{beschriftung.FELD["set_protokolle"]}"' in js
     print("Oberfläche (statisch) bestanden.")
+
+
+def _zwischen(app, rid, wurzel=None):
+    """Die Zwischenzeilen je Artikel (Inventarnummer → Liste der Texte) im Sammel- bzw. Set-Protokoll."""
+    with app.test_request_context():
+        from app import db
+        from app.material.services import protokoll
+        r = db.query("SELECT * FROM mat_round WHERE id = ?", (rid,), one=True)
+        d = protokoll._sammelprotokoll(r, "X", r["locked_at"], wurzel=wurzel,
+                                       haupt={"protokoll_id": "S", "ordner": "G"} if wurzel else None,
+                                       je_set={z["folder_id"]: {"protokoll_id": z["protocol_id"], "kennung": z["id"]}
+                                               for z in protokoll.set_protokolle(rid)})
+        return [(a["inventarnummer"], a["zwischen"], a["im_set"]) for a in d["artikel"]]
+
+
+def test_zwischenzeilen():
+    """Ablauf B1 = Browser 1: Zwischenzeilen nach der ganzen Kette der Sets. Proben b3/b4 der Ablaufprüfung (Set nur mit
+    innerem Set, erster Artikel im inneren Set über einen Unterordner, Artikel ohne Set nach einem Set-Block, dasselbe im
+    Set-Protokoll des äußeren Sets) und der Fall aus Browser S-2.png (Artikel nach einem inneren Set); „n Artikel“ zählt
+    genau die Zeilen darunter."""
+    with ohne_post(), tempfile.TemporaryDirectory() as tmp:
+        app, k = umgebung(tmp)
+        ids = katalog_grund(k["adm"])
+        pruef_formulare(k["katalog"], ids)
+        w, p = k["wart"], k["pruefer"]
+        g, _ = gliederung(k["adm"], "OG Zeilen")
+        f1 = ordner_neu(w, g, "Fahrzeug 1", "fahrzeug")
+        rr = ordner_neu(w, f1, "Rucksack R", "set")
+        rb = ordner_neu(w, rr, "Beutel RB", "set")
+        f2 = ordner_neu(w, g, "Fahrzeug 2", "fahrzeug")
+        a = ordner_neu(w, g, "Rucksack A", "set")
+        t1 = ordner_neu(w, a, "Tasche1", "sonstiges")
+        y = ordner_neu(w, t1, "Beutel Y", "set")
+        t2 = ordner_neu(w, a, "Tasche2", "sonstiges")
+        kk = ordner_neu(w, g, "Kiste K", "set")
+        ee = ordner_neu(w, kk, "Etui E", "set")
+        n = {name: neuer_artikel(w, ids["hms"], fid, serial_no=f"ZZ-{name}")["inventory_no"] for name, fid in
+             (("r1", rr), ("rb1", rb), ("f2", f2), ("y1", y), ("t2", t2), ("e1", ee))}
+        nach_nr = {v: k_ for k_, v in n.items()}
+        rid = w.post(f"{API}/durchgaenge", json={"folder_id": g, "titel": "Platzhalter Zeilen"}).json["durchgang"]["id"]
+        for iid in [x["item_id"] for x in zeilen(app, "SELECT item_id FROM mat_round_item WHERE round_id = ?", (rid,))]:
+            pruefen(p, iid, rid)
+        assert w.post(f"{API}/durchgaenge/{rid}/abschliessen", json={}).status_code == 200
+        t = {z["folder_id"]: z["protocol_id"] for z in zeilen(app, "SELECT folder_id, protocol_id FROM "
+                                                              "mat_round_setprotokoll WHERE round_id = ?", (rid,))}
+        assert set(t) == {rr, rb, a, y, kk, ee}
+        G = "OG Zeilen"
+        erwartet = [
+            ("r1", [f"Set {G} › Fahrzeug 1 › Rucksack R · 1 Artikel, im ganzen Set 2 · Set-Protokoll {t[rr]}"], True),
+            ("rb1", [f"Set {G} › Fahrzeug 1 › Rucksack R › Beutel RB · 1 Artikel · Set-Protokoll {t[rb]}"], True),
+            # Browser S-2.png: der Artikel nach dem inneren Set steht nicht mehr unter dessen Zwischenzeile.
+            ("f2", [f"Außerhalb von Sets · {G} › Fahrzeug 2 · 1 Artikel"], False),
+            # b4: Kiste K hat nur das innere Set – trotzdem eine Zeile mit ihrem Set-Protokoll, vor der inneren.
+            ("e1", [f"Set {G} › Kiste K · im ganzen Set 1 Artikel · Set-Protokoll {t[kk]}",
+                    f"Set {G} › Kiste K › Etui E · 1 Artikel · Set-Protokoll {t[ee]}"], True),
+            # b3: der erste Artikel von A liegt über Tasche1 im inneren Set Y – A steht davor, nicht dahinter.
+            ("y1", [f"Set {G} › Rucksack A · im ganzen Set 2 Artikel · Set-Protokoll {t[a]}",
+                    f"Set {G} › Rucksack A › Tasche1 › Beutel Y · 1 Artikel · Set-Protokoll {t[y]}"], True),
+            ("t2", [f"Set {G} › Rucksack A (Fortsetzung) · 1 Artikel"], True),
+        ]
+        assert [(nach_nr[x], z, i) for x, z, i in _zwischen(app, rid)] == erwartet
+        # Set-Protokoll von A: A ist die äußerste Ebene – nach Y „Rucksack A (Fortsetzung)“, nicht unter Y.
+        assert [(nach_nr[x], z, i) for x, z, i in _zwischen(app, rid, a)] == [
+            ("y1", [f"Set {G} › Rucksack A › Tasche1 › Beutel Y · 1 Artikel · Set-Protokoll {t[y]}"], True),
+            ("t2", [f"Set {G} › Rucksack A (Fortsetzung) · 1 Artikel"], False)]
+        assert [(nach_nr[x], z) for x, z, _ in _zwischen(app, rid, rr)] == [
+            ("r1", []), ("rb1", [f"Set {G} › Fahrzeug 1 › Rucksack R › Beutel RB · 1 Artikel · Set-Protokoll {t[rb]}"])]
+        # So steht es auch im PDF.
+        pfad = zeilen(app, "SELECT pdf_path FROM mat_round WHERE id = ?", (rid,))[0]["pdf_path"]
+        with open(os.path.join(tmp, pfad), "rb") as fh:
+            haupt = " ".join(_pdf_text(fh.read()).split())
+        for _, texte, _ in erwartet:
+            for text in texte:
+                assert text in haupt, text
+        assert haupt.index(f"Set {G} › Kiste K · im ganzen") < haupt.index(f"Set {G} › Kiste K › Etui E")
+        # Ein Durchgang direkt auf dem Set A: A als äußerste Ebene, wie im Set-Protokoll.
+        rid2 = w.post(f"{API}/durchgaenge", json={"folder_id": a, "titel": "Platzhalter A"}).json["durchgang"]["id"]
+        for name in ("y1", "t2"):
+            iid = zeilen(app, "SELECT id FROM mat_item WHERE inventory_no = ?", (n[name],))[0]["id"]
+            pruefen(p, iid, rid2)
+        assert w.post(f"{API}/durchgaenge/{rid2}/abschliessen", json={}).status_code == 200
+        assert [(nach_nr[x], z) for x, z, _ in _zwischen(app, rid2)][1] == \
+            ("t2", [f"Set {G} › Rucksack A (Fortsetzung) · 1 Artikel"])
+    print("Zwischenzeilen bestanden.")
+
+
+def test_abschluss_zweistufig():
+    """Ablauf B2 = Sicherheit 1 (Entscheidung „PDFs vorher erzeugen“): Die PDFs entstehen ohne Schreibsperre – während
+    des Renderns schreibt eine andere Verbindung ohne zu warten. Ändert sich zwischen Rendern und Festschreiben etwas, das
+    in den Protokollen stünde, wird verworfen und neu gerendert (keine Zwischendatei bleibt, keine Nummer verbraucht);
+    ändert es sich jedes Mal, 409 mit verständlicher Meldung und nichts festgeschrieben. verwaiste_beiseite löscht nur alte
+    Zwischendateien."""
+    from app.material.services import durchgang as durchgang_dienst
+    from app.material.services import pdf, protokoll
+    with ohne_post(), tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        rid = durchgang(t, t.g)
+        for x in (t.a1, t.a2, t.b1, t.c1, t.l1):
+            pruefen(t.p, x["id"], rid)
+        for x in (t.d1, t.a3, t.a4):
+            ausnehmen(t.w, rid, x["id"])
+        echt_rendern, echt_vorab = pdf.rendern, protokoll.durchgang_rendern
+        schreiber = []
+
+        def rendern_mit_schreiber(vorlage, daten):
+            # Eine andere Verbindung (wie eine Anmeldung) schreibt – ohne Wartezeit: Niemand hält die Sperre.
+            conn = sqlite3.connect(t.app.config["DB_PATH"], timeout=0)
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                conn.execute("UPDATE users SET last_login = last_login WHERE id = 1")
+                conn.commit()
+                schreiber.append(vorlage)
+            finally:
+                conn.close()
+            return echt_rendern(vorlage, daten)
+        aufrufe = []
+
+        def vorab_dann_umbenennen(v):
+            echt_vorab(v)
+            aufrufe.append(1)
+            if len(aufrufe) == 1:
+                # Nach dem Rendern, vor dem Festschreiben: Set C bekommt einen neuen Namen – steht in den Protokollen.
+                conn = roh(t.app)
+                with conn:
+                    conn.execute("UPDATE mat_folder SET name = 'Kiste C neu' WHERE id = ?", (t.c,))
+                conn.close()
+        pdf.rendern, protokoll.durchgang_rendern = rendern_mit_schreiber, vorab_dann_umbenennen
+        try:
+            r = t.w.post(f"{API}/durchgaenge/{rid}/abschliessen", json={})
+        finally:
+            pdf.rendern, protokoll.durchgang_rendern = echt_rendern, echt_vorab
+        assert r.status_code == 200, r.get_json()
+        assert len(aufrufe) == 2 and schreiber.count("setprotokoll") == 6 and schreiber.count("sammelprotokoll") == 2
+        s = _set_zeilen(t, rid)
+        jahr = s[t.a]["protocol_id"].split("-")[1]
+        assert sorted(z["protocol_id"] for z in s.values()) == [f"T-{jahr}-{n:06d}" for n in (1, 2, 3)]
+        assert s[t.c]["ordner"] == "OG Setstadt › Kiste C neu"
+        haupt = " ".join(_pdf_text(t.w.get(f"/material/durchgang/{rid}/sammelprotokoll").data).split())
+        assert "Kiste C neu" in haupt
+        ablage = os.path.join(tmp, "pdf", jahr)
+        assert not [x for x in os.listdir(ablage) if x.endswith(protokoll.ZWISCHEN_ENDUNG)], os.listdir(ablage)
+        for z in s.values():
+            assert hashlib.sha256(_datei(t, z["pdf_path"])).hexdigest() == z["file_sha256"]
+            assert oct(os.stat(os.path.join(tmp, z["pdf_path"])).st_mode & 0o777) == "0o444"
+        assert len([x for x in os.listdir(ablage) if x.endswith(".pdf")]) == 5 + 3 + 1     # P ×5, T ×3, S
+
+        # Ändert sich jedes Mal etwas: nach VERSUCHE Versuchen 409, nichts festgeschrieben, keine Datei.
+        rid2 = durchgang(t, t.c, "Platzhalter immer anders")
+        pruefen(t.p, t.c1["id"], rid2)
+        vorher = sorted(os.listdir(ablage))
+        zaehler = []
+
+        def immer_anders(v):
+            echt_vorab(v)
+            zaehler.append(1)
+            conn = roh(t.app)
+            with conn:
+                conn.execute("UPDATE mat_folder SET name = ? WHERE id = ?", (f"Kiste C {len(zaehler)}", t.c))
+            conn.close()
+        protokoll.durchgang_rendern = immer_anders
+        try:
+            r = t.w.post(f"{API}/durchgaenge/{rid2}/abschliessen", json={})
+        finally:
+            protokoll.durchgang_rendern = echt_vorab
+        assert r.status_code == 409 and r.json["error"] == durchgang_dienst.GEAENDERT, r.get_json()
+        assert len(zaehler) == durchgang_dienst.VERSUCHE
+        assert sorted(os.listdir(ablage)) == vorher
+        assert zeilen(t.app, "SELECT closed_on, locked_at FROM mat_round WHERE id = ?", (rid2,))[0] == \
+            {"closed_on": None, "locked_at": None}
+        assert t.w.post(f"{API}/durchgaenge/{rid2}/abschliessen", json={}).status_code == 200
+
+        # Abbruch geht denselben Weg (nur das Sammelprotokoll).
+        rid3 = durchgang(t, t.lager, "Platzhalter Abbruch")
+        pruefen(t.p, t.l1["id"], rid3)
+        r = t.w.post(f"{API}/durchgaenge/{rid3}/abbrechen", json={})
+        assert r.status_code == 200 and r.json["durchgang"]["protokoll"] and r.json["durchgang"]["set_protokolle"] == []
+
+        # verwaiste_beiseite: alte Zwischendateien weg, junge (ein anderer Prozess rendert vielleicht) bleiben.
+        alt, jung = os.path.join(ablage, ".T-2026-000099.aaaa.teil"), os.path.join(ablage, ".T-2026-000098.bbbb.teil")
+        for pfad in (alt, jung):
+            with open(pfad, "wb") as fh:
+                fh.write(b"%PDF-Platzhalter")
+        os.utime(alt, (1, 1))
+        with t.app.app_context():
+            from app import db
+            protokoll.verwaiste_beiseite(db.get_db())
+        assert not os.path.exists(alt) and os.path.exists(jung)
+        # Zwischennamen sind keine Protokolldateien: Sie heben den Zähler nicht (Durchgang auf Set C: kein weiteres T).
+        assert zeilen(t.app, "SELECT seq FROM sqlite_sequence WHERE name = 'mat_round_setprotokoll'")[0]["seq"] == 3
+        assert not os.path.isdir(os.path.join(tmp, "pdf", "verwaist"))
+    print("Zweistufiger Abschluss bestanden.")
+
+
+def test_dateiname_ascii():
+    """Der ASCII-Ersatzname eines Downloads schreibt „ue“ statt das „ü“ zu verlieren; filename* trägt den echten Namen."""
+    from app.material.services import export
+    kopf = export.anhang_kopf("Protokolle_Jahresprüfung 2026_S-2026-000001.zip")
+    assert kopf == ('attachment; filename="Protokolle_Jahrespruefung 2026_S-2026-000001.zip"; '
+                    "filename*=UTF-8''Protokolle_Jahrespr%C3%BCfung%202026_S-2026-000001.zip"), kopf
+    assert 'filename="Grosse_Oefen_Uebung.csv"' in export.anhang_kopf("Große_Öfen_Übung.csv")
+    print("Dateiname bestanden.")
 
 
 if __name__ == "__main__":
@@ -375,4 +600,7 @@ if __name__ == "__main__":
     test_pruefseite_und_ablage()
     test_rechte_ordnerseite_und_zip()
     test_oberflaeche_statisch()
+    test_zwischenzeilen()
+    test_abschluss_zweistufig()
+    test_dateiname_ascii()
     print("Alle Tests der Set-Protokolle bestanden.")

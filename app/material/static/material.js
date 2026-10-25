@@ -901,12 +901,12 @@
   // Ohne Zwischenablage ist der Text markiert; am Telefon gibt es kein Strg+C, dort kopiert das Menü der Markierung.
   const kopierText = () => (window.matchMedia("(pointer: coarse)").matches ? "jetzt kopieren" : "mit Strg+C kopieren");
   // Prüfsumme gekürzt; der volle Wert steht im title, ein Klick kopiert ihn (Aktion „summe“).
-  const summeKnopf = (h) => `<button type="button" class="mat-summe mat-hash" data-act="summe" data-wert="${esc(h)}" title="${esc(h)} – Klick kopiert">${esc(h.slice(0, 16))}…</button>`;
+  const summeKnopf = (h) => `<button type="button" class="mat-summe mat-hash" data-act="summe" data-wert="${esc(h)}" title="${esc(h)} – Klick kopiert"><span class="mat-summe-text">${esc(h.slice(0, 16))}…</span></button>`;
   async function summeKopieren(b) {
     try { await navigator.clipboard.writeText(b.dataset.wert); toast("Prüfsumme kopiert"); }
     catch (e) {
       // Ohne Zwischenablage: die ganze Summe zeigen und markieren.
-      b.textContent = b.dataset.wert;
+      (b.querySelector(".mat-summe-text") || b).textContent = b.dataset.wert;
       const r = document.createRange(); r.selectNodeContents(b);
       const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
       toast(`Prüfsumme markiert – ${kopierText()}`);
@@ -1411,14 +1411,19 @@
   function setProtokolleHtml(liste) {
     return `<ul class="mat-runden mat-setprotokolle">${liste.map((t) => `<li>${t.ordner_sichtbar ? `<a href="/material/ordner/${t.folder_id}"><strong>${esc(t.ordner)}</strong></a>` : `<strong>${esc(t.ordner)}</strong>`}
       <span class="muted">${plural(t.artikel, "Artikel", "Artikel")} · <span class="mat-hash">${esc(t.protokoll.id)}</span></span>
-      <a class="mat-pdf" href="${esc(t.protokoll.url)}" target="_blank" rel="noopener" title="Set-Protokoll ${esc(t.protokoll.id)} öffnen">PDF</a></li>`).join("")}</ul>`;
+      <a class="mat-pdf" href="${esc(t.protokoll.url)}" target="_blank" rel="noopener" aria-label="Set-Protokoll ${esc(t.protokoll.id)} (PDF)" title="Set-Protokoll ${esc(t.protokoll.id)} öffnen">PDF</a></li>`).join("")}</ul>`;
   }
   /* Ordnerseite eines Sets: seine Set-Protokolle und die Sammelprotokolle der Durchgänge, die für ihn eröffnet wurden –
-     der Durchgang als Link nur, wenn das Konto ihn sieht. */
+     der Durchgang als Link nur, wenn das Konto ihn sieht. Die Überschrift nennt, was darin steht. */
+  const protokollArt = (x) => (x.art === "set" ? "Set-Protokoll" : "Sammelprotokoll");
+  function sammelprotokolleTitel(liste) {
+    const arten = new Set(liste.map(protokollArt));
+    return arten.size > 1 ? "Set- und Sammelprotokolle" : arten.has("Set-Protokoll") ? "Set-Protokolle" : "Sammelprotokolle";
+  }
   function sammelprotokolleHtml(liste) {
     return `<ul class="mat-runden mat-setprotokolle">${liste.map((x) => `<li>${x.durchgang.sichtbar ? `<a href="/material/durchgang/${x.durchgang.id}"><strong>${esc(x.durchgang.titel)}</strong></a>` : `<strong>${esc(x.durchgang.titel)}</strong>`}
-      <span class="muted">${x.art === "set" ? "Set-Protokoll" : "Sammelprotokoll"} · ${esc(fmtTag(x.geschlossen_am))} · <span class="mat-hash">${esc(x.protokoll.id)}</span></span>
-      <a class="mat-pdf" href="${esc(x.protokoll.url)}" target="_blank" rel="noopener" title="${x.art === "set" ? "Set-Protokoll" : "Sammelprotokoll"} ${esc(x.protokoll.id)} öffnen">PDF</a></li>`).join("")}</ul>`;
+      <span class="muted">${protokollArt(x)} · ${esc(fmtTag(x.geschlossen_am))} · <span class="mat-hash">${esc(x.protokoll.id)}</span></span>
+      <a class="mat-pdf" href="${esc(x.protokoll.url)}" target="_blank" rel="noopener" aria-label="${protokollArt(x)} ${esc(x.protokoll.id)} (PDF)" title="${protokollArt(x)} ${esc(x.protokoll.id)} öffnen">PDF</a></li>`).join("")}</ul>`;
   }
 
   /* Laufende Prüfdurchgänge als Kasten (Übersicht) bzw. Liste mit abgeschlossenen (Prüfungen). */
@@ -1430,7 +1435,7 @@
       ziel.innerHTML = `<section class="section"><h2>${nurOffen ? "Laufende Prüfdurchgänge" : "Prüfdurchgänge"}</h2>
         ${liste.length ? `<ul class="mat-runden">${liste.map((r) => `<li><a href="/material/durchgang/${r.id}"><strong>${esc(r.titel)}</strong></a>
           <span class="muted">${esc(r.ordner)} · eröffnet ${esc(fmtTag(r.eroeffnet_am))}${r.offen ? "" : ` · ${r.abgebrochen ? "abgebrochen" : "abgeschlossen"} ${esc(fmtTag(r.geschlossen_am))}`}</span>
-          ${fortschritt(r.zaehlung)}${r.protokoll ? ` <a class="mat-pdf" href="${esc(r.protokoll.url)}" target="_blank" rel="noopener" title="Sammelprotokoll ${esc(r.protokoll.id)} öffnen">PDF</a>` : ""}</li>`).join("")}</ul>` : leer("Noch kein Prüfdurchgang.")}</section>`;
+          ${fortschritt(r.zaehlung)}${r.protokoll ? ` <a class="mat-pdf" href="${esc(r.protokoll.url)}" target="_blank" rel="noopener" aria-label="Sammelprotokoll ${esc(r.protokoll.id)} (PDF)" title="Sammelprotokoll ${esc(r.protokoll.id)} öffnen">PDF</a>` : ""}</li>`).join("")}</ul>` : leer("Noch kein Prüfdurchgang.")}</section>`;
     } catch (e) { ziel.innerHTML = ""; }
   }
   function fortschritt(z) {
@@ -2104,7 +2109,7 @@
             <button class="btn secondary small" data-act="sammel-zuordnen">Zuordnen an …</button>
             <button class="btn secondary small" data-act="sammel-loesen" hidden>Zuordnung lösen</button></div></div>` : ""}
         </section>
-        ${(d.sammelprotokolle || []).length ? `<section class="section"><h2>Sammelprotokolle</h2>${sammelprotokolleHtml(d.sammelprotokolle)}</section>` : ""}
+        ${(d.sammelprotokolle || []).length ? `<section class="section"><h2>${sammelprotokolleTitel(d.sammelprotokolle)}</h2>${sammelprotokolleHtml(d.sammelprotokolle)}</section>` : ""}
         <p class="small mat-zweigbestand">${system ? plural(Object.values(z).reduce((a, b) => a + b, 0), "Artikel", "Artikel") : `Bestand im ganzen Zweig: <strong>${d.bestand}</strong> ${zahlen(z)}`}</p>
         ${darf.grund ? `<details class="section mat-auf"><summary>Journal des Ordners</summary>${journalHtml(d.journal)}</details>` : ""}`;
       if (darfPflegen) {
@@ -2290,7 +2295,7 @@
         <a href="/material/export/${d.id}.csv" data-export="Die Artikelliste wird heruntergeladen …"><strong>Artikelliste exportieren (CSV)</strong>
           <span>Alle Artikel hier und darunter, auch die von hier gesperrten (ausgesonderte bei ihrer Gliederung), mit Status, Fälligkeiten und Stammdaten – für Excel.</span></a>
         <a href="/material/export/${d.id}-protokolle.zip" data-export="Die Protokolle werden zusammengestellt – bei vielen dauert das einen Moment …"><strong>Protokolle exportieren (ZIP)</strong>
-          <span>Die Protokolle dieser Artikel und die Sammelprotokolle der Durchgänge hier, mit Verzeichnis und Prüfsummen.</span></a>
+          <span>Die Protokolle dieser Artikel, die Sammelprotokolle der Durchgänge und die Set-Protokolle der Sets hier, mit Verzeichnis und Prüfsummen.</span></a>
         ${d.system_kind ? "" : `<a href="/material/ordner/${d.id}/bericht"><strong>Jahresbericht exportieren</strong>
           <span>Bestand, Prüfungen, Sperren, Aussonderungen, Mängel und Rückrufe dieses Zweigs für ein Kalenderjahr – als Seite, PDF und Prüfungsliste (CSV).</span></a>`}
         ${importieren ? `<hr class="mat-menue-trenner">
@@ -4128,7 +4133,7 @@
       if (z) z.textContent = `${pos.length} von ${g.positionen} Positionen`;
     }
     function zeichnen(fokusSel) {
-      teil.innerHTML = `<p class="help mat-bt-flach">Jede Prüfung fragt je Position ab, ob sie vorhanden ist; Seriennummern einzelner Stück stehen am Artikel.</p>
+      teil.innerHTML = `<p class="help mat-bt-flach">Jede Prüfung fragt je Position ab, ob sie vorhanden ist; Seriennummern einzelner Stücke stehen am Artikel.</p>
         <div class="mat-bt-liste">${pos.map((x, i) => `<fieldset class="mat-bt" data-i="${i}"><legend>Position ${i + 1}</legend>
           <div class="mat-bt-kopf"><span></span>
             <div class="btn-row"><button class="btn secondary small" type="button" data-bt="hoch" data-i="${i}" aria-label="Position ${i + 1} nach oben" ${i ? "" : "disabled"}>↑</button><button class="btn secondary small" type="button" data-bt="runter" data-i="${i}" aria-label="Position ${i + 1} nach unten" ${i < pos.length - 1 ? "" : "disabled"}>↓</button><button class="btn secondary small" type="button" data-bt="weg" data-i="${i}" aria-label="Position ${i + 1} entfernen">Entfernen</button></div></div>
@@ -6022,7 +6027,7 @@
         ${(d.set_protokolle || []).length ? `<section class="section"><h2>Set-Protokolle</h2>${setProtokolleHtml(d.set_protokolle)}</section>` : ""}
         <div class="mat-kachelrahmen"><div class="mat-kacheln mat-rundenzahlen">${zustaende.map(([k, t]) => `<div class="mat-kachel z-${k || "gesamt"}"><strong>${z[k || "gesamt"]}</strong><span>${k ? t : "Artikel"}</span></div>`).join("")}</div></div>
         <p>${fortschritt(z)}</p>
-        ${d.offen ? `<p class="help">Jeder öffnet seinen Artikel mit „Prüfen“ und reserviert ihn damit – die anderen sehen „in Prüfung bei …“. Abschließen geht, sobald jeder Artikel geprüft oder mit Grund ausgenommen ist. Beim Abschließen entsteht das Sammelprotokoll mit allen Prüfern${d.set_ordner && d.set_ordner.anzahl ? ` – dazu für jedes Set mit geprüften Artikeln ein eigenes Set-Protokoll (hier ${plural(d.set_ordner.anzahl, "Set", "Sets")})` : ""}.</p>` : ""}
+        ${d.offen ? `<p class="help">Jeder öffnet seinen Artikel mit „Prüfen“ und reserviert ihn damit – die anderen sehen „in Prüfung bei …“. Abschließen geht, sobald jeder Artikel geprüft oder mit Grund ausgenommen ist. Beim Abschließen entsteht das Sammelprotokoll mit allen Prüfern${d.set_ordner && d.set_ordner.anzahl ? ` – dazu für jedes Set mit geprüften Artikeln ein eigenes Set-Protokoll (hier bis zu ${d.set_ordner.anzahl}; Sets mit Geprüftem bisher: ${d.set_ordner.mit_pruefung})` : ""}.</p>` : ""}
         <div class="c-tabs mat-filter">${zustaende.map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}${f ? ` (${z[f]})` : ""}</button>`).join("")}</div>
         ${liste.length ? `${kartenKopf(DURCHGANG_SORT, s)}<table class="list mat-tabelle mat-karten mat-runde"><thead><tr>${sortKopf("Inventar-Nr.", "inventar", s)}${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: kopfZusatz("Hersteller", "hersteller", s, "schmal"), nach: kopfZusatz("Ablage", "ablage", s, "eng") })}${sortKopf("Ablage", "ablage", s, { klasse: "mat-eng-weg" })}${sortKopf("Stand", "stand", s)}${sortKopf("Status", "status", s)}<th></th></tr></thead><tbody>${liste.map(zeile).join("")}</tbody></table>` : leer("Keine Artikel in dieser Auswahl.")}
         ${d.pruefer.length ? `<section class="section"><h2>Prüfer in diesem Durchgang</h2><ul>${d.pruefer.map((x) => `<li>${esc(x.name)}${x.urkunde ? ` · Urkundennummer ${esc(x.urkunde)}` : ""} – ${plural(x.anzahl, "Prüfung", "Prüfungen")}</li>`).join("")}</ul></section>` : ""}`;
@@ -6068,10 +6073,12 @@
       abbrechen: async (b) => {
         const z = d.zaehlung;
         const weiter = z.in_pruefung ? " Offene Prüfungen darin laufen als einzelne Prüfungen weiter." : "";
+        // Set-Protokolle entstehen nur beim Abschluss (F2 b) – das sagt die Rückfrage, sobald Sets im Durchgang sind.
+        const sets = z.erledigt && d.set_ordner && d.set_ordner.anzahl ? " Set-Protokolle entstehen dabei keine – nur beim Abschließen." : "";
         const text = z.erledigt
-          ? `Den Durchgang „${d.titel}“ abbrechen? Er endet ohne Abschluss: ${z.erledigt} geprüft, ${z.ausgenommen} ausgenommen, ${z.offen + z.in_pruefung} nicht geprüft. Was geprüft ist, bleibt dokumentiert – das Sammelprotokoll wird mit diesem Stand festgeschrieben.`
+          ? `Den Durchgang „${d.titel}“ abbrechen? Er endet ohne Abschluss: ${z.erledigt} geprüft, ${z.ausgenommen} ausgenommen, ${z.offen + z.in_pruefung} nicht geprüft. Was geprüft ist, bleibt dokumentiert – das Sammelprotokoll wird mit diesem Stand festgeschrieben.${sets}`
           : `Den Durchgang „${d.titel}“ abbrechen? Darin ist noch nichts geprüft – er wird ganz entfernt.`;
-        if (!(await confirm(text + weiter, "Durchgang abbrechen"))) return;
+        if (!(await confirm(text + weiter, "Durchgang abbrechen", "Zurück"))) return;
         b.disabled = true;
         try {
           const r = await api(`${API}/durchgaenge/${d.id}/abbrechen`, { method: "POST", body: {} });

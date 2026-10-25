@@ -543,9 +543,13 @@ html:has(.mat-mit-leiste) { scroll-padding-bottom: 210px; }
 .mat-protokoll-id { font-size: 1.15rem; font-weight: 700; }
 .mat-protokoll .mat-daten { grid-template-columns: 120px minmax(0, 1fr); }
 .mat-protokoll-zeile { font-size: var(--fs-mittel); }
+/* Die gestrichelte Linie liegt am Text, nicht am Knopf: Am Finger ist der Knopf 44 px hoch, die Linie schwebte sonst
+   unter der Zeile (Browserprüfung vom 25.10.2026). */
 .mat-summe { background: none; border: 0; padding: 0; font-size: inherit; color: inherit; cursor: copy; text-align: left;
-  border-bottom: 1px dashed var(--grau); overflow-wrap: anywhere; }
-.mat-summe:hover { color: var(--rot); border-bottom-color: var(--rot); }
+  overflow-wrap: anywhere; }
+.mat-summe-text { border-bottom: 1px dashed var(--grau); }
+.mat-summe:hover { color: var(--rot); }
+.mat-summe:hover .mat-summe-text { border-bottom-color: var(--rot); }
 .mat-summe:focus-visible { outline: 3px solid var(--gelb); outline-offset: 2px; }
 .mat-ber { border-left: 4px solid var(--wasser); background: var(--co-info-fl); padding: 10px 14px; margin: 0 0 12px; }
 .mat-ber.ersetzt { border-left-color: var(--anthrazit); background: var(--grau-hell); }
