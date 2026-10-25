@@ -13,13 +13,14 @@ vor der Eröffnung begonnen wurde, zählt mit. Je Artikel gilt:
   offen          sonst
 
 Abschließen lässt sich der Durchgang erst, wenn jeder Artikel erledigt oder ausgenommen ist und kein
-Entwurf des Durchgangs mehr offen ist. Dann entsteht in derselben Transaktion das Sammelprotokoll
+Entwurf des Durchgangs mehr offen ist. Dann wird mit dem Schließen das Sammelprotokoll festgeschrieben
 (protokoll.py): alle Artikel mit Ergebnis, Ausnahmen mit Grund, alle beteiligten Prüfer mit Urkundennummer
 und Unterschrift, die Einzelprotokolle mit ihrer Prüfsumme – festgeschrieben wie jedes Protokoll; danach
 ist der Durchgang unveränderlich. Ein Artikel steht höchstens in einem offenen Durchgang.
 
 Seit Schritt 27 bekommt beim regulären Abschluss jeder Ordner der Art „Set“ unterhalb des Durchgangsordners, in dem
 mindestens ein Artikel geprüft wurde, zusätzlich sein Set-Protokoll (protokoll.durchgang_festschreiben, set_protokoll_json).
+Seit der Prüfung vom 25.10.2026 entstehen die PDFs vor der Schreibtransaktion (_beenden).
 
 Abbrechen beendet ihn vorzeitig: Offene Prüfungen darin laufen als einzelne Prüfungen weiter. Wurde noch
 nichts abgeschlossen, verschwindet er ganz; sonst endet er als „abgebrochen“ – Geprüftes und
@@ -31,7 +32,12 @@ ein Verschieben, nimmt nach_verschieben ihn mit Grund heraus; geprüft wird in e
 (offene_runde_fuer, runde_fuer_start). Sehen darf einen Durchgang, wer seinen Ordner sehen darf – vollständig: Zeilen
 mit Artikeln, die das Konto nicht sieht, stehen ohne Link da („sichtbar“: false)."""
 import json
+import sqlite3
+import time
+from contextlib import contextmanager
 from datetime import date
+
+from flask import current_app, g
 
 from ... import db
 from . import Abgelehnt, heute, text
@@ -370,46 +376,130 @@ def einbeziehen(rid, iid):
         journal.eintragen("round", rid, "einbezogen", {"item_id": iid, "grund": ri["excluded_reason"]}, None)
 
 
-def abschliessen(rid, akteur):
-    with protokoll.dateien_sichern(), db.transaction(sofort=True):
-        r = _runde_offen(rid)
-        zeilen = _zeilen(rid)
-        z = _zaehlung(zeilen)
-        if z["offen"] or z["in_pruefung"]:
-            raise Abgelehnt(f"Noch nicht fertig: {z['offen']} offen, {z['in_pruefung']} in Prüfung. Jeder Artikel muss "
-                            "geprüft oder mit Grund ausgenommen sein.", 409)
-        entwuerfe = _offene_entwuerfe(rid)
-        if entwuerfe:
-            raise Abgelehnt("Im Durchgang ist noch eine Prüfung offen (" + ", ".join(
-                e["inspector_name"] for e in entwuerfe) + ").", 409)
-        db.execute("UPDATE mat_round SET closed_on = ?, closed_by = ?, closed_by_name = ? WHERE id = ?",
-                   (heute().isoformat(), akteur.get("id"), akteur["name"], rid))
-        journal.eintragen("round", rid, "geschlossen", None, {"title": r["title"], "erledigt": z["erledigt"],
+# Wie oft Abschließen bzw. Abbrechen neu rendert, wenn sich zwischen dem Rendern und dem Festschreiben etwas geändert hat.
+VERSUCHE = 3
+GEAENDERT = ("Während des Festschreibens wurde am Durchgang weitergearbeitet (etwa geprüft, ausgenommen oder ein Ordner "
+             "geändert) – es wurde nichts festgeschrieben. Bitte noch einmal versuchen.")
+
+
+@contextmanager
+def _lesestand():
+    """Ein Lesestand ohne Schreibsperre (WAL): alles, was darin gelesen wird, gehört zu einem Zeitpunkt. Schreiben darf
+    darin niemand – rollt am Ende zurück."""
+    conn = db.get_db()
+    if conn.in_transaction or getattr(g, "tx_depth", 0):
+        yield
+        return
+    conn.execute("BEGIN")
+    try:
+        yield
+    finally:
+        if conn.in_transaction:
+            conn.rollback()
+
+
+def _abschliessbar(rid):
+    z = _zaehlung(_zeilen(rid))
+    if z["offen"] or z["in_pruefung"]:
+        raise Abgelehnt(f"Noch nicht fertig: {z['offen']} offen, {z['in_pruefung']} in Prüfung. Jeder Artikel muss "
+                        "geprüft oder mit Grund ausgenommen sein.", 409)
+    entwuerfe = _offene_entwuerfe(rid)
+    if entwuerfe:
+        raise Abgelehnt("Im Durchgang ist noch eine Prüfung offen (" + ", ".join(
+            e["inspector_name"] for e in entwuerfe) + ").", 409)
+    return z
+
+
+def _schliessen(r, tag, akteur):
+    """Unter der Schreibsperre: den Durchgang regulär schließen (danach festschreiben)."""
+    z = _abschliessbar(r["id"])
+    db.execute("UPDATE mat_round SET closed_on = ?, closed_by = ?, closed_by_name = ? WHERE id = ?",
+               (tag, akteur.get("id"), akteur["name"], r["id"]))
+    journal.eintragen("round", r["id"], "geschlossen", None, {"title": r["title"], "erledigt": z["erledigt"],
                                                               "ausgenommen": z["ausgenommen"]})
-        protokoll.durchgang_festschreiben(rid, db.now())
+    return True
+
+
+def _abbrechen(r, tag, akteur):
+    """Unter der Schreibsperre: offene Entwürfe lösen; ohne Geprüftes den Durchgang entfernen (False), sonst als
+    abgebrochen schließen (True, danach festschreiben)."""
+    rid = r["id"]
+    for e in _offene_entwuerfe(rid):
+        db.execute("UPDATE mat_inspection SET round_id = NULL WHERE id = ?", (e["id"],))
+        journal.eintragen("inspection", e["id"], "geaendert", {"round_id": rid}, {"round_id": None})
+    if not db.query("SELECT 1 FROM mat_inspection WHERE round_id = ? LIMIT 1", (rid,), one=True):
+        db.execute("DELETE FROM mat_round_item WHERE round_id = ?", (rid,))
+        db.execute("DELETE FROM mat_round WHERE id = ?", (rid,))
+        journal.eintragen("round", rid, "geloescht", {"title": r["title"], "folder_id": r["folder_id"]}, None)
+        return False
+    z = _zaehlung(_zeilen(rid), geschlossen=True)
+    db.execute("UPDATE mat_round SET closed_on = ?, closed_by = ?, closed_by_name = ?, aborted = 1 WHERE id = ?",
+               (tag, akteur.get("id"), akteur["name"], rid))
+    journal.eintragen("round", rid, "abgebrochen", None, {"title": r["title"], "erledigt": z["erledigt"],
+                                                          "ausgenommen": z["ausgenommen"],
+                                                          "nicht_geprueft": z["nicht_geprueft"]})
+    return True
+
+
+def _beenden(rid, akteur, abbruch):
+    """Abschließen bzw. abbrechen samt Sammel- und Set-Protokollen – zweistufig (Prüfung vom 25.10.2026): erst ohne
+    Schreibsperre lesen und alle PDFs rendern (protokoll.durchgang_vorbereiten, durchgang_rendern), dann kurz unter der
+    Sperre prüfen, schließen und ablegen (protokoll.durchgang_festschreiben). Vorher hielt das Rendern vieler
+    Set-Protokolle die Sperre länger, als andere Anfragen warten (15 s) – die scheiterten dann mit 500. Hat sich
+    dazwischen etwas geändert, das in den Protokollen stünde, verwirft es die Dateien und beginnt neu, höchstens VERSUCHE
+    Mal, dann 409. Wer abschließt, wartet wie bisher, bis alles festgeschrieben ist. Liefert, ob der Durchgang bleibt
+    (False nur beim Abbruch ohne Geprüftes: Er wird entfernt)."""
+    for versuch in range(1, VERSUCHE + 1):
+        tag, ts = heute().isoformat(), db.now()
+        beginn = time.monotonic()
+        with protokoll.zwischendateien():
+            with _lesestand():
+                r = _runde_offen(rid)
+                if not abbruch:
+                    _abschliessbar(rid)
+                v = None
+                if not abbruch or db.query("SELECT 1 FROM mat_inspection WHERE round_id = ? LIMIT 1", (rid,), one=True):
+                    v = protokoll.durchgang_vorbereiten(
+                        dict(r, closed_on=tag, closed_by=akteur.get("id"), closed_by_name=akteur["name"],
+                             aborted=1 if abbruch else r["aborted"]), ts)
+            if v:
+                protokoll.durchgang_rendern(v)
+            gerendert = time.monotonic()
+            try:
+                with protokoll.dateien_sichern():
+                    with db.transaction(sofort=True):
+                        gesperrt = time.monotonic()
+                        r = _runde_offen(rid)
+                        if not (_abbrechen if abbruch else _schliessen)(r, tag, akteur):
+                            return False
+                        if v is None:
+                            raise protokoll.Veraendert()
+                        protokoll.durchgang_festschreiben(rid, v)
+            except protokoll.Veraendert:
+                current_app.logger.info("Durchgang %s: seit dem Rendern geändert – Versuch %d verworfen", rid, versuch)
+                continue
+            except sqlite3.OperationalError as exc:
+                if "locked" not in str(exc):
+                    raise
+                raise Abgelehnt("Die Datenbank ist gerade ausgelastet – es wurde nichts festgeschrieben. Bitte gleich "
+                                "noch einmal versuchen.", 503)
+            current_app.logger.info("Durchgang %s festgeschrieben: %d Set-Protokolle, %.1f s ohne Sperre gerendert, "
+                                    "Schreibsperre %.2f s (Versuch %d)", rid, len(v["je_set"]), gerendert - beginn,
+                                    time.monotonic() - gesperrt, versuch)
+            return True
+    raise Abgelehnt(GEAENDERT, 409)
+
+
+def abschliessen(rid, akteur):
+    """Regulär abschließen: jeder Artikel geprüft oder ausgenommen, kein Entwurf mehr offen – dann Sammelprotokoll und
+    Set-Protokolle (_beenden)."""
+    _beenden(rid, akteur, abbruch=False)
 
 
 def abbrechen(rid, akteur):
     """Den Durchgang vorzeitig beenden (siehe oben). Liefert, ob er bleibt – False: Er wurde entfernt, weil
     darin noch nichts abgeschlossen war."""
-    with protokoll.dateien_sichern(), db.transaction(sofort=True):
-        r = _runde_offen(rid)
-        for e in _offene_entwuerfe(rid):
-            db.execute("UPDATE mat_inspection SET round_id = NULL WHERE id = ?", (e["id"],))
-            journal.eintragen("inspection", e["id"], "geaendert", {"round_id": rid}, {"round_id": None})
-        if not db.query("SELECT 1 FROM mat_inspection WHERE round_id = ? LIMIT 1", (rid,), one=True):
-            db.execute("DELETE FROM mat_round_item WHERE round_id = ?", (rid,))
-            db.execute("DELETE FROM mat_round WHERE id = ?", (rid,))
-            journal.eintragen("round", rid, "geloescht", {"title": r["title"], "folder_id": r["folder_id"]}, None)
-            return False
-        z = _zaehlung(_zeilen(rid), geschlossen=True)
-        db.execute("UPDATE mat_round SET closed_on = ?, closed_by = ?, closed_by_name = ?, aborted = 1 WHERE id = ?",
-                   (heute().isoformat(), akteur.get("id"), akteur["name"], rid))
-        journal.eintragen("round", rid, "abgebrochen", None, {"title": r["title"], "erledigt": z["erledigt"],
-                                                              "ausgenommen": z["ausgenommen"],
-                                                              "nicht_geprueft": z["nicht_geprueft"]})
-        protokoll.durchgang_festschreiben(rid, db.now())
-        return True
+    return _beenden(rid, akteur, abbruch=True)
 
 
 def loeschen(rid):

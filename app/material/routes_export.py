@@ -45,6 +45,13 @@ def _fehler(exc):
 _privat = antwort_privat
 
 
+def _download(daten, mimetype, name):
+    """Datei zum Speichern – mit lesbarem ASCII-Ersatznamen („Jahrespruefung“ statt „Jahresprufung“)."""
+    resp = send_file(daten, mimetype=mimetype, as_attachment=True, download_name=name)
+    resp.headers["Content-Disposition"] = export.anhang_kopf(name)
+    return _privat(resp)
+
+
 @seiten.get("/material/export/<int:fid>.csv")
 def export_csv(fid):
     """Alle Artikel des Ordners und seiner Unterordner als CSV für Excel (services/export.py)."""
@@ -55,13 +62,13 @@ def export_csv(fid):
         daten, name = export.artikel_csv(fid)
     except Abgelehnt as exc:
         return _fehler(exc)
-    return _privat(send_file(io.BytesIO(daten), mimetype="text/csv", as_attachment=True,
-                             download_name=name))
+    return _download(io.BytesIO(daten), "text/csv", name)
 
 
 @seiten.get("/material/export/<int:fid>-protokolle.zip")
 def export_protokolle(fid):
-    """Alle Protokolle der Artikel des Ordners und die Sammelprotokolle seiner Durchgänge mit Verzeichnis.csv."""
+    """Alle Protokolle der Artikel des Ordners, die Sammelprotokolle seiner Durchgänge und die Set-Protokolle der Sets im
+    Zweig mit Verzeichnis.csv."""
     nein = _zugang("fid", fid)
     if nein:
         return nein
@@ -69,7 +76,7 @@ def export_protokolle(fid):
         buf, name, _ = export.protokolle_zip(fid)
     except Abgelehnt as exc:
         return _fehler(exc)
-    return _privat(send_file(buf, mimetype="application/zip", as_attachment=True, download_name=name))
+    return _download(buf, "application/zip", name)
 
 
 @seiten.get("/material/durchgang/<int:rid>/protokolle.zip")
@@ -88,7 +95,7 @@ def durchgang_protokolle(rid):
         buf, name = export.durchgang_zip(rid)
     except Abgelehnt as exc:
         return _fehler(exc)
-    return _privat(send_file(buf, mimetype="application/zip", as_attachment=True, download_name=name))
+    return _download(buf, "application/zip", name)
 
 
 @seiten.get("/material/artikel/<int:iid>/lebenslauf.pdf")

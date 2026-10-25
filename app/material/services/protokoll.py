@@ -14,11 +14,18 @@ Durchgangs bzw. der Zeile in mat_round_setprotokoll (AUTOINCREMENT, nie zweimal 
 Festschreibens. Die Lücken zwischen den Nummern sind verworfene Entwürfe, keine fehlenden Protokolle.
 
 Scheitert die Transaktion nach dem Schreiben einer Datei, löscht dateien_sichern() sie wieder – sonst
-lägen PDFs ohne Datenbankzeile herum."""
+lägen PDFs ohne Datenbankzeile herum.
+
+Ein Durchgang schreibt seit der Prüfung vom 25.10.2026 zweistufig fest (durchgang_vorbereiten, durchgang_rendern,
+durchgang_festschreiben): Sammel- und Set-Protokolle entstehen OHNE Schreibsperre unter Zwischennamen; unter der kurzen
+Schreibsperre rechnet durchgang_festschreiben ihre Daten noch einmal aus und übernimmt die Dateien nur, wenn sie genau
+gleich sind – sonst verwirft der Aufrufer sie und beginnt neu. Mit vielen Sets hielt das Rendern unter der Sperre die
+ganze Plattform länger fest, als andere Anfragen warten (15 s, app/db.py)."""
 import hashlib
 import io
 import json
 import os
+import secrets
 from contextlib import contextmanager
 from datetime import date, datetime
 from flask import current_app, g
@@ -29,7 +36,7 @@ from ..models import ANHANGARTEN, DOKUMENTARTEN, ERGEBNISSE, MATERIALARTEN
 from . import ZONE, Abgelehnt, bestand, journal, katalog, laenge_text, qr, stempel
 VORSATZ = {"pruefprotokoll": "P", "aussonderungsprotokoll": "A", "sammelprotokoll": "S", "setprotokoll": "T"}
 TITEL = {"pruefprotokoll": "Prüfprotokoll", "aussonderungsprotokoll": "Aussonderungsprotokoll",
-         "sammelprotokoll": "Sammelprotokoll", "setprotokoll": "Sammelprotokoll"}
+         "sammelprotokoll": "Sammelprotokoll", "setprotokoll": "Set-Protokoll"}
 PRUEFART_TEXT = {"eingang": "Eingangsprüfung", "periodisch": "periodische Prüfung",
                  "ausserplanmaessig": "außerplanmäßige Prüfung", "reparatur": "Prüfung nach Reparatur",
                  "aussonderung": "Aussonderung"}
@@ -141,7 +148,9 @@ def verwaiste_beiseite(conn):
     und die Zähler der Kennungen über jede vorhandene Protokollnummer heben (_nummern_schuetzen).
     Das bleibt nur übrig, wenn ein Prozess zwischen dem Schreiben der Datei und dem Commit abbrach – etwa ein
     unterschriebenes Aussonderungsprotokoll zu einer Aussonderung, die es nie gab. Unter der Schreibsperre: Wer
-    gerade festschreibt, hält sie, seine noch nicht bestätigte Datei kann hier also nicht dabei sein."""
+    gerade festschreibt, hält sie, seine noch nicht bestätigte Datei kann hier also nicht dabei sein. Zwischendateien
+    eines abgebrochenen zweistufigen Abschlusses (zwischendateien) löscht er, wenn sie älter als ZWISCHEN_ALT_S sind –
+    jüngere können zu einem Abschluss gehören, der in einem anderen Arbeitsprozess gerade rendert."""
     import logging
     import re
     pfad = conn.execute("PRAGMA database_list").fetchone()[2]
@@ -159,6 +168,14 @@ def verwaiste_beiseite(conn):
             if not re.fullmatch(r"\d{4}", jahr) or not os.path.isdir(os.path.join(wurzel, jahr)):
                 continue
             for name in sorted(os.listdir(os.path.join(wurzel, jahr))):
+                if name.startswith(".") and name.endswith(ZWISCHEN_ENDUNG):
+                    zwischen = os.path.join(wurzel, jahr, name)
+                    try:
+                        if datetime.now().timestamp() - os.path.getmtime(zwischen) > ZWISCHEN_ALT_S:
+                            os.remove(zwischen)
+                    except OSError:
+                        pass
+                    continue
                 if not name.endswith(".pdf") or f"pdf/{jahr}/{name}" in bekannt:
                     continue
                 ziel = os.path.join(wurzel, "verwaist")
@@ -220,9 +237,71 @@ def _ablegen(rel, daten):
     os.chmod(pfad, 0o444)
 
 
-def _erzeugen(art, pid, daten, anhaenge=()):
-    """Rendern, Anhänge anfügen, Prüfsumme, Stempel, ablegen → Felder für die Datenbank. Scheitert das Erzeugen,
-    bricht der ganze Vorgang ab (die Prüfung bleibt Entwurf) – mit einer Meldung statt eines Serverfehlers."""
+ZWISCHEN_ENDUNG = ".teil"
+# Zwischendateien, die so alt sind, gehören zu keinem laufenden Abschluss mehr (Gunicorn bricht eine Anfrage nach
+# einer Stunde ab) – verwaiste_beiseite löscht sie beim Start.
+ZWISCHEN_ALT_S = 24 * 60 * 60
+
+
+@contextmanager
+def zwischendateien():
+    """Rahmen um das zweistufige Festschreiben eines Durchgangs: Was _zwischen_ablegen vor der Schreibtransaktion
+    ablegt, liegt unter einem Zwischennamen neben seinem Ziel („.<ID>.<zufall>.teil“ – kein .pdf, also weder für
+    verwaiste_beiseite noch für den Nummernschutz eine Protokolldatei). Am Ende verschwinden alle Zwischennamen; was
+    _zwischen_uebernehmen unter der Sperre verlinkt hat, bleibt unter seinem endgültigen Namen (scheitert die
+    Transaktion, löscht dateien_sichern auch den)."""
+    if g.get("mat_pdf_zwischen") is not None:
+        raise RuntimeError("zwischendateien() ist schon offen.")
+    g.mat_pdf_zwischen = {}
+    try:
+        yield
+    finally:
+        for pfad in g.mat_pdf_zwischen.values():
+            try:
+                os.remove(pfad)          # ohne chmod: Der Link teilt sich die Rechte mit der übernommenen Datei.
+            except OSError:
+                pass
+        g.mat_pdf_zwischen = None
+
+
+def _zwischen_ablegen(rel, daten):
+    zwischen = g.get("mat_pdf_zwischen")
+    if zwischen is None:
+        raise RuntimeError("Vorab gerenderte Protokolle liegen nur innerhalb von zwischendateien().")
+    ziel = voller_pfad(rel)
+    os.makedirs(os.path.dirname(ziel), exist_ok=True)
+    pfad = os.path.join(os.path.dirname(ziel),
+                        f".{os.path.basename(ziel)[:-4]}.{secrets.token_hex(8)}{ZWISCHEN_ENDUNG}")
+    with open(pfad, "xb") as fh:
+        zwischen[rel] = pfad
+        fh.write(daten)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.chmod(pfad, 0o444)
+
+
+def _zwischen_uebernehmen(rel):
+    """Unter der Schreibsperre: die vorab gerenderte Datei unter ihrem endgültigen Namen – als harter Link, der nie eine
+    vorhandene Datei überschreibt; ohne harte Links (fremdes Dateisystem) als Kopie wie _ablegen."""
+    neu = g.get("mat_pdf_neu")
+    if neu is None:
+        raise RuntimeError("Protokolle entstehen nur innerhalb von dateien_sichern().")
+    quelle, ziel = g.mat_pdf_zwischen[rel], voller_pfad(rel)
+    try:
+        os.link(quelle, ziel)
+    except FileExistsError:
+        raise RuntimeError(f"Protokolldatei {rel} gibt es schon.")
+    except OSError:
+        with open(quelle, "rb") as fh:
+            _ablegen(rel, fh.read())
+        return
+    neu.append(ziel)
+
+
+def _rendern(art, pid, daten, anhaenge=()):
+    """Rendern, Anhänge anfügen, Prüfsumme, Stempel → (Dateiinhalt, Felder für die Datenbank); abgelegt wird hier noch
+    nichts. Scheitert das Erzeugen, bricht der ganze Vorgang ab (die Prüfung bleibt Entwurf) – mit einer Meldung statt
+    eines Serverfehlers."""
     from . import pdf
     try:
         basis = pdf.rendern(art, daten)
@@ -242,9 +321,15 @@ def _erzeugen(art, pid, daten, anhaenge=()):
         raise Abgelehnt(f"Das Protokoll {pid} ließ sich nicht erzeugen – nichts wurde festgeschrieben. Liegt es an einem "
                         "angehängten PDF, dieses bitte entfernen und neu als PDF speichern oder fotografieren.", 500)
     jahr = pid.split("-")[1]
-    rel = f"pdf/{jahr}/{pid}.pdf"
-    _ablegen(rel, fertig)
-    return {"pdf_path": rel, "pdf_sha256": summe, "pdf_hashed_bytes": n, "file_sha256": stempel.sha256(fertig)}
+    return fertig, {"pdf_path": f"pdf/{jahr}/{pid}.pdf", "pdf_sha256": summe, "pdf_hashed_bytes": n,
+                    "file_sha256": stempel.sha256(fertig)}
+
+
+def _erzeugen(art, pid, daten, anhaenge=()):
+    """Rendern und ablegen – in der Schreibtransaktion des Vorgangs → Felder für die Datenbank."""
+    fertig, felder = _rendern(art, pid, daten, anhaenge)
+    _ablegen(felder["pdf_path"], fertig)
+    return felder
 
 
 # --- Bausteine der Protokolldaten ------------------------------------------------------------------------
@@ -619,6 +704,75 @@ def _ordnung(e, wurzel):
     return tuple((1 if o["kind"] == "set" else 0, o["name"].casefold(), o["id"]) for o in unter), e["inventarnummer"]
 
 
+def _ist_set(o):
+    return o["kind"] == "set" and not o["system_kind"]
+
+
+def _zwischenzeilen(liste, unten, alle_sets, je_set, abgebrochen):
+    """Die Zwischenzeilen der Artikelliste (Prüfung vom 25.10.2026): Verglichen wird die ganze Kette der Sets auf dem Weg
+    jeder Zeile unterhalb von unten (Durchgangs- bzw. Set-Ordner), nicht nur das innerste Set. Beim Eintritt in Sets steht
+    je Set eine Zeile, von außen nach innen – auch für ein Set ohne eigene Artikel, mit seinem Set-Protokoll; beim Rückweg
+    in ein äußeres Set „(Fortsetzung)“; beim Verlassen aller Sets „Außerhalb von Sets · <gemeinsamer Ordner>“ – ist unten
+    selbst ein Set (Set-Protokoll, Durchgang für ein Set), steht das Set als äußerste Ebene: „Set <Pfad> (Fortsetzung)“.
+    „n Artikel“ zählt genau die Zeilen bis zur nächsten Zwischenzeile; hat das Set mehr (in inneren Sets, nach einer
+    Fortsetzung), steht „im ganzen Set …“ dabei – so viele stehen in seinem Set-Protokoll. Setzt je Zeile zwischen
+    (Liste der Texte, meist leer) und im_set (in einem Set unterhalb von unten)."""
+    pfad_unten = bestand.pfad(unten)
+    unten_set = bool(pfad_unten) and _ist_set(pfad_unten[-1])
+    ueber_set = any(_ist_set(o) for o in pfad_unten[:-1])
+    koepfe, vorher, gesehen = [], [], set()
+    for i, e in enumerate(liste):
+        kette = [o["id"] for o in _unter(e, unten) or () if _ist_set(o)]
+        e["im_set"], e["zwischen"] = bool(kette), []
+        gleich = 0
+        while gleich < min(len(kette), len(vorher)) and kette[gleich] == vorher[gleich]:
+            gleich += 1
+        if kette[gleich:]:
+            neu = [(fid, fid in gesehen) for fid in kette[gleich:]]
+        elif len(kette) < len(vorher):
+            neu = [(kette[-1] if kette else None, True)]
+        else:
+            neu = []
+        for fid, fortsetzung in neu:
+            koepfe.append((i, fid, fortsetzung))
+            gesehen.add(fid)
+        vorher = kette
+    for n, (i, fid, fortsetzung) in enumerate(koepfe):
+        # Die Zeilen bis zum nächsten Kopf gehören zum letzten Kopf an dieser Stelle; die davor (äußere Sets, in die
+        # zugleich eingetreten wird) haben keine eigenen.
+        bis = next((k[0] for k in koepfe[n + 1:]), len(liste))
+        block = liste[i:bis]
+        if fid is None:
+            if unten_set:
+                text = f"Set {_pfad_text(unten)} (Fortsetzung)"
+            else:
+                # Der Ordner, in dem alle diese Zeilen liegen (commonprefix vergleicht Listen Glied für Glied).
+                gemeinsam = os.path.commonprefix([[o["id"] for o in e["_kette"]] for e in block if e["_kette"]])
+                text = "Außerhalb innerer Sets" if ueber_set else "Außerhalb von Sets"
+                if gemeinsam:
+                    text += f" · {_pfad_text(gemeinsam[-1])}"
+            text += f" · {len(block)} Artikel"
+        else:
+            s, t = alle_sets[fid], je_set.get(fid)
+            text = f"Set {s['ordner']}"
+            if fortsetzung:
+                text += f" (Fortsetzung) · {len(block)} Artikel"
+            else:
+                if len(block) == s["artikel"]:
+                    text += f" · {len(block)} Artikel"
+                elif block:
+                    text += f" · {len(block)} Artikel, im ganzen Set {s['artikel']}"
+                else:
+                    text += f" · im ganzen Set {s['artikel']} Artikel"
+                if t:
+                    text += f" · Set-Protokoll {t['protokoll_id']}"
+                elif abgebrochen:
+                    text += " · kein Set-Protokoll (Durchgang abgebrochen)"
+                elif not s["geprueft"]:
+                    text += " · kein Set-Protokoll (nichts geprüft)"
+        liste[i]["zwischen"].append(text)
+
+
 def _sammelprotokoll(r, pid, ts, eintraege=None, wurzel=None, haupt=None, je_set=None):
     """Daten des Sammelprotokolls (wurzel None) oder des Set-Protokolls eines Set-Ordners unterhalb des Durchgangsordners
     (wurzel: seine Kennung; haupt: {protokoll_id, ordner} des Sammelprotokolls) – eine Funktion, gefiltert nach den
@@ -635,8 +789,6 @@ def _sammelprotokoll(r, pid, ts, eintraege=None, wurzel=None, haupt=None, je_set
     zaehler = {"erledigt": 0, "ausgenommen": 0, "nicht_geprueft": 0, "einsatzbereit": 0, "instandsetzen": 0,
                "aussondern": 0}
     ohne = 0
-    gesehen, vorher = set(), None
-    alle_sets = set_ordner_von(eintraege, unten)
     for nr, e in enumerate(liste, start=1):
         e["nr"] = nr
         zaehler[e["zustand"]] = zaehler.get(e["zustand"], 0) + 1
@@ -645,22 +797,7 @@ def _sammelprotokoll(r, pid, ts, eintraege=None, wurzel=None, haupt=None, je_set
                 zaehler[e["ergebnis"]] += 1
             if not e["protokoll_id"]:
                 ohne += 1
-        # Das innerste Set auf dem Weg: Wechselt es, steht eine Zwischenzeile davor.
-        block = next((o["id"] for o in reversed(_unter(e, unten) or []) if o["kind"] == "set" and not o["system_kind"]),
-                     None)
-        e["im_set"] = block is not None
-        if block is not None and block != vorher:
-            s, t = alle_sets[block], je_set.get(block)
-            text = f"Set {s['ordner']} · {s['artikel']} Artikel"
-            if t:
-                text += f" · Set-Protokoll {t['protokoll_id']}"
-            elif r["aborted"]:
-                text += " · kein Set-Protokoll (Durchgang abgebrochen)"
-            elif not s["geprueft"]:
-                text += " · kein Set-Protokoll (nichts geprüft)"
-            e["zwischen"] = text + (" (Fortsetzung)" if block in gesehen else "")
-            gesehen.add(block)
-        vorher = block
+    _zwischenzeilen(liste, unten, set_ordner_von(eintraege, unten), je_set, r["aborted"])
     zaehlung = [{"text": "Artikel im Durchgang" if wurzel is None else "Artikel im Set", "anzahl": len(liste)},
                 {"text": "geprüft", "anzahl": zaehler["erledigt"]},
                 {"text": "davon einsatzbereit", "anzahl": zaehler["einsatzbereit"], "einzug": True},
@@ -700,23 +837,23 @@ def _sammelprotokoll(r, pid, ts, eintraege=None, wurzel=None, haupt=None, je_set
     }
 
 
-def durchgang_festschreiben(rid, ts):
-    """Sammelprotokoll eines eben abgeschlossenen oder abgebrochenen Durchgangs – in dessen Transaktion und innerhalb von
-    dateien_sichern(). Beim regulären Abschluss zuerst je Set-Ordner unterhalb des Durchgangsordners, in dem mindestens
-    ein Artikel geprüft wurde, ein Set-Protokoll (F2 b: nicht beim Abbruch, nicht bei „alles ausgenommen“) mit eigener
-    Nummer T-<jahr>-<nr> (F3 a), das das Sammelprotokoll nennt; dann das Sammelprotokoll mit dem Verzeichnis der
-    Set-Protokolle samt Prüfsummen. Scheitert eines, wird nichts festgeschrieben (die Transaktion rollt zurück,
-    dateien_sichern löscht die neuen Dateien). Liefert die Protokoll-ID des Sammelprotokolls."""
-    r = db.query("SELECT * FROM mat_round WHERE id = ?", (rid,), one=True)
-    if not r or not r["closed_on"] or r["locked_at"]:
-        raise RuntimeError("Sammelprotokoll nur einmal und erst nach dem Abschluss.")
+class Veraendert(Exception):
+    """Zwischen dem Rendern ohne Sperre und dem Festschreiben hat sich etwas geändert, das in den Protokollen stünde –
+    der Aufrufer verwirft die vorab gerenderten Dateien und beginnt neu (durchgang._beenden)."""
+
+
+def durchgang_vorbereiten(r, ts):
+    """Stufe 1 des Festschreibens eines Durchgangs, ohne Schreibsperre: was entstünde, als Daten. r ist der Durchgang, wie
+    er nach dem Abschluss bzw. Abbruch dasteht (closed_on, closed_by_name, aborted). Beim regulären Abschluss je Set-Ordner
+    unterhalb des Durchgangsordners, in dem mindestens ein Artikel geprüft wurde, ein Set-Protokoll (F2 b: nicht beim
+    Abbruch, nicht bei „alles ausgenommen“) mit eigener Nummer T-<jahr>-<nr> (F3 a: die nächsten Kennungen der Tabelle –
+    erst alle Nummern, ein inneres Set nennt sein Protokoll im äußeren) und seinen Daten; dazu die Protokoll-ID des
+    Sammelprotokolls. Unter der Sperre rechnet durchgang_festschreiben dasselbe noch einmal."""
     pid = protokoll_id("sammelprotokoll", r["id"], ts)
     eintraege = _eintraege(r)
     haupt = {"protokoll_id": pid, "ordner": _pfad_text(r["folder_id"])}
-    je_set = {}
+    je_set, set_daten = {}, {}
     if not r["aborted"]:
-        # Erst alle Nummern (ein inneres Set nennt sein Protokoll im äußeren), dann die Dateien – unter der Schreibsperre,
-        # die die Transaktion des Aufrufers hält; die Kennung ist die nächste der Tabelle (AUTOINCREMENT).
         naechste = max(db.query("SELECT COALESCE(MAX(seq), 0) AS n FROM sqlite_sequence WHERE name = "
                                 "'mat_round_setprotokoll'", one=True)["n"],
                        db.query("SELECT COALESCE(MAX(id), 0) AS n FROM mat_round_setprotokoll", one=True)["n"])
@@ -725,14 +862,48 @@ def durchgang_festschreiben(rid, ts):
                 naechste += 1
                 je_set[fid] = dict(s, kennung=naechste, protokoll_id=protokoll_id("setprotokoll", naechste, ts))
         for fid, s in je_set.items():
-            felder = _erzeugen("setprotokoll", s["protokoll_id"],
-                               _sammelprotokoll(r, s["protokoll_id"], ts, eintraege, wurzel=fid, haupt=haupt, je_set=je_set))
-            db.execute("INSERT INTO mat_round_setprotokoll (id, round_id, folder_id, ordner, artikel, protocol_id, locked_at, "
-                       "pdf_path, pdf_sha256, pdf_hashed_bytes, file_sha256) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                       (s["kennung"], rid, fid, s["ordner"], s["artikel"], s["protokoll_id"], ts, felder["pdf_path"],
-                        felder["pdf_sha256"], felder["pdf_hashed_bytes"], felder["file_sha256"]))
-            s.update(felder)
-    felder = _erzeugen("sammelprotokoll", pid, _sammelprotokoll(r, pid, ts, eintraege, je_set=je_set))
+            set_daten[fid] = _sammelprotokoll(r, s["protokoll_id"], ts, eintraege, wurzel=fid, haupt=haupt, je_set=je_set)
+    return {"r": r, "ts": ts, "pid": pid, "eintraege": eintraege, "je_set": je_set, "set_daten": set_daten}
+
+
+def durchgang_rendern(v):
+    """Stufe 2, ohne Schreibsperre und innerhalb von zwischendateien(): alle Set-Protokolle, dann das Sammelprotokoll mit
+    ihren Prüfsummen – gerendert und unter Zwischennamen abgelegt. Ergänzt v (aus durchgang_vorbereiten) um die Felder
+    der Dateien und die Daten des Sammelprotokolls."""
+    for fid, s in v["je_set"].items():
+        fertig, felder = _rendern("setprotokoll", s["protokoll_id"], v["set_daten"][fid])
+        _zwischen_ablegen(felder["pdf_path"], fertig)
+        s.update(felder)
+    v["daten"] = _sammelprotokoll(v["r"], v["pid"], v["ts"], v["eintraege"], je_set=v["je_set"])
+    fertig, v["felder"] = _rendern("sammelprotokoll", v["pid"], v["daten"])
+    _zwischen_ablegen(v["felder"]["pdf_path"], fertig)
+
+
+def durchgang_festschreiben(rid, v):
+    """Stufe 3: das Sammelprotokoll (und beim regulären Abschluss die Set-Protokolle) eines eben abgeschlossenen oder
+    abgebrochenen Durchgangs festschreiben – in dessen Schreibtransaktion, nach dem Schließen, und innerhalb von
+    dateien_sichern(). Die Daten werden unter der Sperre noch einmal ausgerechnet; nur wenn sie genau denen gleichen, aus
+    denen v gerendert wurde, kommen die vorab gerenderten Dateien unter ihre endgültigen Namen und die Zeilen in die
+    Datenbank – sonst Veraendert (die Transaktion rollt zurück, nichts ist abgelegt). Liefert die Protokoll-ID des
+    Sammelprotokolls."""
+    r = db.query("SELECT * FROM mat_round WHERE id = ?", (rid,), one=True)
+    if not r or not r["closed_on"] or r["locked_at"]:
+        raise RuntimeError("Sammelprotokoll nur einmal und erst nach dem Abschluss.")
+    ts, pid, je_set = v["ts"], v["pid"], v["je_set"]
+    jetzt = durchgang_vorbereiten(r, ts)
+    if (jetzt["pid"] != pid or list(jetzt["je_set"]) != list(je_set)
+            or any({k: je_set[fid][k] for k in s} != s for fid, s in jetzt["je_set"].items())
+            or jetzt["set_daten"] != v["set_daten"]
+            or _sammelprotokoll(r, pid, ts, jetzt["eintraege"], je_set=je_set) != v["daten"]):
+        raise Veraendert()
+    for fid, s in je_set.items():
+        _zwischen_uebernehmen(s["pdf_path"])
+        db.execute("INSERT INTO mat_round_setprotokoll (id, round_id, folder_id, ordner, artikel, protocol_id, locked_at, "
+                   "pdf_path, pdf_sha256, pdf_hashed_bytes, file_sha256) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                   (s["kennung"], rid, fid, s["ordner"], s["artikel"], s["protokoll_id"], ts, s["pdf_path"],
+                    s["pdf_sha256"], s["pdf_hashed_bytes"], s["file_sha256"]))
+    felder = v["felder"]
+    _zwischen_uebernehmen(felder["pdf_path"])
     db.execute("UPDATE mat_round SET protocol_id = ?, locked_at = ?, pdf_path = ?, pdf_sha256 = ?, pdf_hashed_bytes = ?, "
                "file_sha256 = ? WHERE id = ?",
                (pid, ts, felder["pdf_path"], felder["pdf_sha256"], felder["pdf_hashed_bytes"], felder["file_sha256"], rid))
@@ -805,7 +976,7 @@ def _per_id(pid):
 
 def _art(pid):
     return {"P": "Prüfprotokoll", "A": "Aussonderungsprotokoll", "S": "Sammelprotokoll",
-            "T": "Sammelprotokoll (Set)"}.get(pid[:1], "Protokoll")
+            "T": "Set-Protokoll"}.get(pid[:1], "Protokoll")
 
 
 def _kopf_summe(fh, n):

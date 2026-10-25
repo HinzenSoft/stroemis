@@ -2,8 +2,9 @@
 {# Sammelprotokoll eines Prüfdurchgangs: Ergebnisübersicht, Prüfer, alle Artikel des Durchgangs und das
    Verzeichnis der Einzelprotokolle mit der Prüfsumme jeder Datei. Daten laut services/protokoll._sammelprotokoll
    (dokument, durchgang, zaehlung, pruefer, artikel, ohne_protokoll, set_info, set_protokolle). Bis zu etwa 500 Artikelzeilen.
-   Seit Schritt 27: Die Artikel eines Ordners der Art „Set“ stehen zusammen unter einer Zwischenzeile (a.zwischen,
-   a.im_set), das Verzeichnis der Set-Protokolle folgt dem der Einzelprotokolle. Dieselbe Vorlage trägt das
+   Seit Schritt 27: Die Artikel eines Ordners der Art „Set“ stehen zusammen unter Zwischenzeilen (a.zwischen – eine
+   Liste, von außen nach innen –, a.im_set; protokoll._zwischenzeilen), das Verzeichnis der Set-Protokolle folgt dem der
+   Einzelprotokolle. Dieselbe Vorlage trägt das
    Set-Protokoll eines Set-Ordners (setprotokoll.html, set_info: {name, teil_von, durchgang_ordner}). #}
 {% block stil %}
 .uebersicht-tab { width: 100%; border-collapse: collapse; }
@@ -103,9 +104,9 @@ table.verzeichnis .hash { font-size: 7pt; }
     <thead><tr><th class="zahl">Nr.</th><th>Inventar- / Seriennummer</th><th>Produkt und Ordner</th><th>Ergebnis</th><th>geprüft</th><th>Protokoll</th></tr></thead>
     <tbody>
     {%- for a in artikel %}
-      {%- if a.zwischen %}
-      <tr class="set-kopf"><td colspan="6">{{ a.zwischen }}</td></tr>
-      {%- endif %}
+      {%- for z in a.zwischen %}
+      <tr class="set-kopf"><td colspan="6">{{ z }}</td></tr>
+      {%- endfor %}
       <tr class="{{ 'offen' if a.zustand == 'nicht_geprueft' }}{{ ' im-set' if a.im_set }}">
         <td class="nr zahl"><span class="nr-marke">{{ a.nr }}</span></td>
         <td><div class="mono">{{ a.inventarnummer }}</div><div class="klein mono">{{ a.seriennummer }}</div>{% if a.seriennummer_vormals %}<div class="berichtigung">{{ a.seriennummer_vormals }}</div>{% endif %}</td>

@@ -57,7 +57,7 @@ ARTIKEL_SPALTEN = (
     "in Prüfung bei", "Zugeordnet an", "DEMO")
 VERZEICHNIS_SPALTEN = (
     "Protokoll-ID", "Art", "Prüfart", "Datum", "festgeschrieben", "Inventarnummer", "Seriennummer", "Produkt",
-    "Prüfdurchgang", "Prüfer", "Urkundennummer", "Ergebnis", "Grund", "Datei im ZIP", "SHA-256 der Datei",
+    "Prüfdurchgang", "Set", "Prüfer", "Urkundennummer", "Ergebnis", "Grund", "Datei im ZIP", "SHA-256 der Datei",
     "SHA-256 der ersten N Bytes", "N (Bytes)", "Zustand", "berichtigt durch", "Berichtigung von", "DEMO")
 
 # Mit dem offenen Entwurf (höchstens einer je Artikel) für „in Prüfung bei“ und der zugeordneten Person (Name, immer
@@ -85,6 +85,19 @@ def dateiname(text):
     Wiki). Umlaute bleiben; send_file(download_name=…) schreibt sie RFC-5987-kodiert in die Kopfzeile."""
     name = re.sub(r"[^\w .\-]+", "_", text or "", flags=re.UNICODE).strip(" .") or "Export"
     return name[:120]
+
+
+UMLAUTE = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"})
+
+
+def anhang_kopf(name):
+    """Content-Disposition eines Downloads: der Name nach RFC 5987 (filename*) und als Ersatz für alte Programme in
+    ASCII mit „ue“ statt „ü“ – den Ersatz von send_file (Werkzeug) verlöre das „ü“ ganz („Jahresprufung“)."""
+    import unicodedata
+    from urllib.parse import quote
+    ersatz = unicodedata.normalize("NFKD", name.translate(UMLAUTE)).encode("ascii", "ignore").decode("ascii")
+    ersatz = re.sub(r"[^\w .\-]+", "_", ersatz) or "Export"
+    return f'attachment; filename="{ersatz}"; ' + "filename*=UTF-8''" + quote(name, safe="")
 
 
 def _zelle(wert):
@@ -207,14 +220,15 @@ def _groesse_text(n):
 def _sammel_zeile(r, name, zustand):
     """Zeile des Verzeichnisses für ein Sammelprotokoll."""
     return [r["protocol_id"], "Sammelprotokoll", "", datum_text(r["closed_on"]), zeit_text(r["locked_at"]), "", "", "",
-            r["title"], r["closed_by_name"], "", "abgebrochen" if r["aborted"] else "abgeschlossen", "", name,
+            r["title"], "", r["closed_by_name"], "", "abgebrochen" if r["aborted"] else "abgeschlossen", "", name,
             r["file_sha256"], r["pdf_sha256"], r["pdf_hashed_bytes"], zustand, "", "", "ja" if r["ordner_demo"] else "nein"]
 
 
 def _set_zeile(s, name, zustand):
-    """Zeile des Verzeichnisses für ein Set-Protokoll (Schritt 27); „Grund“ nennt das Set."""
-    return [s["protocol_id"], "Sammelprotokoll (Set)", "", datum_text(s["closed_on"]), zeit_text(s["locked_at"]), "", "", "",
-            s["title"], s["closed_by_name"], "", "abgeschlossen", f"Set {s['ordner']} ({s['artikel']} Artikel)", name,
+    """Zeile des Verzeichnisses für ein Set-Protokoll (Schritt 27); die Spalte „Set“ nennt seinen Pfad beim Festschreiben
+    (seit der Prüfung vom 25.10.2026 – vorher stand er unter „Grund“)."""
+    return [s["protocol_id"], "Set-Protokoll", "", datum_text(s["closed_on"]), zeit_text(s["locked_at"]), "", "", "",
+            s["title"], s["ordner"], s["closed_by_name"], "", "abgeschlossen", "", name,
             s["file_sha256"], s["pdf_sha256"], s["pdf_hashed_bytes"], zustand, "", "", "ja" if s["ordner_demo"] else "nein"]
 
 
@@ -258,9 +272,9 @@ def durchgang_zip(rid):
 def protokolle_zip(fid):
     """(offene temporäre Datei mit dem ZIP, Dateiname, Zahlen): alle festgeschriebenen Prüf- und
     Aussonderungsprotokolle der Artikel des Ordners – auch berichtigte Originale samt ihrer Berichtigung –, die
-    Sammelprotokolle der Durchgänge im Zweig und Verzeichnis.csv mit einer Zeile je Vorgang. Abgeschlossene Vorgänge
-    ohne Protokoll (vor Lieferung 3) stehen im Verzeichnis als „ohne Protokoll“. Ein leerer Ordner ergibt ein ZIP, in
-    dem nur das Verzeichnis (mit Kopfzeile) liegt."""
+    Sammelprotokolle der Durchgänge und (seit Schritt 27) die Set-Protokolle der Sets im Zweig und Verzeichnis.csv mit
+    einer Zeile je Vorgang. Abgeschlossene Vorgänge ohne Protokoll (vor Lieferung 3) stehen im Verzeichnis als „ohne
+    Protokoll“. Ein leerer Ordner ergibt ein ZIP, in dem nur das Verzeichnis (mit Kopfzeile) liegt."""
     o = bestand.ordner(fid)
     bedingung, args = menge(fid)
     pruefungen = db.query(PRUEFUNG_SQL + f"WHERE x.completed_at IS NOT NULL AND {bedingung} ORDER BY x.inspected_on, x.id",
@@ -303,7 +317,7 @@ def protokolle_zip(fid):
         zeilen.append([
             x["protocol_id"], "Aussonderungsprotokoll" if x["kind"] == "aussonderung" else "Prüfprotokoll",
             PRUEFART_TEXT.get(x["kind"], x["kind"]), datum_text(x["inspected_on"]), zeit_text(x["locked_at"]),
-            x["inventory_no"], x["serial_no"], katalog.produktname(x, x["product_description"]), x["durchgang"],
+            x["inventory_no"], x["serial_no"], katalog.produktname(x, x["product_description"]), x["durchgang"], "",
             x["inspector_name"], x["inspector_certificate"], ERGEBNISSE.get(x["result"], x["result"]), x["reason"], name,
             x["file_sha256"], x["pdf_sha256"], x["pdf_hashed_bytes"], zustand, berichtigt_durch.get(x["id"], ""),
             protokoll_von.get(x["corrects_inspection_id"], "(ohne Protokoll)") if x["corrects_inspection_id"] else "",
@@ -312,7 +326,7 @@ def protokolle_zip(fid):
         name, zustand = aufnehmen(r, "Sammelprotokolle")
         zeilen.append(_sammel_zeile(r, name, zustand))
     for s in set_protokolle:
-        name, zustand = aufnehmen(s, "Sammelprotokolle")
+        name, zustand = aufnehmen(s, "Set-Protokolle")
         zeilen.append(_set_zeile(s, name, zustand))
     if zaehler["fehlt"] or zaehler["verändert"]:
         # Welche Dateien, steht schon im Protokoll der App (protokoll.datei); hier die Zusammenfassung des Exports.

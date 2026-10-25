@@ -4160,6 +4160,100 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Nachbesserung Set-Rückbau und Set-Protokolle nach den Prüfungen (25.10.2026)
+
+Grundlage: Berichte der Prüfer Ablauf, Sicherheit und Browser zu e951633 (`planung/material-phase4/
+bericht_pruefung_set_rueckbau_l2c_*.md`) und die Entscheidungen des Nutzers vom 25.10.2026. Kein neuer Schemaschritt.
+
+### Abschluss ohne lange Schreibsperre (Ablauf B2 = Sicherheit 1, Entscheidung „PDFs vorher erzeugen“)
+
+- Bisher entstanden alle Set-Protokolle und das Sammelprotokoll **unter der Schreibsperre** der gemeinsamen Datenbank.
+  Mit vielen Sets dauerte das länger, als jede andere schreibende Anfrage der Plattform wartet (15 s, `app/db.py`) – die
+  scheiterten dann mit 500 (auch Anmeldungen).
+- Jetzt **zweistufig** (`durchgang._beenden`, `protokoll.durchgang_vorbereiten` / `durchgang_rendern` /
+  `durchgang_festschreiben`): Daten in einem Lesestand ohne Sperre lesen (WAL) → alle PDFs **ohne Sperre** rendern, unter
+  Zwischennamen neben ihrem Ziel (`pdf/<jahr>/.<ID>.<zufall>.teil`) → kurze Schreibtransaktion (BEGIN IMMEDIATE): die
+  üblichen Prüfungen (offen, Entwürfe), schließen, **alle Protokolldaten noch einmal ausrechnen** und mit den gerenderten
+  vergleichen (Nummern, Artikel, Ordnerpfade, Prüfer, Ausnahmen, Seriennummern …). Gleich → die Dateien kommen per hartem
+  Link unter ihren endgültigen Namen (nie überschreibend), Zeilen und Journal wie bisher. Anders → verwerfen
+  (Zwischendateien weg, keine Nummer verbraucht) und neu, höchstens 3 Versuche; danach 409 „Während des Festschreibens
+  wurde am Durchgang weitergearbeitet … Bitte noch einmal versuchen.“ – nie 500. Kann die Datenbank trotzdem nicht
+  gesperrt werden, 503 mit Meldung. Für Prüfer und Materialwart ändert sich nichts: Der Abschluss wartet wie bisher.
+  Der Abbruch geht denselben Weg (nur das Sammelprotokoll).
+- Nummernvergabe, Festschreiben, `verwaiste_beiseite` und Unveränderlichkeit bleiben, wie sie waren: Endgültige Namen
+  entstehen nur unter der Sperre; Zwischennamen sind keine Protokolldateien (kein `.pdf`, heben den Zähler nicht).
+  Bricht der Prozess beim Rendern ab, bleiben nur Zwischendateien liegen – der nächste Start löscht sie, wenn sie älter
+  als ein Tag sind (jüngere können zu einem Abschluss in einem anderen Arbeitsprozess gehören).
+- Das Protokoll der App nennt je Abschluss die Renderzeit und die Dauer der Schreibsperre.
+- **Gemessen** (Probe der Sicherheitsprüfung p05 wiederholt: 15 Fahrzeuge × äußeres Set mit 2 inneren Sets = 45 Sets,
+  450 Artikel, Server mit Threads, nebenher alle 0,5 s eine Anmeldung):
+
+  | Last | Abschluss gesamt | davon Schreibsperre | Anmeldungen nebenher |
+  |---|---|---|---|
+  | unbelastet (4 Kerne) | 33,4 s | **0,15 s** | 51, alle 200, keine über 2 s |
+  | Last ≈ 12 (10 Rechenschleifen) | 111,3 s | **0,56 s** | 109, alle 200, keine über 2 s |
+
+  Vorher hielt derselbe Abschluss die Sperre 32,3 s bzw. 64,4 s (Bericht Sicherheit). Zwei gleichzeitige Abschlüsse in
+  zwei Gliederungen (p07, je 12 Sets): beide 200, der zweite verwarf einmal (die T-Nummern hatte der erste vergeben),
+  T-…001–012 und 013–024, keine Dopplung. Abbruch mitten im Rendern (SIGKILL nach 12 s): 17 Zwischendateien, kein `.pdf`,
+  nichts in `pdf/verwaist/`; der erneute Abschluss vergibt T-…000001 (keine Lücke).
+
+### Zwischenzeilen im Sammel- und Set-Protokoll (Ablauf B1 = Browser 1)
+
+- Verglichen wird die **ganze Kette der Sets** auf dem Weg jeder Zeile unterhalb des Durchgangs- bzw. Set-Ordners, nicht
+  nur das innerste Set (`protokoll._zwischenzeilen`): beim Eintritt je Set eine Zeile, **von außen nach innen** – auch für
+  ein Set, das nur innere Sets enthält, mit seiner T-Nummer; beim Rückweg in ein äußeres Set „Set <Pfad> (Fortsetzung)“;
+  beim Verlassen aller Sets **„Außerhalb von Sets · <gemeinsamer Ordner der folgenden Zeilen>“** (liegt der
+  Durchgangsordner selbst in einem Set: „Außerhalb innerer Sets“). Im Set-Protokoll – und im Durchgang direkt auf einem
+  Set – ist das Set selbst die äußerste Ebene („Set <Pfad> (Fortsetzung)“ nach einem inneren Set).
+- „n Artikel“ zählt **genau die Zeilen bis zur nächsten Zwischenzeile**; hat das Set mehr (innere Sets, Fortsetzung),
+  steht „n Artikel, im ganzen Set m“ bzw. „im ganzen Set m Artikel“ da – m ist die Zahl in seinem Set-Protokoll.
+- Tests mit den Proben b3/b4 der Ablaufprüfung und dem Fall aus Browser S-2.png.
+
+### Name „Set-Protokoll“ (Entscheidung des Nutzers)
+
+- PDF-Titel und Fuß „Set-Protokoll T-…“, Prüfseite „Set-Protokoll“, Ordnerseite „Set-Protokolle“ (bzw. „Sammelprotokolle“
+  oder „Set- und Sammelprotokolle“), Ordner-Export im ZIP-Ordner `Set-Protokolle/<jahr>/` (bisher `Sammelprotokolle/`),
+  Verzeichnis „Art“ = „Set-Protokoll“, Text im Export-Menü, Prüfseite nennt Set-Protokolle. Die Nummer bleibt T-…; das
+  Protokoll des Durchgangs bleibt „Sammelprotokoll“. Bereits festgeschriebene T-PDFs (nur dev) behalten ihren Titel.
+
+### Kleinkram
+
+- Durchgangsseite offen: „… ein eigenes Set-Protokoll (hier bis zu n; Sets mit Geprüftem bisher: m)“ statt „(hier n
+  Sets)“.
+- Abbruch-Rückfrage: „Set-Protokolle entstehen dabei keine – nur beim Abschließen.“ (wenn Sets im Durchgang sind);
+  Knöpfe **„Zurück“ | „Durchgang abbrechen“** statt „Abbrechen“ | „Durchgang abbrechen“ (`S.confirm` hat dafür einen
+  dritten Parameter).
+- „PDF“-Links der Set-Protokolle (Durchgangs- und Ordnerseite) und der Durchgangsliste mit eigenem zugänglichem Namen
+  („Set-Protokoll T-… (PDF)“).
+- ZIP- und CSV-Downloads des Exports: ASCII-Ersatzname mit „ue“ statt verlorenem „ü“
+  (`filename="Protokolle_DEMO-Jahrespruefung 2026_S-….zip"`, `filename*` wie bisher).
+- `Verzeichnis.csv`: neue Spalte **„Set“** (hinter „Prüfdurchgang“) mit dem Pfad des Sets; „Grund“ bleibt bei
+  Set-Protokollen leer (bisher „Set … (n Artikel)“ dort).
+- Prüfsummen-Knopf: Die gestrichelte Linie sitzt am Text, nicht am 44 px hohen Knopf – am Finger schwebte sie unter der
+  Zeile.
+- Produktdialog am Telefon, „weißer Streifen am rechten Rand“: nachgemessen (Chromium, 360 px, Reiter „Bestandteile“
+  ganz unten) – kein Element ragt aus dem Dialog (Reiter 28–332 px im Dialog 8–352 px); der Streifen ist die
+  eingeblendete Bildlaufleiste des rollenden Dialoginhalts (oben weiß, darunter der graue Schieber). Keine Änderung.
+- README: Set-Reste in „Bestand“ entfernt („nie an Sets und Teilen … Set-Produkt“, „Set-Meldungen“), Protokoll-IDs mit
+  `T-`; Tippfehler „einzelner Stücke“ im Reiter „Bestandteile“.
+- Unverändert (Wunsch des Nutzers): Hinweis- und Hilfetexte über die volle Inhaltsbreite.
+
+### Nur auf dev (Ablauf B3)
+
+- Der Jahresbericht eines Jahres mit Set-Altbestand (nur dev, Produktion hatte nie Sets) ordnet alte Set-Sperren nach dem
+  allgemeinen Schlüssel ein: „aus ausgesondertem Set entnommen“ erscheint als „aus Prüfung (instandsetzen)“, jede
+  Mitsperre einer Kaskade als eigene „Sperre durch Prüfer ohne Prüfung“. Bewusst keine eigene Lese-Art.
+
+### Tests
+
+- `tests/test_material_setprotokolle.py`: neu `test_zwischenzeilen` (b3/b4, S-2, Set-Protokoll des äußeren Sets, Durchgang
+  direkt auf einem Set, PDF-Text), `test_abschluss_zweistufig` (eine andere Verbindung schreibt während des Renderns ohne
+  zu warten; Änderung zwischen Rendern und Festschreiben → neu gerendert, Nummern ohne Lücke, keine Zwischendatei, Rechte
+  0444; jedes Mal geändert → 409 nach 3 Versuchen, nichts festgeschrieben; Abbruch; `verwaiste_beiseite` löscht nur alte
+  Zwischendateien und hebt den Zähler nicht), `test_dateiname_ascii`; angepasst: Prüfseite „Set-Protokoll“,
+  Verzeichnis mit Spalte „Set“, ZIP-Ordner `Set-Protokolle/`, Oberfläche statisch.
+
 ## Texte über die volle Breite (Wunsch des Nutzers, 25.10.2026)
 
 Wunsch des Nutzers (mit Bildschirmfoto der Seite „Prüfformular“): „Die Texte gehen nicht über die vorgesehene Breite“.
@@ -4180,9 +4274,10 @@ mit den Entscheidungen F1 b, F2 b, F3 a, F4 a, F5 a. **Schemaschritt 27.**
 
 - **Sammelprotokoll (S-…)**: weiter alle Artikel des Durchgangs. Die Artikel eines Ordners der Art „Set“ stehen jetzt
   sicher zusammen (sortiert wird nach der Folge der Ordner statt nach dem Pfadtext; auf jeder Ebene erst die Artikel,
-  dann Unterordner, dann Sets) unter einer **Zwischenzeile** „Set <Pfad> · n Artikel · Set-Protokoll T-…“ (sonst „kein
-  Set-Protokoll (nichts geprüft)“ bzw. „(Durchgang abgebrochen)“; nach einem inneren Set „(Fortsetzung)“) und mit einer
-  Kennlinie in der Nummernspalte. Neuer Abschnitt **„Set-Protokolle dieses Durchgangs“** hinter dem Verzeichnis der
+  dann Unterordner, dann Sets) unter **Zwischenzeilen** „Set <Pfad> · n Artikel · Set-Protokoll T-…“ (sonst „kein
+  Set-Protokoll (nichts geprüft)“ bzw. „(Durchgang abgebrochen)“) und mit einer Kennlinie in der Nummernspalte – seit der
+  Nachbesserung vom 25.10.2026 nach der ganzen Kette der Sets (je Set von außen nach innen, „(Fortsetzung)“ beim Rückweg,
+  „Außerhalb von Sets · <Ordner>“ danach; siehe „Nachbesserung Set-Rückbau und Set-Protokolle“). Neuer Abschnitt **„Set-Protokolle dieses Durchgangs“** hinter dem Verzeichnis der
   Einzelprotokolle: Protokoll-ID, Set, Artikel, SHA-256 der Datei.
 - **Set-Protokoll (T-<jahr>-<nr>)** je Ordner der Art „Set“ **unterhalb** des Durchgangsordners – „wie ein Durchgang nur
   für diesen Ordner“: Kopf mit Durchgang, Gliederung, eröffnet, abgeschlossen, **Set** (Pfad) und **„Teil von
@@ -4199,22 +4294,24 @@ mit den Entscheidungen F1 b, F2 b, F3 a, F4 a, F5 a. **Schemaschritt 27.**
 - Festgeschrieben in **derselben Transaktion** wie das Sammelprotokoll (erst alle Nummern, dann die Set-Protokolle, dann
   das Sammelprotokoll mit ihren Prüfsummen). Scheitert eines, wird nichts festgeschrieben und keine neue Datei bleibt
   liegen. Berichtigungen nach dem Abschluss ändern weder Sammel- noch Set-Protokoll (wie bisher). Journal am Durchgang
-  „festgeschrieben“ mit `set_protokolle` [{protocol_id, folder_id, file_sha256}]. Rechenzeit gemessen: 20 Sets à 10
-  Artikel schreiben in 12,9 s fest (unter der Schreibsperre, alle PDFs in der Transaktion) – unter der Grenze von 30 s
-  aus dem Entwurf, deshalb ohne Hintergrundauftrag.
+  „festgeschrieben“ mit `set_protokolle` [{protocol_id, folder_id, file_sha256}]. ~~Rechenzeit gemessen: 20 Sets à 10
+  Artikel schreiben in 12,9 s fest (unter der Schreibsperre) – unter der Grenze von 30 s aus dem Entwurf.~~ Überholt: Die
+  Grenze sind die 15 s, die jede andere Anfrage auf die Sperre wartet; seit der Nachbesserung entstehen die PDFs vor der
+  Schreibtransaktion (siehe unten).
 - **Oberfläche**: Durchgangsseite offen – der Satz über der Liste nennt die Zahl der Sets, die Rückfrage beim Abschließen
   „… und n Set-Protokolle werden festgeschrieben“, der Toast „Durchgang abgeschlossen – Sammelprotokoll S-… und n
   Set-Protokolle“. Geschlossen – neben „Sammelprotokoll (PDF)“ der graue Knopf **„Alle Protokolle (ZIP)“** und der
   Abschnitt **„Set-Protokolle“** (Pfad des Sets als Link, wenn das Konto den Ordner sieht; Artikel; ID; „PDF“).
-  **Ordnerseite eines Sets**: Abschnitt **„Sammelprotokolle“** unter der Artikelliste (Set-Protokolle dieses Ordners und
+  **Ordnerseite eines Sets**: Abschnitt **„Set-Protokolle“** (bzw. „Sammelprotokolle“ oder „Set- und
+  Sammelprotokolle“, je nachdem, was darin steht – bis zur Nachbesserung immer „Sammelprotokolle“) unter der Artikelliste (Set-Protokolle dieses Ordners und
   Sammelprotokolle der Durchgänge, die für ihn eröffnet wurden; neueste zuerst, höchstens 20).
 - **Rechte (F4 a)**: Ein Set-Protokoll öffnet, wer den Durchgang sehen darf (Leserecht am Durchgangsordner) **und
   zusätzlich, wer den Set-Ordner lesen darf**; das Sammelprotokoll und das ZIP nur, wer den Durchgang sieht. Fremdes und
   Unbekanntes 404, ohne Modulzugang 403.
 - **ZIP „Alle Protokolle“ (F5 a)**: Sammelprotokoll, alle Set-Protokolle und `Verzeichnis.csv` (Spalten wie im
   Protokoll-Export des Ordners). Der **Protokoll-Export eines Ordners** nimmt zusätzlich die Set-Protokolle der
-  Set-Ordner in seinem Zweig auf (Ordner „Sammelprotokolle“, Art „Sammelprotokoll (Set)“).
-- **Prüfseite** erkennt Set-Protokolle („Sammelprotokoll (Set)“); der Nummernschutz beim Start hebt auch den Zähler der
+  Set-Ordner in seinem Zweig auf (Ordner „Set-Protokolle“, Art „Set-Protokoll“, Spalte „Set“ – seit der Nachbesserung).
+- **Prüfseite** erkennt Set-Protokolle („Set-Protokoll“); der Nummernschutz beim Start hebt auch den Zähler der
   Set-Protokolle über die höchste T-Nummer in der Ablage; `verwaiste_beiseite` kennt ihre Dateien.
 - **DEMO**: Ein frischer DEMO-Bestand hat im „DEMO-Seilrucksack“ (Set) das innere Set „DEMO-Karabinerbeutel“ mit einem
   DEMO HMS-Karabiner (zum Ausprobieren „verschachtelt“).
@@ -4254,12 +4351,16 @@ mit den Entscheidungen F1 b, F2 b, F3 a, F4 a, F5 a. **Schemaschritt 27.**
 
 ### Bitte bestätigen
 
-1. Titel des Set-Protokolls „Sammelprotokoll“ mit der Unterzeile „Set <Name> · <Durchgang>“ (Prüfseite: „Sammelprotokoll
-   (Set)“) – wie im Entwurf.
-2. Die Zwischenzeilen im Sammelprotokoll nennen den vollen Pfad des Sets; nach einem inneren Set steht das äußere mit
-   „(Fortsetzung)“, wenn danach noch Artikel des äußeren folgen.
+1. ~~Titel des Set-Protokolls „Sammelprotokoll“~~ – entschieden (Nutzer, 25.10.2026): überall **„Set-Protokoll“**
+   (PDF-Titel und Fuß, Prüfseite, Ordnerseite, ZIP-Ordner, Verzeichnis); das Protokoll des ganzen Durchgangs bleibt
+   „Sammelprotokoll“.
+2. Die Zwischenzeilen im Sammelprotokoll nennen den vollen Pfad des Sets; seit der Nachbesserung nach der ganzen Kette
+   der Sets (siehe dort).
 3. Wird ein Set-Ordner später in eine andere Gliederung verschoben, öffnen seine neuen Leser auch seine alten
-   Set-Protokolle (F4 a hängt am Ordner, nicht an der Gliederung des Durchgangs).
+   Set-Protokolle (F4 a hängt am Ordner, nicht an der Gliederung des Durchgangs). **Folge:** Sie sehen darin auch
+   Artikel, Prüfer (Name, Urkundennummer, Unterschrift), „eröffnet/abgeschlossen von“ und die Gliederung der alten
+   Gliederung – auch Artikel, die vor dem Verschieben aus dem Set genommen wurden; der Ordner-Export der neuen Gliederung
+   nimmt diese Set-Protokolle mit. **Vom Nutzer bestätigt (25.10.2026): „Ja, wie gebaut“.**
 
 ## Rückbau der Set-Funktion (Wunsch des Nutzers, 25.10.2026)
 
@@ -7824,10 +7925,10 @@ oder Plattform-Verwaltung).
 | `POST /api/material/artikel/<id>/sperren` (`grund`: sturz, beschaedigung, verlust, rueckruf; `text`) | Prüfer | Sperre ohne Prüfung |
 | `POST /api/material/artikel/<id>/aussondern` (`grund`: lebensdauer, verlust, irreparabel; `datum`, `bemerkung`) | Materialwart (mit Unterschrift) | Aussonderung gesperrter Artikel mit Aussonderungsprotokoll; liefert `aussonderung` (Kennung) |
 | `GET/POST /api/material/durchgaenge`, `GET/DELETE …/<id>` | lesen / Materialwart oder Prüfer | Prüfdurchgänge (`?offen=1`); eröffnen (`folder_id`, `titel`); löschen, solange nichts geprüft ist |
-| `POST /api/material/durchgaenge/<id>/ausnehmen`, `…/einbeziehen` (`item_id`, `grund`), `…/abschliessen` | Materialwart oder Prüfer | Artikel ausnehmen, wieder einbeziehen, Durchgang abschließen (mit Sammelprotokoll) |
+| `POST /api/material/durchgaenge/<id>/ausnehmen`, `…/einbeziehen` (`item_id`, `grund`), `…/abschliessen` | Materialwart oder Prüfer | Artikel ausnehmen, wieder einbeziehen, Durchgang abschließen (mit Sammel- und Set-Protokollen; 409 „Während des Festschreibens wurde am Durchgang weitergearbeitet …“, wenn sich dreimal zwischen Rendern und Festschreiben etwas geändert hat, 503 bei gesperrter Datenbank) |
 | `POST /api/material/durchgaenge/<id>/abbrechen` | Materialwart oder Prüfer | vorzeitig beenden; `durchgang` ist `null`, wenn er mangels Geprüftem entfernt wurde |
 | `GET /material/export/<ordner>.csv` | Grundrecht am Ordner (Phase 2) | Artikel, deren Heimat im Ordner oder darunter liegt (auch von hier gesperrte und ausgesonderte), als CSV für Excel; Spalte „Zugeordnet an“ (Phase 2), hinter „Modell“ „Bemerkung (Produkt)“ (Nachbesserung vom 18.10.2026), hinter „Lebensende“ die Spalte „Länge (m)“ als „57,5“ (Schritt 20) |
-| `GET /material/export/<ordner>-protokolle.zip` | Grundrecht am Ordner (Phase 2) | alle Protokolle dieser Artikel und die Sammelprotokolle der Durchgänge im Zweig, mit `Verzeichnis.csv` |
+| `GET /material/export/<ordner>-protokolle.zip` | Grundrecht am Ordner (Phase 2) | alle Protokolle dieser Artikel, die Sammelprotokolle der Durchgänge und die Set-Protokolle der Sets im Zweig, mit `Verzeichnis.csv` (Spalte „Set“ seit 25.10.2026); Dateiname mit ASCII-Ersatz („ue“) und `filename*` |
 | `GET /material/artikel/<id>/lebenslauf.pdf` | Grundrecht an der Heimat (Phase 2) | Lebenslauf als PDF/A-3b, auf Abruf, nicht festgeschrieben |
 | `GET /api/material/katalog/export`, `GET …/export/vorschau` | Katalog | Katalog ohne DEMO als ZIP (Format 2) bzw. seine Zahlen vorab |
 | `POST /api/material/katalog/import` (`file`: ZIP oder JSON, `trocken`: Vorgabe `1`) | Katalog | Katalogimport im Hintergrund (seit 24.10.2026): **202** `auftrag`, 409 mit dem laufenden, 507 bei zu wenig Platz (Datei + 64 MB); der Bericht (neu/geändert/unverändert je Art, Bilder, Dokumente, Änderungen, Hinweise, Warnungen, Fehler) kommt über `GET …/katalog/import/<kennung>` |
