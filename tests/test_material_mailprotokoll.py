@@ -301,7 +301,7 @@ def test_stille():
             finally:
                 meldung.HINTERGRUND = alt
             assert r.status_code == 201 and liste == [] and not fehler(app), (r.get_json(), liste)
-            assert any("Produktmeldung: Mail nicht verschickt (Umgebungssperre)" in z for z in log), log
+            assert any("Produkt- oder Set-Meldung: Mail nicht verschickt (Umgebungssperre)" in z for z in log), log
     print("Stille bestanden.")
 
 
