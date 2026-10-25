@@ -9,6 +9,7 @@ from .auth import (EMAIL_RE, MIN_PW, MODULE, STUFEN, VERWALTUNG, VORGABE_NEU, ad
 from .images import delete_avatar
 from .mailer import send_mail, versand
 from .material.services import Abgelehnt
+from .material.services import antrag as mat_antrag
 from .material.services import freigaben as mat_freigaben
 from .material.services import journal as mat_journal
 from .material.services import loeschung as mat_loeschung
@@ -267,7 +268,11 @@ def update_user(uid):
         # Ein Admin setzt das Passwort meist genau dann neu, wenn sich jemand ausgesperrt hat –
         # ohne das Löschen der Fehlversuche bliebe die Anmeldung trotzdem gesperrt.
         clear_attempts(sorted({f"mail:{u['email']}", f"mail:{vals.get('email', u['email'])}"}))
-    return jsonify(user=public_user(db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True)))
+    # Deaktiviert, Stufe gesenkt oder ohne Namen: Fiel damit der letzte Materialwart eines Ordners mit offenem
+    # Änderungsantrag weg, bekommt die Material-Verwaltung eine Mail (Modul Material, N5). „mail“: ob eine ging.
+    mail = (mat_antrag.ohne_verwalter_nach_vorgang()
+            if {"active", "recht_material", "recht_verwaltung", "name"} & set(vals) else False)
+    return jsonify(user=public_user(db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True)), mail=mail)
 
 
 @bp.post("/users/<int:uid>/reset-mail")
@@ -316,7 +321,7 @@ def delete_user(uid):
         db.execute("DELETE FROM users WHERE id = ?", (uid,))
     # Erst nach dem Festschreiben: Bricht die Umschreibung ab, bleibt das Konto samt Bild stehen.
     delete_avatar(current_app.config["MEDIA_DIR"], bild)
-    return jsonify(ok=True)
+    return jsonify(ok=True, mail=mat_antrag.ohne_verwalter_nach_vorgang())
 
 
 @bp.get("/users/<int:uid>/material-folgen")

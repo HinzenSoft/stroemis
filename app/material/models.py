@@ -234,13 +234,16 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
   - Schritt 28 (Aussondern nur durch den Materialwart, Wunsch vom 25.10.2026): neues Prüfergebnis „aussondern_empfohlen“
     (sperrt nur). mat_inspection wird dafür einmal neu aufgebaut (CHECK); Trigger und Indizes kommen in ihrer genauen
     gespeicherten Fassung zurück. Wiederholbar; Rückweg über die Sicherung (siehe _schritt_28).
+  - Schritt 29 (Anträge ohne Materialwart, Wunsch vom 25.10.2026, N5): mat_antrag_ohne_verwalter – je Ordner die Meldung
+    an die Material-Verwaltung, dass er mit offenem Antrag keinen Verwalter mehr hat (Einmaligkeit). Rein additiv,
+    wiederholbar (IF NOT EXISTS). Rückweg: ein älterer Stand ignoriert die Tabelle.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 28
+SCHEMA_VERSION = 29
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -2673,6 +2676,19 @@ def _schritt_28(conn):
         raise sqlite3.IntegrityError(f"Fremdschlüssel nach dem Umbau verletzt: {sorted(neu_verletzt)[:5]}")
 
 
+# --- Schritt 29: Anträge ohne Materialwart (Wunsch vom 25.10.2026, N5) ---------------------------------------------------
+# Je Ordner (Heimat von Artikeln mit offenem Änderungsantrag), dem die Material-Verwaltung gemeldet wurde, dass er keinen
+# Materialwart mehr hat – damit die Mail je Wegfall genau einmal geht (antrag.ohne_verwalter_melden). Die Zeile
+# verschwindet, sobald der Ordner wieder einen Verwalter (oder keinen offenen Antrag mehr) hat; dann darf ein erneuter
+# Wegfall wieder melden. Mit dem Ordner geht die Zeile.
+SCHRITT_29 = [
+    """CREATE TABLE IF NOT EXISTS mat_antrag_ohne_verwalter (
+      folder_id   INTEGER PRIMARY KEY REFERENCES mat_folder(id) ON DELETE CASCADE,
+      gemeldet_at TEXT NOT NULL
+    )""",
+]
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
@@ -2680,7 +2696,7 @@ SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schrit
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
             14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
             20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24,
-            25: _schritt_25, 26: _schritt_26, 27: _schritt_27, 28: _schritt_28}
+            25: _schritt_25, 26: _schritt_26, 27: _schritt_27, 28: _schritt_28, 29: SCHRITT_29}
 
 
 def _meta(conn, schluessel, vorgabe=None):

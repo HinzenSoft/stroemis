@@ -1065,6 +1065,9 @@ def tageslauf(ausloeser="automatisch", erneut=False, jetzt=None):
             try:
                 p["abgelaufen"] = abgelaufene_eintragen(stichtag)
                 p.update(aufraeumen())
+                # Abgelaufene Verwalterfreigaben: Ordner mit offenen Anträgen ohne Materialwart melden (N5).
+                from . import antrag
+                p["ohne_verwalter"] = antrag.ohne_verwalter_melden()
             except Exception as exc:
                 current_app.logger.exception("Tageslauf: Pflege gescheitert: %s", exc)
                 p["fehler"] = _fehlertext(exc)

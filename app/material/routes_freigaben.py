@@ -11,7 +11,7 @@ from flask import jsonify, request
 
 from ..auth import current_user, is_admin, json_body, login_required
 from .routes import api
-from .services import freigaben
+from .services import antrag, freigaben
 from .services.rechte import requires_folder, requires_zugang, sicht, zugang, zugang_meldung
 
 
@@ -30,7 +30,10 @@ def freigabe_erteilen(fid):
     Liste."""
     ids = freigaben.erteilen(fid, json_body())
     liste = freigaben.liste(fid) if sicht().darf("verwalten", fid) else None
-    return jsonify(freigaben=[freigaben.eintrag(gid) for gid in ids], liste=liste), 201
+    # „mail“: ob die Material-Verwaltung eine Mail zu Anträgen ohne Materialwart bekam (N5 – ein Grundrecht kann ein
+    # verwalten herabsetzen).
+    return jsonify(freigaben=[freigaben.eintrag(gid) for gid in ids], liste=liste,
+                   mail=antrag.ohne_verwalter_nach_vorgang()), 201
 
 
 @api.post("/ordner/<int:fid>/freigaben/verlaengern")
@@ -65,13 +68,14 @@ def freigabe_aendern(gid):
     """Felder (jedes optional): recht, bis (null = unbefristet; eine Prüffreigabe nur mit Grundrecht, sonst 400),
     notiz."""
     freigaben.aendern(gid, json_body())
-    return jsonify(freigabe=freigaben.eintrag(gid))
+    return jsonify(freigabe=freigaben.eintrag(gid), mail=antrag.ohne_verwalter_nach_vorgang())
 
 
 @api.delete("/freigaben/<int:gid>")
 @_freigabe_recht
 def freigabe_entziehen(gid):
-    return jsonify(ok=True, offene_entwuerfe=freigaben.entziehen(gid))
+    offen = freigaben.entziehen(gid)
+    return jsonify(ok=True, offene_entwuerfe=offen, mail=antrag.ohne_verwalter_nach_vorgang())
 
 
 @api.get("/freigaben/meine")

@@ -4160,6 +4160,60 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## A4 „Aussonderung empfohlen“ als Filter und Übersichtszahl, N5 Mail bei Anträgen ohne Materialwart, W2 (25.10.2026)
+
+Entscheidungen des Nutzers zur Freigabeliste L2c: „A4 N5 bestätigen“ – „Ja, beides bauen“; W2: „niemals hinter den
+Produktwert, nur nach vorne“. **Schemaschritt 29.**
+
+### A4 – Einstieg zu den Empfehlungen
+- **Bestand:** Im Filtermenü der Seitenleiste (Telefon: Schublade) gibt es unter „Status“ den Eintrag **„Aussonderung
+  empfohlen“** mit Zahl – angeboten, wo ein solcher Artikel liegt (fast immer im Ordner „Gesperrt“) oder der Filter
+  gesetzt ist; er zählt wie die übrigen Filter (mit Kategorie, ohne Person). Schnittstelle: `GET /ordner/<fid>?status=
+  aussonderung_empfohlen`, dazu `empfohlen` (Zahl) in der Antwort (`bestand.EMPFOHLEN`, `empfohlen_sql` – dieselbe Regel
+  wie die Marke: gesperrt bzw. verloren und letzte Prüfung „aussondern empfohlen“).
+- **Übersicht:** Hinweis „<n> Artikel mit Aussonderungsempfehlung – gesperrt, ein Prüfer empfiehlt die Aussonderung;
+  aussondern kannst du sie als Materialwart.“ für Konten, die aussondern dürfen (Recht „verwalten“ an der Heimat; die
+  Material-Verwaltung alle) – nur deren Artikel, je Gliederung getrennt. Der Link öffnet „Gesperrt“ mit gesetztem Filter
+  (`/material/ordner/<Gesperrt>?status=aussonderung_empfohlen`); bei mehreren Gliederungen je eine Verknüpfung mit Zahl.
+  Bei 0 nichts. Schnittstelle: `GET /start` → `aussonderung_empfohlen` [{ordner_id, gliederung, anzahl}].
+- Gebaut als Hinweiskasten wie „offene Änderungsanträge“ (Muster der Übersicht), nicht als Kachel der Statuszahlen –
+  die Empfehlung ist kein Status.
+
+### N5 – Mail, wenn ein Ordner mit offenem Antrag keinen Materialwart mehr hat
+- Fällt für die Heimat von Artikeln mit offenem Änderungsantrag die letzte wirksame Freigabe „verwalten“ weg (dort oder
+  darüber; aktive Konten mit Modulzugang – dieselbe Regel wie „wer entscheidet“), bekommt die **Material-Verwaltung**
+  eine Mail (dieselben Empfänger wie beim Antrag ohne Zuständige und bei Produktmeldungen; ohne Material-Verwaltung die
+  Plattform-Verwaltung). Inhalt: Ordnerpfad, Gliederung, Zahl der offenen Anträge, Links auf die Freigaben des Ordners
+  und die Anträge-Seite – keine Antragsinhalte, keine Namen.
+- **Auslöser:** Freigabe entziehen, ändern oder herabsetzen (sofort, nach dem Commit), Konto deaktivieren, Stufe senken
+  oder Namen leeren (Nutzerverwaltung), Konto löschen, Ablauf befristeter Freigaben (Pflege im täglichen Lauf,
+  `pflege.ohne_verwalter`). Antworten tragen ehrlich `mail` (ob eine Mail an den Versand ging; DEMO, dev-Sperre und
+  ohne Mailserver nur ins Log, Fehlschläge ins Mailfehler-Protokoll).
+- **Einmaligkeit** (`antrag.ohne_verwalter_melden`, Tabelle `mat_antrag_ohne_verwalter`): je Ordner und Wegfall eine Mail;
+  hat der Ordner wieder einen Materialwart (oder keinen offenen Antrag mehr), verschwindet die Zeile, ein späterer
+  Wegfall meldet neu. Ein Antrag, für den es schon beim Stellen keinen Zuständigen gab, zählt mit seiner Mail an die
+  Material-Verwaltung als Meldung. Nicht ausgelöst: Verschieben eines Ordners in eine andere Gliederung (verliert er
+  dabei seine geerbten Verwalter, meldet ihn der nächste Auslöser oder der tägliche Lauf).
+- „Bitte bestätigen“ N5 der Freigabeliste: **entschieden** (Mail gewünscht, gebaut).
+
+### W2 – Lebensende nie hinter den Produktwert (keine Änderung)
+Geprüft, dass kein Weg ein Lebensende hinter die Rechnung aus Herstellung + Lebensdauer setzt: Anlegen
+(`bestand.artikel_werte`: ein späteres Datum ist ein Fehler, ein früheres gilt als vorgezogen), „Bearbeiten“ (nur
+vorziehen, auch ein vorgezogenes nicht wieder nach hinten), Antrag (höchstens bis zur Rechnung), Bestandsimport (ein
+späteres Datum laut Liste wird nicht übernommen, Hinweis „es gilt …“), Lebensdauer am Produkt geändert
+(`katalog.lebensende_nachziehen`: ein vorgezogenes Datum gilt nur, solange es früher liegt). **Entscheidung des Nutzers:
+so lassen.**
+
+### Schemaschritt 29
+Neue Tabelle `mat_antrag_ohne_verwalter` (folder_id Primärschlüssel, ON DELETE CASCADE; gemeldet_at). Rein additiv,
+wiederholbar (IF NOT EXISTS), frisch = migriert (Test). Rückweg: ein älterer Stand ignoriert die Tabelle.
+
+### Tests
+`tests/test_material_a4_n5.py`: Zählung je Recht und Gliederung (Materialwart je Gliederung, Prüfer und Leser nichts,
+Material-Verwaltung alles), Filter mit Zahl und Kategorie, nach dem Aussondern weg; N5 mit allen vier Auslösern,
+Einmaligkeit, erneute Meldung nach neuem Wegfall, keine Mail ohne offenen Antrag, nur an die Material-Verwaltung, kein
+Antragsinhalt, Antrag ohne Zuständige zählt als Meldung; Schritt 29; Oberfläche statisch.
+
 ## Nachbesserung nach der Browserprüfung des Endstands 5de5e56 (25.10.2026)
 
 - **B1:** Die Marke „Aussonderung empfohlen“ bricht in der Kartenansicht um (`white-space: normal`, höchstens so breit
@@ -8262,3 +8316,4 @@ oder Plattform-Verwaltung).
 | `POST /api/material/mailfehler/alle-erledigt` | Modulzugang mit Sicht (sonst 403) | alle offenen Zeilen der eigenen Sicht abhaken → `anzahl` (Phase 4 · 1) |
 | `POST /api/material/artikel/<id>/aussondern` | wie bisher | neu: `datum` vor der letzten abgeschlossenen Prüfung, vor dem Herstelldatum (Monat → erster Tag) oder vor dem Tag der Sperre (jüngster Journaleintrag frei → gesperrt/verloren, Ortszeit) → 409 mit Klartext; Zukunft und vor der Erfassung weiter 400 (C2, Phase 4 · 1 mit Nachbesserung) |
 | `POST /api/material/artikel/<id>/aussondern`, `POST …/pruefungen/<id>/festschreiben`, `GET …/artikel/<id>` | wie bisher | seit Schritt 28: Ergebnis `aussondern` → 400, neu `aussondern_empfohlen` (sperrt); Aussondern nur nach einer letzten Prüfung `instandsetzen`/`aussondern_empfohlen` oder bei `verloren`, sonst 409 mit Grund; Artikel trägt `aussonderung_empfohlen` ({pruefung, protokoll_id, datum, pruefer, grund} bzw. in Listen true/false) und für Materialwarte `aussondern` {ok, grund} |
+| `GET /api/material/ordner/<fid>?status=aussonderung_empfohlen`, `GET /api/material/start`; `POST/PUT/DELETE …/freigaben…`, `PUT/DELETE /api/admin/users/<id>` | wie bisher | A4: Filter und `empfohlen` (Zahl) am Ordner, `aussonderung_empfohlen` [{ordner_id, gliederung, anzahl}] auf der Übersicht; N5: Antworten tragen `mail` (Mail an die Material-Verwaltung zu Anträgen ohne Materialwart) |

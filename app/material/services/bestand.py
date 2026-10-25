@@ -973,7 +973,8 @@ def artikel_kurz(i, stichtag=None):
 
 
 def _empfohlen(i):
-    """Hat ein Prüfer die Aussonderung des gesperrten Artikels empfohlen (letzte Prüfung „aussondern empfohlen“)?"""
+    """Hat ein Prüfer die Aussonderung des gesperrten Artikels empfohlen (letzte Prüfung „aussondern empfohlen“)? Dieselbe
+    Regel als SQL: empfohlen_sql."""
     if i["lock_state"] not in ("gesperrt", "verloren"):
         return False
     if "letztes_ergebnis" in i:
@@ -1118,6 +1119,33 @@ def artikel_sortierung():
     }
 
 
+# Statusfilter „Aussonderung empfohlen“ (Wunsch vom 25.10.2026, A4): kein Status, sondern gesperrte Artikel, deren letzte
+# Prüfung „aussondern empfohlen“ ergab (wie die Marke, _empfohlen).
+EMPFOHLEN = "aussonderung_empfohlen"
+
+
+def empfohlen_sql(a="i"):
+    """SQL-Bedingung über mat_item (Kürzel a): die Aussonderung ist empfohlen."""
+    return (f"({a}.lock_state IN ('gesperrt', 'verloren') AND (SELECT x.result FROM mat_inspection x WHERE "
+            f"x.item_id = {a}.id AND x.completed_at IS NOT NULL AND x.kind <> 'aussonderung' "
+            f"ORDER BY x.completed_at DESC, x.id DESC LIMIT 1) = 'aussondern_empfohlen')")
+
+
+def empfohlen_uebersicht():
+    """Übersicht (A4): je Ordner, in dem gesperrte Artikel mit Aussonderungsempfehlung liegen (der „Gesperrt“-Ordner
+    ihrer Gliederung), deren Zahl – nur Artikel, die das Konto aussondern darf („verwalten“ an ihrer Heimat; die
+    Material-Verwaltung alle). [{ordner_id, gliederung, anzahl}], nach Gliederung; leer, wenn es keine gibt."""
+    recht = rechte.artikel_filter("i", "verwalten")
+    if recht == "0":
+        return []
+    out = []
+    for r in db.query(f"SELECT i.folder_id AS fid, COUNT(*) AS n FROM mat_item i WHERE {recht} AND {empfohlen_sql('i')} "
+                      "GROUP BY i.folder_id"):
+        gl = gliederung_von(r["fid"])
+        out.append({"ordner_id": r["fid"], "gliederung": gl["name"] if gl else "", "anzahl": r["n"]})
+    return sorted(out, key=lambda x: (x["gliederung"].casefold(), x["ordner_id"]))
+
+
 def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, richtung="auf", zugeordnet=None,
                   kategorie=None):
     """Ein Ordner mit Pfad, Unterordnern (mit Zählung) und den Artikeln direkt darin, die das Konto sieht – in einem
@@ -1145,7 +1173,9 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     if kategorie is not None:
         bedingung += " AND i.product_id IN (SELECT id FROM mat_product WHERE category_id = :kat)"
         params["kat"] = kategorie
-    if status_filter:
+    if status_filter == EMPFOHLEN:
+        bedingung += f" AND {empfohlen_sql('i')}"
+    elif status_filter:
         if status_filter not in st.STATUS:
             raise Abgelehnt("Unbekannter Status.")
         bedingung += f" AND {st.status_sql('i')} = :sf"
@@ -1169,7 +1199,10 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
                       f"GROUP BY s", dict(st.parameter(), fid=fid, kat=kategorie)):
         zaehlung[r["s"]] = r["n"]
     out["direkt"] = zaehlung
-    nach_status = f" AND {st.status_sql('i')} = :sf" if status_filter else ""
+    out["empfohlen"] = db.query(f"SELECT COUNT(*) AS n FROM mat_item i WHERE {sicht}{nach_kat} AND {empfohlen_sql('i')}",
+                                dict(fid=fid, kat=kategorie), one=True)["n"]
+    nach_status = (f" AND {empfohlen_sql('i')}" if status_filter == EMPFOHLEN
+                   else f" AND {st.status_sql('i')} = :sf" if status_filter else "")
     kats = db.query(f"SELECT p.category_id AS id, COUNT(*) AS n FROM mat_item i JOIN mat_product p ON p.id = i.product_id "
                     f"WHERE {sicht}{nach_status} GROUP BY p.category_id", dict(st.parameter(), fid=fid, sf=status_filter))
     out["kategorien"] = sorted(({"id": k["id"], "n": k["n"], "name": pf[-1]["name"] if pf else "",

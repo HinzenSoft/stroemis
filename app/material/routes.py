@@ -396,7 +396,8 @@ def start():
     gescheiterte Modul-Mails in der eigenen Sicht (mailprotokoll.uebersicht: offen, zeilen, kein_mailserver) oder null,
     wenn es nichts zu zeigen gibt (Phase 4 · L1). „antraege_offen“:
     offene Änderungsanträge, die das Konto als Materialwart des Ordners entscheiden darf (antrag.zu_entscheiden – für
-    jedes Konto, seit dem 24.10.2026 nicht mehr nur für die Material-Verwaltung)."""
+    jedes Konto, seit dem 24.10.2026 nicht mehr nur für die Material-Verwaltung). „aussonderung_empfohlen“ (A4): je
+    „Gesperrt“-Ordner die Zahl der Artikel mit Aussonderungsempfehlung, die das Konto aussondern darf (sonst leer)."""
     alle = bestand.baum()
     maengel, maengel_gesamt = mangel.offene_liste()
     gliederungen = [o for o in alle if o["kind"] == "gliederung" and not o["system_kind"] and not o.get("nur_pfad")]
@@ -408,6 +409,7 @@ def start():
                    schwelle_tage=st.schwelle_tage(), status_text=st.LABEL,
                    meldungen_offen=meldung.anzahl_offen() if ist_material_verwaltung() else None,
                    antraege_offen=antrag.zu_entscheiden(),
+                   aussonderung_empfohlen=bestand.empfohlen_uebersicht(),
                    rueckrufe=rueckruf.uebersicht(),
                    erinnerungen=erinnerung.stand() if ist_material_verwaltung() else None,
                    nacharbeit=bestandsimport.offen_uebersicht(),

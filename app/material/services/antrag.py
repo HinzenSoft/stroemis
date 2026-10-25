@@ -51,6 +51,7 @@ ohne Mailserver stehen sie im Log statt im Postfach.
 Anträge sind nach der Entscheidung (oder dem Zurückziehen) unveränderlich (Trigger), lassen sich nicht löschen und bleiben
 unbefristet mit dem Artikel; beim Löschen eines Kontos setzt die Datenbank nur die Kontokennung auf NULL, die Namen
 bleiben (Handelnde, wie bei Prüfungen und Mangelmeldungen)."""
+import json
 import unicodedata
 
 from flask import current_app
@@ -222,7 +223,12 @@ def zustaendige(item):
     """Wer Anträge am Artikel entscheiden darf – als Konten (Zeilen von users): eigene gültige Verwalterfreigabe an der
     Heimat oder darüber (erinnerung.ordnerverwalter, die Verwaltung eingeschlossen, wenn sie eingetragen ist) und
     Modulzugang (Stufe und Name) – dieselbe Regel wie darf_entscheiden."""
-    ids = erinnerung.ordnerverwalter(bestand.heimat(item))
+    return zustaendige_ordner(bestand.heimat(item))
+
+
+def zustaendige_ordner(fid):
+    """Dasselbe für einen Ordner (die Heimat der Artikel)."""
+    ids = erinnerung.ordnerverwalter(fid)
     if not ids:
         return []
     rows = db.query(f"SELECT * FROM users WHERE id IN ({','.join('?' * len(ids))}) ORDER BY name COLLATE NOCASE, id",
@@ -561,6 +567,8 @@ def stellen(iid, d):
             nachher["bestandteil_nummern"] = _teile_journal(item, wuensche["component_serial"])
         _produktnamen(vorher, nachher, item, wuensche)
         journal.eintragen("item", iid, "antrag_gestellt", vorher, nachher)
+        if not zustaendige(item):
+            _als_gemeldet(bestand.heimat(item))       # die Mail unten geht dann an die Material-Verwaltung (N5)
     return kid, _zustaendige_benachrichtigen(kid)
 
 
@@ -732,6 +740,99 @@ def _adresse(u, demo):
     """Die Adresse eines Kontos für eine Antragsmail – keine DEMO-Adresse außer bei DEMO-Artikeln; sonst None."""
     adr = (u["email"] or "").strip()
     return adr if adr and (demo or not erinnerung.demo_adresse(adr)) else None
+
+
+# --- Anträge ohne Materialwart (Wunsch vom 25.10.2026, N5) -------------------------------------------------------------
+
+def _offen_je_ordner():
+    """Offene Sammelanträge je Heimat ihres Artikels: {Ordner: Zahl}."""
+    out = {}
+    for r in db.query("SELECT item_id FROM mat_item_change WHERE group_id IS NULL AND status = 'offen'"):
+        h = bestand.heimat(bestand.artikel(r["item_id"]))
+        out[h] = out.get(h, 0) + 1
+    return out
+
+
+def ohne_verwalter_melden():
+    """Ordner, in denen Anträge offen sind, die niemand mehr entscheiden darf (kein Konto mit eigener gültiger Freigabe
+    „verwalten“ dort oder darüber, zustaendige_ordner): einmal je Wegfall eine Mail an die Material-Verwaltung
+    (rechte.material_verwaltung_konten – dieselbe Regel wie beim Antrag ohne Zuständige und bei Produktmeldungen).
+    Aufgerufen nach jedem Vorgang, der eine Verwalterfreigabe wegnehmen kann: Freigabe entziehen oder ändern, Konto
+    deaktivieren, Stufe senken oder löschen (sofort, nach dem Commit) und im Tageslauf (abgelaufene Freigaben).
+    Einmaligkeit über mat_antrag_ohne_verwalter (Schritt 29): gemeldet wird nur ein Ordner, der dort noch nicht steht;
+    hat er wieder einen Verwalter oder keinen offenen Antrag mehr, verschwindet seine Zeile – ein späterer Wegfall meldet
+    neu. Die Mail nennt nur Ordnerpfad, Gliederung und die Zahl der Anträge – keine Inhalte, keine Namen. Liefert, ob eine
+    Mail an den Versand ging (DEMO, Umgebungssperre, ohne Mailserver: nur ins Log)."""
+    if not db.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'mat_antrag_ohne_verwalter'", one=True):
+        return False                                  # Schema vor Schritt 29 (nur in Tests, die früher anhalten)
+    ohne = {fid: n for fid, n in _offen_je_ordner().items() if not zustaendige_ordner(fid)}
+    with db.transaction(sofort=True):
+        gemeldet = {r["folder_id"] for r in db.query("SELECT folder_id FROM mat_antrag_ohne_verwalter")}
+        weg = gemeldet - set(ohne)
+        if weg:
+            db.execute("DELETE FROM mat_antrag_ohne_verwalter WHERE folder_id IN (SELECT value FROM json_each(?))",
+                       (json.dumps(sorted(weg)),))
+        neu = sorted(set(ohne) - gemeldet)
+        for fid in neu:
+            db.execute("INSERT OR IGNORE INTO mat_antrag_ohne_verwalter (folder_id, gemeldet_at) VALUES (?, ?)",
+                       (fid, db.now()))
+    gesendet = False
+    for fid in neu:
+        gesendet = _ohne_verwalter_mail(fid, ohne[fid]) or gesendet
+    return gesendet
+
+
+def ohne_verwalter_nach_vorgang():
+    """ohne_verwalter_melden nach einem Vorgang außerhalb dieses Dienstes (Freigaben, Konten) – nach dessen Commit; ein
+    Fehler hier macht den Vorgang nicht ungeschehen, er steht nur im Protokoll der App. Liefert, ob eine Mail ging."""
+    try:
+        return ohne_verwalter_melden()
+    except Exception as exc:
+        current_app.logger.exception("Anträge ohne Materialwart: Prüfung gescheitert: %s", exc)
+        return False
+
+
+def _als_gemeldet(fid):
+    """Ein Antrag, für den es schon beim Stellen keinen Zuständigen gab, ging mit seiner Mail an die Material-Verwaltung
+    (_zustaendige_benachrichtigen) – der Ordner gilt damit als gemeldet. In der Transaktion des Aufrufers."""
+    db.execute("INSERT OR IGNORE INTO mat_antrag_ohne_verwalter (folder_id, gemeldet_at) VALUES (?, ?)", (fid, db.now()))
+
+
+def _ohne_verwalter_mail(fid, anzahl):
+    demo = bestand.ordner_ist_demo(fid)
+    an = [(_adresse(u, demo), u["id"]) for u in rechte.material_verwaltung_konten() if _adresse(u, demo)][:MAX_EMPFAENGER]
+    if not an:
+        current_app.logger.warning("Ordner %s: Anträge ohne Materialwart – niemand in der Material-Verwaltung erreichbar.",
+                                   fid)
+        return False
+    cfg = current_app.config
+    basis = (cfg.get("BASE_URL") or "").rstrip("/")
+    ordner = bestand._pfad_text(fid)
+    gl = bestand.gliederung_von(fid)
+    anzahl_text = "1 offener Änderungsantrag wartet" if anzahl == 1 else f"{anzahl} offene Änderungsanträge warten"
+    zeilen = [f"Der Ordner „{ordner}“ hat keinen Materialwart mehr (keine gültige Freigabe „verwalten“ dort oder "
+              f"darüber). {anzahl_text} auf eine Entscheidung – entscheiden darf nur, wer dort verwaltet.", "",
+              f"Gliederung:    {gl['name'] if gl else '(ohne Gliederung)'}", f"Ordner:        {ordner}", "",
+              f"Freigabe vergeben (Ordner → Bearbeiten → Freigaben): {basis}/material/ordner/{fid}?freigaben=",
+              f"Änderungsanträge: {basis}{SEITE}", "",
+              "Du bekommst diese Mail, weil du zur Material-Verwaltung gehörst. Sie kommt je Ordner einmal – erneut erst, "
+              "wenn er wieder einen Materialwart hatte und ihn wieder verliert."]
+    betreff = f"{cfg.get('SITE_NAME') or 'strömis.de'} – Änderungsanträge ohne Materialwart: {ordner}"
+    if demo:
+        betreff = f"[DEMO] {betreff}"
+    mails = [(a, betreff, "\n".join(zeilen) + "\n", uid, "verwaltung") for a, uid in an]
+    HINTERGRUND(_ohne_verwalter_versenden, fid, mails, demo)
+    return not mailprotokoll.still(demo)
+
+
+def _ohne_verwalter_versenden(fid, mails, demo=False):
+    for an, betreff, inhalt, konto_id, rolle in mails:
+        try:
+            mailprotokoll.senden(an, betreff, inhalt, art="antrag", konto_id=konto_id, rolle=rolle, bezug_art="folder",
+                                 bezug_id=fid, folder_id=fid, demo=demo)
+        except Exception as exc:
+            current_app.logger.error("Anträge ohne Materialwart (Ordner %s): Mail an Konto %s gescheitert: %s", fid,
+                                     konto_id, exc)
 
 
 def _zustaendige_benachrichtigen(kid):
