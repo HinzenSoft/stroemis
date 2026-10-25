@@ -1552,7 +1552,8 @@ MELDUNG_BEMERKUNG_MAX = 200
 def _meldung_satz(rows):
     """„Aus dem Bestandsimport Nr. …: n Artikel warten in der Nacharbeit.“ (mehrere Importe: „Nr. 3, 5“)."""
     nummern = ", ".join(str(n) for n in sorted({r["import_id"] for r in rows}))
-    return f"Aus dem Bestandsimport Nr. {nummern}: {len(rows)} Artikel warten in der Nacharbeit."
+    return (f"Aus dem Bestandsimport Nr. {nummern}: {len(rows)} Artikel {'wartet' if len(rows) == 1 else 'warten'} in der "
+            "Nacharbeit.")
 
 
 def meldung_bemerkung(rows):
