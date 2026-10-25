@@ -15,10 +15,11 @@ from . import journal
 from .interval import plus_monate, spaetestens, wirksam
 
 
-def kappen(bedingung, args=()):
+def kappen(bedingung, args=(), zusatz=None):
     """Fälligkeiten der Artikel, auf die die SQL-Bedingung (über i = mat_item, p = mat_product) passt,
     auf letzte Prüfung (ohne Prüfung: heute) + wirksames Intervall begrenzen. Liefert die Zahl der
-    vorgezogenen Artikel. Läuft in der Transaktion des Aufrufers mit."""
+    vorgezogenen Artikel. Läuft in der Transaktion des Aufrufers mit. zusatz: weitere Angaben im Journaleintrag – beim
+    bestätigten Antrag {"antrag": Nr.}, damit Leser dort den Entscheider nicht sehen (antrag.journal_verbergen)."""
     zeilen = db.query(
         "SELECT i.id, i.folder_id, i.origin_folder_id, i.lock_state, i.next_due_on, i.last_inspected_on, "
         "i.interval_months AS i_int, p.interval_months AS p_int, "
@@ -40,7 +41,7 @@ def kappen(bedingung, args=()):
         if grenze and z["next_due_on"] > grenze:
             db.execute("UPDATE mat_item SET next_due_on = ?, updated_at = ? WHERE id = ?", (grenze, db.now(), z["id"]))
             journal.eintragen("item", z["id"], "faelligkeit", {"next_due_on": z["next_due_on"]},
-                              {"next_due_on": grenze, "grund": grund})
+                              dict({"next_due_on": grenze, "grund": grund}, **(zusatz or {})))
             vorgezogen += 1
     return vorgezogen
 

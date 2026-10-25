@@ -166,11 +166,52 @@ def fuer_produkt(pid, user=None, meldungen=True):
     return lesen(paare)
 
 
+# Einträge am Artikel, die das Produkt wechseln (Produkt im Dialog „Bearbeiten“ bis zur ersten Prüfung, per Antrag danach).
+PRODUKTWECHSEL = ("produkt_geaendert", "antrag_bestaetigt")
+
+
+def produkt_zeitraeume(item):
+    """Welches Produkt der Artikel wann hatte – aus seinem eigenen Journal (Kennungen steigen streng mit der Zeit):
+    [{product_id, ab, bis, ab_zeit, bis_zeit}] in zeitlicher Folge; ab/bis sind die Kennungen der Wechsel-Einträge
+    (None: seit dem Anlegen bzw. bis heute), *_zeit ihre Zeitpunkte. Ohne Wechsel ein Zeitraum mit dem heutigen Produkt;
+    passt das Journal nicht zum heutigen Produkt (ein Altbestand ohne Wechsel-Eintrag), ebenso (Prüfung der Anträge,
+    Ablauf 1: nach einem Produktwechsel zeigten Journal und Lebenslauf die Geschichte des falschen Produkts)."""
+    ab_loesch = db.query("SELECT MAX(id) AS m FROM mat_audit WHERE entity = 'item' AND entity_id = ? "
+                         "AND action = 'geloescht'", (item["id"],), one=True)["m"] or 0
+    rows = db.query(f"SELECT id, action, created_at, before_json, after_json FROM mat_audit WHERE entity = 'item' "
+                    f"AND entity_id = ? AND id > ? AND action IN ('angelegt', {', '.join('?' * len(PRODUKTWECHSEL))}) "
+                    f"ORDER BY id", (item["id"], ab_loesch, *PRODUKTWECHSEL))
+    out, pid, ab, ab_zeit = [], None, None, None
+    for r in rows:
+        vorher = json.loads(r["before_json"]) if r["before_json"] else {}
+        nachher = json.loads(r["after_json"]) if r["after_json"] else {}
+        if r["action"] == "angelegt":
+            pid = nachher.get("product_id", pid) if pid is None else pid
+            continue
+        neu = nachher.get("product_id")
+        if neu is None or neu == vorher.get("product_id"):
+            continue
+        alt = pid if pid is not None else vorher.get("product_id")
+        if alt is not None:
+            out.append({"product_id": alt, "ab": ab, "bis": r["id"], "ab_zeit": ab_zeit, "bis_zeit": r["created_at"]})
+        pid, ab, ab_zeit = neu, r["id"], r["created_at"]
+    if pid is not None and pid != item["product_id"]:
+        out, ab, ab_zeit = [], None, None
+    out.append({"product_id": item["product_id"], "ab": ab, "bis": None, "ab_zeit": ab_zeit, "bis_zeit": None})
+    return out
+
+
+def im_zeitraum(e, z):
+    return (z["ab"] is None or e["id"] > z["ab"]) and (z["bis"] is None or e["id"] < z["bis"])
+
+
 def fuer_artikel(item):
-    """Lebenslauf-Journal eines Artikels: seine eigenen Einträge und die seines Produkts – ohne die Meldungen, über die
-    das Produkt in den Katalog kam (die gehören zum Katalog, nicht zum Artikel, und kämen oft aus einem fremden
-    Bereich)."""
-    paare = [("item", item["id"])]
-    eintraege = lesen(paare) + fuer_produkt(item["product_id"], meldungen=False)
+    """Lebenslauf-Journal eines Artikels: seine eigenen Einträge und die seiner Produkte – je Produkt nur aus der Zeit,
+    in der der Artikel es hatte (produkt_zeitraeume; das erste mit seiner Geschichte davor, wie bisher), ohne die
+    Meldungen, über die das Produkt in den Katalog kam (die gehören zum Katalog, nicht zum Artikel, und kämen oft aus
+    einem fremden Bereich)."""
+    eintraege = lesen([("item", item["id"])])
+    for z in produkt_zeitraeume(item):
+        eintraege += [e for e in fuer_produkt(z["product_id"], meldungen=False) if im_zeitraum(e, z)]
     eintraege.sort(key=lambda e: e["id"], reverse=True)
     return eintraege

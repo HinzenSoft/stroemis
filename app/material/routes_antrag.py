@@ -34,7 +34,10 @@ def antrag_stellen(iid):
 def antraege():
     """Sammelanträge nach Stand (`status` offen | erledigt | alle; Vorgabe offen): die eigenen zu Artikeln, die das Konto
     liest, und die, die es entscheiden darf; je Antrag `entscheiden`. `zu_entscheiden`: offene, die das Konto
-    entscheiden darf (die Zahl am Knopf „Änderungsanträge“)."""
+    entscheiden darf (die Zahl am Knopf „Änderungsanträge“). `?nur_zahl=1`: nur `zu_entscheiden` (die Blase im Bestand –
+    ohne die ganze Liste zu rechnen)."""
+    if request.args.get("nur_zahl") in ("1", "true", "ja"):
+        return jsonify(zu_entscheiden=antrag.zu_entscheiden())
     filter_ = request.args.get("status") if request.args.get("status") in antrag.FILTER else "offen"
     return jsonify(antraege=antrag.liste(filter_), filter=filter_, zu_entscheiden=antrag.zu_entscheiden())
 

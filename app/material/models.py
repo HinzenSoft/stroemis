@@ -190,7 +190,11 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     (retire_by_manual) – jede Änderung nur mit bestätigtem, noch nicht angewendetem Antrag; mat_item_produkt_fest
     ebenso für das Produkt; mat_item_antrag_angewendet setzt applied_at je gedeckter Zeile. Länge, Bemerkung und
     nächste Prüfung sind nicht freigabepflichtig. Kein Vier-Augen-Trigger (Entscheidung E5). Wiederholbar: Umgebaut
-    wird nur, wenn der CHECK „purchased_on“ noch nicht kennt; die Trigger werden entfernt und neu angelegt.
+    wird nur, wenn der CHECK „purchased_on“ noch nicht kennt; die Trigger werden entfernt und neu angelegt. Zwei Lücken
+    sind nur mit direktem SQL erreichbar und bleiben bewusst offen (die Trigger schützen gegen Programmfehler, nicht
+    gegen Zugriff auf die Datei): Beim gedeckten Produktwechsel ist retire_by_manual in derselben Anweisung frei (es
+    folgt dem neuen Produkt, der Dienst rechnet es); eine Folgezeile mit gleichem Antragsteller, Zeitpunkt und gleicher
+    Begründung lässt sich nachträglich an einen offenen Kopf hängen (antrag.stellen schreibt alle in einer Transaktion).
   - Schritt 24 (Lebensende per Antrag auch wieder nach hinten, Wunsch vom 25.10.2026): Ein Antrag darf ein vorgezogenes
     Lebensende bis zur Rechnung aus Herstellung und Lebensdauer zurücksetzen – genau auf die Rechnung heißt, das von
     Hand gesetzte Lebensende wird leer (retire_by_manual NULL), damit es wieder Herstellung und Katalog folgt. Die

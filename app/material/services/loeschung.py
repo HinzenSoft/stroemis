@@ -73,8 +73,9 @@ def folgen(uid):
             "pruefungen": zahl("SELECT COUNT(*) AS n FROM mat_inspection WHERE inspector_user_id = ? "
                                "AND completed_at IS NOT NULL"),
             "maengel": zahl("SELECT COUNT(*) AS n FROM mat_defect_report WHERE reporter_id = ?"),
-            "antraege": db.query("SELECT COUNT(*) AS n FROM mat_item_change WHERE created_by = ? OR resolved_by = ?",
-                                 (uid, uid), one=True)["n"]}
+            # Sammelanträge zählen einmal (Kopf und Folgezeilen – Prüfung Sicherheit, Befund 5).
+            "antraege": db.query("SELECT COUNT(DISTINCT COALESCE(group_id, id)) AS n FROM mat_item_change "
+                                 "WHERE created_by = ? OR resolved_by = ?", (uid, uid), one=True)["n"]}
 
 
 def konto_loeschen_vorbereiten(uid):

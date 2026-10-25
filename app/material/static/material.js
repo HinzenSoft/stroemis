@@ -3622,7 +3622,10 @@
         try {
           const r = await api(`${API}/artikel/${a.id}/antrag`, { method: "POST", body: daten });
           dlg.close();
-          toast(r.mail ? "Antrag gesendet – die Materialwarte des Ordners bekommen eine Mail." : "Antrag gesendet – er wartet auf einen Materialwart des Ordners.");
+          // Ohne zuständiges Konto ging die Mail an die Material-Verwaltung (Prüfung Ablauf, Befund 4).
+          const ohne = r.antrag && r.antrag.ohne_zustaendige;
+          toast(r.mail ? (ohne ? "Antrag gesendet – die Material-Verwaltung bekommt eine Mail." : "Antrag gesendet – die Materialwarte des Ordners bekommen eine Mail.")
+            : ohne ? "Antrag gesendet – der Ordner hat zurzeit keinen Materialwart, der ihn entscheiden kann." : "Antrag gesendet – er wartet auf einen Materialwart des Ordners.");
           zeigen(artikel);
         } catch (e) { toast(e.message, true); knopf.disabled = false; }
       };
@@ -7335,7 +7338,7 @@
       <dl class="mat-daten mat-meldung-daten"><dt>Begründung</dt><dd><span class="mat-text">${esc(x.begruendung || "")}</span></dd></dl>
       ${offen ? antragRueckruf(x) : ""}
       ${offen && !geht ? `<p class="notice small">${nurAblehnen}</p>` : ""}
-      ${offen && x.ohne_zustaendige ? '<p class="notice small">Dieser Ordner hat keinen Materialwart mit Freigabe „verwalten“ – die Material-Verwaltung ist benachrichtigt. Entscheiden kann sie, sobald sie sich die Freigabe dort gibt.</p>' : ""}
+      ${offen && x.ohne_zustaendige ? '<p class="notice small">Dieser Ordner hat zurzeit keinen Materialwart mit Freigabe „verwalten“ – die Material-Verwaltung kann sich die Freigabe dort geben und dann entscheiden.</p>' : ""}
       ${x.status === "bestaetigt" ? `<p class="mat-meldung-ergebnis">Bestätigt${wer(x.entschieden_von)} am ${esc(S.fmtDate(x.resolved_at))}${x.antwort ? `: <span class="mat-text">${esc(x.antwort)}</span>` : ""}</p>` : ""}
       ${x.status === "abgelehnt" ? `<p class="mat-meldung-ergebnis">Abgelehnt${wer(x.entschieden_von)} am ${esc(S.fmtDate(x.resolved_at))}: <span class="mat-text">${esc(x.antwort || "")}</span></p>` : ""}
       ${x.status === "zurueckgezogen" ? `<p class="mat-meldung-ergebnis">Vom Antragsteller zurückgezogen am ${esc(S.fmtDate(x.resolved_at))}.</p>` : ""}
@@ -7457,7 +7460,7 @@
   async function antraegeZaehlen(el) {
     if (!el) return;
     try {
-      const n = (await api(`${API}/antraege?status=offen`)).zu_entscheiden || 0;
+      const n = (await api(`${API}/antraege?nur_zahl=1`)).zu_entscheiden || 0;     // nur die Zahl, nicht die Liste
       el.textContent = n > 99 ? "99+" : n;
       el.title = n ? `${plural(n, "offener Änderungsantrag", "offene Änderungsanträge")} zu entscheiden` : "";
       el.hidden = !n;

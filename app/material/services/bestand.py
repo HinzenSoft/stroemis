@@ -600,8 +600,12 @@ def artikel_werte(d, alt=None):
             not alt or w["serial_no"].casefold() != alt["serial_no"].casefold()):
         raise Abgelehnt("Seriennummern der Form „STR-…“ vergibt nur das System – bitte die Herstellernummer "
                         "eintragen oder das Feld leer lassen.")
+    # Die Obergrenze gilt, wenn das Intervall (oder das Produkt) sich ändert. Senkt der Katalog die Herstellervorgabe unter
+    # ein gespeichertes Intervall, rechnet wirksam ohnehin mit dem kürzeren – die übrigen Felder bleiben bearbeitbar, ein
+    # Antrag ohne Intervall bleibt stellbar und bestätigbar (Prüfung der Anträge, Ablauf 2 = Sicherheit 1, 25.10.2026).
     hm = herstellerseite(p)[0]
-    if w["interval_months"] and hm and w["interval_months"] > hm:
+    geaendert = not alt or w["interval_months"] != alt.get("interval_months") or w["product_id"] != alt.get("product_id")
+    if w["interval_months"] and hm and w["interval_months"] > hm and geaendert:
         raise Abgelehnt(f"Das Intervall am Artikel darf die Herstellervorgabe ({hm} Monate) nicht überschreiten.")
     return w, p
 

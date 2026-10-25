@@ -26,6 +26,7 @@ Sperrgrund „Rückruf“. Je Artikel wird der Zustand abgeleitet, nie gespeiche
 Ausgesonderte Artikel sind außer Dienst und zählen nicht als betroffen. Beendet wird ein Rückruf mit einem
 Vermerk; danach steht kein Hinweis mehr an den Artikeln, am Produkt bleibt er sichtbar. Das Journal führt beides
 am Produkt (Aktionen „rueckruf“ und „rueckruf_beendet“) – so steht es auch im Lebenslauf jedes Artikels."""
+import json
 import re
 
 from flask import current_app, g
@@ -268,6 +269,42 @@ def fuer_lebenslauf(item):
             if bestand_zeile:
                 z, grund = zustand(r, bestand_zeile)
         out.append(dict(r, alle=not serien(r), zustand=z, grund=grund))
+    return _frueher(item) + out
+
+
+def _frueher(item):
+    """Rückrufe früherer Produkte des Artikels (Produktwechsel, journal.produkt_zeitraeume), die angelegt wurden, als er
+    das Produkt noch hatte, und ihn betrafen – mit einer Seriennummer, die er je trug (Journal), oder für alle Artikel.
+    Ohne Zustand; „frueheres_produkt“ (Name) und „bis“ (Zeitpunkt des Wechsels). Älteste zuerst (Prüfung der Anträge,
+    Ablauf 1)."""
+    from . import bestand, journal
+    zeitraeume = journal.produkt_zeitraeume(item)[:-1]
+    if not zeitraeume:
+        return []
+    nummern = {_norm(item["serial_no"])}
+    for e in journal.lesen([("item", item["id"])]):
+        for teil in (e.get("vorher") or {}, e.get("nachher") or {}):
+            if isinstance(teil.get("serial_no"), str):
+                nummern.add(_norm(teil["serial_no"]))
+    out = []
+    for z in zeitraeume:
+        p = db.query("SELECT * FROM mat_product WHERE id = ?", (z["product_id"],), one=True)
+        # Angelegt vor dem Wechsel: nach der Kennung des Journaleintrags „rueckruf“ (in derselben Sekunde wie der
+        # Wechsel entscheidet sonst die Uhr nicht), ohne Eintrag nach dem Zeitpunkt.
+        angelegt = {}
+        for e in db.query("SELECT id, after_json FROM mat_audit WHERE entity = 'product' AND entity_id = ? "
+                          "AND action = 'rueckruf'", (z["product_id"],)):
+            angelegt[(json.loads(e["after_json"] or "{}") or {}).get("rueckruf")] = e["id"]
+        for r in db.query("SELECT * FROM mat_recall WHERE product_id = ? ORDER BY id", (z["product_id"],)):
+            if (angelegt[r["id"]] > z["bis"]) if r["id"] in angelegt else r["created_at"] > z["bis_zeit"]:
+                continue
+            if r["closed_at"] and z["ab_zeit"] and r["closed_at"] < z["ab_zeit"]:
+                continue
+            liste = {_norm(x) for x in serien(r)}
+            if liste and not liste & nummern:
+                continue
+            out.append(dict(r, alle=not liste, zustand=None, grund=None, bis=z["bis_zeit"],
+                            frueheres_produkt=bestand._produkt_text(p) if p else f"Nr. {z['product_id']}"))
     return out
 
 

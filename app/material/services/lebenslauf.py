@@ -188,7 +188,10 @@ def _rueckrufe(item):
                  "geprueft": "erledigt – nach dem Rückruf geprüft"}
     out = []
     for r in rueckruf.fuer_lebenslauf(item):
-        if r["closed_at"]:
+        if r.get("frueheres_produkt"):
+            stand = (f"betraf den Artikel mit dem früheren Produkt {r['frueheres_produkt']} (bis "
+                     f"{zeit_text(r['bis'])})" + (f"; beendet am {zeit_text(r['closed_at'])}" if r["closed_at"] else ""))
+        elif r["closed_at"]:
             stand = f"beendet am {zeit_text(r['closed_at'])}" + (f" von {r['closed_by_name']}" if r["closed_by_name"] else "")
         elif r["zustand"] == "offen":
             stand = "läuft – für diesen Artikel offen (seit dem Rückruf weder geprüft noch gesperrt)"
@@ -218,8 +221,11 @@ def daten(iid):
     verweise = {r["id"]: r["protocol_id"] for r in db.query(
         "SELECT id, protocol_id FROM mat_inspection WHERE item_id = ? AND protocol_id IS NOT NULL", (iid,))}
     eintraege = journal.lesen([("item", iid)], grenze=JOURNAL_MAX + 1)     # einer mehr: Wurde gekürzt?
-    eintraege += [e for e in journal.lesen([("product", item["product_id"])], grenze=JOURNAL_MAX + 1)
-                  if e["action"] in PRODUKT_AKTIONEN and e["created_at"] >= item["created_at"]]
+    # Produktänderungen je Produkt nur aus der Zeit, in der der Artikel es hatte (journal.produkt_zeitraeume).
+    for z in journal.produkt_zeitraeume(item):
+        eintraege += [e for e in journal.lesen([("product", z["product_id"])], grenze=JOURNAL_MAX + 1)
+                      if e["action"] in PRODUKT_AKTIONEN and e["created_at"] >= item["created_at"]
+                      and journal.im_zeitraum(e, z)]
     eintraege.sort(key=lambda e: e["id"], reverse=True)
     gekuerzt = len(eintraege) > JOURNAL_MAX
     eintraege = eintraege[:JOURNAL_MAX]                                      # die neuesten zuerst – der älteste fällt weg

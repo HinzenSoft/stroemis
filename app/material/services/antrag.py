@@ -52,6 +52,8 @@ ohne Mailserver stehen sie im Log statt im Postfach.
 Anträge sind nach der Entscheidung (oder dem Zurückziehen) unveränderlich (Trigger), lassen sich nicht löschen und bleiben
 unbefristet mit dem Artikel; beim Löschen eines Kontos setzt die Datenbank nur die Kontokennung auf NULL, die Namen
 bleiben (Handelnde, wie bei Prüfungen und Mangelmeldungen)."""
+import unicodedata
+
 from flask import current_app
 
 from ... import db
@@ -82,6 +84,10 @@ HERSTELLUNG_BLEIBT = "Das Herstelldatum lässt sich nicht entfernen – nur auf 
 LEBENSENDE_BLEIBT = "Das Lebensende lässt sich nicht entfernen – bitte ein neues Datum angeben."
 LEBENSENDE_SCHON = ("Dieses Lebensende ergibt sich schon aus den übrigen Änderungen – bitte das Feld „Lebensende“ "
                     "unverändert lassen.")
+LEBENSENDE_GESETZT = ("Das Lebensende {datum} ist am Artikel schon von Hand gesetzt – bitte das Feld „Lebensende“ "
+                      "unverändert lassen.")
+NICHT_ANGEWENDET = ("Der Antrag ließ sich nicht vollständig anwenden – bitte ablehnen; der Antragsteller kann neu "
+                    "beantragen.")
 SERIE_BLEIBT = "Die Seriennummer lässt sich nicht entfernen – bitte die neue Nummer angeben."
 NUR_TEXTIL = "Ein Lebensende gibt es nur bei textilem Material."
 ENTFERNEN_ALT = ("Ein Herstelldatum lässt sich nicht mehr entfernen (Entscheidung vom 21.10.2026) – diesen älteren Antrag "
@@ -254,7 +260,9 @@ def journal_verbergen(eintraege):
     Stelle (Artikelansicht und Lebenslauf)."""
     from .beschriftung import PERSON
     for e in eintraege:
-        if e["action"] in AKTIONEN:
+        # Dazu die vorgezogene Fälligkeit, die ein bestätigter Antrag nach sich zieht (faelligkeit.kappen mit „antrag“) –
+        # sonst stünde der Entscheider dort mit Namen (Prüfung Sicherheit, Befund 2).
+        if e["action"] in AKTIONEN or (e["action"] == "faelligkeit" and "antrag" in (e.get("nachher") or {})):
             e["user_name"] = PERSON
             if e.get("nachher"):
                 e["nachher"] = {k: v for k, v in e["nachher"].items() if k not in JOURNAL_INHALT}
@@ -405,8 +413,11 @@ def _plan(item, wuensche):
         manuell = None if wunsch == rechnung else wunsch
         if manuell == item["retire_by_manual"]:
             # Der Trigger verlangt, dass ein Antrag auf das Lebensende das von Hand gesetzte ändert (sonst bliebe die
-            # Zeile unangewendet) – gleich bleibt es nur, wenn eine andere Änderung das Lebensende schon dahin bringt.
-            raise Abgelehnt(LEBENSENDE_SCHON)
+            # Zeile unangewendet und das Bestätigen scheiterte): gleich bleibt es, wenn dieses Datum schon von Hand
+            # gesetzt ist (wirksam ist eine frühere Rechnung, etwa mit einem anderen Produkt im selben Antrag – Prüfung
+            # Sicherheit, Befund 3) oder eine andere Änderung das Lebensende schon dahin bringt.
+            raise Abgelehnt(LEBENSENDE_GESETZT.format(datum=wert_text("retire_by", manuell)) if manuell
+                            else LEBENSENDE_SCHON)
     if textil and {"retire_by", "product_id", "manufactured_on"} & set(wuensche):
         ende = bestand._lebensende_wirksam(lebensende(w["manufactured_on"], p["lifetime_years"]), manuell)
         if ende != item["retire_by"]:
@@ -432,10 +443,19 @@ def _produktnamen(vorher, nachher, item, wuensche):
 
 # --- Beantragen -----------------------------------------------------------------------------------------------------
 
+def _begruendung(d):
+    """Die Begründung (Pflicht) – eine aus nur unsichtbaren Format- und Leerzeichen (etwa U+200B) zählt als leer
+    (Prüfung Sicherheit, Verbesserung)."""
+    b = text(d, "begruendung", "Begründung", BEGRUENDUNG_MAX, pflicht=True, einzeilig=False)
+    if not "".join(z for z in b if not z.isspace() and unicodedata.category(z) != "Cf"):
+        raise Abgelehnt("„Begründung“ fehlt.")
+    return b
+
+
 def stellen(iid, d):
     """Einen Sammelantrag stellen – je Feld, das sich ändern soll, eine Zeile, alle mit derselben Begründung, ganz oder
     gar nicht. Ein Journaleintrag, eine Mail. Liefert (Antrag-Nr., mail)."""
-    begruendung = text(d, "begruendung", "Begründung", BEGRUENDUNG_MAX, pflicht=True, einzeilig=False)
+    begruendung = _begruendung(d)
     uid, name = akteur()
     with db.transaction(sofort=True):
         item = bestand.artikel(iid)
@@ -508,9 +528,11 @@ def bestaetigen(aid, d):
         _entscheiden(kid, len(rows), "bestaetigt", antwort)
         db.execute(f"UPDATE mat_item SET {', '.join(f'{s} = ?' for s in setzen)}, updated_at = ? WHERE id = ?",
                    (*setzen.values(), db.now(), item["id"]))
-        # Der Trigger hat jede Änderung gedeckt und ihre Zeile verbraucht – fehlt eine, rollt alles zurück.
+        # Der Trigger hat jede Änderung gedeckt und ihre Zeile verbraucht – fehlt eine, rollt alles zurück (409 mit Satz
+        # statt 500; Prüfung Sicherheit, Befund 3 – _plan weist die bekannten Fälle schon beim Stellen ab).
         if any(not r["applied_at"] for r in gruppe(kid)):
-            raise RuntimeError("Änderungsantrag nicht vollständig angewendet.")
+            current_app.logger.error("Änderungsantrag %s: nicht vollständig angewendet", kid)
+            raise Abgelehnt(NICHT_ANGEWENDET, 409)
         vorher = {s: item[s] for s in setzen}
         nachher = dict(setzen, antrag=kid, beantragt_von=k["created_by_name"], begruendung=k["reason"])
         if "serial_generated" in setzen:                 # im Journal als ja/nein wie beim Anlegen und Bearbeiten
@@ -524,7 +546,7 @@ def bestaetigen(aid, d):
                 nachher[schluessel] = [f"{x['title']} (Nr. {x['id']})" for x in liste_]
         journal.eintragen("item", item["id"], "antrag_bestaetigt", vorher, nachher)
         # Ein kürzeres Intervall oder ein anderes Produkt zieht die Fälligkeit nach (eigener Eintrag, wie beim Bearbeiten).
-        faelligkeit.kappen("i.id = ?", (item["id"],))
+        faelligkeit.kappen("i.id = ?", (item["id"],), zusatz={"antrag": kid})
     _antragsteller_benachrichtigen(kid)
     return kid
 
