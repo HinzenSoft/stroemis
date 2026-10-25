@@ -327,10 +327,11 @@
                    set_lauf_geaendert: "Set-Prüfung aus dem Durchgang gelöst",
                    eingesetzt: "in ein Set eingesetzt", aus_set_geloest: "aus dem Set gelöst (Set aufgelöst)",
                    bestandteil_ersetzt: "Bestandteil ersetzt", produkt_geaendert: "Produkt geändert",
-                   stueckliste_uebertragen: "Stückliste übertragen", nicht_in_stueckliste: "steht nicht mehr in der Stückliste des Sets" };
+                   stueckliste_uebertragen: "Stückliste übertragen", nicht_in_stueckliste: "steht nicht mehr in der Stückliste des Sets",
+                   anzahl_verringert: "Anzahl in der Stückliste des Sets verringert – ein Stück zu entnehmen" };
   const RECHT = { lesen: "lesen", pruefen: "prüfen", verwalten: "verwalten" };
   const ENTITAET = { item: "Artikel", product: "Produkt", document: "Dokument", form: "Formular", folder: "Ordner",
-                     category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produktmeldung" };
+                     category: "Kategorie", user: "Konto", inspection: "Prüfung", round: "Durchgang", request: "Produkt- oder Set-Meldung" };
 
   /* Warum hier nicht geprüft werden kann – als HTML. obj: der Ordner, Artikel oder die Prüfung (mit „darf“); ohne obj
      gilt die Frage für das ganze Konto (Seite „Prüfungen“). Prüfen braucht seit Phase 2 dreierlei: das Häkchen
@@ -1072,7 +1073,7 @@
     inhalt.innerHTML = `<div class="page-head"><h1>Material</h1></div>
       ${mangelKasten(d.maengel, d.maengel_gesamt)}
       ${rueckrufKasten(d.rueckrufe)}
-      ${d.meldungen_offen ? `<p class="notice"><a href="/material/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produktmeldung", "offene Produktmeldungen")}</strong></a>
+      ${d.meldungen_offen ? `<p class="notice"><a href="/material/katalog/meldungen"><strong>${plural(d.meldungen_offen, "offene Produkt- oder Set-Meldung", "offene Produkt- oder Set-Meldungen")}</strong></a>
         – Materialwarte warten darauf, Artikel davon anzulegen.</p>` : ""}
       ${d.antraege_offen ? `<p class="notice"><a href="/material/bestand/antraege"><strong>${plural(d.antraege_offen, "offener Änderungsantrag", "offene Änderungsanträge")}</strong></a>
         – Stammdaten nach der ersten Prüfung in Ordnern, die du verwaltest; bestätigen oder ablehnen.</p>` : ""}
@@ -1254,7 +1255,7 @@
     return `<section class="section mat-mail-kasten" id="mat-mail" aria-labelledby="mat-mail-titel" data-offen="${Number(m.offen)}"><div class="mat-kastenkopf"><h2 id="mat-mail-titel" tabindex="-1">Mailversand</h2>
         ${m.zeilen.length ? `<details class="mat-menue"><summary class="btn secondary small" aria-haspopup="true">Mehr</summary><div class="mat-menue-liste">
           <a href="#mat-mail" role="button" data-act="mail-alle"><strong>Alle erledigt</strong><span>Alle offenen Zeilen abhaken – auch die nicht angezeigten (mit Rückfrage).</span></a></div></details>` : ""}</div>
-      ${m.kein_mailserver ? '<p class="notice">Kein Mailserver eingerichtet – keine Modul-Mail geht hinaus (Erinnerungen, Mängel, Anträge, Produktmeldungen, Rückrufe).</p>' : ""}
+      ${m.kein_mailserver ? '<p class="notice">Kein Mailserver eingerichtet – keine Modul-Mail geht hinaus (Erinnerungen, Mängel, Anträge, Produkt- und Set-Meldungen, Rückrufe).</p>' : ""}
       ${m.zeilen.length ? `<p class="help mat-mail-hilfe">Diese Mails hat der Mailserver nicht angenommen. Erinnerungen holt der nächste Lauf nach; alles andere sagst du den Betroffenen selbst – ein erneuter Versand ist nicht möglich.</p>${tabelle}` : ""}
     </section>`;
   }
@@ -2829,6 +2830,13 @@
      letzte Set-Prüfung (mit Berichtigungen von Teilprüfungen danach), und für den Materialwart je Teil das Untermenü
      „Austausch“ (Teil tauschen, Teil entnehmen) und an einer fehlenden Position „Teil einsetzen …“. Tauschen und
      Einsetzen sind bei „Austausch laut Hersteller: nein“ ausgegraut – dann bleibt nur, das Set auszusondern. */
+  // Ein Teil ohne zugeteilte Position (nach „Stückliste übertragen“): Gibt es seine Position noch, nur mit weniger Stück,
+  // ist nicht dieses eine Stück „übrig“ – der Materialwart wählt, welches er entnimmt (Nachbesserung Sets, 25.10.2026).
+  function uebrigHinweis(t, sb) {
+    const noch = (sb.bestandteile || []).some((b) => b.einzeln && b.produkt && t.produkt && b.produkt.id === t.produkt.id);
+    return noch ? '<div class="small mat-warn">Anzahl in der Stückliste verringert – dieses oder ein anderes Stück entnehmen</div>'
+      : '<div class="small mat-warn">steht nicht mehr in der Stückliste</div>';
+  }
   function setKasten(sb, a) {
     const pflege = Boolean(a.darf && a.darf.verwalten) && a.lock_state !== "ausgesondert";
     const zeile = (x, titel, nummer, produkt, aktion) => `<tr${x.lock_state && x.lock_state !== "frei" ? ' class="mat-gesperrt-zeile"' : ""}>
@@ -2890,7 +2898,7 @@
         ${zeile(eigen, "Das Set selbst", `<strong>${esc(a.inventory_no)}</strong><div class="small muted">SN ${esc(a.serial_no)}</div>`, "")}
         ${sb.teile.map((t) => zeile(t, t.bestandteil || "Teil", `<a class="mat-inv" href="/material/artikel/${t.id}"><strong>${esc(t.inventory_no)}</strong></a>
           <div class="small muted">SN ${esc(t.serial_no)}${t.serial_generated ? " (System)" : ""}</div>`,
-          teilProdukt(t) + (t.slot_id || aus ? "" : '<div class="small mat-warn">steht nicht mehr in der Stückliste</div>'), teilMenue(t))).join("")}
+          teilProdukt(t) + (t.slot_id || aus ? "" : uebrigHinweis(t, sb)), teilMenue(t))).join("")}
         ${(aus ? [] : fehlt).map((z) => `<tr class="mat-fehlt-zeile"><td data-l="Teil" class="mat-k-titel"><strong>${esc(z.bezeichnung)}</strong>${z.produkt ? `<div class="small">${nameHtml(z.produkt)}${zusatzHtml(z.produkt)}</div>` : ""}</td>
           <td data-l="Nummer" class="mat-k-halb" colspan="4"><span class="mat-warn">fehlt – ${z.fehlt} von ${z.anzahl}</span></td>
           ${pflege ? `<td class="tabelle-aktionen mat-k-ohne">${einsetzen(z)}</td>` : ""}</tr>`).join("")}
@@ -3184,7 +3192,7 @@
       body.addEventListener("change", stand);
       stand();
       const block = $(".mat-an-teil", body);
-      if (art === "einsetzen") bestandWahl(block, (q) => `${API}/artikel/${a.id}/kandidaten?${new URLSearchParams({ slot_id: z.id, q })}`);
+      if (art === "einsetzen") bestandWahl(block, (q) => `${API}/artikel/${a.id}/kandidaten?${new URLSearchParams({ slot_id: z.id, produkt_id: z.produkt ? z.produkt.id : "", q })}`);
       fokus($(".at-sn", body) || ok);
       ok.onclick = async () => {
         if (pflicht.fehlt()) return;
@@ -3192,7 +3200,9 @@
         fehler.hidden = true;
         const daten = {};
         if (t) daten.teil_id = t.id;
-        if (z) daten.slot_id = z.id;
+        // Mit dem Produkt der Position: Wurde die Stückliste inzwischen übertragen, antwortet der Server 409 statt eine
+        // andere Position zu treffen (Nachbesserung Sets, 25.10.2026).
+        if (z) { daten.slot_id = z.id; if (z.produkt) daten.produkt_id = z.produkt.id; }
         try {
           if (t) {
             daten.verbleib = verbleib();
@@ -3309,7 +3319,7 @@
         let datum;
         try { datum = datumWert(feld, "Ersetzt am") || null; }
         catch (e) { amDatum(e.message); return; }
-        const daten = { slot_id: z.id, datum, bemerkung: $("#be-bem", body).value.trim() };
+        const daten = { slot_id: z.id, bezeichnung: z.bezeichnung, datum, bemerkung: $("#be-bem", body).value.trim() };
         if (nichtBelegt) daten.bestaetigt = $("#be-best", body).checked;
         ok.disabled = true;
         ok.textContent = "Wird eingetragen …";
@@ -4029,7 +4039,7 @@
       const ziel = $("#an-meldungen");
       try {
         const liste = (await api(`${API}/meldungen?eigene=1&status=alle`)).meldungen.slice(0, 10);
-        ziel.innerHTML = liste.length ? `<section class="section"><h2>Deine Produktmeldungen</h2><ul class="mat-meldeliste">
+        ziel.innerHTML = liste.length ? `<section class="section"><h2>Deine Produkt- und Set-Meldungen</h2><ul class="mat-meldeliste">
           ${liste.map((m) => `<li>${meldestatusMarke(m.status)} <strong>${esc(meldungName(m))}</strong>${artNrKurz(m.article_no)}
             <span class="muted small">gemeldet am ${esc(fmtTag(m.created_at))}</span>
             ${m.status === "eingepflegt" && m.produkt ? `<button type="button" class="btn secondary small" data-act="meldung-waehlen" data-pid="${m.produkt.id}">Artikel davon anlegen</button>` : ""}
@@ -7232,7 +7242,7 @@
       const hilfe = d.bearbeiten ? "Materialwarte melden hier Produkte und Sets, die ihnen beim Anlegen von Artikeln im Katalog fehlen. „Produkt anlegen“ bzw. „Set anlegen“ übernimmt ihre Angaben in den Dialog. Der Melder bekommt eine Mail, sobald es im Katalog ist – oder deine Begründung, wenn du ablehnst."
         : d.alle ? "Materialwarte melden hier Produkte und Sets, die ihnen beim Anlegen von Artikeln im Katalog fehlen; die Material-Verwaltung nimmt sie auf oder lehnt sie mit Begründung ab."
           : "Produkte und Sets, die du beim Anlegen von Artikeln als fehlend gemeldet hast. Du bekommst eine Mail, sobald die Material-Verwaltung sie bearbeitet hat.";
-      inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Produktmeldungen" : "Deine Produktmeldungen"}</h1>
+      inhalt.innerHTML = `<div class="page-head"><h1>${d.alle ? "Produkt- und Set-Meldungen" : "Deine Produkt- und Set-Meldungen"}</h1>
           <div class="btn-row"><a class="btn secondary" href="/material/katalog">Katalog</a>${DARF.verwalten ? '<a class="btn secondary" href="/material/artikel/neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span></a>' : ""}</div></div>
         <p class="help">${hilfe}${DARF.verwalten && !DARF.katalog ? ` <button type="button" class="lnk" data-act="eigene">${d.alle ? "Nur deine zeigen" : "Alle Meldungen zeigen"}</button>` : ""}</p>
         <div class="c-tabs mat-filter" role="group" aria-label="Status">${[["offen", "offen"], ["erledigt", "erledigt"], ["alle", "alle"]].map(([w, t]) => `<button type="button" class="${w === filter ? "sel" : ""}" data-act="filter" data-f="${w}" aria-pressed="${w === filter}">${t}${w === "offen" && d.offen ? ` (${d.offen})` : ""}</button>`).join("")}</div>
@@ -7379,7 +7389,7 @@
   }
 
   function zuordnenDialog(m, danach) {
-    dialog(`<h2>Vorhandenem Produkt zuordnen</h2>
+    dialog(`<h2>Vorhandenem Produkt oder Set zuordnen</h2>
       <p class="help">Für „${esc(meldungName(m))}“ – wenn das Produkt schon im Katalog steht, etwa anders geschrieben oder mit anderer Artikelnummer.</p>
       <label for="zu-q">Produkt suchen</label>
       <div class="mat-produktwahl"><input type="search" id="zu-q" autocomplete="off" ${TASTATUR_SUCHE} value="${esc(m.manufacturer)}"><div id="zu-treffer" class="mat-treffer"></div></div>
@@ -7438,7 +7448,7 @@
       // Nur Produktmeldungen – die Änderungsanträge zählt ihr Knopf im Bestand (antraegeZaehlen, Wunsch vom 24.10.2026).
       const n = (await api(`${API}/meldungen?status=offen`)).offen || 0;
       el.textContent = n > 99 ? "99+" : n;
-      el.title = n ? plural(n, "offene Produktmeldung", "offene Produktmeldungen") : "";
+      el.title = n ? plural(n, "offene Produkt- oder Set-Meldung", "offene Produkt- oder Set-Meldungen") : "";
       el.hidden = !n;
     } catch (e) { /* der Zähler ist Beiwerk */ }
   }

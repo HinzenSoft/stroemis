@@ -180,8 +180,8 @@ def freigabe_gruende(s, teil_zeilen, lp, vorschau=False, lid=None):
         gruende.append("Das Set ist unvollständig: " + ", ".join(f"„{f['bezeichnung']}“ fehlt" for f in fehlend) + ".")
     # Nach „Stückliste übertragen“ (Entscheidung S5): Was keiner Position mehr zugeteilt ist, nimmt erst der Verwalter
     # heraus – vorher gibt keine Set-Prüfung frei.
-    for t in sets.ueberzaehlig(sz, teil_zeilen):
-        gruende.append(sets.NICHT_IN_STUECKLISTE_SATZ.format(inv=t["inventory_no"]))
+    for _, satz in sets.uebrig_saetze(sz, sets.ueberzaehlig(sz, teil_zeilen)):
+        gruende.append(satz)
     return gruende
 
 

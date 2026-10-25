@@ -206,6 +206,29 @@ def entnehmen(set_id, d, akteur):
     return tid
 
 
+# Die Oberfläche schickt zur Position deren Produkt bzw. Bezeichnung mit; passt die Position nicht mehr (die Stückliste
+# wurde inzwischen übertragen – neue Kennungen, eine alte kann später einer anderen Position gehören), 409 statt eines
+# stillen Treffers (Prüfung Sicherheit, Befund 1). Ohne die Angabe bleibt es bei 404 für eine unbekannte Position.
+UEBERTRAGEN = "Die Stückliste dieses Sets wurde inzwischen übertragen – bitte die Seite neu laden."
+
+
+def _position_passt(z, d, einzeln):
+    """z: die Position zur Kennung (oder None). d: Anfrage mit „produkt_id“ (einzeln geführt) bzw. „bezeichnung“."""
+    if einzeln:
+        roh = d.get("produkt_id")
+        erwartet = kennung(roh, "Produkt der Position", leer_erlaubt=True)
+        if erwartet is None:
+            return
+        if not z or z["product_id"] != erwartet:
+            raise Abgelehnt(UEBERTRAGEN, 409)
+        return
+    erwartet = d.get("bezeichnung")
+    if erwartet in (None, ""):
+        return
+    if not z or z["bezeichnung"] != str(erwartet):
+        raise Abgelehnt(UEBERTRAGEN, 409)
+
+
 def einsetzen(set_id, d, akteur, tausch):
     """„Teil tauschen“ (tausch: altes Teil „teil_id“ entnehmen mit „verbleib“ wie entnehmen) bzw. „Teil einsetzen“ in eine
     Position, an der eines fehlt („slot_id“ – bei genau einer fehlenden Position darf sie fehlen) – und ein neues Teil
@@ -241,6 +264,7 @@ def einsetzen(set_id, d, akteur, tausch):
             offen = [x for x in sz if x["einzeln"] and vorhanden.get(x["id"], 0) < x["anzahl"]]
             if slot_id is not None:
                 z = next((x for x in sz if x["id"] == slot_id and x["einzeln"]), None)
+                _position_passt(z, d, True)
                 if not z:
                     raise Abgelehnt("Position nicht gefunden.", 404)
                 if z not in offen:
@@ -421,8 +445,8 @@ def set_aussondern_wart(s, grund, bemerkung, tag, akteur, roh_verbleib):
     from . import mangel, pruefung, setlauf
     s, tz = sets.zeilen(s["id"])
     if not any(x["lock_cause"] == "eigen" or x["lock_state"] == "verloren" for x in [s] + tz):
-        raise Abgelehnt("Das Set ist nur gesperrt, weil es unvollständig ist, ein Teil getauscht oder ein Bestandteil "
-                        "ersetzt wurde – aussondern "
+        raise Abgelehnt("Das Set ist nur gesperrt, weil es unvollständig ist, ein Teil getauscht, ein Bestandteil "
+                        "ersetzt oder die Stückliste übertragen wurde – aussondern "
                         "kann es jetzt nur ein Prüfer („Set prüfen“ mit dem Ergebnis „aussondern“) oder nach einer Sperre "
                         "durch einen Prüfer.", 409)
     for x in [s] + tz:
@@ -608,12 +632,14 @@ def kandidaten(ziel, pid, q):
     return {"treffer": [], "weitere": False, "hinweis": None}
 
 
-def kandidaten_am_set(set_id, slot_roh, q_roh):
-    """GET /artikel/<Set>/kandidaten: slot_id eine einzeln geführte Position der Kopie dieses Sets (sonst 404)."""
+def kandidaten_am_set(set_id, slot_roh, q_roh, produkt_roh=None):
+    """GET /artikel/<Set>/kandidaten: slot_id eine einzeln geführte Position der Kopie dieses Sets (sonst 404);
+    produkt_id (die Oberfläche): ihr Produkt – passt es nicht mehr, 409 (UEBERTRAGEN)."""
     slot_id = kennung(slot_roh, "Position")
     q = suchtext(q_roh)
     s = _set(set_id)
     z = next((x for x in sets.slots(set_id) if x["id"] == slot_id and x["einzeln"]), None)
+    _position_passt(z, {"produkt_id": produkt_roh}, True)
     if not z:
         raise Abgelehnt("Position nicht gefunden.", 404)
     return kandidaten(bestand.heimat(s), z["product_id"], q)
@@ -717,6 +743,7 @@ def bestandteil_ersetzt(set_id, d):
     with db.transaction(sofort=True):
         s = _set(set_id)
         z = next((x for x in sets.slots(set_id) if x["id"] == slot_id and not x["einzeln"]), None)
+        _position_passt(z, d, False)
         if not z:
             raise Abgelehnt("Position nicht gefunden.", 404)
         # Untergrenze (Prüfung Sicherheit, Hinweis): Was vor der Erfassung des Sets ersetzt wurde, gehört nicht in seinen

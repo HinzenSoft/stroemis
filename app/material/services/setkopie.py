@@ -17,7 +17,10 @@ Regeln, wie sie hier umgesetzt sind:
     Schritt 22 verbieten es ebenso), offener Entwurf am Set-Artikel, danach fehlte ein Teil an einer Position mit
     „Austausch laut Hersteller: nein“ (einsetzen ginge dann nicht – das Set aussondern), der Systemordner „Gesperrt“ der
     Gliederung fehlt (nur, wenn das Set dabei sperren müsste). Kein Ausschluss: Sperre, Mangel, Rückruf, DEMO.
-  - Wirkung (uebertragen, POST): die Kopie als Ganzes ersetzen (DELETE, sets.kopie_schreiben). Teil-Artikel bewegen
+  - Wirkung (uebertragen, POST): die Kopie als Ganzes ersetzen – erst die neue schreiben (sets.kopie_schreiben), dann
+    die alten Zeilen über ihre Kennungen löschen. So bekommt die neue Kopie Kennungen über den alten, und eine offene
+    Set-Seite, die noch eine alte Kennung schickt, trifft keine Position mit anderer Bedeutung (Prüfung Sicherheit,
+    Befund 1: mat_item_set_slot hat kein AUTOINCREMENT – erst löschen, dann schreiben vergab dieselben Nummern neu). Teil-Artikel bewegen
     sich nicht (S5). Danach zählt _zuteilen neu: Fehlt ein einzeln geführtes Teil oder ist eines übrig (keiner Position
     mehr zugeteilt – „steht nicht mehr in der Stückliste“), sperrt das Set (sets.sperren mit set_grund „stueckliste“;
     Kaskade wie beim Entnehmen, frei erst über „Set prüfen“). Bezeichnung, Austausch, Reihenfolge und Bestandteile ohne
@@ -27,7 +30,8 @@ Regeln, wie sie hier umgesetzt sind:
   - Journal: am Set „stueckliste_uebertragen“ (vorher die alte Kopie, nachher die neue, was fehlt und welche Teile
     nicht mehr in der Stückliste stehen; der Handelnde mit Namen), bei neuer Sperre die Kaskade („gesperrt“ mit
     set_grund „stueckliste“ – zählt im Jahresbericht einmal als Set-Sperre –, an den Teilen „set_gesperrt“ als „System“),
-    an jedem übrigen Teil „nicht_in_stueckliste“. Kein Eintrag am Produkt (dessen Journal sieht jeder mit Modulzugang –
+    an jedem übrigen Teil „nicht_in_stueckliste“ – bzw. „anzahl_verringert“, wenn es seine Position noch gibt (nur weniger
+    Stück; welches herauskommt, wählt der Materialwart). Kein Eintrag am Produkt (dessen Journal sieht jeder mit Modulzugang –
     dort stünden sonst Inventarnummern fremder Gliederungen). Keine Mail.
   - Eine Transaktion (BEGIN IMMEDIATE) über alle gewählten Sets: Die Vorschau liefert „stand“ (SHA-256 über die
     Stückliste und je Set Kopie, Teile mit Produkt, Sperre, offene Set-Prüfung und offenen Entwurf); POST rechnet unter
@@ -178,7 +182,9 @@ def _set_rechnen(s, tz, neu_slots):
         if not (gl and bestand.systemordner(gl["id"], "gesperrt")):
             grund = "Der Systemordner „Gesperrt“ der Gliederung fehlt – bitte den Ordnerbaum prüfen."
     teile_text = [_fehlt_text(fehlend)] if fehlend else []
-    teile_text += [f"{t['inventory_no']} steht nicht mehr in der Stückliste" for t in uebrig]
+    ohne, verringert = sets._uebrig_gruppen(neu_slots, uebrig)
+    teile_text += [f"{t['inventory_no']} steht nicht mehr in der Stückliste" for t in ohne]
+    teile_text += [f"„{z['bezeichnung']}“: Anzahl verringert – {sets._stueck(n)} zu entnehmen" for z, n in verringert]
     if sperrt:
         wirkung = ("bleibt gesperrt bis zur Set-Prüfung: " if s["lock_state"] != "frei" else "gesperrt bis zur Set-Prüfung: ") \
             + "; ".join(teile_text)
@@ -259,8 +265,9 @@ def _uebertragen_an(s, tz, stueck):
     sid = s["id"]
     alt = sets.slots(sid)
     zu_alt, _ = sets._zuteilen(alt, tz)
-    db.execute("DELETE FROM mat_item_set_slot WHERE set_item_id = ?", (sid,))
     sets.kopie_schreiben(sid, stueck)
+    db.execute("DELETE FROM mat_item_set_slot WHERE set_item_id = ? AND id IN (SELECT value FROM json_each(?))",
+               (sid, json.dumps([z["id"] for z in alt])))
     sz = sets.slots(sid)
     _, fehlend = sets.vollstaendigkeit(sz, tz)
     uebrig = sets.ueberzaehlig(sz, tz)
@@ -269,16 +276,21 @@ def _uebertragen_an(s, tz, stueck):
                       {"bestandteile": [_journal_form(z, "component_product_id") for z in stueck],
                        "fehlt": [{"bezeichnung": f["bezeichnung"], "anzahl": f["fehlt"]} for f in fehlend],
                        "nicht_in_stueckliste": [t["inventory_no"] for t in uebrig]})
+    # Ein übriges Teil: Gibt es seine Position (Produkt) noch – nur mit kleinerer Anzahl –, ist offen, WELCHES Stück der
+    # Materialwart entnimmt (S5: er wählt). Dann der neutrale Eintrag „anzahl_verringert“ („Anzahl in der Stückliste
+    # verringert – ein Stück zu entnehmen“) statt „steht nicht mehr in der Stückliste“ (Prüfung Ablauf, Befund 1);
+    # entnimmt er ein anderes Stück, teilt _zuteilen dieses wieder zu, ohne dass an ihm etwas Falsches stünde.
     for t in uebrig:
         z = zu_alt.get(t["id"])
-        journal.eintragen("item", t["id"], "nicht_in_stueckliste", None,
-                          {"set": sid, "set_inventar": s["inventory_no"],
-                           "bestandteil": z["bezeichnung"] if z else katalog.produktname(katalog.produkt(t["product_id"]))})
+        eintrag = {"set": sid, "set_inventar": s["inventory_no"],
+                   "bestandteil": z["bezeichnung"] if z else katalog.produktname(katalog.produkt(t["product_id"]))}
+        aktion = "anzahl_verringert" if sets.position_fuer(sz, t) else "nicht_in_stueckliste"
+        journal.eintragen("item", t["id"], aktion, None, eintrag)
     if fehlend or uebrig:
         teile = ([sets.UNVOLLSTAENDIG.format(bez=", ".join(f"„{f['bezeichnung']}“" for f in fehlend), was="fehlt")]
                  if fehlend else [])
         if uebrig:
-            teile.append(sets.NICHT_IN_STUECKLISTE.format(nummern=", ".join(t["inventory_no"] for t in uebrig)))
+            teile.append(sets.uebrig_text(sz, uebrig))
         sets.sperren(sid, set_grund="stueckliste", anlass="; ".join(teile))
     else:
         sets.gruende_nachziehen(sid)

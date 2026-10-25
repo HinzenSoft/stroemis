@@ -67,7 +67,7 @@ NACHGEHOLT = "nachgeholt"                           # erledigt_von_name einer sp
 LISTE_MAX = 20                                      # Zeilen im Kasten der Übersicht
 LISTE_ALLE = 200                                    # Zeilen hinter „Weitere anzeigen“ (GET /api/material/mailfehler)
 ADRESSE, MAILSERVER_TEXT, ANMELDUNG_TEXT = "[Adresse]", "[Mailserver]", "[Anmeldename]"
-ART_TEXT = {"erinnerung": "Erinnerung", "mangel": "Mangel", "antrag": "Änderungsantrag", "meldung": "Produktmeldung",
+ART_TEXT = {"erinnerung": "Erinnerung", "mangel": "Mangel", "antrag": "Änderungsantrag", "meldung": "Produkt- oder Set-Meldung",
             "rueckruf": "Rückruf"}
 # Zeilen dieser Rollen sieht nur die Material-Verwaltung: Rückfall-Empfänger und Einzelpersonen, die ein Zweig-Verwalter
 # nichts angehen (Entwurf B4).
@@ -219,7 +219,7 @@ def sichtfilter(alias="m", user=None):
 
 # Der Bezug einer Zeile als Weg ins Modul (nur Modul-Routen, aus Kennungen gebaut – nie aus Datenbanktexten).
 BEZUG_TEXT = {"item": "Artikel", "folder": "Ordner", "report": "Mangelmeldung", "change": "Änderungsantrag",
-              "request": "Produktmeldung", "recall": "Rückruf", "none": ""}
+              "request": "Produkt- oder Set-Meldung", "recall": "Rückruf", "none": ""}
 BEZUG_PFAD = {"change": "/material/bestand/antraege", "request": "/material/katalog/meldungen"}
 
 

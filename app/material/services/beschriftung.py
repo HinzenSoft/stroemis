@@ -114,10 +114,12 @@ AKTION = {
     "bestandteil_ersetzt": "Bestandteil ersetzt", "produkt_geaendert": "Produkt geändert",
     "stueckliste_uebertragen": "Stückliste übertragen",
     "nicht_in_stueckliste": "steht nicht mehr in der Stückliste des Sets",
+    # Nachbesserung Sets (25.10.2026): Position gibt es noch, nur weniger Stück – welches herauskommt, wählt der Wart.
+    "anzahl_verringert": "Anzahl in der Stückliste des Sets verringert – ein Stück zu entnehmen",
 }
 ENTITAET = {"item": "Artikel", "product": "Produkt", "document": "Dokument", "form": "Formular", "folder": "Ordner",
             "category": "Kategorie", "user": "Konto", "inspection": "Prüfung", "round": "Durchgang",
-            "request": "Produktmeldung"}
+            "request": "Produkt- oder Set-Meldung"}
 # Wie PRUEFART_KURZ in material.js: im Journal kurz („periodisch“ statt „periodische Prüfung“).
 PRUEFART_KURZ = PRUEFARTEN
 SPERRZUSTAND = {"frei": "frei", "gesperrt": "gesperrt", "verloren": "verloren (gesperrt)", "ausgesondert": "ausgesondert"}

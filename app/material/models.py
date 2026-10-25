@@ -2048,8 +2048,11 @@ def _schritt_21(conn):
 
 
 # Schritt 22 (Sets anlegen und Stückliste übertragen): Die Kopie der Stückliste ändert sich nur als Ganzes – nie an einem
-# ausgesonderten Set und nie während einer offenen Set-Prüfung (setkopie.uebertragen löscht und schreibt neu). Die Texte
-# der übrigen Trigger aus Schritt 21 bleiben, wie sie ausgeliefert wurden.
+# ausgesonderten Set und nie während einer offenen Set-Prüfung (setkopie.uebertragen schreibt neu und löscht die alten
+# Zeilen). Die Texte der übrigen Trigger aus Schritt 21 bleiben, wie sie ausgeliefert wurden. „Nur als Ganzes“ im Text von
+# SLOT_FEST_22 erzwingen die Trigger NICHT: An einem freien Set ohne offene Set-Prüfung ließe direktes SQL einzelne Zeilen
+# einfügen oder löschen – das „Ganze“ hält der Dienst; die Trigger schützen gegen Programmfehler an ausgesonderten Sets
+# und während einer Set-Prüfung (Prüfung Sicherheit, Hinweis).
 SLOT_FEST_22 = ("'Die Stückliste eines angelegten Sets ändert sich nur als Ganzes (Stückliste übertragen) – nicht an einem "
                 "ausgesonderten Set und nicht während einer Set-Prüfung.'")
 _SET_HAELT_KOPIE = ("EXISTS (SELECT 1 FROM mat_item s WHERE s.id = {}.set_item_id AND (s.lock_state = 'ausgesondert' "

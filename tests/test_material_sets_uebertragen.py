@@ -472,6 +472,107 @@ def test_stand_und_rollback():
     print("Stand und Rückrollen bestanden.")
 
 
+# --- Nachbesserung nach den Prüfungen (25.10.2026) ----------------------------------------------------------------------
+
+def test_nachbesserung_pruefungen():
+    """Sicherheit 1: Übertragen schreibt erst die neue Kopie, dann löscht es die alten Zeilen – neue Kennungen über den
+    alten; eine alte Kennung mit Produkt bzw. Bezeichnung → 409 „… inzwischen übertragen …“ (Teil einsetzen, Auswahl,
+    Bestandteil ersetzt), ohne die Angabe 404 wie bisher; auch eine passende Kennung mit anderem Produkt 409.
+    Ablauf 1: Anzahl verringert → am übrigen Teil „anzahl_verringert“ (nicht „nicht_in_stueckliste“), Sperrgrund und
+    Banner nennen die Position; entnimmt der Wart das ANDERE Stück, ist das Set wieder vollständig. Ablauf 2: der 409-Text
+    bei „Set aussondern“ nennt „Stückliste übertragen“."""
+    with ohne_post(), tempfile.TemporaryDirectory() as tmp:
+        t = set_aufbau(tmp)
+        app, w = t.app, t.wart_a
+        s, k1, k2, _ = t.s["id"], *t.teile
+        alt = {z["id"]: z for z in zeilen(app, "SELECT * FROM mat_item_set_slot WHERE set_item_id = ?", (s,))}
+        hoechste = zeilen(app, "SELECT MAX(id) AS m FROM mat_item_set_slot")[0]["m"]
+        # Anzahl der Verbindungselemente 2 → 1, die Rolle als Position entfernt und wieder dazu: neue Kennungen.
+        stueckliste_setzen(t, _liste(t, p0={"anzahl": 1}))
+        uebertragen(t, vorschau(t), [s])
+        neu = {z["id"]: z for z in zeilen(app, "SELECT * FROM mat_item_set_slot WHERE set_item_id = ?", (s,))}
+        assert not set(neu) & set(alt) and min(neu) > hoechste, (alt.keys(), neu.keys())
+        rolle_alt = next(i for i, z in alt.items() if z["product_id"] == t.rolle)
+        tasche_alt = next(i for i, z in alt.items() if not z["einzeln"])
+        tasche_neu = next(i for i, z in neu.items() if not z["einzeln"])
+        UEB = "inzwischen übertragen"
+        r = w.post(f"/api/material/artikel/{s}/teil-einsetzen", json={"slot_id": rolle_alt, "produkt_id": t.rolle,
+                                                                      "serial_no": "NB-X"})
+        assert r.status_code == 409 and UEB in r.json["error"], r.get_json()
+        assert w.post(f"/api/material/artikel/{s}/teil-einsetzen", json={"slot_id": rolle_alt,
+                                                                         "serial_no": "NB-X"}).status_code == 404
+        r = w.get(f"/api/material/artikel/{s}/kandidaten?slot_id={rolle_alt}&produkt_id={t.rolle}&q=NB")
+        assert r.status_code == 409 and UEB in r.json["error"], r.get_json()
+        assert w.get(f"/api/material/artikel/{s}/kandidaten?slot_id={rolle_alt}&q=NB").status_code == 404
+        rolle_neu = next(i for i, z in neu.items() if z["product_id"] == t.rolle)
+        r = w.get(f"/api/material/artikel/{s}/kandidaten?slot_id={rolle_neu}&produkt_id={t.ids['hms']}&q=NB")
+        assert r.status_code == 409, r.get_json()
+        assert w.get(f"/api/material/artikel/{s}/kandidaten?slot_id={rolle_neu}&produkt_id={t.rolle}&q=NB").status_code == 200
+        r = w.post(f"/api/material/artikel/{s}/bestandteil-ersetzt", json={"slot_id": tasche_alt, "bezeichnung": "Tasche",
+                                                                           "bemerkung": "Platzhalter"})
+        assert r.status_code == 409 and UEB in r.json["error"], r.get_json()
+        r = w.post(f"/api/material/artikel/{s}/bestandteil-ersetzt", json={"slot_id": tasche_neu, "bezeichnung": "Beutel",
+                                                                           "bemerkung": "Platzhalter"})
+        assert r.status_code == 409, r.get_json()
+        # Anzahl verringert: ein HMS ist übrig – neutral im Journal, Sätze nennen die Position.
+        a = ok(w.get(f"/api/material/artikel/{s}"))["artikel"]
+        assert a["lock_state"] == "gesperrt" and "„Verbindungselement“: Anzahl verringert – ein Stück zu entnehmen" in \
+            a["lock_reason"] and "nicht mehr in der Stückliste" not in a["lock_reason"], a["lock_reason"]
+        ue = [g for g in a["set"]["sperrgruende"] if g["art"] == "ueberzaehlig"]
+        assert len(ue) == 1 and ue[0]["artikel"] is None and "welches, wählst du" in ue[0]["text"], ue
+        uebrig = [x for x in a["set"]["teile"] if not x.get("slot_id")]
+        assert len(uebrig) == 1 and uebrig[0]["id"] in (k1, k2), a["set"]["teile"]
+        aktionen = zeilen(app, "SELECT entity_id, action FROM mat_audit WHERE action IN ('anzahl_verringert', "
+                               "'nicht_in_stueckliste')")
+        assert [(x["entity_id"], x["action"]) for x in aktionen] == [(uebrig[0]["id"], "anzahl_verringert")], aktionen
+        # „Set aussondern“ eines nur so gesperrten Sets: 409 nennt das Übertragen.
+        r = w.post(f"/api/material/artikel/{s}/aussondern", json={"grund": "irreparabel"})
+        assert r.status_code == 409 and "die Stückliste übertragen wurde" in r.json["error"], r.get_json()
+        # Der Wart entnimmt das ANDERE Stück: das Set ist vollständig, kein Satz bleibt am übrigen.
+        anderes = k1 if uebrig[0]["id"] == k2 else k2
+        ok(w.post(f"/api/material/artikel/{s}/teil-entnehmen", json={"teil_id": anderes}))
+        a = ok(w.get(f"/api/material/artikel/{s}"))["artikel"]
+        assert a["set"]["vollstaendig"] and not [g for g in a["set"]["sperrgruende"] if g["art"] == "ueberzaehlig"]
+        assert all(x.get("slot_id") for x in a["set"]["teile"]) and stimmig(app)
+    print("Nachbesserung Sets (Kennungen, Anzahl verringert, Texte) bestanden.")
+
+
+def test_nachbesserung_meldung_und_import():
+    """Ablauf 3: Set-Meldung mit einfachem Produkt erledigt → Mail „… ist jetzt als Produkt (kein Set) im Katalog“.
+    Importbericht: Set ohne einzeln geführte Position nennt, wie es zu beheben ist."""
+    from app.material.services import importer, katalog_export, meldung
+    gesendet = []
+    alt = mails_abfangen(meldung, lambda an, betreff, inhalt: gesendet.append((an, betreff, inhalt)) or True)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            t = set_aufbau(tmp)
+            mv, w = t.k["katalog"], t.wart_a
+            m = ok(w.post("/api/material/meldungen", json={"manufacturer": "Testwerk", "model": "Kombi Eta", "is_set": True,
+                                                           "set_teile": "Teil A\nTeil B", "folder_id": t.lager_a}),
+                   201)["meldung"]
+            gesendet.clear()
+            ok(mv.post(f"/api/material/meldungen/{m['id']}/produkt", json={
+                "category_id": t.ids["karabiner"], "manufacturer": "Testwerk", "model": "Kombi Eta", "article_no": "KE-1",
+                "material_kind": "metall_hardware", "interval_months": 12}), 201)
+            an_melder = [x for x in gesendet if x[0] == "wart@example.org"]
+            assert an_melder and "das von dir gemeldete Set ist jetzt als Produkt (kein Set) im Katalog" in \
+                an_melder[0][2], gesendet
+            with t.app.app_context():
+                daten, _, _ = katalog_export.sammeln(mit_dateien=False)
+                vorbild = {k: v for k, v in next(x for x in daten["produkte"] if x["modell"] == "Testset Alpha").items()
+                           if k not in ("uid", "bild", "dokumente")}
+                falsch = [dict(vorbild, modell="Importset Ohne", artikelnummer="IO-1",
+                               bestandteile=[{"bezeichnung": "Beutel", "anzahl": 1, "einzeln": False}]),
+                          dict({k: v for k, v in vorbild.items() if k != "bestandteile"}, modell="Importset Leer",
+                               artikelnummer="IL-1")]
+                b = importer.importieren(dict(daten, produkte=daten["produkte"] + falsch), trocken=True, quelle="Test")
+            assert len(b["fehler"]) == 2 and all(importer.EINZELN_BEHEBEN in f for f in b["fehler"]), b["fehler"]
+            assert "„einzeln“: true" in importer.EINZELN_BEHEBEN
+    finally:
+        mails_zurueck(alt)
+    print("Nachbesserung Sets (Mail, Importbericht) bestanden.")
+
+
 if __name__ == "__main__":
     test_set_anlegen_atomar()
     test_set_melden()
@@ -481,4 +582,6 @@ if __name__ == "__main__":
     test_nur_angaben()
     test_teil_fehlt_und_uebrig()
     test_stand_und_rollback()
+    test_nachbesserung_pruefungen()
+    test_nachbesserung_meldung_und_import()
     print("Alle Tests bestanden.")

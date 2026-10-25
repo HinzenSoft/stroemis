@@ -404,7 +404,10 @@ def _melder_benachrichtigen(r):
         p = katalog.produkt(r["product_id"])
         name = katalog.produktname(p) + (f" ({p['article_no']})" if p["article_no"] else "")
         betreff = f"{cfg['SITE_NAME']} – „{gemeldet}“ ist im Katalog"
-        zeilen.append(f"das von dir gemeldete {'Set' if r['is_set'] else 'Produkt'} ist jetzt im Katalog: {name}"
+        # Gemeldet als Set, aufgenommen als einfaches Produkt (Prüfung Ablauf, Sets Befund 3): so sagen.
+        art = "Set" if r["is_set"] else "Produkt"
+        wie = (" als Produkt (kein Set)" if r["is_set"] and not p["is_set"] else "")
+        zeilen.append(f"das von dir gemeldete {art} ist jetzt{wie} im Katalog: {name}"
                       f"{' (Set)' if p['is_set'] and not r['is_set'] else ''}.")
         if r["answer"]:
             zeilen += ["", f"Anmerkung von {r['resolved_by_name']}:", r["answer"]]

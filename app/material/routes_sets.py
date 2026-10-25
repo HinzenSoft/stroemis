@@ -93,9 +93,9 @@ def teil_tauschen(iid):
 @api.post("/artikel/<int:iid>/teil-einsetzen")
 @requires_folder("verwalten", "iid")
 def teil_einsetzen(iid):
-    """{"slot_id" (Position der Kopie, an der ein Teil fehlt – bei genau einer darf es fehlen), Felder des neuen Teils
-    oder "item_id" (vorhandenen Artikel einsetzen, L2b), "bestaetigt"} – 201 mit Set, neuem bzw. eingesetztem Teil und
-    „hinweise“."""
+    """{"slot_id" (Position der Kopie, an der ein Teil fehlt – bei genau einer darf es fehlen), "produkt_id" (ihr Produkt –
+    passt es nicht mehr, 409: Stückliste inzwischen übertragen), Felder des neuen Teils oder "item_id" (vorhandenen
+    Artikel einsetzen, L2b), "bestaetigt"} – 201 mit Set, neuem bzw. eingesetztem Teil und „hinweise“."""
     neu, hinweise = setaustausch.einsetzen(iid, json_body(), _pruefer(), tausch=False)
     return _set_antwort(iid, teil=bestand.artikel_json(bestand.artikel(neu), voll=True), hinweise=hinweise), 201
 
@@ -103,10 +103,11 @@ def teil_einsetzen(iid):
 @api.get("/artikel/<int:iid>/kandidaten")
 @requires_folder("verwalten", "iid")
 def set_kandidaten(iid):
-    """Auswahl „aus dem Bestand wählen“ für „Teil einsetzen“: ?slot_id= (einzeln geführte Position dieses Sets), ?q=
+    """Auswahl „aus dem Bestand wählen“ für „Teil einsetzen“: ?slot_id= (einzeln geführte Position dieses Sets), ?produkt_id= (ihr Produkt, sonst 409), ?q=
     (mindestens 2 Zeichen) – {treffer, weitere, hinweis}; ohne Treffer 200 mit leerer Liste, bei genau passender Nummer
     mit anderem Produkt dazu „hinweis“ (setaustausch.kandidaten; Nachbesserung, Browser B3)."""
-    return jsonify(setaustausch.kandidaten_am_set(iid, request.args.get("slot_id"), request.args.get("q")))
+    return jsonify(setaustausch.kandidaten_am_set(iid, request.args.get("slot_id"), request.args.get("q"),
+                                                  request.args.get("produkt_id")))
 
 
 @api.get("/ordner/<int:fid>/kandidaten")
@@ -128,7 +129,8 @@ def set_aufloesen(iid):
 @api.post("/artikel/<int:iid>/bestandteil-ersetzt")
 @requires_folder("verwalten", "iid")
 def bestandteil_ersetzt(iid):
-    """{"slot_id" (nicht einzeln geführte Position), "datum", "bemerkung", "bestaetigt"} – sperrt das Set bis zur
+    """{"slot_id" (nicht einzeln geführte Position), "bezeichnung" (ihre Bezeichnung – passt sie nicht mehr, 409), "datum",
+    "bemerkung", "bestaetigt"} – sperrt das Set bis zur
     Set-Prüfung; liefert das Set („artikel“)."""
     setaustausch.bestandteil_ersetzt(iid, json_body())
     return _set_antwort(iid)

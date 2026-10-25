@@ -712,14 +712,23 @@ def _stuecklisten(lauf):
                     ersetzen(ort, name, pid, liste)
             except Abgelehnt as exc:
                 fehlerhaft.add(ort)
-                bericht["fehler"].append(f"{ort} ({name}): {exc}")
+                bericht["fehler"].append(f"{ort} ({name}): {exc}"
+                                         + (f" {EINZELN_BEHEBEN}" if str(exc) == stueckliste.EINZELN_PFLICHT else ""))
     # Entscheidung S3: Ein Set ohne einzeln geführtes Teil ist ein Fehler dieses Produkts – auch „set“: true ohne
     # „bestandteile“ an einem Produkt, das noch keine Stückliste hat (ersetzen prüft nur eine mitgeschickte Liste).
     for ort, name, pid, _, _ in angaben:
         if ort not in fehlerhaft and katalog.produkt(pid)["is_set"] and \
                 not any(z["einzeln"] for z in stueckliste.zeilen(pid)):
             bericht["fehler"].append(f"{ort} ({name}): {stueckliste.EINZELN_PFLICHT} – „bestandteile“ mit mindestens einer "
-                                     "einzeln geführten Position fehlt.")
+                                     "einzeln geführten Position fehlt. " + EINZELN_BEHEBEN)
+
+
+# Wie sich ein Set ohne einzeln geführte Position beheben lässt – auch ein Altbestand aus der Zeit vor der Regel (S3),
+# den eine Katalogdatei ohne „bestandteile“ nur nennt (Nachbesserung nach der Prüfung, 25.10.2026).
+EINZELN_BEHEBEN = ("Beheben: in der Datei bei diesem Produkt „bestandteile“ mit mindestens einer Position mit „einzeln“: "
+                   "true angeben (ein Teil mit eigenem Katalogprodukt) – oder „set“: false, solange es keine Artikel davon "
+                   "gibt; ein schon angelegtes Set lässt sich auch in der Anwendung beheben (Produktseite → „Bearbeiten“ → "
+                   "Reiter „Bestandteile“), danach den Katalog neu exportieren.")
 
 
 def _bild(e, pid, alt, ort, name, lauf):

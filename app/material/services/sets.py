@@ -90,6 +90,11 @@ BESTANDTEIL_ERSETZT = "Bestandteil ersetzt – Set prüfen"
 # „Stückliste übertragen“ (Entscheidung S5): ein Teil, das keiner Position der Kopie mehr zugeteilt ist.
 NICHT_IN_STUECKLISTE = "nicht mehr in der Stückliste: {nummern}"
 NICHT_IN_STUECKLISTE_SATZ = "{inv} steht nicht mehr in der Stückliste des Sets – erst „Teil entnehmen“."
+# Gibt es die Position noch, nur mit kleinerer Anzahl, ist nicht dieses eine Stück „übrig“ – der Materialwart wählt, welches
+# er entnimmt (Prüfung Ablauf, Befund 1): die Sätze nennen dann die Position, nicht das Stück.
+ANZAHL_VERRINGERT = "„{bez}“: Anzahl verringert – {n} zu entnehmen"
+ANZAHL_VERRINGERT_SATZ = ("Für „{bez}“ stehen weniger Stück in der Stückliste – erst {n} „Teil entnehmen“ (welches, "
+                          "wählst du).")
 # Wohin ein Teil beim Aussondern des Sets geht (Entscheidung vom 23.10.2026: je Teil wählbar).
 VERBLEIB = {"aussondern": "mit aussondern", "weiterfuehren": "entnehmen und gesperrt weiterführen"}
 TEIL_FEHLT = "Teil nicht gefunden."
@@ -516,7 +521,7 @@ def anlass_text(s, teil_zeilen, slot_zeilen=None):
                                                                                   else "") for f in fehlend))
     uebrig = ueberzaehlig(sz, teil_zeilen)
     if uebrig:
-        teile.append(NICHT_IN_STUECKLISTE.format(nummern=", ".join(t["inventory_no"] for t in uebrig)))
+        teile.append(uebrig_text(sz, uebrig))
     if s.get("set_pruefen"):
         teile.append(BESTANDTEIL_ERSETZT)
     for t in teil_zeilen:
@@ -602,9 +607,8 @@ def sperrgruende(s, teil_zeilen, voll=None, slot_zeilen=None):
         out.append({"art": "unvollstaendig", "artikel": None,
                     "text": "Das Set ist unvollständig: " + ", ".join(
                         f"„{f['bezeichnung']}“ fehlt" + (f" {f['fehlt']}×" if f["fehlt"] > 1 else "") for f in fehlend) + "."})
-    for t in ueberzaehlig(sz, teil_zeilen):
-        out.append({"art": "ueberzaehlig", "artikel": _artikel_verweis(t, s["id"]),
-                    "text": NICHT_IN_STUECKLISTE_SATZ.format(inv=t["inventory_no"])})
+    for t, satz in uebrig_saetze(sz, ueberzaehlig(sz, teil_zeilen)):
+        out.append({"art": "ueberzaehlig", "artikel": _artikel_verweis(t, s["id"]) if t else None, "text": satz})
     if s.get("set_pruefen"):
         # Eine Fassung überall (Banner, Status, Meine PSA, Journal – Nachbesserung, Browser V7).
         out.append({"art": "bestandteil", "artikel": None,
@@ -825,6 +829,45 @@ def vollstaendigkeit(slot_zeilen, teil_zeilen):
     fehlend = [{"bezeichnung": z["bezeichnung"], "fehlt": z["anzahl"] - vorhanden.get(z["id"], 0)}
                for z in slot_zeilen if z["einzeln"] and vorhanden.get(z["id"], 0) < z["anzahl"]]
     return not fehlend, fehlend
+
+
+def position_fuer(slot_zeilen, t):
+    """Die einzeln geführte Position der Kopie mit dem Produkt des Teils (oder None) – für ein übriges Teil heißt das:
+    nur die Anzahl ist verringert."""
+    return next((z for z in slot_zeilen if z["einzeln"] and z["product_id"] == t["product_id"]), None)
+
+
+def _uebrig_gruppen(slot_zeilen, uebrig):
+    """(Teile ohne Position, [(Position, Zahl der übrigen Stücke)]) – die zweite Gruppe in der Reihenfolge der Kopie."""
+    ohne, je = [], {}
+    for t in uebrig:
+        z = position_fuer(slot_zeilen, t)
+        if z:
+            je.setdefault(z["id"], [z, 0])[1] += 1
+        else:
+            ohne.append(t)
+    return ohne, sorted(je.values(), key=lambda x: (x[0]["position"], x[0]["id"]))
+
+
+def _stueck(n):
+    return "ein Stück" if n == 1 else f"{n} Stück"
+
+
+def uebrig_text(slot_zeilen, uebrig):
+    """Teil des Sperrgrunds für übrige Teile (Sperre beim Übertragen, sperrgrund)."""
+    ohne, verringert = _uebrig_gruppen(slot_zeilen, uebrig)
+    teile = [ANZAHL_VERRINGERT.format(bez=z["bezeichnung"], n=_stueck(n)) for z, n in verringert]
+    if ohne:
+        teile.append(NICHT_IN_STUECKLISTE.format(nummern=", ".join(t["inventory_no"] for t in ohne)))
+    return "; ".join(teile)
+
+
+def uebrig_saetze(slot_zeilen, uebrig):
+    """[(Teil oder None, Satz)] für Banner und Gründe der Set-Prüfung: ein Satz je Teil ohne Position, einer je Position
+    mit verringerter Anzahl."""
+    ohne, verringert = _uebrig_gruppen(slot_zeilen, uebrig)
+    return ([(t, NICHT_IN_STUECKLISTE_SATZ.format(inv=t["inventory_no"])) for t in ohne]
+            + [(None, ANZAHL_VERRINGERT_SATZ.format(bez=z["bezeichnung"], n=_stueck(n))) for z, n in verringert])
 
 
 def ueberzaehlig(slot_zeilen, teil_zeilen):

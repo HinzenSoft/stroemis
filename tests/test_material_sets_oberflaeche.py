@@ -100,7 +100,10 @@ def test_oberflaeche_statisch():
     assert ue.count('class="btn"') == 1 and "btn danger" not in ue and "btn ghost" not in ue
     # Set-Kasten: ein Teil ohne Position nur entnehmen.
     kasten0 = funktion(js, "setKasten")
-    assert "!t.slot_id ?" in kasten0 and "steht nicht mehr in der Stückliste" in kasten0
+    assert "!t.slot_id ?" in kasten0 and "uebrigHinweis(t, sb)" in kasten0
+    # Nachbesserung 25.10.2026: Gibt es die Position noch (nur weniger Stück), sagt der Hinweis das neutral.
+    hw = funktion(js, "uebrigHinweis")
+    assert "steht nicht mehr in der Stückliste" in hw and "Anzahl in der Stückliste verringert" in hw
     # Melden (S8): Wahl Produkt | Set, Teile Pflicht, Titel und Auslöser nennen beides; Karte mit Marke und „Set anlegen“.
     md = funktion(js, "meldungDialog")
     for haken in ('name="me-art" value="set"', 'id="me-teile"', 'is_set: "1"', "Fehlendes Produkt oder Set melden",
