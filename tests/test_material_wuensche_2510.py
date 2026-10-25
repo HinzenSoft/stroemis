@@ -212,7 +212,10 @@ def test_bestand_oberflaeche():
     assert "kategorie: true })" in ordner and 'q.set("kategorie", kategorie)' in ordner
     # Spalte vorn, eng und als Karte über Hersteller/Produkt; Sortierwahl der Karten mit Kategorie.
     tab = js[js.index("  function artikelTabelle(liste, opts) {"):js.index("  function wahlFeld(a) {")]
-    assert 'sortKopf("Kategorie", "kategorie", s, { klasse: "mat-schmal-weg" })' in tab
+    # Nachbesserung nach der Browserprüfung (B1): Die Spalte trägt dazu mat-kategorie; zwischen 900 und 979 px steht die
+    # Kategorie klein über dem Hersteller (mat-kat-zusatz, Sortierknopf im Kopf darüber).
+    assert 'sortKopf("Kategorie", "kategorie", s, { klasse: "mat-schmal-weg mat-kategorie" })' in tab
+    assert 'kopfZusatz("Kategorie", "kategorie", s, "kat")' in tab and '<div class="mat-kat-zusatz small muted">' in tab
     assert 'kopfZusatz("Kategorie", "kategorie", s, "schmal")' in tab and "kat ? ARTIKEL_SORT_KAT : ARTIKEL_SORT" in tab
     assert '<td data-l="Kategorie" class="mat-schmal-weg mat-kategorie">${a.kategorie ? esc(a.kategorie.name) : ""}</td>' in tab
     # Leiste: Klicks und Personenwahl aus dem Filtermenü an die Ansicht, „Filter (n)“ öffnet die Schublade dort.

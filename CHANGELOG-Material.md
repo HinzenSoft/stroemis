@@ -24,6 +24,7 @@ für sich deploybar.
 | Änderungsanträge an alle Stammdaten (Schritt 23) | Freigabepflichtig nach der ersten Prüfung: Produkt, Seriennummer, Herstellung, Kauf, Erstgebrauch, Lebensende, Prüfintervall – als ein Sammelantrag; entscheiden die Materialwarte des Ordners (auch den eigenen Antrag, die Material-Verwaltung nur mit eigener Verwalterfreigabe); Liste „Änderungsanträge“ im Bestand, Katalog → Meldungen nur Produkt- und Set-Meldungen; Prüfer bearbeiten Bemerkung, Länge, nächste Prüfung; Produktänderungen im Lebenslauf; Nachtrag 25.10.2026 (Schritt 24): Lebensende per Antrag auch wieder nach hinten bis zur Rechnung | gebaut 24.10.2026, Nachtrag 25.10.2026, wartet auf Prüfung und Freigabe |
 | Wünsche vom 25.10.2026 (W1–W4) | Norm in eigener Zeile auf der Artikelseite; Nacharbeit: „Übernehmen …“ und nach dem Zuordnen direkt übernehmen, „Fehlendes Produkt melden“ vorbelegt; Bestand: Spalte „Kategorie“, Filtermenü in der Seitenleiste mit „Filter (n)“; Wiki: Seiten aus ZIP importieren | gebaut 25.10.2026 (kein Schemaschritt), wartet auf Prüfung und Freigabe |
 | Bestandteil-Liste an normalen Produkten (Schritt 25) | Herstellersets als flache Produkte mit Liste „Bestandteile“ (Bezeichnung und Anzahl): Produktdialog, Produkt- und Artikelseite, Meine PSA, Lebenslauf; jede Prüfung fragt je Position „vorhanden“ ab („fehlt“ = Mangel); Katalogdatei; Set-Meldung → „Produkt anlegen“; dazu Seriennummern der Bestandteile je Stück am Artikel (direkt bis zur ersten Prüfung, dann in der Prüfung oder per Antrag, suchbar) | gebaut 25.10.2026, wartet auf Prüfung und Freigabe |
+| Nachbesserung L2c nach den Prüfungen | Bestandteile: Kennung nie an eine andere Position, Bezeichnung mitverglichen; Berichtigung gegen den wirksamen Wert; Protokoll ohne „neu“, wo nichts übernommen wurde; Wettlauf Prüfung ↔ Antrag 409; Steuerzeichen; Rückweg 25; Ordnerliste ohne Überlauf (Kategorie über dem Hersteller), Prüfung „fehlt“, doppelte Nummer als Hinweis, Schublade, Produktseite „Mehr“ | gebaut 25.10.2026, wartet auf Freigabe |
 | Nachbesserung Sets und Anträge nach den Prüfungen | Sets: Kennungen der Kopie, „Anzahl verringert“, Texte; Anträge: Produktgeschichte nach Wechsel, Intervall-Obergrenze nur bei Änderung, Fälligkeit ohne Namen, 409 statt 500, Texte, Zähl-Aufruf | gebaut 25.10.2026, wartet auf Prüfung und Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
@@ -4258,10 +4259,16 @@ einzeln geführten Teilen) bleiben unverändert.
   umgebaut nur, wenn der CHECK `component_serial` nicht kennt; ein zweiter Lauf ändert nichts. Wer `mat_item_change`
   künftig neu aufbaut, muss die Trigger `mat_teilnummer_*` vorher entfernen und danach neu anlegen.
 - **Rückweg**: Älterer Code sieht Version 25 ≥ seiner und tut nichts; Listen an Nicht-Sets zeigt er nicht, Prüfzeilen
-  schreibt er nicht, Seriennummern der Bestandteile liest er nicht – kein Datenverlust. Vollständig zurück (an einer
-  Kopie, nach Sicherung): `DELETE FROM mat_item_component_serial;`, `DELETE FROM mat_product_component WHERE
-  set_product_id IN (SELECT id FROM mat_product WHERE is_set = 0);`, Trigger aus `TRIGGER_21` für die beiden
-  Stücklisten-Trigger neu anlegen; Anträge mit `component_serial` bleiben als Nachweis stehen.
+  schreibt er nicht, Seriennummern der Bestandteile liest er nicht – kein Datenverlust. Vorher alle offenen Anträge auf
+  Seriennummern der Bestandteile entscheiden. Vollständig zurück (an einer Kopie, nach Sicherung) **in dieser
+  Reihenfolge** (berichtigt nach der Sicherheitsprüfung, S2): erst `DELETE FROM mat_product_component WHERE
+  set_product_id IN (SELECT id FROM mat_product WHERE is_set = 0);` – die Nummern gehen per ON DELETE CASCADE mit (eine
+  Nummer ohne gültige Position darf weg) –, dann `DELETE FROM mat_item_component_serial;` (leer, zur Sicherheit), dann die
+  beiden Stücklisten-Trigger aus `TRIGGER_21` neu anlegen. Umgekehrt (erst die Nummern) bricht es an jeder Nummer eines
+  geprüften Artikels ab (Trigger `mat_teilnummer_loeschen`). Anträge mit `component_serial` bleiben als Nachweis stehen
+  (unveränderlich, Schritt 23) – **Code 24 kennt das Feld nicht**: Artikel mit offenem Teil-Antrag, die Antragsliste
+  „offen“ und – solange es einen Teil-Antrag gibt – „alle“ antworten dort mit 500, ebenso das Ablehnen eines offenen
+  Teil-Antrags. Hingenommen wie beim Rückweg 23 → 22; vorher entscheiden hält wenigstens „offen“ und die Artikel heil.
 
 ### Schnittstelle
 
@@ -4298,6 +4305,116 @@ einzeln geführten Teilen) bleiben unverändert.
 - Ein Antrag auf Seriennummern der Bestandteile darf eine Nummer auch entfernen (leer); ein Produktwechsel und neue
   Nummern gehen nicht in einen Antrag.
 - Die globale Seriennummernsuche (fremde Bereiche) und der Bestandsimport kennen die Nummern der Bestandteile nicht.
+
+## Nachbesserung L2c nach den Prüfungen (25.10.2026)
+
+Grundlage: die Prüfungen Ablauf und Sicherheit der Bestandteil-Liste (f51c310) und die Browserprüfung der ganzen
+Lieferung P4-L2c (Befunde in befunde_l2c.md). Kein neuer Schemaschritt – Schritt 25 bleibt, wie er ist.
+
+### Behoben
+
+- **Nummer am falschen Bestandteil (Ablauf B1)**: Die Kennung einer Position (`mat_product_component.id`, INTEGER PRIMARY
+  KEY ohne AUTOINCREMENT) ging beim Ersetzen der Liste an eine neue Position über – eine Nummer aus einem offenen
+  Prüfentwurf oder Antrag landete nach dem Umbenennen am anderen Bestandteil. Jetzt schreibt das Ersetzen erst die neuen
+  Positionen und löscht dann die alten (wie „Stückliste übertragen“; nur an der Bestandteil-Liste, Set-Code bleibt
+  unberührt). Weil eine Kennung über zwei
+  Änderungen hinweg trotzdem wiederkommen kann (Tasche weg, später Beutel neu), vergleichen Prüfung und Antrag zusätzlich
+  die **Bezeichnung**: die Prüfzeile ihren Text („Tasche (2×) vorhanden“) mit der heutigen Position, der Antrag seine
+  `component_label` (ohne Groß und klein und Leerraum, eine geänderte Anzahl zählt nicht). Passt sie nicht, nimmt die
+  Prüfzeile keine Nummer mehr an (409 „… diese Position gibt es so nicht mehr …“), das Festschreiben übernimmt nichts,
+  und der Antrag „passt“ nicht mehr – Bestätigen 409 mit dem Satz zur Position, nur noch ablehnen.
+- **Berichtigung und wirksamer Wert (Ablauf B2 = Sicherheit S3)**: „Unverändert“ heißt in einer Berichtigung jetzt: gleich
+  dem wirksamen Wert des Originals (seine eingetragene Nummer, sonst die bisherige) – dann gilt wieder der Eintrag des
+  Originals, das Stück steht im Protokoll wie dort. Weicht die Eingabe davon ab, vergleicht das Festschreiben mit dem Stand
+  am Artikel und schreibt die Änderung; das Protokoll der Berichtigung nennt als „alt“ diesen Stand – auch einen, den ein
+  Antrag nach dem Original gesetzt hat („AN → D“ statt „A-T → D“). Wer die Nummer des Originals zurücksetzen will
+  (Original ALT1 → NEU1, Berichtigung ALT1), bekommt sie an den Artikel („NEU1 → ALT1“). Der Berichtigungsentwurf zeigt
+  unter dem Feld „am Artikel heute …“, wenn der Stand am Artikel vom Feld abweicht.
+- **Ordnerliste läuft über den Rand (Browser B1)**: Mit der Spalte „Kategorie“ bleibt die Liste bis 899 px Inhaltsbreite
+  die enge Tabelle (Fold aufgeklappt – Firefox setzte die Zwischenstufe dort noch 33 px zu breit); zwischen 900 und 979 px
+  steht die Kategorie klein über dem Hersteller statt in einer eigenen Spalte, ihr Sortierknopf im Kopf darüber; ab 980 px
+  die volle Tabelle (ein Laptop mit 1280 px und Leiste zeigt also die Zwischenstufe). Gemessen (Prüfer, Touch-Emulation,
+  Chromium): Fenster 800–1380 px in 20-px-Schritten ohne waagerechten Bildlauf; dazu st-geraete (foldable, tablet,
+  laptop; drei Engines; Prüfer, Materialwart, Material-Verwaltung).
+- **Protokoll ohne Übernahme (Ablauf B3)**: Bei „nicht zutreffend“, an einer Position, die es nicht mehr gibt, und an einem
+  Stück über einer gesunkenen Anzahl wird „neu“ geleert – das festgeschriebene Protokoll hält nur fest, was am Artikel
+  geschah.
+- **Wettlauf Prüfung ↔ Antrag (Ablauf B4)**: Die Prüfzeile merkt beim Eintragen den Stand am Artikel. Hat er sich bis zum
+  Festschreiben geändert (bestätigter Antrag, vor der ersten Prüfung auch das Bearbeiten), bricht das Festschreiben mit
+  409 ab, wie beim Prüfpunkt Länge: „Die Seriennummer am Artikel wurde während der Prüfung geändert (Tasche: jetzt …) –
+  bitte deine Eingabe prüfen …“. Die Zeile zeigt danach „bisher“ mit dem neuen Stand, der zweite Versuch schreibt den
+  Eintrag des Prüfers („ANTRAG → PRUEFER“). Wer erst nach dem Antrag einträgt, sah den neuen Stand – kein Rückfragen.
+- **Antragsmail (Ablauf V1)**: nach dem Doppelpunkt immer ein Leerzeichen („Seriennummer Bestandteil „Tasche“: (leer) →
+  MT-1“).
+- **Eingaben nur aus Steuerzeichen (Sicherheit S1)**: `text()` kürzt den Leerraum nach dem Ersetzen der Steuerzeichen noch
+  einmal – „\x01“ ist leer (keine Nummer bzw. „Position n: Bitte eine Bezeichnung angeben.“) statt „ “, das die Datenbank
+  abwies (409 „anderswo geändert“; Antrag 201 und danach nur ablehnbar, Prüfung ließ sich nicht abschließen). Weist die
+  Datenbank im Katalogimport eine Bestandteil-Liste oder Stückliste trotzdem ab, ist das ein Fehler dieses Produkts mit
+  Fundstelle und Name („… ließ sich nicht speichern – eine Position verletzt eine Regel …“), kein Abbruch des ganzen
+  Imports.
+- **Rückweg (Sicherheit S2)**: im Abschnitt Schritt 25 in der richtigen Reihenfolge, mit dem Hinweis auf offene
+  Teil-Anträge und die 500 im Code 24.
+- **Antrag auf eine entfallene Position (Sicherheit, Verbesserung)**: Bestätigen sagt „diese Position gibt es so nicht
+  mehr“ (TEIL_WEG) vor „der Artikel trägt inzwischen nicht mehr den Wert …“.
+- **Wiki-Import (Browser B2)**: Esc im Ergebnis wirkt wie „Schließen“ – der Baum lädt neu, die erste neue Seite öffnet.
+- **README (Browser B3)**: die Schublade gilt unter 1024 px (nicht 1200).
+
+### Oberfläche (Verbesserungen der Browserprüfung)
+
+- **Prüfung „fehlt“**: Die Bemerkung hat eine sichtbare Beschriftung („Bemerkung zum Mangel“ bzw. „Bemerkung“) und steht
+  vor den Seriennummern; die Nummern stehen in einem eigenen Fieldset („Seriennummer“ bzw. „Seriennummern“ mit „Stück n“).
+- **Dieselbe Nummer an zwei Stück** eines Artikels (auch in anderer Schreibung): Hinweis am zweiten Feld „Diese Nummer
+  steht schon an „…““ – beim Anlegen, im Dialog „Bearbeiten“, im Antrag und in der Prüfung; gespeichert wird trotzdem
+  (eindeutig müssen die Nummern nicht sein).
+- **Filter-Schublade am Telefon**: Der Kopf mit „✕“ bleibt oben stehen, auch wenn „Filter“ die Schublade bis zum
+  Filtermenü rollt.
+- **Produktseite**: „Als Variante kopieren …“ und „Rückruf anlegen …“ stehen im Untermenü „Mehr“ neben „Bearbeiten“
+  (Knopfregel: seltene Funktionen im Untermenü).
+- Niedrig: Im Filtermenü behält eine gewählte Kategorie ohne Treffer Namen und Platz (mit 0); der Wiki-Import wählt die
+  ZIP-Datei über den grauen Knopf „ZIP-Datei wählen …“ mit dem gewählten Namen daneben; der schreibgeschützte Block
+  „Seriennummern der Bestandteile“ im Dialog „Bearbeiten“ sagt bei einer Position ohne Nummer „keine Nummer
+  eingetragen“; keine doppelte Klammer mehr („Bestandteil A (rot) – Stück 1 von 2“, in Feldern, Antrag und Journal neuer
+  Einträge); der Trennpunkt vor „Art.-Nr.“ wandert beim Umbruch mit (Meine PSA am Telefon).
+
+### Bewusst nicht geändert
+
+- **Set-Punkte ausgelassen** (Änderung des Nutzers vom 25.10.2026: Die Set-Funktion wird in einem späteren Bau komplett
+  entfernt): Verbesserung 5 (Fehler im Set-Dialog am Reiter, ruhige Dialoghöhe), der lange Satz im Dialog „Stückliste
+  übertragen“ und `font-size` von `.mat-su-gruppe h3` (beide im Set-Dialog). Kein Set-Code geändert.
+- Seiten ohne roten Hauptknopf im Kopf (Katalog, Ordner, Produktseite, Anträge, Meldungen) – gewollt nach der Knopfregel.
+- Wiki-Kopf: Knöpfe 💬/Teilen/☰/⋯ als `btn ghost` mit Emoji und zwei rote Hauptknöpfe („Neue Seite“, „Anlegen“) – bekannte
+  Altlast gegen die Knopfregel, nicht Teil dieser Lieferung.
+
+### Schnittstelle
+
+| Route | Änderung |
+| --- | --- |
+| `PUT …/pruefungen/<pid>/punkte/<rid>` | `seriennummern` an einer Zeile, deren Position es so nicht mehr gibt: 409 |
+| `POST …/pruefungen/<pid>/abschliessen` bzw. `festschreiben` | 409 „Die Seriennummer am Artikel wurde während der Prüfung geändert (…)“, danach erneut |
+| `GET …/pruefungen/<id>` | im Berichtigungsentwurf `nummern[].artikel` (Stand am Artikel heute) |
+| `POST …/antraege/<aid>/bestaetigen` | 409 TEIL_WEG auch bei gleicher Kennung, anderer Bezeichnung; vor STAND_ANDERS |
+| `GET …/artikel/<iid>` (Anträge) | `passt` false, wenn die Position nur noch die Kennung teilt |
+| Katalogimport-Bericht | abgewiesene Liste als `fehler` des Produkts statt Abbruch |
+
+### Tests
+
+- `tests/test_material_bestandteile.py`: `test_kennung_und_bezeichnung` (R1, R2, neue Kennung beim Umbenennen, Gegenprobe
+  andere Schreibung und höhere Anzahl), `test_berichtigung_wirksamer_wert` (Ablauf S1, Sicherheit probe10, unverändert
+  gelassen, zurückgetippt), `test_nicht_uebernommen_und_wettlauf` (S2, S3, R3), `test_steuerzeichen_und_mail` (S1 mit
+  Artikel, Liste, Prüfung, Antrag, Katalogdatei; V1). Alle vier scheitern am Stand f51c310.
+- Rückweg an einer Kopie nachgestellt: die alte Reihenfolge bricht ab, die neue läuft durch.
+- Statisch: `test_oberflaeche_statisch` (Hinweis bei doppelter Nummer, Bemerkung vor dem Fieldset, Untermenü „Mehr“,
+  Zwischenstufe der Kategorie, `stueck_text`); `test_material_wuensche_2510` auf die Klasse `mat-kategorie` angepasst.
+
+### Bitte bestätigen
+
+- B4 gilt wie bei der Länge für jede Änderung seit dem Eintrag – auch, wenn der Materialwart die Nummer während der
+  Eingangsprüfung ändert (bisher galt dort still der Eintrag des Prüfers): einmal 409, danach gilt der Eintrag.
+- Berichtigung: ein angefasstes Stück nennt im Protokoll den Stand am Artikel als „alt“, ein nicht angefasstes bleibt wie
+  im Original (auch wenn ein Antrag es danach geändert hat).
+- Kennungen der Positionen: erst einfügen, dann löschen, dazu der Vergleich der Bezeichnung – kein AUTOINCREMENT (das
+  hätte einen Umbau von `mat_product_component` gebraucht).
+- Dieselbe Nummer an zwei Stück: nur Hinweis, kein Verbot.
 
 ## Wünsche vom 25.10.2026 (Norm-Zeile, Nacharbeit, Filter im Bestand, Wiki-Import)
 

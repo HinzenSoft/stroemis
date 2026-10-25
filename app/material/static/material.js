@@ -70,7 +70,8 @@
      Bindestrich zu brechen („Art.-“ / „Nr. …“). Nur was breiter ist als eine ganze Zeile, bricht darin um. html: die
      Nummer schon maskiert, etwa mit markiertem Suchtext (suche.js); sonst wird nr maskiert. */
   const nummerHtml = (label, nr, html) => `<span class="mat-ganz">${label} ${html === undefined ? esc(nr) : html}</span>`;
-  const artNrHtml = (nr, html) => (nr ? ` · ${nummerHtml("Art.-Nr.", nr, html)}` : "");
+  // Der Trennpunkt gehört zum Stück – sonst blieb er beim Umbruch allein am Zeilenende stehen (Meine PSA am Telefon).
+  const artNrHtml = (nr, html) => (nr ? ` ${nummerHtml("· Art.-Nr.", nr, html)}` : "");
   // Die Artikelnummer allein, leise hinter dem Namen (Listen, Treffer, Meldungen): ebenfalls als ein Stück – „GS-S“
   // brach sonst in der engen Tabelle am Strich um (Geräte-Prüfung vom 22.10.2026).
   const artNrKurz = (nr) => (nr ? ` <span class="muted mat-ganz">${esc(nr)}</span>` : "");
@@ -1520,7 +1521,8 @@
      601–820 px eine engere Tabelle – Seriennummer unter der Inventar-Nr., Hersteller über dem Produkt, nächste Prüfung
      unter dem Status; bis 600 px je Artikel eine Karte, ebenso zusammengefasst, unten Häkchen und „Prüfen“.
      opts.kategorie (Ordnerliste, Wunsch vom 25.10.2026): erste Spalte „Kategorie“ – eng und als Karte klein grau über
-     Hersteller und Produkt. */
+     Hersteller und Produkt; mit Kategorie bis 899 px eng, zwischen 900 und 979 px klein über dem Hersteller
+     (material.css, .mat-kat-zusatz). */
   function artikelTabelle(liste, opts) {
     opts = opts || {};
     const s = opts.sort || null;
@@ -1536,14 +1538,14 @@
     const kat = Boolean(opts.kategorie);
     return `${kartenKopf(kat ? ARTIKEL_SORT_KAT : ARTIKEL_SORT, s, opts.auswahl)}<table class="list mat-tabelle mat-karten mat-artikel${kat ? " mat-mit-kategorie" : ""}">
       <thead><tr>${opts.auswahl ? '<th class="mat-wahlspalte"><label class="mat-wahl-feld"><input type="checkbox" id="mat-alle" class="mat-alle" aria-label="alle auswählen"></label></th>' : ""}
-        ${kat ? sortKopf("Kategorie", "kategorie", s, { klasse: "mat-schmal-weg" }) : ""}${sortKopf("Inventar-Nr.", "inventar", s, { nach: kopfZusatz("Seriennummer", "serie", s, "schmal") })}${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: `${kat ? kopfZusatz("Kategorie", "kategorie", s, "schmal") : ""}${kopfZusatz("Hersteller", "hersteller", s, "schmal")}`, nach: opts.person ? kopfZusatz("Person", "", null, "eng") : "" })}${sortKopf("Serien\u00adnummer", "serie", s, { klasse: "mat-schmal-weg" })}
+        ${kat ? sortKopf("Kategorie", "kategorie", s, { klasse: "mat-schmal-weg mat-kategorie" }) : ""}${sortKopf("Inventar-Nr.", "inventar", s, { nach: kopfZusatz("Seriennummer", "serie", s, "schmal") })}${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg", vor: kat ? kopfZusatz("Kategorie", "kategorie", s, "kat") : "" })}${sortKopf("Produkt", "produkt", s, { vor: `${kat ? kopfZusatz("Kategorie", "kategorie", s, "schmal") : ""}${kopfZusatz("Hersteller", "hersteller", s, "schmal")}`, nach: opts.person ? kopfZusatz("Person", "", null, "eng") : "" })}${sortKopf("Serien\u00adnummer", "serie", s, { klasse: "mat-schmal-weg" })}
         ${opts.person ? '<th class="mat-eng-weg">Person</th>' : ""}${opts.pfad ? "<th>Ablage</th>" : ""}${sortKopf("Nächste Prüfung", "faellig", s, { klasse: "mat-schmal-weg" })}${sortKopf("Status", "status", s, { nach: kopfZusatz("Nächste Prüfung", "faellig", s, "schmal") })}${opts.pruefen ? "<th></th>" : ""}</tr></thead>
       <tbody>${liste.map((a) => `<tr data-id="${a.id}">
         ${opts.auswahl ? `<td class="mat-wahlspalte mat-k-wahl">${wahlFeld(a)}</td>` : ""}
         ${kat ? `<td data-l="Kategorie" class="mat-schmal-weg mat-kategorie">${a.kategorie ? esc(a.kategorie.name) : ""}</td>` : ""}
         <td data-l="Inventar-Nr." class="mat-k-titel"><a class="mat-inv" href="/material/artikel/${a.id}"><strong>${esc(a.inventory_no)}</strong></a>
           <div class="mat-schmal-zusatz small muted">SN ${esc(a.serial_no)}${a.serial_generated ? " (System)" : ""}</div></td>
-        <td data-l="Hersteller" class="mat-schmal-weg">${esc(a.manufacturer || "")}</td>
+        <td data-l="Hersteller" class="mat-schmal-weg">${kat && a.kategorie ? `<div class="mat-kat-zusatz small muted">${esc(a.kategorie.name)}</div>` : ""}${esc(a.manufacturer || "")}</td>
         <td data-l="Produkt" class="mat-k-ohne">${kat && a.kategorie ? `<div class="mat-schmal-zusatz small muted">${esc(a.kategorie.name)}</div>` : ""}${a.manufacturer ? `<div class="mat-schmal-zusatz small muted">${esc(a.manufacturer)}</div>` : ""}${produktZelle(a)}${opts.person && a.zugeordnet_name ? `<div class="mat-eng-zusatz small muted">${esc(a.zugeordnet_name)}</div>` : ""}</td>
         <td data-l="Seriennummer" class="mat-schmal-weg">${esc(a.serial_no)}${a.serial_generated ? ' <span class="muted" title="vom System vergeben">(System)</span>' : ""}</td>
         ${opts.person ? `<td data-l="Person" class="mat-eng-weg mat-k-halb">${esc(a.zugeordnet_name || "")}</td>` : ""}
@@ -2014,6 +2016,7 @@
     let personen = null;             // Konten mit Zuordnungen im Zweig – nur mit Grundrecht geholt
     let kategorie = "";              // Filter „Kategorie“ (Wunsch vom 25.10.2026): Kennung der Kategorie
     let kategorieName = "";          //   … und ihr Name, falls sie nach einer Änderung nicht mehr in der Liste steht
+    let kategorienZuletzt = [];      //   … und die zuletzt vollständige Liste (Name und Platz bei 0 Treffern)
     let nachFilter = null;           // nach einer Wahl im Filtermenü: wohin der Fokus geht (Selektor) bzw. "liste"
     let grund = false;               // Grundrecht am Ordner – bekannt nach dem ersten Zeichnen
     let kopfEl = null;               // Ablaufhinweis der Freigaben: einmal geholt, bei jedem Zeichnen wieder eingesetzt
@@ -2081,7 +2084,16 @@
          der die Schublade bei den Filtern öffnet (F4). Liegt hier gar nichts und ist nichts gefiltert, entfällt es. */
       const zeigeFilter = Boolean(direktAlle || filter || person || kategorie);
       const kats = (d.kategorien || []).slice();
-      if (kategorie && !kats.some((k) => String(k.id) === kategorie)) kats.push({ id: +kategorie, name: kategorieName || "gewählte Kategorie", pfad: kategorieName, n: 0 });
+      if (kategorie && !kats.some((k) => String(k.id) === kategorie)) {
+        // Ohne Treffer (etwa mit einem Status dazu) fehlt die gewählte Kategorie in der Antwort – sie bleibt mit Namen und
+        // Platz der letzten Liste stehen, mit 0 (Prüfung Browser, Verbesserung 6).
+        const i = kategorienZuletzt.findIndex((k) => String(k.id) === kategorie);
+        const vorgaenger = new Set(i >= 0 ? kategorienZuletzt.slice(0, i).map((k) => k.id) : []);
+        let platz = 0;
+        kats.forEach((k, j) => { if (vorgaenger.has(k.id)) platz = j + 1; });
+        kats.splice(i >= 0 ? platz : kats.length, 0, Object.assign({}, i >= 0 ? kategorienZuletzt[i]
+          : { id: +kategorie, name: kategorieName || "gewählte Kategorie", pfad: kategorieName }, { n: 0 }));
+      } else kategorienZuletzt = kats;
       const doppelt = new Set(kats.filter((k, i) => kats.findIndex((x) => x.name.toLowerCase() === k.name.toLowerCase()) !== i).map((k) => k.name.toLowerCase()));
       const katText = (k) => (doppelt.has(k.name.toLowerCase()) ? k.pfad : k.name);
       const wahlKnopf = (act, attr, wert, an, text, n, title) => `<li><button type="button" class="mat-filterwahl${an ? " active" : ""}" data-act="${act}" ${attr}="${esc(wert)}" aria-pressed="${an}"${title ? ` title="${esc(title)}"` : ""}><span>${text}</span><span class="mat-side-anzahl">${n}</span></button></li>`;
@@ -3382,11 +3394,13 @@
   /* Seriennummern der Bestandteile (Schritt 25): je Position der Bestandteil-Liste und Stück ein freiwilliges Feld –
      beim Anlegen, im Dialog „Bearbeiten“ (bis zur ersten Prüfung, Materialwart) und im Antrag. liste: [{id, bezeichnung,
      anzahl, nummern}]. Je zwei Felder in einer Reihe (Telefon: untereinander wie jede field-row). */
-  const stueckText = (z, st) => (z.anzahl > 1 ? `${z.bezeichnung} (Stück ${st} von ${z.anzahl})` : z.bezeichnung);
+  // Wie teilnummern.stueck_text: endet die Bezeichnung mit einer Klammer, ohne zweite Klammer dahinter.
+  const stueckText = (z, st) => (z.anzahl <= 1 ? z.bezeichnung
+    : /\)\s*$/.test(z.bezeichnung) ? `${z.bezeichnung} – Stück ${st} von ${z.anzahl}` : `${z.bezeichnung} (Stück ${st} von ${z.anzahl})`);
   function teilnummernFelder(praefix, liste) {
     const felder = [];
     liste.forEach((z) => { for (let st = 1; st <= z.anzahl; st += 1) felder.push([z, st]); });
-    const feld = ([z, st]) => `<div><label for="${praefix}-${z.id}-${st}">${esc(stueckText(z, st))}</label><input type="text" id="${praefix}-${z.id}-${st}" class="mat-teilnr" data-b="${z.id}" data-s="${st}" maxlength="80" value="${esc((z.nummern || [])[st - 1] || "")}" ${TASTATUR_NUMMER}></div>`;
+    const feld = ([z, st]) => `<div><label for="${praefix}-${z.id}-${st}">${esc(stueckText(z, st))}</label><input type="text" id="${praefix}-${z.id}-${st}" class="mat-teilnr" data-b="${z.id}" data-s="${st}" data-name="${esc(stueckText(z, st))}" maxlength="80" value="${esc((z.nummern || [])[st - 1] || "")}" ${TASTATUR_NUMMER}></div>`;
     const reihen = [];
     for (let i = 0; i < felder.length; i += 2) reihen.push(`<div class="field-row">${feld(felder[i])}${felder[i + 1] ? feld(felder[i + 1]) : "<div></div>"}</div>`);
     return reihen.join("");
@@ -3394,6 +3408,38 @@
   const teilnummernSatz = (praefix, liste, hilfe) => `<fieldset class="mat-teilnr-satz" id="${praefix}"><legend>Seriennummern der Bestandteile</legend>
     ${teilnummernFelder(praefix, liste)}<div class="help">${esc(hilfe)}</div></fieldset>`;
   const teilnummernLesen = (el) => $$(".mat-teilnr", el).map((f) => ({ bestandteil_id: +f.dataset.b, stueck: +f.dataset.s, seriennummer: f.value.trim() }));
+  /* Dieselbe Seriennummer an zwei Stück eines Artikels (auch in anderer Schreibung): nur ein Hinweis am zweiten Feld –
+     gespeichert wird trotzdem, eindeutig müssen die Nummern der Bestandteile nicht sein (Prüfung Browser, Verbesserung
+     2). Eine Gruppe ist ein Artikel: der Satz im Dialog (.mat-teilnr-satz) bzw. die Prüfpunkte (.mat-punkte); jedes Feld
+     nennt sein Stück in data-name. Beim Zeichnen (doppelteZeigen) und bei jeder Eingabe. */
+  const NUMMERFELD = ".mat-teilnr, .mat-pnummer";
+  const nummerSchluessel = (v) => v.trim().replace(/\s+/g, " ").toLocaleLowerCase("de");
+  function doppeltePruefen(gruppe) {
+    const erste = new Map();
+    $$(NUMMERFELD, gruppe).forEach((f) => {
+      const k = nummerSchluessel(f.value);
+      const vorher = k ? erste.get(k) : null;
+      if (k && !vorher) erste.set(k, f);
+      let h = document.getElementById(`${f.id}-doppelt`);
+      if (!vorher) {
+        if (h) { h.remove(); f.removeAttribute("aria-describedby"); }
+        return;
+      }
+      if (!h) {
+        h = document.createElement("div");
+        h.className = "help mat-doppelt";
+        h.id = `${f.id}-doppelt`;
+        f.insertAdjacentElement("afterend", h);
+        f.setAttribute("aria-describedby", h.id);
+      }
+      h.textContent = `Diese Nummer steht schon an „${vorher.dataset.name}“.`;
+    });
+  }
+  const doppelteZeigen = (wurzel) => $$(".mat-teilnr-satz, .mat-punkte", wurzel).forEach(doppeltePruefen);
+  document.addEventListener("input", (e) => {
+    const gruppe = e.target.matches && e.target.matches(NUMMERFELD) ? e.target.closest(".mat-teilnr-satz, .mat-punkte") : null;
+    if (gruppe) doppeltePruefen(gruppe);
+  });
 
   function artikelDialog(a, produktSuche) {
     const textil = a.produkt.material_kind === "textil";
@@ -3410,7 +3456,7 @@
         <div class="field-row">${lesefeld("ad-kauf", "Kauf (Monat)", datumAnzeige(a.purchased_on, "monat"))}${lesefeld("ad-erst", "Erstgebrauch (Monat)", datumAnzeige(a.first_use_on, "monat"))}</div>
         <div class="field-row">${textil ? lesefeld("ad-ende", "Lebensende", datumAnzeige(a.retire_by, "tag")) : ""}${lesefeld("ad-int", "Prüfintervall am Artikel (Monate)", a.interval_months || "")}</div></div>
       <div class="help">${fest ? "Seit der ersten Prüfung fest – Teil des Prüfnachweises." : "Diese Stammdaten ändert der Materialwart."}</div>
-      ${(a.bestandteile || []).length ? `<div class="mat-fest-teile"><p class="mat-bt-label">Seriennummern der Bestandteile</p>${bestandteilZeilen(a.bestandteile, true)}</div>` : ""}
+      ${(a.bestandteile || []).length ? `<div class="mat-fest-teile"><p class="mat-bt-label">Seriennummern der Bestandteile</p>${bestandteilZeilen(a.bestandteile, true, "keine Nummer eingetragen")}</div>` : ""}
       ${fest ? `${offen.map(antragOffenHtml).join("")}
         ${antragMoeglich(a) ? '<div class="btn-row mat-antrag-knopf"><button class="btn secondary small" type="button" id="ad-antrag">Änderung beantragen …</button></div>' : ""}` : ""}` : "";
     const sn = `<label for="ad-sn">Seriennummer des Herstellers</label><input type="text" id="ad-sn" ${TASTATUR_NUMMER} value="${a.serial_generated ? "" : esc(a.serial_no)}" placeholder="${a.serial_generated ? esc(a.serial_no) + " (vom System)" : ""}" maxlength="80">`;
@@ -3441,6 +3487,7 @@
       <label for="ad-notes">Bemerkung</label><textarea id="ad-notes" rows="3" maxlength="4000">${esc(a.notes || "")}</textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="ad-ok" type="button">Speichern</button></div>`,
     (dlg, body) => {
+      doppelteZeigen(body);
       // Ein anderes Produkt (null: es bleibt). Der Dialog zeigt es mit seinen Folgen; Lebensende und Länge folgen ihm.
       let neuesProdukt = null;
       const anders = $("#ad-anders", body);
@@ -3600,6 +3647,7 @@
       <textarea id="aa-grund" rows="3" maxlength="1000" placeholder="z. B. Etikett beim Prüfen falsch abgelesen, Herstellernummer nachträglich gefunden"></textarea>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="aa-ok" type="button">Antrag senden</button></div>`,
     (dlg, body) => {
+      doppelteZeigen(body);
       let neuesProdukt = null;
       const fehler = (text) => { const el = $("#aa-produkt-fehler", body); el.textContent = text || ""; el.hidden = !text; };
       function produktSetzen(p) {
@@ -3872,6 +3920,7 @@
           teilnrFuer = produkt.id;
           const el = $("#an-bestandteile");
           el.innerHTML = (v.bestandteile || []).length ? teilnummernSatz("an-tn", v.bestandteile, "Freiwillig – leer lassen, wo es keine gibt.") : "";
+          doppelteZeigen(el);
           el.hidden = !(v.bestandteile || []).length;
         }
         $("#an-due-hilfe").textContent = v.intervall.monate ? `Prüfintervall ${v.intervall.monate} Monate (${v.intervall.quelle}).` : "Kein Prüfintervall – am Produkt oder in der Kategorie eintragen.";
@@ -5116,7 +5165,8 @@
   /* Die Bestandteil-Liste eines Produkts, das kein Set ist (Schritt 25), auf der Produktseite: „2 × Bezeichnung“ –
      nur, wenn es eine gibt (angelegt wird sie über „Bearbeiten“ → Reiter „Bestandteile“); mit Katalogrecht dazu
      „Bestandteile bearbeiten“. Auch Artikelseite und Meine PSA zeigen sie so (bestandteilZeilen). */
-  const bestandteilZeilen = (liste, mitNummern) => `<ul class="mat-bestandteile">${liste.map((z) => `<li>${z.anzahl} × ${esc(z.bezeichnung)}${mitNummern ? nummernHtml(z) : ""}</li>`).join("")}</ul>`;
+  // ohneText: was dasteht, wenn eine Position keine Nummer trägt (schreibgeschützter Block im Dialog „Bearbeiten“).
+  const bestandteilZeilen = (liste, mitNummern, ohneText) => `<ul class="mat-bestandteile">${liste.map((z) => `<li>${z.anzahl} × ${esc(z.bezeichnung)}${mitNummern ? nummernHtml(z) || (ohneText ? ` <span class="muted small">– ${esc(ohneText)}</span>` : "") : ""}</li>`).join("")}</ul>`;
   // Seriennummern der Stück einer Position (Artikel, Meine PSA): „SN A1“ bzw. „Stück 2: A2“ – leere fallen weg.
   function nummernHtml(z) {
     const mit = (z.nummern || []).map((n, i) => [i + 1, n]).filter(([, n]) => n);
@@ -5198,14 +5248,23 @@
     // Die Bemerkung steht als Zusatz in der Überschrift; nur eine ältere, dort gekürzte zusätzlich ganz hier.
     const zusatz = produktZusatz(p);
     const stueckTeile = (p.bestandteile || []).reduce((n, z) => n + (z.einzeln ? z.anzahl : 0), 0);
+    // Seltene Funktionen im Untermenü statt als weitere Knöpfe neben „Bearbeiten“ (Knopfregel; Prüfung Browser,
+    // Verbesserung 4).
+    const produktMenue = `<details class="mat-menue">
+        <summary class="btn secondary small" aria-haspopup="true">Mehr</summary>
+        <div class="mat-menue-liste">
+          <a href="#" role="button" data-act="variante"><strong>Als Variante kopieren …</strong>
+            <span>Ein neues Produkt mit diesen Stammdaten anlegen, etwa eine andere Länge – mit eigener Artikelnummer.</span></a>
+          <a href="#" role="button" data-act="rr-neu"><strong>Rückruf anlegen …</strong>
+            <span>Eine Rückrufaktion des Herstellers für alle Artikel dieses Produkts oder bestimmte Seriennummern.</span></a>
+        </div></details>`;
     inhalt.innerHTML = `${p.demo ? '<p class="mat-demo-banner">DEMO – nicht für echte Prüfungen.</p>' : ""}
       <div class="mat-pfad"><a href="/material/katalog">Katalog</a> / ${p.kategorie_pfad.map((x) => `<a href="/material/katalog?kategorie=${x.id}">${esc(x.name)}</a>`).join(" / ")}</div>
       <div class="mat-artikelkopf">
         ${p.bild ? bildLink(p.bild, p.original, `Produktbild ${produktName(p)}`, null, `<img class="mat-produktbild" src="${esc(p.bild)}" alt="">`) : '<div class="mat-produktbild leer" aria-hidden="true">kein Produktbild</div>'}
         <div class="mat-artikeltitel"><h1>${nameHtml(p)}${zusatzHtml(p)} ${demoMarke(p.demo)}</h1>
           ${DARF.verwalten ? `<div class="btn-row"><a class="btn secondary small" href="/material/artikel/neu?produkt=${p.id}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel dieses Produkts<span class="k-anlegen"> anlegen</span></span></a></div>` : ""}
-          ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${p.loeschbar ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}</div>
-          <div class="btn-row"><button class="btn secondary small" data-act="variante">Als Variante kopieren</button><button class="btn secondary small" data-act="rr-neu">Rückruf anlegen</button></div>` : ""}</div>
+          ${k ? `<div class="btn-row"><button class="btn secondary small" data-act="bearbeiten">Bearbeiten</button>${p.loeschbar ? '<button class="btn secondary small" data-act="loeschen">Löschen</button>' : ""}${produktMenue}</div>` : ""}</div>
       </div>
       ${rueckrufAbschnitt(p)}
       <div class="mat-spalten">
@@ -6483,18 +6542,22 @@
       const notiz = mangel || x.notiz;
       // Seriennummern der Bestandteile (Schritt 25): je Stück ein Feld, vorbelegt mit der Nummer am Artikel – eine neue
       // oder fehlende trägt der Prüfer hier ein, übernommen wird sie beim Festschreiben (das Protokoll zeigt alt → neu).
-      const nummern = (x.nummern || []).length ? `<div class="mat-punkt-nummern">${x.nummern.map((n) => `<div><label for="pn-${x.id}-${n.stueck}">Seriennummer${x.nummern.length > 1 ? ` Stück ${n.stueck}` : ""}</label>
-          <input type="text" class="mat-pnummer" id="pn-${x.id}-${n.stueck}" data-rid="${x.id}" maxlength="80" autocomplete="off" value="${esc(n.wert || "")}" placeholder="keine" ${TASTATUR_NUMMER}>
-          ${n.neu !== null && n.neu !== undefined && n.neu !== n.alt ? `<div class="help">bisher ${esc(n.alt || "keine")}</div>` : ""}</div>`).join("")}</div>` : "";
+      // Eigenes Fieldset unter der Bemerkung (Prüfung Browser, Verbesserung 1); in der Berichtigung dazu der Stand am
+      // Artikel, wenn er vom Feld abweicht; dieselbe Nummer an zwei Stück nur als Hinweis (doppeltePruefen).
+      const mehrere = (x.nummern || []).length > 1;
+      const nummern = (x.nummern || []).length ? `<fieldset class="mat-punkt-nummern"><legend id="pn-${x.id}-titel">${mehrere ? "Seriennummern" : "Seriennummer"}</legend>${x.nummern.map((n) => `<div>${mehrere ? `<label for="pn-${x.id}-${n.stueck}">Stück ${n.stueck}</label>` : ""}
+          <input type="text" class="mat-pnummer" id="pn-${x.id}-${n.stueck}" data-rid="${x.id}" data-name="${esc(x.text.replace(/ vorhanden$/, "") + (mehrere ? `, Stück ${n.stueck}` : ""))}" maxlength="80" autocomplete="off" value="${esc(n.wert || "")}" placeholder="keine" ${mehrere ? "" : `aria-labelledby="pn-${x.id}-titel" `}${TASTATUR_NUMMER}>
+          ${n.neu !== null && n.neu !== undefined && n.neu !== n.alt ? `<div class="help">bisher ${esc(n.alt || "keine")}</div>` : ""}${n.artikel !== undefined && n.artikel !== n.wert ? `<div class="help">am Artikel heute ${esc(n.artikel || "keine")}</div>` : ""}</div>`).join("")}</fieldset>` : "";
       return `<div class="mat-punkt${mangel ? " mangel" : ""}${nz ? " nz" : ""}" id="pp-${x.id}">
         <div class="mat-punkt-kopf"><span class="mat-punkt-text">${esc(x.text)}</span>
           ${x.kritisch ? '<span class="mat-kritisch" title="Ein Mangel hier schließt „einsatzbereit“ aus">kritisch</span>' : ""}
           ${x.art === "yesno" && x.soll && !istBestandteil(x) ? `<span class="muted small">Soll ${esc(x.soll)}</span>` : ""}${x.art === "laenge" && laengeMoeglich ? `<span class="muted small">${x.soll ? `am Artikel ${esc(x.soll)} m` : "am Artikel keine Länge"}</span>` : ""}${x.pflicht ? "" : '<span class="muted small">optional</span>'}</div>
         <div class="mat-punkt-zeile">${steuer}${foto}
           ${notiz ? "" : `<button type="button" class="lnk small" data-act="pnotiz-auf" data-rid="${x.id}"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Bemerkung<span class="k-anlegen"> anlegen</span></span></button>`}</div>
-        ${nummern}
-        <textarea class="mat-pnotiz" data-rid="${x.id}" rows="2" maxlength="1000" placeholder="${mangel ? "Pflicht bei Mangel: Was ist wo zu sehen?" : "Bemerkung"}" ${notiz ? "" : "hidden"}${mangel ? ' aria-required="true"' : ""}>${esc(x.notiz || "")}</textarea>
-        ${mangel && !(x.notiz || "").trim() ? '<span class="mat-pflicht mat-pflicht-notiz">Bemerkung ist Pflicht</span>' : ""}</div>`;
+        <label for="pnotiz-${x.id}" class="mat-pnotiz-label">${mangel ? "Bemerkung zum Mangel" : "Bemerkung"}</label>
+        <textarea class="mat-pnotiz" id="pnotiz-${x.id}" data-rid="${x.id}" rows="2" maxlength="1000" placeholder="${mangel ? "Pflicht: Was ist wo zu sehen?" : ""}" ${notiz ? "" : "hidden"}${mangel ? ' aria-required="true"' : ""}>${esc(x.notiz || "")}</textarea>
+        ${mangel && !(x.notiz || "").trim() ? '<span class="mat-pflicht mat-pflicht-notiz">Bemerkung ist Pflicht</span>' : ""}
+        ${nummern}</div>`;
     }
 
     function punkteHtml() {
@@ -6706,6 +6769,7 @@
       const ohneNummer = pr.entwurf && pr.eigen && !darfHier("pruefen") && (DARF.pruefer_haekchen || DARF.qualifiziert) ? `<p class="notice">${pruefHinweis(pr)}</p>` : "";
       inhalt.innerHTML = `<div class="mat-pruefung${bearbeitbar() ? " mat-mit-leiste" : ""}">${kopf()}${ohneNummer}${bearbeitbar() ? bearbeitenHtml() : leseHtml()}</div>`;
       anleitungEinsetzen();
+      doppelteZeigen(inhalt);
       if (leisteBeobachter) leisteBeobachter.disconnect();
       if (bearbeitbar()) {
         binden(); abschlussAktualisieren(); abschlussZurueck(); seitenZeichnen(); tipptPruefen(false);
@@ -6739,6 +6803,7 @@
       ersetzt = true;
       try { el.outerHTML = punktHtml(neu); } finally { ersetzt = false; }
       const karte = $(`#pp-${neu.id}`);
+      doppeltePruefen(karte.closest(".mat-punkte"));
       const notiz = $(".mat-pnotiz", karte);
       if (notiz && notizOffen && notiz.hidden) { notiz.hidden = false; const plus = $('[data-act="pnotiz-auf"]', karte); if (plus) plus.remove(); }
       // Noch nicht Bestätigtes aus einem anderen Feld der Karte (die Antwort einer anderen Anfrage kennt es nicht).

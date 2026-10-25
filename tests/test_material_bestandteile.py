@@ -790,6 +790,18 @@ def test_oberflaeche_statisch():
         assert f'{aktion}: "{beschriftung.AKTION[aktion]}"' in js, aktion
     assert f'bestandteil_nummern: "{beschriftung.FELD["bestandteil_nummern"]}"' in js
     assert "Bestandteile bearbeiten" in js and "Seriennummern der Bestandteile" in js
+    # Nachbesserung nach den Prüfungen (25.10.2026): Hinweis bei doppelter Nummer, Bemerkung mit Label vor dem Fieldset
+    # der Nummern, Untermenü „Mehr“ auf der Produktseite, Kategorie über dem Hersteller.
+    css = open(os.path.join(WURZEL, "app/material/static/material.css"), encoding="utf-8").read()
+    assert "function doppeltePruefen(gruppe)" in js and "Diese Nummer steht schon an" in js
+    assert js.index('class="mat-pnotiz-label"') < js.index("${nummern}</div>`;")
+    assert '<fieldset class="mat-punkt-nummern">' in js
+    assert 'data-act="variante"><strong>Als Variante kopieren …</strong>' in js
+    assert 'data-act="variante">Als Variante kopieren</button>' not in js
+    assert "@container mat-seite (min-width: 900px) and (max-width: 979px)" in css and "mat-kat-zusatz" in js
+    assert "btn ghost" not in js
+    from app.material.services.teilnummern import stueck_text
+    assert stueck_text("Teil (rot)", 1, 2) == "Teil (rot) – Stück 1 von 2" and stueck_text("Teil", 2, 2) == "Teil (Stück 2 von 2)"
     print("Oberfläche statisch bestanden.")
 
 

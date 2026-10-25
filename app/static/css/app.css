@@ -2249,6 +2249,16 @@ dialog.us-dlg { width: min(640px, 96vw); }
   body .wiki-shell, body.editing .wiki-shell, body.public .wiki-shell.public { grid-template-columns: min(var(--side-w), 260px) minmax(0, 1fr); }
 }
 
+/* Dateiwahl hinter einem grauen Knopf (Wiki-Import, wie .mat-dateiwahl im Modul Material): daneben, was gewählt ist.
+   Das Dateifeld selbst ist unsichtbar, der Knopf (label) trägt den Fokusrahmen. */
+.dateiwahl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 12px 0 4px; }
+.dateiwahl > label.btn { position: relative; margin: 0; font-size: inherit; }
+.dateiwahl-feld { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
+.dateiwahl > label:has(> .dateiwahl-feld:focus-visible) { outline: 3px solid var(--gelb); outline-offset: 2px; }
+.dateiwahl-name { flex: 1 1 160px; min-width: 0; font-size: var(--fs-klein); color: var(--grau); overflow-wrap: anywhere; }
+.dateiwahl-name.gewaehlt { color: var(--anthrazit); font-weight: 600; }
+@media (pointer: coarse) { .dateiwahl > label.btn { min-height: 44px; } }
+
 /* Knöpfe zum Anlegen („Artikel anlegen“): auf dem Telefon kurz als „+ Artikel“ – „anlegen“ ist dann nur für
    Screenreader da, die immer den ganzen Namen lesen. Tablet und Rechner zeigen den vollen Text. Markup:
    <span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Artikel<span class="k-anlegen"> anlegen</span></span>

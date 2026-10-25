@@ -1045,14 +1045,23 @@
       <p class="help">Ein ZIP mit Markdown-Dateien, etwa aus „Abschnitt als ZIP herunterladen“. Unterordner werden Unterseiten,
         Bilder und Dokumente, auf die eine Seite verweist, kommen mit; Videos bitte einzeln hochladen. Vorhandene Seiten
         bleiben unverändert.</p>
-      <label for="im-datei">ZIP-Datei</label>
-      <input type="file" id="im-datei" accept=".zip,application/zip">
+      <div class="dateiwahl"><label class="btn secondary">ZIP-Datei wählen …<input type="file" id="im-datei" class="dateiwahl-feld"
+        accept=".zip,application/zip" aria-describedby="im-datei-name"></label>
+        <span class="dateiwahl-name" id="im-datei-name" aria-live="polite">keine Datei gewählt</span></div>
       <label for="im-ziel">Einsortieren unter</label>
       <select id="im-ziel"><option value="">– oberste Ebene –</option>${zeilen.join("")}</select>
       <p class="small" id="im-freigabe" aria-live="polite"></p>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="im-ok" type="button">Importieren</button></div>`,
     (dlg, body) => {
       const wahl = $("#im-ziel", body);
+      // Dateiwahl hinter einem grauen Knopf wie im Modul Material (Prüfung Browser): daneben, was gewählt ist.
+      const datei = $("#im-datei", body);
+      datei.addEventListener("change", () => {
+        const f = datei.files[0];
+        const name = $("#im-datei-name", body);
+        name.textContent = f ? `${f.name} (${Math.max(1, Math.round(f.size / 1024))} KB)` : "keine Datei gewählt";
+        name.classList.toggle("gewaehlt", Boolean(f));
+      });
       const satz = () => {
         const ziel = state.byId.get(+wahl.value);
         $("#im-freigabe", body).textContent = !ziel ? ""
@@ -1087,8 +1096,8 @@
           ${r.hinweise.length ? `<h3>Hinweise</h3><ul class="im-hinweise">${r.hinweise.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>` : ""}
           <div class="dlg-actions"><button class="btn secondary" id="im-zu" type="button">Schließen</button></div>`;
         $("#dlg-titel", body).focus();
-        // Auch mit Esc geschlossen: Der Baum zeigt die neuen Seiten.
-        let weiter = null;
+        // Auch mit Esc geschlossen wie mit „Schließen“: Der Baum zeigt die neuen Seiten, die erste ist offen.
+        let weiter = erste.slug;
         dlg.addEventListener("close", async () => { await loadTree(); if (weiter) navigate(weiter); }, { once: true });
         const fertig = (slug) => { weiter = slug; dlg.close(); };
         body.querySelectorAll(".im-seiten a").forEach((a) => a.addEventListener("click", (e) => {

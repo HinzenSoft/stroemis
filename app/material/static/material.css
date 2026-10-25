@@ -849,8 +849,20 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 }
 @media (horizontal-viewport-segments: 2) { .mat-filter-auf { display: none; } }
 @media (pointer: coarse) { .mat-filterwahl, .mat-filter-person select { min-height: 44px; } }
-/* Spalte „Kategorie“ der Ordnerliste: lange Namen brechen um, statt die Tabelle zu verbreitern. */
-table.list.mat-tabelle td.mat-kategorie { overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; }
+/* Spalte „Kategorie“ der Ordnerliste: lange Namen brechen um, statt die Tabelle zu verbreitern. Die Spalte braucht
+   rund 100 px (Prüfung Browser, B1): Mit ihr bleibt die Liste bis 899 px Inhaltsbreite die enge Tabelle (Fold
+   aufgeklappt; Firefox setzt breiter als Chromium), zwischen 900 und 979 px steht die Kategorie klein über dem
+   Hersteller, erst ab 980 px in einer eigenen Spalte. */
+table.list.mat-tabelle :is(td.mat-kategorie, .mat-kat-zusatz) { overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; }
+.mat-kat-zusatz { display: none; }
+@container mat-seite (min-width: 821px) and (max-width: 899px) {
+  table.list.mat-mit-kategorie th.mat-schmal-weg, table.list.mat-mit-kategorie td.mat-schmal-weg { display: none; }
+  table.list.mat-mit-kategorie .mat-schmal-zusatz { display: block; }
+}
+@container mat-seite (min-width: 900px) and (max-width: 979px) {
+  table.list.mat-mit-kategorie th.mat-kategorie, table.list.mat-mit-kategorie td.mat-kategorie { display: none; }
+  table.list.mat-mit-kategorie .mat-kat-zusatz { display: block; }
+}
 
 /* Ordnerleiste: ab 1024 px fest neben dem Inhalt, bis 1199 px schmaler (Tablet quer – der Inhalt behält gut 740 px,
    so passen die Tabellen der Prüfungen). Kerbe und Wischleiste bleiben frei. */
@@ -867,6 +879,14 @@ table.list.mat-tabelle td.mat-kategorie { overflow-wrap: break-word; -webkit-hyp
     margin: -10px -8px -10px 0; padding: 0; font-size: 1.25rem; }
 }
 @media (max-width: 1023px) and (pointer: coarse) { html:has(.mat-side.open) { overflow: hidden; } }
+/* Der Kopf der Schublade mit „✕“ bleibt oben stehen – auch wenn „Filter“ sie bis zum Filtermenü rollt (vorher lag der
+   Knopf am Telefon oberhalb des Bildes; Prüfung Browser, Verbesserung 3). top und margin sind minus dem oberen
+   Innenabstand der Leiste (wie .mat-reiter im Dialog); scroll-padding hält das Ziel des Rollens darunter frei. */
+@media (max-width: 1023px) {
+  .mat-side { scroll-padding-top: 66px; }
+  .mat-side > .mat-side-kopf:first-child { position: sticky; top: -14px; z-index: 3; margin: -14px -10px 8px;
+    padding: 14px 16px 6px; background: var(--grau-hell); box-shadow: 0 1px 0 var(--linie); }
+}
 @media (min-width: 600px) and (max-width: 1023px) { .mat-side { width: min(400px, 60vw); } }
 /* Lange Ordner- und Kategorienamen brechen um, statt mit „…“ zu enden – den vollen Namen im title sieht man ohne Maus
    nie, und „DEMO-Gerätewagen Wasserret…“ war von seinem Nachbarn nicht zu unterscheiden. Getrennt wird an Wortgrenzen
@@ -1787,11 +1807,18 @@ table.list.mat-na-zeilen tr:has(.mat-na-wahl:checked) { background: var(--co-inf
 .mat-teilnr-satz .field-row:first-of-type label { margin-top: 4px; }
 .mat-fest-teile { margin-top: 10px; }
 .mat-fest-teile .mat-bt-label { margin-top: 0; }
+/* An der Prüfzeile „… vorhanden“: eigenes Fieldset unter der Bemerkung (Prüfung Browser, Verbesserung 1). */
 .mat-punkt-nummern { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 4px 14px;
-  margin-top: 8px; }
+  border: 1px solid var(--linie); padding: 4px 12px 10px; margin: 10px 0 0; min-width: 0; }
+.mat-punkt-nummern legend { padding: 0 4px; font-size: var(--fs-klein); font-weight: 600; }
 .mat-punkt-nummern label { margin-top: 0; font-weight: 400; }
 .mat-punkt-nummern input { margin: 0; }
 .mat-punkt-nummern .help { margin: 2px 0 0; }
+/* Die Bemerkung einer Prüfzeile mit sichtbarer Beschriftung – nur, solange das Feld offen ist. */
+.mat-punkt .mat-pnotiz-label { margin: 8px 0 2px; font-weight: 400; font-size: var(--fs-klein); color: var(--grau); }
+.mat-punkt.mangel .mat-pnotiz-label { color: var(--anthrazit); font-weight: 600; }
+.mat-punkt .mat-pnotiz-label + .mat-pnotiz { margin-top: 0; }
+.mat-pnotiz-label:has(+ .mat-pnotiz[hidden]) { display: none; }
 .mat-bt-fehler { margin: 6px 0 0; }
 .mat-bt-neu { margin-top: 12px; align-items: center; }
 .mat-bt-zaehler { margin: 0; }
