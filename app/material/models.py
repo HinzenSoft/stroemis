@@ -191,13 +191,19 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     ebenso für das Produkt; mat_item_antrag_angewendet setzt applied_at je gedeckter Zeile. Länge, Bemerkung und
     nächste Prüfung sind nicht freigabepflichtig. Kein Vier-Augen-Trigger (Entscheidung E5). Wiederholbar: Umgebaut
     wird nur, wenn der CHECK „purchased_on“ noch nicht kennt; die Trigger werden entfernt und neu angelegt.
+  - Schritt 24 (Lebensende per Antrag auch wieder nach hinten, Wunsch vom 25.10.2026): Ein Antrag darf ein vorgezogenes
+    Lebensende bis zur Rechnung aus Herstellung und Lebensdauer zurücksetzen – genau auf die Rechnung heißt, das von
+    Hand gesetzte Lebensende wird leer (retire_by_manual NULL), damit es wieder Herstellung und Katalog folgt. Die
+    Trigger aus 23 kannten nur „neuer Wert = retire_by_manual“; mat_item_stammdaten_fest und mat_item_antrag_angewendet
+    (gleiche Namen ersetzt) decken zusätzlich „retire_by_manual wird leer und das wirksame retire_by ist der beantragte
+    Wert“. Sonst gleich (TRIGGER_24_ARTIKEL); keine Tabelle, keine Zeile. Wiederholbar: entfernen und neu anlegen.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 23
+SCHEMA_VERSION = 24
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -2197,13 +2203,67 @@ def _schritt_23(conn):
         conn.execute(sql)
 
 
+# --- Schritt 24: Lebensende per Antrag auch wieder nach hinten (Wunsch vom 25.10.2026) --------------------------------
+# Ein Antrag auf das Lebensende darf ein vorgezogenes bis zur Rechnung aus Herstellung und Lebensdauer zurücksetzen.
+# Genau auf die Rechnung wird das von Hand gesetzte Lebensende leer – der Antrag nennt dann als neuen Wert das wirksame
+# Lebensende (retire_by), das der Dienst in derselben Anweisung schreibt. Die übrigen Felder wie in Schritt 23.
+
+def _deckt_24(feld, praefix="c."):
+    """Wie _deckt_23; beim Lebensende deckt die Zeile auch „von Hand gesetztes wird leer, wirksam ist der neue Wert“."""
+    if feld != "retire_by":
+        return _deckt_23(feld, praefix)
+    return (f"{praefix}field = 'retire_by' AND {praefix}old_value IS OLD.retire_by "
+            f"AND ({praefix}new_value IS CAST(NEW.retire_by_manual AS TEXT) "
+            f"OR (NEW.retire_by_manual IS NULL AND {praefix}new_value IS NEW.retire_by))")
+
+
+def _ungedeckt_24(feld):
+    spalte = _ANTRAG_SPALTEN_23[feld]
+    return (f"NEW.{spalte} IS NOT OLD.{spalte} AND NOT EXISTS (SELECT 1 FROM mat_item_change c WHERE c.item_id = OLD.id "
+            f"AND c.status = 'bestaetigt' AND c.applied_at IS NULL AND {_deckt_24(feld)})")
+
+
+_FEST_24 = [
+    "(" + _ungedeckt_24("serial_no") + ")",
+    "(NEW.manufactured_on IS NOT OLD.manufactured_on AND NEW.manufactured_on IS NULL)",
+    "(" + _ungedeckt_24("manufactured_on") + ")",
+    "(" + _ungedeckt_24("purchased_on") + ")",
+    "(" + _ungedeckt_24("first_use_on") + ")",
+    "(" + _ungedeckt_24("interval_months") + ")",
+    "(NEW.product_id IS OLD.product_id AND " + _ungedeckt_24("retire_by") + ")",
+]
+TRIGGER_24_ARTIKEL = [
+    # Ersetzen die Fassungen aus Schritt 23 (gleiche Namen); mat_item_produkt_fest bleibt, wie Schritt 23 es anlegt.
+    _trigger("mat_item_stammdaten_fest", "BEFORE UPDATE OF serial_no, manufactured_on, purchased_on, first_use_on, "
+             "interval_months, retire_by_manual ON mat_item",
+             "(" + " OR ".join(_FEST_24) + ") AND " + _GEPRUEFT, STAMMDATEN_FEST_23),
+    "CREATE TRIGGER IF NOT EXISTS mat_item_antrag_angewendet AFTER UPDATE OF "
+    + ", ".join(_ANTRAG_SPALTEN_23.values()) + " ON mat_item WHEN "
+    + " OR ".join(f"NEW.{s} IS NOT OLD.{s}" for s in _ANTRAG_SPALTEN_23.values())
+    + " BEGIN UPDATE mat_item_change SET applied_at = strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now') "
+    "WHERE item_id = NEW.id AND status = 'bestaetigt' AND applied_at IS NULL AND ("
+    + " OR ".join(f"(NEW.{_ANTRAG_SPALTEN_23[f]} IS NOT OLD.{_ANTRAG_SPALTEN_23[f]} AND {_deckt_24(f, '')})"
+                  for f in _ANTRAG_SPALTEN_23)
+    + "); END",
+]
+
+
+def _schritt_24(conn):
+    """Lebensende per Antrag auch wieder nach hinten (Wunsch vom 25.10.2026): die zwei Artikeltrigger, die das
+    Lebensende decken, in der Fassung von Schritt 24 – entfernen und neu anlegen (ein zweiter Lauf ändert nichts)."""
+    for name in ("mat_item_stammdaten_fest", "mat_item_antrag_angewendet"):
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+    for sql in TRIGGER_24_ARTIKEL:
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
 SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schritt_5, 6: _schritt_6, 7: _schritt_7,
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
             14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
-            20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23}
+            20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24}
 
 
 def _meta(conn, schluessel, vorgabe=None):

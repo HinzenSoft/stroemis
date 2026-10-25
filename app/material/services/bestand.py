@@ -1067,7 +1067,9 @@ def artikel_json(i, voll=False):
         out["lebensdauer"] = {"ende": i["retire_by"], "festgeschrieben": True,
                               "rest_tage": (date.fromisoformat(i["retire_by"]) - heute()).days,
                               "jahre": p["lifetime_years"],
-                              "vorgezogen": bool(i["retire_by_manual"]) and i["retire_by"] == i["retire_by_manual"]}
+                              "vorgezogen": bool(i["retire_by_manual"]) and i["retire_by"] == i["retire_by_manual"],
+                              # die Rechnung aus Herstellung und Lebensdauer – bis dahin geht ein Antrag nach hinten
+                              "berechnet": lebensende(i["manufactured_on"], p["lifetime_years"])}
     elif p["lifetime_years"]:
         out["lebensdauer"] = {"festgeschrieben": False, "jahre": p["lifetime_years"], "quelle": p["lifetime_source"]}
     else:

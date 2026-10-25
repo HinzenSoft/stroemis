@@ -776,6 +776,7 @@ def test_migration_15():
         models._schritt_16(conn)
         models._schritt_17(conn)
         models._schritt_23(conn)                   # ersetzt die Artikeltrigger wieder durch die Fassung aus 23
+        models._schritt_24(conn)                   # und die zwei des Lebensendes durch die aus 24
         assert conn.total_changes == n and _schema_in(conn) == trigger
         conn.rollback()
         conn.close()
@@ -1443,6 +1444,7 @@ def test_migration_17():
         n = conn.total_changes
         models._schritt_17(conn)
         models._schritt_23(conn)
+        models._schritt_24(conn)
         assert conn.total_changes == n and _schema_in(conn) == t17
         conn.rollback()
         # Der alte offene Antrag aufs Entfernen: auch an der Schnittstelle vorbei nicht zu bestätigen.

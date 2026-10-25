@@ -7,8 +7,8 @@ Entscheidungen E1–E8): python tests/test_material_antrag_zustaendig.py
      Material-Verwaltung gibt sich die Freigabe selbst (Freigaben und Journal) und entscheidet dann (E6); ohne Stufe 403.
   2. Sammelantrag: mehrere Felder in einem Antrag (ein Journaleintrag, eine Mail, ganz oder gar nicht), höchstens einer
      je Artikel, Bestätigen und Ablehnen des Ganzen, Wert inzwischen anders → nur ablehnen, Zurückziehen der Gruppe.
-  3. Die neuen Felder: Kauf, Erstgebrauch, Prüfintervall (rückt die Fälligkeit vor), Lebensende (nur vorziehen, nur
-     textil), Herstellung nachtragen (E3), Produkt (Lebensende, Länge, Rückruf, DEMO-Grenze, Set und Teil 409).
+  3. Die neuen Felder: Kauf, Erstgebrauch, Prüfintervall (rückt die Fälligkeit vor), Lebensende (nur textil; seit dem
+     25.10.2026 auch wieder nach hinten bis zur Rechnung, Schritt 24), Herstellung nachtragen (E3), Produkt (Lebensende, Länge, Rückruf, DEMO-Grenze, Set und Teil 409).
   4. PUT nach der ersten Prüfung: jedes freigabepflichtige Feld 409, Bemerkung, Länge und nächste Prüfung direkt – für
      Materialwart UND Prüfer (E2); der Prüfer sonst 403.
   5. Mails: an die zuständigen Materialwarte (ohne Antragsteller), Rückfall an die Material-Verwaltung nur ohne jedes
@@ -240,10 +240,10 @@ def test_felder():
     from test_material_sets import set_katalog, set_neu
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
-        # Lebensende: nur textil, nur vorziehen, nicht entfernen.
+        # Lebensende: nur textil, höchstens bis zur Rechnung (Wunsch vom 25.10.2026), nicht entfernen.
         g = item(t.app, t.g1)
         assert g["retire_by"] == "2034-01-01"
-        for d, text in (({"retire_by": "2034-06-01"}, "nur vorziehen"), ({"retire_by": "2034-01-01"}, "mindestens ein Feld"),
+        for d, text in (({"retire_by": "2034-06-01"}, "höchstens bis zur Rechnung"), ({"retire_by": "2034-01-01"}, "mindestens ein Feld"),
                         ({"retire_by": ""}, "nicht entfernen")):
             r = beantragen(t.w, t.g1, **d)
             assert r.status_code == 400 and text in r.json["error"], (d, r.get_json())
@@ -514,7 +514,7 @@ def test_migration_23():
         make_app(tmp)
         pfad = os.path.join(tmp, "stroemis.db")
         version, trigger, _ = _schema(pfad)
-        assert version == endversion() == "23", version
+        assert version == endversion() == "24", version
         assert set(models.ANTRAG_TRIGGER_23) <= set(trigger) and "mat_item_change_gruppe" in trigger
         assert "'purchased_on'" in _tabelle_sql(pfad) and "group_id" in _tabelle_sql(pfad)
         assert "retire_by_manual" in trigger["mat_item_stammdaten_fest"]
@@ -532,7 +532,7 @@ def test_migration_23():
         assert v22 == "22" and "'purchased_on'" not in _tabelle_sql(pfad)
         make_app(tmp)
         v23, t23, _ = _schema(pfad)
-        assert v23 == "23" and set(t23) == set(t22) | {"mat_item_change_gruppe"}, set(t23) ^ set(t22)
+        assert v23 == endversion() and set(t23) == set(t22) | {"mat_item_change_gruppe"}, set(t23) ^ set(t22)
         for n in ("mat_item_stammdaten_fest", "mat_item_produkt_fest", "mat_item_antrag_angewendet",
                   "mat_item_change_inhalt"):
             assert t23[n] != t22[n], n
@@ -548,6 +548,7 @@ def test_migration_23():
         conn.execute("BEGIN")
         n = conn.total_changes
         models._schritt_23(conn)
+        models._schritt_24(conn)                   # seit Schritt 24 die Artikeltrigger in seiner Fassung
         assert conn.total_changes == n and _schema_in(conn) == t23
         conn.rollback()
         conn.close()
@@ -561,6 +562,145 @@ def test_migration_23():
         neu = beantragen(t.w, t.k1, purchased_on="2024-06").json["antrag"]["id"]
         assert neu == 41, neu
     print("Migration 22 → 23 bestanden.")
+
+
+# --- Lebensende per Antrag auch wieder nach hinten (Wunsch vom 25.10.2026, Schritt 24) ---------------------------------
+
+def test_lebensende_nach_hinten():
+    """Ein vorgezogenes Lebensende lässt sich per Antrag wieder nach hinten setzen – höchstens bis zur Rechnung aus
+    Herstellung und Lebensdauer. Genau die Rechnung: retire_by_manual wird leer, das Lebensende folgt danach wieder
+    Herstellung und Katalog. Über die Rechnung hinaus 400 (auch beim Bestätigen, wenn der Katalog die Lebensdauer
+    inzwischen verkürzt hat)."""
+    with post(), tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        # g1: textil, Herstellung 01/2024, Lebensdauer 10 Jahre → Rechnung 01.01.2034.
+        assert lesen(t.w, t.g1)["lebensdauer"]["berechnet"] == "2034-01-01"
+        kid = beantragen(t.w, t.g1, retire_by="2030-05-01").json["antrag"]["id"]
+        assert bestaetigen(t.w, kid).status_code == 200
+        # Nach hinten, aber vor die Rechnung: bleibt von Hand gesetzt.
+        r = beantragen(t.p, t.g1, retire_by="2032-02-01")
+        assert r.status_code == 201, r.get_json()
+        a = r.json["antrag"]["aenderungen"][0]
+        assert (a["feld"], a["alt"], a["neu"]) == ("retire_by", "2030-05-01", "2032-02-01"), a
+        assert bestaetigen(t.w, r.json["antrag"]["id"]).status_code == 200
+        g = item(t.app, t.g1)
+        assert (g["retire_by"], g["retire_by_manual"]) == ("2032-02-01", "2032-02-01"), g
+        j = journal(t.app, t.g1, "antrag_bestaetigt")[-1]
+        assert j["vorher"]["retire_by"] == "2030-05-01" and j["nachher"]["retire_by"] == "2032-02-01", j
+        # Über die Rechnung hinaus nicht – der Satz nennt sie.
+        r = beantragen(t.w, t.g1, retire_by="2034-01-02")
+        assert r.status_code == 400 and "höchstens bis zur Rechnung" in r.json["error"] and "01.01.2034" in r.json["error"]
+        # Genau auf die Rechnung: nicht mehr von Hand gesetzt.
+        kid = beantragen(t.w, t.g1, retire_by="2034-01-01").json["antrag"]["id"]
+        assert bestaetigen(t.w, kid).status_code == 200
+        g = item(t.app, t.g1)
+        assert (g["retire_by"], g["retire_by_manual"]) == ("2034-01-01", None), g
+        x = lesen(t.w, t.g1)["lebensdauer"]
+        assert x["vorgezogen"] is False and x["ende"] == "2034-01-01", x
+        assert zeilen(t.app, "SELECT applied_at FROM mat_item_change WHERE id = ?", (kid,))[0]["applied_at"]
+        j = journal(t.app, t.g1, "antrag_bestaetigt")[-1]
+        assert j["vorher"] == {"retire_by": "2032-02-01", "retire_by_manual": "2032-02-01"} and \
+            j["nachher"]["retire_by_manual"] is None, j
+        # Danach folgt es wieder der Herstellung (per Antrag).
+        kid = beantragen(t.w, t.g1, manufactured_on="2024-06").json["antrag"]["id"]
+        assert bestaetigen(t.w, kid).status_code == 200
+        assert (item(t.app, t.g1)["retire_by"], item(t.app, t.g1)["retire_by_manual"]) == ("2034-06-01", None)
+        # Herstellung und Lebensende in einem Antrag: die Grenze ist die neue Rechnung.
+        kid = beantragen(t.w, t.g1, retire_by="2031-01-01").json["antrag"]["id"]
+        assert bestaetigen(t.w, kid).status_code == 200
+        r = beantragen(t.w, t.g1, manufactured_on="2024-03", retire_by="2034-06-01")
+        assert r.status_code == 400 and "01.03.2034" in r.json["error"], r.get_json()
+        # Dasselbe Datum, das die neue Herstellung ohnehin ergäbe, ohne von Hand gesetztes: kein Lebensende-Antrag.
+        kid = beantragen(t.w, t.g1, retire_by="2034-06-01").json["antrag"]["id"]
+        assert bestaetigen(t.w, kid).status_code == 200 and item(t.app, t.g1)["retire_by_manual"] is None
+        r = beantragen(t.w, t.g1, manufactured_on="2024-03", retire_by="2034-03-01")
+        assert r.status_code == 400 and "ergibt sich schon" in r.json["error"], r.get_json()
+        kid = beantragen(t.w, t.g1, manufactured_on="2024-03", retire_by="2033-03-01").json["antrag"]["id"]
+        assert bestaetigen(t.w, kid).status_code == 200
+        assert (item(t.app, t.g1)["retire_by"], item(t.app, t.g1)["retire_by_manual"]) == ("2033-03-01", "2033-03-01")
+        # Beim Bestätigen gilt die Rechnung von dann: Der Katalog verkürzt die Lebensdauer, der Antrag geht nicht mehr.
+        r = beantragen(t.w, t.g1, retire_by="2034-01-01")
+        assert r.status_code == 201, r.get_json()
+        kid = r.json["antrag"]["id"]
+        sql(t.app, "UPDATE mat_product SET lifetime_years = 9 WHERE id = ?", (t.ids["gurt"],))
+        r = bestaetigen(t.w, kid)
+        assert r.status_code == 400 and "01.03.2033" in r.json["error"], r.get_json()
+        assert ablehnen(t.w, kid, antwort="Platzhalter").status_code == 200
+    print("Lebensende nach hinten bestanden.")
+
+
+def test_trigger_24():
+    """Schritt 24: retire_by_manual wird nur mit einem bestätigten Antrag leer, dessen neuer Wert das wirksame Lebensende
+    derselben Anweisung ist; die Zeile ist danach angewendet. Alles andere wie Schritt 23."""
+    with post(), tempfile.TemporaryDirectory() as tmp:
+        t = aufbau(tmp)
+        kid = beantragen(t.w, t.g1, retire_by="2030-05-01").json["antrag"]["id"]
+        assert bestaetigen(t.w, kid).status_code == 200
+        conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
+        wart = t.k["wart_id"]
+
+        def geht_nicht(befehl, args=()):
+            try:
+                conn.execute(befehl, args)
+            except sqlite3.IntegrityError as e:
+                assert "seit seiner ersten Prüfung fest" in str(e), (befehl, e)
+                return
+            raise AssertionError(befehl)
+
+        try:
+            leeren = "UPDATE mat_item SET retire_by_manual = NULL, retire_by = ? WHERE id = ?"
+            geht_nicht(leeren, ("2034-01-01", t.g1))                      # ohne Antrag
+            kz = conn.execute("INSERT INTO mat_item_change (item_id, field, old_value, new_value, reason, created_by, "
+                              "created_by_name, created_at) VALUES (?, 'retire_by', '2030-05-01', '2034-01-01', "
+                              "'Platzhalter', ?, 'wart', '2026-10-25T08:00:00+00:00')", (t.g1, wart)).lastrowid
+            geht_nicht(leeren, ("2034-01-01", t.g1))                      # offen, nicht bestätigt
+            conn.execute("UPDATE mat_item_change SET status = 'bestaetigt', resolved_by = ?, resolved_by_name = 'wart', "
+                         "resolved_at = '2026-10-25T09:00:00+00:00' WHERE id = ?", (wart, kz))
+            geht_nicht(leeren, ("2033-01-01", t.g1))                      # anderes wirksames Lebensende
+            geht_nicht("UPDATE mat_item SET retire_by_manual = '2032-01-01', retire_by = '2032-01-01' WHERE id = ?",
+                       (t.g1,))                                           # anderer von Hand gesetzter Wert
+            conn.execute(leeren, ("2034-01-01", t.g1))
+            assert conn.execute("SELECT applied_at FROM mat_item_change WHERE id = ?", (kz,)).fetchone()[0]
+            geht_nicht("UPDATE mat_item SET retire_by_manual = '2030-05-01', retire_by = '2030-05-01' WHERE id = ?",
+                       (t.g1,))                                           # verbraucht, nicht zurück
+            conn.rollback()
+        finally:
+            conn.close()
+    print("Trigger 24 bestanden.")
+
+
+def test_migration_24():
+    """23 → 24: nur die zwei Artikeltrigger ändern sich (gleiche Namen), keine Tabelle, keine Zeile; zweiter Lauf
+    nichts; ein frischer Stand 24 hat dieselben Trigger."""
+    from app.material import models
+    with tempfile.TemporaryDirectory() as frisch:
+        make_app(frisch)
+        v, t_frisch, _ = _schema(os.path.join(frisch, "stroemis.db"))
+        assert v == endversion() == "24", v
+    with post(), tempfile.TemporaryDirectory() as tmp:
+        t = bis_schritt(23)(aufbau, tmp)
+        kid = beantragen(t.w, t.g1, retire_by="2030-05-01").json["antrag"]["id"]
+        pfad = os.path.join(tmp, "stroemis.db")
+        alt = zeilen(t.app, "SELECT * FROM mat_item_change ORDER BY id")
+        vorher = _zahlen(pfad)
+        v23, t23, _ = _schema(pfad)
+        assert v23 == "23", v23
+        make_app(tmp)
+        v24, t24, _ = _schema(pfad)
+        assert v24 == "24" and set(t24) == set(t23), set(t24) ^ set(t23)
+        assert {n for n in t24 if t24[n] != t23[n]} == {"mat_item_stammdaten_fest", "mat_item_antrag_angewendet"}
+        assert t24 == t_frisch
+        assert zeilen(t.app, "SELECT * FROM mat_item_change ORDER BY id") == alt and _zahlen(pfad) == vorher
+        conn = sqlite3.connect(pfad)
+        conn.execute("BEGIN")
+        n = conn.total_changes
+        models._schritt_24(conn)
+        assert conn.total_changes == n and _schema_in(conn) == t24
+        conn.rollback()
+        conn.close()
+        # Der offene Antrag aus Stand 23 wirkt nach dem Umstieg wie zuvor.
+        assert bestaetigen(t.w, kid).status_code == 200 and item(t.app, t.g1)["retire_by_manual"] == "2030-05-01"
+    print("Migration 23 → 24 bestanden.")
 
 
 # --- 6. Produktjournal am Artikel (E8), Seiten, Mailprotokoll ---------------------------------------------------------
@@ -633,6 +773,9 @@ def test_oberflaeche_statisch():
     for feld in ("aa-sn", "aa-herst", "aa-kauf", "aa-erst", "aa-ende", "aa-int", "aa-grund", "aa-anders"):
         assert f'id="{feld}"' in antrag_dlg or f'datumFeld("{feld}"' in antrag_dlg, feld
     assert "produktFolgen(a, neuesProdukt)" in antrag_dlg
+    # Lebensende auch wieder nach hinten (25.10.2026): Hilfe am Feld mit der Rechnung, kein „nur vorziehen“ mehr.
+    assert "Lebensende (nur vorziehen)" not in antrag_dlg and 'id="aa-ende-hilfe"' in antrag_dlg
+    assert "a.lebensdauer.berechnet" in antrag_dlg and "höchstens bis" in antrag_dlg
     artikel = js[js.index("async function artikel()"):js.index("function artikelDialog(a,")]
     assert "Seriennummer und Herstellung stehen seit der ersten Prüfung fest – eine Abweichung beantragst du" not in js
     assert "darf.pruefen" in artikel and 'data-act="entscheiden"' not in artikel
@@ -651,6 +794,9 @@ if __name__ == "__main__":
     test_bearbeiten()
     test_trigger_23()
     test_migration_23()
+    test_lebensende_nach_hinten()
+    test_trigger_24()
+    test_migration_24()
     test_produktaenderung_am_artikel()
     test_seiten()
     test_oberflaeche_statisch()

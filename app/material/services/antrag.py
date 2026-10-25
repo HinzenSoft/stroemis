@@ -3,7 +3,7 @@
 
 Seit der ersten abgeschlossenen Prüfung stehen die Stammdaten eines Artikels fest (bestand.FREIGABEPFLICHTIG, Trigger
 mat_item_stammdaten_fest und mat_item_produkt_fest) – sie stehen im Prüfprotokoll: Produkt, Seriennummer, Herstellung,
-Kauf, Erstgebrauch, Lebensende (auch vorziehen) und das Prüfintervall am Artikel (E1). Direkt bleiben Bemerkung, Länge
+Kauf, Erstgebrauch, Lebensende (vorziehen und wieder nach hinten) und das Prüfintervall am Artikel (E1). Direkt bleiben Bemerkung, Länge
 und das Vorziehen der nächsten Prüfung – durch Materialwart und Prüfer (E2, bestand.artikel_aendern). Jede andere
 Änderung – auch eine STR-Nummer durch die echte Herstellernummer ersetzen, auch ein leeres Feld nachtragen (E3), auch das
 Produkt wechseln (E4) – wird mit BEGRÜNDUNG BEANTRAGT.
@@ -26,7 +26,8 @@ Journal zeigen offene Anträge wie bisher jedem, der den Artikel liest (ohne Beg
 Geprüft wird beim Antrag UND beim Bestätigen (der Stand kann sich geändert haben) – der GESAMTE neue Stand nach den
 Regeln des Anlegens (bestand.artikel_werte): Herstellung nicht in der Zukunft, nicht nach Kauf und Erstgebrauch, bei
 textil Pflicht, nie leer; Seriennummer nicht leer, keine STR-Nummer, je Produkt frei; Intervall nicht über der
-Herstellervorgabe; Lebensende nur textil und nur vorziehen; Produkt nicht an Sets und Teilen, nicht auf ein Set-Produkt,
+Herstellervorgabe; Lebensende nur textil und höchstens bis zur Rechnung aus Herstellung und Lebensdauer (Wunsch vom
+25.10.2026: auch wieder nach hinten); Produkt nicht an Sets und Teilen, nicht auf ein Set-Produkt,
 nicht mit offenem Prüfentwurf, nicht über die DEMO-Grenze. Beim Bestätigen muss der Artikel jeden alten Wert noch tragen,
 sonst 409 – der Antrag lässt sich dann nur noch ablehnen. Bestätigt oder abgelehnt wird der ganze Sammelantrag, in einer
 Transaktion; der Trigger lässt genau die beantragten Änderungen zu und markiert jede Zeile als angewendet (applied_at).
@@ -78,7 +79,9 @@ STAND_ANDERS = ("Der Artikel trägt inzwischen nicht mehr den Wert, den der Antr
                 "Antragsteller kann neu beantragen.")
 NUR_ABLEHNEN = "Der Artikel ist inzwischen ausgesondert – den Antrag kannst du nur noch ablehnen."
 HERSTELLUNG_BLEIBT = "Das Herstelldatum lässt sich nicht entfernen – nur auf Antrag ändern (neues Datum angeben)."
-LEBENSENDE_BLEIBT = "Das Lebensende lässt sich nicht entfernen – nur vorziehen (neues Datum angeben)."
+LEBENSENDE_BLEIBT = "Das Lebensende lässt sich nicht entfernen – bitte ein neues Datum angeben."
+LEBENSENDE_SCHON = ("Dieses Lebensende ergibt sich schon aus den übrigen Änderungen – bitte das Feld „Lebensende“ "
+                    "unverändert lassen.")
 SERIE_BLEIBT = "Die Seriennummer lässt sich nicht entfernen – bitte die neue Nummer angeben."
 NUR_TEXTIL = "Ein Lebensende gibt es nur bei textilem Material."
 ENTFERNEN_ALT = ("Ein Herstelldatum lässt sich nicht mehr entfernen (Entscheidung vom 21.10.2026) – diesen älteren Antrag "
@@ -386,17 +389,24 @@ def _plan(item, wuensche):
     if "serial_no" in wuensche and item["serial_generated"]:
         setzen["serial_generated"] = 0            # eine echte Herstellernummer ersetzt die vergebene
     # Lebensende (nur textil): Rechnung aus Herstellung und Lebensdauer; ein von Hand gesetztes gilt, solange es früher
-    # liegt. Beantragt wird nur vorziehen – nie über die Rechnung und nie über das heutige Lebensende hinaus.
+    # liegt. Beantragt wird ein Datum bis höchstens zur Rechnung – vorziehen oder ein vorgezogenes wieder nach hinten
+    # (Wunsch vom 25.10.2026). Genau die Rechnung heißt: nicht mehr von Hand gesetzt (retire_by_manual leer, es folgt
+    # wieder Herstellung und Katalog). Textiles Material hat immer Herstellung und Lebensdauer (Pflicht, CHECK).
     textil = p["material_kind"] == "textil"
     manuell = item["retire_by_manual"]
     if "retire_by" in wuensche:
         if not textil:
             raise Abgelehnt(NUR_TEXTIL)
         rechnung = lebensende(w["manufactured_on"], p["lifetime_years"])
-        grenze = min(rechnung, item["retire_by"]) if item["retire_by"] and "product_id" not in wuensche else rechnung
-        if wuensche["retire_by"] >= grenze:
-            raise Abgelehnt(f"Das Lebensende lässt sich nur vorziehen (vor {wert_text('retire_by', grenze)}).")
-        manuell = wuensche["retire_by"]
+        wunsch = wuensche["retire_by"]
+        if rechnung and wunsch > rechnung:
+            raise Abgelehnt(f"Das Lebensende lässt sich höchstens bis zur Rechnung aus Herstellung und Lebensdauer "
+                            f"setzen ({wert_text('retire_by', rechnung)}).")
+        manuell = None if wunsch == rechnung else wunsch
+        if manuell == item["retire_by_manual"]:
+            # Der Trigger verlangt, dass ein Antrag auf das Lebensende das von Hand gesetzte ändert (sonst bliebe die
+            # Zeile unangewendet) – gleich bleibt es nur, wenn eine andere Änderung das Lebensende schon dahin bringt.
+            raise Abgelehnt(LEBENSENDE_SCHON)
     if textil and {"retire_by", "product_id", "manufactured_on"} & set(wuensche):
         ende = bestand._lebensende_wirksam(lebensende(w["manufactured_on"], p["lifetime_years"]), manuell)
         if ende != item["retire_by"]:

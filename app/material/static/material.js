@@ -3447,6 +3447,10 @@
   // Produkt mit „anderes Produkt“ und seinen Folgen (nicht an Set und Teil). Begründung Pflicht.
   function antragDialog(a) {
     const textil = a.produkt.material_kind === "textil";
+    // Lebensende (Wunsch vom 25.10.2026): vorziehen oder ein vorgezogenes wieder nach hinten – höchstens bis zur
+    // Rechnung aus Herstellung und Lebensdauer (genau die Rechnung: nicht mehr von Hand gesetzt).
+    const berechnet = a.lebensdauer && a.lebensdauer.berechnet;
+    const endeHilfe = berechnet ? `Vorziehen oder wieder nach hinten – höchstens bis ${esc(fmtTag(berechnet))} (Herstellung + ${a.lebensdauer.jahre} Jahre).` : "";
     const mitProdukt = !!a.produkt_beantragbar;
     // Ein laufender Rückruf mit Seriennummernliste trifft den Artikel über seine Nummer – mit einer neuen nicht mehr.
     const rueckrufe = (a.rueckrufe || []).filter((r) => !r.alle);
@@ -3463,7 +3467,7 @@
         <div><label for="aa-herst">Herstellung (Monat)</label>${datumFeld("aa-herst", a.manufactured_on, "monat")}</div></div>
       <div class="field-row"><div><label for="aa-kauf">Kauf (Monat)</label>${datumFeld("aa-kauf", a.purchased_on, "monat")}</div>
         <div><label for="aa-erst">Erstgebrauch (Monat)</label>${datumFeld("aa-erst", a.first_use_on, "monat")}</div></div>
-      <div class="field-row"><div id="aa-ende-feld"${textil ? "" : " hidden"}><label for="aa-ende">Lebensende (nur vorziehen)</label>${datumFeld("aa-ende", a.retire_by, "tag")}</div>
+      <div class="field-row"><div id="aa-ende-feld"${textil ? "" : " hidden"}><label for="aa-ende">Lebensende</label>${datumFeld("aa-ende", a.retire_by, "tag")}${endeHilfe ? `<div class="help" id="aa-ende-hilfe">${endeHilfe}</div>` : ""}</div>
         <div><label for="aa-int">Prüfintervall am Artikel (Monate)</label><input type="number" id="aa-int" min="1" max="120" value="${a.interval_months || ""}" placeholder="vom Produkt/Ordner"></div></div>
       ${rueckrufe.length ? `<p class="notice small">Artikel ist von ${rueckrufe.length > 1 ? "den Rückrufen" : "Rückruf"} ${rueckrufe.map((r) => `„${esc(r.title)}“`).join(", ")} betroffen – nach einer Änderung der Seriennummer ${rueckrufe.length > 1 ? "treffen sie" : "trifft der Rückruf"} ihn nicht mehr (außer die neue Nummer steht ebenfalls in seiner Liste).</p>` : ""}
       <label for="aa-grund">Begründung (Pflicht)</label>
@@ -3486,7 +3490,7 @@
         const folgen = $("#aa-folgen", body);
         folgen.innerHTML = neuesProdukt ? `<p>Neues Produkt: ${esc(produktName(neuesProdukt))}. Nach der Bestätigung:</p><ul>${produktFolgen(a, neuesProdukt).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "";
         folgen.hidden = !neuesProdukt;
-        // Das Lebensende rechnet nach dem neuen Produkt – vorziehen lässt es sich dann mit einem späteren Antrag.
+        // Das Lebensende rechnet nach dem neuen Produkt – ändern lässt es sich dann mit einem späteren Antrag.
         $("#aa-ende-feld", body).hidden = !textil || Boolean(neuesProdukt);
       }
       function suchen() { $("#aa-wahl", body).hidden = false; fehler(""); fokus($("#aa-q", body)); }

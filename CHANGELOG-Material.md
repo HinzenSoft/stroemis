@@ -21,7 +21,7 @@ für sich deploybar.
 | Feintuning nach dem Kommentar-Dokument | Produkt am Artikel ändern bis zur ersten Prüfung (Dialog „Bearbeiten“, Weg aus „aus dem Bestand wählen“), Jahresbericht: ausgesondertes Set als eine Zeile, weitergeführte Teile mit eigener Sperre | gebaut 23.10.2026 (Schema bleibt 21) – wartet auf Freigabe |
 | Katalogimport im Hintergrund | Probelauf und Übernehmen laufen als Auftrag im Hintergrund (202, Stand per Abfrage, Bericht wie bisher), „Übernehmen“ ohne neuen Upload, höchstens ein Import gleichzeitig, Abbruch bei Neustart erkannt, Hinweis auf der Katalogseite; Nachbesserung nach der Sicherheitsprüfung (Kontoverweis statt Kontokennung und Name, Plattenplatz, Übernehmen nach Abbruch wiederholbar, dev-zuruecksetzen wartet) | gebaut 24.10.2026 (kein Schemaschritt, Schema bleibt 21) – wartet auf Freigabe |
 | Sets anlegen und Stückliste übertragen (Schritt 22) | Knopf „Set anlegen“ (Produkt und Stückliste in einem Zug, mindestens ein einzeln geführtes Teil), Umstellen Produkt ↔ Set nur per Katalogdatei, „Stückliste übertragen“ auf angelegte Sets mit Vorschau, Fehlendes Produkt oder Set melden, Begriff „Set“, Ordnerart „Set-Ordner“ | gebaut 24.10.2026, wartet auf Prüfung und Freigabe |
-| Änderungsanträge an alle Stammdaten (Schritt 23) | Freigabepflichtig nach der ersten Prüfung: Produkt, Seriennummer, Herstellung, Kauf, Erstgebrauch, Lebensende, Prüfintervall – als ein Sammelantrag; entscheiden die Materialwarte des Ordners (auch den eigenen Antrag, die Material-Verwaltung nur mit eigener Verwalterfreigabe); Liste „Änderungsanträge“ im Bestand, Katalog → Meldungen nur Produkt- und Set-Meldungen; Prüfer bearbeiten Bemerkung, Länge, nächste Prüfung; Produktänderungen im Lebenslauf | gebaut 24.10.2026, wartet auf Prüfung und Freigabe |
+| Änderungsanträge an alle Stammdaten (Schritt 23) | Freigabepflichtig nach der ersten Prüfung: Produkt, Seriennummer, Herstellung, Kauf, Erstgebrauch, Lebensende, Prüfintervall – als ein Sammelantrag; entscheiden die Materialwarte des Ordners (auch den eigenen Antrag, die Material-Verwaltung nur mit eigener Verwalterfreigabe); Liste „Änderungsanträge“ im Bestand, Katalog → Meldungen nur Produkt- und Set-Meldungen; Prüfer bearbeiten Bemerkung, Länge, nächste Prüfung; Produktänderungen im Lebenslauf; Nachtrag 25.10.2026 (Schritt 24): Lebensende per Antrag auch wieder nach hinten bis zur Rechnung | gebaut 24.10.2026, Nachtrag 25.10.2026, wartet auf Prüfung und Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4316,11 +4316,39 @@ auf dem Zweig `sets-l2c` (Schema 22). **Schema 23.**
 - „Änderung beantragen …“ bleibt auf der Artikelseite in den Stammdaten für alle, die beantragen dürfen (auch den
   Materialwart) – zusätzlich zum Knopf im Dialog „Bearbeiten“; nur der Hilfetext darunter ist weg.
 
+### Nachtrag: Lebensende per Antrag auch nach hinten (Entscheidung des Nutzers, 25.10.2026, Schritt 24)
+
+- **Antrag**: Das Feld „Lebensende“ (vorher „Lebensende (nur vorziehen)“) nimmt jedes Datum bis zur Rechnung aus
+  Herstellung und Lebensdauer – vorziehen wie bisher, ein vorgezogenes wieder nach hinten. Die Hilfe am Feld nennt die
+  Grenze („Vorziehen oder wieder nach hinten – höchstens bis TT.MM.JJJJ (Herstellung + n Jahre).“); darüber 400
+  „Das Lebensende lässt sich höchstens bis zur Rechnung aus Herstellung und Lebensdauer setzen (TT.MM.JJJJ).“ Ändert
+  derselbe Antrag die Herstellung (oder das Produkt), gilt die neue Rechnung; beim Bestätigen wird noch einmal mit der
+  Rechnung von dann geprüft (eine inzwischen verkürzte Lebensdauer → 400, der Antrag lässt sich nur noch ablehnen).
+- **Genau auf die Rechnung** heißt: nicht mehr von Hand gesetzt – `retire_by_manual` wird leer, das Lebensende folgt
+  danach wieder Herstellung und Katalogkorrekturen; die Artikelseite sagt „n Jahre ab Herstellung“ statt „von Hand
+  vorgezogen“. Ergäbe sich das beantragte Datum ohnehin aus den übrigen Änderungen desselben Antrags, lehnt der Server
+  das Feld ab („… bitte das Feld „Lebensende“ unverändert lassen.“) – sonst bliebe die Antragszeile unangewendet.
+- `GET /api/material/artikel/<id>`: `lebensdauer.berechnet` (die Rechnung, für die Hilfe im Dialog).
+- **Schritt 24** (wiederholbar): Die Trigger aus 23 kannten beim Lebensende nur „neuer Wert = `retire_by_manual`“, und
+  der neue Wert eines Antrags ist nie leer (CHECK) – das Zurücksetzen auf die Rechnung ging deshalb nicht ohne neuen
+  Schritt. `mat_item_stammdaten_fest` und `mat_item_antrag_angewendet` (gleiche Namen ersetzt, `TRIGGER_24_ARTIKEL`)
+  decken zusätzlich: `retire_by_manual` wird leer **und** das wirksame `retire_by` derselben Anweisung ist der beantragte
+  Wert – weiterhin nur mit bestätigtem, noch nicht angewendetem Antrag mit genau diesem alten Wert, und nur einmal.
+  Sonst alles wie Schritt 23; keine Tabelle, keine Zeile. Die Bedingung schwächt nichts ab: Ohne Antrag bleibt
+  `retire_by_manual` nach der ersten Prüfung fest.
+- Geprüft: frisch (Trigger gleich dem Stand nach 23 → 24), 23 → 24 mit offenem Antrag (wird danach bestätigt), zweiter
+  Lauf ohne Änderung (`test_material_antrag_zustaendig.test_migration_24`); Trigger an der Schnittstelle vorbei
+  (`test_trigger_24`); Ablauf `test_lebensende_nach_hinten`.
+- **Rückweg** auf Schema 23: die zwei Trigger in der Fassung `TRIGGER_23_ARTIKEL[0]` und `[2]` neu anlegen und
+  `schema_version` auf 23 – Artikel mit leerem `retire_by_manual` nach einem Rücksetzen stören Code 23 nicht.
+- Unverändert: Vor der ersten Prüfung lässt der Dialog „Bearbeiten“ das Lebensende weiterhin nur vorziehen (siehe
+  „Bitte bestätigen“ im Abschnitt „Wünsche vom 25.10.2026“).
+
 ### Bitte bestätigen
 
-1. Ein Lebensende lässt sich per Antrag nur **vorziehen** (nicht zurück auf die Rechnung oder später) – wie bisher
-   direkt. Soll ein Antrag ein irrtümlich vorgezogenes Lebensende auch wieder nach hinten (höchstens bis zur Rechnung aus
-   Herstellung und Lebensdauer) setzen dürfen?
+1. ~~Ein Lebensende lässt sich per Antrag nur **vorziehen** …~~ **Entschieden am 25.10.2026:** Ein Antrag darf ein
+   vorgezogenes Lebensende auch wieder nach hinten setzen, höchstens bis zum berechneten Lebensende (Herstellung +
+   Lebensdauer des Produkts) – umgesetzt mit Schritt 24, siehe „Nachtrag: Lebensende per Antrag auch nach hinten“.
 2. Prüfer bearbeiten Bemerkung, Länge und nächste Prüfung auch **vor** der ersten Prüfung (Entscheidung E2 nennt keinen
    Zeitpunkt); die übrigen Felder bleiben dann dem Materialwart.
 3. Die Zahl an „Änderungsanträge“ und auf der Übersicht zählt die eigenen offenen Anträge mit, wenn man zuständig ist.
