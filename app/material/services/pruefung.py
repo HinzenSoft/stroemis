@@ -66,6 +66,11 @@ LAENGE_GEAENDERT = ("Die Länge am Artikel wurde während der Prüfung auf {laen
                     "bestätigen (der Prüfpunkt zeigt jetzt die neue Länge).")
 UNTERSCHRIFT_FEHLT = ("Zum Festschreiben fehlt deine Unterschrift – bitte im Profil hinterlegen "
                       "oder direkt hier unterschreiben.")
+# Seriennummern der Bestandteile (Schritt 25, Nachbesserung nach den Prüfungen vom 25.10.2026).
+TEIL_POSITION_WEG = ("Die Bestandteil-Liste des Produkts hat sich seit Beginn der Prüfung geändert – diese Position gibt es "
+                     "so nicht mehr; ihre Seriennummer lässt sich hier nicht mehr eintragen.")
+TEILNUMMER_GEAENDERT = ("Die Seriennummer am Artikel wurde während der Prüfung geändert ({stellen}) – bitte deine Eingabe "
+                        "prüfen (das Feld zeigt jetzt „bisher“ mit dem neuen Stand) und erneut abschließen.")
 
 
 def pruefer_aus(user):
@@ -226,14 +231,20 @@ def pruefung_json(p, pruefer_id=None):
         out["formular"] = {"id": p["form_id"], "version": p["form_version"], "titel": f["title"] if f else ""}
     punkte = befunde(p["id"])
     out["punkte"] = [befund_json(r) for r in punkte]
-    if out["entwurf"] and not p["corrects_inspection_id"]:
-        # Seriennummern der Bestandteile: im Entwurf „alt“ wie am Artikel heute (ein Antrag kann sie inzwischen geändert
-        # haben) – beim Festschreiben gilt ohnehin der Stand dann (_teilnummern_uebernehmen).
+    if out["entwurf"]:
+        # Seriennummern der Bestandteile: im Entwurf einer Prüfung „alt“ wie am Artikel heute (ein Antrag kann sie
+        # inzwischen geändert haben) – beim Festschreiben gilt ohnehin der Stand dann (_teilnummern_uebernehmen; hat sich
+        # eine Nummer seit dem Eintrag geändert, fragt abschliessen nach). Eine Berichtigung zeigt die Werte des
+        # Originals und dazu „artikel“, den Stand am Artikel heute.
         from . import teilnummern
         jetzt = teilnummern.nummern(item["id"])
         for x, r in zip(out["punkte"], punkte):
             for n in x["nummern"]:
-                n["alt"] = jetzt.get((r["component_id"], n["stueck"]), "")
+                heute_ = jetzt.get((r["component_id"], n["stueck"]), "")
+                if p["corrects_inspection_id"]:
+                    n["artikel"] = heute_
+                    continue
+                n["alt"] = heute_
                 n["wert"] = n["neu"] if n["neu"] is not None else n["alt"]
     out["anhaenge"] = [anhang_json(a) for a in anhaenge(p["id"])]
     from . import durchgang
@@ -519,62 +530,160 @@ def punkt_setzen(pid, rid, d, pruefer):
     return befund_json(_befund(pid, rid))
 
 
+def _position_passt(r, z, serien):
+    """Ist z (eine Position der heutigen Bestandteil-Liste, kurzliste) noch die Position der Prüfzeile r? Die Kennung
+    allein reicht nicht – eine entfallene Position kann ihre Kennung an eine neue abgeben (Prüfung Ablauf, B1); deshalb
+    auch die Bezeichnung: der Text der Zeile gegen den, den die heutige Position mit der Anzahl beim Start hätte (ohne
+    Groß und klein und Leerraum, wie beim Ersetzen der Liste)."""
+    from .stueckliste import _schluessel, zeile_text
+    return bool(z) and _schluessel(r["checklist_text"]) == _schluessel(zeile_text(z["bezeichnung"], len(serien)))
+
+
+def _original_serien(p, r):
+    """Bei einer Berichtigung: die Seriennummern derselben Zeile im Original (je Stück {alt, neu}) – leer sonst."""
+    if not p["corrects_inspection_id"]:
+        return []
+    o = db.query("SELECT component_id, component_serials FROM mat_inspection_result WHERE inspection_id = ? "
+                 "AND component_id = ? AND checklist_text = ?",
+                 (p["corrects_inspection_id"], r["component_id"], r["checklist_text"]), one=True)
+    return _serien(o) if o else []
+
+
+def _wirksam(x):
+    """Die Nummer, die ein Stück nach seiner Prüfung trug: die eingetragene, sonst die bisherige ("" für keine)."""
+    return (x.get("neu") if x.get("neu") is not None else x.get("alt")) or ""
+
+
 def _serien_setzen(p, r, roh):
     """Seriennummern der Bestandteile an einer Zeile „… vorhanden“ (Schritt 25): je Stück der Text („“ heißt keine
-    Nummer). Was der Prüfer nicht ändert (gleich dem Stand am Artikel – bei einer Berichtigung dem des Originals), bleibt
-    unberührt (neu null). Übernommen wird beim Festschreiben (_teilnummern_uebernehmen)."""
+    Nummer). Was der Prüfer nicht ändert, bleibt unberührt (neu null) – gleich ist es dem Stand am Artikel, den der
+    Eintrag als „alt“ mitmerkt (beim Festschreiben verglichen, _teilnummern_konflikte). Bei einer Berichtigung ist
+    „unverändert“ der wirksame Wert des Originals – dann gilt wieder dessen Eintrag (Prüfung Ablauf B2). Übernommen wird
+    beim Festschreiben (_teilnummern_uebernehmen). Gibt es die Position so nicht mehr, 409."""
+    from . import stueckliste, teilnummern
     serien = _serien(r)
     if not serien:
         raise Abgelehnt("Dieser Prüfpunkt nimmt keine Seriennummern auf.")
     if not isinstance(roh, list) or len(roh) != len(serien):
         raise Abgelehnt(f"„seriennummern“: je Stück ein Text ({len(serien)}).")
-    jetzt = {}
-    if not p["corrects_inspection_id"]:
-        from . import teilnummern
-        jetzt = teilnummern.nummern(p["item_id"])
+    item = bestand.artikel(p["item_id"])
+    z = next((z for z in stueckliste.kurzliste(item["product_id"]) if z["id"] == r["component_id"]), None)
+    if not _position_passt(r, z, serien):
+        raise Abgelehnt(TEIL_POSITION_WEG, 409)
+    jetzt = teilnummern.nummern(p["item_id"])
+    original = _original_serien(p, r)
     for n, (x, wert) in enumerate(zip(serien, roh), start=1):
         wert = text({"w": wert}, "w", "Seriennummer" + (f" (Stück {n})" if len(serien) > 1 else ""), SERIE_MAX)
-        bisher = (x.get("alt") or "") if p["corrects_inspection_id"] else jetzt.get((r["component_id"], n), "")
+        if p["corrects_inspection_id"]:
+            o = original[n - 1] if n <= len(original) else {"alt": x.get("alt"), "neu": None}
+            if wert == _wirksam(o):
+                x["alt"], x["neu"] = o.get("alt"), o.get("neu")      # wie im Original
+            else:
+                x["neu"] = wert
+            continue
+        bisher = jetzt.get((r["component_id"], n), "")
+        x["alt"] = bisher
         x["neu"] = None if wert == bisher else wert
     db.execute("UPDATE mat_inspection_result SET component_serials = ? WHERE id = ?",
                (json.dumps(serien, ensure_ascii=False), r["id"]))
 
 
+def _teilnummern_konflikte(p, item, punkte):
+    """Stück, an denen der Prüfer eine Nummer eingetragen hat, während die Nummer am Artikel seither eine andere wurde
+    (ein bestätigter Antrag, vor der ersten Prüfung das Bearbeiten): [(Zeile, Stück, Nummer jetzt)] – wie bei der Länge
+    (_laenge_konflikte) schriebe sonst der Eintrag still über die neuere Nummer (Prüfung Ablauf, B4). Nicht für eine
+    Berichtigung (ihr „alt“ ist ohnehin der Stand am Artikel) und nicht, wo nichts übernommen würde."""
+    if p["corrects_inspection_id"]:
+        return []
+    from . import stueckliste, teilnummern
+    zeilen = [r for r in punkte if _serien(r) and r["finding"] != "nicht_zutreffend"]
+    if not zeilen:
+        return []
+    jetzt = teilnummern.nummern(item["id"])
+    positionen = {z["id"]: z for z in stueckliste.kurzliste(item["product_id"])}
+    out = []
+    for r in zeilen:
+        serien = _serien(r)
+        z = positionen.get(r["component_id"])
+        if not _position_passt(r, z, serien):
+            continue
+        for nr, x in enumerate(serien, start=1):
+            aktuell = jetzt.get((r["component_id"], nr), "")
+            if nr <= z["anzahl"] and x.get("neu") is not None and x["neu"] != aktuell and (x.get("alt") or "") != aktuell:
+                out.append((r, nr, aktuell))
+    return out
+
+
+def _teilnummern_vormerken(pid, pruefer):
+    """Vor dem Festschreiben, in eigener Transaktion (wie _laenge_vormerken): Hat sich eine Nummer am Artikel geändert,
+    seit der Prüfer an ihrem Stück etwas eingetragen hat, merkt die Zeile den neuen Stand als „alt“ – die Eingabe des
+    Prüfers bleibt. Liefert die Stellen als Text (dann bricht abschliessen mit 409 ab, der Prüfer sieht „bisher“ mit dem
+    neuen Stand und schließt erneut ab) oder None."""
+    with db.transaction(sofort=True):
+        p = _entwurf_des(pid, pruefer)
+        item = bestand.artikel(p["item_id"])
+        konflikte = _teilnummern_konflikte(p, item, befunde(pid))
+        if not konflikte:
+            return None
+        je = {}
+        for r, nr, aktuell in konflikte:
+            je.setdefault(r["id"], _serien(r))[nr - 1]["alt"] = aktuell
+        for rid, serien in je.items():
+            db.execute("UPDATE mat_inspection_result SET component_serials = ? WHERE id = ?",
+                       (json.dumps(serien, ensure_ascii=False), rid))
+        _beruehrt(pid)
+        return _konflikt_text(item, konflikte)
+
+
+def _konflikt_text(item, konflikte):
+    """„Tasche: jetzt AN; …“ – die Stellen aus _teilnummern_konflikte für die Meldung."""
+    from . import teilnummern
+    positionen = teilnummern._beschriftungen(item["product_id"])
+    return "; ".join(f"{teilnummern.journal_form(positionen, r['component_id'], nr, aktuell)['bestandteil']}: "
+                     f"jetzt {aktuell or 'keine'}" for r, nr, aktuell in konflikte)
+
+
 def _teilnummern_uebernehmen(p, item, punkte):
-    """Beim Festschreiben, vor dem Abschluss (Schritt 25): An jeder Zeile „… vorhanden“ wird „alt“ der Stand am Artikel –
-    bei einer Berichtigung bleibt er der des Originals, wie bei der Länge –, und was der Prüfer eingetragen hat („neu“),
-    geht in den Artikel, wenn es sich vom Stand unterscheidet (bei einer Berichtigung nur, was sie gegenüber dem Original
-    ändert). Nicht für „nicht zutreffend“ und nicht für eine Position, die es inzwischen nicht mehr gibt. Der Trigger
-    lässt die Änderung zu, weil der offene Entwurf genau diese Nummer trägt; Journal „bestandteil_nummern“ mit der
-    Prüfung."""
+    """Beim Festschreiben, vor dem Abschluss (Schritt 25): An jeder Zeile „… vorhanden“ wird „alt“ der Stand am Artikel,
+    und was der Prüfer eingetragen hat („neu“), geht in den Artikel, wenn es sich vom Stand unterscheidet. Bei einer
+    Berichtigung bleibt ein Stück, das sie nicht anfasst, wie im Original (alt und neu jenes Prüftags, der Artikel
+    behält seine Nummer); ein angefasstes vergleicht sie mit dem Stand am Artikel – „alt“ ist dann er, auch wenn ein
+    Antrag ihn nach dem Original geändert hat (Prüfung Ablauf B2, Sicherheit S3). Nicht übernommen – „neu“ geleert,
+    damit das Protokoll nur festhält, was am Artikel geschah (Prüfung Ablauf, B3) – wird bei „nicht zutreffend“, an einer
+    Position, die es so nicht mehr gibt (Kennung und Bezeichnung, _position_passt), und an einem Stück über einer
+    gesunkenen Anzahl. Hat sich eine Nummer seit dem Eintrag geändert, hat _teilnummern_vormerken schon abgebrochen
+    (hier nur noch der Wettlauf: 409). Der Trigger lässt die Änderung zu, weil der offene Entwurf genau diese Nummer
+    trägt; Journal „bestandteil_nummern“ mit der Prüfung."""
     from . import stueckliste, teilnummern
     zeilen = [r for r in punkte if _serien(r)]
     if not zeilen:
         return
+    konflikte = _teilnummern_konflikte(p, item, zeilen)
+    if konflikte:
+        raise Abgelehnt(TEILNUMMER_GEAENDERT.format(stellen=_konflikt_text(item, konflikte)), 409)
     jetzt = teilnummern.nummern(item["id"])
     positionen = {z["id"]: z for z in stueckliste.kurzliste(item["product_id"])}
-    original = {}
-    if p["corrects_inspection_id"]:
-        original = {o["component_id"]: _serien(o) for o in db.query(
-            "SELECT component_id, component_serials FROM mat_inspection_result WHERE inspection_id = ? "
-            "AND component_id IS NOT NULL", (p["corrects_inspection_id"],))}
     aenderungen = []
     for r in zeilen:
         serien = _serien(r)
         z = positionen.get(r["component_id"])
+        passt = _position_passt(r, z, serien)
+        original = _original_serien(p, r)
         for nr, x in enumerate(serien, start=1):
             aktuell = jetzt.get((r["component_id"], nr), "")
-            if not p["corrects_inspection_id"]:
-                x["alt"] = aktuell
-            neu = x.get("neu")
-            if neu is None or r["finding"] == "nicht_zutreffend" or not z or nr > z["anzahl"] or neu == aktuell:
+            o = original[nr - 1] if nr <= len(original) else None
+            if o is not None and x.get("neu") == o.get("neu") and (x.get("alt") or "") == (o.get("alt") or ""):
+                continue                   # die Berichtigung lässt das Stück wie im Original
+            if not passt or nr > z["anzahl"] or r["finding"] == "nicht_zutreffend":
+                x["neu"] = None
+                if passt and nr <= z["anzahl"]:
+                    x["alt"] = aktuell
                 continue
-            o = original.get(r["component_id"]) or []
-            if p["corrects_inspection_id"] and nr <= len(o):
-                vorher = o[nr - 1].get("neu") if o[nr - 1].get("neu") is not None else o[nr - 1].get("alt")
-                if (vorher or "") == neu:
-                    continue                   # die Berichtigung lässt die Nummer des Originals stehen
-            aenderungen.append((r["component_id"], nr, aktuell, neu))
+            x["alt"] = aktuell
+            if x.get("neu") is None or x["neu"] == aktuell:
+                x["neu"] = None
+                continue
+            aenderungen.append((r["component_id"], nr, aktuell, x["neu"]))
         db.execute("UPDATE mat_inspection_result SET component_serials = ? WHERE id = ?",
                    (json.dumps(serien, ensure_ascii=False), r["id"]))
     teilnummern.schreiben(item, aenderungen, zusatz={"pruefung": p["id"], "art": p["kind"]})
@@ -827,6 +936,9 @@ def abschliessen(pid, d, pruefer, pruefdatum=None):
     geaendert = _laenge_vormerken(pid, pruefer)
     if geaendert:
         raise Abgelehnt(LAENGE_GEAENDERT.format(laenge=geaendert), 409)
+    geaendert = _teilnummern_vormerken(pid, pruefer)
+    if geaendert:
+        raise Abgelehnt(TEILNUMMER_GEAENDERT.format(stellen=geaendert), 409)
     with protokoll.dateien_sichern(), db.transaction(sofort=True):
         p = _entwurf_des(pid, pruefer)
         item = bestand.artikel(p["item_id"])

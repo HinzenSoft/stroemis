@@ -17,6 +17,8 @@ Beutel hat keine). Regeln, wie sie hier umgesetzt sind (die Trigger aus Schritt 
 
 Journal des Artikels: „bestandteil_nummern“ mit vorher/nachher als Liste {bestandteil, seriennummer} (bestandteil:
 „Tasche“ bzw. „Tasche (Stück 2 von 3)“), dazu die Prüfung oder der Grund."""
+import re
+
 from ... import db
 from ..models import SERIE_MAX
 from . import Abgelehnt, ganzzahl, journal, kennung, text
@@ -29,8 +31,24 @@ GRUND_PRODUKT = "Produkt gewechselt"
 
 
 def stueck_text(bezeichnung, stueck, anzahl):
-    """Die Beschriftung eines Stücks: „Tasche“, bei mehr als einem Stück „Tasche (Stück 2 von 3)“."""
-    return bezeichnung if anzahl <= 1 else f"{bezeichnung} (Stück {stueck} von {anzahl})"
+    """Die Beschriftung eines Stücks: „Tasche“, bei mehr als einem Stück „Tasche (Stück 2 von 3)“ – endet die Bezeichnung
+    selbst mit einer Klammer, „Bestandteil A (rot) – Stück 2 von 3“ (keine doppelte Klammer; Prüfung Browser)."""
+    if anzahl <= 1:
+        return bezeichnung
+    return f"{bezeichnung} – Stück {stueck} von {anzahl}" if bezeichnung.rstrip().endswith(")") \
+        else f"{bezeichnung} (Stück {stueck} von {anzahl})"
+
+
+def gleiche_position(beschriftung, z, stueck):
+    """Nennt die Beschriftung eines Stücks (stueck_text von damals – etwa component_label eines Antrags) noch dieses Stück
+    der Position z (kurzliste)? Gleich heißt: dieselbe Bezeichnung ohne Groß und klein und Leerraum, mit oder ohne
+    „(Stück n von m)“ – die Anzahl darf sich geändert haben, das Stück muss es noch geben. Die Kennung allein reicht
+    nicht: Eine entfallene Position kann sie an eine neue abgeben (Prüfung Ablauf, B1)."""
+    from .stueckliste import _schluessel
+    if not z or stueck > z["anzahl"]:
+        return False
+    b, k = _schluessel(z["bezeichnung"]), _schluessel(beschriftung)
+    return k == b or re.fullmatch(re.escape(b) + rf" (\(stück {stueck} von \d+\)|– stück {stueck} von \d+)", k) is not None
 
 
 def nummern(item_id):

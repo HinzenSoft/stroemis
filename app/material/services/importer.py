@@ -51,6 +51,7 @@ schon geschrieben war (Nachbesserung nach der Sicherheitsprüfung vom 24.10.2026
 """
 import hashlib
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -67,6 +68,8 @@ from ..models import MATERIALARTEN
 from . import Abgelehnt, akteur, heute, journal, katalog, setkopie, stueckliste, text, wahr
 from .faelligkeit import in_kategorie
 from .interval import herstellerseite
+
+log = logging.getLogger(__name__)
 
 FORMAT = "stroemis-material-katalog"
 VERSIONEN = (1, 2)
@@ -734,6 +737,13 @@ def _stuecklisten(lauf):
                 fehlerhaft.add(ort)
                 bericht["fehler"].append(f"{ort} ({name}): {exc}"
                                          + (f" {EINZELN_BEHEBEN}" if str(exc) == stueckliste.EINZELN_PFLICHT else ""))
+            except sqlite3.IntegrityError as exc:
+                # Was die Prüfung im Dienst nicht fängt und erst die Datenbank abweist, ist ein Fehler dieses Produkts –
+                # nicht ein Abbruch des ganzen Imports ohne Fundstelle (Prüfung Sicherheit, S1). Mit dem Fehler wird
+                # ohnehin nichts gespeichert (_durchgang rollt zurück).
+                log.warning("Katalogimport, %s (%s): %s", ort, name, exc)
+                fehlerhaft.add(ort)
+                bericht["fehler"].append(f"{ort} ({name}): {LISTE_ABGEWIESEN}")
     # Entscheidung S3: Ein Set ohne einzeln geführtes Teil ist ein Fehler dieses Produkts – auch „set“: true ohne
     # „bestandteile“ an einem Produkt, das noch keine Stückliste hat (ersetzen prüft nur eine mitgeschickte Liste).
     for ort, name, pid, _, _ in angaben:
@@ -742,6 +752,9 @@ def _stuecklisten(lauf):
             bericht["fehler"].append(f"{ort} ({name}): {stueckliste.EINZELN_PFLICHT} – „bestandteile“ mit mindestens einer "
                                      "einzeln geführten Position fehlt. " + EINZELN_BEHEBEN)
 
+
+LISTE_ABGEWIESEN = ("Die Bestandteil-Liste bzw. Stückliste ließ sich nicht speichern – eine Position verletzt eine Regel "
+                    "(etwa eine leere Bezeichnung). Bitte die Positionen dieses Produkts prüfen.")
 
 # Entscheidung F2 (25.10.2026): Eine Bestandteil-Liste ohne „set“: true an einem Produkt, das hier ein Set ist, wird nicht
 # umgestellt – der Import lehnt sie ab, nichts wird gespeichert.

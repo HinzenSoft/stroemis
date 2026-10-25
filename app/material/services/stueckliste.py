@@ -299,7 +299,11 @@ def _flach_ersetzen(p, alt, neu, grund=None):
     Bezeichnung (_schluessel) bleiben dieselbe Zeile – Bezeichnung, Anzahl und Reihenfolge werden nachgezogen –, damit die
     Seriennummern der Bestandteile an den Artikeln bleiben (teilnummern.py); wegfallende Positionen gehen samt ihren
     Nummern (ON DELETE CASCADE), Stück über einer gesunkenen Anzahl ebenso – je betroffenem Artikel vorher ein Eintrag im
-    Journal (teilnummern.entfallen). Journal „bestandteile“ am Produkt (vorher, nachher)."""
+    Journal (teilnummern.entfallen). Neue Positionen werden VOR dem Löschen der wegfallenden geschrieben: Die Kennung
+    (INTEGER PRIMARY KEY ohne AUTOINCREMENT) ginge sonst an die neue Position über, und eine Nummer aus einem offenen
+    Prüfentwurf oder Antrag landete am anderen Bestandteil (Prüfung Ablauf, B1 – wie setkopie). Über mehrere Änderungen
+    hinweg kann eine Kennung trotzdem wiederkommen; Prüfung und Antrag vergleichen deshalb auch die Bezeichnung.
+    Journal „bestandteile“ am Produkt (vorher, nachher)."""
     from . import teilnummern
     bleibt = {_schluessel(r["bezeichnung"]): r for r in alt}
     behalten = set()
@@ -310,9 +314,6 @@ def _flach_ersetzen(p, alt, neu, grund=None):
     teilnummern.entfallen(p["id"], [r for r in alt if r["id"] not in behalten],
                           {bleibt[_schluessel(r["bezeichnung"])]["id"]: r["anzahl"] for r in neu
                            if _schluessel(r["bezeichnung"]) in bleibt})
-    for r in alt:
-        if r["id"] not in behalten:
-            db.execute("DELETE FROM mat_product_component WHERE id = ?", (r["id"],))
     for r in neu:
         z = bleibt.get(_schluessel(r["bezeichnung"]))
         if z:
@@ -322,6 +323,9 @@ def _flach_ersetzen(p, alt, neu, grund=None):
             db.execute("INSERT INTO mat_product_component (set_product_id, component_product_id, bezeichnung, anzahl, "
                        "einzeln, austausch, position) VALUES (?, NULL, ?, ?, 0, 'nicht_belegt', ?)",
                        (p["id"], r["bezeichnung"], r["anzahl"], r["position"]))
+    for r in alt:
+        if r["id"] not in behalten:
+            db.execute("DELETE FROM mat_product_component WHERE id = ?", (r["id"],))
     # Erst die Anzahl, dann die Stück darüber: Solange das Stück zur Position gehört, schützt der Trigger seine Nummer.
     for r in neu:
         z = bleibt.get(_schluessel(r["bezeichnung"]))

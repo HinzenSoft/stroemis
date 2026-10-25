@@ -63,6 +63,9 @@ def text(d, feld, name, n=200, pflicht=False, einzeilig=True):
         v = re.sub(r"\s{2,}", " ", v)
     else:
         v = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", v)
+    # Nach dem Ersetzen noch einmal: Eine Eingabe nur aus Steuerzeichen ist leer, nicht „ “ (das die Datenbank als leer
+    # abwiese – Prüfung Sicherheit, S1).
+    v = v.strip()
     if pflicht and not v:
         raise Abgelehnt(f"„{name}“ fehlt.")
     if len(v) > n:

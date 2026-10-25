@@ -131,6 +131,18 @@ def alt_am_artikel(item, r):
     return wert_am_artikel(item, r["field"])
 
 
+def teil_passt(item, r, positionen=None):
+    """Gibt es die Position und das Stück einer Antragszeile component_serial noch am Produkt des Artikels – mit derselben
+    Bezeichnung (teilnummern.gleiche_position)? Andere Zeilen passen immer. positionen: {Kennung: Position} (sonst
+    gelesen)."""
+    if r["field"] != "component_serial":
+        return True
+    from . import stueckliste, teilnummern
+    if positionen is None:
+        positionen = {z["id"]: z for z in stueckliste.kurzliste(item["product_id"])}
+    return teilnummern.gleiche_position(r["component_label"], positionen.get(r["component_id"]), r["stueck"])
+
+
 def feld_text(r):
     """Das Feld einer Antragszeile, wie Liste, Mail und Journal es nennen – bei einem Bestandteil mit seiner Bezeichnung
     zum Zeitpunkt des Antrags („Seriennummer Bestandteil „Tasche (Stück 2 von 3)““)."""
@@ -248,8 +260,9 @@ def antrag_json(k, item=None, inhalt=True, rows=None):
     aenderungen = [{"feld": r["field"], "feld_text": feld_text(r), "alt": r["old_value"],
                     "neu": r["new_value"], "alt_text": wert_text(r["field"], r["old_value"]),
                     "neu_text": wert_text(r["field"], r["new_value"]),
-                    # Trägt der Artikel noch den alten Wert? Sonst lässt sich der offene Antrag nur noch ablehnen.
-                    "passt": alt_am_artikel(item, r) == r["old_value"]} for r in rows]
+                    # Trägt der Artikel noch den alten Wert (an derselben Position)? Sonst lässt sich der offene Antrag
+                    # nur noch ablehnen.
+                    "passt": teil_passt(item, r) and alt_am_artikel(item, r) == r["old_value"]} for r in rows]
     out = {f: k[f] for f in ("id", "item_id", "status", "created_at", "resolved_at", "applied_at")}
     out.update({"aenderungen": aenderungen, "felder_text": ", ".join(a["feld_text"] for a in aenderungen),
                 "status_text": ANTRAGSSTATUS[k["status"]], "inhalt": inhalt,
@@ -592,6 +605,10 @@ def bestaetigen(aid, d):
         rows = gruppe(kid)
         if any(r["field"] == "manufactured_on" and not r["new_value"] for r in rows):
             raise Abgelehnt(ENTFERNEN_ALT, 409)
+        # Erst die Position (ihre Kennung kann inzwischen eine andere Position tragen – Bezeichnung mit verglichen), dann
+        # der Wert: Fehlt die Position, sagt das der Satz (Prüfung Sicherheit, Verbesserung), nicht „Wert anders“.
+        if not all(teil_passt(item, r) for r in rows):
+            raise Abgelehnt(TEIL_WEG, 409)
         if any(alt_am_artikel(item, r) != r["old_value"] for r in rows):
             raise Abgelehnt(STAND_ANDERS, 409)
         wuensche = _wuensche_der(rows)
@@ -709,7 +726,8 @@ def _kopfzeilen(item):
 
 
 def _aenderungen_text(rows):
-    return [f"{feld_text(r) + ':':<15}{wert_text(r['field'], r['old_value'])} → "
+    # Auf 15 Zeichen aufgefüllt, mindestens ein Leerzeichen nach dem Doppelpunkt (lange Feldnamen der Bestandteile).
+    return [f"{feld_text(r) + ':':<14} {wert_text(r['field'], r['old_value'])} → "
             f"{wert_text(r['field'], r['new_value'])}" for r in rows]
 
 

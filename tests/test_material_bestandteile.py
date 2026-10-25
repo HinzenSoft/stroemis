@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_material import (H, abschluss, festschreiben, gliederung, jpeg, katalog_grund, make_app,  # noqa: E402
                            neuer_artikel, pruef_formulare, punkte_von, starten, umgebung)
-from test_material_antrag import beantragen, bestaetigen, journal, post  # noqa: E402
+from test_material_antrag import ablehnen, beantragen, bestaetigen, journal, post  # noqa: E402
 from test_material_sets import _importieren, _schema, abgewiesen, roh, set_katalog  # noqa: E402
 from test_material_trennung import bis_schritt, endversion, zeilen  # noqa: E402
 
@@ -551,6 +551,229 @@ def test_katalogdatei():
 
 
 # --- Oberfläche (statisch) -----------------------------------------------------------------------------------------------
+
+# --- Nachbesserung nach den Prüfungen (25.10.2026; Proben der Prüfer Ablauf und Sicherheit) ------------------------------
+
+def _art_nummern(t, iid):
+    return [z["nummern"] for z in ok(t.w.get(f"/api/material/artikel/{iid}"))["artikel"]["bestandteile"]]
+
+
+def _serien_von(t, pid, text):
+    return zeile(ok(t.p.get(f"/api/material/pruefungen/{pid}"))["pruefung"], text)["nummern"]
+
+
+def _setzen(t, pr, text, werte):
+    return t.p.put(f"/api/material/pruefungen/{pr['id']}/punkte/{zeile(pr, text)['id']}", json={"seriennummern": werte})
+
+
+TASCHE = "Platzhalter Tasche vorhanden"
+
+
+def test_kennung_und_bezeichnung():
+    """B1 (Prüfung Ablauf): Umbenennen schreibt die neue Position vor dem Löschen der alten (neue Kennung); kommt eine
+    Kennung über zwei Änderungen doch wieder (Tasche weg, dann Beutel neu), übernimmt weder der offene Prüfentwurf noch
+    der offene Antrag die Nummer der Tasche am Beutel – Prüfzeile 409 beim Eintragen, beim Festschreiben nicht übernommen
+    (Protokoll ohne „neu“), Antrag passt nicht mehr und lässt sich nur ablehnen (TEIL_WEG vor STAND_ANDERS)."""
+    with tempfile.TemporaryDirectory() as tmp, post():
+        t = aufbau(tmp)
+        tasche = t.pos["Platzhalter Tasche"]
+        umbenannt = [LISTE[0], {"bezeichnung": "Platzhalter Beutel", "anzahl": 1}]
+        # Offener Entwurf (R1) und offener Antrag (R2) an zwei Artikeln.
+        a1 = ok(t.w.post("/api/material/artikel", json={"product_id": t.pid, "folder_id": t.lager, "serial_no": "R1"}),
+                201)["artikel"]
+        a2 = ok(t.w.post("/api/material/artikel", json={"product_id": t.pid, "folder_id": t.lager, "serial_no": "R2"}),
+                201)["artikel"]
+        pr0 = pruefung_von(t.p, a2["id"])
+        ok(festschreiben(t.p, pr0["id"], ergebnis="einsatzbereit"))
+        kid = ok(beantragen(t.w, a2["id"], bestandteil_nummern=nummern(t, T="AR-TASCHE")), 201)["antrag"]["id"]
+        pr = pruefung_von(t.p, a1["id"])
+        ok(_setzen(t, pr, TASCHE, ["NR-TASCHE"]))
+        # Tasche weg, danach Beutel neu: Der Beutel bekommt die Kennung der Tasche wieder (höchste Kennung).
+        ok(t.mv.put(f"/api/material/produkte/{t.pid}/bestandteile", json={"bestandteile": [LISTE[0]]}))
+        p = ok(t.mv.put(f"/api/material/produkte/{t.pid}/bestandteile", json={"bestandteile": umbenannt}))["produkt"]
+        assert {z["bezeichnung"]: z["id"] for z in p["bestandteile"]}["Platzhalter Beutel"] == tasche
+        # Prüfung: Eintragen an der Zeile der Tasche 409, Festschreiben übernimmt nichts.
+        r = _setzen(t, pr, TASCHE, ["NR-ANDERS"])
+        assert r.status_code == 409 and "gibt es so nicht mehr" in r.json["error"], r.get_json()
+        ok(festschreiben(t.p, pr["id"], ergebnis="einsatzbereit"))
+        assert _art_nummern(t, a1["id"]) == [["", ""], [""]]
+        assert [n["neu"] for n in _serien_von(t, pr["id"], TASCHE)] == [None]
+        # Antrag: passt nicht, Bestätigen 409 mit dem Satz zur Position, Ablehnen geht.
+        x = ok(t.w.get(f"/api/material/artikel/{a2['id']}"))["artikel"]["antraege"][0]
+        assert x["passt"] is False and [y["passt"] for y in x["aenderungen"]] == [False], x
+        r = bestaetigen(t.w, kid)
+        assert r.status_code == 409 and "diese Position gibt es so nicht mehr" in r.json["error"], r.get_json()
+        assert _art_nummern(t, a2["id"]) == [["", ""], [""]]
+        ok(ablehnen(t.w, kid, antwort="Platzhalter"))
+        # Gegenprobe: Dieselbe Position mit anderer Schreibweise und höherer Anzahl passt weiter.
+        a3 = ok(t.w.post("/api/material/artikel", json={"product_id": t.pid, "folder_id": t.lager, "serial_no": "R3"}),
+                201)["artikel"]
+        ok(festschreiben(t.p, pruefung_von(t.p, a3["id"])["id"], ergebnis="einsatzbereit"))
+        t.pos = {z["bezeichnung"]: z["id"] for z in p["bestandteile"]}
+        a_id = t.pos["Platzhalter Bestandteil A"]
+        kid = ok(beantragen(t.w, a3["id"], bestandteil_nummern=[{"bestandteil_id": a_id, "stueck": 2,
+                                                                  "seriennummer": "AR-A2"}]), 201)["antrag"]["id"]
+        ok(t.mv.put(f"/api/material/produkte/{t.pid}/bestandteile",
+                    json={"bestandteile": [{"bezeichnung": "platzhalter  BESTANDTEIL a", "anzahl": 3}, umbenannt[1]]}))
+        ok(bestaetigen(t.w, kid))
+        assert _art_nummern(t, a3["id"])[0] == ["", "AR-A2", ""]
+        # Umbenennen in einem Zug: Die neue Position bekommt eine neue Kennung (erst einfügen, dann löschen).
+        beutel = {z["bezeichnung"]: z["id"] for z in ok(t.mv.get(f"/api/material/produkte/{t.pid}"))["produkt"][
+            "bestandteile"]}["Platzhalter Beutel"]
+        p = ok(t.mv.put(f"/api/material/produkte/{t.pid}/bestandteile",
+                        json={"bestandteile": [LISTE[0], {"bezeichnung": "Platzhalter Hülle"}]}))["produkt"]
+        assert {z["bezeichnung"]: z["id"] for z in p["bestandteile"]}["Platzhalter Hülle"] > beutel
+    print("Kennung und Bezeichnung bestanden.")
+
+
+def test_berichtigung_wirksamer_wert():
+    """B2 (Prüfung Ablauf) und S3 (Prüfung Sicherheit): Die Berichtigung vergleicht mit dem wirksamen Wert – setzt sie
+    die Nummer des Originals zurück, geht das in den Artikel; hat ein Antrag sie nach dem Original geändert, nennt das
+    Protokoll der Berichtigung diesen Stand als „alt“. Ein Stück, das sie nicht anfasst, bleibt wie im Original."""
+    with tempfile.TemporaryDirectory() as tmp, post():
+        t = aufbau(tmp)
+        app = t.app
+
+        def original(sn, vorher, eingetragen):
+            a = ok(t.w.post("/api/material/artikel", json={"product_id": t.pid, "folder_id": t.lager, "serial_no": sn,
+                                                            "bestandteil_nummern": nummern(t, A1="A1-FEST", T=vorher)}),
+                   201)["artikel"]
+            pr = pruefung_von(t.p, a["id"])
+            ok(_setzen(t, pr, TASCHE, [eingetragen]))
+            ok(festschreiben(t.p, pr["id"], ergebnis="einsatzbereit"))
+            return a, pr
+
+        def berichtigen(pr, eingabe=None, a_eingabe=None):
+            b = ok(t.p.post(f"/api/material/pruefungen/{pr['id']}/berichtigen", json={"grund": "Platzhalter"}),
+                   201)["pruefung"]
+            if eingabe is not None:
+                ok(_setzen(t, b, TASCHE, [eingabe]))
+            if a_eingabe is not None:
+                ok(_setzen(t, b, "Platzhalter Bestandteil A (2×) vorhanden", a_eingabe))
+            return b
+
+        # Ablauf S1: Original ALT1 → NEU1, die Berichtigung trägt ALT1 ein (der Eintrag des Originals war falsch).
+        a, pr = original("BER-1", "ALT1", "NEU1")
+        b = berichtigen(pr, "ALT1")
+        assert [n["artikel"] for n in zeile(ok(t.p.get(f"/api/material/pruefungen/{b['id']}"))["pruefung"],
+                                            TASCHE)["nummern"]] == ["NEU1"]
+        ok(festschreiben(t.p, b["id"], ergebnis="einsatzbereit"))
+        assert _art_nummern(t, a["id"])[1] == ["ALT1"]
+        assert [(n["alt"], n["neu"]) for n in _serien_von(t, b["id"], TASCHE)] == [("NEU1", "ALT1")]
+        assert journal(app, a["id"], "bestandteil_nummern")[-1]["nachher"]["pruefung"] == b["id"]
+        # Sicherheit probe10: Original A-T → P1, Antrag P1 → AN; Berichtigung D-NEU bzw. A-T.
+        for sn, eingabe in (("BER-2", "D-NEU"), ("BER-3", "A-T")):
+            a, pr = original(sn, "A-T", "P1")
+            kid = ok(beantragen(t.w, a["id"], bestandteil_nummern=nummern(t, T="AN")), 201)["antrag"]["id"]
+            ok(bestaetigen(t.w, kid))
+            b = berichtigen(pr, eingabe)
+            ok(festschreiben(t.p, b["id"], ergebnis="einsatzbereit"))
+            assert _art_nummern(t, a["id"])[1] == [eingabe], sn
+            assert [(n["alt"], n["neu"]) for n in _serien_von(t, b["id"], TASCHE)] == [("AN", eingabe)], sn
+        # Unverändert gelassen (auch mitgeschickt): wie im Original, der Artikel behält den Stand nach dem Antrag.
+        a, pr = original("BER-4", "A-T", "P1")
+        kid = ok(beantragen(t.w, a["id"], bestandteil_nummern=nummern(t, T="AN")), 201)["antrag"]["id"]
+        ok(bestaetigen(t.w, kid))
+        b = berichtigen(pr, "P1", a_eingabe=["A1-FEST", ""])
+        ok(festschreiben(t.p, b["id"], ergebnis="einsatzbereit"))
+        assert _art_nummern(t, a["id"]) == [["A1-FEST", ""], ["AN"]]
+        assert [(n["alt"], n["neu"]) for n in _serien_von(t, b["id"], TASCHE)] == [("A-T", "P1")]
+        # Tippt der Prüfer zurück auf den Wert des Originals, gilt wieder dessen Eintrag.
+        a, pr = original("BER-5", "A-T", "P1")
+        b = berichtigen(pr, "X-ZWISCHEN")
+        ok(_setzen(t, b, TASCHE, ["P1"]))
+        ok(festschreiben(t.p, b["id"], ergebnis="einsatzbereit"))
+        assert _art_nummern(t, a["id"])[1] == ["P1"]
+        assert [(n["alt"], n["neu"]) for n in _serien_von(t, b["id"], TASCHE)] == [("A-T", "P1")]
+    print("Berichtigung mit wirksamem Wert bestanden.")
+
+
+def test_nicht_uebernommen_und_wettlauf():
+    """B3 (Prüfung Ablauf): „n. z.“ mit eingetragener Nummer, gesunkene Anzahl und entfallene Position – das Protokoll
+    hält kein „alt → neu“ fest, das am Artikel nicht geschah. B4: Ein Antrag, der die Nummer nach dem Eintrag des
+    Prüfers ändert, wird nicht still überschrieben – 409 wie bei der Länge, danach gilt der Eintrag mit dem neuen „alt“."""
+    with tempfile.TemporaryDirectory() as tmp, post():
+        t = aufbau(tmp)
+        # (a) n. z.
+        a = ok(t.w.post("/api/material/artikel", json={"product_id": t.pid, "folder_id": t.lager, "serial_no": "NZ-1",
+                                                        "bestandteil_nummern": nummern(t, T="ALT2")}), 201)["artikel"]
+        pr = pruefung_von(t.p, a["id"])
+        ok(_setzen(t, pr, TASCHE, ["NEU2"]))
+        ok(t.p.put(f"/api/material/pruefungen/{pr['id']}/punkte/{zeile(pr, TASCHE)['id']}",
+                   json={"befund": "nicht_zutreffend"}))
+        ok(festschreiben(t.p, pr["id"], ergebnis="einsatzbereit"))
+        assert _art_nummern(t, a["id"])[1] == ["ALT2"]
+        assert [(n["alt"], n["neu"]) for n in _serien_von(t, pr["id"], TASCHE)] == [("ALT2", None)]
+        from test_material import pdf_seiten
+        x = zeilen(t.app, "SELECT pdf_path FROM mat_inspection WHERE id = ?", (pr["id"],))[0]
+        flach = " ".join(" ".join(pdf_seiten(os.path.join(tmp, x["pdf_path"]))).split()).replace("-", "")
+        assert "NEU2" not in flach, flach[-600:]
+        # (b) Anzahl sinkt und die Tasche fällt weg, während der Entwurf offen ist.
+        a = ok(t.w.post("/api/material/artikel", json={"product_id": t.pid, "folder_id": t.lager, "serial_no": "NZ-2"}),
+               201)["artikel"]
+        pr = pruefung_von(t.p, a["id"])
+        ok(_setzen(t, pr, "Platzhalter Bestandteil A (2×) vorhanden", ["N-A1", "N-A2"]))
+        ok(_setzen(t, pr, TASCHE, ["N-T"]))
+        ok(t.mv.put(f"/api/material/produkte/{t.pid}/bestandteile",
+                    json={"bestandteile": [{"bezeichnung": "Platzhalter Bestandteil A", "anzahl": 1}]}))
+        ok(festschreiben(t.p, pr["id"], ergebnis="einsatzbereit"))
+        assert _art_nummern(t, a["id"]) == [["N-A1"]]
+        assert [n["neu"] for n in _serien_von(t, pr["id"], "Platzhalter Bestandteil A (2×) vorhanden")] == ["N-A1", None]
+        assert [n["neu"] for n in _serien_von(t, pr["id"], TASCHE)] == [None]
+    with tempfile.TemporaryDirectory() as tmp, post():
+        t = aufbau(tmp)
+        # (c) Wettlauf R3: Eintrag PRUEFER, danach Antrag ALT → ANTRAG bestätigt.
+        a = ok(t.w.post("/api/material/artikel", json={"product_id": t.pid, "folder_id": t.lager, "serial_no": "WL-1",
+                                                        "bestandteil_nummern": nummern(t, T="ALT")}), 201)["artikel"]
+        ok(festschreiben(t.p, pruefung_von(t.p, a["id"])["id"], ergebnis="einsatzbereit"))
+        pr = pruefung_von(t.p, a["id"])
+        ok(_setzen(t, pr, TASCHE, ["PRUEFER"]))
+        kid = ok(beantragen(t.w, a["id"], bestandteil_nummern=nummern(t, T="ANTRAG")), 201)["antrag"]["id"]
+        ok(bestaetigen(t.w, kid))
+        r = festschreiben(t.p, pr["id"], ergebnis="einsatzbereit")
+        assert r.status_code == 409 and "während der Prüfung geändert" in r.json["error"] and \
+            "Platzhalter Tasche: jetzt ANTRAG" in r.json["error"], r.get_json()
+        assert _art_nummern(t, a["id"])[1] == ["ANTRAG"]
+        assert [(n["alt"], n["wert"]) for n in _serien_von(t, pr["id"], TASCHE)] == [("ANTRAG", "PRUEFER")]
+        ok(festschreiben(t.p, pr["id"], ergebnis="einsatzbereit"))
+        assert _art_nummern(t, a["id"])[1] == ["PRUEFER"]
+        assert [(n["alt"], n["neu"]) for n in _serien_von(t, pr["id"], TASCHE)] == [("ANTRAG", "PRUEFER")]
+        # Trägt der Prüfer erst nach dem Antrag ein (er sah den neuen Stand), kein Rückfragen.
+        pr = pruefung_von(t.p, a["id"])
+        kid = ok(beantragen(t.w, a["id"], bestandteil_nummern=nummern(t, T="ANTRAG-2")), 201)["antrag"]["id"]
+        ok(bestaetigen(t.w, kid))
+        ok(_setzen(t, pr, TASCHE, ["PRUEFER-2"]))
+        ok(festschreiben(t.p, pr["id"], ergebnis="einsatzbereit"))
+        assert [(n["alt"], n["neu"]) for n in _serien_von(t, pr["id"], TASCHE)] == [("ANTRAG-2", "PRUEFER-2")]
+    print("Nicht übernommen und Wettlauf bestanden.")
+
+
+def test_steuerzeichen_und_mail():
+    """S1 (Prüfung Sicherheit): Eine Eingabe nur aus Steuerzeichen ist leer – keine Nummer bzw. „Bitte eine Bezeichnung
+    angeben“ statt 409 „anderswo geändert“; Antrag ohne Änderung 400; Prüfzeile und Abschließen laufen; die
+    Katalogdatei nennt Produkt und Position. V1 (Prüfung Ablauf): Leerzeichen nach dem Doppelpunkt in der Antragsmail."""
+    with tempfile.TemporaryDirectory() as tmp, post() as mails:
+        t = aufbau(tmp)
+        a = ok(t.w.post("/api/material/artikel", json={"product_id": t.pid, "folder_id": t.lager, "serial_no": "SZ-1",
+                                                        "bestandteil_nummern": nummern(t, A1="\x01SN-1", T="\x01")}),
+               201)["artikel"]
+        assert _art_nummern(t, a["id"]) == [["SN-1", ""], [""]]
+        ok(t.w.put(f"/api/material/artikel/{a['id']}", json={"bestandteil_nummern": nummern(t, A2="\x00\x01")}))
+        r = t.mv.put(f"/api/material/produkte/{t.pid}/bestandteile", json={"bestandteile": [{"bezeichnung": "\x01"}]})
+        assert r.status_code == 400 and "Position 1: Bitte eine Bezeichnung angeben" in r.json["error"], r.get_json()
+        pr = pruefung_von(t.p, a["id"])
+        ok(_setzen(t, pr, TASCHE, ["\x01"]))
+        ok(festschreiben(t.p, pr["id"], ergebnis="einsatzbereit"))
+        r = beantragen(t.p, a["id"], bestandteil_nummern=nummern(t, T="\x01"))
+        assert r.status_code == 400 and "mindestens ein Feld" in r.json["error"], r.get_json()
+        del mails[:]
+        ok(beantragen(t.p, a["id"], bestandteil_nummern=nummern(t, T="MT-1")), 201)
+        zeile_ = [x for x in mails[0][2].splitlines() if "Bestandteil" in x]
+        assert zeile_ == ["Seriennummer Bestandteil „Platzhalter Tasche“: (leer) → MT-1"], zeile_
+        b = _importieren(t.app, _datei([_p(bestandteile=[{"bezeichnung": "Gut"}, {"bezeichnung": "\x01"}])]), trocken=True)
+        assert any("Lieferumfang Beta" in f and "Position 2: Bitte eine Bezeichnung angeben" in f for f in b["fehler"]), b
+    print("Steuerzeichen und Mail bestanden.")
+
 
 def _js():
     return open(os.path.join(WURZEL, "app/material/static/material.js"), encoding="utf-8").read()
