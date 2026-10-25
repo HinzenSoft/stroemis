@@ -22,6 +22,8 @@ für sich deploybar.
 | Katalogimport im Hintergrund | Probelauf und Übernehmen laufen als Auftrag im Hintergrund (202, Stand per Abfrage, Bericht wie bisher), „Übernehmen“ ohne neuen Upload, höchstens ein Import gleichzeitig, Abbruch bei Neustart erkannt, Hinweis auf der Katalogseite; Nachbesserung nach der Sicherheitsprüfung (Kontoverweis statt Kontokennung und Name, Plattenplatz, Übernehmen nach Abbruch wiederholbar, dev-zuruecksetzen wartet) | gebaut 24.10.2026 (kein Schemaschritt, Schema bleibt 21) – wartet auf Freigabe |
 | Sets anlegen und Stückliste übertragen (Schritt 22) | Knopf „Set anlegen“ (Produkt und Stückliste in einem Zug, mindestens ein einzeln geführtes Teil), Umstellen Produkt ↔ Set nur per Katalogdatei, „Stückliste übertragen“ auf angelegte Sets mit Vorschau, Fehlendes Produkt oder Set melden, Begriff „Set“, Ordnerart „Set-Ordner“ | gebaut 24.10.2026, wartet auf Prüfung und Freigabe |
 | Änderungsanträge an alle Stammdaten (Schritt 23) | Freigabepflichtig nach der ersten Prüfung: Produkt, Seriennummer, Herstellung, Kauf, Erstgebrauch, Lebensende, Prüfintervall – als ein Sammelantrag; entscheiden die Materialwarte des Ordners (auch den eigenen Antrag, die Material-Verwaltung nur mit eigener Verwalterfreigabe); Liste „Änderungsanträge“ im Bestand, Katalog → Meldungen nur Produkt- und Set-Meldungen; Prüfer bearbeiten Bemerkung, Länge, nächste Prüfung; Produktänderungen im Lebenslauf; Nachtrag 25.10.2026 (Schritt 24): Lebensende per Antrag auch wieder nach hinten bis zur Rechnung | gebaut 24.10.2026, Nachtrag 25.10.2026, wartet auf Prüfung und Freigabe |
+| Wünsche vom 25.10.2026 (W1–W4) | Norm in eigener Zeile auf der Artikelseite; Nacharbeit: „Übernehmen …“ und nach dem Zuordnen direkt übernehmen, „Fehlendes Produkt melden“ vorbelegt; Bestand: Spalte „Kategorie“, Filtermenü in der Seitenleiste mit „Filter (n)“; Wiki: Seiten aus ZIP importieren | gebaut 25.10.2026 (kein Schemaschritt), wartet auf Prüfung und Freigabe |
+| Nachbesserung Sets und Anträge nach den Prüfungen | Sets: Kennungen der Kopie, „Anzahl verringert“, Texte; Anträge: Produktgeschichte nach Wechsel, Intervall-Obergrenze nur bei Änderung, Fälligkeit ohne Namen, 409 statt 500, Texte, Zähl-Aufruf | gebaut 25.10.2026, wartet auf Prüfung und Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4155,6 +4157,233 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
 14. **Kasten „Mailversand“ am Telefon**: Eine Karte hat vier Inhaltszeilen (Mail mit Betreff, Empfänger, Fehler mit
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
+
+## Wünsche vom 25.10.2026 (Norm-Zeile, Nacharbeit, Filter im Bestand, Wiki-Import)
+
+Wünsche des Nutzers vom 25.10.2026 (W1–W4; W5 Wiki-Artikel folgt getrennt). Grundlage: Bauentwurf
+`entwurf_l2c_wuensche.md` mit den Entscheidungen F1–F6 (alle Option A). Gebaut auf `antraege-l2c` (Zweig `l2c-rest`).
+**Kein Schemaschritt für W1–W4** (Schritt 24 gehört zum Nachtrag der Anträge).
+
+### W1 – Norm in eigener Zeile
+
+- Artikelseite, Stammdaten: „Produkt“ zeigt nur noch Name und Bemerkung, darunter die Zeile **„Norm“** (mit „–“, wenn
+  das Produkt keine hat) – wie auf der Produktseite. Sonst nirgends geändert (alle übrigen Produktanzeigen haben die Norm
+  schon eigen oder zeigen sie nicht).
+
+### W2 – Nacharbeit: direkt übernehmen, „Fehlendes Produkt melden“ vorbelegt
+
+- **Nach „Zuordnen“** (Karte oder ausgewählte Zeilen) und nach **„Im Katalog anlegen …“** öffnet sich gleich die Prüfung
+  genau dieser Zeilen (F1): Titel „Zugeordnet – übernehmen?“, „n Zeilen zugeordnet.“, „n Zeilen geprüft: k übernehmbar
+  …“, roter Knopf **„k Artikel übernehmen“**, „Abbrechen“ (die Zuordnung bleibt). Zeilen, die aus anderen Gründen offen
+  bleiben (Datum, Seriennummer …), nennt der Dialog unter „Weiter offen“ – nur dafür bleibt die CSV der Weg.
+- **Karte**: Ist ein Produkt zugeordnet (ganz oder zeilenweise) oder die Meldung eingepflegt, steht neben „Produkt
+  zuordnen …“ der graue Knopf **„Übernehmen …“** (dieselbe Prüfung je Produktangabe). Die Texte „„Erneut prüfen“
+  übernimmt …“ entfallen bzw. sagen „Danach kannst du sie gleich übernehmen.“
+- Konten **ohne Katalogrecht**: „**Fehlendes Produkt melden …**“ statt „Produkt melden …“ (Bedingung wie bisher: keine
+  offene Meldung oder abgelehnt). Die Material-Verwaltung behält „Im Katalog anlegen …“.
+- **Vorbelegt** (F2): Hersteller, Modell, Artikelnummer und die **Bemerkung** – „Aus dem Bestandsimport Nr. …: n Artikel
+  warten in der Nacharbeit.“ (bei mehreren Importen „Nr. 3, 5“) und, falls die Liste welche hatte, „Angaben aus der
+  Liste:“ mit den verschiedenen Bemerkungen der Zeilen (höchstens 5, je höchstens 200 Zeichen). Keine Serien- und
+  Inventarnummern, keine Dateinamen. Norm und Kategorie bleiben leer (der Import liest sie nicht). Wer meldet, sieht und
+  ändert den Text vor dem Senden; ohne Bemerkung setzt der Server weiter den Import-Satz. Aus der Nacharbeit bleibt es
+  eine Produktmeldung (S8, `is_set` wird übergangen). `meldungDialog` nimmt dazu `note`, `norm`, `category_id` als
+  Vorbelegung.
+
+### W3 – Bestand: Spalte „Kategorie“ und Filtermenü in der Seitenleiste
+
+- **Spalte „Kategorie“** nur in der Artikelliste des Ordners (F3): vorn, sortierbar (auch in der Sortierwahl der
+  Karten); in der engen Tabelle und als Karte klein grau über Hersteller und Produkt. Lange Namen brechen um. Eine
+  Set-Zeile trägt die Kategorie des Set-Produkts.
+- **Filtermenü** unter dem Ordnerbaum (`#mat-side-filter`, nur die Ordneransicht füllt es): **Status** (alle,
+  überfällig, neu, bald fällig, gesperrt, Lebensdauer erreicht, einsatzbereit), **Kategorie** (alle und die Kategorien
+  der Artikel direkt hier; bei gleichem Namen der Pfad, voller Pfad im title), **Zugeordnet an** (die bisherige Auswahl,
+  nur mit Grundrecht und Zuordnungen im Zweig). Zeilen wie der Baum, die gewählte markiert wie der aktive Ordner
+  (`aria-pressed`), die Zahl grau rechts. Die Reiterzeile über der Liste entfällt.
+- Über der Liste nur, wenn gefiltert: „Gefiltert: Status „…“ · Kategorie „…“ · zugeordnet an „…“ – **Filter
+  zurücksetzen**“; leer: „Keine Artikel mit diesen Filtern.“ Als **Schublade** (unter 1024 px) davor der graue Knopf
+  **„Filter (n)“** (F4): er öffnet dieselbe Schublade bei den Filtern (Fokus auf „Filter“), nach einer Wahl schließt sie
+  und der Fokus geht auf den Satz bzw. die Überschrift der Liste; Esc gibt den Fokus an „Filter (n)“ zurück. Tippflächen
+  ≥ 44 px nur am Finger. Jede Filteränderung setzt Seite 1, Sortierung bleibt; CSV-Export bleibt ungefiltert.
+- **Server**: `ARTIKEL_LISTE_SQL` mit `product_category_id` und `kategorie_name` (Unterabfrage, kein weiterer JOIN),
+  `artikel_kurz` liefert `kategorie` {id, name}; Sortierfeld `kategorie` (wirkt auch in Fälligen und Suche);
+  `ordner_inhalt(…, kategorie)` und `kategorien` [{id, name, pfad, n}].
+
+### Schnittstelle (W2, W3)
+
+| Route | Wer | Was |
+| --- | --- | --- |
+| `GET /api/material/ordner/<id>?kategorie=<id>` | wie bisher | nur Zeilen mit Produkt in dieser Kategorie (unbekannte Kennung: leere Liste; keine Zahl: 400); neu `kategorien`, je Artikel `kategorie`; `sort=kategorie` |
+| `POST /api/material/ordner/<id>/nacharbeit/pruefen` | Verwalter des Ordners | zusätzlich `{"angabe": …}` (alle offenen Zeilen der Produktangabe) statt `zeilen` – genau eins von beiden (sonst 400), unbekannte Angabe 404 |
+| `GET /api/material/ordner/<id>/nacharbeit` | Verwalter des Ordners | je Karte neu `meldung_bemerkung` |
+
+### W4 – Wiki-Import (ZIP)
+
+Wunsch: „Import-Funktion bauen“. Entscheidungen F5 = A (immer neue Seiten, Hinweis bei gleichem Titel) und F6 = A (ZIP
+bis 200 MB, Videos übergangen). Kein Schemaschritt; neues Modul `app/wiki_import.py`, Route in `app/api_wiki.py`.
+
+- **Menü „⋯“ der Seite** (nur Wiki-Verwaltung, `can_publish`): „Seiten aus ZIP importieren …“ unter „Abschnitt als ZIP
+  herunterladen“. Dialog „Seiten importieren“: ein Satz zum Aufbau, Dateiwahl (`.zip`), „Einsortieren unter“ (Seitenbaum
+  eingerückt, „– oberste Ebene –“, vorgewählt die offene Seite), darunter ein Satz, wenn das Ziel ohne Anmeldung sichtbar
+  („Dieser Abschnitt ist ohne Anmeldung sichtbar – die importierten Seiten sind es sofort auch.“) oder lesebeschränkt ist
+  („… sind dann ebenso beschränkt.“); „Abbrechen“ grau | „Importieren“ rot, während der Anfrage „Wird importiert …“
+  (gesperrt). Ergebnis im selben Dialog: „n Seiten und m Dateien importiert.“, die neuen Seiten als Links, „Hinweise“;
+  „Schließen“ (auch Esc) lädt den Baum neu und öffnet die erste neue Seite. Kein `btn ghost`.
+- **Archiv** (vor dem Entpacken): höchstens 2000 Einträge und 512 KB Inhaltsverzeichnis (aus dem Ende-Satz), keine
+  doppelten Namen (auch nicht nach Unicode-Normalisierung), nichts verschlüsselt, entpackt höchstens 1 GB, je Eintrag ab
+  1 MB ein Packverhältnis bis 100:1; gelesen wird nie mehr als die angegebene Größe.
+- **Pfade**: Abbruch bei `..`, führendem `/`, `\`, Laufwerksbuchstaben, Steuerzeichen, symbolischen Verweisen und mehr
+  als 20 Ebenen; still übergangen: Verzeichniseinträge, `__MACOSX/`, Teile mit führendem Punkt, `Thumbs.db`.
+- **Seiten**: `*.md`/`*.markdown`, UTF-8 (BOM erlaubt, CRLF wird LF), ohne Nullzeichen, je höchstens `MAX_REQUEST_MB`
+  (wie eine Seite im Editor), zusammen höchstens 64 MB, höchstens 500 je Import. Titel = erste Zeile `# …` ohne
+  Auszeichnungen (Regel wie `titelZeile` im Editor), sonst der Dateiname – dann wird `# <Titel>` vorangestellt; länger
+  als 200 Zeichen → Abbruch. `A.md` und `A.markdown` zugleich → Abbruch („wären dieselbe Seite“).
+- **Baum**: `A.md` und Ordner `A/` sind dieselbe Seite, `A/B.md` ihre Unterseite; ein Ordner ohne eigene `.md` wird eine
+  Seite mit seinem Namen (nur Titelzeile). Die oberste Ebene kommt unter das Ziel, hinter dessen vorhandene Unterseiten;
+  Geschwister in natürlicher Reihenfolge der Namen. Ein Export lässt sich ohne Änderung wieder einlesen.
+- **Anhänge**: nur Dateien, auf die eine Seite verweist, über dieselbe Ablage wie beim Hochladen (`store_wiki_file`:
+  Bilder neu geschrieben ohne EXIF, Pixelgrenze; Dokumente, GIF, SVG, HTML-Bausteine unverändert), jede Archivdatei
+  einmal, vermerkt in `wiki_files`. Videos → Hinweis „Video „…“ übergangen – Videos einzeln hochladen.“; fremde Endungen
+  → „… übergangen – Dateityp … wird im Wiki nicht unterstützt.“; unbenutzte → „… keine Seite verweist darauf, nicht
+  übernommen.“; eine Datei, die sich nicht verarbeiten lässt (kaputtes Bild), → Hinweis, der Verweis bleibt. Je Art
+  höchstens 50 Hinweise einzeln, dann „… und n weitere“.
+- **Verweise** (außerhalb von Codeblöcken und Inline-Code): Ziele von `](…)` (auch `](<…>)`) und `src="…"`;
+  `/media/wiki/<ref>` → Eintrag `media/<ref>`, relative Pfade relativ zur `.md` (müssen im Archiv bleiben) → neue Datei
+  mit erhaltenem `#…`; relativer Verweis auf eine importierte `.md` → `/wiki/<neuer slug>` (mit Anker). `/wiki/…`-Links,
+  `:::einbau`, `:::baustein`, fremde Adressen bleiben; nicht auflösbar → bleibt stehen, Hinweis „Verweis ohne Datei in
+  „…“: …“.
+- **Schreiben**: Anhänge werden in einem Vorlauf ohne Schreibsperre abgelegt (Bilder neu schreiben dauert), dann alle
+  Seiten in EINER Transaktion (`BEGIN IMMEDIATE`) wie `create_page` (freie Adresse, Ersteller = Importierender, eine
+  Fassung je Seite, `wiki_page_files`, `wiki_page_links`); bei jedem Fehler Rückrollen und die schon abgelegten Dateien
+  löschen. Keine Mails, keine Benachrichtigung von Beobachtern.
+- **Konflikt (F5)**: Gleichnamige Seite unter dem Ziel → trotzdem neue Seite mit eigener Adresse (`…-2`), Hinweis „Unter
+  „X“ gibt es schon eine Seite „Y“ – die importierte steht daneben unter eigener Adresse (/wiki/…).“ (oberste Ebene: „Auf
+  der obersten Ebene …“).
+- **Freigabe/Beschränkung**: nichts wird gesetzt, die neuen Seiten erben vom Ziel. `GET /api/wiki/tree` liefert dafür
+  zusätzlich `read_restricted` (nur für Seiten, die das Konto ohnehin lesen darf).
+- **Konfiguration**: `WIKI_IMPORT_MB` (Vorgabe 200), eigene Grenze in `size_guard` (413 darüber).
+
+| Route | Wer | Was |
+| --- | --- | --- |
+| `POST /api/wiki/import` (multipart: `file`, `parent_id` leer = oberste Ebene) | Wiki-Verwaltung (Mitglied und Lesemodus 403, ohne Anmeldung 401) | 201 `{seiten: [{id, title, slug, parent_id}], dateien, hinweise}`; 400 mit Satz (Archiv, Pfad, Seite, Ziel unbekannt, keine Datei), 413 über `WIKI_IMPORT_MB` |
+
+Tests: `tests/test_wiki_import.py` (Rundweg Export → Import samt zweitem Import unter dasselbe Ziel und oberster Ebene,
+Regeln eines selbst gepackten Archivs, 19 Abbruchfälle ohne Spuren (dazu die Grenze für Seitentext) und ein Fehler mitten im Schreiben, Rechte je
+Rolle, Grenze, Erben von Freigabe und Beschränkung, Oberfläche statisch); `tests/test_wiki_lesemodus.py` erfasst die
+neue Route im Rundumtest von selbst (403). Browserprobe 1280/360 px: Export wieder eingelesen, gleicher Titel → neue
+Seite mit Hinweis, Video und `.exe` übergangen, Satz zur Freigabe bei öffentlichem Ziel; keine Konsolenfehler, kein
+waagerechter Bildlauf.
+
+**Abweichungen vom Entwurf**
+- Ein Bild, das sich nicht verarbeiten lässt, bricht den Import nicht ab: Hinweis, Verweis bleibt (ein kaputtes Bild
+  soll nicht 300 Seiten verhindern); alle Prüfungen des Archivs und der Seiten brechen weiterhin ab.
+- Zusätzlich: höchstens 64 MB Seitentext je Import (alle Seiten liegen beim Umschreiben im Speicher), Titel über 200
+  Zeichen brechen ab (statt zu kürzen – die erste Zeile bliebe sonst länger als der Titel).
+- Anhänge werden vor der Schreibsperre abgelegt (Vorlauf), damit ein Import mit vielen Bildern andere Schreiber nicht
+  blockiert; Aufräumen bei einem Fehler wie im Entwurf.
+- `GET /api/wiki/tree` liefert `read_restricted` mit (für den Satz zur Beschränkung im Dialog).
+
+### Abweichungen vom Entwurf (W1–W3)
+
+- **Zahlen im Filtermenü** zählen wie Filter in einer Leiste: Status mit dem Kategoriefilter, Kategorien mit dem
+  Statusfilter (je Gruppe alle übrigen Filter außer dem eigenen; „Zugeordnet an“ zählt wie bisher bei beiden nicht mit).
+  Der Entwurf hatte für beide die Sicht ohne Filter – dann stünde neben „überfällig (3)“ eine Liste mit einem Artikel.
+- Der Status zeigt seine Zahl immer (auch 0) – eine ruhige Spalte wie die Zahlen im Baum.
+- Die Personenauswahl trägt im Filtermenü die sichtbare Beschriftung „Zugeordnet an“ (statt der ersten Option
+  „Zugeordnet an …“; die erste Option heißt jetzt „alle“).
+
+### Bitte bestätigen
+
+1. Zahlen im Filtermenü mit den übrigen Filtern (siehe Abweichungen).
+2. Vor der ersten Prüfung lässt der Dialog „Bearbeiten“ das Lebensende weiterhin nur vorziehen; nach hinten (bis zur
+   Rechnung) geht es nur per Antrag. Soll „Bearbeiten“ das auch können?
+3. W4: Ein Bild, das sich nicht verarbeiten lässt, bricht den Import nicht ab (Hinweis, der Verweis bleibt).
+4. W4: Über den Feldern des Import-Dialogs steht ein Satz zum Aufbau des ZIP.
+
+## Nachbesserung Sets nach den Prüfungen (25.10.2026)
+
+Befunde der Prüfungen Ablauf und Sicherheit zu „Sets anlegen und Stückliste übertragen“ (`befunde_l2c.md`, beide
+„lieferbar ja“). Kein Schemaschritt.
+
+- **Kennungen der Kopie** (Sicherheit 1): „Stückliste übertragen“ schreibt erst die neue Kopie und löscht dann die alten
+  Zeilen über ihre Kennungen (vorher: erst löschen – `mat_item_set_slot` hat kein AUTOINCREMENT, SQLite vergab dieselben
+  Nummern mit anderer Bedeutung neu; eine offene Set-Seite traf mit „Teil einsetzen“ still eine andere Position). Dazu
+  schickt die Oberfläche zur Position ihr Produkt (`produkt_id`: „Teil einsetzen“, Auswahl „aus dem Bestand wählen“)
+  bzw. ihre Bezeichnung (`bezeichnung`: „Bestandteil ersetzt“); passt die Position nicht mehr, **409 „Die Stückliste
+  dieses Sets wurde inzwischen übertragen – bitte die Seite neu laden.“** Ohne die Angabe bleibt eine unbekannte Position
+  404 wie bisher.
+- **Anzahl verringert** (Ablauf 1): Gibt es die Position eines übrigen Teils noch – nur mit weniger Stück –, steht am
+  Teil der neutrale Journaleintrag **„Anzahl in der Stückliste des Sets verringert – ein Stück zu entnehmen“**
+  (`anzahl_verringert`, Beschriftung in `beschriftung.py` und `material.js`) statt „steht nicht mehr in der Stückliste“;
+  Sperrgrund („„Verbindungselement“: Anzahl verringert – ein Stück zu entnehmen“), Banner, Gründe der Set-Prüfung („Für
+  „…“ stehen weniger Stück in der Stückliste – erst ein Stück „Teil entnehmen“ (welches, wählst du).“), Vorschau und
+  Set-Kasten („dieses oder ein anderes Stück entnehmen“) nennen die Position, nicht das eine Stück. Entnimmt der
+  Materialwart ein anderes Stück, ist das Set vollständig, ohne dass an dem verbliebenen etwas Falsches stünde.
+- **„Set aussondern“** (Ablauf 2): Der 409-Satz nennt jetzt auch „… oder die Stückliste übertragen wurde“.
+- **Mail an den Melder** (Ablauf 3): Eine Set-Meldung, die als einfaches Produkt erledigt wird, sagt „das von dir
+  gemeldete Set ist jetzt als Produkt (kein Set) im Katalog: …“.
+- **S8-Texte**: „Produkt- oder Set-Meldung(en)“ bzw. „Produkt- und Set-Meldungen“ in Übersicht, Katalog → Meldungen
+  (Überschrift, Blase), „Deine …“, „Vorhandenem Produkt oder Set zuordnen“, Journal (Entität), Mailfehler-Protokoll.
+- **Docstring Schritt 22**: „nur als Ganzes“ erzwingen die Trigger nicht (direktes SQL an einem freien Set) – Schutz gegen
+  Programmfehler an ausgesonderten Sets und während einer Set-Prüfung.
+- **Importbericht** (Katalogdatei): Ein Set ohne einzeln geführte Position nennt, wie es zu beheben ist („bestandteile“ mit
+  einer Position `"einzeln": true`, oder `"set": false`, solange es keine Artikel gibt; ein angelegtes Set auch in der
+  Anwendung über „Bearbeiten“ → „Bestandteile“) – auch ein Altbestand aus der Zeit vor der Regel S3.
+- Tests: `tests/test_material_sets_uebertragen.py` (`test_nachbesserung_pruefungen`,
+  `test_nachbesserung_meldung_und_import`), statisch `tests/test_material_sets_oberflaeche.py`.
+- Zur Kenntnis (unverändert): Die Kaskade nimmt ein Teil mit offenem Einzel-Entwurf mit (bestehendes Verhalten).
+
+## Nachbesserung Anträge nach den Prüfungen (25.10.2026)
+
+Befunde der Prüfungen Ablauf und Sicherheit zu den Änderungsanträgen (`befunde_l2c.md`, Berichte
+`bericht_pruefung_antraege_l2c_ablauf.md` und `…_sicherheit.md`, beide „lieferbar ja nach Befund 1 (und 2)“). Die Proben
+der Prüfer sind als Regressionstest übernommen (`tests/test_material_antrag_nachbesserung.py`). Kein weiterer
+Schemaschritt (Schritt 24 gehört zum Nachtrag „Lebensende auch nach hinten“ im Abschnitt der Anträge).
+
+- **Produktwechsel und Geschichte** (Ablauf 1, mittel): Artikeljournal und Lebenslauf lasen das Produktjournal nur des
+  heutigen Produkts – nach einem Wechsel per Antrag fehlten die Änderungen am früheren Produkt, und die Geschichte des
+  neuen aus der Zeit davor stand da. Jetzt leitet `journal.produkt_zeitraeume` die Zeiträume je Produkt aus dem
+  Artikeljournal ab („angelegt“, „produkt_geaendert“, „antrag_bestaetigt“ mit `product_id`; Kennungen steigen streng),
+  `journal.fuer_artikel` und der Lebenslauf lesen je Produkt nur dessen Zeitraum (das erste Produkt wie bisher mit
+  seiner Geschichte davor). Ohne Wechsel – oder wenn das Journal nicht zum heutigen Produkt passt – bleibt alles wie
+  bisher. **Rückrufe** im Lebenslauf: zusätzlich die des früheren Produkts, die angelegt wurden, als der Artikel es noch
+  hatte, und ihn betrafen (alle Artikel oder eine Seriennummer, die er je trug), mit „betraf den Artikel mit dem
+  früheren Produkt … (bis …)“.
+- **Obergrenze des Intervalls** (Ablauf 2 = Sicherheit 1, mittel): `artikel_werte` prüft die Herstellervorgabe nur noch,
+  wenn sich das Intervall am Artikel (oder das Produkt) ändert. Senkt der Katalog die Vorgabe unter ein gespeichertes
+  Intervall, bleiben Bemerkung, Länge und nächste Prüfung bearbeitbar (Materialwart und Prüfer), ein Antrag ohne
+  Intervall stellbar und ein offener bestätigbar; das wirksame Intervall nimmt ohnehin das kürzere. Ein Antrag auf ein
+  Intervall über der Vorgabe bleibt 400.
+- **Folgeeintrag Fälligkeit** (Sicherheit 2): `faelligkeit.kappen` schreibt beim Bestätigen `{"antrag": Nr.}` in den
+  Eintrag „faelligkeit“, `antrag.journal_verbergen` zeigt Lesern dort „(Person)“ statt des Entscheiders (Journal und
+  Lebenslauf).
+- **Produkt + Lebensende** (Sicherheit 3): Ein Sammelantrag, dessen Lebensende schon von Hand so gesetzt ist (wirksam ist
+  eine frühere Rechnung), wird beim Stellen abgewiesen: 400 „Das Lebensende … ist am Artikel schon von Hand gesetzt –
+  bitte das Feld „Lebensende“ unverändert lassen.“ Ein Antrag, der sich beim Bestätigen nicht vollständig anwenden lässt,
+  endet mit **409** „Der Antrag ließ sich nicht vollständig anwenden – bitte ablehnen; …“ (Protokoll im Log) statt 500.
+- **Texte** (Ablauf 3 = Sicherheit 4, Ablauf 4): Die Karte eines Antrags ohne Materialwart sagt neutral „Dieser Ordner
+  hat zurzeit keinen Materialwart mit Freigabe „verwalten“ – die Material-Verwaltung kann sich die Freigabe dort geben
+  und dann entscheiden.“ (die Rückfall-Mail geht nur beim Stellen). Nach „Antrag senden“ im Rückfall „… die
+  Material-Verwaltung bekommt eine Mail.“ bzw. ohne Mail „… der Ordner hat zurzeit keinen Materialwart, der ihn
+  entscheiden kann.“
+- **Löschdialog** (Sicherheit 5): „Konto löschen“ zählt Sammelanträge einmal (`COUNT(DISTINCT COALESCE(group_id, id))`).
+- **Verbesserungen**: Die Blase „Änderungsanträge“ holt nur die Zahl (`GET /api/material/antraege?nur_zahl=1` →
+  `{zu_entscheiden}`); eine Begründung nur aus unsichtbaren Format- und Leerzeichen (U+200B …) ist 400 „„Begründung“
+  fehlt.“; Docstring Schritt 23 nennt die zwei nur per SQL erreichbaren Lücken (beim gedeckten Produktwechsel
+  `retire_by_manual` in derselben Anweisung frei; Folgezeile mit gleichen Angaben nachträglich an einen offenen Kopf).
+- Nicht geändert (Frage an den Nutzer, siehe unten): eine Mail, wenn die letzte Verwalterfreigabe eines Ordners mit
+  offenem Antrag wegfällt.
+
+| Route | Wer | Was |
+| --- | --- | --- |
+| `GET /api/material/antraege?nur_zahl=1` | Modulzugang | nur `{zu_entscheiden}` (die Blase im Bestand) |
+
+### Bitte bestätigen
+
+1. Fällt die letzte Verwalterfreigabe eines Ordners weg (abgelaufen, entzogen, Konto gelöscht), während dort ein Antrag
+   offen ist, geht keine Mail an die Material-Verwaltung – der Antrag wartet, bis sich jemand die Freigabe gibt. Soll es
+   dafür eine Mail geben?
+2. Rückrufe des früheren Produkts im Lebenslauf: Sie zählen, wenn sie angelegt wurden, als der Artikel das Produkt hatte,
+   und ihn betrafen – mit jeder Seriennummer, die er laut Journal je trug.
 
 ## Änderungsanträge an alle Stammdaten, Freigabe durch die zuständigen Materialwarte (Wunsch des Nutzers, 24.10.2026)
 
