@@ -1076,6 +1076,7 @@
         – Materialwarte warten darauf, Artikel davon anzulegen.</p>` : ""}
       ${d.antraege_offen ? `<p class="notice"><a href="/material/bestand/antraege"><strong>${plural(d.antraege_offen, "offener Änderungsantrag", "offene Änderungsanträge")}</strong></a>
         – Stammdaten nach der ersten Prüfung in Ordnern, die du verwaltest; bestätigen oder ablehnen.</p>` : ""}
+      ${empfohlenHinweis(d.aussonderung_empfohlen)}
       ${nacharbeitHinweis(d.nacharbeit)}
       ${erinnerungHinweise(d.erinnerungen)}
       <div id="mat-freigaben-hinweis"></div>
@@ -1997,6 +1998,9 @@
     // Nutzerverwaltung): „Ordner bearbeiten“ einmal im Reiter „Freigaben“ öffnen und den Wert aus der Adresse nehmen –
     // sonst ginge der Dialog bei jedem Neuladen wieder auf.
     const adresse = new URLSearchParams(location.search);
+    // ?status=… (Link der Übersicht „Aussonderung empfohlen“, A4): der Statusfilter gleich gesetzt.
+    const vorgabeStatus = adresse.get("status");
+    if (vorgabeStatus && (vorgabeStatus === EMPFOHLEN || Object.prototype.hasOwnProperty.call(STATUS, vorgabeStatus))) filter = vorgabeStatus;
     let vorlage = adresse.get("freigaben");
     if (vorlage !== null) {
       adresse.delete("freigaben");
@@ -2065,15 +2069,18 @@
       const doppelt = new Set(kats.filter((k, i) => kats.findIndex((x) => x.name.toLowerCase() === k.name.toLowerCase()) !== i).map((k) => k.name.toLowerCase()));
       const katText = (k) => (doppelt.has(k.name.toLowerCase()) ? k.pfad : k.name);
       const wahlKnopf = (act, attr, wert, an, text, n, title) => `<li><button type="button" class="mat-filterwahl${an ? " active" : ""}" data-act="${act}" ${attr}="${esc(wert)}" aria-pressed="${an}"${title ? ` title="${esc(title)}"` : ""}><span>${text}</span><span class="mat-side-anzahl">${n}</span></button></li>`;
-      const statusZahl = (st) => (st ? (d.direkt && d.direkt[st]) || 0 : summe(d.direkt));
+      const statusZahl = (st) => (st === EMPFOHLEN ? d.empfohlen || 0 : st ? (d.direkt && d.direkt[st]) || 0 : summe(d.direkt));
+      // „Aussonderung empfohlen“ (A4) nur, wo es so einen Artikel gibt (oder der Filter gesetzt ist) – meist in „Gesperrt“.
+      const statusListe = ["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"]
+        .concat(d.empfohlen || filter === EMPFOHLEN ? [EMPFOHLEN] : []);
       const filterMenue = `<div class="mat-filtergruppe" role="group" aria-labelledby="mat-fg-status"><h3 id="mat-fg-status">Status</h3>
-          <ul class="mat-filterliste">${["", "ueberfaellig", "neu", "bald_faellig", "gesperrt", "lebensdauer", "einsatzbereit"].map((st) => wahlKnopf("filter", "data-f", st, st === filter, st ? esc(STATUS[st]) : "alle", statusZahl(st))).join("")}</ul></div>
+          <ul class="mat-filterliste">${statusListe.map((st) => wahlKnopf("filter", "data-f", st, st === filter, st ? esc(statusName(st)) : "alle", statusZahl(st))).join("")}</ul></div>
         ${kats.length ? `<div class="mat-filtergruppe" role="group" aria-labelledby="mat-fg-kat"><h3 id="mat-fg-kat">Kategorie</h3>
           <ul class="mat-filterliste">${wahlKnopf("kategorie", "data-k", "", !kategorie, "alle", kats.reduce((n, k) => n + k.n, 0))}${kats.map((k) => wahlKnopf("kategorie", "data-k", String(k.id), String(k.id) === kategorie, esc(katText(k)), k.n, k.pfad)).join("")}</ul></div>` : ""}
         ${personWahl ? `<div class="mat-filtergruppe mat-filter-person">${personWahl}</div>` : ""}`;
       const personName = person && personen ? ((personen.find((p) => String(p.id) === person) || {}).name || "") : "";
       const katAktiv = kategorie ? kats.find((k) => String(k.id) === kategorie) : null;
-      const gefiltert = [filter ? `Status „${esc(STATUS[filter])}“` : "", katAktiv ? `Kategorie „${esc(katText(katAktiv))}“` : "",
+      const gefiltert = [filter ? `Status „${esc(statusName(filter))}“` : "", katAktiv ? `Kategorie „${esc(katText(katAktiv))}“` : "",
         person ? `zugeordnet an „${esc(personName)}“` : ""].filter(Boolean);
       const filterKopf = `<div class="mat-filterkopf"><button type="button" class="btn secondary small mat-filter-auf" data-act="filter-auf" data-leiste-auf
           aria-controls="mat-side">${gefiltert.length ? `Filter (${gefiltert.length})` : "Filter"}</button>
@@ -6712,6 +6719,16 @@
     return daten;
   }
   // Übersicht: offene Nacharbeit je Zielordner, den das Konto verwaltet (/start, höchstens 20).
+  /* Übersicht (A4): gesperrte Artikel mit Aussonderungsempfehlung, die das Konto aussondern darf – je „Gesperrt“-Ordner
+     ein Link mit gesetztem Filter; bei mehreren Gliederungen mit deren Namen. Nichts bei 0. */
+  function empfohlenHinweis(liste) {
+    if (!liste || !liste.length) return "";
+    const n = liste.reduce((s, x) => s + x.anzahl, 0);
+    const link = (x, text) => `<a href="/material/ordner/${Number(x.ordner_id)}?status=${EMPFOHLEN}">${text}</a>`;
+    const text = `${n} Artikel mit Aussonderungsempfehlung`;
+    return `<p class="notice mat-empfohlen-hinweis">${liste.length === 1 ? link(liste[0], `<strong>${text}</strong>`) : `<strong>${text}</strong>`}
+      – gesperrt, ein Prüfer empfiehlt die Aussonderung; aussondern kannst du sie als Materialwart.${liste.length > 1 ? ` ${liste.map((x) => link(x, `${esc(x.gliederung)} (${Number(x.anzahl)})`)).join(" · ")}` : ""}</p>`;
+  }
   const nacharbeitHinweis = (liste) => (liste && liste.length ? `<p class="notice">Nacharbeit aus Bestandsimporten:
       ${liste.map((x) => `<a href="/material/ordner/${esc(x.ordner.id)}/import#bi-nacharbeit">${esc(x.ordner.pfad)}</a> (${esc(x.offen)})`).join(", ")}</p>` : "");
 
@@ -7294,6 +7311,9 @@
   const BEISEITE = "Leg ihn sofort beiseite (aus Fahrzeug oder Lager) und gib ihn deinem Materialwart.";
   const mangelMarke = (x) => (x ? ' <span class="mat-mangel-marke" title="Mangel gemeldet">Mangel</span>' : "");
   // Ein Prüfer hat die Aussonderung des gesperrten Artikels empfohlen (Schritt 28) – aussondern kann der Materialwart.
+  // Als Statusfilter im Bestand (A4) heißt sie EMPFOHLEN (bestand.EMPFOHLEN).
+  const EMPFOHLEN = "aussonderung_empfohlen";
+  const statusName = (st) => (st === EMPFOHLEN ? "Aussonderung empfohlen" : STATUS[st] || st);
   const empfohlenMarke = (x) => (x ? ' <span class="mat-empfohlen-marke">Aussonderung empfohlen</span>' : "");
   const tagZeit = (iso) => fmtZeit(iso).replace(",", "");         // „20.10.2026 13:05“ in der Zeit des Browsers
   // Fotos einer Meldung: Vorschau, groß die Webfassung – ein Original gibt es nicht (F4), „Original“ zeigt dieselbe.
