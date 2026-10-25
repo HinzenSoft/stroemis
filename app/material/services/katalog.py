@@ -1093,6 +1093,10 @@ def formular_anlegen(d, demo=False):
         version = (letzte["version"] + 1) if letzte else 1
         if not titel:
             titel = vorlage["title"] if vorlage else ""
+        # Übernimmt die neue Version die Prüfpunkte einer DEMO-Vorlage, bleibt sie DEMO – sonst kämen deren Punkte über
+        # „Neue Version“ in den Katalog-Export (Sicherheitsprüfung vom 25.10.2026, Befund 5). Mit eigenen Punkten
+        # (Katalogimport) zählt nur der Parameter.
+        demo = demo or bool("punkte" not in d and vorlage and vorlage["demo"])
         # Die Prüfanleitung aus dem Wiki erbt die neue Version von der Vorlage – wie den Titel (Phase 2 · L3); d setzt
         # sie nie (Katalogimport und „Neue Version“ gleich).
         fid = db.execute(f"INSERT INTO mat_form ({spalte}, version, title, active, demo, wiki_page_id, created_by, "
