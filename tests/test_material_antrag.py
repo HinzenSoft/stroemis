@@ -752,13 +752,13 @@ def _schema(pfad):
 
 
 def _zahlen(pfad):
-    """Zeilen je mat_-Tabelle – ohne mat_item_set_slot (entfällt mit Schritt 26) und mat_round_setprotokoll (kommt mit
-    Schritt 27); in den Altständen hier beide leer."""
+    """Zeilen je mat_-Tabelle – ohne mat_item_set_slot (entfällt mit Schritt 26), mat_round_setprotokoll (kommt mit
+    Schritt 27) und mat_antrag_ohne_verwalter (kommt mit Schritt 29); in den Altständen hier alle leer."""
     conn = sqlite3.connect(pfad)
     try:
         return {n: conn.execute(f"SELECT COUNT(*) FROM {n}").fetchone()[0] for (n,) in conn.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'mat%' AND name NOT LIKE '%fts%' "
-            "AND name NOT IN ('mat_item_set_slot', 'mat_round_setprotokoll')")}
+            "AND name NOT IN ('mat_item_set_slot', 'mat_round_setprotokoll', 'mat_antrag_ohne_verwalter')")}
     finally:
         conn.close()
 
