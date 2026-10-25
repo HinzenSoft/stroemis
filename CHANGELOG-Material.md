@@ -4154,6 +4154,27 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Beispielbestand: große Gliederung mit zwei Jahren Geschichte (Wunsch des Nutzers, 25.10.2026)
+
+`scripts/material_beispielbestand.py` baut statt der drei kleinen DEMO-OGs den Bestand einer großen Gliederung aus dem
+echten Katalog: „DEMO-Kreisverband Flussland“ (Zentrallager mit Regalen und Reserve, fünf Fahrzeuge mit Seilrucksäcken
+und Taschen als Set-Ordner, auch ein Set im Set, drei Einsatzgruppen, persönliche Ordner für bis zu 40 Einsatzkräfte)
+und die kleine „DEMO-OG Nachbarstadt“ für die Trennung; Vorgabe 800 Artikel, Produktmix nach Kategorien, keine Produkte
+mit Stückliste. Die Geschichte reicht gut zwei Jahre zurück: Das Skript stellt die Uhr seines eigenen Prozesses zurück
+(services.datetime, db.datetime, models.datetime – nie in der App) und spielt Ersterfassung, jährliche Prüfdurchgänge je
+Bereich mit Sammelprotokoll, Einzel- und außerplanmäßige Prüfungen, Mängel mit Reparatur, Aussonderungen mit Nachkauf,
+Verluste, Verschiebungen, Zuordnungen (auch beendete) und Änderungsanträge Tag für Tag über die Dienste der App ab;
+heute ein offener Durchgang im Zentrallager, ein überfälliger und ein bald fälliger Bereich. Fehlt einer echten
+Kategorie ein wirksames Formular, legt es DEMO-Formulare an (nicht im Katalog-Export): nach den Petzl-Prüfberichten aus
+`scripts/beispielbestand_petzl_punkte.json` (Kopie der Recherche vom 25.10.2026, 13 Kategorien, 147 Punkte wörtlich mit
+Fundstelle; drei zu lange Gruppenüberschriften ohne ihren Klammerzusatz, zwei zu lange Titel ohne Bezugsprodukt), sonst
+Platzhalter wie `material_demo.py` seit 2edb9eb. Sperre wie `dev-zuruecksetzen` (Positivliste BASE_URL in Umgebung und
+Anwendung, vorher nur „nicht die Produktion“). Konten mit den bekannten Postfächern (`demo-wart-a@…`, `demo-pruefer@…`,
+`demo-extern@…`, `demo-mv@…` u. a.; vorhandene DEMO-Konten werden übernommen), Einsatzkräfte mit gemeinsamem Passwort.
+Keine Mails (Hintergrund-Versender im Skriptprozess aus). Laufzeit bei 800 Artikeln rund 20 Minuten (gut eine halbe
+Sekunde je Protokoll). Kein App-Code, kein Schemaschritt. Test: `tests/test_material_beispielbestand.py` (neu
+`test_formulare`).
+
 ## DEMO-Skript: Platzhalter-Formulare (Wunsch des Nutzers, 25.10.2026)
 
 `scripts/material_demo.py --demo` legt zum Schluss – nach dem unveränderten DEMO-Bestand – an jeder **echten** Kategorie

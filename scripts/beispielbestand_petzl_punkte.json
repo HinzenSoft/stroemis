@@ -1,0 +1,2045 @@
+{
+ "Gurte": {
+  "titel": "Prüfung nach Petzl-Prüfverfahren AVAO / ASTRO",
+  "bezugsprodukt": "AVAO / ASTRO (Gurt für gewerbliche Anwendungen)",
+  "quelle": {
+   "prüfbericht": {
+    "hersteller": "Petzl",
+    "art": "prüfbericht",
+    "titel": "Überprüfung von PSA – Prüfbericht – Gurt für gewerbliche Anwendungen",
+    "version_gedruckt": "110526",
+    "datei": "gurte/petzl/dateien/verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf",
+    "dateiname": "verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf",
+    "sha256": "7d446fd216c8e24afb7359c6ce3ee2fd31b7620ef14240b405be6e2fa6420cf9",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dw0fa4861e/media/product/verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf",
+    "gueltig_ab": null
+   },
+   "prüfverfahren": {
+    "hersteller": "Petzl",
+    "art": "prüfverfahren",
+    "titel": "Überprüfung von PSA – Vorgehensweise bei der Überprüfung – Gurte für gewerbliche Anwender",
+    "version_gedruckt": "110526",
+    "datei": "gurte/petzl/dateien/verif-EPI-harnais-PRO-procedure-DE_068bK00000uc9i9QAA.pdf",
+    "dateiname": "verif-EPI-harnais-PRO-procedure-DE_068bK00000uc9i9QAA.pdf",
+    "sha256": "13e73f3ae71380a32a274b2fe3c2029c25a1992d834330838ddc717fdafaeb36",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dw46423b7e/media/product/verif-EPI-harnais-PRO-procedure-DE_068bK00000uc9i9QAA.pdf",
+    "gueltig_ab": null
+   }
+  },
+  "nächstliegend": false,
+  "anzahl_punkte": 15,
+  "punkte": [
+   {
+    "nr": 1,
+    "gruppe": "Bekannte Vorgeschichte des Produkts",
+    "text": "Einsatzbedingungen oder außergewöhnliche Vorkommnisse (Beispiele: Sturz oder Auffangen eines Sturzes, Anwendung oder Lagerung bei extremen Temperaturen, außerhalb der Betriebsstätten des Herstellers vorgenommene Änderungen usw.):",
+    "art": "text",
+    "art_app": "text",
+    "pflicht": false,
+    "soll": "",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf, „Überprüfung von PSA – Prüfbericht – Gurt für gewerbliche Anwendungen“ (110526), S. 1/1, Abschnitt 1"
+   },
+   {
+    "nr": 2,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergewissern Sie sich, dass Seriennummer und CE-Kennzeichnung vorhanden und lesbar sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf, „Überprüfung von PSA – Prüfbericht – Gurt für gewerbliche Anwendungen“ (110526), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 3,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Stellen Sie sicher, dass die Lebensdauer des Produkts nicht überschritten ist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf, „Überprüfung von PSA – Prüfbericht – Gurt für gewerbliche Anwendungen“ (110526), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 4,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergleichen Sie das Produkt mit einem neuen Gerät, um sicherzustellen, dass keine Änderungen vorgenommen wurden und alle Bestandteile vorhanden sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf, „Überprüfung von PSA – Prüfbericht – Gurt für gewerbliche Anwendungen“ (110526), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 5,
+    "gruppe": "Überprüfung des Zustands der Gurtbänder",
+    "text": "Achten Sie auf Einschnitte, aufgequollene Stellen, sonstige Beschädigungen oder Verschleißerscheinungen, die z.B. auf Abnutzung, Hitzeeinwirkung oder Kontakt mit Chemikalien usw. zurückzuführen sind. Kontrollieren Sie das Gurtband des Hüftgurts, der Beinschlaufen, der Verbindung Beinschlaufen/Hüftgurt und gegebenenfalls der Schulterträger. Vergessen Sie nicht die von den Schnallen und Halteösen verdeckten Stellen.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf, „Überprüfung von PSA – Prüfbericht – Gurt für gewerbliche Anwendungen“ (110526), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 6,
+    "gruppe": "Überprüfung des Zustands der Gurtbänder",
+    "text": "Überprüfen Sie den Zustand der Sicherheitsnähte (oben/unten). Achten Sie auf lose, abgenutzte oder durchtrennte Fäden. Die Sicherheitsnähte sind durch andersfarbige Fäden gekennzeichnet.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf, „Überprüfung von PSA – Prüfbericht – Gurt für gewerbliche Anwendungen“ (110526), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 7,
+    "gruppe": "Überprüfung des Zustands der Gurtbänder",
+    "text": "Vergewissern Sie sich, dass die Gurtbandenden umgenäht sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf, „Überprüfung von PSA – Prüfbericht – Gurt für gewerbliche Anwendungen“ (110526), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 8,
+    "gruppe": "Überprüfung der Sturzindikatoren",
+    "text": "Bei den internationalen Ausführungen der Gurte NEWTON, AVAO, ASTRO und VOLT: Überprüfen Sie die dorsalen Sturzindikatoren.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf, „Überprüfung von PSA – Prüfbericht – Gurt für gewerbliche Anwendungen“ (110526), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 9,
+    "gruppe": "Überprüfung der Auffang- und Halteösen",
+    "text": "Überprüfen Sie den Zustand der Befestigungspunkte aus Metall (keine Deformierungen, Kratzer, Risse, Abnutzungs- und Korrosionserscheinungen).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf, „Überprüfung von PSA – Prüfbericht – Gurt für gewerbliche Anwendungen“ (110526), S. 1/1, Abschnitt 5"
+   },
+   {
+    "nr": 10,
+    "gruppe": "Überprüfung der Auffang- und Halteösen",
+    "text": "Überprüfen Sie den Zustand der Halteösen aus Kunststoff (z. B. Einschnitte, Abnutzungserscheinungen, aufgerissene Stellen). Überprüfen Sie den Zustand der textilen Auffang- und Halteösen (z. B. Einschnitte, Abnutzungserscheinungen, aufgerissene Stellen).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf, „Überprüfung von PSA – Prüfbericht – Gurt für gewerbliche Anwendungen“ (110526), S. 1/1, Abschnitt 5"
+   },
+   {
+    "nr": 11,
+    "gruppe": "Überprüfung des Zustands der Schrauben der aufschraubbaren Verbindungsöse (z. B. an der ASTRO-Reihe)",
+    "text": "Überprüfen Sie die Schrauben: Lockern Sie die Schrauben, eine nach der anderen, um ihren Zustand zu überprüfen (Deformierungen, Risse, Korrosionserscheinungen, Zustand des Gewindes).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-harnais-PRO-procedure-DE_068bK00000uc9i9QAA.pdf, „Überprüfung von PSA – Vorgehensweise bei der Überprüfung – Gurte für gewerbliche Anwender“ (110526), S. 3/9, Abschnitt 6"
+   },
+   {
+    "nr": 12,
+    "gruppe": "Überprüfung des Zustands der Einstellschnallen",
+    "text": "Überprüfen Sie den Zustand der FAST-Einstellschnallen (keine Deformierungen, Risse, Kratzer, Abnutzungs- oder Korrosionserscheinungen). Überprüfen Sie den Zustand der DOUBLEBACK-Einstellschnallen (keine Deformierungen, Risse, Kratzer, Abnutzungs- oder Korrosionserscheinungen).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf, „Überprüfung von PSA – Prüfbericht – Gurt für gewerbliche Anwendungen“ (110526), S. 1/1, Abschnitt 7"
+   },
+   {
+    "nr": 13,
+    "gruppe": "Überprüfung des Zustands der Einstellschnallen",
+    "text": "Vergewissern Sie sich, dass das Gurtband nicht verdreht ist. Stellen Sie sicher, dass die Schnallen richtig funktionieren.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf, „Überprüfung von PSA – Prüfbericht – Gurt für gewerbliche Anwendungen“ (110526), S. 1/1, Abschnitt 7"
+   },
+   {
+    "nr": 14,
+    "gruppe": "Überprüfung des Zustands des Verbindungselements Brustgurt/Sitzgurt (falls vorhanden)",
+    "text": "Wenn zum Gurt ein Verbindungselement zur Verbindung von Brust- und Sitzgurt gehört, vergewissern Sie sich, dass dieses vorhanden ist. Überprüfen Sie, ob es sich bei dem Verbindungselement um das richtige Modell handelt und ob es korrekt mit dem Gurt verbunden ist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf, „Überprüfung von PSA – Prüfbericht – Gurt für gewerbliche Anwendungen“ (110526), S. 1/1, Abschnitt 8"
+   },
+   {
+    "nr": 15,
+    "gruppe": "Überprüfung des Zustands der Komfortelemente",
+    "text": "Überprüfen Sie den Zustand der Polsterung an Hüftgurt, Beinschlaufen und Schulterträgern (z. B. Einschnitte, Abnutzungserscheinungen, aufgerissene Stellen). Überprüfen Sie den Zustand der elastischen Beinschlaufenaufhängungen (z. B. Einschnitte, Abnutzungserscheinungen, aufgerissene Stellen).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-harnais-PRO-suivi-DE_068bK00000udJ7NQAU.pdf, „Überprüfung von PSA – Prüfbericht – Gurt für gewerbliche Anwendungen“ (110526), S. 1/1, Abschnitt 10"
+   }
+  ]
+ },
+ "Karabiner": {
+  "titel": "Prüfung nach Petzl-Prüfverfahren Am'D / OK",
+  "bezugsprodukt": "Am'D / OK (Verbindungselemente, Karabiner)",
+  "quelle": {
+   "prüfbericht": {
+    "hersteller": "Petzl",
+    "art": "prüfbericht",
+    "titel": "Überprüfung von PSA – Prüfbericht – Verbindungselemente, Karabiner",
+    "version_gedruckt": "260625",
+    "datei": "verbindungsmittel/petzl/dateien/verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf",
+    "dateiname": "verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf",
+    "sha256": "d1ba52ed30fa51ca66a8ed25cf9cfa0ebe6d3eac73430972b558e630693c26a6",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dwc8b26af4/media/product/verif%20EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf",
+    "gueltig_ab": null
+   },
+   "prüfverfahren": {
+    "hersteller": "Petzl",
+    "art": "prüfverfahren",
+    "titel": "Überprüfung von PSA – Vorgehensweise bei der Überprüfung – Verbindungselemente",
+    "version_gedruckt": "260625",
+    "datei": "karabiner/petzl/dateien/verif_EPI-CONNECTEURS-procedure-DE_068bK00000szXmOQAU.pdf",
+    "dateiname": "verif_EPI-CONNECTEURS-procedure-DE_068bK00000szXmOQAU.pdf",
+    "sha256": "3b4d5fdf37634d0246531feab1f5745aafac13a732604bc93cca53bf8b01d56a",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dwd7a8e6e3/media/product/verif%20EPI-CONNECTEURS-procedure-DE_068bK00000szXmOQAU.pdf",
+    "gueltig_ab": null
+   }
+  },
+  "nächstliegend": false,
+  "anzahl_punkte": 15,
+  "punkte": [
+   {
+    "nr": 1,
+    "gruppe": "Bekannte Vorgeschichte des Produkts",
+    "text": "Einsatzbedingungen oder außergewöhnliche Vorkommnisse (Beispiele: Sturz oder Auffangen eines Sturzes, Anwendung oder Lagerung bei extremen Temperaturen, außerhalb der Betriebsstätten des Herstellers vorgenommene Änderungen usw.):",
+    "art": "text",
+    "art_app": "text",
+    "pflicht": false,
+    "soll": "",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungselemente, Karabiner“ (260625), S. 1/1, Abschnitt 1"
+   },
+   {
+    "nr": 2,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergewissern Sie sich, dass Seriennummer und CE-Kennzeichnung vorhanden und lesbar sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungselemente, Karabiner“ (260625), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 3,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Stellen Sie sicher, dass die Lebensdauer des Produkts nicht überschritten ist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungselemente, Karabiner“ (260625), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 4,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergleichen Sie das Produkt mit einem neuen Gerät, um sicherzustellen, dass keine Änderungen vorgenommen wurden und alle Bestandteile vorhanden sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungselemente, Karabiner“ (260625), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 5,
+    "gruppe": "Überprüfung des Körpers",
+    "text": "Kontrollieren Sie den Zustand des Körpers (z. B. Deformierungen, Risse, Kratzer, Erhitzung- und Korrosionserscheinungen).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungselemente, Karabiner“ (260625), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 6,
+    "gruppe": "Überprüfung des Körpers",
+    "text": "Kontrollieren Sie Abnutzungserscheinungen, die vom durchlaufenden Seil oder durch Aufliegen an Anschlagpunkten verursacht wurden (Materialabtrag: z. B. Abnutzung von mehr als 1 mm (gravierend), Auftreten von scharfen Kanten).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungselemente, Karabiner“ (260625), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 7,
+    "gruppe": "Überprüfung des Körpers",
+    "text": "Kontrollieren Sie den Zustand der Nase (z. B. Deformierungen, Risse, Kratzer, Erhitzung- und Korrosionserscheinungen).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungselemente, Karabiner“ (260625), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 8,
+    "gruppe": "Überprüfung des Schnappers",
+    "text": "Kontrollieren Sie den Zustand des Schnappers (z. B. Deformierungen, Risse, Kratzer, Erhitzung- und Korrosionserscheinungen).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungselemente, Karabiner“ (260625), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 9,
+    "gruppe": "Überprüfung des Schnappers",
+    "text": "Stellen Sie sicher, dass der Keylock-Schlitz sauber ist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungselemente, Karabiner“ (260625), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 10,
+    "gruppe": "Überprüfung des Schnappers",
+    "text": "Kontrollieren Sie den Zustand der Niete (z. B. Deformierungen, Risse, Kratzer, Erhitzung- und Korrosionserscheinungen).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungselemente, Karabiner“ (260625), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 11,
+    "gruppe": "Überprüfung des Schnappers",
+    "text": "Überprüfen Sie, ob sich der Schnapper von Hand vollständig öffnen lässt.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungselemente, Karabiner“ (260625), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 12,
+    "gruppe": "Überprüfung des Schnappers",
+    "text": "Überprüfen Sie das automatische Schließen des Schnappers, die Effizienz der Rückholfeder und die Ausrichtung Schnapper/Nase.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungselemente, Karabiner“ (260625), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 13,
+    "gruppe": "Überprüfung der Verriegelungshülse",
+    "text": "Kontrollieren Sie den Zustand der Verriegelungshülse (z. B. Deformierungen, Risse, Kratzer, Erhitzung- und Korrosionserscheinungen).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungselemente, Karabiner“ (260625), S. 1/1, Abschnitt 5/6"
+   },
+   {
+    "nr": 14,
+    "gruppe": "Überprüfung der Verriegelungshülse",
+    "text": "Kontrollieren Sie beim Ver- und Entriegeln, ob sich die Verriegelungshülse vollständig auf- und zuschrauben lässt. Vergewissern Sie sich, dass die Hülse in der Verriegelungsposition nicht leer dreht.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungselemente, Karabiner“ (260625), S. 1/1, Abschnitt 5",
+    "wortlaut_original": "Kontrollieren Sie beim Vegane- und Entriegeln, ob sich die Verriegelungshülse vollständig auf- und zuschrauben lässt. Vergewissern Sie sich, dass die Hülse in der Verriegelungsposition nicht leer dreht.",
+    "hinweis": "Offensichtlicher Tippfehler im Original, hier berichtigt (Wortlaut sonst unverändert)."
+   },
+   {
+    "nr": 15,
+    "gruppe": "Überprüfung der Verriegelungshülse",
+    "text": "Kontrollieren Sie, ob sich die Verriegelungshülse beim Loslassen des Schnappers automatisch und vollständig verriegelt.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-suivi-connecteur-DE_068bK00000t04aGQAQ.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungselemente, Karabiner“ (260625), S. 1/1, Abschnitt 6"
+   }
+  ]
+ },
+ "Anschlageinrichtungen": {
+  "titel": "Prüfung nach Petzl-Prüfverfahren Andere Anschlageinrichtungen",
+  "bezugsprodukt": "Andere Anschlageinrichtungen (z. B. PAW)",
+  "quelle": {
+   "prüfbericht": {
+    "hersteller": "Petzl",
+    "art": "prüfbericht",
+    "titel": "Überprüfung von PSA – Prüfbericht – Andere Anschlageinrichtungen",
+    "version_gedruckt": "150214",
+    "datei": "verbindungsmittel/petzl/dateien/verif-EPI-connexion-suivi-DE_0685I000000NpxrQAC.pdf",
+    "dateiname": "verif-EPI-connexion-suivi-DE_0685I000000NpxrQAC.pdf",
+    "sha256": "b808c76983487eaadf92cfba5aaff836253bbc30241e33ed0e16347a7f736f8d",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dwf43da9d3/media/product/verif-EPI-connexion-suivi-DE_0685I000000NpxrQAC.pdf",
+    "gueltig_ab": null
+   },
+   "prüfverfahren": {
+    "hersteller": "Petzl",
+    "art": "prüfverfahren",
+    "titel": "Überprüfung von PSA – Vorgehensweise bei der Überprüfung – Andere Anschlageinrichtungen",
+    "version_gedruckt": "150214",
+    "datei": "riggingplatten/petzl/dateien/verif-EPI-connexion-procedure-DE.pdf",
+    "dateiname": "verif-EPI-connexion-procedure-DE.pdf",
+    "sha256": "7d930470758de9ab1ffbf92b49a077c0d28d3454713653e843cf1f5fda59bf33",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dwcab70cbb/media/product/verif-EPI-connexion-procedure-DE_0685I000000NpxwQAC.pdf",
+    "gueltig_ab": null
+   }
+  },
+  "nächstliegend": false,
+  "anzahl_punkte": 6,
+  "punkte": [
+   {
+    "nr": 1,
+    "gruppe": "Bekannte Vorgeschichte des Produkts",
+    "text": "Einsatzbedingungen oder außergewöhnliche Vorkommnisse (Beispiele: Sturz oder Auffangen eines Sturzes, Anwendung oder Lagerung bei extremen Temperaturen, außerhalb der Betriebsstätten des Herstellers vorgenommene Änderungen usw.):",
+    "art": "text",
+    "art_app": "text",
+    "pflicht": false,
+    "soll": "",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-connexion-suivi-DE_0685I000000NpxrQAC.pdf, „Überprüfung von PSA – Prüfbericht – Andere Anschlageinrichtungen“ (150214), S. 1/1, Abschnitt 1"
+   },
+   {
+    "nr": 2,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergewissern Sie sich, dass Seriennummer und CE-Kennzeichnung vorhanden und lesbar sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-connexion-suivi-DE_0685I000000NpxrQAC.pdf, „Überprüfung von PSA – Prüfbericht – Andere Anschlageinrichtungen“ (150214), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 3,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Stellen Sie sicher, dass die Lebensdauer des Produkts nicht überschritten ist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-connexion-suivi-DE_0685I000000NpxrQAC.pdf, „Überprüfung von PSA – Prüfbericht – Andere Anschlageinrichtungen“ (150214), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 4,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergleichen Sie das Produkt mit einem neuen Gerät, um sicherzustellen, dass keine Änderungen vorgenommen wurden und alle Bestandteile vorhanden sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-connexion-suivi-DE_0685I000000NpxrQAC.pdf, „Überprüfung von PSA – Prüfbericht – Andere Anschlageinrichtungen“ (150214), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 5,
+    "gruppe": "Überprüfung des allgemeinen Zustands",
+    "text": "Überprüfen Sie den allgemeinen Zustand des Produkts (Kratzer, Verformung, Risse, Korrosionserscheinungen usw...).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-connexion-suivi-DE_0685I000000NpxrQAC.pdf, „Überprüfung von PSA – Prüfbericht – Andere Anschlageinrichtungen“ (150214), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 6,
+    "gruppe": "Überprüfung der Verbindungsöse",
+    "text": "Überprüfen Sie den Zustand der Verbindungsösen (Kratzer, Deformierungen, Risse, Korrosionserscheinungen usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-connexion-suivi-DE_0685I000000NpxrQAC.pdf, „Überprüfung von PSA – Prüfbericht – Andere Anschlageinrichtungen“ (150214), S. 1/1, Abschnitt 4"
+   }
+  ]
+ },
+ "Abseilgeräte": {
+  "titel": "Prüfung nach Petzl-Prüfverfahren I'D S / I'D L / I'D EVAC / RIG",
+  "bezugsprodukt": "I'D S / I'D L / I'D EVAC / RIG",
+  "quelle": {
+   "prüfbericht": {
+    "hersteller": "Petzl",
+    "art": "prüfbericht",
+    "titel": "Überprüfung von PSA – Prüfbericht – I'D S, I'D L, I'D EVAC und RIG",
+    "version_gedruckt": "160519",
+    "datei": "abseilgeraete/petzl/dateien/verif-EPI-IDS-IDL-IDevac-RIG-suivi-DE.pdf",
+    "dateiname": "verif-EPI-IDS-IDL-IDevac-RIG-suivi-DE.pdf",
+    "sha256": "208dbb79d3598801312e55e375c05616574b3c8215a5ea3fba24050bcc5697aa",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dw17fcb31c/media/product/verif-EPI-IDS-IDL-IDevac-RIG-suivi-DE_068bK00000t3xyLQAQ.pdf",
+    "gueltig_ab": null
+   },
+   "prüfverfahren": {
+    "hersteller": "Petzl",
+    "art": "prüfverfahren",
+    "titel": "Überprüfung von PSA – Vorgehensweise bei der Überprüfung – I'D S, I'D L, I'D EVAC und RIG",
+    "version_gedruckt": "180725",
+    "datei": "abseilgeraete/petzl/dateien/verif-EPI-IDS-IDL-IDevac-RIG-procedure-DE.pdf",
+    "dateiname": "verif-EPI-IDS-IDL-IDevac-RIG-procedure-DE.pdf",
+    "sha256": "56e4f3dd8a73832858e3953d0bfe4c37dd5108b93b919f2694214258f1956d21",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dw60d630d8/media/product/verif-EPI-IDS-IDL-IDevac-RIG-procedure-DE_068bK00000t3yG5QAI.pdf",
+    "gueltig_ab": null
+   }
+  },
+  "nächstliegend": false,
+  "anzahl_punkte": 14,
+  "punkte": [
+   {
+    "nr": 1,
+    "gruppe": "Bekannte Vorgeschichte des Produkts",
+    "text": "Einsatzbedingungen oder außergewöhnliche Vorkommnisse (Beispiele: Sturz oder Auffangen eines Sturzes, Anwendung oder Lagerung bei extremen Temperaturen, außerhalb der Betriebsstätten des Herstellers vorgenommene Änderungen usw.):",
+    "art": "text",
+    "art_app": "text",
+    "pflicht": false,
+    "soll": "",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-IDS-IDL-IDevac-RIG-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – I'D S, I'D L, I'D EVAC und RIG“ (160519), S. 1/1, Abschnitt 1"
+   },
+   {
+    "nr": 2,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergewissern Sie sich, dass Seriennummer und CE-Kennzeichnung vorhanden und lesbar sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-IDS-IDL-IDevac-RIG-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – I'D S, I'D L, I'D EVAC und RIG“ (160519), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 3,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Stellen Sie sicher, dass die Lebensdauer des Produkts nicht überschritten ist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-IDS-IDL-IDevac-RIG-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – I'D S, I'D L, I'D EVAC und RIG“ (160519), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 4,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergleichen Sie das Produkt mit einem neuen Gerät, um sicherzustellen, dass keine Änderungen vorgenommen wurden und alle Bestandteile vorhanden sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-IDS-IDL-IDevac-RIG-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – I'D S, I'D L, I'D EVAC und RIG“ (160519), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 5,
+    "gruppe": "Überprüfung des beweglichen Seitenteils",
+    "text": "Kontrollieren Sie den Zustand des beweglichen Seitenteils (Kratzer, Deformierungen, Verschmutzung, Risse, Abnutzungs- und Korrosionserscheinungen usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-IDS-IDL-IDevac-RIG-procedure-DE.pdf, „Überprüfung von PSA – Vorgehensweise bei der Überprüfung – I'D S, I'D L, I'D EVAC und RIG“ (180725), S. 1/5, Abschnitt 3"
+   },
+   {
+    "nr": 6,
+    "gruppe": "Überprüfung des beweglichen Seitenteils",
+    "text": "Kontrollieren Sie den Zustand der Sicherheitssperre und dass die Rückholfeder einwandfrei funktioniert.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-IDS-IDL-IDevac-RIG-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – I'D S, I'D L, I'D EVAC und RIG“ (160519), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 7,
+    "gruppe": "Überprüfung des beweglichen Seitenteils",
+    "text": "Vergewissern Sie sich, dass sich das bewegliche Seitenteil öffnen und schließen lässt. Überprüfen Sie Spiel und Verformung des beweglichen Seitenteils: Wenn sich das Seitenteil höher als das obere Ende der Achse des Klemmmechanismus bewegen lässt, verwenden Sie das Produkt nicht mehr.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": true,
+    "fundstelle": "verif-EPI-IDS-IDL-IDevac-RIG-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – I'D S, I'D L, I'D EVAC und RIG“ (160519), S. 1/1, Abschnitt 3",
+    "kritisch_beleg": "Dokument nennt den Punkt ausdrücklich als Ausschlussgrund (verwenden Sie das Produkt nicht mehr / muss ausgesondert werden / systematische Aussonderung)."
+   },
+   {
+    "nr": 8,
+    "gruppe": "Überprüfung des beweglichen Seitenteils",
+    "text": "Überprüfen Sie den Zustand der Verbindungsöse (Kratzer, Deformierungen, Risse, Abnutzungs- und Korrosionserscheinungen usw.). Überprüfen Sie den Zustand der Nieten (Kratzer, Deformierungen, Risse, Abnutzungs- und Korrosionserscheinungen, formschlüssige Verbindung usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-IDS-IDL-IDevac-RIG-procedure-DE.pdf, „Überprüfung von PSA – Vorgehensweise bei der Überprüfung – I'D S, I'D L, I'D EVAC und RIG“ (180725), S. 2/5, Abschnitt 3"
+   },
+   {
+    "nr": 9,
+    "gruppe": "Überprüfung des Klemmmechanismus",
+    "text": "Überprüfen Sie den Zustand des Klemmmechanismus und seiner Achse (Kratzer, Deformierungen, Verschmutzung, Risse, Korrosionserscheinungen usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-IDS-IDL-IDevac-RIG-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – I'D S, I'D L, I'D EVAC und RIG“ (160519), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 10,
+    "gruppe": "Überprüfung des Klemmmechanismus",
+    "text": "Kontrollieren Sie die Rotation des Klemmmechanismus.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-IDS-IDL-IDevac-RIG-procedure-DE.pdf, „Überprüfung von PSA – Vorgehensweise bei der Überprüfung – I'D S, I'D L, I'D EVAC und RIG“ (180725), S. 3/5, Abschnitt 4"
+   },
+   {
+    "nr": 11,
+    "gruppe": "Überprüfung des Klemmmechanismus",
+    "text": "Kontrollieren Sie den Zustand des Reibungselements (Kratzer, Deformierungen, Verschmutzung, Risse, Abnutzungs- und Korrosionserscheinungen, usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-IDS-IDL-IDevac-RIG-procedure-DE.pdf, „Überprüfung von PSA – Vorgehensweise bei der Überprüfung – I'D S, I'D L, I'D EVAC und RIG“ (180725), S. 3/5, Abschnitt 4"
+   },
+   {
+    "nr": 12,
+    "gruppe": "Überprüfung des Zustands des Griffs",
+    "text": "Überprüfen Sie den Zustand des Griffs (Kratzer, Deformierungen, Abnutzung, Risse usw.). Überprüfen Sie, ob die Rückholfeder des Griffs einwandfrei funktioniert.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-IDS-IDL-IDevac-RIG-procedure-DE.pdf, „Überprüfung von PSA – Vorgehensweise bei der Überprüfung – I'D S, I'D L, I'D EVAC und RIG“ (180725), S. 3/5–4/5, Abschnitt 5"
+   },
+   {
+    "nr": 13,
+    "gruppe": "Funktionsprüfung",
+    "text": "Führen Sie einen Funktionstest mit den empfohlenen Seildurchmessern durch. Hängen Sie sich in sehr geringem Abstand zum Boden in das Seil. Das Gerät muss das Seil blockieren.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-IDS-IDL-IDevac-RIG-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – I'D S, I'D L, I'D EVAC und RIG“ (160519), S. 1/1, Abschnitt 6"
+   },
+   {
+    "nr": 14,
+    "gruppe": "Funktionsprüfung",
+    "text": "Betätigen Sie den Griff und führen Sie einen Abseilvorgang über eine sehr kurze Strecke durch.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-IDS-IDL-IDevac-RIG-procedure-DE.pdf, „Überprüfung von PSA – Vorgehensweise bei der Überprüfung – I'D S, I'D L, I'D EVAC und RIG“ (180725), S. 4/5, Abschnitt 6"
+   }
+  ]
+ },
+ "Abseilachten": {
+  "titel": "Prüfung nach Petzl-Prüfbericht Manuelles Sicherungsgerät",
+  "bezugsprodukt": "Manuelles Sicherungsgerät (Petzl-Prüfbericht E02 bs; nächstliegend für Achter)",
+  "quelle": {
+   "prüfbericht": {
+    "hersteller": "Petzl",
+    "art": "prüfbericht",
+    "titel": "Manuelles SICHERUNGSGERÄT – Prüfbericht (E02 bs)",
+    "version_gedruckt": "Kennziffer 1 vom 16.11.09",
+    "datei": "abseilgeraete/petzl/dateien/verif-EPI-assureur-suivi-DE.pdf",
+    "dateiname": "verif-EPI-assureur-suivi-DE.pdf",
+    "sha256": "bc411c20667d9ebee91ed1d23e34ae44ef7b68563d56ff09da989c3b0702150e",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dw826d29be/media/product/verif-EPI-assureur-suivi-DE_0685I000000hLNmQAM.pdf",
+    "gueltig_ab": null
+   }
+  },
+  "nächstliegend": true,
+  "anzahl_punkte": 9,
+  "punkte": [
+   {
+    "nr": 1,
+    "gruppe": "Überprüfung der Vorgeschichte",
+    "text": "Die Komponente wurde außerhalb des Herstellerwerks modifiziert",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "nein",
+    "kritisch": true,
+    "fundstelle": "verif-EPI-assureur-suivi-DE.pdf, „Manuelles SICHERUNGSGERÄT – Prüfbericht (E02 bs)“ (Kennziffer 1 vom 16.11.09), S. 1/1",
+    "kritisch_beleg": "Dokument nennt den Punkt ausdrücklich als Ausschlussgrund (verwenden Sie das Produkt nicht mehr / muss ausgesondert werden / systematische Aussonderung)."
+   },
+   {
+    "nr": 2,
+    "gruppe": "Überprüfung der Vorgeschichte",
+    "text": "Die Komponente hat einen schweren Schlag erlitten",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "nein",
+    "kritisch": true,
+    "fundstelle": "verif-EPI-assureur-suivi-DE.pdf, „Manuelles SICHERUNGSGERÄT – Prüfbericht (E02 bs)“ (Kennziffer 1 vom 16.11.09), S. 1/1",
+    "kritisch_beleg": "Dokument nennt den Punkt ausdrücklich als Ausschlussgrund (verwenden Sie das Produkt nicht mehr / muss ausgesondert werden / systematische Aussonderung)."
+   },
+   {
+    "nr": 3,
+    "gruppe": "Überprüfung der Vorgeschichte",
+    "text": "Das Produkt wurde bei Temperaturen unter -40 °C oder über + 80 °C verwendet",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "nein",
+    "kritisch": true,
+    "fundstelle": "verif-EPI-assureur-suivi-DE.pdf, „Manuelles SICHERUNGSGERÄT – Prüfbericht (E02 bs)“ (Kennziffer 1 vom 16.11.09), S. 1/1",
+    "kritisch_beleg": "Dokument nennt den Punkt ausdrücklich als Ausschlussgrund (verwenden Sie das Produkt nicht mehr / muss ausgesondert werden / systematische Aussonderung)."
+   },
+   {
+    "nr": 4,
+    "gruppe": "Überprüfung der Vorgeschichte",
+    "text": "Das Produkt hat die vom Hersteller angegebene Lebensdauer überschritten",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "nein",
+    "kritisch": true,
+    "fundstelle": "verif-EPI-assureur-suivi-DE.pdf, „Manuelles SICHERUNGSGERÄT – Prüfbericht (E02 bs)“ (Kennziffer 1 vom 16.11.09), S. 1/1",
+    "kritisch_beleg": "Dokument nennt den Punkt ausdrücklich als Ausschlussgrund (verwenden Sie das Produkt nicht mehr / muss ausgesondert werden / systematische Aussonderung)."
+   },
+   {
+    "nr": 5,
+    "gruppe": "Überprüfung der Vorgeschichte",
+    "text": "Das Produkt ist mit chemischen Produkten in Berührung gekommen.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "nein",
+    "kritisch": true,
+    "fundstelle": "verif-EPI-assureur-suivi-DE.pdf, „Manuelles SICHERUNGSGERÄT – Prüfbericht (E02 bs)“ (Kennziffer 1 vom 16.11.09), S. 1/1",
+    "kritisch_beleg": "Dokument nennt den Punkt ausdrücklich als Ausschlussgrund (verwenden Sie das Produkt nicht mehr / muss ausgesondert werden / systematische Aussonderung)."
+   },
+   {
+    "nr": 6,
+    "gruppe": "Visuelle Überprüfung der Sicherheitselemente",
+    "text": "Zustand des Körpers (Abnutzungs- und Korrosionserscheinungen, Kratzer, Deformierungen, Risse)",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-assureur-suivi-DE.pdf, „Manuelles SICHERUNGSGERÄT – Prüfbericht (E02 bs)“ (Kennziffer 1 vom 16.11.09), S. 1/1"
+   },
+   {
+    "nr": 7,
+    "gruppe": "Visuelle Überprüfung der Sicherheitselemente",
+    "text": "Zustand der Reibungselemente: Bremsrille (Abnutzungs- und Korrosionserscheinungen, Kratzer, Deformierungen, Risse)",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-assureur-suivi-DE.pdf, „Manuelles SICHERUNGSGERÄT – Prüfbericht (E02 bs)“ (Kennziffer 1 vom 16.11.09), S. 1/1"
+   },
+   {
+    "nr": 8,
+    "gruppe": "Visuelle Überprüfung der Sicherheitselemente",
+    "text": "Zustand der Verbindungsösen",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-assureur-suivi-DE.pdf, „Manuelles SICHERUNGSGERÄT – Prüfbericht (E02 bs)“ (Kennziffer 1 vom 16.11.09), S. 1/1"
+   },
+   {
+    "nr": 9,
+    "gruppe": "Funktionsprüfung",
+    "text": "Funktionstest am Seil",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-assureur-suivi-DE.pdf, „Manuelles SICHERUNGSGERÄT – Prüfbericht (E02 bs)“ (Kennziffer 1 vom 16.11.09), S. 1/1"
+   }
+  ]
+ },
+ "Seilrollen": {
+  "titel": "Prüfung nach Petzl-Prüfverfahren RESCUE / PRO",
+  "bezugsprodukt": "RESCUE / PRO (Seilrollen)",
+  "quelle": {
+   "prüfbericht": {
+    "hersteller": "Petzl",
+    "art": "prüfbericht",
+    "titel": "Überprüfung von PSA – Prüfbericht – Seilrollen",
+    "version_gedruckt": "070121",
+    "datei": "seilrollen/petzl-rollen/dateien/verif-EPI-poulies-suivi-DE.pdf",
+    "dateiname": "verif-EPI-poulies-suivi-DE.pdf",
+    "sha256": "83e17303cb65db99f3f0b9cd7aeb7726a31c4d7b70a1bf96eb5d294167149690",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dw9023ecbf/media/product/verif-EPI-poulies-suivi-DE_068bK00000im6eYQAQ.pdf",
+    "gueltig_ab": null
+   },
+   "prüfverfahren": {
+    "hersteller": "Petzl",
+    "art": "prüfverfahren",
+    "titel": "Überprüfung von PSA – Vorgehensweise bei der Überprüfung – Seilrollen",
+    "version_gedruckt": "060121",
+    "datei": "seilrollen/petzl-rollen/dateien/verif-EPI-poulies-procedure-DE.pdf",
+    "dateiname": "verif-EPI-poulies-procedure-DE.pdf",
+    "sha256": "cd9c472d20f622f7892265433329fa241fb4766698bd74aa14e93c90d7aa870c",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dwc4ce430a/media/product/verif-EPI-poulies-procedure-DE_068bK00000imRUPQA2.pdf",
+    "gueltig_ab": null
+   }
+  },
+  "nächstliegend": false,
+  "anzahl_punkte": 12,
+  "punkte": [
+   {
+    "nr": 1,
+    "gruppe": "Bekannte Vorgeschichte des Produkts",
+    "text": "Einsatzbedingungen oder außergewöhnliche Vorkommnisse (Beispiele: Sturz oder Auffangen eines Sturzes, Anwendung oder Lagerung bei extremen Temperaturen, außerhalb der Betriebsstätten des Herstellers vorgenommene Änderungen usw.):",
+    "art": "text",
+    "art_app": "text",
+    "pflicht": false,
+    "soll": "",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-poulies-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – Seilrollen“ (070121), S. 1/1, Abschnitt 1"
+   },
+   {
+    "nr": 2,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergewissern Sie sich, dass Seriennummer und CE-Kennzeichnung vorhanden und lesbar sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-poulies-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – Seilrollen“ (070121), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 3,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Stellen Sie sicher, dass die Lebensdauer des Produkts nicht überschritten ist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-poulies-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – Seilrollen“ (070121), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 4,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergleichen Sie das Produkt mit einem neuen Produkt, um sicherzustellen, dass keine Änderungen vorgenommen wurden und alle Bestandteile vorhanden sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-poulies-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – Seilrollen“ (070121), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 5,
+    "gruppe": "Überprüfung des Zustands der Seitenteile",
+    "text": "Überprüfen Sie den Zustand der Seitenteile (Kratzer, Deformierungen, Risse, Abnutzung, Korrosionserscheinungen, usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-poulies-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – Seilrollen“ (070121), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 6,
+    "gruppe": "Überprüfung des Zustands der Seitenteile",
+    "text": "Überprüfen Sie den Zustand der Verbindungsösen (Kratzer, Deformierungen, Risse, Abnutzung, Korrosionserscheinungen usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-poulies-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – Seilrollen“ (070121), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 7,
+    "gruppe": "Überprüfung des Zustands der Seitenteile",
+    "text": "Prüfen Sie die einwandfreie Rotation bei Seilrollen mit beweglichen Seitenteilen.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-poulies-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – Seilrollen“ (070121), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 8,
+    "gruppe": "Überprüfung des Zustands der Seitenteile",
+    "text": "Überprüfen Sie den Zustand der Niete (Kratzer, Deformierungen, Risse, Korrosionserscheinungen, formschlüssige Verbindung usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-poulies-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – Seilrollen“ (070121), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 9,
+    "gruppe": "Überprüfung des Zustands der Laufrolle(n)",
+    "text": "Überprüfen Sie den Zustand der Laufrolle (Kratzer, Deformierungen, Risse, Abnutzung, Korrosionserscheinungen, Fremdkörper usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-poulies-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – Seilrollen“ (070121), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 10,
+    "gruppe": "Überprüfung des Zustands der Laufrolle(n)",
+    "text": "Prüfen Sie, ob sich die Laufrolle ungehindert in beide Richtungen drehen kann.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-poulies-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – Seilrollen“ (070121), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 11,
+    "gruppe": "Überprüfung des Öffnungs- und Verriegelungssystems der Seitenteile",
+    "text": "Kontrollieren Sie den Zustand und die Funktion des Verriegelungssystems (Kratzer, Deformierungen, Verschmutzung, Effizienz der Rückholfeder(n)).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-poulies-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – Seilrollen“ (070121), S. 1/1, Abschnitt 5"
+   },
+   {
+    "nr": 12,
+    "gruppe": "Funktionsprüfung",
+    "text": "Installieren Sie Ihre Seilrolle an einem Fixpunkt und legen Sie ein kompatibles Seil um die Laufrolle. Lassen Sie das Seil in beide Richtungen durch das Gerät laufen.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-poulies-suivi-DE.pdf, „Überprüfung von PSA – Prüfbericht – Seilrollen“ (070121), S. 1/1, Abschnitt 6"
+   }
+  ]
+ },
+ "Textilmaterial": {
+  "titel": "Prüfung nach Petzl-Prüfverfahren ANNEAU / CONNEXION",
+  "bezugsprodukt": "ANNEAU / CONNEXION (Verbindungs- und Anschlagmittel)",
+  "quelle": {
+   "prüfbericht": {
+    "hersteller": "Petzl",
+    "art": "prüfbericht",
+    "titel": "Überprüfung von PSA – Prüfbericht – Verbindungs- und Anschlagmittel",
+    "version_gedruckt": "101215",
+    "datei": "flaschenzuege/petzl-jag/dateien/pdf/VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf",
+    "dateiname": "VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf",
+    "sha256": "c38554bfd89bf57349971823a7cee84c9eb2325fcceb70ac1d5cf47df02280b6",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dwb1f4fbd6/media/product/VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf",
+    "gueltig_ab": null
+   },
+   "prüfverfahren": {
+    "hersteller": "Petzl",
+    "art": "prüfverfahren",
+    "titel": "Überprüfung von PSA – Vorgehensweise bei der Überprüfung – Verbindungs- und Anschlagmittel",
+    "version_gedruckt": "210725",
+    "datei": "flaschenzuege/petzl-jag/dateien/pdf/verif-EPI-sangles-amarrage-procedure-DE_068bK00000iujUAQAY.pdf",
+    "dateiname": "verif-EPI-sangles-amarrage-procedure-DE_068bK00000iujUAQAY.pdf",
+    "sha256": "4344b2145354727b85f1a5cadde44f5867805fb60f3d66159e0cf5aad62afeae",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dw7950af66/media/product/verif-EPI-sangles-amarrage-procedure-DE_068bK00000iujUAQAY.pdf",
+    "gueltig_ab": null
+   }
+  },
+  "nächstliegend": false,
+  "anzahl_punkte": 8,
+  "punkte": [
+   {
+    "nr": 1,
+    "gruppe": "Bekannte Vorgeschichte des Produkts",
+    "text": "Einsatzbedingungen oder außergewöhnliche Vorkommnisse (Beispiele: Sturz oder Auffangen eines Sturzes, Anwendung oder Lagerung bei extremen Temperaturen, außerhalb der Betriebsstätten des Herstellers vorgenommene Änderungen usw.):",
+    "art": "text",
+    "art_app": "text",
+    "pflicht": false,
+    "soll": "",
+    "kritisch": false,
+    "fundstelle": "VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungs- und Anschlagmittel“ (101215), S. 1/1, Abschnitt 1"
+   },
+   {
+    "nr": 2,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergewissern Sie sich, dass Seriennummer und CE-Kennzeichnung vorhanden und lesbar sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungs- und Anschlagmittel“ (101215), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 3,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Stellen Sie sicher, dass die Lebensdauer des Produkts nicht überschritten ist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungs- und Anschlagmittel“ (101215), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 4,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergleichen Sie das Produkt mit einem neuen Gerät, um sicherzustellen, dass keine Änderungen vorgenommen wurden und alle Bestandteile vorhanden sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungs- und Anschlagmittel“ (101215), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 5,
+    "gruppe": "Überprüfung des Zustands des Gurtbands",
+    "text": "Überprüfen Sie den Zustand des Gurtbands über die gesamte Länge: Achten Sie auf Einschnitte, Abnutzungserscheinungen und sonstige durch Benutzung, Hitze, Kontakt mit chemischen Produkten usw. hervorgerufene Beschädigungen. Achten Sie darauf, dass keine Fäden durchtrennt sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungs- und Anschlagmittel“ (101215), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 6,
+    "gruppe": "Überprüfung des Zustands des Gurtbands",
+    "text": "Kontrollieren Sie den Zustand der Sicherheitsnähte (oben/unten). Achten Sie auf lose, abgenutzte oder durchtrennte Fäden.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungs- und Anschlagmittel“ (101215), S. 1/1, Abschnitt 3",
+    "wortlaut_original": "Kontrollen Sie den Zustand der Sicherheitsnähte (oben/unten). Achten Sie auf lose, abgenutzte oder durchtrennte Fäden.",
+    "hinweis": "Offensichtlicher Tippfehler im Original, hier berichtigt (Wortlaut sonst unverändert)."
+   },
+   {
+    "nr": 7,
+    "gruppe": "Überprüfung der Verbindungsösen und der Einstellschnalle (entsprechend den Modellen)",
+    "text": "Überprüfen Sie den Zustand der Verbindungsösen und der Einstellschnalle (Kratzer, Risse, Abnutzungserscheinungen, Verformung, Korrosionserscheinungen usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungs- und Anschlagmittel“ (101215), S. 1/1, Abschnitt 4",
+    "wortlaut_original": "Überprüfen Sie den Zustand der Verbindungsösen und der Einstellschnalle: Kratzer, Risse, Abnutzungserscheinungen, Verformung, Korrosionserscheinungen usw.).",
+    "hinweis": "Offensichtlicher Tippfehler im Original, hier berichtigt (Wortlaut sonst unverändert)."
+   },
+   {
+    "nr": 8,
+    "gruppe": "Überprüfung der Verbindungsösen und der Einstellschnalle (entsprechend den Modellen)",
+    "text": "Vergewissern Sie sich, dass die Einstellschnalle einwandfrei funktioniert.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungs- und Anschlagmittel“ (101215), S. 1/1, Abschnitt 4"
+   }
+  ]
+ },
+ "Seile": {
+  "titel": "Prüfung nach Petzl-Prüfverfahren AXIS u. a.",
+  "bezugsprodukt": "AXIS u. a. (Seile)",
+  "quelle": {
+   "prüfbericht": {
+    "hersteller": "Petzl",
+    "art": "prüfbericht",
+    "titel": "Überprüfung von PSA – Prüfbericht – Seile",
+    "version_gedruckt": "071215",
+    "datei": "formulare-petzl/quellen/verif-EPI-cordes-suivi-DE_068bK00000wQQaKQAW.pdf",
+    "dateiname": "verif-EPI-cordes-suivi-DE_068bK00000wQQaKQAW.pdf",
+    "sha256": "07effab34fe5e252bac4116164d15589908ed551c4a7a52b5132926e5c9739d0",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dw1c544ca6/media/product/verif-EPI-cordes-suivi-DE_068bK00000wQQaKQAW.pdf",
+    "gueltig_ab": null
+   },
+   "prüfverfahren": {
+    "hersteller": "Petzl",
+    "art": "prüfverfahren",
+    "titel": "Überprüfung von PSA – Vorgehensweise bei der Überprüfung – Seile",
+    "version_gedruckt": null,
+    "datei": "formulare-petzl/quellen/verif-EPI-cordes-procedure-DE_068bK00000uzxXaQAI.pdf",
+    "dateiname": "verif-EPI-cordes-procedure-DE_068bK00000uzxXaQAI.pdf",
+    "sha256": "c46a437ddffffbaa36aea02d9af5f076ce0121e49020889a594c7ccd66dd7eb8",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dw402662ac/media/product/verif-EPI-cordes-procedure-DE_068bK00000uzxXaQAI.pdf",
+    "gueltig_ab": null
+   }
+  },
+  "nächstliegend": false,
+  "anzahl_punkte": 12,
+  "punkte": [
+   {
+    "nr": 1,
+    "gruppe": "Bekannte Vorgeschichte des Produkts",
+    "text": "Einsatzbedingungen oder außergewöhnliche Vorkommnisse (Beispiele: Sturz oder Auffangen eines Sturzes, Anwendung oder Lagerung bei extremen Temperaturen, außerhalb der Betriebsstätten des Herstellers vorgenommene Änderungen usw.):",
+    "art": "text",
+    "art_app": "text",
+    "pflicht": false,
+    "soll": "",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-cordes-suivi-DE_068bK00000wQQaKQAW.pdf, „Überprüfung von PSA – Prüfbericht – Seile“ (071215), S. 1/1, Abschnitt 1"
+   },
+   {
+    "nr": 2,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergewissern Sie sich, dass Seriennummer und CE-Kennzeichnung vorhanden und lesbar sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-cordes-suivi-DE_068bK00000wQQaKQAW.pdf, „Überprüfung von PSA – Prüfbericht – Seile“ (071215), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 3,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Stellen Sie sicher, dass die Lebensdauer des Produkts nicht überschritten ist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-cordes-suivi-DE_068bK00000wQQaKQAW.pdf, „Überprüfung von PSA – Prüfbericht – Seile“ (071215), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 4,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergleichen Sie das Produkt mit einem neuen Gerät, um sicherzustellen, dass keine Änderungen vorgenommen wurden und alle Bestandteile vorhanden sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-cordes-suivi-DE_068bK00000wQQaKQAW.pdf, „Überprüfung von PSA – Prüfbericht – Seile“ (071215), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 5,
+    "gruppe": "Überprüfung des Zustands des Seilmantels",
+    "text": "Kontrollieren Sie den Zustand des Mantels über die gesamte Seillänge. Vergewissern Sie sich, dass der Mantel keine Einschnitte, Brandstellen, ausgefransten Fäden, aufgerauten Stellen oder Spuren von Chemikalien o. ä. aufweist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-cordes-suivi-DE_068bK00000wQQaKQAW.pdf, „Überprüfung von PSA – Prüfbericht – Seile“ (071215), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 6,
+    "gruppe": "Überprüfung des Zustands des Seilkerns",
+    "text": "Tasten Sie den Seilkern wie in der Abbildung gezeigt über die gesamte Länge des Seils ab. Auf diese Weise können Sie feststellen, ob der Kern beschädigt ist (harte, aufgequollene, weiche oder eingedrückte Stellen usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-cordes-suivi-DE_068bK00000wQQaKQAW.pdf, „Überprüfung von PSA – Prüfbericht – Seile“ (071215), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 7,
+    "gruppe": "Überprüfung der vernähten oder gespleißten Seilendverbindungen",
+    "text": "Kontrollieren Sie den Zustand der Kunststoffhüllen (z. B. Abnutzungserscheinungen, Einschnitte).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-cordes-suivi-DE_068bK00000wQQaKQAW.pdf, „Überprüfung von PSA – Prüfbericht – Seile“ (071215), S. 1/1, Abschnitt 5"
+   },
+   {
+    "nr": 8,
+    "gruppe": "Überprüfung der vernähten oder gespleißten Seilendverbindungen",
+    "text": "Kontrollieren Sie den Zustand der vernähten Endverbindungen und der Sicherheitsnähte (oben/unten). Achten Sie auf lose, abgenutzte oder durchtrennte Fäden.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-cordes-suivi-DE_068bK00000wQQaKQAW.pdf, „Überprüfung von PSA – Prüfbericht – Seile“ (071215), S. 1/1, Abschnitt 5",
+    "wortlaut_original": "Kontrollen Sie den Zustand der vernähten Endverbindungen und der Sicherheitsnähte (oben/unten). Achten Sie auf lose, abgenutzte oder durchtrennte Fäden.",
+    "hinweis": "Offensichtlicher Tippfehler im Original, hier berichtigt (Wortlaut sonst unverändert)."
+   },
+   {
+    "nr": 9,
+    "gruppe": "Überprüfung der vernähten oder gespleißten Seilendverbindungen",
+    "text": "Überprüfen Sie den Zustand der Spleiße: Abnutzungserscheinungen (insbesondere am Verbindungspunkt), lose, abgenutzte oder durchtrennte Fäden.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-cordes-suivi-DE_068bK00000wQQaKQAW.pdf, „Überprüfung von PSA – Prüfbericht – Seile“ (071215), S. 1/1, Abschnitt 5"
+   },
+   {
+    "nr": 10,
+    "gruppe": "Überprüfung der vernähten oder gespleißten Seilendverbindungen",
+    "text": "Spleiße: Überprüfen Sie die Länge der Verbindungsschlaufe (höchstens 5 cm).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-cordes-suivi-DE_068bK00000wQQaKQAW.pdf, „Überprüfung von PSA – Prüfbericht – Seile“ (071215), S. 1/1, Abschnitt 5"
+   },
+   {
+    "nr": 11,
+    "gruppe": "Kontrolle der Seillänge und der Seilmitte",
+    "text": "Wenn Ihr Seil über eine Mittenmarkierung verfügt, kontrollieren Sie, ob diese an der richtigen Stelle ist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-cordes-suivi-DE_068bK00000wQQaKQAW.pdf, „Überprüfung von PSA – Prüfbericht – Seile“ (071215), S. 1/1, Abschnitt 6"
+   },
+   {
+    "nr": 12,
+    "gruppe": "Kontrolle der Seillänge und der Seilmitte",
+    "text": "Messen Sie die Länge Ihres Seils.",
+    "art": "laenge",
+    "art_app": "laenge",
+    "pflicht": true,
+    "soll": "",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-cordes-suivi-DE_068bK00000wQQaKQAW.pdf, „Überprüfung von PSA – Prüfbericht – Seile“ (071215), S. 1/1, Abschnitt 6"
+   }
+  ]
+ },
+ "Seilklemmen": {
+  "titel": "Prüfung nach Petzl-Prüfverfahren BASIC / ASCENSION / CROLL",
+  "bezugsprodukt": "BASIC / ASCENSION / CROLL (gezahnte Seilklemme)",
+  "quelle": {
+   "prüfbericht": {
+    "hersteller": "Petzl",
+    "art": "prüfbericht",
+    "titel": "Überprüfung von PSA – Prüfbericht – Gezahnte Seilklemme",
+    "version_gedruckt": "050717",
+    "datei": "seilklemmen/petzl/dateien/verif-EPI-bloqueur-suivi-DE_068Tx00000Ho5UAIAZ.pdf",
+    "dateiname": "verif-EPI-bloqueur-suivi-DE_068Tx00000Ho5UAIAZ.pdf",
+    "sha256": "b1faf8f92a5dd9da0ef86736c5606501dee68ea264f9c88d0a892a5fde2aef0e",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dw68dc5514/media/product/verif-EPI-bloqueur-suivi-DE_068Tx00000Ho5UAIAZ.pdf",
+    "gueltig_ab": null
+   },
+   "prüfverfahren": {
+    "hersteller": "Petzl",
+    "art": "prüfverfahren",
+    "titel": "Überprüfung von PSA – Vorgehensweise bei der Überprüfung – Seilklemmen (gezahnte Seilklemme)",
+    "version_gedruckt": "150725",
+    "datei": "seilklemmen/petzl/dateien/verif-EPI-bloqueur-procedure-DE_068Tx00000IKQk0IAH.pdf",
+    "dateiname": "verif-EPI-bloqueur-procedure-DE_068Tx00000IKQk0IAH.pdf",
+    "sha256": "6a7f0d6acc92a51a0d21af64fe3207dbba9f566b47b87654aabbdafbe2aed79f",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dwb70c8e91/media/product/verif-EPI-bloqueur-procedure-DE_068Tx00000IKQk0IAH.pdf",
+    "gueltig_ab": null
+   }
+  },
+  "nächstliegend": false,
+  "anzahl_punkte": 13,
+  "punkte": [
+   {
+    "nr": 1,
+    "gruppe": "Bekannte Vorgeschichte des Produkts",
+    "text": "Einsatzbedingungen oder außergewöhnliche Vorkommnisse (Beispiele: Sturz oder Auffangen eines Sturzes, Anwendung oder Lagerung bei extremen Temperaturen, außerhalb der Betriebsstätten des Herstellers vorgenommene Änderungen usw.):",
+    "art": "text",
+    "art_app": "text",
+    "pflicht": false,
+    "soll": "",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-bloqueur-suivi-DE_068Tx00000Ho5UAIAZ.pdf, „Überprüfung von PSA – Prüfbericht – Gezahnte Seilklemme“ (050717), S. 1/1, Abschnitt 1"
+   },
+   {
+    "nr": 2,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergewissern Sie sich, dass Seriennummer und CE-Kennzeichnung vorhanden und lesbar sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-bloqueur-suivi-DE_068Tx00000Ho5UAIAZ.pdf, „Überprüfung von PSA – Prüfbericht – Gezahnte Seilklemme“ (050717), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 3,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Stellen Sie sicher, dass die Lebensdauer des Produkts nicht überschritten ist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-bloqueur-suivi-DE_068Tx00000Ho5UAIAZ.pdf, „Überprüfung von PSA – Prüfbericht – Gezahnte Seilklemme“ (050717), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 4,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergleichen Sie das Produkt mit einem neuen Gerät, um sicherzustellen, dass keine Änderungen vorgenommen wurden und alle Bestandteile vorhanden sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-bloqueur-suivi-DE_068Tx00000Ho5UAIAZ.pdf, „Überprüfung von PSA – Prüfbericht – Gezahnte Seilklemme“ (050717), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 5,
+    "gruppe": "Überprüfung des Körpers",
+    "text": "Überprüfen Sie den Zustand des Körpers (Kratzer, Abnutzungserscheinungen, Risse, Verformung, Korrosionserscheinungen usw...).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-bloqueur-suivi-DE_068Tx00000Ho5UAIAZ.pdf, „Überprüfung von PSA – Prüfbericht – Gezahnte Seilklemme“ (050717), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 6,
+    "gruppe": "Überprüfung des Körpers",
+    "text": "Überprüfen Sie den Zustand der Verbindungsösen (Kratzer, Deformierungen, Risse, Korrosionserscheinungen usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-bloqueur-suivi-DE_068Tx00000Ho5UAIAZ.pdf, „Überprüfung von PSA – Prüfbericht – Gezahnte Seilklemme“ (050717), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 7,
+    "gruppe": "Überprüfung des Körpers",
+    "text": "Überprüfen Sie ihn auf vom Durchrutschen des Seils hervorgerufene Abnutzungserscheinungen.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-bloqueur-suivi-DE_068Tx00000Ho5UAIAZ.pdf, „Überprüfung von PSA – Prüfbericht – Gezahnte Seilklemme“ (050717), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 8,
+    "gruppe": "Überprüfung des Klemmmechanismus",
+    "text": "Überprüfen Sie den Zustand des Klemmmechanismus (Kratzer, Deformierungen, Risse, Korrosionserscheinungen usw.). Kontrollieren Sie das Vorhandensein aller Zähne und deren Abnutzungsgrad. Die Zähne dürfen nicht verschmutzt sein. Säubern Sie diese nötigenfalls mit einer Bürste.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-bloqueur-suivi-DE_068Tx00000Ho5UAIAZ.pdf, „Überprüfung von PSA – Prüfbericht – Gezahnte Seilklemme“ (050717), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 9,
+    "gruppe": "Überprüfung des Klemmmechanismus",
+    "text": "Überprüfen Sie den Zustand der Achse des Klemmmechanismus und der Niete (Kratzer, Deformierungen, Risse, Korrosionserscheinungen usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-bloqueur-suivi-DE_068Tx00000Ho5UAIAZ.pdf, „Überprüfung von PSA – Prüfbericht – Gezahnte Seilklemme“ (050717), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 10,
+    "gruppe": "Überprüfung des Klemmmechanismus",
+    "text": "Kontrollieren Sie die Rotation des Klemmmechanismus und prüfen Sie, ob die Rückholfeder einwandfrei funktioniert.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-bloqueur-suivi-DE_068Tx00000Ho5UAIAZ.pdf, „Überprüfung von PSA – Prüfbericht – Gezahnte Seilklemme“ (050717), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 11,
+    "gruppe": "Überprüfung der Sicherheitssperre",
+    "text": "Überprüfen Sie den Zustand der Sicherheitssperre und ihrer Achse (Kratzer, Deformierungen, Risse, Korrosionserscheinungen usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-bloqueur-suivi-DE_068Tx00000Ho5UAIAZ.pdf, „Überprüfung von PSA – Prüfbericht – Gezahnte Seilklemme“ (050717), S. 1/1, Abschnitt 5"
+   },
+   {
+    "nr": 12,
+    "gruppe": "Überprüfung der Sicherheitssperre",
+    "text": "Vergewissern Sie sich, dass die Rückholfeder der Sicherheitssperre einwandfrei funktioniert. Vergewissern Sie sich, dass die Verriegelung der Sicherheitssperre einwandfrei funktioniert.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-bloqueur-suivi-DE_068Tx00000Ho5UAIAZ.pdf, „Überprüfung von PSA – Prüfbericht – Gezahnte Seilklemme“ (050717), S. 1/1, Abschnitt 5"
+   },
+   {
+    "nr": 13,
+    "gruppe": "Funktionsprüfung",
+    "text": "Vergewissern Sie sich, dass die Seilklemme in einer Richtung am Seil entlang rutscht und in der anderen Richtung blockiert.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-bloqueur-suivi-DE_068Tx00000Ho5UAIAZ.pdf, „Überprüfung von PSA – Prüfbericht – Gezahnte Seilklemme“ (050717), S. 1/1, Abschnitt 6"
+   }
+  ]
+ },
+ "Kantenschutz": {
+  "titel": "Prüfung nach Petzl-Prüfbericht Verbindungs- und Anschlagmittel (Gurtband)",
+  "bezugsprodukt": "(kein Petzl-Kantenschutz; nächstliegend: Verbindungs- und Anschlagmittel, nur Gurtband/Nähte)",
+  "quelle": {
+   "prüfbericht": {
+    "hersteller": "Petzl",
+    "art": "prüfbericht",
+    "titel": "Überprüfung von PSA – Prüfbericht – Verbindungs- und Anschlagmittel",
+    "version_gedruckt": "101215",
+    "datei": "flaschenzuege/petzl-jag/dateien/pdf/VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf",
+    "dateiname": "VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf",
+    "sha256": "c38554bfd89bf57349971823a7cee84c9eb2325fcceb70ac1d5cf47df02280b6",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dwb1f4fbd6/media/product/VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf",
+    "gueltig_ab": null
+   },
+   "prüfverfahren": {
+    "hersteller": "Petzl",
+    "art": "prüfverfahren",
+    "titel": "Überprüfung von PSA – Vorgehensweise bei der Überprüfung – Verbindungs- und Anschlagmittel",
+    "version_gedruckt": "210725",
+    "datei": "flaschenzuege/petzl-jag/dateien/pdf/verif-EPI-sangles-amarrage-procedure-DE_068bK00000iujUAQAY.pdf",
+    "dateiname": "verif-EPI-sangles-amarrage-procedure-DE_068bK00000iujUAQAY.pdf",
+    "sha256": "4344b2145354727b85f1a5cadde44f5867805fb60f3d66159e0cf5aad62afeae",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dw7950af66/media/product/verif-EPI-sangles-amarrage-procedure-DE_068bK00000iujUAQAY.pdf",
+    "gueltig_ab": null
+   }
+  },
+  "nächstliegend": true,
+  "anzahl_punkte": 6,
+  "punkte": [
+   {
+    "nr": 1,
+    "gruppe": "Bekannte Vorgeschichte des Produkts",
+    "text": "Einsatzbedingungen oder außergewöhnliche Vorkommnisse (Beispiele: Sturz oder Auffangen eines Sturzes, Anwendung oder Lagerung bei extremen Temperaturen, außerhalb der Betriebsstätten des Herstellers vorgenommene Änderungen usw.):",
+    "art": "text",
+    "art_app": "text",
+    "pflicht": false,
+    "soll": "",
+    "kritisch": false,
+    "fundstelle": "VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungs- und Anschlagmittel“ (101215), S. 1/1, Abschnitt 1"
+   },
+   {
+    "nr": 2,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergewissern Sie sich, dass Seriennummer und CE-Kennzeichnung vorhanden und lesbar sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungs- und Anschlagmittel“ (101215), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 3,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Stellen Sie sicher, dass die Lebensdauer des Produkts nicht überschritten ist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungs- und Anschlagmittel“ (101215), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 4,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergleichen Sie das Produkt mit einem neuen Gerät, um sicherzustellen, dass keine Änderungen vorgenommen wurden und alle Bestandteile vorhanden sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungs- und Anschlagmittel“ (101215), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 5,
+    "gruppe": "Überprüfung des Zustands des Gurtbands",
+    "text": "Überprüfen Sie den Zustand des Gurtbands über die gesamte Länge: Achten Sie auf Einschnitte, Abnutzungserscheinungen und sonstige durch Benutzung, Hitze, Kontakt mit chemischen Produkten usw. hervorgerufene Beschädigungen. Achten Sie darauf, dass keine Fäden durchtrennt sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungs- und Anschlagmittel“ (101215), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 6,
+    "gruppe": "Überprüfung des Zustands des Gurtbands",
+    "text": "Kontrollieren Sie den Zustand der Sicherheitsnähte (oben/unten). Achten Sie auf lose, abgenutzte oder durchtrennte Fäden.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "VerifEPI-Sangleamarrage_DE_068bK00000iuEtTQAU.pdf, „Überprüfung von PSA – Prüfbericht – Verbindungs- und Anschlagmittel“ (101215), S. 1/1, Abschnitt 3",
+    "wortlaut_original": "Kontrollen Sie den Zustand der Sicherheitsnähte (oben/unten). Achten Sie auf lose, abgenutzte oder durchtrennte Fäden.",
+    "hinweis": "Offensichtlicher Tippfehler im Original, hier berichtigt (Wortlaut sonst unverändert)."
+   }
+  ]
+ },
+ "Flaschenzüge": {
+  "titel": "Prüfung nach Petzl-Prüfverfahren JAG SYSTEM",
+  "bezugsprodukt": "JAG SYSTEM",
+  "quelle": {
+   "prüfbericht": {
+    "hersteller": "Petzl",
+    "art": "prüfbericht",
+    "titel": "Überprüfung von PSA – Prüfbericht – JAG SYSTEM",
+    "version_gedruckt": "091214",
+    "datei": "flaschenzuege/petzl-jag/dateien/pdf/verif-EPI-JAG_SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf",
+    "dateiname": "verif-EPI-JAG_SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf",
+    "sha256": "e74850eae4fbd8a4966ba431058462e4d163e033f3f66435bdc4acb1f32c3252",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dw79802d3b/media/product/verif%20EPI-JAG%20SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf",
+    "gueltig_ab": null
+   },
+   "prüfverfahren": {
+    "hersteller": "Petzl",
+    "art": "prüfverfahren",
+    "titel": "Überprüfung von PSA – Vorgehensweise bei der Überprüfung – JAG SYSTEM",
+    "version_gedruckt": "091214",
+    "datei": "flaschenzuege/petzl-jag/dateien/pdf/verif-EPI-JAG_SYSTEM-procedure_DE_068w0000005ucTXAAY.pdf",
+    "dateiname": "verif-EPI-JAG_SYSTEM-procedure_DE_068w0000005ucTXAAY.pdf",
+    "sha256": "6e2ec30e0c715201f6d0fbc03a28226a1d63a233cd77f1d837a8c8d033ce9953",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dwf7a144fe/media/product/verif%20EPI-JAG%20SYSTEM-procedure_DE_068w0000005ucTXAAY.pdf",
+    "gueltig_ab": null
+   }
+  },
+  "nächstliegend": false,
+  "anzahl_punkte": 14,
+  "punkte": [
+   {
+    "nr": 1,
+    "gruppe": "Bekannte Vorgeschichte des Produkts",
+    "text": "Einsatzbedingungen oder außergewöhnliche Vorkommnisse (Beispiele: Sturz oder Auffangen eines Sturzes, Anwendung oder Lagerung bei extremen Temperaturen, außerhalb der Betriebsstätten des Herstellers vorgenommene Änderungen usw.):",
+    "art": "text",
+    "art_app": "text",
+    "pflicht": false,
+    "soll": "",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-JAG_SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf, „Überprüfung von PSA – Prüfbericht – JAG SYSTEM“ (091214), S. 1/1, Abschnitt 1"
+   },
+   {
+    "nr": 2,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergewissern Sie sich, dass Seriennummer und CE-Kennzeichnung vorhanden und lesbar sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-JAG_SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf, „Überprüfung von PSA – Prüfbericht – JAG SYSTEM“ (091214), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 3,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Stellen Sie sicher, dass die Lebensdauer des Produkts nicht überschritten ist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-JAG_SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf, „Überprüfung von PSA – Prüfbericht – JAG SYSTEM“ (091214), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 4,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergleichen Sie das Produkt mit einem neuen Gerät, um sicherzustellen, dass keine Änderungen vorgenommen wurden und alle Bestandteile vorhanden sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-JAG_SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf, „Überprüfung von PSA – Prüfbericht – JAG SYSTEM“ (091214), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 5,
+    "gruppe": "Entfernen der Verbindungselemente und der Hülle",
+    "text": "Entfernen Sie die Verbindungselemente und überprüfen Sie diese gemäß der entsprechenden Vorgehensweise.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-JAG_SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf, „Überprüfung von PSA – Prüfbericht – JAG SYSTEM“ (091214), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 6,
+    "gruppe": "Entfernen der Verbindungselemente und der Hülle",
+    "text": "Überprüfen Sie die JAG und die JAG TRAXION mit Hilfe der entsprechenden Prüfblätter.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-JAG_SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf, „Überprüfung von PSA – Prüfbericht – JAG SYSTEM“ (091214), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 7,
+    "gruppe": "Überprüfung des Seils",
+    "text": "Überprüfen Sie den Zustand des genähten Auges an der JAG TRAXION.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-JAG_SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf, „Überprüfung von PSA – Prüfbericht – JAG SYSTEM“ (091214), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 8,
+    "gruppe": "Überprüfung des Seils",
+    "text": "Kontrollieren Sie den Zustand des Mantels über die gesamte Seillänge (Einschnitte, Abnutzungserscheinungen, Brandstellen, aufgeraute Stellen oder Spuren von Chemikalien).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-JAG_SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf, „Überprüfung von PSA – Prüfbericht – JAG SYSTEM“ (091214), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 9,
+    "gruppe": "Überprüfung des Seils",
+    "text": "Tasten Sie den Seilkern über die gesamte Länge des Seils ab (harte, aufgequollene, weiche oder eingedrückte Stellen usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-JAG_SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf, „Überprüfung von PSA – Prüfbericht – JAG SYSTEM“ (091214), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 10,
+    "gruppe": "Überprüfung des Seils",
+    "text": "Überprüfen Sie die Nähte. Achten Sie auf durchtrennte, eingerissene, lose oder abgenutzte Fäden.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-JAG_SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf, „Überprüfung von PSA – Prüfbericht – JAG SYSTEM“ (091214), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 11,
+    "gruppe": "Anbringen der Verbindungselemente",
+    "text": "Bevor Sie das System wieder zusammensetzen, vergewissern Sie sich, dass das Seil nicht verdreht ist. Vergewissern Sie sich, dass die Verbindungselemente richtig in den Verbindungsösen der JAG und der JAG TRAXION positioniert sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-JAG_SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf, „Überprüfung von PSA – Prüfbericht – JAG SYSTEM“ (091214), S. 1/1, Abschnitt 6"
+   },
+   {
+    "nr": 12,
+    "gruppe": "Funktionsprüfung",
+    "text": "Installieren Sie Ihr JAG SYSTEM mit einer leichten Last an einem Anschlagpunkt in geringer Höhe. Vergewissern Sie sich, dass die Last blockiert wird.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-JAG_SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf, „Überprüfung von PSA – Prüfbericht – JAG SYSTEM“ (091214), S. 1/1, Abschnitt 7"
+   },
+   {
+    "nr": 13,
+    "gruppe": "Funktionsprüfung",
+    "text": "Prüfen Sie, ob es möglich ist, die JAG TRAXION für eine kurze Abseilfahrt zu deaktivieren.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-JAG_SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf, „Überprüfung von PSA – Prüfbericht – JAG SYSTEM“ (091214), S. 1/1, Abschnitt 7"
+   },
+   {
+    "nr": 14,
+    "gruppe": "Funktionsprüfung",
+    "text": "Prüfen Sie, ob sich die Last hochziehen lässt.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-JAG_SYSTEM-suivi_DE_068w0000005ucT3AAI.pdf, „Überprüfung von PSA – Prüfbericht – JAG SYSTEM“ (091214), S. 1/1, Abschnitt 7"
+   }
+  ]
+ },
+ "Selbstsicherungen": {
+  "titel": "Prüfung nach Petzl-Prüfverfahren ABSORBICA",
+  "bezugsprodukt": "ABSORBICA (Verbindungsmittel mit Falldämpfer)",
+  "quelle": {
+   "prüfbericht": {
+    "hersteller": "Petzl",
+    "art": "prüfbericht",
+    "titel": "Überprüfung von PSA – Prüfbericht – ABSORBICA",
+    "version_gedruckt": "031018",
+    "datei": "selbstsicherungen/petzl/dateien/verif-EPI-ABSORBICA-suivi-DE_068Tx000003odUVIAY.pdf",
+    "dateiname": "verif-EPI-ABSORBICA-suivi-DE_068Tx000003odUVIAY.pdf",
+    "sha256": "54b3a9b76a668e1459d78df71ef2dd5b2c884122ab81e25ad0ce1e0c9bace764",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dw4f4a05ff/media/product/verif-EPI-ABSORBICA-suivi-DE_068Tx000003odUVIAY.pdf",
+    "gueltig_ab": null
+   },
+   "prüfverfahren": {
+    "hersteller": "Petzl",
+    "art": "prüfverfahren",
+    "titel": "Überprüfung von PSA – Vorgehensweise bei der Überprüfung – ABSORBICA",
+    "version_gedruckt": "020524",
+    "datei": "selbstsicherungen/petzl/dateien/verif-EPI-ABSORBICA-procedure-DE_068Tx000003omB4IAI.pdf",
+    "dateiname": "verif-EPI-ABSORBICA-procedure-DE_068Tx000003omB4IAI.pdf",
+    "sha256": "d13157b13f934b3a2e78f50965b7bfa924d6b8e9d697acc3e39d2e37147292c0",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dw055ce267/media/product/verif-EPI-ABSORBICA-procedure-DE_068Tx000003omB4IAI.pdf",
+    "gueltig_ab": null
+   }
+  },
+  "nächstliegend": false,
+  "anzahl_punkte": 13,
+  "punkte": [
+   {
+    "nr": 1,
+    "gruppe": "Bekannte Vorgeschichte des Produkts",
+    "text": "Einsatzbedingungen oder außergewöhnliche Vorkommnisse (Beispiele: Sturz oder Auffangen eines Sturzes, Anwendung oder Lagerung bei extremen Temperaturen, außerhalb der Betriebsstätten des Herstellers vorgenommene Änderungen usw.):",
+    "art": "text",
+    "art_app": "text",
+    "pflicht": false,
+    "soll": "",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-ABSORBICA-suivi-DE_068Tx000003odUVIAY.pdf, „Überprüfung von PSA – Prüfbericht – ABSORBICA“ (031018), S. 1/1, Abschnitt 1"
+   },
+   {
+    "nr": 2,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergewissern Sie sich, dass Seriennummer und CE-Kennzeichnung vorhanden und lesbar sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-ABSORBICA-suivi-DE_068Tx000003odUVIAY.pdf, „Überprüfung von PSA – Prüfbericht – ABSORBICA“ (031018), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 3,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Stellen Sie sicher, dass die Lebensdauer des Produkts nicht überschritten ist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-ABSORBICA-suivi-DE_068Tx000003odUVIAY.pdf, „Überprüfung von PSA – Prüfbericht – ABSORBICA“ (031018), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 4,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergleichen Sie das Produkt mit einem neuen Gerät, um sicherzustellen, dass keine Änderungen vorgenommen wurden und alle Bestandteile vorhanden sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-ABSORBICA-suivi-DE_068Tx000003odUVIAY.pdf, „Überprüfung von PSA – Prüfbericht – ABSORBICA“ (031018), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 5,
+    "gruppe": "Überprüfung des Zustands der Stränge des Verbindungsmittels",
+    "text": "Achten Sie auf durch Benutzung entstandene Abnutzungserscheinungen und Beschädigungen (Einschnitte, aufgeraute Stellen, Spuren von chemischen Produkten usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-ABSORBICA-suivi-DE_068Tx000003odUVIAY.pdf, „Überprüfung von PSA – Prüfbericht – ABSORBICA“ (031018), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 6,
+    "gruppe": "Überprüfung des Zustands der Stränge des Verbindungsmittels",
+    "text": "Kontrollieren Sie den Zustand der Sicherheitsnähte (oben/unten). Achten Sie auf lose, abgenutzte oder durchtrennte Fäden.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-ABSORBICA-suivi-DE_068Tx000003odUVIAY.pdf, „Überprüfung von PSA – Prüfbericht – ABSORBICA“ (031018), S. 1/1, Abschnitt 3",
+    "wortlaut_original": "Kontrollen Sie den Zustand der Sicherheitsnähte (oben/unten). Achten Sie auf lose, abgenutzte oder durchtrennte Fäden.",
+    "hinweis": "Offensichtlicher Tippfehler im Original, hier berichtigt (Wortlaut sonst unverändert)."
+   },
+   {
+    "nr": 7,
+    "gruppe": "Überprüfung des Zustands des Bandfalldämpfers",
+    "text": "Überprüfen Sie den Zustand der Schutzhülle. Achten Sie auf durch Benutzung entstandene Abnutzungserscheinungen und Beschädigungen (Einschnitte, aufgeraute Stellen, Spuren von chemischen Produkten usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-ABSORBICA-suivi-DE_068Tx000003odUVIAY.pdf, „Überprüfung von PSA – Prüfbericht – ABSORBICA“ (031018), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 8,
+    "gruppe": "Überprüfung des Zustands des Bandfalldämpfers",
+    "text": "Vergewissern Sie sich, dass der Falldämpfer keinen Schlag oder Stoß erlitten hat (Stellen Sie sicher, dass das Gewebe zwischen den Gurtbändern nicht aufgerissen ist).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-ABSORBICA-suivi-DE_068Tx000003odUVIAY.pdf, „Überprüfung von PSA – Prüfbericht – ABSORBICA“ (031018), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 9,
+    "gruppe": "Überprüfung des Zustands des Bandfalldämpfers",
+    "text": "Vergewissern Sie sich beim ABSORBICA I oder Y - Modelle 2016 und Folgemodelle - dass der Sturzindikator nicht gerissen ist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-ABSORBICA-suivi-DE_068Tx000003odUVIAY.pdf, „Überprüfung von PSA – Prüfbericht – ABSORBICA“ (031018), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 10,
+    "gruppe": "Überprüfung des Zustands des Bandfalldämpfers",
+    "text": "Kontrollieren Sie den Zustand der Sicherheitsnähte (oben/unten). Achten Sie auf lose, abgenutzte oder durchtrennte Fäden.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-ABSORBICA-suivi-DE_068Tx000003odUVIAY.pdf, „Überprüfung von PSA – Prüfbericht – ABSORBICA“ (031018), S. 1/1, Abschnitt 4",
+    "wortlaut_original": "Kontrollen Sie den Zustand der Sicherheitsnähte (oben/unten). Achten Sie auf lose, abgenutzte oder durchtrennte Fäden.",
+    "hinweis": "Offensichtlicher Tippfehler im Original, hier berichtigt (Wortlaut sonst unverändert)."
+   },
+   {
+    "nr": 11,
+    "gruppe": "Überprüfung des Befestigungspunktes zum Gurt",
+    "text": "Achten Sie auf durch Benutzung entstandene Abnutzungserscheinungen und Beschädigungen (Einschnitte, aufgeraute Stellen, Spuren von chemischen Produkten usw.).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-ABSORBICA-suivi-DE_068Tx000003odUVIAY.pdf, „Überprüfung von PSA – Prüfbericht – ABSORBICA“ (031018), S. 1/1, Abschnitt 5"
+   },
+   {
+    "nr": 12,
+    "gruppe": "Überprüfung des Zustands der Karabiner an den Enden des Verbindungsmittels",
+    "text": "Für die Überprüfung der Verbindungselemente verweisen wir auf den Ihrem Modell entsprechenden Vordruck des Prüfbogens auf Petzl.com.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-ABSORBICA-suivi-DE_068Tx000003odUVIAY.pdf, „Überprüfung von PSA – Prüfbericht – ABSORBICA“ (031018), S. 1/1, Abschnitt 6"
+   },
+   {
+    "nr": 13,
+    "gruppe": "Überprüfung der Schutzelemente",
+    "text": "Kontrollieren Sie den Zustand der STRING-Elemente. Vergewissern Sie sich, dass das STRING-Element den Karabiner in der richtigen Position hält.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif-EPI-ABSORBICA-suivi-DE_068Tx000003odUVIAY.pdf, „Überprüfung von PSA – Prüfbericht – ABSORBICA“ (031018), S. 1/1, Abschnitt 7"
+   }
+  ]
+ },
+ "Verbindungselemente": {
+  "titel": "Prüfung nach Petzl-Prüfverfahren SWIVEL OPEN",
+  "bezugsprodukt": "SWIVEL OPEN (Wirbel)",
+  "quelle": {
+   "prüfbericht": {
+    "hersteller": "Petzl",
+    "art": "prüfbericht",
+    "titel": "Überprüfung von PSA – Prüfbericht – SWIVEL OPEN",
+    "version_gedruckt": "010725",
+    "datei": "verbindungsmittel/petzl/dateien/verif_EPI-SWIVEL_OPEN-suivi-DE_068Tx00000KfQW6IAN.pdf",
+    "dateiname": "verif_EPI-SWIVEL_OPEN-suivi-DE_068Tx00000KfQW6IAN.pdf",
+    "sha256": "12705f94203bfc6f539ed20ce22efecf5de51b2c28b3c1d2494087c7a9bd09f6",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dw4a1cf082/media/product/verif%20EPI-SWIVEL%20OPEN-suivi-DE_068Tx00000KfQW6IAN.pdf",
+    "gueltig_ab": null
+   },
+   "prüfverfahren": {
+    "hersteller": "Petzl",
+    "art": "prüfverfahren",
+    "titel": "Überprüfung von PSA – Vorgehensweise bei der Überprüfung – SWIVEL OPEN",
+    "version_gedruckt": "010725",
+    "datei": "verbindungsmittel/petzl/dateien/verif_EPI-SWIVEL_OPEN-procedure-DE_068Tx00000KfSeMIAV.pdf",
+    "dateiname": "verif_EPI-SWIVEL_OPEN-procedure-DE_068Tx00000KfSeMIAV.pdf",
+    "sha256": "b5e0700c9eed5f67023e09821d2796a7dd3564866dcc22f0380c8a5cbfc90d7d",
+    "url": "https://www.petzl.com/on/demandware.static/-/Sites-petzl-master-catalog/default/dwb0639a5e/media/product/verif%20EPI-SWIVEL%20OPEN-procedure-DE_068Tx00000KfSeMIAV.pdf",
+    "gueltig_ab": null
+   }
+  },
+  "nächstliegend": false,
+  "anzahl_punkte": 10,
+  "punkte": [
+   {
+    "nr": 1,
+    "gruppe": "Bekannte Vorgeschichte des Produkts",
+    "text": "Einsatzbedingungen oder außergewöhnliche Vorkommnisse (Beispiele: Sturz oder Auffangen eines Sturzes, Anwendung oder Lagerung bei extremen Temperaturen, außerhalb der Betriebsstätten des Herstellers vorgenommene Änderungen usw.):",
+    "art": "text",
+    "art_app": "text",
+    "pflicht": false,
+    "soll": "",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-SWIVEL_OPEN-suivi-DE_068Tx00000KfQW6IAN.pdf, „Überprüfung von PSA – Prüfbericht – SWIVEL OPEN“ (010725), S. 1/1, Abschnitt 1"
+   },
+   {
+    "nr": 2,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergewissern Sie sich, dass Seriennummer und CE-Kennzeichnung vorhanden und lesbar sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-SWIVEL_OPEN-suivi-DE_068Tx00000KfQW6IAN.pdf, „Überprüfung von PSA – Prüfbericht – SWIVEL OPEN“ (010725), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 3,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Stellen Sie sicher, dass die Lebensdauer des Produkts nicht überschritten ist.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-SWIVEL_OPEN-suivi-DE_068Tx00000KfQW6IAN.pdf, „Überprüfung von PSA – Prüfbericht – SWIVEL OPEN“ (010725), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 4,
+    "gruppe": "Vorangehende Kontrollen",
+    "text": "Vergleichen Sie das Produkt mit einem neuen Gerät, um sicherzustellen, dass keine Änderungen vorgenommen wurden und alle Bestandteile vorhanden sind.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-SWIVEL_OPEN-suivi-DE_068Tx00000KfQW6IAN.pdf, „Überprüfung von PSA – Prüfbericht – SWIVEL OPEN“ (010725), S. 1/1, Abschnitt 2"
+   },
+   {
+    "nr": 5,
+    "gruppe": "Überprüfung des Körpers",
+    "text": "Überprüfen Sie den Zustand des Körpers (z. B. Deformierungen, Risse, Kratzer, Abnutzungs- und Korrosionserscheinungen). Entfernen Sie alle eingehängten Geräte, die Bereiche am Körper verdecken könnten.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-SWIVEL_OPEN-suivi-DE_068Tx00000KfQW6IAN.pdf, „Überprüfung von PSA – Prüfbericht – SWIVEL OPEN“ (010725), S. 1/1, Abschnitt 3"
+   },
+   {
+    "nr": 6,
+    "gruppe": "Überprüfung des Körpers",
+    "text": "Achten Sie auf Abnutzungserscheinungen, die vom durchlaufenden Seil oder durch Aufliegen an Anschlagpunkten verursacht wurden (Materialabtrag: Der SWIVEL muss ausgesondert werden, wenn er eine Abnutzung von mehr als 1 mm aufweist. Untersuchen Sie das Produkt z. B. auf scharfe Kanten).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": true,
+    "fundstelle": "verif_EPI-SWIVEL_OPEN-suivi-DE_068Tx00000KfQW6IAN.pdf, „Überprüfung von PSA – Prüfbericht – SWIVEL OPEN“ (010725), S. 1/1, Abschnitt 3",
+    "kritisch_beleg": "Dokument nennt den Punkt ausdrücklich als Ausschlussgrund (verwenden Sie das Produkt nicht mehr / muss ausgesondert werden / systematische Aussonderung)."
+   },
+   {
+    "nr": 7,
+    "gruppe": "Überprüfung der Abstandshalter und der Schrauben",
+    "text": "Überprüfen Sie den Zustand der Abstandshalter (z. B. Deformierungen, Risse, Kratzer, Abnutzungs- und Korrosionserscheinungen).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-SWIVEL_OPEN-suivi-DE_068Tx00000KfQW6IAN.pdf, „Überprüfung von PSA – Prüfbericht – SWIVEL OPEN“ (010725), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 8,
+    "gruppe": "Überprüfung der Abstandshalter und der Schrauben",
+    "text": "Überprüfen Sie das Anzugsdrehmoment der Schrauben mithilfe eines Drehmomentschlüssels (das Anzugsdrehmoment ist in der Gebrauchsanweisung Ihrer Ausrüstung angegeben).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-SWIVEL_OPEN-suivi-DE_068Tx00000KfQW6IAN.pdf, „Überprüfung von PSA – Prüfbericht – SWIVEL OPEN“ (010725), S. 1/1, Abschnitt 4"
+   },
+   {
+    "nr": 9,
+    "gruppe": "Überprüfung von Achse und Lager",
+    "text": "Vergewissern Sie sich, dass sich das Lager in beide Richtungen ungehindert drehen lässt. Achten Sie darauf, dass zwischen den beiden Teilen des Körpers kein übermäßiges Spiel besteht.",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-SWIVEL_OPEN-suivi-DE_068Tx00000KfQW6IAN.pdf, „Überprüfung von PSA – Prüfbericht – SWIVEL OPEN“ (010725), S. 1/1, Abschnitt 5"
+   },
+   {
+    "nr": 10,
+    "gruppe": "Überprüfung von Achse und Lager",
+    "text": "Stellen Sie sicher, dass die Schutzkappe der Achse vorhanden ist. Überprüfen Sie den Zustand der Niete in der Achse (z. B. Deformierungen, Risse, Kratzer, Abnutzungs- und Korrosionserscheinungen).",
+    "art": "ja_nein",
+    "art_app": "yesno",
+    "pflicht": true,
+    "soll": "ja",
+    "kritisch": false,
+    "fundstelle": "verif_EPI-SWIVEL_OPEN-suivi-DE_068Tx00000KfQW6IAN.pdf, „Überprüfung von PSA – Prüfbericht – SWIVEL OPEN“ (010725), S. 1/1, Abschnitt 5"
+   }
+  ]
+ }
+}

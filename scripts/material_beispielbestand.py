@@ -1,57 +1,72 @@
 """Beispielbestand für das Modul Material – NUR für dev und Tests, nie für echte Prüfungen.
 
-Ein umfangreicherer Bestand zum Ausprobieren, gebaut allein aus dem vorhandenen Katalog: drei DEMO-Gliederungen
-(„DEMO-OG …“) mit Lager, Fahrzeugen, Einsatzgruppen und persönlichen Ordnern, einige hundert Artikel der echten
-Katalogprodukte, eine Prüfhistorie über deren aktive Prüfformulare (zurückdatiert und festgeschrieben, mit Protokoll
-wie jede echte Prüfung), DEMO-Konten mit Freigaben, je Gliederung ein abgeschlossener und ein offener Prüfdurchgang und
-Zuordnungen an DEMO-Personen. Am Ende kommt jeder Zustand vor: neu, einsatzbereit, bald fällig, überfällig, gesperrt
-(Mangel), verloren gemeldet, ausgesondert und – wo der Katalog eine Lebensdauer hat – Lebensdauer erreicht.
+Ein realistischer Bestand einer großen Gliederung mit gut zwei Jahren Geschichte, gebaut allein aus dem vorhandenen
+Katalog (Wunsch des Nutzers vom 25.10.2026): der „DEMO-Kreisverband Flussland“ mit Zentrallager (Regale, Reserve), fünf
+Fahrzeugen mit Seilrucksäcken und Taschen als Ordner der Art „Set“ (auch ein Set im Set), drei Einsatzgruppen und
+persönlichen Ordnern für bis zu 40 DEMO-Einsatzkräfte – dazu die kleine „DEMO-OG Nachbarstadt“, damit sich die Trennung
+je Gliederung und die globale Suche (Seriennummer DEMO-NS-4711) ausprobieren lassen. Vorgabe 800 Artikel.
 
-Eigenständiges Werkzeug außerhalb von app/ (wie scripts/material_demo.py) und in EINER Datei, damit es sich per stdin
-in den Container reichen lässt – das Docker-Abbild enthält scripts/ nicht. Es läuft nur mit ausdrücklichem Schalter:
+Eigenständiges Werkzeug außerhalb von app/, dazu die Datei der Petzl-Prüfpunkte daneben (beide zusammen per tar in den
+Container reichen – README; fehlt die Datei, gibt es nur Platzhalter-Formulare) – das Docker-Abbild enthält scripts/
+nicht. Es läuft nur mit ausdrücklichem Schalter:
 
     python scripts/material_beispielbestand.py --beispielbestand [--artikel N]
 
---artikel N: so viele Artikel insgesamt (Vorgabe 200), verteilt über alle echten Produkte. Ohne Angabe landen die
-Daten wie bei run.py in ./data; für eine andere Datenbank vorher DATA_DIR setzen. Auf dem dev-Server: README,
-Abschnitt „Beispielbestand (nur dev)“.
+--artikel N: so viele Artikel zu Beginn und als geplante Nachkäufe (Vorgabe 800; Ersatz für Ausgesondertes kommt dazu).
+Ohne Angabe landen die Daten wie bei run.py in ./data; für eine andere Datenbank vorher DATA_DIR setzen. Auf dem
+dev-Server: README, Abschnitt „Beispielbestand (nur dev)“. Nur auf dev oder lokal: BASE_URL in der Umgebung UND in der
+Anwendung (Verwaltung → Einstellungen) muss die Positivliste von flask material dev-zuruecksetzen erfüllen (Host mit
+„dev.“ davor oder localhost/127.0.0.1, zuruecksetzen.adresse_frei); sonst legt das Skript nichts an.
 
-Der Katalog bleibt, wie er ist: Kategorien, Produkte, Formulare, Prüfpunkte, Dokumente, Produktbilder, Rückrufe und
-Meldungen werden nur gelesen, nie geschrieben; einen DEMO-Katalog importiert das Skript nicht. Grundlage sind die
-Produkte ohne DEMO-Kennzeichen außerhalb von DEMO-Kategorien – genau die, die der Katalog-Export mitnimmt. Alles
-Fachliche (Prüfpunkte und Sollwerte, Intervalle, Lebensdauern, Hersteller, Produkte) kommt aus dem Katalog. Erfunden
-sind nur Bestandsangaben, und die tragen „DEMO“: Ordner „DEMO-…“, Seriennummern „DEMO-…“, DEMO-Konten mit
-@example.invalid, Bemerkungen „DEMO – nicht für echte Prüfungen“. Ein Wert, den ein Prüfpunkt verlangt und den nur
-eine echte Prüfung liefern könnte (Messwert, Datum, Foto), wird nicht erfunden: Der Punkt steht auf „nicht zutreffend“
-mit der DEMO-Bemerkung. Ein Mangel trägt die DEMO-Bemerkung und ein DEMO-Platzhalterfoto. Oberfläche, Protokolle,
-Lebenslauf, CSV-Export und Steckbrief zeigen jeden Artikel einer DEMO-Gliederung als DEMO (bestand.demo_sql) – auch
-wenn sein Produkt aus dem echten Katalog stammt.
+Der Katalog: Kategorien, Produkte, Dokumente, Bilder, Rückrufe und Meldungen werden nur gelesen. Einzige Ausnahme sind
+DEMO-Formulare für echte Kategorien ohne wirksames aktives Prüfformular (formulare) – mit DEMO-Kennzeichen, aktiv; der
+Katalog-Export lässt sie aus: nach den Petzl-Prüfberichten, wo scripts/beispielbestand_petzl_punkte.json die Kategorie
+nach ihrem Namen kennt (Punkte wörtlich, mit Gruppe, Soll und kritisch; Fundstellen je Punkt in der Datei, die Quellen im
+Bericht – das Formular hat kein Feld dafür), sonst Platzhalter (je ein Punkt Ja/Nein, Text, Zahl, bei Artikellänge
+„Länge (m)“) an der obersten Kategorie ohne Formular. Grundlage sind die Produkte ohne DEMO-Kennzeichen außerhalb von DEMO-Kategorien und ohne Stückliste
+(Sets nur als Ordnerart). Alles Fachliche (Prüfpunkte, Intervalle, Lebensdauern, Hersteller, Produkte) kommt aus dem
+Katalog; erfunden sind nur Bestandsangaben, und die tragen „DEMO“: Ordner „DEMO-…“, Seriennummern „DEMO-…“, DEMO-Konten mit
+@example.invalid, Bemerkungen, Gründe und Befunde „DEMO – nicht für echte Prüfungen“, Seillängen als Bestandswert. Ein
+Wert, den nur eine echte Prüfung liefern könnte (Messwert, Datum, Foto), wird nicht erfunden: Der Punkt steht auf „nicht
+zutreffend“ mit der DEMO-Bemerkung; ein Mangel trägt die DEMO-Bemerkung und ein DEMO-Platzhalterfoto.
+
+Die Geschichte („volles Leben“): Die Uhr dieses Prozesses wird für den Lauf zurückgestellt (Uhr – services.datetime,
+db.datetime, models.datetime; nur hier, nie in der App) und läuft Tag für Tag nach vorn, so dass Journal, Prüftage,
+Protokolle und Durchgänge ihr damaliges Datum tragen. Ab gut zwei Jahren vor heute: Ersterfassung je Bereich kurz vor
+seiner ersten Jahresprüfung (die Eingangsprüfung geschieht im Durchgang), jährliche Prüfdurchgänge je Bereich
+(abgeschlossen, mit Sammelprotokoll), dazwischen Prüfungen bei kürzerem Intervall und außerplanmäßige, Mängel mit
+Sperre und späterer Prüfung nach Reparatur, Aussonderungen (Mangel, Lebensdauer, Verlust) mit Nachkauf, Nachkäufe über
+die Jahre, verloren gemeldete Artikel, Verschiebungen, Zuordnungen zu Personen (auch beendete: Einsatzkräfte scheiden aus,
+ihre Ausrüstung geht über die Reserve an neue), Änderungsanträge (bestätigt, abgelehnt, zurückgezogen, offen). Heute:
+ein offener Durchgang im Zentrallager (teils erledigt, einer in Prüfung beim externen Prüfer, einer ausgenommen); im
+MTW 2 ist die Jahresprüfung ausgefallen (überfällig), die persönliche Ausrüstung ist bald fällig.
 
 Was danach gilt (deshalb vorher den Katalog exportieren – README):
-  - Jede dabei benutzte Formularversion gilt als „benutzt“ und lässt sich nur noch über eine neue Version ändern.
-  - Jedes Produkt, von dem es danach Artikel gibt, lässt sich nicht mehr löschen und seine Materialart nicht mehr
-    ändern; seine Kategorie lässt sich nicht mehr löschen. Katalogpflege, die das braucht, vorher erledigen – oder
-    später: Katalog exportieren, dev-Datenbank zurücksetzen, Export importieren.
-  - Der Bestand lässt sich nicht wieder entfernen: Prüfnachweise werden nie gelöscht, Artikel mit Prüfungen auch nicht.
-    Zurück geht es nur über das Zurücksetzen der dev-Datenbank.
+  - Jede benutzte Formularversion lässt sich nur noch über eine neue Version ändern; jedes Produkt mit Artikeln lässt
+    sich nicht mehr löschen und seine Materialart nicht mehr ändern, seine Kategorie nicht mehr löschen.
+  - Der Bestand lässt sich nicht wieder entfernen (Prüfnachweise bleiben). Zurück geht es nur über
+    flask material dev-zuruecksetzen und den Katalog-Export.
   - Einmalig: Gibt es eine der Gliederungen schon, legt ein weiterer Lauf nichts an. Erst am Ende steht der Merker
-    „beispielbestand“ in mat_meta. Bricht ein Lauf vorher ab (Strg-C, abgerissene Verbindung), bleibt ein Teilbestand
-    – Artikel ohne Durchgänge und Zuordnungen –, den kein Lauf vervollständigt: Ein weiterer meldet ihn als
-    unvollständig (Rückgabewert 1). Neu geht es dann nur mit einer zurückgesetzten dev-Datenbank und dem Katalog-Export.
+    „beispielbestand“ in mat_meta; ein abgebrochener Lauf hinterlässt einen Teilbestand, den ein weiterer Lauf als
+    unvollständig meldet (Rückgabewert 1).
 
-Alles läuft über die Dienste der App (bestand, pruefung, durchgang, zuordnung, unterschrift, freigaben) und in
-Transaktionen – je Artikel eine samt seiner ganzen Prüfhistorie; scheitert ein Artikel, fehlt er ganz und steht im
-Bericht. Im Journal steht als Akteur „Beispielbestand“, an den Prüfungen der DEMO-Prüfer. Die Konten legt das Skript
-wie scripts/material_demo.py direkt an (ohne Anmeldung gibt es dafür keinen Dienst), mit Journaleintrag „rollen“ und
-nur mit Zugang zum Modul Material.
+Alles läuft über die Dienste der App (bestand, pruefung, durchgang, zuordnung, antrag, unterschrift, freigaben) in
+Transaktionen – je Vorgang eine; scheitert einer, steht er unter „Hinweise“ im Bericht. Im Journal steht als Akteur
+„Beispielbestand“ bzw. das handelnde DEMO-Konto. Mails gehen keine hinaus (auch nicht ins Mailprotokoll): Die
+Hintergrund-Versender der Dienste sind in diesem Prozess abgeschaltet. Die Konten legt das Skript direkt an (ohne Anmeldung
+gibt es dafür keinen Dienst), mit Journaleintrag „rollen“ und nur mit Zugang zum Modul Material; gibt es ein DEMO-Konto
+mit derselben Adresse schon, nimmt es dieses (Passwort und Name bleiben). Laufzeit: Jede Prüfung bekommt ihr Protokoll
+(gut eine halbe Sekunde je PDF) – bei 800 Artikeln rund 15 bis 20 Minuten.
 """
+import heapq
 import io
 import json
+import math
 import os
 import random
 import sys
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Im Container liegt das Skript unter /tmp, die App unter /srv (PYTHONPATH) und die Daten unter /data (DATA_DIR aus dem
@@ -65,54 +80,104 @@ os.environ.setdefault("VIDEOPFLEGE", "0")
 
 HINWEIS = "DEMO – nicht für echte Prüfungen"
 AKTEUR = "Beispielbestand"
-# Vorgabe: gut 300 Protokolle in zweieinhalb bis drei Minuten (gemessen in der Sandbox: 200 Artikel, 305 Protokolle in
-# 2:35 min; 240 Artikel, 385 Protokolle in 3:17 min).
-VORGABE_ARTIKEL = 200
+VORGABE_ARTIKEL = 800
 HOECHSTENS_ARTIKEL = 5000
-SAAT = 20261018                      # gleicher Katalog, gleiche Verteilung – nachvollziehbar
+SAAT = 20261025                      # gleicher Katalog, gleicher Stichtag, gleicher Bestand – nachvollziehbar
 POSTFACH = "example.invalid"
 MERKER = "beispielbestand"           # Schlüssel in mat_meta – erst am Ende eines vollständigen Laufs gesetzt
-# Die Adresse der Produktion (BASE_URL) – dort legt das Skript nichts an, auch wenn es jemand in deren Container reicht.
-PRODUKTION = {"strömis.de", "www.strömis.de", "xn--strmis-yxa.de", "www.xn--strmis-yxa.de"}
+TAGE = 2 * 365 + 60                  # Beginn der Geschichte: gut zwei Jahre vor heute
+FORMULAR_TITEL = "DEMO-Prüfformular (Platzhalter) – "
+PETZL_DATEI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "beispielbestand_petzl_punkte.json")
 
-# Die Gliederungen: Kürzel (Seriennummern, Konten), Ort im Namen, Anteil am Bestand.
-GLIEDERUNGEN = [("AU", "Auental", 0.40), ("BH", "Bachheim", 0.35), ("FS", "Flussstadt", 0.25)]
-EINSATZKRAEFTE = 2                   # je Gliederung: DEMO-Personen mit persönlichem Ordner und Zuordnungen
+# Die Gliederungen: Kürzel (Seriennummern), Name, Anteil am Bestand, Ordnerbaum.
+GROSS, KLEIN = "FL", "NS"
+GLIEDERUNGEN = [(GROSS, "DEMO-Kreisverband Flussland", 0.94), (KLEIN, "DEMO-OG Nachbarstadt", 0.06)]
+# Ordnerbaum je Gliederung: (Schlüssel, Name, Ordnertyp, Oberordner). Kein Ordner bekommt ein eigenes Prüfintervall.
+ORDNER = {
+    GROSS: [
+        ("lager", "DEMO-Zentrallager", "standort", None),
+        ("regal_seile", "DEMO-Regal Seile", "sonstiges", "lager"),
+        ("regal_hardware", "DEMO-Regal Hardware", "sonstiges", "lager"),
+        ("regal_psa", "DEMO-Regal PSA", "sonstiges", "lager"),
+        ("reserve", "DEMO-Reserve", "sonstiges", "lager"),
+        ("fahrzeuge", "DEMO-Fahrzeuge", "sonstiges", None),
+        ("gw1", "DEMO-GW-Wasserrettung 1", "fahrzeug", "fahrzeuge"),
+        ("sr1", "DEMO-Seilrucksack 1", "set", "gw1"),
+        ("fzt", "DEMO-Flaschenzugtasche", "set", "sr1"),                 # ein Set im Set
+        ("sr2", "DEMO-Seilrucksack 2", "set", "gw1"),
+        ("gw2", "DEMO-GW-Wasserrettung 2", "fahrzeug", "fahrzeuge"),
+        ("sr3", "DEMO-Seilrucksack 3", "set", "gw2"),
+        ("mtw1", "DEMO-MTW 1", "fahrzeug", "fahrzeuge"),
+        ("mtw2", "DEMO-MTW 2", "fahrzeug", "fahrzeuge"),
+        ("boot", "DEMO-Mehrzweckboot", "fahrzeug", "fahrzeuge"),
+        ("rt", "DEMO-Rettungstasche Boot", "set", "boot"),
+        ("gruppen", "DEMO-Einsatzgruppen", "sonstiges", None),
+        ("gruppe1", "DEMO-Strömungsrettungsgruppe 1", "sonstiges", "gruppen"),
+        ("gruppe2", "DEMO-Strömungsrettungsgruppe 2", "sonstiges", "gruppen"),
+        ("gruppe3", "DEMO-Strömungsrettungsgruppe 3", "sonstiges", "gruppen"),
+        ("persoenlich", "DEMO-Persönliche Ausrüstung", "sonstiges", None),
+    ],
+    KLEIN: [
+        ("lager", "DEMO-Lager NS", "standort", None),
+        ("mtw", "DEMO-MTW NS", "fahrzeug", None),
+    ],
+}
+# Bereiche mit eigener Jahresprüfung: (Gliederung, Ordner, Tage seit der letzten Runde). Die Runden davor liegen je ein
+# Jahr früher, solange sie nach dem Beginn liegen. „aktuell_aus“: Die Runde dieses Jahres ist ausgefallen – der Bereich ist
+# überfällig. Das Zentrallager prüft heute in einem offenen Durchgang (OFFENER_DURCHGANG).
+BEREICHE = [
+    (GROSS, "lager", 368), (GROSS, "gw1", 200), (GROSS, "gw2", 150), (GROSS, "mtw1", 110), (GROSS, "boot", 80),
+    (GROSS, "mtw2", 400), (GROSS, "gruppen", 45), (GROSS, "persoenlich", 345), (KLEIN, "lager", 170),
+    (KLEIN, "mtw", 230),
+]
+AUSGEFALLEN = {(GROSS, "mtw2")}
+OFFENER_DURCHGANG = (GROSS, "lager", 12)          # eröffnet vor 12 Tagen, ein Drittel erledigt
+EINSATZKRAEFTE = 40                               # höchstens; bei kleinem --artikel weniger (je 20 Artikel eine)
 # Was die Einsatzkräfte sehen: die erste liest ihren persönlichen Ordner, die übrigen haben – wie die meisten, denen PSA
 # zugeordnet ist (services/zuordnung.py) – keinen Modulzugang und sehen nach der Anmeldung nur „Meine PSA“.
-SICHT_PERSON = {1: "liest ihren persönlichen Ordner"}
 OHNE_ZUGANG = "ohne Modulzugang – sieht „Meine PSA“"
 
-# Ordnerbaum je Gliederung: (Schlüssel, Name, Ordnertyp, Oberordner, Gewicht beim Verteilen der Artikel). Dazu je
-# DEMO-Einsatzkraft ein persönlicher Ordner unter „persoenlich“. Kein Ordner bekommt ein eigenes Prüfintervall – es
-# gilt das aus dem Katalog.
-ORDNER = [
-    ("lager", "DEMO-Lager", "standort", None, 5),
-    ("regal_a", "DEMO-Regal A", "sonstiges", "lager", 10),
-    ("regal_b", "DEMO-Regal B", "sonstiges", "lager", 10),
-    ("reserve", "DEMO-Reserve", "sonstiges", "lager", 5),
-    ("fahrzeuge", "DEMO-Fahrzeuge", "sonstiges", None, 0),
-    ("gw", "DEMO-GW-Wasserrettung", "fahrzeug", "fahrzeuge", 4),
-    ("sr1", "DEMO-Seilrucksack 1", "set", "gw", 4),
-    ("sr2", "DEMO-Seilrucksack 2", "set", "gw", 4),
-    ("mtw", "DEMO-MTW", "fahrzeug", "fahrzeuge", 6),
-    ("gruppen", "DEMO-Einsatzgruppen", "sonstiges", None, 0),
-    ("gruppe1", "DEMO-Strömungsrettungsgruppe 1", "sonstiges", "gruppen", 8),
-    ("gruppe2", "DEMO-Strömungsrettungsgruppe 2", "sonstiges", "gruppen", 8),
-    ("persoenlich", "DEMO-Persönliche Ausrüstung", "sonstiges", None, 0),
+# Artikeltypen nach Stichwörtern im Kategoriepfad (in dieser Reihenfolge – „Seilrollen“ sind Rollen, keine Seile) mit
+# ihrem Gewicht im allgemeinen Bestand und den Ordnern, in die sie kommen (Gewichte). Was zu keinem Typ passt, ist
+# „sonstiges“. Typen ohne Produkt im Katalog fallen weg.
+TYPEN = [
+    ("rolle", ("rolle", "flaschenzug"), 3),
+    ("seil", ("seil",), 10),
+    ("karabiner", ("karabiner", "verbindungsmittel"), 30),
+    ("abseil", ("abseil", "achter", "sicherungsger"), 6),
+    ("schlinge", ("schling", "bandschl"), 14),
+    ("platte", ("platte", "rigging"), 3),
+    ("gurt", ("gurt",), 8),
+    ("helm", ("helm",), 4),
+    ("weste", ("weste", "schwimm", "auftrieb"), 4),
+    ("sonstiges", (), 4),
 ]
-GEWICHT_PERSON = 2
-ZWEIG_ZU = ("gw", "sr1", "sr2")                             # abgeschlossener Durchgang (heute)
-ZWEIG_OFFEN = ("lager", "regal_a", "regal_b", "reserve")    # offener Durchgang
-
-# Anteile der Zustände an den Artikeln mit aktivem Formular (der Rest ist einsatzbereit); jeder kommt mindestens
-# einmal vor, sofern es passende Artikel gibt. „lebensdauer…“ nur bei textilen Produkten mit Lebensdauer.
-ANTEILE = [("lebensdauer", 0.03), ("aus_lebensdauer", 0.01), ("aus_mangel", 0.02), ("aus_verlust", 0.015),
-           ("gesperrt", 0.04), ("verloren", 0.025), ("neu", 0.05), ("ueberfaellig", 0.12), ("bald", 0.10)]
-FREIPRUEFUNG = 0.06                  # Anteil der einsatzbereiten mit Sperre und Freiprüfung in der Geschichte
-# Gewichte für 1, 2, 3 oder 4 reguläre Prüfungen je Artikel. Jede Prüfung bekommt ihr Protokoll (gut eine halbe Sekunde
-# je PDF) – das bestimmt die Laufzeit.
-HISTORIE = (60, 28, 9, 3)
+_GRUPPEN = {"gruppe1": 1, "gruppe2": 1, "gruppe3": 1}
+ZIELE = {
+    "seil": dict(regal_seile=4, sr1=1, sr2=1, sr3=1, gw1=1, gw2=1, boot=1, **_GRUPPEN),
+    "karabiner": dict(regal_hardware=4, sr1=2, sr2=2, sr3=2, fzt=2, rt=1, mtw1=1, **_GRUPPEN),
+    "rolle": dict(fzt=3, regal_hardware=2, gw1=1, gw2=1),
+    "abseil": dict(regal_hardware=2, sr1=1, sr2=1, sr3=1, **_GRUPPEN),
+    "schlinge": dict(regal_hardware=2, sr1=2, sr2=2, sr3=2, fzt=1, boot=1, **_GRUPPEN),
+    "platte": dict(regal_hardware=2, sr1=1, sr2=1, sr3=1),
+    "gurt": dict(regal_psa=4, reserve=3, mtw1=1, mtw2=1, boot=1),
+    "helm": dict(regal_psa=4, reserve=3, mtw1=1, mtw2=1, boot=1),
+    "weste": dict(regal_psa=4, reserve=3, mtw1=1, mtw2=1, boot=1),
+    "sonstiges": dict(regal_hardware=2, reserve=2, gw1=1, gw2=1, mtw1=1, mtw2=1),
+}
+ZIELE_KLEIN = {"lager": 3, "mtw": 2}
+# So viel passt in einen Rucksack oder eine Tasche – ist sie voll, kommt der Artikel in einen anderen passenden Ordner.
+FASSUNG = {"sr1": 18, "sr2": 18, "sr3": 18, "fzt": 10, "rt": 12}
+# Persönliche Ausrüstung je Einsatzkraft (nur Typen, die der Katalog hat).
+KIT = [("gurt", 1), ("helm", 1), ("weste", 1), ("karabiner", 2), ("schlinge", 1), ("abseil", 1)]
+LAENGEN = (20, 30, 40, 50, 60, 100)          # Bestandsangabe „Länge (m)“ für Seile – erfunden wie die Seriennummer
+# Wahrscheinlichkeiten der Geschichte
+NACHKAUF = 0.18                    # Anteil der Artikel, die erst im Lauf der Jahre dazukommen
+MANGEL, AUSSONDERN = 0.03, 0.008   # je Prüfung: Mangel (instandsetzen, später Prüfung nach Reparatur) bzw. aussondern
+EINSATZ = 0.03                     # je Artikel und Jahr eine außerplanmäßige Prüfung (nach einem Einsatz)
+VERLUST, LEBENSENDE, VERSCHIEBEN, ANTRAG = 0.012, 0.05, 0.05, 0.02
+GRUPPE_ZUGEORDNET = 0.3            # Anteil der Gruppenausrüstung mit Zuordnung zu einer Person
+ANTRAG_TEXT = {"bestaetigt": "bestätigt", "abgelehnt": "abgelehnt", "zurueckgezogen": "zurückgezogen", "offen": "offen"}
 
 
 class Abbruch(Exception):
@@ -142,15 +207,24 @@ def schalter(argv):
     return n
 
 
-def produktion(adresse):
-    """Zeigt BASE_URL auf die Produktion (auch in Punycode)?"""
-    from urllib.parse import urlsplit
-    host = (urlsplit(adresse or "").hostname or "").lower().rstrip(".")
-    return host in PRODUKTION
+def sperrgrund():
+    """None, wenn BASE_URL in der Umgebung und in der Anwendung frei ist (Positivliste wie flask material
+    dev-zuruecksetzen) – sonst der Grund."""
+    from flask import current_app
+
+    from app import einstellungen
+    from app.material.services import zuruecksetzen
+    einstellungen.anwenden()
+    for herkunft, adresse in (("BASE_URL in der Umgebung", os.environ.get("BASE_URL")),
+                              ("BASE_URL der Anwendung", current_app.config.get("BASE_URL"))):
+        if not zuruecksetzen.adresse_frei(adresse):
+            return (f"{herkunft} ist „{(adresse or '').strip() or 'leer'}“ – der Beispielbestand gehört nur auf dev "
+                    "(Host mit „dev.“ davor) oder localhost/127.0.0.1.")
+    return None
 
 
 def _unterbrochen(signum, _frame):
-    """SIGHUP (abgerissene Verbindung) und SIGTERM wie Strg-C: Der Artikel in Arbeit rollt samt seinen neuen
+    """SIGHUP (abgerissene Verbindung) und SIGTERM wie Strg-C: Der Vorgang in Arbeit rollt samt seinen neuen
     Protokolldateien zurück (protokoll.dateien_sichern), und der Hinweis unten erscheint – soweit es die Ausgabe noch
     gibt."""
     raise KeyboardInterrupt(f"Signal {signum}")
@@ -171,12 +245,14 @@ def main(argv=None):
 
     app = create_app()
     vorher = {sig: signal.signal(sig, _unterbrochen) for sig in (signal.SIGHUP, signal.SIGTERM)}
+    uhr = Uhr()
     try:
         with app.app_context():
             g.mat_akteur = AKTEUR
-            lauf = Beispielbestand(app, n)
+            lauf = Beispielbestand(app, n, uhr)
             try:
-                lauf.anlegen()
+                with uhr, still():
+                    lauf.anlegen()
             except Abbruch as exc:
                 print(exc)
                 sys.exit(exc.code)
@@ -192,11 +268,199 @@ def main(argv=None):
             signal.signal(sig, alt)
 
 
+# --- Die Uhr des Laufs und stille Versender -------------------------------------------------------------------------------
+
+class Uhr:
+    """Stellt für die Dauer des Laufs die Uhr dieses Prozesses um versatz zurück: datetime in services (heute, jetzt),
+    in app.db (db.now – Zeitstempel im Journal und an den Zeilen) und in app.material.models. stellen(tag) setzt den
+    Kalendertag (nie rückwärts, damit Zeitstempel und Prüftage in ihrer Reihenfolge bleiben); die Uhrzeit läuft weiter.
+    Beim Verlassen gilt wieder die echte Uhr."""
+
+    def __init__(self):
+        self.versatz = timedelta(0)
+        self.gestellt = False
+        self._alt = []
+
+    def __enter__(self):
+        from app import db as app_db
+        from app.material import models, services
+        uhr = self
+
+        class Verstellt(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return datetime.now(tz) + uhr.versatz
+
+        for modul in (services, app_db, models):
+            self._alt.append((modul, modul.datetime))
+            modul.datetime = Verstellt
+        return self
+
+    def __exit__(self, *_):
+        for modul, alt in self._alt:
+            modul.datetime = alt
+        self._alt = []
+        self.versatz, self.gestellt = timedelta(0), False
+
+    def tag(self):
+        from app.material.services import heute
+        return heute()
+
+    def stellen(self, tag):
+        neu = timedelta(days=(tag - datetime.now(self._zone()).date()).days)
+        if not self.gestellt or neu > self.versatz:
+            self.versatz, self.gestellt = neu, True
+
+    def echt(self):
+        """Zurück auf heute (für die Schritte von heute)."""
+        self.versatz = timedelta(0)
+
+    @staticmethod
+    def _zone():
+        from app.material.services import ZONE
+        return ZONE
+
+
+class still:
+    """Die Hintergrund-Versender (Mails zu Anträgen, Mängeln, Meldungen) tun in diesem Prozess nichts – es geht nichts
+    hinaus und nichts ins Mailprotokoll."""
+
+    def __enter__(self):
+        from app.material.services import antrag, mangel, meldung
+        self._alt = [(m, m.HINTERGRUND) for m in (antrag, mangel, meldung)]
+        for m, _ in self._alt:
+            m.HINTERGRUND = lambda *a, **k: None
+        return self
+
+    def __exit__(self, *_):
+        for m, alt in self._alt:
+            m.HINTERGRUND = alt
+
+
+# --- Platzhalter-Formulare --------------------------------------------------------------------------------------------
+
+def _platzhalter_punkte(mit_laenge):
+    """Die Prüfpunkte eines Platzhalter-Formulars: je ein Punkt der Arten Ja/Nein, Text und Zahl, bei Artikellänge dazu
+    „Länge (m)“ – ohne Inhalt, nur zum Durchklicken. Pflicht ist nur der Ja/Nein-Punkt (Soll „ja“, nicht kritisch)."""
+    punkte = [{"gruppe": "DEMO-Gruppe", "text": "DEMO Ja/Nein-Punkt (Platzhalter)", "art": "yesno", "soll": "ja"},
+              {"gruppe": "DEMO-Gruppe", "text": "DEMO Text-Punkt (Platzhalter)", "art": "text", "pflicht": False},
+              {"gruppe": "DEMO-Gruppe", "text": "DEMO Zahl-Punkt (Platzhalter)", "art": "number", "pflicht": False}]
+    if mit_laenge:
+        punkte.append({"gruppe": "DEMO-Gruppe", "text": "DEMO Länge (Platzhalter)", "art": "laenge", "pflicht": False})
+    return punkte
+
+
+def petzl_vorlagen(pfad=None):
+    """Die Prüfpunkte nach den Petzl-Prüfberichten je Kategoriename aus scripts/beispielbestand_petzl_punkte.json (Kopie
+    der Recherche vom 25.10.2026, je Punkt mit Fundstelle). Fehlt die Datei (etwa, weil nur dieses Skript in den
+    Container gereicht wurde – README), gibt es nur Platzhalter: {} und der Grund."""
+    pfad = pfad or PETZL_DATEI
+    try:
+        with open(pfad, encoding="utf-8") as fh:
+            daten = json.load(fh)
+    except (OSError, ValueError) as exc:
+        return {}, f"{os.path.basename(pfad)} nicht lesbar ({exc.__class__.__name__}) – nur Platzhalter-Formulare"
+    return {k: v for k, v in daten.items() if isinstance(v, dict) and v.get("punkte")}, None
+
+
+def petzl_titel(kategorie, v):
+    """„DEMO – Prüfformular nach Petzl-Prüfbericht (<Bezugsprodukt>) – <Kategorie>“, bei einer nächstliegenden Vorlage mit
+    Zusatz; passt das nicht in die 160 Zeichen des Titels, ohne das Bezugsprodukt."""
+    zusatz = " (nächstliegende Petzl-Vorlage)" if v.get("nächstliegend") else ""
+    titel = f"DEMO – Prüfformular nach Petzl-Prüfbericht ({v['bezugsprodukt']}) – {kategorie}{zusatz}"
+    return titel if len(titel) <= 160 else f"DEMO – Prüfformular nach Petzl-Prüfbericht – {kategorie}{zusatz}"
+
+
+GRUPPE_MAX = 80                      # so lang darf die Gruppe eines Prüfpunkts sein (katalog.punkte_pruefen)
+
+
+def petzl_gruppe(gruppe):
+    """Die Gruppe eines Petzl-Punkts – zu lang für die App (drei Überschriften der Petzl-Berichte), fällt der Zusatz in
+    Klammern am Ende weg („… Verbindungsöse (z. B. an der ASTRO-Reihe)“ → „… Verbindungsöse“); reicht das nicht,
+    gekürzt mit „…“."""
+    import re
+    g = (gruppe or "").strip()
+    if len(g) > GRUPPE_MAX:
+        g = re.sub(r"\s*\([^()]*\)$", "", g)
+    return g if len(g) <= GRUPPE_MAX else g[:GRUPPE_MAX - 1].rstrip() + "…"
+
+
+def petzl_punkte(v):
+    """Die Punkte wörtlich (berichtigte Fassung „text“) mit Gruppe, Art, Pflicht, Soll und kritisch – so, wie die App sie
+    als Prüfpunkt kennt."""
+    return [{"gruppe": petzl_gruppe(p.get("gruppe")), "text": p["text"], "art": p["art_app"],
+             "pflicht": bool(p.get("pflicht")), "soll": p.get("soll") or "", "kritisch": bool(p.get("kritisch"))}
+            for p in v["punkte"]]
+
+
+def formulare(vorlagen):
+    """Prüfformulare für echte Kategorien ohne wirksames aktives Formular – DEMO-gekennzeichnet und aktiv, der
+    Katalog-Export lässt sie aus. Echte Formulare (aktiv wie inaktiv) und DEMO-Kategorien samt Teilbaum bleiben unberührt.
+      1. Petzl: Eine echte Kategorie, deren Name in vorlagen steht, die selbst kein Formular hat und über keine
+         Oberkategorie ein aktives echtes, bekommt das Formular nach dem Petzl-Prüfbericht.
+      2. Platzhalter (wie scripts/material_demo.py seit 2edb9eb): von oben nach unten – eine echte Kategorie, die weder
+         selbst noch über eine Oberkategorie ein aktives Formular hat, bekommt eins, so hoch wie möglich (die
+         Unterkategorien erben es; ein Formular an einer Unterkategorie geht ihm vor). „Länge (m)“ kommt dazu, wenn eine
+         Kategorie des Teilbaums eine Artikellänge vorsieht. Eine Kategorie mit nur einem inaktiven echten Formular
+         bekommt keins (aktiv verdrängte das DEMO-Formular es im Export); ihre Unterkategorien bekommen eigene.
+    Ein zweiter Lauf legt nichts doppelt an. Liefert (petzl, platzhalter, ohne) – je Kategorienamen."""
+    from app import db
+    from app.material.services import katalog
+    kats = {k["id"]: k for k in db.query("SELECT id, parent_id, name, demo FROM mat_category ORDER BY position, name, id")}
+    kinder = {}
+    for k in kats.values():
+        kinder.setdefault(k["parent_id"], []).append(k)
+    formulare_an = {}
+    for f in db.query("SELECT category_id, active, demo FROM mat_form WHERE category_id IS NOT NULL"):
+        formulare_an.setdefault(f["category_id"], []).append(f)
+    raus, stapel = set(), [k["id"] for k in kats.values() if k["demo"]]
+    while stapel:
+        x = stapel.pop()
+        if x not in raus:
+            raus.add(x)
+            stapel += [c["id"] for c in kinder.get(x, [])]
+
+    def anlegen(kid, titel, punkte):
+        fid = katalog.formular_anlegen({"kategorie_id": kid, "titel": titel, "punkte": punkte}, demo=True)
+        katalog.formular_aktivieren(fid)
+        formulare_an[kid] = [{"active": 1, "demo": 1}]
+
+    petzl = []
+    for k in kats.values():
+        if k["id"] in raus or k["name"] not in vorlagen or formulare_an.get(k["id"]):
+            continue
+        oben = [x["id"] for x in katalog.kategorie_pfad(k["id"])][:-1]
+        if any(f["active"] and not f["demo"] for o in oben for f in formulare_an.get(o, [])):
+            continue
+        anlegen(k["id"], petzl_titel(k["name"], vorlagen[k["name"]]), petzl_punkte(vorlagen[k["name"]]))
+        petzl.append(k["name"])
+    laenge = katalog.laenge_kategorien()
+    platzhalter, ohne = [], []
+
+    def abdecken(k, geerbt):
+        if k["id"] in raus:
+            return
+        eigene = formulare_an.get(k["id"], [])
+        if not geerbt and not eigene:
+            anlegen(k["id"], FORMULAR_TITEL + k["name"],
+                    _platzhalter_punkte(bool(katalog._unterkategorien(k["id"]) & laenge)))
+            platzhalter.append(k["name"])
+        abgedeckt = geerbt or not eigene or any(f["active"] or f["demo"] for f in eigene)
+        if not abgedeckt:
+            ohne.append(k["name"])
+        for kind in kinder.get(k["id"], []):
+            abdecken(kind, abgedeckt)
+
+    for k in kinder.get(None, []):
+        abdecken(k, False)
+    return petzl, platzhalter, ohne
+
+
 # --- Bilder: DEMO-Unterschrift und DEMO-Mangelfoto -----------------------------------------------------------------------
 
 def unterschrift_uri(saat=0):
-    """Eine gezeichnete Platzhalter-Unterschrift mit „DEMO“ als data:-URL, wie sie das Signatur-Pad liefert (wie
-    demo_unterschrift in scripts/material_demo.py); saat variiert den Schwung je Person."""
+    """Eine gezeichnete Platzhalter-Unterschrift mit „DEMO“ als data:-URL, wie sie das Signatur-Pad liefert; saat
+    variiert den Schwung je Person."""
     import base64
     import math
 
@@ -232,26 +496,36 @@ def mangelfoto_png():
 # --- Der Lauf ------------------------------------------------------------------------------------------------------------
 
 class Beispielbestand:
-    def __init__(self, app, n):
+    def __init__(self, app, n, uhr):
         from app.material.services import heute
         from app.material.services import status as st
-        self.app, self.n = app, n
+        self.app, self.n, self.uhr = app, n, uhr
         self.h = heute()                    # Kalendertag in Deutschland, wie überall im Modul
+        self.beginn = self.h - timedelta(days=TAGE)
         self.schwelle = st.schwelle_tage()
         self.rnd = random.Random(SAAT)
-        self.gl = []                        # je Gliederung: kurz, ort, name, id, ordner{schlüssel: id}, konto{rolle: …}
-        self.passwoerter = []
-        self.uebersprungen = []
-        self.zuordnungen = 0
-        self.fertig_gesetzt = False         # Merker geschrieben – der Bestand ist vollständig
-        self._foto = None
-        self._signatur = None
+        self.gl = {}                        # Kürzel → {kurz, name, id, ordner{schlüssel: id}}
+        self.konto = {}                     # Rolle → {id, mail, name}
+        self.passwoerter = []               # (Mail, Name, Passwort oder None, Hinweis)
+        self.hinweise = []
+        self.zahl = {k: 0 for k in ("pruefungen", "runden", "nachkauf", "verschoben", "zugeordnet", "geloest",
+                                    "ausgeschieden", "eintritt", "antraege", "aussonderungen", "verloren")}
+        self.antraege = {}
+        self.fertig_gesetzt = False
+        self.artikel = []                   # Pläne aller Artikel (auch Nachkäufe)
+        self.personen = []                  # Rollen der Einsatzkräfte, die zu Beginn da sind
+        self.neue_personen = []             # die später eintreten
+        self._ereignisse, self._nr = [], 0
+        self._foto = self._signatur = None
+        self._start = time.monotonic()
+        self._formulare = ([], [], [])
+        self._vorlagen = {}
 
     # --- Vorprüfungen ---
 
     @staticmethod
     def namen():
-        return [f"DEMO-OG {ort}" for _, ort, _ in GLIEDERUNGEN]
+        return [name for _, name, _ in GLIEDERUNGEN]
 
     def stand(self):
         """Was nach einem Abbruch da ist – für den Hinweis in main."""
@@ -260,7 +534,7 @@ class Beispielbestand:
                     "setzt die Nutzerverwaltung neu.")
         if not self.gl:
             return "Nichts angelegt – ein neuer Lauf beginnt von vorn."
-        return ("Was bis dahin fertig war, bleibt – jeder Artikel ganz oder gar nicht. Der Beispielbestand ist damit "
+        return ("Was bis dahin fertig war, bleibt – jeder Vorgang ganz oder gar nicht. Der Beispielbestand ist damit "
                 "unvollständig, und kein weiterer Lauf ergänzt ihn: Neu geht es nur mit einer zurückgesetzten "
                 "dev-Datenbank und dem Katalog-Export (README, „Beispielbestand (nur dev)“).")
 
@@ -277,9 +551,9 @@ class Beispielbestand:
             f"({','.join('?' * len(GLIEDERUNGEN))}) ORDER BY id", self.namen())]
 
     def produkte(self):
-        """Die echten Produkte: ohne DEMO-Kennzeichen, nicht in einer DEMO-Kategorie (wie beim Katalog-Export) und mit
-        Prüfintervall (ohne lässt sich kein Artikel anlegen) – je mit Intervall, Lebensdauer (nur textil, wie retire_by)
-        und aktivem Formular aus dem Katalog. Liefert (verwendbar, ausgelassen mit Grund)."""
+        """Die echten Produkte: ohne DEMO-Kennzeichen, nicht in einer DEMO-Kategorie (wie beim Katalog-Export), ohne
+        Stückliste und mit Prüfintervall – je mit Typ, Intervall, Lebensdauer (nur textil), Länge und aktivem Formular.
+        Liefert (verwendbar, ausgelassen mit Grund)."""
         from app import db
         from app.material.services import katalog, katalog_export
         from app.material.services.interval import herstellerseite
@@ -291,26 +565,31 @@ class Beispielbestand:
             if p["category_id"] in raus:
                 ausgelassen.append(f"{name} (in einer DEMO-Kategorie)")
                 continue
+            if p["is_set"]:
+                ausgelassen.append(f"{name} (Set mit Stückliste)")
+                continue
             monate = herstellerseite(p)[0]
             if not monate:
                 ausgelassen.append(f"{name} (kein Prüfintervall im Katalog)")
                 continue
+            pfad = " / ".join(k["name"] for k in katalog.kategorie_pfad(p["category_id"])).lower()
+            typ = next((t for t, worte, _ in TYPEN if any(w in pfad for w in worte)), "sonstiges")
             f = katalog.formular_fuer_produkt(p["id"])
-            gut.append({"id": p["id"], "name": name, "monate": monate,
+            gut.append({"id": p["id"], "name": name, "monate": monate, "typ": typ,
                         "lebensdauer": p["lifetime_years"] if p["material_kind"] == "textil" else None,
-                        "formular": f, "punkte": katalog.punkte(f["id"]) if f else []})
+                        "textil": p["material_kind"] == "textil", "laenge": katalog.laenge_wirksam(p["category_id"]),
+                        "formular": bool(f)})
         return gut, ausgelassen
 
     # --- Ablauf ---
 
     def anlegen(self):
         from app import db
-        start = time.monotonic()
         print(f"Datenbank: {self.app.config['DB_PATH']} · Adresse: {self.app.config['BASE_URL']} · Stichtag: "
-              f"{self.h.strftime('%d.%m.%Y')}")
-        if produktion(self.app.config["BASE_URL"]):
-            raise Abbruch("Abgebrochen: Das ist die Adresse der Produktion – der Beispielbestand gehört nur auf dev. "
-                          "Nichts angelegt.")
+              f"{self.h.strftime('%d.%m.%Y')} · Geschichte ab {self.beginn.strftime('%d.%m.%Y')}")
+        grund = sperrgrund()
+        if grund:
+            raise Abbruch(f"Abgebrochen: {grund} Nichts angelegt.")
         da = self.schon_da()
         if da and not self.fertig():
             raise Abbruch(f"Abgebrochen: Der Beispielbestand ist unvollständig ({', '.join(da)}) – ein früherer Lauf "
@@ -322,406 +601,413 @@ class Beispielbestand:
             return
         produkte, ausgelassen = self.produkte()
         if not produkte:
-            raise Abbruch("Abgebrochen: Im Katalog gibt es keine echten Produkte (ohne DEMO-Kennzeichen, mit "
-                          "Prüfintervall) – der Beispielbestand nimmt nur Produkte aus dem vorhandenen Katalog. Erst den "
-                          "Katalog importieren." + (f" Nicht verwendbar: {'; '.join(ausgelassen)}." if ausgelassen else ""))
-        roh = self._gliederungen_roh()
-        mails = [k["mail"] for gl in roh for k in gl["konten"]]
-        belegt = db.query(f"SELECT email FROM users WHERE email IN ({','.join('?' * len(mails))})", mails)
-        if belegt:
-            raise Abbruch("Abgebrochen: Diese DEMO-Konten gibt es schon – " + ", ".join(r["email"] for r in belegt)
+            raise Abbruch("Abgebrochen: Im Katalog gibt es keine echten Produkte (ohne DEMO-Kennzeichen, ohne Stückliste, "
+                          "mit Prüfintervall) – der Beispielbestand nimmt nur Produkte aus dem vorhandenen Katalog. Erst "
+                          "den Katalog importieren." + (f" Nicht verwendbar: {'; '.join(ausgelassen)}." if ausgelassen
+                                                        else ""))
+        konten = self._konten_roh()
+        fremd = [r["email"] for r in db.query(
+            f"SELECT email, name FROM users WHERE email IN ({','.join('?' * len(konten))})", [k["mail"] for k in konten])
+            if not (r["name"] or "").startswith("DEMO")]
+        if fremd:
+            raise Abbruch("Abgebrochen: Diese Adressen gehören Konten, die nicht „DEMO-…“ heißen – " + ", ".join(fremd)
                           + ". Nichts angelegt.")
-        for gl in roh:
-            self.gliederung_anlegen(gl)
-        print(f"Gliederungen: {', '.join(self.namen())} – mit Ordnerbaum, Konten und Freigaben.")
-        plaene = self.planen(produkte)
-        print(f"Artikel: {len(plaene)} über {len({p['produkt']['id'] for p in plaene})} Produkte – lege an und prüfe "
-              "(jede Prüfung bekommt ihr Protokoll) …", flush=True)
-        for k, plan in enumerate(plaene, 1):
-            self.artikel_anlegen(plan)
-            if k % 25 == 0:
-                print(f"  … {k} von {len(plaene)} Artikeln ({self._dauer(start)})", flush=True)
-        for gl in self.gl:
-            self.durchgaenge(gl, plaene)
-        self.zuordnen(plaene)
+        self.uhr.stellen(self.beginn)
+        for kurz, name, _ in GLIEDERUNGEN:
+            self.gliederung_anlegen(kurz, name)
+        for k in konten:
+            self.konto[k["rolle"]] = self.konto_anlegen(k)
+        self.freigaben()
+        print(f"Gliederungen: {', '.join(self.namen())} – mit Ordnerbaum, {len(konten)} Konten und Freigaben.")
+        self._vorlagen, fehlt = petzl_vorlagen()
+        if fehlt:
+            self.hinweise.append(fehlt)
+        self._formulare = formulare(self._vorlagen)
+        petzl, platzhalter, _ = self._formulare
+        if petzl or platzhalter:
+            print(f"Formulare (DEMO, aktiv): {len(petzl)} nach Petzl-Prüfbericht ({', '.join(petzl)}), "
+                  f"{len(platzhalter)} Platzhalter ({', '.join(platzhalter[:8])}{' …' if len(platzhalter) > 8 else ''}).")
+            produkte, ausgelassen = self.produkte()
+        self.planen(produkte)
+        print(f"Artikel: {len(self.artikel)} geplant über {len({a['produkt']['id'] for a in self.artikel})} Produkte – "
+              "spiele die Geschichte ab (jede Prüfung bekommt ihr Protokoll) …", flush=True)
+        self.abspielen()
+        self.heute_schritte()
         db.execute("INSERT INTO mat_meta (schluessel, wert) VALUES (?, ?) ON CONFLICT(schluessel) DO UPDATE SET "
                    "wert = excluded.wert", (MERKER, f"fertig {self.h.isoformat()}"))
         self.fertig_gesetzt = True
-        self.bericht(plaene, produkte, ausgelassen, start)
+        self.bericht(produkte, ausgelassen)
 
-    @staticmethod
-    def _dauer(start):
-        s = int(time.monotonic() - start)
+    def _dauer(self):
+        s = int(time.monotonic() - self._start)
         return f"{s // 60}:{s % 60:02d} min"
 
     # --- Gliederungen, Ordner und Konten ---
 
-    @staticmethod
-    def _gliederungen_roh():
-        out = []
-        for kurz, ort, anteil in GLIEDERUNGEN:
-            k = kurz.lower()
-            konten = [
-                {"rolle": "wart", "mail": f"demo-wart-{k}@{POSTFACH}", "name": f"DEMO-Materialwart {ort}"},
-                {"rolle": "pruefer", "mail": f"demo-pruefer-{k}@{POSTFACH}", "name": f"DEMO-Prüferin {ort}",
-                 "urkunde": f"DEMO-{kurz}-1012"},
-                {"rolle": "mitglied", "mail": f"demo-mitglied-{k}@{POSTFACH}", "name": f"DEMO-Mitglied {ort}"},
-                {"rolle": "extern", "mail": f"demo-extern-{k}@{POSTFACH}", "name": f"DEMO-Prüfer extern {ort}",
-                 "urkunde": f"DEMO-{kurz}-2024"},
-            ] + [{"rolle": f"person{n}", "mail": f"demo-einsatzkraft-{k}-{n}@{POSTFACH}",
-                  "name": f"DEMO-Einsatzkraft {ort} {n}", "sicht": SICHT_PERSON.get(n, OHNE_ZUGANG)}
-                 for n in range(1, EINSATZKRAEFTE + 1)]
-            out.append({"kurz": kurz, "ort": ort, "anteil": anteil, "name": f"DEMO-OG {ort}", "konten": konten})
-        return out
-
-    def gliederung_anlegen(self, roh):
-        """Ordnerbaum, Konten und Freigaben einer Gliederung – in einer Transaktion."""
+    def gliederung_anlegen(self, kurz, name):
         from app import db
         from app.material.services import bestand
-        gl = dict(roh, ordner={}, konto={})
+        gl = {"kurz": kurz, "name": name, "ordner": {}}
         with db.transaction(sofort=True):
-            gl["id"] = bestand.ordner_anlegen({"name": gl["name"], "kind": "gliederung", "description":
+            gl["id"] = bestand.ordner_anlegen({"name": name, "kind": "gliederung", "description":
                                                f"{HINWEIS}. Beispielbestand aus dem Katalog "
                                                "(scripts/material_beispielbestand.py)."}, demo=True)
-            for schluessel, name, art, oben, _ in ORDNER:
+            for schluessel, oname, art, oben in ORDNER[kurz]:
                 gl["ordner"][schluessel] = bestand.ordner_anlegen(
-                    {"name": name, "kind": art, "parent_id": gl["ordner"][oben] if oben else gl["id"]}, demo=True)
-            for n in range(1, EINSATZKRAEFTE + 1):
-                gl["ordner"][f"person{n}"] = bestand.ordner_anlegen(
-                    {"name": f"DEMO-Einsatzkraft {gl['ort']} {n}", "kind": "persoenlich",
-                     "parent_id": gl["ordner"]["persoenlich"]}, demo=True)
-            for k in gl["konten"]:
-                gl["konto"][k["rolle"]] = self.konto_anlegen(k, gl)
-            self.freigaben(gl)
-        self.gl.append(gl)
+                    {"name": oname, "kind": art, "parent_id": gl["ordner"][oben] if oben else gl["id"]}, demo=True)
+        self.gl[kurz] = gl
 
-    def konto_anlegen(self, k, gl):
-        """Ein DEMO-Konto nur für das Modul Material (Karte, Wiki, Prüfungen und Verwaltung aus) mit zufälligem Passwort –
-        wie in scripts/material_demo.py direkt, mit dem Journaleintrag „rollen“ wie in der Nutzerverwaltung. Prüfer
-        (Häkchen und Urkundennummer) und Materialwart hinterlegen ihre DEMO-Unterschrift über den Dienst des Profils.
-        Modulstufe Material: Mitglied (1) – die Einsatzkraft ohne Modulzugang (OHNE_ZUGANG) bekommt „kein Zugriff“ (0)."""
+    def _personen_zahl(self):
+        return max(1, min(EINSATZKRAEFTE, self.n // 20))
+
+    def _konten_roh(self):
+        """Die DEMO-Konten mit den bekannten Postfächern: Materialwart je Gliederung, zwei Prüfer und ein Prüfer der
+        Nachbarstadt (dauerhaft), ein externer Prüfer (befristet im Zentrallager), ein Mitglied (lesen), die
+        DEMO-Material-Verwaltung (Stufe Verwaltung) und die Einsatzkräfte – die ersten von Beginn an, einige treten später
+        ein (sie übernehmen die Ausrüstung Ausgeschiedener)."""
+        konten = [
+            {"rolle": "wart", "mail": f"demo-wart-a@{POSTFACH}", "name": "DEMO-Materialwart Flussland", "stufe": 1},
+            {"rolle": "wart_ns", "mail": f"demo-wart-b@{POSTFACH}", "name": "DEMO-Materialwart Nachbarstadt", "stufe": 1},
+            {"rolle": "pruefer", "mail": f"demo-pruefer@{POSTFACH}", "name": "DEMO-Prüfer", "stufe": 1,
+             "urkunde": "DEMO-1012"},
+            {"rolle": "pruefer2", "mail": f"demo-pruefer-2@{POSTFACH}", "name": "DEMO-Prüferin 2", "stufe": 1,
+             "urkunde": "DEMO-1013"},
+            {"rolle": "pruefer_ns", "mail": f"demo-pruefer-ns@{POSTFACH}", "name": "DEMO-Prüfer Nachbarstadt",
+             "stufe": 1, "urkunde": "DEMO-1014"},
+            {"rolle": "extern", "mail": f"demo-extern@{POSTFACH}", "name": "DEMO-Prüfer extern", "stufe": 1,
+             "urkunde": "DEMO-2024"},
+            {"rolle": "mitglied", "mail": f"demo-mitglied@{POSTFACH}", "name": "DEMO-Mitglied", "stufe": 1},
+            {"rolle": "mv", "mail": f"demo-mv@{POSTFACH}", "name": "DEMO-Material-Verwaltung", "stufe": 2},
+        ]
+        p = self._personen_zahl()
+        neu = max(1, p // 12)
+        for k in range(1, p + neu + 1):
+            konten.append({"rolle": f"person{k}", "mail": f"demo-einsatzkraft-{k:02d}@{POSTFACH}",
+                           "name": f"DEMO-Einsatzkraft {k:02d}", "stufe": 1 if k == 1 else 0, "person": True,
+                           "sicht": "liest ihren persönlichen Ordner" if k == 1 else OHNE_ZUGANG})
+        self.personen = [f"person{k}" for k in range(1, p + 1)]
+        self.neue_personen = [f"person{k}" for k in range(p + 1, p + neu + 1)]
+        return konten
+
+    def konto_anlegen(self, k):
+        """Ein DEMO-Konto nur für das Modul Material (Karte, Wiki, Prüfungen und Verwaltung aus) – mit zufälligem Passwort,
+        die Einsatzkräfte mit einem gemeinsamen –, mit dem Journaleintrag „rollen“ wie in der Nutzerverwaltung. Prüfer und
+        Materialwarte hinterlegen ihre DEMO-Unterschrift über den Dienst des Profils. Gibt es ein DEMO-Konto mit der
+        Adresse schon (etwa von scripts/material_demo.py), bleibt es mit Name und Passwort; fehlen ihm Stufe, Prüfer-Häkchen
+        oder Unterschrift, kommen sie dazu."""
         import secrets
 
         from werkzeug.security import generate_password_hash
 
         from app import db
         from app.material.services import journal, unterschrift
-        passwort = secrets.token_urlsafe(12)
         urkunde = k.get("urkunde", "")
-        stufe = 0 if k.get("sicht") == OHNE_ZUGANG else 1
-        uid = db.execute(
-            "INSERT INTO users (email, password_hash, name, gliederung, recht_karte, recht_wiki, recht_pruefungen, "
-            "recht_verwaltung, recht_material, mat_pruefer, mat_katalog, urkundennummer, created_at) "
-            "VALUES (?,?,?,?,0,0,0,0,?,?,0,?,?)",
-            (k["mail"], generate_password_hash(passwort), k["name"], gl["name"], stufe, int(bool(urkunde)), urkunde,
-             db.now()))
-        journal.eintragen("user", uid, "rollen", None, {"recht_material": stufe, "mat_pruefer": int(bool(urkunde)),
-                                                        "mat_katalog": 0, "urkundennummer": urkunde})
-        if urkunde or k["rolle"] == "wart":
-            unterschrift.setzen({"id": uid}, unterschrift_uri(uid))
-        self.passwoerter.append((k["mail"], k["name"], passwort, k.get("sicht")))
-        return {"id": uid, "mail": k["mail"], "name": k["name"]}
+        alt = db.query("SELECT * FROM users WHERE email = ?", (k["mail"],), one=True)
+        with db.transaction(sofort=True):
+            if alt:
+                uid = alt["id"]
+                rollen = {}
+                if (alt["recht_material"] or 0) < k["stufe"]:
+                    rollen["recht_material"] = k["stufe"]
+                if urkunde and not (alt["mat_pruefer"] and alt["urkundennummer"]):
+                    rollen.update(mat_pruefer=1, urkundennummer=alt["urkundennummer"] or urkunde)
+                if rollen:
+                    db.execute(f"UPDATE users SET {', '.join(f'{s} = ?' for s in rollen)} WHERE id = ?",
+                               (*rollen.values(), uid))
+                    journal.eintragen("user", uid, "rollen", None, rollen)
+                self.passwoerter.append((k["mail"], alt["name"], None, k.get("sicht")))
+                name = alt["name"]
+            else:
+                if k.get("person"):
+                    passwort = self._gemeinsam = getattr(self, "_gemeinsam", None) or secrets.token_urlsafe(12)
+                else:
+                    passwort = secrets.token_urlsafe(12)
+                uid = db.execute(
+                    "INSERT INTO users (email, password_hash, name, gliederung, recht_karte, recht_wiki, recht_pruefungen, "
+                    "recht_verwaltung, recht_material, mat_pruefer, mat_katalog, urkundennummer, created_at) "
+                    "VALUES (?,?,?,?,0,0,0,0,?,?,0,?,?)",
+                    (k["mail"], generate_password_hash(passwort), k["name"], GLIEDERUNGEN[0][1], k["stufe"],
+                     int(bool(urkunde)), urkunde, db.now()))
+                journal.eintragen("user", uid, "rollen", None, {"recht_material": k["stufe"],
+                                                                "mat_pruefer": int(bool(urkunde)), "mat_katalog": 0,
+                                                                "urkundennummer": urkunde})
+                self.passwoerter.append((k["mail"], k["name"], passwort, k.get("sicht")))
+                name = k["name"]
+            if (urkunde or k["rolle"].startswith("wart")) and not unterschrift.von(uid):
+                unterschrift.setzen({"id": uid}, unterschrift_uri(uid))
+        return {"id": uid, "mail": k["mail"], "name": name}
 
-    def freigaben(self, gl):
-        """Materialwart: verwalten an der Gliederung (dauerhaft); Prüferin: lesen und prüfen, beides dauerhaft – befristet
-        ist eine Prüffreigabe nur für Externe (wie die Vorlage „Prüfer“ und scripts/material_demo.py); Mitglied: lesen;
-        externer Prüfer: nur prüfen im Lager, 30 Tage (zeigt „läuft bald ab“); die Einsatzkräfte aus SICHT_PERSON: lesen
-        an ihrem persönlichen Ordner (dauerhaft), die übrigen nichts. Über den Schreibweg des Freigaben-Dienstes mit den
-        Rechten der Material-Verwaltung – Prüffreigaben nur an qualifizierte Konten, dauerhaft nur mit Grundrecht (das
-        lesen der Prüferin steht in der Reihenfolge davor), befristet höchstens 24 Monate; im Journal unter
-        „Beispielbestand“, die Konten nur als Kontoverweis."""
+    def freigaben(self, extern=False):
+        """Materialwart: verwalten an seiner Gliederung; die Prüfer: lesen und prüfen, beides dauerhaft (befristet ist
+        eine Prüffreigabe nur für Externe); Mitglied: lesen; die erste Einsatzkraft: lesen an ihrem persönlichen Ordner.
+        Mit extern nur der externe Prüfer: prüfen im Zentrallager, 30 Tage ab heute (zeigt „läuft bald ab“). Über den
+        Schreibweg des Freigaben-Dienstes mit den Rechten der Material-Verwaltung; im Journal unter „Beispielbestand“, die
+        Konten nur als Kontoverweis. Eine Freigabe, die das Konto dort schon hat, bleibt."""
+        from app import db
         from app.material.services import freigaben, rechte
         plattform = rechte.Sicht(uid=None, alles=True, qualifiziert=False)
-        extern_bis = (self.h + timedelta(days=30)).isoformat()
-        for rolle, ordner, recht, ende in (("wart", gl["id"], "verwalten", None), ("pruefer", gl["id"], "lesen", None),
-                                           ("pruefer", gl["id"], "pruefen", None),
-                                           ("mitglied", gl["id"], "lesen", None),
-                                           ("extern", gl["ordner"]["lager"], "pruefen", extern_bis),
-                                           *((f"person{n}", gl["ordner"][f"person{n}"], "lesen", None)
-                                             for n in SICHT_PERSON if n <= EINSATZKRAEFTE)):
-            konto = rechte.waehlbares_konto(gl["konto"][rolle]["id"])
+        fl, ns = self.gl[GROSS], self.gl[KLEIN]
+        if extern:
+            liste = [("extern", fl["ordner"]["lager"], "pruefen", (self.h + timedelta(days=30)).isoformat())]
+        else:
+            liste = [("wart", fl["id"], "verwalten", None), ("wart_ns", ns["id"], "verwalten", None),
+                     ("pruefer", fl["id"], "lesen", None), ("pruefer", fl["id"], "pruefen", None),
+                     ("pruefer2", fl["id"], "lesen", None), ("pruefer2", fl["id"], "pruefen", None),
+                     ("pruefer_ns", ns["id"], "lesen", None), ("pruefer_ns", ns["id"], "pruefen", None),
+                     ("mitglied", fl["id"], "lesen", None)]
+        for rolle, ordner, recht, ende in liste:
+            konto = rechte.waehlbares_konto(self.konto[rolle]["id"])
+            if db.query("SELECT 1 FROM mat_folder_grant WHERE folder_id = ? AND user_id = ? AND permission = ?",
+                        (ordner, konto["id"], recht), one=True):
+                continue
             neu = {"user_id": konto["id"], "permission": recht, "valid_until": freigaben._bis(ende, recht),
                    "note": "DEMO"}
             freigaben._schreiben(plattform, {"id": None}, ordner, None, neu, konto)
         rechte.sicht_verwerfen()
 
+    def _personenordner(self, rolle):
+        """Der persönliche Ordner einer Einsatzkraft – beim ersten Bedarf angelegt (an ihrem Eintrittstag); die erste
+        bekommt dort lesen."""
+        from app.material.services import bestand, freigaben, rechte
+        fl = self.gl[GROSS]
+        if rolle not in fl["ordner"]:
+            fl["ordner"][rolle] = bestand.ordner_anlegen(
+                {"name": self.konto[rolle]["name"], "kind": "persoenlich", "parent_id": fl["ordner"]["persoenlich"]},
+                demo=True)
+            if rolle == "person1":
+                konto = rechte.waehlbares_konto(self.konto[rolle]["id"])
+                freigaben._schreiben(rechte.Sicht(uid=None, alles=True, qualifiziert=False), {"id": None},
+                                     fl["ordner"][rolle], None, {"user_id": konto["id"], "permission": "lesen",
+                                                                 "valid_until": None, "note": "DEMO"}, konto)
+                rechte.sicht_verwerfen()
+        return fl["ordner"][rolle]
+
     @staticmethod
     def pruefer(uid):
-        """Prüfer (oder aussondernder Materialwart) aus seinem Konto – wie nach einer Anmeldung (pruefer_aus): Name,
-        Urkundennummer, Unterschrift aus dem Profil, Anmeldung."""
+        """Prüfer (oder aussondernder Materialwart) aus seinem Konto – wie nach einer Anmeldung (pruefer_aus)."""
         from app import db
         from app.material.services import pruefung
         return pruefung.pruefer_aus(db.query("SELECT * FROM users WHERE id = ?", (uid,), one=True))
 
-    # --- Plan: welcher Artikel wohin, mit welchem Zustand ---
+    def _pruefer_fuer(self, a):
+        rollen = ["pruefer_ns"] if a["gl"] == KLEIN else ["pruefer", "pruefer2"]
+        return self.pruefer(self.konto[self.rnd.choice(rollen)]["id"])
 
-    def planen(self, produkte):
-        rnd = self.rnd
-        # Artikel je Produkt: gleich viele, der Rest zufällig; jedes Produkt mindestens einmal, sofern n reicht.
-        auswahl = list(produkte)
-        if self.n < len(auswahl):
-            rnd.shuffle(auswahl)
-            auswahl = auswahl[:self.n]
-            self.uebersprungen.append(f"Nur {self.n} von {len(produkte)} Produkten bekommen Artikel (--artikel).")
-        je = [self.n // len(auswahl)] * len(auswahl)
-        for k in rnd.sample(range(len(auswahl)), self.n % len(auswahl)):
-            je[k] += 1
-        plaene = [{"produkt": p, "zustand": None} for p, m in zip(auswahl, je) for _ in range(m)]
-        rnd.shuffle(plaene)
-        # Gliederung nach Anteil (gleichmäßig durchmischt), darin der Ordner nach Gewicht.
-        anteile = [a for _, _, a in GLIEDERUNGEN]
-        ziele = [(s, gw) for s, _, _, _, gw in ORDNER if gw] + [
-            (f"person{n}", GEWICHT_PERSON) for n in range(1, EINSATZKRAEFTE + 1)]
-        for k, plan in enumerate(plaene):
-            plan["nr"] = k + 1
-            plan["gl"] = self._nach_anteil((k + 0.5) / len(plaene), anteile)
-            plan["ordner"] = self._nach_gewicht(ziele)
-        # Beide Durchgänge brauchen prüfbare Artikel: mindestens 2 mit Formular im Zweig des GW, 4 im Lager (sofern die
-        # Gliederung so viele hat) – nachgezogen aus den übrigen Ordnern, Artikel mit Formular zuerst.
-        for gi in range(len(self.gl)):
-            eigene = [p for p in plaene if p["gl"] == gi]
-            for zweig, ziel, mindest in ((ZWEIG_ZU, "gw", 2), (ZWEIG_OFFEN, "regal_a", 4)):
-                fehlen = mindest - sum(1 for p in eigene if p["ordner"] in zweig and p["produkt"]["formular"])
-                rest = [p for p in eigene if p["ordner"] not in ZWEIG_ZU + ZWEIG_OFFEN]
-                rest.sort(key=lambda p: not p["produkt"]["formular"])
-                for p in rest[:max(0, fehlen)]:
-                    p["ordner"] = ziel
-            # Wer seinen persönlichen Ordner liest (SICHT_PERSON), findet darin mindestens einen Artikel – nachgezogen
-            # aus Ordnern außerhalb der Durchgänge, sofern die Gliederung dort welche hat.
-            for n in (n for n in SICHT_PERSON if n <= EINSATZKRAEFTE):
-                if not any(p["ordner"] == f"person{n}" for p in eigene):
-                    rest = [p for p in eigene if p["ordner"] not in ZWEIG_ZU + ZWEIG_OFFEN
-                            and not p["ordner"].startswith("person")]
-                    if rest:
-                        rest[0]["ordner"] = f"person{n}"
-        # Ohne aktives Formular gibt es keine Prüfung: neu. Nur wenn kein Produkt mit Formular eine Lebensdauer hat, steht
-        # ein Artikel eines textilen Produkts mit Lebensdauer ohne Prüfung auf „Lebensdauer erreicht“ – sonst käme der
-        # Zustand nicht vor (der Bericht nennt ihn).
-        ohne = [p for p in plaene if not p["produkt"]["formular"]]
-        for p in ohne:
-            p["zustand"] = "neu"
-        textil_ohne = [p for p in ohne if p["produkt"]["lebensdauer"] and p["ordner"] not in ZWEIG_ZU]
-        if textil_ohne and not any(p["produkt"]["lebensdauer"] and p["produkt"]["formular"] for p in plaene):
-            textil_ohne[0]["zustand"] = "lebensdauer"
-        # Im Zweig des abgeschlossenen Durchgangs wird heute geprüft – dort steht alles mit Formular zur Prüfung an.
-        for p in plaene:
-            if p["zustand"] is None and p["ordner"] in ZWEIG_ZU:
-                p["zustand"] = "durchgang_zu"
-        frei = [p for p in plaene if p["zustand"] is None]
-        rnd.shuffle(frei)              # die Gliederung folgt der Reihenfolge in plaene – die Zustände nicht
-        anzahl = len(frei)
-        for zustand, anteil in ANTEILE:
-            pool = [p for p in frei if p["zustand"] is None and (
-                p["produkt"]["lebensdauer"] or zustand not in ("lebensdauer", "aus_lebensdauer"))]
-            for p in pool[:max(1, round(anzahl * anteil))]:
-                p["zustand"] = zustand
-        for p in frei:
-            if p["zustand"] is None:
-                p["zustand"] = "einsatzbereit"
-                p["freipruefung"] = rnd.random() < FREIPRUEFUNG
-        # Der offene Durchgang im Lager: ein Drittel der Einsatzbereiten heute geprüft (mindestens einer), einer in
-        # Prüfung (Entwurf des externen Prüfers), einer mit Grund ausgenommen, der Rest offen. Hat das Lager zu wenige
-        # Einsatzbereite, tauscht es Zustände mit Einsatzbereiten aus anderen Ordnern (derselben Gliederung zuerst) –
-        # die Verteilung der Zustände bleibt; nur wenn es gar keine gibt, wird einer einsatzbereit.
-        for gi in range(len(self.gl)):
-            lager = [p for p in plaene if p["gl"] == gi and p["ordner"] in ZWEIG_OFFEN]
-            bereit = [p for p in lager if p["zustand"] == "einsatzbereit" and not p.get("freipruefung")]
-            draussen = [p for p in plaene if p["ordner"] not in ZWEIG_OFFEN + ZWEIG_ZU
-                        and p["zustand"] == "einsatzbereit" and not p.get("freipruefung")]
-            draussen.sort(key=lambda p: p["gl"] == gi)              # pop() nimmt die eigene Gliederung zuerst
-            tauschbar = [p for p in lager if p["produkt"]["formular"] and p["zustand"] in (
-                "neu", "ueberfaellig", "bald", "gesperrt", "verloren", "aus_mangel", "aus_verlust")]
-            while len(bereit) < 2 and draussen and tauschbar:
-                a, b = tauschbar.pop(), draussen.pop()
-                a["zustand"], b["zustand"] = b["zustand"], a["zustand"]
-                bereit.append(a)
-            if not bereit and tauschbar:
-                bereit.append(tauschbar.pop())
-                bereit[0]["zustand"] = "einsatzbereit"
-            for p in bereit[:max(1, len(bereit) // 3)]:
-                p["zustand"], p["durchgang"] = "faellig", "erledigt"
-            faellig = [p for p in lager if p["zustand"] in ("ueberfaellig", "bald")] + [
-                p for p in lager if p["zustand"] == "einsatzbereit" and "durchgang" not in p]
-            if faellig:
-                faellig[0]["durchgang"] = "entwurf"
-            rest = [p for p in lager if p["zustand"] in ("einsatzbereit", "ueberfaellig", "bald")
-                    and "durchgang" not in p]
-            if rest:
-                rest[-1]["durchgang"] = "ausgenommen"
-        return plaene
+    def _wart(self, a):
+        return self.pruefer(self.konto["wart_ns" if a["gl"] == KLEIN else "wart"]["id"])
+
+    # --- Plan ---
+
+    def _favoriten(self, liste):
+        """Gewichte je Produkt eines Typs: bis zu drei Standardprodukte machen gut zwei Drittel aus, der Rest verteilt
+        sich auf die übrigen – so sieht ein gewachsener Bestand aus."""
+        auswahl = sorted(liste, key=lambda p: p["id"])
+        self.rnd.shuffle(auswahl)
+        fav = auswahl[:3]
+        gewichte = [6, 3, 2][:len(fav)]
+        rest = auswahl[3:]
+        if rest:
+            je = 0.45 * sum(gewichte) / len(rest)
+            return fav + rest, gewichte + [je] * len(rest)
+        return fav, gewichte
 
     @staticmethod
-    def _nach_anteil(x, anteile):
-        summe = 0.0
-        for i, a in enumerate(anteile):
-            summe += a
-            if x < summe:
-                return i
-        return len(anteile) - 1
+    def _bereich(kurz, ordner):
+        """Der Bereich (Ordner mit Jahresprüfung), zu dem ein Ordner gehört."""
+        oben = {s: o for s, _, _, o in ORDNER[kurz]}
+        bereiche = {b for k, b, _ in BEREICHE if k == kurz}
+        x = ordner if ordner in oben else "persoenlich"
+        while x not in bereiche and oben.get(x):
+            x = oben[x]
+        return x
 
-    def _nach_gewicht(self, ziele):
-        x = self.rnd.random() * sum(g for _, g in ziele)
-        for s, g in ziele:
-            x -= g
-            if x < 0:
-                return s
-        return ziele[-1][0]
+    def _runden(self, kurz, bereich):
+        """Die Tage der Jahresprüfungen eines Bereichs nach dem Beginn, älteste zuerst."""
+        tage = next(t for k, b, t in BEREICHE if (k, b) == (kurz, bereich))
+        out, k = [], 0
+        while True:
+            tag = self.h - timedelta(days=tage + 365 * k)
+            if tag <= self.beginn + timedelta(days=20):
+                break
+            if not (k == 0 and (kurz, bereich) in AUSGEFALLEN):
+                out.insert(0, tag)
+            k += 1
+        return out
 
-    # --- Termine ---
+    def planen(self, produkte):
+        """Welche Artikel wohin: zuerst die persönliche Ausrüstung je Einsatzkraft (Kit), dann der übrige Bestand nach den
+        Gewichten der Typen und Ordner, ein kleiner Teil in die Nachbarstadt. Ein Teil kommt erst im Lauf der Jahre
+        (Nachkauf), der Rest wird je Bereich kurz vor seiner ersten Jahresprüfung erfasst."""
+        rnd = self.rnd
+        je_typ = {}
+        for p in produkte:
+            je_typ.setdefault(p["typ"], []).append(p)
+        wahl = {t: self._favoriten(liste) for t, liste in je_typ.items()}
+        gewicht = {t: g for t, _, g in TYPEN if t in je_typ}
+
+        def produkt(typ):
+            liste, gew = wahl[typ]
+            return rnd.choices(liste, weights=gew)[0]
+
+        plaene = []
+        kit = [(t, m) for t, m in KIT if t in je_typ]
+        for rolle in self.personen:
+            for typ, m in kit:
+                for _ in range(m):
+                    if len(plaene) < self.n:
+                        plaene.append({"typ": typ, "produkt": produkt(typ), "gl": GROSS, "ordner": rolle,
+                                       "person": rolle})
+        rest = self.n - len(plaene)
+        klein = round(rest * GLIEDERUNGEN[1][2]) if rest >= 20 else min(rest, 1 if self.n >= 4 else 0)
+        typen, gew = list(gewicht), list(gewicht.values())
+        belegt = {}
+        for k in range(rest):
+            typ = rnd.choices(typen, weights=gew)[0]
+            if k < klein:
+                ziele = ZIELE_KLEIN
+                kurz = KLEIN
+            else:
+                ziele, kurz = ZIELE.get(typ, ZIELE["sonstiges"]), GROSS
+            ziele = {o: w for o, w in ziele.items() if belegt.get(o, 0) < FASSUNG.get(o, self.n)} or \
+                {"reserve" if kurz == GROSS else "lager": 1}
+            ordner = rnd.choices(list(ziele), weights=list(ziele.values()))[0]
+            belegt[ordner] = belegt.get(ordner, 0) + 1
+            a = {"typ": typ, "produkt": produkt(typ), "gl": kurz, "ordner": ordner, "person": None}
+            if ordner in _GRUPPEN and rnd.random() < GRUPPE_ZUGEORDNET and self.personen:
+                a["person"] = rnd.choice(self.personen)
+            plaene.append(a)
+        rnd.shuffle(plaene)
+        # Die globale Suche aus dem Kreisverband heraus findet diese Nummer in der Nachbarstadt (wie bisher).
+        ns = [a for a in plaene if a["gl"] == KLEIN]
+        for k, a in enumerate(plaene, 1):
+            a["serie"] = f"DEMO-{a['gl']}-{k:04d}"
+        if ns:
+            ns[0]["serie"] = "DEMO-NS-4711"
+        # Wann jeder Artikel kommt: Nachkauf irgendwann (die letzten Tage mit: „neu“), sonst Ersterfassung des Bereichs.
+        erstes = {}
+        for kurz, bereich, _ in BEREICHE:
+            runden = self._runden(kurz, bereich)
+            erstes[(kurz, bereich)] = runden[0] if runden else self.beginn + timedelta(days=30)
+        for a in plaene:
+            a["bereich"] = self._bereich(a["gl"], a["ordner"])
+            if rnd.random() < NACHKAUF:
+                a["erfasst"] = self._tag(self.beginn + timedelta(days=40), self.h - timedelta(days=1))
+                a["nachkauf"] = True
+            else:
+                a["erfasst"] = max(self.beginn, erstes[(a["gl"], a["bereich"])] - timedelta(days=rnd.randint(3, 25)))
+                a["nachkauf"] = False
+            a.update(self._stamm(a))
+        # Lebensende: Bei einigen textilen Artikeln des Erstbestands endet die Lebensdauer in der Geschichte – sie werden
+        # in der nächsten Runde ausgesondert, oder sie stehen am Ende auf „Lebensdauer erreicht“.
+        textil = [a for a in plaene if a["produkt"]["lebensdauer"] and not a["nachkauf"]]
+        for k, a in enumerate(rnd.sample(textil, min(len(textil), max(1 if textil else 0,
+                                                                     round(len(textil) * LEBENSENDE))))):
+            self._lebensende(a, spaet=k % 3 == 0)
+        self.artikel = plaene
+        for a in plaene:
+            self._ereignis(a["erfasst"], 1, "erfassen", a)
+        for kurz, bereich, _ in BEREICHE:
+            for tag in self._runden(kurz, bereich):
+                self._ereignis(tag, 3, "runde", (kurz, bereich))
+        # Im Zentrallager läuft heute ein Durchgang – eröffnet vor ein paar Tagen.
+        kurz, bereich, vor = OFFENER_DURCHGANG
+        self._ereignis(self.h - timedelta(days=vor), 3, "runde_offen", (kurz, bereich))
+        # Einsatzkräfte scheiden aus, neue treten ein und übernehmen deren Ausrüstung über die Reserve.
+        gehen = rnd.sample(self.personen[1:], min(len(self.neue_personen), max(0, len(self.personen) - 1)))
+        for alt, neu in zip(gehen, self.neue_personen):
+            tag = self._tag(self.beginn + timedelta(days=200), self.h - timedelta(days=90))
+            self._ereignis(tag, 5, "austritt", (alt, neu))
+        # Mindestens ein Mangel mit Prüfung nach Reparatur – vor sechs Wochen, sonst käme er bei wenigen Artikeln nicht vor.
+        kandidaten = [a for a in plaene if a["gl"] == GROSS and not a["nachkauf"] and a["produkt"]["formular"]
+                      and not a["ordner"].startswith("person")]
+        if kandidaten:
+            self._ereignis(self.h - timedelta(days=45), 2, "pruefen", (rnd.choice(kandidaten), "mangel"))
+        # Änderungsanträge an Artikeln, deren Stammdaten feststehen (nach der ersten Prüfung).
+        for a in rnd.sample(plaene, min(len(plaene), max(4, round(len(plaene) * ANTRAG)))):
+            self._ereignis(self._tag(max(a["erfasst"], self.beginn + timedelta(days=200)), self.h - timedelta(days=2)),
+                           6, "antrag", a)
+
+    def _stamm(self, a):
+        """Kauf, Herstellung (Monat) und Erstgebrauch – erfundene Bestandsangaben, passend zur Geschichte. Herstellung
+        vor dem Kauf; bei textilem Material so, dass die Lebensdauer am Ende noch mehr als 60 Tage reicht (das Lebensende
+        in der Geschichte setzt _lebensende eigens)."""
+        from app.material.services.interval import plus_jahre, plus_monate
+        rnd, p = self.rnd, a["produkt"]
+        if a["nachkauf"]:
+            kauf = a["erfasst"] - timedelta(days=rnd.randint(0, 20))
+        else:
+            kauf = a["erfasst"] - timedelta(days=rnd.randint(30, 1200))
+        herstellung = plus_monate(kauf.replace(day=1), -rnd.randint(1, 10))
+        if p["lebensdauer"]:
+            frueheste = plus_jahre((self.h + timedelta(days=60)).replace(day=1), -p["lebensdauer"])
+            herstellung = max(herstellung, plus_monate(frueheste, 1))
+            kauf = max(kauf, herstellung)
+        werte = {"purchased_on": min(kauf, a["erfasst"]).isoformat(), "first_use_on": None}
+        if p["textil"] or rnd.random() < 0.8:
+            werte["manufactured_on"] = min(herstellung, a["erfasst"].replace(day=1)).strftime("%Y-%m")
+        else:
+            werte["manufactured_on"] = None
+        if not a["nachkauf"] and rnd.random() < 0.6:
+            werte["first_use_on"] = min(kauf + timedelta(days=rnd.randint(0, 40)), a["erfasst"]).isoformat()
+        if p["laenge"]:
+            werte["length_m"] = rnd.choice(LAENGEN)
+        return werte
+
+    def _lebensende(self, a, spaet=False):
+        """Herstellung so lange her, dass das Lebensende zwischen der Erfassung (+120 Tage) und gestern liegt – mit spaet
+        nach der letzten Jahresprüfung des Bereichs: Dann steht der Artikel am Ende auf „Lebensdauer erreicht“."""
+        from app.material.services.interval import plus_jahre, plus_monate
+        jahre = a["produkt"]["lebensdauer"]
+        von = a["erfasst"] + timedelta(days=120)
+        if spaet:
+            runden = self._runden(a["gl"], a["bereich"])
+            von = max(von, (runden[-1] if runden else von) + timedelta(days=35))
+        ende = self._tag(von, self.h - timedelta(days=5))
+        herstellung = plus_jahre(ende.replace(day=1), -jahre)
+        kauf = min(plus_monate(herstellung, self.rnd.randint(1, 8)), a["erfasst"])
+        a.update(manufactured_on=herstellung.strftime("%Y-%m"), purchased_on=kauf.isoformat(), first_use_on=None)
 
     def _tag(self, von, bis):
-        """Ein zufälliger Tag zwischen von und bis (beide eingeschlossen)."""
         if bis <= von:
             return von
         return von + timedelta(days=self.rnd.randint(0, (bis - von).days))
 
-    def _letzte(self, monate, faellig_von, faellig_bis):
-        """Tag der letzten Prüfung vor heute, sodass ihre Fälligkeit (Prüftag + Intervall aus dem Katalog) zwischen
-        faellig_von und faellig_bis liegt."""
-        from app.material.services.interval import plus_monate
-        for _ in range(20):
-            letzte = plus_monate(self._tag(faellig_von, faellig_bis), -monate)
-            if letzte < self.h and faellig_von <= plus_monate(letzte, monate) <= faellig_bis:
-                return letzte
-        return min(plus_monate(faellig_von, -monate), self.h - timedelta(days=1))
+    def _ereignis(self, tag, rang, art, daten):
+        """Ein Ereignis in die Warteschlange – nach Tag, dann Rang (erfassen vor prüfen vor Runde …), dann Reihenfolge."""
+        if tag >= self.h:
+            return
+        self._nr += 1
+        heapq.heappush(self._ereignisse, (tag, rang, self._nr, art, daten))
 
-    def _kette(self, letzte, monate, anzahl):
-        """anzahl Prüftage: der letzte ist letzte, davor im Abstand des Intervalls (meist ein paar Tage früher)."""
-        from app.material.services.interval import plus_monate
-        tage = [letzte]
-        for _ in range(anzahl - 1):
-            frueher = plus_monate(tage[0], -monate) + timedelta(days=self.rnd.randint(0, 20))
-            tage.insert(0, min(frueher, tage[0] - timedelta(days=14)))
-        return tage
+    # --- Abspielen ---
 
-    def termine(self, plan):
-        """Stammdaten (Herstellung, Kauf, Erstgebrauch) und die Ereignisse des Artikels in ihrer Reihenfolge: (Tag,
-        Prüfart, Ergebnis, Mangel) für Prüfungen, (heute, „verlust“, …) für die Sperre bei Verlust und (heute,
-        „aussondern“, …) für die Aussonderung durch den Materialwart. Intervall und Lebensdauer aus dem Katalog."""
-        from app.material.services.interval import plus_jahre, plus_monate
-        rnd, h, p = self.rnd, self.h, plan["produkt"]
-        m, zustand, jahre = p["monate"], plan["zustand"], p["lebensdauer"]
-        if zustand == "neu":
-            kauf = h - timedelta(days=rnd.randint(0, 60 if p["formular"] else 900))
-            return self._stamm(plan, kauf, None, h), []
-        if zustand in ("lebensdauer", "aus_lebensdauer"):
-            return self._termine_lebensende(plan)
-        bald_bis = h + timedelta(days=max(1, self.schwelle - 3))
-        spaeter = None
-        if zustand == "einsatzbereit":
-            letzte = self._letzte(m, h + timedelta(days=self.schwelle + 10), plus_monate(h - timedelta(days=3), m))
-        elif zustand == "bald":
-            letzte = self._letzte(m, h + timedelta(days=1), bald_bis)
-        elif zustand == "ueberfaellig":
-            letzte = self._letzte(m, h - timedelta(days=240), h - timedelta(days=1))
-        elif zustand in ("faellig", "durchgang_zu"):
-            letzte = self._letzte(m, h - timedelta(days=60), bald_bis)
-        elif zustand in ("gesperrt", "aus_mangel"):
-            spaeter = h - timedelta(days=rnd.randint(3, 90) if zustand == "gesperrt" else rnd.randint(5, 300))
-            letzte = spaeter - timedelta(days=rnd.randint(20, max(21, m * 30 - 10)))
-        else:                                                          # verloren, aus_verlust
-            letzte = h - timedelta(days=rnd.randint(10, max(11, min(330, m * 30 - 10))))
-        tage = self._kette(letzte, m, rnd.choices(range(1, len(HISTORIE) + 1), weights=HISTORIE)[0])
-        if jahre:
-            # Textil: Das Lebensende (Herstellung + Lebensdauer) bleibt mehr als 60 Tage vor uns – die Geschichte reicht
-            # also nicht weiter zurück, als die Lebensdauer erlaubt.
-            frueheste = plus_jahre(h + timedelta(days=60), -jahre) + timedelta(days=62)
-            while len(tage) > 1 and tage[0] < frueheste:
-                tage.pop(0)
-        ereignisse = self._pruefungen(tage, plan.get("freipruefung"))
-        if spaeter:
-            ereignisse.append((spaeter, self._art(tage[-1], spaeter, m),
-                               "instandsetzen" if zustand == "gesperrt" else "aussondern",
-                               "mangel" if zustand == "gesperrt" else "kritisch"))
-        elif zustand in ("verloren", "aus_verlust"):
-            ereignisse.append((h, "verlust", None, None))
-            if zustand == "aus_verlust":
-                ereignisse.append((h, "aussondern", None, None))
-        return self._stamm(plan, tage[0] - timedelta(days=rnd.randint(0, 20)), tage[0], h), ereignisse
+    def abspielen(self):
+        monat = None
+        while self._ereignisse:
+            tag, _, _, art, daten = heapq.heappop(self._ereignisse)
+            self.uhr.stellen(tag)
+            jetzt = self.uhr.tag()
+            if (jetzt.year, jetzt.month) != monat:
+                monat = (jetzt.year, jetzt.month)
+                print(f"  … {jetzt.strftime('%m/%Y')}: {self.zahl['pruefungen']} Prüfungen, "
+                      f"{sum(1 for a in self.artikel if a.get('iid'))} Artikel ({self._dauer()})", flush=True)
+            getattr(self, f"_e_{art}")(daten)
 
-    def _termine_lebensende(self, plan):
-        """Textil mit Lebensdauer: Herstellung so lange her, dass das Lebensende zwischen 5 und 300 Tagen zurückliegt.
-        Geprüft wurde vorher; „aus_lebensdauer“ endet mit einer Prüfung danach, Ergebnis „aussondern“."""
-        from app.material.services.interval import plus_jahre
-        rnd, h, p = self.rnd, self.h, plan["produkt"]
-        m, jahre = p["monate"], p["lebensdauer"]
-        herstellung = plus_jahre((h - timedelta(days=rnd.randint(5, 300))).replace(day=1), -jahre)
-        ende = plus_jahre(herstellung, jahre)
-        if not p["formular"]:
-            return self._stamm(plan, herstellung + timedelta(days=rnd.randint(20, 200)), None, h, herstellung), []
-        letzte = ende - timedelta(days=rnd.randint(20, max(21, min(200, m * 30 - 20))))
-        tage = self._kette(letzte, m, rnd.choices(range(1, len(HISTORIE) + 1), weights=HISTORIE)[0])
-        while len(tage) > 1 and tage[0] < herstellung + timedelta(days=60):
-            tage.pop(0)
-        tage[0] = max(tage[0], herstellung + timedelta(days=30))
-        ereignisse = self._pruefungen(tage)
-        if plan["zustand"] == "aus_lebensdauer":
-            tag = self._tag(ende, h)
-            ereignisse.append((tag, self._art(tage[-1], tag, m), "aussondern", None))
-        return self._stamm(plan, tage[0] - timedelta(days=rnd.randint(0, 20)), tage[0], h, herstellung), ereignisse
-
-    def _art(self, vorher, tag, monate):
-        """Prüfart einer Prüfung am Tag tag nach der letzten am Tag vorher – wie der Vorschlag der App
-        (pruefung.arten_fuer): periodisch, sobald der Artikel fällig oder bald fällig ist, sonst außerplanmäßig (ein
-        Mangel, der zwischen zwei Prüfungen auffällt)."""
-        from app.material.services.interval import plus_monate
-        return "periodisch" if (plus_monate(vorher, monate) - tag).days <= self.schwelle else "ausserplanmaessig"
-
-    def _pruefungen(self, tage, freipruefung=False):
-        """Reguläre Prüfungen an diesen Tagen – die erste ist die Eingangsprüfung. Mit freipruefung endet eine davon mit
-        einem Mangel („instandsetzen“), ein paar Tage später gibt eine Prüfung nach Reparatur den Artikel wieder frei."""
-        ereignisse = [(t, "eingang" if k == 0 else "periodisch", "einsatzbereit", None) for k, t in enumerate(tage)]
-        if freipruefung:
-            for k in range(len(tage) - 1):
-                luecke = (tage[k + 1] - tage[k]).days
-                if luecke >= 30:
-                    ereignisse[k] = (tage[k], ereignisse[k][1], "instandsetzen", "mangel")
-                    reparatur = tage[k] + timedelta(days=self.rnd.randint(3, min(20, luecke - 10)))
-                    ereignisse.insert(k + 1, (reparatur, "reparatur", "einsatzbereit", None))
-                    break
-        return ereignisse
-
-    def _stamm(self, plan, kauf, erstgebrauch, spaetester, herstellung=None):
-        """Herstellung (Monat), Kauf und Erstgebrauch – erfundene Bestandsangaben, passend zur Geschichte. Ohne
-        vorgegebene Herstellung liegt sie 1 bis 15 Monate vor dem Kauf; bei textilem Material so, dass das Lebensende
-        mehr als 60 Tage nach spaetester liegt (sonst so spät wie möglich: im Monat des Kaufs)."""
-        from app.material.services.interval import plus_jahre, plus_monate
-        p = plan["produkt"]
-        if herstellung is None:
-            herstellung = plus_monate(kauf.replace(day=1), -self.rnd.randint(1, 15))
-            while p["lebensdauer"] and herstellung < kauf.replace(day=1) and \
-                    plus_jahre(herstellung, p["lebensdauer"]) <= spaetester + timedelta(days=60):
-                herstellung = plus_monate(herstellung, 1)
-        kauf = max(kauf, herstellung)
-        return {"manufactured_on": herstellung.strftime("%Y-%m"), "purchased_on": kauf.isoformat(),
-                "first_use_on": erstgebrauch.isoformat() if erstgebrauch else None}
-
-    # --- Artikel samt Geschichte ---
-
-    def artikel_anlegen(self, plan):
-        """Den Artikel mit seiner ganzen Geschichte in EINER Transaktion – scheitert etwas (etwa ein Formular, das sich
-        so nicht ausfüllen lässt), fehlt der Artikel ganz und steht im Bericht."""
+    def _versuch(self, was, aufgabe, fotos=None):
+        """Ein Vorgang in seiner Transaktion; scheitert er an einer Regel der App, steht er unter „Hinweise“."""
         from app import db
-        from app.material.services import Abgelehnt, bestand, protokoll
-        gl = self.gl[plan["gl"]]
-        stamm, ereignisse = self.termine(plan)
-        fotos = []
-        plan["iid"] = None
+        from app.material.services import Abgelehnt, protokoll
+        fotos = [] if fotos is None else fotos
         try:
             with protokoll.dateien_sichern(), db.transaction(sofort=True):
-                iid = bestand.artikel_anlegen(dict(
-                    stamm, product_id=plan["produkt"]["id"], folder_id=gl["ordner"][plan["ordner"]],
-                    serial_no=f"DEMO-{gl['kurz']}-{plan['nr']:04d}", notes=HINWEIS))
-                for e in ereignisse:
-                    self.ereignis(iid, plan, e, fotos)
+                return aufgabe(fotos)
         except Abgelehnt as exc:
             self._fotos_weg(fotos)
-            self.uebersprungen.append(f"Artikel {plan['produkt']['name']} ({plan['zustand']}): {exc}")
-            return
+            self.hinweise.append(f"{self.uhr.tag().isoformat()} {was}: {exc}")
         except BaseException:
             self._fotos_weg(fotos)
             raise
-        plan["iid"] = iid
+        return None
 
     @staticmethod
     def _fotos_weg(fotos):
@@ -731,41 +1017,120 @@ class Beispielbestand:
         for name in fotos:
             delete_photo_files(katalog.medien_dir(), name)
 
-    def _pruefer_fuer(self, plan, tag=None):
-        """Wer am Tag tag (None: heute) prüft: die Prüferin der Gliederung; im Lager heute auch der externe Prüfer –
-        seine Prüffreigabe gilt nur dort und erst ab heute (30 Tage). Die zurückdatierte Geschichte prüft also allein
-        die Prüferin."""
-        gl = self.gl[plan["gl"]]
-        kandidaten = [gl["konto"]["pruefer"]["id"]]
-        if plan["ordner"] in ZWEIG_OFFEN and (tag is None or tag == self.h):
-            kandidaten.append(gl["konto"]["extern"]["id"])
-        return self.pruefer(self.rnd.choice(kandidaten))
+    def _ordner_id(self, a):
+        if a["ordner"].startswith("person"):
+            return self._personenordner(a["ordner"])
+        return self.gl[a["gl"]]["ordner"][a["ordner"]]
 
-    def ereignis(self, iid, plan, e, fotos):
-        from app.material.services import pruefung
-        tag, art, ergebnis, mangel = e
-        if art == "verlust":
-            pruefung.sperren(iid, {"grund": "verlust", "text": HINWEIS}, self._pruefer_fuer(plan, tag))
-        elif art == "aussondern":
-            wart = self.pruefer(self.gl[plan["gl"]]["konto"]["wart"]["id"])
-            pruefung.aussondern(iid, {"grund": "verlust", "bemerkung": HINWEIS}, wart)
-        else:
-            self.pruefen(iid, self._pruefer_fuer(plan, tag), art, ergebnis, mangel, tag, fotos)
+    def _e_erfassen(self, a):
+        from app.material.services import bestand, zuordnung, rechte
 
-    def pruefen(self, iid, pruefer, art, ergebnis, mangel, tag, fotos, durchgang_id=None, abschliessen=True):
-        """Eine Prüfung über den Prüfdienst: Entwurf mit den Prüfpunkten des aktiven Formulars (vorbelegt mit ihrem Soll),
-        ausfüllen, abschließen und festschreiben (Protokoll) – mit dem Prüftag tag (None: heute)."""
+        def anlegen(_):
+            werte = {k: a[k] for k in ("purchased_on", "manufactured_on", "first_use_on", "length_m") if a.get(k)}
+            iid = bestand.artikel_anlegen(dict(werte, product_id=a["produkt"]["id"], folder_id=self._ordner_id(a),
+                                               serial_no=a["serie"], notes=HINWEIS))
+            if a["person"]:
+                zuordnung._schreiben(bestand.artikel(iid), rechte.waehlbares_konto(self.konto[a["person"]]["id"])["id"])
+                self.zahl["zugeordnet"] += 1
+            return iid
+
+        a["iid"] = self._versuch(f"Artikel {a['produkt']['name']} anlegen", anlegen)
+        if not a["iid"]:
+            return
+        if a["nachkauf"]:
+            self._ereignis(a["erfasst"] + timedelta(days=self.rnd.randint(0, 6)), 2, "pruefen", (a, None))
+        self._plane_leben(a)
+
+    def _plane_leben(self, a):
+        """Was einem Artikel zwischen den Runden geschieht: außerplanmäßige Prüfungen nach Einsätzen, ein Verlust, eine
+        Verschiebung."""
+        rnd, von = self.rnd, a["erfasst"] + timedelta(days=30)
+        for _ in range(math.ceil(max(0, (self.h - von).days) / 365)):
+            if rnd.random() < EINSATZ:
+                self._ereignis(self._tag(von, self.h - timedelta(days=1)), 2, "pruefen", (a, "ausserplanmaessig"))
+        if rnd.random() < VERLUST:
+            self._ereignis(self._tag(von, self.h - timedelta(days=1)), 4, "verlust", a)
+        if not a["ordner"].startswith("person") and rnd.random() < VERSCHIEBEN:
+            self._ereignis(self._tag(von, self.h - timedelta(days=1)), 5, "verschieben", a)
+
+    def _artikel(self, a):
+        from app.material.services import bestand
+        return bestand.artikel(a["iid"]) if a.get("iid") else None
+
+    def _e_pruefen(self, daten):
+        """Eine Einzelprüfung: Eingang (Nachkauf), periodisch bei kürzerem Intervall, außerplanmäßig nach einem Einsatz
+        (dann oft mit Mangel) oder nach Reparatur."""
+        a, art = daten
+        i = self._artikel(a)
+        if not i or i["lock_state"] == "ausgesondert" or not a["produkt"]["formular"]:
+            return
+        if art == "reparatur":
+            if i["lock_state"] != "gesperrt":
+                return
+            self.pruefen(a, "reparatur", "einsatzbereit", None)
+            return
+        if i["lock_state"] != "frei":
+            return
+        if art in ("ausserplanmaessig", "mangel") and not i["last_inspected_on"]:
+            return
+        if art == "mangel":
+            self.pruefen(a, "ausserplanmaessig", "instandsetzen", "mangel")
+            return
+        mangel = "zufall"
+        if art == "ausserplanmaessig":
+            x = self.rnd.random()
+            mangel = "kritisch" if x < 0.08 else ("mangel" if x < 0.45 else None)
+        self.pruefen(a, art, *self._ergebnis(i, mangel))
+
+    def _ergebnis(self, i, mangel="zufall"):
+        """(Ergebnis, Mangel) einer Prüfung am Tag der Uhr: Lebensdauer erreicht → aussondern; sonst nach mangel
+        („mangel“, „kritisch“, None) bzw. dem Zufall einer gewöhnlichen Prüfung."""
+        tag = self.uhr.tag().isoformat()
+        if i["retire_by"] and i["retire_by"] <= tag:
+            return "aussondern", None
+        if mangel == "zufall":
+            x = self.rnd.random()
+            mangel = "kritisch" if x < AUSSONDERN else ("mangel" if x < AUSSONDERN + MANGEL else None)
+        if mangel == "kritisch":
+            return "aussondern", "kritisch"
+        if mangel == "mangel":
+            return "instandsetzen", "mangel"
+        return "einsatzbereit", None
+
+    def pruefen(self, a, art, ergebnis, mangel, durchgang_id=None, pruefer=None, abschliessen=True):
+        """Eine Prüfung über den Prüfdienst: Entwurf mit den Prüfpunkten des aktiven Formulars, ausfüllen, abschließen und
+        festschreiben (Protokoll) – Prüftag ist der Tag der Uhr. Danach, was daraus folgt: Prüfung nach Reparatur,
+        Nachkauf, die nächste Prüfung bei kürzerem Intervall."""
         from app.material.services import pruefung
-        pid, _ = pruefung.starten(iid, pruefer, art, durchgang_id)
-        self.befunde(pid, pruefer, mangel, fotos)
-        if not abschliessen:
+        pruefer = pruefer or self._pruefer_fuer(a)
+
+        def tun(fotos):
+            pid, _ = pruefung.starten(a["iid"], pruefer, art, durchgang_id)
+            self.befunde(pid, pruefer, mangel, fotos)
+            if not abschliessen:
+                return pid
+            d = {"ergebnis": ergebnis, "bemerkung": HINWEIS}
+            if ergebnis == "aussondern" and not mangel:
+                d["grund"] = f"Lebensdauer erreicht ({HINWEIS})"
+            elif ergebnis != "einsatzbereit":
+                d["grund"] = HINWEIS
+            pruefung.abschliessen(pid, d, pruefer)
             return pid
-        d = {"ergebnis": ergebnis, "bemerkung": HINWEIS}
-        if ergebnis == "aussondern" and not mangel:
-            d["grund"] = f"Lebensdauer erreicht ({HINWEIS})"
-        elif ergebnis != "einsatzbereit":
-            d["grund"] = HINWEIS
-        pruefung.abschliessen(pid, d, pruefer, pruefdatum=tag)
+
+        pid = self._versuch(f"Prüfung {a['produkt']['name']} ({art or 'Vorschlag'})", tun)
+        if not pid or not abschliessen:
+            return pid
+        self.zahl["pruefungen"] += 1
+        tag = self.uhr.tag()
+        if ergebnis == "instandsetzen":
+            self._ereignis(tag + timedelta(days=self.rnd.randint(5, 30)), 2, "pruefen", (a, "reparatur"))
+        elif ergebnis == "aussondern":
+            self.zahl["aussonderungen"] += 1
+            self._ereignis(tag + timedelta(days=self.rnd.randint(10, 60)), 1, "nachkauf", a)
+        elif a["produkt"]["monate"] < 12:
+            from app.material.services.interval import plus_monate
+            self._ereignis(plus_monate(tag, a["produkt"]["monate"]) - timedelta(days=self.rnd.randint(3, 20)), 2,
+                           "pruefen", (a, None))
         return pid
 
     def befunde(self, pid, pruefer, mangel, fotos):
@@ -799,11 +1164,11 @@ class Beispielbestand:
                         self._signatur = unterschrift_uri(7)
                     pruefung.punkt_setzen(pid, r["id"], {"unterschrift": self._signatur}, pruefer)
             elif r["editor"] == "text":
-                if r["mandatory"] and not (r["value"] or "").strip():
+                if not (r["value"] or "").strip():
                     pruefung.punkt_setzen(pid, r["id"], {"wert": HINWEIS}, pruefer)
-            elif r["editor"] in ("number", "date", "photo"):
+            elif r["editor"] in ("number", "date", "photo", "laenge"):
                 beantwortet = r["photo"] if r["editor"] == "photo" else (r["value"] or "").strip()
-                if r["mandatory"] and not beantwortet:
+                if r["mandatory"] and not beantwortet and r["finding"] != "nicht_zutreffend":
                     pruefung.punkt_setzen(pid, r["id"], {"befund": "nicht_zutreffend", "notiz": HINWEIS}, pruefer)
 
     @staticmethod
@@ -817,165 +1182,382 @@ class Beispielbestand:
                 return liste[0]
         return None
 
+    def _e_nachkauf(self, alt):
+        """Ersatz für einen ausgesonderten Artikel: dasselbe Produkt in denselben Ordner, derselben Person zugeordnet –
+        mit Eingangsprüfung ein paar Tage später."""
+        a = dict(alt, iid=None, nachkauf=True, erfasst=self.uhr.tag(), serie=f"{alt['serie']}-E")
+        a["ordner"] = alt.get("ordner_jetzt", alt["ordner"])
+        a.update(self._stamm(a))
+        self.artikel.append(a)
+        self.zahl["nachkauf"] += 1
+        self._e_erfassen(a)
+
+    def _e_verlust(self, a):
+        """Verloren gemeldet (Sperre durch den Prüfer); die Hälfte sondert der Materialwart später aus und kauft nach."""
+        from app.material.services import pruefung
+        i = self._artikel(a)
+        if not i or i["lock_state"] != "frei":
+            return
+        pruefer = self._pruefer_fuer(a)
+        if self._versuch("Verlust melden", lambda _: pruefung.sperren(a["iid"], {"grund": "verlust", "text": HINWEIS},
+                                                                       pruefer)) is None and \
+                self._artikel(a)["lock_state"] != "verloren":
+            return
+        self.zahl["verloren"] += 1
+        if self.rnd.random() < 0.5:
+            self._ereignis(self.uhr.tag() + timedelta(days=self.rnd.randint(14, 60)), 4, "aussondern_verlust", a)
+
+    def _e_aussondern_verlust(self, a):
+        from app.material.services import pruefung
+        i = self._artikel(a)
+        if not i or i["lock_state"] != "verloren":
+            return
+        wart = self._wart(a)
+        if self._versuch("Aussondern nach Verlust", lambda _: pruefung.aussondern(
+                a["iid"], {"grund": "verlust", "bemerkung": HINWEIS}, wart) or True):
+            self.zahl["aussonderungen"] += 1
+            self._ereignis(self.uhr.tag() + timedelta(days=self.rnd.randint(7, 40)), 1, "nachkauf", a)
+
+    def _e_verschieben(self, a):
+        """In einen anderen Ordner derselben Gliederung, wie es zum Typ passt (nicht in einen Rucksack oder eine Tasche –
+        die sind gepackt)."""
+        from app.material.services import bestand
+        i = self._artikel(a)
+        if not i or i["lock_state"] != "frei":
+            return
+        ziele = {o: w for o, w in (ZIELE_KLEIN if a["gl"] == KLEIN else ZIELE.get(a["typ"], ZIELE["sonstiges"])).items()
+                 if o not in FASSUNG}
+        ziele.pop(a.get("ordner_jetzt", a["ordner"]), None)
+        if not ziele:
+            return
+        neu = self.rnd.choices(list(ziele), weights=list(ziele.values()))[0]
+        if self._versuch("Verschieben", lambda _: bestand.artikel_verschieben([a["iid"]], self.gl[a["gl"]]["ordner"][neu])):
+            a["ordner_jetzt"] = neu
+            self.zahl["verschoben"] += 1
+
+    def _e_austritt(self, daten):
+        """Eine Einsatzkraft scheidet aus: Zuordnungen lösen, ihre persönliche Ausrüstung in die Reserve; 20 bis 60 Tage
+        später tritt eine neue ein – ihr persönlicher Ordner entsteht, und die Ausrüstung kommt dorthin, ihr zugeordnet."""
+        from app.material.services import bestand, zuordnung
+        alt, neu = daten
+        fl = self.gl[GROSS]
+        eigene = [a for a in self.artikel if a.get("iid") and a["person"] == alt]
+        mit = []
+
+        def raus(_):
+            for a in eigene:
+                i = bestand.artikel(a["iid"])
+                if i["lock_state"] == "ausgesondert":
+                    continue
+                if zuordnung._schreiben(i, None):
+                    self.zahl["geloest"] += 1
+                if i["lock_state"] == "frei" and a.get("ordner_jetzt", a["ordner"]).startswith("person"):
+                    mit.append(a)
+            if mit:
+                bestand.artikel_verschieben([a["iid"] for a in mit], fl["ordner"]["reserve"])
+            return True
+
+        if self._versuch(f"Austritt {self.konto[alt]['name']}", raus):
+            self.zahl["ausgeschieden"] += 1
+            for a in eigene:
+                a["person"] = None
+            for a in mit:
+                a["ordner_jetzt"] = "reserve"
+            self._ereignis(self.uhr.tag() + timedelta(days=self.rnd.randint(20, 60)), 5, "eintritt", (neu, mit))
+
+    def _e_eintritt(self, daten):
+        from app.material.services import bestand, rechte, zuordnung
+        neu, artikel = daten
+        bewegt = []
+
+        def rein(_):
+            fid = self._personenordner(neu)
+            uid = rechte.waehlbares_konto(self.konto[neu]["id"])["id"]
+            bewegt.extend(a for a in artikel if bestand.artikel(a["iid"])["lock_state"] == "frei")
+            if bewegt:
+                bestand.artikel_verschieben([a["iid"] for a in bewegt], fid)
+                for a in bewegt:
+                    if zuordnung._schreiben(bestand.artikel(a["iid"]), uid):
+                        self.zahl["zugeordnet"] += 1
+            return True
+
+        if self._versuch(f"Eintritt {self.konto[neu]['name']}", rein):
+            self.zahl["eintritt"] += 1
+            for a in bewegt:
+                a["person"], a["ordner_jetzt"] = neu, neu
+
+    def _als(self, rolle, aufgabe):
+        """aufgabe() als angemeldetes DEMO-Konto (für Dienste, die den Handelnden aus der Anfrage lesen)."""
+        from flask import g
+
+        from app import db
+        from app.material.services import Abgelehnt, rechte
+        with self.app.test_request_context():
+            g.user = db.query("SELECT * FROM users WHERE id = ?", (self.konto[rolle]["id"],), one=True)
+            rechte.sicht_verwerfen()
+            try:
+                return aufgabe()
+            except Abgelehnt as exc:
+                self.hinweise.append(f"{self.uhr.tag().isoformat()} Änderungsantrag: {exc}")
+                return None
+            finally:
+                g.pop("user", None)
+                rechte.sicht_verwerfen()
+
+    def _e_antrag(self, a):
+        """Der Prüfer beantragt eine korrigierte Seriennummer; die Material-Verwaltung bestätigt oder lehnt ab, oder der
+        Antragsteller zieht zurück – ein junger Antrag bleibt offen."""
+        from app.material.services import antrag, bestand
+        i = self._artikel(a)
+        if not i or i["lock_state"] == "ausgesondert" or not bestand.stammdaten_fest(i["id"]):
+            return
+        rolle = "pruefer_ns" if a["gl"] == KLEIN else self.rnd.choice(["pruefer", "pruefer2"])
+        neu = f"{i['serial_no']}-K"
+        ids = self._als(rolle, lambda: antrag.stellen(i["id"], {"serial_no": neu, "begruendung": HINWEIS})[0])
+        if not ids:
+            return
+        self.zahl["antraege"] += 1
+        tag = self.uhr.tag()
+        x = self.rnd.random()
+        if (self.h - tag).days < 30 and x < 0.5:
+            self.antraege[ids[0]] = "offen"
+            return
+        folge = "bestaetigt" if x < 0.55 else ("abgelehnt" if x < 0.8 else "zurueckgezogen")
+        self._ereignis(tag + timedelta(days=self.rnd.randint(1, 10)), 6, "entscheiden", (ids[0], folge, rolle))
+        self.antraege[ids[0]] = "offen"
+
+    def _e_entscheiden(self, daten):
+        from app.material.services import antrag
+        aid, folge, rolle = daten
+        if folge == "bestaetigt":
+            ok = self._als("mv", lambda: antrag.bestaetigen(aid, {"antwort": HINWEIS}) or True)
+        elif folge == "abgelehnt":
+            ok = self._als("mv", lambda: antrag.ablehnen(aid, {"antwort": HINWEIS}) or True)
+        else:
+            ok = self._als(rolle, lambda: antrag.zurueckziehen(aid) or True)
+        if ok:
+            self.antraege[aid] = folge
+
     # --- Prüfdurchgänge ---
 
-    def durchgaenge(self, gl, plaene):
-        """Je Gliederung: ein heute abgeschlossener Durchgang im GW-Wasserrettung (mit Sammelprotokoll; ein Artikel mit
-        Mangel, Artikel ohne Formular ausgenommen) und ein offener im Lager – teils erledigt, einer in Prüfung beim
-        externen Prüfer, einer ausgenommen, der Rest offen."""
-        from app.material.services import Abgelehnt, durchgang
-        wart = self.pruefer(gl["konto"]["wart"]["id"])
-        eigene = {p["iid"]: p for p in plaene if p["iid"] and self.gl[p["gl"]] is gl}
-        jahr = self.h.year
+    def _e_runde(self, daten, offen=False):
+        """Die Jahresprüfung eines Bereichs: Durchgang eröffnen, jeden Artikel prüfen (verteilt über ein paar Tage, gut 40
+        am Tag), Gesperrtes und Verlorenes mit Grund ausnehmen, abschließen (Sammelprotokoll). offen: nur ein Drittel
+        bis gestern – der Rest geschieht heute (heute_schritte)."""
+        from app import db
+        from app.material.services import Abgelehnt, bestand, durchgang
+        kurz, bereich = daten
+        gl = self.gl[kurz]
+        wart = self.pruefer(self.konto["wart_ns" if kurz == KLEIN else "wart"]["id"])
+        titel = (f"DEMO-Jahresprüfung {next(n for s, n, _, _ in ORDNER[kurz] if s == bereich)} "
+                 f"{self.uhr.tag().year}")
+        bedingung, args = bestand.heimat_im_zweig(gl["ordner"][bereich])
+        if not db.query(f"SELECT 1 FROM mat_item i WHERE {bedingung} AND i.lock_state <> 'ausgesondert' LIMIT 1", args):
+            return                                         # (noch) nichts in diesem Bereich – keine Runde
         try:
-            rid = durchgang.eroeffnen(gl["ordner"]["gw"], {"titel": f"DEMO-Jahresprüfung GW-Wasserrettung {jahr}"},
-                                      wart)
+            rid = durchgang.eroeffnen(gl["ordner"][bereich], {"titel": titel}, wart)
         except Abgelehnt as exc:
-            self.uebersprungen.append(f"{gl['name']}: kein abgeschlossener Durchgang – {exc}")
-            rid = None
-        if rid:
-            mangel_offen = True
-            for iid in self._im_durchgang(rid):
-                plan = eigene.get(iid)
-                if plan and plan["zustand"] == "durchgang_zu":
-                    mangel = "mangel" if mangel_offen else None
-                    mangel_offen = False
-                    self._im_durchgang_pruefen(iid, plan, rid, "instandsetzen" if mangel else "einsatzbereit", mangel)
-                else:
-                    grund = (f"{HINWEIS}: kein aktives Prüfformular im Katalog" if plan and not plan["produkt"]["formular"]
-                             else f"{HINWEIS}: nicht auffindbar")
-                    durchgang.ausnehmen(rid, iid, {"grund": grund}, wart)
-            durchgang.abschliessen(rid, wart)
-        try:
-            rid = durchgang.eroeffnen(gl["ordner"]["lager"], {"titel": f"DEMO-Prüfdurchgang Lager {jahr}"}, wart)
-        except Abgelehnt as exc:
-            self.uebersprungen.append(f"{gl['name']}: kein offener Durchgang – {exc}")
+            self.hinweise.append(f"{self.uhr.tag().isoformat()} {titel}: {exc}")
             return
-        for iid in self._im_durchgang(rid):
-            plan = eigene.get(iid) or {}
-            if plan.get("durchgang") == "erledigt":
-                self._im_durchgang_pruefen(iid, plan, rid, "einsatzbereit", None)
-            elif plan.get("durchgang") == "entwurf":
-                extern = self.pruefer(gl["konto"]["extern"]["id"])
-                self.pruefen(iid, extern, "periodisch", None, None, None, [], rid, abschliessen=False)
-            elif plan.get("durchgang") == "ausgenommen":
-                durchgang.ausnehmen(rid, iid, {"grund": f"{HINWEIS}: in Reparatur beim Hersteller"}, wart)
+        nach_iid = {a["iid"]: a for a in self.artikel if a.get("iid")}
+        ids = [r["item_id"] for r in db.query("SELECT ri.item_id FROM mat_round_item ri JOIN mat_item i ON i.id = "
+                                               "ri.item_id WHERE ri.round_id = ? ORDER BY i.inventory_no", (rid,))]
+        if offen:
+            self._offen = (rid, wart, ids, nach_iid)
+            ids = ids[:max(1, len(ids) // 3)]
+        start = self.uhr.tag()
+        for k, iid in enumerate(ids):
+            self.uhr.stellen(start + timedelta(days=k // 40))
+            self._runde_artikel(rid, iid, nach_iid.get(iid), wart)
+        if offen:
+            return
+        self.uhr.stellen(start + timedelta(days=len(ids) // 40 + self.rnd.randint(0, 3)))
+        if self._versuch(titel + " abschließen", lambda _: durchgang.abschliessen(rid, wart) or True):
+            self.zahl["runden"] += 1
+        print(f"  {titel}: {len(ids)} Artikel ({self._dauer()})", flush=True)
 
-    @staticmethod
-    def _im_durchgang(rid):
+    def _e_runde_offen(self, daten):
+        self._e_runde(daten, offen=True)
+
+    def _runde_artikel(self, rid, iid, a, wart):
+        from app.material.services import bestand, durchgang
+        i = bestand.artikel(iid)
+        grund = None
+        if not a or not a["produkt"]["formular"]:
+            grund = f"{HINWEIS}: kein aktives Prüfformular im Katalog"
+        elif i["lock_state"] == "verloren":
+            grund = f"{HINWEIS}: verloren gemeldet"
+        elif i["lock_state"] != "frei":
+            grund = f"{HINWEIS}: gesperrt – in Reparatur"
+        if grund:
+            self._versuch("Ausnehmen", lambda _: durchgang.ausnehmen(rid, iid, {"grund": grund}, wart))
+            return
+        if not self.pruefen(a, None, *self._ergebnis(i), durchgang_id=rid):
+            self._versuch("Ausnehmen", lambda _: durchgang.ausnehmen(
+                rid, iid, {"grund": f"{HINWEIS}: nicht prüfbar"}, wart))
+
+    # --- Heute ---
+
+    def heute_schritte(self):
+        """Mit der echten Uhr: die Prüffreigabe des externen Prüfers (30 Tage), im offenen Durchgang ein Entwurf bei ihm und
+        ein Artikel mit Grund ausgenommen; dazu, was sonst nicht vorkäme (gesperrt, verloren, neu)."""
+        from app.material.services import bestand, durchgang
+        self.uhr.echt()
+        self.freigaben(extern=True)
+        if getattr(self, "_offen", None):
+            rid, wart, ids, nach_iid = self._offen
+            rest = [iid for iid in ids if not db_erledigt(rid, iid)]
+            extern = self.pruefer(self.konto["extern"]["id"])
+            frei = [iid for iid in rest if nach_iid.get(iid) and nach_iid[iid]["produkt"]["formular"]
+                    and bestand.artikel(iid)["lock_state"] == "frei"]
+            if frei:
+                self.pruefen(nach_iid[frei[0]], None, None, None, durchgang_id=rid, pruefer=extern, abschliessen=False)
+            if len(frei) > 1:
+                self._versuch("Ausnehmen", lambda _: durchgang.ausnehmen(
+                    rid, frei[-1], {"grund": f"{HINWEIS}: beim Hersteller zur Reparatur"}, wart))
+        self.sicherstellen()
+
+    def sicherstellen(self):
+        """Was in der Geschichte zufällig nicht vorkam, geschieht heute an Artikeln außerhalb der persönlichen Ordner:
+        eine Aussonderung aus einer Prüfung (kritischer Mangel), eine durch den Materialwart (nach Verlust), ein Mangel
+        (gesperrt), ein Verlust (verloren gemeldet) und ein Nachkauf ohne Eingangsprüfung (neu)."""
         from app import db
-        return [r["item_id"] for r in db.query("SELECT ri.item_id FROM mat_round_item ri JOIN mat_item i ON i.id = "
-                                                "ri.item_id WHERE ri.round_id = ? ORDER BY i.inventory_no", (rid,))]
+        from app.material.services import bestand, pruefung
+        ids = json.dumps([a["iid"] for a in self.artikel if a.get("iid")])
 
-    def _im_durchgang_pruefen(self, iid, plan, rid, ergebnis, mangel):
-        from app import db
-        from app.material.services import Abgelehnt, protokoll
-        fotos = []
-        try:
-            with protokoll.dateien_sichern(), db.transaction(sofort=True):
-                self.pruefen(iid, self._pruefer_fuer(plan), "periodisch", ergebnis, mangel, None, fotos, rid)
-        except Abgelehnt as exc:
-            self._fotos_weg(fotos)
-            self.uebersprungen.append(f"Durchgang, {plan['produkt']['name']}: {exc}")
-        except BaseException:
-            self._fotos_weg(fotos)
-            raise
+        def gibt(where):
+            return db.query(f"SELECT 1 FROM mat_inspection x JOIN mat_item i ON i.id = x.item_id WHERE x.item_id IN "
+                            f"(SELECT value FROM json_each(?)) AND {where} LIMIT 1", (ids,))
 
-    # --- Zuordnungen ---
+        def gesperrt(zustand):
+            return db.query("SELECT 1 FROM mat_item WHERE id IN (SELECT value FROM json_each(?)) AND lock_state = ? "
+                            "LIMIT 1", (ids, zustand))
 
-    def zuordnen(self, plaene):
-        """Was in einem persönlichen Ordner liegt, gehört dieser DEMO-Person; dazu gut ein Drittel der Einsatzgruppen.
-        Über den Schreibweg der Personenzuordnung (Journal am Artikel mit Kontoverweis); Ausgesonderte nicht."""
-        from app import db
-        from app.material.services import bestand, rechte, zuordnung
-        for gi, gl in enumerate(self.gl):
-            personen = [gl["konto"][f"person{n}"]["id"] for n in range(1, EINSATZKRAEFTE + 1)]
-            with db.transaction(sofort=True):
-                for p in plaene:
-                    if p["gl"] != gi or not p["iid"]:
-                        continue
-                    if p["ordner"].startswith("person"):
-                        uid = gl["konto"][p["ordner"]]["id"]
-                    elif p["ordner"] in ("gruppe1", "gruppe2") and self.rnd.random() < 0.4:
-                        uid = self.rnd.choice(personen)
-                    else:
-                        continue
-                    i = bestand.artikel(p["iid"])
-                    if i["lock_state"] != "ausgesondert" and zuordnung._schreiben(i, rechte.waehlbares_konto(uid)["id"]):
-                        self.zuordnungen += 1
+        frei = [a for a in self.artikel if a.get("iid") and a["produkt"]["formular"] and a["gl"] == GROSS
+                and not a.get("ordner_jetzt", a["ordner"]).startswith("person")
+                and bestand.artikel(a["iid"])["lock_state"] == "frei" and bestand.artikel(a["iid"])["last_inspected_on"]
+                and not bestand.artikel(a["iid"])["retire_by"]]
+        self.rnd.shuffle(frei)
+        if not gibt("x.kind = 'aussonderung' AND x.basis_inspection_id IS NOT NULL") and frei:
+            self.pruefen(frei.pop(), "ausserplanmaessig", "aussondern", "kritisch")
+        if not gibt("x.kind = 'aussonderung' AND x.basis_inspection_id IS NULL") and frei:
+            a = frei.pop()
+            pruefer, wart = self._pruefer_fuer(a), self._wart(a)
+            if self._versuch("Verlust melden", lambda _: pruefung.sperren(
+                    a["iid"], {"grund": "verlust", "text": HINWEIS}, pruefer) or True):
+                self.zahl["verloren"] += 1
+                if self._versuch("Aussondern nach Verlust", lambda _: pruefung.aussondern(
+                        a["iid"], {"grund": "verlust", "bemerkung": HINWEIS}, wart) or True):
+                    self.zahl["aussonderungen"] += 1
+        if not gesperrt("gesperrt") and frei:
+            self.pruefen(frei.pop(), "ausserplanmaessig", "instandsetzen", "mangel")
+        if not gesperrt("verloren") and frei:
+            self._e_verlust(frei.pop())
+        if not any(a.get("iid") and not bestand.artikel(a["iid"])["last_inspected_on"]
+                   and bestand.artikel(a["iid"])["lock_state"] == "frei" for a in self.artikel) and self.artikel:
+            muster = next((a for a in self.artikel if a["gl"] == GROSS and not a["ordner"].startswith("person")),
+                          self.artikel[0])
+            a = dict(muster, iid=None, nachkauf=True, erfasst=self.h, person=None, serie=f"{muster['serie']}-N")
+            a.update(self._stamm(a))
+            self.artikel.append(a)
+            self.zahl["nachkauf"] += 1
+            self._e_erfassen(a)
 
     # --- Bericht ---
 
-    def bericht(self, plaene, produkte, ausgelassen, start):
+    def bericht(self, produkte, ausgelassen):
         from app import db
         from app.material.services import bestand
         from app.material.services import status as st
-        ids = json.dumps([p["iid"] for p in plaene if p["iid"]])
+        ids = json.dumps([a["iid"] for a in self.artikel if a.get("iid")])
         artikel = db.query("SELECT * FROM mat_item WHERE id IN (SELECT value FROM json_each(?))", (ids,))
-        zaehlung = st.leere_zaehlung()
-        for i in artikel:
-            zaehlung[st.status(i)] += 1
         verloren = sum(1 for i in artikel if i["lock_state"] == "verloren")
         x = db.query("SELECT SUM(locked_at IS NOT NULL) AS fest, SUM(kind = 'aussonderung') AS aus, "
-                     "SUM(completed_at IS NULL) AS entwurf FROM mat_inspection WHERE item_id IN "
+                     "SUM(completed_at IS NULL) AS entwurf, MIN(inspected_on) AS erste FROM mat_inspection WHERE item_id IN "
                      "(SELECT value FROM json_each(?))", (ids,), one=True)
+        zweige = json.dumps(sorted({f for g in self.gl.values() for f in bestand.unterbaum(g["id"])}))
         runden = db.query("SELECT SUM(closed_on IS NOT NULL) AS zu, SUM(closed_on IS NULL) AS offen FROM mat_round "
-                          "WHERE folder_id IN (SELECT value FROM json_each(?))",
-                          (json.dumps([g["ordner"][s] for g in self.gl for s in ("gw", "lager")]),), one=True)
+                          "WHERE folder_id IN (SELECT value FROM json_each(?))", (zweige,), one=True)
+        antraege = {}
+        for r in db.query("SELECT status, COUNT(*) AS n FROM mat_item_change WHERE item_id IN "
+                          "(SELECT value FROM json_each(?)) GROUP BY status", (ids,)):
+            antraege[r["status"]] = r["n"]
         demo = sum(1 for i in artikel if bestand.ist_demo(i["id"]))
         print()
         print("DEMO-Konten (Passwörter nur hier – sie werden nicht erneut angezeigt):")
+        gemeinsam = [k for k in self.passwoerter if k[3] == OHNE_ZUGANG and k[2]]
         for mail, name, pw, sicht in self.passwoerter:
-            print(f"  {mail:<42} {name:<32} Passwort: {pw}" + (f"  ({sicht})" if sicht else ""))
+            if (mail, name, pw, sicht) in gemeinsam:
+                continue
+            text = f"Passwort: {pw}" if pw else "schon da – Passwort unverändert"
+            print(f"  {mail:<42} {name:<32} {text}" + (f"  ({sicht})" if sicht else ""))
+        if gemeinsam:
+            von, bis = gemeinsam[0][0].split("@")[0], gemeinsam[-1][0].split("@")[0].rsplit("-", 1)[-1]
+            print(f"  {von} bis -{bis}@{POSTFACH}: {len(gemeinsam)} Einsatzkräfte ({OHNE_ZUGANG}) – gemeinsames "
+                  f"Passwort wie oben: {gemeinsam[0][2]}")
         print()
-        print(f"Beispielbestand angelegt – Laufzeit {self._dauer(start)}.")
-        print(f"  Gliederungen  {len(self.gl)} ({', '.join(g['name'] for g in self.gl)}), je {len(self.gl[0]['ordner'])} "
-              "Ordner darunter")
-        print(f"  Konten        {len(self.passwoerter)} DEMO-Konten (je Gliederung Materialwart, Prüferin, Mitglied, "
-              f"externer Prüfer, {EINSATZKRAEFTE} Einsatzkräfte – die erste liest ihren persönlichen Ordner, die übrigen "
-              "haben keinen Modulzugang)")
-        print(f"  Artikel       {len(artikel)} aus {len({p['produkt']['id'] for p in plaene if p['iid']})} Produkten, "
-              f"davon {demo} als DEMO gekennzeichnet")
-        print(f"  Prüfungen     {x['fest'] or 0} festgeschrieben mit Protokoll (davon {x['aus'] or 0} Aussonderungen), "
-              f"{x['entwurf'] or 0} in Prüfung (Entwurf)")
+        print(f"Beispielbestand angelegt – Laufzeit {self._dauer()}.")
+        for g in self.gl.values():
+            print(f"  {g['name']:<34} {len(bestand.unterbaum(g['id'])) - 1} Ordner darunter")
+        print(f"  Konten        {len(self.passwoerter)} DEMO-Konten")
+        print(f"  Artikel       {len(artikel)} aus {len({a['produkt']['id'] for a in self.artikel if a.get('iid')})} "
+              f"Produkten, davon {demo} als DEMO gekennzeichnet; {self.zahl['nachkauf']} Nachkäufe als Ersatz")
+        print(f"  Geschichte    ab {x['erste'] or '–'}; {x['fest'] or 0} Prüfungen festgeschrieben mit Protokoll (davon "
+              f"{x['aus'] or 0} Aussonderungen), {x['entwurf'] or 0} in Prüfung (Entwurf)")
         print(f"  Durchgänge    {runden['zu'] or 0} abgeschlossen mit Sammelprotokoll, {runden['offen'] or 0} offen")
-        print(f"  Zuordnungen   {self.zuordnungen}")
-        je_gl = []
-        for g in self.gl:
-            zweig, z = bestand.unterbaum(g["id"]), st.leere_zaehlung()
-            for i in artikel:
-                if bestand.heimat(i) in zweig:
-                    z[st.status(i)] += 1
-            je_gl.append(z)
-        print(f"Zustände {'gesamt':>19}  " + "  ".join(f"{g['kurz']:>3}" for g in self.gl))
+        print(f"  Zuordnungen   {self.zahl['zugeordnet']} gesetzt, {self.zahl['geloest']} gelöst "
+              f"({self.zahl['ausgeschieden']} Einsatzkräfte ausgeschieden, {self.zahl['eintritt']} eingetreten)")
+        print(f"  Verschoben    {self.zahl['verschoben']} Artikel; verloren gemeldet: {self.zahl['verloren']}")
+        print("  Anträge       " + (", ".join(f"{antraege[s]} {t}" for s, t in ANTRAG_TEXT.items() if s in antraege)
+                                     or "keine"))
+        zaehlung = st.leere_zaehlung()
+        for i in artikel:
+            zaehlung[st.status(i)] += 1
+        print("Zustände")
         for s in st.STATUS:
             zusatz = f"  (davon verloren gemeldet: {verloren})" if s == "gesperrt" else ""
-            print(f"  {st.LABEL[s]:<22}{zaehlung[s]:>4}  " + "  ".join(f"{z[s]:>3}" for z in je_gl) + zusatz)
+            print(f"  {st.LABEL[s]:<22}{zaehlung[s]:>5}{zusatz}")
         fehlen = [st.LABEL[s] for s in st.STATUS if not zaehlung[s]] + ([] if verloren else ["verloren gemeldet"])
         if fehlen:
             grund = "" if any(p["lebensdauer"] for p in produkte) else " (der Katalog hat kein textiles Produkt mit Lebensdauer)"
             print(f"  Kommt nicht vor: {', '.join(fehlen)}{grund}.")
+        petzl, platzhalter, ohne_form = self._formulare
+        if petzl:
+            print("Formulare nach Petzl-Prüfbericht (DEMO, nicht im Katalog-Export; Fundstelle je Punkt in "
+                  "scripts/beispielbestand_petzl_punkte.json):")
+            for name in petzl:
+                for q in self._vorlagen[name]["quelle"].values():
+                    print(f"  {name}: {q['hersteller']} „{q['titel']}“ ({q.get('version_gedruckt') or 'ohne Versionsangabe'}"
+                          f"), {q['dateiname']}")
+        if platzhalter:
+            print(f"Platzhalter-Formulare (DEMO, nicht im Katalog-Export): {', '.join(platzhalter)}.")
+        if ohne_form:
+            print(f"Ohne wirksames Formular (nur ein inaktives echtes – bitte im Katalog aktivieren): {', '.join(ohne_form)}.")
         ohne = sorted({p["name"] for p in produkte if not p["formular"]})
         if ohne:
-            ende = sum(1 for p in plaene if p["iid"] and not p["produkt"]["formular"] and p["zustand"] == "lebensdauer")
-            print(f"Ohne aktives Prüfformular (keine Prüfung möglich, Artikel „neu“"
-                  f"{f', davon {ende} am Ende der Lebensdauer' if ende else ''}): {', '.join(ohne)}.")
+            print(f"Ohne aktives Prüfformular (keine Prüfung möglich, Artikel „neu“): {', '.join(ohne)}.")
         if ausgelassen:
-            print(f"Nicht verwendet: {'; '.join(ausgelassen)}.")
-        benutzt = db.query("SELECT DISTINCT f.title, f.version FROM mat_inspection x JOIN mat_form f ON f.id = x.form_id "
-                           "WHERE x.item_id IN (SELECT value FROM json_each(?)) ORDER BY f.title, f.version", (ids,))
-        if benutzt:
-            print("Jetzt „benutzt“ (nur noch über eine neue Version änderbar): "
-                  + ", ".join(f"„{f['title']}“ Version {f['version']}" for f in benutzt) + ".")
-        mit_artikeln = len({p["produkt"]["id"] for p in plaene if p["iid"]})
+            print(f"Nicht verwendet: {'; '.join(ausgelassen[:20])}{' …' if len(ausgelassen) > 20 else ''}.")
+        mit_artikeln = len({a["produkt"]["id"] for a in self.artikel if a.get("iid")})
         if mit_artikeln:
             print(f"Jetzt mit Artikeln: {mit_artikeln} Produkte – sie lassen sich nicht mehr löschen, ihre Materialart "
-                  "nicht mehr ändern und ihre Kategorien nicht mehr löschen. Katalogpflege, die das braucht: Katalog "
-                  "exportieren, dev-Datenbank zurücksetzen, Export importieren.")
-        if self.uebersprungen:
-            print("Hinweise:")
-            for zeile in self.uebersprungen:
+                  "nicht mehr ändern und ihre Kategorien nicht mehr löschen; benutzte Formularversionen nur noch über eine "
+                  "neue Version ändern. Katalogpflege, die das braucht: Katalog exportieren, dev-Datenbank zurücksetzen, "
+                  "Export importieren.")
+        if self.hinweise:
+            print(f"Hinweise ({len(self.hinweise)}):")
+            for zeile in self.hinweise[:40]:
                 print(f"  {zeile}")
+            if len(self.hinweise) > 40:
+                print(f"  … und {len(self.hinweise) - 40} weitere")
+
+
+def db_erledigt(rid, iid):
+    """Hat der Artikel im Durchgang schon eine abgeschlossene Prüfung oder einen Ausnahmegrund?"""
+    from app import db
+    return bool(db.query("SELECT 1 FROM mat_round_item ri WHERE ri.round_id = ? AND ri.item_id = ? AND "
+                         "(ri.excluded_reason IS NOT NULL OR EXISTS (SELECT 1 FROM mat_inspection x WHERE x.round_id = "
+                         "ri.round_id AND x.item_id = ri.item_id))", (rid, iid), one=True))
 
 
 if __name__ == "__main__":

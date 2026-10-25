@@ -239,52 +239,73 @@ DEMO-Kategorien behalten ihre. Nur wenn `BASE_URL` in der Umgebung und in der An
 
 ### Beispielbestand (nur dev)
 
-`scripts/material_beispielbestand.py` legt aus dem **vorhandenen Katalog** einen größeren Bestand zum Ausprobieren an:
-drei Gliederungen „DEMO-OG Auental“, „DEMO-OG Bachheim“ und „DEMO-OG Flussstadt“ mit Lager, Fahrzeugen, Einsatzgruppen
-und persönlichen Ordnern, 200 Artikel über alle echten Produkte (Seriennummern `DEMO-AU-0001` …), eine Prüfhistorie
-über die aktiven Prüfformulare (zurückdatiert und festgeschrieben, jede Prüfung mit Protokoll), je Gliederung sechs
-DEMO-Konten (Materialwart, Prüferin, Mitglied, externer Prüfer, zwei Einsatzkräfte – nur Modul Material, Passwörter
-stehen nur in der Ausgabe; die Prüferin prüft dauerhaft, der externe Prüfer 30 Tage – befristet sind Prüffreigaben nur
-für Externe), einen abgeschlossenen und einen offenen Prüfdurchgang und Zuordnungen. Den Einsatzkräften
-ist Ausrüstung zugeordnet: Die erste liest ihren persönlichen Ordner, die zweite hat – wie die meisten, denen PSA
-zugeordnet ist – keinen Modulzugang und sieht nach der Anmeldung „nicht freigeschaltet“. Jeder Zustand kommt vor: neu,
-einsatzbereit, bald fällig, überfällig, gesperrt, verloren gemeldet, ausgesondert und – wo der Katalog eine Lebensdauer
-nennt – Lebensdauer erreicht. Am Katalog ändert das Skript nichts (keine Kategorie, kein Produkt, kein Formular, kein
-Dokument, kein Bild, kein Rückruf, keine Meldung); erfunden sind nur Bestandsangaben, alle mit „DEMO“.
-Ein Artikel in einer DEMO-Gliederung gilt überall als DEMO – Oberfläche, Protokolle, Lebenslauf, CSV und Steckbrief –,
-auch wenn sein Produkt aus dem echten Katalog stammt. Deshalb lässt sich zwischen DEMO-Gliederungen und echtem Bestand
-nichts verschieben, weder Artikel noch Ordner (409) – sonst wechselte das Kennzeichen, während die festgeschriebenen
-Protokolle bleiben, wie sie sind.
+`scripts/material_beispielbestand.py` legt aus dem **vorhandenen Katalog** den Bestand einer großen Gliederung mit gut
+zwei Jahren Geschichte an (Wunsch des Nutzers vom 25.10.2026):
+
+- **Struktur:** „DEMO-Kreisverband Flussland“ mit Zentrallager (Regale Seile, Hardware, PSA, Reserve), fünf Fahrzeugen
+  (zwei GW-Wasserrettung, zwei MTW, Mehrzweckboot) mit Seilrucksäcken und Taschen als Ordner der Art „Set“ (die
+  Flaschenzugtasche liegt im Seilrucksack 1 – ein Set im Set), drei Strömungsrettungsgruppen und persönlichen Ordnern für
+  bis zu 40 DEMO-Einsatzkräfte (je 20 Artikel eine); dazu die kleine „DEMO-OG Nachbarstadt“ (Lager, MTW) für die
+  Trennung je Gliederung und die globale Suche (Seriennummer `DEMO-NS-4711`).
+- **Artikel:** Vorgabe 800 (`--artikel N`), nur echte Produkte ohne Stückliste. Mix nach Kategorien: viele Karabiner und
+  Textilmaterial, je Einsatzkraft Gurt, Helm, Karabiner, Schlinge, Abseilgerät (soweit der Katalog sie hat), Seile mit
+  einer Länge, wenige Rollen und Flaschenzüge; je Typ wenige Standardprodukte. Seriennummern `DEMO-FL-0001` …, Ersatz
+  `…-E`.
+- **Geschichte („volles Leben“):** Ersterfassung je Bereich kurz vor seiner ersten Jahresprüfung, jährliche
+  Prüfdurchgänge je Bereich (abgeschlossen, mit Sammelprotokoll), dazwischen Prüfungen bei kürzerem Intervall und
+  außerplanmäßige nach Einsätzen, Mängel mit Sperre und Prüfung nach Reparatur, Aussonderungen (Mangel, Lebensdauer,
+  Verlust) mit Nachkauf, Nachkäufe über die Jahre, verloren gemeldete Artikel, Verschiebungen, Zuordnungen (Einsatzkräfte
+  scheiden aus, ihre Ausrüstung geht über die Reserve an neue), Änderungsanträge (bestätigt, abgelehnt, zurückgezogen,
+  offen). Dafür stellt das Skript die Uhr **seines eigenen Prozesses** zurück und lässt sie Tag für Tag laufen – Journal,
+  Prüftage, Protokolle und Durchgänge tragen ihr damaliges Datum. Heute: ein offener Durchgang im Zentrallager (teils
+  erledigt, einer in Prüfung beim externen Prüfer, einer ausgenommen), im MTW 2 ist die Jahresprüfung ausgefallen
+  (überfällig), die persönliche Ausrüstung ist bald fällig. Jeder Zustand kommt vor. Alle Texte (Befunde, Gründe,
+  Bemerkungen) sind „DEMO – nicht für echte Prüfungen“, Mängel haben ein DEMO-Platzhalterfoto.
+- **Formulare:** Hat eine echte Kategorie kein wirksames aktives Prüfformular, legt das Skript eins an –
+  DEMO-gekennzeichnet, aktiv, nicht im Katalog-Export: nach den **Petzl-Prüfberichten**, wo
+  `scripts/beispielbestand_petzl_punkte.json` die Kategorie nach ihrem Namen kennt (13 Kategorien, Punkte wörtlich mit
+  Gruppe, Soll und „kritisch“; Fundstelle je Punkt in der Datei, Quellen mit Version im Bericht – Petzl, „Überprüfung von
+  PSA – Prüfbericht/Vorgehensweise bei der Überprüfung“ je Produktgruppe, z. B. Gurte 110526, Karabiner 260625, Seile
+  071215; Abseilachten und Kantenschutz mit der nächstliegenden Vorlage), sonst ein Platzhalter (Ja/Nein, Text, Zahl, bei
+  Artikellänge „Länge (m)“) an der obersten Kategorie ohne Formular. Echte Formulare bleiben unberührt.
+- **Konten** (nur Modul Material, Passwörter nur in der Ausgabe; gibt es ein DEMO-Konto mit der Adresse schon, bleibt es
+  samt Passwort): `demo-wart-a@example.invalid` (Materialwart Kreisverband), `demo-wart-b@…` (Nachbarstadt),
+  `demo-pruefer@…` und `demo-pruefer-2@…` (dauerhaft lesen und prüfen), `demo-pruefer-ns@…`, `demo-extern@…` (prüfen im
+  Zentrallager, 30 Tage – befristet sind Prüffreigaben nur für Externe), `demo-mitglied@…` (lesen), `demo-mv@…`
+  (DEMO-Material-Verwaltung, Stufe Verwaltung) und `demo-einsatzkraft-01@…` … – die erste liest ihren persönlichen
+  Ordner, die übrigen haben keinen Modulzugang und sehen „Meine PSA“ (ein gemeinsames Passwort).
+
+Am Katalog ändert das Skript sonst nichts; erfunden sind nur Bestandsangaben, alle mit „DEMO“. Ein Artikel in einer
+DEMO-Gliederung gilt überall als DEMO – Oberfläche, Protokolle, Lebenslauf, CSV und Steckbrief –, auch wenn sein
+Produkt aus dem echten Katalog stammt; zwischen DEMO-Gliederungen und echtem Bestand lässt sich nichts verschieben (409).
+Mails gehen keine hinaus (auch nicht ins Mailprotokoll). Nur auf dev oder lokal: `BASE_URL` in der Umgebung **und** in
+der Anwendung muss die Positivliste von `dev-zuruecksetzen` erfüllen (Host mit „dev.“ davor oder localhost) – sonst
+legt das Skript nichts an.
 
 Vorher:
 
 1. **Katalog exportieren** (Katalog → „Katalog exportieren“ oder `material export-catalog`) und das ZIP aufheben – er
-   ist es, der später in die Produktion geht. Der Beispielbestand kommt mit keinem Export mit.
+   ist es, der später in die Produktion geht. Der Beispielbestand und seine DEMO-Formulare kommen mit keinem Export mit.
 2. Wissen, was danach gilt: Jede benutzte **Formularversion ist „benutzt“** und lässt sich nur noch über eine neue
-   Version ändern. Jedes Produkt, von dem der Beispielbestand Artikel anlegt (bei 200 Artikeln meist alle echten mit
-   Prüfintervall), lässt sich **nicht mehr löschen und seine Materialart nicht mehr ändern**; seine Kategorie lässt sich
-   nicht mehr löschen. Katalogpflege, die das braucht, vorher erledigen – oder später den Katalog exportieren, das
-   Modul auf dev zurücksetzen (siehe „Modul Material auf dev zurücksetzen“) und den Export importieren. Der Bestand
-   lässt sich **nicht entfernen** – Prüfnachweise werden nie gelöscht, Artikel mit Prüfungen auch nicht. Zurück geht es
-   nur, indem man das Modul auf dev zurücksetzt (danach den Katalog-Export importieren).
+   Version ändern. Jedes Produkt mit Artikeln lässt sich **nicht mehr löschen und seine Materialart nicht mehr
+   ändern**; seine Kategorie lässt sich nicht mehr löschen. Der Bestand lässt sich **nicht entfernen** – zurück geht es
+   nur, indem man das Modul auf dev zurücksetzt („Modul Material auf dev zurücksetzen“) und den Export importiert.
 
-Auf dem VPS im Klon der Entwicklung (das Abbild enthält `scripts/` nicht – das Skript geht per stdin in das flüchtige
-`/tmp` des Containers, die App liegt dort unter `/srv`, die Daten unter `/data`):
+Auf dem VPS im Klon der Entwicklung (das Abbild enthält `scripts/` nicht – Skript und Petzl-Datei gehen per tar in das
+flüchtige `/tmp` des Containers, die App liegt dort unter `/srv`, die Daten unter `/data`):
 
 ```bash
-docker exec -i stroemis-dev sh -c 'cat > /tmp/material_beispielbestand.py && VIDEOPFLEGE=0 PYTHONPATH=/srv python /tmp/material_beispielbestand.py --beispielbestand' < scripts/material_beispielbestand.py
+tar c scripts/material_beispielbestand.py scripts/beispielbestand_petzl_punkte.json | docker exec -i stroemis-dev sh -c 'rm -rf /tmp/bb && mkdir /tmp/bb && tar x -C /tmp/bb && VIDEOPFLEGE=0 PYTHONPATH=/srv python /tmp/bb/scripts/material_beispielbestand.py --beispielbestand'
 ```
 
-Der Lauf dauert ein paar Minuten (zählt mit; `--artikel N` für mehr oder weniger Artikel) und endet mit einem Bericht:
-Konten mit Passwörtern, Mengen, Zustände, Produkte ohne aktives Formular (deren Artikel bleiben „neu“), die jetzt
-benutzten Formularversionen und wie viele Produkte jetzt Artikel haben (nicht mehr löschbar, Materialart fest). Er
-läuft nur einmal – gibt es die Gliederungen schon, legt er nichts an. **Nie in der Produktion** (Container `stroemis`)
-– dort gehört kein DEMO-Bestand hin; zeigt `BASE_URL` auf `strömis.de`, bricht das Skript ohnehin ab.
+Der Lauf dauert bei 800 Artikeln rund **20 Minuten** – jede Prüfung bekommt ihr Protokoll, gut eine halbe Sekunde je
+PDF (er zählt je Monat und Durchgang mit; `--artikel N` für weniger). Er endet mit einem Bericht: Konten mit
+Passwörtern, Mengen, Zustände, angelegte Formulare mit ihren Quellen, Hinweise auf Gescheitertes. Er läuft nur einmal –
+gibt es die Gliederungen schon, legt er nichts an. **Nie in der Produktion** (Container `stroemis`).
 
 **Den Befehl in `tmux` oder `screen` starten.** Reißt die Verbindung mitten im Lauf ab (oder Strg-C), bleibt ein
-Teilbestand – Artikel ohne Durchgänge und Zuordnungen –, und kein weiterer Lauf vervollständigt ihn: Er meldet
-„unvollständig“ mit Rückgabewert 1 und legt nichts an. Neu geht es dann nur, indem man das Modul auf dev zurücksetzt
-(„Modul Material auf dev zurücksetzen“) und danach den Katalog-Export importiert.
+Teilbestand, und kein weiterer Lauf vervollständigt ihn: Er meldet „unvollständig“ mit Rückgabewert 1 und legt nichts
+an. Neu geht es dann nur, indem man das Modul auf dev zurücksetzt und danach den Katalog-Export importiert.
 
 ### Modul Material auf dev zurücksetzen (nur dev)
 
@@ -647,8 +668,8 @@ python tests/test_material_antrag.py      # Änderungsanträge: Nachtragen bei M
                                          # Zurückziehen, Herstelldatum nicht entfernbar, Migration 17 (16 → 17 mit Anträgen)
 python tests/test_material_stufen.py     # Phase 2: Modulstufe (Migration 9 → 10, ohne Stufe wirkt nichts – alle Routen, Material-Verwaltung,
                                         # Personensuche je Zweck, Mails, Profil, Vorgabe neuer Konten)
-python tests/test_material_beispielbestand.py  # Beispielbestand: Katalog unverändert (Tabellen, Export, Dateien), alle Zustände, Protokolle, DEMO-Kennzeichnung,
-                                               # abgebrochener Lauf (meldet „unvollständig“)
+python tests/test_material_beispielbestand.py  # Beispielbestand: Katalog unverändert bis auf DEMO-Formulare (nicht im Export), Struktur, Geschichte über zwei Jahre,
+                                               # alle Zustände, Protokolle, DEMO-Kennzeichnung, Konten, Petzl- und Platzhalter-Formulare, abgebrochener Lauf
 python tests/test_material_dev_zuruecksetzen.py  # material dev-zuruecksetzen: Sperren (dev-Kennung, BASE_URL als Positivliste, Schalter), --trocken, Sicherung (0700/0600), Abbruch bei laufendem Katalogimport
                                                  # vollständig, Schema wie neu, übrige Module byteidentisch, Scheitern und SIGTERM/SIGHUP ändern nichts
 python scripts/beispieldaten.py         # füllt ./data mit zwei erfundenen Prüfungs-Lehrgängen zum Ausprobieren
