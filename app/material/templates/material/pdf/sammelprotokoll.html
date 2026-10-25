@@ -1,7 +1,10 @@
 {% extends "material/pdf/basis.html" %}
 {# Sammelprotokoll eines Prüfdurchgangs: Ergebnisübersicht, Prüfer, alle Artikel des Durchgangs und das
-   Verzeichnis der Einzelprotokolle mit der Prüfsumme jeder Datei. Daten laut services/pdf.py (dokument,
-   durchgang, zaehlung, pruefer, artikel, ohne_protokoll). Bis zu etwa 500 Artikelzeilen. #}
+   Verzeichnis der Einzelprotokolle mit der Prüfsumme jeder Datei. Daten laut services/protokoll._sammelprotokoll
+   (dokument, durchgang, zaehlung, pruefer, artikel, ohne_protokoll, set_info, set_protokolle). Bis zu etwa 500 Artikelzeilen.
+   Seit Schritt 27: Die Artikel eines Ordners der Art „Set“ stehen zusammen unter einer Zwischenzeile (a.zwischen,
+   a.im_set), das Verzeichnis der Set-Protokolle folgt dem der Einzelprotokolle. Dieselbe Vorlage trägt das
+   Set-Protokoll eines Set-Ordners (setprotokoll.html, set_info: {name, teil_von, durchgang_ordner}). #}
 {% block stil %}
 .uebersicht-tab { width: 100%; border-collapse: collapse; }
 .uebersicht-tab > tbody > tr > td { vertical-align: top; padding: 0; }
@@ -24,6 +27,10 @@ table.artikel-liste .klein { font-size: 7pt; color: var(--grau); }
 .zustand-ausgenommen { color: var(--schwarz); }
 tr.offen .nr-marke { background: var(--rot); color: #ffffff; font-weight: 700; }
 .berichtigung { font-size: 6.5pt; color: var(--grau); }
+tr.set-kopf td { padding: 2.5mm 1.3mm .8mm; border-bottom: .8pt solid var(--linie); font-weight: 700;
+  color: var(--schwarz); }
+tr.set-kopf { break-after: avoid; }
+tr.im-set td.nr { border-left: 1.2mm solid var(--linie); }
 table.verzeichnis td { padding: .9mm 1.3mm; }
 table.verzeichnis .hash { font-size: 7pt; }
 .abbruch { border: .5pt solid var(--linie); border-left: 2.5mm solid var(--rot); padding: 2.5mm 4mm; margin: 2mm 0 1mm;
@@ -31,7 +38,7 @@ table.verzeichnis .hash { font-size: 7pt; }
 .abbruch strong { color: var(--rot-dunkel); font-size: 11pt; }
 {% endblock %}
 
-{% block unterzeile %}{{ durchgang.titel }}{% if durchgang.abgebrochen %}<span class="marke">ABGEBROCHEN</span>{% endif %}{% endblock %}
+{% block unterzeile %}{% if set_info %}Set {{ set_info.name }} · {% endif %}{{ durchgang.titel }}{% if durchgang.abgebrochen %}<span class="marke">ABGEBROCHEN</span>{% endif %}{% endblock %}
 
 {% block kopfzeile %}
 {%- if durchgang.abgebrochen %}
@@ -48,7 +55,10 @@ table.verzeichnis .hash { font-size: 7pt; }
       ("Durchgang", durchgang.titel), ("Gliederung", durchgang.gliederung), ("eröffnet", durchgang.eroeffnet),
       ("abgebrochen" if durchgang.abgebrochen else "abgeschlossen", durchgang.abgeschlossen),
     ], spalten=2) }}
-  {{ felder([("Ordner", durchgang.ordner)], spalten=1) }}
+  {{ felder([("Set" if set_info else "Ordner", durchgang.ordner)], spalten=1) }}
+  {%- if set_info %}
+  {{ felder([("Teil von", "Sammelprotokoll " ~ set_info.teil_von ~ " (Ordner " ~ set_info.durchgang_ordner ~ ")")], spalten=1) }}
+  {%- endif %}
 </section>
 
 <section>
@@ -62,7 +72,7 @@ table.verzeichnis .hash { font-size: 7pt; }
       </table>
     </td>
     <td>
-      <h2>Prüfer in diesem Durchgang</h2>
+      <h2>Prüfer in {{ "diesem Set" if set_info else "diesem Durchgang" }}</h2>
       {%- if pruefer %}
       <table class="liste pruefer-liste">
         <colgroup><col><col style="width: 22mm"><col style="width: 16mm"><col style="width: 35mm"></colgroup>
@@ -75,7 +85,7 @@ table.verzeichnis .hash { font-size: 7pt; }
         </tbody>
       </table>
       {%- else %}
-      <p class="hinweis">In diesem Durchgang wurde nicht geprüft.</p>
+      <p class="hinweis">In {{ "diesem Set" if set_info else "diesem Durchgang" }} wurde nicht geprüft.</p>
       {%- endif %}
     </td>
   </tr></table>
@@ -87,13 +97,16 @@ table.verzeichnis .hash { font-size: 7pt; }
 </section>
 
 <section>
-  <h2>Artikel im Durchgang</h2>
+  <h2>Artikel {{ "im Set" if set_info else "im Durchgang" }}</h2>
   <table class="liste artikel-liste">
     <colgroup><col style="width: 10mm"><col style="width: 27mm"><col><col style="width: 23mm"><col style="width: 31mm"><col style="width: 25mm"></colgroup>
     <thead><tr><th class="zahl">Nr.</th><th>Inventar- / Seriennummer</th><th>Produkt und Ordner</th><th>Ergebnis</th><th>geprüft</th><th>Protokoll</th></tr></thead>
     <tbody>
     {%- for a in artikel %}
-      <tr class="{{ 'offen' if a.zustand == 'nicht_geprueft' }}">
+      {%- if a.zwischen %}
+      <tr class="set-kopf"><td colspan="6">{{ a.zwischen }}</td></tr>
+      {%- endif %}
+      <tr class="{{ 'offen' if a.zustand == 'nicht_geprueft' }}{{ ' im-set' if a.im_set }}">
         <td class="nr zahl"><span class="nr-marke">{{ a.nr }}</span></td>
         <td><div class="mono">{{ a.inventarnummer }}</div><div class="klein mono">{{ a.seriennummer }}</div>{% if a.seriennummer_vormals %}<div class="berichtigung">{{ a.seriennummer_vormals }}</div>{% endif %}</td>
         <td><div class="wert">{{ produkt_mit_zusatz(a) }}</div>{% if a.produkt_vormals %}<div class="berichtigung">{{ a.produkt_vormals }}</div>{% endif %}<div class="klein">{{ a.ordner }}</div></td>
@@ -131,4 +144,22 @@ table.verzeichnis .hash { font-size: 7pt; }
   <p class="hinweis">Zu diesem Durchgang gibt es keine Einzelprotokolle.</p>
   {%- endif %}
 </section>
+
+{%- if set_protokolle %}
+<section>
+  <h2>Set-Protokolle dieses Durchgangs</h2>
+  <p class="hinweis">Je Ordner der Art „Set“ ein eigenes Protokoll mit allen Artikeln darin (auch in inneren Sets) und
+    SHA-256 seiner Datei – zum Abgleich mit den einzelnen PDFs.</p>
+  <table class="liste verzeichnis">
+    <colgroup><col style="width: 30mm"><col><col style="width: 16mm"><col style="width: 62mm"></colgroup>
+    <thead><tr><th>Protokoll-ID</th><th>Set</th><th class="zahl">Artikel</th><th>SHA-256 der Datei</th></tr></thead>
+    <tbody>
+    {%- for t in set_protokolle %}
+      <tr><td class="mono">{{ t.protokoll_id }}</td><td>{{ t.ordner }}</td><td class="zahl">{{ t.artikel }}</td>
+        <td><span class="hash">{{ t.file_sha256 }}</span></td></tr>
+    {%- endfor %}
+    </tbody>
+  </table>
+</section>
+{%- endif %}
 {% endblock %}

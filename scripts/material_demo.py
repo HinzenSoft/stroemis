@@ -17,7 +17,7 @@ der DEMO-Prüfer noch aus der Zeit, als auch er befristet prüfte, stellt --kont
 (siehe demo_konten).
 Seit Schritt 25 hat die DEMO Rettungsweste eine Bestandteil-Liste (nur Text, Platzhalter). Das DEMO-Set-Produkt aus
 Phase 4 · Lieferung 2 gibt es seit dem Rückbau der Set-Funktion (Schritt 26) nicht mehr; ein Set ist der Ordner
-„DEMO-Seilrucksack“ (Ordnerart „Set“).
+„DEMO-Seilrucksack“ (Ordnerart „Set“) mit dem inneren Set „DEMO-Karabinerbeutel“ (Set-Protokolle, Schritt 27).
 Alles, was das Skript anlegt, trägt das Kennzeichen demo und „DEMO“ im Namen – die Oberfläche zeigt
 es überall als „DEMO – nicht für echte Prüfungen“. Prüfpunkte, Intervalle, Lebensdauern und Hersteller
 sind Platzhalter: Der echte Katalog entsteht in Phase 0 mit den Sachkundigen und kommt über
@@ -151,7 +151,8 @@ def main():
 
 
 def demo_bestand(produkt):
-    """Die DEMO-Gliederung mit Lager, Fahrzeug und Seilrucksack und neun Artikeln – jeder Status kommt einmal vor."""
+    """Die DEMO-Gliederung mit Lager, Fahrzeug, Seilrucksack (Set) und darin dem Karabinerbeutel (inneres Set, Schritt 27:
+    Set-Protokolle verschachtelt) und zehn Artikeln – jeder Status kommt einmal vor."""
     from app.material.services import bestand, heute
     gl = bestand.ordner_anlegen({"name": GLIEDERUNG, "kind": "gliederung",
                                  "description": HINWEIS}, demo=True)
@@ -159,6 +160,7 @@ def demo_bestand(produkt):
     fahrzeug = bestand.ordner_anlegen({"name": "DEMO-Fahrzeug", "kind": "fahrzeug", "parent_id": gl,
                                        "interval_months": 6, "description": "Kürzeres Intervall als Beispiel"}, demo=True)
     rucksack = bestand.ordner_anlegen({"name": "DEMO-Seilrucksack", "kind": "set", "parent_id": fahrzeug}, demo=True)
+    beutel = bestand.ordner_anlegen({"name": "DEMO-Karabinerbeutel", "kind": "set", "parent_id": rucksack}, demo=True)
     h = heute()                      # Kalendertag in Deutschland, wie überall im Modul
     artikel = [
         ("DEMO Gurt A", lager, {"manufactured_on": f"{h.year - 2}-03", "first_use_on": (h - timedelta(days=200)).isoformat()}),
@@ -168,6 +170,7 @@ def demo_bestand(produkt):
                                               "purchased_on": (h - timedelta(days=500)).isoformat()}),  # überfällig
         ("DEMO HMS-Karabiner", rucksack, {"first_use_on": (h - timedelta(days=350)).isoformat()}),      # bald fällig
         ("DEMO HMS-Karabiner", rucksack, {}),
+        ("DEMO HMS-Karabiner", beutel, {}),
         ("DEMO HMS-Karabiner", lager, {"serial_no": "DEMO-K-0815"}),
         ("DEMO Helm", fahrzeug, {"manufactured_on": f"{h.year - 4}-06"}),
         ("DEMO Rettungsweste", fahrzeug, {"first_use_on": (h - timedelta(days=20)).isoformat()}),

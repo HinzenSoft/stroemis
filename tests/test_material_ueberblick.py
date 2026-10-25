@@ -237,8 +237,7 @@ AUSNAHMEN_LESEN = {
     "material.bestandsimport": 403,                # Bestandsimport nur, wer den Zielordner verwaltet (Phase 2 · L3)
     "material.nacharbeit_csv": 403,                # ebenso die Nacharbeit als CSV
     "material.meine_psa_artikel": 404,             # „Meine PSA“: der Führungskraft ist nichts zugeordnet (Phase 3 · L1)
-    # Vorschau „Stückliste übertragen“ nur für die Material-Verwaltung (24.10.2026, S7).
-    "material_api.stueckliste_uebertragen_vorschau": 403,
+    "material.setprotokoll": 404,                  # Set-Protokoll (Schritt 27): die Kennung 999999 gibt es nicht
 }
 # Werkzeuge der Katalogpflege (Katalogaustausch, Lieferung 4) sind nur für die Material-Verwaltung; den Katalog selbst
 # liest die Führungskraft über /kategorien und /produkte. Ebenso der Probelauf der Erinnerungsmails (Phase 2 · L2) und
@@ -345,7 +344,7 @@ def test_fuehrungskraft_nur_lesen():
         kennungen = {
             "kid": ids["gurte"], "did": did, "iid": a1["id"], "mid": mid, "aid": aid, "ruid": ruid, "anid": 999999, "token": token,
             "jahr": h.year,                                 # Jahresbericht (P4-L1): bericht-<jahr>.pdf, -pruefungen-<jahr>.csv
-            "gid": freigabe, "mfid": 999999,
+            "gid": freigabe, "mfid": 999999, "sid": 999999,      # Set-Protokoll (Schritt 27)
             "art": "web", "dateiname": bild.rsplit("/", 1)[1], "filename": "material.js",
             ("produkte", "pid"): ids["gurt"], ("produkt", "pid"): ids["gurt"],
             ("pruefungen", "pid"): entwurf, ("pruefung", "pid"): fest, ("punkte", "rid"): punkt,

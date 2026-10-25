@@ -4160,6 +4160,98 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Set-Protokolle im Prüfdurchgang (Wunsch des Nutzers, 25.10.2026)
+
+Teil des Wunsches zum Rückbau der Set-Funktion: „Implementiere dafür, dass wenn ein Prüfdurchgang einer Gliederung oder
+allgemein eines Ordners Unterordner, die ein Set sind, enthält, diese ein eigenes PDF für den Prüfdurchgang erhalten, wie
+bei einem Prüfdurchgang, der nur für diesen Set-Ordner angelegt wurde.“ Grundlage: `entwurf_set_rueckbau.md` Abschnitt 3.5
+mit den Entscheidungen F1 b, F2 b, F3 a, F4 a, F5 a. **Schemaschritt 27.**
+
+### Neu
+
+- **Sammelprotokoll (S-…)**: weiter alle Artikel des Durchgangs. Die Artikel eines Ordners der Art „Set“ stehen jetzt
+  sicher zusammen (sortiert wird nach der Folge der Ordner statt nach dem Pfadtext; auf jeder Ebene erst die Artikel,
+  dann Unterordner, dann Sets) unter einer **Zwischenzeile** „Set <Pfad> · n Artikel · Set-Protokoll T-…“ (sonst „kein
+  Set-Protokoll (nichts geprüft)“ bzw. „(Durchgang abgebrochen)“; nach einem inneren Set „(Fortsetzung)“) und mit einer
+  Kennlinie in der Nummernspalte. Neuer Abschnitt **„Set-Protokolle dieses Durchgangs“** hinter dem Verzeichnis der
+  Einzelprotokolle: Protokoll-ID, Set, Artikel, SHA-256 der Datei.
+- **Set-Protokoll (T-<jahr>-<nr>)** je Ordner der Art „Set“ **unterhalb** des Durchgangsordners – „wie ein Durchgang nur
+  für diesen Ordner“: Kopf mit Durchgang, Gliederung, eröffnet, abgeschlossen, **Set** (Pfad) und **„Teil von
+  Sammelprotokoll S-… (Ordner …)“**; Ergebnisübersicht und **„Prüfer in diesem Set“** (mit Urkunde und Unterschrift) nur
+  über seine Artikel; Artikelliste mit eigener Nummerierung; Verzeichnis der Einzelprotokolle dieses Sets. PDF/A-3b,
+  festgeschrieben mit eigener Prüfsumme und Stempel wie jedes Protokoll.
+  - **F1 b – alles darunter**: Ein Set-Protokoll enthält alle Artikel unterhalb des Set-Ordners, auch die innerer Sets (die
+    stehen zusätzlich im Protokoll des inneren Sets). Zugehörigkeit nach der Heimat beim Festschreiben (Gesperrte bei
+    ihrem Herkunftsordner); Artikel „aus dem Bereich verschoben“ in keinem Set-Protokoll. Ist der Durchgangsordner selbst
+    ein Set, ist das Sammelprotokoll „sein“ Protokoll – nur innere Sets bekommen eins; ein umgebendes Set nicht.
+  - **F2 b**: nur beim **regulären Abschluss** und nur, wenn im Set **mindestens ein Artikel geprüft** wurde – nicht beim
+    Abbruch, nicht bei „alles ausgenommen“.
+  - **F3 a**: eigene laufende Nummer mit Buchstaben T (Kennung der neuen Tabelle, AUTOINCREMENT).
+- Festgeschrieben in **derselben Transaktion** wie das Sammelprotokoll (erst alle Nummern, dann die Set-Protokolle, dann
+  das Sammelprotokoll mit ihren Prüfsummen). Scheitert eines, wird nichts festgeschrieben und keine neue Datei bleibt
+  liegen. Berichtigungen nach dem Abschluss ändern weder Sammel- noch Set-Protokoll (wie bisher). Journal am Durchgang
+  „festgeschrieben“ mit `set_protokolle` [{protocol_id, folder_id, file_sha256}]. Rechenzeit gemessen: 20 Sets à 10
+  Artikel schreiben in 12,9 s fest (unter der Schreibsperre, alle PDFs in der Transaktion) – unter der Grenze von 30 s
+  aus dem Entwurf, deshalb ohne Hintergrundauftrag.
+- **Oberfläche**: Durchgangsseite offen – der Satz über der Liste nennt die Zahl der Sets, die Rückfrage beim Abschließen
+  „… und n Set-Protokolle werden festgeschrieben“, der Toast „Durchgang abgeschlossen – Sammelprotokoll S-… und n
+  Set-Protokolle“. Geschlossen – neben „Sammelprotokoll (PDF)“ der graue Knopf **„Alle Protokolle (ZIP)“** und der
+  Abschnitt **„Set-Protokolle“** (Pfad des Sets als Link, wenn das Konto den Ordner sieht; Artikel; ID; „PDF“).
+  **Ordnerseite eines Sets**: Abschnitt **„Sammelprotokolle“** unter der Artikelliste (Set-Protokolle dieses Ordners und
+  Sammelprotokolle der Durchgänge, die für ihn eröffnet wurden; neueste zuerst, höchstens 20).
+- **Rechte (F4 a)**: Ein Set-Protokoll öffnet, wer den Durchgang sehen darf (Leserecht am Durchgangsordner) **und
+  zusätzlich, wer den Set-Ordner lesen darf**; das Sammelprotokoll und das ZIP nur, wer den Durchgang sieht. Fremdes und
+  Unbekanntes 404, ohne Modulzugang 403.
+- **ZIP „Alle Protokolle“ (F5 a)**: Sammelprotokoll, alle Set-Protokolle und `Verzeichnis.csv` (Spalten wie im
+  Protokoll-Export des Ordners). Der **Protokoll-Export eines Ordners** nimmt zusätzlich die Set-Protokolle der
+  Set-Ordner in seinem Zweig auf (Ordner „Sammelprotokolle“, Art „Sammelprotokoll (Set)“).
+- **Prüfseite** erkennt Set-Protokolle („Sammelprotokoll (Set)“); der Nummernschutz beim Start hebt auch den Zähler der
+  Set-Protokolle über die höchste T-Nummer in der Ablage; `verwaiste_beiseite` kennt ihre Dateien.
+- **DEMO**: Ein frischer DEMO-Bestand hat im „DEMO-Seilrucksack“ (Set) das innere Set „DEMO-Karabinerbeutel“ mit einem
+  DEMO HMS-Karabiner (zum Ausprobieren „verschachtelt“).
+
+### Schemaschritt 27
+
+- Neue Tabelle `mat_round_setprotokoll` (Kennung AUTOINCREMENT = Nummer, round_id, folder_id ohne ON DELETE, ordner –
+  Pfad beim Festschreiben –, artikel, protocol_id UNIQUE, locked_at, pdf_path, pdf_sha256, pdf_hashed_bytes, file_sha256,
+  UNIQUE (round_id, folder_id)) und Index auf folder_id. Trigger: Einfügen nur an einem geschlossenen, nicht abgebrochenen
+  Durchgang, dessen Sammelprotokoll noch nicht festgeschrieben ist (also nur in `durchgang_festschreiben`), kein REPLACE
+  über die Kennung, kein UPDATE, kein DELETE. Rein additiv, wiederholbar; frisch = migriert (Test).
+- Einen Ordner mit Set-Protokoll löscht man nicht (409 „Für diesen Ordner gibt es Set-Protokolle aus Prüfdurchgängen –
+  er bleibt.“).
+- **Rückweg**: Ein Stand vor 27 ignoriert die Tabelle; die Set-Protokolldateien lägen dort aber ohne bekannte Zeile und
+  wanderten beim nächsten Start nach `pdf/verwaist/` (verwaiste_beiseite des alten Stands). Zurück daher nur über die
+  Sicherung vor dem Deploy (wie bei Schritt 26).
+
+### Schnittstelle
+
+| Route | Neu |
+|---|---|
+| `GET /api/material/durchgaenge/<rid>` | geschlossen: `set_protokolle` [{id, protokoll (wie protokoll_json), ordner, folder_id, ordner_sichtbar, artikel}]; offen (voll): `set_ordner` {anzahl, mit_pruefung} – Sets mit Zeilen bzw. mit Geprüftem, Stand jetzt. Auch die Antwort von `…/abschliessen` und `…/abbrechen` trägt `set_protokolle` |
+| `GET /material/durchgang/<rid>/set/<sid>.pdf` | ein Set-Protokoll (angemeldet, Prüfsumme, im Browser; Rechte F4 a) |
+| `GET /material/durchgang/<rid>/protokolle.zip` | Sammelprotokoll + Set-Protokolle + Verzeichnis.csv; nur wer den Durchgang sieht |
+| `GET /api/material/ordner/<fid>` | an einem Ordner der Art „Set“: `sammelprotokolle` [{art „set“ \| „sammel“, protokoll, durchgang {id, titel, sichtbar}, geschlossen_am}] |
+| `GET /material/export/<fid>-protokolle.zip` | dazu die Set-Protokolle der Set-Ordner im Zweig |
+
+### Tests
+
+- Neu `tests/test_material_setprotokolle.py`: Gliederung mit Set A (Tasche, inneres Set B), Set C, Lager › Set D (nur
+  ausgenommen), Set E (leer), gesperrter Artikel mit Herkunft A, ein Artikel aus dem Bereich verschoben → 1 S + 3 T,
+  Inhalt je PDF (F1 b), Nummern, Haupt-PDF mit Zwischenzeilen, zusammenhängend und Verzeichnis (SHA-256 = file_sha256),
+  Journal; Durchgang für Set A → S + T(B); Abbruch → kein T; Fehler beim Rendern → nichts festgeschrieben, keine Datei;
+  Schritt 27 (Tabelle, Trigger, 26 → 27, zweiter Lauf); Ordner löschen 409; Prüfseite; Nummernschutz; Rechte je Rolle
+  (Leser nur am Set, Leser am Durchgang, fremde Gliederung, ohne Modul); Ordnerseite; ZIP des Durchgangs und
+  Ordner-Export; statisch die Oberfläche.
+
+### Bitte bestätigen
+
+1. Titel des Set-Protokolls „Sammelprotokoll“ mit der Unterzeile „Set <Name> · <Durchgang>“ (Prüfseite: „Sammelprotokoll
+   (Set)“) – wie im Entwurf.
+2. Die Zwischenzeilen im Sammelprotokoll nennen den vollen Pfad des Sets; nach einem inneren Set steht das äußere mit
+   „(Fortsetzung)“, wenn danach noch Artikel des äußeren folgen.
+3. Wird ein Set-Ordner später in eine andere Gliederung verschoben, öffnen seine neuen Leser auch seine alten
+   Set-Protokolle (F4 a hängt am Ordner, nicht an der Gliederung des Durchgangs).
+
 ## Rückbau der Set-Funktion (Wunsch des Nutzers, 25.10.2026)
 
 Wunsch des Nutzers (25.10.2026), wörtlich: „Ich hab es mir anders überlegt. Entferne die Set Funktion komplett. Entferne

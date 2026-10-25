@@ -1179,7 +1179,7 @@ def test_nichts_aus_b():
         app, w, ids = t.app, t.wart_a, t.ids
         form = zeilen(app, "SELECT id FROM mat_form ORDER BY id LIMIT 1")[0]["id"]
         kennungen = {"iid": t.art_b["id"], "mid": b.meldung, "aid": b.anhang_id, "token": b.token, "gid": b.freigabe,
-                     "kid": ids["karabiner"], "did": 999999, "ruid": 999999, "anid": 999999, "filename": "material.js",
+                     "kid": ids["karabiner"], "did": 999999, "ruid": 999999, "anid": 999999, "filename": "material.js", "sid": 999999,
                      "jahr": _heute().year,                 # Jahresbericht (P4-L1) über („ordner“/„export“, fid)
                      "art": "web", "dateiname": "x.jpg", "mfid": b.mailfehler,
                      ("produkte", "pid"): ids["hms"], ("produkt", "pid"): ids["hms"],

@@ -72,6 +72,25 @@ def export_protokolle(fid):
     return _privat(send_file(buf, mimetype="application/zip", as_attachment=True, download_name=name))
 
 
+@seiten.get("/material/durchgang/<int:rid>/protokolle.zip")
+def durchgang_protokolle(rid):
+    """„Alle Protokolle“ eines Durchgangs (Schritt 27, F5 a): Sammelprotokoll, Set-Protokolle und Verzeichnis.csv – wer
+    den Durchgang sieht (Leserecht an seinem Ordner, wie das Sammelprotokoll)."""
+    u = current_user()
+    if not u:
+        return redirect(url_for("pages.login", next=request.path))
+    if not zugang(u):
+        return _fehler(Abgelehnt(zugang_meldung(u), 403))
+    try:
+        bezug = _bezug("rid", {"rid": rid})
+        if not darf("lesen", bezug.ordner_id):
+            raise Abgelehnt(bezug.meldung, 404)
+        buf, name = export.durchgang_zip(rid)
+    except Abgelehnt as exc:
+        return _fehler(exc)
+    return _privat(send_file(buf, mimetype="application/zip", as_attachment=True, download_name=name))
+
+
 @seiten.get("/material/artikel/<int:iid>/lebenslauf.pdf")
 def lebenslauf_pdf(iid):
     """Lebenslauf eines Artikels als PDF – im Browser geöffnet wie die Protokolle, aber auf Abruf gesetzt und nicht

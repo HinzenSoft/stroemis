@@ -60,6 +60,12 @@ def trigger_26():
     return neu, set(models.TRIGGER_WEG_26)
 
 
+def trigger_27():
+    """Die Trigger aus Schritt 27 (Set-Protokolle im Prüfdurchgang)."""
+    from app.material import models
+    return {x.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0] for x in models.TRIGGER_27}
+
+
 def trigger_25(nur_antrag=False):
     """Die Trigger aus Schritt 25 (Bestandteil-Liste, Seriennummern der Bestandteile) – zwei ersetzen gleichnamige aus
     Schritt 21. nur_antrag: nur die, die mat_item_change lesen (wer die Tabelle entfernt, entfernt sie mit)."""
@@ -746,12 +752,13 @@ def _schema(pfad):
 
 
 def _zahlen(pfad):
-    """Zeilen je mat_-Tabelle – ohne mat_item_set_slot (entfällt mit Schritt 26; in den Altständen hier leer)."""
+    """Zeilen je mat_-Tabelle – ohne mat_item_set_slot (entfällt mit Schritt 26) und mat_round_setprotokoll (kommt mit
+    Schritt 27); in den Altständen hier beide leer."""
     conn = sqlite3.connect(pfad)
     try:
         return {n: conn.execute(f"SELECT COUNT(*) FROM {n}").fetchone()[0] for (n,) in conn.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'mat%' AND name NOT LIKE '%fts%' "
-            "AND name <> 'mat_item_set_slot'")}
+            "AND name NOT IN ('mat_item_set_slot', 'mat_round_setprotokoll')")}
     finally:
         conn.close()
 
@@ -1446,7 +1453,7 @@ def test_migration_17():
         # Seriennummern der Bestandteile.
         # 26: die Wächter des Rückbaus statt der entfallenen Set-Trigger.
         neu_26, weg_26 = trigger_26()
-        erwartet = (set(t16) | TRIGGER_17 | TRIGGER_19 | trigger_21() | TRIGGER_23 | trigger_25() | neu_26) - weg_26
+        erwartet = (set(t16) | TRIGGER_17 | TRIGGER_19 | trigger_21() | TRIGGER_23 | trigger_25() | neu_26 | trigger_27()) - weg_26
         assert v17 == endversion() and set(t17) == erwartet, set(t17) ^ erwartet
         assert t17["mat_item_stammdaten_fest"] != t16["mat_item_stammdaten_fest"]
         assert t17["mat_item_antrag_angewendet"] != t16["mat_item_antrag_angewendet"]          # seit Schritt 23 alle Felder

@@ -331,6 +331,8 @@ def ordner_loeschen(fid):
         raise Abgelehnt("Im Ordner liegen noch Artikel (auch gesperrte oder ausgesonderte zählen).", 409)
     if db.query(f"SELECT 1 FROM mat_round WHERE folder_id IN ({marken}) LIMIT 1", betroffen, one=True):
         raise Abgelehnt("Für diesen Ordner gibt es Prüfdurchgänge – er bleibt.", 409)
+    if db.query(f"SELECT 1 FROM mat_round_setprotokoll WHERE folder_id IN ({marken}) LIMIT 1", betroffen, one=True):
+        raise Abgelehnt("Für diesen Ordner gibt es Set-Protokolle aus Prüfdurchgängen – er bleibt.", 409)
     # Offene Nacharbeit eines Bestandsimports in diesen Ordner verschwände sonst samt Produktwahl und Meldungsbezug ohne
     # Journal (mat_import hängt mit ON DELETE CASCADE am Ordner); Erledigtes geht mit, der Nachweis steht im Journal.
     if db.query("SELECT 1 FROM mat_import_row r JOIN mat_import i ON i.id = r.import_id WHERE i.folder_id = ? "
@@ -1166,7 +1168,33 @@ def ordner_inhalt(fid, status_filter=None, seite=1, pro_seite=100, sort=None, ri
     # Offene Zeilen der Nacharbeit aus Bestandsimporten mit genau diesem Zielordner – nur für Verwalter (sonst null).
     from .bestandsimport import offen_im_ordner
     out["nacharbeit"] = offen_im_ordner(fid) if darf["verwalten"] else None
+    if o["kind"] == "set" and not o["system_kind"]:
+        out["sammelprotokolle"] = sammelprotokolle_set(fid)
     return out
+
+
+SAMMELPROTOKOLLE_MAX = 20
+
+
+def sammelprotokolle_set(fid):
+    """Ordnerseite eines Sets (Schritt 27): seine Set-Protokolle und die Sammelprotokolle der Durchgänge, die für ihn
+    eröffnet wurden, neueste zuerst, höchstens SAMMELPROTOKOLLE_MAX. Öffnen darf beide, wer den Ordner liest
+    (Entscheidung F4 a); der Durchgang als Link nur, wenn das Konto seinen Ordner sieht."""
+    from . import protokoll
+    rows = db.query(
+        "SELECT 'set' AS art, s.id, s.round_id, s.protocol_id, s.locked_at, s.pdf_path, s.pdf_sha256, s.pdf_hashed_bytes, "
+        "s.file_sha256, r.title, r.folder_id AS runde_ordner, r.closed_on FROM mat_round_setprotokoll s "
+        "JOIN mat_round r ON r.id = s.round_id WHERE s.folder_id = :fid "
+        "UNION ALL SELECT 'sammel', r.id, r.id, r.protocol_id, r.locked_at, r.pdf_path, r.pdf_sha256, r.pdf_hashed_bytes, "
+        "r.file_sha256, r.title, r.folder_id, r.closed_on FROM mat_round r WHERE r.folder_id = :fid "
+        "AND r.locked_at IS NOT NULL ORDER BY locked_at DESC, art LIMIT :n", {"fid": fid, "n": SAMMELPROTOKOLLE_MAX})
+    s = rechte.sicht()
+    return [{"art": x["art"], "geschlossen_am": x["closed_on"],
+             "protokoll": protokoll.protokoll_json(x, f"/material/durchgang/{x['round_id']}/set/{x['id']}.pdf"
+                                                   if x["art"] == "set" else
+                                                   f"/material/durchgang/{x['round_id']}/sammelprotokoll"),
+             "durchgang": {"id": x["round_id"], "titel": x["title"], "sichtbar": s.sichtbar(x["runde_ordner"])}}
+            for x in rows]
 
 
 # Fällig ist, was vor dem nächsten Einsatz ein Prüfer in die Hand nehmen muss: überfällig, Lebensdauer erreicht

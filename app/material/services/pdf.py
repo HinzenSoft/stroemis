@@ -29,7 +29,7 @@ from urllib.parse import unquote, urlsplit
 from flask import current_app
 
 PDF_VARIANTE = "pdf/a-3b"
-VORLAGEN = ("pruefprotokoll", "aussonderungsprotokoll", "sammelprotokoll", "lebenslauf", "bericht")
+VORLAGEN = ("pruefprotokoll", "aussonderungsprotokoll", "sammelprotokoll", "setprotokoll", "lebenslauf", "bericht")
 SCHRIFT_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
                                             "static", "fonts"))
 JPEG_QUALITAET = 85
@@ -241,7 +241,7 @@ def _vorlagen():
 
 def rendern(vorlage, daten):
     """Ein Protokoll als PDF/A-3b (bytes). vorlage ist „pruefprotokoll“, „aussonderungsprotokoll“,
-    „sammelprotokoll“, „lebenslauf“ oder „bericht“ (Jahresbericht je Zweig, bericht.py), daten das fertig formatierte
+    „sammelprotokoll“, „setprotokoll“ (Schritt 27), „lebenslauf“ oder „bericht“ (Jahresbericht je Zweig, bericht.py), daten das fertig formatierte
     dict dazu (dokument, artikel, pruefung, …). Braucht einen Flask-App-Kontext, keine Anfrage."""
     if vorlage not in VORLAGEN:
         raise ValueError(f"Unbekannte Protokollvorlage: {vorlage}")

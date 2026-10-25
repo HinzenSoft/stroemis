@@ -225,13 +225,19 @@ Feldnamen folgen dem Konzept vom 16.10.2026 (englisch, wie dort festgelegt). Abw
     (mat_component_neu/aendern ersetzt), neue Set-Prüfläufe und set_lauf_id. Akteur im Journal „Migration Schritt 26“.
     Wiederholbar: jede Änderung nur am Altzustand, Trigger entfernt und neu, DROP … IF EXISTS. Rückweg nur über die
     Sicherung vor dem Deploy (älterer Code fände mat_item_set_slot nicht mehr).
+  - Schritt 27 (Set-Protokolle im Prüfdurchgang, Wunsch vom 25.10.2026): mat_round_setprotokoll – je Ordner der Art
+    „Set“ unterhalb des Durchgangsordners ein festgeschriebenes Protokoll T-<jahr>-<nr> (Nummer = Kennung,
+    AUTOINCREMENT) mit Pfad, Zahl der Artikel und Prüfsummen; Einfügen nur beim Festschreiben eines regulär
+    abgeschlossenen Durchgangs, danach unveränderlich (TRIGGER_27). folder_id ohne ON DELETE (ein Set-Ordner mit
+    Set-Protokoll bleibt). Rein additiv, wiederholbar. Rückweg: ältere Stände ignorieren die Tabelle, ihre
+    verwaiste_beiseite legte die Dateien beiseite – zurück nur über die Sicherung.
 """
 import json
 import re
 import sqlite3
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = 26
+SCHEMA_VERSION = 27
 
 # --- Wertelisten -------------------------------------------------------------------------------
 # Was die Datenbank per CHECK erzwingt, steht hier ein zweites Mal – mit den Wörtern, die die
@@ -2560,6 +2566,55 @@ def _schritt_26(conn):
         conn.execute(sql)
 
 
+# --- Schritt 27: Set-Protokolle im Prüfdurchgang (Wunsch vom 25.10.2026) ---------------------------------------------------
+# Je Ordner der Art „Set“ unterhalb des Durchgangsordners ein eigenes festgeschriebenes Protokoll (T-<jahr>-<nr>) mit
+# allen Artikeln darunter (auch die innerer Sets, Entscheidung F1 b) – nur beim regulären Abschluss und nur, wenn im Set
+# mindestens ein Artikel geprüft wurde (F2 b). Eigene Tabelle statt Kind-Durchgängen in mat_round: sonst müsste jede
+# Abfrage über Durchgänge sie wieder herausfiltern (Übersicht, Jahresbericht, Lebenslauf). Die Nummer ist die Kennung
+# (AUTOINCREMENT, nie zweimal vergeben). folder_id ohne ON DELETE: Ein Set-Ordner mit Set-Protokoll lässt sich nicht
+# löschen (der Dienst antwortet vorher 409, bestand.ordner_loeschen). ordner: der Pfad beim Festschreiben.
+SETPROTOKOLL_27 = [
+    """CREATE TABLE IF NOT EXISTS mat_round_setprotokoll (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      round_id         INTEGER NOT NULL REFERENCES mat_round(id),
+      folder_id        INTEGER NOT NULL REFERENCES mat_folder(id),
+      ordner           TEXT NOT NULL,
+      artikel          INTEGER NOT NULL CHECK (artikel >= 1),
+      protocol_id      TEXT NOT NULL UNIQUE,
+      locked_at        TEXT NOT NULL,
+      pdf_path         TEXT NOT NULL,
+      pdf_sha256       TEXT NOT NULL,
+      pdf_hashed_bytes INTEGER NOT NULL,
+      file_sha256      TEXT NOT NULL,
+      UNIQUE (round_id, folder_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_mat_setprotokoll_ordner ON mat_round_setprotokoll(folder_id)",
+]
+# Einfügen nur beim Festschreiben eines regulär abgeschlossenen Durchgangs (geschlossen, nicht abgebrochen, Sammelprotokoll
+# noch nicht festgeschrieben – durchgang_festschreiben schreibt die Set-Protokolle vor dem Sammelprotokoll); danach nie
+# ändern, nie löschen, auch nicht per INSERT OR REPLACE über die Kennung.
+SETPROTOKOLL_FEST = ("'Ein Set-Protokoll entsteht nur beim regulären Abschluss eines Prüfdurchgangs und ist danach "
+                     "unveränderlich.'")
+TRIGGER_27 = [
+    _trigger("mat_setprotokoll_neu", "BEFORE INSERT ON mat_round_setprotokoll",
+             "EXISTS (SELECT 1 FROM mat_round_setprotokoll s WHERE s.id = NEW.id) "
+             "OR NOT EXISTS (SELECT 1 FROM mat_round r WHERE r.id = NEW.round_id AND r.closed_on IS NOT NULL "
+             "AND r.aborted = 0 AND r.locked_at IS NULL)", SETPROTOKOLL_FEST),
+    _trigger("mat_setprotokoll_aendern", "BEFORE UPDATE ON mat_round_setprotokoll", "1", SETPROTOKOLL_FEST),
+    _trigger("mat_setprotokoll_loeschen", "BEFORE DELETE ON mat_round_setprotokoll", "1", SETPROTOKOLL_FEST),
+]
+
+
+def _schritt_27(conn):
+    """Set-Protokolle im Prüfdurchgang: die Tabelle, ihr Index und die Trigger (entfernt und neu). Rein additiv; ein
+    zweiter Lauf ändert nichts."""
+    for sql in SETPROTOKOLL_27:
+        conn.execute(sql)
+    for sql in TRIGGER_27:
+        conn.execute("DROP TRIGGER IF EXISTS " + sql.split("CREATE TRIGGER IF NOT EXISTS ", 1)[1].split()[0])
+        conn.execute(sql)
+
+
 # Je Version die Schritte, die von der Vorversion dorthin führen: eine Liste von SQL-Befehlen (für sich
 # wiederholbar, IF NOT EXISTS) oder eine Funktion. Alle Schritte eines Starts laufen in EINER
 # Transaktion – bricht einer ab, bleibt die Datenbank, wie sie war, und der nächste Start versucht es neu.
@@ -2567,7 +2622,7 @@ SCHRITTE = {1: SCHRITT_1, 2: _schritt_2, 3: _schritt_3, 4: SCHRITT_4, 5: _schrit
             8: _schritt_8, 9: _schritt_9, 10: _schritt_10, 11: _schritt_11, 12: _schritt_12, 13: _schritt_13,
             14: _schritt_14, 15: _schritt_15, 16: _schritt_16, 17: _schritt_17, 18: SCHRITT_18, 19: SCHRITT_19,
             20: _schritt_20, 21: _schritt_21, 22: _schritt_22, 23: _schritt_23, 24: _schritt_24,
-            25: _schritt_25, 26: _schritt_26}
+            25: _schritt_25, 26: _schritt_26, 27: _schritt_27}
 
 
 def _meta(conn, schluessel, vorgabe=None):

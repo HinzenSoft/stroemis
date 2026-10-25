@@ -6,7 +6,8 @@ im Ordner oder darunter liegt – wie beim Eröffnen eines Prüfdurchgangs. Gesp
 ausgesonderte zählen also bei ihrem Herkunftsordner, auch wenn sie in „Gesperrt“ oder „Ausgesondert“ liegen;
 Ausgesonderte ohne Herkunft (vor Schritt 8 ausgesondert, Herkunftsordner gelöscht) gehören zur Gliederung. Protokolle
 wandern mit dem Artikel: Im ZIP stehen die Protokolle der Artikel, die heute zum Ordner gehören, dazu die
-Sammelprotokolle der Durchgänge, die für den Ordner oder einen seiner Unterordner eröffnet wurden. Exportieren darf nur,
+Sammelprotokolle der Durchgänge, die für den Ordner oder einen seiner Unterordner eröffnet wurden, und seit Schritt 27
+die Set-Protokolle der Set-Ordner im Zweig. Exportieren darf nur,
 wer das Grundrecht am Ordner hat (routes_export) – damit sieht er alles, was dazu gehört, auch die Spalte
 „Zugeordnet an“.
 
@@ -203,6 +204,57 @@ def _groesse_text(n):
     return f"{n // 1024 ** 3} GB" if n >= 1024 ** 3 else f"{max(1, n // 1024 ** 2)} MB"
 
 
+def _sammel_zeile(r, name, zustand):
+    """Zeile des Verzeichnisses für ein Sammelprotokoll."""
+    return [r["protocol_id"], "Sammelprotokoll", "", datum_text(r["closed_on"]), zeit_text(r["locked_at"]), "", "", "",
+            r["title"], r["closed_by_name"], "", "abgebrochen" if r["aborted"] else "abgeschlossen", "", name,
+            r["file_sha256"], r["pdf_sha256"], r["pdf_hashed_bytes"], zustand, "", "", "ja" if r["ordner_demo"] else "nein"]
+
+
+def _set_zeile(s, name, zustand):
+    """Zeile des Verzeichnisses für ein Set-Protokoll (Schritt 27); „Grund“ nennt das Set."""
+    return [s["protocol_id"], "Sammelprotokoll (Set)", "", datum_text(s["closed_on"]), zeit_text(s["locked_at"]), "", "", "",
+            s["title"], s["closed_by_name"], "", "abgeschlossen", f"Set {s['ordner']} ({s['artikel']} Artikel)", name,
+            s["file_sha256"], s["pdf_sha256"], s["pdf_hashed_bytes"], zustand, "", "", "ja" if s["ordner_demo"] else "nein"]
+
+
+def _zip_schreiben(zeilen, dateien):
+    """Das ZIP (Verzeichnis.csv und die Dateien) in eine temporäre Datei unter TMP_DIR; liefert sie geöffnet."""
+    buf = tempfile.TemporaryFile(dir=current_app.config["TMP_DIR"])
+    try:
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
+            info = zipfile.ZipInfo("Verzeichnis.csv", date_time=datetime.now(ZONE).timetuple()[:6])
+            z.writestr(info, csv_bytes(VERZEICHNIS_SPALTEN, zeilen))
+            for pfad, name in dateien:
+                z.write(pfad, name)
+    except BaseException:
+        buf.close()
+        raise
+    buf.seek(0)
+    return buf
+
+
+def durchgang_zip(rid):
+    """„Alle Protokolle“ eines Durchgangs (Schritt 27, Entscheidung F5 a): Sammelprotokoll und Set-Protokolle mit
+    Verzeichnis.csv – (offene temporäre Datei, Dateiname). Ohne Sammelprotokoll 404. Fehlt eine Datei oder ist sie
+    verändert, sagt es ihre Zeile (wie protokolle_zip)."""
+    r = db.query("SELECT r.*, " + bestand.demo_ordner_sql("r.folder_id") + " AS ordner_demo FROM mat_round r "
+                 "WHERE r.id = ?", (rid,), one=True)
+    if not r or not r["locked_at"]:
+        raise Abgelehnt("Zu diesem Durchgang gibt es noch kein Sammelprotokoll.", 404)
+    sets = db.query("SELECT s.*, r.title, r.closed_on, r.closed_by_name, "
+                    f"{bestand.demo_ordner_sql('s.folder_id')} AS ordner_demo FROM mat_round_setprotokoll s "
+                    "JOIN mat_round r ON r.id = s.round_id WHERE s.round_id = ? ORDER BY s.id", (rid,))
+    zeilen, dateien = [], []
+    for row, art, ordner in [(r, "sammel", "Sammelprotokolle")] + [(s, "set", "Set-Protokolle") for s in sets]:
+        pfad, zustand = _datei_pruefen(row)
+        name = _im_zip(ordner, row) if pfad else ""
+        if pfad:
+            dateien.append((pfad, name))
+        zeilen.append(_sammel_zeile(row, name, zustand) if art == "sammel" else _set_zeile(row, name, zustand))
+    return _zip_schreiben(zeilen, dateien), f"Protokolle_{dateiname(r['title'])}_{r['protocol_id']}.zip"
+
+
 def protokolle_zip(fid):
     """(offene temporäre Datei mit dem ZIP, Dateiname, Zahlen): alle festgeschriebenen Prüf- und
     Aussonderungsprotokolle der Artikel des Ordners – auch berichtigte Originale samt ihrer Berichtigung –, die
@@ -221,6 +273,12 @@ def protokolle_zip(fid):
         "FROM mat_round r JOIN mat_folder o ON o.id = r.folder_id "
         f"WHERE r.closed_on IS NOT NULL AND {zweig.replace('i.folder_id IN', 'r.folder_id IN', 1)} "
         "ORDER BY r.closed_on, r.id", zargs)
+    # Set-Protokolle (Schritt 27) der Set-Ordner im Zweig.
+    set_protokolle = db.query(
+        "SELECT s.*, r.title, r.closed_on, r.closed_by_name, "
+        f"{bestand.demo_ordner_sql('s.folder_id')} AS ordner_demo FROM mat_round_setprotokoll s "
+        f"JOIN mat_round r ON r.id = s.round_id WHERE {zweig.replace('i.folder_id IN', 's.folder_id IN', 1)} "
+        "ORDER BY s.id", zargs)
     protokoll_von = {x["id"]: x["protocol_id"] or "(ohne Protokoll)" for x in pruefungen}
     berichtigt_durch = {x["corrects_inspection_id"]: protokoll_von[x["id"]] for x in pruefungen if x["corrects_inspection_id"]}
     zeilen, dateien, gesamt = [], [], 0
@@ -252,23 +310,12 @@ def protokolle_zip(fid):
             "ja" if x["artikel_demo"] else "nein"])
     for r in runden:
         name, zustand = aufnehmen(r, "Sammelprotokolle")
-        zeilen.append([
-            r["protocol_id"], "Sammelprotokoll", "", datum_text(r["closed_on"]), zeit_text(r["locked_at"]), "", "", "",
-            r["title"], r["closed_by_name"], "", "abgebrochen" if r["aborted"] else "abgeschlossen", "", name,
-            r["file_sha256"], r["pdf_sha256"], r["pdf_hashed_bytes"], zustand, "", "", "ja" if r["ordner_demo"] else "nein"])
+        zeilen.append(_sammel_zeile(r, name, zustand))
+    for s in set_protokolle:
+        name, zustand = aufnehmen(s, "Sammelprotokolle")
+        zeilen.append(_set_zeile(s, name, zustand))
     if zaehler["fehlt"] or zaehler["verändert"]:
         # Welche Dateien, steht schon im Protokoll der App (protokoll.datei); hier die Zusammenfassung des Exports.
         current_app.logger.warning("Protokoll-Export Ordner %s: %d Protokolldateien fehlen, %d sind verändert – im "
                                    "Verzeichnis vermerkt", fid, zaehler["fehlt"], zaehler["verändert"])
-    buf = tempfile.TemporaryFile(dir=current_app.config["TMP_DIR"])
-    try:
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
-            info = zipfile.ZipInfo("Verzeichnis.csv", date_time=datetime.now(ZONE).timetuple()[:6])
-            z.writestr(info, csv_bytes(VERZEICHNIS_SPALTEN, zeilen))
-            for pfad, name in dateien:
-                z.write(pfad, name)
-    except BaseException:
-        buf.close()
-        raise
-    buf.seek(0)
-    return buf, f"Protokolle_{dateiname(o['name'])}_{heute().isoformat()}.zip", zaehler
+    return _zip_schreiben(zeilen, dateien), f"Protokolle_{dateiname(o['name'])}_{heute().isoformat()}.zip", zaehler

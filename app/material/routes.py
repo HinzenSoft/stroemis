@@ -230,10 +230,11 @@ def durchgang_seite(rid):
     return _seite("durchgang", bezug=("durchgang", rid), id=rid)
 
 
-def _protokoll_senden(row, quelle, kennung_wert, inventarnummer=None):
+def _protokoll_senden(row, quelle, kennung_wert, inventarnummer=None, auch=()):
     """Ein festgeschriebenes Protokoll ausliefern – nur an Angemeldete, die den Artikel (über seine Heimat) bzw. den
-    Durchgang sehen dürfen, und nur, wenn die Datei noch genau die festgeschriebene ist (Prüfsumme). Fremdes antwortet
-    wie Unbekanntes mit 404. Im Browser geöffnet, nicht heruntergeladen."""
+    Durchgang sehen dürfen (oder einen der Ordner in auch lesen – das Set-Protokoll, F4 a), und nur, wenn die Datei noch
+    genau die festgeschriebene ist (Prüfsumme). Fremdes antwortet wie Unbekanntes mit 404. Im Browser geöffnet, nicht
+    heruntergeladen."""
     u = current_user()
     if not u:
         return redirect(url_for("pages.login", next=request.path))
@@ -241,7 +242,7 @@ def _protokoll_senden(row, quelle, kennung_wert, inventarnummer=None):
         return _fehlerseite(403, zugang_meldung(u))
     try:
         b = _bezug(quelle, {quelle: kennung_wert})
-        if not darf("lesen", b.ordner_id):
+        if not darf("lesen", b.ordner_id) and not any(darf("lesen", f) for f in auch):
             raise Abgelehnt(b.meldung, 404)
         if not row:
             abort(404)
@@ -269,6 +270,13 @@ def pruefung_pdf(pid):
 def sammelprotokoll(rid):
     row = db.query("SELECT * FROM mat_round WHERE id = ? AND locked_at IS NOT NULL", (rid,), one=True)
     return _protokoll_senden(row, "rid", rid)
+
+
+@seiten.get("/material/durchgang/<int:rid>/set/<int:sid>.pdf")
+def setprotokoll(rid, sid):
+    """Ein Set-Protokoll (Schritt 27): wer den Durchgang sieht – und, wer den Set-Ordner lesen darf (F4 a)."""
+    row = db.query("SELECT * FROM mat_round_setprotokoll WHERE id = ? AND round_id = ?", (sid, rid), one=True)
+    return _protokoll_senden(row, "rid", rid, auch=(row["folder_id"],) if row else ())
 
 
 @seiten.get("/material/pruefen")

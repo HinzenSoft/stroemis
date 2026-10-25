@@ -8,9 +8,10 @@ SHA-256 geht über diese N Bytes, und ein inkrementelles Update setzt den Stempe
 sie mit der Sicherung wandert –, schreibgeschützt und nie überschrieben. In der Datenbank stehen
 pdf_sha256 (aufgedruckter Wert), pdf_hashed_bytes (N) und file_sha256 (die ganze Datei mit Stempel).
 
-Protokoll-IDs: P-<jahr>-<nr> (Prüfung), A-<jahr>-<nr> (Aussonderung), S-<jahr>-<nr> (Sammelprotokoll); die
-Nummer ist die Kennung der Prüfung bzw. des Durchgangs (AUTOINCREMENT, nie zweimal vergeben), das Jahr das
-des Festschreibens. Die Lücken zwischen den Nummern sind verworfene Entwürfe, keine fehlenden Protokolle.
+Protokoll-IDs: P-<jahr>-<nr> (Prüfung), A-<jahr>-<nr> (Aussonderung), S-<jahr>-<nr> (Sammelprotokoll), seit Schritt
+27 T-<jahr>-<nr> (Set-Protokoll eines Set-Ordners im Durchgang); die Nummer ist die Kennung der Prüfung, des
+Durchgangs bzw. der Zeile in mat_round_setprotokoll (AUTOINCREMENT, nie zweimal vergeben), das Jahr das des
+Festschreibens. Die Lücken zwischen den Nummern sind verworfene Entwürfe, keine fehlenden Protokolle.
 
 Scheitert die Transaktion nach dem Schreiben einer Datei, löscht dateien_sichern() sie wieder – sonst
 lägen PDFs ohne Datenbankzeile herum."""
@@ -26,9 +27,9 @@ from pypdf import PdfReader
 from ... import db
 from ..models import ANHANGARTEN, DOKUMENTARTEN, ERGEBNISSE, MATERIALARTEN
 from . import ZONE, Abgelehnt, bestand, journal, katalog, laenge_text, qr, stempel
-VORSATZ = {"pruefprotokoll": "P", "aussonderungsprotokoll": "A", "sammelprotokoll": "S"}
+VORSATZ = {"pruefprotokoll": "P", "aussonderungsprotokoll": "A", "sammelprotokoll": "S", "setprotokoll": "T"}
 TITEL = {"pruefprotokoll": "Prüfprotokoll", "aussonderungsprotokoll": "Aussonderungsprotokoll",
-         "sammelprotokoll": "Sammelprotokoll"}
+         "sammelprotokoll": "Sammelprotokoll", "setprotokoll": "Sammelprotokoll"}
 PRUEFART_TEXT = {"eingang": "Eingangsprüfung", "periodisch": "periodische Prüfung",
                  "ausserplanmaessig": "außerplanmäßige Prüfung", "reparatur": "Prüfung nach Reparatur",
                  "aussonderung": "Aussonderung"}
@@ -151,6 +152,8 @@ def verwaiste_beiseite(conn):
     try:
         bekannt = {r[0] for r in conn.execute("SELECT pdf_path FROM mat_inspection WHERE pdf_path IS NOT NULL "
                                               "UNION SELECT pdf_path FROM mat_round WHERE pdf_path IS NOT NULL")}
+        if _tabelle_da(conn, "mat_round_setprotokoll"):
+            bekannt |= {r[0] for r in conn.execute("SELECT pdf_path FROM mat_round_setprotokoll")}
         _nummern_schuetzen(conn, wurzel)
         for jahr in sorted(os.listdir(wurzel)):
             if not re.fullmatch(r"\d{4}", jahr) or not os.path.isdir(os.path.join(wurzel, jahr)):
@@ -175,21 +178,27 @@ def _nummern_schuetzen(conn, wurzel):
     Zurückspielen einer Sicherung, nach der noch festgeschrieben wurde), rückt der Zähler (sqlite_sequence) über sie
     hinaus – sonst bekäme die nächste Prüfung die ID eines schon ausgehändigten Protokolls."""
     import re
-    hoechste = {"mat_inspection": 0, "mat_round": 0}
+    hoechste = {"mat_inspection": 0, "mat_round": 0, "mat_round_setprotokoll": 0}
+    tabelle_je = {"S": "mat_round", "T": "mat_round_setprotokoll"}
     for ordner, _, namen in os.walk(wurzel):
         for name in namen:
-            m = re.match(r"([PAS])-\d{4}-(\d+)", name)
+            m = re.match(r"([PAST])-\d{4}-(\d+)", name)
             if m:
-                tabelle = "mat_round" if m.group(1) == "S" else "mat_inspection"
+                tabelle = tabelle_je.get(m.group(1), "mat_inspection")
                 hoechste[tabelle] = max(hoechste[tabelle], int(m.group(2)))
     for tabelle, nr in hoechste.items():
-        if not nr:
+        if not nr or not _tabelle_da(conn, tabelle):
             continue
         zeile = conn.execute("SELECT seq FROM sqlite_sequence WHERE name = ?", (tabelle,)).fetchone()
         if zeile is None:
             conn.execute("INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)", (tabelle, nr))
         elif zeile[0] < nr:
             conn.execute("UPDATE sqlite_sequence SET seq = ? WHERE name = ?", (nr, tabelle))
+
+
+def _tabelle_da(conn, name):
+    """Gibt es die Tabelle? Der Start läuft auch an Datenbanken älterer Stände (Tests mit bis_schritt)."""
+    return bool(conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)).fetchone())
 
 
 def _ablegen(rel, daten):
@@ -523,12 +532,14 @@ def _vormals(item_id, pruefung_id, aktuell, feld="serial_no"):
     return (c["old_value"], c["nr"]) if c and c["old_value"] != str(aktuell) else None
 
 
-def _sammelprotokoll(r, pid, ts):
-    """Daten des Sammelprotokolls. Die Ordnerspalte zeigt die Heimat eines Artikels nur, wenn sie im Zweig des
-    Durchgangs liegt – sonst „aus dem Bereich verschoben“, nie einen Pfad aus einem fremden Bereich (1.7 Nr. 7). Die
-    Seriennummer ist die heutige; hat ein Änderungsantrag sie nach dem Einzelprotokoll ersetzt, steht die alte als
-    „vormals … (Änderungsantrag Nr. …)“ dabei – sonst widersprächen sich beide Dokumente ohne Verweis (Prüfung vom
-    21.10.2026)."""
+def _eintraege(r):
+    """Die Zeilen des Sammelprotokolls eines Durchgangs – einmal je Festschreiben, für das Sammelprotokoll und alle
+    Set-Protokolle. Die Ordnerspalte zeigt die Heimat eines Artikels nur, wenn sie im Zweig des Durchgangs liegt –
+    sonst „aus dem Bereich verschoben“, nie einen Pfad aus einem fremden Bereich (1.7 Nr. 7). Die Seriennummer ist die
+    heutige; hat ein Änderungsantrag sie nach dem Einzelprotokoll ersetzt, steht die alte als „vormals …
+    (Änderungsantrag Nr. …)“ dabei – sonst widersprächen sich beide Dokumente ohne Verweis (Prüfung vom 21.10.2026).
+    Intern dazu (mit „_“): die Kette der Ordner von der Gliederung bis zur Heimat (None außerhalb des Zweigs), Artikel
+    und Prüfung."""
     from . import durchgang
     zeilen = durchgang._zeilen(r["id"])
     zweig, pfade = bestand.unterbaum(r["folder_id"]), {}
@@ -537,20 +548,13 @@ def _sammelprotokoll(r, pid, ts):
     pruefungen = {x["id"]: x for x in db.query(
         "SELECT id, protocol_id, file_sha256, corrects_inspection_id, inspected_on, inspector_name, inspector_certificate "
         "FROM mat_inspection WHERE round_id = ? AND completed_at IS NOT NULL", (r["id"],))}
-    liste, ohne = [], 0
-    zaehler = {"erledigt": 0, "ausgenommen": 0, "nicht_geprueft": 0, "einsatzbereit": 0, "instandsetzen": 0,
-               "aussondern": 0}
+    ketten, liste = {}, []
     for z in zeilen:
         a = artikel.get(z["item_id"])
         if not a:
             continue
         zustand = durchgang._zustand(z, geschlossen=True)
-        zaehler[zustand] = zaehler.get(zustand, 0) + 1
         x = pruefungen.get(z["pruefung_id"]) if z["pruefung_id"] else None
-        if x and z["ergebnis"]:
-            zaehler[z["ergebnis"]] += 1
-        if x and not x["protocol_id"]:
-            ohne += 1
         ausnahme = ""
         if z["excluded_reason"]:
             ausnahme = f"{z['excluded_reason']} ({z['excluded_by_name']}, {ortszeit(z['excluded_at']).strftime('%d.%m.%Y') if z['excluded_at'] else ''})"
@@ -561,6 +565,9 @@ def _sammelprotokoll(r, pid, ts):
             p_alt = db.query("SELECT * FROM mat_product WHERE id = ?", (int(produkt_vormals[0]),), one=True)
             produkt_vormals = (katalog.produktname(p_alt) if p_alt else f"Produkt Nr. {produkt_vormals[0]}",
                                produkt_vormals[1])
+        heimat = bestand.heimat(a)
+        if heimat in zweig and heimat not in ketten:
+            ketten[heimat] = bestand.pfad(heimat)
         liste.append({"inventarnummer": a["inventory_no"], "seriennummer": a["serial_no"],
                       "seriennummer_vormals": (f"vormals {vormals[0]} (Änderungsantrag Nr. {vormals[1]})"
                                                if vormals else ""),
@@ -573,11 +580,88 @@ def _sammelprotokoll(r, pid, ts):
                       "datum": datum_text(x["inspected_on"]) if x else "", "pruefer": x["inspector_name"] if x else "",
                       "urkunde": x["inspector_certificate"] if x else "", "protokoll_id": (x["protocol_id"] or "") if x else "",
                       "datei_sha256": (x["file_sha256"] or "") if x else "",
-                      "berichtigung": bool(x and x["corrects_inspection_id"]), "ausnahme": ausnahme})
-    liste.sort(key=lambda e: (e["ordner"], e["inventarnummer"]))
+                      "berichtigung": bool(x and x["corrects_inspection_id"]), "ausnahme": ausnahme,
+                      "_kette": ketten.get(heimat) if heimat in zweig else None, "_item": a["id"]})
+    return liste
+
+
+def _unter(e, wurzel):
+    """Die Ordner unterhalb von wurzel auf dem Weg zur Heimat der Zeile – None, wenn die Heimat nicht darunter liegt
+    (oder den Zweig verlassen hat)."""
+    kette = e["_kette"]
+    if not kette:
+        return None
+    ids = [o["id"] for o in kette]
+    return kette[ids.index(wurzel) + 1:] if wurzel in ids else None
+
+
+def set_ordner_von(eintraege, wurzel):
+    """Die Ordner der Art „Set“ unterhalb von wurzel, in denen Zeilen liegen: {Kennung: {ordner (Pfad), artikel (Zeilen
+    darunter, auch in inneren Sets – F1 b), geprueft (davon erledigt)}}, in Baumreihenfolge."""
+    out = {}
+    for e in sorted(eintraege, key=lambda e: _ordnung(e, wurzel)):
+        for o in _unter(e, wurzel) or ():
+            if o["kind"] == "set" and not o["system_kind"]:
+                s = out.setdefault(o["id"], {"ordner": _pfad_text(o["id"]), "artikel": 0, "geprueft": 0})
+                s["artikel"] += 1
+                s["geprueft"] += e["zustand"] == "erledigt"
+    return out
+
+
+def _ordnung(e, wurzel):
+    """Sortierschlüssel der Artikelliste: der Weg unter wurzel als Folge von Ordnern (nicht als Text – „Rucksack 1-B“
+    stünde sonst zwischen „Rucksack 1“ und „Rucksack 1 › Tasche“), auf jeder Ebene erst die Artikel direkt im Ordner,
+    dann Unterordner, die kein Set sind, dann die Sets – so stehen die Artikel eines Sets sicher zusammen. Artikel, die
+    den Bereich verlassen haben, stehen am Ende."""
+    unter = _unter(e, wurzel)
+    if unter is None:
+        return ((2, "", 0),), e["inventarnummer"]
+    return tuple((1 if o["kind"] == "set" else 0, o["name"].casefold(), o["id"]) for o in unter), e["inventarnummer"]
+
+
+def _sammelprotokoll(r, pid, ts, eintraege=None, wurzel=None, haupt=None, je_set=None):
+    """Daten des Sammelprotokolls (wurzel None) oder des Set-Protokolls eines Set-Ordners unterhalb des Durchgangsordners
+    (wurzel: seine Kennung; haupt: {protokoll_id, ordner} des Sammelprotokolls) – eine Funktion, gefiltert nach den
+    Artikeln darunter (Entscheidung F1 b: auch die innerer Sets). je_set: die Set-Protokolle des Durchgangs {Ordner:
+    {protokoll_id, artikel, file_sha256, ordner}} – für die Zwischenzeilen der Sets in der Artikelliste und (nur im
+    Sammelprotokoll) das Verzeichnis der Set-Protokolle. Nummerierung je Protokoll 1…n."""
+    from . import durchgang
+    if eintraege is None:
+        eintraege = _eintraege(r)
+    je_set = je_set or {}
+    unten = wurzel or r["folder_id"]
+    liste = [dict(e) for e in eintraege if wurzel is None or _unter(e, wurzel) is not None]
+    liste.sort(key=lambda e: _ordnung(e, unten))
+    zaehler = {"erledigt": 0, "ausgenommen": 0, "nicht_geprueft": 0, "einsatzbereit": 0, "instandsetzen": 0,
+               "aussondern": 0}
+    ohne = 0
+    gesehen, vorher = set(), None
+    alle_sets = set_ordner_von(eintraege, unten)
     for nr, e in enumerate(liste, start=1):
         e["nr"] = nr
-    zaehlung = [{"text": "Artikel im Durchgang", "anzahl": len(liste)},
+        zaehler[e["zustand"]] = zaehler.get(e["zustand"], 0) + 1
+        if e["zustand"] == "erledigt":
+            if e["ergebnis"]:
+                zaehler[e["ergebnis"]] += 1
+            if not e["protokoll_id"]:
+                ohne += 1
+        # Das innerste Set auf dem Weg: Wechselt es, steht eine Zwischenzeile davor.
+        block = next((o["id"] for o in reversed(_unter(e, unten) or []) if o["kind"] == "set" and not o["system_kind"]),
+                     None)
+        e["im_set"] = block is not None
+        if block is not None and block != vorher:
+            s, t = alle_sets[block], je_set.get(block)
+            text = f"Set {s['ordner']} · {s['artikel']} Artikel"
+            if t:
+                text += f" · Set-Protokoll {t['protokoll_id']}"
+            elif r["aborted"]:
+                text += " · kein Set-Protokoll (Durchgang abgebrochen)"
+            elif not s["geprueft"]:
+                text += " · kein Set-Protokoll (nichts geprüft)"
+            e["zwischen"] = text + (" (Fortsetzung)" if block in gesehen else "")
+            gesehen.add(block)
+        vorher = block
+    zaehlung = [{"text": "Artikel im Durchgang" if wurzel is None else "Artikel im Set", "anzahl": len(liste)},
                 {"text": "geprüft", "anzahl": zaehler["erledigt"]},
                 {"text": "davon einsatzbereit", "anzahl": zaehler["einsatzbereit"], "einzug": True},
                 {"text": "davon instandsetzen", "anzahl": zaehler["instandsetzen"], "einzug": True},
@@ -585,42 +669,85 @@ def _sammelprotokoll(r, pid, ts):
                 {"text": "ausgenommen", "anzahl": zaehler["ausgenommen"]}]
     if r["aborted"] or zaehler["nicht_geprueft"]:
         zaehlung.append({"text": "nicht geprüft", "anzahl": zaehler["nicht_geprueft"]})
+    # Prüfer: wer im Durchgang geprüft hat – im Set-Protokoll nur an Artikeln dieses Sets; die Unterschrift ist die
+    # letzte dieses Prüfers an einer solchen Prüfung.
+    nur = "" if wurzel is None else " AND item_id IN (SELECT value FROM json_each(?))"
+    args = (r["id"],) if wurzel is None else (r["id"], json.dumps([e["_item"] for e in liste]))
     pruefer = []
     for x in db.query("SELECT inspector_user_id AS uid, inspector_name AS name, inspector_certificate AS urkunde, "
-                      "COUNT(*) AS anzahl FROM mat_inspection WHERE round_id = ? AND completed_at IS NOT NULL "
+                      "COUNT(*) AS anzahl FROM mat_inspection WHERE round_id = ? AND completed_at IS NOT NULL" + nur + " "
                       + durchgang.OHNE_BERICHTIGTE +
-                      "GROUP BY inspector_user_id, inspector_name, inspector_certificate ORDER BY inspector_name",
-                      (r["id"],)):
+                      "GROUP BY inspector_user_id, inspector_name, inspector_certificate ORDER BY inspector_name", args):
         sig = db.query("SELECT signature_png FROM mat_inspection WHERE round_id = ? AND inspector_user_id IS ? AND "
-                       "inspector_name = ? AND signature_png IS NOT NULL ORDER BY locked_at DESC LIMIT 1",
-                       (r["id"], x["uid"], x["name"]), one=True)
+                       "inspector_name = ? AND signature_png IS NOT NULL" + nur + " ORDER BY locked_at DESC LIMIT 1",
+                       (r["id"], x["uid"], x["name"]) + args[1:], one=True)
         pruefer.append({"name": x["name"], "urkunde": x["urkunde"], "anzahl": x["anzahl"],
                         "unterschrift": _png(sig["signature_png"]) if sig else None})
+    for e in liste:
+        e.pop("_kette", None)
+        e.pop("_item", None)
     gl = bestand.gliederung_von(r["folder_id"])
+    art = "sammelprotokoll" if wurzel is None else "setprotokoll"
     return {
-        "dokument": _dokument("sammelprotokoll", pid, ts, bestand.ordner_ist_demo(r["folder_id"])),
-        "durchgang": {"titel": r["title"], "ordner": _pfad_text(r["folder_id"]), "gliederung": gl["name"] if gl else "",
+        "dokument": _dokument(art, pid, ts, bestand.ordner_ist_demo(unten)),
+        "durchgang": {"titel": r["title"], "ordner": _pfad_text(unten), "gliederung": gl["name"] if gl else "",
                       "eroeffnet": f"{datum_text(r['opened_on'])} von {r['opened_by_name']}",
                       "abgeschlossen": f"{zeit_text(ts)} von {r['closed_by_name']}", "abgebrochen": bool(r["aborted"])},
+        "set_info": ({"name": bestand.ordner(wurzel)["name"], "teil_von": haupt["protokoll_id"],
+                 "durchgang_ordner": haupt["ordner"]} if wurzel is not None else None),
         "zaehlung": zaehlung, "pruefer": pruefer, "artikel": liste, "ohne_protokoll": ohne,
+        "set_protokolle": [je_set[fid] for fid in sorted(je_set, key=lambda f: je_set[f]["kennung"])] if wurzel is None else [],
     }
 
 
 def durchgang_festschreiben(rid, ts):
-    """Sammelprotokoll eines eben abgeschlossenen oder abgebrochenen Durchgangs – in dessen Transaktion und
-    innerhalb von dateien_sichern(). Liefert die Protokoll-ID."""
+    """Sammelprotokoll eines eben abgeschlossenen oder abgebrochenen Durchgangs – in dessen Transaktion und innerhalb von
+    dateien_sichern(). Beim regulären Abschluss zuerst je Set-Ordner unterhalb des Durchgangsordners, in dem mindestens
+    ein Artikel geprüft wurde, ein Set-Protokoll (F2 b: nicht beim Abbruch, nicht bei „alles ausgenommen“) mit eigener
+    Nummer T-<jahr>-<nr> (F3 a), das das Sammelprotokoll nennt; dann das Sammelprotokoll mit dem Verzeichnis der
+    Set-Protokolle samt Prüfsummen. Scheitert eines, wird nichts festgeschrieben (die Transaktion rollt zurück,
+    dateien_sichern löscht die neuen Dateien). Liefert die Protokoll-ID des Sammelprotokolls."""
     r = db.query("SELECT * FROM mat_round WHERE id = ?", (rid,), one=True)
     if not r or not r["closed_on"] or r["locked_at"]:
         raise RuntimeError("Sammelprotokoll nur einmal und erst nach dem Abschluss.")
     pid = protokoll_id("sammelprotokoll", r["id"], ts)
-    felder = _erzeugen("sammelprotokoll", pid, _sammelprotokoll(r, pid, ts))
+    eintraege = _eintraege(r)
+    haupt = {"protokoll_id": pid, "ordner": _pfad_text(r["folder_id"])}
+    je_set = {}
+    if not r["aborted"]:
+        # Erst alle Nummern (ein inneres Set nennt sein Protokoll im äußeren), dann die Dateien – unter der Schreibsperre,
+        # die die Transaktion des Aufrufers hält; die Kennung ist die nächste der Tabelle (AUTOINCREMENT).
+        naechste = max(db.query("SELECT COALESCE(MAX(seq), 0) AS n FROM sqlite_sequence WHERE name = "
+                                "'mat_round_setprotokoll'", one=True)["n"],
+                       db.query("SELECT COALESCE(MAX(id), 0) AS n FROM mat_round_setprotokoll", one=True)["n"])
+        for fid, s in set_ordner_von(eintraege, r["folder_id"]).items():
+            if s["geprueft"]:
+                naechste += 1
+                je_set[fid] = dict(s, kennung=naechste, protokoll_id=protokoll_id("setprotokoll", naechste, ts))
+        for fid, s in je_set.items():
+            felder = _erzeugen("setprotokoll", s["protokoll_id"],
+                               _sammelprotokoll(r, s["protokoll_id"], ts, eintraege, wurzel=fid, haupt=haupt, je_set=je_set))
+            db.execute("INSERT INTO mat_round_setprotokoll (id, round_id, folder_id, ordner, artikel, protocol_id, locked_at, "
+                       "pdf_path, pdf_sha256, pdf_hashed_bytes, file_sha256) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                       (s["kennung"], rid, fid, s["ordner"], s["artikel"], s["protokoll_id"], ts, felder["pdf_path"],
+                        felder["pdf_sha256"], felder["pdf_hashed_bytes"], felder["file_sha256"]))
+            s.update(felder)
+    felder = _erzeugen("sammelprotokoll", pid, _sammelprotokoll(r, pid, ts, eintraege, je_set=je_set))
     db.execute("UPDATE mat_round SET protocol_id = ?, locked_at = ?, pdf_path = ?, pdf_sha256 = ?, pdf_hashed_bytes = ?, "
                "file_sha256 = ? WHERE id = ?",
                (pid, ts, felder["pdf_path"], felder["pdf_sha256"], felder["pdf_hashed_bytes"], felder["file_sha256"], rid))
-    journal.eintragen("round", rid, "festgeschrieben", None,
-                      {"protocol_id": pid, "pdf_sha256": felder["pdf_sha256"],
-                       "pdf_hashed_bytes": felder["pdf_hashed_bytes"], "file_sha256": felder["file_sha256"]})
+    nachher = {"protocol_id": pid, "pdf_sha256": felder["pdf_sha256"], "pdf_hashed_bytes": felder["pdf_hashed_bytes"],
+               "file_sha256": felder["file_sha256"]}
+    if je_set:
+        nachher["set_protokolle"] = [{"protocol_id": s["protokoll_id"], "folder_id": fid, "file_sha256": s["file_sha256"]}
+                                     for fid, s in je_set.items()]
+    journal.eintragen("round", rid, "festgeschrieben", None, nachher)
     return pid
+
+
+def set_protokolle(rid):
+    """Die Set-Protokolle eines Durchgangs (Zeilen von mat_round_setprotokoll), nach Nummer."""
+    return db.query("SELECT * FROM mat_round_setprotokoll WHERE round_id = ? ORDER BY id", (rid,))
 
 
 # --- Lesen und ausliefern ---------------------------------------------------------------------------------
@@ -658,21 +785,27 @@ def dateiname(row, inventarnummer=None):
 
 # --- Prüfseite -----------------------------------------------------------------------------------------
 
+_PROTOKOLL_TABELLEN = ("mat_inspection", "mat_round", "mat_round_setprotokoll")
+
+
 def _per_summe(spalte, summe):
-    r = db.query(f"SELECT protocol_id, pdf_hashed_bytes, pdf_sha256 FROM mat_inspection WHERE {spalte} = ? "
-                 "AND locked_at IS NOT NULL", (summe,), one=True)
-    return r or db.query(f"SELECT protocol_id, pdf_hashed_bytes, pdf_sha256 FROM mat_round WHERE {spalte} = ? "
-                         "AND locked_at IS NOT NULL", (summe,), one=True)
+    for tabelle in _PROTOKOLL_TABELLEN:
+        r = db.query(f"SELECT protocol_id, pdf_hashed_bytes, pdf_sha256 FROM {tabelle} WHERE {spalte} = ? "
+                     "AND locked_at IS NOT NULL", (summe,), one=True)
+        if r:
+            return r
+    return None
 
 
 def _per_id(pid):
-    tabelle = "mat_round" if pid.startswith("S-") else "mat_inspection"
+    tabelle = {"S": "mat_round", "T": "mat_round_setprotokoll"}.get(pid[:1], "mat_inspection")
     return db.query(f"SELECT protocol_id, pdf_hashed_bytes, pdf_sha256 FROM {tabelle} WHERE protocol_id = ? "
                     "AND locked_at IS NOT NULL", (pid,), one=True)
 
 
 def _art(pid):
-    return {"P": "Prüfprotokoll", "A": "Aussonderungsprotokoll", "S": "Sammelprotokoll"}.get(pid[:1], "Protokoll")
+    return {"P": "Prüfprotokoll", "A": "Aussonderungsprotokoll", "S": "Sammelprotokoll",
+            "T": "Sammelprotokoll (Set)"}.get(pid[:1], "Protokoll")
 
 
 def _kopf_summe(fh, n):

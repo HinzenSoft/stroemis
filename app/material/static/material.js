@@ -1406,6 +1406,21 @@
     });
   }
 
+  /* Set-Protokolle eines Durchgangs (Schritt 27): je Set der Pfad (Link nur, wenn das Konto den Ordner sieht), Zahl der
+     Artikel, Protokoll-ID und „PDF“ – als Liste wie die Durchgänge, am Telefon untereinander. */
+  function setProtokolleHtml(liste) {
+    return `<ul class="mat-runden mat-setprotokolle">${liste.map((t) => `<li>${t.ordner_sichtbar ? `<a href="/material/ordner/${t.folder_id}"><strong>${esc(t.ordner)}</strong></a>` : `<strong>${esc(t.ordner)}</strong>`}
+      <span class="muted">${plural(t.artikel, "Artikel", "Artikel")} · <span class="mat-hash">${esc(t.protokoll.id)}</span></span>
+      <a class="mat-pdf" href="${esc(t.protokoll.url)}" target="_blank" rel="noopener" title="Set-Protokoll ${esc(t.protokoll.id)} öffnen">PDF</a></li>`).join("")}</ul>`;
+  }
+  /* Ordnerseite eines Sets: seine Set-Protokolle und die Sammelprotokolle der Durchgänge, die für ihn eröffnet wurden –
+     der Durchgang als Link nur, wenn das Konto ihn sieht. */
+  function sammelprotokolleHtml(liste) {
+    return `<ul class="mat-runden mat-setprotokolle">${liste.map((x) => `<li>${x.durchgang.sichtbar ? `<a href="/material/durchgang/${x.durchgang.id}"><strong>${esc(x.durchgang.titel)}</strong></a>` : `<strong>${esc(x.durchgang.titel)}</strong>`}
+      <span class="muted">${x.art === "set" ? "Set-Protokoll" : "Sammelprotokoll"} · ${esc(fmtTag(x.geschlossen_am))} · <span class="mat-hash">${esc(x.protokoll.id)}</span></span>
+      <a class="mat-pdf" href="${esc(x.protokoll.url)}" target="_blank" rel="noopener" title="${x.art === "set" ? "Set-Protokoll" : "Sammelprotokoll"} ${esc(x.protokoll.id)} öffnen">PDF</a></li>`).join("")}</ul>`;
+  }
+
   /* Laufende Prüfdurchgänge als Kasten (Übersicht) bzw. Liste mit abgeschlossenen (Prüfungen). */
   async function rundenKasten(ziel, nurOffen) {
     if (!ziel) return;
@@ -2089,6 +2104,7 @@
             <button class="btn secondary small" data-act="sammel-zuordnen">Zuordnen an …</button>
             <button class="btn secondary small" data-act="sammel-loesen" hidden>Zuordnung lösen</button></div></div>` : ""}
         </section>
+        ${(d.sammelprotokolle || []).length ? `<section class="section"><h2>Sammelprotokolle</h2>${sammelprotokolleHtml(d.sammelprotokolle)}</section>` : ""}
         <p class="small mat-zweigbestand">${system ? plural(Object.values(z).reduce((a, b) => a + b, 0), "Artikel", "Artikel") : `Bestand im ganzen Zweig: <strong>${d.bestand}</strong> ${zahlen(z)}`}</p>
         ${darf.grund ? `<details class="section mat-auf"><summary>Journal des Ordners</summary>${journalHtml(d.journal)}</details>` : ""}`;
       if (darfPflegen) {
@@ -5996,15 +6012,17 @@
         <div class="page-head"><h1>${esc(d.titel)} ${d.offen ? '<span class="badge">offen</span>' : `<span class="badge grey">${d.abgebrochen ? "abgebrochen" : "abgeschlossen"}</span>`}</h1>
           <div class="btn-row">${d.offen && darf ? `<button class="btn secondary" data-act="abbrechen">Durchgang abbrechen</button>
             <button class="btn" data-act="schliessen" ${d.abschliessbar ? "" : "disabled"}>Durchgang abschließen</button>` : ""}
-            ${!d.offen && d.protokoll ? `<a class="btn secondary" href="${esc(d.protokoll.url)}" target="_blank" rel="noopener">Sammelprotokoll (PDF)</a>` : ""}</div></div>
+            ${!d.offen && d.protokoll ? `<a class="btn secondary" href="${esc(d.protokoll.url)}" target="_blank" rel="noopener">Sammelprotokoll (PDF)</a>` : ""}
+            ${!d.offen && (d.set_protokolle || []).length ? `<a class="btn secondary" href="/material/durchgang/${d.id}/protokolle.zip">Alle Protokolle (ZIP)</a>` : ""}</div></div>
         <p>Ordner <a href="/material/ordner/${d.folder_id}">${esc(d.ordner)}</a> · eröffnet ${esc(fmtTag(d.eroeffnet_am))} von ${esc(d.eroeffnet_von || "–")}
           ${d.offen ? "" : ` · ${d.abgebrochen ? "abgebrochen" : "abgeschlossen"} ${esc(fmtTag(d.geschlossen_am))} von ${esc(d.geschlossen_von || "–")}`}</p>
         ${d.protokoll ? `<p class="mat-protokoll-zeile">Sammelprotokoll <strong class="mat-hash">${esc(d.protokoll.id)}</strong> · festgeschrieben ${esc(fmtZeit(d.protokoll.festgeschrieben))}
           · SHA-256 (erste ${esc(d.protokoll.bytes)} Bytes) ${summeKnopf(d.protokoll.sha256)} · <a href="/material/pruefen">Protokoll prüfen</a></p>`
           : d.offen ? "" : '<p class="small muted">Vor Einführung des Festschreibens geschlossen – ohne Sammelprotokoll.</p>'}
+        ${(d.set_protokolle || []).length ? `<section class="section"><h2>Set-Protokolle</h2>${setProtokolleHtml(d.set_protokolle)}</section>` : ""}
         <div class="mat-kachelrahmen"><div class="mat-kacheln mat-rundenzahlen">${zustaende.map(([k, t]) => `<div class="mat-kachel z-${k || "gesamt"}"><strong>${z[k || "gesamt"]}</strong><span>${k ? t : "Artikel"}</span></div>`).join("")}</div></div>
         <p>${fortschritt(z)}</p>
-        ${d.offen ? `<p class="help">Jeder öffnet seinen Artikel mit „Prüfen“ und reserviert ihn damit – die anderen sehen „in Prüfung bei …“. Abschließen geht, sobald jeder Artikel geprüft oder mit Grund ausgenommen ist. Beim Abschließen entsteht das Sammelprotokoll mit allen Prüfern.</p>` : ""}
+        ${d.offen ? `<p class="help">Jeder öffnet seinen Artikel mit „Prüfen“ und reserviert ihn damit – die anderen sehen „in Prüfung bei …“. Abschließen geht, sobald jeder Artikel geprüft oder mit Grund ausgenommen ist. Beim Abschließen entsteht das Sammelprotokoll mit allen Prüfern${d.set_ordner && d.set_ordner.anzahl ? ` – dazu für jedes Set mit geprüften Artikeln ein eigenes Set-Protokoll (hier ${plural(d.set_ordner.anzahl, "Set", "Sets")})` : ""}.</p>` : ""}
         <div class="c-tabs mat-filter">${zustaende.map(([f, t]) => `<button type="button" data-act="filter" data-f="${f}" class="${f === filter ? "sel" : ""}">${esc(t)}${f ? ` (${z[f]})` : ""}</button>`).join("")}</div>
         ${liste.length ? `${kartenKopf(DURCHGANG_SORT, s)}<table class="list mat-tabelle mat-karten mat-runde"><thead><tr>${sortKopf("Inventar-Nr.", "inventar", s)}${sortKopf("Hersteller", "hersteller", s, { klasse: "mat-schmal-weg" })}${sortKopf("Produkt", "produkt", s, { vor: kopfZusatz("Hersteller", "hersteller", s, "schmal"), nach: kopfZusatz("Ablage", "ablage", s, "eng") })}${sortKopf("Ablage", "ablage", s, { klasse: "mat-eng-weg" })}${sortKopf("Stand", "stand", s)}${sortKopf("Status", "status", s)}<th></th></tr></thead><tbody>${liste.map(zeile).join("")}</tbody></table>` : leer("Keine Artikel in dieser Auswahl.")}
         ${d.pruefer.length ? `<section class="section"><h2>Prüfer in diesem Durchgang</h2><ul>${d.pruefer.map((x) => `<li>${esc(x.name)}${x.urkunde ? ` · Urkundennummer ${esc(x.urkunde)}` : ""} – ${plural(x.anzahl, "Prüfung", "Prüfungen")}</li>`).join("")}</ul></section>` : ""}`;
@@ -6036,11 +6054,14 @@
         });
       },
       schliessen: async (b) => {
-        if (!(await confirm(`Den Durchgang „${d.titel}“ abschließen? Danach lässt sich darin nichts mehr prüfen oder ausnehmen. Das Sammelprotokoll mit allen Prüfern wird festgeschrieben.`, "Abschließen"))) return;
+        const sets = d.set_ordner ? d.set_ordner.mit_pruefung : 0;
+        const fest = sets ? `Das Sammelprotokoll mit allen Prüfern und ${plural(sets, "Set-Protokoll", "Set-Protokolle")} werden festgeschrieben.` : "Das Sammelprotokoll mit allen Prüfern wird festgeschrieben.";
+        if (!(await confirm(`Den Durchgang „${d.titel}“ abschließen? Danach lässt sich darin nichts mehr prüfen oder ausnehmen. ${fest}`, "Abschließen"))) return;
         b.disabled = true;
         try {
           const r = await api(`${API}/durchgaenge/${d.id}/abschliessen`, { method: "POST", body: {} });
-          toast(r.durchgang && r.durchgang.protokoll ? `Durchgang abgeschlossen – Sammelprotokoll ${r.durchgang.protokoll.id}` : "Durchgang abgeschlossen");
+          const n = r.durchgang && r.durchgang.set_protokolle ? r.durchgang.set_protokolle.length : 0;
+          toast(r.durchgang && r.durchgang.protokoll ? `Durchgang abgeschlossen – Sammelprotokoll ${r.durchgang.protokoll.id}${n ? ` und ${plural(n, "Set-Protokoll", "Set-Protokolle")}` : ""}` : "Durchgang abgeschlossen");
           await neu();
         } catch (e) { toast(e.message, true); b.disabled = false; }
       },

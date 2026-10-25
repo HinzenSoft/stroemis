@@ -18,6 +18,9 @@ Entwurf des Durchgangs mehr offen ist. Dann entsteht in derselben Transaktion da
 und Unterschrift, die Einzelprotokolle mit ihrer Prüfsumme – festgeschrieben wie jedes Protokoll; danach
 ist der Durchgang unveränderlich. Ein Artikel steht höchstens in einem offenen Durchgang.
 
+Seit Schritt 27 bekommt beim regulären Abschluss jeder Ordner der Art „Set“ unterhalb des Durchgangsordners, in dem
+mindestens ein Artikel geprüft wurde, zusätzlich sein Set-Protokoll (protokoll.durchgang_festschreiben, set_protokoll_json).
+
 Abbrechen beendet ihn vorzeitig: Offene Prüfungen darin laufen als einzelne Prüfungen weiter. Wurde noch
 nichts abgeschlossen, verschwindet er ganz; sonst endet er als „abgebrochen“ – Geprüftes und
 Ausgenommenes bleibt ihm zugeordnet, jeder andere Artikel steht darin als „nicht geprüft“ – auch im
@@ -224,6 +227,8 @@ def durchgang_json(r, voll=False, pruefer_id=None):
            "geschlossen_von": r["closed_by_name"], "offen": not geschlossen, "abgebrochen": bool(r["aborted"]), "zaehlung": z,
            "protokoll": protokoll.protokoll_json(r, f"/material/durchgang/{r['id']}/sammelprotokoll"),
            "darf": rechte.rechte_ordner(r["folder_id"])}
+    if geschlossen:
+        out["set_protokolle"] = [set_protokoll_json(s) for s in protokoll.set_protokolle(r["id"])]
     entwuerfe = _offene_entwuerfe(r["id"])
     out["abschliessbar"] = out["offen"] and z["offen"] == 0 and z["in_pruefung"] == 0 and not entwuerfe
     if not voll:
@@ -273,7 +278,27 @@ def durchgang_json(r, voll=False, pruefer_id=None):
         "GROUP BY inspector_user_id, inspector_name, inspector_certificate ORDER BY inspector_name", (r["id"],))
     out["loeschbar"] = out["offen"] and not db.query(
         "SELECT 1 FROM mat_inspection WHERE round_id = ? LIMIT 1", (r["id"],), one=True)
+    if out["offen"]:
+        # Stand jetzt: Sets unterhalb des Durchgangsordners mit Zeilen – und mit Geprüftem (so viele Set-Protokolle
+        # entstünden beim Abschließen).
+        ketten, eintraege = {}, []
+        for x in zeilen:
+            h = bestand.heimat(artikel[x["item_id"]])
+            if h in zweig and h not in ketten:
+                ketten[h] = bestand.pfad(h)
+            eintraege.append({"_kette": ketten.get(h), "zustand": _zustand(x, geschlossen),
+                              "inventarnummer": artikel[x["item_id"]]["inventory_no"]})
+        je_set = protokoll.set_ordner_von(eintraege, r["folder_id"])
+        out["set_ordner"] = {"anzahl": len(je_set), "mit_pruefung": sum(1 for s in je_set.values() if s["geprueft"])}
     return out
+
+
+def set_protokoll_json(s):
+    """Ein Set-Protokoll (Zeile von mat_round_setprotokoll) für die Oberfläche; der Link zum Set-Ordner nur, wenn das
+    Konto ihn sieht."""
+    url = f"/material/durchgang/{s['round_id']}/set/{s['id']}.pdf"
+    return {"id": s["id"], "protokoll": protokoll.protokoll_json(s, url), "ordner": s["ordner"], "folder_id": s["folder_id"],
+            "ordner_sichtbar": rechte.sicht().sichtbar(s["folder_id"]), "artikel": s["artikel"]}
 
 
 def liste(nur_offen=False, grenze=50):
