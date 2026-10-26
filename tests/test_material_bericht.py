@@ -412,7 +412,7 @@ def test_rechte_und_eingaben():
         text = _flach(" ".join(seiten))
         assert "<img src=x onerror=alert(1)>" in text, text[:600]
         cd = r.headers["Content-Disposition"]
-        assert cd.startswith("inline") and f"Jahresbericht_OG _img src_x onerror_alert_1__{J}.pdf" in cd, cd
+        assert cd.startswith("inline") and re.search(rf"Jahresbericht_OG _img src_x onerror_alert_1__{J}_\d{{4}}-\d{{2}}-\d{{2}}_\d{{4}}\.pdf", cd), cd
         # Protokollzeile ohne Namen: Ordner, Jahr, Konto, Haken.
         import logging
         aufgezeichnet = []
@@ -444,7 +444,7 @@ def test_pdf_und_csv():
         r, seiten = pdf_text(f, f"/materialablage/ordner/{gid}/bericht-{J}.pdf", pfad)
         cd = r.headers["Content-Disposition"]
         # DEMO enthalten: Präfix im Dateinamen, [DEMO] im Kopf, Zahl im Bericht; sonst Titel, Fuß, Blöcke.
-        assert cd.startswith("inline") and f"DEMO-Jahresbericht_OG Berichtstadt_{J}.pdf" in cd, cd
+        assert cd.startswith("inline") and re.search(rf"DEMO-Jahresbericht_OG Berichtstadt_{J}_\d{{4}}-\d{{2}}-\d{{2}}_\d{{4}}\.pdf", cd), cd
         assert r.headers["Content-Security-Policy"] == CSP_PDF and "no-store" in r.headers["Cache-Control"]
         text = _flach(" ".join(seiten))
         for wert in (f"[DEMO] Jahresbericht OG Berichtstadt {J}", "kein Prüfnachweis", "nicht festgeschrieben",
@@ -474,7 +474,7 @@ def test_pdf_und_csv():
             assert lauf.returncode == 0 and "PASS" in lauf.stdout, (lauf.returncode, lauf.stdout[-800:], lauf.stderr[-800:])
         # Mit Haken: Prüferliste und Aussonderer, eigener Dateiname.
         r, seiten = pdf_text(f, f"/materialablage/ordner/{gid}/bericht-{J}-mit-pruefern.pdf", pfad)
-        assert f"DEMO-Jahresbericht_OG Berichtstadt_{J}-mit-pruefern.pdf" in r.headers["Content-Disposition"]
+        assert re.search(rf"DEMO-Jahresbericht_OG Berichtstadt_{J}-mit-pruefern_\d{{4}}-\d{{2}}-\d{{2}}_\d{{4}}\.pdf", r.headers["Content-Disposition"])
         text = _flach(" ".join(seiten))
         assert "Prüfer im Jahr" in text and re.search(r"\bpruefer\b", text) and "1012-4711" in text and "durch wart" in text, text[-2500:]
         # Vorjahr als PDF: ein anderes Jahr im Titel.
@@ -486,7 +486,7 @@ def test_pdf_und_csv():
         r = f.get(f"/materialablage/export/{gid}-pruefungen-{J}.csv")
         assert r.status_code == 200 and r.mimetype == "text/csv", r.status_code
         cd = r.headers["Content-Disposition"]
-        assert cd.startswith("attachment") and f"Pruefungen_OG Berichtstadt_{J}.csv" in cd, cd
+        assert cd.startswith("attachment") and re.search(rf"Pruefungen_OG Berichtstadt_{J}_\d{{4}}-\d{{2}}-\d{{2}}_\d{{4}}\.csv", cd), cd
         kopf, zeilen = csv_lesen(r.data)
         assert kopf == list(dienst.CSV_SPALTEN), kopf
         assert len(zeilen) == 7 and sum(1 for z in zeilen if z["Art"] == "Aussonderungsprotokoll") == 2, [z["Art"] for z in zeilen]
@@ -509,7 +509,7 @@ def test_pdf_und_csv():
         assert "1012-4711" not in roh and "pruefer" not in roh and ";wart;" not in roh
         # Mit Haken: beide Spalten gefüllt.
         r = f.get(f"/materialablage/export/{gid}-pruefungen-{J}-mit-pruefern.csv")
-        assert f"Pruefungen_OG Berichtstadt_{J}-mit-pruefern.csv" in r.headers["Content-Disposition"]
+        assert re.search(rf"Pruefungen_OG Berichtstadt_{J}-mit-pruefern_\d{{4}}-\d{{2}}-\d{{2}}_\d{{4}}\.csv", r.headers["Content-Disposition"])
         kopf, zeilen = csv_lesen(r.data)
         assert {(z["Prüfer"], z["Urkundennummer"]) for z in zeilen} == {("pruefer", "1012-4711"), ("wart", "")}, zeilen
         # Vorjahr: nur die Eingangsprüfung.

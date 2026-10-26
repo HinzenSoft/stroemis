@@ -29,6 +29,7 @@ für sich deploybar.
 | Neue Modulnamen | Strömipedia, Ankerplätze, Riegenkarten, Materialablage, Leitstelle samt Adressen; alte Adressen leiten dauerhaft weiter (301, Abfrage bleibt, Umlaut-Schreibweisen), neue Protokolle mit `/materialablage/pruefen` | gebaut 26.10.2026, wartet auf Prüfung und Freigabe |
 | Feinschliff aus den Wiki-Fragen | „Deine PSA“ auch in Ordnern mit „Erinnerungsmails aus“ (E2 B), Verlauf des Kontos im Nutzerdialog der Leitstelle (E3 A), geerbtes generisches Formular in der Kategorie (K9), Texte (K19, K21, T, E1, E6), README | gebaut 26.10.2026, wartet auf Prüfung und Freigabe |
 | Katalog am Telefon (26.10.2026) | „☰ Kategorien“ links in der mitlaufenden Suchzeile der Katalogliste; keine Nummernsuche in den Katalogansichten | gebaut 26.10.2026 (kein Schemaschritt), wartet auf Prüfung und Freigabe |
+| Lebenslauf frisch, Melder und Mangelbeschreibung | Jeder Abruf eines Lebenslaufs (und der übrigen Dateien auf Abruf) mit eigener Adresse und Uhrzeit im Namen – gegen die alte Datei auf Android-Telefonen; „Mangel gemeldet“ im Lebenslauf mit Name und Beschreibung für Prüfer, Materialwart und den Melder selbst | gebaut 26.10.2026, wartet auf Prüfung und Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4184,6 +4185,49 @@ verschwinden, das führt sonst nur zu Verwirrungen“.
   und Trefferseite behalten sie. `navAnordnen` prüft die Einzeiligkeit jetzt auch über die Reiter selbst – stehen nur
   noch sie in der Zeile, rollen sie am Telefon seitlich statt umzubrechen.
 - Test: `test_material_l5.py::test_katalog_ohne_nummernsuche_knopf_in_suchzeile`.
+
+## Lebenslauf: immer frisch auf dem Telefon, Melder und Mangelbeschreibung (Wunsch des Nutzers, 26.10.2026)
+
+Meldung des Nutzers, wörtlich: „Ein Tester hat sowohl im Browser als auch beim herunterladen nur eine Seite vom
+Lebenslauf angezeigt bekommen. Dort fehlt allerdings das Journal mit einer Sperrmeldung. Auf der zweiten Seite. […]
+Samsung Galaxy S25 Ultra mit Chrome würde genutzt. Außerdem steht im korrekten Lebenslauf von "Person" statt dem namen
+bei der Mangelmeldung. Der soll eingetragen werden. Und auch die Mangelbeschreibung.“ Kein Schemaschritt.
+
+**1. Veralteter Lebenslauf.** Die PDF des Testers trug den Stand gleich nach dem Anlegen des Artikels – der Server setzt
+den Lebenslauf aber bei jedem Abruf neu (`Cache-Control: no-store`). Ursache: Chrome auf Android legt PDFs als
+Download ab; Adresse und Name (`Lebenslauf_<Inventarnummer>_<Datum>.pdf`) waren den ganzen Tag gleich, beim zweiten
+Tippen bot er die schon vorhandene Datei an. Abhilfe:
+- **Adresse je Abruf eindeutig** (material.js): Links mit `data-frisch` bekommen beim Klick, Klick mit der mittleren
+  Taste und vor dem Kontextmenü `?stand=<Millisekunden>` – gesetzt beim Antippen, nicht beim Zeichnen (die Seite kann
+  alt sein). Der Server übergeht den Parameter. Betroffen: „Lebenslauf (PDF)“, „Artikelliste exportieren (CSV)“,
+  „Protokolle exportieren (ZIP)“, Jahresbericht „PDF“ und „Prüfungen (CSV)“, Nacharbeit „Als CSV herunterladen“,
+  Katalogexport „Herunterladen“.
+- **Name mit Uhrzeit** (`services.zeitstempel()`, deutsche Ortszeit wie „Stand“): `Lebenslauf_<Inventarnummer>_<JJJJ-MM-TT>_<HHMM>.pdf`,
+  ebenso `Artikel_…`, `Protokolle_<Ordner>_…` (Export des Ordners), `Jahresbericht_<Ordner>_<Jahr>[-mit-pruefern]_…`,
+  `Pruefungen_…`, `Nacharbeit_…`, `Katalog_…`. Unverändert: festgeschriebene Protokolle und „Alle Protokolle (ZIP)“
+  eines abgeschlossenen Durchgangs (`Protokolle_<Titel>_<Protokoll-ID>.zip`) – ihr Inhalt ändert sich nicht.
+- Nicht auf einem echten Android-Telefon prüfbar; geprobt: zwei Abrufe nacheinander mit einer Änderung dazwischen →
+  die zweite Datei hat den neuen Stand und einen anderen Namen, `no-store` bleibt (Test und Browserprobe).
+
+**2. Mangelmeldung im Lebenslauf mit Melder und Beschreibung.** Bisher stand bei „Mangel gemeldet“ immer „(Person)“
+ohne Text (beschriftung.py, „Der Lebenslauf geht weiter, an wen er auch geht“ – für Melder und Text abgelöst durch den
+Wunsch vom 26.10.2026). Jetzt nach derselben Regel wie die Oberfläche (`mangel.darf_inhalt`, `bestand._melder_verbergen`):
+Prüfer (wirksame Prüffreigabe, auch der externe) und Materialwart des Artikels (verwalten; Material- und
+Plattform-Verwaltung ebenso) sehen bei jeder Meldung den Namen des Melders und darunter „Mangelbeschreibung: <Text>“;
+wer nur liest, sieht das bei seiner eigenen Meldung, sonst „(Person)“ ohne Text. Der Name ist der beim Melden
+gespeicherte (`mat_defect_report.reporter_name`, bleibt beim Kontolöschen). Fotos nie. Der Text steht vollständig,
+escaped wie jeder Wert der Vorlage, mit Zeilenumbrüchen (`.text`, `white-space: pre-wrap`, `overflow-wrap: anywhere`).
+Andere Betroffene (Kontoverweise, z. B. „Zuordnung geändert“) bleiben „(Person)“. Der Hinweis über den Ereignissen
+sagt es in einem Satz.
+- `lebenslauf._maengel(item)` → `{Kennung: (Name, Beschreibung)}` der sichtbaren Meldungen; `beschriftung.journal_zeilen`
+  nimmt sie als `maengel=` (ohne: wie bisher „(Person)“ – so bleibt der Verlauf in der Leitstelle unverändert).
+
+**Tests.** `test_material_mangel.test_lebenslauf` neu: Materialwart und Prüfer → drei Meldungen mit Namen und Text
+(Markup wörtlich, Zeilenumbruch erhalten, 1 900 Zeichen vollständig), Leser ohne eigene Meldung → dreimal „(Person)“,
+kein Text, Leser mit eigener Meldung → Name und Text nur dort; veraPDF PDF/A-3b bestanden.
+`test_material_export.test_lebenslauf_jeder_abruf_frisch` (neu): zwei Abrufe um 15:46 und 18:18 mit Änderung dazwischen,
+`?stand=` übergangen, CSV/ZIP des Ordners mit Uhrzeit, Knöpfe mit `data-frisch` statisch. Dateinamen in
+`test_material_export` und `test_material_bericht` auf Datum und Uhrzeit umgestellt.
 
 ## Nachbesserung nach den Prüfungen der Umbenennung (26.10.2026)
 
@@ -8516,3 +8560,4 @@ oder Plattform-Verwaltung).
 | `POST /api/material/artikel/<id>/aussondern` | wie bisher | neu: `datum` vor der letzten abgeschlossenen Prüfung, vor dem Herstelldatum (Monat → erster Tag) oder vor dem Tag der Sperre (jüngster Journaleintrag frei → gesperrt/verloren, Ortszeit) → 409 mit Klartext; Zukunft und vor der Erfassung weiter 400 (C2, Phase 4 · 1 mit Nachbesserung) |
 | `POST /api/material/artikel/<id>/aussondern`, `POST …/pruefungen/<id>/festschreiben`, `GET …/artikel/<id>` | wie bisher | seit Schritt 28: Ergebnis `aussondern` → 400, neu `aussondern_empfohlen` (sperrt); Aussondern nur nach einer letzten Prüfung `instandsetzen`/`aussondern_empfohlen` oder bei `verloren`, sonst 409 mit Grund; Artikel trägt `aussonderung_empfohlen` ({pruefung, protokoll_id, datum, pruefer, grund} bzw. in Listen true/false) und für Materialwarte `aussondern` {ok, grund} |
 | `GET /api/material/ordner/<fid>?status=aussonderung_empfohlen`, `GET /api/material/start`; `POST/PUT/DELETE …/freigaben…`, `POST …/ordner/<fid>/verschieben`, `PUT/DELETE /api/admin/users/<id>` | wie bisher | A4: Filter und `empfohlen` (Zahl) am Ordner, `aussonderung_empfohlen` [{ordner_id, gliederung, anzahl}] auf der Übersicht; N5: Antworten tragen `mail` (Mail an die Material-Verwaltung zu Anträgen ohne Materialwart) |
+| `GET /materialablage/artikel/<id>/lebenslauf.pdf`, `…/export/<fid>.csv`, `…/export/<fid>-protokolle.zip`, `…/ordner/<fid>/bericht-<jahr>[-mit-pruefern].pdf`, `…/export/<fid>-pruefungen-<jahr>[-mit-pruefern].csv`, `…/ordner/<fid>/nacharbeit.csv`, `GET /api/material/katalog/export` | wie bisher | seit dem 26.10.2026: Dateiname mit Datum und Uhrzeit (`…_<JJJJ-MM-TT>_<HHMM>.<endung>`, deutsche Zeit); ein Abfrageparameter `stand` (vom Knopf beim Antippen) wird übergangen. Lebenslauf: bei „Mangel gemeldet“ Name des Melders und „Mangelbeschreibung“ für Prüfer, Materialwart und die eigene Meldung, sonst „(Person)“ |

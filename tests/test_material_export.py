@@ -9,9 +9,13 @@ import hashlib
 import io
 import logging
 import os
+import re
 import sys
 import tempfile
 import zipfile
+from contextlib import contextmanager
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -99,7 +103,7 @@ def test_csv():
         assert r.status_code == 200 and r.mimetype == "text/csv", (r.status_code, r.mimetype)
         heute = _heute()
         cd = r.headers["Content-Disposition"]
-        assert cd.startswith("attachment") and f"Artikel_Fahrzeug GW-Wasserrettung_{heute.isoformat()}.csv" in cd, cd
+        assert cd.startswith("attachment") and re.search(rf"Artikel_Fahrzeug GW-Wasserrettung_{heute.isoformat()}_\d{{4}}\.csv", cd), cd
         assert "no-store" in r.headers["Cache-Control"], r.headers["Cache-Control"]
         kopf, zeilen = csv_lesen(r.data)
         assert kopf == list(export.ARTIKEL_SPALTEN), kopf
@@ -190,7 +194,7 @@ def test_zip():
                            protokoll_zeile(app, rid=o["rid"]), protokoll_zeile(app, o["aus"]))
         r = f.get(f"/materialablage/export/{o['fz']}-protokolle.zip")
         assert r.status_code == 200 and r.mimetype == "application/zip", r.status_code
-        assert f"Protokolle_Fahrzeug GW-Wasserrettung_{_heute().isoformat()}.zip" in r.headers["Content-Disposition"]
+        assert re.search(rf"Protokolle_Fahrzeug GW-Wasserrettung_{_heute().isoformat()}_\d{{4}}\.zip", r.headers["Content-Disposition"])
         assert "no-store" in r.headers["Cache-Control"]
         z, kopf, verz = zip_lesen(r.data)
         assert kopf == list(export.VERZEICHNIS_SPALTEN), kopf
@@ -289,7 +293,7 @@ def test_lebenslauf():
         r = f.get(f"/materialablage/artikel/{a['formel']['id']}/lebenslauf.pdf")
         assert r.status_code == 200 and r.mimetype == "application/pdf" and r.data.startswith(b"%PDF"), r.status_code
         cd = r.headers["Content-Disposition"]
-        assert cd.startswith("inline") and f"Lebenslauf_{a['formel']['inventory_no']}_{_heute().isoformat()}.pdf" in cd, cd
+        assert cd.startswith("inline") and re.search(rf"Lebenslauf_{a['formel']['inventory_no']}_{_heute().isoformat()}_\d{{4}}\.pdf", cd), cd
         assert "no-store" in r.headers["Cache-Control"] and r.headers["Content-Security-Policy"] == CSP_PDF
         # Nicht festgeschrieben: keine neue Datei unter DATA_DIR/pdf, keine Zeile in mat_inspection, kein Journaleintrag.
         assert _dateien(os.path.join(tmp, "pdf")) == vorher and _zahlen(app) == zahlen
@@ -335,6 +339,71 @@ def test_lebenslauf():
         assert "noch keine abgeschlossene Prüfung" in text and "Eingangsprüfung ausstehend" in text, text[:1200]
         assert _dateien(os.path.join(tmp, "pdf")) == vorher and _zahlen(app) == zahlen
     print("Lebenslauftest bestanden.")
+
+
+@contextmanager
+def uhrzeit(stunde, minute):
+    """Stellt jetzt() (services.datetime) auf heute, stunde:minute deutscher Zeit – für die Uhrzeit im Dateinamen.
+    db.now() bleibt die echte Uhr."""
+    from app.material import services
+    tag = _heute()
+    fest = datetime(tag.year, tag.month, tag.day, stunde, minute, tzinfo=ZoneInfo("Europe/Berlin"))
+
+    class Uhr(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fest.astimezone(tz) if tz else fest
+    alt = services.datetime
+    services.datetime = Uhr
+    try:
+        yield
+    finally:
+        services.datetime = alt
+
+
+def test_lebenslauf_jeder_abruf_frisch():
+    """Meldung vom 26.10.2026: Chrome auf Android zeigte einen alten Lebenslauf (gleiche Adresse, gleicher Tagesname).
+    Jeder Abruf setzt neu – zwei Abrufe mit einer Änderung dazwischen liefern den neuen Stand unter anderem Namen
+    (Datum und Uhrzeit, deutsche Zeit); der Zeitstempel ?stand=… vom Knopf ändert nichts; no-store bleibt. Die übrigen
+    auf Abruf gesetzten Dateien tragen die Uhrzeit ebenso."""
+    with tempfile.TemporaryDirectory() as tmp:
+        app, k, o, a = aufbau(tmp)
+        w, iid, tag = k["wart"], a["lager"]["id"], _heute().isoformat()
+        url = f"/materialablage/artikel/{iid}/lebenslauf.pdf"
+        pfad = os.path.join(tmp, "lebenslauf.pdf")
+
+        def abruf(adresse):
+            r = w.get(adresse)
+            assert r.status_code == 200 and r.mimetype == "application/pdf", r.status_code
+            assert "no-store" in r.headers["Cache-Control"] and r.headers["Content-Security-Policy"] == CSP_PDF
+            with open(pfad, "wb") as fh:
+                fh.write(r.data)
+            return r.headers["Content-Disposition"], _flach(" ".join(pdf_seiten(pfad)))
+        with uhrzeit(15, 46):
+            cd1, text1 = abruf(f"{url}?stand=1761486360000")
+        assert w.put(f"/api/material/artikel/{iid}", json={"notes": "Platzhalter nach dem ersten Abruf"}).status_code == 200
+        with uhrzeit(18, 18):
+            cd2, text2 = abruf(f"{url}?stand=1761495480000")
+            cd3, text3 = abruf(url)
+        assert cd1.startswith("inline") and f"_{tag}_1546.pdf" in cd1, cd1
+        assert f"_{tag}_1818.pdf" in cd2 and cd3 == cd2, (cd2, cd3)
+        assert "Platzhalter nach dem ersten Abruf" not in text1
+        assert "Platzhalter nach dem ersten Abruf" in text2 and "Platzhalter nach dem ersten Abruf" in text3, text2[:1500]
+        # Die übrigen Dateien auf Abruf: CSV und ZIP des Ordners mit Uhrzeit (Jahresbericht: test_material_bericht).
+        with uhrzeit(7, 5):
+            for adresse in (f"/materialablage/export/{o['fz']}.csv?stand=1", f"/materialablage/export/{o['fz']}-protokolle.zip"):
+                r = w.get(adresse)
+                assert r.status_code == 200 and f"_{tag}_0705." in r.headers["Content-Disposition"], r.headers
+                assert "no-store" in r.headers["Cache-Control"]
+        # Oberfläche: Die Knöpfe tragen data-frisch, beim Klick (nicht beim Zeichnen) kommt ?stand=<ms> dazu.
+        js = w.get("/static/material/material.js").get_data(as_text=True)
+        for knopf in ('/lebenslauf.pdf" target="_blank" rel="noopener" data-frisch', '/export/${d.id}.csv" data-frisch',
+                      '/export/${d.id}-protokolle.zip" data-frisch', '${mit}.pdf" target="_blank" rel="noopener" data-frisch',
+                      '${mit}.csv" data-frisch', '/nacharbeit.csv" data-frisch', '/katalog/export" download data-frisch'):
+            assert knopf in js, knopf
+        assert 'u.searchParams.set("stand", String(Date.now()))' in js
+        assert 'for (const art of ["click", "auxclick", "contextmenu"]) document.addEventListener(art, frischeAdresse, true);' in js
+    print("Lebenslauf frisch bestanden.")
 
 
 # --- Rechte und Oberfläche -------------------------------------------------------------------------------------------
@@ -417,5 +486,6 @@ if __name__ == "__main__":
     test_csv()
     test_zip()
     test_lebenslauf()
+    test_lebenslauf_jeder_abruf_frisch()
     test_rechte()
     test_review_lieferung4()

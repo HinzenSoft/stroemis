@@ -36,6 +36,7 @@ MELDUNG = {"id", "created_at", "inhalt", "description", "fotos", "melder", "offe
 # Eine KOPIE einer Datenbank auf Stand 7 für den Pfad 7 → 13 (test_migration_13) – nur, wenn angegeben; die Quelle
 # bleibt unberührt.
 KOPIE_STAND_7 = os.environ.get("MATERIAL_KOPIE_STAND_7") or ""
+ST_VERA = "/home/harness/devtools/bin/st-vera"
 
 
 # --- Helfer ---------------------------------------------------------------------------------------------------------
@@ -932,21 +933,58 @@ def test_kontoloeschen_folgen():
 
 
 def test_lebenslauf():
-    """Lebenslauf-PDF: „Mangel gemeldet“ mit „(Person)“ – nicht der Name, nicht der Text."""
+    """Lebenslauf-PDF (Wunsch vom 26.10.2026): „Mangel gemeldet“ mit dem Namen des Melders und der Mangelbeschreibung
+    – nach derselben Regel wie die Oberfläche (darf_inhalt): Materialwart und Prüfer sehen beides bei jeder Meldung,
+    wer nur liest, bei der eigenen; sonst „(Person)“ ohne Text. Markup steht wörtlich da, Zeilenumbrüche bleiben, ein
+    langer Text bricht um; keine Fotos."""
     with post_mangel(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
         a1 = t.art[0]
-        zuordnen(t, a1, t.person_id)
-        assert melden(t.person, a1, "Geheimer Platzhaltertext").status_code == 201
-        r = t.w.get(f"/materialablage/artikel/{a1}/lebenslauf.pdf")
-        assert r.status_code == 200 and r.mimetype == "application/pdf", r.status_code
-        pfad = os.path.join(tmp, "lebenslauf.pdf")
-        with open(pfad, "wb") as fh:
-            fh.write(r.data)
-        text = " ".join(" ".join(pdf_seiten(pfad)).split())
-        assert "Mangel gemeldet" in text and "(Person)" in text, text[-1500:]
-        assert "Person Platzhalter" not in text and "Geheimer Platzhaltertext" not in text
-        assert "Mangelmeldung Nr." in text
+        f, p, leser = t.k["fuehrung"], t.k["pruefer"], t.mitglied
+        freigeben(t.adm, t.gid, t.mitglied_id, "lesen")
+        geheim = "Geheimer Platzhaltertext"
+        assert melden(t.w, a1, geheim, fotos=1).status_code == 201
+        markup = 'Platzhalter <b>fett</b> & "Zeichen" <img src=x onerror=alert(1)>\nZweite Zeile äöüß'
+        assert melden(f, a1, markup).status_code == 201
+        lang = " ".join(["Platzhalterwort"] * 100) + " " + "x" * 300          # 1 899 Zeichen, erlaubt sind 2 000
+        assert len(lang) <= 2000 and melden(p, a1, lang).status_code == 201
+
+        def lebenslauf(c, name):
+            r = c.get(f"/materialablage/artikel/{a1}/lebenslauf.pdf")
+            assert r.status_code == 200 and r.mimetype == "application/pdf", r.status_code
+            pfad = os.path.join(tmp, f"{name}.pdf")
+            with open(pfad, "wb") as fh:
+                fh.write(r.data)
+            seiten = pdf_seiten(pfad)
+            return " ".join(" ".join(seiten).split()), "\n".join(seiten), pfad
+        # Materialwart und Prüfer: alle drei Meldungen mit Namen und Text.
+        for c, name in ((t.w, "wart"), (p, "pruefer")):
+            text, roh, pfad = lebenslauf(c, name)
+            assert text.count("Mangelbeschreibung") == 3 and "(Person)" not in text, text[-3000:]
+            for wert in (geheim, "fuehrung", "Platzhalterwort Platzhalterwort",
+                         'Platzhalter <b>fett</b> & "Zeichen" <img src=x onerror=alert(1)>', "Zweite Zeile äöüß"):
+                assert wert in text, (name, wert, text[-3000:])
+            # Zeilenumbruch erhalten: „Zweite Zeile“ steht auf einer eigenen Zeile, nicht hinter dem Markup.
+            zeile = next(z for z in roh.splitlines() if "Zweite Zeile" in z)
+            assert "Zeichen" not in zeile, zeile
+            assert "x" * 300 in text.replace(" ", ""), text[-1500:]           # der lange Teil vollständig
+        # Ein Konto, das nur liest und nicht gemeldet hat: „(Person)“ ohne Namen und ohne Text.
+        text, _, _ = lebenslauf(leser, "leser")
+        assert text.count("(Person)") == 3 and "Mangelbeschreibung" not in text, text[-2000:]
+        for wert in (geheim, "fuehrung", "Platzhalterwort", "Zweite Zeile", "<b>fett</b>"):
+            assert wert not in text, wert
+        assert text.count("Mangelmeldung Nr.") == 3
+        # Der Leser, der selbst gemeldet hat: seine Meldung mit Namen und Text, die fremden als „(Person)“.
+        text, _, pfad = lebenslauf(f, "fuehrung")
+        assert text.count("(Person)") == 2 and text.count("Mangelbeschreibung") == 1, text[-2000:]
+        assert "fuehrung" in text and "Zweite Zeile äöüß" in text and '<b>fett</b>' in text
+        assert geheim not in text and "Platzhalterwort" not in text
+        # PDF/A-3b bleibt gültig (veraPDF, wenn vorhanden – sonst die Kennung in den XMP-Daten).
+        if os.path.exists(ST_VERA):
+            import subprocess
+            for datei in (pfad, os.path.join(tmp, "wart.pdf")):
+                v = subprocess.run([ST_VERA, datei], capture_output=True, text=True, timeout=300)
+                assert v.returncode == 0 and "PASS" in v.stdout, (datei, v.stdout[-800:], v.stderr[-800:])
     print("Lebenslauf bestanden.")
 
 
