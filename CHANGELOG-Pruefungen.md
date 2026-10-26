@@ -4,6 +4,16 @@ Erweiterung von strömis.de um Lehrgänge, Teilnehmende, Voraussetzungen, Prüfu
 Stoppuhr, Nachprüfungen, Medien und eine Mängelübersicht für Feedbackrunden – nur für Nutzer mit dem neuen
 Zusatzrecht „Prüfer“.
 
+## Nachtrag (26.10.2026): Das Modul heißt „Riegenkarten“
+
+Wunsch des Nutzers („Prüfungen in Riegenkarten umbenennen“): Reiter, Seitentitel, Überschrift der Lehrgangsliste,
+Spalte der Rechte-Matrix, Einstellungsgruppe („Diktieren per Mikrofon“) und die Zugangsmeldung („Für dein Konto sind die
+Riegenkarten nicht freigeschaltet.“ statt „Nur für Prüfer“) heißen jetzt „Riegenkarten“. Die Seiten liegen unter
+`/riegenkarten`, `/riegenkarten/kataloge[/<id>]`, `/riegenkarten/<id>[/druck]`; die alten Adressen `/pruefungen…`
+leiten dauerhaft weiter (301, Abfrage bleibt). Innerhalb des Moduls bleiben die Begriffe (Lehrgang, Katalog, Prüfungen
+abnehmen, Prüfer, Prüfungsleistung), ebenso der interne Schlüssel `pruefungen`, die Schnittstelle `/api/pruefungen/…`
+und die Medien unter `/media/pruefung/…`. Siehe CHANGELOG-Material.md, „Neue Modulnamen“.
+
 ## Nachtrag (25.10.2026): Beispieldaten-Skript entfernt
 
 - `scripts/beispieldaten.py` entfernt (Wunsch des Nutzers, 25.10.2026) – Testdaten für den Prüfungsbereich gibt es nur

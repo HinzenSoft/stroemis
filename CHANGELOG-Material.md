@@ -26,6 +26,7 @@ für sich deploybar.
 | Bestandteil-Liste an normalen Produkten (Schritt 25) | Herstellersets als flache Produkte mit Liste „Bestandteile“ (Bezeichnung und Anzahl): Produktdialog, Produkt- und Artikelseite, Meine PSA, Lebenslauf; jede Prüfung fragt je Position „vorhanden“ ab („fehlt“ = Mangel); Katalogdatei; Set-Meldung → „Produkt anlegen“; dazu Seriennummern der Bestandteile je Stück am Artikel (direkt bis zur ersten Prüfung, dann in der Prüfung oder per Antrag, suchbar) | gebaut 25.10.2026, wartet auf Prüfung und Freigabe |
 | Nachbesserung L2c nach den Prüfungen | Bestandteile: Kennung nie an eine andere Position, Bezeichnung mitverglichen; Berichtigung gegen den wirksamen Wert; Protokoll ohne „neu“, wo nichts übernommen wurde; Wettlauf Prüfung ↔ Antrag 409; Steuerzeichen; Rückweg 25; Ordnerliste ohne Überlauf (Kategorie über dem Hersteller), Prüfung „fehlt“, doppelte Nummer als Hinweis, Schublade, Produktseite „Mehr“ | gebaut 25.10.2026, wartet auf Freigabe |
 | Nachbesserung Sets und Anträge nach den Prüfungen | Sets: Kennungen der Kopie, „Anzahl verringert“, Texte; Anträge: Produktgeschichte nach Wechsel, Intervall-Obergrenze nur bei Änderung, Fälligkeit ohne Namen, 409 statt 500, Texte, Zähl-Aufruf | gebaut 25.10.2026, wartet auf Prüfung und Freigabe |
+| Neue Modulnamen | Strömipedia, Ankerplätze, Riegenkarten, Materialablage, Leitstelle samt Adressen; alte Adressen leiten dauerhaft weiter (301, Abfrage bleibt, Umlaut-Schreibweisen), neue Protokolle mit `/materialablage/pruefen` | gebaut 26.10.2026, wartet auf Prüfung und Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4160,6 +4161,80 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
 
+## Neue Modulnamen (Wunsch des Nutzers, 26.10.2026)
+
+Wunsch des Nutzers, wörtlich: „Strömipedia für Wiki / Ankerplätze für Karte / Materialablage für Materialmodul /
+Leitstelle für Verwaltung“, Nachtrag „Prüfungen in Riegenkarten umbenennen“ (das Modul Prüfungen – nicht die
+Prüfungen der Materialablage). Umfang: sichtbare Namen UND Adressen, die alten leiten weiter (Bauentwurf
+`entwurf_umbenennung.md`, Entscheidungen F1–F5 vom 26.10.2026). Kein Schemaschritt, keine Datenänderung.
+
+| Modul (Schlüssel) | bisher | neu | Seiten bisher → neu |
+| --- | --- | --- | --- |
+| `wiki` | Wiki | Strömipedia | `/wiki…` → `/stroemipedia…` (dazu `/strömipedia…`) |
+| `karte` | Spots | Ankerplätze | `/karte` → `/ankerplaetze` (dazu `/ankerplätze`) |
+| `pruefungen` | Prüfungen | Riegenkarten | `/pruefungen…` → `/riegenkarten…` |
+| `material` | Material, „Modul Material“ | Materialablage | `/material…` → `/materialablage…` |
+| `verwaltung` | Verwaltung | Leitstelle | `/admin` → `/leitstelle` |
+
+**Entscheidungen.** F1 A: Rollennamen bleiben („Material-Verwaltung“, „Wiki-Verwaltung“, „Plattform-Verwaltung“), ebenso
+die Stufe „Verwaltung“ in jedem Modul („Leitstelle: Verwaltung“). F2 A: Begriffe in den Modulen bleiben (Album, Lehrgang,
+Katalog, Prüfer; in der Materialablage die Prüfungen, der Reiter „Prüfungen“, Prüfprotokoll …). F3 A: ASCII-Pfade, die
+Umlaut-Schreibweisen leiten zusätzlich weiter. F4 A: gespeicherte Wiki-Links werden nicht umgeschrieben. F5 A: neue
+Protokolle und Lebensläufe drucken `strömis.de/materialablage/pruefen`.
+
+**KERN.**
+- `app/module.py` (neu): `NAME`, `PFAD`, `ALT`, `UMLAUT` und `weiterleitung(pfad, abfrage)`. Interne Schlüssel bleiben
+  (`auth.MODULE`, `recht_<modul>`, Blueprint- und Endpunktnamen, Dateinamen, `/api/…`, CLI-Gruppe `material`).
+- Weiterleitung: erster `before_request`-Haken `alte_adressen` (vor `einstellungen_anwenden` – keine Datenbankabfrage),
+  nur GET/HEAD, ohne Anmeldung und Rechteprüfung (das Ziel prüft selbst), 301 mit `Cache-Control: public,
+  max-age=86400` (ein Rückbau bleibt möglich). Ziel = festes neues Präfix + der Rest des Pfads, kodiert nach RFC 3986
+  (pchar; Rückstrich, Steuerzeichen und „%“ werden kodiert) + die rohe Abfrage – nie ein Host, ein Schema oder „//“
+  am Anfang. Erfasst wird ein Pfad nur, wenn er dem alten Präfix gleicht oder mit „Präfix/“ beginnt (`/materialx`,
+  `/wikis` nicht). Umlaute auch zerlegt (NFC). Auf der Wiki-Subdomain greift sie nicht (dort wird vorher auf
+  `/oeffentlich/…` umgeschrieben). POST/PUT/DELETE auf alte Seitenpfade: 404/405 wie bei jeder unbekannten Seite.
+- Seitenrouten in `app/__init__.py` und `app/material/routes*.py` auf die neuen Pfade; Startweiche über `module.PFAD`.
+  Bleiben: `/`, `/m/<token>`, `/api/…`, `/media/…` (auch `/media/material/…`, `/media/pruefung/…`), `/static/…`,
+  `/oeffentlich/…`, `/profil`, `/login` …
+- Links in Mails (Erinnerung, Mangel, Meldung, Rückruf, Antrag, Mailfehler-Protokoll, Kontoanfrage → `/leitstelle`,
+  Beobachten → `/stroemipedia/<slug>`) und in JSON-Antworten (`protokoll.url`, `weiter`, Wiki-Anleitung `url`) mit den
+  neuen Pfaden. Gespeicherte Mailtexte (`mat_mail_fehler`) bleiben, wie sie verschickt wurden.
+- PDFs: Kopf „Materialablage · Prüfnachweis | · Lebenslauf | · Jahresbericht“, `protokoll.PRUEFSEITE =
+  "/materialablage/pruefen"`; Jahresbericht-Titel „Jahresbericht <Ordner> <Jahr>“ (ohne „Material“). Festgeschriebene
+  PDFs bleiben byteweise, wie sie sind; ihre Prüfseite `/material/pruefen` leitet für immer weiter (ohne Anmeldung).
+- Gespeicherte Wiki-Links (F4 A): `_LINK_REF_RE` erkennt `/wiki/<slug>` und `/stroemipedia/<slug>`; der ZIP-Import
+  schreibt `/stroemipedia/<slug>`. Kein `DERIVED_VERSION`-Sprung (`wiki_page_links` gleicher Inhalt).
+- Meldungen: `KEIN_ZUGANG` („Für dein Konto sind die Ankerplätze/Riegenkarten nicht freigeschaltet.“, „… ist die
+  Strömipedia/Materialablage/Leitstelle …“; bisher „Nur für Prüfer“), Startseite ohne Modul „… an die
+  Plattform-Verwaltung“, alle „Modul Material“-Texte („in der Materialablage“, „Zugang zur Materialablage“,
+  `freigaben.OHNE_ZUGANG` „kein Zugang zur Materialablage“), „Leitstelle → Einstellungen“, Einstellungsgruppen
+  „Riegenkarten“ und „Materialablage“, Erinnerungsbetreff „strömis.de – Materialablage: …“, Katalog-Export
+  `bericht.txt` „Katalog-Export – Materialablage“, Journal-Beschriftung „Stufe Materialablage“, „Seite der Strömipedia
+  Nr.“, „Prüfanleitung (Strömipedia) geändert“ (beschriftung.py und material.js). Die Meldung im Trigger des Journals
+  („Das Journal des Moduls Material ist unveränderlich.“) bleibt – sie steht im Schema.
+
+**OBERFLÄCHE.**
+- Kopfleiste, Titel, Spalten der Rechte-Matrix und Dialogfelder der Nutzerverwaltung aus `module.NAME` (Jinja `modul`,
+  `window.STROEMIS.module` für admin.js); Reihenfolge unverändert, Überlauf fängt das „Mehr“-Menü.
+- Überschriften „Strömipedia“, „Riegenkarten“, „Materialablage“; Leitstelle-Seite behält „Nutzerverwaltung“;
+  „Jahresbericht“ statt „Jahresbericht Material“; öffentliche Seite „öffentliche Strömipedia“, Suchfeld „Strömipedia
+  durchsuchen …“, Titel „<Seite> – Strömipedia – strömis.de“; Fehlerseite „Zur Übersicht der Materialablage“ bzw. „Zur
+  Strömipedia“; Lesemodus „Du siehst die öffentlichen Seiten der Strömipedia …“.
+- Rund 150 Seitenlinks in material.js, 25 in wiki.js, 19 in pruefungen.js, je wenige in suche.js, freigaben.js,
+  pruefen.js, admin.js und den Vorlagen auf die neuen Pfade (`${API}` = `/api/material` bleibt). wiki.js:
+  `SEITEN`/`slugAus` statt `slice(6)`; Klickweiche, `public.js` (Umschreiben auf das Präfix) und die Prüfanleitung
+  nehmen `/wiki/…` und `/stroemipedia/…`; der Editor schreibt neue Links als `/stroemipedia/<slug>`.
+
+**Tests.** `tests/test_umbenennung.py` (neu, nicht in der Vorgabeliste von `st-test` – einzeln aufrufen): jede alte
+Adresse → neue (301, `Location`, Abfrage, `Cache-Control`, GET und HEAD, ohne Anmeldung, Plattform-Verwaltung, ohne
+Stufe), Umlaute auch NFD, nichts sonst erfasst (`/materialx`, `/api/…`, `/media/…`, `/static/…`, `/m/…`, `/oeffentlich/`,
+Wiki-Subdomain), keine Weiterleitung für POST/PUT/DELETE/PATCH, kein offener Sprung (`//`, Rückstrich, CRLF, `@`,
+Schema im Pfad, RTL-Zeichen); neue Adressen wie die alten (Anmeldung mit `next`, 403, Startweiche, Lesemodus); Kopfleiste
+(Namen, Reihenfolge), Titel, Rechte-Matrix, öffentliche Seite, Anmeldung, Fehlerseite, Zugangsmeldungen,
+Einstellungsgruppen; Mails Kontoanfrage und Beobachten, statisch keine alten Pfade in Mail-Links; neues Prüfprotokoll
+und Lebenslauf (Kopf, Prüfseite), ein Protokoll mit alter Prüfseite unverändert (Download, Prüfseite alt und neu);
+Wiki-Links beider Schreibweisen in `wiki_page_links`; statisch (Zeichenketten ohne Kommentare/Docstrings) keine alten
+Seitenpfade und Wortlaute in `app/`. Vorhandene Tests mechanisch auf die neuen Seitenpfade und Texte umgestellt.
+
 ## A4 „Aussonderung empfohlen“ als Filter und Übersichtszahl, N5 Mail bei Anträgen ohne Materialwart, W2 (25.10.2026)
 
 Entscheidungen des Nutzers zur Freigabeliste L2c: „A4 N5 bestätigen“ – „Ja, beides bauen“; W2: „niemals hinter den
@@ -8239,17 +8314,17 @@ oder Plattform-Verwaltung).
 | `PUT /api/material/pruefungen/<id>/punkte/<pid>` mit `unterschrift` (data:-URL oder `null`) | Prüfer (eigener Entwurf) | Unterschriftsfeld eines Formulars |
 | `GET/PUT/DELETE /api/material/unterschrift` (`bild`: data:-URL vom Signatur-Pad) | GET und DELETE angemeldet (eigene Daten, auch ohne Modulzugang); PUT mit Modulzugang nur Prüfer (seit Lieferung 5 schon mit dem Häkchen, ohne Urkundennummer) und wer irgendwo verwaltet (eigenes Konto) | eigene Unterschrift im Profil |
 | `PUT /api/material/urkundennummer` (`urkundennummer`; leer entfernt sie) | Häkchen „Prüfer“ (eigenes Konto), sonst 403 | eigene Urkundennummer im Profil; Antwort `urkundennummer`, `pruefen` (darf jetzt prüfen); ungültig 400 (Lieferung 5) |
-| `GET /material/pruefung/<id>/pdf`, `GET /material/durchgang/<id>/sammelprotokoll` | lesen | Protokoll als PDF (nur, solange die Datei ihre Prüfsumme hat) |
-| `GET /material/pruefen`, `POST /api/material/pruefen` (`datei`) | ohne Anmeldung | Prüfseite: `ergebnis` (unveraendert, veraendert, unbekannt), `protokoll_id`, `art`, `hinweis` – angemeldet mit Zugang dazu `link` |
+| `GET /materialablage/pruefung/<id>/pdf`, `GET /materialablage/durchgang/<id>/sammelprotokoll` | lesen | Protokoll als PDF (nur, solange die Datei ihre Prüfsumme hat) |
+| `GET /materialablage/pruefen`, `POST /api/material/pruefen` (`datei`) | ohne Anmeldung | Prüfseite: `ergebnis` (unveraendert, veraendert, unbekannt), `protokoll_id`, `art`, `hinweis` – angemeldet mit Zugang dazu `link` |
 | `GET /api/material/entwuerfe` | Modulzugang | offene Prüfungen aller Prüfer im eigenen Bereich |
 | `POST /api/material/artikel/<id>/sperren` (`grund`: sturz, beschaedigung, verlust, rueckruf; `text`) | Prüfer | Sperre ohne Prüfung |
 | `POST /api/material/artikel/<id>/aussondern` (`grund`: lebensdauer, verlust, irreparabel; `datum`, `bemerkung`) | Materialwart (mit Unterschrift) | Aussonderung gesperrter Artikel mit Aussonderungsprotokoll; liefert `aussonderung` (Kennung) |
 | `GET/POST /api/material/durchgaenge`, `GET/DELETE …/<id>` | lesen / Materialwart oder Prüfer | Prüfdurchgänge (`?offen=1`); eröffnen (`folder_id`, `titel`); löschen, solange nichts geprüft ist |
 | `POST /api/material/durchgaenge/<id>/ausnehmen`, `…/einbeziehen` (`item_id`, `grund`), `…/abschliessen` | Materialwart oder Prüfer | Artikel ausnehmen, wieder einbeziehen, Durchgang abschließen (mit Sammel- und Set-Protokollen; 409 „Während des Festschreibens wurde am Durchgang weitergearbeitet …“, wenn sich dreimal zwischen Rendern und Festschreiben etwas geändert hat, 503 bei gesperrter Datenbank) |
 | `POST /api/material/durchgaenge/<id>/abbrechen` | Materialwart oder Prüfer | vorzeitig beenden; `durchgang` ist `null`, wenn er mangels Geprüftem entfernt wurde |
-| `GET /material/export/<ordner>.csv` | Grundrecht am Ordner (Phase 2) | Artikel, deren Heimat im Ordner oder darunter liegt (auch von hier gesperrte und ausgesonderte), als CSV für Excel; Spalte „Zugeordnet an“ (Phase 2), hinter „Modell“ „Bemerkung (Produkt)“ (Nachbesserung vom 18.10.2026), hinter „Lebensende“ die Spalte „Länge (m)“ als „57,5“ (Schritt 20) |
-| `GET /material/export/<ordner>-protokolle.zip` | Grundrecht am Ordner (Phase 2) | alle Protokolle dieser Artikel, die Sammelprotokolle der Durchgänge und die Set-Protokolle der Sets im Zweig, mit `Verzeichnis.csv` (Spalte „Set“ seit 25.10.2026); Dateiname mit ASCII-Ersatz („ue“) und `filename*` |
-| `GET /material/artikel/<id>/lebenslauf.pdf` | Grundrecht an der Heimat (Phase 2) | Lebenslauf als PDF/A-3b, auf Abruf, nicht festgeschrieben |
+| `GET /materialablage/export/<ordner>.csv` | Grundrecht am Ordner (Phase 2) | Artikel, deren Heimat im Ordner oder darunter liegt (auch von hier gesperrte und ausgesonderte), als CSV für Excel; Spalte „Zugeordnet an“ (Phase 2), hinter „Modell“ „Bemerkung (Produkt)“ (Nachbesserung vom 18.10.2026), hinter „Lebensende“ die Spalte „Länge (m)“ als „57,5“ (Schritt 20) |
+| `GET /materialablage/export/<ordner>-protokolle.zip` | Grundrecht am Ordner (Phase 2) | alle Protokolle dieser Artikel, die Sammelprotokolle der Durchgänge und die Set-Protokolle der Sets im Zweig, mit `Verzeichnis.csv` (Spalte „Set“ seit 25.10.2026); Dateiname mit ASCII-Ersatz („ue“) und `filename*` |
+| `GET /materialablage/artikel/<id>/lebenslauf.pdf` | Grundrecht an der Heimat (Phase 2) | Lebenslauf als PDF/A-3b, auf Abruf, nicht festgeschrieben |
 | `GET /api/material/katalog/export`, `GET …/export/vorschau` | Katalog | Katalog ohne DEMO als ZIP (Format 2) bzw. seine Zahlen vorab |
 | `POST /api/material/katalog/import` (`file`: ZIP oder JSON, `trocken`: Vorgabe `1`) | Katalog | Katalogimport im Hintergrund (seit 24.10.2026): **202** `auftrag`, 409 mit dem laufenden, 507 bei zu wenig Platz (Datei + 64 MB); der Bericht (neu/geändert/unverändert je Art, Bilder, Dokumente, Änderungen, Hinweise, Warnungen, Fehler) kommt über `GET …/katalog/import/<kennung>` |
 | `GET /api/material/katalog/import/<kennung>`, `POST …/<kennung>/uebernehmen`, `GET …/katalog/import/aktuell` | Katalog (Übernehmen: wer den Probelauf gestartet hat) | Stand und Bericht eines Auftrags (`von`: Name, frisch aus dem Kontoverweis aufgelöst, „(gelöschtes Konto)“ nach dem Löschen); echter Lauf mit der Datei des Probelaufs (202, 507 bei zu wenig Platz; auch mit der Kennung eines abgebrochenen „Übernehmen“, dessen Probelauf seine Datei zurückbekam); laufender oder zuletzt beendeter Auftrag für die Katalogseite – Einzelheiten unter „Katalogimport im Hintergrund“ und seiner Nachbesserung |
@@ -8281,7 +8356,7 @@ oder Plattform-Verwaltung).
 | `flask --app "app:create_app()" material remind [--trocken [--demo]] [--stichtag JJJJ-MM-TT] [--erneut]` | Kommandozeile im Container | Erinnerungslauf: `--trocken` zeigt die Mails des nächsten Laufs mit Adressen und schreibt nichts (auch bei „aus“ oder gesperrt), `--stichtag` und `--demo` (DEMO-Bestand einbeziehen, nur Ansicht) nur mit `--trocken`; ohne `--trocken` ein echter Lauf für heute (nie DEMO), `--erneut` noch einmal am selben Tag (nur, was nicht im Log steht). Exit 0, 1 (Mail gescheitert, Fehler), 2 (aus, gesperrt, kein Mailserver, `--stichtag` oder `--demo` ohne `--trocken`, unlesbares Datum) (Phase 2 · 2) |
 | `flask --app "app:create_app()" material dok-zusammenfuehren [--probe]` | Kommandozeile im Container | Herstellerdokumente einmal je Inhalt (Schritt 18): Altbestand unter `media/material/dok` auf Inhaltsnamen bringen, Dubletten zusammenführen, Prüfsummen aus den Dateien nachtragen – läuft beim ersten Start nach dem Update von selbst; hier mit Bericht (Dateien und MB vorher/nachher, frei, fehlende Dateien, Dateien ohne Zeile und davon entfernte Dubletten, entfernte Zwischendateien älter als ein Tag), `--probe` rechnet nur. Exit 0, 1 (Dateien fehlen), 2 (Ordner nicht erreichbar) (22.10.2026) |
 | `flask --app "app:create_app()" material dev-zuruecksetzen [--trocken] [--ja-alles-loeschen]` | Kommandozeile im Container, nur dev | Modul Material leeren: erst die ganze Datenbank nach `sicherung-material-<Zeitstempel>/` sichern und `media/material`, `pdf/` dorthin verschieben, dann alle `mat_`-Objekte entfernen und das Schema frisch anlegen (Version 21); Konten, Wiki, Spots, Prüfungen, Einstellungen bleiben, DEMO-Konten werden nur genannt. `--trocken` zeigt nur. Nur mit `STROEMIS_NAME` auf `-dev`, `BASE_URL` (Umgebung und Einstellungen) mit Host `dev.…`, `localhost` oder `127.0.0.1` und `--ja-alles-loeschen`; SIGTERM/SIGHUP brechen sauber ab (Exit 1), Sicherung 0700/0600, ältere Sicherungen werden genannt. Exit 0, 1 (Sicherung oder späterer Schritt gescheitert – nichts geändert), 2 (nicht dev, ohne Schalter) (23.10.2026) |
-| `GET /material/ordner/<id>/import` | Materialwart am Ordner (sonst 403-Seite, fremd 404, Systemordner 409) | Seite „Bestandsliste importieren“ mit der Nacharbeit dieses Zielordners (Phase 2 · 3) |
+| `GET /materialablage/ordner/<id>/import` | Materialwart am Ordner (sonst 403-Seite, fremd 404, Systemordner 409) | Seite „Bestandsliste importieren“ mit der Nacharbeit dieses Zielordners (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/import/probelauf` (Formular: `file`, `zuordnung` JSON `{"<Spalte>": feld}`) | Materialwart am Ordner | Probelauf, schreibt nichts (außer einer Protokollzeile, wenn er fremde Dubletten nennt) → Bericht: `datei`, `nacharbeit_csv`, `spalten`, `felder`, `fehlt`, `warnungen`, `schon_importiert`, `sperre_bis` (dieselbe Datei bis dahin gesperrt, ISO in UTC, sonst `null`), `keine_seriennummer` (keine Spalte als Seriennummer zugeordnet), `ohne_seriennummern_bestaetigen` (Übernehmen braucht `ohne_seriennummern`, Entscheidung vom 20.10.2026), `zahlen` (mit `ohne_serie`), `faelligkeit`, `produkte_offen`, `ordner_unbekannt`, `zeilen`, `frist`; 400 unlesbar, 409 Systemordner, 413 zu groß, 429 anderer Import läuft (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/import` (wie der Probelauf, dazu `ohne_seriennummern` ja/nein) | Materialwart am Ordner | Übernehmen in einer Transaktion → 201, Bericht mit Zeilen `angelegt` (`artikel` {id, inventory_no}, vergebene STR-Nummer) und `import` {id, angelegt, im_bestand, nacharbeit, ersetzt}; 409 nichts zu tun, ohne Seriennummernspalte ohne `ohne_seriennummern` = ja („Keine Spalte ist als Seriennummer zugeordnet – bitte bestätigen …“, nichts geschrieben), dieselbe Datei vor weniger als 10 Minuten, Ordnerbaum geändert; anderes als ja/nein → 400 (Phase 2 · 3) |
 | `GET /api/material/ordner/<id>/nacharbeit?gruppe=alle\|produkt\|seriennummer\|daten\|ordner\|sonstige&seite=` | Materialwart am Ordner | offene Nacharbeit dieses Ziels: `zahlen` je Gruppe, `gruppen` (Produktangaben mit Vorschlägen, Meldung und `zugeordnet` – Zahl der Zeilen mit Produktwahl), `zeilen` (200 je Seite, mit `gruende`, `werte`, `offen_bis`), `erledigt` (die letzten 100), `frist` (Phase 2 · 3) |
@@ -8289,16 +8364,16 @@ oder Plattform-Verwaltung).
 | `POST /api/material/ordner/<id>/nacharbeit/melden` (Felder wie `POST /meldungen` ohne `folder_id`, dazu `angabe`; `fotos` mehrfach) | Materialwart am Ordner | Produkt melden; die Meldung hängt an allen offenen Zeilen der Angabe → 201 `meldung` (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/nacharbeit/pruefen` (`zeilen` [Nr.] \| `"alle"`, `uebernehmen`) | Materialwart am Ordner | erneut prüfen (Bericht, schreibt nichts) bzw. mit `uebernehmen` in einer Transaktion übernehmen → `zahlen`, `faelligkeit`, `zeilen` (mit `id`), `hinweise`; 429 wie oben (Phase 2 · 3) |
 | `POST /api/material/ordner/<id>/nacharbeit/verwerfen` (`zeilen` [Nr.] \| `"alle"`) | Materialwart am Ordner | offene Zeilen verwerfen (Werte gelöscht, Journal) → `verworfen` (Phase 2 · 3) |
-| `GET /material/ordner/<id>/nacharbeit.csv` | Materialwart am Ordner (Fehler als Seite) | offene Zeilen als CSV mit „Nacharbeit-Nr.“ (`;`, UTF-8 mit BOM, Formelschutz) – korrigiert wieder hochgeladen, erledigt sie die alten Zeilen (Phase 2 · 3) |
+| `GET /materialablage/ordner/<id>/nacharbeit.csv` | Materialwart am Ordner (Fehler als Seite) | offene Zeilen als CSV mit „Nacharbeit-Nr.“ (`;`, UTF-8 mit BOM, Formelschutz) – korrigiert wieder hochgeladen, erledigt sie die alten Zeilen (Phase 2 · 3) |
 | `GET /api/material/wiki/seiten?q=` | Material-Verwaltung mit Stufe Mitglied im Wiki (sonst 403 mit Klartext) | Seitenwahl: lesbare Seiten ohne Papierkorb und Vorlagen, höchstens 30, je `{id, titel, icon, reichweite}`; `lesemodus` (Phase 2 · 3) |
 | `PUT /api/material/formulare/<id>/wiki` (`seite`: Kennung oder `null`) | wie die Seitenwahl; auch an benutzten Formularen | Prüfanleitung verknüpfen bzw. entfernen; nicht lesbare, unbekannte oder Papierkorb-Seite 404 „Wiki-Seite nicht gefunden.“; schreibt nur diese Spalte, Journal mit der Seitennummer → `formular` (Phase 2 · 3) |
 | (Übersicht, Ordner, Prüfung, Formular) | – | neu: `start.nacharbeit`, `ordner.nacharbeit` (nur mit verwalten), `pruefung.anleitung` (nur Entwürfe), `formular.wiki` und `formular.wiki_aendern` (nur Material-Verwaltung); `DELETE /ordner/<id>` 409 bei offener Nacharbeit (Phase 2 · 3) |
-| `GET /material/meine-psa`, `GET /material/meine-psa/<id>` | angemeldet (sonst Anmeldung), aktives Konto mit Namen – auch ohne Modulstufe (sonst 403 „… braucht dein Konto einen Namen“); mit `<id>` nur ein eigener, nicht ausgesonderter Artikel (sonst 404 wie unbekannt) | Seite „Meine PSA“ (Ansicht `meine_psa`); ohne Modulzugang ohne Modulnavigation und Ordnerleiste (Phase 3 · 1) |
+| `GET /materialablage/meine-psa`, `GET /materialablage/meine-psa/<id>` | angemeldet (sonst Anmeldung), aktives Konto mit Namen – auch ohne Modulstufe (sonst 403 „… braucht dein Konto einen Namen“); mit `<id>` nur ein eigener, nicht ausgesonderter Artikel (sonst 404 wie unbekannt) | Seite „Meine PSA“ (Ansicht `meine_psa`); ohne Modulzugang ohne Modulnavigation und Ordnerleiste (Phase 3 · 1) |
 | `GET /api/material/meine-psa` | wie oben (401 ohne Anmeldung) | `artikel` (Karten: `id`, `inventory_no`, `serial_no`, `serial_generated`, `produkt` {`manufacturer`, `model`, `description`, `article_no`, `material_kind`, `bild` (Webfassung), `vorschau`}, `status`, `status_text`, `next_due_on`, `retire_by`, `last_inspected_on`, `gesperrt`, `verloren`, `lock_reason`, `notes`, `gliederung`, `demo`, `mangel` {`seit`}, `eigene_maengel`, `artikel_link`, `dokumente`, `rueckruf`, seit Schritt 20 `length_m` und `laenge_text`), `gesamt`, `mails`, `schwelle_tage` (Phase 3 · 1) |
 | `PUT /api/material/meine-psa/mails` (`an`: ja/nein) | angemeldet (eigenes Konto) | Erinnerungen „Deine PSA“ an/aus → `{an}`; 400 ohne brauchbares `an` (Phase 3 · 1) |
 | `POST /api/material/artikel/<id>/mangel` (Formular: `beschreibung`, `fotos` × 0–3; oder JSON `{beschreibung}`) | die zugeordnete Person (auch ohne Stufe) oder lesen an der Heimat; ohne Stufe und nicht eigen 403, ohne Leserecht mit Stufe 404 | Mangel melden, sperrt sofort → 201 `{mangel, gesperrt, mail}` (`mail` false bei DEMO, dev-Sperre und ohne Mailserver); 400 (Beschreibung, Fotos), 409 (ausgesondert, schon gemeldet, „Gesperrt“ fehlt), 413 (Phase 3 · 1) |
 | `GET /m/<token>` | angemeldet | eigene PSA ohne Stufe oder ohne Leserecht → „Meine PSA“ des Artikels; sonst wie bisher (ohne Stufe 403, gleich ob es den Artikel gibt) (Phase 3 · 1) |
-| `GET /material` | – | ohne Stufe mit Zuordnung → 302 „Meine PSA“ (Phase 3 · 1) |
+| `GET /materialablage` | – | ohne Stufe mit Zuordnung → 302 „Meine PSA“ (Phase 3 · 1) |
 | `GET /media/material/<art>/<datei>` | ohne Stufe: Produktbild (`web`, `thumb`) und Herstellerdokumente der Arten aus „Meine PSA“ zu eigenen Artikeln, eigene Mangelfotos (sonst 403); mit Stufe: Mangelfotos für den Melder, Prüfer und Materialwarte des Artikels (seit 21.10.2026 nicht mehr für reine Leser – 404) | Mangelfotos ohne `orig` (Phase 3 · 1) |
 | (Übersicht, Artikel, Listen, Prüfung) | – | neu: `start.maengel` (offene, nach denen kein Prüfer geprüft hat, höchstens 50: `id`, `item_id`, `inventory_no`, `produkt`, `created_at`, `kurz`, `fotos`, `melder`), `start.maengel_gesamt`, `start.meine_psa` {`anzahl`, `dringend`} oder `null`; `artikel.maengel` (Meldungen, offene zuerst, `wieder_offen`), `artikel.mangel_nur_gemeldet`, `artikel.mangel_eigen_offen` (Zeitpunkt der eigenen offenen Meldung oder `null`), `artikel.pruefarten.vorschlag` „ausserplanmaessig“ nach einer Meldung; Listenzeile `mangel`; `pruefung.maengel` (offene, im Entwurf). Text (`description`, `kurz`), Fotos (`fotos`) und `melder` nur für Prüfer und Materialwarte des Artikels und die eigene Meldung, sonst `null` bzw. leer mit `inhalt: false` (Phase 3 · 1, geändert 21.10.2026) |
 | `POST /api/material/pruefungen/<id>/festschreiben` | wie bisher | neu: `maengel_gesehen` (abgehakte Kennungen); „einsatzbereit“ bei offener, nicht abgehakter Meldung → 409; Berichtigung mit „einsatzbereit“ bei offener Meldung → 409 (Phase 3 · 1) |
@@ -8312,10 +8387,10 @@ oder Plattform-Verwaltung).
 | `POST /api/material/antraege/<id>/bestaetigen` (`antwort` freiwillig), `…/ablehnen` (`antwort` Pflicht) | Material-Verwaltung (Plattform-Verwaltung eingeschlossen) | entscheiden → `antrag`; 409 schon entschieden, Stand geändert, ausgesondert (nur ablehnen), Dublette, alter Antrag aufs Entfernen des Herstelldatums (nur ablehnen; `antrag.entfernen`) (21.10.2026) |
 | `POST /api/material/antraege/<id>/zurueckziehen` | Modulzugang; nur der Antragsteller, solange er den Artikel liest (sonst 404) | eigenen offenen Antrag zurückziehen → `antrag` (Stand `zurueckgezogen`, keine Mail; Journal `antrag_zurueckgezogen`); 409 schon entschieden oder zurückgezogen; `GET /api/material/antraege?status=erledigt` schließt `zurueckgezogen` ein (21.10.2026) |
 | (Artikel, Übersicht, Meldungen, Kontofolgen) | – | neu: `artikel.antraege` (offene; Begründung und Namen nur für Materialwart und Prüfer, sonst `inhalt: false` – ebenso in `artikel.journal` und im Lebenslauf: ohne `begruendung`, `beantragt_von`, `anmerkung`, `ablehnung`, Handelnder „(Person)“), `artikel.darf_antrag`; `start.antraege_offen` und `meldungen.antraege_offen` (nur Material-Verwaltung, sonst `null`); `material-folgen.antraege` (21.10.2026) |
-| `GET /material/ordner/<fid>/bericht` | angemeldet, Modulzugang, lesen am Ordner (sonst 404 wie Systemordner), Grundrecht (externer Prüfer 403) – `bericht_zugang` | Seite „Jahresbericht“ (Ansicht `bericht`, Rahmen mit `{"id": fid}`) (Phase 4 · 1) |
+| `GET /materialablage/ordner/<fid>/bericht` | angemeldet, Modulzugang, lesen am Ordner (sonst 404 wie Systemordner), Grundrecht (externer Prüfer 403) – `bericht_zugang` | Seite „Jahresbericht“ (Ansicht `bericht`, Rahmen mit `{"id": fid}`) (Phase 4 · 1) |
 | `GET /api/material/ordner/<fid>/bericht?jahr=<1990…2100>&pruefer=<ja\|nein>` | wie die Seite (401 als JSON) | `bericht` {`dokument`, `kopf` (mit `jahre`, `demo`, `pruefer_nennen`), `bestand`, `bewegungen`, `pruefungen`, `durchgaenge`, `pruefer` (nur mit Haken, sonst `null`), `sperren`, `aussonderungen`, `maengel`, `rueckrufe`, `ausblick`, `fuss`}; jede Listenzeile mit `demo`; 400 bei Unsinn in `jahr`/`pruefer`; `Cache-Control: no-store`; INFO-Logzeile ohne Namen, keine Journalzeile (Phase 4 · 1) |
-| `GET /material/ordner/<fid>/bericht-<jahr>.pdf`, `…/bericht-<jahr>-mit-pruefern.pdf` | wie die Seite | der Bericht als PDF/A-3b, inline, nicht festgeschrieben, Listen auf 500 Zeilen je Liste und 1 500 im ganzen PDF gekürzt, je Rückruf höchstens 50 betroffene Artikel (offene zuerst); Dateiname `[DEMO-]Jahresbericht_<Ordner>_<Jahr>[-mit-pruefern].pdf`; 400-Seite bei Jahr außerhalb 1990…2100 (Phase 4 · 1) |
-| `GET /material/export/<fid>-pruefungen-<jahr>.csv`, `…-pruefungen-<jahr>-mit-pruefern.csv` | wie die Seite | Prüfungen und Aussonderungen des Jahres im Zweig als CSV (`;`, CRLF, BOM, Formelschutz, ohne Kappung), Spalten `bericht.CSV_SPALTEN`; Prüfer und Urkundennummer nur in der Fassung „-mit-pruefern“ (Phase 4 · 1) |
+| `GET /materialablage/ordner/<fid>/bericht-<jahr>.pdf`, `…/bericht-<jahr>-mit-pruefern.pdf` | wie die Seite | der Bericht als PDF/A-3b, inline, nicht festgeschrieben, Listen auf 500 Zeilen je Liste und 1 500 im ganzen PDF gekürzt, je Rückruf höchstens 50 betroffene Artikel (offene zuerst); Dateiname `[DEMO-]Jahresbericht_<Ordner>_<Jahr>[-mit-pruefern].pdf`; 400-Seite bei Jahr außerhalb 1990…2100 (Phase 4 · 1) |
+| `GET /materialablage/export/<fid>-pruefungen-<jahr>.csv`, `…-pruefungen-<jahr>-mit-pruefern.csv` | wie die Seite | Prüfungen und Aussonderungen des Jahres im Zweig als CSV (`;`, CRLF, BOM, Formelschutz, ohne Kappung), Spalten `bericht.CSV_SPALTEN`; Prüfer und Urkundennummer nur in der Fassung „-mit-pruefern“ (Phase 4 · 1) |
 | `GET /api/material/start` | wie bisher | neu: `mailfehler` – `null`, wenn nichts zu zeigen ist, sonst {`offen`, `zeilen` (höchstens 20, neueste zuerst, nur offene: `id`, `created_at` UTC, `art`, `art_text`, `klasse`, `empfaenger` (Name, „(gelöschtes Konto)“), `rolle`, `bezug_art`, `bezug_id`, `folder_id`, `betreff`, `meldung`, `erledigt_at`, `erledigt_von_name`, `bezug` {`text`, `pfad` (Modul-Route oder `null`)}), `kein_mailserver` (nur Verwaltung), `alle` (Verwaltung)}; Sicht: Material-/Plattform-Verwaltung alles, wer verwaltet, die Zeilen der Ordner in seiner Verwalten-Sicht (Einzelmails tragen die Heimat des Artikels, Sammelmails die Gliederung) ohne die Rollen verwaltung/antragsteller/melder; `betreff` und `meldung` ohne Adresse, Mailserver und Anmeldenamen. `erinnerungen.letzter` ohne `fehlgeschlagen_an` (nur noch `fehlgeschlagen`); `erinnerungen.pflege.mailfehler` {`alt`, `erledigt`, `waisen`} (Phase 4 · 1) |
 | `GET /api/material/mailfehler` | Modulzugang mit Sicht (sonst 403) | „Weitere anzeigen“: {`offen`, `zeilen` (höchstens `grenze` = 200, neueste zuerst, Felder wie in `/start`), `grenze`} (Phase 4 · 1, Nachbesserung) |
 | `POST /api/material/mailfehler/<mfid>/erledigt` | Modulzugang; Zeile in der eigenen Sicht (sonst 404 „Mailfehler nicht gefunden.“) | abhaken → `zeile`; schon erledigt 200 ohne Änderung (idempotent) (Phase 4 · 1) |
