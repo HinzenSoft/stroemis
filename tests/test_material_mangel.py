@@ -989,7 +989,8 @@ def test_lebenslauf():
 
 
 TRIGGER_13 = {"mat_defect_aendern", "mat_defect_melder", "mat_defect_erledigt", "mat_defect_loeschen",
-              "mat_defect_ersetzen", "mat_defect_neu_erledigt", "mat_defect_erledigt_durch"}
+              "mat_defect_ersetzen", "mat_defect_neu_erledigt", "mat_defect_erledigt_durch",
+              "mat_defect_zeile"}                       # seit Schritt 30: jede Änderung der Kennung (auch über rowid)
 
 
 def _schema_13(pfad):

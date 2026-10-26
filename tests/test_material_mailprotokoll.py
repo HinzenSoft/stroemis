@@ -650,7 +650,8 @@ def test_migration_19():
         soll = {("table", "mat_mail_fehler"), ("index", "idx_mat_mail_fehler_offen"), ("index", "idx_mat_mail_fehler_ordner"),
                 ("index", "idx_mat_mail_fehler_konto"), ("trigger", "mat_mail_fehler_fest"),
                 ("trigger", "mat_mail_fehler_ordner"), ("index", "idx_mat_inspection_inspected_on"),
-                ("index", "idx_mat_audit_entity_action")}
+                ("index", "idx_mat_audit_entity_action"),
+                ("trigger", "mat_mail_fehler_zeile")}                      # seit Schritt 30 (Kennung, auch über rowid)
         assert schema() == soll, schema()
         assert zeilen(app, "SELECT COUNT(*) AS n FROM mat_item")[0]["n"] == vorher and art["id"]
         # Zweiter Lauf und Schritt 19 für sich: keine Änderung.
