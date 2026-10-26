@@ -805,7 +805,7 @@ def test_nutzerverwaltung_oberflaeche():
     # Die Hebung auch nach einem Hin und Her der Verwaltung (Häkchen gesetzt, während Material überdeckt war); der
     # Hinweis nur, solange Material nicht überdeckt ist (im Chromium nachgeprüft, Prüfung der Modulstufen Nr. 8).
     for da in ("wirkt nicht – kein Zugang", "Frei&shy;gabe", 'material.value === "0"', 'material.value = "1"',
-               "Material steht jetzt auf „Mitglied“", "if (!voll && offen)", "auto.hidden = !gehoben || material.disabled"):
+               "Materialablage steht jetzt auf „Mitglied“", "if (!voll && offen)", "auto.hidden = !gehoben || material.disabled"):
         assert da in js, da
     # Gesamtprüfung: Die Zeile zur Urkundennummer nennt nur den Zustand – dass der Prüfer sie selbst im Profil einträgt,
     # steht einmal, im Hilfetext darunter (vorher zweimal untereinander).

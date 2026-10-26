@@ -449,7 +449,7 @@ def test_pdf_und_csv():
         text = _flach(" ".join(seiten))
         for wert in (f"[DEMO] Jahresbericht OG Berichtstadt {J}", "kein Prüfnachweis", "nicht festgeschrieben",
                      "Bestand zum Stichtag", "Bewegungen im Jahr", "Prüfabdeckung", "Prüfdurchgänge", "Jahresprüfung Fahrzeug",
-                     "Sperren und Freigaben", "Aussonderungen im Jahr", "Mangelmeldungen", "Rückrufe", "Platzhalter Rückruf",
+                     "Sperren und Freiprüfungen", "Aussonderungen im Jahr", "Mangelmeldungen", "Rückrufe", "Platzhalter Rückruf",
                      "https://www.example.org/rueckruf", "Ausblick", "Enthält 1 DEMO-Artikel", "OG Unterstadt Gliederung",
                      "Platzhalter Grenze spät", "nicht auffindbar", "Gliederung intern", "fuehrung",
                      a["demo_a"]["inventory_no"], "Testwerk HMS Demo", "noch nie"):

@@ -473,7 +473,7 @@
     try {
       const r = await api(`${API}/freigaben/${f.id}`, { method: "DELETE" });
       stand.hinweis = r.offene_entwuerfe ? `${plural(r.offene_entwuerfe, "offene Prüfung", "offene Prüfungen")} von ${esc(f.konto.name)} – unter
-        <a href="/materialablage/pruefungen">Prüfungen</a> → Offene Prüfungen freigeben.` : "";
+        <a href="/materialablage/pruefungen">Prüfungen</a> → „Offene Prüfungen“ mit „Reservierung aufheben“.` : "";
       toast("Freigabe entzogen");
       await nachher();
     } catch (e) { toast(e.message, true); }

@@ -1829,7 +1829,8 @@
     const geerbt = mitErinnerung && o.erinnerungen && o.erinnerungen.geerbt_von;
     const erinnerungFeld = mitErinnerung ? `<label class="inline"><input type="checkbox" id="od-erinnerung" ${o.reminders_off ? "checked" : ""}> Erinnerungsmails aus</label>
       <div class="help">Für diesen Ordner und alle Unterordner bekommt niemand eine Sammelmail zu Fälligkeit und Lebensende –
-        auch nicht die Verwalter der Ordner darüber und die Material-Verwaltung. Ablaufende Freigaben melden sich weiter.</div>
+        auch nicht die Verwalter der Ordner darüber und die Material-Verwaltung. Ablaufende Freigaben melden sich weiter, ebenso
+        „Deine PSA“ an die Personen, denen hier etwas zugeordnet ist (abbestellen kann das jede selbst im Profil).</div>
       ${geerbt ? `<div class="help">Ohnehin aus – geerbt von „${esc(geerbt.pfad)}“.</div>` : ""}` : "";
     const formular = `<label for="od-name">Name</label><input type="text" id="od-name" value="${esc(o.name || "")}" maxlength="120">
       <div class="field-row">
@@ -2191,7 +2192,7 @@
           catch (e) { toast(e.message, true); }
         },
         loeschen: async () => {
-          if (!(await confirm(`Ordner „${d.name}“ löschen? Das geht nur, solange er leer ist.`, "Löschen"))) return;
+          if (!(await confirm(`Ordner „${d.name}“ löschen? Das geht nur bei einem leeren Ordner – ohne Unterordner und Artikel, ohne Prüfdurchgänge und Set-Protokolle, ohne offene Nacharbeit und ohne gesperrte Artikel, die hierher zurückkehren.`, "Löschen"))) return;
           try { await api(`${API}/ordner/${d.id}`, { method: "DELETE" }); location.href = d.parent_id && offenbar(d.parent_id) ? `/materialablage/ordner/${d.parent_id}` : "/materialablage/bestand"; }
           catch (e) { toast(e.message, true); }
         },
@@ -2302,7 +2303,7 @@
       <summary class="btn secondary small" aria-haspopup="true">${importieren ? "Export / Import" : "Export"}</summary>
       <div class="mat-menue-liste">
         <a href="/materialablage/export/${d.id}.csv" data-export="Die Artikelliste wird heruntergeladen …"><strong>Artikelliste exportieren (CSV)</strong>
-          <span>Alle Artikel hier und darunter, auch die von hier gesperrten (ausgesonderte bei ihrer Gliederung), mit Status, Fälligkeiten und Stammdaten – für Excel.</span></a>
+          <span>Alle Artikel hier und darunter, auch die von hier gesperrten und ausgesonderten, mit Status, Fälligkeiten und Stammdaten – für Excel.</span></a>
         <a href="/materialablage/export/${d.id}-protokolle.zip" data-export="Die Protokolle werden zusammengestellt – bei vielen dauert das einen Moment …"><strong>Protokolle exportieren (ZIP)</strong>
           <span>Die Protokolle dieser Artikel, die Sammelprotokolle der Durchgänge und die Set-Protokolle der Sets hier, mit Verzeichnis und Prüfsummen.</span></a>
         ${d.system_kind ? "" : `<a href="/materialablage/ordner/${d.id}/bericht"><strong>Jahresbericht exportieren</strong>
@@ -2333,7 +2334,7 @@
         <a href="#" role="button" data-act="verschieben"><strong>Verschieben …</strong>
           <span>Den Ordner samt Unterordnern und Artikeln an eine andere Stelle im Bestand hängen.</span></a>
         <a href="#" role="button" data-act="loeschen"><strong>Löschen …</strong>
-          <span>Geht nur bei einem leeren Ordner – ohne Unterordner, Artikel und Prüfdurchgänge; vorher wird nachgefragt.</span></a>
+          <span>Geht nur bei einem leeren Ordner – ohne Unterordner und Artikel, ohne Prüfdurchgänge und Set-Protokolle, ohne offene Nacharbeit eines Bestandsimports und ohne gesperrte Artikel, die hierher zurückkehren; vorher wird nachgefragt.</span></a>
       </div></details>`;
   const LEBENSLAUF_TEXT = "Stammdaten, alle Prüfungen in zeitlicher Reihenfolge, Prüfdurchgänge und Ereignisse als PDF – zum Weitergeben oder als Aussonderungsnachweis. Stand jetzt, nicht festgeschrieben.";
   const lebenslaufKnopf = (a) => `<a class="btn secondary small" href="/materialablage/artikel/${a.id}/lebenslauf.pdf" target="_blank" rel="noopener"
@@ -2386,7 +2387,7 @@
      Seite /materialablage/ordner/<fid>/bericht (Ansicht „bericht“, DATEN = {id}); die Daten kommen fertig formatiert von
      GET /api/material/ordner/<fid>/bericht?jahr=&pruefer= (services/bericht.daten) – dieselben Blöcke in derselben
      Reihenfolge wie im PDF (Entwurf A4): Kopf, Bestand zum Stichtag, Bewegungen, Prüfungen mit Prüfabdeckung,
-     Prüfdurchgänge, Prüfer (nur mit Haken), Sperren und Freigaben, Aussonderungen, Mangelmeldungen, Rückrufe, Ausblick,
+     Prüfdurchgänge, Prüfer (nur mit Haken), Sperren und Freiprüfungen, Aussonderungen, Mangelmeldungen, Rückrufe, Ausblick,
      Fußsätze. Jahr-Auswahl (kopf.jahre) und Haken „Prüfer nennen“ laden die Daten neu und stehen in der Adresse
      (?jahr=&pruefer=1); „PDF“ und „Prüfungen (CSV)“ (grau) führen auf die Dateirouten – mit Haken auf die Fassung
      „-mit-pruefern“, deren Dateiname sagt, dass Namen darin stehen. Ohne Haken enthält keine Ausgabe einen
@@ -2461,7 +2462,7 @@
           b.pruefer.pruefer.map((x) => `<tr>${td("Prüfer", esc(x.name))}${td("Urkundennummer", mono(x.urkunde || ""))}${td("Prüfungen", String(x.n), "mat-be-zahl")}</tr>`)) : leer("Keine Prüfungen.")}
         ${b.pruefer.aussonderungen_durch.length ? `<h3>Aussonderungen durch</h3>${liste([["Name"], ["Aussonderungen", "mat-be-zahl"]],
           b.pruefer.aussonderungen_durch.map((x) => `<tr>${td("Name", esc(x.name))}${td("Aussonderungen", String(x.n), "mat-be-zahl")}</tr>`))}` : ""}</section>` : "";
-      const sperren = `<section class="section" id="be-sperren"><h2>Sperren und Freigaben im Jahr ${esc(String(k.jahr))}</h2>
+      const sperren = `<section class="section" id="be-sperren"><h2>Sperren und Freiprüfungen im Jahr ${esc(String(k.jahr))}</h2>
         ${zahlen([[sp.gesamt, "<strong>Sperren gesamt</strong>"], ...sp.arten.map((a) => [a.n, esc(a.text)]), [sp.freigegeben, "wieder freigegeben (Freiprüfung)"]])}
         ${sp.liste.length ? `${liste([["Datum"], ["Inventarnummer"], ["Art"], ["Grund"]],
           sp.liste.map((x) => `<tr>${td("Datum", esc(x.datum))}${td("Inventarnummer", `${mono(x.inventarnummer)}${demoMarke(x.demo)}`)}${td("Art", esc(x.art_text))}${td("Grund", esc(x.grund))}</tr>`))}${kappung(sp.liste.length, "Sperren")}` : ""}</section>`;
@@ -3507,6 +3508,15 @@
         k.default_interval_months ? `Prüfintervall ${k.default_interval_months} Monate` : "", k.laenge_wirksam ? "Artikel haben eine Länge" : "",
         plural(summe(k.id), "Produkt", "Produkte")].filter(Boolean).join(" · ") : "";
       // Zum aktiven generischen Formular führt bei der Material-Verwaltung der Knopf „Generisches Formular“, sonst der Verweis in der Angabenzeile.
+      // Ohne eigenes gilt das der nächsten Oberkategorie mit einem (katalog.py prüft danach) – die Zeile nennt es mit Link: zur
+      // Kategorie, wo der Knopf steht (Material-Verwaltung), sonst zum Formular (Feinschliff aus den Wiki-Fragen, K9).
+      const geerbt = k && !k.aktives_formular ? pfad.slice(0, -1).reverse().find((x) => x.aktives_formular) : null;
+      const formularZeile = !k ? "" : k.aktives_formular
+        ? (DARF.katalog ? "" : ` · <a href="/materialablage/katalog/formular/${k.aktives_formular}">generisches Prüfformular</a>`)
+        : !geerbt ? ' · <span class="muted">kein aktives generisches Prüfformular</span>'
+          : ` · generisches Prüfformular von ${DARF.katalog
+            ? `<a href="/materialablage/katalog?kategorie=${geerbt.id}" data-act="kategorie" data-id="${geerbt.id}">„${esc(geerbt.name)}“</a>`
+            : `<a href="/materialablage/katalog/formular/${geerbt.aktives_formular}">„${esc(geerbt.name)}“</a>`}`;
       inhalt.innerHTML = `<div class="page-head"><h1>Katalog</h1>
           <div class="btn-row">${DARF.katalog ? '<button class="btn secondary" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Kategorie<span class="k-anlegen"> anlegen</span></span></button><button class="btn secondary" data-act="produkt-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Produkt<span class="k-anlegen"> anlegen</span></span></button>' : ""}
             ${DARF.lesen || DARF.katalog ? `<a class="btn secondary mat-mit-zahl" href="/materialablage/katalog/meldungen">Meldungen<span class="mat-meldezahl" id="kat-meldungen" hidden></span></a>` : ""}
@@ -3514,8 +3524,7 @@
         ${k ? `<div class="mat-katkopf">
             <div class="mat-pfad"><a href="/materialablage/katalog" data-act="kategorie" data-id="">alle Kategorien</a>${pfad.slice(0, -1).map((x) => ` / <a href="/materialablage/katalog?kategorie=${x.id}" data-act="kategorie" data-id="${x.id}">${esc(x.name)}</a>`).join("")}</div>
             <h2>${esc(k.name)} ${demoMarke(k.demo)}</h2>
-            <p class="small">${angaben}${!k.aktives_formular ? ' · <span class="muted">kein aktives generisches Prüfformular</span>'
-              : DARF.katalog ? "" : ` · <a href="/materialablage/katalog/formular/${k.aktives_formular}">generisches Prüfformular</a>`}</p>
+            <p class="small">${angaben}${formularZeile}</p>
             ${DARF.katalog ? `<div class="btn-row"><button class="btn secondary small" data-act="kat-bearbeiten">Kategorie bearbeiten</button>
               <button class="btn secondary small" data-act="kat-formular">Generisches Formular</button><button class="btn secondary small" data-act="kat-loeschen">Löschen</button></div>` : ""}
             <div class="mat-katdoks"><h3 class="mat-unter">Dokumente für alle Produkte dieser Kategorie</h3>

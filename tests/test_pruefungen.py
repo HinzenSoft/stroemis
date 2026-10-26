@@ -126,7 +126,7 @@ def test_pruefungen():
             assert client.get("/riegenkarten/1").status_code == 403, wer
             assert client.get("/riegenkarten/1/druck").status_code == 403, wer
             r = client.get("/api/pruefungen/lehrgaenge")
-            assert r.status_code == 403 and "Prüfer" in r.json["error"], (wer, r.status_code, r.get_json())
+            assert r.status_code == 403 and "Riegenkarten" in r.json["error"], (wer, r.status_code, r.get_json())
             assert client.get("/api/pruefungen/nutzer").status_code == 403, wer
             assert client.post("/api/pruefungen/lehrgaenge", json={"titel": "Hack"}).status_code == 403, wer
             assert client.get("/media/pruefung/thumb/gibtesnicht.jpg").status_code == 403, wer

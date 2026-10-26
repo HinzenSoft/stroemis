@@ -384,7 +384,7 @@ def test_protokoll():
         assert not {x["id"] for x in r1["eintraege"]} & {x["id"] for x in r2["eintraege"]}
         # Angezeigt wird es als zugeklappter Abschnitt in der Nutzerverwaltung.
         html = t.adm.get("/leitstelle").get_data(as_text=True)
-        assert 'id="mat-globalsuche"' in html and "Globale Suchen (Modul Material)" in html, html[-800:]
+        assert 'id="mat-globalsuche"' in html and "Globale Suchen (Materialablage)" in html, html[-800:]
         assert "js/admin_globalsuche.js" in html
     print("Protokoll bestanden.")
 

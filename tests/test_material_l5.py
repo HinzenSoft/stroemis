@@ -124,7 +124,7 @@ def test_shell_geruest():
         # „Artikel anlegen“ ist seit Phase 2 nur für Materialwarte – der Prüfer sieht das Gerüst auf „Prüfungen“.
         for konto, seite in (("wart", "/materialablage/artikel/neu"), ("pruefer", "/materialablage/pruefungen")):
             html = k[konto].get(seite).get_data(as_text=True)
-            mnav = re.search(r'<nav class="mat-nav" aria-label="Modul Material">(.*?)</nav>', html, re.S)
+            mnav = re.search(r'<nav class="mat-nav" aria-label="Materialablage">(.*?)</nav>', html, re.S)
             assert mnav, konto
             mnav = mnav.group(1)
             assert '<div class="mat-reiter">' in mnav and mnav.count('data-nav="') == 4, konto

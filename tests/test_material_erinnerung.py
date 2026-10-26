@@ -1237,7 +1237,7 @@ def test_inhaber():
             m = e.Mail(konten=[], adresse="erika@example.org", name="Erika Extern",
                        eintraege=[f, replace(f, inhaber=True, daten=dict(f.daten, verlaengern=["wart"]))])
             betreff, text = e.mailtext(m, T0)
-            assert e.zahlen(m) == (0, 0, 1, 0) and betreff.endswith("Material: Deine Freigabe läuft ab"), betreff
+            assert e.zahlen(m) == (0, 0, 1, 0) and betreff.endswith("Materialablage: Deine Freigabe läuft ab"), betreff
             assert "Erika Extern – lesen" not in text and "  Verlängern kann: wart.\n" in text, text
     # Oberfläche (statisch): Die Zeile je Mail nennt die eigenen Freigaben.
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -1875,7 +1875,8 @@ def test_psa_zulaessig():
 
 
 def test_psa_auswahl():
-    """Ordner mit „Erinnerungsmails aus“ (geerbt): nichts; gesperrt (auch durch eine Mangelmeldung): nichts;
+    """Ordner mit „Erinnerungsmails aus“ (geerbt): seit E2 B (26.10.2026) trotzdem „Deine PSA“; gesperrt (auch durch
+    eine Mangelmeldung): nichts;
     DEMO-Artikel an eine DEMO-Einsatzkraft nur im Probelauf mit DEMO, gekennzeichnet."""
     with tempfile.TemporaryDirectory() as tmp:
         app, k, ids, gid, system, lager = aufbau(tmp)
@@ -1887,7 +1888,8 @@ def test_psa_auswahl():
             for iid in (a["id"], b["id"]):
                 zuordnen_sql(app, iid, pid)
             sql(app, "UPDATE mat_folder SET reminders_off = 1 WHERE id = ?", (lager,))
-            assert psa_mail(planen(app)) is None
+            m = psa_mail(planen(app))
+            assert m and sorted(e.kennung for e in m.eintraege) == sorted([a["id"], b["id"]]), m
             sql(app, "UPDATE mat_folder SET reminders_off = 0 WHERE id = ?", (lager,))
             sql(app, "UPDATE mat_item SET lock_state = 'gesperrt' WHERE id IN (?, ?)", (a["id"], b["id"]))
             assert psa_mail(planen(app)) is None

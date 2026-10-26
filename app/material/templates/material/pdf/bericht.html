@@ -1,6 +1,6 @@
 {% extends "material/pdf/basis.html" %}
 {# Jahresbericht je Zweig (Phase 4 · Lieferung 1): Bestand zum Stichtag, Bewegungen, Prüfungen und Prüfabdeckung,
-   Durchgänge, Prüfer (nur mit Haken), Sperren und Freigaben, Aussonderungen, Mangelmeldungen, Rückrufe und der Ausblick
+   Durchgänge, Prüfer (nur mit Haken), Sperren und Freiprüfungen, Aussonderungen, Mangelmeldungen, Rückrufe und der Ausblick
    auf zwölf Monate – für die Gliederung intern. Auf Abruf gesetzt und NICHT festgeschrieben: kein Stempel, keine
    Unterschrift, keine Protokoll-ID; der Bericht ist kein Prüfnachweis. Daten laut services/bericht.py (dokument, kopf,
    bestand, bewegungen, pruefungen, durchgaenge, pruefer, sperren, aussonderungen, maengel, rueckrufe, ausblick, fuss,
@@ -212,7 +212,7 @@ h2 { break-after: avoid; }
 {%- endif %}
 
 <section>
-  <h2>Sperren und Freigaben im Jahr {{ kopf.jahr }}</h2>
+  <h2>Sperren und Freiprüfungen im Jahr {{ kopf.jahr }}</h2>
   <table class="zahlen zwei">
     <tr><td class="zahl">{{ sperren.gesamt }}</td><td class="lbl">Sperren gesamt</td></tr>
     {%- for a in sperren.arten %}

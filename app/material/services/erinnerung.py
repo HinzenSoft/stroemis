@@ -30,7 +30,8 @@ DEMO-Konten (Adresse …@….invalid), jeder nur mit dem, was er sieht. Prüfer 
 bekommt ihre eigenen Artikel im Abschnitt „Deine PSA“ (Phase 3 · L1) – auch ohne Modulstufe, abbestellbar im Profil
 (users.mat_psa_mails): 30 Tage vor der Prüfung, überfällig, Lebensende in 90 Tagen (kein 7-Tage-Schritt, PSA_STUFE),
 höchstens MAIL_PSA_MAX Zeilen, einziger Link „Meine PSA“. Wer den Artikel zugleich verwaltet, bekommt ihn wie bisher
-unter ARTIKEL und nicht noch einmal unter „Deine PSA“.
+unter ARTIKEL und nicht noch einmal unter „Deine PSA“. „Deine PSA“ läuft auch in Ordnern mit „Erinnerungsmails aus“ –
+nur der eigene Haken im Profil zählt (Entscheidung E2 B, 26.10.2026).
 Der Inhaber einer ablaufenden Freigabe bekommt sie zusätzlich selbst (Entscheidung vom 19.10.2026) – nach denselben
 Regeln und mit eigenem Vermerk im Log, aber nie als Verwalter, sondern im Abschnitt „Deine Freigaben“: Recht, Ende,
 Pfad des Ankers, seine offenen Prüfungen und wer verlängern kann, nicht mehr, als „Meine Freigaben“ ihm zeigt
@@ -106,6 +107,8 @@ class Eintrag:            # eine Erinnerung für eine Mail
     demo: bool = False    # DEMO-Artikel bzw. -Freigabe – nur im Probelauf mit DEMO (planen(…, demo=True))
     inhaber: bool = False # Freigabe: dieselbe für ihren Inhaber (Abschnitt „Deine Freigaben“, inhaber_eintrag)
     psa: bool = False     # Artikel für die zugeordnete Person – Abschnitt „Deine PSA“ (Phase 3 · L1)
+    nur_psa: bool = False # Artikel in einem Ordner mit „Erinnerungsmails aus“: keine Sammelmail an die Verwalter, nur
+                          # „Deine PSA“ an die zugeordnete Person (Entscheidung E2 B, 26.10.2026)
 
     @property
     def schluessel(self):
@@ -276,7 +279,9 @@ def _zweig(fid, baum):
 def artikel_kandidaten(stichtag, demo=False):
     """Auswahl der Artikel (frei, mit Fälligkeit in 30 Tagen oder Lebensende in 90 Tagen): je Artikel bis zu zwei
     Einträge – Fälligkeit und Lebensende. Dazu die Zahlen des Ausgelassenen: {"ordner_aus": {Ordner: Zahl}, "demo": n,
-    "fehlerhaft": n}. Eine Zeile, die sich nicht lesen lässt, wird geloggt und übersprungen. demo (nur Probelauf): auch
+    "fehlerhaft": n}. Ein Artikel in einem Ordner mit „Erinnerungsmails aus“ zählt dort als ausgelassen – ist er einer
+    Person zugeordnet, kommt er trotzdem mit, als Eintrag nur für sie (nur_psa): „Deine PSA“ läuft immer, nur der eigene
+    Haken im Profil zählt (Entscheidung E2 B, 26.10.2026). Eine Zeile, die sich nicht lesen lässt, wird geloggt und übersprungen. demo (nur Probelauf): auch
     DEMO-Artikel, als Eintrag mit demo=True – sie zählen dann nicht als ausgelassen."""
     rows = db.query(
         "WITH RECURSIVE aus(id) AS (SELECT id FROM mat_folder WHERE reminders_off = 1 "
@@ -299,7 +304,8 @@ def artikel_kandidaten(stichtag, demo=False):
             continue
         if r["ist_aus"]:
             info["ordner_aus"][r["folder_id"]] = info["ordner_aus"].get(r["folder_id"], 0) + 1
-            continue
+            if not r["assigned_user_id"]:
+                continue
         try:
             daten = {"inventory_no": r["inventory_no"], "serial_no": r["serial_no"],
                      "produkt": katalog.produktname(r, r["product_description"]),
@@ -309,10 +315,10 @@ def artikel_kandidaten(stichtag, demo=False):
                 s = stufe(r["next_due_on"], stichtag)
                 if s:
                     neu.append(Eintrag("artikel", r["id"], s, r["next_due_on"], r["folder_id"], daten,
-                                       demo=bool(r["ist_demo"])))
+                                       demo=bool(r["ist_demo"]), nur_psa=bool(r["ist_aus"])))
             if r["retire_by"] and r["retire_by"] <= bis_90 and _tag(r["retire_by"]):
                 neu.append(Eintrag("artikel", r["id"], "lebensdauer", r["retire_by"], r["folder_id"], daten,
-                                   demo=bool(r["ist_demo"])))
+                                   demo=bool(r["ist_demo"]), nur_psa=bool(r["ist_aus"])))
         except (ValueError, TypeError) as exc:
             current_app.logger.error("Erinnerungen: Artikel %s übersprungen – %s", r["id"], exc)
             info["fehlerhaft"] += 1
@@ -528,7 +534,7 @@ def planen(stichtag, demo=False):
     """Wer heute (am Stichtag) welche Mail bekäme: Kandidaten, Empfänger, Rechteschnitt, Abgleich mit dem Log, Texte.
     Eine ablaufende Freigabe geht an die Verwalter des Ankers und zusätzlich an ihren Inhaber (inhaber_eintrag); ein
     Artikel zusätzlich an die zugeordnete Person (Abschnitt „Deine PSA“, Stufe nach PSA_STUFE) – außer sie bekommt ihn
-    ohnehin als Verwalterin unter ARTIKEL.
+    ohnehin als Verwalterin unter ARTIKEL. In einem Ordner mit „Erinnerungsmails aus“ nur an sie (nur_psa, E2 B).
     Schreibt nichts – auch keinen Kontoverweis. Fehlerhafte Datenzeilen werden übersprungen und gezählt.
     demo: DEMO-Artikel, DEMO-Freigaben und DEMO-Konten zählen wie echte – NUR für die Ansicht (probelauf, remind
     --trocken --demo). Der Plan heißt dann nur_ansicht, Mails mit DEMO tragen demo; verschicken lehnt beides ab."""
@@ -544,8 +550,16 @@ def planen(stichtag, demo=False):
     psa_konten = _konten(e.daten["zugeordnet"] for e in artikel if e.daten.get("zugeordnet"))
     post, ohne = {}, []                              # Adresse (casefold) → Mail
     for e in eintraege:
-        konten, e.rueckfall = empfaenger(e, zwischen)
         z = psa_konten.get(e.daten.get("zugeordnet")) if e.art == "artikel" else None
+        if e.nur_psa:
+            # Ordner mit „Erinnerungsmails aus“: keine Sammelmail an die Verwalter, auch kein „ohne Empfänger“ – aber
+            # „Deine PSA“ an die zugeordnete Person, auch wenn sie dort selbst verwaltet (E2 B).
+            if z and _zulaessig_psa(z, demo):
+                eigen = replace(e, stufe=PSA_STUFE[e.stufe], rueckfall="", psa=True, nur_psa=False)
+                if _offen(eigen, z.get("mat_ref"), log):
+                    _einreihen(post, z, eigen)
+            continue
+        konten, e.rueckfall = empfaenger(e, zwischen)
         erreicht = verwaltet = False
         for u in konten:
             s = rechte.sicht(u)

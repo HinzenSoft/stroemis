@@ -18,7 +18,7 @@ from urllib.parse import quote, urlsplit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from test_material import (H, _flach, anmelden, festschreiben, gliederung, katalog_grund, neuer_artikel,  # noqa: E402
+from test_material import (H, _flach, festschreiben, gliederung, katalog_grund, neuer_artikel,  # noqa: E402
                            neues_konto, pdf_seiten, protokoll_zeile, pruef_formulare, starten, umgebung)
 
 WURZEL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

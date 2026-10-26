@@ -46,7 +46,7 @@
     {% if mit_urkunde %}
     <p class="notice{% if darf_pruefen %} hidden{% endif %}" id="ur-hinweis" role="status"><strong>Noch keine Urkundennummer:</strong> Die Verwaltung hat dich als Prüfer eingetragen – prüfen kannst du aber erst, wenn du hier deine Urkundennummer gespeichert hast.</p>
     <form id="f-urkunde" class="ur-form" novalidate>
-      <label for="urkundennummer">Urkundennummer (Prüfernummer, Qualifikation 1012)</label>
+      <label for="urkundennummer">Urkundennummer (Prüfernummer)</label>
       <div class="ur-zeile">
         <input id="urkundennummer" type="text" maxlength="40" value="{{ user.urkundennummer }}" autocomplete="off" spellcheck="false" aria-describedby="ur-hilfe">
         <button class="btn secondary" type="submit">Speichern</button>
@@ -55,7 +55,7 @@
     </form>
     <h3 class="us-titel">Unterschrift</h3>
     {% endif %}
-    <div class="help">Für die Materialablage: Sie wird beim Festschreiben einer Prüfung oder Aussonderung als Kopie ins Protokoll übernommen – zusammen mit deiner Anmeldung, dem Zeitpunkt und der Prüfsumme. Änderst oder entfernst du sie, wirkt das nur auf künftige Protokolle.{% if not mat_zugang %} Dein Konto hat keinen Zugang zur Materialablage – du brauchst sie gerade nicht. Entferne sie, wenn du magst.{% elif not us_setzen %} Du bist weder Prüfer noch Materialwart und brauchst sie nicht mehr – entferne sie, wenn du magst.{% endif %}</div>
+    <div class="help">Für die Materialablage: Sie wird beim Festschreiben einer Prüfung oder Aussonderung als Kopie ins Protokoll übernommen – zusammen mit deiner Anmeldung (E-Mail-Adresse), dem Zeitpunkt und der Prüfsumme. Änderst oder entfernst du sie, wirkt das nur auf künftige Protokolle.{% if not mat_zugang %} Dein Konto hat keinen Zugang zur Materialablage – du brauchst sie gerade nicht. Entferne sie, wenn du magst.{% elif not us_setzen %} Du bist weder Prüfer noch Materialwart und brauchst sie nicht mehr – entferne sie, wenn du magst.{% endif %}</div>
     <div class="us-profil">
       <div class="us-vorschau leer" id="us-vorschau"><span class="muted">Wird geladen …</span></div>
       <div class="btn-row us-knoepfe">
@@ -70,7 +70,7 @@
     <h2>Meine PSA</h2>
     <p class="help">{% if psa_anzahl %}Dir ist Ausrüstung zugeordnet ({{ psa_anzahl }} Artikel) – <a href="/materialablage/meine-psa">Meine PSA ansehen</a>.{% else %}Dir ist zurzeit keine Ausrüstung zugeordnet.{% endif %}</p>
     <label class="inline"><input type="checkbox" id="psa-mails"{% if psa_mails %} checked{% endif %}> Erinnerungen zu meiner PSA per Mail</label>
-    <div class="help">Eine Mail am Morgen, wenn deine PSA in 30 Tagen zur Prüfung muss, wenn die Prüfung überfällig ist und 90 Tage vor ihrem Lebensende – jede Erinnerung nur einmal. Meldet jemand anderes einen Mangel an deiner PSA, bekommst du immer sofort eine Mail – sie betrifft deine Sicherheit.</div>
+    <div class="help">Eine Mail am Morgen, wenn deine PSA in 30 Tagen zur Prüfung muss, wenn die Prüfung überfällig ist und 90 Tage vor ihrem Lebensende – jede Erinnerung nur einmal, auch wenn der Materialwart für den Ordner die Erinnerungsmails abgeschaltet hat. Meldet jemand anderes einen Mangel an deiner PSA, bekommst du immer sofort eine Mail – sie betrifft deine Sicherheit.</div>
   </section>
   {% endif %}
   <section class="section">

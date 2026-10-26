@@ -9,6 +9,7 @@ from .auth import (EMAIL_RE, MIN_PW, MODULE, STUFEN, VERWALTUNG, VORGABE_NEU, ad
 from .images import delete_avatar
 from .mailer import send_mail, versand
 from .material.services import Abgelehnt
+from .material.services import beschriftung as mat_beschriftung
 from .material.services import antrag as mat_antrag
 from .material.services import freigaben as mat_freigaben
 from .material.services import journal as mat_journal
@@ -26,7 +27,7 @@ VORGABE = dict(VORGABE_NEU)
 # Schritt 10 weder gelesen noch geschrieben (Rückweg).
 MATERIAL_SPALTEN = ("recht_material", "mat_pruefer", "urkundennummer")
 OHNE_NAMEN = ("Erst einen Namen eintragen – in der Materialablage steht jeder mit Namen in Journal und Protokollen. Ohne "
-              "Namen geht nur Material „–“.")
+              "Namen geht nur Materialablage „–“.")
 
 
 def _rechte_lesen(d, basis):
@@ -335,6 +336,31 @@ def material_folgen(uid):
     if not db.query("SELECT 1 FROM users WHERE id = ?", (uid,), one=True):
         return jsonify(error="Nutzer nicht gefunden"), 404
     return jsonify(dict(mat_loeschung.folgen(uid), letzter_materialwart=mat_freigaben.einziger_materialwart(uid)))
+
+
+# Verlauf des Kontos in der Materialablage (E3 A): so viele Einträge, neueste zuerst.
+KONTO_JOURNAL_MAX = 50
+
+
+@bp.get("/users/<int:uid>/journal")
+@admin_required
+def konto_journal(uid):
+    """Verlauf des Kontos in der Materialablage für die Leitstelle (Entscheidung E3 A, 26.10.2026): die letzten
+    KONTO_JOURNAL_MAX Einträge des Journals am Konto (entity „user“) – Stufe und Häkchen „Prüfer“ (rollen),
+    Urkundennummer, Unterschrift –, je mit Zeit und Handelndem (Name, nie die E-Mail), als fertige Zeilen
+    (beschriftung.journal_zeilen). Die Unterschrift steht nur als „hinterlegt“ bzw. „–“ da, ohne Bild und ohne den
+    Fingerabdruck, den das Journal trägt. Einträge von vor der Anlage des Kontos gehören einem gelöschten Konto, das
+    dieselbe Kennung hatte (users.id wird nach dem Löschen der höchsten neu vergeben) – sie bleiben draußen."""
+    u = db.query("SELECT id, created_at FROM users WHERE id = ?", (uid,), one=True)
+    if not u:
+        return jsonify(error="Nutzer nicht gefunden"), 404
+    eintraege = [e for e in mat_journal.lesen([("user", uid)], grenze=KONTO_JOURNAL_MAX)
+                 if (e["created_at"] or "") >= (u["created_at"] or "")]
+    for e in eintraege:
+        for seite in ("vorher", "nachher"):
+            if e[seite] and "unterschrift" in e[seite]:
+                e[seite] = dict(e[seite], unterschrift="hinterlegt" if e[seite]["unterschrift"] else None)
+    return jsonify(eintraege=mat_beschriftung.journal_zeilen(eintraege), max=KONTO_JOURNAL_MAX)
 
 
 @bp.post("/users/<int:uid>/approve")

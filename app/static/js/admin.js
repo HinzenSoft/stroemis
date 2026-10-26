@@ -212,7 +212,7 @@
         bei der Materialablage auch Produktkatalog und alle Bestände. Verwaltung in der Leitstelle schließt alle Rechte ein.
         Was eine Stufe genau umfasst, steht als Hinweis am Feld.</div>
       <fieldset class="mat-rollen"><legend>Materialablage</legend>
-        <label class="inline"><input type="checkbox" id="u-mat-pruefer" ${u.mat_pruefer ? "checked" : ""}> Prüfer (Sachkundiger, Qualifikation 1012)</label>
+        <label class="inline"><input type="checkbox" id="u-mat-pruefer" ${u.mat_pruefer ? "checked" : ""}> Prüfer (Sachkundiger)</label>
         <p class="mat-urkunde" ${u.mat_pruefer ? "" : "hidden"}>${urkundeLesend(u)}</p>
         <p class="help mat-stufe-auto" role="status" hidden>Materialablage steht jetzt auf „Mitglied“ – ohne Stufe wirkt das Häkchen nicht. Gespeichert wird beim Speichern.</p>
         <div class="help">Das Häkchen wirkt nur mit Stufe „Mitglied“ oder „Verwaltung“ in der Materialablage. Urkundennummer und Unterschrift
@@ -224,7 +224,10 @@
         <p class="notice u-freigaben-kein-zugang" ${(rechte.material | 0) || !(u.mat_freigaben | 0) ? "hidden" : ""}>Diese Freigaben wirken nicht – das Konto hat keinen Zugang zur Materialablage.</p>
         <div id="u-freigaben"><p class="help">Wird geladen …</p></div>
         <div class="help">Angelegt wird eine Freigabe am Ordner (Bestand → Ordner → Bearbeiten → Freigaben), nicht hier.</div>
-      </fieldset>` : ""}
+      </fieldset>
+      <details class="accordion" id="u-verlauf"><summary>Verlauf (Materialablage)</summary>
+        <div class="accordion-body"><p class="help">Änderungen an Stufe, Häkchen „Prüfer“, Urkundennummer und Unterschrift (ohne Bild) –
+          die letzten 50, neueste zuerst.</p><div id="u-verlauf-liste" aria-live="polite"><p class="help">Wird geladen …</p></div></div></details>` : ""}
       <label>${u.id ? "Neues Passwort (leer lassen, um es zu behalten)" : "Passwort (leer lassen, um eines zu erzeugen)"}</label>
       <input type="text" id="u-pw" autocomplete="off">
       ${u.id ? `<label class="inline"><input type="checkbox" id="u-active" ${u.active ? "checked" : ""}> Konto aktiv</label>`
@@ -351,6 +354,7 @@
         (dlg, body) => {
           koppleRechte(body, u);
           freigabenZeigen(body.querySelector("#u-freigaben"), u);
+          verlaufAnbinden(body.querySelector("#u-verlauf"), u);
           body.querySelector("#u-save").onclick = async (ev) => {
             const knopf = ev.currentTarget;
             if (knopf.disabled) return;
@@ -380,7 +384,7 @@
     }
   });
 
-  /* --- Modul Material im Dialog „Bearbeiten“: die Freigaben des Kontos -------------------------- */
+  /* --- Materialablage im Dialog „Bearbeiten“: die Freigaben des Kontos -------------------------- */
   const RECHT = { lesen: "lesen", verwalten: "verwalten", pruefen: "prüfen" };
   // „2027-12-31“ → „31.12.2027“ – ohne Date-Objekt, damit keine Zeitzone den Tag verschiebt.
   const tag = (iso) => { const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}.${m[2]}.${m[1]}` : ""; };
@@ -438,14 +442,36 @@
         // bleibt stehen und führt hin (wie im Reiter „Freigaben“ am Ordner).
         if (r.offene_entwuerfe) {
           el.insertAdjacentHTML("afterbegin", `<p class="notice">Entzogen – ${mehrzahl(r.offene_entwuerfe, "offene Prüfung", "offene Prüfungen")}
-            des Kontos unter <a href="/materialablage/pruefungen">Materialablage → Prüfungen</a> → Offene Prüfungen freigeben.</p>`);
+            des Kontos unter <a href="/materialablage/pruefungen">Materialablage → Prüfungen</a> → „Offene Prüfungen“ mit „Reservierung aufheben“.</p>`);
         }
         load();
       } catch (e) { S.toast(e.message, true); b.disabled = false; }
     }));
   }
 
-  /* --- Modul Material: einziger Materialwart einer Gliederung ------------------------------------ */
+  /* --- Materialablage im Dialog „Bearbeiten“: Verlauf des Kontos (Entscheidung E3 A, 26.10.2026) ----------------------
+     Das Journal am Konto, geladen erst beim Aufklappen (selten gebraucht). Der Server liefert fertige Zeilen – Namen statt
+     E-Mail, die Unterschrift nur als „hinterlegt“/„–“. */
+  function verlaufAnbinden(box, u) {
+    if (!box) return;
+    const ziel = box.querySelector("#u-verlauf-liste");
+    let geladen = false;
+    const feld = (f) => `${S.esc(f.feld)}: ${f.nur_nachher ? "" : `${S.esc(f.vorher)} → `}${S.esc(f.nachher)}`;
+    box.addEventListener("toggle", async () => {
+      if (!box.open || geladen) return;
+      geladen = true;
+      let d;
+      try { d = await S.api(`/api/admin/users/${u.id}/journal`); }
+      catch (e) { geladen = false; ziel.innerHTML = `<p class="notice">Der Verlauf ließ sich nicht laden: ${S.esc(e.message)}</p>`; return; }
+      const zeilen = d.eintraege || [];
+      ziel.innerHTML = zeilen.length ? `<table class="list"><thead><tr><th>Zeit</th><th>Was</th><th>Von</th><th>Änderung</th></tr></thead><tbody>
+        ${zeilen.map((z) => `<tr><td data-l="Zeit">${S.esc(z.zeit)}</td><td data-l="Was">${S.esc(z.aktion)}</td>
+          <td data-l="Von">${S.esc(z.von)}</td><td data-l="Änderung">${z.felder.length ? z.felder.map(feld).join("<br>") : "–"}</td></tr>`).join("")}
+        </tbody></table>` : '<p class="help">Noch keine Einträge.</p>';
+    });
+  }
+
+  /* --- Materialablage: einziger Materialwart einer Gliederung ------------------------------------ */
   // „der Gliederung „A““, „der Gliederungen „A“ und „B““, „… „A“, „B“ und „C““ – Pfad, damit eine verschachtelte
   // Gliederung nicht mit einer gleichnamigen verwechselt wird.
   function gliederungenText(gl) {
