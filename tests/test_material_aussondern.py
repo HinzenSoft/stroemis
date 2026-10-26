@@ -63,7 +63,7 @@ def test_ergebnis_sperrt_nur():
         assert artikel(p, a1)["aussondern"] is None                 # Prüfer ohne „verwalten“
         liste = w.get(f"{API}/ordner/{t.system['gesperrt']}").json["ordner"]["artikel"]
         assert [x["aussonderung_empfohlen"] for x in liste if x["id"] == a1] == [True]
-        text = " ".join(_pdf_text(w.get(f"/material/pruefung/{pr['id']}/pdf").data).split())
+        text = " ".join(_pdf_text(w.get(f"/materialablage/pruefung/{pr['id']}/pdf").data).split())
         assert "aussondern empfohlen" in text and "Der Prüfer empfiehlt, den Artikel auszusondern" in text, text[:800]
         # Der Prüfer sondert nicht aus – auch nicht über die Route.
         assert aussondern(p, a1).status_code == 403
@@ -195,7 +195,7 @@ def test_durchgang_und_altbestand():
             pr = pruefung(p, iid, durchgang_id=rid)
             assert festschreiben(p, pr["id"], ergebnis="einsatzbereit").status_code == 200
         assert w.post(f"{API}/durchgaenge/{rid}/abschliessen", json={}).status_code == 200
-        haupt = " ".join(_pdf_text(w.get(f"/material/durchgang/{rid}/sammelprotokoll").data).split())
+        haupt = " ".join(_pdf_text(w.get(f"/materialablage/durchgang/{rid}/sammelprotokoll").data).split())
         assert "davon aussondern empfohlen 1" in haupt and "davon ausgesondert" not in haupt, haupt[:900]
         # Altbestand: eine Prüfung mit „aussondern“, wie sie vor Schritt 28 entstand (direkt in der Tabelle).
         alt = neuer_artikel(w, t.ids["hms"], t.lager, serial_no="ALT-1")["id"]

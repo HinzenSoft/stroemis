@@ -116,7 +116,7 @@ def test_zugang():
         zuordnen(t, a2, t.person_id)
         zustand(t.app, a1, last_inspected_on="2025-01-15", next_due_on="2099-01-01")        # einsatzbereit
         sperren(t.k["pruefer"], a2)                                                            # gesperrt: zuerst
-        r = t.person.get("/material/meine-psa")
+        r = t.person.get("/materialablage/meine-psa")
         html = r.get_data(as_text=True)
         assert r.status_code == 200 and 'data-ansicht="meine_psa"' in html, r.status_code
         assert 'class="mat-nav"' not in html and 'id="mat-side"' not in html
@@ -126,13 +126,13 @@ def test_zugang():
         assert d["artikel"][0]["status"] == "gesperrt" and d["artikel"][0]["gesperrt"] is True
         assert d["mails"] is True and isinstance(d["schwelle_tage"], int)
         # Ohne Zuordnung: die Seite öffnet sich, die Liste ist leer.
-        assert t.person2.get("/material/meine-psa").status_code == 200
+        assert t.person2.get("/materialablage/meine-psa").status_code == 200
         assert t.person2.get(LISTE).json["artikel"] == []
         # Ohne Namen: 403 mit Klartext (Seite und Schnittstelle).
         sql(t.app, "UPDATE users SET name = '' WHERE id = ?", (t.person2_id,))
         r = t.person2.get(LISTE)
         assert r.status_code == 403 and "Namen" in r.json["error"], r.get_json()
-        r = t.person2.get("/material/meine-psa")
+        r = t.person2.get("/materialablage/meine-psa")
         assert r.status_code == 403 and "Namen" in r.get_data(as_text=True)
         # Ausgesondert (Altbestand mit stehen gebliebener Zuordnung): fehlt.
         sql(t.app, "UPDATE mat_item SET lock_state = 'ausgesondert', assigned_user_id = ? WHERE id = ?",
@@ -141,7 +141,7 @@ def test_zugang():
         assert t.person.get(LISTE).json["gesamt"] == 2
         # Deaktiviert: Anmeldung bzw. 401.
         assert t.adm.put(f"/api/admin/users/{t.person_id}", json={"active": False}).status_code == 200
-        r = t.person.get("/material/meine-psa")
+        r = t.person.get("/materialablage/meine-psa")
         assert r.status_code == 302 and "/login" in r.headers["Location"], r.status_code
         assert t.person.get(LISTE).status_code == 401
     print("Zugang bestanden.")
@@ -195,20 +195,20 @@ def test_qr():
         zuordnen(t, a2, t.mitglied_id)
         zuordnen(t, a3, t.k["fuehrung_id"])
         r = t.person.get(f"/m/{token_von(t.app, a1)}")
-        assert r.status_code == 302 and r.headers["Location"].endswith(f"/material/meine-psa/{a1}"), r.headers
+        assert r.status_code == 302 and r.headers["Location"].endswith(f"/materialablage/meine-psa/{a1}"), r.headers
         fremd = t.person.get(f"/m/{token_von(t.app, a2)}")
         unbekannt = t.person.get("/m/gibtesnicht0000")
         assert fremd.status_code == unbekannt.status_code == 403
         assert seite(fremd) == seite(unbekannt)
         # Mit Stufe, ohne Leserecht: der eigene Artikel unter „Meine PSA“, ein fremder „fremd“ wie bisher.
         r = t.mitglied.get(f"/m/{token_von(t.app, a2)}")
-        assert r.status_code == 302 and r.headers["Location"].endswith(f"/material/meine-psa/{a2}"), r.headers
+        assert r.status_code == 302 and r.headers["Location"].endswith(f"/materialablage/meine-psa/{a2}"), r.headers
         r = t.mitglied.get(f"/m/{token_von(t.app, a1)}")
         assert r.status_code == 200 and 'data-ansicht="fremd"' in r.get_data(as_text=True)
         assert t.mitglied.get("/m/gibtesnicht0000").status_code == 404
         # Mit Leserecht: die volle Artikelseite, auch für den eigenen Artikel.
         r = t.k["fuehrung"].get(f"/m/{token_von(t.app, a3)}")
-        assert r.status_code == 302 and r.headers["Location"].endswith(f"/material/artikel/{a3}"), r.headers
+        assert r.status_code == 302 and r.headers["Location"].endswith(f"/materialablage/artikel/{a3}"), r.headers
         # Ausgesondert ist nicht mehr „eigen“.
         sql(t.app, "UPDATE mat_item SET lock_state = 'ausgesondert' WHERE id = ?", (a1,))
         r = t.person.get(f"/m/{token_von(t.app, a1)}")
@@ -223,14 +223,14 @@ def test_einzelseite():
         a1, a2, _ = t.art
         zuordnen(t, a1, t.person_id)
         zuordnen(t, a2, t.person2_id)
-        r = t.person.get(f"/material/meine-psa/{a1}")
+        r = t.person.get(f"/materialablage/meine-psa/{a1}")
         assert r.status_code == 200 and f"{{&#34;id&#34;: {a1}}}" in r.get_data(as_text=True)
-        fremd, unbekannt = t.person.get(f"/material/meine-psa/{a2}"), t.person.get("/material/meine-psa/999999")
+        fremd, unbekannt = t.person.get(f"/materialablage/meine-psa/{a2}"), t.person.get("/materialablage/meine-psa/999999")
         assert fremd.status_code == unbekannt.status_code == 404 and seite(fremd) == seite(unbekannt)
         assert "Artikel nicht gefunden." in fremd.get_data(as_text=True)
         sql(t.app, "UPDATE mat_item SET lock_state = 'ausgesondert' WHERE id = ?", (a1,))
-        r = t.person.get(f"/material/meine-psa/{a1}")
-        assert r.status_code == 404 and seite(r) == seite(t.person.get("/material/meine-psa/999999"))
+        r = t.person.get(f"/materialablage/meine-psa/{a1}")
+        assert r.status_code == 404 and seite(r) == seite(t.person.get("/materialablage/meine-psa/999999"))
     print("Einzelseite bestanden.")
 
 
@@ -330,19 +330,19 @@ def test_kopfleiste():
         ja = [(t.person, t.person_id), (t.mitglied, t.mitglied_id), (nur_pruef, nur_pruef_id)]
         nein = [(k["fuehrung"], k["fuehrung_id"]), (k["wart"], k["wart_id"]), (k["pruefer"], k["pruefer_id"]),
                 (k["katalog"], k["katalog_id"])]
-        link = re.compile(r'href="/material/meine-psa" class="[^"]*">Meine PSA</a>')       # der Eintrag der Kopfleiste
+        link = re.compile(r'href="/materialablage/meine-psa" class="[^"]*">Meine PSA</a>')       # der Eintrag der Kopfleiste
         for c, _ in ja + nein:
             assert not link.search(c.get("/profil").get_data(as_text=True))     # ohne Zuordnung nie
         for (_c, uid), iid in zip(ja + nein, t.art + mehr):
             zuordnen(t, iid, uid)
         for c, _ in ja:
             assert link.search(c.get("/profil").get_data(as_text=True))
-            html = c.get("/material/meine-psa").get_data(as_text=True)
-            assert re.search(r'href="/material/meine-psa" class="active"', html), html[:1500]
+            html = c.get("/materialablage/meine-psa").get_data(as_text=True)
+            assert re.search(r'href="/materialablage/meine-psa" class="active"', html), html[:1500]
         for c, _ in nein:
             assert not link.search(c.get("/profil").get_data(as_text=True))
-            html = c.get("/material/meine-psa").get_data(as_text=True)
-            assert re.search(r'href="/material" class="active"', html) and not link.search(html)
+            html = c.get("/materialablage/meine-psa").get_data(as_text=True)
+            assert re.search(r'href="/materialablage" class="active"', html) and not link.search(html)
         # Abfragen einer Wiki-Seite ohne Zuordnung: genau eine zur Zuordnung, keine Freigaben, kein Ordnerbaum.
         abfragen = []
         alt = db_mod.get_db
@@ -353,7 +353,7 @@ def test_kopfleiste():
             return conn
         db_mod.get_db = mit_zaehler
         try:
-            assert t.person2.get("/wiki").status_code == 200
+            assert t.person2.get("/stroemipedia").status_code == 200
         finally:
             db_mod.get_db = alt
         assert len([q for q in abfragen if "assigned_user_id" in q]) == 1, abfragen
@@ -362,18 +362,18 @@ def test_kopfleiste():
 
 
 def test_uebersicht():
-    """/material ohne Stufe: mit Zuordnung 302 auf „Meine PSA“, sonst 403. Mitglied ohne Freigabe mit Zuordnung: die
+    """/materialablage ohne Stufe: mit Zuordnung 302 auf „Meine PSA“, sonst 403. Mitglied ohne Freigabe mit Zuordnung: die
     Übersicht und start.meine_psa; ohne Zuordnung null."""
     with tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
         a1, a2, _ = t.art
         zuordnen(t, a1, t.person_id)
         zuordnen(t, a2, t.mitglied_id)
-        r = t.person.get("/material")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/material/meine-psa"), r.status_code
-        assert t.person2.get("/material").status_code == 403
-        assert t.person.get("/material/bestand").status_code == 403
-        assert t.mitglied.get("/material").status_code == 200
+        r = t.person.get("/materialablage")
+        assert r.status_code == 302 and r.headers["Location"].endswith("/materialablage/meine-psa"), r.status_code
+        assert t.person2.get("/materialablage").status_code == 403
+        assert t.person.get("/materialablage/bestand").status_code == 403
+        assert t.mitglied.get("/materialablage").status_code == 200
         assert t.mitglied.get("/api/material/start").json["meine_psa"] == {"anzahl": 1, "dringend": 1}  # neu
         zustand(t.app, a2, last_inspected_on="2025-01-15", next_due_on="2099-01-01")
         assert t.mitglied.get("/api/material/start").json["meine_psa"] == {"anzahl": 1, "dringend": 0}
@@ -437,7 +437,7 @@ def test_keine_tuer():
         def antworten():
             # Einziger Unterschied auf Seiten: der Eintrag „Meine PSA“ in der Kopfleiste (test_kopfleiste).
             return {r.rule: (x.status_code, re.sub(rb"\s+", b" ", re.sub(
-                rb'<a href="/material/meine-psa" class="[^"]*">Meine PSA</a>', b"", seite(x)))) for r in regeln
+                rb'<a href="/materialablage/meine-psa" class="[^"]*">Meine PSA</a>', b"", seite(x)))) for r in regeln
                     for x in [t.person.get(_url(r, a1, token))]}
         vorher = antworten()
         zuordnen(t, a1, t.person_id)
@@ -447,7 +447,7 @@ def test_keine_tuer():
         assert all(v[0] in (200, 302, 401, 403) for v in nachher.values())
         r = t.person.get(f"/api/material/artikel/{a1}")
         assert r.status_code == 403, r.status_code
-        assert t.person.get(f"/material/artikel/{a1}").status_code == 403
+        assert t.person.get(f"/materialablage/artikel/{a1}").status_code == 403
         assert t.person.get(f"/api/material/artikel/{a1}/pruefungen").status_code == 403
     print("Keine Tür bestanden.")
 

@@ -62,8 +62,8 @@
   // material.js).
   function karte(a, q, i) {
     const name = window.MatProdukt.nameHtml(a);
-    return `<li role="option" id="mv-${i}" aria-selected="false" data-href="/material/artikel/${a.id}">
-      <a href="/material/artikel/${a.id}" tabindex="-1">
+    return `<li role="option" id="mv-${i}" aria-selected="false" data-href="/materialablage/artikel/${a.id}">
+      <a href="/materialablage/artikel/${a.id}" tabindex="-1">
         ${a.vorschau ? `<img class="mv-bild" src="${esc(a.vorschau)}" alt="" loading="lazy">` : '<span class="mv-bild leer" aria-hidden="true"></span>'}
         <span class="mv-text">
           <span class="mv-kopf"><strong class="mv-inv">${markiert(a.inventory_no, q)}</strong>
@@ -88,7 +88,7 @@
     let html = treffer.map((a, i) => karte(a, q, i)).join("");
     if (treffer.length) {
       html += `<li role="option" id="mv-${treffer.length}" aria-selected="false" class="mv-alle" data-alle="1">
-      <a href="/material/suche?q=${encodeURIComponent(q)}" tabindex="-1">${d.gesamt > treffer.length ? `Alle ${d.gesamt} Treffer anzeigen` : "Als Trefferliste anzeigen"}</a></li>`;
+      <a href="/materialablage/suche?q=${encodeURIComponent(q)}" tabindex="-1">${d.gesamt > treffer.length ? `Alle ${d.gesamt} Treffer anzeigen` : "Als Trefferliste anzeigen"}</a></li>`;
     } else {
       html = `<li class="mv-leer" role="presentation">Kein Artikel in deinem Bereich mit „${esc(q)}“ in Serien-, Inventar- oder Herstellernummer.</li>`;
     }

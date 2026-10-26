@@ -21,13 +21,14 @@
   {% if user %}
   <nav class="nav" aria-label="Hauptnavigation">
     {# Die Reiter folgen der Rechte-Matrix (auth.MODULE); jede Route prüft das Recht zusätzlich selbst. #}
-    {# Ohne Stufe im Wiki bleibt der Reiter: Er führt in den Lesemodus mit den öffentlichen Seiten (auth.wiki_lesemodus). #}
-    {% if rechte.wiki %}<a href="/" class="{% if active == 'wiki' %}active{% endif %}">Wiki</a>{% elif wiki_lesemodus %}<a href="/wiki" class="{% if active == 'wiki' %}active{% endif %}">Wiki</a>{% endif %}
-    {% if rechte.karte %}<a href="/karte" class="{% if active == 'map' %}active{% endif %}">Spots</a>{% endif %}
-    {% if rechte.pruefungen %}<a href="/pruefungen" class="{% if active == 'pruefungen' %}active{% endif %}">Prüfungen</a>{% endif %}
-    {% if material_zugang %}<a href="/material" class="{% if active == 'material' %}active{% endif %}">Material</a>{% endif %}
-    {% if meine_psa %}<a href="/material/meine-psa" class="{% if active == 'meine_psa' %}active{% endif %}">Meine PSA</a>{% endif %}
-    {% if rechte.verwaltung %}<a href="/admin" class="{% if active == 'admin' %}active{% endif %}">Verwaltung</a>{% endif %}
+    {# Namen und Adressen aus app/module.py (Umbenennung 26.10.2026); die Schlüssel (rechte.wiki …) bleiben. #}
+    {# Ohne Stufe in der Strömipedia bleibt der Reiter: Er führt in den Lesemodus mit den öffentlichen Seiten (auth.wiki_lesemodus). #}
+    {% if rechte.wiki %}<a href="/" class="{% if active == 'wiki' %}active{% endif %}">{{ modul.name.wiki }}</a>{% elif wiki_lesemodus %}<a href="{{ modul.pfad.wiki }}" class="{% if active == 'wiki' %}active{% endif %}">{{ modul.name.wiki }}</a>{% endif %}
+    {% if rechte.karte %}<a href="{{ modul.pfad.karte }}" class="{% if active == 'map' %}active{% endif %}">{{ modul.name.karte }}</a>{% endif %}
+    {% if rechte.pruefungen %}<a href="{{ modul.pfad.pruefungen }}" class="{% if active == 'pruefungen' %}active{% endif %}">{{ modul.name.pruefungen }}</a>{% endif %}
+    {% if material_zugang %}<a href="{{ modul.pfad.material }}" class="{% if active == 'material' %}active{% endif %}">{{ modul.name.material }}</a>{% endif %}
+    {% if meine_psa %}<a href="{{ modul.pfad.material }}/meine-psa" class="{% if active == 'meine_psa' %}active{% endif %}">Meine PSA</a>{% endif %}
+    {% if rechte.verwaltung %}<a href="{{ modul.pfad.verwaltung }}" class="{% if active == 'admin' %}active{% endif %}">{{ modul.name.verwaltung }}</a>{% endif %}
     <a href="/profil" class="{% if active == 'profile' %}active{% endif %}"><span class="user">{{ user.name or user.email }} </span>Profil</a>
     <button type="button" id="logout">Abmelden</button>
     {# „Mehr“: Was nicht in die Leiste passt, legt common.js hierher (Priority+) – zuerst Abmelden und Profil, der
@@ -41,7 +42,7 @@
 </header>
 {% block body %}{% endblock %}
 <div id="toast" role="status" aria-live="polite"></div>
-<script nonce="{{ csp_nonce }}">window.STROEMIS = { user: {{ (user and {'id': user.id, 'name': user.name, 'email': user.email, 'rechte': rechte}) | tojson }}, mapCenter: {{ cfg.MAP_CENTER | tojson }}, mapZoom: {{ cfg.MAP_ZOOM }}, tileUrl: {{ cfg.TILE_URL | tojson }}, tileAttribution: {{ cfg.TILE_ATTRIBUTION | tojson }}, topoUrl: {{ cfg.TOPO_URL | tojson }}, topoAttribution: {{ cfg.TOPO_ATTRIBUTION | tojson }}, satUrl: {{ cfg.SAT_URL | tojson }}, satAttribution: {{ cfg.SAT_ATTRIBUTION | tojson }}, satLabelsUrl: {{ cfg.SAT_LABELS_URL | tojson }}, publicUrl: {{ cfg.PUBLIC_URL | tojson }}, maxUploadMb: {{ cfg.MAX_CONTENT_LENGTH // 1048576 }}, spracheingabe: {{ cfg.SPRACHEINGABE | tojson }} };</script>
+<script nonce="{{ csp_nonce }}">window.STROEMIS = { user: {{ (user and {'id': user.id, 'name': user.name, 'email': user.email, 'rechte': rechte}) | tojson }}, mapCenter: {{ cfg.MAP_CENTER | tojson }}, mapZoom: {{ cfg.MAP_ZOOM }}, tileUrl: {{ cfg.TILE_URL | tojson }}, tileAttribution: {{ cfg.TILE_ATTRIBUTION | tojson }}, topoUrl: {{ cfg.TOPO_URL | tojson }}, topoAttribution: {{ cfg.TOPO_ATTRIBUTION | tojson }}, satUrl: {{ cfg.SAT_URL | tojson }}, satAttribution: {{ cfg.SAT_ATTRIBUTION | tojson }}, satLabelsUrl: {{ cfg.SAT_LABELS_URL | tojson }}, publicUrl: {{ cfg.PUBLIC_URL | tojson }}, maxUploadMb: {{ cfg.MAX_CONTENT_LENGTH // 1048576 }}, spracheingabe: {{ cfg.SPRACHEINGABE | tojson }}, module: {{ modul | tojson }} };</script>
 <script src="{{ url_for('static', filename='js/common.js') }}"></script>
 {% block scripts %}{% endblock %}
 </body>

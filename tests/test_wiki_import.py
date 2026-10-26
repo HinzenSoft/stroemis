@@ -4,7 +4,7 @@
      Reihenfolge, Bilder umgeschrieben und abrufbar (Fragment #w= bleibt), Anhänge und Verweise vermerkt, eine Fassung je
      Seite; derselbe Import noch einmal → neue Seiten mit eigener Adresse und Hinweis (Entscheidung F5).
   2. Regeln eines selbst gepackten Archivs: Titel aus dem Dateinamen, Ordner ohne eigene .md, relative Bildpfade,
-     Verweis auf eine andere .md → /wiki/<slug>, nicht auflösbare Verweise als Hinweis, Codeblöcke und fremde Adressen
+     Verweis auf eine andere .md → /stroemipedia/<slug>, nicht auflösbare Verweise als Hinweis, Codeblöcke und fremde Adressen
      unverändert, Videos und fremde Endungen übergangen (F6), unbenutzte Dateien nicht übernommen, HTML-Baustein
      angenommen, Systemdateien still übergangen, BOM und CRLF.
   3. Abbruch ohne Spuren: ../x.md, /etc/x.md, a\\b.md, symbolischer Verweis, doppelter Name, verschlüsselt, Packbombe,
@@ -198,7 +198,7 @@ def test_regeln():
         assert s["Ordner"]["content"] == "# Ordner\n"
         assert s["2 Zwei"]["content"].startswith("# 2 Zwei\n\nOhne Titelzeile.")
         assert s["Zehn fett"]["content"] == "# Zehn *fett*\n\nTEXT ZEHN\n"            # BOM und CRLF weg, Titel ohne Stern
-        assert f"[zur Zehn](/wiki/{s['Zehn fett']['slug']}#abs)" in s["2 Zwei"]["content"]
+        assert f"[zur Zehn](/stroemipedia/{s['Zehn fett']['slug']}#abs)" in s["2 Zwei"]["content"]
         assert "(https://example.org/x.png)" in s["2 Zwei"]["content"] and ":::einbau fremde-seite#teil" in s["2 Zwei"]["content"]
         u = s["Unter"]["content"]
         neu = [x["file"] for x in zeilen(t.app, "SELECT file FROM wiki_page_files WHERE page_id = ?", (s["Unter"]["id"],))]

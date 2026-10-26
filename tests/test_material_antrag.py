@@ -399,7 +399,7 @@ def test_entscheiden():
         assert any(e["action"] == "antrag_bestaetigt" for e in a["journal"])
         # Festgeschriebene Protokolle bleiben, wie sie sind: Prüfsumme der Datei unverändert und gültig.
         x = zeilen(t.app, "SELECT id FROM mat_inspection WHERE item_id = ? AND completed_at IS NOT NULL", (t.k2,))[0]
-        assert t.w.get(f"/material/pruefung/{x['id']}/pdf").status_code == 200
+        assert t.w.get(f"/materialablage/pruefung/{x['id']}/pdf").status_code == 200
 
         # Textil: neues Herstelldatum → Lebensende neu (10 Jahre).
         aid = beantragen(t.p, t.g1, manufactured_on="2023-07").json["antrag"]["id"]
@@ -603,7 +603,7 @@ def test_mails():
         assert betreff == f"strömis.de – Änderungsantrag: {inv} (Seriennummer, Herstellung)", betreff
         for teil in (f"{inv} – Testwerk Sonderteil Gamma", "Gliederung:    OG Musterstadt", "Seriennummer:  AN-S1 → HN-1",
                      "Herstellung:   (leer) → 01/2023", "Platzhalter Mailtext", "pruefer beantragt",
-                     "https://strömis.de/material/bestand/antraege", "weil du den Ordner „OG Musterstadt / Lager“ verwaltest"):
+                     "https://strömis.de/materialablage/bestand/antraege", "weil du den Ordner „OG Musterstadt / Lager“ verwaltest"):
             assert teil in text, (teil, text)
         kid = r.json["antrag"]["id"]
         liste.clear()
@@ -616,7 +616,7 @@ def test_mails():
         assert ablehnen(t.w, kid2, antwort="Platzhalter Ablehnung").status_code == 200
         assert [m[0] for m in liste] == ["pruefer@example.org"], liste
         assert "Änderungsantrag abgelehnt" in liste[0][1] and "Platzhalter Ablehnung" in liste[0][2]
-        assert f"https://strömis.de/material/artikel/{t.s1}" in liste[0][2]
+        assert f"https://strömis.de/materialablage/artikel/{t.s1}" in liste[0][2]
         # Der Materialwart beantragt selbst: keine Mail an sich (er ist der einzige zuständige) und entscheidet selbst.
         liste.clear()
         r = beantragen(t.w, t.k1, serial_no="AN-111")
@@ -700,10 +700,10 @@ def test_artikel_und_zahlen():
         for c in (t.mv, t.p, t.f):
             assert c.get("/api/material/start").json["antraege_offen"] == 0
         assert t.w.get("/api/material/antraege").json["zu_entscheiden"] == 1
-        r = t.w.get("/material/katalog/meldungen?bereich=antraege")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/material/bestand/antraege")
+        r = t.w.get("/materialablage/katalog/meldungen?bereich=antraege")
+        assert r.status_code == 302 and r.headers["Location"].endswith("/materialablage/bestand/antraege")
         import html as html_mod
-        seite = html_mod.unescape(t.w.get("/material/katalog/meldungen").get_data(as_text=True))
+        seite = html_mod.unescape(t.w.get("/materialablage/katalog/meldungen").get_data(as_text=True))
         assert '"bereich"' not in seite and "meldungen" in seite
         # Rückruf mit der neuen Nummer – vor der Bestätigung trifft er nicht, danach schon; die alte trifft nicht mehr.
         assert bestaetigen(t.w, aid).status_code == 200
@@ -874,7 +874,7 @@ def test_oberflaeche_statisch():
     assert "btn ghost" not in js
     zaehlen = js[js.index("async function antraegeZaehlen(el)"):]
     assert "zu_entscheiden" in zaehlen[:600] and '"99+"' in zaehlen[:600]
-    assert "d.antraege_offen ? `<p class=\"notice\"><a href=\"/material/bestand/antraege\">" in js
+    assert "d.antraege_offen ? `<p class=\"notice\"><a href=\"/materialablage/bestand/antraege\">" in js
     for x in ("antrag_gestellt:", "antrag_bestaetigt:", "antrag_abgelehnt:", "beantragt_von:", "ablehnung:"):
         assert x in js, x
     assert '"Änderungsantrag behält", "Änderungsanträge behalten"' in admin
@@ -924,14 +924,14 @@ def test_leser_ohne_inhalt():
         abgelehnt = [e for e in lesen(t.f, t.s1)["journal"] if e["action"] == "antrag_abgelehnt"][0]
         assert abgelehnt["nachher"] == {"antrag": aid, "feld": "Seriennummer"}, abgelehnt
         # Lebenslauf: für die Führungskraft ohne, für den Materialwart mit Begründung und Namen.
-        r = t.f.get(f"/material/artikel/{t.k1}/lebenslauf.pdf")
+        r = t.f.get(f"/materialablage/artikel/{t.k1}/lebenslauf.pdf")
         assert r.status_code == 200 and r.mimetype == "application/pdf"
         text = _pdf_text(r.data)
         assert "AN-L1" in text, text
         assert not any(g in text for g in geheim) and "beantragt von" not in text, text
-        text = _pdf_text(t.w.get(f"/material/artikel/{t.k1}/lebenslauf.pdf").data)
+        text = _pdf_text(t.w.get(f"/materialablage/artikel/{t.k1}/lebenslauf.pdf").data)
         assert "Platzhalter Begründung L" in text and "Platzhalter Anmerkung L" in text and "beantragt von" in text
-        text = _pdf_text(t.f.get(f"/material/artikel/{t.s1}/lebenslauf.pdf").data)
+        text = _pdf_text(t.f.get(f"/materialablage/artikel/{t.s1}/lebenslauf.pdf").data)
         assert "Platzhalter Ablehnung M" not in text
     print("Leser ohne Inhalt bestanden.")
 
@@ -1183,12 +1183,12 @@ def test_sammelprotokoll_vormals():
         for iid in (a, b, c):
             pruefen(t.p, iid)
         pa = zeilen(t.app, "SELECT id FROM mat_inspection WHERE item_id = ? AND round_id = ?", (a, rid))[0]["id"]
-        pdf1 = t.w.get(f"/material/pruefung/{pa}/pdf").data
+        pdf1 = t.w.get(f"/materialablage/pruefung/{pa}/pdf").data
         aa = beantragen(t.p, a, serial_no="AN-NEU-1", product_id=hms2).json["antrag"]["id"]
         assert bestaetigen(t.w, aa).status_code == 200
-        assert t.w.get(f"/material/pruefung/{pa}/pdf").data == pdf1 and "AN-ALT-1" in _pdf_text(pdf1)
+        assert t.w.get(f"/materialablage/pruefung/{pa}/pdf").data == pdf1 and "AN-ALT-1" in _pdf_text(pdf1)
         assert t.p.post(f"/api/material/durchgaenge/{rid}/abschliessen", json={}).status_code == 200
-        r = t.w.get(f"/material/durchgang/{rid}/sammelprotokoll")
+        r = t.w.get(f"/materialablage/durchgang/{rid}/sammelprotokoll")
         assert r.status_code == 200 and r.mimetype == "application/pdf"
         text = " ".join(_pdf_text(r.data).split())
         assert "AN-NEU-1" in text and f"vormals AN-ALT-1 (Änderungsantrag Nr. {aa})" in text, text
@@ -1199,7 +1199,7 @@ def test_sammelprotokoll_vormals():
         summe = hashlib.sha256(r.data).hexdigest()
         a3 = beantragen(t.p, c, serial_no="AN-NEU-3").json["antrag"]["id"]
         assert bestaetigen(t.w, a3).status_code == 200
-        r = t.w.get(f"/material/durchgang/{rid}/sammelprotokoll")
+        r = t.w.get(f"/materialablage/durchgang/{rid}/sammelprotokoll")
         assert hashlib.sha256(r.data).hexdigest() == summe and "vormals AN-ALT-3" not in _pdf_text(r.data)
         from app.material.services import protokoll
         with t.app.app_context():
@@ -1353,7 +1353,7 @@ def test_zurueckziehen():
         # Leser: ohne Namen; Lebenslauf nennt den Eintrag.
         e = [x for x in lesen(t.f, t.k1)["journal"] if x["action"] == "antrag_zurueckgezogen"]
         assert len(e) == 1 and e[0]["user_name"] == "(Person)", e
-        text = _pdf_text(t.w.get(f"/material/artikel/{t.k1}/lebenslauf.pdf").data)
+        text = _pdf_text(t.w.get(f"/materialablage/artikel/{t.k1}/lebenslauf.pdf").data)
         assert "Änderungsantrag zurückgezogen" in " ".join(text.split()), text
         # Materialwart und Material-Verwaltung ziehen ihre eigenen zurück.
         assert zurueckziehen(t.w, aid2).status_code == 200

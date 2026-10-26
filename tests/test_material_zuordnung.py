@@ -284,7 +284,7 @@ def test_lebenslauf_ohne_namen():
         w = k["wart"]
         assert w.put(ZU.format(art[0]), json={"user_id": p["person1"]}).status_code == 200
         assert w.put(ZU.format(art[0]), json={"user_id": p["person2"]}).status_code == 200
-        r = w.get(f"/material/artikel/{art[0]}/lebenslauf.pdf")
+        r = w.get(f"/materialablage/artikel/{art[0]}/lebenslauf.pdf")
         assert r.status_code == 200 and r.data[:4] == b"%PDF", r.status_code
         pfad = os.path.join(tmp, "lebenslauf.pdf")
         with open(pfad, "wb") as fh:
@@ -660,7 +660,7 @@ def test_pruefnachweise_bleiben():
         assert not os.path.isdir(verwaist) or not os.listdir(verwaist)
         # Protokolle und Lebenslauf sind weiter abrufbar.
         for z in nachher["fest"]:
-            r = w.get(f"/material/pruefung/{z['id']}/pdf")
+            r = w.get(f"/materialablage/pruefung/{z['id']}/pdf")
             assert r.status_code == 200 and r.data.startswith(b"%PDF-"), (z["id"], r.status_code)
         # Ein offener Entwurf ist kein Nachweis: Er lässt sich weiter verwerfen.
         assert k["pruefer"].delete(f"/api/material/pruefungen/{entwurf}", headers=H).status_code == 200
@@ -748,12 +748,12 @@ def test_anzeige_und_filter_a1r():
         assert [x["id"] for x in r.json["ordner"]["artikel"]] == [art[1]], r.get_json()
         r = w.get("/api/material/faellig", query_string={"zugeordnet": p["person1"]})
         assert [x["id"] for x in r.json["artikel"]] == [art[1]], r.get_json()
-        text = w.get(f"/material/export/{lager}.csv").data.decode("utf-8-sig")
+        text = w.get(f"/materialablage/export/{lager}.csv").data.decode("utf-8-sig")
         zeilen_ = list(csv.DictReader(io.StringIO(text, newline=""), delimiter=";"))
         assert {z["Zugeordnet an"] for z in zeilen_} == {"Person Zwei", "Person Eins", ""}, zeilen_
         assert k["adm"].put(f"/api/admin/users/{p['person2']}", json={"active": False}).status_code == 200
         assert w.get(f"/api/material/artikel/{art[0]}").json["artikel"]["zugeordnet"]["aktiv"] is False
-        r = w.get(f"/material/artikel/{art[0]}/lebenslauf.pdf")
+        r = w.get(f"/materialablage/artikel/{art[0]}/lebenslauf.pdf")
         pfad = os.path.join(tmp, "lebenslauf.pdf")
         with open(pfad, "wb") as fh:
             fh.write(r.data)

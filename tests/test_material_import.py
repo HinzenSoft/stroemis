@@ -840,7 +840,7 @@ def test_nacharbeit_csv_rundweg():
         assert len(offen) == 4
         ok(w.post(f"/api/material/ordner/{t.lager_a}/nacharbeit/produkt", json={"zeilen": [offen[3]["id"]],
                                                                                   "product_id": t.ids["hms"]}))
-        r = w.get(f"/material/ordner/{t.lager_a}/nacharbeit.csv")
+        r = w.get(f"/materialablage/ordner/{t.lager_a}/nacharbeit.csv")
         assert r.status_code == 200 and r.data.startswith(b"\xef\xbb\xbf") and "no-store" in r.headers["Cache-Control"]
         tabelle_ = _csv_lesen(r.data)
         assert tabelle_[0] == ["Nacharbeit-Nr.", "Grund", "Hersteller", "Modell", "Artikelnummer", "Seriennummer",
@@ -1117,7 +1117,7 @@ def test_rechte():
                     ("POST", f"{basis}/nacharbeit/pruefen", {"zeilen": "alle"}),
                     ("POST", f"{basis}/nacharbeit/verwerfen", {"zeilen": "alle"}),
                     ("POST", f"{basis}/nacharbeit/melden", {"angabe": "x"}),
-                    ("GET", f"/material/ordner/{fid}/import", None), ("GET", f"/material/ordner/{fid}/nacharbeit.csv", None)]
+                    ("GET", f"/materialablage/ordner/{fid}/import", None), ("GET", f"/materialablage/ordner/{fid}/nacharbeit.csv", None)]
 
         def anfrage(c, methode, url, inhalt):
             if inhalt == "datei":
@@ -1142,10 +1142,10 @@ def test_rechte():
         assert stand_aller_tabellen(app) == vorher
         # Der Materialwart darf in A alles, die Material-Verwaltung überall.
         assert w.get(f"/api/material/ordner/{fach}/nacharbeit").status_code == 200
-        assert w.get(f"/material/ordner/{fach}/nacharbeit.csv").status_code == 200
+        assert w.get(f"/materialablage/ordner/{fach}/nacharbeit.csv").status_code == 200
         for fid in (fach, t.lager_b):
             assert k["katalog"].get(f"/api/material/ordner/{fid}/nacharbeit").json["zahlen"]["offen"] == 2
-            assert k["katalog"].get(f"/material/ordner/{fid}/import").status_code == 200
+            assert k["katalog"].get(f"/materialablage/ordner/{fid}/import").status_code == 200
         ok(probelauf(k["katalog"], t.lager_b, daten))
     print("Rechte bestanden.")
 
@@ -1251,7 +1251,7 @@ def test_produkt_melden():
                                 "material_kind": "metall_hardware", "interval_months": 12})
             neu = ok(r, 201)["produkt"]["id"]
             mail = [x for x in post if x[0] == "wart@example.org"]
-            assert mail and f"/material/ordner/{t.lager}/import" in mail[0][2] and "Artikel anlegen" not in mail[0][2]
+            assert mail and f"/materialablage/ordner/{t.lager}/import" in mail[0][2] and "Artikel anlegen" not in mail[0][2]
             r = ok(w.post(f"{url}/pruefen", json={"zeilen": "alle", "uebernehmen": True}))
             assert r["zahlen"]["angelegt"] == 2 and {z["produkt"]["id"] for z in r["zeilen"]} == {neu}
             # Abgelehnte Meldung: die Karte zeigt die Antwort.
@@ -1392,11 +1392,11 @@ def test_seite_und_hinweise():
     with ohne_post(), tempfile.TemporaryDirectory() as tmp:
         t = zwei_gliederungen(tmp)
         w, k = t.wart_a, t.k
-        r = w.get(f"/material/ordner/{t.lager_a}/import")
+        r = w.get(f"/materialablage/ordner/{t.lager_a}/import")
         assert r.status_code == 200 and 'data-ansicht="bestandsimport"' in r.get_data(as_text=True)
-        assert k["fuehrung"].get(f"/material/ordner/{t.lager_a}/import").status_code == 403
-        assert w.get(f"/material/ordner/{t.lager_b}/import").status_code == 404
-        assert w.get(f"/material/ordner/{t.sys_a['gesperrt']}/import").status_code == 409
+        assert k["fuehrung"].get(f"/materialablage/ordner/{t.lager_a}/import").status_code == 403
+        assert w.get(f"/materialablage/ordner/{t.lager_b}/import").status_code == 404
+        assert w.get(f"/materialablage/ordner/{t.sys_a['gesperrt']}/import").status_code == 409
         assert w.get(f"/api/material/ordner/{t.lager_a}").json["ordner"]["nacharbeit"] == 0
         ok(uebernehmen(w, t.lager_a, csv_bytes([KOPF, ["Nirgendwerk", "Phantom", "SH-0001"]])), 201)
         ok(uebernehmen(t.wart_b, t.lager_b, csv_bytes([KOPF, ["Nirgendwerk", "Phantom", "SH-0002"]])), 201)
@@ -1519,7 +1519,7 @@ def test_befunde_vor_auslieferung():
         # und sagen, wie es doch geht.
         ok(uebernehmen(w, t.lager, csv_bytes([KOPF, ["Nirgendwerk", "Phantom Z", "BV-0030"]])), 201)
         ok(uebernehmen(w, t.lager, csv_bytes([KOPF, ["Nirgendwerk", "Phantom Y", "BV-0031"]])), 201)
-        csv_alt = w.get(f"/material/ordner/{t.lager}/nacharbeit.csv").data
+        csv_alt = w.get(f"/materialablage/ordner/{t.lager}/nacharbeit.csv").data
         frist, hand = offene_zeilen(app, t.lager)
         ok(w.post(f"/api/material/ordner/{t.lager}/nacharbeit/verwerfen", json={"zeilen": [hand["id"]]}))
         sql(app, "UPDATE mat_import SET created_at = ? WHERE id = ?",
@@ -1552,7 +1552,7 @@ def test_befunde_vor_auslieferung():
                                                                             "product_id": hiviz_m}))
         karte = ok(w.get(f"/api/material/ordner/{t.lager}/nacharbeit"))["gruppen"][0]
         assert (karte["offen"], karte["zugeordnet"], karte["produkt"]) == (2, 1, None), karte
-        csv_neu = w.get(f"/material/ordner/{t.lager}/nacharbeit.csv").data
+        csv_neu = w.get(f"/materialablage/ordner/{t.lager}/nacharbeit.csv").data
         ok(w.post(f"/api/material/ordner/{t.lager}/nacharbeit/verwerfen", json={"zeilen": "alle"}))
         b = ok(probelauf(w, t.lager, csv_neu, "erledigt.csv"))
         assert [(x["status"], x["seriennummer"]) for x in b["zeilen"]] == [("erledigt", "BV-0050"),
@@ -1622,7 +1622,7 @@ def test_ohne_seriennummernspalte():
         assert r["zeilen"][0]["seriennummer"] == "OS-0030"
         # Nacharbeits-CSV: mit ihrer Spalte „Seriennummer“ (hier leer) keine Bestätigung; ohne die Spalte – gelöscht
         # oder auf „ignorieren“ gestellt – dieselbe Regel wie jede Liste.
-        tab = _csv_lesen(w.get(f"/material/ordner/{t.lager}/nacharbeit.csv").data)
+        tab = _csv_lesen(w.get(f"/materialablage/ordner/{t.lager}/nacharbeit.csv").data)
         assert tab[0][5] == "Seriennummer" and len(tab) == 2 and tab[1][5] == "", tab
         b = ok(probelauf(w, t.lager, csv_bytes(tab), "nacharbeit.csv"))
         assert b["nacharbeit_csv"] and not b["keine_seriennummer"] and not b["ohne_seriennummern_bestaetigen"]

@@ -1,4 +1,4 @@
-"""Modulstufe im Modul Material (Phase 2 · Lieferung 1, Nachbesserung vom 18.10.2026):  python tests/test_material_stufen.py
+"""Modulstufe in der Materialablage (Phase 2 · Lieferung 1, Nachbesserung vom 18.10.2026):  python tests/test_material_stufen.py
 
 Die Stufe der Nutzerverwaltung (users.recht_material) wirkt wieder: Mitglied = Modulzugang (Katalog, Suche, Profil –
 Bestand nur über Freigaben je Ordner), Verwaltung = Material-Verwaltung (Produktkatalog, alle Bestände, Gliederungen,
@@ -192,7 +192,7 @@ NUR_PLATTFORM_VERWALTUNG = {"material_api.konto_freigaben", "material_api.global
 
 
 def test_ohne_stufe_rundum():
-    """Ein Konto mit Verwalter- und Prüffreigabe in B, Häkchen und Urkundennummer, aber ohne Stufe im Modul Material:
+    """Ein Konto mit Verwalter- und Prüffreigabe in B, Häkchen und Urkundennummer, aber ohne Stufe in der Materialablage:
     Jede Route der Material-Blueprints (über app.url_map) antwortet 403 – vor jeder Frage nach dem Gegenstand –, außer
     den wenigen in OHNE_STUFE_ERLAUBT; nichts ändert sich. Kein Reiter, Seiten und Medien 403. Mit Stufe Mitglied
     wirken dieselben Freigaben sofort."""
@@ -235,23 +235,23 @@ def test_ohne_stufe_rundum():
         assert gezaehlt >= 120, gezaehlt
         assert _stand(app) == vorher, "Ein Konto ohne Stufe hat etwas geändert."
         # Medien aus B (Ordnerfoto) und die Seiten: 403; kein Reiter in der Kopfleiste.
-        for url in b.ordnerfoto + ["/material", f"/material/ordner/{t.lager_b}", f"/m/{b.token}"]:
+        for url in b.ordnerfoto + ["/materialablage", f"/materialablage/ordner/{t.lager_b}", f"/m/{b.token}"]:
             assert c.get(url).status_code == 403, url
-        assert 'href="/material"' not in c.get("/profil").get_data(as_text=True)
+        assert 'href="/materialablage"' not in c.get("/profil").get_data(as_text=True)
         assert c.get("/api/me").json["user"]["rechte"]["material"] == 0
         # „Meine Freigaben“ und die Liste am Ordner sagen, warum nichts wirkt.
         m = c.get("/api/material/freigaben/meine").json
-        assert not m["zugang"] and {f["wirkt_nicht"] for f in m["freigaben"]} == {"kein Zugang zum Modul Material"}, m
+        assert not m["zugang"] and {f["wirkt_nicht"] for f in m["freigaben"]} == {"kein Zugang zur Materialablage"}, m
         liste = t.wart_b.get(f"/api/material/ordner/{t.b}/freigaben").json["direkt"]
         z = [f for f in liste if f["konto"]["id"] == uid]
         assert {(f["recht"], f["wirkt"], f["wirkt_nicht"]) for f in z} == {
-            ("verwalten", False, "kein Zugang zum Modul Material"), ("pruefen", False, "kein Zugang zum Modul Material")}
+            ("verwalten", False, "kein Zugang zur Materialablage"), ("pruefen", False, "kein Zugang zur Materialablage")}
         # Mit Stufe Mitglied wirken dieselben Freigaben sofort – Verwalten und Prüfen in B.
         assert t.adm.put(f"/api/admin/users/{uid}", json={"rechte": {"material": 1}}).status_code == 200
         d = c.get("/api/material/start").json["darf"]
         assert d["verwalten"] and d["pruefen"] and d["qualifiziert"] and not d["alles"], d
         assert c.get(f"/api/material/ordner/{t.lager_b}").status_code == 200
-        assert 'href="/material"' in c.get("/profil").get_data(as_text=True)
+        assert 'href="/materialablage"' in c.get("/profil").get_data(as_text=True)
     print("Ohne Stufe rundum bestanden.")
 
 
@@ -306,7 +306,7 @@ def test_mitglied_und_material_verwaltung():
                            json={"user_id": k["fuehrung_id"], "grundrecht": "lesen"}).status_code == 201
             r = mv.post(RR.format(ids["hms"]), json={"title": "Testrückruf", "mail": False})
             assert r.status_code == 201 and r.json["betroffen"] == 1 and "empfaenger" in r.json, r.get_json()
-            assert mv.get("/api/admin/users").status_code == 403 and mv.get("/admin").status_code == 403
+            assert mv.get("/api/admin/users").status_code == 403 and mv.get("/leitstelle").status_code == 403
             assert mv.get("/api/material/globalsuche/protokoll").status_code == 403
             assert mv.get("/api/material/freigaben", query_string={"user_id": mg_id}).status_code == 403
             # Prüfen: nicht von selbst – erst mit Häkchen, Urkundennummer und eigener Prüffreigabe.
@@ -358,12 +358,12 @@ def test_haekchen_ohne_stufe():
             liste = {f["recht"]: f for f in w.get(f"/api/material/ordner/{gid}/freigaben").json["direkt"]
                      if f["konto"]["id"] == pid}
             assert {r_: (f["wirkt"], f["wirkt_nicht"], f["konto"]["qualifiziert"], f["konto"]["zugang"])
-                    for r_, f in liste.items()} == {"lesen": (False, "kein Zugang zum Modul Material", False, False),
-                                                   "pruefen": (False, "kein Zugang zum Modul Material", False, False)}
+                    for r_, f in liste.items()} == {"lesen": (False, "kein Zugang zur Materialablage", False, False),
+                                                   "pruefen": (False, "kein Zugang zur Materialablage", False, False)}
             # Eine neue Prüffreigabe gibt es dafür nicht (409), die Personensuche für Freigaben kennt das Konto nicht.
             r = w.post(f"/api/material/ordner/{gid}/freigaben", json={"user_id": pid, "pruefen": True,
                                                                        "pruefen_bis": (_heute() + timedelta(days=30)).isoformat()})
-            assert r.status_code == 409 and "keinen Zugang zum Modul Material" in r.json["error"], r.get_json()
+            assert r.status_code == 409 and "keinen Zugang zur Materialablage" in r.json["error"], r.get_json()
             assert w.get("/api/material/nutzer", query_string={"q": "Haken"}).json["nutzer"] == []
             assert [x["id"] for x in w.get("/api/material/nutzer", query_string={"q": "Haken", "zweck": "zuordnung"})
                     .json["nutzer"]] == [pid]
@@ -375,7 +375,7 @@ def test_haekchen_ohne_stufe():
             # trotzdem – nur zum Entfernen (ihre eigenen Daten, auch ohne Zugang); danach ist er weg.
             html = p.get("/profil").get_data(as_text=True)
             assert 'id="unterschrift" data-setzen="0"' in html and 'id="f-urkunde"' not in html, html
-            assert "<h2>Unterschrift</h2>" in html and "keinen Zugang zum Modul Material" in html
+            assert "<h2>Unterschrift</h2>" in html and "keinen Zugang zur Materialablage" in html
             assert p.put("/api/material/urkundennummer", json={"urkundennummer": "1012-3031"}).status_code == 403
             from test_material import unterschrift_daten
             assert p.put("/api/material/unterschrift", json={"bild": unterschrift_daten()}).status_code == 403
@@ -402,7 +402,7 @@ def test_personensuche_zweck():
         art = neuer_artikel(w, ids["hms"], gid, serial_no="PS-0001")["id"]
         _, uid = neues_konto(app, "psa@example.org", name="Psa Träger", stufe=0)
         r = w.post(f"/api/material/ordner/{gid}/freigaben", json={"user_id": uid, "grundrecht": "lesen"})
-        assert r.status_code == 409 and "keinen Zugang zum Modul Material" in r.json["error"], r.get_json()
+        assert r.status_code == 409 and "keinen Zugang zur Materialablage" in r.json["error"], r.get_json()
         assert not zeilen(app, "SELECT 1 FROM mat_folder_grant WHERE user_id = ?", (uid,))
         for zweck, gefunden in ((None, []), ("freigabe", []), ("zuordnung", [uid])):
             q = {"q": "Träger", **({"zweck": zweck} if zweck else {})}
@@ -456,21 +456,21 @@ def test_meldung_ohne_stufe():
 def test_namenlos_startseite():
     """Ein namenloses Konto von früher mit Stufe Mitglied (Schritt 10 setzt auch solche auf 1): Die Startseite führt
     nicht in die Fehlerseite des Moduls, sondern in den Lesemodus des Wikis, und die Kopfleiste zeigt „Material“ nicht –
-    beides erst mit Namen. /material selbst sagt, was fehlt."""
+    beides erst mit Namen. /materialablage selbst sagt, was fehlt."""
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
         uid = _konto_sql(app, "namenlos@example.org", name="", recht_material=1, recht_wiki=0, recht_karte=0)
         c = anmelden(app, "namenlos@example.org", "passwort1")
         r = c.get("/")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/wiki"), (r.status_code, r.headers)
-        assert 'href="/material"' not in c.get("/profil").get_data(as_text=True)
-        r = c.get("/material")
+        assert r.status_code == 302 and r.headers["Location"].endswith("/stroemipedia"), (r.status_code, r.headers)
+        assert 'href="/materialablage"' not in c.get("/profil").get_data(as_text=True)
+        r = c.get("/materialablage")
         assert r.status_code == 403 and "braucht dein Konto einen Namen" in r.get_data(as_text=True)
         sql(app, "UPDATE users SET name = 'Namenlos Test' WHERE id = ?", (uid,))
         r = c.get("/")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/material"), (r.status_code, r.headers)
-        assert 'href="/material"' in c.get("/profil").get_data(as_text=True)
-        assert c.get("/material").status_code == 200
+        assert r.status_code == 302 and r.headers["Location"].endswith("/materialablage"), (r.status_code, r.headers)
+        assert 'href="/materialablage"' in c.get("/profil").get_data(as_text=True)
+        assert c.get("/materialablage").status_code == 200
     print("Namenloses Konto: Startseite bestanden.")
 
 
@@ -498,7 +498,7 @@ def test_ruhende_freigabe_nicht_hochstufen():
         for c in (w, mv, adm):
             for d in ({"recht": "verwalten"}, {"bis": spaeter}, {"bis": None}, {"recht": "verwalten", "bis": bis}):
                 r = c.put(f"/api/material/freigaben/{lesen}", headers=H, json=d)
-                assert r.status_code == 409 and "keinen Zugang zum Modul Material" in r.json["error"], (d, r.get_json())
+                assert r.status_code == 409 and "keinen Zugang zur Materialablage" in r.json["error"], (d, r.get_json())
         assert zeile(lesen) == vorher
         # Kürzen und die Notiz gehen, ebenso Herabsetzen und Kürzen der dauerhaften Verwalterzeile – und Entziehen.
         kuerzer = (_heute() + timedelta(days=10)).isoformat()
@@ -649,7 +649,7 @@ def test_letzter_materialwart_oberflaeche():
                "gliederungenText(gl)", "nur noch die Material-Verwaltung", '"Trotzdem speichern"',
                "if (!gl.length) return true;"):
         assert da in bleibt, da
-    # Beide Wege, Material zu senken: die Tabelle (nur das Modul Material) und der Dialog (dazu „Konto aktiv“).
+    # Beide Wege, Material zu senken: die Tabelle (nur die Materialablage) und der Dialog (dazu „Konto aktiv“).
     assert 'sel.dataset.modul !== "material" || await materialwartBleibt(u, +sel.value)' in js
     assert "if (!(await materialwartBleibt(u, d.rechte.material, d.active))) return;" in js
     # Fokus nach dem Abbrechen (oder einem Fehler): Im Dialog kommt er auf „Speichern“ zurück, sobald der Knopf wieder
@@ -714,7 +714,7 @@ def test_profil_unterschrift():
 
 
 def test_vorgabe_neue_konten():
-    """Neue Konten (Kontoanfrage und Nutzerverwaltung ohne Angabe) bekommen Mitglied im Modul Material und sonst nichts;
+    """Neue Konten (Kontoanfrage und Nutzerverwaltung ohne Angabe) bekommen Mitglied in der Materialablage und sonst nichts;
     der allererste Nutzer weiter überall Verwaltung. Vorhandene Konten bleiben, wie sie sind. Mit der Freigabe einer
     Kontoanfrage steht die Stufe im Journal des Moduls („rollen“)."""
     keys = ("ADMIN_EMAIL", "ADMIN_PASSWORD")
@@ -761,11 +761,11 @@ def test_vorgabe_neue_konten():
             assert e[0]["before_json"] is None and json.loads(e[0]["after_json"]) == {
                 "recht_material": 1, "mat_pruefer": 0, "grund": "Kontoanfrage freigegeben"}, e
             # Gesamtprüfung: Das Profil eines neuen Kontos (Wiki im Lesemodus, Material Mitglied) erklärt das Profilbild
-            # mit Wiki-Seiten – „Artikel“ heißt im Modul Material der Ausrüstungsgegenstand.
+            # mit Wiki-Seiten – „Artikel“ heißt in der Materialablage der Ausrüstungsgegenstand.
             neu = app.test_client()
             assert neu.post("/api/auth/login", json={"email": "zweit@example.org", "password": "passwort1"}).status_code == 200
             profil = neu.get("/profil").get_data(as_text=True)
-            assert "neben deinem Namen an jeder Wiki-Seite, die du erstellt oder bearbeitet hast" in profil
+            assert "neben deinem Namen an jeder Seite der Strömipedia, die du erstellt oder bearbeitet hast" in profil
             assert "an jedem Artikel" not in profil
             # Eine Kontoanfrage, der die Verwaltung vor der Freigabe Material „–“ gibt, hinterlässt beim Freigeben nichts.
             assert app.test_client().post("/api/auth/register", json={

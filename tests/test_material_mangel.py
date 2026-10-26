@@ -583,7 +583,7 @@ def test_mail():
             _, betreff, text = an[adr]
             assert betreff == f"strömis.de – Mangel gemeldet: {inv} Testwerk HMS Beta – gesperrt", betreff
             assert text.startswith("Person Platzhalter hat am ") and "Platzhalter: Schnalle klemmt" in text
-            assert "Fotos:      2 (am Artikel)" in text and f"https://strömis.de/material/artikel/{a1}" in text
+            assert "Fotos:      2 (am Artikel)" in text and f"https://strömis.de/materialablage/artikel/{a1}" in text
             assert "beiseite" not in text or True
             assert "Lager Platzhalter" in text and "„Gesperrt“ der Gliederung OG Musterstadt" in text
         assert an["wart@example.org"][2].rstrip().endswith("weil du diesen Ordner verwaltest.")
@@ -653,8 +653,8 @@ def test_mail_zugeordnet():
         _, betreff, text = mails[0]
         inv = item(t.app, a1)["inventory_no"]
         assert betreff == f"strömis.de – Deine PSA {inv} ist gesperrt – nicht verwenden", betreff
-        assert text.startswith("Hallo Person Platzhalter,") and f"https://strömis.de/material/meine-psa/{a1}" in text
-        for nicht in ("fuehrung", "Platzhalter-Beschreibung", "Lager Platzhalter", "OG Musterstadt", "/material/artikel/"):
+        assert text.startswith("Hallo Person Platzhalter,") and f"https://strömis.de/materialablage/meine-psa/{a1}" in text
+        for nicht in ("fuehrung", "Platzhalter-Beschreibung", "Lager Platzhalter", "OG Musterstadt", "/materialablage/artikel/"):
             assert nicht not in text, nicht
         assert "leg sie sofort beiseite und gib sie deinem Materialwart" in text and "nicht abbestellen" in text
         # Selbst gemeldet: keine.
@@ -938,7 +938,7 @@ def test_lebenslauf():
         a1 = t.art[0]
         zuordnen(t, a1, t.person_id)
         assert melden(t.person, a1, "Geheimer Platzhaltertext").status_code == 201
-        r = t.w.get(f"/material/artikel/{a1}/lebenslauf.pdf")
+        r = t.w.get(f"/materialablage/artikel/{a1}/lebenslauf.pdf")
         assert r.status_code == 200 and r.mimetype == "application/pdf", r.status_code
         pfad = os.path.join(tmp, "lebenslauf.pdf")
         with open(pfad, "wb") as fh:

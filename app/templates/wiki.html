@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set active = 'wiki' %}
-{% block title %}Wiki – strömis.de{% endblock %}
+{% block title %}{{ modul.name.wiki }} – strömis.de{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/toastui/toastui-editor.min.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/toastui/toastui-editor-plugin-table-merged-cell.min.css') }}">
@@ -8,7 +8,7 @@
 {% block body %}
 <div class="wiki-shell" data-slug="{{ slug }}">
   <aside class="wiki-side" id="wiki-side">
-    <input type="search" id="wiki-search" placeholder="Wiki durchsuchen …" aria-label="Wiki durchsuchen">
+    <input type="search" id="wiki-search" placeholder="Strömipedia durchsuchen …" aria-label="Strömipedia durchsuchen">
     <ul class="search-results hidden" id="search-results"></ul>
     <div class="btn-row" style="margin-bottom:10px"><button class="btn small" id="btn-new-page">Neue Seite</button><button class="btn secondary small" id="btn-trash" type="button" title="Gelöschte Seiten ansehen und wiederherstellen">Papierkorb</button></div>
     <div id="favorites"></div>

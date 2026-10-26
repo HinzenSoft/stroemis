@@ -95,7 +95,7 @@ def test_csv():
         app, k, o, a = aufbau(tmp)
         f = k["fuehrung"]
         from app.material.services import export
-        r = f.get(f"/material/export/{o['fz']}.csv")
+        r = f.get(f"/materialablage/export/{o['fz']}.csv")
         assert r.status_code == 200 and r.mimetype == "text/csv", (r.status_code, r.mimetype)
         heute = _heute()
         cd = r.headers["Content-Disposition"]
@@ -140,10 +140,10 @@ def test_csv():
         assert t["Status"] == "neu" and t["Materialart"] == "textil" and t["DEMO"] == "nein" and t["Sperrzustand"] == "frei"
         # Eine laufende Prüfung steht als „in Prüfung bei“.
         assert starten(k["pruefer"], a["textil"]["id"]).status_code == 201
-        _, zeilen = csv_lesen(f.get(f"/material/export/{o['fz']}.csv").data)
+        _, zeilen = csv_lesen(f.get(f"/materialablage/export/{o['fz']}.csv").data)
         assert {x["Inventarnummer"]: x["in Prüfung bei"] for x in zeilen}[a["textil"]["inventory_no"]] == "pruefer"
         # Die Gliederung: alle fünf, auch der ausgesonderte (in „Ausgesondert“) und das Lager; Umlaute im Dateinamen.
-        r = f.get(f"/material/export/{o['gid']}.csv")
+        r = f.get(f"/materialablage/export/{o['gid']}.csv")
         assert r.status_code == 200 and "filename*=UTF-8''Artikel_OG%20%C3%9Cbungsstadt_" in r.headers["Content-Disposition"]
         _, zeilen = csv_lesen(r.data)
         assert {x["Inventarnummer"] for x in zeilen} == {v["inventory_no"] for v in a.values()}
@@ -153,7 +153,7 @@ def test_csv():
         assert w["Sperr-/Aussonderungsgrund"] == "Verlust", w
         # Ein leerer Ordner: nur die Kopfzeile.
         leer = k["wart"].post("/api/material/ordner", json={"name": "Leer", "kind": "set", "parent_id": o["lager"]}).json["ordner"]["id"]
-        kopf, zeilen = csv_lesen(f.get(f"/material/export/{leer}.csv").data)
+        kopf, zeilen = csv_lesen(f.get(f"/materialablage/export/{leer}.csv").data)
         assert kopf == list(export.ARTIKEL_SPALTEN) and zeilen == []
         # Formel-Schutz und Dateiname auch einzeln.
         assert [export._zelle(v) for v in ("=A1", "+1", "-1", "@x", "\tx", "\rx", "a=b", "", None, 12)] == \
@@ -188,7 +188,7 @@ def test_zip():
         jahr = _heute().year
         p, b, g, s, aus = (protokoll_zeile(app, o["pid"]), protokoll_zeile(app, o["ber"]), protokoll_zeile(app, o["pid_g"]),
                            protokoll_zeile(app, rid=o["rid"]), protokoll_zeile(app, o["aus"]))
-        r = f.get(f"/material/export/{o['fz']}-protokolle.zip")
+        r = f.get(f"/materialablage/export/{o['fz']}-protokolle.zip")
         assert r.status_code == 200 and r.mimetype == "application/zip", r.status_code
         assert f"Protokolle_Fahrzeug GW-Wasserrettung_{_heute().isoformat()}.zip" in r.headers["Content-Disposition"]
         assert "no-store" in r.headers["Cache-Control"]
@@ -219,14 +219,14 @@ def test_zip():
         assert verz[p["protocol_id"]]["Seriennummer"] == "'=1+2"            # Formel-Schutz auch im Verzeichnis
         assert verz[s["protocol_id"]]["Art"] == "Sammelprotokoll" and verz[s["protocol_id"]]["Ergebnis"] == "abgeschlossen"
         # Die Gliederung: dieselben – alles darin gehört auch zu ihr.
-        z, _, verz = zip_lesen(f.get(f"/material/export/{o['gid']}-protokolle.zip").data)
+        z, _, verz = zip_lesen(f.get(f"/materialablage/export/{o['gid']}-protokolle.zip").data)
         assert set(verz) == set(erwartet), set(verz)
         v = verz[aus["protocol_id"]]
         assert v["Art"] == "Aussonderungsprotokoll" and v["Grund"] == "Verlust" and v["Prüfer"] == "wart", v
         assert v["Ergebnis"] == "ausgesondert", v              # nicht das Etikett alter Prüfungen (Ablaufprüfung A1)
         assert hashlib.sha256(z.read(v["Datei im ZIP"])).hexdigest() == aus["file_sha256"]
         # Ein leerer Ordner: ein ZIP, in dem nur das Verzeichnis liegt.
-        z, _, verz = zip_lesen(f.get(f"/material/export/{o['lager']}-protokolle.zip").data)
+        z, _, verz = zip_lesen(f.get(f"/materialablage/export/{o['lager']}-protokolle.zip").data)
         assert z.namelist() == ["Verzeichnis.csv"] and verz == {}
 
         # Eine nachträglich veränderte Datei und eine fehlende brechen den Export nicht ab: Sie stehen im Verzeichnis
@@ -243,7 +243,7 @@ def test_zip():
         mitschrift = _Mitschrift()
         app.logger.addHandler(mitschrift)
         try:
-            r = f.get(f"/material/export/{o['fz']}-protokolle.zip")
+            r = f.get(f"/materialablage/export/{o['fz']}-protokolle.zip")
         finally:
             app.logger.removeHandler(mitschrift)
         assert r.status_code == 200, r.status_code
@@ -260,7 +260,7 @@ def test_zip():
         alt = export.ZIP_MAX_BYTES
         export.ZIP_MAX_BYTES = 1000
         try:
-            r = f.get(f"/material/export/{o['gid']}-protokolle.zip")
+            r = f.get(f"/materialablage/export/{o['gid']}-protokolle.zip")
         finally:
             export.ZIP_MAX_BYTES = alt
         assert r.status_code == 413 and r.mimetype == "text/html" and "größer als" in r.get_data(as_text=True)
@@ -286,7 +286,7 @@ def test_lebenslauf():
         f = k["fuehrung"]
         p, b, s = protokoll_zeile(app, o["pid"]), protokoll_zeile(app, o["ber"]), protokoll_zeile(app, rid=o["rid"])
         vorher, zahlen = _dateien(os.path.join(tmp, "pdf")), _zahlen(app)
-        r = f.get(f"/material/artikel/{a['formel']['id']}/lebenslauf.pdf")
+        r = f.get(f"/materialablage/artikel/{a['formel']['id']}/lebenslauf.pdf")
         assert r.status_code == 200 and r.mimetype == "application/pdf" and r.data.startswith(b"%PDF"), r.status_code
         cd = r.headers["Content-Disposition"]
         assert cd.startswith("inline") and f"Lebenslauf_{a['formel']['inventory_no']}_{_heute().isoformat()}.pdf" in cd, cd
@@ -317,18 +317,18 @@ def test_lebenslauf():
         assert b'pdfaid:part="3"' in xmp and b'pdfaid:conformance="B"' in xmp, xmp[:600]
         # Ausgesondert: Aussonderungsnachweis mit Protokoll und Grund; gesperrt: Sperrgrund und Herkunft.
         aus = protokoll_zeile(app, o["aus"])
-        r = f.get(f"/material/artikel/{a['weg']['id']}/lebenslauf.pdf")
+        r = f.get(f"/materialablage/artikel/{a['weg']['id']}/lebenslauf.pdf")
         with open(pfad, "wb") as fh:
             fh.write(r.data)
         text = _flach(" ".join(pdf_seiten(pfad)))
         assert "AUSGESONDERT" in text and aus["protocol_id"] in text and "Bei Übung weg" in text and "Verlust" in text, text[:1200]
-        r = f.get(f"/material/artikel/{a['gesperrt']['id']}/lebenslauf.pdf")
+        r = f.get(f"/materialablage/artikel/{a['gesperrt']['id']}/lebenslauf.pdf")
         with open(pfad, "wb") as fh:
             fh.write(r.data)
         text = _flach(" ".join(pdf_seiten(pfad)))
         assert "GESPERRT" in text and "Riss am Schnapper" in text and "Fahrzeug GW-Wasserrettung" in text, text[:1200]
         # Ohne Prüfung: ein kurzer Lebenslauf mit Hinweis.
-        r = f.get(f"/material/artikel/{a['lager']['id']}/lebenslauf.pdf")
+        r = f.get(f"/materialablage/artikel/{a['lager']['id']}/lebenslauf.pdf")
         with open(pfad, "wb") as fh:
             fh.write(r.data)
         text = _flach(" ".join(pdf_seiten(pfad)))
@@ -345,8 +345,8 @@ def test_rechte():
         ids = katalog_grund(k["adm"])
         gid, _ = gliederung(k["wart"])
         art = neuer_artikel(k["wart"], ids["hms"], gid)
-        adressen = [f"/material/export/{gid}.csv", f"/material/export/{gid}-protokolle.zip",
-                    f"/material/artikel/{art['id']}/lebenslauf.pdf"]
+        adressen = [f"/materialablage/export/{gid}.csv", f"/materialablage/export/{gid}-protokolle.zip",
+                    f"/materialablage/artikel/{art['id']}/lebenslauf.pdf"]
         for url in adressen:
             # Anonym: zur Anmeldung, danach zurück hierher.
             r = app.test_client().get(url)
@@ -356,14 +356,14 @@ def test_rechte():
             # Führungskraft (lesend), Prüfer, Materialwart, Material-Verwaltung: dürfen.
             for wer in ("fuehrung", "pruefer", "wart", "katalog", "adm"):
                 assert k[wer].get(url).status_code == 200, (wer, url)
-        for url in ("/material/export/99999.csv", "/material/export/99999-protokolle.zip",
-                    "/material/artikel/99999/lebenslauf.pdf"):
+        for url in ("/materialablage/export/99999.csv", "/materialablage/export/99999-protokolle.zip",
+                    "/materialablage/artikel/99999/lebenslauf.pdf"):
             assert k["nutzer"].get(url).status_code == 403, url
             r = k["fuehrung"].get(url)
             assert r.status_code == 404 and r.mimetype == "text/html", (url, r.status_code, r.mimetype)
         # Die Oberfläche bietet die drei Knöpfe an (Ordner: CSV und Protokolle, Artikel: Lebenslauf).
         js = k["fuehrung"].get("/static/material/material.js").get_data(as_text=True)
-        assert "/material/export/" in js and "-protokolle.zip" in js and "/lebenslauf.pdf" in js
+        assert "/materialablage/export/" in js and "-protokolle.zip" in js and "/lebenslauf.pdf" in js
     print("Rechtetest (Export) bestanden.")
 
 
@@ -386,7 +386,7 @@ def test_review_lieferung4():
         conn.execute("UPDATE mat_round_item SET excluded_at = '2026-01-15T23:30:00+00:00' WHERE round_id = ?", (rid,))
         conn.commit()
         conn.close()
-        r = w.get(f"/material/artikel/{a['id']}/lebenslauf.pdf")
+        r = w.get(f"/materialablage/artikel/{a['id']}/lebenslauf.pdf")
         pfad = os.path.join(tmp, "ll.pdf")
         with open(pfad, "wb") as fh:
             fh.write(r.data)

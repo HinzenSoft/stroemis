@@ -1,8 +1,11 @@
-/* Wiki: Seitenbaum, Ansicht mit Inhaltsverzeichnis und Kommentaren, WYSIWYG-Editor (Toast UI),
+/* Strömipedia (Modul wiki): Seitenbaum, Ansicht mit Inhaltsverzeichnis und Kommentaren, WYSIWYG-Editor (Toast UI),
    Bearbeitungsfreigaben, öffentliche Freigabe, Versionen, Suche, Import */
 (function () {
   const { esc, api, toast, dialog, fmtDate } = S;
   const $ = (sel, root) => (root || document).querySelector(sel);
+  // Seitenadressen: /stroemipedia/<slug> (seit der Umbenennung vom 26.10.2026; /wiki/<slug> leitet der Server weiter).
+  const SEITEN = "/stroemipedia/";
+  const slugAus = (href) => href.slice(SEITEN.length);
   /* Beschriftung für [Text](url) und ![Text](url): Ein Dateiname wie "Plan [v2].pdf" beendete
      mit seiner eckigen Klammer die Beschriftung, und aus dem Link wurde Fließtext. */
   const mdBeschriftung = (s) => String(s || "").replace(/([[\]])/g, "\\$1");
@@ -165,7 +168,7 @@
       return `<li class="${sub ? "" : "leaf"}${collapsed ? " collapsed" : ""}" data-id="${p.id}" data-slug="${esc(p.slug)}">
         <div class="row" draggable="true">
           <button class="tg" type="button" aria-label="Auf- oder zuklappen"></button>
-          <a href="/wiki/${esc(p.slug)}" title="${esc(p.title)}" class="${state.current && state.current.id === p.id ? "active" : ""}">${p.icon ? `<span class="tree-icon" aria-hidden="true">${esc(p.icon)}</span>` : ""}${esc(p.title)}${p.is_public ? ' <span class="pub" title="öffentlich freigegeben">🌐</span>' : ""}${p.favorite ? ' <span class="fav" title="auf der Merkliste">★</span>' : ""}</a>
+          <a href="/stroemipedia/${esc(p.slug)}" title="${esc(p.title)}" class="${state.current && state.current.id === p.id ? "active" : ""}">${p.icon ? `<span class="tree-icon" aria-hidden="true">${esc(p.icon)}</span>` : ""}${esc(p.title)}${p.is_public ? ' <span class="pub" title="öffentlich freigegeben">🌐</span>' : ""}${p.favorite ? ' <span class="fav" title="auf der Merkliste">★</span>' : ""}</a>
           <button class="row-add" type="button" title="Unterseite anlegen" aria-label="Unterseite anlegen">+</button>
           <button class="row-menu" type="button" title="Mehr" aria-label="Weitere Aktionen">⋯</button>
         </div>${sub}</li>`;
@@ -183,7 +186,7 @@
     treeEl.querySelectorAll("a").forEach((a) => a.addEventListener("click", (e) => {
       e.preventDefault();
       side.classList.remove("open");
-      navigate(a.getAttribute("href").slice(6));
+      navigate(slugAus(a.getAttribute("href")));
     }));
     treeEl.querySelectorAll(".row-add").forEach((b) => b.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -328,10 +331,10 @@
     const favs = state.pages.filter((p) => p.favorite);
     box.innerHTML = favs.length
       ? `<div class="side-title">Merkliste</div><ul class="fav-list">${favs.map((p) =>
-          `<li><a href="/wiki/${esc(p.slug)}">${p.icon ? `<span class="tree-icon">${esc(p.icon)}</span>` : "★ "}${esc(p.title)}</a></li>`).join("")}</ul>`
+          `<li><a href="/stroemipedia/${esc(p.slug)}">${p.icon ? `<span class="tree-icon">${esc(p.icon)}</span>` : "★ "}${esc(p.title)}</a></li>`).join("")}</ul>`
       : "";
     box.querySelectorAll("a").forEach((a) => a.addEventListener("click", (e) => {
-      e.preventDefault(); side.classList.remove("open"); navigate(a.getAttribute("href").slice(6));
+      e.preventDefault(); side.classList.remove("open"); navigate(slugAus(a.getAttribute("href")));
     }));
   }
 
@@ -369,7 +372,7 @@
     const [ohneHash, hash = ""] = String(ziel || "").split("#");
     const slug = ohneHash.split("?")[0];
     if (!leaveEditor()) return;
-    if (push) history.pushState({ slug }, "", (slug ? `/wiki/${slug}` : "/wiki") + (hash ? `#${hash}` : ""));
+    if (push) history.pushState({ slug }, "", (slug ? `/stroemipedia/${slug}` : "/stroemipedia") + (hash ? `#${hash}` : ""));
     show(slug);
   }
   window.addEventListener("popstate", () => {
@@ -379,7 +382,7 @@
     if (leaveEditor()) return show(slugFromPath());
     // Der Nutzer bleibt im Editor – dann muss auch die Adresse wieder auf die Seite zeigen,
     // die er bearbeitet, sonst zeigen Adresszeile und Ansicht auf Verschiedenes.
-    if (state.current) history.pushState({ slug: state.current.slug }, "", `/wiki/${state.current.slug}`);
+    if (state.current) history.pushState({ slug: state.current.slug }, "", `/stroemipedia/${state.current.slug}`);
   });
 
   /* --- Anwesenheit und Schreibrecht --------------------------------------------------------- */
@@ -444,8 +447,8 @@
       if (kopfNeu) {
         // Umbenannt oder neues Symbol: Kopf, Titel und Baum müssen mit – das ist selten,
         // dafür darf die Seite einmal ganz neu entstehen.
-        document.title = `${p.title} – Wiki – strömis.de`;
-        history.replaceState({ slug: p.slug }, "", `/wiki/${p.slug}`);
+        document.title = `${p.title} – Strömipedia – strömis.de`;
+        history.replaceState({ slug: p.slug }, "", `/stroemipedia/${p.slug}`);
         await loadTree();
         await renderPage();
       } else {
@@ -588,7 +591,7 @@
       state.current = null;
       if (state.spy) { try { state.spy(); } catch (e) { /* egal */ } state.spy = null; }
       seitenInfoSchliessen();
-      content.innerHTML = `<div class="empty"><strong>Seite nicht gefunden</strong>${esc(e.message)}<div class="btn-row" style="justify-content:center;margin-top:12px"><a class="btn secondary small" href="/wiki" id="home-link">Zur Übersicht</a></div></div>`;
+      content.innerHTML = `<div class="empty"><strong>Seite nicht gefunden</strong>${esc(e.message)}<div class="btn-row" style="justify-content:center;margin-top:12px"><a class="btn secondary small" href="/stroemipedia" id="home-link">Zur Übersicht</a></div></div>`;
       $("#home-link").onclick = (ev) => { ev.preventDefault(); navigate(""); };
       renderTree(); renderRail([]);
       return;
@@ -598,8 +601,8 @@
     // Die Anwesenheit galt der vorigen Seite. Stehen lassen hieße, den Bearbeiten-Knopf hier
     // nach einem fremden Schreiber zu graufärben, der ganz woanders sitzt.
     state.praesenz = null;
-    if (d.page.slug !== slug) history.replaceState({ slug: d.page.slug }, "", `/wiki/${d.page.slug}`);
-    document.title = `${d.page.title} – Wiki – strömis.de`;
+    if (d.page.slug !== slug) history.replaceState({ slug: d.page.slug }, "", `/stroemipedia/${d.page.slug}`);
+    document.title = `${d.page.title} – Strömipedia – strömis.de`;
     renderTree();
     await renderPage();
     // Anmelden, wer hier gerade liest – und erfahren, ob jemand anders die Seite bearbeitet.
@@ -621,12 +624,12 @@
     // mehr gibt; die Angabenleiste zeigte die Zahlen der zuletzt gelesenen Seite.
     if (state.spy) { try { state.spy(); } catch (e) { /* egal */ } state.spy = null; }
     seitenInfoSchliessen();
-    document.title = "Wiki – strömis.de";
+    document.title = "Strömipedia – strömis.de";
     renderTree();
     renderRail([]);
     const roots = children(null);
     if (!roots.length) {
-      content.innerHTML = `<div class="empty"><strong>Das Wiki ist noch leer</strong>Lege die erste Seite an.
+      content.innerHTML = `<div class="empty"><strong>Die Strömipedia ist noch leer</strong>Lege die erste Seite an.
         <div class="btn-row" style="justify-content:center;margin-top:14px"><button class="btn" id="h-new">Erste Seite anlegen</button></div></div>`;
       $("#h-new").onclick = () => openEditor({ parent_id: null });
       return;
@@ -636,7 +639,7 @@
        viele Seiten noch folgen, und der Weg dorthin führt über den Abschnitt selbst. */
     const HOME_TIEFE = 3;
     const zaehleUnter = (pid) => children(pid).reduce((n, k) => n + 1 + zaehleUnter(k.id), 0);
-    const eintrag = (p) => `<a href="/wiki/${esc(p.slug)}">${p.icon ? esc(p.icon) + " " : ""}${esc(p.title)}</a>`;
+    const eintrag = (p) => `<a href="/stroemipedia/${esc(p.slug)}">${p.icon ? esc(p.icon) + " " : ""}${esc(p.title)}</a>`;
     const zweig = (pid, tiefe) => {
       const kids = children(pid);
       if (!kids.length) return "";
@@ -646,7 +649,7 @@
       }
       return `<ul>${kids.map((k) => `<li>${eintrag(k)}${zweig(k.id, tiefe + 1)}</li>`).join("")}</ul>`;
     };
-    content.innerHTML = `<div class="wiki-head"><h1>Wiki</h1></div>
+    content.innerHTML = `<div class="wiki-head"><h1>Strömipedia</h1></div>
       <div class="wiki-meta">${state.pages.length} Seiten · Wissen für die Strömungsrettung und seiltechnische Rettung</div>
       <div class="wiki-content home-baum">${roots.map((r) =>
         `<h2>${eintrag(r)}</h2>${zweig(r.id, 1)}`).join("")}</div>
@@ -661,7 +664,7 @@
     let d;
     try { d = await api("/api/wiki/recent"); } catch (e) { return; }
     const list = (rows, meta) => rows.length
-      ? `<ul>${rows.map((r) => `<li><a href="/wiki/${esc(r.slug)}">${r.icon ? esc(r.icon) + " " : ""}${esc(r.title)}</a>`
+      ? `<ul>${rows.map((r) => `<li><a href="/stroemipedia/${esc(r.slug)}">${r.icon ? esc(r.icon) + " " : ""}${esc(r.title)}</a>`
         + `<span class="muted small"> · ${fmtDate(meta(r), true)}</span></li>`).join("")}</ul>`
       : '<p class="muted small">Noch nichts.</p>';
     box.innerHTML = `
@@ -719,7 +722,8 @@
     root.querySelectorAll("a[href]").forEach((a) => {
       const href = a.getAttribute("href") || "";
       if (/^https?:\/\//i.test(href) && istFremd(href)) { a.target = "_blank"; a.rel = "noopener"; }
-      else if (href.startsWith("/wiki/")) a.addEventListener("click", (e) => { e.preventDefault(); navigate(href.slice(6)); });
+      // Interne Links: /stroemipedia/<slug> und – in Seiten von vor der Umbenennung (26.10.2026) – /wiki/<slug>.
+      else if (/^\/(?:stroemipedia|wiki)\//.test(href)) a.addEventListener("click", (e) => { e.preventDefault(); navigate(href.replace(/^\/(?:stroemipedia|wiki)\//, "")); });
       else if (href.startsWith("#") && href.length > 1) a.addEventListener("click", (e) => {
         const ziel = document.getElementById(MD.entziffern(href.slice(1)));
         if (!ziel) return;
@@ -742,7 +746,7 @@
   function krumenPfad(crumbs, p, neu) {
     const glied = (c, aktiv) => aktiv
       ? `<span class="krume" aria-current="page">${c.icon ? `<span class="krume-icon">${esc(c.icon)}</span>` : ""}${esc(c.title)}</span>`
-      : `<a class="krume" href="/wiki/${esc(c.slug)}">${c.icon ? `<span class="krume-icon">${esc(c.icon)}</span>` : ""}${esc(c.title)}</a>`;
+      : `<a class="krume" href="/stroemipedia/${esc(c.slug)}">${c.icon ? `<span class="krume-icon">${esc(c.icon)}</span>` : ""}${esc(c.title)}</a>`;
     const kette = [...crumbs.map((c) => glied(c, false)),
                    glied({ icon: p.icon, title: neu ? "Neue Seite" : (p.title || "Ohne Titel"), slug: p.slug }, true)];
     return `<nav class="krumen" aria-label="Pfad">${kette.join('<span class="krume-sep" aria-hidden="true">/</span>')}</nav>`;
@@ -883,7 +887,7 @@
       <h1 class="seitentitel"><button class="page-icon" id="pg-icon" type="button" title="Symbol der Seite ändern">${p.icon ? esc(p.icon) : "＋"}</button>${esc(p.title)} ${pubBadge}</h1>
       ${autorZeile(p)}
       <article class="wiki-content" id="article"></article>
-      ${kids.length ? `<div class="children-list"><strong>Unterseiten</strong><ul>${kids.map((k) => `<li><a href="/wiki/${esc(k.slug)}">${k.icon ? esc(k.icon) + " " : ""}${esc(k.title)}</a></li>`).join("")}</ul></div>` : ""}
+      ${kids.length ? `<div class="children-list"><strong>Unterseiten</strong><ul>${kids.map((k) => `<li><a href="/stroemipedia/${esc(k.slug)}">${k.icon ? esc(k.icon) + " " : ""}${esc(k.title)}</a></li>`).join("")}</ul></div>` : ""}
       <div id="pg-backlinks"></div>
       <div id="pg-attachments"></div>`;
 
@@ -1054,7 +1058,7 @@
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button><button class="btn" id="im-ok" type="button">Importieren</button></div>`,
     (dlg, body) => {
       const wahl = $("#im-ziel", body);
-      // Dateiwahl hinter einem grauen Knopf wie im Modul Material (Prüfung Browser): daneben, was gewählt ist.
+      // Dateiwahl hinter einem grauen Knopf wie in der Materialablage (Prüfung Browser): daneben, was gewählt ist.
       const datei = $("#im-datei", body);
       datei.addEventListener("change", () => {
         const f = datei.files[0];
@@ -1092,7 +1096,7 @@
         const n = r.seiten.length;
         body.innerHTML = `<h2 id="dlg-titel" tabindex="-1">Seiten importiert</h2>
           <p>${n === 1 ? "1 Seite" : `${n} Seiten`} und ${r.dateien === 1 ? "1 Datei" : `${r.dateien} Dateien`} importiert.</p>
-          <ul class="im-seiten">${r.seiten.map((x) => `<li><a href="/wiki/${esc(x.slug)}">${esc(x.title)}</a></li>`).join("")}</ul>
+          <ul class="im-seiten">${r.seiten.map((x) => `<li><a href="/stroemipedia/${esc(x.slug)}">${esc(x.title)}</a></li>`).join("")}</ul>
           ${r.hinweise.length ? `<h3>Hinweise</h3><ul class="im-hinweise">${r.hinweise.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>` : ""}
           <div class="dlg-actions"><button class="btn secondary" id="im-zu" type="button">Schließen</button></div>`;
         $("#dlg-titel", body).focus();
@@ -1101,7 +1105,7 @@
         dlg.addEventListener("close", async () => { await loadTree(); if (weiter) navigate(weiter); }, { once: true });
         const fertig = (slug) => { weiter = slug; dlg.close(); };
         body.querySelectorAll(".im-seiten a").forEach((a) => a.addEventListener("click", (e) => {
-          e.preventDefault(); fertig(a.getAttribute("href").slice(6));
+          e.preventDefault(); fertig(slugAus(a.getAttribute("href")));
         }));
         $("#im-zu", body).onclick = () => fertig(erste.slug);
       };
@@ -1119,7 +1123,7 @@
          Beides in einer Liste hieß, dass niemand erkennen konnte, wen eine Änderung mitreißt. */
       box.innerHTML = `<div class="children-list"><strong>Was hierher verweist</strong><ul>${d.pages.map((k) =>
         `<li>${k.einbau ? '<span title="Diese Seite bindet einen Abschnitt von hier ein">⇄ </span>' : ""}`
-        + `<a href="/wiki/${esc(k.slug)}">${k.icon ? esc(k.icon) + " " : ""}${esc(k.title)}</a></li>`).join("")}</ul></div>`;
+        + `<a href="/stroemipedia/${esc(k.slug)}">${k.icon ? esc(k.icon) + " " : ""}${esc(k.title)}</a></li>`).join("")}</ul></div>`;
       wireLinks(box);
     } catch (e) { /* Rückverweise sind Beiwerk */ }
   }
@@ -1225,7 +1229,7 @@
       const liste = (titel, seiten) => `<div class="rail-title">${titel} (${seiten.length})</div>` + (seiten.length
         ? `<ul class="info-links">${seiten.map((q) => `<li>`
             + (q.einbau ? '<span title="bindet einen Abschnitt von hier ein">⇄ </span>' : "")
-            + `<a href="/wiki/${esc(q.slug)}">${q.icon ? esc(q.icon) + " " : ""}${esc(q.title)}</a></li>`).join("")}</ul>`
+            + `<a href="/stroemipedia/${esc(q.slug)}">${q.icon ? esc(q.icon) + " " : ""}${esc(q.title)}</a></li>`).join("")}</ul>`
         : '<p class="muted small">keine</p>');
       const ziel = $("#info-verweise");
       if (!ziel) return;
@@ -1724,8 +1728,8 @@
       <label for="lk-text">Beschriftung</label>
       <input type="text" id="lk-text" value="${esc(cur.text || "")}" placeholder="Angezeigter Text">
       <label for="lk-url">Adresse</label>
-      <input type="text" id="lk-url" value="${esc(cur.url || "")}" placeholder="https://… oder /wiki/seite">
-      <label for="lk-search">… oder auf eine Seite im Wiki verlinken</label>
+      <input type="text" id="lk-url" value="${esc(cur.url || "")}" placeholder="https://… oder /stroemipedia/seite">
+      <label for="lk-search">… oder auf eine Seite der Strömipedia verlinken</label>
       <input type="search" id="lk-search" placeholder="Seitentitel suchen …" autocomplete="off">
       <ul class="link-pages" id="lk-pages"></ul>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
@@ -1742,7 +1746,7 @@
             ? hits.map((p) => `<li><button type="button" data-slug="${esc(p.slug)}" data-title="${esc(p.title)}">${esc(p.title)}</button></li>`).join("")
             : '<li class="muted small">Keine passende Seite.</li>';
           list.querySelectorAll("button[data-slug]").forEach((b) => b.onclick = () => {
-            urlEl.value = "/wiki/" + b.dataset.slug;
+            urlEl.value = "/stroemipedia/" + b.dataset.slug;
             if (!textEl.value.trim()) textEl.value = b.dataset.title;
             list.querySelectorAll("button").forEach((x) => x.classList.toggle("sel", x === b));
           });
@@ -2264,7 +2268,7 @@
       { t: "Callout", d: "Info, Warnung, Erfolg, Gefahr, Hinweis – mit Emoji", run: calloutMenu },
       { t: "Spalten", d: "Abschnitt mit zwei bis fünf Spalten", run: columnsMenu },
       { t: "Einklappbare Box", d: "Inhalt erst nach dem Aufklappen sichtbar", run: () => insert(SNIPPETS.accordion) },
-      { t: "Typische Fehler", d: "Tabelle im Stil des Wikis", k: "vorlage tabelle", run: () => insert(SNIPPETS.fehler) },
+      { t: "Typische Fehler", d: "Tabelle im Stil der Strömipedia", k: "vorlage tabelle", run: () => insert(SNIPPETS.fehler) },
       { t: "Inhaltsverzeichnis", d: "Gliederung an dieser Stelle im Text", k: "toc gliederung",
         run: () => insert("$$toc\n$$\n") },
       { t: "Unterseiten", d: "Liste der Unterseiten an dieser Stelle", k: "kinder navigation",
@@ -3516,7 +3520,7 @@
           const slug = (b.lines[1] || "").trim().split("#")[0];
           hideCtx();
           // Neuer Tab: Im Editor stehen ungespeicherte Änderungen, ein Seitenwechsel verlöre sie.
-          if (slug) window.open(`/wiki/${encodeURIComponent(slug)}`, "_blank", "noopener");
+          if (slug) window.open(`/stroemipedia/${encodeURIComponent(slug)}`, "_blank", "noopener");
         };
         const dup = box.querySelector("[data-act=dup]");
         if (dup) dup.onclick = () => rewriteBlock(index, b.lines.join("\n") + "\n\n" + b.lines.join("\n"));
@@ -4893,7 +4897,7 @@
         if (EDMD.repariert()) toast(EDMD.reparaturText(), true);
         katalogVergessen();
         // Ändert die Überschrift den Titel, ändert sich auch die Adresse – ohne Seitenwechsel.
-        if (location.pathname !== `/wiki/${r.page.slug}`) history.replaceState(null, "", `/wiki/${r.page.slug}`);
+        if (location.pathname !== `/stroemipedia/${r.page.slug}`) history.replaceState(null, "", `/stroemipedia/${r.page.slug}`);
         return true;
       } catch (e) {
         // Hat jemand anders gespeichert, hilft nur neu laden – sonst liefe das automatische
@@ -5154,9 +5158,9 @@
         if (searchInput.value.trim() !== q) return;     // inzwischen weitergetippt oder geleert
         searchResults.classList.remove("hidden");
         searchResults.innerHTML = d.results.length
-          ? d.results.map((r) => `<li><a href="/wiki/${esc(r.slug)}">${esc(r.title)}</a>${r.snippet ? `<div class="snip">${esc(r.snippet)}</div>` : ""}</li>`).join("")
+          ? d.results.map((r) => `<li><a href="/stroemipedia/${esc(r.slug)}">${esc(r.title)}</a>${r.snippet ? `<div class="snip">${esc(r.snippet)}</div>` : ""}</li>`).join("")
           : '<li class="muted">Keine Treffer.</li>';
-        searchResults.querySelectorAll("a").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); side.classList.remove("open"); navigate(a.getAttribute("href").slice(6)); }));
+        searchResults.querySelectorAll("a").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); side.classList.remove("open"); navigate(slugAus(a.getAttribute("href"))); }));
       } catch (e) { toast(e.message, true); }
     }, 250);
   });

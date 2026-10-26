@@ -560,7 +560,7 @@ def test_beispielbestand():
         # Einsatzkraft 01 liest ihren persönlichen Ordner (mit zugeordneter Ausrüstung), sonst nichts; die übrigen haben
         # keinen Modulzugang und sehen „Meine PSA“. Der Bericht sagt das.
         eins = anmelden(app, "demo-einsatzkraft-01@example.invalid", passwoerter["demo-einsatzkraft-01@example.invalid"])
-        assert eins.get("/material").status_code == 200
+        assert eins.get("/materialablage").status_code == 200
         r = eins.get(f"/api/material/ordner/{persoenlich}")
         assert r.status_code == 200 and r.json["ordner"]["artikel"], r.get_json()
         assert all(a["zugeordnet_name"] == "DEMO-Einsatzkraft 01" for a in r.json["ordner"]["artikel"]
@@ -568,10 +568,10 @@ def test_beispielbestand():
         assert eins.get(f"/api/material/ordner/{fl['id']}").status_code == 404
         zwei = anmelden(app, ohne, gemeinsam.group(1))
         # Ohne Modulzugang, aber mit zugeordneter PSA: „Material“ führt zu „Meine PSA“ (Phase 3 · L1), sonst 403.
-        r = zwei.get("/material")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/material/meine-psa"), r.status_code
-        assert zwei.get("/material/meine-psa").status_code == 200 and zwei.get("/api/material/meine-psa").json["artikel"]
-        r = zwei.get("/material/bestand")
+        r = zwei.get("/materialablage")
+        assert r.status_code == 302 and r.headers["Location"].endswith("/materialablage/meine-psa"), r.status_code
+        assert zwei.get("/materialablage/meine-psa").status_code == 200 and zwei.get("/api/material/meine-psa").json["artikel"]
+        r = zwei.get("/materialablage/bestand")
         assert r.status_code == 403 and "nicht freigeschaltet" in r.get_data(as_text=True)
         assert re.search(r"demo-einsatzkraft-01@example\.invalid .*\(liest ihren persönlichen Ordner\)", aus)
         # Ausgeschiedene bekommen nach dem Austritt nichts mehr: keine Zuordnung, nichts in ihrem persönlichen Ordner,
@@ -898,7 +898,7 @@ def test_konten():
         aus, code = laufen("--beispielbestand", "--artikel", "6")
         assert code == 1 and "Nichts angelegt" in aus, (code, aus[-2000:])
         for teil in ("demo-mv@example.invalid (offene Kontoanfrage)", "demo-pruefer@example.invalid (deaktiviert)",
-                     "demo-wart-a@example.invalid (Stufe im Modul Material 0, gebraucht 1)",
+                     "demo-wart-a@example.invalid (Stufe in der Materialablage 0, gebraucht 1)",
                      "demo-pruefer-2@example.invalid (kein Prüfer mit gültiger Urkundennummer)"):
             assert teil in aus, (teil, aus[-2000:])
         assert bestand_stand(app) == vorher                                   # nichts angelegt, nichts hochgestuft
@@ -912,7 +912,7 @@ def test_konten():
         aus, code = laufen("--beispielbestand", "--artikel", "6")
         assert code == 0, aus[-3000:]
         assert re.search(r"demo-mitglied@example\.invalid .*schon da – Passwort unverändert", aus), aus[-3000:]
-        assert ("demo-mitglied@example.invalid: Stufe im Modul Material 2 statt 1, Karte an") in aus, aus[-3000:]
+        assert ("demo-mitglied@example.invalid: Stufe in der Materialablage 2 statt 1, Karte an") in aus, aus[-3000:]
         with app.app_context():
             from app import db
             jetzt = db.query("SELECT * FROM users WHERE email = 'demo-mitglied@example.invalid'", one=True)

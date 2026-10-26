@@ -69,7 +69,7 @@
   }
 
   /* Zustand einer Zeile: gültig · läuft in n Tagen ab (gelb) · abgelaufen am … (grau) · wirkt nicht – mit dem Grund
-     vom Server (wirkt_nicht: Konto deaktiviert › Konto ohne Namen › kein Zugang zum Modul Material › Qualifikation
+     vom Server (wirkt_nicht: Konto deaktiviert › Konto ohne Namen › kein Zugang zur Materialablage › Qualifikation
      fehlt › dauerhaft nur mit lesen oder verwalten). */
   function zustand(f) {
     if (!f.gueltig) return `<span class="mf-zustand abgelaufen">abgelaufen am ${fmtTag(f.bis)}</span>`;
@@ -190,7 +190,7 @@
       <div class="mf-personwahl">
         <input type="search" id="mf-person" placeholder="Name – ab 3 Zeichen" autocomplete="off" enterkeyhint="search"
           aria-describedby="mf-person-hilfe" aria-controls="mf-treffer">
-        <div class="help" id="mf-person-hilfe">Jedes aktive Konto mit Namen und Zugang zum Modul Material, auch aus anderen Gliederungen.</div>
+        <div class="help" id="mf-person-hilfe">Jedes aktive Konto mit Namen und Zugang zur Materialablage, auch aus anderen Gliederungen.</div>
         <ul class="mf-treffer" id="mf-treffer" aria-label="Gefundene Personen" hidden></ul>
         <div class="mf-gewaehlt" id="mf-gewaehlt" hidden></div>
       </div>
@@ -339,7 +339,7 @@
       liste.innerHTML = r.nutzer.length ? r.nutzer.map((p) => `<li><button type="button" class="mf-person" data-id="${p.id}">
           ${personHtml(p)}${p.qualifiziert ? ' <span class="badge grey">Prüfer</span>' : ""}</button></li>`).join("")
           + (r.mehr ? '<li class="mf-treffer-leer">Mehr als 20 – bitte genauer.</li>' : "")
-        : '<li class="mf-treffer-leer">Niemand gefunden – nur aktive Konten mit Namen und Zugang zum Modul Material (den gibt die Verwaltung).</li>';
+        : '<li class="mf-treffer-leer">Niemand gefunden – nur aktive Konten mit Namen und Zugang zur Materialablage (den gibt die Verwaltung).</li>';
       liste.hidden = false;
       $$("button.mf-person", liste).forEach((b) => b.addEventListener("click", () => personWaehlen(r.nutzer.find((p) => p.id === +b.dataset.id))));
     }
@@ -473,7 +473,7 @@
     try {
       const r = await api(`${API}/freigaben/${f.id}`, { method: "DELETE" });
       stand.hinweis = r.offene_entwuerfe ? `${plural(r.offene_entwuerfe, "offene Prüfung", "offene Prüfungen")} von ${esc(f.konto.name)} – unter
-        <a href="/material/pruefungen">Prüfungen</a> → Offene Prüfungen freigeben.` : "";
+        <a href="/materialablage/pruefungen">Prüfungen</a> → Offene Prüfungen freigeben.` : "";
       toast("Freigabe entzogen");
       await nachher();
     } catch (e) { toast(e.message, true); }
@@ -521,7 +521,7 @@
     el.classList.add("mf");
     el.innerHTML = '<p class="help">Wird geladen …</p>';
     const stand = { vorlage: opt.vorlage && opt.vorlage !== "verlaengern" ? opt.vorlage : null, daten: null, hinweis: "" };
-    const dort = opt.dort || ((oid) => { location.href = `/material/ordner/${oid}?freigaben`; });
+    const dort = opt.dort || ((oid) => { location.href = `/materialablage/ordner/${oid}?freigaben`; });
     try { stand.daten = await api(`${API}/ordner/${id}/freigaben`); }
     catch (e) { el.innerHTML = `<p class="notice">${esc(e.message)}</p>`; return; }
     const d = stand.daten;
@@ -604,13 +604,13 @@
     const wer = (f) => (f.verwalter.length ? f.verwalter.join(", ").replace(/, ([^,]*)$/, " oder $1") : "die Material-Verwaltung");
     el.innerHTML = `<details class="section mat-auf mf-meine"${wichtig.length ? " open" : ""}><summary>Meine Freigaben <span class="mf-zahl">${d.freigaben.length}</span></summary>
       <ul class="mf-meine-liste">${d.freigaben.map((f) => `<li class="${!f.gueltig ? "abgelaufen" : f.laeuft_ab_in_tagen !== null ? "bald" : ""}">
-        <span class="mf-meine-ordner">${f.gueltig && f.wirkt ? `<a href="/material/ordner/${f.ordner.id}">${esc(f.ordner.pfad)}</a>` : esc(f.ordner.pfad)}</span>
+        <span class="mf-meine-ordner">${f.gueltig && f.wirkt ? `<a href="/materialablage/ordner/${f.ordner.id}">${esc(f.ordner.pfad)}</a>` : esc(f.ordner.pfad)}</span>
         <span class="mf-meine-recht">${esc(RECHT[f.recht] || f.recht)} · ${bisText(f.bis)}</span> ${zustand(f)}
         ${!f.gueltig || f.laeuft_ab_in_tagen !== null ? `<div class="small muted">Verlängern kann: ${esc(wer(f))}.</div>` : ""}
         ${f.wirkt_nicht === "Qualifikation fehlt" ? `<div class="small muted">${esc(OHNE_QUALIFIKATION)}</div>`
           : f.wirkt_nicht === "dauerhaft nur mit lesen oder verwalten"
             ? `<div class="small muted">${esc(`${OHNE_GRUNDRECHT} Vergeben kann es: ${wer(f)}.`)}</div>` : ""}</li>`).join("")}</ul>
-      ${d.zugang ? "" : '<p class="help">Deine Freigaben wirken erst, wenn die Verwaltung dir das Modul Material freischaltet.</p>'}
+      ${d.zugang ? "" : '<p class="help">Deine Freigaben wirken erst, wenn die Verwaltung dir die Materialablage freischaltet.</p>'}
     </details>`;
   }
 

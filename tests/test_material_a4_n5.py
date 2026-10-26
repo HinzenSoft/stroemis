@@ -337,7 +337,7 @@ def test_oberflaeche_statisch():
     assert 'const EMPFOHLEN = "aussonderung_empfohlen";' in js
     assert ".concat(d.empfohlen || filter === EMPFOHLEN ? [EMPFOHLEN] : [])" in js
     assert "${empfohlenHinweis(d.aussonderung_empfohlen)}" in js and "function empfohlenHinweis(liste)" in js
-    assert '`<a href="/material/ordner/${Number(x.ordner_id)}?status=${EMPFOHLEN}">${text}</a>`' in js
+    assert '`<a href="/materialablage/ordner/${Number(x.ordner_id)}?status=${EMPFOHLEN}">${text}</a>`' in js
     assert "vorgabeStatus === EMPFOHLEN" in js
     print("Oberfläche (statisch) bestanden.")
 

@@ -118,22 +118,22 @@ def test_pruefungen():
         app, adm, pr, pr_id, nix, nix_id = umgebung(tmp)
         anon = app.test_client()
 
-        # --- 1./2. Rechte: ohne Stufe im Modul Prüfungen bleibt alles zu – auch für die Wiki-Verwaltung.
-        # (Verwaltung im Modul Verwaltung schließt Prüfungen ein; der Administrator kommt überall hin.)
+        # --- 1./2. Rechte: ohne Stufe in den Riegenkarten bleibt alles zu – auch für die Wiki-Verwaltung.
+        # (Verwaltung in der Leitstelle schließt Prüfungen ein; der Administrator kommt überall hin.)
         for client, wer in ((nix, "Wiki-Verwaltung ohne Recht"),):
-            r = client.get("/pruefungen")
+            r = client.get("/riegenkarten")
             assert r.status_code == 403 and "text/html" in r.content_type, (wer, r.status_code, r.content_type)
-            assert client.get("/pruefungen/1").status_code == 403, wer
-            assert client.get("/pruefungen/1/druck").status_code == 403, wer
+            assert client.get("/riegenkarten/1").status_code == 403, wer
+            assert client.get("/riegenkarten/1/druck").status_code == 403, wer
             r = client.get("/api/pruefungen/lehrgaenge")
             assert r.status_code == 403 and "Prüfer" in r.json["error"], (wer, r.status_code, r.get_json())
             assert client.get("/api/pruefungen/nutzer").status_code == 403, wer
             assert client.post("/api/pruefungen/lehrgaenge", json={"titel": "Hack"}).status_code == 403, wer
             assert client.get("/media/pruefung/thumb/gibtesnicht.jpg").status_code == 403, wer
-            assert 'href="/pruefungen"' not in client.get("/").text, f"{wer} sieht den Reiter"
+            assert 'href="/riegenkarten"' not in client.get("/").text, f"{wer} sieht den Reiter"
             assert client.get("/api/me").json["user"]["rechte"]["pruefungen"] == 0
         # Ohne Anmeldung: Seiten und Medien führen zur Anmeldung, die Schnittstelle sagt 401.
-        r = anon.get("/pruefungen")
+        r = anon.get("/riegenkarten")
         assert r.status_code == 302 and r.headers["Location"].startswith("/login?next="), (r.status_code, r.headers)
         assert anon.get("/api/pruefungen/lehrgaenge").status_code == 401
         r = anon.get("/media/pruefung/thumb/gibtesnicht.jpg")
@@ -145,18 +145,18 @@ def test_pruefungen():
         petra = [u for u in adm.get("/api/admin/users").json["users"] if u["id"] == pr_id][0]
         assert petra["rechte"]["pruefungen"] == 1 and petra["rechte"]["wiki"] == 2, petra
         assert pr.get("/api/me").json["user"]["rechte"]["pruefungen"] >= 1
-        assert pr.get("/pruefungen").status_code == 200
-        assert 'href="/pruefungen"' in pr.get("/").text, "Prüferin muss den Reiter sehen"
+        assert pr.get("/riegenkarten").status_code == 200
+        assert 'href="/riegenkarten"' in pr.get("/").text, "Prüferin muss den Reiter sehen"
         r = pr.get("/api/pruefungen/lehrgaenge")
         assert r.status_code == 200 and r.json["lehrgaenge"] == [], r.get_json()
         # Entzug wirkt sofort: dem Redakteur kurz geben und wieder nehmen.
         assert adm.put(f"/api/admin/users/{nix_id}", json={"rechte": {"pruefungen": 1}}).status_code == 200
         assert nix.get("/api/pruefungen/lehrgaenge").status_code == 200
-        assert 'href="/pruefungen"' in nix.get("/").text
+        assert 'href="/riegenkarten"' in nix.get("/").text
         assert adm.put(f"/api/admin/users/{nix_id}", json={"rechte": {"pruefungen": 0}}).status_code == 200
         assert nix.get("/api/pruefungen/lehrgaenge").status_code == 403
-        assert nix.get("/pruefungen").status_code == 403
-        assert 'href="/pruefungen"' not in nix.get("/").text
+        assert nix.get("/riegenkarten").status_code == 403
+        assert 'href="/riegenkarten"' not in nix.get("/").text
         assert nix.get("/api/me").json["user"]["rechte"]["pruefungen"] == 0
         assert nix.get("/api/me").json["user"]["rechte"]["wiki"] == 2
 
@@ -1976,18 +1976,18 @@ def test_diktat_einstellung():
     with tempfile.TemporaryDirectory() as tmp:
         app, adm, pr, pr_id, nix, nix_id = umgebung(tmp)
         assert adm.put(f"/api/admin/users/{pr_id}", json={"rechte": {"pruefungen": 1}}).status_code == 200
-        r = pr.get("/pruefungen")
+        r = pr.get("/riegenkarten")
         assert r.status_code == 200
         html = r.get_data(as_text=True)
         assert "spracheingabe: true" in html and "js/diktat.js" in html, html[:2000]
         assert "microphone=(self)" in r.headers.get("Permissions-Policy", ""), r.headers.get("Permissions-Policy")
         assert pr.get("/static/js/diktat.js").status_code == 200
         felder = {f["schluessel"]: f for f in adm.get("/api/admin/einstellungen").json["felder"]}
-        assert felder["SPRACHEINGABE"]["gruppe"] == "Prüfungen" and felder["SPRACHEINGABE"]["art"] == "schalter", felder["SPRACHEINGABE"]
+        assert felder["SPRACHEINGABE"]["gruppe"] == "Riegenkarten" and felder["SPRACHEINGABE"]["art"] == "schalter", felder["SPRACHEINGABE"]
         assert adm.put("/api/admin/einstellungen", json={"werte": {"SPRACHEINGABE": "false"}}).status_code == 200
-        assert "spracheingabe: false" in pr.get("/pruefungen").get_data(as_text=True)
+        assert "spracheingabe: false" in pr.get("/riegenkarten").get_data(as_text=True)
         # Ohne Anmeldung gibt es die Seite nicht – und damit auch keinen Hinweis auf den Schalter.
-        assert app.test_client().get("/pruefungen").status_code in (302, 401, 403)
+        assert app.test_client().get("/riegenkarten").status_code in (302, 401, 403)
 
 
 KATALOG_KURZ = ("id", "titel", "beschreibung", "created_by_name", "created_at", "updated_at", "leistungen_anzahl")

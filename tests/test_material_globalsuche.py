@@ -102,7 +102,7 @@ def aufbau(tmp):
 def nichts_geheimes(t, r, *weitere):
     """Die Antwort nennt weder Kennungen noch Links, Status, Prüfungen, Bemerkungen oder verdeckte Ordner."""
     text = r.get_data(as_text=True)
-    for wort in GEHEIM + weitere + ('"id"', "/material/artikel/", "/m/", "Prüferin Nachbarstadt", "1012-9001",
+    for wort in GEHEIM + weitere + ('"id"', "/materialablage/artikel/", "/m/", "Prüferin Nachbarstadt", "1012-9001",
                                     "Testdurchgang", '"status', "einsatzbereit", "faellig", "next_due", "notes"):
         assert wort not in text, (wort, text)
     for x in getattr(t, "alle_b", [t.art_b]):
@@ -311,7 +311,7 @@ def test_keine_bremse():
         assert r.status_code == 400 and r.json["error"] == globalsuche.BESTAETIGEN
         assert global_suchen(f, "ABC").status_code == 400
         assert global_suchen(t.adm, "TEST-B-0001").status_code == 409
-        assert steckbrief_holen(f, token_von(t.art_a)).json == {"weiter": f"/material/artikel/{t.art_a['id']}"}
+        assert steckbrief_holen(f, token_von(t.art_a)).json == {"weiter": f"/materialablage/artikel/{t.art_a['id']}"}
         assert len(protokoll(t.app)) == 36
         # Ein anderes Konto sucht daneben wie immer.
         assert global_suchen(t.wart_a, "TEST-B-0001").status_code == 200 and len(protokoll(t.app)) == 37
@@ -383,7 +383,7 @@ def test_protokoll():
         assert len(r1["eintraege"]) == 50 and len(r2["eintraege"]) == 6 and r1["gesamt"] == r2["gesamt"] == 56
         assert not {x["id"] for x in r1["eintraege"]} & {x["id"] for x in r2["eintraege"]}
         # Angezeigt wird es als zugeklappter Abschnitt in der Nutzerverwaltung.
-        html = t.adm.get("/admin").get_data(as_text=True)
+        html = t.adm.get("/leitstelle").get_data(as_text=True)
         assert 'id="mat-globalsuche"' in html and "Globale Suchen (Modul Material)" in html, html[-800:]
         assert "js/admin_globalsuche.js" in html
     print("Protokoll bestanden.")
@@ -427,8 +427,8 @@ def test_qr_steckbrief():
             ("qr", t.gesp_b["inventory_no"], 1, [t.gesp_b["id"]])], p
         # Eigener Artikel (auch gesperrt, über die Heimat): weiter zum Artikel, nichts protokolliert.
         vorher = len(protokoll(t.app))
-        assert steckbrief_holen(w, token_von(t.art_a)).json == {"weiter": f"/material/artikel/{t.art_a['id']}"}
-        assert steckbrief_holen(t.wart_b, token_von(t.gesp_b)).json == {"weiter": f"/material/artikel/{t.gesp_b['id']}"}
+        assert steckbrief_holen(w, token_von(t.art_a)).json == {"weiter": f"/materialablage/artikel/{t.art_a['id']}"}
+        assert steckbrief_holen(t.wart_b, token_von(t.gesp_b)).json == {"weiter": f"/materialablage/artikel/{t.gesp_b['id']}"}
         assert len(protokoll(t.app)) == vorher
         # Ohne Anmeldung 401, ohne Modulzugang 403.
         assert t.app.test_client().post(QR, json={"token": token_b, "bestaetigt": True}, headers=H).status_code == 401
@@ -621,24 +621,24 @@ def test_eindeutiger_treffer():
         t = zwei_gliederungen(tmp)
         w, a = t.wart_a, t.art_a
         for q in ("TEST-A-0001", "test-a-0001", "TEST-A-000"):
-            r = w.get("/material/suche", query_string={"q": q})
+            r = w.get("/materialablage/suche", query_string={"q": q})
             assert r.status_code == 302, (q, r.status_code)
-            assert r.headers["Location"].endswith(f"/material/artikel/{a['id']}?q={q}"), r.headers["Location"]
-            r = w.get(f"/material/artikel/{a['id']}", query_string={"q": q})
+            assert r.headers["Location"].endswith(f"/materialablage/artikel/{a['id']}?q={q}"), r.headers["Location"]
+            r = w.get(f"/materialablage/artikel/{a['id']}", query_string={"q": q})
             assert r.status_code == 200 and seiten_daten(r) == {"id": a["id"], "suche": q}, seiten_daten(r)
         # Inventarnummern taugen nicht für die globale Suche: Weiterleitung ohne q.
-        r = w.get("/material/suche", query_string={"q": a["inventory_no"]})
-        assert r.status_code == 302 and r.headers["Location"].endswith(f"/material/artikel/{a['id']}"), r.headers
+        r = w.get("/materialablage/suche", query_string={"q": a["inventory_no"]})
+        assert r.status_code == 302 and r.headers["Location"].endswith(f"/materialablage/artikel/{a['id']}"), r.headers
         # Was nicht taugt, übergeht die Artikelseite.
         for q in (a["inventory_no"], "STR-000001", "ABC", "x" * 81, ""):
-            assert seiten_daten(w.get(f"/material/artikel/{a['id']}", query_string={"q": q})) == {"id": a["id"]}, q
+            assert seiten_daten(w.get(f"/materialablage/artikel/{a['id']}", query_string={"q": q})) == {"id": a["id"]}, q
         # Die Material-Verwaltung (hier die Plattform-Verwaltung) sieht alles: kein Angebot, also auch kein q.
-        r = t.adm.get("/material/suche", query_string={"q": "TEST-B-0001"})
-        assert r.status_code == 302 and r.headers["Location"].endswith(f"/material/artikel/{t.art_b['id']}"), r.headers
-        r = t.adm.get(f"/material/artikel/{t.art_b['id']}", query_string={"q": "TEST-B-0001"})
+        r = t.adm.get("/materialablage/suche", query_string={"q": "TEST-B-0001"})
+        assert r.status_code == 302 and r.headers["Location"].endswith(f"/materialablage/artikel/{t.art_b['id']}"), r.headers
+        r = t.adm.get(f"/materialablage/artikel/{t.art_b['id']}", query_string={"q": "TEST-B-0001"})
         assert seiten_daten(r) == {"id": t.art_b["id"]}
         # Fremdes bleibt fremd – auch mit q.
-        r = w.get(f"/material/artikel/{t.art_b['id']}", query_string={"q": "TEST-B-0001"})
+        r = w.get(f"/materialablage/artikel/{t.art_b['id']}", query_string={"q": "TEST-B-0001"})
         assert r.status_code == 404 and "TEST-B-0001" not in r.get_data(as_text=True)
         assert protokoll(t.app) == []
     print("Eindeutiger Treffer bestanden.")
@@ -694,7 +694,7 @@ def test_qr_seite_fremd():
         assert steckbrief_holen(w, token_b).json["treffer"][0]["inventory_no"] == t.art_b["inventory_no"]
         assert [z["art"] for z in protokoll(t.app)] == ["qr"]
         r = w.get(f"/m/{token_von(t.art_a)}")
-        assert r.status_code == 302 and r.headers["Location"].endswith(f"/material/artikel/{t.art_a['id']}"), r.headers
+        assert r.status_code == 302 and r.headers["Location"].endswith(f"/materialablage/artikel/{t.art_a['id']}"), r.headers
     print("QR-Seite fremd bestanden.")
 
 

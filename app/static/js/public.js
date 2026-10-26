@@ -1,4 +1,4 @@
-/* Öffentliches Wiki: freigegebene Seiten lesen – ohne Login (public.html) und im Lesemodus für angemeldete Konten
+/* Öffentliche Strömipedia: freigegebene Seiten lesen – ohne Login (public.html) und im Lesemodus für angemeldete Konten
    ohne Stufe im Wiki (wiki_lesemodus.html). Beide lesen nur über /api/public: Was zu sehen ist, entscheidet der
    Server an einer Stelle (api_wiki.is_public), nicht dieses Skript. */
 (function () {
@@ -6,11 +6,15 @@
   const $ = (s) => document.querySelector(s);
   const shell = $(".wiki-shell"), treeEl = $("#tree"), content = $("#wiki-content"), tocEl = $("#toc"), side = $("#wiki-side");
   const lesemodus = shell.dataset.modus === "lesemodus";
-  /* Seiten liegen unter prefix + slug, die Übersicht unter start. Im Lesemodus sind das /wiki/… und /wiki – eine
-     Adresse /wiki/ gibt es dort nicht, ein Neuladen der Übersicht endete sonst auf der 404-Seite. */
+  /* Seiten liegen unter prefix + slug, die Übersicht unter start. Im Lesemodus sind das /stroemipedia/… und
+     /stroemipedia – eine Adresse /stroemipedia/ gibt es dort nicht, ein Neuladen der Übersicht endete sonst auf der 404-Seite. */
   const prefix = shell.dataset.prefix || (location.pathname.startsWith("/oeffentlich") ? "/oeffentlich/" : "/");
   const start = shell.dataset.start || prefix;
   const adresse = (slug) => (slug ? prefix + slug : start);
+  /* Gespeicherte interne Links: /wiki/<slug> (vor der Umbenennung vom 26.10.2026, Inhalte werden nicht umgeschrieben)
+     und /stroemipedia/<slug> – beide auf das Präfix dieses Lesers umbiegen. */
+  const internUmbiegen = (el) => el.querySelectorAll('a[href^="/stroemipedia/"], a[href^="/wiki/"]').forEach((a) =>
+    a.setAttribute("href", prefix + a.getAttribute("href").replace(/^\/(?:stroemipedia|wiki)\//, "")));
   const slugAusPfad = () => (location.pathname.startsWith(prefix) ? location.pathname.slice(prefix.length) : "");
   let stopSpy = null;
 
@@ -68,14 +72,14 @@
     catch (e) {
       /* Im Lesemodus sagt die Meldung, wo die Seite sonst sein könnte – für „gibt es nicht“ und „nicht öffentlich“
          wortgleich, wie die Schnittstelle selbst: Sonst ließe sich abfragen, welche internen Seiten es gibt. */
-      const text = lesemodus && e.status === 404 ? "Diese Seite gibt es nicht, oder sie steht nur im internen Wiki." : e.message;
+      const text = lesemodus && e.status === 404 ? "Diese Seite gibt es nicht, oder sie steht nur in der internen Strömipedia." : e.message;
       content.innerHTML = `<div class="empty"><strong>Seite nicht gefunden</strong>${esc(text)}<div class="btn-row" style="justify-content:center;margin-top:12px"><a class="btn secondary small" href="${start}">Zur Übersicht</a></div></div>`;
       wire(content);
       // Das Inhaltsverzeichnis gehörte der vorigen Seite – seine Sprungziele gibt es hier nicht. Ebenso ihr Titel im
       // Reiter (und im Verlauf) und ihre Markierung im Baum: Sonst stand dort weiter die Seite, die man verlassen hat.
       tocEl.innerHTML = "";
       if (stopSpy) { stopSpy(); stopSpy = null; }
-      document.title = "Seite nicht gefunden – Wiki – strömis.de";
+      document.title = "Seite nicht gefunden – Strömipedia – strömis.de";
       treeEl.querySelectorAll("a.active").forEach((a) => a.classList.remove("active"));
       // Direkt aufgerufen stand der Baum sonst leer da: dann die Einstiegsseiten wie auf der Übersicht. Nach dem
       // Laden noch einmal nachsehen – ist inzwischen eine andere Seite offen, hat sie ihren eigenen Baum gezeichnet.
@@ -87,7 +91,7 @@
     }
     const p = d.page;
     if (p.slug !== slug) history.replaceState({ slug: p.slug }, "", prefix + p.slug);
-    document.title = `${p.title} – Wiki – strömis.de`;
+    document.title = `${p.title} – Strömipedia – strömis.de`;
     tree(d.tree, p.slug);
     const html = MD.render(p.content);
     // Derselbe Aufbau wie im angemeldeten Wiki: klebende Pfadzeile, Titel, Autorzeile –
@@ -99,8 +103,8 @@
     const art = $("#article");
     const first = art.firstElementChild;
     if (first && first.tagName === "H1" && first.textContent.trim().toLowerCase() === p.title.trim().toLowerCase()) first.remove();
-    // Links auf interne Wiki-Seiten auf den öffentlichen Bereich umbiegen
-    art.querySelectorAll('a[href^="/wiki/"]').forEach((a) => a.setAttribute("href", prefix + a.getAttribute("href").slice(6)));
+    // Links auf interne Seiten auf den öffentlichen Bereich umbiegen
+    internUmbiegen(art);
     wire(content);
     const items = MD.buildToc(art);
     // Eingebundene Abschnitte nur aus dem öffentlichen Bestand: Ist die Quellseite nicht
@@ -113,11 +117,10 @@
     MD.enhance(art, { children: (d.tree || []).filter((t) => t.parent_id === p.id), prefix,
                       holeSeite: (slug) => get(`/api/public/pages/${encodeURIComponent(slug)}`).then((r) => r.page),
                       /* Eingebundener Text trifft erst nach dem Zeichnen ein. Ohne dieselbe
-                         Behandlung führten seine internen Links auf /wiki/… und damit zur
+                         Behandlung führten seine internen Links auf /stroemipedia/… und damit zur
                          Anmeldung, und seine Überschriften fehlten im Verzeichnis. */
                       nachInhalt: (el) => {
-                        el.querySelectorAll('a[href^="/wiki/"]').forEach((a) =>
-                          a.setAttribute("href", prefix + a.getAttribute("href").slice(6)));
+                        internUmbiegen(el);
                         wire(el);
                         verzeichnisZeichnen(MD.buildToc(art));
                       } });
@@ -135,13 +138,13 @@
   }
 
   async function home() {
-    document.title = "Wiki – strömis.de";
+    document.title = "Strömipedia – strömis.de";
     const pages = await einstiegsseiten();
     indexBaum(pages);
     tocEl.innerHTML = "";
     // Im Lesemodus steht der Hinweis auf die Freischaltung schon über dem Text (wiki_lesemodus.html), und angemeldet
     // ist das Konto bereits – deshalb dort ohne „anmelden“ und mit eigenem Text, wenn nichts freigegeben ist.
-    const titel = lesemodus ? "Wiki" : "Öffentliches Wiki";
+    const titel = lesemodus ? "Strömipedia" : "Öffentliche Strömipedia";
     const einleitung = lesemodus
       ? "Freigegebene Inhalte aus der Strömungsrettung."
       : `Freigegebene Inhalte aus der Strömungsrettung. Für alles Weitere: <a href="${STROEMIS.baseUrl}/login">anmelden</a>.`;

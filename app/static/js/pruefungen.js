@@ -1,4 +1,4 @@
-/* Prüfungen – Lehrgangsliste, Lehrgang mit Reitern (Teilnehmende, Leistungen, Bewertung, Mängel),
+/* Riegenkarten (Modul pruefungen) – Lehrgangsliste, Lehrgang mit Reitern (Teilnehmende, Leistungen, Bewertung, Mängel),
    Bewertungsdialog mit Stoppuhr und Medien, Mängelübersicht samt Druckansicht, Import aus Excel/ISC.
    Zwei Stufen von Rechten: Prüfende bewerten, haken ab und kommentieren; die Lehrgangsleitung
    (darf_leiten vom Server) pflegt Stammdaten, Profilbilder, Leistungen und das Lehrgangsergebnis –
@@ -502,7 +502,7 @@
           try {
             const r = await api(`${API}/lehrgaenge/${lg.id}/kopieren`, { method: "POST", body: d });
             meldungMerken(`Kopie „${r.lehrgang.titel}“ angelegt`);
-            location.href = `/pruefungen/${r.lehrgang.id}#leistungen`;
+            location.href = `/riegenkarten/${r.lehrgang.id}#leistungen`;
           } catch (e) { knopf.disabled = false; toast(e.message, true); }
         };
       });
@@ -514,7 +514,7 @@
     try {
       await api(`${API}/lehrgaenge/${lg.id}`, { method: "DELETE" });
       if (ANSICHT === "liste") { toast("Lehrgang gelöscht"); await listeLaden(); }
-      else { meldungMerken("Lehrgang gelöscht"); location.href = "/pruefungen"; }
+      else { meldungMerken("Lehrgang gelöscht"); location.href = "/riegenkarten"; }
     } catch (e) { toast(e.message, true); }
   }
 
@@ -523,9 +523,9 @@
      ========================================================================================== */
   function renderListe() {
     root.innerHTML = `
-      <div class="page-head"><h1>Prüfungen</h1>
+      <div class="page-head"><h1>Riegenkarten</h1>
         <div class="btn-row"><button class="btn secondary" data-act="lg-import">Import</button>
-          <a class="btn secondary" href="/pruefungen/kataloge">Kataloge</a>
+          <a class="btn secondary" href="/riegenkarten/kataloge">Kataloge</a>
           <button class="btn" data-act="lg-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Lehrgang<span class="k-anlegen"> anlegen</span></span></button></div></div>
       <div class="su-banner hidden" id="su-banner"></div>
       <div class="filter">
@@ -565,14 +565,14 @@
       <colgroup><col style="width:30%"><col style="width:16%"><col style="width:10%"><col style="width:6%"><col style="width:18%"><col style="width:20%"></colgroup>
       <thead><tr><th>Lehrgang</th><th>Datum</th><th>Status</th><th>TN</th><th>Fortschritt</th><th></th></tr></thead>
       <tbody>${state.liste.map((lg) => `<tr data-id="${lg.id}">
-        <td data-l="Lehrgang"><a class="titel" href="/pruefungen/${lg.id}">${esc(lg.titel)}</a>
+        <td data-l="Lehrgang"><a class="titel" href="/riegenkarten/${lg.id}">${esc(lg.titel)}</a>
           ${lg.nummer ? `<div class="nummer">Nr. ${esc(lg.nummer)}</div>` : ""}${lg.ort ? `<div class="small muted">${esc(lg.ort)}</div>` : ""}</td>
         <td data-l="Datum">${esc(spanne(lg.datum_von, lg.datum_bis)) || '<span class="muted">–</span>'}</td>
         <td data-l="Status">${statusMarke(lg.status)}</td>
         <td data-l="TN">${lg.tn_anzahl}</td>
         <td data-l="Fortschritt">${fortschrittHtml(lg)}</td>
         <td class="tabelle-aktionen"><div class="btn-row">
-          <a class="btn small" href="/pruefungen/${lg.id}">Öffnen</a>
+          <a class="btn small" href="/riegenkarten/${lg.id}">Öffnen</a>
           ${lg.darf_leiten ? `<button class="btn ghost small" data-act="lg-edit" data-id="${lg.id}">Bearbeiten</button>
           <button class="btn ghost small" data-act="lg-kopie" data-id="${lg.id}">Kopieren</button>
           <button class="btn ghost small" data-act="lg-del" data-id="${lg.id}">Löschen</button>` : ""}
@@ -592,7 +592,7 @@
   }
 
   async function renderKataloge() {
-    root.innerHTML = `<a class="zurueck" href="/pruefungen">← Alle Lehrgänge</a>
+    root.innerHTML = `<a class="zurueck" href="/riegenkarten">← Alle Lehrgänge</a>
       <div class="page-head"><h1>Prüfungsleistungskataloge</h1>
         ${istAdmin() ? '<div class="btn-row"><button class="btn" data-act="kat-neu"><span class="k-text"><span class="k-plus" aria-hidden="true">+ </span>Katalog<span class="k-anlegen"> anlegen</span></span></button></div>' : ""}</div>
       <p class="help">Ein Katalog ist eine Vorlage: Seine Prüfungsleistungen lassen sich beim Anlegen eines Lehrgangs
@@ -610,11 +610,11 @@
       <colgroup><col style="width:32%"><col style="width:38%"><col style="width:10%"><col style="width:20%"></colgroup>
       <thead><tr><th>Katalog</th><th>Beschreibung</th><th>Leistungen</th><th></th></tr></thead>
       <tbody>${kataloge.map((k) => `<tr data-id="${k.id}">
-        <td data-l="Katalog"><a class="titel" href="/pruefungen/kataloge/${k.id}">${esc(k.titel)}</a></td>
+        <td data-l="Katalog"><a class="titel" href="/riegenkarten/kataloge/${k.id}">${esc(k.titel)}</a></td>
         <td data-l="Beschreibung">${k.beschreibung ? esc(kuerzen(k.beschreibung, 140)) : '<span class="muted">–</span>'}</td>
         <td data-l="Leistungen">${k.leistungen_anzahl}</td>
         <td class="tabelle-aktionen"><div class="btn-row">
-          <a class="btn small" href="/pruefungen/kataloge/${k.id}">Öffnen</a>
+          <a class="btn small" href="/riegenkarten/kataloge/${k.id}">Öffnen</a>
           ${istAdmin() ? `<button class="btn ghost small" data-act="kat-edit" data-id="${k.id}">Bearbeiten</button>
           <button class="btn ghost small" data-act="kat-del" data-id="${k.id}">Löschen</button>` : ""}
         </div></td></tr>`).join("")}</tbody></table>`;
@@ -644,7 +644,7 @@
                           : await api(`${API}/kataloge/${k.id}`, { method: "PUT", body: d });
             dlg.close();
             state.kataloge = null;   // Titel/Beschreibung geändert – Auswahlliste neu laden.
-            if (neu) { toast("Katalog angelegt"); location.href = `/pruefungen/kataloge/${r.katalog.id}`; return; }
+            if (neu) { toast("Katalog angelegt"); location.href = `/riegenkarten/kataloge/${r.katalog.id}`; return; }
             toast("Gespeichert");
             if (ANSICHT === "kataloge") await renderKataloge();
             else { state.katalog = r.katalog; renderKatalogSeite(); }
@@ -661,7 +661,7 @@
       await api(`${API}/kataloge/${k.id}`, { method: "DELETE" });
       state.kataloge = null;
       toast("Katalog gelöscht");
-      if (ANSICHT === "katalog") location.href = "/pruefungen/kataloge"; else await renderKataloge();
+      if (ANSICHT === "katalog") location.href = "/riegenkarten/kataloge"; else await renderKataloge();
     } catch (e) { toast(e.message, true); }
   }
 
@@ -675,7 +675,7 @@
     if (!k) return;
     const admin = istAdmin();
     const ls = k.leistungen || [];
-    root.innerHTML = `<a class="zurueck" href="/pruefungen/kataloge">← Alle Kataloge</a>
+    root.innerHTML = `<a class="zurueck" href="/riegenkarten/kataloge">← Alle Kataloge</a>
       <div class="page-head"><h1>${esc(k.titel)}</h1>
         ${admin ? `<div class="btn-row"><button class="btn secondary small" data-act="kat-edit" data-id="${k.id}">Bearbeiten</button>
         <button class="btn ghost small" data-act="kat-del" data-id="${k.id}">Löschen</button></div>` : ""}</div>
@@ -850,7 +850,7 @@
     const rollstaende = $$(".table-scroll", root).map((el) => el.scrollLeft);
     const aufgeklappt = $$("details", root).map((d) => d.open);
     root.innerHTML = `
-      <a class="zurueck" href="/pruefungen">← Alle Lehrgänge</a>
+      <a class="zurueck" href="/riegenkarten">← Alle Lehrgänge</a>
       <div class="page-head"><h1>${esc(lg.titel)}</h1>
         ${lg.darf_leiten ? `<div class="btn-row">
           <button class="btn secondary small" data-act="lg-import-in" data-id="${lg.id}">Import</button>
@@ -2426,7 +2426,7 @@
                   try { await api(`${API}/lehrgaenge/${lg.id}`, { method: "PUT", body: diff }); } catch (e) { toast(e.message, true); }
                 }
                 meldungMerken(meldung);
-                location.href = `/pruefungen/${lg.id}#teilnehmer`;
+                location.href = `/riegenkarten/${lg.id}#teilnehmer`;
                 return;
               }
               dlg.close();
@@ -2452,7 +2452,7 @@
     const lgAus = (x) => (ANSICHT === "liste" ? state.liste.find((l) => l.id === x) : state.lehrgang);
     try {
       switch (act) {
-        case "lg-neu": return lehrgangDialog(null, (lg) => { location.href = `/pruefungen/${lg.id}#leistungen`; });
+        case "lg-neu": return lehrgangDialog(null, (lg) => { location.href = `/riegenkarten/${lg.id}#leistungen`; });
         case "lg-import": return importDialog(null);
         case "lg-edit": {
           // In der Liste fehlen Referierende und Beschreibung – dafür das Detail holen.
@@ -2480,7 +2480,7 @@
           const su = suLesen();
           if (!su) return bannerZeichnen();
           if (ANSICHT === "lehrgang" && su.lehrgang === LEHRGANG_ID) return bewertungsDialog(su.tid, su.lid);
-          location.href = `/pruefungen/${su.lehrgang}#bewertung`;
+          location.href = `/riegenkarten/${su.lehrgang}#bewertung`;
           return;
         }
         case "tn-neu": return teilnehmerDialog(null);
@@ -2496,11 +2496,11 @@
         // Name in der Matrix: direkt zu „je TN“ für genau diese Person wechseln, statt erst über
         // den Reiter und dann die Auswahl zu müssen.
         case "bew-zu-tn": state.bewTn = tid; bewAnsichtSetzen("tn"); return renderReiter();
-        case "bew-tn-druck": window.open(`/pruefungen/${LEHRGANG_ID}/druck?ansicht=tn&teilnehmer=${state.bewTn}`, "_blank", "noopener"); return;
+        case "bew-tn-druck": window.open(`/riegenkarten/${LEHRGANG_ID}/druck?ansicht=tn&teilnehmer=${state.bewTn}`, "_blank", "noopener"); return;
         case "zelle": return bewertungsDialog(tid, lid);
         case "m-np": return bewertungsDialog(tid, lid, { nachpruefung: true });
         case "m-alle": return state.mf.teilnehmer ? alleBewertungenDialog(+state.mf.teilnehmer) : toast("Bitte zuerst eine Person wählen.", true);
-        case "m-druck": window.open(`/pruefungen/${LEHRGANG_ID}/druck?${maengelQuery(state.mf)}`, "_blank", "noopener"); return;
+        case "m-druck": window.open(`/riegenkarten/${LEHRGANG_ID}/druck?${maengelQuery(state.mf)}`, "_blank", "noopener"); return;
         default: return;
       }
     } catch (err) { toast(err.message, true); }
@@ -2527,7 +2527,7 @@
       if (!KATALOG_ID) { root.innerHTML = '<p class="notice">Kein Katalog angegeben.</p>'; return; }
       try { await loadKatalogDetail(); }
       catch (e) {
-        root.innerHTML = `<a class="zurueck" href="/pruefungen/kataloge">← Alle Kataloge</a><p class="notice">${esc(e.status === 404 ? "Diesen Katalog gibt es nicht (mehr)." : "Der Katalog ließ sich nicht laden: " + e.message)}</p>`;
+        root.innerHTML = `<a class="zurueck" href="/riegenkarten/kataloge">← Alle Kataloge</a><p class="notice">${esc(e.status === 404 ? "Diesen Katalog gibt es nicht (mehr)." : "Der Katalog ließ sich nicht laden: " + e.message)}</p>`;
         return;
       }
       return renderKatalogSeite();
@@ -2537,7 +2537,7 @@
     state.reiter = reiterAusHash();
     try { await loadDetail(); }
     catch (e) {
-      root.innerHTML = `<a class="zurueck" href="/pruefungen">← Alle Lehrgänge</a><p class="notice">${esc(e.status === 404 ? "Diesen Lehrgang gibt es nicht (mehr)." : "Der Lehrgang ließ sich nicht laden: " + e.message)}</p>`;
+      root.innerHTML = `<a class="zurueck" href="/riegenkarten">← Alle Lehrgänge</a><p class="notice">${esc(e.status === 404 ? "Diesen Lehrgang gibt es nicht (mehr)." : "Der Lehrgang ließ sich nicht laden: " + e.message)}</p>`;
       return;
     }
     renderLehrgangSeite();

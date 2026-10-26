@@ -182,7 +182,7 @@ def test_folgen():
         assert "Lebensende" in felder and not any(f.startswith("Produkt") and f != "Produkt" for f in felder), felder
         assert sum(1 for f in zeile["felder"] if f["feld"] == "Produkt") == 1, zeile["felder"]
         # Lebenslauf-PDF nennt den Wechsel.
-        r = w.get(f"/material/artikel/{seil['id']}/lebenslauf.pdf")
+        r = w.get(f"/materialablage/artikel/{seil['id']}/lebenslauf.pdf")
         assert r.status_code == 200 and r.data.startswith(b"%PDF")
         pfad = os.path.join(tmp, "lebenslauf.pdf")
         with open(pfad, "wb") as fh:

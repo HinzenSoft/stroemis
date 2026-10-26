@@ -2,7 +2,7 @@
 (function () {
   const { esc, api, toast, dialog, fmtDate, fmtCoord, CAT } = S;
   const me = STROEMIS.user;
-  // Verwaltung im Modul Spots (Rechte-Matrix): darf alle Alben bearbeiten.
+  // Verwaltung in den Ankerplätzen (Rechte-Matrix): darf alle Alben bearbeiten.
   const isAdmin = !!(me.rechte && me.rechte.karte === 2);
 
   const state = {

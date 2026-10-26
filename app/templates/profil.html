@@ -9,7 +9,7 @@
     <div class="profilbild">
       <div class="pb-vorschau" id="pb-vorschau" aria-hidden="true">{% if avatar %}<img src="{{ avatar }}" alt="">{% endif %}<span class="pb-kuerzel{% if avatar %} hidden{% endif %}">{{ initialen }}</span></div>
       <div class="pb-text">
-        <div class="help">Es steht neben deinem Namen an jeder Wiki-Seite, die du erstellt oder bearbeitet hast. Ohne Bild werden die Initialen gezeigt.</div>
+        <div class="help">Es steht neben deinem Namen an jeder Seite der Strömipedia, die du erstellt oder bearbeitet hast. Ohne Bild werden die Initialen gezeigt.</div>
         <div class="btn-row">
           <button class="btn secondary" id="pb-waehlen" type="button">Bild wählen …</button>
           <button class="btn secondary{% if not avatar %} hidden{% endif %}" id="pb-weg" type="button">Entfernen</button>
@@ -55,7 +55,7 @@
     </form>
     <h3 class="us-titel">Unterschrift</h3>
     {% endif %}
-    <div class="help">Für das Modul Material: Sie wird beim Festschreiben einer Prüfung oder Aussonderung als Kopie ins Protokoll übernommen – zusammen mit deiner Anmeldung, dem Zeitpunkt und der Prüfsumme. Änderst oder entfernst du sie, wirkt das nur auf künftige Protokolle.{% if not mat_zugang %} Dein Konto hat keinen Zugang zum Modul Material – du brauchst sie gerade nicht. Entferne sie, wenn du magst.{% elif not us_setzen %} Du bist weder Prüfer noch Materialwart und brauchst sie nicht mehr – entferne sie, wenn du magst.{% endif %}</div>
+    <div class="help">Für die Materialablage: Sie wird beim Festschreiben einer Prüfung oder Aussonderung als Kopie ins Protokoll übernommen – zusammen mit deiner Anmeldung, dem Zeitpunkt und der Prüfsumme. Änderst oder entfernst du sie, wirkt das nur auf künftige Protokolle.{% if not mat_zugang %} Dein Konto hat keinen Zugang zur Materialablage – du brauchst sie gerade nicht. Entferne sie, wenn du magst.{% elif not us_setzen %} Du bist weder Prüfer noch Materialwart und brauchst sie nicht mehr – entferne sie, wenn du magst.{% endif %}</div>
     <div class="us-profil">
       <div class="us-vorschau leer" id="us-vorschau"><span class="muted">Wird geladen …</span></div>
       <div class="btn-row us-knoepfe">
@@ -68,7 +68,7 @@
   {% if psa_anzahl or not psa_mails %}
   <section class="section" id="psa">
     <h2>Meine PSA</h2>
-    <p class="help">{% if psa_anzahl %}Dir ist Ausrüstung zugeordnet ({{ psa_anzahl }} Artikel) – <a href="/material/meine-psa">Meine PSA ansehen</a>.{% else %}Dir ist zurzeit keine Ausrüstung zugeordnet.{% endif %}</p>
+    <p class="help">{% if psa_anzahl %}Dir ist Ausrüstung zugeordnet ({{ psa_anzahl }} Artikel) – <a href="/materialablage/meine-psa">Meine PSA ansehen</a>.{% else %}Dir ist zurzeit keine Ausrüstung zugeordnet.{% endif %}</p>
     <label class="inline"><input type="checkbox" id="psa-mails"{% if psa_mails %} checked{% endif %}> Erinnerungen zu meiner PSA per Mail</label>
     <div class="help">Eine Mail am Morgen, wenn deine PSA in 30 Tagen zur Prüfung muss, wenn die Prüfung überfällig ist und 90 Tage vor ihrem Lebensende – jede Erinnerung nur einmal. Meldet jemand anderes einen Mangel an deiner PSA, bekommst du immer sofort eine Mail – sie betrifft deine Sicherheit.</div>
   </section>

@@ -116,7 +116,7 @@ def _konten(app):
 def neues_konto(app, mail, grund=None, stufe=None, **felder):
     """Ein Konto über die Nutzerverwaltung anlegen und anmelden – mit Namen (ohne Namen kein Modulzugang), wenn felder
     nichts anderes sagt. grund: „lesen“ oder „verwalten“ – das Konto bekommt es an jeder Gliederung, die gliederung()
-    danach anlegt. stufe: Stufe im Modul Material – Vorgabe 1 (Mitglied, wie neue Konten) mit Namen, 0 ohne; ein
+    danach anlegt. stufe: Stufe in der Materialablage – Vorgabe 1 (Mitglied, wie neue Konten) mit Namen, 0 ohne; ein
     „material“ in felder["rechte"] geht vor. Liefert (Client, Kennung)."""
     adm = _konten(app)["adm"]
     daten = dict({"email": mail, "password": "passwort1", "name": mail.split("@")[0]}, **felder)
@@ -284,7 +284,7 @@ def test_migration():
 
 def test_rollen():
     """Stufen und Häkchen aus der Nutzerverwaltung und was jede Rolle angeboten bekommt. Seit der Nachbesserung
-    „Modulstufe“ (Schritt 10) gibt die Stufe im Modul Material den Zugang (Mitglied) bzw. alles (Verwaltung); Bestand
+    „Modulstufe“ (Schritt 10) gibt die Stufe in der Materialablage den Zugang (Mitglied) bzw. alles (Verwaltung); Bestand
     gibt es für Mitglieder nur über Freigaben je Ordner (hier die Standardfreigaben von gliederung)."""
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
@@ -375,11 +375,11 @@ def test_rollen():
         r = c.get("/api/material/start")
         assert r.status_code == 403 and "Namen" in r.json["error"], r.get_json()
         # Seiten: Modul nur mit Stufe; der Reiter erscheint nur dann.
-        assert k["fuehrung"].get("/material").status_code == 200
-        assert 'href="/material"' in k["fuehrung"].get("/material").get_data(as_text=True)
-        assert k["nutzer"].get("/material").status_code == 403
-        assert 'href="/material"' not in k["nutzer"].get("/profil").get_data(as_text=True)
-        r = app.test_client().get("/material")
+        assert k["fuehrung"].get("/materialablage").status_code == 200
+        assert 'href="/materialablage"' in k["fuehrung"].get("/materialablage").get_data(as_text=True)
+        assert k["nutzer"].get("/materialablage").status_code == 403
+        assert 'href="/materialablage"' not in k["nutzer"].get("/profil").get_data(as_text=True)
+        r = app.test_client().get("/materialablage")
         assert r.status_code == 302 and "/login" in r.headers["Location"]
     print("Rollentest bestanden.")
 
@@ -608,7 +608,7 @@ def test_artikel():
         r = app.test_client().get(f"/m/{token}")
         assert r.status_code == 302 and "/login" in r.headers["Location"]
         r = k["fuehrung"].get(f"/m/{token}")
-        assert r.status_code == 302 and r.headers["Location"].endswith(f"/material/artikel/{alle[1]}")
+        assert r.status_code == 302 and r.headers["Location"].endswith(f"/materialablage/artikel/{alle[1]}")
         assert k["nutzer"].get(f"/m/{token}").status_code == 403
         assert k["fuehrung"].get("/m/gibt-es-nicht").status_code == 404
     print("Artikeltest bestanden.")
@@ -642,9 +642,9 @@ def test_suche():
             assert treffer(c, "B-7")[0] == ["AX-55501", "AX-55502", "QQ-777"]
         # Ein eindeutiger Treffer öffnet den Artikel direkt – mit der Anfrage für das Angebot der globalen Suche
         # (Phase 2); sonst die Trefferliste.
-        r = w.get("/material/suche?q=QQ-777")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/material/artikel/3?q=QQ-777"), r.headers.get("Location")
-        assert w.get("/material/suche?q=AX").status_code == 200
+        r = w.get("/materialablage/suche?q=QQ-777")
+        assert r.status_code == 302 and r.headers["Location"].endswith("/materialablage/artikel/3?q=QQ-777"), r.headers.get("Location")
+        assert w.get("/materialablage/suche?q=AX").status_code == 200
         assert k["nutzer"].get("/api/material/suche?q=AX").status_code == 403
         # Ohne Volltextindex (altes SQLite) findet die Suche dasselbe über LIKE.
         with app.app_context():
@@ -998,7 +998,7 @@ def test_review_befunde():
         assert r.status_code == 200 and r.json["treffer"] == [] and r.json["eindeutig"] is None, r.get_json()
         # 9. Steuerzeichen im Suchbegriff: kein 500.
         for url in ("/api/material/suche?q=abc%00def", "/api/material/suche?q=ab%00", "/api/material/produkte?q=abc%00def",
-                    "/material/suche?q=abc%00def"):
+                    "/materialablage/suche?q=abc%00def"):
             assert w.get(url).status_code in (200, 400), url
         # 15. Negative Seitengröße wird geklemmt, nicht „alles“.
         assert len(w.get("/api/material/faellig?status=einsatzbereit,ueberfaellig,bald_faellig&pro_seite=-1").json["artikel"]) <= 1
@@ -1250,8 +1250,8 @@ def test_pruefung():
         # Lesen dürfen alle mit Zugang zum Modul, Nutzer ohne Recht nicht.
         assert k["fuehrung"].get(f"/api/material/pruefungen/{pid}").status_code == 200
         assert k["nutzer"].get(f"/api/material/pruefungen/{pid}").status_code == 403
-        assert k["fuehrung"].get(f"/material/pruefung/{pid}").status_code == 200
-        assert k["fuehrung"].get(f"/material/artikel/{iid}/pruefung/neu").status_code == 200
+        assert k["fuehrung"].get(f"/materialablage/pruefung/{pid}").status_code == 200
+        assert k["fuehrung"].get(f"/materialablage/artikel/{iid}/pruefung/neu").status_code == 200
     print("Prüfungstest bestanden.")
 
 
@@ -1478,7 +1478,7 @@ def test_durchgang():
         assert w.delete(f"/api/material/durchgaenge/{rid2}", headers=H).status_code == 200
         assert w.get(f"/api/material/durchgaenge/{rid2}").status_code == 404
         assert w.delete(f"/api/material/durchgaenge/{rid}", headers=H).status_code == 409
-        assert k["fuehrung"].get(f"/material/durchgang/{rid}").status_code == 200
+        assert k["fuehrung"].get(f"/materialablage/durchgang/{rid}").status_code == 200
         # Wird ein Artikel eines offenen Durchgangs ausgesondert, nimmt das System ihn mit Grund heraus.
         rid3 = w.post("/api/material/durchgaenge", json={"folder_id": fahrzeug, "titel": "Dritter"}).json["durchgang"]["id"]
         assert p1.post(f"/api/material/artikel/{b['id']}/sperren", json={"grund": "verlust"}).status_code == 200
@@ -1884,7 +1884,7 @@ def test_produktmeldung():
             assert k["wart"].get(m["fotos"][0]["vorschau"]).status_code == 200
             assert [p[0] for p in post] == ["katalog@example.org"], post
             assert "Rettungsgurt Gamma" in post[0][1] and "https://www.example.org/gamma.pdf" in post[0][2] \
-                and "https://strömis.de/material/katalog/meldungen" in post[0][2] and "OG Musterstadt" in post[0][2], post[0]
+                and "https://strömis.de/materialablage/katalog/meldungen" in post[0][2] and "OG Musterstadt" in post[0][2], post[0]
 
             # Eingaben: Pflichtfelder, nur http(s)-Links, höchstens fünf, Kategorie muss es geben.
             for falsch, teil in (({"manufacturer": " "}, "Hersteller"), ({"links": "javascript:alert(1)"}, "http"),
@@ -1931,9 +1931,9 @@ def test_produktmeldung():
             assert k["nutzer"].get("/api/material/meldungen").status_code == 403
             assert k["katalog"].get("/api/material/start").json["meldungen_offen"] == 2
             assert k["wart"].get("/api/material/start").json["meldungen_offen"] is None
-            assert k["katalog"].get("/material/katalog/meldungen").status_code == 200
-            assert k["wart"].get("/material/katalog/meldungen").status_code == 200
-            assert k["nutzer"].get("/material/katalog/meldungen").status_code == 403
+            assert k["katalog"].get("/materialablage/katalog/meldungen").status_code == 200
+            assert k["wart"].get("/materialablage/katalog/meldungen").status_code == 200
+            assert k["nutzer"].get("/materialablage/katalog/meldungen").status_code == 403
 
             # Einpflegen als neues Produkt: Produkt und erledigte Meldung in einem Zug, Bescheid an den Melder.
             post.clear()
@@ -1945,7 +1945,7 @@ def test_produktmeldung():
             pid = r.json["produkt"]["id"]
             assert r.json["meldung"]["status"] == "eingepflegt" and r.json["meldung"]["produkt"]["id"] == pid
             assert [p[0] for p in post] == ["wart@example.org"], post
-            assert f"https://strömis.de/material/artikel/neu?produkt={pid}&ordner={gid}" in post[0][2] \
+            assert f"https://strömis.de/materialablage/artikel/neu?produkt={pid}&ordner={gid}" in post[0][2] \
                 and "Mit Gebrauchsanleitung angelegt." in post[0][2] and "ist im Katalog" in post[0][1], post[0]
             with app.app_context():
                 from app import db
@@ -2438,7 +2438,7 @@ def test_festschreiben():
         pr = r.json["pruefung"]
         jahr = _heute().year
         assert pr["protokoll"]["id"] == f"P-{jahr}-{pid:06d}", pr["protokoll"]
-        assert pr["protokoll"]["url"] == f"/material/pruefung/{pid}/pdf" and pr["unterschrift"].startswith("data:image/png")
+        assert pr["protokoll"]["url"] == f"/materialablage/pruefung/{pid}/pdf" and pr["unterschrift"].startswith("data:image/png")
         zeile = protokoll_zeile(app, pid)
         assert zeile["locked_at"] and zeile["signature_png"] and zeile["locked_login"] == "pruefer@example.org"
         assert zeile["pdf_path"] == f"pdf/{jahr}/P-{jahr}-{pid:06d}.pdf"
@@ -2495,14 +2495,14 @@ def test_festschreiben():
         assert re.search(r"Testpunkt Verschleiß\s+Nein\s+in Ordnung\s+Nein$", befund_zeile(lay, "Testpunkt Verschleiß"))
         assert "KRITISCH" not in text and "Ein kritischer Punkt mit Mangel schließt „einsatzbereit“ aus." in text
         # Ausliefern: nur mit Leserecht, nur unverändert.
-        r = k["fuehrung"].get(f"/material/pruefung/{pid}/pdf")
+        r = k["fuehrung"].get(f"/materialablage/pruefung/{pid}/pdf")
         assert r.status_code == 200 and r.mimetype == "application/pdf" and r.data == daten
         assert f"P-{jahr}-{pid:06d}_{a['inventory_no']}.pdf" in r.headers["Content-Disposition"]
         assert "sandbox" not in r.headers["Content-Security-Policy"]
-        assert k["nutzer"].get(f"/material/pruefung/{pid}/pdf").status_code == 403
-        r = app.test_client().get(f"/material/pruefung/{pid}/pdf")
+        assert k["nutzer"].get(f"/materialablage/pruefung/{pid}/pdf").status_code == 403
+        r = app.test_client().get(f"/materialablage/pruefung/{pid}/pdf")
         assert r.status_code == 302 and "/login" in r.headers["Location"]
-        assert k["fuehrung"].get(f"/material/pruefung/{pid + 99}/pdf").status_code == 404
+        assert k["fuehrung"].get(f"/materialablage/pruefung/{pid + 99}/pdf").status_code == 404
         # Im Lebenslauf: Protokoll-ID und Link.
         lauf = w.get(f"/api/material/artikel/{a['id']}").json["artikel"]["pruefungen"]
         assert lauf[0]["protokoll"]["id"] == f"P-{jahr}-{pid:06d}", lauf
@@ -2513,7 +2513,7 @@ def test_festschreiben():
             b = fh.read(1)
             fh.seek(n // 2)
             fh.write(bytes([b[0] ^ 1]))
-        r = k["fuehrung"].get(f"/material/pruefung/{pid}/pdf")
+        r = k["fuehrung"].get(f"/materialablage/pruefung/{pid}/pdf")
         assert r.status_code == 409 and b"Pr\xc3\xbcfsumme" in r.data, r.status_code
     print("Festschreibtest bestanden.")
 
@@ -2601,7 +2601,7 @@ def test_berichtigung():
 
 
 def test_pruefseite():
-    """/material/pruefen meldet das Original als unverändert und eine um ein Byte geänderte Kopie als verändert –
+    """/materialablage/pruefen meldet das Original als unverändert und eine um ein Byte geänderte Kopie als verändert –
     ohne Anmeldung und ohne Personendaten."""
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
@@ -2617,7 +2617,7 @@ def test_pruefseite():
             original = fh.read()
         n = zeile["pdf_hashed_bytes"]
         anon = app.test_client()
-        assert anon.get("/material/pruefen").status_code == 200
+        assert anon.get("/materialablage/pruefen").status_code == 200
 
         def pruefen(daten, c=anon):
             r = c.post("/api/material/pruefen", data={"datei": (io.BytesIO(daten), "protokoll.pdf")}, headers=H,
@@ -2646,7 +2646,7 @@ def test_pruefseite():
         # Ein fremdes PDF ist kein Protokoll von strömis.de.
         assert pruefen(PDF)["ergebnis"] == "unbekannt"
         # Angemeldet mit Zugang zum Modul: dazu der Weg zum Vorgang.
-        assert pruefen(original, k["fuehrung"])["link"] == f"/material/pruefung/{pid}"
+        assert pruefen(original, k["fuehrung"])["link"] == f"/materialablage/pruefung/{pid}"
         assert "link" not in pruefen(original, k["nutzer"])
         r = anon.post("/api/material/pruefen", data={}, headers=H, content_type="multipart/form-data")
         assert r.status_code == 400
@@ -2699,7 +2699,7 @@ def test_aussonderungsprotokoll():
         text = _flach(" ".join(pdf_seiten(os.path.join(tmp, zeile["pdf_path"]))))
         assert "Verlust" in text and "Seit Übung weg" in text and "Materialwart" in text and b["inventory_no"] in text
         assert "verloren" in text, text[:900]
-        r = k["fuehrung"].get(f"/material/pruefung/{aid}/pdf")
+        r = k["fuehrung"].get(f"/materialablage/pruefung/{aid}/pdf")
         assert r.status_code == 200 and r.mimetype == "application/pdf"
     print("Aussonderungsprotokolltest bestanden.")
 
@@ -2727,7 +2727,7 @@ def test_sammelprotokoll():
         assert r.status_code == 200, r.get_json()
         d = r.json["durchgang"]
         jahr = _heute().year
-        assert d["protokoll"]["id"] == f"S-{jahr}-{rid:06d}" and d["protokoll"]["url"] == f"/material/durchgang/{rid}/sammelprotokoll"
+        assert d["protokoll"]["id"] == f"S-{jahr}-{rid:06d}" and d["protokoll"]["url"] == f"/materialablage/durchgang/{rid}/sammelprotokoll"
         zeile = protokoll_zeile(app, rid=rid)
         pfad = os.path.join(tmp, zeile["pdf_path"])
         seiten = pdf_seiten(pfad)
@@ -2740,7 +2740,7 @@ def test_sammelprotokoll():
             assert e["protocol_id"] in text and e["file_sha256"] in text.replace(" ", ""), e["protocol_id"]
         assert "pruefer" in text and "1012-4711" in text and "Prüferin Zwei" in text and "1012-4712" in text
         assert "nicht auffindbar" in text and "Jahresprüfung Test" in text
-        r = k["fuehrung"].get(f"/material/durchgang/{rid}/sammelprotokoll")
+        r = k["fuehrung"].get(f"/materialablage/durchgang/{rid}/sammelprotokoll")
         assert r.status_code == 200 and r.mimetype == "application/pdf"
         # Abgeschlossen heißt unveränderlich – auch in der Datenbank.
         conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
@@ -2878,7 +2878,7 @@ def test_lieferung2_bestand():
                               (_heute() + timedelta(days=300)).isoformat(), ts, ts, ts))
         pr = p1.get(f"/api/material/pruefungen/{pid}").json["pruefung"]
         assert pr["protokoll"] is None and pr["berichtigbar"]["ok"], pr
-        assert k["fuehrung"].get(f"/material/pruefung/{pid}/pdf").status_code == 404
+        assert k["fuehrung"].get(f"/materialablage/pruefung/{pid}/pdf").status_code == 404
         conn = sqlite3.connect(os.path.join(tmp, "stroemis.db"))
         try:
             conn.execute(f"UPDATE mat_inspection SET result = 'instandsetzen' WHERE id = {pid}")

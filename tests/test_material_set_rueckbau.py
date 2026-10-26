@@ -380,7 +380,7 @@ def test_schnittstelle():
         ids = katalog_grund(k["adm"])
         gid, _ = gliederung(wart)
         a = neuer_artikel(wart, ids["hms"], gid)["id"]
-        for methode, url in (("get", f"/material/artikel/{a}/set-pruefung"), ("get", f"/api/material/artikel/{a}/set-lauf"),
+        for methode, url in (("get", f"/materialablage/artikel/{a}/set-pruefung"), ("get", f"/api/material/artikel/{a}/set-lauf"),
                              ("post", f"/api/material/artikel/{a}/set-lauf"), ("post", f"/api/material/artikel/{a}/aufloesen"),
                              ("post", f"/api/material/artikel/{a}/teil-entnehmen"),
                              ("get", f"/api/material/produkte/{ids['hms']}/stueckliste-uebertragen"),
@@ -434,7 +434,7 @@ def test_schnittstelle():
         assert any(p.get("bestandteile") == [{"bezeichnung": "Tasche", "anzahl": 1}] for p in daten["produkte"])
         # Artikel-CSV ohne Set-Spalten; eine Spalte „Set (Inventarnummer)“ aus einem älteren Export ignoriert der
         # Bestandsimport.
-        r = wart.get(f"/material/export/{gid}.csv")
+        r = wart.get(f"/materialablage/export/{gid}.csv")
         assert r.status_code == 200, r.status_code
         kopfzeile = r.data.decode("utf-8-sig").splitlines()[0]
         assert "Set" not in kopfzeile, kopfzeile

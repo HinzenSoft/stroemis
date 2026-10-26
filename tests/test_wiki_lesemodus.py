@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from test_smoke import H, jpeg, make_app  # noqa: E402
 
-KEIN_ZUGANG = "Für dein Konto ist das Wiki nicht freigeschaltet."
+KEIN_ZUGANG = "Für dein Konto ist die Strömipedia nicht freigeschaltet."
 
 
 def konto(app, adm, mail, name, rechte=None):
@@ -130,25 +130,25 @@ def test_lesen():
         anon = app.test_client()
 
         # Die Seiten des Wikis öffnen den Lesemodus: Kopfleiste, Reiter „Wiki“ aktiv, Hinweis, der öffentliche Leser.
-        for adresse in ("/wiki", f"/wiki/{oeff['offen']['slug']}", f"/wiki/{nicht['intern']['slug']}", "/wiki/gibt-es-nicht"):
+        for adresse in ("/stroemipedia", f"/stroemipedia/{oeff['offen']['slug']}", f"/stroemipedia/{nicht['intern']['slug']}", "/stroemipedia/gibt-es-nicht"):
             r = leser.get(adresse)
             assert r.status_code == 200, adresse
-            assert 'id="logout"' in r.text and '<a href="/wiki" class="active">Wiki</a>' in r.text, adresse
-            assert "Du siehst die öffentlichen Seiten des Wikis." in r.text and 'data-modus="lesemodus"' in r.text
+            assert 'id="logout"' in r.text and '<a href="/stroemipedia" class="active">Strömipedia</a>' in r.text, adresse
+            assert "Du siehst die öffentlichen Seiten der Strömipedia." in r.text and 'data-modus="lesemodus"' in r.text
             assert "js/public.js" in r.text and "js/wiki.js" not in r.text and "toastui" not in r.text
             ohne_merkmal(r.text, w["merkmale"], adresse)
         # Startseite ohne jedes Modul: der Lesemodus statt der Sackgasse; mit Spots führt sie wie bisher dorthin.
         r = leser.get("/")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/karte")
+        assert r.status_code == 302 and r.headers["Location"].endswith("/ankerplaetze")
         # Mit dem Modul Material (Vorgabe neuer Konten) führt sie dorthin, ohne jedes Modul in den Lesemodus.
         assert w["adm"].put(f"/api/admin/users/{w['leser_id']}", json={"rechte": {"karte": 0}}).status_code == 200
         r = leser.get("/")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/material")
+        assert r.status_code == 302 and r.headers["Location"].endswith("/materialablage")
         assert w["adm"].put(f"/api/admin/users/{w['leser_id']}", json={"rechte": {"material": 0}}).status_code == 200
         r = leser.get("/")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/wiki")
-        # Der Reiter steht auch auf anderen Seiten und führt nach /wiki (nicht auf die Startseite).
-        assert '<a href="/wiki" class="">Wiki</a>' in leser.get("/profil").text
+        assert r.status_code == 302 and r.headers["Location"].endswith("/stroemipedia")
+        # Der Reiter steht auch auf anderen Seiten und führt nach /stroemipedia (nicht auf die Startseite).
+        assert '<a href="/stroemipedia" class="">Strömipedia</a>' in leser.get("/profil").text
 
         # Lesen: dieselbe Antwort wie ohne Anmeldung – selbst freigegeben, geerbt, unter interner Elternseite.
         for name, p in oeff.items():
@@ -270,7 +270,7 @@ def test_rundum():
                             assert a.status_code == b.status_code == 200
                             assert _ohne_nonce(text) == _ohne_nonce(b.get_data(as_text=True)), url
                         else:
-                            # /wiki und /wiki/<slug>: die Hülle des Lesemodus – der Inhalt kommt über /api/public.
+                            # /stroemipedia und /stroemipedia/<slug>: die Hülle des Lesemodus – der Inhalt kommt über /api/public.
                             assert a.status_code == 200 and 'data-modus="lesemodus"' in text, url
                             assert b.status_code == 302 and "/login" in b.headers["Location"], url
         assert geprueft >= {"wiki.tree", "wiki.get_page", "wiki.update_page", "wiki.trash", "wiki.purge_page",
@@ -304,36 +304,36 @@ def test_unveraendert():
         w = aufbau(tmp)
         app, adm, mitglied, intern = w["app"], w["adm"], w["mitglied"], w["nicht"]["intern"]
         for c, name in ((mitglied, "Mitglied"), (adm, "Verwaltung")):
-            r = c.get("/wiki")
+            r = c.get("/stroemipedia")
             assert r.status_code == 200 and "js/wiki.js" in r.text and 'data-modus="lesemodus"' not in r.text, name
             assert "Du siehst die öffentlichen Seiten" not in r.text, name
-            assert '<a href="/" class="active">Wiki</a>' in r.text, name
+            assert '<a href="/" class="active">Strömipedia</a>' in r.text, name
             assert c.get("/").status_code == 200, name
             assert intern["slug"] in {p["slug"] for p in c.get("/api/wiki/tree").json["pages"]}, name
             assert c.get(f"/api/wiki/pages/{intern['slug']}").status_code == 200, name
             assert c.get("/api/wiki/search?q=INTERN-MARKE").json["results"], name
         assert mitglied.post("/api/wiki/pages", json={"title": "Platzhalter Mitglied"}).status_code == 201
 
-        # Wartend: keine Anmeldung, keine Sitzung – /wiki führt zur Anmeldung, die Schnittstelle sagt 401.
+        # Wartend: keine Anmeldung, keine Sitzung – /stroemipedia führt zur Anmeldung, die Schnittstelle sagt 401.
         c = app.test_client()
         c.post("/api/auth/register", json={"email": "wartet@example.org", "password": "passwort1", "name": "Wartend",
                                            "gliederung": "OG Platzhalter"})
         assert c.post("/api/auth/login", json={"email": "wartet@example.org", "password": "passwort1"}).status_code == 403
-        r = c.get("/wiki")
+        r = c.get("/stroemipedia")
         assert r.status_code == 302 and r.headers["Location"].startswith("/login"), r.status_code
         assert c.get("/api/wiki/tree").status_code == 401
 
         # Deaktiviert: die laufende Sitzung verfällt, der Lesemodus mit ihr.
         leser = w["leser"]
-        assert leser.get("/wiki").status_code == 200
+        assert leser.get("/stroemipedia").status_code == 200
         assert adm.put(f"/api/admin/users/{w['leser_id']}", json={"active": False}).status_code == 200
-        r = leser.get("/wiki")
+        r = leser.get("/stroemipedia")
         assert r.status_code == 302 and r.headers["Location"].startswith("/login"), r.status_code
         assert leser.get("/api/wiki/tree").status_code == 401
 
         # Ohne Anmeldung: wie bisher zur Anmeldung, der öffentliche Teil bleibt offen.
         anon = app.test_client()
-        assert anon.get("/wiki").status_code == 302 and anon.get("/").status_code == 302
+        assert anon.get("/stroemipedia").status_code == 302 and anon.get("/").status_code == 302
         assert anon.get(f"/api/public/pages/{w['oeffentlich']['offen']['slug']}").status_code == 200
         assert anon.get("/oeffentlich/").status_code == 200
     print("Unverändert bestanden.")

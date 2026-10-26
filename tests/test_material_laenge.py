@@ -425,7 +425,7 @@ def test_csv_und_import():
         from app.material.services import export
         a = neuer_artikel(t.w, t.seil, t.lager, manufactured_on=t.herst, serial_no="SL-1", length_m="57,5")
         hms = neuer_artikel(t.w, t.ids["hms"], t.lager, serial_no="HB-1")
-        r = t.w.get(f"/material/export/{t.lager}.csv")
+        r = t.w.get(f"/materialablage/export/{t.lager}.csv")
         assert r.status_code == 200
         kopf, rows = csv_lesen(r.data)
         assert kopf == list(export.ARTIKEL_SPALTEN) and kopf[kopf.index("Lebensende") + 1] == "Länge (m)", kopf
@@ -576,7 +576,7 @@ def test_pruefung_laenge():
         assert artikel(w, hms["id"])["length_m"] is None and not journal_laenge(t.app, hms["id"])
         assert "nicht zutreffend" in protokoll_text(t.app, tmp, prh["id"])
         # Lebenslauf-PDF und Meine PSA zeigen die Länge.
-        r = w.get(f"/material/artikel/{a['id']}/lebenslauf.pdf")
+        r = w.get(f"/materialablage/artikel/{a['id']}/lebenslauf.pdf")
         assert r.status_code == 200
         pfad = os.path.join(tmp, "lebenslauf.pdf")
         with open(pfad, "wb") as fh:
@@ -767,7 +767,7 @@ def test_trennung():
         assert r.status_code == unbekannt.status_code == 404 and r.get_json() == unbekannt.get_json(), r.get_json()
         assert t.w.get(f"{ART}/{fremd['id']}").status_code == 404
         assert zeilen(t.app, "SELECT length_m FROM mat_item WHERE id = ?", (fremd["id"],))[0]["length_m"] == 40.0
-        assert "40,0" not in t.w.get(f"/material/export/{t.lager}.csv").get_data(as_text=True)
+        assert "40,0" not in t.w.get(f"/materialablage/export/{t.lager}.csv").get_data(as_text=True)
     print("Trennung bestanden.")
 
 

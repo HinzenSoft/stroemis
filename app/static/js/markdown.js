@@ -638,7 +638,7 @@ window.MD = (function () {
         const fuss = document.createElement("div");
         fuss.className = "einbau-fuss";
         const a = document.createElement("a");
-        a.href = (o.prefix || "/wiki/") + seite.slug;
+        a.href = (o.prefix || "/stroemipedia/") + seite.slug;
         a.textContent = seite.title;
         fuss.append(document.createTextNode("Aus "), a);
         el.appendChild(fuss);
@@ -646,7 +646,7 @@ window.MD = (function () {
         /* Links, Inhaltsverzeichnis und Scrollspy entstehen VOR enhance und kennen den
            eingebundenen Text deshalb nicht: Seine Überschriften fehlten im Verzeichnis, seine
            internen Links luden im Wiki die ganze Anwendung neu und führten im öffentlichen
-           Bereich auf /wiki/… und damit zur Anmeldung.
+           Bereich auf /stroemipedia/… und damit zur Anmeldung.
            Das kommt VOR der Nachbearbeitung: buildToc vergibt die Kennungen der Überschriften,
            und ohne Kennung bekommt eine Überschrift keinen Anker. */
         if (typeof o.nachInhalt === "function") { try { o.nachInhalt(inhalt); } catch (e) { /* egal */ } }
@@ -884,7 +884,7 @@ window.MD = (function () {
       const kids = o.children || [];
       el.innerHTML = kids.length
         ? `<div class="children-list"><strong>Unterseiten</strong><ul>${kids.map((k) =>
-            `<li><a href="${esc(o.prefix || "/wiki/")}${esc(k.slug)}">${k.icon ? esc(k.icon) + " " : ""}${esc(k.title)}</a></li>`).join("")}</ul></div>`
+            `<li><a href="${esc(o.prefix || "/stroemipedia/")}${esc(k.slug)}">${k.icon ? esc(k.icon) + " " : ""}${esc(k.title)}</a></li>`).join("")}</ul></div>`
         : '<div class="muted small">Diese Seite hat keine Unterseiten.</div>';
     });
 

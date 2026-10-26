@@ -1,18 +1,18 @@
 {% extends "base.html" %}
 {% set active = 'wiki' %}
-{% block title %}Wiki – strömis.de{% endblock %}
+{% block title %}{{ modul.name.wiki }} – strömis.de{% endblock %}
 {% block body %}
 {# Lesemodus: angemeldet, aber ohne Stufe im Wiki (auth.wiki_lesemodus). Zu sehen ist genau, was der öffentliche Teil
    ohne Anmeldung zeigt – derselbe Leser (public.js), dieselbe Schnittstelle (/api/public). Kein Editor, kein Verlauf,
    keine Kommentare: Die Skripte dafür werden gar nicht erst geladen, und ihre Schnittstellen antworten weiter 403. #}
-<div class="wiki-shell lesemodus" data-slug="{{ slug }}" data-modus="lesemodus" data-prefix="/wiki/" data-start="/wiki">
+<div class="wiki-shell lesemodus" data-slug="{{ slug }}" data-modus="lesemodus" data-prefix="/stroemipedia/" data-start="/stroemipedia">
   <aside class="wiki-side" id="wiki-side">
-    <input type="search" id="wiki-search" placeholder="Wiki durchsuchen …" aria-label="Öffentliche Seiten durchsuchen">
+    <input type="search" id="wiki-search" placeholder="Strömipedia durchsuchen …" aria-label="Öffentliche Seiten durchsuchen">
     <ul class="search-results hidden" id="search-results"></ul>
     <ul class="tree" id="tree"></ul>
   </aside>
   <main class="wiki-main" id="wiki-main">
-    <p class="lesemodus-hinweis" role="note">Du siehst die öffentlichen Seiten des Wikis. Für das interne Wiki schaltet dich die Verwaltung frei.</p>
+    <p class="lesemodus-hinweis" role="note">Du siehst die öffentlichen Seiten der Strömipedia. Für die interne Strömipedia schaltet dich die Plattform-Verwaltung frei.</p>
     <button class="btn secondary small wiki-menu-btn" id="wiki-menu">☰ Seiten</button>
     <div id="wiki-content"></div>
   </main>

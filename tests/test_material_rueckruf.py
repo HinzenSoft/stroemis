@@ -69,7 +69,7 @@ def pruefen(c, iid):
 
 
 def konto(app, adm, mail, **felder):
-    """Ein Konto mit Namen – ohne Angabe mit Stufe Mitglied im Modul Material (wie neue Konten)."""
+    """Ein Konto mit Namen – ohne Angabe mit Stufe Mitglied in der Materialablage (wie neue Konten)."""
     felder = dict(felder, rechte=dict({"material": 1}, **felder.get("rechte", {})))
     r = adm.post("/api/admin/users", json=dict({"email": mail, "password": "passwort1", "name": mail.split("@")[0]}, **felder))
     assert r.status_code == 201, (mail, r.get_json())
@@ -332,7 +332,7 @@ def test_mail_empfaenger():
                 inhalt = an[adr]
                 for teil in ("Testbeschreibung des Herstellers.", "https://example.org/rr-1", "  RR-1\n", "  rr-2\n",
                              "Dein Bereich: 2 betroffene Artikel", "Grund „Rückruf“", inv[art["RR-1"]], inv[art["rr-2"]],
-                             f"https://strömis.de/material/katalog/produkt/{hms}", "https://strömis.de/material\n",
+                             f"https://strömis.de/materialablage/katalog/produkt/{hms}", "https://strömis.de/materialablage\n",
                              "OG Musterstadt / Lager"):
                     assert teil in inhalt, (adr, teil, inhalt)
                 assert inv[ns_art] not in inhalt and "Nachbarstadt" not in inhalt, (adr, inhalt)
@@ -580,7 +580,7 @@ def test_lebenslauf_und_pruefung():
                            headers=H).status_code == 200
 
             def lebenslauf(iid):
-                r = p1.get(f"/material/artikel/{iid}/lebenslauf.pdf")
+                r = p1.get(f"/materialablage/artikel/{iid}/lebenslauf.pdf")
                 assert r.status_code == 200 and r.data[:4] == b"%PDF", r.status_code
                 pfad = os.path.join(tmp, f"ll_{iid}.pdf")
                 with open(pfad, "wb") as fh:

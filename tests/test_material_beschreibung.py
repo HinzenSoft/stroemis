@@ -305,7 +305,7 @@ def _darstellung(export, gesetzt):
         assert ".zusatz { color: var(--grau); font-weight: 400; }" in html
         assert '<div class="lbl">Modell</div><div class="wert">HMS Beta</div>' in html
         # Der Lebenslauf (PDF, Stand jetzt) ebenso.
-        r = w.get(f"/material/artikel/{a['id']}/lebenslauf.pdf")
+        r = w.get(f"/materialablage/artikel/{a['id']}/lebenslauf.pdf")
         assert r.status_code == 200, r.status_code
         pfad = os.path.join(tmp, "lebenslauf.pdf")
         with open(pfad, "wb") as fh:
@@ -316,7 +316,7 @@ def _darstellung(export, gesetzt):
         # „Modell“ nennt den Teil davor. Im Katalog bleibt der Modellname, wie er ist.
         r = kp.put(f"/api/material/produkte/{ids['gurt']}", json={"model": "Gurt Alpha | Platzhalter"})
         assert r.status_code == 200, r.get_json()
-        r = w.get(f"/material/artikel/{g['id']}/lebenslauf.pdf")
+        r = w.get(f"/materialablage/artikel/{g['id']}/lebenslauf.pdf")
         assert r.status_code == 200, r.status_code
         html = zuletzt()
         assert '<div class="produkt">Testwerk Gurt Alpha <span class="zusatz">Platzhalter</span></div>' in html
@@ -332,7 +332,7 @@ def _darstellung(export, gesetzt):
         assert modell == "Gurt Alpha | Platzhalter", modell
         # CSV: eigene Spalte hinter „Modell“; das Modell allein. Seit dem Wunsch vom 18.10.2026 heißt sie „Bemerkung
         # (Produkt)“ – die „Bemerkung“ des Artikels (notes) steht weiter hinten, jeder Spaltenkopf nur einmal.
-        r = w.get(f"/material/export/{gid}.csv")
+        r = w.get(f"/materialablage/export/{gid}.csv")
         assert r.status_code == 200, r.status_code
         kopf, zeilen = csv_lesen(r.data)
         assert kopf == list(export.ARTIKEL_SPALTEN) and kopf[kopf.index("Modell") + 1] == "Bemerkung (Produkt)", kopf
@@ -438,15 +438,15 @@ def test_oberflaeche_statisch():
     assert all(name == zusatz for name, _, zusatz in stellen), stellen
     assert not re.search(r"\$\{zusatzHtml\([^)]*\)\}(</strong>|</a>)", js)      # nie im Link, nie in <strong>
     # Die Katalogliste wie im Bildschirmfoto: Name fett im roten Link, dann grau Zusatz und Artikelnummer.
-    for stelle in ('<a href="/material/katalog/produkt/${x.id}"><strong>${nameHtml(x, true)}</strong></a>'
+    for stelle in ('<a href="/materialablage/katalog/produkt/${x.id}"><strong>${nameHtml(x, true)}</strong></a>'
                    '${zusatzHtml(x)}${artNrKurz(x.article_no)}',
                    "${nameHtml(a, true)}${zusatzHtml(a)}${artNrKurz(a.article_no)}",
                    # Artikellisten (23.10.2026): der Name als roter Link auf den Artikel, Zusatz und Nummer grau dahinter.
-                   '<a class="mat-produktname" href="/material/artikel/${a.id}" tabindex="-1">${nameHtml(a, true)}</a>'
+                   '<a class="mat-produktname" href="/materialablage/artikel/${a.id}" tabindex="-1">${nameHtml(a, true)}</a>'
                    '${zusatzHtml(a)}${artNrKurz(a.article_no)}',
                    '<h1>${nameHtml(p)}${zusatzHtml(p)} ${demoMarke(p.demo)}</h1>',
                    "<strong>${nameHtml(pr.produkt)}</strong>${zusatzHtml(pr.produkt)}${artNrHtml(",
-                   '<a href="/material/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}'
+                   '<a href="/materialablage/katalog/produkt/${p.id}">${nameHtml(p)}</a>${zusatzHtml(p)}'
                    '${artNrHtml(p.article_no)}',
                    # Produktsuche (24.10.2026): Kategorie als Trennkopf statt in jeder Zeile.
                    '<strong>${nameHtml(p)}</strong>${zusatzHtml(p)}${p.article_no ? ` <span class="muted"><span class="mat-ganz">${esc(p.article_no)}</span></span>` : ""}',

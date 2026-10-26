@@ -550,7 +550,7 @@ def test_rechteschnitt():
             kat = m["katalog@example.org"].text
             assert "RS-C" in kat and "OG Ohnewart (1) – kein Materialwart eingetragen, darum an die Material-Verwaltung" \
                 in kat, kat
-            assert f"Materialwart vergeben: {BASIS}/material/ordner/{gc}?freigaben=materialwart" in kat
+            assert f"Materialwart vergeben: {BASIS}/materialablage/ordner/{gc}?freigaben=materialwart" in kat
             assert "weil du zur Material-Verwaltung gehörst" in kat and "RS-A" not in kat
             assert "weil du diese Ordner verwaltest" not in kat                # nur Rückfall – der Satz entfällt
             assert "Du bekommst diese Mail, weil du diese Ordner verwaltest." in m["wart@example.org"].text
@@ -859,7 +859,7 @@ def test_demo_probelauf():
             # Der Inhaber der DEMO-Freigabe bekommt seine eigene – im Probelauf, gekennzeichnet (test_inhaber).
             x = namen["extern"]
             assert x["demo"] is True and (x["artikel"], x["freigaben"], x["eigene"], x["psa"]) == (0, 0, 1, 0), x
-            assert x["betreff"] == "[DEMO] strömis.de – Material: Deine Freigabe läuft ab", x["betreff"]
+            assert x["betreff"] == "[DEMO] strömis.de – Materialablage: Deine Freigabe läuft ab", x["betreff"]
             assert "DEINE FREIGABEN, DIE BALD ABLAUFEN" in x["text"] and "Verlängern kann: demo-wart." in x["text"], x
             assert "  lesen bis 12.11.2026 (in 10 Tagen) · DEMO\n" in x["text"], x["text"]
             w, d, kv = namen["wart"], namen["demo-wart"], namen["katalog"]
@@ -1028,13 +1028,13 @@ def test_freigabe_ablauf():
             # An die Verwalter des Ankers und – Entscheidung vom 19.10.2026 – an den Inhaber selbst (test_inhaber).
             assert [m[0] for m in liste] == ["extern@example.org", "wart@example.org"], liste
             eigen = an(liste, "extern@example.org")[0]
-            assert eigen[1] == "strömis.de – Material: Deine Freigabe läuft ab", eigen[1]
+            assert eigen[1] == "strömis.de – Materialablage: Deine Freigabe läuft ab", eigen[1]
             assert "OG Musterstadt\n  prüfen bis 02.12.2026 (in 30 Tagen) · 2 offene Prüfungen\n" \
                    "  Verlängern kann: wart.\n" in eigen[2], eigen[2]
             assert "Offene Prüfungen schließt du am besten vor dem Ablauf ab" in eigen[2]
             text = an(liste, "wart@example.org")[0][2]
             assert "Erika Extern – prüfen bis 02.12.2026 (in 30 Tagen) · 2 offene Prüfungen" in text, text
-            assert f"Verlängern: {BASIS}/material/ordner/{gid}?freigaben=verlaengern" in text
+            assert f"Verlängern: {BASIS}/materialablage/ordner/{gid}?freigaben=verlaengern" in text
             assert "1 Freigabe läuft ab" in an(liste, "wart@example.org")[0][1]
             # Nur Freigaben: Der Schalter am Ordner hält sie nicht an – die Fußzeile verspricht es auch nicht.
             assert "abschalten" not in text and text.rstrip().endswith(
@@ -1089,7 +1089,7 @@ def test_freigabe_ablauf():
             # „Materialwart vergeben“, aber „Verlängern“.
             assert "OG Einzelwart (1) – nur der Inhaber selbst verwaltet hier, darum an die Material-Verwaltung" in text, text
             assert "einzel – verwalten bis" in text and "kein Materialwart" not in text
-            assert f"Verlängern: {BASIS}/material/ordner/{gx}?freigaben=verlaengern" in text
+            assert f"Verlängern: {BASIS}/materialablage/ordner/{gx}?freigaben=verlaengern" in text
             assert "freigaben=materialwart" not in text, text
             assert "Gruppen mit „nur der Inhaber selbst verwaltet hier“ bekommst du, weil du zur Material-Verwaltung " \
                    "gehörst." in " ".join(text.split()), text
@@ -1163,16 +1163,16 @@ def test_inhaber():
                                              "wilma@example.org"], [m[0] for m in liste]
             assert erg["mails"]["mails"] == 4 and erg["mails"]["fehlgeschlagen"] == 0, erg
             betreff, text = an(liste, "erika@example.org")[0][1:]
-            assert betreff == "strömis.de – Material: Deine Freigabe läuft ab", betreff
+            assert betreff == "strömis.de – Materialablage: Deine Freigabe läuft ab", betreff
             assert text == (
                 "Hallo Erika Extern,\n\n"
-                "hier steht, welche deiner Freigaben im Modul Material bald ablaufen (Stand 02.11.2026) und wer sie "
+                "hier steht, welche deiner Freigaben in der Materialablage bald ablaufen (Stand 02.11.2026) und wer sie "
                 "verlängern kann.\n\n"
                 "DEINE FREIGABEN, DIE BALD ABLAUFEN\n\n"
                 "OG Musterstadt / Lager\n"
                 "  lesen bis 22.11.2026 (in 20 Tagen)\n"
                 "  Verlängern kann: Max Muster, wart oder Wilma Wartin.\n\n"
-                f"Deine Freigaben im Überblick („Meine Freigaben“): {BASIS}/material\n\n"
+                f"Deine Freigaben im Überblick („Meine Freigaben“): {BASIS}/materialablage\n\n"
                 "Du bekommst diese Mail, weil es deine eigenen Freigaben sind – einmal je Freigabe und "
                 "Enddatum.\n"), text
             # Nicht mehr, als „Meine Freigaben“ ihr zeigt: dieselben Verwalter, dasselbe Ende, derselbe Pfad.
@@ -1182,7 +1182,7 @@ def test_inhaber():
                  ["Max Muster", "wart", "Wilma Wartin"])], meine
             # Wilma: ihre eigene Freigabe nur unter „Deine Freigaben“, Erikas und Ottos als Verwalterin.
             betreff, text = an(liste, "wilma@example.org")[0][1:]
-            assert betreff == "strömis.de – Material: Deine Freigabe läuft ab, außerdem 2 Freigaben laufen ab", betreff
+            assert betreff == "strömis.de – Materialablage: Deine Freigabe läuft ab, außerdem 2 Freigaben laufen ab", betreff
             assert "DEINE FREIGABEN, DIE BALD ABLAUFEN\n\nOG Musterstadt / Lager\n  verwalten bis 27.11.2026 " \
                    "(in 25 Tagen)\n  Verlängern kann: Max Muster oder wart.\n" in text, text
             assert "Wilma Wartin –" not in text and text.count("verwalten bis 27.11.2026") == 1, text
@@ -1318,11 +1318,11 @@ def test_mailtext():
             artikel(app, w, ids["gurt"], lager, "MT-6", faellig=T0 + timedelta(days=6), lebensende=T0 + timedelta(days=60))
             p = planen(app)
             m = {x.adresse: x for x in p.mails}["wart@example.org"]
-            assert m.betreff == ("strömis.de – Material: 1 überfällig, 1 Lebensdauer erreicht, 2 in 7 Tagen fällig, "
+            assert m.betreff == ("strömis.de – Materialablage: 1 überfällig, 1 Lebensdauer erreicht, 2 in 7 Tagen fällig, "
                                  "1 in 30 Tagen fällig, 2 erreichen bald das Lebensende"), m.betreff
             t = m.text
             assert t.startswith("Hallo wart,\n\nhier steht nur, was seit der letzten Erinnerung neu fällig ist"), t
-            assert f"Alles Fällige: {BASIS}/material/pruefungen" in t
+            assert f"Alles Fällige: {BASIS}/materialablage/pruefungen" in t
             assert t.index("OG Musterstadt / Fahrzeug 1 (1)") < t.index("OG Musterstadt / Lager (5)"), t
             assert "MT-5" in t and ("Lebensdauer erreicht seit 30.10.2026 – prüfen lassen („aussondern empfohlen“), "
                                     "danach sondert der Materialwart aus") in t, t
@@ -1333,14 +1333,14 @@ def test_mailtext():
             assert [z.split("SN ")[1].split()[0] for z in zeilen_lager[:5]] == ["MT-2", "MT-5", "MT-3", "MT-6", "MT-4"], \
                 zeilen_lager
             links = [z for z in t.splitlines() if "http" in z]
-            assert links and all(f"{BASIS}/material/" in z for z in links), links
+            assert links and all(f"{BASIS}/materialablage/" in z for z in links), links
             assert t.endswith("Für einen Ordner abschalten: Ordner → Bearbeiten → „Erinnerungsmails aus“.\n"), t
             assert "@" not in t, t
             # Steuerzeichen im Namen der Seite: der Betreff bleibt eine Zeile.
             app.config["SITE_NAME"] = "strömis .de\n"
             p = planen(app)
             betreff = p.mails[0].betreff
-            assert "\n" not in betreff and " " not in betreff and betreff.startswith("strömis .de – Material:")
+            assert "\n" not in betreff and " " not in betreff and betreff.startswith("strömis .de – Materialablage:")
             app.config["SITE_NAME"] = "strömis.de"
 
             with post():
@@ -1372,7 +1372,7 @@ def test_mailtext():
             for name, n in (("A-Halle", 50), ("B-Halle", 40), ("C-Halle", 30)):
                 assert f"OG Großlager / {name} ({n})" in t, name
             for fid in o:
-                assert f"Ordner: {BASIS}/material/ordner/{fid}" in t
+                assert f"Ordner: {BASIS}/materialablage/ordner/{fid}" in t
             assert "… und 20 weitere in diesem Ordner" in t and "… und 0 weitere" not in t, t
             assert t.index("OG Großlager / A-Halle") < t.index("OG Großlager / B-Halle") < t.index("OG Großlager / C-Halle")
             # Dringlichkeit: A und B (früher fällig) ganz, C nur zu 10 Zeilen.
@@ -1407,7 +1407,7 @@ def test_schalter_aus():
                 r = lauf(app)
             assert r["pflege"]["tag"] == T0.isoformat() and r["mails"] is None and not liste and not log(app), r
             code, text = cli(app)
-            assert code == 2 and "ausgeschaltet (Verwaltung → Einstellungen)" in text, text
+            assert code == 2 and "ausgeschaltet (Leitstelle → Einstellungen)" in text, text
             code, text = cli(app, "--stichtag", "2026-11-20")
             assert code == 2 and "Ein echter Lauf gilt immer für heute." in text, text
             code, text = cli(app, "--trocken", "--stichtag", "20.11.2026")
@@ -1730,7 +1730,7 @@ def test_einstellung():
             with app.app_context():
                 from app import einstellungen
                 feld = next(f for f in einstellungen.als_json()["felder"] if f["schluessel"] == "MATERIAL_ERINNERUNGEN")
-            assert feld["gruppe"] == "Material" and feld["art"] == "schalter" and feld["wert"] == "false", feld
+            assert feld["gruppe"] == "Materialablage" and feld["art"] == "schalter" and feld["wert"] == "false", feld
             assert feld["titel"] == "Erinnerungsmails verschicken" and "ab 6 Uhr" in feld["hilfe"]
             assert app.config["MATERIAL_ERINNERUNGEN"] is False
     print("Einstellung bestanden.")
@@ -1930,11 +1930,11 @@ def test_psa_mailtext():
                 f"  {inv[b['id']]}  Testwerk HMS Beta, SN MT-2\n"
                 "    zur Prüfung fällig am 14.11.2026 (in 12 Tagen) – bitte rechtzeitig deinem Materialwart geben.\n"
                 "    Die Eingangsprüfung steht noch aus.\n\n"
-                f"Deine PSA im Überblick: {BASIS}/material/meine-psa\n\n"
-                "Du bekommst diese Mail, weil dir diese Ausrüstung im Modul Material zugeordnet ist. Abbestellen: "
+                f"Deine PSA im Überblick: {BASIS}/materialablage/meine-psa\n\n"
+                "Du bekommst diese Mail, weil dir diese Ausrüstung in der Materialablage zugeordnet ist. Abbestellen: "
                 f"Profil → „Erinnerungen zu meiner PSA“ ({BASIS}/profil).\n")
             assert m.text == soll, m.text
-            assert set(re.findall(r"https://\S+?(?=[)\s])", m.text)) == {f"{BASIS}/material/meine-psa", f"{BASIS}/profil"}
+            assert set(re.findall(r"https://\S+?(?=[)\s])", m.text)) == {f"{BASIS}/materialablage/meine-psa", f"{BASIS}/profil"}
             # Gemischt: Verwalterin in Gliederung A, eigene PSA in B (dort verwaltet sie nicht).
             _, mid = konto(app, k["adm"], "misch@example.org", name="Misch Platzhalter")
             freigeben(k["adm"], gid, mid, "verwalten")
@@ -1942,7 +1942,7 @@ def test_psa_mailtext():
             c = artikel(app, k["adm"], ids["hms"], gb, "MT-3", faellig=T0 - timedelta(days=2))
             zuordnen_sql(app, c["id"], mid)
             m = psa_mail(planen(app), "misch@example.org")
-            assert m.betreff == "strömis.de – Material: Deine PSA (1 überfällig), außerdem 1 überfällig, " \
+            assert m.betreff == "strömis.de – Materialablage: Deine PSA (1 überfällig), außerdem 1 überfällig, " \
                                "1 in 30 Tagen fällig", m.betreff
             assert m.text.index("DEINE PSA") < m.text.index("\nARTIKEL\n") and "MT-3" in m.text
             assert "„Deine PSA“ bekommst du, weil dir diese Ausrüstung zugeordnet ist (abbestellen im Profil)." in m.text
@@ -1950,7 +1950,7 @@ def test_psa_mailtext():
             # Mit einer eigenen ablaufenden Freigabe.
             freigeben(k["adm"], gb, mid, "lesen", bis=T0 + timedelta(days=10))
             m = psa_mail(planen(app), "misch@example.org")
-            assert m.betreff.startswith("strömis.de – Material: Deine PSA (1 überfällig), Deine Freigabe läuft ab, "
+            assert m.betreff.startswith("strömis.de – Materialablage: Deine PSA (1 überfällig), Deine Freigabe läuft ab, "
                                         "außerdem "), m.betreff
             assert m.text.index("DEINE PSA") < m.text.index("DEINE FREIGABEN") < m.text.index("\nARTIKEL\n")
     print("PSA: Mailtext bestanden.")

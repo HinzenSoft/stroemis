@@ -340,7 +340,7 @@ fieldset.mat-rollen { border: 1px solid var(--linie); padding: 4px 12px 10px; ma
 fieldset.mat-rollen legend { font-weight: 700; font-size: .9rem; padding: 0 4px; }
 /* Urkundennummer nur lesend unter dem Häkchen „Prüfer“ – eingetragen wird sie im Profil des Prüfers. */
 fieldset.mat-rollen .mat-urkunde { margin: 0 0 0 26px; font-size: var(--fs-klein); overflow-wrap: anywhere; }
-/* Zustand einer Freigabe im Dialog („wirkt nicht – kein Zugang zum Modul Material“) bricht in der schmalen Spalte um:
+/* Zustand einer Freigabe im Dialog („wirkt nicht – kein Zugang zur Materialablage“) bricht in der schmalen Spalte um:
    Ecken wie ein Kästchen statt einer Pille. */
 #u-freigaben .badge { border-radius: var(--radius); line-height: 1.3; padding: 2px 6px; }
 /* Hinweis, wenn das Häkchen „Prüfer“ Material von „–“ auf „Mitglied“ gehoben hat – unter dem Häkchen eingerückt. */
@@ -1276,7 +1276,7 @@ details.accordion .accordion-body > :first-child { margin-top: 0; } details.acco
 .md-lightbox img { max-width: 96vw; max-height: 92vh; object-fit: contain; cursor: default; }
 .md-lightbox-close {
   /* Kerbe und Kamera (Telefon quer) bleiben frei. Mit der Maus 36 px wie bisher, am Finger 44 px – das × bleibt dabei
-     an derselben Stelle. Gilt auch für die Großansicht im Modul Material (dialog.mat-lightbox). */
+     an derselben Stelle. Gilt auch für die Großansicht in der Materialablage (dialog.mat-lightbox). */
   position: absolute; top: calc(12px + var(--sicher-oben)); right: calc(16px + var(--sicher-rechts)); width: 36px; height: 36px;
   background: none; border: 0; color: var(--weiss); font-size: 2rem; line-height: 1; cursor: pointer;
 }
@@ -2249,7 +2249,7 @@ dialog.us-dlg { width: min(640px, 96vw); }
   body .wiki-shell, body.editing .wiki-shell, body.public .wiki-shell.public { grid-template-columns: min(var(--side-w), 260px) minmax(0, 1fr); }
 }
 
-/* Dateiwahl hinter einem grauen Knopf (Wiki-Import, wie .mat-dateiwahl im Modul Material): daneben, was gewählt ist.
+/* Dateiwahl hinter einem grauen Knopf (Wiki-Import, wie .mat-dateiwahl in der Materialablage): daneben, was gewählt ist.
    Das Dateifeld selbst ist unsichtbar, der Knopf (label) trägt den Fokusrahmen. */
 .dateiwahl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 12px 0 4px; }
 .dateiwahl > label.btn { position: relative; margin: 0; font-size: inherit; }

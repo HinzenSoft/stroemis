@@ -20,8 +20,8 @@ from test_material_trennung import zeilen  # noqa: E402
 from test_material_ueberblick import ordner_neu  # noqa: E402
 from test_wiki_lesemodus import konto  # noqa: E402
 
-NUR_MIT_WIKI = "dir fehlt die Stufe im Wiki"
-FEHLT = "Wiki-Seite nicht gefunden."
+NUR_MIT_WIKI = "dir fehlt die Stufe in der Strömipedia"
+FEHLT = "Seite der Strömipedia nicht gefunden."
 GEHEIM = "Geheimtitel Platzhalter"
 
 
@@ -118,7 +118,7 @@ def test_setzen():
                 (fid,))]
         f = ok(verknuepfen(t.mvw, fid, p.intern["id"]))["formular"]
         assert f["wiki"] == {"seite": p.intern["id"], "titel": "Platzhalter Anleitung Intern", "reichweite": "intern",
-                             "url": f"/wiki/{p.intern['slug']}", "zustand": "ok"} and f["wiki_aendern"]
+                             "url": f"/stroemipedia/{p.intern['slug']}", "zustand": "ok"} and f["wiki_aendern"]
         assert journal() == [({"seite": None}, {"seite": p.intern["id"]})]
         assert "Platzhalter Anleitung" not in json.dumps(zeilen(t.app, "SELECT * FROM mat_audit WHERE entity = 'form'"),
                                                           ensure_ascii=False)
@@ -216,7 +216,7 @@ def test_anleitung_und_rechte():
             assert r.status_code == 200, r.get_json()
             return r.json["pruefung"]["anleitung"], r.get_data(as_text=True)
         a, _ = anleitung(t.pw, e_pw)
-        assert a == {"titel": "Platzhalter Anleitung Intern", "url": f"/wiki/{p.intern['slug']}",
+        assert a == {"titel": "Platzhalter Anleitung Intern", "url": f"/stroemipedia/{p.intern['slug']}",
                      "quelle": f"/api/wiki/pages/{p.intern['slug']}?leise=1"}, a
         for c, pid in ((t.extern, e_ex), (t.neu, e_pw)):
             a, text = anleitung(c, pid)
@@ -230,7 +230,7 @@ def test_anleitung_und_rechte():
         # Öffentliche Seite: ohne Wiki-Stufe über den öffentlichen Endpunkt.
         ok(verknuepfen(t.mvw, fid, p.offen["id"]))
         a, _ = anleitung(t.extern, e_ex)
-        assert a == {"titel": "Platzhalter Anleitung Offen", "url": f"/wiki/{p.offen['slug']}",
+        assert a == {"titel": "Platzhalter Anleitung Offen", "url": f"/stroemipedia/{p.offen['slug']}",
                      "quelle": f"/api/public/pages/{p.offen['slug']}"}, a
         assert t.extern.get(a["quelle"]).status_code == 200 and t.neu.get(a["quelle"]).status_code == 200
         assert anleitung(t.neu, e_pw)[0]["quelle"] == f"/api/public/pages/{p.offen['slug']}"
@@ -315,7 +315,7 @@ def test_oberflaeche_statisch():
     assert "anleitungEinsetzen();" in pr and '${pr.anleitung ? \'<div class="mat-anleitung-platz"></div>\' : ""}' in pr
     # Formularzeile und Seitenwahl
     assert 'f.wiki_aendern ? \'<button type="button" class="lnk" data-act="wiki-waehlen">Ändern …</button>\'' in js
-    assert "Verknüpfen kann, wer im Wiki mindestens Mitglied ist." in js and "Seite Nr. ${esc(w.seite)} – du darfst sie nicht lesen" in js
+    assert "Verknüpfen kann, wer in der Strömipedia mindestens Mitglied ist." in js and "Seite Nr. ${esc(w.seite)} – du darfst sie nicht lesen" in js
     ww = js[js.index("  function wikiWahl(formular, danach) {"):js.index("/* --- Suche ---")]
     assert ww.count('class="btn"') == 1 and "Verknüpfung entfernen" in ww and "setTimeout(suchen, 300)" in ww
     print("Oberfläche (statisch) bestanden.")

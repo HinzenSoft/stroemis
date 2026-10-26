@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set active = 'map' %}
-{% block title %}Spots – strömis.de{% endblock %}
+{% block title %}{{ modul.name.karte }} – strömis.de{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/markercluster/MarkerCluster.css') }}">

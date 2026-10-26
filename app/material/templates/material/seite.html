@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{# Ohne Modulzugang sieht das Konto nirgends „Material“ – der Reiter heißt wie die einzige Ansicht. #}
-{% block title %}{% if nur_psa %}Meine PSA{% else %}Material{% endif %} – strömis.de{% endblock %}
+{# Ohne Modulzugang sieht das Konto nirgends „Materialablage“ – der Reiter heißt wie die einzige Ansicht. #}
+{% block title %}{% if nur_psa %}Meine PSA{% else %}{{ modul.name.material }}{% endif %} – strömis.de{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('material.static', filename='material.css') }}">
 <link rel="stylesheet" href="{{ url_for('material.static', filename='freigaben.css') }}">
@@ -13,10 +13,10 @@
    nur aus, der Server prüft jede Aktion selbst. Den Inhalt baut material.js aus /api/material. #}
 <div class="mat-shell" id="mat-shell">
 {# Ordnerleiste links (material.js füllt sie): in den Ansichten des Bestands neben dem Inhalt, auf schmalen
-   Bildschirmen als Schublade hinter „☰ Ordner“ – wie die Seitenleiste im Wiki. #}
+   Bildschirmen als Schublade hinter „☰ Ordner“ – wie die Seitenleiste in der Strömipedia. #}
 {# Ohne Modulzugang („Meine PSA“, nur_psa) gibt es weder Ordnerleiste noch Modulnavigation. #}
 {% if not nur_psa %}<aside class="mat-side" id="mat-side" aria-label="Ordner" hidden>
-  <div class="mat-side-kopf"><a href="/material/bestand">Ordner</a>
+  <div class="mat-side-kopf"><a href="/materialablage/bestand">Ordner</a>
     <button class="lnk mat-side-zu" type="button" id="mat-side-zu" aria-label="Ordnerleiste schließen">✕</button></div>
   <div id="mat-baumnav"><p class="help">Wird geladen …</p></div>
   {# Filtermenü unter dem Baum (Wunsch vom 25.10.2026): nur die Artikelliste eines Ordners füllt und zeigt es. #}
@@ -28,20 +28,20 @@
 <main class="page breit mat" id="mat" data-ansicht="{{ ansicht }}" data-daten="{{ daten }}" data-darf="{{ darf }}">
   {# Passt die Zeile nicht (Telefon, Fold, Tablet hochkant), ordnet material.js sie um (navAnordnen): Die Reiter rollen
      seitlich in einer Zeile, die Nummernsuche wartet hinter der Lupe und öffnet als eigene Zeile darunter. #}
-  {% if not nur_psa %}<nav class="mat-nav" aria-label="Modul Material">
+  {% if not nur_psa %}<nav class="mat-nav" aria-label="Materialablage">
     <button class="btn secondary small mat-side-auf" type="button" id="mat-side-auf" aria-controls="mat-side"
             aria-expanded="false">☰<span class="mat-side-auf-text"> Ordner</span></button>
     <div class="mat-reiter">
-      <a href="/material" data-nav="dashboard">Übersicht</a>
-      <a href="/material/pruefungen" data-nav="pruefungen">Prüfungen</a>
-      <a href="/material/bestand" data-nav="bestand">Bestand</a>
-      <a href="/material/katalog" data-nav="katalog">Katalog</a>
+      <a href="/materialablage" data-nav="dashboard">Übersicht</a>
+      <a href="/materialablage/pruefungen" data-nav="pruefungen">Prüfungen</a>
+      <a href="/materialablage/bestand" data-nav="bestand">Bestand</a>
+      <a href="/materialablage/katalog" data-nav="katalog">Katalog</a>
     </div>
     <button class="btn secondary small mat-lupe" type="button" id="mat-lupe" aria-controls="mat-suche" aria-expanded="false"
             aria-label="Nummernsuche" title="Nummernsuche" hidden><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"
             focusable="false"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path
             d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
-    <form class="mat-suche" id="mat-suche" action="/material/suche" method="get" role="search">
+    <form class="mat-suche" id="mat-suche" action="/materialablage/suche" method="get" role="search">
       <input type="search" name="q" placeholder="Nummer suchen" title="Serien-, Inventar- oder Herstellernummer – auch Teile davon" aria-label="Nummer suchen: Serien-, Inventar- oder Herstellernummer"
              autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="search">
       <button class="btn secondary small" type="submit">Suchen</button>

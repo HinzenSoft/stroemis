@@ -1,7 +1,7 @@
 """Texte über die volle Breite (Wunsch des Nutzers vom 25.10.2026, „Die Texte gehen nicht über die vorgesehene Breite“):
 python tests/test_material_textbreite.py  oder  pytest
 
-Hinweiskästen (.notice) und Hilfe- bzw. Erklärtexte (.help, .muted, p.small, p.mat-text) im Modul Material haben keine
+Hinweiskästen (.notice) und Hilfe- bzw. Erklärtexte (.help, .muted, p.small, p.mat-text) in der Materialablage haben keine
 eigene Höchstbreite mehr – sie laufen so breit wie die Felder und Tabellen ihres Abschnitts, auf allen Seiten des Moduls.
 Der lange Fließtext im Wiki behält seine Lesebreite (app.css, --lesebreite)."""
 import os

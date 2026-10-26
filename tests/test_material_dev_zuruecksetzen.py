@@ -195,7 +195,7 @@ def test_sperren():
             assert code == 0 and aus.startswith("Probelauf – nichts geändert."), (code, aus)
             assert "mat_item " in aus and "Sicherung nach:" in aus and "sicherung-material-" in aus, aus
             assert "media/material" in aus and "pdf" in aus and f"Version {endversion()}" in aus and "Bleibt: Konten" in aus, aus
-        # BASE_URL der Anwendung (Verwaltung → Einstellungen) zeigt auf die Produktion, die Umgebung auf dev.
+        # BASE_URL der Anwendung (Leitstelle → Einstellungen) zeigt auf die Produktion, die Umgebung auf dev.
         with app.app_context():
             from app import db
             db.execute("INSERT INTO einstellungen (schluessel, wert, geaendert_am) VALUES ('BASE_URL', "
@@ -226,7 +226,7 @@ def test_zuruecksetzen():
         with umwelt(app, **DEV):
             aus, code = aufrufen(app, "--ja-alles-loeschen")
         assert code == 0, (code, aus)
-        assert "Modul Material zurückgesetzt. Sicherung:" in aus and "docker compose restart" in aus, aus
+        assert "Materialablage zurückgesetzt. Sicherung:" in aus and "docker compose restart" in aus, aus
         assert "demo-wart-a@example.invalid (DEMO-Materialwart Flussland)" in aus and "Nutzerverwaltung" in aus, aus
         (ordner,) = sicherungen(app)
         sicherung = os.path.join(tmp, ordner)

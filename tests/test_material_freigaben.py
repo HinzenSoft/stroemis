@@ -281,7 +281,7 @@ def test_grenzen():
         # geschrieben; zuordnen ließe sich ihm dagegen ein Artikel (test_material_stufen).
         stufenlos, stufenlos_id = neues_konto(app, "stufenlos@example.org", name="Stufenlos Test", stufe=0)
         r = erteilen(w, gid, user_id=stufenlos_id, grundrecht="lesen")
-        assert r.status_code == 409 and "keinen Zugang zum Modul Material" in r.json["error"], r.get_json()
+        assert r.status_code == 409 and "keinen Zugang zur Materialablage" in r.json["error"], r.get_json()
         assert grant(app, gid, stufenlos_id, "lesen") is None
 
         # Nr. 8 und 9: Enddaten. Ohne Ende („“ oder null) nur mit Grundrecht am Anker – das hat der Prüfer (lesen an
@@ -858,10 +858,10 @@ def test_meine_ohne_zugang():
         freigeben(adm, lager, k["nutzer_id"], "lesen")
         assert k["nutzer"].get("/api/material/start").status_code == 403
         x = [x for x in k["nutzer"].get("/api/material/freigaben/meine").json["freigaben"] if x["gueltig"]][0]
-        assert (x["wirkt"], x["wirkt_nicht"]) == (False, "kein Zugang zum Modul Material"), x
+        assert (x["wirkt"], x["wirkt_nicht"]) == (False, "kein Zugang zur Materialablage"), x
         z = [f for f in adm.get("/api/material/freigaben", query_string={"user_id": k["nutzer_id"]}).json["freigaben"]
              if f["gueltig"]][0]
-        assert (z["wirkt"], z["wirkt_nicht"], z["konto"]["zugang"]) == (False, "kein Zugang zum Modul Material", False), z
+        assert (z["wirkt"], z["wirkt_nicht"], z["konto"]["zugang"]) == (False, "kein Zugang zur Materialablage", False), z
         sql(app, "DELETE FROM mat_folder_grant WHERE folder_id = ? AND user_id = ? AND permission = 'lesen'",
             (lager, k["nutzer_id"]))
         # Höchstens drei Verwalter, nach Namen.

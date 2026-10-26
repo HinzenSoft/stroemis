@@ -399,15 +399,15 @@ def test_fuehrungskraft_nur_lesen():
             gelesen += 1
         assert gelesen >= 42, gelesen                      # so viele waren es in Lieferung 4
         r = f.get(f"/m/{token}")
-        assert r.headers["Location"].endswith(f"/material/artikel/{a1['id']}"), r.headers["Location"]
+        assert r.headers["Location"].endswith(f"/materialablage/artikel/{a1['id']}"), r.headers["Location"]
         # Die Produktmeldungen liest sie – alle, aber ohne Knöpfe zum Abarbeiten.
         r = f.get("/api/material/meldungen")
         assert r.json["alle"] and not r.json["bearbeiten"] and [m["id"] for m in r.json["meldungen"]] == [mid], r.get_json()
         assert f.get(f"/api/material/meldungen/{mid}").json["meldung"]["model"] == "Gurt Omega"
         # Fremde Entwürfe, festgeschriebene Protokolle und Sammelprotokolle sieht sie auch.
         assert f.get(f"/api/material/pruefungen/{entwurf}").json["pruefung"]["entwurf"]
-        assert f.get(f"/material/pruefung/{fest}/pdf").mimetype == "application/pdf"
-        assert f.get(f"/material/durchgang/{rid}/sammelprotokoll").mimetype == "application/pdf"
+        assert f.get(f"/materialablage/pruefung/{fest}/pdf").mimetype == "application/pdf"
+        assert f.get(f"/materialablage/durchgang/{rid}/sammelprotokoll").mimetype == "application/pdf"
         assert _stand(app) == vorher
     print("Führungskraft nur lesend bestanden.")
 
@@ -432,7 +432,7 @@ def test_qr_ausgesondert():
 
         def seite_ueber_qr(x):
             r = f.get(f"/m/{token(x)}")
-            assert r.status_code == 302 and urlparse(r.headers["Location"]).path == f"/material/artikel/{x['id']}", r.headers
+            assert r.status_code == 302 and urlparse(r.headers["Location"]).path == f"/materialablage/artikel/{x['id']}", r.headers
             r = f.get(r.headers["Location"])
             assert r.status_code == 200
             return r.get_data(as_text=True)
@@ -466,9 +466,9 @@ def test_qr_ausgesondert():
         ziel = urlparse(r.headers["Location"])
         assert r.status_code == 302 and ziel.path == "/login" and parse_qs(ziel.query)["next"] == [f"/m/{token(a)}"], r.headers
         assert k["nutzer"].get(f"/m/{token(a)}").status_code == 403
-        r = k["nutzer"].get(f"/material/artikel/{a['id']}")
+        r = k["nutzer"].get(f"/materialablage/artikel/{a['id']}")
         assert r.status_code == 403 and "AUSGESONDERT" not in r.get_data(as_text=True)
-        r = app.test_client().get(f"/material/artikel/{a['id']}")
+        r = app.test_client().get(f"/materialablage/artikel/{a['id']}")
         assert r.status_code == 302 and "AUSGESONDERT" not in r.get_data(as_text=True)
     print("QR-Ziel ausgesondert bestanden.")
 

@@ -143,7 +143,7 @@ def test_ohne_zustaendige():
         r = beantragen(t.adm, t.fb, serial_no="AN-B3")
         assert r.status_code == 201 and r.json["antrag"]["ohne_zustaendige"] is True, r.get_json()
         assert [m[0] for m in mails] == ["katalog@example.org"], mails
-        assert "keinen Materialwart mit Freigabe „verwalten“" in mails[0][2] and "/material/bestand/antraege" in mails[0][2]
+        assert "keinen Materialwart mit Freigabe „verwalten“" in mails[0][2] and "/materialablage/bestand/antraege" in mails[0][2]
         assert zeilen(t.app, "SELECT COUNT(*) AS n FROM mat_audit WHERE action = 'antrag_gestellt'")[0]["n"] == 1
         assert zurueckziehen(t.adm, r.json["antrag"]["id"]).status_code == 200
         # Der Antragsteller ist der einzige Zuständige: keine Mail, er entscheidet selbst.
@@ -708,12 +708,12 @@ def test_produktaenderung_am_artikel():
         assert r.status_code == 200, r.get_json()
         j = [e for e in lesen(t.w, t.k1)["journal"] if e["entity"] == "product" and e["action"] == "geaendert"]
         assert j and j[0]["nachher"]["norm"] == "EN 362:Platzhalter", j
-        text = " ".join(_pdf_text(t.w.get(f"/material/artikel/{t.k1}/lebenslauf.pdf").data).split())
+        text = " ".join(_pdf_text(t.w.get(f"/materialablage/artikel/{t.k1}/lebenslauf.pdf").data).split())
         assert "Produkt geändert" in text and "EN 362:Platzhalter" in text, text
         # Rückrufe stehen im eigenen Abschnitt, nicht als Journalzeile des Produkts.
         t.mv.post(f"/api/material/produkte/{t.ids['hms']}/rueckrufe", headers=H,
                   json={"title": "Platzhalter-Rückruf E8", "serials": "AN-100\nAN-B1", "mail": False})
-        text = " ".join(_pdf_text(t.w.get(f"/material/artikel/{t.k1}/lebenslauf.pdf").data).split())
+        text = " ".join(_pdf_text(t.w.get(f"/materialablage/artikel/{t.k1}/lebenslauf.pdf").data).split())
         assert "Rückruf angelegt" not in text and "AN-B1" not in text, text
         # Materialart mit Artikeln bleibt 409, Löschen eines Produkts mit Artikeln auch.
         assert t.mv.put(f"/api/material/produkte/{t.ids['hms']}", headers=H,
@@ -725,15 +725,15 @@ def test_produktaenderung_am_artikel():
 def test_seiten():
     with post(), tempfile.TemporaryDirectory() as tmp:
         t = aufbau(tmp)
-        r = t.w.get("/material/katalog/meldungen?bereich=antraege&status=erledigt")
-        assert r.status_code == 302 and r.headers["Location"].endswith("/material/bestand/antraege?status=erledigt"), r
-        r = t.w.get("/material/katalog/meldungen?bereich=antraege")
-        assert r.headers["Location"].endswith("/material/bestand/antraege")
-        r = t.w.get("/material/bestand/antraege")
+        r = t.w.get("/materialablage/katalog/meldungen?bereich=antraege&status=erledigt")
+        assert r.status_code == 302 and r.headers["Location"].endswith("/materialablage/bestand/antraege?status=erledigt"), r
+        r = t.w.get("/materialablage/katalog/meldungen?bereich=antraege")
+        assert r.headers["Location"].endswith("/materialablage/bestand/antraege")
+        r = t.w.get("/materialablage/bestand/antraege")
         assert r.status_code == 200 and "antraege" in r.get_data(as_text=True)
         assert "antraege_offen" not in t.mv.get("/api/material/meldungen?status=offen").json
         from app.material.services import mailprotokoll
-        assert mailprotokoll.BEZUG_PFAD["change"] == "/material/bestand/antraege"
+        assert mailprotokoll.BEZUG_PFAD["change"] == "/materialablage/bestand/antraege"
     print("Seiten bestanden.")
 
 
@@ -746,11 +746,11 @@ def test_oberflaeche_statisch():
     js = open(os.path.join(WURZEL, "app/material/static/material.js"), encoding="utf-8").read()
     css = open(os.path.join(WURZEL, "app/material/static/material.css"), encoding="utf-8").read()
     best = js[js.index("async function bestand()"):js.index("/* --- Foto im Dialog")]
-    assert ('<a class="btn secondary mat-mit-zahl" href="/material/bestand/antraege">Änderungsanträge'
+    assert ('<a class="btn secondary mat-mit-zahl" href="/materialablage/bestand/antraege">Änderungsanträge'
             '<span class="mat-meldezahl" id="bst-antraege" hidden></span></a>') in best
     assert "antraegeZaehlen(" in best
     seite = js[js.index("async function antraegeSeite()"):js.index("function antragBestaetigenDialog")]
-    assert '<a class="btn secondary" href="/material/bestand">Bestand</a>' in seite
+    assert '<a class="btn secondary" href="/materialablage/bestand">Bestand</a>' in seite
     karte = seite[seite.index("function antragKarte("):]
     assert 'class="btn"' not in karte and "btn danger" not in karte and 'data-act="bestaetigen"' in karte
     best_dlg = js[js.index("function antragBestaetigenDialog"):js.index("function antragAblehnenDialog")]
@@ -775,7 +775,7 @@ def test_oberflaeche_statisch():
     artikel = js[js.index("async function artikel()"):js.index("function artikelDialog(a)")]
     assert "Seriennummer und Herstellung stehen seit der ersten Prüfung fest – eine Abweichung beantragst du" not in js
     assert "darf.pruefen" in artikel and 'data-act="entscheiden"' not in artikel
-    assert '/material/bestand/antraege">Entscheiden …</a>' in js
+    assert '/materialablage/bestand/antraege">Entscheiden …</a>' in js
     assert "btn ghost" not in js
     assert ".mat-bereiche" not in css
     assert "antraege: \"bestand\"" in js and "antraege: antraegeSeite" in js

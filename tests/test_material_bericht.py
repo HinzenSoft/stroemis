@@ -349,9 +349,9 @@ def test_rechte_und_eingaben():
         app, k, o, a = aufbau(tmp)
         f, w, ext, J = k["fuehrung"], k["wart"], o["ext"], o["J"]
         gid = o["gid"]
-        wege = [f"/api/material/ordner/{gid}/bericht", f"/material/ordner/{gid}/bericht",
-                f"/material/ordner/{gid}/bericht-{J}.pdf", f"/material/ordner/{gid}/bericht-{J}-mit-pruefern.pdf",
-                f"/material/export/{gid}-pruefungen-{J}.csv", f"/material/export/{gid}-pruefungen-{J}-mit-pruefern.csv"]
+        wege = [f"/api/material/ordner/{gid}/bericht", f"/materialablage/ordner/{gid}/bericht",
+                f"/materialablage/ordner/{gid}/bericht-{J}.pdf", f"/materialablage/ordner/{gid}/bericht-{J}-mit-pruefern.pdf",
+                f"/materialablage/export/{gid}-pruefungen-{J}.csv", f"/materialablage/export/{gid}-pruefungen-{J}-mit-pruefern.csv"]
         # Führungskraft (lesen) und Materialwart (verwalten): alles 200; die Seite ist der Rahmen mit der Ansicht „bericht“.
         for c in (f, w, k["adm"], k["katalog"]):
             for url in wege:
@@ -359,7 +359,7 @@ def test_rechte_und_eingaben():
                 assert r.status_code == 200, (url, r.status_code)
                 if url != wege[1]:                      # die Seite ist nur der Rahmen; Daten, PDF und CSV nie zwischenspeichern
                     assert "no-store" in r.headers["Cache-Control"], url
-        r = f.get(f"/material/ordner/{gid}/bericht")
+        r = f.get(f"/materialablage/ordner/{gid}/bericht")
         assert 'data-ansicht="bericht"' in r.get_data(as_text=True)
         # Externer Prüfer (nur pruefen): 403 – er sieht den Ordner, bekommt aber keinen Bericht (wie beim Export).
         r = ext.get(wege[0])
@@ -369,9 +369,9 @@ def test_rechte_und_eingaben():
         # Fremde Gliederung und Systemordner: 404 wie Unbekanntes; ohne Modulzugang 403; ohne Anmeldung 401 bzw. Anmeldung.
         for fid in (o["gfremd"], o["system"]["gesperrt"], 999999):
             assert w.get(f"/api/material/ordner/{fid}/bericht").status_code == 404, fid
-            assert w.get(f"/material/ordner/{fid}/bericht-{J}.pdf").status_code == 404, fid
-            assert w.get(f"/material/export/{fid}-pruefungen-{J}.csv").status_code == 404, fid
-            assert w.get(f"/material/ordner/{fid}/bericht").status_code == 404, fid
+            assert w.get(f"/materialablage/ordner/{fid}/bericht-{J}.pdf").status_code == 404, fid
+            assert w.get(f"/materialablage/export/{fid}-pruefungen-{J}.csv").status_code == 404, fid
+            assert w.get(f"/materialablage/ordner/{fid}/bericht").status_code == 404, fid
         assert k["adm"].get(f"/api/material/ordner/{o['system']['gesperrt']}/bericht").status_code == 404
         assert k["nutzer"].get(wege[0]).status_code == 403 and k["nutzer"].get(wege[2]).status_code == 403
         fremd = app.test_client()
@@ -384,8 +384,8 @@ def test_rechte_und_eingaben():
             assert r.status_code == 400 and "Jahr" in r.json["error"], (jahr, r.get_json())
         assert f.get(wege[0], query_string={"pruefer": "vielleicht"}).status_code == 400
         assert f.get(wege[0], query_string={"jahr": str(J - 1), "pruefer": "nein"}).status_code == 200
-        assert f.get(f"/material/ordner/{gid}/bericht-1800.pdf").status_code == 400
-        assert f.get(f"/material/export/{gid}-pruefungen-2101.csv").status_code == 400
+        assert f.get(f"/materialablage/ordner/{gid}/bericht-1800.pdf").status_code == 400
+        assert f.get(f"/materialablage/export/{gid}-pruefungen-2101.csv").status_code == 400
         # Eine Sichtberechnung je Anfrage (Muster test_material_trennung.test_abfragezahl).
         abfragen = []
         alt = db_mod.get_db
@@ -408,7 +408,7 @@ def test_rechte_und_eingaben():
             assert len([q for q in abfragen if "WITH RECURSIVE baum" in q]) <= 2, [q[:80] for q in abfragen if "RECURSIVE" in q]
         # Ordnername mit Markup: wörtlich im PDF-Text, keine Links aus Daten.
         gx, _ = gliederung(k["adm"], "OG <img src=x onerror=alert(1)>")
-        r, seiten = pdf_text(k["adm"], f"/material/ordner/{gx}/bericht-{J}.pdf", os.path.join(tmp, "x.pdf"))
+        r, seiten = pdf_text(k["adm"], f"/materialablage/ordner/{gx}/bericht-{J}.pdf", os.path.join(tmp, "x.pdf"))
         text = _flach(" ".join(seiten))
         assert "<img src=x onerror=alert(1)>" in text, text[:600]
         cd = r.headers["Content-Disposition"]
@@ -441,13 +441,13 @@ def test_pdf_und_csv():
         pfad = os.path.join(tmp, "bericht.pdf")
         vorher = set(os.listdir(os.path.join(tmp, "pdf"))) if os.path.isdir(os.path.join(tmp, "pdf")) else set()
         journal_vorher = journal_zahl(app)
-        r, seiten = pdf_text(f, f"/material/ordner/{gid}/bericht-{J}.pdf", pfad)
+        r, seiten = pdf_text(f, f"/materialablage/ordner/{gid}/bericht-{J}.pdf", pfad)
         cd = r.headers["Content-Disposition"]
         # DEMO enthalten: Präfix im Dateinamen, [DEMO] im Kopf, Zahl im Bericht; sonst Titel, Fuß, Blöcke.
         assert cd.startswith("inline") and f"DEMO-Jahresbericht_OG Berichtstadt_{J}.pdf" in cd, cd
         assert r.headers["Content-Security-Policy"] == CSP_PDF and "no-store" in r.headers["Cache-Control"]
         text = _flach(" ".join(seiten))
-        for wert in (f"[DEMO] Jahresbericht Material OG Berichtstadt {J}", "kein Prüfnachweis", "nicht festgeschrieben",
+        for wert in (f"[DEMO] Jahresbericht OG Berichtstadt {J}", "kein Prüfnachweis", "nicht festgeschrieben",
                      "Bestand zum Stichtag", "Bewegungen im Jahr", "Prüfabdeckung", "Prüfdurchgänge", "Jahresprüfung Fahrzeug",
                      "Sperren und Freigaben", "Aussonderungen im Jahr", "Mangelmeldungen", "Rückrufe", "Platzhalter Rückruf",
                      "https://www.example.org/rueckruf", "Ausblick", "Enthält 1 DEMO-Artikel", "OG Unterstadt Gliederung",
@@ -473,17 +473,17 @@ def test_pdf_und_csv():
             lauf = subprocess.run([ST_VERA, pfad], capture_output=True, text=True, timeout=300)
             assert lauf.returncode == 0 and "PASS" in lauf.stdout, (lauf.returncode, lauf.stdout[-800:], lauf.stderr[-800:])
         # Mit Haken: Prüferliste und Aussonderer, eigener Dateiname.
-        r, seiten = pdf_text(f, f"/material/ordner/{gid}/bericht-{J}-mit-pruefern.pdf", pfad)
+        r, seiten = pdf_text(f, f"/materialablage/ordner/{gid}/bericht-{J}-mit-pruefern.pdf", pfad)
         assert f"DEMO-Jahresbericht_OG Berichtstadt_{J}-mit-pruefern.pdf" in r.headers["Content-Disposition"]
         text = _flach(" ".join(seiten))
         assert "Prüfer im Jahr" in text and re.search(r"\bpruefer\b", text) and "1012-4711" in text and "durch wart" in text, text[-2500:]
         # Vorjahr als PDF: ein anderes Jahr im Titel.
-        r, seiten = pdf_text(f, f"/material/ordner/{gid}/bericht-{J - 1}.pdf", pfad)
+        r, seiten = pdf_text(f, f"/materialablage/ordner/{gid}/bericht-{J - 1}.pdf", pfad)
         assert f"OG Berichtstadt {J - 1}" in _flach(seiten[0])
         # CSV: Spalten laut bericht.CSV_SPALTEN, eine Zeile je Prüfung und Aussonderung des Jahres (berichtigte Originale
         # nicht), Formelschutz, kritischer Mangel, Berichtigung von, Prüfer nur mit Haken.
         from app.material.services import bericht as dienst
-        r = f.get(f"/material/export/{gid}-pruefungen-{J}.csv")
+        r = f.get(f"/materialablage/export/{gid}-pruefungen-{J}.csv")
         assert r.status_code == 200 and r.mimetype == "text/csv", r.status_code
         cd = r.headers["Content-Disposition"]
         assert cd.startswith("attachment") and f"Pruefungen_OG Berichtstadt_{J}.csv" in cd, cd
@@ -508,12 +508,12 @@ def test_pdf_und_csv():
         roh = r.data.decode("utf-8-sig")
         assert "1012-4711" not in roh and "pruefer" not in roh and ";wart;" not in roh
         # Mit Haken: beide Spalten gefüllt.
-        r = f.get(f"/material/export/{gid}-pruefungen-{J}-mit-pruefern.csv")
+        r = f.get(f"/materialablage/export/{gid}-pruefungen-{J}-mit-pruefern.csv")
         assert f"Pruefungen_OG Berichtstadt_{J}-mit-pruefern.csv" in r.headers["Content-Disposition"]
         kopf, zeilen = csv_lesen(r.data)
         assert {(z["Prüfer"], z["Urkundennummer"]) for z in zeilen} == {("pruefer", "1012-4711"), ("wart", "")}, zeilen
         # Vorjahr: nur die Eingangsprüfung.
-        kopf, zeilen = csv_lesen(f.get(f"/material/export/{gid}-pruefungen-{J - 1}.csv").data)
+        kopf, zeilen = csv_lesen(f.get(f"/materialablage/export/{gid}-pruefungen-{J - 1}.csv").data)
         assert len(zeilen) == 1 and zeilen[0]["Prüfart"] == "Eingangsprüfung" and zeilen[0]["Datum"] == f"15.06.{J - 1}"
     print("PDF und CSV bestanden.")
 
@@ -543,7 +543,7 @@ def test_kappung():
         b = bericht(w, gid)
         assert len(b["pruefungen"]["nicht_geprueft"]) == n and "gekappt" not in b["pruefungen"]
         pfad = os.path.join(tmp, "viel.pdf")
-        r, seiten = pdf_text(w, f"/material/ordner/{gid}/bericht-{J}.pdf", pfad)
+        r, seiten = pdf_text(w, f"/materialablage/ordner/{gid}/bericht-{J}.pdf", pfad)
         text = _flach(" ".join(seiten))
         assert "und 100 weitere Artikel" in text and f"höchstens {dienst.KAPPUNG} Zeilen je Liste" in text, text[-600:]
         assert text.count("M-9") == dienst.KAPPUNG, text.count("M-9")
@@ -565,7 +565,7 @@ def test_kappung():
                                                          for r in b["rueckrufe"]), [r["betroffen"] for r in b["rueckrufe"]]
         import time
         t0 = time.monotonic()
-        r, seiten = pdf_text(w, f"/material/ordner/{gid}/bericht-{J}.pdf", pfad)
+        r, seiten = pdf_text(w, f"/materialablage/ordner/{gid}/bericht-{J}.pdf", pfad)
         dauer = time.monotonic() - t0
         text = _flach(" ".join(seiten))
         assert text.count("M-9") <= dienst.KAPPUNG_GESAMT, text.count("M-9")
@@ -618,7 +618,7 @@ def test_rueckruf_ausblick_kategorien():
 def test_oberflaeche():
     """Statisch (Browserprüfung P4-L1): Tab-Titel schon beim ersten Laden; erster Aufruf gescheitert → Meldung mit
     Jahr-Auswahl (nicht nur eine rote Zeile); Sprungmarken mit festen ids; Rückruf-Artikel aufklappbar; Datumsfehler
-    unterscheidet Format und ungültigen Tag, das Feld trägt aria-invalid. Fehlerseite unter /material führt zur
+    unterscheidet Format und ungültigen Tag, das Feld trägt aria-invalid. Fehlerseite unter /materialablage führt zur
     Material-Übersicht."""
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
@@ -637,11 +637,11 @@ def test_oberflaeche():
     assert "bitte als TT.MM.JJJJ angeben" in datum and 'feld.removeAttribute("aria-invalid")' in datum
     with tempfile.TemporaryDirectory() as tmp:
         app, k = umgebung(tmp)
-        r = k["wart"].get("/material/ordner/999999/bericht")
+        r = k["wart"].get("/materialablage/ordner/999999/bericht")
         text = r.get_data(as_text=True)
-        assert r.status_code == 404 and '<a href="/material">Zur Material-Übersicht</a>' in text and "Zum Wiki" not in text, text[-500:]
-        r = k["wart"].get("/material/gibt-es-nicht")
-        assert r.status_code == 404 and "Zur Material-Übersicht" in r.get_data(as_text=True)
+        assert r.status_code == 404 and '<a href="/materialablage">Zur Übersicht der Materialablage</a>' in text and "Zur Strömipedia" not in text, text[-500:]
+        r = k["wart"].get("/materialablage/gibt-es-nicht")
+        assert r.status_code == 404 and "Zur Übersicht der Materialablage" in r.get_data(as_text=True)
     print("Oberfläche bestanden.")
 
 

@@ -24,16 +24,19 @@
 
   /* Rechte je Modul: Jeder Nutzer hat in jedem der fünf Module eine Stufe – kein Zugriff,
      Mitglied oder Verwaltung. Was die Stufe im Modul bedeutet, steht hier an EINER Stelle und
-     erscheint als Titel am Auswahlfeld, in der Tabelle wie im Dialog. Im Modul Verwaltung gibt
+     erscheint als Titel am Auswahlfeld, in der Tabelle wie im Dialog. In der Leitstelle gibt
      es kein „Mitglied“: Nutzer, Rechte und Einstellungen pflegt man ganz oder gar nicht.
-     Im Modul Material ist die Stufe der Zugang (Mitglied) bzw. die Material-Verwaltung; den Bestand
-     zeigen einem Mitglied erst Freigaben, die der Verwalter eines Ordners vergibt. */
+     In der Materialablage ist die Stufe der Zugang (Mitglied) bzw. die Material-Verwaltung; den Bestand
+     zeigen einem Mitglied erst Freigaben, die der Verwalter eines Ordners vergibt.
+     Die sichtbaren Namen (t) kommen aus app/module.py (STROEMIS.module) – die Schlüssel k bleiben. */
+  const NAME = (STROEMIS.module || {}).name || {};
+  const PFAD = (STROEMIS.module || {}).pfad || {};
   const MODULE = [
-    { k: "karte", t: "Spots", hilfe: "Mitglied: eigene Alben anlegen und bearbeiten. Verwaltung: alle Alben." },
-    { k: "wiki", t: "Wiki", hilfe: "Ohne Zugriff (–): nur die öffentlich freigegebenen Seiten lesen. Mitglied: eigene und freigegebene Seiten. Verwaltung: alle Seiten, beschränkte lesen, veröffentlichen, HTML-Bausteine, Ersteller ändern." },
-    { k: "pruefungen", t: "Prüfungen", hilfe: "Mitglied: Prüfungen abnehmen (Prüfer). Verwaltung: zusätzlich Kataloge pflegen und jeden Lehrgang leiten." },
-    { k: "material", t: "Material", hilfe: "Mitglied: das Modul nutzen – Katalog, Suche, Profil; Bestand nur über Freigaben, die der Verwalter eines Ordners vergibt. Verwaltung: zusätzlich Produktkatalog pflegen (Kategorien, Produkte, Dokumente, Prüfformulare, Meldungen, Rückrufe), alle Bestände aller Gliederungen, Gliederungen anlegen, jede Freigabe. Prüfen nur mit Häkchen „Prüfer“, Urkundennummer und Prüffreigabe." },
-    { k: "verwaltung", t: "Verwaltung", nurVoll: true,
+    { k: "karte", t: NAME.karte, hilfe: "Mitglied: eigene Alben anlegen und bearbeiten. Verwaltung: alle Alben." },
+    { k: "wiki", t: NAME.wiki, hilfe: "Ohne Zugriff (–): nur die öffentlich freigegebenen Seiten lesen. Mitglied: eigene und freigegebene Seiten. Verwaltung: alle Seiten, beschränkte lesen, veröffentlichen, HTML-Bausteine, Ersteller ändern." },
+    { k: "pruefungen", t: NAME.pruefungen, hilfe: "Mitglied: Prüfungen abnehmen (Prüfer). Verwaltung: zusätzlich Kataloge pflegen und jeden Lehrgang leiten." },
+    { k: "material", t: NAME.material, hilfe: "Mitglied: die Materialablage nutzen – Katalog, Suche, Profil; Bestand nur über Freigaben, die der Verwalter eines Ordners vergibt. Verwaltung: zusätzlich Produktkatalog pflegen (Kategorien, Produkte, Dokumente, Prüfformulare, Meldungen, Rückrufe), alle Bestände aller Gliederungen, Gliederungen anlegen, jede Freigabe. Prüfen nur mit Häkchen „Prüfer“, Urkundennummer und Prüffreigabe." },
+    { k: "verwaltung", t: NAME.verwaltung, nurVoll: true,
       hilfe: "Verwaltung: Nutzer, Rechte und Einstellungen – schließt alle Rechte in allen Modulen ein." },
   ];
   const STUFEN = [[0, "–"], [1, "Mitglied"], [2, "Verwaltung"]];
@@ -68,7 +71,7 @@
 
   /* Unter dem Material-Feld: das Häkchen „Prüfer“ (gesetzt im Dialog „Bearbeiten“; gelb, solange die
      Urkundennummer fehlt – die trägt der Prüfer selbst im Profil ein) und klein die Zahl gültiger
-     Freigaben. Gelb, was nicht wirkt: Häkchen oder Freigaben ohne Stufe im Modul Material, eine Stufe
+     Freigaben. Gelb, was nicht wirkt: Häkchen oder Freigaben ohne Stufe in der Materialablage, eine Stufe
      ohne Namen – beides gibt keinen Zugang. */
   function rechtZelle(m, u) {
     const feld = rechtFeld(m, u.rechte, { eigenes: u.id === STROEMIS.user.id, konto: u });
@@ -78,11 +81,11 @@
     if (u.mat_pruefer && u.urkunde_gueltig) marken.push(`<span class="badge grey" title="Prüfer (Sachkundiger), Urkundennummer ${S.esc(u.urkundennummer)}">Prüfer</span>`);
     else if (u.mat_pruefer) marken.push('<span class="badge urkunde-fehlt" title="Häkchen „Prüfer“ gesetzt, aber noch keine Urkundennummer – die trägt der Prüfer selbst im Profil ein. Bis dahin darf er nicht prüfen.">Prüfer – Urkunden&shy;nummer fehlt</span>');
     if (!stufe && (u.mat_pruefer || n)) {
-      marken.push('<span class="badge kein-zugang" title="Ohne Stufe Mitglied oder Verwaltung im Modul Material wirken Häkchen und Freigaben nicht.">wirkt nicht – kein Zugang</span>');
+      marken.push('<span class="badge kein-zugang" title="Ohne Stufe Mitglied oder Verwaltung in der Materialablage wirken Häkchen und Freigaben nicht.">wirkt nicht – kein Zugang</span>');
     } else if (stufe && !String(u.name || "").trim()) {
-      marken.push('<span class="badge kein-zugang" title="Im Modul Material steht jeder mit Namen in Journal und Protokollen – ohne Namen kein Zugang.">ohne Namen – kein Zugang</span>');
+      marken.push('<span class="badge kein-zugang" title="In der Materialablage steht jeder mit Namen in Journal und Protokollen – ohne Namen kein Zugang.">ohne Namen – kein Zugang</span>');
     }
-    if (n) marken.push(`<span class="recht-klein" title="Gültige Freigaben im Modul Material – vergeben am Ordner (Bestand → Ordner → Bearbeiten → Freigaben)">${n} Frei&shy;gabe${n === 1 ? "" : "n"}</span>`);
+    if (n) marken.push(`<span class="recht-klein" title="Gültige Freigaben in der Materialablage – vergeben am Ordner (Bestand → Ordner → Bearbeiten → Freigaben)">${n} Frei&shy;gabe${n === 1 ? "" : "n"}</span>`);
     return feld + (marken.length ? `<div class="recht-marken">${marken.join(" ")}</div>` : "");
   }
 
@@ -204,21 +207,21 @@
       <label>Telefon</label><input type="tel" id="u-phone" value="${S.esc(u.phone)}">
       <label>Rechte</label>
       <div class="rechte-reihe">${MODULE.map((m) => `<div><label for="u-r-${m.k}">${m.t}</label>${rechtFeld(m, rechte, { id: "u-r-" + m.k, eigenes, konto: u })}</div>`).join("")}</div>
-      <div class="help">„–“ kein Zugriff (im Wiki: nur die öffentlichen Seiten lesen) · „Mitglied“ eigene Inhalte, bei Prüfungen: Prüfungen abnehmen,
-        bei Material: das Modul nutzen (Bestand über Freigaben je Ordner) · „Verwaltung“ alles im Modul, bei Material auch
-        Produktkatalog und alle Bestände. Verwaltung im Modul „Verwaltung“ schließt alle Rechte ein.
+      <div class="help">„–“ kein Zugriff (in der Strömipedia: nur die öffentlichen Seiten lesen) · „Mitglied“ eigene Inhalte, bei den Riegenkarten:
+        Prüfungen abnehmen, bei der Materialablage: sie nutzen (Bestand über Freigaben je Ordner) · „Verwaltung“ alles im Modul,
+        bei der Materialablage auch Produktkatalog und alle Bestände. Verwaltung in der Leitstelle schließt alle Rechte ein.
         Was eine Stufe genau umfasst, steht als Hinweis am Feld.</div>
-      <fieldset class="mat-rollen"><legend>Modul Material</legend>
+      <fieldset class="mat-rollen"><legend>Materialablage</legend>
         <label class="inline"><input type="checkbox" id="u-mat-pruefer" ${u.mat_pruefer ? "checked" : ""}> Prüfer (Sachkundiger, Qualifikation 1012)</label>
         <p class="mat-urkunde" ${u.mat_pruefer ? "" : "hidden"}>${urkundeLesend(u)}</p>
-        <p class="help mat-stufe-auto" role="status" hidden>Material steht jetzt auf „Mitglied“ – ohne Stufe wirkt das Häkchen nicht. Gespeichert wird beim Speichern.</p>
-        <div class="help">Das Häkchen wirkt nur mit Stufe „Mitglied“ oder „Verwaltung“ im Modul Material. Urkundennummer und Unterschrift
+        <p class="help mat-stufe-auto" role="status" hidden>Materialablage steht jetzt auf „Mitglied“ – ohne Stufe wirkt das Häkchen nicht. Gespeichert wird beim Speichern.</p>
+        <div class="help">Das Häkchen wirkt nur mit Stufe „Mitglied“ oder „Verwaltung“ in der Materialablage. Urkundennummer und Unterschrift
           trägt der Prüfer selbst in seinem Profil ein („Urkundennummer und Unterschrift“); beides steht später auf jedem Prüfprotokoll.
           Prüfen kann er erst mit Urkundennummer und einer Prüffreigabe am Ordner (befristet nur für externe Prüfer) – auch die
-          Verwaltung. Mit Material braucht das Konto einen Namen.</div>
+          Verwaltung. Mit der Materialablage braucht das Konto einen Namen.</div>
       </fieldset>
-      ${u.id ? `<fieldset class="mat-rollen"><legend>Freigaben im Modul Material</legend>
-        <p class="notice u-freigaben-kein-zugang" ${(rechte.material | 0) || !(u.mat_freigaben | 0) ? "hidden" : ""}>Diese Freigaben wirken nicht – das Konto hat keinen Zugang zum Modul Material.</p>
+      ${u.id ? `<fieldset class="mat-rollen"><legend>Freigaben in der Materialablage</legend>
+        <p class="notice u-freigaben-kein-zugang" ${(rechte.material | 0) || !(u.mat_freigaben | 0) ? "hidden" : ""}>Diese Freigaben wirken nicht – das Konto hat keinen Zugang zur Materialablage.</p>
         <div id="u-freigaben"><p class="help">Wird geladen …</p></div>
         <div class="help">Angelegt wird eine Freigabe am Ordner (Bestand → Ordner → Bearbeiten → Freigaben), nicht hier.</div>
       </fieldset>` : ""}
@@ -243,7 +246,7 @@
   /* Im Dialog gilt dieselbe Regel wie in der Tabelle, nur ohne Server dazwischen: Wer die
      Verwaltung auf „Verwaltung“ stellt, sieht die vier anderen Felder sofort auf „Verwaltung“
      springen und erstarren – und bekommt beim Zurückstellen seine vorherigen Werte wieder.
-     Dazu im Modul Material: Wer das Häkchen „Prüfer“ setzt, während Material auf „–“ steht, sieht
+     Dazu in der Materialablage: Wer das Häkchen „Prüfer“ setzt, während Material auf „–“ steht, sieht
      die Auswahl auf „Mitglied“ springen (ohne Stufe wirkte das Häkchen nicht; gespeichert wird erst
      mit „Speichern“). Wer Material danach ausdrücklich auf „–“ stellt, behält das Häkchen – es wirkt
      dann nur nicht. Setzt man das Häkchen, während die Verwaltung auf „Verwaltung“ steht (Material zeigt
@@ -389,7 +392,7 @@
       // Der Grund kommt vom Server (wirkt_nicht) – in fester Reihenfolge: deaktiviert, ohne Namen, kein Zugang zum Modul
       // Material, Qualifikation fehlt, dauerhaft nur mit lesen oder verwalten.
       const titel = {
-        "kein Zugang zum Modul Material": "Ohne Stufe Mitglied oder Verwaltung im Modul Material wirkt keine Freigabe.",
+        "kein Zugang zur Materialablage": "Ohne Stufe Mitglied oder Verwaltung in der Materialablage wirkt keine Freigabe.",
         "Qualifikation fehlt": "Ohne Häkchen und Urkundennummer wirkt eine Prüffreigabe nicht.",
         "dauerhaft nur mit lesen oder verwalten": "Dauerhaft prüft nur, wer dort auch lesen oder verwalten hat.",
       }[f.wirkt_nicht] || "";
@@ -410,7 +413,7 @@
     catch (e) { el.innerHTML = `<p class="help">Die Freigaben ließen sich nicht laden: ${S.esc(e.message)}</p>`; return; }
     el.innerHTML = liste.length ? `<table class="list"><thead><tr><th>Ordner</th><th>Recht</th><th>bis</th><th>Zustand</th><th></th></tr></thead><tbody>
       ${liste.map((f) => `<tr>
-        <td data-l="Ordner"><a href="/material/ordner/${f.ordner.id}?freigaben" title="Freigaben dieses Ordners öffnen">${S.esc(f.ordner.pfad)}</a>${f.notiz ? `<div class="small muted">${S.esc(f.notiz)}</div>` : ""}</td>
+        <td data-l="Ordner"><a href="/materialablage/ordner/${f.ordner.id}?freigaben" title="Freigaben dieses Ordners öffnen">${S.esc(f.ordner.pfad)}</a>${f.notiz ? `<div class="small muted">${S.esc(f.notiz)}</div>` : ""}</td>
         <td data-l="Recht">${S.esc(RECHT[f.recht] || f.recht)}</td>
         <td data-l="bis">${f.bis ? tag(f.bis) : "dauerhaft"}</td>
         <td data-l="Zustand">${zustand(f)}</td>
@@ -435,7 +438,7 @@
         // bleibt stehen und führt hin (wie im Reiter „Freigaben“ am Ordner).
         if (r.offene_entwuerfe) {
           el.insertAdjacentHTML("afterbegin", `<p class="notice">Entzogen – ${mehrzahl(r.offene_entwuerfe, "offene Prüfung", "offene Prüfungen")}
-            des Kontos unter <a href="/material/pruefungen">Material → Prüfungen</a> → Offene Prüfungen freigeben.</p>`);
+            des Kontos unter <a href="/materialablage/pruefungen">Materialablage → Prüfungen</a> → Offene Prüfungen freigeben.</p>`);
         }
         load();
       } catch (e) { S.toast(e.message, true); b.disabled = false; }
@@ -484,7 +487,7 @@
     try { gl = (await S.api(`/api/admin/users/${u.id}/material-folgen`)).letzter_materialwart || []; }
     catch (e) { return true; }
     if (!gl.length) return true;
-    const wie = senkt && aus ? "Mit Material „–“ und dem Deaktivieren" : senkt ? "Mit Material „–“" : "Mit dem Deaktivieren";
+    const wie = senkt && aus ? "Mit Materialablage „–“ und dem Deaktivieren" : senkt ? "Mit Materialablage „–“" : "Mit dem Deaktivieren";
     return rueckfrage("Einziger Materialwart", `<p><strong>${S.esc(u.name || u.email)}</strong> ist der einzige
         Materialwart ${gliederungenText(gl)}. ${wie} verwaltet dort danach nur noch die Material-Verwaltung und vergibt
         Freigaben.</p>
@@ -492,7 +495,7 @@
         Bestand → Gliederung → Bearbeiten → Freigaben, Vorlage „Materialwart“.</p>`, "Trotzdem speichern");
   }
 
-  /* Löschen: Was im Modul Material daraus folgt, steht vorher da (GET …/material-folgen) – auch, wenn das Konto der
+  /* Löschen: Was in der Materialablage daraus folgt, steht vorher da (GET …/material-folgen) – auch, wenn das Konto der
      einzige Materialwart einer Gliederung ist. Fehlt die Auskunft, lässt sich trotzdem löschen – der Dialog sagt dann
      nur, dass er die Folgen nicht kennt. */
   function folgenText(f) {
@@ -506,8 +509,8 @@
 
   function loeschDialog(u) {
     S.dialog(`<h2>Nutzer löschen</h2>
-      <p>${S.esc(u.name || u.email)} (${S.esc(u.email)}) löschen? Alben, Bilder und Wiki-Seiten bleiben erhalten und gehen auf dich über.</p>
-      <div id="u-folgen"><p class="help">Folgen im Modul Material werden ermittelt …</p></div>
+      <p>${S.esc(u.name || u.email)} (${S.esc(u.email)}) löschen? Alben, Bilder und Seiten der Strömipedia bleiben erhalten und gehen auf dich über.</p>
+      <div id="u-folgen"><p class="help">Folgen in der Materialablage werden ermittelt …</p></div>
       <div class="dlg-actions"><button class="btn secondary" data-close type="button">Abbrechen</button>
         <button class="btn danger" id="u-del" type="button">Löschen</button></div>`,
     async (dlg, body) => {
@@ -522,11 +525,11 @@
       try {
         const f = await S.api(`/api/admin/users/${u.id}/material-folgen`);
         const gl = f.letzter_materialwart || [];
-        el.innerHTML = `<p class="notice">Modul Material: ${folgenText(f)}</p>${gl.length ? `<p class="notice">${S.esc(u.name || u.email)}
+        el.innerHTML = `<p class="notice">Materialablage: ${folgenText(f)}</p>${gl.length ? `<p class="notice">${S.esc(u.name || u.email)}
           ist der einzige Materialwart ${gliederungenText(gl)} – danach verwaltet dort nur noch die Material-Verwaltung und
           vergibt Freigaben.</p>` : ""}`;
       } catch (e) {
-        el.innerHTML = `<p class="help">Was das Löschen im Modul Material entfernt (Freigaben, Zuordnungen, offene Prüfungen), ließ sich
+        el.innerHTML = `<p class="help">Was das Löschen in der Materialablage entfernt (Freigaben, Zuordnungen, offene Prüfungen), ließ sich
           nicht ermitteln${e.status === 404 ? "" : `: ${S.esc(e.message)}`}. Festgeschriebene Prüfungen behalten den Namen des Prüfers.</p>`;
       }
     });
@@ -546,7 +549,7 @@
     if (name !== "nutzer" && !felder.length) ladeEinstellungen();
     // Der Reiter gehört in die Adresse: Wer die Einstellungen offen hatte und neu lädt, landet
     // sonst wieder bei den Nutzern.
-    history.replaceState(null, "", name === "nutzer" ? "/admin" : "/admin#einstellungen");
+    history.replaceState(null, "", name === "nutzer" ? PFAD.verwaltung : PFAD.verwaltung + "#einstellungen");
   };
   document.querySelectorAll("[data-reiter]").forEach((b) => b.onclick = () => reiter(b.dataset.reiter));
 

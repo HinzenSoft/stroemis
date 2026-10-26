@@ -158,7 +158,7 @@ def test_abschluss():
         d = t.w.get(f"{API}/durchgaenge/{t.rid}").json["durchgang"]
         x = next(x for x in d["set_protokolle"] if x["folder_id"] == t.a)
         assert x["artikel"] == 4 and x["ordner_sichtbar"] is True and x["protokoll"]["id"] == s[t.a]["protocol_id"]
-        assert x["protokoll"]["url"] == f"/material/durchgang/{t.rid}/set/{s[t.a]['id']}.pdf"
+        assert x["protokoll"]["url"] == f"/materialablage/durchgang/{t.rid}/set/{s[t.a]['id']}.pdf"
         assert t.w.get(x["protokoll"]["url"]).status_code == 200
     print("Abschluss mit Set-Protokollen bestanden.")
 
@@ -181,7 +181,7 @@ def test_set_als_durchgang_abbruch_und_fehler():
         r = t.w.post(f"{API}/durchgaenge/{rid2}/abbrechen", json={})
         assert r.status_code == 200 and r.json["durchgang"]["protokoll"], r.get_json()
         assert _set_zeilen(t, rid2) == {} and r.json["durchgang"]["set_protokolle"] == []
-        haupt = " ".join(_pdf_text(t.w.get(f"/material/durchgang/{rid2}/sammelprotokoll").data).split())
+        haupt = " ".join(_pdf_text(t.w.get(f"/materialablage/durchgang/{rid2}/sammelprotokoll").data).split())
         assert "kein Set-Protokoll (Durchgang abgebrochen)" in haupt
         # Fehler beim Rendern eines Set-Protokolls.
         rid4 = durchgang(t, t.lager, "Platzhalter Lager")
@@ -310,13 +310,13 @@ def test_rechte_ordnerseite_und_zip():
     with ohne_post(), tempfile.TemporaryDirectory() as tmp:
         t = _haupt(tmp)
         s = _set_zeilen(t, t.rid)
-        url = {fid: f"/material/durchgang/{t.rid}/set/{z['id']}.pdf" for fid, z in s.items()}
-        haupt_url, zip_url = f"/material/durchgang/{t.rid}/sammelprotokoll", f"/material/durchgang/{t.rid}/protokolle.zip"
+        url = {fid: f"/materialablage/durchgang/{t.rid}/set/{z['id']}.pdf" for fid, z in s.items()}
+        haupt_url, zip_url = f"/materialablage/durchgang/{t.rid}/sammelprotokoll", f"/materialablage/durchgang/{t.rid}/protokolle.zip"
         leser, leser_id = neues_konto(t.app, "leser_set@example.org", name="Leser Set")
         freigeben(t.adm, t.a, leser_id, "lesen")
         assert leser.get(url[t.a]).status_code == 200 and leser.get(url[t.b]).status_code == 200
-        for u in (url[t.c], haupt_url, zip_url, f"/material/durchgang/{t.rid}/set/{s[t.a]['id'] + 99}.pdf",
-                  f"/material/durchgang/{t.rid + 1}/set/{s[t.a]['id']}.pdf"):
+        for u in (url[t.c], haupt_url, zip_url, f"/materialablage/durchgang/{t.rid}/set/{s[t.a]['id'] + 99}.pdf",
+                  f"/materialablage/durchgang/{t.rid + 1}/set/{s[t.a]['id']}.pdf"):
             assert leser.get(u).status_code == 404, u
         assert leser.get(f"{API}/durchgaenge/{t.rid}").status_code == 404
         f = t.k["fuehrung"]
@@ -350,7 +350,7 @@ def test_rechte_ordnerseite_und_zip():
         kopf = r.headers["Content-Disposition"]
         assert kopf.startswith('attachment; filename="Protokolle_Platzhalter-Durchgang_S-') and "filename*=UTF-8''" in kopf
         # Ordner-Export von A: T(A) und T(B).
-        r = t.w.get(f"/material/export/{t.a}-protokolle.zip")
+        r = t.w.get(f"/materialablage/export/{t.a}-protokolle.zip")
         z = zipfile.ZipFile(io.BytesIO(r.data))
         texte = " ".join(z.namelist())
         assert s[t.a]["protocol_id"] in texte and s[t.b]["protocol_id"] in texte and s[t.c]["protocol_id"] not in texte
@@ -372,7 +372,7 @@ def test_oberflaeche_statisch():
     Set-Protokollen, PDF-Links mit eigenem Namen, Prüfsummen-Linie am Text."""
     wurzel = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     js = open(os.path.join(wurzel, "app/material/static/material.js"), encoding="utf-8").read()
-    assert '<a class="btn secondary" href="/material/durchgang/${d.id}/protokolle.zip">Alle Protokolle (ZIP)</a>' in js
+    assert '<a class="btn secondary" href="/materialablage/durchgang/${d.id}/protokolle.zip">Alle Protokolle (ZIP)</a>' in js
     assert "function setProtokolleHtml(liste)" in js and "function sammelprotokolleHtml(liste)" in js
     assert "<h2>Set-Protokolle</h2>" in js and "<h2>${sammelprotokolleTitel(d.sammelprotokolle)}</h2>" in js
     assert '"Set- und Sammelprotokolle" : arten.has("Set-Protokoll") ? "Set-Protokolle" : "Sammelprotokolle"' in js
@@ -528,7 +528,7 @@ def test_abschluss_zweistufig():
         jahr = s[t.a]["protocol_id"].split("-")[1]
         assert sorted(z["protocol_id"] for z in s.values()) == [f"T-{jahr}-{n:06d}" for n in (4, 5, 6)]
         assert s[t.c]["ordner"] == "OG Setstadt › Kiste C neu"
-        haupt = " ".join(_pdf_text(t.w.get(f"/material/durchgang/{rid}/sammelprotokoll").data).split())
+        haupt = " ".join(_pdf_text(t.w.get(f"/materialablage/durchgang/{rid}/sammelprotokoll").data).split())
         assert "Kiste C neu" in haupt
         ablage = os.path.join(tmp, "pdf", jahr)
         assert not [x for x in os.listdir(ablage) if x.endswith(protokoll.ZWISCHEN_ENDUNG)], os.listdir(ablage)

@@ -122,20 +122,20 @@ def test_shell_geruest():
             assert name and name.group(1).endswith(" ") and name.group(1).strip(), (konto, name)
             assert "&nbsp;Profil" not in nav, konto
         # „Artikel anlegen“ ist seit Phase 2 nur für Materialwarte – der Prüfer sieht das Gerüst auf „Prüfungen“.
-        for konto, seite in (("wart", "/material/artikel/neu"), ("pruefer", "/material/pruefungen")):
+        for konto, seite in (("wart", "/materialablage/artikel/neu"), ("pruefer", "/materialablage/pruefungen")):
             html = k[konto].get(seite).get_data(as_text=True)
             mnav = re.search(r'<nav class="mat-nav" aria-label="Modul Material">(.*?)</nav>', html, re.S)
             assert mnav, konto
             mnav = mnav.group(1)
             assert '<div class="mat-reiter">' in mnav and mnav.count('data-nav="') == 4, konto
             assert 'id="mat-lupe" aria-controls="mat-suche" aria-expanded="false"' in mnav and " hidden>" in mnav, konto
-            assert '<form class="mat-suche" id="mat-suche" action="/material/suche"' in mnav, konto
+            assert '<form class="mat-suche" id="mat-suche" action="/materialablage/suche"' in mnav, konto
             assert '<span class="mat-side-auf-text"> Ordner</span>' in mnav, konto
             # Reihenfolge: Ordner-Knopf, Reiter, Lupe, Suche – material.js prüft die Zeile in dieser Folge.
             assert mnav.index("mat-side-auf") < mnav.index("mat-reiter") < mnav.index("mat-lupe") < mnav.index("mat-suche"), konto
         # Die öffentliche Prüfseite (ohne Anmeldung) hat keine Hauptnavigation – also auch kein „Mehr“.
         with app.test_client() as gast:
-            html = gast.get("/material/pruefen").get_data(as_text=True)
+            html = gast.get("/materialablage/pruefen").get_data(as_text=True)
             assert "nav-mehr" not in html
     print("Seitengerüst (shell) bestanden.")
 
@@ -221,7 +221,7 @@ def test_formulare_ordnerfoto_und_suchfeld():
         assert baum[gid]["original"] == o["original"]
         assert w.delete(f"/api/material/ordner/{gid}/foto", headers=H).status_code == 200
         assert f.get(f"/api/material/ordner/{gid}").json["ordner"]["original"] is None
-        html = f.get(f"/material/ordner/{gid}").get_data(as_text=True)
+        html = f.get(f"/materialablage/ordner/{gid}").get_data(as_text=True)
         feld = html[html.index('name="q"'):]
         feld = feld[:feld.index(">")]
         for attr in ('autocapitalize="characters"', 'autocorrect="off"', 'spellcheck="false"', 'enterkeyhint="search"'):
@@ -252,7 +252,7 @@ def test_oberflaeche_rechte_je_ordner():
     for haken in ('role="tablist"', 'role="tab"', 'role="tabpanel"', "aria-selected", "ArrowRight", "ArrowLeft",
                   "geaendert: () =>", "nachFreigaben", "kopfhinweis(el, d, () =>", "?freigaben`"):
         assert haken in js, haken
-    assert "/material/ordner/${f.ordner.id}?freigaben" in lesen("app/static/js/admin.js")
+    assert "/materialablage/ordner/${f.ordner.id}?freigaben" in lesen("app/static/js/admin.js")
     assert re.search(r"return \{ anbieten, bestaetigen, suchen, karte, fremd \}", glob)
     # Freigaben, Bausteine, die erst nach material.js geladen werden: material.js wartet auf die ganze Seite.
     assert "DOMContentLoaded" in js

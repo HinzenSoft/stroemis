@@ -1,4 +1,4 @@
-/* Prüfseite (/material/pruefen): ein PDF hochladen, die Antwort der Schnittstelle zeigen. Öffentlich – deshalb nicht
+/* Prüfseite (/materialablage/pruefen): ein PDF hochladen, die Antwort der Schnittstelle zeigen. Öffentlich – deshalb nicht
    material.js, das ohne angemeldetes Konto nichts anzeigt. */
 (function () {
   "use strict";

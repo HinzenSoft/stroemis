@@ -865,7 +865,7 @@ def test_ablauf():
         r = k["fuehrung"].get("/api/material/start")
         assert r.status_code == 200 and not r.json["darf"]["lesen"] and r.json["bestand"] == 0, r.get_json()
         assert k["fuehrung"].get("/api/me").json["user"]["rechte"]["material"] == 1
-        assert k["fuehrung"].get("/material").status_code == 200
+        assert k["fuehrung"].get("/materialablage").status_code == 200
         m = k["fuehrung"].get("/api/material/freigaben/meine").json["freigaben"]
         assert [(x["ordner"]["pfad"], x["bis"], x["gueltig"], x["verwalter"]) for x in m] == [
             ("OG Musterstadt", gestern.isoformat(), False, ["wart"])], m
@@ -874,7 +874,7 @@ def test_ablauf():
         r = k["fuehrung"].get("/api/material/start")
         assert r.status_code == 403 and r.json["error"] == rechte.NICHT_FREIGESCHALTET, r.get_json()
         assert "Nutzerverwaltung" in rechte.NICHT_FREIGESCHALTET
-        assert k["fuehrung"].get("/material").status_code == 403
+        assert k["fuehrung"].get("/materialablage").status_code == 403
     print("Ablauf bestanden.")
 
 
@@ -946,13 +946,13 @@ def test_abfragezahl():
                     [q for q in abfragen if re.search(r"FROM mat_folder\b(?!_)", q)])
         # (Das Profil fragt die Sicht – ob das Konto irgendwo verwaltet und unterschreiben darf –, sonst keine Seite.)
         for c in (k["fuehrung"], k["wart"], k["katalog"], k["nutzer"], k["adm"]):
-            for url in ("/wiki", "/api/me", "/api/wiki/tree" if c is not k["nutzer"] else "/karte"):
+            for url in ("/stroemipedia", "/api/me", "/api/wiki/tree" if c is not k["nutzer"] else "/ankerplaetze"):
                 if c.get(url).status_code != 200:
                     continue
                 freigaben, baum = zaehlen(c, url)
                 assert not freigaben and not baum, (url, freigaben, baum)
-        assert 'href="/material"' in k["fuehrung"].get("/wiki").get_data(as_text=True)
-        assert 'href="/material"' not in k["nutzer"].get("/wiki").get_data(as_text=True)
+        assert 'href="/materialablage"' in k["fuehrung"].get("/stroemipedia").get_data(as_text=True)
+        assert 'href="/materialablage"' not in k["nutzer"].get("/stroemipedia").get_data(as_text=True)
         # Im Modul: eine Abfrage der eigenen Freigaben für die Sicht, eine für den Baum – trotz Decorator, darf_alles und
         # Zählung in derselben Anfrage.
         freigaben, baum = zaehlen(k["fuehrung"], f"/api/material/ordner/{gid}")
@@ -1225,7 +1225,7 @@ def test_nichts_aus_b():
                     "/api/material/produkte?q=HMS", f"/api/material/produkte/{ids['hms']}", "/api/material/meldungen",
                     f"/api/material/ordner/{t.a}", f"/api/material/ordner/{t.lager_a}", f"/api/material/ordner/{t.sys_a['gesperrt']}",
                     f"/api/material/artikel/{t.art_a['id']}", f"/api/material/durchgaenge/{b.durchgang_a}",
-                    f"/material/export/{t.a}.csv", f"/material/export/{t.lager_a}.csv", "/material", "/material/bestand"):
+                    f"/materialablage/export/{t.a}.csv", f"/materialablage/export/{t.lager_a}.csv", "/materialablage", "/materialablage/bestand"):
             r = w.get(url)
             assert r.status_code == 200, (url, r.status_code)
             ohne_merkmale(b, url, r.data)
@@ -1245,15 +1245,15 @@ def test_nichts_aus_b():
         assert [x["bestand"] for x in w.get("/api/material/produkte?q=HMS").json["produkte"]] == [1]
         assert t.wart_b.get(f"/api/material/produkte/{ids['hms']}").json["produkt"]["bestand"] == 2   # art_b, gesperrt
         # Das ZIP von A: Verzeichnis und Dateinamen ohne B.
-        r = w.get(f"/material/export/{t.a}-protokolle.zip")
+        r = w.get(f"/materialablage/export/{t.a}-protokolle.zip")
         assert r.status_code == 200, r.status_code
         z = zipfile.ZipFile(io.BytesIO(r.data))
         ohne_merkmale(b, "ZIP von A", "\n".join(z.namelist()) + _text(z.read("Verzeichnis.csv")))
         assert len(z.namelist()) == 3                          # Verzeichnis, die Prüfung und das Sammelprotokoll von A
         # Die Suchseite leitet nicht zu Fremdem weiter; die Artikelseite aus B ist 404 ohne Banner; der QR-Scan zeigt
         # nur „fremd“.
-        assert w.get("/material/suche?q=TEST-B-0001").status_code == 200
-        r = w.get(f"/material/artikel/{b.gesperrt['id']}")
+        assert w.get("/materialablage/suche?q=TEST-B-0001").status_code == 200
+        r = w.get(f"/materialablage/artikel/{b.gesperrt['id']}")
         assert r.status_code == 404 and "mat-banner" not in r.get_data(as_text=True)
         ohne_merkmale(b, "Artikelseite B", r.data)
         r = w.get(f"/m/{b.token}")
@@ -1261,7 +1261,7 @@ def test_nichts_aus_b():
         ohne_merkmale(b, "QR fremd", r.data)
         assert "mat-banner" not in r.get_data(as_text=True)
         r = t.wart_b.get(f"/m/{b.token}")
-        assert r.status_code == 302 and r.headers["Location"].endswith(f"/material/artikel/{t.art_b['id']}")
+        assert r.status_code == 302 and r.headers["Location"].endswith(f"/materialablage/artikel/{t.art_b['id']}")
 
         # Medien je Datei: aus B 404 (für B selbst 200), das Produktbild für alle mit Modulzugang.
         for url in b.ordnerfoto + b.befundfoto + b.meldungsfoto + [b.anhang]:
@@ -1486,8 +1486,8 @@ def test_vererbung_und_heimat():
         for fid in (gid, lager, halle):
             gleich_wie_unbekannt(fahrer.get(f"/api/material/ordner/{fid}"), unbekannt)
         gleich_wie_unbekannt(fahrer.get(f"/api/material/artikel/{h}"), fahrer.get("/api/material/artikel/999999"))
-        assert fahrer.get(f"/material/ordner/{gid}").status_code == 404
-        assert fahrer.get(f"/material/ordner/{sys_a['gesperrt']}").status_code == 200
+        assert fahrer.get(f"/materialablage/ordner/{gid}").status_code == 404
+        assert fahrer.get(f"/materialablage/ordner/{sys_a['gesperrt']}").status_code == 200
         inhalt = fahrer.get(f"/api/material/ordner/{sys_a['gesperrt']}").json["ordner"]
         assert [a["id"] for a in inhalt["artikel"]] == [x] and inhalt["artikel_gesamt"] == 1 and inhalt["journal"] is None
         assert {a["id"] for a in k["wart"].get(f"/api/material/ordner/{sys_a['gesperrt']}").json["ordner"]["artikel"]} == {x, h}
@@ -1508,9 +1508,9 @@ def test_vererbung_und_heimat():
         a = fahrer.get(f"/api/material/artikel/{x}").json["artikel"]
         assert a["status"] == "ausgesondert" and a["folder_id"] == sys_a["ausgesondert"] and a["origin_folder_id"] == satz
         assert fahrer.get(f"/api/material/pruefungen/{aid}").status_code == 200
-        r = fahrer.get(f"/material/pruefung/{aid}/pdf")
+        r = fahrer.get(f"/materialablage/pruefung/{aid}/pdf")
         assert r.status_code == 200 and r.mimetype == "application/pdf", r.status_code
-        assert fahrer.get(f"/material/artikel/{x}").status_code == 200
+        assert fahrer.get(f"/materialablage/artikel/{x}").status_code == 200
         inhalt = fahrer.get(f"/api/material/ordner/{sys_a['ausgesondert']}").json["ordner"]
         assert [a["id"] for a in inhalt["artikel"]] == [x], inhalt["artikel"]
     print("Vererbung und Heimat bestanden.")
@@ -1618,7 +1618,7 @@ def test_eine_heimat():
         assert w.post(f"/api/material/artikel/{z}/aussondern", json={"grund": "irreparabel"}).status_code == 200
         bleibt = neuer_artikel(w, ids["hms"], t.a, serial_no="TEST-A-0012")["id"]
         inventar = {r["id"]: r["inventory_no"] for r in zeilen(app, "SELECT id, inventory_no FROM mat_item")}
-        assert inventar[y] in w.get(f"/material/export/{t.a}.csv").get_data(as_text=True)
+        assert inventar[y] in w.get(f"/materialablage/export/{t.a}.csv").get_data(as_text=True)
         r = t.adm.post(f"/api/material/ordner/{t.lager_a}/verschieben", json={"parent_id": t.b})
         assert r.status_code == 200, r.get_json()
         lage = {r["id"]: r["folder_id"] for r in zeilen(app, "SELECT id, folder_id FROM mat_item WHERE id IN (?, ?)", (y, z))}
@@ -1632,7 +1632,7 @@ def test_eine_heimat():
         for iid in (y, z):
             gleich_wie_unbekannt(w.get(f"/api/material/artikel/{iid}"), w.get("/api/material/artikel/999999"))
         gleich_wie_unbekannt(starten(k["pruefer"], y), starten(k["pruefer"], 999999))
-        csv_a = w.get(f"/material/export/{t.a}.csv").get_data(as_text=True)
+        csv_a = w.get(f"/materialablage/export/{t.a}.csv").get_data(as_text=True)
         assert inventar[y] not in csv_a and inventar[z] not in csv_a and inventar[bleibt] in csv_a
         r = w.post("/api/material/durchgaenge", json={"folder_id": t.a, "titel": "Testdurchgang Musterstadt"})
         assert r.status_code == 201 and r.json["durchgang"]["zaehlung"]["gesamt"] == 1, r.get_json()
@@ -1641,7 +1641,7 @@ def test_eine_heimat():
         # H sieht beide in seinen Systemordnern – und sie gehören zum verschobenen Lager.
         assert {a["id"] for a in t.wart_b.get(f"/api/material/ordner/{t.sys_b['gesperrt']}").json["ordner"]["artikel"]} == {y}
         assert t.wart_b.get(f"/api/material/artikel/{z}").json["artikel"]["origin_folder_id"] == t.lager_a
-        csv_lager = t.wart_b.get(f"/material/export/{t.lager_a}.csv").get_data(as_text=True)
+        csv_lager = t.wart_b.get(f"/materialablage/export/{t.lager_a}.csv").get_data(as_text=True)
         assert inventar[y] in csv_lager and inventar[z] in csv_lager
 
         # Ebenso, wenn ein Ordner zur Gliederung wird (nur wer die Gliederung darüber verwaltet): Gesperrte und
@@ -1841,10 +1841,10 @@ def test_pruefsicht():
         assert r.json["pruefung"]["darf"]["pruefen"] and r.json["pruefung"]["artikel"]["zugeordnet_name"] is None
         assert ext.get(f"/api/material/artikel/{iid}/pruefungen").status_code == 200
         assert ext.get(f"/api/material/pruefungen/{pid}").status_code == 200
-        for url in (f"/material/export/{t.lager_a}.csv", f"/material/export/{t.lager_a}-protokolle.zip",
-                    f"/material/artikel/{iid}/lebenslauf.pdf"):
+        for url in (f"/materialablage/export/{t.lager_a}.csv", f"/materialablage/export/{t.lager_a}-protokolle.zip",
+                    f"/materialablage/artikel/{iid}/lebenslauf.pdf"):
             assert ext.get(url).status_code == 403, url
-        for url in (f"/material/export/{t.a}.csv", f"/material/export/{t.a}-protokolle.zip"):
+        for url in (f"/materialablage/export/{t.a}.csv", f"/materialablage/export/{t.a}-protokolle.zip"):
             assert ext.get(url).status_code == 404, url
         # Ohne Urkundennummer (Stufe bleibt, also Modulzugang): Die Prüffreigabe wirkt nicht – alles wie unbekannt.
         assert adm.put(f"/api/admin/users/{ext_id}", json={"urkundennummer": ""}).status_code == 200
@@ -1852,8 +1852,8 @@ def test_pruefsicht():
             gleich_wie_unbekannt(ext.get(f"/api/material/{pfad}"), ext.get(f"/api/material/{pfad.split('/')[0]}/999999"
                                                                            + ("/pruefungen" if pfad.endswith("pruefungen")
                                                                               and pfad.startswith("artikel") else "")))
-        assert ext.get(f"/material/export/{t.lager_a}.csv").status_code == 404
-        assert ext.get(f"/material/artikel/{iid}").status_code == 404
+        assert ext.get(f"/materialablage/export/{t.lager_a}.csv").status_code == 404
+        assert ext.get(f"/materialablage/artikel/{iid}").status_code == 404
         # Ohne Stufe im Modul: kein Modulzugang – 403 vor jeder Frage nach dem Gegenstand (auch mit Häkchen und Nummer).
         assert adm.put(f"/api/admin/users/{ext_id}", json={"urkundennummer": "1012-9999",
                                                            "rechte": {"material": 0}}).status_code == 200
@@ -1917,7 +1917,7 @@ def test_journal_und_seiten():
         eintrag = next(j for j in a["journal"] if j["action"] == "zuordnung_geloest")
         assert eintrag["nachher"] == {"konto": {"name": "Person Musterstadt"}, "grund": "ausgesondert"}, eintrag
         assert refs()[person_id] not in json.dumps(a)
-        r = w.get(f"/material/artikel/{y}/lebenslauf.pdf")
+        r = w.get(f"/materialablage/artikel/{y}/lebenslauf.pdf")
         assert r.status_code == 200, r.status_code
         pfad = os.path.join(tmp, "lebenslauf.pdf")
         with open(pfad, "wb") as fh:
@@ -1942,22 +1942,22 @@ def test_journal_und_seiten():
             assert r.status_code == 200, r.get_json()
             return r.json
         assert pruefen(w)["ergebnis"] == "unveraendert" and "link" not in pruefen(w)
-        assert pruefen(t.wart_b)["link"] == f"/material/pruefung/{pid_b}"
-        assert w.get(f"/material/pruefung/{pid_b}/pdf").status_code == 404
-        assert w.get(f"/material/pruefung/{pid_b}").status_code == 404
+        assert pruefen(t.wart_b)["link"] == f"/materialablage/pruefung/{pid_b}"
+        assert w.get(f"/materialablage/pruefung/{pid_b}/pdf").status_code == 404
+        assert w.get(f"/materialablage/pruefung/{pid_b}").status_code == 404
 
         # „Artikel anlegen“: nur wer irgendwo verwaltet; den Ordner aus der Adresse nur, wenn er ihn verwaltet.
-        r = k["fuehrung"].get("/material/artikel/neu")
+        r = k["fuehrung"].get("/materialablage/artikel/neu")
         assert r.status_code == 403 and "Materialwarte" in r.get_data(as_text=True)
 
         def daten(r):
             assert r.status_code == 200, r.status_code
             return json.loads(html_mod.unescape(re.search(r'data-daten="([^"]*)"', r.get_data(as_text=True)).group(1)))
-        assert daten(w.get(f"/material/artikel/neu?ordner={t.lager_b}"))["ordner"] is None
-        assert daten(w.get(f"/material/artikel/neu?ordner={t.lager_a}"))["ordner"] == t.lager_a
+        assert daten(w.get(f"/materialablage/artikel/neu?ordner={t.lager_b}"))["ordner"] is None
+        assert daten(w.get(f"/materialablage/artikel/neu?ordner={t.lager_a}"))["ordner"] == t.lager_a
         # Ohne Modulzugang: 403 mit dem Grund, auf jeder Seite.
         token = zeilen(app, "SELECT qr_token FROM mat_item WHERE id = ?", (t.art_a["id"],))[0]["qr_token"]
-        for url in ("/material", f"/m/{token}", f"/material/artikel/{t.art_a['id']}", f"/material/export/{t.a}.csv"):
+        for url in ("/materialablage", f"/m/{token}", f"/materialablage/artikel/{t.art_a['id']}", f"/materialablage/export/{t.a}.csv"):
             r = k["nutzer"].get(url)
             assert r.status_code == 403 and "nicht freigeschaltet" in r.get_data(as_text=True), url
         # Prüfer stehen mit Namen da, nie mit der E-Mail.
@@ -2001,7 +2001,7 @@ def test_nichts_aus_b_paket_d():
         ruid = r.json["rueckruf"]["id"]
         for url in ("/api/material/rueckrufe", "/api/material/start", f"/api/material/produkte/{ids['hms']}",
                     f"/api/material/produkte/{ids['hms']}/rueckrufe", f"/api/material/artikel/{t.art_a['id']}",
-                    f"/material/katalog/produkt/{ids['hms']}"):
+                    f"/materialablage/katalog/produkt/{ids['hms']}"):
             r = w.get(url)
             assert r.status_code == 200, (url, r.status_code)
             ohne_merkmale(b, url, r.data)
@@ -2068,12 +2068,12 @@ def test_psa_ohne_tuer():
         r = c.get(f"/m/{token_a}")
         assert r.status_code == 403 and ohne_nonce(r) == ohne_nonce(c.get("/m/gibtesnicht"))
         r = c.get(f"/m/{b.token}")
-        assert r.status_code == 302 and r.headers["Location"].endswith(f"/material/meine-psa/{t.art_b['id']}")
-        r = c.get(f"/material/meine-psa/{t.art_a['id']}")
-        assert r.status_code == 404 and ohne_nonce(r) == ohne_nonce(c.get("/material/meine-psa/999999"))
+        assert r.status_code == 302 and r.headers["Location"].endswith(f"/materialablage/meine-psa/{t.art_b['id']}")
+        r = c.get(f"/materialablage/meine-psa/{t.art_a['id']}")
+        assert r.status_code == 404 and ohne_nonce(r) == ohne_nonce(c.get("/materialablage/meine-psa/999999"))
         d = c.get("/api/material/meine-psa").json
         assert [a["id"] for a in d["artikel"]] == [t.art_b["id"]] and d["artikel"][0]["gliederung"] == "OG Nachbarstadt"
-        for antwort in (json.dumps(d, ensure_ascii=False), c.get("/material/meine-psa").get_data(as_text=True)):
+        for antwort in (json.dumps(d, ensure_ascii=False), c.get("/materialablage/meine-psa").get_data(as_text=True)):
             for merkmal in ("Musterstadt", "TEST-A-0001", "wart@", "pruefer@"):
                 assert merkmal not in antwort, merkmal
         for url in [foto_a] + b.ordnerfoto + b.befundfoto + b.meldungsfoto + [b.anhang]:

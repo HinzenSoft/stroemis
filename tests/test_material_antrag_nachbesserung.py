@@ -63,7 +63,7 @@ def test_produktwechsel_journal_lebenslauf():
         assert (b, "EN Platzhalter-B-vorher") not in neu and (t.ids["hms"], "EN Platzhalter-A-spaeter") not in neu, neu
         assert not any(e["entity"] == "product" and e["entity_id"] == b and e["action"] == "angelegt"
                        for e in lesen(t.w, t.k1)["journal"])
-        text = " ".join(_pdf_text(t.w.get(f"/material/artikel/{t.k1}/lebenslauf.pdf").data).split())
+        text = " ".join(_pdf_text(t.w.get(f"/materialablage/artikel/{t.k1}/lebenslauf.pdf").data).split())
         assert "Platzhalter-A-waehrend" in text and "Platzhalter-B-nachher" in text, text[:600]
         assert text.count("Platzhalter-B-vorher") == 1 and "Platzhalter-A-spaeter" not in text
         assert "Platzhalter-Rückruf A vorher" in text and "früheren Produkt" in text
@@ -124,7 +124,7 @@ def test_faelligkeit_ohne_namen_fuer_leser():
         assert f and f[0]["nachher"]["antrag"] == kid and f[0]["user_name"] == "(Person)", f
         w = [e for e in lesen(t.w, t.k1)["journal"] if e["action"] == "faelligkeit"]
         assert w[0]["user_name"] == "Wart Zwei", w
-        assert "Wart Zwei" not in _pdf_text(t.f.get(f"/material/artikel/{t.k1}/lebenslauf.pdf").data)
+        assert "Wart Zwei" not in _pdf_text(t.f.get(f"/materialablage/artikel/{t.k1}/lebenslauf.pdf").data)
     print("Fälligkeit ohne Namen für Leser bestanden.")
 
 
