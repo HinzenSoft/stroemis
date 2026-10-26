@@ -18,6 +18,7 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30.
 | Phase 2 · 2 – Erinnerungen | Täglicher Erinnerungslauf ab 6 Uhr (eingebaut, abschaltbar, dazu `flask material remind`): Sammelmail an die Verwalter zu Fälligkeit (30/7 Tage, überfällig), Lebensende (90 Tage) und ablaufenden Freigaben (30 Tage); Erinnerungslog mit Kontoverweis; „Erinnerungsmails aus“ je Ordner; Laufstand und Probelauf auf der Übersicht | geliefert 19.10.2026, freigegeben, auf dev |
 | Phase 2 · 3 – Bestandsimport und Prüfanleitung | Bestandslisten aus Excel oder CSV in einen Ordner: Probelauf, Übernehmen in einer Transaktion (Artikel auf „neu“, Fälligkeit aus der Liste, STR-Nummern für Zeilen ohne Seriennummer, eine Liste ganz ohne Seriennummernspalte nur mit Häkchen) und Nacharbeit je Zielordner (Produkte zuordnen, melden oder im Katalog anlegen, erneut prüfen, CSV-Rundweg, Frist ein Monat); Prüfanleitung aus dem Wiki am Prüfformular, Abschnitt „Prüfung“ eingeblendet in offenen Prüfungen | geliefert 19.10.2026, vier Punkte am 20.10.2026 entschieden (einer geändert und eingearbeitet), freigegeben, auf dev |
 | Phase 3 · 1 – Meine PSA und Mangelmeldung | „Meine PSA“ (zugeordnete Ausrüstung, auch ohne Stufe im Modul), Mangelmeldung mit Foto, die den Artikel sofort sperrt, Abschnitt „Deine PSA“ in der Sammelmail (Schritt 13) | geliefert 20.10.2026, freigegeben, auf dev |
+| Herstellerdokumente einmal je Inhalt (Schritt 18) | Gleiche Dokumentdateien liegen einmal unter `media/material/dok/<SHA-256>` statt je Produkt unter Zufallsnamen; Zusammenführen des Altbestands beim Start und von Hand | gebaut 22.10.2026 (Schema 18), freigegeben 22.10.2026, auf dev |
 | Artikellänge (Schritt 20) | Häkchen „Artikel haben eine Länge“ je Kategorie (vererbt), Feld „Länge (m)“ am Artikel (Steckbrief, Listen, Lebenslauf, Meine PSA, CSV, Bestandsimport), Prüfpunkt-Typ „Länge“ – vorbelegt, ein abweichender Wert geht beim Festschreiben in den Artikel (Journal, Protokoll „alt → neu“) | gebaut 22.10.2026, freigegeben, auf dev |
 | Phase 4 · 1 – Auswertung und Betriebsreife | Jahresbericht je Zweig (Seite, PDF, CSV der Prüfungen), Mailfehler-Protokoll mit Kasten „Mailversand“ auf der Übersicht (Schritt 19), dazu C1 (Strömipedia und Leitstelle am Finger) und C2 (Datumsfelder) | geliefert 22.10.2026, offene Punkte am 23.10.2026 „wie gebaut“, freigegeben, auf dev |
 | Phase 4 · 2 – Sets mit Komponenten | Hersteller-Sets: Stückliste im Katalog (auch in der Katalogdatei), Set-Artikel mit Teil-Artikeln, Set-Status, -Fälligkeit und -Lebensende, Listen mit der Set-Zeile, Verschieben und Zuordnen mit allen Teilen, Meine PSA; Sperr-Kaskade, Set prüfen mit Set-Protokoll, Austausch, Aussondern mit Wahl je Teil, Oberfläche | geliefert 23.10.2026 (c5e1b06), freigegeben 23.10.2026; durch den Rückbau der Set-Funktion (Schritt 26) ersetzt |
@@ -38,9 +39,11 @@ Geschichte stehen. Schemaversion nach der Nachbesserung vor dem Merge: 30.
 | Nachbesserung Sets und Anträge nach den Prüfungen | Sets: Kennungen der Kopie, „Anzahl verringert“, Texte; Anträge: Produktgeschichte nach Wechsel, Intervall-Obergrenze nur bei Änderung, Fälligkeit ohne Namen, 409 statt 500, Texte, Zähl-Aufruf | gebaut 25.10.2026, freigegeben, auf dev |
 | Neue Modulnamen | Strömipedia, Ankerplätze, Riegenkarten, Materialablage, Leitstelle samt Adressen; alte Adressen leiten dauerhaft weiter (301, Abfrage bleibt, Umlaut-Schreibweisen), neue Protokolle mit `/materialablage/pruefen` | gebaut 26.10.2026, freigegeben, auf dev |
 | Feinschliff aus den Wiki-Fragen | „Deine PSA“ auch in Ordnern mit „Erinnerungsmails aus“ (E2 B), Verlauf des Kontos im Nutzerdialog der Leitstelle (E3 A), geerbtes generisches Formular in der Kategorie (K9), Texte (K19, K21, T, E1, E6), README | gebaut 26.10.2026, freigegeben, auf dev |
-| Katalog am Telefon (26.10.2026) | „☰ Kategorien“ links in der mitlaufenden Suchzeile der Katalogliste; keine Nummernsuche in den Katalogansichten | gebaut 26.10.2026 (kein Schemaschritt), bestätigt wie gebaut (Nutzer 26.10.2026), im Zweig vor-merge |
-| Nachbesserung vor dem Merge (Schritt 30) | R1 Rückruf nach Änderungsantrag, Rückruf ohne Mailserver, DEMO-Konten nicht als Material-Verwaltung, „Bald fällig“ 0–365, Unveränderlichkeit gegen SQL von Hand (Schritt 30), Jahresbericht ohne Bildlauf, Fokus nach Esc, Tippflächen, Toast unter Touch, README/CHANGELOG für den Merge | gebaut 26.10.2026 (Zweig vm-material), zur Freigabe vor dem Merge |
-| Lebenslauf frisch, Melder und Mangelbeschreibung | Jeder Abruf eines Lebenslaufs (und der übrigen Dateien auf Abruf) mit eigener Adresse und Uhrzeit im Namen – gegen die alte Datei auf Android-Telefonen; „Mangel gemeldet“ im Lebenslauf mit Name und Beschreibung für Prüfer, Materialwart und den Melder selbst | gebaut 26.10.2026, bestätigt wie gebaut (Nutzer 26.10.2026), im Zweig vor-merge |
+| Katalog am Telefon (26.10.2026) | „☰ Kategorien“ links in der mitlaufenden Suchzeile der Katalogliste; keine Nummernsuche in den Katalogansichten | gebaut 26.10.2026 (kein Schemaschritt), bestätigt wie gebaut (Nutzer 26.10.2026), auf dev (vor dem Merge geprüft) |
+| Nachbesserung vor dem Merge (Schritt 30) | R1 Rückruf nach Änderungsantrag, Rückruf ohne Mailserver, DEMO-Konten nicht als Material-Verwaltung, „Bald fällig“ 0–365, Unveränderlichkeit gegen SQL von Hand (Schritt 30), Jahresbericht ohne Bildlauf, Fokus nach Esc, Tippflächen, Toast unter Touch, README/CHANGELOG für den Merge | gebaut 26.10.2026, bestätigt wie gebaut (Nutzer 26.10.2026), auf dev (vor dem Merge geprüft) |
+| Nachbesserung vor dem Merge – übrige Module | Leitstelle: Rechte-Felder im Nutzerdialog (F1), Fokus in langen Dialogen; Strömipedia: ein Verlaufseintrag je Link (N1), Emoji-Raster mit einem Tab-Stopp (N4), Rollennamen in Meldungen (N5), Schrägstrich am Adressende und Kleinigkeiten (N6), Export → Import gleichnamiger Geschwister | gebaut 26.10.2026 (kein Schemaschritt), auf dev (vor dem Merge geprüft) |
+| Lebenslauf frisch, Melder und Mangelbeschreibung | Jeder Abruf eines Lebenslaufs (und der übrigen Dateien auf Abruf) mit eigener Adresse und Uhrzeit im Namen – gegen die alte Datei auf Android-Telefonen; „Mangel gemeldet“ im Lebenslauf mit Name und Beschreibung für Prüfer, Materialwart und den Melder selbst | gebaut 26.10.2026, bestätigt wie gebaut (Nutzer 26.10.2026), auf dev (vor dem Merge geprüft) |
+| Nachbesserung vor dem Merge, Runde 2 | Rückruf: nur eine Prüfung, deren Entwurf nach Rückruf bzw. Antrag begann, erledigt ihn (N-A1); „Bald fällig“ aus der `.env` nur 0–365, sonst Warnung und Vorgabe 30; README zur Inbetriebnahme (Prüfformulare neu anlegen, Kontrollen) | gebaut 26.10.2026 (kein Schemaschritt), zur Freigabe |
 
 ## Abgleich mit dem Bestand (vor Lieferung 1)
 
@@ -4173,6 +4176,62 @@ Danach liefen die ganze Suite (`st-test`) grün, `st-py`, `st-js` und `st-css` o
 14. **Kasten „Mailversand“ am Telefon**: Eine Karte hat vier Inhaltszeilen (Mail mit Betreff, Empfänger, Fehler mit
     Antwort), bei 360 px umbrochen etwa 170 px hoch; die Antwort des Mailservers ließe sich noch hinter „Technische
     Antwort“ einklappen – bitte am Gerät ansehen.
+
+## Nachbesserung vor dem Merge, Runde 2 (26.10.2026)
+
+Auftrag `planung/material-phase4/auftrag_nachbesserung_vor_merge_2.md` nach der Ablaufprüfung des Stands vor-merge
+2122b62 (`bericht_pruefung_vm_ablauf.md`). Freigabe des Nutzers: „Rückruf, readme und die Prüfung kannst du schon mal
+angehen“ – Befund N-A1, die README-Ergänzungen (Verbesserungen 5 und 6) und die Prüfung des `.env`-Werts
+(Verbesserung 3), dazu seine Entscheidung zu den Prüfformularen in der Produktion. Kein Schemaschritt (Schema bleibt 30),
+keine Oberflächenänderung. Zweig `vm-rest`.
+
+- **N-A1 – Rückruf während eines offenen Prüfentwurfs** (`services/rueckruf.py`): Als Prüfung zum Rückruf zählt nur
+  eine abgeschlossene, deren **Entwurf** nach der Grenze begann – dem späteren von Rückruf-Anlage und letztem
+  bestätigtem Antrag auf Produkt oder Seriennummer (R1). Gemessen wird jetzt `mat_inspection.created_at` (das Anlegen
+  des Entwurfs beim Start der Prüfung; `completed_at` ist der Abschluss) statt `completed_at`: Wer den Entwurf vorher
+  geöffnet hatte, sah auf der Prüfseite keinen Rückruf-Hinweis (die Seite zeichnet ihn beim Laden). Bisher galt ein
+  Rückruf als „erledigt – nach dem Rückruf geprüft“, wenn er (1) während eines offenen Entwurfs angelegt oder (2) ein
+  Antrag auf neue Seriennummer während eines offenen Entwurfs bestätigt wurde und der Prüfer danach festschrieb (beim
+  Produktwechsel gibt es dafür schon 409). Jetzt bleibt er dort offen, bis eine danach begonnene Prüfung abgeschlossen
+  ist. Berichtigungen zählen weiter nicht, gleiche Sekunde zählt weiter als vorher. `GEPRUEFT_UM_SQL` heißt
+  `PRUEFUNG_BEGONNEN_SQL` (Spalte `pruefung_begonnen`); alle Leser von `zustand` – Banner am Artikel, Marke in den
+  Listen, Produktseite, Übersicht, Jahresbericht (`bericht._rueckrufe`), Meine PSA (`psa.liste`), Lebenslauf – rechnen
+  damit. Aussonderungen (Entwurf und Abschluss zugleich) sind ohnehin erledigt.
+- **„Bald fällig“ aus der `.env`** (`app/__init__.py`, `einstellungen.py`): `MATERIAL_BALD_FAELLIG_TAGE` gilt nur als
+  ganze Zahl von 0 bis 365. Ein anderer Wert (`abc`, `1000`, `-5`, `1.5`) verhinderte bisher bei `abc` den Start
+  (ValueError) und wirkte sonst ungeprüft; jetzt startet die App, schreibt eine Warnung ins Log
+  („MATERIAL_BALD_FAELLIG_TAGE='abc' in der Umgebung ist keine ganze Zahl von 0 bis 365 – es gilt die Vorgabe 30.“) und
+  nimmt die Vorgabe 30. Leer heißt Vorgabe ohne Warnung. Die Leitstelle zeigt den wirksamen Wert: Ein unbrauchbarer
+  `.env`-Wert erscheint nicht mehr als „umgebung“, sondern als Vorgabe 30 (`einstellungen._aus_umgebung`, gilt für jedes
+  Feld, dessen `.env`-Wert `Feld.wert` nicht annimmt). `logging.basicConfig` steht dafür am Anfang von `create_app`.
+- **README „Inbetriebnahme in der Produktion“:** Prüfformulare kommen nicht per Export – die Material-Verwaltung legt
+  sie in der Produktion neu an (Entscheidung des Nutzers vom 26.10.2026; die DEMO-Formulare des Beispielbestands gehören
+  nicht hinein); ebenso im Absatz „Katalog exportieren und importieren“. Ergänzte Kontrollen: `stat -c %u data` = 1000
+  vorab, Nutzer über die neuen Modulnamen und Adressen informieren, Prüfung der Vor-Merge-Kopie (`integrity_check`,
+  Dateizahl), Deploy-Lauf beobachten, `docker port stroemis` nach dem Deploy, Zählung vorher/nachher gegen die Kopie,
+  nach der nächsten vollen Stunde `ls -la ~/data.bak` und `crontab -l`. „Moduls Material“ → „der Materialablage“
+  (Daten im Volume, WeasyPrint). Konfiguration: Zeile zu `MATERIAL_BALD_FAELLIG_TAGE`. Rückruf-Absatz: Beginn des
+  Entwurfs ist maßgeblich.
+- **CHANGELOG-Übersicht:** Stand der drei jüngsten Zeilen „auf dev (vor dem Merge geprüft)“; neue Zeilen für
+  „Nachbesserung vor dem Merge – übrige Module“, Schritt 18 „Herstellerdokumente einmal je Inhalt“ und diese Runde.
+- **Schnittstelle:** Form unverändert. `artikel.rueckrufe[].grund == "geprueft"` (und die Zahlen `offen` überall) heißt
+  jetzt „nach Rückruf bzw. Antrag begonnene Prüfung abgeschlossen“; `GET /api/admin/einstellungen` meldet für einen
+  unbrauchbaren `.env`-Wert `quelle: "vorgabe"` mit dem Vorgabewert statt `quelle: "umgebung"` mit dem Rohwert.
+- Tests: `tests/test_material_vor_merge_2.py` (neu) – N-A1 mit Rückruf und Seriennummer-Antrag während offener
+  Entwürfe samt Kontrolle (Entwurf nach dem Rückruf), je Banner (drei Rollen), Marke, Übersicht, Produktseite,
+  Jahresbericht, Meine PSA, Lebenslauf und die erledigende neue Prüfung; `.env`-Werte `abc`, `1000`, `366`, `-5`, `1.5`,
+  `1e2` (Warnung, 30, Leitstelle „vorgabe“), leer (30 ohne Warnung), `0`, `365`, ` 45 ` (gelten, „umgebung“), ein
+  gespeicherter Wert liegt weiter darüber. Gegenprobe am Stand 2122b62: beide Tests scheitern (Rückruf „erledigt“,
+  ValueError beim Start). R1-Tests (`test_material_vor_merge.py`) unverändert grün.
+
+### Bitte bestätigen
+
+1. **Folge von N-A1:** Wer einen Entwurf vor dem Rückruf begonnen hat, muss nach dem Festschreiben noch einmal prüfen,
+   damit der Rückruf für den Artikel erledigt ist – auch wenn er die Prüfseite zwischendurch neu geladen und den
+   Hinweis gesehen hat (der Server kennt nur den Beginn des Entwurfs). Alternative wäre, Anträge auf Seriennummer bei
+   offenem Entwurf wie beim Produktwechsel mit 409 abzulehnen; der Rückruf-Fall bliebe dann offen.
+2. **Leitstelle bei unbrauchbarem `.env`-Wert:** Anzeige „30 (Vorgabe)“ statt des Rohwerts – der Rohwert steht nur in
+   der Warnung im Log.
 
 ## Nachbesserung vor dem Merge – Materialablage, Sicherheit, Doku, Betrieb (26.10.2026)
 
