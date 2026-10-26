@@ -271,6 +271,11 @@ table.list.mat-artikel th.mat-wahlspalte, table.list.mat-artikel td.mat-wahlspal
 /* Die Produktliste lädt endlos nach; die Suchzeile bleibt dabei unter der Kopfleiste stehen. */
 .mat-suchzeile { position: sticky; top: var(--topbar); z-index: 30; background: var(--weiss); padding: 8px 0; }
 .mat-suchzeile input { margin: 0; }
+/* Als Schublade steht „☰ Kategorien“ links in der Suchzeile und klebt mit ihr (material.js, leisteKnopfSetzen; Wunsch
+   vom 26.10.2026): nur das Zeichen, so hoch wie das Suchfeld; „Kategorien“ bleibt für Vorleseprogramme. */
+.mat-suchzeile:has(> .mat-side-auf) { display: flex; align-items: stretch; }
+.mat-suchzeile:has(> .mat-side-auf) input { flex: 1 1 auto; min-width: 0; }
+.mat-suchzeile > .mat-side-auf { flex: none; min-width: 44px; justify-content: center; align-items: center; margin-bottom: 10px; }
 .mat-endlos { text-align: center; padding: 10px 0 4px; }
 .mat-katdoks { margin-top: 12px; border-top: 1px solid var(--linie); padding-top: 8px; }
 .mat-unter { font-size: var(--fs-mittel); text-transform: uppercase; letter-spacing: .04em; color: var(--grau); margin: 14px 0 6px; }
@@ -811,7 +816,7 @@ button.mat-ue-klapp:focus-visible { outline: 3px solid var(--gelb); outline-offs
 .mat-nav.eng .mat-suche { display: none; }
 .mat-nav.eng.suche-offen .mat-suche { display: flex; flex: 1 1 100%; max-width: none; margin: 4px 0 0; }
 .mat-nav.eng.suche-offen .mat-lupe { background: var(--anthrazit); border-color: var(--anthrazit); color: var(--weiss); }
-.mat-nav.enger .mat-side-auf-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.mat-nav.enger .mat-side-auf-text, .mat-suchzeile .mat-side-auf-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .mat-nav.enger .mat-reiter > a { padding: 9px 8px 8px; font-size: var(--fs-mittel); }
 .mat-reiter.rollt-rechts { -webkit-mask-image: linear-gradient(to left, transparent, #000 28px); mask-image: linear-gradient(to left, transparent, #000 28px); }
 .mat-reiter.rollt-links { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
@@ -1206,6 +1211,7 @@ table.list.mat-artikel tr:has(.mat-wahl-art:checked) { background: var(--co-info
      „Nachbesserung nach der Geräte-Prüfung“ am Ende. */
   .mat-reiter > a { display: flex; align-items: center; min-height: 44px; }
   .mat-nav .btn, .mat-nav .mat-suche input, .mat-nav.eng .mat-side-auf, .mat-nav.eng .mat-lupe { min-height: 44px; }
+  .mat-suchzeile > .mat-side-auf { min-height: 44px; }              /* im Katalog in der Suchzeile, das Feld wächst mit */
 }
 /* Fälligkeiten je Ordner als Karte am Finger: Beschriftung und Zahl sind zusammen das Ziel. */
 @media (pointer: coarse) {

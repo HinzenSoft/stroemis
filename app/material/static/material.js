@@ -696,6 +696,23 @@
   const schublade = window.matchMedia("(max-width: 1023px)");
   const zweiHaelften = window.matchMedia("(horizontal-viewport-segments: 2)");
   const alsSchublade = () => schublade.matches && !zweiHaelften.matches;
+  /* Im Katalog wandert „☰ Kategorien“, solange die Leiste eine Schublade ist, links in die Suchzeile über der
+     Produktliste (Wunsch vom 26.10.2026): Die klebt beim Scrollen oben, die Modulnavigation rollt weg – wer weit
+     unten war, kam sonst nicht mehr an die Kategorien. Derselbe Knopf, kein zweiter (Handler, aria-expanded und die
+     Fokus-Rückkehr bleiben); dort nur „☰“, der Name „Kategorien“ bleibt zum Vorlesen (material.css). Breiter (Leiste
+     daneben) kehrt er in die Navigation zurück. Der Katalog ruft das nach jedem Zeichnen der Suchzeile. */
+  const knopfInSuchzeile = () => Boolean(leisteAuf && leisteAuf.closest(".mat-suchzeile"));
+  function leisteKnopfSetzen() {
+    if (!leisteAuf || !matNav || !leiste) return;
+    const zeile = ANSICHT === "katalog" && alsSchublade() ? $(".mat-suchzeile", inhalt) : null;
+    const ziel = zeile || matNav;
+    if (leisteAuf.parentNode !== ziel) {
+      const fokus = document.activeElement === leisteAuf;
+      ziel.prepend(leisteAuf);
+      if (fokus) leisteAuf.focus({ preventScroll: true });
+    }
+    navAnordnen();                     // ohne den Knopf hat die Navigation mehr Platz
+  }
   // Als Schublade ist die geschlossene Leiste nur aus dem Bild geschoben – „inert“ nimmt sie auch aus der
   // Tab-Reihenfolge und dem Vorlesen. Neben dem Inhalt (breiter Bildschirm) ist sie immer bedienbar.
   function leisteInert() { if (leiste) leiste.inert = alsSchublade() && !leiste.classList.contains("open"); }
@@ -746,7 +763,7 @@
       zug = null;
       leiste.style.transition = "";
       leiste.style.transform = "";
-      if (weit) leisteZu();
+      if (weit) leisteZu(knopfInSuchzeile());           // der Knopf klebt im Bild – Fokus zurück, ohne zu rollen
     };
     document.addEventListener("touchend", ende);
     document.addEventListener("touchcancel", ende);
@@ -766,7 +783,7 @@
       if (kat && katalogWahl && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
         e.preventDefault();
         katalogWahl(kat.dataset.kat ? +kat.dataset.kat : null);
-        leisteZu();
+        leisteZu(knopfInSuchzeile());
         return;
       }
       const b = e.target.closest("[data-klapp]");
@@ -797,7 +814,7 @@
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") leisteZu(true); });
     // Wechselt die Darstellung (Tablet gedreht, Fold auf- oder zugeklappt), schließt eine offene Schublade – sonst
     // stand sie beim Zurückwechseln samt Abdunklung wieder offen da.
-    const umschalten = () => { leisteZu(); leisteInert(); navAnordnen(); };
+    const umschalten = () => { leisteZu(); leisteInert(); leisteKnopfSetzen(); };
     schublade.addEventListener("change", umschalten);
     zweiHaelften.addEventListener("change", umschalten);
     leisteWischen();
@@ -3536,6 +3553,7 @@
         <div class="mat-suchzeile"><input type="search" id="kat-q" placeholder="${katPlatzhalter()}"
           aria-label="${KAT_SUCHE}" title="${KAT_SUCHE}" value="${esc(q)}" autocomplete="off" ${TASTATUR_SUCHE}></div>
         <div id="kat-liste"></div>`;
+      leisteKnopfSetzen();             // „☰ Kategorien“ in die neue Suchzeile (Telefon, Tablet hochkant)
       let los = null;
       $("#kat-q").addEventListener("input", (e) => { clearTimeout(los); los = setTimeout(() => { q = e.target.value.trim(); zeigen(liste); }, 250); });
       zeigen(liste);
